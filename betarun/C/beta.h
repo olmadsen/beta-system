@@ -26,6 +26,14 @@ extern long *BETA_end; /* C-variable */
 # endif
 #endif
 
+#ifdef linux
+#define intel
+#endif
+
+#ifdef nti
+#define intel
+#endif
+
 #include "define.h"
 #include "betaerror.h"
 #include "object.h"

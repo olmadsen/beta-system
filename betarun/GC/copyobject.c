@@ -22,7 +22,8 @@ void tempAOArootsAlloc()
     } 
     AOArootsLimit = (long *) ((char *) tempAOAroots + IOASize);
     INFO_IOA( fprintf(output,
-		      "#IOA: temporary AOAroots table allocated %dKb.\n", IOASize/Kb));
+		      "#IOA: temporary AOAroots table allocated %dKb.\n", 
+		      (int)IOASize/Kb));
     
     oldPtr = AOArootsPtr; /* start of old table */
     AOArootsPtr = AOArootsLimit; /* end of new table */
@@ -110,7 +111,7 @@ ref(Object) NewCopyObject( theObj, theCell)
 	if( ((ref(ValRep)) theObj)->HighBorder > LARGE_REP_SIZE){
 	    /* A large val rep was detected in the IOA heap */
 	    ref(Object) newObj; 
-	    if (newObj = CopyObjectToLVRA((ref(ValRep))theObj)) {
+	    if ((newObj = CopyObjectToLVRA((ref(ValRep))theObj))) {
 		newObj->GCAttr = (long) theCell; /* Preserve the LVRA-Cycle */
 		DEBUG_LVRA( Claim( isValRep(cast(ValRep)*theCell),
 				  "NewCopyObject: isValRep(cast(ValRep)*theCell)" ));
@@ -126,7 +127,7 @@ ref(Object) NewCopyObject( theObj, theCell)
 	/* theObj is old enough to go into AOA */
 	if( !isStackObject(theObj) ){
 	    ref(Object) newObj; 
-	    if( newObj = CopyObjectToAOA( theObj) ){
+	    if( (newObj = CopyObjectToAOA(theObj)) ){
 		/* Insert theCell in AOAroots table. 
 		 * Used as roots in mark-sweep if an AOA GC is invoked after IOAGc.
 		 */

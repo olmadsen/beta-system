@@ -650,9 +650,9 @@ void ProcessStackPart(low, high)
     ref(Object) theObj;
     handle(Object) theCell;
     
-    DEBUG_IOA(fprintf(output, "StackPart: [0x%x..0x%x]\n", low, high);
+    DEBUG_IOA(fprintf(output, "StackPart: [0x%x..0x%x]\n", (int)low, (int)high);
 	      fprintf(output, "ComponentBlock/CallbackFrame: [0x%x, 0x%x, 0x%x]\n", 
-		      *(high+1), *(high+2), *(high+3));
+		      (int)(*(high+1)), (int)(*(high+2)), (int)(*(high+3)));
 	      );
     Claim( high <= (long *)StackStart, "ProcessStackPart: high<=StackStart" );
     
@@ -662,7 +662,8 @@ void ProcessStackPart(low, high)
 	    theObj  = *theCell;
 	    if( isObject( theObj) ){
 		if( /*inLVRA( theObj) ||*/ isValRep(theObj) ){
-		    DEBUG_IOA( fprintf( output, "(STACK(%d) is *ValRep)", current-low));
+		    DEBUG_IOA( fprintf(output, "(STACK(%d) is *ValRep)", 
+				       (int)(current-low)));
 		}else{
 		    ProcessReference(casthandle(Object)current);
 		    CompleteScavenging();

@@ -33,9 +33,9 @@ long isObject( theObj)
 
   if( theObj->Proto == 0 ) return FALSE;
 
-  if( inAOA(theObj) && (isStatic(theObj->GCAttr) || (theObj->GCAttr == 0)) ) 
+  if( inAOA(theObj) && ((isStatic(theObj->GCAttr)) || (theObj->GCAttr == 0)) ) 
     return TRUE;
-  if( isStatic(theObj->GCAttr) || isAutonomous(theObj->GCAttr) ){
+  if( (isStatic(theObj->GCAttr)) || isAutonomous(theObj->GCAttr) ){
     return TRUE;
   }else{
     if( inToSpace(theObj->GCAttr) || inAOA(theObj->GCAttr) ){
@@ -63,18 +63,23 @@ long ObjectType(aObj)
   ref(Object) aObj;
 {
   if( isSpecialProtoType(aObj->Proto)){
-     switch( (long) aObj->Proto){
-       case (long) ComponentPTValue:   return ComponentType; 
-       case (long) StackObjectPTValue: return StackObjectType;
-       case (long) WordRepPTValue:     return WordRepType;    
-       case (long) DoubleRepPTValue:   return DoubleRepType;    
-       case (long) ByteRepPTValue:     return ByteRepType;    
-       case (long) ValRepPTValue:      return ValRepType;    
-       case (long) RefRepPTValue:      return RefRepType;    
-       case (long) StructurePTValue:   return StructureType; 
-       case (long) DopartObjectPTValue:      return DopartType; 
-     }
-  }else return ItemType;
+    switch( (long) aObj->Proto){
+    case (long) ComponentPTValue:   return ComponentType; 
+    case (long) StackObjectPTValue: return StackObjectType;
+    case (long) WordRepPTValue:     return WordRepType;    
+    case (long) DoubleRepPTValue:   return DoubleRepType;    
+    case (long) ByteRepPTValue:     return ByteRepType;    
+    case (long) ValRepPTValue:      return ValRepType;    
+    case (long) RefRepPTValue:      return RefRepType;    
+    case (long) StructurePTValue:   return StructureType; 
+    case (long) DopartObjectPTValue:      return DopartType; 
+    default: 
+      fprintf(output, "ObjectType: unknown object\n");
+      fflush(output);
+      return 0;
+    }
+  }
+  else return ItemType;
 }
 
 void Claim( expr, message)
@@ -85,10 +90,10 @@ void Claim( expr, message)
     fprintf(output, "Assumption (%s) failed!\n", message);
     fprintf(output,
 	    "IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
-	    IOA, IOATop, IOALimit);
+	    (int)IOA, (int)IOATop, (int)IOALimit);
     fprintf(output,
 	    "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
-	    ToSpace, ToSpaceTop, ToSpaceLimit);
+	    (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
 #ifdef RTDEBUG
     Illegal(); /* Usefull to break in */
 #endif
@@ -125,7 +130,7 @@ ref(Object) CkP5;
 static void RegError(long pc, char *reg, ref(Object) value)
 {
   fprintf(output, "\nIllegal value for GC register at PC=0x%x: %s=0x%x\n", 
-	  pc, reg, value);
+	  (int)pc, reg, (int)value);
   Illegal();
 }
 

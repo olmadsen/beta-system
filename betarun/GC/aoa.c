@@ -52,18 +52,18 @@ static ref(Object) AOAalloc( size)
 	MallocExhausted = TRUE;
 	INFO_AOA( fprintf(output,
 			  "#(AOA: AOAtoIOAtable allocation %d failed!.)\n",
-			  AOAtoIOAtableSize));
+			  (int)AOAtoIOAtableSize));
 	return 0;
       }
     /* Try to allocate a new AOA block. */
-    if( AOABaseBlock = newBlock(AOABlockSize) ){
-      INFO_AOA( fprintf( output, "#(AOA: new block allocated %dKb.)\n",
-			AOABlockSize/Kb));
+    if( (AOABaseBlock = newBlock(AOABlockSize)) ){
+      INFO_AOA( fprintf(output, "#(AOA: new block allocated %dKb.)\n",
+			(int)AOABlockSize/Kb));
       AOATopBlock  = AOABaseBlock;
     }else{
       MallocExhausted = TRUE;
-      INFO_AOA( fprintf( output, "#(AOA: block allocation failed %dKb.)\n",
-			AOABlockSize/Kb));
+      INFO_AOA( fprintf(output, "#(AOA: block allocation failed %dKb.)\n",
+			(int)AOABlockSize/Kb));
       return 0;
     }
   }
@@ -85,9 +85,9 @@ static ref(Object) AOAalloc( size)
   }
   
   if( AOACreateNewBlock ){
-    if( AOATopBlock->next = newBlock( AOABlockSize) ){
+    if( (AOATopBlock->next = newBlock( AOABlockSize)) ){
       INFO_AOA( fprintf( output, "#(AOA: new block allocated %dKb.)\n",
-			AOABlockSize/Kb) );
+			(int)AOABlockSize/Kb) );
       AOATopBlock = AOATopBlock->next;
       oldTop = AOATopBlock->top;
       AOACreateNewBlock = FALSE;
@@ -101,7 +101,7 @@ static ref(Object) AOAalloc( size)
     }else{
       MallocExhausted = TRUE;
       INFO_AOA( fprintf( output, "#(AOA: block allocation failed %dKb.)\n",
-			AOABlockSize/Kb));
+			(int)AOABlockSize/Kb));
       AOANeedCompaction = TRUE;
       return 0;
     }
@@ -137,7 +137,8 @@ ref(Object) CopyObjectToAOA( theObj)
   theObj->GCAttr = (long) newObj;
   
   DEBUG_AOA( AOAcopied += size );
-  DEBUG_AOA( fprintf( output, "#ToAOA: IOA-address: 0x%x AOA-address: 0x%x proto: 0x%x size: %d\n", theObj, newObj, theObj->Proto, size));
+  DEBUG_AOA( fprintf(output, "#ToAOA: IOA-address: 0x%x AOA-address: 0x%x proto: 0x%x size: %d\n", 
+		     (int)theObj, (int)newObj, (int)(theObj->Proto), (int)size));
   
   /* Return the new object in ToSpace */
   return newObj;
@@ -160,7 +161,7 @@ void AOAGc()
     negAOArefsRESET ();
 #endif
 
-  INFO_AOA( fprintf( output, "\n#(AOA-%d ", NumAOAGc); fflush(output) );
+  INFO_AOA( fprintf(output, "\n#(AOA-%d ", (int)NumAOAGc); fflush(output) );
   /* Mark all reachable objects within AOA and reverse all pointers. */
 #ifdef macintosh
   RotateTheCursorBack();
@@ -217,8 +218,11 @@ void AOAGc()
   }
 #endif
   
-  INFO_AOA( fprintf( output, "%dKb in %d blocks, %d%% free)\n", 
-		    toKb(size), blocks, 100 - (100 * used)/size); fflush(output));
+  INFO_AOA( fprintf(output, "%dKb in %d blocks, %d%% free)\n", 
+		    (int)toKb(size), 
+		    (int)blocks, 
+		    (int)(100 - (100 * used)/size)); 
+	   fflush(output));
   asmemptylabel(EndAOA);
 }
 
@@ -227,7 +231,7 @@ static long *RAFStackBase;
 static long *RAFStackTop;
 static long *RAFStackLimit;
 
-static extendRAFStackArea(void)
+static void extendRAFStackArea(void)
 /* Extend (temporary) space used to hold unprocessed reverse-and-follow references. */
 {
   long oldSize;
@@ -239,12 +243,12 @@ static extendRAFStackArea(void)
   if ((newBase = (long *)MALLOC(newSize)) != NULL) {
     INFO_AOA(fprintf(output, 
 		     "#(AOA: RAF stack area allocated: %d longs)\n", 
-		     newSize/4));
+		     (int)newSize/4));
   } else {
     char buf[100];
     sprintf(buf,
 	    "AOA GC: Failed to malloc RAF stack area: %d longs.", 
-	    newSize/4);
+	    (int)newSize/4);
     Notify(buf);
     exit(-1);
   }
@@ -252,20 +256,20 @@ static extendRAFStackArea(void)
   if (RAFStackBase != IOA) {
     FREE(RAFStackBase);
     INFO_AOA(fprintf(output, 
-		     "#(AOA: RAF stack area freed: %d longs)\n", oldSize/4));
+		     "#(AOA: RAF stack area freed: %d longs)\n", (int)oldSize/4));
   }
   RAFStackBase = newBase;
   RAFStackLimit = (long*) ((long)RAFStackBase + newSize);
   RAFStackTop = (long*)((long)RAFStackBase + oldSize);
 }
 
-static freeRAFStackArea(void)
+static void freeRAFStackArea(void)
 /* Free any external space allocated to hold unprocessed RAF-references */
 {
   if (RAFStackBase != IOA) {
     FREE(RAFStackBase);
     INFO_AOA(fprintf(output, "#(AOA: RAF stack area freed: %d longs)\n", 
-		     ((long)RAFStackLimit - (long)RAFStackBase)/4));
+		     (int)((long)RAFStackLimit - (long)RAFStackBase)/4));
   }
 }
 
@@ -280,7 +284,7 @@ static freeRAFStackArea(void)
  * object has not been followed.
  */
 
-static ReverseAndFollow(void)
+static void ReverseAndFollow(void)
 {
   handle(Object) theCell;
   ref(Object) theObj;
@@ -335,7 +339,7 @@ static ReverseAndFollow(void)
   }
 }
 
-static FollowItem( theObj)
+static void FollowItem( theObj)
      ref(Item) theObj;
 { 
   ref(ProtoType) theProto  = theObj->Proto;
@@ -486,7 +490,7 @@ static void Phase1()
       }
 #endif
       if (old == *--pointer){
-	INFO_AOA(fprintf(output, "Phase1: Duplicate AOA root: 0x%x\n", old));
+	INFO_AOA(fprintf(output, "Phase1: Duplicate AOA root: 0x%x\n", (int)old));
       } else {
 	old = *pointer;
 	RAFPush(*pointer & ~1);
@@ -526,7 +530,7 @@ long VeryStupidBCC;
 #define endChain(x) (( -0xFFFF <= ((long) (x))) && (((long) (x)) <= 1))
 #endif
 
-static handleAliveStatic( theObj, freeObj )
+static void handleAliveStatic( theObj, freeObj )
      ref(Object) theObj;
      ref(Object) freeObj;
 {
@@ -564,7 +568,7 @@ static handleAliveStatic( theObj, freeObj )
   } 
 }
 
-static handleAliveObject( theObj, freeObj)
+static void handleAliveObject( theObj, freeObj)
      ref(Object) theObj;
      ref(Object) freeObj;
 {
@@ -687,7 +691,7 @@ static void Phase2( numAddr, sizeAddr, usedAddr)
 	    
 	  INFO_DOT(fprintf(output, 
 			   "#DOT: updating AOA reference 0x%x to 0x%x\n", 
-			   *current, theObj));
+			   (int)(*current), (int)theObj));
 	  *current = (long) theObj;
 	  if (!theObj) DOTSize--; /* Element was deleted. */
 
@@ -700,7 +704,7 @@ static void Phase2( numAddr, sizeAddr, usedAddr)
   }
 } 
 
-static FindInterval( table, size, block, startAddr, stopAddr)
+static void FindInterval( table, size, block, startAddr, stopAddr)
      ptr(long) table;
      long size;
      ref(Block) block;
@@ -747,12 +751,12 @@ static void Phase3()
   else {
     if( !(table = (ptr(long)) MALLOC( AOAtoIOACount * 4))){
       char buf[50];
-      sprintf(buf,"#Phase3: malloc failed %d longs\n", AOAtoIOACount);
+      sprintf(buf,"#Phase3: malloc failed %d longs\n", (int)AOAtoIOACount);
       Notify(buf);
       exit(-1);
     }
-    INFO_AOA( fprintf( output, "#(AOA: new block for table %d longs)\n",
-		      AOAtoIOACount));
+    INFO_AOA( fprintf(output, "#(AOA: new block for table %d longs)\n",
+		      (int)AOAtoIOACount));
   }
   
   /* Move compact(AOAtoIOAtable) -> table. */
@@ -769,8 +773,8 @@ static void Phase3()
     DEBUG_AOA( Claim( counter == AOAtoIOACount,"Phase3: counter == AOAtoIOACount"));
   }
   
-  DEBUG_AOA( fprintf( output,"(AOAtoIOA#%d)", AOAtoIOACount));
-  DEBUG_AOA( fprintf( output,"(AOAtoLVRA#%d)", AOAtoLVRAsize));
+  DEBUG_AOA( fprintf(output,"(AOAtoIOA#%d)", (int)AOAtoIOACount));
+  DEBUG_AOA( fprintf(output,"(AOAtoLVRA#%d)", (int)AOAtoLVRAsize));
   
   /* Clear the AOAtoIOAtable. */
   AOAtoIOAClear();
@@ -866,8 +870,8 @@ static void Phase3()
   /* if table was allocated with malloc, please free it. */
   if( table != IOA ){
     FREE( table);
-    INFO_AOA( fprintf( output, "#(AOA: block for table freed %d longs)\n",
-		      AOAtoIOACount));
+    INFO_AOA( fprintf(output, "#(AOA: block for table freed %d longs)\n",
+		      (int)AOAtoIOACount));
   }
 }
 
@@ -879,19 +883,19 @@ void AOACheck()
   long        theObjectSize;
   
   /* if (theBlock != 0)
-     fprintf(output, "AOACheck: AOABaseBlock: 0x%x, top: 0x%x\n", AOABaseBlock, AOABaseBlock->top); */
+     fprintf(output, "AOACheck: AOABaseBlock: 0x%x, top: 0x%x\n", (int)AOABaseBlock, (int)(AOABaseBlock->top)); */
   while( theBlock ){
     theObj = (ref(Object)) BlockStart(theBlock);
     while( (ptr(long)) theObj < theBlock->top ){
       theObjectSize = 4*ObjectSize( theObj);
-      fprintf(output,"AOACheck: ObjectSize=0x%x, ", theObjectSize);
+      fprintf(output,"AOACheck: ObjectSize=0x%x, ", (int)theObjectSize);
       Claim(ObjectSize(theObj) > 0, "#AOACheck: ObjectSize(theObj) > 0");
       AOACheckObject( theObj);
       theObj = (ref(Object)) Offset( theObj, theObjectSize);
     }
     theBlock = theBlock->next;
     /* if (theBlock != 0)
-      fprintf(output, "AOACheck: block: 0x%x, top: 0x%x\n", theBlock, theBlock->top); */
+      fprintf(output, "AOACheck: block: 0x%x, top: 0x%x\n", (int)theBlock, (int)(theBlock->top)); */
   }
 } 
 
@@ -941,20 +945,20 @@ void AOACheckObject( theObj)
 #if 0
 	  fprintf(output, 
 		  "AOACheckObject: &theComponent->StackObj: 0x%x, theComponent->StackObj: 0x%x\n", 
-		  &theComponent->StackObj, theComponent->StackObj);
+		  (int)&theComponent->StackObj, (int)theComponent->StackObj);
 #endif
 	  AOACheckReference( (handle(Object))(&theComponent->StackObj));
 	}
 #if 0
 	fprintf(output, 
 		"AOACheckObject: &theComponent->CallerComp: 0x%x\n", 
-		&theComponent->CallerComp);
+		(int)&theComponent->CallerComp);
 #endif
 	AOACheckReference( (handle(Object))(&theComponent->CallerComp));
 #if 0
 	fprintf(output, 
 		"AOACheckObject: &theComponent->CallerObj: 0x%x\n", 
-		&theComponent->CallerObj);
+		(int)&theComponent->CallerObj);
 #endif
 	AOACheckReference( (handle(Object))(&theComponent->CallerObj));
 	AOACheckObject( (ref(Object))(ComponentItem( theComponent)));

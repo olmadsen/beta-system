@@ -10,7 +10,7 @@ void CBFAAlloc()
   /* Allocate the Call Back Functions Area. */
   if ( CBFABlockSize < 0 ) {
     char buf[100];
-    sprintf(buf, "Too small CBFA specified: %dKb", CBFABlockSize/Kb);
+    sprintf(buf, "Too small CBFA specified: %dKb", (int)CBFABlockSize/Kb);
     Notify2(buf, "Check your BETART environment variable");
     exit(1);
   }
@@ -28,7 +28,7 @@ void CBFAAlloc()
     lastCBFA = CBFA;
     if ( ! (lastCBFA->entries = cast(CallBackEntry) MALLOC(CBFABlockSize)) ) {
       char buf[100];
-      sprintf(buf,"Couldn't allocate CBFA (%dKb)\n", CBFABlockSize/Kb);
+      sprintf(buf,"Couldn't allocate CBFA (%dKb)\n", (int)CBFABlockSize/Kb);
       Notify(buf);
       exit(1);
     }
@@ -36,7 +36,8 @@ void CBFAAlloc()
     CBFATop = lastCBFA->entries;
     CBFALimit = cast(CallBackEntry) ((long) lastCBFA->entries + CBFABlockSize);
   }
-  INFO_CBFA( fprintf(output, "#(CBFA: new block allocated %dKb.)\n", CBFABlockSize/Kb) );
+  INFO_CBFA( fprintf(output, "#(CBFA: new block allocated %dKb.)\n", 
+		     (int)CBFABlockSize/Kb) );
 }
 
 void CBFArelloc()
@@ -57,7 +58,7 @@ void CBFArelloc()
   lastCBFA = lastCBFA->next;
   if ( ! (lastCBFA->entries = cast(CallBackEntry) MALLOC(CBFABlockSize)) ) {
     char buf[100];
-    sprintf(buf,"Couldn't allocate CBFA (%dKb)", CBFABlockSize/Kb);
+    sprintf(buf,"Couldn't allocate CBFA (%dKb)", (int)CBFABlockSize/Kb);
     Notify(buf);
     exit(1);
   }
@@ -65,7 +66,8 @@ void CBFArelloc()
   CBFATop = lastCBFA->entries;
   CBFALimit = cast(CallBackEntry) ((long) lastCBFA->entries + CBFABlockSize);
   
-  INFO_CBFA( fprintf(output, "#(CBFA: new block allocated %dKb.)\n", CBFABlockSize/Kb) );
+  INFO_CBFA( fprintf(output, "#(CBFA: new block allocated %dKb.)\n", 
+		     (int)CBFABlockSize/Kb) );
 }
 
 void freeCBF(external_entry)

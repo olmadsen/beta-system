@@ -39,13 +39,13 @@ void TraceXcall(long arg1, ...)
   fprintf(output, "External call: %s(", XcallName);
   if (XcallNum--){
     /* At least 1 arg */
-    fprintf(output, "0x%x", arg1);
+    fprintf(output, "0x%x", (int)arg1);
     if (XcallNum) {
       /* At least 2 args */
       fprintf(output, ", ");
       va_start(ap, arg1);
       while (XcallNum--){
-	fprintf(output, "0x%x", va_arg(ap, long));
+	fprintf(output, "0x%x", (int)(va_arg(ap, long)));
 	if (XcallNum) fprintf(output, ", ");
       }
       va_end(ap);

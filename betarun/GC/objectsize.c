@@ -43,8 +43,8 @@ long ObjectSize(theObj)
     default:
       fprintf(stderr, 
 	      "ObjectSize: Error: Unknown ProtoType %d for object 0x%08x\n",
-	      theProto, 
-	      theObj);
+	      (int)theProto, 
+	      (int)theObj);
       return 0;
 #endif
     }

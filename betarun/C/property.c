@@ -12,9 +12,7 @@
  */
 #include <stdio.h>
 #include "beta.h"
-#ifdef macintosh
-#include <CType.h>
-#endif
+#include <ctype.h>
 
 #ifndef DEMO
 static long intScan();
@@ -28,7 +26,7 @@ static long CmpStr();
 
 #define ENTRY( string, code) if( CmpStr(name, string) ){ code; return; }
 
-static BooleanProperty( name)
+static void BooleanProperty(name)
   char *name;
 {
   ENTRY("info",     Info0 = TRUE);
@@ -72,7 +70,7 @@ static BooleanProperty( name)
 }
 
 #ifndef DEMO
-static ValueProperty( name, value)
+static void ValueProperty( name, value)
   char *name, *value;
 {
 #ifdef valhallaRT
@@ -95,14 +93,14 @@ static ValueProperty( name, value)
         if( IOAPercentage < 3 ){
 	  char buf[100];
 	  sprintf(buf, "IOAPercentage (%d) is too low, adjusted to 3.",
-		  IOAPercentage);
+		  (int)IOAPercentage);
 	  Notify(buf);
 	  IOAPercentage = 3;
 	}
 	if( IOAPercentage > 40 ){
 	  char buf[100];
 	  sprintf( buf, "IOAPercentage (%d) is too high, adjusted to 40.",
-		   IOAPercentage);
+		   (int)IOAPercentage);
 	  Notify(buf);
 	  IOAPercentage = 40;
 	});
@@ -115,14 +113,14 @@ static ValueProperty( name, value)
         if( AOAPercentage < 3 ){
 	  char buf[100];
 	  sprintf(buf, "AOAPercentage (%d) is too low, adjusted to 3.",
-		  AOAPercentage);
+		  (int)AOAPercentage);
 	  Notify(buf);
 	  AOAPercentage = 3;
 	}
 	if( AOAPercentage > 97 ){
 	  char buf[100];
 	  sprintf(buf, "AOAPercentage (%d) is too high, adjusted to 97.",
-		  AOAPercentage);
+		  (int)AOAPercentage);
 	  Notify(buf);
 	  AOAPercentage = 97;
 	});
@@ -135,14 +133,14 @@ static ValueProperty( name, value)
         if( LVRAPercentage < 3 ){
 	  char buf[100];
 	  sprintf(buf, "LVRAPercentage (%d) is too low, adjusted to 3.",
-		  LVRAPercentage);
+		  (int)LVRAPercentage);
 	  Notify(buf);
 	  LVRAPercentage = 3;
 	}
 	if( LVRAPercentage > 97 ){
 	  char buf[100];
 	  sprintf(buf, "LVRAPercentage (%d) is too high, adjusted to 97.",
-		  LVRAPercentage);
+		  (int)LVRAPercentage);
 	  Notify(buf);
 	  LVRAPercentage = 97;
 	});

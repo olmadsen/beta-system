@@ -44,7 +44,7 @@ void GetBetaEnv()
     }
   }
 #else
-  if( betaEnv = getenv( DEFAULT_PROPERTY_NAME) )
+  if( (betaEnv = getenv(DEFAULT_PROPERTY_NAME)) )
     SetupProperties( betaEnv);
 #endif
 }

@@ -130,7 +130,7 @@ static void LVRADisplayTable()
   fprintf(output, "#(Free reps in LVRATable: ");
   for(index=0;index <= TableMAX; index++)
     if(LVRATable[index] )
-      fprintf(output, "%d:%d ", index, LVRATabNum[index]);
+      fprintf(output, "%d:%d ", (int)index, (int)LVRATabNum[index]);
   fprintf(output, ")\n");
 }
 #endif
@@ -158,8 +158,8 @@ static void LVRAInsertFreeElement(freeRep)
   freeRep->GCAttr = 0; 
   DEBUG_CODE( if( index == TableMAX )
 	     fprintf(output, "(LVRAInsertFreeElement: size=%d (0x%x))", 
-		     freeRep->HighBorder,
-		     freeRep->HighBorder));
+		     (int)freeRep->HighBorder,
+		     (int)freeRep->HighBorder));
   DEBUG_CODE(LVRATabNum[index]++);
 }
 
@@ -265,8 +265,8 @@ static ref(LVRABlock) newLVRABlock(size)
   theBlock = (ref(LVRABlock)) MALLOC( sizeof(struct LVRABlock) + blocksize );
   
   if( theBlock != 0 ){
-    INFO_LVRA( fprintf( output, "#(LVRA: new block allocated %dKb)\n",
-		       toKb(blocksize))); 
+    INFO_LVRA( fprintf(output, "#(LVRA: new block allocated %dKb)\n",
+		       (int)toKb(blocksize))); 
     LVRANumOfBlocks++;
     
     theBlock->next  = 0;
@@ -276,7 +276,7 @@ static ref(LVRABlock) newLVRABlock(size)
   } else {
     MallocExhausted = TRUE;
     INFO_LVRA(fprintf(output ,"#(LVRA: failed to allocate new block %dKb)\n", 
-		      toKb(blocksize))); 
+		      (int)toKb(blocksize))); 
   }
   return theBlock;
 }
@@ -352,12 +352,12 @@ ref(ValRep) LVRAAlloc(proto, range)
       sprintf(type, "shortint repetition");
       break;
     default:
-      sprintf(type, "repetition type %d", proto);
+      sprintf(type, "repetition type %d", (int)proto);
       break;
     }
     fprintf(output, 
 	    "#(LVRAAlloc: %s, range = %d, size = %d)\n",
-	    type, range, size);
+	    type, (int)range, (int)size);
   });
   DEBUG_LVRA(Claim(isSpecialProtoType(proto), "isSpecialProtoType(proto)"));  
   if( LVRABaseBlock == 0 ){
@@ -371,10 +371,10 @@ ref(ValRep) LVRAAlloc(proto, range)
   }
   if( LVRAFreeListAvailable )
     /* Try allocation in freeList */
-    if( newRep = LVRAFindInFree(proto, range, size) ) return newRep;
+    if( (newRep = LVRAFindInFree(proto, range, size)) ) return newRep;
   
   /* Allocation in freeList failed. Try allocation in top block */
-  if( newRep = LVRAAllocInBlock(proto, range, size) ) return newRep;
+  if( (newRep = LVRAAllocInBlock(proto, range, size)) ) return newRep;
   
   /* Allocation in top block failed. Mark rest of top block as free */
   rest = LVRARestInBlock(LVRATopBlock);
@@ -399,11 +399,11 @@ ref(ValRep) LVRAAlloc(proto, range)
     /* Try redoing the free list */
     LVRAConstructFreeList();
     /* Try allocation by the new freelist */
-    if( newRep = LVRAFindInFree(proto, range, size) ) return newRep;
+    if( (newRep = LVRAFindInFree(proto, range, size)) ) return newRep;
     
     if( LVRATopBlock->next ){
       LVRATopBlock = LVRATopBlock->next;
-      if( newRep = LVRAAllocInBlock(proto, range, size) ) return newRep;       
+      if( (newRep = LVRAAllocInBlock(proto, range, size)) ) return newRep;       
     }
     if( LVRACreateNewBlock || (range > LVRABigRange) ){
       if( (block = newLVRABlock(size)) == 0) return 0;
@@ -412,7 +412,7 @@ ref(ValRep) LVRAAlloc(proto, range)
       
       LVRATopBlock = LVRATopBlock->next;
       LVRACreateNewBlock = FALSE;
-      if( newRep = LVRAAllocInBlock(proto, range, size) ) return newRep;
+      if( (newRep = LVRAAllocInBlock(proto, range, size)) ) return newRep;
     }
   }
   
@@ -420,9 +420,9 @@ ref(ValRep) LVRAAlloc(proto, range)
   LVRACompaction();
   
   /* Now try allocation in top block */
-  if( newRep = LVRAAllocInBlock(proto, range, size) ) return newRep;
+  if( (newRep = LVRAAllocInBlock(proto, range, size)) ) return newRep;
   /* Allocation in top block failed. Try using the free list */
-  if( newRep = LVRAFindInFree(proto, range, size) ) return newRep;
+  if( (newRep = LVRAFindInFree(proto, range, size)) ) return newRep;
   
   /* None of the above succeeded. Try allocating a new block */
   if( (block = newLVRABlock(size)) == 0) return 0;
@@ -432,7 +432,7 @@ ref(ValRep) LVRAAlloc(proto, range)
   LVRACreateNewBlock = FALSE;
   
   /* Try allocating in the new top block */
-  if( newRep = LVRAAllocInBlock(proto, range, size) ) return newRep;
+  if( (newRep = LVRAAllocInBlock(proto, range, size)) ) return newRep;
   
   /* All hope is gone ! */
   DEBUG_LVRA(fprintf(output, "#LVRAAlloc failed!\n"));
@@ -479,18 +479,18 @@ ref(Object) CopyObjectToLVRA(theRep)
   ref(ValRep) newRep;
   
   DEBUG_LVRA(fprintf(output, "#CopyObjectToLVRA(%d, %d)\n",
-		     theRep->Proto,
-		     theRep->HighBorder-theRep->LowBorder+1
+		     (int)(theRep->Proto),
+		     (int)(theRep->HighBorder-theRep->LowBorder+1)
 		     ));
-  if (newRep = LVRAAlloc(theRep->Proto,
-			 theRep->HighBorder-theRep->LowBorder+1)) {
+  if ((newRep = LVRAAlloc(theRep->Proto,
+			 theRep->HighBorder-theRep->LowBorder+1))) {
       RepCopy(newRep, theRep);
       newRep->GCAttr = 0;
       /* Install forward reference to newObj in theObj */
       theRep->GCAttr = (long) newRep;
   }
   /* Return the new object in ToSpace */
-  DEBUG_LVRA(fprintf(output, "#COPYObjectToLVRA: newRep=0x%x\n", newRep));
+  DEBUG_LVRA(fprintf(output, "#COPYObjectToLVRA: newRep=0x%x\n", (int)newRep));
   return cast(Object)newRep;
 }
 
@@ -531,7 +531,7 @@ void LVRACompaction()
 
   /* Run compaction elements in 'LVRABlock{->next}*'  */
   
-  INFO_LVRA( fprintf( output, "#(LVRA-%d ", NumLVRAGc) ); 
+  INFO_LVRA( fprintf( output, "#(LVRA-%d ", (int)NumLVRAGc) ); 
   
   LVRACleanTable();
   saved = 0; 
@@ -566,7 +566,7 @@ void LVRACompaction()
 	      if (prevDstBlock != NULL)
 		prevDstBlock->next = nextBlock;
 	      INFO_LVRA(fprintf(output, "#(LVRA: block freed %dKb)\n",
-				toKb((long)dstBlock->limit - (long)dstBlock)));
+				(int)toKb((long)dstBlock->limit - (long)dstBlock)));
 	      FREE(dstBlock);
 	      LVRANumOfBlocks--;
 	      dstBlock = nextBlock;
@@ -636,7 +636,7 @@ void LVRACompaction()
     ref(LVRABlock) nextBlock = dstBlock->next;
     saved += (long)dstBlock->limit - (long)dstBlock->top;
     INFO_LVRA(fprintf(output, "#(LVRA: block freed %dKb)\n",
-		      toKb((long)dstBlock->limit - (long)dstBlock)));
+		      (int)toKb((long)dstBlock->limit - (long)dstBlock)));
     FREE(dstBlock);
     LVRANumOfBlocks--;
     dstBlock = nextBlock;
@@ -660,11 +660,13 @@ void LVRACompaction()
 	    fprintf(output, " (new block needed in next LVRAAlloc) "));
   
   INFO_LVRA(fprintf(output, " %dKb in %d blocks, %d%% free)\n",
-		    toKb(sizeBlocks), LVRANumOfBlocks, (100*saved)/sizeBlocks));
+		    (int)toKb(sizeBlocks), 
+		    (int)LVRANumOfBlocks, 
+		    (int)((100*saved)/sizeBlocks)));
   DEBUG_LVRA(fprintf(output, "Dead: %d, Alive: %d, Moved: %d, FreeList: %d\n",
-		     numDead, numAlive, numMoved, numFree));
+		     (int)numDead, (int)numAlive, (int)numMoved, (int)numFree));
   DEBUG_LVRA(fprintf(output, "Size of dead reps: %d (0x%x)\n", 
-		     sizeDead, sizeDead));
+		     (int)sizeDead, (int)sizeDead));
   LVRALastIOAGc = 0;
   DEBUG_LVRA(INFO_LVRA(LVRAStatistics()));
   DEBUG_LVRA( LVRACheck() );
@@ -752,8 +754,10 @@ static void LVRAConstructFreeList()
   }
   DEBUG_AOA(if (LVRACreateNewBlock) fprintf(output, " (new block needed) "));
   
-  INFO_LVRA( fprintf( output, "  %dKb in %d blocks, %dKb free)\n",
-		     toKb(sizeBlocks), LVRANumOfBlocks, toKb(saved)));
+  INFO_LVRA( fprintf(output, "  %dKb in %d blocks, %dKb free)\n",
+		     (int)toKb(sizeBlocks), 
+		     (int)LVRANumOfBlocks, 
+		     (int)toKb(saved)));
   DEBUG_LVRA( LVRADisplayTable() );
   LVRALastIOAGc = NumIOAGc;
 
@@ -782,7 +786,7 @@ void LVRACheck()
     /* Take the next element in the LVRA block chain. */
     theBlock = theBlock->next;
   }
-  fprintf(output, "#LVRACheck: %d repetitions in LVRA\n", numReps);
+  fprintf(output, "#LVRACheck: %d repetitions in LVRA\n", (int)numReps);
 } 
 
 void LVRAStatistics(void)
@@ -800,20 +804,21 @@ void LVRAStatistics(void)
   theBlock = LVRABaseBlock;
   while (theBlock != NULL) {
     blockNo++;
-    fprintf(output, "Block %d:\n", blockNo);
+    fprintf(output, "Block %d:\n", (int)blockNo);
     rep = (ref(ValRep)) LVRABlockStart(theBlock);
     while ((long *)rep < theBlock->top) {
       theObjectSize = LVRARepSize(rep);
       if (rep->GCAttr != 0) {
-	fprintf(output, "addr=0x%-6x type=%-7s size=%-6d ref=%-6x (%s)\n",
-		rep, 
+	fprintf(output, 
+		"addr=0x%-6x type=%-7s size=%-6d ref=%-6x (%s)\n",
+		(int)rep, 
 		rep->Proto==ValRepPTValue?"integer":
 		rep->Proto==ByteRepPTValue?"char":
 		rep->Proto==WordRepPTValue?"short":
 		rep->Proto==DoubleRepPTValue?"double":
 		"???",
-		theObjectSize,
-		rep->GCAttr,
+		(int)theObjectSize,
+		(int)rep->GCAttr,
 		inIOA(rep->GCAttr)?"IOA":
 		inAOA(rep->GCAttr)?"AOA":
 		(long)ToSpace<=rep->GCAttr && rep->GCAttr<(long)ToSpaceLimit?"ToSpace!!!":
@@ -822,8 +827,8 @@ void LVRAStatistics(void)
 	numAliveReps++;
       } else {
 	fprintf(output, "addr=0x%-6x              size=%-6d            (DEAD)\n",
-		rep, 
-		theObjectSize);
+		(int)rep, 
+		(int)theObjectSize);
 	sizeDeadReps += theObjectSize;
 	numDeadReps++;
       }
@@ -831,10 +836,10 @@ void LVRAStatistics(void)
     }
     theBlock = theBlock->next;
   }
-  fprintf(output, "Summary: %d LVRA blocks\n", blockNo);
+  fprintf(output, "Summary: %d LVRA blocks\n", (int)blockNo);
   fprintf(output, "Summary: %d alive repetitions, total size=%d\n", 
-	  numAliveReps, sizeAliveReps);
+	  (int)numAliveReps, (int)sizeAliveReps);
   fprintf(output, "Summary: %d dead repetitions, total size=%d\n", 
-	  numDeadReps, sizeDeadReps);
+	  (int)numDeadReps, (int)sizeDeadReps);
 }
 #endif /* RTDEBUG */

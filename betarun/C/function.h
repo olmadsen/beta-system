@@ -122,6 +122,9 @@ long LVRAAlive(ref(ValRep));
 #endif
 
 /* GC/misc.c */
+#ifdef RTDEBUG
+extern void Illegal();
+#endif
 extern long isObject(ref(Object));
 extern long inBetaHeap(ref(Object));
 extern long ObjectType(ref(Object));

@@ -15,11 +15,11 @@ static long prim_index = 0;
 long AOAtoIOAAlloc()
 {
     AOAtoIOAtableSize = primes[0];
-    if( AOAtoIOAtable = newBlock(AOAtoIOAtableSize * sizeof(long)) ){
+    if( (AOAtoIOAtable = newBlock(AOAtoIOAtableSize * sizeof(long))) ){
 	AOAtoIOAtable->top = AOAtoIOAtable->limit;
 	AOAtoIOAClear();
-	INFO_AOA( fprintf( output, "#(AOA: AOAtoIOAtable allocated %d longs.)\n",
-			  AOAtoIOAtableSize));
+	INFO_AOA( fprintf(output, "#(AOA: AOAtoIOAtable allocated %d longs.)\n",
+			  (int)AOAtoIOAtableSize));
 	return 1;
     } else
       return 0;
@@ -37,11 +37,11 @@ void AOAtoIOAReAlloc()
   
   /* Allocate a new and larger block to hold AOAtoIOA references. */
   AOAtoIOAtableSize = primes[prim_index];
-  if( AOAtoIOAtable = newBlock(AOAtoIOAtableSize * sizeof(long)) ){
+  if( (AOAtoIOAtable = newBlock(AOAtoIOAtableSize * sizeof(long))) ){
     AOAtoIOAtable->top = AOAtoIOAtable->limit;
     AOAtoIOAClear();
-    INFO_AOA( fprintf( output, "#(AOAtoIOAtable resized to %d entries",
-		      AOAtoIOAtableSize));
+    INFO_AOA( fprintf(output, "#(AOAtoIOAtable resized to %d entries",
+		      (int)AOAtoIOAtableSize));
   } else {
     /* If the allocation of the new AOAtoIOAtable failed please
        terminate the program execution. */
@@ -66,7 +66,7 @@ void AOAtoIOAReAlloc()
 	     while (i++<oldBlockSize)
 	       if(*(pointer++)) 
 		 used++;
-	     fprintf(output, ", %d used.)\n", used);
+	     fprintf(output, ", %d used.)\n", (int)used);
 	   }
 	   );
 
@@ -83,7 +83,7 @@ void AOAtoIOAInsert( theCell)
 
 #ifdef RTDEBUG
     if (!inAOA( theCell)) {
-      fprintf(output, "AOAtoIOAInsert: 0x%x not in AOA!\n", theCell);
+      fprintf(output, "AOAtoIOAInsert: 0x%x not in AOA!\n", (int)theCell);
       Illegal(); /* useful to break in */
     }
 #endif
@@ -143,8 +143,8 @@ void AOAtoIOAReport()
     long used = 0;
     if( AOAtoIOAtable ){
 	MACRO_ScanBlock( AOAtoIOAtable, if( *thisCell) used++ );
-	fprintf( output, "#AOAtoIOATable size=%d filled=%d%%\n",
-	       AOAtoIOAtableSize, (100*used)/AOAtoIOAtableSize);
+	fprintf(output, "#AOAtoIOATable size=%d filled=%d%%\n",
+		(int)AOAtoIOAtableSize, (int)(100*used)/AOAtoIOAtableSize);
     }
 }
 

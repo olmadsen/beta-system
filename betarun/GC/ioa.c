@@ -106,7 +106,7 @@ You may order an unconstrained version from\n",
   
   IOAActive = TRUE;
   
-  INFO_IOA( fprintf( output, "#(IOA-%d %d? ", NumIOAGc, ReqObjectSize));
+  INFO_IOA( fprintf( output, "#(IOA-%d %d? ", (int)NumIOAGc, (int)ReqObjectSize));
   InfoS_LabA();
   
   /* Initialize the ToSpace */
@@ -259,7 +259,7 @@ You may order an unconstrained version from\n",
 
 	      INFO_DOT(fprintf(output, 
 			       "#DOT: updating IOA reference 0x%x to 0x%x\n", 
-			       *current, theObj));
+			       (int)(*current), (int)theObj));
 	      *current = (long) theObj;
 	      if (!theObj) DOTSize--;
 	  
@@ -329,8 +329,8 @@ You may order an unconstrained version from\n",
       if (limit < 0) {
 	DEBUG_IOA( fprintf(output, 
 			   "#IOA: %d StackObjects fill up more than 10%% of IOA (%d)\n", 
-			   IOAStackObjectNum, 
-			   IOAStackObjectSum));
+			   (int)IOAStackObjectNum, 
+			   (int)IOAStackObjectSum));
 	limit = 0;
       }
       IOAtoAOAtreshold = 0;
@@ -342,12 +342,12 @@ You may order an unconstrained version from\n",
       if (limit)
 	IOAtoAOAtreshold +=1; 
     }
-    DEBUG_IOA( fprintf( output, " treshold=%d", IOAtoAOAtreshold));
-    DEBUG_IOA( fprintf( output, " AOAroots=%d", 
-		       areaSize(AOArootsPtr,AOArootsLimit)));
+    DEBUG_IOA( fprintf(output, " treshold=%d", (int)IOAtoAOAtreshold));
+    DEBUG_IOA( fprintf(output, " AOAroots=%d", 
+		       (int)areaSize(AOArootsPtr,AOArootsLimit)));
     
-    INFO_IOA( fprintf( output," %d%%)\n",
-		      (100 * areaSize(IOA,IOATop))/areaSize(IOA,IOALimit)));
+    INFO_IOA( fprintf(output," %d%%)\n",
+		      (int)((100 * areaSize(IOA,IOATop))/areaSize(IOA,IOALimit))));
     
     DEBUG_IOA( IOACheck() );
     DEBUG_CBFA( CBFACheck() );
@@ -358,8 +358,8 @@ You may order an unconstrained version from\n",
     if (IOATop+4*ReqObjectSize > IOALimit)
       if (IOALooksFullCount > 2) {
 	char buf[100];
-	sprintf(buf, "Sorry, IOA is full: cannot allocate %d bytes.\n"
-		"Program terminated.\n", 4*ReqObjectSize);
+	sprintf(buf, "Sorry, IOA is full: cannot allocate %d bytes.\n\
+Program terminated.\n", (int)(4*ReqObjectSize));
 	Notify(buf);
 	BetaExit(1);
       } else
@@ -916,22 +916,23 @@ long GetDistanceToEnclosingObject( theObj)
     }
   }
   
-  void IOACheckReference(theCell)
-    handle(Object) theCell;
-  {
-    if( *theCell ){
-      if (!(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell))) {
-	fprintf (output, "theCell = 0x%x, *theCell = 0x%x\n", theCell, *theCell);
-	Claim( inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell),
-	      "IOACheckReference: *theCell lazy ref or inside IOA, AOA or LVRA");
-      }
-      if( inLVRA(*theCell) ){
-	Claim( ((ref(ValRep)) *theCell)->GCAttr == (long) theCell,
-	      "IOACheckReference:  ((ref(ValRep)) *theCell)->GCAttr == theCell");
-	DEBUG_LVRA( Claim( isValRep(*theCell),
-			  "IOACheckReference: isValRep(*theCell)"));
-      }
+void IOACheckReference(theCell)
+     handle(Object) theCell;
+{
+  if( *theCell ){
+    if (!(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell))) {
+      fprintf (output, "theCell = 0x%x, *theCell = 0x%x\n", 
+	       (int)theCell, (int)(*theCell));
+      Claim( inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell),
+	    "IOACheckReference: *theCell lazy ref or inside IOA, AOA or LVRA");
+    }
+    if( inLVRA(*theCell) ){
+      Claim( ((ref(ValRep)) *theCell)->GCAttr == (long) theCell,
+	    "IOACheckReference:  ((ref(ValRep)) *theCell)->GCAttr == theCell");
+      DEBUG_LVRA( Claim(isValRep(*theCell),
+			"IOACheckReference: isValRep(*theCell)"));
     }
   }
-  
+}
+
 #endif /* RTDEBUG */

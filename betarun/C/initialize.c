@@ -260,7 +260,7 @@ long *cIntStackPtr;
 double *cFloatStackPtr;
 #endif
 
-Initialize()
+void Initialize()
 {
   /* This hack is to cope with the sparc, where
      IOA and IOATop(off) is register vars */
@@ -306,21 +306,21 @@ Initialize()
   Notify("RTS: Garbage collector may perform consistency checks on heaps (use BETART).");
 #endif
   
-  INFO( fprintf( output, "#(Heap info: IOA=2*%dKb", IOASize/Kb) );
-  INFO( fprintf( output, ", AOABlock=%dKb", AOABlockSize/Kb) );
-  INFO( fprintf( output, ", LVRABlock=%dKb", LVRABlockSize/Kb) );
-  INFO( fprintf( output, ", CBFABlock=%dKb\n", CBFABlockSize/Kb) );
+  INFO( fprintf( output, "#(Heap info: IOA=2*%dKb", (int)IOASize/Kb) );
+  INFO( fprintf( output, ", AOABlock=%dKb", (int)AOABlockSize/Kb) );
+  INFO( fprintf( output, ", LVRABlock=%dKb", (int)LVRABlockSize/Kb) );
+  INFO( fprintf( output, ", CBFABlock=%dKb\n", (int)CBFABlockSize/Kb) );
   
   /* Setup the Infant Object Area */
   if ( IOASize <= 0 ) {
     char buf[100];
-    sprintf(buf,"Too small IOA size specified: %dKb", IOASize/Kb);
+    sprintf(buf,"Too small IOA size specified: %dKb", (int)IOASize/Kb);
     Notify2(buf, "Check your BETART environment variable.");
     exit(1);
   }
   if( !AllocateHeap( &tmpIOA,     &tmpIOATop,     &IOALimit, IOASize ) ){
     char buf[100];
-    sprintf(buf,"Couldn't allocate IOA (%dKb)", IOASize/Kb);
+    sprintf(buf,"Couldn't allocate IOA (%dKb)", (int)IOASize/Kb);
     Notify(buf);
     exit(1);
   }
@@ -348,7 +348,7 @@ Initialize()
 
   if( !AllocateHeap( &ToSpace, &ToSpaceTop, &ToSpaceLimit, IOASize ) ){
     char buf[100];
-    sprintf(buf,"Couldn't allocate ToSpace (%dKb)\n", IOASize/Kb);
+    sprintf(buf,"Couldn't allocate ToSpace (%dKb)\n", (int)IOASize/Kb);
     Notify(buf);
     exit(1);
   }
