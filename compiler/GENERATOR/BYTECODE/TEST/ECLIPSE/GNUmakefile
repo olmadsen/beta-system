@@ -9,14 +9,14 @@ beta: clean beta_indenter eclipse
 jvm:
 	mkdir jvm
 
-dummies: jvm
+dummies: jvm 
 	javac -classpath jvm -d jvm IDocument.java
 	javac -classpath jvm -d jvm DefaultAutoIndentStrategy.java
 	javac -classpath jvm -d jvm DocumentCommand.java
 
 java_indenter: dummies
-	javac -classpath jvm -d jvm Screen.java
-	javac -classpath jvm -d jvm BetaAutoIndentStrategy.java
+	javac -classpath jvm -d Screen.java
+	javac -classpath jvm -d BetaAutoIndentStrategy.java
 
 beta_indenter: dummies
 	jbeta -s 188 BetaAutoIndentStrategy.bet
