@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: copyobject.c,v $, rel: %R%, date: $Date: 1992-08-27 15:57:34 $, SID: $Revision: 1.11 $
+ * Mod: $RCSfile: copyobject.c,v $, rel: %R%, date: $Date: 1992-08-31 09:28:08 $, SID: $Revision: 1.12 $
  * by Lars Bak.
  */
 
@@ -17,7 +17,7 @@ void tempToSpaceToAOAalloc()
     ptr(long) oldPtr;
     ptr(long) pointer = ToSpaceLimit; /* points to end of old table */
     
-    if ( ! (tempToSpaceToAOA = (long *) malloc(IOASize)) ){
+    if ( ! (tempToSpaceToAOA = (long *) MALLOC(IOASize)) ){
 	fprintf(output, "Could not allocate ToSpaceToAOA table.\n");
 	exit(1);
     } 
