@@ -196,12 +196,13 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 #endif
 
 #ifdef sgi
-  { long SPoff;
+  { 
     PC = (long *) scp->sc_pc;
     theObj = CurrentObject = (struct Object *) scp->sc_regs[30];
-    GetSPoff(SPoff, CodeEntry(theObj->Proto, (long)PC)); 
-    StackEnd = (long *) ((long)scp->sc_regs[29]+SPoff);
-
+    { long SPoff;
+      GetSPoff(SPoff, CodeEntry(theObj->Proto, (long)PC)); 
+      StackEnd = (long *) ((long)scp->sc_regs[29]+SPoff);
+    }
     if( !(inBetaHeap(theObj) && isObject(theObj))) theObj  = 0;
     switch( sig){
     case SIGFPE: 
@@ -223,6 +224,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
       default:
 	todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
       }
+      break;
 #ifdef RTDEBUG
     case SIGINT: /* Interrupt */
       todo=DisplayBetaStack( InterruptErr, theObj, PC, sig); break;

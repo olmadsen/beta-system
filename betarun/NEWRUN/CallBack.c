@@ -6,12 +6,6 @@
 #include "beta.h"
 #include "crun.h"
 
-
-/* FIXME:
- * if valhallaisstepping, we should call valhalla after callback returns to C 
- */
-
-
 #ifdef RTVALHALLA
 #include "valhallaComm.h"
 #endif /* RTVALHALLA */
@@ -97,5 +91,11 @@ struct Item *AlloSICB(struct Structure **struchandle, long *SP)
   Ck(struc->iOrigin);
   ss = AlloI((struct Object *)struc->iOrigin, struc->iProto, SP);
   Ck(ss);
+
+#ifdef RTVALHALLA
+  if (valhallaIsStepping)
+    ValhallaOnProcessStop((long *)struc->iProto->CallBackRoutine,0,0,0,RTS_CBFA);
+#endif
+
   return ss;
 }

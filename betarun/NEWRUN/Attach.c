@@ -35,13 +35,19 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
    };
    
    if ((long)comp->CallerLSC == -1) {
+     /* adjust SPx to be SP of previous frame. */
+     long SPoff;
+     GetSPoff(SPoff, CodeEntry(this->Proto, RA)); 
+     SPx = (long *) ((long)SPx+SPoff);
      BetaError(RecursiveAttErr, this, (long *)SPx);
-     /* FIXME: Probably SPx should be adjusted for SPoff */
    }
 
    if ((long)comp->CallerLSC == -2) {
+     /* adjust SPx to be SP of previous frame. */
+     long SPoff;
+     GetSPoff(SPoff, CodeEntry(this->Proto, RA)); 
+     SPx = (long *) ((long)SPx+SPoff);
      BetaError(CompTerminatedErr, this, (long *)SPx); 
-     /* FIXME: Probably SPx should be adjusted for SPoff */
    }
 
    isFirst = (comp->CallerLSC == 0);
