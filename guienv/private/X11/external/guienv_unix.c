@@ -144,3 +144,13 @@ void XClipRect (Display *dpy, GC gc, long x, long y, long width, long height)
   rect.height = height;
   XSetClipRectangles(dpy, gc, 0, 0, &rect, 1, Unsorted);
 }
+
+void
+do_nothing()
+{
+}
+
+void GetRidOfStupidWarningsFromX(XtAppContext app)
+{
+    XtAppSetWarningHandler(app, (XtErrorHandler)&do_nothing);
+}
