@@ -331,32 +331,12 @@ do 'RasterPaint' -> out.debugps;
 --TiledSolidColorWritePS: descriptor--
 (# tile: ^BitMap;
    trace_bits: (# exit false #);
-   MakePaintProc:
+   PutBits:
      (# bitpos: @integer;
         p: ^BitMap.pixel;
         value: @int8u;
         gp: ^Bitmap.getPixel;
-        sep: @out.sep;
-        tx, ty: @integer;
      do &tile.GetPixel[] -> gp[];
-        '{\n    pop\n    ' -> out.puttext;
-        tile.width -> out.putint; sep;
-        tile.height -> out.putint; sep;
-        'true ' -> out.puttext;
-        (* The coordinate system of a Bifrost bitmap is identical to that of
-         * a PostScript image, so the identity matrix can be used here.
-         * However, the only way I have been able to translate the bitmap
-         * in x-y direction has been using the tx and ty components of this
-         * matrix. It does not seem to work using the /BBox of the pattern.
-         * FIXME: Currently the translation is not done - should be based on
-         * the placement and hotspot of the shape, and the hotspot of the tile.
-         *)
-        '[1 0 0 1 ' -> out.puttext;
-        0 -> tx -> ty (* FIXME *);
-        tx -> out.putint; sep;
-        ty -> out.putint; sep;
-        '] ' -> out.puttext;
-        '{ ' -> out.puttext;
         '<'  -> out.puttext;
         7 -> bitpos (* bits are filled in from MSB in PostScript images *);
         0 -> value;
@@ -387,8 +367,6 @@ do 'RasterPaint' -> out.debugps;
              for);
         for);
         '> ' -> out.puttext;
-        '} imagemask' -> out.putline;
-        '  }' -> out.putline;
      #);
    WriteRGB: @integerobject
      (# r: @real;
@@ -396,36 +374,21 @@ do 'RasterPaint' -> out.debugps;
         r/MaxRGB  -> out.putreal;
         out.sep;
      #);
-   SetPattern:
-     (* Filling a shape with a pattern is amazingly complex
-      * in PostScript. The following method is described in section 4.9
-      * of PostScript Language Reference Manual, second edition, 
-      * Adobe Systems Incorporated, 1990, ISBN 0-201-18127-4.
-      * Some of this should probably be extracted into PostScript
-      * macros (EPSmacros.bet).
-      *)
-     (# 
-     do '[/Pattern /DeviceRGB] setcolorspace' ->out.putline;
-        RGBvalues -> (writeRGB, writeRGB, writeRGB);
-        '\n<<' -> out.putline;
-        '  /PaintType 2' -> out.putline;
-        '  /PatternType 1' -> out.putline;
-        '  /TilingType 1' -> out.putline;
-        '  /BBox [0 0 ' -> out.puttext;
-        tile.width->out.putint; out.sep; tile.height->out.putint; 
-        ']'->out.putline;
-        '  /XStep ' -> out.puttext; tile.width->out.putint; out.newline;
-        '  /YStep ' -> out.puttext; tile.height->out.putint; out.newline;
-        '  /PaintProc ' -> out.puttext;
-        MakePaintProc;
-        '>>' -> out.putline;
-        'matrix' -> out.putline;
-        'makepattern' -> out.putline;
-        'setcolor' -> out.putline;
-     #);
+   tx, ty: @integer;
 do 'TiledSolidColor' -> out.debugps;
+   (* r g b w h tx ty bits tsc *)
    theTile -> tile[];
-   SetPattern;
+   RGBvalues -> (writeRGB, writeRGB, writeRGB);
+   tile.width->out.putint; out.sep; tile.height->out.putint; out.sep;
+   (* FIXME: Do not know how to get tile correctly placed above shape.
+    * The following does not work:
+    * (tile.hotspot, shape_hotspot) -> SubPoints -> out.putpoint;
+    * Compare, though, with the calculation for SetTSorigin in
+    * PaintX11Impl.
+    *)
+   (0,0) -> out.putpoint; (* dummy (tx,ty) *)
+   PutBits;
+   'tsc' -> out.putline;
    INNER writePS;
 #)
 
@@ -440,7 +403,7 @@ do 'AbstractGraphicalObject' -> out.debugps;
    if);
    &text[] -> pt[];
    false -> invisible;
-   pt[] -> thePaint.writePS;
+   (pt[],theShape.hotspot) -> thePaint.writePS;
    (if pt.length // 0 then true->invisible if);
    pt[] -> out.putText;
    'PatternName' -> out.debugps;
