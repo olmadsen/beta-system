@@ -1,5 +1,5 @@
-// nbeta tstenv
-// csc -t:library -r:clr/tstenv.dll Component.cs
+// nbeta ../../betaenv
+// csc -t:library -r:../../clr/betaenv.dll Component.cs
 
 public class Component
 { public static Component current;
@@ -17,7 +17,7 @@ public class Component
 
   private void run() 
     { 
-      body.xdo();
+      body.@do();
       lock(this) { 
 	System.Threading.Monitor.Pulse(this);
       }
