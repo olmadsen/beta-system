@@ -5,4 +5,4 @@ set PATH=%CD%\bin;%PATH%
 cd examples
 echo Working directory now %CD%
 echo BETALIB and PATH set. 
-echo Now start using pbeta compilation.
+echo Now start using pre-beta for compilation.

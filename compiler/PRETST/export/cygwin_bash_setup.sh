@@ -6,4 +6,4 @@ export PATH=${CYG_BETALIB}/bin:${CYG_JAVAHOME}/bin:${PATH}
 cd $BETALIB/examples
 echo Working directory now $PWD
 echo BETALIB and PATH set. 
-echo Now start using pbeta for compilation.
+echo Now start using pre-beta for compilation.

@@ -20,9 +20,9 @@ This will set up needed environment variables and change directory to the
 
 Examples
 --------
-The .bet files in the examples directory can be compiled and run using "pbeta".
+The .bet files in the examples directory can be compiled and run using "pre-beta".
 Compiling, e.g. beer.bet is done as such:
-   pbeta beer
+   pre-beta beer
 This will result in windows batch file "beer.bat", which calls pre-vm with the
 components generated from the BETA compilation.
 
