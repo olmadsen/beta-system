@@ -10,18 +10,21 @@
 /* Implementation using the /proc file system. */
 #include <fcntl.h>
 
-#if 0
-#ifndef sun4s
-static ssize_t pwrite(int fildes,
-		      const void  *buf, 
-		      size_t  nbyte, 
-		      off_t offset)
+#ifdef sgi
+/* The (undocumented) pwrite in IRIX 5.3 does not seem to
+ * work. This can probably be dropped when IRIX 5.3 is not needed
+ * anymore.
+ */
+static ssize_t myPwrite(int fildes,
+		       const void  *buf, 
+		       size_t  nbyte, 
+		       off_t offset)
 {
   lseek(fildes, offset, SEEK_SET);
   return write(fildes, buf, nbyte);
 }
-#endif
-#endif
+#define pwrite myPwrite
+#endif /* sgi */
 
 #define MAX_PID_COUNT 10
 

@@ -67,12 +67,9 @@ int executeProcess (char *execName)
   return pid;
 }
 
+extern char *machine_name(void); /* in betarun */
 char *valhallaMachineName()
 {
-#ifdef MACHINETYPE
-  return MACHINETYPE;
-#else
-  return "unknown";
-#endif
+  return machine_name();
 }
 
