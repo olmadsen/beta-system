@@ -94,7 +94,19 @@ static long  AllocateHeap(long * base,
 	     char *name
 	     )
 {
-  if((*base = (long)MALLOC(numbytes)) != 0){
+#ifdef nti
+  /* Windows sometimes gives you unaligned allocations.  This trick
+   * fixes it, but it means you can't free these areas!
+   */
+  if ((*base = (long)MALLOC(numbytes + 4)) != 0) {
+    *base = ObjectAlign((unsigned long)(*base));
+    INFO_ALLOC(numbytes);
+    *top   = *base;
+    *limit = *base + numbytes;
+    return *base;
+  }
+#else
+  if ((*base = (long)MALLOC(numbytes)) != 0) {
     if (ObjectAlign((unsigned long)(*base)) != (unsigned long)(*base)) {
       fprintf(output, "Allocated unaligned heap\n");
       BetaExit(1);
@@ -103,7 +115,9 @@ static long  AllocateHeap(long * base,
     *top   = *base;
     *limit = *base + numbytes;
     return *base;
-  } else {
+  }
+#endif
+  else {
     AllocateHeapFailed(name, numbytes);
     return 0;
   }
