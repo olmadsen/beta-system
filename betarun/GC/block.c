@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: block.c,v $, rel: %R%, date: $Date: 1992-06-03 15:16:31 $, SID: $Revision: 1.2 $
+ * Mod: $RCSfile: block.c,v $, rel: %R%, date: $Date: 1992-06-09 15:13:43 $, SID: $Revision: 1.3 $
  * by Lars Bak
  */
 
@@ -24,10 +24,9 @@ ref(Block) newBlock( size )
   return theBlock;
 }
 
-freeBlock(theBlock)
-  ref(Block) theBlock;
+void freeBlock(theBlock)
+     ref(Block) theBlock;
 {
-  /* here theBlock->top - theBlock->limit bytes should be freed */
   free(theBlock);
 }
 

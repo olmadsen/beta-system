@@ -10,7 +10,7 @@
 static int primes[] = { 5879,  8821, 13241, 19867, 29803, 44711, 0 };
 
 ref(Block) newBlock(); /* Extern routine in block.c */
-freeBlock();           /* Extern routine in block.c */
+void freeBlock();      /* Extern routine in block.c */
 
 static int prim_index = 0;
 /* Allocates the initial AOAtoIOAtable. */
