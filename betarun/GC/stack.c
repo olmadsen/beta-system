@@ -1,5 +1,5 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1990-1992 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1990-93 Mjolner Informatics Aps.
  * stack.c
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
@@ -92,7 +92,7 @@ static long skipCparams=FALSE;
 struct RegWin *BottomAR=0, *lastAR=0;
 long PC = 0;
 void PrintAR(struct RegWin *ar, struct RegWin *theEnd);
-
+void PrintCAR(struct RegWin *cAR);
 #endif
 
 /* Traverse an activation record (AR) [ar, theEnd[
@@ -126,11 +126,6 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
 	      fprintf(output, "ProcessAR: ar->i3 (0x%x) is *ValRep\n", ar->i3));
     DEBUG_IOA(if (inBetaHeap(ar->i4) && objIsValRep(cast(Object)(ar->i4)))
 	      fprintf(output, "ProcessAR: ar->i4 (0x%x) is *ValRep\n", ar->i4));
-
-    DEBUG_IOA(if (ar->i0 && (! (inBetaHeap(ar->i0) && isObject(ar->i0)))){
-		fprintf(output, "ar: 0x%x, %%i0: 0x%x NOT AN OBJECT\n", ar, ar->i0); 
-		fflush(output);
-	      });
 
     if (inBetaHeap(ar->i0) && isObject(ar->i0) && !objIsValRep(cast(Object)(ar->i0)))
       if (isProto((cast(Object)ar->i0)->Proto)) ProcessReference(&ar->i0);
@@ -202,10 +197,15 @@ void ProcessStack()
 	    /* This is AR of HandleCB. Don't GC this, but
 	     * skip to betaTop and update nextCBF */
 	    nextCBF = (struct RegWin *) theAR->l5;
-	    DEBUG_CODE(PC = 0)
-	      /* Cannot know where we came from in beta before C was called */;
 	    skipCparams = TRUE;
-	    theAR = (struct RegWin *) theAR->l6;
+	    DEBUG_STACK({ /* Wind down the stack until betaTop is reached */
+			  struct RegWin *cAR;
+			  for (cAR = theAR;
+			       cAR != (struct RegWin *) theAR->l6;
+			       PC = cAR->i7 +8, cAR = (struct RegWin *) cAR->fp)
+			    PrintCAR(cAR);
+			});
+	    theAR = (struct RegWin *) theAR->l6; /* Skip to betaTop */
 	  }
 	}
 	ProcessAR(theAR, (struct RegWin *) theAR->fp);
@@ -384,17 +384,22 @@ void ProcessStackObj(theStack)
 
 #ifdef sparc
 
-static FILE *thePipe=0; 
-static char theLabel[100]; 
-static long labelAddress;
+struct label {
+  long address;
+  char *id;
+};
+
 long labelOffset = 0;
-static char *labels=0;
+struct label **labels = 0;
+long numLabels = 0;
 
 static void initLabels()
 {
   char ch;
   char command[200];
-  int size=0;
+  char theLabel[200];
+  FILE *thePipe; 
+  long labelAddress;
 
   fprintf(output, "(initLabels ...");
   fflush(output);
@@ -402,79 +407,112 @@ static void initLabels()
   (void) strcpy (command, "nm -grn ");
   (void) strcat (command, ArgVector[0]);
 
+  /* Find number of labels */
   thePipe = popen (command, "r");
 
+  /* Skip to etext */
   for (;;){
     fscanf(thePipe, "%x %c %s", &labelAddress, &ch, theLabel);
     if (labelAddress==(long)&etext) break;
   }
-      
-  while (fgetc (thePipe) != EOF)
-    size+=1;
+  numLabels=0;
+  for (;;){
+    if (fscanf(thePipe, "%x %c %s", &labelAddress, &ch, theLabel) == EOF)
+      break;
+    numLabels++;
+  }
 
-  if (! (labels=(char *)malloc(size+1)))
+  if (! (labels=(struct label **)malloc(numLabels * sizeof(struct label *)))) {
     fprintf(output, "Failed to allocate memory for labels\n");
+    numLabels = -1;
+    labels = 0;
+  }
   else
     {
+      long lastLab=0;
+      /* Read into labels */
       pclose (thePipe);
       thePipe = popen (command, "r");
+      /* Skip to etext */
       for (;;){
 	fscanf(thePipe, "%x %c %s", &labelAddress, &ch, theLabel);
 	if (labelAddress==(long)&etext) break;
       }
-      fread(labels, 1, size, thePipe);
+      /* Read labels */
+      for (;;lastLab++){
+	struct label *lab;
+	if (fscanf(thePipe, "%x %c %s", &labelAddress, &ch, theLabel) == EOF)
+	  break;
+	if (! (lab = (struct label *) malloc(sizeof(struct label)))){
+	  fprintf(output, "Allocation of struct label failed\n");
+	  numLabels = -1;
+	  /* free previously allocated labels */
+	  free(labels);
+	  labels = 0;
+	  break;
+	}
+	if (! (lab->id = (char *)malloc(strlen(theLabel)+1))) {
+	  fprintf(output, "Allocation of label id failed\n");
+	  numLabels = -1;
+	  /* free previously allocated labels */
+	  free(labels);
+	  labels = 0;
+	  break;
+	}
+	lab->address = labelAddress;
+	strcpy(lab->id, theLabel);
+	labels[lastLab] = lab;
+      }
       pclose (thePipe);
     }
   fprintf(output, " done)\n");
   fflush(output);
+
+#if 0
+  fprintf(output, "Labels:\n");
+  { 
+    long n;
+    for (n=0; n<=numLabels; n++){
+      fprintf(output, "0x%x\t%s\n", labels[n]->address, labels[n]->id);
+    }
+  }
+  fflush(output);
+#endif
 }
 
 char *getLabel (addr)
      long addr;
 {
-  char ch;
-  char *lab;
-  int chars;
+  long n;
 
-  if (labels==0) initLabels();
+  if (numLabels==0) initLabels();
 
   if (!addr){
     labelOffset=0;
-    labelAddress=0;
     return "<unknown>";
   }
-  
-  if (labels)
-    for (lab=labels;;){
-      if (sscanf (lab, "%x %c %s%n", &labelAddress, &ch, theLabel, &chars) 
-	  == EOF)
-	{
-	  labelAddress = 0;
-	  break;
-	}
-      else 
-	if (labelAddress <= addr){
-	  labelOffset = addr-labelAddress;
-	  return theLabel;
-	} else {
-	  lab += chars;
-	}
+
+  if (labels){
+    for (n=0; n<=numLabels; n++){
+      if (labels[n]->address <= addr){
+	labelOffset = addr-(labels[n]->address);
+	return labels[n]->id;
+      }
     }
+  }
+  labelOffset=0;
+  return "<unknown>";
 }
 
 void PrintRef(ref(Object) ref)
 {
   if (ref) {
     if (inBetaHeap(ref) && isObject(ref) ){
-      if(objIsValRep(ref)) {
-	fprintf(output, ", is *ValRep");
-      } else {
-	fprintf(output, ", is object");
-	if (isProto((ref)->Proto))
-	  fprintf(output, ", proto ok: 0x%x", ref->Proto);
-	else
-	  fprintf(output, ", proto NOT ok: 0x%x", ref->Proto);
-      }
+      fprintf(output, ", is object");
+      if (isProto((ref)->Proto))
+	fprintf(output, ", proto ok: 0x%x (%s)", ref->Proto, DescribeObject(ref));
+      else
+	fprintf(output, ", proto NOT ok: 0x%x", ref->Proto);
     } else {
       fprintf(output, ", is NOT object");
     }
@@ -482,25 +520,29 @@ void PrintRef(ref(Object) ref)
   fprintf(output, "\n");
 }
 
+void PrintCAR(struct RegWin *cAR)
+{
+  fprintf(output, 
+	  "----- C AR: 0x%x, end: 0x%x, PC: 0x%x (%s+0x%x)\n",
+	  cAR, 
+	  cAR->fp,
+	  PC,
+	  getLabel(PC),
+	  labelOffset);
+}
+
 void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
 {
   struct Object **theCell = (struct Object **) &ar[1];
 
-  if (DebugLabels){
-    fprintf(output, 
-	    "----- ar: 0x%x, theEnd: 0x%x, PC: 0x%x (%s+0x%x)\n",
-	    ar, 
-	    theEnd,
-	    PC,
-	    getLabel(PC),
-	    labelOffset);
-  } else {
-    fprintf(output, 
-	    "----- ar: 0x%x, theEnd: 0x%x, PC: 0x%x\n",
-	    ar, 
-	    theEnd,
-	    PC);
-  }    
+  fprintf(output, 
+	  "----- AR: 0x%x, theEnd: 0x%x, PC: 0x%x (%s+0x%x)\n",
+	  ar, 
+	  theEnd,
+	  PC,
+	  getLabel(PC),
+	  labelOffset);
+
   fprintf(output, "%%i0: 0x%x", ar->i0); PrintRef(cast(Object)ar->i0);
   fprintf(output, "%%i1: 0x%x", ar->i1); PrintRef(cast(Object)ar->i1)
     /* Notice that CopyT, AlloVR1-4 gets an offset in this parameter.
@@ -513,17 +555,79 @@ void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
   /* Notice that in INNER some return adresses are pushed. This is no
    * danger.
    */
-  if (skipCparams)
+  if (skipCparams){
     /* This AR called C, skip one hidden word, and (at least) 
      * six parameters
      */
     ((long) theEnd) -= 48;
+    fprintf(output, "(Skipped 12 longs allocated for C-call)\n");
+  }
 
   for (; theCell != (struct Object **) theEnd; theCell+=2) {
     fprintf(output, "0x%x", *theCell);
     PrintRef(cast(Object)(*theCell));
   }
   fflush(output);
+}
+
+/* PrintStack.
+ * Should probably not be called during GC. Instead, you may set DebugStack to
+ * TRUE before calling IOAGc()
+ */
+void PrintStack()
+{
+  struct RegWin *theAR;
+  struct RegWin *nextCBF = (struct RegWin *) ActiveCallBackFrame;
+  struct RegWin *nextCompBlock = (struct RegWin *) lastCompBlock;
+  struct RegWin *end;
+  
+  /* Flush register windows to stack */
+  asm("ta 3");
+  
+  fprintf(output, "\n ***** Trace of stack *****\n");
+  
+  end  = (struct RegWin *)StackPointer;
+  /* end points to the activation record of PrintStack() */
+  PC=((struct RegWin *) end)->i7 +8;
+  end = (struct RegWin *)((struct RegWin *) end)->fp; /* Skip AR of PrintStack() */
+
+  skipCparams = TRUE; /* Skip 12 longs allocated for the call to PrintStack() */
+  
+  for (theAR =  (struct RegWin *) end;
+       theAR != (struct RegWin *) 0;
+       PC = theAR->i7 +8, theAR = (struct RegWin *) theAR->fp) {
+    if (theAR == nextCompBlock) {
+      /* This is the AR of attach. Continue, but get
+       * new values for nextCompBlock and nextCBF. 
+       * Please read StackLayout.doc
+       */
+      nextCBF = (struct RegWin *) theAR->l5;
+      nextCompBlock = (struct RegWin *) theAR->l6;
+      if (nextCompBlock == 0)
+	break; /* we reached the bottom */
+    } else {
+      if (theAR == nextCBF) {
+	/* This is AR of HandleCB. Skip this and
+	 * skip to betaTop and update nextCBF
+	 */
+	{ /* Wind down the stack until betaTop is reached */
+	  struct RegWin *cAR;
+	  for (cAR = theAR;
+	       cAR != (struct RegWin *) theAR->l6;
+	       PC = cAR->i7 +8, cAR = (struct RegWin *) cAR->fp)
+	    PrintCAR(cAR);
+	};
+	nextCBF = (struct RegWin *) theAR->l5;
+	skipCparams = TRUE;
+	theAR = (struct RegWin *) theAR->l6;
+      }
+    }
+    PrintAR(theAR, (struct RegWin *) theAR->fp);
+    skipCparams=FALSE;
+  }
+   
+  fprintf(output, " *****  End of trace  *****\n");
+  
 }
 
 #endif /* sparc */

@@ -1,5 +1,5 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1990-93 Mjolner Informatics Aps.
  * copyobject.c
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */

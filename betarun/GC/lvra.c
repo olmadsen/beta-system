@@ -1,16 +1,11 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1991-93 Mjolner Informatics Aps.
  * lvra.c
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
 
 static LVRACompaction();
-void LVRACheck();
-
-#ifdef RTDEBUG
-long LVRAAlive();
-#endif
 static LVRAConstructFreeList();
 
 #define TableMAX 16
