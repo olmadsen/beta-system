@@ -11,16 +11,9 @@ public class Component
     body = b; 
     thread = new System.Threading.Thread(new System.Threading.ThreadStart(run));
     thread.IsBackground = true;
+    b._comp = this;
+    caller = this;
   }
-
-  static public void AlloC(BetaObject b)
-    { 
-      Component C = new Component(b);
-      //b.comp\u0024 = C; // b.comp$
-      b._comp = C;
-      C.caller = C;
-    }
-
 
   private void run() 
     { 

@@ -1,20 +1,17 @@
 package beta;
-//package org.eclipse.ui.betaeditor.beta;
 
 class Component extends Thread
 { static Component current;
     Component caller;
     BetaObject body;
 
-    Component(){};
-    Component(BetaObject b) { body = b; setDaemon(true); }
-
-    static public void AlloC(BetaObject b)
-    { 
-	Component C = new Component(b);
-	b.comp$ = C;
-	C.caller = C;
+    Component(BetaObject b) { 
+	body = b; 
+	setDaemon(true); 
+	b.comp$ = this; 
+        caller = this;
     }
+
     synchronized public void swap()
     { 
 	trace("Component:swap");

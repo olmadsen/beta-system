@@ -23,7 +23,7 @@ java_indenter: dummies
 
 beta_indenter: dummies
 	rm -rf ../jvm
-	cd .. ; jbeta -qw -s 188 tstenv
+	cd .. ; jbeta --mute -qw -s 188 tstenv
 	jbeta --mute -qw -s 188 BetaAutoIndentStrategy.bet
 
 eclipse:
