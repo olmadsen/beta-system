@@ -77,7 +77,7 @@ valhallaApplication: valhallaGUI
           
        do
           (if isStandAloneValhalla then leave debuggeeOutDated if);
-	  ((getExecNameparam).copy)->EXECstrippedName[]->f.name;
+          ((getExecNameparam).copy)->EXECstrippedName[]->f.name;
           exeFileExtension->EXECstrippedName.stripExtension;
           f.entry.modtime->debuggeemodtime;
           mps.AST.dependencyGraph
@@ -88,7 +88,8 @@ valhallaApplication: valhallaGUI
                machine_type->TargetMachine[];
                machine_type->TargetDirectory[];
                scan:
-                 EXECstrippedName[]->scanextent
+               EXECstrippedName[]
+                 ->scanextent
                    (# 
                    do
                       (if current.modtime > debuggeemodtime then
@@ -298,9 +299,17 @@ valhallaApplication: valhallaGUI
      doContinue:
        (# 
        do
-          debuggee.processComm.continue;
-          'Running'
-            -> (*FGC, gui.*) putpinfo;
+          debuggee.processComm.continue
+            (#
+               failure:: 
+                 (# 
+                 do
+                    true->continue;
+                    (* Display warning *)
+                    continueError
+                 #)
+            #);
+          'Running'-> (*FGC, gui.*) putpinfo;
           waitersem.V;
           
        #);
@@ -308,12 +317,10 @@ valhallaApplication: valhallaGUI
        (# 
        do
           (if debuggeeIsRunning then
-              TRUE->stopped;
-              debuggee.processComm.stop
+              TRUE->stopped; debuggee.processComm.stop
           if)
        #);
-     doFinish:
-      <<SLOT valhalladoFinish:Descriptor>>;
+     doFinish: <<SLOT valhalladoFinish:Descriptor>>;
      stopped: @Boolean;
      (*  TRUE if doStop was called. *)
      (* procwaiter
@@ -439,7 +446,7 @@ valhallaApplication: valhallaGUI
           wriggleIfFound:< BooleanValue
             (# found: ^ (*FGC, gui.*) main.codemoveableEditor; 
             enter found[]
-            do true->value; INNER
+            do valhallaprefs.wriggleiffound->value; INNER
             #);
           acceptFound:< BooleanValue
             (# found: ^ (*FGC, gui.*) main.codemoveableEditor; 
@@ -460,7 +467,10 @@ valhallaApplication: valhallaGUI
                found: ^ (*FGC, gui.*)
                main.objectView
             enter found[]
-            do true->value; INNER
+            do
+               valhallaprefs.wriggleiffound
+                 ->value;
+               INNER
             #);
           acceptFound:< BooleanValue
             (#
@@ -716,7 +726,7 @@ valhallaApplication: valhallaGUI
        (# 
        do
           (if theEnveditor[] <> none then
-              theEnveditor.wriggle; 
+              (if valhallaprefs.wriggleiffound then theEnveditor.wriggle;  if)
            else
               &envedittype[]->theEnveditor[]; theEnveditor.open; 
           if);
@@ -896,7 +906,7 @@ valhallaApplication: valhallaGUI
        (#
           menubarType:: 
             (# open::  (#  <<SLOT mainTypeMenubarTypeOpen:DoPart>> #) #);
-          onhide::  (#  do 'close'->screen.putline; resetdebugger #)
+          onhide::  (#  do resetdebugger #)
        #);
      init::< (* gui.init *) 
        (# (*FGC, skal dette i en pattern, saa det kan redo *) 
@@ -943,6 +953,7 @@ valhallaApplication: valhallaGUI
             (# 
             do
                sources.edenv.globalWriteProtection->GlobalWriteProtectionStatus;
+               true->sources.edenv.setglobalWriteProtection;
                program[]->setExecNameParam;
                (if debuggeeOutDated then leave debugProgram if);
                main.show;
@@ -996,6 +1007,17 @@ valhallaApplication: valhallaGUI
           externalInterface.GlobalWriteProtectionStatus
             ->sources.edenv.setGlobalWriteProtection;
           INNER
+       #);
+     (* Exceptions should call this and close debugger in mjolnertool *)
+     continueError:
+       (# msg: ^text; 
+       enter msg[]
+       do
+          (if msg[] = none then &text[]->msg[] if);
+          '\nClosing Debugger'->msg.append;
+          (main[],msg[],'Error')->gui.alertUser;
+          stopDebugging;
+          
        #);
      
   do
