@@ -6,10 +6,17 @@
 # define STDCALL
 #endif
 
-#define test 0
+#define test 1
 
 struct myData{
     long x;
+    short s;
+    char c;  
+};
+
+struct myBigData{
+    long x;
+    long y;
     short s;
     char c;  
 };
@@ -28,6 +35,7 @@ struct vtbl
   char (STDCALL *f5)(struct xCOMclass *this, struct myData *S);
   char (STDCALL *f6)(struct xCOMclass *this, struct myData S);
   struct myData (STDCALL *f7)(struct xCOMclass *this, long a, long b, long c);
+  struct myBigData (STDCALL *f8)(struct xCOMclass *this, long a, long b, long c);
 };
 
 /* xCOMclass is the class */
@@ -95,8 +103,18 @@ char STDCALL f6(struct xCOMclass *this, struct myData S)
 
 struct myData STDCALL f7(struct xCOMclass *this, long a, long b, long c)
 { struct myData mD;
-  if (test) printf(" xCOMclass::F7: %i, %i, %c \n",a,b,c);
+  if (test) printf(" xCOMclass::F7: %d, %d, %d \n",a,b,c);
   mD.x = 1234;
+  mD.s = 321;
+  mD.c = '=';
+  return mD;
+}
+
+struct myBigData STDCALL f8(struct xCOMclass *this, long a, long b, long c)
+{ struct myBigData mD;
+  if (test) printf(" xCOMclass::F8: %d, %d, %d \n",a,b,c);
+  mD.x = 1234;
+  mD.y = 0x87654321;
   mD.s = 321;
   mD.c = '=';
   return mD;
@@ -119,6 +137,7 @@ struct xCOMclass * GetXobj()
   theVTBL.f5 = &f5;
   theVTBL.f6 = &f6;
   theVTBL.f7 = &f7;
+  theVTBL.f8 = &f8;
   /* Allocate xCOMclass object */
   R = (struct xCOMclass *)malloc(sizeof(struct xCOMclass));
   R->proto = &theVTBL;
@@ -187,9 +206,11 @@ void PutBobj(struct bCOMclass * R)
 }
 
 
-void olsen()
+void olsen(struct xCOMclass * R)
 { struct myData mD;
-  struct xCOMclass * R;
+  struct myBigData mDB;
   mD = f7(R,11,12,'*');
-  printf(" xCOMclass::F6: %i %i %c \n",mD.x,mD.s,mD.c);
+  printf(" xCOMclass::F6: %i %i %i %c \n",mD.x,mD.s,mD.c);
+  mDB = f8(R,11,12,'*');
+  printf(" xCOMclass::F6: %i %i %i %c \n",mDB.x,mDB.y,mDB.s,mDB.c);
 }
