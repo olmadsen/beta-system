@@ -51,13 +51,19 @@ if (lastmodnumber == 0) {
     else
 	  century = "20";
 	      
-    document.writeln("<FONT size=\"-1\">"
-		     + "[Modified: " + day_names[lastmod.getDay()] + " " 
-		     + month_names[lastmod.getMonth()] + " " + sup_date
-		     + " " + century + lastmod.getYear() 
-		     + " at " + hours + ":" + minutes
+    document.writeln("<NOBR><FONT size=\"-1\">"
+		     + "[Modified: " 
+		     + day_names[lastmod.getDay()] 
+		     + " " 
+		     + month_names[lastmod.getMonth()] 
+		     + " " 
+		     + sup_date
+		     + " " 
+		     + century + lastmod.getYear() 
+		     + " at " 
+		     + hours + ":" + minutes
 		     + "]"
-		     + "</FONT>"
+		     + "</FONT></NOBR>"
 		     );
   }
 }
