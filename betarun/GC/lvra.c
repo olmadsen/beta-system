@@ -5,7 +5,7 @@
  */
 #include "beta.h"
 
-#define TabelMAX 15
+#define TableMAX 15
 
 struct LVRABlock *LVRABaseBlock;
 struct LVRABlock *LVRATopBlock;
@@ -23,39 +23,38 @@ long LVRAFreeListMemory;
 
 #define LVRABigRange 100 * 256    /* ~ValRepSize > 100 Kb. */
 
-ref(ValRep) LVRATabel[TabelMAX+1];
+ref(ValRep) LVRATable[TableMAX+1];
 
 DEBUG_CODE( long LVRATabNum[16] )
 
-#define ValRepSize( range) (range*4 + 16)
 
-/* LVRAtabelIndex find a index in the Tabel in the range [0..TabelMAX].
+/* LVRAtableIndex find a index in the Table in the range [0..TableMAX].
  * The index is a sort of a log2 function.
  * f(16) = 0; f(32) = 1 ..... f(64Kb) = 12; f(128Kb) = 13 etc.
- * The returned value is <= TabelMAX.
+ * The returned value is <= TableMAX.
  */
-int LVRATabelIndex( range )
+int LVRATableIndex( range )
   int range;
 { int index = 0; range >>= 4;
   while( ( range >>= 1 ) != 0) index++;
-  if( index > TabelMAX ) index = TabelMAX;
+  if( index > TableMAX ) index = TableMAX;
   return index; 
 }
 
 /* LVRACleanTable initialize the Free List Table */
-LVRACleanTabel()
+LVRACleanTable()
 { int index;
-  for(index=0;index <= TabelMAX; index++) LVRATabel[index] = 0;
+  for(index=0;index <= TableMAX; index++) LVRATable[index] = 0;
   LVRAFreeListAvailable = FALSE;
-  DEBUG_CODE( for(index=0;index <= TabelMAX; index++) LVRATabNum[index] = 0 );
+  DEBUG_CODE( for(index=0;index <= TableMAX; index++) LVRATabNum[index] = 0 );
 }
 
 #ifdef RTDEBUG
 LVRADisplayTable()
 { int index;
   fprintf( output, "#(LVRAFreeList: ");
-  for(index=0;index <= TabelMAX; index++)
-    if( LVRATabel[index] )
+  for(index=0;index <= TableMAX; index++)
+    if( LVRATable[index] )
       fprintf( output, "%d:%d ", index, LVRATabNum[index]);
   fprintf( output, ")\n");
 }
@@ -70,17 +69,17 @@ LVRAInsertFreeElement( freeRep)
   ref(ValRep) headRep;
 
   LVRAFreeListAvailable = TRUE;
-  index = LVRATabelIndex( freeRep->HighBorder );
+  index = LVRATableIndex( freeRep->HighBorder );
   /* Insert the repetition as the first element in the list. */
-  DEBUG_LVRA( { struct ValRep *cur = LVRATabel[index];
+  DEBUG_LVRA( { struct ValRep *cur = LVRATable[index];
                while( cur ){ Claim( cur != freeRep,"LVRAInsert"); 
 			     cur = (struct ValRep *) cur->Proto;}
 
 	      } );
-  headRep = LVRATabel[index];  LVRATabel[index] = freeRep;
+  headRep = LVRATable[index];  LVRATable[index] = freeRep;
   freeRep->Proto  = (ref(ProtoType)) headRep;
   freeRep->GCAttr = 0; 
-  DEBUG_CODE( if( index == TabelMAX )
+  DEBUG_CODE( if( index == TableMAX )
 	        fprintf( output, "(LVRAInsert=%d)", freeRep->HighBorder));
   DEBUG_CODE( LVRATabNum[index]++);
 }
@@ -101,9 +100,9 @@ ref(ValRep) LVRAFindInFree( range)
   int index;
   DEBUG_CODE( int oldBorder);
 
-  index = LVRATabelIndex( range );
-  takenFrom = (ptr(long)) &LVRATabel[index];
-  currentRep = (ref(ValRep)) LVRATabel[index];
+  index = LVRATableIndex( range );
+  takenFrom = (ptr(long)) &LVRATable[index];
+  currentRep = (ref(ValRep)) LVRATable[index];
   while( currentRep ){
     if( currentRep->HighBorder == range ){
       /* Update the chain in the freeList. */
@@ -121,8 +120,8 @@ ref(ValRep) LVRAFindInFree( range)
   }
 
   do{
-    takenFrom = (ptr(long)) &LVRATabel[index];
-    currentRep = (ref(ValRep)) LVRATabel[index];
+    takenFrom = (ptr(long)) &LVRATable[index];
+    currentRep = (ref(ValRep)) LVRATable[index];
     while( currentRep != 0 ){
       if( currentRep->HighBorder >= range + 4 ){
         /* Update the chain in the freeList. */
@@ -155,7 +154,7 @@ ref(ValRep) LVRAFindInFree( range)
       currentRep = (ref(ValRep))  currentRep->Proto;
     }
     index++;
-  }while( index <= TabelMAX );
+  }while( index <= TableMAX );
   return 0;
 }
 
@@ -337,7 +336,7 @@ LVRACompaction()
 
   LVRANumOfBlocks = 0;
 
-  LVRACleanTabel();
+  LVRACleanTable();
 
   saved = 0; numBlocks = 0; sizeBlocks = 0; 
 
@@ -457,7 +456,7 @@ LVRAConstructFreeList()
 
   INFO_LVRA( fprintf( output, "#(LVRA: make free list")); 
 
-  LVRACleanTabel();
+  LVRACleanTable();
 
   saved = 0; numBlocks = 0; sizeBlocks = 0;
   currentLVRABlock = LVRABaseBlock;
