@@ -116,12 +116,13 @@ long BetaStackTop,BetaThis;
 long oldHT=0;
 long heap[heapMax];
 
-#ifdef PPC
+/*#ifdef PPC
 long IOA= (long) &heap[0];
 #endif
 #ifdef SGI
 long _IOA= (long) &heap[0];
-#endif
+#endif*/
+long _IOA= (long) &heap[0];
 
 long IOAused=0;
 long IOAtop = 0; /*&heap[heapMax];*/
@@ -253,12 +254,7 @@ long AllocHeap(int size) {
    /* the following is to experiment with ChkRA: by redefining
     * _IOA, the oldest objects becomes logically outside _IOA
     */
-#ifdef PPC
-   if ((heapTop > 1000) && (heapTop < 2000)) { IOA= &heap[heapTop]; }
-#endif
-#ifdef SGI
    if ((heapTop > 1000) && (heapTop < 2000)) { _IOA= &heap[heapTop]; }
-#endif
 
    for (i=0; i<size; i++) ((long *)start)[i]=0;
    if (heapTop > heapMax) FatalErr(1);
