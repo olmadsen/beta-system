@@ -17,33 +17,38 @@ INCLUDE './symboltable';
    
    runtime : @ast.runtime;    (* The MPS interface to the BETA grammar/ASTs *)
    
-   Conditionals: 
-     @ (# 
-	  t: [1]^Text;
-	  cnt: @integer;
-	  insert: 
-	    (# 
-	       symbol: ^text;
-	    enter symbol[]
-	    do 
-	       cnt+1 -> cnt; 
-	       (if cnt>t.range then t.range -> t.extend if);
-	       symbol[] -> t[cnt][];
-	    #);
-	  contains: 
-	    (# 
-	       symbol: ^text;
-	       success: @boolean;
-	    enter symbol[]
-	    do 
-	       false -> success;
-	       (for i:cnt repeat
-		    (if (symbol[]->t[i].equalNCS) then true -> success if);
-	       for);
-	    exit success
-	    #);
-       enter insert
-       #);
+   ComPrototypes: @boolean;
+   disp_off: ^asmfile.Constant;
+   
+   Conditionals: @ 
+     (# 
+        t: [1]^Text;
+        cnt: @integer;
+        insert: 
+          (# symbol: ^text;
+          enter symbol[]
+          do cnt+1 -> cnt; 
+             (if cnt>t.range then t.range -> t.extend if);
+             symbol[] -> t[cnt][];
+             (if 'COM'->symbol.equal then
+                 true->ComPrototypes;
+                 '\n  *** Using COM Prototype layout.' -> screen.putline;
+             if);
+          #);
+        contains: 
+          (# 
+             symbol: ^text;
+             success: @boolean;
+          enter symbol[]
+          do 
+             false -> success;
+             (for i:cnt repeat
+                  (if (symbol[]->t[i].equalNCS) then true -> success if);
+             for);
+          exit success
+          #);
+     enter insert
+     #);
    
    NameApplToText: (# na:^ast.NameAppl enter na[]  exit na.getText #);
    NameDeclToText: (# nd:^ast.NameDecl enter nd[]  exit nd.getText #);
@@ -174,10 +179,22 @@ INCLUDE './symboltable';
         
 	DoConstDecl:
 	  (# decl: ^runtime.ConstDecl;
+             name: ^text;
+             value: @integer;
 	  enter decl[]
 	  do 
-	     (decl.getName->NameDeclToText, decl.getValue->NumberToInteger)
+	     (decl.getName->NameDeclToText->name[], 
+             decl.getValue->NumberToInteger->value)
 	       -> GlobalBase.AddConst;
+             (name[], value) -> asmfile.DefineConstant;
+             (if 'DISP_OFF' -> name.equal then
+                 value -> asmfile.NewConstant -> disp_off[];
+                 (if ComPrototypes then
+                     '\n  *** DISP_OFF is '-> screen.puttext; 
+                     disp_off -> screen.putint; 
+                     screen.newline;
+                 if);
+             if);
 	  #);
      enter s[]
      do s.newscan
@@ -375,7 +392,6 @@ INCLUDE './symboltable';
 		    #);
 		  
 		  op1,op2:^AsmFile.Operand; result:@integer;
-		  
 		  trans: ^runtime.Transaction
 	       enter trans[]
 	       do
@@ -406,7 +422,44 @@ INCLUDE './symboltable';
 			  (if (op1[] -> isOperandZero) then
 			      op2[] -> AsmFile.Clear
 			   else
-			      (op1[], op2[]) -> AsmFile.Move
+                              (if ComPrototypes then
+                                  (if op2.isProto then
+                                      (* op1 -> op2.ProtoType *)
+                                      'SETPROTO' -> asmfile.commentline;
+                                      (if op1.type=asmfile.constanttype then
+                                          (# op1const: ^asmfile.constant;
+                                          do op1[]->op1const[];
+                                             op1const+disp_off
+                                               ->asmfile.NewConstant
+                                               ->op1[];
+                                          #);
+                                       else
+                                          (* See after move *)
+                                      if);
+                                  if);
+                                  (if op1.isProto then
+                                      (* op1.ProtoType -> op2 *)
+                                      'GETPROTO' -> asmfile.commentline;
+                                      (* Rest is below *)
+                                  if);
+                              if);
+                              (op1[], op2[]) -> AsmFile.Move;
+                              (if ComPrototypes then
+                                  (if op2.isProto and 
+                                      (op1.type<>asmfile.constanttype) then
+                                      (* op1 -> op2.ProtoType *)
+                                      (* Must add to memory, since register
+                                       * pointing to prototype may
+                                       * later be used in routine.
+                                       *)
+                                      (disp_off[], op2[]) -> asmfile.Add;
+                                  if);
+                                  (if op1.isProto then
+                                      (* op1.ProtoType -> op2 *)
+                                      (* GETPROTO *)
+                                      (disp_off[], op2[]) -> asmfile.Subtract;
+                                  if);
+                              if);
 			  if)
 		       // 1 then (* Add *)
 			  (if (op1[] -> isOperandOne) then
@@ -944,7 +997,6 @@ do
    InitAstEnv;
    GlobalBase.init;
    'TRUE'->Conditionals; 
-   
    (if debug then 'debug' -> Conditionals; 'With DEBUG.' -> screen.putline; if);
    'Using parser: ' -> screen.puttext;
    BobsTab -> screen.putline;
