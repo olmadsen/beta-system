@@ -1598,20 +1598,20 @@ void InstallSigHandler (int sig, void (handler)(int))
     signal (sig, handler);
 #else /* linux || sgi */
   { struct sigaction sa;
-#ifdef macosx
-    sa.sa_flags = 0;
-#else 
     /* Specify that we want full info about the signal, and that
      * the handled signal should not be blocked while being handled: 
      */
     sa.sa_flags = SA_SIGINFO | SA_RESETHAND;
-#endif
     /* No further signals should be blocked while handling the specified
      * signals. 
      */
     sigemptyset(&sa.sa_mask); 
     /* Specify handler */
+#ifdef macosx
+    sa.sa_sigaction = handler;
+#else
     sa.sa_handler = handler;
+#endif
     sigaction(sig,&sa,0);
   }
 #endif  /* linux || sgi */

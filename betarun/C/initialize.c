@@ -227,6 +227,12 @@ void Initialize()
 
   GetBetaEnv();
 
+#ifdef macosx
+  NoCatchException = 1;
+  fprintf(output, "MacOS X: Signal Handlers Disabled\n");
+  fflush(output);
+#endif
+
   if (NoCatchException) {
     DEBUG_CODE(fprintf(output, "Signal Handlers Disabled\n"));
   } else { 
