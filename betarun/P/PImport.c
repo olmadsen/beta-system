@@ -157,7 +157,7 @@ static void importScanObject(Object *obj,
     * - All references
     * - All Values
     */
-
+    
    /* The proto type */
    importProtoType(obj);   
    theProto = GETPROTO(obj);
@@ -487,26 +487,25 @@ void importStoreObject(Object *theObj,
     * cannot remember what it is about. It has got nothing to do with
     * the basic actions of importing an object.
     */
+
    ObjInfo *objInfo;
+
+   Claim(theObj -> GCAttr == 0, "Unexpected part object?");
    
-   Claim(theObj == getRealObject(theObj), "Unexpected part object");
-   Claim(inAOA(theObj), "Where is theObj?");
-  
    /* Create an object info object for the object */
    objInfo = (ObjInfo *)AOAallocate(sizeof(struct _ObjInfo));
    SETPROTO(objInfo, ObjInfoPTValue);
-
+   
    objInfo -> flags = FLAG_INSTORE;   
    objInfo -> theObj = theObj;
    objInfo -> store = currentcsb = store;
    objInfo -> offset = offset;
    
    importScanObject(theObj, TRUE, objInfo, forced);
-
-   currentcsb = NULL;
-
-   theObj -> GCAttr = (u_long)PUTOI(objInfo);
    
+   currentcsb = NULL;
+   
+   theObj -> GCAttr = (u_long)PUTOI(objInfo);
 }
 
 #endif /* PERSIST */

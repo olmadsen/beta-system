@@ -97,61 +97,49 @@ Object *USloadObject(CAStorage *store,
                      unsigned long inx,
                      u_long forced)
 {
-   unsigned long size, distanceToPart;
+   unsigned long size, distanceToPart = 0;
    Object *theStoreObj, *theRealStoreObj, *theRealObj;
    
-   theStoreObj = (Object *)SBOBJlookup(store, offset);
+   theStoreObj = (Object *)SBOBJlookup(store, offset, &distanceToPart, &size);
    
    Claim(theStoreObj != NULL, "Could not look up store object");
    
-   theRealStoreObj = getRealObject(theStoreObj);
-   distanceToPart = (unsigned long)theStoreObj - (unsigned long)theRealStoreObj;
+   theRealStoreObj = (Object *)((u_long)theStoreObj - distanceToPart);
    
-   if (distanceToPart == 0) {
-      forceAOAAllocation = TRUE; /* The following allocation must not fail*/
-      size = 4*StoreObjectSize(theRealStoreObj, store);
-      theRealObj = AOAallocate(2*size);
-      loadedBytes += 2*size;
-      if (loadedBytes > MAXPERSISTENTBYTES) {
-         loadedBytes = 0;
-         forceAOACompaction = TRUE;
-         DEBUG_CODE(fprintf(output, "Max persistent bytes exceeded\n"));
-      }
-      if (forceAOACompaction) {
-         DEBUG_CODE(fprintf(output, "Requesting GC at next allocation\n"));
-         /* Request GC at next IOAAllocation */
-         AOANeedCompaction = TRUE;
-         forceAOACompaction = FALSE;
-#if defined(NEWRUN) || defined(sparc)
-         IOATopOff = (char *)IOALimit  - (char *) IOA;
-#else
-         IOATop = IOALimit;
-#endif
-      }
-      memcpy(theRealObj, theRealStoreObj, size);
-
-      /* The real object is imported */
-      importStoreObject(theRealObj, store, offset, inx, forced);
-
-      /* A copy of the object is saved after the object itself. */
-      memcpy((char*)theRealObj+size, theRealObj, size);
-
-      /* The copy is marked as alive. This marking is only used to
-	 indicate to the GC'er that it should not free the space taken
-	 up by the object. */
-      ((Object*)((char*)theRealObj+size))->GCAttr = LISTEND;
-        
-      INFO_PERSISTENCE(objectsLoaded++);
-      return theRealObj;
-   } else {
-      Object *theRealObj;
-      
-      theRealObj = USloadObject(store,
-                                offset - distanceToPart,
-                                -1,
-                                forced);
-      return (Object *)((unsigned long)theRealObj + distanceToPart);
+   forceAOAAllocation = TRUE; /* The following allocation must not fail*/
+   theRealObj = AOAallocate(2*size);
+   loadedBytes += 2*size;
+   if (loadedBytes > MAXPERSISTENTBYTES) {
+      loadedBytes = 0;
+      forceAOACompaction = TRUE;
+      DEBUG_CODE(fprintf(output, "Max persistent bytes exceeded\n"));
    }
+   if (forceAOACompaction) {
+      DEBUG_CODE(fprintf(output, "Requesting GC at next allocation\n"));
+      /* Request GC at next IOAAllocation */
+      AOANeedCompaction = TRUE;
+      forceAOACompaction = FALSE;
+#if defined(NEWRUN) || defined(sparc)
+      IOATopOff = (char *)IOALimit  - (char *) IOA;
+#else
+      IOATop = IOALimit;
+#endif
+   }
+   memcpy(theRealObj, theRealStoreObj, size);
+
+   /* The real object is imported */
+   importStoreObject(theRealObj, store, offset, inx, forced);
+   
+   /* A copy of the object is saved after the object itself. */
+   memcpy((char*)theRealObj+size, theRealObj, size);
+   
+   /* The copy is marked as alive. This marking is only used to
+      indicate to the GC'er that it should not free the space taken
+      up by the object. */
+   ((Object*)((char*)theRealObj+size))->GCAttr = LISTEND;
+   
+   INFO_PERSISTENCE(objectsLoaded++);
+   return (Object *)((u_long)theRealObj + distanceToPart);
 }
 
 Object *handleSpecialReference(unsigned long specRef)

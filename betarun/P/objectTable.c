@@ -279,7 +279,8 @@ static u_long allocateStorage(CAStorage *store, Object *realObj, u_long nb)
     /* We cannot save component objects. Rather they should be
      * registered as special objects
      */
-    
+   Claim(getRealObject(realObj) == realObj, "Unexpected part object");
+   
     if (isComponent(realObj)) {
         fprintf(output,
                 "allocateStorage: Saving component (register it as special object)\n");
@@ -674,7 +675,9 @@ static void updateObjectInStore(Object *theObj,
 				unsigned short Flags)
 {
    char *storeObj;
-    
+
+   Claim(theObj == getRealObject(theObj), "Exporting part object");
+   
    storeObj = (char *)exportObject(theObj, store, objSize);
     
    if (Flags & FLAG_INSTORE) {

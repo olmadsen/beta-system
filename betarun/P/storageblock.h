@@ -43,7 +43,7 @@ char *SBGNlookup(CAStorage *csb, u_long id, u_long *length);
 u_long SBGNtop(CAStorage *csb);
 u_long /* object id */ SBOBJcreate(CAStorage *csb, char *obj, u_long nb);
 void SBOBJsave(CAStorage *csb, char *obj, u_long oid, u_long nb);
-char *SBOBJlookup(CAStorage *csb, u_long oid);
+char *SBOBJlookup(CAStorage *csb, u_long oid, u_long *distanceToPart, u_long *objSize);
 void SBstart(void);
 void SBend(void);
 u_long SBOBJpresent(CAStorage *csb, u_long oid);

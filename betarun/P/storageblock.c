@@ -468,6 +468,8 @@ u_long /* object id */ SBOBJcreate(CAStorage *csb, char *obj, u_long nb)
      * order to allow for this tagging.
      */
 
+    /* The object must not be a part object */
+
     /* Allocate room for the object and size */
     alignedsize = nb + sizeof(u_long);
     if (alignedsize & ((1 << TAGBITS) - 1)) {
@@ -481,19 +483,20 @@ u_long /* object id */ SBOBJcreate(CAStorage *csb, char *obj, u_long nb)
     /* Write object to area */
     CAsave(csb, SBObjects, obj, oid + sizeof(u_long), nb);
 
-    return oid;
-    
+    return oid + sizeof(u_long);
 }
+
 
 void SBOBJsave(CAStorage *csb, char *obj, u_long oid, u_long nb)
 {
-    Claim(csb -> open, "Store closed");
-
+   Claim(csb -> open, "Store closed");
+   /* The object must not be a part object */
+   
    /* Write object size */
-    CAsave(csb, SBObjects, (char *)&nb, oid, sizeof(u_long));
-
-    /* Write object to area */
-    CAsave(csb, SBObjects, obj, oid + sizeof(u_long), nb);
+   CAsave(csb, SBObjects, (char *)&nb, oid - sizeof(u_long), sizeof(u_long));
+   
+   /* Write object to area */
+   CAsave(csb, SBObjects, obj, oid, nb);
 }
 
 u_long getNumberOfUpdates(CAStorage *csb)
@@ -506,27 +509,42 @@ u_long getNumberOfUpdates(CAStorage *csb)
 static char *obj = NULL;
 static u_long size = 0;
 
-char *SBOBJlookup(CAStorage *csb, u_long oid)
+char *SBOBJlookup(CAStorage *csb, u_long oid, u_long *distanceToPart, u_long *objSize)
 {
-    u_long nb;
+    u_long GCAttr;
 
     Claim(csb -> open, "Store closed");
 
-    /* read size */
-    CAload(csb, SBObjects, (char *)&nb, oid, sizeof(u_long));
-    
-    if (nb <= size) {
-        /* read object */
-        CAload(csb, SBObjects, obj, oid + sizeof(u_long), nb);
-        objects++;
-        return obj;
+    /* read GCAttribute, 4 bytes ahead in the object */
+    CAload(csb, SBObjects, (char *)&GCAttr, oid + sizeof(u_long), sizeof(u_long));
+
+    if (ntohl(GCAttr) == 0) {
+       /* read size */
+       CAload(csb, SBObjects, (char *)objSize, oid - sizeof(u_long), sizeof(u_long));
+
+       if (*objSize <= size) {
+          /* read object */
+          CAload(csb, SBObjects, obj, oid, *objSize);
+          objects++;
+          return obj;
+       } else {
+          if (obj) {
+             free(obj);
+          }
+          size = *objSize;
+          obj = (char *)malloc(sizeof(char)* (*objSize));
+          return SBOBJlookup(csb, oid, distanceToPart, objSize);
+       }
     } else {
-        if (obj) {
-            free(obj);
-        }
-        size = nb;
-        obj = (char *)malloc(sizeof(char)*nb);
-        return SBOBJlookup(csb, oid);
+       char *enclosing;
+       u_long distance;
+       
+       distance = -4 * ntohl(GCAttr);
+       *distanceToPart   = *distanceToPart + distance;
+       
+       enclosing = SBOBJlookup(csb, oid - distance, distanceToPart, objSize);
+       
+       return enclosing + distance;
     }
 }
 

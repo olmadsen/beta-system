@@ -211,16 +211,6 @@ void exportProtoType(Object *theObj)
    }
 }
 
-void exportProtoTypes(Object *theObj, CAStorage *store)
-{
-   currentcsb = store;
-   scanObject(theObj,
-              NULL,
-              exportProtoType,
-              TRUE);
-   currentcsb = NULL;
-}
-
 ProtoType *translateStoreProto(ProtoType *theProto, CAStorage *store)
 {
    unsigned long group;
@@ -245,18 +235,6 @@ void importProtoType(Object *theObj)
    SETPROTO(theObj, translateStoreProto(GETPROTO(theObj), currentcsb));
 #endif
    Claim(GETPROTO(theObj) != NULL, "Could not find prototype");
-}
-
-void importProtoTypes(Object *theObj, CAStorage *store)
-{
-   currentcsb = store;
-   dontCheckProtoTypes = TRUE;
-   scanObject(theObj,
-              NULL,
-              importProtoType,
-              TRUE);
-   dontCheckProtoTypes = FALSE;
-   currentcsb = NULL;
 }
 
 unsigned long StoreObjectSize(Object * theObj, CAStorage *store)
