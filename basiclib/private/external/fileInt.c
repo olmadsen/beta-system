@@ -249,7 +249,11 @@ int setEntryModtime(path, time)
   return 0;
 }
 
+#ifdef nti
+int renameNtEntry(old,new)
+#else
 int renameUnixEntry(old,new)
+#endif
      char *old,*new;
 {
   if( ((char)(*old)=='\0') || ((char)(*new)=='\0') )
@@ -282,7 +286,11 @@ int renameUnixEntry(old,new)
   return 1;
 }
 
+#ifdef nti
+int chownNtEntry(path, owner, group)
+#else
 int chownUnixEntry(path, owner, group)
+#endif
      char *path;
      int owner;
      int group;
@@ -310,7 +318,11 @@ int entryExists(path, follow)
   }
 }
 
+#ifdef nti
+int deleteNtFile(path)
+#else
 int deleteUnixFile(path)
+#endif
      char *path;
 {
   if((char)(*path) == '\0')
@@ -321,7 +333,11 @@ int deleteUnixFile(path)
   return 1;
 }
 
+#ifdef nti
+int createNtFile(path)
+#else
 int createUnixFile(path)
+#endif
      char *path;
 {int fd;
  if((char)(*path)=='\0')
@@ -381,8 +397,17 @@ int makeSymLink(src, dst)
 #include <errno.h>
 #include <stdio.h>
 #include <time.h>
-#include <utime.h>
 #include <io.h>
+#ifdef nti_bor
+#include <utime.h>
+#else
+#include <sys/utime.h>
+#define S_IXUSR _S_IEXEC
+#define S_IWUSR _S_IWRITE
+#define S_IRUSR _S_IREAD
+#define S_IFBLK (-1) /* ??? */
+#define ENOTSAM EXDEV
+#endif
 
 #include <malloc.h>
 
@@ -394,6 +419,30 @@ int getErrno()
   return errno;
 }
 
+/* This function will try to determine whether a text file really is
+ * a text file. Used like this... Change
+ *   fopen(name, text ? "rt" : "rb");
+ * To
+ *   fopen(name, text && textfile_is_text(name) ? "rt" : "rb");
+ */
+int textfile_is_text(char *name)
+{
+  FILE *f=fopen(name,"rb");
+  if (f) {
+    char *buf = malloc(512);
+    int size=fread(buf,1,512,f);
+    int i;
+    fclose(f);
+    for (i = 1; i < size; i++)
+      if (buf[i] == '\n') {
+        free(buf);
+        return buf[i-1] == '\r';
+      }
+    free(buf);
+  }
+  return 1;
+}
+
 struct stat statBuffer;        /* used for all calls to stat */
 
 int entryStatus(path,status,permission,follow)
@@ -401,15 +450,15 @@ int entryStatus(path,status,permission,follow)
      int  *status;     /* OUT par. The buffer must be allocated by Beta. */
      int  *permission; /* OUT par. ---------------||-------------------- */ 
      /* In essence an "lstat" call on the entry with absolute path, path.
-	The status of the entry is passed on to Beta by means of the
-	two buffers, status and permission. A return of -1 indicates
-	an error in the stat call, whereas a return of 1 means succes.
-	*/
+        The status of the entry is passed on to Beta by means of the
+        two buffers, status and permission. A return of -1 indicates
+        an error in the stat call, whereas a return of 1 means succes.
+        */
      int follow; /* follow links ? Ignored by Windows NT*/
 { int entryType;
   
   if (stat(path,&statBuffer)<0 ) 
-    return -1;    
+    return -1;
   
   /* fill in the status buffer */
   status[0]=(int) statBuffer.st_dev;
@@ -434,32 +483,32 @@ int entryStatus(path,status,permission,follow)
   status[16]=(int) statBuffer.st_mtime;
   status[17]=(int) statBuffer.st_ctime;
   /* status[18]= /* currently not used */
-    /* status[19]= /* currently not used */
+  /* status[19]= /* currently not used */
   
-      /* The mode of the entry denoted by the full path name, path, is 
-	 is changed according to the supplied permission buffer.
-	 The buffer is an array of 9 integers (each 1 or 0). The first 3 are 
-	 related to the mode for the "other" category, the next 3 give the mode
-	 for "group" and the last 3 denote the mode of "owner". The integers 
-	 should be inetrpreted as follows :
-	 
-	 |other                |group                |owner
-	 -----------------------------------------------------------------
-	 protection :exec | write | read  | exec | write | read | exec | write | read
-	 -----------------------------------------------------------------
-	 
-	 If for example the (other,exec) integer is 1, the "other" category are
-	 given execute permission to the entry.
-	 */
+  /* The mode of the entry denoted by the full path name, path, is 
+     is changed according to the supplied permission buffer.
+     The buffer is an array of 9 integers (each 1 or 0). The first 3 are 
+     related to the mode for the "other" category, the next 3 give the mode
+     for "group" and the last 3 denote the mode of "owner". The integers 
+     should be inetrpreted as follows :
+     
+     |other                |group                |owner
+     -----------------------------------------------------------------
+     protection :exec | write | read  | exec | write | read | exec | write | read
+     -----------------------------------------------------------------
+     
+     If for example the (other,exec) integer is 1, the "other" category are
+     given execute permission to the entry.
+     */
   
-      /* fill in the permission buffer */
-      /* permission[0] /* currently not used */
-	/* permission[1] /* currently not used */
-	  /* permission[2] /* currently not used */
-	    /* permission[3] /* currently not used */
-	      /* permission[4] /* currently not used */
-		/* permission[5] /* currently not used */
-		  permission[6]=( S_IXUSR & statBuffer.st_mode ) ? 1 : 0;
+  /* fill in the permission buffer */
+  /* permission[0] * currently not used */
+  /* permission[1] * currently not used */
+  /* permission[2] * currently not used */
+  /* permission[3] * currently not used */
+  /* permission[4] * currently not used */
+  /* permission[5] * currently not used */
+  permission[6]=( S_IXUSR & statBuffer.st_mode ) ? 1 : 0;
   permission[7]=( S_IWUSR & statBuffer.st_mode ) ? 1 : 0;
   permission[8]=( S_IRUSR & statBuffer.st_mode ) ? 1 : 0;
   return 1;
@@ -469,33 +518,33 @@ int entryStatus(path,status,permission,follow)
 
 int readMode(int binary)
 {
-  return O_RDONLY | (binary || getenv("BINARY") ? O_BINARY : 0);
+  return O_RDONLY | (binary ? O_BINARY : O_TEXT);
 }
-
+     
 int readWriteCreateMode(int binary)
 {
-  return O_RDWR | O_CREAT | (binary || getenv("BINARY") ? O_BINARY : 0);
+  return O_RDWR | O_CREAT | (binary ? O_BINARY : O_TEXT);
 }
-
+     
 int writeCreateMode(int binary)
 {
-  return O_WRONLY | O_CREAT | O_TRUNC | (binary || getenv("BINARY") ? O_BINARY : 0);
+  return O_WRONLY | O_CREAT | O_TRUNC | (binary ? O_BINARY : O_TEXT);
 }
-
+     
 int appendCreateMode(int binary)
 {
-  return O_WRONLY | O_CREAT | O_APPEND | (binary || getenv("BINARY") ? O_BINARY : 0);
+  return O_WRONLY | O_CREAT | O_APPEND | (binary ? O_BINARY : O_TEXT);
 }
-
+     
 int readAppendCreateMode(int binary)
 {
-  return O_WRONLY | O_CREAT | O_APPEND | (binary || getenv("BINARY") ? O_BINARY : 0);
+  return O_WRONLY | O_CREAT | O_APPEND | (binary ? O_BINARY : O_TEXT);
 }
-
+     
 /* Constants giving the permission attached files that are created
  * in an open call.
  */
-
+     
 /* This constant gives write/read permission to owner and
  * read permission to group and others.
  */
@@ -529,16 +578,16 @@ int touchEntry(path)
      char *path;
 {
   if((char)(*path)=='\0')
-    return 0;			/* test for empty string */
+    return 0;                      /* test for empty string */
   if(utime(path,NULL)<0)
-    return -1;
+      return -1;
 }
 
-int renameUnixEntry(old,new)
+int renameNtEntry(old,new)
      char *old,*new;
 {
   if( ((char)(*old)=='\0') || ((char)(*new)=='\0') )
-    return -1;			/* test for empty string */
+    return -1;                      /* test for empty string */
   if(rename(old,new)<0)
     if (errno==ENOTSAM){
       /* cross device link: try copy instead */
@@ -552,11 +601,11 @@ int renameUnixEntry(old,new)
       s2 = open(new, O_RDWR | O_TRUNC | O_CREAT | O_BINARY, oldstat.st_mode & 0777);
       if(s2 < 0) return -1;
       for(;;) {
-	char buf[BSIZE];
-	x = read(s1, buf, BSIZE);
-	if(x == 0) break;
-	if(x < 0) return -1;
-	if(write(s2, buf, x) < 0) return -1;
+        char buf[BSIZE];
+        x = read(s1, buf, BSIZE);
+        if(x == 0) break;
+        if(x < 0) return -1;
+        if(write(s2, buf, x) < 0) return -1;
       }
       (void)close(s1); 
       (void)close(s2);
@@ -567,7 +616,7 @@ int renameUnixEntry(old,new)
   return 1;
 }
 
-int chownUnixEntry(path, owner, group)
+int chownNtEntry(path, owner, group)
      char *path;
      int owner;
      int group;
@@ -585,12 +634,12 @@ int entryExists(path, follow)
      int follow;
 {
   if((char)(*path)=='\0')
-    return -1;			/* test for empty string */
+    return -1;                     /* test for empty string */
   if( access(path,F_OK)<0) return 0;
   return 1;
 }
 
-int deleteUnixFile(path)
+int deleteNtFile(path)
      char *path;
 {
   if((char)(*path) == '\0')
@@ -601,11 +650,11 @@ int deleteUnixFile(path)
   return 1;
 }
 
-int createUnixFile(path)
+int createNtFile(path)
      char *path;
 {int fd;
  if((char)(*path)=='\0')
-   return 0;			/* test for empty string */
+   return 0;                   /* test for empty string */
  if((fd=open(path,O_CREAT,S_IREAD|S_IWRITE))<0)
    return -1;
  if(close(fd)<0)
@@ -617,20 +666,20 @@ int changeProtection(path,protection)
      char *path;
      int *protection;
      /* The mode of the entry denoted by the full path name, path, is 
-	is changed according to the supplied protection buffer, protection.
-	The buffer is an array of 9 integers (each 1 or 0). The first 3 are 
-	related to the mode for the "other" category, the next 3 give the mode
-	for "group" and the last 3 denote the mode of "owner". The integers 
-	should be inetrpreted as follows :
-	
-	|other                |group                |owner
-	-----------------------------------------------------------------
-	protection :exec | write | read  | exec | write | read | exec | write | read
-	---------------------------------------------------------------
-	
-	If for example the (other,exec) integer is 1, the "other" category are
-	given execute permission to the entry.
-	*/
+        is changed according to the supplied protection buffer, protection.
+        The buffer is an array of 9 integers (each 1 or 0). The first 3 are 
+        related to the mode for the "other" category, the next 3 give the mode
+        for "group" and the last 3 denote the mode of "owner". The integers 
+        should be inetrpreted as follows :
+        
+        |other                |group                |owner
+        -----------------------------------------------------------------
+        protection :exec | write | read  | exec | write | read | exec | write |read
+        ---------------------------------------------------------------
+        
+        If for example the (other,exec) integer is 1, the "other" category are
+        given execute permission to the entry.
+        */
 { register i,mask=0;
   
   for(i=6;i<9;i++)

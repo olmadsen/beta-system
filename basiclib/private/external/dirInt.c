@@ -9,13 +9,20 @@
 #  include <sys/dir.h>
 #  define DIRENT direct
 #else
-#  define DIRENT dirent
-#  include <dirent.h>
+#  ifdef nti_ms
+#    include <io.h>
+#    define DIRENT _DIR
+#  else
+#    include <dirent.h>
+#    define DIRENT dirent
+#  endif
 #endif
 
 #ifdef nti
 #  include <malloc.h>
-#  include <dir.h>
+#  ifdef nti_bor
+#    include <dir.h>
+#  endif
 #else
 #  include <sys/param.h>
 #  include <pwd.h>
@@ -40,6 +47,58 @@ static int strptrcmp(s1, s2)
 { 
   return strcmp(*s1,*s2);
 }
+#ifdef nti_ms
+typedef struct _DIR
+{
+  struct _finddata_t entry;
+  long hFile;
+  int result;
+  char *d_name;
+} DIR;
+
+DIR *opendir(char *path)
+{
+  DIR *dirp = malloc(sizeof(DIR));
+  char *match = malloc(strlen(path)+3);
+  strcpy(match,path);
+  if (match[strlen(match)-1] != '\\')
+    strcat(match, "\\");
+  strcat(match, "*");
+  dirp->hFile = _findfirst(match, &(dirp->entry));
+  if (dirp->hFile == -1L) {
+    free(dirp);
+    free(match);
+    /* Error: nothing allocated */
+    dirp->result = -1;
+    return NULL;
+  }
+  free(match);
+  /* Allocated only the return value (dirp) */
+  dirp->d_name = NULL;
+  dirp->result = 0;
+  return dirp;
+}
+
+struct DIRENT *readdir(DIR *dirp)
+{
+  if (dirp->result == -1L) {
+    free(dirp->d_name);
+    free(dirp);
+    return NULL;
+  }
+  dirp->d_name = realloc(dirp->d_name, strlen(dirp->entry.name)+1);
+  strcpy(dirp->d_name, dirp->entry.name);
+  dirp->result = _findnext(dirp->hFile, &(dirp->entry));
+  return dirp;
+}
+
+int closedir(DIR *dirp)
+{
+  free(dirp->d_name);
+  free(dirp);
+}
+#endif /* dir_ms */
+
 
 /* Scan enties in dir. Return the length of the longest entryname via
  * LongestFnc, Apply CallbackFnc to each entry found.
@@ -92,7 +151,11 @@ void (*LongestFnc)();
   return(num);
 }
 
+#ifdef nti
+int findNtEntry(path,name)
+#else
 int findUnixEntry(path,name)
+#endif
 char *path;
 char *name;
 /* Locates the entry with name, name, in the directory with absolute
@@ -170,7 +233,11 @@ char *path;
  return num;
 }
 
+#ifdef nti
+int createNtDirectory(path)
+#else
 int createUnixDirectory(path)
+#endif
 char *path;
 {
  if((char)(*path)=='\0')
@@ -185,7 +252,11 @@ char *path;
 }
 
 
+#ifdef nti
+int deleteNtDirectory(path)
+#else
 int deleteUnixDirectory(path)
+#endif
 char *path;
 {if((char)(*path) == '\0')
    return 0;                    /* test for empty string */
