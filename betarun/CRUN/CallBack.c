@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-08-25 19:41:02 $, SID: $Revision: 1.17 $
+ * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-08-27 15:40:17 $, SID: $Revision: 1.18 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -17,7 +17,9 @@ asmlabel(CopyCPP, "
 void *CCopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 {
     /* Find a free entry in the Call Back Functions Area.		*/
-    /* This area is defined by [ CBFA <= CBFATop <= CBFALimit ].	*/
+    /* This area is defined by 
+     * [ lastCBFABlock->entries <= CBFATop <= CBFALimit ].	
+     */
 
     if (CBFATop+1 > CBFALimit){
       CBFArelloc();
