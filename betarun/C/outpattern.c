@@ -1744,6 +1744,13 @@ int DisplayBetaStack(BetaErr errorNumber,
 
   NotifyMessage[0]=0;
 
+  if ((errorNumber==IllegalInstErr) && 
+      IsBetaCodeAddrOfProcess((long)thePC) &&
+      IS_BREAK_INST(*(long*)thePC)){
+    /* Hit breakpoint instruction in BETA code - must be a %break */
+    errorNumber = EmulatorTrapErr;
+  }
+
   old_output = output;
   if (!OpenDumpFile(errorNumber)) return 0;
   

@@ -165,7 +165,7 @@ int strongIsObject(Object *obj)
   if (!inBetaHeap(obj)) {
     if (obj) {
       DEBUG_STRONGISOBJECT({
-	fprintf(output,"strongIsObject: (0x%08) is not in heap\n", (int)obj);
+	fprintf(output,"strongIsObject: (0x%08x) is not in heap\n", (int)obj);
       });
       return 0; 
     } else {
@@ -175,7 +175,7 @@ int strongIsObject(Object *obj)
   
   if (ObjectAlign((unsigned)obj) != (unsigned)obj) {
     DEBUG_STRONGISOBJECT({
-      fprintf(output,"strongIsObject: (0x%08) is unaligned\n", (int)obj);
+      fprintf(output,"strongIsObject: (0x%08x) is unaligned\n", (int)obj);
     });
     return 0;
   }
