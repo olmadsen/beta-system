@@ -25,10 +25,24 @@
 #define WordRepBodySize(range)   (((2*(range)+3)/4)*4)
 #define DoubleRepBodySize(range) ((range)*8)
 
-#define ValRepSize(range)    (ValRepBodySize(range) + headsize(ValRep))
-#define ByteRepSize(range)   (ByteRepBodySize(range) + headsize(ValRep))
-#define WordRepSize(range)   (WordRepBodySize(range) + headsize(ValRep))
-#define DoubleRepSize(range) (DoubleRepBodySize(range) + headsize(ValRep))
+#ifdef sparc
+/* Objects must be multiples of 8 bytes because of reals */
+# define StructureSize         (((headsize(Structure)+63) >> 5) << 5)
+# define RefRepSize(range)     (((((range)*4 + headsize(RefRep))+63) >> 5) << 5)
+# define ValRepSize(range)     ((((ValRepBodySize(range) + headsize(ValRep))+63) >> 5) << 5)
+# define ByteRepSize(range)    ((((ByteRepBodySize(range) + headsize(ValRep))+63) >> 5) << 5)
+# define WordRepSize(range)    ((((WordRepBodySize(range) + headsize(ValRep))+63) >> 5) << 5)
+# define DoubleRepSize(range)  ((((DoubleRepBodySize(range) + headsize(ValRep))+63) >> 5) << 5)
+# define StackObjectSize(size) ((((4*(size) + headsize(StackObject))+63) >> 5) << 5)
+#else
+# define StructureSize         headsize(Structure)
+# define RefRepSize(range)     ((range)*4 + headsize(RefRep))
+# define ValRepSize(range)     (ValRepBodySize(range) + headsize(ValRep))
+# define ByteRepSize(range)    (ByteRepBodySize(range) + headsize(ValRep))
+# define WordRepSize(range)    (WordRepBodySize(range) + headsize(ValRep))
+# define DoubleRepSize(range)  (DoubleRepBodySize(range) + headsize(ValRep))
+# define StackObjectSize(size) (4*(size) + headsize(StackObject))
+#endif
 
 #define toObject(x)      ((ref(Object))      x)
 #define toItem(x)        ((ref(Item))        x)
@@ -59,3 +73,11 @@
 
 #define BlockStart( theB) ((ptr(long)) Offset( theB, sizeof(struct Block)))
 #define LVRABlockStart( theB) ((ptr(long)) Offset( theB, sizeof(struct LVRABlock)))
+
+
+#ifdef sparc
+/* 64 bit alignment because of the reals */
+#define MALLOC(size) memalign(64, size)
+#else
+#define MALLOC(size) malloc(size)
+#endif
