@@ -11,12 +11,6 @@ homeDirectories: (# exit 'configuration\\r4.0\\homeDirectories' #);
 -- PathHandlerCurrentDirectory: DoPart --
 do getCurrentDir->cwd[]; 
 
--- PathHandlerCurDir: DoPart --
-do private.currentdirectory.copy->value[]  
-
--- PathHandlerBetaLib: DoPart --
-do private.betalib.copy->value[]  
-
 -- PathHandlerDirectoryChar: DoPart --
 do '\'->c  
 
@@ -106,29 +100,25 @@ do (if THIS(ConvertFilePath).path[]
                  // '/' // '\' then (* absolute path *)
                     leave converter
                  // '~' then
-                 (* try look in table:
-                  * We cannot expand usernames on Win32
-                  *)
-                    test:
-                    (if 1
-                     // 1 then
-                        private.nameTable.scan
+                    (* try look in table:
+                     * We cannot expand usernames on Win32
+                     *)
+                    test: 
+                      (if true then
+                          private.nameTable.scan
                           (# 
-                          do (if ((1,currentSize)->path.sub->thisHome.equal)
-                              // true then
+                          do (if ((1,currentSize)->path.sub->thisHome.equal) then
                                  (1,currentSize)->path.delete;
                                  thisDir[]->path.prepend;
                                  path.length->pathlength;
                                  leave test;
-                                 
                              if)
                           #);
-                        (* not found in table: expand ~ as betalib *)
-                        (1,1)->path.delete;
-                        private.betalib[]->path.prepend;
-                        path.length->pathlength;
-                        
-                    if);
+                          (* not found in table: expand ~ as betalib *)
+                          (1,1)->path.delete;
+                          private.betalib[]->path.prepend;
+                          path.length->pathlength;
+                      if)
                     
                  // '.' then (* this is new from unix version *)
                     (if ('./'->basis.equal) or ('.\\'->basis.equal) then
@@ -332,163 +322,50 @@ do (if THIS(ConvertFilePath).path[]
    if)
 #)  
 
--- pathHandlerPrivate: Descriptor --
-(#
-   t: @Text;
-   betalib,currentdirectory: ^Text;
-   NameTable: @
-     (#
-        Home,HomeDir: [100] ^text;
-        top: @integer;
-        NewHomeDir:
-          (# H,D: ^text; found: @boolean
-          enter (H[],D[])
-          do false->found;
-             scanning: scan
-               (# 
-               do (if (thisHome[]->h.equal) then
-                      D->HomeDir[currentInx]; true->found; leave scanning
-                  if);
-                  
-               #);
-             (if not found then
-                 (if ((top+1->top) <= Home.range) then
-                     &Text[]->Home[top][];
-                     H->Home[top];
-                     &Text[]->HomeDir[top][];
-                     D->HomeDir[top]
-                 if)
-             if)
-          #);
-        Scan:
-          (# thisHome,thisDir: @text; currentInx,currentSize: @integer
-          do (for i: top repeat
-               i->currentInx;
-               Home[i].length->currentSize;
-               Home[i]->thisHome;
-               HomeDir[i]->thisDir;
-               INNER
-             for);
-             
-          #);
-        Init:
-          (# homes: @file; abb,fullName: ^text; 
-          do '$(BETALIB)'
-               ->expandEnvVar
-                 (#
-                    defaultValue::<
-                      (# do 'c:\\beta\\'->envvarvalue[]; #);
-                    
-                 #)->betalib[];
-             (if (private.BetaLib.length->private.BetaLib.inxGet) <> '\' then
-                 '\'->private.BetaLib.append; 
-             if);
-             betalib.makeLC;
-             getCurrentDir->private.CurrentDirectory[];
-             '\'->private.CurrentDirectory.append;
-             ('~beta\\',betalib[])->&newHomeDir;
-             ('~beta/',betalib[])->&newHomeDir;
-             homeDirectories->(private.BetaLib.Copy).Append->homes.name;
-             (if homes.entry.exists then
-                 homes.openRead;
-                 loop:
-                 (if homes.eos
-                  // false then (*'Homedir line: '->puttext;*)
-                     homes.getLine->abb[];
-                     (*abb[]->putline;*)
-                     homes.getLine->fullname[];
-                     (*fullname[]->putline;*)
-                     (if (1->fullName.inxget) <> '/' then
-                         (fullName[],private.currentDirectory[])
-                           ->convertFilePath->fullName[];
-                         
-                     if);
-                     (abb[],fullname[])->&newHomeDir;
-                     restart loop
-                 if);
-                 (*'No more homes'->putline;*)
-                 homes.close
-             if);
-             
-          #);
-        
-     #);
-   
-#)  
 
--- localPathBody: Descriptor --
-(#
-   path,basis: ^text;
-   inx,slashinx,parents: @integer;
-   tmp: ^text;
-   rmdbl: @removedoubleslash;
-   
-do findpart:
-   (if (THIS(LocalPath).path[] <> none ) and (THIS(LocalPath).basis[] <> none )
-    then (* copy paths to avoid side-effects *)
-       THIS(LocalPath).path.copy->path[];
-       THIS(LocalPath).basis.copy->basis[];
-       (* check that basis can be used *)
-       (if basis.length > 0 then
-           (if (basis.length->basis.inxget) <> '/' then '/'->basis.append if);
-           
-        else
-           currentdirectory->tmp[]; tmp->basis; 
-       if);
-       path[]->rmdbl;
-       basis[]->rmdbl;
-       (directorychar,'/',path[])->substChars;
-       (directorychar,'/',basis[])->substChars;
-       (* Check if basis is a prefix of path *)
-       (if (1,basis.lgth)->path.sub->basis.equal
-        // true then
-           &text[]->localName[];
-           path.t[basis.lgth+1:path.lgth]->localName;
-           leave findpart;
-           
-       if);
-       (* Check if basis and path have a common prefix *)
-       0->inx;
-       0->slashinx;
-       0->parents;
-       common:
-       (for i: (basis.lgth,path.lgth)->min repeat
-         (if (basis.T[i] <> path.T[i]) then leave common if);
-         i->inx;
-         (if basis.T[i] // '/' then i->slashinx if);
-         
-       for);
-       (* inx points to last char common of the two paths, slashinx points
-        * to last common '/'.
-        *)
-       (if slashinx > 1 then
-       (* There was a common prefix (in addition to '/') *)
-           path.t[slashinx+1:path.lgth]->path;
-           basis.t[slashinx+1:basis.lgth]->basis;
-           (* find number of '../'s to prepend to path *)
-           '/'->basis.findAll (# do parents+1->parents #);
-           (for parents repeat '../'->path.prepend for);
-           path.copy->localname[];
-           leave findpart;
-           
-       if);
-       
+-- PathHandlerInitNameTable: descriptor --
+(# homes: @file; abb,fullName: ^text; 
+do '\'->directoryChar;
+   '$(BETALIB)'
+     ->expandEnvVar
+   (#
+      defaultValue::<
+        (# do 'c:\\beta\\'->envvarvalue[]; #);
+      
+   #)->betalib[];
+   (if (private.BetaLib.length->private.BetaLib.inxGet) <> '\' then
+       '\'->private.BetaLib.append; 
    if);
-   (* end findpart *)
-   (if localName[] = none then
-       LocalPathException;
-       (* in case of continue: fall back on full path *)
-       (if (path[] <> none ) then path.copy->localName[]; if)
+   betalib.makeLC;
+   getCurrentDir->private.CurrentDirectory[];
+   '\'->private.CurrentDirectory.append;
+   ('~beta\\',betalib[])->&newHomeDir;
+   ('~beta/',betalib[])->&newHomeDir;
+   homeDirectories->(private.BetaLib.Copy).Append->homes.name;
+   (if homes.entry.exists then
+       homes.openRead;
+       loop:
+         (if not homes.eos then 
+             (*'Homedir line: '->puttext;*)
+             homes.getLine->abb[];
+             (*abb[]->putline;*)
+             homes.getLine->fullname[];
+             (*fullname[]->putline;*)
+             (if (1->fullName.inxget) <> '/' then
+                 (fullName[],private.currentDirectory[])
+                   ->convertFilePath->fullName[];
+                 
+             if);
+             (abb[],fullname[])->&newHomeDir;
+             restart loop
+         if);
+       (*'No more homes'->putline;*)
+       homes.close
    if);
-   
-#)  
-
--- pathHandlerInit: DoPart --
-do private.nameTable.init; '\'->directoryChar  
+#)
 
 -- fcPrivate: Descriptor --
 (# #)  
-
 -- fcInit: DoPart --
 do 
 -- fcConvertFilePath: Descriptor --

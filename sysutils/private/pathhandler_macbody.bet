@@ -24,12 +24,6 @@ do ','->delimiter
 -- PathHandlerCurrentDirectory: DoPart --
 do getCurrentDir->cwd[]; 
 
--- PathHandlerCurDir: DoPart --
-do private.currentdirectory.copy->value[]  
-
--- PathHandlerBetaLib: DoPart --
-do private.betalib.copy->value[]  
-
 -- convertFilePathBody: Descriptor --
 (#
    endedBySlash: @boolean;
@@ -132,27 +126,23 @@ do (if THIS(ConvertFilePath).path[] <> none
                     if);
                     leave converter
                  // '~' then
-                 (* try look in table, we cannot expand usernames on MAC *)
-                    test:
-                    (if 1
-                     // 1 then
-                        Private.Nametable.Scan
+                    (* try look in table, we cannot expand usernames on MAC *)
+                    test: 
+                      (if true then
+                          Private.Nametable.Scan
                           (# 
-                          do (if ((1,currentSize)->path.sub->thisHome.equal)
-                              // true then
+                          do (if ((1,currentSize)->path.sub->thisHome.equal) then
                                  (1,currentSize)->path.delete;
                                  thisDir[]->path.prepend;
                                  path.length->pathlength;
                                  leave test;
-                                 
                              if)
                           #);
-                        (* not found in table: expand ~ as betalib *)
-                        (1,1)->path.delete;
-                        private.betalib[]->path.prepend;
-                        path.length->pathlength;
-                        
-                    if);
+                          (* not found in table: expand ~ as betalib *)
+                          (1,1)->path.delete;
+                          private.betalib[]->path.prepend;
+                          path.length->pathlength;
+                      if)
                     
                  // '.' then (* this is new from unix version *)
                     (if './'->basis.equal // true then leave converter if);
@@ -346,193 +336,94 @@ do (if THIS(ConvertFilePath).path[] <> none
    if)
 #)  
 
--- pathHandlerPrivate: Descriptor --
-(#
-   t: @Text;
-   betalib,currentdirectory: ^Text;
-   NameTable: @
-     (#
-        Home,HomeDir: [100] ^text;
-        top: @integer;
-        NewHomeDir:
-          (# H,D: @text; found: @boolean
-          enter (H,D)
-          do false->found;
-             scanning: scan
-               (# 
-               do (if (thisHome[]->h.equal)
-                   // true then
-                      D->HomeDir[currentInx]; true->found; leave scanning
-                  if);
-                  
-               #);
-             (if found
-              // false then
-                 (if ((top+1->top) > Home.range)
-                  // true then 
-                  else
-                     &Text[]->Home[top][];
-                     H->Home[top];
-                     &Text[]->HomeDir[top][];
-                     D->HomeDir[top]
-                 if)
-             if)
-          #);
-        Scan:
-          (# thisHome,thisDir: @text; currentInx,currentSize: @integer
-          do (for i: top repeat
-               i->currentInx;
-               Home[i].length->currentSize;
-               Home[i]->thisHome;
-               HomeDir[i]->thisDir;
-               INNER
-             for)
-          #);
-        Init:
-          (#
-             f: @file;
-             (*(# entryDesc::<(# exists:(# error::<(# do true -> continue#)#)#)#);*)
-             abb,fullName: ^text;
-             getStandAlone: External
-               (# isRunningAlone: @integer exit isRunningAlone #);
-             getBetaLib: @stringGetter;
-             GetBetaFolder: external (# a,b: [1] @char; enter a exit b #);
-             
-          do getCurrentDir->CurrentDirectory[];
-             (if CurrentDirectory[]
-              // none then
-                 (failureTrace,'Failed to get CurrentDirectory')->stop; 
-             if);
-             CurrentDirectory.makeLC;
-             (if getStandAlone
-              // 1 then (*'This is standalone'->screen.putline;*)
-                 'betaLib'->getBetaLib.strName;
-                 &Text[]->betalib[];
-                 getBetaLib.getFromResourceFile->betalib;
-                 betalib->t;
-                 homeDirectories->t.append;
-                 (*'Trying: '->screen.puttext; t[]->screen.putline;*)
-                 t[]->f.entry.path;
-                 (if f.entry.exists
-                   (# error::< (# do true->continue #) #)
-                  // false then (*'did not exists'->screen.putline;*)
-                     betalib->GetBetaFolder->pToC->betalib;
-                     (if betalib.length
-                      // 0 then (normal,'Program execution terminated')->stop
-                      else
-                         betalib->getBetaLib.updateResource; 
-                     if)
-                 if);
-                 (*'Done doing standalone...'->screen.putline;*)
-                 
-              else
-             (*'This is MPW tool'->screen.putline;*)
-                 '$(BETALIB)'
-                   ->expandEnvVar
-                     (#
-                        defaultValue::<
-                          (# 
-                          do 'You have to set the MPW-environment variable {BetaLib}'
-                               ->screen.putLine;
-                             'to the homeDirectory of the Beta-System'
-                               ->screen.putLine;
-                             'before running any Beta-programs'->screen.putLine;
-                             (Failure,'Program execution terminated')->stop
-                          #)
-                     #)->betalib[];
-                 (if betalib[]
-                  // none then
-                     (failureTrace,
-                      'Failed to read MPW-environment variable {BetaLib}')->stop
-                 if);
-                 
-             if);
-             (*'BETALIB is: '->screen.puttext; betalib[]->screen.putline;*)
-             betalib.makeLC;
-             betalib->t;
-             homeDirectories->t.append;
-             t[]->f.entry.path;
-             (if f.entry.exists
-              // true then
-              (*t[]->screen.puttext; ' exists, trying open: '->screen.puttext;*)
-                 ('~beta/',betalib)->&newHomeDir;
-                 f.openRead;
-                 (*'file open'->screen.putline;*)
-                 loop:
-                 (if f.eos
-                  // false then
-                     f.getline->abb[];
-                     f.getline->fullname[];
-                     (if fullname[]
-                      // none then 
-                      else
-                         (fullName[],CurrentDirectory[])->convertFilePath
-                           ->fullname[];
-                         (if fullname[]
-                          // none then
-                             (failureTrace,'Failed to convert file path')->stop
-                         if);
-                         (abb,fullname)->&newHomeDir;
-                         
-                     if);
-                     restart loop
-                 if);
-                 f.close
-              else
-                 'Cannot open homeDirectories file: '->t.prepend;
-                 (failureTrace,t[])->stop
-             if);
-             
-          #)
-     #)
-#)  
-
--- localPathBody: Descriptor --
-(# pathIndex,basisIndex: @integer; path,basis: ^text; 
-do (if (THIS(LocalPath).path[] <> none ) and (THIS(LocalPath).basis[] <> none )
-    // true then (* copy paths to avoid side-effects *)
-       THIS(LocalPath).path.copy->path[];
-       THIS(LocalPath).basis.copy->basis[];
-       '/'->basis.findAll (# do inx->basisIndex #);
-       (if basisIndex
-        // 0 then ':'->basis.findAll (# do inx->basisIndex #)
-       if);
-       '/'->path.findAll (# do inx->pathIndex #);
-       (if pathIndex
-        // 0 then ':'->path.findAll (# do inx->pathIndex #)
-       if);
-       (1,basisIndex)->basis.sub->basis[];
-       tester:
-       (if ((1,pathIndex)->path.sub->basis.equal)
-        // true then (pathIndex+1,path.length)->path.sub->localName[]
-        else
-       (* well. we did not find any match. 
-        * Let us se if it matches something in the pathhandler 
-        * data-structure
-        *)
-           Private.nameTable.scan
-             (# 
-             do (if ((1,thisDir.length)->path.sub->thisDir.equal)
-                 // true then
-                    (thisDir.length+1,path.length)->path.sub
-                      ->(thisHome.Copy).Append->localName[];
-                    leave tester
-                if)
-             #);
-           path.copy->localName[]
-       if)
-   if);
-   (if localName[]
-    // none then
-       (if path[] // none then  else path.copy->localName[]; if)
-    else
-       ':'->localName.FindAll (# do ('/',inx)->localName.inxPut #); 
-   if);
+-- PathHandlerInitNameTable: descriptor --
+(# t: @Text;
+   f: @file;
+   abb,fullName: ^text;
+   getStandAlone: External
+     (# isRunningAlone: @integer exit isRunningAlone #);
+   getBetaLib: @stringGetter;
+   GetBetaFolder: external (# a,b: [1] @char; enter a exit b #);
    
-#)  
-
--- pathHandlerInit: DoPart --
-do Private.NameTable.init; ':'->directoryChar  
+do ':'->directoryChar;
+   getCurrentDir->CurrentDirectory[];
+   (if CurrentDirectory[]=none then
+       (failureTrace,'Failed to get CurrentDirectory')->stop; 
+   if);
+   CurrentDirectory.makeLC;
+   (if getStandAlone=1 then 
+       (*'This is standalone'->screen.putline;*)
+       'betaLib'->getBetaLib.strName;
+       &Text[]->betalib[];
+       getBetaLib.getFromResourceFile->betalib;
+       betalib->t;
+       homeDirectories->t.append;
+       (*'Trying: '->screen.puttext; t[]->screen.putline;*)
+       t[]->f.entry.path;
+       (if not (f.entry.exists(# error::<(# do true->continue #)#)) then 
+           (*'did not exists'->screen.putline;*)
+           betalib->GetBetaFolder->pToC->betalib;
+           (if betalib.length=0 then 
+               (normal,
+               'failed to get BETALIB: Program execution terminated')
+                 ->stop
+            else
+               betalib->getBetaLib.updateResource; 
+           if)
+       if);
+       (*'Done doing standalone...'->screen.putline;*)
+    else
+       (*'This is MPW tool'->screen.putline;*)
+       '$(BETALIB)'
+         ->expandEnvVar
+       (#
+          defaultValue::<
+            (# 
+            do 'You have to set the MPW-environment variable {BetaLib}'
+                 ->screen.putLine;
+               'to the homeDirectory of the Beta-System'
+                 ->screen.putLine;
+               'before running any Beta-programs'->screen.putLine;
+               (Failure,'Program execution terminated')->stop
+            #)
+       #)->betalib[];
+       (if betalib[]=none then
+           (failureTrace,
+           'Failed to read MPW-environment variable {BetaLib}')
+             ->stop
+       if);
+       
+   if);
+   (*'BETALIB is: '->screen.puttext; betalib[]->screen.putline;*)
+   betalib.makeLC;
+   betalib->t;
+   homeDirectories->t.append;
+   t[]->f.entry.path;
+   (if f.entry.exists then
+       (*t[]->screen.puttext; ' exists, trying open: '->puttext;*)
+       ('~beta/',betalib.copy)->&newHomeDir;
+       f.openRead;
+       (*'file open'->screen.putline;*)
+       loop:
+         (if not f.eos then
+             f.getline->abb[];
+             f.getline->fullname[];
+             (if fullname[]<>none then 
+                 (fullName[],CurrentDirectory[])->convertFilePath
+                   ->fullname[];
+                 (if fullname[]=none then
+                     (failureTrace,'Failed to convert file path')->stop
+                 if);
+                 (abb.copy,fullname.copy)->&newHomeDir;
+             if);
+             restart loop
+         if);
+       f.close
+    else
+       'Cannot open homeDirectories file: '->t.prepend;
+       (failureTrace,t[])->stop
+   if);
+#) 
 
 -- fcPrivate: Descriptor --
 (# #)  
