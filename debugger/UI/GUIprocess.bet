@@ -23,20 +23,74 @@ GUIprocess: processInterface
       * Set to FALSE if process stop was due to a skipBreak or a conditional
       * breakpoint that evaluated to FALSE. In these cases, the process should
       * continue at once. *)
+     changedSources:
+       (* tests if the sources of this(GUIprocess) have been changed
+        * since last compilation
+        *)
+       (# changed: @boolean;
+          execModtime: @integer;
+          Report:
+            (#
+            do true->changed;
+               msg.newLine;
+               'Quit immediately (and recompile) to be able to continue debugging'
+                 ->msg.puttext;
+               (msg[],'Warning')->alertInfo
+            #);
+          msg: @text;
+       do msg.clear;
+          false->changed;
+          executable.modtime->execModtime;
+          'Checking for changed fragments...'->putinfo;
+          scan:
+            scanObjectFileInfos
+            (# diskfile,textfile: @file;
+               t: @text;
+            do current.groupName->t;
+               MPS.AST.astFileExtension->t.append; t[]->diskfile.name;
+               current.groupName->t;
+               '.bet'->t.append; t[]->textfile.name;
+               (if textfile.entry.exists and
+                   (textfile.entry.modTime > execModtime) then
+                   'Source file: '->msg.puttext;
+                   textfile.name->msg.putline;
+                   '   has been changed since last compilation of the executable!'->msg.putline;
+                else
+                   (if diskfile.entry.exists then
+                       (if (diskfile.entry.modTime > execModtime) then
+                           'Group file: '->msg.puttext;
+                           diskfile.name->msg.putline;
+                           '   has been changed since last compilation of the executable!'->msg.putline;
+                       if)
+                    else
+                       'Group file: '->msg.puttext;
+                       diskfile.name->msg.putline;
+                       '   has been deleted!'->msg.putline;
+                   if)
+               if)
+            #);
+          (if msg.length>0 then Report if);
+          ''->putinfo;
+       exit changed   
+       #);
      rerun:: 
-       (# 
+       (# success: @boolean
        do remoteObjects.clear;
           FALSE->running;
           (* Reset breakpoints. *)
           bml.scan (# do current.reinstall #);
+          not changedSources->success
+       exit success
        #);
      init::
-       (#
+       (# success: @boolean
        do remoteObjects.init; remoteObjects[]->newObjectPoolPut
           (# alreadyThere:: (# do true->continue #)#);
           bml.init; bml[]->newObjectPoolPut
           (# alreadyThere:: (# do true->continue #)#);
+          not changedSources->success;
           INNER;
+       exit success
        #);
      DBstatus::
        (# t: @Text;
@@ -67,7 +121,7 @@ GUIprocess: processInterface
      onProcessFork::
        (# t: @Text;
        do 'Forking `%s'' process'->t.putFormat
-          (#de: @diskEntry;
+          (# de: @diskEntry;
           do getEXECNAMEparam->de.path;
              de.path.name->s;
           #);
@@ -114,6 +168,11 @@ GUIprocess: processInterface
      unknownImpFailure::
        (# 
        do ('Failed to set breakpoint','WARNING!!')->alertinfo; true->continue;
+       #);
+     otherError::
+       (#
+       do (msg[],'WARNING!!')->alertinfo;
+          true->continue;
        #);
      commError::
        (#
@@ -166,7 +225,7 @@ GUIprocess: processInterface
                      if);
                   #);
                   'Unexpected: DOT element not found in remoteObjectDB'
-                    -> putLine;
+                    -> otherError
                #);
           #);
           TRUE->running;

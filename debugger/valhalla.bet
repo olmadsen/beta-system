@@ -14,6 +14,7 @@ INCLUDE 'breakpoints';
 INCLUDE 'UI/valhallaGUI';
 INCLUDE 'UI/GUIprocess';
 INCLUDE 'UI/stackview';
+INCLUDE 'UI/stackbrowser';
 INCLUDE 'UI/objectviewadds';
 INCLUDE 'UI/enveditor';
 INCLUDE '~beta/guienv/v1.4/utils/promptForArgs';
@@ -43,14 +44,6 @@ systemenv
    
    theEnveditor: ^enveditType; (* Environment editor. *)
    enveditType: gui.envEditor (# onClose:: (# do NONE->theEnveditor[] #)#);
-   
-   debuggeeChangedSources:
-     (# FN: ^text;
-        changedOutside,otherError: @boolean;
-     enter FN[]
-     do <<SLOT debuggeeChangedSources: descriptor>>
-     exit (changedOutside,otherError)
-     #);
    
    debuggeeIsRunning: BooleanValue
      (# 
@@ -178,12 +171,46 @@ systemenv
    waitersem: @semaphore; 
    procwaiter: @|System (# do <<SLOT procwaiter:descriptor>> #);
    
+   mystackbrowser: gui.main.stackbrowser
+     (# stackbrowserEncloserType::
+          (# openNewCodeView::
+               (# 
+               do cast[]->newcodemoveable
+                  (# acceptFound::
+                       (#
+                       do contents.browser.codePane.codeViews.find
+                          (# predicate:: (# do (found[]=current[])->value #) 
+                          do true->value
+                          #)
+                       #)
+                  #);
+               #);
+             openNewObjectView:: 
+               (# 
+               do bo[]->newobjectmoveable
+                  (# acceptFound::
+                       (#
+                       do true->value;
+                          contents.browser.objectPane.objectViews.find
+                          (# predicate::
+                               (# do (found[]=current.sov.contents[])->value #)
+                          do false->value
+                          #)
+                       #)
+                  #);
+               #);
+             selectCodeView:: (# <<SLOT selectCodeView: dopart>> #);
+             selectObjectView:: (# <<SLOT selectObjectView: dopart>> #);
+             alertInfo:: (# do (inf[],title[])->gui.alertInfo #);
+          #);
+     #);
+   
    mystackview: gui.main.stackviewmoveable
      (# listEncloserType::
           (# openNewCodeView:: (# do cast[]->newcodemoveable #);
              openNewObjectView:: 
                (# 
-               do (bo[],force)->gui.main.OpenMoveableObjectView
+               do (bo[],true)->gui.main.OpenMoveableObjectView
                   (# getFather:: (# do gui.main.objworld[]->father[]#)#)
                #);
              alertInfo:: (# do (inf[],title[])->gui.alertInfo #);
@@ -219,6 +246,22 @@ systemenv
         cast: ^astInterface.ast;
      enter cast[]
      <<SLOT newcodemoveable:dopart>>
+     #);
+   newobjectmoveable: 
+     (# openIfNotFound:< BooleanValue (# do true->value; INNER #);
+        wriggleIfFound:< BooleanValue
+          (# found: ^gui.main.objectView
+          enter found[]
+          do true->value; INNER
+          #);
+        acceptFound:< BooleanValue
+          (# found: ^gui.main.objectView
+          enter found[]
+          do INNER
+          #);
+        bo: ^betaObject;
+     enter bo[]
+     <<SLOT newobjectmoveable:dopart>>
      #);
    
    cmdlineprompt: @gui.promptForArgs
@@ -286,6 +329,12 @@ systemenv
      <<SLOT newstackviewbody:dopart>>
      #);
    
+   newstackbrowser:
+     (# comp: ^processInterface.remoteBetaObject;
+     enter comp[]
+     <<SLOT newstackbrowserbody:dopart>>
+     #);
+   
    sockgen: @socketGenerator;
    
    gui: @valhallaGUI
@@ -331,26 +380,22 @@ systemenv
           (# changedOutside, otherError: @boolean
           do (if newExecName<>NONE then
                  ensureKilled; 
-                 getEXECNAMEparam->debuggeeChangedSources
-                   ->(changedOutside,otherError);
-                 (if not (changedOutside or otherError) then
-                     doEditCommandLine;
-                     FALSE->runNewDebuggee;
-                     getEXECNAMEparam->loadSources
+                 doEditCommandLine;
+                 FALSE->runNewDebuggee;
+                 (if debuggee[]<>NONE then
+                     ('program',debuggee.MPS.BETA.DescriptorForm)
+                       ->debuggee.DBmanager.slotnameToGroups
+                     (# do current[]->loadSources #);
                  if)
              if)
           #);
         debuggeeStatus::
           (# do debuggeeIsReady->value #);
         debuggeeRerun::
-          (# changedOutside, otherError: @boolean 
+          (# 
           do (if rerunStatus then
                  ensureKilled;
-                 getEXECNAMEparam->debuggeeChangedSources
-                   ->(changedOutside,otherError);
-                 (if not (changedOutside or otherError) then
-                     TRUE->runNewDebuggee
-                 if);
+                 TRUE->runNewDebuggee
              if)
           #);
         rerunStatus::
@@ -425,6 +470,18 @@ systemenv
              if);
           #);
         activeStackStatus::
+          (# 
+          do (if (debuggeeIsReady->value) then
+                 (debuggee.curComp<>0)->value 
+             if);
+          #);
+        debuggeeStackBrowser:: 
+          (# 
+          do (if stackBrowserStatus then
+                 debuggee.currentRemoteComponent->newstackbrowser
+             if);
+          #);
+        stackBrowserStatus::
           (# 
           do (if (debuggeeIsReady->value) then
                  (debuggee.curComp<>0)->value 
@@ -529,19 +586,18 @@ systemenv
         gui.sources.appendDone
 
      #);
-   changedOutside, otherError: @boolean;
 do thespawner.init; thespawner[]->objectPool.put;
    0->sockgen.port; sockgen.bind; sockgen[]->objectPool.put;
    gui.init;
    parseValhallaParams;
    procwaiter[]->fork;
    (if getEXECNAMEparam<>NONE then
-       getEXECNAMEparam->debuggeeChangedSources
-         ->(changedOutside,otherError);
-       (if not (changedOutside or otherError) then
-           FALSE->runNewDebuggee;
-           getEXECNAMEparam->loadSources
-       if);
+       FALSE->runNewDebuggee;
+       (if debuggee[]<>NONE then
+           ('program',debuggee.MPS.BETA.DescriptorForm)
+             ->debuggee.DBmanager.slotnameToGroups
+           (# do current[]->loadSources #);
+       if)
    if)
 #)
 

@@ -40,10 +40,15 @@ getLabel:
   exit label[]
   #);
 
-showSelectedCode:
-  (# inx: @Integer;
+findCode:
+  (# onCodeFound:<
+       (# cast: ^astInterface.ast
+       enter cast[]
+       do INNER
+       #);
+     inx: @Integer;
      impi: ^processInterface.ImperativeInfo;
-  do (if svprivate.curItem=0 then leave showSelectedCode if);
+  do (if svprivate.curItem=0 then leave findCode if);
      
      findEntry:
        (for i:lastStack.last repeat
@@ -62,7 +67,7 @@ showSelectedCode:
                  (if dp[]<>NONE then
                      (* Ok, at least we can show the dopart. *)
                      ('Unknown imperative. Showing surrounding dopart','Missing debug info')->encl.alertInfo;
-                     dp[]->encl.openNewCodeView;
+                     dp[]->onCodeFound;
                   else
                      (* Show ObjectDescriptor whose dopart should contain
                       * the code address. *)
@@ -73,24 +78,29 @@ showSelectedCode:
                          ('Unknown ObjectDescriptor. Unable to show code.','Missing debug info')->encl.alertInfo;
                       else
                          ('Unknown imperative. Showing surrounding ObjectDescriptor','Missing debug info')->encl.alertInfo;
-                         pti.objdesc[]->encl.openNewCodeView;
+                         pti.objdesc[]->onCodeFound;
                      if);
                  if);
               #);
          #)->impi[]; 
          (if impi[]<>NONE then
-             impi.cast[]->encl.openNewCodeView;
+             impi.cast[]->onCodeFound;
          if);
      if);
   #);
 
-popupItemMenu:
+findObject:
   (# inx: @Integer; (* Index into lastStack of item currently selected. *)
-     menupos: @Point;
-     popupin: ^windowitem;
-  enter (menupos, popupin[]) (* localposition from mouse event *)
-  do 
-     (if svprivate.curItem=0 then leave popupItemMenu if);
+     onUnknownCode:< object;
+     onBetaCode:< object
+       (# title: ^text; bo: ^betaObject
+       enter (title[],bo[])
+       do INNER
+       #);
+     onGcode:< object;
+     onCcode:< object;
+     onAttCode:< object;
+  do (if svprivate.curItem=0 then leave findObject if);
      
      svprivate.itemmenu.clear;
      
@@ -103,12 +113,11 @@ popupItemMenu:
        for);
      
      (if lastStack.codeTypes[inx]
-      //unknownCode then   
+      //unknownCode then onUnknownCode 
       //betaCode then
          (# bo: ^processInterface.remoteBetaObject;
             t: ^Text;
-         do 
-            (* Show menu containing a single entry which is the object
+         do (* Show menu containing a single entry which is the object
              * corresponding to this return address. *)
             (lastStack.returnObjs[inx]->getObj->bo[]->getType).copy->t[];
             (if bo.isComponentObject then
@@ -116,23 +125,63 @@ popupItemMenu:
              else
                 'OBJ: '->t.prepend;
             if);
-            (t[],inx,svprivate.itemMenu.onObjectItemSelect##)
-              ->svprivate.itemMenu.appendItemMenuItem;
+            (t[],bo[])->onBetaCode;
          #);         
       //Gcode then
-         'Gcode'->putLine;
+         onGcode
       //Ccode then
-         (# onSelect: svprivate.itemMenu.onSelectAction
-              (# 
-              do 
-              #);
-         do 'Ccode'->putLine;
-         #)
+         onCcode
       //attCode then
-         'attCode'->putLine;
+         onAttCode
      if);
      
-     (1,menupos,popupin[])->svprivate.itemMenu.popup;
+     INNER
+  #);
+
+showSelectedCode: findCode
+  (# onCodeFound:: (# do cast[]->encl.openNewCodeView #) #);
+
+popupItemMenu: findObject
+  (# menupos: @Point;
+     popupin: ^windowitem;
+     onUnknownCode:: (# do #);
+     onBetaCode::
+       (#
+       do (title[],bo[],svprivate.itemMenu.onObjectItemSelect##)
+            ->svprivate.itemMenu.appendItemMenuItem;
+       #);
+     onGcode::
+       (# do'Gcode'->putLine #);
+     onCcode::
+       (# onSelect: svprivate.itemMenu.onSelectAction
+            (# 
+            do 
+            #)
+       do 'Ccode'->putLine
+       #);
+     onAttCode::
+       (# do'attCode'->putLine #);
+  enter (menupos, popupin[]) (* localposition from mouse event *)
+  do (1,menupos,popupin[])->svprivate.itemMenu.popup;
+  #);
+
+selectStackFrame:
+  (#
+  do findObject
+     (# onUnknownCode:: (# do #);
+        onBetaCode::
+          (#
+          do (bo[],FALSE)
+               ->encl.selectObjectView;
+          #);
+        onGcode::
+          (# do'Gcode'->encl.selectExternalView #);
+        onCcode::
+          (# do 'Ccode'->encl.selectExternalView #);
+        onAttCode::
+          (# do'attCode'->encl.selectExternalView #);
+     #);
+     findCode(# onCodeFound:: (# do cast[]->encl.selectCodeView #) #);
   #);
 
 updateList: 
@@ -352,7 +401,7 @@ showstack:
 do (if iconified then
        TRUE->updateDeferred
     else
-       updateList;
+       updateList; INNER doUpdate
    if);
    
 --- stackviewlistclose:descriptor ---
@@ -410,6 +459,16 @@ do
       THIS(stackViewList)[]->sll.append;
    #);
    
+--- stackviewOnSelect:descriptor ---
+(# 
+do (if not doubleClick then
+       (if not svPrivate.isGarbage then
+           item->svprivate.curItem;
+           selectStackFrame
+       if)
+   if)
+#)
+   
 --- stackviewOnMouseDown:descriptor ---
 (# 
 do (if doubleClick then
@@ -455,11 +514,11 @@ do (if doubleClick then
    
    itemMenu: @menu 
      (# appendItemMenuItem:
-          (# itemtitle: ^Text; inx: @Integer; onSelect: ##onSelectAction;
-             mi: ^itemMenuItem;
-          enter (itemtitle[],inx,onSelect##)
+          (# itemtitle: ^Text; onSelect: ##onSelectAction;
+             mi: ^itemMenuItem; bo: ^betaObject
+          enter (itemtitle[],bo[],onSelect##)
           do &itemMenuItem[]->mi[];
-             (itemtitle[],inx,onSelect##)->mi.open;
+             (itemtitle[],bo[],onSelect##)->mi.open;
           #);
         
         onSelectAction:
@@ -470,7 +529,7 @@ do (if doubleClick then
 
         onObjectItemSelect: onSelectAction
           (# 
-          do (lastStack.returnObjs[mi.inx]->getObj,FALSE)
+          do (mi.bo[],FALSE)
                ->encl.openNewObjectView
           #);
 
@@ -481,10 +540,10 @@ do (if doubleClick then
 
         itemMenuItem: menuItem
           (# onSelect: ##onSelectAction;
-             inx: @Integer;
+             bo: ^betaObject;
              open:: 
                (# itemtitle: ^Text;
-               enter (itemtitle[],inx,onSelect##)
+               enter (itemtitle[],bo[],onSelect##)
                do THIS(itemMenuItem)[]->append; itemtitle[]->name;
                #);
              eventHandler:: 

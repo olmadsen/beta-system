@@ -1,0 +1,386 @@
+ORIGIN  '~beta/guienv/v1.4/guienv';
+
+INCLUDE '~beta/guienv/v1.4/utils/pane';
+INCLUDE '~beta/guienv/v1.4/fields';
+INCLUDE '~beta/objectbrowser/v2.1/UI/labelled';
+INCLUDE '~beta/objectbrowser/v2.1/UI/moveable';
+INCLUDE '~beta/objectbrowser/v2.1/UI/objectview';
+INCLUDE '~beta/sourcebrowser/v1.1/codemoveable';
+
+INCLUDE '~beta/objectbrowser/v2.1/UI/private/objectviewbody';
+
+INCLUDE 'stackview';
+INCLUDE 'private/stackviewbody';
+
+(*
+ * COPYRIGHT
+ *   Copyright Mjolner Informatics, 1997
+ *   All rights reserved.
+ *)
+
+--- windowlib: attributes ---
+stackbrowser: moveable
+  (# aspect:< integerValue (# do 3->value; INNER #);
+     updatedeferred: @Boolean
+       (* TRUE if an update was deferred due to this stackbrowser
+        * being iconified.
+        *);
+     doUpdate:: 
+       (# 
+       do (if iconified then
+              TRUE->updateDeferred
+           else
+              updateBrowser
+          if)
+       #);
+     onDeIconify:: 
+       (# 
+       do (if updateDeferred then
+              updateBrowser;
+              FALSE->updateDeferred;
+          if)
+       #);
+     updateBrowser: 
+       (# 
+       do contents.browser.codePane.codeViews.closeAll;
+          contents.browser.objectPane.objectViews.closeAll;
+          contents.browser.stackPane.contents.contents.doUpdate;
+       #);
+     stackbrowserEncloser: stackViewEncloser
+       (# settitle:: (# do t[]->contents.browser.stackPane.contents.label #);
+          selectCodeView::< 
+            (# scv: ^contents.browser.codePane.stackCodeView;
+               father: ^interfaceObject
+            do cast[]->contents.browser.codePane.codeViews.show->scv[];
+               (if scv[]<>NONE then
+                   contents.browser.codePane[]->father[];
+                   INNER;
+               if)
+            #);
+          selectObjectView::< 
+            (# sov: ^contents.browser.objectPane.stackObjectView;
+               father: ^interfaceObject
+            do bo[]->contents.browser.objectPane.objectViews.show->sov[];
+               (if sov[]<>NONE then
+                   contents.browser.objectPane[]->father[];
+                   INNER;
+               if)
+            #);
+          selectExternalView::< 
+            (#
+            do contents.browser.codePane.externalCode;
+               contents.browser.objectPane.externalObject;
+            #);
+          tryClose:: 
+            (# 
+            do contents.browser.stackPane.contents.close;
+               contents.browser.codePane.codeViews.closeAll;
+               contents.browser.objectPane.objectViews.closeAll;
+               close;
+            #);
+       #);
+     stackbrowserEncloserType:< stackbrowserEncloser;
+     theStackbrowserEncloser: @stackbrowserEncloserType;
+     contentsType:: 
+       (# browser: @browserType;
+          browserType:< pane
+            (# fatherFrame::
+                 (#
+                 do contents.frame->fr; 
+                    ((0,0),(fr.right-fr.left,fr.bottom-fr.top))->fr;
+                 #);
+               eventhandler:: 
+                 (# onFatherFrameChanged:: (# do father.size->size #) #);
+               overlayView: labelled
+                 (# zoomed: @boolean;
+                    eventhandler::< 
+                      (# onMouseDown:: 
+                           (# 
+                           do (if doubleclick then
+                                  (if zoomed then
+                                      false->zoomed;
+                                      this(browserType).unzoom;
+                                   else
+                                      true->zoomed;
+                                      this(overlayView).father[]
+                                        ->this(browserType).zoomMember;
+                                  if)
+                              if);
+                           #);
+                         onFatherFrameChanged:: 
+                           (# do (if visible then father.size->size if) #);
+                         onVisibleChanged:: 
+                           (# do (if visible then father.size->size if) #);
+                      #);
+                    open::< 
+                      (# sz: @point enter sz do sz->size; INNER #)
+                 #);
+               externalView: overlayView
+                 (# contentsType:: staticText;
+                    open::< 
+                      (# openContents::< 
+                           (# 
+                           do this(externalView)[]->contents.open;
+                              true->doneInInner;
+                              INNER
+                           #)
+                      do INNER
+                      #)
+                 #);
+               stackPane: @Canvas
+                 (# selectFirstFrame:
+                      (# 
+                      do (1,false)->contents.contents.selection.select; 
+                         1->contents.contents.doSelect;
+                      #);
+                    contents: @overlayView
+                      (# contentsType:: stackViewList
+                           (# doSelect:
+                                (# item: @integer
+                                enter item
+                                do (if not svPrivate.isGarbage then
+                                       item->svprivate.curItem;
+                                       selectStackFrame
+                                   if);
+                                #);
+                              doUpdate::
+                                (# 
+                                do (1,false)->selection.select; 
+                                   1->doSelect;
+                                #);
+                              getencloser:: 
+                                (# do theStackbrowserEncloser[]->theEncloser[] #);
+                              open:: 
+                                (# 
+                                do 'Stack View'->label;
+                                   THIS(stackbrowser).debuggee[]->debuggee[];
+                                   THIS(stackbrowser).component[]->component[];
+                                #);
+                           #);
+                         open:: 
+                           (# openContents:: 
+                                (# sll: ^stackViewListList;
+                                do (stackPane.contents[],size)->contents.open;
+                                   true->doneInInner;
+                                #)
+                           #);
+                      #);
+                    open:: 
+                      (# sz: @point
+                      enter sz
+                      do sz->size;
+                         (stackPane[],size)->contents.open;
+                      #)
+                 #);
+               codePane: @Canvas
+                 (# currentView: ^overlayView;
+                    codeViews: @list
+                      (# element:: 
+                           (# cast: ^astInterface.ast; scv: ^stackCodeView #);
+                         closeAll: iterate
+                           (#
+                           do NONE->currentView[];
+                              current.elm.scv.close;
+                              current[]->delete;
+                           #);
+                         show: 
+                           (# cast: ^astInterface.ast;
+                              scv: ^stackCodeView;
+                           enter cast[]
+                           do find
+                              (# predicate:: 
+                                   (# do (cast.frag[]=current.cast.frag[])->value #);
+                                 notFound:: 
+                                   (# e: ^element
+                                   do &stackCodeView[]->scv[];
+                                      (codePane[],codePane.size)->scv.open;
+                                      &element[]->e[];
+                                      cast[]->e.cast[];
+                                      scv[]->e.scv[]->currentView[];
+                                      e[]->append;
+                                   #)
+                              do (if currentView[]<>current.scv[] then
+                                     (if currentView[]<>NONE then currentView.hide if);
+                                     current.scv[]->currentView[];
+                                     currentView.show;
+                                     (cast[],1,0,0)
+                                       ->current.scv.contents.sifViewer.setFocus;
+                                 if);
+                              #);
+                           exit scv[]
+                           #);
+                      #);
+                    externalCodeView: @externalView
+                      (# open::
+                           (# openContents::
+                                (# do '<<External Code>>'->contents.label; #)
+                           do 'Code View'->label;
+                           #)
+                      #);
+                    externalCode:
+                      (#
+                      do (if currentView[]<>externalCodeView[] then
+                             (if currentView[]<>NONE then currentView.hide if);
+                             externalCodeView[]->currentView[];
+                             currentView.show;
+                         if);
+                      #);
+                    codeViewer: codemoveableEditor
+                      (# isolated:: trueObject;
+                         selectNode:: 
+                           (# 
+                           do node[]->theStackbrowserEncloser.selectCodeView;
+                           #);
+                         initialContractionLevel:: (# do 2->value #);
+                         charWidthType:: 
+                           (# 
+                           do (* HACK NEEDED UNTIL textEditor.defaultStyle
+                               * gets implemented !!!
+                               *)
+                              stackPane.contents.private.theLabel.style->ts[]
+                           #);
+                         getEncloser::
+                           (# do editorEncloser[]->theEncloser[] #);
+                      #);
+                    editorEncloserType:< codemoveableEditorEncloser
+                      (# onHighLight:: (# do wriggle #) #);
+                    editorEncloser: @editorEncloserType;
+                    stackCodeView: overlayView
+                      (# contentsType:: codeViewer;
+                         open:: 
+                           (# openContents:: 
+                                (# cel: ^codemoveableEditorList
+                                do (this(stackCodeView)[], sz)->contents.open;
+                                   true->doneInInner;
+                                #)
+                           do 'Code View'->label
+                           #)
+                      #);
+                    open:: 
+                      (# sz: @point
+                      enter sz
+                      do sz->size;
+                         (codePane[],size)->externalCodeView.open;
+                         externalCodeView.hide;
+                      #)
+                 #);
+               objectPane: @Canvas
+                 (# currentView: ^overlayView;
+                    objectViews: @list
+                      (# element:: 
+                           (# bo: ^betaObject; sov: ^stackObjectView #);
+                         closeAll: iterate
+                           (#
+                           do NONE->currentView[];
+                              current.elm.sov.close;
+                              current[]->delete;
+                           #);
+                         show: 
+                           (# bo: ^betaObject;
+                              sov: ^stackObjectView;
+                           enter bo[]
+                           do find(# predicate:: 
+                                       (# do (bo[]=current.bo[])->value #);
+                                     notFound:: 
+                                       (# e: ^element
+                                       do &stackObjectView[]->sov[];
+                                          (objectPane[],objectPane.size,bo[])
+                                            ->sov.open;
+                                          &element[]->e[];
+                                          bo[]->e.bo[];
+                                          sov[]->e.sov[]->currentView[];
+                                          e[]->append;
+                                       #)
+                                  do (if currentView[]<>current.sov[] then
+                                         (if currentView[]<>NONE then currentView.hide if);
+                                         current.sov[]->currentView[];
+                                         currentView.show;
+                                     if);
+                                  #);
+                           exit sov[]
+                           #);
+                      #);
+                    externalObjectView: @externalView
+                      (# open::
+                           (# openContents::
+                                (# do '<<External Object>>'->contents.label #)
+                           do 'Object View'->label;
+                           #)
+                      #);
+                    externalObject:
+                      (#
+                      do (if currentView[]<>externalObjectView[] then
+                             (if currentView[]<>NONE then currentView.hide if);
+                             externalObjectView[]->currentView[];
+                             currentView.show;
+                         if);
+                      #);
+                    stackObjectView: overlayView
+                      (# bo: ^betaObject; 
+                         objectEncloserType:< objectViewEncloser
+                           (# onHighLight:: 
+                                (# do wriggle #);
+                              getObject::
+                                (# do this(stackObjectView).bo[]->bo[] #)
+                           #);
+                         objectEncloser: @objectEncloserType;
+                         contentsType:: objectView
+                           (# open:: 
+                                (# 
+                                do 'Object View'->label #);
+                              getEncloser:: 
+                                (# do objectEncloser[]->theEncloser[] #);
+                           #);
+                         open:: 
+                           (# openContents:: 
+                                (#
+                                do (this(stackObjectView)[], sz)
+                                     ->contents.open;
+                                   true->doneInInner;
+                                #) 
+                           enter bo[]
+                           #)
+                      #);
+                    open:: 
+                      (# sz: @point;
+                      enter sz
+                      do sz->size;
+                         (objectPane[],size)->externalObjectView.open;
+                         externalObjectView.hide;
+                      #)
+                 #);
+               open::< 
+                 (# setDefaults:: 
+                      (#
+                      do true->verticalStacking; 50->minsize; 2->panewidth
+                      #);
+                    sz: @point;  
+                 do 'Stack Browser'->title;
+                    THIS(stackbrowser).contents.size->sz;
+                    (sz.h,(sz.v div aspect)-1)->sz;
+                    (this(browserType)[],sz)->stackPane.open;
+                    (this(browserType)[],sz)->codePane.open;
+                    (this(browserType)[],sz)->objectPane.open;
+                    stackPane[]->appendMember;
+                    codePane[]->appendMember;
+                    objectPane[]->appendMember;
+                    INNER open;
+                    appendsDone;
+                 #);
+            #);
+          open::
+            (#
+            do (contents[],TRUE,100,2)->browser.open;
+               browser.stackPane.selectFirstFrame;
+            #)
+       #);
+     
+     debuggee: ^processInterface;
+     component: ^processInterface.remoteBetaObject;
+     
+     open::< 
+       (#
+       enter (debuggee[],component[])
+       do INNER open
+       #)
+  #);

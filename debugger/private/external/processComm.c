@@ -414,15 +414,3 @@ HANDLE executeProcess (char *execName) {
 }
 
 #endif /* not nti */
-
-
-
-
-
-
-
-
-
-
-
-
