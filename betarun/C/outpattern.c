@@ -522,6 +522,10 @@ errorTable[] =
   { IOAFullErr,        "IOA heap is full" },
   { FpZeroDivErr,      "Floating Point division by zero" },
   { FpExceptErr,       "Floating Point exception" },
+#ifdef intel
+  { FpStackUflowErr,   "Floating Point stack underflow" },
+  { FpStackOflowErr,   "Floating Point stack overflow" },
+#endif
 #ifdef RTDEBUG
   { InterruptErr,      "User Interrupt" },
 #endif

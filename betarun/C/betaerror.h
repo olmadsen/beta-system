@@ -23,6 +23,10 @@ enum BetaErr {
   IOAFullErr =        -18 /* IOA heap is full */,
   FpZeroDivErr =      -19 /* Floating Point division by zero */,
   FpExceptErr =       -20 /* Floating Point exception */,
+#ifdef intel
+  FpStackUflowErr =   -21 /* Floating Point Stack Underflow */,
+  FpStackOflowErr =   -22 /* Floating Point Stack Overflow */,
+#endif
 #ifdef RTDEBUG	     	  
   InterruptErr =      -28 /* User Interupt */,
 #endif		     	  
