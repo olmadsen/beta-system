@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
- * by Peter Andersen, Peter Oerbaek, and Tommy Thorn.
+ * by Peter Andersen, Peter Oerbaek, Tommy Thorn, and Jacob Seligmann
  */
 
 #define GCable_Module
@@ -67,8 +67,8 @@ void CQua(ref(Object) dstQuaOrigin,
       /* Qua check on lazy reference */
       if (! inIOA(theCell)) 
 	/* in AOA area. */
-	negAOArefsINSERT(theCell);
-      srcProto = cast(ProtoType) findDanglingProto(src);
+	negAOArefsINSERT((long)theCell);
+      srcProto = cast(ProtoType) findDanglingProto((int)src);
     } else 
 #endif
       if (! inIOA(theCell) && inIOA(src))
@@ -174,7 +174,7 @@ void COQua(ref(Object) dstQuaOrigin,
 	AOAtoIOAInsert(theCell);
 #ifdef RTLAZY
       else if (isLazyRef(src)) {
-	negAOArefsINSERT(theCell);
+	negAOArefsINSERT((long)theCell);
 	fprintf (stderr, "Aaarghh: Strict QUA check on lazy reference -- Goodbye cruel world\n");
 	exit (99);
       }

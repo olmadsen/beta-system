@@ -4,7 +4,7 @@
 
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
- * by Peter Andersen and Tommy Thorn.
+ * by Peter Andersen, Tommy Thorn, and Jacob Seligmann
  */
 
 #define GCable_Module
@@ -57,8 +57,10 @@ void CCopySRR(ref(RefRep) theRep,
     
     /* stack[12] -> theRep; */
     /* Check that low and high usable. */
-    if (low < theRep->LowBorder) BetaError(RepLowRangeErr, theItem);
-    if (high > theRep->HighBorder) BetaError(RepHighRangeErr, theItem);
+    if (low < theRep->LowBorder) 
+      BetaError(RepLowRangeErr, cast(Object)theItem);
+    if (high > theRep->HighBorder) 
+      BetaError(RepHighRangeErr, cast(Object)theItem);
     
     /* Calculate the range of the new repetition. */
     size = high - low + 1;

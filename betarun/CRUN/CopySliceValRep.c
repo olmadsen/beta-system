@@ -4,7 +4,7 @@
 
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
- * by Peter Andersen and Tommy Thorn.
+ * by Peter Andersen, Tommy Thorn, and Jacob Seligmann
  */
 
 #ifdef hppa
@@ -52,8 +52,10 @@ void CCopySVR(ref(ValRep) theRep,
     /* Copy a slice of a Value Repetition. */
     
     /* Check that low and high are usable. */
-    if (low < theRep->LowBorder) BetaError(RepLowRangeErr, theItem);
-    if (high > theRep->HighBorder) BetaError(RepHighRangeErr, theItem);
+    if (low < theRep->LowBorder) 
+      BetaError(RepLowRangeErr, cast(Object)theItem);
+    if (high > theRep->HighBorder) 
+      BetaError(RepHighRangeErr, cast(Object)theItem);
     
     /* Calculate the range of the new repetition. */
     high =  (high - low) + 1;
