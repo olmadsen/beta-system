@@ -124,7 +124,7 @@ void BetaExit(long number)
     ValhallaOnProcessStop (0,0,0,0,0);
 #ifdef UNIX
     if (number){
-      DEBUG_CODE(fprintf(output, "debuggee(PID=%d): sleeping for 10 minuttes before exiting...\n", getpid()));
+      DEBUG_CODE(fprintf(output, "debuggee(PID=%d): sleeping for 10 minuttes before exiting...\n", (int)getpid()));
       DEBUG_CODE(sleep(10*60));
       DEBUG_CODE(fprintf(output, "debuggee: 10 minuttes past - goodbye...\n"));
     }
