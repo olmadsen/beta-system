@@ -3,9 +3,9 @@
 /* -- Prototype constants */
 #define ComponentPTValue       ((struct ProtoType *) -1)
 #define StackObjectPTValue     ((struct ProtoType *) -2)
-#define ValRepPTValue          ((struct ProtoType *) -3)
+#define StructurePTValue       ((struct ProtoType *) -3)
 #define RefRepPTValue          ((struct ProtoType *) -4)
-#define StructurePTValue       ((struct ProtoType *) -5)
+#define ValRepPTValue          ((struct ProtoType *) -5)
 #define ByteRepPTValue         ((struct ProtoType *) -6)
 #define WordRepPTValue         ((struct ProtoType *) -7)
 #define DoubleRepPTValue       ((struct ProtoType *) -8)
