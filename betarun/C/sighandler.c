@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: sighandler.c,v $, rel: %R%, date: $Date: 1991-03-19 11:45:51 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: sighandler.c,v $, rel: %R%, date: $Date: 1992-03-23 13:12:56 $, SID: $Revision: 1.4 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -10,7 +10,7 @@
 #endif
 
 /* This procedure is called if a nasty signal is recieved
- * during execution og SignalHandler.
+ * during execution of SignalHandler.
  * Please Exit nicely.
  */
 static void ExitHandler(sig, code, scp, addr)
@@ -29,18 +29,15 @@ void SignalHandler(sig, code, scp, addr)
   handle(Object) theCell;
   ref(Object)    theObj = 0;
 
-  { /* Setup signal handles for the Beta system */
-    signal( SIGFPE,  ExitHandler);
-    signal( SIGILL,  ExitHandler);
-    signal( SIGBUS,  ExitHandler);
-    signal( SIGSEGV, ExitHandler);
+  /* Setup signal handles for the Beta system */
+  signal( SIGFPE,  ExitHandler);
+  signal( SIGILL,  ExitHandler);
+  signal( SIGBUS,  ExitHandler);
+  signal( SIGSEGV, ExitHandler);
 #ifdef apollo
-    signal( SIGINT,  ExitHandler);
-    signal( SIGQUIT, ExitHandler);
+  signal( SIGINT,  ExitHandler);
+  signal( SIGQUIT, ExitHandler);
 #endif
-   }
-
-
 
   /* Set StackEnd to the stack pointer just before trap. */
   StackEnd = (long *) scp->sc_sp;
@@ -68,6 +65,34 @@ void SignalHandler(sig, code, scp, addr)
     case SIGSEGV:
       DisplayBetaStack( -32, theObj); break;
     default: 
+      DisplayBetaStack( -100, theObj);  
+  }
+#endif
+
+#ifdef sparc
+  /* Try to fetch the address of current Beta object in a0.*/
+  theCell = (handle(Object)) (((long) scp) - ((long) 24));
+  if( inIOA( *theCell)) if( isObject( *theCell)) theObj  = *theCell;
+
+  switch( sig){
+    case SIGFPE: 
+      switch(code){
+      /*case FPE_CHKINST_TRAP: // Index error (chk2) //
+       *DisplayBetaStack( -3, theObj); break;
+       */
+      case FPE_INTDIV_TRAP: /* div by zero */
+	DisplayBetaStack( -10, theObj); break;
+      default: /* arithmetic exception */
+        DisplayBetaStack( -4, theObj);
+      }
+      break;
+    case SIGILL: /* Illegal instruction */
+      DisplayBetaStack( -30, theObj); break;
+    case SIGBUS: /* Bus error */
+      DisplayBetaStack( -31, theObj); break;
+    case SIGSEGV: /* Segmentation fault */
+      DisplayBetaStack( -32, theObj); break;
+    default:  /* Unknown signal */
       DisplayBetaStack( -100, theObj);  
   }
 #endif
