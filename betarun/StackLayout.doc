@@ -1,15 +1,16 @@
-92-Jun-25: Stack Layout Documentation for the SPARC
+92-Aug-24: Stack Layout Documentation for the SPARC
 
 Understanding the SPARC Stack
 =============================
 
-As we are using the register windows on the SPARC and generally are complying
-with the C convention, we need to use the SPARC stack conventions.
+As we are using the register windows on the SPARC and generally are
+complying with the C convention, we need to use the SPARC stack
+conventions.
 
-On the SPARC the stack is kind of a linked list of activation records, whose
-head is a register window. As some of these register windows may not be
-flushed from the (register window) cache, we need to flush it manually to be
-sure. To this purpose a trap has provided (ta 3).
+On the SPARC the stack is kind of a linked list of activation records,
+whose head is a register window. As some of these register windows may
+not be flushed from the (register window) cache, we need to flush it
+manually to be sure. To this purpose a trap has provided (ta 3).
 
 Taken from "The SPARC Architecture Manual" p.160. (Reversed though):
 
@@ -60,37 +61,6 @@ automatically expanded by subtracting from the stack pointer. As the
 stack pointer must always be eight-byte aligned, a pushed word takes
 up eight bytes.
 
-In order for the GC to know which values are references and which are
-plain values, the convention is use that plain values are followed by
-a magic value. Thus a value of -5 indicates that the preceding stack
-value is a plain value, -6 that the preceding two values are plain,
-etc.
-
-[Actually, this seems to have been fixed, so no non-reference pushes
-are made to the stack, thus making the figure below obsolete. Check
-this with Olm.]
-
-Example: The stack after an object invocation, and push of a reference
-and a plain value.
-
-
-Stack growth
-
-		======================================
-SP ->		Space reserved for the register window
-		--------------------------------------
-SP + 64		-5
-		--------------------------------------
-SP + 64 +  4	dummy (alignment)
-		--------------------------------------
-SP + 64 +  8	the plain value
-		--------------------------------------
-SP + 64 + 16	the reference
-		--------------------------------------
-SP + 64 + 20	dummy (alignment)
-		======================================
-SP + 88 = FP	Previous activation record....
-
 
 Components
 ==========
@@ -103,6 +73,39 @@ a component causes part of the SPARC stack to be copied off to a
 active component. Likewise, attaching a component will push the saved
 "component stack" object on to the SPARC stack.
 
+Attaching a new component courses the old value of ActiveCallBackFrame
+and lastCompBlock to be pushed to the stack. On the SPARC we cannot
+push directly, so these values are saved in the AR of Attach, and
+instead of pointing to the pushed values, lastCompBlock points to the
+begining of this AR.
+
+Here's a nice figure:
+
+SP ->		====================================| Active Component
+		BETA				    |
+		====================================+=================
+lastCompBlock->	Attach activation record (*)	    | Caller Component
+	|   |	------------------------------------|
+	|   |	More activation records		    |
+	|   |	....				    |
+	|   |	====================================|
+(1)	|   -->	HandleCallBack AR,if any	    |
+	|	...				    |
+	|	====================================+=================
+(2)	------>	Attach activation records (*)	    | Caller^2 Component
+		...
+
+
+(*): Here in greater detail:
+
+Attach activation record:
+		---------------------------------------
+		%l0
+		..
+		%l5 = callBackFrame = (1) in the figure
+		%l6 = nextCompBlock = (2) -- " --
+		%l7 = level (unused) = 0
+		---------------------------------------
 
 Call Back Frames
 ================
@@ -111,21 +114,25 @@ When BETA is called back from C the C part of the stack is wrapped
 into a CallBackFrame to make it distinguisable at GC.
 
 Consider the situation where BETA has called the C function
-"doCallBack". The stackpointer is saved in "
+"doCallBack". The stackpointer before the call is saved in
+"BetaStackTop". When C later calls back to BETA, it goes though
+HandleCallBack, which pushes the old values of BetaStackTop and
+ActiveCallBackFrame to the stack, and sets ActiveCallBackFrame to
+point these values.
 
 While this preceding explanation is precise for most of the CICS
-implementions, it's not exactly right for the SPARC. As explained,
-the SPARC stack consists of linked activation records, thus one
-cannot push values to stack in the ordinary sence. Instead, the
+implementions, it's not exactly right for the SPARC. As explained, the
+SPARC stack consists of linked activation records, thus one cannot
+push values to stack in the ordinary sence. Instead, the
 "CallBackFrame" struct is simulated by forcing the three fields to
 reside in the registers %l5, %l6, %l7 in the function
-"HandleCallBack". This way their position on the stack is always
-known relative to the activation record of "HandleCallBack", and
-therefore "ActiveCallBack" actually points to the activation
-record of "HandleCallBack".
+"HandleCallBack". This way their position on the stack is always known
+relative to the activation record of "HandleCallBack", and therefore
+"ActiveCallBack" actually points to the activation record of
+"HandleCallBack".
 
-Consider for example a program where BETA has called C, and the
-C-part has called back. In this case the Stack might look like this:
+Consider for example a program where BETA has called C, and the C-part
+has called back. In this case the Stack might look like this:
 
 SP ->		====================================
 		BETA
@@ -135,10 +142,14 @@ ActiveC.B.F.->	HandleCallBack activation record (*)
 	|   |	More activation records
 	|   |	....
 	|   |	====================================
-(1)	|   -->	C
+	|   |	C
+	|   |	====================================
+(1)	|   -->	BETA
+	|	...
 	|	====================================
-(2)	------>	BETA
-		====================================
+(2)	------>	HandleCallBack activation record (*)
+		
+
 
 (*): Here in greater detail:
 
@@ -146,34 +157,7 @@ HandleCallBack activation record:
 		---------------------------------------
 		%l0
 		..
-		%i5 = CallBackFrame = (1) in the figure
-		%i6 = nextCompBlock = (2) -- " --	(bad name).
-		%i7 = level (unused) = 0
+		%l5 = next = (2) in the figure
+		%l6 = betaTop = (1) -- " --
+		%l7 = tmp (unused) = 0
 		---------------------------------------
-
-
----- Stop here --- Under development --- :^) ----
-
-Implementation (
---------------
-
-In the case of call back in a CompBlock, CallBackFrame (saved or actual)
-pointes to the activation record of the "C-wrapper" call back routine. In
-this case the stack section from the previous CompBlock to CallBackFrame
-belongs to the called C function and should thus be ignored. For example, if
-we have just been called back from C, the stack migth look as this:
-
-SP		....	| Stack frame for M-part of beta code
-		--------|-------------------------------------
-FP		Reg.Win | Stack frame for the "C-wrapper" stub
-		...	|
-		--------|-------------------------------------
-lastCompBlock   Reg.Win | Stack frame for HandleCallBack
-		....
-		--------
-		......
-
-NO NO NO! I need to sleep, reread and recheck this! Don't believe
-anything I write about CallBackFrame's :^)
-
-/T
