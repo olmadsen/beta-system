@@ -16,8 +16,11 @@ extern struct Item     *AlloI();
 #endif
 
 #ifdef sparc
-extern struct Component*CAlloC();
-extern struct Item     *CAlloI();
+/* Functions used to call RT routines directly from C.
+ * Needed because %i1 in calling regwin is destroyed by (C)AlloC
+ */
+extern struct Item      *SPARC_AlloI(struct Object *origin, int i1, struct ProtoType *proto, int i3, int i4);
+extern struct Component *SPARC_AlloC(struct Object *origin, int i1, struct ProtoType *proto, int i3, int i4);
 /* binding of entry names */
 
 #ifndef __svr4__
@@ -46,6 +49,7 @@ extern long              leS() asm("leS");
 extern long              geS() asm("geS");
 extern long              ltS() asm("ltS");
 #else
+extern ref(StackObject) AlloSO(unsigned size);
 extern long 		 eqS(); 
 extern long              neS();
 extern long              gtS();
@@ -53,7 +57,7 @@ extern long              leS();
 extern long              geS();
 extern long              ltS();
 #endif
-#endif
+#endif /* sparc */
 
 #ifdef hppa
 extern long 		 eqS() asm("eqS"); 
