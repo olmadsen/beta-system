@@ -51,6 +51,7 @@ void InstallHandler (int sig)
 
 void onBreakpointHit (
 #ifdef sun4s
+#error breaktest currently does not compile on sun4s
 long sig, siginfo_t *info, ucontext_t *ucon
 #else
 #ifdef linux
