@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1992 Mjolner Informatics Aps.
- * Mod: $RCSfile: sparcdep.h,v $, rel: %R%, date: $Date: 1992-08-22 02:06:55 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: sparcdep.h,v $, rel: %R%, date: $Date: 1992-08-24 02:30:23 $, SID: $Revision: 1.5 $
  * by Tommy Thorn
  */
 
@@ -71,6 +71,7 @@ register long   retAddress   asm("%i7");
 #define getret(saved) (saved = retAddress)
 
 /* Various machine instructions */
+#define RETL 0x81c3e008
 #define MOV_O7_G1 0x8210000f
 #define MK_CALL(p,f) \
   (*(long *)p = 0x40000000| (((unsigned) ((char*)f-(char*)p)) >> 2))
@@ -107,37 +108,49 @@ register volatile void *GCreg3 asm("%o4");
   register r1 asm("%o4");
 
 #define asmlabel(label, code) \
-  asm(".text;.align 4;.global " #label ";" #label ":" code)
+  __asm__(".text;.align 4;.global " #label ";" #label ":" code)
 
 /* C procs that gets origin and proto, and return an Object
    That mess of code just moves (i2,i1)->(o0,o1) and jumps
    to Cname
 */
 
-#define ParamOriginProto(name)		          \
-  __asm__(".text;.align 4;.global "#name";"#name":\
-          mov %i1,%o1;b _C"#name";mov %i2,%o0");\
+#define ParamOriginProto(name)				\
+  asmlabel(name,					\
+	   "mov %i1,%o1;"				\
+	   "mov %i2,%o0;"				\
+	   "save %sp,-64,%sp;"				\
+	   "mov %i0,%o0;"				\
+	   "call _C"#name";"				\
+	   "mov %i1,%o1;"				\
+	   "ret;"					\
+	   "restore %o0,0,%i1");			\
  void *C##name(struct Object *origin, struct ProtoType *proto)
 
 #define FetchOriginProto
 
 /* C procs that gets this and component */
-#define ParamThisComp(name)			  \
-  __asm__(".text;.align 4;.global "#name";"#name":\
-          mov %i0,%o0;b	_C"#name";mov %i1,%o1");   \
- void C##name(struct Item *this, struct Component *comp)
+#define ParamThisComp(name)				\
+  asmlabel(name, "mov %i0,%o0;b _C"#name";mov %i1,%o1");\
+ void C##name(struct Object *this, struct Component *comp)
 
 #define FetchThisComp
 
+/* C procs that gets a Structure parameter, and returns in this */
+#define ParamStruc(name)				\
+  asmlabel(name,					\
+	   "mov %i1,%o0;"				\
+	   "save %sp,-64,%sp;"				\
+	   "call _C"#name";"				\
+	   "mov %i0,%o0;"				\
+	   "ret;"					\
+	   "restore %o0,0,%i1");			\
+ void *C##name(struct Structure *struc)
+
+#define FetchStruc
+
 /* On the SPARC we need to skip the first instruction */
 #define CallBetaEntry(entry,item)			\
-  (* (void (*)()) ((long*)entry+1) )(item)
-
-/* Returns value in both C return reg, %o0, and BETA return reg %i1
-   so the routine call be called from both C and BETA ;^)
- */
-#define ReturnDual(value)					\
-  __asm__("mov %0, %%i0;ret;restore %%i0, 0, %%i1"::"r" (value)); \
-  return (void *) 0 /* dummy */
+    (* (void (*)()) ((long*)entry+1) )(item)
 
 #endif
