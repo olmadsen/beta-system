@@ -577,7 +577,7 @@ long fix_stacks(long SP, Object *curObj, long PC)
   DEBUG_STACK(fprintf(output, "fix_stacks: Terminating reference stack.\n"));
   terminate_reference_stack((long*)PrevSP, (long*)SP);
   
-  return prevSP;
+  return PrevSP;
 }
 #endif /* NEWRUN */
 
