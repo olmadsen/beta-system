@@ -1129,14 +1129,11 @@ void IOACheckObject (theObj)
 	
       case (long) StackObjectPTValue:
 	{ 
-#ifndef linux
+#ifdef mc68020
 	  ref(StackObject) theStackObject;
 	  ptr(long)        stackptr; 
 	  handle(Object)   theCell; 
 	  ptr(long)        theEnd;
-#endif	  
-
-#ifdef mc68020
 	  theStackObject = Coerce(theObj, StackObject);
 	  /* printf("sobj=0x%x\n", theStackObject);
 	   * printf("sobj: StackSize=0x%x\n", theStackObject->StackSize);
