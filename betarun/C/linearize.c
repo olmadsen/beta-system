@@ -3,7 +3,11 @@
 #include "beta.h"
 
 void lin_dummy() {
+
+#ifdef sparc
   USE();
+#endif /* sparc */
+
 }
 
 #ifdef PERSIST
