@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Qua.c,v 1.1 1992-10-30 12:37:12 beta Exp $
+ * Mod: $Id: Qua.c,v 1.2 1992-11-05 14:24:08 poe Exp $
  * by Peter Andersen, Peter Oerbaek, and Tommy Thorn.
  */
 
@@ -23,17 +23,30 @@ asmlabel(Qua,
 	 "b _CQua;"
 	 "mov %i0,%o0;");
 
+#ifdef hppa
+#  define CQua Qua
+#endif
+
 void CQua(ref(Object) this, 
 	  ref(ProtoType) dstQuaProto,
 	  ref(Object) dstQuaOrigin, 
 	  struct Object **theCell)
 {
-  ref(Object) src = *theCell
-    /* the source can be found in theCell since the assignment *has* been done. */;
+  ref(Object) src;
+    /* the source can be found in theCell since the assignment *has* been done. */
   ref(ProtoType) srcProto;
   ref(Object)    srcOrigin;
   GCable_Entry();
-  
+
+#ifdef hppa
+  this = getThisReg();
+  dstQuaProto = getCallReg();
+  dstQuaOrigin = getOriginReg();
+  theCell = getR1Reg();
+#endif
+
+  src = *theCell;
+
   Ck(src);
   Ck(dstQuaOrigin);
   
