@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Qua.c,v 1.3 1992-11-09 15:05:51 poe Exp $
+ * Mod: $Id: Qua.c,v 1.4 1992-11-12 12:12:35 beta Exp $
  * by Peter Andersen, Peter Oerbaek, and Tommy Thorn.
  */
 
@@ -16,6 +16,9 @@
  *   2. Qua Check: Check if the actual qualification of src is less than or equal than
  *                 qualification of dst, as given by dstQuaProto and dstQuaOrigin.
  */
+
+/* Sloppy qua-check, only prototypes are considered */
+
 asmlabel(Qua,
 	 "mov %i1,%o1;"
 	 "mov %i2,%o2;"
@@ -30,6 +33,96 @@ void Qua(struct Object **theCell,
 	 ref(Object) dstQuaOrigin)
 #else
 void CQua(ref(Object) this, 
+	  ref(ProtoType) dstQuaProto,
+	  ref(Object) dstQuaOrigin, 
+	  struct Object **theCell)
+#endif
+{
+  ref(Object) src;
+    /* the source can be found in theCell since the assignment *has* been done. */
+  ref(ProtoType) srcProto;
+  GCable_Entry();
+
+#ifdef hppa
+  this = getThisReg();
+  dstQuaProto = getCallReg();
+  dstQuaOrigin = getOriginReg();
+#endif
+
+  src = *theCell;
+
+  Ck(src);
+  
+  if (src){
+    /* If src is NONE, all is well */
+    
+    /* 1. Check reference assignment */
+    if (! inIOA(theCell) && inIOA(src)) 
+      AOAtoIOAInsert(theCell);
+    
+    /* 2. Qua Check */
+    switch((long) src->Proto){
+    case (long) StructurePTValue:
+      /* It was a pattern variable assignment: src is a struc-object */
+      srcProto  = (cast(Structure)src)->iProto;
+      break;
+    case (long) ComponentPTValue:
+      /* It was a component-reference assignment: src points to a component */
+      src       = cast(Object)(cast(Component)src)->Body;
+      srcProto  = src->Proto;
+      break;
+    default:
+      /* It was a normal reference assignment: src is normal object */
+      srcProto  = src->Proto;
+      break;
+    }
+    
+    /* Check for EqS */
+    if (srcProto == dstQuaProto){
+      /* Structures are identical. All is OK */
+    } else {
+      do {
+	/* Inlined version of ltS without struc objects, and not checking origins */
+	ref(ProtoType) proto1 = srcProto;
+	
+	if (dstQuaProto->Prefix == dstQuaProto){
+	  /* dstQuaProto is Object## */
+	  return;
+	}
+	
+	/* Prefix of srcProto is the first try */
+	for (proto1 = proto1->Prefix;
+	     proto1 != proto1->Prefix; /* proto1 != Object## */
+	     proto1 = proto1->Prefix) {
+	  if (proto1 == dstQuaProto) {
+	    /* dstQuaProto is a prefix of srcProto; all is OK */
+	    return; /* ignore origins */
+	  }
+	}
+      } while (FALSE);
+      /* dstQuaProto is not a prefix of srcProto */
+      BetaError(QuaErr, this);
+    }
+  }
+}
+
+
+/* Strict qua-check, also checking origins */
+
+asmlabel(OQua,
+	 "mov %i1,%o1;"
+	 "mov %i2,%o2;"
+	 "mov %o0,%o3;"
+	 "b _COQua;"
+	 "mov %i0,%o0;");
+
+#ifdef hppa
+void OQua(struct Object **theCell,
+	 ref(Object) this, 
+	 ref(ProtoType) dstQuaProto,
+	 ref(Object) dstQuaOrigin)
+#else
+void COQua(ref(Object) this, 
 	  ref(ProtoType) dstQuaProto,
 	  ref(Object) dstQuaOrigin, 
 	  struct Object **theCell)
@@ -60,21 +153,31 @@ void CQua(ref(Object) this,
       AOAtoIOAInsert(theCell);
     
     /* 2. Qua Check */
-    if (src->Proto == StructurePTValue){
+    switch((long) src->Proto){
+    case (long) StructurePTValue:
       /* It was a pattern variable assignment: src is a struc-object */
       srcProto  = (cast(Structure)src)->iProto;
       srcOrigin = (cast(Structure)src)->iOrigin;
-    } else {
+      break;
+    case (long) ComponentPTValue:
+      /* It was a component-reference assignment: src points to a component */
+      src       = cast(Object)(cast(Component)src)->Body;
+      srcProto  = src->Proto;
+      srcOrigin = cast(Object)((long *)src)[srcProto->OriginOff];
+      break;
+    default:
       /* It was a normal reference assignment: src is normal object */
       srcProto  = src->Proto;
       srcOrigin = cast(Object)((long *)src)[srcProto->OriginOff];
+      break;
     }
     
     /* Check for EqS */
     if (srcProto == dstQuaProto && srcOrigin == dstQuaOrigin ){
       /* Structures are identical. All is OK */
     } else {
-      int less=FALSE;
+      long less=FALSE;
+      long isPrefix=FALSE;
       do {
 	/* Inlined version of ltS without struc objects */
 	ref(ProtoType) proto1 = srcProto;
@@ -91,6 +194,7 @@ void CQua(ref(Object) this,
 	     proto1 = proto1->Prefix) {
 	  if (proto1 == dstQuaProto) {
 	    /* Now there is some hope, now we need to check if origins are equal. */
+	    isPrefix=TRUE;
 	    
 	    if (dstQuaProto->OriginOff == srcProto->OriginOff){
 	      /* The original prototypes have same origin offset (same prefix level), 
@@ -112,7 +216,10 @@ void CQua(ref(Object) this,
 	}
       } while (FALSE);
       if (!less) 
-	BetaError(QuaErr, this);
+	if (isPrefix)
+	  BetaError(QuaOrigErr, this);
+	else
+	  BetaError(QuaErr, this);
     }
   }
 }
