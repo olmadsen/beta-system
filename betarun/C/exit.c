@@ -21,21 +21,33 @@ BetaError(errorNo, theObj)
   long errorNo;
   ref(Object) theObj;
 {
-  if (QuaCont && (errorNo==QuaErr || errorNo==QuaOrigErr)){
-    fprintf(output, "\n*** OBS. ");
-    ErrorMessage(output, QuaErr);
-    fprintf(output, " (continuing)\n");
-  } else {
-    if( errorNo < 0 ){
+  if( errorNo < 0 ){
 #ifdef sparc
-      asm("ta 3");
-      StackEnd = (long *) ((struct RegWin *)FramePointer)->fp;
+    asm("ta 3");
+    StackEnd = (long *) ((struct RegWin *)FramePointer)->fp;
 #else
-      StackEnd = (ptr(long)) &theObj; StackEnd++;
+    StackEnd = (ptr(long)) &theObj; StackEnd++;
+    /* Current object was pushed as the first thing, when
+     * the error was detected. The "thing" just below
+     * is the first real part of the Beta stack
+     */
 #endif
-      DisplayBetaStack( errorNo, theObj);  
+    if (errorNo==QuaErr || errorNo==QuaOrigErr){
+      if (QuaCont) {
+	fprintf(output, "\n*** OBS. ");
+	ErrorMessage(output, QuaErr);
+	fprintf(output, " (continuing)\n");
+	return;
+      } 
+#ifndef sparc
+      (long *)StackEnd+=13;
+      /* We have saved a0-a4, d0-d7, and also we have a return
+       * address from jsr Qua to ignore.; see Qua.run.
+       */
+#endif
     }
-    BetaExit(-1);
+    DisplayBetaStack( errorNo, theObj);  
   }
+  BetaExit(-1);
 }
 
