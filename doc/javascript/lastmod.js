@@ -52,10 +52,14 @@ if (lastmodnumber == 0) {
     }
 	
     // Y2K hack
-    // NetScape reports year=100;
-    // Internet explorer reports year=2000;
-      century = year;
+    // For dates in 2000:
+    //   NetScape reports year=100;
+    //   Internet explorer reports year=2000;
     year %= 100;
+    if (year >= 98 )
+      century = "19";
+    else
+      century = "20";
     if (year<10){
       year = "0" + year;
     }
