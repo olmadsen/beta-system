@@ -227,8 +227,12 @@ AstInterface:
                a: ^ast;
 	       current: ^sonCat;
 	       currentSonNo: @integer;
-            do 'new-scan is not implemented' -> putline;
-               INNER;
+            do scan
+               (#
+               do current[] -> THIS(Newscan).current[];
+                  currentSonNo -> THIS(newScan).currentSonNo;
+                  INNER newScan;
+               #);
             #);
           dump::<
             (# <<SLOT ListDump: doPart>> #);
@@ -237,6 +241,7 @@ AstInterface:
      Optional: AST
        (# dump::<
             (# <<SLOT OptionalDump: doPart>> #);
+       exit -2
        #);
      SlotDesc: AST
        (# <<SLOT SlotDescLib: attributes>>;
@@ -330,10 +335,18 @@ AstInterface:
             (# <<SLOT ConstDump: doPart>> #);
           getValue:
             (# val: @integer;
-            do 'const.getvalue is not implemented' -> putline;
+               txt: ^Text;
+            do getText -> txt[];
+               txt.reset;
+               txt.getInt -> val;
             exit val
             #);
        exit prodNo.const
+       #);
+     super: @ (* Private *)
+       (# undefined: (#  exit - 10 #);
+	  cons: (#  exit - 11 #);
+	  list: (#  exit 99999 #)
        #);
      
      kinds: @
@@ -425,9 +438,12 @@ AstInterface:
        #);
      FragmentForm: Fragment
        (# <<SLOT FragmentFormLib: attributes>>;
+          
           root: ^AST;
           binding: ^slotDesc;
           firstSlot: ^SlotDesc;
+          modificationStatus: @integer;
+          markAsChanged: (# #);
           open:
             (#
             exit THIS(FragmentForm)[]
@@ -477,7 +493,13 @@ AstInterface:
             exit frag[]
             #);
 
-
+          textFileName:
+            (# name: ^Text;
+            do (if father <> NONE then
+                   (father).textFileName -> name[];
+               if);
+            exit name[]
+            #);
           bindSemanticInfo:
 	    (#
 	    <<SLOT FragmentFormBindSemanticInfo: doPart>>
@@ -559,6 +581,21 @@ AstInterface:
             enter name[]
             <<SLOT FragmentGroupLoad: doPart>>
             #);
+          open:
+            (# name: ^Text;
+               frag: ^Fragment;
+               errorStream: ^Stream;
+            enter (name[], errorStream[])
+            do search: scan
+               (#
+               do (if current.name -> name.equalNCS then 
+                      current[] -> frag[];
+                      leave search;
+                  if);
+                  
+               #);
+            exit frag[]
+            #);
           textFileName:
             (# path: ^Text;
             do (fullname).copy -> path[];
@@ -632,7 +669,8 @@ AstInterface:
        exit (name[],thePathHandler.currentDirectory)->thePathHandler.convertFilePath
        #);
      TOP: @
-       (# open: protect
+       (# topgroup: ^FragmentGroup;
+          open: protect
             (# name: ^Text;
                error: ^Stream;
                group: ^FragmentGroup;
@@ -664,6 +702,20 @@ AstInterface:
        (# default: ^TreeLevel;
           beta: ^TreeLevel;
           meta: ^TreeLevel;
+          insertMetaGrammar:
+            (# grammar: ^TreeLevel;
+               location: ^Text;
+            enter (grammar[], location[])
+            do 'insert: ' -> puttext;
+               location[] -> putline;
+               
+               '-parser' 
+                 -> (location.copy).append 
+                 -> expandToFullPath
+                 -> grammar.init;
+               grammar[] -> register;
+               grammar[] -> meta[];
+            #);
           register:
             (# grammar: ^TreeLevel;
             enter grammar[]
@@ -683,6 +735,7 @@ AstInterface:
      TreeLevel:
        (# <<SLOT TreeLevelLib: attributes>>;
           treeLevelVisitor:< Visitor;
+          grammarAst: ^FragmentForm;
           grammarIdentification:< (* the grammar name *)
             (# theGrammarName: ^text
             do &Text[] -> theGrammarName[];
@@ -753,6 +806,29 @@ AstInterface:
             enter (node[], output[])
             <<SLOT TreeLevelPretty: doPart>>
             #);
+          ParseSymbolDescriptor:
+            (# terminals: [1] ^Text;
+               nonterminals: [1] @integer;
+            #);
+          
+          ErrorReporter:
+            (# frag: ^FragmentForm;
+               errorStream: ^Stream;
+               beforeFirstError:< (# do INNER #);
+               forEachError:<
+	         (# streamPos,startLineNo: @integer;
+	            errorLines:
+		      (* 1, 2 or 3 lines of text before the
+		       * error.  Approx. 100 chars
+		       *) @text;
+	            errorPos: (* the pos in errorLines of the error *) @integer;
+	            legalSymbols: ^parseSymbolDescriptor
+	         enter (streamPos,startLineNo,errorLines,errorPos (*inx*) ,legalSymbols[])
+	         do INNER;
+	         #);
+               afterLastError:< (# do INNER; #);
+            #);
+          theErrorReporter: ^ErrorReporter;
           
           parser: @
             (# <<SLOT parserLib: attributes>>;
@@ -761,17 +837,24 @@ AstInterface:
                  enter tableFileName[]
                  <<SLOT parserInit: doPart>> 
                  #);
+               errorReport:
+                 (# input: ^Stream;
+                    error: ^Stream;
+                 enter (input[], error[])
+                 <<SLOT TreelevelParserErrorReport: doPart>>
+                 #);
                parse:
                  (# goal: @integer;
                     input: ^Stream;
                     root: ^AST;
-                    frag: ^FragmentForm;
                  enter (goal, input[], frag[])
                  <<SLOT parserParse: doPart>>
                  exit root[]
                  #);
                trace: @boolean;
                lastCH: @char;
+               initialpos: @integer;
+               frag: ^FragmentForm;
                private: @<<SLOT parserPrivate: descriptor>>;
             #);
           kindArray: [0] @int8u;
@@ -842,7 +925,10 @@ AstInterface:
             #);
           switch: [100] @boolean;
        #);
-     
+     undefinedGrammarName:
+       (* describes unknown grammars *) (#  exit '????' #);
+     undefinedVersion: (* describes unknown versions of grammars *)
+       (#  exit - 1 #);
      GrammarFinder:
        (#
        #);
@@ -851,7 +937,7 @@ AstInterface:
        (#
        #);
      private: @<<SLOT AstInterfacePrivate: descriptor>>;
-     
+     YggdrasilVersion: (# exit 'v6.0' #);
   do AstLevelInit;
      INNER;
   #);

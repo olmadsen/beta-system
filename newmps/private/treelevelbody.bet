@@ -26,7 +26,7 @@ docParser: (# exit false #);
 dashInNames: (# exit false #);
 newlineIsCommentEnd: (# exit false #);
 caseSensitive: (# exit false #);
-splitString: (# exit true #);
+splitString: (# exit false #);
 
 
 trace_lineno: (# exit false #);
@@ -306,6 +306,173 @@ do (TableFileName[],True,isEos,docParser,dashInNames,
    private.makeArrays;
    (* private.printRules; *)
    
+-- TreelevelParserErrorReport: doPart --
+do (# N: @integer;
+      beforeText: @text;
+      get: @input.get;
+      ch: @char;
+      print,oldPrint: @boolean;
+      startLineNo,lineNo: @integer;
+      pos,first,beforePos: @integer;
+      constructLegals:
+        (# symb: ^parseSymbolDescriptor;
+           noOfTerminals, noOfNonterminals,i,j: @integer;
+           t: ^text;
+           e: ^private.b.ErrorDescriptor; 
+        do private.EDesc[N][] -> e[];
+           e.scan
+           (# do
+              (if thisSymb=private.b.btab.errorVal then
+               else
+                  (if (thisSymb>=private.b.btab.nontStart) then
+                      noOfNonterminals + 1 -> noOfNonterminals
+                   else
+                      noOfTerminals + 1 -> noOfTerminals
+              if)if);
+           #);
+           &parseSymbolDescriptor[] -> symb[];
+           noOfTerminals -> symb.terminals.new;
+           noOfNonTerminals -> symb.nonterminals.new;
+           0 -> i -> j;
+           e.scan
+           (# do
+              (if thisSymb=private.b.btab.errorVal then
+               else
+                  (if (thisSymb>=private.b.btab.nontStart) then
+                      thisSymb -> private.b.prodSy -> private.b.labelNo 
+                        -> symb.nonterminals[i+1 -> i]
+                   else 
+                      thisSymbText -> t[];
+                      t.copy -> symb.terminals[j+1 -> j][];
+              if)if);
+           #);
+        exit symb[]
+        #);
+      DefaultErrorReporter: ErrorReporter
+        (# forEachError::
+	     (#
+	        l: @text;
+	        lastPos: @integer;
+	        t,cd: ^text;
+	        tabCount: @integer;
+	        ch: @char
+	     do
+	        0->errorLines.pos;
+	        loop:
+	          (#
+	          do
+		     '#'->errorStream.put;
+		     startLineNo
+		       ->errorStream.putInt
+                     (# format::  (#  do 4->width #) #);
+		     ' '->errorStream.put;
+		     startLineNo+1->startLineNo;
+		     errorLines.pos->lastPos;
+		     &text[]->t[];
+		     L:
+		       (if errorLines.eos then
+		           leave L
+		        else
+		           (if ((errorLines.get->ch) <> ascii.newLine) then
+			       ch->t.put; restart L
+		           if)
+		       if);
+		     t[]->errorStream.putLine;
+		     (if not errorLines.eos then restart loop if)
+	          #);
+	        0->tabCount;
+	        ascii.ht->t.findAll (#  do 1+tabCount->tabCount #);
+	        '# ****'->errorStream.putText;
+	        (for tabCount repeat ascii.ht->errorStream.put for);
+	        (for errorPos-lastPos-3-tabCount repeat '*'->errorStream.put for);
+	        '  ^'->errorStream.putLine;
+	        '#  Expected symbol'->errorStream.putText;
+	        (if legalSymbols.terminals.range = 1 then
+		    ': '->errorStream.putText;
+	         else
+		    's: '->errorStream.putText
+	        if);
+	        (for i: legalSymbols.terminals.range repeat
+	             legalSymbols.terminals[i][]->errorStream.putText;
+	             (if (i <> legalSymbols.terminals.range) then
+		         ' '->errorStream.put
+	             if)
+	        for);
+	        errorStream.newLine;
+	        (if frag.fatherR[] = none then
+	            (* we have a stand alone fragmentForm.  Do not write file and
+	             * line-number information
+	             *)
+                    
+	         else
+		    ' File "'->errorStream.putText;
+		    frag.textFileName->t[];
+		    currentDirectory->cd[];
+		    (frag.textFileName,currentDirectory)
+		      ->thePathHandler.convertFilePath->errorStream.putText;
+		    '"; Line '->errorStream.putText;
+		    startLineNo-1->errorStream.putInt;
+		    errorStream.newLine;
+                    
+	        if);
+                
+	     #);
+        #);
+   do (if theErrorReporter[] = NONE then
+          &DefaultErrorReporter[] -> theErrorReporter[];
+      if);
+      1 -> lineNo;
+      frag[] -> theErrorReporter.frag[];
+      error[] -> theErrorReporter.errorStream[];
+      theErrorReporter.beforeFirstError;
+      1->N;
+      Loop: (if (N <= private.errorTop) then
+                print -> oldPrint;
+                ((private.epositions[N]-100)<=pos)->print;
+                
+                (if print then
+                    (if oldPrint then
+                        (if (beforeText.length>100) then
+                            startLineNo + 1 -> startLineNo;
+                            test: ascii.newLine -> beforeText.findAll
+                            (# 
+                            do inx + beforePos -> beforePos;
+                               (1,inx) -> beforeText.delete; 
+                               leave test 
+                            #);
+                        if)          
+                     else
+                        beforeText.clear; 
+                        pos -> beforePos;
+                        lineNo -> startLineNo;
+                    if);
+                if); 
+                lineNo+1->lineNo; pos->first;
+                readLine:
+                  (# 
+                  do (if input.eos then ch=ascii.newline; leave readLine if);
+                     pos+1->pos;
+                     get->ch;
+                     (if print then ch -> beforeText.put if);
+                     (if ch=ascii.newline then leave readLine if);
+                     restart readLine;
+                  #);
+                
+                (if print then
+                    mark:
+                      (if (private.epositions[N]<= pos) then 
+                          (private.epositions[N],startLineNo,beforeText,private.epositions[N]-beforePos,constructLegals)
+                            -> theErrorReporter.forEachError;
+                          (if ((N+1 -> N) <= private.errorTop) then
+                              restart mark
+                          if); 
+                      if);
+                if);
+                restart Loop
+            if);
+      theErrorReporter.afterLastError;
+   #)
+   
 -- parserParse: doPart --
 do (goal, input[], frag[]) -> private.TreeParser -> root[];
 
@@ -315,6 +482,10 @@ do (goal, input[], frag[]) -> private.TreeParser -> root[];
    actionArray: [0] @int8;
    labelArray: [0] ^Text;
    rules: [0] ^Rule;
+   
+   EDesc: [100] ^b.ErrorDescriptor; 
+   epositions: [100] @integer;
+   errorTop: @integer;
    
    
    TreeParser:
@@ -713,7 +884,16 @@ do (goal, input[], frag[]) -> private.TreeParser -> root[];
                   (#
                   do thisSymbText->legalss[Etop].putText;
                      ' ' ->legalss[Etop].put
-                  #)
+                  #);
+                  
+                  (if ((errorTop+1 -> errorTop) = EDesc.range) then 
+                      100->EDesc.extend;
+                      100->positions.extend
+                  if);
+                  legalSymbs[] -> EDesc[ErrorTop][];
+                  
+                  initialPos + pos  -> epositions[ErrorTop];
+                  
                #);
              fatalError::< (# do 'Bobs parse error!'->msg.putLine; msg[] -> putline; #);
           #);
@@ -727,6 +907,8 @@ do (goal, input[], frag[]) -> private.TreeParser -> root[];
         &input.eos[] -> lexstream.iseos[];
         (goal -> B.LabLhs, lexstream[]) -> bobsparse -> ok;
         B.lastCH -> lastCH;
+        initialPos + B.noOfCharRead -> initialPos;
+        
         (if trace then
             'bobs are done' -> putline;
         if);
