@@ -82,7 +82,10 @@ void ProcessStackObj(struct StackObject *theStackObject)
 extern long *etext;
 extern long *end;
 #define isData(addr) ( ((long*)&etext <= (long*)(addr)) && ((long*)(addr) < (long*)&end) )
-#define isProto(addr) ( isSpecialProtoType(addr) || isData(addr) )
+#define isProto(addr) (isSpecialProtoType(addr) || \
+		       (isData(addr) && ((int)(addr) % 4 == 0)))
+
+static long skipCparams=FALSE;
 
 #ifdef RTDEBUG
 
@@ -140,6 +143,11 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
     CompleteScavenging();
 
     /* Process the stack part */
+    if (skipCparams)
+      /* This AR called C, skip one hidden word, and (at least) 
+       * six parameters (compiler allocates 48, that may be too much...)
+       */
+       ((long) theEnd) -= 48;
     for (; theCell != (struct Object **) theEnd; theCell+=2)
       if (inBetaHeap(*theCell) && isObject(*theCell))
 	if( objIsValRep(*theCell) ){
@@ -189,14 +197,19 @@ void ProcessStack()
 	    nextCompBlock = (struct RegWin *) theAR->l6;
 	    if (nextCompBlock == 0)
 	      break; /* we reached the bottom */
-	}
-	else if (theAR == nextCBF) {
+	} else {
+	  if (theAR == nextCBF) {
 	    /* This is AR of HandleCB. Don't GC this, but
 	     * skip to betaTop and update nextCBF */
 	    nextCBF = (struct RegWin *) theAR->l5;
+	    DEBUG_CODE(PC = 0)
+	      /* Cannot know where we came from in beta before C was called */;
+	    skipCparams = TRUE;
 	    theAR = (struct RegWin *) theAR->l6;
+	  }
 	}
 	ProcessAR(theAR, (struct RegWin *) theAR->fp);
+	skipCparams=FALSE;
 	DEBUG_CODE(lastAR = theAR);
     }
     DEBUG_CODE(if (BottomAR) Claim(lastAR==BottomAR, "lastAR==BottomAR");
@@ -213,10 +226,15 @@ long lastPC=0;
 void ProcessStackObj(struct StackObject *theStack)
 {
     struct RegWin *theAR;
+
+    /* Start at theStack->Body[1], since theStack->Body[0] is saved FramePointer */
     long delta = (char *) &theStack->Body[1] - (char *) theStack->Body[0];
     
     DEBUG_STACK(fprintf(output, " *-*-* StackObject *-*-* \n");
 		lastPC=PC;
+		/* The PC of the topmost AR is saved in CallerLCS of the comp this stackobj 
+		 * belongs to. It is not known here. 
+		 */
 		PC = 0;
 		)
 
@@ -329,6 +347,35 @@ void ProcessStack()
 	currentBlock = currentBlock->next;
     }
 }
+
+void ProcessStackObj(theStack)
+     struct StackObject *theStack
+{ ptr(long)        stackptr; 
+  handle(Object)   theCell; 
+  ptr(long)        theEnd;
+	    
+  DEBUG_IOA( Claim(theStack->StackSize <= theStack->BodySize,
+		   "ProcessReference: StackObjectType: Stack > Object") );
+	    
+  theEnd = &theStack->Body[0] + theStack->StackSize;
+	    
+  for( stackptr = &theStack->Body[0]; stackptr < theEnd; stackptr++){
+    if( inBetaHeap( *stackptr)){
+      theCell = (handle(Object)) stackptr;
+      if( isObject( *theCell ) )
+	ProcessReference( stackptr);
+    }else{
+      switch( *stackptr ){
+      case -8: stackptr++;
+      case -7: stackptr++;
+      case -6: stackptr++;
+      case -5: stackptr++;
+	break;
+      }
+    }
+  }
+}
+
 #endif /* mc68020 */
 
 /*************************** DEBUG ****************************/
@@ -394,7 +441,7 @@ char *getLabel (addr)
   if (!addr){
     labelOffset=0;
     labelAddress=0;
-    return "<unknovn>";
+    return "<unknown>";
   }
   
   if (labels)
@@ -456,7 +503,7 @@ void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
   }    
   fprintf(output, "%%i0: 0x%x", ar->i0); PrintRef(cast(Object)ar->i0);
   fprintf(output, "%%i1: 0x%x", ar->i1); PrintRef(cast(Object)ar->i1)
-    /* Notice that AlloVR1-4 gets an offset in this parameter.
+    /* Notice that CopyT, AlloVR1-4 gets an offset in this parameter.
      * This should be safe.
      */;
   fprintf(output, "%%i3: 0x%x", ar->i3); PrintRef(cast(Object)ar->i3);
@@ -466,6 +513,12 @@ void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
   /* Notice that in INNER some return adresses are pushed. This is no
    * danger.
    */
+  if (skipCparams)
+    /* This AR called C, skip one hidden word, and (at least) 
+     * six parameters
+     */
+    ((long) theEnd) -= 48;
+
   for (; theCell != (struct Object **) theEnd; theCell+=2) {
     fprintf(output, "0x%x", *theCell);
     PrintRef(cast(Object)(*theCell));
