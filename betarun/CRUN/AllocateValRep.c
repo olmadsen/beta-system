@@ -46,8 +46,8 @@ ref(ValRep) CAlloVR1(ref(Object) theObj,
     if (range > LARGE_REP_SIZE) {
 	theRep = cast(ValRep) LVRACAlloc(ByteRepPTValue, range);
 	if (theRep) {
-	    Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
-		  "AlloVR1: lvra structure ok");
+	    DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
+			     "AlloVR1: lvra structure ok"));
 	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
 	    theRep->GCAttr = (long) ((char *) theObj + offset);
 	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
@@ -100,8 +100,8 @@ ref(ValRep) CAlloVR2(ref(Object) theObj,
     if (range > LARGE_REP_SIZE) {
 	theRep = cast(ValRep) LVRACAlloc(WordRepPTValue, range);
 	if (theRep) {
-	    Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
-		  "AlloVR2: lvra structure ok");
+	    DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
+			     "AlloVR2: lvra structure ok"));
 	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
 	    theRep->GCAttr = (long) ((char *) theObj + offset);
 	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
@@ -152,8 +152,8 @@ ref(ValRep) CAlloVR4(ref(Object) theObj,
     if (range > LARGE_REP_SIZE) {
 	theRep = cast(ValRep) LVRACAlloc(ValRepPTValue, range);
 	if (theRep) {
-	    Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
-		  "AlloVR4: lvra structure ok");
+	    DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
+			     "AlloVR4: lvra structure ok"));
 	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
 	    theRep->GCAttr = (long) ((char *) theObj + offset);
 	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
@@ -207,12 +207,12 @@ ref(ValRep) CAlloVR8(ref(Object) theObj,
     if (range > LARGE_REP_SIZE) {
 	theRep = cast(ValRep) LVRACAlloc(DoubleRepPTValue, range);
 	if (theRep) {
-	   Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
-		 "AlloVR8: lvra structure ok");
-	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-	    theRep->GCAttr = (long) ((char *) theObj + offset);
-	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
-	    RETURN(theRep);
+	  DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
+			    "AlloVR8: lvra structure ok"));
+	   /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
+	   theRep->GCAttr = (long) ((char *) theObj + offset);
+	   *casthandle(ValRep)((char *)theObj + offset) = theRep;
+	   RETURN(theRep);
 	}
     }
 
