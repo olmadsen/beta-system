@@ -47,15 +47,9 @@ case "`uname -m`" in
 			objdir=sun4s
 			MOTIFHOME=${MOTIFHOME-/usr/dt}
 			MOTIFINC=${MOTIFINC-$MOTIFHOME/include}
-			if [ -f $MOTIFHOME/lib/libXm.so.4 ]
-			then
-			   # We use Motif 1.2.3 since our C object files 
-			   # are compiled with Motif 1.2.3 headers.
-			   # -lgen required even for Motif 1.2.3
-			   MOTIFLINKOPT="$MOTIFHOME/lib/libXm.so.3 -lgen"
-			else
-			   MOTIFLINKOPT="$MOTIFHOME/lib/libXm.so.3"
-			fi
+			# We use Motif 1.2.3 since our C object files 
+			# are compiled with Motif 1.2.3 headers.
+		        MOTIFLINKOPT="$MOTIFHOME/lib/libXm.so.3"
 			OPENWINHOME=${OPENWINHOME-/usr/openwin}
 			export OPENWINHOME
 			#PATH=$MOTIFHOME/bin:/usr/bin/X11:/usr/ccs/bin:$PATH

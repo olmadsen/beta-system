@@ -46,13 +46,9 @@ case "sun4*"
 		if ( ! $?MOTIFINC  ) setenv MOTIFINC    $MOTIFHOME/include
 		if ( ! $?OPENWINHOME ) setenv OPENWINHOME /usr/openwin
 		if ( -f $MOTIFHOME/lib/libXm.so.4 ) then
-		   # We use Motif 1.2.3 since our C object files 
-		   # are compiled with Motif 1.2.3 headers.
-		   # -lgen required even for Motif 1.2.3
-		   setenv MOTIFLINKOPT "$MOTIFHOME/lib/libXm.so.3 -lgen"
-		else
-		   setenv MOTIFLINKOPT "$MOTIFHOME/lib/libXm.so.3"
-		endif
+		# We use Motif 1.2.3 since our C object files 
+		# are compiled with Motif 1.2.3 headers.
+		setenv MOTIFLINKOPT "$MOTIFHOME/lib/libXm.so.3"
 		#setenv PATH $MOTIFHOME/bin:$PATH
 		#if ( $?XFILESEARCHPATH ) then
 		#	setenv XFILESEARCHPATH $MOTIFHOME/lib/%T/%N%S:$XFILESEARCHPATH
