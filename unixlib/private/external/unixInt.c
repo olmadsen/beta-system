@@ -442,9 +442,6 @@ int in,out;
     printf("argrep %d : %s",i,argRep[i]);
 #endif
 
- /* save references to the fathers stdin/out */
- thisIn=dup(0);
- thisOut=dup(1);
 #ifdef sgi
  switch(pid=fork()){
 #else
@@ -455,6 +452,10 @@ int in,out;
    {
      dup2(in,0);
      dup2(out,1);
+     if (in != 0 && in != 1) 
+       close(in);
+     if (out != 0 && out != 1) 
+       close(out);
      execve(name,argRep,environ); 
      _exit(1);
    }
@@ -466,15 +467,6 @@ int in,out;
  default : 
    /* Parent: */
    {
-     dup2(thisIn,0);
-     dup2(thisOut,1);
-     /* clean up the table of filedescriptors */
-     close(thisIn);
-     close(thisOut);
-     if(in != 0) 
-       close(in);
-     if(out != 1) 
-       close(out);
      return pid;
    }
  }
