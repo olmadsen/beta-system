@@ -138,7 +138,15 @@ extern unsigned int set_fpc_csr(unsigned int csr);
 
 static void EnableIEEE754Exceptions(mask)
 {      
-  /* Possibly need to set MSR bits too, but mfmsr/mtmsr are supervisor only!*/
+#if 0
+  register unsigned long msr;
+  /* Need to set MSR bits too, but mfmsr/mtmsr are supervisor only!*/
+  /* The stuff below is like get_msr()/set_msr() in <architecture/ppc_basic_regs.h> */
+  __asm__ __volatile("mfmsr %0" : "=r" (msr)); 
+  msr |= (1L<<(31-23)) /*FE1*/| (1L<<(31-20)) /*FE0*/;
+  __asm__ __volatile("mtmsr %0" : : "r" (msr)); 
+#endif
+
   if (mask & FPU_ZERODIVISION)  __asm__ __volatile("mtfsb1 27"); 
   if (mask & FPU_INVALID)       __asm__ __volatile("mtfsb1 24"); 
   if (mask & FPU_OVERFLOW)      __asm__ __volatile("mtfsb1 25"); 

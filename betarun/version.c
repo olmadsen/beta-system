@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(91)";
+char betarun_version[] = "BETARUN VERSION 5.3(92)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.112  2002/04/08 11:37:02  henryml
+ * MacOSX Pascal calling convention interface. A little more signal handling.
+ * Betarun version number: 91
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.111  2002/04/08 11:17:33  datpete
  * macosx floating point handling
  * Betarun version number: 90+
