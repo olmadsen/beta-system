@@ -96,9 +96,9 @@ if ( $REMOVEASTS == "yes" ) then
     mbs_rmast -u >>& $LOG
 endif
 date >>& $LOG
-mbs_compile --nocode >>& LOG
+mbs_compile --nocode >> $LOG
 date >>& $LOG
-mbs_compile >>& LOG
+mbs_compile >> $LOG
 date >>& $LOG
 mbs_compiletools -u >>& $LOG
 date >>& $LOG
