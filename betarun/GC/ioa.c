@@ -821,7 +821,7 @@ void ProcessAOAReference( theCell)
   
   if( inIOA(theObj)){ /* theObj is inside IOA */
     GCAttribute = theObj->GCAttr;
-    if( GCAttribute > 2048 ){ /* theObj has a forward pointer. */
+    if( isForward(GCAttribute) ){ /* theObj has a forward pointer. */
       *theCell = (ref(Object)) GCAttribute;
       DEBUG_LVRA( Claim( !inLVRA((ref(Object))GCAttribute),
 			"ProcessAOAReference: Forward ValRep"));

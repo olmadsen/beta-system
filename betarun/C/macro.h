@@ -116,7 +116,11 @@ do {                               \
 #define isNegativeRef(x) ((long)(x) < 0)
 #define isPositiveRef(x) ((long)(x) > 0)
 
+#ifdef MT
+#define isAutonomous(x)   ((0 <= (x)) && ((x) <= 2048 /*FIXME: IOAMaxAge?*/))
+#else
 #define isAutonomous(x)   ((1 <= (x)) && ((x) <= 2048))
+#endif
 #define isStatic(x)       (-0xFFFF <= (x)) && ((x) <= -1)
 #define isForward(x)      ((x) > 2048 )
 
