@@ -1195,7 +1195,7 @@ void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
 	  }
 	}
       }) /* DEBUG_STACKOBJ */;
-      func(theCell, *(Object**)current);
+      func((Object**)current, *(Object**)current);
     }
   }
   DEBUG_STACKOBJ(fprintf(output, " *-*-* End StackObject 0x%x *-*-*\n", (int)sObj));
