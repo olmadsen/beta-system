@@ -26,6 +26,11 @@ Item *AlloCOM(Object *origin, ProtoType *proto, long *SP)
       /* The new Item is now allocated, but not initialized yet! */
     
       setup_item(item, proto, origin); 
+      /* setup_item has assigned origin, but assuming item in IOA 
+       * Do it again with AssignReference
+       */
+      AssignReference(((long*)item)+((ProtoType*)proto)->OriginOff, 
+		      (Item *)origin);
     
 #ifndef COM
       item->Proto = (ProtoType *)((long)(item->Proto)+DISP_OFF);

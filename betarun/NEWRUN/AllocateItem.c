@@ -62,7 +62,8 @@ Item *AlloI(Object *origin, ProtoType *proto, long *SP)
 
   /* The new Item is now allocated, but not initialized yet! */
   
-  setup_item(item, proto, origin); 
+  setup_item(item, proto, origin);
+  /* FIXME: If allocation directly in AOA, origin assignment in setup_item must use AssignRef! See COM.c */ 
   if (proto->GenPart){
     Protect(item, CallGPart(proto->GenPart, item, SP));
   }
@@ -99,7 +100,7 @@ Item *AlloH(ProtoType *proto, long *SP)
   /* The new Object is now allocated, but not initialized yet! */
   
   setup_item(item, proto, 0);
-  
+  /* Never any need for AssignReference, since origin=0 is used */
   Ck(item);
   
   return item;

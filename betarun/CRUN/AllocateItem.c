@@ -95,6 +95,7 @@ ParamOriginProto(Item *,AlloI)
     /* The new Object is now allocated, but not initialized yet! */
     
     setup_item(item, proto, origin); 
+    /* FIXME: If allocation directly in AOA, origin assignment in setup_item must use AssignRef! See COM.c */
     
     if (proto->GenPart){
       Protect(item, CallBetaEntry(proto->GenPart,item));
@@ -131,7 +132,7 @@ ParamOriginProto(Item *,AlloH)
     /* The new Object is now allocated, but not initialized yet! */
 
     setup_item(item, proto, /*origin*/ 0);
-
+    /* Never any need for AssignReference, since origin=0 is used */
 
     Ck(item);
 

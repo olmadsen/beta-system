@@ -47,6 +47,7 @@ Component *AlloC(Object *origin, ProtoType *proto, long *SP)
   /* comp->GCAttr set above if in IOA */
   
   setup_item((Item *)&comp->Body, proto, origin);
+  /* FIXME: If allocation directly in AOA, origin assignment in setup_item must use AssignRef! See COM.c */
   
   ((Item *)&comp->Body)->GCAttr = -((headsize(Component))/4);
   

@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(112)";
+char betarun_version[] = "BETARUN VERSION 5.3(113)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.134  2003/02/19 11:48:49  datpete
+ *     Disabled intel prefetch
+ * Betarun version number: 112
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.133  2003/02/12 12:17:56  datpete
  *     Use of gcc-2.95.2 for sparc - gcc3 results in instabil runtime system
  * Betarun version number: 111
