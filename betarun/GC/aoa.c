@@ -290,7 +290,11 @@ static FollowItem( theObj)
   
   /* Handle all the references in the Object. */
   while( *Tab != 0 ){
-    theCell = (ptr(long)) Offset( theObj, *Tab++ );
+    theCell = (ptr(long)) Offset( theObj, ((*Tab++) & (short) ~3) );
+    /* sbrandt 24/1/1994: 2 least significant bits in prototype 
+     * dynamic offset table masked out. As offsets in this table are
+     * always multiples of 4, these bits may be used to distinguish
+     * different reference types. */ 
 #ifdef RTLAZY
     if( *theCell > 0 ) ReverseAndFollow( theCell );
     else if (isLazyRef (*theCell)) negAOArefsINSERT ((long) theCell);
@@ -855,7 +859,11 @@ void AOACheckObject( theObj)
     
     /* Handle all the references in the Object. */
     while( *Tab != 0 ){
-      theCell = (ptr(long)) Offset( theObj, *Tab++ );
+      theCell = (ptr(long)) Offset( theObj, ((*Tab++) & (short) ~3) );
+      /* sbrandt 24/1/1994: 2 least significant bits in prototype 
+       * dynamic offset table masked out. As offsets in this table are
+       * always multiples of 4, these bits may be used to distinguish
+       * different reference types. */ 
 #ifdef RTLAZY
       if( *theCell > 0 ) AOACheckReference( theCell );
 #else
@@ -950,7 +958,11 @@ void AOACheckObjectSpecial( theObj)
     
     /* Handle all the references in the Object. */
     while( *Tab != 0 ){
-      theCell = (ptr(long)) Offset( theObj, *Tab++ );
+      theCell = (ptr(long)) Offset( theObj, ((*Tab++) & (short) ~3) );
+      /* sbrandt 24/1/1994: 2 least significant bits in prototype 
+       * dynamic offset table masked out. As offsets in this table are
+       * always multiples of 4, these bits may be used to distinguish
+       * different reference types. */ 
     }
   }
 }

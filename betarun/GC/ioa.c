@@ -505,7 +505,11 @@ void ProcessObject(theObj)
       
       /* Handle all the references in the Object. */
       for (refs_ofs = (short *)&tab->StaticOff + 1; *refs_ofs; ++refs_ofs) {
-	  theCell = (struct Object **) ((char *) theObj + *refs_ofs);
+	  theCell = (struct Object **) ((char *) theObj + ((*refs_ofs) & (short) ~3));
+	  /* sbrandt 24/1/1994: 2 least significant bits in prototype 
+	   * dynamic offset table masked out. As offsets in this table are
+	   * always multiples of 4, these bits may be used to distinguish
+	   * different reference types. */ 
 	  if (*theCell ) ProcessReference(theCell);
       }
   }
@@ -662,7 +666,11 @@ void ProcessAOAObject(theObj)
       
       /* Handle all the references in the Object. */
       while( *Tab != 0 ){
-	  theCell = (ptr(long)) Offset( theObj, *Tab++ );
+	  theCell = (ptr(long)) Offset( theObj, ((*Tab++) & (short) ~3) );
+	  /* sbrandt 24/1/1994: 2 least significant bits in prototype 
+	   * dynamic offset table masked out. As offsets in this table are
+	   * always multiples of 4, these bits may be used to distinguish
+	   * different reference types. */ 
 	  if( *theCell != 0 ) ProcessAOAReference( theCell );
       }
   }
@@ -847,7 +855,11 @@ void IOACheckObject (theObj)
 	
 	/* Handle all the references in the Object. */
 	while (*Tab != 0) {
-	    theCell = (long *) Offset(theObj, *Tab++);
+	  theCell = (long *) Offset(theObj, ((*Tab++) & (short) ~3));
+	  /* sbrandt 24/1/1994: 2 least significant bits in prototype 
+	   * dynamic offset table masked out. As offsets in this table are
+	   * always multiples of 4, these bits may be used to distinguish
+	   * different reference types. */ 
 #ifdef RTLAZY
 	    if (*theCell > 0) IOACheckReference(theCell);
 #else
