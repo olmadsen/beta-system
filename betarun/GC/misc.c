@@ -125,17 +125,17 @@ long CheckCell(theCell)
 #if (defined(linux) || defined(nti))
 void CheckRegisters()
 {
-  extern ref(Object) a2 asm("a2");
-  extern ref(Object) a3 asm("a3");
-  extern ref(Object) a4 asm("a4");
+  extern ref(Object) a2; /*asm("a2");*/
+  extern ref(Object) a3; /*asm("a3");*/
+  extern ref(Object) a4; /*asm("a4");*/
   long pc = CkP0;
   ref(Object) ebp = CkP1;
   ref(Object) esi = CkP2;
   ref(Object) edx = CkP3;
   ref(Object) edi = CkP4;
-  if (!CheckCell(a2)) RegError(pc, "cell a2", a2);
-  if (!CheckCell(a3)) RegError(pc, "cell a3", a3);
-  if (!CheckCell(a4)) RegError(pc, "cell a4", a4);
+  if (!CheckCell(a2)) RegError(pc, "_a2", a2);
+  if (!CheckCell(a3)) RegError(pc, "_a3", a3);
+  if (!CheckCell(a4)) RegError(pc, "_a4", a4);
   if (!CheckCell(ebp)) RegError(pc, "ebp", ebp);
   if (!CheckCell(esi)) RegError(pc, "esi", esi);
   if (!CheckCell(edx)) RegError(pc, "edx", edx);
