@@ -162,8 +162,10 @@
 #endif
 #ifdef linux
 #define LINUX_CODE(code) code;
+#define NON_LINUX_CODE(code)
 #else
 #define LINUX_CODE(code)
+#define NON_LINUX_CODE(code) code;
 #endif
 #ifdef nti
 #define NTI_CODE(code) code;

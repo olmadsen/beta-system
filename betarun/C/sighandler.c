@@ -403,9 +403,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   DEBUG_CODE({
     fprintf(output, "\nBetaSignalHandler: Caught signal %d", (int)sig);
     PrintSignal((int)sig);
-#ifndef linux
-    fprintf(output, " code %d", (int)code);
-#endif
+    NON_LINUX_CODE(fprintf(output, " code %d", (int)code));
     fprintf(output, ".\n");
   });
 
