@@ -35,6 +35,7 @@ extern void BetaError();
 /* C/cbfa.c */
 extern void CBFAAlloc();
 extern void CBFArelloc();
+extern void freeCBF()
 
 /* C/sighandler.c */
 extern void SignalHandler();

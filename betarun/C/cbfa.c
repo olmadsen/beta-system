@@ -63,3 +63,10 @@ void CBFArelloc()
     INFO_CBFA( fprintf(output, "#(CBFA: new block allocated %dKb.)\n", CBFABlockSize/Kb); );
     
 }
+
+void freeCBF(cb)
+     ref(CallBackEntry) cb;
+{
+  /* For now we just clear the entry */
+  cb->theStruct = 0; /* theStruct will no longer constitute a root for GC */
+}
