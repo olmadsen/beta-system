@@ -110,8 +110,36 @@ static void PrintNumVars(void)
 }
 #endif /* RTDEBUG */
 
+static int indirectprotocmp(const void *a1, const void *a2)
+{
+  TRACE_PROTOSTATISTICS({
+    ProtoValue **pv1 = (ProtoValue**)a1;
+    ProtoValue **pv2 = (ProtoValue**)a2;
+    
+    if ((*pv1)->count > (*pv2)->count) 
+      return 1;
+    if ((*pv1)->count < (*pv2)->count) 
+      return -1;
+  });
+  return 0;
+}
+
 void BetaExit(long number)
 {
+  TRACE_PROTOSTATISTICS({
+    long i;
+    /* Print out how many times each prototype has been created */
+    if (proto_list) {
+      qsort(proto_list, proto_num_elems, sizeof(ProtoValue *),
+	    (int (*)(const void *, const void *))indirectprotocmp);
+      for (i=0; i<proto_num_elems; i++) {
+	fprintf(output, "count: %-8ld ", proto_list[proto_num_elems-i-1]->count);
+	PrintProto((ProtoType*)proto_list[proto_num_elems-i-1]->proto);
+	fprintf(output, "\n");
+      }
+    }
+  });
+
 #if (defined(RTVALHALLA) && !defined(nti_bor))
   if (valhallaID) {
     /* Tell valhalla that we are terminating: */

@@ -110,6 +110,9 @@ static void BooleanProperty(char *name)
 #endif
   ENTRY("TraceFindActivation", TraceFindActivation = TRUE); 
   ENTRY("TFA", TraceFindActivation = TRUE); 
+#ifdef PROTO_STATISTICS
+  ENTRY("NoProtoStatistics", ProtoStatistics = FALSE); 
+#endif /* PROTO_STATISTICS */
 
 #ifdef RTDEBUG
   ENTRY("DebugIOA",   DebugIOA = TRUE);

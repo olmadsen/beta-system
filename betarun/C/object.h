@@ -364,6 +364,15 @@ typedef struct _nums
 #endif
 } nums;
 
+#ifdef PROTO_STATISTICS
+/* For debugging purposes. This is a list of prototypes and how many times
+   they have been created */
+typedef struct _ProtoValue {
+  long proto;
+  long count;
+} ProtoValue;
+#endif /* PROTO_STATISTICS */
+
 #ifdef MT
 typedef enum { 
   Flag_Semablocked = (1UL<< 0), 

@@ -1,7 +1,11 @@
-char betarun_version[] = "BETARUN VERSION 5.3(20)";
+char betarun_version[] = "BETARUN VERSION 5.3(21)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.20  2001/07/20 09:47:32  sosh
+ * Changed the placement of database files. See changes
+ * Betarun version number: 20
+ *
  * Revision 1.19  2001/06/25 13:56:44  corry
  * Fix calls of isdigit to get _unsigned_ char parameter to avoid warning
  * on Sun.

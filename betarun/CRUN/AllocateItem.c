@@ -12,6 +12,8 @@
 ParamOriginProto(Item *,AlloI)
 /* = Item * AlloI(Object *origin, ProtoType *proto) */
 {
+    int proto_i, proto_found;
+
     DeclReference1(Item *, item); /*= Item * item; */
     MCHECK();
     FetchOriginProto();
@@ -27,6 +29,35 @@ ParamOriginProto(Item *,AlloI)
 #endif
 
     Claim((long)proto->Size>0, "proto->Size>0");
+
+    TRACE_PROTOSTATISTICS({
+      /* Code for updating the list of prototypes */
+      if (proto_list == NULL) {
+	proto_list = (ProtoValue **)malloc(500*sizeof(ProtoValue*));
+	proto_size = 500;
+      }
+      if (proto_num_elems >= proto_size) {
+	proto_list = (ProtoValue **)realloc(proto_list, sizeof(ProtoValue*)*
+					    proto_size*2);
+	proto_size *= 2;
+      }
+      
+      proto_i=0;
+      proto_found = 0;
+      for (proto_i=0; proto_i<proto_num_elems; proto_i++) {
+	if ((long)proto == proto_list[proto_i]->proto) {
+	  proto_list[proto_i]->count++;
+	  proto_found = 1;
+	}
+      }
+      if (proto_found == 0) {
+	ProtoValue *my_proto;
+	my_proto = (ProtoValue *)malloc(sizeof(ProtoValue));
+	my_proto->proto = (long)proto;
+	my_proto->count = 1;
+	proto_list[proto_num_elems++] = my_proto;
+      }
+    });
 
     Protect(origin, item = (Item *) IOAalloc(ItemSize(proto)));
     

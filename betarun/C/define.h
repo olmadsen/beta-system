@@ -13,6 +13,10 @@
 # define MT_CODE(code)
 #endif
 
+/* Make allocation routines collect statistics about prototypes of 
+   allocated objects */
+/*#define PROTO_STATISTICS 1*/
+
 /* COM prototypes */
 #define COM 1 /* RUN: must match define in Declaration.run */
 /*#undef COM*/
@@ -326,6 +330,12 @@ typedef unsigned short u_short;
 #  define TRACE_FINDACTIVATION(code) \
      if (TraceFindActivation) { code; fflush(output); }
 
+#ifdef PROTO_STATISTICS
+#  define TRACE_PROTOSTATISTICS(code) \
+     if (ProtoStatistics) { code; fflush(output); }
+#else
+#  define TRACE_PROTOSTATISTICS(code) 
+#endif /* PROTO_STATISTICS */
 
 #define REFERENCEACTIONARGSTYPE Object **theCell, long refType
 #define REFERENCEACTIONARGS theCell
