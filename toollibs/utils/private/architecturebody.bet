@@ -1,0 +1,126 @@
+ORIGIN '../architecture';
+INCLUDE '~beta/basiclib/binfile';
+INCLUDE '~beta/compiler/GENERATOR/ELF/elf';
+INCLUDE '~beta/compiler/GENERATOR/COFF/coff_ms';
+INCLUDE '~beta/sysutils/endian';
+
+(* FIXME: probably does not work with ppcmac PEF files and
+ * Win32 EXE files, as it should!
+ * Is constructed using object-files for input, not executables (:-(
+ *)
+
+--is_native_executable:descriptor--
+(# f: @binfile(# accesserror::(# do true->continue->open_error #)#);
+   type: ^text;
+   test_elf:
+     (# machine_long: @integer;
+        machine_short: @shortint;
+        magic: @shortint;
+     enter magic
+     do (0,frombeginning) -> f.setpos;
+        f.getLong -> machine_long;
+        (if machine_long=(ELFMAG->swap_long) then
+            (18,frombeginning) -> f.setpos;
+            f.getShort -> machine_short;
+            (machine_short=magic) -> value;
+         else
+            false -> value;
+        if);
+     #);
+   test_coff:
+     (# machine_short, magic: @shortint;
+     enter magic
+     do (0,frombeginning) -> f.setpos;
+        f.getShort -> machine_short;
+        (machine_short=magic) -> value;
+     #);
+   open_error: @boolean;
+do filename[] -> f.name;
+   (if f.entry.exists then
+       f.openRead;
+       (if open_error then
+           false -> value
+        else
+           machine_type -> type[];
+           (if true
+            // 'sun4s' -> type.equal then
+               EM_SPARC -> test_elf
+            // 'sgi' -> type.equal then
+               EM_MIPS -> test_elf
+            // 'linux' -> type.equal then 
+               EM_386 -> test_elf
+            // 'nti' -> type.equal then
+               IMAGE_FILE_MACHINE_I386 -> test_coff
+            // 'ppcmac' -> type.equal then
+               IMAGE_FILE_MACHINE_POWERPC_BIG -> test_coff
+            else
+               'is_native_executable: unknown architecture!' -> screen.putline;
+           if);
+           f.close;
+       if);
+    else
+       false -> value;
+   if);
+#)
+
+--LIB: attributes--
+swap_short:
+  (* Only needed on big-endian *)
+  (# s: @shortint;
+     c1, c2: @char;
+  enter s
+  do 0->s.%getbyte->c1;
+     1->s.%getbyte->c2;
+     (c1,1) -> s.%putbyte;
+     (c2,0) -> s.%putbyte;
+  exit s
+  #);
+swap_long: 
+  (* Only needed on little-endian *)
+  htonl(# #);
+
+--type_of_executable:descriptor--
+(# f: @binfile(# accesserror::(# do true->continue->open_error #)#);
+   open_error: @boolean;
+   machine_long: @integer;
+   machine_short: @shortint;
+do filename[] -> f.name;
+   (if f.entry.exists then
+       f.openRead;
+       (if open_error then
+        else
+           (0,frombeginning) -> f.setpos;
+           f.getLong -> machine_long; (* is in host byte-order *)
+           (* Test for ELF file *)
+           (if machine_long=(ELFMAG->swap_long) then
+               (18,frombeginning) -> f.setpos;
+            else
+               (* Try reading COFF magic *)
+               (0,frombeginning) -> f.setpos;
+           if);
+           f.getShort -> machine_short; (* is in host byte-order *)
+           (if isLittleEndian (* host *) then
+               machine_short -> swap_short -> machine_short;
+           if); 
+           (* Test for big-endian targets *)
+           (if machine_short
+            // EM_SPARC then 'SPARC ELF' -> exetype[];
+            // EM_MIPS then 'MIPS ELF' -> exetype[];
+            // IMAGE_FILE_MACHINE_POWERPC_BIG then 'PowerPC xcoff'->exetype[]
+            else
+               (* test for little-endian targets *)
+               (if isBigEndian (* host *) then
+                   machine_short -> swap_short -> machine_short;
+               if);
+               (if machine_short
+                // EM_386->htons then 'Linux ELF' -> exetype[];
+                // IMAGE_FILE_MACHINE_I386->htons then 'Win32 PE coff' -> exetype[]
+               if);
+           if);
+           f.close;
+       if);
+   if);
+   (if exetype[]=NONE then
+       'Unknown!!'->exetype[];
+   if);
+#)
