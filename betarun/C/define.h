@@ -14,7 +14,7 @@
 #endif
 
 /* COM prototypes */
-#define COM 1
+#define COM 1 /* RUN: must match define in Declaration.run */
 #undef COM
 
 #ifdef RTDEBUG

@@ -18,9 +18,10 @@ AlloI: public
      Offset:        Word      = DataReg2;
      DataReg2Long:  Long      = DataReg2; 
      TmpData:       Long      = DataReg1;
+     Eax:           CodeArea  = DataReg1;
      Entry:         CodeArea  = DataReg1;
      TmpAddr:       Long      = AddrReg1;
-     initTab:       CodeArea  = AddrReg1; { index in GC table in prototype }
+     initTab:       GCEntry   = AddrReg1; { index in GC table in prototype }
      newTop:        DataArea  = AddrReg1;
      theItem:       Item      = AddrReg2;
           
@@ -101,8 +102,12 @@ AlloI: public
              (code '	movl	%eax,4(%esi,%ebx,4)	#v 4	' code);
              (code '	movl	-4(%ebp),%eax		#u 5	' code);
              (code '	testl	$0xffff,(%ebp)		#v 5	' code);
-             (code '	movl	%eax,(%esi,%ebx,4)	#u 6	' code);
-             (code '	jne	L4a			#v 6	' code);
+             (if COM then
+                 (code'	leal	DISP_OFF(%eax),%eax     #u 6 SETPROTO' code);
+                 (code'	nop				#v 6	' code);
+             if);
+             (code '	movl	%eax,(%esi,%ebx,4)	#u 6/7	' code);
+             (code '	jne	L4a			#v 6/7	' code);
              (code 'L5a:					' code);
          if);
          (if nti then
@@ -116,21 +121,28 @@ AlloI: public
              (code '    mov	4[esi+4*ebx],eax	;v 4	' code);
              (code '    mov	eax,[ebp-4]		;u 5	' code);
              (code '    test	dword ptr [ebp],0ffffh	;v 5	' code);
-             (code '    mov	[esi+4*ebx],eax		;u 6	' code);
-             (code '    jne	L4a			;v 6	' code);
+             (if COM then
+                 (code'	lea	eax,DISP_OFF[eax]       ;u 6 SETPROTO' code);
+                 (code'	nop				;v 6	' code);
+             if);
+             (code '    mov	[esi+4*ebx],eax		;u 6/7	' code);
+             (code '    jne	L4a			;v 6/7	' code);
              (code 'L5a:					' code);
          if);
       else
          loop:
          0->Offset!l;
-         initTab[0]!w -> Offset;
+         initTab.StaticOff -> Offset;
          (if Offset!l<>0 then
              { Insert the distance to the autonomous object. }
              -1 -> TmpData;
-             initTab[2]!w -> TmpData!w;
+             initTab.OrigOff -> TmpData!w;
              TmpData!l -> theItem[4+Offset*4];
              { Insert the protoType from the initTab. }
-             initTab[4]!l -> TmpData!l; 
+             initTab.Proto -> TmpData!l; 
+             (if COM then
+                 DISP_OFF -> TmpData+; { SETPROTO }
+             if);
              TmpData!l -> theItem[Offset*4]!l;
              8 -> initTab+;
              goto loop
