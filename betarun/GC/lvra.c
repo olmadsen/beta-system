@@ -36,8 +36,11 @@ DEBUG_CODE(GLOBAL(long LVRATabNum[TableMAX+1]))
 void LVRACheck(void);
 void LVRAStatistics(void);
 
-long LVRAAlive(ref(ValRep) theRep)
+/* Never called during IOAGc, so no need to check for ToSpace */
+static long LVRAAlive(ref(ValRep) theRep)
 {
+  Claim(!IOAActive, "LVRAAlive: must not be called during IOAGc");
+
   if(!isValRep(theRep) ){
     return FALSE;
   }
@@ -46,25 +49,52 @@ long LVRAAlive(ref(ValRep) theRep)
     return FALSE;
   }
   
-  /* FIXME: Why does this make lvra go bananas?
-  if (inToSpace(theRep->GCAttr)){
-    / LVRAAlive is never called during IOAGc, so pointers from ToSpace are not roots /
-    return FALSE;
-  }
-  */
-
   /* Test for lvra cycle */
   if (! ((long) theRep == *((long *) theRep->GCAttr))){
     return FALSE;
   }
 
-  return TRUE;
+  /* References from dead AOA objects to LVRA reps are NOT
+   * explicitly broken as previously assumed: See large comment
+   * in aoa.c:Phase3().
+   * So we will have to assure that the referencing cell is
+   * actually inside a live object!
+   * The alternative would be to either clear unused parts of AOA
+   * or to analyze dead objects in AOA too during Phase1.
+   * Both alternatives would be much more time consuming than to 
+   * check the refering cells for the relatively few repetitions in 
+   * LVRA.
+   */
+
+  if (!(inIOA((struct Object *)theRep->GCAttr) ||
+	inAOA((struct Object *)theRep->GCAttr))) {
+    fprintf(output,
+	    "LVRAAlive: rep 0x%x with proper cycle referenced from "
+	    "outside legal heaps: 0x%x ",
+	    (int)theRep,
+	    (int)theRep->GCAttr);
+    if (inAOAUnused(theRep->GCAttr)) {
+      fprintf(output, "(DEAD-AOA)");
+    }
+    if (inToSpace(theRep->GCAttr)) {
+      fprintf(output, "(ToSpace)");
+    }
+    fprintf(output, "\n");
+    fflush(output);
+    /* Illegal(); */
+  }
+
+  return (inIOA((struct Object *)theRep->GCAttr) ||
+	  inAOA((struct Object *)theRep->GCAttr));
+
 }
 #else
 #define LVRAAlive(rep) \
   (isValRep(rep) && \
   ((rep)->GCAttr != LVRARepInFreeList) && \
-  (long) (rep) == *(long *) (rep)->GCAttr)
+  (long) (rep) == *(long *) (rep)->GCAttr) && \
+  (inIOA((struct Object *)rep->GCAttr) || \
+   inAOA((struct Object *)rep->GCAttr))
 #endif
 
 long LVRARepSize(struct ValRep *rep)
@@ -505,6 +535,7 @@ void LVRAkill(struct ValRep *rep)
   rep->Proto = 0;
   rep->GCAttr = LVRARepInFreeList;
   LVRAInsertFreeElement(rep); /* datpete 5 feb 1996 */
+  DEBUG_LVRA(fprintf(output, "LVRAkill: 0x%x\n", (int)rep));
 }
 
 #ifdef CHECK_LVRA_IN_IOA
@@ -796,6 +827,8 @@ static void LVRAConstructFreeList(void)
 
   DEBUG_LVRA(LVRACheck());
 
+  DEBUG_LVRA(INFO_LVRA(LVRAStatistics()));
+
   INFO_HEAP_USAGE(PrintHeapUsage("after LVRA freelist construction"));
 
 }
@@ -839,6 +872,9 @@ void LVRAStatistics(void)
   long sizeDeadReps = 0;
   long numAliveReps = 0;
   long numDeadReps = 0;
+  int fromAOA, fromUnusedAOA, fromIOA, fromToSpace;
+  int fromAOAtotal=0, fromUnusedAOAtotal=0, fromIOAtotal=0, fromToSpacetotal=0;
+  int fromElseWhere;
   
   fprintf(output,"\nTraversing LVRA...\n------------------\n");
   theBlock = LVRABaseBlock;
@@ -849,6 +885,10 @@ void LVRAStatistics(void)
     while ((long *)rep < theBlock->top) {
       theObjectSize = LVRARepSize(rep);
       if (LVRAAlive(rep)){
+	if ((fromIOA=inIOA(rep->GCAttr))) fromIOAtotal++;
+	if ((fromAOA=inAOA(rep->GCAttr))) fromAOAtotal++;
+	if ((fromUnusedAOA=inAOAUnused(rep->GCAttr))) fromUnusedAOAtotal++;
+	if ((fromToSpace=inToSpace(rep->GCAttr))) fromToSpacetotal++;
 	fprintf(output, 
 		"addr=0x%-6x type=%-7s size=%-6d LVRACycle=%s ref=%-6x (%s)\n",
 		(int)rep, 
@@ -860,16 +900,23 @@ void LVRAStatistics(void)
 		(int)theObjectSize,
 		((*(long*)(int)rep->GCAttr) == (long)rep) ? "ok " : "BAD",
 		(int)rep->GCAttr,
-		inIOA(rep->GCAttr)?"IOA":
-		inAOA(rep->GCAttr)?"AOA":
-		inToSpace(rep->GCAttr)?"ToSpace!!!":
+		fromIOA?"IOA":
+		fromAOA?"AOA":
+		fromUnusedAOA?"DEAD-AOA!!!":
+		fromToSpace?"ToSpace!!!":
 		"???");
 	sizeAliveReps += theObjectSize;      
 	numAliveReps++;
       } else {
-	fprintf(output, "addr=0x%-6x              size=%-6d            (DEAD)\n",
-		(int)rep, 
-		(int)theObjectSize);
+	if (rep->GCAttr==LVRARepInFreeList){
+	  fprintf(output, "addr=0x%-6x              size=%-6d   (DEAD - in freelist)\n",
+		  (int)rep, 
+		  (int)theObjectSize);
+	} else {
+	  fprintf(output, "addr=0x%-6x              size=%-6d   (DEAD - not in freelist)\n",
+		  (int)rep, 
+		  (int)theObjectSize);
+	}
 	sizeDeadReps += theObjectSize;
 	numDeadReps++;
       }
@@ -877,9 +924,23 @@ void LVRAStatistics(void)
     }
     theBlock = theBlock->next;
   }
+  fromElseWhere=numAliveReps-fromIOAtotal-fromAOAtotal-fromUnusedAOAtotal-fromToSpacetotal;
   fprintf(output, "Summary: %d LVRA blocks\n", (int)blockNo);
   fprintf(output, "Summary: %d alive repetitions, total size=%d\n", 
 	  (int)numAliveReps, (int)sizeAliveReps);
+  if (fromIOAtotal){
+    fprintf(output, "Summary:   Referenced from IOA:         %d\n", fromIOAtotal);
+  }
+  if (fromAOAtotal){
+    fprintf(output, "Summary:   Referenced from AOA:         %d\n", fromAOAtotal);
+  }
+  if (fromUnusedAOAtotal){
+    fprintf(output, "Summary:   Referenced from DEAD AOA!!:  %d\n", fromUnusedAOAtotal);
+  }
+  fprintf(output, "Summary:   Referenced from ToSpace:     %d\n", fromToSpacetotal);
+  if (fromElseWhere){
+    fprintf(output, "  Referenced from elsewhere!!: %d\n", fromElseWhere);
+  }
   fprintf(output, "Summary: %d dead repetitions, total size=%d\n", 
 	  (int)numDeadReps, (int)sizeDeadReps);
 }

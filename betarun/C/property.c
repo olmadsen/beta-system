@@ -49,6 +49,7 @@ static void BooleanProperty(char *name)
 	 InfoHeapUsage = TRUE;
 	 );
    ENTRY("infoheapusage", InfoHeapUsage = TRUE);
+   ENTRY("infoheap", InfoHeapUsage = TRUE);
    ENTRY("quacont",  QuaCont = TRUE);
 
 #ifdef sparc
@@ -63,6 +64,8 @@ static void BooleanProperty(char *name)
   ENTRY("debugcbfa",  DebugCBFA = TRUE);
   ENTRY("dumpaoa",   DumpAOA = TRUE);
   ENTRY("debugaoa",   DebugAOA = TRUE);
+  ENTRY("debugaoatoioa",   DebugAOAtoIOA = TRUE);
+  ENTRY("debugaoatolvra",   DebugAOAtoLVRA = TRUE);
   ENTRY("debuglvra",  DebugLVRA = TRUE);
   ENTRY("debugstack", DebugStack = TRUE);
   ENTRY("debugstackobj", DebugStackObj = TRUE);
@@ -79,6 +82,8 @@ static void BooleanProperty(char *name)
 	DebugMT = TRUE;
 	DebugIOA = TRUE; 
 	DebugAOA = TRUE;
+	DebugAOAtoIOA = TRUE;
+	DebugAOAtoLVRA = TRUE;
 	DebugLVRA = TRUE; 
 	DebugStack=TRUE;
 	DebugLazy = TRUE;
@@ -87,6 +92,8 @@ static void BooleanProperty(char *name)
   ENTRY("debugall",   
 	DebugIOA = TRUE; 
 	DebugAOA = TRUE;
+	DebugAOAtoIOA = TRUE;
+	DebugAOAtoLVRA = TRUE;
 	DebugLVRA = TRUE; 
 	DebugStack=TRUE; 
 	DebugLazy = TRUE;

@@ -304,25 +304,37 @@ void AOAGc()
 #if defined(MAC)
   RotateTheCursorBack();
 #endif
-  DEBUG_AOA( fprintf( output, "1"); fflush(output) );
+  DEBUG_AOA( fprintf( output, "Phase1\n"); fflush(output) );
   Phase1();  
   /* Calculate new addresses for the reachable objects and reverse pointers. */
 #if defined(MAC)
   RotateTheCursorBack();
 #endif
-  DEBUG_AOA( fprintf( output, "2"); fflush(output) );
+  DEBUG_AOA( fprintf( output, "Phase2\n"); fflush(output) );
   Phase2( &blocks, &size, &used); 
   /* Copy all reachable objects to their new locations. */
 #if defined(MAC)
   RotateTheCursorBack();
 #endif
-  DEBUG_AOA( fprintf( output, "3"); fflush(output) );
+  DEBUG_AOA( fprintf( output, "Phase3\n"); fflush(output) );
   Phase3();  
 #if defined(MAC)
   RotateTheCursorBack();
 #endif
   AOANeedCompaction = FALSE;
-  
+
+#if 1
+#ifdef RTDEBUG
+  { /* Clear unused part of AOA to trigger errors earlier */
+    Block* theBlock = AOABaseBlock;
+    while (theBlock) {
+      memset(theBlock->top, 0, (long)theBlock->limit - (long)theBlock->top);
+      theBlock = theBlock->next;
+    }
+  }
+#endif  
+#endif  
+
   if( AOAMinFree ){
     if( (size - used) < AOAMinFree )
       /* if freeArea < AOAMinFree  then ... */
@@ -465,23 +477,34 @@ static void ReverseAndFollow(void)
       }else{
 	*theCell = (ref(Object)) theObj->GCAttr; theObj->GCAttr = (long) theCell;
       }
-    }else{
+    } else {
+      /* The referenced object is not in AOA */
+      /* FIXME: inAOA(theCell) should not be needed? */
       if (inAOA(theCell) && inLVRA(theObj)) { 
-	/* Save the theCell for later use */
-	if ((long *)RAFStackTop >= AOAtoLVRAtable)
-	  if (AOAtoLVRAtable > GLOBAL_IOA) 
+	/* Save theCell for later use */
+	if ((long *)RAFStackTop >= AOAtoLVRAtable){
+	  /* Next decrement of AOAtoLVRAtable will cross RAFStackTop.
+	   * See figure at Phase1().
+	   */
+	  if (AOAtoLVRAtable > GLOBAL_IOA) { 
 	    extendRAFStackArea(); 
-	  else
+	  } else {
+	    /* We have reached bottom of IOA - no more space for AOAtoLVRAtable */
 #ifdef NEWRUN	   
 	    BetaError(AOAtoLVRAfullErr, CurrentObject, StackEnd, 0);
 #else
 	    BetaError(AOAtoLVRAfullErr, 0);
 #endif
+	  }
+	}
+	/* Save the reference from AOA to LVRA */
 	*--AOAtoLVRAtable = (long)theCell;
 	AOAtoLVRAsize++;
-	if (RAFStackBase == GLOBAL_IOA)
-	  RAFStackLimit--;
-	DEBUG_LVRA( Claim( isValRep(*theCell), "Phase1: LVRA cycle"));
+	/* If RAF is still kept in bottom of IOA, decrease it's limit,
+	 * since AOAtoLVRAtable has now grown one cell downwards.
+	 */
+	if (RAFStackBase == GLOBAL_IOA) RAFStackLimit--;
+	DEBUG_LVRA( Claim( isValRep(*theCell), "Phase1: isValRep"));
 	DEBUG_LVRA( Claim( (*theCell)->GCAttr == (long) theCell,
 			  "Phase1: LVRA cycle"));
       }
@@ -547,8 +570,11 @@ static void CheckAOACell(struct Object **theCell,struct Object *theObj)
 #endif
 #endif
 
-/* FollowObject is used during Phase1 of the Mark-Sweep GC. 
- * For each referernce inside theObj it calls ReverseAndFollow.
+/* FollowObject:
+ * FollowObject is used during Phase1 of the Mark-Sweep GC. 
+ * For each referernce inside theObj it pushes the reference on the 
+ * ReverseAndFollow stack, thus giving the already active ReverseAndFollow
+ * invocation some more to work on.
  */
 
 static void FollowObject(ref(Object) theObj)
@@ -562,9 +588,10 @@ static void FollowObject(ref(Object) theObj)
     case SwitchProto(ByteRepPTValue):
     case SwitchProto(ShortRepPTValue):
     case SwitchProto(DoubleRepPTValue):
-    case SwitchProto(LongRepPTValue): return;
+    case SwitchProto(LongRepPTValue): 
+      DEBUG_AOA(Claim(!inLVRA(theObj), "FollowObject: Should not be called for LVRA object"));
       /* No references in a Value Repetition, so do nothing*/
-      
+      return;
     case SwitchProto(DynItemRepPTValue):
     case SwitchProto(DynCompRepPTValue):
       /* Follow the iOrigin */
@@ -666,9 +693,11 @@ static void FollowObject(ref(Object) theObj)
   }else FollowItem( (struct Item*) theObj);
 }
 
-/* Phase1 of the Mark-Sweep GC, reverse:
- * all cells in root(AOA),
- * all cells in AOA, where cells point into AOA
+/* Phase1:
+ * Marking phase. 
+ * Phase1 of the Mark-Sweep GC, reverse:
+ *   all cells in root(AOA),
+ *   all cells in AOA, where cells point into AOA
  */
 static void Phase1(void)
 { /* Call FollowReference for each root to AOA. */
@@ -819,8 +848,11 @@ static void handleAliveObject(ref(Object) theObj, ref(Object) freeObj)
   } 
 }
 
-
-
+/*
+ * Phase2:
+ * All live objects now have a non-zero GCAttr.
+ * Calculate new object addresses (diffs).
+ */
 static void Phase2(ptr(long) numAddr, ptr(long) sizeAddr, ptr(long) usedAddr)
 {
   ref(Block)  theBlock  = AOABaseBlock;
@@ -916,11 +948,12 @@ static void Phase2(ptr(long) numAddr, ptr(long) sizeAddr, ptr(long) usedAddr)
   }
 } 
 
+/* FindInterval:
+ * Finds an interval in "table", where all elements are inside "block".
+ * We assume that the table is sorted in increasing order.
+ */
 static void FindInterval(long * table, long size, ref(Block) block, long * startAddr, long * stopAddr)
 {
-  /* Finds an interval in table, where all elements are inside block.
-   * We assume that the table is sorted in increasing order.
-   */
   long start, stop;
   
   start = 0;
@@ -931,13 +964,14 @@ static void FindInterval(long * table, long size, ref(Block) block, long * start
   *stopAddr  = stop;
 }
 
-/* Phase 3:
+/* Phase3:
  *  Update the AOAtoIOATable,
  *  then sort the Table in area[ToSpaceLimit..ToSpaceTop].
+ *  Slide objects into their new positions.
  */
 static void Phase3()
 {
-  long *   table;
+  long *   table; /* Local copy of AOAtoIOATable */
   
   /* Calculate the size of table. */
   AOAtoIOACount = 0;
@@ -981,11 +1015,11 @@ static void Phase3()
 #endif
       pointer++;
     }
-    DEBUG_AOA( Claim( counter == AOAtoIOACount,"Phase3: counter == AOAtoIOACount"));
+    DEBUG_AOAtoIOA( Claim( counter == AOAtoIOACount,"Phase3: counter == AOAtoIOACount"));
   }
   
-  DEBUG_AOA( fprintf(output,"(AOAtoIOA#%d)", (int)AOAtoIOACount));
-  DEBUG_AOA( fprintf(output,"(AOAtoLVRA#%d)", (int)AOAtoLVRAsize));
+  DEBUG_AOAtoIOA( fprintf(output,"(AOAtoIOA#%d)", (int)AOAtoIOACount));
+  DEBUG_AOAtoLVRA( fprintf(output,"(AOAtoLVRA#%d)", (int)AOAtoLVRAsize));
   
   /* Clear the AOAtoIOAtable. */
   AOAtoIOAClear();
@@ -997,6 +1031,13 @@ static void Phase3()
     WordSort((unsigned long*)negAOArefs, negAOAsize);
 #endif
 
+  DEBUG_AOAtoLVRA({
+    int i;
+    fprintf(output, "Phase3: Dumping AOAtoLVRAtable:\n");
+    for (i=0; i<AOAtoLVRAsize; i++){
+      fprintf(output, "  [%d]: 0x%x\n", i, (int)AOAtoLVRAtable[i]);
+    }
+  });
 
   {
     ref(Block)  theBlock;
@@ -1014,7 +1055,9 @@ static void Phase3()
       theObj = (ref(Object)) BlockStart(theBlock);
       
       FindInterval( table, AOAtoIOACount, theBlock, &start, &stop);
+      /* Now: table[start..stop] are all inside theBlock */
       FindInterval( AOAtoLVRAtable, AOAtoLVRAsize, theBlock, &start1, &stop1);
+      /* Now: AOAtoLVRAtable[start1..stop1] are all inside theBlock */
 #ifdef RTLAZY
       if (negAOArefs)
 	FindInterval( negAOArefs, negAOAsize, theBlock, &start2, &stop2);
@@ -1049,10 +1092,19 @@ static void Phase3()
 	    start++;
 	  }
 	  while( (start1<stop1) && (AOAtoLVRAtable[start1] < (long)nextObj) ){
-	    DEBUG_AOA( Claim( inLVRA( (ref(Object))(*(long *)(AOAtoLVRAtable[start1]-diff))),
-			     "Phase3: Pointer is in LVRA"));
+	    DEBUG_AOAtoLVRA( Claim( inLVRA( (ref(Object))(*(long *)(AOAtoLVRAtable[start1]-diff))),
+				    "Phase3: Pointer is in LVRA"));
+	    DEBUG_AOAtoLVRA(Claim((*((handle(ValRep)) (AOAtoLVRAtable[start1]-diff)))->GCAttr == AOAtoLVRAtable[start1], "Phase3: LVRAcycle is valid before update"));
+	    
 	    (*((handle(ValRep)) (AOAtoLVRAtable[start1]-diff)))->GCAttr =
 	      AOAtoLVRAtable[start1]-diff;
+	    DEBUG_AOAtoLVRA({
+	      fprintf(output, 
+		      "Phase3: AOAtoLVRAtable[%d]: Updated LVRAcycle: *0x%x = 0x%x\n", 
+		      (int)start1,
+		      (int)&((*((handle(ValRep)) (AOAtoLVRAtable[start1]-diff)))->GCAttr),
+		      (int)(AOAtoLVRAtable[start1]-diff));
+	    });
 	    start1++;
 	  }
 #ifdef RTLAZY
@@ -1065,16 +1117,45 @@ static void Phase3()
 #endif
 	  newObj->GCAttr = 0;
 	} else {
-	  /* theObj is not reachable. */
-	  while ((start<stop) && (table[start] < (long)nextObj)) start++;
+	  /* theObj->GCAttr==0: theObj is not reachable. */
 	  
-	  while( (start1<stop1) && (AOAtoLVRAtable[start1] < (long)nextObj) ){
-	    DEBUG_AOA( Claim( inLVRA( (ref(Object))(*(long *)(AOAtoLVRAtable[start1]))),
-			     "Phase3: Pointer is in LVRA"));
+	  /* Wind pointer into table to beginning of pointers for nextObj */
+	  while ((start<stop) && (table[start] < (long)nextObj)) start++;
+
+	  /* No-FIXME: The code in following while loop will never be called: 
+	   * There will never be 
+	   * any references from dead AOA objects to LVRA in AOAtoLVRAtable,
+	   * since this table is build by FollowObject in Phase1, and since 
+	   * FollowObject is only called for live objects.
+	   * The following code could thus be removed, but LVRA will have 
+	   * to do something extra to avoid keeping repetitions referred 
+	   * from dead AOA objects - if the object is not overwritten during
+	   * Phase3 (e.g. if it is at the end of a block), the LVRA cycle
+	   * will persist!
+	   * If the code is removed, it should probably be replaced with a 
+	   * Claim saying that (start1>=stop1).
+	   * And this explanation should be placed somewhere else!!!
+	   */
+#if 1
+	  DEBUG_CODE(Claim(start1>=stop1, "Phase3: No Refs from DEAD-AOA to LVRA"));
+#else
+	  
+	  while((start1<stop1) && (AOAtoLVRAtable[start1]<(long)nextObj)){
+	    DEBUG_AOAtoLVRA(Claim(inLVRA((ref(Object))(*(long *)(AOAtoLVRAtable[start1]))),
+				  "Phase3: Pointer is in LVRA"));
+	    
+	    DEBUG_AOAtoLVRA(fprintf(output, 
+				    "Phase3: AOAtoLVRAtable[%d]: Breaking LVRAcycle for rep 0x%x\n",
+				    (int)start1,
+				    (int)(*(struct ValRep **) AOAtoLVRAtable[start1])));
+	    
 	    LVRAkill(*(struct ValRep **) AOAtoLVRAtable[start1]);
 	    start1++;
-	  }
+	  } /* End while */
+#endif	  
+	  /* End-of-else (object not reachable in AOA) */
 	}
+
 	theObj = nextObj;
       }
       theBlock->top = theBlock->info.nextTop;

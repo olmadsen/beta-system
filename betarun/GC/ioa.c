@@ -45,6 +45,7 @@ void IOAGc()
 		    (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
 	    );
 
+  /* Clear ToSpace to trigger errors earlier */
   DEBUG_CODE(memset(ToSpace, 0, IOASize));
   
   NumIOAGc++;

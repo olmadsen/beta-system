@@ -259,7 +259,7 @@ void Initialize()
     DEBUG_CODE(fprintf(output, "Signal Handlers Disabled\n"));
   } else { 
     SetupBetaSignalHandlers();
-	SetupFPU();
+    SetupFPU();
   }
 
 #ifdef MT

@@ -138,7 +138,7 @@ void AOAtoIOAInsert(handle( Object) theCell)
     }
 #endif
 
-    DEBUG_AOA( Claim( inAOA( theCell),"AOAtoIOAInsert: theCell in AOA"));
+    DEBUG_AOAtoIOA( Claim( inAOA( theCell),"AOAtoIOAInsert: theCell in AOA"));
     
 #if 0
     DEBUG_CODE(fprintf(output, "\n*** AOAtoIOAInsert(0x%x)\n", (int)theCell));
@@ -165,21 +165,21 @@ void AOAtoIOAInsert(handle( Object) theCell)
       goto exit;
     }
     
-    DEBUG_AOA(fprintf(output, "\nAOAtoIOAInsert collision"));
+    DEBUG_AOAtoIOA(fprintf(output, "\nAOAtoIOAInsert collision"));
     /* linear search at most MAX_PROBES forward */
     count = MAX_PROBES;
     index = ((unsigned long) theCell+1) % AOAtoIOAtableSize;
     do {
-      DEBUG_AOA(fprintf(output, "[%d]", MAX_PROBES-(int)count));
+      DEBUG_AOAtoIOA(fprintf(output, "[%d]", MAX_PROBES-(int)count));
       if (table[index]==0){
 	/* Found free */
 	table[index] = (unsigned long) theCell; 
-	DEBUG_AOA(fprintf(output, "\n"));
+	DEBUG_AOAtoIOA(fprintf(output, "\n"));
 	goto exit;
       }
       if (table[index]==(unsigned long) theCell){
 	/* Already there */
-	DEBUG_AOA(fprintf(output, "\n"));
+	DEBUG_AOAtoIOA(fprintf(output, "\n"));
 	goto exit;
       }
       index++;

@@ -110,6 +110,7 @@ do {                               \
 #define inHeap(x)    (inIOA(x) || inLVRA(x))
 #define inToSpace(x) (((long)ToSpace <= (long)(x)) && ((long)(x) < (long)ToSpaceTop)) 
 #define inAOA(x)     inArea(AOABaseBlock, (struct Object *)(x))
+#define inAOAUnused(x) inAreaUnused(AOABaseBlock, (struct Object *)(x))
 
 #define isSpecialProtoType(x) (((long)(MinPTValue) <= (long)(x)) && \
                                ((long)(x) <= (long)(MaxPTValue)))

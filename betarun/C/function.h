@@ -129,6 +129,9 @@ extern long Errno(void);
 extern ref(Block) newBlock(long);
 extern void freeBlock(ref(Block));
 extern long inArea(ref(Block), ref(Object));
+#ifdef RTDEBUG
+extern long inAreaUnused(ref(Block), ref(Object));
+#endif
 
 /* GC/objectsize.c */
 extern long ObjectSize(ref(Object));
@@ -208,7 +211,6 @@ extern ref(Object) CopyObjectToLVRA(ref(ValRep));
 #endif
 #ifdef RTDEBUG
 void LVRACheck(void);
-long LVRAAlive(ref(ValRep));
 #endif
 
 /* GC/misc.c */

@@ -47,7 +47,7 @@ long inArea( theBlock, theObj )
 }
 
 #ifdef RTDEBUG
-long inUnusedArea( theBlock, theObj )
+long inAreaUnused( theBlock, theObj )
   ref(Block)  theBlock;
   ref(Object) theObj;
 {

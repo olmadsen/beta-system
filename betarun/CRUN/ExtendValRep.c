@@ -179,11 +179,16 @@ ParamObjOffRange(ExtVR4)
   
   DEBUG_CODE(NumExtVR4++);
   Ck(theObj);
-  
+
   newRep = (struct ValRep *)0;
   theRep = *casthandle(ValRep) ((long *) theObj + offset);
   oldRange = theRep->HighBorder;
   newRange = oldRange + add; /* Range of new repetition */
+
+#ifdef RTDEBUG
+  if (oldRange<0) fprintf(output, "ExtVR4: negative oldRange %d\n", (int)oldRange);
+  if (add<0) fprintf(output, "ExtVR4: negative add %d\n", (int)add);
+#endif
   
   if (newRange < 0) newRange = 0;
   
