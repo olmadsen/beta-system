@@ -13,11 +13,14 @@ MDBODY nti     'basicsystemenv_nt'
 --- lib:attributes ---
 
 secondCounter:
-  (# now: @Integer; (* Seconds since something. *)
-  <<SLOT secoundCounterBody:dopart>>
+  (# now: @Real; (* Seconds since something. *)
+  <<SLOT secondCounterBody:dopart>>
   exit now
   #);
 
+--- TimeStamp:dopart ---
+do secondCounter->value
+   
 ---semP:descriptor---
 (# 
 do 
@@ -122,11 +125,19 @@ do
 (# do (if urgent.count>0 then urgent.V else mutex.V if) #)
    
 --- sleep:dopart ---
-do 
-   (if time > 0 then
+do (if time > 0 then
        theActive.ce[] -> theActive.q.delete;
        SE_SLEEPING -> theActive.shstatus;
        (theActive.ce[], time) -> private.sleeping.putSleeper;
+       private.sleeping[] -> theActive.q[];
+       SUSPEND;
+   if)
+   
+--- sleepUntil:dopart ---
+do (if time > secondCounter then
+       theActive.ce[] -> theActive.q.delete;
+       SE_SLEEPING -> theActive.shstatus;
+       (theActive.ce[], time) -> private.sleeping.putAbsSleeper;
        private.sleeping[] -> theActive.q[];
        SUSPEND;
    if)
@@ -145,7 +156,7 @@ do
                                 * systems are in some semaphore queue. *)
    sleeping: @sleepingQueue;   (* Sleeping systems.              *)
    
-   attNext: @Integervalue
+   attNext: @Realvalue
      (* Return values: 
       *   0: Ok, still something to do.
       *   1: All systems blocked. (Could mean deadlock)
@@ -154,7 +165,7 @@ do
       *  supposed to wake up in -value seconds. *)
      (# 
         sleeper, next: ^cyclicElm;
-        untilNextReady: @Integer;
+        untilNextReady: @Real;
         sys: ^|System;
         
      do run:
@@ -424,18 +435,23 @@ sleepingQueue: cyclicQueue
           INNER;
        #);
        
-     firstDue: @Integer;
+     firstDue: @Real;
      now: @secondCounter;
      
      putSleeper: @
-       (# sleepingTime: @Integer; 
+       (# sleepingTime: @Real; 
           elm, cur: ^cyclicElm;
        enter (elm[],sleepingTime)
-       do
-          now + sleepingTime -> elm.due;
+       do now + sleepingTime -> elm.due;
           (if elm.due=0 then 1 -> elm.due if);
-          
-          doput:
+          (elm[],sleepingTime)->putAbsSleeper;
+       #);
+     
+     putAbsSleeper: @
+       (# sleepingTime: @Real; 
+          elm, cur: ^cyclicElm;
+       enter (elm[],sleepingTime)
+       do doput:
             (if size=0 then
                 (elm[],NONE) -> insertBefore;
                 elm.due -> firstDue;
@@ -458,7 +474,7 @@ sleepingQueue: cyclicQueue
        #);
      
      getSleeper: @
-       (# elm: ^cyclicElm; untilNextReady: @Integer;
+       (# elm: ^cyclicElm; untilNextReady: @Real;
        do
           (if size=0 then
               none -> elm[]; 

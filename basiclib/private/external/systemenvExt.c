@@ -1,3 +1,6 @@
+/* Prototypes: */
+double getTimeAsDouble(void);
+
 #ifdef MAC
 
 #include <Events.h>
@@ -12,7 +15,14 @@ int getImRead(int thefile)
   		return 0;
 }
 
-void sleep(int secs)
+double getTimeAsDouble(void)
+{
+  /* FIXME!  Implement this correctly! */
+  return time(0);
+}
+
+
+void sleepDouble(double secs)
 {	
 	Boolean result;
 	EventRecord event;
@@ -25,13 +35,12 @@ void sleep(int secs)
 }
 
 
-void sleepUntil(int due)
+void ExtsleepUntil(double due)
 {
 	int now = time (0);
-  	if (due > now) sleep (due-now);
+  	if (due > now) sleepDouble (due-now);
 	return;
 }
-
 
 #else /* NOT MAC */
 
@@ -61,11 +70,26 @@ void sleepUntil(int due)
 #endif
 
 #ifdef nti
-  void sleep(long period)
-  {
-    Sleep(1000*period);
-  }
+double getTimeAsDouble(void)
+{
+  return ((double)GetTickCount())/1000;
+}
+
+void sleepDouble(double period)
+{
+  SleepEx((long)(1000*period),FALSE);
+}
 # define ioctl ioctlsocket
+#else
+void sleepDouble(double period)
+{
+  fd_set aset;
+  struct timeval tv;
+  FD_ZERO(&aset);
+  tv.tv_sec = period;
+  tv.tv_usec = 1000000*(period-tv.tv_sec);
+  select(0,&aset,&aset,&aset,&tv);
+}
 #endif
 
 
@@ -155,9 +179,10 @@ void sleepUntil(int due)
 #endif
 
 
-void sleepUntil (int due)
-{ int now = time (0);
-  if (due > now) sleep (due-now);
+void ExtsleepUntil (double due)
+{ 
+  double now = getTimeAsDouble();
+  if (due > now) sleepDouble (due-now);
 }
 
 int getStandardIn ()
