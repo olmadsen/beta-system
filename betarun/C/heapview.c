@@ -8,11 +8,11 @@ void PrintHeapUsage(char *prompt)
 
   fprintf(output, "Heap usage %s:\n", prompt);
   fprintf(output, 
-	  "  IOA:            %8d Kb\n", 
-	  (GLOBAL_IOA) ? (int)IOASize/1024 : 0);
+          "  IOA:            %8d Kb\n", 
+          (GLOBAL_IOA) ? (int)IOASize/1024 : 0);
   fprintf(output, 
-	  "  ToSpace:        %8d Kb\n", 
-	  (ToSpace) ? (int)IOASize/1024 : 0);
+          "  ToSpace:        %8d Kb\n", 
+          (ToSpace) ? (int)IOASize/1024 : 0);
   
   aoablocks = 0;
   if (AOABaseBlock){
@@ -29,12 +29,12 @@ void PrintHeapUsage(char *prompt)
   aoasize=totalAOASize;
 #endif
   fprintf(output, 
-	  "  AOA:            %8d Kb (%d blocks)\n", 
-	  (int)aoasize/1024, 
-	  (int)aoablocks);
+          "  AOA:            %8d Kb (%d blocks)\n", 
+          (int)aoasize/1024, 
+          (int)aoablocks);
   fprintf(output, 
-	  "  AOAtoIOA table: %8d Kb\n", 
-	  (int)AOAtoIOAtableSize*sizeof(long)/1024);
+          "  AOAtoIOA table: %8d Kb\n", 
+          (int)AOAtoIOAtableSize*sizeof(long)/1024);
   fflush(output);
 
   cbfablocks = 0;
@@ -47,9 +47,11 @@ void PrintHeapUsage(char *prompt)
   }
   cbfasize=CBFABlockSize*cbfablocks;
   fprintf(output, 
-	  "  CBFA:           %8d Kb (%d blocks)\n", 
-	  (int)cbfasize/1024,
-	  (int)cbfablocks);
+          "  CBFA:           %8d Kb (%d blocks, %d entries in use)\n", 
+          (int)cbfasize/1024,
+          (int)cbfablocks,
+          (int)NumCBFAEntries);
+
 
   fprintf(output, "\n"); 
   fflush(output);
@@ -77,7 +79,6 @@ typedef int *intptr;
 #define HeapInfoAOATotalSize  35
 #define HeapInfoAOATotalFree  36
 
-
 int getHeapInfo(int infoId)
 {
   switch (infoId) {
@@ -91,7 +92,7 @@ int getHeapInfo(int infoId)
     case HeapInfoCBFALimit : return (int)CBFALimit;
     case HeapInfoCBFATop : return (int)CBFATop;
     case HeapInfoCBFABlockSize : return (int)CBFABlockSize;
-    case HeapInfoCBFAsize : return (int)((int)CBFATop - (int)CBFA);
+    case HeapInfoCBFAsize : return (int)NumCBFAEntries;
     case HeapInfoAOABaseBlock : return (int)AOABaseBlock;
     case HeapInfoAOATopBlock : return  0; /* (int)AOATopBlock; */
     case HeapInfoAOABlockSize : return (int)AOABlockSize;

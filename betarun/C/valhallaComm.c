@@ -95,7 +95,7 @@ void valhalla_init_sockets (int valhallaport)
   self=dlopen(NULL, (RTLD_NOW | RTLD_GLOBAL) );
   if (!self) {
     fprintf(output, 
-	    "debuggee: dlopen(NULL) failed. Do NOT use dynamic compilation!\n");
+            "debuggee: dlopen(NULL) failed. Do NOT use dynamic compilation!\n");
   }
 #endif /* UNIX */
 #ifdef nti
@@ -104,10 +104,10 @@ void valhalla_init_sockets (int valhallaport)
   sock = valhalla_openActiveSocket (valhalla_inetAddrOfThisHost(),valhallaport);
   if (sock==-1) {
     fprintf (output, 
-	     "valhalla_init_sockets failed. errno=%d (%s)\n",
-	     errno,
-	     strerror(errno));
-	exit(0);
+             "valhalla_init_sockets failed. errno=%d (%s)\n",
+             errno,
+             strerror(errno));
+        exit(0);
   } else {
     valhalla_create_buffers ();
   }
@@ -365,14 +365,14 @@ void valhallaInit (int debug_valhalla)
     if (valhallaPID) {
 
       if (valhallaPID!=-1) {
-	fprintf (output,"Waiting for valhalla (pid=%d) to connect\n",valhallaPID);
-	valhallaID = malloc (20);
-	sprintf (valhallaID,"%d",(int)port);
-	valhalla_await_connection ();
+        fprintf (output,"Waiting for valhalla (pid=%d) to connect\n",valhallaPID);
+        valhallaID = malloc (20);
+        sprintf (valhallaID,"%d",(int)port);
+        valhalla_await_connection ();
       } else {
-	fprintf (output, "Could not fork\n");
-	shutdown (psock,2);
-	return;
+        fprintf (output, "Could not fork\n");
+        shutdown (psock,2);
+        return;
       }
       DEBUG_CODE(DebugValhalla = debug_valhalla);
       
@@ -383,8 +383,8 @@ void valhallaInit (int debug_valhalla)
       
       betalib = getenv ("BETALIB");
       if (!betalib) {
-	betalib="/usr/local/lib/beta";
-	DEBUG_VALHALLA(fprintf(output,"debuggee: BETALIB not found\n"));
+        betalib="/usr/local/lib/beta";
+        DEBUG_VALHALLA(fprintf(output,"debuggee: BETALIB not found\n"));
       }
       /*sprintf (valhallaname,"%s/%s",betalib,"bin/valhalla2.0");*/
       sprintf (valhallaname,"%s/%s",betalib,"debugger/v2.2.x/valhalla");
@@ -422,7 +422,7 @@ void valhallaInit (int debug_valhalla)
     case TERMINATE: exit (99);
     default:
       fprintf (output, "Unexpected return from valhallaCommunicate: %d \n",
-	       todo);
+               todo);
       exit (99);
     }
   }
@@ -448,9 +448,9 @@ void HandleStackCell(long returnAdr, Object *returnObj)
   valhalla_writeint ((int)returnObj);
   DEBUG_VALHALLA({
     fprintf(output,
-	    "debuggee: forEachStackEntry: returnAdr=%d, returnObj=%d\n",
-	    (int)returnAdr,
-	    (int)returnObj);
+            "debuggee: forEachStackEntry: returnAdr=%d, returnObj=%d\n",
+            (int)returnAdr,
+            (int)returnObj);
   });
 }
 
@@ -462,7 +462,7 @@ static void HasRefToCheck(REFERENCEACTIONARGSTYPE)
 {
   long ptr = (long)(*theCell);
   if ((long)HasRefToTarget <= ptr 
-      && ptr < (long)HasRefToTarget+HasRefToTargetSize) {
+      && ptr < (long)HasRefToTarget + HasRefToTargetSize) {
     HasRefToFlag = TRUE;
   }
 }
@@ -471,13 +471,13 @@ void HasRefDoObj(Object* obj)
 {
   ProtoType * proto;
   long size;
-  HasRefToFlag = 0;
+  HasRefToFlag = FALSE;
   scanObject(obj, HasRefToCheck, TRUE);
   if (HasRefToFlag) {
     proto = GETPROTO(obj);
     size = 4*ObjectSize(obj);
     DEBUG_VALHALLA(fprintf(output, "%08x %08x %5d\n", 
-			   (int)obj, (int)proto, (int)size));
+                           (int)obj, (int)proto, (int)size));
     valhalla_writeint((int)obj);
     valhalla_writeint((int)proto);
     valhalla_writeint((int)size);
@@ -488,14 +488,13 @@ void HasRefDoRef(Object** theCell)
 {
   ProtoType * proto;
   long size;
-  HasRefToFlag = 0;
   if (theCell) {
     if ((long)HasRefToTarget <= (long)*theCell
-	&& (long)*theCell < (long)HasRefToTarget + HasRefToTargetSize) {
+        && (long)*theCell < (long)HasRefToTarget + HasRefToTargetSize) {
       proto = NULL;
       size = 4;
       DEBUG_VALHALLA(fprintf(output, "%08x %08x %5d\n", 
-			     (int)theCell, (int)proto, (int)size));
+                             (int)theCell, (int)proto, (int)size));
       valhalla_writeint((int)theCell);
       valhalla_writeint((int)proto);
       valhalla_writeint((int)size);
@@ -548,7 +547,7 @@ INLINE void *valhalla_CopyCPP(Structure *struc, long *SP, Object *curobj)
   extern void HandleCB(void);
   DEBUG_CODE(NumCopyCPP++);
   if (!struc) return (void *)0 /* NULL function pointer given to C */;
-  /* Take the next free entry in the Call Back Functions Area.	*/
+  /* Take the next free entry in the Call Back Functions Area.  */
   /* This area is defined by 
    * [ lastCBFABlock->entries <= CBFATop < CBFALimit ].
    */
@@ -588,7 +587,7 @@ INLINE int findMentry (ProtoType *proto)
   DEBUG_VALHALLA (fprintf(output,"debuggee: findMentry\n"));  
   if (proto && proto->MpartOff){
 #ifdef MAC
-	return **(long **)((long)proto+proto->MpartOff);
+        return **(long **)((long)proto+proto->MpartOff);
 #else
     return *(long*)((long)proto+proto->MpartOff);
 #endif
@@ -601,51 +600,51 @@ INLINE int findMentry (ProtoType *proto)
 #ifdef MAC
 static void print_protos(group_header *gh)
 {
-	long* proto=&gh->protoTable[1];
-	int i, NoOfPrototypes;
-	ProtoType *current;
-	
-	NoOfPrototypes = gh->protoTable[0];
-	for (i=0; i<NoOfPrototypes; i++){
-		current = (ProtoType *) *proto;
-		if (current->MpartOff) {
-			fprintf(output, "%d\n", **(long **)((long)current+current->MpartOff));
-		}
-      	proto++;
+        long* proto=&gh->protoTable[1];
+        int i, NoOfPrototypes;
+        ProtoType *current;
+        
+        NoOfPrototypes = gh->protoTable[0];
+        for (i=0; i<NoOfPrototypes; i++){
+                current = (ProtoType *) *proto;
+                if (current->MpartOff) {
+                        fprintf(output, "%d\n", **(long **)((long)current+current->MpartOff));
+                }
+        proto++;
     }
   return;
 }
 
 static void adjust_header(group_header *gh)
 {
-	long* proto=&gh->protoTable[1];
-	long min = MAXINT;
-	long max = MININT;
-	long mpart;
-	long *code;
-	
-	int i, NoOfPrototypes;
-	ProtoType *current;
-	
-	NoOfPrototypes = gh->protoTable[0];
-	for (i=0; i<NoOfPrototypes; i++){
-		current = (ProtoType *) *proto;
-		if (current->MpartOff) {
-			mpart = **(long **)((long)current+current->MpartOff);
-			
-			if (mpart < min) {
-				min = mpart;
-			}
-			code = (long *) mpart;
-			while(*code != 0)
-				code++;
-			mpart = (long) code;
-			
-			if (mpart > max) {
-				max = mpart;
-			}
-		}
-      	proto++;
+        long* proto=&gh->protoTable[1];
+        long min = MAXINT;
+        long max = MININT;
+        long mpart;
+        long *code;
+        
+        int i, NoOfPrototypes;
+        ProtoType *current;
+        
+        NoOfPrototypes = gh->protoTable[0];
+        for (i=0; i<NoOfPrototypes; i++){
+                current = (ProtoType *) *proto;
+                if (current->MpartOff) {
+                        mpart = **(long **)((long)current+current->MpartOff);
+                        
+                        if (mpart < min) {
+                                min = mpart;
+                        }
+                        code = (long *) mpart;
+                        while(*code != 0)
+                                code++;
+                        mpart = (long) code;
+                        
+                        if (mpart > max) {
+                                max = mpart;
+                        }
+                }
+        proto++;
     }
     
     gh->code_start = min;
@@ -670,16 +669,16 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       valhalla_writeint (opcode);
       while ((current = NextGroup (current))) {
 #ifdef MAC
-	DEBUG_VALHALLA(print_protos(current));
-	adjust_header(current);
+        DEBUG_VALHALLA(print_protos(current));
+        adjust_header(current);
 #endif 
-	valhalla_writetext (NameOfGroupMacro(current));/* groupName */
-	valhalla_writeint ((int) current->data_start); 
-	valhalla_writeint ((int) current->data_end);   
-	valhalla_writeint ((int) current->code_start); 
-	valhalla_writeint ((int) current->code_end);   
-	valhalla_writeint ((int) current->unique_group_id.hash);       
-	valhalla_writeint ((int) current->unique_group_id.modtime);
+        valhalla_writetext (NameOfGroupMacro(current));/* groupName */
+        valhalla_writeint ((int) current->data_start); 
+        valhalla_writeint ((int) current->data_end);   
+        valhalla_writeint ((int) current->code_start); 
+        valhalla_writeint ((int) current->code_end);   
+        valhalla_writeint ((int) current->unique_group_id.hash);       
+        valhalla_writeint ((int) current->unique_group_id.modtime);
       }
       valhalla_writetext ("");
       valhalla_socket_flush ();
@@ -715,7 +714,7 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       int address;
       valhalla_writeint (opcode);
       while ((address = valhalla_readint ()))
-	valhalla_writeint ((* (int *) address));
+        valhalla_writeint ((* (int *) address));
       valhalla_socket_flush ();
     }
     break;
@@ -726,25 +725,25 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       
       DEBUG_VALHALLA(fprintf(output,"debuggee: Got object %d\n",(int) obj));
       if (obj && inBetaHeap(obj) && isObject(obj)){
-	legal=1;
+        legal=1;
       } else {
-	legal=0;
+        legal=0;
       }
       if (legal) {
-	address = (int) obj;
-	if ((GETPROTO(obj)) != (ComponentPTValue)) {
-	  DEBUG_VALHALLA(fprintf(output,"debuggee: Not ComponentPTValue\n"));
-	  if (obj->GCAttr == -6) {
-	    Component *comp = (Component *) (address - 24);
-	    DEBUG_VALHALLA(fprintf(output,"debuggee: GCAttr was -6\n"));
-	    if (GETPROTO(comp) == (ComponentPTValue)){
-	      address = address - 24;
-	    }
-	  }
-	}
+        address = (int) obj;
+        if ((GETPROTO(obj)) != (ComponentPTValue)) {
+          DEBUG_VALHALLA(fprintf(output,"debuggee: Not ComponentPTValue\n"));
+          if (obj->GCAttr == -6) {
+            Component *comp = (Component *) (address - 24);
+            DEBUG_VALHALLA(fprintf(output,"debuggee: GCAttr was -6\n"));
+            if (GETPROTO(comp) == (ComponentPTValue)){
+              address = address - 24;
+            }
+          }
+        }
       } else {
-	address=0;
-	DEBUG_VALHALLA(if (obj && !legal) fprintf(output,"debuggee: NOT object!\n"));
+        address=0;
+        DEBUG_VALHALLA(if (obj && !legal) fprintf(output,"debuggee: NOT object!\n"));
       }
       valhalla_writeint (opcode);
       valhalla_writeint (address);
@@ -781,11 +780,11 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       tableSize= (int) protoTable[0];
       
       for (i=1; i<=tableSize; i++) {
-	/* M entry point: */
-	valhalla_writeint (findMentry ((ProtoType *) protoTable[i]));
-	
-	valhalla_writeint (protoTable[i][1]); /* G entry point. */
-	valhalla_writeint (protoTable[i][4]); /* (formIndex,AstIndex) */
+        /* M entry point: */
+        valhalla_writeint (findMentry ((ProtoType *) protoTable[i]));
+        
+        valhalla_writeint (protoTable[i][1]); /* G entry point. */
+        valhalla_writeint (protoTable[i][4]); /* (formIndex,AstIndex) */
       };
       valhalla_writeint (opcode);
       
@@ -874,17 +873,17 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
        * "STACK LAYOUT at callback/gpart" in stack.c.
        */
       {
-	long SPoff /* size allocated on stack when theObj became active */;
-	DEBUG_STACK(fprintf(output, "VOP_EXECUTEOBJECT: Finding previous frame:\n"));
-	GetSPoff(SPoff, CodeEntry(GETPROTO(curObj), PC)); 
-	DEBUG_STACK({
-	  fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__);
-	  fprintf(output, "Old SP:      0x%x\n", SP);
-	  fprintf(output, "CodeEntry:   0x%x\n", CodeEntry(GETPROTO(curObj), PC));
-	  fprintf(output, "SPoff:       0x%x\n", SPoff);
-	  fprintf(output, "New SP:      0x%x\n", SP+SPoff);
-	});
-	SP = (long)SP+SPoff;
+        long SPoff /* size allocated on stack when theObj became active */;
+        DEBUG_STACK(fprintf(output, "VOP_EXECUTEOBJECT: Finding previous frame:\n"));
+        GetSPoff(SPoff, CodeEntry(GETPROTO(curObj), PC)); 
+        DEBUG_STACK({
+          fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__);
+          fprintf(output, "Old SP:      0x%x\n", SP);
+          fprintf(output, "CodeEntry:   0x%x\n", CodeEntry(GETPROTO(curObj), PC));
+          fprintf(output, "SPoff:       0x%x\n", SPoff);
+          fprintf(output, "New SP:      0x%x\n", SP+SPoff);
+        });
+        SP = (long)SP+SPoff;
       }
 #endif /* NEWRUN */
 
@@ -946,11 +945,11 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
 #if defined(sun4s) || defined(linux) 
       /* Not available for sgi - grrrr... */
       {
-	static Dl_info info;
-	if (dladdr((void*)addr, &info)){
-	  sym = info.dli_sname;
-	  off = (long)addr - (long)info.dli_saddr;
-	}
+        static Dl_info info;
+        if (dladdr((void*)addr, &info)){
+          sym = info.dli_sname;
+          off = (long)addr - (long)info.dli_saddr;
+        }
       }
 #else /* !sun4s */
       fprintf(output, "debuggee: VOP_LOOKUP_SYM_OFF: NYI\n");
@@ -979,8 +978,8 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
     break;
     case VOP_MAIN_PHYSICAL: {
       DEBUG_VALHALLA(fprintf(output,
-			     "VOP_MAIN_PHYSICAL()=0x%x",
-			     (int)getMainPhysical()));
+                             "VOP_MAIN_PHYSICAL()=0x%x",
+                             (int)getMainPhysical()));
       valhalla_writeint(opcode);
       valhalla_writeint(getMainPhysical());
       valhalla_socket_flush();
@@ -991,26 +990,26 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       long index, min, max, usecount, usesize, freecount, freesize;
       valhalla_writeint(opcode);
       DEBUG_VALHALLA({
-	fprintf(output, "   min  -   max   usecount  usesize"
-		" / freecount freesize\n");
+        fprintf(output, "   min  -   max   usecount  usesize"
+                " / freecount freesize\n");
       });
       for (index = 0;
-	   AOAFreeListIndexGetStat(index, &min, &max, 
-				   &usecount, &usesize,
-				   &freecount, &freesize);
-	   index++) {
-	DEBUG_VALHALLA({
-	  fprintf(output, "%08x-%08x %8d %8d /  %8d %8d\n",
-		  (int)min, (int)max, (int)usecount, 
-		  (int)usesize, (int)freecount, (int)freesize);
-	});
-	valhalla_writeint(index);
-	valhalla_writeint(min);
-	valhalla_writeint(max);
-	valhalla_writeint(usecount);
-	valhalla_writeint(usesize);
-	valhalla_writeint(freecount);
-	valhalla_writeint(freesize);
+           AOAFreeListIndexGetStat(index, &min, &max, 
+                                   &usecount, &usesize,
+                                   &freecount, &freesize);
+           index++) {
+        DEBUG_VALHALLA({
+          fprintf(output, "%08x-%08x %8d %8d /  %8d %8d\n",
+                  (int)min, (int)max, (int)usecount, 
+                  (int)usesize, (int)freecount, (int)freesize);
+        });
+        valhalla_writeint(index);
+        valhalla_writeint(min);
+        valhalla_writeint(max);
+        valhalla_writeint(usecount);
+        valhalla_writeint(usesize);
+        valhalla_writeint(freecount);
+        valhalla_writeint(freesize);
       }
       DEBUG_VALHALLA(fprintf(output, "-1\n"));
       valhalla_writeint(-1);
@@ -1036,52 +1035,52 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
 
       DEBUG_VALHALLA(fprintf(output, " address   proto    size\n"));
       for (current = (Object*)IOA;
-	   current < (Object*)IOATop;
-	   current = (Object*)((long)current + size)) {
-	proto = GETPROTO(current);
-	size = 4*ObjectSize(current);
-	DEBUG_VALHALLA(fprintf(output, "%08x %08x %5d\n", 
-			       (int)current, (int)proto, (int)size));
-	valhalla_writeint((int)current);
-	valhalla_writeint((int)proto);
-	valhalla_writeint((int)size);
+           current < (Object*)IOATop;
+           current = (Object*)((long)current + size)) {
+        proto = GETPROTO(current);
+        size = 4*ObjectSize(current);
+        DEBUG_VALHALLA(fprintf(output, "%08x %08x %5d\n", 
+                               (int)current, (int)proto, (int)size));
+        valhalla_writeint((int)current);
+        valhalla_writeint((int)proto);
+        valhalla_writeint((int)size);
       }
       if (current < (Object*)IOALimit) {
-	size = (long)IOALimit - (long)IOATop;
-	DEBUG_VALHALLA(fprintf(output, "%08x %08x %5d\n", 
-			       (int)IOATop, (int)0, (int)size));
-	valhalla_writeint((int)IOATop);
-	valhalla_writeint((int)0);
-	valhalla_writeint((int)size);
+        size = (long)IOALimit - (long)IOATop;
+        DEBUG_VALHALLA(fprintf(output, "%08x %08x %5d\n", 
+                               (int)IOATop, (int)0, (int)size));
+        valhalla_writeint((int)IOATop);
+        valhalla_writeint((int)0);
+        valhalla_writeint((int)size);
       }
       DEBUG_VALHALLA(fprintf(output, "0\n"));
       valhalla_writeint(0);
 
       for (currentBlock = AOABaseBlock;
-	   currentBlock;
-	   currentBlock = currentBlock -> next) {
-	for (current = (Object*)BlockStart(currentBlock);
-	     current < (Object*)currentBlock->limit;
-	     current = (Object*)((long)current + size)) {
-	  if (AOAISFREE(current)) {
-	    size = ((AOAFreeChunk*)current)->size;
-	    DEBUG_VALHALLA(fprintf(output, "%08x %08x %5d\n", 
-				   (int)current, (int)0, (int)size));
-	    valhalla_writeint((int)current);
-	    valhalla_writeint((int)0);
-	    valhalla_writeint((int)size);
-	  } else {
-	    proto = GETPROTO(current);
-	    size = 4*ObjectSize(current);
-	    DEBUG_VALHALLA(fprintf(output, "%08x %08x %5d\n", 
-				   (int)current, (int)proto, (int)size));
-	    valhalla_writeint((int)current);
-	    valhalla_writeint((int)proto);
-	    valhalla_writeint((int)size);
-	  }
-	}
-	DEBUG_VALHALLA(fprintf(output, "0\n"));
-	valhalla_writeint(0);
+           currentBlock;
+           currentBlock = currentBlock -> next) {
+        for (current = (Object*)BlockStart(currentBlock);
+             current < (Object*)currentBlock->limit;
+             current = (Object*)((long)current + size)) {
+          if (AOAISFREE(current)) {
+            size = ((AOAFreeChunk*)current)->size;
+            DEBUG_VALHALLA(fprintf(output, "%08x %08x %5d\n", 
+                                   (int)current, (int)0, (int)size));
+            valhalla_writeint((int)current);
+            valhalla_writeint((int)0);
+            valhalla_writeint((int)size);
+          } else {
+            proto = GETPROTO(current);
+            size = 4*ObjectSize(current);
+            DEBUG_VALHALLA(fprintf(output, "%08x %08x %5d\n", 
+                                   (int)current, (int)proto, (int)size));
+            valhalla_writeint((int)current);
+            valhalla_writeint((int)proto);
+            valhalla_writeint((int)size);
+          }
+        }
+        DEBUG_VALHALLA(fprintf(output, "0\n"));
+        valhalla_writeint(0);
       }
       DEBUG_VALHALLA(fprintf(output, "-1\n"));
       valhalla_writeint(-1);
@@ -1097,41 +1096,53 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
        */
       Object *current;
       Block *currentBlock;
-      Object* target = (Object*)valhalla_readint();
       long size;
-      if (!strongIsObject(target)) {
-	valhalla_writeint(-1);
-	break;
+      Object* target;
+
+      target = (Object*)valhalla_readint();
+      DEBUG_VALHALLA(fprintf(output, "Got target=%08x: ", (int)target));
+      if (!target ||  strongIsObject(target)) {
+        DEBUG_VALHALLA(fprintf(output, "Is object.\n"));
+        valhalla_writeint(opcode);
+      } else {
+        DEBUG_VALHALLA(fprintf(output, "Is not object\n"));
+        valhalla_writeint(-1);
+        break;
       }
-      valhalla_writeint(opcode);
-      HasRefToTarget = getRealObject(target);
-      HasRefToTargetSize = 4*ObjectSize(HasRefToTarget);
+
+      if (target) {
+        HasRefToTarget = getRealObject(target);
+        HasRefToTargetSize = 4*ObjectSize(HasRefToTarget);
+      } else {
+        HasRefToTarget = target;
+        HasRefToTargetSize = 4;
+      }
       
       DEBUG_VALHALLA(fprintf(output, " address   proto    size\n"));
       for (current = (Object*)IOA;
-	   current < (Object*)IOATop;
-	   current = (Object*)((long)current + size)) {
-	size = 4*ObjectSize(current);
-	HasRefDoObj(current);
+           current < (Object*)IOATop;
+           current = (Object*)((long)current + size)) {
+        size = 4*ObjectSize(current);
+        HasRefDoObj(current);
       }
       for (currentBlock = AOABaseBlock;
-	   currentBlock;
-	   currentBlock = currentBlock -> next) {
-	for (current = (Object*)BlockStart(currentBlock);
-	     current < (Object*)currentBlock->limit;
-	     current = (Object*)((long)current + size)) {
-	  if (!AOAISFREE(current)) {
-	    size = 4*ObjectSize(current);
-	    HasRefDoObj(current);
-	  } else {
-	    size = ((AOAFreeChunk*)current)->size;
-	  }
-	}
+           currentBlock;
+           currentBlock = currentBlock -> next) {
+        for (current = (Object*)BlockStart(currentBlock);
+             current < (Object*)currentBlock->limit;
+             current = (Object*)((long)current + size)) {
+          if (!AOAISFREE(current)) {
+            size = 4*ObjectSize(current);
+            HasRefDoObj(current);
+          } else {
+            size = ((AOAFreeChunk*)current)->size;
+          }
+        }
       }
       /* now the tricky part: check all refs outside objects: */
-      HasRefDoRef((Object**)ActiveComponent);
-      HasRefDoRef((Object**)BasicItem);
-      HasRefDoRef((Object**)LazyItem);
+      HasRefDoRef((Object**)&ActiveComponent);
+      HasRefDoRef((Object**)&BasicItem);
+      HasRefDoRef((Object**)&LazyItem);
        
       DEBUG_VALHALLA(fprintf(output, "0\n"));
       valhalla_writeint(0);
@@ -1143,22 +1154,22 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
     default:
       {
 #ifdef nti
-	char dirCh = '\\';
+        char dirCh = '\\';
 #else
-	char dirCh = '/';
+        char dirCh = '/';
 #endif
-	char *execname, *localname;
+        char *execname, *localname;
 
-	execname = ArgVector[0];
-	if ( (localname=strrchr(execname, dirCh)) ) 
-	  localname = &localname[1];
-	else
-	  localname = execname;
-	
-	fprintf (output, 
-		 "%s: Unexpected valhalla opcode: %d\n", 
-		 localname, 
-		 opcode);
+        execname = ArgVector[0];
+        if ( (localname=strrchr(execname, dirCh)) ) 
+          localname = &localname[1];
+        else
+          localname = execname;
+        
+        fprintf (output, 
+                 "%s: Unexpected valhalla opcode: %d\n", 
+                 localname, 
+                 opcode);
       }
     break;
     }
@@ -1179,9 +1190,9 @@ void forEachAlive (int handle, Object *address, DOTonDelete onDelete)
 {
   DEBUG_VALHALLA({
     fprintf (output,
-	     "debuggee: forEachAlive: handle=%d, address=%d \n", 
-	     (int)handle, 
-	     (int)address);
+             "debuggee: forEachAlive: handle=%d, address=%d \n", 
+             (int)handle, 
+             (int)address);
   });
   if (onDelete==DOTgarbageOnDelete) {
     valhalla_writeint ((int)handle);
@@ -1200,7 +1211,7 @@ void forEachAlive (int handle, Object *address, DOTonDelete onDelete)
  * is ready to serve requests. */
 
 int ValhallaOnProcessStop (long*  PC, long* SP, Object * curObj, 
-			   long sig, long errorNumber)
+                           long sig, long errorNumber)
 { 
   char *txt; int res;
   DEBUG_VALHALLA(fprintf(output,"debuggee: ValhallaOnProcessStop: PC=%d, SP=0x%x, curObj=%d,sig=%d,errorNumber=%d\n",(int) PC, (int) SP, (int) curObj, (int) sig, (int) errorNumber));
@@ -1253,7 +1264,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, Object * curObj,
   valhalla_writetext (txt);
 
   DEBUG_VALHALLA(fprintf(output,"debuggee: ValhallaOnProcessStop: errorText=%s\n",txt));
-			 
+                         
   valhalla_writeint (errorNumber);
   if (errorNumber<0) {
     txt = ErrorMessage (errorNumber);
