@@ -79,8 +79,6 @@ typedef struct ObjectRep{
     long            HighBorder;/* Higher bound of range       */
     ref(ProtoType)  iProto;    /* Prototype of objects in rep */
     ref(Object)     iOrigin;   /* Origin of objects in rep    */
-    long            isComp;    /* Is it component objects?    */
-    long            isDynamic; /* Objects allocated offline?  */
     long            Body[1];   /* The body part               */ 
 } ObjectRep;
 
