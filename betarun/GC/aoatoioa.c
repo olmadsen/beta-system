@@ -79,7 +79,7 @@ void AOAtoIOAInsert( theCell)
      handle( Object) theCell;
 {
     ptr(long) table = BlockStart( AOAtoIOAtable);
-    long      index, count;
+    unsigned long      index, count;
 
 #ifdef RTDEBUG
     if (!inAOA( theCell)) {
@@ -99,20 +99,20 @@ void AOAtoIOAInsert( theCell)
     DEBUG_AOA( Claim( inAOA( theCell),"AOAtoIOAInsert: theCell in AOA"));
     
     /* First Hash function. */
-    index = ((long) theCell) % AOAtoIOAtableSize;
-    if( table[index] == 0){ table[index] = (long) theCell; return; }
+    index = ((unsigned long) theCell) % AOAtoIOAtableSize;
+    if( table[index] == 0){ table[index] = (unsigned long) theCell; return; }
     if( table[index] == (long) theCell ) return;
     
     /* Second Hash function. */
-    index = (((long) theCell)<<4) % AOAtoIOAtableSize;
+    index = (((unsigned long) theCell)<<4) % AOAtoIOAtableSize;
     if( table[index] == 0 ){ table[index] = (long) theCell; return; }
-    if( table[index] == (long) theCell ) return;
+    if( table[index] == (unsigned long) theCell ) return;
     
     count = 0;
     while( count < 100 ){
-	count++; index = (count + (long) theCell) % AOAtoIOAtableSize;
+	count++; index = (count + (unsigned long) theCell) % AOAtoIOAtableSize;
 	if( table[index] == 0 ){ table[index] = (long) theCell; return; }
-	if( table[index] == (long) theCell ) return;
+	if( table[index] == (unsigned long) theCell ) return;
     }
     AOAtoIOAReAlloc();
     AOAtoIOAInsert( theCell);
