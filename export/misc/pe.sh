@@ -1,14 +1,24 @@
 #!/bin/sh
 
+PACKSYSTEM=yes
+PACKLIB=yes
+PACKOBJECTSERVER=yes
+PACKLIDSKJALV=yes
+
 export PACKSYSTEM
 export PACKLIB
-export PACKXT
 export PACKLIDSKJALV
+export PACKLIDSKJALV_XT
 export PACKOBJECTSERVER
 
 
-# === STANDARD SYSTEM ===
+# === PERSONAL EDITION SYSTEM ===
 
+DST=/users/beta/export/tarfiles/r3.1.1.pe
+if [ ! -d $DST ]; then mkdir $DST; fi
+DST=${DST}/${TARGET}
+if [ ! -d $DST ]; then mkdir $DST; fi
+export DST
 
 echo Removing existing tar/lst/cmd files:
 ls $DST/*
@@ -23,7 +33,11 @@ if [ "$PACKLIB" = "yes" ]; then
 fi
 
 if [ "$PACKXT" = "yes" ]; then
-   /users/beta/export/distribution/r3.1.1/misc/xt-pe.sh
+   /users/beta/export/distribution/r3.1.1/misc/xt.sh
+fi
+
+if [ "$PACKLIDSKJALV" = "yes" ]; then
+   /users/beta/export/distribution/r3.1.1/misc/lidskjalv.sh
 fi
 
 if [ "$PACKCONTRIB" = "yes" ]; then
