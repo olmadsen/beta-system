@@ -86,11 +86,11 @@ function onKey(e)
      }
      if (e.which==110) {
         // 'n'
-	if (next) window.location = next;
+	if (window.next) window.location = next;
      }
      if (e.which==112) {
         // 'p'
-	if (prev) window.location = prev;
+	if (window.prev) window.location = prev;
      }
      if (e.which==116) {
         // 't'
@@ -98,11 +98,11 @@ function onKey(e)
      }
      if (e.which==99) {
         // 'c'
-	if (content) window.location = content;
+	if (window.content) window.location = content;
      }
      if (e.which==105) {
         // 'i'
-	if (inx) window.location = inx;
+	if (window.inx) window.location = inx;
      }
      if (e.which==109) {
         // 'm'
@@ -110,7 +110,7 @@ function onKey(e)
      }
      if (e.which==63) {
         // '?'
-	if (help) window.open(help,'miadochelp','scrollbars=yes');
+	if (window.help) window.open(help,'miadochelp','scrollbars=yes');
      }
    } else if (document.all){
      if (event.keyCode==104) {
@@ -125,11 +125,11 @@ function onKey(e)
      }
      if (event.keyCode==110) {
         // 'n'
-	if (next) window.location = next;
+	if (window.next) window.location = next;
      }
      if (event.keyCode==112) {
         // 'p'
-	if (prev) window.location = prev;
+	if (window.prev) window.location = prev;
      }
      if (event.keyCode==116) {
         // 't'
@@ -137,19 +137,19 @@ function onKey(e)
      }
      if (event.keyCode==105) {
         // 'i'
-	if (inx) window.location = inx;
+	if (window.inx) window.location = inx;
      }
      if (event.keyCode==99) {
         // 'c'
-	if (content) window.location = content;
+	if (window.content) window.location = content;
      }
      if (event.keyCode==109) {
         // 'm'
-	if (manuals) window.location = manuals;
+	if (window.manuals) window.location = manuals;
      }
      if (event.keyCode==63) {
         // '?'
-	if (help) window.open(help,'miadochelp','scrollbars=yes');
+	if (window.help) window.open(help,'miadochelp','scrollbars=yes');
      }
    }
 }
