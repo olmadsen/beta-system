@@ -13,7 +13,7 @@
  *   #)
  */
 
-long  Argc(){ return ArgCount; }
+long  Argc(void){ return ArgCount; }
 
 /* Argv is an external described in "betaenvbody.bet"
  *   Argv: External
@@ -25,7 +25,9 @@ long  Argc(){ return ArgCount; }
  *  #) 
  */
 
-char *Argv(n) long n; { return ArgVector[n-1]; }
+char  *Argv(long n){ return ArgVector[n-1]; }
+
+char **Argvector(void){ return ArgVector; }
 
 #include <stdarg.h>
 void TraceXcall(long arg1, ...)
