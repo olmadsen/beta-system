@@ -85,15 +85,71 @@ void DESdestroy(DEStorage *des)
     free(des);
 }
 
+static void DESWriteAreaTable(DEStorage *des)
+{
+   /* Write header information */
+   Rewind(des -> fd);
+   writeLong(des -> fd, &des -> areaTable -> magic);
+   writeLong(des -> fd, &des -> areaTable -> storageTop);
+   writeLong(des -> fd, &des -> areaTable -> tableSize);
+   
+   /* Write table entries */
+   {
+      u_long count;
+      
+      for (count = 0; count < des -> areaTable -> tableSize; count++) {
+         AreaTableEntry *current;
+         
+         current = des -> areaTable -> table + count;
+         
+         writeLong(des -> fd, &current -> allocated);
+         writeLong(des -> fd, &current -> storageOffset);
+         writeLong(des -> fd, &current -> areaTop);
+         writeLong(des -> fd, &current -> areaSize);
+      }
+   }
+}
+                     
+static u_long DESReadAreaTable(DEStorage *des)
+{
+   readLong(des -> fd, &des -> areaTable -> magic);
+   
+   if (des -> areaTable -> magic == MAGIC) {
+      readLong(des -> fd, &des -> areaTable -> storageTop);
+      readLong(des -> fd, &des -> areaTable -> tableSize);
+      
+      if (des -> areaTable -> table == NULL) {
+         des -> areaTable -> table = (AreaTableEntry *)
+            malloc(sizeof(struct areaTableEntry) * des -> areaTable -> tableSize);
+
+         /* Read table entries */
+         {
+            u_long count;
+            
+            for (count = 0; count < des -> areaTable -> tableSize; count++) {
+               AreaTableEntry *current;
+               
+               current = des -> areaTable -> table + count;
+               
+               readLong(des -> fd, &current -> allocated);
+               readLong(des -> fd, &current -> storageOffset);
+               readLong(des -> fd, &current -> areaTop);
+               readLong(des -> fd, &current -> areaSize);
+            }
+         }
+         return 0;
+      } else {
+         return ACCESSERRORERROR;
+      }
+   } else {
+      return ACCESSERRORERROR;
+   }
+}
+
 void DESflush(DEStorage *des)
 {
-    Rewind(des -> fd);
-    writeLong(des -> fd, &des -> areaTable -> magic);
-    writeLong(des -> fd, &des -> areaTable -> storageTop);
-    writeLong(des -> fd, &des -> areaTable -> tableSize);
-    writeSome(des -> fd,
-              des -> areaTable -> table,
-              des -> areaTable -> tableSize * sizeof(struct areaTableEntry));
+   /* Writes the state of the areatable to disk */
+   DESWriteAreaTable(des);
 }
 
 u_long /* error code */ DESattach(DEStorage *des,
@@ -113,44 +169,10 @@ u_long /* error code */ DESattach(DEStorage *des,
                            , S_IWRITE | S_IREAD)) < 0) {
                return ACCESSERRORERROR;
             } else {
-               u_long magic;
-               
-               readLong(fd, &magic);
-               if (magic == MAGIC) {
-                  u_long storageTop;
-                  u_long tableSize;
-                  
-                  /* Chances are that we have opened an existing storage area. */
-                  des -> host = strdup(host);
-                  des -> path = strdup(path);
-                  des -> fd = fd;
-                  
-                  if (des -> areaTable) {
-                     readLong(fd, &storageTop);
-                     readLong(fd, &tableSize);
-              
-                     if (des -> areaTable -> table == NULL) {
-                        des -> areaTable -> magic = magic;
-                        des -> areaTable -> storageTop = storageTop;
-                        des -> areaTable -> tableSize = tableSize;
-                        
-                        des -> areaTable -> table = (AreaTableEntry *)
-                           malloc(sizeof(struct areaTableEntry) * tableSize);
-                        
-                        readSome(fd, 
-                                 des -> areaTable -> table, 
-                                 sizeof(struct areaTableEntry) * tableSize);
-                        return 0;
-                        
-                     } else {
-                        return ACCESSERRORERROR;
-                     }
-                  } else {
-                     return ACCESSERRORERROR;
-                  }
-               } else {
-                  return ACCESSERRORERROR;
-               }
+               des -> host = strdup(host);
+               des -> path = strdup(path);
+               des -> fd = fd;
+               return DESReadAreaTable(des);
             }
          } else {
             return NOTFOUNDERROR;
@@ -408,14 +430,8 @@ static u_long create(DEStorage *des,
                sizeof(u_long) * 3 +
                sizeof(struct areaTableEntry) * DEFAULTTABLESIZE;
         
-            writeLong(fd, &des -> areaTable -> magic);
-            writeLong(fd, &des -> areaTable -> storageTop);
-            writeLong(fd, &des -> areaTable -> tableSize);
-	
-            writeSome(fd, 
-                      des -> areaTable -> table, 
-                      sizeof(struct areaTableEntry) * DEFAULTTABLESIZE);
-        
+            DESWriteAreaTable(des);
+            
             /* The storage is not appended to the file at this point. It
              * will be created by the operating system as it is accessed.
              */

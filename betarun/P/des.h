@@ -11,7 +11,7 @@
  */
 
 typedef struct areaTableEntry {
-  short allocated;
+  u_long allocated;
   u_long storageOffset;
   u_long areaTop;
   u_long areaSize;
