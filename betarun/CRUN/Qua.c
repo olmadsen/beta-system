@@ -25,10 +25,10 @@ asmlabel(Qua,
 	 );
 
 #ifdef hppa
-void Qua(struct Object **theCell,
-	 ref(Object) this, 
-	 ref(ProtoType) dstQuaProto,
-	 ref(Object) dstQuaOrigin)
+void Qua(ref(ProtoType) dstQuaProto,
+	 struct Object **theCell,
+	 ref(Object) dstQuaOrigin,
+	 ref(Object) this)
 #else
 void CQua(ref(Object) dstQuaOrigin,
 	  struct Object **theCell,
@@ -44,7 +44,7 @@ void CQua(ref(Object) dstQuaOrigin,
 #ifdef hppa
   this = cast(Object)getThisReg();
   dstQuaProto = cast(ProtoType)getCallReg();
-  dstQuaOrigin = cast(Object)getOriginReg();
+  /*dstQuaOrigin = cast(Object)getOriginReg();*/
 #endif
 
   src = *theCell;
