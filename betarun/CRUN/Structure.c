@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Structure.c,v 1.24 1992-10-23 15:24:32 beta Exp $
+ * Mod: $Id: Structure.c,v 1.25 1992-10-28 14:40:26 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -119,15 +119,6 @@ int NeS(ref(Structure) arg1, ref(Structure) arg2)
   return !EqS(arg1, arg2);
 }
 
-int LtS(ref(Structure) arg1, ref(Structure) arg2)
-{
-  GCable_Entry();
-  
-  Ck(arg1); Ck(arg2);
-  return GtS(arg2, arg1);
-}
-
-
 int LeS(ref(Structure) arg1, ref(Structure) arg2)
 { 
   GCable_Entry();
@@ -147,6 +138,15 @@ int GeS(ref(Structure) arg1, ref(Structure) arg2)
 
 int GtS(ref(Structure) arg1, ref(Structure) arg2)
 {
+  GCable_Entry();
+  
+  Ck(arg1); Ck(arg2);
+  return LtS(arg2, arg1);
+}
+
+
+int LtS(ref(Structure) arg1, ref(Structure) arg2)
+{
   ref(ProtoType) proto1;
   ref(ProtoType) proto2;
   DeclReference1(struct Item *, newObject);
@@ -163,37 +163,37 @@ int GtS(ref(Structure) arg1, ref(Structure) arg2)
   if (proto1 == proto2)
     return 0;
 
-  if (proto1->Prefix == proto1) /* proto1 is Object## */
+  if (proto2->Prefix == proto2) /* proto2 is Object## */
     return 1;
   
-  /* Prefix of proto2 is the first try */
+  /* Prefix of proto1 is the first try */
   
-  for (proto2 = proto2->Prefix;
-       proto2 != proto2->Prefix; /* proto2 != Object## */
-       proto2 = proto2->Prefix) {
+  for (proto1 = proto1->Prefix;
+       proto1 != proto1->Prefix; /* proto1 != Object## */
+       proto1 = proto1->Prefix) {
 	 if (proto1 == proto2) {
 	   /* Now there is some hope, now we need to check if origins are equal. */
 	   
-	   if (proto1->OriginOff == arg2->iProto->OriginOff){
+	   if (proto2->OriginOff == arg1->iProto->OriginOff){
 	     /* The prototypes have same origin offset (same prefix level), so
 		the result is (arg1->iOrigin == arg2->iOrigin) */
 	     return arg1->iOrigin == arg2->iOrigin;
 	   }
 	   
 	   /* If proto1 and proto2 has different Origin Prefix
-	    * we need to generate an object from arg2 and then
+	    * we need to generate an object from arg1 and then
 	    * test the resulting origin from the new object.
 	    *   
 	    * We need to generate a new item, as this is currently the only
 	    * way we can get the origin.
 	    * The problem is that there are several origins (one per prefixlevel).
-	    * So we generate an object corresponding to arg2 and find the origin
-	    * at the offset determined *by the prefix* (proto1). This should be the
-	    * same as origin of arg1.
+	    * So we generate an object corresponding to arg1 and find the origin
+	    * at the offset determined *by the prefix* (proto2). This should be the
+	    * same as origin of arg2.
 	    */
 	   
-	   Protect(arg1, newObject = CAlloSI(arg2));
-	   return cast(Object)((long*)newObject)[proto1->OriginOff] == (arg1->iOrigin);
+	   Protect(arg2, newObject = CAlloSI(arg1));
+	   return cast(Object)((long*)newObject)[proto2->OriginOff] == (arg2->iOrigin);
 	 }
        }
   return 0; 
