@@ -547,7 +547,7 @@ void ProcessObject(theObj)
   
   theProto = theObj->Proto;
   
-  if( isNegativeRef(theProto) ){  
+  if( isSpecialProtoType(theProto) ){  
     switch( (long) theProto ){
     case (long) ByteRepPTValue:
     case (long) WordRepPTValue:
@@ -778,7 +778,7 @@ void ProcessAOAObject(theObj)
   
   theProto = theObj->Proto;
   
-  if( isNegativeRef(theProto) ){  
+  if( isSpecialProtoType(theProto) ){  
     switch( (long) theProto ){
     case (long) ByteRepPTValue: 
     case (long) WordRepPTValue: 
@@ -1019,7 +1019,7 @@ void IOACheckObject (theObj)
     Claim( !inBetaHeap((ref(Object))theProto),
 	  "#IOACheckObject: !inBetaHeap(theProto)");
     
-    if( isNegativeRef(theProto) ){  
+    if( isSpecialProtoType(theProto) ){  
       switch( (long) theProto ){
       case (long) ByteRepPTValue:
       case (long) WordRepPTValue:

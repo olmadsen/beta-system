@@ -505,7 +505,7 @@ static void FollowObject(ref(Object) theObj)
   
   theProto = theObj->Proto;
   
-  if( isNegativeRef(theProto) ){  
+  if( isSpecialProtoType(theProto) ){  
     switch( (long) theProto ){
     case (long) ByteRepPTValue:
     case (long) WordRepPTValue:
@@ -767,7 +767,7 @@ static void handleAliveStatic(ref(Object) theObj, ref(Object) freeObj)
   theObj->GCAttr = (long) theCell; /* Save forward pointer to Phase3. */
   DEBUG_AOA( Claim( theObj->GCAttr < 0, "handleAliveStatic:  theObj->GCAttr < 0"));
   
-  if( !isNegativeRef(theProto)){
+  if( !isSpecialProtoType(theProto)){
     /* theObj is an item. */
     /* Calculate a pointer to the GCTable inside the ProtoType. */
     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
@@ -805,7 +805,7 @@ static void handleAliveObject(ref(Object) theObj, ref(Object) freeObj)
 		   "handleAliveObject:  chainEnd == 0 or 1"));
   theObj->GCAttr = (long) freeObj; /* Save forward pointer to Phase3. */
   
-  if( !isNegativeRef(theProto)){
+  if( !isSpecialProtoType(theProto)){
     /* theObj is an item. */
     /* Calculate a pointer to the GCTable inside the ProtoType. */
     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
@@ -1125,7 +1125,7 @@ void AOACheckObject( theObj)
   Claim( !inBetaHeap((ref(Object))theProto),
 	"#AOACheckObject: !inBetaHeap(theProto)");
   
-  if( isNegativeRef(theProto) ){  
+  if( isSpecialProtoType(theProto) ){  
     switch( (long)  theProto ){
     case (long) ByteRepPTValue:
     case (long) WordRepPTValue:
@@ -1384,7 +1384,7 @@ void AOACheckObjectSpecial( theObj)
   Claim( !inBetaHeap((ref(Object))theProto),
 	"#AOACheckObjectSpecial: !inBetaHeap(theProto)");
   
-  if( isNegativeRef(theProto) ){  
+  if( isSpecialProtoType(theProto) ){  
     switch( (long) theProto ){
     case (long) ByteRepPTValue:
     case (long) WordRepPTValue:
@@ -1450,6 +1450,8 @@ void AOACheckObjectSpecial( theObj)
        * dynamic offset table masked out. As offsets in this table are
        * always multiples of 4, these bits may be used to distinguish
        * different reference types. */ 
+      
+      /* FIXME: no objects checked here?? */
     }
   }
 }

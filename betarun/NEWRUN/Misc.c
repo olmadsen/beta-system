@@ -50,12 +50,6 @@ void FailureExit()
   BetaError(StopCalledErr, GetThis(BetaStackTop[0]), BetaStackTop[0], 0);
 }
 
-
-void HandleIndexErr(long *SP, struct Object *this)
-{
-    BetaError(RepRangeErr, this, SP, 0);
-}
-
 /* RefNone always referenced by betaenv, but not called on platforms,
  * that use traps to check refnone.
  */

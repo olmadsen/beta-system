@@ -6,7 +6,7 @@
 #include "beta.h"
 #include "crun.h"
 
-void CopyRR(struct ValRep *theRep,
+void CopyRR(struct RefRep *theRep,
 	    struct Object *theObj,
 	    unsigned offset /* in longs */,
 	    long *SP

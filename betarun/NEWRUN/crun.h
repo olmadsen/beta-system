@@ -24,7 +24,7 @@ extern void		    AlloVR8(struct Object* theObj, unsigned offset, int range, long
 extern void                 AlloORR (struct Object *origin, struct ProtoType *proto, struct Object *theObj, unsigned offset, int range, long *SP);
 extern void                 AlloORRC(struct Object *origin, struct ProtoType *proto, struct Object *theObj, unsigned offset, int range, long *SP);
 extern struct ValRep *	    CopyCT(unsigned char *textPtr, long *SP);
-extern void 		    CopyRR(struct ValRep *theRep, struct Object* theObj, unsigned offset, long *SP);
+extern void 		    CopyRR(struct RefRep *theRep, struct Object* theObj, unsigned offset, long *SP);
 extern void 		    CopySRR(struct RefRep *theRep, struct Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
 extern void 		    CopySVR(struct ValRep *theRep, struct Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
 extern struct Item *	    CopyT(char *asciz, struct Item *theItem, unsigned offset, long *SP);
