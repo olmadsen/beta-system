@@ -228,4 +228,222 @@ CpkSVT: public
      pop RegAdr, AddrReg2, AddrReg1;
      (if debug then call Ck if);
      return;
+  #);
+
+CpkVT_W: public
+  (#
+     { Input variable. }
+     repArg:      Repetition = DataReg1; {pReg1 in Intel version}
+     
+     { Used variables. }
+     a1:          Long       = RegCall;
+     theRep:      Repetition = RegCall;
+     theTextAddr: DataArea   = AddrReg2;
+     FreeSpace:   Long       = DataReg1;
+     nextText:    DataArea   = AddrReg1;
+     BodySize:    Long       = DataReg2;
+     index:       Long       = RegAdr; { Saved/restored }
+     Value:       Long       = DataReg1;
+     stack:   StackArea  = SP;
+  do 
+     {
+       General stack layout:
+       <a1>                +0
+       <DataReg2>          +4
+       <AddrReg2>          +8
+       <AddrReg1>          +12
+       <return address>    +16 
+       <C argument>        +20 
+     }
+     
+     (if debug then call Ck if);
+     (if debug then 1 -> NumCpkVT+ if); 
+
+     pReg1 -> DataReg1;
+     
+     {Reserve room for C argument below return address}
+     4 -> stack-; 
+     stack[4] -> stack[0]; { Copy return address }
+     
+     push AddrReg1, AddrReg2, DataReg2;
+     
+     push a1;
+     repArg -> theRep;
+     
+     { Compute the text start point. }
+     CTextPoolEnd -> theTextAddr;
+     
+     { Check range overflow on CTextPool.                               }
+     { nextText is used as a tmp. register only.                        }
+     { Size_left_in_CTextPool = (Adr(CTextPool) + MAXCTEXTPOOL) - CTextPoolEnd. }
+     CTextPool[] -> nextText;
+     nextText -> FreeSpace;
+     MAXCTEXTPOOL -> FreeSpace+;
+     CTextPoolEnd -> FreeSpace-;
+     
+     theRep.HighBorder -> BodySize;
+     2 -> BodySize*;
+     
+     (if FreeSpace < BodySize then
+         { No need to adjust stack - BetaError uses BetaStackTop in this case }
+         push RegThis; 
+         push CTextPoolErr; 
+         call BetaError;
+     if);
+     
+     push RegAdr;
+     
+     { Copy the contents of the repetition to the CTextPool. }
+     (if BodySize <> 0 then
+         0 -> index;
+         0 -> Value;
+         loop:
+         theRep[16+index]!b -> Value!w; 
+         Value!w -> theTextAddr[index*2]!w;
+         1 -> index+;
+         (if index < BodySize then goto loop if)
+     if);
+     
+     pop RegAdr;
+     
+     { Update CTextPool. }
+     theTextAddr[BodySize][] -> nextText;
+     nextText -> CTextPoolEnd;
+     
+     {Install C argument}
+     theTextAddr -> stack[20];
+     
+     pop a1;
+     pop DataReg2, AddrReg2, AddrReg1;
+     (if debug then call Ck if);
+     return;
+  #);
+
+
+
+CpkSVT_W: public
+  (#
+     { Input variables. }
+     repArg:      Repetition = DataReg1; {pReg1 in Intel version}
+     low:         Long       = DataReg2; {pReg2 in Intel version}
+     high:        Long       = RegAdr;   {pReg3 in Intel version}
+     
+     { Used variables. }
+     a1:          Long       = RegCall;
+     theRep:      Repetition = RegCall;
+     theTextAddr: DataArea   = AddrReg2;
+     FreeSpace:   Long       = DataReg2;
+     nextText:    DataArea   = AddrReg1;
+     BodySize:    Long       = DataReg1; 
+     index:       Long       = DataReg2;
+     Value:       Byte       = DataReg1;
+     PC:          Long       = DataReg1;
+     stack:   StackArea  = SP;
+  do 
+     {
+       General stack layout:
+       <a1>                +0 
+       <RegAdr>            +4
+       <AddrReg2>          +8
+       <AddrReg1>          +12
+       <return address>    +16
+       <C argument>        +20
+     }
+     
+     (if debug then 1 -> NumCpkSVT+ if); 
+     (if debug then call Ck if);
+     
+     {Reserve room for C argument below return address}
+     4 -> stack-; 
+     stack[4] -> stack[0]; { Copy return address }
+
+     push AddrReg1, AddrReg2, RegAdr;
+     
+     pReg1 -> DataReg1; pReg2 -> DataReg2; pReg3 -> RegAdr;
+
+     push a1;
+     repArg -> theRep;
+     
+     { Check bounds and transform high into number of bytes to copy }
+     (if low  < theRep.LowBorder then 
+         low -> RangeErr;
+         theRep.HighBorder -> RangeMax;
+         20 -> stack+; 
+         pop  PC;
+         { Remove 3 registers pushed by compiler before calling CInitT }
+         12 -> stack+;
+         push PC;
+         push RegThis; 
+         push RepLowRangeErr; 
+         call BetaError;
+     if);
+     (if high > theRep.HighBorder then 
+         high -> RangeErr;
+         theRep.HighBorder -> RangeMax;
+         20 -> stack+; 
+         pop  PC;
+         { Remove 3 registers pushed by compiler before calling CInitT }
+         12 -> stack+;
+         push PC;
+         push RegThis; 
+         push RepHighRangeErr; 
+         call BetaError;
+     if);
+     low  -> high-; 1 -> high+;
+     (if high < 0 then 0 -> high if);
+     
+     { Compute the text start point. }
+     CTextPoolEnd -> theTextAddr;
+     
+     { Check range overflow on CTextPool.                               }
+     { nextText is used as a tmp. register only.                        }
+     { Size_left_in_CTextPool = (Adr(CTextPool) + MAXCTEXTPOOL) - CTextPoolEnd. }
+     
+     push low; {Save low; is about to be destroyed by FreeSpace assignment}
+     
+     CTextPool[] -> nextText;
+     nextText -> FreeSpace;
+     MAXCTEXTPOOL -> FreeSpace+;
+     CTextPoolEnd -> FreeSpace-;
+     
+     high -> BodySize;
+     2 -> BodySize*;
+     (if FreeSpace < BodySize then
+         { No need to adjust stack - BetaError uses BetaStackTop in this case }
+         push RegThis; 
+         push CTextPoolErr; 
+         call BetaError;
+     if);
+     
+     pop low; {Restore low; finished using FreeSpace}
+     
+     { Copy the contents of the repetition to the CTextPool. }
+     (if high <> 0 then
+         1 -> low-;
+         theRep[low][] -> theRep; { Start at low. }
+         0 -> index;
+         0 -> Value;
+         push BodySize; {Save BodySize; is about to be destroyed by Value assignment}
+         loop:
+         theRep[16+index]!b -> Value!w; { copy as bytes }
+         Value!w -> theTextAddr[index*2]!w;
+         1 -> index+;
+         (if index < high then goto loop if);
+         pop BodySize; {Restore Bodysize; finished using Value}
+     if);
+     (if false then
+         0 -> theTextAddr[high]!b; { NULL termination }
+     if);
+     
+     { Update CTextPool. }
+     theTextAddr[BodySize][] -> nextText;
+     nextText -> CTextPoolEnd;
+     
+     {Install C argument}
+     theTextAddr -> stack[20];
+     
+     pop  a1;
+     pop RegAdr, AddrReg2, AddrReg1;
+     (if debug then call Ck if);
+     return;
   #)

@@ -159,5 +159,167 @@ CopyT: public
      pop BodySize { skip };
      pop Range;
      goto again
+  #);
+
+
+
+
+CopyT_W: public
+  (#
+     { Allocate a (short)ValueRepetition and initialize it with some wide text.    }
+     { Stack on entry: <return address>,<offset>,<item>,<asciiz> }
+     
+     { Used variables. }
+     stack:   StackArea  = SP;
+     theText: CodeArea   = AddrReg1; { Address to the ascii text. }
+     newTop:  DataArea   = AddrReg1;
+     theCell: DataArea   = AddrReg1;
+     newRep:  Repetition = AddrReg2;
+     Range:   Long       = DataReg1; { The range of the valRep. }
+     BodySize: Long      = DataReg2; { number of bytes to allocate }
+     Value:   Long       = DataReg2;
+     offset:  Long       = DataReg2
+  do
+     (if debug then 1 -> NumCopyT+ if); 
+     (if debug then call Ck if);
+ 
+     {
+       General stack layout:
+       <DataReg2>          +0 
+       <DataReg1>          +4 
+       <AddrReg2>          +8 
+       <AddrReg1>          +12
+       <return address>    +16 
+       <offset>            +20
+       <item>              +24
+       <asciiz>            +28 
+     }			   
+          
+     push AddrReg1, AddrReg2, DataReg1, DataReg2;
+     
+     { Calculate the length of the text. }
+     stack[28] -> theText;
+     0 -> Range;
+     goto LoopB;
+     LoopA: 1  -> Range+;
+     LoopB: (if theText[Range]!b <> 0 then goto LoopA if);
+     
+     (if debug then
+         (if do_unconditional_GC then
+             { See general comment in AllocateItem.run }
+             IOATop -> newRep;
+             Range -> BodySize;
+             2 -> BodySize*;
+             ObjectAlign -> BodySize|;
+             newRep[16+BodySize][] -> newTop;
+             goto GC;
+         if);
+     if);
+     
+     again:
+     
+     (if Range > LARGE_REP_SIZE then
+         push RegThis, RegCall; { save registers }
+         push Range; { Parameters to LVRAAlloc. }
+         push ShortRepPTValue; { Parameters to LVRAAlloc. }
+         call LVRAAlloc;
+         DataReg1 -> newRep;
+         4 -> SP+;
+         pop  Range;
+         pop  RegCall, RegThis;
+	 (if newRep = 0 then 
+             Range -> BodySize;
+             2 -> BodySize*;
+             ObjectAlign -> BodySize|;
+	     goto GC;
+	 if);
+         goto copyBody
+     if);
+     
+     { Stack:
+       <General stack layout>
+     }
+     
+     IOAAlloc:
+    
+     { Allocate a value repetition with bodysize = ((range*2+3)/4)*4 bytes }
+     IOATop -> newRep;
+     Range -> BodySize;
+     2 -> BodySize*;
+     ObjectAlign -> BodySize|;
+     newRep[16+BodySize][] -> newTop;
+     (if newTop > IOALimit then goto GC if);
+     newTop -> IOATop;
+     
+     { The new Object is now allocated, but not initialized yet!}
+     
+     { Initialize the structual part of the valrep.             }
+     ShortRepPTValue -> newRep.ProtoType;
+     (if IOAMinAge<>0 then
+         IOAMinAge -> newRep.GCAttr;
+     if);
+     1     -> newRep.LowBorder;
+     Range -> newRep.HighBorder;
+     
+     copyBody:
+     
+     stack[28] -> theText;
+     
+     { Assign the text to the body part of the repetition. }
+     (if Range <> 0 then
+         0 -> Value;
+         1 -> Range-;
+         loop:
+         theText[Range]!b -> Value!w;
+         Value!w -> newRep[16+Range*2]!w;
+         1 -> Range-;
+         (if FLAGS >= 0 then goto loop if)
+     if);
+     
+     stack[24] -> theCell;
+     stack[20]  -> offset;
+      
+     theCell[offset*4][] -> theCell;
+     newRep -> theCell[0];
+     
+     (if call_chkra_unconditionally then
+         call ChkRA_EBP;
+      else
+         (if theCell outside IOA then  { The theCell resides in AOA. }
+             push theCell;
+             call ChkRA { No need to remove parameter. }
+         if);
+     if);
+     
+     pop DataReg2, DataReg1, AddrReg2, AddrReg1;
+     (if debug then call Ck if);
+     return 12;
+     
+     GC:
+     { The IOA heap is full, so we need a garbage collection }
+     { Set the requested Object Size }
+     4 -> BodySize/;
+     4 -> BodySize+;
+     BodySize -> ReqObjectSize;
+     { Protect the calculated range during GC so that we do not
+       have to recalculate it after GC.
+     }
+     push Range;
+     push Protect3Tag; { protect Range, DataReg1, and DataReg2 }
+     { Stack:
+       <tag3>
+       <Range>
+       <General stack layout>
+       - data registers are tagged properly.
+     }
+     { newTop, newRep points inside IOA to unallocated chunk }
+     0 -> newTop;
+     0 -> newRep;
+     { Call the Garbage Collector }
+     call doGC;
+     { Skip tag and restore range }
+     pop BodySize { skip };
+     pop Range;
+     goto again
   #)
 

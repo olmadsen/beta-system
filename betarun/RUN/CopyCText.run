@@ -166,4 +166,149 @@ CopyCT: public
        <general stack layout>
      }
      goto again
+  #);
+
+CopyCT_W: public
+  (#
+     { Allocate a (short)ValueRepetition and initialize it with some wide text. }
+     
+     { FIXME: Should be eliminated: Use CopyT_W instead }
+     
+     { Input variable. }
+     textPtr: Long       = DataReg1; { Address to the ascii text. }
+     
+     { Output variable. }
+     theRep:  Repetition = DataReg1; { The allocated repetition. }
+                                     {pReg1 in Intel version}
+     
+     { Used variable.  }
+     theText: CodeArea   = AddrReg1; { The ascii text. }
+     Range:  Long 	 = DataReg1; { The range of the valRep. }
+     BodySize: Long      = DataReg2; { number of bytes to allocate }
+     Value: Long         = DataReg1;
+     newTop: DataArea    = AddrReg1;
+     newRep: Repetition  = AddrReg2
+  do
+     (if debug then 1 -> NumCopyCT+ if); 
+     (if debug then call Ck if);
+     
+     { 
+       General stack layout:
+       <DataReg2>
+       <AddrReg2>
+       <AddrReg1>
+       ... 
+     }
+     
+     push AddrReg1, AddrReg2, DataReg2;
+     push textPtr; {Save original input parameter}
+     
+     { stack:
+       <textPtr>
+       <general stack layout>
+     }
+     
+     textPtr -> theText;
+     { Calculate the length of the text. }
+     0 -> Range;
+     (if theText=0 then goto NULL if);
+     goto LoopB;
+     LoopA: 1  -> Range+;
+     LoopB: (if theText[Range]!b <> 0 then goto LoopA if);
+     NULL:
+     
+     { FIXME: LVRA missing }
+     
+     (if debug then
+         (if do_unconditional_GC then
+             { See general comment in AllocateItem.run }
+             IOATop -> newRep;
+             Range -> BodySize;
+             2 -> BodySize*;
+             ObjectAlign -> BodySize|;
+             newRep[16+BodySize][] -> newTop;
+             goto GC;
+         if);
+     if);
+
+     again:
+
+     { Allocate a value repetition }
+     IOATop -> newRep;
+     Range -> BodySize;
+     2 -> BodySize*;
+     ObjectAlign -> BodySize|;
+     newRep[16+BodySize][] -> newTop; { destroys theText }
+     (if newTop > IOALimit then goto GC if);
+     newTop -> IOATop;
+     
+     { The new Object is now allocated, but not initialized yet!}
+     
+     { Initialize the structual part of the valrep.             }
+     ShortRepPTValue -> newRep.ProtoType; { byte rep }
+     (if IOAMinAge<>0 then
+         IOAMinAge -> newRep.GCAttr;
+     if);
+     1    -> newRep.LowBorder;
+     Range -> newRep.HighBorder;
+     
+     { Stack: 
+       <general stack layout>
+     }
+     pop theText; { Restore theText, i.e, load original input value) }
+     
+     newRep -> pReg1;
+     
+     Range -> BodySize;
+     { Assign the text to the body part of the repetition. }
+     (if BodySize <> 0 then
+         0 -> Value;
+         1 -> BodySize-;
+         loop:
+         theText[BodySize]!b -> Value!w;
+         Value!w -> newRep[16+BodySize*2]!w;
+         1 -> BodySize-;
+         (if FLAGS >= 0 then goto loop if)
+     if);
+
+     pop DataReg2, AddrReg2, AddrReg1;
+     (if debug then call Ck if);
+     return;
+     
+     GC:
+     
+     { stack:
+       <textPtr>
+       <general stack layout>
+     }
+     
+     { The IOA heap is full, so we need a garbage collection.            }
+     { Set the requested Object Size.            }
+     4 -> BodySize/;
+     4 -> BodySize+;
+     BodySize -> ReqObjectSize;
+     { Save calculated Range during GC }
+     push Range;
+     { Protect Range, textPtr, DataReg2 during GC }
+     push Protect3Tag;
+     { Stack:
+       <tag3>
+       <Range>
+       <textPtr>
+       <general stack layout>
+       - data registers are tagged properly.
+     }
+     0 -> newRep { newRep points inside IOA to unallocated chunk };
+     { Call the garbage collector }
+     call doGC;
+     { Skip pushed tag }
+     pop DataReg2 { skip };
+     { Restore calculated range }
+     pop Range;
+     { stack:
+       <textPtr>
+       <general stack layout>
+     }
+     goto again
   #)
+
