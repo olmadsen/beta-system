@@ -15,10 +15,13 @@
 #include <errno.h>
 #endif
 
+#ifndef RTLAZY
 #define ANYADDR 1 /* If set to 1, allow mmap at any address. Otherwise,
 		   * mmap is only allowed to return in the positive
-		   * region of the address space
+		   * region of the address space.
+		   * RTLAZY requires a heap purely in positive addresses.
 		   */
+#endif /* !RTLAZY */
 
 #define inBlock( theB, addr) (((BlockStart( theB)) <= (long *) addr) \
                               && ((long *) addr < theB->limit) )

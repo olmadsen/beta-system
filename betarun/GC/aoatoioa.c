@@ -40,7 +40,9 @@ static long primes[] =
 
 /* The currently unused semispace: */
 static Block *alternateAOAtoIOAtable = NULL;
+#if !MAXAOATOIOAPRIM
 static long alternateAOAtoIOAtableSize = 0;
+#endif
 
 /* Local function prototypes: */
 static int AOAtoIOAInsertImpl(Object **theCell);
