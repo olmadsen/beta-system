@@ -2,7 +2,7 @@
   Compilation statements: 
     jbeta Bclass.bet
     javac -d jvm -classpath jvm/Bclass.jar BclassUser.java
-    java -classpath jvm:jvm/Bclass.jar betauser.BclassUser
+    java -classpath jvm/Bclass.jar:jvm betauser.BclassUser
 */ 
 
 package betauser;
@@ -29,7 +29,7 @@ class BclassUser
     public static void main(String args[])
     {
 	betaenv env = new betaenv(null);
-	//env.init();
+	env.init();
 	Bclass b = new Jclass(env);
 	b.set(9);
 	System.out.println(b.get());

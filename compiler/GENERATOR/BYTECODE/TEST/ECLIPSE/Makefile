@@ -24,7 +24,7 @@ java_indenter: dummies
 beta_indenter: dummies
 	rm -rf ../jvm
 	cd .. ; jbeta -qw -s 188 tstenv
-	jbeta -qw -s 188 BetaAutoIndentStrategy.bet
+	jbeta --mute -qw -s 188 BetaAutoIndentStrategy.bet
 
 eclipse:
 	javac -classpath jvm -d jvm Eclipse.java
@@ -45,4 +45,4 @@ screen_install:
 
 
 clean:
-	rm -rf jvm *.a2s *.ast *.astL *~ 
+	rm -rf jvm *.a2s *.ast *.astL *~ *.out *.run
