@@ -357,6 +357,8 @@ EOT
 
     print <<"EOT" if ($flags&$flag_print);
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$printframe"></SCRIPT>
+EOT
+    print <<"EOT" if (($flags&$flag_print) && !$wiki);
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$fixprintbutton"></SCRIPT>
 EOT
 
