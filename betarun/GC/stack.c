@@ -1287,7 +1287,7 @@ void PrintRef(Object * ref)
 	  fprintf(output, " (is in IOA)");
 	if (inAOA(ref)) 
 	  fprintf(output, " (in in AOA)");
-	if (ToSpace(ref)<=(long*)ref && (long*)ref<ToSpaceLimit)
+	if (ToSpace<=(long*)ref && (long*)ref<ToSpaceLimit)
 	  fprintf(output, " (is in ToSpace!)");
       }
     }

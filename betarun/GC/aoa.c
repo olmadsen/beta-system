@@ -377,6 +377,8 @@ long sizeOfAOA(void)
   current = AOABaseBlock;
     
   while(current) {
+    Claim(BlockStart(current)==current->top, 
+	  "BlockStart(current)==current->top");
     numbytes += BlockNumBytes(current);
     current = current->next;
   }
@@ -464,8 +466,10 @@ void AOAGc()
   /* Scan each block in AOA. */
   currentBlock = AOABaseBlock;
   while (currentBlock) {
-    /* Then each chunk in the block is examined */
     long freeInBlock;
+    Claim(BlockStart(currentBlock)==currentBlock->top, 
+	  "BlockStart(currentBlock)==currentBlock->top");
+    /* Then each chunk in the block is examined */
 
     freeInBlock = AOAScanMemoryArea(currentBlock -> top, 
 				    currentBlock -> limit);
@@ -567,6 +571,8 @@ void AOACheck()
 
   lastAOAObj=0;
   while( theBlock ){
+    Claim(BlockStart(theBlock)==theBlock->top, 
+	  "BlockStart(theBlock)==theBlock->top");
     theObj = (Object *) BlockStart(theBlock);
     while( (long *) theObj < theBlock->top ){
       theObjectSize = 4*ObjectSize(theObj);

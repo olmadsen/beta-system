@@ -109,21 +109,66 @@ static void DoNothing(Object **theCell,Object *theObj)
 }
 #endif
 
+long isObjectState;
+
 long isObject(void *theObj)
 { 
-  if (ObjectAlign((unsigned)theObj) != (unsigned)theObj)
-    return FALSE;
+  ProtoType *proto;
+  Object *obj;
+  long gc;
 
-  /* FIXME: could do much more (proto, GCAttr) */
-  
-  return TRUE;
+  obj = (Object*)theObj;
+
+  isObjectState = 1;
+  if (ObjectAlign((unsigned)obj) != (unsigned)obj)
+    return 0;
+
+  isObjectState = 2;
+  if (!inBetaHeap(obj))
+    return 0;
+
+  isObjectState = 3;
+  proto = obj->Proto;
+  gc = obj->GCAttr;
+
+  if (inAOA(obj)) {
+    isObjectState = 4;
+    if (gc == FREECHUNK)
+      return 0;
+  }
+
+  if (inIOA(obj)) {
+    if (IOAActive) {
+      isObjectState = 5;
+      if (!(isStatic(gc) || isAutonomous(gc) || isForward(gc)))
+	return 0;
+    } else {
+      isObjectState = 6;
+      if (!(isStatic(gc) || isAutonomous(gc)))
+	return 0;
+    }
+  } 
+
+  if (inToSpace(obj)) {
+    isObjectState = 7;
+    if (!(isStatic(gc) || isAutonomous(gc)))
+      return 0;
+  }
+    
+  isObjectState = 8;
+  if (!IsPrototypeOfProcess((long)proto))
+    return 0;
+
+  isObjectState = 0;
+  return 1;
 }
 
 void zero_check(char *p, long bytesize)
 {                                                       
   long i;                                      
-  if (ObjectAlign(bytesize)!=bytesize)                                       
+  if (ObjectAlign(bytesize)!=(unsigned)bytesize) {
     fprintf(output, "zero_check: ObjectAlign(bytesize)!=bytesize\n");   
+  }
   for (i = (long)(bytesize)/4-1; i >= 0; i--)           
     if (*((long *)(p)+i) != 0) {                        
       fprintf(output,                                   
@@ -308,7 +353,8 @@ void CCk(void *r, char *fname, int lineno, char *ref)
       }
 #endif /* NEWRUN */
       /* Check alignment */
-      Claim(isLazyRef(r) || (ObjectAlign((long)r)==(long)r), __CkString);
+      Claim(isLazyRef(r) || (ObjectAlign((unsigned)r)==(unsigned)r), 
+	    __CkString);
       /* Check it's in a heap */
       Claim(inIOA(rr) || inAOA(rr) || isLazyRef(rr), __CkString);
     }
@@ -551,12 +597,10 @@ static void RegError(long pc1, long pc2, char *reg, Object * value)
 
 static long CheckCell(Object *theCell)
 {
-  if (theCell &&
-      inBetaHeap(theCell) &&
-      isObject(theCell)) {
-    return TRUE;
+  if (theCell && inBetaHeap(theCell) && !isObject(theCell)) {
+    return 0;
   }
-  return FALSE;
+  return 1;
 }
 #endif /* intel */
 #endif /* RTDEBUG */
