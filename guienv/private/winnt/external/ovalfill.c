@@ -19,7 +19,7 @@ static int limit;
 
 
 
-static int number_of_bits_set( Uint32 a )
+int number_of_bits_set( Uint32 a )
 {
     if(!a) return 0;
     if(a & 1) return 1 + number_of_bits_set(a >> 1);

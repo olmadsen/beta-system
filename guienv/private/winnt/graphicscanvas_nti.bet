@@ -22,6 +22,7 @@ BUILD nti '$$/ovalfill.obj' 'external/ovalfill.c' 'betacc $0 $1';
 -- lib: attributes --
 
 
+
 write_pixels_to_png: external
   (# pixels: @int32u;
      width: @int32;
@@ -487,6 +488,53 @@ do (# drawGDILine:
         do start -> transform -> aamoveto;
            end -> transform -> aalineto;
         #);
+      drawComplexLine2:
+        (# vx, vy: @real;
+           x1, y1: @real;
+           x2, y2: @real;
+           length: @real;
+           ux, uy: @real;
+           outside: @PointList;
+           p: ^Point2d;
+           flag: @boolean;
+           xr, yr: @real;
+           delta: @real;
+           ntPoints: [0] @integer;
+           size: @integer;
+           nullpen, prev: @integer;
+        do strokewidth / 2 -> delta;
+           start -> transform -> (x1, y1);
+           end -> transform -> (x2, y2);
+           x2 - x1 -> vx;
+           y2 - y1 -> vy;
+           vx*vx + vy*vy -> sqrt -> length;
+           (if length > 0.0001 then
+               (vx / length) * delta -> uy;
+               - (vy / length) * delta -> ux;
+               &Point2d[] -> p[];
+               x1 - ux -> p.x;
+               y1 - uy -> p.y;
+               p[] -> outside.append;
+               &Point2d[] -> p[];
+               x1 + ux -> p.x;
+               y1 + uy -> p.y;
+               p[] -> outside.append;
+               &Point2d[] -> p[];
+               x2 + ux -> p.x;
+               y2 + uy -> p.y;
+               p[] -> outside.append;
+               &Point2d[] -> p[];
+               x2 - ux -> p.x;
+               y2 - uy -> p.y;
+               p[] -> outside.append;
+               &Point2d[] -> p[];
+               x1 - ux -> p.x;
+               y1 - uy -> p.y;
+               p[] -> outside.append;
+               outside[] -> PolygonScan;
+           if);
+           
+        #);
       drawComplexLine:
         (# vx, vy: @real;
            x1, y1: @real;
@@ -570,7 +618,11 @@ do (# drawGDILine:
           (if strokewidth <= 1 then
               drawSimpleLine;
            else
-              drawComplexLine;
+              (if newstyle then
+                  drawComplexLine2;
+               else
+                  drawComplexLine;
+              if);
           if);
       if);
    #);
@@ -686,42 +738,55 @@ do (# flag: @boolean;
    #);
    
 -- PixmapSurfaceFillPolygon: doPart --
-do (if NOT useGDI then
-       (# flag: @boolean;
-          xr, yr: @integer;
-          fx, fy: @integer;
-       do true -> flag;
-          points.scan
-          (#
-          do current -> transform -> (xr, yr);
-             (if flag then
-                 (xr, yr) -> aamoveto;
-                 (xr, yr) -> (fx, fy);
-                 false -> flag;
-              else
-                 (xr, yr) -> aalineto;
-             if);
-          #);
-          (fx, fy) -> aalineto;
-       #);
-       
+do (if NOT newstyle then
+       (if NOT useGDI then
+           (# flag: @boolean;
+              xr, yr: @integer;
+              fx, fy: @integer;
+           do true -> flag;
+              points.scan
+              (#
+              do current -> transform -> (xr, yr);
+                 (if flag then
+                     (xr, yr) -> aamoveto;
+                     (xr, yr) -> (fx, fy);
+                     false -> flag;
+                  else
+                     (xr, yr) -> aalineto;
+                 if);
+              #);
+              (fx, fy) -> aalineto;
+           #);
+           
+       if);
    if);
-   
-   (# ntPoints: [0] @integer;
-      size: @integer;
-   do points.size -> size;
-      2 * size ->  ntPoints.new;
-      points.scan
-      (# xi, yi: @integer;
-         i: @integer;
-      do i + 1 -> i;
-         current -> transform -> (xi, yi);
-         xi -> ntPoints[(i*2)-1];
-         yi -> ntPoints[i*2];
-      #);
-      (private.hdc,@@ntPoints[1],size) -> Polygon;
-   #);
-   
+   (if newstyle then
+       (# curve: @PointList;
+          p: ^Point2d;
+       do points.scan
+          (#
+          do &Point2d[] -> p[];
+             current -> transform -> p;
+             p[] -> curve.append;
+          #);
+          curve[] -> PolygonScan;
+       #);
+   else
+       (# ntPoints: [0] @integer;
+          size: @integer;
+       do points.size -> size;
+          2 * size ->  ntPoints.new;
+          points.scan
+          (# xi, yi: @integer;
+             i: @integer;
+          do i + 1 -> i;
+             current -> transform -> (xi, yi);
+             xi -> ntPoints[(i*2)-1];
+             yi -> ntPoints[i*2];
+          #); 
+          (private.hdc,@@ntPoints[1],size) -> Polygon;
+       #);
+   if);
 -- PixmapSurfaceDrawPixmap: doPart --
 do (# x, y: @integer;
       hdcmem: @integer;
@@ -822,7 +887,7 @@ do theAngle -> currentAngle;
 -- PixmapSurfacePen: doPart --
 do (# red, green, blue: @int8u;
       colorref: @int32u;
-      
+      colorvalue: @int32u;
    do theColor.red %srl 8 -> red;
       theColor.green %srl 8 -> green;
       theColor.blue %srl 8 -> blue;
@@ -832,6 +897,8 @@ do (# red, green, blue: @int8u;
       
       
       red %bor (green %sll 8) %bor (blue %sll 16) -> colorref;
+      blue %bor (green %sll 8) %bor (red %sll 16) -> colorvalue;
+      
       (private.hdc, colorref) -> SetTextColor;
       colorref -> CreateSolidBrush -> private.brush;
       (private.hdc, private.brush) -> SelectObject -> DeleteObject;
@@ -839,6 +906,7 @@ do (# red, green, blue: @int8u;
       (private.hdc, private.pen) -> SelectObject -> DeleteObject;
       
       colorref -> private.colorref;
+      colorvalue -> private.colorvalue;
    #);
    
 -- PixmapSurfacePush: doPart --
@@ -875,10 +943,411 @@ do (private.hdc, private.old_dib) -> SelectObject;
    
 -- PixmapSurfaceLib: attributes --
 
+trace_plot: (# exit false #);
+trace_poly: (# exit false #);
+
+newstyle: (# exit true #);
+
+
+FixedPoint:
+  (# x, y: @integer;
+  #);
+
+PolygonScan:
+  (# poly: ^PointList;
+     left, top, right, bottom: @integer;
+     xorigin: @integer;
+     yorigin: @integer;
+     
+     scanlines: @integer;
+     
+     EdgeTable:
+       (# storage: [1] ^Edge;
+          top: @integer;
+          
+          insert:
+            (# theEdge: ^Edge;
+            enter theEdge[]
+            do top + 1 -> top;
+               (if top > storage.range then
+                   storage.range -> storage.extend;
+               if);
+               theEdge[] -> storage[top][];
+            #);
+          sort:
+            (# k: @integer;
+               tmp: ^Edge;
+            do (for i: top - 1 repeat
+                    (for j: top - i repeat
+                         top - j + 1 -> k;
+                         (if storage[k].xmin < storage[k-1].xmin then
+                             storage[k][] -> tmp[];
+                             storage[k-1][] -> storage[k][];
+                             tmp[] -> storage[k-1][];
+                         if);
+                    for);
+               for);
+            #);
+          scan:
+            (# current: ^Edge;
+            do (for inx: top repeat
+                    storage[inx][] -> current[];
+                    INNER;
+               for);
+            #);
+          weed:
+            (# y: @integer;
+               inx: @integer;
+            enter y
+            do 1 -> inx;
+               loop:
+                 (if inx <= top then
+                     (if storage[inx].ymax = y then
+                         storage[top][] -> storage[inx][];
+                         NONE -> storage[top][];
+                         top - 1 -> top;
+                      else
+                         inx + 1 -> inx;
+                     if);
+                     restart loop;
+                 if);
+            #);
+          print:
+            (#
+            do scan
+               (#
+               do current.xmin -> putint;
+                  '(' -> put;
+                  current.dx -> putreal;
+                  ')' -> put;
+                  '[' -> put;
+                  current.ymax -> putint;
+                  ']' -> put;
+                  ' ' -> put;
+               #);
+            #);
+       #);
+     
+     GlobalEdgeTable: [0] @EdgeTable;
+     ActiveEdgeTable: @EdgeTable;
+     
+     
+     Edge:
+       (# dx: @real;
+          ymax: @integer;
+          xmin: @real;
+       #);
+     
+     print:
+       (#
+       do (for inx: GlobalEdgeTable.range repeat
+               inx -> putint;
+               ': ' -> puttext;
+               GlobalEdgeTable[inx].print;
+               newline;
+          for);
+       #);
+     convert:
+       (# y: @integer;
+          xleft, xright: @integer;
+          tmp: @real;
+          color: @integer;
+          plot:
+            (# x, y: @integer;
+               minory: @integer;
+               majorx: @integer;
+               minorx: @integer;
+               mask: @integer;
+            enter (x, y)
+            do y mod 8 + 1 -> minory;
+               x div 8 -> majorx;
+               x mod 8 -> minorx;
+               1 %sll minorx -> mask;
+               
+               (if trace_poly AND trace_plot then
+                   '(' -> puttext;
+                   x -> putint;
+                   ' ' -> puttext;
+                   y -> putint;
+                   ')' -> put;
+                   '[' -> put;
+                   minory -> putint;
+                   '; ' -> puttext;
+                   majorx -> putint;
+                   ', ' -> puttext;
+                   minorx -> putint;
+                   ' #' -> puttext;
+                   mask -> puthex;
+                   
+                   ']' -> put;
+               if);
+               
+               buffer[minory].storage[majorx + 1] + mask -> buffer[minory].storage[majorx + 1];
+               
+               (** (xorigin*8 + x, yorigin*8 + y, color) -> plotpixel; **)
+            #);
+          clear:
+            (#
+            do (for j: 8 repeat
+                    (for i: buffer[j].storage.range repeat
+                         0 -> buffer[j].storage[i];
+                    for);
+               for);
+            #);
+          plotline:
+            (# count: @integer;
+               line: @integer;
+               gray: @integer;
+            enter line
+            do (if trace_plot then
+                   'LINE [' -> puttext;
+               if);
+               (for i: rowbytes repeat
+                    0 -> count;
+                    (for j: 8 repeat
+                         count + bits[buffer[j].storage[i]+1] -> count;
+                    for);
+                    (if trace_plot then
+                        count -> putint;
+                        ' ' -> put;
+                    if);
+                    
+                    (if count > 0 then
+                        (if count = 64 then
+                            (xorigin + i - 1, yorigin + line - 1, color) -> plotpixel;
+                         else
+                            (count * 0xFF) / 64 -> gray;
+                            (xorigin + i - 1, yorigin + line - 1, gray, color) -> blend_pixel;
+                        if);
+                    if);
+               for);
+               (if trace_plot then
+                   ']' -> put;
+                   newline;
+               if);
+            #);
+          Row:
+            (# storage: [0] @int8u;
+            #);
+          buffer: [8] @Row;
+          rowbytes: @integer;
+          
+          bits: [256] @int8u;
+          
+          number_of_bits_set: external
+            (# a: @integer;
+               b: @integer;
+            enter a
+            exit b
+            #);
+            
+          
+       do private.colorvalue -> color;
+          (for i: 256 repeat
+               i - 1 -> number_of_bits_set -> bits[i];
+          for);
+          1 -> y;
+          (right + 7) div 8 -> rowbytes;
+          (for inx: 8 repeat
+               rowbytes -> buffer[inx].storage.new;
+          for);
+          
+          (for major: scanlines div 8 repeat
+               (for minor: 8 repeat
+                    (if trace_poly then
+                        y -> putint;
+                        ': ' -> puttext;
+                    if);
+                    GlobalEdgeTable[y].scan
+                    (#
+                    do current[] -> ActiveEdgeTable.insert;
+                    #);
+                    (* Remove AET[i] if AET[i].ymax = y *)
+                    y -> ActiveEdgeTable.weed;
+                    (* Sort AET *)
+                    ActiveEdgeTable.sort;
+                    
+                    (* Fill *)
+                    
+                    (if ActiveEdgeTable.top > 0 then
+                        (if ActiveEdgeTable.top = 2 then
+                            (if trace_poly then
+                                '[' -> puttext;
+                                ActiveEdgeTable.storage[1].xmin -> putreal;
+                                ' ' -> puttext;
+                                ActiveEdgeTable.storage[2].xmin -> putreal;
+                                ']' -> puttext;
+                            if);
+                            
+                            ActiveEdgeTable.storage[1].xmin -> ceil -> tmp;
+                            tmp -> xleft;
+                            ActiveEdgeTable.storage[2].xmin -> ceil -> tmp;
+                            tmp -> xright;
+                            (if trace_poly then
+                                ' SPAN[' -> puttext;
+                                xleft -> putint;
+                                ' ' -> puttext;
+                                xright -> putint;
+                                ']' -> puttext;
+                            if);
+                            
+                            (if xleft = xright then
+                                (xleft, y - 1) -> plot;
+                             else
+                                (for i: (xright - xleft) repeat
+                                     (xleft + i - 1, y - 1) -> plot;
+                                for);
+                            if);
+                            
+                        if);
+                    if);
+                    y + 1 -> y;
+                    (* Increment xmin *)
+                    ActiveEdgeTable.scan
+                    (#
+                    do current.xmin + current.dx -> current.xmin;
+                    #);
+                    (if trace_poly then
+                        newline;
+                    if);
+               for);
+               major -> plotline;
+               clear;
+          for);
+       #);
+     
+     
+     prepare:
+       (# 
+	  insertEdge:
+	    (# p1, p2: ^FixedPoint;
+	       
+	       e: ^Edge;
+               low, high: ^FixedPoint;
+               inx: @integer;
+	    enter (p1[], p2[])
+	    do (if p1.y <> p2.y then
+	           
+		   (if p1.y < p2.y then
+		       p1[] -> low[];
+                       p2[] -> high[];
+		    else
+		       p2[] -> low[];
+                       p1[] -> high[];
+		   if);
+                   
+		   &Edge[] -> e[];
+                   (high.x - low.x) / (high.y - low.y) -> e.dx;
+		   high.y + 1 -> e.ymax;
+		   low.x  -> e.xmin;
+                   low.y + 1 -> inx;
+                   e[] -> GlobalEdgeTable[inx].insert;
+	       if);
+	    #);
+          
+          data: [0] ^FixedPoint;
+          ox, oy: @real;
+          curve: @PointList;
+       do (if trace_poly then
+              'poly [' -> puttext;
+              poly.scan
+              (#
+              do '(' -> put;
+                 current.x -> putint;
+                 ', ' -> puttext;
+                 current.y -> putint;
+                 ')' -> put;
+              #);
+              ']' -> putline;
+          if);
+          
+          (if poly.size > 2 then
+              
+              (* Calculate origin *)
+              
+              (poly.head).elm.x -> ox;
+              (poly.head).elm.y -> oy;
+              poly.scan
+              (#
+              do (if current.x < ox then
+                     current.x -> ox;
+                 if);
+                 (if current.y < oy then
+                     current.y -> oy;
+                 if);
+              #);
+              ox -> floor -> xorigin;
+              oy -> floor -> yorigin;
+              
+              
+              poly.size -> data.new;
+              poly.scan
+              (# inx: @integer;
+              do inx + 1 -> inx;
+                 &FixedPoint[] -> data[inx][];
+                 (current.x - xorigin) * 8.0  -> data[inx].x;
+                 (current.y - yorigin) * 8.0 -> data[inx].y;
+              #);
+              data[1].x -> left -> right;
+	      data[1].y -> top -> bottom;
+	      (for inx: data.range - 1 repeat
+	           (if data[inx+1].x < left then
+	               data[inx+1].x -> left;
+	           if);
+	           (if data[inx+1].x > right then
+	               data[inx+1].x -> right;
+	           if);
+	           (if data[inx+1].y < top then
+	               data[inx+1].y -> top;
+	           if);
+	           (if data[inx+1].y > bottom then
+	               data[inx+1].y -> bottom;
+	           if);
+	      for);
+              
+              
+              
+	      ((bottom + 7) div 8) * 8 -> scanlines;
+              
+              (if trace_poly then
+                  'box [' -> puttext;
+                  left -> putint;
+                  ' ' -> put;
+                  top -> putint;
+                  ' ' -> put;
+                  right -> putint;
+                  ' ' -> put;
+                  bottom -> putint;
+                  ']' -> putline;
+              if);
+              
+	      scanlines -> GlobalEdgeTable.new;
+              
+	      (for inx: data.range repeat
+	           (if inx = data.range then
+		       (data[inx][], data[1][]) -> insertEdge;
+		    else
+		       (data[inx][], data[inx+1][]) -> insertEdge;
+		   if);
+	      for);
+              (for inx: GlobalEdgeTable.range repeat
+                   GlobalEdgeTable[inx].sort;
+              for);
+          if);
+       #);
+     
+  enter poly[]
+  do prepare;
+     convert;
+  #);
 
 plotpixel: external
   (# x, y, color: @integer;
   enter (x, y, color)
+  #);
+blend_pixel: external
+  (# x, y, gray, color: @integer;
+  enter (x, y, gray, color)
   #);
 
 
@@ -925,6 +1394,7 @@ ntFrameRect: external
    old_pen: @integer;
    current: ^Matrix;
    colorref: @int32u;
+   colorvalue: @int32u;
    doomed: @boolean;
 #)
 
