@@ -37,6 +37,7 @@
 #  include <pwd.h>
 #  include <dirent.h>
 #  define DIRENT dirent
+#  define _DIR DIR
 #  define MAX_PATH       1024
 #endif
 
@@ -61,12 +62,12 @@ typedef struct _DIR
   HANDLE hFile;
   int result;
   char d_name[MAX_PATH];
-} DIR;
+} DIR, _DIR;
 
-struct _DIR *opendir(char *path)
+_DIR *opendir(char *path)
 {
   char match[MAX_PATH+8];
-  struct _DIR *dirp = malloc(sizeof(struct _DIR));
+  _DIR *dirp = malloc(sizeof(_DIR));
   int pathlen;
   strcpy(match,path);
   pathlen=strlen(match);
@@ -88,7 +89,7 @@ struct _DIR *opendir(char *path)
   return dirp;
 }
 
-struct _DIR *readdir(struct _DIR *dirp)
+_DIR *readdir(_DIR *dirp)
 {
   if (dirp->result == 0) {
     return NULL;
@@ -98,7 +99,7 @@ struct _DIR *readdir(struct _DIR *dirp)
   return dirp;
 }
 
-int closedir(struct _DIR *dirp)
+int closedir(_DIR *dirp)
 {
   FindClose(dirp->hFile);
   free(dirp);
@@ -118,7 +119,7 @@ int ScanDir(char *dir, int *longestP, int *numP, void (*CallbackFnc)(char*))
   int longest = 0;
   char **list;
   int listlen = 64;
-  struct _DIR *dirp; 
+  _DIR *dirp; 
   char *tmp;
   struct DIRENT *dp;
 
