@@ -12,7 +12,7 @@
 #ifdef crts
 ParamThisComp(struct Component *, Att)
 {
-  fprintf(output, "Attach NYI\n");
+  fprintf(output, "<Attach NYI>");
 }
 #endif
 
