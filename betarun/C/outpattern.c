@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1991-10-09 14:36:27 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1991-10-21 21:13:09 $, SID: $Revision: 1.8 $
  * by Lars Bak
  */
 
@@ -130,65 +130,44 @@ DisplayObject(output,aObj,retAddress)
   }
 }
 
+struct errorEntry {
+  int  errorNumber;
+  char *errorMessage;
+} errorTable[] = {
+    -1, "Reference is none",
+    -2, "Executing terminated component",
+    -3, "Repetition index out of range",
+    -4, "Arithmetic exception",
+    -5, "Repetition subrange out of range",
+    -6, "Repetition subrange out of range",
+    -7, "Repetition subrange out of range",
+    -8, "Stop is called",
+    -9, "LVRA is full, please implement next step!",
+   -10, "Integer division by zero",
+   -11, "Call back function area is full",
+   -12, "Call back Pascal function has wrong return size",
+   -30, "Illegal instruction",
+   -31, "Bus error",
+   -32, "Segmentation fault",
+   -33, "AOAtoIOAtable is full (temporary)",
+   -34, "AOAtoLVRAtable is full (temporary)",
+  -100, "Unknown signal",
+     0, 0
+};
 
 ErrorMessage(output, errorNumber)
   ptr(FILE) output;
   int errorNumber;
 {
-  if( errorNumber == -1){
-      fprintf(output,"Reference is none"); return;
+  int  index = 0;
+
+  while( errorTable[index].errorNumber != 0){
+    if( errorNumber == errorTable[index].errorNumber){
+      fprintf(output,"%s", errorTable[index].errorMessage);
+      return;
     }
-  if( errorNumber == -2){
-      fprintf(output,"Executing terminated component"); return;
-    }
-  if( errorNumber == -3){
-      fprintf(output,"Repetition index out of range"); return;
-    }
-  if( errorNumber == -4){
-      fprintf(output,"Arithmetic exception"); return;
-    }
-  if( errorNumber == -5){
-      fprintf(output,"Repetition subrange out of range"); return;
-    }
-  if( errorNumber == -6){
-      fprintf(output,"Repetition subrange out of range"); return;
-    }
-  if( errorNumber == -7){
-      fprintf(output,"Repetition subrange out of range"); return;
-    }
-  if( errorNumber == -8){
-      fprintf(output,"Stop is called"); return;
-    }
-  if( errorNumber == -9){
-      fprintf(output,"LVRA is full, please implement next step!"); return;
-    }
-  if( errorNumber == -10){
-      fprintf(output,"Integer division by zero"); return;
-    }
-  if( errorNumber == -11){
-      fprintf(output,"Call back function area is full"); return;
-    }
-  if( errorNumber == -12){
-      fprintf(output,"Call back Pascal function has wrong return size"); return;
-    }
-  if( errorNumber == -30){
-      fprintf(output,"Illegal instruction"); return;
-    }
-  if( errorNumber == -31){
-      fprintf(output,"Bus error"); return;
-    }
-  if( errorNumber == -32){
-      fprintf(output,"Segmentation fault"); return;
-    }
-  if( errorNumber == -33){
-      fprintf(output,"AOAtoIOAtable is full (temporary)"); return;
+    index++;
   }
-  if( errorNumber == -34){
-      fprintf(output,"AOAtoLVRAtable is full (temporary)"); return;
-  }
-  if( errorNumber == -100){
-      fprintf(output,"Unknown signal"); return;
-    }
   fprintf(output,"Unknown error (%d)", errorNumber);
 }
 
