@@ -382,8 +382,8 @@ static void appendObject(Object *obj)
   } else {
     last -> GCAttr = (u_long)obj;
     last = obj;
-    last -> GCAttr = NULLPOINTER;
   }
+  last -> GCAttr = NULLPOINTER;
 }
 
 static void collectPersistentObjects(REFERENCEACTIONARGSTYPE)

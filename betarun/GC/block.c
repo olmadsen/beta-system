@@ -39,24 +39,29 @@ Block *
 newBlock(long size)
 {
   Block * theBlock;
+  int numbytes = sizeof(Block) + size;
 
 #ifdef USEMMAP
   unsigned long sizeAlign;
-  sizeAlign = RoundToPage(size + sizeof(Block));
+  sizeAlign = RoundToPage(numbytes);
   theBlock = AllocateBlock(sizeAlign);
 #else
 #ifdef nti
-  /* Windows sometimes gives you unaligned allocations.  This trick
-   * fixes it, but it means you can't free these areas!
+  /* Windows sometimes gives you unaligned allocations.  
    */
-  if ((theBlock = (Block *)MALLOC(sizeof(Block) + size + 8)) != 0) {
+  numbytes += 8;
+  if ((theBlock = (Block *)MALLOC(numbytes)) != 0) {
+    theBlock->orig_ptr = theBlock;
     theBlock = (Block *)ObjectAlign((unsigned long)(theBlock));
   }
 #else
-  theBlock = (Block *) MALLOC( sizeof(Block) + size);
+  theBlock = (Block *) MALLOC(numbytes);
+  if (theBlock){
+    theBlock->orig_ptr = theBlock;
+  }
 #endif /* nti */
 #endif /* USEMMAP */
-  INFO_ALLOC(sizeof(Block) + size);
+  INFO_ALLOC(numbytes);
   
   if( theBlock != 0 ){
     theBlock->next  = 0;
@@ -119,7 +124,7 @@ void freeBlock(Block * theBlock)
 {
 #ifdef USEMMAP
 #else
-  FREE(theBlock);
+  FREE(theBlock->orig_ptr);
 #endif /* USEMMAP */
 }
 

@@ -52,7 +52,10 @@ static long alternateAOAtoIOAtableSize = 0;
 #endif
 
 /* Local function prototypes: */
-static int AOAtoIOAInsertImpl(Object **theCell);
+#ifndef RTDEBUG
+static 
+#endif /* RTDEBUG */
+int AOAtoIOAInsertImpl(Object **theCell);
 #ifdef MT
 static void AOAtoIOAInsert(handle( Object) theCell);
 #endif
@@ -299,7 +302,10 @@ void reportAsgRef(Object **theCell)
 }
 #endif
 
-static int AOAtoIOAInsertImpl(Object **theCell)
+#ifndef RTDEBUG
+static 
+#endif /* RTDEBUG */
+int AOAtoIOAInsertImpl(Object **theCell)
 {
     unsigned long *table;
     unsigned long index, count;

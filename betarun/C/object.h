@@ -155,7 +155,7 @@ typedef struct _Block{
   long          *top;          /* Refers the top in this(Block)   */
   long          *limit;        /* Refers the limit of this(Block) */
   long          id;
-  void          *dummy;
+  struct _Block *orig_ptr;
 } Block;
 
 typedef struct _AOAFreeChunk {

@@ -26,7 +26,7 @@
 #endif 
 
 /* */
-#undef DEBUG_PERSISTENCE
+/* #define DEBUG_PERSISTENCE */
 #define MAXPERSISTENTBYTES 2048 * Kb
 
 /* LOCAL VARIABLES */

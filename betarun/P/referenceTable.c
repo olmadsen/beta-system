@@ -206,7 +206,7 @@ void Aappend(Array *array, unsigned long theCell)
 }
 #endif /* PERSIST */
 
-#ifdef RUN
+#if 0 /* was: RUN  now in CHKRA.run */
 void CheckForNewAOAclient(Object **theCell)
 {
 #ifdef PERSIST
