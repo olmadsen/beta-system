@@ -125,6 +125,9 @@ void ProcessStack(void)
 
 static ProtoType *activation_proto;
 static Object *activation_object;
+static Object *activation_start;
+static int     activation_start_found;
+
 static void find_foreach(long PC, Object *theObj)
 {
   ProtoType *proto;
@@ -134,6 +137,21 @@ static void find_foreach(long PC, Object *theObj)
   fprintf(output, "\n");
   fflush(output);
   if (!theObj) return;
+  if (activation_start){
+    if (activation_start == theObj){
+      /* Found start object */
+      if (activation_start_found){
+	fprintf(output, "find_foreach: found start object 0x%x AGAIN - using it\n", (int)activation_start);
+	/* Do not return */
+      } else {
+	fprintf(output, "find_foreach: found start object 0x%x\n", (int)activation_start);
+      activation_start_found = 1;
+      /* Do not consider this object */
+      return;
+      }
+    }
+    if (!activation_start_found) return;
+  }
   proto = GETPROTO(theObj);
   if (isSpecialProtoType(proto)) {
     if (proto==DopartObjectPTValue){
@@ -174,14 +192,14 @@ static void find_foreach(long PC, Object *theObj)
  *    (# proto: @integer;
  *       theTry: ^try;
  *     do try## -> getProtoTypeForStruc -> proto;
- *        proto -> find_activation -> obj;
+ *        (proto, @@startTry) -> find_activation -> obj;
  * 	  (if obj<>0 then
  *            obj -> addressToObject -> theTry[];
  *        if);
  *        ...
  *    #)
  */
-Object *find_activation(ProtoType *proto)
+Object *find_activation(ProtoType *proto, Object *startObj)
 {
   Component *comp = ActiveComponent;
   long *oldStackEnd = StackEnd;
@@ -196,6 +214,8 @@ Object *find_activation(ProtoType *proto)
 #endif /* NEWRUN */
   activation_object = 0;
   activation_proto = proto;
+  activation_start = startObj;
+  activation_start_found = 0;
   while (!activation_object && comp){
     scanComponentStack (comp, 0, 0, find_foreach);
     comp = comp->CallerComp;
