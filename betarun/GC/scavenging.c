@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-06-01 14:04:22 $, SID: $Revision: 1.13 $
+ * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-06-02 15:15:11 $, SID: $Revision: 1.14 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -349,6 +349,7 @@ void ProcessObject(theObj)
 
   if( (long) theProto < 0 ){  
     switch( (long) theProto ){
+    case ByteRepPTValue:
     case ValRepPTValue: return; /* No references in the type of object, so do nothing*/
 
     case RefRepPTValue:
@@ -531,6 +532,7 @@ void ProcessAOAObject(theObj)
 
   if( (long) theProto < 0 ){  
     switch( (long) theProto ){
+    case ByteRepPTValue: 
     case ValRepPTValue: 
       return; /* No references in the type of object, so do nothing*/
     case RefRepPTValue:
@@ -663,6 +665,7 @@ void IOACheckObject( theObj)
 
   if( (long) theProto < 0 ){  
     switch( (long) theProto ){
+    case ByteRepPTValue:
     case ValRepPTValue:
     /* No references in the type of object, so do nothing*/
       return;
