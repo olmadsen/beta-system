@@ -15,19 +15,29 @@ Component *AlloC(Object *origin, ProtoType *proto, long *SP)
 
   Ck(origin);
   
+  DEBUG_ALLOI(fprintf(output,
+		      "AlloC#%d: origin=0x%x (%s), proto=0x%x (%s)\n",
+		      NumAlloC,
+		      (int)origin, 
+		      origin ? ProtoTypeName(GETPROTO(origin)) : 0, 
+		      (int)proto, 
+		      ProtoTypeName(proto)));
+
   DEBUG_CODE( Claim(proto->Size > 0, "AlloC: proto->Size > 0") );
   
   push(origin);
   size = ComponentSize(proto);
-  if (size>IOAMAXSIZE){
-    DEBUG_AOA(fprintf(output, "AlloC allocates in AOA\n"));
-    comp = (Component *)AOAcalloc(size);
-    DEBUG_AOA(if (!comp) fprintf(output, "AOAcalloc failed\n"));
-  }
-  if (!comp) {
-    comp = (Component *)IOAalloc(size, SP);
-    if (IOAMinAge!=0) comp->GCAttr = IOAMinAge;
-  }
+  do {
+    if (size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "AlloC allocates in AOA\n"));
+      comp = (Component *)AOAcalloc(size);
+      DEBUG_AOA(if (!comp) fprintf(output, "AOAcalloc failed\n"));
+    }
+    if (!comp) {
+      comp = (Component *)IOATryAlloc(size, SP);
+      if (comp && IOAMinAge!=0) comp->GCAttr = IOAMinAge;
+    }
+  } while (!comp);
   pop(origin);
 
   /* The new Component is now allocated, but not initialized yet! */

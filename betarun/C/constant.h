@@ -33,8 +33,13 @@
 #define IOAMAXSIZE           (IOASize/8)
 #define MMAPPageSize         65536
 #define MMAPMaxSize          (1024*1024*1024)
-#define AOAMaxSize           (768*1024*1024)
+#define AOAMAXSIZE           MMAPMaxSize
 #define MAXCTEXTPOOL	     1000
+#ifdef PERSIST
+#define PERSIST_MAXENTRIES   0x160000
+#else
+#define PERSIST_MAXENTRIES   0
+#endif
 
 #if defined (UseRefStack) || defined(NEWRUN) || ((defined(PERSIST) || defined(RTVALHALLA)) && (defined(intel) || defined(sparc)))
 #define REFSTACKSIZE         1000

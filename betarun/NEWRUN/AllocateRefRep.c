@@ -21,15 +21,17 @@ void AlloRR(unsigned offset /* in bytes */,
 
     push(theObj);
     size = RefRepSize(range);
-    if (range>LARGE_REP_SIZE || size>IOAMAXSIZE){
-      DEBUG_AOA(fprintf(output, "AlloRR allocates in AOA\n"));
-      theRep = (RefRep *)AOAcalloc(size);
-      DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
-    }
-    if (!theRep) {
-      theRep = (RefRep *)IOAalloc(size, SP);
-      if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
-    }
+    do {
+      if (range>LARGE_REP_SIZE || size>IOAMAXSIZE){
+	DEBUG_AOA(fprintf(output, "AlloRR allocates in AOA\n"));
+	theRep = (RefRep *)AOAcalloc(size);
+	DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
+      }
+      if (!theRep) {
+	theRep = (RefRep *)IOATryAlloc(size, SP);
+	if (theRep && IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
+      }
+    } while (!theRep);
     pop(theObj);
 
     SETPROTO(theRep, RefRepPTValue);

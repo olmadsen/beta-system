@@ -6,6 +6,12 @@
 #include "beta.h"
 #include "crun.h"
 
+#if 1
+#define PROTO theRep->iProto /* cc forgets to save proto across AlloI/C call??? */
+#else
+#define PROTO proto
+#endif
+
 
 void AlloVRI(Object *origin,
 	     ProtoType *proto,
@@ -39,15 +45,17 @@ void AlloVRI(Object *origin,
   size = DynObjectRepSize(range);
   push(theObj);
   push(origin); 
-  if (size>IOAMAXSIZE){
-    DEBUG_AOA(fprintf(output, "AlloVRI allocates in AOA\n"));
-    theRep = (ObjectRep *)AOAcalloc(size);
-    DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
-  } 
-  if (!theRep) {
-    theRep = (ObjectRep *)IOAalloc(size, SP);
-    if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
-  }
+  do {
+    if (size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "AlloVRI allocates in AOA\n"));
+      theRep = (ObjectRep *)AOAcalloc(size);
+      DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
+    } 
+    if (!theRep) {
+      theRep = (ObjectRep *)IOATryAlloc(size, SP);
+      if (theRep && IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
+    }
+  } while (!theRep);
   pop(origin);
   pop(theObj);
 
@@ -64,7 +72,7 @@ void AlloVRI(Object *origin,
 
   /* Allocate items and assign them into the repetition */
   while(--range>=0){
-    Protect(theRep, item = AlloI(theRep->iOrigin, proto, SP));
+    Protect(theRep, item = AlloI(theRep->iOrigin, PROTO, SP));
     AssignReference((long *)((long)&theRep->Body[0]+range*4), item);
   }
 
@@ -96,15 +104,17 @@ void AlloVRC(Object *origin,
   size = DynObjectRepSize(range);
   push(theObj);
   push(origin); 
-  if (size>IOAMAXSIZE){
-    DEBUG_AOA(fprintf(output, "AlloVRC allocates in AOA\n"));
-    theRep = (ObjectRep *)AOAcalloc(size);
-    DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
-  } 
-  if (!theRep){
-    theRep = (ObjectRep *)IOAalloc(size, SP);
-    if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
-  }
+  do {
+    if (size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "AlloVRC allocates in AOA\n"));
+      theRep = (ObjectRep *)AOAcalloc(size);
+      DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
+    } 
+    if (!theRep){
+      theRep = (ObjectRep *)IOATryAlloc(size, SP);
+      if (theRep && IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
+    }
+  } while (!theRep);
   pop(origin);
   pop(theObj);
 
@@ -121,7 +131,7 @@ void AlloVRC(Object *origin,
 
   /* Allocate components and assign them into the repetition */
   while(--range>=0){
-    Protect(theRep, comp = AlloC(theRep->iOrigin, proto, SP));
+    Protect(theRep, comp = AlloC(theRep->iOrigin, PROTO, SP));
     AssignReference((long *)((long)&theRep->Body + range*4), 
 		    (Item *)comp);
   }

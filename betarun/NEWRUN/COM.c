@@ -19,21 +19,27 @@ Item *AlloCOM(Object *origin, ProtoType *proto, long *SP)
   fprintf(output, "\n\n***WARNING: Using AlloCOM with COM symbol undefined. GC may fail!\n\n");
 #endif
 
-  Protect(origin, item = (Item *) AOAcalloc(ItemSize(proto)));
+  do {
+    Protect(origin, item = (Item *) AOAcalloc(ItemSize(proto)));
 
-  /* The new Item is now allocated, but not initialized yet! */
-  
-  setup_item(item, proto, origin); 
-
+    if (item) {
+      /* The new Item is now allocated, but not initialized yet! */
+    
+      setup_item(item, proto, origin); 
+    
 #ifndef COM
-    item->Proto = (ProtoType *)((long)(item->Proto)+DISP_OFF);
+      item->Proto = (ProtoType *)((long)(item->Proto)+DISP_OFF);
 #endif /* COM */
+    
+      if (proto->GenPart){
+	Protect(item, CallGPart(proto->GenPart, item, SP));
+      }
+    } else {
+      Protect(origin, IOATryAlloc(0x40000000, SP)); /* Dummy alloc to trigger GC */
+    }
+  } while (!item);
 
-  if (proto->GenPart){
-    Protect(item, CallGPart(proto->GenPart, item, SP));
-  }
   Ck(item);
-
   return item;
 }
 

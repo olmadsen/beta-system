@@ -56,15 +56,17 @@ void CCopySRR(RefRep *theRep,
     push(theItem);
     push(theRep);
     size = RefRepSize(range);
-    if (size>IOAMAXSIZE){
-      DEBUG_AOA(fprintf(output, "CopySRR allocates in AOA\n"));
-      newRep = (RefRep *)AOAalloc(size);
-      DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
-    }
-    if (!newRep) {
-      newRep = (RefRep *)IOAalloc(size, SP);
-      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
-    }
+    do {
+      if (size>IOAMAXSIZE){
+	DEBUG_AOA(fprintf(output, "CopySRR allocates in AOA\n"));
+	newRep = (RefRep *)AOAalloc(size);
+	DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
+      }
+      if (!newRep) {
+	newRep = (RefRep *)IOATryAlloc(size, SP);
+	if (newRep && IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+      }
+    } while (!newRep);
     pop(theRep);
     pop(theItem);
     

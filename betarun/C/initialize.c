@@ -227,6 +227,8 @@ static int mmapAllocateHeap(Block **BaseBlock,
   long size = (numbytes+sizeof(Block)+MMAPPageSize-1) & ~(MMAPPageSize-1);
   *BaseBlock = AllocateBlock(size);
   if (*BaseBlock) {
+    /* Set limit to reflect the amount requested */
+    (*BaseBlock)->limit = (long*)((char*)((*BaseBlock)->top) + numbytes);
     return 1;
   } else {
     AllocateHeapFailed(name, size);
@@ -403,6 +405,13 @@ void Initialize()
   mmapAllocateHeap(&ToSpaceBaseBlock, IOASize, "ToSpace heap");
   InsertGuardPage();
   AOAtoIOAalloc();
+  InsertGuardPage();
+  AOAtoIOAalloc();
+  InsertGuardPage();
+  AOAMaxSize = mmapUnusedSize();
+  AOAMaxSize -= PERSIST_MAXENTRIES; /* Leave room for persistense */
+  AOAMaxSize -= 64 * MMAPPageSize; /* Leave 64 pages for other things */
+  AOABaseBlock = reserveBlock(AOAMaxSize);
   InsertGuardPage();
 #endif /* USEMMAP */
 

@@ -35,18 +35,20 @@ ParamObjOffRange(ExtRR)
     push(theObj);
     push(theRep);
     size = RefRepSize(newRange);
-    if (newRange>LARGE_REP_SIZE || size>IOAMAXSIZE){
-      DEBUG_AOA(fprintf(output, "ExtRR allocates in AOA\n"));
-      newRep = (RefRep *)AOAcalloc(size);
-      DEBUG_AOA(if (!newRep) fprintf(output, "AOAcalloc failed\n"));
-    }
-    if (!newRep) {
-      newRep = (RefRep *)IOAalloc(size);
-      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
-    }
+    do {
+      if (newRange>LARGE_REP_SIZE || size>IOAMAXSIZE){
+	DEBUG_AOA(fprintf(output, "ExtRR allocates in AOA(newRange=%d)\n", newRange));
+	newRep = (RefRep *)AOAcalloc(size);
+	DEBUG_AOA(if (!newRep) fprintf(output, "AOAcalloc failed\n"));
+      }
+      if (!newRep) {
+	newRep = (RefRep *)IOATryAlloc(size);
+	if (newRep && IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
+      }
+    } while (!newRep);
     pop(theRep);
     pop(theObj);
-   
+    
     SETPROTO(newRep,RefRepPTValue);
     /* newRep->GCAttr set above if in IOA */
     newRep->LowBorder = 1;

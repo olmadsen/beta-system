@@ -10,7 +10,7 @@
 void mmapInitial(unsigned long numbytes);
 
 /* LOCAL CONSTANTS */
-#define MAXENTRIES 0x160000
+#define MAXENTRIES PERSIST_MAXENTRIES
 
 /* LOCAL VARIABLES */
 static long sourcereg;
@@ -41,9 +41,11 @@ void PITAlloc(void)
      the protected memmory area.
   */
   
-  /* Allocate mmapped proxy indirection table. */
-  PIT = (void *)reserveProtectedBlock((unsigned long) MAXENTRIES);
-  PITLimit = (void *)((unsigned long)PIT + (unsigned long)MAXENTRIES);
+  if (!PIT) {
+    /* Allocate mmapped proxy indirection table. */
+    PIT = (void *)reserveProtectedBlock((unsigned long) MAXENTRIES);
+    PITLimit = (void *)((unsigned long)PIT + (unsigned long)MAXENTRIES);
+  }
 
 #if !MMAPANYADDR
   Claim((unsigned long)PITLimit < 0x7fffffff,

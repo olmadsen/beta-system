@@ -93,3 +93,36 @@ char *IOAallocToSP(unsigned size, long *SP, long PC)
 #endif /* MT */
 }
 
+#ifdef __GNUC__
+static __inline__
+#endif
+char *IOATryAlloc(unsigned size)
+{
+  register char *p = NULL;
+  
+  DEBUG_CODE(Claim(size>0, "IOATryAlloc: size>0"));
+  DEBUG_CODE(Claim( ((long)size&7)==0 , "IOATryAlloc: (size&7)==0"));
+  DEBUG_CODE(Claim( ((long)GLOBAL_IOATop&7)==0 , "IOATryAlloc: (GLOBAL_IOATop&7)==0"));
+  
+  if (do_unconditional_gc && ActiveComponent /* don't do this before AttBC */){
+    ReqObjectSize = size / 4;
+    doGC();
+  }
+  if ((char *)GLOBAL_IOATop+size > (char *)GLOBAL_IOALimit) {
+    ReqObjectSize = size / 4;
+    doGC();
+  } 
+
+  if ((char *)GLOBAL_IOATop+size <= (char *)GLOBAL_IOALimit) {
+    p = (char *)GLOBAL_IOATop;
+#ifdef hppa
+    GLOBAL_IOATop = (long*)((long)GLOBAL_IOATop+size);
+#endif
+#ifdef sparc
+    IOATopOff += size;
+#endif
+    DEBUG_CODE(zero_check(p, size));
+  }
+
+  return p;
+}

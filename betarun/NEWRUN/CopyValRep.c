@@ -24,22 +24,28 @@ void CopyVR1(ValRep *theRep,
 
     size = ByteRepSize(range);
     
-    if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
-      newRep = LVRAAlloc(ByteRepPTValue, range);
-    } else {
-      /* Allocate newRep in IOA */
-      push(theObj);
-      push(theRep);
-      newRep = (ValRep *)IOAalloc(size, SP);
-      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
-      pop(theRep);
-      pop(theObj);
-      
-      SETPROTO(newRep, ByteRepPTValue);
-      /* newRep->GCAttr set above */
-      newRep->LowBorder = 1;
-      newRep->HighBorder = range;
-    }
+    do {
+      if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
+	newRep = LVRAAlloc(ByteRepPTValue, range);
+      } 
+      if (!newRep) {
+	/* Allocate newRep in IOA */
+	push(theObj);
+	push(theRep);
+	newRep = (ValRep *)IOATryAlloc(size, SP);
+	pop(theRep);
+	pop(theObj);
+	if (newRep) {
+	  if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+	  
+	  SETPROTO(newRep, ByteRepPTValue);
+	  /* newRep->GCAttr set above */
+	  newRep->LowBorder = 1;
+	  newRep->HighBorder = range;
+	  break;
+	}
+      }
+    } while (!newRep);
 
     size -= headsize(ValRep); /* adjust size to be bodysize */
 
@@ -71,22 +77,27 @@ void CopyVR2(ValRep *theRep,
 
     size = ShortRepSize(range);
     
-    if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
-      newRep = LVRAAlloc(ShortRepPTValue, range);
-    } else {
-      /* Allocate newRep in IOA */
-      push(theObj);
-      push(theRep);
-      newRep = (ValRep *)IOAalloc(size, SP);
-      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
-      pop(theRep);
-      pop(theObj);
-      
-      SETPROTO(newRep, ShortRepPTValue);
-      /* newRep->GCAttr set above */
-      newRep->LowBorder = 1;
-      newRep->HighBorder = range;
-    }
+    do {
+      if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
+	newRep = LVRAAlloc(ShortRepPTValue, range);
+      } 
+      if (!newRep) {
+	/* Allocate newRep in IOA */
+	push(theObj);
+	push(theRep);
+	newRep = (ValRep *)IOATryAlloc(size, SP);
+	pop(theRep);
+	pop(theObj);
+	if (newRep) {
+	  if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+	  
+	  SETPROTO(newRep, ShortRepPTValue);
+	  /* newRep->GCAttr set above */
+	  newRep->LowBorder = 1;
+	  newRep->HighBorder = range;
+	}
+      }
+    } while (!newRep);
 
     size -= headsize(ValRep); /* adjust size to be bodysize */
 
@@ -118,22 +129,27 @@ void CopyVR4(ValRep *theRep,
 
     size = LongRepSize(range);
     
-    if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
-      newRep = LVRAAlloc(LongRepPTValue, range);
-    } else {
-      /* Allocate newRep in IOA */
-      push(theObj);
-      push(theRep);
-      newRep = (ValRep *)IOAalloc(size, SP);
-      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
-      pop(theRep);
-      pop(theObj);
-      
-      SETPROTO(newRep, LongRepPTValue);
-      /* newRep->GCAttr set above */
-      newRep->LowBorder = 1;
-      newRep->HighBorder = range;
-    }
+    do {
+      if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
+	newRep = LVRAAlloc(LongRepPTValue, range);
+      } 
+      if (!newRep) {
+	/* Allocate newRep in IOA */
+	push(theObj);
+	push(theRep);
+	newRep = (ValRep *)IOATryAlloc(size, SP);
+	pop(theRep);
+	pop(theObj);
+	if (newRep) {
+	  if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+	  
+	  SETPROTO(newRep, LongRepPTValue);
+	  /* newRep->GCAttr set above */
+	  newRep->LowBorder = 1;
+	  newRep->HighBorder = range;
+	}
+      }
+    } while (!newRep);
 
     size -= headsize(ValRep); /* adjust size to be bodysize */
 
@@ -165,22 +181,27 @@ void CopyVR8(ValRep *theRep,
 
     size = DoubleRepSize(range);
     
-    if (range > LARGE_REP_SIZE || size>IOAMAXSIZE){
-      newRep = LVRAAlloc(DoubleRepPTValue, range);
-    } else {
-      /* Allocate newRep in IOA */
-      push(theObj);
-      push(theRep);
-      newRep = (ValRep *)IOAalloc(size, SP);
-      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
-      pop(theRep);
-      pop(theObj);
-      
-      SETPROTO(newRep, DoubleRepPTValue);
-      /* newRep->GCAttr set above */
-      newRep->LowBorder = 1;
-      newRep->HighBorder = range;
-    }
+    do {
+      if (range > LARGE_REP_SIZE || size>IOAMAXSIZE){
+	newRep = LVRAAlloc(DoubleRepPTValue, range);
+      } 
+      if (!newRep) {
+	/* Allocate newRep in IOA */
+	push(theObj);
+	push(theRep);
+	newRep = (ValRep *)IOATryAlloc(size, SP);
+	pop(theRep);
+	pop(theObj);
+	if (newRep) {
+	  if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+	  
+	  SETPROTO(newRep, DoubleRepPTValue);
+	  /* newRep->GCAttr set above */
+	  newRep->LowBorder = 1;
+	  newRep->HighBorder = range;
+	}
+      }
+    } while (!newRep);
 
     size -= headsize(ValRep); /* adjust size to be bodysize */
 
@@ -216,14 +237,17 @@ void CopyVRI(ObjectRep *theRep,
       
     push(theObj);
     push(theRep); 
-    if (size>IOAMAXSIZE){
-      DEBUG_AOA(fprintf(output, "CopyVRI allocates in AOA\n"));
-      newRep = (ObjectRep *)AOAalloc(size);
-      DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
-    } else {
-      newRep = (ObjectRep *)IOAalloc(size, SP);
-      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
-    }
+    do {
+      if (size>IOAMAXSIZE){
+	DEBUG_AOA(fprintf(output, "CopyVRI allocates in AOA\n"));
+	newRep = (ObjectRep *)AOAalloc(size);
+	DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
+      } 
+      if (!newRep) {
+	newRep = (ObjectRep *)IOATryAlloc(size, SP);
+	if (newRep && IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+      }
+    } while (!newRep);
     pop(theRep);
     pop(theObj);
       
@@ -267,14 +291,17 @@ void CopyVRC(ObjectRep *theRep,
       
     push(theObj);
     push(theRep); 
-    if (size>IOAMAXSIZE){
-      DEBUG_AOA(fprintf(output, "CopyVRC allocates in AOA\n"));
-      newRep = (ObjectRep *)AOAalloc(size);
-      DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
-    } else {
-      newRep = (ObjectRep *)IOAalloc(size, SP);
-      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
-    }
+    do {
+      if (size>IOAMAXSIZE){
+	DEBUG_AOA(fprintf(output, "CopyVRC allocates in AOA\n"));
+	newRep = (ObjectRep *)AOAalloc(size);
+	DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
+      } 
+      if (!newRep) {
+	newRep = (ObjectRep *)IOATryAlloc(size, SP);
+	if (newRep && IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+      }
+    } while (!newRep);
     pop(theRep);
     pop(theObj);
       

@@ -96,6 +96,7 @@ extern void                 doGC(long *SP, Object *this, unsigned long NumLongs)
  * functions in Misc.c, and add prototypes here:
  */
 extern void *IOAalloc(unsigned size, long *SP);
+extern void *IOATryAlloc(unsigned size, long *SP);
 #endif
 
 #endif /* _CRUN_H_ */

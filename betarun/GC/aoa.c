@@ -11,12 +11,55 @@
 #include "../P/referenceTable.h"
 #endif /* PERSIST */
 
+/* Policy regarding when to perform a GC rather than extending AOA:
+ *
+ * AOA may fail in delivering a block upon allocation, if
+ * there is no sufficiently large block available. 
+ * 1) if AOA is not overfull, do a GC.
+ * 2) if the allocation still fails after that, extend AOA sufficiently
+ *    and remember that the GC did not free enough space.
+ *
+ * Policy:
+ * 
+ * Keep a flag of whether AOA is considered OverFull.
+ * Upon failure of an allocation, the action depends on the flag:
+ * OverFull==True -> 
+ * 	if the heap has been extended enough, do a GC.
+ *	otherwise, extend the heap.
+ * OverFull==False ->
+ *	Do a GC.
+ *
+ * Rules for changing the value of OverFull:
+ *
+ * If the GC did not free enough space (say freed less than X 
+ * percent of the size of AOA), set OverFull=True, otherwise 
+ * set it to False. It can thus only change to False after a GC.
+ *
+ * If an allocation fails, try a GC if OverFull==False, or
+ * if OverFull==True and the heap has been extended enough
+ * (say more than X percent of the size of AOA or Y MB)
+ *
+ * [ One could take AOAPercentage for Y ]
+ *
+ * There is a minor caveat here: even if the heap has been extended enough,
+ * and one does the GC, that does not guarantee that there is sufficient 
+ * room. If there isn't, then the heap has to be extended even though it
+ * had already been extended enough...
+ */
+
+
+
 #define REP ((ObjectRep *)theObj)
 
 /* LOCAL FUNCTIONS */
-static long AllocateBaseBlock(void);
+#ifdef USEMMAP
+static Object* ExtendBaseBlock(unsigned long numbytes);
+#else
+static long AllocateBaseBlock(unsigned long numbytes);
 static void AOANewBlock(long newBlockSize);
-static void AOAMaybeNewBlock(long minNewBlockSize);
+/* static void AOAMaybeNewBlock(long minNewBlockSize); */
+#endif
+
 #ifdef RTDEBUG
 #ifdef FASTDEBUG
 #else
@@ -29,6 +72,11 @@ void scanPartObjects(Object *obj, void (*)(Object *));
 static long totalFree = 0;
 static long totalFreeAtLast = 0;
 static long lastAOAGCAt = -1000;  /* NumIOAGc of last AOAGC */
+
+static int OverFullFlag = 0;
+static unsigned long AOASizeAtGC = 0;
+static unsigned long AOAFreeAtGC = 0;
+
 
 /* tempAOArootsAlloc:
  *  Not enough room for the AOAroots table in ToSpace.
@@ -116,6 +164,38 @@ void tempAOArootsFree(void)
   INFO_IOA(fprintf(output, "freed temporary AOAroots table\n"));
 }
 
+#ifdef USEMMAP
+static Object *ExtendBaseBlock(unsigned long numbytes)
+{
+  char *newspace = (char*)AOABaseBlock->top;
+  char *oldlimit; 
+  unsigned long extend = numbytes;
+
+  if (numbytes <= (unsigned long)((char*)AOABaseBlock->limit - (char*)AOABaseBlock->top)) {
+    AOABaseBlock->top = (long*)((char*)AOABaseBlock->top+numbytes);
+    totalAOASize = (char*)AOABaseBlock->top-(char*)BlockStart(AOABaseBlock);
+    ((Object*)newspace)->GCAttr = DEADOBJECT;
+    return (Object*)newspace;
+  }
+
+  extend = (extend+16*MMAPPageSize-1) & ~(16*MMAPPageSize-1);
+  if (AOABaseBlock->limit == BlockStart(AOABaseBlock)) {
+    /* No memory available, first time.  
+     * Block.c allocates an entire page to hold the blockheader,
+     * but none of it is available yet. 
+     * Use rest of that block, too */
+    extend += MMAPPageSize-sizeof(Block);
+  }
+  oldlimit = (char*)AOABaseBlock->limit;
+  extendBlock(AOABaseBlock, extend);
+  extend = (char*)AOABaseBlock->limit - oldlimit;
+  AOABaseBlock->top = (long*)((char*)AOABaseBlock->top+numbytes);
+  totalAOASize = (char*)AOABaseBlock->top-(char*)BlockStart(AOABaseBlock);
+  ((Object*)newspace)->GCAttr = DEADOBJECT;
+  return (Object*)newspace;
+}
+
+#else /* USEMMAP */
 
 static void AOANewBlock(long newBlockSize) 
 {
@@ -154,6 +234,7 @@ static void AOANewBlock(long newBlockSize)
   }
 }
 
+#if 0
 static void AOAMaybeNewBlock(long minNewBlockSize) 
 {
   long newBlockSize = minNewBlockSize;
@@ -171,6 +252,7 @@ static void AOAMaybeNewBlock(long minNewBlockSize)
     AOANewBlock(newBlockSize);
   }
 }
+#endif
 
 /* AllocateBaseBlock:
  * Some of The functionality has been taken out of 'AOAallocate below
@@ -181,9 +263,16 @@ static void AOAMaybeNewBlock(long minNewBlockSize)
  * itself.
  */
 
-static long AllocateBaseBlock(void)
+static long AllocateBaseBlock(unsigned long numbytes)
 {
-  if( MallocExhausted || (AOABlockSize == 0) ) return 0;
+  unsigned long blksize = AOABlockSize;
+  if (AOANeedCompaction > blksize) {
+    blksize = AOANeedCompaction;
+  }
+  if (numbytes > blksize) {
+    blksize = numbytes;
+  }
+  if( MallocExhausted || (blksize == 0) ) return 0;
   /* Check if the AOAtoIOAtable is allocated. If not then allocate it. */
   if( AOAtoIOAtable == 0 ) 
     if( AOAtoIOAalloc() == 0 ){
@@ -194,15 +283,15 @@ static long AllocateBaseBlock(void)
       return 1;
     }
   /* Try to allocate a new AOA block. */
-  if( (AOABaseBlock = newBlock(AOABlockSize)) ){
+  if( (AOABaseBlock = newBlock(blksize)) ){
     INFO_AOA( fprintf(output, "#(AOA: new block allocated %dKb.)\n",
-		      (int)AOABlockSize/Kb));
+		      (int)blksize/Kb));
     AOABaseBlock->top = AOABaseBlock->limit;
     AOATopBlock  = AOABaseBlock;
     AOABlocks++;
-    totalFree += AOABlockSize;
-    totalFreeAtLast = AOABlockSize;	
-    totalAOASize += AOABlockSize;
+    totalFree += blksize;
+    totalFreeAtLast = blksize;	
+    totalAOASize += blksize;
         
     /* Insert the new block in the freelist */
     AOAInsertFreeBlock((char *)BlockStart(AOATopBlock), AOABlockSize);
@@ -210,11 +299,12 @@ static long AllocateBaseBlock(void)
   }else{
     MallocExhausted = TRUE;
     fprintf(output, "#(AOA: baseblock allocation failed %dKb.)\n",
-	    (int)AOABlockSize/Kb);
+	    (int)blksize/Kb);
     return 1;
   }
   return 0;
 }
+#endif
 
 /* AOAallocate allocate 'size' number of bytes in the Adult object area.
  * If the allocation succeeds the function returns a reference to the allocated
@@ -233,55 +323,67 @@ Object *AOAallocate(long numbytes)
     return newObj;
   }
 
-  if (AOABaseBlock == 0) {
-    if (AllocateBaseBlock()) {
-      return 0;
-    }
+#ifndef USEMMAP
+  if (!AOABaseBlock) {
+    AllocateBaseBlock(0);
     return AOAallocate(numbytes);
+  }
+#endif
+
+  DEBUG_CODE({
+    if (!IOAActive) {
+      INFO_AOA(fprintf(output,"AOAallocate failed: "
+		       "numbytes=%d, OFflag=%d\n",
+		       (int)numbytes, OverFullFlag));
+    }
+  });
+  if (!totalAOASize || noAOAGC || IOALooksFullCount
+#ifdef PERSIST
+      || forceAOAAllocation
+#endif
+      ) {
+    AOANeedCompaction = 1;
+#ifdef USEMMAP
+    return ExtendBaseBlock(numbytes);
+#else
+    AOANewBlock(numbytes);
+    return AOAallocate(numbytes);
+#endif
   } 
 
+  if (!OverFullFlag){
+    OverFullFlag = 1;
+    AOANeedCompaction = 1;
+    return NULL;  /* perform GC */
+  }
+
+  if (OverFullFlag == 1) {
+    if ((unsigned long)(totalAOASize-AOASizeAtGC) >= (unsigned long)AOAMinFree
+	|| ((unsigned long)totalAOASize > 100 
+	    && (unsigned long)(AOASizeAtGC / (totalAOASize / 100)) 
+	    > (unsigned long)AOAPercentage)) {
+      AOANeedCompaction = 1;
+      return NULL;  /* perform GC */
+    }
+  }
+
+  OverFullFlag = 1;
   /* IOA/NewCopyObject handles that we return 0
    * by just moving the object to ToSpace once more.
    */
-#ifdef PERSIST
-  if (IOAActive && IOALooksFullCount==0 && !noAOAGC && !forceAOAAllocation) {
-#else 
-  if (IOAActive && IOALooksFullCount==0 && !noAOAGC) {    
-    AOANeedCompaction = TRUE;
-    return 0;
-#endif /* PERSIST */
-  }
 
-  /* Only get here is caller cannot handle a NULL result.
-   * We add a new block and indicate that we want an AOAGC ASAP 
-   */
-  
-  DETAILEDSTAT_AOA(fprintf(output,"Could not allocate 0x%0x bytes, "
-		   "allocating new block now\n"
-		   "and requesting AOAGc from next IOAGc.\n",
-		   (int)numbytes));
-  AOAMaybeNewBlock(numbytes);
-  AOANeedCompaction = TRUE;
-  
-  return AOAallocate(numbytes);
+#ifdef USEMMAP
+    return ExtendBaseBlock(numbytes);
+#else
+    AOANewBlock(numbytes);
+    return AOAallocate(numbytes);
+#endif
 }
 
 Object *AOAalloc(long numbytes)
 {
-  Object *theObj;
-
-  MT_CODE(mutex_lock(&aoa_lock));
-
   DEBUG_CODE(NumAOAAlloc++);
-  theObj = AOAallocate(numbytes);
-  if (theObj) {
-    MT_CODE(mutex_unlock(&aoa_lock));
-    return theObj;
-  }
-
-  fprintf(output, "AOAalloc: cannot allocate 0x%x bytes\n", (int)numbytes);
-  BetaExit(1);
-  return NULL;
+  return AOAallocate(numbytes);
 }
 
 Object *AOAcalloc(long numbytes)
@@ -290,10 +392,11 @@ Object *AOAcalloc(long numbytes)
   long gca;
 
   theObj = AOAalloc(numbytes);
-  /* No need to check theObj!=0 since this is done in AOAalloc */
-  gca = theObj->GCAttr;
-  memset(theObj, 0, numbytes);
-  theObj->GCAttr = gca;
+  if (theObj) {
+    gca = theObj->GCAttr;
+    memset(theObj, 0, numbytes);
+    theObj->GCAttr = gca;
+  }
   return theObj;
 }
 
@@ -527,7 +630,7 @@ void AOAGc()
     /* Then each chunk in the block is examined */
     
     freeInBlock = AOAScanMemoryArea(BlockStart(currentBlock),
-				    currentBlock -> limit);
+				    currentBlock -> top);
     totalFree += freeInBlock;
 
     DETAILEDSTAT_AOA(fprintf(output,"[0x%08x/0x%08x/0x%08x] ",
@@ -541,9 +644,25 @@ void AOAGc()
 
   AOARefStackUnHack();
   
-  if (totalFree < AOAMinFree) {
-    AOANewBlock(AOABlockSize);
+  if (totalAOASize > 100 
+      && (unsigned long)(freed / (totalAOASize / 100)) 
+      < (unsigned long)AOAPercentage) {
+    OverFullFlag++;
+  } else {
+    OverFullFlag = 0;
   }
+  AOASizeAtGC = totalAOASize;
+  AOAFreeAtGC = totalFree;
+
+#ifndef USEMMAP
+  if (totalFree < AOAMinFree) {
+    unsigned long blksize = AOABlockSize;
+    if (AOANeedCompaction > blksize) {
+      blksize = AOANeedCompaction;
+    }
+    AOANewBlock(blksize);
+  }
+#endif
   totalFreeAtLast = totalFree;
 
   STAT_AOA(AOADisplayFreeList());
@@ -630,11 +749,15 @@ void AOACheck()
   while( theBlock ){
     theObj = (Object *) BlockStart(theBlock);
     while( (long *) theObj < theBlock->top ){
-      theObjectSize = 4*ObjectSize(theObj);
-      Claim((theObjectSize&7)==0, "#AOACheck: (TheObjectSize&7)==0 ");
-      Claim(ObjectSize(theObj) > 0, "#AOACheck: ObjectSize(theObj) > 0");
-      AOACheckObject( theObj);
-      lastAOAObj=theObj;
+      if (AOAISFREE(theObj)) {
+	theObjectSize = ((AOAFreeChunk*)theObj)->size;
+      } else {
+	theObjectSize = 4*ObjectSize(theObj);
+	Claim((theObjectSize&7)==0, "#AOACheck: (TheObjectSize&7)==0 ");
+	Claim(ObjectSize(theObj) > 0, "#AOACheck: ObjectSize(theObj) > 0");
+	AOACheckObject( theObj);
+	lastAOAObj=theObj;
+      }
       theObj = (Object *) Offset( theObj, theObjectSize);
     }
     theBlock = theBlock->next;
@@ -1036,7 +1159,7 @@ void prependToListInAOA(REFERENCEACTIONARGSTYPE)
 #else
   realObj = getRealObject(theObj);
   
-  if (inToSpace(realObj) {
+  if (inToSpace(realObj)) {
     AOAtoIOAInsert(theCell);
   } else if (inAOA(realObj)) {
     prependToList(realObj);

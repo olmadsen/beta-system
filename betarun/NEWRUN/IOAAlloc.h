@@ -25,3 +25,32 @@ INLINE void *IOAalloc(unsigned size, long *SP)
   
   return p;
 }
+
+
+INLINE void *IOATryAlloc(unsigned size, long *SP)
+{
+  register char *p;
+  
+  /*fprintf(output, "IOAalloc: IOATop=0x%x, size=0x%x\n", IOATop, size);*/
+  
+  DEBUG_CODE(Claim(size>0, "IOAalloc: size>0"));
+  DEBUG_CODE(Claim( ((long)size&7)==0 , "IOAalloc: (size&7)==0"));
+  DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "IOAalloc: (IOATop&7)==0"));
+  
+  if (do_unconditional_gc && ActiveComponent /* don't do this before AttBC */){
+    doGC(SP, GetThis(SP), size / 4);
+  }
+  if ((char *) IOATop+size > (char *)IOALimit) {
+    doGC(SP, GetThis(SP), size / 4);
+  }
+
+  if ((char *) IOATop+size <= (char *)IOALimit) {
+    p = (char *)IOATop;
+    IOATopOff += size;
+  
+    DEBUG_CODE(zero_check((char*)p, size));
+  
+    return p;
+  }
+  return NULL;
+}

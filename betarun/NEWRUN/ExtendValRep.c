@@ -33,41 +33,48 @@ void ExtVR1(Object *theObj,
     copyRange = (ByteRepBodySize((add < 0) ? newRange : oldRange))>>2;
     size = ByteRepSize(newRange);
       
-    if (newRange > LARGE_REP_SIZE || size>IOAMAXSIZE){
-      newRep = LVRAXAlloc(ByteRepPTValue, oldRange, newRange);
-      *(ValRep **)((long *) theObj + offset) = newRep;
-	
-      /* Copy old rep */
-      for (i = 0; i < copyRange; ++i){
-	newRep->Body[i] = theRep->Body[i];
+    while (1) {
+      if (newRange > LARGE_REP_SIZE || size>IOAMAXSIZE){
+	newRep = LVRAXAlloc(ByteRepPTValue, oldRange, newRange);
+	if (newRep) {
+	  *(ValRep **)((long *) theObj + offset) = newRep;
+	  
+	  /* Copy old rep */
+	  for (i = 0; i < copyRange; ++i){
+	    newRep->Body[i] = theRep->Body[i];
+	  }
+	  return;
+	}
       }
-      return;
+
+      /* Allocate new repetition in IOA */
+      push(theObj);
+      newRep = (ValRep *)IOATryAlloc(size, SP);
+      pop(theObj);
+      if (newRep) {
+	if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
+	
+	/* Reload theRep - may have been moved in IOAGc */
+	theRep = *(ValRep **)((long *) theObj + offset);
+	
+	/* Assign structural part of new repetition */
+	SETPROTO(newRep, ByteRepPTValue);
+	/* newRep->GCAttr set above if in IOA */
+	newRep->LowBorder = theRep->LowBorder;
+	newRep->HighBorder = newRange;
+	
+	/* Assign into theObj */
+	AssignReference((long *) theObj + offset, (Item *)newRep);
+	
+	/* Copy contents of old rep to new rep */
+	for (i = 0; i < copyRange; ++i){
+	  newRep->Body[i] = theRep->Body[i];
+	} 
+	
+	Ck(theObj); Ck(theRep); Ck(newRep);
+	return;
+      }
     }
-
-    /* Allocate new repetition */
-    push(theObj);
-    newRep = (ValRep *)IOAalloc(size, SP);
-    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
-    pop(theObj);
-
-    /* Reload theRep - may have been moved in IOAGc */
-    theRep = *(ValRep **)((long *) theObj + offset);
-
-    /* Assign structural part of new repetition */
-    SETPROTO(newRep, ByteRepPTValue);
-    /* newRep->GCAttr set above if in IOA */
-    newRep->LowBorder = theRep->LowBorder;
-    newRep->HighBorder = newRange;
-
-    /* Assign into theObj */
-    AssignReference((long *) theObj + offset, (Item *)newRep);
-    
-    /* Copy contents of old rep to new rep */
-    for (i = 0; i < copyRange; ++i){
-      newRep->Body[i] = theRep->Body[i];
-    } 
-    
-    Ck(theObj); Ck(theRep); Ck(newRep);
 } /* ExtVR1 */
 
 void ExtVR2(Object *theObj,
@@ -97,41 +104,48 @@ void ExtVR2(Object *theObj,
     copyRange = (ShortRepBodySize((add < 0) ? newRange : oldRange))>>2;
     size = ShortRepSize(newRange);
       
-    if (newRange > LARGE_REP_SIZE || size>IOAMAXSIZE){
-      newRep = LVRAXAlloc(ShortRepPTValue, oldRange, newRange);
-      *(ValRep **)((long *) theObj + offset) = newRep;
-	
-      /* Copy old rep */
-      for (i = 0; i < copyRange; ++i){
-	newRep->Body[i] = theRep->Body[i];
+    while (1) {
+      if (newRange > LARGE_REP_SIZE || size>IOAMAXSIZE){
+	newRep = LVRAXAlloc(ShortRepPTValue, oldRange, newRange);
+	if (newRep) {
+	  *(ValRep **)((long *) theObj + offset) = newRep;
+	  
+	  /* Copy old rep */
+	  for (i = 0; i < copyRange; ++i){
+	    newRep->Body[i] = theRep->Body[i];
+	  }
+	  return;
+	}
       }
-      return;
+      
+      /* Allocate new repetition */
+      push(theObj);
+      newRep = (ValRep *)IOATryAlloc(size, SP);
+      pop(theObj);
+      if (newRep) {
+	if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
+	
+	/* Reload theRep - may have been moved in IOAGc */
+	theRep = *(ValRep **)((long *) theObj + offset);
+	
+	/* Assign structural part of new repetition */
+	SETPROTO(newRep, ShortRepPTValue);
+	/* newRep->GCAttr set above if in IOA */
+	newRep->LowBorder = theRep->LowBorder;
+	newRep->HighBorder = newRange;
+	
+	/* Assign into theObj */
+	AssignReference((long *) theObj + offset, (Item *)newRep);
+	
+	/* Copy contents of old rep to new rep */
+	for (i = 0; i < copyRange; ++i){
+	  newRep->Body[i] = theRep->Body[i];
+	} 
+	
+	Ck(theObj); Ck(theRep); Ck(newRep);
+	return;
+      }
     }
-
-    /* Allocate new repetition */
-    push(theObj);
-    newRep = (ValRep *)IOAalloc(size, SP);
-    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
-    pop(theObj);
-
-    /* Reload theRep - may have been moved in IOAGc */
-    theRep = *(ValRep **)((long *) theObj + offset);
-
-    /* Assign structural part of new repetition */
-    SETPROTO(newRep, ShortRepPTValue);
-    /* newRep->GCAttr set above if in IOA */
-    newRep->LowBorder = theRep->LowBorder;
-    newRep->HighBorder = newRange;
-
-    /* Assign into theObj */
-    AssignReference((long *) theObj + offset, (Item *)newRep);
-    
-    /* Copy contents of old rep to new rep */
-    for (i = 0; i < copyRange; ++i){
-      newRep->Body[i] = theRep->Body[i];
-    } 
-    
-    Ck(theObj); Ck(theRep); Ck(newRep);
 } /* ExtVR2 */
 
 void ExtVR4(Object *theObj,
@@ -161,41 +175,48 @@ void ExtVR4(Object *theObj,
     copyRange = LongRepBodySize((add < 0) ? newRange : oldRange) >>2;
     size = LongRepSize(newRange);
       
-    if (newRange > LARGE_REP_SIZE || size>IOAMAXSIZE){
-      newRep = LVRAXAlloc(LongRepPTValue, oldRange, newRange);
-      *(ValRep **)((long *) theObj + offset) = newRep;
-	
-      /* Copy old rep */
-      for (i = 0; i < copyRange; ++i){
-	newRep->Body[i] = theRep->Body[i];
+    while(1) {
+      if (newRange > LARGE_REP_SIZE || size>IOAMAXSIZE){
+	newRep = LVRAXAlloc(LongRepPTValue, oldRange, newRange);
+	if (newRep) {
+	  *(ValRep **)((long *) theObj + offset) = newRep;
+	  
+	  /* Copy old rep */
+	  for (i = 0; i < copyRange; ++i){
+	    newRep->Body[i] = theRep->Body[i];
+	  }
+	  return;
+	}
       }
-      return;
-    }
       
-    /* Allocate new repetition */
-    push(theObj);
-    newRep = (ValRep *)IOAalloc(size, SP);
-    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
-    pop(theObj);
-
-    /* Reload theRep - may have been moved in IOAGc */
-    theRep = *(ValRep **)((long *) theObj + offset);
-
-    /* Assign structural part of new repetition */
-    SETPROTO(newRep, LongRepPTValue);
-    /* newRep->GCAttr set above if in IOA */
-    newRep->LowBorder = theRep->LowBorder;
-    newRep->HighBorder = newRange;
-
-    /* Assign into theObj */
-    AssignReference((long *) theObj + offset, (Item *)newRep);
-    
-    /* Copy contents of old rep to new rep */
-    for (i = 0; i < copyRange; ++i){
-      newRep->Body[i] = theRep->Body[i];
-    } 
-    
-    Ck(theObj); Ck(theRep); Ck(newRep);
+      /* Allocate new repetition */
+      push(theObj);
+      newRep = (ValRep *)IOATryAlloc(size, SP);
+      pop(theObj);
+      if (newRep) {
+	if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
+	
+	/* Reload theRep - may have been moved in IOAGc */
+	theRep = *(ValRep **)((long *) theObj + offset);
+	
+	/* Assign structural part of new repetition */
+	SETPROTO(newRep, LongRepPTValue);
+	/* newRep->GCAttr set above if in IOA */
+	newRep->LowBorder = theRep->LowBorder;
+	newRep->HighBorder = newRange;
+	
+	/* Assign into theObj */
+	AssignReference((long *) theObj + offset, (Item *)newRep);
+	
+	/* Copy contents of old rep to new rep */
+	for (i = 0; i < copyRange; ++i){
+	  newRep->Body[i] = theRep->Body[i];
+	} 
+	
+	Ck(theObj); Ck(theRep); Ck(newRep);
+	return;
+      }
+    }
 } /* ExtVR4 */
 
 void ExtVR8(Object *theObj,
@@ -225,41 +246,48 @@ void ExtVR8(Object *theObj,
     copyRange = (DoubleRepBodySize((add < 0) ? newRange : oldRange))>>2;
     size = DoubleRepSize(newRange);
       
-    if (newRange > LARGE_REP_SIZE || size>IOAMAXSIZE){
-      newRep = LVRAXAlloc(DoubleRepPTValue, oldRange, newRange);
-      *(ValRep **)((long *) theObj + offset) = newRep;
-	
-      /* Copy old rep */
-      for (i = 0; i < copyRange; ++i){
-	newRep->Body[i] = theRep->Body[i];
+    while(1) {
+      if (newRange > LARGE_REP_SIZE || size>IOAMAXSIZE){
+	newRep = LVRAXAlloc(DoubleRepPTValue, oldRange, newRange);
+	if (newRep) {
+	  *(ValRep **)((long *) theObj + offset) = newRep;
+	  
+	  /* Copy old rep */
+	  for (i = 0; i < copyRange; ++i){
+	    newRep->Body[i] = theRep->Body[i];
+	  }
+	  return;
+	}
       }
-      return;
-    }
       
-    /* Allocate new repetition */
-    push(theObj);
-    newRep = (ValRep *)IOAalloc(size, SP);
-    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
-    pop(theObj);
-
-    /* Reload theRep - may have been moved in IOAGc */
-    theRep = *(ValRep **)((long *) theObj + offset);
-
-    /* Assign structural part of new repetition */
-    SETPROTO(newRep, DoubleRepPTValue);
-    /* newRep->GCAttr set above if in IOA */
-    newRep->LowBorder = theRep->LowBorder;
-    newRep->HighBorder = newRange;
-
-    /* Assign into theObj */
-    AssignReference((long *) theObj + offset, (Item *)newRep);
-    
-    /* Copy contents of old rep to new rep */
-    for (i = 0; i < copyRange; ++i){
-      newRep->Body[i] = theRep->Body[i];
-    } 
-    
-    Ck(theObj); Ck(theRep); Ck(newRep);
+      /* Allocate new repetition */
+      push(theObj);
+      newRep = (ValRep *)IOATryAlloc(size, SP);
+      pop(theObj);
+      if (newRep) {
+	if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
+	
+	/* Reload theRep - may have been moved in IOAGc */
+	theRep = *(ValRep **)((long *) theObj + offset);
+	
+	/* Assign structural part of new repetition */
+	SETPROTO(newRep, DoubleRepPTValue);
+	/* newRep->GCAttr set above if in IOA */
+	newRep->LowBorder = theRep->LowBorder;
+	newRep->HighBorder = newRange;
+	
+	/* Assign into theObj */
+	AssignReference((long *) theObj + offset, (Item *)newRep);
+	
+	/* Copy contents of old rep to new rep */
+	for (i = 0; i < copyRange; ++i){
+	  newRep->Body[i] = theRep->Body[i];
+	} 
+	
+	Ck(theObj); Ck(theRep); Ck(newRep);
+	return;
+      }
+    }
 } /* ExtVR8 */
 
 
@@ -292,15 +320,17 @@ void ExtVRI(Object *theObj,
   
   /* Allocate new repetition */
   push(theObj);
-  if (size>IOAMAXSIZE){
-    DEBUG_AOA(fprintf(output, "ExtVRI allocates in AOA\n"));
-    newRep = (ObjectRep *)AOAcalloc(size);
-    DEBUG_AOA(if (!newRep) fprintf(output, "AOAcalloc failed\n"));
-  } 
-  if (!newRep){
-    newRep = (ObjectRep *)IOAalloc(size, SP);
-    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
-  }
+  do {
+    if (size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "ExtVRI allocates in AOA\n"));
+      newRep = (ObjectRep *)AOAcalloc(size);
+      DEBUG_AOA(if (!newRep) fprintf(output, "AOAcalloc failed\n"));
+    } 
+    if (!newRep){
+      newRep = (ObjectRep *)IOATryAlloc(size, SP);
+      if (newRep && IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
+    }
+  } while (!newRep);
   pop(theObj);
   
   /* Reload theRep - may have been moved in IOAGc */
@@ -368,15 +398,17 @@ void ExtVRC(Object *theObj,
   
   /* Allocate new repetition */
   push(theObj);
-  if (size>IOAMAXSIZE){
-    DEBUG_AOA(fprintf(output, "ExtVRC allocates in AOA\n"));
-    newRep = (ObjectRep *)AOAcalloc(size);
-    DEBUG_AOA(if (!newRep) fprintf(output, "AOAcalloc failed\n"));
-  } 
-  if (!newRep){
-    newRep = (ObjectRep *)IOAalloc(size, SP);
-    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
-  }
+  do {
+    if (size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "ExtVRC allocates in AOA\n"));
+      newRep = (ObjectRep *)AOAcalloc(size);
+      DEBUG_AOA(if (!newRep) fprintf(output, "AOAcalloc failed\n"));
+    } 
+    if (!newRep){
+      newRep = (ObjectRep *)IOATryAlloc(size, SP);
+      if (newRep && IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
+    }
+  } while (!newRep);
   pop(theObj);
   
   /* Reload theRep - may have been moved in IOAGc */

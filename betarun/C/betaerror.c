@@ -422,7 +422,9 @@ errorTable[] =
   { FpStackUflowErr,   "Floating Point stack underflow" },
   { FpStackOflowErr,   "Floating Point stack overflow" },
 #endif
+#ifdef RTDEBUG
   { InterruptErr,      "User Interrupt" },
+#endif
   { EmulatorTrapErr,   "Emulator trap" },
   { IllegalInstErr,    "Illegal instruction" },
   { BusErr,            "Bus error" },

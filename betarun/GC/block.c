@@ -235,6 +235,11 @@ void InsertGuardPage(void)
   mmapHeapTop = (char*)mmapHeapTop + MMAPPageSize;
 }
 
+unsigned long mmapUnusedSize(void)
+{
+  return (char*)mmapHeapLimit - (char*)mmapHeapTop;
+}
+
 Block * reserveBlock(long numbytes)
 {
   Block * theBlock;

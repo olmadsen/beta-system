@@ -6,8 +6,6 @@
 #include "beta.h"
 #include "crun.h"
 
-#ifndef MT
-
 /* parameters:
  *   primreg1 = off
  *   primreg2 = range, 
@@ -25,28 +23,31 @@ ParamThisOffRange(AlloVR1)
 
     DEBUG_CODE(NumAlloVR1++);
 
-    Ck(theObj);
-    Size = ByteRepSize(range);
+    do {
+      Ck(theObj);
+      Size = ByteRepSize(range);
 
-    if (range > LARGE_REP_SIZE) {
+      if (range > LARGE_REP_SIZE) {
         theRep = (ValRep *) LVRACAlloc(ByteRepPTValue, range);
         if (theRep) {
-            Claim(theRep->HighBorder==range&&theRep->LowBorder==1, "LVRA structure ok");
-            *(ValRep **)((char *)theObj + offset) = theRep;
-            return;
+	  Claim(theRep->HighBorder==range&&theRep->LowBorder==1, "LVRA structure ok");
+	  *(ValRep **)((char *)theObj + offset) = theRep;
+	  return;
         }
-    }
+      }
 
-    Protect(theObj, theRep = (ValRep *) IOAalloc(Size));
-
-    SETPROTO(theRep,ByteRepPTValue);
-    if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
-    theRep->LowBorder = 1;
-    theRep->HighBorder = range;
-  
-    AssignReference((long *)((char *)theObj + offset), (Item *) theRep);
-
-    Ck(theObj); Ck(theRep);
+      Protect(theObj, theRep = (ValRep *) IOATryAlloc(Size));
+      if (theRep) {
+	SETPROTO(theRep,ByteRepPTValue);
+	if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
+	theRep->LowBorder = 1;
+	theRep->HighBorder = range;
+	
+	AssignReference((long *)((char *)theObj + offset), (Item *) theRep);
+	
+	Ck(theObj); Ck(theRep);
+      }
+    } while (!theRep);
 }
 
 ParamThisOffRange(AlloVR2)
@@ -56,30 +57,34 @@ ParamThisOffRange(AlloVR2)
   FetchThisOffRange();
 
   DEBUG_CODE(NumAlloVR2++);
-  Ck(theObj);
-
   if (range < 0) range = 0;
 
-  Size = ShortRepSize(range);
+  do {
+    Ck(theObj);
+    Size = ShortRepSize(range);
 
-  if (range > LARGE_REP_SIZE) {
-    theRep = (ValRep *) LVRACAlloc(ShortRepPTValue, range);
-    if (theRep) {
-      Claim(theRep->HighBorder==range&&theRep->LowBorder==1, "LVRA structure ok");
-      *(ValRep **)((char *)theObj + offset) = theRep;
-      return;
+    if (range > LARGE_REP_SIZE) {
+      theRep = (ValRep *) LVRACAlloc(ShortRepPTValue, range);
+      if (theRep) {
+	Claim(theRep->HighBorder==range&&theRep->LowBorder==1, "LVRA structure ok");
+	*(ValRep **)((char *)theObj + offset) = theRep;
+	return;
+      }
     }
-  }
 
-  Protect(theObj, theRep = (ValRep *) IOAalloc(Size));
+    Protect(theObj, theRep = (ValRep *) IOATryAlloc(Size));
+    
+    if (theRep) {
+      SETPROTO(theRep,ShortRepPTValue);
+      if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
+      theRep->LowBorder = 1;
+      theRep->HighBorder = range;
+      
+      AssignReference((long *)((char *)theObj + offset), (Item *) theRep);
+      Ck(theObj); Ck(theRep);
+    }
+  } while (!theRep);
 
-  SETPROTO(theRep,ShortRepPTValue);
-  if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
-  theRep->LowBorder = 1;
-  theRep->HighBorder = range;
-  
-  AssignReference((long *)((char *)theObj + offset), (Item *) theRep);
-  Ck(theObj); Ck(theRep);
 }
 
 ParamThisOffRange(AlloVR4)
@@ -89,31 +94,33 @@ ParamThisOffRange(AlloVR4)
   FetchThisOffRange();
 
   DEBUG_CODE(NumAlloVR4++);
-  Ck(theObj);
+  if (range < 0) range = 0;
 
-  if (range < 0)
-    range = 0;
+  do {
+    Ck(theObj);
+    Size = LongRepSize(range);
 
-  Size = LongRepSize(range);
-
-  if (range > LARGE_REP_SIZE) {
-    theRep = (ValRep *) LVRACAlloc(LongRepPTValue, range);
-    if (theRep) {
-      Claim(theRep->HighBorder==range&&theRep->LowBorder==1, "LVRA structure ok");
-      *(ValRep **)((char *)theObj + offset) = theRep;
-      return;
+    if (range > LARGE_REP_SIZE) {
+      theRep = (ValRep *) LVRACAlloc(LongRepPTValue, range);
+      if (theRep) {
+	Claim(theRep->HighBorder==range&&theRep->LowBorder==1, "LVRA structure ok");
+	*(ValRep **)((char *)theObj + offset) = theRep;
+	return;
+      }
     }
-  }
 
-  Protect(theObj, theRep = (ValRep *) IOAalloc(Size));
-  
-  SETPROTO(theRep,LongRepPTValue);
-  if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
-  theRep->LowBorder = 1;
-  theRep->HighBorder = range;
-
-  AssignReference((long *)((char *)theObj + offset), (Item *) theRep);
-  Ck(theObj); Ck(theRep);
+    Protect(theObj, theRep = (ValRep *) IOATryAlloc(Size));
+    
+    if (theRep) {
+      SETPROTO(theRep,LongRepPTValue);
+      if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
+      theRep->LowBorder = 1;
+      theRep->HighBorder = range;
+      
+      AssignReference((long *)((char *)theObj + offset), (Item *) theRep);
+      Ck(theObj); Ck(theRep);
+    }
+  } while (!theRep);
 }
 
 ParamThisOffRange(AlloVR8)
@@ -123,31 +130,31 @@ ParamThisOffRange(AlloVR8)
   FetchThisOffRange();
 
   DEBUG_CODE(NumAlloVR8++);
-  Ck(theObj);
+  if (range < 0) range = 0;
 
-  if (range < 0)
-    range = 0;
+  do {
+    Ck(theObj);
+    Size= DoubleRepSize(range);
 
-  Size= DoubleRepSize(range);
-
-  if (range > LARGE_REP_SIZE) {
-    theRep = (ValRep *) LVRACAlloc(DoubleRepPTValue, range);
-    if (theRep) {
-      Claim(theRep->HighBorder==range&&theRep->LowBorder==1, "LVRA structure ok");
-      *(ValRep **)((char *)theObj + offset) = theRep;
-      return;
+    if (range > LARGE_REP_SIZE) {
+      theRep = (ValRep *) LVRACAlloc(DoubleRepPTValue, range);
+      if (theRep) {
+	Claim(theRep->HighBorder==range&&theRep->LowBorder==1, "LVRA structure ok");
+	*(ValRep **)((char *)theObj + offset) = theRep;
+	return;
+      }
     }
-  }
 
-  Protect(theObj, theRep = (ValRep *) IOAalloc(Size));
-
-  SETPROTO(theRep,DoubleRepPTValue);
-  if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
-  theRep->LowBorder = 1;
-  theRep->HighBorder = range;
-
-  AssignReference((long *)((char *)theObj + offset), (Item *) theRep);
-  Ck(theObj); Ck(theRep);
+    Protect(theObj, theRep = (ValRep *) IOATryAlloc(Size));
+    
+    if (theRep) {
+      SETPROTO(theRep,DoubleRepPTValue);
+      if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
+      theRep->LowBorder = 1;
+      theRep->HighBorder = range;
+      
+      AssignReference((long *)((char *)theObj + offset), (Item *) theRep);
+      Ck(theObj); Ck(theRep);
+    }
+  } while (!theRep);
 }
-
-#endif /* MT */

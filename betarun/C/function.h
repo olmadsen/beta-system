@@ -162,6 +162,7 @@ extern void freeBlock(Block *);
 extern long inArea(Block *, Object *);
 #ifdef USEMMAP
 void mmapInitial(unsigned long numbytes);
+unsigned long mmapUnusedSize(void);
 void InsertGuardPage(void);
 Block * reserveProtectedBlock(long numbytes);
 Block * reserveBlock(long numbytes);

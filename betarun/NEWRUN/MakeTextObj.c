@@ -22,35 +22,40 @@ void MkTO(char *asciz,
     range = strlen(asciz);
     repsize = ByteRepSize(range);
 
-    if (range > LARGE_REP_SIZE) {
-      theRep = (ValRep *)LVRAAlloc(ByteRepPTValue, range);
-      /* theRep is now allocated, and the header of it is initialized */
-      size = ItemSize(TextProto);
-      theText=(TextObject*)AOAcalloc(size);
-    } else {
-      /* Allocate both theText and theRep in IOA */
-      size=ItemSize(TextProto) + repsize;
-
-      /* Allocate in IOA/AOA */
-      SaveVar(theItem);
-      if (size>IOAMAXSIZE) {
-        DEBUG_AOA(fprintf(output, "MkTO allocates in AOA\n"));
-        theText=(TextObject*)AOAcalloc(size);
-      } else {
-        theText=(TextObject*)IOAalloc(size, SP);
-        if (IOAMinAge!=0) {
-          theText->GCAttr = IOAMinAge;
-        }
+    size=ItemSize(TextProto) + repsize;
+    while(1) {
+      if (size > LARGE_REP_SIZE) {
+	theText=(TextObject*)AOAcalloc(size);
+	if (theText) {
+	  /* An uninitialized value repetition is at the end of theText */
+	  theRep = (ValRep *)((long)theText+ItemSize(TextProto));
+	  theRep->GCAttr = DEADOBJECT;
+	  SETPROTO(theRep, ByteRepPTValue);
+	  theRep->LowBorder = 1;
+	  theRep->HighBorder = range;
+	  break;
+	} 
       }
-      RestoreVar(theItem);
-      /* An uninitialized value repetition is at the end of theText */
-      theRep = (ValRep *)((long)theText+ItemSize(TextProto));
-      SETPROTO(theRep, ByteRepPTValue);
-      if (IOAMinAge!=0) {
-        theRep->GCAttr = IOAMinAge;
+      if (!theText) {
+	/* Allocate both theText and theRep in IOA */
+	SaveVar(theItem);
+	theText=(TextObject*)IOATryAlloc(size, SP);
+	RestoreVar(theItem);
+	if (theText) {
+	  if (IOAMinAge!=0) {
+	    theText->GCAttr = IOAMinAge;
+	  }
+	  /* An uninitialized value repetition is at the end of theText */
+	  theRep = (ValRep *)((long)theText+ItemSize(TextProto));
+	  SETPROTO(theRep, ByteRepPTValue);
+	  if (IOAMinAge!=0) {
+	    theRep->GCAttr = IOAMinAge;
+	  }
+	  theRep->LowBorder = 1;
+	  theRep->HighBorder = range;
+	  break;
+	}
       }
-      theRep->LowBorder = 1;
-      theRep->HighBorder = range;
     }
 
     /* The new TextObject and Repetition are now allocated */
@@ -63,15 +68,6 @@ void MkTO(char *asciz,
 
     AssignReference((long *)theItem + offset, (Item *)theText);
       
-    if (!theRep){
-      /* An uninitialized value repetition is at the end of theText */
-      theRep = (ValRep *)((long)theText+ItemSize(TextProto));
-      SETPROTO(theRep, ByteRepPTValue);
-      if ((IOAMinAge!=0) && (!isInAOA)) theRep->GCAttr = IOAMinAge;
-      theRep->LowBorder = 1;
-      theRep->HighBorder = range;
-    }
-    
     /* Assign the text to the body part of the repetition. */
     for (i = 0; i < (repsize-headsize(ValRep))/4; i++){
       theRep->Body[i] = *((long *)asciz + i);

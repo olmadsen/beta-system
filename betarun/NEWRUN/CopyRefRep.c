@@ -27,15 +27,17 @@ void CopyRR(RefRep *theRep,
     push(theObj);
     push(theRep);
     size = RefRepSize(range);
-    if (range>LARGE_REP_SIZE || size>IOAMAXSIZE){
-      DEBUG_AOA(fprintf(output, "CopyRR allocates in AOA\n"));
-      newRep = (RefRep *)AOAalloc(size);
-      DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
-    }
-    if (!newRep) {
-      newRep = (RefRep *)IOAalloc(size, SP);
-      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
-    }
+    do {
+      if (range>LARGE_REP_SIZE || size>IOAMAXSIZE){
+	DEBUG_AOA(fprintf(output, "CopyRR allocates in AOA\n"));
+	newRep = (RefRep *)AOAalloc(size);
+	DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
+      }
+      if (!newRep) {
+	newRep = (RefRep *)IOATryAlloc(size, SP);
+	if (newRep && IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+      }
+    } while (!newRep);
     pop(theRep);
     pop(theObj);
 

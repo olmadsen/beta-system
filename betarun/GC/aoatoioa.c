@@ -6,6 +6,13 @@
  */
 #include "beta.h"
 
+/* Enable/Disable statistics: */
+#if 0
+#define DEBUG_AOAtoIOA_STAT(code) { code; }
+#else
+#define DEBUG_AOAtoIOA_STAT(code) 
+#endif
+
 /* Max number of linear probes in AOAtoIOAInsert */
 #define MAX_PROBES 128
 
@@ -325,11 +332,11 @@ static int AOAtoIOAInsertImpl(Object **theCell)
     index = ((unsigned long) theCell) % AOAtoIOAtableSize;
     if (table[index] == 0){ 
       table[index] = (unsigned long) theCell;
-      DEBUG_AOAtoIOA(fprintf(output, "\n(AOAtoIOAInsertstat=0)"));
+      DEBUG_AOAtoIOA_STAT(fprintf(output, "\n(AOAtoIOAInsertstat=0)"));
       return 0;
     }
     if (table[index] == (unsigned long) theCell) {
-      DEBUG_AOAtoIOA(fprintf(output, "\n(AOAtoIOAInsertstat=1)"));
+      DEBUG_AOAtoIOA_STAT(fprintf(output, "\n(AOAtoIOAInsertstat=1)"));
       return 0;
     }
     
@@ -338,33 +345,33 @@ static int AOAtoIOAInsertImpl(Object **theCell)
     index = (((unsigned long) theCell)<<4) % AOAtoIOAtableSize;
     if (table[index] == 0){ 
       table[index] = (unsigned long) theCell; 
-      DEBUG_AOAtoIOA(fprintf(output, "\n(AOAtoIOAInsertstat=2)"));
+      DEBUG_AOAtoIOA_STAT(fprintf(output, "\n(AOAtoIOAInsertstat=2)"));
       return 0;
     }
     if (table[index] == (unsigned long) theCell) {
-      DEBUG_AOAtoIOA(fprintf(output, "\n(AOAtoIOAInsertstat=3)"));
+      DEBUG_AOAtoIOA_STAT(fprintf(output, "\n(AOAtoIOAInsertstat=3)"));
       return 0;
     }
 #endif
     
-    DEBUG_AOAtoIOA(fprintf(output, "\nAOAtoIOAInsert collision"));
+    DEBUG_AOAtoIOA_STAT(fprintf(output, "\nAOAtoIOAInsert collision"));
     /* linear search at most MAX_PROBES forward */
     count = MAX_PROBES;
     index = ((unsigned long)theCell + 1) % AOAtoIOAtableSize;
     DEBUG_CODE(conflictcount = 4);
     do {
-      DEBUG_AOAtoIOA(fprintf(output, "[%d]", MAX_PROBES-(int)count));
+      DEBUG_AOAtoIOA_STAT(fprintf(output, "[%d]", MAX_PROBES-(int)count));
       Claim(((0<=index) && (index<(unsigned long)AOAtoIOAtableSize)), "Index must be inside range");
       if (table[index]==0){
 	/* Found free */
 	table[index] = (unsigned long)theCell; 
-	DEBUG_AOAtoIOA(fprintf(output, "\n(AOAtoIOAInsertstat=%d)",
+	DEBUG_AOAtoIOA_STAT(fprintf(output, "\n(AOAtoIOAInsertstat=%d)",
 			       (int)conflictcount));
 	return 0;
       }
       if (table[index]==(unsigned long)theCell){
 	/* Already there */
-	DEBUG_AOAtoIOA(fprintf(output, "\n(AOAtoIOAInsertstat=%d)",
+	DEBUG_AOAtoIOA_STAT(fprintf(output, "\n(AOAtoIOAInsertstat=%d)",
 			       (int)(conflictcount+1)));
 	return 0;
       }

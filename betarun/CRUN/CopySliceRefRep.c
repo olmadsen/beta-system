@@ -46,15 +46,17 @@ ParamRepObjOffLowHigh(CopySRR)
     push(theObj);
     push(theRep);
     size = RefRepSize(range);
-    if (range>LARGE_REP_SIZE || size>IOAMAXSIZE){
-      DEBUG_AOA(fprintf(output, "CopyRR allocates in AOA\n"));
-      newRep = (RefRep *)AOAalloc(size);
-      DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
-    }
-    if (!newRep) {
-      newRep = (RefRep *)IOAalloc(size);
-      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
-    }
+    do {
+      if (range>LARGE_REP_SIZE || size>IOAMAXSIZE){
+	DEBUG_AOA(fprintf(output, "CopyRR allocates in AOA\n"));
+	newRep = (RefRep *)AOAalloc(size);
+	DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
+      }
+      if (!newRep) {
+	newRep = (RefRep *)IOATryAlloc(size);
+	if (newRep && IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+      }
+    } while (!newRep);
     pop(theRep);
     pop(theObj);
     
@@ -74,7 +76,6 @@ ParamRepObjOffLowHigh(CopySRR)
     AssignReference((long *)theObj + offset, (Item *) newRep);
 
     Ck(newRep); Ck(theRep); Ck(theObj);
-
 }
 
 

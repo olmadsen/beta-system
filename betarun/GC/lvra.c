@@ -9,9 +9,11 @@ ValRep *LVRAAlloc(ProtoType *proto, long range)
 
   size = DispatchRepSize(proto, range);
   newRep = (ValRep *) AOAallocate(size);
-  SETPROTO(newRep,proto);
-  newRep->LowBorder  = 1;
-  newRep->HighBorder = range; /* indexes */
+  if (newRep){
+    SETPROTO(newRep,proto);
+    newRep->LowBorder  = 1;
+    newRep->HighBorder = range; /* indexes */
+  }
   return newRep;
 }
 

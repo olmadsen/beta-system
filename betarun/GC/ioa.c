@@ -524,7 +524,7 @@ void IOAGc()
 #else
   if ((long)IOATop+4*(long)ReqObjectSize > (long)IOALimit) {
     /* Not enough freed by this GC */
-    if (IOALooksFullCount > 2) {
+    if (IOALooksFullCount > 4) {
       char buf[512];
       sprintf(buf, "Sorry, IOA is full: cannot allocate %d bytes.\n\
 Program terminated.\n", (int)(4*ReqObjectSize));
@@ -535,7 +535,7 @@ Program terminated.\n", (int)(4*ReqObjectSize));
       BetaError(IOAFullErr, 0);
 #endif
     } else {
-      if (IOALooksFullCount==2) {
+      if (IOALooksFullCount > 1) {
         /* Have now done two IOAGc's without freeing enough space.
          * Make sure that all objects go to AOA in the next GC.
          */
@@ -546,7 +546,7 @@ Program terminated.\n", (int)(4*ReqObjectSize));
     }
     INFO_IOA(fprintf(output, "[%d]\n", IOALooksFullCount));
   } else {
-    if (((long)IOATop-(long)IOA)/(((long)IOALimit-(long)IOA)/100+1) > 70) {
+    if (FALSE && ((long)IOATop-(long)IOA)/(((long)IOALimit-(long)IOA)/100+1) > 70) {
       IOALooksFullCount = 1;
     } else {
       IOALooksFullCount = 0;

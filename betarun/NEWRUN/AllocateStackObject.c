@@ -13,17 +13,19 @@ StackObject *AlloSO(unsigned size, long *SP)
 
     DEBUG_CODE(NumAlloSO++);
 
-    if (stacksize>IOAMAXSIZE){
-      DEBUG_AOA(fprintf(output, "AlloSO allocates in AOA\n"));
-      sObj = (StackObject *)AOAalloc(stacksize);
-      DEBUG_AOA(if (!sObj) fprintf(output, "AOAalloc failed\n"));
-    }
-    if (sObj){
-      sObj->GCAttr = 0; /* In AOA */
-    } else {
-      sObj = (StackObject *)IOAalloc(stacksize, SP);
-      if (IOAMinAge!=0) sObj->GCAttr = IOAMinAge; /* In IOA */
-    }
+    do {
+      if (stacksize>IOAMAXSIZE){
+	DEBUG_AOA(fprintf(output, "AlloSO allocates in AOA\n"));
+	sObj = (StackObject *)AOAalloc(stacksize);
+	DEBUG_AOA(if (!sObj) fprintf(output, "AOAalloc failed\n"));
+      }
+      if (sObj){
+	sObj->GCAttr = 0; /* In AOA */
+      } else {
+	sObj = (StackObject *)IOATryAlloc(stacksize, SP);
+	if (sObj && IOAMinAge!=0) sObj->GCAttr = IOAMinAge; /* In IOA */
+      }
+    } while (!sObj);
 
     SETPROTO(sObj, StackObjectPTValue);
     /* sObj->GCAttr set above if in IOA */

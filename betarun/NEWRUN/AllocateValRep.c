@@ -21,18 +21,20 @@ void AlloVR1(unsigned offset /* in bytes */,
     Ck(theObj);
     size = ByteRepSize(range);
 
-    if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
+    do {
+      if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
 	theRep = (ValRep *)LVRACAlloc(ByteRepPTValue, range);
 	if (theRep) {
-	    *(ValRep **)((char *)theObj + offset) = theRep;
-	    return;
+	  *(ValRep **)((char *)theObj + offset) = theRep;
+	  return;
 	}
-    }
-
-    push(theObj);
-    theRep = (ValRep *)IOAalloc(size, SP);
-    if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
-    pop(theObj);
+      }
+      
+      push(theObj);
+      theRep = (ValRep *)IOATryAlloc(size, SP);
+      if (theRep && IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
+      pop(theObj);
+    } while (!theRep);
   
     SETPROTO(theRep, ByteRepPTValue);
     /* theRep->GCAttr set above if in IOA */
@@ -60,18 +62,20 @@ void AlloVR2(unsigned offset /* in bytes */,
 
     size = ShortRepSize(range);
 
-    if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
+    do {
+      if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
 	theRep = (ValRep *)LVRACAlloc(ShortRepPTValue, range);
 	if (theRep) {
-	    *(ValRep **)((char *)theObj + offset) = theRep;	   
-	    return;
+	  *(ValRep **)((char *)theObj + offset) = theRep;	   
+	  return;
 	}
-    }
-
-    push(theObj);
-    theRep = (ValRep *)IOAalloc(size, SP);
-    if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
-    pop(theObj);
+      }
+      
+      push(theObj);
+      theRep = (ValRep *)IOATryAlloc(size, SP);
+      if (theRep && IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
+      pop(theObj);
+    } while (!theRep);
 
     SETPROTO(theRep, ShortRepPTValue);
     /* theRep->GCAttr set above if in IOA */
@@ -98,18 +102,21 @@ void AlloVR4(unsigned offset /* in bytes */,
 
     size = LongRepSize(range);
 
-    if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
+    do {
+      if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
 	theRep = (ValRep *)LVRACAlloc(LongRepPTValue, range);
 	if (theRep) {
-	    *(ValRep **)((char *)theObj + offset) = theRep;
-	    return;
+	  *(ValRep **)((char *)theObj + offset) = theRep;
+	  return;
 	}
-    }
+      }
+      
+      push(theObj);
+      theRep = (ValRep *)IOATryAlloc(size, SP);
+      if (theRep && IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
+      pop(theObj);
+    } while (!theRep);
 
-    push(theObj);
-    theRep = (ValRep *)IOAalloc(size, SP);
-    if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
-    pop(theObj);
     
     SETPROTO(theRep, LongRepPTValue);
     /* theRep->GCAttr set above if in IOA */
@@ -137,18 +144,21 @@ void AlloVR8(unsigned offset /* in bytes */,
 
     size = DoubleRepSize(range);
 
-    if (range > LARGE_REP_SIZE) {
+    do {
+      if (range > LARGE_REP_SIZE) {
 	theRep = (ValRep *)LVRACAlloc(DoubleRepPTValue, range);
 	if (theRep) {
-	   *(ValRep **)((char *)theObj + offset) = theRep;
-	    return;
+	  *(ValRep **)((char *)theObj + offset) = theRep;
+	  return;
 	}
-    }
+      }
+      
+      push(theObj);
+      theRep = (ValRep *)IOATryAlloc(size, SP);
+      if (theRep && IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
+      pop(theObj);
+    } while (!theRep);
 
-    push(theObj);
-    theRep = (ValRep *)IOAalloc(size, SP);
-    if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
-    pop(theObj);
 
     SETPROTO(theRep, DoubleRepPTValue);
     /* theRep->GCAttr set above if in IOA */

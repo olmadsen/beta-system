@@ -23,24 +23,32 @@ Item *CopyT(char *asciz,
   range = strlen(asciz);
   size = ByteRepSize(range);
   
-  if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
-    DEBUG_AOA(fprintf(output, "CopyT allocates in AOA\n"));
-    theRep = (ValRep *)LVRAAlloc(ByteRepPTValue, range);
-    *(ValRep **)((long *)theItem + offset) = theRep;
-  } else {
+  while (1) {
+    if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
+      DEBUG_AOA(fprintf(output, "CopyT allocates in AOA\n"));
+      theRep = (ValRep *)LVRAAlloc(ByteRepPTValue, range);
+      if (theRep) {
+	*(ValRep **)((long *)theItem + offset) = theRep;
+	break;
+      }
+    } 
+
     /* Allocate in IOA */
     push(theItem);
-    theRep = (ValRep *)IOAalloc(size, SP);
-    if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge; /* In IOA */
+    theRep = (ValRep *)IOATryAlloc(size, SP);
     pop(theItem);
-  
-    SETPROTO(theRep, ByteRepPTValue);
-    /* theRep->GCAttr set above */
-    theRep->LowBorder = 1;
-    theRep->HighBorder = range;
-
-    AssignReference((long *)theItem + offset, (Item *)theRep);
-  }
+    if (theRep) {
+      if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge; /* In IOA */
+    
+      SETPROTO(theRep, ByteRepPTValue);
+      /* theRep->GCAttr set above */
+      theRep->LowBorder = 1;
+      theRep->HighBorder = range;
+    
+      AssignReference((long *)theItem + offset, (Item *)theRep);
+      break;
+    }
+  }  
   
   /* Assign the text to the body part of the repetition. */
   for (i = 0; i < (size-headsize(ValRep))/4; i++){

@@ -49,29 +49,37 @@ void CCopySVR1(ValRep *theRep,
   range =  (high - low) + 1;
   if (range < 0) range = 0;
 
-  if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
-    /* newRep allocated in AOA */
-    newRep = (ValRep *)LVRAAlloc(ByteRepPTValue, range);
-    *(ValRep **)((long *)theItem + offset) = newRep;
-  } else {
+  while (1) {
+    if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
+      /* newRep allocated in AOA */
+      newRep = (ValRep *)LVRAAlloc(ByteRepPTValue, range);
+      if (newRep) {
+	*(ValRep **)((long *)theItem + offset) = newRep;
+	break;
+      }
+    } 
+    
     /* Allocate in IOA */
     size  = ByteRepSize(range);
     
     push(theItem);
     push(theRep); 
-    newRep = (ValRep *)IOAalloc(size, SP);
-    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+    newRep = (ValRep *)IOATryAlloc(size, SP);
     pop(theRep);
     pop(theItem);
-    
-    /* Initialize the structual part of the repetition. */
-    SETPROTO(newRep, ByteRepPTValue);
-    /* newRep->GCAttr set above */
-    newRep->LowBorder = 1;
-    newRep->HighBorder = range;
-
-    AssignReference((long *)theItem + offset, (Item *)newRep);
+    if (newRep) {
+      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+      /* Initialize the structual part of the repetition. */
+      SETPROTO(newRep, ByteRepPTValue);
+      /* newRep->GCAttr set above */
+      newRep->LowBorder = 1;
+      newRep->HighBorder = range;
+      
+      AssignReference((long *)theItem + offset, (Item *)newRep);
+      break;
+    }
   }
+
   
   /* Copy the body part of the repetition. */
   { /* Since the slice may start on any byte we copy it byte by byte */
@@ -132,27 +140,34 @@ void CCopySVR2(ValRep *theRep,
   range =  (high - low) + 1;
   if (range < 0) range = 0;
 
-  if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
-    newRep = (ValRep *)LVRAAlloc(ShortRepPTValue, range);
-    *(ValRep **)((long *)theItem + offset) = newRep;
-  } else {
+  while (1) {
+    if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
+      newRep = (ValRep *)LVRAAlloc(ShortRepPTValue, range);
+      if (newRep) {
+	*(ValRep **)((long *)theItem + offset) = newRep;
+	break;
+      }
+    } 
+
     /* Allocate in IOA */
     size  = ShortRepSize(range);
     
     push(theItem);
     push(theRep); 
-    newRep = (ValRep *)IOAalloc(size, SP);
-    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+    newRep = (ValRep *)IOATryAlloc(size, SP);
     pop(theRep);
     pop(theItem);
-    
-    /* Initialize the structual part of the repetition. */
-    SETPROTO(newRep, ShortRepPTValue);
-    /* newRep->GCAttr set above */
-    newRep->LowBorder = 1;
-    newRep->HighBorder = range;
-
-    AssignReference((long *)theItem + offset, (Item *)newRep);
+    if (newRep) {
+      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+      /* Initialize the structual part of the repetition. */
+      SETPROTO(newRep, ShortRepPTValue);
+      /* newRep->GCAttr set above */
+      newRep->LowBorder = 1;
+      newRep->HighBorder = range;
+      
+      AssignReference((long *)theItem + offset, (Item *)newRep);
+      break;
+    }
   }
   
   /* Copy the body part of the repetition. */
@@ -212,27 +227,34 @@ void CCopySVR4(ValRep *theRep,
   range =  (high - low) + 1;
   if (range < 0) range = 0;
 
-  if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
-    newRep = (ValRep *)LVRAAlloc(LongRepPTValue, range);
-    *(ValRep **)((long *)theItem + offset) = newRep;
-  } else {
+  while (1) {
+    if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
+      newRep = (ValRep *)LVRAAlloc(LongRepPTValue, range);
+      if (newRep) {
+	*(ValRep **)((long *)theItem + offset) = newRep;
+      }
+    } 
+    
     /* Allocate in IOA */
     size  = LongRepSize(range);
     
     push(theItem);
     push(theRep);
-    newRep = (ValRep *)IOAalloc(size, SP);
-    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+    newRep = (ValRep *)IOATryAlloc(size, SP);
     pop(theRep);
     pop(theItem);
-    
-    /* Initialize the structual part of the repetition. */
-    SETPROTO(newRep, LongRepPTValue);
-    /* newRep->GCAttr set above */
-    newRep->LowBorder = 1;
-    newRep->HighBorder = range;
-  
-    AssignReference((long *)theItem + offset, (Item *)newRep);
+    if (newRep) {
+      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+      
+      /* Initialize the structual part of the repetition. */
+      SETPROTO(newRep, LongRepPTValue);
+      /* newRep->GCAttr set above */
+      newRep->LowBorder = 1;
+      newRep->HighBorder = range;
+      
+      AssignReference((long *)theItem + offset, (Item *)newRep);
+      break;
+    }
   }
   
   /* Copy the body part of the repetition. */
@@ -288,27 +310,35 @@ void CCopySVR8(ValRep *theRep,
   range =  (high - low) + 1;
   if (range < 0) range = 0;
 
-  if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
-    newRep = (ValRep *)LVRAAlloc(DoubleRepPTValue, range);
-    *(ValRep **)((long *)theItem + offset) = newRep;
-  } else{
+  while (1) {
+    if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
+      newRep = (ValRep *)LVRAAlloc(DoubleRepPTValue, range);
+      if (newRep) {
+	*(ValRep **)((long *)theItem + offset) = newRep;
+	break;
+      }
+    } 
+
     /* Allocate in IOA */
     size  = DoubleRepSize(range);
     
     push(theItem);
     push(theRep);
-    newRep = (ValRep *)IOAalloc(size, SP);
-    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+    newRep = (ValRep *)IOATryAlloc(size, SP);
     pop(theRep);
     pop(theItem);
-    
-    /* Initialize the structual part of the repetition. */
-    SETPROTO(newRep, DoubleRepPTValue);
-    /* newRep->GCAttr set above */
-    newRep->LowBorder = 1;
-    newRep->HighBorder = range;
-  
-    AssignReference((long *)theItem + offset, (Item *)newRep);
+    if (newRep) {
+      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+      
+      /* Initialize the structual part of the repetition. */
+      SETPROTO(newRep, DoubleRepPTValue);
+      /* newRep->GCAttr set above */
+      newRep->LowBorder = 1;
+      newRep->HighBorder = range;
+      
+      AssignReference((long *)theItem + offset, (Item *)newRep);
+      break;
+    }
   }
   
   /* Copy the body part of the repetition. */
@@ -371,15 +401,17 @@ void CCopySVRI(ObjectRep *theRep,
   size = DynObjectRepSize(range);
   push(theRep); 
   push(theItem);
-  if (size>IOAMAXSIZE){
-    DEBUG_AOA(fprintf(output, "CopySVRI allocates in AOA\n"));
-    newRep = (ObjectRep *)AOAalloc(size);
-    DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
-  } 
-  if (!newRep){
-    newRep = (ObjectRep *)IOAalloc(size, SP);
-    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
-  }
+  do {
+    if (size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "CopySVRI allocates in AOA\n"));
+      newRep = (ObjectRep *)AOAalloc(size);
+      DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
+    } 
+    if (!newRep){
+      newRep = (ObjectRep *)IOATryAlloc(size, SP);
+      if (newRep && IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+    }
+  } while (!newRep);
   pop(theItem);
   pop(theRep);
   
@@ -447,15 +479,18 @@ void CCopySVRC(ObjectRep *theRep,
   size = DynObjectRepSize(range);
   push(theRep); 
   push(theItem);
-  if (size>IOAMAXSIZE){
-    DEBUG_AOA(fprintf(output, "CopySVRC allocates in AOA\n"));
-    newRep = (ObjectRep *)AOAalloc(size);
-    DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
-  } 
-  if (!newRep){
-    newRep = (ObjectRep *)IOAalloc(size, SP);
-    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
-  }
+
+  do {
+    if (size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "CopySVRC allocates in AOA\n"));
+      newRep = (ObjectRep *)AOAalloc(size);
+      DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
+    } 
+    if (!newRep){
+      newRep = (ObjectRep *)IOATryAlloc(size, SP);
+      if (newRep && IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+    }
+  } while (!newRep);
   pop(theItem);
   pop(theRep);
   

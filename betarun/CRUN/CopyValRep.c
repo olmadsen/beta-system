@@ -22,21 +22,25 @@ ParamRepObjOff(CopyVR1)
 
     size = ByteRepSize(range);
     
-    if (range > LARGE_REP_SIZE){
+    do {
+      if (range > LARGE_REP_SIZE){
         newRep = LVRAAlloc(ByteRepPTValue, range);
-        
-    } else {
+      } 
+      if (!newRep) {
         /* Allocate in IOA */
-        Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
-        SETPROTO(newRep,ByteRepPTValue);
-        
-        if (IOAMinAge!=0) {
-            newRep->GCAttr = IOAMinAge;
-        }
-
-        newRep->LowBorder = 1;
-        newRep->HighBorder = range;
-    }
+        Protect2(theObj, theRep, newRep = (ValRep *) IOATryAlloc(size));
+	if (newRep) {
+	  SETPROTO(newRep,ByteRepPTValue);
+	  
+	  if (IOAMinAge!=0) {
+	    newRep->GCAttr = IOAMinAge;
+	  }
+	  
+	  newRep->LowBorder = 1;
+	  newRep->HighBorder = range;
+	}
+      }
+    } while (!newRep);
     
     size -= headsize(ValRep); /* adjust size to be bodysize */
     
@@ -67,21 +71,25 @@ ParamRepObjOff(CopyVR2)
     
     size = ShortRepSize(range);
     
-    if (range > LARGE_REP_SIZE){
+    do {
+      if (range > LARGE_REP_SIZE){
         newRep = LVRAAlloc(ShortRepPTValue, range);
-        
-    } else {
+      } 
+      if (!newRep) {
         /* Allocate in IOA */
-        Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
-        SETPROTO(newRep,ShortRepPTValue);
-
-        if (IOAMinAge!=0) {
-            newRep->GCAttr = IOAMinAge;
-        }
-        
-        newRep->LowBorder = 1;
-        newRep->HighBorder = range;
-    }
+        Protect2(theObj, theRep, newRep = (ValRep *) IOATryAlloc(size));
+	if (newRep) {
+	  SETPROTO(newRep,ShortRepPTValue);
+	  
+	  if (IOAMinAge!=0) {
+	    newRep->GCAttr = IOAMinAge;
+	  }
+	  
+	  newRep->LowBorder = 1;
+	  newRep->HighBorder = range;
+	}
+      }
+    } while (!newRep);
     
     size -= headsize(ValRep); /* adjust size to be bodysize */
     
@@ -111,21 +119,26 @@ ParamRepObjOff(CopyVR4)
 
     size = LongRepSize(range);
     
-    if (range > LARGE_REP_SIZE){
+    do {
+      if (range > LARGE_REP_SIZE){
         newRep = LVRAAlloc(LongRepPTValue, range);
-    } else {
+      } 
+      if (!newRep) {
         /* Allocate in IOA */
-        Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
-        SETPROTO(newRep,LongRepPTValue);
-
-        if (IOAMinAge!=0) {
+        Protect2(theObj, theRep, newRep = (ValRep *) IOATryAlloc(size));
+	if (newRep) {
+	  SETPROTO(newRep,LongRepPTValue);
+	  
+	  if (IOAMinAge!=0) {
             newRep->GCAttr = IOAMinAge;
-        }
-        
-        newRep->LowBorder = 1;
-        newRep->HighBorder = range;
-    }
-    
+	  }
+	  
+	  newRep->LowBorder = 1;
+	  newRep->HighBorder = range;
+	}
+      }
+    } while (!newRep);
+
     size -= headsize(ValRep); /* adjust size to be bodysize */
     
     /* Copy theRep to newRep. Copy the whole body as longs */
@@ -155,21 +168,26 @@ ParamRepObjOff(CopyVR8)
 
     size = DoubleRepSize(range);
     
-    if (range > LARGE_REP_SIZE){
+    do {
+      if (range > LARGE_REP_SIZE){
         newRep = LVRAAlloc(DoubleRepPTValue, range);
-    } else {
+      } 
+      if (!newRep) {
         /* Allocate in IOA */
-        Protect2(theObj, theRep, newRep = (ValRep *) IOAalloc(size));
-        SETPROTO(newRep,DoubleRepPTValue);
-
-        if (IOAMinAge!=0) {
+        Protect2(theObj, theRep, newRep = (ValRep *) IOATryAlloc(size));
+	if (newRep) {
+	  SETPROTO(newRep,DoubleRepPTValue);
+	  
+	  if (IOAMinAge!=0) {
             newRep->GCAttr = IOAMinAge;
-        }
+	  }
+	  
+	  newRep->LowBorder = 1;
+	  newRep->HighBorder = range;
+	}
+      }
+    } while (!newRep);
 
-        newRep->LowBorder = 1;
-        newRep->HighBorder = range;
-    }
-    
     size -= headsize(ValRep); /* adjust size to be bodysize */
     
     /* Copy theRep to newRep. Copy the whole body as longs */

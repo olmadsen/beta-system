@@ -31,21 +31,29 @@ ParamOriginProto(Item *,AlloCOM)
 
     Claim((long)proto->Size>0, "proto->Size>0");
 
-    Protect(origin, item = (Item *) AOAcalloc(ItemSize(proto)));
-
-    /* The new Object is now allocated, but not initialized yet! */
-
-    setup_item(item, proto, origin); 
-
+    do {
+      Ck(origin);
+      Protect(origin, item = (Item *) AOAcalloc(ItemSize(proto)));
+      if (item) {
+	/* The new Object is now allocated, but not initialized yet! */
+	
+	setup_item(item, proto, origin); 
+	AssignReference(((long*)item)+((ProtoType*)proto)->OriginOff, 
+			(Item *)origin);
+	
 #ifndef COM
-    item->Proto = (ProtoType *)((long)(item->Proto)+DISP_OFF);
+	item->Proto = (ProtoType *)((long)(item->Proto)+DISP_OFF);
 #endif /* COM */
-
-    if (proto->GenPart){
-      Protect(item, CallBetaEntry(proto->GenPart,item));
-    }
-    /* origin cannot be Ck'ed since it is not protected during call above */
-    Ck(item);
+	
+	if (proto->GenPart){
+	  Protect(item, CallBetaEntry(proto->GenPart,item));
+	}
+	/* origin cannot be Ck'ed since it is not protected during call above */
+	Ck(item);
+      } else {
+	Protect(origin, IOATryAlloc(0x40000000)); /* Dummy alloc to trigger GC */
+      }
+    } while (!item);
 
     MCHECK();
 

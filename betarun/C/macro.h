@@ -137,7 +137,12 @@ do {                               \
      
 #define inToSpace(x) (((unsigned long)ToSpace <= (unsigned long)(x)) && ((unsigned long)(x) < (unsigned long)ToSpaceTop)) 
 #define inToSpaceArea(x) (((unsigned long)ToSpace <= (unsigned long)(x)) && ((unsigned long)(x) < (unsigned long)ToSpaceLimit)) 
+#ifdef USEMMAP
+#define inAOA(x)     (((BlockStart(AOABaseBlock)) <= (long *)(x)) \
+                              && ((long *)(x) < AOABaseBlock->top) )
+#else
 #define inAOA(x)     inArea(AOABaseBlock, (Object *)(x))
+#endif /* USEMMAP */
 #define inAOAUnused(x) inAreaUnused(AOABaseBlock, (Object *)(x))
      
 #define isSpecialProtoType(x) (((long)(MinPTValue) <= (long)(x)) && \
@@ -320,7 +325,7 @@ do {                               \
 #define isData(x) 1
 
 #ifdef sparc
-extern long *start __asm__("_start");
+extern unsigned long *start __asm__("_start");
 extern unsigned long etext;
 #define isCode(addr) ( ((unsigned long)&start <= (unsigned long)(addr)) &&  \
                        ((unsigned long)(addr) < (unsigned long)&etext) )
