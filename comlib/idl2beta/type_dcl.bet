@@ -51,9 +51,16 @@ do (* Add basic types to global_types. The types are
    ('octet',              'int8') -> global_types.add_basic_type;
    ('any',                'int32') -> global_types.add_basic_type;
    
-   (* Add types from comlib.bet to global_types *)
+   (* Add types from comlib.bet/wtypes.bet to global_types *)
    ('HRESULT',            'int32') -> global_types.add_basic_type;
    ('BSTR',               'BSTR') -> global_types.add_basic_type;
+   ('VARIANT',            'VARIANT') -> global_types.add_union_type;
+   ('VARIANT_BOOL',       'int16') -> global_types.add_basic_type;
+   ('OLECMDF',            'int32') -> global_types.add_basic_type;
+   ('OLECMDID',           'int32') -> global_types.add_basic_type;
+   ('OLECMDEXECOPT',      'int32') -> global_types.add_basic_type;
+   ('READYSTATE',         'int32') -> global_types.add_basic_type;
+   ('tagREADYSTATE',      'int32') -> global_types.add_basic_type;
 #)
 
 --do_base_type_spec: descriptor--
@@ -150,9 +157,10 @@ do_type_spec:
              (* Both emit the definition of the enum mapping, and
               * add the type to types.
               *)
+             outfile.indent;
              info.name[] -> outfile.puttext; ': ' -> outfile.puttext;
              (t[]) -> do_constr_enum_type;
-             'integer' -> info.representation[];
+             'int32' -> info.representation[];
              type_cat_enum -> info.category;
           else
              'Oops, must have forgotten a type!' -> outfile.comment;
@@ -182,6 +190,7 @@ do_type_declarator:
         (* done with dcl_info *)
         (* Fill in the rest of the type *)
         (info[], types[], t.gettype_spec) -> do_type_spec;
+        outfile.newline;
         outfile.indent;
         outfile.CommentBegin;
         'typedef: ' -> outfile.puttext;
@@ -243,7 +252,7 @@ do_struct_type:
                     (&idl_attributes[]->info.attributes[],mem.getattribute_opt)
                       -> do_attributeX;
                 if);
-                ';' -> outfile.putline;
+                ';' -> outfile.put;
              #);
           #);
        #);
@@ -279,8 +288,8 @@ do_enum_type:
      id, previous_id: ^text;
      initializer_met: @boolean;
   enter (t[])
-  do (* Define "type" pattern *)
-     'IntegerObject(\# ' -> outfile.puttext;
+  do 'IntegerObject(\# ' -> outfile.puttext;
+     outfile.indent;
      outfile.CommentBegin;
      'enum ' -> outfile.puttext;
      t.getidentifier -> IdentifierToText -> outfile.puttext;
@@ -297,15 +306,23 @@ do_enum_type:
      do ';' -> outfile.putline;
         outfile.indent;
         id[] -> previous_id[];
+        current[] -> EmitComments;
+        current.getidentifier -> EmitComments;
         current.getidentifier -> IdentifierToText -> id[] ->outfile.puttext;
         ': ' -> outfile.puttext;
-        outfile.CommentBegin;
-        (* FIXME: info.name[] -> outfile.puttext; *)
-        outfile.CommentEnd;
+        (* FIXME: missing
+         * outfile.CommentBegin;
+         * info.name[] -> outfile.puttext; 
+         * outfile.CommentEnd;
+         *)
         outfile.PatternBegin;
         'exit ' -> outfile.puttext;
         (if current.getvalue_opt -> optionalPresent then
-            (current.getvalue_opt -> v[]).getconst_exp -> do_const_exp;
+            (current.getvalue_opt -> v[]).getconst_exp 
+              -> do_const_exp
+              -> outfile.puttext;
+            v[] -> EmitComments; 
+            v.getconst_exp -> EmitComments;
             true -> initializer_met;
          else
             (if initializer_met then
@@ -318,8 +335,10 @@ do_enum_type:
                 val+1 -> val;
             if);
         if);
+        ' ' -> outfile.put;
         outfile.PatternEnd;
      #);
+     ';' -> outfile.putline;
   #);
 
 do_union_type:

@@ -32,20 +32,12 @@ do_export_op_dcl:
             (# o: ^idl.op_attribute;
                oa: ^idl.op_attribute_param_attribute;
                pa: ^idl.param_attribute_list;
-               att: @idl_attributes;
-            enter o[]
+               att: ^idl_attributes;
+            enter (o[], att[])
             do (if o.symbol
                 // idl.op_attribute_param_attribute then
                    (o[] -> oa[]).getparam_attribute_list->pa[];
                    (att[], pa.getattributeX) -> do_attributeX;
-                   (* Currently we are only insterested in the 
-                    * helpstring
-                    *)
-                   (if att.typelib.helpstring[]<>NONE then
-                       outfile.indent;
-                       att.typelib.helpstring[]
-                         -> outfile.commentline;
-                   if)
                if)
             #);
           do_raises_expr:
@@ -202,8 +194,11 @@ do_export_op_dcl:
                                (if pointer_level
                                 // 0 then
                                    '@' -> outfile.put;
-                                   (* yet another special case *)
-                                   (if 'BSTR' -> current.representation.equal then
+                                   (* yet some more special cases *)
+                                   (if true
+                                    // 'BSTR' -> current.representation.equal
+                                    // 'VARIANT' -> current.representation.equal
+                                       then
                                        'int32' -> outfile.puttext;
                                     else
                                        current.representation[]->outfile.puttext;
@@ -385,20 +380,43 @@ do_export_op_dcl:
                outfile.newline;
             #);
           e: ^idl.op_dcl;
-          virtual_name: ^text;
+          virtual_name, property_name: ^text;
+          att: @idl_attributes;
        enter e[]
-       do outfile.indent;
+       do NONE -> property_name[];
+          outfile.indent;
           (* Start a virtual *)
           e.getIdentifier 
             -> IdentifierToText 
-            -> virtual_name[]
-            -> outfile.puttext;
-          (*':< External' -> outfile.puttext;*)
+            -> virtual_name[];
+          (if e.getop_attributeOpt -> optionalPresent then
+              (e.getop_attributeOpt, att[]) -> do_op_attribute
+          if);
+          (if att.typelib.propget then
+              'get' -> outfile.puttext;
+              (* If both a propput and a propget, save for help pattern *)
+              propputs.find
+              (# predicate::(# do virtual_name[] -> current.equal -> value #);
+                 notfound::(# do virtual_name[] -> propgets.append; #);
+              do virtual_name[]-> property_name[];
+              #);
+          if);
+          (if att.typelib.propput then
+              'put' -> outfile.puttext;
+              (* If both a propput and a propget, save for help pattern *)
+              propgets.find
+              (# predicate::(# do virtual_name[] -> current.equal -> value #);
+                 notfound::(# do virtual_name[] -> propputs.append; #);
+              do virtual_name[]-> property_name[];
+              #);
+          if);
+          virtual_name[] -> outfile.puttext;
           ':< ' -> outfile.puttext;
           outfile.newline;
           2 -> outfile.indent.inc;
-          (if e.getop_attributeOpt -> optionalPresent then
-              e.getop_attributeOpt -> do_op_attribute
+          (if att.typelib.helpstring[] <> NONE then
+              outfile.indent;
+              att.typelib.helpstring[] -> outfile.commentline;
           if);
           (if e.getraises_exprOpt -> optionalPresent then
               e.getraises_exprOpt -> do_raises_expr;
@@ -444,6 +462,24 @@ do_export_op_dcl:
           outfile.PatternEnd;
           ';' -> outfile.putline;
           2 -> outfile.indent.dec;
+          (if property_name[]<>NONE then
+              (* Emit help pattern *)
+              outfile.indent;
+              property_name[] -> outfile.puttext;
+              ': ' -> outfile.puttext;
+              'property' -> outfile.commentline;
+              2 -> outfile.indent.inc;
+              outfile.indent;
+              outfile.patternbegin;
+              'enter put' -> outfile.puttext;
+              property_name[] -> outfile.puttext;
+              ' exit get' -> outfile.puttext;
+              property_name[] -> outfile.puttext;
+              ' '->outfile.put;
+              outfile.patternend;
+              ';' -> outfile.putline;
+              2 -> outfile.indent.dec;
+          if);
           (*outfile.newline;*)
           (if trace then
               newline;
