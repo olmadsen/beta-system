@@ -13,6 +13,7 @@
  * linker and betarun needs most symbols.
  */
 
+
 #ifdef nti_gnu
 #  include "winntdef.h"
 #endif /* nti_gnu */
@@ -49,6 +50,14 @@ void label_dummy() {
 #define Decimal
 #endif
 
+#ifdef ppcmac
+#define FULL_NMCOMMAND  "not yet implemented"
+#define TERSE_NMCOMMAND "not yet implemented"
+#define Decimal
+#endif
+
+
+
 #ifndef nti
 #ifndef FULL_NMCOMMAND
 #error FULL_NMCOMMAND should be defined
@@ -73,7 +82,7 @@ void findNextLabel (labeltable *table)
   int inx,val;
 
 #ifdef ppcmac
-  return 0;
+  return;
 #endif
 
   while (1) {
@@ -145,7 +154,8 @@ labeltable *initReadNameTable (char* execFileName, int full)
 
 #ifdef ppcmac
   return 0;
-#endif
+  
+#else
 
   if (!table){
     fprintf(output,"couldn't malloc label table for file %s\n", execFileName); 
@@ -186,6 +196,7 @@ labeltable *initReadNameTable (char* execFileName, int full)
 #endif /* nti */
 
   return table;
+#endif /* ppcmac */
 }
 
 void freeNameTable(labeltable *handle)
