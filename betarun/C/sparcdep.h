@@ -219,7 +219,7 @@ register volatile void *GCreg4 asm("%o4");
 	      /*unsigned*/ int range)
 
 /* C procs that gets object, origin, prototype, offset, range,  */
-#define ParamObjOriginProtoOffRange(type, name)			\
+#define ParamObjOriginProtoOffRange(name)			\
   asmlabel(name, 					\
 	   "mov %i0, %o1; "				\
            "mov %l0, %o2; "				\
@@ -227,7 +227,7 @@ register volatile void *GCreg4 asm("%o4");
            "clr %o4; "					\
 	   "ba "CPREF#name"; "				\
 	   "mov %l1, %o5; ");				\
- type C##name(struct Object *origin,			\
+ void C##name(struct Object *origin,			\
 	      struct Object *theObj,	                \
 	      unsigned offset, /* in bytes */		\
 	      struct ProtoType *proto,			\
@@ -336,32 +336,32 @@ extern struct ValRep *CAlloVR8(struct Object *theObj,
 			       /*unsigned*/ int range);
 
 #ifdef STATIC_OBJECT_REPETITIONS
-extern struct ObjectRep *CAlloORG(struct Object *iOrigin,
-				  struct Object *theObj,
-				  unsigned offset, /* in bytes */
-				  struct ProtoType *proto,
-				  int i4,
-				  int range);
-extern struct ObjectRep *CAlloORGC(struct Object *iOrigin,
-				   struct Object *theObj,
-				   unsigned offset, /* in bytes */
-				   struct ProtoType *proto,
-				   int i4,
-				   int range);
+extern void CAlloORG(struct Object *iOrigin,
+		     struct Object *theObj,
+		     unsigned offset, /* in bytes */
+		     struct ProtoType *proto,
+		     int i4,
+		     int range);
+extern void CAlloORGC(struct Object *iOrigin,
+		      struct Object *theObj,
+		      unsigned offset, /* in bytes */
+		      struct ProtoType *proto,
+		      int i4,
+		      int range);
 #endif /* STATIC_OBJECT_REPETITIONS */
 
-extern struct ObjectRep *CAlloORR(struct Object *iOrigin,
-				  struct Object *theObj,
-				  unsigned offset, /* in bytes */
-				  struct ProtoType *proto,
-				  int i4,
-				  int range);
-extern struct ObjectRep *CAlloORRC(struct Object *iOrigin,
-				   struct Object *theObj,
-				   unsigned offset, /* in bytes */
-				   struct ProtoType *proto,
-				   int i4,
-				   int range);
+extern void CAlloORR(struct Object *iOrigin,
+		     struct Object *theObj,
+		     unsigned offset, /* in bytes */
+		     struct ProtoType *proto,
+		     int i4,
+		     int range);
+extern void CAlloORRC(struct Object *iOrigin,
+		      struct Object *theObj,
+		      unsigned offset, /* in bytes */
+		      struct ProtoType *proto,
+		      int i4,
+		      int range);
 
 extern void CCopyT(int i0,
 		   ref(Item) theItem,

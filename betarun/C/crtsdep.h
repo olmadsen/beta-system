@@ -2,7 +2,7 @@
  * BETA RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * crtsdep.h
  * by Ole Lehrmann Madsen, Peter Andersen, Kim Jensen M¿ller, and Peter Ryberg Jensen
- * $Id: crtsdep.h,v 1.13 1995-11-24 12:42:39 kjm Exp $
+ * $Id: crtsdep.h,v 1.14 1995-11-29 12:18:28 beta Exp $
  */
 
 #define JUMPSTACK 1
@@ -16,8 +16,8 @@
 	 unsigned offset, /* in bytes */		 \
 	 int range				         \
 	 )
-#define ParamObjOriginProtoOffRange(type, name)			\
- type name(struct Object *origin,			\
+#define ParamObjOriginProtoOffRange(name)			\
+ void name(struct Object *origin,			\
 	      struct Object *theObj,	                \
 	      unsigned offset, /* in bytes */		\
 	      struct ProtoType *proto,			\
@@ -103,31 +103,31 @@ extern struct ValRep *		AlloVR8(struct Object* theObj,
 					unsigned offset, 
 					int range);
 #ifdef STATIC_OBJECT_REPETITIONS
-extern struct ObjectRep *AlloORG(struct Object *iOrigin,
-				  struct Object *theObj,
-				  unsigned offset, /* in bytes */
-				  struct ProtoType *proto,
-				  int range);
-extern struct ObjectRep *AlloORGC(struct Object *iOrigin,
-				   struct Object *theObj,
-				   unsigned offset, /* in bytes */
-				   struct ProtoType *proto,
-				   int range);
+extern void AlloORG(struct Object *iOrigin,
+		    struct Object *theObj,
+		    unsigned offset, /* in bytes */
+		    struct ProtoType *proto,
+		    int range);
+extern void AlloORGC(struct Object *iOrigin,
+		     struct Object *theObj,
+		     unsigned offset, /* in bytes */
+		     struct ProtoType *proto,
+		     int range);
 #endif /* STATIC_OBJECT_REPETITIONS */
 
-extern struct ObjectRep *AlloORR(struct Object *iOrigin,
-				  struct Object *theObj,
-				  unsigned offset, /* in bytes */
-				  struct ProtoType *proto,
-				  int range);
-extern struct ObjectRep *AlloORRC(struct Object *iOrigin,
-				   struct Object *theObj,
-				   unsigned offset, /* in bytes */
-				   struct ProtoType *proto,
-				   int range);
-extern void 			CopyT(char *asciz, 
-				      struct Item *theItem,
-				      unsigned offset);
+extern void AlloORR(struct Object *iOrigin,
+		    struct Object *theObj,
+		    unsigned offset, /* in bytes */
+		    struct ProtoType *proto,
+		    int range);
+extern void AlloORRC(struct Object *iOrigin,
+		     struct Object *theObj,
+		     unsigned offset, /* in bytes */
+		     struct ProtoType *proto,
+		     int range);
+extern void CopyT(char *asciz, 
+		  struct Item *theItem,
+		  unsigned offset);
 
 extern struct StackObject *     AlloSO(unsigned size);
 

@@ -9,7 +9,7 @@
 #include "crun.h"
 
 #ifdef STATIC_OBJECT_REPETITIONS
-ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORG)
+ParamObjOriginProtoOffRange(AlloORG)
 {
   /* AllocateObjectRepetitionGeneral: Allocate repetition of plain items,
    * inlined in repetition 
@@ -49,10 +49,10 @@ ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORG)
 
   AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
 
-  RETURN(theRep);
+  return;
 }
 
-ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORGC)
+ParamObjOriginProtoOffRange(AlloORGC)
 {
   /* AllocateObjectRepetitionGeneralComponent: Allocate repetition of plain components,
    * inlined in repetition 
@@ -102,11 +102,11 @@ ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORGC)
 
   AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
 
-  RETURN(theRep);
+  return;
 }
 #endif /* STATIC_OBJECT_REPETITIONS */
 
-ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORR)
+ParamObjOriginProtoOffRange(AlloORR)
 {
   /* AllocateObjectRepetitionReference: Allocate repetition of offline items
    */
@@ -155,10 +155,10 @@ ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORR)
 
   AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
 
-  RETURN(theRep);
+  return;
 }
 
-ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORRC)
+ParamObjOriginProtoOffRange(AlloORRC)
 {
   /* AllocateObjectRepetitionComponent: Allocate repetition of offline components
    */
@@ -208,5 +208,5 @@ ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORRC)
 
   AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
 
-  RETURN(theRep);
+  return;
 }

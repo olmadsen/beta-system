@@ -293,8 +293,8 @@ static inline long getRPReg()
 	      )
 
 /* C procs that gets object, origin, prototype, offset, range,  */
-#define ParamObjOriginProtoOffRange(type, name)			\
- type name(struct Object *origin,			\
+#define ParamObjOriginProtoOffRange(name)			\
+ void name(struct Object *origin,			\
 	      struct Object *theObj,	                \
 	      unsigned offset, /* in bytes */		\
 	      struct ProtoType *proto,			\
@@ -410,29 +410,30 @@ extern struct ValRep *		AlloVR8(struct Object* theObj,
 					unsigned offset, 
 					int range);
 #ifdef STATIC_OBJECT_REPETITIONS
-extern struct ObjectRep *AlloORG(struct Object *iOrigin,
-				 struct Object *theObj,
-				 unsigned offset, /* in bytes */
-				 struct ProtoType *proto,
-				 int range);
-extern struct ObjectRep *AlloORGC(struct Object *iOrigin,
-				  struct Object *theObj,
-				  unsigned offset, /* in bytes */
-				  struct ProtoType *proto,
-				  int range);
+extern void AlloORG(struct Object *iOrigin,
+		    struct Object *theObj,
+		    unsigned offset, /* in bytes */
+		    struct ProtoType *proto,
+		    int range);
+extern void AlloORGC(struct Object *iOrigin,
+		     struct Object *theObj,
+		     unsigned offset, /* in bytes */
+		     struct ProtoType *proto,
+		     int range);
 #endif /* STATIC_OBJECT_REPETITIONS */
 
-extern struct ObjectRep *AlloORR(struct Object *iOrigin,
-				 struct Object *theObj,
-				 unsigned offset, /* in bytes */
-				 struct ProtoType *proto,
-				 int range);
-extern struct ObjectRep *AlloORRC(struct Object *iOrigin,
-				  struct Object *theObj,
-				  unsigned offset, /* in bytes */
-				  struct ProtoType *proto,
-				  int range);
-extern void 			CopyT(char *asciz, 
-				      struct Item *theItem,
-				      unsigned offset);
+extern void AlloORR(struct Object *iOrigin,
+		    struct Object *theObj,
+		    unsigned offset, /* in bytes */
+		    struct ProtoType *proto,
+		    int range);
+extern void AlloORRC(struct Object *iOrigin,
+		     struct Object *theObj,
+		     unsigned offset, /* in bytes */
+		     struct ProtoType *proto,
+		     int range);
+extern void CopyT(char *asciz, 
+		  struct Item *theItem,
+		  unsigned offset);
+
 #endif /* ! _SNAKEDEP_H_ */
