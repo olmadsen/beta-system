@@ -5,6 +5,7 @@
  */
 #include "beta.h"
 #include "aoa.h"
+#include "scavenging.h"
 
 static void FollowObject();
 static void Phase1();
@@ -310,7 +311,7 @@ static void FollowObject( theObj)
  */
 static void Phase1()
 { /* Call FollowReference for each root to AOA. */
-  ptr(long) pointer = ToSpaceToAOALimit?ToSpaceToAOALimit:ToSpaceLimit;
+  ptr(long) pointer = ToSpaceToAOALimit;
 
   /* temporarily use IOA for table. Only ToSpace contains usefull informations */
   AOAtoLVRAtable = (ptr(long)) Offset(IOA, IOASize/2) ;
