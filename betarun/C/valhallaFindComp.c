@@ -566,7 +566,7 @@ static void find_foreach(long PC, Object *theObj)
   if (activation_object) return;
   if (!theObj) return;
   proto = GETPROTO(theObj);
-  if (isSpecialProtoType(proto) {
+  if (isSpecialProtoType(proto)) {
     /* at least DoPartObjectPT can happen */
     /* This cannot be the object sought */
     return;
