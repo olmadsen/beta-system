@@ -117,6 +117,11 @@ sub compare_expected()
     }
     close IN;
     close OUT;
+    if (! -d "reference"){
+	print "'reference' directory does not exist. Now creating it.\n";
+	mkdir "reference", 0775 || die "Cannot create directory 'reference': $!";
+	print "Do a manual 'cvs add reference'\n";
+    }
     if ( -f "reference/$exec.run" ){
 	open(IN, "<reference/$exec.run") || die "Unable to read reference output reference/$exec.run: $!";
 	open(OUT, ">$prog.ref") || die "Unable to write processed reference output $prog.ref: $!";
@@ -216,7 +221,7 @@ sub countdirs
 
 sub run_demo
 {
-    my ($dir, $exec, $args,) = @_;
+    my ($dir, $exec, $args) = @_;
 
     $dir = '.' if ($dir eq "");
     if (!-d $dir){
@@ -229,7 +234,7 @@ sub run_demo
     unlink "$exec.dump", "$exec.run", "$exec.out", "$exec.ref", "$exec.diff";
     &compile_demo($exec);
     print "-"x10 . "Executing $exec" . "-"x10  . "\n"; 
-    system "$exec > $exec.run";
+    system "$exec $args > $exec.run";
     $progs{&trim_path("$dir/$exec")}=$?;
 
     &cat("$exec.run") unless ($skipoutput);
