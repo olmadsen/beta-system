@@ -63,6 +63,17 @@ do (if not BETACFL.parser.haveBeenInitialized then
    if)
 #)
 
+--- ymerLoadSettings: dopart --
+do browser.reloadsettings
+   
+--- ymerLoadProject: dopart ---
+do proj.subprojects.scan
+   (#
+   do current.copy->browser.projects.theProjects.append;
+      NONE->current.superProject[]
+   #);
+   browser.projectsChanged;
+   
 --- ymerAddProject: dopart ---
 do &browser.projects.project[]->newProj[];
    name.copy->newProj.name[];
@@ -619,21 +630,33 @@ do &theprojectlist.action
       selectedProj: ^browser.projects.project;
    do (if (theprojectlist.selection.first->i)<>0 then
           (if theEvent.doubleClick then
-              i->projectByIndex->selectedProj[];
-              (if true
-               // selectedProj.isDotDotDirectory then
-                  selectedProj[]->setupDotDot;
-               // selectedProj.unfolded then
-                  false->selectedProj.unfolded;
-                  selectedProj[]->foldSubprojects;
-                  projectsChanged;
-                  selectedProj[]->setProject;
+              (if theEvent.shiftKey then
+                  (# fragmentBrowser: ^ymerBrowserWindow; t: ^text;
+                  do &ymerBrowserWindow[]->fragmentBrowser[];
+                     fragmentBrowser.open;
+                     i->projectByIndex->selectedProj[];
+                     selectedProj[]->fragmentBrowser.loadProject;
+                     'Browser on: '->t[];
+                     selectedProj.name[]->t.puttext;
+                     t[]->fragmentBrowser.title
+                  #)
                else
-                  true->selectedProj.unfolded;
-                  selectedProj[]->unfoldSubprojects;
-                  projectsChanged;
-                  selectedProj[]->setProject;
-              if);
+                  i->projectByIndex->selectedProj[];
+                  (if true
+                   // selectedProj.isDotDotDirectory then
+                      selectedProj[]->setupDotDot;
+                   // selectedProj.unfolded then
+                      false->selectedProj.unfolded;
+                      selectedProj[]->foldSubprojects;
+                      projectsChanged;
+                      selectedProj[]->setProject;
+                   else
+                      true->selectedProj.unfolded;
+                      selectedProj[]->unfoldSubprojects;
+                      projectsChanged;
+                      selectedProj[]->setProject;
+                  if)
+              if)
           if)
       if)
    #)[]->theprojectlist.appendAction;
@@ -645,37 +668,45 @@ do &thegrouplist.action
       root, newProj: ^browser.projects.project;
    do (if (thegrouplist.selection.first)<>0 then
           (if theEvent.doubleClick then
+              (* do what's needed to make THIS into a root *)
+              thegrouplist.selection.first
+                ->groups.getGroupByIndex->selectedGroup[];
+              &browser.projects.project[]->newProj[];
+              selectedGroup.location->newProj.location;
+              (if newProj.name[]=NONE then
+                  selectedGroup.name.copy->newProj.name[]
+              if);
+              (if (newProj.name.length->newProj.name.inxGet) <> '*' then
+                  '*'->newProj.name.append;
+              if);
+              true->newProj.isRoot;
+              newProj[]->root[];
+              
+              &browser.projects.project[]->newProj[];
+              root.location->newProj.location;
+              true->newProj.isDomain;
+              '[domain]'->newProj.name[];
+              root[]->newProj.superProject[];
+              newProj[]->root.subprojects.append;
+              
+              &browser.projects.project[]->newProj[];
+              root.location->newProj.location;
+              true->newProj.isExtent;
+              '[extent]'->newProj.name[];
+              root[]->newProj.superProject[];
+              newProj[]->root.subprojects.append;
+              
               (if theEvent.shiftKey then
-                  (* do what's needed to make THIS into a root *)
-                  thegrouplist.selection.first
-                    ->groups.getGroupByIndex->selectedGroup[];
-                  &browser.projects.project[]->newProj[];
-                  selectedGroup.location->newProj.location;
-                  (if newProj.name[]=NONE then
-                      selectedGroup.name.copy->newProj.name[]
-                  if);
-                  (if (newProj.name.length->newProj.name.inxGet) <> '*' then
-                      '*'->newProj.name.append;
-                  if);
-                  true->newProj.isRoot;
-                  
-                  newProj[]->projects.theProjects.append;
-                  newProj[]->root[];
-                  
-                  &browser.projects.project[]->newProj[];
-                  root.location->newProj.location;
-                  true->newProj.isDomain;
-                  '[domain]'->newProj.name[];
-                  root[]->newProj.superProject[];
-                  newProj[]->root.subprojects.append;
-                  
-                  &browser.projects.project[]->newProj[];
-                  root.location->newProj.location;
-                  true->newProj.isExtent;
-                  '[extent]'->newProj.name[];
-                  root[]->newProj.superProject[];
-                  newProj[]->root.subprojects.append;
-                  
+                  (# fragmentBrowser: ^ymerBrowserWindow; t: ^text;
+                  do &ymerBrowserWindow[]->fragmentBrowser[];
+                     fragmentBrowser.open;
+                     root[]->fragmentBrowser.loadProject;
+                     'Browser on: '->t[];
+                     root.name[]->t.puttext;
+                     t[]->fragmentBrowser.title
+                  #)
+               else
+                  root[]->projects.theProjects.append;
                   projectsChanged;
                   root[]->setProject;
               if)
@@ -684,7 +715,75 @@ do &thegrouplist.action
    #)[]->thegrouplist.appendAction;
 
 --- onFragmentgroupViewOpen: dopart --- 
-do &thefragmentgroupview.action
+do &theFragmentgroupView.action
+   (# eventtype:: theFragmentgroupView.theeventhandler.mousedown;
+      codeViewWindow: ymerLocalWindow
+        (# ff: ^mps.AST.fragmentForm;
+           codeview: @codemoveableEditor
+	     (# selectNode:: 
+		  (# cVW: ^codeViewWindow
+                  do  node.frag[]->viewSeparate->cVW[];
+                     (node[],1,0,0)
+                       ->cVW.codeview.SifViewer.setFocus;
+		  #);
+                getEncloser:: (# do codeviewEncloser[]->theEncloser[] #);
+                open::
+                  (# do true->bindBottom->bindTop->bindRight->bindLeft #); 
+	     #); 
+	   codeviewEncloser: @ codemoveableEditorEncloser
+	     (# tryclose:: (# do this(codeViewWindow).close #);
+	        onHighLight:: (# do THIS(codeViewWindow).wriggle #);
+	        getAST:: (# do mps.AST[]->AST[] #);
+	        getBETACFL:: (# do mps.BETACFL[]->BETACFL[] #);
+	     #);
+           eventhandler::
+             (# onAboutToClose::
+                  (#
+                  do (if (browser.getFragmentFormEditor).closeGroup->okToClose then
+                         this(codeViewWindow)[]->CVlist.at->CVlist.delete
+                     if)
+                  #)
+             #);
+	   open::
+	     (# t: ^text;
+	     do (this(codeViewWindow).contents,size)->codeview.open;
+                
+	        (codeviewEncloser.getAST,codeviewEncloser.getBETACFL,
+	        ff[],NONE(*theInitiallySelectedNode[]*))
+		  ->codeview.newfragment;
+                
+                (ff.father).fullname->fragmentDefaultName->t[];
+                '-'->t.append; ff.name->t.append;
+                t[]->title;
+	     #);
+        #);
+      CVlist: @list(# element:: codeViewWindow #);
+      viewSeparate:
+        (# ff: ^mps.AST.fragmentForm;
+           cVW: ^codeViewWindow;
+        enter ff[]
+        do l: CVlist.scan
+             (#
+             do (if current.ff[]=ff[] then current[]->cVW[]; leave l if)
+             #);
+           (if cVW[]=NONE then
+               &codeViewWindow[]->cVW[]; ff[]->cVW.ff[]; cVW.open;
+               cVW[]->CVlist.append;
+            else
+               cVW.wriggle;
+           if)
+        exit cVW[]
+        #)
+   do (if theFragmentgroupView.selection.first<>0 then
+          (if theEvent.doubleClick then
+              (if theEvent.shiftKey then
+                  browser.currentForm[]->viewSeparate
+              if)
+          if)
+      if)
+   #)[]->theFragmentgroupView.appendAction;
+   
+   &thefragmentgroupview.action
    (# eventtype:: thefragmentgroupview.theeventhandler.keydown;
       ch: @char; inx, i: @integer; searching: @boolean;
       g: ^projects.group;
@@ -861,6 +960,7 @@ do OS.init;
    browsers.init;
    INNER init;
    ymerBrowser.open;
+   ymerBrowser.loadSettings;
 #)
 
 --- ymerPrivate: descriptor ---
