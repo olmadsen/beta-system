@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CopyCtext.c,v 1.12 1992-09-03 12:55:47 beta Exp $
+ * Mod: $Id: CopyCtext.c,v 1.13 1992-09-03 15:16:49 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -41,9 +41,7 @@ ref(ValRep) CCopyCT(unsigned char *textPtr)
 
     /* Assign the text to the body part of the repetition. */
 
-    for (i = 0; i < (size-headsize(ValRep)); i++) {
-	theRep->Body[i] = *((long *)textPtr + i);
-    }
+    strcpy((char *)theRep->Body, textPtr);
 
 #ifdef sparc
     /* hack hack. Olm wants the result in %i2 */
