@@ -117,20 +117,13 @@ void findNextLabel (labeltable *table)
 
 labeltable *initReadNameTable (char* execFileName, int full)
 { 
-#ifdef RTVALHALLA
   char command[100];
   labeltable *table = (labeltable*)MALLOC(sizeof(labeltable));
-#endif /* RTVALHALLA */
 
 #ifdef ppcmac
   return 0;
 #endif
 
-#ifndef RTVALHALLA
-  fprintf(output, 
-	  "initReadNameTable: cannot read symbols for stripped executable\n");
-  return 0;
-#else /* RTVALHALLA */
   if (!table){
     fprintf(output,"couldn't malloc label table for file %s\n", execFileName); 
     return 0;
@@ -170,8 +163,6 @@ labeltable *initReadNameTable (char* execFileName, int full)
 #endif /* nti */
 
   return table;
-
-#endif /* RTVALHALLA */
 }
 
 void freeNameTable(labeltable *handle)
@@ -203,11 +194,6 @@ int nextAddress(labeltable *table)
   return -1;
 #endif
 
-#ifndef RTVALHALLA
-  fprintf(output, 
-	  "nextAddress: cannot read symbols for stripped executable\n");
-  return -1;
-#else /* RTVALHALLA */
   findNextLabel(table);
   /*fprintf(output, "nextAddress: 0x%x\n", table->NextAddress); fflush(output);*/
   return table->NextAddress;
@@ -215,12 +201,15 @@ int nextAddress(labeltable *table)
 
 char* nextLabel(labeltable *table) 
 { 
+#ifdef ppcmac
+  return 0;
+#endif
+
   /*fprintf(output, "nextLabel: %s\n", table->NextLabel); fflush(output);*/
   return table->NextLabel;
-#endif /* RTVALHALLA */
 }
 
-#if defined(nti) && defined(RTVALHALLA)
+#ifdef nti
 /* Implements 'nm' like behaviour for nti */
 static PSTR GetSZStorageClass(BYTE storageClass);
 static void DumpSymbolTable(labeltable *table,
@@ -262,18 +251,18 @@ static void DumpSectionTable(labeltable *table,
 			     BOOL IsEXE)
 {
     unsigned i;
-    table->textSectionNumber = -1;
+    table->textSectionNumber = (DWORD)-1;
 
     for ( i=1; i <= cSections; i++, section++ )
     {
       if (strcmp(section->Name,TEXTSECTIONNAME)==0) {
-	table->textSectionNumber = i;
+	table->textSectionNumber = (DWORD)i;
 	break;
       }
     }
-    if (table->textSectionNumber==-1) {
+    if (table->textSectionNumber==(DWORD)-1) {
       fprintf(output,"Warning! nm(DumpSectionTable): Couldn't find section number of %s\n",TEXTSECTIONNAME);
-      table->textSectionNumber = DEFAULTTEXTSECTIONNUMBER;
+      table->textSectionNumber = (DWORD)DEFAULTTEXTSECTIONNUMBER;
     }
 }
 
@@ -429,4 +418,4 @@ static PSTR GetSZStorageClass(BYTE storageClass) {
     return "???";
 }
 
-#endif /* nti && RTVALHALLA */
+#endif /* nti */

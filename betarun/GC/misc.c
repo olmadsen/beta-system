@@ -823,7 +823,8 @@ static void initLabels(void)
     return;
   }
 #ifdef nti
-  process_offset = getProcessOffset(table, getMainPhysical);
+  process_offset = getProcessOffset(table, getMainPhysical());
+  /*fprintf(output, "initLabels: ProcessOffset: 0x%x\n", process_offset);*/
 #endif /* nti */
   labels=(label**)MALLOC(maxLabels * sizeof(label*));
   if (!labels) {
@@ -901,7 +902,8 @@ char *getLabel (long addr)
   return "<unknown>";
 #endif /* ppcmac */
 
-if (!labels) initLabels();
+  if (!labels) initLabels();
+
   if (!addr){
     labelOffset=0;
     return "<unknown>";
