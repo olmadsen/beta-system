@@ -23,7 +23,6 @@ ParamThisComp(void, AttBC)
 #ifdef hppa
     long			dummy;
     struct ComponentBlock       cb; /* don't move without changing SnakeAdditions.S */
-
     comp = cast(Component)getCallReg();
 #endif
 
@@ -59,8 +58,8 @@ ParamThisComp(void, AttBC)
     cb.next = cast(ComponentBlock) 0;
     cb.level = 0;
     cb.RefBlock = (void *)/*getRefSP()*/RefSP;
-    lastCompBlock = (void *)/*getSPReg()*/RefSP;
-    StackStart = (long)getSPReg();  /* Should be start of Ref Stack though */
+    StackStart = (long)RefSP;
+    lastCompBlock = (void *)RefSP;
     comp->CallerLSC = 1;
 #endif
 

@@ -206,7 +206,9 @@ long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
 
     /* Push CallBackFrame. */
     cbf.next    = ActiveCallBackFrame;
+#ifndef REFSTACK
     cbf.betaTop = BetaStackTop;
+#endif
     /* cbf.tmp     = (long) getSPReg();  so the GC can find it */
     ActiveCallBackFrame = &cbf;
 
@@ -235,7 +237,9 @@ long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
 
     /* Pop CallBackFrame */
     ActiveCallBackFrame = cbf.next;
+#ifndef REFSTACK
     BetaStackTop        = cbf.betaTop;
+#endif
 
 #if 0
     asm ("LDIL\tLR'savedIOA,%r1");

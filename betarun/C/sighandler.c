@@ -136,7 +136,9 @@ void BetaSignalHandler(sig, code, scp, addr)
 
   /* Set StackEnd to the stack pointer just before trap. */
 #if !(defined(linux) || defined(nti))
+#if !(defined(hppa) && defined(REFSTACK))
   StackEnd = (long *) scp->sc_sp;
+#endif /* hppa && REFSTACK */
 #ifndef hppa
   PC = (long *) scp->sc_pc;
 #endif /* !hppa */

@@ -100,10 +100,11 @@ struct LVRABlock{
 
 struct CallBackFrame {
     ref(CallBackFrame)  next;
+#if !(defined(hppa) && defined(REFSTACK))
     ptr(long)           betaTop;
+#endif
     long                tmp;
 };
-
 
 struct CallBackEntry {
 #ifdef crts
