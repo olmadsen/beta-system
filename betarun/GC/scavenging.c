@@ -290,6 +290,21 @@ void IOAGc()
 #endif
     
     NumIOAGc++;
+
+#ifdef MADA
+    if (NumIOAGc>=1000) {
+      fprintf(output, "\
+  ******************************************************\n\
+  *  This DEMO version of The Mjolner BETA System is   *\n\
+  *  limited in the number of garbage collections it   *\n\
+  *  will allow.                                       *\n\
+  ******************************************************\n\
+");
+      exit(0);
+    }
+#endif
+
+
     IOAActive = TRUE;
     
     INFO_IOA( fprintf( output, "#(IOA-%d %d? ", NumIOAGc, ReqObjectSize));
