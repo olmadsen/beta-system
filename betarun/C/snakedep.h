@@ -383,7 +383,7 @@ static __inline__ long getRPReg()
   /* all are in correct registers */
 
 
-/* Copy(S)RR, Copy(S)VR1, Copy(S)VR2, Copy(S)VR4, Copy(S)VR8 */
+/* CopyRR, CopyVR1, CopyVR2, CopyVR4, CopyVR8 */
 #define ParamRepObjOff(name)                            \
 void name(struct ValRep *theRep,                        \
 	  struct Object *theObj,                        \
@@ -413,7 +413,7 @@ void name(struct ValRep *theRep,                        \
   high = (long) getPrimReg5()
 
 
-/* CopySVRI, CopySVRC */
+/* CopySVRI, CopySVRC CopySRR, CopySVR1, CopySVR2, CopySVR4, CopySVR8 */
 #define ParamORepObjOffLowHigh(name)                    \
 void name(struct ObjectRep *theRep,                     \
 	  struct Object *theObj,                        \

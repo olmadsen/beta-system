@@ -1,14 +1,23 @@
 ------- CopyValRep: System ----
 
+{ FIXME: CopyVR1 is partly fixed, but tst fails after first CopyVR1 }
+
 CopyVR1: public
   (#
      { Copy a Byte Repetition. }
-     { stack on entry [return(0),offset(4),Item(8),ValRep(12),...] }
+
+     { stack on entry [return(0),...] }
+     
+     { input parameters }
+     { Repetition: DataRegA; (pReg1 on intel) }
+     { Object:     DataRegB; (pReg2 on intel) }
+     { Offset:     DataRegC; (pReg3 on intel) }
         
      stack: StackArea = SP;
      
      { Used variable.  }
      theRep:    Repetition        = AddrReg1;
+     theItem:   Object            = AddrReg1;
      theCell:   DataArea          = AddrReg1;
 
      newTop:    DataArea          = AddrReg2;
@@ -33,33 +42,23 @@ CopyVR1: public
        <Intel: AddrReg1>   Intel: +12
        <Mac: AddrReg2>                  Mac: +0    
        <return address>    Intel: +16   Mac: +4    Default: +0
-       <offset>            Intel: +20   Mac: +8    Default: +4
-       <item>              Intel: +24   Mac: +12   Default: +8
-       <valrep>            Intel: +28   Mac: +16   Default: +12
      }
      
      (if MacOS then push AddrReg2 if);
      (if intel then push AddrReg1, AddrReg2, DataReg1, DataReg2 if);
      
      (if intel then
-         stack[28] -> theRep;
-      else 
-         (if MacOS then
-             stack[16] -> theRep;
-          else
-             stack[12] -> theRep;
-         if)
+         pReg1 -> theRep;
+      else
+         DataRegA -> theRep;
      if);
      theRep.HighBorder -> range;
      
      (if range > 256 then
-         (if intel then
-             push RegCall, RegThis;
-          else
-             push RegCall, RegThis, DataRegA, DataRegB;
-         if);
+         push RegCall, RegThis;
+         (if intel then ; else push DataRegA, DataRegB, DataRegC; if);
          
-         cycleCell -> cycleCell-; {Stupid MC680x0 assembler won't clear addrreg !}
+         cycleCell -> cycleCell-; {Stupid MC680x0 assembler won't clr A-reg !}
          (if theRep outside IOA then { theRep is in LVRA }
              theRep.Age -> cycleCell { save pointer to cell refering theRep }
          if);
@@ -71,25 +70,25 @@ CopyVR1: public
          call LVRAAlloc;
          stack[8] -> cycleCell; {Restore cycleCell}
          (if cycleCell <> 0 then
-             { restore theRep from pointer to cell. The reason for this is that 
-               theRep may have been moved by an LVRACompaction 
+             { restore theRep from pointer to cell. 
+               The reason for this is that theRep may have been moved by an 
+               LVRACompaction 
              }
              cycleCell[0] -> theRep;
+             DataRegA -> newRep; {Fetch LVRAAlloc result}
+             (if intel then ; else pop DataRegC, DataRegB, DataRegA; if);
              goto endifCycleCell;
          if);
+         DataRegA -> newRep; {Fetch LVRAAlloc result}
+         (if intel then ; else pop DataRegC, DataRegB, DataRegA; if);
          {Restore theRep, may have been destroyed by LVRAAlloc}
          (if intel then
-             stack[48{28+(3+2)*4}] -> theRep
+             pReg1 -> theRep
           else
-             (if MacOS then
-                 stack[44{16+(3+4)*4}] -> theRep
-              else
-                 stack[40{12+(3+4)*4}] -> theRep
-             if);
+             DataRegA -> theRep;
          if);
          endifCycleCell:
          
-         DataRegA -> newRep; {Fetch LVRAAlloc result}
          4 -> SP+; {Discard proto}
          pop range; {Restore range}
          4 -> SP+; {Discard cycleCell}
@@ -97,27 +96,17 @@ CopyVR1: public
          (if newRep <> 0 then
              { Make the LVRA-cycle: theCell -> newRep.Age }
              (if intel then
-                 stack[28{20+2*4}] -> tmp; 
+                 pReg3 -> tmp; 
                  4 -> tmp*;
-                 stack[32{24+2*4}] -> tmp+;
+                 pReg2 -> tmp+;
               else
-                 (if MacOS then
-                     stack[24{8+4*4}] -> tmp; 
-                     4 -> tmp*;
-                     stack[28{12+4*4}] -> tmp+;
-                  else
-                     stack[20{4+4*4}] -> tmp; 
-                     4 -> tmp*;
-                     stack[24{8+4*4}] -> tmp+;
-                 if);
+                 DataRegC -> tmp;
+                 4 -> tmp*;
+                 DataRegB -> tmp+;
              if);
              tmp -> newRep.Age
          if);
-         (if intel then
-             pop RegThis, RegCall;
-          else
-             pop DataRegB, DataRegA, RegThis, RegCall;
-         if);
+         pop RegThis, RegCall;
          
          (if newRep <> 0 then
              { range -> BodySize; // no need; it is the same register }
@@ -165,20 +154,14 @@ CopyVR1: public
      pop newRep; { pop unmodified newRep }
      
      AssignReference:
-     
      (if intel then
-         stack[24] -> theCell;
-         stack[20]  -> offset;
+         pReg2 -> theItem;
+         pReg3 -> offset;
       else
-         (if MacOS then 
-             stack[12] -> theCell;
-             stack[8]  -> offset;
-          else
-             stack[8] -> theCell;
-             stack[4] -> offset;
-         if);
+         DataRegB -> theItem;
+         DataRegC -> offset;
      if);
-     theCell[offset*4][] -> theCell;
+     theItem[offset*4][] -> theCell;
      newRep -> theCell[0];
      
      (if theCell outside IOA then  { The theCell resides in AOA. }
@@ -189,7 +172,7 @@ CopyVR1: public
      (if intel then pop DataReg2, DataReg1, AddrReg2, AddrReg1 if);
      (if MacOS then pop AddrReg2 if);
      (if debug then call Ck if);
-     return 12;
+     return;
      
      GC:
      { The IOA heap is full, so we need a garbage collection.            }
@@ -205,12 +188,19 @@ CopyVR1: public
 CopyVR2: public
   (#
      { Copy a Short Repetition. }
-     { stack on entry [return(0),offset(4),Item(8),ValRep(12),...] }
+
+     { stack on entry [return(0),...] }
+     
+     { input parameters }
+     { Repetition: DataRegA; (pReg1 on intel) }
+     { Object:     DataRegB; (pReg2 on intel) }
+     { Offset:     DataRegC; (pReg3 on intel) }
         
      stack: StackArea = SP;
      
      { Used variable.  }
      theRep:    Repetition        = AddrReg1;
+     theItem:   Object            = AddrReg1;
      theCell:   DataArea          = AddrReg1;
 
      newTop:    DataArea          = AddrReg2;
@@ -235,33 +225,23 @@ CopyVR2: public
        <Intel: AddrReg1>   Intel: +12
        <Mac: AddrReg2>                  Mac: +0    
        <return address>    Intel: +16   Mac: +4    Default: +0
-       <offset>            Intel: +20   Mac: +8    Default: +4
-       <item>              Intel: +24   Mac: +12   Default: +8
-       <valrep>            Intel: +28   Mac: +16   Default: +12
      }
      
      (if MacOS then push AddrReg2 if);
      (if intel then push AddrReg1, AddrReg2, DataReg1, DataReg2 if);
      
      (if intel then
-         stack[28] -> theRep;
-      else 
-         (if MacOS then
-             stack[16] -> theRep;
-          else
-             stack[12] -> theRep;
-         if)
+         pReg1 -> theRep;
+      else
+         DataRegA -> theRep;
      if);
      theRep.HighBorder -> range;
      
      (if range > 256 then
-         (if intel then
-             push RegCall, RegThis;
-          else
-             push RegCall, RegThis, DataRegA, DataRegB;
-         if);
+         push RegCall, RegThis;
+         (if intel then ; else push DataRegA, DataRegB, DataRegC; if);
          
-         cycleCell -> cycleCell-; {Stupid MC680x0 assembler won't clear addrreg !}
+         cycleCell -> cycleCell-; {Stupid MC680x0 assembler won't clr A-reg !}
          (if theRep outside IOA then { theRep is in LVRA }
              theRep.Age -> cycleCell { save pointer to cell refering theRep }
          if);
@@ -273,25 +253,25 @@ CopyVR2: public
          call LVRAAlloc;
          stack[8] -> cycleCell; {Restore cycleCell}
          (if cycleCell <> 0 then
-             { restore theRep from pointer to cell. The reason for this is that 
-               theRep may have been moved by an LVRACompaction 
+             { restore theRep from pointer to cell. 
+               The reason for this is that theRep may have been moved by an 
+               LVRACompaction 
              }
              cycleCell[0] -> theRep;
+             DataRegA -> newRep; {Fetch LVRAAlloc result}
+             (if intel then ; else pop DataRegC, DataRegB, DataRegA; if);
              goto endifCycleCell;
          if);
+         DataRegA -> newRep; {Fetch LVRAAlloc result}
+         (if intel then ; else pop DataRegC, DataRegB, DataRegA; if);
          {Restore theRep, may have been destroyed by LVRAAlloc}
          (if intel then
-             stack[48{28+(3+2)*4}] -> theRep
+             pReg1 -> theRep
           else
-             (if MacOS then
-                 stack[44{16+(3+4)*4}] -> theRep
-              else
-                 stack[40{12+(3+4)*4}] -> theRep
-             if);
+             DataRegA -> theRep;
          if);
          endifCycleCell:
          
-         DataRegA -> newRep; {Fetch LVRAAlloc result}
          4 -> SP+; {Discard proto}
          pop range; {Restore range}
          4 -> SP+; {Discard cycleCell}
@@ -299,32 +279,21 @@ CopyVR2: public
          (if newRep <> 0 then
              { Make the LVRA-cycle: theCell -> newRep.Age }
              (if intel then
-                 stack[28{20+2*4}] -> tmp; 
+                 pReg3 -> tmp; 
                  4 -> tmp*;
-                 stack[32{24+2*4}] -> tmp+;
+                 pReg2 -> tmp+;
               else
-                 (if MacOS then
-                     stack[24{8+4*4}] -> tmp; 
-                     4 -> tmp*;
-                     stack[28{12+4*4}] -> tmp+;
-                  else
-                     stack[20{4+4*4}] -> tmp; 
-                     4 -> tmp*;
-                     stack[24{8+4*4}] -> tmp+;
-                 if);
+                 DataRegC -> tmp;
+                 4 -> tmp*;
+                 DataRegB -> tmp+;
              if);
              tmp -> newRep.Age
          if);
-         (if intel then
-             pop RegThis, RegCall;
-          else
-             pop DataRegB, DataRegA, RegThis, RegCall;
-         if);
+         pop RegThis, RegCall;
          
          (if newRep <> 0 then
              { range -> BodySize; // no need; it is the same register }
-             2 -> BodySize*;
-             3 -> BodySize+;
+             4 -> BodySize+;
              4 -> BodySize/;
              4 -> BodySize*;
              goto copyBodyPush
@@ -369,20 +338,14 @@ CopyVR2: public
      pop newRep; { pop unmodified newRep }
      
      AssignReference:
-     
      (if intel then
-         stack[24] -> theCell;
-         stack[20]  -> offset;
+         pReg2 -> theItem;
+         pReg3 -> offset;
       else
-         (if MacOS then 
-             stack[12] -> theCell;
-             stack[8]  -> offset;
-          else
-             stack[8] -> theCell;
-             stack[4] -> offset;
-         if);
+         DataRegB -> theItem;
+         DataRegC -> offset;
      if);
-     theCell[offset*4][] -> theCell;
+     theItem[offset*4][] -> theCell;
      newRep -> theCell[0];
      
      (if theCell outside IOA then  { The theCell resides in AOA. }
@@ -393,7 +356,7 @@ CopyVR2: public
      (if intel then pop DataReg2, DataReg1, AddrReg2, AddrReg1 if);
      (if MacOS then pop AddrReg2 if);
      (if debug then call Ck if);
-     return 12;
+     return;
      
      GC:
      { The IOA heap is full, so we need a garbage collection.            }
@@ -408,13 +371,20 @@ CopyVR2: public
 
 CopyVR4: public
   (#
-     { Copy an Integer Repetition. }
-     { stack on entry [return(0),offset(4),Item(8),ValRep(12),...] }
+     { Copy a Long Repetition. }
+
+     { stack on entry [return(0),...] }
+     
+     { input parameters }
+     { Repetition: DataRegA; (pReg1 on intel) }
+     { Object:     DataRegB; (pReg2 on intel) }
+     { Offset:     DataRegC; (pReg3 on intel) }
         
      stack: StackArea = SP;
      
      { Used variable.  }
      theRep:    Repetition        = AddrReg1;
+     theItem:   Object            = AddrReg1;
      theCell:   DataArea          = AddrReg1;
 
      newTop:    DataArea          = AddrReg2;
@@ -439,33 +409,23 @@ CopyVR4: public
        <Intel: AddrReg1>   Intel: +12
        <Mac: AddrReg2>                  Mac: +0    
        <return address>    Intel: +16   Mac: +4    Default: +0
-       <offset>            Intel: +20   Mac: +8    Default: +4
-       <item>              Intel: +24   Mac: +12   Default: +8
-       <valrep>            Intel: +28   Mac: +16   Default: +12
      }
      
      (if MacOS then push AddrReg2 if);
      (if intel then push AddrReg1, AddrReg2, DataReg1, DataReg2 if);
      
      (if intel then
-         stack[28] -> theRep;
-      else 
-         (if MacOS then
-             stack[16] -> theRep;
-          else
-             stack[12] -> theRep;
-         if)
+         pReg1 -> theRep;
+      else
+         DataRegA -> theRep;
      if);
      theRep.HighBorder -> range;
      
      (if range > 256 then
-         (if intel then
-             push RegCall, RegThis;
-          else
-             push RegCall, RegThis, DataRegA, DataRegB;
-         if);
+         push RegCall, RegThis;
+         (if intel then ; else push DataRegA, DataRegB, DataRegC; if);
          
-         cycleCell -> cycleCell-; {Stupid MC680x0 assembler won't clear addrreg !}
+         cycleCell -> cycleCell-; {Stupid MC680x0 assembler won't clr A-reg !}
          (if theRep outside IOA then { theRep is in LVRA }
              theRep.Age -> cycleCell { save pointer to cell refering theRep }
          if);
@@ -477,25 +437,25 @@ CopyVR4: public
          call LVRAAlloc;
          stack[8] -> cycleCell; {Restore cycleCell}
          (if cycleCell <> 0 then
-             { restore theRep from pointer to cell. The reason for this is that 
-               theRep may have been moved by an LVRACompaction 
+             { restore theRep from pointer to cell. 
+               The reason for this is that theRep may have been moved by an 
+               LVRACompaction 
              }
              cycleCell[0] -> theRep;
+             DataRegA -> newRep; {Fetch LVRAAlloc result}
+             (if intel then ; else pop DataRegC, DataRegB, DataRegA; if);
              goto endifCycleCell;
          if);
+         DataRegA -> newRep; {Fetch LVRAAlloc result}
+         (if intel then ; else pop DataRegC, DataRegB, DataRegA; if);
          {Restore theRep, may have been destroyed by LVRAAlloc}
          (if intel then
-             stack[48{28+(3+2)*4}] -> theRep
+             pReg1 -> theRep
           else
-             (if MacOS then
-                 stack[44{16+(3+4)*4}] -> theRep
-              else
-                 stack[40{12+(3+4)*4}] -> theRep
-             if);
+             DataRegA -> theRep;
          if);
          endifCycleCell:
          
-         DataRegA -> newRep; {Fetch LVRAAlloc result}
          4 -> SP+; {Discard proto}
          pop range; {Restore range}
          4 -> SP+; {Discard cycleCell}
@@ -503,30 +463,22 @@ CopyVR4: public
          (if newRep <> 0 then
              { Make the LVRA-cycle: theCell -> newRep.Age }
              (if intel then
-                 stack[28{20+2*4}] -> tmp; 
+                 pReg3 -> tmp; 
                  4 -> tmp*;
-                 stack[32{24+2*4}] -> tmp+;
+                 pReg2 -> tmp+;
               else
-                 (if MacOS then
-                     stack[24{8+4*4}] -> tmp; 
-                     4 -> tmp*;
-                     stack[28{12+4*4}] -> tmp+;
-                  else
-                     stack[20{4+4*4}] -> tmp; 
-                     4 -> tmp*;
-                     stack[24{8+4*4}] -> tmp+;
-                 if);
+                 DataRegC -> tmp;
+                 4 -> tmp*;
+                 DataRegB -> tmp+;
              if);
              tmp -> newRep.Age
          if);
-         (if intel then
-             pop RegThis, RegCall;
-          else
-             pop DataRegB, DataRegA, RegThis, RegCall;
-         if);
+         pop RegThis, RegCall;
          
          (if newRep <> 0 then
              { range -> BodySize; // no need; it is the same register }
+             4 -> BodySize+;
+             4 -> BodySize/;
              4 -> BodySize*;
              goto copyBodyPush
          if)
@@ -567,20 +519,14 @@ CopyVR4: public
      pop newRep; { pop unmodified newRep }
      
      AssignReference:
-     
      (if intel then
-         stack[24] -> theCell;
-         stack[20]  -> offset;
+         pReg2 -> theItem;
+         pReg3 -> offset;
       else
-         (if MacOS then 
-             stack[12] -> theCell;
-             stack[8]  -> offset;
-          else
-             stack[8] -> theCell;
-             stack[4] -> offset;
-         if);
+         DataRegB -> theItem;
+         DataRegC -> offset;
      if);
-     theCell[offset*4][] -> theCell;
+     theItem[offset*4][] -> theCell;
      newRep -> theCell[0];
      
      (if theCell outside IOA then  { The theCell resides in AOA. }
@@ -591,7 +537,7 @@ CopyVR4: public
      (if intel then pop DataReg2, DataReg1, AddrReg2, AddrReg1 if);
      (if MacOS then pop AddrReg2 if);
      (if debug then call Ck if);
-     return 12;
+     return;
      
      GC:
      { The IOA heap is full, so we need a garbage collection.            }
@@ -601,18 +547,25 @@ CopyVR4: public
      (if intel then pop DataReg2, DataReg1, AddrReg2, AddrReg1 if);
      (if MacOS then pop AddrReg2 if);
      call doGC;         { Call the Garbage Collector.               }
-     goto CopyVR4        { Go back to the beginning of this routine. }
+     goto CopyVR4       { Go back to the beginning of this routine. }
   #);
 
 CopyVR8: public
   (#
-     { Copy a Double Repetition. }
-     { stack on entry [return(0),offset(4),Item(8),ValRep(12),...] }
+     { Copy a Douoble Repetition. }
+
+     { stack on entry [return(0),...] }
+     
+     { input parameters }
+     { Repetition: DataRegA; (pReg1 on intel) }
+     { Object:     DataRegB; (pReg2 on intel) }
+     { Offset:     DataRegC; (pReg3 on intel) }
         
      stack: StackArea = SP;
      
      { Used variable.  }
      theRep:    Repetition        = AddrReg1;
+     theItem:   Object            = AddrReg1;
      theCell:   DataArea          = AddrReg1;
 
      newTop:    DataArea          = AddrReg2;
@@ -637,33 +590,23 @@ CopyVR8: public
        <Intel: AddrReg1>   Intel: +12
        <Mac: AddrReg2>                  Mac: +0    
        <return address>    Intel: +16   Mac: +4    Default: +0
-       <offset>            Intel: +20   Mac: +8    Default: +4
-       <item>              Intel: +24   Mac: +12   Default: +8
-       <valrep>            Intel: +28   Mac: +16   Default: +12
      }
      
      (if MacOS then push AddrReg2 if);
      (if intel then push AddrReg1, AddrReg2, DataReg1, DataReg2 if);
      
      (if intel then
-         stack[28] -> theRep;
-      else 
-         (if MacOS then
-             stack[16] -> theRep;
-          else
-             stack[12] -> theRep;
-         if)
+         pReg1 -> theRep;
+      else
+         DataRegA -> theRep;
      if);
      theRep.HighBorder -> range;
      
      (if range > 256 then
-         (if intel then
-             push RegCall, RegThis;
-          else
-             push RegCall, RegThis, DataRegA, DataRegB;
-         if);
+         push RegCall, RegThis;
+         (if intel then ; else push DataRegA, DataRegB, DataRegC; if);
          
-         cycleCell -> cycleCell-; {Stupid MC680x0 assembler won't clear addrreg !}
+         cycleCell -> cycleCell-; {Stupid MC680x0 assembler won't clr A-reg !}
          (if theRep outside IOA then { theRep is in LVRA }
              theRep.Age -> cycleCell { save pointer to cell refering theRep }
          if);
@@ -675,25 +618,25 @@ CopyVR8: public
          call LVRAAlloc;
          stack[8] -> cycleCell; {Restore cycleCell}
          (if cycleCell <> 0 then
-             { restore theRep from pointer to cell. The reason for this is that 
-               theRep may have been moved by an LVRACompaction 
+             { restore theRep from pointer to cell. 
+               The reason for this is that theRep may have been moved by an 
+               LVRACompaction 
              }
              cycleCell[0] -> theRep;
+             DataRegA -> newRep; {Fetch LVRAAlloc result}
+             (if intel then ; else pop DataRegC, DataRegB, DataRegA; if);
              goto endifCycleCell;
          if);
+         DataRegA -> newRep; {Fetch LVRAAlloc result}
+         (if intel then ; else pop DataRegC, DataRegB, DataRegA; if);
          {Restore theRep, may have been destroyed by LVRAAlloc}
          (if intel then
-             stack[48{28+(3+2)*4}] -> theRep
+             pReg1 -> theRep
           else
-             (if MacOS then
-                 stack[44{16+(3+4)*4}] -> theRep
-              else
-                 stack[40{12+(3+4)*4}] -> theRep
-             if);
+             DataRegA -> theRep;
          if);
          endifCycleCell:
          
-         DataRegA -> newRep; {Fetch LVRAAlloc result}
          4 -> SP+; {Discard proto}
          pop range; {Restore range}
          4 -> SP+; {Discard cycleCell}
@@ -701,31 +644,23 @@ CopyVR8: public
          (if newRep <> 0 then
              { Make the LVRA-cycle: theCell -> newRep.Age }
              (if intel then
-                 stack[28{20+2*4}] -> tmp; 
+                 pReg3 -> tmp; 
                  4 -> tmp*;
-                 stack[32{24+2*4}] -> tmp+;
+                 pReg2 -> tmp+;
               else
-                 (if MacOS then
-                     stack[24{8+4*4}] -> tmp; 
-                     4 -> tmp*;
-                     stack[28{12+4*4}] -> tmp+;
-                  else
-                     stack[20{4+4*4}] -> tmp; 
-                     4 -> tmp*;
-                     stack[24{8+4*4}] -> tmp+;
-                 if);
+                 DataRegC -> tmp;
+                 4 -> tmp*;
+                 DataRegB -> tmp+;
              if);
              tmp -> newRep.Age
          if);
-         (if intel then
-             pop RegThis, RegCall;
-          else
-             pop DataRegB, DataRegA, RegThis, RegCall;
-         if);
+         pop RegThis, RegCall;
          
          (if newRep <> 0 then
              { range -> BodySize; // no need; it is the same register }
-             8 -> BodySize*;
+             4 -> BodySize+;
+             4 -> BodySize/;
+             4 -> BodySize*;
              goto copyBodyPush
          if)
      if);
@@ -734,8 +669,6 @@ CopyVR8: public
      { range -> BodySize; // no need; it is the same register }
      8 -> BodySize*;
      newRep[16+BodySize][] -> newTop;
-     
-     CheckGC:
      (if newTop > IOALimit then goto GC if);
      
      IOATop -> tmp;
@@ -749,7 +682,7 @@ CopyVR8: public
      1                 -> newRep.Age;
      1                 -> newRep.LowBorder;
      theRep.HighBorder -> newRep.HighBorder;
-          
+     
      copyBodyPush:
      push newRep;
 
@@ -767,20 +700,14 @@ CopyVR8: public
      pop newRep; { pop unmodified newRep }
      
      AssignReference:
-     
      (if intel then
-         stack[24] -> theCell;
-         stack[20]  -> offset;
+         pReg2 -> theItem;
+         pReg3 -> offset;
       else
-         (if MacOS then 
-             stack[12] -> theCell;
-             stack[8]  -> offset;
-          else
-             stack[8] -> theCell;
-             stack[4] -> offset;
-         if);
+         DataRegB -> theItem;
+         DataRegC -> offset;
      if);
-     theCell[offset*4][] -> theCell;
+     theItem[offset*4][] -> theCell;
      newRep -> theCell[0];
      
      (if theCell outside IOA then  { The theCell resides in AOA. }
@@ -791,7 +718,7 @@ CopyVR8: public
      (if intel then pop DataReg2, DataReg1, AddrReg2, AddrReg1 if);
      (if MacOS then pop AddrReg2 if);
      (if debug then call Ck if);
-     return 12;
+     return;
      
      GC:
      { The IOA heap is full, so we need a garbage collection.            }
@@ -801,10 +728,10 @@ CopyVR8: public
      (if intel then pop DataReg2, DataReg1, AddrReg2, AddrReg1 if);
      (if MacOS then pop AddrReg2 if);
      call doGC;         { Call the Garbage Collector.               }
-     goto CopyVR8        { Go back to the beginning of this routine. }
+     goto CopyVR8       { Go back to the beginning of this routine. }
   #);
 
-CopyVRI: public
+CopyVRI: public { FIXME: parameters }
   (#
      { Copy an Item Repetition. }
      { stack on entry [return(0),offset(4),Item(8),ValRep(12),...] }
@@ -932,7 +859,7 @@ CopyVRI: public
      goto CopyVRI        { Go back to the beginning of this routine. }
   #);
 
-CopyVRC: public
+CopyVRC: public { FIXME: parameters }
   (#
      { Copy a Component Repetition. }
      { stack on entry [return(0),offset(4),Item(8),ValRep(12),...] }
