@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: MakeTextObj.c,v $, rel: %R%, date: $Date: 1992-06-16 23:47:56 $, SID: $Revision: 1.1 $
+ * Mod: $RCSfile: MakeTextObj.c,v $, rel: %R%, date: $Date: 1992-06-17 01:00:00 $, SID: $Revision: 1.2 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -9,6 +9,8 @@
 
 /* long offset of rep. within text obj. TEXT ATTRIBUTE HARDCODED:3. */
 #define REP_OFF 3
+
+void mkTextObj() asm("mkTextObj"); /* MP */
 
 void mkTextObj(char *cText,
 	       ref(Item) theItem,
