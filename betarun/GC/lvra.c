@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $Id: lvra.c,v 1.25 1992-09-25 22:04:23 beta Exp $
+ * Mod: $Id: lvra.c,v 1.26 1992-10-02 14:49:22 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
@@ -280,7 +280,10 @@ int inLVRA(theObj )
   return FALSE;
 }
 
-static long LVRARestInBlock(theBlock)
+/* Needs to be non-static, since ~beta/Xt/.../private/external/getarg.c
+ * uses it
+ */
+long LVRARestInBlock(theBlock)
      ref(LVRABlock) theBlock;
 {
   return (long) theBlock->limit - (long) theBlock->top;
