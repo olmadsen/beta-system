@@ -47,13 +47,15 @@ foldersTree = gFld("<B>Contents</B>", "");
 
        aux1 = insFld(foldersTree, gFld("Internal Documentation", ""));
 	      aux2 = insFld(aux1, gFld("Mjolner", "../mjolner/internal/"));
-		     aux3 = insFld(aux2, gFld("Arkitektur", "../mjolner/internal/architecture"));
+			    insFld(aux2, gLnk(0, "Error Reports Overview", "../mjolner/internal/errorReportsStatus.html"));
+			    insFld(aux2, gLnk(0, "Executive summary", "../mjolner/internal/mjolnerbugs.html"));
+		     aux3 = insFld(aux2, gFld("Architecture", "../mjolner/internal/architecture"));
 			    insFld(aux3, gLnk(0, "990319", "../mjolner/internal/architecture/990319/index.html"));
 
-		     aux3 = insFld(aux2, gFld("Planer", "../mjolner/internal/plans"));
+		     aux3 = insFld(aux2, gFld("Plans", "../mjolner/internal/plans"));
 			    insFld(aux3, gLnk(0, "uge21-34", "../mjolner/internal/plans/uge21-34.html"));
 
-		     aux3 = insFld(aux2, gFld("Status", "../mjolner/internal/minutes"));
+		     aux3 = insFld(aux2, gFld("Minutes", "../mjolner/internal/minutes"));
 			    insFld(aux3, gLnk(0, "990319", "../mjolner/internal/minutes/990319.txt"));
 			    insFld(aux3, gLnk(0, "990409", "../mjolner/internal/minutes/990409.txt"));
 			    insFld(aux3, gLnk(0, "990416", "../mjolner/internal/minutes/990416.txt"));
