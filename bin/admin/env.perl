@@ -114,6 +114,10 @@ if (-e "c:\\") {
 	    $MACHINETYPE = 'SUN4S';
 	    $objdir = 'sun4s';
 	    &setup_sun4_5_6;
+	} elsif ($rev =~ /^5\.7/) {
+	    $MACHINETYPE = 'SUN4S';
+	    $objdir = 'sun4s';
+	    &setup_sun4_5_7;
 	} else {
 	    print "Unknown/unsupported Sun4 OS\n";
 	    exit 1;
@@ -257,6 +261,10 @@ sub setup_sun4_5_6 {
     } else {
 	$LD_RUN_PATH = "$ENV{'MOTIFHOME'}/lib:/usr/dt/lib:$ENV{'OPENWINHOME'}/lib";
     }
+}
+
+sub setup_sun4_5_7 {
+    &setup_sun4_5_6;
 }
 
 sub setup_hpux9pa {
