@@ -309,11 +309,13 @@ public class BetaOutput
 	};
 	putln("--LIB: attributes--\n");
 	putln("(* Java " + className + " class members.");
-	putln(" * See " + "_" + className + " for class declaration.");
-	putln(" * See http://java.sun.com/j2se/" 
-	      + System.getProperty("java.version") 
-	      + "/docs/api/" 
-	      + packageName + className + ".html");
+	putln(" * See " + "_" + className + ".bet for class declaration.");
+	if (packageName.startsWith("java/")){
+	    putln(" * See http://java.sun.com/j2se/" 
+		  + System.getProperty("java.version") 
+		  + "/docs/api/" 
+		  + packageName + className + ".html");
+	}
 	putln(" *)");
 	putPatternBegin(className, "_" + className);
     }
