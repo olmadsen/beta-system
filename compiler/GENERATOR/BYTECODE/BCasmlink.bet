@@ -338,9 +338,8 @@ do (if use_pcre then
        'export PATH' -> AFF.putline;
        'TMPDIR=${TMPDIR-/tmp}'->AFF.putLine;
    if);
-   (if false (*isPRE*) then
-       'echo Executing PRE job file ' -> AFF.puttext;
-       AFF.name -> AFF.putline;
+   (if isPRE then
+       ('pre/main.pra', true, AFF[]) -> del;
    if);
    (if isIL then
        ('ilasm.out', true, AFF[]) -> del;
@@ -399,7 +398,7 @@ do 'echo '->AFF.puttext; (* same in bat/sh *)
 #)
 ---Remove: descriptor ---
 (# 
-do 'Remove '->screen.puttext; name[]->screen.putline;
+do (*'Remove '->screen.puttext; name[]->screen.putline;*)
    (if common.hostIsWindows then
        (* Delete .exe file - even for java *)
        name.copy -> name[]; 
@@ -454,6 +453,7 @@ do 'resource'->TODO
 (# e: @diskentry;
    out: ^text;
    FF: ^text;
+   jarpath: ^text;
    
 do (if (common.switch[184] or common.switch[189]) or (common.isPRE) then
        asmext -> F.append;
@@ -538,7 +538,27 @@ do (if (common.switch[184] or common.switch[189]) or (common.isPRE) then
            if);
            F[] -> asmstate.verifylist.append;
         // isPRE then
-           'pre-asm '->AFF.puttext; 
+           (if false then
+               (* Fails for all but the first call??? *)
+               'call pre-asm.bat '->AFF.puttext; 
+            else
+               (* Inline pre-asm.bat *)
+               (* First find pre-asm in path to get path of jar file *)
+               findAssemblerJar: scanSearchPath
+               (# e: @diskentry;
+               do path.length->path.setpos;
+                  DirectoryChar -> path.put;
+                  'pre-asm.jar' -> (path.copy).append -> e.path;
+                  (if e.exists then e.path->jarpath[]; leave findAssemblerJar if);
+               #);
+               (if jarpath[]=NONE then
+                   'BCasmlink: warning: pre-asm[.bat] not found' 
+                     -> screen.putline;
+               if);
+               'java -jar '-> AFF.puttext;
+               jarpath[] -> BackslashToSlash -> AFF.puttext;
+               ' ' -> AFF.put;
+           if);
            (if common.hostIsWindows then
                '.pra' -> (F.copy).appendExtension -> AFF.puttext;
             else
@@ -722,7 +742,7 @@ do (if true
        GenerateClrVerify;
        AFF.newline;
     // isPRE then
-       'Generate script to invoke PRE program' -> TODO;
+       (* Nothing here in start of link directive *)
     else
        'link' -> TODO;
    if);
@@ -921,8 +941,13 @@ do (* lObj = '"foo"' *)
     // isIL then
        lObj[] -> addDllFile;
     // isPRE then
-       'linkObj' -> TODO;
-	'Link: ' -> ldA.puttext; lObj[] -> lDA.putline
+       (if common.hostIsWindows then
+           'type ' -> ldA.puttext; 
+        else
+           'cat ' -> ldA.puttext; 
+       if);
+       lObj[] -> lDA.puttext;
+       '.pra >> pre/main.pra' -> ldA.putline;
     else
        'linkObj' -> TODO;
    if);
@@ -937,6 +962,9 @@ do (if isJava then
        'jar @' -> AFF.puttext;
        jatfilename -> AFF.putline;
        CheckLinkError -> AFF.putline;
+   if);
+   (if isPRE then
+       'call pre-asm pre/main.pra' -> AFF.putline;
    if);
 #)
 ---trailer: descriptor ---
@@ -1245,6 +1273,9 @@ do (if true
            (jatfilename, true, AFF[]) -> del; 
        if);
     // isPRE then
+       (* FIXME: Create wrapper script for program  HERE  *)
+       '\necho PRE component on file: '->AFF.puttext;
+       'pre/main.prc' ->AFF.putline;
        (if common.hostIsWindows then
            generateBatFileLabels;
        if);
