@@ -6,6 +6,7 @@
 
 PACKSYSTEM=${PACKSYSTEM-"no"}
 PACKLIB=${PACKLIB-"no"}
+PACKCOM=${PACKCOM-"no"}
 PACKYGGDRASIL=${PACKYGGDRASIL-"no"}
 PACKEDITOR=${PACKEDITOR-"no"}
 PACKFRIGG=${PACKFRIGG-"no"}
@@ -21,6 +22,7 @@ PACKPERSISTENCE=${PACKPERSISTENCE-"no"}
 PACKOBJECTSERVER=${PACKOBJECTSERVER-"no"}
 
 export PACKLIB
+export PACKCOM
 export PACKPERSISTENCE
 export PACKOBJECTSERVER
 export PACKSYSTEM
@@ -58,6 +60,10 @@ if [ "$PACKLIB" = "yes" ]; then
    ${BETALIB}/export/misc/lib.sh
    PACKOBJECTSERVER=packed
    export PACKOBJECTSERVER
+fi
+
+if [ "$PACKCOM" = "yes" ]; then
+   ${BETALIB}/export/misc/com.sh
 fi
 
 if [ "$PACKYGGDRASIL" = "yes" ]; then
