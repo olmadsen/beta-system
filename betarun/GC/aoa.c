@@ -403,6 +403,16 @@ static void FollowObject( theObj)
       { struct ObjectRep *rep = (struct ObjectRep *)theObj;
 	long *pointer;
 	register long size, index;
+#ifdef RTLAZY
+	      if( isPositiveRef(rep->iOrigin) ) 
+		{RAFPush(&rep->iOrigin);} 
+	      else 
+		if (isLazyRef (rep->iOrigin))
+		  negAOArefsINSERT ((long)&rep->iOrigin);
+#else
+	      /* no need to test for zero - the object is always there */
+	      RAFPush(pointer);
+#endif	
 	if (rep->isDynamic) {
 	  /* Scan the repetition and follow all entries */
 	  { 
@@ -971,6 +981,12 @@ void AOACheckObject( theObj)
       { struct ObjectRep *rep = (struct ObjectRep *)theObj;
 	long *pointer;
 	register long size, index;
+#ifdef RTLAZY
+	if( isPositiveRef(rep->iOrigin) ) 
+	  AOACheckReference( (handle(Object))(&rep->iOrigin) );
+#else
+	AOACheckReference( (handle(Object))(&rep->iOrigin) );
+#endif
 	if (rep->isDynamic) {
 	  /* Scan the repetition and follow all entries */
 	  { 

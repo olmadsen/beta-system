@@ -498,6 +498,7 @@ void ProcessObject(theObj)
       { struct ObjectRep *rep = (struct ObjectRep *)theObj;
 	long *pointer;
 	register long size, index;
+	ProcessReference( (handle(Object))(&rep->iOrigin) );
 	if (rep->isDynamic) {
 	  /* Scan the repetition and follow all entries */
 	  { 
@@ -678,6 +679,7 @@ void ProcessAOAObject(theObj)
       { struct ObjectRep *rep = (struct ObjectRep *)theObj;
 	long *pointer;
 	register long size, index;
+	ProcessAOAReference( (handle(Object))(&rep->iOrigin) );
 	if (rep->isDynamic) {
 	  /* Scan the repetition and follow all entries */
 	  { 
@@ -882,6 +884,7 @@ long GetDistanceToEnclosingObject( theObj)
 	{ struct ObjectRep *rep = (struct ObjectRep *)theObj;
 	  long *pointer;
 	  register long size, index;
+	  IOACheckReference( (handle(Object))(&rep->iOrigin) );
 	  if (rep->isDynamic) {
 	    /* Scan the repetition and follow all entries */
 	    { 
