@@ -1,10 +1,11 @@
-// javac helloapplet.java;
-// mkdir -p javabc
-// mv helloapplet.class javabc/
+// javac -d jvm helloapplet.java;
+// 
 // Then either
 //    1. Open helloapplet.html in browser
 // or
 //    2. appletviewer [-debug] helloapplet.html
+
+package beta;
 
 import java.applet.Applet;
 import java.awt.Graphics;
