@@ -1,18 +1,18 @@
 #ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
 #include "valhallaFindComp.h"
 
-#ifdef hpux
+#if (defined(hpux) || defined(linux) || defined(macintosh))
 void findComponentStack (struct ComponentStack* compStack, int PC)
 {
-  printf("findComponentStack NYI for hpux\n");
+  printf("findComponentStack NYI\n");
 }
 
 void scanComponentStack (struct ComponentStack* compStack,
 			 forEachCallType forEach)
 {
-  printf("scanComponentStack NYI for hpux\n");
+  printf("scanComponentStack NYI\n");
 }
-#endif /* hpux */
+#endif
 
 #ifdef sparc
 
