@@ -10,12 +10,6 @@ do private.close; INNER close
 -- ConnectionOpen: DoPart --
 do (name[],username[],password[])->private.open;   
 
--- DBEnvClose: DoPart --
-do private.close; INNER close  
-
--- DBEnvOpen: DoPart --
-do private.open; INNER open  
-
 -- DBEnvBDBCException: DoPart --
 do
    THIS(exception)[]->getPatternName->msg.putLine;
@@ -60,6 +54,26 @@ do private.execute->res[];
 (#
    hstmt: @integer;
    hasHstmt: @boolean;
+   theResultSet: @
+   (* Assertion: A connected resultSet is (and should) only dropped via
+    * - close of a statement, or
+    * - re-execution of a statement
+    *)
+     (#
+        ref: ^resultSet;
+        exists: @boolean;
+        set: (#  enter ref[] do true->exists #);
+        assertClosed: (#  do (if exists then close if) #);
+        close:
+          (# rc: @shortint
+          do
+             (private.hstmt,SQL_CLOSE)->SQLFreeStmt->rc;
+             (if rc <> SQL_SUCCESS then
+                 (SQL_HANDLE_STMT,private.hstmt)->execException
+             if);
+             false->exists
+          #)
+     #);
    open:
      (# rc: @shortint
      do
@@ -75,10 +89,14 @@ do private.execute->res[];
             if)
         if)
      #);
+   assertOpen:
+   (* Check if this statement has a handle and allocate one otherwise *)
+     (#  do (if not hasHstmt then open if) #);
    close:
      (# rc: @shortint
      do
         (if hasHstmt then
+            theResultSet.assertClosed;
             (SQL_HANDLE_STMT,hstmt)->SQLFreeHandle->rc;
             (if rc <> SQL_SUCCESS then
                 (SQL_HANDLE_DBC,THIS(Connection).private.hdbc)->execException
@@ -160,22 +178,22 @@ shortIntToSigned: integerValue
              info.NoOfCols->elms.new;
              (for i: info.NoOfCols repeat
                &Info.ColumnInfo[]->theInfo[];
-               THIS(DBEnv).Private.MAX_COL_TXT->ColumnName.init;
+               THIS(Connection).Private.MAX_COL_TXT->ColumnName.init;
                i->ColumnNo;
-               (hstmt,ColumnNo,ColumnName,THIS(DBEnv).Private.MAX_COL_TXT,@@
-                NameLength,@@ DataType,@@ ColumnSize,@@ DecimalDigits,@@
+               (hstmt,ColumnNo,ColumnName,THIS(Connection).Private.MAX_COL_TXT,
+                @@ NameLength,@@ DataType,@@ ColumnSize,@@ DecimalDigits,@@
                 NullAble)->SQLDescribeCol->rc1;
                ColumnName.get->theInfo.ColumnName[];
                ColumnName.free;
                ColumnNo->theInfo.ColumnNo;
                DataType-> (* SIC! *) shortIntToSigned->DataTypeS;
-               DataTypeS->THIS(DBEnv).private.SQLTypeToPattern
+               DataTypeS->THIS(Connection).private.SQLTypeToPattern
                  ->theInfo.DataType##;
                DataTypeS->theInfo.DataTypeNo;
                (if NullAble <> 0 then true->theInfo.NullAble if);
-               THIS(DBEnv).Private.MAX_COL_TXT->ColumnTypeName.init;
+               THIS(Connection).Private.MAX_COL_TXT->ColumnTypeName.init;
                (hstmt,ColumnNo,SQL_DESC_TYPE_NAME,ColumnTypeName,
-                THIS(DBEnv).Private.MAX_COL_TXT,@@ StringLengthPtr,NULL)
+                THIS(Connection).Private.MAX_COL_TXT,@@ StringLengthPtr,NULL)
                  ->SQLColAttribute->rc2;
                ColumnTypeName.get->theInfo.DataTypeName[];
                ColumnTypeName.free;
@@ -201,11 +219,7 @@ shortIntToSigned: integerValue
               else
                  (SQL_HANDLE_STMT,private.hstmt)->resultSetException
              if)
-          #);
-        (private.hstmt,SQL_CLOSE)->SQLFreeStmt->rc;
-        (if rc <> SQL_SUCCESS then
-            (SQL_HANDLE_STMT,private.hstmt)->resultSetException
-        if)
+          #)
      #);
    checkError:
      (# rc: @shortint; hstmt: @integer
@@ -241,18 +255,22 @@ shortIntToSigned: integerValue
 -- getTables: DoPart --
 do private.getTables->res[];   
 
+-- SQLStatementSet: DoPart --
+do private.assertOpen; INNER set  
+
 -- SQLStatementExecute: DoPart --
 do
    (if private.hasHstmt then
+       private.theResultSet.assertClosed;
        INNER execute;
        (* res[] = none IFF an exception was thrown *)
-       (if res[] <> none then res.private.init if)
+       (if res[] <> none then
+           res.private.init; res[]->private.theResultSet.set
+       if)
     else
-       exception (#  do 'Attempt to execute statement before open'->msg #)
+       exception
+         (#  do 'Attempt to execute SQLStatement before open'->msg #)
    if)  
-
--- SQLStatementOpen: DoPart --
-do private.open  
 
 -- SQLStatementClose: DoPart --
 do private.close  
@@ -436,7 +454,7 @@ do name[]->private.getIntegerByName->res
 do name[]->private.getRealByName->res  
 
 -- ResultGetTextByName: DoPart --
-do name[]->private.getTextByName  
+do name[]->private.getTextByName->res[]  
 
 -- ResultGetBooleanByName: DoPart --
 do name[]->private.getBooleanByName->res  
@@ -458,9 +476,10 @@ do name[]->private.getBooleanByName->res
    getText: getByNo
      (# res: ^text; target: @cString; StrLen_or_IndPtr: @integer
      do
-        THIS(DBEnv).private.MAX_COL_TXT->target.init;
+        THIS(Connection).private.MAX_COL_TXT->target.init;
         (THIS(ResultSet).private.hstmt,i,SQL_CHAR,target,
-         THIS(DBEnv).private.MAX_COL_TXT,@@ StrLen_or_IndPtr)->SQLGetData->rc;
+         THIS(Connection).private.MAX_COL_TXT,@@ StrLen_or_IndPtr)->SQLGetData
+          ->rc;
         target.get->res[];
         target.free
      exit res[]
@@ -558,7 +577,7 @@ do name[]->private.getBooleanByName->res
                   (SQL_HANDLE_DBC,henv,@@ THIS(connection).private.hdbc)
                     ->SQLAllocHandle->rc;
                   (if rc <> SQL_SUCCESS then
-                      (SQL_HANDLE_ENV,henv)->openException
+                      (SQL_HANDLE_ENV,henv)->openConnectionException
                   if)
                #);
              openConnection:
@@ -583,22 +602,20 @@ do name[]->private.getBooleanByName->res
                           true->THIS(connection).private.isOpen
                        else
                           (SQL_HANDLE_DBC,THIS(connection).private.hdbc)
-                            ->openException
+                            ->openConnectionException
                       if)
                    else
                       (SQL_HANDLE_DBC,THIS(connection).private.hdbc)
-                        ->openException
+                        ->openConnectionException
                   if)
                #)
           do
              (if THIS(connection).private.isOpen then
                  twiceOpen
               else
-                 THIS(DBEnv).private.henv->allocateHDBC
+                 getHenv->allocateHDBC
              if);
-             THIS(DBEnv).private.henv->openConnection;
-             THIS(Connection)[]->THIS(DBEnv).private.addConnection;
-             
+             getHenv->openConnection
           #)
      #)
 #)  
@@ -661,62 +678,7 @@ do name[]->private.getBooleanByName->res
                 (SQL_HANDLE_DBC,hdbc)->connectionException
             if)
         if)
-     #)
-#)  
-
--- DBEnvPrivate: Descriptor --
-(#
-   henv: @integer;
-   open:
-     (#
-        rc: @shortint;
-        twiceOpen: exception
-          (# 
-          do
-             'Attempt to open '->msg;
-             THIS(DBEnv)[]->getPatternName->msg.append;
-             ' twice.'->msg.append
-          #)
-     do
-        (if private.isOpen then
-            twiceOpen
-         else
-            (@@ private.henv)->SQLAllocEnv->rc
-        if);
-        (if rc = SQL_SUCCESS then
-            true->private.isOpen; private.Connections.init
-         else
-            (SQL_HANDLE_ENV,SQL_NULL_HANDLE)->BDBCException
-        if)
      #);
-   close:
-     (#
-        rc: @shortint;
-        twiceClose: exception
-          (# 
-          do
-             'Attempt to close '->msg;
-             THIS(DBEnv)[]->getPatternName->msg.append;
-             ' that is not open.'->msg.append
-          #)
-     do
-        (if not private.isOpen then
-            twiceClose
-         else
-            private.Connections.scan
-              (#  do (if current.private.isOpen then current.close if) #);
-            (SQL_HANDLE_ENV,private.henv)->SQLFreeHandle->rc
-        if);
-        (if rc = SQL_SUCCESS then
-            false->private.isOpen
-         else
-            (SQL_HANDLE_ENV,private.henv)->BDBCException
-        if)
-     #);
-   isOpen: @boolean;
-   addConnection:
-     (# aConn: ^Connection enter aConn[] do aConn[]->Connections.append #);
-   Connections: @list (# element:: Connection #);
    MAX_COL_TXT: (*Artificial upper bound for all text in columns *)
      (#  exit 255 #);
    SQLTypeToPattern:
@@ -746,4 +708,17 @@ do name[]->private.getBooleanByName->res
      exit Pattern##
      #)
 #)  
+
+-- DBEnvInit: DoPart --
+do
+     (# 
+     do
+        @@ henv->SQLAllocEnv->rc;
+        (* (SQL_HANDLE_ENV,SQL_NULL_HANDLE,@@ henv)->SQLAllocHandle->rc;
+         (henv,SQL_ATTR_ODBC_VERSION,SQL_OV_ODBC3,0)->SQLSetEnvAttr->rc; *)
+        (if rc <> SQL_SUCCESS then
+            exception
+              (#  do 'Failed to allocate environment for connection'->msg #)
+        if)
+     #)  
 

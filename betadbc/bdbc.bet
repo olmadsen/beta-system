@@ -3,319 +3,291 @@ INCLUDE '~beta/containers/v1.6/list'
         'shortintobject';
 BODY 'private/bdbcbody';
 -- lib: Attributes --
-DBEnv:
-(* Handles connections to ODBC-compliant databases.
- * A DBEnv must be opened before any other operation on it is meaningful
- *)
+Connection: (* A connection to an ODBC compliant database *)
   (#
-     <<SLOT DBEnvLib:Attributes>>;
-     Connection:
-     (* A connection to an ODBC compliant database *)
+     <<SLOT ConnectionLib:Attributes>>;
+     Info: @
        (#
-          <<SLOT ConnectionLib:Attributes>>;
+          table:
+            (#
+               CatalogName,SchemaName,
+                 TableName,TableType: ^text
+            #);
+          tableList: list (# element:: table #);
+          getTables:
+            (# res: ^tableList <<SLOT getTables:DoPart>> exit res[] #);
+          TransactionsSupported: @
+            (# isSupported: @boolean
+            <<SLOT ConnectionInfoTransactionsSupported:DoPart>>
+            exit isSupported
+            #);
+          AutoCommitMode:
+          (* In AutoCommitMode, every database operation is a transaction
+           * that is committed when performed 
+           *) @
+            (# AutoCommitOn: @boolean
+            enter
+              (# 
+              enter AutoCommitOn
+              <<SLOT ConnectionInfoAutoCommitModeEnter:DoPart>>
+              #)
+            exit
+              (# 
+              <<SLOT ConnectionInfoAutoCommitModeExit:DoPart>>
+              exit AutoCommitOn
+              #)
+            #);
+          TransactionLevel: @
+            (#
+               READ_UNCOMMITTED: integerValue
+                 (#  <<SLOT ConnectionInfoREAD_UNCOMMITTED:DoPart>> #);
+               READ_COMMITTED:
+                integerValue
+                 (#  <<SLOT ConnectionInfoREAD_COMMITTED:DoPart>> #);
+               REPEATABLE_READ:
+                integerValue
+                 (#  <<SLOT ConnectionInfoREPEATABLE_READ:DoPart>> #);
+               SERIALIZABLE:
+                integerValue
+                 (#  <<SLOT ConnectionInfoSERIALIZABLE:DoPart>> #);
+               level:
+               (* One of the above defined transaction levels *) @integer
+            enter
+              (# 
+              enter level
+              <<SLOT ConnectionInfoTransactionLevelEnter:DoPart>>
+              #)
+            exit
+              (# 
+              <<SLOT ConnectionInfoTransactionLevelExit:DoPart>>
+              exit level
+              #)
+            #);
+          infoException:< BDBCException (#  do INNER infoException #);
+          infoWarning:< BDBCWarning (#  do INNER infoWarning #);
+          private: @<<SLOT ConnectionInfoPrivate:Descriptor>>
+       #);
+     commit:
+     (* Commits all transactions pertaining to this connection.
+      * Use Info.TransactionSupported to check if this is meaningful *)
+       (#  <<SLOT ConnectionCommit:DoPart>> #);
+     rollBack:
+     (* Rolls back all transactions pertaining to this connection *)
+       (#  <<SLOT ConnectionRollBack:DoPart>> #);
+     SQLStatement:
+     (* Models an SQL statement.
+      * An SQLStatement should be closed after end of use.
+      *)
+       (#
+          ContentsType:<
+            (#
+               get:< (#  do INNER get exit t[] #);
+               set:< (#  enter t[] <<SLOT SQLStatementSet:DoPart>> #);
+               t: ^text
+            enter set
+            exit get
+            #);
+          Contents: @ContentsType;
+          execute:<
+            (# res: ^ResultSet
+            <<SLOT SQLStatementExecute:DoPart>>
+            exit Res[]
+            #);
+          close: (#  <<SLOT SQLStatementClose:DoPart>> #);
+          execException:< BDBCException
+            (#  do INNER execException #);
+          execWarning:< BDBCWarning
+            (#  do INNER execWarning #);
+          private:
+            @<<SLOT SQLStatementPrivate:Descriptor>>
+       #);
+     DirectSQLStatement:
+     (* 1. Set 'Contents'  
+      * 2. Call 'execute'.  Repeat 1 & 2 as necessary
+      * 3. Call 'close'
+      * Use this statement type if a statement will be executed at most a few times *)
+     SQLStatement
+       (#
+          execute::  (#  <<SLOT DirectSQLStatementExecute:DoPart>> #);
+          execDirectException:<
+           BDBCException (#  do INNER execDirectException #);
+          execDirectWarning:< BDBCWarning
+            (#  do INNER execDirectWarning #);
+          private: @<<SLOT DirectSQLStatementPrivate:Descriptor>>
+       #);
+     PreparedSQLStatement:
+     (* 1. Set 'Contents' using '?' as placeholder
+      * 2. Bind values to placeholders using the set... methods.
+      * 3. Call 'execute'. Repeat 2 & 3 as necessary.
+      * 4. Go to 1. if necessary
+      * 5. Call 'close'
+      * Use this statement type if a statement will be executed multiple 
+      * times with different bindings.
+      * NOT IMPLEMENTED
+      *) SQLStatement
+       (#
+          setColumn: (# i: @integer enter i do INNER setColumn #);
+          setInteger: setColumn
+            (# value: @integer enter value do INNER setInteger #);
+          setReal: setColumn
+            (# value: @real enter value do INNER setReal #);
+          setText: setColumn
+            (# value: ^text enter value[] do INNER setText #);
+          setBoolean: setColumn
+            (# value: @boolean enter value do INNER setBoolean #)
+       #);
+     ResultSet:
+     (* Result of a SQLStatement. 
+      * If Info.UpdateCount = 0 then the ResultSet is scanable.
+      * A ResultSet can be scanned at most once.
+      *)
+       (#
+          Result:
+            (#
+               getColumn: (* Get data in column 'i' *)
+                 (# i: @integer enter i <<SLOT ResultGetColumn:DoPart>> #);
+               getInteger: getColumn
+                 (# res: @integer
+                 <<SLOT ResultGetInteger:DoPart>>
+                 exit res
+                 #);
+               getReal: getColumn
+                 (# res: @real <<SLOT ResultGetReal:DoPart>> exit res #);
+               getText: getColumn
+                 (# res: ^text
+                 <<SLOT ResultGetText:DoPart>>
+                 exit
+                 res[]
+                 #);
+               getBoolean: getColumn
+                 (# res: @boolean
+                 <<SLOT ResulGetBoolean:DoPart>>
+                 exit res
+                 #);
+               ;
+               getColumnByName:
+               (* Get the data in the first column in the result designated by 'name'*)
+                 (# name: ^text
+                 enter name[]
+                 <<SLOT ResultGetColumnByName:DoPart>>
+                 #);
+               getIntegerByName:
+                getColumnByName
+                 (# res: @integer
+                 <<SLOT ResultGetIntegerByName:DoPart>>
+                 exit res
+                 #);
+               getRealByName:
+                getColumnByName
+                 (# res: @real
+                 <<SLOT ResultGetRealByName:DoPart>>
+                 exit res
+                 #);
+               getTextByName:
+                getColumnByName
+                 (# res: ^text
+                 <<SLOT ResultGetTextByName:DoPart>>
+                 exit res[]
+                 #);
+               getBooleanByName:
+                getColumnByName
+                 (# res: @boolean
+                 <<SLOT ResultGetBooleanByName:DoPart>>
+                 exit res
+                 #);
+               resultException:<
+                BDBCException (#  do INNER resultException #);
+               resultWarning:< BDBCWarning (#  do INNER resultWarning #);
+               private: @<<SLOT ResultPrivate:Descriptor>>
+            #);
           Info: @
             (#
-               table:
+               NoOfCols: @integer;
+               UpdateCount: @integer;
+               ColumnInfo:
                  (#
-                    CatalogName,SchemaName,
-                      TableName,TableType: ^text
+                    ColumnName: ^Text;
+                    ColumnNo: @Integer;
+                    DataType:
+                    (* The BETA pattern corresponding to the
+                     datatype for this column *) ##Object;
+                    DataTypeName: (* DBMS specific type name *) ^Text;
+                    DataTypeNo: (* ODBC specific numbering of SQL datatypes *)
+                      @integer;
+                    NullAble: @Boolean
                  #);
-               tableList: list (# element:: table #);
-               getTables:
-                 (# res: ^tableList <<SLOT getTables:DoPart>> exit res[] #);
-               TransactionsSupported: @
-                 (# isSupported: @boolean
-                 <<SLOT ConnectionInfoTransactionsSupported:DoPart>>
-                 exit
-                 isSupported
+               getColumnInfo:
+                 (# i: @Integer; res: ^ColumnInfo
+                 enter i
+                 <<SLOT ResultSetInfoGetColumnInfo:DoPart>>
+                 exit res[]
                  #);
-               AutoCommitMode:
-               (* In AutoCommitMode, every database operation is a transaction
-                * that is committed when performed 
-                *) @
-                 (# AutoCommitOn: @boolean
-                 enter
-                   (# 
-                   enter AutoCommitOn
-                   <<SLOT ConnectionInfoAutoCommitModeEnter:DoPart>>
-                   #)
-                 exit
-                   (# 
-                   <<SLOT ConnectionInfoAutoCommitModeExit:DoPart>>
-                   exit
-                   AutoCommitOn
-                   #)
-                 #);
-               TransactionLevel: @
+               getColumnInfoByName:
                  (#
-                    READ_UNCOMMITTED: integerValue
-                      (#  <<SLOT ConnectionInfoREAD_UNCOMMITTED:DoPart>> #);
-                    READ_COMMITTED: integerValue
-                      (#  <<SLOT ConnectionInfoREAD_COMMITTED:DoPart>> #);
-                    REPEATABLE_READ:
-                     integerValue
-                      (#  <<SLOT ConnectionInfoREPEATABLE_READ:DoPart>> #);
-                    SERIALIZABLE:
-                     integerValue
-                      (#  <<SLOT ConnectionInfoSERIALIZABLE:DoPart>> #);
-                    level:
-                    (* One of the above defined transaction levels *) @integer
-                 enter
-                   (# 
-                   enter level
-                   <<SLOT ConnectionInfoTransactionLevelEnter:DoPart>>
-                   #)
-                 exit
-                   (# 
-                   <<SLOT ConnectionInfoTransactionLevelExit:DoPart>>
-                   exit level
-                   #)
-                 #);
-               infoException:< BDBCException (#  do INNER infoException #);
-               infoWarning:< BDBCWarning (#  do INNER infoWarning #);
-               private: @<<SLOT ConnectionInfoPrivate:Descriptor>>
+                    name: ^Text;
+                    res: ^ColumnInfo
+                 enter name[]
+                 <<SLOT ResultSetInfogetColumnInfoByName:DoPart>>
+                 exit res[]
+                 #)
             #);
-          commit:
-          (* Commits all transactions pertaining to this connection.
-           * Use Info.TransactionSupported to check if this is meaningful *)
-            (#  <<SLOT ConnectionCommit:DoPart>> #);
-          rollBack:
-          (* Rolls back all transactions pertaining to this connection *)
-            (#  <<SLOT ConnectionRollBack:DoPart>> #);
-          SQLStatement:
-          (* Models a SQL statement.
-           * An SQLStatement must be opened before use and closed after 
-           *)
-            (#
-               ContentsType:<
-                 (#
-                    get:< (#  do INNER get exit t[] #);
-                    set:< (#  enter t[] do INNER set #);
-                    t: ^text
-                 enter set
-                 exit get
-                 #);
-               Contents: @ContentsType;
-               execute:<
-                 (# res: ^ResultSet
-                 <<SLOT SQLStatementExecute:DoPart>>
-                 exit Res[]
-                 #);
-               open:
-                 (# 
-                 <<SLOT SQLStatementOpen:DoPart>>
-                 #);
-               close: (#  <<SLOT SQLStatementClose:DoPart>> #);
-               execException:< BDBCException
-                 (# 
-                 do INNER execException
-                 #);
-               execWarning:< BDBCWarning
-                 (# 
-                 do INNER execWarning
-                 #);
-               private:
-                 @<<SLOT SQLStatementPrivate:Descriptor>>
+          scan: (# current: @Result <<SLOT resultSetScan:DoPart>> #);
+          resultSetException:< BDBCException
+            (# 
+            do INNER resultSetException
             #);
-          DirectSQLStatement:
-          (* 1. Set 'Contents'  
-           * 2. Call 'execute'
-           * Use this statement type if a statement will be executed at most a few times *)
-          SQLStatement
-            (#
-               execute::  (#  <<SLOT DirectSQLStatementExecute:DoPart>> #);
-               execDirectException:<
-                BDBCException (#  do INNER execDirectException #);
-               execDirectWarning:< BDBCWarning
-                 (#  do INNER execDirectWarning #);
-               private: @<<SLOT DirectSQLStatementPrivate:Descriptor>>
-            #);
-          PreparedSQLStatement:
-          (* 1. Set 'Contents' using '?' as placeholder
-           * 2. Bind values to placeholders using the set... methods.
-           * 3. Call 'execute'. Repeat 2 & 3 as necessary.
-           * Use this statement type if a statement will be executed multiple 
-           * times with different bindings.
-           * NOT IMPLEMENTED
-           *) SQLStatement
-            (#
-               setColumn: (# i: @integer enter i do INNER setColumn #);
-               setInteger: setColumn
-                 (# value: @integer enter value do INNER setInteger #);
-               setReal: setColumn
-                 (# value: @real enter value do INNER setReal #);
-               setText: setColumn
-                 (# value: ^text enter value[] do INNER setText #);
-               setBoolean: setColumn
-                 (# value: @boolean enter value do INNER setBoolean #)
-            #);
-          ResultSet:
-          (* Result of a SQLStatement. 
-           * If Info.UpdateCount = 0 then the ResultSet is scanable.
-           * A ResultSet can be scanned at most once.
-           *)
-            (#
-               Result:
-                 (#
-                    getColumn: (* Get data in column 'i' *)
-                      (# i: @integer
-                      enter i
-                      <<SLOT ResultGetColumn:DoPart>>
-                      #);
-                    getInteger: getColumn
-                      (# res: @integer
-                      <<SLOT ResultGetInteger:DoPart>>
-                      exit res
-                      #);
-                    getReal: getColumn
-                      (# res: @real
-                      <<SLOT ResultGetReal:DoPart>>
-                      exit res
-                      #);
-                    getText: getColumn
-                      (# res: ^text
-                      <<SLOT ResultGetText:DoPart>>
-                      exit res[]
-                      #);
-                    getBoolean: getColumn
-                      (# res: @boolean
-                      <<SLOT ResulGetBoolean:DoPart>>
-                      exit res
-                      #);
-                    ;
-                    getColumnByName:
-                    (* Get the data in the first column in the result designated by 'name'*)
-                      (# name: ^text
-                      enter name[]
-                      <<SLOT ResultGetColumnByName:DoPart>>
-                      #);
-                    getIntegerByName:
-                     getColumnByName
-                      (# res: @integer
-                      <<SLOT ResultGetIntegerByName:DoPart>>
-                      exit res
-                      #);
-                    getRealByName: getColumnByName
-                      (# res: @real
-                      <<SLOT ResultGetRealByName:DoPart>>
-                      exit res
-                      #);
-                    getTextByName:
-                     getColumnByName
-                      (# res: ^text
-                      <<SLOT ResultGetTextByName:DoPart>>
-                      exit res[]
-                      #);
-                    getBooleanByName:
-                     getColumnByName
-                      (# res: @boolean
-                      <<SLOT ResultGetBooleanByName:DoPart>>
-                      exit res
-                      #);
-                    resultException:< BDBCException
-                      (#  do INNER resultException #);
-                    resultWarning:< BDBCWarning
-                      (#  do INNER resultWarning #);
-                    private: @<<SLOT ResultPrivate:Descriptor>>
-                 #);
-               Info: @
-                 (#
-                    NoOfCols: @integer;
-                    UpdateCount: @integer;
-                    ColumnInfo:
-                      (#
-                         ColumnName: ^Text;
-                         ColumnNo: @Integer;
-                         DataType:
-                         (* The BETA pattern corresponding to the
-                          datatype for this column *) ##Object;
-                         DataTypeName: (* DBMS specific type name *) ^Text;
-                         DataTypeNo:
-                         (* ODBC specific numbering of SQL datatypes *)
-                           @integer;
-                         NullAble: @Boolean
-                      #);
-                    getColumnInfo:
-                      (# i: @Integer; res: ^ColumnInfo
-                      enter i
-                      <<SLOT ResultSetInfoGetColumnInfo:DoPart>>
-                      exit res[]
-                      #);
-                    getColumnInfoByName:
-                      (# name: ^Text; res: ^ColumnInfo
-                      enter name[]
-                      <<SLOT ResultSetInfogetColumnInfoByName:DoPart>>
-                      exit res[]
-                      #)
-                 #);
-               scan: (# current: @Result <<SLOT resultSetScan:DoPart>> #);
-               resultSetException:< BDBCException
-                 (#  do INNER resultSetException #);
-               resultSetWarning:< BDBCWarning
-                 (#  do INNER resultSetWarning #);
-               private: @<<SLOT ResultSetPrivate:Descriptor>>
-            #);
-          connectionException:<
-           BDBCException (#  do INNER connectionException #);
-          connectionWarning:< BDBCWarning
-            (#  do INNER connectionWarning #);
-          open:<
-          (* Name of the connection to open must be supplied.
-           * userName and password is voluntary
-           *)
-            (#
-               name: ^text;
-               userName: ^text;
-               password: ^text;
-               openException:< BDBCException (#  do INNER openException #);
-               openWarning:< BDBCWarning (#  do INNER openWarning #);
-               private: @<<SLOT ConnectionOpenPrivate:Descriptor>>
-            enter
-            (name[],userName[],
-             password[])
-            <<SLOT ConnectionOpen:DoPart>>
-            #);
-          close:<
-            (#
-               closeException:< BDBCException
-                 (# 
-                 do INNER closeException
-                 #);
-               closeWarning:< BDBCWarning
-                 (# 
-                 do INNER closeWarning
-                 #);
-               private:
-                 @<<SLOT ConnectionClosePrivate:Descriptor>>
-            <<SLOT ConnectionClose:DoPart>>
-            #);
+          resultSetWarning:< BDBCWarning
+            (#  do INNER resultSetWarning #);
           private:
-            @<<SLOT ConnectionPrivate:Descriptor>>
+            @<<SLOT ResultSetPrivate:Descriptor>>
        #);
-     open:< (#  <<SLOT DBEnvOpen:DoPart>> #);
-     close:< (#  <<SLOT DBEnvClose:DoPart>> #);
-     BDBCException:
-     (* Low level interface for catching exceptions.
-      * A general exception message is supplied in msg,
-      * SQL states and native error codes in SQLState, 
-      * NativeError in a comma-separated list.
-      * BDBCException should NOT be called directly by an application
-      *) Exception
+     ;
+     open:<
+     (* Name of the connection to open must be supplied.
+      * userName and password is voluntary
+      *)
        (#
-          SQLState: @text;
-          NativeError: @text;
-          HandleType: @integer;
-          Handle: @integer
-       enter (HandleType,Handle)
-       <<SLOT DBEnvBDBCException:DoPart>>
+          name: ^text;
+          userName: ^text;
+          password: ^text;
+          openConnectionException:< BDBCException
+            (#  do INNER openConnectionException #);
+          openConnectionWarning:< BDBCWarning
+            (#  do INNER openConnectionWarning #);
+          private: @<<SLOT ConnectionOpenPrivate:Descriptor>>
+       enter
+       (name[],userName[],password[])
+       <<SLOT ConnectionOpen:DoPart>>
        #);
-     BDBCWarning: BDBCException
-       (# 
-       do true->continue; INNER BDBCWarning
+     close:<
+       (#
+          closeException:< BDBCException (#  do INNER closeException #);
+          closeWarning:< BDBCWarning (#  do INNER closeWarning #);
+          private: @<<SLOT ConnectionClosePrivate:Descriptor>>
+       <<SLOT ConnectionClose:DoPart>>
        #);
-     private:
-       @<<SLOT DBEnvPrivate:Descriptor>>
-  do INNER DBEnv
+     connectionException:< BDBCException
+       (#  do INNER connectionException #);
+     connectionWarning:< BDBCWarning (#  do INNER connectionWarning #);
+     private: @<<SLOT ConnectionPrivate:Descriptor>>
   #);
-  
+BDBCException:
+(* Low level interface for catching exceptions.
+ * A general exception message is supplied in msg,
+ * SQL states and native error codes in SQLState, 
+ * NativeError in a comma-separated list.
+ * BDBCException should NOT be called directly by an application
+ *) Exception
+  (#
+     SQLState: @text;
+     NativeError: @text;
+     HandleType: @integer;
+     Handle: @integer
+  enter (HandleType,Handle)
+  <<SLOT DBEnvBDBCException:DoPart>>
+  #);
+BDBCWarning: BDBCException
+  (# 
+  do true->continue; INNER BDBCWarning
+  #)  
 
