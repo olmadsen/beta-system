@@ -153,7 +153,14 @@ splitClassSignature: SplitSignature
       *)
      @integer;
    numTempLocals: @integer;
-   
+  
+   xLab: @
+     (# labno: @integer; lab: ^text
+     do 'X' -> lab[];
+        labNo + 1 -> labNo -> lab.putint;
+     exit lab[]
+     #);
+
    notClosed:  @boolean; 
    preF: @ (*file*) text
      (# emitcomment:
@@ -597,20 +604,24 @@ splitClassSignature: SplitSignature
           #);
         loadValue:
           (# V: @integer
-          do (if off > 0 then (off div 4) - 2 -> V if);
-             (if V <= fields.numArguments then
-                 '\tpush.argument ' -> preF.puttext; 
-                 (if definingStaticMethod then
-                     V + 1 -> preF.putint
-		 else
-		    V -> preF.putint;
-		 if);
-                 ' 0 ; '-> preF.puttext;
-                 fieldName[] -> preF.putline;
+          do (if off < 0 then 
+                 '\tpush.local ' -> preF.puttext; 
+                  -off -> preF.putint; ' 0\n' -> preF.puttext
              else
-                 '\tpush.local ' -> preF.puttext;  
-                 V -> preF.putint; ' 0\n' -> preF.puttext
-             if)
+               (if off > 0 then 
+	 	   (off div 4) - 2 -> V;
+               if);
+               (if definingStaticMethod then V + 1 -> V if);
+                  (if V <= fields.numArguments then
+                      '\tpush.argument ' -> preF.puttext; 
+	              V -> preF.putint;
+                      ' 0 ; '-> preF.puttext;
+                      fieldName[] -> preF.putline;
+                   else
+                      '\tpush.local ' -> preF.puttext;  
+                      V -> preF.putint; ' 0\n' -> preF.puttext
+              if)if)
+
           #);
         store:
           (# isSimple: @boolean
@@ -751,7 +762,7 @@ else
      #);
    loadOrigin:
      (# ONlevel: @integer; 
-        className,fieldType: ^text
+        className,fieldType,ORG: ^text
      enter(ONlevel,className[],fieldType[])
      do (if isMainMethod then
             (* reconsider for main/program-slot;
@@ -766,8 +777,13 @@ else
                  *)
                 '\tpush.argument 0 0\n' -> mstate.preF.puttext;                
              else
-                (* '\tpush.field origin\n' -> mstate.preF.puttext; *)
+(if true then
+                'origin$' -> ORG[];
+                (2,className.length-1) -> className.sub -> ORG.append;
+                ORG[] -> mstate.preF.emitsend;
+else
                 'origin' -> mstate.preF.emitsend;
+if)
             if);
         if)
      #);
@@ -808,7 +824,10 @@ else
              * 7: L1: iconst_0
              * 8: L2:
              *)
-            'not' -> preF.emitsend;
+	    '\tpush.constant 1\n' -> preF.puttext;
+            '+:' -> preF.emitsend;
+	    '\tpush.constant 2\n' -> preF.puttext;
+            '%:' -> preF.emitSend
          // mult then
             '*:' -> preF.emitsend;
          // divv then
@@ -816,12 +835,16 @@ else
          // modd then
             '%:' -> preF.emitsend;
          // xorr then
-            'or:' -> preF.emitsend;
+            ';\txor NOT implemented\n' -> preF.puttext;
+            '+:' -> preF.emitsend;
          // logNot then
             (* bit not *)
-            'logNot:' -> preF.emitsend;
+            ';\tlogNot NOT implemented\n' 
+	    '\tpush.constant 0' -> preF.putline;
+            '+:' -> preF.emitsend;
          // neg then
-            'neg' -> preF.emitsend;
+	    '\tpush.constant 0\n\tswap\n' -> preF.puttext;
+            '-:' -> preF.emitsend;
          // orr then
             '||:' -> preF.emitsend;
          // andd then
@@ -904,8 +927,33 @@ else
       * 8:  L1: bipush 1
       * 10: L2:
       *)          
-     (# L1,L2: @integer;
-     do '\t// cmpToBool ' -> preF.putline;
+     (# cond: @integer; Lx,Ly: ^text
+     enter cond
+     do '\t; cmpToBool ' -> preF.putline;
+        (if cond
+         // 1 (* =  *) then
+            '=:' -> preF.emitsend;
+         // 2 (* <> *) then
+            '<>:' -> preF.emitsend;
+         // 3 (* <  *) then
+            '<:' -> preF.emitsend;
+         // 4 (* <= *) then
+            '<=:' -> preF.emitsend;
+         // 5 (* >  *) then
+            '>:' -> preF.emitsend;
+         // 6 (* >= *) then
+            '>=:' -> preF.emitsend;
+        if);
+	xLab -> Lx[];
+	xLab -> Ly[];
+        '\n\tpush.global #"true"' -> preF.puttext;
+        '\n\tbranch.identical ' -> preF.puttext; Lx[] -> preF.putline;
+        '\tpush.constant 0\n' -> preF.puttext;
+        '\tbranch ' -> preF.puttext; Ly[] -> preF.putline;
+	' ' -> preF.put; Lx[] -> preF.puttext;
+        ': push.constant 1\n' -> preF.puttext;
+	' ' -> preF.put; Ly[] -> preF.puttext;
+        ': \n' -> preF.puttext
      #);
    emitCmpBoolJmp:
      (# cond,L,lab: @integer
@@ -1157,6 +1205,7 @@ else
 	    'B2: \n' -> preF.puttext;
             
          // '%primitive:put'->prim.equal then
+            'asChar' ->preF.emitsend;
             'print' ->preF.emitsend;
          else
             'callExternal' -> jvmFIXME;
@@ -1246,13 +1295,16 @@ else
             '\tpush.global #"text"\n'
             '\tpush.argument 0 0\n'
             '\tsend #"new:"\n'
-            '\tswap\n'
-            '\tsend #"T:"\n' -> preF.putText
+            '\tswap\n' -> preF.putText;
+	    'asArray' -> preF.emitSend;
+	    ':' -> (common.enterMethod).append -> preF.emitSend
+            (*'\tsend #"T:"\n' -> preF.putText*)
          // common.BetaText2ExternalString then
             '\t;BetaText2ExternalString\n' -> pref.puttext;
             '\tsend #"T"\n' -> preF.putText
          // common.text2charArray then
-            '\t;common.text2charArray - to be implemented?' -> preF.putline
+            '\t;text2charArray' -> preF.putline;
+    	    'asArray' -> preF.emitSend;
          else
             '\t; ??primitive not handled: ' -> preF.puttext;
             primno -> preF.putint;

@@ -185,8 +185,15 @@ do '\tdup\n' -> mstate.preF.puttext;
    if)
    
 ---byteCode_allocAndStoreLocal:doPart---
-do '; allocandStoreLocal ' -> mstate.preF.putline;
-   '\tpop.local 9 0\n' -> mstate.preF.puttext;
+do (# RA: ^mch.RegAdr;
+   do '; allocandStoreLocal ' -> mstate.preF.putline;
+      &mch.RegAdr[] -> RA[];
+       mstate.numTempLocals+1 -> mstate.numTempLocals;
+      -mstate.numTempLocals -> RA.off;
+      -9 -> RA.off; (* temporary hack *)
+      '\tpop.local 9 0\n' -> mstate.preF.puttext;
+      RA[] -> A[]
+   #)
    
 ---byteCode_loadLocal:doPart---
 do '; loadLocal ' -> mstate.preF.putline;
@@ -252,15 +259,30 @@ do (* not used *)
 ---byteCode_doAsgRefAdr:doPart---
 do thisAdr.out;
    ':' -> (mstate.A.fieldName.copy).append -> mstate.preF.emitsend;
-'\t;asgRefAdr\n' -> mstate.preF.puttext
+  
+   '\t;asgRefAdr:' -> mstate.preF.puttext;
+   sourceClassName[] -> mstate.pref.putline
 
 
 ---byteCode_doAsgRegAdr:doPart---
 do (* source reg on stack *)
-   thisAdr.out;
+(if true then
+   (# ON: ^text
+   do thisAdr.out;
+      mstate.A.fieldName.copy -> ON[];
+      (if 'origin' -> mstate.A.fieldName.equal then
+	(* should be optimized by in genlib_bytecode_body:storeOrigin
+         * by using mch.storeOrigin *)
+          '$' -> ON.put;  
+          (2,sourceClassName.length-1) -> sourceClassName.sub -> ON.puttext;
+       if);
+      ':' -> ON.append;
+      ON[] -> mstate.preF.emitSend
+   #)
+else
    ':' -> (mstate.A.fieldName.copy).append -> mstate.preF.emitsend;
-   '\t;asgRegAdr\n' -> mstate.preF.puttext
-
+if);
+   '\t;asgRegAdr \n' -> mstate.preF.puttext;
 
 ---bytecode_checkCast:doPart---
 do '\tpush.constant ' -> mstate.preF.puttext;
@@ -333,7 +355,10 @@ do  '; BREAK' -> mstate.preF.putline
 do  ';  BREALSIMPLE' -> mstate.preF.putline
    
 ---byteCode_cmpToBool:doPart--   
-do  '; cmpToBool' -> mstate.preF.putline
+do  '; cmpToBool' -> mstate.preF.putline;
+    op1.loadToReg;
+    op2.loadToReg;
+    cond -> mstate.emitCmpToBool
    
 ---byteCode_cmpAndJmp:doPart---
 do op1.loadToReg; op2.loadToReg;
@@ -440,7 +465,8 @@ do (# lastDot: @integer;
       '{'->mstate.preF.putline;
       (* '.instance_side{\n' -> mstate.preF.putline;*)
       (* '.field origin\n'-> mstate.preF.puttext; *)
-      '  .property origin\n'-> mstate.preF.puttext;
+      '  .property origin$'-> mstate.preF.puttext;
+      className[] -> mstate.pref.putline
    #)
    
 --byteCode_marknested:doPart---
@@ -475,6 +501,14 @@ do (#
    do methodname[] -> mstate.thisInnerMethodName[];  
       signature[] -> mstate.thisSignature[];
       noOfEnterArgs -> mstate.fields.numArguments;
+      (if (type = 0) and not ('run' -> mstate.thisInnerMethodName.equal) then
+         '\n  .instance_method ' -> mstate.preF.puttext;
+         mstate.thisInnerMethodName[] -> mstate.preF.emitSymbol;
+         '\n  { \t.locals 10\n\t.maxstacksize 100\n'
+	 '\n\tpush.argument 0 0'
+	 '\n\treturn.local\n  }\n' -> mstate.preF.puttext;
+      if);
+
 
       0 -> mstate.fields.numCells;
       mstate.thisSignature[] 
