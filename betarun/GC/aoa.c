@@ -219,7 +219,7 @@ static ReverseAndFollow( theCell)
       DEBUG_LVRA( Claim( (long) (*theCell)->Proto == -3,"Phase1: LVRA cycle"));
       DEBUG_LVRA( Claim( (*theCell)->GCAttr == (long) theCell,
 			"Phase1: LVRA cycle"));
-      if( AOAtoLVRAsize > (IOASize/4) ) BetaError(-34);
+      if( AOAtoLVRAsize > (IOASize/4) ) BetaError(-34, 0);
     }
   }
 }
