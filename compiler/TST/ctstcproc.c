@@ -70,6 +70,8 @@ struct Ydata *XdataToYdata(r) struct Xdata *r;
   s->a='+';
   s->b='*';
   s->d=444;
+  /*printf ("\nFrom C: \tw:%d, ch:%c, q:%c, y:%d, a:%c, b:%c, d:%d\n",s->w,s->ch,s->q,s->y,s->a,s->b,s->d);
+  fflush(stdout);*/
   return s;
 }
 char *XdataToText(r) struct Xdata *r;
