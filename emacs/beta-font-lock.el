@@ -1,10 +1,10 @@
 ;;; beta-font-lock.el --- using font-lock-mode with BETA.
 
-;;; Copyright (C) 1996 Erik Ernst.
+;;; Copyright (C) 1996-1999 Erik Ernst.
 
-;;; Author: Erik Ernst <eernst@daimi.aau.dk>
-;;; Version: 0.1
-;;; Requires: GNU Emacs 19.30 or newer
+;;; Author: Erik Ernst <eernst@daimi.au.dk>
+;;; Version: 0.22
+;;; Requires: GNU Emacs 20.3 or newer
 
 ;;; This program is free software; you can redistribute it and/or modify
 ;;; it under the terms of the GNU General Public License as published by
@@ -41,7 +41,7 @@
 ;;; To make it possible for emacs to find this file, you must have the 
 ;;; path to it in your 'load-path'.  This might already be the case, 
 ;;; otherwise you can use something like
-;;; '(setq load-path (cons "/usr/local/lib/beta/emacs" load-path))'.
+;;; '(setq load-path (cons "/usr/local/lib/beta/emacs/v1.6" load-path))'.
 ;;;
 ;;; NB: If you _do_not_ want to use "beta-menu19" you can execute
 ;;; '(setq beta-font-lock-insert-menus-p nil)'.  By default,
@@ -53,7 +53,7 @@
 ;;;
 ;;; Executive summary:
 ;;;
-;;;  (setq load-path (cons "/users/beta/emacs" load-path)); if needed
+;;;  (setq load-path (cons "/users/beta/emacs/v1.7" load-path)); if needed
 ;;; 
 ;;;  (defun mybeta () 
 ;;;    (interactive)
@@ -64,8 +64,9 @@
 ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(require 'beta-mode)
 (require 'font-lock)
-(require 'make-regexp)
+(require 'regexp-opt)
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -83,7 +84,7 @@
 (defconst beta-font-lock-property-regexp
   (eval-when-compile
     (concat "^\\("
-	    (make-regexp '("ORIGIN" "BODY" "MDBODY" "INCLUDE"
+	    (regexp-opt '("ORIGIN" "BODY" "MDBODY" "INCLUDE"
 			   "LIBFILE" "LINKOPT" "OBJFILE" "MAKE" "BUILD"))
 	    "\\)\\(\\s *\\w*\\s '[^']*'\\)+;?")))
 (defconst beta-font-lock-slotdecl-regexp
@@ -93,10 +94,10 @@
   ;; safer but slower: "<<\\s *SLOT\\s *\\w+\\s *:\\s *\\w+\\s *>>"
   "<<SLOT +\\w+: *\\w+>>")
 (defconst beta-font-lock-fragment-regexp
-  ;; quick-and-dirty
+  ;; FIXME: check if some kinds are missing
   (eval-when-compile
     (concat "\\(^\\("
-	    (make-regexp '("ORIGIN" "BODY" "MDBODY" "INCLUDE"
+	    (regexp-opt '("ORIGIN" "BODY" "MDBODY" "INCLUDE"
 			   "LIBFILE" "LINKOPT" "OBJFILE" "MAKE" "BUILD"))
 	    "\\)\\)\\|"
 	    "\\(--+[a-z_0-9: \\t]*--+\\)\\|"
@@ -104,10 +105,13 @@
 
 ;; many-line construct markers: object descriptors, control structure stm.s
 (defconst beta-font-lock-scope-regexp
+  ;; includes a couple of gbeta things; should not affect BETA code
   (eval-when-compile
-    (make-regexp '("(#" "#)"
+    (regexp-opt '("(#" "#)"
 		   "(if\\>" "\\<if)"
 		   "(for\\>" "\\<for)"
+		   "(when\\>" "\\<when)"
+		   "(while\\>" "\\<while)"
 		   "(code\\>" "\\<code)"
 		   "\\<then\\>" "\\<else\\>" "\\<repeat\\>" "//"))))
 
@@ -115,20 +119,20 @@
 (defconst beta-font-lock-structurekeyword-regexp
   (eval-when-compile
     (concat "\\<\\("
-	    (make-regexp '("do" "enter" "exit"))
+	    (regexp-opt '("do" "enter" "exit"))
 	    "\\)\\>")))
 
 (defconst beta-font-lock-structurestatement-regexp
   (eval-when-compile
     (concat "\\<\\("
-	    (make-regexp '("leave" "restart" "suspend" "inner"))
+	    (regexp-opt '("leave" "restart" "suspend" "inner"))
 	    "\\)\\>")))
 
 ;; other keywords
 (defconst beta-font-lock-keyword-regexp
   (eval-when-compile
     (concat "\\<\\("
-	    (make-regexp '("this" "not" "div" "mod" "or" "xor" "and"))
+	    (regexp-opt '("this" "not" "div" "mod" "or" "xor" "and"))
 	    "\\)\\>"
 	    "\\|\\+\\|-\\|\\*\\|/\\|=\\|>\\|<")))
 
@@ -136,26 +140,30 @@
 (defconst beta-font-lock-basic-regexp
   (eval-when-compile
     (concat "\\<\\("
-	    (make-regexp '("integer" "char" "boolean" "real"
+	    (regexp-opt '("integer" "char" "boolean" "real"
 			   "shortint" "data" "true" "false" "none"))
 	    "\\)\\>")))
 
 ;; declaration markers
-(setq beta-font-lock-decl-regexp
+
+(eval-when-compile 
   ;; safer but slower: "\\(\\(\\w+\\s *,\\s *\\)*\\w+\\s *\\):"
-  "\\(\\(\\w+, *\\)*\\w+\\):")
+  (defconst beta-font-lock-declbase-regexp "\\(\\(\\w+, *\\)*\\w+\\):"))
+
+(defconst beta-font-lock-decl-regexp
+  (eval-when-compile beta-font-lock-declbase-regexp))
 (defconst beta-font-lock-patterndecl-regexp
   (eval-when-compile
-    (concat beta-font-lock-decl-regexp "\\s *\\((#\\|(\\*\\|\\w\\)")))
+    (concat beta-font-lock-declbase-regexp "\\s *\\((#\\|(\\*\\|\\w\\)")))
 (defconst beta-font-lock-virtualdecl-regexp
   (eval-when-compile
-    (concat beta-font-lock-decl-regexp "<")))
+    (concat beta-font-lock-declbase-regexp "<")))
 (defconst beta-font-lock-furtherdecl-regexp
   (eval-when-compile
-    (concat beta-font-lock-decl-regexp "\\(:<\\|:\\)")))
+    (concat beta-font-lock-declbase-regexp "\\(:<\\|:\\)")))
 (defconst beta-font-lock-substancedecl-regexp
   (eval-when-compile
-    (concat beta-font-lock-decl-regexp "\\s *\\(@\\|\\^\\|##\\|\\[\\)")))
+    (concat beta-font-lock-declbase-regexp "\\s *\\(@\\|\\^\\|##\\|\\[\\)")))
 
 ;; Coercion -- "get me a reference value", "get me a pattern value"
 (defconst beta-font-lock-coercion-regexp
@@ -213,19 +221,41 @@
   'beta-font-lock-sdecl-face
   "Face to use for declarations of substance")
 
-(defvar beta-font-lock-face-defs
-  ;; (FACE FOREGROUND BACKGROUND BOLD-P ITALIC-P UNDERLINE-P)
-  (list '(beta-font-lock-fragment-face "Sienna")
-	'(beta-font-lock-fragmentdecl-face "Sienna" nil t)
-	'(beta-font-lock-fragmentappl-face "Red" nil nil t)
-	'(beta-font-lock-block-face "Dark Green")
-	'(beta-font-lock-structurestatement-face "Red")
-	'(beta-font-lock-basic-face "Dark Green")
-	'(beta-font-lock-pdecl-face "Blue" "Yellow")
-	'(beta-font-lock-vdecl-face "Blue" "Green")
-	'(beta-font-lock-fdecl-face "White" "Green" t)
-	'(beta-font-lock-sdecl-face "Blue" nil t)))
+;; New version of font-lock doesn't like people defining their own faces, 
+;; so we use standard faces from now on.  That also allows users to 
+;; customize the standard faces (e.g., for 'type') to have the same color
+;; in all languages.  This def can probably just be deleted soon.
+;;
+;(defvar beta-font-lock-face-defs
+;  ;; (FACE FOREGROUND BACKGROUND BOLD-P ITALIC-P UNDERLINE-P)
+;  (list '(beta-font-lock-fragment-face "Sienna")
+;	'(beta-font-lock-fragmentdecl-face "Sienna" nil t)
+;	'(beta-font-lock-fragmentappl-face "Red" nil nil t)
+;	'(beta-font-lock-block-face "Dark Green")
+;	'(beta-font-lock-structurestatement-face "Red")
+;	'(beta-font-lock-basic-face "Dark Green")
+;	'(beta-font-lock-pdecl-face "Blue" "Yellow")
+;	'(beta-font-lock-vdecl-face "Blue" "Green")
+;	'(beta-font-lock-fdecl-face "White" "Green" t)
+;	'(beta-font-lock-sdecl-face "Blue" nil t)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;;  General choice of meaning for the 
+;;;  standard faces
+;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; font-lock-comment-face:           for comments
+;; font-lock-string-face:            for strings
+;; font-lock-keyword-face:           for keyword, structure{keyword,statement}
+;; font-lock-type-face:              for virtual patterns
+;; font-lock-warning-face:           reserved for user
+;; font-lock-builtin-face:           for object/integer/.. and true/false
+;; font-lock-function-name-face:     for patterns
+;; font-lock-variable-name-face:     for substance (@,##,^)
+;; font-lock-constant-face:          for properties (INCLUDE etc.)
+;;
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
@@ -237,76 +267,72 @@
 
 (defconst beta-font-lock-keywords-sparse
   (list
-
+   
    ;; Properties
-   (list beta-font-lock-fragment-regexp 0 font-lock-reference-face t)
-
-   ;; Structural clues when reading a descriptor
-   (list beta-font-lock-structurestatement-regexp 0 font-lock-keyword-face)
-
-   ;; Declared names
-   (list beta-font-lock-decl-regexp 1 font-lock-function-name-face))
-
-  "Font-lock specification: simple, well-behaved, only standard faces used")
-
-(defconst beta-font-lock-keywords-fruitcake
-  (list
-
-   ;; Properties
-   (list beta-font-lock-property-regexp 0 beta-font-lock-fragment-face t)
-
-   ;; Form decl/appl
-   (list beta-font-lock-slotdecl-regexp 0 beta-font-lock-fragmentdecl-face)
-   (list beta-font-lock-slotappl-regexp 0 beta-font-lock-fragmentappl-face)
-
-   ;; Blocks
-   (list beta-font-lock-scope-regexp 0 beta-font-lock-block-face)
-
+   (list beta-font-lock-fragment-regexp 0 font-lock-constant-face t)
+   
    ;; Structural clues when reading a descriptor
    (list beta-font-lock-structurekeyword-regexp 0 font-lock-keyword-face)
-   (list beta-font-lock-structurestatement-regexp 0
-	 beta-font-lock-structurestatement-face)
+   (list beta-font-lock-structurestatement-regexp 0 font-lock-keyword-face)
+   
+   ;; Declared names
+   (list beta-font-lock-decl-regexp 1 font-lock-function-name-face))
+  
+  "Font-lock specification: simple, fast")
+  
+(defconst beta-font-lock-keywords-fruitcake
+  (list
+   
+   ;; Properties
+   (list beta-font-lock-property-regexp 0 font-lock-constant-face t)
+   
+   ;; Form decl/appl
+   (list beta-font-lock-slotdecl-regexp 0 font-lock-constant-face)
+   (list beta-font-lock-slotappl-regexp 0 font-lock-constant-face)
+   
+   ;; Blocks
+   (list beta-font-lock-scope-regexp 0 font-lock-keyword-face)
+   
+   ;; Structural clues when reading a descriptor
+   (list beta-font-lock-structurekeyword-regexp 0 font-lock-keyword-face)
+   (list beta-font-lock-structurestatement-regexp 0 font-lock-keyword-face)
    (list beta-font-lock-keyword-regexp 0 font-lock-keyword-face)
    (list beta-font-lock-coercion-regexp 1 font-lock-keyword-face)
-
+   
    ;; Basic patterns and special values
-   (list beta-font-lock-basic-regexp 0 beta-font-lock-basic-face)
-
+   (list beta-font-lock-basic-regexp 0 font-lock-builtin-face)
+   
    ;; Declared names
-   (list beta-font-lock-patterndecl-regexp 1 beta-font-lock-pdecl-face)
-   (list beta-font-lock-virtualdecl-regexp 1 beta-font-lock-vdecl-face)
-   (list beta-font-lock-furtherdecl-regexp 1 beta-font-lock-fdecl-face)
-   (list beta-font-lock-substancedecl-regexp 1 beta-font-lock-sdecl-face))
-
-  "Font-lock specification: many colors, non-standard faces, bad taste")
+   (list beta-font-lock-patterndecl-regexp 1 font-lock-function-name-face)
+   (list beta-font-lock-virtualdecl-regexp 1 font-lock-type-face)
+   (list beta-font-lock-furtherdecl-regexp 1 font-lock-type-face)
+   (list beta-font-lock-substancedecl-regexp 1 font-lock-variable-name-face))
+  
+  "Font-lock specification: heavy decoration, rather slow")
 
 (defconst beta-font-lock-keywords-hilit-like
   (list
 
    ;; Properties
-   (list beta-font-lock-property-regexp 0 beta-font-lock-fragment-face t)
+   (list beta-font-lock-property-regexp 0 font-lock-constant-face t)
 
    ;; Form decl/appl
-   (list beta-font-lock-slotdecl-regexp 0 beta-font-lock-fragmentdecl-face)
-   (list beta-font-lock-slotappl-regexp 0 beta-font-lock-fragmentappl-face)
+   (list beta-font-lock-slotdecl-regexp 0 font-lock-constant-face)
+   (list beta-font-lock-slotappl-regexp 0 font-lock-constant-face)
 
    ;; Blocks
    (list beta-font-lock-scope-regexp 0 font-lock-keyword-face)
 
    ;; Structural clues when reading a descriptor
-   (list beta-font-lock-structurekeyword-regexp 0
-	 font-lock-keyword-face)
-   (list beta-font-lock-structurestatement-regexp 0
-	 beta-font-lock-structurestatement-face)
-   (list beta-font-lock-keyword-regexp 0
-	 font-lock-keyword-face)
-   (list beta-font-lock-coercion-regexp 1
-	 font-lock-keyword-face)
+   (list beta-font-lock-structurekeyword-regexp 0 font-lock-keyword-face)
+   (list beta-font-lock-structurestatement-regexp 0 font-lock-keyword-face)
+   (list beta-font-lock-keyword-regexp 0 font-lock-keyword-face)
+   (list beta-font-lock-coercion-regexp 1 font-lock-keyword-face)
 
    ;; Declared names
-   (list beta-font-lock-decl-regexp 1 beta-font-lock-sdecl-face))
+   (list beta-font-lock-decl-regexp 1 font-lock-variable-name-face))
 
-  "Font-lock specification: somewhat like hilit19 with beta-hilit19.el")
+  "Font-lock specification: used to be somewhat like beta-hilit19.")
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -374,16 +400,13 @@
          '((?_ . "w"))  ; (SYNTAX-ALIST) allow '_'in words
          'beta-font-lock-syntax-begin ; (SYNTAX-BEGIN)
          ))
-  ;; install special BETA faces
-  (font-lock-make-faces t)
-  (setq font-lock-face-attributes
-        (append font-lock-face-attributes beta-font-lock-face-defs))
   ;; insert menus
   (if beta-font-lock-insert-menus-p
       (beta-font-lock-insert-menu-entries))
   ;; ensure that font-lock is in fact used
   (turn-on-font-lock))
 
+;; just to save people who hate menu bars..
 (defun beta-font-lock-change-specification (spec)
   (interactive "SChoose a BETA font-lock spec: ")
   (setq beta-font-lock-keywords spec)
