@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateRefRep.c,v $, rel: %R%, date: $Date: 1992-08-31 10:03:59 $, SID: $Revision: 1.9 $
+ * Mod: $RCSfile: AllocateRefRep.c,v $, rel: %R%, date: $Date: 1992-08-31 19:16:20 $, SID: $Revision: 1.10 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -30,9 +30,9 @@ ref(RefRep) CAlloRR(ref(Object) theObj,
     DeclReference1(struct RefRep *, theRep);
     GCable_Entry();
 #ifdef hppa
+    range  = (unsigned) getD1Reg();
     theObj = cast(Object) getThisReg();
     offset = (unsigned) getD0Reg();
-    range  = (unsigned) getD1Reg();
 #endif
 
     Ck(theObj);

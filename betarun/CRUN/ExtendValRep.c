@@ -1,10 +1,15 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: ExtendValRep.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:44 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: ExtendValRep.c,v $, rel: %R%, date: $Date: 1992-08-31 19:16:23 $, SID: $Revision: 1.8 $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #define GCable_Module
+
+#ifdef hppa
+/* to keep Gcc's grappy little hand off this */
+register long _dummyx asm("r16");
+#endif
 
 #include "beta.h"
 #include "crun.h"
@@ -32,7 +37,7 @@ void CExtVR(ref(Object) theObj,
     GCable_Entry();
 
 #ifdef hppa
-    add = getD0Reg(); puts("ExtVR:not tested on snake");
+    add = (long) getR2Reg();
 #endif
 
     Ck(theObj);
