@@ -4,6 +4,9 @@ var PullStepTime = 15;
 var DrawStepTime = 30;
 var rightboundary = -20;
 var leftboundary = -100;
+var SideBar = 0;
+var hdraw = 0;
+var hpull = 0;
 
 function on_load() {
   window.status='Type ? for Help';
@@ -12,9 +15,11 @@ function on_load() {
 
 function AdjustSideBar() {
   if (document.layers) { 
-     document.layers.SideBar.top = window.pageYOffset+37; 
+     SideBar.top = window.pageYOffset+37; 
   } else if (document.all) { 
-     document.all.SideBar2.style.pixelTop=document.body.scrollTop+15; 
+     SideBar.pixelTop=document.body.scrollTop+15; 
+  } else if (document.getElementById){
+     SideBar.top=parseInt(document.getElementsByTagName("body")[0].scrollTop)+15 + "px"; 
   }
   return true;
 }
@@ -22,17 +27,25 @@ function AdjustSideBar() {
 function SetupSideBar() {
   var is_mac = (navigator.userAgent.indexOf("Mac")>-1);
   if (document.layers) { 
+     SideBar = document.layers.SideBar;
      rightboundary=94
      leftboundary=36
   } else if (document.all) { 
+     SideBar = document.all.SideBar2.style;
      if (is_mac){
        rightboundary=-0
        leftboundary=-87
-       document.all.SideBar2.style.pixelLeft = leftboundary;
+       SideBar.pixelLeft = leftboundary;
      } else {
        rightboundary=0
        leftboundary=-77
      }
+  } else if (document.getElementById){
+     SideBar = document.getElementById("SideBar2").style;
+     rightboundary=-2
+     leftboundary=-87
+     SideBar.left = leftboundary + "px";
+     SideBar.top  = 8 + "px";
   }
   AdjustSideBar();
   setInterval("AdjustSideBar()", 200);
@@ -42,50 +55,67 @@ function SetupSideBar() {
   }
 }
 
+function SetLeft(left){
+  if (document.layers){
+     SideBar.left = left;
+  } else {
+     SideBar.left = left + "px";
+  }
+} 
+
 function pull(){
-  if (window.hdraw)
-    clearInterval(hdraw);
+  //alert("pull");
+  if (hdraw){
+     clearInterval(hdraw);
+     hdraw=0;
+  }
   hpull=setInterval("pullstep()",PullStepTime)
 }
 
 function draw(){
-  if (window.hpull)
-    clearInterval(hpull)
+  //alert("draw");
+  if (hpull){
+    clearInterval(hpull);
+    hpull=0;
+  }
   hdraw=setTimeout("delayeddraw()",DrawDelay);
 }
 
 function delayeddraw(){
-  if (window.hpull)
-    clearInterval(hpull)
+  if (hpull){
+    clearInterval(hpull);
+    hpull=0;
+  }
   hdraw=setInterval("drawstep()",DrawStepTime)
 }
 
 function pullstep(){
-  if (document.all&&document.all.SideBar2.style.pixelLeft<rightboundary)
-     document.all.SideBar2.style.pixelLeft+=5
-  else if(document.layers&&document.layers.SideBar.left<rightboundary)
-     document.layers.SideBar.left+=4
-  else if (window.hpull)
-     clearInterval(hpull)
+  var left = parseInt(SideBar.left);
+  if (left<rightboundary){
+     SetLeft(left+5);     
+  } else if (hpull) {
+     clearInterval(hpull);
+     hpull=0;
+  }
 }
 
 function drawstep(){
-  if (document.all&&document.all.SideBar2.style.pixelLeft>leftboundary)
-     document.all.SideBar2.style.pixelLeft-=5
-  else if(document.layers&&document.layers.SideBar.left>leftboundary)
-     document.layers.SideBar.left-=4
-  else if (window.hdraw)
-    clearInterval(hdraw)
+  var left = parseInt(SideBar.left);
+  if (left>leftboundary){
+     SetLeft(left-5);
+  } else if (hdraw) {
+     clearInterval(hdraw);
+     hdraw=0;
+  }
 }
 
 function out()
 {
-  if (document.all)
-     document.all.SideBar2.style.pixelLeft=leftboundary
-  else if(document.layers)
-     document.layers.SideBar.left=leftboundary
-  else if (window.hdraw)
-    clearInterval(hdraw)
+  SetLeft(leftboundary);
+  if (hdraw){
+    clearInterval(hdraw);
+    hdraw=0;
+  }
 }
 
 function warn(msg)
@@ -111,8 +141,7 @@ function show()
 {
   if (document.layers){
      document.layers.SideBar.visibility = "visible";
-  }
-  if (document.all) {
+  } else {
      document.all.SideBar2.style.visibility = "visible";
      document.all.SideBar2.style.display = "block";
   }
@@ -122,8 +151,7 @@ function hide()
 {
   if (document.layers){
      document.layers.SideBar.visibility = "hidden";
-  }
-  if (document.all){
+  } else {
      document.all.SideBar2.style.visibility = "hidden";
      document.all.SideBar2.style.display = "none";
   }

@@ -584,10 +584,10 @@ EOT
 <LAYER id="SideBar" onMouseover="pull()" onMouseout="draw()" style="position:absolute;left:-95px;width:80px;layer-background-color:#669999;padding:5px;line-height:25px; ">
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript1.2">
 <!--
-if (document.all){
+if (document.getElementById || document.all){
   document.write('\<DIV id="SideBar2" onMouseover="pull()" onMouseout="draw()" STYLE="position:absolute;left:-80px;top:15px;width:100px;background-color:#669999;padding:5px;line-height:25px;" TITLE="Navigation Bar: Slides out when cursor is moved out"\>');
 }
-if (document.all && (navigator.userAgent.indexOf("Mac")==-1)) {
+if ((document.all && (navigator.userAgent.indexOf("Mac")==-1))) {
   document.write('\<IMG SRC="'+img+'/navigation-light.gif" STYLE="position:absolute;left:84;top:5" WIDTH=13 HEIGHT=63 ALT=""\>');
 } else {
   document.write('\<IMG SRC="'+img+'/navigation-light.gif" ALIGN=RIGHT WIDTH=13 HEIGHT=63 ALT=""\>');
@@ -602,7 +602,7 @@ for (i=0;i<=lnk.length-1;i++){
     document.write('<HR ALIGN=LEFT WIDTH=60>\\n');
   }
 }
-if (document.all)
+if (document.getElementById || document.all)
   document.write('\</DIV\>\\n');
 else
   document.write('&nbsp;\\n');
@@ -1132,13 +1132,19 @@ sub parse_special_tags
 	    ################# Found heading start. #########################
 	    $done .= $match;
 	    local ($h, $heading, $anchor, $headanchors, $headinx, $attributes);
+	    local ($betacaption) = 0;
+	    $attributes = "";
 	    $h = $1;
 	    print STDERR "Heading start H$h, headinglevel=$headinglevel\n" if ($debug);
-	    if ($remaining =~ m%^[^>]*\>%si){
+	    if ($remaining =~ m%(^[^>]*)\>%si){
 		# Matched <Hn xxx>
-		$attributes = $1; # xxx - currently not used for anything
-		$done .= $&; # start tag
+		$attributes = $1; # xxx
+		$done .= $&; # complete start tag
 		$remaining = $';
+	    }
+	    print STDERR "H$h attributes: '$attributes'\n" if ($debug);
+	    if ($attributes =~ m%class\s*=\s*betacaption%i){
+		$betacaption=1;
 	    }
 	    local ($heading_char_pos) = $full_length-length($remaining);
 	    if ($h<$headinglevel){
@@ -1158,15 +1164,21 @@ sub parse_special_tags
 		    $num_h[$headinglevel]++;
 		}
 	    }
-	    $num_h[$h]++;
-	    # Generate number for heading
-	    $number = "";
-	    for ($i=1; $i<=$h; $i++){
-		$number .= "$num_h[$i].";
+	    if ($betacaption){
+		$num_beta++;
+		# Start anchor to refer from TOC
+		$anchor = "BETA_$num_beta";
+	    } else {
+		$num_h[$h]++;
+		# Generate number for heading
+		$number = "";
+		for ($i=1; $i<=$h; $i++){
+		    $number .= "$num_h[$i].";
+		}
+		chop $number; # remove trailing dot
+		# Start anchor to refer from TOC
+		$anchor = "H${h}_$num_h[$h]";
 	    }
-	    chop $number; # remove trailing dot
-	    # Start anchor to refer from TOC
-	    $anchor = "H${h}_$num_h[$h]";
 	    $done .= "<A NAME=\"$anchor\">";
 	    if ($remaining =~ m%\</H$h\>%si){
 		$heading = $`;
@@ -1191,12 +1203,20 @@ sub parse_special_tags
 		    $headanchors .= $1 . $3;
 		    $heading = $` . $2 . $';
 		}
-		$heading = "$number $heading";
-		$done .= $heading . "</A>$headanchors</H$h>"; # end tag
+		if ($betacaption){
+		    $done .= "Program $num_beta: $heading</A>$headanchors</H$h>"; # end tag
+		} else {
+		    $heading = "$number $heading";
+		    $done .= $heading . "</A>$headanchors</H$h>"; # end tag
+		}
 	    } else {
 		&src_warning($full_length-length($remaining), "Unterminated heading? (<H$h>)");
 	    }
-	    push (@headings, "$heading\@$htmlfile\#$anchor");
+	    if ($betacaption){
+		push (@programs, "$num_beta $heading\@$htmlfile\#$anchor");
+	    } else {
+		push (@headings, "$heading\@$htmlfile\#$anchor");
+	    }
 	} elsif ($match =~ m%\</H[1-6]\>%i){
 	    # Found heading end
 	    &src_warning($full_length-length($remaining), "Unmatched end-of-heading? ($&)");
@@ -1286,15 +1306,15 @@ sub parse_special_tags
 		$done .= "<A NAME=\"$anchor\"></A>";
 	    }
 	    if ($caption ne ""){
-		$done .= "<H4 CLASS=betacaption>$caption</H4>";
+		$done .= "<P></P><H4 CLASS=betacaption>$caption</H4>";
 	    }
 	    $done .= "\n";
-	    $done .= "<PRE CLASS=BETA>\n";
+	    $done .= "<BLOCKQUOTE>\n<TABLE BORDER=3 class=beta><TR><TD>";
 	    # Trim $beta for whitespace
 	    $beta =~ s/^\s*//;
 	    $beta =~ s/\s*$//;
 	    $done .= &quote_html($beta); 
-	    $done .= "</PRE>\n";
+	    $done .= "</TD></TR></TABLE>\n</BLOCKQUOTE>\n";
 	} elsif ($match =~ m%\</BETA\>%i){
 	    # Found BETA end
 	    &src_warning($full_length-length($remaining), "Unmatched end-of-beta? (</BETA>)");
