@@ -86,6 +86,7 @@ sub make_hrefs
 {
     local ($string) = @_[0];
     $string =~ s/<([-\w]+)>/<A HREF="#$1">&lt;$1&gt;<\/A\>/g;
+    $string =~ s/<([-\w]+):([-\w]+)>/<A HREF="#$2">&lt;$1:$2&gt;<\/A\>/g;
     return $string;
 }
 
@@ -174,6 +175,7 @@ while(<GRAM>){
 	} else {
 	    #line without rule definition
 	    $line =~ s/<([-\w]+)>/<A HREF="#$1">&lt;$1&gt<\/A>/g;
+	    $line =~ s/<([-\w]+):([-\w]+)>/<A HREF="#$2">&lt;$1:$2&gt<\/A>/g;
 	}
     }
     $line = &unquote_html($line);
