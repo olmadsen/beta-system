@@ -66,7 +66,7 @@ if ($fullpath){
     $css = "http://www.daimi.au.dk/~beta/doc/style/miadoc.css";
     $lastmodscript = "http://www.daimi.au.dk/~beta/doc/javascript/lastmod.js";
     $imagedir = "http://www.daimi.au.dk/~beta/doc/images/";
-    $topfile = "http://www.daimi.au.dk/~beta/doc/index.html";
+    $topfile = "index.html";
 } else {
     if ($extradir){
 	$css = "../../../style/miadoc.css";
