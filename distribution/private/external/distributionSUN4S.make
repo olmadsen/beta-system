@@ -29,7 +29,7 @@ $(odir)startAsDeamon.o: $(dir)startAsDeamon.c
 	gcc $(debug) -D$(MACHINETYPE) -O -c $(dir)startAsDeamon.c -o $(odir)startAsDeamon.o
 	
 $(odir)thisHost.o: $(dir)thisHost.c
-	gcc $(debug) -D$(MACHINETYPE) -I $(BETALIB)/process/v1.4/private/external -O -c $(dir)thisHost.c -o $(odir)thisHost.o
+	gcc $(debug) -D$(MACHINETYPE) -I $(BETALIB)/process/v1.5/private/external -O -c $(dir)thisHost.c -o $(odir)thisHost.o
 
 $(dir)$(MACHINETYPE):
 	mkdir $(dir)$(MACHINETYPE)
