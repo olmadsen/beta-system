@@ -573,6 +573,8 @@ int betaImage2Mask(BetaImage *src, BetaImage *dst)
   
 
   src_row = src->data;
+  src_row += (src->height-1) * src->rowbytes;
+  
   dst_row = dst->data;
   for(j = 0; j < src->height; j++) {
     src_pixel = src_row;
@@ -583,7 +585,7 @@ int betaImage2Mask(BetaImage *src, BetaImage *dst)
       if (a < 200)
         SetBit(dst_row, i);
     }
-    src_row += src->rowbytes;
+    src_row -= src->rowbytes;
     dst_row += dst->rowbytes;
   }
   return 0;
@@ -711,10 +713,11 @@ void TransferRaster(HDC hDC, int x, int y, int width, int height, HBITMAP hBmp)
   DeleteObject(hMemDC);
 }
 
-int ReadPNGalpha(char *name, HBITMAP *phbmp, void **pixels, int *width, int *height)
+int ReadPNGalpha(char *name, HBITMAP *phbmp, void **pixels, int *width, int *height, HBITMAP *hmask)
 {
   int result;
   BetaImage image;
+  BetaImage mask;
   
   void *pBits = NULL;
   unsigned char *src;
@@ -751,6 +754,12 @@ int ReadPNGalpha(char *name, HBITMAP *phbmp, void **pixels, int *width, int *hei
       dst += 4;
     }
   }
+  if(image.alpha) {
+    betaImage2Mask(&image, &mask);
+    *hmask = CreateBitmap(mask.width, mask.height, 1, 1, mask.data);
+  }
+
+  
   /* Return the bitmap */
   *phbmp = hBmp;
   *pixels = pBits;
