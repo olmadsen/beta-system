@@ -13,6 +13,7 @@
 #define MAXHOSTNAMELENGTH 128
 #define MAXPATHNAMELENGTH 256
 #define INITIALNUMLOCATIONS 2
+#define INITIALPROTONAMEBUFFERSIZE 8192
 
 typedef struct StoreProxy {
   unsigned long storeID;     /* Store in which to find referred object */
@@ -31,10 +32,16 @@ typedef struct storeLocation { /* Identifies locations of stores */
 } storeLocation;
 
 typedef struct storeIDMap { /* Maps store ID's to file locations */
-  unsigned long top;
   unsigned long size;
+  unsigned long top;
   storeLocation locations[INITIALNUMLOCATIONS];  /* Can be extended */
 } storeIDMap;
+
+typedef struct storeProtoNames { /* Maps store protoIDs to groupnames */
+  unsigned long size;
+  unsigned long top;
+  char names[INITIALPROTONAMEBUFFERSIZE]; /* Can be extended */
+} storeProtoNames;
 
 typedef struct PStoreHeader {
   unsigned long headerSize;        /* Size in bytes of this header */
@@ -45,6 +52,9 @@ typedef struct PStoreHeader {
 
   /* Naming stores referred from this store */
   storeIDMap referredStores;
+
+  /* List of names of groupnames present in this store */
+  storeProtoNames protoNames;
 
   /* Root names */
   nameMapEntry nameMap[MAXNAMES];

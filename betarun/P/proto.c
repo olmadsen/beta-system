@@ -4,6 +4,9 @@
 /* */
 #ifdef PERSIST
 #include <sys/types.h>
+#include "PStore.h"
+
+extern PStoreHeader *currentPStore;
 
 /* LOCAL TYPES */
 typedef struct protoID {
@@ -35,6 +38,76 @@ void freeProtoHandling(void)
   TIFree(ItoPCache, NULL);
 }
 
+void AddProtoToCache(unsigned long group, 
+		     unsigned long protono, 
+		     ProtoType* theProto)
+{
+  protoID *id = (protoID *)malloc(sizeof(protoID));
+  
+  id -> group = group;
+  id -> protoNo = protono;
+  
+  TInsert((unsigned long)theProto, (unsigned long)id,
+	  &PtoICache, (unsigned long)theProto);
+}
+
+
+char *FindNameByGroupID(unsigned long group)
+{
+  unsigned long idx = 1;
+  char *current = currentPStore->protoNames.names;
+  char *end = current+currentPStore->protoNames.top;
+  while (current<end) {
+    if (idx == group) {
+      return current;
+    }
+    current += strlen(current)+1;
+    idx++;
+  }
+  fprintf(output, "Got groupindex outside range in use\n");
+  Illegal();
+  BetaExit(1);
+  return NULL;
+}
+
+unsigned long FindGroupIDByName(char *name)
+{
+  unsigned long idx = 1;
+  char *current = currentPStore->protoNames.names;
+  char *end = current+currentPStore->protoNames.top;
+  while (current<end) {
+    if (!strcmp(current,name)) {
+      return idx;
+    }
+    current += strlen(current)+1;
+    idx++;
+  }
+  DEBUG_CODE(Claim(current == end, "FindGroupIDByName: passed end."));
+
+  /* Not found in table.  Add new entry. */
+  {
+    unsigned long len = strlen(name) + 1;
+    if (currentPStore->protoNames.top + len > currentPStore->protoNames.size) {
+      /* Make room for more groupnames now! */
+      /* FIXME!  Do this... */
+      fprintf(output,
+	      "FindGroupIDByName: NYI: Make room for more groupnames\n");
+      Illegal();
+      BetaExit(1);
+    } 
+    
+    DEBUG_CODE({
+      Claim(currentPStore->protoNames.top + len 
+	    <= currentPStore->protoNames.size,
+	    "FindGroupIDByName: Did not get enough room");
+    });
+    
+    memcpy(current, name, len);
+    currentPStore->protoNames.top += len;
+    return idx;
+  }
+}
+
 void protoAddrToID(ProtoType *theProto, unsigned long *group, unsigned long *protoNo)
 {
   group_header *gh;
@@ -51,33 +124,21 @@ void protoAddrToID(ProtoType *theProto, unsigned long *group, unsigned long *pro
     *protoNo = (unsigned long)theProto;
     
   } else {
-    unsigned long count;
-    
     *group = 0;
     *protoNo = -1; /* Mark as illegal proto id. If the proto is not
 		    * found this will signal error to caller. */
-    gh = NextGroup(0);
-    count = 0;
-    while (gh) {
+
+    for (gh = NextGroup(0); gh; gh = NextGroup(gh)) {
       unsigned long pNo;
       
       if ((pNo = IsPrototypeOfGroup(gh, (long)theProto)) > 0) {
-	*group = count;
+	char *name = NameOfGroupMacro(gh);
+	*group = FindGroupIDByName(name);
 	*protoNo = pNo - 1;
 	
-	/* Save this mapping for later */
-	{
-	  id=(protoID *)malloc(sizeof(protoID));
-	  
-	  id -> group = *group;
-	  id -> protoNo = *protoNo;
-	  
-	  TInsert((unsigned long)theProto, (unsigned long)id, &PtoICache, (unsigned long)theProto);
-	}
+	AddProtoToCache(*group, *protoNo, theProto);
 	return;
       }
-      count++;
-      gh = NextGroup(gh);
     }
   }
   /* Failing Lookups are not cached */
@@ -86,10 +147,11 @@ void protoAddrToID(ProtoType *theProto, unsigned long *group, unsigned long *pro
 ProtoType *IDtoProtoAddr(unsigned long group, unsigned long protoNo)
 {
   group_header *gh;
-  unsigned long count, key;
+  unsigned long key;
   ProtoType *theProto;
-  
-  Claim(group < 0xFFFF, "group too large");
+  char *groupname;
+
+  Claim(group <= 0xFFFF, "group too large");
   Claim(protoNo < 0xFFFF, "protoNo too large");
   
   key = ((group << 16) | protoNo);
@@ -97,12 +159,17 @@ ProtoType *IDtoProtoAddr(unsigned long group, unsigned long protoNo)
     return theProto;
   }
   
-  gh = NextGroup(0);
-  count = 0;
-  
-  while ((count < group) && (gh)) {
-    count++;
-    gh = NextGroup(gh);
+  if (group == 0xFFFF) {
+    /* isSpecialProtoType */
+    return (ProtoType*)protoNo;
+  }
+
+  groupname = FindNameByGroupID(group);
+
+  for (gh = NextGroup(0); gh; gh = NextGroup(gh)) {
+    if (!strcmp(NameOfGroupMacro(gh), groupname)) {
+      break;
+    }
   }
   
   if (gh) {
@@ -111,7 +178,7 @@ ProtoType *IDtoProtoAddr(unsigned long group, unsigned long protoNo)
     return theProto;
   }
   
-  return 0;
+  return NULL;
 }
 
 static ProtoType *PrototypeNoToProto(group_header *gh, unsigned long protoNo) 
@@ -123,9 +190,9 @@ static ProtoType *PrototypeNoToProto(group_header *gh, unsigned long protoNo)
   if (protoNo < NoOfPrototypes) {
     return (ProtoType *)proto[protoNo];
   } else {
-    return 0;
+    return NULL;
   }
-  return 0;
+  return NULL;
 }
 
 static void exportProtoType(Object *theObj)

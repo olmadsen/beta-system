@@ -260,6 +260,10 @@ static PStoreHeader *newStore(char *host, char *path)
   new -> numberOfUpdates = 0;
   new -> referredStores.size = INITIALNUMLOCATIONS;
   
+  new->protoNames.size = INITIALPROTONAMEBUFFERSIZE;
+  new->protoNames.top = 0;
+  memset(new->protoNames.names, 0, new->protoNames.size);
+
   new -> headerSize = headerSize;
   new -> maxNumBlocks = INITIALBLOCKSINSTORE;
   /* new -> blockSize will be set below */
