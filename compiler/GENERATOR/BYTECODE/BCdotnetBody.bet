@@ -147,6 +147,11 @@ ConvertType:
          T[]->out.puttext;
          ')*/' ->out.puttext;
      if);
+     (* Delete valueType indicator character *)
+     removeAtChar:
+       (# 
+       do '@valuetype'->T.findTextAll(# do (inx,inx)->T.delete; restart removeAtChar #);
+       #);
      (if true 
       // T[]=NONE then
          (*(DumpStack, 'ConvertType: T[] is none') -> Stop;*)
@@ -1034,7 +1039,8 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
      #);
    Address:
      (#
-        reg,off,size,isField,ONlevel: @integer; 
+        reg,off,size,isField,ONlevel: @integer;
+        isValueTypeOrigin: @boolean;
         fieldName,descName,fieldType: ^text;
         get: 
           (# hasFieldName: @integer 
@@ -1100,7 +1106,7 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
         emitType:
           (#
           do (if fieldType[] <> none then
-                 fieldType[] -> out.puttext
+                 fieldType[] -> ConvertType -> out.puttext
               else
                  'int32' -> out.puttext;
                  'OBS! missing type info (fieldType)' -> emitcomment
@@ -1148,13 +1154,13 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
                  -1 -> stack_delta (* pops object, field name; pushes field value *);
               else
                  (if ONlevel > 0 then
-                     'ldfld  ' -> out.puttext; 1->_n;
+                     isValueTypeOrigin->ldfld; 1->_n;
                      emitType;
                      emitField;
                      0 -> stack_delta (* pops object; pushes field value *);
                   else
                      (if isField=1 then
-                         'ldfld  ' -> out.puttext; 2->_n;
+                         isValueTypeOrigin->ldfld; 2->_n;
                          emitType;
                          emitField; 
                          0 -> stack_delta (* pops object; pushes field value *);
@@ -1258,13 +1264,13 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
           enter withQua
           do BC.gettext -> sig[];
              (if ONlevel > 0 then
-                 'ldfld  ' -> out.puttext; 3->_n;
+                 isValueTypeOrigin->ldfld; 3->_n;
                  (*emittype;*) sig[]->AddClass->out.puttext; ' ' -> out.put;
                  emitField;
                  0 -> stack_delta (* pops object; pushes field value *)
               else 
                  (if isField = 1 then
-                     'ldfld  ' -> out.puttext; 4->_n;
+                     isValueTypeOrigin->ldfld; 4->_n;
                      (*emittype;*)sig[]->AddClass->out.puttext;' ' -> out.put;
                      emitField;
                      0 -> stack_delta (* pops object; pushes field value *)
@@ -1447,7 +1453,8 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
    castClass:
      (# sig, msg: ^text;
      enter sig[]
-     do (if 'valuetype '->((1,10)->sig.sub).equal then
+     do sig[] -> ConvertType -> sig[];
+        (if 'valuetype '->((1,10)->sig.sub).equal then
             (* Casting to and from value type instances isn’t permitted.
              * ECMA 335, section 12.1.6.2.6 
              *)
@@ -1460,7 +1467,16 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
             sig[] -> out.putln;
             (* stack neutral *)
         if)
-     #)
+     #);
+   
+   ldfld:
+     (# addressOff: @boolean;
+     enter addressOff
+     do 'ldfld' -> out.puttext;
+        (if addressOff then 'a' -> out.put if);
+        '  '->out.puttext;
+     #);
+            
    
 do init;
    read:
@@ -2255,7 +2271,7 @@ do init;
               // stVal then
                  A.get; A.store
               // loadRef then
-                 A.get; A.loadRef
+                 (BC.get=1)->A.isValueTypeOrigin; A.get; A.loadRef; false->A.isValueTypeOrigin;
               // loadQRef then
                  A.get; true->A.loadRef
               // pushAdr then
@@ -2622,7 +2638,8 @@ do init;
                  'conv.i4'->out.puttext;
                  -1 -> stack_delta;
               // int64ToInt32 then
-                 'conv.i4'->out.puttext;
+                 '\n*** NOT emitting int64ToInt32' -> screen.putline;
+                 (*'conv.i4'->out.puttext;*)
                  -1 -> stack_delta;
               // func then
                  (# f: @integer;

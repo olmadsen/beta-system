@@ -1,18 +1,19 @@
 #!/usr/local/bin/perl -s
 $BETALIB=$ENV{'BETALIB'};
 $BETALIB=~s%\\%/%g;
+push(@INC, $ENV{'BETALIB'} . "/bin/admin");
 if ($ENV{'MIASDK'} eq ""){
     $ENV{'MIASDK'} = ms;
 }
-require "$BETALIB/bin/admin/env.perl";
+require "env.perl";
 %options                = 0;
 
 ###########################################################
 ##################   Configuration   ######################
 ###########################################################
-$beta                   = "$BETALIB/boot/bin/$objdir/beta";
+$beta                   = "$BETALIB/boot/bin/$native_objdir/beta";
 $clroptions             = "-qw -s 23";
-$jvmoptions  = "-qw -s 188 23"; 
+$jvmoptions             = "-qw -s 188 23"; 
 $diffoptions            = "-u";
 
 &process_command_line();
@@ -168,10 +169,11 @@ sub usage()
     $jvmdefault = "(default)" if ($options{'target'} eq "jvm");
     $clrdefault = "(default)" if ($options{'target'} eq "clr");
     print<<EOT;
-usage: testall [-h][-v][-r][-c][-C][-g][-t][-k][-d][-j]
+usage: testall <options>
+where <options> are:
  -h  print this help
  -v  verbose mode
- -l  Just list the programs without testing them
+ -L  Just list the programs without testing them
  -o  show output from executions (by default only displayed if error)
  -r  run only (do not compile programs)
  -c  compile only (do not execute programs)
@@ -179,6 +181,8 @@ usage: testall [-h][-v][-r][-c][-C][-g][-t][-k][-d][-j]
  -k  keep programs after execution
  -K  do not clean existing bytecode directories
  -P  no disassembly for JVM
+ -l  do not execute local programs
+ -e  do not execute external programs
  -g  do not execute graphics programs
  -t  do not test TST
  -d  compile for target clr $clrdefault
@@ -212,10 +216,12 @@ sub process_command_line()
     &process_option('keepprograms', 1, 	   $k, "Not deleting programs after execution (-k)");
     &process_option('nographics',   1, 	   $g, "Not testing graphics applications (-g)");
     &process_option('notst',        1, 	   $t, "Not testing TST (-t)");
-    &process_option('list',         1, 	   $l, "Only listing programs (-l)");
+    &process_option('list',         1, 	   $L, "Only listing programs (-l)");
     &process_option('nodisassemble',1, 	   $P, "Not disassembling for JVM (-P)");
     &process_option('nocompiler',   1, 	   $C, "Not compiling compiler (-C)");
     &process_option('nostdlib',     1, 	   $s, "Not testing standard libraries (-s)");
+    &process_option('nolocals',     1, 	   $l, "Not testing local programs (-l)");
+    &process_option('noexternals',  1, 	   $e, "Not testing external programs (-e)");
     &process_option('keepcode',     1, 	   $K, "Not deleting bytecode directories (-K)");
 
     $jvmoptions .= " -p" if (!$options{'nodisassemble'});
@@ -274,6 +280,10 @@ sub list_programs()
 sub test_programs()
 {
     local @progs = @_;
+    if ($options{'nolocals'}){
+	print "Not testing local programs (-l)\n";
+	return;
+    }
     foreach $f (@progs){
 	
 	$exec = &compile_program($f);
@@ -298,6 +308,10 @@ sub test_programs()
 
 sub test_externals()
 {
+    if ($options{'noexternals'}){
+	print "Not testing external programs (-e)\n";
+	return;
+    }
     if (scalar %externals){
 	print "\nTesting external programs\n";
 	print "========================================================\n";
@@ -359,7 +373,7 @@ sub test_tst()
     print "========================================================\n";
     $testdir = `pwd`; chomp $testdir;
     &pushd("../../../TST");
-    unlink ("tstenv." . $AstExt{$objdir});
+    unlink ("tstenv." . $AstExt{$native_objdir});
     $exec = &compile_program("btst");
     print "-"x10 . "Testing $exec" . "-"x10  . "\n";
     system "$exec > $testdir/btst.run";
@@ -409,15 +423,15 @@ sub test_standard_libraries(){
 
 sub make_clean()
 {
-    print "Cleaning up generated files (may take substantial time).\n";
+    print "Cleaning up generated files.\n";
     system "rm -f *.run *.out *.diff";
     print "*** Removing ast files ***\n" if ($options{'verbose'});
     system "rm -f *.ast *.astL";
 
     unless ($options{'keepcode'}){
-	print "*** Removing bytecode directories ***\n" if ($options{'verbose'});
-	print  "mbs_rmcode -u " . $options{'target'} . "\n" if ($verbose);
-	system "mbs_rmcode -u " . $options{'target'};
+	print "*** Removing bytecode directories (may take substantial time; use -K to skip this) ***\n";
+	print  "mbs_rmcode -u -v " . $options{'target'} . "\n" if ($verbose);
+	system "mbs_rmcode -u -v " . $options{'target'};
     }
 }
 
@@ -425,10 +439,10 @@ sub compile_compiler()
 {
     if ($options{'target'} eq "clr"){
 	$sbetasrc="$BETALIB/compiler/nbeta.bet";
-	$sbeta="$BETALIB/bin/$objdir/nbeta${EXESUFFIX}";
+	$sbeta="$BETALIB/bin/$native_objdir/nbeta${EXESUFFIX}";
     } else {
 	$sbetasrc="$BETALIB/compiler/jbeta.bet";
-	$sbeta="$BETALIB/bin/$objdir/jbeta${EXESUFFIX}";
+	$sbeta="$BETALIB/bin/$native_objdir/jbeta${EXESUFFIX}";
     }
     
     unless ($options{'nocompiler'} || $options{'runonly'}){
