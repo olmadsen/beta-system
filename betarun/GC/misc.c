@@ -11,15 +11,12 @@
 #endif /* PERSIST */
 
 #define FAST_DUMP 1
-#undef NO_TRIE
 
-#ifndef NO_TRIE
 #ifdef MAC
 #include "trie.h"
 #else
 #include "../P/trie.h"
 #endif /* MAC */
-#endif
 
 #ifdef UNIX
 #include <unistd.h>
@@ -48,9 +45,7 @@ void gcmisc_dummy() {
 #endif /* sparc */
 }
 
-#ifndef NO_TRIE
 static Trie *trie;
-#endif
 
 /* Used by 
  *    objinterface.bet for: extGetCstring
@@ -956,8 +951,6 @@ static char *getLabelExact(long addr);
 static void addLabel(long adr, char *id);
 static int cmpLabel(const void *left, const void *right);
 
-static long lastAddress = 0;
-
 static int isLocalLab(char *lab)
 {
   /* Test for:
@@ -990,7 +983,6 @@ static void addLabel(long adr, char *id)
 {
   label *lab;
   int len;
-  int lastslash = 0;
   int i;
   char* buf;
 
@@ -999,28 +991,10 @@ static void addLabel(long adr, char *id)
     return;
   }
 
-#ifdef NO_TRIE
-  /* Check for duplicate: Since these are added sorted, 
-   * need only check previous address.
-   * NO - doesn't work (:-(
-   * Things are added in several batches...
-   */
-  /* if (adr == lastAddress) return; */
-#else
   if (labels && getLabelExact(adr)) {
     /* There is already a symbol on that addr.  Ignore new one */
     return;
-  }
-#endif
-
-  lastAddress = adr;
-
-  len  = strlen(id);
-  for (i = 0; i < len; i++) {
-    if (id[i] == '/') {
-      lastslash = i+1;
-    }
-  }  
+  } 
 
   buf = MALLOC(sizeof(label)+len+1-lastslash);
 
@@ -1031,7 +1005,7 @@ static void addLabel(long adr, char *id)
     labels = 0;
     return;
   }
-  INFO_ALLOC(sizeof(label)+len+1-lastslash);
+  INFO_ALLOC(sizeof(label)+len+1);
 
   lab = (label *) buf;
   lab->id = buf+sizeof(label);
@@ -1054,9 +1028,6 @@ static void addLabel(long adr, char *id)
   }
   labels[numLabels] = lab;
 
-#ifdef NO_TRIE
-  /* Speed up: do not register in Trie. Don't care about duplicates */
-#else
 #ifndef MAC
   /* Register label in trie */
   TInsert((unsigned long)(lab -> address), 
@@ -1064,7 +1035,6 @@ static void addLabel(long adr, char *id)
 	  &trie, 
 	  (unsigned long)(lab -> address));
   
-#endif
 #endif
 
   numLabels++;
@@ -1077,10 +1047,19 @@ static void addGroupLabel(long adr, char *id)
   label *lab;
   char* buf;
   int len = strlen(id);
+  int lastslash = 0;
 
-  /* No need to check for locallabs, duplicates or slashes */
+  /* No need to check for locallabs, duplicates */
 
-  buf = MALLOC(sizeof(label)+len+1);
+  /* Remove leading paths */
+  len  = strlen(id);
+  for (i = 0; i < len; i++) {
+    if (id[i] == '/') {
+      lastslash = i+1;
+    }
+  } 
+
+  buf = MALLOC(sizeof(label)+len+1-lastslash);
   if (!buf) {
     INFO_LABELS(fprintf(output, "Allocation of label failed\n"));
     /* free previously allocated labels */
@@ -1088,12 +1067,12 @@ static void addGroupLabel(long adr, char *id)
     grouplabels = 0;
     return;
   }
-  INFO_ALLOC(sizeof(label)+len+1);
+  INFO_ALLOC(sizeof(label)+len+1-lastslash);
 
   lab = (label *) buf;
   lab->id = buf+sizeof(label);
 
-  strcpy(lab->id, id);
+  strcpy(lab->id, id+lastslash);
   lab->address = adr;
 
   if (!grouplabels) {
@@ -1246,9 +1225,7 @@ static void initLabels(void)
 #endif /* hppa */
 #endif /* UNIX */
   
-#ifndef NO_TRIE
   trie = TInit();
-#endif
 
   INFO_LABELS(fprintf(output, "[initLabels ... "); fflush(output););
   strcpy(exefilename, ArgVector[0]);
@@ -1308,12 +1285,10 @@ static char *getLabelExact(long addr)
   addr -= process_offset;
 #endif
 
-#ifndef NO_TRIE
 #ifndef MAC
   if (labels) {
     return (char *)TILookup(addr, trie);
   }
-#endif
 #endif
 
   return NULL;
