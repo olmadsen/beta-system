@@ -32,8 +32,6 @@ resource 'ALRT' (7129) {
 		/* [4] */
 		OK, visible, silent
 	}
-	/****** Extra bytes follow... ******/
-	/* $"300A"                                               /* 0. */
 };
 
 resource 'ALRT' (7130) {
@@ -49,8 +47,6 @@ resource 'ALRT' (7130) {
 		/* [4] */
 		OK, visible, silent
 	}
-	/****** Extra bytes follow... ******/
-	/* $"300A"                                               /* 0. */
 };
 
 resource 'ALRT' (7128, purgeable) {
@@ -66,8 +62,6 @@ resource 'ALRT' (7128, purgeable) {
 		/* [4] */
 		OK, visible, silent
 	}
-	/****** Extra bytes follow... ******/
-	/* $"280A"                                               /* (. */
 };
 
 resource 'DITL' (7130) {
@@ -268,14 +262,12 @@ resource 'MENU' (7133, preload) {
 };
 
 resource 'WIND' (7128, "BETA Console", purgeable, preload) {
-	{64, 60, 314, 460},
+	{564, 460, 814, 860},
 	zoomDocProc,
 	invisible,
 	goAway,
 	0x0,
 	"BETA Console"
-	/****** Extra bytes follow... ******/
-	/* $"BA28 0A"                                            /* º(. */
 };
 
 resource 'ICN#' (-16455) {
@@ -620,5 +612,34 @@ resource 'STR#' (7128, purgeable) {
 		/* [12] */
 		"Cannot do Paste."
 	}
+};
+
+resource 'BNDL' (128) {
+	'????',
+	0,
+	{	/* array TypeArray: 2 elements */
+		/* [1] */
+		'FREF',
+		{	/* array IDArray: 1 elements */
+			/* [1] */
+			0, 128
+		},
+		/* [2] */
+		'ICN#',
+		{	/* array IDArray: 1 elements */
+			/* [1] */
+			0, 0
+		}
+	}
+};
+
+data '????' (0, "Owner resource") {
+	$"00"                                                 /* . */
+};
+
+resource 'FREF' (128) {
+	'TEXT',
+	0,
+	""
 };
 

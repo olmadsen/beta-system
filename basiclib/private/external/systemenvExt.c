@@ -1,6 +1,5 @@
 #ifdef MAC
-/* Possible code for a future mac implementation
- */
+
 #include <Events.h>
 #include <OSUtils.h>
 
@@ -14,19 +13,29 @@ int getImRead(int thefile)
 }
 
 void sleep(int secs)
-{	long dummy;
-	Delay(secs*60,&dummy);
-	/* Delay blocks the machine, use WaitNextEvent instead */
-	
+{	
+	Boolean result;
+	EventRecord event;
+	/*
+	 * This WaitNextEvent does not take any event out of the
+	 * event queue since the mask parameter (first param) is 0.
+	 */
+	result = WaitNextEvent(0, &event, secs * 60, nil);
+	return;
 }
 
-long time(void)
+
+void sleepUntil(int due)
 {
-  return TickCount();
+	int now = time (0);
+  	if (due > now) sleep (due-now);
+	return;
 }
 
-int KeyboardEOS()
-{ return 0; }
+int time(int timeLoc)
+{	
+	return (TickCount() / 60);
+}
 
 #else /* NOT MAC */
 

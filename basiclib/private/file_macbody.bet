@@ -2,11 +2,11 @@ ORIGIN 'filebody';
 BUILD default ':$$/fileInt_mac.obj' ':external/fileInt_mac.c' 'mrc -o $0 $1';
 
 INCLUDE '../external'
-        '~beta/maclib/v3.0/files'
-        '~beta/maclib/v3.0/resources'
-        '~beta/maclib/v3.0/gestaltequ'
-        '~beta/maclib/v3.0/macdirectory'
-        '~beta/maclib/v3.0/toolutils';
+        '~beta/maclib/v3.1/files'
+        '~beta/maclib/v3.1/resources'
+        '~beta/maclib/v3.1/gestaltequ'
+        '~beta/maclib/v3.1/macdirectory'
+        '~beta/maclib/v3.1/toolutils';
 -- lib: Attributes --
 (* this fragment is the implementation part of file pattern.
  * It uses a lot of calls to external functions in Mac Toolbox.
@@ -98,7 +98,7 @@ EOFpeek: External
 EOFvalue: External (* returns the EOF value *)
   (# N: @Integer do CallC exit N #);
 FSpIsDir: External
-  (# fs: ^FSSpec; result: @ShortInt;  enter fs[] exit result #);
+  (# fs: ^FSSpec; result: @boolean;  enter fs[] exit result #);
 FSpIsLocked: External
   (# fs: ^FSSpec; result: @ShortInt;  enter fs[] exit result #);
 FSpEntryExists: External
@@ -161,6 +161,7 @@ HMakeFSSpec: External
   do callC
   exit result
   #);
+  
 MakeFSSpec:
   (# 
      vRefNum: @ShortInt;
@@ -222,11 +223,29 @@ decomposeName: (* get name of path in beta/mac style! *)
         if);
         
      #);
+	 
+   makeFSSpec: @
+      (# result: @integer;
+	  do (0, 0, path, fs[]) -> FSMakeFSSpec -> result; 
+		 (if result
+			//-43 then
+				true -> FSSpecValid; (* The FSSpec is valid, but 
+								      * the entry does not exist 
+									  *)
+			//0 then
+				true -> FSSpecValid;
+			   (if fs[] -> FSpIsDir then
+				   fs[] -> FSpGetDirID -> dirID;
+			   if);
+		 else
+			 false -> FSSpecValid;
+		 if);
+	  #);
+	  
    fs: ^FSSpec;
    dirID: @LongInt;
    FSSpecValid: @Boolean;
    path: @Text;
-   (* Only used when this(DiskEntry) doesn't exist. *)
    
 #)  
 
@@ -315,50 +334,22 @@ do
    if)  
 
 -- DiskEntryPathSet: DoPart --
-do
-   &FSSpec[]->private.fs[];
-   (*'Path set: '->screen.puttext; p[]->screen.puttext;*)
-   (if ((0,0,p,private.fs[])->MakeFSSpec)
-    // - 43 then (* FSSpec is valid but entry does not exist *)
-    (*'FSSpec is valid but entry does not exist'->screen.putline;*)
-       TRUE->private.FSSpecValid; 
-    // 0 then
-       TRUE->private.FSSpecValid;
-       (if isDirectory then
-           private.fs[]->FSpGetDirID->private.dirID;
-           (*' isDir '->screen.puttext;*)
-           
-       if);
-       (*'FSSpec is valid'->screen.putline;*)
-       
-    else
-   (*'FSSpec is invalid'->screen.putline;*)
-       p->private.path; FALSE->private.FSSpecValid; 
-   if);
-     
+do &FSSpec[]->private.fs[];
+   p -> private.path;
+   private.makeFSSpec; (* Try to make a FSSpec - this can fail if
+     					* the entry does not exist, but this is not
+						* an error.
+						*)
+
 
 -- DiskEntryPathGet: DoPart --
-do
-   &Text[]->p[];
-   private.FSpCheckNil;
-   (if private.FSSpecValid or exists  then
-       (private.fs.parID,private.fs.vRefNum)->GetDirectoryName->p;
-       private.fs.name->p.append;
-       (if private.FSSpecValid then
-           (if isDirectory then ':'->p.append if)
-       if);
-       
-    else
-   (* if the entry and the path does not exists try use private.part as entry name *)
-       private.path->p; 
-   if);
-     
+do private.path.copy -> p[];
 
 -- DiskEntryExists: DoPart --
 do
    private.FSpCheckNil;
    (if not private.FSSpecValid then (* FSSpec not valid, try again *)
-       private.path[]->path.set; 
+       private.makeFSSpec; 
    if);
    (if not private.FSSpecValid then
    (* FSSpec still not valid, entry does not exists *)
@@ -382,7 +373,7 @@ do INNER;
    if);
 
 -- DiskEntrySize: DoPart --
-do   
+do  'DiskEntrySize: DoPart' -> screen.putLine;
 
 -- DiskEntryGetModTime: DoPart --
 do private.FSpCheckNil; private.fs[]->FSpGetModTime->time  
