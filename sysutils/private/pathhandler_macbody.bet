@@ -1,491 +1,559 @@
-ORIGIN '../pathhandler';
-OBJFILE mac 'mac/PathName.o';
-MAKE    mac 'external/pathhandler_macbody.make'
-
+ORIGIN 'pathhandlerbody';
+OBJFILE default '$/PathName.o';
+RESOURCE default 'external/pathhandler_macbody.r';
+INCLUDE '~beta/maclib/v3.0/macdirectory'
+        '~beta/maclib/v3.0/mactypes'
+        'resstr_macbody';
 (*
- COPYRIGHT
- Copyright Mjolner Informatics, 1989-94
- All rights reserved.
+ *  COPYRIGHT
+ *     Copyright Mjolner Informatics, 1989-96
+ *     All rights reserved.
  *)
- 
-INCLUDE '~beta/maclib/v2.7/macdirectory';
-INCLUDE '~beta/maclib/v2.7/mactypes';
-INCLUDE '~beta/basiclib/v1.5/file';
-INCLUDE '~beta/basiclib/v1.5/external';
-INCLUDE '../envstring';
-INCLUDE 'resstr';
+-- LIB: Attributes --
+homeDirectories: (# exit 'configuration:r4.0:homeDirectories' #);   
 
--- LIB: attributes --
-
-(* Release dependent location of the homeDirectories file 
- * Remember to change when making new releases
- *
- * Macintosh path relative to {betalib} (~beta)
- *)
-homeDirectories:
-  (# exit 'configuration:r3.0:homeDirectories' #);
 
 --PathHandlerDirectoryChar: dopart--
 do ':'->c
---PathHandlerCurrentDirectory: dopart--
-do getCurrentDir->cwd[]
---PathHandlerScanSearchPath: dopart--
-do (if pathlist=NONE then
-       '$(Commands)' -> expandenvvar -> pathlist[];
-   if);
-   (if delimiter=0 then
-       ',' -> delimiter;
-   if);
-   (if pathlist.length>0 then
-       (# start: @integer;
-       do 1->start;
-          pathlist.reset;
-          delimiter->pathlist.findAll
-          (#
-          do (if (inx-1>start) then 
-                 (start,inx-1)->pathlist.sub->path[];
-                 INNER scanSearchPath;
-             if);
-             inx+1->start;
-          #);
-          (if start-1<pathlist.length then
-              (start,pathlist.length)->pathlist.sub->path[];
-              INNER scanSearchPath;
-          if);
-       #);
-   if)
+     
+ 
+--PathhandlerSearchPath: dopart--
+do '$(Commands)' -> path[]
+--PathhandlerSearchPathDelimiter: dopart--
+do ',' -> delimiter
    
--- ConvertFileNameNoFather: descriptor --
-(#
-do 'Error in file path conversion in PathHandler: ' -> msg.putline;
-   'Too many ''..''s in the path\n\t''' -> msg.puttext;
-   THIS(ConvertFilePath).path[] -> msg.puttext;
-   '''\ncompared to the basis\n\t''' -> msg.puttext;
-   THIS(ConvertFilePath).basis[] -> msg.puttext;
-   '''\n'->msg.puttext;
-   'Path not converted.' -> msg.putline;
-#)
+--PathHandlerCurrentDirectory: dopart--
+do getCurrentDir->cwd[];
+--PathHandlerCurDir: dopart--
+do private.currentdirectory.copy->value[]
+--PathHandlerBetaLib: dopart--
+do private.betalib.copy->value[]
 
-
-
------- convertFilePathBody: descriptor -------
-(# endedBySlash: @boolean;
+-- convertFilePathBody: Descriptor --
+(# 
+   endedBySlash: @boolean;
    slashInx,index: @integer;
-   pathlength, basislength: @integer;
+   pathlength,basislength: @integer;
    path,basis: ^Text;
    ch: @char;
-   
    isMacPath: BooleanValue
      (# p: ^Text; 
-	 enter p[]
-	 do ':' -> p.FindCh (# do true -> value #);
-	 #);
-	 
-do (if THIS(ConvertFilePath).path[]<>NONE
+     enter p[]
+     do ':'->p.FindAll (# do true->value #); 
+     #);
+   
+do
+   (if THIS(ConvertFilePath).path[] <> none
     // true then
-	   &text[]->path[]; 
-	   THIS(ConvertFilePath).path -> path;
-	   path.length -> pathlength;
-       (if pathlength<>0 // true then
-           (if (pathlength -> path.inxget) // '/' then true -> endedBySlash if);
-           (if (pathlength -> path.inxget) // ':' then true -> endedBySlash if);
-		   &text[]->basis[]; 
-		   (if THIS(ConvertFilePath).basis[] // NONE then 
-			   private.CurrentDirectory -> basis;
-			else 
-			   THIS(ConvertFilePath).basis -> basis;
-		   if);
-           (if basis.length//0 then private.CurrentDirectory -> basis if);
-		   basis.length -> basislength;
-		   (if ((pathlength -> path.inxget) <> '/')  and ((pathlength -> path.inxget) <> ':') // true then 
-			    (if path[] -> isMacPath//true then
-				    ':' -> path.append;
-				 else
-				    '/' -> path.append;
-				if);
-				pathlength+1 -> pathlength;
-		   if);
-		   (if ((basislength -> basis.inxget) <> '/') and ((basislength -> basis.inxget) <> ':') // true then 
-			    (if basis[] -> isMacPath//true then
-				    ':' -> basis.append;
-				 else
-				    '/' -> basis.append;
-				if);
-				basislength+1 -> basislength;
-		   if);
-		   path[] -> expandEnvVar -> path[]; (* Expand environment variables *)
-		   basis[] -> expandEnvVar -> basis[]; (* Expand environment variables *)
-		   path.length -> pathlength;
-		   converter: 
-			 (# T: ^text; index: @integer; firstCh: @char; found: @boolean;
-				unknownPrefix: 
-				  (# (* the prefix of path is unknown.
-					  It must be a local file
-					  *)
-				  do (':',1) -> path.insert; 
-				     pathlength+1 -> pathlength;
-					 restart converter
-				  #);
-			 do 
-			 (if (1 -> path.inxGet)
-			 // '/' then (* full path: remove first slash *) 
-				(1,1) -> path.delete;
-				pathlength-1 -> pathlength;
-			    (if pathlength//0 then (* path is only '/' *)
-				    (* result should be volume of basis *)
-					(if ((1 -> basis.inxGet)='/') and (basislength=1) //true then 
-					  (* basis is just '/' use CWD *)
-					  getCurrentDir -> path[];
-					 else
-					   (* convert basis to a full mac path if possible *)
-					   (basis[],basis[]) -> &convertfilepath -> path[];
-					if);
-					(* get volume of path: find first ':' and get the name before *)
-					scanner: (# do ':' -> path.FindCh (# do inx -> index; leave scanner #)#);
-					(1,index) -> path.sub -> path[];
-				    path.length -> pathlength;
-				if);
-				leave converter
-			 // '~' then (* try look in table, we cannot expand usernames on MAC *)
-				test: 
-				(if 1//1 then
-					Private.Nametable.Scan
-					(#
-					do (if ((1,currentSize) -> path.sub ->thisHome.equal) // true then
-						   (1,currentSize) -> path.delete;
-						   thisDir[] -> path.prepend;
-						   path.length -> pathlength;
-						   leave test;
-					if)#);
-					(* not found in table: expand ~ as betalib *)
-					(1,1) -> path.delete;
-					private.betalib[] -> path.prepend;
-				    path.length -> pathlength;
-				if);
-			 // '.' then (* this is new from unix version *)
-				(if './' -> basis.equal// true then leave converter if);
-				(* path is a relative path starting with .
-				 * since path is '/'-terminated, length >=2
-				 *)
-				(if (2 -> path.inxGet)
-				 // '.' then
-					(* path starts with '..'
-					 * Since path is always terminated by '/', length is >=3
-					 *)
-					(if (3 -> path.inxGet)
-					 // '/' then
-						(* path starts with '../'
-						 * delete prefix of path and last component of basis
-						 * and rerun converter
-						 *)
-						(1,3) -> path.delete; pathlength-3->pathlength;
-						0 -> index; 
-						'/' -> basis.FindCh
-						(# 
-						do (if inx//basislength then
-							   (* found the terminating slash *)
-							   (if index<>0
-								// true then 
-								   (* found slash before the last one in basis *)
-								   (index+1,basislength) -> basis.delete;
-								   basis.length -> basislength;
-								   (if pathlength//0 then 
-									   basis -> path; basislength -> pathlength;
-									   leave converter
-								   if);
-								// false then
-								   (* only terminating slash in basis. *)
-								   (if inx//1 then (* basis = '/' *)
-									   NoFather;
-									   (* in case NoFather continues: *)
-									   '../' -> path.prepend; pathlength+3->pathlength;
-									   leave converter; 
-									else
-									   '../' -> path.prepend; pathlength+3->pathlength;
-									   './' -> basis.prepend; basislength+2->basislength;
-								   if)
-							   if);
-							   restart converter
-							else
-							   (* save the position of this slash *)
-							   inx -> index
-						   if)
-						#);
-						(if index//0 then (* did not found any '/' try ':' in basis *)
-							':' -> basis.FindCh
-							(# 
-							do (if inx//basislength then
-								   (* found the terminating ':' *)
-								   (if index<>0
-									// true then 
-									   (* found ':' before the last one in basis *)
-									   (index+1,basislength) -> basis.delete;
-									   basis.length -> basislength;
-									   (if pathlength//0 then 
-									       basis -> path; basislength -> pathlength;
-									       leave converter
-									   if);
-									// false then
-									   (* only ':' last in basis
-									    * basis is a volume name
-										*)
-									   '../' -> path.prepend; pathlength+3->pathlength;
-								   if);
-								   restart converter
-								else
-								   (* save the position of this ':' *)
-								   inx -> index
-							   if)
-						    #);
-						if);
-					 else 
-						(* path starts with ..something, it must be a local file/directory
-						 * named '..something'
-						 *)
-						unknownprefix;
-					if)
-				 // '/' then
-					(* Path starts with './', i.e. a path local to basis
-					 * delete prefix of path, concatenate basis and path
-					 * and return path 
-					 *)
-					(1,2) -> path.delete; 
-					basis[] -> path.prepend; path.length->pathlength;
-					leave converter
-				 else
-					(* path starts with .something, it must be a local file/directory *)
-					unknownPrefix
-				if);
-			 // ':' then (* this is old mac stuff *)
-				(1,1) -> path.delete;
-				'/' -> basis.FindCh (# do inx -> index #);
-				(if index // 0 then 
-					':' -> basis.FindCh (# do inx -> index #);
-				if);
-				(* basis = 'xxx/xxx/.../xxx/xxx'
-				 *			               ^ index
-				 *)
-				((1,index) -> basis.sub,1) -> path.insert;
-				path.length->pathlength;
-				leave converter
-			 else 
-				false -> found;
-				':' -> path.findCH(# do true -> found #);
-				(* if we have a colon, we have a global name on the mac *)
-				(if found // false then unknownPrefix if);
-				leave converter
-			if)#);
+       &text[]->path[];
+       THIS(ConvertFilePath).path->path;
+       path.length->pathlength;
+       (if pathlength <> 0
+        // true then
+           (if (pathlength->path.inxget) // '/' then true->endedBySlash if);
+           (if (pathlength->path.inxget) // ':' then true->endedBySlash if);
+           &text[]->basis[];
+           (if THIS(ConvertFilePath).basis[]
+            // none then private.CurrentDirectory->basis; 
+            else
+               THIS(ConvertFilePath).basis->basis; 
+           if);
+           (if basis.length // 0 then private.CurrentDirectory->basis if);
+           basis.length->basislength;
+           (if ((pathlength->path.inxget) <> '/') and
+           ((pathlength->path.inxget) <> ':')
+            // true then
+               (if path[]->isMacPath
+                // true then ':'->path.append; 
+                else
+                   '/'->path.append; 
+               if);
+               pathlength+1->pathlength;
+               
+           if);
+           (if ((basislength->basis.inxget) <> '/') and
+           ((basislength->basis.inxget) <> ':')
+            // true then
+               (if basis[]->isMacPath
+                // true then ':'->basis.append; 
+                else
+                   '/'->basis.append; 
+               if);
+               basislength+1->basislength;
+               
+           if);
+           path[]->expandEnvVar->path[];
+           (* Expand environment variables *)
+           basis[]->expandEnvVar->basis[];
+           (* Expand environment variables *)
+           path.length->pathlength;
+           converter:
+             (# 
+                T: ^text;
+                index: @integer;
+                firstCh: @char;
+                found: @boolean;
+                unknownPrefix:
+                  (# 
+                  (* the prefix of path is unknown.
+                   8 It must be a local file
+                   *) 
+                  do
+                     (':',1)->path.insert;
+                     pathlength+1->pathlength;
+                     restart converter
+                  #);
+                
+             do
+                (if (1->path.inxGet)
+                 // '/' then (* full path: remove first slash *)
+                    (1,1)->path.delete;
+                    pathlength-1->pathlength;
+                    (if pathlength
+                     // 0 then (* path is only '/' *)
+                     (* result should be volume of basis *)
+                        (if ((1->basis.inxGet) = '/') and (basislength = 1)
+                         // true then (* basis is just '/' use CWD *)
+                            getCurrentDir->path[]; 
+                         else
+                        (* convert basis to a full mac path if possible *)
+                            (basis[],basis[])->&convertfilepath->path[]; 
+                        if);
+                        (* get volume of path: 
+                         * find first ':' and get the name before
+                         *)
+                        scanner:
+                          (# 
+                          do
+                             ':'
+                               ->path.FindAll
+                                 (# do inx->index; leave scanner #)
+                          #);
+                        (1,index)->path.sub->path[];
+                        path.length->pathlength;
+                        
+                    if);
+                    leave converter
+                 // '~' then
+                 (* try look in table, we cannot expand usernames on MAC *)
+                    test:
+                    (if 1
+                     // 1 then
+                        Private.Nametable.Scan
+                          (# 
+                          do
+                             (if ((1,currentSize)->path.sub->thisHome.equal)
+                              // true then
+                                 (1,currentSize)->path.delete;
+                                 thisDir[]->path.prepend;
+                                 path.length->pathlength;
+                                 leave test;
+                                 
+                             if)
+                          #);
+                        (* not found in table: expand ~ as betalib *)
+                        (1,1)->path.delete;
+                        private.betalib[]->path.prepend;
+                        path.length->pathlength;
+                        
+                    if);
+                    
+                 // '.' then (* this is new from unix version *)
+                    (if './'->basis.equal // true then leave converter if);
+                    (* path is a relative path starting with .
+                     * since path is '/'-terminated, length >=2
+                     *)
+                    (if (2->path.inxGet)
+                     // '.' then
+                     (* path starts with '..'
+                      * Since path is always terminated by '/', length is >=3
+                      *)
+                        (if (3->path.inxGet)
+                         // '/' then
+                         (* path starts with '../'
+                          * delete prefix of path and last component of basis
+                          * and rerun converter
+                          *)
+                            (1,3)->path.delete;
+                            pathlength-3->pathlength;
+                            0->index;
+                            '/'
+                              ->basis.FindAll
+                                (# 
+                                do
+                                   (if inx
+                                    // basislength then
+                                    (* found the terminating slash *)
+                                       (if index <> 0
+                                        // true then
+                                        (* found slash before the last one in basis *)
+                                           (index+1,basislength)->basis.delete;
+                                           basis.length->basislength;
+                                           (if pathlength
+                                            // 0 then
+                                               basis->path;
+                                               basislength->pathlength;
+                                               leave converter
+                                           if);
+                                           
+                                        // false then
+                                        (* only terminating slash in basis. *)
+                                           (if inx
+                                            // 1 then (* basis = '/' *)
+                                               NoFather;
+                                               (* in case NoFather continues: *)
+                                               '../'->path.prepend;
+                                               pathlength+3->pathlength;
+                                               leave converter;
+                                               
+                                            else
+                                               '../'->path.prepend;
+                                               pathlength+3->pathlength;
+                                               './'->basis.prepend;
+                                               basislength+2->basislength;
+                                               
+                                           if)
+                                       if);
+                                       restart converter
+                                    else
+                                   (* save the position of this slash *)
+                                       inx->index
+                                   if)
+                                #);
+                            (if index
+                             // 0 then
+                             (* did not found any '/' try ':' in basis *)
+                                ':'
+                                  ->basis.FindAll
+                                    (# 
+                                    do
+                                       (if inx
+                                        // basislength then
+                                        (* found the terminating ':' *)
+                                           (if index <> 0
+                                            // true then
+                                            (* found ':' before the last one in basis *)
+                                               (index+1,basislength)
+                                                 ->basis.delete;
+                                               basis.length->basislength;
+                                               (if pathlength
+                                                // 0 then
+                                                   basis->path;
+                                                   basislength->pathlength;
+                                                   leave converter
+                                               if);
+                                               
+                                            // false then
+                                            (* only ':' last in basis
+                                             * basis is a volume name
+                                             *)
+                                               '../'->path.prepend;
+                                               pathlength+3->pathlength;
+                                               
+                                           if);
+                                           restart converter
+                                        else
+                                       (* save the position of this ':' *)
+                                           inx->index
+                                       if)
+                                    #);
+                                
+                            if);
+                            
+                         else
+                        (* path starts with ..something, it must be a local file/directory
+                         * named '..something'
+                         *)
+                            unknownprefix; 
+                        if)
+                     // '/' then
+                     (* Path starts with './', i.e. a path local to basis
+                      * delete prefix of path, concatenate basis and path
+                      * and return path 
+                      *)
+                        (1,2)->path.delete;
+                        basis[]->path.prepend;
+                        path.length->pathlength;
+                        leave converter
+                     else
+                    (* path starts with .something, it must be a local file/directory *)
+                        unknownPrefix
+                    if);
+                    
+                 // ':' then (* this is old mac stuff *)
+                    (1,1)->path.delete;
+                    '/'->basis.FindAll (# do inx->index #);
+                    (if index
+                     // 0 then ':'->basis.FindAll (# do inx->index #); 
+                    if);
+                    (* basis = 'xxx/xxx/.../xxx/xxx'
+                     *			               ^ index
+                     *)
+                    ((1,index)->basis.sub,1)->path.insert;
+                    path.length->pathlength;
+                    leave converter
+                 else
+                    false->found;
+                    ':'->path.findAll (# do true->found #);
+                    (* if we have a colon, we have a global name on the mac *)
+                    (if found // false then unknownPrefix if);
+                    leave converter
+                if)
+             #);
            (* Converter done *)
            (* Check that the path is ended by slash iff the original one was *)
-           (if ((pathlength -> path.inxget) = '/') OR ((pathlength -> path.inxget) = ':') //true then
-               (if endedBySlash // false then 
-                   (if pathlength//1 then
-                       (* special case: the result was '/' *)
+           (if ((pathlength->path.inxget) = '/') or
+           ((pathlength->path.inxget) = ':')
+            // true then
+               (if endedBySlash
+                // false then
+                   (if pathlength
+                    // 1 then (* special case: the result was '/' *) 
                     else
-                       (pathlength, pathlength) -> path.delete; 
+                       (pathlength,pathlength)->path.delete; 
                    if);
+                   
                if)
             else
-               (if endedBySlash // true then ':' -> path.append; if)
+               (if endedBySlash // true then ':'->path.append;  if)
            if);
-		   (* replace / with : *)
-		   '/' -> path.FindCh(# do (':',inx) ->path.inxPut #);
+           (* replace / with : *)
+           '/'->path.FindAll (# do (':',inx)->path.inxPut #);
            (* Check that there are no '::' in the path unless first *)
-           -1 -> slashInx;
-           ':' -> path.FindCh
-           (# 
-           do (if inx > slashInx
-               // true then
-                  (if inx = slashInx+1
-                   // true then 
-				      (if inx>2//true then
-					      (inx, inx) -> path.delete (* two consecutive ':' *)
-					  if);
-                   // false then inx -> slashInx; (* remember position of last ':' *)
+           - 1->slashInx;
+           ':'
+             ->path.FindAll
+               (# 
+               do
+                  (if inx > slashInx
+                   // true then
+                      (if inx = slashInx+1
+                       // true then
+                          (if inx > 2
+                           // true then
+                              (inx,inx)->path.delete (* two consecutive ':' *)
+                          if);
+                          
+                       // false then
+                          inx->slashInx; (* remember position of last ':' *) 
+                      if)
                   if)
-              if)
-           #);
-           &text[] -> convertedpath[];
-           path -> convertedpath;
-		   loop : (* on MAC: case in file names is not significant *)
-		   (for i:convertedpath.length repeat
-	            (if (convertedpath.T[i]->ch)
-		           //'-' then leave loop
-		         else ch -> ascii.lowCase -> convertedpath.T[i];
-		        if)
-	       for)
-if)if)#)
+               #);
+           &text[]->convertedpath[];
+           path->convertedpath;
+           loop: (* on MAC: case in file names is not significant *)
+           (for i: convertedpath.length repeat
+             (if (convertedpath.T[i]->ch)
+              // '-' then leave loop
+              else
+                 ch->ascii.lowCase->convertedpath.T[i]; 
+             if)
+           for)
+       if)
+   if)
+#)  
 
--- PathHandlerBetaLib: descriptor --
-(# do &text[]->value[]; private.betalib->value #)
-
--- PathHandlerCurDir: descriptor --
-(# do &text[]->value[]; private.currentdirectory->value #)
-
------- pathHandlerPrivate: descriptor ---------
-(# t: @Text;
-   betalib, currentdirectory: ^Text;
+-- pathHandlerPrivate: Descriptor --
+(# 
+   t: @Text;
+   betalib,currentdirectory: ^Text;
    NameTable: @
-     (# Home,HomeDir: [100] ^text; top: @integer;
-        NewHomeDir: 
-          (# H,D: @text;
-             found: @boolean
-          enter(H,D)
-          do false -> found;
+     (# 
+        Home,HomeDir: [100] ^text;
+        top: @integer;
+        NewHomeDir:
+          (# H,D: @text; found: @boolean
+          enter (H,D)
+          do
+             false->found;
              scanning: scan
                (# 
-               do (if (thisHome[] -> h.equal)
-                   // true then D -> HomeDir[currentInx]; true -> found; leave scanning
+               do
+                  (if (thisHome[]->h.equal)
+                   // true then
+                      D->HomeDir[currentInx]; true->found; leave scanning
                   if);
+                  
                #);
-             (if found // false then
-                 (if ((top+1->top)>Home.range) // true then
+             (if found
+              // false then
+                 (if ((top+1->top) > Home.range)
+                  // true then 
                   else
-                     &Text[] -> Home[top][]; H -> Home[top]; 
-                     &Text[] -> HomeDir[top][]; D -> HomeDir[top]
-          if)if)#);
-        Scan: 
+                     &Text[]->Home[top][];
+                     H->Home[top];
+                     &Text[]->HomeDir[top][];
+                     D->HomeDir[top]
+                 if)
+             if)
+          #);
+        Scan:
           (# thisHome,thisDir: @text; currentInx,currentSize: @integer
-          do (for i: top repeat
-                  i->currentInx;
-                  Home[i].length -> currentSize;
-                  Home[i] -> thisHome;
-                  HomeDir[i] -> thisDir;
-                  INNER
-          for)#);
-        Init: 
-          (# f: @file(#entryDesc::<(#exists::<(#error::<(#do true -> continue#)#)#)#);
+          do
+             (for i: top repeat
+               i->currentInx;
+               Home[i].length->currentSize;
+               Home[i]->thisHome;
+               HomeDir[i]->thisDir;
+               INNER
+             for)
+          #);
+        Init:
+          (# 
+             f: @file;
+             (*(# entryDesc::<(# exists:(# error::<(# do true -> continue#)#)#)#);*)
              abb,fullName: ^text;
              getStandAlone: External
-               (# isRunningAlone: @integer
-               exit isRunningAlone
-               #);
+               (# isRunningAlone: @integer exit isRunningAlone #);
              getBetaLib: @stringGetter;
-             GetBetaFolder: external
-               (# a,b: [1]@char;
-               enter a
-               exit b
-               #);
-          do getCurrentDir -> CurrentDirectory[];
-             (if CurrentDirectory[]//NONE then
-                 (failureTrace,'Failed to get CurrentDirectory') -> stop;
+             GetBetaFolder: external (# a,b: [1] @char;  enter a exit b #);
+             
+          do
+             getCurrentDir->CurrentDirectory[];
+             (if CurrentDirectory[]
+              // none then
+                 (failureTrace,'Failed to get CurrentDirectory')->stop; 
              if);
              CurrentDirectory.makeLC;
-             (if getStandAlone//1 then
-                 'betaLib' -> getBetaLib.strName;
-                 &Text[] -> betalib[];
-                 getBetaLib.getFromResourceFile -> betalib;
-                 betalib -> t;
-                 homeDirectories -> t.append;
-                 t[] -> f.entry.path;
-                 (if f.entry.exists(#error::<(#do true -> continue#)#)
-                  // false then
-                     betalib -> GetBetaFolder -> pToC -> betalib;
-                     (if betalib.length//0 then (normal,'Program execution terminated') -> stop
+             (if getStandAlone
+              // 1 then (*'This is standalone'->screen.putline;*)
+                 'betaLib'->getBetaLib.strName;
+                 &Text[]->betalib[];
+                 getBetaLib.getFromResourceFile->betalib;
+                 betalib->t;
+                 homeDirectories->t.append;
+                 (*'Trying: '->screen.puttext; t[]->screen.putline;*)
+                 t[]->f.entry.path;
+                 (if f.entry.exists
+                   (# error::< (# do true->continue #) #)
+                  // false then (*'did not exists'->screen.putline;*)
+                     betalib->GetBetaFolder->pToC->betalib;
+                     (if betalib.length
+                      // 0 then (normal,'Program execution terminated')->stop
                       else
-                         betalib -> getBetaLib.updateResource;
-                 if)if);
-              else
-                 '$(BETALIB)' 
-                   -> expandEnvVar 
-                 (# defaultValue::< 
-                      (#
-                      do 'You have to set the MPW-environment variable {BetaLib}' -> screen.putLine;
-                         'to the homeDirectory of the Beta-System' -> screen.putLine;
-                         'before running any Beta-programs' -> screen.putLine;
-                         (Failure,'Program execution terminated') -> stop
-                 #)#) -> betalib[];
-                 (if betalib[]//NONE then
-                     (failureTrace,'Failed to read MPW-environment variable {BetaLib}') -> stop
+                         betalib->getBetaLib.updateResource; 
+                     if)
                  if);
-			 if);
-			 betalib.makeLC;
-			 betalib -> t;
-			 homeDirectories -> t.append;
-			 t[] -> f.entry.path;
-			 (if f.entry.exists
-			  // true then
-				 ('~beta/',betalib) -> &newHomeDir;
-				 f.openRead;
-				 loop: 
-				   (if f.eos
-					// false then
-					   f.getline -> abb[];
-					   f.getline -> fullname[];
-					   (if fullname[]//NONE then else
-					       (fullName[],CurrentDirectory[]) -> convertFilePath -> fullname[];
-						   (if fullname[]//NONE then
-							   (failureTrace,'Failed to convert file path') -> stop
-						   if);
-					       (abb,fullname) -> &newHomeDir;
-					   if);
-					   restart loop
-				   if);
-				 f.close
-			   else
-			     'Cannot open homeDirectories file: ' -> t.prepend;
-				 (failureTrace,t[]) -> stop
-			 if);
-#)#)#)
+                 (*'Done doing standalone...'->screen.putline;*)
+                 
+              else
+             (*'This is MPW tool'->screen.putline;*)
+                 '$(BETALIB)'
+                   ->expandEnvVar
+                     (# 
+                        defaultValue::<
+                          (# 
+                          do
+                             'You have to set the MPW-environment variable {BetaLib}'
+                               ->screen.putLine;
+                             'to the homeDirectory of the Beta-System'
+                               ->screen.putLine;
+                             'before running any Beta-programs'->screen.putLine;
+                             (Failure,'Program execution terminated')->stop
+                          #)
+                     #)->betalib[];
+                 (if betalib[]
+                  // none then
+                     (failureTrace,
+                      'Failed to read MPW-environment variable {BetaLib}')->stop
+                 if);
+                 
+             if);
+             (*'BETALIB is: '->screen.puttext; betalib[]->screen.putline;*)
+             betalib.makeLC;
+             betalib->t;
+             homeDirectories->t.append;
+             t[]->f.entry.path;
+             (if f.entry.exists
+              // true then
+              (*t[]->screen.puttext; ' exists, trying open: '->screen.puttext;*)
+                 ('~beta/',betalib)->&newHomeDir;
+                 f.openRead;
+                 (*'file open'->screen.putline;*)
+                 loop:
+                 (if f.eos
+                  // false then
+                     f.getline->abb[];
+                     f.getline->fullname[];
+                     (if fullname[]
+                      // none then 
+                      else
+                         (fullName[],CurrentDirectory[])->convertFilePath
+                           ->fullname[];
+                         (if fullname[]
+                          // none then
+                             (failureTrace,'Failed to convert file path')->stop
+                         if);
+                         (abb,fullname)->&newHomeDir;
+                         
+                     if);
+                     restart loop
+                 if);
+                 f.close
+              else
+                 'Cannot open homeDirectories file: '->t.prepend;
+                 (failureTrace,t[])->stop
+             if);
+             
+          #)
+     #)
+#)  
 
--- LocalPathException: descriptor --
-(#
-do 'Error in localpath conversion of \n'''->msg.puttext;
-   this(localpath).path[] -> msg.puttext;
-   '''\nrelative to the basis\n''' -> msg.puttext;
-   this(localpath).basis[] -> msg.puttext;
-   ''''->msg.putline;
-#)
-
------- localPathBody: descriptor ------
-(# pathIndex,basisIndex: @integer;
-   path,basis: ^text;
-do (if (this(LocalPath).path[]<>NONE) and (this(LocalPath).basis[]<>NONE) // true then
-       (* copy paths to avoid side-effects *)
-       this(LocalPath).path.copy -> path[];
-       this(LocalPath).basis.copy -> basis[];
-   	   '/' -> basis.findCh(# do inx -> basisIndex #);
-   	   (if basisIndex // 0 then
-           ':' -> basis.findCh(# do inx -> basisIndex #) if);
-   	   '/' -> path.findCh(# do inx -> pathIndex #);
-   	   (if pathIndex // 0 then
-           ':' -> path.findCh(# do inx -> pathIndex #) if);
-   	   (1,basisIndex) -> basis.sub -> basis[];
-   	   tester: 
-	       (if ((1,pathIndex) -> path.sub -> basis.equal)
-            // true then
-               (pathIndex+1,path.length) -> path.sub -> localName[]
-            else 
-               (* well. we did not find any match. 
-                * Let us se if it matches something in the pathhandler data-structure
-                *)
-               Private.nameTable.scan
-               (# 
-               do (if ((1,thisDir.length) -> path.sub -> thisDir.equal) // true then
-                      (thisDir.length+1,path.length) -> path.sub 
-		        		 -> thisHome.CopyAppend -> localName[];
-                      leave tester
-               if)#);
-               path.copy -> localName[]
-   if)if);     
-   (if localName[]//NONE then 
-       (if path[]//NONE then 
-	    else
-		   path.copy -> localName[];
+-- localPathBody: Descriptor --
+(# pathIndex,basisIndex: @integer; path,basis: ^text; 
+do
+   (if (THIS(LocalPath).path[] <> none ) and (THIS(LocalPath).basis[] <> none )
+    // true then (* copy paths to avoid side-effects *)
+       THIS(LocalPath).path.copy->path[];
+       THIS(LocalPath).basis.copy->basis[];
+       '/'->basis.findAll (# do inx->basisIndex #);
+       (if basisIndex
+        // 0 then ':'->basis.findAll (# do inx->basisIndex #)
+       if);
+       '/'->path.findAll (# do inx->pathIndex #);
+       (if pathIndex
+        // 0 then ':'->path.findAll (# do inx->pathIndex #)
+       if);
+       (1,basisIndex)->basis.sub->basis[];
+       tester:
+       (if ((1,pathIndex)->path.sub->basis.equal)
+        // true then (pathIndex+1,path.length)->path.sub->localName[]
+        else
+           (* well. we did not find any match. 
+            * Let us se if it matches something in the pathhandler 
+            * data-structure
+            *)
+           Private.nameTable.scan
+             (# 
+             do
+                (if ((1,thisDir.length)->path.sub->thisDir.equal)
+                 // true then
+                    (thisDir.length+1,path.length)->path.sub
+                      ->(thisHome.Copy).Append->localName[];
+                    leave tester
+                if)
+             #);
+           path.copy->localName[]
        if)
-    else
-	    ':' -> localName.FindCh(# do ('/',inx) -> localName.inxPut #);
    if);
-#)
+   (if localName[]
+    // none then
+       (if path[] // none then  else path.copy->localName[];  if)
+    else
+       ':'->localName.FindAll (# do ('/',inx)->localName.inxPut #); 
+   if);
+   
+#)  
 
------- pathHandlerInit: descriptor -----
-(# do Private.NameTable.init;
-   ':' -> directoryChar
-#)
+-- pathHandlerInit: DoPart --
+do Private.NameTable.init; ':'->directoryChar  
 
------ fcPrivate: descriptor -----
-(# #)
------ fcInit: descriptor -------
-(# #)
------ fcConvertFilePath: descriptor ------
-(# #)
+-- fcPrivate: Descriptor --
+(# #)  
+
+-- fcInit: DoPart --
+do   
+
+-- fcConvertFilePath: Descriptor --
+(# #)  
+
