@@ -45,7 +45,8 @@ ParamOriginProto(struct Item *,AlloI)
 #endif
     }
 
-    Ck(origin); Ck(item);
+    Ck(origin);
+    Ck(item);
 
     MCHECK();
 
