@@ -5,6 +5,7 @@ INCLUDE '~beta/win32lib/winuserconsts';
 INCLUDE '~beta/win32lib/wingdi';
 INCLUDE '~beta/win32lib/wingdiconsts';
 INCLUDE '~beta/win32lib/dcmanagement';
+INCLUDE '~beta/win32lib/windowsmisc';
 INCLUDE '~beta/guienv/graphics';
 INCLUDE '~beta/basiclib/math';
 INCLUDE '~beta/toollibs/utils/PNG/png';
@@ -70,9 +71,8 @@ InputCanvasMethods: WindowItemMethods
           (if info.message = WM_MOUSEMOVE then
               (info.lParam.loWord,info.lParam.hiWord) 
                 -> (x, y);
-              (if current[] <> NONE then
-                  (x, y) -> current.onMouseMove;
-              if);
+              ((info.lParam.loWord,info.lParam.hiWord), info.where, info.button, doubleClickPossible, (VK_SHIFT -> isVKeyDown), (VK_CONTROL -> isVKeyDown), GetMessageTime)
+               -> theEventHandler.onMouseMove;
           if);
           INNER;
        #);
@@ -156,7 +156,71 @@ do (# result: @integer;
       if);
    #);
    
-
+-- GraphicsCanvasItemMouseDownDelay: doPart -- 
+do (# ticks: @integer;
+      start: @integer;
+   do tickcount -> start;
+      l:
+        (if mouse.buttonState=button then
+            GetTickCount -> ticks;
+            (if ((ticks - start) < period) then
+                restart l;
+             else
+                inner delay;
+            if);
+        if);
+   #)
+   
+-- GraphicsCanvasItemDrag: doPart --
+do
+(# prevMode: @integer;
+   dc: @integer;
+   pen,prevPen: @integer;
+   brush,prevBrush: @integer;
+do interfaceObjectID -> GetDC -> dc;
+   (dc,R2_XORPEN) -> SetROP2 -> prevMode;
+   (PS_DOT,1,0) -> CreatePen -> pen;
+   (dc,pen) -> SelectObject -> prevPen;
+   NULL_BRUSH -> GetStockObject -> brush;
+   (dc,brush) -> SelectObject -> prevBrush;
+   trackMouse
+   (#  
+      currentFrame: @rectangle;
+      drawFrame:
+        (# 
+        do (dc,currentFrame.left,
+           currentFrame.top,
+           currentFrame.right,
+           currentFrame.bottom) -> ntRectangle;
+        #);
+      
+      mousePress::<
+        (#
+        do 'mousePress. x,y = ' -> screen.puttext; x -> putint; ', ' -> screen.puttext; y -> putint; newline;
+           
+           (x,y) -> currentFrame.topLeft;
+           (20,20) -> currentFrame.size;
+           drawFrame;
+        #);
+      mouseMove::<
+        (#
+        do drawFrame;
+           (h,v) -> currentFrame.offset;
+           drawFrame;
+        #);
+      mouseRelease::<
+        (#
+        do drawFrame;
+           currentFrame.topLeft -> (x,y);
+           'mouseRelease. x,y = ' -> screen.puttext; x -> putint; ', ' -> screen.puttext; y -> putint; newline;
+        #);
+   #); 
+   (dc,prevPen) -> SelectObject;
+   (dc,prevBrush) -> SelectObject;
+   pen -> DeleteObject;
+   (father.interfaceObjectID,dc) -> ReleaseDC;
+   
+#)
 -- GraphicsCanvasOpen: doPart --
 do INNER;
    &InputCanvasMethods[] -> theMethods;
@@ -545,6 +609,7 @@ do (# x, y: @integer;
           (hdcmem, oldbmp) -> SelectObject;
           hdcmem -> DeleteDC;
       if);
+
    #);
    
 
