@@ -1,4 +1,11 @@
-#!/usr/local/bin/perl
+#!/usr/local/bin/perl -s
+
+### Main
+
+if (defined($c)){
+    # run.demos -c
+    &compile_all_demos();
+}
 
 sub findprogs
 # find all .bet files in dir and
@@ -209,6 +216,17 @@ sub write_to_demo
 
 }
 
+sub compile_all_demos
+# find all .bet files in current directory and
+# attempt to compile them
+{
+    undef %progs;
+    &findprogs('.');
+    print "############# Compiling all .bet files recursively\n";
+    system "beta -qw " . join(' ', sort keys %progs);
+    undef %progs;
+}
+
 sub run_all_demos
 # find all .bet files in current directory and
 # run all corresponding programs
@@ -280,6 +298,7 @@ sub setup_variables
     $betalib = $ENV{'BETALIB'};
     
     if (-e "c:\\") {
+	$OS = "WIN";
 	$betalib =~ s#\\#/#g;
 	if ($ENV{'MIASDK'} =~ /^(ms|bor|gnu)$/i) {
 	    $MIASDK = $1;
@@ -291,6 +310,7 @@ sub setup_variables
 	}
     } elsif (-e "/etc") {
 	# UNIX
+	$OS = "UNIX";
 	$mach = `uname -m`;
 	$rev  = `uname -r`;
 	if ($mach =~ /^sun4/) {
@@ -310,9 +330,11 @@ sub setup_variables
 	}
     } else {
 	# Macintosh
+	$OS = "MAC";
 	$objdir='ppcmac';
     }
     $ENV{'objdir'} = $objdir;
+    $ENV{'OS'}     = $OS;
 }
 
 sub IntHandler 
@@ -329,6 +351,5 @@ sub IntHandler
 	print "Please answer question asked before interrupt: ";
     }
 }
-
 
 return 1;
