@@ -20,7 +20,6 @@ clean:
 
 distclean: clean
 	-/bin/rm -f *.html *.pdf
-	if [ -d src ]; then /bin/rm -rf src; fi
 
 always:
 	@echo ""
