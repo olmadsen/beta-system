@@ -6,7 +6,15 @@
 #include "beta.h"
 #include "crun.h"
 
-
+/*************************** crts ***************************/
+#ifdef crts
+void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
+{
+  fprintf(output, "CRTS: CopyCPP NYI\n");
+  fflush(output);
+  return NULL;
+}
+#endif /* crts */
 
 /**************************** sparc **************************/
 #ifdef sparc
