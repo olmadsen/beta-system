@@ -17,11 +17,6 @@
 #define COM 1 /* RUN: must match define in Declaration.run */
 /*#undef COM*/
 
-/* New persistence */
-#ifdef sparc
-/* #define PERSIST */
-#endif /* sparc */
-
 #ifdef RTDEBUG
 /* Trigger unconditional GC at every allocation.
  * MT: Should match define i BetaRun.bet!
@@ -33,11 +28,6 @@
 #endif
 
 #define RTINFO  /* Include support for runtime info */
-#ifdef PERSIST
-#undef RTLAZY
-#else
-#define RTLAZY /* Include support for lazy fetch */
-#endif /* PERSIST */
 #ifdef RTDEBUG
 #if (!defined(MAC) /*&& !defined(hppa)*/)
 #define RTVALHALLA
@@ -118,6 +108,17 @@
 #undef RUN
 #define NEWRUN 1
 #endif
+
+/* New persistence */
+#if defined(sparc) || defined(intel)
+/* #define PERSIST */
+#endif /* sparc || intel */
+
+#ifdef PERSIST
+#undef RTLAZY
+#else
+#define RTLAZY /* Include support for lazy fetch */
+#endif /* PERSIST */
 
 /******** Misc. *******/
 #define FALSE	0

@@ -791,6 +791,9 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 
 /***************************** BEGIN nti ********************************/
 #ifdef nti
+#ifdef PERSIST
+extern int proxyTrapHandler(CONTEXT* pContextRecord);
+#endif
 
 #ifdef nti_gnu
 EXCEPTION_DISPOSITION 
@@ -827,6 +830,25 @@ BetaSignalHandler(LPEXCEPTION_POINTERS lpEP)
   sig = (long)pExceptionRec->ExceptionCode;
   switch (pExceptionRec->ExceptionCode){
   case EXCEPTION_ACCESS_VIOLATION:
+#ifdef PERSIST
+    DEBUG_CODE({
+      if (0) {
+	unsigned char* pc;
+	pc = (unsigned char*)PC;
+	fprintf(output, "EXCEPTION_ACCESS_VIOLATION: PC=0x%8x: "
+		"%02x %02x %02x %02x\n", (int)PC,
+		pc[0], pc[1], pc[2], pc[3]);
+      }
+    });
+    todo = proxyTrapHandler(pContextRecord);
+    if (!todo) {
+      return OUR_EXCEPTION_CONTINUE_EXECUTION;
+    } else if (todo == 2) {
+      todo=DisplayBetaStack(RefNoneErr, theObj, PC, sig); break;
+    } else {
+      todo=DisplayBetaStack(SegmentationErr, theObj, PC, sig); break;
+    }
+#endif
   case EXCEPTION_DATATYPE_MISALIGNMENT:
     todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
   case EXCEPTION_STACK_OVERFLOW:

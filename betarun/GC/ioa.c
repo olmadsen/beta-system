@@ -451,7 +451,9 @@ Program terminated.\n", (int)(4*ReqObjectSize));
   
 #ifdef PERSIST
   if (repeatIOAGc) {
+#ifdef sparc
     StackEnd = (long *)((struct RegWin *) StackPointer);
+#endif
     goto IOAGCstart;
     /* Yuhuuu!!!! */
   }

@@ -9,7 +9,6 @@
 
 /******************** BetaError ******************/
 
-#ifdef RTLAZY
 #ifdef RUN
 GLOBAL(long RefNonePC) = 0; 
 GLOBAL(int *RefNoneStackEnd) = 0;
@@ -20,7 +19,6 @@ GLOBAL(int *RefNoneStackEnd) = 0;
 GLOBAL(static unsigned char regnum);
 GLOBAL(static volatile int InLazyHandler);
 #endif /* RUN */
-#endif /* RTLAZY */
 
 #ifdef nti /* NOT linux */
 extern void CallLazyItem (void);
