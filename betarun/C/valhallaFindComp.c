@@ -557,4 +557,57 @@ int scanComponentStack (Component* comp,
 }
 #endif /* MT */
 #endif /* sparc */
+
+static ProtoType *activation_proto;
+static Object *activation_object;
+static void find_foreach(long PC, Object *theObj)
+{
+  if (activation_object) return;
+  if (!theObj) return;
+  if (GETPROTO(theObj) == activation_proto){
+    /* exact qualification found */
+    activation_object = theObj;
+    return;
+  } else {
+    /* See if prefix matches */
+    ProtoType *proto = GETPROTO(theObj);
+    if (proto->Prefix == proto){
+      /* proto is Object## */
+      return;
+    }
+    for (proto = proto->Prefix;
+	 proto != proto->Prefix; /* proto != Object## */
+	 proto = proto->Prefix) {
+      if (proto == activation_proto) {
+	/* proto is a prefix of activation_proto */
+	activation_object = theObj;
+	return; 
+      }
+    }
+  }
+}
+
+
+/* Usage:
+ *  throw:
+ *    INCLUDE '~beta/sysutils/objinterface';
+ *    (# proto: @integer;
+ *       theTry: ^try;
+ *     do try## -> getProtoTypeForStruc -> proto;
+ *        (proto, @@THIS(throw), 0) -> find_activation -> obj;
+ * 	  (if obj<>0 then
+ *            obj -> addressToObject -> theTry[];
+ *        if);
+ *        ...
+ *    #)
+ */
+Object *find_activation(ProtoType *proto, Object *curObj, long pc)
+{
+  StackEnd = BetaStackTop;
+  activation_object = 0;
+  activation_proto = proto;
+  scanComponentStack (ActiveComponent, curObj, pc, find_foreach);
+  return activation_object;
+}
+
 #endif /* RTVALHALLA */
