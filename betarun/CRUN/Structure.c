@@ -224,6 +224,7 @@ long ltS(Structure * arg1, Structure * arg2)
 	    * origin at the offset determined *by the prefix* (proto2). 
 	    * This should be the same as origin of arg2.
 	    */
+	   DEBUG_CODE(fprintf(output, "ltS allocates object\n"));
 	   
 #ifdef sparc
 #ifdef MT
