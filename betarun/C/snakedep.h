@@ -118,6 +118,19 @@ static inline void *popReference()
   return p;
 }
 
+static inline void pushReg(void *r) 
+{ /* This is how compiler pushes: strange big frame (64)? */
+  asm volatile("STW\t%0,-36(0,%%r30)" : /* no out */ : "r" (r));
+  asm volatile("LDO\t64(%r30),%r30");
+}
+
+static inline void *popReg() 
+{ register void *r;
+  asm volatile("LDO\t-64(%r30),%r30");
+  asm volatile("LDW\t-36(0,%%r30),%0" : "=r" (r) : );
+  return r;
+}
+
 #if 0
 static inline void modifyRefSP(const long n)
 {
@@ -364,8 +377,26 @@ static inline struct Item * CAlloSI(struct Structure *s)
     return i;
 }
 
+#if 0
 #define CallBetaEntry(entry,item)       \
   (setCallReg(item), (* (void (*)()) (entry))()); BETA_CLOBBER
+#else
+/* Calls of Beta entries (e.g. genparts) should be treated like callback.
+ * specificly the savedRefSP may be overwritten by the Beta-code.
+ */
+#define CallBetaEntry(entry,item) \
+{ /* Save savedIOA, savedIOATopoff, savedRefSP on ordinary stack */ \
+  register long *r; \
+  r = (long *)savedIOA; pushReg(r); \
+  r = (long *)savedIOATopoff; pushReg(r); \
+  r = (long *)savedRefSP; pushReg(r); \
+  (setCallReg(item), (* (void (*)()) (entry))()); BETA_CLOBBER;  \
+  /* Restore savedRefSP, savedIOATopoff, savedIOA */ \
+  r = popReg(); (long *)savedRefSP = r; \
+  r = popReg(); (long *)savedIOATopoff = r; \
+  r = popReg(); (long *)savedIOA = r; \
+}
+#endif
 
 #define Protect(var, code) \
   pushReference(var); { code; } var = (typeof(var))popReference();
