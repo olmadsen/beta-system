@@ -1171,10 +1171,10 @@ void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
 	}
       });
       DEBUG_STACKOBJ({
-	fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
 	if(inBetaHeap((Object*)*current)){
 	  Object *theObj = *(Object **)current;
 	  if (isObject(theObj)) {
+	    fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
 	    PrintRef(*(Object**)current);
 	    fprintf(output, "\n");
 	  } else {
@@ -1189,6 +1189,21 @@ void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
 		fprintf(output, " *** ILLEGAL PROTOTYPE: 0x%08x\n", (int)theObj->Proto);
 	      }
 	    }
+	  }
+	} else {
+	  fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
+	  if (*current) {
+	    if (IsPrototypeOfProcess(*current)) {
+	      fprintf(output, ", is proto  (");
+	      PrintProto((ProtoType*)*current);
+	      fprintf(output, ")\n");
+	    } else {
+	      fprintf(output, " ");
+	      PrintCodeAddress(*current);
+	      fprintf(output, "\n");
+	    }
+	  } else {
+	    fprintf(output, "\n");
 	  }
 	}
       }) /* DEBUG_STACKOBJ */;
@@ -1235,7 +1250,7 @@ void PrintStackPart(long *low, long *high)
 	}
       }
     } else {
-      /* handle value register objects on the stack ref. ../Asm/DataRegs.s */
+      /* handle tagged data registers on the stack */
       if ((-8<=(*current)) && ((*current)<=-5))
 	fprintf(output, 
 		"0x%08x: %d (SKIP NEXT %d)\n", 
