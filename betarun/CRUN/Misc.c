@@ -18,7 +18,10 @@ long *   savedRefSP;
 void Return() {}
 #endif
 #ifdef sparc
-asmlabel(Return, "retl; nop");
+/* The first nop is needed in the case that Return is called directly
+ * from a runtime ruotine. This is the case for e.g. an empty program
+ */
+asmlabel(Return, "nop; retl; nop");
 #endif
 
 void
@@ -61,6 +64,10 @@ IOAalloc(unsigned size)
   GCable_Entry();
 
   DEBUG_CODE(Claim(size>0, "IOAalloc: size>0"));
+#if (defined(sparc) || defined(hppa))
+  DEBUG_CODE(Claim( ((long)size&7)==0 , "IOAalloc: (size&7)==0"));
+  DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "IOAalloc: (IOATop&7)==0"));
+#endif
 
   while ((char *)IOATop+size > (char *)IOALimit) {
       ReqObjectSize = size / 4;
@@ -85,6 +92,10 @@ IOAcalloc(unsigned size)
   GCable_Entry();
 
   DEBUG_CODE(Claim(size>0, "IOACalloc: size>0"));
+#if (defined(sparc) || defined(hppa))
+  DEBUG_CODE(Claim( ((long)size&7)==0 , "IOAcalloc: (size&7)==0"));
+  DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "IOAcalloc: (IOATop&7)==0"));
+#endif
 
   while ((char *) IOATop+size > (char *)IOALimit) {
       ReqObjectSize = size / 4;
