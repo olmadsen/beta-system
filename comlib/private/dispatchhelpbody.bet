@@ -140,112 +140,126 @@ do putString:
         #);
      #)
    
---DispatchParamsPutStringArray: dopart--
-do putStringArray:
+--DispatchParamsPutSafeArrayPrivate: descriptor--
+(# psa: ^SAFEARRAY;
+   saBound: @SAFEARRAYBOUND;
+   icount: @integer;
+   hr: @HRESULT;
+   pVargBase: ^VARIANT;
+   pVarg: @VariantRefHolder;
+   i: @integer;
+   elm: ^List.element;
+#)
+--DispatchParamsPutSafeArray: dopart--
+do putSafeArrayLabel:
      (# 
-     do (* R.range -> icount*);
-        R.size -> icount;
+     do R.size -> private.icount;
         
-        0 -> saBound.lLbound;
-        iCount -> saBound.cElements;
+        0 -> private.saBound.lLbound;
+        private.iCount -> private.saBound.cElements;
         
-        (VT_VARIANT, 1, saBound[]) -> SafeArrayCreate -> psa[];
+        (VT_VARIANT, 1, private.saBound[]) -> SafeArrayCreate -> private.psa[];
         (if debug then
             'psa: ' -> puttext;
-            %getLongAt(@@psa) -> theinteger;
+            %getLongAt(@@private.psa) -> theinteger;
             theInteger -> putint; newline;
         if);
         
-        (if psa[]=NONE then
-            'DispatchParams.putStringArray: SafeArrayCreate failed' -> putline;
-            leave putStringArray;
+        (if private.psa[]=NONE then
+            'DispatchParams.putSafeArray: SafeArrayCreate failed' -> putline;
+            leave putSafeArrayLabel;
         if);
         
         (* Lock the SAFEARRAY while accessing the data *)
-        (psa[], pvarg[]) -> SafeArrayAccessData -> hr;
-        (if hr.succeeded then
+        (private.psa[], private.pvarg[]) -> SafeArrayAccessData -> private.hr;
+        (if private.hr.succeeded then
             (* Save pointer, we will increment pvarg in a while *)
-            pvarg -> pvargBase[];
+            private.pvarg -> private.pvargBase[];
          else
-            'DispatchParams.putStringArray: SafeArrayCreate failed' 
+            'DispatchParams.putSafeArray: SafeArrayCreate failed' 
               -> putline;
-            psa[] -> SafeArrayDestroy;
-            leave putStringArray;
+            private.psa[] -> SafeArrayDestroy;
+            leave putSafeArrayLabel;
         if);
         
         (if debug then
             'pvarg.value: ' -> puttext;
-            %getLongAt(@@pvarg.value) -> theinteger;
+            %getLongAt(@@private.pvarg.value) -> theinteger;
             theInteger -> putint; newline;
         if);
         
+        0 -> private.i;
         scan: R.scan
-          (# i: @integer;
-          do i+1 -> i;
-             setup: pvarg.value[] -> VARIANT_init
-             (# bstr: @integer;
-                wstr: @wstring;
-             do VT_BSTR -> vt;
-                (if debug then
-                    current[] -> puttext; ': '->puttext;
-                if);
-                
-                current[] -> wstr.set;
-                wstr -> SysAllocString -> bstr;
-                wstr.free;
-                (if bstr<>0 then
-                    bstr -> bstrVal;
-                 else
-                    'DispatchParams.putStringArray: SysAllocString failed' 
-                      -> putline;
-                    (* Clean up *)
-                    pvargBase[] -> pvarg;
-                    (for j:i repeat
-                         pvarg -> VARIANT_init
-                         (# do bstrVal -> SysFreeString #);
-                         pvarg.increment;
-                    for);
-                    psa[] -> SafeArrayDestroy;
-                    NONE -> psa[];
-                    leave setup;
-                if);
-             #);
-             (if psa[]=NONE then leave scan if);
-             pvarg.increment;
+          (# 
+          do private.i+1 -> private.i;
+             current[] -> private.elm[];
+             INNER putSafeArray;
+             (if private.psa[]=NONE then leave scan if);
+             private.pvarg.increment;
              (if debug then
                  'pvarg.value: ' -> puttext;
-                 %getLongAt(@@pvarg.value) -> theInteger;
+                 %getLongAt(@@private.pvarg.value) -> theInteger;
                  theInteger -> putint; newline;
              if);
           #);
-        (if psa[]=NONE then leave putStringArray if);
+        (if private.psa[]=NONE then leave putSafeArrayLabel if);
         
         (* Unlock *)
-        psa[] -> SafeArrayUnaccessData -> hr;
-        (if hr.succeeded then
+        private.psa[] -> SafeArrayUnaccessData -> private.hr;
+        (if private.hr.succeeded then
          else
-            'DispatchParams.putStringArray: SafeArrayUnaccessData' -> putline;
-            psa[] -> SafeArrayDestroy;
-            leave putStringArray;
+            'DispatchParams.putSafeArray: SafeArrayUnaccessData failed' -> putline;
+            private.psa[] -> SafeArrayDestroy;
+            leave putSafeArrayLabel;
         if);
         
         (* Now set up argument *)
-        private.varg[]->VARIANT_init
+        THIS(DispatchParams).private.varg[]->VARIANT_init
         (# 
         do VT_VARIANT %Bor VT_ARRAY -> vt;
            (if debug then
                'vt: ' -> puttext; vt -> putint; newline;
                'psa: ' -> puttext;
-               %getLongAt(@@psa) -> theinteger;
+               %getLongAt(@@private.psa) -> theinteger;
                theInteger -> putint; newline;
            if);
-           psa[] -> parray;
+           private.psa[] -> parray;
            (if debug then
                'parray: ' -> puttext; vd.long3 -> putint; newline;
            if);
-        #);
+        #)
      #)
-          
+   
+--DispatchParamsPutStringArray: dopart--
+do setup: private.pvarg.value[] -> VARIANT_init
+   (# bstr: @integer;
+      wstr: @wstring;
+   do VT_BSTR -> vt;
+      (if debug then
+          private.elm[] -> puttext; ': '->puttext;
+      if);
+      
+      private.elm[] -> wstr.set;
+      wstr -> SysAllocString -> bstr;
+      wstr.free;
+      (if bstr<>0 then
+          bstr -> bstrVal;
+       else
+          'DispatchParams.putStringArray: SysAllocString failed' 
+            -> putline;
+          (* Clean up *)
+          private.pvargBase[] -> private.pvarg;
+          (for j:private.i repeat
+               private.pvarg -> VARIANT_init
+               (# do bstrVal -> SysFreeString #);
+               private.pvarg.increment;
+          for);
+          private.psa[] -> SafeArrayDestroy;
+          NONE -> private.psa[];
+          leave setup;
+      if);
+   #);
+   
 --InvokeByName: dopart--
 do InvokeByName:
      (# cNamedArgs: @integer;
