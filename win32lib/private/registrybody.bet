@@ -1,4 +1,7 @@
 ORIGIN '../registry';
+INCLUDE
+'../winbase';
+
 -- lib: attributes --
 
 ERROR_SUCCESS: (# exit 0 #);
@@ -9,7 +12,36 @@ SYNCHRONIZE: (# exit 16x00100000 #);
 READ_CONTROL: (# exit 16x00020000 #);
 STANDARD_RIGHTS_READ: (# exit READ_CONTROL #);
 
-REG_SZ: (# exit 1 #);   (* Unicode nul terminated string *)
+(* From winnt.h *)
+STANDARD_RIGHTS_ALL: (# exit 0x001F0000 #);
+SPECIFIC_RIGHTS_ALL: (# exit 0x0000FFFF #);
+
+REG_OPTION_RESERVED: (# exit 0x00000000 #);   (* Parameter is reserved *)
+REG_OPTION_NON_VOLATILE: (# exit 0x00000000 #);   (* Key is preserved
+                                                   * when system is rebooted *)
+REG_OPTION_VOLATILE: (# exit 0x00000001 #);     (* Key is not preserved
+                                                 * when system is rebooted *)
+REG_OPTION_CREATE_LINK: (# exit 0x00000002 #);  (* Created key is a
+                                                 * symbolic link *)
+REG_OPTION_BACKUP_RESTORE: (# exit 0x00000004 #);   (* open for backup or restore
+                                                     * special access rules
+                                                     * privilege required *)
+
+EG_OPTION_OPEN_LINK: (# exit 0x00000008 #);  (* Open symbolic link *)
+
+
+KEY_ALL_ACCESS: (# exit 
+                   ((STANDARD_RIGHTS_ALL %Bor
+                   KEY_QUERY_VALUE            %Bor
+                   KEY_SET_VALUE              %Bor
+                   KEY_CREATE_SUB_KEY         %Bor
+                   KEY_ENUMERATE_SUB_KEYS     %Bor
+                   KEY_NOTIFY                 %Bor
+                   KEY_CREATE_LINK)           
+                   %Band                           
+                   (%Bnot SYNCHRONIZE)) 
+                #);
+
 
 (* Registry Specific Access Rights.
  *)
@@ -50,9 +82,54 @@ RegCreateKeyEx: external
      lpdwDisposition: @integer; (* address of disposition value buffer *)
      result: @integer;
   enter (hKey,lpSubKey,Reserved,lpClass,dwOptions,samDesired,
-     lpSecurityAttributes,phkResult,lpdwDisposition)
+     lpSecurityAttributes[],phkResult,lpdwDisposition)
   do 'RegCreateKeyExA' -> callStd;
   exit result
+  #);
+
+(* Same as above but with different interface. *)
+RegCreateKeyEx2: external
+  (# hKey: @integer; (* handle of an open key  *)
+     lpSubKey: [1] @char; (* address of subkey name *)
+     Reserved: @integer; (* reserved *)
+     lpClass: @integer; (* address of class string *)
+     dwOptions: @integer; (* special options flag *)
+     samDesired: @integer; (* desired security access *)
+     lpSecurityAttributes: ^SECURITY_ATTRIBUTES; (* address of key security 
+                                                  * structure *)
+     phkResult: @integer; (* address of buffer for opened handle  *)
+     lpdwDisposition: @integer; (* address of disposition value buffer *)
+     result: @integer;
+  enter (hKey,lpSubKey,Reserved,lpClass,dwOptions,samDesired,
+     lpSecurityAttributes[],phkResult,lpdwDisposition)
+  do 'RegCreateKeyExA' -> callStd;
+  exit result
+  #);
+
+RegSetValueExText: external
+  (# hKey: @integer;           (* handle to key to set value for *)
+     lpValueName: [1] @char;   (* name of the value to set *)
+     Reserved: @integer;       (* reserved  *)
+     dwType: @integer;         (* flag for value type *)
+     lpData: [1] @char;        (* address of value data *)
+     cbData: @integer;         (* size of value data *)
+     res: @integer;
+  enter (hKey, lpValueName, Reserved, dwType, lpData, cbData)
+  do 'RegSetValueExA' -> callStd;
+  exit res
+  #);
+
+RegSetValueExDword: external
+  (# hKey: @integer;           (* handle to key to set value for *)
+     lpValueName: [1] @char;   (* name of the value to set *)
+     Reserved: @integer;       (* reserved  *)
+     dwType: @integer;         (* flag for value type *)
+     lpData: @integer;        (* address of value data *)
+     cbData: @integer;         (* size of value data *)
+     res: @integer;
+  enter (hKey, lpValueName, Reserved, dwType, lpData, cbData)
+  do 'RegSetValueExA' -> callStd;
+  exit res
   #);
 
 RegOpenKeyEx: external
@@ -68,6 +145,21 @@ RegOpenKeyEx: external
   enter (hKey,lpSubKey,ulOptions,samDesired,phkResult)
   do 'RegOpenKeyExA' -> callStd;
   exit result
+  #);
+
+RegEnumKeyEx: external
+  (# hKey: @integer; (* handle of key to enumerate *)
+     dwIndex: @integer; (* index of subkey to enumerate *)
+     lpName: @integer; (* address of buffer for subkey name *);
+     lpcbName: @integer; (* address for size of subkey buffer *)
+     lpReserved: @integer; (* Reserved *)
+     lpClass: @integer; (* address of buffer for class string *)
+     lpcbClass: @integer; (* address for size of class buffer *)
+     lpftLastWriteTime: @integer; (* address for time key last written to *)
+     res: @integer;
+  enter (hKey, dwIndex, lpName, lpcbName, lpReserved, lpClass, lpcbClass, lpftLastWriteTime)
+  do 'RegEnumKeyExA' -> callStd;
+  exit res
   #);
 
 RegQueryValueEx: external
@@ -86,6 +178,34 @@ RegQueryValueEx: external
   exit result
   #);
 
+
+RegQueryInfoKey: external
+  (# hKey: @integer;       (* handle of key to query *)
+     lpClass: @integer;    (* address of buffer for class string *)
+     lpcbClass: @integer;  (* address of size of class string buffer *)
+     lpReserved: @integer; (* reserved *)
+     lpcSubKeys: @integer; (* address of buffer for number of subkeys *)
+     lpcbMaxSubKeyLen: @integer;  (* address of buffer for longest subkey 
+                                   * name length *)
+     lpcbMaxClassLen: @integer;  (* address of buffer for longest class string 
+                                  * length *)
+     lpcValues: @integer;        (* address of buffer for number of value 
+                                  * entries *)
+     lpcbMaxValueNameLen: @integer;   (* address of buffer for longest 
+                                       * value name length *)
+     lpcbMaxValueLen: @integer;   (* address of buffer for longest value 
+                                   * data length  *)
+     lpcbSecurityDescriptor: @integer; (* address of buffer for security 
+                                        * descriptor length *)
+     lpftLastWriteTime: @integer;    (* address of buffer for last write time *)
+     res: @integer;
+  enter (hKey, lpClass, lpcbClass, lpReserved, lpcSubKeys, lpcbMaxSubKeyLen,
+     lpcbMaxClassLen, lpcValues, lpcbMaxValueNameLen, lpcbMaxValueLen, 
+     lpcbSecurityDescriptor, lpftLastWriteTime)
+  do 'RegQueryInfoKeyA' -> callStd;
+  exit res
+  #);
+
 RegCloseKey: external
   (# hKey: @integer; (* handle of key to close  *)
      result: @integer; (* If the function succeeds, the return value is 
@@ -95,6 +215,16 @@ RegCloseKey: external
   enter hKey
   do callStd
   exit result
+  #);
+
+
+RegDeleteKey: external
+  (# hKey: @integer; (* handle to open key *)
+     subKey: [1] @char;   (* address of name of subkey to delete *)
+     res: @integer;
+  enter (hKey, subKey)
+  do 'RegDeleteKeyA' -> callStd;
+  exit res
   #);
 
 
@@ -118,7 +248,7 @@ do (HKEY_val, subKeyName, 0, KEY_READ,  @@phkResult)
              -> RegQueryValueEx -> result;
            (if result=ERROR_SUCCESS then
                bufferSize-1 -> value.lgth -> value.pos;
-               (if valueType<>REG_SZ then
+               (if not ((valueType=REG_SZ) or (valueType=REG_EXPAND_SZ)) then
                    'readFromRegistry: retrieved non-string value' 
                      -> screen.putLine; 
                    NONE -> value[]; otherError
@@ -186,3 +316,184 @@ readFromRegistry:
      #);
 
 *)
+
+-- SetRegKeyValueImpl: doPart --
+do 
+   (if root
+    //HKEY_CLASSES_ROOT
+    //HKEY_CURRENT_USER
+    //HKEY_LOCAL_MACHINE
+    //HKEY_USERS
+    //HKEY_PERFORMANCE_DATA
+       then
+       
+       false -> res;
+       
+       (if key[]<>NONE then
+           key.copy -> szKey[];
+        else
+           &text[] -> szKey[];
+       if);
+       
+       (if (subkey[]<>NONE) then
+           '\\' -> szKey.append;
+           subkey[] -> szKey.append;
+       if);
+       
+       (root, szKey, 0, 0, 
+       REG_OPTION_NON_VOLATILE, 
+       KEY_ALL_ACCESS,
+       NONE,
+       @@hKey,
+       0)
+         -> RegCreateKeyEx2 -> ec;
+       
+       (if (ERROR_SUCCESS = ec) then
+           
+           (if (value[]<>NONE) then
+               (if valueName[]=NONE then &text[] -> valueName[]; if);
+               
+               (if valueType
+                //REG_SZ then
+                   (if value## <= text## then
+                       value[] -> textValue[];
+                       (hKey,valueName,0,valueType,textValue,textValue.length+1)
+                         -> RegSetValueExText -> ec;
+                    else
+                       'valueType and value does not match.' -> setValueFailed;
+                   if);
+                //REG_DWORD then
+                   (if value## <= integerObject## then
+                       value[] -> intValue[];
+                       intValue -> intVal;
+                       (hKey,valueName,0,valueType,@@intVal,4)
+                         -> RegSetValueExDword -> ec;
+                    else
+                       'valueType and value does not match.' -> setValueFailed;
+                   if);
+                   
+                else
+                   'Unsupported valueType.' -> setValueFailed;
+               if);
+               
+           if);
+           (if (ERROR_SUCCESS = ec) then
+               TRUE -> res;
+            else
+               ec -> getErrorMessage -> setValueFailed;
+           if);
+           hKey -> RegCloseKey;
+        else
+           ec -> getErrorMessage -> createKeyFailed;
+       if);
+    else
+       NoSuchRoot;
+   if);
+   
+   
+-- DeleteRegKeyImpl: doPart --
+do (if subKey[]<>NONE then
+       (hKey, subKey) -> RegDeleteKey -> ec;
+       (if (ERROR_SUCCESS = ec) then
+           TRUE -> res;
+        else
+           ec -> getErrorMessage -> failed;
+       if);
+   if);
+   
+   
+-- EnumKeysImpl: doPart --
+do (#                   
+      subKeyNameCstr: @cstring;
+      lpcbName: @integer;
+      classNameCstr: @cstring;
+      lpcbClass: @integer;
+      fileTimePtr: @integer;
+   do (if subKeyName[]<>NONE then
+          100 -> lpcbName -> subKeyNameCstr.init;
+          (if className[]<>NONE then
+              100 -> lpcbClass -> classNameCstr.init;
+           else
+              0 -> lpcbClass;              
+          if);
+          8 -> malloc -> fileTimePtr;
+          
+          (if fileTimePtr<>0 then
+              (hKey,index,
+              subKeyNameCstr,@@lpcbName,
+              0,
+              classNameCstr,@@lpcbClass,
+              fileTimePtr)
+                -> RegEnumKeyEx -> res;
+              
+              fileTimePtr -> free;
+              0 -> fileTimePtr;
+          if);
+          
+          (if res=ERROR_SUCCESS then
+              subKeyNameCstr.get -> subKeyName.putText;
+              
+              (if className[]<>NONE then
+                  classNameCstr.get -> className.puttext;
+              if);           
+          if);
+          (if subKeyNameCstr<>0 then
+              subKeyNameCstr.free;
+          if);
+          (if classNameCstr<>0 then
+              classNameCstr.free;
+          if);
+      if);
+   #)
+   
+-- QueryRegInfoKeyImpl: doPart --
+do outerL:
+     (# hKey: @integer; (* handle of key to query *)
+        classNameCstr: @cString;
+        lpcbClass: @integer;
+        result: @integer;
+        didOpenKey: @boolean;
+     do false -> didOpenKey;
+        (if keyName[]<>NONE then
+            (root, keyName, 0, KEY_READ,  @@hKey) 
+              -> RegOpenKeyEx -> result;
+            (if result=ERROR_SUCCESS then
+                true -> didOpenKey;
+            if);
+         else
+            root ->hKey;
+            ERROR_SUCCESS -> result;
+        if);
+        (if result=ERROR_SUCCESS then
+            0 -> lpcbClass;
+            (if className[]<>NONE then
+                150 -> lpcbClass -> classNameCstr.init;
+            if);
+            (hKey,
+            classNameCstr, @@lpcbClass,
+            0,
+            @@cSubKeys,
+            0,0,
+            @@cValues,
+            0,0,0,0)
+              -> RegQueryInfoKey 
+              -> res;
+            
+            (if res=ERROR_SUCCESS then
+                (if className[]<>NONE then
+                    classNameCstr.get -> className.puttext;
+                if);           
+            if);
+            
+            (if classNameCstr<>0 then
+                classNameCstr.free;
+            if);
+        if);
+        
+        (if didOpenKey then
+            hKey -> RegCloseKey -> result;
+            (if not (result=ERROR_SUCCESS) then
+                'RegCloseKey failed.' -> screen.putLine;
+            if)
+        if);
+     #);
