@@ -504,3 +504,12 @@ HANDLE executeProcess (char *execName) {
   }  
 }
 #endif /* not nti */
+
+
+#ifdef hpux9pa
+int executeProcess (unsigned char *execName)
+{
+  fprintf(stderr,"executeProcess not impl. on hpux9pa\n");
+}
+
+#endif

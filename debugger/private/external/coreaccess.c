@@ -487,6 +487,24 @@ int UnsetBreak(HANDLE pid, int address, int oldInstruction) {
 #endif /* not nti */
 
 
+#ifdef hpux9pa
+#include "stdio.h"
+int SetBreak (pid_t pid, int address, int *oldInstruction) 
+{
+  fprintf(stderr,"SetBreak Called, not impl. on hpux9pa\n");
+}
+
+int UnsetBreak (pid_t pid, int address, int oldInstruction)
+{
+  fprintf(stderr,"UnsetBreak Called, not impl. on hpux9pa\n");
+}
+
+int SendSIGINT (pid_t pid)
+{
+ fprintf(stderr,"SendSIGINT Called, not impl. on hpux9pa\n");
+}
+
+#endif /* hpux9pa */
 
 
 
