@@ -22,7 +22,7 @@ ParamOriginProto(struct Component *,AlloC)
     DEBUG_CODE( Claim(proto->Size > 0, "AlloC: proto->Size > 0") );
 
     Protect(origin, 
-	    comp = cast(Component) IOAcalloc(ComponentSize(proto->Size)));    
+	    comp = cast(Component) IOAcalloc(ComponentSize(proto)));    
 
     /* The new Component is now allocated, but not initialized yet! */
 
