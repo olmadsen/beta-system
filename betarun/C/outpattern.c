@@ -662,7 +662,9 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
     long   *PC=thePC;
 
     while((void **)theCell > &ReferenceStack[0]) {
-      if(!isLazyRef(*theCell) && (unsigned)*theCell & 1) {
+      if ((*theCell)==(struct Object *)ExternalMarker){
+	fprintf(output, "  [ EXTERNAL ACTIVATION PART ]\n");
+      } else if (!isLazyRef(*theCell) && (unsigned)*theCell & 1) {
 	/* The reference is tagged: Should appear in beta.dump */
 	theObj = (struct Object *)((unsigned)*theCell & ~1);
 	PC = 0; /* No way to tell the PC ?? */
