@@ -293,29 +293,6 @@ resource 'ICN#' (-16455) {
 	}
 };
 
-resource 'ICN#' (128, purgeable) {
-	{	/* array: 2 elements */
-		/* [1] */
-		$"0001 0000 0002 8000 0004 4000 0008 2000"
-		$"0010 101C 0021 0822 0042 0441 0084 42A1"
-		$"0108 8151 0211 12AA 0422 2554 0800 4AA8"
-		$"1088 1550 2111 2AA8 4202 5544 8444 AA82"
-		$"4088 9501 2110 CA02 1020 E404 0840 F808"
-		$"0400 0010 0200 0020 0100 0040 0080 0080"
-		$"0040 0100 0020 0200 0010 0400 0008 0800"
-		$"0004 1000 0002 2000 0001 4000 0000 80",
-		/* [2] */
-		$"0001 0000 0003 8000 0007 C000 000F E000"
-		$"001F F01C 003F F83E 007F FC7F 00FF FEFF"
-		$"01FF FFFF 03FF FFFE 07FF FFFC 0FFF FFF8"
-		$"1FFF FFF0 3FFF FFF8 7FFF FFFC FFFF FFFE"
-		$"7FFF FFFF 3FFF FFFE 1FFF FFFC 0FFF FFF8"
-		$"07FF FFF0 03FF FFE0 01FF FFC0 00FF FF80"
-		$"007F FF00 003F FE00 001F FC00 000F F800"
-		$"0007 F000 0003 E000 0001 C000 0000 80"
-	}
-};
-
 resource 'icl8' (-16455) {
 	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"
 	$"FFFF FFFF FFFF FFFF FFFF FFFF FFFF FFFF"
@@ -612,34 +589,5 @@ resource 'STR#' (7128, purgeable) {
 		/* [12] */
 		"Cannot do Paste."
 	}
-};
-
-resource 'BNDL' (128) {
-	'????',
-	0,
-	{	/* array TypeArray: 2 elements */
-		/* [1] */
-		'FREF',
-		{	/* array IDArray: 1 elements */
-			/* [1] */
-			0, 128
-		},
-		/* [2] */
-		'ICN#',
-		{	/* array IDArray: 1 elements */
-			/* [1] */
-			0, 0
-		}
-	}
-};
-
-data '????' (0, "Owner resource") {
-	$"00"                                                 /* . */
-};
-
-resource 'FREF' (128) {
-	'TEXT',
-	0,
-	""
 };
 
