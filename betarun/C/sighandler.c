@@ -56,6 +56,7 @@ void SignalHandler(sig, code, scp, addr)
       case FPE_INTDIV_TRAP:
 	DisplayBetaStack( ZeroDivErr, theObj); break;
       default:
+	fprintf(stderr, "code: %d", code); fflush(stderr);
         DisplayBetaStack( ArithExceptErr, theObj);
       }
       break;
@@ -118,11 +119,19 @@ void SignalHandler(sig, code, scp, addr)
     case SIGEMT:
       DisplayBetaStack( EmulatorTrapErr, theObj); break;
     case SIGILL:
-      /* if code == 6 then it has been a chk instruction => index error. */
-      if( code == 6 )
+      switch(code){
+      case 6:
+	/* if code == 6 then it has been a chk instruction => index error. */
         DisplayBetaStack( RepRangeErr, theObj);
-      else
-        DisplayBetaStack( IllegalInstErr, theObj);        
+	break;
+      case 7:
+	/* if code == 7 then it has been a trap instruction => reference is none. */
+        DisplayBetaStack( RefNoneErr, theObj);
+	break;
+      default:
+        DisplayBetaStack( IllegalInstErr, theObj);
+        break;
+      }
       break;
     case SIGBUS:
       DisplayBetaStack( BusErr, theObj); break;
