@@ -15,6 +15,7 @@
 # henryml: removed definition of CC, beta job file sets
 #          an appropriate default.
 #CC=gcc
+RM = /bin/rm -f
 
 CFLAGS=-O
 #CFLAGS=-O -DMAX_WBITS=14 -DMAX_MEM_LEVEL=7
