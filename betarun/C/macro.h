@@ -302,6 +302,7 @@ extern void zero_check(char *p, long bytesize);
 extern void CkReg(char *func,long value, char *reg);
 extern void CCk(void *r, char *fname, int lineno, char* ref);
 #define Ck(r) CCk(r, __FILE__, __LINE__, #r)
+extern void Claim(long, char*);
 
 #else /* !RTDEBUG */
 

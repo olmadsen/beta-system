@@ -227,9 +227,6 @@ extern void assignRef(long *theCell, Item * newObject);
 extern void Illegal(void);
 #endif
 extern long inBetaHeap(Object *);
-#ifdef RTDEBUG
-extern void Claim(long, char*);
-#endif
 #if defined(MAC)
 extern void InitTheCursor(void);
 extern void RotateTheCursor(void);
