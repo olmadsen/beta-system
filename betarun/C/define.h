@@ -1,8 +1,9 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: define.h,v $, rel: %R%, date: $Date: 1992-03-23 13:32:20 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: define.h,v $, rel: %R%, date: $Date: 1992-04-02 03:44:48 $, SID: $Revision: 1.5 $
  * by Lars Bak
  */
+
 #define FALSE	0
 #define TRUE	1
 
@@ -18,6 +19,14 @@
 #define ptr(x)    x *
 #define ref(x)    struct x *
 #define handle(x) struct x **
+#define cast(x) (struct x *)
+#define casthandle(x) (struct x **)
+
+/* headsize *only* works on heap objects. They should
+ * all include a Body element
+ */  
+
+#define headsize(x) (sizeof(struct x) - sizeof(long))
 
 #ifdef hpux
 #  define UNIX
