@@ -34,6 +34,7 @@
 #define VOP_ADDGROUP           19
 #define VOP_LOOKUP_SYM_OFF     20
 #define VOP_LOOKUP_ADDRESS     21
+#define VOP_PROCESS_OFFSET     22
 
 #define VOP_STOPPED            50
 

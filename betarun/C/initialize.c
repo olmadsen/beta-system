@@ -445,14 +445,6 @@ IOASliceSize = ObjectAlignDown(IOASliceSize);
  
 }
 
-/* Function used to calculate difference between
- * logical adresses and physical adresses.
- */
-unsigned long address_of_me(void)
-{
-  return (unsigned long)&address_of_me;
-}
-
 #ifdef sparc
 int _init(void)
 {
