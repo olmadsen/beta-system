@@ -1,12 +1,15 @@
 ORIGIN '~beta/guienv/v1.3.1/guienv';
 BODY 'private/siftexteditorbody'
-     'private/codeviewerbody';
+     'private/codeviewerbody'
+     'private/selection'
+     'private/search';
 INCLUDE '~beta/guienv/v1.3.1/guienv'
         '~beta/guienv/v1.3.1/fields'
         '~beta/guienv/v1.3.1/guienvactions'
         '~beta/guienv/v1.3.1/stddialogs'
-        '~beta/guienv/v1.3.1/utils/prompts'
+        '~beta/sourcebrowser/v0.1.ess/xprompts'
         '~beta/guienv/v1.3.1/utils/textfieldadds'
+        (*'~beta/guienv/v1.3.1/utils/prompts'*)
         '~beta/guienv/v1.3.1/utils/timer'
         '~beta/pretty/v4.9.1/pplib'
         '~beta/betaast/v4.9.1/betasematt'
@@ -73,38 +76,14 @@ sifTextEditor: textEditor
      node: ^mps.ast;
      theWindow: (#  exit THIS(window)[] #);
      textEditing: @boolean;
-     onOpen:<
-       (# 
-       do
-          sifViewer.automaticHolocomments;
-          (if node[] <> none then
-          (* Open contractions before prettyprinting to prevent prettyprinting
-           * twice: *)
-              node[]->SifViewer.openContractionsUntilRoot; 
-           else
-              (if initialContractionLevel <> 0 then
-                  (frag.root[],initialContractionLevel)
-                    ->SifViewer.openContractionLevel;
-                  
-              if);
-              
-          if);
-          (frag.root[],- 1)->sifViewer.astView.pp.present;
-          (if node[] <> none then
-              (node[],1,0,0)->sifViewer.setFocus
-           else
-              (1,1)->SifViewer.selectionToAst; 
-          if)
-       #);
+     onOpen:< (#  <<SLOT codeviewerOnOpen:DoPart>> #);
      onDoubleClick:<
        (# start,end: @integer
        enter (start,end)
        <<SLOT codeviewerOnDoubleClick:DoPart>>
        #);
      onClick:<
-       (#
-          start,end,line1,char1,line2,
-            char2: @integer
+       (# start,end,line1,char1,line2,char2: @integer
        enter (start,end)
        <<SLOT codeviewerOnClick:DoPart>>
        #);
@@ -452,6 +431,8 @@ codeviewer:
      UI: ^guienv;
      theSifTextEditor: ^sifTextEditor;
      id: @integer;
+     setWaitCursor: (#  do ui.cursors.watch[]->UI.mouse.busyCursor #);
+     setStructureCursor: (#  do none ->UI.mouse.busyCursor #);
      generalOutput: astView.output
        (#
           printSpecialComment::< 
@@ -539,10 +520,12 @@ codeviewer:
        enter theSifViewer[]
        <<SLOT codeviewerSetupFormEditor:DoPart>>
        #);
+     closeGroup:<
+     (* if value then close is OK *) booleanValue;
+     closeForm:< object;
      windowOutput: generalOutput
        (#
-          windowLine,theWholeText:
-            ^text;
+          windowLine,theWholeText: ^text;
           beforePresent::< 
             (# 
             do
@@ -665,7 +648,6 @@ codeviewer:
           perform:
             (# current: ^mps.ast; fatherNode: ^mps.ast; exp: ^mps.expanded
             do
-               ui.cursors.watch[]->UI.mouse.busyCursor;
                (if length = 1 then
                    node[]->current[];
                    INNER perform;
@@ -688,7 +670,7 @@ codeviewer:
                    
                if);
                (node[],length,subCommentInx1,subCommentInx2)->astToSelection;
-               none ->UI.mouse.busyCursor
+               
             #);
           
        enter (node[],length,subCommentInx1,subCommentInx2)
@@ -709,10 +691,22 @@ codeviewer:
        (# str: ^text; 
        do (if edDebug then INNER ; str[]->screen.putText;  if)
        #);
+     dir: @
+       (#
+          up: (#  exit 0 #);
+          down: (#  exit 1 #);
+          pred: (#  exit 2 #);
+          next: (#  exit 3 #);
+          root: (#  exit 4 #);
+          extend: (#  exit 5 #);
+          nextNonterminal: (#  exit 6 #);
+          prevNonterminal: (#  exit 7 #);
+          
+       #);
      selectionToAST:
        (# start,end: @integer
        enter (start,end)
-       do <<SLOT seletionToAst:Descriptor>>; 
+       do <<SLOT selectionToAst:Descriptor>>; 
        #);
      aFocusChangedEvent: @focusChangedEvent;
      focusChangedEvent:<
@@ -1466,7 +1460,7 @@ codeviewer:
           (if not doneInInner then
               (if cs.node.kind
                // mps.kinds.nameDecl // mps.kinds.nameAppl then
-                  (1,cs.node[])->followSemanticLink
+                  cs.node[]->followSemanticLink
               if)
           if)
        #);
@@ -1688,13 +1682,12 @@ codeviewer:
        #);
      followSemanticLink:
        (#
-          itemSelected: @integer;
           node,theNode: ^mps.ast;
           help: ^text;
           ff: ^mps.fragmentForm;
           fg: ^mps.fragmentGroup;
           
-       enter (itemSelected,node[])
+       enter node[]
        do
           (if node.kind
            // mps.kinds.nameAppl
@@ -1703,140 +1696,57 @@ codeviewer:
            else
               node[]->theNode[]
           if);
-          (if (itemSelected > 0) then
-              node.frag[]->ff[];
-              ff.father->fg[];
-              (if not
-              ((mps[],fg[])
-                 ->getDoneCheckProperty)
-              (* isChecked *) then (* itemselected is 1 *)
-                  'This fragment group must be (re)checked'->help[];
-                  help.newLine;
-                  'in order to (re)build the semantic links.'->help.putLine;
-                  'This is currently done by the compiler'->help.putText;
-                  (none ,help[],'Alert')->UI.alertUser;
-                  
-               else
-                  (if theNode.symbol
-                   // betaGrammar.descriptorForm then
-                        (# theDescForm: ^betaGrammar.DescriptorForm
-                        do
-                           theNode[]->theDescForm[];
-                           (if itemSelected
-                            // 1 then
-                               'descNo : '->screen.putText;
-                               theDescForm.descNo->screen.putInt;
-                               screen.newLine
-                            // 2 then
-                               theDescForm.origin->selectNode
-                            // 3 then
-                               'size : '->screen.putText;
-                               theDescForm.size->screen.putInt;
-                               screen.newLine
-                            // 4 then
-                               'attSize : '->screen.putText;
-                               theDescForm.attSize->screen.putInt;
-                               screen.newLine
-                            // 5 then
-                               'kind : '->screen.putText;
-                               theDescForm.kind->screen.putInt;
-                               screen.newLine
-                           if)
-                        #)
-                   // betaGrammar.attributesForm then
-                        (# theAttForm: ^betaGrammar.attributesForm
-                        do
-                           theNode[]->theAttForm[];
-                           (if itemSelected
-                            // 1 then theAttForm.origin->selectNode
-                           if)
-                        #)
-                   // betaGrammar.objectDescriptor then
-                        (# theObjDesc: ^betaGrammar.objectDescriptor
-                        do
-                           theNode[]->theObjDesc[];
-                           (if itemSelected
-                            // 1 then
-                               'descNo : '->screen.putText;
-                               theObjDesc.descNo->screen.putInt;
-                               screen.newLine
-                            // 2 then
-                               theObjDesc.origin->selectNode
-                            // 3 then
-                               'size : '->screen.putText;
-                               theObjDesc.size->screen.putInt;
-                               screen.newLine
-                            // 4 then
-                               'attSize : '->screen.putText;
-                               theObjDesc.attSize->screen.putInt;
-                               screen.newLine
-                            // 5 then
-                               'kind : '->screen.putText;
-                               theObjDesc.kind->screen.putInt;
-                               screen.newLine
-                           if)
-                        #)
-                   // betaGrammar.repetitionDecl then
-                        (# theRepetitionDecl: ^betaGrammar.repetitionDecl
-                        do
-                           theNode[]->theRepetitionDecl[];
-                           (if itemSelected
-                            // 1 then theRepetitionDecl.origin->selectNode
-                           if)
-                        #)
-                   // betaGrammar.forImp then
-                        (# theForImp: ^betaGrammar.ForImp
-                        do
-                           theNode[]->theForImp[];
-                           (if itemSelected
-                            // 1 then theForImp.origin->selectNode
-                           if)
-                        #)
-                   // betaGrammar.labelledImp then
-                        (# theLabelledImp: ^betaGrammar.labelledImp
-                        do
-                           theNode[]->theLabelledImp[];
-                           (if itemSelected
-                            // 1 then theLabelledImp.origin->selectNode
-                           if)
-                        #)
-                   // betaGrammar.nameApl then
-                        (# theNameApl: ^betaGrammar.nameApl
-                        do
-                           theNode[]->theNameApl[];
-                           (if itemSelected
-                            // 1 then
-                               theNameApl.dclRef->selectNode
-                            // 2 then
-                               theNameApl.descRef->selectNode
-                            // 3 then
-                               theNameApl.findDescriptor->selectNode
-                           if)
-                        #)
-                   // betaGrammar.nameDcl then
-                        (# theNameDcl: ^betaGrammar.nameDcl; f: ^mps.ast
-                        do
-                           theNode.father->f[];
+          node.frag[]->ff[];
+          ff.father->fg[];
+          (if not
+          ((mps[],fg[])
+             ->getDoneCheckProperty)
+          (* isChecked *) then (* itemselected is 1 *)
+              'This fragment group must be (re)checked'->help[];
+              help.newLine;
+              'in order to (re)build the semantic links.'->help.putLine;
+              'This is currently done by the compiler'->help.putText;
+              (none ,help[],'Alert')->UI.alertUser;
+              
+           else
+              (if theNode.symbol
+               // betaGrammar.nameApl then
+                    (# theNameApl: ^betaGrammar.nameApl
+                    do theNode[]->theNameApl[]; theNameApl.dclRef->selectNode
+                    #)
+               // betaGrammar.nameDcl then
+                    (# theNameDcl: ^betaGrammar.nameDcl; f: ^mps.ast
+                    do
+                       theNode.father->f[];
+                       (if f.symbol
+                        // betaGrammar.names then
+                           f.father->f[];
                            (if f.symbol
-                            // betaGrammar.names then
-                               f.father->f[];
-                               (if f.symbol
-                                // betaGrammar.bindingDecl
-                                // betaGrammar.finalDecl then
-                                   theNode[]->theNameDcl[];
-                                   (if itemSelected
-                                    // 1 then theNameDcl.virtDcl->selectNode
-                                   if)
-                               if)
-                           if);
-                           (if itemSelected
-                            // 2 then
+                            // betaGrammar.bindingDecl // betaGrammar.finalDecl
+                            then
                                theNode[]->theNameDcl[];
-                               theNameDcl.findDescriptor->selectNode
-                           if);
-                           
-                        #)
-                  if)
+                               theNameDcl.virtDcl->selectNode;
+                               (* use findDescriptor instead? 
+                                (if itemSelected
+                                // 1 then
+                                theNameApl.dclRef->selectNode
+                                // 2 then
+                                theNameApl.descRef->selectNode
+                                // 3 then
+                                theNameApl.findDescriptor->selectNode
+                                if)*)
+                               
+                           if)
+                       if);
+                       (* use findDescriptor instead? 
+                        (if itemSelected
+                        // 2 then
+                        theNode[]->theNameDcl[];
+                        theNameDcl.findDescriptor->selectNode
+                        if);
+                        *)
+                       
+                    #)
               if)
           if)
        #);
@@ -1903,78 +1813,6 @@ codeviewer:
           if);
           
        exit (l1,c1,l2,c2)
-       #);
-     checkSonNode:
-       (#
-          node: ^mps.ast;
-          expNode: ^mps.expanded;
-          prod: ^mg.prod;
-          constructor: ^mg.constructor;
-          consElemList: ^mg.consElemList;
-          
-       enter node[]
-       do
-          loop:
-          (if (node.kind = mps.kinds.interior) then
-              node[]->expNode[];
-              (if expNode.noOfSons
-               // 1 then
-                  expNode.symbol->Prodlist.get->prod[];
-                  (if prod.symbol
-                   // mg.listZero // mg.listOne then
-                      expNode.getson1->node[]; restart loop; 
-                   // mg.constructor then
-                      prod[]->constructor[];
-                      constructor.getConsElemList->consElemList[];
-                      (if consElemList.noOfSons
-                       // 1 then expNode.getson1->node[]; restart loop; 
-                      if);
-                      
-                  if);
-                  
-              if);
-              
-          if)
-       exit node[]
-       #);
-     checkSon:
-       (# 
-       do
-          (if cs.subCommentInx1
-           // 0 then cs.node[]->checkSonNode->cs.node[]
-          if)
-       #);
-     checkFather: (#  do cs.node[]->checkFatherNode->cs.node[] #);
-     checkFatherNode:
-       (#
-          node: ^mps.ast;
-          fatherNode: ^mps.expanded;
-          prod: ^mg.prod;
-          constructor: ^mg.constructor;
-          consElemList: ^mg.consElemList
-       enter node[]
-       do
-          loop:
-          (if (node.father <> none ) then
-              node.father->fatherNode[];
-              fatherNode.symbol->Prodlist.get->prod[];
-              (if fatherNode.noOfSons
-               // 1 then
-                  (if prod.symbol
-                   // mg.constructor then
-                      prod[]->constructor[];
-                      constructor.getConsElemList->consElemList[];
-                      (if consElemList.noOfSons
-                       // 1 then fatherNode[]->node[]; restart loop; 
-                      if);
-                      
-                  if);
-                  
-              if);
-              
-          if);
-          
-       exit node[]
        #);
      hasComment:
        (# node: ^mps.ast; hasOne: @boolean; expNode: ^mps.expanded; 
@@ -2250,14 +2088,28 @@ codeviewer:
               if)
           if)
        #);
+     showAst: (#  do <<SLOT showAstBody:Descriptor>> #);
      doAbstract:
-       (#  do cs.perform (#  do current[]->setContraction #) #);
+       (# 
+       do
+          cs.perform
+            (# 
+            do current[]->setContraction
+            #)
+       #);
      doAbstractRecursively:
-       (#  do cs.perform (#  do current[]->setContractions #) #);
+       (# 
+       do
+          cs.perform
+            (# 
+            do current[]->setContractions
+            #)
+       #);
      doOverview:
        (# 
        do
-          ui.cursors.watch[]->UI.mouse.busyCursor;
+          ui.cursors.watch[]
+            ->UI.mouse.busyCursor;
           frag.root[]->setContractions;
           (frag.root[],- 1)->astView.pp.present;
           cs->setFocus;
@@ -2265,17 +2117,35 @@ codeviewer:
        #);
      doDetail:
        (# 
-       do cs.perform (#  do (current[],1)->openContractionLevel #)
+       do
+          cs.perform
+            (# 
+            do
+               (current[],1)
+                 ->openContractionLevel
+            #)
        #);
      doDetailRecursively:
-       (#  do cs.perform (#  do current[]->openAllContractions #) #);
+       (# 
+       do
+          cs.perform
+            (# 
+            do current[]->openAllContractions
+            #)
+       #);
      doReprettyprint:
        (# 
        do
-          ui.cursors.watch[]->UI.mouse.busyCursor;
+          ui.cursors.watch[]
+            ->UI.mouse.busyCursor;
           (frag.root[],- 1)->astView.pp.present;
           cs->astToSelection;
           none ->UI.mouse.busyCursor
+       #);
+     doShowAst:
+       (# node: ^mps.ast
+       enter node[]
+       <<SLOT doShowAst:DoPart>>
        #);
      automaticHolocomments:
        (# abstracted: @boolean; 
@@ -2349,24 +2219,255 @@ codeviewer:
               (node[],node[])->astView.pp.update; (node[],1,0,0)->setFocus
           if)
        #);
+     subject4: (* navigation operations: selection.bet *) (#  #);
+     findSuper:
+       (# synCatNo: @mps.nonterminalSymbol; 
+       enter synCatNo
+       do
+            (#
+               superSynCatNo,lastSuper: @mps.nonterminalSymbol;
+               prod: ^mg.prod;
+               constructor: ^mg.constructor;
+               alternation: ^mg.alternation;
+               opt: ^mg.opt;
+               listOne: ^mg.listOne;
+               listZero: ^mg.listZero;
+               dummy: ^mg.dummy;
+               leftSide: ^mg.leftSide;
+               foundSuper: @boolean;
+               
+            do
+               (if not synCatNo.isLexem then
+                   false->foundSuper;
+                   synCatNo->Prodlist.get->prod[];
+                   loop:
+                     (# 
+                     do
+                        (if prod.symbol
+                         // mg.constructor then
+                            prod[]->constructor[];
+                            constructor.getLeftside->leftSide[];
+                            
+                         // mg.alternation then
+                            prod[]->alternation[];
+                            alternation.getLeftside->leftSide[];
+                            
+                         // mg.opt then
+                            prod[]->opt[]; opt.getLeftside->leftSide[]; 
+                         // mg.listOne then
+                            prod[]->listOne[]; listOne.getLeftside->leftSide[]; 
+                         // mg.listZero then
+                            prod[]->listZero[];
+                            listZero.getLeftside->leftSide[];
+                            
+                         // mg.dummy then
+                            prod[]->dummy[]; dummy.getLeftside->leftSide[]; 
+                        if);
+                        1->leftSide.getAttribute->superSynCatNo;
+                        (if superSynCatNo
+                         // mps.super.cons then
+                            
+                         // mps.super.list then
+                            
+                         // mps.super.undefined then
+                            
+                         else
+                            true->foundSuper;
+                            superSynCatNo->Prodlist.get->prod[];
+                            superSynCatNo->lastSuper;
+                            restart loop;
+                            
+                        if);
+                        
+                     #);
+                   (if foundSuper then lastSuper->synCatNo if);
+                   
+               if);
+               
+            #)
+       exit synCatNo
+       #);
+     parsingSynCatNo:
+       (#
+          node: ^mps.ast;
+          synCatNo: @mps.nonterminalSymbol;
+          isList: @boolean;
+          theListElement: ^mps.ast;
+          
+       enter node[]
+       do
+            (#
+               node2: ^mps.ast;
+               fatherSynCatNo: @mps.nonterminalSymbol;
+               prod,fatherProd: ^mg.prod;
+               fatherNode,expNode: ^mps.expanded;
+               trySuper: @boolean;
+               
+            do
+               trace
+                 (#  do 'parsingSynCatNo'->str[] #);
+               false->isList;
+               true->trySuper;
+               node[]->getSynCatNo->synCatNo;
+               (if not synCatNo.isLexem then
+                   synCatNo->Prodlist.get->prod[];
+                   (if prod.symbol
+                    // mg.listOne // mg.listZero then
+                       true->isList;
+                       false->trySuper;
+                       (if node.kind
+                        // mps.kinds.unexpanded then
+                        (* in the case of attributes slot!*)
+                           node[]->theListElement[]; 
+                        else
+                           node[]->expNode[];
+                           expNode.getSon1->theListElement[];
+                           
+                       if);
+                       
+                   if);
+                   
+               if);
+               (if not isList then
+                   node[]->checkFatherNode->node2[]->getSynCatNo->synCatNo;
+                   node2.father->fatherNode[];
+                   (if fatherNode[]
+                    // none then (* root *) ; 
+                    else
+                       fatherNode[]->getSynCatNo->fatherSynCatNo->Prodlist.get
+                         ->fatherProd[];
+                       (if fatherProd.symbol
+                        // mg.listOne // mg.listZero then
+                           fatherSynCatNo->synCatNo;
+                           true->isList;
+                           false->trySuper;
+                           node2[]->theListElement[];
+                           
+                       if);
+                       
+                   if);
+                   
+               if);
+               (if trySuper then synCatNo->findSuper->synCatNo;  if);
+               (if edDebug then
+                   'SynCatNo, isList: '->screen.putText;
+                   synCatNo->screen.putInt;
+                   isList->screen.putInt;
+                   screen.newLine;
+                   
+               if);
+               
+            #)
+       exit (synCatNo,isList,theListElement[])
+       #);
+     selectNewCs: (#  do <<SLOT selectNewCsBody:Descriptor>> #);
+     checkSon:
+       (# 
+       do <<SLOT checkSonBody:Descriptor>>
+       #);
+     checkSonNode:
+       (# node: ^mps.ast
+       enter node[]
+       do <<SLOT checkSonNodeBody:Descriptor>>
+       exit node[]
+       #);
+     checkFather:
+       (# 
+       do
+          cs.node[]->checkFatherNode
+            ->cs.node[]
+       #);
+     checkFatherNode:
+       (# node: ^mps.ast
+       enter node[]
+       do
+          <<SLOT checkFatherNodeBody:Descriptor>>
+       exit node[]
+       #);
+     extend: (#  do <<SLOT extendBody:Descriptor>> #);
+     down:
+       (#  do <<SLOT downBody:Descriptor>> #);
+     navigate:
+       (# direction: @integer; 
+       enter direction
+       do <<SLOT navigateBody:Descriptor>>
+       #);
+     select:
+       (# direction: @integer; 
+       enter direction
+       do <<SLOT selectBody:Descriptor>>
+       #);
+     gotoNonterminal: (#  do <<SLOT gotoNonterminalBody:Descriptor>> #);
+     gotoNonEmpty:
+       (# 
+       do
+          <<SLOT gotoNonEmptyBody:Descriptor>>
+       #);
+     nextNonterminal: (#  do <<SLOT nextNonterminalBody:Descriptor>> #);
+     prevNonterminal:
+       (# 
+       do
+          <<SLOT prevNonterminalBody:Descriptor>>
+       #);
+     searchPrivate: @<<SLOT searchPrivate:Descriptor>>;
+     searchText:
+       (# t: ^text; parseOK: @boolean
+       enter t[]
+       do <<SLOT searchTextBody:Descriptor>>
+       exit
+       parseOK
+       #);
+     searchStructure: (#  do <<SLOT searchStructureBody:Descriptor>> #);
+     searchNext:
+       (# found: @boolean
+       do
+          <<SLOT searchNextBody:Descriptor>>
+       exit found
+       #);
+     searchPrev:
+       (# found: @boolean
+       do <<SLOT searchPrevBody:Descriptor>>
+       exit found
+       #);
+     searchName:
+       (# name: ^text; found: @boolean
+       enter name[]
+       do <<SLOT searchNameBody:Descriptor>>
+       exit
+       found
+       #);
      askUndoPermission:< booleanValue;
      askPastePermission:< booleanValue;
      askInsertPermission:< booleanValue;
      askTexteditMode:< booleanValue;
-     doUndo:< object;
-     doCut:< object;
-     doCopy:< object;
-     doPaste:< object;
+     doCommand:
+       (#  do setWaitCursor; INNER doCommand; setStructureCursor #);
+     doUndo:< doCommand;
+     doCut:< doCommand;
+     doCopy:< doCommand;
+     doPaste:< doCommand;
      doTextedit:< (# ch: @char enter ch do INNER #);
      checkTexteditingFinished:<
        (# start,end: @integer enter (start,end) do INNER #);
-     doParseText:< object;
-     doRevertTextedit:< object;
+     doParseText:< doCommand;
+     doRevertTextedit:< doCommand;
      doShowTexteditCommands:< object;
-     doInsertBefore:< object;
-     doInsertAfter:< object;
-     doRemoveOptionals:< object;
-     doShowOptionals:< object;
+     doInsertBefore:< doCommand;
+     doInsertAfter:< doCommand;
+     doRemoveOptionals:< doCommand;
+     doShowOptionals:< doCommand;
+     doSearch: (#  <<SLOT doSearch:DoPart>> #);
+     askMakeDoPartSlot:< booleanValue;
+     askMakeDescriptorSlot:< booleanValue;
+     askMakeAttributesSlot:< booleanValue;
+     askPasteFragmentForm:< booleanValue;
+     doMakeDoPartSlot:< object;
+     doMakeDescriptorSlot:< object;
+     doMakeAttributesSlot:< object;
+     doPasteFragmentForm:< doCommand;
+     doFillSlot:< doCommand;
+     doFillAllSlots:< object;
+     doHideImplementation:< object;
      metaGrammarInit:
        (#
           theMetaGrammar: ^mps.treelevel;
@@ -2377,12 +2478,13 @@ codeviewer:
           (if mps.grammarTable.meta[] <> none then
               mps.grammarTable.meta[]->mg[]; 
            else
-              &mps.metaGrammar[]->theMetaGrammar[]->mps.grammarTable.meta[]
-                ->mg[];
+              &mps.metaGrammar[]->theMetaGrammar[]
+                ->mps.grammarTable.meta[]->mg[];
               theMetaGrammar.init;
-              '~beta/grammars/metagram/v4.4/metagrammar'->grammarWithPath[];
-              ('-meta'->grammarWithPath.copyAppend,screen[])->mps.top.open
-                ->gg[];
+              '~beta/grammars/metagram/v4.4/metagrammar'
+                ->grammarWithPath[];
+              ('-meta'->grammarWithPath.copyAppend,
+               screen[])->mps.top.open->gg[];
               (if gg[]
                // none then
                   'Could not open: '->screen.putText;

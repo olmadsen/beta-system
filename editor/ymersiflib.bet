@@ -1,19 +1,34 @@
-ORIGIN '~beta/sourcebrowser/v0.1/ymer';
-INCLUDE '~beta/guienv/v1.3.1/utils/simplemenu';
-BODY 'private/globalfrejacommbody';
+ORIGIN '~beta/sourcebrowser/v0.1.ess/ymer';
+INCLUDE '~beta/guienv/v1.3.1/utils/simplemenu'
+        '~beta/sourcebrowser/v0.1.ess/private/parseEditor'
+        '~beta/sourcebrowser/v0.1.ess/private/semanticEditor';
+BODY 'private/globalfrejacommbody'
+     'private/compiler';
 -- lib: Attributes --
 fragmentBrowser: ymerApplication
   (#
      edenv: ^ymerBrowser.editorEnv;
-     ymerBrowserWindow::
+     ymerBrowserWindow:: 
        (#
-          eventhandler:: (#  #);
-          open:: (#  #);
+          eventhandler::  (#  #);
+          open::  (#  #);
           theSifTextEditor: ^sifTextEditor;
           cfe: (* current form editor *) ^theSifTextEditor.codeViewerType;
           cbg: (* current browser group *) ^browser.projects.group;
           cge: (* current group editor *) ^edenv.groupEditor;
           cff: (* current fragment form *) ^mps.ast.fragmentform;
+          ongoingTextediting: @boolean;
+          checkOngoingTextEditing:
+            (# value: @boolean
+            do
+               browser.getFragmentFormEditor->theSifTextEditor[];
+               (if theSifTextEditor[] <> none then
+                   (if theSifTextEditor.sifViewer[] <> none then
+                       theSifTextEditor.textediting->value
+                   if)
+               if)
+            exit value
+            #);
           formEditorExists:
             (# exists: @boolean
             do
@@ -21,8 +36,11 @@ fragmentBrowser: ymerApplication
                (if theSifTextEditor[] <> none then
                    (if theSifTextEditor.sifViewer[] <> none then
                        theSifTextEditor.sifViewer[]->cfe[];
-                       true->exists;
-                       INNER formEditorExists
+                       (if not theSifTextEditor.textediting then
+                           true->exists; INNER formEditorExists
+                        else
+                           true->ongoingTextediting
+                       if)
                    if)
                if)
             exit exists
@@ -31,21 +49,18 @@ fragmentBrowser: ymerApplication
             (# exists: @boolean
             do
                (if browser[] <> none then
-                   '1 '->putLine;
                    browser.currentgroup[]->cbg[];
-                   '2 '->putLine;
                    browser.currentForm[]->cff[];
-                   '3 '->putLine;
                    (if cbg[] <> none then
                        (if edenv[] <> none then
                            (if edenv.groupEditorList[] <> none then
-                               '4 '->putLine;
                                cbg.fg[]
                                  ->edenv.groupEditorList.findOrCreateGroupEditor
                                  ->cge[];
-                               '5 '->putLine;
                                (if cge[] <> none then
-                                   true->exists; INNER groupEditorExists
+                                   (if not checkOngoingTextediting then
+                                       true->exists; INNER groupEditorExists
+                                   if)
                                if)
                            if)
                        if)
@@ -62,6 +77,56 @@ fragmentBrowser: ymerApplication
                (if ff[] <> none then
                    (browser.currentProject[],cbg[],ff[])
                      ->browser.setFragmentForm
+               if)
+            #);
+          findAndSelect:
+            (# node: ^mps.ast.ast
+            enter node[]
+            do
+               (if node[] <> none then
+                   (if cfe[] <> none then
+                       (if node.frag[] <> cfe.frag[] then
+                           ((node.frag.father).fullName,node.frag.name)
+                             ->browser.selectFragmentForm;
+                           (if formEditorExists then
+                               (node[],1,0,0)->cfe.setFocus
+                            else
+                               'formeditor not found'->putLine
+                           if)
+                        else
+                           (node[],1,0,0)->cfe.setFocus
+                       if)
+                    else
+                       ((node.frag.father).fullName,node.frag.name)
+                         ->browser.selectFragmentForm;
+                       (if formEditorExists then
+                           (node[],1,0,0)->cfe.setFocus
+                        else
+                           'formEditor not found'->putLine
+                       if)
+                   if)
+                else
+                   'findAndSelect: node is none!'->putLine
+               if)
+            #);
+          findForm:
+            (# ff: ^mps.ast.fragmentForm
+            enter ff[]
+            do
+               (if ff[] <> none then
+                   ((ff.father).fullName,ff.name)->browser.selectFragmentForm
+                else
+                   'findForm: ff is none!'->putLine
+               if)
+            #);
+          findGroup:
+            (# fg: ^mps.ast.fragmentGroup
+            enter fg[]
+            do
+               (if fg[] <> none then
+                   fg.fullName->browser.selectFragmentGroup
+                else
+                   'findGroup: fg is none!'->putLine
                if)
             #);
           externComm: @<<SLOT externprivate:Descriptor>>;
@@ -96,14 +161,211 @@ fragmentBrowser: ymerApplication
                <<SLOT commFrejaHandleFrejaCommand:Descriptor>>;
                
             #);
-          menubarType::
+          lastCompiledFg: ^mps.ast.fragmentGroup;
+          compilerPrivate: @<<SLOT compilerPrivate:Descriptor>>;
+          activateCompiler:
+            (#
+               fragmentFile: ^text;
+               generateCode,
+                 generateDebugInfo: @boolean
+            enter
+            (fragmentFile[],generateCode,
+             generateDebugInfo)
+            do <<SLOT activateCompilerBody:Descriptor>>
+            #);
+          initCompiler:
+           <<SLOT initCompilerBody:Descriptor>>;
+          formsWithSemanticErrors: @list
+            (# element::< mps.ast.fragmentForm #);
+          savedGroups: @set (# element::< mps.ast.fragmentGroup;  #);
+          handleSavedGroups:
+            (# done:< object; 
+            do <<SLOT commFrejaHandleSavedGroups:Descriptor>>; 
+            #);
+          callCompiler:
+            (#
+               exp:
+                 ^mps.ast.
+                    expanded;
+               node: ^mps.ast.ast
+            do
+               ''->writeInfoView;
+               formsWithSemanticErrors.clear;
+               'Calling BETA compiler'->putLine;
+               '-------------------------------------------------------------------------------'
+                 ->putLine;
+               INNER ;
+               '-------------------------------------------------------------------------------'
+                 ->putLine;
+               (if formsWithSemanticErrors.size = 0 then
+                   handleSavedGroups
+                else
+                   l: formsWithSemanticErrors.scan
+                     (# 
+                     do
+                        none ->node[];
+                        'Semantic Error(s)'->writeInfoView;
+                        (if current.root.kind = mps.ast.kinds.interior then
+                            current.root[]->exp[];
+                            loop: exp.suffixWalk
+                              (# 
+                              do
+                                 (if current.hasSemanticError then
+                                 (*current.semanticError->semanticErrorText->t[];*)
+                                     current[]->node[]; leave loop
+                                 if)
+                              #);
+                            (if node[] <> none then node[]->findAndSelect if)
+                        if);
+                        current.father->openSemanticErrorEditor;
+                        leave l
+                     #);
+                   savedGroups.clear
+               if);
+               
+            #);
+          check:
+            (#
+               fg: ^mps.ast.fragmentGroup;
+               status: @boolean;
+               nontExist: @boolean;
+               nont: ^mps.ast.unexpanded
+            enter fg[]
+            do
+               edenv.nonterminalsExist->(nontExist,nont[]);
+               (if nontExist then
+                   nont[]->findAndSelect;
+                   (none ,
+                    'This fragment group cannot be checked\nbefore all nonterminals have been removed',
+                    'Compiler message')->alertUser
+                else
+                   callCompiler
+                     (#  do (fg.name,false,false)->activateCompiler;  #);
+                   (formsWithSemanticErrors.size = 0)->status;
+                   
+               if)
+            exit status
+            #);
+          compile:
+            (#
+               fg: ^mps.ast.fragmentGroup;
+               status: @boolean;
+               nontExist: @boolean;
+               nont: ^mps.ast.unexpanded
+            enter fg[]
+            do
+               edenv.nonterminalsExist->(nontExist,nont[]);
+               (if nontExist then
+                   nont[]->findAndSelect;
+                   (none ,
+                    'This fragment group cannot be compiled\nbefore all nonterminals have been removed',
+                    'Compiler message')->alertUser
+                else
+                   callCompiler
+                     (#  do (fg.name,true,true)->activateCompiler;  #);
+                   (formsWithSemanticErrors.size = 0)->status;
+                   
+               if)
+            exit status
+            #);
+          writeInfoView:
+            (# t: ^text
+            enter t[]
+            do
+            (* newLine;
+             '<<<'->putText;
+             t[]->putText;
+             '>>>'->putLine;
+             ''->infoView.contents.label;*) t[]->infoView.msg; 
+            #);
+          openParseEditor:
+            (#
+               pe: @browser.parseEditor
+                 (# open::  (#  do (600,800)->size; fn[]->loadFiles #)
+                 #);
+               fn: ^text
+            enter fn[]
+            do pe.open
+            #);
+          openSemanticErrorEditor:
+            (#
+               theGroup: ^mps.ast.fragmentGroup;
+               sv: @browser.semanticViewer
+                 (#
+                    open:: 
+                      (#  do theGroup[]->fg[]; theGroup.name->fgName[];  #)
+                 #)
+            enter theGroup[]
+            do sv.open
+            #);
+          recoverGroup:
+            (# g: ^mps.ast.fragmentGroup; ge: ^edenv.groupEditor; 
+            enter ge[]
+            do
+            (*g.name->help[];
+             help.copy->oldName[];
+             '#'->oldName.put;
+             (g[],oldName[])->groupEnvPrivate.changeGroupFromFile;
+             * *)
+               ge.fg[]->g[];
+               (if ge[]
+                // none then 'no groupEditor, should not happen'->putLine; 
+                else
+                   '#'->g.restoreBackup;
+                   ge.groupTouched;
+                   (true,true)->ge.save;
+                   ge.resetGroupTouch;
+                   ge.closeGroup;
+                   true->edenv.onGoingRecovery;
+                   g[]->findGroup;
+                   g[]->edenv.groupEditorList.findOrCreateGroupEditor->ge[];
+                   (if ge[] = none then
+                       'no groupEditor, should not happen'->putLine
+                    else
+                       ge.groupTouched
+                   if);
+                   false->edenv.onGoingRecovery;
+                   
+               if);
+               
+            #);
+          revertGroup:
+            (# g: ^mps.ast.fragmentGroup; ge: ^edenv.groupEditor; f: @file; 
+            enter ge[]
+            do
+            (*g.name->help[];
+             help.copy->oldName[];
+             '#'->oldName.put;
+             (g[],oldName[])->groupEnvPrivate.changeGroupFromFile;
+             * *)
+               ge.fg[]->g[];
+               (if ge[]
+                // none then 'no groupEditor, should not happen'->putLine; 
+                else
+                   '~'->g.restoreBackup;
+                   '#'->(g.diskFileName).copyAppend->f.name;
+                   (if f.entry.exists then f.delete if);
+                   ge.groupTouched;
+                   (true,true)->ge.save;
+                   ge.resetGroupTouch;
+                   ge.closeGroup;
+                   g[]->findGroup;
+                   g[]->edenv.groupEditorList.findOrCreateGroupEditor->ge[];
+                   (if ge[] = none then
+                       'no groupEditor, should not happen'->putLine
+                   if);
+                   
+               if);
+               
+            #);
+          menubarType:: 
             (#
                GroupFile: @simplemenu
                  (#
                     iNew: @item
                       (#
-                         onStatus:: (#  do false->value #);
-                         onSelect::
+                         onStatus::  (#  do false->value #);
+                         onSelect:: 
                            (#
                               ff: ^mps.ast.fragmentForm;
                               ge: ^edenv.groupEditor
@@ -116,70 +378,75 @@ fragmentBrowser: ymerApplication
                                        current.f[]->ff[]
                                    if)
                                 #);
-                              (ge.fg.fullName,ff.name)
-                                ->browser.selectFragmentForm
+                              ff[]->findForm
                            #)
                       #);
                     iNewBetaProgram: @item
                       (#
-                         onStatus:: (#  do true->value #);
-                         onSelect::
+                         onStatus:: 
+                           (#  do not checkOngoingTextediting->value #);
+                         onSelect:: 
                            (#
                               ff: ^mps.ast.fragmentForm;
                               ge: ^edenv.groupEditor
                            do
                               edenv.newBetaProgram->ge[];
-                              ge.fg.fragmentlist.scan
-                                (# 
-                                do
-                                   (if current.type = mps.ast.formType then
-                                       current.f[]->ff[]
-                                   if)
-                                #);
-                              (if ff[] = none then
-                                  'ff is none!'->putLine
-                               else
-                                  ff.name->putLine;
-                                  (ff.father).fullName->putLine
-                              if);
-                              (ge.fg.fullName,ff.name)
-                                ->browser.selectFragmentForm
+                              (if ge[] <> none then
+                                  ge.fg.fragmentlist.scan
+                                    (# 
+                                    do
+                                       (if current.type = mps.ast.formType then
+                                           current.f[]->ff[]
+                                       if)
+                                    #);
+                                  (if ff[] = none then
+                                      'ff is none!'->putLine
+                                   else
+                                      ff[]->findForm
+                                  if)
+                              if)
                            #)
                       #);
                     iNewBetaLibrary: @item
                       (#
-                         onStatus:: (#  do true->value #);
-                         onSelect::
+                         onStatus:: 
+                           (#  do not checkOngoingTextEditing->value #);
+                         onSelect:: 
                            (#
                               ff: ^mps.ast.fragmentForm;
                               ge: ^edenv.groupEditor
                            do
                               edenv.newBetaLibrary->ge[];
-                              ge.fg.fragmentlist.scan
-                                (# 
-                                do
-                                   (if current.type = mps.ast.formType then
-                                       current.f[]->ff[]
-                                   if)
-                                #);
-                              (ge.fg.fullName,ff.name)
-                                ->browser.selectFragmentForm
+                              (if ge[] <> none then
+                                  ge.fg.fragmentlist.scan
+                                    (# 
+                                    do
+                                       (if current.type = mps.ast.formType then
+                                           current.f[]->ff[]
+                                       if)
+                                    #);
+                                  (if ff[] = none then
+                                      'ff is none!'->putLine
+                                   else
+                                      ff[]->findForm
+                                  if)
+                              if)
                            #)
                       #);
                     iSave: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               groupEditorExists
                                 (#  do true->value #)
                            #);
-                         onSelect:: (#  do cge.save #)
+                         onSelect::  (#  do (true,true)->cge.save #)
                       #);
                     iSaveAs: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
@@ -187,11 +454,11 @@ fragmentBrowser: ymerApplication
                                 (#  do true->value #);
                               false->value
                            #);
-                         onSelect:: (#  do cge.saveAs #)
+                         onSelect::  (#  do cge.saveAs #)
                       #);
                     iSaveAbstract: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
@@ -199,33 +466,37 @@ fragmentBrowser: ymerApplication
                                 (#  do true->value #);
                               false->value
                            #);
-                         onSelect:: (#  do cge.saveabstract #)
+                         onSelect::  (#  do cge.saveabstract #)
                       #);
                     iRecover: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               groupEditorExists
-                                (#  do true->value #);
-                              false->value
+                                (#  do cge.autoSaveFileExists->value #)
                            #);
-                         onSelect:: (#  do cge.recover #)
+                         onSelect::  (#  do cge[]->recoverGroup #)
                       #);
                     iRevert: @item
                       (#
-                         onStatus::
+                         f: @file;
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               groupEditorExists
-                                (#  do true->value #);
-                              false->value
+                                (# 
+                                do
+                                   '~'->(cge.fg.diskFileName).copyAppend
+                                     ->f.name;
+                                   f.entry.exists->value
+                                #)
                            #);
-                         onSelect:: (#  do cge.revert #)
+                         onSelect::  (#  do cge[]->revertGroup #)
                       #);
-                    open::
+                    open:: 
                       (# 
                       do
                          'New...'->iNew.new;
@@ -244,28 +515,28 @@ fragmentBrowser: ymerApplication
                  (#
                     iUndo: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               groupEditorExists
                                 (#  do cge.askUndoPermission->value #)
                            #);
-                         onSelect::
+                         onSelect:: 
                            (# 
                            do cge.undo; (cge.fg[],none )->updateBrowser
                            #)
                       #);
                     iCut: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               groupEditorExists
                                 (#  do (cff[] <> none )->value #)
                            #);
-                         onSelect::
+                         onSelect:: 
                            (# 
                            do
                               cff[]->cge.cutForm;
@@ -274,18 +545,18 @@ fragmentBrowser: ymerApplication
                       #);
                     iCopy: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               groupEditorExists
                                 (#  do (cff[] <> none )->value #)
                            #);
-                         onSelect:: (#  do cff[]->cge.copyForm #)
+                         onSelect::  (#  do cff[]->cge.copyForm #)
                       #);
                     iPaste: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
@@ -297,7 +568,7 @@ fragmentBrowser: ymerApplication
                                    if)
                                 #)
                            #);
-                         onSelect::
+                         onSelect:: 
                            (# ff: ^mps.ast.fragmentForm
                            do
                               cff[]->cge.pasteForm->ff[];
@@ -306,7 +577,7 @@ fragmentBrowser: ymerApplication
                       #);
                     iAppend: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
@@ -315,7 +586,7 @@ fragmentBrowser: ymerApplication
                                 do none ->cge.askPastePermission->value
                                 #)
                            #);
-                         onSelect::
+                         onSelect:: 
                            (# ff: ^mps.ast.fragmentForm
                            do
                               none ->cge.pasteForm->ff[];
@@ -324,14 +595,14 @@ fragmentBrowser: ymerApplication
                       #);
                     iInsertDescriptorFragmentForm: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               groupEditorExists
                                 (#  do cge.askInsertPermission->value #)
                            #);
-                         onSelect::
+                         onSelect:: 
                            (# ff: ^mps.ast.fragmentForm
                            do
                               (cff[],2)->cge.insertForm->ff[];
@@ -340,14 +611,14 @@ fragmentBrowser: ymerApplication
                       #);
                     iInsertAttributesFragmentForm: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               groupEditorExists
                                 (#  do cge.askInsertPermission->value #)
                            #);
-                         onSelect::
+                         onSelect:: 
                            (# ff: ^mps.ast.fragmentForm
                            do
                               (cff[],3)->cge.insertForm->ff[];
@@ -356,14 +627,14 @@ fragmentBrowser: ymerApplication
                       #);
                     iInsertDoPartFragmentForm: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               groupEditorExists
                                 (#  do cge.askInsertPermission->value #)
                            #);
-                         onSelect::
+                         onSelect:: 
                            (# ff: ^mps.ast.fragmentForm
                            do
                               (cff[],31)->cge.insertForm->ff[];
@@ -372,14 +643,14 @@ fragmentBrowser: ymerApplication
                       #);
                     iEditProperties: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               groupEditorExists
                                 (#  do true->value #)
                            #);
-                         onSelect::
+                         onSelect:: 
                            (# 
                            do
                               cge.editProperties;
@@ -388,21 +659,21 @@ fragmentBrowser: ymerApplication
                       #);
                     iEditFormName: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               groupEditorExists
                                 (#  do (cff[] <> none )->value #)
                            #);
-                         onSelect::
+                         onSelect:: 
                            (# ff: ^mps.ast.fragmentForm
                            do
                               cff[]->cge.editFormName;
                               (cge.fg[],cff[])->updateBrowser
                            #)
                       #);
-                    open::
+                    open:: 
                       (# 
                       do
                          'Undo'->iUndo.new;
@@ -427,112 +698,149 @@ fragmentBrowser: ymerApplication
                  (#
                     iCheck: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               groupEditorExists
                                 (#  do true->value #)
                            #);
-                         onSelect:: (#  do  #)
+                         onSelect:: 
+                           (# 
+                           do cge.fg[]->lastCompiledFg[]; cge.fg[]->check
+                           #)
                       #);
                     iReCheck: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               groupEditorExists
-                                (#  do true->value #)
+                                (#  do (lastCompiledFg[] <> none )->value #)
                            #);
-                         onSelect:: (#  do  #)
+                         onSelect::  (#  do lastCompiledFg[]->check #)
                       #);
                     iCompile: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               groupEditorExists
                                 (#  do true->value #)
                            #);
-                         onSelect:: (#  do  #)
+                         onSelect:: 
+                           (# 
+                           do cge.fg[]->lastCompiledFg[]; cge.fg[]->compile
+                           #)
                       #);
                     iRecompile: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               groupEditorExists
-                                (#  do true->value #)
+                                (#  do (lastCompiledFg[] <> none )->value #)
                            #);
-                         onSelect:: (#  do  #)
+                         onSelect::  (#  do lastCompiledFg[]->compile #)
                       #);
                     iExecute: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               groupEditorExists
-                                (#  do true->value #)
+                                (#  do true->value #);
+                              false->value
                            #);
-                         onSelect:: (#  do  #)
+                         onSelect::  (#  do  #)
                       #);
                     iReExecute: @item
                       (#
-                         onStatus::
+                         onStatus:: 
+                           (# 
+                           do
+                              false->value;
+                              groupEditorExists
+                                (#  do true->value #);
+                              false->value
+                           #);
+                         onSelect::  (#  do  #)
+                      #);
+                    iCompileAndExecute: @item
+                      (#
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               groupEditorExists
                                 (#  do true->value #)
                            #);
-                         onSelect:: (#  do  #)
+                         onSelect:: 
+                           (# 
+                           do cge.fg[]->lastCompiledFg[]; cge.fg[]->compile
+                           #)
+                      #);
+                    iRecompileAndExecute: @item
+                      (#
+                         onStatus:: 
+                           (# 
+                           do
+                              false->value;
+                              groupEditorExists
+                                (#  do (lastCompiledFg[] <> none )->value #)
+                           #);
+                         onSelect::  (#  do lastCompiledFg[]->compile #)
                       #);
                     iDebug: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               groupEditorExists
-                                (#  do true->value #)
+                                (#  do true->value #);
+                              false->value
                            #);
-                         onSelect:: (#  do  #)
+                         onSelect::  (#  do  #)
                       #);
                     iSemanticErrors: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               groupEditorExists
                                 (#  do true->value #)
                            #);
-                         onSelect:: (#  do  #)
+                         onSelect:: 
+                           (#  do cge.fg[]->openSemanticErrorEditor #)
                       #);
                     iSemanticLinks: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
-                              groupEditorExists
-                                (#  do true->value #)
+                              formEditorExists
+                                (#  do cfe.cs.hasSemanticLink->value #)
                            #);
-                         onSelect:: (#  do  #)
+                         onSelect:: 
+                           (#  do cfe.cs.node[]->cfe.followSemanticLink #)
                       #);
-                    open::
+                    open:: 
                       (# 
                       do
-                         'Check Active'->iCheck.new;
+                         'Check Current'->iCheck.new;
                          'Recheck'->iReCheck.new;
-                         'Compile Active'->iCompile.new;
-                         'Recompile'->iRecompile.new;
-                         'Execute Active'->iExecute.new;
-                         'Reexecute'->iReExecute.new;
+                         'Compile Current'->iCompile.new;
+                         ('Recompile','r')->iRecompile.newKey;
+                         'Execute Current'->iExecute.new;
+                         ('Reexecute','e')->iReExecute.newKey;
+                         newSeparator;
                          'Debug'->iDebug.new;
                          newSeparator;
                          'Semantic Errors...'->iSemanticErrors.new;
@@ -541,9 +849,9 @@ fragmentBrowser: ymerApplication
                  #);
                Edit: @simplemenu
                  (#
-                    eventHandler::<
+                    eventHandler::< 
                       (#
-                         onSelect::<
+                         onSelect::< 
                            (# 
                            do
                            (* (if formEditorExists then
@@ -555,39 +863,39 @@ fragmentBrowser: ymerApplication
                       #);
                     iUndo: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               formEditorExists
                                 (#  do cfe.askUndoPermission->value #)
                            #);
-                         onSelect:: (#  do cfe.doUndo #)
+                         onSelect::  (#  do cfe.doUndo #)
                       #);
                     iCut: @item
                       (#
-                         onStatus:: (#  do formEditorExists->value #);
-                         onSelect:: (#  do cfe.doCut;  #)
+                         onStatus::  (#  do formEditorExists->value #);
+                         onSelect::  (#  do cfe.doCut;  #)
                       #);
                     iCopy: @item
                       (#
-                         onStatus:: (#  do formEditorExists->value #);
-                         onSelect:: (#  do cfe.doCopy;  #)
+                         onStatus::  (#  do formEditorExists->value #);
+                         onSelect::  (#  do cfe.doCopy #)
                       #);
                     iPaste: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               formEditorExists
                                 (#  do cfe.askPastePermission->value #)
                            #);
-                         onSelect:: (#  do cfe.doPaste #)
+                         onSelect::  (#  do cfe.doPaste #)
                       #);
                     iTextedit: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
@@ -599,75 +907,93 @@ fragmentBrowser: ymerApplication
                                     else
                                        'Edit Text'->THIS(item).name
                                    if);
-                                   true->value
-                                #)
+                                   true->value;
+                                   
+                                #);
+                              (if ongoingTextediting then
+                                  (if cfe.askTextEditMode then
+                                      'Parse Text'->THIS(item).name
+                                   else
+                                      'Edit Text'->THIS(item).name
+                                  if);
+                                  true->value
+                              if)
                            #);
-                         onSelect::
+                         onSelect:: 
                            (# 
                            do
                               (if cfe.askTextEditMode then
-                                  cfe.doParseText
+                                  cfe.doParseText; ''->writeInfoView
                                else
-                                  cfe.doTextEdit
+                                  cfe.doTextEdit;
+                                  'Textediting Mode'->writeInfoView
                               if);
                               
                            #)
                       #);
                     iRevertTextEdit: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               formEditorExists
-                                (#  do cfe.askTexteditMode->value #)
+                                (#  do cfe.askTexteditMode->value #);
+                              ongoingTextEditing->value
                            #);
-                         onSelect:: (#  do cfe.doRevertTextEdit;  #)
+                         onSelect:: 
+                           (#  do cfe.doRevertTextEdit; ''->writeInfoView #)
                       #);
                     iShowTexteditCommands: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               formEditorExists
-                                (#  do cfe.askTexteditMode->value #)
+                                (#  do cfe.askTexteditMode->value #);
+                              ongoingTextEditing->value
                            #);
-                         onSelect:: (#  do cfe.doShowTexteditCommands;  #)
+                         onSelect::  (#  do cfe.doShowTexteditCommands;  #)
                       #);
                     iInsertBefore: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               formEditorExists
                                 (#  do cfe.askInsertPermission->value #)
                            #);
-                         onSelect:: (#  do cfe.doInsertBefore #)
+                         onSelect::  (#  do cfe.doInsertBefore #)
                       #);
                     iInsertAfter: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
                               formEditorExists
                                 (#  do cfe.askInsertPermission->value #)
                            #);
-                         onSelect:: (#  do cfe.doInsertAfter #)
+                         onSelect::  (#  do cfe.doInsertAfter #)
                       #);
                     iRemoveOptionals: @item
                       (#
-                         onStatus:: (#  do formEditorExists->value #);
-                         onSelect:: (#  do cfe.doRemoveOptionals #)
+                         onStatus::  (#  do formEditorExists->value #);
+                         onSelect::  (#  do cfe.doRemoveOptionals #)
                       #);
                     iShowOptionals: @item
                       (#
-                         onStatus:: (#  do formEditorExists->value #);
-                         onSelect:: (#  do cfe.doShowOptionals #)
+                         onStatus::  (#  do formEditorExists->value #);
+                         onSelect::  (#  do cfe.doShowOptionals #)
                       #);
-                    open::
+                    iSearch: @item
+                      (#
+                         onStatus::  (#  do formEditorExists->value #);
+                         onSelect::  (#  do cfe.doSearch #)
+                      #);
+                    open:: 
                       (# 
                       do
                          ('Undo','z')->iUndo.newkey;
@@ -683,16 +1009,18 @@ fragmentBrowser: ymerApplication
                          ('Insert Before','u')->iInsertBefore.newKey;
                          ('Insert After','a')->iInsertAfter.newKey;
                          newSeparator;
-                         ('Remove Optionals','r')->iRemoveOptionals.newKey;
-                         ('Show Optionals','s')->iShowOptionals.newKey
+                         ('Remove Optionals','n')->iRemoveOptionals.newKey;
+                         ('Show Optionals','l')->iShowOptionals.newKey;
+                         newSeparator;
+                         ('Search...','s')->iSearch.newKey
                       #);
                     
                  #);
                View: @simplemenu
                  (#
-                    eventHandler::<
+                    eventHandler::< 
                       (#
-                         onSelect::<
+                         onSelect::< 
                            (# 
                            do
                            (* (if formEditorExists then
@@ -704,60 +1032,43 @@ fragmentBrowser: ymerApplication
                       #);
                     iAbstract: @item
                       (#
-                         onStatus:: (#  do formEditorExists->value #);
-                         onSelect:: (#  do cfe.doAbstract #)
+                         onStatus::  (#  do formEditorExists->value #);
+                         onSelect::  (#  do cfe.doAbstract #)
                       #);
                     iAbstractRecursively: @item
                       (#
-                         onStatus:: (#  do formEditorExists->value #);
-                         onSelect:: (#  do cfe.doAbstractRecursively;  #)
+                         onStatus::  (#  do formEditorExists->value #);
+                         onSelect::  (#  do cfe.doAbstractRecursively;  #)
                       #);
                     iOverview: @item
                       (#
-                         onStatus:: (#  do formEditorExists->value #);
-                         onSelect:: (#  do cfe.doOverview;  #)
+                         onStatus::  (#  do formEditorExists->value #);
+                         onSelect::  (#  do cfe.doOverview;  #)
                       #);
                     iDetail: @item
                       (#
-                         onStatus:: (#  do formEditorExists->value #);
-                         onSelect:: (#  do cfe.doDetail #)
+                         onStatus::  (#  do formEditorExists->value #);
+                         onSelect::  (#  do cfe.doDetail #)
                       #);
                     iDetailRecursively: @item
                       (#
-                         onStatus:: (#  do formEditorExists->value #);
-                         onSelect:: (#  do cfe.doDetailRecursively;  #)
+                         onStatus::  (#  do formEditorExists->value #);
+                         onSelect::  (#  do cfe.doDetailRecursively;  #)
                       #);
                     iReprettyprint: @item
                       (#
-                         onStatus:: (#  do formEditorExists->value #);
-                         onSelect:: (#  do cfe.doReprettyprint;  #)
+                         onStatus::  (#  do formEditorExists->value #);
+                         onSelect::  (#  do cfe.doReprettyprint;  #)
                       #);
-                    findAndSelect:
-                      (# node: ^mps.ast.ast
-                      enter node[]
-                      do
-                         (if node[] <> none then
-                             (if node.frag[] <> cfe.frag[] then
-                                 'not same frag'->putLine;
-                                 ((node.frag.father).fullName,node.frag.name)
-                                   ->browser.selectFragmentForm;
-                                 (if formEditorExists then
-                                     'no formeditor?'->putLine;
-                                     (node[],1,0,0)->cfe.setFocus
-                                  else
-                                     'formeditor not found'->putLine
-                                 if)
-                              else
-                                 'same frag'->putLine;
-                                 (node[],1,0,0)->cfe.setFocus
-                             if)
-                          else
-                             'findAndSelect: node is none!'->putLine
-                         if)
+                    iShowAstCS: @item
+                      (#
+                         onStatus::  (#  do formEditorExists->value #);
+                         onSelect:: 
+                           (#  do cfe.cs.node[]->cfe.doShowAst;  #)
                       #);
                     iBack: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
@@ -768,14 +1079,14 @@ fragmentBrowser: ymerApplication
                                      ->value
                                 #)
                            #);
-                         onSelect::
+                         onSelect:: 
                            (# 
                            do cfe.cs.node[]->edenv.history.back->findAndSelect
                            #)
                       #);
                     iForward: @item
                       (#
-                         onStatus::
+                         onStatus:: 
                            (# 
                            do
                               false->value;
@@ -786,14 +1097,14 @@ fragmentBrowser: ymerApplication
                                      ->value
                                 #)
                            #);
-                         onSelect::
+                         onSelect:: 
                            (# 
                            do
                               cfe.cs.node[]->edenv.history.forward
                                 ->findAndSelect
                            #)
                       #);
-                    open::
+                    open:: 
                       (# 
                       do
                          'Abstract'->iAbstract.new;
@@ -803,6 +1114,7 @@ fragmentBrowser: ymerApplication
                          'Detail Recursively'->iDetailRecursively.new;
                          newSeparator;
                          ('Reprettyprint','p')->iReprettyprint.newKey;
+                         'Show AST Current Selection'->iShowAstCS.new;
                          newSeparator;
                          ('Back','b')->iBack.newKey;
                          ('Forward','f')->iForward.newKey;
@@ -810,38 +1122,142 @@ fragmentBrowser: ymerApplication
                       #);
                     
                  #);
-               open::
+               SLOTs: @simplemenu
+                 (#
+                    eventHandler::< 
+                      (#
+                         onSelect::< 
+                           (# 
+                           do
+                           (* (if formEditorExists then
+                            'menu enable does not work!!'->putLine; enable
+                            else
+                            'menu disable does not work!!'->putLine; disable
+                            if)*) 
+                           #)
+                      #);
+                    iSearchSlotBinding: @item
+                      (#
+                         onStatus:: 
+                           (# 
+                           do
+                              false->value;
+                              formEditorExists
+                                (#  do cfe.cs.isSlot->value #)
+                           #);
+                         onSelect::  (#  do cfe.makeSearchSlotBinding #)
+                      #);
+                    iMakeDoPartSlot: @item
+                      (#
+                         onStatus:: 
+                           (# 
+                           do
+                              false->value;
+                              formEditorExists
+                                (#  do cfe.askMakeDoPartSlot->value #)
+                           #);
+                         onSelect::  (#  do cfe.doMakeDoPartSlot;  #)
+                      #);
+                    iMakeDescriptorSlot: @item
+                      (#
+                         onStatus:: 
+                           (# 
+                           do
+                              false->value;
+                              formEditorExists
+                                (#  do cfe.askMakeDescriptorSlot->value #)
+                           #);
+                         onSelect::  (#  do cfe.doMakeDescriptorSlot;  #)
+                      #);
+                    iMakeAttributesSlot: @item
+                      (#
+                         onStatus:: 
+                           (# 
+                           do
+                              false->value;
+                              formEditorExists
+                                (#  do cfe.askMakeAttributesSlot->value #)
+                           #);
+                         onSelect::  (#  do cfe.doMakeAttributesSlot;  #)
+                      #);
+                    iPasteFragmentForm: @item
+                      (#
+                         onStatus:: 
+                           (# 
+                           do
+                              false->value;
+                              formEditorExists
+                                (#  do cfe.askPasteFragmentForm->value #)
+                           #);
+                         onSelect::  (#  do cfe.doPasteFragmentForm;  #)
+                      #);
+                    iHideImpl: @item
+                      (#
+                         onStatus::  (#  do formEditorExists->value #);
+                         onSelect::  (#  do cfe.doHideImplementation;  #)
+                      #);
+                    iFillSlot: @item
+                      (#
+                         onStatus:: 
+                           (# 
+                           do
+                              false->value;
+                              formEditorExists
+                                (#  do cfe.cs.isSlot->value #)
+                           #);
+                         onSelect::  (#  do cfe.doFillSlot;  #)
+                      #);
+                    iFillAllSlots: @item
+                      (#
+                         onStatus::  (#  do formEditorExists->value #);
+                         onSelect::  (#  do cfe.doFillAllSlots #)
+                      #);
+                    open:: 
+                      (# 
+                      do
+                         'Search SLOT Binding'->iSearchSlotBinding.new;
+                         newSeparator;
+                         'Make DoPart SLOT...'->iMakeDoPartSlot.new;
+                         'Make Descriptor SLOT...'->iMakeDescriptorSlot.new;
+                         'Make Attribute SLOT...'->iMakeAttributesSlot.new;
+                         'Hide Implementation...'->iHideImpl.new;
+                         newSeparator;
+                         'Paste Fragment Form'->iPasteFragmentForm.new;
+                         'Fill SLOT...'->iFillSlot.new;
+                         'Fill All SLOTs'->iFillAllSlots.new;
+                         
+                      #);
+                    
+                 #);
+               open:: 
                  (# 
                  do
                     GroupFile.new;
                     GroupEdit.new;
-                    GroupPerform.new;
+                    'Tools'->GroupPerform.new;
                     Edit.new;
-                    View.new
+                    View.new;
+                    SLOTs.new
                  #)
             #)
        #);
-     init::
+     init:: 
        (# 
        do
           objectPool.get
             (#
                type:: ymerBrowser.editorEnv;
-               init::
+               init:: 
                  (# 
                  do
-                    'init editorEnv from Ymer'->putLine;
+                    (if false then 'init editorEnv from Ymer'->putLine;  if);
                     (mps.ast[],mps.betaCFL[],THIS(fragmentBrowser)[])->obj.init
                  #)
-            #)->edenv[]
+            #)->edenv[];
+          ymerBrowser.initCompiler
        exit (mps.ast[],mps.betaCFL[])
        #);
      
-  do
-  (*(if noOfArguments<>2 then
-   *    'ERROR: Illegal number of arguments'->screen.putline;
-   *    (normal,'Usage: ymer machineType')->stop
-   *  else
-   *    2->arguments->*) init (*if)*)
+  do init; INNER fragmentBrowser
   #)  
 

@@ -1,0 +1,930 @@
+ORIGIN '../codeeditor';
+-- slotPrivate: Descriptor --
+(#
+   superSynCatNo,selectionSynCatNo: @mps.nonterminalSymbol;
+   currentUnexp: ^mps.unexpanded;
+   mypasteFragment:
+     (#
+        cf: @astFocus;
+        frag: ^mps.fragmentForm;
+        fatherNode: ^mps.expanded;
+        prod: ^mg.prod;
+        pasteElement: ^mps.ast;
+        aList: (*doDelete: @boolean;*) ^mps.list;
+        isSon: @integer;
+        newFocus: @astFocus;
+        length: @integer
+     enter (cf,frag[])
+     do
+        (if switch[6] then 'pasteFragment'->putline if);
+        frag[]->edenv.clip.fragments.elm[1].copy->pasteElement[];
+        edenv.clip.length->length;
+        (if cf.node.father = none then (* current selection is root *)
+            pasteElement[]
+              ->
+              (*false -> doDelete;
+               (none ,0,cf,length,doDelete) -> makeUndoElem;
+               pasteElement[] -> program[];
+               &makeAstReplacedEvent;
+               (program[],1,0,0) -> &setFocus*) frag.root[]
+         else
+            cf.node.father->fatherNode[];
+            fatherNode.symbol->prodList.get->prod[];
+            (if (prod.symbol = mg.listZero) or (prod.symbol = mg.listOne) then
+            (*true -> doDelete;*)
+                cf.node.sonNo->isSon;
+                fatherNode[]->aList[];
+                (for
+                (*(fatherNode[],isSon,cf,length,doDelete) -> makeUndoElem;*)
+                cf.length repeat
+                  isSon->aList.delete
+                for);
+                (for
+                (*(isSon -> fatherNode.get,length) -> newFocus;
+                 (fatherNode[],isSon,undoElem.fragmentLength,undoElem.fragments[]
+                 ,newFocus.length) -> aListElementsReplacedEvent;
+                 newFocus -> &setFocus*) i: length repeat
+                  (isSon+i-1,(frag[]->edenv.clip.fragments.elm[i].copy))
+                    ->fatherNode.insert
+                for)
+             else
+            (* cf.length as well as length is equal to 1 ! 
+             false -> doDelete;
+             (fatherNode[],cf.node.sonNo,cf,length,doDelete) -> makeUndoElem;*)
+                (cf.node.sonNo,pasteElement[])
+                  ->
+                  (*&makeAstReplacedEvent;
+                   (pasteElement[],1,,0,0) -> setFocus*) fatherNode.put
+            if)
+        if);
+        (if switch[6] then 'end pasteFragment'->putline if)
+     #);
+   myCopyFragment:
+     (#
+        cf: @astFocus;
+        fatherNode: ^mps.expanded;
+        copyNode: ^mps.ast;
+        synCatNo: @mps.nonterminalSymbol;
+        prod: ^mg.prod;
+        isSon: @integer
+     enter (cf)
+     do
+        (if switch[6] then 'copyFragment'->putline if);
+        cf.node[]->checkFatherNode-> (* may update cs, preliminary *) cf.node[];
+        ag[]->mps.newFragmentForm->edenv.clippedff[];
+        edenv.clippedff[]->cf.node.copy->edenv.clip.fragments.elm[1][];
+        (if ((cf.node.father->fatherNode[]) <> none ) then
+            (for i: (cf.length-1) repeat
+              cf.node.sonNo+i->fatherNode.get->copyNode[];
+              edenv.clippedff[]->copyNode.copy->edenv.clip.fragments.elm[i+1][]
+            for)
+        if);
+        cf.node[]->getSynCatNo->edenv.clip.synCatNo;
+        cf.length->edenv.clip.length;
+        (if switch[6] then ' end copyFragment'->putline if)
+     #);
+   fillSlot:
+     (#
+        unexp: ^mps.unexpanded;
+        promptUser: @boolean;
+        emptyDescriptor: @boolean;
+        copyNode: ^mps.ast;
+        length: @integer;
+        help: ^text;
+        ge: ^edenv.groupEditor;
+        fg: ^mps.fragmentGroup;
+        fatherNode,far: ^mps.expanded
+     enter (unexp[],promptUser)
+     do
+        unexp[]
+          ->searchSlotBinding
+            (#
+               bindingFound::< 
+                 (# 
+                 do
+                    (if promptUser then
+                        ff.father->edenv.groupEditorList.findGroupEditor;
+                        'Fill the '''->help[];
+                        ff.name->help.putText;
+                        ''' SLOT?'->help.putText;
+                        (none ,'Fill SLOT',help[])
+                          ->UI.promptForBoolean
+                            (#
+                               ok::< 
+                                 (# 
+                                 do
+                                    (unexp[],ff[])->checkFragmentForm
+                                      ->(emptyDescriptor,copyNode[],length);
+                                    (if
+                                    (*ff[]->edenv.clippedFrag[];
+                                     ff.father->fg[]->groupEditorList.findGE->ge[];
+                                     (if (ge[]<>none)  
+                                     ff[]->ge.deleteFragment;
+                                     ge.groupTouched;
+                                     else 
+                                     ff.name->fg.fragmentList.deleteLocalName;
+                                     if);
+                                     *) emptyDescriptor then
+                                        (unexp[],1,0,0)->cs; cut
+                                     else
+                                        (if switch[5] then
+                                            'copyNode.dump '->putLine;
+                                            (1,screen[])->copyNode.dump;
+                                            newLine;
+                                            'length: '->putText;
+                                            length->putInt;
+                                            newLine
+                                        if);
+                                        (copyNode[],length,0,0)
+                                          ->slotPrivate.myCopyFragment;
+                                        unexp.father->fatherNode[];
+                                        (if switch[5] then
+                                            'fatherNode: '->putText;
+                                            fatherNode.symbol->putInt;
+                                            newLine
+                                        if);
+                                        (if fatherNode.symbol
+                                         // edenv.betaGrammar.InsertedItem then
+                                            (fatherNode[],1,0,0)->cs
+                                         else
+                                            (unexp[],1,0,0)->setFocus
+                                        if);
+                                        paste
+                                    if)
+                                 #)
+                            #)
+                     else
+                        (unexp[],ff[])->checkFragmentForm
+                          ->(emptyDescriptor,copyNode[],length);
+                        (if
+                        (*ff.father->fg[]->groupEditorList.findGE->ge[];
+                         (if (ge[]<>none) then 
+                         ff[]->ge.deleteFragment; 
+                         ge.groupTouched;
+                         else  
+                         ff.name->fg.fragmentList.deleteLocalName;
+                         if);
+                         *) emptyDescriptor then
+                            (unexp[],1,0,0)->cs;
+                            checkson;
+                            true (*doNotNotify*) -> (*setFocus;*) cut
+                         else
+                            (copyNode[],length,0,0)->slotPrivate.myCopyFragment;
+                            ((unexp[],1,0,0),frag[])
+                              ->slotPrivate.myPasteFragment
+                        if)
+                    if)
+                 #);
+               bindingNotFound::< 
+                 (# 
+                 do
+                    'Could not find a binding of the SLOT '''->help[];
+                    slotName[]->help.putText;
+                    ''''->help.put;
+                    (if promptUser then
+                        (none ,help[],'Fill SLOT')->UI.alertUser
+                     else
+                        '***** '->help.prePend; help[]->putLine
+                    if)
+                 #)
+            #)
+     #);
+   makeSlot:
+     (#
+        synCatNo: @mps.nonterminalSymbol;
+        name: ^text;
+        theAst: ^mps.ast;
+        sonNo,length: @integer;
+        fatherNode,theExp: ^mps.expanded;
+        theUnexp: ^mps.unexpanded;
+        theObjectDescriptor: ^edenv.betaGrammar.objectDescriptor;
+        theAttributesForm: ^edenv.betaGrammar.AttributesForm;
+        theAttributes: ^edenv.betaGrammar.Attributes;
+        fg: ^mps.fragmentGroup;
+        theSlot: ^mps.slotDesc;
+        keepSuperSynCatNo: @integer;
+        pasteNode: ^mps.ast;
+        setFatherNode:
+          (#
+             fatherNode: ^mps.expanded;
+             supersyncatno,no: @integer;
+             unexp: ^mps.unexpanded
+          enter supersyncatno
+          do
+             (if superSynCatNo
+              // edenv.betaGrammar.attributes then
+                 cs.node.sonNo->sonNo;
+                 cs.node.father->fatherNode[];
+                 (if (fatherNode[] <> none ) then
+                     loop:
+                     (if fatherNode.symbol
+                      // edenv.betaGrammar.attributes then 
+                      else
+                         (if (fatherNode.father <> none ) then
+                             fatherNode.father->fatherNode[]; restart loop
+                         if);
+                         
+                     if)
+                 if);
+                 
+              // betaGram.objectSpecification // betaGram.betaForm then
+                 cs.node.father->fatherNode[];
+                 (if (fatherNode[] <> none ) then
+                     loop:
+                     (if fatherNode.symbol
+                      // edenv.betaGrammar.PatternDecl
+                      // edenv.betaGrammar.VirtualDecl
+                      // edenv.betaGrammar.BindingDecl then
+                         2->sonNo
+                      // edenv.betaGrammar.StaticItem
+                      // edenv.betaGrammar.StaticComponent then
+                         1->sonNo
+                      else
+                         (if (fatherNode.father <> none ) then
+                             fatherNode.father->fatherNode[]; restart loop
+                         if);
+                         
+                     if)
+                 if);
+                 
+              // edenv.betaGrammar.imperatives then
+                 cs.node.sonNo->sonNo;
+                 cs.node.father->fatherNode[];
+                 (if (fatherNode[] <> none ) then
+                     loop:
+                     (if fatherNode.symbol
+                      // edenv.betaGrammar.Imperatives then 
+                      else
+                         (if (fatherNode.father <> none ) then
+                             fatherNode.father->fatherNode[]; restart loop
+                         if)
+                     if)
+                 if);
+                 
+              // edenv.betaGrammar.dopart then
+                 cs.node.sonNo->sonNo; cs.node.father->fatherNode[]; 
+             if)
+          exit (fatherNode[],sonNo)
+          #);
+        createSlotAST:
+          (#
+             supersyncatno: @integer;
+             pasteNode: ^mps.ast;
+             aDescriptorForm: ^edenv.betaGrammar.DescriptorForm;
+             anAttributesForm: ^edenv.betaGrammar.AttributesForm;
+             anObjectDescriptor: ^edenv.betaGrammar.ObjectDescriptor;
+             aMainPart: ^edenv.betaGrammar.MainPart;
+             anAttributes: ^edenv.betaGrammar.Attributes;
+             anActionPart: ^edenv.betaGrammar.ActionPart;
+             aDoPart: ^edenv.betaGrammar.DoPart;
+             anImperatives: ^edenv.betaGrammar.Imperatives;
+             anInnerImp: ^edenv.betaGrammar.InnerImp;
+             aPatternDecl: ^edenv.betaGrammar.patternDecl;
+             anUnexp: ^mps.unexpanded
+          enter supersyncatno
+          do
+             (if superSynCatNo
+              // edenv.betaGrammar.attributes then
+              (*(edenv.betaGrammar.attributesForm,edenv.makeSLOTfrag[])->edenv.betaGrammar.newAst->anAttributesForm[]
+               ->edenv.makeSLOTfrag.root[];*)
+                 (if switch[5] then
+                     'edenv.betaGrammar.attributes'->putLIne
+                 if);
+                 (edenv.betaGrammar.Attributes,edenv.makeSLOTfrag[])
+                   ->edenv.betaGrammar.newAst->anAttributes[]
+                   -> (* build an attributes AST with one attributeDecl *)
+                     edenv.makeSLOTfrag.root[];
+                 (edenv.betaGrammar.PatternDecl,edenv.makeSLOTfrag[])
+                   ->edenv.betaGrammar.newAst->aPatternDecl[]
+                   -> (* just a dummy decl *) anAttributes.append;
+                 aPatternDecl[]->pasteNode[];
+                 betaGram.attributeDecl
+                 (*edenv.betaGrammar.attributes
+                  Form*) ->edenv.makeSLOTtype
+              // betaGram.objectSpecification // betaGram.betaForm then
+                 (edenv.betaGrammar.ObjectDescriptor,edenv.makeSLOTfrag[])
+                   ->edenv.betaGrammar.newAst->edenv.makeSLOTfrag.root[]
+                   ->pasteNode[];
+                 (if switch[5] then
+                     'edenv.betaGrammar.objectSpecification,betaform'->putLIne
+                 if);
+                 edenv.betaGrammar.ObjectDescriptor (*Form*)
+                   ->edenv.makeSLOTtype
+              // edenv.betaGrammar.imperatives then
+                 (if switch[5] then
+                     'edenv.betaGrammar.imperatives'->putLine
+                 if);
+                 (edenv.betaGrammar.ObjectDescriptor,edenv.makeSLOTfrag[])
+                   ->edenv.betaGrammar.newAst->anObjectDescriptor[]
+                   ->edenv.makeSLOTfrag.root[];
+                 (if selectionSynCatNo
+                  // edenv.betaGrammar.objectDescriptor then
+                     edenv.makeSLOTfrag.root[]->pasteNode[]
+                  else
+                 (* build an objectDescriptor with one imp in the doPart
+                  * this could have been done easier by just parsing
+                  * (# do inner #) !!!
+                  * but I did it as an exercise in using mps
+                  * 
+                  * ObjectDescriptor : ObjectSpecification
+                  (#
+                  getPrefixOpt: getson1(##);
+                  putPrefixOpt: putson1(##);
+                  getMainPart: getson2(##);
+                  putMainPart: putson2(##);
+                  <<SLOT ObjectDescriptorAttributes:attributes>>
+                  exit 4 #);
+                  
+                  MainPart : cons
+                  (#
+                  getAttributes: getson1(##);
+                  putAttributes: putson1(##);
+                  getActionPart: getson2(##);
+                  putActionPart: putson2(##);
+                  <<SLOT MainPartAttributes:attributes>>
+                  exit 5 #);
+                  ActionPart : cons
+                  (#
+                  getEnterPartOpt: getson1(##);
+                  putEnterPartOpt: putson1(##);
+                  getDoPartOpt: getson2(##);
+                  putDoPartOpt: putson2(##);
+                  getExitPartOpt: getson3(##);
+                  putExitPartOpt: putson3(##);
+                  exit 26 
+                  #);                                   
+                  *)
+                     (betaGram.PrefixOpt,edenv.makeSLOTfrag[])
+                       ->edenv.betaGrammar.newOptional->anUnexp[]
+                       ->anObjectDescriptor.putPrefixOpt;
+                     betaGram.PrefixOpt
+                       -> (* derive the optional empty: *)
+                         anUnexp.nonTerminalSymbol;
+                     (edenv.betaGrammar.MainPart,edenv.makeSLOTfrag[])
+                       ->edenv.betaGrammar.newAst->aMainPart[]
+                       ->anObjectDescriptor.putMainPart;
+                     (edenv.betaGrammar.Attributes,edenv.makeSLOTfrag[])
+                       ->edenv.betaGrammar.newAst->anAttributes[]
+                       ->aMainPart.putAttributes;
+                     (betaGram.attributeDeclOpt,edenv.makeSLOTfrag[])
+                       ->edenv.betaGrammar.newOptional->anUnexp[]
+                       ->anAttributes.append;
+                     betaGram.AttributeDeclOpt->anUnexp.nonTerminalSymbol;
+                     (edenv.betaGrammar.ActionPart,edenv.makeSLOTfrag[])
+                       ->edenv.betaGrammar.newAst->anActionPart[]
+                       ->aMainPart.putActionPart;
+                     (betaGram.EnterPartOpt,edenv.makeSLOTfrag[])
+                       ->edenv.betaGrammar.newOptional->anUnexp[]
+                       ->anActionPart.putEnterPartOpt;
+                     betaGram.EnterPartOpt->anUnexp.nonTerminalSymbol;
+                     (edenv.betaGrammar.DoPart,edenv.makeSLOTfrag[])
+                       ->edenv.betaGrammar.newAst->aDoPart[]
+                       ->anActionPart.putDoPartOpt;
+                     (betaGram.ExitPartOpt,edenv.makeSLOTfrag[])
+                       ->edenv.betaGrammar.newOptional->anUnexp[]
+                       ->anActionPart.putExitPartOpt;
+                     betaGram.ExitPartOpt->anUnexp.nonTerminalSymbol;
+                     (edenv.betaGrammar.Imperatives,edenv.makeSLOTfrag[])
+                       ->edenv.betaGrammar.newAst->anImperatives[]
+                       ->aDoPart.putImperatives;
+                     (edenv.betaGrammar.InnerImp,edenv.makeSLOTfrag[])
+                       ->edenv.betaGrammar.newAst->anInnerImp[]
+                       -> (* just a dummy imp *) anImperatives.append;
+                     anInnerImp[]->pasteNode[]
+                 if);
+                 edenv.betaGrammar.ObjectDescriptor (*Form*)
+                   ->edenv.makeSLOTtype
+              // edenv.betaGrammar.doPart then
+                 (if switch[5] then 'edenv.betaGrammar.doPart'->putLine if);
+                 (edenv.betaGrammar.doPart,edenv.makeSLOTfrag[])
+                   ->edenv.betaGrammar.newAst->aDoPart[]
+                   ->edenv.makeSLOTfrag.root[];
+                 aDoPart[]->pasteNode[];
+                 edenv.betaGrammar.doPart->edenv.makeSLOTtype
+              else
+                 (if switch[5] then 'else SynCatNo'->putLine if)
+             if)
+          exit pasteNode[]
+          #);
+        insertSlot:
+          (#
+             superSynCatNo,sonNo: @integer;
+             fatherNode: ^mps.expanded;
+             unexp: ^mps.unexpanded;
+             anInsertedItem: ^edenv.betaGrammar.InsertedItem;
+             aDoPart: ^edenv.betaGrammar.DoPart
+          enter (superSynCatNo,fatherNode[],sonNo,unExp[])
+          do
+             (if switch[5] then
+                 'insertSlot: sonNo: '->screen.putText;
+                 sonNo->putInt;
+                 newLine;
+                 'fatherNode.dump'->screen.putLine;
+                 (1,screen[])->fatherNode.dump;
+                 newLine
+             if);
+             (if superSynCatNo
+              // edenv.betaGrammar.attributes then
+                 (sonNo,theUnexp[])->fatherNode.insert
+              // betaGram.objectSpecification // betaGram.betaForm then
+                 (sonNo,theUnexp[])->fatherNode.put
+              // edenv.betaGrammar.imperatives then
+                 (edenv.betaGrammar.InsertedItem,fatherNode.frag[])
+                   ->edenv.betaGrammar.newAst->anInsertedItem[];
+                 (sonNo,anInsertedItem[])->fatherNode.insert;
+                 (1,theUnexp[])->anInsertedItem.put
+              // edenv.betaGrammar.DoPart then
+                 (sonNo,theUnexp[])->fatherNode.put
+             if);
+             (if switch[5] then
+                 'fatherNode.dump'->screen.putLine;
+                 (1,screen[])->fatherNode.dump;
+                 newLine
+             if)
+          #)
+     enter (name[])
+     do
+        superSynCatNo->setFatherNode->(fatherNode[],sonNo);
+        cs.length->length;
+        (if switch[5] then
+            'fatherNode.dump'->putLine;
+            (1,screen[])->fatherNode.dump;
+            newLine;
+            'sonNo,length: '->putText;
+            sonNo->putInt;
+            ' '->put;
+            length->putInt;
+            newLine
+        if);
+        SuperSyncatNo->keepSuperSynCatNo;
+        true (*doNotNotify*) ->cut;
+        ag[]->mps.newFragmentForm->edenv.makeSLOTfrag[];
+        name[]->edenv.makeSLOTFrag.name;
+        keepSuperSynCatNo->createSlotAST->pasteNode[];
+        ((pasteNode[],1,0,0),edenv.makeSLOTfrag[])->slotPrivate.mypasteFragment;
+        (if switch[5] then
+            'edenv.makeSLOTfrag.root.dump'->screen.putLine;
+            (1,screen[])->edenv.makeSLOTfrag.root.dump;
+            newLine
+        if);
+        frag[]->edenv.betaGrammar.newSlot->theSlot[];
+        name[]->theSlot.name;
+        (edenv.makeSLOTtype,frag[])->edenv.betaGrammar.newUnexpanded
+          ->theUnexp[];
+        theSlot[]->theUnexp.theSlot;
+        (if switch[5] then
+            'fatherNode.dump'->putLine; (1,screen[])->fatherNode.dump; newLine
+        if);
+        (keepSuperSynCatNo,fatherNode[],sonNo,theUnexp[])->insertSlot;
+        (if switch[5] then
+            'fatherNode.dump'->putLine; (1,screen[])->fatherNode.dump; newLine
+        if);
+        (fatherNode[],fatherNode[])
+          -> (*(program[],-1)->astView.pp.present;*) astView.pp.update;
+        (theUnexp[],1,0,0)->setFocus;
+        edenv.makeSLOTFrag[]->edenv.clippedFrag[]
+     #);
+   getName:
+     (#
+        node: ^mps.ast;
+        exp: ^mps.expanded;
+        name: ^text;
+        synCatNo: @mps.nonterminalSymbol;
+        ad: ^edenv.betaGrammar.attributeDecl;
+        nd: ^mps.nameDecl
+     do
+        cs.node[]->node[];
+        node[]->getSynCatNo->synCatNo;
+        loop:
+        (if synCatNo
+         // betaGram.PatternDecl // betaGram.SimpleDecl
+         // betaGram.RepetitionDecl // betaGram.VirtualDecl
+         // betaGram.BindingDecl // betaGram.FinalDecl then
+            node[]->exp[];
+            exp.getson1->exp[];
+            exp.getson1->exp[];
+            exp.getson1->nd[];
+            (nd.getText).copy->name[]
+         else
+            (if node.father <> none then
+                node.father->node[]; node[]->getSynCatNo->synCatNo; restart loop
+             else
+                ''->name[]
+            if)
+        if)
+     exit name[]
+     #);
+   checkFragmentForm:
+     (#
+        node: ^mps.ast;
+        frag: ^mps.fragmentForm;
+        emptyDescriptor: @boolean;
+        copyNode: ^mps.ast;
+        length: @integer;
+        isList: @boolean;
+        theListElement: ^mps.ast;
+        superSynCatNo: @mps.nonterminalSymbol;
+        aDescriptorForm: ^edenv.betaGrammar.DescriptorForm;
+        anObjectDescriptor: ^edenv.betaGrammar.ObjectDescriptor;
+        aMainPart: ^edenv.betaGrammar.MainPart;
+        anAttributes: ^edenv.betaGrammar.Attributes;
+        anAttributesForm: ^edenv.betaGrammar.AttributesForm;
+        anActionPart: ^edenv.betaGrammar.ActionPart;
+        aDoPart: ^edenv.betaGrammar.DoPart;
+        anImperatives: ^edenv.betaGrammar.imperatives;
+        anAst: ^mps.ast;
+        noAttributes,noDoPart,imperativesExtracted: @boolean
+     enter (node[],frag[])
+     do
+        frag.root[]->copyNode[];
+        1->length;
+        node[]->parsingSynCatNo
+          ->
+          (* get the ObjectDescriptor in case of descriptorform 
+           * and attributes in case of attributesform?
+           *) (SuperSyncatNo,isList,theListElement[]);
+        (if superSynCatNo
+         // edenv.betaGrammar.imperatives then
+            (if frag.root.symbol
+             // edenv.betaGrammar.descriptorForm then
+                frag.root[]->aDescriptorForm[];
+                aDescriptorForm.getObjectDescriptor->anObjectDescriptor[]
+             else
+                (if frag.root.symbol
+                 // edenv.betaGrammar.objectDescriptor then
+                    frag.root[]->anObjectDescriptor[]
+                 else
+                    'Strange fragment form!!'->putLine
+                if)
+            if);
+            anObjectDescriptor.getMainPart->aMainPart[];
+            aMainPart.getAttributes->anAttributes[];
+            (if switch[5] then
+                'anAttributes.noOfSons: '->putText;
+                anAttributes.noOfSons->putInt;
+                newLine
+            if);
+            (if anAttributes.noOfSons
+             // 1 then
+                1->anAttributes.get->anAst[];
+                (if switch[5] then
+                    'anAST.dump'->putLine; (1,screen[])->anAST.dump; newLine
+                if);
+                (if anAst.kind
+                 // mps.kinds.optional then
+                    true->noAttributes;
+                    (if switch[5] then 'no attributes'->putLine if)
+                if)
+            if);
+            aMainPart.getActionPart->anActionPart[];
+            anActionPart.getDoPartOpt->anAst[];
+            (if anAst.kind
+             // mps.kinds.optional then
+                true->noDoPart; (if switch[5] then 'no do part'->putLine if)
+             else
+                anAST[]->aDoPart[]
+            if);
+            (if noAttributes then
+                (if noDoPart then
+                    true->emptyDescriptor
+                 else
+                (* extract Imperatives *)
+                    true->imperativesExtracted;
+                    aDoPart.getImperatives->anImperatives[];
+                    anImperatives.noOfSons->length;
+                    (if (length > 0) then
+                        1->anImperatives.get->copyNode[]
+                     else
+                    (* should not happen *)
+                        anImperatives[]->copyNode[]
+                    if)
+                if)
+            if);
+            (if not imperativesExtracted then
+                (if switch[6] then 'copying ast'->putline if);
+                anObjectDescriptor[]->copyNode[]
+            if)
+         else
+            (if frag.root.symbol = edenv.betaGrammar.doPart then
+                frag.root[]->copyNode[]
+             else
+                (if frag.root.symbol
+                 // edenv.betaGrammar.descriptorForm then
+                    frag.root[]->aDescriptorForm[];
+                    aDescriptorForm.getObjectDescriptor->anAst[];
+                    (if switch[6] then 'copying ast'->putline if);
+                    anAst[]->copyNode[]
+                 else
+                    (if frag.root.symbol
+                     // edenv.betaGrammar.objectDescriptor then
+                        frag.root[]->copyNode[]
+                     else
+                        (if frag.root.symbol
+                         // edenv.betaGrammar.AttributesForm then
+                            frag.root[]->anAttributesForm[];
+                            anAttributesForm.getAttributes->anAttributes[]
+                         else
+                            (if frag.root.symbol
+                             // edenv.betaGrammar.Attributes then
+                                frag.root[]->anAttributes[]
+                             else
+                                'Strange fragment form'->putLine
+                            if)
+                        if);
+                        anAttributes.noOfSons->length;
+                        (if (length > 0) then
+                            1->anAttributes.get->copyNode[]
+                         else
+                        (* should not happen *)
+                            anAttributes[]->copyNode[]
+                        if)
+                    if)
+                if)
+            if)
+        if)
+     exit (emptyDescriptor,copyNode[],length)
+     #)
+#)  
+
+-- askMakeDopartSlot: DoPart --
+do
+     (#
+        isList: @boolean;
+        theListElement: ^mps.ast;
+        theSlot: ^mps.slotDesc;
+        fragName: ^text
+     do
+        cs.node[]->parsingSynCatNo
+          ->(slotPrivate.SuperSyncatNo,isList,theListElement[]);
+        (if switch[5] then
+            'supersyncatno, isList, selectionsyncatno: '->putText;
+            slotPrivate.SuperSyncatNo->putInt;
+            ' '->put;
+            isList->putInt;
+            ','->put;
+            cs.node.symbol->slotPrivate.selectionSynCatNo->putInt;
+            newLine
+        if);
+        (if slotPrivate.SuperSyncatNo
+         // edenv.betaGrammar.doPart then
+            true->value; (if switch[5] then 'doPart'->putLine if)
+        if);
+        (if switch[5] then newLine if)
+     #)  
+
+-- askMakeDescriptorSlot: DoPart --
+do
+     (#
+        isList: @boolean;
+        theListElement: ^mps.ast;
+        theSlot: ^mps.slotDesc;
+        fragName: ^text
+     do
+        cs.node[]->parsingSynCatNo
+          ->(slotPrivate.SuperSyncatNo,isList,theListElement[]);
+        (if switch[5] then
+            'supersyncatno, isList, selectionsyncatno: '->putText;
+            slotPrivate.SuperSyncatNo->putInt;
+            ' '->put;
+            isList->putInt;
+            ','->put;
+            cs.node.symbol->slotPrivate.selectionSynCatNo->putInt;
+            newLine
+        if);
+        (if slotPrivate.SuperSyncatNo
+         // betaGram.BetaForm then
+            (if cs.node.symbol
+             // edenv.betaGrammar.objectDescriptor then
+             (*edenv.betaGrammar.objectDescriptor->SuperSyncatNo;*)
+                true->value;
+                (if switch[5] then 'betaform,objectDescriptor'->putLine if)
+             else
+                (if switch[5] then
+                    'betaform,not objectDescriptor'->putLine
+                if)
+            if)
+         // betaGram.objectSpecification then
+            (if cs.node.symbol
+             // edenv.betaGrammar.objectDescriptor then
+             (*edenv.betaGrammar.objectDescriptor->SuperSyncatNo;*)
+                true->value;
+                (if switch[5] then
+                    'objectSpecification,objectDescriptor'->putLine
+                if)
+             else
+                (if switch[5] then
+                    'objectSpecification,not objectDescriptor'->putLine
+                if)
+            if)
+         // edenv.betaGrammar.imperatives then
+            true->value; (if switch[5] then 'imperatives'->putLine if)
+        if);
+        (if switch[5] then newLine if)
+     #)  
+
+-- askMakeAtributesSlot: DoPart --
+do
+     (#
+        isList: @boolean;
+        theListElement: ^mps.ast;
+        theSlot: ^mps.slotDesc;
+        fragName: ^text
+     do
+        cs.node[]->parsingSynCatNo
+          ->(slotPrivate.SuperSyncatNo,isList,theListElement[]);
+        (if switch[5] then
+            'supersyncatno, isList, selectionsyncatno: '->putText;
+            slotPrivate.SuperSyncatNo->putInt;
+            ' '->put;
+            isList->putInt;
+            ','->put;
+            cs.node.symbol->slotPrivate.selectionSynCatNo->putInt;
+            newLine
+        if);
+        (if slotPrivate.SuperSyncatNo
+         // edenv.betaGrammar.attributes then
+            (if cs.node.symbol
+             // edenv.betaGrammar.patternDecl then
+             (*edenv.betaGrammar.patternDecl->SuperSyncatNo;*)
+                true->value;
+                (if switch[5] then 'attributes,patternDecl'->putLine if)
+             else
+                (if switch[5] then 'attributes,not patternDecl'->putLine if)
+            if)
+        if);
+        (if switch[5] then newLine if);
+        (if ((cs.length = 1) and (cs.node.kind = mps.kinds.unexpanded)) then
+            cs.node[]->slotPrivate.currentUnexp[];
+            (if switch[5] then
+                'nonterminalSymbol: '->putText;
+                slotPrivate.currentUnexp.nonterminalsymbol->putInt;
+                newLine
+            if);
+            (if slotPrivate.currentUnexp.nonterminalsymbol
+             // betaGram.attributeDeclOpt then true->value
+            if)
+        if)
+     #)  
+
+-- askPasteFragmentForm: DoPart --
+do
+     (# currentUnexp: ^mps.unexpanded
+     do
+        (if ((cs.length = 1) and (cs.node.kind = mps.kinds.unexpanded)) then
+            cs.node[]->currentUnexp[];
+            (if switch[5] then
+                'nonterminalSymbol: '->putText;
+                currentUnexp.nonterminalsymbol->putInt;
+                newLine
+            if);
+            (if currentUnexp.isSlot then
+                (if (edenv.clippedFrag[] <> none ) then
+                    true
+                      ->value
+                      (* currentUnexp.theSlot->theSlot[];
+                       edenv.clippedFrag.name->fragName[];
+                       (if theSlot.name->fragName.equal then
+                       (5,UI.enable)->menuItems.look
+                       else
+                       (5,UI.disable)->menuItems.look
+                       if)*)
+                if)
+            if)
+        if)
+     #)  
+
+-- doMakeDopartSlot: DoPart --
+do
+   (none ,'Make DoPart SLOT','Enter name of DoPart fragment form',
+    slotPrivate.getName)
+     ->UI.promptForText
+       (#
+          ok::< 
+            (# 
+            do
+               setwaitCursor;
+               true->cs.undoPermit;
+               userText[]->slotPrivate.makeSlot;
+               fragmentTouched;
+               setstructureCursor
+            #)
+       #)  
+
+-- doMakeDescriptorSlot: DoPart --
+do
+   (none ,'Make Descriptor Slot','Enter name of Descriptor fragment form',
+    slotPrivate.getName)
+     ->UI.promptForText
+       (#
+          ok::< 
+            (# 
+            do
+               setwaitCursor;
+               true->cs.undoPermit;
+               userText[]->slotPrivate.makeSlot;
+               fragmentTouched;
+               setstructureCursor
+            #)
+       #)  
+
+-- doMakeAttributesSlot: DoPart --
+do
+   (none ,'Make Attrutes SLOT','Enter name of Attributes fragment form',
+    slotPrivate.getName)
+     ->UI.promptForText
+       (#
+          ok::< 
+            (# 
+            do
+               setwaitCursor;
+               true->cs.undoPermit;
+               userText[]->slotPrivate.makeSlot;
+               fragmentTouched;
+               setstructureCursor
+            #)
+       #)  
+
+-- doPasteFragmentForm: DoPart --
+do
+     (# copyNode: ^mps.ast; length: @integer; emptyDescriptor: @boolean
+     do
+        true->cs.undoPermit;
+        (cs.node[],edenv.clippedFrag[])->slotPrivate.checkFragmentForm
+          ->(emptyDescriptor,copyNode[],length);
+        (if switch[5] then
+            'edenv.clippedfrag.root.dump '->putLine;
+            (1,screen[])->edenv.clippedfrag.root.dump;
+            newLine;
+            'copyNode.dump '->putLine;
+            (1,screen[])->copyNode.dump;
+            newLine
+        if);
+        (if emptyDescriptor then
+            cut
+         else
+            (copyNode[],length,0,0)->slotPrivate.myCopyFragment; paste
+        if);
+        fragmentTouched;
+        
+     #)  
+
+-- doFillSlot: DoPart --
+do
+   (slotPrivate.currentUnexp[],true)
+     -> (*true->cs.undoPermit; what about the group editor *)
+       slotPrivate.fillSlot;
+   fragmentTouched;
+   (if switch[5] then 'finished fill SLOT'->putLine if);
+     
+
+-- doFillAllSlots: DoPart --
+do
+     (#
+        exp: ^mps.expanded;
+        unexp: ^mps.unexpanded;
+        hasSlots: @boolean;
+        no: @integer
+     do
+        (none ,'Fill All SLOTS',
+         'Do you really want to fill out every SLOT in this fragment form?\nThere is no Undo on this operation!')
+          ->UI.promptForBoolean
+            (#
+               ok::< 
+                 (# 
+                 do
+                    setwaitCursor;
+                    (if (frag.root[] <> none ) then
+                        frag.root[]->exp[];
+                        exp.suffixWalk
+                          (# 
+                          do
+                             (if (current.kind = mps.kinds.unexpanded) then
+                                 current[]->unexp[];
+                                 (if unexp.isSlot then
+                                     true->hasSlots;
+                                     (unexp[],false)->slotPrivate.fillSlot;
+                                     no+1->no;
+                                     (if switch[6] then
+                                         no->putInt; newLine
+                                     if)
+                                 if)
+                             if)
+                          #);
+                        no->putInt;
+                        ' SLOTs were filled, if the corresponding fragment form was found'
+                          ->putLine
+                    if);
+                    setstructureCursor;
+                    (if hasSlots then
+                        doAbstractRecursively; fragmentTouched
+                     else
+                        (none ,'This fragment form has no SLOTs',
+                         'Fill All SLOTS')->UI.alertUser
+                    if)
+                 #)
+            #)
+     #)  
+
+-- doHideImplementation: DoPart --
+do 'HideImplementation not implemented :-)'->putLine  
+

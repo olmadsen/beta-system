@@ -1,10 +1,12 @@
 ORIGIN '../codeeditor';
-INCLUDE 'editorenvbody';
+INCLUDE 'editorenvbody'
+        '~beta/betaast/v4.9.1/donecheck';
 -- groupeditorFormeditorListFindOrCreateEditor: DoPart --
 do
-   'findOrCreateEditor'->putLine;
    ff[]->findEditor->fe[];
-   (if fe[] = none then 'creating formeditor'->putLine;  if)  
+   (if trace[2] then
+       (if fe[] = none then 'creating formeditor'->putLine;  if)
+   if)  
 
 -- groupeditorFormeditorListFindEditor: DoPart --
 do
@@ -21,7 +23,47 @@ do
      #)  
 
 -- groupeditorCloseGroup: DoPart --
-do 'CloseGroup'->putLine  
+do
+     (#
+        position: ^groupEditorList.theCellType;
+        help: ^text;
+        cleanUp:
+          (#  do formEditorList.scan (#  do current.closeForm #) #)
+     do
+        (if (THIS(groupEditor)[]->groupEditorList.at->position[]) <> none then
+            (if true (*trace[2]*) then
+                'GroupEditor.CloseGroup: '->putText; fg.name->putLine; 
+            if);
+            (if (touched > 0) and not isAfrejaEditor then
+                'Save changes to '->help[];
+                fg.name->help.putText;
+                '?'->help.put;
+                (none ,'Close group',help[])
+                  ->UI.promptForBoolean
+                    (#
+                       ok::< 
+                         (#  do (true,true)->save; true->value; cleanup #);
+                       notOK::<  (#  do true->value; cleanUp #);
+                       cancel::<  (#  do false->value #);
+                       
+                    #)
+             else
+                (if needToUpdateTextFile then
+                    fg[]->editorenvPrivate.makeNewTextfile
+                if);
+                cleanUp;
+                true->value
+            if);
+            position[]->groupEditorList.delete
+         else
+            (if trace[2] then
+                'GroupEditor.CloseGroup: already closed!!!'->putText;
+                fg.name->putLine;
+                
+            if);
+            true->value
+        if)
+     #)  
 
 -- groupeditorSave: DoPart --
 do
@@ -36,7 +78,7 @@ do
              thisOperation:
                (# help: ^text; 
                do
-                  fg[]->editorenvprivate.ASTGC;
+                  (if doGC then fg[]->editorenvprivate.ASTGC;  if);
                   (if not ((fg[],true)->editorenvPrivate.extendedMarkAsChanged)
                    then
                       leave thisOperation
@@ -44,18 +86,8 @@ do
                   resetGroupTouch;
                   fg[]->editorenvPrivate.deleteAutoSaveFile;
                   ('~',fg[])->editorenvPrivate.extendedSaveBackup;
-                  (* g.fullName->help[];
-                   '#'->help.put;
-                   mps.astFileExtension->help.putText;
-                   help[]->f.name;
-                   (if f.entry.exists
-                   // true then 
-                   f.delete
-                   if);
-                   * *)
                   fg[]->editorenvPrivate.getGrammarName->gname[];
-                  (if ('beta'->gname.equal)
-                   // true then
+                  (if ('beta'->gname.equal) then
                       fg.fragmentlist.scan
                         (#
                            help: ^text;
@@ -76,9 +108,7 @@ do
                                    'This fragment group cannot be compiled before all nonterminals are removed'
                                      ->help.putText;
                                    help[]->putLine (* UI.statusmessage*) ;
-                                   leave
-                                   (*unExp[]->groupEditorList.findAndSelect;*)
-                                   thisOperation
+                                   leave thisOperation
                                if)
                            if);
                            
@@ -95,19 +125,23 @@ do
             (if (touched > 0) then
                 true->OKtoSave
              else
-                (none ,'Save','File not touched, do you really want to save?')
-                  ->UI.promptForBoolean
-                    (#
-                       ok::<  (#  do true->OKtoSave #);
-                       cancel::<  (#  do false->OKtoSave #)
-                    #);
+                'Save: not touched, nothing done'->putLine;
+                (* (none ,'Save',
+                 'File not touched, do you really want to save?')
+                 ->UI.promptForBoolean
+                 (#
+                 ok::<  (#  do true->OKtoSave #);
+                 notOK::<  (#  do false->OKtoSave #)
+                 #);*)
                 
             if);
             (if OKtoSave then
                 'Saving...'->putText;
                 doSave;
                 newLine;
-                fg[]->editorenvPrivate.makeNewTextFile
+                (if doUpdateTextFile then
+                    fg[]->editorenvPrivate.makeNewTextFile
+                if)
             if);
             
          else
@@ -129,17 +163,31 @@ do
 do   
 
 -- groupeditorResetGroupTouch: DoPart --
-do
-   0->touched;
-   'formEditorList.scan(#  do current.sde.resetFragmentTouch #);'->putLine  
+do 0->touched; formEditorList.scan (#  do current.resetFragmentTouch #);   
 
 -- groupeeditorGroupTouched: DoPart --
-do 'grouptouched'->putLine  
+do
+   (if writeAccess // true then touched+1->touched;  if);
+   (if touched
+    // 1 (* only first time *) then
+       (if (grammarName[] <> none )
+        // true then
+           (if ('beta'->grammarName.equal)
+            // true then (0,mps[],fg[])->setDoneCheckProperty; 
+           if);
+           
+       if);
+       
+   if);
+   (if trace[7] then
+       'group touched '->putText; touched->putint; ' times'->putLine; 
+   if);
+     
 
 -- groupeditorGroupDetouched: DoPart --
 do
    touched-1->touched;
-   (if true then
+   (if trace[7] then
        'group touched '->putText; touched->putint; ' times'->putLine; 
    if)  
 
@@ -164,16 +212,6 @@ do
             newName[]->f.name;
             mess[]->putline;
             restart loop;
-            (* (none ,'Sif',mess[],newName[])
-             ->UI.promptForText
-             (#
-             ok::< 
-             (# 
-             do
-             usertext[]->putLine; usertext.copy->f.name; restart loop
-             #)
-             #);*)
-            (* when this is OK the same test should be in editFormName*)
             
         if);
         (if beforeElement[] = none then
@@ -255,15 +293,15 @@ do
 do
      (# fle: ^fg.fragmentListElement; t: ^text; doParse: @boolean
      do
-        ('Enter fragment form name','')
-          ->myPromptForText
+        (none ,'Insert New Fragment Form','Enter fragment form name','')
+          ->promptForText
             (#
-               confirm::< 
+               ok::< 
                  (# 
                  do
                     ('beta',screen[])->mps.grammarTable.find
                       ->mps.newFragmentForm->newff[];
-                    theText[]->newff.name;
+                    userText[]->newff.name;
                     'syncatno: '->putText;
                     synCatNo->putInt;
                     newline;
@@ -306,14 +344,25 @@ do
      do
         ff[]->getFragmentListElement->fle[];
         (if fle[] <> none then
-            ('Edit Fragment Form Name',fle.name[])
-              ->myPromptForText
+            (none ,'Edit Fragment Form Name','Enter New Name',fle.name[])
+              ->promptForText
                 (#
-                   confirm::< 
+                   ok::< 
                      (# 
-                     do theText[]->fle.name[]->fle.f.name; groupTouched; 
+                     do userText[]->fle.name[]->fle.f.name; groupTouched; 
                      #)
                 #)
         if)
      #)  
+
+-- groupeditorCompilerSavedGroup: Descriptor --
+(# 
+do
+   (if touched > 0 then
+       true->needToUpdateTextFile;
+       fg[]->editorenvPrivate.deleteAutoSaveFile;
+       fg[]->editorenvPrivate.backupTextFile;
+       resetGroupTouch
+   if)
+#)  
 
