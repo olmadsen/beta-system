@@ -16,14 +16,14 @@ namespace beta.converter
 	    converted = new System.Collections.Specialized.ListDictionary();
 	  }
 
-	internal bool trace = false;
+	internal bool trace = true;
 		
 	internal BetaOutput beta;
 	internal System.Type thisClass;
 	internal System.String className;
 	internal System.String namespaceName;
 	internal System.String superClass;
-	internal System.String superPkg;
+	internal System.String superNs;
 		
 	internal static void  usage(System.String msg)
 	  {
@@ -93,7 +93,6 @@ namespace beta.converter
 			
 	    System.Reflection.FieldInfo[] fieldlist;
 	    fieldlist = cls.GetFields(System.Reflection.BindingFlags.Instance 
-				      | System.Reflection.BindingFlags.NonPublic
 				      | System.Reflection.BindingFlags.Public 
 				      | System.Reflection.BindingFlags.DeclaredOnly);
 	    if (fieldlist.Length == 0) return ;
@@ -108,6 +107,9 @@ namespace beta.converter
 		  beta.nl();
 		}
 		first = false;
+		if (trace){
+		  beta.commentline("Field: " + f.Name + ", type: " + f.FieldType);
+		}
 		beta.putField(dollarToUnderscore(f.Name), mapType(cls, f.FieldType, false), isStatic);
 	      }
 	    }
@@ -121,7 +123,6 @@ namespace beta.converter
 			
 	    System.Reflection.ConstructorInfo[] ctorlist;
 	    ctorlist = cls.GetConstructors(System.Reflection.BindingFlags.Instance
-					   | System.Reflection.BindingFlags.NonPublic 
 					   | System.Reflection.BindingFlags.Public 
 					   | System.Reflection.BindingFlags.DeclaredOnly);
 	    if (ctorlist.Length == 0) return ;
@@ -166,7 +167,6 @@ namespace beta.converter
 			
 	    System.Reflection.MethodInfo[] methlist;
 	    methlist = cls.GetMethods(System.Reflection.BindingFlags.Instance 
-				      | System.Reflection.BindingFlags.NonPublic 
 				      | System.Reflection.BindingFlags.Public 
 				      | System.Reflection.BindingFlags.DeclaredOnly);
 	    if (methlist.Length == 0) return ;
@@ -207,6 +207,9 @@ namespace beta.converter
 		    mangledName = dollarName;
 		  }
 		}
+		if (trace){
+		  beta.commentline("Method: " + name + ", returns: " + returnType + " , parameters: " + parameternames.ToString());
+		}
 		beta.putMethod(name, mangledName, parameternames, returnType, isStatic);
 	      }
 	    }
@@ -238,7 +241,10 @@ namespace beta.converter
 	    mapType(cls, cls.BaseType, true);
 			
 	    // scan fields 
-	    System.Reflection.FieldInfo[] fieldlist = cls.GetFields(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.DeclaredOnly);
+	    System.Reflection.FieldInfo[] fieldlist;
+	    fieldlist = cls.GetFields(System.Reflection.BindingFlags.Instance 
+				      | System.Reflection.BindingFlags.Public 
+				      | System.Reflection.BindingFlags.DeclaredOnly);
 	    for (int i = 0; i < fieldlist.Length; i++)
 	      {
 		System.Reflection.FieldInfo f = fieldlist[i];
@@ -249,7 +255,10 @@ namespace beta.converter
 	      }
 			
 	    // scan constructors
-	    System.Reflection.ConstructorInfo[] ctorlist = cls.GetConstructors(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.DeclaredOnly);
+	    System.Reflection.ConstructorInfo[] ctorlist;
+	    ctorlist = cls.GetConstructors(System.Reflection.BindingFlags.Instance 
+					   | System.Reflection.BindingFlags.Public 
+					   | System.Reflection.BindingFlags.DeclaredOnly);
 	    for (int i = 0; i < ctorlist.Length; i++)
 	      {
 		System.Reflection.ConstructorInfo ct = ctorlist[i];
@@ -264,46 +273,40 @@ namespace beta.converter
 	      }
 			
 	    // Scan methods
-	    System.Reflection.MethodInfo[] methlist = cls.GetMethods(System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.DeclaredOnly);
-	    for (int i = 0; i < methlist.Length; i++)
-	      {
-		System.Reflection.MethodInfo m = methlist[i];
-		if (isRelevant(m))
+	    System.Reflection.MethodInfo[] methlist;
+	    methlist = cls.GetMethods(System.Reflection.BindingFlags.Instance
+				      | System.Reflection.BindingFlags.Public
+				      | System.Reflection.BindingFlags.DeclaredOnly);
+	    for (int i = 0; i < methlist.Length; i++){
+	      System.Reflection.MethodInfo m = methlist[i];
+	      if (isRelevant(m)){
+		mapType(cls, m.ReturnType, true);
+		System.Reflection.ParameterInfo[] parameters = m.GetParameters();
+		for (int j = 0; j < parameters.Length; j++)
 		  {
-		    mapType(cls, m.ReturnType, true);
-		    System.Reflection.ParameterInfo[] parameters = m.GetParameters();
-		    for (int j = 0; j < parameters.Length; j++)
-		      {
-			mapType(cls, parameters[j].ParameterType, true);
-		      }
+		    mapType(cls, parameters[j].ParameterType, true);
 		  }
 	      }
-			
+	    }
+	    
 	    if (includes.Values.Count==0) return null;
 	    System.Object[] inc = new System.Object[includes.Values.Count];
 	    includes.Values.CopyTo(inc,0);
-	    for (int i = 0; i < inc.Length; i++)
-	      {
-		inc[i] = prependClassWithUnderscore((System.String) inc[i]);
-	      }
-	    ;
+	    for (int i = 0; i < inc.Length; i++){
+	      inc[i] = prependClassWithUnderscore((System.String) inc[i]);
+	    };
 	    return inc;
 	  }
 		
 	internal virtual void  include(System.String name)
 	  {
-	    if (stripNamespace(name).Equals(className))
-	      {
-		// No need to include current class
-	      }
-	    else if (slashToDot(name).Equals("java.lang.Object"))
-	      {
-		// No need to include Object
-	      }
-	    else
-	      {
-		includes[dotToSlash(name)] = name;
-	      }
+	    if (stripNamespace(name).Equals(className)){
+	      // No need to include current class
+	    } else if (slashToDot(name).Equals("java.lang.Object")){
+	      // No need to include Object
+	    } else {
+	      includes[dotToSlash(name)] = name;
+	    }
 	  }
 		
 	internal virtual System.String prependClassWithUnderscore(System.String name)
@@ -577,6 +580,20 @@ namespace beta.converter
 	    return (i >= 0)?name.Substring(i + 1, (name.Length) - (i + 1)):name;
 	  }
 		
+	internal virtual System.String stripPath(System.String name)
+	  {
+	    int i;
+	    i = name.LastIndexOf((System.Char) '/');
+	    return (i >= 0)?name.Substring(i + 1, (name.Length) - (i + 1)):name;
+	  }
+
+	internal virtual System.String stripExtension(System.String name)
+	  {
+	    int i;
+	    i = name.LastIndexOf((System.Char) '.');
+	    return (i >= 0)?name.Substring(1, i-1):name;
+	  }
+		
 	internal virtual System.String unmangle(System.Type outer, System.String innerName)
 	  {
 	    System.String unmangled = innerName;
@@ -601,6 +618,9 @@ namespace beta.converter
 	    System.String innerName = null;
 	    System.String innerSuper = null;
 	    System.Type sup;
+	    System.String resolution = stripPath(stripExtension(cls.Assembly.CodeBase.ToString()));
+	    System.String innerRes = null;
+
 	    if (outer == null)
 	      {
 		beta.putHeader(namespaceName, className, doIncludes(cls));
@@ -609,6 +629,7 @@ namespace beta.converter
 	      {
 		innerClass = stripNamespace(cls.FullName);
 		innerName = stripNamespace(unmangle(outer, cls.FullName));
+		innerRes  = stripPath(stripExtension(System.Type.GetType(innerClass).Assembly.CodeBase.ToString()));
 		sup = cls.BaseType;
 		if (sup != null)
 		  {
@@ -623,12 +644,12 @@ namespace beta.converter
 	    doClasses(cls);
 	    if (outer == null)
 	      {
-		beta.putTrailer(namespaceName, className);
+		beta.putTrailer(resolution, namespaceName, className);
 		beta.close();
 	      }
 	    else
 	      {
-		beta.putTrailer(namespaceName, innerClass);
+		  beta.putTrailer(innerRes, namespaceName, innerClass); // Assuming same namespace!
 	      }
 	  }
 		
@@ -679,12 +700,13 @@ namespace beta.converter
 		namespaceName = dotToSlash(thisClass.Namespace);
 		className = stripNamespace(thisClass.FullName);
 		System.Type sup = thisClass.BaseType;
+	        System.String resolution = stripPath(stripExtension(thisClass.Assembly.CodeBase.ToString()));
 		if (sup != null)
 		  {
-		    superPkg = dotToSlash(sup.Namespace);
+		    superNs = dotToSlash(sup.Namespace);
 		    superClass = stripNamespace(sup.FullName);
 		  }
-		beta = new BetaOutput(betalib, namespaceName, className, superPkg, superClass, overwrite, output);
+		beta = new BetaOutput(betalib, resolution, namespaceName, className, superNs, superClass, overwrite, output);
 		if (beta.output == null)
 		  return null;
 	      }

@@ -12,12 +12,19 @@ namespace beta.converter
 	internal System.IO.FileInfo entry;
 	internal System.IO.FileInfo existing = null;
 		
-	public BetaOutput(System.String betalib, System.String ns, System.String cls, System.String supNs, System.String sup, int overwrite, System.IO.TextWriter outstream)
+	public BetaOutput(System.String betalib, 
+			  System.String resolution, 
+			  System.String ns, 
+			  System.String cls, 
+			  System.String supNs, 
+			  System.String sup, 
+			  int overwrite, 
+			  System.IO.TextWriter outstream)
 	  {
 			
 	    openStream(betalib, ns, "_" + cls, overwrite, outstream);
 	    if (output != null)
-	      putWrapper(ns, cls, supNs, sup);
+	      putWrapper(resolution, ns, cls, supNs, sup);
 	    openStream(betalib, ns, cls, overwrite, outstream);
 	  }
 		
@@ -104,12 +111,13 @@ namespace beta.converter
 	public virtual void  putln(System.String line)
 	  {
 	    indent();
-	    output.WriteLine(line);
+	    output.Write(line); 
+	    nl();
 	  }
 		
 	public virtual void  nl()
 	  {
-	    output.WriteLine("");
+	    output.Write("\n");
 	  }
 		
 	public virtual System.String mapReserved(System.String word)
@@ -285,7 +293,7 @@ namespace beta.converter
 	    indent(+ 3);
 	  }
 		
-	public virtual void  putWrapper(System.String namespaceName, System.String className, System.String superNs, System.String superClass)
+	public virtual void  putWrapper(System.String resolution, System.String namespaceName, System.String className, System.String superNs, System.String superClass)
 	  {
 	    putln("ORIGIN '~beta/basiclib/betaenv';");
 	    if ((superClass != null) && !superClass.Equals("Object")) {
@@ -300,7 +308,7 @@ namespace beta.converter
 	    putln(" *)");
 	    putPatternBegin("_" + className, superClass);
 	    nl();
-	    putTrailer(namespaceName, className);
+	    putTrailer(resolution, namespaceName, className);
 	  }
 		
 	public virtual void  putHeader(System.String namespaceName, System.String className, System.Object[] includes)
@@ -388,10 +396,10 @@ namespace beta.converter
 	  indent(- 2);
 	}
 		
-	public virtual void  putTrailer(System.String namespaceName, System.String className)
+	public virtual void  putTrailer(System.String resolution, System.String namespaceName, System.String className)
 	  {
 	    indent(- 3);
-	    putln("do " + namespaceName + '/' + className + "' -> className;");
+	    putln("do '[" + resolution + ']' + namespaceName + '.' + className + "' -> className;");
 	    putln("INNER;");
 	    putln("#);\n");
 	    indent(- 2);
