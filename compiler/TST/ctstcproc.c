@@ -100,3 +100,6 @@ int fdd(i,s) long i; char *s; {
  }
   
 long id(long x) { return x; }
+
+long intFloat(int n, real x) {return (long)(n+x);}
+long floatInt(real x, int n) {return (long)(n+x);}
