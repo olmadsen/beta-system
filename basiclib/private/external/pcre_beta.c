@@ -1,4 +1,8 @@
+#ifdef MAC
+#include "pcre.h"
+#else
 #include "pcre/pcre.h"
+#endif
 
 #define PCRE_C_LOCALE 65536 /* Keep in sync with definition in perlregexp.bet */
 
@@ -13,7 +17,7 @@ locale_pcre_compile(
 {
     const char *tables;
     if (!precalc_tables)
-        precalc_tables = pcre_maketables();
+        precalc_tables = (char const *) pcre_maketables();
     if (options & PCRE_C_LOCALE) {
         options -= PCRE_C_LOCALE;
 	tables = 0;
@@ -21,5 +25,5 @@ locale_pcre_compile(
     else
         tables = precalc_tables;
     
-    return pcre_compile(pattern, options, errptr, erroffset, tables);
+    return pcre_compile(pattern, options, errptr, erroffset, (unsigned char *) tables);
 }
