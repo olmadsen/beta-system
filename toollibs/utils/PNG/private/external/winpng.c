@@ -303,7 +303,7 @@ int readPNG(char *name, HBITMAP *phbmp, int *width, int *height, HBITMAP *hmask)
   HDC hdc;
   
 
-  result = BetaReadPNG(name, &image);
+  result = BetaReadPNG(name, &image, 1);
 
   printf("aaa\n");
   
@@ -335,48 +335,3 @@ int readPNG(char *name, HBITMAP *phbmp, int *width, int *height, HBITMAP *hmask)
 }
 
 
-int readPNG1(char *name, HBITMAP *phbmp, int *width, int *height, int *depth)
-{
-  HDC hdc;
-  HDC hdcmem;
-  
-  HBITMAP hbmp;
-  
-  BetaImage image;
-  UINT start;
-  UINT num;
-  BITMAPINFO bmi;
-  UINT uUsage;
-  int result;
-  
-
-  result = BetaReadPNGToBetaImage(name, &image);
-
-  printf("read = %d\n", result);
-
-  *width = image.width;
-  *height = image.height;
-
-  hdc = GetDC(NULL);
-
-  if(!hdc) {
-    printf("failed to get dc\n");
-  }
-  
-
-  
-  bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-  bmi.bmiHeader.biWidth = image.width;
-  bmi.bmiHeader.biHeight = -image.height;
-  bmi.bmiHeader.biPlanes = 1;
-  bmi.bmiHeader.biBitCount = 24;
-  bmi.bmiHeader.biCompression = BI_RGB;
- 
-  
-  *phbmp = CreateDIBitmap(hdc, (LPBITMAPINFOHEADER) &bmi, CBM_INIT, image.data, &bmi, DIB_RGB_COLORS);
-  if(!(*phbmp)) {
-    result = GetLastError();
-  }
-  ReleaseDC(NULL, hdc);
-  return result;
-}
