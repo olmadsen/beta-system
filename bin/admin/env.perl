@@ -113,6 +113,7 @@ if (-e "c:\\") {
     if ($MIASDK ne "gnu") {
         $USE_GNUC="no";
     }
+    $cygwin = ($ENV{'TERM'} eq 'cygwin');
 } elsif (-e "/etc") {
     # UNIX
     $CURRENTDIR='.';
