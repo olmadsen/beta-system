@@ -71,3 +71,16 @@
     (find-file "inx.html")
     (query-replace-regexp "<H2>\\([A-Z]\\)</H2>" "<H2><A NAME=_\\1>\\1</A></H2>" nil))
 )
+
+(defun miadoc-replace7 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+  ;;(message "Building tags table of HTML files in local directory ...")
+  ;;(grep "/usr/local/bin/etags *.html")
+  ;;(visit-tags-table "./TAGS" nil)
+
+  (let ((case-replace t))
+    (message "Adding Style sheet")
+    (tags-query-replace "</TITLE>" "</TITLE>
+<LINK REL=stylesheet HREF=../style/miadoc.css TYPE=text/css>" nil))
+)
