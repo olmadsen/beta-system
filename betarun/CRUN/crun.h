@@ -95,7 +95,7 @@ setup_item(ref(Item) theItem,
 # ifdef hppa
   static char __CkString[80];
 #  define Ck(r) \
-   { sprintf(__CkString, "%s:%d:Ck failed:%s", __FILE__, __LINE__, #r); \
+   { sprintf(__CkString, "%s: %d: Ck failed: %s (0x%x)", __FILE__, __LINE__, #r, r); \
      if(r) Claim(inIOA(r) || inAOA(r) || inLVRA(r), __CkString); }
 # else
 /*#  define Ck(r) \
