@@ -17,7 +17,8 @@ A. Prerequisites
 ================
 
 1. The Microsoft .NET Framework Final version must be installed.
-   Download: [http://msdn.microsoft.com/downloads/default.asp?url=/downloads/sample.asp?url=/msdn-files/027/000/976/msdncompositedoc.xml]
+   Download: 
+   [http://msdn.microsoft.com/downloads/default.asp?url=/downloads/sample.asp?url=/msdn-files/027/000/976/msdncompositedoc.xml]
    Direct:
    [http://download.microsoft.com/download/.netframesdk/SDK/1.0/W98NT42KMeXP/EN-US/setup.exe]
 
@@ -26,16 +27,17 @@ B. Installation of BETA_Net
 ===========================
 
 1. There is no installer.
-   Simply unzip BETA_Net.zip. This will create a directory named
+   Simply unzip BETA_Net-<date>.zip. This will create a directory named
    BETA_Net.
-   The compiler nbeta.exe resides bin dubdirectory this directory.
+   The compiler nbeta.exe resides in the bin subdirectory.
    Make sure you have the BETA_Net/bin directory in your search path, if
    you want to invoke the compiler from other directories.
 
 2. Set BETALIB.
    You must set the environment variable BETALIB to the location of
    your BETA_net directory before using the compiler.
-   Do this in Start->Control Panels->System->Environment.
+   Do this in 
+     Start->Settings->Control Panels->System->Advanced->Environment Variables.
 
 3. Example programs reside in the examples subdirectory.
 
@@ -93,8 +95,8 @@ D. Known preliminary issues
    currently named F12, F16, ... instead of their actual names. Thus
    these are the names that will appear when inpected in a debugger.
 
-7. BETA patterns used as classes can be prefixed with the
-   keyword "class" and BETA patterns used as methods can likewise be
+7. BETA patterns used only as classes can be prefixed with the
+   keyword "class" and BETA patterns used only as methods can likewise be
    prefixed with keyword "proc". This will reduce the number of
    generated .NET classes.
 
@@ -105,8 +107,8 @@ D. Known preliminary issues
      > beta -s 188 foo.bet
 
 
-E. Using the CLR debugger
-=========================
+E. Using the CLR debugger(s)
+===========================
 
 1. Along with the free .NET framework comes a stand alone source level
    debugger named DbgCLR.exe. It typically resides in 
@@ -117,7 +119,7 @@ E. Using the CLR debugger
 3. Given that foo.bet has been compiled to foo.exe, you may now
    specify foo.exe in menu item [Debug->Program to debug].
 
-4. Now set a breakpoint at the beginnig of the program:
+4. Now set a breakpoint at the beginning of the program:
    From menu item [Debug->New Breakpoint (Ctrl-B)] specify
    breakpoint in Function "program.do".
 
@@ -137,6 +139,23 @@ E. Using the CLR debugger
      > nbeta -d foo
    or (forcing total recompile):
      > nbeta -s 12 -d foo
+
+9. There is also a command line debugger included in the .NET
+   Framework.
+   It is named cordbg.exe and is normally automatically accessible
+   from your shell (as the .NET Framework Installer will have included
+   the path to it in your search path).
+   If you compiled with nbeta -d cordbg is very useful for debugging
+   IL code. It automatically breaks a the main entry point when run as
+     > cordbg foo.exe
+   The syntax for breaking in the do method of calls program is
+     (cordbg) b program::do
+   You may also use cordbg for source level debug, and specify, e.g.,
+     (cordbg) b foo.bet:16
+   to make it break in line 16 of foo.bet. In this case foo should be
+   compiled without the -d option. To get more help on using cordbg
+   type this:
+     (cordbg) help
 
 
 F. Using Visual Studio .NET

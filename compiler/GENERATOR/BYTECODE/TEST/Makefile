@@ -1,2 +1,4 @@
 clean:
-	-rm -f *~ *.dll *.exe *.lst *.class *.astL *.ast
+	-rm -f *~ *.dll *.pdb *.exe *.exe.config *.out *.lst *.class *.astL *.ast *.a2s *.dump
+	-rm -rf dotnet javabc
+
