@@ -336,17 +336,16 @@ static void Phase1()
   AOAtoLVRAsize  = 0;
   
 #ifdef RTDEBUG
-  /* Make sure that there are no duplicate AOA roots! */
-  {  
+  { /* Make sure that there are no duplicate AOA roots! */
     long old=0;
     WordSort(ToSpaceToAOAptr, ToSpaceToAOALimit-ToSpaceToAOAptr);
     while (pointer > ToSpaceToAOAptr){
 #ifdef hppa
-	/* See below... */
-	if(*((long *)*(pointer-1)) & 1) {
-	    *((long *)*(pointer-1)) &= ~1; /* clear tag bit */
-	    *(pointer-1) |= 1;		   /* set it in table */
-	}
+      /* See below... */
+      if(*((long *)*(pointer-1)) & 1) {
+	*((long *)*(pointer-1)) &= ~1; /* clear tag bit */
+	*(pointer-1) |= 1;		   /* set it in table */
+      }
 #endif
       if (old == *--pointer){
 	INFO_AOA(fprintf(output, "Phase1: Duplicate AOA root: 0x%x\n", old));
@@ -358,22 +357,23 @@ static void Phase1()
   }
 #else /* RTDEBUG */
   while( pointer > ToSpaceToAOAptr) {
-      pointer--;
+    pointer--;
 #ifdef hppa
-      /*
-       * Dreadful hack. We have to remove the tag bits from those references
-       * in stackobjects that have them, so the Follow*() can handle them,
-       * but we have to save them somewhere. They are saved in the LSB of
-       * the pointers in the ToSpaceToAOA table. They are restored just
-       * before the AOAGc finishes in AOAGc().
-       */
-      if(*((long *)*pointer) & 1) {
-	  *((long *)*pointer) &= ~1; /* clear tag bit in stackobject */
-	  *pointer |= 1;	     /* set it in table */
-      }
+    /*
+     * Dreadful hack. We have to remove the tag bits from those references
+     * in stackobjects that have them, so the Follow*() can handle them,
+     * but we have to save them somewhere. They are saved in the LSB of
+     * the pointers in the ToSpaceToAOA table. They are restored just
+     * before the AOAGc finishes in AOAGc().
+     */
+    if(*((long *)*pointer) & 1) {
+      *((long *)*pointer) &= ~1; /* clear tag bit in stackobject */
+      *pointer |= 1;	     /* set it in table */
+    }
 #endif
-      ReverseAndFollow( *pointer & ~1);
+    ReverseAndFollow( *pointer & ~1);
 #endif
+  }
 }
 
 #define isAlive(x)  (toObject(x)->GCAttr != 0)
