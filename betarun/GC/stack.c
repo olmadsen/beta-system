@@ -671,8 +671,12 @@ static void initLabels()
   fprintf(output, "(initLabels ...");
   fflush(output);
 
+#ifdef sun4s
+  (void)sprintf(command,"nm -vhx %s | sort -r",ArgVector[0]);
+#else
   (void) strcpy (command, "nm -grn ");
   (void) strcat (command, ArgVector[0]);
+#endif
 
   /* Find number of labels */
   thePipe = popen (command, "r");
