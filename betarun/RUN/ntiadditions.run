@@ -10,10 +10,12 @@ SetArgValues: public
   stackPointer: StackArea = SP;
   theVector:    StackArea = AddrReg1
 do
-  stackPointer[8]  -> ArgCount;
-  stackPointer[12] -> theVector;
-  theVector -> ArgVector;
-  return
+   push AddrReg1;
+   stackPointer[12]  -> ArgCount;
+   stackPointer[16] -> theVector;
+   theVector -> ArgVector;
+   pop AddrReg1;
+   return
 #);
 
 { Routine called from betaenvbody in case of detected failure. }
@@ -25,6 +27,14 @@ do
   push CurrentObject;
   push -8;
   call BetaError
+#);
+
+RetC: public = '_Return' (# do return #);
+
+UoFv: public { was unorderedFval }
+(#
+do push -37;
+   call BetaError
 #)
 
 ------- CallBack: System ----
@@ -35,99 +45,128 @@ BetaStackTop:        cvar;
 
 CopyCPP: public
   (#
+     { Used variables. }
      theCBStruct: DataArea = AddrReg1;
      newTop:      DataArea = AddrReg2;
-     
-     stackTop: StackArea  = SP;
-     theRoutine: CodeArea = AddrReg2
+     stack: StackArea  = SP;
+     theRoutine: CodeArea = AddrReg2;
+     tmpCalc: DataArea = DataReg1;
   do
+     {
+       Stack layout:
+       <AddrReg2>         +0
+       <AddrReg1>         +4
+       <DataReg1>         +8
+       <return address>   +12
+       <struct>           +16
+     }
+          
+     push DataReg1, AddrReg1, AddrReg2;
+     
+     again:
+     
      { Find a free entry in the Call Back Functions Area. }
      { This area is defined by [ CBFA <= CBFATop <= CBFALimit ]. }
      
      CBFATop -> theCBStruct;
-     theCBStruct[12][] -> newTop;
+     theCBStruct[10][] -> newTop;
      (if newTop > CBFALimit then
          { Search through the area to find a free one.
            Not yet implemented: No one are ever freed 
          }
-	 (code '	pushal' code);
-{
-         (code '#      movm.l  %a0-%a4,-(%sp)' code);
-         (code '#     movm.l  %d0-%d7,-(%sp)' code);
-}
+	 (code '	pushad' code);
          call CBFArelloc;
-{
-         (code '#     movm.l  (%sp)+,%d0-%d7' code);
-         (code '#     movm.l  (%sp)+,%a0-%a4' code);
-}
-         (code '	popal' code);
-         goto CopyCPP
+         (code '	popad' code);
+         goto again;
      if);
      
      newTop -> CBFATop;
      
-     stackTop[4] -> theCBStruct[0];
-     20153 -> theCBStruct[4]!w;  { Write the first word of the jsr instruction 4eb9.}
-     HandleCB[] -> theRoutine;
-     theRoutine -> theCBStruct[6];
-     20085 -> theCBStruct[10]!w; { Write the rts instruction 4e75.}
+     stack[16] -> theCBStruct[0];
+     232 -> theCBStruct[4]!b;  {Write call opcode: 0xe8}
+     HandleCB[] -> theRoutine; 
+     theCBStruct[9][] -> tmpCalc; 
+     tmpCalc -> theRoutine-;
+     theRoutine -> theCBStruct[5]; {Write call argument: relative offset to HandleCB[]}
+     195 -> theCBStruct[9]!b; { Write ret opcode: 0xcb}
      theCBStruct[4][] -> theCBStruct;
-     theCBStruct -> stackTop[4];
+     theCBStruct -> stack[16];
      
+     pop AddrReg2, AddrReg1, DataReg1;
+     {(code '	invd' code);} {Flush cache -- i486 only}
      return
   #);
 
+
+
 HandleCB: public
   (#
-     stackPointer: StackArea = SP;
+     { Output variable. }
+     { C call returns result i eax }
+     
+     { Used variables. }
+     stack: StackArea = SP;
      dataPointer: DataArea = RegArg;
      theStruct:   Structure = RegArg;
      theProto:    ProtoType = RegArg;
      resObj:      Object    = RegArg;
-     
-     theOrigin:   Object    = DataReg1;
-     
      newProto:    ProtoType = RegAdr;
      codePointer: CodeArea  = RegAdr;
-     
      theObj: Object = RegObj
   do
-     (code '	pushal' code); {*** WRONG-WRONG-WRONG! See linuxadditions ***}
+     (if debug then call Ck if);
+     
+     (code '	push	ecx' code);
+     (code '	push	edx' code);
+     (code '	push	ebx' code);
+     (code '	push	ebp' code);
+     (code '	push	esi' code);
+     (code '	push	edi' code);
      
      { Push CallBackFrame = (next, betaTop, tmp). }
      push 0;
      push BetaStackTop;
      push ActiveCallBackFrame;
      
-     stackPointer -> ActiveCallBackFrame;
+     stack -> ActiveCallBackFrame;
      
-     stackPointer[60] -> dataPointer; { 16 = Offset after the previous push. }
-     dataPointer[-10] -> theStruct;
+     stack[36{(3+6)*4}] -> dataPointer;
+     dataPointer[-9{sizeof(struct)+sizeof(call)=4+5}] -> theStruct;
      
      (if theStruct=0 then
          pop ActiveCallBackFrame;
          pop BetaStackTop;
          4 -> SP+;
          call freeCallbackCalled;
-         (code '	popal' code);
+         (code '	pop	edi' code);
+         (code '	pop	esi' code);
+         (code '	pop	ebp' code);
+         (code '	pop	ebx' code);
+         (code '	pop	edx' code);
+         (code '	pop	ecx' code);
          return;
      if);
-
-     theStruct.iOrigin -> theOrigin;
+     
+     theStruct.iOrigin -> pReg1;
      theStruct.iProto -> theProto;
-     call AlloI;
+     call AlloI; {GC regs OK; stack safe, too}
      resObj -> theObj;
      resObj.ProtoType ->  newProto;
      newProto.CallBackRoutine -> codePointer;
-     call codePointer;
+     call codePointer; {Returns result in eax}
      
      pop ActiveCallBackFrame;
      pop BetaStackTop;
-     4 -> stackPointer+;
+     4 -> stack+;
      
-     (code '	popal' code);
+     (code '	pop	edi' code);
+     (code '	pop	esi' code);
+     (code '	pop	ebp' code);
+     (code '	pop	ebx' code);
+     (code '	pop	edx' code);
+     (code '	pop	ecx' code);
      
-     return
+     return;
   #)
 
 ----]]
