@@ -1,16 +1,35 @@
 ORIGIN '../Impl/BifrostImpl';
 INCLUDE '~beta/basiclib/v1.6/file';
+INCLUDE '~beta/basiclib/v1.6/regexp';
 INCLUDE '~beta/sysutils/v1.6/time';
+INCLUDE '~beta/sysutils/v1.6/objinterface';
 INCLUDE '../Impl/SegmentList';
+INCLUDE '../../EPSfile';
 BODY 'EPSmacros';
+
+--- textlib: attributes ---
+globalReplace: loop
+  (* replaces all occurences of m with r in THIS(text) using 
+   * regexp_replace
+   *)
+  (# 
+     m,r: ^Text;
+     while::
+       (# 
+       do (m[],r[]) -> 
+          regexp_replace(# posToMatchEnd:: (# do true->value #) #) 
+            -> value;
+       #)
+  enter (m[],r[])
+  #);
 
 --StreamLib: attributes--
 sep: (# do ' '->put #);
-putpoint: 
+putpoint:
   (# x,y: @integer;
      puti: @putint;
      s: @sep;
-  enter (x,y) 
+  enter (x,y)
   do x->puti; s;
      y->puti; s
   #);
@@ -45,6 +64,9 @@ debugps:
   do '% '->puttext; comment[] -> putline;
   #);
 
+--CanvasReadEPS: doPart--
+do 'Not implemented yet' -> Screen.Putline;
+   
 --LineSegmentWritePS: descriptor--
 (#
 do 'LineSegment' -> out.debugps;
@@ -88,7 +110,7 @@ do 'NonCircularSplineSegment' -> out.debugps;
 do 'Shape' -> out.debugps;
    privatepart.segmentlist.firstsegment -> firstseg[];
    (if firstseg##<=CircularSplineSegment##//false then
-       firstpoint -> out.putpoint; 
+       firstpoint -> out.putpoint;
        ' moveto' -> out.putline;
    if);
    privatepart.segmentlist.scan(# do out[] -> current.writePS #);
@@ -133,7 +155,7 @@ do 'MultiLineShape' -> out.debugps;
     // CapButt    then 0->out.putint; out.sep;
     // CapRounded then 1->out.putint; out.sep;
     // CapSquare  then 2->out.putint; out.sep;
-    if);
+   if);
    width -> out.putint;
    ' m' -> out.putline;
    INNER writePS;
@@ -142,14 +164,36 @@ do 'MultiLineShape' -> out.debugps;
 --TextShapeWritePS: descriptor--
 (# putt: @out.puttext;
    t: @text;
+   more: ^text;
 do 'TextShape' -> out.debugps;
+   '% Textvalue: ' -> more[];
+   theText -> t; 
+   t[] -> more.putLine;
+   '% TextAttributes: ' -> more.putText;
+   position -> more.putpoint;
+   ' ' -> more.put;
+   size -> more.putint;
+   ' ' -> more.put;
+   theFontName -> more.putint;
+   ' ' -> more.put;
+   theStyle -> more.putint;
    '(' -> out.put;
-   theText -> t; t[] -> putt;
+   t.reset;
+   (if t.length > 0 then
+       ('\\\\','\\\\\\\\') -> t.globalReplace;
+       t.reset;
+       (')','\\\\)') -> t.globalReplace;
+       t.reset;
+       ('(','\\\\(') -> t.globalReplace;
+   if);
+   t[] -> putt;
    ') '-> putt;
    (if underline then
        'true '->putt;
+       ' 1' -> more.putText;
     else
        'false '->putt;
+       ' 0' -> more.putText;
    if);
    position -> out.putpoint;
    size -> out.putint; out.newline;
@@ -166,7 +210,7 @@ do 'TextShape' -> out.debugps;
        (if theFontName//Times then
            '-Roman' -> putt;
        if)
-    // Italic then 
+    // Italic then
        (if theFontName//Times then
            '-Italic'->putt;
         else
@@ -178,6 +222,7 @@ do 'TextShape' -> out.debugps;
        theStyle -> screen.putint; screen.newline;
    if);
    ' t' -> out.putline;
+   more[]-> out.putline;
    INNER writePS;
 #)
 
@@ -191,6 +236,9 @@ do 'PieShape' -> out.debugps;
    verticalradius -> r;
    r / horizontalradius -> out.putreal; out.sep;
    'p'->out.putline;
+   '% verticalradius: ' -> out.putText;
+   verticalradius -> out.putInt;
+   out.newLine;
    INNER writePS;
 #)
 
@@ -205,6 +253,9 @@ do 'ArcShape' -> out.debugps;
    r / horizontalradius -> out.putreal; out.sep;
    arcwidth -> out.putint; out.sep;
    'a'->out.putline;
+   '% verticalradius: ' -> out.putText;
+   verticalradius -> out.putInt;
+   out.newLine;
    INNER writePS;
 #)
 
@@ -238,6 +289,9 @@ do 'EllipseShape' -> out.debugps;
    verticalradius -> r;
    r / horizontalradius -> out.putreal; out.sep;
    'e'->out.putline;
+   '% verticalradius: ' -> out.putText;
+   verticalradius -> out.putInt;
+   out.newLine;
    INNER writePS;
 #)
 
@@ -245,10 +299,20 @@ do 'EllipseShape' -> out.debugps;
 (# writergb: @integerobject
      (# r: @real;
      do value -> r;
-        r/MaxRGB  -> out.putreal; 
+        r/MaxRGB  -> out.putreal;
         out.sep;
-     #)
-do 'SolidColor' -> out.debugps;
+     #);
+   putIntSep:
+     (# i: @Integer;
+     enter i
+     do i -> t.putInt;
+        ' ' -> t.put
+     #);
+   t: ^text
+do &text[]->t[];
+   'SolidColor ' -> t.putText;
+   RGBvalues -> (putIntSep, putIntSep, putIntSep);
+   t[] -> out.debugps;
    RGBvalues -> (writeRGB, writeRGB, writeRGB);
    'setrgbcolor' -> out.putline;
    INNER writePS;
@@ -273,16 +337,20 @@ do 'TiledSolidColor' -> out.debugps;
 do 'AbstractGraphicalObject' -> out.debugps;
    'gsave' -> out.putline;
    'newpath'->out.putline;
-   (if TM.m[]<>NONE then 
+   (if TM.m[]<>NONE then
        TM.m -> out.putmatrix; 'concat' -> out.putline;
    if);
    out[] -> thePaint.writePS;
+   'PatternName' -> out.debugps;
+   this(abstractGraphicalObject)[] -> getPatternName -> out.debugps;
    out[] -> theShape.writePS;
    INNER writePS;
    'grestore' -> out.putline;
+   writeUserData -> out.putText;
+   '% end GO' -> out.putline;
 #)
 --UserDefGOWritePS: descriptor--
-(# 
+(#
 do (if theshape.fillRule
     // WindingRule then
        'fill' -> out.putline;
@@ -302,32 +370,30 @@ do 'PictureShape' -> out.debugps;
 do 'Picture' -> out.debugps;
    scanGOs(# do out[] -> go.writePS #);
    INNER writePS;
+   'end picture' -> out.debugps;
 #)
 
 --CanvasWriteEPS: descriptor--
-(# 
+(#
    WriteMacros: <<SLOT WriteEPSMacros: descriptor>>;
-   size: @point; 
+   size: @point;
    f: @file;
-   r: @rectangle; 
+   r: @rectangle;
    scale: @real;
    translate: @point;
    page: @point;
    m: @point;
    margin: (# exit (20, 20) #);
 do (if out[]//NONE then screen[]->out[] if);
-   
+
    THIS(BifrostCanvas).size -> size;
    (pagesize.width-pagesize.x, pagesize.height-pagesize.y) -> page;
    margin -> m;
    (page.x-2*m.x, page.y-2*m.y) -> page;
-   
+
    (* Write the header *)
    '%!PS-Adobe-3.0 EPSF-3.0' -> out.putline;
-   '%%Creator: ' -> out.puttext;
-   1 -> arguments -> f.name;
-   f.entry.path.name -> out.puttext;
-   out.newline;
+   out.startEPSfile;
    
    (* Calculate Scale to fit Canvas to page *)
    (if page.x-size.x < page.y-size.y then
@@ -344,28 +410,22 @@ do (if out[]//NONE then screen[]->out[] if);
        ((page.x-size.x) div 2) div scale -> translate.x;
    if);
    (margin, translate) -> addpoints -> translate;
-   
-   '%%BoundingBox: '->out.puttext; 
+
+   '%%BoundingBox: '->out.puttext;
    thePicture.getbounds -> r;
    translate.x + scale * (r.x)          -> out.putint; out.sep;
    translate.y + scale * (r.y-r.height) -> out.putint; out.sep;
    translate.x + scale * (r.x+r.width)  -> out.putint; out.sep;
-   translate.y + scale * (r.y)          -> out.putint; 
-   out.newline;
-
-   '%%Title: Bifrost EPS' -> out.puttext;
-   out.newline;
-   '%%CreationDate: ' -> out.puttext;
-   systemtime -> formattime -> out.puttext;
+   translate.y + scale * (r.y)          -> out.putint;
    out.newline;
    
    (* '% canvas size:   '->out.puttext; size -> out.putpoint; out.newline;
     * '% margin:        '->out.puttext; margin -> out.putpoint; out.newline;
-    * '% picture bound: '->out.puttext; 
+    * '% picture bound: '->out.puttext;
     * (r.x, r.x)->out.putpoint; (r.width, r.height)->out.putpoint; out.newline;
     * '% page:          '->out.puttext; page -> out.putpoint; out.newline;
     *)
-   
+
    WriteMacros;
 
    (* Handle vertical and noOfCopies *)
@@ -375,12 +435,12 @@ do (if out[]//NONE then screen[]->out[] if);
    (if noOfCopies>1 then
        '/#copies '->out.puttext; noOfCopies-> out.putint; ' def' -> out.putline;
    if);
-   
+
    translate -> out.putpoint;
    'translate' -> out.putline;
-   scale->out.putreal; out.sep; scale->out.putreal; 
+   scale->out.putreal; out.sep; scale->out.putreal;
    ' scale' -> out.putline;
-    
+
    (if debugGraphic then
        '% Draw a thin frame around canvas' -> out.putline;
        'newpath' -> out.putline;
@@ -393,14 +453,13 @@ do (if out[]//NONE then screen[]->out[] if);
        'closepath'-> out.putline;
        'stroke'-> out.putline;
    if);
-   
+
    (* Process the graphics *)
    'Begin' -> out.putline;
    out[] -> thePicture.writePS;
-   
+
    (* Showpage & Epilogue *)
    'showpage' -> out.putline;
    'End' -> out.putline;
-   
-   '%%EOF' -> out.putline;
+   out.endEPSfile;
 #)
