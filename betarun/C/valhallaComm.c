@@ -717,6 +717,15 @@ static void adjust_header(group_header *gh)
 
 #endif /* mac */
 
+
+/* used in find-attribute */
+
+int evaluatorResult;
+void evaluatorSaveInt(int val)
+{
+  evaluatorResult = val; 
+}
+
 static int valhallaCommunicate (int PC, int SP, Object* curObj)
 { int opcode;
   DEBUG_VALHALLA (fprintf(output,"debuggee: valhallaCommunicate\n"));  
@@ -969,6 +978,9 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       valhallaIsStepping = FALSE;
       valhalla_exelevel++;
 
+      /*Clear old saved value */
+      evaluatorResult = 0;
+
       /* Save stackpointer in BetaStackTop to make the trap look like 
        * an external call
        */
@@ -979,6 +991,8 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       valhalla_exelevel--;
       valhallaIsStepping = old_valhallaIsStepping;
       DEBUG_VALHALLA(fprintf(output, "VOP_EXECUTEOBJECT done.\n"));
+      valhalla_writeint (opcode);
+      valhalla_writeint (evaluatorResult);
       valhalla_writeint (opcode);
       valhalla_socket_flush ();
     }
