@@ -64,6 +64,7 @@ EOT
 $lastmodscript = "$scriptdir/lastmod.js";
 $hashfromparent = "$scriptdir/hashfromparent.js";
 $printframe = "$scriptdir/printframe.js";
+$fixprintbutton = "$scriptdir/fixprintbutton.js";
 if ($wiki){
     $tocfile = $ENV{'TOCURL'};
 } else {
