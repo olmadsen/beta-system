@@ -1093,6 +1093,7 @@ static void Phase3()
 }
 
 #ifdef RTDEBUG
+/* AOACheck: Consistency check on entire AOA area */
 void AOACheck()
 {
   ref(Block)  theBlock  = AOABaseBlock;
@@ -1116,6 +1117,7 @@ void AOACheck()
   }
 } 
 
+/* AOACheckObject: Consistency check on AOA object */
 void AOACheckObject( theObj)
      ref(Object) theObj;
 { ref(ProtoType) theProto;
@@ -1342,6 +1344,7 @@ void AOACheckObject( theObj)
   }
 }
 
+/* AOACheckReference: Consistency check on AOA reference */
 void AOACheckReference( theCell)
      handle(Object) theCell;
 {
@@ -1375,6 +1378,7 @@ void AOACheckReference( theCell)
   }
 }
 
+/* AOACheckObjectSpecial: Weak consistency check on AOA object */
 void AOACheckObjectSpecial( theObj)
      ref(Object) theObj;
 { ref(ProtoType) theProto;
@@ -1450,8 +1454,6 @@ void AOACheckObjectSpecial( theObj)
        * dynamic offset table masked out. As offsets in this table are
        * always multiples of 4, these bits may be used to distinguish
        * different reference types. */ 
-      
-      /* FIXME: no objects checked here?? */
     }
   }
 }
