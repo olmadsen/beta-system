@@ -23,7 +23,6 @@
 #define do_unconditional_gc 0
 #endif
 
-#define NONMOVEAOAGC
 #undef KEEP_STACKOBJ_IN_IOA
 
 #define RTINFO  /* Include support for runtime info */
@@ -209,12 +208,9 @@
 #endif
 
 
-#ifdef NONMOVEAOAGC
 #define DEADOBJECT 1
 #define FREECHUNK 2
 #define LISTEND 3
 
 #define REFERENCEACTIONARGSTYPE Object **theCell
 #define REFERENCEACTIONARGS theCell
-
-#endif /* NONMOVEAOAGC */

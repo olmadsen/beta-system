@@ -172,9 +172,7 @@ void AOAtoIOAReport(void);
 /* GC/aoa.c */
 extern void tempAOArootsAlloc(void);
 extern void tempAOArootsFree(void);
-#ifdef NONMOVEAOAGC
 extern long sizeOfAOA(void);
-#endif /* NONMOVEAOAGC */
 #ifdef NEWRUN
 extern Object *AOAalloc(long numbytes, long *SP);
 extern Object *AOAcalloc(long numbytes, long *SP);
