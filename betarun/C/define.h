@@ -322,5 +322,10 @@ typedef unsigned short u_short;
 #  define InfoS_End()
 #endif
 
+/* Unconditional property stuff */
+#  define TRACE_FINDACTIVATION(code) \
+     if (TraceFindActivation) { code; fflush(output); }
+
+
 #define REFERENCEACTIONARGSTYPE Object **theCell, long refType
 #define REFERENCEACTIONARGS theCell

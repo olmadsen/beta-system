@@ -108,6 +108,8 @@ static void BooleanProperty(char *name)
 #ifdef sparc
   ENTRY("SuspCont", SuspCont = TRUE);
 #endif
+  ENTRY("TraceFindActivation", TraceFindActivation = TRUE); 
+  ENTRY("TFA", TraceFindActivation = TRUE); 
 
 #ifdef RTDEBUG
   ENTRY("DebugIOA",   DebugIOA = TRUE);
@@ -137,7 +139,8 @@ static void BooleanProperty(char *name)
   /* Trace GroupName() */
   ENTRY("TraceGroup", TraceGroup = TRUE); 
   /* Trace DisplayBetaStack() */
-  ENTRY("TraceDump", TraceDump = TRUE); 
+  ENTRY("TraceDump", TraceDump = TRUE);
+  /* Trace find_activation() */
   /* Trace search for prefix in ObjectDescription */
   ENTRY("TraceCodeEntry", TraceCodeentry = TRUE); 
 #ifdef MT
