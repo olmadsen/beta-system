@@ -690,6 +690,8 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
       long   old_valhallaIsStepping;
       void (*cb)(void);
 
+      DEBUG_STACK(fprintf(output, "VOP_EXECUTEOBJECT: SP=0x%x\n", (int)vop_sp));
+
       /* Debuggee is currently stopped in C code.
        * To activate a BETA object in debuggee, we thus have
        * to create a structure object "struc" from

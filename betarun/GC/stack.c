@@ -181,6 +181,28 @@ char *getLabel (addr)
 #endif /* RTDEBUG */
 /************************* End Label Debug *************************/
 
+/************************* Other common debug stuff ****************/
+#ifdef RTDEBUG
+static void PrintSkipped(long *current)
+{
+  struct Object *ref = (struct Object *)*current;
+  DEBUG_STACK(fprintf(output, "0x%08x: 0x%08x ", (int)current, (int)ref));
+  if (ref && inBetaHeap(ref) && isObject(ref) && IsPrototypeOfProcess((long)ref->Proto)){ 
+    fprintf(output, "*** SUSPICIOUS STACK-SKIP!");
+    fflush(output);
+    if (!DebugStack) {
+      fprintf(output, "0x%08x: 0x%08x ", (int)current, (int)ref);
+    }
+    fprintf(output, " proto: 0x%08x (%s)\n", (int)ref->Proto, ProtoTypeName(ref->Proto)); 
+  } else {
+    fprintf(output, "- SKIPPED\n");
+  } 
+  fflush(output);
+}
+#endif /* RTDEBUG */
+/************************* End common debug stuff *************************/
+
+
 #ifdef NEWRUN
 /************************* Begin NEWRUN ****************************/
 
@@ -800,7 +822,23 @@ struct RegWin *BottomAR=0, *lastAR=0;
 GLOBAL(long PC) = 0;
 void PrintAR(struct RegWin *ar, struct RegWin *theEnd);
 void PrintCAR(struct RegWin *cAR);
+static void CheckForLVRA(int reg, char *desc);
 #endif
+
+static __inline__ void ProcessReg(long *addr, char *desc)
+{
+  if (inBetaHeap(cast(Object)(*addr)) 
+      && isObject(cast(Object)(*addr)) 
+      && !inLVRA(cast(Object)(*addr))) {
+    if (isProto((cast(Object)(*addr))->Proto)) 
+      ProcessReference(casthandle(Object)(addr)); } 
+#ifdef RTLAZY
+  else if (isLazyRef(*addr)) {
+    DEBUG_LAZY(fprintf (output, "Lazy ref in %s: %d\n", desc, (int)(*addr)));
+    ProcessReference(casthandle(Object)(addr));
+  }
+#endif
+}
 
 /* Traverse an activation record (AR) [ar, theEnd[
    Notice theEnd is *not* included
@@ -817,83 +855,25 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
     
     DEBUG_STACK(PrintAR(ar, theEnd));
 
-    DEBUG_CODE(Claim((long)ar < (long)theEnd,  "ProcessAR: ar is less than theEnd");
-	       Claim(((long) theEnd) % 4 == 0, "ProcessAR: theEnd is 4 byte aligned");
-	       Claim(((long) theEnd) % 4 == 0, "ProcessAR: theEnd is 4 byte aligned");
-	       )
+    DEBUG_CODE({
+      Claim((long)ar < (long)theEnd,  "ProcessAR: ar is less than theEnd");
+      Claim(((long) theEnd) % 4 == 0, "ProcessAR: theEnd is 4 byte aligned");
+    });
         
     /* Process GC registers of the activation record. */
-    DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i0)) 
-		  && inLVRA(cast(Object)(ar->i0)))
-	      fprintf(output, "ProcessAR: ar->i0 (0x%x) is pointer into LVRA\n", (int)(ar->i0)));
-    DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i1)) 
-		  && inLVRA(cast(Object)(ar->i1)))
-	      fprintf(output, "ProcessAR: ar->i1 (0x%x) is pointer into LVRA\n", (int)(ar->i1)));
-    DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i2)) 
-		  && inLVRA(cast(Object)(ar->i2)))
-	      fprintf(output, "ProcessAR: ar->i2 (0x%x) is pointer into LVRA\n", (int)(ar->i2)));
-    DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i3)) 
-		  && inLVRA(cast(Object)(ar->i3)))
-	      fprintf(output, "ProcessAR: ar->i3 (0x%x) is pointer into LVRA\n", (int)(ar->i3)));
-    DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i4)) 
-		  && inLVRA(cast(Object)(ar->i4)))
-	      fprintf(output, "ProcessAR: ar->i4 (0x%x) is pointer into LVRA\n", (int)(ar->i4)));
+    DEBUG_CODE({
+      CheckForLVRA(ar->i0, "ar->i0");
+      CheckForLVRA(ar->i1, "ar->i1");
+      CheckForLVRA(ar->i2, "ar->i2");
+      CheckForLVRA(ar->i3, "ar->i3");
+      CheckForLVRA(ar->i4, "ar->i4");
+    });
 
-    if (inBetaHeap(cast(Object)(ar->i0)) 
-	&& isObject(cast(Object)(ar->i0)) 
-	&& !inLVRA(cast(Object)(ar->i0))) {
-      if (isProto((cast(Object)ar->i0)->Proto)) 
-	ProcessReference(casthandle(Object)(&ar->i0)); } 
-#ifdef RTLAZY
-    else if (isLazyRef(ar->i0)) {
-      DEBUG_LAZY(fprintf (output, "Lazy ref in i0: %d\n", (int)(ar->i0)));
-      ProcessReference(casthandle(Object)(&ar->i0));
-    }
-#endif
-    if (inBetaHeap(cast(Object)(ar->i1)) 
-	&& isObject(cast(Object)(ar->i1)) 
-	&& !inLVRA(cast(Object)(ar->i1))) {
-      if (isProto((cast(Object)ar->i1)->Proto)) 
-	ProcessReference(casthandle(Object)(&ar->i1)); }
-#ifdef RTLAZY
-    else if (isLazyRef(ar->i1)) {
-      DEBUG_LAZY(fprintf (output, "Lazy ref in i1: %d\n", (int)(ar->i1)));
-      ProcessReference(casthandle(Object)(&ar->i1));
-    }
-#endif
-    if (inBetaHeap(cast(Object)(ar->i2)) 
-	&& isObject(cast(Object)(ar->i2)) 
-	&& !inLVRA(cast(Object)(ar->i2))) {
-      if (isProto((cast(Object)ar->i2)->Proto)) 
-	ProcessReference(casthandle(Object)(&ar->i2)); }
-#ifdef RTLAZY
-    else if (isLazyRef(ar->i2)) {
-      DEBUG_LAZY(fprintf (output, "Lazy ref in i2: %d\n", (int)(ar->i2)));
-      ProcessReference(casthandle(Object)(&ar->i2));
-    }
-#endif
-    if (inBetaHeap(cast(Object)(ar->i3)) 
-	&& isObject(cast(Object)(ar->i3)) 
-	&& !inLVRA(cast(Object)(ar->i3))) {
-      if (isProto((cast(Object)ar->i3)->Proto)) 
-	ProcessReference(casthandle(Object)(&ar->i3)); }
-#ifdef RTLAZY
-    else if (isLazyRef(ar->i3)) {
-      DEBUG_LAZY(fprintf (output, "Lazy ref in i3: %d\n", (int)(ar->i3)));
-      ProcessReference(casthandle(Object)(&ar->i3));
-    }
-#endif
-    if (inBetaHeap(cast(Object)(ar->i4)) 
-	&& isObject(cast(Object)(ar->i4)) 
-	&& !inLVRA(cast(Object)(ar->i4))) {
-      if (isProto((cast(Object)ar->i4)->Proto)) 
-	ProcessReference(casthandle(Object)(&ar->i4)); }
-#ifdef RTLAZY
-    else if (isLazyRef(ar->i4)) {
-      DEBUG_LAZY(fprintf (output, "Lazy ref in i4: %d\n", (int)(ar->i4)));
-      ProcessReference(casthandle(Object)(&ar->i4));
-    }
-#endif
+    ProcessReg(&ar->i0, "i0");
+    ProcessReg(&ar->i1, "i1");
+    ProcessReg(&ar->i2, "i2");
+    ProcessReg(&ar->i3, "i3");
+    ProcessReg(&ar->i4, "i4");
     CompleteScavenging();
 
     /* Process the stack part */
@@ -901,7 +881,31 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
       /* This AR called C, skip one hidden word, and (at least) 
        * six parameters (compiler allocates 12, that may be too much...)
        */
-      theCell = (struct Object **)((long)theCell+48);
+#ifdef RTVALHALLA
+      if (valhallaID){
+	/* If run under valhalla, an evaluator may be under execution.
+	 * In this case a callback is simulated by setting BetaStackTop
+	 * to the value of SP at the time valhallaOnProcess was called.
+	 * This resembles a C call (BETA code was left, external code
+	 * was entered). However, the BETA code was NOT left using
+	 * an actual call instruction, and there was NOT allocated
+	 * room on the stack for parameteres.
+	 * Here is a simple (non-proof) test to prevent skipping
+	 * the 12 words in this case.
+	 * FIXME: This will NOT work, if BETA frame had pushed 6 or more
+	 * things on stack (each decrements stack with 8).
+	 * A better test would analyze the code at the PC of the frame
+	 * to see if the stack space was allocated.
+	 */
+	if ((long)theCell+48>=(long)ar->fp){
+	  skipCparams = 0;
+	} 
+      }
+#endif /* RTVALHALLA */
+      if (skipCparams){
+	/* Will not skip out of frame - let's do it... */
+	theCell = (struct Object **)((long)theCell+48);
+      }
     }
 
     for (; theCell != (struct Object **) theEnd; theCell+=2) {
@@ -978,13 +982,27 @@ void ProcessStack()
 	  /* This is AR of HandleCB. Don't GC this, but
 	   * skip to betaTop and update nextCBF */
 	  nextCBF = (struct RegWin *) theAR->l5;
-	  
-	  DEBUG_STACK({ /* Wind down the stack until betaTop is reached */
-	    struct RegWin *cAR;
-	    for (cAR = theAR;
-		 cAR != (struct RegWin *) theAR->l6;
-		 PC = cAR->i7 +8, cAR = (struct RegWin *) cAR->fp)
-	      PrintCAR(cAR);
+	  DEBUG_STACK({ 
+	    fprintf(output, "Met frame of HandleCB at SP=0x%x.\n",(int)theAR);
+	    if (valhallaID){
+	      fprintf(output, "Cannot wind down past signal handler.\n");
+	      fprintf(output, "Skipping directly to SP=0x%x.\n", (int)theAR->l6);
+	    } else {
+	      /* Wind down the stack until betaTop is reached */
+	      struct RegWin *cAR;
+	      fprintf(output, "Winding down to frame with %%fp=0x%x",(int)theAR->l6);
+	      fprintf(output, " (BetaStackTop)\n");
+	      for (cAR = theAR;
+		   cAR != (struct RegWin *) theAR->l6;
+		   PC = cAR->i7 +8, cAR = (struct RegWin *) cAR->fp){
+		if (!cAR) {
+		  fprintf(output, "ProcessStack: gone past _start - exiting...!\n");
+		  Illegal();
+		  BetaExit(1);
+		}
+		PrintCAR(cAR);
+	      }
+	    }
 	  });
 	  
 	  theAR = (struct RegWin *) theAR->l6; /* Skip to betaTop */
@@ -1234,22 +1252,6 @@ void ProcessStackObj(theStack)
 }
 
 #ifdef RTDEBUG
-static void PrintSkipped(long *current)
-{
-  struct Object *ref = (struct Object *)*current;
-  DEBUG_STACK(fprintf(output, "0x%08x: 0x%08x ", (int)current, (int)ref));
-  if (ref && inBetaHeap(ref) && isObject(ref) && IsPrototypeOfProcess((long)ref->Proto)){ 
-    fprintf(output, "*** SUSPICIOUS STACK-SKIP!");
-    fflush(output);
-    if (!DebugStack) {
-      fprintf(output, "0x%08x: 0x%08x ", (int)current, (int)ref);
-    }
-    fprintf(output, " proto: 0x%08x (%s)\n", (int)ref->Proto, ProtoTypeName(ref->Proto)); 
-  } else {
-    fprintf(output, "- SKIPPED\n");
-  } 
-  fflush(output);
-}
 void PrintRef(ref(Object) ref)
 {
   if (ref) {
@@ -1467,6 +1469,7 @@ void PrintCAR(struct RegWin *cAR)
 	  (int)PC,
 	  getLabel(PC),
 	  (int)labelOffset);
+  fprintf(output, "%%fp: 0x%x\n", (int)cAR->fp); 
 }
 
 void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
@@ -1499,13 +1502,25 @@ void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
    */
   if (skipCparams){
     /* This AR called C, skip one hidden word, and (at least) 
-     * six parameters
+     * six parameters. See comments in ProcessAR.
      */
     int i;
-    fprintf(output, "(Skipping 12 longs allocated for C-call)\n");
-    for (i=0; i<12; i++, theCell+=1) {
-      fprintf(output, "  (0x%x skipped)\n", (int)(*theCell));
-    }
+    if (valhallaID){
+      if ((long)theCell+48>=(long)ar->fp){
+	DEBUG_STACK({
+	  fprintf(output, 
+		  "ProcessAR: NOT skipping 12 longs - would be out of frame.\n");
+	  fprintf(output, 
+		  "Frame looks like invoker of valhalla.\n");
+	});
+	skipCparams = 0;
+      }
+      if (skipCparams){
+	fprintf(output, "Skipping 12 words in frame that called C:\n");
+	for (i=0; i<12; i++) PrintSkipped((long*)theCell+i);
+	theCell = (struct Object **)((long)theCell+48);
+      }
+    }      
   }
   for (; theCell != (struct Object **) theEnd; theCell+=2) {
     fprintf(output, "0x%x", (int)(*theCell));
@@ -1528,7 +1543,7 @@ void PrintStack()
   /* Flush register windows to stack */
   __asm__("ta 3");
   
-  fprintf(output, "\n ***** Trace of stack *****\n");
+  fprintf(output, "\n ***** PrintStack: Trace of stack *****\n");
   
   end  = (struct RegWin *)StackPointer;
   /* end points to the activation record of PrintStack() */
@@ -1572,8 +1587,15 @@ void PrintStack()
     skipCparams=FALSE;
   }
    
-  fprintf(output, " *****  End of trace  *****\n");
+  fprintf(output, " *****  PrintStack: End of trace  *****\n");
   
+}
+
+void CheckForLVRA(int reg, char *desc)
+{
+  DEBUG_IOA(if (inBetaHeap(cast(Object)(reg)) 
+		&& inLVRA(cast(Object)(reg)))
+	    fprintf(output, "ProcessAR: %s (0x%x) is pointer into LVRA\n",desc,reg));
 }
 
 #endif /* sparc */
