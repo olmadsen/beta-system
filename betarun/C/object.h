@@ -4,6 +4,11 @@
    thus one can use the headsize macro
    */
 
+#ifndef BETARUN_C_OBJECT_H
+#define BETARUN_C_OBJECT_H 1
+
+#include "macro.h"
+
 typedef struct _ProtoType {     /* Number indicates long offset */
   unsigned short     GCTabOff;  /*  0:  Byte offset to the GC Table                */
   unsigned short     OriginOff; /*  2:  Where should the origin be                 */
@@ -506,3 +511,5 @@ typedef struct _TSD
 # define GLOBAL_IOATop IOATop
 # define GLOBAL_IOALimit IOALimit
 #endif /* MT */
+
+#endif /* BETARUN_C_OBJECT_H */

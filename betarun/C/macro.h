@@ -1,3 +1,6 @@
+#ifndef BETARUN_C_MACRO_H
+#define BETARUN_C_MACRO_H 1
+
 /* macroes */
 
 /* define DMALLOC to 1 to use dmalloc library - requires manual link
@@ -570,3 +573,4 @@ typedef union FormatI
 #define IS_BREAK_INST(x) (((long)x & 0x000000ff)==0x000000cc)
 #endif
 
+#endif /* BETARUN_C_MACRO_H */

@@ -1,7 +1,13 @@
-char betarun_version[] = "BETARUN VERSION 5.3(32)";
+char betarun_version[] = "BETARUN VERSION 5.3(33)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.32  2001/08/09 20:16:09  corry
+ * More info from TIME_IOA and TIME_AOA
+ * Default IOA semispace size reduced from 1024 to 64k
+ * We don't need inArea any more
+ * Betarun version number: 32
+ *
  * Revision 1.31  2001/08/09 20:11:37  corry
  * Add nodebug_pg profiling version of betarun on GNUC platforms
  * Add comments to Makefile-toplev to tell you how to use the library versions
