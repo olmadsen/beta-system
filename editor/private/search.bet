@@ -1,0 +1,220 @@
+ORIGIN '../codeeditor';
+(*
+   COPYRIGHT
+	 Copyright Mjolner Informatics, 1986-94
+	 All rights reserved.
+ *)
+-- searchPrivate: Descriptor --
+(#
+   searchNode: ^mps.ast;
+   theSearchName: ^text;
+   textWithFindSub: text
+     (# (* specialization of the text pattern that supports findSubstring *)
+        FindCh:
+        (* Finds all occurences of ch:
+         * For 'inx' where THIS(text).inx=ch do inner
+         *)
+          (# inx: @integer; ch: @char
+          enter ch
+          do
+             (for i: lgth repeat
+               (if T[i->inx]->ascii.upCase
+                // ch->ascii.upCase then INNER
+               if)
+             for)
+          #);
+        findSubstring:
+          (#
+          (* Finds all occurences of substring and calls inner for each occurrence
+           *) texttofind: ^text; firstch: @char; 
+          enter texttofind[]
+          do
+             1->texttofind.inxget->firstch
+               ->findCh
+                 (# foundtext: ^text; 
+                 do
+                    (inx,inx+texttofind.length-1)->sub->foundtext[];
+                    (if (foundtext[]->texttofind.equalNCS)
+                     // true then INNER findSubstring; 
+                    if)
+                 #)
+          #);
+        isSubstring:
+          (# string: ^text; found: @boolean; 
+          enter string[]
+          do
+             FALSE->found;
+             l: string[]->findSubstring (#  do TRUE->found; leave l #);
+             
+          exit found
+          #);
+        
+     #);
+   search:
+     (# direction: @integer; current: ^mps.ast; csIsMatching: @boolean; 
+     enter direction
+     do
+        cs.node[]->current[];
+        true->csIsMatching;
+        loop:
+          (# 
+          do
+             (if (searchPrivate.searchNode[]->cs.node.match)
+              // true then
+                 (if csIsMatching
+                  // true then
+                     direction->&select; restart loop; 
+                  // false then
+                     (cs.node[],1,0,0)->setFocus; 
+                 if);
+                 
+              // false then
+                 false->csIsMatching;
+                 direction->&select;
+                 (if (current[]->cs.node.equal)
+                  // true then
+                     'Fragment not found'->screen.putText;
+                     screen.newLine;
+                     leave loop;
+                     
+                  // false then
+                     restart loop; 
+                 if);
+                 
+             if);
+             
+          #);
+        
+     #);
+   searchName:
+     (#
+        direction: @integer;
+        current: ^mps.ast;
+        lexText: ^mps.lexemText;
+        help: ^text;
+        help2: @searchPrivate.textWithFindSub;
+        found: @boolean;
+        
+     enter direction
+     do
+        (if (searchNode[] <> none ) and (theSearchName[] <> none ) then
+            (if (theSearchName.length > 0) then
+                cs.node[]->current[];
+                loop:
+                  (# 
+                  do
+                     direction->select;
+                     (if (current[]->cs.node.equal)
+                      // true then false->found; 
+                     if);
+                     (if cs.node.kind
+                      // mps.kinds.nameDecl // mps.kinds.nameAppl
+                      // mps.kinds.string then
+                         cs.node[]->lexText[];
+                         lexText.getText->help[];
+                         help->help2;
+                         (if (theSearchName[]->help2.isSubString)
+                          // true then
+                             true->found;
+                             cs.node[]->searchPrivate.searchNode[];
+                             (cs.node[],1,0,0)->setFocus;
+                             
+                          else
+                             restart loop; 
+                         if);
+                         
+                      else
+                         restart loop; 
+                     if);
+                     
+                  #);
+                
+            if)
+        if);
+        
+     exit found
+     #);
+   
+#)  
+
+-- Searchtextbody: Descriptor --
+(#
+   synCatNo: @mps.nonterminalSymbol;
+   isList: @boolean;
+   current: ^mps.ast;
+   rootNode: ^mps.expanded;
+   theListElement: ^mps.ast;
+   
+do
+   cs.node[]->parsingSynCatNo->(synCatNo,isList,theListElement[]);
+   0->t.setPos;
+   (synCatNo,screen[],t[],frag[])->ag.parser->parseOK;
+   (if parseOK
+    // true then
+       (if isList
+        // true then
+           frag.root[]->rootNode[];
+           1->rootNode.get->searchPrivate.searchNode[];
+           
+        // false then
+           frag.root[]->searchPrivate.searchNode[]; 
+       if);
+       dir.down->searchPrivate.search;
+       
+   if);
+   
+#)  
+
+-- searchStructureBody: Descriptor --
+(# 
+do cs.node[]->searchPrivate.searchNode[]; dir.down->searchPrivate.search; 
+#)  
+
+-- searchNextBody: Descriptor --
+(#  do dir.down->searchPrivate.searchName->found #)  
+
+-- searchPrevBody: Descriptor --
+(#  do dir.up->searchPrivate.searchName->found #)  
+
+-- searchNameBody: Descriptor --
+(#
+   exp: ^mps.expanded;
+   lexText: ^mps.lexemText;
+   help: ^text;
+   help2: @searchPrivate.textWithFindSub;
+   
+do
+   (if frag.root.kind
+    // mps.kinds.interior then
+       frag.root[]->exp[];
+       search: exp.suffixWalk
+         (# 
+         do
+            (if current.kind
+             // mps.kinds.nameDecl // mps.kinds.nameAppl // mps.kinds.string
+             then
+                current[]->lexText[];
+                lexText.getText->help[];
+                help->help2;
+                (if (name[]->help2.isSubString)
+                 // true then
+                    true->found;
+                    exp[]->searchPrivate.searchNode[];
+                    name[]->searchPrivate.theSearchName[];
+                    (current[],1,0,0)->setFocus;
+                    leave search;
+                    
+                if);
+                
+            if);
+            
+         #);
+       (if found
+        // false then
+           none ->searchPrivate.searchNode[];
+           &text[]->searchPrivate.theSearchName[];
+           
+       if)
+   if)
+#)  
+

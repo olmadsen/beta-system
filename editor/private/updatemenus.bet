@@ -1,0 +1,574 @@
+ORIGIN '../codeeditor';
+-- expandMenuPrivate: Descriptor --
+(#
+   maxEntries: (#  exit 300 #);
+   menuEntry:
+     (# menuText: ^text; synCatNo: @integer; prev,next: ^menuEntry; 
+     exit (synCatNo,menuText[])
+     #);
+   expandmenus: [maxEntries] ^menuEntry;
+   lastEntry: [maxEntries] ^menuEntry;
+   UIexpandmenus: [maxEntries] ^UI.menu;
+   UIlexemExpandmenus: [7] ^UI.menu;
+   (* prodNo: @
+    (#
+    unExpanded: (#  exit - 1 #);
+    optional: (#  exit - 2 #);
+    nameAppl: (#  exit - 3 #);
+    nameDecl: (#  exit - 4 #);
+    const: (#  exit - 5 #);
+    string: (#  exit - 6 #);
+    comment: (#  exit - 7 #);
+    slotDesc: (#  exit - 8 #)
+    #);*)
+   oldSynCatNo,oldKind: @integer;
+   menuExists: @boolean;
+   type: @
+     (#
+        listOrOptional: (#  exit 1 #);
+        lexem: (#  exit 2 #);
+        normalExpand: (#  exit 3 #);
+        
+     #);
+   expandMenu: @
+     (#
+        itemMax: (#  exit 100 #);
+        expMenu: [itemMax] @integer;
+        lexemExpMenu: [7] @integer;
+        curItem: @integer;
+        menuType: @integer;
+        synCatNo: @integer;
+        initMenu:
+          (# 
+          do
+          (* ('Expand','')->init;
+           0->curItem;
+           (1,'Not a nonterminal')->menuItems.insert;
+           (1,UI.disable)->menuItems.look;*) 
+          #);
+        setMenuType: (# t: @integer;  enter t do t->menutype #);
+        resetMenu: (#  do 0->curItem;  #);
+        emptyMenu:
+          (# 
+          do
+             resetMenu;
+             (* (1,'Not a nonterminal')->menuItems.insert;
+              (1,UI.disable)->menuItems.look;*)
+             
+          #);
+        insertItem:
+          (#
+           menuNo,synCatNo: @integer ;
+             s: ^text;
+             theMenu: ^UI.menu;
+             theItem: ^UI.menu.menuItem;
+             sep: ^UI.menu.separator;
+             
+          enter (menuNo,synCatNo,s[])
+          do
+             (if (curItem = expMenu.range) then
+                 'Maximum expand menu size exceeded, extending repetition to:  '
+                   ->screen.putText;
+                 curItem-expMenu.range+10->expMenu.extend;
+                 expMenu.range->screen.putInt;
+                 screen.newLine;
+                 
+             if);
+             curItem+1->curItem;
+             (if synCatNo < 0 then
+                 synCatNo->lexemExpMenu[- synCatNo]
+              else
+                 synCatNo->expMenu[curItem]
+             if);
+             (if not menuExists then (*(curItem,s[])->menuItems.insert*)
+                 'menuNo: '->putText;
+                 menuNo->putInt;
+                 newLine;
+                 'synCatNo: '->putText;
+                 synCatNo->putInt;
+                 newLine;
+                 'curItem: '->putText;
+                 curItem->putInt;
+                 newLine;
+                 (if menuNo < 0 (* lexem *) then
+                     UIlexemExpandMenus[- menuNo][]->theMenu[];
+                     (if theMenu[] = none then
+                         &UI.menu[]->theMenu[]; theMenu.open
+                     if);
+                     &theMenu.menuItem
+                       (#
+                          eventHandler:: 
+                            (#
+                               onSelect:: 
+                                 (# 
+                                 do
+                                    lexemExpMenu[position]->onExpandMenuSelected
+                                 #)
+                            #)
+                       #)[]->theItem[]->theMenu.append;
+                     theItem.open;
+                     s[]->theItem.name
+                  else
+                     UIexpandmenus[menuNo][]->theMenu[];
+                     (if theMenu[] = none then
+                         &UI.menu[]->UIexpandmenus[menuNo][]->theMenu[];
+                         theMenu.open
+                     if);
+                     (if ('-'->s.equal) then
+                         &theMenu.separator[]->sep[];
+                         sep.open;
+                         sep[]->theMenu.append
+                      else
+                         &theMenu.menuItem
+                           (#
+                              eventHandler:: 
+                                (#
+                                   onSelect:: 
+                                     (# 
+                                     do expMenu[position]->onExpandMenuSelected
+                                     #)
+                                #)
+                           #)[]->theItem[]->theMenu.append;
+                         theItem.open;
+                         s[]->theItem.name
+                     if)
+                 if)
+             if);
+             
+          #);
+        popupMenu:
+          (# menuNo: @integer; popUpAt: @point
+          enter (menuNo,popUpAt)
+          do
+             (if true
+              // menuNo <= 0 // menuNo > UIexpandmenus.range then
+                 'menuNo is out of range: '->putText; menuNo->putInt; newLine; 
+              else
+                 (if UIexpandmenus[menuNo][] <> none then
+                     (1,popUpAt,theSifTextEditor.theWindow)
+                       ->UIexpandmenus[menuNo].popUp
+                  else
+                     'No popup menu for: '->putText; menuNo->putInt; newLine; 
+                 if)
+             if)
+          #);
+        update:
+          (#
+          synCatNo: @mps.nonterminalSymbol;
+             prod: ^mg.prod;
+             first: @boolean;
+             menuItem: ^menuEntry;
+             menuNo: @integer;
+             makeMenuEntry:
+               (#
+                  menuNo: @integer;
+                  synCatNo: @integer;
+                  menuText: ^text;
+                  tempMenu: ^menuEntry;
+                  
+               enter (menuNo,synCatNo,menuText[])
+               do
+                  expandMenus[menuNo][]->tempMenu[];
+                  &menuEntry[]->expandmenus[menuNo][];
+                  (if tempMenu[]
+                   // none then
+                   (* the menu for this syncatno has not been created before *)
+                      expandmenus[menuNo][]->lastEntry[menuNo][]
+                   else
+                      tempMenu[]->expandmenus[menuNo].next[];
+                      expandmenus[menuNo][]->tempMenu.prev[];
+                      
+                  if);
+                  syncatno->expandmenus[menuno].syncatno;
+                  menutext[]->expandmenus[menuno].menutext[];
+                  
+               #);
+             createexpandmenu:
+               (# syncatno: @mps.nonterminalSymbol; prod: ^mg.prod; 
+               enter syncatno
+               do
+                  syncatno->prodlist.get->prod[];
+                  (if first then
+                      syncatno->menuno;
+                      (if (syncatno > expandmenus.range) then
+                          'production max exceeded, extending repetition to '
+                            ->screen.puttext;
+                          frag.grammar.kindarray.range-expandmenus.range+1
+                            ->expandmenus.extend;
+                          frag.grammar.kindarray.range-lastEntry.range+1
+                            ->lastEntry.extend;
+                          frag.grammar.kindarray.range-UIexpandmenus.range+1
+                            ->UIexpandmenus.extend;
+                          expandmenus.range->screen.putint;
+                          screen.newline;
+                          
+                      if);
+                      
+                  if);
+                  (if prod.symbol
+                   // mg.alternation then
+                        (#
+                           alternation: ^mg.alternation;
+                           syncatlist: ^mg.syncatlist;
+                           
+                        do
+                           prod[]->alternation[];
+                           alternation.getsyncatlist->syncatlist[];
+                           syncatlist.scan
+                             (#
+                                syncat: ^mg.syncat;
+                                synname: ^mg.synname;
+                                lextext: ^mps.lexemtext;
+                                
+                             do
+                                current[]->syncat[];
+                                syncat.getsynname->synname[];
+                                errorprodtest:
+                                  (#
+                                     prod: ^mg.prod;
+                                     constructor: ^mg.constructor;
+                                     conselemlist: ^mg.conselemlist;
+                                     conselem: ^mg.conselem;
+                                     
+                                  do
+                                     1->synname.getattribute->prodlist.get
+                                       ->prod[];
+                                     (if prod.symbol
+                                      // mg.constructor then
+                                         prod[]->constructor[];
+                                         constructor.getconselemlist
+                                           ->conselemlist[];
+                                         conselemlist.getson1->conselem[];
+                                         (if conselem.symbol
+                                          // mg.errorspec then
+                                             leave errorprodtest
+                                         if);
+                                         
+                                     if);
+                                     synname.getnameappl->lextext[];
+                                     (menuno,1->synname.getattribute,
+                                      lextext.gettext)->makemenuentry;
+                                     
+                                  #);
+                                
+                             #);
+                           
+                        #);
+                      
+                   // mg.constructor // mg.listone then
+                        (#
+                           leftside: ^mg.leftside;
+                           syndeclname: ^mg.syndeclname;
+                           str2: ^mps.lexemtext;
+                           
+                        do
+                           prod.getson1->leftside[];
+                           leftside.getsyndeclname->syndeclname[];
+                           syndeclname.getnamedecl->str2[];
+                           test
+                             (#  do str2.gettext->str[] #);
+                           (menuno,syncatno,str2.gettext)->makemenuentry;
+                           
+                        #)
+                   // mg.listzero // mg.opt then
+                        (#
+                           syncat: ^mg.syncat;
+                           nextprod: ^mps.expanded;
+                           synname: ^mg.synname;
+                           leftside: ^mg.leftside;
+                           syndeclname: ^mg.syndeclname;
+                           str2: ^mps.lexemtext;
+                           
+                        do
+                           (if first then
+                               loop:
+                                 (# 
+                                 do
+                                    prod[]->findsynnameatt->syncatno;
+                                    (if syncatno.islexem
+                                     // false then
+                                        syncatno->prodlist.get->nextprod[];
+                                        (if nextprod.symbol
+                                         // mg.opt then
+                                            nextprod[]->prod[]; restart loop; 
+                                        if);
+                                        
+                                    if);
+                                    
+                                 #);
+                               (if syncatno.islexem then
+                                   prod.getson2->leftside[];
+                                   leftside.getsyndeclname->syndeclname[];
+                                   syndeclname.getnamedecl->str2[];
+                                   (menuno,syncatno,str2.gettext)
+                                     ->makemenuentry;
+                                   (menuno,0,'Empty')->makemenuentry;
+                                   
+                                else
+                                   (if nextprod.symbol
+                                    // mg.alternation then
+                                       false->first;
+                                       syncatno->&createexpandmenu;
+                                       (menuno,0,'-')->makemenuentry;
+                                       (menuno,0,'Empty')->makemenuentry;
+                                       
+                                    else
+                                       prod.getson2->syncat[];
+                                       syncat.getsynname->synname[];
+                                       synname.getnameappl->str2[];
+                                       (menuno,syncatno,str2.gettext)
+                                         ->makemenuentry;
+                                       (menuno,0,'Empty')->makemenuentry;
+                                       
+                                   if);
+                                   
+                               if);
+                               
+                            else
+                               prod.getson1->leftside[];
+                               leftside.getsyndeclname->syndeclname[];
+                               syndeclname.getnamedecl->str2[];
+                               (menuno,syncatno,str2.gettext)->makemenuentry;
+                               
+                           if);
+                           
+                        #);
+                      
+                  if);
+                  
+               #);
+             itemSynCatNo: @integer;
+             s: ^text;
+             
+          enter syncatno
+          do
+             trace
+               (#  do 'updateexpandmenu'->str[] #);
+             true->first;
+             (if frejastatuson then frejaexpandstatus.clear;  if);
+             (if syncatno.islexem then
+                 type.lexem->expandmenu.setmenutype;
+                 (if frejastatuson then ' lexem '->frejaedittypestatus;  if);
+                 (syncatno,syncatno,'Enter lexem')->insertitem;
+                 (* (1,ui.disable)->menuitems.look;*)
+                 
+              else
+                 syncatno->prodlist.get->prod[];
+                 (if prod.symbol
+                  // mg.alternation // mg.constructor // mg.listone then
+                     type.normalexpand->expandmenu.setmenutype;
+                     (if frejastatuson then
+                         ' unexpnormal '->frejaedittypestatus
+                     if);
+                     
+                  // mg.listzero // mg.opt then
+                     type.listoroptional->expandmenu.setmenutype;
+                     (if frejastatuson then
+                         ' unexpoptional '->frejaedittypestatus
+                     if);
+                     
+                 if);
+                 (if (syncatno > expandmenus.range) then
+                     'production max exceeded, extending repetition to '
+                       ->screen.puttext;
+                     frag.grammar.kindarray.range-expandmenus.range+1
+                       ->expandmenus.extend;
+                     frag.grammar.kindarray.range-lastEntry.range+1
+                       ->lastEntry.extend;
+                     frag.grammar.kindarray.range-UIexpandmenus.range+1
+                       ->UIexpandmenus.extend;
+                     expandmenus.range->screen.putint;
+                     screen.newline;
+                     
+                 if);
+                 false->menuExists;
+                 (if (expandmenus[syncatno][] = none ) then
+                 (* the menu for this syncatno has not been created before *)
+                     syncatno->&createexpandmenu
+                  else
+                     true->menuExists
+                 if);
+                 lastentry[syncatno][]->menuitem[];
+                 loop:
+                   (# 
+                   do
+                      menuItem->(itemSynCatNo,s[]);
+                      (synCatNo,itemSynCatNo,s[])->ExpandMenu.insertItem;
+                      (if frejaStatusOn then
+                          (if synCatNo = 0 then (* derive empty *)
+                              1->frejaExpandStatus.putInt
+                           else
+                              synCatNo->frejaExpandStatus.putInt
+                          if);
+                          ' '->frejaExpandStatus.put;
+                          s[]->frejaExpandStatus.putText;
+                          ' '->frejaExpandStatus.put;
+                          
+                      if);
+                      (if ((menuItem.prev[]->menuItem[]) <> none ) then
+                          restart loop; 
+                      if);
+                      
+                   #);
+                 
+             if);
+             
+          #);
+        onExpandMenuSelected:
+          (# syncatNo: @integer
+          enter synCatNo
+          do
+             true->cs.undoPermit;
+             (if expandmenuPrivate.expandmenu.menuType
+              // type.listOrOptional then
+                 (if (synCatNo = 0) then
+                     makeEmptyListOrOpt; 
+                  else
+                     (synCatno,true)->nodeExpand; 
+                 if);
+                 
+              // type.lexem then
+                 'promptfortext'->putLine; (synCatNo,false)->nodeExpand; 
+              // type.normalExpand then
+                 (synCatNo,true)->nodeExpand; 
+             if);
+             
+          #);
+        
+     #);
+   
+#)  
+
+-- onMiddleButton: DoPart --
+do
+   (if cs.isUnexpanded then
+       (cs.node[]->getsynCatNo,pos)->expandMenuPrivate.expandMenu.popUpMenu; 
+   if)  
+
+-- updateExpandMenuBody: Descriptor --
+(# synCatNo: @mps.nonterminalSymbol; unexp: ^mps.unexpanded
+do
+   false->cs.isUnexpanded;
+   cs.node[]->getSynCatNo->synCatNo;
+   (if
+   ((cs.node.kind <> expandMenuPrivate.oldKind) or
+    (synCatNo <> expandMenuPrivate.oldSynCatNo) or frejaStatusOn)
+    // true then
+       cs.node.kind->expandMenuPrivate.oldKind;
+       synCatNo->expandMenuPrivate.oldSynCatNo;
+       expandMenuPrivate.expandMenu.resetMenu;
+       (if ((cs.length = 1) and (cs.node.kind = mps.kinds.unexpanded))
+        // true then
+           cs.node[]->unexp[];
+           (if not unexp.isSlot then
+               synCatNo->expandMenuPrivate.oldSynCatNo;
+               synCatNo->expandMenuPrivate.expandMenu.update;
+               true->cs.isUnexpanded;
+               (* UI.setPopUpMenuCursor;*)
+               
+            else
+           (* UI.setStructureCursor; *)
+               
+           if)
+        else
+           expandMenuPrivate.expandMenu.emptyMenu;
+           (*UI.setStructureCursor; *)
+           (if frejaStatusOn
+            // true then ' expanded '->frejaEditTypeStatus
+           if);
+           
+       if);
+       
+   if);
+   
+#)  
+
+-- editMenuUpdateBody: Descriptor --
+(#
+   synCatNo: @mps.nonterminalSymbol;
+   fatherProd: ^mps.ast;
+   fatherNode,node: ^mps.ast;
+   currentGrammar,grammarOnClipBoard: ^text;
+   checkSynCatComp:
+     (#
+        synCatNo1,synCatNo2: @mps.nonterminalSymbol;
+        prod: ^mg.prod;
+        leftside: ^mg.leftside;
+        OK: @boolean;
+        
+     enter (synCatNo1,synCatNo2)
+     do
+        trace
+          (#  do 'checkSynCatComp '->str[] #);
+        (if synCatno2.isLexem
+         // false then
+            synCatNo2->Prodlist.get->prod[];
+            (if prod.symbol
+             // mg.opt // mg.listZero then
+             (* find syntactic category of rigth side *)
+                prod[]->findSynNameAtt->synCatNo2; 
+            if);
+            
+        if);
+        loop:
+        (if ((synCatNo1 = synCatNo2)->OK)
+         // false then
+            (if synCatNo1.isLexem
+             // false then
+                synCatNo1->Prodlist.get->prod[];
+                prod.getSon1->leftSide[];
+                1->leftSide.getAttribute->synCatNo1;
+                (if
+                ((synCatNo1 = mps.super.cons) or (synCatNo1 = mps.super.list) or
+                 (synCatNo1 = mps.super.undefined))
+                 // true then leave loop;  // false then restart loop; 
+                if);
+                
+            if);
+            
+        if);
+        
+     exit OK
+     #);
+   
+do
+   trace
+     (#  do 'updateeditMenu'->str[] #);
+   false->cs.pastePermit->cs.listInsertPermit;
+   cs.node[]->checkFatherNode->node[];
+   node[]->getSynCatNo->synCatNo;
+   ;
+   (if (edenv.clip.fragments.elm[1][] <> none ) then
+       cs.node.frag.grammar.grammarIdentification->currentGrammar[];
+       edenv.clip.fragments.elm[1].frag.grammar.grammarIdentification
+         ->grammarOnClipBoard[];
+       (if grammarOnClipBoard[]->currentGrammar.equal then
+           (if ((edenv.clip.synCatNo,synCatNo)->checkSynCatComp)
+            // true then (* paste is permitted *) true->cs.pastePermit; 
+           if)
+       if);
+       
+   if);
+   node.father->fatherNode[];
+   (if (fatherNode[] = none )
+    // false then
+       fatherNode.symbol->synCatNo->Prodlist.get->fatherProd[];
+       (if fatherProd.symbol
+        // mg.listZero // mg.listOne then (* list element may be inserted *)
+           true->cs.listInsertPermit; 
+       if);
+       
+   if);
+   (if frejaStatusOn then
+       frejaEditStatus.clear;
+       cs.undoPermit->frejaEditStatus.putInt;
+       ' '->frejaEditStatus.put;
+       cs.pastePermit->frejaEditStatus.putInt;
+       ' '->frejaEditStatus.put;
+       cs.listInsertPermit->frejaEditStatus.putInt;
+       ' '->frejaEditStatus.put;
+       
+   if);
+   
+#)  
+

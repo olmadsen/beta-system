@@ -1,0 +1,443 @@
+ORIGIN '../codeeditor';
+(*
+ * COPYRIGHT
+ *	 Copyright Mjolner Informatics, 1986-94
+ *	 All rights reserved.
+ *)
+-- createListBody: Descriptor --
+(# (* Create a list node with syntactic category synCatNo and with        *)
+(* one son. Insert the list node as son number 'isSon' in 'fatherNode' *)
+(* CreateList is called whenever a list nonterminal is to be expanded  *)
+   listNode: ^mps.expanded; nontNode: ^mps.unexpanded; 
+do
+   trace
+     (#  do 'createList'->str[] #);
+   (synCatNo,frag[])->ag.newAst->listNode[] (* create list node *) ;
+   prod[]->&findSynNameAtt
+     ->synCatNo (* find syntactic category of son and insert son-nonterminal *)
+     ;
+   (synCatNo,frag[])->ag.newUnexpanded->nontNode[];
+   (1,nontNode[])->listNode.insert;
+   (if (fatherNode[] = none )
+    // true then (* cs is root and nonterminal *)
+       listNode[]->frag.root[]
+    // false then
+       (isSon,listNode[])->fatherNode.put
+   if);
+   (if prod.symbol // mg.listOne then (synCatNo,listNode[],1)->&expand if)
+#)  
+
+-- expandBody: Descriptor --
+(# (* Expand is called for each nonterminal to be automatically expanded.  *)
+(* Expand will recursively expand a nonterminal until user interaction *)
+(* is needed in order to decide what to expand with.                  *)
+   newFragment: ^mps.expanded;
+   nontNode: ^mps.unexpanded;
+   sonNumber: @integer;
+   newSynCatNo: @mps.nonterminalSymbol;
+   prod: ^mg.prod;
+   findNonDummy: (* Find the first non-dummy production derivable from 'prod' *)
+     (# synCatNo: @mps.nonterminalSymbol; prod: ^mg.prod
+     enter prod[]
+     do
+        trace
+          (#  do 'findNonDummy'->str[] #);
+        prod[]->findSynNameAtt->synCatNo;
+        (if synCatNo.isLexem
+         // false then
+            synCatNo->Prodlist.get->prod[];
+            (if (prod.symbol = mg.dummy)
+             // true then prod[]->&findNonDummy
+            if)
+        if)
+     exit synCatNo
+     #);
+   
+do
+   trace
+     (#  do 'expand'->str[] #);
+   (if edDebug
+    // true then 'synCatNo:'->screen.putText; synCatNo->putInt
+   if);
+   &showAst;
+   (if synCatNo.isLexem
+    // true then
+       trace (#  do 'lexem'->str[] #)
+    // false then
+       synCatNo->Prodlist.get->prod[];
+       (if prod.symbol
+        // mg.alternation then
+           trace (#  do 'alternation'->str[] #); 
+        // mg.listZero then
+           trace (#  do 'listZero'->str[] #)
+        // mg.opt then
+           trace (#  do 'optional'->str[] #)
+        // mg.constructor then
+           trace
+             (#  do 'constructor'->str[] #);
+           (synCatNo,frag[])->ag.newAst->newFragment[];
+           (if (fatherNode[] = none )
+            // true then (* cs is root and nonterminal *)
+               newFragment[]->frag.root[]
+            // false then
+               (isSon,newFragment[])->fatherNode.put
+           if);
+           (synCatNo,newFragment[])->&setSynCatNo;
+           0->sonNumber;
+           newFragment.scan
+             (# unexp: ^mps.unExpanded
+             do
+                sonNumber+1->sonNumber;
+                current[]->unExp[];
+                unExp.nonterminalSymbol->synCatNo;
+                (synCatNo,newFragment[],sonNumber)->&expand
+             #)
+        // mg.listOne then
+           trace
+             (#  do 'listOne'->str[] #);
+           (synCatNo,prod[],fatherNode[],isSon)->&createList
+        // mg.dummy then
+           trace
+             (#  do 'dummy'->str[] #);
+           prod[]->&findNonDummy->newSynCatNo;
+           (if newSynCatNo.isLexem
+            // true then
+               trace
+                 (#  do 'lexemFound '->str[] #);
+               (newSynCatNo,frag[])->ag.newUnexpanded->nontNode[];
+               (isSon,nontNode[])->fatherNode.put
+            // false then
+               trace
+                 (#  do 'notLexem '->str[] #);
+               (newSynCatNo,fatherNode[],isSon)->&expand
+           if)
+       if)
+   if)
+#)  
+
+-- newBody: Descriptor --
+(# (* Creates a new program from the first production in the language grammar *)
+
+do trace (#  do 'new'->str[] #); newPrivate; aNewFragmentEvent; selectNewCs
+#)  
+
+-- newPrivateBody: Descriptor --
+(#
+   position: @integer;
+   synCatNo: @mps.nonterminalSymbol;
+   expFragment: ^mps.expanded;
+   nontNode: ^mps.unexpanded;
+   prod: ^mg.prod
+do
+   1->Prodlist.get->prod[];
+   (if prod.symbol
+    // mg.alternation // mg.opt // mg.listZero then
+       (1,frag[])->ag.newUnexpanded->frag.root[]; 
+    else
+       (1,frag[])->ag.newAst->frag.root[]; 
+   if);
+   frag.root[]->cs.node[];
+   1->cs.length;
+   (if
+   ((frag.root.kind = mps.kinds.unexpanded) or
+    (frag.root.kind = mps.kinds.optional))
+    // true then (* program is optional, alternation or listZero *)
+       frag.root[]->nontNode[]; 1->nontNode.nonterminalSymbol
+    // false then
+       frag.root[]->expFragment[];
+       1->Prodlist.get->prod[];
+       (if prod.symbol
+        // mg.listOne then
+           prod[]->findSynNameAtt->synCatNo;
+           (synCatNo,frag[])->ag.newUnexpanded->nontNode[];
+           (1,nontNode[])->expfragment.insert;
+           (synCatNo,expfragment[],1)->&expand
+        // mg.constructor then
+           (1,expFragment[])->setSyncatNo;
+           0->position;
+           expfragment.scan
+             (# nontNode: ^mps.unExpanded
+             do
+                position+1->position;
+                current[]->nontNode[];
+                nontNode.nonterminalSymbol->synCatNo;
+                (synCatNo,expFragment[],position)->&expand
+             #)
+       if)
+   if);
+   
+#)  
+
+-- expandLexemBody: Descriptor --
+(#
+   nontNode: ^mps.unexpanded;
+   synCatNo: @mps.nonterminalSymbol;
+   fatherNode: ^mps.expanded;
+   isSon: @integer;
+   newFragment: ^mps.ast;
+   aLexemText: ^mps.lexemText;
+   
+do
+   trace
+     (#  do 'expandLexem'->str[] #);
+   (*'expandLexem was called with: '->putText; t->putLine;*)
+   cs.node[]->nontNode[];
+   nontNode.nonterminalSymbol->synCatNo;
+   (if synCatNo.isLexem
+    // false then 'not a lexem!'->putLine; 
+    else
+       cs.node.father->fatherNode[];
+       cs.node.sonNo->isSon;
+       (fatherNode[],isSon,cs,1,false)->makeUndoElem;
+       (synCatNo,frag[])->ag.newAst->newFragment[];
+       (isSon,newFragment[])->fatherNode.put;
+       newFragment[]->cs.node[];
+       (if (cs.node.symbol = mps.const)
+        // true then (*getInt -> aconst.putValue*)
+           'a const?'->putLine; 
+        // false then (* nameDecl, nameAppl or string *)
+           cs.node[]->alexemText[]; t[]->alexemText.putText
+       if);
+       makeAstReplacedEvent;
+       cs->aFocusChangedEvent;
+       
+   if);
+   
+#)  
+
+-- nodeExpandBody: Descriptor --
+(# (* nodeExpand is called each time the user initiates a command in the *)
+(* expand menu. Current selection which at this time is a nonterminal *)
+(* will then be expanded with the syntactic category specified by the *)
+(* user. For each nonterminal created expand will be called.          *)
+   fatherNode: ^mps.expanded;
+   newFragment: ^mps.ast;
+   nontNode: ^mps.unexpanded;
+   prod,nextProd: ^mg.prod;
+   command,isSon: @integer;
+   csSynCatNo: @mps.nonterminalSymbol;
+   createMd: @boolean;
+   editLexem: (* cs must be lexem node ! *)
+     (# aConst: ^mps.const; aLexemText: ^mps.lexemText
+     do
+        trace
+          (#  do 'editLexem'->str[] #);
+        (if (cs.node.symbol = mps.const)
+         // true then
+            cs.node[]->aConst[];
+            newLine;
+            'const: '->screen.putText;
+            getInt->aconst.putValue
+         // false then (* nameDecl, nameAppl or string *)
+            newLine;
+            'text: '->screen.putText;
+            cs.node[]->alexemText[];
+            getAtom->alexemText.putText
+        if)
+     #);
+   
+do
+   false->createMd;
+   L:
+     (# 
+     do
+        trace
+          (#  do 'nodeExpand '->str[] #);
+        cs.node.father->fatherNode[];
+        (if (fatherNode[] = none )
+         // true then 1->isSon // false then cs.node.sonNo->isSon
+        if);
+        (if createMd
+         // false then (fatherNode[],isSon,cs,1,false)->makeUndoElem
+        if);
+        cs.node[]->nontNode[];
+        nontNode.nonterminalSymbol->csSynCatNo;
+        (if csSynCatNo.isLexem
+         // false then
+            csSynCatNo->Prodlist.get->prod[];
+            (if prod.symbol
+             // mg.listZero then
+             (* syntactic category of cs is listZero and a list node with *)
+             (* one son has to be inserted instead of the nonterminal at  *)
+             (* current selection. The son-nonterminal then should be     *)
+             (* expanded with the syntactic category given to nodeExpand. *)
+                trace
+                  (#  do 'listZero '->str[] #);
+                (csSynCatNo,prod[],fatherNode[],isSon)->&createList;
+                (if (* father should be list node *) (fatherNode[] = none )
+                 // true then
+                    frag.root[]->fatherNode[]
+                 // false then
+                    isSon->fatherNode.get->fatherNode[]
+                if);
+                1->fatherNode.get->cs.node[] (* son nonterminal is cs *) ;
+                1->cs.length;
+                1->isSon;
+                (synCatNo,fatherNode[],isSon)->&expand;
+                isSon->fatherNode.get->cs.node[];
+                makeAstReplacedEvent;
+                goToNonterminal;
+                (* selectNewCS *)
+                ;
+                cs->aFocusChangedEvent;
+                leave L (* leave nodeexpand *)
+            if)
+        if);
+        (if (* if lexem *) synCatNo.isLexem
+         // true then
+            (if newLexem
+             // false then
+                (synCatNo,frag[])->ag.newAst->newFragment[];
+                (isSon,newFragment[])->fatherNode.put;
+                newFragment[]
+                  ->cs.node[] (* der er nu indsat en lexem knude i traeet. *) ;
+                &editLexem
+             // true then
+                trace
+                  (#  do 'isLexem'->str[] #);
+                (syncatNo,frag[])->ag.newUnexpanded->nontNode[];
+                (isSon,nontNode[])->fatherNode.put;
+                nontNode[]->cs.node[]
+            if);
+            (if createMd
+             // true then
+                (fatherNode[],isSon,undoElem.fragmentLength,
+                 undoElem.fragments[],2)->aListElementsReplacedEvent
+             // false then
+                makeAstReplacedEvent
+            if);
+            goToNonterminal;
+            (* selectNewCS *)
+            cs->aFocusChangedEvent;
+            
+         // false then
+            synCatNo->Prodlist.get->prod[];
+            (if prod.symbol
+             // mg.alternation then
+                trace
+                  (#  do 'alternation'->str[] #);
+                cs.node[]->nontNode[];
+                synCatNo->nontNode.nonterminalSymbol;
+                makeAstReplacedEvent;
+                goToNonterminal;
+                (* selectNewCS *)
+                ;
+                cs->aFocusChangedEvent;
+                
+             // mg.constructor // mg.listOne // mg.dummy then
+                trace
+                  (#  do 'constructorORlistOneORDummy'->str[] #);
+                (synCatNo,fatherNode[],isSon)->&expand;
+                (if (fatherNode[] = none )
+                 // true then
+                    frag.root[]->cs.node[]
+                 // false then
+                    isSon->fatherNode.get->cs.node[]
+                if);
+                (if createMd
+                 // true then
+                    (fatherNode[],isSon,undoElem.fragmentLength,
+                     undoElem.fragments[],2)->aListElementsReplacedEvent
+                 // false then
+                    makeAstReplacedEvent
+                if);
+                goToNonterminal;
+                (* selectNewCS *)
+                cs->aFocusChangedEvent;
+                
+             // mg.opt then
+                trace
+                  (#  do 'optional '->str[] #);
+                L1:
+                  (# 
+                  do
+                     prod[]->findSynNameAtt->synCatNo;
+                     (if synCatNo.isLexem
+                      // false then
+                         synCatNo->Prodlist.get->nextProd[];
+                         (if nextProd.symbol
+                          // mg.opt then nextProd[]->prod[]; restart L1
+                         if)
+                     if)
+                  #);
+                (synCatNo,fatherNode[],isSon)->&expand;
+                isSon->fatherNode.get->cs.node[];
+                (if createMd
+                 // true then
+                    (fatherNode[],isSon,undoElem.fragmentLength,
+                     undoElem.fragments[],2)->aListElementsReplacedEvent
+                 // false then
+                    makeAstReplacedEvent
+                if);
+                goToNonterminal;
+                (* selectNewCS *)
+                cs->aFocusChangedEvent;
+                
+            if)
+        if)
+     #)
+#)  
+
+-- listInsertBody: Descriptor --
+(# (* ListInsert is called whenever the user wants to insert a list element *)
+(* in an already existing list. A nonterminal of same syntactic category *)
+(* as the list elements is created and inserted either before or after   *)
+(* the list element(s) which constitutes current selection.              *)
+   prod: ^mg.prod;
+   nontNode: ^mps.unexpanded;
+   fatherNode: ^mps.expanded;
+   isSon: @integer;
+   synCatNo: @mps.nonterminalSymbol;
+   undoElm: @astFocus
+do
+   trace
+     (#  do 'listInsert '->str[] #);
+   checkFather;
+   (* may update cs, preliminary *)
+   cs.node.father->fatherNode[] (* midlertidig 7/10 *) ;
+   (if command
+    // ins.before then (* cs.node.sonNo is unchanged *)
+       cs.node.sonNo->isSon
+    // ins.after then (* insert after *)
+       cs.node.sonNo+cs.length->isSon
+    // ins.first then
+       cs.node[]->fatherNode[]; 1->isSon
+   if);
+   none ->undoElm.node[];
+   0->undoElm.length;
+   (fatherNode[],isSon,undoElm,1,true)->makeUndoElem;
+   fatherNode.symbol->Prodlist.get->prod[]->&findSynNameAtt
+     -> (* find syntactic category of list element *) synCatNo;
+   (syncatNo,frag[])->ag.newUnexpanded->nontNode[];
+   (isSon,nontNode[])->fatherNode.insert;
+   (synCatNo,fatherNode[],isSon)->&expand;
+   (fatherNode[],isSon)->aListElementInsertedEvent;
+   (isSon->fatherNode.get,1,0,0)->setFocus;
+   
+#)  
+
+-- expandOptionalBody: Descriptor --
+(# (* expand  an empty optional to a nonterminal of appropriate *)
+(* syntactic category                                        *)
+   fatherNode: ^mps.expanded;
+   synCatNo: @mps.nonterminalSymbol;
+   nontNode: ^mps.unexpanded;
+   isSon: @integer;
+   opt: ^mps.optional;
+   
+do
+   trace
+     (#  do 'expandOptional'->str[] #);
+   (cs.node.father,cs.node.sonNo,cs,1,false)->makeUndoElem;
+   cs.node.father->fatherNode[];
+   cs.node.sonNo->isSon;
+   cs.node[]->opt[];
+   opt.nonterminalSymbol->synCatNo;
+   (1,frag[])->ag.newUnexpanded->nontNode[];
+   (isSon,nontNode[])->fatherNode.put;
+   (synCatNo,fatherNode[],isSon)->&expand;
+   isSon->fatherNode.get->cs.node[];
+   makeAstReplacedEvent;
+   selectNewCs
+#)  
+

@@ -1,0 +1,488 @@
+ORIGIN '../codeeditor';
+(*
+ * COPYRIGHT
+ *	 Copyright Mjolner Informatics, 1986-94
+ *	 All rights reserved.
+ *)
+-- selectNewCsBody: Descriptor --
+(# 
+do
+   trace
+     (#  do 'selectNewCs'->str[] #);
+   (* cs shall not be changed, but check son  *)
+   checkSon;
+   cs->aFocusChangedEvent;
+   (* ? *)
+   
+#)  
+
+-- checkSonBody: Descriptor --
+(# 
+do (if cs.subCommentInx1 // 0 then cs.node[]->checkSonNode->cs.node[] if)
+#)  
+
+-- checkSonNodeBody: Descriptor --
+(#
+(* The following two situations makes it necessary
+ to go further down:
+ 1) This selection is a list node with only one son.
+ 2) This selection is a constructor node with only one son
+ *)
+   expNode: ^mps.expanded;
+   prod: ^mg.prod;
+   constructor: ^mg.constructor;
+   consElemList: ^mg.consElemList;
+   
+do
+   loop:
+   (if (node.kind = mps.kinds.interior)
+    // true then
+       node[]->expNode[];
+       (if expNode.noOfSons
+        // 1 then
+           expNode.symbol->Prodlist.get->prod[];
+           (if prod.symbol
+            // mg.listZero // mg.listOne then
+               expNode.getson1->node[]; restart loop; 
+            // mg.constructor then
+               prod[]->constructor[];
+               constructor.getConsElemList->consElemList[];
+               (if consElemList.noOfSons
+                // 1 then expNode.getson1->node[]; restart loop; 
+               if);
+               
+           if);
+           
+       if);
+       
+   if)
+#)  
+
+-- checkFatherNodeBody: Descriptor --
+(#
+(* The following two situations makes it necessary to
+ go further up:
+ 1) If the old selection was the only son and this
+ selection is a list node.
+ 2) If the old selection was the only son 
+ and this selection is constructor node.
+ 
+ cs.length = 1 when this routine is called.
+ *)
+   fatherNode: ^mps.expanded;
+   prod: ^mg.prod;
+   constructor: ^mg.constructor;
+   consElemList: ^mg.consElemList;
+   
+do
+   loop:
+   (if (node.father <> none )
+    // true then
+       node.father->fatherNode[];
+       fatherNode.symbol->Prodlist.get->prod[];
+       (if fatherNode.noOfSons
+        // 1 then
+           (if prod.symbol
+            // mg.constructor then
+               prod[]->constructor[];
+               constructor.getConsElemList->consElemList[];
+               (if consElemList.noOfSons
+                // 1 then fatherNode[]->node[]; restart loop; 
+               if);
+               
+           if);
+           
+       if);
+       
+   if);
+   
+#)  
+
+-- downBody: Descriptor --
+(# (* this operation is intended to replace dir.down->navigate *)  do  #)  
+
+-- extendBody: Descriptor --
+(# prod: ^mg.prod; fatherNode: ^mps.expanded; 
+do
+   trace
+     (#  do 'extend'->str[] #);
+   (if ((cs.node.father->fatherNode[]) <> none )
+    // true then
+       fatherNode.symbol->Prodlist.get->prod[];
+       (if prod.symbol
+        // mg.listZero // mg.listOne then
+           (if (cs.node.sonNo+cs.length-1 < fatherNode.noOfSons)
+            // true then cs.length+1->cs.length; 
+            else
+               (fatherNode[],1,0,0)->cs; 
+           if);
+           
+        else
+           (fatherNode[],1,0,0)->cs; &checkFather; 
+       if);
+       
+   if);
+   cs->aFocusChangedEvent;
+   
+#)  
+
+-- goToNonterminalBody: Descriptor --
+(#
+   csNode: ^mps.expanded;
+   unexp: ^mps.unexpanded;
+   current: ^mps.ast;
+   synCatNo: @mps.nonterminalSymbol;
+   
+do
+   trace
+     (#  do 'goToNonterminal'->str[] #);
+   checkSon;
+   cs.node[]->current[];
+   (* to avoid looping *)
+   loop:
+   (if (cs.node.kind <> mps.kinds.unexpanded)
+    // true then
+       dir.down->&select;
+       (if (cs.node[]->current.equal) // false then restart loop;  if);
+       
+    else
+       cs.node[]->unexp[];
+       (if unexp.isSlot
+        // true then
+           (if (cs.node[]->current.equal) // false then restart loop;  if); 
+       if);
+       
+   if);
+   1->cs.length;
+   
+#)  
+
+-- goToNonEmptyBody: Descriptor --
+(# (* to avoid selecting an empty list/optional node *)
+   csNode: ^mps.expanded; current: ^mps.ast; prod: ^mg.prod; 
+do
+   trace
+     (#  do 'goToNonEmpty'->str[] #);
+   cs.node[]->current[];
+   (* to avoid looping *)
+   loop:
+     (# 
+     do
+        dir.down->&select;
+        (if (cs.node.kind = mps.kinds.interior)
+         // true then
+            cs.node[]->csNode[];
+            csNode.symbol->Prodlist.get->prod[];
+            (if (csNode.noOfSons = 0)
+             // true then
+                (if prod.symbol
+                 // mg.listZero // mps.optional then
+                    (if (cs.node[]->current.equal)
+                     // false then restart loop; 
+                    if);
+                    
+                if);
+                
+            if);
+            
+        if)
+     #);
+   1->cs.length;
+   
+#)  
+
+-- nextNonterminalBody: Descriptor --
+(# current: ^mps.ast; 
+do
+   cs.node[]->current[];
+   (* to avoid looping *)
+   loop:
+     (# 
+     do
+        dir.down->&select;
+        (if (cs.node.kind <> mps.kinds.unexpanded)
+         // true then
+            (if (cs.node[]->current.equal) // false then restart loop;  if);
+            
+        if);
+        
+     #);
+   1->cs.length;
+   
+#)  
+
+-- prevNonterminalBody: Descriptor --
+(# current: ^mps.ast; 
+do
+   cs.node[]->current[];
+   (* to avoid looping *)
+   loop:
+     (# 
+     do
+        dir.up->&select;
+        (if (cs.node.kind <> mps.kinds.unexpanded)
+         // true then
+            (if (cs.node[]->current.equal) // false then restart loop;  if);
+            
+        if);
+        
+     #);
+   1->cs.length;
+   
+#)  
+
+-- navigateBody: Descriptor --
+(# oldCs: @astFocus; 
+do cs->oldCs; direction->&select; cs->aFocusChangedEvent; (* ? *) 
+#)  
+
+-- selectBody: Descriptor --
+(#
+   fatherNode: ^mps.expanded;
+   csNode: ^mps.expanded;
+   current: ^mps.ast;
+   goDownRight:
+     (# 
+     do
+        loop:
+          (# 
+          do
+             (if (cs.node.kind = mps.kinds.interior)
+              // true then
+                 cs.node[]->csNode[];
+                 (if (csNode.noOfSons <> 0)
+                  // true then (* go to rightmost son *)
+                     csNode.noOfSons->csNode.get->cs.node[]; restart loop; 
+                 if);
+                 
+             if);
+             
+          #);
+        1->cs.length;
+        
+     #);
+   (* goDownRight *)
+   sonExists:
+     (# exists: @boolean; 
+     do
+        (if (cs.node.kind = mps.kinds.interior)
+         // false then
+            false->exists; 
+         // true then
+            cs.node[]->csNode[]; (csNode.noOfSons <> 0)->exists; 
+        if);
+        
+     exit exists
+     #);
+   (* sonExists *)
+   
+do
+   trace
+     (#  do 'select'->str[] #);
+   cs.node[]->current[];
+   cs.node.father->fatherNode[];
+   (if direction
+    // dir.up then
+       trace
+         (#  do 'up'->str[] #);
+       (if (cs.node.father = none )
+        // true then
+           &goDownRight; (* to keep symetry *) 
+        // false then
+           (if (cs.node.sonNo = 1)
+            // true then (* no left brother *)
+               cs.node.father->cs.node[]; (* go up *) &checkFather; 
+            // false then (* go left and downto rightmost leaf *)
+               cs.node.sonNo-1 (* go left *) ->fatherNode.get->cs.node[];
+               &goDownRight;
+               
+           if);
+           
+       if);
+       1->cs.length;
+       
+    // dir.down then
+       trace
+         (#  do 'down'->str[] #);
+       (if (1 < cs.length)
+        // true then
+           1->cs.length; 
+        // false then
+           (if sonExists
+            // false then
+               (if (cs.node.father = none )
+                // false then
+                   (if (cs.node.sonNo = fatherNode.noOfSons)
+                    // true then (* no right brother *)
+                       loop:
+                         (# 
+                         do
+                            cs.node.father->cs.node[];
+                            (* go up *)
+                            (if (cs.node.father = none )
+                             // false then
+                                cs.node.father->fatherNode[];
+                                (if (cs.node.sonNo < fatherNode.noOfSons)
+                                 // true then (* right brother exists *)
+                                    cs.node.sonNo+1
+                                      -> (* go right *) fatherNode.get
+                                      ->cs.node[];
+                                    
+                                 // false then (* go up *)
+                                    restart loop; 
+                                if);
+                                
+                            if);
+                            
+                         #);
+                       
+                    // false then (* right brother exists *)
+                       cs.node.sonNo+1-> (* go right *) fatherNode.get
+                         ->cs.node[];
+                       
+                   if);
+                   (* right brother exists? *)
+                   
+               if);
+               (* father exists *)
+               
+            // true then (* son exists *) (* go down *)
+               cs.node[]->csNode[]; csNode.getSon1->cs.node[]; 
+           if);
+           (* sons exists ? *)
+           1->cs.length;
+           
+       if);
+       &checkSon;
+       
+    // 8 (* should be dir.nonCyclicDown *) then
+       thisOp:
+         (# 
+         do
+            trace
+              (#  do 'nonCyclicDown'->str[] #);
+            (* this is really awfull, but I have only 5 minutes,
+             it is a copy of dir.down, except that only traversal 
+             in the selected subtree is allowed  *)
+            (if (1 < cs.length)
+             // true then
+                1->cs.length; 
+             // false then
+                (if sonExists
+                 // false then
+                    (if (cs.node.father = none )
+                     // false then
+                        (if (cs.node.sonNo = fatherNode.noOfSons)
+                         // true then (* no right brother *)
+                            loop:
+                              (# 
+                              do
+                                 cs.node.father->cs.node[];
+                                 (if (cs.node[]->current.equal)
+                                  // true then
+                                     'back again from select '->putLine;
+                                     leave thisOp;
+                                     
+                                 if);
+                                 (if (cs.node.father = none )
+                                  // false then
+                                     cs.node.father->fatherNode[];
+                                     (if (cs.node.sonNo < fatherNode.noOfSons)
+                                      // true then (* right brother exists *)
+                                         cs.node.sonNo+1
+                                           -> (* go right *) fatherNode.get
+                                           ->cs.node[];
+                                         
+                                      // false then (* go up *)
+                                         restart loop; 
+                                     if);
+                                     
+                                 if);
+                                 
+                              #);
+                            
+                         // false then (* right brother exists *)
+                            cs.node.sonNo+1-> (* go right *) fatherNode.get
+                              ->cs.node[];
+                            
+                        if);
+                        (* right brother exists? *)
+                        
+                    if);
+                    (* father exists *)
+                    
+                 // true then (* son exists *) (* go down *)
+                    cs.node[]->csNode[]; csNode.getSon1->cs.node[]; 
+                if);
+                (* sons exists ? *)
+                1->cs.length;
+                
+            if);
+            (* &checkSon;*)
+            
+         #)
+    // dir.pred then
+       trace
+         (#  do 'pred'->str[] #);
+       (if (cs.node.father = none )
+        // false then
+           (if (cs.node.sonNo = 1)
+            // true then (* no left brother *)
+               
+            // false then (* go left *)
+               cs.node.sonNo-1->fatherNode.get->cs.node[]; &checkSon; 
+           if);
+           1->cs.length;
+           
+        // true then (* no left brother *)
+           
+       if);
+       
+    // dir.next then
+       trace
+         (#  do 'next'->str[] #);
+       (if (cs.node.father = none )
+        // false then
+           (if (cs.node.sonNo+cs.length-1 < fatherNode.noOfSons)
+            // true then
+               cs.node.sonNo+cs.length->fatherNode.get->cs.node[]; &checkSon; 
+           if);
+           1->cs.length;
+           
+        // true then (* no right brother *)
+           
+       if);
+       
+    // dir.root then
+       trace (#  do 'root'->str[] #); frag.root[]->cs.node[]; 1->cs.length; 
+    // dir.extend then
+       trace
+         (#  do 'extend'->str[] #);
+         (# prod: ^mg.prod; 
+         do
+            (if not ((cs.node.father->fatherNode[]) = none )
+             // true then
+                fatherNode.symbol->Prodlist.get->prod[];
+                (if
+                (((prod.symbol = mg.listZero) or (prod.symbol = mg.listOne)) and
+                 (cs.node.sonNo+cs.length <= fatherNode.noOfSons))
+                 // true then
+                    cs.length+1->cs.length; 
+                 // false then
+                    (fatherNode[],1,0,0)->cs; &checkFather; 
+                if);
+                
+            if);
+            
+         #);
+       (* Ole *)
+       
+    // dir.nextNonterminal then
+       trace (#  do 'nextNonterminal'->str[] #); &nextNonterminal; 
+    // dir.prevNonterminal then
+       trace (#  do 'prevNonterminal'->str[] #); &prevNonterminal; 
+   if);
+   (* direction *)
+   
+#)  
+

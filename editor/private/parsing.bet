@@ -1,0 +1,356 @@
+ORIGIN '../codeeditor';
+(*
+ *  COPYRIGHT
+ *      Copyright Mjolner Informatics, 1986-94
+ *      All rights reserved.
+ *)
+-- substituteBody: Descriptor --
+(# fatherNode: ^mps.expanded; 
+do
+   trace
+     (#  do 'substitute'->str[] #);
+   (if (oldFragment.father = none )
+    // true then
+       (none ,0,(oldFragment[],1,0,0),1,false)->makeUndoElem;
+       newFragment[]->frag.root[];
+       (*aNewFragmentEvent;*)
+       makeAstReplacedEvent;
+       (*removed 950524: fragmentTouched;
+        thisGroupEditor.groupTouched;*)
+       
+    // false then
+       oldFragment.father->fatherNode[];
+       (fatherNode[],oldFragment.sonNo,(oldFragment[],1,0,0),1,false)
+         ->makeUndoElem;
+       (oldFragment.sonNo,newFragment[])->fatherNode.put;
+       (oldFragment[],newFragment[])->anAstReplacedEvent;
+       
+   if)
+#)  
+
+-- listSubstituteBody: Descriptor --
+(#
+   fatherNode: ^mps.list;
+   startElement,noOfOldElements,noOfNewElements: @integer;
+   elem: ^mps.ast;
+   subComments: ^text;
+   
+do
+   trace
+     (#  do 'listSubstitute'->str[] #);
+   f.node.father->fatherNode[];
+   (if astView.pp.ppDebug then
+       'dump of whole list before: '->putLine; fatherNode.dump; newline; 
+   if);
+   f.length->noOfOldElements;
+   theList.noOfSons->noOfNewElements;
+   f.node.sonNo->startElement;
+   (if astView.pp.ppDebug
+    // true then
+       'StartElement: '->screen.putText;
+       startElement->screen.putInt;
+       screen.newline;
+       'newElms: '->screen.putText;
+       noOfNewElements->screen.putInt;
+       screen.newline;
+       'oldElms: '->screen.putText;
+       noOfOldElements->screen.putInt;
+       screen.newline;
+       
+   if);
+   (fatherNode[],startElement,f,noOfNewElements,true)->makeUndoElem;
+   (if astView.pp.ppDebug then
+       '*** deleting old selection'->screen.putLine; 
+   if);
+   (for i: f.length repeat
+     (if fatherNode.hasComment
+      // true then
+         (if (i <= f.length)
+          // true then ('',startElement)->fatherNode.setSubComments
+         if);
+         
+     if);
+     startElement->fatherNode.delete;
+     
+   for);
+   (for i: noOfNewElements repeat
+     i->theList.get->elem[];
+     (startElement+i-1,(frag[]->elem.copy))->fatherNode.insert;
+     
+   for);
+   (if astView.pp.ppDebug then
+       'dump of parsed list: '->putLine;
+       thelist.dump;
+       newline;
+       '*** inserting parsed list in old list'->screen.putLine;
+       
+   if);
+   (for i: noOfNewElements repeat
+     i->theList.getSubcomments->subcomments[];
+     (if (subcomments.lgth <> 0)
+      // true then
+         (if astView.pp.ppDebug then
+             screen.newLine;
+             'listSub '->putText;
+             i->putint;
+             ' ('->Screen.putText;
+             (subcomments[],screen[])->mps.printComment;
+             ')'->Screen.put;
+             Screen.newLine;
+             
+         if);
+         (if (i = 1) and (startElement+i-1 > 1)
+          // true then
+             (subcomments[],startElement+i-2)->fatherNode.insertSubComments; 
+          else
+             (subcomments[],startElement+i-1)->fatherNode.setSubComments; 
+         if);
+         
+     if);
+     
+   for);
+   (if astView.pp.ppDebug then
+       'dump of updated list: '->putLine; fatherNode.dump; newline; 
+   if);
+   (fatherNode[],startElement,noOfOldElements,undoElem.fragments[],
+    noOfNewElements)->aListElementsReplacedEvent;
+   (startElement->fatherNode.get,noOfNewElements,0,0)->f;
+   
+#)  
+
+-- findSuperBody: Descriptor --
+(#
+   superSynCatNo,lastSuper: @mps.nonterminalSymbol;
+   prod: ^mg.prod;
+   constructor: ^mg.constructor;
+   alternation: ^mg.alternation;
+   opt: ^mg.opt;
+   listOne: ^mg.listOne;
+   listZero: ^mg.listZero;
+   dummy: ^mg.dummy;
+   leftSide: ^mg.leftSide;
+   foundSuper: @boolean;
+   
+do
+   (if synCatNo.isLexem
+    // false then
+       false->foundSuper;
+       synCatNo->Prodlist.get->prod[];
+       loop:
+         (# 
+         do
+            (if prod.symbol
+             // mg.constructor then
+                prod[]->constructor[]; constructor.getLeftside->leftSide[]; 
+             // mg.alternation then
+                prod[]->alternation[]; alternation.getLeftside->leftSide[]; 
+             // mg.opt then
+                prod[]->opt[]; opt.getLeftside->leftSide[]; 
+             // mg.listOne then
+                prod[]->listOne[]; listOne.getLeftside->leftSide[]; 
+             // mg.listZero then
+                prod[]->listZero[]; listZero.getLeftside->leftSide[]; 
+             // mg.dummy then
+                prod[]->dummy[]; dummy.getLeftside->leftSide[]; 
+            if);
+            1->leftSide.getAttribute->superSynCatNo;
+            (if superSynCatNo
+             // mps.super.cons then
+                
+             // mps.super.list then
+                
+             // mps.super.undefined then
+                
+             else
+                true->foundSuper;
+                superSynCatNo->Prodlist.get->prod[];
+                superSynCatNo->lastSuper;
+                restart loop;
+                
+            if);
+            
+         #);
+       (if foundSuper // true then lastSuper->synCatNo if);
+       
+   if);
+   
+#)  
+
+-- parsingSynCatNoBody: Descriptor --
+(#
+   node2: ^mps.ast;
+   fatherSynCatNo: @mps.nonterminalSymbol;
+   prod,fatherProd: ^mg.prod;
+   fatherNode,expNode: ^mps.expanded;
+   trySuper: @boolean;
+   
+do
+   trace
+     (#  do 'parsingSynCatNo'->str[] #);
+   false->isList;
+   true->trySuper;
+   node[]->getSynCatNo->synCatNo;
+   (if synCatNo.isLexem
+    // false then
+       synCatNo->Prodlist.get->prod[];
+       (if prod.symbol
+        // mg.listOne // mg.listZero then
+           true->isList;
+           false->trySuper;
+           (if node.kind
+            // mps.kinds.unexpanded then (* in the case of attributes slot!*)
+               node[]->theListElement[]; 
+            else
+               node[]->expNode[]; expNode.getSon1->theListElement[]; 
+           if);
+           
+       if);
+       
+   if);
+   (if isList
+    // false then
+       node[]->checkFatherNode->node2[]->getSynCatNo->synCatNo;
+       node2.father->fatherNode[];
+       (if fatherNode[]
+        // none then (* root *) ; 
+        else
+           fatherNode[]->getSynCatNo->fatherSynCatNo->Prodlist.get
+             ->fatherProd[];
+           (if fatherProd.symbol
+            // mg.listOne // mg.listZero then
+               fatherSynCatNo->synCatNo;
+               true->isList;
+               false->trySuper;
+               node2[]->theListElement[];
+               
+           if);
+           
+       if);
+       
+   if);
+   (if trySuper // true then synCatNo->findSuper->synCatNo;  if);
+   (if edDebug
+    // true then
+       'SynCatNo, isList: '->screen.putText;
+       synCatNo->screen.putInt;
+       isList->screen.putInt;
+       screen.newLine;
+       
+   if);
+   
+#)  
+
+-- parseTextBody: Descriptor --
+(#
+   newFocus: @astFocus;
+   synCatNo: @mps.nonterminalSymbol;
+   isList: @boolean;
+   rootNode,fatherNode: ^mps.expanded;
+   node,keepRoot,parsingRoot: ^mps.ast;
+   help: ^text;
+   
+do
+   trace
+     (#  do 'parseText'->str[] #);
+   f.node[]->parsingSynCatNo->(synCatNo,isList,node[]);
+   (if isList
+    // true then
+       (if (node.father <> none )
+        // true then
+           node.father->fatherNode[];
+           (if (f.node[]->fatherNode.equal)
+            // true then fatherNode.noOfSons->f.length; 
+           if);
+           
+       if);
+       node[]->f.node[];
+       
+   if);
+   (*'old sub tree'->putLine;
+    f.node.dump;
+    newLine;*)
+   frag.root[]->keepRoot[];
+   t.reset;
+   doParse:
+     (# 
+     do
+        (synCatNo,t[],screen[],frag[])
+          ->ag.parser.doParse
+            (#
+               fatalParseError::< 
+                 (# 
+                 do
+                    &text[]->help[];
+                    (if errNo
+                     // 0 then (* 'Parse error(s)' -> help.putLine;*) 
+                     else
+                        'Fatal parse error:'->help.putLine;
+                        help.newLine;
+                        (if errNo
+                         // 1 then
+                            'Parse stack overflow'->help.putLine
+                         // 2 then
+                            'End of file encountered during parsing'
+                              ->help.putLine
+                         // 9 then
+                            'End of file encountered while reading a string'
+                              ->help.putLine
+                         // 10 then
+                            'End of file encountered while reading a comment or a nonterminal'
+                              ->help.putLine
+                        if);
+                        help[]->UI.nonModalAlert
+                    if);
+                    none ->mps.theCatcher[];
+                    false->parseOK;
+                    leave doParse
+                 #)
+            #)->parseOk;
+        
+     #);
+   (if parseOk
+    // true then
+       frag.root[]->parsingRoot[];
+       keepRoot[]->frag.root[];
+       (if isList (* parsingRoot a list? *)
+        // false then
+           f.node[]->checkFatherNode->f.node[];
+           (f.node[],parsingRoot[])->substitute;
+           parsingRoot[]->f.node[];
+           
+        // true then
+           (if (f.length = 1) (* selection length *)
+            // true then
+               parsingRoot[]->rootNode[];
+               (if (rootNode.noOfSons = 1)
+                // true then
+                   1->rootNode.get->node[];
+                   f.node[]->checkFatherNode->f.node[];
+                   (f.node[],node[])->substitute;
+                   node[]->f.node[];
+                   
+                // false then
+                   (f,parsingRoot[])->listSubstitute->f; 
+               if);
+               
+            // false then
+               (f,parsingRoot[])->listSubstitute->f; 
+           if);
+           
+       if);
+       
+    else
+       keepRoot[]->frag.root[];
+       'Trying to parse: '->putText;
+       synCatNo->putInt;
+       ':  '->putText;
+       syncatNo->ag.symbolToName->putLine;
+       '<'->put;
+       t[]->putText;
+       '>'->put;
+       newLine;
+       
+   if);
+   
+#)  
+

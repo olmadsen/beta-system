@@ -1,0 +1,451 @@
+ORIGIN '../codeeditor';
+(*
+ * COPYRIGHT
+ *	 Copyright Mjolner Informatics, 1986-94
+ *	 All rights reserved.
+ *)
+-- cutFragmentBody: Descriptor --
+(#
+   fatherNode: ^mps.expanded;
+   prod,sonProd,fatherProd: ^mg.prod;
+   synCatNo: @mps.nonterminalSymbol;
+   isSon: @integer;
+   doNotify: @boolean;
+   makeClipBoardElement:
+   (* saves a cut or copied fragmnet on the 'clipboard'    *)
+   (* The syntactic category and the length of the clipped *)
+   (* fragment and furthermore each og elements in the     *)
+   (* fragment is saved.                                   *)
+     (#
+        elm: @astFocus;
+        synCatNo: @mps.nonterminalSymbol;
+        isSon: @integer;
+        fatherNode: ^mps.expanded
+     enter (synCatNo,elm)
+     do
+        trace
+          (#  do 'makeclip'->str[] #);
+        synCatNo->edenv.clip.synCatNo;
+        elm.length->edenv.clip.length;
+        elm.node[]->edenv.clip.fragments.elm[1][];
+        (if ((elm.node.Father->fatherNode[]) = none )
+         // false then
+            elm.node.sonNo->isSon;
+            (for i: (elm.length-1) repeat
+              isSon+i->fatherNode.get->edenv.clip.fragments.elm[i+1][]
+            for)
+        if);
+        
+     #);
+   deleteListElement:
+   (* cs is one or more listElements that should be deleted *)
+     (# isSon: @integer; aList: ^mps.list
+     do
+        trace
+          (#  do 'deleteList'->str[] #);
+        cs.node.father->aList[];
+        cs.node.sonNo->isSon;
+        (aList[],isSon,cs,0,deleted)->makeUndoElem;
+        (for cs.length repeat isSon->aList.delete for);
+        (if doNotify
+         // true then
+            (aList[],isSon,undoElem.fragmentLength,undoElem.Fragments[])
+              ->alistElementsDeletedEvent;
+            
+        if);
+        (if (1 <= aList.noOfSons)
+         // true then
+            (if (aList.noOfSons < isSon)
+             // true then aList.noOfSons->isSon
+            if);
+            isSon->aList.get->cs.node[]
+         // false then
+            aList[]->cs.node[]
+        if);
+        1->cs.length;
+        (if doNotify // true then selectNewCs if);
+        
+     #);
+   reduceOptional:
+   (* cs is either derived over an optional or is a nonterminal which *)
+   (* is an optional, e.g.<<impop>>. An optional-nonterminal must be  *)
+   (* inserted instead of cs.                                         *)
+     (#
+        fatherNode: ^mps.expanded;
+        aList: ^mps.list;
+        synCatNo: @mps.nonterminalSymbol;
+        isSon: @integer;
+        newOpt: ^mps.optional
+     enter synCatNo
+     do
+        trace
+          (#  do 'reduceOptional'->str[] #);
+        cs.node.father->fatherNode[];
+        cs.node.sonNo->isSon;
+        (fatherNode[],isSon,cs,1,deleted)->makeUndoElem;
+        (synCatNo,frag[])->ag.newOptional->newOpt[];
+        synCatNo->newOpt.nonterminalSymbol;
+        (if (1 < cs.length)
+         // true then (* father is listOne and cs.length = noOfSons *)
+            fatherNode[]->aList[];
+            (for i: cs.length repeat 1->aList.delete for);
+            (1,newOpt[])->aList.insert (* now all the sons are deleted *) ;
+            newOpt[]->cs.node[];
+            1->cs.length;
+            (if doNotify
+             // true then
+                (aList[],1,undoElem.fragmentLength,undoElem.fragments[],
+                 cs.length)->aListElementsReplacedEvent
+            if)
+         // false then
+         (* father is constructor or cs is an optional nonterminal *)
+            (isSon,newOpt[])->fatherNode.put;
+            newOpt[]->cs.node[];
+            (if doNotify // true then makeAstReplacedEvent if);
+            
+        if);
+        (if doNotify // true then goToNonEmpty; cs->setFocus;  if);
+        
+     #);
+   dump:
+     (# 
+     do
+     (*  1 -> program.dump;
+      newLine;
+      'cs.node.index/isSon: ' -> screen.putText;
+      cs.node.index -> putInt;
+      (if (cs.node.father = none)  //false then 
+      cs.node.sonNo -> putInt if); 
+      newLine; *) 
+     #);
+   reduceConstructor:
+   (* The father of cs is a constructor and cs should be replaced  *)
+   (* by a nonterminal with the syntactic category of the position *)
+   (* isSon in the father production.                              *)
+     (#
+        synCatNo: @mps.nonterminalSymbol;
+        isSon: @integer;
+        fatherNode: ^mps.expanded;
+        constructor: ^mps.cons;
+        nontNode: ^mps.unexpanded
+     enter synCatNo
+     do
+        trace
+          (#  do 'reduceConstructor'->str[] #);
+        checkFather;
+        cs.node.father->fatherNode[]->constructor[];
+        cs.node.sonNo->isSon;
+        (fatherNode[],isSon,cs,1,deleted)->makeUndoElem;
+        (syncatNo,frag[])->ag.newUnexpanded->nontNode[];
+        (isSon,nontNode[])->fatherNode.put;
+        (synCatNo,fatherNode[],isSon)->&expand;
+        isSon->fatherNode.get->cs.node[];
+        (if doNotify // true then makeAstReplacedEvent; selectNewCs if);
+        
+     #);
+   reduceListOne:
+   (* fatherNode is a listOne and cs.length = noOfSons, which means *)
+   (* than cs should be replaced by a son-nonterminal               *)
+     (#
+        nontNode: ^mps.ast;
+        aList: ^mps.list;
+        isSon: @integer;
+        synCatNo: @mps.nonterminalSymbol
+     enter synCatNo
+     do
+        trace
+          (#  do 'reduceListOne'->str[] #);
+        cs.node.father->aList[];
+        cs.node.sonNo->isSon;
+        (aList[],isSon,cs,1,deleted)->makeUndoElem;
+        (syncatNo,frag[])->ag.newUnexpanded->nontNode[];
+        (for i: cs.length repeat 1->aList.delete for);
+        (isSon,nontNode[])->aList.insert;
+        (synCatNo,aList[],isSon)->&expand;
+        isSon->aList.get->cs.node[];
+        1->cs.length;
+        (if doNotify
+         // true then
+            (aList[],isSon,undoElem.fragmentLength,undoElem.fragments[],
+             cs.length)->aListElementsReplacedEvent;
+            selectNewCs
+        if);
+        
+     #);
+   deleteListZero:
+   (* cs is a listZero nonterminal or node with any number of sons *)
+   (* and should be replaced by an empty listZero node.            *)
+     (#
+        fatherNode,newNode: ^mps.expanded;
+        synCatNo: @mps.nonterminalSymbol;
+        aList: ^mps.list;
+        listElms: @astFocus;
+        noOfSons,isSon: @integer
+     enter synCatNo
+     do
+        trace
+          (#  do 'deleteListZero'->str[] #);
+        cs.node.father->fatherNode[];
+        cs.node.sonNo->isSon;
+        (if (cs.node.kind = mps.kinds.interior)
+         // true then
+            cs.node[]->aList[];
+            aList.noOfSons->noOfSons;
+            aList.getSon1->listElms.node[];
+            noOfsons->listElms.length;
+            (aList[],1,listElms,0,true)->makeUndoElem;
+            (for i: noOfsons repeat 1->aList.delete for);
+            (if doNotify
+             // true then
+                (aList[],1,undoElem.fragmentLength,undoElem.fragments[])
+                  ->aListElementsDeletedEvent
+            if)
+         // false then
+            (fatherNode[],isSon,cs,1,deleted)->makeUndoElem;
+            (synCatNo,frag[])->ag.newAst (* newUnexpanded? *) ->newNode[];
+            (isSon,newNode[])->fatherNode.put;
+            newNode[]->cs.node[];
+            (if doNotify // true then makeAstReplacedEvent if);
+            
+        if);
+        (if doNotify // true then selectNewCs if)
+     #);
+   reduceRoot:
+     (# 
+     do
+        trace
+          (#  do 'reduceRoot'->str[] #);
+        (none ,0,cs,1,deleted)->makeUndoElem;
+        newPrivate;
+        (if doNotify // true then makeAstReplacedEvent; selectNewCs if)
+     #);
+   
+do
+   trace
+     (#  do 'cutFragment'->str[] #);
+   not doNotNotify->doNotify;
+   checkFather;
+   cs.node.father->fatherNode[];
+   cs.node[]->getSynCatNo->synCatNo;
+   (synCatNo,cs)->makeClipboardElement;
+   L:
+     (# 
+     do
+        (if (fatherNode[] = none )
+         // true then (* cs is root *)
+            false->deleted; reduceRoot; leave L
+         // false then
+            cs.node.sonNo->isSon;
+            fatherNode.symbol->ProdList.get->fatherProd[];
+            (if synCatNo.isLexem
+             // false then
+                synCatNo->ProdList.get->prod[];
+                (if cs.length
+                 // 1 then
+                    (if prod.symbol
+                     // mg.listZero then
+                     (* cs is a listZero node or nonterminal and should *)
+                     (* be replaced by an empty listZero node *)
+                        false->deleted; synCatNo->deleteListZero; leave L
+                     // mg.opt then
+                     (* cs is a nonterminal which is optional and should *)
+                     (* be replaced by an optional-nonterminal *)
+                        (if
+                        ((fatherProd.symbol = mg.listZero) or
+                         ((fatherProd.symbol = mg.listOne) and
+                          (1+cs.length <= fatherNode.noOfSons)))
+                         // true then (* cs is one or more list elements *)
+                            true->deleted; deleteListElement
+                         // false then
+                            false->deleted; synCatNo->reduceOptional; 
+                        if);
+                        leave L
+                    if)
+                if)
+            if);
+            (if
+            ((fatherProd.symbol = mg.listZero) or
+             ((fatherProd.symbol = mg.listOne) and
+              (1+cs.length <= fatherNode.noOfSons)))
+             // true then (* cs is one or more list elements *)
+                true->deleted; deleteListElement
+             // false then
+                (if fatherProd.symbol
+                 // mg.listOne then
+                    fatherProd[]->findSynNameAtt->synCatNo->ProdList.get
+                      ->sonProd[];
+                    false->deleted;
+                    (if (sonProd.symbol = mg.opt)
+                     // true then
+                        synCatNo->reduceOptional
+                     // false then
+                        synCatNo->reduceListOne
+                    if)
+                 // mg.constructor then
+                    (if (cs.node.kind <> mps.kinds.unexpanded)
+                     // true then
+                          (#
+                             cons: ^mg.constructor;
+                             consElemList: ^mg.consElemList;
+                             sonIndex: @integer
+                          do
+                             fatherProd[]->cons[];
+                             cons.getConsElemList->consElemList[];
+                             0->sonIndex;
+                             loop:
+                             mg.synName
+                               ->consElemList.suffixWalkForProd
+                                 (# 
+                                 do
+                                    sonIndex+1->sonIndex;
+                                    (if sonIndex
+                                     // isSon then
+                                        1->current.getAttribute->synCatNo;
+                                        leave loop
+                                    if)
+                                 #);
+                             false->deleted;
+                             (if synCatNo.isLexem
+                              // false then
+                                 synCatNo->ProdList.get->sonProd[];
+                                 (if (sonProd.symbol = mg.opt)
+                                  // true then
+                                     synCatNo->reduceOptional
+                                  // false then
+                                     synCatNo->reduceConstructor
+                                 if)
+                              // true then
+                                 synCatNo->reduceConstructor
+                             if)
+                          #)
+                    if)
+                if)
+            if)
+        if)
+     #)
+#)  
+
+-- makeEmptyListOrOptBody: Descriptor --
+(# (* cs is a listZero or an optional nonterminal *)
+   fatherNode: ^mps.expanded;
+   newFragment,unExp: ^mps.unexpanded;
+   newOpt: ^mps.optional;
+   synCatNo: @mps.nonterminalSymbol;
+   prod: ^mg.prod;
+   doDelete: @boolean
+do
+   trace
+     (#  do 'makeEmptyListOrOpt'->str[] #);
+   false->doDelete;
+   cs.node.father->fatherNode[];
+   (fatherNode[],cs.node.sonNo,cs,1,doDelete)->makeUndoElem;
+   cs.node[]->unExp[];
+   unExp.nonterminalSymbol->synCatNo->ProdList.get->prod[];
+   (if prod.symbol
+    // mg.opt // mg.listZero then
+       (synCatNo,frag[])->ag.newOptional->newOpt[];
+       synCatNo->newOpt.nonterminalSymbol;
+       (cs.node.sonNo,newOpt[])->fatherNode.put;
+       newOpt[]->cs.node[];
+       
+    else
+       (synCatNo,frag[])->ag.newAst->newFragment[];
+       (cs.node.sonNo,newFragment[])->fatherNode.put;
+       newFragment[]->cs.node[];
+       
+   if);
+   makeAstReplacedEvent;
+   selectNewcs
+#)  
+
+-- pasteFragmentBody: Descriptor --
+(# (* pasteFragment is called only if current selection is a node with *)
+(* same or compatibel syntactic category as fragment on clipboard   *)
+   fatherNode: ^mps.expanded;
+   prod: ^mg.prod;
+   pasteElement: ^mps.ast;
+   doDelete: @boolean;
+   aList: ^mps.list;
+   isSon: @integer;
+   newFocus: @astFocus;
+   length: @integer;
+   doNotify: @boolean;
+   
+do
+   trace
+     (#  do 'pasteFragment'->str[] #);
+   not doNotNotify->doNotify;
+   (* so the default is doNotify *)
+   frag[]->edenv.clip.fragments.elm[1].copy->pasteElement[];
+   edenv.clip.length->length;
+   (if (cs.node.father = none )
+    // true then (* current selection is root *)
+       false->doDelete;
+       (none ,0,cs,length,doDelete)->makeUndoElem;
+       pasteElement[]->frag.root[];
+       (if doNotify
+        // true then &makeAstReplacedEvent; (frag.root[],1,0,0)->&setFocus
+       if);
+       
+    // false then
+       cs.node.father->fatherNode[];
+       fatherNode.symbol->ProdList.get->prod[];
+       (if (prod.symbol = mg.listZero) or (prod.symbol = mg.listOne)
+        // true then
+           true->doDelete;
+           cs.node.sonNo->isSon;
+           fatherNode[]->aList[];
+           (fatherNode[],isSon,cs,length,doDelete)->makeUndoElem;
+           (for cs.length repeat isSon->aList.delete for);
+           (for i: length repeat
+             (isSon+i-1,(frag[]->edenv.clip.fragments.elm[i].copy))
+               ->fatherNode.insert
+           for);
+           (isSon->fatherNode.get,length,0,0)->newFocus;
+           (if doNotify
+            // true then
+               (fatherNode[],isSon,undoElem.fragmentLength,undoElem.fragments[],
+                newFocus.length)->aListElementsReplacedEvent;
+               newFocus->&setFocus
+           if);
+           
+        // false then (* cs.length as well as length is equal to 1 ! *)
+           false->doDelete;
+           (fatherNode[],cs.node.sonNo,cs,length,doDelete)->makeUndoElem;
+           (cs.node.sonNo,pasteElement[])->fatherNode.put;
+           (if doNotify
+            // true then
+               &makeAstReplacedEvent; (pasteElement[],1,0,0)->setFocus
+           if);
+           
+       if)
+   if)
+#)  
+
+-- copyFragmentBody: Descriptor --
+(# (* copyFragment may be called for any node. The fragment to be *)
+(* copied will be copied to the clipboard.                     *)
+   fatherNode: ^mps.expanded;
+   copyNode: ^mps.ast;
+   synCatNo: @mps.nonterminalSymbol;
+   prod: ^mg.prod;
+   isSon: @integer
+do
+   trace
+     (#  do 'copyFragment '->str[] #);
+   checkFather;
+   (if edenv[] = none then 'edenv[] is none!!'->putLine if);
+   (* may update cs, preliminary *)
+   ag[]->mps.newFragmentForm->edenv.clippedff[];
+   edenv.clippedff[]->cs.node.copy->edenv.clip.fragments.elm[1][];
+   (if ((cs.node.father->fatherNode[]) = none )
+    // false then
+       (for i: (cs.length-1) repeat
+         cs.node.sonNo+i->fatherNode.get->copyNode[];
+         edenv.clippedff[]->copyNode.copy->edenv.clip.fragments.elm[i+1][]
+       for)
+   if);
+   cs.node[]->getSynCatNo->edenv.clip.synCatNo;
+   cs.length->edenv.clip.length
+#)  
+

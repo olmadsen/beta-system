@@ -1,0 +1,218 @@
+ORIGIN '../codeeditor';
+(*
+   COPYRIGHT
+	 Copyright Mjolner Informatics, 1986-94
+	 All rights reserved.
+*)
+-- removeEmptyElementBody: Descriptor --
+(#
+(* Removes the last element in a list if empty. 
+ If the element has a comment the left brother gets it *)
+   node,leftBrother: ^mps.ast;
+   synCatNo: @mps.nonterminalSymbol;
+   prod: ^mg.prod;
+   t: ^text;
+   
+do
+   trace
+     (#  do 'removeEmptyElement'->str[] #);
+   theList[]->getSynCatNo->Prodlist.get->prod[];
+   (if
+   ((prod.symbol = mg.listZero) and (theList.noOfSons > 0) or
+    (prod.symbol = mg.listOne) and (theList.noOfSons > 1))
+    // true then
+       theList.noOfSons->theList.get->node[];
+       node[]->getSynCatNo->synCatNo;
+       (if (node.kind <> mps.kinds.unexpanded)
+        // true then
+           (if synCatNo.isLexem
+            // false then
+               synCatNo->Prodlist.get->prod[];
+               (if prod.symbol
+                // mg.opt then (* empty optional *)
+                (* currently disabled because of new comment representation
+                 * 
+                 (if node.hasComment //true then
+                 node[] -> getComment->t[];
+                 (if (theList.noOfSons >1) 
+                 //true then
+                 (theList.noOfSons-1->theList.get,t[])->
+                 moveComment;
+                 //false then 
+                 (theList.father, t[]) -> moveComment; 	 
+                 if);
+                 if);
+                 theList.noOfSons -> theList.delete;
+                 *) (*  ';'->screen.put; *)
+                   
+               if)
+           if)
+       if)
+   if)
+#)  
+
+-- removeEmptyElementsBody: Descriptor --
+(#
+   expNode: ^mps.expanded; synCatNo: @mps.nonterminalSymbol; prod: ^mg.prod; 
+do
+   (if node.kind
+    // mps.kinds.interior then
+       node[]->expNode[];
+       expNode.suffixWalk
+         (# 
+         do
+            current[]->getSynCatNo->synCatNo;
+            (if synCatNo.isLexem
+             // false then
+                synCatNo->Prodlist.get->prod[];
+                (if prod.symbol
+                 // mg.listOne // mg.listZero then
+                    current[]->removeEmptyElement
+                if);
+                
+            if);
+            
+         #);
+       
+   if);
+   
+#)  
+
+-- removeOptionalsBody: Descriptor --
+(#
+   expNode: ^mps.expanded;
+   synCatNo: @mps.nonterminalSymbol;
+   prod: ^mg.prod;
+   removeOptional:
+     (#
+        node: ^mps.unexpanded;
+        fatherNode: ^mps.expanded;
+        newFragment: ^mps.optional;
+        synCatNo: @mps.nonterminalSymbol;
+        prod: ^mg.prod;
+        
+     enter node[]
+     do
+        (node.father,node.sonNo,(node[],1,0,0),1,false)->makeUndoElem;
+        node.father->fatherNode[];
+        (node.nonterminalSymbol->synCatNo,frag[])->ag.newOptional
+          ->newFragment[];
+        (node.sonNo,newFragment[])->fatherNode.put;
+        synCatNo->newFragment.nonterminalSymbol;
+        true->MakeAstReplacedEvent;
+        
+     #);
+   
+do
+   (if node.kind
+    // mps.kinds.interior then
+       node[]->expNode[];
+       expNode.suffixWalk
+         (# 
+         do
+            current[]->getSynCatNo->synCatNo;
+            (if current.kind
+             // mps.kinds.unExpanded then
+                (if synCatNo.isLexem
+                 // false then
+                    synCatNo->Prodlist.get->prod[];
+                    (if prod.symbol
+                     // mg.opt then
+                        current[]->removeOptional
+                     // mg.listZero then
+                        
+                    if);
+                    
+                if);
+                
+            if);
+            
+         #);
+       
+   if);
+   node[]->astReplacedSequenceEvent;
+   (node[],1,0,0)->aFocusChangedEvent;
+   
+#)  
+
+-- insertOptionalsBody: Descriptor --
+(#
+   expNode,expElm: ^mps.expanded;
+   synCatNo: @mps.nonterminalSymbol;
+   prod: ^mg.prod;
+   insertOptional:
+     (#
+        node: ^mps.optional;
+        fatherNode: ^mps.expanded;
+        synCatNo: @mps.nonterminalSymbol;
+        nontNode: ^mps.unexpanded;
+        isSon: @integer;
+        
+     enter node[]
+     do
+        (node.father,node.sonNo,(node[],1,0,0),1,false)->makeUndoElem;
+        node.father->fatherNode[];
+        node.sonNo->isSon;
+        node.nonterminalSymbol->synCatNo;
+        (syncatNo,frag[])->ag.newUnexpanded->nontNode[];
+        (isSon,nontNode[])->fatherNode.put;
+        (synCatNo,fatherNode[],isSon)->&expand;
+        true->MakeAstReplacedEvent;
+        
+     #);
+   insertFirstListElement:
+     (#
+        node: ^mps.ast;
+        prod: ^mg.prod;
+        nontNode: ^mps.unexpanded;
+        fatherNode: ^mps.expanded;
+        isSon: @integer;
+        synCatNo: @mps.nonterminalSymbol;
+        
+     enter node[]
+     do
+        (node.father,node.sonNo,(node[],1,0,0),1,false)->makeUndoElem;
+        node.father->fatherNode[];
+        node[]->fatherNode[];
+        1->isSon;
+        fatherNode.symbol->Prodlist.get->prod[]->&findSynNameAtt->synCatNo;
+        (syncatNo,frag[])->ag.newUnexpanded->nontNode[];
+        (isSon,nontNode[])->fatherNode.insert;
+        (synCatNo,fatherNode[],isSon)->&expand;
+        (fatherNode[],isSon)->aListElementInsertedEvent
+     #);
+   
+do
+   (if node.kind
+    // mps.kinds.interior then
+       node[]->expNode[];
+       expNode.suffixWalk
+         (# 
+         do
+            current[]->getSynCatNo->synCatNo;
+            (if (current.kind = mps.kinds.optional)
+             // true then current[]->insertOptional; 
+            if);
+            (if synCatNo.isLexem
+             // false then
+                synCatNo->Prodlist.get->prod[];
+                (if prod.symbol
+                 // mg.listZero then
+                    (if (current.kind = mps.kinds.interior)
+                     // true then
+                        current[]->expElm[];
+                        (if (expElm.noOfSons = 0)
+                         // true then current[]->insertFirstListElement; 
+                        if)
+                    if)
+                if)
+            if);
+            
+         #);
+       
+   if);
+   node[]->astReplacedSequenceEvent;
+   (node[],1,0,0)->aFocusChangedEvent;
+   
+#)  
+
