@@ -266,8 +266,6 @@ void ProcessStackObj(struct StackObject *theStack)
 
 #ifdef mc68020
 
-long *StackStart=0;
-
 /* Traverse the StackArea [low..high] and Process all references within it. */
 void ProcessStackPart(low, high)
      ptr(long) low;
