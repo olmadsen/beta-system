@@ -8,6 +8,12 @@
 #define isSpecialProtoType(x) ((MinPTValue <= (long) x) \
                               && ( (long) x <= MaxPTValue))
 
+#ifdef nti
+#define isNegativeProto(x) ((unsigned long)(x) > 0x7FFFFFFF)
+#else
+#define isNegativeProto(x) ((long)(x) < 0)
+#endif
+
 #define isAutonomous(x)   ((1 <= x)  && ( x <= 2048))
 #define isStatic(x)       (  -0xFFFF <= x) && ( x <= -1)
 #define isForward(x)      ( x > 2048 )
@@ -174,7 +180,7 @@
 # define asmemptylabel(label)
 # endif
 #else
-# ifdef linux
+# if defined(linux) || defined(nti)
 # define asmemptylabel(label)
 # else
   /* See sparcdep.h/snakedep.h */
