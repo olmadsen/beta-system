@@ -233,6 +233,20 @@ register volatile void *GCreg3 asm("%o4");
   pop(v2); pop(v1);					\
   asmcomment( -- Protect-end)
 
+#define ClearCParams() \
+  FramePointer[16] =   \
+  FramePointer[17] =   \
+  FramePointer[18] =   \
+  FramePointer[19] =   \
+  FramePointer[20] =   \
+  FramePointer[21] =   \
+  FramePointer[22] =   \
+  FramePointer[23] =   \
+  FramePointer[24] =   \
+  FramePointer[25] =   \
+  FramePointer[26] =   \
+  FramePointer[27] = 0
+
 #endif
 
 static inline USE()
