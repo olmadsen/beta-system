@@ -122,44 +122,35 @@ function onKey(e)
 {
   var ch;
   if (document.layers)
-    ch = e.which;
+    ch = String.fromCharCode(e.which);
   if (document.all)
-    ch = event.keyCode;
+    ch = String.fromCharCode(event.keyCode);
   
-  if (ch==104) {
-    // 'h'
+  if (ch=='h'){
     hide();
   }
-  if (ch==115) {
-    // 's'
+  if (ch=='s') {
     show();
   }
-  if (ch==110) {
-    // 'n'
+  if (ch=='n') {
     go_to(lnk[0], ttl[0]);
   }
-  if (ch==112) {
-    // 'p'
+  if (ch=='p') {
     go_to(lnk[1], ttl[1]);
   }
-  if (ch==116) {
-    // 't'
+  if (ch=='t') {
     window.location.hash = "_top";
   }
-  if (ch==99) {
-    // 'c'
+  if (ch=='c') {
     go_to(lnk[3], ttl[3]);
   }
-  if (ch==105) {
-    // 'i'
+  if (ch=='i') {
     go_to(lnk[4], ttl[4]);
   }
-  if (ch==63) {
-    // '?'
+  if (ch=='?') {
     window.open(lnk[6],'miadochelp','scrollbars=yes');
   }
-  if (ch==109) {
-    // 'm'
+  if (ch=='m') {
     go_to(lnk[7], ttl[7]);
   }
 }
