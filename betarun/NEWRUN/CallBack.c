@@ -79,6 +79,8 @@ void *CopyCPP(struct Structure *theStruct, struct Structure *dummy)
 
   GEN_CB_STUB();
 
+  DEBUG_CBFA(fprintf(output, "CopyCPP: allocated callback stub 0x%x\n", CBFATop));
+
   ++CBFATop;
   return (void *)&(CBFATop-1)->code[0];
 }

@@ -1,5 +1,15 @@
 /* macroes */
 
+#define IOA           _IOA.start
+#if defined(sparc) || defined(NEWRUN)
+#define IOATopOff     _IOA.topoff
+#define IOATop        ((long *) ((long)IOA+IOATopOff))
+#else
+#define IOATop        _IOA.top
+#endif
+#define IOALimit      _IOA.limit
+#define IOASize       _IOA.size
+
 #ifdef RTLAZY
 #define isLazyRef(ref) ((lastDangler <= ((int)(ref))) && (((int)(ref)) < -101))
 #else
@@ -29,8 +39,7 @@
 #define inToSpace(x) (((long)ToSpace <= (long)(x)) && ((long)(x) < (long)ToSpaceTop)) 
 #define inAOA(x)     inArea(AOABaseBlock, (struct Object *)(x))
 
-#define isSpecialProtoType(x) ((MinPTValue <= (long)(x)) \
-                              && ((long)(x) <= MaxPTValue))
+#define isSpecialProtoType(x) ((MinPTValue <= (long)(x)) && ((long)(x) <= MaxPTValue))
 
 #define isNegativeRef(x) ((long)(x) < 0)
 #define isPositiveRef(x) ((long)(x) > 0)
@@ -360,7 +369,11 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
       po->OrigOff = initTab->OrigOff;                                           \
    }                                                                            \
                                                                                 \
-   ((long *)(theItem))[((struct ProtoType *)(proto))->OriginOff]=(long)(origin);\
+   /* Assign origin into theItem. Since theItem may now be allocaed directly in \
+    * AOA, it is necessary to use AssignReference.                              \
+    */                                                                          \
+   AssignReference(((long*)(theItem))+((struct ProtoType*)(proto))->OriginOff,  \
+                   (origin));                                                   \
 }
 
 
@@ -403,8 +416,6 @@ typedef union FormatI
   SPoff = -addiu.instr.offset;                                 \
 }
 #endif
-
-#define IOATop ((long *) ((char *)IOA+IOATopOff))
 
 #define push(v) /* printf("push: RefSP=0x%x\n", RefSP); */ *RefSP++ = (struct Object *) v
 #define pop(v)  /* printf("pop: RefSP=0x%x\n", RefSP); */  v = (void *) *--RefSP

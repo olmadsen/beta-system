@@ -1,6 +1,24 @@
 #define Kb                1024
 #define Mb             Kb * Kb
 
+/* Heap is the structure of IOA and ToSpace heaps */
+
+#if (defined(NEWRUN))
+typedef struct Heap {
+  long *start;
+  long topoff; 
+  long *limit;
+  unsigned long size;
+} Heap;
+#else
+typedef struct Heap {
+  long *start;
+  long *top; 
+  long *limit;
+  unsigned long size;
+} Heap;
+#endif
+
 #ifdef macintosh
 
 #ifndef DEFAULT_IOASIZE

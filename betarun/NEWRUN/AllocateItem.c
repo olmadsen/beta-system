@@ -8,13 +8,21 @@
 
 struct Item *AlloI(struct Object *origin, struct ProtoType *proto, long *SP)
 {
-  struct Item *item;
+  struct Item *item=0;
+  unsigned long size = ItemSize(proto);
 
   Ck(origin);
   DEBUG_CODE(NumAlloI++;
 	     Claim(proto->Size > 0, "AlloI: proto->Size > 0") );
 
-  Protect(origin, item = (struct Item *) IOAcalloc(ItemSize(proto), SP));
+  if (size>IOAMAXSIZE){
+    DEBUG_AOA(fprintf(output, "AlloI allocates in AOA\n"));
+    item = (struct Item *)AOAcalloc(size);
+    DEBUG_AOA(if (!item) fprintf(output, "AOAcalloc failed\n"));
+  }
+  if (!item) {
+    Protect(origin, item = (struct Item *) IOAcalloc(size, SP));
+  }
 
   /* The new Object is now allocated, but not initialized yet! */
   

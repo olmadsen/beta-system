@@ -143,6 +143,7 @@ void IOAGc()
 	     */
 	    limit = (long)cbfa->entries + CBFABlockSize;
 	  }
+	  DEBUG_CBFA(fprintf(output, "ProcessCBFA: current=0x%x\n", current));
 	  if (current->theStruct){
 	    ProcessReference((handle(Object))(&current->theStruct));
 	  }

@@ -162,7 +162,15 @@ struct Object *ProcessStackPart(long SP,
 		      SP));
   ProcessRefStack((struct Object **)SP-2, func); /* -2: start at dyn */
   PC = *((long *)SP-1);
-  theObj = *((struct Object **)SP-2); 
+  theObj = *((struct Object **)SP-2);
+
+  if (SP==StackStart){
+    /* Only top frame to process - can happen for stack objects */
+    return theObj;
+  }
+  DEBUG_STACK(fprintf(output, "New SP:     0x%x\n", SP));
+  DEBUG_STACK(fprintf(output, "New PC:     0x%x\n", PC));
+  DEBUG_STACK(fprintf(output, "New object: 0x%x (proto: 0x%x)\n", theObj, theObj?theObj->Proto:0));
 
   do {
 
@@ -190,6 +198,9 @@ struct Object *ProcessStackPart(long SP,
 	ProcessRefStack((struct Object **)SP-2, func); /* -2: start at dyn */
 	PC = *((long*)SP-1);
 	theObj = *((struct Object **)SP-2); 
+	DEBUG_STACK(fprintf(output, "New SP:     0x%x\n", SP));
+	DEBUG_STACK(fprintf(output, "New PC:     0x%x\n", PC));
+	DEBUG_STACK(fprintf(output, "New object: 0x%x (proto: 0x%x)\n", theObj, theObj?theObj->Proto:0));
 	if (SP<StackStart) {
 	  continue; /* Restart do-loop */
 	} else {
@@ -240,6 +251,9 @@ struct Object *ProcessStackPart(long SP,
       ProcessRefStack((struct Object **)SP-2, func); /* -2: start at dyn */
       PC = *((long*)SP-1);
       theObj = *((struct Object **)SP-2); 
+      DEBUG_STACK(fprintf(output, "New SP:     0x%x\n", SP));
+      DEBUG_STACK(fprintf(output, "New PC:     0x%x\n", PC));
+      DEBUG_STACK(fprintf(output, "New object: 0x%x (proto: 0x%x)\n", theObj, theObj?theObj->Proto:0));
       if (SP<StackStart) {
 	continue; /* Restart do-loop */
       } else {
@@ -297,7 +311,7 @@ struct Object *ProcessStackPart(long SP,
       theObj = comp->CallerObj;
       DEBUG_STACK(fprintf(output, "New SP:     0x%x\n", SP));
       DEBUG_STACK(fprintf(output, "New PC:     0x%x\n", PC));
-      DEBUG_STACK(fprintf(output, "New object: 0x%x (proto: 0x%x)\n", theObj, theObj->Proto));
+      DEBUG_STACK(fprintf(output, "New object: 0x%x (proto: 0x%x)\n", theObj, theObj?theObj->Proto:0));
       if (SP<StackStart) {
 	continue; /* Restart do-loop */
       } else {
@@ -330,6 +344,8 @@ struct Object *ProcessStackPart(long SP,
        */
       long SPoff;
       /* size allocated on stack when theObj became active */
+      DEBUG_CODE(Claim(theObj, "theObj non-null\n"));
+      DEBUG_CODE(Claim(theObj->Proto, "theObj->Proto non-null\n"));
       DEBUG_CODE(Claim(!isSpecialProtoType(theObj->Proto), 
 		       "!isSpecialProtoType(theObj->Proto)"));
       GetSPoff(SPoff, CodeEntry(theObj->Proto, PC)); 
@@ -337,12 +353,14 @@ struct Object *ProcessStackPart(long SP,
       DEBUG_STACK(fprintf(output, "CodeEntry:   0x%x\n", CodeEntry(theObj->Proto, PC)));
       SP = (long)SP+SPoff;      
       DEBUG_STACK(fprintf(output, "SPoff:       0x%x\n", SPoff));
-      DEBUG_STACK(fprintf(output, "Previous SP: 0x%x\n", SP));
       /* SP now points to end of previous frame, i.e. bottom of top frame */
       /* normal dyn from the start of this frame gives current object */
       theObj = *((struct Object **)SP-2); 
       /* RTS from the start of this frame gives PC */
       PC = *((long*)SP-1);
+      DEBUG_STACK(fprintf(output, "New SP:     0x%x\n", SP));
+      DEBUG_STACK(fprintf(output, "New PC:     0x%x\n", PC));
+      DEBUG_STACK(fprintf(output, "New object: 0x%x (proto: 0x%x)\n", theObj, theObj?theObj->Proto:0));
     }
 
     /* INVARIANT:

@@ -20,7 +20,7 @@ struct Structure *AlloS(struct Object *origin, struct ProtoType *proto, long *SP
   
   newStruct->Proto = StructurePTValue;
   newStruct->GCAttr = 1;
-  newStruct->iOrigin = origin;
+  AssignReference(&newStruct->iOrigin, origin);
   newStruct->iProto = proto;
 
   Ck(newStruct);
@@ -83,7 +83,7 @@ struct Structure *ThisS(struct Object *this, long *SP)
   /* origin is the object we really want orgin and proto of */
   
   newStruct->iProto = origin->Proto;
-  newStruct->iOrigin = ((struct Object **)origin)[origin->Proto->OriginOff];
+  AssignReference(&newStruct->iOrigin, ((struct Object **)origin)[origin->Proto->OriginOff]);
   
   Ck(newStruct);
 
@@ -116,7 +116,7 @@ struct Structure *ObjS(struct Object *theObj, long *SP)
   newStruct->GCAttr = 1;
   
   newStruct->iProto = theObj->Proto;
-  newStruct->iOrigin = ((struct Object **)theObj)[theObj->Proto->OriginOff];
+  AssignReference(&newStruct->iOrigin, ((struct Object **)theObj)[theObj->Proto->OriginOff]);
 
   Ck(newStruct);
   

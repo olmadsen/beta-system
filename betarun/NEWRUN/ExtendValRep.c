@@ -16,7 +16,7 @@ void ExtVR(struct Object *theObj,
 	   )
 {
     struct ValRep * theRep;
-    struct ValRep * newRep;
+    struct ValRep * newRep=0;
     long range; /* range of old repetition */
     long newRange; /* Range of new repetition */
     long copyRange; /* Number of LONGS to copy from old rep */
@@ -70,12 +70,18 @@ void ExtVR(struct Object *theObj,
     /* NOT REACHED if LVRAcalloc successfully called */
 
     /* Allocate and nullify new repetition: There is a little overhead here;
-     * only extension needs to be nullified
+     * only extension needs to be nullified. TODO!
      */
+    if (size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "ExtVR allocates in AOA\n"));
+      newRep = (struct ValRep *)AOAcalloc(size);
+      DEBUG_AOA(if (!newRep) fprintf(output, "AOAcalloc failed\n"));
+    } 
+    if (!newRep){
+      Protect2(theObj, theRep, newRep = (struct ValRep *)IOAcalloc(size, SP));
+    }
     
-    Protect2(theObj, theRep, newRep = (struct ValRep *)IOAcalloc(size, SP));
-    
-    Ck(theRep);
+    Ck(theObj); Ck(theRep);
     
     /* Assign structural part of new repetition */
     newRep->Proto = theRep->Proto;
@@ -95,15 +101,14 @@ void ExtVR(struct Object *theObj,
 
       /* Copy contents of old rep to new rep */
       for (i = 0; i < copyRange; ++i){
-	NEWREP->Body[i] = REP->Body[i];
-	/* No need to use AssignReference: NEWREP is in IOA */
+	AssignReference(&NEWREP->Body[i], REP->Body[i]);
       }
 
       NEWREP->iProto = REP->iProto;
-      NEWREP->iOrigin = REP->iOrigin;
+      AssignReference(&NEWREP->iOrigin, REP->iOrigin);
 
       if (add>0){
-	/* Allocate/Initialize new extra elements */
+	/* Allocate and Initialize new extra elements */
 
 	switch((long)theRep->Proto){
 	case (long) DynItemRepPTValue:

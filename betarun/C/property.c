@@ -65,7 +65,7 @@ static void BooleanProperty(char *name)
 	DebugIOA = TRUE; 
 	DebugAOA = TRUE;
 	DebugLVRA = TRUE; 
-	/* DebugStack=TRUE; NO it does not always work */
+	DebugStack=TRUE; 
 	DebugCBFA=TRUE);
 #endif
 

@@ -57,15 +57,10 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
      arg1    = (long)comp->CallerObj; 
    }
   
-   comp->CallerComp = ActiveComponent;
-   comp->CallerObj = this;
+   AssignReference(&comp->CallerComp, ActiveComponent);
+   AssignReference(&comp->CallerObj, this);
    comp->StackObj   = 0;
    comp->CallerLSC = -1; /* indicate that comp is attached */
-
-#if 0
-   fprintf(output, "Att: comp=0x%x\n", comp);
-   fprintf(output, "Att: callerObj=0x%x\n", comp->CallerObj);
-#endif
 
    ActiveComponent = comp;
 

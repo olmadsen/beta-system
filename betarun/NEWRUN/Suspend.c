@@ -82,7 +82,7 @@ void Susp(struct Object *this, long prevSP, long RA, long SPz)
    returnObj  = ActiveComponent->CallerObj;
 
    /* Remember what was current object before suspend */
-   ActiveComponent->CallerObj = this; 
+   AssignReference(&ActiveComponent->CallerObj, this); 
    /* Remember where ActiveComponent where in the code */
    ActiveComponent->CallerLSC = RA;
 

@@ -1272,7 +1272,7 @@ void AOACheckReference( theCell)
 #else
   if ( *theCell ){
 #endif
-    Claim( inAOA(*theCell) || inIOA(*theCell) || inLVRA(*theCell),
+    Claim(inAOA(*theCell) || inIOA(*theCell) || inLVRA(*theCell),
 	  "AOACheckReference: *theCell in IOA, AOA or LVRA");
     if( inIOA( *theCell) ){
       IOACheckObject( *theCell);
@@ -1280,8 +1280,13 @@ void AOACheckReference( theCell)
 	if( *pointer ) found = (*pointer == (long) theCell);
 	pointer++;
       }
-      if (!found)
-	Claim( found, "AOACheckReference: *theCell in IOA but not in AOAtoIOAtable");
+      if (!found){
+	char buf[100];
+	sprintf(buf, 
+		"AOACheckReference: *theCell [*(0x%x)] in IOA but not in AOAtoIOAtable",
+		theCell);
+	Claim( found, buf);
+      }
     }
     if( inLVRA(*theCell) )
       Claim( ((ref(ValRep)) *theCell)->GCAttr == (long) theCell,

@@ -23,6 +23,7 @@ void CopySVR(struct ValRep *theRep,
     DEBUG_CODE(NumCopySVR++);
 
     Ck(theItem); Ck(theRep);
+
     /* Copy a slice of a Value Repetition. */
     
     /* Check that low and high are usable. */
@@ -35,11 +36,12 @@ void CopySVR(struct ValRep *theRep,
     range =  (high - low) + 1;
     if (range < 0) range = 0;
 
-    if (range > LARGE_REP_SIZE) {
-      /* Allocate in LVRA */
-      long *cycleCell = 0;
-
-      if (!inIOA(theRep)) {
+    if (isValRep(theRep)){
+      if (range > LARGE_REP_SIZE) {
+	/* Allocate in LVRA */
+	long *cycleCell = 0;
+	
+	if (!inIOA(theRep)) {
 	  /* theRep is in LVRA (it cannot be in AOA, cf. NewCopyObject). 
 	   * If LVRAAlloc causes an LVRACompaction
 	   * the value of theRep may be wrong after LVRAAlloc: this is the case
@@ -49,41 +51,56 @@ void CopySVR(struct ValRep *theRep,
 	   */
 	  cycleCell = (long *)theRep->GCAttr; /* Cell that references theRep */
 	}
-
-      DEBUG_LVRA(fprintf(output, "CopySVR allocates in LVRA\n"));
-
-      newRep = (struct ValRep *)LVRAAlloc(theRep->Proto, range);
-
-      if (cycleCell) {
-	/* theRep was in LVRA. Since it may have been moved by
-	 * LVRACompaction, we update it.
-	 */
-	theRep = (struct ValRep *)*cycleCell;
+	
+	DEBUG_LVRA(fprintf(output, "CopySVR allocates in LVRA\n"));
+	
+	newRep = (struct ValRep *)LVRAAlloc(theRep->Proto, range);
+	
+	if (cycleCell) {
+	  /* theRep was in LVRA. Since it may have been moved by
+	   * LVRACompaction, we update it.
+	   */
+	  theRep = (struct ValRep *)*cycleCell;
+	}
       }
-    }
-    
-    if (newRep) {
-      /* newRep allocated in LVRA */
-      DEBUG_CODE(Claim(newRep->HighBorder==range&&newRep->LowBorder==1, 
-		       "CopySVR: lvra structure ok"));
-      /* Make the LVRA-cycle: theCell -> newRep.GCAttr */
-      newRep->GCAttr = (long) ((long *) theItem + offset);
-      *(struct ValRep **)((long *)theItem + offset) = newRep;
-    } else{
-      /* Allocate in IOA */
-      size  = DispatchValRepSize(theRep->Proto, range);
-      Protect2(theRep,theItem,newRep = (struct ValRep *)IOAalloc(size, SP));
-      Ck(theRep); Ck(theItem);
+      
+      if (newRep) {
+	/* newRep allocated in LVRA */
+	DEBUG_CODE(Claim(newRep->HighBorder==range&&newRep->LowBorder==1, 
+			 "CopySVR: lvra structure ok"));
+	/* Make the LVRA-cycle: theCell -> newRep.GCAttr */
+	newRep->GCAttr = (long) ((long *) theItem + offset);
+	*(struct ValRep **)((long *)theItem + offset) = newRep;
+      } else{
+	/* Allocate in IOA */
+	size  = DispatchValRepSize(theRep->Proto, range);
+	Protect2(theRep,theItem,newRep = (struct ValRep *)IOAalloc(size, SP));
+	Ck(theRep); Ck(theItem);
+	
+	/* Initialize the structual part of the repetition. */
+	newRep->Proto = theRep->Proto;
+	newRep->GCAttr = 1;
+	newRep->LowBorder = 1;
+	newRep->HighBorder = range;
+      }
+    } else {
+      /* Object rep */
+      size = DispatchObjectRepSize(theRep->Proto, range, REP->iProto);
+      if (size>IOAMAXSIZE){
+	DEBUG_AOA(fprintf(output, "ExtVR allocates in AOA\n"));
+	newRep = (struct ValRep *)AOAalloc(size);
+	DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
+      } 
+      if (!newRep){
+	Protect2(theRep, theItem, newRep = (struct ValRep *)IOAalloc(size, SP));
+      }
 
-      /* Initialize the structual part of the repetition. */
+      Ck(theRep); Ck(theItem); Ck(newRep);
       newRep->Proto = theRep->Proto;
       newRep->GCAttr = 1;
       newRep->LowBorder = 1;
       newRep->HighBorder = range;
-    }
-
-    if (isObjectRep(theRep)){
-      NEWREP->iOrigin = REP->iOrigin;
+      AssignReference(&NEWREP->iOrigin, REP->iOrigin);
       NEWREP->iProto = REP->iProto;
     }
 
@@ -122,13 +139,14 @@ void CopySVR(struct ValRep *theRep,
       case (long) DynItemRepPTValue:
       case (long) DynCompRepPTValue:
 	for (i = 0; i < range; ++i){
-	  NEWREP->Body[i] = REP->Body[i+low-theRep->LowBorder];
-	  /* No need to use AssignReference: NEWREP is in IOA */
+	  AssignReference(&NEWREP->Body[i], REP->Body[i+low-theRep->LowBorder]);
 	}
 	break;
+#ifdef RTDEBUG
       default:
 	Notify("CopySliceValRep: wrong prototype");
 	exit(1);
+#endif
     }
         
     AssignReference((long *)theItem + offset, (struct Item *)newRep);

@@ -188,6 +188,7 @@ void CBFACheck()
 	   */
 	  limit = (long)cbfa->entries + CBFABlockSize;
 	}
+	DEBUG_CBFA(fprintf(output, "CBFACheck: current=0x%x\n", current));
 	if (current->theStruct) {
 	  Claim(inBetaHeap((ref(Object))(current->theStruct)), 
 		"inBetaHeap(current->theStruct)");

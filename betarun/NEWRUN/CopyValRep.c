@@ -80,23 +80,28 @@ void CopyVR(struct ValRep *theRep,
       /* object-repetition */
       size = DispatchObjectRepSize(theRep->Proto, range, REP->iProto);
 
-      Protect2(theObj, theRep,
-	       newRep = (struct ValRep *)IOAalloc(size, SP));
+      if (size>IOAMAXSIZE){
+	DEBUG_AOA(fprintf(output, "ExtVR allocates in AOA\n"));
+	newRep = (struct ValRep *)AOAalloc(size);
+	DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
+      } 
+      if (!newRep){
+	Protect2(theObj, theRep, newRep = (struct ValRep *)IOAalloc(size, SP));
+      }
       
       Ck(theObj);
       newRep->Proto = theRep->Proto;
       newRep->GCAttr = 1;
       newRep->LowBorder = 1;
       newRep->HighBorder = range;
-      NEWREP->iOrigin = REP->iOrigin;
+      AssignReference(&NEWREP->iOrigin, REP->iOrigin);
       NEWREP->iProto = REP->iProto;
 
       size -= headsize(ObjectRep); /* adjust size to be bodysize */
 
       /* Copy theRep to newRep. Copy the whole body as longs */
       for (i = 0; i < size/4; ++i){
-	NEWREP->Body[i] = REP->Body[i];
-	/* No need to use AssignReference: NEWREP is in IOA */
+	AssignReference(&NEWREP->Body[i], REP->Body[i]);
       }
     }
         

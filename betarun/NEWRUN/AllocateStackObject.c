@@ -8,7 +8,7 @@
 
 struct StackObject *AlloSO(unsigned size, long *SP)
 {
-    struct StackObject *sObj;
+    struct StackObject *sObj=0;
     unsigned long stacksize = StackObjectSize(size);
 
     DEBUG_CODE(NumAlloSO++);
@@ -16,7 +16,9 @@ struct StackObject *AlloSO(unsigned size, long *SP)
     if (stacksize>IOAMAXSIZE){
       DEBUG_AOA(fprintf(output, "AlloSO allocates in AOA\n"));
       sObj = (struct StackObject *)AOAalloc(stacksize);
-    } else {
+      DEBUG_AOA(if (!sObj) fprintf(output, "AOAalloc failed\n"));
+    }
+    if (!sObj){
       sObj = (struct StackObject *)IOAalloc(stacksize, SP);
     }
 

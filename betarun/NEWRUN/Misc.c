@@ -14,7 +14,7 @@ struct Object *GetThis(long *SP)
    *            |-----------------------|
    *     SP-1:  |    return address     |
    *     SP-2:  |    dyn                |
-   *     SP-3:  |    this               |
+   *     SP-3:  |    this (not anymore  |
    *            |    ...                |
    */
 
