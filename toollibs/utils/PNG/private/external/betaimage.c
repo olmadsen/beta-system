@@ -186,6 +186,9 @@ long BetaAllocColor (BetaPalette *palette, Color *color, Color* actual)
        && green == palette->special.green
        && blue == palette->special.blue)
       {
+        actual->red = red;
+        actual->green = green;
+        actual->blue = blue;
         return 0;
       }
   }
