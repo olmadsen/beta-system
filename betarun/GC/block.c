@@ -20,13 +20,18 @@
 #define inBlockUnused( theB, addr) ((theB->top <= (long *) addr) \
                               && ((long *) addr < theB->limit) )
 
+static long RoundToPage(long size)
+{
+  return (size+MMAPPageSize-1) & ~(MMAPPageSize-1);
+}
+
 Block * newBlock(long size)
 {
   Block * theBlock;
 
 #ifdef USEMMAP
   unsigned long sizeAlign;
-  sizeAlign = (size + sizeof(Block) + 8191) & ~8191;
+  sizeAlign = RoundToPage(size + sizeof(Block));
   theBlock = AllocateBlock(sizeAlign);
 #else
   theBlock = (Block *) MALLOC( sizeof(Block) + size );
@@ -212,7 +217,8 @@ void mmapInitial(unsigned long numbytes)
 
   mmapHeapTop   = mmapHeap;
   mmapHeapLimit = (void*)((char*)mmapHeap + numbytes);
-  INFO(fprintf(output, "At %08X)", (int)mmapHeap));
+  INFO(fprintf(output, "At %08X-%08X)", 
+	       (int)mmapHeap, (int)mmapHeapLimit));
 }
 
 void InsertGuardPage(void)
@@ -223,12 +229,14 @@ void InsertGuardPage(void)
 Block * reserveBlock(long numbytes)
 {
   Block * theBlock;
-  INFO(fprintf(output, "(#reserveBlock(%08X))", (int)numbytes));
+  numbytes = RoundToPage(numbytes);
+  INFO(fprintf(output, "(#reserveBlock(%08X) at %08X. ", 
+	       (int)numbytes, (int)mmapHeapTop));
   Claim((long)mmapHeap, "reserveBlock: mmapHeap=0");
   Claim((long)mmapHeapTop, "reserveBlock: mmapHeapTop=0");
   Claim((long)mmapHeapLimit, "reserveBlock: mmapHeapLimit=0");
   Claim(numbytes >= 0, "reserveBlock: with negative numbytes");
-  Claim((numbytes & 8191)==0, "reserveBlock: numbytes must be aligned to 8Kb");
+  Claim(((numbytes & (MMAPPageSize-1))==0), "reserveBlock: numbytes must be aligned to MMAPPageSize");
 
 #if defined(hppa) || defined(sun4s) || defined(linux) || defined(sgi)
   if (mprotect(mmapHeapTop, MMAPPageSize, 
@@ -264,7 +272,8 @@ Block * reserveBlock(long numbytes)
   theBlock->mmaplimit    = (long*)((char*)theBlock + MMAPPageSize);
   theBlock->mmapmaxlimit = (long*)mmapHeapTop;
 
-  INFO(fprintf(output, "Got block at %08X)", (int)theBlock));
+  INFO(fprintf(output, "Got block at %08X-%08X)", 
+	       (int)theBlock, (int)theBlock->mmapmaxlimit));
 
   return theBlock;
 }
@@ -272,12 +281,13 @@ Block * reserveBlock(long numbytes)
 Block * reserveProtectedBlock(long numbytes)
 {
   Block * theBlock;
+  numbytes = RoundToPage(numbytes);
   INFO(fprintf(output, "(#reserveBlock(%08X))", (int)numbytes));
   Claim((long)mmapHeap, "reserveBlock: mmapHeap=0");
   Claim((long)mmapHeapTop, "reserveBlock: mmapHeapTop=0");
   Claim((long)mmapHeapLimit, "reserveBlock: mmapHeapLimit=0");
   Claim(numbytes >= 0, "reserveBlock: with negative numbytes");
-  Claim((numbytes & 8191)==0, "reserveBlock: numbytes must be aligned to 8Kb");
+  Claim(((numbytes & (MMAPPageSize-1))==0), "reserveBlock: numbytes must be aligned to MMAPPageSize");
 
   theBlock = mmapHeapTop;
   mmapHeapTop = (void*)((char*)mmapHeapTop + numbytes);

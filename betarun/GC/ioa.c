@@ -619,16 +619,19 @@ void DoStackCell(Object **theCell,Object *theObj)
     /* Because of the very well-defined structure of stackframes
      * there should be no GC-able cells, that refer outside BETA heaps.
      */
-    else {
-      if ((theObj!=CALLBACKMARK)&&(theObj!=GENMARK)){
-        fprintf(output, 
-                "DoStackCell: 0x%x: 0x%x is outside BETA heaps!\n", 
-		theCell, 
-		theObj);
-	fflush(output);
-        ILLEGAL;
+#ifdef RTLAZY
+    else 
+#endif /* RTLAZY */
+      {
+	if ((theObj!=CALLBACKMARK)&&(theObj!=GENMARK)){
+	  fprintf(output, 
+		  "DoStackCell: 0x%x: 0x%x is outside BETA heaps!\n", 
+		  theCell, 
+		  theObj);
+	  fflush(output);
+	  ILLEGAL;
+	}
       }
-    }
 #endif
   }
 }
