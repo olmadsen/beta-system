@@ -19,7 +19,6 @@
 
 /******* Define specific machine types *********/
 #ifdef sun
-#  define UNIX
 #  ifdef sparc
 #    ifdef __svr4__
 #      define sun4s
