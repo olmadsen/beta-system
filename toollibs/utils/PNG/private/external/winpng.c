@@ -543,7 +543,8 @@ void write_pixels_to_png_area(HBITMAP hbmp, int x, int y, int width, int height,
   return;
 }
 
-void write_pixels_to_png_area_rgb(HBITMAP hbmp, int x, int y, int width, int height, char *file_name)
+void write_pixels_to_png_area_rgb(HBITMAP hbmp, int x, int y, int width, int height, char *file_name,
+                                  int transparent, int t_red, int t_green, int t_blue)
 {
 
   BITMAP bitmap;
@@ -556,6 +557,9 @@ void write_pixels_to_png_area_rgb(HBITMAP hbmp, int x, int y, int width, int hei
   unsigned char *image;
   long k; 
   png_color_8 sig_bit;
+
+  png_color_16 t_color;
+  
   
   unsigned char *data;
   unsigned char *line1;
@@ -613,11 +617,19 @@ void write_pixels_to_png_area_rgb(HBITMAP hbmp, int x, int y, int width, int hei
                PNG_COLOR_TYPE_RGB, PNG_INTERLACE_NONE,
                PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
 
+  if(transparent) {
+    t_color.red = t_red;
+    t_color.green = t_green;
+    t_color.blue = t_blue;
+    png_set_tRNS(png_ptr, info_ptr, NULL, 0, &t_color);
+  }
+
+  
   png_write_info(png_ptr, info_ptr);
   png_set_filler(png_ptr, 0, PNG_FILLER_AFTER);
   png_set_bgr(png_ptr);
   
-
+  
   {
     int i;
     int j;
@@ -672,7 +684,9 @@ static void InitPalette(void)
   return;
 }
 
-void DibsectionToImage8(HBITMAP hbmp, int x, int y, int width, int height, BetaImage *image8)
+void DibsectionToImage8(HBITMAP hbmp, int x, int y, int width, int height,
+                        BetaImage *image8,
+                        int transparent, int t_red, int t_green, int t_blue)
 {
   BetaImage image;
   BITMAP bitmap;
@@ -680,6 +694,16 @@ void DibsectionToImage8(HBITMAP hbmp, int x, int y, int width, int height, BetaI
   unsigned char *data;
 
   InitPalette();
+
+  if(transparent) {
+    std.special.red = t_red;
+    std.special.green = t_green;
+    std.special.blue = t_blue;
+    std.special_set = 1;
+  } else {
+    std.special_set = 0;
+  }
+  
   result = GetObject((HGDIOBJ) hbmp, sizeof(BITMAP), (void *) &bitmap);
   
   if(!result) {
@@ -725,7 +749,9 @@ void DibsectionToImage8(HBITMAP hbmp, int x, int y, int width, int height, BetaI
 }
 
 
-void write_pixels_to_png_area_indexed(HBITMAP hbmp, int x, int y, int width, int height, char *file_name)
+void write_pixels_to_png_area_indexed
+(HBITMAP hbmp, int x, int y, int width, int height,
+ char *file_name, int transparent, int t_red, int t_green, int t_blue)
 {
 
 
@@ -755,7 +781,7 @@ void write_pixels_to_png_area_indexed(HBITMAP hbmp, int x, int y, int width, int
   
   BetaCreateImage(&image8, width, height, 8, NULL);
 
-  DibsectionToImage8(hbmp, x, y, width, height, &image8);
+  DibsectionToImage8(hbmp, x, y, width, height, &image8, transparent, t_red, t_green, t_blue);
   
   png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
 
@@ -786,16 +812,37 @@ void write_pixels_to_png_area_indexed(HBITMAP hbmp, int x, int y, int width, int
                3, PNG_INTERLACE_NONE,
                PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
 
-  palette = (png_colorp)malloc(std.ncolors * sizeof (png_color));
-   /* ... set palette colors ... */
-  for(i = 0; i < std.ncolors; i++) {
-    palette[i].red = std.colormap[i].red;
-    palette[i].green = std.colormap[i].green;
-    palette[i].blue = std.colormap[i].blue;
+  if(transparent) {
+    png_byte index;
+    
+    palette = (png_colorp)malloc((std.ncolors+1) * sizeof (png_color));
+    /* ... set palette colors ... */
+    for(i = 0; i < std.ncolors; i++) {
+      palette[i].red = std.colormap[i].red;
+      palette[i].green = std.colormap[i].green;
+      palette[i].blue = std.colormap[i].blue;
+    }
+    palette[std.ncolors].red = std.special.red;
+    palette[std.ncolors].green = std.special.green;
+    palette[std.ncolors].blue = std.special.blue;
+    index = std.ncolors;
+    png_set_PLTE(png_ptr, info_ptr, palette, std.ncolors+1);
+    png_set_tRNS(png_ptr, info_ptr, &index, 1, NULL);
+    
+  } else {
+    palette = (png_colorp)malloc(std.ncolors * sizeof (png_color));
+    /* ... set palette colors ... */
+    for(i = 0; i < std.ncolors; i++) {
+      palette[i].red = std.colormap[i].red;
+      palette[i].green = std.colormap[i].green;
+      palette[i].blue = std.colormap[i].blue;
+    }
+    png_set_PLTE(png_ptr, info_ptr, palette, std.ncolors);
   }
-  png_set_PLTE(png_ptr, info_ptr, palette, std.ncolors);
+  
    
 
+  
   png_write_info(png_ptr, info_ptr);
   
   rows = (unsigned char **) malloc(height * sizeof(unsigned char *));
@@ -1013,7 +1060,6 @@ int ReadPNGalpha(char *name, HBITMAP *phbmp, void **pixels, int *width, int *hei
   HBITMAP hBmp;
 
 
-  printf("read_png_alpha\n");
   
   result = BetaReadPNG(name, &image, 2);
   if(result != 0) {

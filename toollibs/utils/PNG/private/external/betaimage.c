@@ -138,6 +138,7 @@ void MakeColorMap1(BetaPalette *palette)
 	palette->colormap[i].green = (int)(0.5 + ((i/levels)%levels) * N);
 	palette->colormap[i].blue = (int)(0.5 + ((i/levelsq)%levels) * N);
     }
+    palette->special_set = 0;
 }
 
 void BetaInitRGBmap(BetaPalette *palette)
@@ -179,6 +180,15 @@ long BetaAllocColor (BetaPalette *palette, Color *color, Color* actual)
   red = color->red;
   green = color->green;
   blue = color->blue;
+
+  if(palette->special_set) {
+    if(red == palette->special.red
+       && green == palette->special.green
+       && blue == palette->special.blue)
+      {
+        return palette->ncolors;
+      }
+  }
   
   red = red >> 3;
   green = green >> 3;
@@ -189,6 +199,8 @@ long BetaAllocColor (BetaPalette *palette, Color *color, Color* actual)
   actual->green = palette->colormap[palette->rgbmap[index]].green;
   actual->blue = palette->colormap[palette->rgbmap[index]].blue;
   return palette->xpixel[palette->rgbmap[index]];
+
+  
 }
 
 

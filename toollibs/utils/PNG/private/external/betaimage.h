@@ -27,6 +27,8 @@ typedef struct BetaPalette {
   long ncolors;
   unsigned char rgbmap[32768];
   unsigned char xpixel[256];
+  int special_set;
+  Color special;
 } BetaPalette;
 
 
