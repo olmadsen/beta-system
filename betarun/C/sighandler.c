@@ -1209,6 +1209,7 @@ ExceptionHandler default_exceptionhandler;
 
 void InstallSigHandler (int sig)
 {
+#ifndef nti
 #if defined(linux) || defined(sgi)
     signal (sig, (void (*)(int))BetaSignalHandler);
 #else /* linux || sgi */
@@ -1223,6 +1224,7 @@ void InstallSigHandler (int sig)
     sigaction(sig,&sa,0);
   }
 #endif  /* linux || sgi */
+#endif  /* !nti */
 }
 
 /* 
