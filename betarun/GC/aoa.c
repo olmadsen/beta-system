@@ -19,7 +19,9 @@
 #include "winsock.h"
 #else
 
+#ifndef ntohl
 #define ntohl(x) x
+#endif
 
 #endif
 #endif 

@@ -135,7 +135,7 @@ typedef unsigned short u_short;
 #endif
 
 /* New persistence */
-#if defined(sparc) || defined(intel) || defined(sgi)
+#if defined(sparc) || defined(intel) || defined(sgi) || defined(macosx)
 #define PERSIST
 /* #define DEBUGPERSISTENCE */
 /* #define USEMMAP  uses to mych RAM */

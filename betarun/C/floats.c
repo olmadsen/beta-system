@@ -1,7 +1,8 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991-99, 2001 Mjolner Informatics Aps.
- * floats.c: floating point aspects of BETA runtime system
- * by Peter Andersen
+ * floats.c: 
+ *   IEEE 754 floating-point aspects of BETA runtime system
+ *   by Peter Andersen
  */
 
 #include "beta.h"

@@ -840,28 +840,72 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 
 /***************************** BEGIN macosx ********************************/
 #ifdef macosx
-
-#define GetPCandSP(scp) { pc = (pc_t)scp->sc_ir; StackEndAtSignal=StackEnd=(long*)scp->sc_sp; }
-
 void BetaSignalHandler (long sig, /*siginfo_t*/ void *info, struct sigcontext *scp)
 {
   Object ** theCell;
-  Object *    theObj = 0;
+  Object *    theObj;
   pc_t pc;
   long todo = 0;
 
-  GetPCandSP(scp);
+  DEBUG_CODE({
+    fprintf(output, "\nBetaSignalHandler: Caught signal %d", (int)sig);
+    PrintSignal((int)sig);
+    fprintf(output, ".\n");
+  });
 
-  /* Setup signal handlers for the Beta system */
+  /* Setup exit handlers */
   signal( SIGFPE,  ExitHandler);
   signal( SIGILL,  ExitHandler);
   signal( SIGBUS,  ExitHandler);
   signal( SIGSEGV, ExitHandler);
   signal( SIGEMT,  ExitHandler);
 
-  fprintf(output, "\n\n*****Signal caught. Not yet handled on macosx\n");
-  todo=DisplayBetaStack( UnknownSigErr, theObj, pc, sig);
+  pc = (pc_t)scp->sc_ir; 
+  if (scp->sc_regs == NULL){
+    StackEndAtSignal=StackEnd=(long*)scp->sc_sp;
+  } else {
+    fprintf(output, "BetaSignalHandler: Cannot get MacOSX kernel private register state!\n");
+    StackEndAtSignal=StackEnd=0;
+  }
 
+  theObj = 0 /* FIXME */;
+  if( !(inBetaHeap(theObj) && isObject(theObj))) theObj  = 0;
+
+  switch (sig){
+  case SIGFPE: 
+    todo=DisplayBetaStack( FpExceptErr, theObj, pc, sig); break;
+  case SIGEMT:
+    todo=DisplayBetaStack( EmulatorTrapErr, theObj, pc, sig); break;
+  case SIGILL:
+    todo=DisplayBetaStack( IllegalInstErr, theObj, pc, sig); break;
+  case SIGBUS:
+    todo=DisplayBetaStack( BusErr, theObj, pc, sig); break;
+  case SIGSEGV:
+    todo=DisplayBetaStack( SegmentationErr, theObj, pc, sig); break;
+  case SIGTRAP:
+    /* Could be:
+     *    - An illegal instruction in BETA or external code?
+     *    - refnone in BETA code.
+     *    - breakpoint trap?
+     */
+    if (IsBetaCodeAddrOfProcess(pc)){
+      /* Could still be a segmentation fault. Would need to
+       * do a disassembly to make a better guess.
+       * Here we just guess that it is a refnone.
+       */
+      todo=DisplayBetaStack( RefNoneErr, theObj, pc, sig); 
+    } else {
+      todo=DisplayBetaStack( IllegalInstErr, theObj, pc, sig); 
+    }
+    break;
+  case SIGINT: /* Interrupt */
+    todo=HandleInterrupt(theObj, pc, sig); break;
+  default: 
+    todo=DisplayBetaStack( UnknownSigErr, theObj, pc, sig);  
+  }
+  if (!todo) {
+    BetaExit(1);
+  }
 }
 
 #endif /* macosx */

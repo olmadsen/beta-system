@@ -682,7 +682,7 @@ static char *DBname(char *path, int checkdir)
       sprintf(dbname, "%s/%s", path, DBNAME);
       return &dbname[0];
     } else {
-      fprintf(output, "DBname: path name length exceeded only %d characters are allowed\n", MAXDBNAMELENGTH - strlen(DBNAME) - 1);
+      fprintf(output, "DBname: path name length exceeded only %d characters are allowed\n", (int)(MAXDBNAMELENGTH - strlen(DBNAME) - 1));
       BetaExit(1);
       return NULL;
     }
@@ -701,7 +701,7 @@ static char *DBname(char *path, int checkdir)
       sprintf(dbname, "%s/%s", path, DBNAME);
       return &dbname[0];
     } else {
-      fprintf(output, "DBname: path name length exceeded only %d characters are allowed\n", MAXDBNAMELENGTH - strlen(DBNAME) - 1);
+      fprintf(output, "DBname: path name length exceeded only %d characters are allowed\n", (int)(MAXDBNAMELENGTH - strlen(DBNAME) - 1));
       BetaExit(1);
       return NULL;
     }
@@ -710,7 +710,7 @@ static char *DBname(char *path, int checkdir)
       sprintf(dbname, "%s.pst", path);
       return &dbname[0];
     } else {
-      fprintf(output, "DBname: path name length exceeded only %d characters are allowed\n", MAXDBNAMELENGTH - strlen(DBNAME) - 1);
+      fprintf(output, "DBname: path name length exceeded only %d characters are allowed\n", (int)(MAXDBNAMELENGTH - strlen(DBNAME) - 1));
       BetaExit(1);
       return NULL;
     }

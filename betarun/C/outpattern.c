@@ -1217,14 +1217,14 @@ void NotifyErrorDuringDump(BetaErr errorNumber, BetaErr errorNumber2)
     fflush(stdout);
     DEBUG_CODE({
       fprintf(stderr, 
-	      "NotifyErrorDuringDump: Showing MsgBox. isMakingDump=%d\n", 
+	      "NotifyErrorDuringDump: Showing message. isMakingDump=%d\n", 
 	      (int)isMakingDump); 
       fflush(stderr);
     });
     Notify(buffer);
     DEBUG_CODE({
       fprintf(stderr, 
-	      "NotifyErrorDuringDump: MsgBox done\n"); 
+	      "NotifyErrorDuringDump: Message done\n"); 
       fflush(stderr);
     });
   }

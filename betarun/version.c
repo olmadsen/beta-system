@@ -1,7 +1,14 @@
-char betarun_version[] = "BETARUN VERSION 5.3(86)";
+char betarun_version[] = "BETARUN VERSION 5.3(87)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.105  2002/04/02 09:56:04  grouleff
+ * compile for nti.
+ * Betarun version number: 86 
+ * Changed files:
+ *     C/sighandler.c
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.104  2002/03/27 21:25:12  datpete
  * Major sighandler.c cleanup/restructuring.
  * Partial signal handling on macosx.
