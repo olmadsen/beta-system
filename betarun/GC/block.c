@@ -81,6 +81,9 @@ void mmapInitial(unsigned long numbytes)
 #else
 #ifdef linux
   mmapflags = MAP_PRIVATE | MAP_FIXED;
+#ifndef MAP_FAILED
+#define MAP_FAILED -1
+#endif
 #else
   mmapflags = MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED;
 #endif
@@ -91,13 +94,13 @@ void mmapInitial(unsigned long numbytes)
   startadr = MMAPSTART;
   while (!mmapHeap && (!((startadr+numbytes) & (1<<31)))) {
     mmapHeap = mmap((void*)startadr, numbytes, PROT_NONE, mmapflags, fd,0);
-    if (mmapHeap == MAP_FAILED) {
+    if ((long)mmapHeap == MAP_FAILED) {
       mmapHeap = NULL;
       startadr += MMAPINCR;
     }
   }
   close(fd);
-  if (mmapHeap == MAP_FAILED) {
+  if ((long)mmapHeap == MAP_FAILED) {
     mmapHeap = 0;
     fprintf(output, "mmapInitial failed with errno %d\n", errno);
     BetaExit(1);
