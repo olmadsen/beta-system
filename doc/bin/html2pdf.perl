@@ -22,7 +22,7 @@
 ### main #######
 
 # Command line options
-$verbose = $v;
+$verbose = "-v" if (defined($v));
 
 if ($old){
     $htmldoc = "htmldoc";

@@ -150,7 +150,7 @@ sub make_hrefs
 sub make_h2
 {
     local ($string) = $_[0];
-    return "</PRE>\n<P><HR><P><H2>$string</H2>\n<PRE>";
+    return "</PRE>\n<H2>$string</H2>\n<PRE>";
 }
 
 sub quote_strings
