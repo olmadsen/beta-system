@@ -1,0 +1,111 @@
+ORIGIN 'system';
+LIB_DEF 'betacompiler' '../../lib';
+INCLUDE '~beta/dependency/dependency';
+INCLUDE '~beta/dependency/private/scanNonCompiledBody';
+INCLUDE '~beta/dependency/private/controlbody';
+INCLUDE '../CHECKER/sematt';
+INCLUDE '../GENERATOR/asmlink';
+INCLUDE 'misk';
+BODY   'translate_controlbody';
+BODY   'translate_libsbody';
+---transDepGraph:descriptor---
+dependencyGraph
+(# <<SLOT xDependencyLib:attributes>>;
+   init:: (# 
+          do true -> notFirst (* ??? *);
+             this(compiler).infoStream[] -> infoStream[];
+             this(compiler).messageStream[] -> messageStream[];
+             this(compiler).traceStream[] -> traceStream[];
+             this(compiler).bugStream[] -> bugStream[];
+          #);
+   handleFragments: scanNonCompiled
+     (* Scans the dependency graph (extent) for 
+      * -  root[] (enter parameter to scanNonCompiled)
+      * -  for each fragmentGroup that must be compiled, Translate is called
+      * -  additional virtuals are called during the scan of the 
+      *    dependency graph; see virtual bindings below
+      *)
+     (# <<SLOT handleFragmentsLib:attributes>>;
+        init::
+          (#
+          do NONE -> lst[]; 
+             sematt.init;
+             false -> lastTransWasReal;
+             asmLink.asmExt -> this(scanNonCompiled).asmExt[];
+             asmLink.binExt -> this(scanNonCompiled).binExt[];
+             this(compiler).b2c -> this(scanNonCompiled).b2c;
+             this(compiler).nti -> this(scanNonCompiled).nti;
+             verboseLevel -> xVerboseLevel;
+             common.switch[4 ] -> this(depGraph).useCompact;
+             common.switch[11] -> checkAll;
+             common.switch[12] -> genAll;
+             common.switch[35] -> this(depGraph).useFullNAme;
+             (for i: 20 repeat
+                  common.switch[380+i] -> this(depGraph).switch[i]
+             for)
+          #);
+        AfterGroup:: (# <<SLOT translateAfterGroup:doPart>> #);
+        AddGroup:: (# do FG.name -> thisTranslate.addedFragment #);
+        AddTranslate:: (# do FG.name -> thisTranslate.addedTranslate #);
+        BuildProperty:: (# <<SLOT BuildProperty:doPart>> #);
+        CurrentProperty:: (# <<SLOT CurrentProperty:doPart>> #);
+        Translate:: 
+          (* Performs translation (compilation of a fragment group *)
+          (# <<SLOT TranslateDo:doPart>> #);
+        addVirtualSuper:: (# <<SLOT translateAddVirtualSuper:doPart>>#);
+        
+        (************************ EXCEPTIONS ****************************)
+        isFile:: (#do msg[] -> infostream.putline #);
+        DoubleFormException::
+          (# do offendingFormName[]->thisTranslate.DoubleFormException #);
+        transAccessException:: 
+          (#do FN[] -> thisTranslate.TransAccessException #);
+        circularDependencyException:: 
+          (#do (fg[],12)->thisTranslate.MsgException #);
+        unknownPropertyException:< exception
+          (# 
+          do (* who calls here? *)
+          #);
+        emptyFragmentException:: 
+          (#do (fg[],2) -> thisTranslate.MsgException #);
+        parseException:: (# do FullFN[] -> thisTranslate.ParseException #);
+        transCreateDirException:: 
+          (# do FN[] -> thisTranslate.TransCreateDirException #);
+        MPSexception:: (#do T[] -> thisTranslate.MPSexception #);
+        notExistingException:: 
+          (#do FullFN[] -> thisTranslate.notExistingException #);
+        noSpaceException:: (#do thisTranslate.NoSpaceException #);
+        fragmentException::
+          (#
+          do (FG[],FF[],slot[],errNo,errMsg[],CloseGroup[])
+               -> thisTranslate.fragmentException
+          #);
+        propertyException:: 
+          (#
+          do (FG[],p[],t[],n,CloseGroup[]) 
+               -> thisTranslate.propertyException;
+             (* currently a warning if n >= 5, but this may change and
+              * a better interface should be made 
+              *)
+             (if n >= 5 then true->continue; (* warning *) if)
+          #);
+     <<SLOT handleFragmentsDo:doPart>>
+     #);
+   clearOutputFile,
+   lastTransWasReal,
+   binaryCodeGen,
+   notFirst: @boolean; (* only used in repeat mode *)
+#)
+---translate_sharedLibs:descriptor---
+(* keeps track of LIBRARY definitions in the fragments *)
+(# <<SLOT sharedLibraryLib:attributes>>;
+   init: <<SLOT libs_init:descriptor>>;
+   scanLibraryProp: 
+     (# fg: ^fragmentGroup; doAsm,inLib: @boolean
+     enter(fg[],doAsm)
+     <<SLOT scanLibraryProp:doPart>>
+     exit inLib
+     #);
+   Make: <<SLOT libsMake:descriptor>>;
+   private: @ <<SLOT libsprivate:descriptor>>
+#)

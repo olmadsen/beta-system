@@ -1,0 +1,778 @@
+ORIGIN 'checkerdopart';
+LIB_ITEM 'betacompiler';
+INCLUDE 'checklib';   
+INCLUDE '~beta/betaast/scanBetaText';
+INCLUDE 'nxalloc'
+---ChkEvalBody:descriptor---
+(# desc,sort,dclRef,p,a,d,L,R : @ ASTindex ;
+   cNXdepth: nxDepth
+     (# testAndCheckDesc::
+          (#
+          do (if (desc->sematt.descKind) = sematt.unDefined then
+                 (desc[],false,none,-1) -> &ChkForm
+             if);
+
+          #)
+     #);
+   
+   AllocInsObj:
+     (# ins,desc: ^ ASTindex; size,access: @ integer
+     enter(ins[],desc[])
+     do (if common.switch[201] then
+            (desc[],false,NONE,-1) -> &ChkForm
+         else
+            (if desc.label = gram.mainPart then
+                (* yet another newindex problem;
+                 * DS.put fails, since it assumes a descriptor;
+                 * MUST reconsider - we don't know if this recursive
+                 * checking will work - perhaps decs has
+                 * already been checked.
+                 *)
+                (desc[],false,NONE,-1) -> &ChkForm
+             else
+                (desc[],0,0(*common.itemKind,common.insCons*),NONE) -> DS.put
+            if)
+        if);
+        (if way//key.single//key.exitt then desc[]->ChkCProcEnter if);
+        (*  else
+         (desc,common.itemKind) -> &GetSpecSize ->(size,access);
+         (if (desc[]->sematt.Insertable) then
+         (ins[],size) -> InsLst.Insert;               
+         else offCount->ins.InsOff;
+         offCount+size->offCount
+         if)if*)
+     #);
+   ChkCProcEnter:
+     (* if external call then the enter parameters MUST be supplied*)
+     (# desc,pref,MP,att,NP,DP,XP: ^ASTindex; 
+        preDesc,node: @ASTindex;
+        hasEnter,rem: @boolean
+     enter desc[]
+     do (if desc.label = gram.objectDescriptor then
+            desc->preDesc; 
+            L: (#do
+                   preDesc.father->node;
+                   (if node.label = gram.finalDecl then
+                       leave L; (* cannot be cProc-sub *)
+                   if);
+                   predesc[]->descSonsRef->(pref[],MP[],att[],NP[],DP[],XP[]);
+                   (if NP.label = gram.EnterPart then true->hasEnter if);
+                   (if pref.label = gram.prefix then
+                       pref.son->&SetUp->(node,preDesc);
+                       (if preDesc.label = gram.objectDescriptor then
+                           (if predesc->desc.equal then
+                               (* loop as in P: P(# ... #) - will be catched
+                                * during normal checking
+                                *)
+                               leave L
+                           if);
+                           restart L
+                        if)
+                    else 
+                       (if predesc->cProcDesc.equal  then
+                           (if hasEnter then (EV,59)->WE.SemError if)
+                  if)if)#)if);
+     #);
+   ChkExeOrRef:
+     (* EV= (ComputedObjectEvaluation <ObjectEvaluation>)
+      *   | (ObjectReference <Reference>)
+      * <ObjectEvaluation> = (InsertedItem <ObjectDescriptor>)
+      *                    | <reference>
+      * <reference> = <DynamicObjectGeneration>
+      *             | (ObjectDenotation <attributeDenotation)
+      *  <DynamicObjectGeneration> =
+      *      (dynamicItemGeneration <ObjectSpecification> )
+      *    | (dynComponentGeneration <ObjectSpecification> )
+      *)
+     (# isRef: @boolean; EV,EV1,desc,dclRef: @ASTindex
+     enter(isRef,EV)
+     do EV.son -> EV;
+        (if EV.label 
+         // gram.dynamicItemGeneration then
+            EV->&ChkDynObjGen;
+            (if isRef then CIrefType->type if)
+         // gram.dynamicComponentGeneration  then 
+            EV->&ChkDynObjGen;
+            (if isRef then CCrefType->type if)
+         // gram.ObjectDenotation then
+            EV.son ->EV1-> &SetUp -> (dclRef,desc);
+            (* Note: If EV1 = this(P), the P may have been setUp in e.q
+             *       P->aP[]; where P: (# ... exit this(p)[] #)
+             * This implies that the this-check in setUp is NOT performed!
+             * Therefore the isEnclosing check has been reintroduced in
+             * ifNotThis.
+             * Should be further investigated!
+             *)
+            L:
+            EV1->IfNotThis
+            (# sort: @ASTindex; (*AD: @attDesc*)D: ^ASTindex;
+               isNotChecked,isOK: @boolean;
+               kind : @integer
+            do dclRef.sort->sort;
+               (if sort.label 
+                // gram.simpleDecl then (* ok *)
+                   sort.son -> sort; sort.brother -> sort;
+                // gram.repetitionDecl then
+                   (*
+                    * (if EV1.label <> gram.indexed then (EV,15)->&WE.SemError if);
+                    *)
+                   sort.son -> sort; sort.brother -> sort; 
+                   sort.brother -> sort;
+                else
+                   (EV,15)->&WE.SemError;
+                   (*leave L*)
+               if);
+               (if ctst then
+                   198 -> trace(#do 'ChkExeOrRef: '->xT; desc[] -> xA #)
+               if);
+               L:
+                 (if (desc.label=gram.objectDescriptor)
+                     and ((desc -> sematt.descKind) = sematt.dataKind) then
+                   (if sort.label = gram.staticItem then
+                       dclRef[] -> sematt.encDesc -> D[];
+                       (if (D->sematt.descKind->kind) <> sematt.comKind then
+                           (if kind
+                            // sematt.beingChecked 
+                            // sematt.unDefined then 
+                               true -> isNotChecked;
+                               D -> ScanCatLst -> D;
+                               D -> comDesc.equal -> isOk
+                           if);
+                           (if ctst then
+                               198 -> trace
+                               (#
+                               do 'DataDesc: '->xT; dclref[] -> xA; xN;
+                                  'desc=' -> xT; desc[] -> xA; xN;
+                                  'descKind='-> xT; 
+                                  desc ->sematt.descKind ->xI; xN ;
+                                  'encDesc='->xT; D[] -> xA; xN;
+                                  D.label ->xI; ' '->put;
+                                  D -> sematt.descKind->xI; 
+                                  ' '->put; comKind -> xI;
+                                  ' isNotChecked=' -> xT; isNotChecked->xB;
+                                  ' isOK=' -> xT; isOK -> xB
+                           #)if);
+                           (if isOK then leave L if);
+                           (EV1[],true) -> WE.MakeError
+                           (#
+                           do 'The reference: "' -> XT;
+                              EV1[] -> XA;
+                              '" is to a static data-object (part-object)\n'
+                              'A reference to a static data-object is only legal\n'
+                              'if the data-object is declared in a COM-object'
+                              -> XT
+                           #)
+                       if)
+                   if);
+               if);
+               (*
+               (if sort.label
+                // gram.dynamicItem then VIrefType -> type
+                // gram.dynamicComponent then VCrefType -> type
+                // gram.variablePattern then VStrucType -> type
+                if);
+                *)
+            #)
+         // gram.insertedItem then 'Inserted item!'->bugstream.putline
+        if);
+     #);
+   ChkDynObjGen:
+     (# IG,desc,dclRef: @ASTindex
+          (* IG = (dynItemGeneration <entSpec> )      *)
+     enter IG
+     do IG.son -> IG; true->hasCode;
+        (if IG.label 
+         // gram.objectDescriptor then
+            (* a singular dynamic object may NOT be checked here.
+             * In cases like
+             *    A: (# do ...; &X.A(# ... #); ... #)
+             * checking of X.A(# ... #) will recursivley imply a check
+             * of A, which will make the cheker loop.
+             * This is a problem for handling cases like
+             *    P: (# do ...; &(# do inner P #); ... #)
+             * where a recursive check of &(# do ...; inner P; ... #)
+             * is necessary in order to mark that P has an inner!
+             * 
+             * A solution to this problem may be to delay all 'super has no
+             * inner' messages and check at the end of a checking if the
+             * super still does not have an inner!
+             *)
+            (IG[],common.itemKind,0,(*common.insCons,*)NONE) -> DS.put
+         // gram.unExpanded then true->innerFound
+         // gram.thisObject // gram.RemotePrimitive then
+            (IG,108)->&WE.SemError
+         else
+            IG -> &SetUp -> (dclRef,desc);
+            (* 18/10/97: the following check will not always work
+             * since the descriptor may not have been checked!
+             * Just added check for dynamic generation of data-objects
+             * which is NOT allowed. This check should also be
+             * made for singular descriptors above.
+             *)
+            (IG,dclRef.sort,true,false) -> &IsNonSimplePtn;
+            (if way//key.single//key.exitt then desc[]->ChkCProcEnter if)
+     if)#);
+   IfNotThis:
+     (# den,N: @ASTindex
+     enter den
+     do (if den.label = gram.thisObject then (* dont check for insertion *)
+            den.son->N; (* N.label=gram.nameApl *)
+            (* see chkExeIOrRef below about isEnclosing *)
+            (N[],thisDesc,N.on,1(* this *))->isEnclosing
+            (*// gram.qualifiedObject then (den,56)->WE.SemError*)
+         else 
+            (*(if den.label//gram.computedRemote then 
+                175->trace(#do 'OBS! ThisOrQua:computedRemote'->T #)
+             if);*)
+            INNER
+     if)#);
+   ChkObjEval:
+     (* the syntaxtic category <ObjectEvaluation> may denote
+      * object references or patterns (inserted object).
+      * Compute 
+      *    type = insEval
+      *         | simpleEval (integer boolean char real)
+      *         | repValEval
+      *       | repRefEval
+      *         | itemEval
+      *       | compEval
+      *               | sysEval
+      *       | repKind
+      *    size = size of enter- or exit-part of objectEval
+      *    tmpSize = temporary locations used for computing ObjectEval
+      *    hasTmp = (tmpSize>0): code must be executed
+      *)
+     (# EV,den,N: @ASTindex; insert,rep,isRemotePrim: @Boolean; 
+        evalKind,MN,dKind: @integer
+     enter EV
+     do (if ctst then
+            178->trace(#do 'ChkObjEval:'->XT; EV[]->xA #)
+        if);
+        EV.son -> den; (* den = <AttributeDenotation> *)
+        CHK:
+          (# nxLevel: @integer; hasNXcode: @boolean
+          do (if den.label = gram.remotePrimitive then 
+                 den.son->den; den.brother->N;
+                 (N[],1)->ChkNewPrim               ;
+                 true->isRemotePrim;
+                 (* what about expKind here ? *)
+             if);
+             den->&setUp->(dclRef,desc); (* OBS virtual *)
+             (if desc.label <> gram.unExpanded then
+                 (* actualDesc will return integerDesc!!!! *)
+                 (thisDesc,den)->actualDesc->(desc,MN); (* inefficient ?? *)
+                 (if inNXlist and switch180 then
+                     (* reconsider if desc should be checked 
+                      * in all cases when way<>single
+                      *)
+                     (if (desc->descKind) = undefined then
+                         (desc[],false,NONE,-1)->&ChkForm
+                     if)
+                 if)
+             if);
+             itemEval->evalKind; (* ugly, necessary if thisObject *)
+             den->IfNotThis
+             (#do (EV,dclRef.sort)->&isObjectSpec->(insert,evalKind)#);
+             (if den.label = gram.remote then
+                 den.son->N;(* N.X *)
+                 (if (N->SimpleOrRep) (* inefficient *)
+                   // gram.dynamicItem// gram.dynamicComponent 
+                   // gram.staticItem//gram.staticComponent
+                   // gram.variablePattern then (*repetition*)
+                      (if way//key.single then
+                          (EV,84)->&WE.SemError
+                          (* only enterr is legal here, but the other cases
+                           * are handled by chklst
+                           *)
+                      if);
+                     repKind->EV.evalKind; 
+                     valType->type; 
+                     leave CHK
+             if)if);
+             (if insert then (* insertion *)
+                 (EV[],desc[])->&AllocInsObj;
+                 insEval -> EV.evalKind; 
+                 (if desc.label = gram.objectDescriptor then
+                     (* one more newindex.bet problem *)
+                     desc[] -> sematt.type -> type;
+                     desc -> sematt.descKind -> dKind
+                 if);
+                 (*!!!!!!!!!!!!!!!!! OBS! applies also to similar cases below
+                  * desc may not have been checked in which case type
+                  * will be emptyType
+                  *)
+                 (if dKind = sematt.constKind then
+                     (* as above, desc may NOT have been checked, i.e.
+                      * we may not catch const desc's like
+                      *  snorf: (# exit hest #);
+                      *  hest: (# exit 12 #)
+                      * when checking exit list of snorf, hest may not
+                      * have been checked.
+                      *)
+                     (*193->trace(#do 'Eval:const desc:'->xT; desc[] ->xA  #);*)
+                     constEval -> expKind;
+                     desc.attSize -> cstVal
+                  else
+                     (if switch181 then
+                         (* chain MUST be fixed *)
+                         (desc[],false,desc->actualDesc.DB.newSingle)
+                           -> cNXdepth
+                           -> (nxLevel,hasNXcode);
+                         nxLevel  -> NXtmp.alloc;
+                     if);
+                     true->hasCode;
+                     (if (desc.label=gram.objectDescriptor)
+                         (* newindex.bet problem !*)
+                         and (desc[]->sematt.inlineNX) then 
+                         inlineNXeval -> expKind 
+                     if);
+                     (if dKind (*(desc->DescKind) newindex.bet problem *)
+                         = standardKind then 
+                         (EV,39)->&WE.SemError 
+                     if)
+                 if)
+              else
+                  (if (den->&SemAtt.SimpleOrRep)
+                   // gram.dynamicItem//gram.dynamicComponent 
+                   // gram.variablePattern then
+                      (* repetition *)
+                      repRefEval->EV.evalKind
+                   // gram.staticItem // gram.staticComponent then
+                      repValEval->EV.evalKind
+                   else 
+                      (if desc.label = gram.objectDescriptor then
+                          (if desc->sematt.descKind
+                           // sematt.standardKind then 
+                              (if desc->realDesc.equal then 
+                                  realEval->EV.evalKind;
+                                  realType->type;
+                               else
+                                  (* simple integer,char, or boolean *)
+                                  (* or other standard descriptors? *)
+                                  simpleEval->EV.evalKind;
+                                  desc[]->sematt.type->type;
+                                  (if way 
+                                   // key.exitt then
+                                      (*!! if R[exp] then exp must
+                                       * be checked fo being simple or not!
+                                       * There may be other cases of
+                                       * denotations like computedEval, @!!
+                                       *)
+                                      simpleExpEval->expKind
+                                   // key.enterr then
+                                      (if den.label = gram.nameApl then
+                                          (if den.on = 0 then
+                                              simpleVarListEval->expKind
+                                  if)if)if)
+                              if);
+                              (* also check if complex den. like R[exp].n *)
+                           // sematt.dataKind then
+                              evalKind->EV.evalKind;
+                              (*193->trace(#do 'Eval:datakind:'->T;EV[]->A #)*)
+                           else
+                              (* compound object *)
+                              (if switch181 then
+                                  (* chain MUST be fixed *)
+                                  (desc[],false,desc->actualDesc.DB.newSingle)
+                                    -> cNXdepth
+                                    -> (nxLevel, hasNXcode);
+                                  (* hasNXcode is also computed below
+                                   * for desc; fix this
+                                   *)
+                                  nxLevel -> NXtmp.alloc;
+                              if);
+                              evalKind->EV.evalKind;
+                              desc[] -> sematt.type -> type;
+                              desc[] -> semAtt.hasDo -> hasCode;
+                              (if way
+                               // key.enterr then 
+                                  (desc[]->semAtt.hasNcode) or hasCode
+                                    -> hasCode;
+                               // key.exitt then
+                                  (desc[]->semAtt.hasXcode) or hasCode
+                                    -> hasCode;
+                              if);
+                              (if den.label=gram.nameApl then
+                                  (den.on>0) or hasCode -> hasCode
+                              if);
+                              (if ctst then
+                                  178->trace(#do'HasCode1:'->xT; hasCode->xB; desc[]-> xA#)
+                              if)
+                          if)
+                       else 
+                          (* 181: what should we do here ?*)
+                          evalKind->EV.evalKind; 
+                          (*desc[]->sematt.type->type; - must be objectDesc*)
+                          true->hasCode;
+                          (if ctst then
+                              178->trace(#do'HasCode2:'->xT; hasCode->xB; desc[]-> xA#)
+                          if)
+          if)if)if)#);
+        (if isRemotePrim then primType->type if)
+     #);
+   ChkTransListElm:
+     (# elm: @ASTindex
+     enter elm
+     do (if elm.label
+         // gram.insertedItem // gram.dynamicItemgeneration
+         // gram.dynamicComponentgeneration then
+            (elm,58)->WE.SemError
+         // gram.objectDenotation then
+            (if elm.evalKind = insEval then (elm,58)->WE.SemError
+     if)if)#);
+   ChkNewPrim:
+     (# op: ^ASTindex; n,primKind: @integer (*1:remote,2:binary,3:unary*)
+     enter(op[],primKind) 
+     do op[]->primitiveToNumber(# error::(#do (op,40)->&WE.SemError #)#)->n;
+        (* The following code checks if the 3 kinds of primitives
+         * appears in the right contect. E.g. putBits does not appear
+         * as a binary primitive. This is NOT catched by chkLst, since
+         * it is currently too simple. But catching it here is ok
+         *)
+         (if primKind 
+          // 1 then (* X.%OP *)
+             (if n//5//6//7//8//9//10//31//13//19//20
+              //21//32//33//39//40//41//42//44//45  then
+              else (op,92)->&WE.SemError
+              if)
+          // 2 then (* binary *)
+             (if n//2//3//4//22//23//24//25//34//35//36//37//38 then
+              else (op,92)->&WE.SemError
+             if)
+          // 3 then (* unary *)
+             (if n//1 (* 1=bNot *) //26//27//28//29//30//43 
+                 (* 26=getByteAt,... 43 = %thiss object *) then
+              else (op,92)->&WE.SemError 
+             if)
+         if)
+     #);
+   NewWay:
+     (# W,LW,RW: @integer
+     enter W
+     do (if W
+         // key.single then key.exitt->LW; key.enterr->RW
+         // key.enterr then key.trans->LW; key.enterr->RW
+         // key.trans  then key.trans->LW->RW
+         // key.exitt  then key.exitt->LW; key.trans->RW
+        if)
+     exit(LW,RW)
+     #);
+   
+     (* Evaluations are classified into the following categories;
+      * - constEval: a constant like, 12, none, true
+      * - simpleVarListEval: simple variable with ON=0 or list of simpleVar's
+      * - inlineNXeval:  An insertion with only enter/exit that may be inlined
+      *                  Ex.:  formatR: (# a,b,c: @integer;
+      *                                    X: (# op: @integer
+      *                                       enter op
+      *                                       exit op %bor (a %sll 21) ...
+      *                                       #)
+      *                                 enter(a,b,c)
+      *                                 #)
+      *                        addi: formatR(#exit 0x4c000000 -> X #)
+      *                        The X above is an inlineNXeval
+      *                  OBS! Other evaluations including inlineNXeval MUST
+      *                  be considered
+      * - simpleExpEval: a simple expression with simple variables,
+      *                  array elements, remote, binary operations,
+      *                  inlineNXevals, ...;
+      *                  NO general object evaluations, assignments, ...
+      * - generalEval
+      * 
+      * The classification is used to gives special handling to
+      * descriptors like
+      * -   (#exit 12 #)   constVal
+      * -   (# a,b,c: @integer enter(a,b,c)exit a*b+x #)
+      *     inlineNX 
+      *     if way = enterr, an enter list is being checked and the eval
+      *     is classified as one of 
+      *          constEval,simpleVarListEval, generalEval
+      *     If way = exitt, an exit list is being checked and the eval
+      *     is classified as one of 
+      *          constEval, simpleExpEval, inlineNXeval, generalEval
+      * 
+      * The property reflected by hasCode should probably be included
+      * in this classification
+      * 
+      * The exit-variable expKind of chkEval holds the classification
+      *)
+   BinaryExpKind:
+     (# ek1,ek2,ek3: @integer
+     enter(ek1,ek2)
+     do generalEval->ek3;
+        (if way = key.exitt then
+            (if (ek1 <= simpleExpEval) and (ek2 <= simpleExpEval) then
+                simpleExpEval -> ek3
+        if)if)
+     exit ek3
+     #);
+   ek1,ek2,
+   B1,B2,Ltype,Rtype,LW,RW,V,SZ,dRegNo1,dRegNo2: @integer; 
+   EV1,EV2: @ASTindex; 
+   hc1,hc2: @boolean
+do generalEval -> expKind; (* playing safe:-) *)
+        (*193->trace(#do EV[]->xA #);*)
+   (if EV.label
+    // gram.assignmentEvaluation then
+       EV.son->EV1; EV1.brother->EV2;
+       way->NewWay->(LW,RW);  
+       (ThisDesc,EV1,LW,inNXlist)->&ChkEval->(B1,V,SZ,hc1,Ltype); 
+       (ThisDesc,EV2,RW,inNXlist)->&ChkEval->(B2,V,SZ,hc2,Rtype);  
+       hc1 or hc2 -> hasCode;
+       (ThisDesc,EV,assignCompKind,EV1,Ltype,EV2,0)-> &CmpLst -> type; 
+       (if (B1 <= simpleExpEval) and (B2 = inlineNXeval) then
+               simpleExpEval -> expKind
+       if);
+    // gram.insertedItem then 
+       (# den: @ASTindex; pre,att,mainP,enterP,doP,exitP: ^ASTindex
+       do EV.son -> den;
+          (if den.label 
+           // gram.objectDescriptor then
+              (**************** must be checked due to possible INNER P ***)
+              
+              (* no ChkForm if insertable*)
+              M: (#do 
+                    L:
+                      (if way = key.single then
+                          (if common.switch[53] then leave L if);
+                          den[]
+                            -> sematt.descSonsRef
+                            -> (pre[],mainP[],att[],enterP[],doP[],exitP[]);
+                          (if pre.label = gram.empty then
+                              att->scanList(#do (* not empty *) leave L #);
+                              (if doP.isSlot then leave L if);
+                                  (*193->trace(#do 'desc. is inserted!'->T; offCount->I#);*)
+                              (*offCount->thisDesc.size;*)
+                              (* hack to pass offcount
+                               * to next ChkForm
+                               *)
+                              (den[],true,NONE,offCount)->&ChkForm;
+                              den.size->offCount; (* pass offCount back *)
+                               (*310->trace(#do'Comp.desc:'->T; offcount->I;den[]->A#);*)
+                              leave M;
+                      if)if);
+                    (den[],true,NONE,-1) -> &ChkForm;
+                 #);
+              (* (EV[],den[]) -> &AllocInsObj;*)
+           // gram.unExpanded then true->innerFound
+           else EV->&ChkObjEval
+       if)#);
+       true->hasCode;
+    // gram.objectDenotation then EV -> &ChkObjEval
+    // gram.dynamicItemgeneration then EV -> &ChkDynObjGen
+    // gram.dynamicComponentGeneration then EV -> &ChkDynObjGen
+    // gram.computedObjectEvaluation then 
+       (* EV = (ObjectReference <Reference> ) *)
+       (false,EV.son)->&ChkExeOrRef;
+       (EV,114) -> WE.SemError
+    // gram.objectReference then  
+       (true,EV)->&ChkExeOrRef; 
+       (* mark as reference, mark item or comp ref *)
+       
+    // gram.evalList then
+       (if way = key.enterr then simpleVarListEval -> expKind 
+        else constEval->expKind
+       if);
+       EV.son->ScanList
+       (# N,T: @Integer; eK: @integer; hc: @Boolean
+       do N+1->N;
+          (ThisDesc,CurrentNode,way,inNXlist)
+            -> &ChkEval
+            -> (eK,CstVal,dRegNo,hc,type);
+          (if way
+           // key.exitt then
+              (if eK 
+               // constEval then constEval->expKind 
+               // simpleExpEval then simpleExpEval->expKind 
+               else generalEval->expKind
+              if)
+           // key.enterr then
+              (if eK <> simpleVarListEval then generalEval -> expKind if)
+           // key.trans then currentNode->chkTransListElm if);          
+          (hc or hasCode)->hasCode;
+       exit N#)->V;
+       (if V > 1 then 
+           (if way = key.exitt then generalEval -> expKind if);
+           listType->type 
+       if)
+    // gram.integerConst then
+       (# T: ^ text; F: @ASTindex
+       do EV.getText -> T[];
+          EV.father -> F;
+          (if F.label = gram.unaryMinusExp then
+               (* To be able to handle 
+                *    -2147483648 = minInt
+                * we must prepend the '-' sign before
+                * calling getNumber to avoid number overflow;
+                * see also evbody: call of getNumber
+                *)
+              '-' -> T.prepend
+          if);
+          0 -> T.setPos;
+          T.getNumber
+          (# integerValue::
+               (#do value->cstVal; constEval->expKind; cValType->type #);
+             basedValue::
+               (#do value->cstVal; constEval->expKind; cValType->type #);
+             realValue:: (#do cRealType->type #);
+             baseError:: (#do (EV,88)->&WE.SemError; true->continue #);
+             syntaxError:: (#do (EV,53)->WE.SemError; true->continue #);
+             valueError:: (#do (EV,53)->WE.SemError; true->continue #);
+             underflow:: (#do (EV,123)->WE.SemError; true -> continue #);
+             overflow:: (#do (EV,124)->WE.SemError; true -> continue #);
+          #);
+          (if not T.eos then (EV,53)->WE.SemError if)
+       #)
+    // gram.textConst then 
+       (# T: ^ text; l: @integer
+       do EV.gettext->T[];
+          T.scanBeta
+          (# NullChar::(#do (EV,109)->&WE.Warning #)
+          do l+1->l  
+          #);
+          (if l = 1 then
+              1->T.inxGet->CstVal; 
+              constEval->expKind;
+              cCharType->type
+           else (* l=0 or l>1*)
+              cRepType->type
+          if); 
+       #)
+    // gram.noneExp then (* Ref const! *) 
+       noneType->type;
+       constEval->expKind; 0->cstVal
+    // gram.structureReference then
+       (# EVX,dclRef,descRef,sort: @ASTindex;
+          isNonStandard:
+            (# MN: @integer
+            do (if descRef.label
+                //gram.virtualDecl//gram.bindingDecl//gram.finalDecl
+                //gram.variablePattern then (* ok *)
+                   (*(thisDesc,EVx)->actualDesc->(descRef,MN)*)
+                else
+                   (if descRef->isStandard then (EV,93)->WE.SemError if)
+               if)
+            #)
+       do EV.son->EVx->&SetUp->(dclRef,descRef);
+          dclRef.sort->sort;
+          (if sort.label
+           // gram.patternDecl then 
+              (if descRef->isStandard then (EV,93)->&WE.SemError if);
+              cStrucType->type
+           // gram.virtualDecl 
+           // gram.bindingDecl // gram.finalDecl 
+              then (* ok *) cStrucType->type
+           // gram.simpleDecl then 
+              (* either S: ## T; or X: @T or X: ^T 
+               * OK in all three cases
+               *) 
+              isNonStandard;
+              vStrucType->type
+           // gram.repetitionDecl then
+              (if EVx.label//gram.indexed then isNonStandard
+               else (EV,44) -> WE.SemError
+              if);
+              vStrucType->type
+           else (EV,44) -> WE.SemError
+       if)#)
+    // gram.repetitionSlice then
+       (# dclref,descRef:@ASTindex;
+          eK1,eK2: @integer; (* consider if repSlice can ve simpleEval *)
+       do EV.son->EV1->&setUp->(dclref,descRef);
+          (if (EV1->SimpleOrRep)
+           // gram.dynamicItem//gram.dynamicComponent 
+           // gram.variablePattern (* perhaps not good enough for varPtn? *) then
+              (* repetition *)
+              repRefEval->EV.evalKind
+           // gram.staticItem // gram.staticComponent then
+              repValEval->EV.evalKind
+           else (EV1,45)->WE.SemError
+          if);
+          (*!!! dRegNo, hasCode etc *)
+          (ThisDesc,EV1.brother->EV1,way,inNXlist)
+            -> &ChkEval
+            -> (eK1,CstVal,dRegNo,hasCode,type);
+          (ThisDesc,EV1.brother->EV2,way,inNXlist)
+            ->&ChkEval
+            ->(eK2,CstVal,dRegNo,hasCode,type);
+          repType->type;
+       #)
+    // gram.primitive then 
+       (*!!!!!!!!!!! size/tmpsize cannot be calculated??? *)
+       EV->ParsePrimitive (# error:: (# do (EV,40)->&WE.SemError #)#);
+       (if way = key.exitt then simpleExpEval -> expKind if)
+    // gram.unaryMinusExp then
+       EV.son -> EV1;
+       (ThisDesc,EV1,way,inNXlist) 
+         -> ChkEval 
+         -> (expKind,CstVal,dRegNo,hasCode,type);
+       (if EV1.label <> gram.integerConst then
+           (* see integerConst above *)
+           -CstVal -> CstVal
+       if);
+       (ThisDesc,EV,unaryCompKind,EV1,valType,EV1,type) -> &CmpLst -> type
+    // gram.unaryPlusExp then
+       (ThisDesc,EV.son->EV1,way,inNXlist)
+         -> &ChkEval
+         -> (expKind,CstVal,dRegNo,hasCode,type);
+        (ThisDesc,EV,unaryCompKind,EV1,valType,EV1,type)->&CmpLst->type
+    // gram.notExp then
+       (*!!!!!! Type checking *)
+       (thisDesc,EV.son->EV1,way,inNXlist)
+         -> &chkEval
+         -> (expKind,CstVal,dRegNo,hasCode,type);
+       (ThisDesc,EV,unaryCompKind,EV1,boolType,EV1,type)->&CmpLst;
+       cBoolType->type;
+    // gram.address then
+       (# dclRef,desc: @ASTindex
+       do EV.son -> &SetUp -> (dclRef,desc); (EV,dclRef) -> &isObject;
+          valType->type;
+          (if way = key.exitt then simpleExpEval->expKind if)
+       #)
+    // gram.primitiveExp then 
+       EV.son->EV1; EV1.brother->EV2; 
+       (EV2[],2)->chkNewPrim;
+       EV2.brother->EV2;
+       (ThisDesc,EV1,way,inNXlist)
+         -> &ChkEval
+         -> (eK1,cstVal,dRegNo1,hasCode,Ltype);
+       (ThisDesc,EV2,way,inNXlist)
+         -> &ChkEval
+         -> (eK2,cstVal,dRegNo2,hasCode,Rtype);
+       (eK1,eK2)->BinaryExpKind->expKind;
+       cPrimType->type;
+    // gram.unaryPrimitiveExp then
+       EV.son->EV1; 
+       (EV1[],3)->chkNewPrim;
+       EV1.brother->EV1;
+       (ThisDesc,EV1,way,inNXlist)
+         -> &ChkEval
+         -> (ek1,cstVal,dRegno1,hasCode,type);
+       (eK1,0)->BinaryExpKind->expKind;
+       cPrimType->type
+    else (* EV should not be called with lexems  *)
+       (if (EV.label->evalClass) = evalClass.binOp then
+           EV.son->EV1; EV1.brother->EV2;
+           (* should way always be exitt here ?*)
+           (ThisDesc,EV1,way,inNXlist)
+             -> &ChkEval
+             -> (eK1,cstVal,dRegNo1,hc1,Ltype);
+           (ThisDesc,EV2,way,inNXlist) 
+             -> &ChkEval
+             -> (ek2,cstVal,dRegNo2,hc2,Rtype);
+           hc1 or hc2 -> hasCode;
+           (eK1,eK2)->BinaryExpKind->expKind;
+           (ThisDesc,EV,binaryCompKind,EV1,Ltype,EV2,Rtype)->&CmpLst->type;
+
+           (if dRegNo1 = dRegNo2 then dRegNo1+1->dRegNo 
+            else (dRegNo1,dRegNo2)->max->dRegNo 
+           if);
+           dRegNo2->V; (* due to endian problem, dRegNo2 must be 'reassigned'*)
+           (@@dRegNo2,V)->TOS'%putShort[1]';
+           (@@dRegNo2,dRegNo1)->TOS'%putShort[0]';
+           (dRegNo2,1)->EV.putAttribute; 
+           (dRegNo,2)->EV.putAttribute;
+   if)if) ;
+       (*193->trace(#do 'ChkEval:'->xT; expKind->xI; EV[]->xA; #);*)
+#)
+

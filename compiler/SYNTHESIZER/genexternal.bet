@@ -1,0 +1,1098 @@
+ORIGIN 'genlib';
+LIB_ITEM 'betacodegen';
+INCLUDE 'auxlib';
+(* ************************************************
+ * Generation of machine code for 
+ * 1) Call of external routines such as C, and Pascal
+ *    All slots starting with ExternalCall
+ * 2) CallBack
+ *    Slot GenCallBAck
+ * 3) Primitive (assembler calls) calls
+ *    2 slots starting with PrimitiveCall
+ *)
+---evalLib:attributes---
+ExternalDataPartVal: evVal
+  (* represents a struct VALUE returned from an external routine *)
+  (# display:: (# do 'ExternalDataPartVal:' -> xT #);
+     release:: (#do dR.deAlloc #);
+     asgToItem::
+       (# aR: @mch.adrRegOperand;
+          dR2: ^mch.dataRegOperand;
+          lA: @mch.RegAdr; rA1: ^mch.RegAdr
+       do (if stest then 
+              301->trace(#do 'ExternalDataPartVal:'-> xT; rA.display -> xT;
+                       dR.display -> xT;
+                        #)
+          if);
+          rA.copy -> rA1[];
+          (if val
+           // 1 then
+              (dR[],rA1[]) -> mch.stVal;
+           // 2 then
+              (dR[],rA1[]) -> mch.stVal;
+              4 -> rA1.addOff -> rA1[];
+              (dRx[],rA1[]) -> mch.stVal
+           else 
+              (* this may not work for SPARC, etc *)
+              aR.alloc;
+              (dR[],aR[]) -> mch.cpReg;
+              aR -> lA.reg;
+              (for i: rDesc.size div 4 repeat
+                   (i-1) * 4 -> lA.off;
+                   (if ((lA[],rA1[]) -> mch.cpMem -> dR2[]) <> NONE then
+                       dR2.deAlloc
+                   if);
+                   4 -> rA1.addOff -> rA1[]
+              for);
+              aR.deAlloc; 
+          if);
+          (if switch181 then rA[] -> rAx[] if);
+          rA.freeAdr;    
+          (*this(ExternalDataPartVal)[] -> V[]*)
+       #);
+     asgToList::(#do'ExternalDataPartVal:asgToList:notImplemented'->thisTranslate.systemException#);
+     dR,dRx: @mch.dataRegOperand; (* val:
+                                   *  1  : size(struct)=4, dR = structVal
+                                   *  2  : size(struct)=8, dR,dRx = structVal
+                                   * else: drA = address of struct 
+                                   *)
+     val: @integer
+  enter(dR,dRx,val)
+  exit this(ExternalDataPartVal)[]
+  #);
+ExternalTextVal: evVal
+  (* Represents a text returned from an external procedure;
+   * see genExternal.bet:ExternalCallGetExitP:extType=common.textXpar
+   *)
+  (# display::<(#do 'ExternalTextVal:'->xT #);
+     evType::<(#do 2 -> type #);
+     release::< (#do A.freeAdr #);
+     asgToRefAdr::<
+       (#
+       do 'ExternalTextVal:asgToRefAdr'-> thisTranslate.systemException 
+       #);   
+     asgToRepAdr::< 
+       (* used to assign beta text object returned from cProc;
+        * see externalCall.getExitP *)
+       (# dest: ^mch.registerOperand
+       do (if stest then 
+              301->trace(#do 'ExternalTextVal:asgToRepAdr:'->xT;#)
+          if);
+          4->A.size;
+          (A[],false) -> rA.asgRefAdr -> dest[]; dest[] -> mch.chkHeap;
+          rA.freeAdr; 
+          this(ExternalTextVal)[] -> V[]
+       #);
+     asgToItem::<
+       (# nScan: @ | scanNadr
+       do (if stest then 
+              301->trace(#do 'ExternalTextVal:asgToItem:'->xT;#)
+          if);
+          (rDesc[],rA[],0,rChain[],true)->nScan; 
+          this(ExternalTextVal)[]->nScan.AsgToNelm -> rAx[];
+          nscan.reset
+       #);
+     asgToNXoffsets::<
+       (# off: @integer; rAx: ^mch.address; dr: ^mch.dataRegOperand 
+       do (if stest then 
+              301->trace(#do 'ExternalTextVal:asgToNXoffSets:'->xT #)
+          if);
+          NX.getNext -> off;
+          off -> (rA.copy).addOff -> rAx[]; 
+          (if NX.getKind
+           // NX.repTmp // NX.repOff then 
+              (rAx[],none,none) -> asgToRepAdr
+           // NX.refTmp // NX.refOff then
+              cError(#do 'ExternalVarVal:asgToNXoffSets:notRep,butRef'-> xT #)
+           else
+              cError(#do 'externalVarVal:asgToNXoffSets:not rep'-> xT #)
+          if);
+       #);
+     asgToCproc::<
+       (* Assigning an external to another external:
+        *    foo: external(# a: [1]@char enter a #);
+        *    bar: external(# b: [1]@char exit b #);
+        *    bar -> foo
+        *)
+       (# CP: @ExternalCall; 
+       do (if stest then 
+              301->trace(#do 'ExternalTextVal:asgToCproc:'->xT #)
+          if);
+          (externalName,Desc[],extKind,EV.son)->CP; (* init *)
+          (CP.getEnterP,extKind,CP.getEnterP.size,CP.pascExtProcInfo)
+            -> pushCpar;
+          CP.call;
+          CP.getExitP->V[];
+       #);
+     pushCpar::<
+       (# aR: @mch.adrRegOperand
+       do (if stest then 301->trace(#do 'ExternalTextVal:pushCpar:'->xT #)if);
+          2->mch.initPrimCall; (* assuming switch[61] *)
+          A.toReg2 -> aR;
+          1 -> aR.toPrimDest;
+          (if common.switch[79(*61*)] then (2,0) -> mch.SpToPrimReg if);
+          protectCallReg
+          (#
+          do (if extKind 
+              // sematt.pascExt //semAtt.pascTrapExt then
+                 'PpkVT'->mch.callPrim
+              else 'CpkVT'->mch.callprim 
+          if)#);
+          2 -> mch.getPrimRes;
+          
+       #);
+     A: ^mch.address (* address of char rep object - NOT a char rep var*)
+  enter A[]
+  exit this(externaltextVal)[]
+  #);
+ExternalTextVal2: evVal
+  (* Represents a text returned from an external procedure;
+   * see genExternal.bet:ExternalCallGetExitP:extType=common.textXpar
+   *)
+  (# display::<(#do 'ExternalTextVal:'->xT #);
+     evType::<(#do 2 -> type #);
+     release::< (#do (*A.freeAdr*) #);
+     asgToRefAdr::<
+       (#
+       do 'ExternalTextVal:asgToRefAdr'-> thisTranslate.systemException 
+       #);   
+     asgToRepAdr::< 
+       (* used to assign beta text object returned from cProc;
+        * see externalCall.getExitP *)
+       (# dest: ^mch.registerOperand; max: @integer;
+          dr: @mch.dataRegOperand
+       do (if stest then 
+              301->trace(#do 'ExternalTextVal2:asgToRepAdr:'->xT;#)
+          if);
+          (* OBS! We may have to use protectCallreg etc as in
+           * textVal::asgToRepAdr - textVal:asgToRepAdr
+           * may be simplified since external C texts (including
+           * callBack) are now handled here. ExternalTextVal may
+           * also be eliminated - and getTextXres is also not
+           * used anymore.
+           *)  
+          (if common.switch[61] then
+              protectCallReg
+              (#
+              do mch.pushReg -> max; 
+                 (rA[],3) -> CopyT
+                 (#
+                 do 1->charPtrReg.toPrimDest;
+                    (4,1) -> mch.SPtoPrimReg
+                 #)-> dr;
+                 (* copy dr to callReg and thisReg *)
+                 (dr[],mch.callRegOp[]) -> mch.cpReg;
+                 (dr[],mch.thisRegOp[]) -> mch.cpReg;
+                 max->mch.popReg 
+              #)
+           else
+              (rA[],0) -> CopyT(#do 1->charPtrReg.toPrimDest #)
+          if);
+          this(ExternalTextVal2)[] -> V[]
+       #);
+     asgToItem::<
+       (# nScan: @ | scanNadr
+       do (if stest then 
+              301->trace(#do 'ExternalTextVal:asgToItem:'->xT;#)
+          if);
+          (rDesc[],rA[],0,rChain[],true)->nScan; 
+          this(ExternalTextVal2)[]->nScan.AsgToNelm -> rAx[];
+          nscan.reset
+       #);
+     asgToNXoffsets::<
+       (# off: @integer; rAx: ^mch.address; dr: ^mch.dataRegOperand 
+       do (if stest then 
+              301->trace(#do 'ExternalTextVal:asgToNXoffSets:'->xT #)
+          if);
+        (*  NX.getNext -> off;
+          off -> (rA.copy).addOff -> rAx[]; 
+          (if NX.getKind
+           // NX.repTmp // NX.repOff then 
+              (rAx[],none,none) -> asgToRepAdr
+           // NX.refTmp // NX.refOff then
+              cError(#do 'ExternalVarVal:asgToNXoffSets:notRep,butRef'-> xT #)
+           else
+              cError(#do 'externalVarVal:asgToNXoffSets:not rep'-> xT #)
+         if);*)
+       #);
+     asgToCproc::<
+       (* Assigning an external to another external:
+        *    foo: external(# a: [1]@char enter a #);
+        *    bar: external(# b: [1]@char exit b #);
+        *    bar -> foo
+        *)
+       (# CP: @ExternalCall; 
+       do (if stest then 
+              301->trace(#do 'ExternalTextVal:asgToCproc:'->xT #)
+          if);
+          (externalName,Desc[],extKind,EV.son)->CP; (* init *)
+          (CP.getEnterP,extKind,CP.getEnterP.size,CP.pascExtProcInfo)
+            -> pushCpar;
+          CP.call;
+          CP.getExitP->V[];
+       #);
+     pushCpar::<
+       (# 
+       do (if stest then 301->trace(#do 'ExternalTextVal:pushCpar:'->xT #)if);
+          charPtrReg[]->mch.pushClong
+       #);
+     charPtrReg: @mch.dataRegOperand; (* address of ASCIIZ string *)
+  enter charPtrReg
+  exit this(ExternalTextVal2)[]
+  #)
+-- ExternalCallGetEnterP: DoPart --
+do
+   produce:
+     (#
+     do (if forward then (* forward *)
+            (for i: top repeat PL[i->inx]->pType; SUSPEND for)
+         else
+            (* backwards *)
+            (for i: top repeat PL[top-i+1->inx]->pType; SUSPEND for)
+        if);
+        (if extType = sematt.dispatchExt then restart produce if)
+     #);
+   - 1->pType;
+   (* ugly *)
+     
+
+-- ExternalCallPascalTraps: DoPart --
+do
+     (#
+        nxt: (#  do (if T.eos then ascii.fs->ch else T.get->ch if) #);
+        ch: @char;
+        Trap:
+          (# trapTxt: @text
+          do
+             L:
+             (if ch
+              // ascii.fs // ',' // '}' then 
+              else
+                 ch->trapTxt.put; nxt; restart L
+             if);
+             trapTxt[]->mch.pascalTrap
+          #);
+        emitT:
+          (# 
+          do
+             nxt;
+             (if ch
+              // ascii.fs then 
+              else
+                 (if ch
+                  // '{' then
+                     nxt;
+                     M:
+                       (# 
+                       do Trap; (if ch // ',' then nxt; restart M if)
+                       #)
+                  else
+                     Trap
+                 if)
+             if)
+          #);
+        
+     do 0->T.setPos; emitT
+     #)  
+
+-- ExternalCallCall: Descriptor --
+(#
+   traceXcall:
+     (# func: ^text; noOfPar: @integer
+     enter (func[],noOfPar)
+     do
+          (#
+             lab: @mch.localLab;
+             ar: @mch.adrRegOperand;
+             dr: @mch.dataRegOperand;
+             CP: @Externalcall;
+             V: ^evVal
+          do
+             Lab.new;
+             true->Lab.isTextAdr;
+             mch.switchToData;
+             Lab.def;
+             (func[],false)->mch.asciiText;
+             mch.switchToCode;
+             ar.alloc;
+             (lab[],ar[])->mch.gLea;
+             ('XcallName',false)->mch.importData;
+             ('XcallNum',false)->mch.importData;
+             (ar[],'XcallName'->mch.newCtextOp)->mch.stValInText;
+             ar.deAlloc;
+             dr.alloc;
+             (noOfPar->mch.newCstOp,dr[])->mch.ldCst;
+             (dr[],'XcallNum'->mch.newCtextOp)->mch.stValIntext;
+             dr.deAlloc;
+             29->SwitchOn;
+             ('TraceXcall',Desc[],sematt.cExt,theES)->CP;
+             29->SwitchOff;
+             0->CP.exitType;
+             (* to override the exit type of Desc *)
+             (* desc is passed here, since CP should save all the parameters of desc.
+              * desc is the descriptor of the external being traced
+              *)
+             CP.call;
+             (*22 -> switchOn;
+              CP.getExitP->V[];
+              22 -> switchOff;*)
+             (if V[] <> none then V.release if)
+          #)
+     #)
+do
+   (if common.switch[22] then
+       22->switchOff;
+       29->SwitchOn;
+       (externalName[],BC+SC+LC)->TraceXcall;
+       22->switchOn;
+       29->SwitchOff
+   if);
+   (if extType
+    // semAtt.cExt // semAtt.pascExt // semAtt.stdExt then
+       (externalName,extType,BC+SC+LC,exitType)->mch.callCproc
+    // semAtt.pascTrapExt then
+       externalName[]->PascalTraps
+    // semAtt.asmExt then
+       externalName->mch.callPrim
+    // semAtt.virtExt then
+         (#
+            D: @ASTindex;
+            A: ^mch.address;
+            aR: @mch.adrRegOperand;
+            A1: @mch.RegAdr
+         do (*desc.father->D;
+             D.son->sematt.singleName->D;
+             *)
+            (* 301->trace(#do 'ExternalVirtualDispatch:'->xT; theES[] -> xA; mch.dumpreg #);*)
+            (if theES[] = NONE then
+                'ExternalCallCall: theES[] = NONE! Error in some asgToCproc'
+                  -> putline
+            if);
+            theES -> sematt.getName -> D;
+            D.dclRef -> D; 
+            (if not (extType->mch.xParForward) then
+                (theES,true)->TransferObject
+            if);
+            objectReg->A1.reg;
+            (A1[],objectReg[])->mch.ldVal;
+            D.off - 4 -> A1.off;
+            (A1[],objectReg[])->mch.ldVal;
+            (* the following is highly INTEL specific *)
+            L:
+              (if exitType = common.dataXpartPar then
+                (# SP: @mch.stackOff;
+                   dR: @mch.dataRegOperand
+                do (if common.targetMachineId
+                    // common.nti_gnu 
+                    // common.nti_ms then
+                       (if exitDescSize // 4 // 8 then leave L
+                   if)if);
+                   (BC+SC+LC)*4+exitDescSize -> SP;
+                   dR.alloc;
+                   (SP[],dR[]) -> mch.gLea;
+                   dR[] -> mch.push;
+                   dR.deAlloc
+                #);
+              if);
+            (objectReg[],extType,BC+SC+LC,exitType)->mch.externalDispatch;
+            objectReg.deAlloc
+         #)
+   if)
+#)  
+
+-- ExternalCallGetExitP: DoPart --
+do
+   (if common.switch[22] and (common.targetMachineId = common.linux) then
+       mch.dataRegA[]->mch.pushClong;
+       'TraceXres'->mch.jsrT;
+       mch.dataRegA[]->mch.pop;
+       
+   if);
+   (if exitType = common.dataXpartPar then
+       (* this is a hack to assure that stack is popped
+        * properly: when a partObject (cstruct) is returned
+        * call-by-value, space for it is allocated on the stack,
+        * and a ref to it is allocated on the stack also.
+        * The following should really be cleaned up:
+        * from here on (handling of exit-value), exitDescSize is
+        * no longer a byte size, but a long size; in adddition
+        * 1 is added for the reference to be struct being pushed
+        * (as mentioned above).
+        *)
+       (exitDescSize div 4) + 1 -> exitDescSize
+    else 
+       0 -> exitDescSize
+   if);
+   
+   (if extType
+    // semAtt.cExt
+    // sematt.virtExt
+    // sematt.dispatchExt 
+    // sematt.stdExt
+    // semAtt.pascExt 
+    // semAtt.pascTrapExt then
+       (if exitType
+        // common.byteXpar
+        // common.shortXpar
+        // common.longXpar
+        // common.COMobjectXpar then
+           ((extType,exitType,BC+SC+LC,exitDescSize,max,dummyMax) 
+             -> mch.getSimpleXres
+           ,false,false,false) 
+             -> mkComputedEvVal 
+             -> V[] 
+        // common.int64Xpar then
+           (# drA,drB: @mch.dataRegOperand
+           do (extType,exitType,BC+SC+LC,exitDescSize,max,dummyMax)
+                -> mch.getDoubleXres -> (drA,drB);
+              (drA,drB) -> mkDoubleEvVal -> V[] (* OBS: just for experiments! 
+                                                 * see hack in doubleEvval:asgToAdr
+                                                 *)
+           #)
+        // common.textXpar //  common.wtextXpar then
+           (# A: @mch.RegAdr
+           do (if exitType = common.wtextXpar then
+                  '\n***** Warning: external exit type "[...]@wchar" may not'
+                  ' have been implemented!' -> putline
+              if);
+              (if common.switch[120] then
+                  (extType,exitType,BC+SC+LC,exitDescSize,max,dummyMax) 
+                    -> mch.getSimpleXres
+                    -> ExternalTextVal2 -> V[]
+               else
+                  (extType,exitType,BC+SC+LC,exitDescSize,max,dummyMax) 
+                    -> mch.getTextXres
+                    -> A.reg;
+                  A[] -> ExternalTextVal -> V[]
+              if)
+              (*gen.copyCtext -> ExternalTextVal -> V[]*)
+           #)
+        // common.repetitionXpar then
+           cError (#  do 'External exit type REP:'->xT #)
+        // common.doubleXpar then (* check float also here *)
+           (if mch.realXresIsDouble then
+               (extType,exitType,BC+SC+LC,exitDescSize,max,dummyMax) 
+                 -> mch.getDoubleXres 
+                 -> mkDoubleEvVal 
+                 -> V[]
+            else
+               (extType,exitType,BC+SC+LC,exitDescSize,max,dummyMax) 
+                 -> mch.getFloatXres
+                 -> mkFloatEvVal 
+                 -> V[]
+           if)
+        // common.cStructXpar
+        // common.dataXpar then
+           ((extType,exitType,BC+SC+LC,exitDescSize,max,dummyMax) 
+             -> mch.getDataRefXres
+           ,false,false,false)
+             -> mkComputedEvVal
+             -> V[]
+        // common.dataXpartPar then
+           L:(#
+             do (if common.targetMachineId
+                 // common.nti_gnu 
+                 // common.nti_ms then
+                    (if exitDescSize
+                        (* as mentioned above, exitDescSize is:
+                         *    (exitDescBYTEsize div 4) + 1
+                         * where the 1 is the extra reference to
+                         * the struct being pushed as a parameter
+                         *)
+                     // 2 (* returned struct is 4 bytes *) then
+                        (extType,exitType,BC+SC+LC,0,max,dummyMax)
+                          -> mch.getSimpleXres 
+                          -> drA;
+                        (drA,0,1) -> ExternalDataPartVal -> V[];
+                        leave L
+                     // 3 (* returned struct is 8 bytes *) then
+                        (extType,exitType,BC+SC+LC,0,max,dummyMax)
+                          -> mch.getDoubleXres 
+                          -> (drA,drB);
+                        (drB,drA,2) -> ExternalDataPartVal -> V[];
+                        leave L
+                if)if);
+                ((extType,exitType,BC+SC+LC,exitDescSize,max,dummyMax) 
+                  -> mch.getDataPartXres
+                ,0,0)
+                  -> ExternalDataPartVal 
+                  -> V[]
+             #)
+        // 0 (* no exit type *) then
+           311->trace
+           (# do 'noXres: exitDescSize=' -> xT; exitDescSize -> xI #);
+           (extType,exitType,BC+SC+LC,exitDescSize,max,dummyMax) 
+             -> mch.noXres
+        else
+           cError
+           (#
+           do 'Illegal external exit type for C,std,comVirtual:'->xT; 
+              exitType->xI 
+           #) 
+       if)
+    else
+       cError (#do 'Illegal external type:'->xT; extType->xI #) 
+   if);
+   (if V[] = none then
+       (* may be the case if a call-back is called;
+        * this is an error that should be catched by the checker
+        *)
+       (# dr: @mch.dataRegOperand
+       do dr.alloc;
+          (* return arbitrary result *)
+          (dr,false,false,false)->mkComputedEvVal->V[]
+       #)
+    else
+       (if common.switch[22] and (common.targetMAchineId <> common.linux) then
+           (* TraceXres *)
+           (# CP: @ExternalCall; vW: ^evVal; (*CV: ^ComputedEvVal*)
+           do 22->switchOff;
+              ('TraceXres',Desc[],sematt.cExt,theES)->CP;
+              0->CP.exitType;
+              (*(if V##
+               // computedEvVal## then 
+               V[]->CV[]; 
+               CV.dr[]->mch.pushClong; *)
+              V.toDataReg->mch.pushClong; 
+              (*if);*)
+              CP.call;
+              CP.getExitP->VW[];
+              (if VW[] <> none then VW.release if);
+              22->switchOn                
+           #)
+       if)
+   if)  
+
+-- ExternalCallAddPl: DoPart --
+do (if ((top+1->top) > PL.range) then
+       PL.range->PL.extend; pSize.range->pSize.extend
+   if);
+   P->PL[top]  
+
+-- ExternalCallInitPl: Descriptor --
+(# doubleParSize: @integer
+   (* For UNIX this size is 2 longs. 
+    * For Macintosh C it is 3 longs
+    * For Macintosh Pascal it is 1 long (adr. of arg.)
+    *)
+do (if 'mac' -> (TargetMachine).equal then
+       (if extType
+        // sematt.cExt // sematt.cCallBackExt then
+           3->doubleParSize
+        // sematt.pascExt // sematt.pascTrapExt // sematt.pascCallBackExt then
+           1->doubleParSize
+        else
+           'Illegal external type for Macintosh'->thisTranslate.systemException
+       if)
+    else
+       2->doubleParSize
+   if);
+   (* scan possible enter parameters *)
+   (desc[],true)
+     ->sematt.ScanCNX
+       (#
+          bytePar:: (#do common.byteXpar ->addPL; BC+1->BC #);
+          shortPar:: (#do common.shortXpar ->addPl; SC+1->SC #);
+          longPar:: (#do common.longXpar ->addPL; LC+1->LC #);
+          int64Par:: (#do common.int64Xpar -> addPl; LC+2 -> LC (*???*)#);
+          textpar:: 
+            (#
+            do (if isWtext then 
+                   common.wtextXpar ->addPL
+                else
+                   common.textXpar ->addPL
+               if);                   
+               LC+1->LC; true->hasTextPar 
+            #);
+          BSTR::
+            (#
+            do (*'\n*** BSTR argument:' -> putline;*)
+               common.BSTRXpar -> addPL; LC+1->LC
+            #);
+          repPar::<  (# #);
+          partObjectPar::
+            (# parType: @integer
+            do  (if theDesc->sematt.descKind
+                 // sematt.dataKind then common.dataXpartPar -> parType
+                 else
+                    'ExternalCproc(externalCOMvirtual:partObjectPar:unknownType'->thisTranslate.systemException
+                if);
+               parType -> addPL;
+               LC + (theDesc.size div 4) -> LC
+            #);
+          refObjectPar::< 
+            (# parType,PL: @integer
+            do common.cStructXpar -> parType;
+               (if theDesc->sematt.descKind
+                // sematt.dataKind then common.dataXpar -> parType
+                // sematt.comKind 
+                // sematt.dispatchKInd (* OBS! May need to be fixed *)
+                   then common.COMobjectXpar -> parType
+                // sematt.holderKind then common.holderXpar -> parType
+                else
+                   (if not sematt.wtextDesc.isNull then
+                       (theDesc) -> sematt.descChain -> (theDesc,PL);
+                         (* ugly we must go to ustream; temp hack *)
+                       (if theDesc -> sematt.wtextDesc.equal then 
+                           common.wtextXpar -> parType
+                   if)if)
+               if);
+               parType->addPL;
+               LC+1->LC
+            #);
+          doublePar:: (#do common.doubleXpar ->addPL; LC+doubleParSize->LC #);
+          varPtn::< 
+            (#
+               K,extT,nS,xS: @Integer;
+               hasExit: @boolean;
+               callId: ^Text;
+               dclId: @ASTindex;
+               univProcInfo: @Integer;
+               univCnt: @Integer;
+               
+            do
+               theDesc.son->theDesc;
+               theDesc.dclRef->dclId;
+               (thisDesc[],theDesc[])->getActualDesc->(theDesc,K);
+               (*for some reason theDesc=sort for varPtn,see getCatsort*)
+               (none ,dclId.getText,theDesc[],K)->semAtt.cProcDecoder
+                 ->(callId[],extT);
+               (if extT
+                // sematt.cExt // sematt.cCallBackExt then
+                   common.varPtnCXpar -> addPl
+                // sematt.stdExt // sematt.stdCallBackExt then
+                   (theDesc[],True)
+                     ->sematt.scanCNX
+                       (# bytePar::<  (#  do nS+4->nS #);
+                          shortPar::<  (#  do nS+4->nS #);
+                          longPar::<  (#  do nS+4->nS #);
+                          textpar::<  (#  do nS+4->nS #);
+                          refObjectPar::<  (#  do nS+4->nS #);
+                          doublePar::<  (#  do nS+4*doubleParSize->nS #)
+                       #);
+                   (theDesc[],false)
+                     ->sematt.scanCNX
+                       (# bytePar::<  (#  do 4->xS #);
+                          shortPar::<  (#  do 4->xS #);
+                          longPar::<  (#  do 4->xS #)
+                       #);
+                   common.varPtnStdXpar -> addPl;
+                   nS*256+xS->pSize[top]
+                else
+               (* pascExt *)
+                   64->univCnt;
+                   (* encode pascExt params into univProcInfo for 
+                    * PowerMac Pascal callbacks (mode switches)
+                    *  
+                    *  |xx|xx|xx|xx|xx|xx|xx|xx|xx|xx|xx|xx|xx|xx|xxxx|
+                    *   <----------------params-------------->    ^^^^calling convention
+                    *                                          ^^res_size
+                    * res_size and calling convention is set in CopyPPP
+                    *)
+                   (theDesc[],True)
+                     ->sematt.scanCNX
+                       (#
+                          bytePar::< 
+                            (# 
+                            do
+                               nS+2->nS;
+                               (1*univCnt)+univProcInfo->univProcInfo;
+                               univCnt*4->univCnt;
+                               
+                            #);
+                          shortPar::< 
+                            (# 
+                            do
+                               nS+2->nS;
+                               (2*univCnt)+univProcInfo->univProcInfo;
+                               univCnt*4->univCnt;
+                               
+                            #);
+                          longPar::< 
+                            (# 
+                            do
+                               nS+4->nS;
+                               (3*univCnt)+univProcInfo->univProcInfo;
+                               univCnt*4->univCnt;
+                               
+                            #);
+                          textpar::< 
+                            (# 
+                            do
+                               nS+4->nS;
+                               (3*univCnt)+univProcInfo->univProcInfo;
+                               univCnt*4->univCnt;
+                               
+                            #);
+                          refObjectPar::< 
+                            (# 
+                            do
+                               nS+4->nS;
+                               (3*univCnt)+univProcInfo->univProcInfo;
+                               univCnt*4->univCnt;
+                               
+                            #);
+                          doublePar::< 
+                            (# 
+                            do
+                               nS+4*doubleParSize->nS;
+                               (3*univCnt)+univProcInfo->univProcInfo;
+                               univCnt*4->univCnt;
+                               
+                            #);
+                          
+                       #);
+                   (theDesc[],false)
+                     ->sematt.scanCNX
+                       (#
+                          bytePar::<  (#  do 1->xS #);
+                          shortPar::<  (#  do 2->xS #);
+                          longPar::<  (#  do 4->xS #);
+                          
+                       #);
+                   common.varPtnPascalXpar->addPl;
+                   nS*256+xS->pSize[top];
+                   univProcInfo->pascExtProcInfo
+               if);
+               LC+1->LC
+            #)
+       #)
+#)  
+
+-- ExternalCallInitExitType: Descriptor --
+(# 
+do (* find posible exit-parameter *)
+   (desc[],false)
+     ->sematt.ScanCNX
+       (#
+          bytePar::<  (# do common.byteXpar -> exitType #);
+          shortPar::<  (# do common.shortXpar -> exitType #);
+          longPar::<  (# do common.longXpar -> exitType #);
+          int64Par:: (# do common.int64Xpar -> exitType #);
+          textpar::<  
+            (#  
+            do (if isWtext then 
+                   common.wtextXpar->exitType 
+                else
+                   common.textXpar->exitType 
+               if)
+            #);
+          repPar::<  (# do common.repetitionXpar -> exitType #);
+          refObjectPar::< 
+            (# 
+            do common.cStructXpar -> exitType;
+               (if theDesc->sematt.descKind
+                // sematt.dataKind then common.dataXpar ->exitType
+                // sematt.comKind then common.comObjectXpar -> exitType
+               if);               
+            #);
+          partObjectPar:: 
+            (# 
+            do (if theDesc->sematt.descKind
+                // sematt.dataKind then common.dataXpartPar ->exitType;
+                // sematt.comKind then common.comObjectXpar -> exitType
+                else
+                   'ExternalExit:unknownExitPartObjectType'->thisTranslate.systemException
+               if);
+               theDesc.size -> exitDescSize
+            #);  
+          doublePar::<  (# do 7->exitType #)
+       #);
+#)  
+
+-- ExternalCallTransferObject: DoPart --
+do (*301->trace 
+   (# do 'TransFerObject:transNow= '->xT; transNow->xB; 
+      theES[]->xA; mch.dumpreg 
+    #);*)
+   (*&ASTindex[] -> ES[]; EV->ES;*)
+   (* remove this comment:
+    * EV is saved to get offset of virtual
+    * in externalCallCall and to pass
+    * object ref at the same place; the call
+    * of TransferObject in callCall makes another
+    * save of EV/ES, which is unnecessary!
+    *)       
+   (if transNow then
+       (# A: ^mch.address
+       do (* here if sparc, etc.  *)
+          objectReg.alloc;
+          ((gen.thisRegAdr,thisDesc[],theES[],thisSuperChain)
+            -> genOrgAdr->A[],objectReg[])
+            -> mch.gLea;
+          objectReg[]->mch.pushClong;
+          A.freeAdr
+       #)
+    else
+       (* here if Intel,transfer is delayed to be last parameter *) 
+       (*objectReg.alloc;*)
+   if)
+
+-- ExternalCallDo: DoPart --
+do (if stest then
+         301->cTrace
+       (#
+       do 'Calling cproc: '->xT; externalName[]->xT;
+          (if extType
+           // sematt.cExt then ' cCall'->xT
+           // semAtt.pascExt then ' pascCall'->xT
+           // semAtt.pascTrapExt then ' PascalTrap'->xT
+           // semAtt.cCallBackExt then ' cCallBack'->xT
+           // semAtt.pascCallBackExt then ' pascCallBack'->xT
+           // semAtt.stdExt then ' stdCall'->xT
+           // semAtt.stdCallBackExt then ' stdCallBack'->xT
+           else ' otherCall'->xT
+   if)#)if);
+   
+   (if extType
+    // semAtt.cCallBackExt // semAtt.pascCallBackExt // semAtt.stdCallBackExt
+    then
+       '\n\n***** Error: An external call-back routine'
+       ' cannot be called in Beta code.\n'
+       '      Name of external pattern: "'
+         -> messageStream.puttext;
+       externalName[] -> messageStream.putText;
+       '"\n' -> messagestream.puttext
+   if);
+   desc[]->sematt.descSonsRef->(p[],m[],a[],enterP[],doP[],exitP[]);
+   InitPl;
+   (if desc[] <> none then (* NONE should be asmExt *) initExitType if);
+   (*306->trace(#do '-noOfPar;'->xT; BC+SC+LC->xI; #);*)
+   (extType,BC+SC+LC)->mch.initExternalCall;
+   (if not common.switch[29] then
+       mch.getRegForXres->(max,dummyMax);
+       mch.saveHeapTop;
+       (if hasTextPar and
+       ((mch.externalLevel = 1) (*or not common.switch[62]*) ) then
+       (* apparently externalLevel is not counted correctly if 62 is false *)
+           protectCallReg
+             (# 
+             do 0->mch.initPrimCall; 'CinitT'->mch.callprim; 0->mch.getPrimRes
+             #)
+       if);
+       
+   if);
+   L: (* allocatespace for a possibe returns struct value *)
+     (# 
+     do (if common.targetMachineId
+         // common.nti_gnu 
+         // common.nti_ms then
+            (if exitDescSize // 4 // 8 then leave L
+        if)if);
+        (exitType,exitDescSize) -> mch.allocExternalResult
+     #);
+
+   (if (extType = semAtt.virtExt) then  
+       (* 301->trace(#do 'callDo:transferObject'->xT; mch.dumpreg #);*)
+       (theES,extType->mch.xParForward) -> transferObject;
+   if);
+     
+
+-- genCallBack: Descriptor --
+(# EH: @EValHandler; (* ugly *) 
+do
+   (if nameId[] = NONE then 
+       'Dynamic' -> nameID[]
+    else
+       (if nameID.length = 0 then
+           'Dynamic' -> nameID
+   if)if);
+   (if stest then
+       308 -> cTrace
+       (#
+       do 'CallBack pattern: ' -> xT; nameId[] -> xT; xN;
+          thisDesc[] -> xA
+   #)if);
+   (none (*EV[]*) ,nameId[],thisDesc[],0 (*isVirt*) )
+     ->sematt.cProcDecoder
+       (#
+          CP: @EH.ExternalCall;
+          nScan: @|EH.scanNadr;
+          xScan: @|EH.scanXadr;
+          W: ^EH.EvVal;
+          XV: ^EH.evVal;
+          A: ^mch.address;
+          SP: @mch.stackOff;
+          dr: @mch.DataRegOperand
+       do
+          (if extKind
+           // sematt.cCallBackExt // semAtt.PascCallBackExt
+           // semAtt.StdCallbackExt then
+              callId[]->externalEntryLab[];
+              &GenObj;
+              (* normal code generation *)
+              (* pop Enter-part *)
+              extKind->CP.extType;
+              (* more hacking!! *)
+              thisDesc[]->CP.desc[];
+              (* needed by initPL and initExitType *)
+              CP.InitPL;
+
+              CP.InitExitType;
+              (* exittype needed by b2c for Pascal callback *)
+              (* Entrypoint *)
+              (callId[],thisDescNo,thisForm[],extKind,CP.BC+CP.SC+CP.LC,
+              CP.exitType)->mch.externalEntry;
+              
+              (if switch181 then
+                  (if mch.callRegBusy then
+                      '\***genExternal:callBack:callReg busy!'->putline
+                  if);
+                  mch.getCallReg
+              if);              
+              gen.callRegAdr->A[];
+              thisDesc[]->A.bAdr.localDesc[];
+              (extKind,CP.BC,CP.SC,CP.LC)->mch.initXpar;
+              AsgToN:
+                (if ((thisDesc[],A[],0,ThisSuperChain,true)->nScan) then
+                  (if (true->CP.getEnterP)
+                   // 1 (* byte *) then
+                      dr.alloc;
+                      (if extKind
+                       // sematt.cCallBackExt // semAtt.stdCallBackExt then
+                          dr[]->mch.getXlong
+                       else
+                          dr[]->mch.getXbyte
+                      if);
+                      (dr,false,false,false)->EH.mkComputedEvVal->W[];
+                      W[]->nScan.asgToNelm
+                   // 2 (* word *) then
+                      dr.alloc;
+                      (if extKind
+                       // sematt.cCallBackExt // semAtt.stdCallBackExt then
+                          dr[]->mch.getXlong
+                       else
+                          dr[]->mch.getXword
+                      if);
+                      (dr,false,false,false)->EH.mkComputedEvVal->W[];
+                      W[]->nScan.asgToNelm
+                   // 3 (* long *) then
+                      dr.alloc;
+                      dr[]->mch.getXlong;
+                      (dr,false,false,false)->EH.mkComputedEvVal->W[];
+                      W[]->nScan.asgToNelm
+                   // 4 (* text *) then
+                      (# W1: ^EH.evVal; EH: @evalhandler
+                      do dr.alloc;
+                         dr[]->mch.getXlong; 
+                         (if common.switch[120] then
+                             dr->EH.ExternalTextVal2 -> W1[];
+                          else
+                             (if common.switch[61] then
+                                 ('',dr[],true) -> EH.mkTxtCstEvVal2 -> W1[]
+                              else
+                                 dr->gen.copyCtext->EH.ExternaltextVal->W1[];
+                                 (*OBS! Only necessary for SPARC*)
+                                 (mch.thisRegOp[],mch.callRegOp[])->mch.cpReg;
+                                 
+                             if)
+                         if);
+                         W1[]->nScan.asgToNelm
+                      #)
+                   // 5 (* rep *) then
+                      cError (#  do 'Enter call-back: general rep'->xT #)
+                   // 6 (* cStruc *) then
+                      cError (#  do 'Enter call-back: cStruc'->xT #)
+                   // 7 (* double *) then
+                      cError (#  do 'Enter call-back: double'->xT #)
+                  if);
+                  restart asgToN
+              if);
+              (* exe do-part *)
+              (# topDesc,PD: @ASTindex;
+                 topDescNo: @integer;
+                 topFormId: ^text;
+              do thisDesc->topDesc;
+                 L:
+                   (# 
+                   do
+                      topDesc.son->PD;
+                      (if PD.label
+                       // gram.prefix then
+                          PD.son->&sematt.QuaDesc->PD;
+                          (if (PD->sematt.CprocDesc.equal)
+                           // false then PD->topDesc; restart L
+                          if)
+                      if)
+                   #);
+                 topDesc.descId->(topFormId[],topDescNo);
+                 (if common.switch[61] then
+                     (4->mch.newCstOp,mch.thisRegOp[])->mch.ldCst;
+                     mch.ExternalMark;
+                     
+                 if);
+                 ('M',topDesc[],0)->callEntry
+              #);
+              (* (if not b2c then CP.InitExitType if);*)
+              (if CP.exitType <> 0 then
+                  (if extKind (* is always one of the following? *)
+                   // sematt.cCallBackExt // sematt.pascCallBackExt
+                   // semAtt.stdCallBackExt then
+                      (thisDesc[],A[],0,ThisSuperChain)->xScan;
+                      xScan.getExitVal->XV[];
+                      (if common.switch[120] then
+                          XV.toDataRegA; (* toDataRegA is ONLY
+                                          * used for return a value
+                                          * form a callback.
+                                          * Should be renamed 'toXres'
+                                          *)
+                       else
+                          XV.toDataRegA;
+                          0->mch.toXres
+                      if)
+                  if)
+              if);
+              mch.ExternalReturn
+          if);
+          
+       #);
+   
+#)  
+
+-- PrimitiveCallCall: DoPart --
+do (# dr: @mch.dataRegOperand; strucRef: @boolean; pDest: ^mch.mOperand
+   do (if isThisS then
+          1->mch.thisRegOp.toPrimDest;
+          (2,0)->mch.SPtoPrimReg;
+          T->mch.callPrim;
+          1->mch.getPrimRes->dr;
+          mch.restoreReg;
+          (*OBS! Explicit test for ThisS. In general there is a problem
+           * with TOS-operations returning references
+           *)
+          (# ar: @mch.adrRegOperand
+          do
+             ar.alloc;
+             (dr[],ar[])->mch.cpReg;
+             (*dr.deAlloc;*)
+             (ar,false,none ,none )->mkComputedRefEvVal
+               ->V[] (* here we dont know the sourceEV! *)
+          #)
+       else
+          T->mch.callPrim;
+          (*dr.alloc;*)
+          1->mch.getPrimRes->dr;
+          (if common.switch[120] then
+              '\n***PrimitiveCallCall::OBS!'
+              'primreg used in computedVal'->putline
+          if);
+          (* Note: it is assumed that a primCall returns a value*)
+          mch.restoreReg;
+          (dr,false,false,false)->mkComputedEvVal->V[]
+      if);
+      mch.cNest - 1 -> mch.cNest (* A BLODY HACK!
+                                  * cNest is incremented by PrimitiveCall below
+                                  *)
+   #)  
+   
+-- PrimitiveCall: DoPart --
+do
+   (if 'ThisS'->T.equal->isThisS then
+       2->mch.initPrimcall
+    else
+       noOfPar->mch.initPrimCall
+   if);
+   mch.saveReg;
+   mch.saveHeapTop;
+     
+

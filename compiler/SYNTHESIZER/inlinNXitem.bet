@@ -1,0 +1,215 @@
+ORIGIN 'evlib';
+LIB_ITEM 'betacodegen';
+INCLUDE '../GENERATOR/registerContent';
+INCLUDE 'auxlib'
+(* 7/4/96: Origin computation
+ * An exit list in an inlineNX may refer to global variables as in
+ *    a: @integer;
+ *    foo: (# x: @integer enter x exit x+a #)
+ * The base addres for computing "x+a" denotes the origin of foo;
+ * to attribute isOrigin of an address indicates that the address is
+ * actually the origin of an object; if "A.isOrigin" is true, then
+ *    on -> A.goOrigin -> A1[]
+ * then on is decreased by one in goOrigin.
+ * In gdbody it is tested if "on < 0". This is apparenlty NOT used anymore
+ * and should be deleted.
+ * 
+ * For recursive inlineNXs as in
+ *     addI: formatR(#exit 0x7c000000 -> X #)
+ * the above mechanism does NOT seem to work, since X has origin
+ * in formatR, setSuperDesc fails.
+ * 
+ * For insertable descriptors of the form (#do ... #), the attribute
+ * "insertable" of a descriptor node is used. "insertable" is used 
+ * test in e.g. searchbody:find, if on should NOT be incremented by one
+ * when searching for a declaration.
+ * 
+ * A better solution for both cases may be to always increment on;
+ * in goOrigin it is tested if the descriptor isinlineNX or insertable
+ * in which case, code to follow origin is NOT generated.
+ *)
+---mkInlineItemEval:dopart---
+do (# W: @InlineNXItem; EVx: @ASTindex
+   do lEv.son->EVx;
+      EVx[]->W.lEv[];
+      lDesc[]->W.lDesc[]; 
+      lA[]->W.lA[]; 
+      (*  (lChain[],lDesc)->DH.theDesc->(D,MN,lChain[],isV);*)
+      lChain[]->W.lChain[];
+      (*callingDesc[] -> W.callingDesc[];*)
+      (* The computation of callingDesc MUST be thoroughly tested!
+       * EncDesc bypasses insertable descriptors, and stops at do-parts, etc
+       *)
+      lEV[] -> sematt.EncDesc -> W.callingDesc[];
+      W[]->V[]
+   #)
+---evalLib:attributes---
+(*
+ * foo: (# a,b,c: @integer
+ *      enter(a,b,c)
+ *      exit a*b+a*c
+ *      #)
+ * ....
+ * (e1,e2,e3)->foo->V
+ * 
+ * e1 ->d0
+ * e2 ->d1
+ * e3 ->d2          - hvad sker hvis vi lober toer for data-registre?
+ * origin(foo)->a1  - not needed in this example
+ * d0*d1 -> d3
+ * d0*d2 -> d4
+ * d3 + d4 -> d3
+ * d3 ->V
+ * 
+ * bar: (# inx: @integer enter inx exit R.T[inx+4] #)
+ * 
+ * e -> bar -> V
+ * e -> d0;
+ * origin(bar) -> a1
+ * R.T[d0+4]->V          - origin needed here
+ * 
+ * We can evaluate enter parameters lazily - 2 baseAdrs must be kept;
+ * one for enter and one for exit;
+ * 
+ * Best approach so far: assign enter parameters to registers;
+ * enter parameters MUST be simple variables (or references);
+ * an object keeps track of variables assigned to data-registers; 
+ * In evbody:: simple, reval, etc, it is checked if the variable
+ * is already in a data register, in which case a computedEval is returned;
+ * 
+ * Origin of elements in exit-part must be decremented by 1 if > 0
+ * 
+ * Problem: we may run out of registers:
+ * - adapt logical registermodel as for ix86
+ * - how easy will this be to introduce in general?
+ * - a loadOps may be needed before each machine-op
+ *)
+InlineNXitem: EvVal
+  (#
+     newDataRegToN:
+       (* allocate new dataReg *)
+       (#
+       do CheckRanges;
+          (if stest then 195->trace(#do 'NewDataReg:'->xT; top->xI #)if);
+          &mch.dataRegOperand[]->Neval[top][];
+          Neval[top].alloc;
+          false->isConst[top];
+       exit Neval[top][]
+       #);
+     dataRegToN:
+       (# dr: ^mch.dataRegOperand
+       enter dr[]
+       do CheckRanges;
+          (if stest then 195->trace(#do 'DataReg:'->xT; top->xI #)if);
+          dr[]->Neval[top][];
+          false->isConst[top];
+       #);
+     newConstToN:
+       (# C: @integer
+       enter C
+       do CheckRanges;
+          (if stest then 195->trace(#do 'Const:'->xT; top->xI; C->xI #)if);
+          C->const[top];
+          true->isConst[top];
+       #);
+     CheckRanges:
+       (#
+       do (if (top+1->top) > Neval.range then 
+              Neval.range->Neval.extend;
+              const.range->const.extend;
+              isConst.range->isConst.extend;
+          if);
+       #);
+     eval:
+       (* assign enter-parameters to dataregisters;
+        * evaluate exit-part;
+        * return computedEvVal
+        *)
+       (# NS,XS: @ | sematt.NXScanner;
+          rchain,chain1: ^DH.superChain;
+          ev: ^ASTindex;
+          pl: @integer;
+          cEv: ^evVal;
+          OA: ^ mch.address;
+          EH: @evalHandler;
+          callRegOnStack: @boolean
+       enter rchain[]
+       do (if stest then
+              195->trace
+              (#do 'InliningNX:'->xT; lEv[]->xA; lDesc[]->xA; 
+                 callingDesc[]->xA;
+                 lA.bAdr.localDesc[]->xA #)
+          if);
+          'InlineNX'->mch.comment; lEv[]->gen.comment;
+          (lDesc[],true,lChain[]) -> NS;
+          (for i: NS.length repeat
+               i->NS.getNXelm->(ev[],pl,chain1[]);
+               (if isConst[i] then
+                   (ev[],const[i])->theGen.regCont.assignAsConst
+                else
+                   (ev[],Neval[i][])->theGen.regCont.assignAsReg
+               if)
+          for);
+
+          (lDesc[],false,lChain[]) -> XS;
+          (if XS.length = 1 then
+              (* 0 or 1 exit-element; 0 is a degenerated case like
+               * foo: (# a,b,c: @integer enter(a,b,c) #)
+               * but it may appear
+               *)
+              AllocCallReg->callRegOnStack;
+              (lA[],callingDesc[],lEv[],rChain[])->genOrgAdr->OA[];
+              OA.tocallReg;
+              (* NOTE: OA is NOT the address of lDesc, but of the origin of
+               * lDesc; this should ONLY be relevant when OA.goOrigin is
+               * computed; in this case goOrigin should skip lDesc without
+               * generating code
+               *)
+              lDesc[] -> OA.bAdr.localDesc[];
+              
+              1->XS.getNXelm->(ev[],pl,chain1[]);
+              (OA[],ev[],false,chain1[])->EH.expEval->cEv[];
+              theGen.regCont.release;
+              callRegOnStack->popCall;
+           else
+              (if XS.length <> 0 then 
+                  'inlineNX:eval:length>0:'-> thisTranslate.systemException 
+              if);
+              this(inlineNXitem)[]->cEv[]
+          if)
+       exit cEv[]
+       #);
+
+     lEv,               (* an evaluation denoting a pattern P *)
+     lDesc,             (* lDesc is the descriptor of P; 
+                         * P consists of an enter and/or an exit list;
+                         * P may be a subpattern
+                         *)
+     callingDesc: ^ASTindex; (* The descriptor where lEv appears *)
+     lA: ^mch.address;
+     lChain: ^DH.superChain;
+     Neval: [4] ^ mch.dataRegOperand;
+     const: [4] @integer;
+     isConst: [4] @boolean;
+     top: @integer;
+  #);
+(* list 
+asgToInlineNX::
+  (#
+  enter inlNX[]
+  do scanList
+     (# ev: @ASTindex
+     do current->ev;
+        ev[]->eval->V[];
+        inlNX[]->V.asgToInLineNX
+     #)
+  #);
+
+( * computedEvVal
+asgToInLineNX:
+  (#
+  enter inlNX[]
+  do dr[]->inlNX.dataRegToN;
+  #)
+ *)
+        

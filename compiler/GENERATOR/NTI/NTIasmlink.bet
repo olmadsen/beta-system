@@ -1,0 +1,620 @@
+ORIGIN '../asmlinkbody';
+INCLUDE '~beta/sysutils/cstring';
+--asmState:descriptor--
+(# (*Put local variables here*)
+   rspObjName: @Text;
+   rspResName: @Text;
+   rspLibName: @Text;
+   curDir: @Text; (* Holds prev. dir. changed to (i.e. current dir) *)
+   changedDisk: @boolean;
+#)
+--HasSharedLibs:descriptor--
+(# do false -> value #)
+--asmlinklib: attributes ---
+AppendExe:
+  (# objname: ^text;
+     olen: @integer;
+     ExeExt: ^text;
+  enter objname[]
+  do (* test for .exe extension *)
+     objname.length -> olen;
+     asmlink.ExeExt -> ExeExt[];
+     (if ((olen-ExeExt.length+1,olen)->objname.sub->ExeExt.equalNCS) then
+         (* .exe extension already present *)
+      else
+         asmlink.ExeExt->objName.copyAppend->objname[]; 
+     if);
+  exit objname[]
+  #);
+smartChDir:
+  (# path: ^Text;
+     dest: ^Stream;
+     newPath: ^Text;
+     pathslash: @text;
+  enter (dest[],path[])
+  do (* Only emit 'cd path' if not already in that directory. *)
+     (if not (path[]->asmState.curDir.equalNcs) then
+         path->pathslash; '\\'->pathslash.put;
+         pathslash[]->smartPath->newPath[];
+         (newPath.length,newPath.length)->newPath.delete;
+         (* Check if not on same drive *)
+         (if newPath.length > 1 then
+             (if (2->newPath.inxget) = ':' then
+                 (1,2)->newPath.sub->dest.putLine;
+                 true->asmState.changedDisk;
+             if)
+         if);
+         'cd '->dest.putText;
+         newpath[]->dest.putline;
+         path->asmState.curDir;
+     if)
+  #);
+smartPath:
+  (# newPath: ^Text;
+     oldPath: @Text;
+  enter newpath[]
+  do (* newPath->oldPath;
+      * (oldPath[], asmState.curDir[])->thePathHandler.localPath->newPath[];
+      * (if newPath.length > oldPath.length then
+      *     oldPath[]->newPath[]
+      *  else
+      *     '/'->newPath.findCh(# do ('\\', inx)->newPath.inxput #)
+      * if)
+      *)
+  exit newPath[]
+  #);
+isBorland:
+  (# exit common.sdk=2 #);
+isMicrosoft:
+  (# exit common.sdk=1 #);
+---cont: descriptor --
+(# do '\\'->Aff.put; aff.newLine; ascii.ht->aff.put; #)
+---header: descriptor ---
+(# rspObjEntry: @DiskEntry;
+do '@echo off\n'->AFF.putText;
+   (if isBorland then
+       thePathHandler.currentDirectory->asmState.curDir.putText;
+   if);
+   ((objName[],thePathhandler.currentDirectory)
+     ->thePathHandler.convertFilePath).copy -> rspObjEntry.path;
+   
+   asmState.rspObjName.clear;
+   '$(TMPDIR)'->expandEnvVar
+   (# defaultValue::
+        (#
+        do '$(TEMP)' ->expandEnvVar
+           (# defaultValue::
+                (#
+                do '$(TMP)'->expandEnvVar
+                   (# defaultValue::
+                        (# t: @text;
+                        do rspObjEntry.path.head -> t.putText;
+                           '\\'                   -> t.put;
+                           TargetMachine       -> t.putText;
+                           '\\'                   -> t.put;
+                           common.sdk.name[]     -> t.putText;
+                           t[]->envvarvalue[];
+                        #)
+                   #) -> envvarvalue[];
+                #)
+           #) -> envvarvalue[]
+        #)
+   #) -> asmState.rspObjName.putText;
+
+   (if (asmState.rspObjName.length->asmState.rspObjName.inxGet) <> '\\' then
+      '\\' -> asmState.rspObjName.put;
+   if);
+   '/'->asmState.rspObjName.findCh
+     (# do ('\\', inx)->asmState.rspObjName.inxput #);
+   rspObjEntry.path.name -> asmState.rspObjName.putText;
+   
+   
+   (if isBorland then
+       asmState.rspObjName->asmState.rspLibName;
+       '.rl'->asmState.rspLibName.append;
+       (true,asmState.rspLibName[])->remove;
+       
+       asmState.rspObjName->asmState.rspResName;
+       '.rr'->asmState.rspResName.append;
+       (true,asmState.rspResName[])->remove;
+       
+       '.ro'->asmState.rspObjName.append;
+       (true,asmState.rspObjName[])->remove;
+    else
+       '.rsp'->asmState.rspObjName.append;
+       (true,asmState.rspObjName[])->remove;
+   if);
+#)
+---AsmExt: descriptor ---
+(# do '.asm'->ext #) 
+---BinExt: descriptor ---
+(# do '.obj'->ext #)
+---LibExt: descriptor ---
+(# do '.lib'->ext #)
+---JobExt: descriptor ---
+(# do '.bat'->ext #)
+---ExeExt: descriptor ---
+(# do '.exe'->ext #)
+---Echo: descriptor ---
+(# do 'echo '->AFF.puttext #)
+---Remove: descriptor ---
+(#
+do (if check//true then
+       'if exist "'->AFF.putText; name[]->AFF.putText; '" '->AFF.putText
+   if);
+   'del "'->AFF.putText; name[]->AFF.putText; '" >nul'->AFF.putLine;
+#)
+---ChangeDirectory:doPart---
+do (if (dir.lgth>1) and (dir.T[2]=':') then
+       (* change drive *)
+       dir.T[1]->AFF.put; ':' -> AFF.put; AFF.newline;
+   if);
+   'cd '->AFF.puttext; dir[] -> AFF.putline
+---AddCommand:doPart---
+do cmd[] -> AFF.putline;
+   'if errorlevel 1 goto builderror' -> AFF.putLine;
+---Make: descriptor ---
+(# makename: ^text;
+   sepinx: @integer;
+   newDir: @Text;
+do (if isBorland then
+       0->sepinx; '\\'->m.findCh(# do inx->sepinx #);
+       (if sepinx
+        // 0 then
+           m[]->makename[];
+        // 1 then
+           (AFF[],'\\')->smartChDir;
+           (2,m.Length)->m.Sub->makename[];
+        else
+           (AFF[],(1,sepinx-1)->m.Sub)->smartChDir;
+           (sepinx+1,m.Length)->m.Sub->makename[];
+       if);
+       'make -q -s -DWIN32 -f'->AFF.putText; makename[]->AFF.putText;
+       (if switch[12] then ' -B'->AFF.putText if);
+       ' -DSRCDIR=. -DASM_VERSION=4'->AFF.putText;
+       ' -DMACHINETYPE='->AFF.putText; TargetMachine->AFF.putText;
+       ' -DSDK='->AFF.putText; common.sdk.name[]->AFF.puttext;
+       ' >nul' -> AFF.putline;
+       (if verboselevel<verboseLevel.nothing then
+           'if errorlevel 1 echo Make '->AFF.putText; m[]->AFF.putLine;
+       if);
+       'if errorlevel 1 make -s -DWIN32 -f'->AFF.putText; makename[]->AFF.putText;
+       (if switch[12] then ' -B'->AFF.putText if);
+       ' -DSRCDIR=. -DASM_VERSION=4'->AFF.putText;
+       ' -DMACHINETYPE='->AFF.putText; TargetMachine->AFF.putText;
+       ' -DSDK='->AFF.putText; common.sdk.name[]->AFF.putLine;
+    else
+       0->sepinx; '\\'->m.findCh(# do inx->sepinx #);
+       (if sepinx
+        // 0 then
+           '.'->makename[];
+        // 1 then
+           '\\'->makename[];
+        else
+           (1,sepinx-1)->m.Sub->makename[];
+       if);
+       'nmake -nologo -q -s "-f'->AFF.putText; m[]->AFF.putText; '"'->AFF.put;
+       (if switch[12] then ' -A'->AFF.putText if);
+       ' "SRCDIR='->AFF.putText; makename[]->AFF.putText; '"'->AFF.put;
+       (if common.sdk.masm6 then
+           ' ASM_VERSION=6'->AFF.puttext;
+        else
+           ' ASM_VERSION=386'->AFF.puttext;
+       if);
+       ' MACHINETYPE='->AFF.putText; TargetMachine->AFF.putText;
+       ' SDK='->AFF.putText; common.sdk.name[]->AFF.putLine;
+       (if verboselevel<verboseLevel.nothing then
+           'if errorlevel 1 echo Make '->AFF.putText; m[]->AFF.putLine;
+       if);
+       'if errorlevel 1 nmake -nologo -s "-f'->AFF.putText;
+       m[]->AFF.putText; '"'->AFF.put;
+       (if switch[12] then ' -A'->AFF.putText if);
+       ' "SRCDIR='->AFF.putText; makename[]->AFF.putText; '"'->AFF.put;
+       (if common.sdk.masm6 then
+           ' ASM_VERSION=6'->AFF.puttext;
+        else
+           ' ASM_VERSION=386'->AFF.puttext;
+       if);
+       ' MACHINETYPE='->AFF.putText; TargetMachine->AFF.putText;
+       ' SDK='->AFF.putText; common.sdk.name[]->AFF.putLine;
+   if);
+   'if errorlevel 1 goto makeerror'->AFF.putLine;
+#)
+---resource: descriptor ---
+(# rcpath,rcname,resname: ^text;
+   sepinx: @integer;
+   rcentry, resentry: @diskentry;
+   compile: @boolean;
+   sep: ^text;
+   pathWithSep: ^text;
+   dir: @directory;
+   resdir,t: @text;
+do (* FIXME: Support for multiple resource files (Sdk=ms).
+    * Do this by using #include in a tmp file.
+    *)
+   0->sepinx; '\\'->m.findCh(# do inx->sepinx #);
+   (if sepinx
+    // 0 then
+       ''->rcpath[];
+       ''->sep[];
+       m[]->rcname[];
+    // 1 then
+       '\\'->rcpath[];
+       ''->sep[];
+       ((2,m.Length)->m.Sub)->rcname[];
+    else
+       ((1,sepinx-1)->m.Sub)->rcpath[];
+       '\\'->sep[];
+       ((sepinx+1,m.Length)->m.Sub)->rcname[];
+   if);
+   (* Now rcpath is the path of the .rc file. The rcname variable is the
+    * name of the .rc file without path.
+    *)
+   0->sepinx; '.'->rcname.findCh(# do inx->sepinx #);
+   (if sepinx>0 then
+       'res'-> (((1,sepinx)->rcname.Sub).copy).Append->resname[];
+    else
+       '.res'-> (m.copy).Append->resname[]
+   if);
+   (* Create directories *)
+   rcpath[]->dir.name;
+   (* OLM: 7.5.98:
+    * TargetMachine is now a patter in system.bet compiler:;
+    * Perhaps T can just be declared as t: ^text, but I cannot
+    * see if this is possible!
+    * The change is NOT tested!
+    *)
+   (# t1: ^ text do targetMachine -> t1[]; T1 ->t #);
+   t[]->dir.createDir(# exists::(# do true->continue #) #);
+
+   (* t is 'nti' *)
+   '\\' -> t.prepend;
+   (* t is '\nti' *)
+   t[] -> (rcpath.copy).append -> dir.name;
+   common.sdk.name->t;
+   t[]->dir.createDir(# exists::(# do true->continue #) #);
+
+   '\\'->resname.prepend;
+   common.sdk.name[]->resname.prepend;
+   '\\'->resname.prepend;
+   TargetMachine->resname.prepend;
+   (* resname is now the name of the .res file relative to rcpath
+    * i.e. nti\sdk\foo.res if the previous line was enabled.
+    *)
+   (* Check if rcname contains the name of a .res file. If so, do NOT
+    * try to compile it. Simply add it to the .response file. sepinx
+    * still contains the index of the '.' in rcname.
+    *)
+   (if 'res'->((sepinx+1,rcname.length)->rcname.sub).equalNCS then
+       (if isBorland then
+           echo;
+           rcpath[]->AFF.putText; sep[]->AFF.putText; rcname[]->AFF.putText;
+           ' +>>'->AFF.putText; asmState.rspResName[]->smartPath->AFF.putLine;
+        else
+           echo;
+           rcpath[]->AFF.putText; sep[]->AFF.putText; rcname[]->AFF.putText;
+           '>>'->AFF.putText; asmState.rspObjName[]->AFF.putLine;
+       if)
+    else
+       (* Check if it is necessary to actually resource compile the file *)
+       (if switch[12] then
+           true->compile;
+        else
+           sep[]-> (rcpath.copy).append->pathWithSep[];
+           resname[]-> (pathWithSep.copy).append->resentry.path;
+           (if not resentry.exists then
+               true->compile;
+            else
+               rcname[]-> (pathWithSep.copy).append->rcentry.path;
+               (rcentry.modtime>resentry.modtime)->compile;
+       if) if);
+       (if isBorland then
+           (if compile then
+               (AFF[],rcpath[])->smartChDir;
+               'brcc32 -dMACHINETYPE='->AFF.putText;
+               TargetMachine->AFF.putText;
+               ' -fo'->AFF.putText; resname[]->AFF.putText;
+               ' '->AFF.put; rcname[]->AFF.putLine;
+               'if errorlevel 1 goto reserror'->AFF.putLine;
+           if);
+           echo; rcpath[]->AFF.putText; sep[]->AFF.putText;
+           resname[]->AFF.putText;
+           ' +>>'->AFF.putText; asmState.rspResName[]->smartPath->AFF.putLine;
+        else
+           (if compile then
+               'rc /dMACHINETYPE='->AFF.putText;
+               TargetMachine->AFF.putText;
+               ' "/i'->AFF.putText; rcpath[]->AFF.putText;
+               '" "/fo'->AFF.putText; rcpath[]->AFF.putText;
+               sep[]->AFF.putText; resname[]->AFF.putText;
+               '" "'->AFF.putText; rcpath[]->AFF.putText;
+               sep[]->AFF.putText; rcname[]->AFF.putText; '"'->AFF.putLine;
+               'if errorlevel 1 goto reserror'->AFF.putLine;
+           if);
+           echo; '"'->AFF.put; rcpath[]->AFF.putText; sep[]->AFF.putText;
+           resname[]->AFF.putText;
+           '">>'->AFF.putText; asmState.rspObjName[]->AFF.putLine;
+       if);
+   if)
+#)
+---assemble: descriptor ---
+(# asmname,asmpath,shortName: ^text;
+   sepinx: @integer;
+do
+   (* MASM6.11 will echo automatically *)
+   (if verboseLevel<=verboseLevel.actions then
+       (if isBorland or (not common.sdk.masm6) then
+           Echo; 'Assembling '->AFF.putText;
+           F[]->AFF.putText; AsmExt->AFF.putLine;
+       if)
+   if);
+   (if isBorland then
+       (* This next part assumes that the extension of assembler
+        * files are .asm and the extension of object files are .obj
+        * and thus the same length.  A hack has been introduced for
+        * assembler files whose name is longer than 79 characters (75
+        * without the extension) because TASM32 vomits if either is 80
+        * characters or longer.  We could actually always take the
+        * safe approach and do a smartChDir to the directory of the
+        * assembler file. But the name of the assembler file is put
+        * into the objectfile. Not the full path but the name that
+        * tasm32 is asked to asssemble. That is the reason why we wish
+        * to have the full path if possible. When (or if) tasm32 ever
+        * gets to work properly, simply use F in place of asmname and
+        * remove the following lines up to and including then if)
+        * matching (if F.length...
+        *)
+       F[]->asmname[];
+       (if F.length > 75 then (* tasm32 bugs *)
+           0->sepinx; '\\'->F.findCh(# do inx->sepinx #);
+           (if sepinx>1//true then
+               (AFF[],(1,sepinx-1)->F.Sub)->smartChDir;
+               (sepinx+1,F.Length)->F.Sub->asmname[];
+           if);
+       if);
+       'tasm32 -t -w-res -m -ml -kh32768 '->AFF.putText;
+       (if switch[13] then
+           '-Zd ' -> AFF.putText;
+       if);
+       asmname[]->AFF.putText; AsmExt->AFF.putText; ','->AFF.put;
+       asmname[]->AFF.putText; BinExt->AFF.putLine;
+       'if errorlevel 1 goto asmerror'->AFF.putLine;
+       (if switch[18] // false then (* remove .asm-file *)
+           (false,AsmExt-> (asmname.Copy).Append)->remove
+       if);
+    else
+       (if common.sdk.masm6 then
+           'ml /w /nologo /coff /Cp /c "/Fo'->AFF.putText;
+           F[]->AFF.putText; BinExt->AFF.putText; '" "/Ta'->AFF.putText;
+           F[]->AFF.putText; asmExt->AFF.putText; '"'->AFF.putLine;
+        else
+           (# Win32FindData: @cstring;
+              FindFirstFile: external
+                (# name,finddata,handle: @integer
+                enter (name, finddata)
+                do 'FindFirstFileA'->CallStd
+                exit handle
+                #);
+              FindClose: external
+                (# handle: @integer
+                enter handle
+                do 'FindClose'->CallStd
+                #);
+              short: @cstring;
+              long: @cstring;
+           do 320->Win32FindData.init;
+              (asmExt->(F.copy).Append->long.set,Win32FindData.charptr)
+                ->FindFirstFile->FindClose;
+              Win32FindData.charptr+304->short.charptr;
+              (if (short.get).length = 0 then
+                  Win32FindData.charptr+44->short.charptr;
+              if);
+              long.free;
+              short.get->shortName[];
+              Win32FindData.free;
+           #);
+           0->sepinx;
+           '\\'->F.findCh(# do inx->sepinx #);
+           (1,sepinx)->F.Sub->asmpath[];
+           (* F="d:\full\path\originalname"
+            * shortName="origin~1.asm"
+            * asmpath="d:\full\path\"
+            *)
+           'masm386 -w0 -t -Ml '->AFF.putText;
+           (if switch[13] then
+               '-Zd ' -> AFF.puttext;
+           if);
+           asmpath[]->AFF.putText; shortName[]->AFF.putText; ','->AFF.put;
+           F[]->AFF.putText; BinExt->AFF.putText; ';'->AFF.putLine;
+           'editbin /nologo '->AFF.putText; F[]->AFF.putText;
+           BinExt->AFF.putText; ' >nul'->AFF.putLine;
+       if);
+       'if errorlevel 1 goto asmerror'->AFF.putLine;
+       (if switch[18] // false then (* remove .asm-file *)
+           (false,AsmExt->(F.Copy).Append)->remove
+       if);
+   if);
+#)
+--linkLibraries:descriptor--
+(* to be fixed *)
+(#
+do (if switch[53]//true then 
+       Libs.scan
+       (#
+       do (if thisElm.args.length//0 then 
+           else
+              'echo linking shared lib: '->AFF.puttext; thisElm.T[]->AFF.putLine;
+              
+              'ld -dy -G \\\n\t-o '->AFF.puttext;
+              thisElm.T[]->AFF.puttext; ' '->AFF.put;
+              thisElm.args[]->AFF.putline
+          if)
+   #)if)
+#)
+--contCh:descriptor--
+(#do '+'->value #)
+--ldArgMax:descriptor--
+(#do MAXINT->value #)
+--ldTmp:descriptor--
+(#
+do 'Whoa!!!'->bugstream.putLine;
+#)
+---link: descriptor ---
+(# betaLinkOpt: ^text;
+do (if isBorland then
+       '$(BETALINKOPTIONS)'
+         ->expandEnvVar
+       (# defaultValue::<
+            (# do  '-ap -c -n -Tpe' -> envvarValue[];
+       #)#)
+         ->betaLinkOpt[];
+
+       'echo.>>'->AFF.putText; asmState.rspObjName[]->smartPath->AFF.putLine;
+       'echo.>>'->AFF.putText; asmState.rspResName[]->smartPath->AFF.putLine;
+       'echo.>>'->AFF.putText; asmState.rspLibName[]->smartPath->AFF.putLine;
+       'tlink32 '->AFF.puttext;
+       (if switch[13] then '-v -m -s'->AFF.puttext
+        else '-x'->AFF.puttext if);
+       ' -L'->AFF.puttext;
+       '$(LD_LIBRARY_PATH)'->expandEnvVar
+       (# defaultValue::<
+            (# do '.' -> envvarValue[];
+       #)#)->AFF.puttext;
+       ' '->AFF.puttext;
+       betaLinkOpt[]->AFF.putText;
+       ' c0w32.obj'->AFF.puttext; (* GUI program *)
+       ' @'->AFF.putText; asmState.rspObjName[]->smartPath->AFF.putText;
+    else
+       '$(BETALINKOPTIONS)'
+         ->expandEnvVar
+       (# defaultValue::<
+            (# BetaLib: ^Text;
+	       (* 5-1-96: datpete: removed incremental link:
+                * it prevents persistence from working.
+                *)
+            do '/NOLOGO /MACHINE:ix86 /SUBSYSTEM:CONSOLE /ENTRY:WinMainCRTStartup /INCREMENTAL:no'->envvarValue[];
+       #)#)
+         ->betaLinkOpt[];
+       
+       'echo.>>'->AFF.putText; asmState.rspObjName[]->AFF.putLine;
+       'LINK /OUT:'->AFF.puttext;
+       objName[]->AppendExe->AFF.putText;
+       (if switch[13] then
+           ' /DEBUG /DEBUGTYPE:CV /PDB:'->AFF.putText;
+           objname[]->AFF.putText; '.pdb '->AFF.putText;
+        else
+           ' '->AFF.put;
+       if);
+       betaLinkOpt[]->AFF.putText;
+       ' kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib wsock32.lib @'->AFF.putText;
+       asmState.rspObjName[]->AFF.putText; ' '->AFF.put;
+   if)
+#)
+---linkObj:descriptor ---
+(# sepinx: @integer;
+   ext: ^text;
+   unquote: @  (* Hack to make v5.2 work on borland. 16/9/96 grouleff. *)
+     (# t: ^text; l: @integer;
+     enter t[]
+     do t.length -> l;
+        (if l>2 then
+            (if (((1->t.inxget)='"') and ((l->t.inxget)='"')) then
+                (l,l) -> t.delete;
+                (1,1) -> t.delete;
+            if);
+        if);
+     exit t[]
+     #);
+do
+   (if lobj.length<>0 then
+       (if isBorland then
+           0->sepinx;
+           '.'->lobj.findCh(# do inx->sepinx #);
+           (sepinx,lobj.length)->lobj.sub->ext[];
+           (if '.lib'->ext.equalNCS then
+               (AFF[],thePathhandler.currentDirectory)->smartChDir;
+               echo; lobj[]->unquote->AFF.putText; ' +>>'->AFF.putText;
+               asmState.rspLibName[]->smartPath->AFF.putLine;
+            else
+               (AFF[],thePathhandler.currentDirectory)->smartChDir;
+               echo; lobj[]->unquote->AFF.putText; ' +>>'->AFF.putText;
+               asmState.rspObjName[]->smartPath->AFF.putLine;
+           if);
+        else
+           echo; '"'->AFF.put; lobj[]->AFF.putText; '">>'->AFF.putText;
+           asmState.rspObjName[]->AFF.putLine;
+       if);
+   if)
+#)
+---addBetaRun:descriptor---
+(# #)
+--asmlinkdynamic:descriptor--
+(# #)
+---libraries: descriptor ---
+(# betasys: @text
+do 
+   (if isBorland then
+       ','->ldA.put; objName[]->AppendExe->ldA.putText;
+       ','->ldA.put;
+       (if switch[13] then
+           objName[]->ldA.putText; '.map,'->ldA.putText
+        else
+           ','->ldA.put
+       if);
+       betaRun[]->smartPath->ldA.putText;
+       (if not userDefinedBetaRun then asmLink.libExt->ldA.putText if);
+       ' cw32.lib import32.lib @'->ldA.putText;
+       asmState.rspLibName[]->smartPath->ldA.putText;
+       ',,@'->ldA.putText; (* no .def file (,,) *)
+       asmState.rspResName[]->smartPath->ldA.putLine;
+    else
+       (if userDefinedBetaRun//true then
+           betaRun[]->ldA.putText
+        else
+           asmLink.libExt-> (betaRun.Copy).Append->ldA.putText
+       if);
+       ldA.newline;
+   if);
+   'if errorlevel 1 goto linkerror'->ldA.putLine;
+#)
+---linkTrailer: descriptor ---
+(#
+do (if verboseLevel<=verboseLevel.actions then
+       'echo Object program on file: '->AFF.putText;
+       objName[]->AppendExe->AFF.putLine;
+   if);
+#)
+---trailer: descriptor ---
+(# 
+do 'goto exit'->AFF.putLine;
+
+   ':asmerror\necho An Assembler Error Occurred.\ngoto exit'->AFF.putLine;
+
+   ':builderror\necho A BUILD Error Occurred.\ngoto exit'->AFF.putLine;
+   
+   ':makeerror\necho A Make Error Occurred.\ngoto exit'->AFF.putLine;
+
+   ':reserror\necho A Resource Compiler Error Occurred.\ngoto exit'->AFF.putLine;
+
+   ':linkerror'->AFF.putLine;
+   (true,objName[]->AppendExe)->remove;
+   'echo A Link Error Occurred\ngoto exit'->AFF.putLine;
+
+   ':exit'->AFF.putLine;
+   (* We cannot use smartChDir here because we may come here after an
+    * error in which case we could come from anywhere...
+    *)
+   (true,asmState.rspObjName[])->remove;
+   (if isBorland then
+       (true,asmState.rspResName[])->remove;
+       (true,asmState.rspLibName[])->remove;
+   if);
+   (if isBorland then
+       (if asmState.changedDisk then
+           (1,2)->(thePathhandler.currentDirectory).sub->AFF.putLine;
+       if);
+       'cd '->AFF.putText; thePathhandler.currentDirectory->AFF.putLine;
+   if);
+#)
+-- jobFilePermission: descriptor --
+(# #)

@@ -1,0 +1,3753 @@
+ORIGIN '../REALmachine';
+LIB_ITEM 'betacodegen';
+INCLUDE '../RISCmachine';
+INCLUDE '../image';
+INCLUDE 'mips';
+BODY 'MIPS_appendToBC';
+BODY  '../SGI/SGIelf'
+--machineatt:attributes---
+(*********************************************************************
+ * Register assignment:
+ * 
+ *      th               $30     s8
+ *      ca               $5      a1      2nd argument
+ *      or               $4      a0      1st external argument
+ *      a2,a3,a4         $16-18  s0-s2
+ *      d0,d1,d2,d3      $8 -12  t0-t4
+ *      dataTmp1-2       $13-14  t5-t6
+ *      adrTmp1-2        $19-20  s3-4
+ *      ca is saved in adrTmp1 during primitive calls
+ *      IOAbotReg        $21     s5
+ *      IOAusedReg       $22     s6
+ * According to the ABI: t0-t9 are NOT saved across function calls;
+ *                       s0-s8 are saved accross function calls
+ *)
+maxOff: (# exit 32767 #);
+minOff: (# exit -32768 #);
+originReg: (#exit mips_r4 #);
+refTmp: (# n: @integer (* 1,2,3*) enter n exit mips_R15 + n #);
+refTmpOp: (# ar: @adrRegOperand; n: @integer (* 1,2,3*) 
+          enter n -> refTmp ->ar.rn  exit ar[] 
+          #);
+dataTmp1: (#exit mips_r13 #);
+dataTmp2: (#exit mips_r14 #);
+adrTmp1: (#exit mips_r19 #);
+adrTmp2: (#exit mips_r20 #);
+PICcallReg: (#exit mips_R25 #); (* When calling PIC functions, r25 must 
+                                * contain the addres of the called function
+                                *)
+MaxNoOfPrimReg: (#exit 4 #);
+mips_RAop: (# ra: @adrRegOperand do mips_RA->ra exit ra[] #);
+IOAbotReg: (#exit mips_R21 #);
+IOAusedReg: (#exit mips_R22 #);
+adrTmpOp: 
+  (# n: @integer; (* 1-4 *) ar: @adrRegOperand 
+  enter n do mips_R18 + n ->ar.rn 
+  exit ar[] #);
+Log2FysRefReg:
+  (# a: @integer
+  enter a
+  exit a - 2 + mips_R16
+  #);
+BLT_macro:
+  (# R1,R2: @integer; L: ^localLab; op: ^dataRegOperand
+  enter(R1,R2,L[])
+  do dataTmp->op[];
+     (R2,R1,op.reg1)->  SLT -> mstate.b.emit;
+     (op.reg1,0, (L.labNo->mstate.labs.off) div 4) -> BNE ->mstate.b.emit
+  #);
+BLTU_macro:
+  (# R1,R2: @integer; L: ^localLab; op: ^dataRegOperand
+  enter(R1,R2,L[])
+  do dataTmp->op[];
+     (R2,R1,op.reg1)->  SLTU -> mstate.b.emit; (* R1 < R2 -> R1 *)
+     (op.reg1,0, (L.labNo->mstate.labs.off) div 4) -> BNE ->mstate.b.emit
+  #);
+BLE_macro:
+  (# R1,R2: @integer; L: ^localLab; op: ^dataRegOperand
+  enter(R1,R2,L[]) (* index <= range  => not (range < index ) *)
+  do dataTmp->op[];
+     (R1,R2,op.reg1)->  SLT -> mstate.b.emit; (*  R2 < R1 -> R1 *)
+     (op.reg1,0, (L.labNo->mstate.labs.off) div 4) -> BEQ ->mstate.b.emit
+  #);
+BLEU_macro: (* fixed like BLE_macro*)
+  (# R1,R2: @integer; L: ^localLab; op: ^dataRegOperand
+  enter(R1,R2,L[])
+  do dataTmp->op[];
+     (R1,R2,op.reg1)->  SLTU -> mstate.b.emit;
+     (op.reg1,0, (L.labNo->mstate.labs.off) div 4) -> BEQ ->mstate.b.emit
+  #);
+BGT_macro:
+  (# R1,R2: @integer; L: ^localLab; op: ^dataRegOperand
+  enter(R1,R2,L[])
+  do dataTmp->op[];
+     (R1,R2,op.reg1)->  SLT -> mstate.b.emit;
+     (op.reg1,0, (L.labNo->mstate.labs.off) div 4) -> BNE ->mstate.b.emit
+  #);
+BGTIU_macro:
+  (# R1,C: @integer; L: ^localLab; op: ^dataRegOperand
+  enter(R1,C,L[])
+  do dataTmp->op[];
+     (op.reg1,R1,C+1)->  SLTIU -> mstate.b.emit;  (* not (R1 < C+1)
+                                                 * <==>
+                                                 * R1 >= C
+                                                 *)
+     (op.reg1,0, (L.labNo->mstate.labs.off) div 4) -> BEQ ->mstate.b.emit
+  #);
+BGE_macro:
+  (# R1,R2: @integer; L: ^localLab; op: ^dataRegOperand
+  enter(R1,R2,L[])  (* R1 >=  R2   ==>  not (R1 < R2) *)
+  do dataTmp->op[];
+     (R2,R1,op.reg1)->  SLT -> mstate.b.emit;
+     (op.reg1,0, (L.labNo->mstate.labs.off) div 4) -> BEQ ->mstate.b.emit
+  #);
+CMP_FLOAT_macro:
+  (# cond: @integer; op1: ^mOperand; op2,op: ^ floatRegOp; 
+     lab: ^localLab; branchT: @boolean;
+  enter(cond,op1[],op2[],lab[])
+  do op1.loadFloatOp->op[];
+     (if cond (* IF T1 cc R then goto L *)
+      // 1 (* =  *) then
+         (op2.rn,op.rn) -> C_EQ_D -> mstate.b.emit;
+         true -> branchT
+      // 2 (* <> *) then 
+         (op2.rn,op.rn) -> C_EQ_D -> mstate.b.emit;
+      // 3 (* <  *) then 
+         (op2.rn,op.rn) -> C_LT_D -> mstate.b.emit;
+         true -> branchT
+      // 4 (* <= *) then
+         (op2.rn,op.rn) -> C_LE_D -> mstate.b.emit;
+         true -> branchT
+      // 5 (* >  *) then 
+         (op2.rn,op.rn) -> C_NGT_D -> mstate.b.emit;
+      // 6 (* >= *) then 
+         (op2.rn,op.rn) -> C_NGE_D -> mstate.b.emit;
+     if) ;
+     xNOP -> mstate.b.emit;
+     (if branchT then
+         (lab.labNo->mstate.labs.off) div 4-> BC1T -> mstate.b.emit
+      else
+         (lab.labNo->mstate.labs.off) div 4-> BC1F -> mstate.b.emit
+     if);
+  #);
+localLabText:
+  (# T: ^text;
+     labNo: @integer
+  enter labNo
+  do &text[]->T[];
+     '.L'->T;
+     labNo->T.putInt
+  exit T[]
+  #);
+(* perhaps adrTmp and dataTmp should alternate between %i5, %l6,%l7 *)
+adrTmp:
+  (# A: @adrRegOperand
+  do adrTmp1->A
+  exit A[]
+  #);
+dataTmp: 
+  (* alternates between allocating %l6 and %l7 *)
+  (# D: ^dataRegOperand 
+  do &dataRegOperand[]->D[]; 
+     (if mstate.dataTmp6 then dataTmp1->D.rN else dataTmp2->D.rN if);
+     NOT mstate.datatmp6 -> mstate.dataTmp6
+  exit D[] 
+  #);
+floatTmp:  (* to be like dataTmp *)
+  (# F: @floatRegOp
+  do (if mstate.floatTmp then 30->F.rN else 28->F.rN if);
+     NOT mstate.floatTmp -> mstate.floatTmp
+  exit F[]
+  #);
+Fmov:
+  (# f1,f2: ^floatRegOp
+  enter(f1[],f2[])
+  do (f2.rn,f1.rn)-> MOV_D  ->mstate.b.emit  
+  #);
+CstOpToReg:
+  (# op: ^mOperand; dr: ^dataRegOperand
+  enter op[]
+  do dataTmp -> dr[];
+     (if (op.val < minOff) or (maxOff < op.val) then
+         (op[],dr[]) -> PutSet
+      else
+         (dr.reg1,op.val) -> LI -> mstate.b.emit 
+     if)
+  exit dr[]
+  #);
+InxRegAdrToReg: (* not needed any more? See InxRegAdrLoadAdrOp *)
+  (# op: ^inxRegAdr; dr: ^dataRegOperand; A: @RegAdr
+  enter op[]
+  do dataTmp->dr[];
+     '\n*** OBS! InxRegAdrToReg:'->puttext; op.offset->putint; newline;
+     (op.reg1,op.reg2,dr.reg1) -> ADD -> mstate.b.emit;
+     dr -> A.reg; op.offSet->A.off
+  exit A[]
+  #);
+CallProc:
+  (# T: ^text; noGPrestore: @ boolean;
+  enter T[]
+  do (if common.switch[62] then
+         (T[],callMark) -> mstate.b.mark; 
+         (mips_R25,mips_GP,0) -> LW -> mstate.b.emit;
+         (mips_R25,mips_RA)->JALR->mstate.b.emit;
+         INNER;
+         (* restore GP *)
+         (if not NoGPrestore (* NoGPrestore=true for ExO *) then 
+             mstate.stacks.GPsave;
+             (mips_GP,mips_SP,0) -> LW  -> mstate.b.emit;
+         if)
+      else
+         (T[],callMark) -> mstate.b.mark; 
+         0-> JAL ->mstate.b.emit;
+         INNER
+     if)
+  #);
+getExternalResult:
+  (# getSimpleRes:      
+     (# drA: @dataRegOperand
+     do drA.alloc;
+        (mips_R2,0,drA.reg1) -> ADD -> mstate.b.emit
+     exit drA
+     #); 
+     getDoubleRes:
+       (# drA: @doubleDataRegOperand
+       do drA.alloc;
+          (mips_R2,0,drA.dNo1.reg1) -> ADD -> mstate.b.emit;
+          (mips_R3,0,drA.dNo2.reg1) -> ADD -> mstate.b.emit
+       exit drA
+       #);
+     
+  do false -> mstate.alloI;;
+     INNER;
+     mstate.xFreeOreg
+  #);
+SaveRegisters:
+  (#
+  do (for i: 3 repeat i->refTmpOp ->pushData for);
+     (for i: 4 repeat i->adrTmpOp ->pushData for)     
+  #);
+RestoreRegisters:
+  (#
+  do (for i: 4 repeat 5-i->adrTmpOp -> popData for);
+     (for i: 3 repeat 4-i->refTmpOp -> popData for)
+  #);
+RestoreGP:
+  (#
+  do (if common.switch[62] then
+         mstate.stacks.GPsave;
+         (mips_GP,mips_SP,0) -> LW -> mstate.b.emit;
+         (*(mips_GP,mips_R23) -> MOV -> mstate.b.emit*)
+     if);
+  #);
+SaveStackFrame:
+  (# 
+  do (if common.switch[62] then ComputeGP if);
+     
+     mstate.stacks.newFrame;
+     (mips_sp,mips_sp,0)-> ADDIU ->mstate.b.emit;
+     
+     (if common.switch[62] then
+         mstate.stacks.GPsave;
+         (mips_GP,mips_SP,0) -> SW -> mstate.b.emit;
+         (*(mips_R23,mips_GP) -> MOV -> mstate.b.emit*)
+     if);
+  #);
+ComputeGP:
+  (#
+  do ('_gp_disp',setHiMark)->mstate.b.mark;
+     (mips_GP,0,0)-> LUI ->mstate.b.emit;
+     ('_gp_disp',setLoMark)->mstate.b.mark;
+     (mips_GP,mips_GP,0)-> ADDIU ->mstate.b.emit;
+     (mips_R25,mips_GP,mips_GP)-> ADDU ->mstate.b.emit;
+  #);
+DoReturn:
+  (# 
+  do mips_ra-> JR ->mstate.b.emit;
+     mstate.stacks.popFrame;
+     (mips_sp,mips_sp,0)-> ADDIU ->mstate.b.emit;
+     false -> mstate.stacks.markRef.clearTop (* make sure that NO clear
+                                              * appear in possible following
+                                              * code for virtual bindings
+                                              *)
+  #);
+
+DoPatch:
+  (#
+  do mstate.stacks.patch
+     (# entry::
+          (#
+          do mstate.b.buffer[inx div 4 + 1] 
+             %bor ((-stackFrameSize ) %band 0xffff)
+               -> mstate.b.buffer[inx div 4 + 1];
+          #);
+        exitt::
+          (# inst,off: @integer
+          do mstate.b.buffer[inx div 4 + 1] -> inst;
+             inst %band 0xffff -> off;
+             inst %band 0xffff0000 -> inst;
+             inst %bor (stackFrameSize + off) -> mstate.b.buffer[inx div 4 + 1];
+          #);
+        data::
+          (# off: @integer
+          do inx div 4 +1 -> i;
+             (*(16,16) -> mstate.b.buffer[i].%getSignedBits -> off;*)
+             1 -> mstate.b.buffer[i].%getSignedShort -> off;
+             dataStart + off -> off;
+             (*(off %band 0xffff,16,16) -> mstate.b.buffer[i].%putBits*)
+             (off %band 0xffff,1) -> mstate.b.buffer[i].%putShort
+          #);
+        float::
+          (# off: @integer
+          do inx div 4 +1 -> i;
+             (*(16,16) -> mstate.b.buffer[i].%getSignedBits -> off;*)
+             1 -> mstate.b.buffer[i].%getSignedShort -> off;
+             floatStart + off -> off;
+             (*(off %band 0xffff,16,16) -> mstate.b.buffer[i].%putBits*)
+             (off %band 0xffff,1) -> mstate.b.buffer[i].%putShort
+          #);
+        GP::
+          (# 
+          do (GPoff %band 0xffff,16,16) -> mstate.b.buffer[inx div 4 + 1].%putBits
+          #);
+        i,off: @integer;
+     do inx div 4 + 1 -> i;
+        (*(16,16) -> mstate.b.buffer[i].%getSignedBits -> off;*)
+        1 -> mstate.b.buffer[i].%getSignedShort -> off;
+        (if mstate.stacks.debug then 
+            ' stackStart='->puttext; stackStart->putint;
+            ' off='->puttext; off ->putint
+        if);
+        stackStart + stackFrameSize - 4 - off -> off;
+        (if mstate.stacks.debug then ' off='->puttext; off ->putint; ' '->put if);
+        (*(off %band 0xffff,16,16) -> mstate.b.buffer[i].%putBits*)
+        (off %band 0xffff,1) -> mstate.b.buffer[i].%putShort
+     #);
+  #);
+ClearStackTop:
+  (# noNop: @boolean
+  enter noNop
+  do (if mstate.stacks.markRef.clearTop then
+         mstate.stacks.markRef;
+         (mips_R0,mips_SP,mstate.stacks.refTop*4) -> SW -> mstate.b.emit;
+         false -> mstate.stacks.markRef.clearTop;
+      else 
+         (if not noNop then xNOP -> mstate.b.emit if)
+     if)
+  #);
+PushReturn:
+  (#
+  do (mips_ra,mips_sp,mstate.stacks.pushRef)-> SW ->mstate.b.emit;
+     thisRegOp[] -> PushRef;  
+     (*callRegOp[] -> PushRef; (* temporary -- needed by GC *)
+  #);
+PopReturn:
+  (* this is a bit tricky! The return address is pushed once,
+   * but may be used several times, due to leave P (pattern).
+   * A raInx is therefore used below instead of a popRef;
+   * this only works since the segment returns to its caller
+   * after the faked pop of ra. The ra is always the first element
+   * on the stack.
+   *)
+  (#
+  do (mips_ra,mips_sp,mstate.stacks.raInx)-> LW ->mstate.b.emit;
+  #);
+PopThis:
+  (* like PopReturn - pushed once, but perhaps popped several times *)
+  (#
+  do (thisO,mips_sp,mstate.stacks.thisInx)-> LW ->mstate.b.emit;
+  #);
+PushRealThis:
+  (# op: ^registerOperand
+  do (if mstate.thisPushCount = 0 then
+         mstate.stacks.pushRef -> mstate.realThisSpOff;
+         (thisO,mips_sp,mstate.realThisSpOff) -> SW -> mstate.b.emit;
+      else
+         thisRegOp[] -> pushRef
+     if);
+     mstate.thisPushCount + 1 -> mstate.thisPushCount
+  #);
+PopRealThis:
+  (#
+  do mstate.thisPushCount - 1 -> mstate.thisPushCount;
+     thisRegOp[] -> popRef
+  #);
+PushRef:
+  (# op: ^registerOperand
+  enter op[]
+  do (op.reg1,mips_sp,mstate.stacks.pushRef)-> SW ->mstate.b.emit;
+  #);
+PopRef:
+  (# op: ^registerOperand
+  enter op[]
+  do (op.reg1,mips_sp,mstate.stacks.popRef)-> LW ->mstate.b.emit;
+  #);
+PushData:
+  (# op: ^registerOperand
+  enter op[]
+  do (op.reg1,mips_sp,mstate.stacks.pushData)-> SW ->mstate.b.emit;
+  #);
+PopData:
+  (# op: ^registerOperand
+  enter op[]
+  do (op.reg1,mips_sp,mstate.stacks.popData)-> LW ->mstate.b.emit;
+  #);
+saveData:  
+  (# op: ^dataRegOperand
+  enter op[]
+  do mstate.stacks.DataRegSave;
+     (op.reg1,mips_SP,(op.reg1-mips_R8)*4) -> SW -> mstate.b.emit;
+  #);
+restoreData:
+  (# op: ^dataRegOperand
+  enter op[]
+  do mstate.stacks.DataRegSave;
+     (op.reg1,mips_SP,(op.reg1-mips_R8)*4) -> LW -> mstate.b.emit;
+  #);
+SaveFloat:
+  (# op: @floatRegOp
+  enter op.rn
+  do mstate.stacks.FloatRegsave;
+     (op.rn,mips_sp,op.rn*4) -> SDC1 -> mstate.b.emit
+  #);
+RestoreFloat:
+  (# op: @floatRegOp
+  enter op.rn
+  do mstate.stacks.FloatRegsave;
+     (* op.rn in [0,2,4,...,15] *)
+     (op.rn,mips_sp,op.rn*4) -> LDC1 -> mstate.b.emit
+  #);
+PushCpar:
+  (# op: ^mOperand; OReg: ^mOperand; dr: @ dataRegOperand
+  enter op[]
+  do mstate.xGetOreg->OReg[];
+     true -> mstate.hasIntPar;
+     (if Oreg.isPrimRegOp then
+         (* Oreg[]->op.loadToReg->op[];*)
+         (* should be eliminated - but error in cstOperand:pushCpar
+          * 12.11.95: cstOperand:pushCpar error seesm to have been fixed,
+          * at least v5.0/machine uses ldVal where ldCst is used now!
+          *)
+         (* 15/1/95: cstOperand:pushCpar load the const to the register
+          * without considering the size of the const. Dont work for
+          * sparc etc. PushCpar empty for o-registers.
+          * Similarly loadToReg is empty for e.g. dataRegOperand whereas
+          * pushCpar moves to %o-register.I.e. difficult to know
+          * when instructions are generated here. Could be useful to
+          * use delay slot in .mul, .div, etc.
+          *)
+         OReg[]->op.pushCpar
+      else 
+         dr.alloc; dr[]->op.loadToReg->op[];
+         (* arg0 ->  0(SP) / mips_R4
+          * arg1 ->  4(SP) / mips_R5
+          * arg2 ->  8(SP) / mips_R6
+          * arg3 -> 12(SP) / mips_R7
+          * arg4 -> 16(SP)
+          *)
+         (op.reg1,oReg.reg1,oReg.offSet)->SW->mstate.b.emit;
+         dr.deAlloc
+     if)
+  #);
+PushOregisters:
+  (# Oreg: @adrRegOperand; n: @integer; dr: ^dataRegOperand;
+     busyCall: @boolean
+  enter n
+  do (for i: (n,MaxNoOfPrimReg) -> Min repeat 
+          mips_R4 + (i-1)->oReg.rn; 
+          (if not ((oReg=mips_R5) and callRegBusy) then
+              oReg[] -> pushData;
+           else
+              true->busyCall;
+              (if common.switch[315] then
+                  '\n*** callRegBusy - don\'t push arg 2!'->putline
+              if)
+          if)
+     for);
+     (* push n mark for GC*)
+     dataTmp -> dr[]; dr.rn -> oReg.rn;
+     (for i: n - MaxNoOfPrimReg repeat
+          (* remaining parameters on SP-stack *)
+          (oReg.reg1,mips_SP, 12 + i*4) -> LW -> mstate.b.emit;
+          oReg[] -> pushData
+     for);
+  exit busyCall
+  #);
+PopOregisters:
+  (# Oreg: @adrRegOperand; n,max: @integer; dr: ^dataRegOperand;
+     busyCall: @boolean
+  enter(n,busyCall)
+  do dataTmp ->dr[]; dr.rn -> oReg.rn; n - MaxNoOfPrimReg -> max;
+     (for i: max repeat
+          oReg[] -> popData;
+          (oReg.reg1,mips_SP, 16 + (max - i)*4) -> SW -> mstate.b.emit
+     for);
+     (n,MaxNoOfPrimReg) -> Min -> max;
+     (for i: max repeat 
+          mips_r4 + max - i -> oReg.rn; 
+          (if not ((oReg=mips_R5) and busyCall) then
+              oReg[] -> popData
+              (* mips_r4 + i - 1 -> oReg.rn; 
+               * (Oreg.reg1,mips_SP,4*(i - 1))->LW->mstate.b.emit; *)
+           else
+              (if common.switch[315] then              
+                  '\n*** callRegBusy - don\'t pop arg 2!'->putline
+              if)
+          if)
+     for)
+  #);
+GetXpar:
+  (* get next parameter for callback function *)
+  (# dr: ^dataRegOperand; drG: @ dataRegOperand;
+  enter dr[]
+  do (dr.reg1,mips_SP,mstate.stacks.callBackStackOffset + (Xpar.no-1) * 4) 
+       -> LW -> mstate.b.emit;
+     (mips_R2,dr.reg1) -> MOV -> mstate.b.emit; (* needed for textpar*)
+     Xpar.no+1 -> Xpar.no
+  #);
+PutSet:
+  (# C: ^cstOperand;
+     op: ^mOperand;
+  enter (C[],op[])
+  do (if ((0xffff, C) -> TOS'%and') = 0 then
+         (* one instruction *)
+         (op.reg1,0,C->HI)->LUI->mstate.b.emit;
+      else
+         (if (minOff <= C) and (C <= maxOff) then
+             (* one instruction *)
+             (op.reg1,0,C)-> ADDI ->mstate.b.emit;
+          else
+             (* two instructions *)
+             (op.reg1,0,C->HI)->LUI->mstate.b.emit;
+	     (op.reg1,op.reg1,C->LO)-> ORI ->mstate.b.emit
+             (* note that PutSetText uses ADDIU *)
+         if)
+     if)
+  #);
+PutSetText:
+  (# T: ^Text;
+     op: ^mOperand;
+  enter (T[],op[])
+  do (if common.switch[62] then
+         (T[],dataMark) -> mstate.b.mark; 
+         (op.reg1,mips_GP,0) -> LW -> mstate.b.emit;
+      else
+         (* always two instructions - address not know at this time *)
+         (T[],setHiMark)->mstate.b.mark;
+         (op.reg1,0,0)->LUI->mstate.b.emit;
+         (* consider an INNER here to make use of delay slot
+          * if the next instruction is a jump
+          *)
+         (T[],setLoMark)->mstate.b.mark;
+         (op.reg1,op.reg1,0)->ADDIU->mstate.b.emit;
+     if)
+  #);
+PutSetLocalDatalab:
+  (# T: ^Text;
+     op: ^mOperand;
+  enter (T[],op[])
+  do (if common.switch[62] then
+         (T[],dataMark) -> mstate.b.mark; 
+         (op.reg1,mips_GP,0) -> LW -> mstate.b.emit;
+         (T[],setLoMark)->mstate.b.mark;
+         (op.reg1,op.reg1,0) -> ADDIU -> mstate.b.emit;
+      else
+         (* always two instructions - address not know at this time *)
+         (T[],setHiMark)->mstate.b.mark;
+         (op.reg1,0,0)->LUI->mstate.b.emit;
+         (* consider an INNER here to make use of delay slot
+          * if the next instruction is a jump
+          *)
+         (T[],setLoMark)->mstate.b.mark;
+         (op.reg1,op.reg1,0)->ADDIU->mstate.b.emit;
+     if)
+  #);
+
+ClearAdrTmpRegs: (* clear registers that may hold addresses *)
+  (#
+  do true->rep.clearA[2]->rep.clearA[3]->rep.clearA[4];
+  #);
+doCall: 
+  (# delay: @integer; callLab:<object (* make this more efficient *)
+  do inner
+  #);
+doCall2:
+  (* used for real BETA calls of e.g. M-entry-points *)
+  (* Complicated if C-call in progress:
+   * ...
+   * call AlloI
+   * a1 -> R19   callReg in R19
+   * ...         what if enter/exit parameters? Seems NOT to work!
+   * pushOreg
+   * R19 -> a1   
+   * call M17FOO
+   * a1 -> R19
+   * popOreg    may override a1
+   * a1 -> R26  save argument1 in R26, remember that arg1 inTmp  (R26)
+   * r19 -> a1  a1 = callReg again
+   * 
+   * All this is only necessary if more than 2 arguments !
+   * The above comment is no longer valied. See evval2:listEvVal:asgtoCproc,
+   * and callAlloPrim and getPrimRes
+   *)
+  (# 
+  do (if mstate.Xlevel > 0 then
+         mState.xCnt -> pushOregisters -> mState.busyCall
+     if);
+     INNER doCall2;
+     (if mstate.Xlevel > 0 then
+         (mState.xCnt,mState.busyCall) -> popOregisters
+     if)
+  #);
+definePrim:
+  (# T: ^text
+  enter T[]
+  do (T[],false)->entrypoints.addDef
+  #);
+AsgRef:
+  (# destA: ^Address;
+     agR,aaR,tmpAr: @adrRegOperand;
+     destReg: ^RegisterOperand; 
+     sourceReg: @adrRegOperand;
+     L: @localLab;  withQua: @boolean; max: @integer
+  enter(destA[],withQua)
+  do (if WithQua then 
+         adrTmp2->aaR;
+         (destA[],aaR[])->gLea; 
+         true->aaR.ind;
+         aaR[]->destReg[]
+      else
+         adrTmp2->agR.rN;
+         (destA[],agR[])->gLea; 
+         true->agR.ind;
+         agR[]->destReg[]; 
+     if);
+     destA.freeAdr;
+     
+     INNER AsgRef;
+
+     (if withQua then
+         (sourceReg.reg1,destReg.reg1,0)->SW->mstate.b.emit 
+      else
+         (*  IOA[0] = IOA_bot
+          *  IOA[4] = IOS_used = IOA_top - IOA_bot
+          * 
+          *  Check if   R in [IOA_bot, IOA_bot + IOA_used[
+          * 
+          *  Memory     [ ............ [IOA_bot, IOA_top[ ........]
+          *                   R1               R2           R3 
+          *  d = R1 - IOAbot  :  d < 0
+          *  d = R2 - IOAbot  :  0 <= d < IOA_used
+          *  d = R3 - IOAbot  :  IOA_used <= d < MemMax
+          * 
+          *  IOA_used unsigned<= d  : R is NOT in IOA
+          *)
+         IOAusedReg -> tmpAr.rn;
+         ('_IOA',tmpAr[]) -> PutSetText;
+         (IOAbotReg,tmpAr.reg1,0)-> LW ->mstate.b.emit;
+         (IOAusedReg,tmpAr.reg1,4)-> LW ->mstate.b.emit;
+         
+         (*  destReg.reg1 - IOAbot -> dataTmp1 *)
+         (IOAbotReg,destReg.reg1,dataTmp1) -> SUB -> mstate.b.emit;
+         L.new;
+         (dataTmp1,IOAusedReg,L[]) -> BLEU_macro;
+         (sourceReg.reg1,destReg.reg1,0) -> SW -> mstate.b.emit;
+         (if callRegBusy then callRegOp[]->pushRef if);
+         PushReg -> max;
+         'ChkRA' -> CallProc
+         (#do
+            (* ('ChkRA',callMark) -> mstate.b.mark; 0-> JAL ->mstate.b.emit;*)
+            (mips_R4,destReg.reg1) -> MOV -> mstate.b.emit;
+         #);
+         max -> PopReg;
+         (if callRegBusy then callRegOp[] -> popRef if);
+         L.def
+     if);
+     (if withQua then false->aaR.ind else false->agR.ind if);
+     sourceReg.deAlloc;
+  #);
+
+markMax: (# exit 13 #);
+
+MipsImage: RiscImage
+  (# (* LIP: byte offsets of next item to be emitted 
+      * LIP:0 = buffer[1];
+      *  LIP:4 = buffer[2];
+      *  ...
+      *)         
+     appendToBC: <<SLOT MIPSappendToBC: descriptor>>;
+     mark: @
+       (# t: ^text; type: @integer; E: ^EntryPointInfo;
+       enter (t[],type)
+       do (if (markTop+1->markTop) > marks.range then
+              marks.range->marks.extend;
+              types.range->types.extend;
+              epElm.range->epElm.extend; (*'$'->screen.put*)
+          if);
+          (LIP div 4) + 1 ->marks[markTop];
+          type->types[markTop];
+          (if type = entryDefMark then 
+              (T[],not mstate.inCode)->entryPoints.addDef->epElm[markTop][];
+              (* is called in CODEmachine for all entry points 
+               * T117FOO, M117FOO, etc.
+               * For local labels like  '.L12' it is called below
+               * for markLocalLab -- OOPS not used consistently.
+               * And for labels BETA_code1eddDef is NOT
+               * called - i.e. we must call here - FIX IT!
+               *)
+           else
+              (*(T[],LIP)->entryPoints.markUse->E[];*)
+              T[]->entryPoints.find
+              (# notFound:: (#do E[]->entryPoints.insert #)
+              #)
+                ->epElm[markTop][];
+              noOfRel +1 -> noOfRel
+          if)
+       #);
+     markLocalLabBcc:
+       (# labNo: @integer; T: ^text
+       enter labNo
+       do labNo->LocalLabtext->T[];
+          (T[],bgtuMark)->mstate.b.mark
+       #);
+     markLocalLab: @
+       (# labNo: @integer; T: ^text
+       enter labNo
+       do labNo->LocalLabText->T[];
+          (*(T[],not inCode)->entryPoints.addDef;*)
+          (T[],entryDefMark)->mstate.d.mark
+       #);
+  #);
+
+--mstate:descriptor--
+(# NoComSupport: @
+     (# reported: @boolean
+     do (if not reported then
+            '\n\n*** COM support has not yet been implemented for SGI' -> putline;
+            true -> reported
+        if)
+     #);
+   inBindVirtuals: @boolean;(* generating code for binding virtuals
+                             * genlib:bindvirtual:final2virt;
+                             * used in jmpReg
+                             *)
+   realThisSpOff, thisPushCount: @integer;
+   popThis: @integer;  (* 1: this MUST be popped after primitive op;
+                        * 2: just decrement stack top
+                        *)
+   stacks: @
+     (#
+        first,  (* first instruction in this segment *)
+        dataSize, (* no of data registers *)
+        floatSize, (* no of float registers *)
+        xMax, (* current max of external parameter stack *)
+        refTop, refMax, (* top and current max of refStack *)
+        dataStop,dataMax (* top and current max of dataStack *)
+        : @integer; 
+        debug,
+        saveData, (* dataRegs must be saved *)
+        saveFloat (* floatRegs must be saved *)
+        : @boolean; 
+        last: [4] @integer; lastTop: @integer;
+        (* last/lastTop keep track of instructions where  the stack
+         * must be popped; it is always the last instruction of a
+         * segment, but leave P (where P is a pattern) may generate
+         * additional sp pops
+         *)
+        comEntry: @boolean; (* see allocObj *)
+        init: @
+          (#
+          do (if comEntry then
+                 false -> comEntry
+              else
+                 (if first > 0 then 
+                 (* currently ad hoc to call DoPatch here;
+                  * a mch slot should be called 
+                  * to indicate the end of a segment (G as well as M)
+                  *)
+                 doPatch 
+             if);
+             0->first->refTop->refMax->markRef.top->dataTop->lastTop->floatTop
+               ->dataSize->floatSize->callBackFrameSize->dataStop->dataMax
+             ->markData.top -> GPsave.top;
+             5 -> xMax; (* max. no. of parameters to a betarun routine *)
+             false->saveData->saveFloat;
+                 common.switch[195] -> debug;
+             if)
+          #);
+        CodeMark:
+          (# codeInx: [20] @integer; top: @integer; 
+             clearTop: @boolean; (* refTop*4(SP) MUST be cleared before a call;
+                                  * not used in markData 
+                                  *)
+             dump:
+               (# T: ^text
+               enter T[]
+               do (for i: top repeat ' '->T.put; codeInx[i] -> T.putInt for)
+               #);
+          do (if (top + 1 -> top) > codeInx.range then
+                 codeInx.range -> codeInx.extend
+             if);
+             b.LIP-> codeInx[top];
+             true -> clearTop;
+          #);
+        markRef: @ CodeMark;
+        pushRef: @
+          (# off: @integer
+          do  refTop * 4 -> off;
+             (if (refTop + 1 -> refTop) > refMax then refTop -> refMax if);
+             markRef;
+          exit off
+          #);
+        popRef: @
+          (# 
+          do refTop - 1 -> refTop;
+             markRef
+          exit refTop * 4
+          #);
+        popRefTop: @
+          (# 
+          do refTop - 1 -> refTop;
+          exit refTop * 4
+          #);
+        markData: @ CodeMark;
+        pushData: @
+          (# off: @integer
+          do dataStop * 4 -> off;
+             (if (dataStop + 1 -> dataStop) > dataMax then dataStop ->dataMax if);
+             
+             markData
+          exit off
+          #);
+        popData: @
+          (# 
+          do dataStop - 1 -> dataStop;
+             markData
+          exit dataStop * 4
+          #);
+        raInx: (# do markRef exit 0  #);
+        thisInx: (#do markRef exit 4 #);
+        newFrame: (#do init; mstate.b.LIP -> first #);
+        popFrame:
+          (# 
+          do (if (lastTop + 1 -> lastTop) > last.range then 
+                 last.range -> last.extend
+             if);
+             mstate.b.LIP -> last[lastTop];
+          #);
+        GPsave: @
+          (# inx: [10] @integer; top: @integer;
+             size: @
+               (# s: @integer
+               do (if common.switch[62] then 4 -> s else 0 -> s if)
+               exit s
+               #);
+          do (if (top + 1 -> top) > inx.range then
+                 inx.range -> inx.extend 
+             if);
+             b.LIP -> inx[top];             
+          #);
+        dataInx: [10] @integer; dataTop: @integer;
+        dataRegSave:
+          (#
+          do (if (dataTop + 1 -> dataTop) > dataInx.range then
+                 dataInx.range -> dataInx.extend 
+             if);
+             b.LIP -> dataInx[dataTop];
+             true -> saveData
+          #);
+        floats: [10] @integer; floatTop: @integer;
+        floatRegSave:
+          (#
+          do (if (floatTop + 1 -> floatTop) > floats.range then
+                 floats.range -> floats.extend
+             if);
+             b.LIP -> floats[floatTop];
+             true->saveFloat
+          #);
+        xFrame: @
+          (# noOfPar: @integer
+          enter noOfPar
+          do (if noOfPar > xMax then noOfPar -> xMax if);
+          #);
+        callBackFrameSize: @integer;
+        callBackStackOffset:
+          (#  
+          do (xMax + refMax+1 + dataMax) * 4 -> callBackFrameSize;
+             (if (callBackFrameSize mod 8) > 0 then
+                 callBackFrameSize + 4 -> callBackFrameSize
+             if)
+          exit callBackFrameSize
+          #);
+        patch:
+          (# entry:< 
+               (# inx: @integer 
+               enter inx 
+               do (if debug then 
+                      '\nfirst:'->T.puttext; inx->T.putint; ' '->T.put
+                  if); 
+                  inner 
+               #);
+             exitt:<
+               (# inx: @integer 
+               do (if debug then
+                      'last:'->T.puttext; inx->T.putint; ' '->T.put; 
+                  if);
+                  (for i: lastTop repeat 
+                       last[i] -> inx;
+                       inner 
+                  for)
+               #);
+             data:<
+               (# inx,dataStart: @integer;   
+               do xMax * 4 -> dataStart;
+                  (if debug then '; data:'->T.puttext if);
+                  (for i: dataTop repeat
+                       dataInx[i] -> inx;
+                       (if debug then inx -> T.putint; ' '->T.put if); 
+                       INNER
+                  for);
+               #);
+             float:<
+               (# inx,floatStart: @integer
+               do xMax*4 + dataSize -> floatStart;
+                  (if debug then '; float:'->T.puttext if);
+                  (for i: floatTop repeat
+                       floats[i] -> inx;
+                       (if debug then inx -> T.putint; ' '->T.put if);
+                       inner
+                  for)
+               #);
+             GP:<
+               (# inx,GPoff: @integer
+               do xMax*4 + dataSize + floatSize -> GPoff;
+                  (if debug then
+                      'GP: '->T.puttext;
+                      dataSize -> T.putint; ' ' -> T.put;
+                      GPoff->T.putint;T.newline;
+                  if);
+                  (for i: GPsave.top repeat
+                       GPsave.inx[i] -> inx;
+                       INNER
+                  for)
+               #);
+             stackFrameSize,  (* see genPrim below where an assumption
+                               * on stackFrameSize is made *)
+             inx,stackStart: @integer;
+             T: @text;
+             (*
+              *    |
+              *    |
+              *    |---
+              *    | GP
+              *    |-----
+              *    | float
+              *    |---
+              *    | data
+              *    |---
+              *    | X arg
+              * 0: |
+              *    |---
+              *)
+          do (if saveData then 
+                 4 * 6 (* d0-d5 *) -> dataSize
+             if);
+             (if saveFloat then 
+                 4 * 32 (* f0-f32 *) -> floatSize;
+                 (* float saves must be 8-byte aligned *)
+                 (if (xMax mod 2) = 1 then xMax + 1 -> xMax if)
+             if);                 
+             (* refTop/refMax is next free element on stack *)
+             (refMax+1) * 4 + dataMax * 4 + GPsave.size  
+            + dataSize +  floatSize + xMax * 4 
+               -> stackFrameSize;
+             (if (stackFrameSize mod 8) > 0 then 
+                 stackFrameSize + 4 -> stackFrameSize
+             if);
+             (if (callBackFrameSize > 0) 
+                 and (callBackFrameSize <> stackFrameSize)  then
+                 '\n**** Inconsistent stack frame size for callback entry! CallBackFrameSize: '
+                   -> puttext;
+                 callBackFrameSize -> putint; 
+                 ' StackFrameSize: '-> puttext; StackFrameSize -> putint; 
+                 newline;
+                 true -> debug
+             if);
+             T.clear;
+             (if debug then
+                 'StackFrameSize='->T.puttext; stackFrameSize->T.putint; 
+                 ' xMax='->T.puttext; xMax->T.putint
+             if);
+             first->entry;
+             exitt;
+             Data;
+             Float;
+             (if common.switch[62] then GP if);
+             (if debug then T[]->dump if);
+             (* patch refStack *)
+             0 -> stackStart;
+             (for i: markRef.top repeat
+                  markRef.codeInx[i] -> inx;
+                  INNER
+             for);
+             (* patch dataStack: why refMax + 1 *)
+             - (refMax + 1) * 4 -> stackStart;
+             (for i: markData.top repeat
+                  markData.codeInx[i] -> inx;
+                  INNER
+             for)
+          #);        
+        dump: @ 
+          (# T: ^text
+          enter T[]
+          do (if common.switch[18] and (refMax>0) then
+                 'refMax='->T.puttext; refMax->T.putInt; 
+                 (if refTop <> 0 then
+                     ' refTop='->T.puttext; refTop->T.putInt
+                 if);
+                 T[] -> markRef.dump;
+                 '\ndataMax= '->T.putText; dataMax->T.putInt;
+                 T[] -> markData.dump;
+                 T[] -> screen.putLine
+             if)
+          #)
+        (* External call stack handling *)
+        
+     #);
+
+   
+   a1InTmp, AlloDO,restoreCallReg,initPrimCall: @boolean; 
+   (* see initprimcall, jsrTable, callAlloI *)
+   lastMfHiLo: @integer; (* LIP of last MFHI or MFLO instruction*)
+   alloI: @boolean;
+   textStrTblSTart,dataStrTblSTart: @integer;
+   parspace: @integer;
+   Init:
+     (#
+     do 10000 -> B.buffer.new;
+        10000 -> D.buffer.new;
+        4->B.IPinc;
+        mstate.strTbl.init;
+        (if common.targetMachineId
+         // common.sgi // common.sun4s then
+            2->mstate.symtabTop; (* 2 first symbols are 'sections' 
+                                  * for text and data. sun4s/elf
+                                  * counts from one
+                                  *)
+            '.text'->mstate.strTbl.insert->textStrTblStart;
+            '.data'->mstate.strTbl.insert->dataStrTblStart
+         else 
+            0->mstate.symtabTop (* sun4/a.out counts from zero,
+                                 * but the index is added one
+                                 * in the compiler. 1 is subtacted
+                                 * when emitting symbinx in SUN4aout
+                                 *)
+        if)
+     #);
+   inCode: @boolean;
+   symtabTop: @integer; (* counter for no of symtab entries *)
+   
+   emitCodeToFile: <<SLOT emitCodeToFile: descriptor>>;
+   
+   B,D: @ MipsImage; (* B for code/text, D for data *)
+   labs: @
+     (# adr: [500] @integer; top: @integer; 
+        use: [500] ^loc;
+        loc: (# off: @integer; next: ^loc #);
+        def: @
+          (# l,patchAdr,patchInst: @integer; s: ^loc
+          enter l
+          do (if l>adr.range then 
+                 l+adr.range->adr.extend;
+                 l+use.range->use.extend; (*'&'->put*)
+             if);
+             b.LIP->adr[l];
+             use[l][]->s[]; none->use[l][];
+             LL: 
+               (if s[] <> none then
+                   (* '\nPatch L'->putText; l->putInt; '='->put;
+                    b.LIP->putint; ' in:'->putText; s.off->putint;  ';'->put;
+                    *)                
+                   (s.off div 4) + 1 ->patchAdr; (* ->putInt;*)
+
+                   (* patch *)
+                   (*'!'->BC.putC; (B.buffer[patchAdr],true)->bcPutHex; ':'->BC.putC;*)
+                   (*B.buffer[patchAdr] %band 0xFFC00000 -> patchInst; *)
+                   B.buffer[patchAdr] -> patchInst; 
+                   (if patchInst %srl 26
+                    // 2 (* j bit26 *) then
+                       'J'->put;
+                       patchInst %band 0xfc000000 -> patchInst; 
+                       (* J is a funny form of PC relative:
+                        * J (PC %band 0xfc000000) + bit26
+                        *)
+                       patchInst %bor ((b.LIP div 4) %band 0x3FFFFFFF)
+                         -> B.buffer[patchAdr];
+                    else
+                       (* 'b'->put;                       *)
+                       patchInst %band 0xFFFF0000 -> patchInst; 
+                       (*(patchInst,true)->bcPutHex; BC.putnl;
+                        * patchInst %bor (((b.LIP-s.off) div 4) %band 0xFFFFF)
+                        *)
+                       (*' dest='->puttext; ((b.LIP div 4) %band 0xFFFFF)->putint;
+                        newline;
+                        *)
+                       patchInst %bor (((b.LIP - s.off - 4) div 4) %band 0xFFFFF)
+                         -> B.buffer[patchAdr];
+                   if);
+                   (*'!'->putLine;*)
+                   s.next[]->s[];
+                   restart LL
+             if)
+          #);
+        off: @
+          (# l,of: @integer; s: ^loc;
+          enter l
+          do (if l>adr.range then 
+                 l+adr.range->adr.extend;
+                 l+use.range->use.extend
+             if);
+             (if adr[l]=0 then (* forward ref *)
+                 (*'\nUse L'->puttext; l->putInt; ' in:'->puttext; 
+                  b.LIP->putint; newline;*)
+                 &loc[]->s[];
+                 b.LIP->s.off; use[l][]->s.next[]; s[]->use[l][];
+                 b.LIP->of; (* to get a zero *)
+              else
+                 adr[l]->of
+             if)
+          exit of-b.LIP-4
+          #);
+     #);
+   defDataLab:
+     (# L: @localLab; S: ^text;
+     do switchToData;
+        L.new; true->L.isTextAdr; L.def; 
+        inner;
+
+        switchToCode;
+        L.labNo->LocalLabText->S[];
+     exit S[]
+     #);
+   strTbl: @
+     (# str: @text;
+        init:
+          (#
+          do 1000->str.extend;
+             0->str.put; 
+             (if common.targetMachineId = common.sun4 then
+                 (for i: 3 repeat 0->str.put
+             for)if)
+          #);
+        insert: @
+          (# T: ^text; index: @integer
+          enter T[]
+          do str.length->index;
+             T.scanAll(#do ch->str.put #);
+             0->str.put
+          exit index
+          #);
+        scan:
+          (# inx: @integer; ch: @char
+          enter inx 
+          do inx+1->inx; (* for ELF the strTbl is index form zero, 
+                          * for BETA from 1
+                          *)
+             (if inx<=0 then '\nstrTbl inx=0'->putline; 
+                 '????'->bc.putX
+             if);
+             str.T[inx]->ch;
+             L: (if ch<>0 then
+                    INNER;
+                    str.T[inx+1->inx]->ch;
+                    restart L
+                if)
+          #)
+     #);
+   dataTmp6,floatTmp: @ boolean;
+   proto: ^text; (* prototype label used by doCall to fill delay slot*)
+   
+   floatReg: [14] @ integer; 
+   (* the SPARC has 32 float reg. They may hold 16 double float values in
+    * pairs (%f0,%f1), (%f2,%f3), etc. (%f28,%f29) and (%f30,%f31) are used
+    * for tmp. values as allocated by the floatTmp proc.
+    *)
+   isBetaEnv: @boolean; (* true if initial betaenv *)
+   
+   F0notUsed: @boolean; (* True during call of external function, returning
+                         * a value in %f0. It signals that %f0 should NOT
+                         * be pushed/popped before/after the external call
+                         * %f0 may be busy before the call, in which case
+                         * the old %f0 is saved in saveF0
+                         *)
+   saveF0: ^floatRegOp; (* save busy %f0 during externall call returning
+                         * value in %f0
+                         *)
+   xInitOreg:
+       (# noOfReg:@ integer; oReg: @adrRegOperand; 
+       enter noOfREg
+       do noOfReg->mstate.stacks.xFrame;
+          (if (Xlevel+1->Xlevel) > busyO.range then
+              busyO.range->busyO.extend;
+              busyF.range->busyF.extend;
+              busyCallReg.range->busyCallReg.extend
+          if);
+          (if Xlevel > 1 then
+              xCnt->PushOregisters->busyCall; 
+              (for i:  fCnt div 2 repeat
+                   (* fCnt = 0: no external float arguments
+                    *      = 2: $f12 in use
+                    *      = 4: $f12 and $f14 in use
+                    *)
+                   10 + i*2 -> SaveFloat
+              for);
+              (* push xCnt,fCnt *)
+              xCnt->busyO[Xlevel-1];
+              fCnt->busyF[Xlevel-1]; 
+              busyCall->busyCallReg[Xlevel-1];
+          if);
+         
+          noOfReg->xPno; 0->xCnt->fCnt; 
+          false -> mstate.hasIntPar
+       #);
+   xGetOreg:
+     (* if oRegNo=0, then get oRegisters in the order 0,1,2,...
+      * if oRegNo>0 then get %(oRegNo-1), 
+      *)
+     (# SpAdr:
+          (# SpA: @RegAdr
+               (# primRegIsRegAdr:: TrueValue
+               #); 
+             n: @integer
+          enter n
+          do n * 4 -> SpA.off; mips_SP -> SpA.reg
+          exit SpA[]
+          #);
+        Oreg:
+          (# oRg: @dataRegOperand
+               (# isPrimRegOp:: trueValue;
+                  primRegIsReg:: trueValue 
+               #); 
+             rn: @integer
+          enter rn
+          do mips_R4 + rN ->oRg;
+          exit oRg[]
+          #);
+        oRegNo: @integer; res: ^mOperand
+     enter oRegNo
+     do (if (0 < oRegNo) then
+            (if (oRegNo <= 4) then oRegNo-1 -> OReg -> res[]
+             else
+                oRegNo- 1 -> SpAdr -> res[]
+            if)
+         else (if xCnt < 4 then
+                  xCnt -> OReg -> res[]
+               else
+                  xCnt -> SpAdr -> res[]
+        if)if);
+        xCnt+1->xCnt
+     exit res[]
+     #);
+   getFparPair:
+     (* Get a floating point register pair (12,13)  or (13,14)
+      * and an integer argument pair ($4,$5), ($6,$7), 
+      * or a stack address.
+      * 
+      * The rules for passing floating point arguments to external C functions
+      * are complicated! Consider an argument list:
+      * 
+      *    a0,a1,a2,a3,....
+      * 
+      * If a0 is a float then a0 is passed in $FR12
+      * If a0 and a1 are floats the a0 is passed in $FR12 and a1 in $FR14
+      * If ai is integer and aj is float and i < j then aj is passed in
+      * the integer argument registers or on the stack; registers pairs and
+      * stack offset must be 8-byte aligned.
+      * 
+      * NOTE! If the external C-procedure has a variable number of arguments,
+      * then the floats MUST always be passed in integer arg. registers and/or
+      * on the stack. 
+      * THIS IS CURRENTLY NOT IMPLEMENTED!
+      * This is, however, ONLY a problem if the argument list starts
+      * with 1 or 2 reals. In e.g. printf and tstvarargs, the first argument is
+      * an integer and therefore the subsequent floats go to int args.
+      *)
+     (# res: ^ mOperand; FR: ^floatRegOp
+     do (if not hasIntPar and (fCnt < 4) then
+            (* fCnt = 0, 2, 4 *)
+            &floatRegOp[] -> FR[];
+            12 + fCnt -> FR.rn;
+            fCnt + 2 -> fCnt;
+        if);
+        (* allocate integer register pair *)
+        (if (xCnt mod 2) = 1 then xCnt+1 -> xCnt if); (* align *)
+        xGetOreg -> res[];
+        xCnt + 1 -> xCnt; 
+     exit(FR[],res[])
+     #);
+   xMovePrimToX: (* see GetPrimRes*)
+       (# Oreg: @adrRegOperand; On: @integer
+       do (if Xlevel > 1 then
+              busyO[Xlevel-1]->oN; oN + mips_R4 ->Oreg;              
+              (if Oreg <= mips_R7 then
+                  (* move result of primCall to Oreg*)
+                  (mips_R2,0,Oreg.reg1)->ADD->mstate.b.emit
+               else 
+                  (mips_R2,mips_SP,4*(Oreg - 4)) -> SW ->mstate.b.emit;
+                  (* stack:
+                   * lowAdr     sp               highAdr
+                   *             0  4  8  12 16 ... 
+                   * --------------------------------------
+                   *            |a0 a1 a2 a3 a4 a5 ...
+                   * --------------------------------------
+                   *)
+              if);
+              xFreeOreg;
+              oN+1->xCnt;
+           else cError(#do'xMovePrimToX'->T #)
+          if)
+       #);
+   xFreeOreg:
+       (# oReg: @adrRegOperand; 
+       do xLevel-1->Xlevel;
+          (if Xlevel > 0 then
+              busyO[xLevel] -> xCnt;
+              busyF[xLevel] -> fCnt;
+              busyCallReg[xLevel] -> busyCall;
+              (for i: fCnt div 2 repeat
+                   10 + i*2 -> restoreFloat
+              for);
+              (xCnt,busyCall) -> PopOregisters;
+          if);
+          (if Xlevel = 0 then 0->xCnt->xPno->fCnt; false->busyCall if)
+       #);
+   tmpText: ^Text;
+   busyCallReg: [8]@boolean;  (* true if callReg is busyat this level *)
+   busyCall: @boolean;
+   busyF, (* busy Float Arg. Regs. pr. level *)
+   busyO: [8]@integer; (* busy Integer Arg. Regs. pr. level *)
+   xPno,xCnt,fCnt,Xlevel: @integer;
+   hasIntPar: @boolean
+#)
+--AssemblerHeader:descriptor--
+(#
+do true->loadProtoType; (* preliminary for MIPS *)
+   mips_R8 -> dataRegA; mips_R9 -> dataRegB;
+   dataTmp1 -> dataRegX; dataTmp2 -> dataRegY;  
+   switchToCode
+#)
+
+--CstOpPut:doPart---
+do 
+--cstLoadOp:doPart--
+do (if (minOff <= C) and (C <= maxOff) then 
+       this(CstOperand)[]->op[]
+    else
+       dataTmp->op[];
+       (this(cstOperand)[],op[])->PutSet;
+if)
+--cstOpLoadToReg:doPart--
+do (this(cstOperand)[],R[])->PutSet; R[]->res[]
+--TextOpPut:doPart--
+do T[]->BC.putX
+--TextOpLoadAdr:doPart--
+do (T[],R[])->PutSetText
+--DataRegOpPut:doPart--
+do
+--FloatRegOpPut:descriptor--
+(##)
+--FloatRegOpAlloc:descriptor--
+(#
+do 100->rN;
+   L:
+     (for i: mstate.floatReg.range repeat
+          (if mstate.floatReg[i]//0 then
+              mstate.floatReg[i]+1->mstate.floatReg[i]; (i-1)*2->rN;
+              leave L
+if)for)#)
+--FloatRegOpDeAlloc:descriptor--
+(# n: @integer (* don't overwrite rN - used in float:asgToCpar after deAlloc *)
+do (rN div 2)->n;
+   (if (0<=n) and (n<mstate.floatReg.range) then
+       mstate.floatReg[n+1]-1->mstate.floatReg[n+1] 
+    else 'FloatReg inx err.'->bugstream.putline
+if)#)
+--FloatRegOpReUse:descriptor--
+(# N: @integer do (rN div 2)+1->N; mstate.floatReg[N]+1->mstate.floatReg[N]  #)
+--FloatRegOpLoad:descriptor--
+(# op: ^mOperand
+do A.loadAdrOp->op[];
+   (if op.isRegAdr then
+       (rn,op.reg1,op.offSet) -> LDC1 ->mstate.b.emit
+    else
+       '\n*****floatRegOpLoad:inxRegAdr'->putline
+ if)
+#)
+--FloatRegOpStore:descriptor--
+(# op:^mOperand
+do A.loadAdrOp->op[];
+   (if op.isRegAdr then
+       (rn,op.reg1,op.offSet) -> SDC1 ->mstate.b.emit
+    else
+       '\n*****floatRegOpLoad:inxRegAdr'->putline
+ if)
+#)
+--FloatRegOpStoreTmp:descriptor--
+(#do this(floatRegOp)[]->A[] #)
+--floatRegOpStore2int:descriptor--
+(# F: @floatRegOp;
+   op: ^mOperand
+do A.loadAdrOp->op[];
+   F.alloc; D.alloc;
+   (F.rn,rn) -> TRUNC_W_D -> mstate.b.emit;
+   (F.rN,D.reg1) -> MFC1 -> mstate.b.emit;
+   (D.reg1,op.reg1,op.offSet) -> SW -> mstate.b.emit;
+#)
+--floatConst:descriptor---
+(# x: @real; S: ^text; op: ^mOperand
+do 8->mstate.d.align;
+   mstate.defDataLab
+   (# 
+   do 0->T.setPos; T.getReal->x;
+      @@x->TOS'%AdrGetLong'->mstate.d.emit;
+      @@x+4->TOS'%AdrGetLong'->mstate.d.emit;
+   #)
+     ->S[];
+
+   FR.alloc;
+
+   dataTmp -> op[];
+   (S[],op[]) -> PutSetLocalDataLab;
+   (FR.rN, op.reg1,0) -> LDC1 -> mstate.b.emit   
+#)
+--int2float:descriptor--
+(# DT: ^registerOperand; FR1: @floatRegOp
+do FR.alloc;  FR1.alloc;
+   DataTmp->DT[];
+   (if A.isRegAdr then
+       (DT.reg1,A.reg1,A.offSet)-> LW ->mstate.b.emit
+   if);
+   (FR1.rN,DT.reg1) -> MTC1 -> mstate.b.emit;
+   (FR.rN,FR1.rN) -> CVT_D_W -> mstate.b.emit;
+   FR1.deAlloc
+#)
+--intReg2float:descriptor--
+(# 
+do FR.alloc;
+   (FR.rN,A.reg1) -> MTC1 -> mstate.b.emit;
+   (FR.rN,FR.rN) -> CVT_D_W -> mstate.b.emit;
+#)
+--float2int:doPart--
+do (FR.rn,FR.rn) -> TRUNC_W_D -> mstate.b.emit;
+   (FR.rN,dr.reg1) -> MFC1 -> mstate.b.emit;
+--cmpToBoolFloat:descriptor--
+(# Lab: @localLab
+do Lab.new;
+   (cond,op1[],op2[],lab[]) -> CMP_FLOAT_macro;
+   (1->NewCstOp,op3[])->ldCst; (* delay slot *)
+   op3[]->gClr;
+   Lab.Def
+#)
+--cmpAndJmpFloat:descriptor--
+(# 
+do (cond,op1[],op2[],lab[]) -> CMP_FLOAT_macro;
+   ClearStackTop (* 19.12.95 *)
+#)
+--popFstack:descriptor--
+(##)
+--cmpFloat:descriptor--
+(##)
+--fBeq:descriptor--
+(##)
+--fBge:descriptor--
+(##)
+--fBle:descriptor--
+(##)
+--fBne:descriptor--
+(##)
+--fBgt:descriptor--
+(##)
+--fBlt:descriptor--
+(##)
+--addFloat:descriptor--
+(# op: ^ floatRegOp
+do A.loadFloatOp->op[];
+   (LF.rn,op.rn,LF.rn) -> ADD_D ->mstate.b.emit
+#)
+--subFloat:descriptor--
+(# op: ^ floatRegOp
+do A.loadFloatOp->op[];      (* LF <-  LF - op *)
+   (LF.rn,LF.rn,op.rn) -> SUB_D ->mstate.b.emit
+   (*dest<-op1 - op2*)
+#)
+--mulFloat:descriptor--
+(# op: ^ floatRegOp
+do A.loadFloatOp->op[];
+   (LF.rn,op.rn,LF.rn) -> MUL_D ->mstate.b.emit
+#)
+--divFloat:descriptor--
+(# op: ^ floatRegOp
+do A.loadFloatOp->op[];
+   (LF.rn,LF.rn,op.rn) -> DIV_D ->mstate.b.emit
+#)
+--negFloat:descriptor--
+(#
+do (F.rn,F.rn,F.rn) -> NEG_D ->mstate.b.emit (* why format 3 *)
+#)
+--pushFloatReg:descriptor--
+(# #)
+--popFloatReg:descriptor--
+(# #)
+--AdrRegOpPut:doPart--
+do
+--stackTopAdrPutOp:descriptor--
+(##)  
+--doubleDataRegPut:descriptor-- (* see e.g. divsl.l *)
+(#  #)
+--LocalLabDef:doPart--
+do (if type
+    // dataToCode then
+       labNo->mstate.d.markLocalLab
+    // codeLocal then 
+       (asText,entryDefMark) -> mstate.b.mark
+    // interFragment then
+       asText -> export;
+       (asText,entryDefMark) -> mstate.b.mark   
+    else
+       (if isTextAdr then 
+           (* label in data segment for asciz-text or real-const *)
+           (if mState.inCode then (* case table label *)
+               false -> mState.inCode;
+               labNo->mstate.d.markLocalLab;
+               true-> mState.inCode
+            else
+               labNo->mstate.d.markLocalLab;
+           if)
+        else (*label in code segment *)
+           (if betaLabel then (* as in L: (if ... leave L ; ...if)
+                               * or start label of  case-imp
+                               *)
+               (asText,entryDefMark)->mstate.b.mark
+           if);
+   if)if);
+   labNo->mstate.labs.def;
+--VirtLabDef:descriptor--
+(# T: ^text
+do labNo->LocalLabText->T[];
+   (T[],entryDefMark)->mstate.b.mark;
+   (if common.switch[62] then
+       ('_gp_disp',setHiMark)->mstate.b.mark;
+       (mips_GP,0,0)-> LUI ->mstate.b.emit;
+       ('_gp_disp',setLoMark)->mstate.b.mark;
+       (mips_GP,mips_GP,0)-> ADDIU ->mstate.b.emit;
+       (mips_R25,mips_GP,mips_GP)-> ADDU ->mstate.b.emit;
+       (* Note: We do NOT save mips_GP here, since we don't call any
+        * other entry points; or do we ? It MUST be investigated
+        * if other entry-points are called; othwerwise here is a potential
+        * error.
+        *)
+   if)
+#)
+--LocalLabPut:doPart--
+do 
+--localLabLoadAdr:doPart--
+do (if type = interFragment then
+       (*asText -> import; OLM 26/7/96*)
+       (asText,R[])->PutSetText
+    else
+       (asText,R[])->PutSetLocalDataLab; (* ??? why dataLab here ?*)
+   if)
+--localLabAstext:descriptor--
+(#
+do '.L' -> localLabText; labNo -> localLabText.putInt
+#)
+--ldCst:doPart--
+do (if (minOff <= C) and (C <= maxOff) then
+       (R.reg1,mips_r0,C)->ADDI->mstate.b.emit
+    else
+       (C[],R[])->PutSet
+   if);
+--stCst:descriptor--
+(# op: ^mOperand; tmp: ^dataRegOperand
+do A.loadAdrop->op[];
+   (if C = 0 then 
+       (if size
+        // 4 then (NewDataRegOp,op[])->stVal
+        // 1 then (NewDataRegOp,op[])->stByte
+        else 
+           (NewDataRegOp,op[])->stHalf
+       if)
+    else
+       dataTmp->tmp[];
+       (C[],tmp[])->PutSet;
+       (if size
+        // 4 then (tmp[],op[])->stVal
+        // 1 then (tmp[],op[])->stByte
+        else (tmp[],op[])->stHalf
+   if)if)
+#)
+--ldByte:descriptor---
+(# (* is op2 always register*)
+   op: ^mOperand
+do op1.loadAdrOp->op[];
+   (if op.isInxRegAdr then op[] -> InxRegAdrToReg -> op[] if);
+   (if op1.signed then
+       (op2.reg1,op.reg1,op.offSet)-> LB ->mstate.b.emit
+    else
+       (op2.reg1,op.reg1,op.offSet)-> LBU ->mstate.b.emit
+   if)
+#)
+--ldHalf:descriptor---
+(# (* is op2 always register?*)
+   op: ^mOperand
+do op1.loadAdrOp->op[];
+   (if op.isInxRegAdr then op[] -> InxRegAdrToReg -> op[] if);
+   (if op1.signed then
+       (op2.reg1,op.reg1,op.offSet)-> LH ->mstate.b.emit
+    else
+       (op2.reg1,op.reg1,op.offSet)-> LHU ->mstate.b.emit
+   if)
+#)
+--ldVal:descriptor--
+(# op: ^mOperand;
+do A.loadAdrOp->op[];
+   (if op.isInxRegAdr then op[] -> InxRegAdrToReg -> op[] if);
+   (* offset 16-bit - check!*)
+   (R.reg1,op.reg1,op.offSet)-> LW ->mstate.b.emit
+#)
+--ldVl:descriptor--
+(#
+do (if size
+    //4 then (A[],R[])->ldVal;
+    //1 then (A[],R[])->ldByte;
+    else (A[],R[])->ldHalf;
+   if);
+#)
+--stByte:descriptor---
+(# (* is op2 always register?*)
+   op: ^mOperand
+do op2.loadAdrOp->op[]; (******** OBS also forinxRegAdr *)
+   (if op.isInxRegAdr then op[] -> InxRegAdrToReg -> op[] if);
+   (op1.reg1,op.reg1,op.offSet)->sb->mstate.b.emit       
+#)
+--stHalf:descriptor---
+(# (* is op2 always register?*)
+   op: ^mOperand
+do op2.loadAdrOp->op[];
+   (if op.isInxRegAdr then op[] -> InxRegAdrToReg -> op[] if);
+   (op1.reg1,op.reg1,op.offSet)-> SH ->mstate.b.emit       
+#)
+--stVal:descriptor--
+(# op: ^mOperand
+do A.loadAdrOp->op[];
+   (if op.isInxRegAdr then op[] -> InxRegAdrToReg -> op[] if);
+   (R.reg1,op.reg1,op.offSet) -> SW ->mstate.b.emit       
+#)
+--stValInLab: dopart--
+do 'stValInLab'->screen.putline;
+--ldValFromLab: dopart--
+do 'ldValFromLab'->screen.putline;
+--cpReg:doPart--
+do (if R1.reg1 <> R2.reg1 then
+       (R1.reg1,0,R2.reg1)->ADD->mstate.b.emit
+   if)
+--cpByteMem:descriptor--
+(# op1,op2: ^mOperand; op3: ^dataRegOperand
+do A1.loadAdrOp->op1[];  (* may use a dataTmp if InxRegAdr; i.e. should
+                          * not be delayed to ldByte
+                          *)
+   dataTmp->op3[];
+   (op1[],op3[])->ldByte;
+   (* op1 must be used before A2.loadAdrOp, 
+    * otherwise there may be a register conflict*)
+   (op3[],(*op2*)A2[])->stByte;
+#)
+--cpHalfMem:descriptor--
+(#op1,op2: ^mOperand; op3: ^dataRegOperand
+do A1.loadAdrOp->op1[];
+   dataTmp->op3[];
+   (op1[],op3[])->ldHalf;
+   (op3[],(*op2*)A2[])->stHalf;
+#)
+--cpMem:descriptor--
+(# op1,op2,op3: ^mOperand
+do &dataRegOperand[]->dr[]; dr.alloc;
+   (A1[],dr[])->ldVal;
+   (dr[],A2[])->stVal;
+#)
+--stValInText	:doPart--
+do (if common.switch[62] then
+       (# tOp: ^mOperand
+       do DataTmp -> tOp[];
+          (L.T[],tOp[]) -> PutSetText;
+          (op.reg1,tOp.reg1,0)->SW->mstate.b.emit; 
+       #)
+    else
+       (L.T[],setHiMark)->mstate.b.mark;
+       (dataTmp1,0,0)->LUI->mstate.b.emit; (* dataTmp1 is G1 in sparc?*)
+       (L.T[],setLoMarkSt)->mstate.b.mark;
+       (op.reg1,dataTmp1,0)->SW->mstate.b.emit; 
+   if)
+--comment:doPart--
+do
+--Export:doPart--
+do
+   Lab.copy->entryPoints.find
+   (# notFound::
+        (#
+        do true->E.export; E[]->entryPoints.insert;
+        #)
+   do true->E.export
+   #)
+--Import:descriptor--
+(# #)
+--ImportData:descriptor--
+(# #)
+--JsrTable:descriptor--
+(# op: @adrRegOperand
+do (*AdrTmpOp -> op[];*) PICcallReg -> op;
+   (A[],op[])->ldVal; 
+   (if newVirt then 
+       false -> mstate.restoreCallReg; (*  hack! 
+                                        * Note: see gen1body:newVirt for
+                                        * the case where a jmp is used;
+                                        * must also be fixed;
+                                        * this imp may no longer bee needed 
+                                        * since we now use mips_RA instead of 
+                                        * callReg
+                                        *)
+       (op.reg1,mips_RA)->JALR->mstate.b.emit;
+       ClearStackTop;
+       RestoreGP;
+    else op[] -> JsrReg
+if)#)
+--RegAdrToOriginReg:descriptor--
+(* access = common.direct;
+ * reg and off may be defined
+ *)
+(# op: ^dataRegOperand; oReg: @adrRegOperand
+do (if off = 0 then    (* off may be negative, zero or positive !!! *)
+       (if reg <> originReg then
+          originReg->oReg;
+           (reg[],oReg[] (* reg=off=0*))->cpReg
+       if)
+    else
+       (if (-4096 <= off) and (off < 4096) then
+           (originReg,reg.reg1,off)->ADDI->mstate.b.emit;
+        else
+           dataTmp->op[];
+           (off->NewCstOp,op[])->PutSet; 
+           (reg.reg1,op.reg1,originReg)->ADD->mstate.b.emit
+       if);
+   if)
+#)
+
+--jsrT:doPart--
+do T[] -> CallProc(#do ClearStackTop #)
+--jmpTlong:doPart--
+do (if common.switch[62] then
+       (T[],callMark) -> mstate.b.mark;
+       (mips_R25,mips_GP,0) -> LW -> mstate.b.emit;
+       mips_R25 -> JR -> mstate.b.emit;
+    else
+       (T[],setHiMark)->mstate.b.mark;
+       (dataTmp1,0,0)-> LUI ->mstate.b.emit;
+       (T[],setLoMark)->mstate.b.mark;
+       (dataTmp1,dataTmp1,0)-> ADDIU ->mstate.b.emit;
+       dataTmp1->JR->mstate.b.emit;
+   if);
+   xNOP->mstate.b.emit;
+   (* clearStackTop should NOT be necessary here and for jmpT *)
+   (if common.switch[68] then
+       (callO,mips_R2) -> MOV -> mstate.b.emit;
+   if)
+--jmpT:doPart--
+do (T,NONE)->jmpTlong
+--gJmp:dopart--
+do (# lop: ^localLab
+   do (if op##=localLab## then
+          op[]->lop[];
+          (if lop.betaLabel and false then
+              (# T: ^text
+              do lop.labNo->LocalLabtext->T[];
+                 (T[],jmpMark)->mstate.b.mark;
+                 0->J->mstate.b.emit
+              #)
+           else
+              (* NOTE: funny form of PC relative here!
+               * J is a bit hard to use here!
+               * (mstate.b.LIP + (lop.labNo->mstate.labs.off) div 4)
+               *  -> J
+               *  ->mstate.b.emit;
+               *)
+              (mips_R0,mips_R0,(lop.labNo->mstate.labs.off) div 4)
+                -> BEQ
+                ->mstate.b.emit
+          if);
+          ClearStackTop (* 19.12.95 *)
+      else
+         '\nBA not localLab'->putLine
+     if)
+   #);
+
+--gJsr:dopart--
+   (* Is only called from synthlibbody:callEntry to execute G- or -M-part *)
+do doCall2
+   (# 
+   do (*(if GorM = 'G' then
+          (mips_R4,mips_R0,mips_R0)->ADDI->mstate.b.emit
+          (*(mips_R4,mips_SP) -> MOV -> mstate.b.emit* )
+           if);*)
+      (if mstate.thisPushCount > 0 then 
+          thisRegOp[] -> pushRef;
+          1 -> mstate.popThis;
+          mstate.stacks.markRef;
+          (thisO,mips_sp,mstate.realThisSpOff) -> LW -> mstate.b.emit
+      if);
+      op.T[] -> CallProc
+      (#do
+         (* (op.T[],callMark)->mstate.b.mark; 0-> JAL -> mstate.b.emit;*)
+         ClearStackTop;
+      #);
+      (if mstate.popThis 
+       // 1 then thisRegOp[] -> popRef
+       // 2 then mstate.stacks.popRefTop
+      if); 
+      0 -> mstate.popThis
+   #)
+--jsrReg:doPart--
+do doCall2
+   (#
+   do (if op.reg1 <> PICcallReg then
+          (PICcallReg,op.reg1) -> MOV -> mstate.b.emit
+      if);
+      (PICcallReg,mips_R31) -> JALR -> mstate.b.emit;
+      ClearStackTop;
+      RestoreGP
+   #)
+--jmpReg:doPart--
+do op.reg1 -> JR -> mstate.b.emit;
+   (if mstate.inBindVirtuals then (* 19.12.95 *)
+       xNOP -> mstate.b.emit
+    else ClearStackTop
+   if)
+   (* be careful with ClearStackTop here, 
+    * since this call may
+    * be in a final2virt code where sp is NOT well-
+    * defined; perhaps we should keep explicit track of
+    * when generating code for virtual bindings
+    *)
+--saveInnerReturn:doPart-- 
+do (* SaveStackFrame;
+    * PushReturn;
+    *)
+   SaveReturn;
+--returnInner:doPart--
+do (* restore return adr ra, from stack 
+    * PopReturn;
+    * DoReturn;
+    *)
+   Return
+--rts:doPart--
+do (if not common.switch[214] then
+       XNOP->mstate.b.emit; 
+   if); 
+   mips_ra -> JR -> mstate.b.emit;
+   XNOP->mstate.b.emit; 
+--gClr:doPart--
+do (mips_R0,mips_R0,op.reg1) -> mips_OR -> mstate.b.emit
+--pushAdr:descriptor--
+(#
+do op[]->pushCpar 
+   (* to O-register - push of 'hello' to External.
+    * should be named similar to pushClong, etc.
+    * But must also fix UNIXmachine.
+    * Use pushCtext: which is not used
+    * PushAdr can then be eliminated
+    *)
+#)
+--BeginLabel:doPart--
+do (if hasSlots then RestoreGP if)
+(*   
+(# ar: @adrRegOperand; A: @RegAdr
+do (if true then
+       mips_GP  -> ar.rn
+    else
+       dataTmp1->ar.rn;
+       ar[]-> gClr; ( * load lastCompBlock to ar MISSING!! * );
+       ( * lastCompBlock - SP -> dataTmp1 * )
+       (mips_SP,dataTmp1,dataTmp1) -> SUB -> mstate.b.emit;
+   if);
+   thisO->A.reg; common.direct->A.access; off->A.off;
+   (ar[],A[]) -> stVal;
+#) 
+ *)
+---endLabel:dopart--
+do (if hasSlots then RestoreGP if)
+--pushThisOrCall:descriptor--
+(# 
+do (if pushTh then PushRealThis (*thisRegOp[]->pushRef*) if);
+   (if pushCa then callRegOp[]->pushRef if)
+#)
+--popThisOrCall:descriptor--
+(#
+do (if popCa then callRegOp[]->popRef if);
+   (if popTh then (*thisRegOp[]->popRef*) PopRealThis if)
+#)
+--Push:descriptor--
+(#  op1: ^mOperand
+do (if op.IsAdrRegOp then
+       (* inner P within nested descriptor may call this pus;
+        * a mch.pushref should be made
+        *)
+       op[] -> pushRef
+    else
+       op[] -> pushData;
+   if);
+#)
+--Pop:descriptor--
+(#  
+do (if op.isAdrRegOp then op[]->PopRef
+    else
+       op[] -> popData
+   if)
+#)
+--PushReg:descriptor--
+(# ar: @adrRegOperand
+do (for i: 3 repeat (* a2,a3,a4 *)
+        (if rep.aReg[i + 2 ] > 0 then
+            (* i+1 in [2,3,4,...] *)
+            (*  'PushRef: a'->puttext; i+1->putint;
+             *' f='->puttext; i+1-> log2FysRefReg -> putInt; 
+             *' LIP='->puttext; mstate.b.LIP->putint; newline;
+             *)
+            (i + 1 ) -> log2FysRefReg  -> ar; ar[]->PushRef
+   if)for);
+   
+   pushDataReg->max
+#)
+--PushDataReg:descriptor--
+(# op: ^dataRegOperand
+do (* PUSH data registers MUST be done *)
+   -1->rep.dMax;
+   (for i: rep.dReg.range repeat
+	(if (rep.dReg[i]>0) then i-1->rep.dMax if)for);
+   (if (rep.dMax>-1) then
+       (for i: rep.dMax+1 repeat
+            mips_R8 + (i-1) -> NewDataRegOp -> saveData
+       for);
+   if);
+   -1->rep.fMax;
+   (for i: mstate.floatReg.range repeat
+        (if mstate.floatReg[i]>0 then i-1->rep.fMax
+   if)for);
+   (if rep.fMax>-1 then
+       (for i: rep.fMax+1 repeat
+            (if (i > 1) or (not mstate.f0NotUsed) then
+                (i-1)*2 -> SaveFloat
+   if)for)if);
+   (* push data/float reg mark 
+   (if (rep.dMax+rep.fMax) > -2 then
+       -((rep.dMax+1)+(rep.fMax+1)*2+4)->NewCstOp->push
+    if);
+    *)
+   rep.dMax->max (* max is ONLY dataReg max *)
+#)
+--PopDataReg:descriptor--
+(#
+do (*(if (max + rep.fMax) > -2 then 24 -> setTop if); *)
+   (for i: rep.fMax+1 repeat 
+        (if (i > 1) or (not mstate.f0NotUsed) then
+            (i-1)*2-> RestoreFloat 
+   if)for);
+   (for i:max+1 repeat mips_R8 + (i-1) -> NewDataRegOp -> restoreData for);
+#)
+--popReg:descriptor--
+(# ar: @adrRegOperand; i: @integer
+do max->popDataReg; 
+   (for j: 3 repeat
+        3 + 1 - j -> i; (* i in [3,2,1] *)
+        (if rep.aReg[i + 2] > 0 then (* i+2 in [5=a4,4=a3,3=a2] *)
+           (* 'PopReg a='->puttext; i+1->putint;
+            * ' f='->puttext; i+1->log2FysRefReg->putint; newline;
+            *)
+            (i + 1) -> log2FysRefReg -> ar; ar[]->popRef
+   if)for);
+#)
+--SetTop:descriptor--
+(#
+do (if off <> 0 then (mips_SP,MIPS_SP,off) -> ADDIU -> mstate.b.emit if)
+#)
+--gLea:descriptor---
+(# (* op2 is always an address register *)
+do op2[]->op1.loadAdr
+#)
+--gLeaLabel:descriptor---
+(#
+do op2[]->op1.loadAdr
+#)
+--leaToPrimReg:descriptor--
+(#
+do (if op2.rn > mips_R7 then
+       '\n***OBS! leaToPrimReg: more than 4 arguments\n'->putline
+    else
+       (op1[],op2[])->gLea
+   if)
+#)
+--ChkCase:doPart--
+   (* inx = caseIndex-min
+    * if inx >unsigned  (max-min) the  goto elseLab
+    * This ALSO works if caseIndex < min.
+    * Similar to ChkIndex below.
+    * Note that min is NOT used here.
+    *)
+do (inx.reg1,(max-min),elseLab[]) -> BGTIU_macro;
+   (2->newCstOp,inx[])->logicalShiftLeft;
+--ChkIndex:descriptor--
+(# (* op1: adr. of range elm. in repetition
+    * op2: index register
+    * move range -> %l6
+    * move index to %l7
+    * This code is now part of RegAdrIndex 
+    *)
+#)
+--ChkHeap:descriptor--
+(*R[] -> S.X[]  offset til X 28 
+sub %i0, %g6, %g1       ! %g1 = %i0 - heapBot
+cmp %g1, %g7            ! %g7 - %g1
+bltu 1f                 ! jump if %g1 < %g7,
+                          dvs %i0 in [heapBot, heapBot+%g7[
+st %o0, [%l0+56]        ! delay slot, udf|res f|r jump
+mov %o0, %g2            ! Begge argumenter skal vel overf|res til CheckRef..?
+call ChkRA
+add %l1, 56, %g1
+1:
+
+Husk at %g6 og %g7 ikke indeholder IOA_bot og IOA_top, men
+IOA_bot og (IOA_top - IOA_bot).
+*)
+(# #)
+--SignExtByte:descriptor--
+(#
+do (0,op.reg1,op.reg1,24) -> SLL -> mstate.b.emit;
+   (0,op.reg1,op.reg1,24) -> SRA -> mstate.b.emit;
+#)
+--SignExtWord:descriptor--
+(#
+do (0,op.reg1,op.reg1,16) -> SLL -> mstate.b.emit;
+   (0,op.reg1,op.reg1,16) -> SRA -> mstate.b.emit;
+#)
+--GetBits:descriptor--
+(# (* sll op1, pos, op2
+    * srl op2, 32-length, op2
+    *)
+do (0,op2.reg1,op1.reg1,pos) -> SLL -> mstate.b.emit;
+   (0,op2.reg1,op2.reg1,32-length) -> SRL -> mstate.b.emit;
+#)
+--GetSignedBits:descriptor--
+(# (* sll op1, pos, op2
+    * sra op2, 32-length, op2
+    *)
+do (0,op2.reg1,op1.reg1,pos) -> SLL -> mstate.b.emit;
+   (0,op2.reg1,op2.reg1,32-length) -> SRA -> mstate.b.emit;
+#)
+--gGetBits:doPart--
+(* pDr = length
+ * sll   dr by pDr -> dr
+ * movi  32 -> dataTmp1
+ * sub   dataTmp1 - lDr -> lDr
+ * srl   dr by lDr -> dr
+ *)
+do (dr.reg1,pDr.reg1,dr.reg1)-> SLLV -> mstate.b.emit;
+   (dataTmp1,32) -> LI -> mstate.b.emit;
+   (lDr.reg1,dataTmp1,lDr.reg1) -> SUB -> mstate.b.emit;
+   (dr.reg1,lDr.reg1,dr.reg1) -> SRLV -> mstate.b.emit;
+--gGetSignedBits:doPart--
+   (* sll dr, pDr, dr
+    * set 32, %l6
+    * sub %l6,lDr,lDr	32-length
+    * sra dr, lDr, dr
+    *)
+do (dr.reg1,pDr.reg1,dr.reg1)-> SLLV -> mstate.b.emit;
+   (dataTmp1,32) -> LI -> mstate.b.emit;
+   (lDr.reg1,dataTmp1,lDr.reg1) -> SUB -> mstate.b.emit;
+   (dr.reg1,lDr.reg1,dr.reg1) -> SRAV -> mstate.b.emit;
+
+--PutBits:doPart--
+   (* ld [op2], %l7
+    * set (1<<len)-1, %l6
+    * and op1, %l6, op1
+    * sll op1, 32-len-pos, op1
+    * sll %l6, 32-len-pos, %l6
+    * andn %l7, %l6, %l7
+    * or   %l7, op1, %l7
+    * st %l7, [op2]
+    *)   
+do (# ld7: @dataRegOperand; m: @integer; A1: @RegAdr
+   do dataTmp2->lD7;
+      op2->A1.reg;
+      (A1[],lD7[])->ldVal;
+      (1 %sll length) -1 ->m;
+      (if length > 16 then
+          (dataTmp1,0,m %srl 16) -> LUI -> mstate.b.emit;
+          (dataTmp1,dataTmp1,m %band 0xffff) -> ORI -> mstate.b.emit
+       else
+          (*(dataTmp1,m) -> LI -> mstate.b.emit;   LI gives sign-extension for 0xffff*)
+          (dataTmp1,0,m) -> ORI -> mstate.b.emit;       
+      if);
+      (op1.reg1,dataTmp1,op1.reg1)-> mips_AND-> mstate.b.emit;
+      (if ((32 - length - pos) -> m) > 0 then
+          (0,op1.reg1,op1.reg1,m) -> SLL -> mstate.b.emit;
+          (0,dataTmp1,dataTmp1,m) -> SLL -> mstate.b.emit;
+      if); 
+      (* next 2: ANDN *)
+      (dataTmp1,mips_R0,dataTmp1)-> NOR  ->mstate.b.emit;
+      (dataTmp2,dataTmp1,dataTmp2) -> mips_AND -> mstate.b.emit;
+      (op1.reg1,dataTmp2,dataTmp2) -> mips_OR -> mstate.b.emit;
+      (lD7[],A1[])->stval;
+   #) 
+--gPutBits:doPart--
+   (* ld [ar], %l7
+    * set 1, %l6
+    * sll %l6,lDr
+    * neg %l6
+    * not %l6
+    * and dr, %l6, dr
+    * add lDr,pDr,pDr		length+pos->pDr
+    * neg pDr
+    * set 32,lDr
+    * add lDr,pDr,Pdr		32-length-pos -> pDr
+    * sll dr, pDr, dr
+    * sll %l6, pDr, %l6
+    * andn %l7, %l6, %l7
+    * or   %l7, dr, %l7
+    * st %l7, [ar]    
+    *)
+do  (# ld7: @dataRegOperand; m: @integer; A1: @RegAdr
+    do dataTmp2->lD7;
+       ar->A1.reg;
+       (A1[],lD7[])->ldVal;
+      
+       (* make mask  '0...01...1'->%dataTmp1 with length 1-digits *)
+       (dataTmp1,1) -> LI -> mstate.b.emit;
+       (dataTmp1,lDr.reg1,dataTmp1) -> SLLV -> mstate.b.emit;
+       (dataTmp1,mips_R0,dataTmp1)->SUB->mstate.b.emit;
+       (* NOT:  *)
+       (dataTmp1,mips_R0,dataTmp1)-> NOR  ->mstate.b.emit;
+       (* clear bits in dr using mask *)
+       (dr.reg1,dataTmp1,dr.reg1) -> mips_AND -> mstate.b.emit;
+       (* calculate 32-length-pos to pDr *)
+       (lDr.reg1,pDr.reg1,pDr.reg1) -> ADD -> mstate.b.emit;
+       (pDr.reg1,mips_R0,pDr.reg1) -> SUB -> mstate.b.emit;
+       (lDR.reg1,32) -> LI -> mstate.b.emit;
+       (lDR.reg1,pDr.reg1,pDr.reg1) -> ADD -> mstate.b.emit;
+       (dr.reg1,pDr.reg1,dr.reg1) -> SLLV -> mstate.b.emit;
+       (dataTmp1,pDr.reg1,dataTmp1) -> SLLV -> mstate.b.emit;
+       (* next 2: ANDN *)
+       (dataTmp1,mips_R0,dataTmp1)-> NOR  ->mstate.b.emit;
+       (dataTmp2,dataTmp1,dataTmp2) -> mips_AND -> mstate.b.emit;
+       (dr.reg1,dataTmp2,dataTmp2) -> mips_OR -> mstate.b.emit;
+       (ld7[],A1[])->stval;
+    #)
+--gAdd:descriptor--
+(# (* op1: RegAdr or cstOp
+    * op2: register 
+    *)
+do op1.loadOp->op1[]; 
+   (if op1.isCstOp and ((op1.val < minOff) or (maxOff < op1.val)) then
+       op1[] -> CstOpToReg -> op1[]
+   if);
+   (if op1.isCstOp then
+       (op2.reg1,op2.reg1,op1.val)->ADDI->mstate.b.emit
+    else
+       (op2.reg1,op1.reg1,op2.reg1)->ADD->mstate.b.emit
+   if);
+#)
+--addMem:descriptor--
+(# (* op2 is a mem. adr.*) 
+   op: ^(*mOperand*) Address
+do dataTmp->R[]; op2.loadAdrOp->op[]; (op[],R[])->ldVal;
+   op1.loadOp->op1[]; 
+   (op1[],R[],4)->gAdd;
+   (R[],op[])->stVal;
+#)
+--gSub:descriptor--
+(# (* op2-op1 ? *)
+do op1.loadOp->op1[]; op2.loadOp->op2[];
+   (if op1.isCstOp then (* CHECK that const is only 16bit!!*)
+       (op2.reg1,op2.reg1,-op1.val)->ADDI->mstate.b.emit
+    else
+       (op1.reg1,op2.reg1,op2.reg1)-> SUB ->mstate.b.emit
+   if)
+#)
+--gNeg:descriptor--
+(#
+do (op.reg1,mips_R0,op.reg1)->SUB->mstate.b.emit
+#)
+--cmpToBool:descriptor--
+(# isCstOp: @boolean;
+   op1ToReg:
+     (# op: ^mOperand
+     do dataTmp -> op[];
+        (op.reg1,op1.val) -> LI -> mstate.b.emit;
+        op[] -> op1[]
+     #)
+do op1.loadOp ->op1[];
+   op1.isCstOp -> isCstOp;
+   (if cond (* op1 op op2 -> op3 ! beware that it may instead be:
+             * op2 op op1 -> op3
+             *)
+    // 1 (* =  *) then
+       (if isCstOp then op1ToReg if);
+       (op2.reg1,op1.reg1,op3.reg1) -> SUB -> mstate.b.emit;
+       (op3.reg1,mips_R0,op3.reg1) -> SLTU -> mstate.b.emit; (* 0 ==> equal *)
+       (op3.reg1,op3.reg1,1) -> XORI -> mstate.b.emit
+    // 2 (* <> *) then
+       (if isCstOp then op1ToReg if);
+       (op2.reg1,op1.reg1,op3.reg1) -> SUB -> mstate.b.emit;
+       (op3.reg1,mips_R0,op3.reg1) -> SLTU -> mstate.b.emit; (* 0 ==> equal *)
+2    // 3 (* <  *) then 
+       (if isCstOp then 
+           (op3.reg1,op2.reg1,op1.val) -> SLTI -> mstate.b.emit
+        else
+           (op1.reg1,op2.reg1,op3.reg1) -> SLT -> mstate.b.emit
+       if)
+    // 4 (* <= *) then (* a <= b ==> not b < a *)
+       (if isCstOp then op1ToReg if);
+       (op2.reg1,op1.reg1,op3.reg1) -> SLT -> mstate.b.emit;
+       (op3.reg1,op3.reg1,1) -> XORI -> mstate.b.emit
+    // 5 (* >  *) then
+       (if isCstOp then op1ToReg if);
+       (op2.reg1,op1.reg1,op3.reg1) -> SLT -> mstate.b.emit
+    // 6 (* >= *) then
+       (if isCstOp then 
+           (op3.reg1,op2.reg1,op1.val) -> SLTI -> mstate.b.emit
+        else
+           (op1.reg1,op2.reg1,op3.reg1) -> SLT -> mstate.b.emit
+       if);
+       (op3.reg1,op3.reg1,1) -> XORI -> mstate.b.emit
+   if);
+#)
+--cmpAndJmp:descriptor--
+(# op: ^mOperand
+do op1.loadOp->op1[];
+   (if op1.isCstOp then (* OBS SLT has an SLITI version *)
+       dataTmp->op[];
+       (op.reg1,op1.val)-> LI -> mstate.b.emit; 
+       op[] -> op1[];
+   if);
+   (if cond (* IF op2 cc op1 then goto L ?? is this right? *)
+    // 1 (* =  *) then
+       (op1.reg1,op2.reg1,(lab.labNo->mstate.labs.off) div 4) 
+         -> BEQ->mstate.b.emit
+    // 2 (* <> *) then 
+       (op1.reg1,op2.reg1,(lab.labNo->mstate.labs.off) div 4) 
+         -> BNE->mstate.b.emit
+    // 3 (* <  *) then (op2.reg1,op1.reg1,lab[]) -> BLT_macro
+    // 4 (* <= *) then (op2.reg1,op1.reg1,lab[]) -> BLE_macro
+    // 5 (* >  *) then (op2.reg1,op1.reg1,lab[]) -> BGT_macro
+    // 6 (* >= *) then (op2.reg1,op1.reg1,lab[]) -> BGE_macro
+   if);
+   ClearStackTop
+#)
+--cmpBoolAndJmp:descriptor--
+(#
+do op.loadOp->op[];
+   (if cond (* IF T1 cc R then goto L *)
+    // 1 (* =  *) then 
+       (op.reg1,mips_r0,(lab.labNo->mstate.labs.off) div 4) -> BEQ->mstate.b.emit
+    // 2 (* <> *) then 
+       (op.reg1,mips_r0,(lab.labNo->mstate.labs.off) div 4) -> BNE->mstate.b.emit
+    // 3 (* <  *) 
+    // 4 (* <= *) 
+    // 5 (* >  *) 
+    // 6 (* >= *) then
+       '**** SGI compiler error: CmpBoolAndJump: <, <=, >, >='->cError
+   if);
+   ClearStackTop
+#)
+--gCmp:descriptor--
+(# #)
+--Gmult:descriptor--
+(# op,R: ^mOperand (* not just registerOperand!?*); nop: @boolean
+do op1.loadOp->op[];
+   (if op.isCstOp then
+       dataTmp -> R[];
+       (op[],R[]) -> ldCst;
+       R[] -> op[]
+   if);
+   (* The next two instructions following MFLO and MFHI cannot be
+    * MULT, DIV, etc
+    *)
+   (if (mstate.b.LIP - mstate.lastMfHiLo) <= 8 then 
+       (for i: (12 - (mstate.b.LIP - mstate.lastMfHiLo)) div 4 repeat
+            (if nop then xNOP->mstate.b.emit 
+             else ClearStackTop; true->nop
+            if)
+   for)if);
+   (op.reg1,op2.reg1) -> MULT -> mstate.b.emit;
+   mstate.b.LIP -> mstate.lastMfHiLo;
+   op2.reg1 -> MFLO -> mstate.b.emit;
+#)
+--gDiv:descriptor--
+(# op,R: ^mOperand; L: @localLab
+do op1.loadOp->op[];
+   (if op.isCstOp then
+       dataTmp -> R[];
+       (op[],R[]) -> ldCst;
+       R[] -> op[]
+   if);
+   (if (mstate.b.LIP - mstate.lastMfHiLo) <= 8 then 
+       (for i: (12 - (mstate.b.LIP - mstate.lastMfHiLo)) div 4 repeat
+            xNOP->mstate.b.emit 
+   for)if);
+   (op2.dNo2.reg1,op.reg1) -> mips_DIV -> mstate.b.emit;
+   mstate.b.LIP -> mstate.lastMfHiLo;
+   
+   (* check for division by zero *)
+   L.new;
+   (op.reg1, L.labNo->mstate.labs.off (*not div 4 since forward*)) 
+     ->  BNEZ -> mstate.b.emit;
+   XNOP -> mstate.b.emit;
+   7 -> mips_BREAK -> mstate.b.emit;
+   L.def;
+
+   (if isDiv then
+       op2.dNo2.reg1 -> MFLO -> mstate.b.emit
+    else
+       op2.dNo1.reg1 -> MFHI -> mstate.b.emit
+   if)
+#)
+--gOr:descriptor--
+(* op1 = register or constant ?*)
+(#
+do op1.loadOp->op1[];
+   (if op1.isCstOp and ((op1.val < 0) or (op1.val > maxOff)) then 
+       op1[] -> CstOpToReg -> op1[] 
+   if);
+   (if op1.isCstOp then
+       (op2.reg1,op2.reg1,op1.val) -> ORI -> mstate.b.emit
+   else
+       (op1.reg1,op2.reg1,op2.reg1) -> mips_OR -> mstate.b.emit
+   if);
+#)
+--gAnd:descriptor--
+(#
+do op1.loadOp->op1[];
+   (if op1.isCstOp and ((op1.val < 0) or (op1.val > maxOff)) then 
+       op1[] -> CstOpToReg -> op1[] 
+   if);
+   (if op1.isCstOp then
+       (op2.reg1,op2.reg1,op1.val) -> ANDI -> mstate.b.emit
+       (*dest*)
+   else
+       (op1.reg1,op2.reg1,op2.reg1) -> mips_AND -> mstate.b.emit
+                         (*dest*)
+   if);
+#)
+--gXor:descriptor--
+(#
+do op1.loadOp->op1[];
+   (if op1.isCstOp and ((op1.val < 0) or (op1.val > maxOff)) then 
+       op1[] -> CstOpToReg -> op1[] 
+   if);
+   (if op1.isCstOp then
+       (op2.reg1,op2.reg1,op1.val) -> XORI -> mstate.b.emit
+   else
+       (op1.reg1,op2.reg1,op2.reg1) -> mips_XOR -> mstate.b.emit
+   if);
+#)
+--gNot:descriptor--
+(# 
+do (op.reg1,op.reg1,1) -> XORI -> mstate.b.emit
+#)
+--LogNot:descriptor--
+(#
+do (op.reg1,mips_R0,op.reg1) -> NOR -> mstate.b.emit
+#)
+--gGetDataByte:descriptor--
+(#
+do (if byteNo
+    // 0 then (* shift right 24 *) 
+       (0,op1.reg1,op1.reg1,24)->SRL->mstate.b.emit  
+    // 1 then (* shift right 16 *)
+       (0,op1.reg1,op1.reg1,16)->SRL->mstate.b.emit  
+    // 2 then (* rotate right 8 bits *)
+       (0,op1.reg1,op1.reg1,8)->SRL->mstate.b.emit  
+   if);
+   (op1.reg1,op1.reg1,255)->ANDI->mstate.b.emit;
+#)
+--gGetDataWord:descriptor--
+(#
+do (if wordNo = 0 then
+       (0,op1.reg1,op1.reg1,16)->SRL->mstate.b.emit
+    else
+       (dataTmp2,mips_R0,-1)->ADDI->mstate.b.emit;
+       (0,dataTmp2,dataTmp2,16)->SRL->mstate.b.emit;
+       (op1.reg1,dataTmp2,op1.reg1)->mips_AND->mstate.b.emit
+   if);
+#)
+--tstNone:descriptor--
+(# 
+do (A[],R[])->ldVal; 
+   clearStackTop;
+   (if common.switch[77] then
+       (* force read of R to R0 to check for NONE or lazy ref;
+        * used for new persistence implementation.
+        *)
+       (mips_R0,R.reg1,0) -> LW -> mstate.b.emit
+    else       
+       (mips_R0,R.reg1)->TGE->mstate.b.emit
+   if)
+#)
+--JumpIfTrue:descriptor--
+(##)
+--gBeq:descriptor--
+(##)
+--gBne:descriptor--
+(##)
+--gBge:descriptor--
+(# #)
+--gBae:descriptor-- (* greater than or equal/carry clear *)
+(##)
+--gBle:descriptor-- (* less or equal unsigned *)
+(##)
+--gBbe:descriptor--
+(##)
+--gBgt:descriptor-- 
+(##)
+--gBab:descriptor-- (* greater unsigned *)
+(##)
+--gBlt:descriptor--
+(##)
+--gBbl:descriptor-- (* less than unsigned/*arry set *)
+(##)
+--trap:descriptor--
+(##)
+--CallCproc:descriptor--
+(# max: @integer
+do (if exitType = 7 (*double*) then (* check? *)
+       (# fp,fp0: @floatRegOp;
+       do true -> mstate.F0notUsed; (* dont push/pop %f0 *)
+          fp.alloc; 
+          (if fp.rn <> 0 then 
+              (* %f0 is busy - save it until after the call *)
+              floatTmp->mstate.saveF0[];
+              (fp0[],mstate.saveF0[])->fMov;
+              (* AVOID! push of F0  by PushReg -> max *)
+           else
+              none -> mstate.saveF0[];
+          if);
+          fp.deAlloc
+       #);
+    else
+       false -> mstate.F0notUsed;
+       none -> mstate.saveF0[];
+   if);
+   (if mstate.a1InTmp then (* hack *)
+       (mips_R26,0,mips_R5) -> mips_OR -> mstate.b.emit; (* HACK *)
+       false->mstate.a1InTmp
+   if);
+   PushReg -> max;
+   thisRegOp[] -> PushRef;
+   (* should callReg be saved here? *)
+   T->jsrT;
+   thisRegOp[] -> PopRef;
+   max -> PopReg;
+   false -> mstate.F0notUsed; (* in general %f0 is in use *)
+#)
+--PushClong:descriptor-- 
+(#
+do op[]->PushCpar
+#)
+--PushCword:descriptor--
+(#
+do op[]->PushCpar
+#)
+--PushCbyte:descriptor--
+(#
+do op[]->PushCpar
+#)
+--PushCdoubleAdr:descriptor--
+(# FR: ^floatRegOp; oReg: ^mOperand; spAdr: ^regAdr;
+   dr1,dr2: ^dataRegOperand;
+do mstate.getFparPair -> (FR[],oReg[]);
+   (if not mstate.hasIntPar and (FR[] <> NONE) then
+       (FR.rn,A.reg1,A.offSet)-> LDC1 ->mstate.b.emit
+    else       
+       (if oReg.isDataRegOp then
+           (* load A to oReg *)
+           (oReg.reg1  ,A.reg1,A.offSet)  -> LW ->mstate.b.emit;
+           (oReg.reg1+1,A.reg1,A.offSet+4)-> LW ->mstate.b.emit;
+        else
+           (* move A to stack *)
+           oReg[] -> spAdr[];
+           DataTmp -> dr1[];
+           DataTmp -> dr2[];
+           (dr1.reg1,A.reg1,A.offSet)   -> LW ->mstate.b.emit;
+           (dr2.reg1,A.reg1,A.offSet+4) -> LW ->mstate.b.emit;
+           (dr1.reg1,spAdr.reg1,spAdr.offSet) -> SW ->mstate.b.emit;
+           (dr2.reg1,spAdr.reg1,spAdr.offSet+4) -> SW ->mstate.b.emit;
+   if)if)
+#)
+--PushCfloat:descriptor--
+(# FR: ^floatRegOp; oReg: ^mOperand; spAdr: ^regAdr
+do mstate.getFparPair -> (FR[],oReg[]);
+   (if not mstate.hasIntPar and (FR[] <> NONE) then
+       (FR.rn,F.rn)-> MOV_D  ->mstate.b.emit  
+    else
+       (if oReg.isDataRegOp then 
+           (* move F to oReg *)
+           (F.rN  ,oReg.reg1+1) -> MFC1 -> mstate.b.emit;
+           (F.rN+1,oReg.reg1)   -> MFC1 -> mstate.b.emit;
+        else
+           (* push F on stack *)
+           oReg[] -> spAdr[];
+           (F.rN, spAdr.reg,spAdr.off) -> SDC1 -> mstate.b.emit; 
+   if)if)
+#)
+--PushCtext:descriptor--
+(##)
+--PopCword:descriptor--
+(##)
+--PopCbyte:descriptor--
+(##)
+--Xpar:descriptor--
+(# no: @integer;
+   dreg: [5]@integer
+#)
+--initGetXpar:descriptor--
+(# aR: @adrRegOperand; dr:  @dataregOperand; N: @integer
+do BC+SC+LC->N;
+   1->Xpar.no 
+#)
+--getXlong:descriptor--
+(*for C, long,word, and byte are always long *) 
+(# drg: @dataregoperand;
+do dr[] -> GetXpar
+#)
+---GetXword:descriptor--
+(* only for MAC Pascal, byte and word are always word *)
+(# #)
+---GetXbyte:descriptor--
+(* only for MAC Pascal, byte and word are always word *)
+(# #)
+--toXres:descriptor--
+(#
+do (if rNo = 0 then 
+       (mips_R2,dataRegA.reg1) -> MOV -> mstate.b.emit
+    else cError(#do 'Error in register no. for call-back'->T #)
+   if)
+#)
+--StackOffPut:descriptor--
+(##)
+--SPtoPrimReg:doPart--
+do (if pNo <= 4 then
+       mstate.stacks.popFrame;
+       (mips_R3 + pNo, mips_SP,0) -> ADDIU -> mstate.b.emit
+    else
+       mstate.stacks.popFrame;
+       (dataTmp1, mips_SP,0) -> ADDIU -> mstate.b.emit;       
+       (dataTmp1,mips_SP, (pNo - 1 )*4) -> SW -> mstate.b.emit
+   if);
+   (if pushThis > 0 then 
+       thisRegOp[] -> pushRef;
+       pushThis -> mstate.popThis
+   if)
+--SaveReg:descriptor--     (* Save registers a0 and a1 *)
+(* saveReg/restoreReg are called from evlib:pushThisAndCall and
+ * when calling externals.
+ * These two situations should be distinguished
+ * OBS! the two booleans pushCa and pushTh should be tested!
+ * SUN4B should also be fixed for this
+ *)
+(# 
+do callRegOp[] -> PushRef;
+   PushRealThis (*thisRegOp[] -> PushRef*)
+#)
+---SaveAllReg:doPart---
+do
+
+---RestoreAllReg:doPart---
+do 
+--SaveHeapTop:descriptor---
+(# T: @text;  dr1,dr2: ^dataRegOperand
+do DataTmp -> dr1[]; dataTmp -> dr2[];
+   ('BetaStackTop',dr1[]) -> PutSetText;
+   mstate.stacks.popFrame;
+   (dr2.reg1, mips_SP,0) -> ADDIU -> mstate.b.emit;
+   (dr2.reg1,dr1.reg1,0)-> SW -> mstate.b.emit;
+   (*(thisO,dr1.reg1,4)-> SW -> mstate.b.emit;*)
+#)
+--RestoreReg:descriptor--  (* Restore registers a0 and a1 *)
+(#
+do PopRealThis; (*thisRegOp[] -> PopRef;*)
+   callRegOp[] -> PopRef
+#)
+--popCallStack:descriptor--
+(#  #)
+--AllocExternalResult:doPart--
+do
+   
+--PascalTrap:descriptor--
+(# #)
+---SetBreak:doPArt---
+do 80 -> mips_break ->  mstate.b.emit
+
+--SwitchToData:descriptor--
+(#
+do false->mstate.inCode
+#)
+--SwitchToCode:descriptor--
+(#
+do true->mstate.inCode
+#)
+--DeclareLong:descriptor--
+(#
+do N->mstate.d.emit
+#)
+--DeclareAddress:descriptor--
+(#  opt: ^textOperand; opl: ^localLab; T: ^text
+do (if true
+    // op##=textOperand## then 
+       op[]->opt[] ;
+       (opt.T.copy,wordMark)->mstate.d.mark;
+       0->mstate.d.emit
+    // op##=localLab## then 
+       (* a local label in a case table in code 
+        * or a virtual label in a prototype
+        *)
+       op[]->opl[]; 
+       opl.labNo->LocalLabtext->T[];
+       (if opl.betaLabel and not common.switch[62] then
+           (T[],wordMark)->mstate.b.mark;
+           0->mstate.b.emit
+        else
+           (T[],wordMark)->mstate.d.mark;
+           0->mstate.d.emit
+       if)
+    else '\n!!! dclAdr NOT text or localLab'->bugstream.putLine
+   if)
+#)
+--DeclareWord:descriptor--
+(#
+do N->mstate.d.emitHalf
+#)
+--DclWord:descriptor--
+(#
+do N->mstate.d.emitHalf
+#)
+--EmitByte:descriptor--
+(#do B->mstate.d.emitByte #)
+--Skip:descriptor--
+(##)
+--AsciiText:descriptor--
+(#
+do T.scanAll(#do ch->mstate.d.emitByte #);
+   0->mstate.d.emitByte;
+   4->mstate.d.align
+#)
+--LabelDef:descriptor--
+(#
+do (if mstate.inCode then
+       (*(thisO,mips_R4) -> MOV -> mstate.b.emit;
+       (if common.switch[62] then
+           (PICcallReg,PICcallReg,8) -> ADDIU -> mstate.b.emit;
+        else
+           xNOP -> mstate.b.emit
+        if);*)
+       (* the following is for resetting IP such that .db offsets are
+        * correctly calculated from the start of theG/M-entrypoint;
+        * it is ONLY needed because of the two instructions generated above;
+        * if the 2 instructions before the entry-point are removed, the
+        * IP clearing should be removed
+        *)
+       (*IP + dbgInf.IPsum -> dbgInf.IPsum;
+        0 -> IP -> dbgInf.oldIP;*)
+       (* end-of IP clear-code *)
+       (T.copy,entryDefMark)->mstate.b.mark;
+       mState.stacks.init;
+    else
+       (T.copy,entryDefMark)->mstate.d.mark
+   if);
+#)
+--SubDescriptorSlotEntry:descriptor--
+(# 
+do computeGP;
+#)
+--defineMainLabel1:descriptor--
+(# NewEntry:
+     (# T: ^text
+     enter T[]
+     do T[] -> export; T[] -> labelDef;
+        (T[],false)->entryPoints.addDef;
+        SaveStackFrame;
+        PushReturn;
+     #);
+   RTS:
+     (#
+     do PopThis;
+        PopReturn;
+        DoReturn;
+     #);
+   GenPrim:
+     (# T: ^text; noOfArg: @integer; (* no of arguments Excluding SP *)
+        D: ^dataRegOperand;
+        frameSize: (#exit 40 #); 
+        (* OBS! Important assumption:
+         * The size of a stack frame is minimum 40 bytes;
+         * this holds space for up to 6 arguments to external routines,
+         * dynamic link, return address and the GP.
+         * See computation of stackFrameSize above.
+         * Note that xMax = 5; i.e. in all stack frames, space is
+         * reserved for 5 arguments. This was assumed to be the max
+         * for external routines. This is not the case since some
+         * of the ones generated here have 6 arguments. Perhaps it
+         * is not necessary to define xMax, but for here it has
+         * the advantage that the stackFrameSize is always 40 for
+         * all the routines generated here.
+         *)
+     enter(T[],noOfArg)
+     do T[] -> NewEntry;
+        dataTmp -> D[];
+        noOfArg+1 -> mstate.stacks.xFrame; (* reserve space for arguments
+                                            * on the stack
+                                            *)
+        (for i: noOfArg > MaxNoOfPrimReg repeat
+             (* copy from stack to stack *)
+             (D.reg1,mips_SP,frameSize + 16 + (i-1)*4) -> LW -> mstate.b.emit;
+             (D.reg1,mips_SP,16 + (i-1)*4) -> SW -> mstate.b.emit;
+        for);
+        (noOfArg+1,0) -> SpToPrimReg;
+        'C' -> T.prepend;
+        T[] -> CallProc(#do ClearStackTop#);
+        RTS;
+     #);
+   T: ^text; aR: @adrRegOperand
+do true->mState.isBetaEnv;
+
+   &text[]->T[];
+   
+   (* CallB(this1,CallReg,BetaEntry,SP)
+    * 
+    * Routine to be used for calling a BETA entry-point
+    * 
+    * 1.  A G-entry point from AlloI
+    * 
+    *       callB(returnmark,CalledObject,G-entry)
+    * 
+    * 2.  The top M1BETAENV entry point 
+    * 
+    *     Either AttachBasicComponent
+    * 
+    *         ...?
+    * 
+    *     or  simple call from minirun.c
+    *        CallB(0,InitialBetaEnvObject,M1BETAENV)
+    * 
+    * 3.  Attach of some M11FOO
+    *     
+    *     CallB(component,CalledObject,M11FOO)
+    *)
+   'CallB' -> T; T[] -> export; T[] -> labelDef;
+   ('CallB',false)->entryPoints.addDef;
+   SaveStackFrame;
+   PushReturn;
+   (*  mstate.stacks.popFrame;*)
+   SaveRegisters;
+   (PICcallReg,mips_R6) -> MOV -> mstate.b.emit;
+   (mips_R7,mips_SP,0) -> SW -> mstate.b.emit;
+   PICcallReg -> aR;
+   (PICcallReg,mips_R31) -> JALR -> mstate.b.emit;
+   (thisO,mips_R4) -> MOV -> mstate.b.emit;
+   RestoreRegisters;
+   PopReturn;
+   DoReturn;
+
+   'DoGC' -> T; T[] -> export; T[] -> labelDef;
+   ('DoGC',false)->entryPoints.addDef;
+   SaveStackFrame;
+   PushReturn;
+   (* mstate.stacks.popFrame;*)
+   (mips_R4,mips_SP,40) -> ADDIU -> mstate.b.emit; (*size of this stack frame*)
+   (mips_R5,thisO) -> MOV -> mstate.b.emit;
+   (mips_R6,mips_R0) -> MOV -> mstate.b.emit;
+   'doGC' -> jsrT;
+   ClearStackTop;
+   PopReturn;
+   DoReturn;
+   
+   'HandleIndexErr' -> T; T[] -> export; T[] -> labelDef;
+   ('HandleIndexErr',false)->entryPoints.addDef;
+   SaveStackFrame;
+   PushReturn;
+   (*mstate.stacks.popFrame;*)
+   (mips_R4,common.RepRangeErr) -> LI -> mstate.b.emit;
+   (mips_R5,thisO) -> MOV -> mstate.b.emit;
+   (mips_R6,mips_SP,40) -> ADDIU -> mstate.b.emit; (*size of this stack frame*)
+   (mips_R7,mips_RA) -> MOV -> mstate.b.emit;
+   'BetaError' -> jsrT;
+   ClearStackTop;
+   PopReturn;
+   DoReturn;
+   
+   'FailureExit' -> T; T[] -> export; T[] -> labelDef;
+   ('FailureExit',false)->entryPoints.addDef;
+   SaveStackFrame;
+   PushReturn;
+   (mips_R4,common.StopCalledErr) -> LI -> mstate.b.emit;
+   (mips_R5,thisO) -> MOV -> mstate.b.emit;
+   (mips_R6,mips_SP,40) -> ADDIU -> mstate.b.emit; (*size of this stack frame*)
+   (mips_R7,mips_RA) -> MOV -> mstate.b.emit;
+   'BetaError' -> jsrT;
+   ClearStackTop;
+   PopReturn;
+   DoReturn;
+   
+   'DumpStack' -> T; T[] -> export; T[] -> labelDef;
+   ('DumpStack',false)->entryPoints.addDef;
+   SaveStackFrame;
+   PushReturn;
+   (mips_R4,common.DumpStackErr) -> LI -> mstate.b.emit;
+   (mips_R5,thisO) -> MOV -> mstate.b.emit;
+   (mips_R6,mips_SP,40) -> ADDIU -> mstate.b.emit; (*size of this stack frame*)
+   (mips_R7,mips_RA) -> MOV -> mstate.b.emit;
+   'BetaError' -> jsrT;
+   ClearStackTop;
+   PopReturn;
+   DoReturn;
+   
+   'GetSP' -> T; T[] -> export; T[] -> labelDef;
+   ('GetSP',false)->entryPoints.addDef;
+   mips_ra-> JR ->mstate.b.emit;
+   (mips_R2,mips_SP) -> MOV -> mstate.b.emit;
+
+   ('CpkVT',   1) -> GenPrim;
+   ('CpkSVT',  3) -> GenPrim;
+   ('CopySRR', 5) -> GenPrim;
+   ('CopySVR1',5) -> GenPrim;
+   ('CopySVR2',5) -> GenPrim;
+   ('CopySVR4',5) -> GenPrim;
+   ('CopySVR8',5) -> GenPrim;
+   ('CopySVRI',5) -> GenPrim;
+   ('CopySVRC',5) -> GenPrim;
+   ('Qua',3) -> GenPrim;
+
+   'BETA_main' -> T ; T[] -> export;  T[] -> labelDef;
+   ('BETA_main',false)->entryPoints.addDef;
+
+#)
+---GetCallReg:descriptor--
+(#
+do rep.aReg[2] + 1 -> rep.aReg[2]
+#)
+---DecrCallReg:descriptor---
+(#
+do rep.aReg[2] - 1 -> rep.aReg[2];
+   (if rep.aReg[2] < 0 then
+       0->rep.aReg[2];
+       cError(#do 'CallReg negative: a1'-> T#);
+if)#)
+---FreeCallReg:descriptor--
+(# ar: @adrRegOperand
+do rep.aReg[2] -1 -> rep.aReg[2];
+#)
+--CallRegBusy:doPart--
+do (rep.aReg[2] > 0) -> value 
+--CallRegInPrimReg2:doPart--
+do (rep.aReg[2] > 0) -> value
+--GetOriginReg:descriptor--
+(# #)
+--freeOriginReg:descriptor--
+(# #)
+--ByteSwap:descriptor--
+(# dr: @dataRegOperand;
+   T: @text
+do dr.alloc;
+   (if long then
+       (dr.reg1,ar.reg1,0) -> LW -> mstate.b.emit;
+       (0,dr.reg1,dataTmp1,8) -> SRL -> mstate.b.emit;
+       (dataTmp1,dataTmp1,0xFF) -> ANDI -> mstate.b.emit;
+       (0,dr.reg1,dataTmp2,24) -> SLL -> mstate.b.emit;
+       (0,dataTmp1,dataTmp1,16) -> SLL -> mstate.b.emit;
+       (dataTmp1,dataTmp2,dataTmp2) -> mips_OR -> mstate.b.emit;
+       (0,dr.reg1,dataTmp1,8) -> SRL -> mstate.b.emit;
+       (dataTmp1,dataTmp1,0xFF00) -> ANDI -> mstate.b.emit;
+       (dataTmp1,dataTmp2,dataTmp2) -> mips_OR -> mstate.b.emit;
+       (0,dr.reg1,dr.reg1,24) -> SRL -> mstate.b.emit;
+       (dataTmp2,dr.reg1,dataTmp2) -> mips_OR -> mstate.b.emit;
+       (dataTmp2,ar.reg1,0) -> SW -> mstate.b.emit;
+    else
+       (dr.reg1,ar.reg1,0) -> LHU -> mstate.b.emit;
+       (dataTmp1,dr.reg1,0xFF) -> ANDI -> mstate.b.emit;
+       (0,dataTmp1,dataTmp1,8) -> SLL -> mstate.b.emit;
+       (0,dr.reg1,dr.reg1,8) -> SRL -> mstate.b.emit;
+       (dr.reg1,dr.reg1,0xFF) -> ANDI -> mstate.b.emit;
+       (dataTmp1,dr.reg1,dr.reg1) -> mips_OR -> mstate.b.emit;
+       (dr.reg1,ar.reg1,0)-> SH ->mstate.b.emit;
+   if);
+#)
+
+--arithShiftLeft:dopart--
+do (if op1.isCstOp then
+       (0,op2.reg1,op2.reg1,op1.val)-> SLL ->mstate.b.emit;
+    else
+       (op2.reg1,op1.reg1,op2.reg1)-> SLLV ->mstate.b.emit;
+   if);
+--arithShiftRight:doPart--
+do (if op1.isCstOp then
+       (0,op2.reg1,op2.reg1,op1.val)-> SRA ->mstate.b.emit;
+    else
+       (op2.reg1,op1.reg1,op2.reg1)-> SRAV ->mstate.b.emit;
+   if);
+--logicalShiftLeft:doPart--
+do (if op1.isCstOp then
+       (0,op2.reg1,op2.reg1,op1.val)-> SLL ->mstate.b.emit;
+    else
+       (op2.reg1,op1.reg1,op2.reg1)-> SLLV ->mstate.b.emit;
+   if);
+--logicalShiftRight:doPart--
+do (if op1.isCstOp then
+       (0,op2.reg1,op2.reg1,op1.val)-> SRL ->mstate.b.emit;
+    else
+       (op2.reg1,op1.reg1,op2.reg1)-> SRLV ->mstate.b.emit;
+   if);
+--rotateLeft:doPart-- 
+do (# td: ^dataRegOperand; n: @integer;
+   do dataTmp->td[];
+      (td.reg1,op2.reg1)-> MOV ->mstate.b.emit;
+      (if op1.isCstOp then
+          (0,op2.reg1,op2.reg1,op1.val)-> SLL ->mstate.b.emit;
+          (0,td.reg1,td.reg1,32-op1.val)-> SRL->mstate.b.emit;
+       else
+          (op2.reg1,op1.reg1,op2.reg1)-> SLLV ->mstate.b.emit;
+          (op1.reg1,mips_R0,op1.reg1)-> SUB ->mstate.b.emit;
+          (op1.reg1,op1.reg1,32)-> ADDI ->mstate.b.emit;
+          (td.reg1,op1.reg1,td.reg1)-> SRLV ->mstate.b.emit
+      if);
+      (op2.reg1,td.reg1,op2.reg1)-> mips_OR ->mstate.b.emit;
+   #)
+--rotateRight:doPart---
+do (# td: ^dataRegOperand; n: @integer; 
+   do dataTmp->td[];
+      (td.reg1,op2.reg1)-> MOV ->mstate.b.emit;
+      (if op1.isCstOp then
+          (0,op2.reg1,op2.reg1,op1.val)-> SRL ->mstate.b.emit;
+          (0,td.reg1,td.reg1,32-op1.val)-> SLL ->mstate.b.emit;
+       else
+          (op2.reg1,op1.reg1,op2.reg1)-> SRLV ->mstate.b.emit;
+          (op1.reg1,mips_R0,op1.reg1)-> SUB ->mstate.b.emit;
+          (op1.reg1,op1.reg1,32)-> ADDI ->mstate.b.emit;
+          (td.reg1,op1.reg1,td.reg1)-> SLLV ->mstate.b.emit
+      if);
+      (op2.reg1,td.reg1,op2.reg1)-> mips_OR ->mstate.b.emit;
+   #)
+--nop:descriptor--
+(# do xNOP -> mstate.b.emit #)
+--RegAdrPutOp:doPart--
+do
+--RegAdrLoadAdr:doPart--
+do (if (off < minOff) or (maxOff < off) then
+       (# op: ^mOperand
+       do dataTmp->op[]; 
+          (off->newCstOp,op[])->PutSet;
+          (reg.reg1,op.reg1,R.reg1)->ADD->mstate.b.emit;
+       #)
+    else
+       (R.reg1,reg.reg1,off)->ADDI->mstate.b.emit
+   if)
+--adrLoadFloatOp:descriptor--
+(#
+do floatTmp->op[];
+   (op.rn,reg,off)-> LDC1 ->mstate.b.emit  
+#)
+--RegAdrLoadOp:descriptor--
+(# largeOff: @boolean;
+do dataTmp->op[];
+   (thisOp,op[],size)->ldVl;
+#)
+--RegAdrLoadAdrOp:descriptor--
+(***************
+ * It should be possible to return an InxRegAdr with
+ * reg and dr and eliminate the add reg,dr,dr.
+ * Check,however, that reg is not deallocated somewhere!
+ *)
+(# aR: ^adrRegOperand; A1: @RegAdr;
+do (if (off < minOff) or (maxOff < off) then
+       (*DR.alloc;*)
+       adrTmp->aR[];
+       (* it is not clear how deallocation of aR and thisOp happens!
+        * perhaps a tmpDataOperand must be introduced?
+        * Other similar loadAdrOp slost MUST be checked
+        * Change: changed to use adrTmp which returns %i5. This
+        * operation must thus NEVER be used in a context where %i5
+        * is used.
+        *)
+       (off->newCstOp,aR[])->PutSet;
+       (reg.reg1,aR.reg1,aR.reg1)->ADD->mstate.b.emit;
+       aR.rN->A1.reg; (* A1.off=0*)
+       A1[]->op[]
+    else this(RegAdr)[]->op[]
+   if)
+#)
+--RegInd:doPart--
+(* Address Register Indirect NOT USED? *) 
+do
+--RegisterOffSet:doPart--
+do
+--InxRegAdrPutOp:doPart--
+do
+--InxRegAdrLoadAdr:doPart--
+   (* dReg <- aReg + dReg 
+    * R <- dReg + off
+    *)
+do (dReg.reg1,aReg.reg1,dReg.reg1)->ADD->mstate.b.emit;   
+   (if (off < - 0xffff) or (0x7fff < off) then 
+       (# op: ^mOperand
+       do 'InxRegAdrLoadAdr:BIG'->putline;
+          dataTmp->op[]; 
+          (off->newCstOp,op[])->PutSet;
+          (R.reg1,dReg.reg1,op.reg1)-> ADD ->mstate.b.emit;
+       #)
+    else
+       (R.reg1,dReg.reg1,off) -> ADDI -> mstate.b.emit;
+   if)
+--InxRegAdrPushRegAndOff:descriptor--
+(#
+do (off->newCstOp,dReg[],4)->gAdd; 
+   (2->newCstOp,dReg[])->arithShiftRight;
+   aReg[]->pushClong; dReg[]->pushClong
+#)
+(***************** registers **************)
+--DataRegMax:doPart--
+do 5->val 
+---thisO:doPart--
+do mips_r30->rNo 
+---callO:doPart--
+do mips_r5->rNo
+(******************************************)
+
+---BeginProtoTypes:descriptor---
+(#
+do mstate.stacks.init; (* ad hoc call *)
+   switchToData
+#)
+(********************** high level instructions ************)
+--SaveReturn:descriptor---
+(# 
+do SaveStackFrame;
+   PushReturn;
+   (* thisRegOp[] -> PushRef;*)
+   (*(if inGpart then
+       (for i: 3 repeat i->refTmpOp ->pushData for);
+       (for i: 4 repeat i->adrTmpOp ->pushData for)
+    if);*)
+   (callRegOp[],thisRegOp[])->CpReg;
+   ClearAdrTmpRegs;
+#)
+--Return:descriptor--
+(# 
+do (thisRegOp[],callRegOp[])->CpReg;
+   (*(if inGpart then
+       (for i: 4 repeat 5-i->adrTmpOp -> popData for);
+       (for i: 3 repeat 4-i->refTmpOp -> popData for)
+    if);*)
+   PopThis;
+   PopReturn;
+   DoReturn
+#)
+---ReturnVirtualCOM:dopart--
+do (mips_R2,dataRegA.reg1) -> MOV -> mstate.b.emit; (*cleaner interface needed *)
+   (false,RToff) -> Return
+--ExternalEntry:descriptor--
+(# ar,ar1: @adrRegOperand; dr: @dataRegOperand 
+do entryId[]->labelDef;
+   (* save arguments of call back function; we dont know how many arguments 
+    * there are and should probably NOT save more there are, since
+    * there may not be room on the stack?? The number of arguments could
+    * be a parameter to ExternalEntry.
+    * We should consider floating point arguments. However, they are NOT
+    * used by AlloSICB.
+    * AlloSICB has only 2 arguments, but we save all 4 arg. registers.
+    *)
+   (mips_R4,mips_SP,0) -> SW -> mstate.b.emit;
+   (mips_R5,mips_SP,4) -> SW -> mstate.b.emit;
+   (mips_R6,mips_SP,8) -> SW -> mstate.b.emit;
+   (mips_R7,mips_SP,12) -> SW -> mstate.b.emit;
+   (if common.switch[62] then
+       (PICcallReg,PICcallReg,20) -> ADDIU -> mstate.b.emit;
+   if);
+   
+   true -> inGpart; (* this is a hack to ensure that caller save registers
+                     * are saved; we are of course NOT in a G-part
+                     *)
+   SaveReturn; 
+   SaveRegisters;
+   (mips_R4,mips_R8) -> MOV -> mstate.b.emit;
+
+   ar.alloc; 
+   ('BetaStackTop',ar[]) -> PutSetText;
+   (mips_R5,ar.reg1,0)-> LW ->mstate.b.emit;
+   ar.dealloc;
+
+   'AlloSICB'->jsrT;
+   
+   (thisO,mips_R2) -> MOV -> mstate.b.emit; (* needed for text par *)
+   
+   (mips_R5,mips_R2) -> MOV -> mstate.b.emit;
+#)
+---ExternalMark:descriptor---
+(* sp(0) = betaStackTop[0]; SP of last beta object
+ * sp(4) = betaStackTop[4]; last Beta object calling C before this call-back
+ *)
+(# ar: @adrRegOperand; dr: @dataRegOperand
+do ar.alloc; dr.alloc;
+   ('BetaStackTop',ar[]) -> PutSetText; (* double work, but not sure if
+                                         * ar is still ok after AlloSICB
+                                         *)
+   (dr.reg1,ar.reg1,0) -> LW ->mstate.b.emit;
+   (dr.reg1,mips_SP,0) -> SW -> mstate.b.emit;
+   (* (dr.reg1,ar.reg1,4) -> LW ->mstate.b.emit;
+    * (dr.reg1,mips_SP,4) -> SW -> mstate.b.emit;
+    *)
+   ar.deAlloc; dr.deAlloc;
+#)
+--ExternalReturn:descriptor--
+(# ar: @adrRegOperand; dr: @dataRegOperand
+do (* pop BetaStackTop;
+    * possible C-calls during the call-back may
+    * have given a new value to BetaStackTop
+    *)
+   ar.alloc; dr.alloc;
+   ('BetaStackTop',ar[]) -> PutSetText; 
+
+   (dr.reg1,mips_SP,0) -> LW -> mstate.b.emit;
+   (dr.reg1,ar.reg1,0) -> SW ->mstate.b.emit;
+  
+   (* (dr.reg1,mips_SP,4) -> LW -> mstate.b.emit;
+    * (dr.reg1,ar.reg1,4) -> SW ->mstate.b.emit;
+    *)
+   ar.deAlloc; dr.deAlloc;
+   
+   RestoreRegisters;
+   Return
+#)
+--RegAdrIndex:descriptor--
+(# IA: @InxRegAdr; aR: @adrRegOperand; A1: @RegAdr; 
+   L: @localLab; indexCheck: @boolean;
+   mult: @boolean; log: @integer
+do reAlloc->aR;
+   (this(RegAdr)[],aR[])->ldVal; 
+   freeAdr;
+   aR->A1.reg; 12->A1.off;
+
+   (if not common.switch[14] then (*(A1[],dReg[])->ChkIndex*)
+       true->indexCheck;
+       (A1[],dataTmp1->newDataRegOp)->ldVal; (* dataTmp1 = range *)
+       (dataTmp2,dReg.reg1,-1)->ADDI->mstate.b.emit;
+       L.new;
+       (dataTmp2,dataTmp1,L[]) -> BLTU_macro
+       (* branch if dataTmp2 <u dataTmp1=range - missing instruction?*)
+   if);
+
+   (* @@R[i] = R.start + (i-1)*size +16 *)
+   (if isSimple then
+       (if size 
+        // 1 then 
+           15->IA.off; (if indexCheck then ClearStackTop if)
+        // 2 then
+           14->IA.off;
+           (0,dreg.reg1,dReg.reg1,1)->SLL->mstate.b.emit;
+        // 4 then
+           12->IA.off;
+           (0,dreg.reg1,dReg.reg1,2)->SLL->mstate.b.emit;
+        // 8 then
+           8->IA.off;
+           (0,dreg.reg1,dReg.reg1,3)->SLL->mstate.b.emit;
+       if)
+    else
+       24-size->IA.off; 
+       (if (size->exact_log2->log) <> -1 then
+           (0,dreg.reg1,dReg.reg1,log)->SLL->mstate.b.emit;
+        else
+           true->mult;
+           (if indexCheck then if);
+   if)if);
+   (if indexCheck then 
+       'HandleIndexErr' -> CallProc
+       (#
+       do (if true then  
+              (if mstate.thisPushCount > 0 then 
+                  (* attempt to restore this= *)
+                  mstate.stacks.markRef;
+                  (thisO,mips_sp,mstate.realThisSpOff) 
+                    -> LW 
+                    -> mstate.b.emit;
+               else
+                   xNOP -> mstate.b.emit; (* ClearStackTop cannot be here, since
+                                  * the clearing is only executed if index
+                                  * error. And a Clear here will prevent 
+                                  * the next clearStackTop to generate a clear
+                                     *)
+              if)
+          else
+             xNOP -> mstate.b.emit; (* ClearStackTop cannot be here, since
+                                  * the clearing is only executed if index
+                                  * error. And a Clear here will prevent 
+                                  * the next clearStackTop to generate a clear
+                                     *)
+          if)
+       #);
+       L.def;
+   if);
+   (if mult then (size->newCstOp,dReg[],4)->gMult if);
+   aR->IA.aReg;  dReg -> IA.dReg;
+   (*(aR.reg1,dReg.reg1,aR.reg1)->ADD->mstate.b.emit;*)
+   (* datpete: the following is not needed on sparc, is it??? *)
+   size->IA.size; (* OBS only OK for size=1,2,4,8 *)
+   
+   access->IA.access;
+   IA[]->A[];
+   (* dReg.deAlloc*)
+#)
+--InxRegAdrLoadOp:descriptor---
+(# op1: ^mOperand
+do loadAdrOp->op1[]; (* add off to dReg *)
+   dataTmp->op[]; 
+   (op1[],op[],size)->ldVl;
+#)
+--InxRegAdrLoadFloatOp:descriptor---
+(# (*aa: ^Address*) aa: ^inxRegAdr;
+   ar: ^adrRegOperand
+do AdrTmp -> ar[];
+   floatTmp -> op[];
+   (aReg,dReg,ar.reg1)-> ADD ->mstate.b.emit;
+   (op.rN,ar.reg1,off) -> LDC1 -> mstate.b.emit
+#)
+--InxRegAdrLoadAdrOp:descriptor--
+(# A: @RegAdr; dr: ^dataRegOperand
+do (* do NOT add to dReg, since this(InxRegAdr) may be used at
+    * other places in which case off again may be added to dReg.
+    * It dont work by allocating a dataTmp, since this(InxRegAdr) may
+    * live for longer than dataTmp swaps, ie. use the same tmp.reg. again
+    *)
+   (* does this make InxRegAdrToReg: superfluos? Yes! *)
+   dataTmp -> dr[];
+   (if (off < minOff) or (maxOff < off) then
+       (off->newCstOp,dr[])->PutSet;
+       (* why two add here?*)
+       (dReg.reg1,dr.reg1,dr.reg1)-> ADD -> mstate.b.emit;    
+       '\n***** InxRegAdrLoadOp: CHECK slot!\n'->putline;
+       (aReg.reg1,dr.reg1,dr.reg1)-> ADD -> mstate.b.emit;    
+    else
+       (aReg.reg1,dReg.reg1,dr.reg1)-> ADD -> mstate.b.emit;    
+       off -> A.off
+   if);
+   dr -> A.reg; size->A.size;
+   A[]->op[]
+#)
+
+--initExternalCall:dopart--
+(* C kald, med noOfPar parameters *)
+do (if (noOfPar mod 2) = 1 then noOfPar + 1 -> noOfPar if);
+   (* if external floats then 8-byte alignment necessary *)
+   noOfPar->mState.xInitOreg;
+--getRegForXres:descriptor--
+(# (*do saveHeapTop*)#)
+--endX:descriptor--
+(##)
+--noXres:doPart---
+do getExternalResult
+   
+---getSimpleXres:doPart---
+do getExternalResult(# do getSimpleRes -> drA #)
+   
+---getTextXres:doPart---
+do (* create BETA char repetition;
+    * copy C-text referred by d0;
+    * return reference in primReg1 
+    *)
+   getExternalResult
+   (# pDest: ^mOperand; dr: @dataRegOperand
+   do (*getSimpleRes;*)
+      2-> initPrimcall;
+      (* 1 -> dataRegA.toPrimDest;*)
+      (mips_R2,0,mips_R4) -> ADD -> mstate.b.emit;
+      (2,1) -> SPtoPrimReg;
+      'CopyCT'->callPrim;
+      aR.alloc;
+      (*3 -> getPrimRes -> dr;*)
+      (mips_R2,0,aR.reg1) -> ADD -> mstate.b.emit;
+       mState.xFreeOreg
+   #)
+---realXresIsDouble:doPart---
+do false -> value
+   
+---getDoubleXres:doPart---
+do getExternalResult(#do getDoubleRes -> (drA,drB) #)
+---getFloatXres:doPart---
+do getExternalResult
+   (# FP0: @floatRegOp
+   do FP.alloc;
+      (if FP.rN <> 0 then 
+          (* move %f0,%FP 
+           * move mstate.saveF0, %f0
+           *)
+          (FP0[],FP[])->Fmov;
+          (mstate.saveF0[],FP0[])->Fmov;
+      if);   
+      NONE -> mstate.saveF0[];
+   #)
+
+---getDataRefXres :doPart---
+do getExternalResult(# do getSimpleRes -> drA #)
+
+---getDataPartXres:doPart---
+do getEXternalResult(#do 'GetDataPartXres is NOT implemented'-> putline #);
+   getExternalResult(#do getSimpleRes -> drA #);
+
+--GetComPar:dopart--
+do mstate.noCOMsupport;
+   (if isValPar then
+       dataTmp -> paramAdr[]
+    else
+       &AdrRegOperand[] -> paramAdr[]
+   if);
+   (* paramNo = 0 is origin which has been handled *)
+   (if false (*paramNo < 4*) then
+       (if isValPar then
+           (paramAdr.reg1,mips_r4+paramNo) -> MOV -> mstate.b.emit
+        else
+           mips_r4 + paramNo -> paramAdr.reUse;
+       if);
+    else
+       paramAdr.alloc;
+       (* see InitExternalCall for the stack layout;
+        * an extra register window has been saved at this point
+        *)
+       mstate.stacks.popFrame;
+       (paramAdr.reg1,mips_SP,(paramNo-4)*4+16) -> LW -> mstate.b.emit
+   if)
+
+--xParForward:descriptor--
+(#do true->forward  #)
+---initPrimCall:descriptor--
+(#
+do noOfPar -> mState.xInitOreg;
+#)
+---primRep:descriptor-- (* not used ?*)
+(# used,busy: [8] @boolean
+#)
+--getPrimReg:descriptor-- 
+(# 
+do pNo->mstate.xGetOreg -> primReg[]
+#)
+--CallPrim:descriptor--
+(# RA: @localLab; aR: @adrRegOperand; 
+   isAtt, isSusp,isExO,popThis,realThisOK: @boolean;
+   max: @integer
+do (if true
+    // 'Att'->T.equal then
+       (if mstate.thisPushCount > 0 then
+           (* we must transfer the real thisO which as been 
+            * pushed on the stack 
+            *)
+           mstate.stacks.markRef;
+           (thisO,mips_sp,mstate.realThisSpOff) -> LW -> mstate.b.emit;
+           true -> realThisOK (* we dont have to worry about restoring
+                               * the realThis below
+                               *)
+       if);
+       (mips_R4,thisO) -> MOV -> mstate.b.emit;
+       (* mips_R5 is componet for Att, dummy for Susp *)
+       RA.new;  true->RA.betalabel;
+       6->aR.rn;
+       (RA[],aR[])-> gLeaLabel;
+       true->isSusp;
+       (mips_R7,mips_SP) -> MOV -> mstate.b.emit;
+       (* the following is generated to ensure that dyn of attached object
+        * will refer to the component and not to the calling object.
+        *)
+       (thisO,callO) -> MOV -> mstate.b.emit;
+       true -> isAtt
+    // 'Susp'->T.equal then
+       (*(mips_R4,thisO) -> MOV -> mstate.b.emit;*)
+       RA.new;  true->RA.betalabel;
+       6->aR.rn;
+       (RA[],aR[])-> gLeaLabel;
+       true->isSusp;
+       (mips_R7,mips_SP) -> MOV -> mstate.b.emit;
+    // 'ExO' -> T.equal 
+    // 'ExOx' -> T.equal then
+       (* dataRegA = R8: labelOffSet in destObj 
+        *            R4: jumpAdr
+        *            R5: destObj
+        *            R6: label after ExO
+        *            R7: thisObject
+        *            R8: SP
+        * adrTmp1 =  R19: jumpAdr
+        *)
+       RA.new;  true->RA.betalabel;
+       6->aR.rn;
+       (RA[],aR[])-> gLeaLabel;
+       (mips_R7,thisO) -> MOV -> mstate.b.emit;
+       (mips_SP,mips_SP,16) -> SW -> mstate.b.emit;  (* R8 <- SP *)
+       (adrTmp1,mips_R4) -> MOV -> mstate.b.emit;    (* adrTmp1 <- jumpAdr *)
+       (if 'ExO' -> T.equal then
+           (thisO,mips_R5) -> MOV -> mstate.b.emit;      (* thisO <- destObj *)
+       if);
+       true->isExO;
+   if);
+   PushReg -> max;
+   (* restore thisReg *)
+   (if not realThisOk and (mstate.thisPushCount > 0) then 
+       thisRegOp[] -> pushRef;
+       (*  1 -> mstate.popThis;*)
+       true -> popThis;
+       mstate.stacks.markRef;
+       (thisO,mips_sp,mstate.realThisSpOff) -> LW -> mstate.b.emit
+    if);
+
+   T[] -> CallProc(#do ClearStackTop #);  
+   
+   (* invert restore of thisreg *)
+   (if popThis then thisRegOp[] -> popRef if);
+
+   max -> PopReg;
+   
+   (if mstate.popThis 
+    // 1 then thisRegOp[] -> popRef
+    // 2 then mstate.stacks.popRefTop
+   if); 
+   0 -> mstate.popThis;
+
+   (if isSusp or isAtt then  
+       RA.def;
+       (mips_SP,mips_R4) -> MOV -> mstate.b.emit;
+       (thisO,mips_R5) -> MOV -> mstate.b.emit;
+       RestoreGP;
+    else (if isExO then
+             (* NOTE: may not always work correctly since the correct
+              * GP may not be computed. If ExO is to a label in
+              * another fragment, the GP of this fragment MUST be
+              * used. The restore of GP in jsrT above is thus 
+              * superflouos and the GP of the fragment being jumped
+              * to MUST be restored. This GP is found in SP(GPoff)
+              * of the fragment being jumped to. Unfortunately
+              * GPoff is NOT know here!
+              *)
+             RA.def;
+             (if 'ExOx' -> T.equal then
+                 (thisO,mips_R2,-8) -> LW -> mstate.b.emit
+             if);
+             adrTmp1 -> JR -> mstate.b.emit;
+             (mips_SP,mips_R2) -> MOV -> mstate.b.emit; (* set SP *)
+         if)
+   if);
+   true->mstate.initPrimCall;
+
+#)
+--CallAlloPrim:descriptor--
+(#
+do proto[]->mstate.proto[]; 
+
+   (3,1) ->  SPtoPrimReg;
+   
+   T[] -> CallProc(#do ClearStackTop #);
+
+   none->mstate.proto[];
+   (if (mstate.Xlevel > 1) then 
+       (* external call in progress;
+        * see evval2:listEvVal:asgToCproc
+        *)
+       (adrTmp1,mips_R2) -> MOV -> mstate.b.emit; 
+       true->mstate.alloI;
+    else
+       (callO,mips_R2) -> MOV -> mstate.b.emit;
+   if);
+
+   (if mstate.popThis 
+    // 1 then thisRegOp[] -> popRef
+    // 2 then mstate.stacks.popRefTop
+   if); 
+   0 -> mstate.popThis;
+   true->mstate.initPrimCall
+#)
+---GetPrimRes:descriptor--
+(# (* GetPrimRes MUST always be called in order to update o-registers*)
+do (if not mstate.alloi and mState.restoreCallReg and mstate.initPrimCall
+       then 
+       (* this is a funny situation; happens when allocating
+        * virtual objects in declarations X: @V;
+        * getPrimRes is called before CallAlloI;
+        * in fact AlloI will be called after getPrimRes
+        * but (see jsrtable) we should NOT restore callO.
+        * And even worse for local virtuals X: @V there is no
+        * jsrTable; we must thus NOT restore if NO primCall
+        * CallAlloPrim has been made:-(
+        * mstate.initPrimCall = false if initPrimCall with no 
+        * callprim/CallAlloPrim
+        *)
+       (*       (adrTmp1,0,callO) -> mips_OR -> mstate.b.emit;*)
+   if);
+   (if res
+    // 0 (* o: ignore result*) then
+       mstate.xFreeOreg 
+    //1 (* use result *)then
+       dr.alloc; 
+       (mips_R2,0,dr.reg1) -> ADD -> mstate.b.emit;
+       mState.xFreeOreg
+    //2 (* result is X-parameter *) then mState.xMovePrimToX
+    //3 (* result is used immediately *) then
+       mips_R2 -> dr;
+       mState.xFreeOreg
+   if);
+   (if mstate.alloI then
+       (* see callAlloPrim *)
+       (callO,adrTmp1) -> MOV -> mstate.b.emit;
+       false -> mstate.AlloI
+   if)
+#)
+(*** BC file ***)
+--putS:doPart---
+do 
+(**************** register allocation ***************)
+---GetAdr:doPart---
+(* allocates %i2,%i3,%i4,... *)
+do 10->rN; (* just during testing *)
+   L: (for i:5 repeat
+           (if not (rep.aReg[i+2] > 0) then
+               rep.aReg[i+2]+1->rep.aReg[i+2];
+               i+1->rN;
+               leave L
+      if)for);
+   (* rN=2,3,4,... *)
+   (if (rN<5) then false->rep.clearA[rN]
+    else
+       rN -> AdrRegOverflow
+   if);
+   (* rN in [2,3,4,...], i.e. rN represents, a2,a3,a4, ...
+    * mips_R16 is first temp. adr reg: r1;
+    * rN -2 + mips_R16 gives physical register representing 
+    * a2,a3,a4, ...
+    *)
+   rN - 2 + mips_r16 -> rN; 
+---GetData:doPart---
+do 10->rN; (* just during testing *)
+   L: (for i:5 repeat
+           (if not (rep.dReg[i]>0) then
+               rep.dReg[i]+1->rep.dReg[i];
+               i-1->rN;
+               leave L
+      if)for);
+   (if rN = 10 then DataRegOverflow if);
+   rN + mips_r8 -> rN (* rN = 16,17,18,... *)
+---freeAdr:doPart--
+   (* do not try to deallocate thisO or callO.
+    * sometimes they are allocated, 
+    * which they should not have been
+    *)
+do rNo - mips_r16 + 2 -> rNo; (* to make mapping -> a2,a3,a4,a5,...;
+                               * mip1_R16 - mips_R16 + 2 -> a2
+                               *)
+   (if (1 < rNo) and (rNo < 5 ) then    
+       rep.aReg[rNo+1]-1->rep.aReg[rNo+1];
+       (* (if rNo//2//3//4 then true->rep.clearA[rNo] if);*)
+       (if (rep.aReg[rNo+1]<0) then
+           cError
+           (# S: @text
+           do 'AdrReg negative:a'->S; rNo->S.putInt; S[]->T;
+              0->rep.aReg[rNo+1] 
+#)if)if)
+---adrRegInUse:doPart---
+   (* called by freeAdr in InxRegAdr - used to be needed when aReg
+    * did NOT refer to the rep-object but into it. Now it should
+    * refer to the rep-object
+    *)
+do true->value
+---dataRegInUse:doPart---
+do rep.dReg[rN + 1 - mips_r8] > 0 -> value 
+---freeData:doPart--
+do rNo - mips_r8 -> rNo;
+   (if (0 <= rNo) and (rNo < 5) then
+       rep.dReg[rNo+1]-1->rep.dReg[rNo+1];
+       
+       (if rNo<6 then
+           (*(# S:@ text do 'FreeData:d'->S; rNo->S.putInt; S->comment #);*)
+           (if (rep.dReg[rNo+1]<0) then 
+               cError
+               (# S: @text
+               do 'DataReg negative:d'->S; rNo->S.putInt; S[]->T;
+                  s->comment;
+                  0->rep.dReg[rNo+1] 
+   #)if)if)if)
+---releaseReg:descriptor---
+(#
+do (for i: rep.aReg.range repeat 0->rep.aReg[i]->rep.dReg[i] for);
+   (for i: mstate.floatReg.range repeat 0->mstate.floatReg[i] for);
+   (if externalLevel <> 0 then
+       '\nMachine: externalLevel <>0 :'->bugstream.puttext;
+       externallevel -> bugstream.putint;
+       bugstream.newline
+   if)
+#)
+--noOfFreeDataReg:descriptor---
+(#do (for i: dataRegMax repeat (if rep.dReg[i+1]//0 then val+1->val if)for)#)
+--DataRegOpReUse:descriptor--
+(# N: @integer
+do (rN+1) - mips_r8 ->N;
+   (if (0<N) and (N<=rep.dReg.range) then
+       rep.dReg[N]+1->rep.dReg[N]
+    else (*cError(#do 'DataRegOpReuse: index error'->T #)*)
+       'DataRegOpReuse: index error'->bugstream.putline 
+if)#)
+--AdrRegOpReUse:doPart--
+do (if (mips_R16 <= rN) and (rN <= mips_R20) then
+       rep.aReg[rN + 3 - mips_r16] + 1 -> rep.aReg[rN + 3 - mips_r16]
+       (* index should correspond to  1 + a0,a1,a2,a3,a4,a5,... 
+        * Since mips_R16 = a2, 2 must be added, 1 is added to start indexing at 1
+        *) 
+   if)
+--getVirtualoriginStart1:descriptor--
+(# A1: @RegAdr; aR: @adrRegOperand
+do originReg -> aR->A1.reg; A1[]->startA[];
+   true->mstate.InBindVirtuals
+#)
+--getVirtualoriginStart2:descriptor--
+(#
+do startA.toOriginReg; (* a final off may have to be added *) 
+   false -> mstate.InBindVirtuals
+#)
+---Final2VirtJump:descriptor--
+(# 
+do (if common.switch[62] then
+       (PICcallReg,CallO) -> MOV -> mstate.b.emit
+   if)
+#)
+--InitMachine:descriptor--
+(# name: ^text;
+do openDbgInf;
+   mstate.Init;
+#)
+--CloseMachine:descriptor--
+(* Note, BC.name has the form:
+ *      'somePath/foo-BETA-'
+ * i.e. asmlink:asmExt returns '-BETA-'.
+ * This extension is removed below.
+ * 
+ * Switches:
+ *   24:   only generate .db. Has NOT been tested.
+ *)
+(# FN: ^text;
+do BC.name->FN[];
+   (FN.length-3,FN.length)->FN.delete; (* remove '-BETA-' *)
+   FN[]->BC.name;
+   (* producing debug tables *)
+   FN[]->saveDbgInf;
+   (if not switch24 then 
+       (if common.switch[18] then
+           <<SLOT MIPSwriteAsmFile:descriptor>>
+       if);
+       mstate.emitCodeToFile
+   if)
+#)
+---getImages:dopart---
+do mstate.B[] -> codeIm[]; 
+   mstate.D[] -> data[]
+   
+--asgRefAdr:doPart---
+   (* assign A to thisAddress *)
+do (thisAdr[],withQua)->AsgRef
+   (#
+   do sourceReg.alloc;
+      (if A.access = common.direct then
+          (A[],sourceReg[])->gLea
+       else 
+          (A[],sourceReg[])->ldVal
+      if);
+      destReg[]->dest[]
+   #)
+
+--asgRefReg:doPart---
+(* as asgRefAdr, but A is an adrRegOperand *)
+do (thisAdr[],withQua)
+     -> AsgRef(#do A->sourceReg.reUse; destReg[]->dest[] #)
+   
+---addTargetInfo:doPart----
+do (if data then
+       mstate.d.LIP->E.LIP
+    else
+       mstate.b.LIP->E.LIP
+   if)
+---entryPointsInsert:doPart---
+do elm.T[]->mstate.strTbl.insert->elm.m.strInx;
+   mstate.symtabTop + 1 -> mstate.symtabTop -> elm.m.symtabInx
+--entryPointsEqual:descriptor---   
+(##)   
+--externalDispatch:descriptor--
+(# 
+do mstate.NoCOMsupport;
+   (if reg.reg1 <> PICcallReg then
+       (PICcallReg,reg.reg1) -> MOV -> mstate.b.emit
+   if);
+   (PICcallReg,mips_R31) -> JALR -> mstate.b.emit;
+   ClearStackTop;
+   RestoreGP   
+#)
+--Lock:descriptor--
+(# do 'Lock'->putline; #)
+--Unlock:descriptor--
+(# do 'Unlock'->putline; #)
+--enablePreemption:descriptor--
+(# do 'enablePreemption'->putline; #)
+--disablePreemption:descriptor--
+(# do 'disablePreemption'->putline; #)
+--allocObj:dopart--
+(* %a0 = origin
+ * %a1 = 1. arg
+ * %a2 = 2. arg
+ * %a3 = ...
+ * 
+ * FIXME! The entry code here must be fixed to be
+ * able to work with garbage collection.
+ * Should look like a call back entry, but also
+ * be prepared to be called from C
+ *)
+   
+do mstate.noCOMsupport;
+   (# a1,a2,a3: @dataRegOperand
+   do SaveReturn;
+      (* save arguments a1,a2,a3 - a0 is used by AlloI *)
+      (* All arguments are saved in parameter save area;
+       * and always fetched from here by getComArg
+       *)
+      mstate.stacks.popFrame;
+      (mips_r5,mips_sp, 4)-> SW ->mstate.b.emit;
+      mstate.stacks.popFrame;
+      (mips_r6,mips_sp, 8)-> SW ->mstate.b.emit;
+      mstate.stacks.popFrame;
+      (mips_r7,mips_sp,12)-> SW ->mstate.b.emit;
+
+      (*  mips_r5 -> a1;  mips_r6 -> a2;  mips_r7 -> a3; 
+       a1[] -> pushData; a2[] -> pushData; a3[] -> pushData;*)
+      (Tentry[]->newTextToDataOp,callRegOp[]) -> gLea;
+      ('AlloI',Tentry[]) -> CallAlloPrim;
+      (ThisO,CallO) -> MOV -> mstate.b.emit; 
+      true -> mstate.stacks.comEntry; (* HACK *)
+      (* mstate.stacks.popFrame;
+      (mips_r5,mips_sp, 4)-> LW ->mstate.b.emit;
+      mstate.stacks.popFrame;
+      (mips_r6,mips_sp, 8)-> LW ->mstate.b.emit;
+      mstate.stacks.popFrame;
+      (mips_r7,mips_sp,12)-> LW ->mstate.b.emit;
+      a3[] -> popData; a2[] -> popData; a1[] -> popData;*)
+   #)
+--SaveCodeState:doPart--
+do
+   
+--restoreCodeState:doPart--
+do
+   
+---EmitCk:descriptor---
+(##)
+

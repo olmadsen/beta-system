@@ -1,0 +1,195 @@
+ORIGIN 'evlib';
+LIB_ITEM 'betacodegen';
+INCLUDE 'auxlib';
+INCLUDE 'storeReg'
+---mkComputedAdrVal:descriptor--
+(# CV: ^ComputedAdrVal
+do &ComputedAdrVal[]->CV[]->V[]; 
+   dr[]->CV.thisReg[]; isAreg->CV.isAreg; strucRef->CV.strucRef
+#)
+---EvalLib:attributes---
+ComputedAdrVal: EvVal 
+  (# thisVal::<
+       (# V: @ComputedAdrVal 
+       do thisReg[]->V.thisReg[]; strucRef->V.strucRef; V[]->thisV[] 
+       #);
+     display::< (# do 'CompAdrVal:'->xT; thisReg.display->xT #);
+     reUse: (#do thisReg -> thisReg.reUse #);
+     loadVal::< (#do this(ComputedAdrVal)[]->V[] #);
+     loadVal2::< (#do this(ComputedAdrVal)[]->V[] #);
+     thisReg: ^mch.registerOperand;
+     isAreg, (* to be eliminated*)
+     strucRef: @boolean; (* adr. register has a structureReference,dirty! *)
+     theReg::<(#do thisReg -> aR #);    
+     release::< (#do thisReg.deAlloc #);
+     reAlloc::<(#do thisReg ->thisReg.reUse #);
+     toTmp::<
+       (#
+       do (if thisReg.isCallReg then
+              (* this(ComputedEvVal) is &T[] *)
+              (# aR: @mch.adrRegOperand
+              do aR.alloc; (thisReg[],aR[])->mch.cpReg;
+                 aR[]->thisReg[];
+                 mch.decrCallReg
+       #)if)#);
+     toPrimDest::<
+       (# 
+       do pNo->thisReg.toPrimDest
+          (*(if primDest.isPrimRegOp then
+              (thisReg[],primDest[]) -> mch.cpReg
+           else
+              (thisReg[],primDest[]) -> mch.stVal
+          if)*)
+       #);
+     evType::< (#do (if strucRef then 4->type else 1->type if)#);
+     (* type=1 is simple, 2 is ref, 3 is real, 4 is struc *)
+     asgToAdr::<
+       (#
+       do (if StrucRef then 
+              (thisReg[],false) -> rA.asgRefReg
+           else
+              (thisReg[],rA[]) -> mch.stVal
+          if);
+          rA.freeAdr;
+          this(ComputedAdrVal)[]->V[] 
+       #);
+     asgToRefAdr::
+       (# rA: ^mch.address; EV: @ASTindex; 
+       do (if stest then 
+              301->trace(#do 'computedAdrVal:asgToRefAdr:'->xT; destEV[]->xA #)
+          if);
+          destEV.son -> EV;
+          (EV[],strucRef,rAbase[],thisReg[],0,rChain[]) -> storeRegRef -> rA[];
+          rA.freeAdr; this(ComputedAdrVal)[] -> V[]
+       #);
+     asgToRepAdr:: 
+       (* This operation is called when assigning a text to
+        * a char rep in a COM virtual function. It does NOT
+        * necessarily work in all cases, including switch[61],
+        * etc.
+        *)
+       (# old61: @boolean;
+       do 'computedAdr:asgToRepAdr:' -> thisTranslate.systemException;
+          (if false then
+              3 -> mch.initPrimCall;
+              (if common.isIntel then
+                  thisReg[] -> mch.push; (*1 -> thisReg.toPrimDest;*)
+               else
+                  thisReg[] -> mch.pushAdr; (*1 -> thisReg.toPrimDest;*)
+              if);
+              2 -> rA.pushRegAndOff;
+              'CopyT'-> mch.callPrim;
+              0 -> mch.getPrimRes;
+          if)
+       #);
+
+     asgToItem::< (* A -> rA *)
+       (# nScan: @ | scanNadr; Ax: @mch.RegAdr
+       do (if (rDesc -> sematt.descKind) = sematt.dataKind then
+              (if stest then 
+                  301->trace(#do 'computedAdrVal:asgToItem:'->xT;rDesc[]->xA#)
+              if);
+                           
+              '\n*** Data-objects as part objects in COM virtuals'->puttext;
+              '\n    (call-by-value of struct)'->puttext;
+              '\n    is NOT correctly implemented!'-> putline;
+              (* datpete: 24/02/99: call _struct_param_by_value error function in betarun *)
+              '      Generating call of error function instead.' -> putline;
+              ('_struct_param_by_value',sematt.cExt,0,0) -> mch.callCproc;
+           else
+              (rDesc[],rA[],0,rChain[],true) -> nScan;
+              this(ComputedAdrVal)[] -> nScan.AsgToNelm; 
+              nScan.reset
+          if)
+       #);
+     asgToRealAdr:: (#do 'Error:computedAdrVal:asgToRealAdr'-> putline #);
+     asgToInlineItem:: (#do 'Error:computedAdrVal:asgToInLineItem'-> putline #);
+     asgToList::< (#do toListOne #);
+     asgToCproc::<
+       (# CP: @ExTernalCall
+       do release;
+          (externalName,Desc[],extKind,EV.son) -> CP; (* init *)
+          (CP.getEnterP,extKind,CP.getEnterP.size,CP.pascExtProcInfo)
+            -> pushCpar;
+          CP.call;
+          CP.getExitP->V[];
+       #);
+     asgToInLinePrimitive::<
+       (# D: [1]@integer; dRes: @integer; dr: @mch.dataRegOperand;
+       do thisReg -> thisReg.reUse; thisReg -> D[1]; 
+          (opCode,I1,I2,D) 
+            -> gen.inLinePrimitive 
+            -> dRes
+            -> thisReg;
+          (thisReg,false,false,false) -> mkComputedEvVal -> V[];
+          (if dRes <> D[1] then D[1]->mch.freeData if)
+       #);
+     asgToNewPrim: (#do 'computedAdrVal:asgToNewPrim'-> putline #);
+     pushCpar::<
+       (# 
+       do (if released then reAlloc if);
+          (if type
+           // common.byteXpar then thisReg[]->mch.pushCbyte
+           // common.shortXpar then thisReg[]->mch.pushCword
+           // common.longXpar then thisReg[]->mch.pushClong
+           // common.varPtnCXpar then 
+              1->mch.initPrimCall;
+              (if common.switch[61] or common.switch[64] then
+                  (if true then
+                      1 -> thisReg.toPrimDest
+                   else
+                      (thisReg[],1->mch.getPrimReg) -> mch.cpReg
+                  if)
+               else                      
+                  thisReg[]->mch.pushClong;  (* should be prim *)
+              if);
+              protectCallReg(# do 'CopyCPP'->mch.callprim #);
+              2->mch.getPrimRes
+           // common.varPtnPascalXpar then 
+	      (univProcInfo,thisReg[],size[]) -> genCopyPPP
+           // common.varPtnStdXpar then  (* Std for Windows NT *)
+              7 ->mch.initPrimCall;
+              thisReg[]->mch.pushClong; size[]->mch.pushClong;
+              'CopySPP'->mch.callPrim;
+              2->mch.getPrimRes
+              (* others not used *)
+           // common.COMobjectXpar then
+              (if stest then 
+                  301->trace(#do 'ComputedAdrEvVal: ComObjectPar:' ->xT#)
+              if);
+              thisReg[]->mch.pushClong 
+           // common.holderXpar then
+              (if stest then 
+                  301 ->trace(#do 'ComputedAdrEvVal: HolderXpar:' ->xT#)
+              if);
+              (* a holder ptn must have the form
+               *   intHolder: holder(# value: @integer ... #)
+               *   refHolder: holder(# ref: ^object #)
+               * It is important that value and ref is in a fixed offset
+               * which currently is offset 16;
+               * we pass the address of value or ref, 
+               * which is aReg + 16.
+               * Note Holder objects should be allocated in COM object
+               * space, and ever be moved by the GC. We must there fore
+               * have a GC strategy for them
+               *)
+              (16->mch.newCstOp,thisReg[],4) -> mch.gAdd;
+              thisReg[] -> mch.pushClong              
+          if);
+          release
+       #);
+     ToDreg::<
+       (* used when computing primitive address expressions like @@ch;
+        * the address of ch is in A; mch.move A to the 'dr' data register
+        *)
+       (# aReg: @mch.adrRegOperand
+       do aReg.alloc; 
+          (A[],aReg[])->mch.gLea;
+	  thisReg.alloc; (aReg[],thisReg[])->mch.CpReg;
+	  (*(0->mch.newCstOp,aReg[])->mch.ldCst;*) 
+          aReg[]->mch.gClr;
+	  (* in order NOT to confuse garbage collection *)
+	  aReg.deAlloc; A.freeAdr
+       #);
+     scmp::<(#do doCmp(#do 2->toPrimDest #)#);
+  #);

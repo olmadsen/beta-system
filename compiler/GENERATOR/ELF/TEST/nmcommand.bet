@@ -1,0 +1,99 @@
+ORIGIN '../elfread';
+
+(* simulation of nm *)
+
+--PROGRAM: descriptor--
+(# ef: @elfreader
+     (# gs: @getString; 
+        gsh: @getShdr; 
+        gsn: @getSectionName;
+     #);
+   sh: ^Elf32_Shdr;
+   inx: @integer;
+   putfmt: 
+     (# i: @integer;
+        printf: external
+          (# fmt: [0]@char;
+             val: @integer;
+          enter (fmt,val)
+          #);
+     enter i
+     do ('%010d', i) -> printf;
+     #);
+   fname: ^text;
+   Usage:
+     (# 
+     do 'Usage: nmcommand <ELF object file>' -> screen.putline;
+        stop;
+     #);
+   sname: ^text;
+do (if noOfArguments <> 2 then
+       Usage;
+    else
+       2 -> arguments -> fname[] -> ef.name;
+       (if not ef.entry.exists then
+           Usage;
+       if)
+   if);
+   fname[] -> ef.name;
+   ef.openread;
+   
+   ef.scanAllSymEnts
+   (# global: @boolean;
+      current_sec_changed::
+        (# 
+        do 'Section ' -> puttext; current_sec.sh_name-> ef.gsn -> putline;
+        #);
+   do (* In the dynamic linker and valhalla, the two interesting
+       * values will be current.st_value and current.st_name,
+       * and a test to ensure that only the symbols of a given type
+       * is recorded.
+       * Below we do some mangling to make nmcommand output in the
+       * same style as 'nm -p' - just to prove that it is possible (:-)
+       *)
+      (* current_inx ->putint; ascii.ht->put; *)
+      (* Emit value as 10 decimal digits *)
+      current.st_value -> putfmt;
+      ' ' -> put;
+      (* Emit identifier char a la nm *)
+      ((current.st_info -> ELF32_ST_BIND) = STB_GLOBAL) -> global;
+      (if (current.st_info -> ELF32_ST_TYPE) 
+       // STT_NOTYPE then
+          (if global then 'N' -> put; else 'n' -> put if);
+       // STT_SECTION then
+          (if global then 'S' -> put; else 's' -> put if);
+       // STT_FILE then
+          (if global then 'F' -> put; else 'f' -> put if);
+       else
+          (* Base identifier on section *)
+          (if true
+           // (current.st_shndx = SHN_ABS) then
+              (if global then 'A' -> put; else 'a' -> put if);
+           // (SHN_LOPROC<=current.st_shndx) and (current.st_shndx<=SHN_HIPROC)
+              then (* Processor specific *)
+              (if global then 'P' -> put; else 'p' -> put if);
+           else            
+              current.st_shndx -> ef.gsh -> sh[];
+              (if sh.sh_type
+               // SHT_NULL then
+                  (if global then 'U' -> put; else 'u' -> put if)
+               else
+                  sh.sh_name -> ef.gsn -> sname[];
+                  (if true 
+                   // '.text' -> sname.equal then
+                      (if global then 'T' -> put; else 't' -> put if);
+                   // '.data' -> sname.equal then
+                      (if global then 'D' -> put; else 'd' -> put if);
+                   // '.bss' -> sname.equal then
+                      (if global then 'B' -> put; else 'b' -> put if);
+                   else
+                      '?' -> put;
+                  if);
+              if);
+          if)
+      if);
+      ' ' -> put;
+      (current_sec.sh_link, current.st_name) -> ef.gs -> putline;
+   #);
+   ef.close;
+#)

@@ -1,0 +1,295 @@
+ORIGIN 'REALmachine';
+LIB_ITEM 'betacodegen';
+---initGen:descriptor--
+(# 
+do (if not data then 
+       (* data entry points (T117FOO) are exported when defining
+        * entrytable for persistent store. See synthlibbody:prototype
+        *)
+       EP[]->Export
+   if);
+   true->inGpart;
+   (EP[],data)-> GlobalLabelDef
+#)
+---initDo:descriptor--
+(#
+do (if not data then 
+       (* data entry points (T117FOO) are exported when defining
+        * entrytable for persistent store. See synthlibbody:prototype
+        *)
+       EP[]->Export
+   if);
+   false->inGpart;
+   (EP[],data)-> GlobalLabelDef
+#)
+---InitDataSeg:descriptor---
+(# dataLab: @NewCtextOp; T: ^text; betaDataOp: @NewCTextOp
+do doHead; true->dataLab.op.BETAlab;
+   'BETA_code1'->dataLab; dataLab.op.T[]->labelDef; 
+   (* comment needed on HP to make assemblers accept TWO labels at same address *)
+   ' '->comment;
+   (if common.switch[64] then
+       nop (* force next label to be at another address to simplify debug *)
+   if);
+   (if common.targetMachineId = common.ppcmac then
+       nop (* force next label to be at another address due to mac linker *)
+   if);
+   switchToData;
+   (* generate: 
+    *   BETA_DATA_1391764_726500316:
+    *   BETA_DATA_1391764_726500316
+    *   BETA_data2
+    *   BETA_data3
+    *   BETA_code1
+    *   BETA_code2
+    *   groupIdLab ref
+    *   unique-group-id-hash
+    *   unique-group-id-modtime
+    *   0    -- patched by RTS to point back to beta-data-file
+    *)
+
+   group_hash.copy -> T[];
+   'BETA_DATA_' -> T.prepend -> betaDataOp;
+   betaDataOp.op.T[] -> Export; 
+   (* no immediate export is generated for
+    * data entry-points, since the data entry 
+    * points T117FOO are emitted together with
+    * the persistence table. An explicit
+    * export is therefore necessary
+    *) 
+   betaDataOp.op.T[] -> LabelDef;
+   ' ' -> comment; (* to force a newline needed by the HPUX9 assembler *)
+
+    betaDataOp.op[] ->declareAddress;
+   'BETA_data2'->datalab; (dataLab.op.T[],true)->importData;
+   'BETA_data2'->dataLab->declareAddress;
+   'BETA_data3'->dataLab; (dataLab.op.T[],true)->importData;
+   'BETA_data3'->dataLab->declareAddress;
+   'BETA_code1'->dataLab->declareAddress;
+   'BETA_code2'->dataLab->declareAddress;
+
+   true->groupIdLab.isTextAdr; (* declared in machine *)
+   groupIdLab.new; 
+   groupIdLab[] -> declareAddress;
+   group_hash.reset;
+   group_hash.getint -> declareLong; group_hash.get; (* '-'*)
+   group_hash.getint -> declareLong;
+   0 -> declareLong; 
+
+   
+   switchToCode;
+   
+   (* the init of isNoneLab used to be done in beginAlloc,
+    * but for a fragment, with only do-part slots, there may be no
+    * beginAlloc executed. InitDataSeg is always executed
+    *)
+   (if common.targetMachineId 
+    // common.sgi 
+    // common.sun4s 
+    // common.ppcmac 
+    // common.hpux9pa then
+    else (* the following must not be executed if sgi/ppc;
+          * see 10 lines above
+          *)
+       isNoneLab.New; isNoneLab.Def; 
+       ('RefNone',none)->jmpTlong
+   if);
+#)
+
+---endCodeSeg:descriptor---
+(# dataLab: @NewCtextOp;
+do 'BETA_code2'->dataLab; dataLab.op.T[]->LabelDef;
+   nop; (* HP UX 8 does need a nop here *)
+   
+   beginProtoTypes;
+   
+   'BETA_data2'->dataLab; dataLab.op.T[]->LabelDef
+#)
+--allocDoPartObject:descriptor--
+   (*  0: proto field
+    *  4: size
+    *  8: origin = thisRegOp
+    * 12: tmp. data
+    * 16: ...
+    *)
+(# ar: @adrRegOperand
+do (if common.switch[61] then
+       3->initPrimCall;
+       (size->newCstOp,1->getPrimReg) -> ldCst;
+       (thisRegOp[],2->getPrimReg) -> cpReg;
+       (3,1) -> SPtoPrimReg
+    else
+       1->initPrimCall;       
+       (size->newCstOp,1->getPrimReg)->ldCst;
+   if);
+   'AlloDO'->callPrim;
+   (if common.switch[61] then
+       3 -> getPrimRes -> ar;
+       (ar[],thisRegOp[]) -> cpReg
+    else
+       0->getPrimRes
+   if)
+#)
+
+--deAllocDoPartObject:descriptor--
+(#  A: @RegAdr
+do (* before return, thisReg must be defined to be the object containing
+    * the dopart. This object is the origin of the the dopart object
+    *)
+   thisO->A.reg; 8->A.addOff;
+   (A[],thisRegOp[])->ldVal
+#)
+
+
+---EndDataSeg:descriptor---
+(# dataLab: @ NewCtextOp
+do (if not switch24 then
+       'BETA_data3'->dataLab; dataLab.op.T[]->LabelDef;
+       '  '->comment; (* to generate a newline*)
+   if);
+#)
+
+---initCreateDataFile:dopart---
+do (# betaDataOp: @NewCTextOp
+   do (none,common[],fileName.copy,none) -> init;
+      switchToData;
+      'BETA_DATA' -> betaDataOp;
+      betaDataOp.op.T[] -> export;
+      betaDataOp.op.T[]  -> labelDef;
+      ' '->comment; (* for the benefit of HP assemblers *)
+   #)
+   
+---endCreateDataFile:dopart---   
+do (* Double NULL termination to allow for extension of 
+    * BETA_DATA list (by runtime system)
+    *)
+   0 -> declareLong;
+   0 -> declareLong;
+   close;
+
+---EmitLabId:dopart---
+do
+   
+---initEmitProtoIndexTable:dopart--
+do noOfPT->declareLong; 
+
+---endEmitProtoIndexTable:dopart---
+do groupIdLab.def; 
+   false->groupIdLab.isTextAdr;
+
+   (localFilePath[],false)->asciiText
+
+---EmitProtoIndex:dopart---
+do PT[]->newTextOp->declareAddress
+
+--InnerEntry:dopart--
+do entry[]->declareAddress
+
+---EmitInnerTable:doPart--
+do (# T: @NewCtextOp
+   do 'Return'->T; T.OP[]->declareAddress;
+      INNER EmitInnerTable
+   #)
+   
+---EmitProto:doPart--
+do (# pLab: @textOperand; ch: @char
+   do (thisTlab[],true) -> GlobalLabelDef;
+      (*0:GCtableOffSet*) GCtableOffSet->declareWord;
+      (*2: OriginOff   *) OriginOff div 4 ->declareWord;
+      (*4: G-entry     *) 
+      (if thisGlab[] <>  NONE then 
+          thisGlab[]->pLab; pLab[]->declareAddress
+       else
+          0 -> declareLong
+      if);
+      (*8: superTlab   *) superTlab[]->pLab; pLab[]->declareAddress;
+      (*12: size       *) size->declareWord;
+      (*14: topMentryOff*) topMentryOff->declareWord;
+      (*16: formIndex  *) formIndex->declareWord;
+      (*18: AST        *) astNumber->declareWord;
+      (if externalEntryLab[] <> NONE then
+          (*16/20: externalEntry*) 
+          externalEntryLab[]->pLab; pLab[]->declareAddress
+       else 0 -> declareLong 
+      if)
+   #)
+
+---EmitVirtAdr:dopart--
+do lab[]->declareAddress;
+
+---emitObjTableOff:dopart---
+do (if (offNo+1->offNo) mod 3 
+    // 1 // 2 then 
+       off->declareWord
+    // 0 then
+       off->declareLong (* component prototype *)
+   if)
+   
+---emitText:dopart---
+do offNo+1 -> offNo;
+   (if not local then (T[],false)->importData if);
+   T[]->NewTextOp->declareAddress
+   
+---EmitRefTableOff:dopart---
+do off->declareWord
+
+---EmitTextConst:descriptor---
+(# lab: @ localLab; pDest: ^mOperand
+do Lab.new; true->Lab.isTextAdr; lab.dataToCode -> Lab.type;
+   switchToData;
+   Lab.def;
+   (S[],isWtext) -> asciiText;
+   switchToCode;
+   (if pNo = -1 then (* argument to external function*)
+       lab [] -> pushAdr
+    else
+       (if common.switch[61] then
+           (* EmitTextConst should have "enter pNo" *)
+           pNo -> GetPrimReg->pDest[];
+           (if pDest.isPrimRegOp then
+               pDest[] -> lab.loadAdr
+            else
+               (# dr: @dataRegOperand
+               do dr.alloc;
+                  dr[] -> lab.loadAdr;
+                  (dr[],pDest[]) -> stVal
+           #)if)
+        else       
+           lab[]->pushAdr
+   if)if)
+#)
+
+--NextGroup:dopart---
+do (# betaDataOp: @NewCTextOp
+      (* (if isBetaEnv then '% ' -> puttext; if);
+       * id[] -> puttext; ' /* ' -> puttext; groupName[] -> putline;
+       *)
+   do id[] -> betadataop; 
+      (betadataop.op.T[],false) -> importData;
+      betadataop.Op[] -> declareAddress;
+   #)
+
+---break:dopart--
+do (if true
+    // common.isIntel 
+    // common.targetMachineId=common.hpux9pa then
+       (off->NewCstOp,DataRegA[])->ldCst;
+       (* not used by sun4s, and sgi *)
+   if);
+   1->initPrimCall;
+   (jmpAdr[],1->getPrimReg)->leaToPrimReg;
+   (* Note exitObj is in callReg *)
+   (if common.switch[89] then
+       'ExOx'->callprim;
+    else
+       'ExO'->callprim;
+   if);
+   0->getPrimRes
+   
+--FreeLabel:dopart--
+do
+   
+--InitExternalParams: dopart--
+do
+   
+

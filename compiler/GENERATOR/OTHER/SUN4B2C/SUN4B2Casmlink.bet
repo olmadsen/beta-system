@@ -1,0 +1,167 @@
+ORIGIN 'asmlink';
+INCLUDE '~beta/unixlib/unixfile'
+--asmState:descriptor--
+(# tmpCount: @integer #)
+--HasSharedLibs:descriptor--
+(#do switch[53]->value#)
+--- cont: descriptor --
+(#
+do '\\' -> Aff.put; aff.newLine; ascii.ht -> aff.put;
+#)
+--- header: descriptor ---
+(# 
+do '#! /bin/sh'->AFF.putLine;
+   'BETALIB='->AFF.putText; BetaLib[]->AFF.putLine;
+   'export BETALIB'->AFF.putLine;
+   'MACHINETYPE='->AFF.putText; targetMachine[]->AFF.putLine;
+   'export MACHINETYPE'->AFF.putLine;
+   'LD_PXDB=/dev/null\nexport LD_PXDB'->AFF.putline;
+   'BetaAsm(){'->AFF.putLine;
+   '  trap "echo C-compiling interrupted.; /bin/rm -f $1.o; exit 2" 2 9 10'
+     ->AFF.putLine;
+   '  echo C-compiling $1.c'->AFF.putLine;
+   (if switch[53]//true then
+       '  if gcc -c -w -O +z -o $2.o $1.c'->AFF.putLine 
+    else
+       '  if gcc -c -w -O -I b2c -o $2.o $1.c'->AFF.putLine;
+   if);
+   '  then'->AFF.putLine;
+   (if switch[18]//false then 
+       '    /bin/rm -f $1.c'->AFF.putLine 
+    else
+       '    return' ->AFF.putLine
+   if);
+   '  else '->AFF.putLine;
+   '    /bin/rm -f $2.o; echo  Aborted.; exit 1'->AFF.putLine;
+   '  fi  '->AFF.putLine;
+   '}'->AFF.putLine
+#)
+--- AsmExt: descriptor --- 
+(# do '.c'->ext #) 
+--- BinExt: descriptor --- 
+(# do '.o'->ext #)
+---LibExt: descriptor ---
+(# do '.sl'->ext #)
+--- JobExt: descriptor ---
+(# do '..job'->ext #)
+---ExeExt:descriptor---
+(* the extension for an executable file is empty 
+ * on most platforms except Windows NT 
+ *)
+(#do ''->ext #)
+--- Echo: descriptor ---
+(# do 'echo '->AFF.puttext #)
+--- Remove: descriptor ---
+(# do '/bin/rm -f '->AFF.puttext #)
+--- Make: descriptor ---
+(# 
+do (if first//true then
+       'trap "echo make interrupted.; exit 2" 2 9 10'->AFF.putLine;
+   if); 
+   echo; 'make '->AFF.puttext; m[] -> AFF.putLine;
+   '/bin/make -f '->AFF.putText; m[]->AFF.puttext; 
+   ' MACHINETYPE='->AFF.puttext; targetMachine[]->AFF.putLine
+#)
+--- resource: descriptor ---
+(##)
+--- RemoteShell: descriptor ---
+(# do '/usr/bin/remsh ' -> rsh #)
+--- assemble: descriptor ---
+(# p: @integer; G: @text
+do 'BetaAsm '->AFF.putText; 
+   F->G;
+   AST.thePathHandler.directoryChar->G.findAll(#do inx-> p #);
+   (p-4,p)->G.delete; G[]->AFF.putText; ' ' ->AFF.put;
+   F[]->AFF.putLine
+#)
+--linkLibraries:descriptor--
+(#
+do(* -b below is not enough*)
+   (if switch[53]//true then
+   Libs.scan
+   (#
+   do (if thisElm.args.length//0 then 
+       else
+          'echo linking shared lib: '->AFF.puttext; thisElm.T[]->AFF.putLine;
+          
+          'ld -b -q \\\n\t-o '->AFF.puttext;
+          thisElm.T[]->AFF.puttext; ' '->AFF.put;
+          thisElm.args[]->AFF.putline
+      if)
+   #)if)
+#)
+--contCh:descriptor--
+(#do '\\'->value #)
+--ldArgMax:descriptor--
+(#do 8000->value #)
+--ldTmp:descriptor--
+(#
+do &text[]->TmpF[]; 
+   '/tmp/'->TmpF; (* NOTE wont work if concurrent compilations *)
+   objName[]->TmpF.puttext;
+   asmState.tmpCount+1->asmState.tmpCount->TmpF.putInt;
+   '/bin/ld -r -o '->AFF.putText; TmpF[]->AFF.putText; 
+   ' \\\n\t' ->AFF.putText;
+   tmpArgs[]->AFF.putText;
+#)
+--- link: descriptor ---
+    (# ldLibPath,betaLinkOpt: ^ text
+    do 'trap "echo :linking interrupted.; /bin/rm -f '->AFF.puttext;
+       objName[]->AFF.puttext;
+       '; exit 2" 2 9 10'->AFF.putLine;
+
+      '$(BETALINKOPTIONS)'
+	 -> expandEnvVar
+	     (# defaultValue::<
+	          (#
+		  do '-Bstatic '->envvarvalue[]
+             #)#)
+	 ->betaLinkOpt[];
+       (if switch[37]//true then ' -s ' -> betaLinkOpt.append if);
+
+       'ld '->AFF.puttext; 
+       
+       '$(LD_LIBRARY_PATH)'->expandEnvVar->ldLibPath[];
+       (if ldLibPath.length//0 then (* skip *)
+        else
+           ' -L$LD_LIBRARY_PATH '->AFF.putText
+       if);
+       
+       betaLinkOpt[]->AFF.putText; 
+       
+       ' -o '->AFF.puttext; objName[]->AFF.puttext; ' '->AFF.put; cont;
+    #)
+---addBetaRun:descriptor---
+(* the following can be for most platforms except Windows NT *)
+(#
+do (if userDefinedBetaRun//false then
+       asmLink.binExt->betaRun.CopyAppend->linkObj
+if)#)
+--asmlinkdynamic:descriptor--
+(##)
+--- linkObj:descriptor ---
+(#
+do lobj[]->ldA.putText; ' \\\n\t'->ldA.putText
+#)
+--- libraries: descriptor ---
+(# 
+do ' -lm -lc '->ldA.putLine;
+#)
+--- trailer: descriptor ---
+    (# do
+       'case $? in'->AFF.putLine;
+       '0)'->AFF.putText; AFF.newline;
+       'echo Object program on file: '->AFF.puttext;
+       objName[]->AFF.putLine;
+       ';;'->AFF.putLine;
+       '*)'->AFF.putLine;
+       '/bin/rm -f '->AFF.PutText;
+       objName[]->AFF.putLine;
+       'esac'->AFF.PutLine;
+    #)
+-- jobFilePermission: descriptor --
+(# (* change permission on the jobfile so it can be excuted *)
+   ue: @unixentry;
+do AFF.name -> ue.path;
+   ('a','x') -> ue.permission.add;
+#)

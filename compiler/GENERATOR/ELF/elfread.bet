@@ -1,0 +1,320 @@
+ORIGIN 'elffile';
+LIB_DEF 'elfread' '../../../lib';
+BODY 'elfreadbody';
+
+(* elfread.bet:
+ *   Lowlevel patterns for reading object files in ELF format.
+ *   Items are cached as they are read from file - this gives a
+ *   performance enhancement of about 75%.
+ * 
+ *   As an alternative, one may try reading the entire file into
+ *   a char-array (with range as indicated by the file's length),
+ *   and operating on this array.
+ *   But for instance, if you want to get all symbols for a 5Mb
+ *   executable this may be a waste, since you do not need the content
+ *   of the (large) .data and .text sections.
+ * 
+ *   Instead consider using mmap of the entire file to memory: 
+ *   This will give fever disk-accesses and less LVRA allocations. 
+ *   Only possible on UNIX, but ELF is currently not used on non-UNIX.
+ * 
+ *   $Id: elfread.bet,v 1.1 2001-05-29 13:25:58 corry Exp $
+ *)
+
+--LIB: attributes--
+
+elfreader: elffile
+  (#
+     <<SLOT ElfReaderLib: attributes>>;
+     
+     (* ELF Header *)
+
+     getEhdr:
+       (* Get ELF header from file - NONE if error *)
+       (# eh: ^Elf32_Ehdr;
+          it: @<<SLOT ElfFileGetEhdr: descriptor>>
+       do it;
+       exit eh[]
+       #);
+
+     (* Section Headers *)
+
+    
+
+     getShdr:
+       (* Get a section header from file - NONE if error *)
+       (# sh: ^Elf32_Shdr;
+          sh_inx: @integer (* counted from 0 *);
+          it: @<<SLOT ElfFileGetShdr: descriptor>>
+       enter sh_inx
+       do it;
+       exit sh[]
+       #);
+
+     scanShdrs:
+       (* Scan through all section headers - INNER called for each *)
+       (# current: ^Elf32_Shdr;
+          current_inx: @integer;
+       do <<SLOT ElfFileScanShdrs: descriptor>>
+       #);
+     
+     (* Reading data and text segment *)
+     
+     getData:
+       (* Returns an externally allocated buffer containing the
+        * .data segment and the size in bytes of this buffer.
+        * After performing this, cache.data_ptr will contain the bytes 
+        * from the ".data" segment, and cache.data_hdr will be the 
+        * section header for section ".data".
+        *)
+       (# it: @<<SLOT ElfFileGetData: descriptor>>;
+          ptr, size: @integer;
+       do it;
+       exit (ptr, size)
+       #);
+     
+     getText:
+       (* Returns an externally allocated buffer containing the
+        * .text segment and the size in bytes of this buffer.
+        * After performing this, cache.text_ptr will contain the bytes 
+        * from the ".text" segment, and cache.text_hdr will be the 
+        * section header for section ".text".
+        *)
+       (# it: @<<SLOT ElfFileGetText: descriptor>>;
+          ptr, size: @integer;
+       do it;
+       exit (ptr, size)
+       #);
+     
+
+     (* Symbol Table *)
+
+     getSymTabEnt:
+       (* Get an entry from .symtab - NONE if error *)
+       (# sym: ^Elf32_Sym;
+          sh: ^Elf32_Shdr (* section containing the symbols *);
+          sym_inx: @integer (* counted from 0 *);
+          it: @<<SLOT ElfFileGetSymTabEnt: descriptor>>
+       enter sym_inx
+       do it;
+       exit (sym[],sh[])
+       #);
+
+     getDynSymEnt:
+       (* Get an entry from .dynsym - NONE if error *)
+       (# sym: ^Elf32_Sym;
+          sh: ^Elf32_Shdr (* section containing the symbols *);
+          sym_inx: @integer (* counted from 0 *);
+          it: @<<SLOT ElfFileGetDynSymEnt: descriptor>>
+       enter sym_inx
+       do it;
+       exit (sym[],sh[])
+       #);
+
+     scanAllSymEnts:
+       (* Scan through all entries in all sections containing symbol tables
+        * INNER is called for each entry. current is the current entry.
+        * current_sec is the section being scanned. current_inx is the
+        * index into this section. skip_current_sec is called whenever
+        * the scanning changes from one section to another, if it returns
+        * true for that section (by further binding) it skips the section.
+        * After performing this, cache.symtab will contain the symbols from
+        * the ".symtab" segment, cache.symtab.range will be the number of 
+        * symbols in the ".symtab" segment, and cache.symtab_hdr 
+        * will be the section header for section ".symtab".
+        * Analogous for ".dynsym".
+        *)
+       (# current: ^Elf32_sym;
+          current_inx: @integer;
+          current_sec: ^Elf32_Shdr;
+          current_sec_changed:< (# skip: @boolean do INNER exit skip #);
+       do <<SLOT ElfFileScanAllSymEnts: descriptor>>
+       #);
+
+     scanSymTabEnts: scanAllSymEnts
+       (* After performing this, cache.symtab will contain the symbols from
+        * the ".symtab" segment, cache.symtab.range will be the number of symbols 
+        * in the ".symtab" segment, and cache.symtab_hdr will be the 
+        * section header for section ".symtab".
+        *)
+       (# current_sec_changed::<(# do (current_sec.sh_type<>SHT_SYMTAB)->skip; INNER #)
+       do INNER scanSymTabEnts;
+       #);
+
+     scanDynSymEnts: scanAllSymEnts
+       (* After performing this, cache.dynsym will contain the symbols from
+        * the ".dynsym" segment, cache.dynsym.range will be the number of 
+        * symbols in the ".dynsym" segment, and cache.dynsym_hdr will be the 
+        * section header for section ".dynsym".
+        *)
+       (# current_sec_changed::<(# do (current_sec.sh_type<>SHT_DYNSYM)->skip; INNER #)
+       do INNER scanDynSymEnts;
+       #);
+
+     (* Relocation Entries *)
+
+     getDataRelEnt:
+       (* Get a relocation entry for .data - NONE if error *)
+       (# rel: ^Elf32_Rel;
+          sh: ^Elf32_Shdr (* section containing the relocations *);
+          rel_inx: @integer (* counted from 0 *);
+          it: @<<SLOT ElfFileGetDataRelEnt: descriptor>>
+       enter rel_inx
+       do it;
+       exit (rel[],sh[])
+       #); 
+
+     getDataRelaEnt:
+       (* Get a relocation entry with addend for .data - NONE if error *)
+       (# rela: ^Elf32_Rela;
+          sh: ^Elf32_Shdr (* section containing the relocations *);
+          rela_inx: @integer (* counted from 0 *);
+          it: @<<SLOT ElfFileGetDataRelaEnt: descriptor>>
+       enter rela_inx
+       do it;
+       exit (rela[],sh[])
+       #);
+
+     getTextRelEnt:
+       (* Get a relocation entry for .text - NONE if error *)
+       (# rel: ^Elf32_Rel;
+          sh: ^Elf32_Shdr (* section containing the relocations *);
+          rel_inx: @integer (* counted from 0 *);
+          it: @<<SLOT ElfFileGetTextRelEnt: descriptor>>
+       enter rel_inx
+       do it;
+       exit (rel[],sh[])
+       #); 
+
+     getTextRelaEnt:
+       (* Get a relocation entry with addend for .text - NONE if error *)
+       (# rela: ^Elf32_Rela;
+          sh: ^Elf32_Shdr (* section containing the relocations *);
+          rela_inx: @integer (* counted from 0 *);
+          it: @<<SLOT ElfFileGetTextRelaEnt: descriptor>>
+       enter rela_inx
+       do it;
+       exit (rela[],sh[])
+       #);
+
+     scanDataRelEnts:
+       (* Scan through all entries in .rel.data.
+        * INNER is called for each entry. current is the current entry.
+        * current_inx is the index into the section.
+        * After a complete scan, the cache.data_rel contains the list of
+        * all rel-entries for .data, and cache.data_rel_hdr contains the
+        * header for .rel.data.
+        *)
+       (# current: ^Elf32_Rel;
+          current_inx: @integer;
+       do <<SLOT ElfFileScanDataRelEnts: descriptor>>
+       #);
+     scanTextRelEnts:
+       (* Scan through all entries in .rel.text.
+        * INNER is called for each entry. current is the current entry.
+        * current_inx is the index into the section.
+        * After a complete scan, the cache.text_rel contains the list of
+        * all rel-entries for .text, and cache.text_rel_hdr contains the
+        * header for .rel.text.
+        *)
+       (# current: ^Elf32_Rel;
+          current_inx: @integer;
+       do <<SLOT ElfFileScanTextRelEnts: descriptor>>
+       #);
+     scanDataRelaEnts:
+       (* Scan through all entries in .rela.data.
+        * INNER is called for each entry. current is the current entry.
+        * current_inx is the index into the section.
+        * After a complete scan, the cache.data_rela contains the list of
+        * all rela-entries for .data, and cache.data_rela_hdr contains 
+        * the header for .rela.data.
+        *)
+       (# current: ^Elf32_Rela;
+          current_inx: @integer;
+       do <<SLOT ElfFileScanDataRelaEnts: descriptor>>
+       #);
+     scanTextRelaEnts:
+       (* Scan through all entries in .rela.text.
+        * INNER is called for each entry. current is the current entry.
+        * current_inx is the index into the section.
+        * After a complete scan, the cache.text_rela contains the list of
+        * all rela-entries for .text, and cache.text_rela_hdr contains 
+        * the header for .rela.text.
+        *)
+       (# current: ^Elf32_Rela;
+          current_inx: @integer;
+       do <<SLOT ElfFileScanTextRelaEnts: descriptor>>
+       #);
+
+     (* String Tables *)
+
+     getString:
+       (* Get string from string table - NONE if error.
+        * str_inx is index into stringtable.
+        * strtab_inx is section index of stringtable 
+        * - it is normally found in sh_link of a section header.
+        *)
+       (# str: ^text;
+          str_inx: @integer; 
+          strtab_inx: @integer;
+          it: @<<SLOT ElfFileGetStr: descriptor>>
+       enter (strtab_inx, str_inx)
+       do it;
+       exit str[]
+       #);
+
+     getSectionName:
+       (* Get string from section header string table - NONE if error *)
+       (# str: ^text;
+          str_inx: @integer (* counted from 0 *);
+          it: @<<SLOT ElfFileGetShStr: descriptor>>
+       enter str_inx
+       do it;
+       exit str[]
+       #);
+     
+     cache: @
+       (# 
+          ehdr: ^ELF32_Ehdr;
+          shdrs: [0]^ELF32_Shdr;
+          symtab: [0]^ELF32_Sym;
+          symtab_hdr: ^ELF32_Shdr;
+          dynsym: [0]^ELF32_Sym;
+          dynsym_hdr: ^ELF32_Shdr;
+          data_rel:  [0]^ELF32_Rel;
+          data_rel_hdr: ^ELF32_Shdr;
+          data_rela: [0]^ELF32_Rela;
+          data_rela_hdr: ^ELF32_Shdr;
+          text_rel:  [0]^ELF32_Rel;
+          text_rel_hdr: ^ELF32_Shdr;
+          text_rela: [0]^ELF32_Rela;
+          text_rela_hdr: ^ELF32_Shdr;
+          strtab: [0]@char;
+          strtab_hdr: ^ELF32_Shdr;
+          shstr: [0]@char;
+          shstr_hdr: ^ELF32_Shdr;
+          data_ptr: @integer;
+          data_size: @integer;
+          data_hdr: ^ELF32_Shdr;
+          text_ptr: @integer;
+          text_size: @integer;
+          text_hdr: ^ELF32_Shdr;
+       #)
+  #);
+
+shdr_type_astext:
+  (# type: @integer;
+     desc: ^text
+  enter type
+  <<SLOT ElfFileShdrTypeAsText: dopart>>
+  exit desc[]
+  #);
+
+rel_type_astext:
+  (# type: @integer;
+     desc: ^text
+  enter type
+  <<SLOT ElfFileRelTypeAsText: dopart>>
+  exit desc[]
+  #);
+

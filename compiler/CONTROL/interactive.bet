@@ -1,0 +1,902 @@
+(*ORIGIN 'system';*)
+ORIGIN '~beta/basiclib/basicsystemenv';
+LIB_DEF 'interactive' '../../lib';
+INCLUDE 'system';
+INCLUDE 'errorHandler';
+INCLUDE '../GENERATOR/runJobFile';
+---systemlib: attributes---
+interactiveCompiler: 
+  (# Mjolner: ^text ;
+     StripBetExt: (* strip a possible '.bet' extension *)
+       (# T: ^Text; T1: ^Text; L: @integer
+       enter T[]
+       do (if ((T.length->L)>3) then
+	      (L-3,L)->T.sub->T1[];
+	      (if (comp.trans.common.SrcExt -> T1.equalNCS) then (L-3,L)->T.delete 
+       if)if)#);
+     
+     OldCmd: ^text;
+     
+     argBuffer: @
+       (# A: [10] ^ text; top,last: @integer; 
+          current: ^text;
+          input: ^stream;
+          empty:@ boolean;
+          clear: (#do 0->top #);
+          add: @
+            (# 
+            do '-' <> (1->current.inxGet) -> getNextArgument.seenFragmentArg;
+               (if '--help' -> current.equalNCS then
+                   (* dont prompt input for more arguments *)
+                   true -> getNextArgument.seenFragmentArg;
+               if);
+               (if (top+1->top) > A.range then A.range -> A.extend if);
+               current[] -> A[top][];
+
+            #);
+          scan:
+            (# xCurrent: ^text
+            do (for i: top repeat
+                    A[i][] -> xCurrent[];
+                    i = top -> empty;
+                    INNER scan
+               for);
+            #);
+          ReadArguments:
+            (#
+            do getNextArgument.input[] -> input[];
+               (* first take arguments from comand line*)
+               (for i: NoOfArguments-1 repeat
+                    i+1->Arguments-> current[];
+                    (if current.length > 0 then
+                        add
+                    if);
+               for);
+               (if not getNextArgument.seenFragmentArg then ReadInput if);
+            #);
+          ReadInput:
+            (# 
+            do Loop:
+                 (#
+                 do 'Type Fragment File Name: '->comp.infostream.puttext;
+                    readAtom:
+                      (# 
+                      do (if input.eos then (0,'end-of-stream')->&stop if);
+                         &text[]->current[];
+                         input.scan
+                         (# while::
+                              (#do (ch<= ' ') and (ch<>ascii.newline)->value#)
+                         #);
+                         input.Scan
+                         (# while:: (#do (ch > ' ')->value#) 
+                         do ch->current.put
+                         #);
+                         (if current.length=0 then 
+                             (if oldCmd[]=none then 
+                                 (if input.peek=ascii.newline then
+                                     input.get (* skip <nl> *)
+                                 if);
+                                 restart Loop 
+                              else oldCmd->current;
+                                 'Translating '->comp.infostream.putText; 
+                                 current[]->comp.infostream.putLine;
+                         if)if);
+
+                         argBuffer.add;
+                         
+                         (if not getNextArgument.seenFragmentArg then
+                             restart readAtom
+                          else
+                             (* skip rest of line to avoid that trailing 
+                              * blanks and nl gives new translation
+                              *)
+                             input.scan
+                             (# while::(#do ch<>ascii.newline -> value #)#);
+                             input.get; (* get nl *)
+                         if)
+                      #);
+                 #);
+               false -> empty
+            #);
+       #);
+     getNextArgument: @ |
+       (* The arguments to the compiler must be on the form: 
+        *   xbeta [-s <switch-1> ... <switch-n> 0] 
+        *         [-t <target-machine> ] [-m <jobfile-machine> ] 
+        *         [-o <output-file>] [-rqac...] 
+        *         fragment1 ... fragmentN 
+        * The arguments may be given either on the command line or to the 
+        * input prompt presented by the compiler.
+        * If  fragments are specified on the command line and 
+        * repeat mode is not given, then NO prompt for more input
+        * is given.
+        * If no fragment is specified, a prompt for input is given.
+        * If interactive mode, then the compiler will repeatedly
+        * prompt for input.
+        *)
+       (# compilerSwitchMode: @boolean; 
+          targetSwitchMode: @boolean;
+          jobFileMachineMode: @boolean;
+          outputFileMode: @boolean;
+          betarunMode: @boolean;
+          CombinedArg: @Boolean; (* true if in a -xxxx arg *)
+          compilerSwitchStream: @text;
+          seenFragmentArg: @boolean;
+          root: ^Text;
+          currentArg: ^Text;
+          CompilerArguments: @
+            (* tuples of
+             * ( '--repeat','r','Turn compiler into repeating mode'
+             * ,false,true->repeatMode)
+             *)
+            (# 
+               Argument: 
+                 (# long: @Text;
+                    posAbbrev, negAbbrev: @Char;
+                    help: @Text;
+                    hasArg: @Boolean;
+                    hasHelp: @Boolean;
+                    toggleOption: @Boolean;
+                    hasDefault: @Boolean;
+                    sepLine: @Boolean;
+                    onAction: ^Object;
+                    offAction: ^Object;
+                 #);
+               argumentList: [100] ^Argument;
+               nextActionForArgument: ^Object;
+               size: @Integer;
+               init:
+                 (# count: @Integer;
+                    initter:
+                      (# long,help: ^text;
+                         posA,negA: @char;
+                         hasArg: @boolean;
+                         hasHelp: @boolean;
+                         toggleOption: @Boolean;
+                         hasDefault,sepLine: @Boolean;
+                         on: ^object;
+                         off: ^object;
+                      enter (long[],posA,negA,help[],hasArg,hasHelp,toggleOption,hasDefault,sepLine,on[],off[])
+                      do &Argument[]-> argumentList[count][];
+                         (long,posA,negA,help,hasArg,hasHelp,toggleOption,hasDefault,sepLine,on[],off[])-> 
+                         (argumentList[count].long,
+                         argumentList[count].posAbbrev,
+                         argumentList[count].negAbbrev,
+                         argumentList[count].help,
+                         argumentList[count].hasArg,
+                         argumentList[count].hasHelp,
+                         argumentList[count].toggleOption,
+                         argumentList[count].hasDefault,
+                         argumentList[count].sepLine,
+                         argumentList[count].onAction[],
+                         argumentList[count].offAction[]);
+                         count+1->count;
+                      #);
+                 do 1->count;
+                    
+                    (# action: 
+                         (# 
+                         do PrintUsage; 
+                            (if onCommandLine then stop if)
+                         #)
+                    do ('help','h',0,
+                       'Print this help info',
+                       false,true,false,false,true,&action[],NONE)
+                         ->initter;
+                    #);
+                    (# onAction: (# do true->repeatMode #);
+                       offAction: (# do false->repeatMode #)
+                    do ('repeat','r',0,
+                       'Run compiler in repeating mode',
+                       false,true,true,true,true,&onAction[],&offAction[])
+                         ->initter;
+                    #);
+                    (# onAction: (# do 6->comp.switchOff #);
+                       offAction: (# do 6->comp.switchOn #)
+                    do ('link',0,'x',
+                       'Link program',
+                       false,true,true,true,true,&onAction[],&offAction[])
+                         ->initter;
+                    #);
+                    (# action: (# do 17->comp.switchOn #)
+                    do ('static',0,0,
+                       'Use static linking',
+                       true,true,false,false,false,&action[],NONE)
+                         ->initter;
+                    #);
+                    (# action: (# do 17->comp.switchOff #)
+                    do ('dynamic',0,0,
+                       'Use dynamic linking',
+                       true,true,false,true,true,&action[],NONE)
+                         ->initter;
+                    #);
+                    (# onAction: (# do 32->comp.switchOn #);
+                       offAction: (# do 32->comp.switchOff #)
+                    do ('list',0,'l',
+                       'Generate .lst file, if semantic errors',
+                       false,true,true,true,true,&onAction[],&offAction[])
+                         ->initter;
+                    #);
+                    (# onAction: (#do 41->comp.switchOn; #);
+                       offAction: (#do 41->comp.switchOff; #)
+                    do ('debug',0,'d',
+                       'Generate debug info to enable debugging',
+                       false,true,true,true,true,&onAction[],&offAction[])
+                         ->initter;
+                    #);
+                    (# onAction: (# do 5->comp.switchOff; 33->comp.switchOff #);
+                       (* please see documentation for switch 5 in 
+                        * systembody.bet; control also sets 33 and
+                        * the old value of switch 33 should be rembered
+                        *)
+                       offAction: (# do 5->comp.switchOn #)
+                    do ('code',0,'c',
+                       'Generate code',
+                       false,true,true,true,true,&onAction[],&offAction[])
+                         ->initter;
+                    #);
+                    (# onAction: (# do 42->comp.switchOff #);
+                       offAction: (# do 42->comp.switchOn #)
+                    do ('checkQua',0,'Q',
+                       'Generate qualification runtime checks',
+                       false,true,true,true,true,&onAction[],&offAction[])
+                         ->initter;
+                    #);
+                    (# onAction: (# do 9->comp.switchOn #);
+                       offAction: (# do 9->comp.switchOff #)
+                    do ('checkStrongQua','F',0,
+                       'Generate complete qualification runtime checks',
+                       false,false,true,true,true,&onAction[],&offAction[])
+                         ->initter;
+                    #);
+                    (# onAction: (# do 14->comp.switchOff #);
+                       offAction: (# do 14->comp.switchOn #)
+                    do ('checkNone',0,'N',
+                       'Generate runtime checks for NONE references',
+                       false,true,true,true,true,&onAction[],&offAction[])
+                         ->initter;
+                    #);
+                    (# onAction: (# do 15->comp.switchOff #);
+                       offAction: (# do 15->comp.switchOn #)
+                    do ('checkIndex',0,'I',
+                       'Generate runtime checks for repetition index out of range',
+                       false,true,true,true,true,&onAction[],&offAction[])
+                         ->initter;
+                    #);
+                    (# onAction: (# do 19->comp.switchOff; 90->comp.switchOff; #);
+                       offAction: (# do 19->comp.switchOn; 90->comp.switchOn; #)
+                    do ('warn',0,'w',
+                       'Generate warnings',
+                       false,true,true,true,true,&onAction[],&offAction[])
+                         ->initter;
+                    #);
+                    (# onAction: (# do 19->comp.switchOff #);
+                       offAction: (# do 19->comp.switchOn #)
+                    do ('warnQua',0,'q',
+                       'Generate warnings about runtime QUA checks',
+                       false,true,true,true,true,&onAction[],&offAction[])
+                         ->initter;
+                    #);
+                    (# action: (# do comp.verboseLevel.verbose->comp.verboseLevel #)
+                    do ('verbose',0,0,
+                       'Verbose compiler info output',
+                       false,true,false,false,false,&action[],NONE)
+                         ->initter;
+                    #);
+                    (# action: (# do comp.verboseLevel.actions->comp.verboseLevel #)
+                    do ('quiet',0,0,
+                       'Only compiler info on parse, check, etc.',
+                       false,true,false,true,false,&action[],NONE)
+                         ->initter;
+                    #);
+                    (# action: 
+                         (# 
+                         do comp.verboseLevel.nothing->comp.verboseLevel;
+                            19 -> comp.switchOn; 90 -> comp.switchOn
+                         #)
+                       (* Note there is NO offAction. Normally mute
+                        * is changed to verbose, etc. by --verbose, etc.
+                        * This will not turn warnings on again.
+                        * Turning warnings on MUST be done explicitly
+                        *)
+                    do ('mute',0,0,
+                       'No compiler info output',
+                       false,true,false,false,true,&action[],NONE)
+                         ->initter;
+                    #);
+                    (# onAction: 
+                         (# 
+                         do 191->comp.switchOn; 
+                            192->comp.switchOn; 
+                            193->comp.switchOn 
+                         #);
+                       offAction: 
+                         (# 
+                         do 191->comp.switchOff; 
+                            192->comp.switchOff; 
+                            193->comp.switchOff 
+                         #)
+                    do ('traceCheck',0,0,
+                       'Trace the compiler during semantic checking',
+                       false,true,true,false,true,&onAction[],&offAction[])
+                         ->initter;
+                    #);
+                    (# onAction: 
+                         (# 
+                         do 307->comp.switchOn; 
+                            308->comp.switchOn; 
+                            311->comp.switchOn 
+                         #);
+                       offAction: 
+                         (# 
+                         do 307->comp.switchOff; 
+                            308->comp.switchOff; 
+                            311->comp.switchOff 
+                         #)
+                    do ('traceCode',0,0,
+                       'Trace the compiler during code generation',
+                       false,true,true,false,true,&onAction[],&offAction[])
+                         ->initter;
+                    #);
+                    (# action: 
+                         (# 
+                         do (if CombinedArg then
+                                'WARNING: \'o\' option ignored'->comp.infostream.putline;
+                             else 
+                                true->outputFileMode
+                         if)#);
+                    do ('out','o',0,
+                       'Specify name to use for executable',
+                       true,true,false,false,true,&action[],NONE)
+                         ->initter;
+                    #);
+                    (# onAction: (# do 18->comp.switchOn #);
+                       offAction: (# do 18->comp.switchOff #)
+                    do ('preserve','p',0,
+                       'Preserve generated .job and assembly files',
+                       false,true,true,true,true,&onAction[],&offAction[])
+                         ->initter;
+                    #);
+                    (# onAction: (# do 33->comp.switchOff #);
+                       offAction: (# do 33->comp.switchOn #)
+                    do ('job',0,'j',
+                       'Execute the .job file',
+                       false,true,true,true,true,&onAction[],&offAction[])
+                         ->initter;
+                    #);
+                    (# action: 
+                         (# 
+                         do (if CombinedArg then
+                                'WARNING: \'s\' option ignored'->comp.infostream.putline;
+                             else 
+                                compilerSwitchStream.clear;
+                                true->compilerSwitchMode
+                         if)#)
+                    do ('switch','s',0,
+                       'Set/unset one or more compiler switches.\n\t\t\t(Please consult the manual for details)',
+                       true,true,false,false,true,&action[],NONE)
+                         ->initter;
+                    #);
+                    (# action: 
+                         (# 
+                         do (if CombinedArg then
+                                'WARNING: \'l\' option ignored'->comp.infostream.putline;
+                             else
+                                (if currentArg[]<>NONE then
+                                (if comp.link_libs[]=NONE then 
+                                    &Text[]->comp.link_libs[]
+                                if);
+                                currentArg[]->comp.link_libs.puttext;
+                                ' '->comp.link_libs.put;
+                            if);
+                            NONE->currentArg[];
+                            if)
+                         #)
+                    do ('linkOpts',0,0,
+                       'Specify text string to be append to the\n\t\t\tlink directive',
+                       true,true,false,false,true,&action[],NONE)
+                         ->initter;
+                    #);
+                    (# onAction: (# do 12->comp.switchOn #);
+                       offAction: (# do 12->comp.switchOff #)
+                    do ('all','a',0,
+                       'Force checking of all forms',
+                       false,false,true,false,true,&onAction[],&offAction[])
+                         ->initter;
+                    #);
+                    (# action: (# do true->betarunMode; #)
+                    do ('betarun',0,0,
+                       'Specify run-time system to link with',
+                       true,false,false,false,true,&action[],NONE)
+                         ->initter;
+                    #);
+                    (# action: (# do (* ignored here, read elsewhere *) #)
+                    do ('gram',0,0,
+                       'Specify alternate grammar',
+                       false,false,false,false,true,&action[],NONE)
+                         ->initter;
+                    #);
+                    (# action: 
+                         (# 
+                         do (if CombinedArg then
+                                'WARNING: \'m\' option ignored'->comp.infostream.putline;
+                             else 
+                                true->jobFileMachineMode 
+                         if)#)
+                    do ('machine','m',0,
+                       'Use <machine> as host for assembling and linking ',
+                       true,false,false,false,true,&action[],NONE)
+                         ->initter;
+                    #);
+                    (# action: 
+                         (# 
+                         do (if CombinedArg then
+                                'WARNING: \'t\' option ignored'->comp.infostream.putline;
+                             else 
+                                true->targetSwitchMode
+                         if)#)
+                    do ('target','t',0,
+                       '<machine> is the name of the machine type\n\t\t\tfor which a configuration is instantiated',
+                       true,false,false,false,true,&action[],NONE)
+                         ->initter;
+                    #);
+                    (# onAction: (#do 63 -> comp.SwitchOn #);
+                       offAction: (#do 63 -> comp.SwitchOff #)
+                    do  ('shared','y',0,
+                       'Link using shared BETA libraries.\n\t\t\tNot available for all platforms',
+                       false,true,true,true,true,&onAction[],&offAction[])
+                       -> initter
+                    #);
+                    count-1->size;
+               #);
+               PrintUsage:
+                 (# t:@text;
+                 do comp.infostream.newline;
+                    'Usage: beta [options] [fragment1 ... fragmentN]'->comp.infostream.putline;
+                    '       where [options] is one or more of:'->comp.infostream.putline;
+                    (for i: size repeat 
+                         t.clear;
+                         (if argumentList[i].hasHelp then
+                             ' --'->t.puttext;
+                             argumentList[i].long[]->t.puttext;
+                             (for 12-argumentList[i].long.length repeat
+                                  ' '->t.put;
+                             for);
+                             (if argumentList[i].posAbbrev<>0 then
+                                 ' -'->t.puttext;
+                                 argumentList[i].posAbbrev->t.put; 
+                                 ' '->t.puttext;
+                              else
+                                 (if argumentList[i].hasDefault then
+                                     ' (*)'->t.puttext
+                                 if)
+                             if);
+                             (for 22-t.length repeat ' '->t.put for);
+                             argumentList[i].help[]->t.putline;
+                             t[]->comp.infostream.puttext; t.clear;
+
+                             (if argumentList[i].toggleOption then
+                                 ' --no'->t.puttext;
+                                 1->argumentList[i].long.inxget
+                                   ->ascii.upcase->t.put;
+                                 (2,argumentList[i].long.length)
+                                   ->argumentList[i].long.sub->t.puttext;
+                                 (for 10-argumentList[i].long.length repeat
+                                      ' '->t.put;
+                                 for);
+                                 (if argumentList[i].negAbbrev<>0 then
+                                     ' -'->t.puttext;
+                                     argumentList[i].negAbbrev->t.put; 
+                                     '  '->t.puttext;
+                                  else
+                                     (if argumentList[i].hasDefault then
+                                         ' (*)'->t.puttext
+                                     if)
+                                 if);
+                                 t.newline;
+                                 t[]->comp.infostream.puttext
+                             if);
+                             (if argumentList[i].sepLine then
+                                 comp.infostream.newline
+                             if);
+                         if);
+                    for);
+                    comp.infostream.newline;
+                    'For options with both "--<name>" and "--no<name>" forms:'->comp.infostream.putline;
+                    '\tActivate the option using   "--<name>"'->comp.infostream.putline;
+                    '\tDeactivate the option using "--no<name>".'->comp.infostream.putline;
+                    'The option type "-<ch>" allow multiple option characters'->comp.infostream.putline;
+                    '\tafter the "-" (e.g. "-qwd").'->comp.infostream.putline;
+                    'Long option names are case insensitive.'->comp.infostream.putline;
+                    'Single letter options are case sensitive.'->comp.infostream.putline;
+                    '(*) above indicates the default option.'->comp.infostream.putline;
+                    comp.infostream.newline;	
+                 #);
+               searchLong: @
+                 (# t: ^Text; on: @Boolean;
+                    hasArg: @Boolean;
+                 enter (t[],on)
+                 do (*'Searching for: '->comp.infostream.puttext; t[]->comp.infostream.putline;*)
+                    search: 
+                      (#
+                      do
+                         (for i:size repeat
+                              (if argumentList[i].long[]->t.equalNCS then
+                                  (if on then
+                                      argumentList[i].onAction
+                                   else
+                                      (if argumentList[i].toggleOption then
+                                          argumentList[i].offAction
+                                       else
+                                          t[] -> ArgError;
+                                          leave search
+                                      if)
+                                  if);
+                                  argumentList[i].hasArg->hasArg;
+                                  leave search;
+                              if)
+                         for);
+                         (* not found *)
+                         t[] -> ArgError;
+                      #)
+                 exit hasArg
+                 #);
+               searchAbbrev: @
+                 (# c: @Char;
+                    hasArg: @Boolean;
+                 enter c
+                 do (*'Searching for: '->comp.infostream.puttext; 
+                     * c->comp.infostream.put; comp.infostream.newline;*)
+                    search: 
+                      (# 
+                      do
+                         (for i:size repeat
+                              (if c=argumentList[i].posAbbrev then
+                                  argumentList[i].onAction;
+                                  (if not CombinedArg then
+                                      argumentList[i].hasArg->hasArg;
+                                  if);
+                                  leave search;
+                              if);
+                              (if c=argumentList[i].negAbbrev then
+                                  argumentList[i].offAction;
+                                  (if not CombinedArg then
+                                      argumentList[i].hasArg->hasArg;
+                                  if);
+                                  leave search;
+                              if)
+                         for);
+                         (* not found *)
+                         (# t: @Text; do c->t.put; t[]-> ArgError #);
+                      #)
+                 exit hasArg
+                 #)
+            #);
+          ArgError:
+            (# current: ^text
+            enter current[]
+            do 'Unknown compiler option: \''->comp.infostream.puttext;
+               current[]->comp.infostream.puttext; '\''->comp.infostream.put; 
+               comp.infostream.newline;
+               (if onCommandLine then
+                   CompilerArguments.PrintUsage;
+                   (normal,'')->&stop
+                else
+                   'Type "-h" for help'->comp.infoStream.putLine
+               if)
+            #);
+          scanArguments: 
+            (# current: ^Text;
+            do (* first take arguments from comand line*)
+               (*(for i: NoOfArguments-1 repeat
+                    i+1->Arguments->current[];
+                    (if current.length > 0 then
+                        INNER 
+                    if);
+                for);*)
+               argBuffer.scan
+               (#
+               do Xcurrent[] -> current[]; 
+                  (*'next1:' -> puttext; Xcurrent[] -> putline; *)
+                  INNER ScanArguments
+               #);
+               (if repeatmode or not seenFragmentArg then 
+                   (* start interactive dialog *)
+                   false->onCommandLine;
+                   Loop: 
+                     (if true then
+                         argBuffer.scan
+                         (#do Xcurrent[] -> current[]; 
+                            (*'next2:' -> puttext; Xcurrent[] -> putline; *)
+                            INNER ScanArguments
+                         #);
+                         (if repeatMode then restart Loop if)
+                      else
+                         (# 
+                         do 'Type Fragment File Name: '->comp.infostream.puttext;
+                        false->seenFragmentArg;
+                        readAtom:
+                          (# l: @char
+                          do (if input.eos then 
+                                 (0,'end-of-stream')->&stop 
+                              if);
+	                     &text[]->current[];
+                             input.scan
+                             (# while::
+                                  (#do (ch<= ' ') and (ch<>ascii.newline)->value#)
+                             #);
+                             input.Scan
+                             (# while:: (#do (ch > ' ')->value#) 
+                             do ch->current.put 
+                             #);
+                             (if current.length=0 then 
+                                 (if oldCmd[]=none then 
+                                     (if input.peek=ascii.newline then
+                                         input.get (* skip <nl> *)
+                                     if);
+                                     restart Loop 
+	                          else oldCmd->current;
+		                     'Translating '->comp.infostream.putText; 
+                                     current[]->comp.infostream.putLine;
+                             if)if);
+                             INNER scanArguments;
+                             (if not seenFragmentArg then
+                                 restart readAtom
+                              else
+                                 (* skip rest of line to avoid that trailing 
+                                  * blanks and nl gives new translation
+                                  *)
+                                 input.scan
+                                 (# while::(#do ch<>ascii.newline -> value #)#);
+                                 input.get; (* get nl *)
+                             if)
+                          #);
+                        (if repeatMode then restart Loop if)
+                     #)
+                     if)
+            if)#);
+          EndOfSwitches:
+            (#
+            do false->compilerSwitchMode;
+               0->compilerSwitchStream.putInt; 
+               compilerSwitchStream.newline;
+               0->compilerSwitchStream.setPos; 
+               compilerSwitchStream[]->comp.trans.readSwitches;
+            #);
+          IfNumberSetSwitch:
+            (# T: ^text; B: @boolean; n: @integer;
+            enter T[]
+            do true->B;
+               L:
+                 (#
+                 do T.scanAll
+                    (#do n+1->n;
+                       (if ((ch<'0') or ('9'<ch)) (* is not a digit*)
+                           and
+                           ((n>1) or 
+                           not ((ch='-') or (ch='+'))) (* and not the sign *)
+                           then 
+                           false->B; leave L 
+                    if)#);
+                    0->T.setPos;
+                    (if (T.getInt->n) > 0 then
+                        n->comp.SwitchOn
+                     else
+                        -n->comp.SwitchOff
+                    if)
+                 #)
+            exit B
+            #);
+          input: ^stream
+       enter input[]          
+       do false->compilerSwitchMode->targetSwitchMode->seenFragmentArg;
+          false->jobFileMachineMode->outputFileMode->repeatMode->betarunMode;
+          true->onCommandLine;
+          compilerSwitchStream.clear;
+          CompilerArguments.init;
+          scanArguments
+          (# switch: @integer;
+          do ProcessArgument:
+               (if true 
+                // compilerSwitchMode then 
+                 0->current.setPos;
+                   (if (current.getInt
+                       (# syntaxError::
+                            (# 
+                            do EndOfSwitches;
+                               (* current was not a number - process again *)
+                               restart ProcessArgument
+                            #)
+                       #)->switch) 
+                    // 0 then EndOfSwitches
+                    else 
+                       current[]->compilerSwitchStream.append; 
+                       ' '->compilerSwitchStream.put
+                   if);
+                // targetSwitchMode then
+                   current[] -> comp.TargetMachine;
+                   false->targetSwitchMode;
+                // jobFileMachineMode then
+                   &Text[]->comp.jobFileMach[];
+                   current->comp.jobFileMach;
+                   false->jobFileMachineMode;
+                // outputFileMode then
+                   &Text[]->comp.outputFile[];
+                   current->comp.outputFile;
+                   false->outputFileMode;
+                // betarunMode then
+                   &Text[]->comp.betarunSwitch[];
+                   current->comp.betarunSwitch;
+                   false->betarunMode;
+                else
+                   false->CombinedArg;
+                   testForSwitch:
+                   (#
+                      (*                    do (if (1->current.inxGet) // '-' then
+                       *                           (if current.length//1 then 
+                       *                               current[]->ArgError;
+                       *                               leave testForSwitch;
+                       *                           if);
+                       *                           (if (2->current.inxGet) // '-' then
+                       *                               {* arg is '--xxx' *}
+                       *                               (3,current.length)->current.sub
+                       *                                 ->CompilerArguments.searchLong;
+                       *                               leave testForSwitch;
+                       *                            else
+                       *                               {* Arg is '-xxx' .
+                       *                                * It may be a negative number '-193'
+                       *                                *}
+                       *                               (if false {*current[]->IfNumberSetSwitch*} then
+                       *                                else
+                       *                               (current.length>2) -> CombinedArg;
+                       *                               current[]->currentArg[];
+                       *                               1->current.setpos;
+                       *                               current.scan
+                       *                               (# while::(# do true->value#);
+                       *                               do (if currentArg[]<>NONE then
+                       *                                      ch->CompilerArguments.searchAbbrev;
+                       *                                   else
+                       *                                      leave testForSwitch;
+                       *                                  if);
+                       *                                   #); 
+                       *                                   NONE->currentArg[];
+                       *                               if);
+                       *                               leave testForSwitch;
+                       *                       if)if);
+                       *                       {* argument does not start with '-' *}
+                       *                       (if false {*current[]->ifNumberSetSwitch*} then
+                       *)
+                   do (if true
+                       // '--no'->((1,4)->current.sub).equal then
+                          ((5,current.length)->current.sub,false)
+                            ->CompilerArguments.searchLong;
+                          leave testForSwitch;
+                       // '--'->((1,2)->current.sub).equal then
+                          ((3,current.length)->current.sub,true)
+                            ->CompilerArguments.searchLong;
+                          leave testForSwitch;
+                       // '-'=(1->current.inxGet) then
+                          (current.length>2) -> CombinedArg;
+                          current[]->currentArg[];
+                          1->current.setpos;
+                          current.scan
+                          (# while::(# do true->value#);
+                          do (if currentArg[]<>NONE then
+                                 ch->CompilerArguments.searchAbbrev;
+                              else
+                                 leave testForSwitch;
+                             if);
+                          #); 
+                          NONE->currentArg[];
+                       else
+                          (* argument is not a option
+                           * Treat as fragment file name
+                           *)
+                          &Text[]->root[]->oldCMD[]; 
+                          current->root; root[]->StripBetExt;
+                          true->seenFragmentArg;;
+                          (* leave HandleArgument and call compiler *)
+                          SUSPEND;
+                      if);
+                   #); (* testForSwitch *)
+             if); (* if true *)
+          #); (* scanArguments *)
+          NONE->root[];
+       exit root[]
+       #);
+     
+     BETAastIF: @ASTInterface;
+     beta: ^BETAastIF.treeLevel;
+     comp: @BETAastIF.compiler;
+
+     activateCompiler:
+       (# rootFragment: ^text
+       enter rootFragment[]
+       do L:
+            rootFragment[] -> comp.xtranslate
+            (# Report::
+                 (# 
+                 do msg[]->comp.messagestream.putline; 
+                    leave L
+                 #);
+               JobFileRunner::
+                 (#
+                 do (AFF[],common[],infoStream[],messageStream[],
+                    hostMachineType[], targetmachine[], jobfilemachine[],
+                    interactiveCompiler)
+                      -> runJobFile
+                    (# error::(#do msg[]->comp.trans.jobFileError #)
+                    #);
+                 #);
+            #);
+       #);
+     
+     first,repeatMode,fragmentsAsArgument,onCommandLine: @boolean;
+     BETAgram: ^text
+     
+  do (if Mjolner[]=NONE then
+         'Mjolner'->mjolner[]
+     if);
+     screen[]->comp.infostream[];
+     screen[]->comp.tracestream[];
+     screen[]->comp.messagestream[];
+     screen[]->comp.bugstream[];
+     
+     (if comp.demoVersion then
+         '******************************************************'->comp.infostream.putline;
+         '*   '->comp.infostream.putText;
+         Mjolner[]->comp.infostream.puttext;
+         ' BETA Compiler - DEMO VERSION  rel. 3.0   *'->comp.infostream.putline;
+         '******************************************************'->comp.infostream.putline;
+         '* This is the DEMO version of the BETA compiler that *'->comp.infostream.putline;
+         '* may only be used for evaluation purposes, and not  *'->comp.infostream.putline;
+         '* for any teaching or commercial purposes. The use   *'->comp.infostream.putline;
+         '* of the program is subject to the restrictions in   *'->comp.infostream.putline;
+         '* the '->comp.infostream.puttext;
+         Mjolner[]->comp.infostream.putText;
+         ' BETA demo license                      *'->comp.infostream.putline;
+         '******************************************************'->comp.infostream.putline;
+     if);
+     
+     BETAastIF;
+     &BETAastIF.treeLevel[] -> beta[];
+     ('~beta/grammars/beta/beta','beta',comp.bugStream[])
+       ->beta.betagrammarInit; 
+     comp.init;
+     
+     (if comp.verboseLevel <= comp.verboseLevel.actions then
+         Mjolner[]->comp.infostream.puttext;
+         ' BETA Compiler version '->comp.infostream.puttext;
+         comp.compilerversion->comp.infostream.puttext;
+         ' for '->comp.infostream.puttext;
+         comp.targetMachineText[]->comp.infostream.putline;
+     if);
+
+     true->comp.InteractiveCompiler;
+     true->first;
+     keyboard[]->getNextArgument.input[];
+     ArgBuffer.readArguments;
+     dealWithArgs:
+       (# arg: ^text
+       do (if (getNextArgument->arg[]) <> NONE then
+              repeatMode->comp.isRepeatMode;
+              arg [] -> activateCompiler;
+              true->fragmentsAsArgument;
+              (if repeatMode and ArgBuffer.empty then 
+                  ArgBuffer.clear;
+                  ArgBuffer.readInput 
+              if);
+              restart dealWithArgs;
+       if)#);
+     (* (if comp.verboseLevel<comp.verboseLevel.nothing then
+                 'translating: '->comp.infostream.puttext; 
+                 comp.rootfragment[]->comp.infostream.putline;
+             if);
+      *)
+     (if comp.trans.common.switch[68] then
+         comp.trans.common.print;
+         comp.trans.dStat.print;
+     if)
+  #)
+
+

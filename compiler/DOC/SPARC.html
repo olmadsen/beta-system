@@ -1,0 +1,409 @@
+<HTML>
+
+<HEAD>
+<TITLE>SPARC specifics</TITLE>
+<LINK REV="made" HREF="mailto:olm@daimi.aau.dk">
+</HEAD>
+
+<BODY>
+<H1>SPARC specifics</H1>
+
+<PRE>
+
+Documentation for beta4.4
+-------------------------
+
+This version is intented to provide
+1.	a SPARC/SUN-4 implementation,
+1.	better support for reals, 
+2.	support for mainPart and doPart slots, 
+3.	implementation of computed remote,
+4.	real numbers and based constants,
+5.	byte/word/long alignment of simple objects
+
+A new prototype format is generated since SPARC have some strict
+alignment requirements. The code generation is OK for both HP and
+SPARC. The run-time system has also been upgraded.
+
+The SUN-3, Apollo and Mac versions have not been updated yet.
+
+
+A.	Sparc Implementation
+----------------------------
+
+	Code generation for SPARC/SUN-4. Status
+
+1.a	Compiler
+
+	All done
+	
+2.a	Run-time system
+
+	All done!
+
+
+B.	New Features
+--------------------
+
+.	Real
+
+---&gt;	Missing: 
+	* arithmetic exceptions, 
+	* dump of FP registers.
+
+	Current implementation uses double format(64bits) - 
+	Perhaps single, double and extend should all be supported
+
+
+1.a	Support for infix real expressions like				+
+
+		x+y -&gt; z
+
+		+ - * / = &lt;&gt; &lt; &gt; &lt;= &gt;=
+
+1.b	Support for int to real and real to int conversions like	-
+
+		i -&gt; x		i+x -&gt; y  y -&gt; i
+
+1.c	Real numbers							-
+
+		3.14		3.14E111   314E-8
+
+2.	Based constants like:						-
+
+		2x0101		binary
+		8x2764		octal
+		16xAF12		hexadecimal
+		0xAF12		interpreted as hexadecimal
+
+
+3.	New slot types
+	
+	Missing: various import of entry points, the test for
+	external/internal entry-point must be changed since a do-part
+	descriptor is split between two segments. Also MainPart form
+	is located in other segment than its formId. Could perhaps
+	get another formId? Should have been fixed using hashtable
+	in machine.bet
+	
+3a.	DoPart slot like in
+
+		f: (# a,b,c: @ integer enter(a,b) &lt;&lt;SLOT f:doPart&gt;&gt; exit c #)
+
+	Missing: virtual table generation and testing
+
+3.b	MainPart slot like in
+
+		B: A &lt;&lt;SLOT B:mainPart&gt;&gt;
+
+
+4	Computed Remote
+
+		( (e1,e2,e3)-&gt;F).foo
+
+	is being implemented. 
+	SearchBody: search for foo has been implemented; points of possible
+	errors have been identified, but only few error messages.
+	Pattern chkCompRemote should probably be moved to more general
+	level.
+	virtual: actual desc, catP, and others must be fixed.
+	genAdr: muts be fixed
+
+D	Error messages/printing
+
+	A semantic error is printed on the screen by a PP of the nearest
+	enclosing descriptor. THis may cause problems when printing
+	descriptors with many declarations and imperatives.
+	Many lines may be printed. Also the level parameter may be a
+	problem, since only Lvel no. of elements in list may be printed.
+	The list elm. with the error MUST be printed, but this may not
+	happen if it is at the end of a long list.
+
+E	Switch 1 has been reversed. Tracing is now pr. default printing
+	trace information without user interaction.
+	Switch 1 will do trace with user interaction.
+
+C.	Error Corrections
+-------------------------
+
+1.	Assignment to primitive TOS
+
+		(p,R[]) -&gt; TOS'attach'
+
+	listEvVal.asgToPrimitive, calls pushCPar, which for a reference
+	implies transfer of cStruct. This has been fixed such that for
+	long arg (3), the address is pushed. Also refEvVal.asgToPrimitive
+	now calls pushCpar. 
+	asgToPrimitive should call via primReg.
+
+2.	Offset in if-imp for comparison of references have NOT previously
+	been entered into the GC ref.table. This has been fixed.
+
+D.	Implementation
+----------------------
+
+
+Register allocation
+
+1. We use the register windows on SPARC
+
+2. Allocation of BETA registers on SPARC
+
+	th =  %i0	this(object)		a0 on MC
+	ca =  %i1	callReg:obj. to be exe.	a1 on MC
+	or =  %i2	origin of new obj.	a2 on MC
+
+	R1 =  %i3	tmp. adr. register	a3 on MC
+	R2 =  %i4	tmp. adr. register	a4 on MC
+        X1 =  %i5	tmp. adr. register for 	not relevant
+			computing the adr. of
+			R[i]. Should be ignored
+			by GC.
+
+	di =  %li	data registre		di on MC
+
+	Note: the %o-registers are also used for passing paraemters to C
+	and primitive routines. 
+
+	Some routines, like copyCtext returns their result in or, which
+	is a2 on MC and %01 on Sparc. This should be cleaned up.
+
+	For the GC: The following registers may hold addresses
+
+		th, ca, R1, R2, ca, or
+
+
+3. Object call (SPARC)
+
+   Entry point code:
+
+	mov	%i1,%o0
+	save	%sp,-64,%sp
+
+   Return point code:
+
+	ret
+	restore
+
+   Since input and output registers automatically overlap, 'th' will
+   automatically be updated.
+
+beta4.4 generates the following prototype format:
+
+
+        GCTabel         0       2 bytes
+        OrigOff         2       2 bytes
+        GenPart         4       4 bytes
+        Prefix          8       4 bytes
+        Size           12       2 bytes	 	no. of. longs
+        FormId         14       2 bytes
+	Astindex	16	2 bytes
+	dummy zero	18	2 bytes
+        CallBackRoutine 20      4 bytes (Optional)
+
+The static table and dynamic table has been switched
+
+In the static table, the entry-point and the start offset has been switched
+
+4.	Entry points
+
+	The machine module has a hashtable keeping track of entry points
+	used by the fragment. Should be used to define export/import.
+	Importdata must be cconsidered!!
+
+5.	Call-back
+
+	Machine dependent parts have been moved to machine.bet.
+
+
+6.	Byte and word alignment
+
+	has been implemented. Small datatypes (boolean,char,shortInt) are
+	allocated as bytes or short. The same for the corresponding
+	repetitions.
+	
+	All offsets in the AST are byte offsets, used to be long offsets.
+
+---&gt;	On the SPARC a double must be aligned on 8 byte boundary.
+	This makes it difficult to handle part objects, since the alignment
+	is done relative to an objects start. A part object with a real part
+	must then be allocated on a 8-byte boundary.
+
+---&gt;    A change has been made to adr.index such that size is a parameter.
+	This was necessary to get byte indexing on SPARC.
+	Should be checked carefully. Be aware that this influences transfer
+	of external cStruct parameters.
+
+7.	Parameter transfer to primitive operations
+
+	Eventually all parameters to primitive
+	operations will be transferred as follows
+
+				MC680x0		SPARC
+	parameter 1		  d7		  %o0
+	parameter 2		  d6		  %o1
+	parameter 3		  d5		  %o2
+	... etc. 
+	Possible result in	  d0		  %o0
+
+	Currently this is implemented for 
+
+		EqStruc, NeStruc, etc.
+
+8.	Conflict between R[i]-&gt;put and GC.
+
+	To handle this conflict the following changes have been
+	made to the codegenerator:
+
+	1. An mOperand has a virtual loadAdrOp corresponding to loadOp.
+	   This operation must be called just before any instruction that
+	   has a memory address as an argument. It must be called on
+	   all such arguments of the instruction.
+
+	   For examples, see all places in SUN4machine.bet where
+	   loadAdrOp is called
+
+	2. Register %i5 is used for computed the address of R[i].
+	   It is always used immediately before the address is used
+	   and its value is only used by the next instruction.
+	   The GC should therefore ignore this register
+
+	3. The form RegAdrIndex has been changed to delay addition
+	   of rep.-start-adr and index register.
+	   This is done using an InxRegAdr object. This object type
+	   has not been used for SPARC before. It requires that some
+	   slots needs to be filled. In addition some new slots are needed.
+
+	4. Changed or new forms:
+		--InxRegAdrLoadOp:descriptor---
+		--InxRegAdrLoadFloatOp:descriptor---
+		--InxRegAdrLoadAdrOp:descriptor--
+		--ByteRegAdrIndex:descriptor--
+		--ByteInxRegAdrLoadAdrOp:descriptor--
+	
+	    The two latter forms will be eliminated in the future
+	    and have NOT been fixed!
+
+E.	Changes
+----------------
+
+The marking of standard, beingchecked, has been changed from using desc.size
+to using desc.kind[byte 0], which is accessible throug sematt.descKind.
+
+
+When an AST has been checked:
+	desc-&gt;sematt.descKind 
+may have the values
+	standardKind: (#exit 1 #); desc is a desc. for basic objects like
+					integer, boolean, char, real, etc.
+	constKind: (#exit 2#); 	   desc is a constant like n:(#exit 13#)
+        CprocKind: (#exit 3#); 	   desc is sub of EXTERNAL
+	generalKind: (#exit 4#);   any other user defined descr. including
+					cstruct and its subpatterns
+2.	Register handling
+
+2a	In itemeval:genObj, the allocation of callReg has been moved inside
+	the if-imp. In the old version callReg was busy during evaluation
+	of  origin. This is not necessary. In ((x,y)-&gt;F).P it actually
+	gave less efficient code.
+
+2b	In itemeval:toTmp, there seemed to be an error in which has been
+	fixed. The error implied superflous push of callReg even if it
+	had been moved to a tmp -register. See the code.
+
+2c	In itemEval:asgToItem. A test of rA.isCallReg=false has been inserted
+	to avoid allocating callReg if rA is already callReg. In
+	P1-&gt;P2 where thereiis only one exit/enter list the code was
+	reduced from 22 to 16 instructions. Further optimizations 
+	may be possible here.
+
+2d	The size fields in prototypes is now the size in no.of longs.
+	It used to be no. of longs -1.
+
+F.	Versions
+----------------
+
+The following versions are used by beta4.4 (does NOT apply to 44x and 4.4y)
+
+lrwxr-xr-x   1 beta     other          4 Jan 29 13:50 ./ast/new@ -&gt; v4.4
+lrwxr-xr-x   1 beta     other          4 Feb 21 11:57 ./basiclib/new@ -&gt; v1.0
+lrwxr-xr-x   1 beta     other          4 Jan 29 13:51 ./betaast/new@ -&gt; v3.4
+lrwxr-xr-x   1 beta     other          4 Feb 21 12:10 ./bobs/new@ -&gt; v6.3
+lrwxr-xr-x   1 beta     other          4 Feb 20 13:36 ./ensemble/new@ -&gt; v2.4
+lrwxr-xr-x   1 beta     other          4 Jan 29 15:49 ./pretty/new@ -&gt; v4.4
+
+G.	Final changes
+---------------------
+
+1.	FP registers are saved/restored in push/popDataReg
+
+2.	In L: ...
+	the 'sp' is now saved relative to the  variable 'lastCompBlock'.
+	Require changes to ExitO for motorola. Not needed fo SPARC since
+	sp is in register windows
+
+3.	The slost newDesc and newCtextOp hav been made in 
+	HPmachine, SUN3machine, SUN4machine
+
+4.	The slot jobFilePermission has been made in HPasmlink, etc
+
+5.	The slot debugEndMinfo has been nade into two slots
+		debugBeforeEndMinfo
+		debugAfterMinfo
+
+6.	The slot stackTopAdrPutOp has been added to SUN3machine, HPmachine
+	and HPmachine
+
+7.	The slot assemblerHeader has ben split into two slots; the new
+	one is debugHeader
+
+8.	The slots PushC-Long,word,byte,DoubleAdr,text have been moved
+	from UNIXmachine to HP/SUN3machine
+
+Reference assignment
+--------------------
+
+Jeg minder lige om reference assignment: (eksempel fra 21/10)
+!antag heaplen = %g6 og heapbot = %g7
+
+	add	%l1, 28, %l3
+	sub	%l3, %g7, %l3
+	cmp	%l3, %g6
+	bleu	1f
+	st	%whatever, [%l3, %g6]
+
+	call	CheckReferenceAssignment
+	nop	! eller mov %l3, %o0 eller lign?
+
+1:	...
+
+Det er da rimeligt effektivt.
+- CheckIndex:
+    Hvis op2 peger p} de to intervalgr{nser vil det f|lgende
+    svare til cmp2:
+
+	ld	[op2+0], %g1	! low ?
+	ld	[op2+4], %g2	! high ?
+	sub	%g2, %1, %g2	! er op1 i [%g1, %g2]?
+	sub	op1, %g1, %g1
+	cmp	%g1, %g2
+	bgu	IndexError	! == bcc
+	nop
+
+   Hvis den nedre gr{nse altid er 1, virker:
+
+	ld	[op2+4], %g1	! high ?
+	sub	op1, 1, %g2
+	cmp	%g2, %g1
+	bgeu	IndexError
+	nop			! eller add %g2, 0, %g2;add %g2, 0, %g2
+/Tommy
+
+	
+
+
+
+</PRE>
+
+</BODY>
+</HTML>

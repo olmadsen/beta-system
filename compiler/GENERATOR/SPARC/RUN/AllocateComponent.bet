@@ -1,0 +1,148 @@
+ORIGIN 'BetaRun';
+
+--BetaRunAlloC: descriptor--
+(* Allocate Component
+ * 
+ * Parameters:
+ *   CallO  (%i1) V-Entry of item
+ *   Origin (%o0) Origin
+ * Returns:
+ *   comp in %i1
+ *   
+ * Registers affected:
+ *   Allocates several data registers.
+ *   May destroy %o5 if call_psusp_doGC is called.
+ *)
+(# dr: @dataRegOperand;
+   regProto, regOriginOff: @dataRegOperand;
+   regGCTab,regOff,regTmp: @dataRegOperand;
+   SetupPartObject, Finished, Ventry_called: @LocalLab;
+do SetupPartObject.new;
+   Finished.new;
+   dr.alloc;
+   regProto.alloc;
+   'AlloC' -> ExtLabel;
+   NumAlloC -> IncNum;
+   ;
+   (* Find prototype of item part *)
+   (CallO,regProto,dr) -> findProto;
+   ;
+   (* Push CallO (V-entry) during component allocation to get 
+    * it updated in case of GC.
+    *)
+   CallO->PushRefRegister;
+   (* Allocate proto.size*4 + common.compHeadSize*4 *)
+   (* proto->size -> dr *)
+   (regProto, 12, dr) -> LDUH_I -> emit;
+   (* dr*4 -> dr *)
+   (dr, 2, dr) -> SLL_I -> emit;
+   ;
+   (* dr now contains size of item part of component *)
+   (* add header size and align *)
+   (dr,common.compHeadSize*4,dr)->ADD_I->emit;
+   dr[] -> EmitAlign8;
+   ;
+   (* dr now contains size of COMPONENT to allocate *)
+   (CallO,dr,false,'call_psusp_doGC',true)->
+   GenIOAAlloc
+   (# BeforeDoGC:: (# do O0 -> PushRefRegister #);
+      AfterDoGC :: (# do O0 -> PopRefRegister #);
+   #);
+   ;
+   (* CallO now points to new (uninitialized) component *)
+   ;
+   (* Setup Component header *)
+   (* proto -> comp[0] *)
+   (common.ComponentPTValue->newCstOp,dr[])->ldCst;
+   (CallO,0,dr.reg1)->ST_I->emit;
+   (if common.IOAMinAge<>0 then
+       (* initial age -> comp[4] *)
+       (common.IOAMinAge->newCstOp,dr[])->ldCst;
+       (CallO,4,dr)->ST_I->emit;
+   if);
+   ;
+   (* Adjust CallO to point to ITEM *)
+   (CallO, common.compHeadSize*4, callO) -> ADD_I -> emit;
+   ; 
+   (* Initialize header of item partobject *)
+   (* Prototype *)
+   (CallO, 0, regProto) -> ST_I -> emit;
+   (* Origin *)
+   regOriginOff.alloc;
+   (regProto,2,regOriginOff) -> LDUH_I -> emit;
+   (regOriginOff,2,regOriginOff) -> SLL_I -> emit;
+   (CallO,regOriginOff,O0,false) -> AssignRef;
+   regOriginOff.dealloc;
+   (* GCAttr: -compHeadSize *)
+   (-common.compHeadSize->newCstOp,dr[])->ldCst;
+   (CallO,4,dr)->ST_I->emit;
+   
+   dr.dealloc;
+   (* Traverse GC table of prototype 
+    * and set up prototypes and GCAttr fields of inlined partobjects
+    *)
+   regGCTab.alloc;
+   (regProto,0,regGCTab) -> LDUH_I -> emit;
+   (regProto,regGCTab,regGCTab) -> ADD -> emit;
+   regProto.dealloc;
+   regOff.alloc;
+   regTmp.alloc;
+   SetupPartObject.def;
+   (* Load offset from GCtable entry *)
+   (regGCTab,0,regOff) -> LDUH_I -> emit;
+   (regOff,0) -> CMP_I -> emit;
+   (Finished->mstate.labs.off) div 4 -> BE -> emit;
+   (regOff,2,regOff) -> SLL_I -> emit;
+   (* Initialize prototype of partobject *)
+   (regGCTab,4,regTmp) -> LD_I -> emit;
+   (CallO,regOff,regTmp) -> ST -> emit;
+   (* Initialize GCAttr of partobject *)
+   (regGCTab,2,regTmp) -> LDSH_I -> emit;
+   (regOff,4,regOff) -> ADD_I -> emit;
+   (CallO,regOff,regTmp) -> ST -> emit;
+   (* Take next entry in GCTab *)
+   (SetupPartObject->mstate.labs.off) div 4 -> BA -> emit;
+   (regGCTab,8,regGCTab) -> ADD_I -> emit (* delay slot *);
+   regGCTab.dealloc;
+   regOff.dealloc;
+   regTmp.dealloc;
+   ;
+   Finished.def;
+   ;
+   (* Call V-entry for offline partobject initialization.
+    * %o0 must be set to 0 and %i1 (CallO) must point to item
+    * (and it already does).
+    * BUT do NOT call V-entries of the form (1) as described
+    * in findProto - these will do unconditional allocation.
+    * The only way to test this is as in the start of findProto.
+    *)
+   Ventry_called.new;
+   dr.alloc;
+   regTmp.alloc;
+   dr -> PopRefRegister (* V-entry *);
+   (* Load second instruction from V-entry *)
+   (dr,4,RegTmp) -> LD_I -> mstate.B.emit;
+   ;
+   (* Test bit 24: is 1 in SETHI (case 1) and 0 in OR (case 2a+2b) *)
+   (RegTmp,24,RegTmp) -> SRL_I -> mstate.B.emit;
+   (RegTmp,1,RegTmp) -> ANDCC_I -> mstate.B.emit;
+   (Ventry_called->mstate.labs.off) div 4 -> BNE -> mstate.B.emit;
+   EmitNOP;
+   O7 -> PushDataRegister;
+   (dr,0,O7)->JMPL_I->emit;
+   O0 -> CLR -> emit;
+   O7 -> PopDataRegister;
+   dr.dealloc;
+   regTmp.dealloc;
+   ;
+   Ventry_called.def;
+   (* Adjust CallO back to point to COMPONENT *)
+   (CallO, -common.compHeadSize*4, callO) -> ADD_I -> emit;
+   ; 
+   (CallO, 'AlloC', 'CallO') -> EmitCk;
+   ;
+   (* JMPL %O7+8,%g0 *)
+   O7 -> AssertRegisterNotZero;
+   RETL->emit;
+   xnop -> emit;
+#)

@@ -1,0 +1,724 @@
+ORIGIN 'check';
+LIB_ITEM 'betacompiler'
+-- InitBasicDescs: DoPart --
+(* To handle int8, ... int64u;
+ * NOT FINISHED!
+ * Currently int64/int64u are NOT implemented.
+ * Unsigned are marked in the descriptor as "-1 -> D.attSize"; 
+ * this might be reconsidered.
+ * Adress has been added an signed: @boolean; 
+ * All operations must be added sign/unsigned; currently only ldByte
+ * and ldHalf handles this. add, shift, etc are NOT handled, and this may
+ * take some time.
+ * Type checking must be reconsidered.
+ * 
+ * NOTE! Some basic descriptors are ALSO checked as normal descriptors,
+ * e.g. COM. This requires that descKind is not cleared to zero as done
+ * below in initDesc. When betaenv is checked, COM.descKind is cleared, but
+ * an explicit test for comDesc in chkDesc:chkPre handles this.
+ * The same is the case for iDispatch. In chkdescbody, it is explicitly 
+ * tested for the descriptor iDispatch.
+ *)
+do (# FixExternal:
+        (# N: @ASTindex; T: ^text
+        do (* the cProcDesc has the form:
+            *    external: (#...,externalEntry,...:@text...#)
+            * the nameApl text MUST appear as if it has been checked.
+            *)
+           (if externalWasDefined then
+               (if textApl.isNull then
+                   '\n*** Error in fragment defining basic patterns:'
+                   '\nThe basic patterns "external" and "text" MUST be' 
+                   '\n defined in the same fragment'
+                     -> messagestream.putline;  
+               if);
+               (if not cProcDesc.isNull then
+                   (* If null probably no origin *)
+                   cProcDesc->N;
+                   N.son->N;
+                   N.brother->N;
+                   N.son->N;
+                   (* attributes *)
+                   N->scanList (#  do currentNode->N #);
+                   (if N.isNull then
+                       '\n\n!! Warning: problem with pattern "external"'
+                         -> messagestream.putline
+                    else
+                       (if N.label = gram.simpleDecl then
+                           N.son->N;
+                           N.brother->N;
+                           N.son->N;
+                           (* N=attributeDenotation=nameApl *)
+                           N.getText->T[];
+                           (if 'text'->T.equalNCS then
+                               1->N.on; textApl->N.dclRef; textDesc->N.descRef
+                           if)
+                       if)
+                   if)
+                else
+                   '\n*** WARNING! Basic pattern "external" is null!' 
+                     -> messagestream.putline;    
+           if)if)
+        #);
+      textApl: @ASTindex;
+      externalWasDefined: @boolean
+   do base -> scanList
+      (# dcl,names,d: @ASTindex;
+         Mark:
+           (# names,ndesc: ^ ASTindex; size,attsize,kind,type: @integer
+           enter(names[],nDesc[],size,attsize,kind,type)
+           do names.brother -> nDesc;
+              size -> nDesc.size;
+              attSize -> nDesc.attSize;
+              (nDesc,kind,type) -> standardMark
+           #);
+         StandardMark:
+           (# d: @ASTindex; descKind,type,K: @integer
+           enter (d,descKind,type)
+           do (@@ K,descKind)->tos'%putByte[0]';
+              (@@ K,type)->tos'%putBits[27,5]';
+              K->d.kind
+           #);
+
+      do currentNode->dcl;
+              (* 132-> trace(#do 'InitBasicDesc:'->xT; dcl[] -> xA #);*)
+         (if dcl.label <> gram.unExpanded then              
+             dcl.son->names
+               ->scanList
+             (# name: @ASTindex
+             do currentNode->name;
+                (if true
+                 // ('text'->name.textEQ) then 
+                    name -> textApl; names.brother -> textDesc; 
+                 // ('char'->name.textEQ) then
+                    (names[],charDesc[],1,-1,standardKind,charType) -> mark
+                 // 'wchar' -> name.textEQ then
+                    (names[],wCharDesc[],2,-1,standardKind,valType) -> mark
+                 // ('boolean'->name.textEQ) then
+                    (names[],boolDesc[],1,-1,standardKind,boolType) -> mark
+                 // ('false'->name.textEQ) then
+                    (names[],falseDesc[],4,0,constKind,cBoolType) -> mark
+                    (*4->d.size; ??*)
+                 // ('true'->name.textEQ) then
+                    (names[],trueDesc[],4,1,constKind,cBoolType) -> mark
+                    (* 4->d.size; ?? *)
+                 // 'int8'->name.textEQ then
+                    (names[],int8Desc[],  1, 0,standardKind,valType) -> mark
+                 // 'int8u'->name.textEQ then
+                    (names[],int8uDesc[], 1,-1,standardKind,valType) -> mark
+                 // 'int16'->name.textEQ then
+                    (names[],int16Desc[], 2, 0,standardKind,valType) -> mark
+                 // ('shortInt'->name.textEQ) then
+                    (names[],shortDesc[],2,0,standardKind,valType) -> mark
+                 // 'int16u'->name.textEQ then
+                    (names[],int16uDesc[],2,-1,standardKind,valType) -> mark
+                 // ('integer'->name.textEQ) then
+                    (names[],integerDesc[],4,0,standardKind,valType) -> mark
+                 // 'int32'->name.textEQ then
+                    (names[],int32Desc[],4,0,standardKind,valType) -> mark
+                 // 'int32u'->name.textEQ then
+                    (names[],int32uDesc[],4,-1,standardKind,valType) -> mark
+                 // 'int64'->name.textEQ then
+                    (names[],int64Desc[],8,0,standardKind,int64Type) -> mark
+                 // 'int64u'->name.textEQ then
+                    (names[],int64uDesc[],8,-1,standardKind,int64Type) -> mark
+                 // ('errorName'->name.textEQ) then
+                    name->errorName; 
+                 // ('real'->name.textEQ) then
+                    (names[],realDesc[],8, 0,standardKind,realType) -> mark
+                 // ('External'->name.textEQ) then
+                    (# kind: @integer
+                    do names.brother->d->cProcDesc;
+                       (*common.standard*)
+                       4 (*???*) ->cProcDesc.size;
+                       (d,standardKind,0)->standardMark;
+                       (* set hasInner = true *)
+                       d.kind->kind;
+                       (@@ kind,true)->tos'%putBits[12,1]';
+                       (*hasinner*)
+                       (@@ kind,true)->tos'%putBits[17,1]';
+                       (*onlyi nner*)
+                       kind->d.kind;
+                       true -> externalWasDefined
+                    #)
+                 // ('cStruct'->name.textEQ) then
+                    names.brother->d->cStrucDesc;
+                    (*(d,standardKind,0)->standardMark; 
+                     common.standard->cStrucDesc.size;*)
+                 // ('Object'->name.textEQ) then
+                    names.brother->superObject
+                 // ('Repetition'->name.textEQ) then
+                    names.brother->repDesc; 
+                 // 'data'->name.textEQ then
+                    names.brother->dataDesc;
+                    0->dataDesc.size->dataDesc.attSize;
+                    (dataDesc,dataKind,0)->standardMark;
+                    (* hack to handle TOS'%..' *)
+                 // 'com' -> name.textEq then 
+                    (* if com is also checked the kindseems to 
+                     * be cleared; FIX! *)
+                    names.brother -> comDesc;
+                    (comDesc,comKind,0) -> standardMark;
+                 // 'holder' -> name.textEQ then
+                    names.brother -> holderDesc;
+                    (holderDesc,holderKind,0) -> standardMark
+                 // 'state' -> name.textEQ then
+                    names.brother -> stateDesc;
+                    (stateDesc,stateKind,0) -> standardMark
+                 // 'dispatch' -> name.textEQ then
+                    names.brother -> dispatchDesc;
+                    (dispatchDesc,dispatchKind,0) -> standardMark
+                 // 'idispatch' -> name.textEQ then
+                    'idispatch ' -> puttext;
+                    names.brother -> dispatchDesc;
+                    (dispatchDesc,dispatchKind,0) -> standardMark
+                 // 'BSTR' -> name.textEQ then
+                    'BSTR ' -> puttext;
+                     names.brother -> BSTRDesc;
+                    (* no mark here - just remeber the decriptor *)
+                if)
+             #)
+         if);
+      #);
+      FixExternal
+   #)
+-- InitWithoutCheck: Descriptor --
+(# 
+do (if not hasOrigin then (* BetaEnv *)
+       theGroup.scan
+       (# FF: ^FragmentForm; sysDesc: @ASTindex;
+          p,m,att,n,d,x: ^ASTindex
+       do current[]->FF[];
+          FF.theGSForm->sysDesc;
+          &ASTindex[] -> p[];
+          sysDesc.son -> p; (* objectDescriptor *);
+          p[] -> DescSonsRef -> (p[],m[],att[],n[],d[],x[]);
+          att -> initBasicDescs
+       #);
+       (*  Sematt.DumpStd;*)
+    else
+       (* some fragment that may have a basic-property *)
+       theGroup.prop.scanProp
+       (# doProp::
+            (# FF: ^FragmentForm; att: @ASTindex
+            do prop.makelc; 
+               (if 'basic' -> prop.equal then 
+                   '\n*** Defining basic patterns: ' -> puttext;
+                   theGroup.scan
+                   (#
+                   do current[]->FF[];
+                      FF.theGSForm -> att;
+                      att.son -> initBasicDescs
+                   #);
+                   newline
+       if)#)#)
+   if)
+#)  
+
+-- InitTerm: Descriptor --
+(# SlotError:
+     (# node: @ASTindex; D: ^slotDesc; U: ^unExpanded
+     enter node
+     do (node,47)->&SemError;
+        (* transform unExpanded node into slot-node *)
+        (* node.a ->U[];
+         * node.f->grammarTable.BETA.newSlot->D[]->U.theSlot;
+         * '***ERROR***'->D.name;
+         *)
+        true->fatalInitTermError
+     #);
+   InitBrothers:
+     (# node,origin: @ASTindex
+     enter (node,origin)
+     do L:
+        (if not node.isNull then
+            (node,origin)->&Init; node.brother->node; restart L
+        if)
+     #);
+   CollectDecl:
+     (# desc,att,root,libRoot: @ASTindex;
+        ind: @integer;
+        PrintDcl:
+          (# R: @ASTindex
+          enter R
+          do (for ind repeat ' '->Tracestream.put for);
+             (if not R.isNULL then
+                 R.getText->Tracestream.Puttext;
+                 tracestream.newline;
+                 ind+1->ind;
+                 R.Left->&PrintDcl;
+                 R.Right->&PrintDcl;
+                 ind-1->ind
+              else
+                 '.'->tracestream.put; lst.newline
+             if)             
+          #);
+        PrintLib:
+          (# L,N: @ASTindex
+          enter L
+          do (if not L.isNull then
+                 'Include '->lst.PutText;
+                 L.son->N;
+                 N.gettext->lst.Puttext;
+                 lst.newline;
+                 L.Next->&PrintLib
+             if)
+          #);
+        son1,n: @ASTindex;
+        saveRoot: @boolean
+     enter (desc,att,saveRoot)
+     do (if not wasChanged then
+            (*****  NOTE term being re-checked.
+             * In this case the else part is NOT executed !!!
+             *)
+            (att,desc)->&Init (* normal scan of attributes *)
+         else
+            null->LibRoot;
+            att
+              ->scanList
+                (# dcl: @ASTindex; (* dcl=SORT[NL,T] *) 
+                do currentNode->dcl;
+                   dcl.ClearError;
+                   (if dcl.label = gram.unExpanded then
+                       (if dcl.isSlot then
+                           (dcl,desc)->&Init;
+                           (if libRoot.isNull then
+                               dcl->libRoot
+                            else
+                               libRoot->dcl.next; dcl->libRoot
+                           if)
+                        else
+                           dcl->slotError
+                       if)
+                    else
+                       dcl.son->son1;
+                       (if dcl.label
+                        // gram.bindingDecl // gram.finalDecl then
+                           (dcl[],desc)->&InitBinding
+                        // gram.repetitionDecl then
+                           (* repetition[NL INDEX SPEC] *)
+                           dcl.son->n; (dcl,n.brother,desc)->&initSemi
+                        else
+                           (son1.brother,desc)->&InitBrothers
+                       if);
+                       son1
+                         ->scanList
+                           (# name: @ASTindex; (* nameDcl *) 
+                           do currentNode->name;
+                              dcl->name.sort;
+                              null->name.left->name.right;
+                              (if root.isNull then
+                                  name->Root
+                               else
+                                  (root,name)
+                                    ->Find
+                                      (# left::(#  do name->father.left #);
+                                         right::(#  do name->father.right #);
+                                      do name.ClearError;
+                                         (* in case of re-check *)
+                                         (* (name,1)->&SemError*)
+                                         (name[],false) -> MakeError
+                                         (# 
+                                         do '"' -> XT;
+                                            name[] -> XA;
+                                            '" is declared more than once' 
+                                              -> XT
+                                         #)
+                                      #)
+                              if)
+                           #)
+                   if)
+                #);
+            (if saveRoot then
+                (* is not saved for mainPart forms *)
+                Root->desc.DclRoot;
+                libRoot->desc.lib
+            if)
+        if);
+        (*131->trace
+        (#do 'CollectDecl:'->xT;
+            desc.DclRoot-> &PrintDcl; libRoot->&PrintLib 
+         #) *)      
+     #);
+   InitBinding:
+     (* node = (bindingDecl <name> <BS> ) 
+      *  test for a declaration of the form
+      *  B ::< (# ... #)
+      *  where a prefix with name empty string is added.
+      *  dclRef of empty name is NULL and
+      *  declRef of empty Name refers to B   *)
+     (# node: ^ASTindex; origin,B,BS,BSpre,BsPn: @ASTindex
+     enter (node[],origin)
+     do
+        node.son->B;
+        B.brother->BS;
+        B->singleName->B;
+        B.ClearError;
+        null->B.virtDcl;
+        (BS,origin)->&Init;
+        (* init. whole desc *)
+        (*132->trace(#do 'initT'->xT; node[]->xA #);*)
+        (if BS.label = gram.objectDescriptor then
+            BS.son->BSpre;
+            (if BSpre.label = gram.empty then
+                BS->addPrefix->BsPn;
+                node->BsPn.descRef;
+                origin->BsPn.origin;
+                null->BsPn.dclRef
+             else
+                BSpre.son->BsPn;
+                BsPn->GetName->BsPn;
+                (if BsPn.stringLength = 0 then
+                (* the dummy prefix was added by controlfragment
+                 * before compaction of AST*)
+                    node->BsPn.descRef;
+                    origin->BsPn.origin;
+                    null->BsPn.dclRef
+                 else
+                (*normal  prefix, initialized by init above*)
+                (*null->BsPn.descRef*)                    
+                if)
+            if);
+            (*origin->BsPn.origin; null->BsPn.dclRef;*)            
+        if)
+     #);
+   InitSemi:
+     (# semi,index,origin: @ASTindex; 
+     enter (semi,index,origin)
+     do (*133->trace(#do index[]->A #);*)
+        (if index.label = gram.namedIndex then
+            origin->semi.origin;
+            semi->origin;
+            index.son->index;
+            semi->index.sort
+        if);
+        (semi.son,origin)->&initBrothers
+     #);
+   Init: (* recursive traversal of the AST *)
+     (# node,origin: @ASTindex;
+        InitDesc:
+          (# DescSonsRef:
+               (*** NOTe: this pattern is similar to the one in sematt except
+                * that here it is also tested if an unexpanded is in fac
+                * a slot
+                *)
+               (# desc: ^ASTindex; pre,mainP,att,enterP,doP,exitP: @ASTindex
+               enter desc[]
+               do desc.son->pre;
+                  pre.brother->mainP;
+                  (* main-part*)
+                  (if mainP.label = gram.unExpanded then
+                      (if not mainP.isSlot then mainP->slotError if);
+                      integerDesc.son->att;
+                      att.brother->att;
+                      att.son -> att
+                      (* this is a bloody hack in order to make sure that
+                       * att, etc. are NOT null but gram.empty 
+                       *)
+                   else
+                      mainP.son->att; (* attribute-part *) 
+                  if);
+                  att.brother->enterP;
+                  (* actionPart *)
+                  enterP.son->enterP;
+                  (* enter Part*)
+                  enterP.brother->doP;
+                  (* doPart *)
+                  doP.brother->exitP;
+                  (* exitPart *)
+                  (if (doP.label <> gram.empty) then
+                      (if doP.label = gram.unExpanded then
+                          (if not doP.isSlot then doP->slotError if)
+                       else
+                          doP.son->doP (* impList of doPart *)
+                      if)
+                  if)
+               exit (pre[],mainP[],att[],enterP[],doP[],exitP[])
+               #);
+             mp: @ASTindex
+          do level+1->level;
+             node[]->DescSonsRef->(pref[],mainP[],att[],enterP[],doP[],exitP[]);
+             (* hack to handle T<<SLOT A:mainPart>> *)
+             node.son->mp;
+             mp.brother->mp;
+             (if mp.isSlot then (mp,node)->&init if);
+             (FF.fragNode,descNo+1->descNo)->node.descId;
+             (if (node->DescKind)
+              // standardKind // constKind then (*skip*)
+              // dataKind then
+              (* FIX 8/3/95: for a fragment not being parsed,
+               * descKind will not be cleared. This implies that
+               * such data descriptor will not be rechecked.
+               * It is only pattern 'data' that should not have
+               * its kind set to undefined
+               *)
+                 (if not (node->dataDesc.equal) then
+                     0->node.attSize; 0->node.kind
+                 if)
+              else
+                 0->node.attSize;
+                 0->node.kind;
+                 (* see also standardMark *)
+                 (* kind=0 represents sematt.unDefined *)                 
+             if);
+             (**** preliminary change ****)
+             origin->node.origin;
+             (if pref.label
+              // gram.prefix then
+                 pref.clearError;
+                 (* origin of a prefix nameApl is origin of the descriptor *)
+                 (pref.son,origin)->&InitBrothers
+              // gram.unexpanded then
+                 pref->slotError
+             if);
+             (node,att,true)->&collectDecl;
+             (if (enterP.label <> gram.empty) then
+                 (if enterP.label = gram.unexpanded then
+                     enterP->SlotError
+                  else
+                     (enterP.son,node)->&Init
+                 if)
+             if);
+             (if (doP.label <> gram.empty) then
+                 (doP,node)->&Init
+             if);
+             (if (exitP.label <> gram.empty) then
+                 (if exitP.label = gram.unexpanded then
+                     exitP->SlotError
+                  else
+                     (exitP.son,node)->&Init
+                 if)
+             if);
+             level-1->level;             
+          #);
+        InitLabelSemi:
+          (# node,origin,labelDcl: @ASTindex
+          enter (node,origin)
+          do node.son->labelDcl;
+             node->labelDcl.sort;
+             origin->node.origin;
+             (labelDcl,node)->&initBrothers
+          #);
+        pref,mainP,att,enterP,doP,exitP: ^ASTindex;
+        n: @ASTindex
+     enter (node,origin)
+     do (if not node.isNull then
+        (*132->trace(#do level->I; hasTmpSto->I; node[]->A #);*)
+            node.ClearError;
+            (* 0->node.ErrInx;*)
+            (* in case of recheck *)
+            (if node.Label
+             // gram.nameApl then
+                origin->node.origin;
+                null->node.dclRef
+                  ->
+                    node.descRef
+                    (* note that origin shares space with on !!!! *)
+             // gram.objectDescriptor then
+                (if level = 0 then 
+                    (* In the following dopart the descriptor
+                     * is marked insertable and as it has a for-imp,
+                     * a doPart object is needed. 
+                     * A more elaborate scheme might avoid always
+                     * allocating a dopart object in this case
+                     * 
+                     *    do (# do (for ... for) #)
+                     *)
+                    true->hasTmpSto 
+                if);
+                &InitDesc
+             // gram.forImp then (* forImp[INDEX IMP+;] *)
+                (if level = 0 then true->hasTmpSto if);
+                (node,node.son,origin)->&initSemi
+             // gram.labelledImp then (* (label (nameDcl> <imp*;>)) *)
+                (if level = 0 then true->hasTmpSto if);
+                (node,origin)->&initLabelSemi
+             // gram.bindingDecl // gram.finalDecl then
+                (node[],origin)->&InitBinding
+             // gram.repetitionDecl then (* repetition[NL INDEX SPEC] *)
+                node.son->n; (node,n.brother,origin)->&initSemi
+             // gram.textConst // gram.integerConst // gram.codeConst
+             // gram.codeString // gram.empty then (*skip*)
+                
+             // gram.nameDcl then (* skip *)
+                
+             // gram.unexpanded then
+                (if node.isSlot then (*132->trace(#do node[]->A #);*)
+                    origin->node.slotOrigin
+                 else
+                    node->SlotError
+                if)
+             else
+                (if node.nodeClass
+                 // kinds.cons then
+                    (node.son,origin)->&InitBrothers; 
+                 // kinds.list then
+                    node->scanList (#  do (currentNode,origin)->&Init #)
+                 // kinds.dummy then
+                    (node.son,origin)->&Init
+                 else
+                    
+                if)
+            if)
+        if)
+     #);
+   (* Init *)
+   sysForm,formDesc: @ASTindex;
+   (* the descriptor of F *)
+   origin,pref: @ASTindex;
+   OP: ^SlotDesc;
+   initialEnv: @boolean;
+   level: @integer;
+   (* level no. of nested descriptors *)
+   hasTmpSto
+   (* true if tmp. sto. need for doPart-form.
+    * Will be true if for-imp and/or labelled-imp at out-level
+    * of doPart-form. 
+    *): @boolean;
+   OriginError:
+     (# n: @integer
+     enter n
+     do
+        '\n\n*** The fragment\n\t'->messagestream.puttext;
+        theGroup.fullName->messagestream.puttext;
+        '\n\thas NO ORIGIN!\n\t'->messagestream.puttext;
+        'All fragments except \'betaenv\' must have an ORIGIN'
+          ->messagestream.putText;
+        (for i: n repeat '!'->messageStream.put for);
+        messageStream.putLine;
+        (theGroup[],11)->msg;
+        
+     #);
+do
+   FF.theGSForm->sysForm;
+   0->sysForm.descNo;
+   (* descNo contains the index of the search cash
+    * for this form; must be zero initially *)
+   (* sysForm = (objectDescriptor <desc> )
+    *         | (AttributesForm <att_dcl+;> )
+    *         | (doPart <impList*;> )
+    *)
+        (*132->trace(#do sysForm[]->A #);*)
+   (if dynamicCompilationContext.rootOrigin[] = none then       
+       (if (FF.binding[]->OP[]) = none (* bad condition to test *) then
+           (if not (sematt.integerDesc.isNull 
+               and sematt.superObject.isNull) then
+               (* if integerDesc or superObject are not null, then
+                * betaenv/tstenv has already been defined
+                *)
+               1->originError
+            else
+               (if sysForm.label
+                // gram.objectDescriptor // gram.descriptorForm then
+                   (theGroup[],false) -> InitWithOutCheck;
+                   true->initialEnv;
+                   (* Check that this was in fact betaenv or tstenv.
+                    * This is done by checking that pattern integer and
+                    * pattern object have been defined. In principle one 
+                    * should check that all basic patterns have been defined.
+                    *)
+                   (if sematt.integerDesc.isNull or sematt.superObject.isNull
+                    then
+                       2->originError
+                   if)
+                else
+                   3->originError
+               if)
+           if)           
+        else
+           (theGroup[],true) -> InitWithOutCheck; 
+           OP.node->origin;
+           (* a SLOT *)
+           (*origin.slotOrigin->origin*)
+           (* origin of SLOT *)           
+       if);
+       origin->sysForm.xOrigin       
+    else
+       dynamicCOmpilationContext.rootOrigin -> sysForm.xOrigin
+   if);
+   (* descNo,libDescNo: For each descriptorFrom descNo must be initialised 
+    * to zero. I.e within each descriptor, the descriptors are numbered 
+    * sequentially starting with 1. For attribute forms, all the descriptors
+    * must be numbered sequentially starting with 1.
+    *)
+   (* reference to fragment origin *)
+   (if sysForm.label
+    // gram.descriptorForm then
+       sysForm.son->formDesc;
+       formDesc.son->pref;
+       (if pref.label = gram.prefix then 
+           (*132->trace(#do 'Formdesc has prefix:'->T #);*)
+           1->descNo
+        else
+           0->descNo
+       if);
+       (formDesc,sysForm)->&Init;
+       (formDesc[],common.itemKind,0,none )->DS.put;
+       (* kind,cons are not correct: the compiler seems to assume
+        * that kind>0 implies singular?
+        *)       
+    // gram.attributesForm then
+       attDescNo->descNo;
+       (sysForm,sysForm.son,true)->&CollectDecl;
+       sysForm->formDesc;
+       descNo->attDescNo;
+       (formDesc[],0,0,none )->DS.put;
+       (* kind,cons are not correct *)       
+    // gram.doPart then
+       0->level;
+       false->hasTmpSto;
+       0->descNo;
+       sysForm->formDesc;
+       (formDesc (*node*) ,sysForm)->&Init;
+       (if hasTmpSto then
+           1->formDesc.descNo;
+           (*135->trace(#do 'TmpSto needed:'->T; formDesc[]->A #)*)
+           
+       if);
+       (formDesc[],formDesc[] (*?*) )->DS.putDo;
+       (* kind,cons are not correct *)       
+    // gram.mainPart then
+       (# D,root: @ASTindex; pref,att,enterP,doP,exitP: ^ASTindex;
+       do 0->descNo;
+          sysForm->formDesc;
+          (* A mainPart is a partial descriptor and must be initailized
+           * in most cases like a descriptor. This is done below. 
+           * CollectDecl checks for double declarations and builds a
+           * search tree to be stored in the descriptor; but since we
+           * only have a mainPart there is no place to store the
+           * descriptor. It is thus NOT stored. In search, a linaer
+           * search is instead performed in mainParts.
+           * THERE IS CURRENLY NO SUPPORT FOR LIB SLOTS in mainParts
+           *)
+          (if false then
+              (formDesc (* node *) ,sysForm)->&Init;
+           else
+              formDesc[] 
+                -> sematt.mainPartSons 
+                -> (D,pref[],att[],enterP[],doP[],exitP[]);
+              (sysForm,att,false)->&collectDecl;
+              (if (enterP.label <> gram.empty) then
+                  (if enterP.label = gram.unexpanded then
+                      enterP->SlotError
+                   else
+                      (enterP.son,sysForm)->&Init
+                  if)
+              if);
+              (if (doP.label <> gram.empty) then
+                  (doP,sysForm)->&Init
+              if);
+              (if (exitP.label <> gram.empty) then
+                  (if exitP.label = gram.unexpanded then
+                      exitP->SlotError
+                   else
+                      (exitP.son,sysForm)->&Init
+                  if)
+              if);
+          if);
+          
+          (formDesc[],sysForm[] (*?*) )->DS.putDo;
+          (* kind,cons are not correct *)
+       #)
+   if)
+#)  
+

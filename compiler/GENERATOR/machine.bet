@@ -1,0 +1,2391 @@
+ORIGIN '../CONTROL/com'; 
+LIB_ITEM 'betacodegen';
+INCLUDE '~beta/basiclib/file';
+INCLUDE '~beta/containers/hashTable';
+INCLUDE '~beta/basiclib/numberio';
+INCLUDE 'image';
+BODY 'machinebody';
+
+-- LIB: Attributes --
+TrueValue: BooleanValue (#  do true->value #);
+
+machineFactory:
+  (# <<SLOT MachineFactoryLib:attributes>>;
+     ASTdesc:< object;
+     nextAdrId: @integer; (* see address:display *)
+     AbstractMachine:
+       (# <<SLOT AbstractMachinelib: attributes>>;
+          (*************** machine operands *****************
+           *  mOperand
+           *     cstOperand
+           *     textOperand
+           *     registerOperand
+           *        dataRegOperand
+           *        adrRegOperand
+           *        doubleDataRegOperand
+           *        floatRegOp
+           *     localLab
+           *     address
+           *       regAdr
+           *       inxRegAdr
+           *)
+          NewCstOp:
+            (# R: @cstOperand
+            enter R.C
+            exit R[]
+            #);
+          NewTextOp:
+            (# R: @textOperand
+            enter R
+            exit R[]
+            #);
+          NewTextToDataOp:
+            (# R: @textOperand
+            enter R
+            do true->R.fromCodeToData
+            exit R[]
+            #);
+          NewCtextOp:<
+            (# T: ^text; op: @textOperand
+            enter T[]
+            do inner
+            exit op[]
+            #);
+          NewDataRegOp: (# R: @dataRegOperand enter R.rN exit R[] #);
+          NewAdrRegOp: (# R: @adrRegOperand enter R.rN exit R[] #);
+
+          mOperand: (* an operand for a machine instruction *)
+            (# thisClass:< mOperand;
+               Display:< (# T: @text do INNER exit T[] #);
+               out:< (# do inner #);
+               putOp:< (* print This mOperand on file BC *) Object;
+               reg1:< integerValue;
+               reg2:< integerValue;
+               offSet:< integerValue;
+               val:< integerValue;
+               isCstOp:< booleanValue;
+               isTextOp:< booleanValue;
+               isRegOp:< booleanValue;
+               isDataRegOp:< booleanValue;
+               isAdrRegOp:< booleanValue;
+               isDoubleDataRegOp:< booleanValue;
+               isFloatRegOp:< booleanValue;
+               (* Something is wrong here: isPrimRegOp was supposed
+                * to distinguish primRegs in registers and memory
+                * but is always TRUE even for INTEL;
+                * primRegIsReg has been added to handle the difference
+                * between registers and memory; we should eventaully
+                * be able to eliminate isPrimRegOp
+                *)
+               isPrimRegOp:< booleanValue;
+               primRegIsReg:< booleanValue;
+               primRegIsRegAdr:< booleanValue;
+               primRegIsTextOp:< booleanValue;
+               asText:<
+                 (# T: ^text; TO: @textOperand
+                 do &text[]->T[]; INNER; T[]->TO
+                 exit TO[]
+                 #);
+               isLocalLabOp:< booleanValue;
+               isAddress:< booleanValue;
+               isRegAdr:< booleanValue;
+               isInxRegAdr:< booleanValue;
+               isOriginReg:< booleanValue; (* to handle the hack where reg=-11
+                                            * represents originReg. 
+                                            * E.g gen:newVirt, but also other
+                                            * places *)
+               thisOp:< (* returns a COPY of this mOperand; just for using putOp *)
+                 (# op: ^thisClass do INNER exit op[] #);
+               loadOp:<
+                 (* on some machines the operands of operations like add must be in
+                  * registers. This is the case for SUN4/SPARC. 
+                  * This operation may be used for this purpose *)
+                 (# op: ^mOperand do INNER exit op[] #);
+               loadFloatOp:< (* like loadOp for float values *)
+                 (# op: ^FloatRegOp do INNER exit op[] #);
+               loadAdrOp:<
+                 (* like loadOp, but for preparing an address to be an argument
+                  * of a RISC (SPARC,Snake) instruction.
+                  * The op returned should ALWAYS be an address; thus mOperand
+                  * should be replaced by address, and any use of loadAdrOp
+                  * should checked in e.g.SUN4machine, etc
+                  *) 
+                 (# op: ^mOperand do INNER exit op[] #);
+               loadAdr:<
+                 (* load the addres of this operand into register R
+                  * Used by SUN4 implementation
+                  *) 
+                 (# R: ^RegisterOperand enter R[] do INNER #);
+               loadToReg:< (* load this(mOperand) to register R *)
+                 (# R,Res: ^mOperand
+                 enter R[]
+                 do THIS(mOperand)[]->res[]; INNER
+                 exit Res[]
+                 #);
+               pushCpar:< (* push this(mOperand) in register R. Used for SUN4 only *)
+                 (# R: ^mOperand enter R[] do INNER #);
+               getReg:<
+                 (* returns possible a-reg. and d-reg. used in this operand.
+                  * Each mOperand uses as most one a-reg and/or at most one d-reg.
+                  * Note that 0 (zero) means that no reg. is used. The values
+                  * 1,2,... corresponds to registers 0,1,...
+                  *) 
+                 (# aNo,dNo: @integer do INNER exit (aNo,dNo) #);
+               toPrimDest:<
+                 (# pNo: @integer; primDest: ^mOperand
+                 enter pNo
+                 do pNo->GetPrimReg->primDest[]; INNER
+                 #);
+               
+            #);
+          CstOperand:< mOperand
+            (# thisClass:: cstOperand;
+               isCstOp:: TrueValue;
+               val::  (#  do C->value #);
+               pushCpar::<  (#  do (THIS(cstOperand)[],R[])->ldCst #);
+               toPrimDest:: 
+                 (# 
+                 do (if primDest.primRegIsReg then
+                        (THIS(cstOperand)[],primDest[])->ldCst
+                     else (if primDest.primRegIsRegAdr then (*sgi*)
+                              (THIS(cstOperand)[],primDest[],4)->stCst
+                           else
+                              (* isTextOp: intel *)
+                              (# reg: @dataRegOperand
+                              do reg.alloc;
+                                 (THIS(cstOperand)[],reg[])->ldCst;
+                                 (reg[],primDest.asText) -> stValInText;
+                                 reg.deAlloc
+                              #)
+                    if)if)
+                 #);
+               C:@integer;          
+            enter C
+            exit C
+            #);
+          TextOperand:< mOperand
+            (# thisClass:: textOperand;
+               isTextOp:: TrueValue;
+               BETAlab, (* true if BETA_data/code *) 
+               fromCodeToData: @boolean;
+               T: ^Text;
+            enter T[]
+            exit T[]
+            #);
+          registerOperand: mOperand
+            (# <<SLOT RegisterOperandLib:Attributes>>;
+               isRegOp:: TrueValue;
+               isObjectReg:< booleanValue;
+               (* returns TRUE is this register may
+                * refer an object, i.e. is subject to 
+                * be GC'ed; dataReg's always return
+                * FALSE; adrReg's return TRUE by default
+                * but some e.g. for SPARC return FALSE
+                *)
+               regF:< integervalue (* return physical register number *) ;
+               alloc:< object;
+               deAlloc:< object;
+               reUse:< (#  enter rN do INNER #);
+               isCallReg:< (# value: @boolean do INNER exit value #);
+               inUse:< booleanValue;
+               toPrimDest::
+                 (# 
+                 do (if primDest.primRegIsReg then
+                        (THIS(registerOperand)[],primDest[]) -> cpReg
+                     else (if primDest.primRegIsRegAdr then (* sgi *)
+                              (THIS(registerOperand)[],primDest[]) -> stVal
+                           else (* intel *)
+                              (THIS(registerOperand)[],primDest.asText)
+                                -> stValInText
+                    if)if)   
+                 #);
+               rn: @integer; (*  the logical register number *)
+               fn: @integer;
+               (* possible physical register to which the logical 
+                * register has been assigned. Currently only used
+                * by Intel386 machines to keep track of physical
+                * register between deAlloc/reuse in codegen. for
+                * if-imp
+                *)          
+            enter rn
+            exit rn
+            #);
+          DataRegOperand:< RegisterOperand
+            (# isDataRegOp:: TrueValue;
+               display::< 
+                 (#do '%'->T.put; 'd'->T.put; rn->T.putint; ' '->T.put #);
+            #);
+          doubleDataRegOperand:< mOperand
+            (# isDoubleDataRegOp:: TrueValue;
+               dNo1,dNo2: @dataRegOperand;
+               alloc:
+                 (# 
+                 do dNo1.alloc; dNo2.alloc
+                 #);
+               deAlloc:
+                 (# 
+                 do dNo1.deAlloc; dNo2.deAlloc
+                 #);
+               getReg::< 
+                 (# 
+                 do 'doubleReg' ->common.bugstream.putline
+                 #);
+               loadOp::< (#  do (*OOPS*)  #);
+               pushCpar::< (# do (dNo2[],R[])->cpReg #);
+            enter (dNo1,dNo2)
+            exit (dNo1,dNo2)         
+            #);
+         AdrRegOperand:< registerOperand
+            (# isAdrRegOp:: TrueValue;
+               display::<
+                 (#
+                 do '%'->T.put; 'a'->T.put; rn->T.putint;
+                    (if ind then '(indirect)'->T.puttext if);
+                    ' ' -> T.put;
+                 #);
+               ind: @boolean; (* indirect via this(register) *)
+               mkIndirect: (#  do true->ind #);
+            #);
+          FloatRegOp:< RegisterOperand
+            (# n2: @integer;
+               isFloatRegOp:: TrueValue;         
+               load:<
+                 (# A: ^address
+                 enter A[]
+                 do INNER
+                 #);
+               store:<
+                 (# A: ^address
+                 enter A[]
+                 do INNER
+                 #);
+               storeTmp:<
+                 (# A: ^mOperand
+                 do INNER
+                 exit A[]
+                 #);
+               store2Int:<
+                 (# A: ^address; D: @dataRegOperand
+                 enter A[]
+                 do INNER
+                 exit D[]
+                 #)
+            enter n2
+            exit n2
+            #);
+          StackTopAdr:< address; (* only to be used as part of floatOp *)
+          (* Local labels used by e.g. control structures *)
+          LocalLab:< mOperand
+            (# isLocalLabOp:: TrueValue;
+               descId: ^text;         
+               type: @integer;
+               descLocal: (#  exit 0 #);
+               codeLocal: (#  exit 1 #);
+               codeToData: (#  exit 2 #);
+               interFragment: (#  exit 3 #);
+               caseStart: (#  exit 4 #);
+               caseEntry: (#  exit 5 #);
+               caseEnd: (#  exit 6 #);
+               dataLocal: (#  exit 7 #);
+               dataToCode: (#  exit 8 #);
+               betaLabel,
+               (* the label corresponds to the restart or leave
+                * address of a BETA label like "L: (if ... if)".
+                * Such labels may be addressed from another
+                * descriptor than they are defined.
+                *) isTextAdr: @boolean;
+               new: (#  do 1->newLab->labNo #);
+               def:< (# do INNER #);
+               VirtLabDef:< (# do inner #);
+               asText:< (# localLabText: ^text do inner exit localLabText[] #);
+               labNo: @integer;
+            enter labNo
+            exit labNo
+            #);
+          newLab: @
+            (# n,lab: @integer
+            enter n
+            do lab+n->lab
+            exit lab
+            #);
+          Address: mOperand
+            (# isAddress:: TrueValue;
+               ThisClass::< address;
+               display::< 
+                 (# 
+                 do 'Adr(' -> T.puttext; 
+                    (if adrId = 0 then 
+                        nextAdrId +1 -> nextAdrId -> adrId
+                    if);
+                    adrId -> T.putint;
+                    '):size='->T.putText;
+                    size->T.putInt;
+                    ':'->T.put;
+                    (if signed then
+                        'S'->T.put
+                     else
+                        'U'->T.put
+                    if);
+                    (if access
+                     // common.direct then
+                        ':direct:'->T.putText
+                     // common.cstInd then
+                        ':cstInd:'->T.puttext
+                     // common.varInd then
+                        ':varInd:'->T.puttext
+                    if);
+                    (if frozenReg then 'frozen:'->T.putText if);
+                    (if deAllocated then 'deAllocated:'->T.putText if);
+                    (if noTmp then 'noTmp:'->T.putText if);
+                    INNER
+                 #);
+               bAdr: @
+                 (# localDesc: ^ASTdesc;
+                    copy:<
+                      (# A: ^address
+                      enter A[]
+                      do INNER;
+                         LocalDesc[]->A.bAdr.LocalDesc[]; 
+                      #);
+                    copyLdesc:<
+                      (# A: ^address
+                      enter A[]
+                      do INNER;
+                         LocalDesc[]->A.bAdr.LocalDesc[];
+                      #);
+                 #);
+               adrId: @int16u; (* unique ID used for debugging
+                                * to trace copying of address-objects
+                                *)
+               size: @int8u; (* 1,2,4,8 bytes *)
+               access: @int8u;
+               signed: @boolean; (* Storage unit is signed:
+                                  * int8, int8u, int16, int16u, etc.
+                                  *) 
+               isNotObjRef, (* the adr.reg. of this address is not 
+                             * referring a real object - it may e.g. refer
+                             * a data-object
+                             *)
+               deAllocated, (* true if involved adrReg has been de-allocated *)
+               noTmp, (* true: do not save in tmp - switch181 *)
+               frozenReg: @boolean;
+               doFreeze:
+                  (# unFreeze: @boolean
+                  do (if not frozenReg then
+                         true -> frozenReg -> unFreeze
+                     if)
+                  exit unFreeze
+                  #);
+                unFreeze:
+                  (# unFreeze: @boolean
+                   enter unFreeze 
+                   do (if unFreeze then false -> frozenReg if)
+                  #);
+               (* elim: freezeReg/freeReg, use doFreeze/unFreeze *)
+               freezeReg: (#  do true->frozenReg #);
+               freeReg: (#  do false->frozenReg; freeAdr #);
+               freeAdr:< (* release all registers in THIS address *)
+                 (# clear: @boolean
+                 enter clear
+                 do (if not deAllocated then INNER ; true->deAllocated if)
+                 #);
+               copy:<
+                 (# aCopy: ^address
+                 do INNER ;
+                    size->aCopy.size;
+                    access->aCopy.access;
+                    aCopy[]->bAdr.copy;
+                    signed -> aCopy.signed;
+                    deAllocated -> aCopy.deAllocated;
+                    frozenReg -> aCopy.frozenReg;
+                    noTmp -> aCopy.noTmp;
+                    isNotObjRef -> aCopy.isNotObjRef
+                 exit aCopy[]
+                 #);
+               theReg:< (# aR: @adrRegOperand do INNER exit aR #);
+               adrVal: (# A: ^address do INNER ; size->A.size exit A[] #);
+               RegType:< (# regT: @integer do INNER exit regT #);
+
+               toReg2:< (# aR: @adrRegOperand do INNER exit aR #);
+               toReg3:< (# aR: @adrRegOperand do INNER exit aR #);
+
+               toTmp:< adrVal;
+               elimReg:<
+                 (# elimThis,elimCall: @boolean
+                 enter (elimThis,elimCall)
+                 do INNER
+                 #);
+
+               BooleanValue: (# val: @boolean do INNER exit val #);
+               isSimple:< BooleanValue;
+               useCallReg:< BooleanValue;
+               isCallReg:< BooleanValue;
+               mkIndirect:<
+                 (# NoneChk: @boolean (*generate NONE chec*)
+                 enter NoneChk
+                 do INNER
+                 #);
+               addOff:<
+                 (# v: @Integer; A: ^address
+                 enter v
+                 do INNER ; A[]->bAdr.copyLdesc; size->A.size
+                 exit A[]
+                 #);
+               toCallReg:< AdrVal;
+               mvToCallReg:< (* replace possible adr.-reg. with callReg *)
+                 (# A: ^address
+                 do INNER ; size->A.size; access->A.access; A[]->bAdr.copy
+                 exit A[]
+                 #);
+               toOriginReg:< (# do inner #);
+               storeOrigin:
+                 (* slot in machinebody *)
+                 (* A is address of origin object to be stored in this(address) *)
+               (# A: ^address
+               enter A[] << SLOT StoreOrigin:doPart>> 
+               #);
+               toDataReg:< (* load address into data reg. dr *)
+                 (# dr: ^dataRegOperand enter dr[] do INNER #);
+               index:<
+                 (# dReg: @dataRegOperand;
+                    isSimple: @boolean;
+                    size: @integer;
+                    A: ^Address
+                 enter (dReg,isSimple,size)
+                 do INNER
+                 exit A[]
+                 #);
+               asgRefAdr:
+                 (# A: ^address; 
+                    withQua: @boolean;
+                    dest: ^registerOperand; 
+                 enter (A[],withQua)
+                 do (this(address)[],A[],withQua) -> doAsgRefAdr -> dest[]
+                 exit dest[]
+                 #);
+               asgRefReg:
+                 (# A: ^AdrRegOperand;
+                    withQua: @boolean;
+                    dest: ^registerOperand;               
+                 enter (A[],withQua)
+                 do (this(address)[],A[],withQua) -> doAsgRefReg -> dest[]
+                 exit dest[]
+                 #);
+               asgRepAdr: (* slot in machinebody *)
+                 (# A: ^address enter A[] do <<SLOT asgRepAdr:Descriptor>> #);
+               pushRegAndOff:<
+                 (* push register and offset *)
+                 (# pNo: @integer enter pNo do INNER #);
+               
+            #);
+          RegAdr:< address (* register, offset (possible zero) *)
+            (# isRegAdr:: TrueValue;
+               isOriginReg::(#do reg = -11 -> value #);
+               theReg::< (#do reg -> aR #);
+               display::< 
+                 (#  
+                 do (*'aReg:'->T.puttext; reg->T.putInt; *)
+                    reg.display -> T.putText;
+                    ':off:'->T.putText; off->T.putInt 
+                 #);
+               reg: @AdrRegOperand;
+               off: @integer;
+               inCode: @boolean;
+               copy::< 
+                 (# A: @RegAdr
+                 do A[]->aCopy[]; reg->A.reg; off->A.off; frozenReg->A.frozenReg
+                 #);
+               thisOp::< 
+                 (# A: @RegAdr
+                 do A[]->op[];
+                    reg->A.reg;
+                    off->A.off;
+                    size->A.size;
+                    frozenReg->A.frozenReg;
+                    deAllocated->A.deAllocated
+                 #);
+               reAlloc:
+                 (# aR: @adrRegOperand
+                 do (if frozenReg then
+                        aR.alloc
+                     else
+                        (if (reg > 0) then
+                            reg->aR.reUse
+                         else
+                            cError (#  do 'ReUse:negative'->T #)
+                        if)
+                    if)
+                 exit aR
+                 #);
+               mkCall:
+                 (# 
+                 do callO->reg;
+                    0->off;
+                    common.direct->access;
+                    true->frozenReg
+                 #);
+
+               toReg2::< 
+                 (* load address of this(RegAdr) to a register;
+                  * toReg3 is essential the same;
+                  * only difference is thereuse strtegy
+                  *)
+                 (# A: ^address
+                 do (if access
+                     // common.cstInd // common.varInd then
+                        0->addOff->A[]; (* off = 0 *) (*freeAdr;*) 
+                        A.toReg2->aR
+                     else
+                        (if off = 0 then 
+                            (* 17.8.93: reUse does NOT alloc new register *)
+                            (if frozenReg then reg->aR else reg->aR.reUse if)
+                         else
+                            reAlloc->aR; (THIS(RegAdr)[],aR[])->gLea; freeAdr
+                        if)
+                    if)
+                 #);
+               toReg3::< 
+                 (# A: ^address
+                 do (if access
+                     // common.cstInd // common.varInd then
+                        0->addOff->A[]; (* off = 0 *) (*freeAdr;*) 
+                        A.toReg3->aR
+                     else
+                        (if off = 0 then
+                            (* 17.8.93: reUse does NOT alloc new register *)
+                            reg->aR
+                         else
+                            (if frozenReg then aR.alloc else reg->aR if);
+                            (THIS(RegAdr)[],aR[])->gLea
+                        if)
+                    if)
+                 #);
+               toPrimDest:: 
+                 (# dr: ^dataRegOperand
+                 do (if primDest.primRegIsReg then
+                        (THIS(regAdr)[],primDest[])->ldVal
+                     else (if primDest.primRegIsRegAdr then
+                              (if ((THIS(regADr)[],primDest[])->cpMem->dr[])
+                                  <> NONE then
+                                  dr.deAlloc
+                              if)
+                           else
+                              (# reg: @dataRegOperand
+                              do reg.alloc;
+                                 (THIS(regAdr)[],reg[]) -> ldVal;
+                                 (reg[],primDest.asText) -> stValInText;
+                                 reg.deAlloc
+                              #)
+                    if)if)
+                 #);
+               toTmp::< (* THIS address is reg=callReg *) 
+                 (#  <<SLOT RegAdrToTmp:DoPart>> #);
+               elimReg::< 
+                 (# aR: @AdrRegOperand; elim: @boolean
+                 do (if elimThis then
+                        (reg = thisO)->elim
+                    if);
+                    (if elimCall then
+                        (reg = callO) or elim->elim
+                    if);
+                    (if elim then
+                        aR.alloc;
+                        (reg[],aR[])->cpReg;
+                        aR->reg;
+                        false->frozenReg->deAllocated
+                    if)
+                 #);
+               RegType::< 
+                 (# 
+                 do (if access = common.direct then 
+                        reg -> regT
+                     else
+                        -1 -> regT
+                    if)
+                 #);
+               isSimple::< 
+                 (# 
+                 do (reg = thisO) or (reg = callO)->val
+                 #);
+               useCallReg::< 
+                 (#  do (reg = callO)->val #);
+               isCallReg::< 
+                 (# 
+                 do (reg = callO) and (off = 0) and
+                    (access = common.direct)->val
+                 #);
+               freeAdr::< 
+                 (# 
+                 do (if not frozenReg then
+                        (if clear then reg[] -> gClr if);
+                        reg->mfreeAdr;
+                    if)
+                 #);
+               reg1::  (#  do reg->value #);
+               offSet::  (#  do off->value #);
+               loadToReg::< 
+                 (# 
+                 do (THIS(RegAdr)[],R[],size)->ldVl;
+                    R[]->res[]
+                 #);
+               pushCpar::< 
+                 (# 
+                 do (THIS(RegAdr)[],R[],size)->ldVl
+                 #);
+               addOff::<
+                 (* NB! addOff has side effects *) 
+                 (# reg1: @adrRegOperand; A1: @regAdr
+                 do (if access
+                     // common.direct then
+                        off+v->off
+                     // common.cstInd then
+                        (if frozenReg then
+                            reg1.alloc; false->frozenreg
+                         else
+                            reg->reg1
+                        if);
+                        (if common.switch[77] then
+                            (THIS(RegAdr)[],reg1[])->tstNone; 
+                         else
+                            (THIS(RegAdr)[],reg1[],size)->ldVl;
+                        if);
+                        v->off;
+                        reg1->reg
+                     // common.varInd then
+                        (if frozenReg or common.switch[120] then
+                            reg1.alloc; false->frozenReg
+                         else
+                            reg->reg1
+                        if);
+                        (if not switch14 then
+                            (THIS(RegAdr)[],reg1[])->tstNone; 
+                         else
+                            (THIS(RegAdr)[],reg1[],size)->ldVl
+                        if);
+                        v->off;
+                        reg1->reg
+                    if);
+                    reg->A1.reg;
+                    off->A1.off;
+                    frozenReg->A1.frozenReg;
+                    A1[]->A[]
+                 #);
+               toCallReg::<
+                 (* used as A.toCallReg and A.toCallReg-A[].
+                  * CLEAN UP
+                  *) 
+                 (# reg1: @adrRegOperand;
+                    A1: ^address;
+                    A2: @regAdr;
+                    doFree: @boolean
+                 do (if access // common.cstInd // common.varInd then
+                        0->addOff->A1[];
+                        A1.toCallReg->A[];
+                        callO -> reg1
+                        (* may generate NONE-check; may cost an extra move *)
+                     else
+                        (if reg = callO then 
+                            reg->reg1
+                         else
+                            not frozenReg->doFree;
+                            (* dont FREE before
+                             * register is actually used
+                             * in an instruction;
+                             * gives ix86 problmes
+                             *)
+                            callO->reg1
+                        if);
+                        (if (reg <> reg1) or (off <> 0) then
+                            (THIS(RegAdr)[],reg1[])->gLea; (* remember none check*) 
+                        if);
+                        (if doFree then reg->mFreeAdr if);
+                        
+                    if);
+                    reg1->reg;
+                    0->off;
+                    common.direct->access;
+                    reg->A2.reg;
+                    A2[]->A[];
+                    true->frozenReg->A.frozenReg;
+                    A[]->bAdr.copyLdesc
+                 #);
+               mvToCallReg::< 
+                 (# A1: @RegAdr
+                 do (if reg = callO then 
+                        reg->A1.reg
+                     else
+                        (reg[],callRegOp[])->cpReg;
+                        ;
+                        callO->A1.reg;
+                        (if not frozenReg then reg.deAlloc if)
+                    if);
+                    off->A1.off;
+                    true->A1.frozenReg;
+                    A1[]->A[]
+                 #);
+          toDataReg::< 
+                 (# aR: @adrRegOperand
+                 do ReAlloc->aR;
+                    (THIS(RegAdr)[],aR[])->gLea;
+                    freeAdr;
+                    (aR[],dr[])->cpReg;
+                    aR.deAlloc
+                 #);
+               mkIndirect::< 
+                 (# ar: @adrRegOperand
+                 do callO->ar;
+                    (THIS(RegAdr)[],ar[])->gLea;
+                    freeAdr;
+                    ar->reg;
+                    0->off (*?????????????????*)
+                 #);
+               PushRegAndOff::< 
+                 (# pDest: ^mOperand
+                 do (if common.switch[61] then
+                        (if true then
+                            pNo->reg.toPrimDest
+                         else  
+                            pNo->getPrimReg->pDest[];
+                            (if pDest.isPrimRegOp then
+                                (reg[],pDest[])->cpReg; 
+                             else
+                                (reg[],pDest[])->stVal; 
+                            if);
+                        if);
+                        (if pNo > 0 then pNo+1->pNo (*else pN=0 *) if);
+                        (if true then
+                            pNo->(off div 4->NewCstOp).toPrimDest
+                         else
+                            pNo->getprimReg->pDest[];
+                            (if pDest.isPrimRegOp then
+                                (off div 4->NewCstOp,pDest[])->ldCst; 
+                             else
+                                (off div 4->NewCstOp,pDest[],4)->stCst; 
+                        if)if)                
+                     else
+                        reg[]->pushClong; off div 4->NewCstOp->pushClong
+                    if)
+                 #)
+               
+            #);
+          InxRegAdr:< address
+            (* index register adress.
+             * Consist of an address register (aReg), a data register (dReg)
+             * and an offset (off).  
+             * The resulting address is (aReg)+(dReg)+off
+             *)
+            (# aReg: @adrRegOperand;
+               dReg: @dataRegOperand;
+               off: @integer;
+               offset::  (#  do off->value #);
+               theReg::< (#do aReg -> aR #);
+               display::< 
+                 (# 
+                 do (*'aReg:'->T.putText; aReg->T.putInt;*)
+                    aReg.display -> T.putText;
+                    (*':dReg:'->T.putText; dReg->T.putInt;*)
+                    dReg.display -> T.putText;
+                    ':off:'->T.putText;
+                    off->T.putInt               
+                 #);
+               reAlloc:
+                 (# aR: @adrRegOperand
+                 do (if frozenReg then aR.alloc else aReg->aR.reUse if)
+                 exit aR
+                 #);
+               copy::< 
+                 (# A: @InxRegAdr
+                 do A[]->aCopy[];
+                    aReg->A.aReg;
+                    dReg->A.dReg;
+                    off->A.off;
+                    frozenReg->A.frozenReg
+                 #);
+               thisOp::< 
+                 (# A: @InxRegAdr
+                 do A[]->op[];
+                    aReg->A.aReg;
+                    dReg->A.dReg;
+                    off->A.off;
+                    size->A.size;
+                    frozenReg->A.frozenReg;
+                    deAllocated->A.deAllocated
+                 #);
+               getReg::<  (#  do aReg+1->aNo; dReg+1->dNo #);
+               toReg2::< 
+                 (# A: ^address
+                 do (if access
+                     // common.cstInd
+                     // common.varInd then
+                        0->addOff->A[];
+                        (* off = 0 *)
+                        (*freeAdr;*)
+                        A.toReg2->aR
+                     else
+                        reAlloc->aR;
+                        (THIS(InxRegAdr)[],aR[])->gLea;
+                        freeAdr
+                    if)
+                 #);
+               toReg3::< 
+                 (# A: ^address
+                 do (if access
+                     // common.cstInd
+                     // common.varInd then
+                        0->addOff->A[];
+                        (* off = 0 *)
+                        (*freeAdr;*)
+                        A.toReg3->aR
+                     else
+                        (if frozenReg then
+                            aR.alloc
+                         else
+                            aReg->aR
+                        if);
+                        (THIS(InxRegAdr)[],aR[])->gLea;
+                    if)
+                 #);
+               toTmp::< (#<<SLOT InxRegAdrToTmp:DoPart>> #);
+               elimReg::< 
+                 (# aR: @AdrRegOperand; elim: @boolean
+                 do (if elimThis then (aReg = thisO)->elim if);
+                    (if elimCall then (aReg = callO) or elim->elim if);
+                    (if elim then
+                        aR.alloc;
+                        (aReg[],aR[])->cpReg;
+                        aR->aReg;
+                        false->frozenReg->deAllocated
+                    if)
+                 #);
+               RegType::< 
+                 (# 
+                 do (if access = common.direct then 
+                        aReg -> regT
+                     else
+                        - 1 -> regT
+                    if)
+                 #);
+               freeAdr::< 
+                 (# 
+                 do (if not frozenReg then
+                        aReg->mfreeAdr;
+                        (* the following clearing is done to satisfy the very
+                         * paranoid GC- and persistent implementors
+                         *)
+                        (if not aReg.inUse then aReg[]->gClr if);
+                        
+                    if);
+                    (if not frozenreg or not common.switch[180] then
+                        (* when we finally have swith[180] in operation
+                         * the following imp. should just be moved to the
+                         * then-part of the previous if
+                         *)
+                        dReg->FreeData
+                    if)
+                 #);
+               reg1::  (#  do aReg->value #);
+               reg2::  (#  do dReg->value #);
+               loadToReg::< 
+                 (#  do (THIS(InxRegAdr)[],R[],size)->ldVl; R[]->res[] #);
+               pushCpar::<  (#  do (THIS(InxRegAdr)[],R[],size)->ldVl #);
+               addOff::< (* fix frozen *) 
+                 (# dr: @dataRegOperand; reg1: @adrRegOperand; A1: @regAdr
+                 do (if access
+                     // common.direct then
+                        off+v->off; copy->A[]
+                     // common.cstInd then
+                        (if frozenReg then reg1.alloc else aReg->reg1 if);
+                        (THIS(InxRegAdr)[],reg1[],size)->ldVl;
+                        v->off;
+                        reg1->aReg;
+                        (if not common.switch[180] then
+                            false->frozenReg;
+                        if);
+                        aReg->A1.reg;
+                        off->A1.off;
+                        A1[]->A[];
+                        (if not common.switch[180] or not frozenreg then 
+                            dReg.deAlloc
+                        if)
+                     // common.varInd then
+                        (if frozenReg then reg1.alloc else aReg->reg1 if);
+                        (if not switch14 then
+                            (THIS(InxRegAdr)[],reg1[]) -> tstNone
+                         else
+                            (THIS(InxRegAdr)[],reg1[],size) -> ldVl
+                        if);
+                        v->off;
+                        reg1->aReg;
+                        (if not common.switch[180] then
+                            false->frozenReg
+                        if);
+                        aReg->A1.reg;
+                        off->A1.off;
+                        A1[]->A[];
+                        (if not common.switch[180] or not frozenreg then 
+                            dReg.deAlloc
+                        if)
+                    if);
+                    
+                 #);
+               isSimple::<  (#  do (aReg = thisO) or (aReg = callO)->val #);
+               useCallReg::<  (#  do (aReg = callO)->val #);
+               isCallReg::< 
+                 (# 
+                 do (aReg = callO) and (off = 0) and (access = common.direct)->val
+                 #);
+               toCallReg::< 
+                 (# reg1: @adrRegOperand;
+                    A1: ^address;
+                    A2: @regAdr;
+                    doFree: @boolean
+                 do
+                    (if access
+                     // common.cstInd // common.varInd then
+                        0->addOff->A1[];
+                        A1.toCallReg->A[];
+                        callO
+                          ->reg1
+                        (* may generate NONE-check; may cost an extra move *)
+                     else
+                        (if aReg = callO then aReg->reg1
+                         else
+                            not frozenReg->doFree; callO->reg1
+                        if);
+                        (if (aReg <> reg1) or (off <> 0) then
+                            (THIS(InxRegAdr)[],reg1[])->gLea;
+                            (* remember none check*)
+                            
+                        if);
+                        (if doFree then aReg->mFreeAdr if);
+                        
+                    if);
+                    reg1->aReg;
+                    0->off;
+                    common.direct->access;
+                    reg1->A2.reg;
+                    A2[]->A[];
+                    true->frozenReg->A.frozenReg;
+                    A[]->bAdr.copyLdesc (*	 freeAdr  ?????*)
+                 #);
+               mvToCallReg::< 
+                 (# A1: @InxRegAdr
+                 do (if aReg = callO then aReg->A1.aReg
+                     else
+                        (aReg[],callRegOp[])->cpReg;
+                        callO->A1.aReg;
+                        (if not frozenReg then aReg.deAlloc if)
+                    if);
+                    dReg->A1.dReg;
+                    off->A1.off;
+                    true->A1.frozenReg;
+                    A1[]->A[]
+                 #);
+               toOriginReg::< 
+                 (# A: ^address
+                 do (if access // common.cstInd // common.varInd then
+                        0->addOff->A[]; A.toOriginReg
+                     else
+                        (# A1: @regAdr do toReg2->A1.reg; A1.toOriginReg #)
+                    if)
+                 #);
+               toDataReg::<  (#  do 'InxRegAdr: toDataReg'->notImpl #);
+               mkIndirect::<  (#  do 'InxRegAdr: mkIndirect'->notImpl #);
+               index::<  (#  do 'InxRegAdr: index'->notImpl #);
+               
+               
+            #);
+          StackOff:< address 
+            (# off: @integer;
+            enter off
+            exit off
+            #);
+
+          
+          (* register operations *)
+          (* abstract operations *);
+          nop:< (#do inner #);
+          ldCst:< (* load const C to register R *)
+            (# C: ^CstOperand; R: ^registerOperand
+            enter (C[],R[])
+            do INNER
+            #);
+          stCst:< (* store const C in address A *)
+            (# C: ^CstOperand; A: ^address; size: @integer
+            enter (C[],A[],size)
+            do INNER
+            #);
+          ldByte:<
+            (# op1: ^address;
+               op2: ^registerOperand
+            enter (op1[],op2[])
+            do INNER
+            #);
+          ldHalf:<
+            (# op1: ^address; op2: ^registerOperand
+            enter (op1[],op2[])
+            do INNER
+            #);
+          ldVal:< (* load long value mem[A] to register R *)
+            (# A: ^address; R: ^registerOperand
+            enter (A[],R[])
+            do INNER
+            #);
+          ldvalFromLab:<
+            (* load long from address L to register R *)
+            (# R: ^registerOperand; L: ^LocalLab; 
+            enter (L[],R[])
+            do INNER
+            #);
+          ldVl:<
+            (* load long value mem[A] to register R
+             * Elim. ldVal,ldHalf,ldByte *)
+            (# A: ^address; R: ^registerOperand; size: @integer
+            enter (A[],R[],size)
+            do INNER
+            #);
+          stByte:<
+            (# op1: ^registerOperand; op2: ^address
+            enter (op1[],op2[])
+            do INNER
+            #);
+          stHalf:<
+            (# op1: ^registerOperand;
+               op2: ^address
+            enter (op1[],op2[])
+            do INNER
+            #);
+          stVal:< (* store register R in mem[A] *)
+            (# R: ^registerOperand; A: ^address
+            enter (R[],A[])
+            do INNER
+            #);
+          stValInLab:<
+            (* Store long value from register R in address L *)
+            (# R: ^registerOperand; L: ^localLab; 
+            enter (R[],L[])
+            do inner
+            #);
+          cpReg:< (* copy register R1 to register R2 *)
+            (# R1,R2: ^registerOperand
+            enter (R1[],R2[])
+            do INNER cpReg
+            #);
+          cpByteMem:< (* copy mem[A1] to mem[A2] *)
+            (# A1,A2: ^address; dr: ^dataRegOperand
+            enter (A1[],A2[])
+            do inner
+            exit dr[]
+            #);
+          cpHalfMem:< (* copy mem[A1] to mem[A2] *)
+            (# A1,A2: ^address; dr: ^dataRegOperand
+            enter (A1[],A2[])
+            do inner
+            exit dr[]
+            #);
+          cpMem:< (* copy mem[A1] to mem[A2] *)
+            (# A1,A2: ^address; dr: ^dataRegOperand
+            enter (A1[],A2[])
+            do inner
+            exit dr[]
+            #);
+          stValInText:< (* store value in textOp adr *)
+            (# op: ^mOperand; L: ^textOperand
+            enter (op[],L[])
+            do inner 
+            #);
+          doAsgRefAdr:<
+            (# thisAdr,A: ^address; withQua: @boolean;
+               dest: ^registerOperand
+            enter(thisAdr[],A[],withQua)
+            do INNER
+            exit dest[]
+            #);
+          doAsgRefReg:<
+            (# thisAdr: ^address; A: ^AdrRegOperand; withQua: @boolean;
+               dest: ^registerOperand
+            enter(thisAdr[],A[],withQua)
+            do INNER
+            exit dest[]
+            #);
+          ChkHeap:<
+            (# op: ^RegisterOperand
+            enter op[]
+            do INNER;
+               op.deAlloc
+            #);
+
+          (* arithmetic *)
+          sizedBinOp:
+            (# op1,op2: ^mOperand; size: @integer
+            enter (op1[],op2[],size)
+            do INNER
+            #);
+          gAdd:< sizedBinop
+            (#
+            do INNER
+            #);
+          addMem:< (*add to mem *) BinOp
+          (# R: ^dataRegOperand do inner exit R[] #);
+          gNeg:< sizedUnOp (#  do inner #);
+          gSub:< sizedBinop
+            (#
+            do INNER
+            #);
+          gMult:< sizedBinop
+            (#
+            do INNER
+            #);
+          gDiv:<
+            (# op1: ^mOperand;
+               op2: ^doubleDataRegOperand;
+               isDiv: @boolean (* used by SUN4machine *)
+            enter (op1[],op2[],isDiv)
+            do inner
+            #);
+          gOr:< sizedBinop
+            (#
+            do INNER
+            #);
+          gAnd:< sizedBinop
+            (#
+            do INNER
+            #);
+          gXor:< sizedBinOp;
+          gNot:< (*NOT 0 = 1 , NOT 1 = 0 *) sizedUnOp
+          (#  do inner #);
+          logNot:< sizedUnOp;
+
+          gCmp:< sizedBinOp (# do inner #);
+
+          (*************** bit operations ***********)     
+          SignExtByte:< UnOp;
+          SignExtWord:< UnOp;
+          GetBits:< BitOp;
+          GetSignedBits:< BitOp;
+          gGetBits:<
+            (# dr,pDr,lDr: ^dataRegOperand
+            enter (dr[],pDr[],lDr[])
+            do inner
+            #);
+          gGetSignedBits:<
+            (# dr,pDr,lDr: ^dataRegOperand
+            enter (dr[],pDr[],lDr[])
+            do inner
+            #);
+          PutBits:<
+            (# op1: ^dataRegOperand;
+               op2: ^adrRegOperand;
+               pos,length: @integer;
+               drF: ^dataRegOperand
+                 (* when calling PutBits, this register is free
+                  * and can be used to implement putBits. 
+                  * It is used by the Intel386 codegenerators
+                  *)
+            enter (op1[],pos,length,op2[],drF[])
+            do inner
+            #);
+          gPutBits:<
+            (# dr,pDr,lDr: ^dataRegOperand;
+               ar: ^adrRegOperand
+            enter (dr[],pDr[],lDr[],ar[])
+            do inner
+            #);
+          ByteSwap:<
+            (# ar: @adrRegOperand; long: @boolean
+            enter (ar,long)
+            do inner
+            #);
+          gGetDataByte:<
+            (# Op1: ^dataRegOperand; byteNo: @integer
+            enter (Op1[],byteNo)
+            do inner
+            #);
+          gGetDataWord:<
+            (# Op1: ^dataRegOperand;
+               wordNo: @integer
+            enter (Op1[],wordNo)
+            do inner
+            #);
+          arithShiftLeft:< binOp;
+          logicalShiftLeft:< binOp;
+          arithShiftright:< binOp;
+          logicalShiftRight:< binOp;
+          rotateLeft:< binOp;
+          rotateRight:< binOp;
+
+          (* control flow operations *)
+          UnOp:
+            (# op: ^mOperand
+            enter op[]
+            do INNER
+            #);
+          sizedUnOp:
+            (# op: ^mOperand; size: @integer
+            enter (op[],size)
+            do INNER
+            #);
+          jumpIfTrue:< cond;
+          tstNone:<
+            (# A: ^address; R: ^adrRegOperand
+            enter (A[],R[])
+            do inner
+            #);
+          gBeq:< cond;
+          gBne:< cond;
+          gBge:< cond;
+          gBae:< (*above or equal=unsiged ge*) cond;
+          gBle:< cond;
+          gBbe:< (*below or equal=unsigned le*) cond;
+          gBgt:< cond;
+          gBab:< (*above=unsigned gt*) cond;
+          gBlt:< cond;
+          gBbl:< (*below=unsigned lt*) cond;
+          trap:< (* trap on condition *)
+            (# cond: @integer
+            enter cond
+            do inner
+            #);
+
+          JsrTable:<
+            (* jump to the address in location A *)
+            (# A: ^address; newVirt: @boolean
+            enter (A[],newVirt)
+            do inner
+            #);
+          TextOpr: (# t: @text enter t do INNER #);
+          jmpTlong:< TextOpr
+            (* Jump to entrypoint in code segment of ANOTHER fragment *)
+            (# labArg: ^text 
+                 (* extra label when jmpTlong AlloI is generated
+                  * for V-entrypoint; needed to make use
+                  * of delay slots on sparc
+                  *);
+            enter labArg[] do inner
+            #);
+          jmpT:< TextOpr;
+          (* Jump to entrypointin code segment of CURRENT fragment *)
+          jsrT:< TextOpr ;
+          (* Jsr to entrypoint in code segment of CURRENT fragment *)
+          jsrReg:<
+            (# op: ^AdrRegOperand
+            enter op[]
+            do INNER
+            #);
+          jmpReg:<
+            (# op: ^AdrRegOperand;
+               isCase: @boolean
+            enter (op[],isCase)
+            do INNER
+            #);
+          gJmp:< UnOp
+            (#
+            do INNER
+            #);
+          gJsr:<
+            (# op: ^TextOperand;
+               GorM: @char;
+               local: @boolean (* is destination in current object file? *);
+            enter (op[],GorM,local)
+            do INNER
+            #);
+          BeginLabel:<
+            (* save exe state for subsequent restart/leave:
+             *  - restartLab: label to jump for restart,
+             *  - leaveLab:   label to jump for leave,
+             *  - off:        (long) location in this object for storing information,
+             *    in most cases the current stack-pointer (sp) is stored in th(off)
+             *)
+            (# restartLab,leaveLab: ^localLab;
+               off: @integer;
+               hasCalls,
+               (* there are object executions in the code enclosed by
+                * the label, and these object executions may result in
+                * leave/restart via ExO
+                *) hasSlots: @boolean;
+               
+            enter (restartLab[],leaveLab[],off,hasCalls,hasSlots)
+            do inner
+            #);
+          Break:< (* leave/restart *)
+            (# off: @integer; jmpAdr: ^localLab; isLeave: @boolean
+            enter (off,jmpAdr[],isLeave)
+            do inner
+            #);
+          FreeLabel:<
+            (# off: @integer
+            enter off
+            do inner
+            #);
+          EndLabel:<
+            (* End of code for label
+             * off and has same meaning as for BeginLabel 
+             *)
+            (# off: @integer; hasCalls,hasSlots: @boolean
+            enter (off,hasCalls,hasSlots)
+            do inner
+            #);
+
+          saveInnerReturn:<
+            (# RToff: @integer
+            enter RToff
+            do inner
+            #);
+          returnInner:<
+            (# RToff: @integer; isLeavePtn: @boolean
+            enter (RToff,isLeavePtn)
+            do inner
+            #);
+          EmitTextConst:<
+            (* handle code gen for text constants;
+             * S is either an argument to a primitive operation or
+             * an argument to an external function.
+             * If pNo = -1, then S is an argument to an external function;
+             * otherwise pNo is the argument no. of the primitive
+             *)
+            (# S: ^text; pNo: @integer; isWtext: @boolean
+            enter (S[],pNo,isWtext)
+            do inner
+            #);
+
+          (************** register allocation oveflow *********)
+          DataRegOverflow: ^RegisterOverflow;
+          RegisterOverflow:
+            (# n: @integer
+            enter n
+            do INNER
+            #);
+          StandardDataRegOverflow: RegisterOverflow
+            (#
+            do cError (#  do 'DataReg overflow'->T #)
+            #);
+          AdrRegOverflow: ^RegisterOverflow;
+
+          InlineNx:
+            (# Failed:< 
+                 (#
+                 do RestoreCodeState;
+                    INNER Failed
+                 #);
+            <<SLOT InlineNX: doPart>>
+            #);
+          SaveCodeState:< (# do inner #);
+          RestoreCodeState:< (# do inner #);
+
+          rts:< (#  do inner #);
+          gLea:<
+            (# op1: ^mOperand;
+               op2: ^registerOperand
+                 (* adrRegOp , oRegOp *)
+            enter (op1[],op2[])
+            do inner
+            #);
+          gLeaLabel:<
+            (# op1: ^mOperand; op2: ^adrRegOperand
+            enter (op1[],op2[])
+            do inner
+            #);
+          leaToPrimReg:<
+            (# op1: ^mOperand;
+               op2: ^registerOperand (* adrRegOp , oRegOp *)
+            enter (op1[],op2[])
+            do inner
+            #);
+          gClr:<
+            (# op: ^mOperand
+            enter op[]
+            do inner
+            #);
+          BinOp:
+            (# op1,op2: ^mOperand
+            enter (op1[],op2[])
+            do INNER
+            #);
+          BitOp:
+            (# op1,op2: ^mOperand;
+               pos,length: @integer;
+               drF: ^dataRegOperand
+                 (* when calling PutBits, this register is free
+                  * and can be used to implement putBits. 
+                  * It is used by the Intel386 codegenerators
+                  *)
+            enter (op1[],pos,length,op2[],drF[])
+            do INNER
+            #);
+          PushAdr:< UnOp;
+          Push:< UnOp;
+          Pop:< UnOp;
+          PushThisOrCall:<
+            (# pushTh,pushCa: @boolean
+            enter (pushTh,pushCa)
+            do inner
+            #);
+          PopThisOrCall:<
+            (# popTh,popCa: @boolean
+            enter (popTh,popCa)
+            do inner
+            #);
+          SetTop:< (# off: @integer enter off do inner #);
+          ChkCase:<
+            (# min,max: @integer;
+               inx: ^dataRegOperand;
+               elseLab: ^localLab
+            enter (min,max,inx[],elseLab[])
+            do inner
+            #);
+          ChkIndex:< BinOp;
+
+          cond2text:
+            (# cond: @integer; T: @text
+            enter cond
+            do (if cond
+                // common.cond_always then 'always' -> T
+                // common.cond_eq then 'eq' -> T
+                // common.cond_ne then 'ne' -> T
+                // common.cond_lt then 'lt' -> T
+                // common.cond_le then 'le' -> T
+                // common.cond_gt then 'gt' -> T
+                // common.cond_ge then 'ge' -> T
+                // common.cond_gtu then 'gtu' -> T
+                // common.cond_leu then 'leu' -> T
+                // common.cond_geu then 'geu' -> T
+                // common.cond_ltu then 'ltu' -> T
+                // common.cond_pos then 'pos' -> T
+                // common.cond_neg then 'neg' -> T
+                // common.cond_vc then 'vc' -> T
+                // common.cond_vs then 'vs' -> T
+                // common.cond_never then 'never' -> T
+                else 'Unknown'->T
+               if)
+            exit T[]
+            #);
+          cmpToBool:<
+            (# cond: @integer;
+               op1: ^mOperand;
+               op2,op3: ^registerOperand;
+               size: @integer
+            enter (cond,op1[],op2[],op3[],size)
+            do inner
+            #);
+
+          cmpAndJmp:<
+            (# cond: @integer;
+               op1: ^mOperand;
+               op2: ^registerOperand;
+               size: @integer;
+               Lab: ^LocalLab
+            enter(cond,op1[],op2[],size,Lab[])
+            do INNER
+            #);
+          cmpBoolAndJmp:<
+            (# cond: @integer;
+               op: ^mOperand;
+               size: @integer;
+               Lab: ^LocalLab
+            enter (cond,op[],size,Lab[])
+            do INNER
+            #);
+          cond:
+            (# op: ^localLab
+            enter op[]
+            do INNER
+            #);
+
+          (***** floating point operations ****************)
+          floatConst:<
+            (# T: ^text;
+               value: @real;
+               FR: @floatRegOp
+            enter (T[],value)
+            do INNER
+            exit FR[]
+            #);
+          int2float:<
+            (# A: ^address; FR: @floatRegOp
+            enter A[]
+            do inner
+            exit FR[]
+            #);
+          intReg2float:<
+            (# A: ^registerOperand; FR: @floatRegOp
+            enter A[]
+            do inner
+            exit FR[]
+            #);
+          float2int:<
+            (# FR: ^floatRegOp;
+               dr: ^registerOperand (*normally dataReg, but primReg for Intel/NT *)
+            enter (FR[],dr[])
+            do inner
+            #);
+          cmpToBoolFloat:<
+            (# cond: @integer;
+               op1: ^mOperand;
+               op2: ^floatRegOp;
+               op3: ^dataRegOperand
+            enter (cond,op1[],op2[],op3[])
+            do inner
+            #);
+          cmpAndJmpFloat:<
+            (# cond: @integer;
+               op1: ^mOperand;
+               op2: ^floatRegOp;
+               Lab: ^localLab;
+               pop: @boolean
+            enter (cond,op1[],op2[],Lab[],pop)
+            do inner
+            #);
+          popFstack:< (* called before else - only for Ix386*)(# do inner #);
+          cmpFloat:<
+            (# LF: ^floatRegOp;
+               A: ^mOperand (* address or floatRegOp *)
+            enter (LF[],A[])
+            do inner
+            #);
+          fBeq:< cond;
+          fBge:< cond;
+          fBle:< cond;
+          fBne:< cond;
+          fBgt:< cond;
+          fBlt:< cond;
+          (* For the 4 operations addFloat, subFloat, mulFloat, and divFloat:
+           * For HP/motorola, the  A operand is always an address.
+           * For the SPARC, the  A operand may also be a FloatRegOp
+           *)
+          FloatSig:
+            (# LF: ^floatRegOp; A: ^mOperand; AinFreg: @boolean
+            enter (LF[],A[],AinFreg)
+            do INNER
+            #);
+          addFloat:< FloatSig;
+          subFloat:< FloatSig;
+          mulFloat:< FloatSig;
+          divFloat:< FloatSig;
+          negFloat:<
+            (# F: ^floatRegOp
+            enter F[]
+            do INNER
+            #);
+
+          (*************** concurrency ******************)
+          Lock:<
+            (# ar: @adrRegOperand
+            enter ar
+            do inner
+            #);
+          UnLock:<
+            (# ar: @adrRegOperand
+            enter ar
+            do inner 
+            #);
+          EnablePreemption:<
+            (# ar: @adrRegOperand
+            enter ar
+            do inner
+            #);
+          DisablePreemption:<
+            (# ar: @adrRegOperand
+            enter ar
+            do inner
+            #);
+
+          (************ register allocation *************)
+          FreeAdr:<
+            (# rNo,fn: @integer
+            enter rNo
+            do inner
+            exit fn
+            #);
+          mFreeAdr: (#  enter FreeAdr #);
+          FreeData:< (# rNo,fn: @integer enter rNo do inner exit fn #);
+          ReleaseReg:< (#do inner #);
+          thisO:<
+            (# rNo: @integer
+            do inner
+            exit rNo
+            #);
+          callO:<
+            (# rNo: @integer
+            do inner
+            exit rNo
+            #);
+          DecrCallReg:< (#do inner #);
+          GetCallReg:< (# do inner #);
+          FreeCallReg:<
+            (# A: ^mOperand (*??address*)
+            enter A[]
+            do inner
+            exit A[]
+            #);
+          CallRegInPrimReg2:< booleanValue;
+          GetOriginReg:< (#do inner #);
+          FreeOriginReg:< (#do inner #);
+          (* BRUTE FORCE *)
+          DataRegMax:<
+            (# val: @integer
+            do inner
+            exit val
+            #);
+          (* defines the no. of available data registers;
+           * the registers are enumerated as: d0,d1,...d[dataRegMax-1]
+           * i.e. there are DataRegMax+1 registers
+           *)
+          NoOfFreeDataReg:< (# val: @integer do inner exit val #);
+          DumpReg:< (# do inner #);
+          
+          PushReg:<
+            (# max: @integer
+            do inner
+            exit max
+            #);
+          PopReg:<
+            (# max: @integer
+            enter max
+            do inner
+            #);
+          PushDataReg:<
+            (# max: @integer
+            do inner
+            exit max
+            #);
+          PopDataReg:<
+            (# max: @integer
+            enter max
+            do inner   
+            #);
+          PushFloatReg:<
+            (# rN: @integer
+            enter rN
+            do inner
+            #);
+          PopFloatReg:<
+            (# rN: @integer 
+            enter rN 
+            do inner 
+            #);
+          (**************** External procedure interface routines ***********
+           * The following parameters may be transferred:
+           *	1: byte (1 byte)
+           *	2: short/word (2 bytes)
+           *	3: long (4 bytes)
+           *	4: text reference
+           *	5: array of long, NOT USED!!!
+           *	6: cStruc reference
+           *	7: double (2*long), used for reals
+           * 10: data-object (variable size)
+           * 
+           * Currently C, Pascal and assmebly are supported.
+           * UNIX: only C and assembly have been tested, 
+           *       since Pascal compilers have not been available.
+           * Mac:  both C, Pascal/Pascal traps and assembly.
+           * NT:   C, (assembly?), Pascal and Std works.
+           *)
+          externalLevel: @integer;
+          (* nesting level of external calls *)
+          InitExternalCall:<
+            (# extType
+               (* external language; 1=C, 2=pascal, 3=pascTrap, 4=assembly, 7=std *)
+               ,noOfPar: @integer
+            enter (extType,noOfPar)
+            do externalLevel+1->externallevel;
+               inner
+            #);
+          InitExternalParams:<
+            (# info: @Integer; 
+            enter info
+            do inner
+            #);
+
+          PushC: (# op: ^mOperand enter op[] do INNER #);
+          PushClong:< PushC;
+          PushCword:< PushC;
+          PushCbyte:< PushC;
+          PushCdoubleAdr:<
+            (# A: ^address
+            enter A[]
+            do inner
+            #);
+          PushCfloat:< (# F: ^floatRegOp enter F[] do inner #);
+          PushCtext:<
+            (# T: @text
+            enter T
+            do inner;
+               T->jsrT
+            #);
+          (* the purpose of this op is to call an RTS routine and for Sparc to
+           * reserve an o-register
+           *)
+          PopCword:< unOp; (* pop a word to D0; only relevant for MacPascal *)
+          PopCbyte:< unOp; (* pop a byte to D0; only relevant for MacPascal *) 
+          Cnest: @integer;
+          (* no. of nested C calls*)
+          CallCproc:<
+            (# T: @text;
+               extType,noOfParam,exitType: @integer
+            enter (T,extType,noOfParam,exitType)
+            do inner;
+               Cnest-1 -> Cnest
+            #);
+          externalDispatch:<
+            (# reg: ^adrRegOperand; extType,noOfParam,exitType: @integer
+            enter (reg[],extType,noOfParam,exitType)
+            do inner;
+               Cnest-1->Cnest
+            #);
+          Xres: 
+            (# extType,  (* external routine type - sematt: cExt, etc *)
+               exitType, (* type of possible exitValue - common: byteXpar, etc *)
+               parSize,  (* size of input parameters bye/long? *)
+               exitSize, (* if exitType = common.dataXpartPar, then
+                          * a struct is returned as call-by-value
+                          * and exitSize is the size of this structs
+                          *)
+               max,dummyMax: @integer (* internal register management *)
+            enter(extType,exitType,parSize,exitSize,max,dummyMax)
+            do inner
+            #);
+          noXres:< Xres
+            (#
+            do inner;
+               externalLevel-1 -> externallevel
+            #);
+          getSimpleXres:< Xres
+            (# drA: @dataRegOperand
+            do inner;
+               externalLevel-1->externalLevel
+            exit drA
+            #);
+          getTextXres:< Xres
+            (# aR: @adrRegOperand 
+            do inner; externalLevel-1->externalLevel 
+            exit aR 
+            #);
+          realXresIsDouble:< booleanValue (* true: double; false: floatReg *)
+            (# extType: @integer
+            enter extType do inner
+            #);
+          getDoubleXres:<Xres
+            (# drA,drB: @dataRegOperand;
+            do inner; externalLevel-1->externalLevel
+            exit(drA,drB)
+            #);
+          getFloatXres:< Xres
+            (# fp: @floatRegOp
+            do inner; externalLevel-1->externalLevel
+            exit fp[]
+            #);
+          getDataRefXres:< Xres
+            (# drA: @dataRegOperand
+            do inner; externalLevel-1->externalLevel
+            exit drA
+            #);
+          getDataPartXres:< Xres
+            (# drA: @dataRegOperand
+            do inner; externalLevel-1->externalLevel
+            exit drA
+            #);
+          SaveHeapTop:<
+            (# 
+            do (if Cnest = 0 then
+                   INNER
+               if);
+               Cnest+1->Cnest
+            #);
+          PopCallStack:<
+            (# Bn,Sn,Ln,N: @integer
+            enter (Bn,Sn,Ln)
+            do (if (((Bn+Sn+Ln)->N) > 0) then inner if)
+            #);
+          AllocExternalResult:< 
+            (* Used to be: 
+             *    AlcPAscRes: allocate result for Pascal procedure/function;
+             * OLM: 24/04/99: 
+             * is now used in general to allocate space for the result; 
+             * needed for externals returning a struct *)
+            (# exitType,byteSize: @integer
+            enter(exitType,byteSize)
+            do inner
+            #);
+          PascalTrap:<
+            (* Only meaningful on  Macintosh *)
+            (# trapId: ^Text
+            enter trapId[]
+            do inner; Cnest-1->Cnest
+            #);
+          SetBreak:< (# do inner #);
+          SaveReg:< (#  do inner #);
+          RestoreReg:< (# do inner #);
+          SaveAllReg:< (#  do inner #);
+          RestoreAllReg:< (# do inner #);
+
+          initXpar:<
+            (# extKind,BC,SC,LC: @integer;
+            enter (extKind,BC,SC,LC)
+            do inner
+            #);
+          getXlong:<
+            (# dr: ^dataRegOperand
+            enter dr[]
+            do inner
+            #);
+          getXword:<
+            (# dr: ^dataRegOperand
+            enter dr[]
+            do inner
+            #);
+          getXbyte:<
+            (# dr: ^dataRegOperand
+            enter dr[]
+            do inner
+            #);
+          toXres:< (* NO longer in use - can be eliminated *)
+            (# rNo: @integer
+            enter rNo
+            do inner
+            #);
+          GetRegForXres:< (* allocate register(s) for result of external call *)
+            (# max,dummyMax: @integer
+            do inner
+            exit (max,dummyMax)
+            #);
+          endX:<
+            (# extType,exitType,BC,SC,LC,max,dummyMax: @integer
+            enter (extType,exitType,BC,SC,LC,max,dummyMax)
+            do inner
+            #);
+          GetComPar:<
+            (* Get parameter no. paramNo, for a COM virtual;
+             * return address in paramAdr
+             *)
+            (# paramNo: @integer; isValPar: @boolean;
+               paramAdr: ^RegisterOperand
+            enter(paramNo,isValPar)
+            do inner
+            exit paramAdr[]
+            #);
+          xParForward:<
+            (* return TRUE if parameters are to be delivered in forward order,
+             * false otherwise. For Motorola C parameters are pushed in reverse
+             * for SPARC they are assigned to o-reg. forward.
+             *)
+            (# extKind: @integer; forward: @boolean
+            enter extKind
+            do inner
+            exit forward
+            #);
+
+          (*********** primitive BETA run-time routine interface ****)
+          GetPrimReg:<
+            (# pNo: @integer;
+               primReg: ^mOperand
+            enter pNo
+            do INNER
+            exit primReg[]
+            #);
+          initPrimCall:<
+            (# noOfPar: @integer
+            enter noOfPar
+            do INNER
+            #);
+          loadPrototype: @boolean;
+          (* if true, callAlloPrim loads the
+           * prototype-label in proto.
+           * For sun4/sun4s this may partly
+           * be done in a delay slot. 
+           * By default loadProtoType is false,
+           * and CallAlloPrim must then ignore
+           * the proto parameter.
+           *)
+
+          CallPrim:<
+            (# T: @text
+            enter T
+            do INNER
+            #);
+          CallAlloPrim:<
+            (# T: @text; proto: ^text
+            enter (T,proto[])
+            do INNER
+            #);
+          GetPrimRes:<
+            (# res: @integer;
+               (* 0: ignore res, 1: get in dr, 2: push to C*)
+               dr: @dataRegOperand
+            enter res
+            do INNER
+            exit dr
+            #);
+          SPtoPrimReg:<
+            (# pNo: @integer;
+               pushThis: @integer
+                 (*0:no push; 1:push&pop;2: push*)
+            enter (pNo,pushThis)
+            do inner
+            #);
+
+          (* entry point / return *)
+          Export:<
+            (# Lab: ^text
+            enter lab[]
+            do inner
+            #);
+          Import:<
+            (# Lab: ^text;
+               wasAdded: @boolean
+            enter lab[]
+            do inner
+            #);
+          ImportData:<
+            (* lab  is defined in the data segment of af fragment.
+             * It is always a label of the form T117FOO.
+             * If local=true then lab is defined in the data segment of the
+             * file currently being compiled.
+             * If local=false then lab is defined in the datasegment of
+             * another file.
+             * Most systems should generate an import only if local=true.
+             * The MAC, however, must import such labels in the code segment.
+             * The compiler calls ImportData for all labels when in the code segment
+             * and the value of local may be used to determine an import 
+             * (and a Mac should probably always import)!
+             * When generating the datasegment, the compiler only calls 
+             * ImportData if local=false
+             *)
+            (# Lab: ^text; local,wasAdded: @boolean
+            enter (lab[],local)
+            do inner
+            #);
+          switchToData:< (#  do inner #);
+          switchToCode:<
+            (# 
+            do inner
+            #);
+          declareAddress:<
+            (# op: ^mOperand
+            enter op[]
+            do inner
+            #);
+          declareLong:<
+            (# N: @integer
+            enter N
+            do inner
+            #);
+          declareWord:<
+            (# N: @integer enter N do inner #);
+          dclWord:<
+            (# N: @integer
+            enter N
+            do inner
+            #);
+          emitByte:<
+            (# B: @char
+            enter B
+            do inner;
+               (*cnt+1->cnt*)
+            #);
+          skip:< (# BN: @integer enter BN do inner  #);
+          asciiText:< 
+            (# T: ^text; isWtext: @boolean enter(T[],isWtext) do inner #);
+          SubDescriptorSlotEntry:< (# do inner #);
+          DefineMainLabel:
+            (# T: @text
+            enter T
+            do DefineMainLabel1;
+               INNER          
+            #);
+          DefineMainLabel1:<(# do inner #);
+          LabelDef:<
+            (# T: ^Text
+            enter T[]
+            do INNER
+            #);
+          GlobalLabelDef:<
+            (# xLab: ^text; data: @boolean
+            enter(xLab[],data)
+            do (if not data then 
+                   (* data entry points (T117FOO) are exported when defining
+                    * entrytable for persistent store. See synthlibbody:prototype
+                    *)
+                   xLab[] -> Export
+               if);
+               (if not common.switch[120] then
+                   xLab[] -> LabelDef
+               if);
+               INNER
+            #);
+          AllocObj:<
+            (# Tentry: ^text; size: @integer; isLeaf: @boolean
+            enter (Tentry[],size,isLeaf)
+            do inner
+            #);
+          EmitCk:<
+            (* Emit a consistency check for reference in
+             * register RegRef with description in RefName
+             * used in routine RoutineName.
+             * Only used for switch 64.
+             *)
+            (# RegRef: @integer;
+               RoutineName, RefName: ^text;
+            enter (RegRef, RoutineName[], RefName[])
+            do inner
+            #);
+          SaveReturn:<
+            (# isGpart: @boolean; RToff: @integer
+            enter (isGpart,RToff)
+            do inner
+            #);
+          Return:<
+            (# isLeavePtn: @boolean;
+               RToff: @integer
+            enter (isLeavePtn,RToff)
+            do INNER
+            #);
+          allocDoPartObject:<
+            (# size: @integer
+            enter size
+            do inner
+            #);
+          deAllocDoPartObject:<
+            (# size: @integer
+            enter size
+            do inner
+            #);
+          getVirtualOriginStart:
+            (* Tricky operation used when generating code to load virtual 
+             * prototypes and generate their origin.
+             * Consider
+             *    A: (# ... V:< ...; ... #) or V::< ... or  V:: ...
+             * PrimReg1 (sparc: %o0, MC: d7) contains the address of the A-object.
+             * This A-object may be the origin of the V-object.
+             * If the virtual has the form V:<A, V::<A or V::A then PrimReg1 is 
+             * not the origin. The origin will be computed from PrimReg1.
+             * getVirtualOriginStart1 must define startA to be an address denoting
+             * A. Since PrimReg1 is not an addressregister, PrimReg1 must be moved
+             * to an address register to be used in startA.
+             * It is NOT possible to alloccate an addressreister using e.g. 
+             * ar.alloc since some of the address registers may be busy. They are
+             * NOT saved at the point where this code is called.
+             * After INNER, the origin will be in the address register of thisA.
+             * getVirtualOriginStart2 must move this addrreg. to PrimReg1 and 
+             * perhaps restore possible address registers  being used by startA
+             *)
+            (# startA: ^address;
+               originRegIsDefined: @boolean; (* origin has been moved to 
+                                              * originReg during INNER
+                                              *)
+               (* The next slot is currently only needed for MC68 and Ix86 *)
+               final2virtJump:
+                 (#
+                 do (startA[],originRegIsDefined) 
+                      -> doFinal2VirtJump
+                      -> (startA[],originRegIsDefined) ;
+                 #)
+            do (startA[],originRegIsDefined) 
+                 -> GetVirtualOriginStart1
+                 -> (startA[],originRegIsDefined) ;
+               INNER;
+               (startA[],originRegIsDefined)
+                 -> GetVirtualOriginStart2
+                 -> (startA[],originRegIsDefined) ;
+            #);
+          doFinal2VirtJump:<
+            (# startA: ^address; originRegIsDefined: @boolean;
+            enter(startA[],originRegIsDefined)
+            do inner
+            exit(startA[],originRegIsDefined)
+            #);
+          GetVirtualOriginStart1:< 
+            (# startA: ^address; originRegIsDefined: @boolean;
+            enter(startA[],originRegIsDefined)
+            do inner
+            exit(startA[],originRegIsDefined)
+            #);
+          GetVirtualOriginStart2:< 
+            (# startA: ^address; originRegIsDefined: @boolean;
+            enter(startA[],originRegIsDefined)
+            do inner
+            exit(startA[],originRegIsDefined)
+            #);
+          ReturnVirtualCOM: <
+            (# noOfReg, (* no of arguments *)
+               dataByValueByteSize, (* total byte size of call-by-value
+                                     * data/struct parameters transferred
+                                     * to a COM virtual*)
+               RToff: @integer
+            enter(noOfReg,dataByValueByteSize,RToff) do inner
+            #);
+          ExternalEntry:<
+            (# entryId,formId: ^text;
+               descNo,extType,noOfEnterPar,exitType: @integer;
+            enter (entryId[],descNo,formId[],extType,noOfEnterPar,exitType)
+            do inner          
+            #);
+          ExternalMark:< (# do inner #);
+          (*  Set a stack mark before calling beta from call-Back;
+           * currently only MIPS and PPC
+           *) 
+          ExternalReturn:< (#do inner #);
+
+          (*** high level operations *)
+          doHead:< (# do inner #); (* start of each .s file *)
+          InitDataSeg:<
+            (# initialBetaEnv: @boolean
+            enter initialBetaEnv
+            do inner (*<<SLOT InitDataSeg:Descriptor>>*)
+            #);
+          newFragment:<
+            (# FN: ^text;
+               (* name of the fragment *)
+               astLabel: @integer
+                 (* label of the top AST node of the fragment.
+                  * Either
+                  *    gram.descriptorForm,
+                  *    gram.attributesForm,
+                  *    gram.doPart,
+                  *    gram.mainPart
+                  *)
+            enter (FN[],astLabel)
+            do inner (*<<SLOT newFragment:DoPart>>*)
+            #);
+          newProto:<
+            (# index,astRef: @integer
+            enter (index,astRef)
+            do inner 
+            #);
+          newImp:<
+            (# astRef: @integer
+            enter astRef
+            do inner 
+            #);
+          newEval:<
+            (# astRef: @integer
+            enter astRef
+            do inner 
+            #);
+          openDbgInf:< (# do inner #);
+          saveDbgInf:<
+            (# fname: ^text
+            enter fname[]
+            do inner
+            #);
+          (*     nc,lc: @integer;*)
+          (* nc=noofdescriptors, lc=noofasmlines *)
+          (* attributes for generation of debug information. 
+           * A table is keeping track of the relative 'address' of each
+           * imperative in the do-part of an object descriptor.
+           * 
+           * The XXmachine.bet code must update IP whenever an instruction is 
+           * generated. IP need not be the 'real' relative address. It can be
+           * an integer identifying a unique label for the imperative. 
+           * The interpretation is completely up to the actual XXmachine.bet
+           * 
+           *)
+
+          incIP:< (* SHOULD be eliminated; but is used in dobody *)
+            (# n: @integer enter n do INNER #);
+          inGpart: @boolean;
+          initGen:<
+            (# nodeId: @integer;
+               EP: ^text;
+               data: @boolean
+            enter (nodeId,EP[],data)
+            do inner 
+            #);
+          initDo:<
+            (# nodeId: @integer; EP: ^text; data: @boolean
+            enter (nodeId,EP[],data)
+            do inner 
+            #);
+          (********** high-level operations ******
+           * For all direct codegeneration machines, the slots are defined in 
+           *    CODEmachine.bet
+           * For C-generation they are defined i Cmachine.bet
+           *)
+          EndCodeSeg:<
+            (# 
+            do inner
+            #);
+          EmitLabId:<
+            (# lab: ^Text;          
+            enter lab[]
+            do inner
+            #);
+          (**************** generation of prototypes ****************)
+          EmitProtoIndexTable:
+            (# noOfPT: @integer;
+            enter noOfPT
+            do noOfPT -> initEmitProtoIndexTable;
+               INNER;
+               endEmitProtoIndexTable
+            #);
+          InitEmitProtoIndexTable:<
+            (# noOfPT: @integer;
+            enter noOfPT
+            do INNER
+            #);
+          EmitProtoIndex:<
+            (# PT: ^text
+            enter PT[]
+            do INNER 
+            #);
+          EndEmitProtoIndexTable:< (# do INNER #);
+          EmitProto:<
+            (# thisTLab,thisGlab,superTlab,externalEntryLab: ^text;
+               GCtableOffset,originOff,size,topMentryOff,formIndex,astNumber:
+                 @integer;          
+            enter(thisTLab[],GCtableOffset,OriginOff,thisGlab[],superTlab[],size,
+               topMentryOff,formIndex,astNumber,externalEntryLab[])
+            do INNER
+            #);
+          (* temporary declarations for B2C only *)
+          innerTableSize,fixedProtoSize,objTmpSize,
+          dynGCsize,virtSize: @integer;
+          EmitInnerTable:<
+            (# NoOfentries: @integer;               
+            enter noOfEntries
+            do INNER
+            #);
+          InnerEntry:<
+            (# entry: ^textOperand
+            enter entry[]
+            do INNER
+            #);
+          EmitVirtTable:
+            (# size,index: @integer
+            enter size
+            do (for i: size repeat i->index; INNER EmitVirtTable for);
+            #);
+          EmitVirtAdr:<
+            (# lab: ^mOperand
+            enter lab[]
+            do INNER
+            #);
+          EmitObjTable:
+            (# size,inx,offNo: @integer;               
+            enter size
+            do  0->offNo;
+               (for i: size repeat 
+                    i->inx; 
+                    INNER EmitObjTable
+               for);
+               0->declareWord;
+            #);
+          EmitObjTableOff:< 
+            (# offNo,off: @integer enter(offNo,off) do INNER exit offNo #);
+          EmitText:<
+            (# offNo: @integer; T: ^text; local: @boolean
+            enter (offNo,T[],local)
+            do INNER
+            exit offNo
+            #);
+          EmitRefTable:
+            (# size,inx,offNo: @integer;
+            enter size
+            do (for i: size repeat 
+                    i->inx; 
+                    INNER EmitRefTable
+               for);
+               0->EmitRefTableOff;
+            #);
+          EmitRefTableOff:< (# off: @integer enter off do INNER #);
+          
+          comment:< (# T: @Text enter T do inner #);
+          localFilePath,
+          (* local path relative to ~beta of this fragment file *) 
+          group_hash: (* 'unique' id of this fragment file *) ^text;
+          
+          BCname: ^text;
+          init:<
+            (# name: ^text
+            enter(localFilePath[],common[],name[], group_hash[])
+            do name[] -> BCname[]; 
+               inner
+            #);
+          GetImages:<
+            (# data,codeIm: ^image 
+            do inner
+            exit(data[],codeIm[])
+            #);
+          close:<
+            (# 
+            do inner;
+            #);
+          CreateDataFile:
+            (# fileName: ^text
+            enter (fileName[],common[])
+            do (fileName[],common[]) -> initCreateDataFile;
+               INNER ;
+               endCreateDataFile;
+            #); 
+          NextGroup:<
+            (# id,groupName: ^text;
+               isBetaenv: @boolean
+            enter (id[],groupName[],isBetaenv)
+            do INNER
+            #);
+          initCreateDataFile:<
+             (# fileName: ^text
+            enter (fileName[],common[])
+            do INNER
+            #);
+          endCreateDataFile:<
+            (#
+            do inner
+            #);
+          (******* move to com*********)
+          cError:
+            (# T:(# T1: ^text
+                 enter T1[]
+                 do T1[]->common.bugstream.puttext
+                 #);
+               I:(# 
+                 enter common.bugstream.putInt
+                 #)
+            enter T
+            do '\n***Should NOT happen: ' -> puttext; INNER;
+            #);
+          CallRegBusy:< booleanValue;
+          (* On some platforms (e.g. MIPS,PowerPC, and later perhaps also sparc
+           * and snake), callReg is the same register as primReg2. PrimReg2
+           * is the same registers as the 2. argument register according to
+           * the ABI for these platforms. (note primregs are numbered 1,2,...
+           * and argument registers 0,1,2, ...).
+           * When passing external arguments, the 2. arg. register may contain
+           * callReg. The pattern CallRegInPrimReg2 must return true in this case,
+           * false otherwise. This can be done by returning the value of
+           * callRegBusy.
+           * For platforms where callReg is NEVER in the 2. arg. register,
+           * the pattern should always retun false
+           *)
+          ThisRegOp,CallRegOp: @adrRegOperand;
+          DataRegA,  (* for most platforms, the register where results are returned
+                      * to external languages such as C. Used by toDataRegA in
+                      * genexternal for returning results of BETA callback
+                      * and for returning values of COM virtuals
+                      *)
+          DataRegB,
+          dataRegX,dataRegY: ^registerOperand;
+
+
+          FloatStackUnit: @boolean;
+          (* true if the floating point unit is a stack
+           * as for the Intel 386/486 processor.
+           * false otherwise. Currently only used
+           * in evval2:floatEvVal:asgToRealAdr
+           *)
+          
+          (*common: ^commonDef;*)
+          switch14,switch24: @boolean; (* elim *)
+          notImpl: cError
+            (# 
+            do INNER ;
+               ' has not been implemented'
+                 ->common.bugstream.putline
+            #);
+       #);
+
+     common: ^commonDef;
+     mch: ^AbstractMachine
+  enter common[]
+  <<SLOT machineFactory:doPart>>
+  exit mch[]
+  #);

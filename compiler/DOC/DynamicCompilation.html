@@ -1,0 +1,357 @@
+<HTML>
+
+<HEAD>
+<TITLE>Dynamic Compilation</TITLE>
+<LINK REV="made" HREF="mailto:olm@daimi.aau.dk">
+</HEAD>
+
+<BODY>
+<H1>1.   Dynamic Compilation</H1>
+
+<P>
+This document is supposed to describe the dynamic compilation
+framework for Beta.  As of now, the document is rather incomplete
+since only SGI specific issues are described.
+
+
+<P>
+The implementation of the dynamic compilation framework is part of an
+on going project for developing a
+<A HREF="http://www.daimi.aau.dk/~devise/Internal/beta/DPE/index.html">
+Dynamic Programming Environment</A> for Beta.
+
+<P>
+The dynamic compilation framework is located in
+
+<PRE>
+    $BETALIB/compiler/DYN/dynlib
+</PRE>
+A small prototype using the framework is located in
+<PRE>
+    $BETALIB/compiler/DYN/dynenv
+</PRE>
+
+<H1>2.   Interface to Dynamic Compilation Framework</H1>
+
+This section is an incomplete description of the low level interface
+to the dynamic compilation framework. It is intended for Valhalla
+implementers.  For using the simple interface, see:
+<PRE>
+         $BETALIB/compiler/DYN/dynlib.bet 
+
+for further details.
+
+A dynamic image may be created in different ways:
+
+InProcessImage:
+---------------
+
+This refers to an image created as the result of dynamic compilation
+of e.g. an object descriptor.
+
+InProcessFileImage:
+------------------
+
+An image created by reading a BETA object file
+
+OutProcessImage:
+----------------
+
+Like InProcessImage, but to be linked out-of-process to be used
+e.g. by Valhalla.
+
+OurProcessFileImage:
+--------------------
+
+Like InProcessFileImage, but to be used by e.g. Valhalla.
+
+The rest of this section describes the low level interface to be used
+by e.g. Valhalla.
+
+The framework contains the file
+
+	 $BETALIB/compiler/DYN/imagepair.bet 
+
+which defines the following patterns (see comments in imagepair for an
+explanation of each pattern):
+
+   ImagePair:
+      (# ...
+         xData,xCode: ^ LoadableImage;
+         LoadableImage: (# ... #);
+         InProcessImage: LoadableImage (# ... #);
+	 InProcessFileImage: LoadableImage(# ... #);
+         OutProcessImage: LoadableImage(# ... #);
+	 OutProcessFileImage: LoadableImage(# ... #); (* not yet existing *)
+	 LinkObject: ...
+	 xAllocImage: ...
+	 xCollectExternals: ...
+	 xCollectEntries: ...
+	 xRelocate: ...
+	 xLoadImage: ...
+	 xTransferImage: ...
+	 ...
+      #)
+
+The following dynlib operations creates instances of ImagePair:
+
+     GetImagePair: 
+       (* Returns an ImagePair consisting of the last compiled fragment.
+        * If outProcess is
+        * true:  the code and data images are represented as instances
+        *        of OutProcessImage
+        * false: the code and data images are represented as instances
+        *        of InProcessImage
+        * may be obtained. 
+        *)
+       (# outProcess: @boolean; IM: ^imagePair
+       enter outProcess
+       <<SLOT dynlib_GetImagePair:DoPart>>
+       exit IM[]
+       #);
+     LoadFile:
+       (* Loads a BETA object file and return the corresponding ImagePair
+        * where the code and data images are represented as instances
+        * of inProcessFileImage
+        *)
+       (# fn: ^text;
+          IM: ^imagePair          
+       enter fn[]   
+       <<SLOT dynlib_LoadFile:DoPart>>
+       exit IM[]
+       #);
+
+We assume the following declarations, i.e. a nameTable and an ImagePair
+has been obtained from some place.
+
+     NT: ^nameTable;   
+     IMP: ^ImagePair;
+
+     codeStart,dataStart: @integer;
+
+(The interface described below is a newly designed interface. To
+assure backward compatibility, the new interface has an 'x' prepended
+to all operations.  The 'x' will eventually be eliminated.)
+
+In-process dynamic load and link takes place as follows (similar to
+linkObject in imagePair - move to dynlib?):
+
+         (* IMP is created by  false -> getImagePair -> IMP[] *)
+
+         (* linking in Beta images *)
+         NT[] -> IMP.xCollectExternals;
+         IMP.xAllocImage;  (* allocate in-process memory buffers *)
+         NT[] -> IMP.xCollectEntries;
+         (NT[] -> IMP.xRelocate;
+
+         IMP.xLoadImage;  (* load Beta buffers to memory buffers *)
+
+Out-process dynamic load and link (Valhalla) may be done with the
+following code:
+
+        (* IMP is created by  true -> getImagePair -> IMP[] *)
+
+        (* use Valhalla protocol to allocate memory buffers
+         * with out-process addresses
+         * IMP.data.LIP -> VALHALLA_ALLOC -> dataStart;
+         * IMP.codeIm.LIP -> VALHALLA_ALLOC -> codeStart
+         *)
+
+         (dataStart,codeStart) -> IMP.xAllocImage; 
+
+         (* linking in Beta images *)
+         NT[] -> IMP.xCollectEntries;
+         NT[] -> IMP.xRelocate;
+    
+         IMP.xtransferImage
+         (#
+         do (item,outProcessAdr) -> VALHALLA_WRITE
+         #)
+
+
+See imagepair, if further information is needed.
+
+</PRE>
+<H1>3.   Dynamic link on SGI</H1>
+<PRE>
+
+This section describes specific issues for dynamic linking on SGI using
+the MIPS processor.
+
+An example of a code- and data segment generated by the Beta compiler
+is given at the end of this document.
+
+
+Relocation
+----------
+
+A Global Offset Table (GOT) must be constructed in the data segment.
+The GOT must hold absolute addresses of all symbols referred in the
+code and data segments.
+
+The symbol _gp_disp_ referred in the beginning of each code entry
+point is the distance between the GOT and the start address of the
+entry pont.  Note that _gp_disp has a different value for each entry
+point.
+
+When an entry point is called, the register $25 holds the address
+of the entry point.
+
+The code at the start of each entry-point computes the address of GOT
+in $gp.
+
+The address of symbols is computed relative to $gp. A symbol
+reference, like T1HELLO in:
+
+	lw	$5,T1HELLO($gp)
+
+will thus have to be replaced by its offset in the GOT.
+
+
+Example of computation of absolute address in M1OBJ1
+----------------------------------------------------
+
+	At entry to M1OBJ1:     $25 = address of M1OBJ1 = 10200
+				_gp_disp = GOT - M1OBJ1 = 11600
+
+        _gp_disp  -> $gp	$gp = 11600
+        $gp + $25 -> $gp	$gp = 21800
+
+        $gp + GOToff(T1HELLO) =  $gp + 40 = 21840 -> $5
+
+Memory organization of code- and data segments
+----------------------------------------------
+
+
+Code segment					absolute   _gp_disp   GOT
+------------					address
+
+		|-----------------------|
+codeStart:	| ...			|	10000
+		| ...			|
+		| ...			|
+M1OBJ1:		| la	$gp,_gp_disp 	|	10200   +  11600  =  21800
+		| addiu	$gp,$gp,0	|
+		| addu	$gp,$gp,$25 	|
+		|    ...		|
+		| lw	$5,T1HELLO($gp) |
+		| lw	$25,AlloI($gp) 	|
+		| jalr	$31,$25		|
+		| ...			|
+		| ...			|
+		| ...			|
+M2OBJ1:		| la	$gp,_gp_disp 	|	12900	+   8900  =  21800
+		| addiu	$gp,$gp,0	|
+		| addu	$gp,$gp,$25 	|
+		|    ...		|
+		|    ...		|	
+		|-----------------------|
+
+Data segment
+------------
+							   GOToff
+dataStart:	|-----------------------|	20000
+		| ...			|
+		| ...			|
+		| ...			|
+		|-----------------------|
+GOT:		| ...			|	21800	      0
+		| ...			|
+		| T1HELLO		|       21840        40
+		| ...			|
+		| AlloI			|	21864        64
+		| ...			|
+		|-----------------------|
+
+
+Code and data example
+---------------------
+
+.text
+.set noreorder
+BETA_code1:
+
+.globl	M1OBJ1
+M1OBJ1:
+	la	$gp,_gp_disp                  # 0x00 (0)	0x00 (0)
+	addiu	$gp,$gp,0                     # 0x04 (4)	0x04 (4)
+	addu	$gp,$gp,$25                   # 0x08 (8)	0x08 (8)
+	addiu	$sp,$sp,-40                   # 0x0C (12)	0x0C (12)
+	sw	$gp,20($sp)                   # 0x10 (16)	0x10 (16)
+	sw	$31,36($sp)                   # 0x14 (20)	0x14 (20)
+	sw	$30,32($sp)                   # 0x18 (24)	0x18 (24)
+	add	$30,$0,$5                     # 0x1C (28)	0x1C (28)
+$L2:
+	lw	$4,8($30)                     # 0x20 (32)	0x20 (32)
+	lw	$5,T1HELLO($gp)               # 0x24 (36)	0x24 (36)
+	addiu	$6,$sp,40                     # 0x28 (40)	0x28 (40)
+	sw	$30,28($sp)                   # 0x2C (44)	0x2C (44)
+	lw	$25,AlloI($gp)                # 0x30 (48)	0x30 (48)
+	jalr	$31,$25                       # 0x34 (52)	0x34 (52)
+	sw	$0,24($sp)                    # 0x38 (56)	0x38 (56)
+	lw	$gp,20($sp)                   # 0x3C (60)	0x3C (60)
+	or	$5,$0,$2                      # 0x40 (64)	0x40 (64)
+	lw	$30,28($sp)                   # 0x44 (68)	0x44 (68)
+	lw	$25,M1HELLO($gp)              # 0x48 (72)	0x48 (72)
+	jalr	$31,$25                       # 0x4C (76)	0x4C (76)
+	sw	$0,28($sp)                    # 0x50 (80)	0x50 (80)
+	lw	$gp,20($sp)                   # 0x54 (84)	0x54 (84)
+$L3:
+	add	$5,$0,$30                     # 0x58 (88)	0x58 (88)
+	lw	$30,32($sp)                   # 0x5C (92)	0x5C (92)
+	lw	$31,36($sp)                   # 0x60 (96)	0x60 (96)
+	jr	$31                           # 0x64 (100)	0x64 (100)
+	addiu	$sp,$sp,40                    # 0x68 (104)	0x68 (104)
+BETA_code2:
+	nop	                              # 0x00 (0)	0x6C (108)
+.data
+.align 8
+'
+.globl	BETA_DATA_388783053_899550801
+BETA_DATA_388783053_899550801:
+	.word	BETA_DATA_388783053_899550801 # 0x00 (0)	0x00 (0)
+	.word	BETA_data2                    # 0x04 (4)	0x04 (4)
+	.word	BETA_data3                    # 0x08 (8)	0x08 (8)
+	.word	BETA_code1                    # 0x0C (12)	0x0C (12)
+	.word	BETA_code2                    # 0x10 (16)	0x10 (16)
+	.word	.L1                           # 0x14 (20)	0x14 (20)
+	.word	0x172C5BCD                    # 0x18 (24)	0x18 (24)
+	.word	0x359E0E51                    # 0x1C (28)	0x1C (28)
+	.word	0x00000000                    # 0x20 (32)	0x20 (32)
+BETA_data2:
+	.word	0x00000001                    # 0x00 (0)	0x24 (36)
+	.word	T1OBJ1                        # 0x04 (4)	0x28 (40)
+.L1:
+	.word	0x2F757365                    # 0x00 (0)	0x2C (44)
+	.word	0x72732F6F                    # 0x04 (4)	0x30 (48)
+	.word	0x6C6D2F62                    # 0x08 (8)	0x34 (52)
+	.word	0x6574612F                    # 0x0C (12)	0x38 (56)
+	.word	0x636F6D70                    # 0x10 (16)	0x3C (60)
+	.word	0x696C6572                    # 0x14 (20)	0x40 (64)
+	.word	0x2F636F6D                    # 0x18 (24)	0x44 (68)
+	.word	0x70696C65                    # 0x1C (28)	0x48 (72)
+	.word	0x722F4459                    # 0x20 (32)	0x4C (76)
+	.word	0x4E2F4F42                    # 0x24 (36)	0x50 (80)
+	.word	0x4A310000                    # 0x28 (40)	0x54 (84)
+
+.globl	T1OBJ1
+T1OBJ1:
+	.word	0x00200002                    # 0x00 (0)	0x58 (88)
+	.word	0x00000000                    # 0x04 (4)	0x5C (92)
+	.word	T20BETAENV                    # 0x08 (8)	0x60 (96)
+	.word	0x00040018                    # 0x0C (12)	0x64 (100)
+	.word	0x0001001A                    # 0x10 (16)	0x68 (104)
+	.word	0x00000000                    # 0x14 (20)	0x6C (108)
+	.word	M1OBJ1                        # 0x18 (24)	0x70 (112)
+	.word	Return                        # 0x1C (28)	0x74 (116)
+	.word	0x0000000A                    # 0x20 (32)	0x78 (120)
+	.word	0x0000504F                    # 0x24 (36)	0x7C (124)
+	.word	0x626A3123                    # 0x28 (40)	0x80 (128)
+	.word	0x00000000                    # 0x2C (44)	0x84 (132)
+BETA_data3:
+	.word	0x00000000                    # 0x00 (0)	0x88 (136)
+
+</PRE>
+
+</BODY>
+</HTML>

@@ -1,0 +1,206 @@
+ORIGIN 'BetaRun';
+
+--BetaRunAlloI1: descriptor--
+(* Allocate item with no partobjects, 
+ * i.e. no G-parts and no GC-table processing.
+ * (14 instructions, if no GC)
+ * 
+ * Arguments:
+ *   CallO (%i1): Prototype
+ *   %o0: Origin
+ * Returns:
+ *   CallO (%i1): Allocated object
+ * Registers affected:
+ *   CallO (%i1) is overwritten with new object.
+ *   regSavedReturn (%l7) is destroyed, if GCfunc is called.
+ *   3 allocated dataregisters are destroyed.
+ *)
+(# regSize, regProto, regOriginOff: @dataRegOperand;
+do 'AlloI1' -> ExtLabel;
+   NumAlloI->IncNum; 
+   regSize.alloc;
+   regProto.alloc;
+   regOriginOff.alloc;
+   (O0, 'AlloI1', 'origin') -> EmitCk;
+   (* load size from prototype *)
+   (CallO,12,regSize) -> LDUH_I -> emit;
+   (regSize,2,regSize) -> SLL_I -> emit (* size = size*4 *);
+   (* save prototype for later *)
+   (CallO,regProto) -> MOV -> emit;
+   regProto -> AssertRegisterNotZero;
+   (* allocate *)
+   (CallO,regSize,false,'call_psusp_doGC',true)->GenIOAAlloc;
+   (if common.IOAMinAge<>0 then
+       (* Set up GCAttr *)
+       (callO,4,common.IOAMinAge) -> ST_I -> emit;
+   if);
+   (* Set up origin *)
+   regProto -> AssertRegisterNotZero;
+   (regProto,2,regOriginOff) -> LDUH_I -> emit;
+   (regOriginOff,2,regOriginOff) -> SLL_I -> emit;
+   (CallO,regOriginOff,O0,false) -> AssignRef; 
+   (if debug_runtime then
+       (* need to set up proto already here (:-( *)
+       (CallO,0,regProto) -> ST_I -> emit;
+       (O0, 'AlloI1', 'New Item') -> EmitCk;
+   if);
+   RETL -> emit;
+   (* Set up prototype *)
+   (CallO,0,regProto) -> ST_I -> emit (* delay slot *);
+   regSize.dealloc;
+   regProto.dealloc;
+   regOriginOff.dealloc;
+#)
+
+--BetaRunAlloI2: descriptor--
+(* Allocate item with partobjects, 
+ * i.e. with GC-table processing, but no G-parts.
+ * 
+ * Arguments:
+ *   %i5: Prototype (five!)
+ *   %o0: Origin
+ *   %l6: offset to store return address in.
+ *   %l7: return address to store in object
+ *   %i1: if AlloI2 is called for a part object,
+ *        Origin is 0 and %i1 points to the object to initialize.
+ * Returns:
+ *   %i0: (ThisO) Allocated object (zero!)
+ * Registers affected:
+ *   FIXME: the "registers affected" below are not correct!
+ *   %i1 is overwritten with new object.
+ *   %o5 is overwritten by size.
+ *   %o4, %o3, %o2, %o1 are destroyed by partobject initialization.
+ *   regSavedReturn (%l7) is destroyed, if GCfunc is called.
+ *)
+(# regSize: @dataRegOperand;
+   regProto, regOrigin, regOriginOff: @dataRegOperand;
+   regGCTab, regOff, regTmp: @dataRegOperand;
+   regDyn,regReturnOff,regReturnAdr, regNewObj: @dataRegOperand;
+   Finished, SetupPartObject: @locallab;
+do 'AlloI2' -> ExtLabel;
+   NumAlloI->IncNum;      
+   (* fixed bindings *)
+   I5->regProto;
+   O0->regOrigin;
+   L6->regReturnOff;
+   L7->regReturnAdr;
+   (* Actually we are about to return in %i0, but if we are called
+    * for a part object, it is %i1 that points out the current object,
+    * and should then be initialized. So in case we have to allocate,
+    * we do it in %i1, and then move the object to %i0 when returning.
+    *)
+   I1->regNewObj;
+   ;
+   SetupPartObject.new;
+   Finished.new;
+   ;
+   (O0, 'AlloI2', 'origin') -> EmitCk;
+   ;
+   regReturnAdr.alloc;
+   (if regNewObj=ThisO then
+       (* Save current object for later storage in new object *)
+       regDyn.alloc;
+       (regNewObj,regDyn) -> MOV -> mstate.b.emit;
+   if);
+   (* save of return address moved to delay slot below *)
+   ;
+   (* Test for regOrigin (%o0) less than or equal to 0.
+    * If so, no allocation and partobject initialization
+    * should be performed.
+    *)
+   (regOrigin,0) -> CMP_I -> emit;
+   (Finished->mstate.labs.off) div 4->BLE->emit;
+   (L7,regReturnAdr) -> MOV -> mstate.b.emit; (* delay slot *)
+   ;
+   (* Allocate memory *)
+   regSize.alloc;
+   (regProto,12,regSize) -> LDUH_I -> emit;
+   (regSize,2,regSize) -> SLL_I -> emit (* size = size*4 *);
+   (regNewObj,regSize,false,'call_psusp_doGC',true)->GenIOAAlloc;
+   regSize.dealloc;
+   ;
+   (* Set up prototype *)
+   (regNewObj,0,regProto) -> ST_I -> emit;
+   (if common.IOAMinAge<>0 then
+       (* Set up GCAttr *)
+       (regNewObj,4,common.IOAMinAge) -> ST_I -> emit;
+   if);
+   (* Set up origin *)
+   regOriginOff.alloc;
+   (regProto,2,regOriginOff) -> LDUH_I -> emit;
+   (regOriginOff,2,regOriginOff) -> SLL_I -> emit;
+   (regNewObj,regOriginOff,regOrigin,false) -> AssignRef;
+   regOriginOff.dealloc;
+   ;
+   (* Traverse GC table of prototype 
+    * and set up prototypes and GCAttr fields of partobjects
+    *)
+   regGCTab.alloc;
+   regOff.alloc;
+   regTmp.alloc;
+   (regProto,0,regGCTab) -> LDUH_I -> emit;
+   (regProto,regGCTab,regGCTab) -> ADD -> emit;
+   SetupPartObject.def;
+   (* Load offset from GCtable entry *)
+   (regGCTab,0,regOff) -> LDUH_I -> emit;
+   (regOff,0) -> CMP_I -> emit;
+   (Finished->mstate.labs.off) div 4 -> BE -> emit;
+   (regOff,2,regOff) -> SLL_I -> emit;
+   (* Initialize prototype of partobject *)
+   (regGCTab,4,regTmp) -> LD_I -> emit;
+   (regNewObj,regOff,regTmp) -> ST -> emit;
+   (* Initialize GCAttr of partobject *)
+   (regGCTab,2,regTmp) -> LDSH_I -> emit;
+   (regOff,4,regOff) -> ADD_I -> emit;
+   (regNewObj,regOff,regTmp) -> ST -> emit;
+   (* Take next entry in GCTab *)
+   (SetupPartObject->mstate.labs.off) div 4 -> BA -> emit;
+   (regGCTab,8,regGCTab) -> ADD_I -> emit (* delay slot *);
+   regGCTab.dealloc;
+   regOff.dealloc;
+   regTmp.dealloc;
+   ;
+   Finished.def;
+   ;
+   (* Save dynamic caller and return address in object and return *)
+   (if regNewObj=ThisO then
+       (* store saved current object *)
+       (regNewObj,regReturnOff,regDyn) -> ST -> emit;
+       regDyn.dealloc;
+    else
+       (* store current object *)
+       (regNewObj,regReturnOff,ThisO) -> ST -> emit;
+       
+   if);
+   (regReturnOff,4,regReturnOff) -> ADD_I -> emit;
+   (regNewObj,regReturnOff,regReturnAdr,false) -> AssignRef;
+   (regNewObj, 'AlloI2', 'New Item') -> EmitCk;
+   RETL -> emit;
+   (* make sure we return in ThisO *)
+   (regNewObj,ThisO) -> MOV -> emit (* delay slot *);
+   ;
+   regReturnAdr.dealloc;
+#)
+
+--BetaRunAlloI2_68: descriptor--
+(# L: @LocalLab
+do xNOP -> mstate.b.emit;
+   'AlloI2' -> ExtLabel;
+   L.new;
+   (4(*le*),0-> newCstOp (*??? see gen2body: case 4 *)
+   ,thisRegOp[]
+   (* tricky on sun4s: see returnSaved *)
+   ,4,L[])
+     -> cmpAndJmp;
+   (O7,I4) -> MOV -> mstate.b.emit;
+   (I5,I1) -> MOV -> mstate.b.emit;
+   
+   'AlloI' -> jsrT;
+   
+   (I4,O7) -> MOV -> mstate.b.emit;
+   L.def;
+   (I1,I0) -> MOV -> mstate.b.emit;
+   O7 -> AssertRegisterNotZero;
+   RETL -> mstate.b.emit;
+   xNOP -> mstate.b.emit;     
+#)

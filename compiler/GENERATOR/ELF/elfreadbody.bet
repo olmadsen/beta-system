@@ -1,0 +1,712 @@
+ORIGIN 'elfread';
+LIB_ITEM 'elfread';
+MDBODY sun4s 'elfread_sparcbody'
+       linux 'elfread_intelbody'
+       x86sol'elfread_intelbody'
+       sgi   'elfread_mipsbody';
+
+(* Possibly some of the following will turn out to be machine dependant
+ * - fragment them out if so.
+ *)
+
+--ElfReaderLib: attributes--
+memcpy: external
+  (# res: @integer;
+     s1, s2, n: @integer;
+  enter (s1, s2, n)
+  exit res
+  #);
+memccpy: external
+  (# res: @integer;
+     s1, s2, c, n: @integer;
+  enter (s1, s2, c, n)
+  exit res
+  #);
+memalign: external
+  (# align, size, ptr: @integer
+  enter (align,size)
+  exit ptr
+  #);
+read_shdrs:
+  (* read entire section into array to avoid too many
+   * file accesses.
+   *)
+  (# gb: @getbytes;
+     gh: @getEhdr;
+     eh: ^Elf32_Ehdr;
+     array: [0]@char;
+  do gh -> eh[];
+     eh.e_shnum*eh.e_shentsize -> array.new;
+     (eh.e_shoff, frombeginning) -> setpos;
+     (@@array[1],array.range) -> gb;
+     eh.e_shnum -> cache.shdrs.new;
+     (for i:eh.e_shnum repeat
+          &Elf32_Shdr[] -> cache.shdrs[i][];
+          (@@cache.shdrs[i].sh_name (* to *),
+          @@array[1]+(i-1)*eh.e_shentsize (* from *),
+          eh.e_shentsize (* nbytes *)) -> memcpy;
+     for);
+     0 -> array.new;
+  #);
+read_data:
+  (# 
+  do scanForData: scanShdrs
+       (# secname: ^text;
+          gb: @getbytes;
+          gs: @getSectionName;
+       do current.sh_name -> gs -> secname[];
+          (if '.data' -> secname.equal then
+              current[] -> cache.data_hdr[];
+              (current.sh_offset, frombeginning) -> setpos;
+              (8, current.sh_size -> cache.data_size) 
+                -> memalign 
+                -> cache.data_ptr;
+              (if cache.data_ptr=0 then
+                  (* FIXME: raise exception *)
+                  'elfread: allocation of data segment failed ('
+                    -> screen.puttext;
+                  current.sh_size -> screen.putint;
+                  ' bytes)' -> screen.putline;
+               else
+                  (cache.data_ptr, cache.data_size) -> gb;
+              if);
+              leave scanForData;
+          if)
+       #)
+  #);
+read_text:
+  (# 
+  do scanForText: scanShdrs
+       (# secname: ^text;
+          gb: @getbytes;
+          gs: @getSectionName;
+       do current.sh_name -> gs -> secname[];
+          (if '.text' -> secname.equal then
+              current[] -> cache.text_hdr[];
+              (current.sh_offset, frombeginning) -> setpos;
+              (8, current.sh_size -> cache.text_size)
+                -> memalign
+                -> cache.text_ptr;
+              (if cache.text_ptr=0 then
+                  (* FIXME: raise exception *)
+                  'elfread: allocation of text segment failed (' 
+                    -> screen.puttext;
+                  current.sh_size -> screen.putint;
+                  ' bytes)' -> screen.putline;
+               else
+                  (cache.text_ptr, cache.text_size) -> gb;
+              if);
+              leave scanForText;
+          if)
+       #)
+  #);
+read_symtab_hdr:
+  (# 
+  do scan: scanShdrs
+       (# 
+       do (if current.sh_type=SHT_SYMTAB then
+              current[] -> cache.symtab_hdr[];
+              leave scan;
+          if);
+       #)
+  #);
+read_symtab:
+  (* read entire section into array to avoid too many
+   * file accesses.
+   *)
+  (# array: [0]@char;
+     gb: @getbytes;
+     sh: ^Elf32_Shdr;
+  do (if cache.symtab_hdr[]=NONE then
+         read_symtab_hdr;
+     if);
+     cache.symtab_hdr[] -> sh[];
+     sh.sh_size div sh.sh_entsize -> cache.symtab.new;
+     sh.sh_size -> array.new;
+     (sh.sh_offset, frombeginning) -> setpos;
+     (@@array[1],sh.sh_size) -> gb;
+     (for i:cache.symtab.range repeat
+          &Elf32_Sym[] -> cache.symtab[i][] ;
+          (@@cache.symtab[i].st_name (* to *),
+          @@array[1]+(i-1)*sh.sh_entsize (* from *),
+          sh.sh_entsize (* nbytes *)) -> memcpy;
+     for);
+     0->array.new;
+  #);
+read_dynsym_hdr:
+  (# 
+  do scan: scanShdrs
+       (# 
+       do (if current.sh_type=SHT_DYNSYM then
+              current[] -> cache.dynsym_hdr[];
+              leave scan;
+          if);
+       #)
+  #);
+read_dynsym:
+  (* read entire section into array to avoid too many
+   * file accesses.
+   *)
+  (# array: [0]@char;
+     gb: @getbytes;
+     sh: ^Elf32_Shdr;
+  do (if cache.dynsym_hdr[]=NONE then
+         read_dynsym_hdr;
+     if);
+     cache.dynsym_hdr[] -> sh[];
+     sh.sh_size div sh.sh_entsize -> cache.dynsym.new;
+     sh.sh_size -> array.new;
+     (sh.sh_offset, frombeginning) -> setpos;
+     (@@array[1],sh.sh_size) -> gb;
+     (for i:cache.dynsym.range repeat
+          &Elf32_Sym[] -> cache.dynsym[i][] ;
+          (@@cache.dynsym[i].st_name (* to *),
+          @@array[1]+(i-1)*sh.sh_entsize (* from *),
+          sh.sh_entsize (* nbytes *)) -> memcpy;
+     for);
+     0->array.new;
+  #);
+read_data_rel_hdr:
+  (# gs: @getSectionName;
+  do scan: scanShdrs
+       (# 
+       do (if current.sh_type=SHT_REL then
+              (if '.rel.data' -> (current.sh_name -> gs).equal then
+                  current[] -> cache.data_rel_hdr[];
+                  leave scan;
+              if);
+          if)
+       #)
+  #);
+read_data_rel:
+  (* read entire section into array to avoid too many
+   * file accesses.
+   *)
+  (# array: [0]@char;
+     gb: @getbytes;
+     sh: ^Elf32_Shdr;
+  do (if cache.data_rel_hdr[]=NONE then
+         read_data_rel_hdr;
+     if);
+     cache.data_rel_hdr[] -> sh[];
+     (if sh.sh_size>0 then
+         sh.sh_size div sh.sh_entsize -> cache.data_rel.new;
+         sh.sh_size -> array.new;
+         (sh.sh_offset, frombeginning) -> setpos;
+         (@@array[1],sh.sh_size) -> gb;
+         (for i:cache.data_rel.range repeat
+              &Elf32_Rel[] -> cache.data_rel[i][] ;
+              (@@cache.data_rel[i].r_offset (* to *),
+              @@array[1]+(i-1)*sh.sh_entsize (* from *),
+              sh.sh_entsize (* nbytes *)) -> memcpy;
+         for);
+         0->array.new;
+     if)
+  #);
+read_data_rela_hdr:
+  (# gs: @getSectionName;
+  do scan: scanShdrs
+       (# 
+       do (if current.sh_type=SHT_RELA then
+              (if '.rela.data' -> (current.sh_name -> gs).equal then
+                  current[] -> cache.data_rela_hdr[];
+                  leave scan;
+              if);
+          if)
+       #)
+  #);
+read_data_rela:
+  (* read entire section into array to avoid too many
+   * file accesses.
+   *)
+  (# array: [0]@char;
+     gb: @getbytes;
+     sh: ^Elf32_Shdr;
+  do (if cache.data_rela_hdr[]=NONE then
+         read_data_rela_hdr;
+     if);
+     cache.data_rela_hdr[] -> sh[];
+     (if sh.sh_size>0 then
+         sh.sh_size div sh.sh_entsize -> cache.data_rela.new;
+         sh.sh_size -> array.new;
+         (sh.sh_offset, frombeginning) -> setpos;
+         (@@array[1],sh.sh_size) -> gb;
+         (for i:cache.data_rela.range repeat
+              &Elf32_Rela[] -> cache.data_rela[i][] ;
+              (@@cache.data_rela[i].r_offset (* to *),
+              @@array[1]+(i-1)*sh.sh_entsize (* from *),
+              sh.sh_entsize (* nbytes *)) -> memcpy;
+         for);
+         0->array.new;
+     if)
+  #);
+read_text_rel_hdr:
+  (# gs: @getSectionName;
+  do scan: scanShdrs
+       (# 
+       do (if current.sh_type=SHT_REL then
+              (if '.rel.text' -> (current.sh_name -> gs).equal then
+                  current[] -> cache.text_rel_hdr[];
+                  leave scan;
+              if);
+          if)
+       #)
+  #);
+read_text_rel:
+  (* read entire section into array to avoid too many
+   * file accesses.
+   *)
+  (# array: [0]@char;
+     gb: @getbytes;
+     sh: ^Elf32_Shdr;
+  do (if cache.text_rel_hdr[]=NONE then
+         read_text_rel_hdr;
+     if);
+     cache.text_rel_hdr[] -> sh[];
+     (if sh.sh_size>0 then
+         sh.sh_size div sh.sh_entsize -> cache.text_rel.new;
+         sh.sh_size -> array.new;
+         (sh.sh_offset, frombeginning) -> setpos;
+         (@@array[1],sh.sh_size) -> gb;
+         (for i:cache.text_rel.range repeat
+              &Elf32_Rel[] -> cache.text_rel[i][] ;
+              (@@cache.text_rel[i].r_offset (* to *),
+              @@array[1]+(i-1)*sh.sh_entsize (* from *),
+              sh.sh_entsize (* nbytes *)) -> memcpy;
+         for);
+         0->array.new;
+     if);
+  #);
+read_text_rela_hdr:
+  (# gs: @getSectionName;
+  do scan: scanShdrs
+       (# 
+       do (if current.sh_type=SHT_RELA then
+              (if '.rela.text' -> (current.sh_name -> gs).equal then
+                  current[] -> cache.text_rela_hdr[];
+                  leave scan;
+              if);
+          if)
+       #)
+  #);
+read_text_rela:
+  (* read entire section into array to avoid too many
+   * file accesses.
+   *)
+  (# array: [0]@char;
+     gb: @getbytes;
+     sh: ^Elf32_Shdr;
+  do (if cache.text_rela_hdr[]=NONE then
+         read_text_rela_hdr;
+     if);
+     cache.text_rela_hdr[] -> sh[];
+     (if sh.sh_size>0 then
+         sh.sh_size div sh.sh_entsize -> cache.text_rela.new;
+         sh.sh_size -> array.new;
+         (sh.sh_offset, frombeginning) -> setpos;
+         (@@array[1],sh.sh_size) -> gb;
+         (for i:cache.text_rela.range repeat
+              &Elf32_Rela[] -> cache.text_rela[i][] ;
+              (@@cache.text_rela[i].r_offset (* to *),
+              @@array[1]+(i-1)*sh.sh_entsize (* from *),
+              sh.sh_entsize (* nbytes *)) -> memcpy;
+         for);
+         0->array.new;
+     if)
+  #);
+read_strtab:
+  (* read entire section into cache.strtab *)
+  (# gb: @getbytes;
+     gs: @getShdr;
+     sh: ^Elf32_Shdr;
+     strtab_inx: @integer;
+  enter strtab_inx
+  do strtab_inx -> gs -> sh[] -> cache.strtab_hdr[];
+     (if sh.sh_type<>SHT_STRTAB then
+         'Warning: GetStr: section ' -> screen.puttext;
+         strtab_inx -> screen.putint;
+         ' is NOT a STRTAB section!' -> screen.putline;
+     if);
+     (sh.sh_offset, frombeginning) -> setpos;
+     sh.sh_size -> cache.strtab.new;
+     (@@cache.strtab[1], sh.sh_size) -> gb;
+  #);
+read_shstr:
+  (* read entire section into cache.shstr *)
+  (# gb: @getbytes;
+     gs: @getShdr;
+     sh: ^Elf32_Shdr;
+     gh: @getEhdr;
+  do (gh).e_shstrndx -> gs -> sh[] -> cache.shstr_hdr[];
+     (sh.sh_offset, frombeginning) -> setpos;
+     sh.sh_size -> cache.shstr.new;
+     (@@cache.shstr[1], sh.sh_size) -> gb;
+  #);
+
+
+--ElfFileGetEhdr: descriptor--
+(# gb: @getbytes;
+do (if cache.ehdr[]<>NONE then
+       cache.ehdr[] -> eh[];
+    else
+       (0,frombeginning)->setpos;
+       &Elf32_Ehdr[] -> eh[];
+       (@@eh.e_ident0, elfheadersize) -> gb;
+       (if (eh.e_ident0=ELFMAG0) and (eh.e_ident1=ELFMAG1) and 
+           (eh.e_ident2=ELFMAG2) and (eh.e_ident3=ELFMAG3) then
+           (* OK *)
+           eh[] -> cache.ehdr[];
+        else
+           (* FIXME: raise exception *)
+           'Failed to read ELF header' -> screen.putline;
+           NONE -> eh[];
+       if);
+   if);
+#)
+
+--ElfFileShdrTypeAsText: dopart--
+do (if type
+    // SHT_NULL then
+       'SHT_NULL' -> desc[];
+    // SHT_PROGBITS then
+       'SHT_PROGBITS' -> desc[];
+    // SHT_SYMTAB then
+       'SHT_SYMTAB' -> desc[];
+    // SHT_STRTAB then
+       'SHT_STRTAB' -> desc[];
+    // SHT_RELA then
+       'SHT_RELA' -> desc[];
+    // SHT_HASH then
+       'SHT_HASH' -> desc[];
+    // SHT_DYNAMIC then
+       'SHT_DYNAMIC' -> desc[];
+    // SHT_NOTE then
+       'SHT_NOTE' -> desc[];
+    // SHT_NOBITS then
+       'SHT_NOBITS' -> desc[];
+    // SHT_REL then
+       'SHT_REL' -> desc[];
+    // SHT_SHLIB then
+       'SHT_SHLIB' -> desc[];
+    // SHT_DYNSYM then
+       'SHT_DYNSYM' -> desc[];
+    // SHT_NUM then
+       'SHT_NUM' -> desc[];
+       (* FIXME: the following makes compiler crash!!! *)
+       (* // SHT_LOUSER {* 0x80000000 *} then
+        *    'SHT_LOUSER' -> desc[];
+        * // SHT_HIUSER {* 0xffffffff *}then
+        *    'SHT_HIUSER' -> desc[];
+        *)
+    else
+       '<unknown shdr type: ' -> desc[];
+       type->desc.putint; '>' ->desc.put;
+   if)
+
+--ElfFileGetShdr: descriptor--
+(# 
+do (if cache.shdrs.range=0 then
+       read_shdrs;
+   if);
+   (if sh_inx>=cache.shdrs.range then
+       (* FIXME: raise exception *)
+       'Not that many section headers: ' -> screen.puttext;
+       sh_inx -> screen.putint; screen.newline;
+       NONE -> sh[];
+    else
+       cache.shdrs[sh_inx+1][] -> sh[];
+   if)
+#)
+
+--ElfFileScanShdrs: descriptor--
+(# 
+do 0 -> current_inx;
+   (if cache.shdrs.range=0 then
+       read_shdrs;
+   if);
+   (for i:cache.shdrs.range repeat
+        cache.shdrs[i][]->current[];
+        INNER ScanShdrs;
+        i->current_inx;
+   for);
+#)
+
+--ElfFileGetSymTabEnt: descriptor--
+(# 
+do NONE -> sym[];
+   (if cache.symtab.range=0 then 
+       read_symtab;
+   if);
+   (if sym_inx>=cache.symtab.range then
+       (* FIXME: raise exception *)
+       'Not that many symbols: ' -> screen.puttext;
+       sym_inx -> screen.putint; screen.newline;
+    else
+       cache.symtab[sym_inx+1][]->sym[];
+       cache.symtab_hdr[] -> sh[];
+   if)
+#)
+
+--ElfFileGetDynSymEnt: descriptor--
+(# 
+do NONE -> sym[];
+   (if cache.dynsym.range=0 then 
+       read_dynsym;
+   if);
+   (if sym_inx>=cache.dynsym.range then
+       (* FIXME: raise exception *)
+       'Not that many symbols: ' -> screen.puttext;
+       sym_inx -> screen.putint; screen.newline;
+    else
+       cache.dynsym[sym_inx+1][]->sym[];
+       cache.dynsym_hdr[] -> sh[];
+   if)
+#)
+
+--ElfFileScanAllSymEnts: descriptor--
+(# 
+do scanShdrs
+   (# 
+   do (* 'trying '->screen.puttext ; current_inx -> screen.putint; 
+       * ' '->screen.put; current.sh_name -> getsectionname -> screen.putline;
+       *)
+      (if current.sh_type
+       // SHT_SYMTAB then
+          current[] -> current_sec[];
+          (if not current_sec_changed (* exits "skip" *) then
+              (if current.sh_size>0 then
+                  (if cache.symtab.range=0 then 
+                      read_symtab;
+                  if);
+                  0->THIS(ScanAllSymEnts).current_inx;
+                  (for i:cache.symtab.range repeat
+                       cache.symtab[i][]->THIS(ScanAllSymEnts).current[];
+                       INNER ScanAllSymEnts;
+                       i->THIS(ScanAllSymEnts).current_inx;
+                  for);
+              if)
+          if)
+       // SHT_DYNSYM then
+          current[] -> current_sec[];
+          (if not current_sec_changed (* exits "skip" *) then
+              (if current.sh_size>0 then
+                  (if cache.dynsym.range=0 then 
+                      read_dynsym;
+                  if);
+                  0->THIS(ScanAllSymEnts).current_inx;
+                  (for i:cache.dynsym.range repeat
+                       cache.dynsym[i][]->THIS(ScanAllSymEnts).current[];
+                       INNER ScanAllSymEnts;
+                       i->THIS(ScanAllSymEnts).current_inx;
+                  for);
+              if)
+          if)
+      if)
+   #)
+#)
+
+--ElfFileGetDataRelEnt: descriptor--
+(# 
+do NONE -> rel[];
+   (if cache.data_rel.range=0 then 
+       read_data_rel; 
+   if);
+   (if rel_inx>=cache.data_rel.range then
+       (* FIXME: raise exception *)
+       'Not that many rel entries for .data: ' -> screen.puttext;
+       rel_inx -> screen.putint; screen.newline;
+       NONE -> rel[];
+    else
+       cache.data_rel[rel_inx+1][]->rel[];
+   if);
+#)
+
+--ElfFileGetDataRelaEnt: descriptor--
+(# 
+do NONE -> rela[];
+   (if cache.data_rela.range=0 then 
+       read_data_rela; 
+   if);
+   (if rela_inx>=cache.data_rela.range then
+       (* FIXME: raise exception *)
+       'Not that many rela entries for .data: ' -> screen.puttext;
+       rela_inx -> screen.putint; screen.newline;
+       NONE -> rela[];
+    else
+       cache.data_rela[rela_inx+1][]->rela[];
+   if);
+#)
+
+--ElfFileGetTextRelEnt: descriptor--
+(# 
+do NONE -> rel[];
+   (if cache.text_rel.range=0 then 
+       read_text_rel; 
+   if);
+   (if rel_inx>=cache.text_rel.range then
+       (* FIXME: raise exception *)
+       'Not that many rel entries for .text: ' -> screen.puttext;
+       rel_inx -> screen.putint; screen.newline;
+       NONE -> rel[];
+    else
+       cache.text_rel[rel_inx+1][]->rel[];
+   if);
+#)
+
+--ElfFileGetTextRelaEnt: descriptor--
+(# 
+do NONE -> rela[];
+   (if cache.text_rela.range=0 then 
+       read_text_rela; 
+   if);
+   (if rela_inx>=cache.text_rela.range then
+       (* FIXME: raise exception *)
+       'Not that many rela entries for .text: ' -> screen.puttext;
+       rela_inx -> screen.putint; screen.newline;
+       NONE -> rela[];
+    else
+       cache.text_rela[rela_inx+1][]->rela[];
+   if);
+#)
+
+--ElfFileScanDataRelEnts: descriptor--
+(# 
+do 0->current_inx;
+   (if cache.data_rel.range=0 then read_data_rel if);
+   (for i:cache.data_rel.range repeat
+        cache.data_rel[i][]->current[];
+        INNER ScanDataRelEnts;
+        i->current_inx;
+   for);
+#)
+--ElfFileScanTextRelEnts: descriptor--
+(# 
+do 0->current_inx;
+   (if cache.text_rel.range=0 then read_text_rel if);
+   (for i:cache.text_rel.range repeat
+        cache.text_rel[i][]->current[];
+        INNER ScanTextRelEnts;
+        i->current_inx;
+   for);
+#)
+--ElfFileScanDataRelaEnts: descriptor--
+(# 
+do 0->current_inx;
+   (if cache.data_rela.range=0 then read_data_rela if);
+   (for i:cache.data_rela.range repeat
+        cache.data_rela[i][]->current[];
+        INNER ScanDataRelaEnts;
+        i->current_inx;
+   for);
+#)
+--ElfFileScanTextRelaEnts: descriptor--
+(# 
+do 0->current_inx;
+   (if cache.text_rela.range=0 then read_text_rela if);
+   (for i:cache.text_rela.range repeat
+        cache.text_rela[i][]->current[];
+        INNER ScanTextRelaEnts;
+        i->current_inx;
+   for);
+#)
+
+--ElfFileGetStr: descriptor--
+(# getBytesUntilNull:
+     (# inx: @integer;
+        t: ^text;
+        p: ^text.put;
+        ch: @char;
+     enter inx
+     do &text[]->t[];
+        &t.put[]->p[];
+        (* FIXME: may possibly be optimized by using memccpy. But how large a
+         * BETA text need we allocate?
+         *)
+        loop:
+          (# 
+          do cache.strtab[inx+1->inx]->ch;
+             (if ch<>0 then 
+                 ch->p;
+                 restart loop;
+             if)
+          #);
+     exit t[]
+     #);
+do (* FIXME: there can be more than one string table. 
+    * Here we only handle the .strtab section properly
+    * (the only one generated by BETA)
+    *)
+   (if strtab_inx
+    // SHN_LORESERVE then '<LORESERVE>' -> str[];
+    // SHN_ABS then '<ABS>' -> str[];
+    // SHN_COMMON then '<COMMON>' -> str[];
+    // SHN_HIRESERVE then '<HIRESERVE>' -> str[];
+    else
+       (if cache.strtab.range=0 then
+           strtab_inx -> read_strtab;
+       if);
+       (if str_inx >=  cache.strtab.range then
+           (* FIXME: raise exception *)
+           'Not that many strings in .strtab: ' -> screen.puttext;
+           str_inx -> screen.putint; screen.newline;
+           NONE -> str[];
+        else
+           str_inx -> getbytesUntilNull -> str[];
+       if);
+   if)
+#)
+
+--ElfFileGetShStr: descriptor--
+(# getBytesUntilNull:
+     (# inx: @integer;
+        t: ^text;
+        p: ^text.put;
+        ch: @char;
+     enter inx
+     do &text[]->t[];
+        &t.put[]->p[];
+        (* FIXME: may possibly be optimized by using memccpy. But how large a
+         * BETA text need we allocate?
+         *)
+        loop:
+          (# 
+          do cache.shstr[inx+1->inx]->ch;
+             (if ch<>0 then 
+                 ch->p;
+                 restart loop;
+             if)
+          #);
+     exit t[]
+     #);
+do (* Cannot know exact number of strings. In principle
+    * there may be one for every byte (e.g. 'abcd\0' may
+    * encode strings 'acbd', 'bcd', 'cd', and 'd', i.e. 4
+    * strings in 5 bytes). 
+    *)
+   (if cache.shstr.range=0 then
+       read_shstr;
+   if);
+   (if str_inx >= cache.shstr.range then
+       (* FIXME: raise exception *)
+       'Not that many strings in .shstrndx: ' -> screen.puttext;
+       str_inx -> screen.putint; screen.newline;
+       NONE -> str[];
+    else
+       str_inx -> getbytesUntilNull -> str[];
+   if)
+#)
+
+--ElfFileGetData: descriptor--
+(# 
+do (if cache.data_ptr=0 then read_data if);
+   cache.data_ptr -> ptr;
+   cache.data_size -> size;
+#)
+
+--ElfFileGetText: descriptor--
+(# 
+do (if cache.text_ptr=0 then read_text if);
+   cache.text_ptr -> ptr;
+   cache.text_size -> size;
+#)
+

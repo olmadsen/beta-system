@@ -1,0 +1,2176 @@
+ORIGIN '../backend';
+INCLUDE 'powerpc';
+INCLUDE 'ppcimage';
+BODY '../PPCMAC/ppcmacxcoffbackend';
+
+-- backendatt: attributes --
+trace: (# exit true #);
+
+TODO: 
+  (# t:^Text
+  enter t[]
+  do 
+     (if t[]=NONE then
+         'TODO: (with no arg)'->T[];
+      else
+     if);
+     (if trace then
+         'TODO:'->screen.putText;
+         t[]->screen.putLine;
+      else
+         (failureTrace, t[])->stop;
+     if)
+  #);
+
+doJsrT:
+  (# entry: ^text
+  enter entry[]
+  do &backendInstruction(#do entry[]->label[] #) -> jsrTImpl
+  #);
+     
+GetExternalResult:
+  (# getSimpleRes: 
+       (# I: ^backendInstruction
+       enter I[]
+       do (I.writeReg,ReturnReg) -> MR -> mstate.b.emit;
+       #);
+     getDoubleRes:
+       (# I: ^backendInstruction
+       enter I[]
+       do (I.writeReg ,ReturnReg) -> MR -> mstate.b.emit;
+          (I.writeReg2,ReturnReg+1) -> MR -> mstate.b.emit;
+       #)
+  do false -> mstate.alloI;
+     inner;
+     mstate.xFreeOreg 
+  #);
+
+--getRegisterOffsets:doPart--
+do 23->dataOff;
+   27->adrOff;
+   3->primOff 
+   
+--getNumberOfDataRegisters:dopart--
+do 4->regCount
+
+--getNumberOfAdrRegisters:dopart--
+do 3->regCount
+   
+--getNumberOfRegisters:dopart--
+do (* See DOC/Registers.html *)
+   (if type
+    // 1 (*dataReg*) then 4->number
+    // 2 (*adrReg*)  then 2+3->number (* this+call counts too *)
+    // 3 (*floatReg*) then 16->number
+    // 4 (*primReg*) then 8->number
+   if)
+   
+--getPhysicalRegisterNumber:dopart--
+do (* See DOC/Registers.html *)
+   (if type
+    // 1 (*dataReg*) then
+       GPR24-1+reg -> physicalregister (* D0,D1,D2,D3,D4 *)
+    // 2 (*AdrReg*) then
+       (if reg
+        // 1 then GPR31->physicalregister
+        // 2 then GPR4->physicalregister
+        else
+           (if reg <= 5 then
+               GPR28-3+reg->physicalregister (* a2,a3,a4 *)
+            else
+               '\nppcbackend: adrReg overflow: ' -> puttext;
+               reg -> putint; newline;
+               GPR20-6+reg->physicalregister (* GPR20, GPR21, ... *)
+           if)
+       if)
+    // 3 (*float*) then
+       FPR13 + reg->physicalregister
+    // 4 then
+       GPR3+reg->physicalregister
+   if)
+--primRegIsReg:doPart--
+do true->value
+   
+--primRegIsRegAdr:doPart--
+do false->value
+   
+--backendIsSmallAluConstant:doPart--
+do ((*minOff*) 0 <= C) and (C <= maxOff) -> value
+   (* OBS we need a variant here, since addii, etc
+    * takes negative numbers but ANDI, etc ONLY
+    * takes positive numbers:-)
+    *)
+   
+--backendIsSmallAdrOff:doPart--
+do (minOff <= C) and (C <= maxOff) -> value
+   
+--backendHasRotateInstr:doPart--
+do false -> value
+   
+--backendScaledIndex:doPart--
+do false->value
+
+-- backendNop: dopart --
+do xNOP -> mstate.b.emit
+
+-- backendgLea:doPart--
+do (I.writeReg,I.readReg,I.imm)->ADDI->mstate.b.emit;
+   
+-- backendgLeaInx:doPart--
+do (I.writeReg,I.readReg,I.readReg2)->ADD->mstate.b.emit;
+   (if I.imm <> 0 then
+       (I.writeReg,I.writeReg,I.imm)->ADDI->mstate.b.emit;
+   if)
+   
+-- backendgLeaText:doPart--
+do (I.label[],I.writeReg) -> putSetText
+   
+-- backendgLeaLabel:doPart--
+do (* we should probably cleanup here; 
+    * either use thisLL or I.lab
+    *)
+   (# thisLL: @backendLocalLab
+   do 'L'->I.label[]; I.labNo->I.label.putint;   (* asText *)    
+      thisLL[] -> mstate.labForExO[]; (* just a hAck to do trhis always;
+                                       * FG has tHE LOCK ON INMCH.BET.
+                                       * but perhaps we should chamge the
+                                       * passing oft his parameter to
+                                       * callPrim for ExO
+                                       *)
+      I.labNo->thisLL.labNo;
+      I.type->thisLL.type;
+      (if thisLL.type 
+       // thisLL.caseStart then  
+          (I.label[],false,CASEstartType) -> entryPoints.addDefPPC;
+          (I.label[],dataMark) -> mstate.b.mark;
+          (I.writeReg,RTOC,0) -> LWZ -> mstate.b.emit;
+       // thisLL.codeLocal then
+          (# csect: ^text; LabLIP: @integer
+          do thisLL.labNo->mstate.labs.codeLocalOff->(csect[],LabLIP);
+             (* See gJmp - do we ever come here?
+              * An csect and LabLIP are not used?
+              *)
+             (I.readReg,RTOC,0) -> LWZ -> mstate.b.emit;
+             thisLL[] -> mstate.labForExO[];
+          #)
+       // thisLL.InterFragment then
+          thisLL[] -> mstate.labForExO[];
+       else  
+          (I.label[],I.writeReg) -> putSetText
+   if)#)
+   
+-- backendldCst:dopart --
+do (I.writeReg,I.imm)->PutSet
+
+-- backendstCst:dopart --
+do 1->mstate.FIXME
+
+-- backendldVal:dopart --
+do (if i.size=4 then
+       (I.writeReg,I.readReg,I.readOffSet)-> LWZ ->mstate.b.emit
+    else
+       (if i.size=1 then 
+           (I.writeReg,I.readReg,I.readOffSet)-> LBZ ->mstate.b.emit;
+           (if i.signed then  
+               I.writeReg->I.readReg; I[]->SignExtByteImpl;
+           if)
+        else
+           (* size=2 *)
+           (if i.signed then
+               (I.writeReg,I.readReg,I.readOffSet)-> LHA ->mstate.b.emit
+            else
+               (I.writeReg,I.readReg,I.readOffSet)-> LHZ ->mstate.b.emit 
+   if)if)if)
+   
+-- backendldVlInx:dopart --
+do (if I.readOffSet <> 0 then 
+       (I.inxReg,I.inxReg,I.readOffSet)->ADDI->mstate.b.emit 
+   if); 
+   (if i.size=4 then
+       (I.writeReg,I.readReg,I.inxReg)-> LWZX ->mstate.b.emit
+    else
+       (if i.size=1 then 
+           (I.writeReg,I.readReg,I.inxReg)-> LBZX ->mstate.b.emit; 
+           (if i.signed then  
+               I.writeReg->I.readReg; I[]->SignExtByteImpl;
+           if)
+        else
+           (* size=2 *)
+           (if i.signed then
+               (I.writeReg,I.readReg,I.inxReg)-> LHAX ->mstate.b.emit
+            else
+               (I.writeReg,I.readReg,I.inxReg)-> LHZX ->mstate.b.emit 
+   if)if)if)
+   
+-- backendstVal:dopart --
+do (if i.size=4 then
+       (I.readReg2,I.readReg,I.readOffSet)->STW->mstate.b.emit
+    else
+       (if I.size=1 then
+           (I.readReg2,I.readReg,I.readOffSet)->STB->mstate.b.emit
+        else
+           (I.readReg2,I.readReg,I.readOffSet)->STH->mstate.b.emit
+   if)if)
+   
+-- backendstValInx:dopart --
+do (I.inxReg,I.inxReg,I.readOffSet)->ADDI->mstate.b.emit;   
+   (if i.size=4 then
+       (I.readReg2,I.readReg,I.inxReg)->STWX->mstate.b.emit
+    else
+       (if I.size=1 then
+           (I.readReg2,I.readReg,I.inxReg)->STBX->mstate.b.emit
+        else
+           (I.readReg2,I.readReg,I.inxReg)->STHX->mstate.b.emit
+   if)if)
+   
+-- backendcpReg:dopart --
+do (I.writeReg,I.readReg)-> MR ->mstate.b.emit
+   
+-- backendstValInText:dopart --
+do (I.label[],setHiMark)->mstate.b.mark;
+   (dataTmp1,0)-> LIS ->mstate.b.emit; (* dataTmp1 is G1 in sparc?*)
+   (I.label[],setLoMarkSt)->mstate.b.mark;
+   (dataTmp1,I.readReg,0)-> STW ->mstate.b.emit; 
+   
+-- backenddoAsgRefAdr:dopart --
+do (* empty on ppc *)
+
+-- backenddoAsgRefReg:dopart --
+do (* empty on ppc *)
+
+-- backendChkHeap:dopart --
+do (* I.readReg : register containing source reference
+    * I.readReg2: register containing destination address
+    *)
+   (# L: @backendLocalLab;  
+   do (I.readReg,I.readReg2,0)->STW->mstate.b.emit;
+
+      (if not I.withQua then
+          (*  IOA[0] = IOA_bot
+           *  IOA[4] = IOS_used = IOA_top - IOA_bot
+           * 
+           *  Check if   R in [IOA_bot, IOA_bot + IOA_used[
+           * 
+           *  Memory     [ ............ [IOA_bot, IOA_top[ ........]
+           *                   R1               R2           R3 
+           *  d = R1 - IOAbot  :  d < 0
+           *  d = R2 - IOAbot  :  0 <= d < IOA_used
+           *  d = R3 - IOAbot  :  IOA_used <= d < MemMax
+           * 
+           *  IOA_used unsigned<= d  : R is NOT in IOA
+           *)
+          ('_IOA',IOAusedReg) -> PutSetText;
+          (IOAbotReg,IOAusedReg,0)-> LWZ ->mstate.b.emit;
+          (IOAusedReg,IOAusedReg,4)-> LWZ ->mstate.b.emit;
+          
+          (*  destReg - IOAbot -> dataTmp1 *)
+          (dataTmp1,IOAbotReg,I.readReg2) -> SUB -> mstate.b.emit;
+          (I.readReg,I.readReg2,0) -> STW -> mstate.b.emit;
+          L.new;
+          (dataTmp1,IOAusedReg) -> CMPLW -> mstate.b.emit;
+          &backendInstruction(# do L.labNo->labNo #) -> gBleImpl;
+
+          (GPR3,I.readReg2) -> MR -> mstate.b.emit;
+          (if callRegBusy then callO->pushRef if);
+          PushRegImpl; (* -> max;*)
+          ('.ChkRA',callMark) -> mstate.b.mark; 
+          0-> BL ->mstate.b.emit;
+          xNOP -> mstate.b.emit;
+          (*max ->*) PopRegImpl;
+          (if callRegBusy then callO -> popRef if);
+          L.def
+      if);
+   #);
+
+   
+-- backendgAddImm:dopart --
+do (I.writeReg,I.readReg2,I.imm)->ADDI->mstate.b.emit
+
+-- backendgAddReg:dopart --
+do (I.writeReg,I.readReg2,I.readReg)->ADD->mstate.b.emit
+
+-- backendaddMem:dopart --
+do 2->mstate.FIXME
+
+-- backendgNeg:dopart --
+do (I.writeReg,I.readReg)-> NEG ->mstate.b.emit  
+
+-- backendgSubImm:dopart --
+do (I.writeReg,I.readReg2,-I.imm)->ADDI->mstate.b.emit
+   
+-- backendgSubReg:dopart --
+do (I.writeReg,I.readReg,I.readReg2)-> SUB ->mstate.b.emit
+   (* Note confusing order: ppc dumpxcoff writes
+    * sub writeReg readReg2 readReg
+    *)
+
+-- backendgMultImm:dopart --
+do (# dr: @integer
+   do I.imm -> cstOpToReg ->dr;
+      (I.writeReg,dr,I.readReg2) -> MULLW -> mstate.b.emit;
+   #)
+   
+--backendgMultReg:dopart --
+do (I.writeReg,I.readReg,I.readReg2) -> MULLW -> mstate.b.emit;
+
+--backendgDIVImm:dopart --
+do (# dr,Reg:  @integer
+   do I.imm -> cstOpToReg ->dr;
+      (if I.isDiv then
+          (I.writeReg,dr,I.readReg2) -> DIVW -> mstate.b.emit; 
+       else
+          dataTmp -> Reg;
+          (Reg,I.readReg) -> MR -> mstate.b.emit; 
+          (Reg,Reg,dr) -> DIVW -> mstate.b.emit;
+          (Reg,Reg,dr) -> MULLW -> mstate.b.emit;
+          (I.writeReg,Reg,I.readReg) -> SUBF -> mstate.b.emit;
+      if)
+   #)
+   
+--backendgDIVReg:dopart --
+do (if I.isDiv then
+       (I.writeReg,I.readReg,I.readReg2) -> DIVW -> mstate.b.emit; 
+    else
+       (# Reg: @integer
+       do dataTmp -> Reg;
+          (Reg,I.readReg) -> MR -> mstate.b.emit; 
+          (Reg,Reg,I.readReg2) -> DIVW -> mstate.b.emit;
+          (Reg,Reg,I.readReg2) -> MULLW -> mstate.b.emit;
+          (I.writeReg,Reg,I.readReg) -> SUBF -> mstate.b.emit;
+   #)if)
+
+--backendgOrImm:dopart --
+do (I.writeReg,I.readReg2,I.imm)-> ORI ->mstate.b.emit
+
+--backendgOrReg:dopart --
+do (I.writeReg,I.readReg,I.readReg2)-> OR_ ->mstate.b.emit
+   
+--backendgAndImm:dopart --
+do (I.writeReg,I.readReg2,I.imm)-> ANDI_ ->mstate.b.emit
+
+--backendgAndReg:dopart --
+do (I.writeReg,I.readReg,I.readReg2)-> AND_ ->mstate.b.emit
+   
+--backendgxOrImm:dopart --
+do (I.writeReg,I.readReg2,I.imm)-> XORI ->mstate.b.emit
+
+--backendgxOrReg:dopart --
+do (I.writeReg,I.readReg,I.readReg2)-> XOR_ ->mstate.b.emit
+
+--backendgAndNReg:dopart --
+do (DataTmp1,I.readReg2,ZeroTmpReg)-> NOR ->mstate.b.emit;
+   (I.writeReg,I.readReg,DataTmp1)-> AND_ ->mstate.b.emit
+   
+--backendgNot:dopart --
+do (I.writeReg,I.readReg,1) -> XORI -> mstate.b.emit
+
+--backendlogNot:dopart --
+do (I.writeReg,ZeroTmpReg,I.readReg) -> NOR -> mstate.b.emit  
+
+--backendgCmpImm:dopart --
+do 5->mstate.FIXME
+   
+--backendgCmpReg:dopart --
+do 6->mstate.FIXME
+
+--backendSignExtByte:dopart --
+(* for this operation and SignExtWord, getBits and getSignedBits there are
+ * special instructions on the PPC. I.e one instead of two instructions.
+ *)  
+do (I.writeReg,I.readReg,24) -> SLWI -> mstate.b.emit;
+   (I.writeReg,I.writeReg,24) -> SRAWI -> mstate.b.emit; 
+
+--backendSignExtWord:dopart --
+do (I.writeReg,I.readReg,16) -> SLWI -> mstate.b.emit;
+   (I.writeReg,I.writeReg,16) -> SRAWI -> mstate.b.emit; 
+
+--backendGetBits:dopart --
+   (* pos = i.imm; length = i.size, signed flag. *)
+do 'backendGetBits'->TODO (* not used *)
+     
+--backendgGetBits:dopart --
+do 'backendgGetBits'->TODO (* not used *)
+   
+--backendputBits:dopart --
+do 'backendputBits'->TODO (* not used *)
+   
+--backendgPutBits:dopart --
+do 'backendgPutBits'->TODO (* not used *)
+
+--backendByteSwap:dopart --
+do 'backendByteSwap'->TODO (* not used *)
+
+--backendgGetDataByte:dopart --
+do (if I.imm (* byteNo *)
+    // 0 then (* shift right 24 *) 
+       (I.writeReg,I.readReg,24)->SRWI->mstate.b.emit  
+    // 1 then (* shift right 16 *)
+       (I.writeReg,I.readReg,16)->SRWI->mstate.b.emit  
+    // 2 then (* rotate right 8 bits *)
+       (I.writeReg,I.readReg,8)->SRWI->mstate.b.emit  
+   if);
+   (I.writeReg,I.readReg,255) -> ANDI_-> mstate.b.emit;
+   
+--backendgGetDataWord:dopart --
+do (if I.imm (*wordNo*) = 0 then
+       (I.writeReg,I.readReg,16)->SRWI->mstate.b.emit
+    else
+       (dataTmp2,-1)-> LI ->mstate.b.emit;
+       (dataTmp2,dataTmp2,16)->SRWI->mstate.b.emit;
+       (I.writeReg,dataTmp2,I.readReg)->AND_->mstate.b.emit
+   if);
+   
+--backendarithShiftLeftImm:dopart --
+do (I.writeReg,I.readReg,I.imm)-> SLWI ->mstate.b.emit;
+   
+--backendarithShiftLeftReg:dopart --
+do (I.writeReg,I.readReg,I.readReg2)-> SLW ->mstate.b.emit;
+   
+--backendlogicalShiftLeftImm:dopart --
+do (I.writeReg,I.readReg,I.imm)-> SLWI ->mstate.b.emit;
+
+--backendlogicalShiftLeftReg:dopart --
+do (I.writeReg,I.readReg,I.readReg2)-> SLW ->mstate.b.emit;
+
+--backendarithShiftRightImm:dopart --
+do (I.writeReg,I.readReg,I.imm)-> SRAWI ->mstate.b.emit;
+
+--backendarithShiftRightReg:dopart --
+do (I.writeReg,I.readReg,I.readReg2)-> SRAW ->mstate.b.emit;
+
+--backendlogicalShiftRightImm:dopart --
+do (I.writeReg,I.readReg,I.imm)-> SRWI ->mstate.b.emit;
+   
+--backendlogicalShiftRightReg:dopart --
+do (I.writeReg,I.readReg,I.readReg2)-> SRW ->mstate.b.emit;
+
+--backendrotateLeftImm:dopart --
+do 'backendrotateLeftImm'->TODO  (* implemented in INTERMEDIATEmachine *)
+   
+--backendrotateLeftReg:dopart --
+do 'backendrotateLeftReg'->TODO  (* implemented in INTERMEDIATEmachine *)
+   
+--backendrotateRightImm:dopart --
+do 'backendrotateRightImm'->TODO (* implemented in INTERMEDIATEmachine *)
+   
+--backendrotateRightReg:dopart --
+do 'backendrotateRightReg'->TODO (* implemented in INTERMEDIATEmachine *)
+   
+--backendBeginLabel:dopart --
+do (* not used on ppc *)
+
+--backendFreeLabel:dopart --
+do 'backendFreeLabel'->TODO  (* not used on ppc *)
+
+--backendEndLabel:dopart --
+do (* not used on ppc *)
+
+--backendsaveInnerReturn:dopart --
+do (* OBS! Why do we call SaveReturnImpl?
+    * We are in the same object so only a partial
+    * saveReturn is necessary - as for now the following
+    * MUTS be true: thisO = callO;
+    * is currently violated by INNER
+    * FIXME!
+    *)
+   (callO,thisO)-> MR ->mstate.b.emit; (* HACK - FIXME *)
+   SaveReturnImpl
+   
+---backendExternalMark:doPart---
+   (* Push BetaStackTop: 
+    * Possible external calls during call of entry may destroy BetaStackTop.
+    *
+    * PPC: SP(24) is start of externalPar area (xArg0, see PPC.doc)
+    * Since we do not use this area for other stuff in BETA frames,
+    * we are free to use it for BetaStackTop during calls.
+    * The code below sets:
+    *   sp(24+0) = betaStackTop[0]; SP of last beta object
+    * { obsolete:
+    *   sp(24+4) = betaStackTop[4]; last Beta object calling C 
+    *                             ; before this call-back
+    * }
+    *   
+    *)
+   (* Get address of BetaStackTop[0] *)
+do ('BetaStackTop',adrTmp1) -> PutSetText;
+   (* load BetaStackTop[0] *)
+   (dataTmp1,adrTmp1,    0) -> LWZ ->mstate.b.emit;
+   (* Store in SP(24) *)
+   (dataTmp1, GPR_sp, 24+0) -> STW -> mstate.b.emit;
+   
+---backendExternalReturn:doPart---
+do (# ar,dr: @integer; I: @backendInstruction
+   do (if mstate.stacks.saveData then
+          '\nOBS! backendExternalReturn_A: saveData=true'->putline
+       if);
+      (* pop BetaStackTop;
+       * possible C-calls during call of entry may
+       * have given a new value to BetaStackTop.
+       *
+       * PPC: See comment in ExternalMark:descriptor
+       * above for layout.
+       *)
+      dataTmp1->ar; dataTmp2->ar;
+   
+      (* Get address of BetaStackTop[0] *)
+      ('BetaStackTop',ar) -> PutSetText; 
+      (* Load from SP(24) *)
+      (dr, GPR_sp,  24+0) -> LWZ -> mstate.b.emit;
+      (* Store in BetaStackTop[0] *)
+      (dr, ar,    0) -> STW -> mstate.b.emit;
+      (if mstate.stacks.saveData then
+          '\nOBS! backendExternalReturn_B: saveData=true'->putline
+      if);
+      RestoreRegisters;
+      I[]->ReturnImpl
+   #)
+   
+---backendinitXpar:doPart---
+do 1->Xpar.getNo
+   
+---backendPreGetXpar:doPart---
+do  (* not used on ppc *)
+   
+---backendNoOfPreGetXpar:doPart---
+do  0-> value (* tricky *)
+   
+--- backendgetXlong:doPart---
+do (I.writeReg
+   ,GPR_sp,mstate.stacks.callBackStackOffset
+   + mstate.stacks.linkSize
+   + (xpar.getNo-1)*4
+   ) 
+     -> LWZ 
+     -> mstate.b.emit;
+   (*(GPR3,I.writeReg) -> MR -> mstate.b.emit; (* needed for textpar*) 
+
+   xPar.getNo+1 -> xPar.getNo
+   
+---backendgetXword:doPart---
+do 'backendgetXword'->TODO (* not used *)
+
+---backendgetXbyte:doPart---
+do 'backendgetXbyte'->TODO (* not used *)
+
+---backendtoXres:doPart---
+do (GPR3,I.readReg)-> MR ->mstate.b.emit
+   
+---backendXpar:descriptor---
+(# getNo: @integer #)
+   
+---backendGetRegForXres:doPart---
+do (* not used ?*)
+
+--backendreturnInner:dopart --
+do (* restore return adr ra, from stack 
+    * PopReturn;
+    * DoReturn;
+    *)
+   true -> I.condition (* isLeavePtn *);
+   (* I.imm = RTOFF - we should perhaps use I.RTOFF instead *)
+   I[] -> ReturnImpl
+   
+---backendExternalEntry:doPart---
+do (# ar: @integer
+   do (if mstate.stacks.saveData then
+          '\nOBS! backendExternalEntry: saveData=true'->putline
+      if);
+      I.label.copy -> labelDef; (* do the copy in INTERMEDIATEmachine *)
+      (* We should consider saving floating point arguments. 
+       * However, they are NOT used by AlloSICB.
+       *)
+      (for k: I.noOfEnterPar repeat 
+           (GPR2+k,GPR_sp,20+k*4) -> STW -> mstate.b.emit;
+      for);
+   
+      SaveReturnImpl; 
+      SaveRegisters;
+   
+      (* HML: Fix for callbacks on mac *)
+      7->mstate.FIXME;
+      (GPR3,GPR24) -> MR -> mstate.b.emit; (* TEMP FIX *)
+      (*(GPR3,GPR11) -> MR -> mstate.b.emit; (* GPR11 refers the struc *)
+   
+      DataTmp1->ar;
+      ('BetaStackTop',ar) -> PutSetText;
+      (GPR4,ar,0)-> LWZ -> mstate.b.emit;
+   
+      'AlloSICB'->I.label[]; I[]->jsrTImpl;
+   
+      (thisO,ReturnReg) -> MR -> mstate.b.emit; (* needed for text par *)
+      (callO,ReturnReg) -> MR -> mstate.b.emit; 
+   #)
+   
+--backendEmitTextConst:dopart --
+do 'backendEmitTextConst' ->TODO (* not used *)
+
+--backendgClr:dopart --
+do (I.writeReg,0) -> LI -> mstate.b.emit
+
+--backendpushAdr:dopart --
+do 'backendpushAdr' ->TODO (* should never be called! *)
+
+--backendPush:dopart --
+do i.readReg->PushData
+
+--backendPop:dopart --
+do i.writeReg->PopData
+
+--backendPushThisOrCall:dopart --
+do (if I.bool then 
+       thisO->pushRef 
+   if);
+   (if I.bool2 then 
+       callO->pushRef 
+   if)
+
+--backendpopThisOrCall:dopart --
+do (if I.bool2 then 
+       callO->popRef 
+   if);
+   (if I.bool then 
+       thisO->popRef 
+   if)
+   
+--backendSPtoPrim:doPart---
+do (I.writeReg,I.imm)->SPtoPrimReg
+   
+--backendsetTop:dopart --
+do (if I.imm <> 0 then (GPR_sp,GPR_SP,I.imm) -> ADDI(*U*) -> mstate.b.emit if)
+
+--backendChkCase:dopart --
+   (* inx = caseIndex-min
+    * if inx >unsigned  (max-min) the  goto elseLab
+    * This ALSO works if caseIndex < min.
+    * Similar to ChkIndex below.
+    * Note that min is NOT used here.
+    *)
+do (I.readReg,(I.size-I.readOffSet) (*max-min*)) -> CMPLWI -> mstate.b.emit;
+   (* branch if I.readReg >unsigned (max-min) *)
+   I[] -> gBgtImpl;
+   
+   2 -> I.imm;
+   I[]->logicalShiftLeftImmImpl;
+
+--backendChkIndex:dopart --
+do (# L: @backendLocalLab; log: @integer
+   do (if I.indexCheck then (*(A1[],dReg[])->ChkIndex*)
+          (dataTmp1,I.readReg,12)-> LWZ ->mstate.b.emit; (* dataTmp1 = range *)
+          (dataTmp2,I.inxReg,-1)->ADDI->mstate.b.emit;
+          ClearStackTop; 
+          L.new;
+          (* text index-1 (dataTmp2) <u range (dataTmp1)*)
+          (dataTmp2,dataTmp1) -> CMPLW -> mstate.b.emit;
+          &backendInstruction(# do L.labNo->labNo #) -> gBltImpl;
+          (* branch if dataTmp2 <u dataTmp1=range - missing instruction?*)
+
+          ('.HandleIndexErr',callMark)->mstate.b.mark;
+          0-> BL ->mstate.b.emit;
+          xNOP -> mstate.b.emit;
+          L.def;
+      if);
+
+      (* @@R[i] = R.start + (i-1)*size +16 *)
+      (if I.condition (* isSimple *) then
+          (if I.size 
+           // 1 then 
+           // 2 then
+              (I.inxReg,I.inxReg,1)->SLWI->mstate.b.emit;
+           // 4 then
+              (I.inxReg,I.inxReg,2)->SLWI->mstate.b.emit;
+           // 8 then
+              (I.inxReg,I.inxReg,3)->SLWI->mstate.b.emit;
+          if)
+       else
+          (if (I.size->exact_log2->log) <> -1 then
+              (I.inxReg,I.inxReg,log)->SLWI->mstate.b.emit;
+           else
+              (* mult *)
+              I.size->I.imm;
+              I.inxReg->I.readReg2->I.writeReg;
+              I[]->gMultImmImpl 
+      if)if);
+   #)
+   
+--backendcmpToBool:dopart --
+do (# Lab: @backendLocallab
+   do (I.readReg2,I.readReg)-> CMPW ->mstate.b.emit;
+      (I.writeReg,1) -> LI -> mstate.b.emit;
+      Lab.new;
+      (if I.cond (* IF T1 cc R then goto L *)
+       // 1 (* =  *) then (lab.labNo->mstate.labs.off) ->BEQ ->mstate.b.emit
+       // 2 (* <> *) then (lab.labNo->mstate.labs.off) ->BNE ->mstate.b.emit
+       // 3 (* <  *) then (lab.labNo->mstate.labs.off) ->BLT ->mstate.b.emit
+       // 4 (* <= *) then (lab.labNo->mstate.labs.off) ->BLE ->mstate.b.emit
+       // 5 (* >  *) then (lab.labNo->mstate.labs.off) ->BGT ->mstate.b.emit
+       // 6 (* >= *) then (lab.labNo->mstate.labs.off) ->BGE ->mstate.b.emit
+      if);
+      (I.writeReg,0) -> LI -> mstate.b.emit;
+      Lab.Def
+   #)
+   
+--backendLoadFloat:doPart---
+do (I.writeReg,I.readReg,I.readOffSet) -> LFD ->mstate.b.emit
+   
+--backendLoadFloatInx:doPart---
+do (if I.readOffSet <> 0 then 
+       (I.inxReg,I.inxReg,I.readOffSet)->ADDI->mstate.b.emit 
+   if);
+   (I.writeReg,I.readReg,I.inxReg)-> LFDX ->mstate.b.emit
+   
+--backendStoreFloat:doPart---
+do (I.readReg2,I.readReg,I.readOffSet) -> STFD ->mstate.b.emit
+   
+--backendStoreFloatInx:doPart---
+do (if I.readOffSet <> 0 then 
+       (I.inxReg,I.inxReg,I.readOffSet)->ADDI->mstate.b.emit 
+   if);
+   (I.readReg2,I.readReg,I.inxReg)-> STFDX ->mstate.b.emit
+   
+---backendLoadInt2Float:dopart---
+do (# DT: @integer
+   do dataTmp -> DT;
+      (DT,I.readReg,I.readOffSet)-> LWZ ->mstate.b.emit;
+
+      DT->I.readReg;
+      I[] -> ConvertInt2Float
+   #)
+   (*(I.writeReg,I.readReg,I.readOffSet)-> LFD ->mstate.b.emit;*)
+   
+---backendLoadInt2FloatInx:dopart---
+do (# DT: @integer
+   do dataTmp -> DT;
+      (if I.readOffSet <> 0 then 
+          (I.inxReg,I.inxReg,I.readOffSet)->ADDI->mstate.b.emit 
+      if);
+      (DT,I.readReg,I.inxReg)-> LWZX ->mstate.b.emit;
+
+     I[] -> ConvertInt2Float
+    #)
+   
+   (*(if I.readOffSet <> 0 then 
+       (I.inxReg,I.inxReg,I.readOffSet)->ADDI->mstate.b.emit 
+   if);
+   (I.writeReg,I.readReg,I.inxReg)-> LWZX ->mstate.b.emit;*)
+   
+---backendStoreFloat2int:dopart---
+do (I.writeReg,I.readReg2) -> FCTIWZ -> mstate.b.emit;
+   (I.writeReg,dataTmp1) -> FregToGreg;
+   (dataTmp1,I.readReg,I.readOffSet) -> STW -> mstate.b.emit;
+
+---backendStoreFloat2intInx:dopart---
+do (I.writeReg,I.readReg2) -> FCTIWZ -> mstate.b.emit;
+   (I.writeReg,dataTmp1) -> FregToGreg;
+   (if I.readOffSet <> 0 then 
+       (I.inxReg,I.inxReg,I.readOffSet)->ADDI->mstate.b.emit 
+   if);
+   (dataTmp1,I.readReg,I.inxReg) -> STWX -> mstate.b.emit;
+   
+--backendfloatConst:dopart --
+do (# dReg: @integer; S : ^text
+   do 8->mstate.d.align;
+      mstate.defDataLab
+      (# 
+      do @@I.floatVal  ->TOS'%AdrGetLong'->mstate.d.emit;
+         @@I.floatVal+4->TOS'%AdrGetLong'->mstate.d.emit;
+      #)
+        ->S[];
+      dataTmp -> dReg;
+      (S[],dReg) -> PutSetText;
+      (I.writeReg, dReg,0) -> LFD -> mstate.b.emit   
+   #)
+
+
+--backendint2float:dopart --
+   (* Note: in INTERMEDIATEmachine, floatRegOp::int2float
+    * uses F.loadInt (loadInt2Float), which loads the integer 
+    * to load the integer to a floating point register 
+    * - on some platforms, loadInt2Float cannot convert
+    * the finteger to a float and this has to be done by
+    * int2Float (this doPart). For PPC, loadInt2Float
+    * does the conversion. Here we then have to copy
+    * readReg to floatReg. This should be improved!
+    *)
+do (I.readReg,I.writeReg) -> Fmov
+
+--backendintReg2float:dopart --
+do I[] -> ConvertInt2Float
+
+--backendfloat2int:dopart --
+do (I.writeReg2,I.readReg) -> FCTIWZ -> mstate.b.emit;
+   (I.writeReg2,I.writeReg) -> FregToGreg
+
+--backendcmpToBoolFloat:dopart --
+do (# Lab: @backendLocalLab
+   do clearStackTop;
+      (*(op2[],op1[])->cmpFloat; (* notice operand order *)
+      (I.writeReg,1)->PutSet;
+      Lab.new;
+      (* Note that integer compare branch instructions are used!
+       * Are these the right ones. Cannot find any float cmp instructions;
+       * perhaps  the fcmpu sets some other conditions codes in CR?
+       *)
+      (if I.cond (* IF T1 cc R then goto L *)
+       // 1 (* =  *) then (Lab.labNo->mstate.labs.off) ->BEQ ->mstate.b.emit
+       // 2 (* <> *) then (Lab.labNo->mstate.labs.off) ->BNE ->mstate.b.emit
+       // 3 (* <  *) then (Lab.labNo->mstate.labs.off) ->BLT ->mstate.b.emit
+       // 4 (* <= *) then (Lab.labNo->mstate.labs.off) ->BLE ->mstate.b.emit
+       // 5 (* >  *) then (Lab.labNo->mstate.labs.off) ->BGT ->mstate.b.emit
+       // 6 (* >= *) then (Lab.labNo->mstate.labs.off) ->BGE ->mstate.b.emit
+      if);
+      
+      (I.writeReg,0) -> LI -> mstate.b.emit;
+      Lab.Def
+   #)
+
+
+--backendpopFStack:dopart --
+do 
+
+--backendcmpFloat:dopart --
+do (* this is a floating point comparea UNORDERED;
+    * there is also an ORDERED version;
+    * which one should we use?
+    *)
+   (I.readReg,I.readReg2)-> FCMPU ->mstate.b.emit;
+   xNOP->mstate.b.emit;(* ?? *)
+
+--backendaddFloat:dopart --
+do (I.writeReg,I.readReg,I.readReg2) -> FADD ->mstate.b.emit
+
+--backendsubFloat:dopart --
+   (* I.writeReg <- I.readReg - I.readReg2 *)
+do (I.writeReg,I.readReg,I.readReg2) -> FSUB ->mstate.b.emit
+
+--backendmulFloat:dopart --
+do (I.writeReg,I.readReg,I.readReg2) -> FMUL ->mstate.b.emit
+
+--backenddivFloat:dopart --
+do (I.writeReg,I.readReg,I.readReg2) -> FDIV ->mstate.b.emit
+
+--backendnegFloat:dopart --
+do (I.writeReg,I.readReg,I.readReg) -> FNEG ->mstate.b.emit (*why format 3?*)
+
+--backendLoadSpilledDataRegImpl:dopart --
+do 'backendLoadSpilledDataRegImpl'->TODO
+   
+--backendSpillDataRegImpl:dopart--
+do 'backendSpillDataRegImpl'->TODO
+   
+--backendlock:dopart --
+do 'backendlock'->TODO (* no used *)
+
+--backendallRegInPrimReg2I:dopart --
+do 'backendallRegInPrimReg2I'->TODO (* see comment in INTERNEDIATEmachine*)
+
+--backendGetOriginReg:dopart --
+do (* empty *)
+
+--backendFreeOriginReg:dopart --
+do (* empty *)
+
+--backendDataRegMax:dopart --
+do 'backendDataRegMax'->TODO (* not used *)
+
+--backendNoOfFreeDataReg:dopart --
+do 'backendNoOfFreeDataReg'->TODO (* not used *)
+
+--backendDumpReg:dopart --
+do' backendDumpReg'->TODO (* not used *)
+
+--backendPushReg:dopart --
+do (# dataCount: @integer
+   do liveAdr[]->scanBitVektor32
+      (#
+      do (if (current <> thisO) and (current <> callO) then;
+             (*'pushRef: '-> puttext; current->putint; newline;*)
+             current -> pushRef
+         if)
+      #);
+      liveData[]->scanBitVektor32
+      (#
+      do (* 'pushData: '-> puttext; current->putint; newline;*)
+         dataCount+1->dataCount;
+         current->saveData;      
+      #);
+      (* required: mstate.floatReg[1:32]=false *)
+      liveFloats[]->scanBitVektor32
+      (#
+      do 1->mstate.floatReg[current+1];
+         dataCount+2->dataCount;
+         current-> saveFloat;
+         (*'pushFloat: '-> puttext; current->putint; newline;*)
+      #);
+      (* NO dataMark is pushed since separate stacks *)
+   #)
+
+--backendPopReg:dopart --
+do (# Areg,Dreg: [32]@boolean;
+      hasAdrRegsOnStack,hasDataRegsOnStack,hasFloatRegsOnStack: @boolean
+   do FloatRegOnStack:
+        (for i: mstate.floatReg.range repeat
+             (if mstate.floatReg[32-i+1] > 0 then
+                 true -> hasFloatRegsOnStack;
+                 leave FloatRegOnStack
+        if)for);
+      liveData[]->scanBitvektor32
+      (# 
+      do true -> Dreg[current+1];
+         true -> hasDataRegsOnStack
+      #);
+      
+      liveAdr[]->scanBitvektor32
+      (# 
+      do (if (current <> thisO) and (current <> callO) then
+             true -> Areg[current+1];
+             true -> hasAdrRegsOnStack
+      if)#);
+      (* PPC has NO datamark since separate stacks *)
+      (if hasFloatRegsOnStack then 
+          (for i: mstate.floatReg.range repeat
+               (if mstate.floatReg[32-i+1] > 0 then
+                   (*'popFloat: '-> puttext; 32-i->putint; newline;*)
+                   32-i -> restoreFloat;
+                   0->mstate.floatReg[32-i+1];
+      if)for)if);
+      (if hasDataRegsOnStack then
+          (for i: 32 repeat
+               (if dReg[32-i+1] then
+                   (*'popData: '-> puttext; 32-i->putint; newline;*)
+                   32-i->restoreData
+      if)for)if);
+      (if hasAdrRegsOnStack then
+          (for i: 32 repeat
+               (if aReg[32-i+1] then 
+                  (* 'popRef: '-> puttext; 32-i->putint; newline;*)
+                   32-i -> popRef
+      if)for)if)
+   #)
+
+
+--backendPushDataReg:dopart --
+do 'backendPushDataReg'->TODO (* not used *)
+
+--backendPopDataReg:dopart --
+do 'backendPopDataReg'->TODO (* not used *)
+
+--backendPushFloatReg:dopart --
+do 'backendPushFloatReg'->TODO (* not used *)
+
+--backendPopFloatReg:dopart --
+do 'backendPopFloatReg'->TODO (* not used *)
+
+--backendtstNone:dopart --
+do clearStackTop;
+   (if common.switch[77] then
+       (* force read of R to GPR0(?) to check for NONE or lazy ref;
+        * used for new persistence implementation.
+        *)
+       (* datpete: 25/6/99: Not tested. Is GPR0 OK to use here? 
+        * Or is dataTmp1/2 better?
+        * Registers are not described in DOC/SGI.html.
+        *)
+       (* (GPR0,R.reg1,0) -> LWZ -> mstate.b.emit *)
+       (I.writeReg,0) -> TWLEI -> mstate.b.emit
+    else       
+       (I.writeReg,0) -> TWLEI -> mstate.b.emit
+   if)
+
+--backendtrap:dopart --
+do 'backendtrap'->TODO (* not used *)
+
+--backendreturn:dopart --
+do (callO,thisO) -> MR ->mstate.b.emit;
+   PopThis;
+   I.condition(*isLeavePtn*)->DoReturn
+   
+--backendsaveReturn:dopart --
+do SaveStackFrame;
+   thisO -> PushRef;
+   (thisO,callO)-> MR ->mstate.b.emit;
+   ClearAdrTmpRegs;
+
+--backendrts:dopart --
+do (if not common.switch[214] then XNOP->mstate.b.emit if); 
+   BLR -> mstate.b.emit;
+   XNOP->mstate.b.emit; 
+   mstate.stacks.endFrame
+
+--backendSaveReg:dopart --
+(* Save registers a0 and a1;
+ * saveReg/restoreReg are called from evlib:pushThisAndCall and
+ * when calling externals.
+ * These two situations should be distinguished
+ * OBS! the two booleans pushCa and pushTh should be tested!
+ * SUN4B should also be fixed for this.
+ * OBS!OBS! SaveReg/restoreReg and PushThisOrCall/PopThisOrCall
+ * should be unified - eliminate  SaveReg/restoreReg
+ *)
+do callO -> PushRef;
+   thisO -> PushRef
+
+--backendRestoreReg:dopart --
+do thisO -> PopRef;
+   callO -> PopRef
+
+--backendGetPrimRes:dopart --
+do (if not mstate.alloi and mState.restoreCallReg and mstate.initPrimCall
+       then 
+       (* this is a funny situation; happens when allocating
+        * virtual objects in declarations X: @V;
+        * getPrimRes is called before CallAlloI;
+        * in fact AlloI will be called after getPrimRes
+        * but (see jsrtable) we should NOT restore callO.
+        * And even worse for local virtuals X: @V there is no
+        * jsrTable; we must thus NOT restore if NO primCall
+        * CallAlloPrim has been made:-(
+        * mstate.initPrimCall = false if initPrimCall with no 
+        * callprim/CallAlloPrim
+        *)
+       (callO,adrTmp1) -> MR -> mstate.b.emit;
+   if);
+   (if I.imm (*res*)
+    // 0 (* o: ignore result*) then
+       mstate.xFreeOreg 
+    // 1 (* use result *)then
+       (I.writeReg,returnReg) -> MR -> mstate.b.emit;
+       mState.xFreeOreg
+    // 2 (* result is X-parameter *) then mState.xMovePrimToX
+    // 3 (* result is used immediately *) then
+       (* returnReg should be bound to I.writeReg*)
+       (I.writeReg,returnReg) -> MR -> mstate.b.emit;
+       mState.xFreeOreg
+   if);
+   (if mstate.alloI then
+       (* see callAlloPrim *)
+       (callO,adrTmp1) -> MR -> mstate.b.emit;
+       false -> mstate.AlloI
+   if)
+
+--backenddeclareLong: doPart--
+do N->mstate.d.emit;
+   
+--backenddeclareWord: doPart--
+do N->mstate.d.emitHalf
+   
+--backenddclWord: doPart--
+do N->mstate.d.emitHalf
+   
+--backendemitByte: doPart--
+do B->mstate.d.emitByte
+
+--backendDeclareAddress:dopart --
+do (# lab: ^text;  LL: @backendLocallab
+   do I.labNo->LL.labNo;
+      I.type -> LL.type;
+      I.condition -> LL.betaLabel;
+      
+      (if LL.type
+       // LL.caseEntry then  
+          (*'case entry: '->puttext; LL.labNo -> putint; newline;*)
+          LL.labNo -> mstate.labs.off;
+          0 -> mstate.b.emit;
+       // LL.caseEnd then    
+          (*'case end: '->puttext; LL.labNo -> putint; newline;*)
+          LL.labNo -> mstate.labs.off -> mstate.b.emit
+       // LL.caseStart then (* should NOT happen *)
+       else
+          LL.labNo->LocalLabtext->lab[];
+          (if true then
+              (if LL.betaLabel and mstate.inCode then 
+                  ('.'->lab.prepend,wordMark)->mstate.b.mark
+               else (* localLab in .data; e.g. virtualLabel; so why do we set 
+                     * betaLabel to true in newVirtLab?
+                     *)
+                  (if LL.betaLabel then
+                      ('.'->Lab.prepend,wordMark)->mstate.d.mark
+                   else
+                      (Lab[],wordMark)->mstate.d.mark;
+                  if)
+              if);
+              0->mstate.d.emit 
+           else
+              '.'->Lab.prepend; 
+              (* '\n*** backendDeclareAddress:'->puttext;
+               lab[]->putline;*)
+              (lab[],wordMark)->mstate.b.mark;
+              0->mstate.b.emit
+          if)
+      if)
+   #)
+   
+--declareDataSegmentLabelAddressImpl:dopart--
+do (# lab: ^text
+   do I.labNo->LocalLabtext->lab[];
+      (*'.'->Lab.prepend;*)
+      (* '\n*** declareDataSegmentLabelAddressImpl:'->puttext;
+       lab[]->putline;*)
+      (if I.condition (* betaLabel *) then
+          (* e.g. a virtual label (L17) in a protoyytype dispatch table *)
+          ('.'->lab.prepend,wordMark)->mstate.d.mark  
+       else
+          (lab[],wordMark)->mstate.d.mark;
+      if);
+      0->mstate.d.emit
+   #)   
+   
+--declareDataSegmentTextAddressImpl:dopart--
+do (# E: ^EntryPointInfo
+   do I.label[]->entrypoints.find->E[];
+     (* '\n** declareDataSegmentTextAddressImpl:'->puttext;
+      I.label[]->putline; *)
+      (if E.data or ((1->I.label.InxGet)= 'T') then
+          (* how does this work for callback entry points?
+           * See the commwent at backendexport
+           *)
+          (I.label.copy,wordMark)->mstate.d.mark;
+       else
+          (*'.'->(I.label.copy).prepend->putline;*)
+          ('.'->(I.label.copy).prepend,wordMark)->mstate.d.mark;
+      if);
+      0->mstate.d.emit
+   #)
+   
+--backendChkConstIndex:dopart --
+do 'backendChkConstIndex'->TODO (* not used *)
+
+--backendjsrTable:dopart --
+do (# S: @ text; 
+   do (GPR12,I.readReg)-> MR ->mstate.b.emit; (* here we generate an extra MR
+                                               * compared to the OLD compiler; 
+                                               * we should make sure that IM 
+                                               * loads to GPR12
+                                               *)
+      (if I.condition (* newVirt *) then 
+          false -> mstate.restoreCallReg; (* hack! 
+                                           * Note: see gen1body:newVirt for
+                                           * the case where a jmp is used;
+                                           * must also be fixed;
+                                           * this imp may no longer be needed
+                                           * since we now use GPR0 instead of
+                                           * callReg
+                                           *)
+          ClearStackTop;
+          (if common.targetMachineId = common.ppcmac then
+              '._ptrgl' ->S;
+              (* I.readReg*) GPR12 -> S.putInt;
+              (S[],callMark) -> mstate.b.mark; 
+              0-> BL -> mstate.b.emit;		   
+		   
+              (* Michael Lassen 17 jan. 98.
+               * The following nop will NOT be
+               * patched by the linker, therefore
+               * the RTOC restore should be
+               * generated explicitly
+               *)
+			
+              (* XNOP -> mstate.b.emit *) (* for linker patch *)
+		   
+              (* Explicit restore: *)
+		   
+              (RTOC,GPR_sp,20) -> LWZ -> mstate.b.emit;    
+		   
+              (* END Michael Lassen *)
+		   
+           else      
+              I.readReg -> MTCTR  -> mstate.b.emit;           
+              BLR -> mstate.b.emit;
+          if)
+       else I[]->JsrRegImpl
+   if)#)
+   
+--backendjmpTlong:dopart --
+do ('.'->I.label.prepend,callMark) -> mstate.b.mark;
+   0 -> B ->mstate.b.emit;
+   
+--backendjmpT:dopart --
+do I[] -> jmpTlongImpl
+
+--backendjsrT:dopart --
+do (# S: @text
+   do '.'->S;
+      I.label[] -> S.append;
+      ClearStackTop;
+      (S[],callMark)->mstate.b.mark; 
+      0-> BL ->mstate.b.emit;
+      xNOP -> mstate.b.emit
+   #)
+
+--backendjsrReg:dopart --
+do doCall2
+   (# S: @text
+   do (if common.targetMachineId = common.ppcmac then
+          (GPR12,I.readReg)-> MR -> mstate.b.emit;
+          '._ptrgl'->S;
+          12 -> S.putInt;
+          (S[],callMark) -> mstate.b.mark; 
+          0-> BL -> mstate.b.emit;
+       else
+          I.readReg -> MTCTR -> mstate.b.emit; 
+          BLR -> mstate.b.emit;
+      if);	  
+      (* Michael Lassen 17 jan. 98.
+       * The following nop will NOT be
+       * patched by the linker, therefore
+       * the RTOC restore should be
+       * generated explicitly
+       *)
+      
+      (* xNOP -> mstate.b.emit; *) (* for linker to patch RTOC restore *)
+      
+      (* Explicit restore: *)
+      
+      (RTOC,GPR_sp,20) -> LWZ -> mstate.b.emit;    
+      
+      (* END Michael Lassen *)
+   #)
+
+--backendjmpReg:dopart --
+do (if common.targetMachineId // common.ppcmac // common.ppcos2 then
+       (if I.condition (*isCase*) then 
+              (GPR0,I.readReg) -> MR -> mstate.b.emit;
+              0 -> mstate.caseStart;
+           else
+              (GPR0,I.readReg,0) -> LWZ -> mstate.b.emit;
+          if);
+          GPR0 -> MTCTR -> mstate.b.emit; 
+          BCTR -> mstate.b.emit;
+    else
+       I.readReg -> MTCTR -> mstate.b.emit; (* is this the way to do it ?*)
+       BCTR -> mstate.b.emit; (* ?? *)
+   if);
+
+
+--backendgJsr:dopart --
+do doCall2(# do I.label[]->Callproc #)
+   
+--backendjsrTableTest:dopart --
+do 'backendjsrTableTest'->TODO (* not used *)
+
+--backendJumpIfTrue:dopart --
+do 'backendJumpIfTrue'->TODO (* not used *)
+
+--backendgBeq:dopart --
+do (I.labNo->mstate.labs.off)  -> BEQ ->mstate.b.emit
+
+--backendgBne:dopart --
+do (I.labNo->mstate.labs.off)  -> BNE ->mstate.b.emit
+
+--backendgBge:dopart --
+do (I.labNo->mstate.labs.off)  -> BGE ->mstate.b.emit
+
+--backendgBae:dopart --
+do 'backendgBae'->TODO
+
+--backendgBle:dopart --
+do (I.labNo->mstate.labs.off)  -> BLE ->mstate.b.emit
+
+--backendgBbe:dopart --
+do 'backendgBbe'->TODO
+
+--backendgBgt:dopart --
+do (I.labNo->mstate.labs.off)  -> BGT ->mstate.b.emit
+
+--backendgBab:dopart --
+do 'backendgBab'->TODO
+
+--backendgBlt:dopart --
+do(I.labNo->mstate.labs.off)  -> BLT->mstate.b.emit
+
+--backendgBbl:dopart --
+do 'backendgBbl'->TODO
+
+--backendcmpAndJmp:dopart --
+do ClearStackTop;
+   (I.readReg,I.readReg2)-> CMPW ->mstate.b.emit;
+   (if I.cond (* IF T1 cc R then goto L *)
+    // 1 (* =  *) then I[]->gBeqImpl
+    // 2 (* <> *) then I[]->gBneImpl
+    // 3 (* <  *) then I[]->gBltImpl
+    // 4 (* <= *) then I[]->gBleImpl
+    // 5 (* >  *) then I[]->gBgtImpl
+    // 6 (* >= *) then I[]->gBgeImpl
+   if)
+
+--backendcmpAndJmpImm:dopart --
+do ClearStackTop;
+   (I.readReg,I.imm)-> CMPWI ->mstate.b.emit;
+   (if I.cond (* IF T1 cc R then goto L *)
+    // 1 (* =  *) then I[]->gBeqImpl
+    // 2 (* <> *) then I[]->gBneImpl
+    // 3 (* <  *) then I[]->gBltImpl
+    // 4 (* <= *) then I[]->gBleImpl
+    // 5 (* >  *) then I[]->gBgtImpl
+    // 6 (* >= *) then I[]->gBgeImpl
+   if)
+
+--backendcmpBoolAndJmp:dopart --
+do ClearStackTop;
+   (I.readReg,0)-> CMPWI ->mstate.b.emit;
+   (if I.cond (* IF T1 cc R then goto L *)
+    // 1 (* =  *) then I[]->gBeqImpl
+    // 2 (* <> *) then I[]->gBneImpl
+    // 3 (* <  *) then I[]->gBltImpl
+    // 4 (* <= *) then I[]->gBleImpl
+    // 5 (* >  *) then I[]->gBgtImpl
+    // 6 (* >= *) then I[]->gBgeImpl
+   if)
+
+--backendcmpAndJmpFloat:dopart --
+do (* clearStackTop;
+    * (op2[],op1[])->cmpFloat; - called from INTERMEDIATE machine 
+    * as for cmpToBoolFloat, the conditional jumps may not
+    * be the right ones 
+    *)
+   clearStackTop; (* we assume that this does not affect condition codes *)
+   (if I.cond (* IF T1 cc R then goto L *)
+    // 1 (* =  *) then I[]->gBeqImpl
+    // 2 (* <> *) then I[]->gBneImpl
+    // 3 (* <  *) then I[]->gBltImpl
+    // 4 (* <= *) then I[]->gBleImpl
+    // 5 (* >  *) then I[]->gBgtImpl
+    // 6 (* >= *) then I[]->gBgeImpl
+   if) 
+
+--backendfBeq:dopart --
+do 'backendfBeq'->TODO (* not used on PPC *)
+
+--backendfBge:dopart --
+do 'backendfBge'->TODO (* not used on PPC *)
+   
+--backendfBle:dopart --
+do 'backendfBle'->TODO (* not used on PPC *)
+
+--backendfBne:dopart --
+do 'backendfBne'->TODO (* not used on PPC *)
+
+--backendfBgt:dopart --
+do 'backendfBgt'->TODO (* not used on PPC *)
+
+--backendfBlt:dopart --
+do 'backendfBlt'->TODO (* not used on PPC *)
+
+--backendgJmp:dopart --
+do (# lop: @backendLocalLab; csect: ^text; LabLIP: @integer;
+      LL: ^backendLocallab
+   do (if I[] = none then
+          'backendgJmp: I is none'->putline;
+      if);
+      I.labNo->lop;
+      I.type->lop.type;
+      (* clean up here *)
+      I.lab[]-> LL[];
+      (if LL[] <> none then 
+          (*'backendgJmp: I.lab is NOT none L'->puttext; 
+          I.labNo->putint; ' '->put; LL.labno->putint;  ' ' -> put;*)
+          LL.type->lop.type; 
+       else
+          'backendgJmp: I.lab is none L'->puttext;
+           I.labNo->putint; ' '->put; lop.labno->putint;  ' ' -> put;
+          lop.descLocal->lop.type
+      if);
+      (*LOP.type->putint; newline;*)
+      ClearStackTop;
+      (if lop.type
+       // lop.descLocal then
+          (lop.labNo->mstate.labs.off) -> B -> mstate.b.emit
+       // lop.codeLocal then
+          LL.labNo->mstate.labs.codeLocalOff->(csect[],LabLIP);
+          (* LabLIP is start within this code fragment of the Csect 
+           * containing the label; cannot be treated as descLocal
+           * since the label is in another csect than the jump;
+           * the Mac linker/loader reorganises csects; i.e. they
+           * don't come in the same order as in the code segment.
+           *)
+          (# aR: @ integer
+          do GPR12 -> aR;
+             (csect[],aR) -> PutSetText2;
+             (GPR12,GPR12,0) -> LWZ -> mstate.b.emit;
+             (* note we use GPR12 and NOT GPR0, since 
+              * addi g0,g0,v is equivalent to
+              * li g0,v, i.e. it is NOT possible to addi to gpr0!
+              *)
+             (GPR12,GPR12,LabLIP) -> ADDI -> mstate.b.emit;
+             GPR12  -> MTCTR -> mstate.b.emit;
+             BCTR -> mstate.b.emit;
+          #)
+          (* the following does NOT work since the linker will
+           * set the addres to the glue code+LabLIP:-(
+           * (csect[],jmpMark)->mstate.b.mark;
+           * LabLIP -> B -> mstate.b.emit;
+           *)
+       // lop.interFragment then (* does this happen?*)
+          (# aR: @ integer
+          do GPR12 -> aR;
+             
+             (* 'gjmp: interfragment L'->puttext;
+             LL.labNo->putint; ' '->put;
+             '.'->(LL.asText).prepend -> putline;*)
+             
+             ('.'->(LL.asText).prepend,aR) -> PutSetText2;
+             (GPR12,GPR12,0) -> LWZ -> mstate.b.emit;
+             GPR12  -> MTCTR -> mstate.b.emit;
+             BCTR -> mstate.b.emit;
+          #)
+       else
+          cError(#do 'gJmp: unknown LocalLab type: '-> T; lop.type->I #)
+      if)
+   #)
+
+--backendCallPrim:dopart --
+do (# aR: @integer;
+      isAtt,isSusp,isExO: @boolean;
+      compLab: ^text;
+      patchAdr: @integer;
+      
+      max: @integer;
+      T: ^text
+   do I.label[]-> T[];
+      (if true
+       // 'Att'->T.equal then
+          (* GPR3: this
+           * GPR4: comp   (GPR5=callO)
+           * GPR5: return adr. after Attach
+           * GPR6: SP
+           *)
+          (GPR3,thisO) -> MR -> mstate.b.emit;
+          5->aR;
+          mstate.interlabs.newCompLab -> compLab[];
+          (compLab[],aR) -> PutSetText2;
+          (* DON't work - we must transfer a RTOC entry 
+           * (mstate.thisCsect.copy,aR[]) -> PutSetText2;
+           * mstate.b.LIP div 4 + 1 -> patchAdr;
+           * (aR.reg1,aR.reg1,0) -> ADDI -> mstate.b.emit; 
+           *)
+          true->isAtt;
+          (GPR6,GPR_sp) -> MR -> mstate.b.emit;
+          (* the following is generated to ensure that dyn of attached object
+           * will refer to the component and not to the calling object.
+           *)
+          (thisO,callO) -> MR -> mstate.b.emit;
+       // 'Susp'->T.equal then
+          (* GPR3: this
+           * GPR4: oldSP (not used)
+           * GPR5: return adr after suspend
+           * GPR6: SP
+           *) 
+          mstate.interlabs.newCompLab -> compLab[];
+          5->aR;
+          (compLab[],aR) -> PutSetText2;
+          (GPR6,GPR_sp) -> MR -> mstate.b.emit;
+          true->isSusp
+       // 'ExO'->T.equal then
+          (* R3: jumpAdr
+           * R4: destObj
+           * R5: label after ExP; should just be the PC around ExO
+           * R6: thisObject
+           * R7: SP
+           *)
+          (* the next 2 instructsion are for getting the PC *)
+          4 -> BL -> mstate.b.emit;
+          GPR5 -> MFLR -> mstate.b.emit;
+          (GPR6,thisO) -> MR -> mstate.b.emit;
+          (GPR7,GPR_sp) -> MR -> mstate.b.emit;  
+          (adrTmp1,GPR3) -> MR -> mstate.b.emit;  (* adrTmp1 <- GPR3 *)
+          (thisO,GPR4) -> MR -> mstate.b.emit;    (* thisO <- destObj *)
+          true->isExO;
+      if);
+      pushRegImpl; (* -> max;*)
+      I[]->jsrTImpl;
+      (*max -> *) popRegImpl;
+      (if isAtt or isSusp then  
+          (compLab[],isSusp) -> mstate.interLabs.defCompLab;
+          (GPR_sp,GPR3) -> MR -> mstate.b.emit;
+          true->mstate.initPrimCall;
+          (if mstate.popThis 
+           // 1 then thisO -> popRef
+           // 2 then mstate.stacks.popRefTop
+          if); 
+          (thisO,callO ) -> MR -> mstate.b.emit;
+       else 
+          (if isExO then
+              (GPR_sp,ReturnReg) -> MR -> mstate.b.emit; (* set SP *)
+              I[]->gJmpImpl
+          if);
+          true->mstate.initPrimCall;
+          (if mstate.popThis 
+           // 1 then thisO -> popRef
+           // 2 then mstate.stacks.popRefTop
+          if); 
+      if);
+      0 -> mstate.popThis;
+   #)
+   
+--backendCallAlloPrim:dopart --
+do (# S: @text
+   do I.proto[]->mstate.proto[]; 
+
+      (3,1) ->  SPtoPrimReg;
+
+      ClearStackTop;  
+      '.' -> S; I.label[] -> S.append;
+      (S[],callMark)->mstate.b.mark; 
+      0-> BL ->mstate.b.emit;
+      xNOP -> mstate.b.emit;
+
+      none->mstate.proto[];
+      (if (mstate.Xlevel > 1) then 
+          (* external call in progress *)
+          (adrTmp1,returnReg) -> MR -> mstate.b.emit; 
+          true->mstate.alloI;
+       else
+          (callO,returnReg) -> MR -> mstate.b.emit;
+      if);
+      (if mstate.popThis 
+       // 1 then thisO -> popRef
+       // 2 then mstate.stacks.popRefTop
+      if); 
+      0 -> mstate.popThis;
+      true->mstate.initPrimCall
+   #)
+
+--backendinitPrimCall:dopart --
+do I.imm(*noOfPar*) -> mState.xInitOreg
+
+--backendPushClong:dopart --
+do I[]->pushCpar
+   
+--backendPushClongImm:dopart --
+do (failureTrace,'backendpuchclongimm NOT supported on ppc')->stop 
+
+--backendPushCdouble:dopart --
+do (# FR,oReg: @integer
+   do mstate.getFparReg -> (FR,oReg);
+   
+      (* load A to FR *)
+      (FR,I.readReg,I.readOffSet) -> LFD -> mstate.b.emit; 
+
+      (if oReg <= (GPR3 + MaxNoOfPrimReg -1) then
+          (* load A to the oReg pair ??? *)
+          oReg -> mstate.f2x
+       else
+          (* move A to stack *)
+          (*oReg[] -> sp[];
+           (A[],sp[]) -> cpMem;*)
+          'backendPushCdouble: Missing push on stack!'->TODO
+   if)#)
+   
+--backendPushCfloat:dopart --
+do (# FR,oReg: @integer; 
+   do mstate.getFparReg -> (FR,oReg);
+
+   (FR,I.readReg) -> FMR  -> mstate.b.emit; (* move *)
+   
+   (if oReg <= (GPR3 + MaxNoOfPrimReg - 1 ) then
+       (* move F to oReg pair *)
+       (if oReg  <= 4 then
+           oReg -> mstate.f2x
+        else 
+           (I.readReg,oReg+1) 
+             -> FregToGreg
+           (#
+           do (* load the 2. half *)
+              (oReg,op,0) -> LWZ -> mstate.b.emit
+           #)
+       if)
+    else
+       (* store I.readReg on stack *)
+       (I.readReg,GPR_sp,mstate.stacks.linkSize+oReg*4) -> STFD -> mstate.b.emit
+   if)
+#)
+
+   
+--backendInitExternalCall:dopart --
+do (* I.size = noOfPar *)
+   (if (I.size mod 2) = 1 then I.size + 1 -> I.size if);
+   (* we 8-byte align if there are float arguments *)
+   I.size->mState.xInitOreg;
+   
+--backendCallC:dopart --
+do (* NOTE: floatRegs are allocated as fp14, ..., fp29; see comment 
+    * at floatReg: [..] above
+    * (if exitType=7 ( * double * ) then
+    *  (# fp,fp1: @floatRegOp;
+    * do fp.alloc;
+    *    (if fp.rn = 1 then 
+    *      else ( * %f1 is busy - save it until after the call * )
+    *          floatTmp->mstate.saveF1[];
+    *          1 -> fp1.rN;
+    *          (fp1[],mstate.saveF1[])->fMov;
+    *      if);
+    *      fp.deAlloc
+    *   #);
+    * if);
+    *)
+   (if mstate.a1InTmp then (* hack *)
+       (callO,GPR18) -> MR -> mstate.b.emit; (* HACK *)
+       false->mstate.a1InTmp
+   if);
+   PushRegImpl;(* -> max;*)
+   (if callRegBusy then callO -> PushRef if);
+   thisO -> PushRef;
+   mstate.delayedF2X;
+   I[]->jsrTImpl;
+   thisO -> PopRef;
+   (if callRegBusy then callO -> PopRef if);
+   (*max -> *) PopRegImpl;
+   
+---backendNoXres:doPart---
+do getExternalResult (* clean-up *)
+
+---backendgetSimpleXres:doPart---
+do getExternalResult
+   (#
+   do I[]->getSimpleRes
+   #)
+      
+---backendgetTextXres:doPart---
+do getExternalResult
+   (#
+   do I[]->getSimpleRes;
+      'backendgetTextXres:missing CopyCT'->TODO
+   #)
+   
+---realXresIsDouble:doPart---
+do false->value
+   
+---backendgetDoubleXres:doPart---
+do getExternalResult(#do I[]->getDoubleRes #)
+   
+---backendgetFloatXres:doPart---
+do getExternalResult
+   (#
+   do (FPR1,I.writeReg) -> Fmov
+   #)
+   
+---backendgetDataRefXres:doPart---
+do getExternalResult
+   (#
+   do I[]->getSimpleRes
+   #) 
+   
+---backendgetDataPartXres:doPart---
+do 'backendgetDataPartXres'->TODO;
+   getExternalResult
+   (#
+   do I[]->getSimpleRes
+   #)
+   
+---backendgetSaveHeapTop:doPart---
+do (# T: @text;  dr1,dr2: @integer
+   do dataTmp -> dr1; dataTmp -> dr2;
+      ('BetaStackTop',dr1) -> PutSetText;
+      mstate.stacks.popFrame;
+      (dr2,GPR_sp,0) -> ADDI(*U*) -> mstate.b.emit;
+      (dr2,dr1,0)-> STW -> mstate.b.emit;
+   #)
+   
+---backendXparForward:doPart--
+do true->value
+
+--backendInlineAlloiNGNP:dopart --
+do 'backendInlineAlloiNGNP'->TODO (* not used *)
+
+--backenddeAllocIOA:dopart --
+do 'backenddeAllocIOA'->TODO (* not used *)
+
+--backendStackAlloPrim:dopart --
+do 'backendStackAlloPrim'->TODO (* not used *)
+  
+--backendasciiText:doPart--
+do T.scanAll
+   (#
+   do (if ch = 10 then 
+          (* to ease cross compilation *)
+          13 -> mstate.d.emitByte
+       else
+          ch->mstate.d.emitByte 
+   if)#);
+   0->mstate.d.emitByte;
+   4->mstate.d.align
+   
+---backendInitMachine:descriptor---
+(#
+do name[] -> BC.name;
+   (if trace_back then
+       '>>>> initMachine: ' -> puttext; name[] -> putline
+   if);
+   (*openDbgInf;*)
+   mstate.Init; 
+   500->newlab.lab;
+#)
+
+--backendClose:doPart--
+do (* This is slot EndDataSeg which used to be in CODEmachine *)
+   'BETA_data3'->LabelDef;
+   (***** end EndDataSeg *)
+
+   (* Note, BC.name has the form:
+    *      'somePath/foo-BETA-'
+    * i.e. asmlink:asmExt returns '-BETA-'.
+    * This extension is removed below.
+    * 
+    * Switches:
+    *   24:   only generate .db. Has NOT been tested.
+    *)
+   (# FN,T,name: ^text; switch39: @boolean;
+      xfile: @file;
+   do (if trace_back then
+          '>>>> closeMachine: ' -> puttext; BC.name -> putline
+      if);
+      BC.name->FN[];
+      (FN.length-3,FN.length)->FN.delete; (* remove '-BT-' *)
+      
+      '.x' -> (FN.copy).append -> xfile.name;   
+      xfile.openWrite;
+      entryPoints.scan
+      (#
+      do (if current.export then
+             (if current.data then
+                 current.t[] -> xfile.putLine;
+              else
+                 (if (1 -> current.t.inxGet) = '.' then
+                     (2, current.t.length) -> current.t.sub -> xfile.putLine;
+                 if);
+             if);
+         if);
+      #);
+      xfile.close;
+   
+      FN[]->BC.name;
+      (* producing debug tables *)
+      (* FN[]->saveDbgInf;*)
+      (if trace_back then
+          'backendClose: missing: FN[]->saveDbgInf;' ->TODO
+      if);
+      (if common.switch[18] then
+          'backendClose:Missing generation of .s-file'->TODO
+      if);
+      mstate.emitCodeToFile
+   #)     
+   
+--backenddefineMainLabel:doPart--
+do (# (*** OLM 17/9/99: For Valhalla adaption *)
+      NewEntry:
+        (# T: ^text
+        enter T[]
+        do T[] -> labelDef; T[] -> export; 
+           (T[],false)->entryPoints.addDef;
+           SaveReturnImpl
+        #);
+      RTS:
+        (#
+        do &backendInstruction -> ReturnImpl
+        #);
+      GenPrim:
+        (# T: ^text; noOfArg: @integer;
+           D: @integer;
+           frameSize: (#exit 40 #); (*OBS Check this <<<<<<<<<<<< *)
+        enter(T[],noOfArg)
+        do T.Copy -> NewEntry;
+           dataTmp -> D;
+           noOfArg+1 -> mstate.stacks.xFrame; (* reserve space for arguments
+                                               * on the stack
+                                               *)
+           (for i: noOfArg > MaxNoOfPrimReg repeat
+                (* copy from stack to stack !CHECK this <<<<<<<<<<<<<<<< *)
+                (D,GPR_SP,frameSize + 16 + (i-1)*4) -> LWZ -> mstate.b.emit;
+                (D,GPR_SP,16 + (i-1)*4) -> STW -> mstate.b.emit;
+           for);
+           (noOfArg+1,0) -> SpToPrimReg;
+           'C' -> T.prepend;
+           ClearStackTop;
+           T[] -> CallProc;
+           RTS;
+        #);
+      (******************8 Valhalla adaption ****************)
+      T: ^text; 
+      L1,L2: @backendlocalLab
+   do true -> mState.isBetaEnv;
+      2 -> mstate.isM1BETAENV;
+
+      &text[]->T[];
+   
+      (* GetSP *)
+      'GetSP' -> labelDef; '.GetSP' -> export;
+      (ReturnReg,GPR_sp) -> MR -> mstate.b.emit;
+      BLR->mstate.b.emit;
+      (* end GetSp *)
+   
+      'HandleIndexErr' -> labelDef;  '.HandleIndexErr' -> export; 
+      SaveStackFrame;
+      (GPR3,-3) -> LI -> mstate.b.emit;
+      (GPR4,thisO) -> MR -> mstate.b.emit;
+      (GPR5,GPR_SP,0x40) -> ADDI -> mstate.b.emit; (*size of this stack frame*)
+      GPR6 -> MFLR -> mstate.b.emit;
+      ClearStackTop;
+      'BetaError' -> doJsrT;
+      false -> DoReturn;
+      
+      'FailureExit' -> labelDef;  '.FailureExit' -> export; 
+      SaveStackFrame;
+      (GPR3,common.StopCalledErr) -> LI -> mstate.b.emit;
+      (GPR4,thisO) -> MR -> mstate.b.emit;
+      (GPR5,GPR_SP,0x40) -> ADDI -> mstate.b.emit; (*size of this stack frame*)
+      GPR6 -> MFLR -> mstate.b.emit;
+      ClearStackTop;
+      'BetaError' -> doJsrT;
+      false -> DoReturn;
+      
+      'DumpStack' -> labelDef;  '.DumpStack' -> export; 
+      SaveStackFrame;
+      (GPR3,common.DumpStackErr) -> LI -> mstate.b.emit;
+      (GPR4,thisO) -> MR -> mstate.b.emit;
+      (GPR5,GPR_SP,0x40) -> ADDI -> mstate.b.emit; (*size of this stack frame*)
+      GPR6 -> MFLR -> mstate.b.emit;
+      ClearStackTop;
+      'BetaError' -> doJsrT;
+      false -> DoReturn;
+      
+      'DoGC' -> labelDef; '.DoGC' -> export;
+      SaveStackFrame;
+      (GPR3,GPR_SP,0x40) -> ADDI -> mstate.b.emit; (*size of this stack frame*)
+      (GPR4,thisO) -> MR -> mstate.b.emit;
+      (GPR5,0) -> LI -> mstate.b.emit;
+      ClearStackTop;
+      'doGC' -> doJsrT;
+      false -> DoReturn;
+      
+      (* CallB(GPR3,GPR4,GPR5,GPR6)
+       * 
+       *    GPR3: caller
+       *    GPR4: callee
+       *    GPR5: TOC-entry for routine to be called
+       *    GPR6: SP
+       *)
+      'CallB' -> labelDef; '.CallB' -> export;
+      SaveStackFrame;
+      (*PushReturn;*)
+      SaveRegisters;
+      
+      (* Michael Lassen 16 jan. 1998, save rtoc: *)
+      
+      (RTOC,GPR_sp,20) -> STW -> mstate.b.emit;
+      
+      (* END *)
+
+   
+      (GPR0,GPR5,0) -> LWZ -> mstate.b.emit;     
+      (RTOC,GPR5,4) -> LWZ -> mstate.b.emit;
+      GPR0 -> MTLR -> mstate.b.emit;
+      (GPR6,GPR_sp,24) -> STW -> mstate.b.emit; (* SP to previous BETA frame
+                                                 * is saved at the stack position
+                                                 * of the first external
+                                                 * parameter
+                                                 *)
+      (thisO, GPR3) -> MR -> mstate.b.emit;     
+      BLRL ->mstate.b.emit;   
+   
+      (* Michael Lassen 16 jan. 1998, restore rtoc: *)
+      
+      (RTOC,GPR_sp,20) -> LWZ -> mstate.b.emit;     
+      
+      
+      (* END *)
+      
+      RestoreRegisters;
+      (*PopReturn;*)
+      false -> DoReturn;
+      (* end CallB *)
+      
+      (* FlushCodeCache(GPR3=startAdr,GPR4=lastAdr) 
+       * The following instruction sequence is from
+       * PowerPC 604, chapter 3, section 3.2.
+       * Notice that DCBST and ICBI are called for 
+       * all addresses in [start, last].
+       * It is probably only necessary to call it once pr cash-line,
+       * however, according to news-discussion there dont seem to be
+       * a processor independent way of determining the cache-line size!
+       *)
+      'FlushCodeCache' -> labelDef; '.FlushCodeCache' -> export;
+      
+      (GPR0,0) -> LI -> mstate.b.emit;
+   
+      (* init loop *)
+      (GPR5,GPR3) -> MR -> mstate.b.emit;   
+      (* loop *)
+      (GPR5,GPR0) -> DCBST -> mstate.b.emit; (* update memory *)
+      (GPR5,GPR5,4) -> ADDI -> mstate.b.emit;
+      (GPR5,GPR4) -> CMPW -> mstate.b.emit; 
+      -12 -> BLE -> mstate.b.emit;
+      (* end-loop *)
+      
+      SYNC -> mstate.b.emit;                 (* wait for update *)
+   
+      (* init loop *)
+      (GPR5,GPR3) -> MR -> mstate.b.emit;
+      (* loop *)
+      (GPR5,GPR0) -> ICBI -> mstate.b.emit;  (* remove (invalidate) copy in 
+                                           * instruction cache 
+                                           *)
+      (GPR5,GPR5,4) -> ADDI -> mstate.b.emit;
+      (GPR5,GPR4) -> CMPW -> mstate.b.emit; 
+      -12 -> BLE -> mstate.b.emit;
+      (* end-loop *)
+
+      SYNC -> mstate.b.emit;                 (* wait for ICBI operation to be 
+                                              * globally performed 
+                                              *)
+      ISYNC -> mstate.b.emit;                (* remove copy in own 
+                                              * instruction buffer 
+                                              *)
+      
+      BLR ->mstate.b.emit;   
+      (* FlushCodeCache *)
+   
+      (* doAtt(SPz,topObj,spSize,sObj,compAdr)
+       * 
+       *    GPR3: SPz
+       *    GPR4: topObj
+       *    GPR5: spSize
+       *    GPR6: sObj
+	*    GPR7: compAdr
+       *)
+      'doAtt' -> labelDef; '.doAtt' -> export;
+      (* Save return from Att *)
+      GPR0 -> MFLR -> mstate.b.emit;
+      (GPR0,GPR_SP,8) -> STW -> mstate.b.emit;
+   
+      (GPR_sp,GPR3) -> MR -> mstate.b.emit;
+      (GPR8,GPR5,-4) -> ADDI -> mstate.b.emit;   (* spSize -> GPR8 *)
+   
+      (* while GPR8 >= 0 do sObj[GPR8] -> SPz[GPR8]; GPR8 - 4 -> GPR8 end *)
+      L1.new; L2.new;
+      L1.def;
+      (GPR8,0) -> CMPWI -> mstate.b.emit;
+      &backendInstruction(#do L2.labNo->labNo #) -> gBltImpl; (*jumpif GPR8 < 0 *)
+   
+      (GPR10,GPR6,GPR8) -> ADD -> mstate.b.emit; 
+      (GPR9,GPR10,0) -> LWZ -> mstate.b.emit;
+   
+      (GPR10,GPR3,GPR8) -> ADD -> mstate.b.emit;
+      (GPR9,GPR10,0) -> STW -> mstate.b.emit;
+   
+      (GPR8,GPR8,-4) ->  ADDI -> mstate.b.emit;
+      &backendInstruction(#do L1.labNo->labNo #) -> gJmpImpl;
+   
+      L2.def;	
+   
+      (* compAdr(SPz,topObj) *)
+      (GPR0,GPR7,0) -> LWZ -> mstate.b.emit;     
+      (RTOC,GPR7,4) -> LWZ -> mstate.b.emit;
+      GPR0 -> MTCTR -> mstate.b.emit;
+      BCTR ->mstate.b.emit;   
+
+      (* end doAtt *)
+   
+      (****olm 17/9/99: Valhalla adaption *)
+      ('CpkVT',   1) -> GenPrim;
+      ('CpkSVT',  3) -> GenPrim;
+      ('CopySRR', 5) -> GenPrim;
+      ('CopySVR1',5) -> GenPrim;
+      ('CopySVR2',5) -> GenPrim;
+      ('CopySVR4',5) -> GenPrim;
+      ('CopySVR8',5) -> GenPrim;
+      ('CopySVRI',5) -> GenPrim;
+      ('CopySVRC',5) -> GenPrim;
+      ('Qua',3) -> GenPrim;   
+
+      'BETA_main' -> labelDef; '.BETA_main' -> export;
+   #)
+
+--backendswitchToCode:doPart--
+do true->mstate.inCode;
+   none -> mstate.preEntry[];
+   
+--backendswitchToData:doPart--
+do false->mstate.inCode;
+   none -> mstate.preEntry[];
+   
+--backendexport:doPart--
+do (# S: @text
+   do (if (1-> Lab.inxGet) 
+       // 'G' // 'M' then
+          (* OBS! This seems to be a hack! 
+           * How will this work with callback patterns?
+           * A callback pattern generate entrypoints like
+           *   foo: ...
+           * Such entrypoints should probably be handled
+           * like G- and M-entrypoints
+           *)
+           (*'Export:'->puttext; lab[]->putline;*)
+          '.' -> S;
+          Lab[] -> S.append;
+          S[] -> Lab[]
+      if);
+      Lab.copy->entryPoints.find
+      (# notFound::
+           (#
+           do true->E.export; E[]->entryPoints.insert;
+           #)
+      do true->E.export
+      #)
+   #)
+
+--backendlabelDef:doPart--
+do (if mstate.inCode then
+       (*'\n** backendlabelDef: in code; type:'->putline;*)      
+       '.'-> lab.prepend;
+       (lab[],entryDefMark)->mstate.b.mark;
+       mState.stacks.init;
+       lab[] -> mstate.thisCsect[];
+       mstate.b.LIP -> mstate.thisCsectStart
+    else
+       (lab.copy,entryDefMark)->mstate.d.mark;
+       (* lab[] -> mstate.thisCsect[]; 
+        * do we need this opne for data?
+        * if we just add it it will confuse generation of object-file
+        *)
+       mstate.d.LIP -> mstate.thisCsectStart
+   if);
+
+
+---backendputD:descriptor--
+(##)
+
+---backendputA:descriptor--
+(##) 
+
+---backendimm:descriptor--
+(##)
+
+-- backendputS: DoPart --
+do 'backendputS'->TODO (* not used*)
+ 
+---backendaddTargetInfo: doPart---
+do (if data then
+       mstate.d.LIP->E.LIP
+    else
+       mstate.b.LIP->E.LIP
+   if)
+
+---backendstValInLab: doPart---
+do 'backendstValInLab'->TODO (* not used *)
+
+---backendldValFromLab: dopart---
+do 'backendldValFromLab'->TODO (* not used *)
+
+---backendCallO: dopart---
+do GPR4->rNo
+   
+---backendEndCodeSeg: dopart---
+do  'BETA_code2'->LabelDef;
+   nopImpl;
+   
+   (* Here used to be a call of beginPrototypes, 
+    * which included only: switchToData 
+    *)
+   switchToData;
+   
+   'BETA_data2'->LabelDef
+
+---backendentryPointsInsert: dopart---
+do elm.T[]->mstate.strTbl.insert->elm.m.strInx;
+   mstate.symtabTop + 1 -> mstate.symtabTop -> elm.m.symtabInx
+
+---backendThisO: dopart---
+do GPR31->rNo
+
+---backendentryPointsEqual: descriptor---
+(#
+do value and (left.m.TOCentry = right.m.TOCentry) -> value;
+#)
+
+---backendLocalLabDef: doPart---
+do (*'\n** backendLocalLabDef: L'->puttext; 
+   labno->putint; ' type: '->puttext; type->putint; ' ' -> put;
+   astext -> putline;*)
+   (if type
+    // dataToCode then
+       labNo->mstate.d.markLocalLab
+    // codeLocal then 
+       labNo -> mstate.labs.markCsect
+    // codeToData then
+       ('.'->(asText).prepend,entryDefMark)->mstate.b.mark;
+    // caseStart then
+       (# entry: ^EntryPoints.ElementType
+       do (asText,false,CASEstartType) -> entryPoints.addDefPPC -> entry[];
+          mstate.b.LIP -> entry.LIP -> mstate.caseStart;
+          mstate.thisCsect[] -> entry.m.csect[];
+       #)
+    // caseEntry then
+    // caseEnd then
+    // interFragment then
+       asText -> mstate.interLabs.def;
+       (* E.g. SUN4Bmachine does the following, but this will generate
+        * an external label on PPCMAC which will give rise to a separate
+        * code entry point
+        * asText -> export; 
+        * (astext,entryDefMark)->mstate.b.mark
+        *)
+    else
+       (if isTextAdr then 
+           (* label in data segment for asciz-text or real-const *)
+           labNo->mstate.d.markLocalLab
+        else (*label in code segment *)
+           (*false->betaLabel; !!!!! To be fixed!!!*)
+           (if betaLabel then 
+               (astext,entryDefMark)->mstate.b.mark
+           if);
+   if)if);
+   labNo->mstate.labs.def;
+   
+---backendInitCreateDataFile: doPart---
+do (none,common[],fileName.copy,none) -> init;
+   switchToData;
+   'BETA_DATA' ->export;
+   'BETA_DATA' -> labelDef;
+   
+--backendNextGroup: dopart---
+do (id[],false) ->importData;
+   &backendinstruction(#do id[]->label[] #) 
+     ->  declareDataSegmentTextAddressImpl
+   
+---backendEndCreateDataFile:dopart---
+do 0 -> declareLong;
+   0 -> declareLong;
+   close;
+   
+---backendAsText:doPart---
+do &text[]->localLabText[];
+   (if type = interFragment then
+       descId[]->localLabText.puttext; 
+       labNo->localLabText.putInt; 
+    else
+       'L' -> localLabText.put;
+       labNo -> localLabText.putInt
+   if)
+   
+---GlobalCodeLabelDef:doPart---
+do '.'-> I.label.prepend;
+   (I.label[],entryDefMark)->mstate.b.mark;
+   mState.stacks.init;
+   mstate.b.LIP -> mstate.thisCsectStart;
+   I.label[] -> mstate.thisCsect[];
+   
+--backendAllocObj:doPart--
+do mstate.noComSupport
+   
+--backendGetCOMpar:doPart--
+do mstate.noComSupport
+   
+--backendExternalDispatch:doPart--
+do mstate.noComSupport
+   
+---backendReturnVirtualCOM:doPart--
+do mstate.noComSupport
+   
+---backendDoHead:descriptor---
+(#
+do '_pointer_glue12' -> labelDef;
+   (GPR0,GPR12,0) -> LWZ -> mstate.b.emit;
+   (RTOC,GPR_SP,20) -> STW -> mstate.b.emit;
+   GPR0  -> MTCTR -> mstate.b.emit;
+   (RTOC,GPR12,4) -> LWZ -> mstate.b.emit;
+   BCTR -> mstate.b.emit;
+#)

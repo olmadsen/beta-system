@@ -1,0 +1,2342 @@
+ORIGIN '../backend';
+INCLUDE 'sparc';
+INCLUDE 'sparcimage';
+BODY '../SUN4S/sun4selfbackend';
+(*
+ BODY '../CODEmachine';
+ BODY 'RUN/BetaRun';
+ MDBODY sun4s '../SUN4S/SUN4Self'
+        sun4 'SUN4aout';
+*)
+
+-- backendatt: attributes --
+clearAdrTmpRegs:
+  (* should be eliminated and handled by INTERMEDIATEmachine*)
+  (#
+  do I0+2->CLR->Bemit;
+     I0+3->CLR->Bemit;
+     I0+4->CLR->Bemit;
+  #);
+regIOA: (#  exit G5 #);
+regIOATopOff: (#  exit G6 #);
+
+setHiMark: (# exit 8 #); (* from image.bet *)
+setLoMark: (# exit 9 #); (* from image.bet *)
+setLoMarkSt: (# exit 10 #); (* from image.bet *)
+
+trace: (# exit true #);
+AssertRegisterNotZero:
+  (* DEBUG *)
+  (# (*L: @locallab;*)
+     reg: @integer;
+  enter reg
+  <<SLOT backendAssertRegisterNotZero:dopart>>
+  #);
+
+Bemit: (# enter mstate.b.emit #);
+Bmark: (# enter mstate.b.mark #);
+frame_size: 
+  (* Like gcc, we use size 112 for all stack frame sizes
+   * and when pushing/popping address 112 down the frame.
+   * See:
+   * http://www.daimi.au.dk/~beta/doc/betarun/internal/SparcStack.html#betaframe.
+   *)
+  (# exit 112 #);
+
+TODO: 
+  (# t:^Text
+  enter t[]
+  do 
+     (if t[]=NONE then
+         'TODO: (with no arg)'->T[];
+      else
+     if);
+     (if trace then
+         'TODO:'->screen.putText;
+         t[]->screen.putLine;
+      else
+         (failureTrace, t[])->stop;
+     if)
+  #);
+
+UseDelay:
+  (* This pattern attempts to use the delay slot following a call 
+   * instruction. It cannot be used to generate delay slots following other
+   * instructions such as jmpl, Bxx, etc., since these instructions have
+   * register arguments. This will require further checking.
+   * 
+   *    lastDelay: | a delay slot
+   *               | ...
+   *    B.LIP-8:   | INST          |  candidate  for moving to currentDelay
+   *    B.LIP-4:   | call/xxx      |  an instruction executing delay slot
+   *    B.LIP:     | currentDelay  |  we are generating this delay slot
+   * 
+   * Requirements :
+   * 
+   * 1.   B.LIP-8 must exist; and never use two first instructions in a 
+   *      routine; check this.
+   * 2.   B.LIP-8 and B.LIP-4 cannot be delay slots
+   * 3.   B.LIP-8 cannot be a CALL, JMP, Bxx, etc. 
+   *      But this should never happen.
+   * 4.   There cannot be a label at B.LIP
+
+   *)
+  (# 
+  do (if common.switch[216] AND mstate.B.PotentialDelaySlot then
+         mstate.B.swap
+      else
+         xNOP -> Bemit
+     if)
+  #);
+GenDelay:
+  (# 
+  do INNER;
+     mstate.B.LIP-4 -> mstate.lastDelay;     
+  #);
+doCall2: (* used for real BETA calls of e.g. M-entry-points *)
+  (# PushOregs: @boolean;
+  do (mstate.Xlevel>0) and (mstate.XCnt>0) -> PushOregs;
+     (if PushOregs then 
+         (if stack_alloc_trace then
+             '\n<docall2:1>'->screen.puttext;
+         if);
+         0->mState.SaveBusyReg(# do 1->AllocateSpace; SaveOregs #); 
+     if);
+     INNER doCall2;
+     (if PushOregs then 
+         (if stack_alloc_trace then
+             '\n<docall2:-1>'->screen.puttext;
+         if);
+         0->mState.RestoreBusyReg(# do RestoreOregs; 1->DeallocateSpace; #)
+     if)
+  #);
+doCall:
+  (# delay: @integer;
+     isCall: @boolean;
+     ProtoDest: 
+       (# dest: @integer
+       do (if ISAlloI2 then
+              I5 -> dest
+           else I1 -> dest
+          if)
+       exit dest
+       #);
+     ISAlloI2:< booleanValue;
+     proto: ^Text;
+  enter proto[]
+  do 
+     (if proto[] <> none then
+         (proto[],setHiMark)->mstate.b.mark;
+         (ProtoDest,0)->SETHI->Bemit;
+         1->delay         
+      else
+         0->delay
+     if);
+     (if mstate.b.clearA[2] then
+         (if mstate.b.aReg[2+1] <= 0 then (* problems with reAlloc *)
+             (if delay = 0 then
+                 I2->CLR->delay
+              else
+                 I2->CLR->Bemit
+             if);
+             false->mstate.b.clearA[2]
+         if)
+     if);
+     (if mstate.b.clearA[3] then
+         (if mstate.b.aReg[3+1] <= 0 then (* problems with reAlloc *)
+             (if delay = 0 then
+                 I3->CLR->delay
+              else
+                 I3->CLR->Bemit
+             if);
+             false->mstate.b.clearA[3]
+         if)
+     if);
+     (if mstate.b.clearA[4] then
+         (if mstate.b.aReg[4+1] <= 0 then
+             (if delay = 0 then
+                 I4->CLR->delay
+              else
+                 I4->CLR->Bemit
+             if);
+             false->mstate.b.clearA[4]
+         if)
+     if);
+     INNER ;
+     GenDelay
+     (#
+     do (if delay = 1 then
+            (proto[],setLoMark)->mstate.b.mark;
+            (ProtoDest,0,ProtoDest)->OR_I->Bemit
+         else
+            (if delay <> 0 then delay->Bemit 
+             else (if isCall then UseDelay else EmitNOP if)
+            if)
+        if)
+     #)
+     
+  #);
+       
+EmitNop: (# do xNop -> Bemit #);
+emitDelayNOP: genDelay
+  (* Generate a NOP isntruction in a delay slot.
+   * UseDelay will attempt to use the delay slots
+   *)
+  (#  
+  do xNOP->Bemit 
+  #);
+
+PutSet:
+  (# C, R: @Integer; 
+  enter (C, R)
+  do
+     (if (- 4096 <= C) and (C <= 4095) then (* one instruction *)
+         (if C=0 then
+             (* clr looks better in disassembly *)
+             R->CLR->Bemit;
+          else
+             (C, R)->MOV_I->Bemit; 
+         if)
+      else
+         (if (C->LO) = 0 then (* one instruction *)
+             (R, C->HI)->SETHI->Bemit; 
+          else
+             (* two instructions *)
+             (R, C->HI)->SETHI->Bemit;
+             (R, C->LO, R)->OR_I->Bemit
+         if)
+     if)
+  #);
+
+PutSetText:
+  (# T: ^Text; reg: @integer
+  enter (T[],reg)
+  do (* allways two instructions - address not know at this time *)
+     (T[],setHiMark)->mstate.b.mark;
+     (reg,0)->SETHI->mstate.b.emit;
+     (T[],setLoMark)->mstate.b.mark;
+     (reg,0,reg)->OR_I->mstate.b.emit;
+     
+  #);
+
+PushRef:
+  (# op: ^BackendInstruction
+  enter op[]
+  do (SP,8,SP)->SUB_I->mstate.b.emit;
+     (SP,frame_size,op.readReg)->ST_I->mstate.b.emit;
+  #);
+PopRef:
+  (# op: ^BackendInstruction
+  enter op[]
+  do (SP,frame_size,op.readReg)->LD_I->mstate.b.emit; (* writeReg hee ?*)
+     (SP,8,SP)->ADD_I->mstate.B.emit
+  #);
+PushData:
+  (# op: ^BackendInstruction
+  enter op[]
+  do (SP,8,SP)->SUB_I->mstate.b.emit;
+     (SP,frame_size,op.readReg)->ST_I->mstate.b.emit;
+  #);
+PopData:
+  (# op: ^BackendInstruction
+  enter op[]
+  do (if op.writeReg = 0 then
+         '\n*** backend:popData: writeReg is 0'->putline
+     if);
+     (SP,frame_size,op.writeReg)->LD_I->mstate.b.emit; 
+     (SP,8,SP)->ADD_I->mstate.B.emit
+  #);
+PushCpar:
+  (# op: ^BackendInstruction; Oreg: ^OregOperand
+  enter op[]
+  do mstate.xGetOreg->OReg[];
+     (if Oreg <= O5 then
+         Oreg -> op.writeReg; 
+         op[]->cpRegImpl
+      else
+         (SP,4*(Oreg-6-O0)+92,op.readReg)->ST_I->mstate.b.emit;
+     if)
+  #);
+PushCparFromMem:
+  (# op: ^BackendInstruction; Oreg: ^OregOperand
+  enter op[]
+  do mstate.xGetOreg->OReg[];
+     (if Oreg <= O5 then
+         Oreg -> op.writeReg; 
+         op[]->ldValImpl
+      else
+         G1 -> op.writeReg; (* OBS! G1 is used here! *)
+         op[]->ldValImpl;
+         (SP,4*(Oreg-6-O0)+92,G1)->ST_I->mstate.b.emit;
+     if)
+  #);
+gBltu:
+  (# lop: ^backendLocalLab
+  enter lop[]
+  do
+     (lop.labNo->mstate.labs.off) div 4->BLTU
+       ->mstate.b.emit (* OBS NO dealy NOP here *)
+  #);
+getExternalResult:
+  (# getSimpleRes: 
+       (# drA: ^BackendInstruction
+       enter drA[]
+       do (O0,drA.writeReg) -> MOV -> mstate.b.emit
+       #);
+     (*getDoubleRes:
+       (# drA: ^ BackendInstruction
+       enter drA[]
+       do (O0,drA.writeReg) -> MOV -> mstate.b.emit;
+          (O1,drA.writeReg2) -> MOV -> mstate.b.emit;
+       #);*)
+     getDoubleRes:
+       (# drA: ^BackendInstruction
+       enter drA[]
+       do(O0,drA.writeReg) -> MOV -> mstate.b.emit;
+	 (O1,drA.writeReg2) -> MOV -> mstate.b.emit;
+       exit drA[]
+       #)     
+  do INNER;
+     false -> mstate.xFreeOreg;
+  #);
+
+     
+(****************** backend dopart slots start here!! **********************)
+
+--getRegisterOffsets:doPart--
+do 15->dataOff;
+   23->adrOff;
+   8->primOff
+   
+--getNumberOfDataRegisters:dopart--
+do 3->regCount
+
+--getNumberOfAdrRegisters:dopart--
+do 3->regCount
+   
+--getNumberOfRegisters:dopart--
+do (* See DOC/Registers.html *)
+   (if type
+    // 1 (*dataReg*) then 5->number
+    // 2 (*adrReg*)  then 2+3->number (* this+call counts too *)
+    // 3 (*floatReg*) then 16->number
+    // 4 (*primReg*) then 4->number
+   if)
+   
+--getPhysicalRegisterNumber:dopart--
+do (* See DOC/Registers.html *)
+   (if type
+    // 1 (*dataReg*) then
+       L0-1+reg -> physicalregister (* D0,D1,D2,D3,D4*)
+    // 2 (*AdrReg*) then
+       I0-1+reg->physicalregister (* I2,I3,I4 *)
+    // 3 (*float*) then
+       reg->physicalregister
+    // 4 then
+       O0+reg->physicalregister
+   if)    
+   
+--primRegIsReg:doPart--
+do true->value
+   
+--primRegIsRegAdr:doPart--
+do false->value
+
+--backendIsSmallAluConstant:doPart--
+do (-4096 <= c) and (c <= 4095) -> value
+   
+--backendIsSmallAdrOff:doPart--
+do (-4096 <= c) and (c <= 4095) -> value
+   
+--backendHasRotateInstr:doPart--
+do false -> value
+   
+--backendScaledIndex:doPart--
+do false -> value
+   
+-- backendNop: dopart --
+do EmitNop
+
+-- backendgLea:doPart--
+do (i.readReg, i.imm, i.writeReg)->ADD_I->Bemit;
+   
+-- backendgLeaInx:doPart--
+do (i.readReg, i.readReg2, i.writeReg)->ADD->Bemit;
+   (if i.imm <> 0 then
+       (i.writeReg, i.imm, i.writeReg)->ADD_I->Bemit;
+   if);
+   
+-- backendgLeaText:doPart--
+do (I.label[],i.writeReg) -> putSetText
+   
+-- backendgLeaLabel:doPart--
+do '.L'->I.label[];
+   I.labNo->I.label.putint;
+   (I.label[],i.writeReg) -> putSetText
+   
+-- backendldCst:dopart --
+do (i.imm, i.writereg)->PutSet
+
+-- backendstCst:dopart --
+do (failureTrace,'backendstCst NOT supported on sparc')->stop
+
+-- backendldVal:dopart --
+do (if i.size=4 then
+       (i.readReg, i.readOffset, i.writeReg)->LD_I->Bemit
+    else
+       (if i.size=1 then 
+           (if i.signed then
+               (i.readReg, i.readOffset, i.writeReg)->LDSB_I->Bemit
+            else
+               (i.readReg, i.readOffset, i.writeReg)->LDUB_I->Bemit
+           if)
+        else
+           (* size=2 *)
+           (if i.signed then
+               (i.readReg, i.readOffset, i.writeReg)->LDSH_I->Bemit
+            else
+               (i.readReg, i.readOffset, i.writeReg)->LDUH_I->Bemit
+           if)
+       if)
+   if)
+
+-- backendldVlInx:dopart --
+do (I.inxReg, I.readOffset, I.inxReg)->ADD_I->Bemit;
+   (if i.size=4 then
+       (i.readReg, i.inxReg, i.writeReg)->LD->Bemit
+    else
+       (if i.size=1 then 
+           (if i.signed then
+               (i.readReg, i.inxReg, i.writeReg)->LDSB->Bemit
+            else
+               (i.readReg, i.inxReg, i.writeReg)->LDUB->Bemit
+           if)
+        else
+           (* size=2 *)
+           (if i.signed then
+               (i.readReg, i.inxReg, i.writeReg)->LDSH->Bemit
+            else
+               (i.readReg, i.inxReg, i.writeReg)->LDUH->Bemit
+           if)
+       if)
+   if);
+   
+-- backendstVal:dopart --
+do (if i.size=4 then
+       (i.readReg, i.readOffset, i.readReg2)->ST_I->Bemit
+    else
+       (if i.size=1 then 
+           (i.readReg, i.readOffset, i.readReg2)->STB_I->Bemit
+        else
+           (* size=2 *)
+           (i.readReg, i.readOffset, i.readReg2)->STH_I->Bemit
+       if)
+   if)
+   
+-- backendstValInx:dopart --
+do (I.inxReg, I.readOffset, I.inxReg)->ADD_I->Bemit;
+   
+   (if i.size=4 then
+       (i.readReg, i.inxReg, i.readReg2)->ST->Bemit
+    else
+       (if i.size=1 then 
+           (i.readReg, i.inxReg, i.readReg2)->STB->Bemit
+        else
+           (* size=2 *)
+           (i.readReg, i.inxReg, i.readReg2)->STH->Bemit
+       if)
+   if);
+   
+-- backendcpReg:dopart --
+do (i.readReg, i.writeReg)->MOV->Bemit
+
+   
+-- backendstValInText:dopart --
+do (i.label[],setHiMark)->Bmark;
+   (G1,0)->SETHI->Bemit;
+   (i.label[],setLoMarkSt)->Bmark;
+   mstate.B.markLastAsData;
+   (G1, 0, i.readReg)->ST_I->Bemit;    
+
+-- backenddoAsgRefAdr:dopart --
+do (* empty on sparc *)
+
+-- backenddoAsgRefReg:dopart --
+do (* empty on sparc *)
+
+-- backendChkHeap:dopart --
+do (if not i.WithQua then
+       (i.readReg2,regIOA,I5)->SUB->Bemit;
+       (I5,regIOATopOff)->CMP->Bemit;
+       3->BLEU->Bemit;
+   if);
+   
+   (i.readReg2,i.readOffset,i.readReg)->ST_I->Bemit;
+   
+   (if not i.withQua then
+       ('ChkRA',callMark)->mstate.b.mark;
+       0->CALL->Bemit;
+       genDelay
+       (#
+       do (i.readReg2, G1)->MOV->Bemit; (* required by ChkRA *)
+       #);
+       I.readReg2->CLR->Bemit (* consider handling this in 
+                               * INTERMEDIATEmachine
+                               * We still NEED to handle the case with QUA;
+                               * we cannot clear here since readReg2 is used 
+                               * by Qua
+                               *)
+   if);
+
+   
+-- backendgAddImm:dopart --
+do (i.readReg2, i.imm, i.writeReg)->ADD_I->Bemit;
+
+-- backendgAddReg:dopart --
+do (i.readReg, i.readReg2, i.writeReg)->ADD->Bemit;
+
+-- backendaddMem:dopart --
+do  (* empty: never called *)
+
+-- backendgNeg:dopart --
+do (G0,i.readReg,i.writeReg)->SUB->Bemit (* olm *)
+
+-- backendgSubImm:dopart --
+do (i.readReg2, i.imm, i.writeReg)->SUB_I->Bemit; (* olm *)
+   
+-- backendgSubReg:dopart --
+do (i.readReg2, i.readReg, i.writeReg)->SUB->Bemit; (* olm *)
+
+-- backendgMultImm:dopart --
+do (if true (*not sparc_v7*) then
+       (* gcc -O6 -mv8:
+        * signed long mul(signed long x, signed long y)
+        * { return x*y; }
+        * 
+        * mul:
+        *   retl
+        *   smul %o0,%o1,%o0
+        *)
+       (i.readReg2,i.imm,i.writeReg)->SMUL_I->Bemit
+       (* Consider testing for overflow in Y register *)
+    else
+       (* OLM: do we have to support sparc_v7? *)
+       (* .mul considered a primitive - do not save floats across 
+       (2,true)->mstate.xInitOreg; 
+       op1[]->pushCpar;
+       op2[]->pushCpar;
+       '.mul'->jsrT;
+       (O0,op2.reg1)->MOV->Bemit;
+        true->mstate.xFreeOreg;
+        *)
+   if);
+--backendgMultReg:dopart --
+do (if true (*not sparc_v7*) then
+       (* gcc -O6 -mv8:
+        * signed long mul(signed long x, signed long y)
+        * { return x*y; }
+        * 
+        * mul:
+        *   retl
+        *   smul %o0,%o1,%o0
+        *)
+       (*olm:            op1.loadOp->op1[]; *)
+       (i.readReg,i.readReg2,i.writeReg)->SMUL->Bemit
+       (* Consider testing for overflow in Y register *)
+    else
+       (* .mul considered a primitive - do not save floats across 
+       (2,true)->mstate.xInitOreg; 
+       op1[]->pushCpar;
+       op2[]->pushCpar;
+       '.mul'->jsrT;
+       (O0,op2.reg1)->MOV->Bemit;
+       true->mstate.xFreeOreg;
+       *)
+   if);
+   
+--backendgDIVImm:dopart --
+do 
+
+--backendgDIVReg:dopart --
+do (if i.isDiv then
+       (* gcc -O6 -mv8:
+        * signed long mul(signed long x, signed long y)
+        * { return x*y; }
+        * 
+        * div:              
+        *   sra %o0,31,%g2    # get sign of operand
+        *   wr %g0,%g2,%y   
+        *   nop             
+        *   nop             
+        *   nop             
+        *   sdiv %o0,%o1,%o0
+        *   retl
+        *   nop
+        *)
+       (i.readReg,31,G1) -> SRA_I -> mstate.b.emit;
+       (G0,G1,G0) -> WRY -> mstate.b.emit;
+       
+       (i.ReadReg,i.readReg2,i.writeReg)->SDIV->mstate.b.emit
+    else
+       (* gcc -O6 -mv8:
+        * signed long rem(signed long x, signed long y)
+        * { return x%y; }
+        *
+        * rem:            
+        *   sra %o0,31,%g3 
+        *   wr %g0,%g3,%y  
+        *   nop	       
+        *   nop	       
+        *   nop	      
+        *   sdiv %o0,%o1,%g2
+        *   smul %g2,%o1,%g2
+        *   retl
+        *   sub %o0,%g2,%o0
+        *)
+       (i.readReg,31,G1) -> SRA_I -> mstate.b.emit;
+       (G0,G1,G0) -> WRY -> mstate.b.emit;
+       (i.readReg,i.readReg2,G1)->SDIV->mstate.b.emit;
+       (G1,i.readReg2,G1)->SMUL->mstate.b.emit;
+       (i.readReg,G1,i.writeReg)->SUB->mstate.b.emit;
+   if)
+
+--backendgOrImm:dopart --
+do (i.readReg2, i.imm, i.writeReg)->OR_I->Bemit; (* olm *)
+
+--backendgOrReg:dopart --
+do (i.readReg, i.readReg2, i.writeReg)->sparc_OR->Bemit; (* olm *)
+   
+--backendgAndImm:dopart --
+do (i.readReg2, i.imm, i.writeReg)->AND_I->Bemit; (* olm *)
+
+--backendgAndReg:dopart --
+do (i.readReg, i.readReg2, i.writeReg)->sparc_AND->Bemit; (* olm *)
+   
+--backendgxOrImm:dopart --
+do (i.readReg2, i.imm, i.writeReg)->XOR_I->Bemit; (* olm *)
+
+--backendgxOrReg:dopart --
+do (i.readReg, i.readReg2, i.writeReg)->sparc_XOR->Bemit; (* olm *)
+   
+--backendgAndNReg:dopart --
+do (i.readReg, i.readReg2, i.writeReg)->ANDN->Bemit; 
+  
+--backendgNot:dopart --
+do (i.readReg, 1, i.writeReg)->XOR_I->Bemit; (* olm *)
+
+--backendlogNot:dopart --
+do (i.readreg,i.writeReg)->sparc_NOT->Bemit (* olm *)
+
+--backendgCmpImm:dopart --
+do (i.readReg2,i.imm)->CMP_I->Bemit (* olm *)
+   
+--backendgCmpReg:dopart --
+do (i.readReg,i.readReg2)->CMP->Bemit (* olm *)
+
+--backendSignExtByte:dopart --
+do (i.readReg,24,i.writeReg)->SLL_I->Bemit;
+   (i.readReg,24,i.writeReg)->SRA_I->Bemit;
+
+--backendSignExtWord:dopart --
+do (i.readReg,16,i.writeReg)->SLL_I->Bemit;
+   (i.readReg,16,i.writeReg)->SRA_I->Bemit;
+
+--backendGetBits:dopart --
+do (i.readReg, i.pos, i.writeReg)->SLL_I->Bemit;
+   (if i.signed then
+       (i.writeReg, 32-i.length, i.writeReg)->SRA_I->Bemit;
+    else
+       (i.writeReg, 32-i.length, i.writeReg)->SRL_I->Bemit;
+   if)
+   
+--backendgGetBits:dopart --
+do (if true then
+       (* should be a fatal error 
+        * is implemented at INTERMEDIATEmachine-level
+        *)
+       '\nSUN4S has NO gGetbits-implementation' -> putline
+    else
+       (i.readReg, i.readReg2, i.writeReg)->SLL->Bemit;
+       (G0, i.readReg2, G1)->SUB->Bemit;
+       (G1, 32, G1)->ADD_I->Bemit;
+       (if i.signed then
+           (i.writeReg, G1, i.writeReg)->SRA->Bemit;
+        else
+           (i.writeReg, G1, i.writeReg)->SRL->Bemit;
+       if)
+   if)
+
+--backendputBits:dopart --
+do (* op1: readReg2 : bits to be stored in mem
+    *    : writeReg2: same as readReg2
+    * op2: readReg  : address of mem to store bits 
+    * drF: writeReg : free data register
+    * pos: position in mem
+    * length: no of bits in mem
+    * 
+    * ld [op2], %l7
+    * set (1<<len)-1, %l6
+    * and op1, %l6, op1
+    * sll op1, 32-len-pos, op1
+    * sll %l6, 32-len-pos, %l6
+    * andn %l7, %l6, %l7
+    * or   %l7, op1, %l7
+    * st %l7, [op2]
+    *)
+   (# m: @integer; 
+   do (* I.(readReg,0,writeReg) loads meme-val to drF*)
+      4->I.size;
+      L7->I.writeReg; (* don't work when allocated in INTERMEDIATEmachine *)
+      I[]->ldValImpl;
+      (1 %sll i.length)-1->m;
+      (if i.length > 12 then
+          (L6,m->HI)->SETHI->Bemit;  (* OBS we also use L6 *)
+          (L6,M->LO,L6)->OR_I->Bemit
+       else
+          (m,L6)->MOV_I->Bemit; 
+      if);
+      (i.readReg2,L6,i.writeReg2)->sparc_AND->Bemit;   
+      (i.readReg2,32-i.length-i.pos,i.readReg2)
+        ->SLL_I ->Bemit;
+      (L6,32-i.length-i.pos,L6)->SLL_I->Bemit;
+      (I.writeReg,L6,I.writeReg)->ANDN->Bemit;
+      (i.readReg2,I.writeReg,I.writeReg)->sparc_OR->Bemit;
+      I.writeReg -> I.readReg2;
+      I[]->stvalImpl;      (* store readReg2 in mem[readReg+0] *)
+   #)
+
+--backendgPutBits:dopart --
+(* ld [ar], %l7
+ * set 1, %l6
+ * sll %l6,lDr
+ * neg %l6
+ * not %l6
+ * and dr, %l6, dr
+ * add lDr,pDr,pDr		length+pos->pDr
+ * neg pDr
+ * set 32,lDr
+ * add lDr,pDr,Pdr		32-length-pos -> pDr
+ * sll dr, pDr, dr
+ * sll %l6, pDr, %l6
+ * andn %l7, %l6, %l7
+ * or   %l7, dr, %l7
+ * st %l7, [ar]    
+ *)
+do (if true then
+       (* should be a fatal error 
+        * is implemented at INTERMEDIATEmachine-level
+        *)
+       '\nSUN4S has NO gPutBits-implementation' -> putline
+    else(# X: @backendInstruction; m: @integer 
+        do 4->X.size;
+           I.inxReg->X.readReg;
+           L7->X.writeReg;
+           X[]->ldValImpl;
+           (* make mask  '0...01...1'->%l6 with length 1-digits *)
+           (1,L6)->MOV_I->mstate.b.emit;
+           (L6,I.readReg3,L6)->SLL->mstate.b.emit;
+           (G0,L6,L6)->SUB->mstate.b.emit;
+           (L6,L6)->sparc_NOT->mstate.b.emit;
+           (* clear bits in dr using mask *)
+           (I.readReg,L6,I.readReg)->sparc_AND->mstate.b.emit;
+           (* calculate 32-length-pos to pDr *)
+           (I.readReg3,I.readReg2,I.readReg2)->ADD->mstate.b.emit;
+           (G0,I.readReg2,I.readReg2)->SUB->mstate.b.emit;
+           (32,I.readReg3)->MOV_I->mstate.b.emit;
+           (I.readReg3,I.readReg2,I.readReg2)->ADD->mstate.b.emit;
+           (I.readReg,I.readReg2,I.readReg)->SLL->mstate.b.emit;
+           (L6,I.readReg2,L6)->SLL->mstate.b.emit;
+           (L7,L6,L7)->ANDN->mstate.b.emit;
+           (I.readReg,L7,L7)->sparc_OR->mstate.b.emit;
+           X.writeReg->X.readReg2;
+           X[]->stvalImpl;        
+        #)
+   if)
+
+--backendByteSwap:dopart --
+do (if I.condition(*long*) then
+       (I.writeReg,24,g1) -> sll_i -> mstate.b.emit;
+       (I.writeReg,8,l6) -> srl_i -> mstate.b.emit;
+       (L6,0xFF,L6) -> AND_I -> mstate.b.emit;
+       (L6,16,L6) -> sll_i -> mstate.b.emit;
+       (g1,L6,g1) -> sparc_OR -> mstate.b.emit;
+       (I.writeReg,16,l6) -> srl_i -> mstate.b.emit;
+       (L6,0xFF,L6) -> AND_I -> mstate.b.emit;
+       (L6,8,L6) -> sll_i -> mstate.b.emit;
+       (g1,L6,g1) -> sparc_OR -> mstate.b.emit;
+       (I.writeReg,24,I.writeReg) -> srl_i -> mstate.b.emit;
+       (g1,I.writeReg,I.writeReg) -> sparc_OR -> mstate.b.emit;
+    else
+       (I.writeReg,0xFF,g1) -> AND_I -> mstate.b.emit;
+       (g1,8,g1) -> sll_i -> mstate.b.emit;
+       (I.writeReg,8,I.writeReg) -> srl_i -> mstate.b.emit;
+       (I.writeReg,0xFF,I.writeReg) -> AND_I -> mstate.b.emit;
+       (I.writeReg,g1,I.writeReg) -> sparc_OR -> mstate.b.emit;
+   if);
+   
+--backendgGetDataByte:dopart --
+do (if i.imm (*  byteNo *)
+    // 0 then (* shift right 24 *)
+       (i.readReg,24,i.writeReg)->SRL_I->Bemit
+    // 1 then (* shift right 16 *)
+       (i.readReg,16,i.writeReg)->SRL_I->Bemit;
+       (i.writeReg,255,i.writeReg)->AND_I->Bemit
+    // 2 then (* shift right 8 bits *)
+       (i.readReg,8,i.writeReg)->SRL_I->Bemit;
+       (i.writeReg,255,i.writeReg)->AND_I->Bemit
+    // 3 then (* shift right 8 bits *)
+       (i.readReg,255,i.writeReg)->AND_I->Bemit
+   if);
+  
+
+--backendgGetDataWord:dopart --
+do (if (*wordNo*) i.imm = 0 then
+       (i.readReg,16,i.writeReg)->SRL_I->Bemit
+    else
+       (i.readReg,16,i.writeReg)->SLL_I->Bemit;
+       (i.writeReg,16,i.writeReg)->SRL_I->Bemit
+   if);
+
+--backendarithShiftLeftImm:dopart --
+do (i.readReg,i.imm,i.writeReg)->SLL_I->Bemit
+   
+--backendarithShiftLeftReg:dopart --
+do (i.readReg,i.readReg2,i.writeReg)->SLL->Bemit
+   
+--backendlogicalShiftLeftImm:dopart --
+do (i.readReg,i.imm,i.writeReg)->SLL_I->Bemit
+
+--backendlogicalShiftLeftReg:dopart --
+do (i.readReg,i.readReg2,i.writeReg)->SLL->Bemit
+
+--backendarithShiftRightImm:dopart --
+do (i.readReg,i.imm,i.writeReg)->SRA_I->Bemit
+
+--backendarithShiftRightReg:dopart --
+do (i.readReg,i.readReg2,i.writeReg)->SRA->Bemit
+
+--backendlogicalShiftRightImm:dopart --
+do (i.readReg,i.imm,i.writeReg)->SRL_I->Bemit
+   
+--backendlogicalShiftRightReg:dopart --
+do (i.readReg,i.readReg2,i.writeReg)->SRL->Bemit 
+
+--backendrotateLeftImm:dopart --
+do (* Empty *)   
+--backendrotateLeftReg:dopart --
+do (* Empty *)   
+--backendrotateRightImm:dopart --
+do (* Empty *)   
+--backendrotateRightReg:dopart --
+do (* Empty *)   
+   
+--backendBeginLabel:dopart --
+do (* empty *)
+
+--backendFreeLabel:dopart --
+do (* not used ???*)
+
+--backendEndLabel:dopart --
+do (* empty *)
+
+--backendAllocObj:doPart--
+(* %o0 = origin
+ * %o1 = 1. arg
+ * %o2 = 2. arg
+ * %o3 = ...
+ * 
+ * FIXME! The entry code here must be fixed to be
+ * able to work with garbage collection.
+ * Should look like a call back entry, but also
+ * be prepared to be called from C
+ *)
+do (O1,L7) -> MOV -> mstate.b.emit;     (* save 1. arg. in L7 *)
+   (SP,-frame_size,SP) -> SAVE_I -> mstate.b.emit;
+   (* now %i0 = origin, %i1 = free, %i2 = 2. arg *)
+   (I0,O0) -> MOV -> mstate.b.emit;     (* origin -> %o0 *)
+
+   'AlloI'->I.label[];
+   I[] -> CallAlloPrimImpl;
+
+   (* I1 = new object; I2 = 2. arg  *)
+   (I1,I0) -> MOV -> mstate.b.emit; (* new object -> I0 *)
+   
+   (G0,G0,G0) -> RESTORE -> mstate.b.emit; 
+   (L7,O1) -> MOV -> mstate.b.emit;
+   (SP,-frame_size,SP) -> SAVE_I -> mstate.b.emit;
+   (* I0 = new object, I1 = 1. arg, I2 = 2. arg, ... *)
+
+   
+--backendsaveInnerReturn:dopart --
+do (SP,8,SP)->SUB_I->Bemit;
+   (SP,frame_size,O7)->ST_I->Bemit;
+
+--backendreturnInner:dopart --
+do (SP,frame_size,O7)->LD_I->Bemit;
+   (SP,8,SP)->add_I->Bemit;
+   O7 -> AssertRegisterNotZero;
+   RETL->Bemit;
+   EmitDelayNOP
+
+--backendReturnVirtualCOM:doPart--
+do I[] -> ReturnImpl
+   
+---backendExternalEntry:doPart---
+do I.label[]->labelDef;
+   (* is the following commetn still valid or does it only hold
+    * for switch 65?
+    *)
+   (* %o0 = @@struc, %i0,%i1,...,%i5, SP(64+...) are parameters;
+    * save parameters in on stack
+    *    SP + 156 (92) -> | Outgoing parameters past the sixth
+    *                     |-------------------------------------
+    *    SP + 132 (68) -> | Six words for storing %o0-%05
+    *                     |-------------------------------------
+    *    SP + 128 (64) -> | store of possible return aggregate
+    *                     |-------------------------------------
+    *	   	          | register window for calling C function
+    *     SP + 64 (0)  -> |
+    *                     |-------------------------------------
+    *  		          | frame saved by dynamic CallBack code
+    * 		    SP -> |
+    *                     |-------------------------------------
+    * struc.origin -> %o0
+    * struc.Ventry -> %i1
+    * jsr %i1
+    * transfer parameters
+    * jsr M1FOO
+    * get exit
+    * return
+    *)
+   
+   (*SaveReturn;*)
+   (I1,O0)->MOV->mstate.b.emit;
+   (SP, -frame_size, SP)->SAVE_I->mstate.b.emit;
+   (I0,O0)->MOV->mstate.b.emit
+   
+---backendExternalMark:doPart---
+do (* empty *)
+   
+---backendExternalReturn:doPart---
+do RET->mstate.b.emit;
+   (G0,G0,G0)->RESTORE->mstate.b.emit;   
+   
+---backendXpar:Descriptor---;
+(# putNo,getNo,last: @integer; dreg: [5] @integer #)
+
+---backendinitXpar:doPart---
+do 1->Xpar.putNo->xPar.getNo;
+   
+   
+---backendNoOfPreGetXpar:dopart---
+do (5,noOfPar)->min -> xPar.last->value;
+   (if xPar.putNo > xPar.last then
+       (* in case of no argmuments, but ugly *)
+       (I0,I1)->MOV->mstate.b.emit
+   if)
+
+---backendPreGetXpar:doPart---
+do (I0+xPar.putNo,I.writeReg)->MOV->mstate.b.emit;
+   (if xPar.putNo > 1 then I0+xPar.putNo->CLR->mstate.b.emit if);
+   xPar.putNo+1->xPar.putNo;   
+   (if xPar.putNo > xPar.last then
+       (I0,I1)->MOV->mstate.b.emit
+   if)
+   
+--- backendgetXlong:doPart---
+do (if Xpar.getNo <= 4 then
+       (* I.writeReg contains the parameter already *)
+    else
+       (I.readReg,(Xpar.getNo-5)*4,I.writeReg)->LD_I->mstate.b.emit
+   if);
+   Xpar.getNo+1->Xpar.getNo
+
+---backendgetXword:doPart---
+do '\n++++ backendgetXword NOT implemented'->putline
+   
+---backendgetXbyte:doPart---
+do '\n++++ backendgetXbyte NOT implemented'->putline
+   
+---backendtoXres:doPart---
+do (I.readReg,I0)->MOV->Bemit 
+
+--backendGetCOMpar:doPart--
+do (* paramNo = 0 is origin which has been handled;
+    * I.writeReg may be a dataReg or an adrReg 
+    *)
+   (if I.paramNo < 6 then
+       (* HERE the input parameter may be in e.g. %i2
+        * and we should just be able to reuse %i2;
+        * currently we copy to writeReg, but the register
+        * allocator is probably confused
+        *)
+       (thisO+I.paramNo,I.writeReg)->MOV->mstate.b.emit
+    else
+       (* see InitExternalCall for the stack layout;
+        * an extra register window has been saved at this point
+        *)
+       (SP, frame_size + 4*(I.paramNo-6)+92,I.writeReg) 
+         -> LD_I 
+         -> mstate.b.emit;
+   if)
+   
+---backendGetRegForXres:doPart---
+do (* not used in sparc *)
+
+--backendEmitTextConst:dopart --
+do 'backendEmitTextConst' -> TODO
+
+--backendgClr:dopart --
+do I.writeReg->CLR->Bemit
+
+--backendpushAdr:dopart --
+do I[]->PushCpar
+
+--backendPush:dopart --
+do i[]->PushData
+
+--backendPop:dopart --
+do i[]->PopData
+
+--backendPushThisOrCall:dopart --
+do (if I.bool then 
+       thisO->I.readReg;
+       I[]->pushRef 
+   if);
+   (if I.bool2 then 
+       callO->I.readReg;
+       I[]->pushRef 
+   if)
+
+--backendpopThisOrCall:dopart --
+do (if I.bool2 then 
+       callO->I.readReg;
+       I[]->popRef 
+   if);
+   (if I.bool then 
+       thisO->I.readReg;
+       I[]->popRef 
+   if)
+
+--backendsetTop:dopart --
+do (if (*off*) i.imm <> 0 then
+       (if i.imm < 0 then
+           (* Using sub for negative offsets;
+            * easier to read in disassembly
+            *)
+           (SP,-i.imm,SP)->SUB_I->Bemit
+        else
+           (SP,i.imm,SP)->ADD_I->Bemit
+       if)
+   if)
+
+--backendChkCase:dopart --
+do (* inx = caseIndex-min
+    * if inx >unsigned  (max-min) the  goto elseLab
+    * This ALSO works if caseIndex < min.
+    * Similar to ChkIndex below.
+    * Note that min is NOT used here.
+    *)
+   (I.readReg,(i.size(*max*)-i.readOffSet(*min*)))->CMP_I->mstate.b.emit;
+   (I.labNo->mstate.labs.off) div 4->BGTU->mstate.b.emit;
+   2->I.imm;
+   I[]->logicalShiftLeftImmImpl;   
+
+--backendChkIndex:dopart --
+do (# L: @backendLocalLab;
+      mult: @boolean; log: @integer
+   do 1->mstate.FIXME;
+      (if I.indexCheck then
+          (I.readReg,12,L6)->LD_I->Bemit;
+          (I.inxReg,1,L7)->SUB_I->mstate.b.emit;
+          (L7,L6)->xCMP->mstate.b.emit;
+          L.new;
+          L[]->gBltu;
+      if);
+      (if I.condition (*isSimple*) then
+          (if I.size
+           // 4 then
+              (I.inxReg,2,I.inxReg)->SLL_I->Bemit;
+           // 2 then
+              (I.inxReg,1,I.inxReg)->SLL_I->Bemit;
+           // 1 then
+              (if I.indexCheck then EmitDelayNOP if)
+           // 8 then
+              (I.inxReg,3,I.inxReg)->SLL_I->Bemit;       
+          if)
+       else
+          (if (I.size->exact_log2->log) <> - 1 then
+              (I.inxReg,log,I.inxReg)->SLL_i->mstate.b.emit
+           else
+              true->mult; 
+              (if I.indexCheck then EmitDelayNOP if); 
+          if)
+      if);
+     
+      (if I.indexCheck then
+          ('HandleIndexErr',callMark)->mstate.b.mark;
+          0->CALL->mstate.b.emit;
+          EmitDelayNOP;
+          L.def;          
+      if);
+      (if mult then 
+          I.size->I.imm;
+          I.inxReg->I.readReg2->I.writeReg;
+          i[]->gMultImmImpl 
+      if);
+   #)
+   
+--backendcmpToBool:dopart --
+do (# lab: @backendLocalLab
+   do (i.readReg2,i.readReg)->CMP->mstate.b.emit;
+      Lab.new;
+      (if I.cond (* IF T1 cc R then goto L *)
+       // 1 (* =  *) then
+          (lab.labNo->mstate.labs.off) div 4->BE->Bemit
+       // 2 (* <> *) then
+          (lab.labNo->mstate.labs.off) div 4->BNE->Bemit
+       // 3 (* <  *) then
+          (lab.labNo->mstate.labs.off) div 4->BLT->Bemit
+       // 4 (* <= *) then
+          (lab.labNo->mstate.labs.off) div 4->BLE->Bemit
+       // 5 (* >  *) then
+          (lab.labNo->mstate.labs.off) div 4->BGT->Bemit
+       // 6 (* >= *) then
+          (lab.labNo->mstate.labs.off) div 4->BGE->Bemit
+      if);
+      &BackEndInstruction(#do 1->imm; i.writeReg->writeReg#)->ldCstImpl;
+      (* delay slot *)
+      i[]->gClrImpl; (* olm: ???*)
+      Lab.Def
+   #)
+
+--backendLoadFloat:doPart---
+do  (I.readReg,i.readOffset,I.writeReg*2)->LDDF_I->mstate.b.emit
+   
+--backendLoadFloatInx:doPart---
+do (if I.readOffSet <> 0 then
+       (I.inxreg,I.readOffSet,I.inxReg)->ADD_I->mstate.b.emit
+   if);
+   (I.readReg,i.inxReg,I.writeReg*2)->LDDF->mstate.b.emit;
+   
+--backendStoreFloat:doPart---
+do (I.readReg,i.readOffset,I.readReg2*2)->STDF_I->mstate.b.emit;
+   
+--backendStoreFloatInx:doPart---
+do (if I.readOffSet <> 0 then
+       (I.inxreg,I.readOffSet,I.inxReg)->ADD_I->mstate.b.emit
+   if);
+   (I.readReg,i.inxReg,I.readReg2*2)->STDF->mstate.b.emit;
+   
+--backendStoreFloat2int:doPart---
+do (G0,I.readReg2*2,I.writeReg*2)->FDTOI->mstate.b.emit;
+   (I.readReg,i.readOffset,I.writeReg*2)->STF_I->mstate.b.emit
+   
+--backendStoreFloat2intInx:doPart---
+do (G0,I.readReg2*2,I.writeReg*2)->FDTOI->mstate.b.emit;
+   (I.readReg,i.inxReg,I.writeReg*2)->STF->mstate.b.emit;
+   
+--backendLoadInt2Float:dopart--
+do (I.readReg,I.readOffSet,I.writeReg*2)->LDF_I->mstate.b.emit
+   
+--backendLoadInt2FloatInx:dopart--
+do (if I.readOffSet <> 0 then
+       (I.inxreg,I.readOffSet,I.inxReg)->ADD_I->mstate.b.emit
+   if);
+   (I.readReg,I.inxReg,I.writeReg*2)->LDF->mstate.b.emit;
+   
+--backendfloatConst:dopart --
+do (# x: @real; S: ^text; 
+   do 8->mstate.d.align;
+      mstate.defDataLab
+      (# 
+      do %getLongAt (@@I.floatVal) -> mstate.d.emit;
+         %getLongAt (@@I.floatVal+4) -> mstate.d.emit;
+      #)->S[];
+      (S[],setHiMark)->mstate.b.mark;
+      (G1,0)->SETHI->mstate.b.emit;
+      (S[],setLoMarkLdd)->mstate.b.mark;
+      (G1,0,I.writeReg*2)->LDDF_I->mstate.b.emit
+   #)  
+
+--backendint2float:dopart --
+do (G0,I.readReg*2,I.writeReg*2)->FITOD->mstate.b.emit
+
+--backendintReg2float:dopart --
+do (# S: ^text
+   do mstate.defDataLab (#  do 0->mstate.d.emit #)->S[];
+      (S[],setHiMark)->mstate.b.mark;
+      (G1,0)->SETHI->mstate.b.emit;
+      (S[],setLoMarkSt)->mstate.b.mark;
+      (G1,0,I.readReg)->ST_I->mstate.b.emit;
+      (S[],setLoMarkLd)->mstate.b.mark;
+      (G1,0,0(*I.writeReg2*2*))->LDF_I->mstate.b.emit;
+      (0,0(*I.writeReg2*2*),I.writeReg*2)->FITOD->mstate.b.emit;
+#) 
+
+--backendfloat2int:dopart --
+do (if not mstate.float2IntTmp then
+       switchToData;
+       'BetaFloat2IntTmp'->labelDef;
+       0->DeclareLong;
+       switchToCode;
+       true->mstate.float2IntTmp
+   if);
+   (G0,I.readReg*2,I.writeReg2*2)->FDTOI->mstate.b.emit;
+   ('BetaFloat2IntTmp',G1)->PutSetText;      (* OBS G1 is used here !*)
+   (G1,0,I.readReg*2)->STF_I->mstate.b.emit; 
+   (G1,0,I.writeReg)->LD_I->mstate.b.emit
+
+--backendcmpToBoolFloat:dopart --
+do (# Lab: @backendLocalLab;
+   do lab.new;
+      (if I.cond (* IF T1 cc R then goto L *)
+       // 1 (* =  *) then
+          (lab.labNo->mstate.labs.off) div 4->FBE->mstate.b.emit
+       // 2 (* <> *) then
+          (lab.labNo->mstate.labs.off) div 4->xFBNE->mstate.b.emit
+       // 3 (* <  *) then
+          (lab.labNo->mstate.labs.off) div 4->FBL->mstate.b.emit
+       // 4 (* <= *) then
+          (lab.labNo->mstate.labs.off) div 4->xFBLE->mstate.b.emit
+       // 5 (* >  *) then
+          (lab.labNo->mstate.labs.off) div 4->FBG->mstate.b.emit
+       // 6 (* >= *) then
+          (lab.labNo->mstate.labs.off) div 4->xFBGE->mstate.b.emit
+       else
+          '\n****OBS! backendcmpToBoolFloat: illegal condition'->putline
+      if);
+      1->I.imm; I[]->ldCstImpl; (* in delay slot *)
+      I[]->gClrImpl;
+      lab.def
+   #)
+
+--backendpopFStack:dopart --
+do (*  empty *)
+
+--backendcmpFloat:dopart --
+do (I.readReg*2,I.readReg2*2,G0)->FCMPD->mstate.b.emit;
+
+--backendaddFloat:dopart --
+do (i.readReg*2,i.readReg2*2,i.writeReg*2)->FADDD->Bemit; 
+
+--backendsubFloat:dopart --
+do (i.readReg*2,i.readReg2*2,i.writeReg*2)->FSUBD->Bemit; 
+
+--backendmulFloat:dopart --
+do (i.readReg*2,i.readReg2*2,i.writeReg*2)->FMULD->Bemit; 
+
+--backenddivFloat:dopart --
+do (i.readReg*2,i.readReg2*2,i.writeReg*2)->FDIVD->Bemit; 
+
+--backendnegFloat:dopart --
+do (I.readReg*2,I.readReg*2,I.writeReg*2)->FNEGS->mstate.b.emit (* why format 3 *)
+   
+   
+--backendLoadSpilledDataRegImpl:dopart --
+do 'backendLoadSpilledDataRegImpl'->TODO
+   
+--backendSpillDataRegImpl:dopart--
+do 'backendSpillDataRegImpl'->TODO
+   
+--backendlock:dopart --
+do 'backendlock'->TODO
+
+--backendallRegInPrimReg2I:dopart --
+do 'backendallRegInPrimReg2I'->TODO
+
+--backendGetOriginReg:dopart --
+do (* empty *)
+
+--backendFreeOriginReg:dopart --
+do (* empty *)
+
+--backendDataRegMax:dopart --
+do 'backendDataRegMax'->TODO
+
+--backendNoOfFreeDataReg:dopart --
+do 'backendNoOfFreeDataReg'->TODO
+
+--backendDumpReg:dopart --
+do' backendDumpReg'->TODO
+
+--backendPushReg:dopart --
+do 
+   16->mstate.floatReg.R.new;
+   
+   liveFloats[]->scanbitvektor32
+   (#
+   do 1->mstate.floatReg.R[current+1]
+   #);
+   (if mstate.floatRegBusy then
+       0 -> mstate.SaveBusyReg(# do 2->AllocateSpace; (2,true)->SaveFloats #)
+   if)
+
+--backendPopReg:dopart --
+do 
+   (* clear floatreg repetition *)
+   16->mstate.floatReg.R.new;
+   
+   liveFloats[]->scanbitvektor32
+   (#
+   do 1->mstate.floatReg.R[current+1]
+   #);
+   
+   (if mstate.floatRegBusy then
+       0 -> mstate.RestoreBusyReg(# do true->RestoreFloats; 2->DeallocateSpace #)
+   if)
+
+--backendPushDataReg:dopart --
+do 'backendPushDataReg'->TODO
+
+--backendPopDataReg:dopart --
+do 'backendPopDataReg'->TODO
+
+--backendPushFloatReg:dopart --
+do 'backendPushFloatReg'->TODO
+
+--backendPopFloatReg:dopart --
+do 'backendPopFloatReg'->TODO
+
+--backendtstNone:dopart --
+do (if common.switch[77] then
+       (* force read of R to %G0 to check for NONE or lazy ref;
+        * used for new persistence implementation.
+        *)
+       (I.writeReg,0,G0) -> LD_I -> mstate.b.emit
+    else       
+       I.writeReg->TST->mstate.b.emit; 
+       17->TLE_I->mstate.b.emit (* equivalent to cond_le ->trap *);
+   if)
+
+--backendtrap:dopart --
+do 17->TLE_I->Bemit
+
+--backendreturn:dopart --
+do RET->Bemit; 
+   (G0,G0,G0)->RESTORE->Bemit; 
+
+--backendsaveReturn:dopart --
+do (I1,O0)->MOV->Bemit;
+   (SP,-frame_size,SP)->SAVE_I->Bemit;
+   ClearAdrTmpRegs
+
+--backendrts:dopart --
+do (if not common.switch[214] then EmitDelayNOP if);
+   O7 -> AssertRegisterNotZero;
+   RETL->Bemit;
+   EmitDelayNOP
+
+--backendSaveReg:dopart --
+   (* Save registers a0 and a1 *)
+(* saveReg/restoreReg are called from evlib:pushThisAndCall and
+ * when calling externals.
+ * These two situations should be distinguished
+ *)
+do (SP,16,SP)->SUB_I->mstate.b.emit;
+   (SP,frame_size,I1)->ST_I->mstate.b.emit;
+   (SP,frame_size+8,I0)->ST_I->mstate.b.emit;
+
+--backendRestoreReg:dopart --
+   (* Restore registers a0 and a1 *)
+
+do (SP,frame_size,I1)->LD_I->mstate.b.emit;
+   (SP,frame_size+8,I0)->LD_I->mstate.b.emit;
+   (SP,16,SP)->ADD_I->mstate.B.emit;
+
+--backendGetPrimRes:dopart --
+do (# (* GetPrimRes MUST always be called in order to update o-registers*) 
+   xMovePrimToX: 
+     (# Oreg: @oRegOperand; On: @integer
+     do (if mstate.Xlevel > 1 then
+            mstate.busyO[mstate.Xlevel-1]->oN;
+            oN+O0->Oreg;
+            (if oN <> 0 then
+                (if Oreg <= O5 then
+                    (* Put O0 in Oreg *)
+                    (O0,Oreg.reg)->MOV->mstate.b.emit
+                 else
+                    (* Store O0 in 'outgoing argument area' on stack *)
+                    (if mstate.xbusyAllocated or mstate.dbusyallocated then
+                        (SP,4*(Oreg-O6)+276,O0)->ST_I->mstate.b.emit;
+                     else
+                        (SP,4*(Oreg-O6)+92,O0)->ST_I->mstate.b.emit;
+                    if)
+                if)
+            if);
+            true->mstate.xFreeOreg;
+            oN+1->mstate.xCnt;
+         else
+                (* cError (#  do 'xMovePrimToX'->T #)*) 
+            'xMovePrimToX' -> TODO
+        if)
+     #);
+
+do (if mstate.parSpace > 0 then
+       (* This may happen if a primitive has more than 11 arguments.
+        * This should NEVER happen. However, it may not be a problem.
+        * This situation has not been considered
+        *)
+       (*cError(#do 'GetPrimRes:Primitive with more than 11 arguments' ->T#)*)
+       'GetPrimRes:Primitive with more than 11 arguments' -> TODO
+       
+   if);
+      (if i.imm (*res???*)
+    // 0 (* o: ignore result*) then
+       true->mState.xFreeOreg
+    // 1 // 3 (* use result *) then (* 3 should be optimized as for MIPS *)
+       (O0,i.writeReg)->MOV->mstate.b.emit; 
+       true->mState.xFreeOreg
+    // 2 (* result is X-parameter *) then
+       xMovePrimToX
+    // 4 (* result is text to be returned by COM virtual *)then
+       (O0,I0) -> MOV -> mstate.b.emit;
+       true->mSTate.xFreeOreg       
+   if);
+#)
+
+--backenddeclareLong: doPart--
+do N->mstate.d.emit
+   
+--backenddeclareWord: doPart--
+do  N->mstate.d.emitHalf
+   
+--backenddclWord: doPart--
+do N->mstate.d.emitHalf
+   
+--backendemitByte: doPart--
+do B->mstate.d.emitByte
+   
+--backendDeclareAddress:dopart --
+do (if trace_back then
+       '>>> backend: declareaddress: '->puttext; newline
+   if);
+   (* only locallabs with betalabel *)
+   (* a local label in a case table in code 
+    * or a virtual label in a prototype
+    *)
+   (i.labNo->LocalLabtext,wordMark)->mstate.b.mark; 
+   0->mstate.b.emit
+   
+--declareDataSegmentLabelAddressImpl:dopart--
+do (if trace_back then
+       '>>> backendDeclareDataSegmentLabelAddress: '->puttext;
+        i.labNo ->localLabtext -> putline;
+   if);
+   (i.labNo->localLabText,wordMark)->mstate.d.mark; 
+   0->mstate.d.emit
+   
+--declareDataSegmentTextAddressImpl:dopart--
+do (if trace_back then
+       '>>> backendDeclareDataSegmentTextAddress: '->puttext;
+       i.label[] -> putline;
+   if);
+   (i.label[],wordMark)->mstate.d.mark; 
+   0->mstate.d.emit
+   
+--backendChkConstIndex:dopart --
+do 'backendChkConstIndex'->TODO
+
+--backendjsrTable:dopart --
+do (if I.condition then
+       (*I.readReg -> AssertRegisterNotZero;*)
+       I.proto[]->doCall (#  do (I.readReg,0,O7)->JMPL_I->mstate.b.emit #)
+    else
+       I[]->JsrRegImpl
+   if)  
+
+--backendjmpTlong:dopart --
+   (* OBS! labArg[] from OLD SPARCmachine is NOT used *)
+do (i.label[],setHiMark)->mstate.b.mark;
+   (I5,0)->SETHI->Bemit;
+   (i.label[],setLoMarkJmp)->mstate.b.mark;
+   (I5,0,G0)->JMPL_I->Bemit;
+   EmitDelayNOP;
+   
+--backendjmpT:dopart --
+do I[] -> jmptLongImpl
+
+--backendjsrT:dopart --
+do i.proto[]->doCall
+   (# 
+   do (if stack_alloc_trace then
+          '\n<' -> bugstream.puttext; 
+          i.label[] -> bugstream.puttext; 
+          '>' -> bugstream.put;
+       if);
+      (i.label[],callMark)->mstate.b.mark; 
+      0->CALL->Bemit; 
+      true -> isCall
+   #)  
+
+--backendjsrReg:dopart --
+do doCall2
+   (#  
+   do i.proto[]->doCall
+      (#  
+      do i.readReg -> AssertRegisterNotZero;
+         (i.readReg,0,O7)->JMPL_I->Bemit
+      #) 
+   #) 
+
+--backendjmpReg:dopart --
+do i.readReg -> AssertRegisterNotZero;
+   (i.readReg,0,G0)->JMPL_I->Bemit; 
+   EmitDelayNOP  
+
+--backendgJsr:dopart --
+do doCall2
+     (# 
+     do i.proto[]->doCall
+          (# 
+          do (i.label[],callMark)->mstate.b.mark;
+             0->CALL->Bemit;
+             true -> isCall
+          #)
+     #) (* Is only called from SetPC to execute a do-part*)  
+
+--backendjsrTableTest:dopart --
+do 'backendjsrTableTest'->TODO
+
+--backendJumpIfTrue:dopart --
+do 'backendJumpIfTrue'->TODO
+
+--backendgBeq:dopart --
+do (i.labNo->mstate.labs.off) div 4->BE->Bemit; 
+   EmitDelayNOP
+
+--backendgBne:dopart --
+do (i.labNo->mstate.labs.off) div 4->BNE->Bemit; 
+   EmitDelayNOP
+
+--backendgBge:dopart --
+do (i.labNo->mstate.labs.off) div 4->BGE->Bemit; 
+   EmitDelayNOP
+
+--backendgBae:dopart --
+do (i.labNo->mstate.labs.off) div 4->BCC->Bemit; 
+   EmitDelayNOP
+
+--backendgBle:dopart --
+do (i.labNo->mstate.labs.off) div 4->BLE->Bemit; 
+   EmitDelayNOP
+
+--backendgBbe:dopart --
+do (i.labNo->mstate.labs.off) div 4->BLEU->Bemit; 
+   EmitDelayNOP
+
+--backendgBgt:dopart --
+do (i.labNo->mstate.labs.off) div 4->BGT->Bemit; 
+   EmitDelayNOP
+
+--backendgBab:dopart --
+do (i.labNo->mstate.labs.off) div 4->BGTU->Bemit; 
+   EmitDelayNOP
+
+--backendgBlt:dopart --
+do (i.labNo->mstate.labs.off) div 4->BLT->Bemit; 
+   EmitDelayNOP
+
+--backendgBbl:dopart --
+do (i.labNo->mstate.labs.off) div 4->BCS->Bemit; 
+   EmitDelayNOP
+
+--backendcmpAndJmp:dopart --
+do (i.readReg,i.readReg2)->CMP->mstate.b.emit;
+   (if i.cond (* IF T1 cc R then goto L *) 
+    // 1 (* =  *) then
+       i[]->gBeqImpl
+    // 2 (* <> *) then
+       i[]->gBneImpl
+    // 3 (* <  *) then
+       i[]->gBltImpl
+    // 4 (* <= *) then
+       i[]->gBleImpl
+    // 5 (* >  *) then
+       i[]->gBgtImpl
+    // 6 (* >= *) then
+       i[]->gBgeImpl
+   if)
+   
+--backendcmpAndJmpImm:dopart --
+do (i.readReg,i.imm)->CMP_I->mstate.b.emit;
+   (if i.cond (* IF T1 cc R then goto L *) 
+    // 1 (* =  *) then
+       i[]->gBeqImpl
+    // 2 (* <> *) then
+       i[]->gBneImpl
+    // 3 (* <  *) then
+       i[]->gBltImpl
+    // 4 (* <= *) then
+       i[]->gBleImpl
+    // 5 (* >  *) then
+       i[]->gBgtImpl
+    // 6 (* >= *) then
+       i[]->gBgeImpl
+   if)
+
+--backendcmpBoolAndJmp:dopart --
+do (i.readReg,0)->CMP_I->mstate.b.emit;
+   (if i.cond (* IF T1 cc R then goto L *)
+    // 1 (* =  *) then
+       i[]->gBeqImpl
+    // 2 (* <> *) then
+       i[]->gBneImpl
+    // 3 (* <  *) then
+       i[]->gBltImpl
+    // 4 (* <= *) then
+       i[]->gBleImpl
+    // 5 (* >  *) then
+       i[]->gBgtImpl
+    // 6 (* >= *) then
+       i[]->gBgeImpl
+   if)
+
+
+--backendcmpAndJmpFloat:dopart --
+do (if I.cond (* IF T1 cc R then goto L *)
+    // 1 (* =  *) then
+       I[]->fBeqImpl
+    // 2 (* <> *) then
+       I[]->fBneImpl
+    // 3 (* <  *) then
+       I[]->fBltImpl
+    // 4 (* <= *) then
+       I[]->fBleImpl
+    // 5 (* >  *) then
+       I[]->fBgtImpl
+    // 6 (* >= *) then
+       I[]->fBgeImpl
+   if)
+
+
+--backendfBeq:dopart --
+do (i.labNo->mstate.labs.off) div 4->FBE->Bemit; 
+   EmitDelayNOP
+
+--backendfBge:dopart --
+do (i.labNo->mstate.labs.off) div 4->xFBGE->Bemit;
+   EmitDelayNOP
+   
+--backendfBle:dopart --
+do (i.labNo->mstate.labs.off) div 4->xFBLE->Bemit;
+   EmitDelayNOP
+
+--backendfBne:dopart --
+do (i.labNo->mstate.labs.off) div 4->xFBNE->Bemit;
+   EmitDelayNOP
+
+--backendfBgt:dopart --
+do (i.labNo->mstate.labs.off) div 4->FBG->Bemit; 
+   EmitDelayNOP
+
+--backendfBlt:dopart --
+do (i.labNo->mstate.labs.off) div 4->FBL->Bemit; 
+   EmitDelayNOP
+
+--backendgJmp:dopart --
+do (i.labNo->mstate.labs.off) div 4->BA->Bemit; 
+   EmitDelayNOP  
+
+--backendCallPrim:dopart --
+do  (if false (* can we eliminate this? mstate.isBetaEnv *) then
+       i.proto[]->doCall
+       (#  
+       do (i.label[],callmark)->mstate.b.mark; 
+          0->CALL->mstate.b.emit;
+          true -> isCall
+       #)
+     else
+        (if 'CopyCT'->I.label.equal then
+            (* temporary hack!*)
+            6->mstate.FIXME;
+            (SP,8,SP)->SUB_I->mstate.b.emit;
+            (SP,frame_size,L0)->ST_I->mstate.b.emit;
+            (O0,L0)->MOV->mstate.b.emit
+        if);
+        i[]->jsrTimpl;
+        (if 'CopyCT'->I.label.equal then
+            (SP,frame_size,L0)->LD_I->mstate.b.emit; 
+            (SP,8,SP)->ADD_I->mstate.B.emit
+        if)
+   if)
+
+--backendCallAlloPrim:dopart --
+do (if trace_back then
+       '>>> CallAlloPrim: ' -> puttext; I.label[] -> puttext;
+       ' '->put; I.proto[] -> putline;
+   if);
+   
+   (if  not common.switch[68] and mstate.isBetaEnv then
+       i.proto[]->doCall
+         (#  do (i.label[],callMark)->mstate.b.mark; 0->CALL->mstate.b.emit #);
+       (*T[]->definePrim ??? *)
+       
+    else
+       i[]->jsrTimpl
+   if);
+
+--backendinitPrimCall:dopart --
+do (i.imm(*noOfPar*),true)->mState.xInitOreg
+
+--backendPushClong:dopart --
+do i[]->PushCpar
+   
+--backendPushClongImm:dopart --
+do (failureTrace,'backendpuchclongimm NOT supported on sparc')->stop
+   
+--backendPushCdouble:dopart --
+do 4->I.size; (* is probaly 8 corresponding to double
+               * but we load it as 2 4-byte values
+               *)
+   I[] -> pushCparFromMem;   
+   I.readOffSet+4 -> I.readOffSet;
+   I[] -> pushCparFromMem;
+   
+--backendPushCfloat:dopart --
+do (# toMem:
+        (#
+        do 8->mstate.d.align;
+           mstate.defDataLab (#  do 0->mstate.d.emit; 0->mstate.d.emit #)->S[];
+           (S[],setHiMark)->mstate.b.mark;
+           (G1,0)->SETHI->mstate.b.emit;
+           (S[],setLoMark)->mstate.b.mark;
+           (G1,0,G1)->OR_I->mstate.b.emit;
+           (G1,0,I.readReg*2)->STDF_I->mstate.b.emit;
+        #);
+   
+      CP1,CP2: ^oRegOperand; S: ^text; 
+      SPoff: @integer; 
+   do mstate.xGetOreg->CP1[];
+      mstate.xGetOreg->CP2[];
+      (* should go via pushCpar to check if oreg>=5 *)
+      (if CP1 <= O5 then
+          toMem;
+          (G1,0,CP1.reg1)->LD_I->mstate.b.emit;
+          (if CP2 <= O5 then
+              (* whole float in O-registers *)
+              (G1,4,CP2.reg1)->LD_I->mstate.b.emit
+           else 
+              (* first half in O5 second half on stack *)
+              (G1,4,L7)->LD_I->mstate.b.emit;
+              (SP,4*(CP2-6-O0)+92,L7)->ST_I->mstate.b.emit;           
+          if)
+       else
+          (*pass all on stack *)
+          (* (CP1,CP2) = (O0 + 6, O0 + 7) = (SP+92,SP+96) - alignment problem
+           *           = (O0 + 7, O0 + 8) = (SP+96,SP+100) 
+           *)
+          4*(CP1-6-O0)+92 -> SPoff;       
+          (if (CP1 mod 2) = 0 then
+              (* we cannot store a float directly
+               * since SP+92 is NOT 8-byte aligned *)
+              toMem;
+              (* Old SPARCmachine used dataTmp instead of L7 *)
+              (G1,0,L7) -> LD_I -> mstate.b.emit;
+              (SP,SPoff,L7) -> ST_I -> mstate.b.emit;           
+              (G1,4,L7) -> LD_I -> mstate.b.emit;
+              (SP,SPoff+4,L7) -> ST_I -> mstate.b.emit;           
+           else
+              (SP,SPoff,I.readReg*2) -> STDF_I -> mstate.b.emit;
+          if)          
+      if)
+   #)  
+
+   
+   
+--backendInitExternalCall:dopart --
+   (* See http://www.daimi.au.dk/~beta/doc/betarun/internal/SparcStack.html#betaframe
+    * and http://www.daimi.au.dk/~beta/doc/betarun/internal/SparcStack.html#savebusy.
+    * C call, n params:
+    *
+    *        set     betastacktop, %g1
+    *        st      %sp, [%g1]
+    *
+    *        sub     %sp, space_needed(n), %sp
+    *        mov     ..., %o0                ! 1. argument
+    *        ..
+    *        mov     ..., %o5                ! 6. argument
+    *        st      ..., [%sp+92]           ! 7. argument
+    *        st      ..., [%sp+96]           ! 8. argument
+    *        ..
+    *        st      ..., [%sp+92+(n-7)*4]   ! n'te argument
+    *        call    C_routine
+    *        nop
+    *        add     %sp, space_needed(n), %sp
+    *
+    * where
+    * 
+    *  space_needed(n) = round_to_nearest_8(4*(n-11)), if n > 11
+    *                    0                           , otherwise
+    * 
+    *  Notice that up to 5 stack arguments can be pushed without 
+    *  allocating extra stack space. 
+    *  See http://www.daimi.au.dk/~beta/doc/betarun/internal/SparcStack.html#betaframe.
+    * 
+    * To handle busy floating point registers during external calls:
+    * - assume that (some) FP-registers are busy during external calls
+    * - stack space will be reserved for (all) FP-registers
+    * - there are 32 FP-registers that can hold 16 FP values
+    *   that will need 32 * 4 bytes = 128 bytes
+    * - Besides this 8 bytes are set aside for a tag that will
+    *   allow the GC to ignore the part of the stack used for the
+    *   float regs.
+    * - The actual saving appears in the SaveBusyRegs pattern.
+    * - See http://www.daimi.au.dk/~beta/doc/betarun/internal/SparcStack.html#savebusy.
+    *)
+do 
+   (* set the current live registers *)
+   16->mstate.floatReg.R.new;
+   liveFloats[]->scanbitvektor32
+   (#
+   do 1->mstate.floatReg.R[current+1]
+   #);
+   
+   (i.size (* noOfPar *),false)->mState.xInitOreg;
+   
+--backendCallC:dopart --
+do (# floatbusy: @boolean
+   do
+      (if false (* is this handled by the caller of backend?
+                 * exitType = 7 ( *double*) then
+          (# (*fp,fp0: @floatRegOp; *)
+          do (* fp.alloc; *)
+             (if i.writeReg <> 0 then
+                 (* %f0 is busy - save it until after the call *)
+                 (*floatTmp->mstate.saveF0[];*)
+                 (* datpete-tmpFloatAlloc: mstate.saveF0 could be alloc'ed instead *)
+                 (*(fp0[],mstate.saveF0[])->fMov;*)
+                 (* 0->pushFloatReg; mstate.saveF0.rN->popFloatReg *)
+                 
+             if);
+             (*fp.deAlloc*)
+          #);
+          
+      if);
+      (if common.switch[65] then 
+          <<SLOT backendCallCprocSaveStack:Descriptor>> 
+      if);
+      mstate.floatRegBusy(*OtherThanF0*) -> floatbusy;
+      (if floatbusy then
+          (if stack_alloc_trace then
+              '\n<CallCproc:7>'->screen.puttext;
+          if);
+          mstate.parspace -> mstate.SaveBusyReg(# do (1,false) -> SaveFloats #);
+      if);
+      (* solaris assumed; no '_' in C-entry-points *)
+      (if stack_alloc_trace then
+          '\n<' -> bugstream.puttext; 
+          i.label[]-> bugstream.puttext; '>' -> bugstream.put;
+      if);
+      i.proto[]->doCall
+      (# 
+      do (i.label[],callMark)->mstate.b.mark; 
+         0->CALL->mstate.b.emit;
+         true -> isCall
+      #);
+      (if floatbusy then
+          (if stack_alloc_trace then
+              '\n<CallCproc:-7>'->screen.puttext;
+          if);
+          mstate.parspace -> mstate.RestoreBusyReg(# do RestoreFloats #);
+      if);
+      (*(if common.switch[65] then 
+       <<SLOT CallCprocRestoreStack:Descriptor>> 
+       if);*)
+   #)  
+   
+--backendExternalDispatch:doPart--
+do doCall(#do (I.readReg,0,O7)->JMPL_I->mstate.b.emit #)
+   
+--backendNoXres:doPart---
+do getExternalResult (* clean-up *)
+   
+---backendgetSimpleXres:doPart--
+do getExternalResult
+   (#
+   do I[]->getSimpleRes
+   #)
+   
+---backendgetTextXres:doPart--- (* currently NOT used *)
+do getExternalResult
+   (# 
+   do (if true then
+          I[]->getSimpleRes
+       else
+          (O0,L0) -> MOV -> mstate.b.emit; 
+          (* CopyCT expects input argument i %l0
+           * consider chaning this to %o0,
+           * but check use of CopyCT at other
+           * places, like CallBac*)
+          'CopyCT'->I.label[];
+          I[] -> jsrTImpl;
+          (O0,I.writeReg)  -> MOV -> mstate.b.emit;
+      if)
+   #)
+   
+---realXresIsDouble:doPart---
+do false -> value
+   
+---backendgetDoubleXres:doPart---
+do getExternalResult(#do I[]->getDoubleRes #)
+   
+---backendgetFloatXres:doPart---
+do getExternalResult
+   (# (*FP0: @floatRegOp*)
+     do (if I.writeReg <> 0 then
+            (* move %f0,%FP 
+             * move mstate.saveF0, %f0
+
+            (FP0[],FP[])->Fmov;
+            (mstate.saveF0[],FP0[])->Fmov;
+             *)  
+            (0, f0, I.writeReg*2) -> FMOVS -> mstate.b.emit;
+            (** OBS 1st arg NOT used *)
+            (0, f1, I.writeReg*2+1) -> FMOVS->mstate.b.emit;
+            4->mstate.FIXME
+        if);
+     #);
+   
+---backendgetDataRefXres:doPart---
+do getExternalResult
+   (#
+   do I[]->getSimpleRes
+   #)
+   
+---backendgetDataPartXres:doPart---
+do 5 -> mstate.FIXME;
+   getExternalResult
+   (#
+   do I[] -> getSimpleRes 
+      (*(O0,drA.reg1) -> MOV -> mstate.b.emit (* apparently return is
+                                             * %O7 + 12 and NOT
+                                             * %O7 + 8
+                                             * ???
+                                             *)
+   #);
+   
+---backendgetSaveHeapTop:doPart---
+do (# T: @text
+   do 'BetaStackTop'->T;
+      (T[],setHiMark)->mstate.b.mark;
+      (G1,0)->SETHI->mstate.b.emit;
+      (T[],setLoMarkSt)->mstate.b.mark;
+      mstate.B.markLastAsData;
+      (G1,0,SP)->ST_I->mstate.b.emit;
+   #)
+   
+---backendXparForward:doPart--
+do true -> value
+   
+--backendInlineAlloiNGNP:dopart --
+do 'backendInlineAlloiNGNP'->TODO
+
+--backenddeAllocIOA:dopart --
+do 'backenddeAllocIOA'->TODO
+
+--backendStackAlloPrim:dopart --
+do 'backendStackAlloPrim'->TODO
+  
+--backendasciiText:doPart--
+do (if isWtext then
+       T.scanAll
+       (#  do ch->mstate.d.emitHalf #);
+       0->mstate.d.emitHalf
+    else
+       T.scanAll
+       (#  do ch->mstate.d.emitByte #);
+       0->mstate.d.emitByte;       
+   if);
+   4->mstate.d.align
+   
+---backendInitMachine:descriptor---
+(#
+do name[] -> BC.name;
+   (if trace_back then
+       '>>>> initMachine: ' -> puttext; name[] -> putline
+   if);
+   (*openDbgInf;*)
+   mstate.Init;
+#)
+
+--backendClose:doPart--
+do (* This is slot EndDataSeg which used to be in CODEmachine *)
+   'BETA_data3'->LabelDef;
+   (***** end EndDataSeg *)
+
+   (* Note, BC.name has the form:
+    *      'somePath/foo-BETA-'
+    * i.e. asmlink:asmExt returns '-BETA-'.
+    * This extension is removed below.
+    * 
+    * Switches:
+    *   24:   only generate .db. Has NOT been tested.
+    *)
+   (# FN,T,name: ^text; switch39: @boolean
+   do (if trace_back then
+          '>>>> closeMachine: ' -> puttext; BC.name -> putline
+      if);
+      BC.name->FN[];
+      (FN.length-5,FN.length)->FN.delete;
+      (* remove '-BETA-' *)
+      FN[]->BC.name;
+      (* producing debug tables *)
+      (* FN[]->saveDbgInf;*)
+      (if trace_back then
+          '>>>>> backendClose: missing: FN[]->saveDbgInf;' -> putline
+      if);
+      (if common.switch[18] then
+          (* write assembly dump to file 'foo...s', 
+           * and NOT to 'foo..s' in order NOT to confuse
+           * dependency analysis
+           *)
+          BC.name->FN[];
+          (*('.',FN.length)->FN.insert;*)
+          '...s'->(FN.copy).append->BC.name;
+          BC.openWrite;
+          '!************** text segment ************\n.text\n'->BC.putX;
+          mstate.b.appendToBC;
+          '\n!************** data segment ************\n.data\n'->BC.putX;
+          '.align 8\n'->BC.putX;
+          common.switch[39]->switch39;
+          (* save current value *)
+          0->mstate.d.emit;
+          (* to ensure that BETA_data3 is printed *)
+          true->common.switch[39];
+          (* emit .word, NOT asm-code *)
+          mstate.d.appendToBC;
+          switch39->common.switch[39];
+          (*mstate.b.emitSymbols;*)
+          (* includes d also *)
+          BC.close;
+          (* remove the extra '.' in 'foo...s' 
+           * (FN.length-1,FN.length-1)->FN.delete;
+           *)
+          FN[]->BC.name;
+          (* restore BC.name to 'somePath/foo' *)
+          
+      if);
+      mstate.emitCodeToFile
+   #)  
+   
+--backendinitCreateDataFile: DoPart--
+do (none,common[],fileName.copy,none) -> init;
+   switchToData;
+   'BETA_DATA' ->export;
+   'BETA_DATA' -> labelDef;
+  (* ' '->comment; (* for the benefit of HP assemblers *)
+   
+--backendendCreateDataFile: DoPart--   
+do (* Double NULL termination to allow for extension of 
+    * BETA_DATA list (by runtime system)
+    *)
+   0 -> declareLong;
+   0 -> declareLong;
+   close;
+   
+--backendNextGroup: DoPart--
+do (* (if isBetaEnv then '% ' -> puttext; if);
+    * id[] -> puttext; ' /* ' -> puttext; groupName[] -> putline;
+    *)
+   (if trace_back then
+       '>>> backendNextGroup: ' -> puttext; id[] -> puttext; newline;
+   if);
+   (id[],false) ->importData;
+   &backendinstruction(#do id[]->label[] #) 
+     ->  declareDataSegmentTextAddressImpl
+   
+--backenddefineMainLabel: doPart--
+do mstate.B.clearDelay;
+   true->mState.isBetaEnv;
+   <<SLOT backendGenBetaRun:descriptor>>
+   
+--backendswitchToCode: doPart--
+do true->mstate.inCode
+   
+--backendswitchToData:doPart--
+do false->mstate.inCode
+   
+
+--backendexport:doPart--
+do (if trace_back then
+       '>>> backendexport: ' -> puttext; lab[] -> putline
+   if);
+   lab.copy
+     ->entryPoints.find
+   (# notFound::  (#  do true->E.export; E[]->entryPoints.insert;  #)
+   do true->E.export
+   #)    
+
+--backendlabelDef:doPart--
+do (if trace_back then
+       '>>> labelDef: ' -> puttext; lab[] -> puttext;
+       (if mstate.inCode then ' inCode' -> putline 
+        else ' inData'->putline 
+       if);   
+   if);
+
+   mstate.B.clearDelay;
+   (if mstate.inCode then
+       (lab.copy,entryDefMark)->mstate.b.mark
+    else
+       (lab.copy,entryDefMark)->mstate.d.mark
+   if);
+
+---backendputD:descriptor--
+(##)
+
+---backendputA:descriptor--
+(##) 
+
+---backendimm:descriptor--
+(##)
+
+-- backendputS: DoPart --
+do 
+ 
+---backendCallCprocSaveStack: descriptor---
+(# #)
+
+---backendaddTargetInfo: doPart---
+do (if data then mstate.d.LIP->E.LIP else mstate.b.LIP->E.LIP if)  
+
+---backendstValInLab: doPart---
+do
+
+---backendldValFromLab: dopart---
+do
+
+---backendEndCodeSeg: dopart--- (* move to backendBody?*)
+do  'BETA_code2'->LabelDef;
+   nopImpl;
+   
+   (* Here used to be a call of beginPrototypes, 
+    * which included only: switchToData 
+    *)
+   switchToData;
+   
+   'BETA_data2'->LabelDef
+
+
+---backendentryPointsInsert: dopart---
+do elm.T[]->mstate.strTbl.insert->elm.m.strInx;
+   mstate.symtabTop+1->mstate.symtabTop->elm.m.symtabInx 
+
+---backendentryPointsEqual: descriptor---
+(# #) (* not used?*)
+
+---backendThisO: dopart---
+do I0->rNo
+   
+---backendCallO: dopart---
+do I1->rNo 
+
+---backendAssertRegisterNotZero: doPart---
+do
+
+-- backendLocalLabDef: DoPart --
+do (if type
+    // dataToCode then
+       labNo->mstate.d.markLocalLab
+    // codeToData then
+       mstate.B.clearDelay;      
+       (asText,entryDefMark)->mstate.b.mark  
+    // codeLocal then
+       mstate.B.clearDelay;
+       (asText,entryDefMark)->mstate.b.mark
+    // interFragment then
+       mstate.B.clearDelay;
+       asText->export; 
+       (asText,entryDefMark)->mstate.b.mark
+    else
+       (* just to be sure to cover all cases*)
+       (if isTextAdr then
+           (* label in data segment for asciz-text or real-const *)
+           labNo->mstate.d.markLocalLab
+        else
+           mstate.B.clearDelay;
+           (*label in code segment *)
+           (if betaLabel then
+               (* as in L: (if ... leave L ; ...if)
+                * or start label of  case-imp
+                *)
+               (asText,entryDefMark)->mstate.b.mark
+   if)if)if);
+   labNo->mstate.labs.def;
+     
+--backendasText:doPart--
+   (* part of this one was in REALmachine
+    * the rest in SPARCmachine
+    *)
+do &text[]->localLabText[];
+   (if type = interFragment then
+       descId[]->localLabText.puttext; 
+       labNo->localLabText.putInt; 
+    else
+      '.L'->localLabText;
+       labNo->localLabText.putInt
+   if)
+   
+---GlobalCodeLabelDef:doPart---
+do mstate.B.clearDelay;
+   (I.label.copy,entryDefMark)->mstate.b.mark;
+   (if NOT I.isLocal then
+       (I.label[],false) -> entrypoints.addDef  
+   if)
+   
+-- backendGenBetaRun: Descriptor --
+(# 
+   GenStart:
+     (* Generate _start entry point.
+      * See 
+      *   "System V Application Binary Interface -
+      *   SPARC Processor Supplement", Third Edition,
+      *   ISBN 0-13-104696-9,
+      *   section "Process Initialization", pages 3-27 to 3-33.
+      *)
+     (# NoExitFunction: @backendLocalLab; 
+     do     
+        '_start'->ExtLabel;
+        NoExitFunction.new;
+        ;
+        (* Clear Frame Pointer *)
+        FP->CLR->Bemit;
+        ;
+        (* Initialize Stack Pointer *)
+        (SP,0x40,L0)->LD_I->Bemit (* load argc *) ;
+        (SP,0x44,L1)->ADD_I->Bemit (* address of argv *) ;
+        (SP,0x20,SP)->SUB_I->Bemit (* initial regwin? *) ;
+        ;
+        (* Test for function to register with atexit *)
+        G1->TST->Bemit;
+        (NoExitFunction.labNo->mstate.labs.off) div 4->BE->Bemit;
+        (G1,O0)->MOV->Bemit;
+        ('atexit',callMark)->mstate.b.mark;
+        0->CALL->Bemit;
+        xNOP->Bemit;
+        ;
+        NoExitFunction.def;
+        (* Register _fini with atexit *)
+        ('_fini',O0)->EmitSetReg;
+        ('atexit',callMark)->mstate.b.mark;
+        0->CALL->Bemit;
+        xNOP->Bemit;
+        ;
+        (* Call _init *)
+        ('_init',callMark)->mstate.b.mark;
+        0->CALL->Bemit;
+        xNOP->Bemit;
+        ;
+        (* Set arguments for main (argc, argv, envp) *)
+        (L0,O0)->MOV->Bemit;
+        (L1,O1)->MOV->Bemit;
+        (L0,2,O2)->SLL_I->Bemit;
+        (O2,4,O2)->ADD_I->Bemit;
+        (L1,O2,O2)->ADD->Bemit;
+        ('_environ',O3)->EmitSetReg;
+        mstate.B.markLastAsData;
+        (O3,0,O2)->ST_I->Bemit;
+        ;
+        (* Call main *)
+        ('main',callMark)->mstate.b.mark;
+        0->CALL->Bemit;
+        xNOP->Bemit;
+        ;
+        (* Call exit when main returns *)
+        ('exit',callMark)->mstate.b.mark;
+        0->CALL->Bemit;
+        xNOP->Bemit;
+        ;
+        (* Call _exit when exit returns *)
+        ('_exit',callMark)->mstate.b.mark;
+        0->CALL->Bemit;
+        xNOP->Bemit;
+        ;
+        (* Goodbye *)
+     #);
+   ExtLabel: 
+     (* labelDef should be reconsidered and so should mstate.b/d.mark *)
+     (# T: ^text
+     enter T[]
+     do (if common.switch[301] then (* tracecode *)
+            screen.newline; t[]->screen.puttext; 
+        if);
+        T[]->export;
+        T[]->labelDef
+     #);
+   EmitSetReg:
+     (# L: ^text; reg: @integer; 
+     enter (L[],reg)
+     do (L[],setHiMark)->mstate.b.mark;
+        (reg,0)->SETHI->Bemit;
+        (L[],setLoMark)->mstate.b.mark;
+        (reg,0,reg)->OR_I->Bemit;
+     #);
+   GenMain:
+     (* NOTE: currently genMain MUST be the last call
+      * in GenBetaRun; since it is followed by an inner
+      * in defineMainLabel1, which calls some code in 
+      * gen1body:initialSeq. Should be cleaned up!
+      *)
+     (# BI: @backEndInstruction
+     do
+        (if false (*debug_runtime*) then
+            (* TEST of is_cti check in SPARCmachine (code never called) *)
+            '\nGenerating 4 CTI in delay slots to test the check for this:'
+              -> putline;
+            CALL->Bemit;
+            CALL->Bemit;
+            BNE->Bemit;
+            JMPL->Bemit;
+            CALL->Bemit;
+            EmitNop;
+        if);
+        'main'->ExtLabel;
+        (SP,-frame_size,SP)->SAVE_I->Bemit;
+        ClearAdrTmpRegs;
+        doCall
+        (# 
+        do ('SetArgValues',callMark)->mstate.b.mark; 
+           0->CALL->Bemit
+        #);
+        (* multi-thread stuff is removed - see OLD sparc fragments *)
+  #);
+
+do (* emit a single NOP to prevent label of first routine becoming 
+    * identical with BETA_code1 - confuses gdb
+    *)
+   emitNOP;
+   (* emit routines *)
+   (*AllocCOM;*)
+   (*(if common.switch[68] and NOT common.switch[65] then
+       AlloI2_68
+   if);
+   (if common.switch[65] then
+       AlloI1;
+       AlloI2;
+       GenAlloC;
+       GenCall_doGC;
+       GenCall_psusp_doGC;
+       AlloSO;
+       GenAttachSuspend;
+       AlloS;
+       AlloSI;
+       AlloSC;
+       ObjS;
+       MkTO;
+       QuaV;
+       CopyCPP;
+       ExO;
+       GenAlloRep;
+    if);
+    *)
+   GenStart;
+   GenMain;
+   (* MUST be last call: see comment at GenMain *)
+#)  
+
+---backendDoHead:descriptor---
+(##)
+
+-- backendSPtoPrim:doPart --
+do

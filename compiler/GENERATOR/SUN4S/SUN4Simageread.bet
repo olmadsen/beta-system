@@ -1,0 +1,76 @@
+ORIGIN '../ELF/ELFimageread';
+INCLUDE '../ELF/elf_sparc';
+
+--ImageReadMapOffset: dopart--
+do (off div 4) + 1 -> off
+        
+--ImageReadMapRelType: dopart--
+do (if reltype
+    // R_SPARC_WDISP30 then callMark -> map
+    // R_SPARC_HI22 then setHiMark -> map
+    // R_SPARC_LO10 then setLoMark -> map
+       (* FIXME: cannot determine if it should instead be 
+        * setLoMarkSt, setLoMarkJmp, setLoMarkLdd, setLoMarkLd.
+        *)
+    // R_SPARC_32 then wordMark -> map
+    // R_SPARC_NONE then entryDefMark -> map
+    // R_SPARC_WDISP22 then jmpMark -> map
+       (* FIXME: cannot determine if it should instead be bgtuMark *)
+   if);
+   
+--ImageReadRelocation: descriptor--
+(# (* Sun4s uses Rela *)
+   
+   rel_inx: @integer;
+   
+   maprela: @
+     (* Compare with the generation of Rela entries in SUN4Self *)
+     (# rela: ^Elf32_Rela;
+        mark, type: @integer;
+        ep: ^EntryPointInfo;
+        getsym: @f.getSymTabEnt;
+        sym: ^Elf32_Sym;
+        hdr: ^Elf32_Shdr;
+     enter rela[]
+     do rela.r_offset -> mapoffset -> mark;
+        rela.r_info -> ELF32_R_TYPE -> mapreltype -> type;
+        rela.r_info -> ELF32_R_SYM -> getsym -> (sym[], hdr[]);
+        sym[] -> mapsym -> ep[]
+     exit (mark, type, ep[])
+     #);
+   
+do f.scanDataRelaEnts;
+   f.cache.data_rela.range -> data_image.noOfRel;
+   data_image.markTop -> rel_inx;
+   data_image.noOfRel + data_image.markTop -> data_image.marktop;
+   (if data_image.marktop > data_image.marks.range then
+       data_image.marktop -> data_image.marks.extend;
+       data_image.marktop -> data_image.types.extend;
+       data_image.marktop -> data_image.epElm.extend;
+   if);
+   (for i:data_image.noOfRel repeat
+        rel_inx+1 -> rel_inx;
+        f.cache.data_rela[i][] -> maprela -> 
+        (data_image.marks[rel_inx] 
+        ,data_image.types[rel_inx]
+        ,data_image.epElm[rel_inx][]);
+   for);
+   f.scanTextRelaEnts;
+   f.cache.text_rela.range -> text_image.noOfRel;
+   text_image.markTop -> rel_inx;
+   text_image.noOfRel + text_image.markTop -> text_image.marktop;
+   (if text_image.marktop > text_image.marks.range then
+       text_image.marktop -> text_image.marks.extend;
+       text_image.marktop -> text_image.types.extend;
+       text_image.marktop -> text_image.epElm.extend;
+   if);
+   (for i:text_image.noOfRel repeat
+        rel_inx+1 -> rel_inx;
+        f.cache.text_rela[i][] -> maprela -> 
+        (text_image.marks[rel_inx] 
+        ,text_image.types[rel_inx]
+        ,text_image.epElm[rel_inx][]);
+   for);
+#)
+   
+   

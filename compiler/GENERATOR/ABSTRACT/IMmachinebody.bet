@@ -1,0 +1,1609 @@
+ORIGIN 'INTERMEDIATEmachine';
+INCLUDE '~beta/sysutils/endian';
+INCLUDE 'IManalyzer';
+BODY 'IMtransformbody';
+BODY 'IMpeepholebody'
+-- IntermediateMachinelib: Attributes --
+
+(*FIXME 'ok' until transform2 in availanalyzer!!*)
+
+
+dumpIpartcode:
+  (#
+     thisIp: ^Ipart;
+     insts: [700] @integer;
+     colors: [1]@integer;
+     
+     (* bitvectors of 32 bits *)
+     liveFloats,liveAdr,liveData:@Bitvektor32;
+     i2,i3,i4: @boolean;
+  enter thisIp[]
+  do thisIp.colors.range+1->colors.new;
+     (* move colors up, inx zero becomes inx 1 (legal inx) *)
+     0->colors[1];
+     (for i:colors.range-1 repeat
+          thisIp.colors[i]->colors[i+1]
+     for);
+     
+     true->i2->i3->i4;
+     
+     (if IMtrace_low then
+         'dumpIpartcode on graph: %s\n'->putformat(# do thisip.name[]->s #);
+         'Colors are (NOTE: mapped to colors[0:range-1]!)'->putline;
+         (for j:colors.range repeat
+              'colors[%d] = %d\n'->putformat(# do j-1->d; colors[j]->d #)
+         for);
+         'Generating instructions:'->screen.putline
+     if);
+     
+     liveFloats[]->backend.liveFloats[];
+     liveAdr[]->backend.liveAdr[];
+     liveData[]->backend.liveData[];
+     
+     thisIp.StackCells -> backend.stackCells;
+     thisIp[]->this(IntermediateMachine).backend.currentIP[];
+     
+     thisIp.graph.BBcodescan
+     (# liveRegisters:^BIset;
+        tmpreg:@int32u;
+        tmpi234:^i234;
+        genf:@integer;
+        doClear:@BackendInstruction;
+        cn: ^IntermachineBBgraph.realnode;
+        BI:^BackendInstruction;
+
+     do current[]->cn[];
+        cn.inst[]->BI[];
+        (if IMtrace_low then
+            '%d-%d %s(%d) read1=%d read2=%d write1=%d write2=%d inxreg=%d imm=%d size=%d\n'
+              -> screen.putformat
+            (# 
+            do cn.inx->d; 
+               cn.genf->d;
+               cn.type->ins2text->s;
+               cn.mynode->d;
+               BI.readreg->d;
+               BI.readreg2->d;
+               BI.writereg->d; 
+               BI.writereg2->d; 
+               BI.inxreg->d; 
+               BI.imm->d;
+               BI.size->d;
+            #);
+            (if BI.opcode > 0 then
+                insts[cn.type]+1->insts[cn.type]
+            if)
+        if); (* trace_low *)
+       
+        colors[BI.readreg+1]->BI.readreg;
+        colors[BI.readreg2+1]->BI.readreg2;
+        colors[BI.readreg3+1]->BI.readreg3;
+        colors[BI.writereg+1]->BI.writereg;
+        colors[BI.writereg2+1]->BI.writereg2; 
+        colors[BI.inxreg+1]->BI.inxreg;
+        
+        (if cn.type=IInitExternalCall then
+            (if IMtrace_low then
+                'InitExternalCall linking to %d\n'->putformat(# do cn.inst.pos->d #); 
+            if);
+            liveFloats.clear;
+            (* find the genf of the callc-node *)
+            thisIp.graph.RealNodes[cn.inst.pos].genf->genf;
+            
+            (if IMtrace_low then
+                'found genf:%d\n\n'->putformat(# do genf->d #)
+            if);
+            
+            thisIp.liveAnalysis.rep[cn.genf][]->
+            scanBIset
+            (# 
+            do (if thisIp.graph.regs[current] = Floatreg then
+                   colors[current+1]->liveFloats.insert
+               if)
+            #);
+            (if IMtrace_low then screen[]->liveFloats.print if)
+        if);
+        
+        (if (cn.type=IPushReg) or (cn.type=IPopReg) then
+
+            (if cn.type=IPopReg then
+                cn.genf->genf
+             else
+                (* pushreg, find registers live at popreg, they should be pushed *)
+                thisIp.graph.RealNodes[cn.inst.pos].genf->genf
+            if);
+            
+            liveFloats.clear;
+            liveAdr.clear;
+            liveData.clear;
+            
+            thisIp.liveAnalysis.rep[genf][]->
+            scanBIset
+            (# 
+            do (if thisIp.graph.regs[current] 
+                // FloatReg then
+                   colors[current+1]->liveFloats.insert
+                // AdrReg then
+                   colors[current+1]->liveAdr.insert
+                // DataReg then
+                   colors[current+1]->liveData.insert
+               if)
+            #)
+
+        if);
+        
+        (if (common.targetMachineId = common.sun4s) and 
+            ((cn.type>=callInstruction) and (cn.type<localjumpnr)) then
+            (* erstat med BI.isCall *)
+            IgClr->doClear.type;
+            thisIp.clearAnalysis.rep[cn.genf][]->tmpi234[];
+            (if tmpi234[]<>none then
+                (* else is dead code *)
+                tmpi234.regs->tmpreg;
+                
+                (if tmpreg %Band (1 %sll 26) then false->i2 if);
+                (if tmpreg %Band (1 %sll 27) then false->i3 if);
+                (if tmpreg %Band (1 %sll 28) then false->i4 if);
+                (if i2 then
+                    26->doClear.writeReg;
+                    doClear[]->backend.gClrImpl
+                if);
+                
+                (if i3 then
+                    27->doClear.writeReg;
+                    doClear[]->backend.gClrImpl
+                if);
+                (if i4 then
+                    28->doClear.writeReg;
+                    doClear[]->backend.gClrImpl
+                if)
+            if)
+        if);
+        
+        (if IMtrace_low then
+            '   physReg: read1=%d, read2=%d write1=%d write2=%d inxreg=%d\n'
+              -> screen.putformat        
+            (# 
+            do BI.readreg->d;
+               BI.readreg2->d;
+               BI.writereg->d; 
+               BI.writereg2->d; 
+               BI.inxreg->d; 
+        #)if);
+        (if backend.opCodeMap[BI.opCode][] = NONE then
+            'ERROR: IMmachineBody: opCodeMap['->puttext;
+            BI.opCode -> putint;
+            '] is none' -> putline
+        if);
+        cn.genf -> THIS(IntermediateMachine).backend.CurrentInstructionAnalysisNumber;
+        BI[]->backend.opCodeMap[BI.opCode]
+     #);
+     (if IMtrace_low then
+         'Generated the following instructions:'->lpl;
+         (for cnt:700  repeat
+              (if insts[cnt] > 0 then
+                  '%03d times of Instruction type:%d,\n'
+                    ->screen.putformat (#  do  insts[cnt]->d; cnt->d; #)
+              if)
+     for)if)
+  #);
+
+dumpDopartCode:
+  (# thisdp:^IDopart;
+  enter thisdp[]
+  do (if common.switch[311] then
+         'Generating dopart: %s\n'
+           ->screen.putformat (#  do thisdp.name[]->s #);
+     if);
+     (thisdp.nodeId,thisdp.name[],thisdp.data)->backend.initDo;
+     thisdp[]->dumpIpartCode;
+      (if common.switch[311] then
+          'Done, Generating dopart: %s\n'
+            ->screen.putformat (#  do thisdp.name[]->s #)
+      if)
+  #);
+
+
+dumpGpartcode:
+  (#
+     thisGp: ^IGpart;
+     cn: ^Intermachinebbgraph.realnode;
+     (*cstoperand: ^backend.cstOperand*)
+  enter thisgp[]
+  do (if common.switch[311] then
+         'Generating Gpart: %s\n'
+           ->screen.putformat (#  do thisGp.name[]->s #)
+     if);
+     (thisGp.nodeId,thisGp.name[],thisGp.data)->backend.initGen;
+     thisgp[]->dumpIpartCode;
+     (if common.switch[311] then
+         'Done, Generating Gpart: %s\n'
+           ->screen.putformat (#  do thisGp.name[]->s #)
+     if)
+  #);
+
+dumpFragmentCode:
+  (# thisf: ^Ifragment; 
+     I: ^backendInstruction
+  enter thisf[]
+  do (if common.switch[311] then
+         'Generating fragment %s\n'
+           ->screen.putformat (#  do thisf.fn[]->s #)
+     if);
+     (thisF.FN[],thisF.astlabel)->backend.newFragment;
+     thisf.doparts.scan
+     (#  do current[]->dumpdopartcode #);
+     thisf.Gparts.scan
+     (#  do current[]->dumpGpartcode #)
+  #);
+ConstRepCheck:Ianalyzer
+  (# (* World: ^triples;
+      *      carrier:: World.localExtBiSet;
+      *      initialize: (#  do &triples[]->world[]; world.init #);
+      *      direction:: forward;
+      *      t: ^triple;
+      *      equal:: 
+      *        (# 
+      *        do
+      *           (if right[] <> none then
+      *               (left[],right[])->world.extequal->result
+      *           if)
+      *        #);
+      *      combine:: 
+      *        (#  do (left[],right[])->world.extIntersection->result[];  #);
+      *      flowFunctionType:: 
+      *        (# repreg,ldtoreg,ldfromreg,ldoff:@integer;
+      *           prevnode:^graphtype.realnode;
+      *           iaess:^InxRegEssence;
+      *           t:^triple;
+      *        do {*'ConstRepCheck on inst of type:%d, read1=%d, read2=%d write1=%d\n'
+      *             ->screen.putformat
+      *           (# 
+      *           do
+      *              current.inst.opcode->d;
+      *              (if current.inst.readreg1[] <> none then current.inst.readreg1->d else 0->d if);
+      *              (if current.inst.readreg2[] <> none then current.inst.readreg2->d else 0->d if);
+      *              (if current.inst.writeReg[] <> none then
+      *                  current.inst.writeReg->d
+      *               else
+      *                  0->d
+      *              if)
+      *            #);*}
+      *           true->done;
+      * 
+      *           (if current.inst.opcode=IChkConstIndex then
+      *               {* THIS NEEDS TO BE FIXED *}
+      *               current.inst.prev[]->prevnode[];
+      *               (if prevnode.opcode=IldVal then
+      *                   prevnode.writeReg->ldtoreg;
+      *                   prevnode.readreg1->ldfromreg;
+      *                   (if (ldfromreg=1) and (ldtoreg=current.inst.ess1) then
+      *                       &triple[]->t[];
+      *                       {* (fromreg,offset,index) *}
+      *                       (1,prevnode.const2,current.inst.int)->t;
+      *                       (t[],result[])->world.gen->result[]
+      *                   if)
+      *               if);
+      *               leave flowFunctionType
+      *           if);
+      *           (if (current.inst.opcode = IdoAsgRefAdr) or
+      *               ((current.inst.opcode >= IjsrTable) and (current.inst.opcode <= IgJsr)) or
+      *               ((current.inst.opcode >= runtimecalls) and (current.inst.opcode <=runtimeCallsEnd)) then
+      *               &carrier[]->result[]; 
+      *               leave flowFunctionType
+      *           if); 
+      *        #);
+      *       transform:
+      *        (# tmp: ^Intermachinebbgraph.realnode; info: ^carrier; 
+      *           ldfromreg,ldtoreg: @integer; 
+      *           prevnode,thisnode:^graphtype.realnode;
+      *        do
+      *           graph.bbcodescan
+      *           (# t:@triple;
+      *              ll:^world.typelist;
+      *           do (if current.inst.opcode=IChkConstIndex then
+      *                  {* thisAnalysis.rep[current.inst.index][]->info[];*}
+      *                  thisAnalysis.rep[current.genf][]->info[];
+      *                  {* THIS NEEDS TO BE FIXED *}
+      *                  current.inst.prev[]->prevnode[];
+      *                  (if prevnode.opcode=IldVal then
+      *                      prevnode.writeReg->ldtoreg;
+      *                      prevnode.readreg1->ldfromreg;
+      *                      (if (ldfromreg=1) and (ldtoreg=current.inst.ess1) then
+      *                          {* (fromreg,offset,index) *}
+      *                          {*(1,prevnode.const2,current.inst.int)->t;*}
+      *                          current[]->thisnode[];
+      *                          info[]->world.scanSet
+      *                          (# 
+      *                          do (if (current.inst.t.r1=1) and (current.inst.t.const=prevnode.const2)
+      *                                 and (current.inst.t.r2>=thisnode.int) then
+      *                                 false->thisnode.bool2;
+      *                                 'transformed inst %d\n'->screen.putformat
+      *                                 (# do thisnode.inx->d#)
+      *                             if)
+      *                          #)
+      *                      if)
+      *                  if)
+      *               if)               
+      *           #)
+      *        #)
+      *)
+  #);
+
+availableExpression: Ianalyzer
+  (# World: ^triples;
+     carrier:: World.localExtBiSet;
+     initialize:: (#  do &triples[]->world[]; world.init #);
+     direction:: forward;
+     t: ^triple;
+     equal:: 
+       (# 
+       do
+          (if right[] <> none then
+              (left[],right[])->world.extequal->result
+          if);
+       #);
+     combine:: 
+       (#  do (left[],right[])->world.extIntersection->result[];  #);
+     flowFunctionType:: 
+       (# BI:^BackendInstruction;
+       do current.inst[]->BI[];
+          (if IMtrace_low then
+              'avail inst nr. %d of type:%d, read1=%d, read2=%d write1=%d\n'
+                ->screen.putformat
+              (# 
+              do current.mynode->d;
+                 current.inst.opcode->d;
+                 BI.readreg->d;
+                 BI.readreg2->d;
+                 BI.writereg->d;
+          #)if);
+          
+          (* at ref. assignments remove all alias posibilities 
+           * based on attribute offsets *)
+          (if (current.inst.opcode = IdoAsgRefAdr) then
+              (BI.readOffset,result[])->world.killnotorgoff->result[]; 
+              true->done;leave flowFunctionType
+          if);
+          (if current.inst.opcode = IdoAsgRefReg then
+              (BI.readOffset,result[])->world.killnotorgoff->result[]; 
+              true->done
+          if);
+          
+          (* kill everything than a register holding origin *)
+          (if ((current.inst.opcode >= IjsrTable) and (current.inst.opcode <= IgJsr)) 
+              or ((current.inst.opcode>=runtimecalls) and (current.inst.opcode<=runtimeCallsEnd)) then
+              true->done;
+              (if current.inst.opcode<>IinitPrimCall then 
+                  (8,result[])->world.killnotorigin->result[]; 
+              if);
+              leave flowFunctionType
+          if);
+          (BI.writereg,result[])->world.kill->result[];
+          (BI.writereg2,result[])->world.kill->result[];
+          
+          true->done;
+          (if current.inst.opcode 
+           // ItstNone then 
+              (* we do not want primregs in analysis! *)
+              (* if so why not test the kind of register, not number ??? *)
+              (if (BI.readreg <> BI.writeReg) and (BI.writeReg<>3) then
+                  &triple[]->t[];
+                  (BI.readReg,BI.readOffset,BI.writeReg)
+                    ->t;
+                  (t[],result[])->world.gen->result[]
+              if)
+           // Ildval then
+              (if BI.size = 4 then
+                  (if (BI.readReg <> BI.writeReg) then
+                      &triple[]->t[];
+                      (BI.readReg,BI.readOffset,BI.writeReg)->t;
+                      (t[],result[])->world.gen->result[]
+                  if)
+              if)
+           // IstVal then
+              (if BI.size = 4 then
+                  (if BI.readReg<>BI.readreg2 then
+                      &triple[]->t[];
+                      (BI.readreg,BI.readOffset,BI.readReg2)->t;  
+                      (t[],result[])->world.gen->result[]
+                  if)
+              if)
+           // IdoAsgRefReg then
+              (if BI.readReg<>BI.readreg2 then
+                  &triple[]->t[];
+                  (BI.readReg,BI.readOffset,BI.readreg2)->t;  
+                  (t[],result[])->world.gen->result[]
+              if)
+          if)
+       #);   
+     transform2: 
+       (* convert ldval that where not eliminated into cpregs *)
+       (* this is a little dangerous, (read, who understands this in detail) *)
+     (# tmp: ^Intermachinebbgraph.realnode; info: ^carrier; checkint: @integer; 
+     do graph.bbcodescan
+        (# areg:^AdrRegOperand;
+           BI: ^backendinstruction;     
+        do current.inst[]->BI[];
+           current.next[]->tmp[];   (* used to be BI.next *)        
+           (if tmp[]<>none then
+               thisAnalysis.rep[tmp.genf][]->info[];
+               (if (info[] <> none ) then
+                   (if (BI.opcode = IldVal) and (BI.size <> 4 ) and
+                       (BI.readReg <> BI.writeReg) then
+                       (BI.writeReg,info[])->world.findsubstitute
+                         ->checkint;
+                       (if checkint<>BI.writeReg then
+                           'changed to cpreg'->putline;
+                           checkint->BI.readReg;
+                           iCpReg->BI.opcode
+                       if)
+                   if)
+               if)
+           if)
+        #)
+     #);
+
+     transform:
+       (# tmp: ^Intermachinebbgraph.realnode; info: ^carrier; checkint: @integer; 
+       do
+          graph.bbcodescan
+          (# (*
+              do
+              (if current.inst.opcode=IdoAsgRefAdr then
+              'idoasgrefadr test, chkint=%d, r1=%d, r2=%d\n'->screen.putformat
+              (# do checkint->d; BI.readReg.reg1->d; BI.readreg2.reg1->d #);
+              checkint->BI.readReg.reg1;
+              if); *) 
+             BI: ^backendinstruction;
+          do current.inst[]->BI[];
+             thisAnalysis.rep[current.genf][]->info[];
+             (if (info[] <> none ) then
+                 (if (BI.readReg <> 0 ) and
+                     (BI.writeReg <> 0 ) and
+                     ((BI.opcode = IldVal) or
+                     (BI.readReg <> BI.writeReg)) then
+                     (BI.readReg,info[])->world.findsubstitute
+                       ->checkint;
+                     (if IMtrace_low then
+                         logfile[]->info.print;lpl;
+                         'Found checkint1 =%d at index=%d\n'->screen.putformat
+                         (# do checkint->d; current.inst.inxReg(*inx*)->d#);
+                     if);
+                     (if (BI.readReg <> checkint) and
+                         ((BI.readreg2 = 0 ) or
+                         (checkint <> BI.readreg2)) then
+                         (if IMtrace_low then
+                             'Changed readReg in node:%d from %d to %d\n'
+                               ->screen.putformat
+                             (# 
+                             do current.inst.inxReg(*inx*)->d;
+                                BI.readReg->d;
+                                checkint->d
+                         #)if);
+                         checkint -> BI.readReg;
+                     if)
+                 if);
+                 (* Denne fanger ikke stval !! *)
+                 (if (BI.readreg2 <> 0 ) and
+                     (BI.writeReg <> 0 ) and
+                     (BI.readreg2 <> BI.writeReg) then
+                     (BI.readreg2,info[])->world.findsubstitute
+                       ->checkint;
+                     (if IMtrace_low then
+                         'Found checkint2 =%d at index=%d\n'->screen.putformat
+                         (# do checkint->d;current.inst.inxReg(*inx*)->d#);
+                     if);
+                     (if (BI.readReg <> checkint) and
+                         (checkint <> BI.readreg2) then
+                         (if IMtrace_low then
+                             'Changed readreg2 in node:%d from %d to %d\n'
+                               ->screen.putformat
+                             (# 
+                             do current.inst.inxReg(*inx*)->d;
+                                BI.readreg2->d;
+                                checkint->d
+                         #)if);
+                         checkInt -> BI.readreg2;
+                     if)
+                 if); 
+                 (if (BI.writeReg = 0) and (BI.readReg <> 0) then
+                     (BI.readReg,info[])->world.findsubstitute->checkint;
+                     (if IMtrace_low then
+                         'Found checkint3 = %d at index=%d\n'->screen.putformat
+                         (# do checkint->d;current.inst.inxReg(*inx*)->d#);
+                     if);
+                     (if BI.readReg<>checkint then
+                         checkint -> BI.readReg
+                     if)
+                 if);
+                 (if (BI.writeReg=0) and (BI.readreg2 <> 0) then
+                     (BI.readreg2,info[])->world.findsubstitute->checkint;
+                     (if Imtrace_low then
+                         'Found checkint4 = %d at index=%d\n'->screen.putformat
+                         (# do checkint->d;current.inst.inxReg(*inx*)->d#);
+                     if);
+                     (if BI.readreg2<>checkint then
+                         checkint -> BI.readreg2;
+                     if)
+                 if);
+             if)
+          #)
+       #)
+  #);
+
+livemem: Ianalyzer
+  (# (* den er ikke korrekt til at fjerne 2->a; 32->a; *)
+     (*    World: ^pairs;
+      *      carrier:: World.localExtBiSet;
+      *      initialiser: (#  do &pairs[]->world[]; world.init #);
+      *      direction:: backward;
+      *      t: ^pair;
+      *      equal:: 
+      *        (# 
+      *        do
+      *           (if right[] <> none then
+      *               (left[],right[])->world.extequal->result
+      *           if);
+      *           
+      *        #);
+      *      combine::  (#  do (left[],right[])->world.extunion->result[];  #);
+      *      flowFunctionType:: 
+      *        (# 
+      *        do
+      *           true->done;
+      *           (if current.inst.opcode
+      *            // Ildval // Ildval // Itstnone then
+      *               &pair[]->t[];
+      *               (current.inst.readReg.reg1,current.inst.const2)->t;
+      *               (t[],result[])->world.gen->result[];
+      *               
+      *           if);
+      *           (if (current.inst.writeReg.reg1 > 0) then
+      *               (current.inst.writeReg.reg1,result[])->world.killmany->result[]; 
+      *           if)
+      *        #)
+      *)
+  #);
+clearAnalyzer: Ianalyzer
+  (#
+     thisdp: ^Ipart;
+     carrier:: i234;
+     direction:: forward;
+     equal:: 
+       (# 
+       do (if right[] <> none then (left.regs = right.regs)->result if)
+       #);
+     combine:: 
+       (# 
+       do left.copy->result[]; (left.regs %Band right.regs)->result.regs
+       #);
+     flowfunctionType:: 
+       (# BI:^BackendInstruction;
+       do
+          (if ((current.type>=callInstruction) and (current.type<localjumpnr)) then
+              (* erstat med BI.isCall, does clear all i2,i3,i4 => mark as used *)
+              ((7 %sll 26) %Bor result.regs)
+                ->result.regs
+           else
+              current.inst[]->BI[];
+              
+              (if BI.writeReg>0 then
+                  ((1 %sll (thisdp.colors[BI.writeReg])) %Bor result.regs)
+                    ->result.regs
+              if);
+              
+              (if BI.readReg>0 then
+                  ((1 %sll (thisdp.colors[BI.readreg])) %Bor result.regs)
+                    ->result.regs
+              if);
+              
+              (if BI.readReg2>0 then
+                  ((1 %sll (thisdp.colors[BI.readreg2])) %Bor result.regs)
+                    ->result.regs
+              if);
+              
+              (if BI.readReg3>0 then
+                  ((1 %sll (thisdp.colors[BI.readReg3])) %Bor result.regs)
+                    ->result.regs
+              if)
+          if);
+          
+          true->done
+       #);
+     transform: (#  #);
+     setdp: (#  enter thisdp[] #);
+     
+  #);
+liveAnalyzer: Ianalyzer
+  (#
+     carrier:: BIset(# bound::(# do graph.regstop->value #) #);
+     direction:: backward;
+     equal:: 
+       (# 
+       do (if right[] <> none then left[]->right.equal->result if)
+       #);
+     combine::  (#  do left.copy->result[]; right[]->result.union #);
+     flowFunctionType:: 
+       (# BI:^BackendInstruction;
+       do 
+          current.inst[]->BI[];
+          (if IMtrace_low then
+              'This is inst: %d type%d read1=%d read2=%d, readoff=%d, writereg=%d\n'
+                -> putformat
+              (# do current.inx->d; current.inst.opcode->d;
+                 BI.readreg->d; bi.readreg2->d; 
+                 bi.readoffset->d; bi.writereg->d 
+              #);
+          if);
+
+          (if BI.writeReg>0 then BI.writeReg->result.delete if);
+          (if BI.writeReg2>0 then BI.writeReg2->result.delete if);
+          
+          (if BI.readReg > 0 then
+              BI.readReg->result.insert
+          if);
+          
+          (if BI.readReg2 > 0 then
+              BI.readReg2->result.insert;
+          if);
+          (if BI.readReg3 > 0 then
+              BI.readReg3->result.insert
+          if);
+          (if BI.inxReg > 0 then
+              BI.inxReg->result.insert
+          if);
+          
+          true->done;
+          (if IMtrace_low then
+              screen[]->result.print;newline
+          if);
+       #);
+     transform:
+       (# tmp: ^Intermachinebbgraph.realnode; info: ^BISet; 
+       do
+          graph.bbcodescan
+          (# 
+          do
+             (if not current.inst.hassideeffects  then
+                 thisAnalysis.rep[current.genf][]->info[];
+                 (if (current.inst.writeReg[] <> none ) and (info[] <> none ) then
+                     (* only for ldval? *)
+                     (if not (current.inst.writeReg->info.has) then
+                         current[] -> graph.removerealNode
+                     if)
+                 if)
+             if)
+          #)
+       #)
+  #);
+colorSimpleLeafRoutine:
+  (# 
+     colors: [1] @integer;
+     thisdp: ^Ipart;
+  enter thisdp[]
+  do thisdp.graph.regstop->colors.new;
+     24->colors[1]; (* i0 *)
+     1->colors[2];  (* g1 *)
+     (for i:thisdp.graph.regstop-2 repeat
+          7+i->colors[i+2]  (* o0..o5 *)
+     for);
+     colors->thisdp.colors
+  #);
+colorInterferenceGraph:
+  (# lpi: 
+       (# N: @integer 
+       enter N do (if IMtrace_low then N->logfile.putint if)
+       #);
+     lp: 
+       (# ch: @char
+       enter ch do (if IMtrace_low then ch->logfile.put if)
+       #);
+     allowSpill:<
+       (# result:@boolean;
+          regno:@integer;
+       enter regno
+       do inner
+       exit result
+       #);
+     printMatrix:
+       (# 
+       do
+          lpl;
+          '  '->logfile.puttext;
+          (for i: regstop repeat i->lpi for);
+          logfile.newline;
+          (for i: regstop repeat
+               i->lpi;
+               ' '->lp;
+               (for j: i repeat
+                    (if (i,j)->readmtx then 1->lpi else 0->lpi if)
+               for);
+               logfile.newline
+          for)
+       #);
+     printAdjLists:
+       (# 
+       do
+          (for j: regstop repeat
+               'node %d har kanter til: '->screen.putformat (#  do j->d #);
+               (for i: nodes[j].nints repeat
+                    nodes[j].adjnds[i]->lpi; ' '->lp
+               for);
+               logfile.newline
+          for)
+       #);
+     buildMatrix:
+       (# inx1,inx2: @integer; 
+       do
+          thisdp.graph.bbcodescan
+          (# cregs: [1] @integer;
+             carrier: ^BIset;
+          do
+             (* current[]->cn[]; *)
+             (if current.genf>0 then
+                 thisdp.liveAnalysis.rep[current.genf][]->carrier[];
+                 (if carrier[] = none then
+                     'CARRIER NONE' -> logfile.puttext;
+                  else
+                     (* test if writereg is not live, must insert edge to all liveregisters *)
+                     (if (current.type=ICpReg) and (not (current.inst.writeReg->carrier.has)) then
+                         (* copy to register which is not live *)
+                         (if IMtrace_low then
+                             'Found unused cpreg'->putline
+                         if);
+                         current.inst.writeReg->carrier.insert
+                     if)
+                 if);
+                 (if IMtrace_low then
+                     logfile[]->carrier.print; 
+                 if);
+                 carrier.tolist->cregs;
+                 (for k: cregs.range repeat
+                      cregs[k]->inx1;
+                      (*(if thisdp.graph.regs[inx1] = type then*)
+                      (if nodes[inx1].type = type then
+                          (for l: cregs.range-k repeat
+                               cregs[l+k]->inx2;
+                               (if thisdp.graph.regs[inx2] = type then
+                                   (inx1,inx2)->setTrue
+                               if)
+                          for)
+                      if)
+                 for)
+             if)
+                     
+          #);
+          
+       #);
+     BuildAdjLists:
+       (# 
+       do
+          (for ii: regstop repeat
+               (for jj: ii repeat
+                    (if (ii,jj)->readmtx then
+                        nodes[ii].nints+1->nodes[ii].nints;
+                        nodes[jj].nints+1->nodes[jj].nints;
+                        jj->nodes[ii].adjnds[nodes[ii].nints];
+                        ii->nodes[jj].adjnds[nodes[jj].nints]
+                    if)
+               for)
+          for)
+       #);
+     pruneGraph:
+       (# numberOfRegisters:@integer
+       enter numberOfRegisters
+       do
+          (* see Muchnick p 505 *)
+          (* first apply degree < R rule *)
+          l:
+            (# success: @boolean; 
+            do
+               true->success;
+               (for inx: regstop repeat
+                    (if (nodes[inx].type = type) and (not nodes[inx].pushed) and 
+                        (nodes[inx].nints < numberOfRegisters) then
+                        
+                        (if IMtrace_low then
+                            'pushed reg %d ,top = %d,\n'->logfile.putformat
+                            (# 
+                            do inx->d;
+                               stacktop->d
+                            #)
+                        if);
+                        
+                        false->success;
+                        1+stacktop->stacktop;
+                        inx->stack[stacktop];
+                        inx->adjustngbrs;
+                        true->nodes[inx].pushed
+                    if)
+               for);
+               (if not success then 
+                   (* we pushed a register, try again *)
+                   restart l 
+               if)
+            #);
+          (* if there are any unpushed registers, push one optimistically *)
+          (* should use spillcost, but we do not have such *)
+
+          (for inx: regstop repeat
+               (if (nodes[inx].type = type) and (not nodes[inx].pushed) (*and (inx->allowSpill)*) then
+                   (* pushing first not-pushed register found*)
+                   
+                   (if IMtrace_low then
+                       'pushed reg %d ,top = %d, range = %d\n'->putformat
+                       (# 
+                       do inx->d;
+                          stacktop->d;
+                          stack.range->d;
+                       #)
+                   if);
+                   
+                   1+stacktop->stacktop; inx->stack[stacktop]; 
+                   true->nodes[inx].pushed;
+                   
+                   (if IMtrace_low then
+                       'optimistic extrapush'->lpl
+                   if);
+                   restart pruneGraph
+               if);
+          for)          
+       #);
+     colorRegs:
+       (# numberOfRegisters:@integer;
+          c,virtualRegister,r,tmp,tmpinx: @integer;
+          success, foundRegister: @boolean;
+          usedregs: [1] @boolean;
+          defaultregs: [1] @boolean;
+          inx:@integer; 
+          preColor:@integer;
+          memoryCell:@integer;
+       enter numberOfRegisters
+       do
+          (* default regs is bitvector of used regs *)
+          numberOfRegisters->defaultregs.new;
+          true->success;
+          (* regs one and two is allways used *)
+          (if type = AdrReg then
+              true->defaultregs[1]; true->defaultregs[2]; 
+          if);
+          
+          (if IMtrace_low then
+              'Stack is:'->puttext;
+              (for i:stacktop repeat
+                   stack[stackTop-i+1]->putint; ' '->put;
+              for);
+              newline
+          if);
+          
+          (* shift up those which are spilled *)
+               
+          (* for each register on stack find free color to use *)
+          l:
+            (# 
+            do (* clear usedregs*)
+               (if stacktop = 0 then 'stackwas zero'->lpl; leave l if);
+               
+               (* clear used regs to default setting *)
+               defaultregs->usedregs;
+               
+               (* pop register from stack *)
+               stack[stacktop]->virtualRegister;
+               stacktop-1->stacktop;
+               
+               (* registers this and call, should not be colored *)
+               (if (virtualRegister < 3) then
+                   restart l 
+               if);
+               
+               (* if neighbors are colored, mark those colors in usedregs *)
+               (for k: nodes[virtualRegister].cnt repeat
+                    nodes[nodes[virtualRegister].adjnds[k]].rn->tmp;
+                    (if tmp > 0 then true->usedregs[tmp] if)
+               for);
+               
+               false->foundRegister;
+               thisDP.graph.preColor[virtualRegister]->preColor;
+               (if (preColor>0) and (not usedRegs[preColor]) then
+                   (if IMtrace_low then
+                       'found (pre)color %d for reg %d\n'
+                         ->screen.putformat (# do precolor->d; 
+                                               virtualRegister->d; 
+                                            #)
+                   if);
+                   preColor->nodes[virtualRegister].rn;
+                   true->foundRegister
+                else
+                   (* find first unused color *)
+                   ll:
+                     (for k: numberOfRegisters repeat
+                          k->inx;
+                          (if not usedregs[inx] then
+                              (if IMtrace_low then
+                                  'found color %d for reg %d, k=%d\n'
+                                    ->screen.putformat (# do inx->d; 
+                                                          virtualRegister->d; 
+                                                          k->d
+                                                       #)
+                              if);
+                              inx->nodes[virtualRegister].rn;
+                              true->foundRegister;
+                              leave ll
+                          if)
+                     for)
+               if);
+               
+               (if not foundRegister then
+                   (if virtualRegister->allowSpill then
+                       (* allocate memory cell *)
+                       (* this way use many cells, should be integrated with the above. *)
+                       1+memoryCell -> memoryCell;
+                       memoryCell + numberOfRegisters ->nodes[virtualRegister].rn;
+                       1->defaultregs.extend;
+                       1->inmemorycells.extend;
+                       virtualRegister->inmemorycells[memoryCell];
+                       
+                       (if IMtrace_low then
+                           'Register %d is colored to memorycell %d \n'->
+                           screen.putformat(# do virtualRegister->d; memorycell->d #)
+                       if)
+                    else
+                       'Unable to find register for %d\n'->putformat(# do virtualRegister->d #);
+                       (* find another register among neighbors to be spilled *)
+                       l:
+                         (for k: nodes[virtualRegister].cnt repeat
+                              nodes[virtualRegister].adjnds[k]->tmpinx;
+                              (if tmpinx->allowSpill then
+                                  (* found appropiate *)
+                                  1+memoryCell -> memoryCell;
+                                  memoryCell + numberOfRegisters ->nodes[tmpinx].rn;
+                                  1->defaultregs.extend;
+                                  1->inmemorycells.extend;
+                                  tmpinx->inmemorycells[memoryCell];
+                                  
+                                  (if IMtrace_low then
+                                      'Register %d is recolored to memorycell %d \n'->
+                                      screen.putformat(# do tmpinx->d; memorycell->d #)
+                                  if);
+                                  (* leave colorRegs; *)
+                                  -1->stackTop;
+                                  stackTop+1->stackTop;
+                                  leave l;
+                              if)
+                         for)
+                   if)
+               if);
+               (if stacktop > 0 then restart l if)
+            #)
+       exit memoryCell
+       #);
+     colorPrimRegs:
+       (# 
+       do (for k: regstop-3 repeat
+               (if nodes[k+3].type=4 then
+                   thisdp.graph.primregs[k+3]-1->nodes[k+3].rn
+               if)
+          for)
+       #);
+     realColorRegs:
+       (# dataDummy,adrDummy: @integer;
+          getPhysicalReg:@backend.CAP.getPhysicalRegisterNumber;
+          k3:@integer;
+          maxColoringType:@integer;
+       do
+          backend.thisO->nodes[1].rn;
+          backend.callO->nodes[2].rn;
+          backend.CAP.getRegisterOffsets (* OBS - must perhaps be revised*)
+            -> (dataDummy,adrDummy,nodes[3].rn);
+          (if IMtrace_low then
+              (for k: regstop repeat
+                   'register %d is colored %d\n'
+                     ->screen.putformat (#  do k->d; nodes[k].rn->d #);
+          for)if);
+          regstop->colors.new;
+          (if IMtrace_low then
+              'regstop=%d\n'->screen.putformat (#  do regstop->d #);
+          if);
+          nodes[1].rn->colors[1];
+          nodes[2].rn->colors[2];
+          nodes[3].rn->colors[3];
+          
+          (* on Intel do not color primregs *)
+          (if backend.CAP.primRegIsReg then
+              5->maxColoringType
+           else
+              4->maxColoringType
+          if);
+          
+          (for k: regstop-3 repeat
+               k+3->k3;
+               (if nodes[k3].type<maxColoringType then
+                   (* old and to simple way *)
+                   (* nodes[k3].rn+typeoffset[nodes[k3].type]->colors[k3] *)
+                   
+                   (nodes[k3].type,nodes[k3].rn)->getPhysicalReg -> colors[k3]
+                else
+                   0->colors[k3]
+               if)
+          for);
+          (if IMtrace_low then
+              (for k: regstop repeat
+               'register %d is real colored %d = %d\n'
+                     ->screen.putformat (#  do k->d; colors[k]->d;nodes[k].rn-1->d  #)
+              for)
+          if)
+       #);
+     insertSpills:
+       (# graph:^IntermachineBBgraph;
+          cn: ^IntermachineBBgraph.realnode;
+          dataRegisters, adrRegisters:@integer;
+          doNotFlush:@BIset;
+          
+       do thisdp.graph[]->graph[];
+          dataReg -> backend.CAP.getNumberOfRegisters -> dataRegisters;
+          adrReg -> backend.CAP.getNumberOfRegisters -> adrRegisters;
+          graph.codescan
+          (# BI:^BackendInstruction;
+             pushReg:@integer;
+          do
+             curr.realgraph[]->cn[];
+             l:(if cn[]<>none then
+                   cn.inst[]->BI[];    
+                   (* remap registers *)
+                   doNotFlush.clear;
+                   
+                   (* do not flush those that are read by this instruction *)
+                   (if BI.readReg>0  then BI.readReg ->doNotFlush.insert if);
+                   (if BI.readReg2>0 then BI.readReg2->doNotFlush.insert if);
+                   (if BI.readReg3>0 then BI.readReg3->doNotFlush.insert if);
+                   
+                   (if BI.readReg>adrReg then
+                       (* is located in memory *)
+                       doNotFlush.findFree32 -> pushReg;
+                       
+                   if);
+                   
+                   cn.next[]->cn[];
+                   restart l
+               if)
+             
+             (* restore mapping *)
+             
+          #)
+       #);
+     
+     setTrue: @
+       (# i,j,a,b,k,regs: @integer; 
+       enter (i,j)
+       do
+          (if i > j then (i,j)->(a,b) else (j,i)->(a,b) if);
+          (a-1)*regs+b->k;
+          (if IMtrace_low then
+              (if (k > matrix.range) or (k < 1) then
+                  'settrue: k=%d, i=%d, j=%d, range=%d\n'
+                    ->screen.putformat 
+                  (#  do k->d; settrue.i->d; j->d; matrix.range->d #)
+          if)if);
+          (if not matrix[k] then
+              1+nodes[a].cnt->nodes[a].cnt;
+              1+nodes[b].cnt->nodes[b].cnt;
+              true->matrix[k]
+          if)
+       #);
+     readMtx: @
+       (# i,j,a,b,k,regs: @integer; res: @boolean; 
+       enter (i,j)
+       do
+          (if i > j then (i,j)->(a,b) else (j,i)->(a,b) if);
+          (a-1)*regs+b->k;
+          matrix[k]->res
+       exit res
+       #);
+     adjustngbrs: @ (* remove i's neighbors, and remove i from neigbors *)
+       (# i: @integer; other: @integer; 
+       enter i
+       do (* remove i from other *)
+          (for k: nodes[i].adjnds.range repeat
+               nodes[i].adjnds[k]->other; i->nodes[other].remove
+          for);
+          0->nodes[i].nints
+       #);
+     graphnode:
+       (#
+          rn,nints,cnt,type: @integer;
+          adjnds: [1] @integer;
+          (* inoutset from splay.bet *)
+          pushed: @boolean;
+          remove:
+            (# i,tmp: @integer
+            enter i
+            do
+               (if nints = 0 then leave remove if);
+               (for k: cnt repeat
+                    (if adjnds[k] = i then
+                        adjnds[k]->tmp;
+                        adjnds[nints]->adjnds[k];
+                        tmp->adjnds[nints];
+                        nints-1->nints;
+                        leave remove
+                    if)
+               for)
+            #)
+       #);
+     
+     matrix: [1] @boolean;
+     (* incidence matrix *)
+
+     nodes: [1] @graphnode;
+     colors: [1] @integer;
+     thisdp: ^Ipart;
+
+     (* cregs: [1] @integer; *)
+     stack: [1] @integer;
+     stacktop: @integer;
+     regstop: @integer;
+     type: @integer;
+     memoryCells:@integer;
+     inMemoryCells:[0]@integer
+  enter thisdp[]
+  do 
+     
+     thisdp.graph.regstop->regstop;
+     (if IMtrace_low then
+         'color:regstop: ' ->puttext; regstop -> putint; newline;
+     if);
+     
+     (* create all nodes = virtual regs *)
+     regstop->nodes.new;
+     (for i: regstop repeat 
+          thisdp.graph.regs[i]->nodes[i].type
+     for);
+     
+     loop:
+       (# 
+       do
+          1+type->type;
+          (if IMtrace_low then
+              'coloringtype:%d \n'->screen.putformat (#  do type->d #);
+          if);
+          (if type >= PrimReg then leave loop if);
+          
+          (* insert edges between interfering registers *)    
+          regstop*regstop->matrix.new;
+          regstop->stack.new;
+          0->stacktop;
+          regstop->setTrue.regs->readmtx.regs;
+          (* insert bits in matrix *)
+          buildMatrix;
+          (* printMatrix; *)
+          (* allocate space in lists *)
+          (for i: regstop repeat nodes[i].cnt->nodes[i].adjnds.new for);
+          (* print adj matrix *)
+          (* printMatrix; *)
+          (* build adj list *)
+          BuildAdjLists;
+          (* print adj lists *)
+          (* printAdjLists; *)
+          (* prune graph *)
+          
+          (if IMtrace_low then
+              'PRUNING TYPE: %d NUMBEROFREGISTERS: %d\n'->putformat
+              (# do type->d;  type -> backend.CAP.getNumberOfRegisters ->d #);
+          if);
+          
+          type -> backend.CAP.getNumberOfRegisters -> pruneGraph;
+          
+          (* color regs *)
+          type -> backend.CAP.getNumberOfRegisters -> colorRegs->memoryCells;
+          memoryCells->thisDp.StackCells[type];
+          
+          (if IMtrace_low then
+              'Coloring of regtype:%d used %d memoryCells\n'->putformat
+              (# do type ->d; memoryCells->d #);
+          if);
+          
+          (*Run next kind of register *)
+          restart loop
+       #);
+     inMemoryCells.range -> memoryCells;
+     (if memoryCells=0 then
+         (if backend.CAP.primRegIsReg then
+             colorPrimRegs
+         if);
+         
+         (* select real colors *)
+         realColorRegs;
+         colors->thisdp.colors;
+
+      else
+         Inner
+     if)
+  #);
+analysedopartcode:
+  (#
+     thisdp: ^Idopart;
+     liveRegs: @liveAnalyzer
+       (#
+          firstnode:: 
+            (#  do thisdp.graph.nodelist[thisdp.graph.nodeCnt][]->n[] #)
+       #);
+     av: @availableExpression
+       (# firstnode::  (#  do thisdp.graph.nodelist[1][]->n[];  #);  #);
+     ca: @clearAnalyzer
+       (# firstnode::  (#  do thisdp.graph.nodelist[1][]->n[];  #);  #);
+     cr: @constRepCheck
+       (# firstnode::  (#  do thisdp.graph.nodelist[1][]->n[];  #);  #)
+  enter thisdp[]
+  <<SLOT analysedp:DoPart>>
+  #);
+analyseGpartcode:
+  (# thisGp: ^IGpart; 
+     liveRegs: @liveAnalyzer
+       (#
+          firstnode:: 
+            (#  do thisgp.graph.nodelist[thisgp.graph.nodeCnt][]->n[] #)
+       #);
+     ca: @clearAnalyzer
+       (# firstnode::  (#  do thisgp.graph.nodelist[1][]->n[];  #);  #)
+  enter thisGp[]
+  <<SLOT analysegp:DoPart>>
+  #);
+analyseFragmentCode:
+  (# thisf: ^Ifragment; 
+  enter thisf[]
+  do (if common.switch[311] then
+         'Analyzing fragment %s\n'
+           ->screen.putformat (#  do thisf.fn[]->s #);
+     if);
+     thisf.doparts.scan
+     (#  do current[]->analysedopartcode #);
+     thisf.Gparts.scan
+     (#  do current[]->analyseGpartcode #)
+  #);  
+ph:peepholer
+  (# 
+     graphtyp::<IntermachineBBgraph;
+     jumpjump:peepfunction
+       (# 
+          rn,tmprn:^thegraph.realnode;
+          tmp,tmp2:^thegraph.node;
+       <<SLOT jumpjumpbody:dopart>>
+       #);
+     poppush:peepfunction
+       (# 
+          tmp:^thegraph.realnode;
+       <<SLOT poppushbody:dopart>>
+       #);
+     stld:peepfunction
+       (# nexti:^thegraph.realnode;
+       <<SLOT stldbody:dopart>>
+       #);
+     deadCodeRem:peepfunction
+       (# 
+       <<SLOT deadCodeRem:doPart>>
+       #);
+     collapseLabels:peepfunction
+       (# tmp,tmp2:^thegraph.node;
+          rn:^thegraph.realnode;
+       <<SLOT collapseLabels:DoPart>>
+       #);
+     init::
+       (# <<SLOT peepinit:doPart>>
+       #);
+  #);
+ph2:peepholer
+  (# 
+     graphtyp::<IntermachineBBgraph;
+     tstnonetold:peepfunction
+       (# nexti:^thegraph.realnode;
+       <<SLOT tstnoneToLd:dopart>>
+       #);
+     stst:peepfunction
+       (# nexti:^thegraph.realnode;
+       <<SLOT stst:dopart>>
+       #);
+     init::
+       (# <<SLOT peep2init:doPart>>
+       #)
+  #)
+
+-- dumpObjectcode: DoPart --
+do '!Optimizing'->lpl;
+   IFragmentSet.fragments.scan
+   (#  do current[]->analyseFragmentCode #);
+   IFragmentSet.dumpvcg; 
+   '!Writing'->lpl;
+   'Dumping ObjectCode:'->lpl;
+   (* let sparc machine allocate labnos after ours *)
+   newlab.lab->backend.newlab.lab;
+   (if IMtrace_low then
+       'Setting backend.newlab.lab to %d\n'->screen.putformat (#  do newlab.lab->d #);
+       IFragmentSet.printgraphs;
+   if);
+   IFragmentSet.fragments.scan
+   (#  do current[]->dumpFragmentCode #);
+   backend.endCodeSeg;
+   'Endcodesegment executed'->lpl  
+---IMgetBits:doPart---
+do (if IMtrace then 
+       '\tGetBitsImpl\t'->amc.puttext;
+       op1.out;
+       amc.ptab;
+       pos->amc.putint;
+       amc.ptab;
+       length->amc.putint;
+       amc.ptab;
+       op2.out;
+       amc.ptab;
+       (* drF.out; *)
+       '{' -> amc.put;
+       amc.newline
+   if);
+   op1.loadOp->op[];
+   (if backend.CAP.hasGetBits then
+       IgetBits->addNewNode->i[];
+       op.reg1->i.readReg;
+       op2.reg1->i.writeReg;
+       pos->i.pos;
+       length->i.length;
+    else
+       (if isLittleEndian then
+           32 - (pos+length) -> pos;
+       if);
+       IarithShiftLeftImm->addNewNode->I[];
+       op.reg1->I.readReg; pos->I.imm; op2.reg1->I.writeReg;
+       (if isSigned then
+           IarithShiftRightImm->addNewNode->I[];
+        else
+           IlogicalShiftRightImm->addNewNode->I[];
+       if);
+       op2.reg1->I.readReg;
+       32-length->I.imm;
+       op2.reg1->I.writeReg;
+   if);
+   (if IMtrace then
+       '}' -> amc.put;
+       amc.newline;
+   if);
+--IMputBits:doPart---
+do (if drF[] = none then
+       (* should be OK *)
+       &dataRegOperand[] -> drF[];
+       drF.alloc
+   if);
+   (if IMtrace then 
+       '\tPutBits\t'->amc.puttext;
+       op1.out;
+       amc.ptab;
+       pos->amc.putint;
+       amc.ptab;
+       length->amc.putint;
+       amc.ptab;
+       op2.out;
+       amc.ptab; drf.out;
+       '{' -> amc.put;
+       amc.newline
+   if);
+   (if backend.CAP.hasPutBits then
+       IputBits->addNewNode->i[];
+       (* op1: dataRegOperand - bits to be stored
+        * op2: adrRegOperand - adr in mem to store bits
+        * pos,length - bitposition and number of bits to store
+        * drF: free dataRegOperand to be used in the implementation
+        *      - hmm! apparenly not used anymore?
+        * store op1 -> mem[op2](pos:pos+length)
+        *)
+       op1.reg1->I.readReg2->I.writeReg2;
+       op2.reg1->I.readReg;
+       0->I.readOffset;
+       4->I.size;
+       pos->I.pos;
+       length->I.length;
+       drF.reg1->I.writeReg;   
+    else
+       (# memDst: @regAdr;
+          dstReg: @dataRegOperand;
+          mask1, mask2: @integer
+       do (if isLittleEndian then
+              32 - (pos+length) -> pos;
+          if);
+          op2.reg1->memDst.reg;
+          dstReg.alloc;
+          (1 %sll length)-1->mask1;
+          %Bnot (mask1 %sll (32-length-pos)) -> mask2; 
+          (memDst[],dstReg[],4) -> ldVl;     (* ld  [op2], %dstReg           *)
+          (mask1->newCstOp,op1[],4) -> gAnd; (* and op1, mask1, op1         *)
+          (32-(length+pos)->newCstOp,op1[])  (* sll op1, 32-len-pos, op1    *)
+            -> logicalShiftLeft;             
+          (mask2->newCstOp,dstReg[],4)       (* and %dstReg, mask2, %dstReg *)
+            -> gAnd;
+          (op1[],dstReg[],4) -> gOr;         (* or  %dstReg, op1, %dstReg   *)
+          (dstReg[],memDst[])->stVal;        (* st  %dstReg, [op2]          *)
+       #)
+   if);
+   (if IMtrace then
+       '}' -> amc.put;
+       amc.newline;
+   if);
+   
+---IMgPutBits:doPart---
+   (* set 1, %l6
+    * sll %l6,lDr
+    * neg %l6
+    * not %l6
+    * and dr, %l6, dr
+    * add lDr,pDr,pDr		(length+pos)->pDr
+    * neg pDr                   -(length+pos) -> pDr
+    * add pDr,32,pDr		32-(length+pos) -> pDr
+    * sll dr, pDr, dr
+    * sll %l6, pDr, %l6
+    * ld [ar], %l7
+    * andn %l7, %l6, %l7
+    * or   %l7, dr, %l7
+    * st %l7, [ar]    
+    *)
+do (if IMtrace then 
+       '\tgPutBits\t'->amc.puttext;
+       dr.out;
+       amc.ptab;
+       pdr.out;
+       amc.ptab;
+       ldr.out;
+       amc.ptab;
+       ar.out;
+       amc.ptab;
+       '{' -> amc.put;
+       amc.newline
+   if);
+   (if backend.CAP.hasGputBits then
+       IgPutBits->addNewNode->i[];
+       dr->I.readReg;   (* value to be put *)
+       pDr->I.readReg2; (* position where to put *)
+       lDr->I.readReg3; (* length of bit-vector to be put *)
+       ar->I.inxReg;    (* address where to put bits *)
+    else              
+       (# value,mask: @dataRegOperand; m: @integer; A1: @RegAdr
+       do value.alloc;
+          ar->A1.reg;
+          mask.alloc;  
+          (* make mask  '0...01...1'->%mask with length 1-digits *)
+          (1->newCstOp,mask[]) -> ldCst;
+          (lDr[],mask[]) -> logicalShiftLeft;
+          (mask[],4) -> gNeg;
+          (mask[],4) -> LogNot;
+          (* clear bits in dr using mask *)
+          (mask[],dr[],4) -> gAnd;
+          (if isLittleEndian then
+              (* Shift with 32 - (length + (32 - (length+pos)) = pos = pDr *)
+              (* I.e. nothing to do (:-) *)
+           else
+              (* calculate 32-length-pos to pDr *)
+              (lDr[],pDr[],4) -> gAdd;
+              (pDR[],4) -> gNeg;
+              (32->newCstOp,pDr[],4) -> gAdd;
+          if);
+          (pDr[],dr[]) -> logicalShiftLeft;
+          (pDr[],mask[]) -> logicalShiftLeft;
+          (A1[],value[])->ldVal;
+          (mask[],value[]) -> gAndNReg;
+          (dr[],value[],4) -> gOr;
+          (value[],A1[]) -> stVal
+       #)
+   if);
+   (if IMtrace then
+       '\t}' -> amc.putline
+   if)
+
+---IMgGetBits:doPart---
+   (* sll dr, pDr, dr
+    * set 32, %l6
+    * sub %l6,lDr,lDr	32-length
+    * srl dr, lDr, dr
+    *)
+do (if IMtrace then 
+       '\tgGetBits\t'->amc.puttext;
+       dr.out;
+       amc.ptab;
+       pDr.out;
+       amc.ptab;
+       ldr.out;
+       amc.ptab;
+       '{' -> amc.put;
+       amc.newline
+   if);
+   INNER;
+   (if backend.CAP.hasGgetBits then
+       (* op1.loadOp->op[]; ???? *)
+       IgGetBits->addNewNode->i[];
+       dr.reg1->i.readReg->i.writeReg;
+       pDr.reg1->i.readreg2;
+       lDr.reg1->i.readreg3->i.writeReg2;
+       isSigned -> i.signed;
+    else
+       (# L6: @dataRegOperand
+       do L6.alloc; 
+          (if isLittleEndian then
+              (* 32 - (pos+length) -> pos
+               * 
+               *  addl lDr,pDr
+               *  negl pDr
+               *  addl $32,pDr
+               *)
+              (lDR[],pDr[],4)->gAdd;
+              (pDr[],4) -> gNeg;
+              (32->NewCstOp, pDr[],4) -> gAdd;
+          if);
+          (pDr[],dr[]) -> logicalShiftLeft;
+          (32->newCstOp,L6[]) -> ldCst;
+          (lDR[],l6[],4) -> gSub;
+          (if isSigned then
+              (l6[],dr[]) -> ArithShiftRight
+           else
+              (l6[],dr[]) -> LogicalShiftRight
+          if)
+       #)
+   if) ;
+   (if IMtrace then
+       '}' -> amc.put;
+       amc.newline;
+   if);
+
+---IMbyteSwap:doPart---
+do (# i: ^backendInstruction; 
+      A: @regAdr 
+   do (if IMtrace then 
+          '\tByteSwap\t'->amc.puttext;
+          ar.out;
+          amc.ptab;
+          long->amc.putboolean;
+          '{' -> amc.put;
+          amc.newline
+      if);
+      ar->A.reg; false->A.signed; 
+      dr.alloc; 
+      (if long then
+          (A[],dr[])-> ldVal
+       else
+          (A[],dr[])-> ldHalf          
+      if);
+      (if backend.CAP.hasByteSwap then
+          IByteSwap->addNewNode->i[];
+          dr.reg1 -> i.readreg;
+          dr.reg1-> i.writereg;
+          long->i.condition
+       else
+          dr1.alloc;        
+          (if long then
+              dr2.alloc;
+              (dr.reg1,24,dr1.reg1) -> doLogicalShiftLeftImm;
+              (dr.reg1, 8,dr2.reg1) -> doLogicalShiftRightImm;
+              (0xFF->newCstOp,dr2[],4) -> gAnd;
+              (dr2.reg1,16,dr2.reg1) -> doLogicalShiftLeftImm;
+              (dr2[],dr1[],4) -> gOr;
+              (dr.reg1,16,dr2.reg1) -> doLogicalShiftRightImm;
+              (0xFF->newCstOp,dr2[],4) -> gAnd;
+              (dr2.reg1, 8,dr2.reg1) -> doLogicalShiftLeftImm;
+              (dr2[],dr1[],4) -> gOr;
+              (dr.reg1,24,dr.reg1) -> doLogicalShiftRightImm;
+              (dr1[],dr[],4) -> gOr;
+           else
+              (dr.reg1 ,0xFF,dr1.reg1) -> doAndImm;
+              (dr1.reg1,   8,dr1.reg1) -> doLogicalShiftLeftImm;
+              (dr.reg1 ,   8, dr.reg1) -> doLogicalShiftRightImm;
+              (dr.reg1,0xFF,dr.reg1) -> doAndImm;
+              (dr1[],dr[],4) -> gOr;
+          if)
+      if);
+      (if long then
+          (dr[],A[])-> stVal
+       else 
+          (dr[],A[])-> stHalf
+      if);
+      (if IMtrace then
+          '}' -> amc.put;
+          amc.newline;
+      if);
+
+   #)
+

@@ -1,0 +1,112 @@
+ORIGIN '../imagereadbody';
+INCLUDE 'coffread';
+MDBODY ppcmac '../PPCMAC/PPCMACimageread'
+       nti    '../NTI/WIN32imageread';
+
+(* Read COFF file segment into the two images
+ * data_image and text_image.
+ *)
+
+--readDataAndTextImagesBody: descriptor--
+(# f: @coffReader;
+   gs: @f.getString;
+   ep: ^EntryPointInfo;
+   numsym: @integer;
+   num_aux: @integer;
+   
+   mapoffset: @
+     (# off: @integer;
+     enter off
+     <<SLOT ImageReadMapOffset: dopart>>
+     exit off
+     #);
+   mapauxsym: @
+     (# sym: ^Syment;
+        ep: ^EntryPointInfo
+     enter sym[]
+     <<SLOT ImageReadMapAuxSym: dopart>>
+     exit ep[]
+     #);
+   
+   mapsym: @
+     (* Transform an COFF symbol into an EntryPointInfo.
+      *)
+     (# sym: ^Syment;
+        binding, type, defsec: @integer;
+        ep: ^EntryPointInfo;
+        gn: @f.getName;
+        shdr: ^Scnhdr;
+     enter sym[]
+     <<SLOT ImageReadMapSym: dopart>>
+     exit ep[]
+     #);
+   
+   mapreltype: @
+     (# reltype, map: @integer;
+     enter reltype
+     <<SLOT ImageReadMapRelType: dopart>>
+     exit map
+     #);
+   
+do fname[] -> f.name;
+   f.openread;
+   &image[] -> data_image[];
+   &image[] -> text_image[];
+   
+   (* 1. read buffers *)
+   f.getData -> (data_image.buffer_ptr, data_image.buffer_size);
+   data_image.buffer_size -> data_image.LIP;
+   f.getText -> (text_image.buffer_ptr, text_image.buffer_size);
+   text_image.buffer_size -> text_image.LIP;
+   
+   (* 2. Read symbol table into marks *)
+   f.scanSyments;
+   f.cache.syments.range -> numsym;
+   (* Cannot tell which symbols belong to which sections,
+    * so set aside room for all symbols in both images.
+    *)
+   (if numsym > data_image.marks.range then
+       numsym -> data_image.marks.new;
+       numsym -> data_image.types.new;
+       numsym -> data_image.epElm.new;
+       0 -> data_image.marktop;
+   if);
+   (if numsym > text_image.marks.range then
+       numsym -> text_image.marks.new;
+       numsym -> text_image.types.new;
+       numsym -> text_image.epElm.new;
+       0 -> text_image.marktop;
+   if);
+   (* Now there is space enough. Now start copying all local 
+    * symbols (corresponding to the entryDefMarks) into the 3 
+    * arrays of both images.
+    *)
+   0->num_aux;
+   (for i:f.cache.syments.range repeat
+        (if num_aux>0 then
+            f.cache.syments[i][] -> mapauxsym -> ep[];
+            num_aux-1 -> num_aux;
+         else
+            f.cache.syments[i][] -> mapsym -> ep[];
+            f.cache.syments[i].n_numaux -> num_aux;
+        if);
+        (if (ep[]<>NONE) and ep.local then
+            (if ep.data then
+                data_image.marktop+1 -> data_image.marktop;
+                ep.LIP -> mapoffset -> data_image.marks[data_image.marktop];
+                entryDefMark -> data_image.types[data_image.marktop];
+                ep[] -> data_image.epElm[data_image.marktop][];
+             else
+                text_image.marktop+1 -> text_image.marktop;
+                ep.LIP -> mapoffset -> text_image.marks[text_image.marktop];
+                entryDefMark -> text_image.types[text_image.marktop];
+                ep[] -> text_image.epElm[text_image.marktop][];
+            if);
+        if);
+   for);
+   
+   (* 3. Read relocation *)
+   <<SLOT ImageReadRelocation: descriptor>>;
+   
+   f.close;
+#)

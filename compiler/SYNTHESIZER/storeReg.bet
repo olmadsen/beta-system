@@ -1,0 +1,171 @@
+ORIGIN 'evlib';
+LIB_ITEM 'betacodegen';
+---EvalLib:attributes--
+StoreRegRef:
+  (# strucRef: @boolean;
+     theReg: ^mch.registerOperand; 
+     comParNo: @integer; (* if the Reg is a COM parameter, comParNo is
+                          * the parameter number - this is to handle
+                          * holders for SGI - we should consider
+                          * doing it the same way for other platforms *)
+     EV: ^ASTindex;
+     rAbase,rA: ^mch.address;
+     rChain: ^DH.superChain;
+     useA,reGetArgFromStack: @boolean;
+     theRegaR: @mch.AdrRegOperand
+  enter(EV[],strucRef,rAbase[],theReg[],comParNo,rChain[])
+  do (if common.switch[121] and theReg.isDataRegop then
+         (* should probably always be done
+          * since theReg is used in a RegAdr below
+          *)
+         (# ar: @mch.adrRegOperand
+         do ar.alloc;
+            (theReg[],ar[]) -> mch.cpReg;
+            ar[] -> theReg[]
+     #)if);
+     (rAbase[],EV[],false,rChain[]) -> genAdr -> rA[];
+     (if strucRef then (theReg[],false) -> rA.asgRefReg
+      else
+         (# desc,descTop: @ASTindex; PL: @integer;
+            dr: @mch.dataRegOperand;
+            L: @mch.localLab
+         do EV -> sematt.descrip -> desc;
+            (* note that wtextDesc is wstreamDesc *)
+            desc -> sematt.descChain -> (descTop,PL);
+            (if descTop -> sematt.wtextDesc.equal then
+                (* wtext received from C or via BETA call of
+                 * external COM virtual
+                 *)
+               (* 301->trace
+                (#do 'computedAdrVal:asgToRef: CtoBETA-wtext'->xT; 
+                   EV[] -> xA 
+                #);*)
+                1 -> mch.initPrimCall;
+                1 -> theReg.toPrimDest;
+                'CopyCWT' -> mch.callPrim;
+                1 -> mch.getPrimRes -> dr;
+                (dr[],rA[]) -> mch.stVal
+             else
+                (if (desc -> sematt.descKind) 
+                 // sematt.holderKind then
+                    (* generate a holder object;
+                     *   save address (theReg) and its value
+                     *   in the holder object
+                     *)
+                    (# A: ^mch.address; A1: @mch.RegAdr;
+                       dr1,dr2: @mch.dataRegOperand; inDr: @boolean;
+                       dr3: ^mch.dataRegOperand
+                    do (if stest then
+                           301->trace(#do 'computedAdrVal:holder'->xT #)
+                       if);
+                       (if true
+                        // common.isIntel then
+                           (if theReg.isDataRegOp then
+                               (if stest then
+                                   301->trace(#do 'StoreReg:Intel:DataReg'->xT#)
+                               if);
+                               theRegaR.alloc;
+                               (*(theReg[],theRegAr[]) -> mch.cpReg;*)
+                               theReg[] -> mch.push;
+                               -5 -> mch.newCstOp -> mch.push;
+                               true -> useA
+                           if)
+                        // common.sgi then
+                           true -> reGetArgFromStack
+                           (* in this case we simply forget about theReg
+                            * and fecthes in agian form the stack after
+                            * allocation of the holder object
+                            *)
+                       if);
+                       L.new;
+                       (* is callReg free here? *)
+                       (if theReg.isCallReg and not reGetArgFromStack then
+                           (* input parameters in %i1, %i2, %i3, ...
+                            * we must save %i1 in e.g. %i2,
+                            * but %i2 must first be saved, since
+                            * it can hold a parameter value
+                            *)
+                           dr1.alloc; dr2.alloc;
+                           (theReg[],dr1[]) -> mch.cpReg;
+                           (if useA then
+                               theRegAr -> A1.reg;   (* address of value *)
+                            else
+                               theReg -> A1.reg;   (* address of value *)
+                           if);
+                           (* test *)
+                           dr2[] -> mch.gClr;
+                           (0->mch.newCstOp,A1.reg[],4) -> mch.gCmp;
+                           L[] -> mch.gBeq;
+                           
+                           (A1[],dr2[]) -> mch.ldVal;
+                           L.def;
+                           true -> inDr
+                       if);
+                           (*(if useA then theRegAr[] -> mch.gClr if);*)
+                       
+                       (Desc[],common.itemKind ) -> doLoadProtoAndAlloc;
+                       (mch.callRegOp[],rA[]) -> mch.stVal;
+                       
+                       (if useA then
+                           4 -> mch.setTop;
+                           theRegAr[] -> mch.pop
+                       if);
+                       gen.callRegAdr -> A[];
+                       12 -> A.addOff -> A[];
+
+                       (if inDr then
+                           (dr1[],A[]) -> mch.stVal
+                        else
+                           (if useA then
+                               (* theReg is a data reg and may 
+                                * have been destroyed on INTEL *)
+                               (theRegAr[],A[]) -> mch.stVal
+                            else
+                               (if reGetArgFromStack then
+                                   (comParNo,true) -> mch.getComPar -> theReg[]
+                               if);
+                               (theReg[],A[]) -> mch.stVal
+                           if)
+                       if);
+                       
+                       4 -> A.addOff -> A[];  (* A uses callReg = %i1 *)
+                       (if inDr then
+                           (dr2[],A[]) -> mch.stVal;
+                           dr1.deAlloc; dr2.deAlloc
+                        else
+                           (if useA then
+                               theRegAr -> A1.reg;    (* address of value *)
+                            else
+                               theReg -> A1.reg;    (* address of value *)
+                           if);
+                           (* test *)
+                           (if reGetArgFromStack then
+                               (common.cond_eq,0->mch.newCstOp,A1.reg[],4,L[]) 
+                                 -> mch.cmpAndJmp
+                            else
+                               (0->mch.newCstOp,A1.reg[],4) -> mch.gCmp;
+                               L[] -> mch.gBeq;
+                           if);
+                           (if ((A1[],A[])->mch.cpMem->dr3[]) <> none then
+                               (*copy value to holder*)
+                               dr3.deAlloc; 
+                           if);
+                           L.def;
+                       if);
+                       (if useA then 
+                           theRegAr[] -> mch.gClr;
+                           theRegAr.deAlloc 
+                       if);
+                    #)
+                 // sematt.dataKind then
+                    (theReg[],rA[]) -> mch.stVal
+                 else
+                    (* when do we come here? 
+                     'ComputedAdrVal:asgToRef:reportThisMessage'
+                     -> putline;*)
+                    (theReg[],rA[]) -> mch.stVal
+                if)
+         if)#)
+     if);
+  exit rA[]
+  #)

@@ -1,0 +1,759 @@
+ORIGIN 'evlib';
+LIB_ITEM 'betacodegen';
+INCLUDE '~beta/betaast/scanBetaText';
+INCLUDE 'auxlib';
+INCLUDE 'inlinNXitem';
+INCLUDE 'storeReg';
+INCLUDE 'computedval';
+(*INCLUDE 'asgtoitem'*)
+---mkListVal:descriptor---
+(# LV: ^ListVal
+do &ListVal[]->LV[]->V[]; (evl[],thisBaseAdr[],lChain[])->LV
+#)
+---EvalLib:attributes---
+ListVal: EvVal
+  (# thisVal::
+       (#V: @ListVal do (evl[],thisBaseAdr[],lChain[])->V; V[]->thisV[] #);
+     evId:: (# do 'ListVal:' -> id[] #);
+     display::
+       (# 
+       do 'evl='->xT; evl[]->xA; xN;
+          'thisBaseAdr='->xT; thisBaseAdr.display->xT;
+          (*lCHain[]->printChain*)
+       #);
+     loadVal::< (#do cError(#do 'listVal: loadVal'->xT #)#);
+     loadVal2::< (#do cError(#do 'listVal: loadVal'->xT #)#);
+     theReg::<(#do thisBaseAdr.theReg -> aR #);
+     release::
+       (#
+       do (*179->trace(#do 'list1:'-> xT; mch.dumpreg #);*)
+          thisBaseAdr.freeAdr; 
+          none->evl[]; none->thisBaseAdr[]; none->lChain[];
+          (*179->trace(#do 'list2:'-> xT; mch.dumpreg #);*)
+       #);
+     toTmp::
+       (#
+       do (if thisBaseAdr.useCallReg then
+              thisBaseAdr.toTmp->thisBaseAdr[]; mch.decrCallReg if)
+       #);
+     elimReg:: (# do (elimThis,elimCall)->thisBaseAdr.elimReg #);
+     asgToAdr:: (* (E1,E2,...)->rA *)
+       (#do cError(#do 'ListVal:asgToAdr'->xT; evl[]->xA #)#);
+     asgToRepAdr::
+       (# length: @integer; isValueRep,unfreeze: @boolean
+       do (if stest then
+              301->trace(#do 'ListVal:asgToRepAdr;'->xT; evl[]->xA;
+                           thisBaseAdr.display; xN;
+                           100->SwitchOn;
+                           rEv[]->xA;
+                           100->SwitchOff
+                        #)
+          if);
+          (if not thisBaseAdr.frozenReg then
+              thisBaseAdr.freezeReg;
+              true ->unfreeze
+          if);
+          evl->scanList(# do length + 1 -> length #);
+          (* Value repetion is assumed, later ref rep should be supported *)
+          
+          (if rEV.son -> sematt.simpleOrRep 
+           // gram.staticItem // gram.staticComponent then
+              true -> isValueRep
+           // gram.dynamicItem // gram.dynamicComponent then
+              false -> isValueRep
+          if);
+          (isValueRep,rA.size,length,rA[]) -> asgToNewRep
+          (#
+          do evl->scanList
+             (# EV: @AStindex
+             do currentNode -> EV;
+                (thisBaseAdr.copy,EV[],false,lChain[](*rChain[]*))
+                  -> ExpEval
+                  -> V[];
+                (* OBS: Currently asgToRepElm is used, but we might
+                 * as well here decide whether to use asgToAdr,
+                 * asgToRealAdr, etc. And later also asgToRefAdr
+                 * when reference repetitions are supported
+                 *)
+                (if stest then
+                    301->ctrace
+                    (#
+                    do 'listVal:asgToRepAdr:elm:'->xT;
+                       V.display;
+                       mch.dumpreg;
+                #)if);
+                (if false then
+                    (if rA.size < 8 then
+                        NextElmAdr -> V.asgToAdr -> V[]
+                     else
+                        NextElmAdr -> V.asgToRealAdr -> V[];
+                    if)
+                 else
+                    (NextElmAdr,rEV[],rChain[]) -> V.asgToRepElm -> V[]
+                if);
+                V.release;
+             #);
+          #);
+          (if unFreeze then false -> baseAdr.frozenReg if);
+          rA.freeAdr;
+          this(ListVal)[] -> V[]
+       #);
+     asgToItem::
+       (* evl=(E1,E2,...)
+        * E1 -> EV.n1; E2 -> EV.n2 ... *)
+       (# nScan: @ | scanNadr;
+          NA: ^Mch.Address; more,first,onStack: @boolean;
+          theEVL : @ASTindex;
+          nxLevel: @integer;
+          isSimple: @boolean; hasCode: @boolean
+       do (if switch181 then
+              evl.father -> theEVL;
+              (theEVL[],false,lChain[]) -> sematt.NXdepth -> (nxLevel,hasCode);
+              (if hasCode then
+                  false -> isSimple;
+                  (if rA.useCallReg then 
+                      (if rA.isCallReg then mch.decrCallReg
+                       else
+                          '\n***evval2:listVal::asgToItem:rA is NOT callreg'
+                            -> putline
+                      if);
+                      rA.toTmp -> rA[];
+                      (* rA.freezeReg (* who will release it? *)
+                  if)
+               else
+                  true -> isSimple;
+              if);
+              
+              (rDesc[],rA[](*not used*),0,rChain[],true) -> nScan;
+              
+              (rDesc[],rA[],rchain[],nScan[],isSimple) -> asgToN
+              (# V: ^evVal;
+                 EH: @EvalHandler;
+                 localDesc: ^ASTindex
+              do (if nScan.N = 1 then
+                     (if stest then
+                         301->trace(#do 'listVal:asgToItem:N=1'->xT #)
+                     if);
+                     (rObjAdr[],this(ListVal)[],nscan.thisEv[],nScan.thisChain[])
+                       -> EH.AssignValToEval 
+                       -> V[];
+                     (if V[] <> NONE then V.release
+                      else '\nListVal:asgToItem-1:V_is_None'->putline
+                     if);                        
+                  else
+                     evl -> scanList
+                     (# EV: @ASTindex;
+                        lV,V: ^evVal;
+                        rObjTmp: @addressTmpHandler;
+                     do currentNode -> EV;
+                        (EV[],false,lChain[]) 
+                          -> sematt.NXdepth 
+                          -> (nxLevel,hasCode);
+                        (if hasCode then rObjAdr[]->rObjTmp.save if);
+                        (thisBaseAdr[],EV[],false,lChain[])
+                          -> ExpEval
+                          -> lV[];
+                        rObjAdr.bAdr.localDesc[] -> localDesc[];
+                        (rObjAdr[],nScanN.PL,rObjAdr[]) 
+                          -> SetSuperDesc 
+                          -> rObjAdr[]; (* rObjAdr is a new object! *)
+                        rObjTmp.restore;
+                        rObjTmp.deAlloc;
+                        rObjAdr.freezeReg; (* OBS! Overrides a possible 
+                                            * non-freeze in asgToN. Gave
+                                            * adr-negative during clean-up,
+                                            * but should be reconsidered
+                                            *)
+                 
+                        (rObjAdr[],lV[],nscan.thisEv[],nScan.thisChain[])
+                          -> EH.AssignValToEval 
+                          -> V[];
+                        (if stest then
+                            301->ctrace(#do 'listVal:in:asgtoItem:'->xT;
+                                         display; xN;
+                                         'V='->xT; V.display
+                        #)if);
+                        localDesc[] -> rObjAdr.bAdr.localDesc[];       
+                        (if V[] <> NONE then V.release
+                         else '\nListVal:asgToItem:VISNone'->putline
+                        if);
+                        nextEnterEval;
+                     #)
+                 if);
+              #)
+              -> this(asgToItem).rAx[] -> this(asgToItem).rA[]
+           else
+              (if common.switch[125] then
+                  '\n*** list2item' -> putline;
+                  (rDesc[],rA[],0,rChain[],true) -> nScan -> more;
+                  (if nScan.N = 1 then
+                     this(ListVal)[] -> nScan.asgToNelm
+                   else
+                       evl -> scanList 
+                         (# EV: @ASTindex
+                         do currentNode -> EV;
+                            (* chain is valid for Left-side, 
+                             * rChain for right-side *)
+                            (thisBaseAdr.copy,EV[],false,lChain[](*rChain[]*))
+                              -> ExpEval
+                              -> nScan.asgToNelm; 
+                            nScan -> more;
+                  #)if)   
+               else                  
+                  rA[] -> moveToCallReg
+                  (# chain1: ^DH.SuperChain
+                  do EHchain[] -> chain1[];
+                     (if rA.isCallReg and thisBaseAdr.isCallReg then
+                         (* why does this never happen?*)
+                         cError(#do 'ListVal:asgToItem:CallReg conflict'-> xT #)
+                     if);
+                     (rDesc[],thisA[]->rA[],0,rChain[],true) -> nScan -> more;
+                     (if nScan.N=1 then
+                         this(ListVal)[] -> nScan.asgToNelm
+                      else 
+                         (if thisBaseAdr.regType // mch.thisO // mch.callO then
+                         evl -> scanList 
+                         (# EV: @ASTindex
+                         do currentNode -> EV;
+                            (* chain is valid for Left-side, 
+                             * rChain for right-side *)
+                            (thisBaseAdr.copy,EV[],false,lChain[](*rChain[]*))
+                              -> ExpEval
+                              -> nScan.asgToNelm; 
+                            nScan -> more;
+                            (if stest then
+                                301->trace(#do 'ListVal:asgToItem2'->xT; mch.dumpreg#)
+                            if);
+                         #)
+                      else
+                         (* with NXoffSets, baseAdr of a list should always
+                          * be thisReg.
+                          *)
+                         (if switch180 then 
+                             cError(#do'listVal:asgToItem:Wrong Register'->xT#)
+                         if);
+                         pushThis; 
+                         thisBaseAdr[] -> toThis -> thisBaseAdr[];
+                         evl -> scanList 
+                         (# EV: @ASTindex
+                         do currentNode->EV;
+                            (thisBaseAdr.copy,EV[],false,lChain[](*rChain[]*))
+                              -> ExpEval
+                              -> nScan.asgToNelm; 
+                            nScan -> more
+                         #);
+                         popThis
+                 if)if);
+                 nScan.reset;
+              #)->rA[]; (* 27.4.93 *)
+              (* this could be handled more efficient, since a push callReg by
+               * moveToCallReg should not restore until the item has been 
+               * executed. Not possible with current structure.
+               * Might perhaps be done by push/pop of rA in the calls to
+               * asgToItem in transferEnter in evLib?
+               *)
+              if)
+          if)
+       #);
+     asgToNxOffSets::
+       (# off: @integer; isRef,toCall: @boolean; A: ^mch.address;
+          V: ^evVal
+       do (if stest then 178->trace(#do 'listVal:asgToNXoffSets:'-> xT #)if);
+          (if rA.isCallReg then
+              (* this is only necessary if some Ev in evl is an object
+               * that has to be executed. Some simple way of testing
+               * this is missing
+               *)
+              rA.toTmp -> rA[]; 
+              rA.freezeReg; (* freeze seems necessary
+                             * since someone makes a freeAdr. 
+                             *)
+              mch.decrCallReg;
+              true -> toCall;
+              (*178->trace(#
+                        do 'listVal:asgToNXoffSets2:'-> xT; 
+                           rA.display->xT;
+               mch.dumpReg #);*)
+          if);          
+          evl->scanList
+          (# Ev: @ASTindex
+          do currentNode->Ev;
+             (thisBaseAdr.copy,Ev[],false,lChain[])->ExpEval->V[];
+             (rA[],NX[],inXpart) -> V.asgToNxOffSets -> rA[];
+             (if stest then
+                 178->trace(# do 'listVal:asgToNXoffSets2B:'-> xT; 
+                              mch.dumpReg #)
+             if);             
+             V.release
+          #);
+          (if toCall then
+              (if rA.isCallReg then
+                  cError(#do 'listVal:asgToNXoffSets:callRegproblem'->xT #)
+              if);
+              false -> rA.frozenReg;
+              mch.GetCallReg; (* can callReg be busy here - and should
+                               * it then be pushed, and where will it 
+                               * then be popped
+                               *)
+              rA.toCallReg -> rA[];
+              (if stest then
+                  178->trace(#do 'listVal:asgToNXoffSets3:'-> xT; mch.dumpReg #)
+              if);
+          if)              
+       #);
+     asgToInlineItem::
+       (# inx: ^inlineNXitem
+       do evl->scanList
+          (# Ev: @ASTindex
+          do currentNode->Ev;
+             (thisBaseAdr.copy,Ev[],false,lChain[])->ExpEval->V[];
+             (rDesc[],inlNX[],rChain[])->V.asgToInlineItem
+          #);
+          (*inlNX[]->inx[]; inx.eval->V[]*)
+       #);
+     asgToList::< (* assign evl=(le1,le2,...)->EV=(re1,re2,...) *)
+       (# scanRevl: @ | 
+            (# 
+            do EV->scanList(#do currentNode->rEv; SUSPEND #)
+            #);
+          rEv: @ASTindex;
+          W: @ListVal;
+       do (if switch181 then
+              evl->scanList
+              (# EV: @ASTindex
+              do currentNode->EV;
+                 scanRevl;
+                 (thisBaseAdr.copy,Ev[],false,lChain[])->ExpEval->V[];
+                 (BA[],V[],rEv[],rChain[])->AssignValToEval->V[]; 
+                 V.release
+              #)
+           else
+          (if thisBaseAdr.regType//mch.thisO//mch.callO then
+              (if stest then
+                  301->trace(#do 'ListVal:asgToList2:'->xT #)
+              if);
+              evl->scanList
+              (# EV: @ASTindex
+              do currentNode->EV;
+                 scanRevl;
+                 (thisBaseAdr.copy,Ev[],false,lChain[])->ExpEval->V[];
+                 (BA[],V[],rEv[],rChain[])->AssignValToEval->V[]; V.release
+              #)
+           else
+              (if switch180 then 
+                  cError(#do 'listVal:asgToList:Wrong register'->xT #)
+              if);
+              BA[]->moveToCallReg
+              (#
+              do (*350->trace(#do 'PushThis6'-> xT #);*)
+                 pushThis; 
+                 thisBaseAdr[]->toThis->thisBaseAdr[];
+                 evl->scanList
+                 (# EV: @ASTindex
+                 do currentNode->EV;
+                    scanRevl;
+                    (thisBaseAdr.copy,Ev[],false,lChain[])->ExpEval->V[];
+                    (thisA[],V[],rEv[],rChain[])->AssignValToEval->V[]; 
+                    V.release;
+                 #);
+                 thisA[]->BA[]; popThis
+              #)->BA[]; (* 27.4.93 - see asgToItem above *)
+          if)if);
+          (* return the right-side evalList, ev *)
+          (ev[],BA[],rChain[])->W; W[]->V[]
+       #);
+     asgToDispatch::
+       (# EL: [100] ^ASTindex; top: @integer;
+          scanL:
+            (# EV: ^ ASTindex; next,inc: @integer
+            do (if sematt.cExt->mch.xParForward then 
+                   1 -> inc; 1 -> next
+                else -1 -> inc; top -> next
+               if);
+               (for i: top repeat
+                    EL[next][] -> EV[];
+                    INNER;
+                    next + inc -> next
+               for);                    
+            #)
+       do 311 -> ctrace
+          (#
+          do 'listVal:asgToDispatch:' -> xT; EV[] -> xA; xN;
+             desc[]-> xA;
+          #);
+          evl->scanList
+          (#
+          do &ASTindex[]->EL[top+1->top][];
+             currentNode->EL[top]
+          #);
+          (EV[],externalName[],desc[],extKind)
+            -> GenCOMdispatch
+          (#
+          do scanL
+             (# X: @integer
+             do (thisBaseAdr.copy,EV[],false,lChain[]) -> ExpEval -> V[];
+                V[] -> PushDispatchPar
+             #);
+          #) -> V[]
+       #);
+     asgToCproc::<
+       (# CP: @ ExTernalCall; 
+          EL: [100] ^ASTindex; top,max: @integer;
+          chain1: ^DH.SuperChain; 
+          inThis,popCall,popThis,arg2Saved: @boolean;
+          savedArg2: @mch.dataRegOperand;
+          callRegParNo: @integer
+       do (if stest then
+              301->ctrace(#do 'listVal:asgtoCproc:'->xT;  #);
+          if);
+          FixBase
+          (#
+          do EHchain[]->chain1[];
+             (externalName,Desc[],extKind,EV.son)->CP; (* init *)
+             evl->scanList
+             (#
+             do &ASTindex[]->EL[top+1->top][];
+                currentNode->EL[top]
+             #);
+             (if extKind->mch.xParForward then
+                 (* For some tstcproc.bet
+                  * of the RISC's: mips, ppc, sparc (eventually),
+                  * callReg is the same register as the 2nd argument register.
+                  * (1) Before transferring external arguments, it must be
+                  *     tested if callReg is busy, and if so, callReg MUST be
+                  *     saved and later restored.
+                  * (2) Evaluation of an argument may involve execution
+                  *     of primitive operations, like AlloI, CopyT, etc; these
+                  *     primitives may use argument registers; initPrimCall
+                  *     will push possible busy arg. registers and getPrimRes
+                  *     will restore them .....
+                  * (3) Evaluation of arguments may call Beta procedures:
+                  *     Eval of e.g. arg. 3:
+                  *     Push arg1,arg2 (callreg)
+                  *     AlloI -> callReg(arg2)
+                  *     Pop arg1,arg2   - override callReg
+                  *     .... transfer enter-params to callReg 
+                  *     call M12FOO
+                  *     We thus SAVE calReg(arg1) in a dataRegister when
+                  *     it has been evaluated.
+                  *     After AlloI we dont override callReg with arg. pop.
+                  *     Before external call arg1 must be restored.
+                  * RE 1. It seems that NO registers are ever stored before
+                  * an external call? All busy registers should be saved?
+                  * We now do it for MIPS/PPC - but should it be done
+                  * in general?
+                  *)
+                 (if common.switch[61] then
+                     (*mch.pushReg -> max; - dont work
+                      * since some of the registers may have been released
+                      * when the external is called. And then
+                      * allocated after the call and then overwritten
+                      * by mch.popReg
+                      *)
+                     (if extKind = sematt.VirtExt then
+                         (* first arg. is theObject, so first eval
+                          * in the list goes to callReg *)
+                         1 -> callRegParNo
+                      else
+                         2 -> callRegParNo
+                     if);                   
+                     (if mch.callRegBusy and (top >= callRegParNo) then
+                         (false,true) -> mch.pushThisOrCall;
+                         true -> popCall;
+                         (if thisBaseAdr.useCallReg then
+                             (*350->trace(#do 'PushThis7'-> xT #);*)
+                             pushThis;
+                             true -> popThis;
+			     thisBaseAdr[] -> toThis -> thisBaseAdr[];
+                             (*'CallReg in use at ListVal:asgToCproc'
+                              * ->systemError*)
+                 if)if)if);
+                 (if stest then
+                     301->trace(#do 'ParNo: ' -> xT; callRegParNo -> xI;
+                                  'extKind' -> xT; extKind -> xI#)
+                 if);
+                 (for i:top repeat
+                      (thisBaseAdr.copy,EL[i][],false,lChain[])
+                        -> ExpEval
+                        -> V[];
+                      (true->CP.getEnterP,extKind,CP.getEnterP.size
+                      ,CP.pascExtProcInfo)
+                        -> V.pushCpar;
+                      (* arg2/callReg may be used during evaluation of 
+                       * arg 3, 4, ... We thus save it and restore it
+                       * when all arguments have been evaluated
+                       *)
+                      (if common.switch[61]
+                          and (i = callRegParNo) and (top > callRegParNo) then
+                          (* par no. 2 in callReg - MUST be saved *)
+                          savedArg2.alloc; (* potentially dataReg overflow
+                                            * if many nested C calls in
+                                            * position of par. 2 of C-calls
+                                            *)
+                          (mch.callRegOp[],savedArg2[]) -> mch.cpReg;
+                          true -> arg2Saved;
+                         (* savedArg2[] -> mch.push (*data*)
+                      if)
+                 for);
+              else                 
+                 (for i:top repeat
+                      (thisBaseAdr.copy,EL[top-i+1][],false,lChain[])
+                        -> ExpEval
+                        -> V[];
+                      (false->CP.getEnterP,extKind,CP.getEnterP.size
+                      
+                      ,CP.pascExtProcInfo)
+                        -> V.pushCpar;
+                 for)
+             if);
+             (if arg2Saved then 
+                 (*savedArg2[] -> mch.pop (*data*);
+                 (savedArg2[],mch.callRegOp[]) -> mch.cpReg;
+                 savedArg2.deAlloc
+             if);
+             CP.call;
+             CP.getExitP->V[]; 
+             (if popThis then (true,false) -> mch.popThisOrCall if);
+             (if popCall then (false,true) -> mch.popThisOrCall if);
+                 (*(if common.switch[61] then max -> mch.popReg if)*)
+       #)#);
+     asgToPrimitive::<
+       (# CP: @primitiveCall; inThis: @boolean; chain1: ^DH.SuperChain
+       do EHchain[]->chain1[];
+          FixBase
+          (# n: @integer
+          do evl->scanlist(#do n+1->n (* this ONLY count 1 pr. elm!! *)#);
+             (n,T[])->CP;
+             evl->Scanlist
+             (# EV: @ASTindex; V: ^EvVal
+             do currentNode->EV;
+                (thisBaseAdr.copy,EV[],false,lChain[])->ExpEval->V[];
+                (3(* always long *),sematt.asmExt,0,0)->V.pushCpar;
+             #);
+             CP.call->V[];
+       #)#);
+     asgToInLinePrimitive::<
+       (# xDr: [3] ^mch.dataRegOperand;  D: [3]@integer; Dmax,dRes: @integer;
+          W: @ComputedEvVal; chain1: ^DH.SuperChain
+       do EHchain[]->chain1[];
+          FixBase
+          (# dR1: ^mch.dataRegOperand
+          do evl->scanList
+             (# E: @ASTindex; V: ^evVal
+             do currentNode->E; 
+                (thisBaseAdr.copy,E[],false,lChain[])->ExpEval->V[];
+                V.toDataReg->xDr[Dmax+1->Dmax][];
+                xDr[Dmax]->D[Dmax]; (*V.release; !!*)
+                (*350->trace(#do mch.dumpReg #)*)
+             #);
+             (opCode,I1,I2,D)->gen.inLinePrimitive->dRes->W.dr;
+             W[]->V[];
+             (for i: Dmax repeat
+                  (if dRes = D[i] then else xDr[i].deAlloc if);
+       for)#)#);
+     asgToNewPrim::<
+       (# EV1,EV2,op: @ASTindex; lv,rv,V1,V2: ^evVal; 
+          opCode,pos,length,val: @integer;
+	  dr,lDr,rDr,pDr,wDr: ^mch.dataRegOperand; opT: ^text; A: ^mch.address;
+	  ar: @mch.adrRegOperand;
+
+          putBW:
+            (* (val,byteNo)->A.putByte/Short *)
+	    (* (@@A,val)->putByte/Short *) 
+          (# size: @integer; bsNo: @integer
+          enter size
+          do evl->scanList
+             (# E: @ASTindex; i: @integer; dr1: ^mch.dataRegOperand
+             do currentNode->E;
+                (if i+1->i
+                 // 1 then (* val *)
+                    (baseAdr.copy,E[],false,rchain[])->ExpEval->lv[];
+                 // 2 then (* byteNo *) 
+                    E[]->getConst->(bsNo,V1[]); 
+                    (if V1[]=none then
+                        (if size//2 then bsNo*2->bsNo if);
+                        bsNo->A.addOff->A[]
+                     else
+                        V1.loadVal2->V1[]; (*Check this evrywhere*)
+                        V1.toDataReg->dr1[];
+                        (A[],dr1[],size)->primIndex->A[]
+                    if)
+                if);
+             #) ;
+             lv.toDataReg->dr[];
+             (if size
+              // 1 then (dr[],A[])->mch.stByte
+              // 2 then (dr[],A[])->mch.stHalf
+              // 4 then (dr[],A[])->mch.stVal
+             if);
+             A.freeAdr; (* cleared if InxRegAdr *)
+             (dr,false,false,false)->mkComputedEvVal->V[]
+             (* A.aReg does NOT denoet a real object - must be cleared *)
+          #);
+
+          inxPut:
+	    (* (val,inx)->R.inxPut/byte/short/long *)
+	    (* (R,inx,val) -> inxPut/byte/short/long 
+             * R is a repetition
+	     * D[1]=adr(R), D[2]=inx, D[3]=val 
+             *)
+          (# val: ^mch.dataRegOperand;      
+             size: @integer (* 0=byte, 1=word, 2=long *);
+             oldS14,oldS15: @boolean
+          enter size
+          do common.switch[14]->oldS14; common.switch[15]->oldS15;
+             true->common.switch[14]->common.switch[15];
+             evl->scanList
+             (# E: @ASTindex;; i: @integer
+             do currentNode->E;
+                (if i+1->i
+                 // 1 then
+                    (baseAdr.copy,E[],false,rchain[])->ExpEval->lv[];
+                    lv.toDataReg->val[];
+                 // 2 then
+                    (baseAdr.copy,E[],false,rchain[])->ExpEval->lv[];
+                    lv.toDataReg->dr[];
+                if);
+             #);
+             (dr,true,size)->A.index->A[];
+             size->A.addOff->A[]; (* check that this works *)
+             (if size
+              // 1 then (val[],A[])->mch.stByte
+              // 2 then (val[],A[])->mch.stHalf
+              // 4 then (val[],A[])->mch.stVal
+             if);
+             oldS14->common.switch[14]; oldS15->common.switch[15];
+             (* A.aReg does NOT denote a real object - must be cleared *)
+             A.freeAdr; (* cleared if InxRegAdr *)
+             (val,false,false,false)->mkComputedEvVal->V[]
+
+          #);
+          getConst: 
+            (# E: ^ASTindex; T: ^text; val: @integer; V: ^evVal
+            enter E[]
+            do (if E.label = gram.integerConst then
+	           E.getText->T[]; 0->T.setPos; T.getInt->val
+		else 
+		   (thisBaseAdr.copy,E[],false,rchain[])->ExpEval->V[]
+	       if)
+            exit(val,V[])
+            #);
+	  ClrAndDeAlloc:
+            (# ar: @mch.adrRegOperand
+            enter ar
+            do ar[]->mch.gClr; ar.deAlloc
+            #)
+       do EV.son-> EV1; EV1.son->EV1; Ev1.brother->op;
+          (baseAdr.copy,EV1[],false,rchain[])->genAdr->A[];
+          (if op[]->sematt.primitiveToNumber->opCode
+           // 9 (* putByte *) then 
+	      (if EV.evalKind = sematt.repValEval then 
+                  1->inxPut
+	       else 1->putBW
+	      if)
+           // 10 (* putShort *) then 
+	      (if EV.evalKind = sematt.repValEval then 
+                  2->inxPut
+	       else 2->putBW
+	      if)
+           // 31 (* putLong *) then
+	      (if EV.evalKind = sematt.repValEval then 
+                  4->inxPut
+	       else (* sematt.simpleEval, realVal, ... *) 
+                  4->putBW
+	      if)
+           // 19 (* (pos,length)->R.%getBits    *)
+           // 20 (* (pos,length)->getSignedBits *) then
+	      (* address of R is in A *)
+              (# dr: @mch.dataRegOperand; pos,length: @integer
+              do dr.alloc; (A[],dr[])->mch.ldVal; A.freeAdr;
+	         evl->scanList
+                 (# E: @ASTindex;; i: @integer
+                 do currentNode->E;
+                    (if i+1->i
+                     // 1 then (* pos *) E[]->getConst->(pos,V1[])
+                     // 2 then (* length *) E[]->getConst->(length,V2[]);
+                    if);
+                 #) ;
+	         (* V1[]=nil => pos is constant
+	          * V2[]=nil => length is constant
+	          *)                 
+	         (if (V1[]<>none) or (V2[]<>none)  then
+                     (V1[],pos)->const2Reg->pDr[];
+                     (V2[],length)->const2Reg->wDr[];
+                     (if opCode=19 then
+                         (dr[],pDr[],wDr[])->mch.gGetBits
+                      else
+                         (dr[],pDr[],wDr[])->mch.gGetSignedBits
+                     if)
+                  else
+	             (if opCode = 19 then 
+                         (dr[],pos,length,dr[],none)->mch.getBits
+	              else (dr[],pos,length,dr[],none)->mch.getSignedBits
+	         if)if);
+	         (dr,false,false,false)->mkComputedEvval->V[];
+	      #)
+           // 21 (* (Val,pos,length)->R.%putbits *) then 
+	      evl->scanList
+              (# E: @ASTindex;; i: @integer
+              do currentNode->E;
+                 (if i+1->i
+                  // 1 then (* val *) E[]->getConst->(val,V[])
+                  // 2 then (* pos *) E[]->getConst->(pos,V1[])
+                  // 3 then (* length *) E[]->getConst->(length,V2[])
+                 if);
+              #);
+	      A.toReg2->ar; ar.mkIndirect;
+              (V[],val)->const2Reg->lDr[];
+              (if v1[]=none then (* pos is constant *)
+                  (if v2[]=NONE then (* pos and width are constant *)
+                      (* the current case of putBits *)
+                      (lDr[],pos,length,ar[],none)->mch.putBits
+                   else (* length is variable *)
+                      (* general case *)
+                      (V1[],pos)->const2Reg->pDr[];
+                      V2.toDataReg->wDr[];
+                      (lDr[],pDr[],wDr[],ar[])->mch.gPutBits
+                  if)
+               else 
+                  V1.toDataReg->pDr[];
+                  (if (v2[]=NONE) then
+                      (V2[],length)->const2Reg->wDr[];
+                      (lDr[],pDr[],wDr[],ar[])->mch.gPutBits
+                   else 
+                      (* pos is variable *)
+                      (* general case *)
+                      V2.todataReg->wDr[];
+                      (lDr[],pDr[],wDr[],ar[])->mch.gPutBits
+              if)if);
+              (lDr,false,false,false)->mkComputedEvval->V[];
+              (* the following call is 'inherited' from the old primitive-code
+               * from gen1body! It is a coincidence that it works,since ar 
+               * is marked as indirect. This should generate set 0, [%ar].
+               * It works since ar is transferred by value, which does NOT
+               * transfer the inDirect flag!!!! Ugly:-(
+               *)
+              ar->ClrAndDeAlloc;
+          if)
+       #);
+     pushCPar::<(#do 'ListPushCpar'->NotImpl #);
+     FixBase:
+       (# 
+       do (if thisBaseAdr.regType//mch.thisO//mch.callO then
+              INNER
+           else
+              (if switch180 then 
+                  cError(#do 'listVal:FixBase:Wrong register'->xT #)
+              if);
+                  (*350->trace(#do 'PushThis8'-> xT #);*)
+              pushThis; thisBaseAdr[]->toThis->thisBaseAdr[];
+              INNER;
+              popThis
+       if)#);
+     
+     evl: ^ASTindex; 
+     thisBaseAdr: ^mch.address;
+     lChain: ^DH.SuperChain;
+     (* evl must be evaluated relative to thisBaseAdr *)
+  enter(evl[],thisBaseAdr[],lChain[])
+  #);

@@ -1,0 +1,430 @@
+ORIGIN 'prototype';
+LIB_ITEM 'betacodegen';
+---EmitMain:descriptor--
+(# emit:
+     (* generate M-part labels for inner calls;
+      * MainLst has an element pr non-empty dopart
+      *)
+     (# R: ^MainLst; TOP: ^mch.textOperand; local: @boolean; 
+        innerOff: @integer; D: ^ASTindex
+     enter(R[],innerOff)
+     do (if R[] <> NONE then
+            (R.succ[],R.mDesc.virtSize)->&emit;
+            (if objKind // sematt.comKind // sematt.dispatchKind then
+                (* NO inner should be allocated for com object *)
+                'Return' -> mch.newCtextOp -> Top[]
+             else
+                (if R.mDesc[] -> sematt.hasOnlyInner then
+                    (if mTop = 0 then
+                        'Return' -> mch.newCtextOp -> Top[]
+                     else
+                        Mentry[mTop].T[]-> mch.newTextOp -> TOP[]
+                    if)                 
+                 else
+                    ('M',R.mDesc[])
+                      -> mkEntryPoint
+                      -> (mch.newTextOp->Top[],local);
+                    (if not local then TOP.T[]->mch.import if)
+            if)if);
+            (if (Mtop+1->Mtop) > Mentry.range  then
+                Mentry.range->Mentry.extend
+            if);
+                (*312->trace(#do 'MarkInner:'->xT;innerOff->xI;R.mDesc[]->xA#);*)
+            (TOP[],innerOff) -> markInner;
+            (if R.succ[] = NONE then 
+                20+innerOff -> topMentryOff; 
+                ('Return'->mch.NewCtextOp,R.mDesc.virtSize)-> markInner
+            if);
+            TOP[]->Mentry[Mtop][];
+     if)#);
+   Mentry: [10] ^mch.textOperand; Mtop: @integer
+do (mainHead[],4) -> &emit; 
+
+   (* size of prototype parts *)
+   Mtop->mch.innerTableSize;
+   6->mch.fixedProtoSize;
+   objTmpTop->mch.objTmpSize;
+   dyn.top->mch.dynGCSize;
+   virtTable.range div 4 ->mch.virtSize;
+#)
+---EmitBindTable:descriptor---
+(# L: @integer; formId,T: ^text; local: @boolean; lab: @mch.localLab
+do (virtTable.range div 4)->mch.EmitVirtTable
+   (#do (if (virtTable[index*4]->L)
+         // -1 then
+            (if objKind 
+             // sematt.comKind // sematt.dispatchKind then
+                ('G',virtTable2[index*4][])->mkEntryPoint->(T[],local);
+                (if not local then T[]->mch.import if);
+             else
+                (if common.switch[68] then
+                    ('V',virtTable2[index*4][])->mkEntryPoint->(T[],local);
+                    (if not local then T[]->mch.import if);
+                 else
+                    ('T',virtTable2[index*4][])->mkEntryPoint->(T[],local);
+                    (if not local then (T[],false)->mch.importData if);
+            if)if);
+            T[]->mch.newTextOp->mch.EmitVirtAdr;
+         // -2 then
+            virtTable3[index*4][] -> mch.EmitVirtAdr
+         else 
+            (if L = 0 then
+                (* happens for descriptors with no do-part *)
+                'Return' -> mch.NewCtextOp -> mch.declareAddress
+             else
+                L->Lab; 
+                (if common.targetMachineId = common.ppcmac then
+                    true -> lab.betalabel
+                if);
+                Lab[]->mch.EmitVirtAdr
+            if)
+   if)#)
+#)
+--EmitExport:descriptor--
+(# index,R: @integer
+do formId.makeUC;
+   formId[]->formSet.isLocal->index;
+   (*305->trace
+    (#do  newline; formId[]->T; ' '->put; 
+    protoIndexTable.range->putInt; ' '->put; index->putInt; 
+    (if index//0 then 
+    else
+    ' '->put; protoIndexTable[index].pt.range->putInt
+    if); 
+    ' '->put; descNo->putInt; 
+    #);*)
+   
+   L:
+     (if index = 0 then
+         (for i: formNames.range-(noOfForms+1) repeat
+              (if formNames[i+noOfForms+1][]->formId.equal then
+                  noOfForms+1+i->index;
+                  (* 305->trace(#do 'Found:'->T; index->I #);*)
+                  Leave L
+         if)for);
+         1->formNames.extend;
+         formId[]->formNames[formNames.range->index][];
+         1->protoIndexTable.extend;
+         &protoIndex[]->protoIndexTable[protoIndexTable.range][];
+              (*305->trace(#do 'Allocate:'->T; index->I #);*)
+     if);
+   (if descNo>(protoIndexTable[index].pt.range->R)  then
+       (if descNo>2*R then (descNo - R) + 8 -> R if); 
+       R->protoIndexTable[index].pt.extend;
+   if);
+   (if descno <> 0 then
+       this(prototype)[]->protoIndexTable[index].pt[descNo][]
+   if);
+   
+   (if desc2Alias then 
+       &protoObject[]->protoIndexTable[index].pt[1][]
+       (* emitProtoType for this object has no effect *)
+   if);
+   (if succ[] <> none then succ.emitExport if)
+#)
+--EmitProtoType:descriptor--
+(* protohead MUST be eliminated from gen.bet and gen2body.bet,
+ * and the version below must be simplified
+ *)
+(# plab: @mch.textOperand; 
+   thisTLab,thisGlab,superTlab: ^text; 
+   Tlab,Glab,T1,G1: ^Text; local: @boolean;
+   GCtableOffset: @integer;
+   Emit: @
+     (# descNo: @integer; formId: ^text
+     enter(descNo,formId[])
+     do ('T',descNo,formId[],true)->main.gen.sysLab->thisTlab[];
+        (if objKind = sematt.externalVirtualKind then
+            NONE -> thisGlab[]
+         else
+            (if (desc[]->sematt.hasAcode) or common.switch[65] then
+                (* There is NO V-entry for simple patterns;
+                 * NOT true: a V-entry is needed since R## may indirectly
+                 * result in a call to a V-entry *)
+                (* we always place the V-entry in the prototype *)
+                (*('G',descNo,formId[],true)->main.gen.sysLab->thisGlab[];*)
+                (if common.switch[68] then
+                    (if common.switch[64] then 
+                        ('V',desc[])->mkEntryPoint->(thisGlab[],local)
+                     else
+                        NONE -> thisGlab[]
+                    if)
+                 else
+                    ('G',desc[])->mkEntryPoint->(thisGlab[],local)
+                if);
+                (if not local and (thisGlab[] <> NONE) then 
+                    thisGlab[]->mch.import 
+                if)
+             else (*'Return'*) NONE -> thisGlab[]
+        if)if);
+        (if prefDesc.isNull then
+            ('T',sematt.superObject[])->mkEntryPoint->(superTlab[],local)
+         else
+            ('T',prefDesc[])->mkEntryPoint->(superTlab[],local)
+        if);
+        (if not local then (superTlab[],false)->mch.importData if);
+        
+        (*(if (externalEntryLab[] = NONE) and not common.switch[66] then
+            20+desc.virtSize->GCtableOffset
+         else*)
+            (* extra long with externalEntryLab is generated - see below *)
+            24+desc.virtSize->GCtableOffset;
+            (*if);*)
+        
+        (thisTlab[],GCtableOffset,orgOff,thisGlab[],superTlab[]
+        ,(((8 - (size mod 8)) mod 8) + size) div 4 
+        ,topMentryOff,formIndex,nodeId DIV 2, externalEntryLab[])
+          ->mch.EmitProto;
+        (*312->trace(#do 'bindTable for:'->xT; desc[] -> xA;
+                     (for i: virttable.range div 4 repeat
+                          '-----'->xT;
+                          virtTable[i*4] -> xI; xN;
+                          virtTable2[i*4][] -> xA; xN;
+                          (if virttable3[i*4][] <> NONE then
+                              virttable3[i*4] -> xT; 
+                           else 'NONE'->xT
+                          if);
+                          xN
+         for)#);*)
+        
+        emitBindTable;
+        
+        emitObjectTemplate;
+        
+        dyn.top->mch.EmitRefTable(#do dyn.Off[inx]->mch.emitRefTableOff #);
+        
+        (*320->trace
+         (#do 'Bytes'->bytes.dump; 'Shorts'->shorts.dump;
+         'Longs'->longs.dump; 'Reals'->reals.dump
+         #);*)
+        (if true
+         // common.switch[47]
+         // common.isIntel then
+            (* little endian machine *)
+            (# b,v,inx,w,m,
+               N: @integer; (* no. of bytes to represent the longs *)
+               SetBit: @
+                 (# X,P,v: @integer;
+                 enter X
+                 do ((X mod 32)  (* byte no. *)
+                    div 4)  (* bit pos in byte *)
+                      -> P;
+                    (1 %sll (7-P)) %Bor b -> b;
+                    (*320->trace(#do 'SetBit: '->xT; X->xI; ' '->xT;b->sPutHex#);*)
+                 #);
+               mark01:
+                 (#
+                 do (* the 2 first bits are used to mark the 
+                     * presence of the short- and/or real-list
+                     *)
+                    (*320->trace(#do b -> sPutHex #);*)
+                    (if  (b %band 0xc0) <> 0 then
+                        '\n\n***Bit 0 or 1 of endian-info is non-zero'
+                          -> bugstream.putline;
+                        descId[] -> bugstream.putline
+                    if);
+                    (if shorts.top > 0 then 
+                        (0x80 %bor b) -> b 
+                    if);
+                    (if reals.top > 0 then
+                        (0x40 %bor b) -> b 
+                    if);
+                 #);
+
+            do ((size-1) div 32) + 1->N; (* no. of bytes to represent longs *)
+                    (*320->trace(#do 'No.ofbytes:'->T; N->I; newline#);*)
+               (* emit bit vector for long offsets - each bits represents
+                * a 4 byte address
+                *)
+               
+               (*  N -> mch.emitBytes*)
+               (#
+               do 32->inx;
+                  mark01;
+                  (* Scan longs, mark them in the bitvektor *)
+                  (for i: longs.top repeat
+                       longs.off[i]->w;
+                       L:(if w>=inx then
+                             (* The current longoffset is not in current
+                              * byte, move on to the next.
+                              *)
+                             b->mch.emitByte; m+1->m;
+                             0->b; inx+32->inx;
+                             (* Maybe the current long is *still*
+                              * not in the current byte; 
+                              * Check that again.
+                              *)
+                             restart L 
+                         if);
+                       w->SetBit;
+                  for);
+                  b->mch.emitByte; m+1->m;
+                  (for i: N-m repeat 0->mch.emitByte for);
+                  (if (N mod 2) = 1 then (* align 2 *) 0->mch.emitByte if)
+               #);
+               (if shorts.top > 0 then
+                   (for i: shorts.top repeat
+                        shorts.off[i]->mch.declareWord
+                   for);
+                   0->mch.declareWord;
+               if);
+               (if reals.top > 0 then
+                   (for i: reals.top repeat
+                        reals.off[i]->mch.declareWord
+                   for);
+                   0->mch.declareWord;
+               if);
+            #)
+        if);
+        (if not b2c then descId -> gen.DescIdf if);
+        (************ end-of-prototype ***************)
+     #)
+
+do (desc[],pref[],att[],descNo,formId[],0,OrgOff)->computeObjectTemplate;
+   (if b2c then descId -> gen.DescIdf if);
+
+   EmitMain;
+   
+   (if desc2Alias  then
+       (if b2c or (common.targetMachineId = common.ppcmac) then
+           (1,formId[])->emit;
+           EmitMain
+        else
+           ('T',1,formId[],true)->main.gen.sysLab->Tlab[];
+           ('G',1,formId[],true)->main.gen.sysLab->Glab[];
+           (Tlab[],true)->main.gen.DefineGlobEntry; ' '->mch.comment;
+   if)if);
+
+   (descNo,formId[])->emit;
+   none->descId[]->formId[]->prefFormId[]->externalEntryLab[];
+   none->mainHead[];
+   (for i: virttable2.range repeat none->virttable2[i][] for);
+   (for i: objTmpTop repeat none->ObjTmps[i][] for);
+   none->succ[];
+#)
+--ComputeObjectTemplate:descriptor--
+(# EmitOT:
+     (* EmitOT is called for thisDesc and recursively for all static items *)
+     (# emit:
+          (# desc,pref,att,p,m,a,n,d,x: ^ASTindex; 
+             preDesc: @ASTindex; descKind,orgOff: @integer
+          enter(desc[],pref[],att[],orgOff)
+          do (if pref.label = gram.prefix then
+                 pref.son->pref;
+                 (thisDesc[],pref[])->GetActualDesc->(preDesc,descKind);
+                 (if true
+                     (* // (preDesc->sematt.CstrucDesc.equal)*)
+                  // (predesc->semAtt.CprocDesc.equal)  then 
+                  else
+                     preDesc[]->semAtt.descSonsRef->(pref[],m[],a[],n[],d[],x[]);
+                     (preDesc[],pref[],a[],preDesc.originOff)-> &emit
+             if)if);
+             att->ScanList
+             (# dcl,nameL,ES,dcldesc,AD: @ASTindex;
+                objKind: @integer; descKind: @integer;
+             do currentNode->dcl;
+                (if not dcl.isSlot then
+                    (if dcl.label = gram.simpleDecl then
+                        dcl.son->nameL; nameL.brother->ES;
+                        (if (ES.label->objKind)
+                         // gram.staticItem // gram.staticComponent then
+                            ES.son->AD; 
+
+                            (desc[],AD[])
+                              ->GetActualDesc->(dclDesc,descKind);
+                            
+                            (if descKind = gram.objectDescriptor then
+                                (if (dclDesc->sematt.DescKind)
+                                 // sematt.generalKind // sematt.holderKind then
+                                    (if (dclDesc[]->sematt.descAccess)
+                                     = common.direct then
+                                        nameL->scanList
+                                        (# name: @ASTindex;  id: ^text;
+                                           dn,locationOff,attOff: @integer;
+                                           OT: ^ObjTmp
+                                        do currentNode->name; 
+                                           name.off->attOff;
+
+                                           (if objKind
+                                            // gram.staticItem then
+                                               -attOff->locationOff
+                                            // gram.staticComponent then
+                                               &ObjTmp[]->OT[];
+                                               (gOff+attOff) div 4->OT.gOff;
+                                               -(attOff div 4)->OT.locOff;
+                                               OT.save;
+
+                                               attOff+common.compHeadSize*4
+                                                 -> attOff;
+                                               -common.compHeadSize*4->locationOff
+                                           if);
+                                           attOff+dclDesc.size->off;
+
+                                           dclDesc[]->SemAtt.descSonsRef
+                                             ->(p[],m[],a[],n[],d[],x[]);
+                                           
+                                           dclDesc.descId->(id[],dn);
+                                           (gOff+attOff,dclDesc[],p[],a[],dn,id[],
+                                           locationOff,dclDesc.originOff)
+                                             ->&EmitOT
+                                        #)
+             if)if)if)if)if)if)#);
+             
+             (*desc.size-off->gen.emitZero;*) desc.size->off;
+          #);
+        BeginObjTmp:
+          (# OT: ^ObjTmp; T: ^text; local: @boolean
+          do (if locationOff <> 0 then (* notthisTemplate *)
+                 &ObjTmp[]->OT[];
+                 gOff div 4->OT.gOff;
+                 locationOff div 4->OT.locOff;
+                 ('T',desc[])->mkEntryPoint->(T[],local);
+                 T[]->OT.EP[]; local->OT.local;
+                 OT.save
+             if)
+          #);
+        gOff,(* offset in thisTemplate *)
+        off: @integer;
+        desc,pref,att: ^ASTindex;
+        descNo: @integer; formId: ^text; locationOff,OrgOff: @integer
+     enter(gOff,desc[],pref[],att[],descNo,formId[],locationOff,OrgOff)
+     do (*(descNo,formId[],gOff,locationOff)->gen.beginObjTmp;*)
+        BeginObjTmp;
+        (* NOTE locationOff=0 for this(template), special code *)
+        2->off;
+        (desc[],pref[],att[],OrgOff)->emit;
+     #);   
+   (* ObjTmp:
+    *      (# gOff,locOff: @integer; EP: ^text; local: @boolean;
+    *         save:
+    *           (#
+    *           do (if (objTmpTop+1->objTmpTop) > objTmps.range  then
+    *                  objTmps.range->objTmps.extend
+    *              if);
+    *              this(ObjTmp)[]->objTmps[objTmpTop][]
+    *           #);
+    *      #);
+    *)
+   (*objTmps: [5] ^ObjTmp; objTmpTop: @integer;*)
+do (0,desc[],pref[],att[],descNo,formId[],0,orgOff)->emitOT;
+#)
+---emitObjectTemplate:descriptor---
+(#
+do objTmpTop -> mch.EmitObjTable
+   (# OT: ^objTmp
+   do objTmps[inx][]->OT[]; 
+      (* passing offNo is not nice; used to be hidden in machine
+       * but due to the revision of the interface to integrate
+       * new backend, this revision was made
+       *)
+      (offNo,OT.gOff) -> mch.emitObjTableOff -> offNo; 
+      (offNo,OT.locOff) -> mch.emitObjTableOff -> offNo;
+      (if OT.EP[] = NONE then 
+          (offNo,-1) -> mch.emitObjTableOff -> offNo
+       else 
+          (offNo,OT.EP[],OT.local) -> mch.emitText -> offNo
+      if)
+   #);
+#)
+--protoTypeBody:doPart--
+do EmitExport

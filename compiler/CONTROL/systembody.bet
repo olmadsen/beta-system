@@ -1,0 +1,472 @@
+ORIGIN 'system';
+LIB_ITEM 'betacompiler';
+BODY '../compilerrcmversion';
+---compilerVersion:doPart---
+do (# compilerrcmversion: 
+        integerValue(# <<SLOT compilerrcmversion:dopart>> #);
+   do '5.5 (' -> T; compilerrcmversion -> T.putInt; ')' -> T.put;
+      (* Do not overwrite T, only append to it. *)
+      (*' - with new N/X code' -> T.append *)
+   #)
+---betarunVersion:doPart---
+   (* it is assumed that target machine name is also 
+    * the name of the code directory 
+    *)
+do 'betarun/' -> betarun; 
+   (if b2c then 'b2c/'->betarun.append if);
+   targetMachine[]->betarun.append;
+   '/'->betarun.put;
+---systemTranslateBody: descriptor---
+(#  
+do (* Dynamic generation to avoid search cache overflow etc. *)
+   (* &trans.semAttType[] -> trans.semAtt[];*)
+   (*  this(translate)[] -> trans.thisTranslate[];*)
+   init;
+   (this(translate)[],rootFragment[]) -> trans.doTranslate;
+#)
+---systemInitBody: descriptor---
+(# AstInit: @boolean; BETAgram: ^text; beta: ^astInterface.treeLevel
+do trans.common.init;
+   (if infostream[] = NONE    then screen[]->infostream[] if);
+   (if tracestream[] = NONE   then screen[]->tracestream[] if);
+   (if messagestream[] = NONE then screen[]->messagestream[] if);
+   (if bugstream[] = NONE     then screen[]->bugstream[] if);
+   infostream[]->trans.common.infostream[];
+   tracestream[]->trans.common.tracestream[];
+   messagestream[]->trans.common.messagestream[];
+   bugstream[]->trans.common.bugstream[];
+
+   verboseLevel.actions->verboseLevel;
+
+   (# current: ^Text;
+   do (for i:noOfArguments repeat
+           i->Arguments -> current[];
+           (if true 
+            // '--gram'->current.equalNCS then
+               (* Note:  use of switch --gram is special:
+                * --gram implies that a grammar file name is prompted on 
+                * input; if 'trace' is written' as the grammar name, 
+                * then grammar lookup is traced
+                *)
+               true -> trans.common.switch[52] (* used in comp.init *)
+            // '--mute'->current.equalNCS then
+               verboseLevel.nothing->verboseLevel
+           if)            
+      for)
+   #);
+   41->switchOn; (* valhalla support by default *)
+   77->switchOn; (* New persistense RefNone check by default *)
+   85->switchOn; (* Fnsave floatsave on intel *)
+#)
+---SetTargetMachine:doPart---
+do (if targetMach[] <> NONE then
+       targetMach.copy ->  trans.common.SetTargetMachineId
+    else
+       none -> trans.common.SetTargetMachineId
+   if)
+---GetTargetMachine:doPart---
+do (if trans.common.targetMachine[] <> NONE then
+       trans.common.targetMachine.copy -> targetMach[]
+    else
+       none -> targetMach[]
+   if)
+
+---parseExceptionBody: descriptor---
+(#
+do  '\nParse errors in fragment : ' -> msg.putline;
+   fullFN[] -> msg.putline;
+   msg.newLine;
+#)
+---MPSException:doPart---
+do newline; T[] -> msg.putLine;
+   INNER MPSException
+   
+---notExistingException: descriptor---
+(#
+do '\nThe following name is not a fragment file:\n\t ' -> msg.puttext;
+   FullFN[] -> msg.putline;
+   'It is either a non-existing file or a directory\n'->msg.putText
+#)
+---TransAccessException: doPart--
+do
+(# T: ^text; last,lastSlash,butLast: @integer
+do '\nYou are attempting to translate the file:\n\t'->msg.putText;
+   
+   (* FN can be foo, foo.lst, foo.ast, foo.astL, foo.go, foo...s, etc.
+    * It is a problem when 'foo' is the parameter, since we then dont
+    * know which file is the problem. The cause of this problem is
+    * the call of transaccessexcp in dependency/private/controlbody
+    * which does NOT propagate the filename that cannot be accessed.
+    * The message 'm' has this information, and could be used, but then
+    * the  following should be adjusted to this. And all forms of m
+    * MUST be checked. Also we dont know if the access error is a read- 
+    * or write access error!
+    *)
+   L:
+     fn.scanAll
+     (# inx: @integer 
+     do inx+1->inx; 
+        (if ch 
+         // '.' then inx -> last
+         // thePathHandler.directoryChar then inx -> lastSlash
+        if)
+     #);
+   (if lastSlash > last then 0->last if);
+   skipDot:
+     (if last > 1 then
+         (if (last -> FN.inxGet) = '.' then
+             last - 1 -> last;
+             restart skipDot
+     if)if);
+   (if last > 0 then
+       (1,last) -> FN.sub -> T[]
+    else
+       FN[] -> T[];
+       NONE -> FN[]
+   if);
+   
+   (* We may now have a file name: /.../foo
+    * or                           /.../sun4s/foo
+    * We should remove a possible targetMachine directory
+    *)
+   0 -> last -> butLast;
+   T.scanAll
+     (# inx: @integer
+     do inx +1 -> inx;
+	(if ch = thePathHandler.directoryChar then
+	    last -> butLast;
+	    inx -> last
+	if);
+     #);
+   (if (butLast > 0) and (last > 0) then
+       (if (butLast+1,last-1) -> T.sub -> trans.common.targetMachine.equal then
+           (butLast+1,last) -> T.delete
+   if)if);
+
+   trans.common.SrcExt -> (T.Copy).Append->msg.puttext;
+
+   (if FN[] = NONE then 
+       '\nYou do not have permission for doing this!'->msg.puttext;
+       '\nThe problem can be an access error for one or both of the files:\n\t'
+         ->msg.puttext;
+       '.bet\n\t'-> (T.Copy).Append->msg.puttext;
+       '.ast (.astL)\n'->(T.copy).append -> msg.puttext;
+    else 
+       '\nYou do not have permission for accessing the file/directory:\n\t'
+         ->msg.puttext;
+       FN[]->msg.putLine
+   if);
+   INNER TransAccessException
+#)
+--NoSpaceException:doPart---
+do '\n\nNo more space on disk!\n'->msg.putText;
+   'Some files must be removed before compilation can be resumed.\n'
+     -> msg.putText;
+   INNER NoSpaceException
+   
+---TransCreateDirException:doPart---
+do '\nAn error occured when trying to create the directory\n\t'->msg.putText;
+   FN[] -> msg.puttext; 
+   '\nYou may not have permission for doing this!'->msg.putLine;
+   INNER TransCreateDirException
+   
+---MsgException: doPart---
+do (if (trans.lst[]<>NONE) then trans.lst.close if);
+   (if FG[] <> NONE then
+       '\n\n**** Error while processing fragment group:\n\n\t'->msg.puttext;
+       FG.fullName->msg.putText;
+       '\n\n'->msg.puttext;
+   if);
+   (if no
+    // 1 then (* eliminate*) 'System error!!!'->msg.putline
+    // 2 then
+       '*** The fragment group is empty!'->msg.putLine;
+    // 11 then 'Error(s) in fragment structure'-> msg.putline;
+    // 12 then
+       'The fragment group is reached twice during dependency analysis'-> msg.putline;
+       'Circularity in fragment structure (origin and/or include)'
+         -> msg.putLine;
+    // 14 then 'Stopped because of semantic errors' -> msg.putLine;
+    // 16 then 'Stopped because of file access problem'->msg.putline
+    else 'Should not happen(msg):' ->msg.putline; no->msg.putInt; msg.newline
+   if);
+   '\nTranslation terminated' -> msg.putline;
+   INNER MsgException
+   
+---jobFileExceptionBody: descriptor---
+(#
+do '\nError when executing job file:\n' -> msg.putLine;
+   message[]->msg.append;
+#)
+---otherFileError:doPart---
+do 'An error occured for the file: \n\t' -> msg.puttext;
+   FN[] -> msg.puttext;
+   m[] -> msg.puttext;
+   INNER otherFileError;
+   
+---NotificationBody: dopart---
+do true->proceed; INNER;
+   
+---DoubleFormExceptionBody:descriptor--
+(#
+do '\n***** Error in group: '->msg.puttext;
+   'Two or more forms have the name: '->msg.puttext;
+   n[]->msg.putLine;
+   INNER doubleFormException
+#)
+---propertyException:doPart--
+do '\n*** Error/warning in property list of:\n\t'->msg.puttext;
+   FG.name->msg.puttext; '\n\n\t'->msg.puttext;
+   (if n
+    // 1 then
+       'Two or more origins are specified:\n\t'->msg.puttext;
+       (# g: ^fragment;
+       do FG.origin -> g[]; g.name -> msg.puttext;
+       #);
+       '\n\t'->msg.puttext; t[]->msg.putline
+    // 2 then
+       'The reserved property name "'->msg.puttext;
+       t.makeUC; t[]->msg.puttext;
+       '"\n\tappears in the property list for '->msg.puttext;
+       p.makeUC; p[]->msg.puttext;
+    // 3 then
+       'Illegal "'->msg.puttext; p.makeUC; p[]->msg.puttext;
+       '" property: "'->msg.puttext; t.makeUC; t[]->msg.puttext;
+       '"\n'->msg.puttext
+    // 4 then
+       'Empty filename in property "'->msg.puttext;
+       p.makeUC; p[]->msg.puttext; '"'->msg.put; 
+       msg.newline;
+    // 5 then
+       '**** Unrecognised property: ' -> Msg.Puttext;
+       p[]-> Msg.Putline;
+       true->warning
+    // 6 then
+       '*** Property "'   -> msg.puttext;
+       p[]-> msg.puttext;
+       '" has no value for "' -> msg.putText;
+       t[]->msg.putText; '"\n'->msg.putLine;
+       true->warning
+    // 7 then
+       '*** Property "'   -> msg.puttext;
+       p[]-> msg.puttext;
+       '" must have at 1, 3 or more arguments\n'->msg.puttext;
+       'in addition to the target machine selector\n'->msg.putline;
+       true->warning;
+    // 8 then
+       'Missing initial selector for property: "'
+         -> msg.puttext;
+       p[] -> msg.puttext; '"'->msg.put; 
+       '\n\t"default" is used!'->msg.putline;
+       true -> warning
+   if);
+   (if not warning then
+       '\n\n\tA ";" may be missing before '->msg.puttext;
+       t[]->msg.putline;
+   if);
+   INNER propertyException
+   
+---SystemExceptionType:doPart---
+do '\n\n******************* FATAL ERROR IN COMPILER ******************'
+     ->msg.putline;
+   'The following line is an internal identification of the error:'
+     ->msg.putLine;
+   T[] -> msg.putline;
+   'Please report this error to Mjolner Informatics!'->msg.putline;
+   'Send e-mail to "support@mjolner.com".' -> msg.putline;
+   'Please include all files needed to reproduce the error.'->msg.putline;
+   
+   INNER SystemException
+   
+---thePP:doPart---
+do (# T: @ text; 
+   do (if PP[] = none then &PrettyPrinter[]->PP[] if);
+      (D,T[],L,common.switch[54])->PP;
+      skipTrailingBlanks:
+        (# last: @integer
+        do T.length -> last;
+           (for i: T.length repeat
+                (if T.T[last] <= ' ' then 
+                    last - 1 -> last;
+                 else
+                    (if last < T.length then
+                        (last+1,T.length) -> T.delete
+                    if);
+                    leave skipTrailingBlanks;
+                if);
+        for)#);
+               
+      T[] -> S.puttext;
+(*      T.scanAll
+      (# nl: @boolean
+      do (if nl then ascii.newline -> S.put; false -> nl if);
+         (if ch <> ascii.newline then ch -> S.put
+          else true -> nl;
+         if)
+ #);*)
+      NONE->D[];
+   #)
+---ReadSwitchesBody: descriptor---
+(#
+do L: cycle
+     (# N: @Integer
+     do S.GetInt
+	  (# syntaxError::
+	       (# T: @text
+	       do '\n***Syntax error while reading switches.'->T.putline;
+		  '\tArgument: \''->T.puttext; S[]->T.puttext;
+		  '\'\n'->T.puttext;
+		  '\tExpecting integer argument(s)\n\n'->T.puttext;
+                  T[] -> bugstream.puttext;
+                  true->continue
+	       #)
+	  #) -> N;
+        (if  N=0 then leave L if);
+        (if 0 < N then N->switchOn else -N->switchOff if);
+        (if N = 78 then
+            (* FORCE fatal compiler error *)
+            (# S: ^text do S.newline #)
+        if)
+
+#)#)
+--switchOn:descriptor--
+(#
+do (if (1 <= n) and (n <= trans.common.switch.range) then
+       true -> trans.common.switch[n];            
+       (if N = 28 then true -> trans.common.switch[18] if);
+   if);
+   (if (400 < N) and (N <500) then
+       (N-400,true) -> this(astInterface).Trace.set 
+if)#)
+--switchOff:descriptor--
+(#
+do (if (1 <= n) and (n <= trans.common.switch.range) then
+       false -> trans.common.switch[n];
+   if);
+   (if (400<N) and (N<500) then
+       (N-400,false) -> this(astInterface).Trace.set 
+if)#)
+--setSwitch:descriptor--
+(#
+do (if (1 <= n) and (n <= trans.common.switch.range) then
+       v -> trans.common.switch[n]
+if)#)
+--trace_xA:doPart---
+do (# S: @text
+   do (if T[] = NONE then 'None'->tracestream.putText else
+          (if T.isNull then 'Null'->tracestream.putText else
+              (if trans.common.switch[100] then 
+                  (*0->T.lispPrint *)
+                  (T.asAst).dump
+               else 
+                  (T[],S[],5)->thePP;
+                  S.scanAll
+                  (#
+                  do (if ch = ascii.nl then xN
+                      else ch -> traceStream.put
+                     if)
+                  #)
+      if)if)if);
+      ' '->traceStream.put
+   #)
+--trace_xN:doPart---
+do traceStream.newline;
+   (for i:traceLevel+1 repeat ' ' -> tracestream.put for);
+   
+---Trace:descriptor---
+(# ch: @ char;
+do (if no < 1 then
+       INNER Trace
+    else
+       (if trans.common.switch[no] then
+           (if no
+            // 307 // 308 // 311 then 0 -> traceLevel; 
+           if);
+           tracestream.newline;
+           (for i: traceLevel + 1 repeat '%' ->tracestream.put for); 
+           no -> tracestream.putint; 
+           ':'->tracestream.put; ' '->  tracestream.put; 
+           (if no
+            // 307 // 308 // 311 then xU
+           if);
+           (if not trans.common.switch[1] then INNER Trace
+            else
+               L: cycle
+                 (#
+                 do getNonBlank -> ch;
+                    (if ch
+                     // '?' then INNER Trace; leave L
+                     // '/' then INNER Trace
+                     // 'S' // 's' // '-' then keyBoard[]-> &readSwitches
+if)#)if)if)if)#)
+
+--dStat_init:descriptor--
+(#
+do (for i: P.top repeat none -> P.d[i][] for);
+   0 -> P.top
+#)
+---dStat_new:doPart---
+do (if kind > 0 then
+       (# inx: @integer; D: ^ASTindex
+       do L:
+	    (# 
+	    do (for i: P.top repeat
+		    (if desc -> P.d[i].equal then
+			i -> inx;
+			leave L
+		    if)
+	       for);
+	       (if (P.top + 1 -> P.Top) > P.d.range then
+		   P.d.range -> P.d.extend;
+		   P.kind.range -> P.kind.extend;
+	       if);
+               &ASTindex[] -> D[];
+               desc -> D;
+	       D[] -> P.d[P.top->inx][];
+	    #);
+      
+	  (if kind
+	   // 1 then 1 %bor P.kind[inx] -> P.kind[inx]
+	   // 2 then 2 %bor P.kind[inx] -> P.kind[inx]
+	   // 3 then 4 %bor P.kind[inx] -> P.kind[inx]
+	  if)
+   #)if)
+---dStat_Print:descriptor---
+(#
+do (for i: P.top repeat
+        (if P.kind[i]
+         // 1 then P.dyn + 1 -> P.dyn
+         // 2 then P.part + 1 -> P.part
+         // 3 then P.dynPart + 1 -> P.dynPart
+         // 4 then P.pre + 1 -> P.pre;
+         // 5 then P.dynPre + 1 -> P.dynPre
+         // 6 then P.partPre + 1 -> P.partPre;
+         // 7 then P.dynPartPre + 1 -> P.dynPartPre;
+         else
+        if);
+   for);
+   '\nUse of descriptor:\n'->puttext;
+   '\tDynamic:\t'-> puttext; P.dyn -> putint; newline;
+   '\tPart:\t\t' -> puttext; P.part -> putint; newline;
+   '\tPre:\t\t'-> puttext; P.pre -> putint; newline;
+   '\tDynamic & part:\t' -> puttext; P.dynPart  -> putint; newline;
+   '\tDynamic & pre:\t'->puttext; P.dynPre -> putint; newline;
+   '\tPart & pre:\t'->puttext; P.partPre -> putint; newline;
+   '\tDyn,part & pre:\t' -> puttext; P.dynPartPre -> putint; newline;
+   'Total:\t\t\t'-> puttext; P.top->putint; newline;   
+#)
+---dStat_Private:descriptor---
+(# d: [100] ^ASTindex; 
+   kind: [100] @integer;
+   top: @integer;
+   
+   dyn,
+   part,
+   dynPart,
+   pre,
+   dynPre,
+   partPre,
+   dynPartPre: @integer
+#)
+
+   

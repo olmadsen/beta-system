@@ -1,0 +1,551 @@
+ORIGIN '../SPARCmachine';
+INCLUDE 'genstart' (* also used by NoBetaRun, and cannot be body *);
+BODY 'SPARCmachinebody';
+BODY 'Structure';
+BODY 'AllocateItem';
+BODY 'AllocateComponent';
+BODY 'AllocateRepetition';
+BODY 'AllocateStackObject';
+BODY 'AttachSuspend';
+BODY 'MakeTextObject';
+BODY 'Callback';
+BODY 'PerformGC';
+BODY 'ExitObjects';
+BODY 'AllocateCOM';
+-- LIB: attributes --
+
+(* C-preprocessor like "defines" *)
+do_unconditional_gc: (# exit false #);
+IOATopInTSD: (# exit true #);
+
+-- machineatt: Attributes --
+debug_runtime: (# exit common.switch[13] #);
+
+newOregOp: (# oReg: @oRegOperand enter oReg exit oReg[] #);
+newGregOp: (# gReg: @gRegOperand enter gReg exit gReg[] #);
+
+EmitAlign8:
+  (# dr: ^registerOperand;
+  enter dr[]
+  do (dr,7,dr)->ADD_I ->emit;
+     (dr,7,dr)->ANDN_I->emit;
+  #);
+
+EmitFuncText:
+(* Call 'function' with address of T as argument.
+ * Calls save and restore to avoid destroying %o0 
+ * (and possibly other %o registers in 'function').
+ *)
+  (# T: ^text; function: ^text; 
+  enter (function[],T[])
+  do
+     (SP,-frame_size,SP)->SAVE_I->emit;
+     (T[],setHiMark)->mstate.b.mark;
+     (O0,0)->SETHI->emit;
+     (function[],callMark)->mstate.b.mark;
+     0->CALL->emit;
+     (T[],setLoMark)->mstate.b.mark;
+     (O0,0,O0)->OR_I->emit;
+     (G0,G0,G0)->RESTORE->emit;
+     
+  #);
+IncNum: (* Increment variable in Nums array in TSD by one *)
+  (# offset: @integer;
+     dr0,dr1: @dataregoperand;
+  enter offset
+  do
+     (if debug_runtime then
+         dr0.alloc; 
+         dr1.alloc;
+         dr0->loadNums;
+         (dr0,offset,dr1)->LD_I->mstate.b.emit;
+         (dr1,1,dr1)->ADD_I->mstate.b.emit;
+         (dr0,offset,dr1)->ST_I->mstate.b.emit;
+         dr0.dealloc; dr1.dealloc;
+     if);
+  #);
+PushDataRegister:
+  (# rN: @integer
+  enter rN
+  do rN -> NewDataRegOp -> PushData;
+  #);
+PushRefRegister:
+  (# rN: @integer
+  enter rN
+  do rN -> NewAdrRegOp -> PushRef;
+  #);
+PopDataRegister:
+  (# rN: @integer
+  enter rN
+  do rN -> NewDataRegOp -> PopData;
+  #);
+PopRefRegister:
+  (# rN: @integer
+  enter rN
+  do rN -> NewAdrRegOp -> PopRef;
+  #);
+checkDataTmp:
+  (* Check if there is room for n data items on component stack *)
+  (* FIXME: could add directly to regDataTopOff since program
+   * will stop anyway, if there is no space.
+   *)
+  (# n: @integer;
+   reg: @integer; (* tmp register to use *)
+  enter (n, reg)
+  do (regDataTopOff,n*8,reg)->SUB_I->mstate.b.emit;
+     (regRefTopOff,reg)->CMP->mstate.b.emit;
+     16->TGE_I->mstate.b.emit;
+  #);
+checkRefTmp:
+  (* Check if there is room for n references on component stack *)
+  (* FIXME: could add directly to regRefTopOff since program
+   * will stop anyway, if there is no space.
+   *)
+  (# n: @integer;
+     reg: @integer; (* tmp register to use *)
+  enter (n, reg)
+  do (regRefTopOff,n*4,reg)->ADD_I->mstate.b.emit;
+     (reg,regDataTopOff)->CMP->mstate.b.emit;
+     16->TGE_I->mstate.b.emit;
+  #);
+pushDataTmp:
+  (# reg, stack: @integer;
+  enter (reg,stack)
+  do (regDataTopOff,8,regDataTopOff)->SUB_I->emit;
+     (stack,regDataTopOff,reg)->ST->emit;
+  #);
+popDataTmp:
+  (# reg, stack: @integer;
+  enter (reg,stack)
+  do (stack,regDataTopOff,reg)->LD->emit;
+     (regDataTopOff,8,regDataTopOff)->ADD_I->emit;
+  #);
+pushRefTmp:
+  (# reg, stack: @integer;
+  enter (reg,stack)
+  do (regRefTopOff,4,regRefTopOff)->ADD_I->emit;
+     (stack,regRefTopOff,reg)->ST->emit;
+  #);
+popRefTmp:
+  (# reg, stack: @integer;
+  enter (reg,stack)
+  do (stack,regRefTopOff,reg)->LD->emit;
+     (regRefTopOff,4,regRefTopOff)->SUB_I->emit;
+  #);
+
+AssignRef:
+(* Used to assign a Beta reference into a beta object.
+ * If the reference-assignment causes a root from AOA to
+ * IOA, then AOAtoIOAINsert is called. I.e. implement
+ * the following C code (ignoring casts):
+ * 
+ *   *(RegObj+Off) = RegRef; 
+ *   if (RegReg && inIOA(RegRef) && !inIOA(RegObj) 
+ *      AOAtoIOAInsert(RegObj+Off)
+ * 
+ *   IOA                            gIOATop (not inclusive)
+ *   |------------------------------|---------
+ *   |          Do nothing          |  ChkRA()
+ *
+ * 
+ * See AsgRef in SUN4Bmachine.
+ * 
+ * Destroy %o5 if inIOA(RegRef).
+ * Other registers are either fixed or allocated.
+ *)
+  (#
+     RegObj: @integer;
+     Off: @integer;
+     RegRef: @integer;
+     dr: @DataRegOperand;
+     NotRoot: @LocalLab;
+     immediateOffset: @boolean;
+     gIOATop: @dataRegOperand;
+  enter (RegObj,Off,RegRef,immediateOffset)
+  do
+     dr.alloc;
+     gIOATop.alloc;
+     (gIOATop[], 'gIOATop'->newTextOp) -> ldValFromText;
+     NotRoot.new;
+     ;
+     (if immediateOffset then 
+         (* Off is a literal *)
+         (* consistency check *)
+         (if (Off mod 4)<>0 then
+             (failuretrace, 'AssignRef: immediate offset must by 4-aligned!')->stop;
+         if);
+         (RegObj,Off,RegRef)->ST_I->emit; (* In delay slot *)
+      else
+         (* Off is a register *)
+         (RegObj,Off,RegRef)->ST->emit; (* In delay slot *)
+     if);
+     ;
+     (* Check !inIOA(RegObj) *)
+     (RegObj,gIOATop)->CMP->emit;
+     (NotRoot->mstate.labs.off) div 4->BLTU->emit;
+     (if immediateOffset then 
+         (* Off is a literal *)
+         (RegObj,Off,O5)->ADD_I->emit; (* in delay slot *)
+      else
+         (* Off is a register *)
+         (RegObj,Off,O5)->ADD->emit; (* in delay slot *)
+     if);
+     (SP,-frame_size,SP)->SAVE_I->emit;
+     ('ChkRA',callMark)->mstate.b.mark;
+     0->CALL->emit;
+     (I5,G1)->MOV->emit;
+     regActiveComponent->loadActiveComponent;
+     (G0,G0,G0)->RESTORE->emit;
+     NotRoot.def;
+     dr.dealloc;
+     gIOATop.dealloc;
+  #);
+
+FindProto:
+  (* computes proto-adr to Preg.
+   *   Ventry must refer V-entry 
+   *   RegTmp must be a free register
+   * MUST match corresponding function in betarun/C/sparcdep.h.
+   *)
+  (# Ventry,Preg,RegTmp: @integer; Done: @localLab
+  enter(Ventry,Preg,RegTmp)
+  do (* A V-entry either has the form
+      * 
+      * 1. V-entry without G-part
+      *    <V1FOO>:    sethi  %hi(AlloI1), %i5     # (LoadProtoAndAlloc3)
+      *    <V1FOO+4>:  sethi  %hi(T1FOO), %i1      # (LoadProtoAndAlloc3)
+      *    <V1FOO+8>:  jmp    %i5 + %lo(AlloI1)    # (LoadProtoAndAlloc3)
+      *    <V1FOO+12>: or     %i1, %lo(T1FOO), %i1 # (LoadProtoAndAlloc3)
+      *    ...
+      * 
+      * 2a.V-entry with G-part
+      *    <V1FOO>:    or     %g0, RTOff, %l6      # (SaveReturn)
+      *    <V1FOO+4>:  or     %g0, %o7, %l7        # (JsrT)
+      *    <V1FOO+8>:  sethi  %hi(T1FOO), %i5      # (doCall)
+      *    <V1FOO+12>: call   AlloI2               # (JsrT)
+      *    <V1FOO+16>: or     %i5, %lo(T1FOO), %i5 # (doCall)
+      *    ...
+      * 
+      * 2b.Like 2a, but with large RTOff (RTOff+4>4095):
+      *    <V1FOO>:    sethi  %hi(RTOff), %l6      # (SaveReturn)
+      *    <V1FOO+4>:  or     %l6, %lo(RTOff), %l6 # (SaveReturn)
+      *    <V1FOO+8>:  or     %g0, %o7, %l7        # (JsrT)   
+      *    <V1FOO+12>: sethi  %hi(T1FOO), %i5      # (doCall) 
+      *    <V1FOO+16>: call   AlloI2               # (JsrT)   
+      *    <V1FOO+20>: or     %i5, %lo(T1FOO), %i5 # (doCall) 
+      *    ...
+      *)
+     Done.new;
+     (* Load second instruction *)
+     (Ventry,4,Preg) -> LD_I -> mstate.B.emit;
+     ;
+     (* Test bit 24: is 1 in SETHI and 0 in OR *)
+     (Preg,24,RegTmp) -> SRL_I -> mstate.B.emit;
+     (RegTmp,1,RegTmp) -> ANDCC_I -> mstate.B.emit;
+     (Done->mstate.labs.off) div 4 -> BNE_A -> mstate.B.emit;
+     (* Delay slot (only if branch taken). Case 1: Load OR in delay *)
+     (Ventry,12,RegTmp) -> LD_I -> mstate.B.emit;
+     ;
+     (* Case 2a or 2b *)
+     (* fetch third instruction *)
+     (Ventry,8,Preg) -> LD_I -> mstate.B.emit;
+     (* Test bit 24: is 1 in SETHI and 0 in OR *)
+     (Preg,24,RegTmp) -> SRL_I -> mstate.B.emit;
+     (RegTmp,1,RegTmp) -> ANDCC_I -> mstate.B.emit;
+     (Done->mstate.labs.off) div 4 -> BNE_A -> mstate.B.emit;
+     (* Delay slot (only if branch taken). Case 2a: Load OR in delay *)
+     (Ventry,16,RegTmp) -> LD_I -> mstate.B.emit;
+     ;
+     (* Case 2b (expensive but less frequent) *)
+     (Ventry,12,Preg)   -> LD_I -> mstate.B.emit;
+     (Ventry,20,RegTmp) -> LD_I -> mstate.B.emit;
+     ;
+     Done.def;
+     (* Preg now contains SETHI instr. and RegTmp contains OR instr. *)
+     (* calculate %hi(Preg) *)
+     (Preg,10,Preg) -> SLL_I->emit;
+     (* Calculate %lo(RegTmp) *)
+     (RegTmp,0x3ff,RegTmp) -> AND_I -> emit;
+     (* Combine them *)
+     (Preg,RegTmp,Preg) -> sparc_OR -> emit;
+  #);
+
+GenMain:
+(* NOTE: currently genMain MUST be the last call
+ * in GenBetaRun; since it is followed by an inner
+ * in defineMainLabel1, which calls some code in 
+ * gen1body:initialSeq. Should be cleaned up!
+ *)
+  (# 
+  do
+     (if debug_runtime then
+         (* TEST of is_cti check in SPARCmachine (code never called) *)
+         '\nGenerating 4 CTI in delay slots to test the check for this:'
+           -> putline;
+         CALL->emit;
+         CALL->emit;
+         BNE->emit;
+         JMPL->emit;
+         CALL->emit;
+         EmitNop;
+     if);
+     'main'->ExtLabel;
+     (SP,-frame_size,SP)->SAVE_I->emit;
+     ClearAdrTmpRegs;
+     doCall
+       (# 
+       do ('SetArgValues',callMark)->mstate.b.mark; 0->CALL->emit
+       #);
+     (if common.switch[65] then
+         false->common.switch[64];
+         false->common.switch[65];
+         (*saveReturn;*)
+         ('Initialize',1 (*cExt*) ,0,0)->callCproc;
+         (* Create storage for thread specific data for main thread *)
+         'create_TSD'->jsrT;
+         (* Set up regTSD *)
+         (O0,regTSD) -> MOV -> emit;
+         (* Set up _thread_id field of TSD *)
+         'thr_self'->jsrT;
+         O0 -> storeTSD(# do ThreadIdTSDoff -> off #);
+         (if common.switch[13] (* debug runtime system *) then
+             'ReportMainStarted' -> jsrT;
+         if);
+         (* Clear registers that may be saved in TSD during GC *)
+         I0 -> CLR -> emit;
+         O0 -> CLR -> emit;
+         (* Create stack for main thread to be used until the first
+          * attach has occurred.
+          *)
+         'AlloSO' -> jsrT;
+         true->common.switch[64];
+         true->common.switch[65];
+         
+     if);
+     
+  #);
+PackStackOff:
+  (# regActiveStack: @integer; 
+  enter regActiveStack
+  do
+     (if regActiveStack = 0 then
+         'PackStackOff: regActiveStack=0'->putline; 
+     if);
+     (regActiveStack,refTopOff,regRefTopOff)->ST_I->emit;
+     (regActiveStack,dataTopOff,regDataTopOff)->ST_I->emit;
+     
+  #);
+UnpackStackOff:
+  (# regActiveStack: @integer; 
+  enter regActiveStack
+  do
+     (if regActiveStack = 0 then
+         'UnPackStackOff: regActiveStack=0'->putline; 
+     if);
+     (regActiveStack,refTopOff,regRefTopOff)->LD_I->emit;
+     (regActiveStack,dataTopOff,regDataTopOff)->LD_I->emit;
+     
+  #);
+GenIOAAlloc:
+  (* Increment Thread specific IOATop by NumBytes and check for GC.
+   * 
+   *     |-------------------------|
+   *                ^              ^
+   *                regIOATop      IOALimit
+   * 
+   *     IOAtop     is in regIOATop
+   *     IOALimit   is thread specific data at offset IOALimitTSDoff
+   * 
+   * Parameters:
+   *   regObj is the register in which to return the resulting heapPTr.
+   *   requestedNumBytes is either the immediate size, or the number of
+   *   the register containing the req.size. 
+   *   This is indicated by ImmediateSize being false.
+   *   GCFunc is the name of the function to call when GC is needed.
+   *   SaveOrigin is true iff regorigin should be saved during GC
+   *    
+   * Registers affected:
+   *   %i1 and %o5 may be destroyed, if GCFunc is called, or the 
+   *   requested number of bytes fills more than 13 bits.
+   *   regSavedReturn is destroyed, if GCfunc is called.
+   *   Allocates 1 datareg.
+   * 
+   * Calls:
+   *   May call GCFunc.
+   *)
+  (# regObj,OriginReg,requestedNumBytes: @Integer;
+     ImmediateSize: @Boolean;
+     GCFunc: ^Text;
+     IOALimitOp, IOATopOp: @dataRegOperand;
+     newTopOp: @AdrRegOperand;
+     L: @localLab;
+     SaveOrigin: @Boolean;
+     
+     (* Objects called around DoGC call. Typical usage is for
+      * saving registers on stack.
+      *)
+     BeforeDoGc:<object;
+     AfterDoGc:<object;
+          
+  enter (regObj,requestedNumBytes,ImmediateSize,GCfunc[],SaveOrigin)
+  do L.new;
+     IOALimitOp.alloc;
+     regNewTop->newTopOp;
+     O0->OriginReg;
+     (if IOATopInTSD then
+         (* new object is assumed to start at current top *)
+         (*IOATopOp.alloc;*) regObj -> IOATopOp;
+         IOATopOp->loadIOATop
+      else
+         regIOATop -> IOATopOp;
+         (* new object is assumed to start at current top *)
+         (IOATopOp,regObj)->MOV->mstate.b.emit;
+     if);
+     
+     (if ImmediateSize then
+         requestedNumBytes->align8 -> requestedNumBytes;
+         (if requestedNumBytes > 0xfff then
+             (* More than 13 bit *)
+             (requestedNumBytes->newCstOp,newTopOp[])->ldCst;
+             (IOATopOp,newTopOp,newTopOp)->ADD->mstate.b.emit;
+          else
+             (* requestedNumBytes will fit in 13 bits *)
+             (IOATopOp,requestedNumBytes,newTopOp)->ADD_I->mstate.b.emit 
+         if);
+      else
+         (IOATopOp,requestedNumBytes,newTopOp)->ADD->mstate.b.emit
+     if);
+          
+     IOALimitOp->loadIOAlimit;
+     (if do_unconditional_gc then
+         '\nGenIOAAlloc: calling GCfunc unconditionally\n'->puttext;
+      else
+         (* Check for GC *)
+         (newTopOp, IOALimitOp) -> CMP -> mstate.b.emit;
+         (L.labNo->mstate.labs.off) div 4->BLE_a->mstate.b.emit;
+         (if IOATopInTSD then
+             newTopOp -> storeIOATop; (* Annulled delayslot *)
+          else
+             (newTopOp, IOATopOp) -> MOV -> mstate.b.emit; (* Annulled delayslot *)
+         if);
+     if);
+     IOALimitOp.dealloc;
+     ;
+     (* Call GC *)
+     (O7,regSavedReturn)->MOV->emit; (* Save return addr. Cannot be in delay slot *)
+     O7 -> AssertRegisterNotZero;
+     (if SaveOrigin then originReg->storeOrg; if);
+     BeforeDoGC;
+     (GCFunc[],callMark)->mstate.b.mark;
+     0->CALL->mstate.b.emit;
+     xNOP->emit;
+     AfterDoGC;
+     (if SaveOrigin then originReg->loadOrigin; G0->storeOrg; if);
+     ;
+     (regSavedReturn,O7)->MOV->emit; (* Restore upon return here *)
+     O7 -> AssertRegisterNotZero;
+     (if regObj<>I1 then
+         (I1,regObj) -> MOV -> emit;
+     if);
+     ;
+     L.def;
+     (if IOATopInTSD then
+         (*IOATopOp.dealloc*)
+     if)
+  #);
+
+(* Allocate Stack Object: See AllocateStackObject.bet *)
+AlloSO: <<SLOT BetaRunAlloSO: descriptor>>;
+
+(* Allocation of component: See AllocateComponent.bet *)
+GenAlloC: <<SLOT BetaRunAlloC: descriptor>>;
+
+(* Attach and Suspend: See AttachSuspend.bet *)
+GenAttachSuspend: <<SLOT BetaRunAttachSuspend: descriptor>>;
+
+(* Garbage Collection stubs: see PerformGC.bet *)
+GenCall_doGC: <<SLOT BetaRunCallDoGC: descriptor>>;
+GenCall_psusp_doGC: <<SLOT BetaRunCallPSuspDoGC: descriptor>>;
+
+(* Structures: See Structure.c *)
+AlloS: <<SLOT BetaRunAlloS: descriptor>>;
+AlloSI: <<SLOT BetaRunAlloSI: descriptor>>;
+AlloSC: <<SLOT BetaRunAlloSC: descriptor>>;
+ObjS: <<SLOT BetaRunObjS: descriptor>>;
+leS: <<SLOT BetaRunleS: descriptor>>;
+ltS: <<SLOT BetaRunltS: descriptor>>;
+geS: <<SLOT BetaRungeS: descriptor>>;
+gtS: <<SLOT BetaRungtS: descriptor>>;
+eqS: <<SLOT BetaRuneqS: descriptor>>;
+neS: <<SLOT BetaRunneS: descriptor>>;
+
+QuaV:
+  (* At entry to QuaV, %i1 holds the address of the V-entry;
+   * Find the prototype in the V-entry code;
+   *) 
+  (# Vadr: @adrRegOperand
+  do 'QuaV'->ExtLabel;
+     (I1,L6,L7) -> FindProto;
+     (L6,I1) -> MOV -> mstate.B.emit;
+     'Qua'->jmpT
+  #);
+
+(* Creating Text object from ascii string: See MakeTextObject.bet *)
+MkTO: <<SLOT BetaRunMkTO: descriptor>>;
+
+CopyCPP: <<SLOT BetaRunCopyCPP: descriptor>>;
+
+(* Leave of nested pattern. See ExitObjects.bet *)
+ExO: <<SLOT BetaRunExitObjects: descriptor>>;
+
+(* Allocation of different repetitions: See AllocateRepetition.bet *)
+GenAlloRep: <<SLOT BetaRunGenAlloRep: descriptor>>;
+
+(* Allocation of simple and complex items: See AllocateItem.bet *)
+AlloI1: <<SLOT BetaRunAlloI1: descriptor>>;
+AlloI2: <<SLOT BetaRunAlloI2: descriptor>>;
+AlloI2_68: <<SLOT BetaRunAlloI2_68: descriptor>>;
+
+(* Allocation for COM objects *)
+AllocCom: <<SLOT AllocCOM:descriptor>>;
+
+-- GenBetaRun: Descriptor --
+(# 
+do (* emit a single NOP to prevent label of first routine becoming 
+    * identical with BETA_code1 - confuses gdb
+    *)
+   emitNOP;
+   (* emit routines *)
+   AllocCOM;
+   (if common.switch[68] and NOT common.switch[65] then
+       AlloI2_68
+   if);
+   (if common.switch[65] then
+       AlloI1;
+       AlloI2;
+       GenAlloC;
+       GenCall_doGC;
+       GenCall_psusp_doGC;
+       AlloSO;
+       GenAttachSuspend;
+       AlloS;
+       AlloSI;
+       AlloSC;
+       ObjS;
+       (* leS;
+        * ltS;
+        * geS;
+        * gtS;
+        * eqS;
+        * neS;
+        *)
+       MkTO;
+       QuaV;
+       CopyCPP;
+       ExO;
+       GenAlloRep;
+   if);
+   GenStart;
+   GenMain;
+   (* MUST be last call: see comment at GenMain *)
+#)  

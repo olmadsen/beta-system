@@ -1,0 +1,347 @@
+ORIGIN 'coffread';
+MDBODY nti 'coffread_ntibody'
+       linux 'coffread_ntibody' (* for testing *)
+       ppcmac 'coffread_ppcmacbody'
+       default 'coffread_unixbody';
+
+--CoffFileLib: attributes--
+memcpy: external
+  (# res: @integer;
+     s1, s2, n: @integer;
+  enter (s1, s2, n)
+  exit res
+  #);
+memccpy: external
+  (# res: @integer;
+     s1, s2, c, n: @integer;
+  enter (s1, s2, c, n)
+  exit res
+  #);
+malloc: external
+  (# size, ptr: @integer
+  enter size
+  exit ptr
+  #);
+
+--CoffReaderLib: attributes--
+read_text_hdr: 
+  (# 
+  do findtext: scanScnhdrs
+     (# name: ^text;
+     do (current.s_name1_4,current.s_name5_8)
+          -> getName 
+          -> name[];
+        (if '.text' -> name.equal then
+            current[] -> cache.text_hdr[];
+            leave findtext;
+        if);
+     #);
+     (if cache.text_hdr[]=NONE then
+         (* FIXME: raise exception *)
+         'read_text_hdr: cannot find .text hdr' 
+           -> screen.putline;
+     if);
+  #);
+read_data_hdr: 
+  (# 
+  do finddata: scanScnhdrs
+     (# name: ^text;
+     do (current.s_name1_4,current.s_name5_8)
+          -> getName 
+          -> name[];
+        (if '.data' -> name.equal then
+            current[] -> cache.data_hdr[];
+            leave finddata;
+        if);
+     #);
+     (if cache.data_hdr[]=NONE then
+         (* FIXME: raise exception *)
+         'read_data_hdr: cannot find .data hdr' 
+           -> screen.putline;
+     if);
+  #);
+read_text_reloc:
+  (# array: [0]@char;
+     gb: @getBytes;
+  do (if cache.text_hdr[]=NONE then read_text_hdr if);
+     (* Read entire set of text relocations into cache.text_reloc
+      * to avoid too many file accesses.
+      *)
+     cache.text_hdr.s_nreloc*RELSZ -> array.new;
+     cache.text_hdr.s_nreloc -> cache.text_reloc.new;
+     (cache.text_hdr.s_relptr, frombeginning) -> setpos;
+     (@@array[1], array.range) -> gb;
+     (* Now create all elements in cache.text_reloc *)
+     (for i:cache.text_reloc.range repeat
+          &reloc[] -> cache.text_reloc[i][];
+          (@@cache.text_reloc[i].r_vaddr (* to *),
+          @@array[1]+(i-1)*RELSZ (* from *),
+          RELSZ (* nbytes *)) -> memcpy;
+     for);
+     0->array.new;
+  #);
+read_data_reloc:
+  (# array: [0]@char;
+     gb: @getBytes;
+  do (if cache.data_hdr[]=NONE then read_data_hdr if);
+     (* Read entire set of data relocations into cache.data_reloc
+      * to avoid too many file accesses.
+      *)
+     cache.data_hdr.s_nreloc*RELSZ -> array.new;
+     cache.data_hdr.s_nreloc -> cache.data_reloc.new;
+     (cache.data_hdr.s_relptr, frombeginning) -> setpos;
+     (@@array[1], array.range) -> gb;
+     (* Now create all elements in cache.data_reloc *)
+     (for i:cache.data_reloc.range repeat
+          &reloc[] -> cache.data_reloc[i][];
+          (@@cache.data_reloc[i].r_vaddr (* to *),
+          @@array[1]+(i-1)*RELSZ (* from *),
+          RELSZ (* nbytes *)) -> memcpy;
+     for);
+     0->array.new;
+  #);
+read_shdrs:
+  (* read entire set of section headers into local array 
+   * to avoid too many file accesses.
+   *)
+  (# array: [0]@char;
+     gb: @getBytes;
+  do (if cache.hdr[]=NONE then getFilehdr if);
+     cache.hdr.f_nscns*SCNHSZ -> array.new;
+     (FILHSZ+cache.hdr.f_opthdr, frombeginning) -> setpos;
+     (@@array[1],array.range) -> gb;
+     (* Allocate space for the scnhdrs in cache *)
+     cache.hdr.f_nscns -> cache.scnhdrs.new;
+     (for i:cache.hdr.f_nscns repeat
+          &scnhdr[] -> cache.scnhdrs[i][];
+          (@@cache.scnhdrs[i].s_name1_4 (* to *),
+          @@array[1]+(i-1)*SCNHSZ (* from *),
+          SCNHSZ (* nbytes *)) -> memcpy;
+     for);
+     0 -> array.new;
+  #);
+
+read_syments:
+  (# gb: @getbytes;
+     gh: @getFilehdr;
+     hdr: ^filehdr;
+     array: [0]@char;
+  do (if (gh -> hdr[]) <> NONE then 
+         (* read entire symbol table into array to avoid too many
+          * file accesses.
+          *)
+         hdr.f_nsyms ->cache.syments.new;
+         hdr.f_nsyms*SYMESZ -> array.new;
+         (hdr.f_symptr, frombeginning) -> setpos;
+         (@@array[1],array.range) -> gb;
+         (for i:hdr.f_nsyms repeat
+              (if cache.syments[i][]=NONE then
+                  &syment[] -> cache.syments[i][];
+                  (@@cache.syments[i].n_name1_4 (* to *),
+                  @@array[1]+(i-1)*SYMESZ (* from *),
+                  SYMESZ (* nbytes *)) -> memcpy;
+              if);
+         for);
+         0->array.new;
+     if);
+  #);
+
+read_data:
+  (# gb: @getBytes;
+  do (if cache.data_hdr[]=NONE then read_data_hdr if);
+     cache.data_hdr.s_size -> malloc -> cache.data_ptr;
+     (if cache.data_ptr=0 then
+         (* FIXME: raise exception *)
+         'malloc of data segment failed' -> screen.putline;
+      else
+         (cache.data_hdr.s_scnptr, frombeginning) -> setpos;
+         (cache.data_ptr, cache.data_hdr.s_size) -> gb;
+     if);
+  #);
+
+read_text:
+  (# gb: @getBytes;
+  do (if cache.text_hdr[]=NONE then read_text_hdr if);
+     cache.text_hdr.s_size -> malloc -> cache.text_ptr;
+     (if cache.text_ptr=0 then
+         (* FIXME: raise exception *)
+         'malloc of text segment failed' -> screen.putline;
+      else
+         (cache.text_hdr.s_scnptr, frombeginning) -> setpos;
+         (cache.text_ptr, cache.text_hdr.s_size) -> gb;
+     if);
+  #);
+
+--CoffFileGetFilehdr: descriptor--
+(# gb: @getbytes;
+   ok: @boolean;
+do (if cache.hdr[]<>NONE then
+       cache.hdr[] -> hdr[];
+    else
+       (0,frombeginning)->setpos;
+       &filehdr[] -> hdr[];
+       (@@hdr.f_magic, FILHSZ) -> gb;
+       <<SLOT CoffFileCheckFilehdrMagic: descriptor>>;
+       (if ok then
+           hdr[] -> cache.hdr[];
+        else
+           (* FIXME: raise exception *)
+           'Failed to read COFF file header' -> screen.putline;
+           NONE -> hdr[];
+       if);
+   if);
+#)
+--CoffFileGetAouthdr: descriptor--
+(# 
+do 'CoffFileGetAouthdr NYI' -> screen.putline;
+#)
+--CoffFileGetScnhdr: descriptor--
+(# 
+do 'CoffFileGetScnhdr NYI' -> screen.putline;
+#)
+--CoffFileScanShdrs: descriptor--
+(# 
+do (if cache.scnhdrs.range=0 then read_shdrs if);
+   0 -> current_inx;
+   (for i:cache.hdr.f_nscns repeat
+        cache.scnhdrs[i][]->current[];
+        INNER ScanScnhdrs;
+        i->current_inx;
+   for);
+#)
+
+--CoffFileGetData: descriptor--
+(# 
+do (if cache.data_ptr=0 then read_data if);
+   cache.data_ptr -> ptr;
+   cache.data_hdr.s_size -> size;
+#)
+
+--CoffFileGetText: descriptor--
+(# 
+do (if cache.text_ptr=0 then read_text if);
+   cache.text_ptr -> ptr;
+   cache.text_hdr.s_size -> size;
+#)
+
+--CoffFileGetSyment: descriptor--
+(# 
+do (if cache.syments.range=0 then
+       read_syments;
+   if);
+   (if sym_inx+1>cache.syments.range then
+       'CoffFileGetSyment: not that many syments' -> screen.putline;
+    else
+       cache.syments[sym_inx+1][]->sym[];
+   if)
+#)
+--CoffFileScanSyments: descriptor--
+(# 
+do (if cache.syments.range=0 then
+       read_syments;
+   if);
+   0 -> current_inx;
+   (for i:cache.syments.range repeat
+        cache.syments[i][]->current[];
+        INNER ScanSyments;
+        i->current_inx;
+   for);
+
+#)
+--CoffFileGetDataReloc: descriptor--
+(# 
+do 'CoffFileGetDataReloc NYI' -> screen.putline;
+#)
+--CoffFileGetTextReloc: descriptor--
+(# 
+do 'CoffFileGetTextReloc NYI' -> screen.putline;
+#)
+--CoffFileScanDataReloc: descriptor--
+(# 
+do (if cache.data_reloc.range=0 then
+       read_data_reloc;
+   if);
+   0->current_inx;
+   (for i:cache.data_reloc.range repeat
+        cache.data_reloc[i][] -> current[];
+        i->current_inx;
+        INNER ScanDataReloc;
+   for);
+#)
+--CoffFileScanTextReloc: descriptor--
+(# 
+do (if cache.text_reloc.range=0 then
+       read_text_reloc;
+   if);
+   0->current_inx;
+   (for i:cache.text_reloc.range repeat
+        cache.text_reloc[i][] -> current[];
+        i->current_inx;
+        INNER ScanTextReloc;
+   for);
+#)
+--CoffFileGetStr: descriptor--
+(# read_strings:
+     (# gb: @getbytes;
+        gh: @getFilehdr;
+        hdr: ^filehdr;
+     do (if (gh->hdr[])<>NONE then
+            (* read entire section into cache.strings *)
+            (hdr.f_symptr+hdr.f_nsyms*SYMESZ, frombeginning) -> setpos;
+            (getlong - 4) -> cache.strings.new;
+            (@@cache.strings[1], cache.strings.range) -> gb;
+         else
+            (* FIXME: raise exception *)
+            'CoffFileGetStr: cannot read file header' -> screen.putline;
+        if)
+     #);
+   
+   getBytesUntilNull:
+     (# inx: @integer;
+        t: ^text;
+        p: ^text.put;
+        ch: @char;
+     enter inx
+     do &text[]->t[];
+        &t.put[]->p[];
+        (* FIXME: may possibly be optimized by using memccpy. 
+         * But how large a BETA text need we allocate?
+         *)
+        loop:
+          (# 
+          do cache.strings[inx-3]->ch;
+             inx+1->inx;
+             (if ch<>0 then 
+                 ch->p;
+                 restart loop;
+             if)
+          #);
+     exit t[]
+     #);
+   
+do (if cache.strings.range=0 then
+       read_strings
+   if);
+   str_inx -> getBytesUntilNull -> str[]
+#)
+
+--CoffFileGetName: descriptor--
+(# ch: @char
+do findName:
+     (if name1_4 <> 0 then
+         &text[] -> name[];
+         (for i:4 repeat
+              i-1 -> name1_4.%getByte -> ch;
+              (if ch=0 then leave findName if);
+              ch->name.put;
+         for);
+         (for i:4 repeat
+              i-1 -> name5_8.%getByte -> ch;
+              (if ch=0 then leave findName if);
+              ch->name.put;
+         for);
+      else
+         name5_8 -> getString -> name[];
+     if);
+#)
+   

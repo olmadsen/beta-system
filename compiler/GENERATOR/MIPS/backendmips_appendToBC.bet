@@ -1,0 +1,201 @@
+ORIGIN 'mipsimage';
+LIB_ITEM 'betacodegen';
+INCLUDE 'mips_disass'
+---backendMIPSappendToBC:descriptor---
+(# DA: @disass
+     (# printLab:: 
+          (# isLab:: BooleanValue (#  do true->value #); 
+          do (*  'Find:'->puttext; LIP -> putInt; '.'->put;*)
+             LIP * 4 + saveLIP * 4 -> LIP;
+             find:       
+               (for i: mstate.labs.adr.range repeat
+                    (if mstate.labs.adr[i] <> 0 then
+                        (*mstate.labs.adr[i]->putInt; ','->put;*)
+                        (if mstate.labs.adr[i] = LIP then
+                            i  -> Lab;
+                            leave find
+               if)if)for)
+          #)
+     #);
+   saveLIP: @integer;
+   emitElm:
+     (# i: @integer; T: ^text
+     enter i -> saveLIP
+     do (if common.switch[39] then
+            '\t.word\t'->BC.putT; (buffer[i],true,BC[])->DA.putHex;
+            '.word\t0x12345678'->Tab
+         else
+            '\t'->BC.putX; 
+            buffer[i] -> DA -> T[] -> BC.putX;
+            T[]->tab
+        if)
+     #);
+   tab: @
+     (*assume: T='op \toperands'*)
+     (# T: ^text; ht,n: @integer
+     enter T[]
+     do 0->n;
+        T.scanAll
+        (#do n+1->n; 
+           (if ch=ascii.ht then ht+1->ht;0->n if)
+        #);
+        (* i no. of chars after '\t' if one exists *)
+           (*(for i: 1 - ht repeat ascii.ht->BC.putC for);*)
+        n->emitSp
+     #);
+   emitSp:
+     (# n: @integer
+     enter n
+     do (for i: 30-n repeat ' '->BC.putC for);
+     #);
+   emitReg:
+     (# i,sc,in: @integer
+     enter(i,sc)
+     do buffer[i]->in;
+        ((sc,5) -> in.%getBits,BC[]) -> DA.putReg;
+     #);
+   emitFReg:
+     (# i,sc,in: @integer
+     enter(i,sc)
+     do buffer[i]->in;
+        (in %srl sc) %band 0x1F->in;
+        '%'->BC.putC; 'f'->BC.putC; in->BC.putI;
+        (if in<10 then ' '->BC.putC if)
+     #);
+   emitSym:
+     (# inx,n: @integer
+     enter inx
+     do epElm[inx].m.strInx->mstate.strTbl.scan(#do ch->BC.putC; n+1->n #)
+     exit n
+     #);
+   emitHiSym:
+     (# inx,n: @integer
+     enter inx
+     do (*'hi('->BC.putX; inx ->emitSym->n; ')'->BC.putC*)
+        '0'->BC.putC
+     exit n
+     #);
+   emitLoSym:
+     (# inx,n: @integer
+     enter inx
+     do (*'lo('->BC.putX; inx ->emitSym->n; ')'->BC.putC*)
+        '0'->BC.putC
+     exit n
+     #);
+   fromLastEntry,n,lapTop: @integer
+do (if lastMark=0 then 1->lastMark if);
+   1->lapTop;
+   (for i:  LIP div 4 repeat
+        (if mstate.inCode then
+            (for lapTop: mstate.labs.adr.range  repeat
+                 (if mstate.labs.adr[lapTop] > 0 then 
+                     (if mstate.labs.adr[lapTop] = (i - 1) * 4 then
+                         '$L'->BC.putX; lapTop->BC.putI; 
+                         ':'->BC.put; '\n'->BC.put;
+        if)if)for)if);
+        L:
+          (if marks[lastMark]=i then
+              (* relocatable item *)
+              (if types[lastMark]
+               // callMark then 
+                  (if common.switch[62] then
+                      '\tlw\t$25,' -> BC.putX;                       
+                      lastMark->emitSym->n;
+                      '($gp)'->BC.putX; 
+                      7 + n + 2 -> emitSp;
+                   else
+                      '\tjal\t'->BC.putX; 
+                      lastMark->emitSym->emitSp
+                  if)
+               // bgtuMark then
+                  '\tbgtu\t'->BC.putX; lastMark->emitSym->emitSp
+               // jmpMark then                            
+                  '\tj\t'->BC.putX; lastMark->emitSym->emitSp
+               // setHiMark then
+                  (* Note, due to limitations  the sgi assembler,
+                   * 2 instructions (this one and a subsequent ori/setLoMark)
+                   * may become more than 2 instructions
+                   *)
+                  '\tla\t'->BC.putX; (i,11)->emitReg;
+                  ','->BC.putC; 
+                  lastMark->emitSym->n;
+                  n+4->emitSp;  
+                  (*'\tlw\t'->BC.putX; (i,11)->emitReg;
+                  ',0('->BC.putX;  (i,11)->emitReg; ')'->BC.putC;
+                   n+4+2+3->emitSp;*)
+               // setLoMark then
+                  i -> emitElm;
+                  (*'\tori\t'->BC.putX; 
+                  (i,6)->emitReg; ','->BC.putC;
+                  (i,11)->emitReg; ','->BC.putC;
+                  lastMark->emitLoSym->n;
+                   n+8+2+3->emitSp;*)
+               // setLoMarkSt then
+                  '\tsw\t'->BC.putX; 
+                  (i,11)->emitReg; ','->BC.putC;
+                  lastMark->emitLoSym->n;
+                  '('->BC.putC;
+                  (i,6)->emitReg;  
+                  ')'->BC.putC; 
+                  n+9+2+3+1->emitSp;
+               // setLoMarkJmp then (*  NOT used for MIPS *)
+                  '\tb\t'->BC.putX;
+                  (dataTmp1,BC[])->DA.putReg;
+                  '+lo('->BC.putX; 
+                  lastMark->emitSym->n;
+                  ')'->BC.putX;
+                  n+8+1->emitSp;
+               // setLoMarkLdd then
+                  '\tldd\t[%lo('->BC.putX; 
+                  lastMark->emitSym->n;
+                  ')+%g1],'->BC.putX;
+                  (i,25)->emitFreg;
+                  n+5+5+4-1->emitSp;
+               // dataMark then
+                  '\tlw\t'->BC.putX;   
+                  (i,11)->emitReg; ','->BC.putC;
+                  lastMark->emitSym->n;
+                  '('->BC.putC;
+                  (i,6)->emitReg;  
+                  ')'->BC.putC; 
+                  n+9->emitSp;
+               // setLoMarkLd then
+                  '\tlw\t[%lo('->BC.putX; 
+                  lastMark->emitSym->n;
+                  ')+%g1],'->BC.putX;
+                  (i,25)->emitFreg;
+                  n+5+5+4->emitSp;
+               // wordMark then
+                  '\t.word\t'->BC.putX; 
+                  lastMark->emitSym->emitSp;
+               // entryDefMark then
+                  (if epElm[lastMark].export then
+                      '\n.globl\t'->BC.putX; 
+                      lastMark->emitSym; BC.putNl;
+                  if);
+                  lastMark->emitSym; ':'->BC.putC; BC.putNL;
+                  (if (lastMark+1) <= marks.range then 
+                      (if marks[lastMark+1]=i then 
+                          (* several marks at same adr*)
+                          lastMark+1->lastMark;
+                          restart L
+                  if)if);
+                  0->fromLastEntry;
+                  i->emitElm
+              if);
+              (if lastMark<marks.range then lastMark+1->lastMark
+               else 0->marks[lastMark]
+              if)
+           else   
+              i->emitElm
+          if);
+        '#'->BC.putC;  ' '->BC.putC;
+        (fromLastEntry,false,BC[])->DA.putHex; ' '->BC.putC; '('->BC.putC; 
+        fromLastEntry->BC.putI;  ')'->BC.putC;
+        fromLastEntry+4->fromLastEntry;
+        ascii.ht->BC.putC; 
+        ((i-1)*4,false,BC[])->DA.putHex; ' '->BC.putC; '('->BC.putC;
+        (i-1)*4->BC.putI; ')'->BC.putC;
+        BC.putNl;
+   for);
+#)

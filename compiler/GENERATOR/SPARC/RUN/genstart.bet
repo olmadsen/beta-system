@@ -1,0 +1,89 @@
+ORIGIN '../SPARCmachine';
+-- machineatt: Attributes --
+GenStart:
+  (* Generate _start entry point.
+   * See 
+   *   "System V Application Binary Interface -
+   *   SPARC Processor Supplement", Third Edition,
+   *   ISBN 0-13-104696-9,
+   *   section "Process Initialization", pages 3-27 to 3-33.
+   *)
+  (# NoExitFunction: @LocalLab; 
+  do     
+     '_start'->ExtLabel;
+     NoExitFunction.new;
+     ;
+     (* Clear Frame Pointer *)
+     FP->CLR->emit;
+     ;
+     (* Initialize Stack Pointer *)
+     (SP,0x40,L0)->LD_I->emit (* load argc *) ;
+     (SP,0x44,L1)->ADD_I->emit (* address of argv *) ;
+     (SP,0x20,SP)->SUB_I->emit (* initial regwin? *) ;
+     ;
+     (* Test for function to register with atexit *)
+     G1->TST->emit;
+     (NoExitFunction.labNo->mstate.labs.off) div 4->BE->emit;
+     (G1,O0)->MOV->emit;
+     ('atexit',callMark)->mstate.b.mark;
+     0->CALL->emit;
+     xNOP->emit;
+     ;
+     NoExitFunction.def;
+     (* Register _fini with atexit *)
+     ('_fini',O0)->EmitSetReg;
+     ('atexit',callMark)->mstate.b.mark;
+     0->CALL->emit;
+     xNOP->emit;
+     ;
+     (* Call _init *)
+     ('_init',callMark)->mstate.b.mark;
+     0->CALL->emit;
+     xNOP->emit;
+     ;
+     (* Set arguments for main (argc, argv, envp) *)
+     (L0,O0)->MOV->emit;
+     (L1,O1)->MOV->emit;
+     (L0,2,O2)->SLL_I->emit;
+     (O2,4,O2)->ADD_I->emit;
+     (L1,O2,O2)->ADD->emit;
+     ('_environ',O3)->EmitSetReg;
+     mstate.B.markLastAsData;
+     (O3,0,O2)->ST_I->emit;
+     ;
+     (* Call main *)
+     ('main',callMark)->mstate.b.mark;
+     0->CALL->emit;
+     xNOP->emit;
+     ;
+     (* Call exit when main returns *)
+     ('exit',callMark)->mstate.b.mark;
+     0->CALL->emit;
+     xNOP->emit;
+     ;
+     (* Call _exit when exit returns *)
+     ('_exit',callMark)->mstate.b.mark;
+     0->CALL->emit;
+     xNOP->emit;
+     ;
+     (* Goodbye *)
+  #);
+
+ExtLabel: 
+  (* labelDef should be reconsidered and so should mstate.b/d.mark *)
+  (# T: ^text
+  enter T[]
+  do (if common.switch[301] then (* tracecode *)
+         screen.newline; t[]->screen.puttext; 
+     if);
+     T[]->export;
+     T[]->labelDef
+  #);
+EmitSetReg:
+  (# L: ^text; reg: @integer; 
+  enter (L[],reg)
+  do (L[],setHiMark)->mstate.b.mark;
+     (reg,0)->SETHI->emit;
+     (L[],setLoMark)->mstate.b.mark;
+     (reg,0,reg)->OR_I->emit;
+  #);

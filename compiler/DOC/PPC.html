@@ -1,0 +1,550 @@
+<HTML>
+
+<HEAD>
+<TITLE>PowerPC specifics</TITLE>
+<LINK REV="made" HREF="mailto:olm@daimi.aau.dk">
+</HEAD>
+
+<BODY>
+<H1>PowerPC specifics</H1>
+
+<PRE>
+ 
+Documentation for the Macintoahs PowerPC BETA implementation
+------------------------------------------------------------
+
+1.	Stack organization
+--------------------------
+
+Like SGI, but with the following exceptions
+	
+	oldSP'-&gt;|			|
+		|-----------------------|
+		|			|
+		|	...		|
+		|			|
+		|-----------------------|
+		|  Saved RTOC'		|
+		|  Reserved		|
+		|  Reserved		|
+		|  Saved LR'		|
+		|  Saved CR'		|
+	oldSP -&gt;|  Saved SP' (oldSP')	|
+		|-----------------------|                --------.
+		|	dyn		|                        |
+		|	...		| reference stack        |
+		|-----------------------|                        |
+		|			| float reg save area    |
+		|-----------------------|                        |
+		|			| data reg save area     |
+		|-----------------------|                        |
+		|	xArgi		|                        | Frame for
+		|	 ...		| external argument area | M7BAR
+		|	xArg1		|                        | 
+		|	xArg0		|                        |
+		|-----------------------|  ----.                 |
+	SP+20	| Saved RTOC		|      |                 |
+	SP+16	| Reserved		|      | 'link' area     |
+	SP+12	| Reserved		|      | for M7BAR       |
+	SP+8	| Saved LR (return adr)	|      |                 |
+	SP+4	| Saved CR		|      |                 |
+	SP  -&gt;	| Saved SP (oldSP)	|      |                 |
+		|-----------------------|  ----'       ----------'
+		|			|
+
+When executing in a M-entry like M7BAR, the stack frame corresponding to
+M7BAR is   ]oldSP,SP].
+
+To return from M7BAR:
+
+	SP[0]  -&gt; SP		-- SP is restored as oldSP
+	SP[-1] -&gt; this		-- this is restored from dyn
+	SP[2]  -&gt; returnAddress -- the return address in the caller
+
+Note:	"dyn" is the first element on the reference stack; on MIPS
+	the return address is the firsts element and dyn is the second element.
+
+	The return address is oldSP[2] = Saved LR';
+	SP[2] = Saved LR is used when calls are made from M7BAR
+
+1.1.    Converting Framepointers.
+---------------------------------
+
+In Suspend, the absolute framepointers are converted to relative
+values when packed into the stackobject.
+In Attack, the framepointers are then adjusted back to absolute
+values, when the componenet is unpacked.
+This is because it may be unpacked at another stack position
+than it was executing at before.
+
+The following figure illustrates the two different stack organizations:
+
+     Absolute addr                   Distances             Relative addr (stackobj)
+     ============                    =========             =============
+
+SPx-&gt;|___________|                                                      
+     |///////////|					                
+     |/// Att ///|					                
+SPy-&gt;|///////////|&lt;-.                              ___	    ___________
+     |           |  |                               |	   |           |
+     |           |  |                               |      |           |
+     |___________|--' &lt;-.                     ___   |  	   |_____d4____|
+     |           |      |                      |    | 	   |           |
+     |           |      |                      |    |      |           |
+     |___________|------' &lt;-.            ___   |    | 	   |_____d3____|
+     |           |	    |             |    |    |      |           |
+     |           |	    |             |    |    |      |           |   
+     |___________|----------' &lt;-.   ___   |    |    |      |_____d2____|
+     |           |	        |    |    |    |    |      |           | 
+     |           |	        |    |    |    |    |      |           |  
+SPz-&gt;|___________|--------------'   _|_  _|_  _|_  _|_     |_____d1____|     
+     |///////////|                   d1   d2   d3   d4                   
+     |// Susp ///|					                
+     |///////////|					                
+
+
+2.	Component handling
+--------------------------
+
+The situation at Suspend is as follows (like the SGI description)
+
+
+		HighAdr	|		|
+			|===============|
+			|  X:		|
+			|  calling 	|
+			|  component	| &lt;-----|
+			|---------------|	|
+			|  BETA item	|	|
+			|  frames	| &lt;-----|	
+			|---------------|	|
+			|  topX item	|	|
+			|---------------|	|
+			|  'link'       |	|
+	          SPx -&gt;|    SP'	| &lt;-----|
+	                |===============|	|
+	          	|		|	|
+	                |  Att frame	|	|
+			|---------------|	|
+			|  'link'       |	|
+	          SPy -&gt;|    SPx	| &lt;-----|
+	                |---------------|	|
+			|		|	|
+			|  Y: BETA	|	|
+			|  component	|	|
+			|  frame	|	|
+			|---------------|	|
+			|  'link'       |	|
+	          	|    SPy	| &lt;-----|
+			|---------------|	|
+	                |  BETA item	|	|
+	                |  frames	| &lt;-----| 0 &lt;= frames and links here
+			|---------------|	|
+			| topY item	|	|
+			|---------------|	|
+			|  'link'       |	|
+	          SPz -&gt;|    SP"	| &lt;-----|
+	                |---------------|	|
+			|		|	|
+	                | Susp frame	|	|
+			|---------------|	|
+			|  'link'       |  	|
+	          SP -&gt; |    SPz	| &lt;-----|
+	                |---------------|
+			|		|
+
+1.      Compared to the SGI situation, the PowerPC link areas have 
+        been inserted explicitly. The link marks a.o. chains the stack
+        frames. This means that when suspending a component, the
+        SP-links MUST be converted to relative values. Similarly at
+        attach, the link marks in a stack object MUST be made absolute
+        again.
+
+2.	For SGI, the return address is pushed on the stack by BETA code.
+	For PPC, the return address is part of the link mark. This makes
+	difference in the case of attach. Consider the following example
+
+			(# X: @ | (# do S1; suspend; S2 #);
+			do X; X
+			#)
+
+	The first attcah of X implies that the do-part of X is executed by
+	entering the M-entry point of X. 
+
+	*	For SGI the M-entry point saves the return link on the stack.
+		When X executes suspend, the stack is saved in a stack object
+		including the return address to the attach call.
+		When the 2nd attach X is performed, the saved stack is unpacked
+		including the return address to (the first) attach; and 
+		execution continues after suspend. 
+		When X terminates it returns via the return address to
+		attach (RTS routine Att).
+		Note that when X terminates it actually returns via the return
+		address to the caller of Att that attached X the first time.
+		This only works since subsequent calls of Att all call
+		X at the same point in the code.
+
+	*	On PPC the above scheme does NOT work since the return address
+		to att is NOT in the part of the stack saved by BETA code.
+		The return addres is therefore only saved at the first attach 
+		of X. To fix this, the compiler on PPC generates extra code
+		to save the return address to Att at subsequent attaches.
+
+
+                Here is an example of the extra code: When the first attach
+                is made from M1TSTCOMP, the RA given to Att is the address of
+                the following function:
+				  csect     .M1TSTCOMP.1{PR}          
+		   81820070               lwz       r12,M1TSTCOMP{TC}(RTOC)   
+		   818C0000               lwz       r12,0x0000(r12)
+		   398C005C               addi      r12,r12,92
+		   7D8903A6               mtctr     r12                       
+		   4E800420               bctr
+
+                The function calculates the addres of M1TSTCOMP using the TOC
+                and adds the offset to just below the Att call and then sets the PC
+                to this value and continues from there.
+
+
+3.	When Att calls BETA code of the component being attached, the BETA
+	code invalidates registers assumed to keep their values over
+	procedure calls. When a component is suspended it does NOT return to
+	Att, so there is no problem with smashed registers. However, when
+	a component terminates, it returns to Att. This may cause problems
+	since registers may have been smashed by the BETA code. On SGI
+	this has NOT been a problem (pure luck:-) On PPC it is a problem.
+	To solved this problem Att in the simple betarun has been changed
+	to avoid dependence of registers. For all platforms we should
+	find a waterproof solution. Either the BETA code MUST save and
+	restore registers when performing an attach. Or Att must be
+	a machine code routine instead of a C routine.
+
+        The solution to this register-saving problem is to use CallB
+        to call the component from attach. See CallB description below.
+
+	On ppcmac, we could not get the stack-object unpacking code to
+	work correctly (it manipulates stuff in the "red zone" of the
+	stack, and this can be destroyed, as far as I remember
+	/Peter).
+	So to solve the problem, anentry point doAtt is generated,
+	which does the stackobject unpacking directly in machine code.
+	This presents a problem to shared libraries, though. Since
+	doAtt has no stack frame of its own, it has no place to save
+	RTOC! Maybe a solution is to save RTOC in the components?
+
+
+
+3.	XCOFF
+-------------
+
+1.	Mac PowerPC code in XCOFF format consist of a number of section.
+	A section is often called a "csect". The code segment for a fragment
+	thus consist of a number of csetc's
+	
+		CSECT G1FOO:	...
+				...
+
+		CSECT M1FOO:	...
+			L1:	...
+				...
+
+		CSECT G2FOO:	...
+				...
+
+		CSECT M2FOO:	...
+			L2:	...
+				...
+		...
+
+	L1 and l2 are local labels within M1FOO and M2FOO.
+
+	Apparently the linker does NOT place csects in the same order as
+	they appear in the XCOFF file! 
+
+	This means that it is NOT possible to compute the relative address a 
+	label in another csect. E.g. from within M1FOO, the relative address
+	of L2 cannot be know at compile time. It is thus NOT possible to
+	generate a simple relative branch to L2 from within M1FOO. Such a
+	branch MUST be computed by using the address of M2FOO and adding the 
+	offset of L2. 
+
+	Currently it is NOT known if L2 can be declared in such a way that
+	the linker can resolve the address! If L2 is declared in a visible
+	way it gives rise to a new csect. This new csect may then not appear
+	after the precedding code form M2FOO. This may, however, be due to our
+	limited knowledge of XCOFF!
+
+3.	Inner dispatch table has been merged with virtual dispatch-table.
+
+CallB
+-----
+
+Originally each GPart had to save all callee save registers (according
+to C calling conventions), since they might potentially be called from
+a C routine (e.g. AlloI). Also before each G and M entry point, two
+instructions had to be added to allow set-up of the correct dynamic
+link when called from C (e.g. AlloI).
+
+The solution with extra instructions before the entry points is not possible
+on ppcmac because the csects may be placed anywhere by the linker.
+
+To solve these two and other problems, an entry called CallB with C signature
+
+  void CallB(struct Object *caller, struct Object *callee, long address, long SP)
+
+is generated in betaenv.obj. On ppcmac it looks like this:
+
+  CallB
+     +00000 012A0148   stwu       SP,-0x0068(SP)  
+     +00004 012A014C   stw        r18,0x0060(SP)  
+     +00008 012A0150   stw        r19,0x005C(SP)  
+     +0000C 012A0154   stw        r20,0x0058(SP)  
+     +00010 012A0158   stw        r21,0x0054(SP)  
+     +00014 012A015C   stw        r22,0x0050(SP)  
+     +00018 012A0160   stw        r23,0x004C(SP)  
+     +0001C 012A0164   stw        r24,0x0048(SP)  
+     +00020 012A0168   stw        r25,0x0044(SP)  
+     +00024 012A016C   stw        r26,0x0040(SP)  
+     +00028 012A0170   stw        r27,0x003C(SP)  
+     +0002C 012A0174   stw        r28,0x0038(SP)  
+     +00030 012A0178   stw        r29,0x0034(SP)  
+     +00034 012A017C   stw        r30,0x0030(SP)  
+     +00038 012A0180   lwz        r0,0x0000(r5)   
+     +0003C 012A0184   lwz        RTOC,0x0004(r5) 
+     +00040 012A0188   mtlr       r0              
+     +00044 012A018C   stw        r6,0x0018(SP)   
+     +00048 012A0190   mr.        r31,r3          
+     +0004C 012A0194   blrl                       
+     +00050 012A0198   lwz        r30,0x0030(SP)  
+     +00054 012A019C   lwz        r29,0x0034(SP)  
+     +00058 012A01A0   lwz        r28,0x0038(SP)  
+     +0005C 012A01A4   lwz        r27,0x003C(SP)  
+     +00060 012A01A8   lwz        r26,0x0040(SP)  
+     +00064 012A01AC   lwz        r25,0x0044(SP)  
+     +00068 012A01B0   lwz        r24,0x0048(SP)  
+     +0006C 012A01B4   lwz        r23,0x004C(SP)  
+     +00070 012A01B8   lwz        r22,0x0050(SP)  
+     +00074 012A01BC   lwz        r21,0x0054(SP)  
+     +00078 012A01C0   lwz        r20,0x0058(SP)  
+     +0007C 012A01C4   lwz        r19,0x005C(SP)  
+     +00080 012A01C8   lwz        r18,0x0060(SP)  
+     +00084 012A01CC   addi       SP,SP,0x0068    
+     +00088 012A01D0   lwz        r0,0x0008(SP)   
+     +0008C 012A01D4   mtlr       r0              
+     +00090 012A01D8   blr                        
+
+This saves all registers needed by the C calling convetions, and sets up
+a link back to the SP parameter. This is used when calling the following 
+BETA entry points from C:
+
+    M1BETAENV from main
+    First attach of each component
+    Gparts called from AlloI and AlloC.
+
+the stack frame allows the GC to skip the frames from CallB and back to
+the indicated SP.
+
+For the Gparts there is a little extra overhead in using CallB from C because of
+the extra call. BUT since calls of Gparts from BETA does not save/restore 
+C calling convention registers anymore, there is expected an overall benefit
+in speed. In size the solution is MUCH better.
+
+ENTRY-POINTS
+------------
+
+Consider a BETA entry point:
+
+	M7BAR:	...
+		...
+		...
+
+For MAC/XCOFF the following entry-points exists:
+
+In the code segment:
+
+	.M7BAR: 	...
+			...
+			...
+	
+	M7BAR{GL}:   	lwz 	r0  , 0(r12)	r12 is assumed to point 
+						to M7BAR{DS}
+	      	      	sw  	RTOC,20(SP)
+	              	mtctr	r0
+	      	      	lwz 	RTOC, 4(r12)
+	      	      	bctr
+              
+In the data segment:
+
+	M7BAR{DS}:   .M7BAR
+		     RTOC for M7BAR
+		     0			Unused
+
+RTOC (or TOC) is a special register (R2?) which for a given routine MUST
+refer to the TOC-section for that routine. For each shared object there
+is a TOC-section which contains the addresses of all routines that
+are called from the object and all data accessed from the object.
+
+A procedure call of the form
+
+	BL	M7BAR
+
+MUST have the form:
+
+	BL	.M7BAR
+	nop
+
+which is pacthed by the linker to:
+
+	BL	M7BAR{GL}
+	lwz	RTOC,20(SP)
+
+I have NOT been able to find any description of the use of '.' in
+entry points.  The ppcc compiler generates entry-points with a dot,
+and apparently the linker assumes some convention based on '.'!
+
+CALL BACK
+---------
+
+Consider a BETA call-back pattern :
+
+		bar: external(# ... do cExternalEntry; ... #)
+
+Let the code for 'bar' be M7BAR as described above.
+	
+CopyCPP generates the following CallBack entry for bar:
+
+	[L+0] refers the struc bar#.
+
+	[L+4  - L+8 ] 	is a TOC-entry for the CallBack code;
+			it refers to the code starting at L+12;
+
+	[L+12 - L+44] 	is the actual code calling .bar;
+			'entry' is supposed to denote the TOC-entry for bar,
+			which is  bar{DS};
+			'start' is L+0, i.e. the addres of bar;
+			the code does 2 thins: 
+			(1) it contains part of the glue code for bar 
+			    (bar{DS}); the part omitted form bar{DS} is the
+		            instruction saving the RTOC of the caller; 
+			    (see also description below)
+			(2) it load bar# into r25.
+
+	L+0 :	bar#
+	L+4 :	L+12
+	L+8 :	0 (RTOC, not used)
+	L+12:	lis r12,     entry &gt;&gt; 16	; entry -&gt; r12
+    	L+16:	lis r25,     start &gt;&gt; 16        ; bar# -&gt; r25 (dataReg0)
+    	L+20: 	ori r12,r12, entry & 0xffff	; rest of L+12
+    	L+24:	ori r25,r25, start & 0xffff	; rest of L+16
+    	L+28:	lwz r0, 0(r12)			; .bar -&gt; r0
+    	L+32:	mtctr r0			; 
+    	L+36:	lwz RTOC, 4(r12)		; bar.RTOC -&gt; RTOC
+    	L+40:	bctr				; goto .bar
+
+The function pointer returned by CopyCPP is the value of L+4.
+
+Code-entry point for call back entry of bar:
+
+	.bar: ...
+	      ...
+	      bl .M7BAR
+	      ...
+
+Glue code for calling .bar:
+
+	bar{GL}:   lwz 	 r0  , 0(r12)	r12 is assumed to point to bar{DS}
+		   sw  	 RTOC,20(SP)
+	           mtctr r0
+	           lwz 	 RTOC, 4(r12)
+	           bctr
+Note, the glue code is NEVER called, since it is inlined in the CallBack
+entry for bar.
+
+TOC entry for bar:
+.data
+
+	bar{DS}:    .bar
+		    RTOC for bar
+	      	    0			unused
+
+Presently not known if a ClearCash is needed after CopyCPP!
+
+Steps executed from C when calling a BETA call back pattern
+------------------------------------------------------------
+
+Consider a C-function 'foo' calling a BETA call back function denoted
+by the C-pointer 'f' and let 'f' be the BETA pattern 'bar' as
+described above.  The following happens:
+
+(1)	'f' denotes the address L+4 above.
+
+(2)	The address denoted by 'f' is loaded to a register,
+	say R12; now R12 = L+4.
+
+(3)	A jump is made to glue code for R12, i.e. 'foo' executes
+
+		BL 	.ptr_glue12
+		LWZ 	RTOC,20(SP)
+
+	where .ptr_glue12 is as descibed above.
+
+(4)	In .ptr_glue, the following happens:
+(4.1)	The address of the call back glue code is loaded into
+	R0; i.e. R0 = L+12 above. 
+(4.2)	The RTOC of bar is saved in 20(SP)
+(4.3)	THE RTOC of the call back code is loaded; the value loaded is L+8,
+	i.e. RTOC=0 after this!
+(4.4)	A jump is made to L+12
+
+(5)	In the call back code the following happens
+(5.1)	R12 is loaded with the TOC-entry for bar (L+12,L+20)
+(5.2)	R25 is loaded with te struc var for bar##, (L+16,L+24)
+(5.3)	The code address for .bar is loaded into R0 and moved to the
+	count register (L+28,L+32).
+(5.4)	The RTOC for bar is loaded (L+36).
+(5.5)	A jump is made to .bar.
+
+(6)	.bar generates and executes a BETA pattern instance and returns
+	to foo.
+
+
+</PRE>
+
+<H2><A NAME="bibliography">Bibliography</A></H2>
+
+<DL>
+
+<DT><A NAME="coffbook">[COFFBOOK]</A>
+<DD>
+<EM>Understanding and Using COFF - UNIX Common Object File Format</EM><br>
+by Gintaras R. Gircys, O'Reilly &amp; Associates, Inc, 1988<BR>
+<P>
+
+<DT><A NAME="COFFPPC">[COFFPPC]</A>
+<DD>
+<I><A
+HREF="http://www.mot.com/SPS/MCORE/EVScdrom/diab/data/html/linkppc/link5.htm#1211101">Common
+Object File Format (COFF)(PowerPC Linker)</A></I></DD>
+</DT>
+
+<DT><A NAME="XCOFF">[XCOFF]</A>
+<DD>
+<I><A
+HREF="http://www.daimi.aau.dk/~devise/Internal/beta/PDF/PowerOpen.pdf">PowerOpen ABI - Application Binary Interface,
+Big Endian 32 Bit Hardware Implementation, June 30, 1994</A></I>
+(XCOFF specification, local PDF file).
+</DD>
+</DT>
+
+<DT><A NAME="macos">[MACOS]</A>
+<DD>
+<I><A
+HREF="http://developer.apple.com/techpubs/mac/operating_system.html">Apple
+Developer Documentation: Mac OS: Operating System Services</A></I>
+</DD>
+</DT>
+
+</DL>
+
+</BODY>
+</HTML>

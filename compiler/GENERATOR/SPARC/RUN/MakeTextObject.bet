@@ -1,0 +1,142 @@
+ORIGIN 'BetaRun';
+
+
+--MachineAtt: attributes--
+
+charRepHeadSize: (#  exit 16 #);
+textObjectSize: (#  exit 32 #) (* used to be 24 - but returnAdr added *);
+
+
+--BetaRunMkTO: descriptor--
+(* Create a text object.
+ * 
+ * Parameters:
+ *    %o0 = asciz-Text-Label
+ *    %o1 = dest. object
+ *    %o2 = offset in %o1
+ * Registers:
+ *    Allocates 4 dataregs.
+ *    Destroys %o5.
+ * 
+ * Assigns new text object into destination object at 
+ * the specified offset (multiplied by 4).
+ *)
+(#
+   asciz, textSize,dr1,dr2, regTextObj: @dataRegOperand;
+   NoCopy,Loop,Loop2: @localLab;
+do (* initialization *)
+   textSize.alloc;
+   O0->asciz;
+   Loop.new;
+   Loop2.new;
+   NoCopy.new;
+   ;
+   (* entry point *)
+   'MkTO'->ExtLabel;
+   NumMkTO->IncNum; 
+   (* Compute size of text -> S.
+    * Alloc textObject + char rep of size S
+    *)
+   ;
+   I1 -> regTextObj;
+   CallO->storeSavedCallO; (* Save I1 in TSD *)
+   ;
+   (* count non-zero chars in asciz *)
+   textSize[]->gClr;
+   (* loop start *)
+   ;
+   Loop.def;
+   dr2.alloc;
+   (asciz,textSize,dr2)->LDUB->emit;
+   (dr2,0)->CMP_I->emit;
+   (Loop->mstate.labs.off) div 4->BNE->emit;
+   (1->newCstOp,textSize[],1)->gAdd; (*Delay slot *)
+   ;
+   (* don't count the terminating zero *)
+   (1->newCstOp,textSize[],1)->gSub;
+   ;
+   (* align size of repetition part as in NewR *)
+   (textSize,4,dr2) -> ADD_I -> emit;
+   (dr2,2,dr2) -> SRL_I ->emit;
+   (dr2,2,dr2) -> SLL_I ->emit;
+   (* Now dr2 is range adjusted to account for the terminating zero, 
+    * and 4 byte alignment. Add header and size of text object and align 8.
+    *)
+   (dr2, charRepHeadSize+textObjectSize, dr2) -> ADD_I -> emit;
+   dr2[] -> EmitAlign8;
+   (* Now dr2 = no. of bytes needed for textObject and charRep*)
+   ;
+   (* allocate *)
+   
+   (regTextObj, dr2, false, 'call_psusp_doGC',false) ->
+   GenIOAAlloc
+   (# BeforeDoGC:: (# do O1 -> PushRefRegister #);
+      AfterDoGC :: (# do O1 -> PopRefRegister #);
+   #);
+   ;
+   (* initialize text object *)
+   (* proto *)
+   dr1.alloc;
+   (dr1[],'TextProto'->newtextOp)->ldValFromtext;
+   (regTextObj,0,dr1)->ST_I->emit;
+   (* initial age *)
+   (if common.IOAMinAge<>0 then
+       (common.IOAMinAge->newCstOp,dr1[]) -> ldCst;
+       (regTextObj,4,dr1)->ST_I->emit;
+   if);
+   (* origin *)
+   (dr1[],'BasicItem'->newTextOp) -> ldValFromText;
+   (regTextObj,8,dr1,true)->AssignRef;
+   ;
+   (* Note the charRep is in offset 20 (used to be 12);
+    * but now there is also returnAttributes
+    *)
+   (regTextObj,textObjectSize,I2)->ADD_I->emit;
+   (* start of charRep *)
+   (regTextObj,20,I2,true)->AssignRef;
+   (* regTextObj.lgth *)
+   (regTextObj,24,textSize)->ST_I->emit;
+   (* regTextObj.pos *)
+   (regTextObj,28,textSize)->ST_I->emit;
+   ;
+   (* initialize charRep *)
+   (* charRep proto *)
+   (common.ByteRepPTValue->newCstOp,dr2[])->ldCst;
+   (I2,0,dr2)->ST_I->emit;
+   (* charRep GCAttr *)
+   (if common.IOAMinAge<>0 then
+       (common.IOAMinAge->newCstOp,dr2[])->ldCst;
+       (I2,4,dr2)->ST_I->emit;
+   if);
+   (* charRep LowBorder *)
+   (1->newCstOp,dr2[])->ldCst;
+   (I2,8,dr2)->ST_I->emit;
+   (* charRep HighBorder *)
+   (I2,12,textSize)->ST_I->emit;
+   ;
+   (* copy asciz text *)
+   (textSize,3,textSize)->ANDN_I->emit;
+   (3 (*lt*) ,0->newCstOp,textSize[],4,NoCopy[])->cmpAndJmp;
+   (I2,textSize,I2)->ADD->emit;
+   (I2,charRepHeadSize,I2)->ADD_I->emit;
+   ;
+   Loop2.def;
+   (asciz,textSize,dr1)->LD->emit;
+   (I2,0,dr1)->ST_I->emit;
+   (textSize,4,textSize)->SUB_I->emit;
+   (I2,4,I2)->SUB_I->emit;
+   (textSize,0)->CMP_I->emit;
+   Loop2[]->gBGe;
+   NoCopy.def;
+   ;
+   (* store ref to text obj *)
+   (O2,2,O2)->SLL_I->emit;
+   (O1,O2,regTextObj,false)->AssignRef;
+   ;
+   (regTextObj, 'MkTO', 'regTextObj') -> EmitCk;
+   ;
+   O7 -> AssertRegisterNotZero;
+   RETL->emit;
+   (* Restore %i1 from TSD (delay slot). *)
+   CallO->loadSavedCallO;     
+#)

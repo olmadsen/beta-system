@@ -1,0 +1,518 @@
+ORIGIN 'checklib';;
+LIB_ITEM 'betacompiler'
+---GetSpecSize:doPart--
+(*********************
+ * For general pattern, an access attribute should be stored to mark
+ * descriptors with mainPart,dopart slots as indirect.
+ * There should be two operations. One for items and one for components.
+ * descKind should also be used to mark unDefined and beingChecked.
+ *)
+do L:
+     (if catSort.label = gram.objectDescriptor then
+         (if catSort->sematt.DescKind // unDefined // beingChecked then
+             (if not ((catSort[],(*??*)false,NONE,-1) -> &ChkForm) then
+                 (* false if circular prefix *)
+                 0 -> size;
+                 leave L
+         if)if);
+         (if (catSort[]->sematt.descAccess->access) = common.direct then 
+             catSort.size->size
+          else 4->size
+         if);
+         (if kind = common.compKind then common.compHeadSize*4+size->size if)
+      else (*// virtualDecl // gram.bindingDecl // gram.unExpanded then*)
+         4->size; common.cstInd -> access
+     if)
+--isEnclosing:descriptor--
+(# error:
+     (# errKind: @integer
+     enter errKind
+     do (if errKind
+         // 1 then
+            (if thisInnerLab
+             //1//2 then (N,46)->WE.SemError
+             //3 then (N,10)->WE.SemError
+            if)
+         // 2 then
+            (if thisInnerLab
+             //1//2 then (N,80)->WE.SemError
+             //3 then (N,85)->WE.SemError
+            if)
+        if)
+     #);
+   D: @ASTindex; (*static!*) D1,D2: ^ASTindex;
+   LocalDesc:
+     (#
+     do (if (desc.label = gram.objectDescriptor) and (desc[]->Insertable) then 
+            (* In cases like
+             * 1.   P: (# ... do (#do ... this(P) ... #); ... #)
+             * desc may be the singular insertable descriptor
+             *)
+            desc[]->DescOrigin->D1[]
+         else desc->D1
+        if);
+     #)
+do (* N is a nameApl in desc 
+    *   N: (# ... (# ... this(N) ... #) ... #)
+    * The following code follows origin from 'desc' using N.on(on); the
+    * resulting descriptor is in D1. 
+    * If origin is followed N.on times, we will get the descriptor containing
+    * the declaration of N. Instead we only go N.on-1 times which will
+    * give the descriptor named by N.
+    * A number of special cases be considered during this computation; 
+    * see the comments below.
+    * When D1 is computed it is compared to N.descRef
+    *)
+   (* 193->trace(#do 'Isenclosing: on/thisInnerLab='->xT;
+                on->xI; thisInnerLab->xI; N[]->xA; desc[]->xA; 
+    #);*)
+   on -> N.onForThis;   (* see comment below *) 
+   &ASTindex[]->D1[]; 
+   LocalDesc;
+        (* on=0: In most cases:  P: (# P: ... do this(P) ... #); illegal
+         *       Can also be
+         *            A: (# P: A(# ... this(P) #); #)
+         *       Illegal since this(P) refers to the P in the super-part
+         *       i.e. the one in the A-prefix. Currently there is NO way
+         *       here to refer to the enclosing P.
+         * on=1: D1=desc;
+         * on=2: the following for is empty - see the if;
+         * on>2: on-2 by following for, 1 time by the if;
+         *)
+   (if (on = 0) and (thisInnerLab = 1) (* this *) then 
+       1 -> &Error
+    else
+       (for on-2 repeat D1[]->DescOrigin->D1[] for);
+       (if on >= 2 then
+           (if thisInnerLab <> 1  then 
+               (*  = 1: this
+                * <> 1: inner or lab 
+                * on>=2 in the following cases
+                * 1.   N: (# do (# do inner N #) #)
+                * 2.   N: (# P: (# do inner N #) #)
+                * 3.   N: (# <<SLOT N: doPart>> #);
+                *      ---N:doPart-- do  inner N
+                * Case 1 and 3 are legal. Case 2 is illegal.
+                * D1 denotes the descriptor associated with N.
+                * D denotes the descriptor containing inner N.
+                * If on=2 then we have case 3 and D=D1
+                *)
+               (if D1.label <> gram.doPart then 
+                   (* = doPart: case 3: ok*)
+                   D1.father->D;
+                   (if D.label
+                    // gram.patternDecl // gram.virtualDecl
+                    // gram.bindingDecl // gram.finalDecl 
+                    // gram.staticItem  // gram.staticComponent then
+                       (* dynamicRef,Component and VariablePtn cannot
+                        * appear since they cannot be singular
+                        *)
+                       2 -> Error
+           if)if)if);
+           D1[]->DescOrigin->D1[];
+           (* if case 3. above, then D1=desc(N)*)
+       if);
+       N.descRef->D;
+       (if D.label // gram.virtualDecl // gram.bindingDecl//gram.finalDecl then
+           D.son->D; D.brother->D;
+       if);
+       (if not (D->D1.equal) then 
+           (if D.label = gram.unExpanded then
+               (* N: <<SLOT N:objectDescriptor>> *)
+               D1.origin->D1;
+               (if D1.label = gram.descriptorForm then
+                   D1.xOrigin->D1; (*D1.label=gram.unExpanded *)
+                   (if not (D->D1.equal) then
+                       messagestream.newline; (N[],screen[],10)->thePP;
+                       '*** Warning: in this(P) or inner P, P is a'->messagestream.puttext;
+                       ' descriptor-slot; semantic check missing'->messagestream.putline;
+                       '-----------------'->messagestream.puttext
+                   if)
+                else '%'->tracestream.put; 1->Error if)
+            else 
+               (if thisInnerLab = 1 then
+                   (* this(N) is handled and N is NOT referring to D1.
+                    * Check if N is referring to super-pattern of D1.
+                    * This is a bit fragile. Consider
+                    * 
+                    *    ...; P(# ...  do ..... this(P) ... #)
+                    * 
+                    * When checking this(P), P is searched as a normal
+                    * nameApl, i.e. some visible P-nameDcl must exist.
+                    * If this P-nameDcl is NOT enclosing the prefix test
+                    * is made. The prefix is NOT a nameDecl.
+                    * This means that in
+                    * 
+                    *      P': (# ... P"(#do this(P) #) #)
+                    * 
+                    * this(P) refers to P' and not P".
+                    * 
+                    * See also the comment below at on -> N.on
+                    *)
+                   LocalDesc; (* -> D1 *)
+                   L:
+                     (# on: @integer; Dp: @ASTindex
+                     do (for i: N.on repeat
+                             on + 1 -> on;
+                             D1.son->Dp;
+                             SearchPrefix:
+                               (if Dp.label = gram.prefix then
+                                   Dp.son->getDesc->Dp;
+                                   (if Dp->D.equal then (* ok *)
+                                       on -> N.onForThis; 
+                                       (* N.onForThis is an adjusted 
+                                        * N.on value to hold the correct 
+                                        * origin path for codegen. In
+                                        * checking situations, like 
+                                        * actualDesc, etc., on of P in 
+                                        * this(P) must be the correct
+                                        * origin path for P, i.e. we cannot
+                                        * override N.on with N.onForThis
+                                        *)
+                                       leave L 
+                                    else
+                                       Dp.son -> Dp;
+                                       restart SearchPrefix
+                                   if)
+                               if);
+                             D1[] -> DescOrigin -> D1[];
+                        for);
+                        1 -> Error
+                     #)
+                else 
+                   1->Error 
+       if)if)if);
+       (if thisInnerLab = 3 then (*lab*)
+           (if on = 1 then
+               (if desc[]->insertable then 
+                   (if common.switch[48] then (N,86)->WE.Warning 
+                else (N,86)->WE.SemError if)if)
+            else (if common.switch[48] then 
+                     (N,86)->WE.Warning 
+                  else 
+                     (N,86)->WE.SemError
+       if)if)if);
+   if)
+#)
+---EnterSize:descriptor---
+(# p,m,a,n,d,x: ^ASTindex
+do desc[]->descSonsRef->(p[],m[],a[],n[],d[],x[]);
+   (if (N.label<>gram.empty) then N.NXsize->size if)
+#)
+---ExitSize:descriptor---
+(# p,m,a,n,d,exitP: ^ASTindex
+do desc[]->descSonsRef->(p[],m[],a[],n[],d[],exitP[]);
+   (if (exitP.label<>gram.empty) then exitP.NXsize->size if)
+#)
+---AllocNXtmp:doPart--- (* NOT used anymore - elim *)
+   (* enter a
+    * enter(a,b)
+    * enter(a,(b,c),e)
+    *)
+do (# AllocForObj: @
+        (# E: ^ASTindex;
+           E1,desc: @ASTindex;  MN: @integer;
+           GeneralDesc:
+             (# AllocPrefNX: @
+                  (* perhaps tricky - see docheck:GetPreDesc *)
+                  (# preDesc: @ASTindex
+                  do (if pref.label = gram.prefix then
+                         desc -> GetPreDesc -> preDesc;
+                         (preDesc[],outer) -> GeneralDesc
+                     if)
+                  #);
+                pref,mainP,att,entP,doP,exitP: ^ASTindex;
+                desc: ^ASTindex; outer: @boolean
+             enter(desc[],outer)
+             do (* the following MUST also scan the prefix *)
+                (if ctst then
+                    179->trace(#do 'GeneralDesc:'->xT; desc[] -> xA; (*chain.print*) #)
+                if);
+                desc[]
+                  -> DescSonsRef
+                  -> (pref[],mainP[],att[],entP[],doP[],exitP[]);
+                AllocPrefNX;
+                (if isN then
+                    (if entP.label <> gram.empty then
+                       entP.son -> E1;
+                        (E1[],true,desc[],NXO[],outer)
+                          -> AllocNXtmp;
+                    if)
+                 else
+                    (if exitP.label <> gram.empty then
+                        exitP.son -> E1;
+                        (E1[],false,desc[],NXO[],outer) 
+                          -> AllocNXtmp;
+                if)if)
+             #)
+        enter E[]
+        do (if ctst then 179->trace(#do 'AllocForObj: '-> xT; E[] -> xA #)if);
+           E.son -> E1;
+           (if E1.label = gram.remotePrimitive then
+               (if ctst then
+                   179->trace(#do 'AllocForObj:remPrim: '-> xT; E1[] -> xA #)
+               if);
+               (E[],none,4) -> NXO.AllocVal
+            else
+               (encDesc,E1) -> ActualDesc -> (desc,MN);
+               (if (E1-> SimpleOrRep)
+                // gram.dynamicItem // gram.dynamicComponent
+                // gram.variablePattern
+                // gram.staticItem //gram.staticComponent then
+                   (if ctst then
+                       179->trace(#do 'IsRep:'-> xT; E1[] -> xA #)
+                   if);
+                   (E[],none,4) -> NXO.AllocRep
+                else
+                   L:
+                     (if (desc -> sematt.descKind) 
+                      // standardKind // constKind then
+                         (* NOTE: constKind comes from
+                          *    foo: (# exit (# exit true #)#)
+                          * Current code is NOT optimal, since
+                          * checker does not find out that foo
+                          * is constant.
+                          *)
+                         (if ctst then 
+                             179->trace
+                             (#
+                             do 'AllocForObj:standard/const'->xT; 
+                                outer -> xB;
+                                (*100 -> switchOn;*)
+                                E[] ->xA; 
+                                100 -> switchOff
+                             #)
+                         if);
+                         (# D: @ASTindex
+                         do E.son -> D;
+                            (if outer AND (D.label = gram.nameApl) then
+                                (if D.on = 0 then 
+                                    D.dclRef -> D;
+                                    (E[],none,D.off,Desc.size) -> NXO.MarkVal;
+                                    leave L
+                         if)if)#);
+                         (E[],none,4) -> NXO.AllocVal
+                      else
+                         (if ctst then
+                             179->trace
+                             (#
+                             do 'AllocForObj:general:'->xT;
+                                desc->sematt.descKind->xI;
+                                desc[] -> xA
+                             #)
+                         if);
+                         (if (desc->sematt.descKind) = sematt.unDefined then
+                             (desc[],false,none,-1) -> &ChkForm
+                         if);
+                         (desc[],false) -> GeneralDesc
+           if)if)if)
+        #);
+      EVx: @ASTindex; 
+   do (if ctst then
+          179->trace(#do 'AllocNXtmp:isN:'-> xT; isN->xB; EV[]-> xA#)
+      if);
+      L:
+      (if EV.label 
+       // gram.assignmentEvaluation then
+          (* allocate simple value or list of simple values??*)
+          EV.son -> EV;
+          (if not isN then EV.brother -> EV if);
+          (if ctst then
+              179->trace(#do 'AllocNXtmp2:'-> xT; EV[]-> xA#)
+          if);
+          restart L
+       // gram.insertedItem 
+       // gram.objectDenotation 
+       // gram.dynamicItemGeneration 
+       // gram.dynamicComponentGeneration then
+          (* where do we store the list of offsets?
+           * the following call will override in object EV
+           * and not in the object with the enter/exit element.
+           * We probably have to enumerate whenever being used
+           *)
+          EV[] -> AllocForObj
+       // gram.computedObjectEvaluation then 
+          'AllocNXtmp:ComputedEv'->putline
+       // gram.objectReference 
+       // gram.structureReference then 
+          (# D: @ASTindex
+          do EV.son -> D;
+             (if outer AND (D.label = gram.nameApl) AND (D.on = 0) then
+                 D.dclRef -> D;
+                 (if D.access = common.direct then
+                     (EV[],none,4,false) -> NXO.AllocRef
+                  else 
+                     (EV[],none,4,D.off,false) -> NXO.MarkRef
+                 if)
+              else 
+                 (EV[],none,4,false) -> NXO.AllocRef
+          if)#)
+       // gram.evalList then 
+          EV.son -> EVx; 
+          EVx -> scanList
+          (# E: @ASTindex 
+          do currentNode-> E; 
+             (E[],isN,encDesc[],NXO[],outer) -> AllocNXtmp 
+          #)
+       // gram.integerConst // gram.noneExp then 
+          (* skip if outer level - no attribute space reserved.
+           * Check this for other categories as well
+           *)
+          (EV[],none,4) -> NXO.AllocVal
+       // gram.textConst then
+          (EV[],none,4) -> NXO.AllocVal
+       // gram.repetitionSlice then
+          (EV[],none,4,false) -> NXO.AllocRef
+       // gram.notExp (* perhaps just alloc a boolean *)
+       // gram.unaryMinusExp // gram.unaryPlusExp then
+          (EV[],none,4) -> NXO.AllocVal
+       // gram.unaryPrimitiveExp 
+       // gram.primitive then
+          (EV[],none,4) -> NXO.AllocVal
+       else
+          (if (EV.label -> EvalClass) = EvalClass.binOp then
+              (EV[],none,4) -> NXO.AllocVal
+           else
+              'NXtmp NOT found' -> putline
+          if)
+      if);
+   #)
+   
+---MarkDesc:descriptor---
+(# K: @Integer
+do (if not common.switch[205] and (descKind = callBackKind) then
+       (* callBackKind is ONLY activated when switch[205] is true *)
+       externalKind -> descKind
+   if);
+   (descKind  , 0)   -> K.%putByte;
+   (hasNcode  , 8,1) -> K.%putBits;
+   (hasDo     , 9,1) -> K.%putBits;
+   (hasXcode  ,10,1) -> K.%putBits;
+   (isData    ,11,1) -> K.%putBits;
+   (hasInner  ,12,1) -> K.%putBits;
+   (insertable,13,1) -> K.%putBits;
+   (descAccess,14,1) -> K.%putBits;
+   (* bit 15 is used by the interpreter *)   
+   
+   (if not common.switch[214] then true -> hasAcode if);
+   (if not common.switch[215] then false->hasOnlyInner if);
+   
+   (hasAcode    ,16,1) -> K.%putBits; 
+   (hasOnlyInner,17,1) -> K.%putBits;
+   
+   (if common.switch[211] then (inlineNX ,18,1) -> K.%putBits if);
+   (if common.switch[212] then (inlineDO ,19,1) -> K.%putBits if);
+   (if common.switch[213] then (hasOnlyNX,20,1) -> K.%putBits if);
+
+   (xType,27,5) -> K.%putBits;
+       (* 166->trace(#do 'Type:'->T; xType->I; newline#);
+        * 191->trace(#do (if hasAcode then 'hasAcode'->T if);
+        * (if hasOnlyInner then 'OnlyInner'->T if) #);
+        *)
+   (if desc.label 
+    // gram.objectDescriptor then
+       K -> desc.kind;
+    // gram.doPart then
+       '\n *** marking doPart ! ' -> putline
+    // gram.mainPart then
+       (*  '\n *** marking mainPart ! ' -> putline*)
+    // gram.attributes // gram.attributesForm then
+       '\n *** marking attributes ! ' -> putline
+    else
+       '\n *** marking unknown ! ' -> putline
+   if)  
+#)
+---DumpDesc:descriptor---
+(# ScanImp:
+     (# imp: @ASTindex
+     enter imp
+     do (if not imp.isNull then
+            (if imp.label
+             // gram.objectDenotation then
+                (if imp.evalKind  = insEval then
+                    'Insertion: '->tracestream.puttext; 
+                    (imp.InsOff)->tracestream.putint; tracestream.newline 
+                if)
+             // gram.insertedItem then
+                'Insertion: '->tracestream.puttext; 
+                (imp.InsOff)->tracestream.putint; tracestream.newline
+            if);
+            (if imp.internal then imp.son->&ScanImp if);
+            imp.brother->&ScanImp
+     if)#);
+   pref,mainP,att,entP,doP,exitP: ^ASTindex
+do desc[]->DescSonsRef->(pref[],mainP[],att[],entP[],doP[],exitP[]);
+   '\n-----------'->tracestream.putline;
+   198->trace(#do desc[] -> xA #);
+   att->ScanList
+   (# decl: @ASTindex
+   do currentNode->decl;
+      (if not decl.isSlot then
+          (if decl.label//gram.simpleDecl//gram.repetitionDecl then
+              decl.son->scanlist
+              (# name: @ASTindex
+              do currentNode->name;
+                 (name.off)->tracestream.putint; ' '->tracestream.put;
+                 (if name.access
+                  // common.varInd then 'V'->tracestream.put
+                  // common.cstInd then 'I'->tracestream.put
+                  // common.direct then 'D'->tracestream.put
+                 if);
+                 ' '->tracestream.put; name.getText->tracestream.puttext;
+                 tracestream.newline;
+   #)if)if)#);
+   'Origin:'->tracestream.putText; 
+   (desc.originOff)->tracestream.putInt; tracestream.newline;
+   'Size:  '->tracestream.putText; 
+   (desc.size)->tracestream.putInt; tracestream.newline;
+   'vSize: '->tracestream.putText; 
+   (desc.virtSize)->tracestream.putInt; tracestream.newline;
+   (if (entP.label<>gram.empty) then
+       'Enter off/size:'->tracestream.putText;
+       (entP.NXOff)->tracestream.putInt; 
+       (entP.NXsize)->tracestream.putInt; tracestream.newline;
+   if);
+   (if (exitP.label<>gram.empty) then
+       'Exit  off/size:'->tracestream.putText;
+       (exitP.NXOff)->tracestream.putInt; 
+       (exitP.NXSize)->tracestream.putInt; tracestream.newline
+   if);
+   'Kind:  '->tracestream.puttext;
+   (if (desc->sematt.descKind)
+    // standardKind then 'Standard'->tracestream.putline;
+    // constKind then
+       'Const' -> tracestream.puttext; 
+       (desc.virtSize)->tracestream.putint; tracestream.newline
+    // externalKind then 'externalSub'->tracestream.putline
+    // callBackKind then 'callBack(externa)Sub'->tracestream.putline
+    // generalKind then 'General'->tracestream.putline
+    // dataKind then 'Data'->tracestream.putline
+    // comKind then  'COM'->tracestream.putline
+    // dispatchKind then 'dispatch'->tracestream.putline
+    else 'undefined'->tracestream.putline
+   if);
+   (desc[]->hasNcode,desc[]->hasDo,desc[]->hasXcode,
+   desc[]->isData,desc[]->hasInner,desc[]->insertable,desc[]->inlineNX,
+   desc[]->hasOnlyNX)
+     ->(# B:[8]@boolean
+       enter(B[1],B[2],B[3],B[4],B[5],B[6],B[7],B[8])
+       do (for i:B.range repeat
+               (if i
+                // 1 then 'hasNcode  '->tracestream.puttext
+                // 2 then 'hasDo     '->tracestream.puttext
+                // 3 then 'hasXcode  '->tracestream.puttext
+                // 4 then 'isData    '->tracestream.puttext
+                // 5 then 'hasInner  '->tracestream.puttext
+                // 6 then 'insertable'->tracestream.puttext
+                // 7 then 'inlineNX'->tracestream.puttext
+                // 8 then 'hasOnlyNX'->tracestream.puttext
+               if);
+               (if B[i] then ': True'->tracestream.putLine
+                else ': False'->tracestream.putLine
+       if)for)#);
+   'xType   :'->tracestream.puttext; desc[]->sematt.type->tracestream.putint; 
+   tracestream.newline;
+   
+   doP->&scanImp
+#)
+

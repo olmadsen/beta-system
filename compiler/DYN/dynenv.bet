@@ -1,0 +1,601 @@
+ORIGIN '~beta/guienv/guienvsystemenv';  
+INCLUDE '~beta/guienv/fields';
+INCLUDE '~beta/guienv/stddialogs';
+INCLUDE '~beta/guienv/scrolllists';
+INCLUDE '~beta/basiclib/file';
+INCLUDE '~beta/basiclib/regexp';
+
+INCLUDE 'dynlib';
+INCLUDE '../SEQ/sequencer';
+BODY    '../GENERATOR/oldbackend'
+--- program: descriptor ---
+(* This program is an example of using the 
+ * 
+ *      Dynamic BETA compilation framework
+ * 
+ * from dynlib.bet
+ *)
+systemenv
+(# setWindowEnv::< (# do myWindowEnv[] -> theWindowEnv[] #);
+   MPS: @ASTInterface;
+   beta: ^MPS.treeLevel;
+   DC: @ MPS.dynamicCompiler
+     (# initDyn::<
+          (# thisExecutable: ^text;
+          do true -> withExplicitOrigin;
+             (for i: NoOfArguments-1 repeat
+                  i+1->Arguments->T[];
+                  (if true
+                   // '--noexe'->T.equalNCS then
+                      true->noExe
+                   // '--trace'->T.equalNCS then
+                      screen[]->info[];
+                      verboseLevel.verbose->verboseLevel;
+                      (false,19)->setSwitch;
+                      (false,90)->setSwitch;
+                   // '--traceLoad' -> T.equalNCS then
+                      screen[]->info[];
+                      true -> traceLoad
+                   // '--fulltrace'->T.equalNCS then
+                      true->trace -> traceLoad; screen[]-> msg[]
+                   // '--labeltrace'->T.equalNCS then
+                      true->trace; screen[]-> msg[] -> NT.tracestream[];
+                   // '--tracebifrost'->T.equalNCS then
+                      true->trace; screen[]->msg[];
+                      (*true -> debuggraphic;*)
+                   // '--mute'->T.equalNCS then
+                      &stream[]->info[];
+                      verboseLevel.nothing->verboseLevel;
+                      (true,19)->setSwitch;
+                      (true,90)->setSwitch                      
+                   // '--verbose'->T.equalNCS then
+                      screen[]->info[];
+                      verboseLevel.verbose->verboseLevel;
+                      (false,19)->setSwitch;
+                      (false,90)->setSwitch 
+                   // '--context' -> T.equalNCS then
+                      false -> withExplicitOrigin
+                  if)
+             for);
+             (if msg[] = none then &stream[]->msg[] if);
+             'Dynamic Mjolner Environment ...'->info.puttext;
+             (1 -> Arguments -> thisExecutable[],false) -> NT.init; 
+             '...' -> info.puttext;
+             (* On nti, calling dynenv.exe is normal and the compiler
+              * cannot handle any extension but .bet *)
+             exeFileExtension->thisExecutable.stripExtension;
+             (thisExecutable[],none) -> ActivateCompiler; (* to initialize 
+                                                           * dependency graph *)
+             info.newline;
+          #);
+     #);
+   myWindowEnv: @guienv     
+     (# textWindow: @Window
+          (# newObjButton: @pushButton
+               (# eventHandler:: 
+                    (# onMouseUp:: 
+                         (# R: ^objectEditor
+                         do (ObjC+1->ObjC,false,none ,0)->&ObjectEditor->R[];
+                            R.open;
+                            (if (eTop+1->eTop) > ed.range then
+                                ed.range->ed.extend
+                            if);
+                            R[]->ed[eTop][]
+                         #)
+                    #);
+                  open:: 
+                    (# 
+                    do (5,5)->position; (100,30)->size; 'New object'->label
+                    #)
+               #);
+             newImpButton: @pushButton
+               (# eventHandler:: 
+                    (# onMouseUp:: 
+                         (# R: ^objectEditor
+                         do (ObjC+1->ObjC,true,none ,0)->&ObjectEditor->R[];
+                            R.open;
+                            (if (eTop+1->eTop) > ed.range then
+                                ed.range->ed.extend
+                            if);
+                            R[]->ed[eTop][]
+                         #)
+                    #);
+                  open:: 
+                    (# 
+                    do (125,5)->position; (120,30)->size; 
+                       'New imperative'->label
+                    #)
+               #);
+
+             loadFileButton: @pushButton
+               (# eventHandler::
+                    (# onMouseUp::
+                         (# IM: ^ImagePair; 
+                            fname: ^text; 
+                            PL: ^patternWindow;
+                            OK: @boolean
+                         do L:
+                              (if (textWindow[] 
+                                  -> FileSelectionDialog 
+                                    -> fname[])
+                                  <> NONE then
+                                  fname[] -> includeList.append;
+                                  
+                                  (fname[],none) -> DC.ActivateCompiler
+                                  (# AddedFragment ::
+                                       (#
+                                       do
+                                       #);
+                                     AddedTranslate::
+                                       (#
+                                       do 'Scheduled for translation: '
+                                            -> puttext;
+                                          FullFN[] -> putline;
+                                       #);
+                                     CodeGenfragment::
+                                       (#
+                                       do 'Compiled: ' -> puttext;
+                                          fullFN[] -> putline
+                                       #);
+                                     Report::
+                                       (#
+                                       do leave L
+                                       #)
+                                  #);
+                                  fname[] -> DC.LoadFiles
+                                  (# loadingFile::
+                                       (#
+                                       do 'Loading: '->puttext;
+                                          thisFN[] -> puttext;
+                                          '(' -> put;
+                                          thisNo -> putint;
+                                          ' of ' -> putText;
+                                          noOfFiles -> putint;
+                                          ' files)'->putline
+                                       #);
+                                  #) -> IM[];
+                                  (if IM[] <> NONE then
+                                      (if DC.trace then
+                                          'Set trace' -> putline;
+                                          true -> IM.trace
+                                      if);
+                                      &PatternWindow[]-> PL[];
+                                      IM[] -> PL.IM[];
+                                      fname.copy -> PL.fname[];
+                                      PL.open;
+                              if)if)
+                         #);
+                    #);
+                  open::
+                    (#
+                    do (5,40)->position; (100,30)->size; 
+                       'Load file'->label
+                    #)
+               #);
+             PatternWindow: window
+               (# IM: ^imagePair;
+                  fname: ^text;
+                  list: @textScrollList
+                    (# multipleSelection:: (# do false -> value #);
+                       open::
+                         (# aTextStyle: ^textStyle;
+                         do &textStyle[] -> aTextStyle[];
+                            'Times' -> aTextStyle.name;
+                            12 -> aTextStyle.size;
+                            textFaces.bold -> aTextStyle.face;
+                            aTextStyle[] -> style;
+                            (13, 13) -> position; 
+                            (if IM[]=NONE then
+                                'PatternWindow: IM[]=NONE'->putline;
+                            if);
+                            (100, 50 + IM.prototop*15) -> size;
+                            IM.protoTop -> append;
+                            IM.scanBetaNames
+                            (# i: @integer
+                            do i+1 -> i;
+                               (i, current[]) -> setText;
+                            #)
+                         #);
+                       eventHandler::
+                         (# onSelect::
+                              (# selectedText: ^text;
+                                 PrototypeAdr: @integer;
+                                 F: ##object; 
+                                 theOrigin,R: ^object
+                              do (if item <> 0 then
+                                     item -> getText -> selectedText[];
+                                     selectedText[] -> Title;
+                                     (if doubleClick then
+                                         selectedText[] 
+                                           -> IM.namedOff 
+                                           -> ProtoTypeAdr;
+                                         (if guiEx then
+                                             myWindowEnv[] -> theOrigin[]
+                                          else 
+                                             objectPool[] 
+                                               -> getOrigin
+                                               -> theOrigin[]
+                                         if);
+                                         (theOrigin[],ProtoTypeAdr)
+                                           -> DC.MakeStruc
+                                           -> F##;
+                                         &F[] -> R[];
+                                         (if showSequence then
+                                             R[] -> SequenceCall
+                                          else
+                                             (# dummy: @char do R #)
+                                         if)
+                                     if);
+                                  else
+                                     '<<NONE>>' -> Title;
+                                 if);
+                              #);
+                         #);
+                    #);
+                  open::
+                    (# width, height: @integer;
+                    do fname[] -> title;
+                       list.open;
+                       list.size -> (width, height);
+                       (width+ 26, height + 26) -> size;
+                       true -> list.bindRight;
+                       true -> list.bindBottom;
+                    #);
+                  close::
+                    (#
+                    do (*terminate*)
+                    #);                  
+               #);
+             quitButton: @pushButton
+               (# eventHandler:: 
+                    (# onMouseUp:: 
+                         (# 
+                         do 'Exit dynamic Mjolner environment'
+                              -> DC.info.putline;
+                            terminate
+                         #)
+                    #);
+                  open:: 
+                    (#
+                    do (125,40)->position; (100,30)->size; 'Quit'->label 
+                    #)
+               #);
+             betaenvButton: @ radioButton
+               (# eventHandler::
+                    (# onStateChanged::
+                         (#
+                         do (if state then
+                                includeList.clear;
+                                false -> guiex;
+                                false -> guienvButton.state
+                            if)
+                    #)#);
+                  open::
+                    (#
+                    do 'betaenv' -> label;
+                       (260,5) -> position;
+                       fitToCOntents
+                    #)
+               #);
+             guienvButton: @ radioButton
+               (# eventHandler::
+                    (# onStateChanged::
+                         (#
+                         do (if state then 
+                                includeList.clear;
+                                true -> guiex;
+                                false -> betaenvButton.state
+                            if)
+                    #)#);
+                  open::
+                    (#
+                    do 'guienv' -> label;
+                       (260,25) -> position;
+                       fitToCOntents
+                    #)
+               #);
+             YmerButton: @ pushButton
+               (# eventHandler::
+                    (# onMouseUp::
+                         (# OK: @boolean; IM: ^imagePair;
+                            prototypeAdr: @integer;
+                            Sif: ##object;
+                            theOrigin,theSif: ^object
+                         do (*('Sif','~beta/editor/sif' ,'DynSif')*)
+                            ('Ymer','myYmer','myYmer')
+                              -> LoadApl
+                         #);
+                    #);
+                  open::
+                    (#
+                    do (5,80) -> position; (100,30) -> size; 
+                       'Open Ymer' -> label
+                    #)
+               #);
+             FriggButton: @ PushButton
+               (# eventHandler::
+                    (# onMouseUp::
+                         (#
+                         do ('Frigg'
+                            ,'~beta/interfacebuilder/friggultralib'
+                            ,'friggultra')
+                              -> LoadApl
+                    #)#); 
+                  open::
+                    (#
+                    do (125,80) -> position; (100,30) -> size; 
+                       'Open Frigg' -> label
+                    #)
+               #);
+             LoadApl:
+               (# name,loc,ptn: ^ text; 
+                  OK: @boolean; IM: ^imagePair;
+                  prototypeAdr: @integer;
+                  Apl: ##object;
+                  theOrigin,theApl: ^object
+               enter(name[],loc[],ptn[])
+               do 'Loading ' -> puttext; 
+                  name[] -> puttext; 
+                  ' ...'->puttext;
+                  loc[] -> DC.CompileAndLoad -> (OK,IM[]);
+                  (if OK and (IM[] <> NONE) then
+                      '.' -> put;
+                      ptn[] -> IM.NamedOff -> PrototypeAdr;
+                      (if prototypeAdr = 0 then
+                          'Failed to get prototype for ' -> puttext;
+                          name[] -> putline
+                      if);
+                     myWindowEnv[] -> theOrigin[];
+                      (theOrigin[],PrototypeADr) 
+                        -> DC.MakeStruc
+                        -> Apl##;
+                      '.'->put;
+                      &Apl[] -> theApl[];
+                      '.' -> put;
+                      theApl;
+                      newline;
+                   else
+                      'Error in loading!' -> puttext; name[] -> putline
+                  if);
+               #);
+             sequenceOnButton: @ radioButton
+               (# eventHandler::
+                    (# onStateChanged::
+                         (# 
+                         do (if state then
+                                true -> showSequence;
+                                false -> sequenceOffButton.state
+                            if)
+                         #)
+                    #);
+                  open::
+                    (#
+                    do 'sequenceOn' -> label;
+                       (260,70) -> position;
+                       fitToCOntents
+                    #)
+               #);
+             sequenceOffButton: @ radioButton
+               (# eventHandler::
+                    (# onStateChanged::
+                         (# 
+                         do (if state then
+                                false -> showSequence;
+                                false -> sequenceOnButton.state
+                            if) 
+                         #)
+                    #);
+                  open::
+                    (#
+                    do 'sequenceOff' -> label;
+                       (260,90) -> position;
+                       fitToCOntents
+                    #)
+               #);
+(*             ShowSequenceButton: @PushButton
+               (# eventHandler::
+                    (# onMOuseUp::
+                         (#
+                         do
+                         #)
+                    #);
+                  open::
+                    (#
+                    do (245,80) -> position; (100,30) -> size; 
+                       'Show Sequence' -> label
+                    #)
+ #);*)
+             open:: 
+               (# 
+               do 'Dynamic Mjolner Environment'->title;
+                  (360,120)->size;
+                  quitButton.open;
+                  newObjButton.open;
+                  newImpButton.open;
+                  loadFileButton.open;
+                  betaenvButton.open;
+                  guienvButton.open;
+                  true -> betaenvButton.state;
+                  ymerButton.open;
+                  friggButton.open;
+                  sequenceOnButton.open;
+                  sequenceOffButton.open;
+                  true -> sequenceOffButton.state;
+                  contents->target
+               #);
+             ed: [5] ^objectEditor;
+             eTop: @integer
+          #);
+        ObjC: @integer;
+        objectEditor: window
+          (# textFile: @file;
+             w: @canvas
+               (# doItButton: @pushButton
+                    (# eventHandler:: 
+                         (# onMouseUp:: 
+                              (# T: @text; S: ^text; context: ^object
+                              do 'OBJ' -> T;
+                                 myObjC -> T.putint;
+                                 '.bet' -> T.puttext;
+                                 T[] -> textFile.name;
+                                 textFile.openWrite;
+                                 (if theOrigin[] = none then
+                                     (if guiEx then
+                                         'ORIGIN \'~beta/bifrost/Bifrost\';'
+                                           -> textfile.putLine;
+                                         myWindowEnv[] -> theOrigin[]
+                                      else
+                                         'ORIGIN \'~beta/basiclib/betaenv\';'
+                                           -> textFile.putline;
+                                         objectPool[] (* origin of betaenv *)
+                                           -> getOrigin 
+                                           -> theOrigin[]
+                                     if);
+                                     includeList.scan
+                                     (#
+                                     do 'INCLUDE \'' -> textFile.puttext;
+                                        (current[], '')
+                                          -> MPS.thePathhandler.localpath
+                                          ->textFile.puttext;
+                                        '\';\n' -> textFile.puttext
+                                     #);
+                                     (if guiex then
+                                         '---GuienvLib:attributes---\n'
+                                           -> textFile.putText;
+                                      else
+                                         '---Lib:attributes---\n'
+                                           -> textFile.putText
+                                     if)
+                                  else
+                                     'ORIGIN \''->textFile.putText;
+                                     'OBJ'->textFile.puttext;
+                                     originObjC->textFile.putInt;
+                                     '\'\n'->textFile.puttext;
+                                     (if withExplicitOrigin then
+                                         '---'->textFile.puttext;
+                                         'XOBJ'->textFile.puttext;
+                                         originObjC->textFile.putInt;
+                                         ':attributes---\n'
+                                           ->textFile.putText;
+                                      else
+                                         '---dummy:attributes---\n'
+                                           -> textfile.puttext;
+                                 if)if);
+                                 'PObj' -> textFile.puttext;
+                                 myObjC -> textFile.putInt; 
+                                 ':' -> textFile.put;
+                                 textFile.newline;
+                                 (if withExplicitOrigin then
+                                     '(# <<SLOT XOBJ' -> textFile.puttext;
+                                     myObjC->textFile.putInt;
+                                     ':attributes>>;\n' -> textFile.puttext;
+                                     (if impEd then
+                                         'do '->textFile.putline;
+                                         txtEdit.contents.contents
+                                         -> textFile.putline;
+                                         '#)' -> textFile.putline
+                                      else
+                                         txtEdit.contents.contents -> S[];
+                                         (3,S.length)
+                                          -> S.sub
+                                          -> textFile.puttext;
+                                      if)
+                                   else
+                                     (if impEd then
+                                         '(#do\n   '->textfile.puttext;
+                                         txtEdit.contents.contents
+                                         -> textFile.putline;
+                                         '#)' -> textFile.putline
+                                      else
+                                         txtEdit.contents.contents
+                                         -> textFile.putline;
+                                 if)if);
+                                 textFile.close;
+                                 (if not withExplicitOrigin then
+                                     theOrigin[] -> context[]
+                                  else
+                                     none -> context[]
+                                 if);
+                                 CompileAndExe:
+                                   (# OK: @boolean
+                                   do (textFile.name,context[])
+                                        -> DC.activateCompiler
+                                      (# report::(#do '\n**parse error' -> putline;
+                                         leave CompileAndExe #)#)
+                                        -> OK;
+                                      (if not (OK and not noExe) then
+                                          (theOrigin[],DC.GetImagePair)
+                                            -> DC.executeObject
+                                            -> theObject[]
+                                          (* else some error has happened *)
+                                   if)#)
+                              #)
+                         #);
+                       open:: 
+                         (# 
+                         do (5,5)->position; (100,30)->size; 'DoIt'->label
+                         #)
+                    #);
+                  newSubObjButton: @pushButton
+                    (# eventHandler:: 
+                         (# onMouseUp:: 
+                              (# R: ^objectEditor
+                              do (ObjC+1->ObjC,false,theObject[],myObjC)
+                                   ->&ObjectEditor->R[];
+                                 R.open;
+                                 (*(if (eTop+1->eTop ) > ed.range 
+                                  then ed.range -> ed.extend 
+                                  if);
+                                  R[] -> ed[eTop][]*)
+                              #)
+                         #);
+                       open:: 
+                         (# 
+                         do (120,5)->position;
+                            (130,30)->size;
+                            'New internal-object'->label
+                         #)
+                    #);
+                  open:: 
+                    (# 
+                    do (280,40)->size; doItButton.open; newSubObjButton.open
+                    #)
+               #);
+             open:: 
+               (# 
+               do (if impEd then 'Imperative'->title else 'Object'->title if);
+                  (270,290)->size;
+                  W.open;
+                  txtEdit.open;
+               #);
+             txtEdit: @textEditor
+               (# open:: 
+                    (# s: @styledtext;
+                    do '(# \ndo \n#)' -> s;
+                       s[] -> contents.contents;
+                       (7,7) -> contents.selection;
+                       (5,40)->position;
+                       (250,250)->size;
+                       true->bindBottom;
+                       true->bindRight;
+                       contents[] -> target;
+                    #)
+               #);
+             myObjC,originObjC: @integer;
+             impEd: @boolean;
+             theObject: ^Object;
+             theOrigin: ^object
+          enter (myObjC,impEd,theOrigin[],originObjC)
+          exit THIS(objectEditor)[]
+          #);
+     do textWindow.open;
+        MPS;
+        &MPS.treeLevel[] -> beta[];
+        ('~beta/grammars/beta/beta','beta',screen[])
+          -> beta.betagrammarInit;
+        DC.initDyn;
+     #);
+   includeList: @list(# element::text #);
+   withExplicitOrigin,guiEx,showSequence,noExe: @boolean;
+do
+#) 

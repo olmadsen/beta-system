@@ -1,0 +1,428 @@
+ORIGIN '../imagepair';
+LIB_ITEM 'dynamiccompiler';
+MDBODY nti     'imagepair_ntibody' (* FIXME: '$$' is 'nti\ms' ! *)
+       linux   'imagepair_intelelfbody'
+       x86sol  'imagepair_intelelfbody'
+       default 'imagepair_$body';
+BUILD  nti     '$$/betaLink.obj' 'betaLink.c' 'betacc $0 $1'
+       ppcmac ':$$/betaLink.obj' 'betaLink.c' 'mrc -shared_lib_export on -o $0 $1'
+       default '$$/betaLink.o'   'betaLink.c' '$CC -c -o $0 $1';
+---imagePairLib:attributes---
+AddGroup: external
+  (* Add new_group to list of known data-segment headers 
+   * in runtime system - used by e.g. NextGroup.
+   *)
+  (# new_group: @integer (* address of start of data segment *)
+  enter new_group
+  #);
+FlushCodeCache: 
+  (# start,size: @integer
+  enter(start,size)
+  do <<SLOT FlushCodeCache:descriptor>>
+  #);
+
+xRefTable: hashTable
+  (* Used to collect and allocate offsets for external symbols
+   * to be placed in the Global Offset Table (GOT) on MIPS/SGI
+   *)
+  (#  element:: 
+       (# name: ^text;   (* name of entry point *)
+          adr,           (* absolute address *)
+          off: @integer; (* offset in TOC *)
+          isLocal,isData: @boolean;
+          display:
+            (#
+            do 'Name: ' -> puttext; name[] -> puttext;
+               ' off: ' -> puttext; off -> puthex; 
+               ' adr: ' -> puttext; adr -> puthex;
+               newline
+            #)
+       #);
+     top: @integer;
+     trace: @boolean;
+     H: @honeyMan;
+     NT: ^name_to_address_table;
+     hashFunction::  (#  do e.name[] -> H.hash -> value #);
+     equal::  (#  do left.name[] -> right.name.equal -> value #);
+     add:
+       (# n: ^text; xAdr: @integer; e: ^element; isLoc,isD: @boolean
+       enter(n[],xAdr,isLoc,isD)
+       do (if trace then 'Add: ' -> puttext; n[] -> putline; if);
+	  &element[] -> e[];
+          n[] -> e.name[];
+          isLoc -> e.isLocal; isD -> e.isData;
+          e[] 
+            -> hashFunction
+            -> findIndexed
+          (# predicate::(# do (e[],current[])->equal->value #);
+             notFound::
+               (#
+               do xAdr -> e.adr;
+                  (* e.adr + NT.logical2physical_offset -> e.adr;*)
+                  top + 1 -> top -> e.off;
+                  (if trace then  e.display; if);
+                  e[] -> insert
+               #)
+          #)
+       #);
+     update:
+       (#
+       do scan
+          (#
+          do (if (not current.isLocal) and (current.adr = 0) then
+                 (if trace then
+                     'Update: '->puttext; current.name[] -> puttext;
+                 if);
+                 current.name[] -> NT.lookUp -> current.adr;
+                 (if trace then
+                     'adr: '->puttext;  current.adr -> puthex; newline
+                 if);
+             if)
+          #)
+       #);
+     lookUp:
+       (# N: ^text; e: ^element; theOff: @integer
+       enter N[]
+       do &element[] -> e[]; N[]->  e.name[];
+          L:
+            e[] -> hashFunction
+            -> findIndexed
+          (# predicate::(# do (e[],current[])->equal->value #);
+          do current.off -> theOff;
+             leave L
+          #)
+       exit theOff * 4
+       #);
+     scanRelocated: scan
+        (# GOTadr,itemAdr: @integer
+        do GOTstart + current.off * 4 -> GOTadr;
+           (if trace then 
+               current.display; 
+               'GOTadr: ' -> puttext; GOTadr -> puthex; ':'->put; 
+           if);
+           current.adr -> itemAdr;
+           (if current.isLocal then
+               (if current.isData then
+                   dataStart + itemAdr -> itemAdr
+                else
+                   codeStart + itemAdr -> itemAdr
+           if)if);
+           (if trace then 
+               itemAdr -> puthex; newline; 
+           if);
+           INNER scanRelocated
+        #);
+     init:: (# enter NT[] do H.init #);
+  #);
+---ScanMarksLib:attributes---
+PatchGot: 
+  (* Note: The first attempt to patch relocation for the GOT
+   * was to do it for each entry point.
+   * However, there are entry points that are not marked as such, 
+   * e.g. call back entries, and there are entry points that
+   * should not be patched, e.g. labels usef for leave and
+   * restart out of objects.
+   * A better approach is just to pacth during a normal relocate
+   * where the gp_displ symbols are met. Currently this is also
+   * done to catch the ones not handled by going through the
+   * entry points.
+   * This should be cleaned up, but since NTI seems to need a similar
+   * mechanism we should do the clean-up when we know what NTI needs
+   *)
+  (# relativeOff,absAdr: @integer
+  enter(relativeOff,absAdr)
+  do <<SLOT PatchGOT:descriptor>>
+  #);
+dump:
+  (# isDef: @boolean; 
+  enter isDef
+  do (*true->trace;*)
+     (if not trace then leave dump if);
+     name[]->puttext;
+     (if name.length < 8 then '\t'->put if);
+     (if isDef then
+         '\t Entry:'->puttext;
+         relativeOff->putHex;
+         ' absAdr: ' -> puttext;
+         absAdr -> puthex;
+         (if ep.export then '\t --export'->puttext if);
+      else
+         '\t Ref: '->puttext;
+         relativeOff->putHex;
+         '\t Def: '->puttext;
+         xAdr->putHex;
+         '\t --' -> puttext;
+         mark -> mark_astext -> puttext;
+     if);
+     newline
+  #);
+IsPrototypeOfProcess: External
+  (# data_addr: @integer;
+     is_proto_in_group: @boolean;
+  enter (data_addr)
+  exit is_proto_in_group
+  #);
+---scanMarks:dopart---
+do (for i: im.marktop repeat
+        im.epElm[i][] -> ep[];
+        im.marks[i] 
+          -> mapoffset 
+          -> relativeOff;
+        imStart + relativeOff -> absAdr;
+        (if ep[] <> NONE then
+            (* may be NONE on linux for special relocations.
+             * Never NONE for entryDefs, though.
+             *)
+            ep.t[] -> name[];
+        if);
+        im.types[i] -> mark;
+        INNER ScanMarks
+   for)
+---CollectExternals:doPart---
+do (if mark <> entryDefMark then
+       (if ep[] <> NONE then
+           (if ep.local then
+               true -> isLocal;
+               (if ep.data then
+                   true -> isData;
+                   ep.LIP -> xAdr
+                else
+                   false -> isData;
+                   ep.LIP -> xAdr
+               if)            
+            else
+                  false -> isLocal;
+               ep.t[] -> NT.lookUp -> xAdr
+           if);
+           (ep.t[],xAdr,isLocal,isData) -> private.xRef.Add	
+       if);
+   if);
+---collectEntries:doPart---
+do (# 
+   do (if mark = entryDefMark then
+	  true->dump;
+	  (* ep is never NONE for entryDefMark *)
+	  (if ep.export then
+	      (* The entries in NT are logical addresses:
+	       * Convert from physical (for NTI).
+	       *)
+	      ep.t[] -> name[];
+	      (name[],absAdr - NT.logical2physical_offset) -> NT.add;
+	      (* Check if it is a prototype and add it to IMP if so.
+	       * Notice that you can NOT use the runtime system routine
+	       * IsPrototypeOfProcess at this point since when
+	       * reading in object files, the group_headers of the
+	       * object files are added (AddGroup) *before* they
+	       * are relocated, i.e. the ProtoTable pointer in
+	       * the header is still 0. This makes the runtime system routine
+	       * crash.
+	       *)
+	      (if (not isCode) and 
+                  (name[]->isBetaPrototype)
+		  (*(absAdr->IsPrototypeOfProcess)*)  then
+		  ep.t[]->name[];
+		  (name[],relativeOff,absAdr) -> add
+	      if);
+	      (if isCode and needsGOT then
+                  (* see comment for PatchGOT in above *)
+		  (relativeOff,absAdr) -> PatchGOT
+	      if);
+	      (if false then
+		  (if (not isCode) then
+		      (if (name[]->isBetaPrototype) and
+                          (NOT (absAdr->IsPrototypeOfProcess)) then
+			  'Non-match: name=' -> puttext;
+			  name[] -> puttext;
+			  ', absAdr=' -> puttext;
+			  absAdr -> putint;
+			  newline;
+		      if);
+		      (if (NOT (name[]->isBetaPrototype)) and
+                          (absAdr->IsPrototypeOfProcess) then
+			  'Bad-match: name=' -> puttext;
+			  name[] -> puttext;
+			  ', absAdr=' -> puttext;
+			  absAdr -> putint;
+			  newline;
+		      if);
+		  if);
+	      if);
+	   else
+	      (if isCode and needsGOT then
+                  (* see comment for PatchGOT in above *)                  
+		  (relativeOff,absAdr) -> PatchGOT
+	      if)
+	  if)
+      if)
+   #)
+---relocate:doPart---
+do (if mark <> entryDefMark then
+       (if (ep[]<>NONE) then
+           (if ep.local then
+               (if ep.data then
+                   dataStart+ep.LIP -> xAdr
+                else
+                   codeStart+ep.LIP -> xAdr
+               if)            
+            else
+               ep.t[] -> name[];
+               name[] -> NT.lookUp -> xAdr; 
+		  (if xAdr = 0 then
+                      '**** symbol not defined: '->puttext;
+                      name[] -> putline
+		  if);
+               (* For NTI: *)
+               xAdr + NT.logical2physical_offset -> xAdr;
+           if);
+       if);
+       <<SLOT RelocateBody: descriptor>>
+   if);
+--LoadableImage_loadImage:doPart-- 
+do INNER LoadImage;
+   (if (not isCode) and (private.xRef[] <> NONE) then
+       im.LIP + private.xRef.top*4 +4 -> noOfBytes
+    else
+       im.LIP -> noOfBytes
+   if); 
+   (imStart,noOfBytes) -> flushCodeCache;
+--loadableImage_loadGot:doPart--
+do (*private.xRef.scan
+   (# adr: @integer
+   do (if trace then 
+          current.display; 
+          (GOTstart + current.off * 4) -> puthex; 
+          ':'->put; 
+      if);
+      current.adr -> adr;
+      (if current.isLocal then
+          (if current.isData then
+              dataStart + adr -> adr
+           else
+              codeStart + adr -> adr
+      if)if);
+      (if trace then 
+          adr -> puthex; newline; 
+          ((GOTstart + current.off * 4),GOTstart,private.xRef.top*4,'GOT') 
+            -> ChkAdr;
+      if);
+      (adr) %putLongAt (GOTstart + current.off * 4) 
+    #);
+    *)
+   private.xRef.scanRelocated(#do  (itemAdr) %putLongAt (GOTadr) #);
+   (GOTstart,GOTnoOfBytes) -> FlushCodeCache
+   
+--InProcessImage_AllocImage:doPart--
+do (if (not isCode) and (private.xRef[] <> NONE) then
+       (if trace then 'Alloc GOT: '->puttext; if);
+       (* Global Offset Table (GOT) is needed *)
+       4 + 4 * private.xRef.top -> GOTnoOfBytes;
+       Im.LIP + GOTnoOfBytes -> numBytes
+    else
+       Im.LIP -> numBytes
+   if);
+   numBytes -> allocateImage -> imStart;
+   (if (not isCode) and (private.xRef[]<> NONE) then
+       ImStart + Im.LIP + 4 -> GOTstart;
+       (if trace then GOTstart -> putHex ;newline if)
+   if);
+--InProcessImage_LoadImage:doPart--
+do (if trace then 'Load image: ' -> putline; if);
+   imStart -> adr;
+   (for i: Im.LIP div 4 repeat
+        (if trace then (adr,imStart,Im.LIP,'code') -> ChkAdr; if);
+        (Im.buffer[i] ) %putLongAt (adr);
+        adr + 4 -> adr
+   for);
+   (if (not isCode) and (private.xRef[] <> NONE) then
+       LoadGOT
+   if);
+   (if (not isCode) then imStart -> AddGroup if);
+   
+---InProcessFileImage_AllocGOT:doPart---
+do (if private.xRef[] <> NONE then
+       4 * private.xRef.top + 4 
+         -> GOTnoOfBytes
+         -> allocateImage 
+         -> GOTstart
+   if)
+--InProcessFileImage_LoadImage:doPart---
+do (if private.xRef[] <> NONE then
+       LoadGOT
+   if);
+   (if (not isCode) then imStart -> AddGroup if);
+--OutProcessImage_AllocImage:doPart--
+do optionalStart -> imStart;
+   (if (not isCode) and (private.xRef[] <> NONE) then
+       (* NOTE: GOTnoOfBytes is set in imagepair_CollectExternals *)
+       ImStart + Im.LIP + 4 -> GOTstart;
+   if)
+---imagePair_CollectExternals:doPart---
+do (if needsGot then
+       &xRefTable[] -> private.xRef[];
+       trace -> private.xRef.trace;
+       NT[] -> private.xRef.init; 
+       NT[] -> xData.CollectExternals;
+       NT[] -> xCode.CollectExternals;
+       (* the following is new to handle Valhalla for SGI;
+        * the other laces where GOTnoOfBytes is set may be
+        * removed (I think!)
+        *)
+       4 + 4 * private.xRef.top -> GOTnoOfBytes;
+   if);
+---imagePair_CollectEntries:doPart---
+do NT[] -> xData.CollectEntries;
+   NT[] -> xCode.CollectEntries;
+---imagePair_Relocate:doPart---    
+do (if needsGOT then
+       private.xRef.Update;
+   if);
+   NT[] -> xData.relocate;
+   NT[] -> xCode.relocate;
+   
+---imagePair_transferImage:doPart--
+do (# im: ^image; 
+   do (* a recursive transferImage is not possible since
+       * a virtual cannot be subpatterned
+       *)
+      xCode.transferImage -> im[];
+      codeStart -> outProcessAdr;
+      (for i: im.LIP div 4 repeat
+           im.buffer[i] -> item;
+           INNER xTransferImage;
+           outProcessAdr + 4 -> outProcessAdr                    
+      for);
+      xData.transferImage -> im[];
+      dataStart -> outProcessAdr;
+      (for i: im.LIP div 4 repeat
+           im.buffer[i] -> item;
+           INNER xTransferImage;
+           outProcessAdr + 4 -> outProcessAdr                    
+      for);
+      (if private.xRef[] <> NONE then
+          private.xRef.scanRelocated
+          (#
+          do GOTadr -> outProcessAdr;
+             itemAdr -> item;
+             INNER xTransferImage;
+      #)if)
+   #);
+
+---imagepair_displayImageBounds:doPart--
+do 'codeStart: ' -> puttext; codeStart -> puthex;
+   '     codeSize: ' -> puttext;  xCode.im.LIP -> puthex;
+   newline;
+   'dataStart: ' -> puttext; dataStart -> putHex;
+   '     dataSize: ' -> puttext;  xData.im.LIP -> puthex;
+   newline;
+   (if private.xRef[] <> NONE then
+       ' GOTstart: '-> puttext; GOTstart -> puthex;
+       ' GOTnoOfBytes: ' -> puttext; GOTnoOfBytes -> puthex;
+       ' totalData: ' -> puttext; 
+       xData.im.LIP + GOTnoOfBytes -> puthex;
+   if);
+   newline;
+
+---imagepair_private:descriptor---
+(#   xRef: ^xRefTable; 
+#)
+

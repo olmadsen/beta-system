@@ -1,0 +1,1431 @@
+ORIGIN 'sematt';
+LIB_ITEM 'betacompiler';
+INCLUDE '~beta/betaast/semanticerrortext'
+---semattlib:attributes---
+descRefError:
+  (# N: ^ASTindex; T: @text
+  enter N[]
+  do 'The semantic link from "' -> T;
+     (N[],T[],500) ->thePP; 
+     '" its descriptor is invalid.\n' 
+     'This may be due to a compiler error or because \n'
+     'an ast/astL-file has been deleted during compilation'
+       -> T.puttext;
+     T[] -> ThisTranslate.SystemException
+  #)
+---sematt_attDesc_display:doPart---
+do (# xA: 
+        (# T: ^text; N: ^ASTindex 
+        enter(T[],N[])
+        do T[] -> tracestream.puttext; 
+           (N[],traceStream[],5) -> thePP
+        #);
+      T: ^text;
+   do ('Attribute: ',node[]) -> xA;
+      ('\n    apl: ',apl[]) -> xA;
+      ('\n    dcl: ',dcl[]) -> xA;
+      ('\n   sort: ',sort[]) -> xA;
+      ('\n   spec: ',spec[]) -> xA;
+      ('\n   desc: ',desc[]) -> xA;
+      (if isRep then
+          '\n  isRep: true' -> tracestream.puttext 
+       else
+          '\n  isRep: false' -> tracestream.puttext
+      if);
+      '\n   kind: ' -> tracestream.puttext;  
+      (if kind
+       // undefined then 'undefined' -> T[]
+       // standardKind then 'standard' -> T[]
+       // constKind then 'const' -> T[]
+       // externalKind then 'external' -> T[]
+       // generalKind then 'general' -> T[]
+       // dataKind then 'data' ->T[]
+       // callBackKInd then 'callBack' -> T[]
+       // externalVirtualKind then 'externalVirtual' -> T[]
+       // comKind then 'com' -> T[]
+       // holderKInd then 'holder'-> T[]
+       // stateKind then 'state' -> T[]
+       else
+      if);
+      (if T[] <> NONE then T[] -> tracestream.puttext
+       else kind -> tracestream.putint
+      if);
+      tracestream.newline;
+      inner display
+   #)
+---sematt_attDesc:doPart---
+do (if ctst then 192 -> trace(#do 'attDesc: ' -> xT; node[] -> xA; #)if);
+   node[] -> sematt.GetName2 -> apl[];
+   (if apl.label 
+    // gram.objectDescriptor 
+    // gram.unexpanded then  
+       (* objectDescriptor
+        * Is this the right abstraction then?
+        * Apl,dcl,sort,spec,isRep,spec are undefined?
+        *)
+       apl -> spec
+    else
+       apl.dclRef -> dcl; 
+       dcl.sort -> sort;
+       sort.son -> spec; spec.brother -> spec;
+       (if sort.label = gram.repetitionDecl then
+           true -> isRep;
+           spec.brother -> spec
+       if);
+   if);
+   (if ctst then 192 -> trace(#do 'attDesc: ' -> xT; spec[] -> xA; #)if);
+   spec[] -> sematt.DescOfSpec -> desc[]   
+--chkComputedEval:descriptor--
+(# cmpEvalErr:
+     (# n: @integer ; desc: ^ASTindex
+     enter(n,desc[]) 
+     do true->cmpEvErr; 
+        (N,EV[],desc[]) -> error 
+     #);
+   cmpEvErr: @boolean;
+   PC:
+     (# chain: ^DB.superChain
+     enter chain[]
+     do (if ctst then
+            176->trace
+            (#do(if chain[] = none then 'Chain is none'->xT else chain if)
+            #)
+        if)
+        #);
+   checkLoop: @
+     (#  ev: ^ASTindex; R: [4] ^ASTindex; top: @integer; ok: @boolean
+     enter ev[]
+     do Check:
+          (#
+          do (for i: top repeat 
+                  (if R[i] -> ev.equal then
+                      false -> ok;
+                      leave check
+             if)for);
+             true -> ok;
+             (if (top+1->top) > R.range then R.range -> R.extend if);
+             &ASTindex[] -> R[top][];
+             EV -> R[top]
+          #)
+     exit ok
+     #);
+   
+   chkCompEv:
+     (# EV,V,refDesc: ^ASTindex; EV1,EV2: @ASTindex;
+        chain,chain1: ^DB.superChain;
+        MN,ptnForm: @integer;
+     enter(chain[],EV[])
+     do (if ctst then
+            175->trace(#do 'chkCompEv:BEGIN:'->xT; EV[]->xA; chain[]->PC #)
+        if);
+        (if not (EV[] -> checkLoop) then 
+            (121,none) -> cmpEvalErr;
+            integerDesc[] -> refDesc[];
+            leave ChkCompEv 
+        if);
+        DoChk:
+        (if EV.label
+         // gram.assignmentEvaluation then
+            EV.son->EV1; EV1.brother->EV1;
+            (chain[],EV1[])->&chkCompEv->(V[],chain[],refDesc[])
+         // gram.insertedItem
+         // gram.objectDenotation
+         // gram.dynamicItemGeneration // gram.dynamicComponentGeneration 
+            then
+            (# exitScanner: @GeneralNXScanner
+                 (# GetTheDesc::< (* chain is in enter/exit of GetTheDesc *)
+                      (# 
+                      do (if ctst then
+                             175->trace(#do 'chkCompX: '->xT; N[]->xA; chain[]->PC#)
+                         if);
+                         (chain[],N)->DB.theDesc->(N,MN,chain[],ptnForm);
+                         (if ctst then
+                             175->trace(#do 'chkCompY'->xT; chain[]->PC #)
+                         if)
+                 #)#);
+               tN,desc: @ASTindex;
+               PL,MN: @integer; ptnForm: @integer
+            do (if ctst then
+                   175->trace(#do 'chkCompEvObj1:'->xT; EV[]->xA #)
+               if);
+               EV.son->tN;
+	       (* chain is the environment to lookup EV *)
+               (chain[],tN)->DB.theDesc->(desc,MN,chain[],ptnForm);
+               (* chain is the environment including EV *)
+               (if desc.label = gram.objectDescriptor then
+                   175->trace(#do 'desc:\n'->xT; desc[]->xA #);
+                   (if (desc->sematt.desckind) = beingChecked then
+                       (84,desc[]) -> cmpEvalErr;
+                       leave DoChk
+               if)if);
+               (if ctst then
+                   175->trace(#do 'chkCompEvObj2:'->xT; EV[]->xA; chain[]->PC #);
+               if);
+	       (* exitScanner gets a chain including desc! *)
+               (desc[],false,chain[])->exitScanner;
+               (if ctst then 175->trace(#do 'chkCompEvObj3:'->xT; EV[]->xA; chain[]->PC #)
+               if);
+               (if exitScanner.length<>1 then (82,none)->cmpEvalErr
+                else 
+		   (* getNXElm should return exactly one element *)
+                   1->exitScanner.getNXElm->(V[],PL,chain[]);
+		   (* chain is where to lookup V *)
+                   (if ctst then
+                       175->trace(#do 'chkCompEvObj4:'->xT; EV[]->xA; chain[]->PC #)
+                   if);
+                   (* V must be declared as V: ^T *)
+                   (chain[],V[])->&chkCompEv->(V[],chain[],refDesc[])
+		   (* chain does contain refDesc *)
+               if);
+               (if ctst then
+                   175->trace
+                   (#do'chkCompEvObj5:'->xT; EV[]->xA; 
+                      refDesc[]->xA; chain[]->PC #)
+               if);
+            #)
+         // gram.objectReference then
+            (if ctst then 175->trace(#do 'chkCompEv:Ref1:'->xT; EV[]->xA #)
+            if);
+            EV[]->V[]; 
+            V.son->EV1; EV1.son->EV1; 
+	    (* chain is where to lookup EV1 *)
+            (chain[],EV1)->DB.theDesc->(EV1,MN,chain[],ptnForm);
+	    (* chain includes EV1, which is the descriptor for EV1.old *)
+            EV1[]->refDesc[];
+            (if ctst then 
+                175->trace(#do 'chkComputedEv:Ref2:'->xT; V[]->xA; refDesc[]->xA #)
+            if);
+            (if EV1.label//gram.objectDescriptor then
+             // gram.virtualDecl //gram.bindingDecl //gram.finalDecl then
+	        'ChkComputedRemote: virtual problem'-> ThisTranslate.SystemException
+             else 'ChkComputedRemote: desc. problem'-> ThisTranslate.SystemException
+            if)
+         else (83,none) -> cmpEvalErr; EV[]->V[]
+        if);
+     exit(V[],chain[],refDesc[])
+     #);
+   EvRemEV,EV1,N1: @ASTindex; V: ^ASTindex;
+do (* EV = (computedRemote <evaluations> <name ) *)
+   (if ctst then
+       175->trace(#do 'ChkComputedEval:BEGIN:'->xT; EV[]->xA #)
+   if);
+   EV.son->EV1; EV1.brother->N1; N1[]->N[];
+   EV1->scanlist
+    (# i: @integer 
+    do currentNode->EvRemEV->EV1; 
+       (if (i+1->i) = 2 then (81,none)->cmpEvalErr if)
+    #);
+   EvRemEV[]->remEv[]; (* EvRemEV is used because of an earlier problem
+			* with aliasing where remEV was overwritten
+			*)
+   (* chain is where to lookup EV1 *)
+   (chain[],EV1[])->chkCompEv->(V[],chain[],refDesc[]);
+   (* chain does now also include refDesc *)
+   (* V = (objectReference (objectDenotation <attDen>)) *)
+   (if cmpEvErr then integerDesc[]->refDesc[]
+    else
+       V.son->V; V.son->V; V[]->ref[]
+   if);
+   (if ctst then
+       175->trace(#do 'chkComputedEval:END:'->xT; ref[]->xA; refDesc[]->xA #)
+   if);
+#)
+---typeString:doPart---
+do (if T >= 16 then 'C'->S if);
+   (if T mod 16
+    // boolType    then '"boolean"'->S.puttext
+    // cboolType   then '"boolean constant"'->S.puttext
+    // charType    then '"char"'->S.puttext
+    // cCharType   then '"char constant"'->S.puttext
+    // valType     then '"integer"'->S.puttext
+    // cvalType    then '"integer constant"'->S.puttext
+    // realType    then '"real"'->S.puttext
+    // crealType   then '"real constant"'->S.puttext
+    // VIrefType   then '"reference"'->S.puttext
+    // CIrefType   then '"reference constant"'->S.puttext
+    // VCrefType   then '"component reference"'->S.puttext
+    // CCrefType   then '"component reference constant"'->S.puttext
+    // noneType    then '"none-reference"'->S.puttext
+    // vStrucType  then '"pattern variable"'->S.puttext
+    // cStrucType  then '"pattern variable constant"'->S.puttext
+    // repType     then '"repetiton"' -> S.puttext
+    // crepType    then '"repetiton constant"' -> S.puttext
+    // primType    then '"primitive"' -> S.puttext
+    // cPrimType   then '"primitive constant"' -> S.puttext
+    // listType    then '"list"'->S.puttext       
+    // ref2repType then 'ref2rep' -> S.puttext
+    // tosType     then '"tos-primitive"'->S .puttext
+    // int64Type   then '"int64"'->S.puttext
+    // ref2repType then '"ref2rep"'->S.puttext
+    else 
+       '"unknown"' -> S.puttext; 
+       '(' -> S.put; T->S.putint; ')' -> S.put
+  if);
+ 
+---EvalClassInit:descriptor---
+(#
+do binOp->EC[gram.eqExp]; relOp->opT[gram.eqExp];
+   binOp->EC[gram.neExp]; relOp->opT[gram.neExp];
+   binOp->EC[gram.ltExp]; allRelOp->opT[gram.ltExp];
+   binOp->EC[gram.leExp]; allRelOp->opT[gram.leExp];
+   binOp->EC[gram.gtExp]; allRelOp->opT[gram.gtExp];
+   binOp->EC[gram.geExp]; allRelOp->opT[gram.geExp];
+   binOp->EC[gram.plusExp]; addOp->opT[gram.plusExp];
+   binOp->EC[gram.minusExp]; addOp->opT[gram.minusExp];
+   binOp->EC[gram.orExp]; boolOp->opT[gram.orExp];
+   binOp->EC[gram.xorExp]; boolOp->opT[gram.xorExp];
+   binOp->EC[gram.timesExp]; addOp->opT[gram.timesExp];
+   binOp->EC[gram.realDivExp];  addOp->opT[gram.realDivExp];
+   binOp->EC[gram.intDivExp]; addOp->opT[gram.intDivExp];
+   binOp->EC[gram.modExp]; modOp->opT[gram.modExp];
+   binOp->EC[gram.andExp]; boolOp->opT[gram.andExp];
+   
+   (* addOp is not always correct, since primtive exps can e.g. be boolean;
+    * primitiveExp was added due to implementation of enter/exit entrypoints
+    * and allocation of tmp vars; it has not been considered if 
+    * unaryPrimitive Ops should be classified as well
+    *)
+   binOp->EC[gram.primitiveExp]; addOp->opT[gram.primitiveExp];
+   
+   unOp->EC[gram.unaryPlusExp];  addOp->opT[gram.unaryPlusExp];
+   unOp->EC[gram.unaryMinusExp]; addOp->opT[gram.unaryMinusExp];
+   unOp->EC[gram.notExp]; boolOp->opT[gram.notExp];
+   
+   (* operators like +,-,*,/,div *)
+   (valType,valType,valType)->addMap.def;
+   (valType,realType,realType)->addMap.def;
+   (realType,valType,realType)->addMap.def;
+   (realType,realType,realType)->addMap.def;
+   (valType,charType,valType)->addMap.def;
+   (charType,valType,valType)->addMap.def;
+   (charType,charType,valType)->addMap.def;
+   
+   (primType,valType,primType)->addMap.def;
+   (primType,charType,primType)->addMap.def;
+   (primType,boolType,primType)->addMap.def;
+   (valType,primType,primType)->addMap.def;
+   (charType,primType,primType)->addMap.def;
+   (boolType,primType,primType)->addMap.def;
+   (realType,primType,primType)->addMap.def;
+   (primType,realType,primType)->addMap.def;
+   (primType,primType,primType)->addMap.def;
+   
+   (* opetator: mod. NOT defined for real *)
+   (valType,valType,valType)->modMap.def;
+   (valType,charType,valType)->modMap.def;
+   (charType,valType,valType)->modMap.def;
+   (charType,charType,charType)->modMap.def;
+   (primType,primType,primType)->modMap.def;
+   
+   (* relational operators: = , <> *)
+   (valType,valType,1)->relMap.def;
+   (valType,realType,1)->relMap.def;
+   (realType,valType,1)->relMap.def;
+   (realType,realType,1)->relMap.def;
+   (valType,charType,1)->relMap.def;
+   (charType,valType,1)->relMap.def;
+   (charType,charType,1)->relMap.def;
+   (boolType,boolType,1)->relMap.def;   
+
+   (VIrefType,VIrefTYpe,2)->relMap.def;
+   (VCrefType,VCrefTYpe,2)->relMap.def;
+   (VstrucType,VstrucType,2)->relMap.def;
+   (noneType,VIrefTYpe,1)->relMap.def;
+   (noneType,VCrefTYpe,1)->relMap.def;
+   (noneType,VstrucType,1)->relMap.def;
+   (VIrefType,noneType,1)->relMap.def;
+   (VCrefType,noneType,1)->relMap.def;
+   (VstrucType,noneType,1)->relMap.def;
+   (noneType,noneType,1)->relMap.def;
+   
+   (primType,valType,1)->relMap.def;
+   (primType,charType,1)->relMap.def;
+   (primType,boolType,1)->relMap.def;
+   (valType,primType,1)->relMap.def;
+   (charType,primType,1)->relMap.def;
+   (boolType,primType,1)->relMap.def;
+   (primType,primType,1)->relMap.def;
+
+   (* relational operators: <, <=, , >, >= *)
+   (valType,valType,1)->allRelMap.def;
+   (valType,realType,1)->allRelMap.def;
+   (realType,valType,1)->allRelMap.def;
+   (realType,realType,1)->allRelMap.def;
+   (valType,charType,1)->allRelMap.def;
+   (charType,valType,1)->allRelMap.def;
+   (charType,charType,1)->allRelMap.def;
+   (boolType,boolType,1)->allRelMap.def;   
+   
+   (VstrucType,VstrucType,2)->allRelMap.def;
+   (noneType,VstrucType,1)->allRelMap.def;
+   (VstrucType,noneType,1)->allRelMap.def;
+   
+   (primType,valType,1)->allRelMap.def;
+   (primType,charType,1)->allRelMap.def;
+   (primType,boolType,1)->allRelMap.def;
+   (valType,primType,1)->allRelMap.def;
+   (charType,primType,1)->allRelMap.def;
+   (boolType,primType,1)->allRelMap.def;
+   (primType,primType,1)->allRelMap.def;
+   
+   (* boolean operators: and, or, xor *)
+   (boolType,boolType,boolType)->boolMap.def;
+   (boolType,primType,primType)->boolMap.def;
+   (primType,boolType,primType)->boolMap.def;
+   
+   (* assignment -> *)
+   (valType,valType,1)->assignMap.def;
+   (valType,realType,1)->assignMap.def;
+   (realType,valType,1)->assignMap.def;
+   (realType,realType,1)->assignMap.def;
+   (valType,charType,1)->assignMap.def;
+   (charType,valType,1)->assignMap.def;
+   (charType,charType,1)->assignMap.def;
+   (boolType,boolType,1)->assignMap.def;
+   
+   (* int64 *)
+   (int64Type,int64Type,1)->assignMap.def;
+   (valType,int64Type,1)->assignMap.def;
+   (int64Type,valType,1)->assignMap.def;
+   
+   (VIrefType,VIrefTYpe,2)->assignMap.def;
+   (VCrefType,VCrefTYpe,2)->assignMap.def;
+   (VstrucType,VstrucType,2)->assignMap.def;
+   (noneType,VIrefTYpe,1)->assignMap.def;
+   (noneType,VCrefTYpe,1)->assignMap.def;
+   (noneType,VstrucType,1)->assignMap.def;
+   
+   (repType,VIrefType,3)->assignMap.def;  (* 'fisk' -> S[] *)
+   (CharType,VIrefType,3)->assignMap.def; (* 'a' -> S[] *)
+   (charType,repType,3)->assignMap.def; 
+   (repType,repType,9)->assignMap.def;
+   
+   (* to handle value/ext -> REP *)
+   (valType,repType,5) -> assignMap.def; 
+   (charType,repType,6) -> assignMap.def; 
+   (boolType,repType,7) -> assignMap.def; 
+   (realType,repType,8) -> assignMap.def; 
+   (VIrefType,repType,11) -> assignmap.def;
+   (CIrefType,repType,11) -> assignmap.def;
+   
+   (ref2repType,ref2repType,10) -> assignMap.def; (* R1[] -> R2[] 
+                                                   * where R1,R2: [...] ...*)
+   
+   (* a lot of code assigns to/from boolean and integer
+    * and/or compares boolean and integer
+    * make a special case of this!
+    *)
+   (boolType,valType,4)->assignMap.def;
+   (valType,boolType,4)->assignMap.def;
+   (boolType,valType,4)->relMap.def;
+   (valType,boolType,4)->relMap.def;
+   (boolType,valType,4)->allRelMap.def;
+   (valType,boolType,4)->allRelMap.def;
+   (boolType,valType,4)->boolMap.def;
+   (valType,boolType,4)->boolMap.def;
+   (boolType,valType,-1)->addMap.def;
+   (valType,boolType,-1)->addMap.def;
+   
+   (primType,primType,1)->assignMap.def;
+   (primType,valType,1)->assignMap.def;
+   (primType,boolType,1)->assignMap.def;
+   (primType,charType,1)->assignMap.def; 
+   (primType,realType,1)->assignMap.def; 
+   (valType,primType,1)->assignMap.def;   
+   (charType,primType,1)->assignMap.def;   
+   (boolType,primType,1)->assignMap.def;
+   (realType,primType,1)->assignMap.def;
+   (primType,VstrucType,1)->assignMap.def;
+   (repType,primType,1)->assignMap.def;
+#)
+---descsonsref:doPart---
+do DecodeDesc:
+     (if desc.label 
+      // gram.objectDescriptor then
+         desc.son -> pre;  
+         pre.brother -> mainP; (* main-part*) 
+         (if mainP.isSlot then
+	     integerDesc.son->att; att.brother->att; att.son->att
+	     (* this is a bloody hack in order to make sure that
+	      * att, etc. are NOT null but gram.empty 
+	      *)
+          else mainP.son->att; (* attribute-part *)
+         if);
+         att.brother->enterP; (* actionPart *)
+         enterP.son->enterP;  (* enter Part*)
+         enterP.brother->doP;     (* doPart *)
+         doP.brother->exitP;     (* exitPart *)
+         (if (doP.label<>gram.empty)  then
+             (if not doP.isSlot then
+	         doP.son->doP (* impList of doPart *)
+         if)if)
+      // gram.mainPart then
+         (# D1: @ASTindex; p,a,n,d,x: ^AStindex
+         do desc[] -> mainPartSons -> (D1,p[],a[],n[],d[],x[]);
+            p -> pre; a -> att; n -> enterP; d->doP; x -> exitP
+         #)
+      // gram.labelledImp then
+         (* this may happen in case of errors like
+          *    do ...; P: (# x: @integer enter x do ...; e->&P #); ... 
+          * I.e. P is a labbellImp where the imp is a descriptor, but
+          * P is used as a pattern inside the dopart of P.
+          * This error has been reported when checking &P, so the following
+          * code is just to ensure that the checker does not chrash
+          *)
+         superObject[]->desc[];
+         restart DecodeDesc
+      else (desc,'DescSons') -> &TypeErr 
+     if);
+   none->desc[]
+---mainPartSons:doPart---
+do &ASTindex[]->att[]; &ASTindex[]->enterP[];
+   &ASTindex[]->doP[]; &ASTindex[]->exitP[];
+   mainP.son->att; att.brother->enterP; enterP.son->enterP;
+   enterP.brother->doP; doP.brother->exitP;
+   (if doP.label <> gram.empty then
+       (if not doP.isSlot then
+           doP.son->doP (* impList of doPart *)
+   if)if);
+   mainP.xOrigin -> theSlot;
+   theSlot.slotOrigin -> thisDesc;
+   &ASTindex[]->pre[]; thisDesc.son->pre;
+   (if ctst then
+       191->trace
+       (#
+       do 'mainPartsSons:'->xT;
+          mainP[] -> xA; xN;
+          theSlot[] -> XA; xN;
+          thisDesc[] -> xA;
+   #)if)
+---MainPartDesc:doPart---
+do &ASTindex[] -> theDesc[];
+   mainP.father -> theDesc;
+   (if theDEsc.isNull then
+       (* a fragment form *)
+       mainP.xOrigin -> theDesc;
+       193->trace(#do 'MainPartDesc1:'->xT; theDesc[]->xA #);
+       theDesc.slotOrigin -> theDesc;
+   if);
+   (if ctst then
+       193->trace(#do'MainPartDesc2:'->xT; mainP[] -> xA; theDesc[]->xA#)
+   if);
+---EvCase:descriptor--
+(# ObjCase:
+     (# EVx: @ASTindex
+     do (*301->trace(#do 'ObjCase: '->xT; EV.evalKind->XI; EV[] -> XA #);*)
+	EV.son->EVx;
+        (if EVx.label=gram.remotePrimitive then EV[]->newRemotePrim
+	else
+        (if EV.EvalKind
+         // Sematt.insEval then DescCase
+         // Sematt.simpleEval then Ev[]->simple
+         // sematt.realEval then Ev[]->realEv
+         // SemAtt.repValEval // repRefEval then
+            (Ev[],EV.evalKind,NONE,NONE)->repetition
+         // SemAtt.itemEval then Ev[]->itemEv
+         // SemAtt.compEval then Ev[]->compEv
+         // SemAtt.sysKind then Ev[]->sysEv
+         // SemAtt.repKind then Ev[]->repOp
+         else (* not checked! Must be revised!!!!*) EV[]->objDen
+     if)if)#);
+   DescCase:
+     (# desc,objSpec,dclId: @ASTindex; 
+        kind, isVirt: @integer (* eliminate*)
+     do EV.son->objSpec;
+        (if objSpec.label=gram.remotePrimitive then
+	    EV[]->newRemotePrim
+         else
+	    objSpec->Descrip-> desc;
+            (if desc.label 
+             // gram.objectDescriptor then
+                (if (desc->DescKind->kind)
+                 // generalKind // callBackKind then 
+                    (if (desc[]->sematt.inlineNX) then
+                        (EV[],objSpec[],desc[],isVirt)->inlineNX
+                     else
+                        (EV[],objSpec[],desc[],isVirt)->insert
+                    if)
+                 // constKind then (EV[],desc.attSize)->constDesc
+                 // externalKind then 
+                    objSpec->getName->objSpec; objSpec.dclRef->dclId;
+                    (EV[],dclId[],desc[],isVirt)->cProcDesc
+                 // stanDardKind then EV[]->standardDesc
+                 // externalVirtualKind // dispatchVirtualKind then
+                    objSpec->getName->objSpec; objSpec.dclRef->dclId;
+                    'descCase:'->puttext;
+                    kind -> putint; newline;
+                    (EV[],dclId[],desc[],isVirt,kind)-> externalVirtual
+                if)
+             else (* virtual, binding or unexpanded or ptn var?? *)
+                  (* 301->trace(#do 'DescCase:insert'->xT; EV[]->xA; desc[]->xA#);*)
+                (if desc.label 
+                 // gram.virtualDecl // gram.bindingDecl 
+                 // gram.finalDecl then
+                    (# D: @ASTindex; K: @integer
+                    do desc.son -> D; D.brother -> D;
+                       L:
+                         (if (D.label=gram.objectDescriptor)
+                             and (((D -> DescKind -> K) = externalVirtualKind)
+                             or (K = dispatchVirtualKind)) then
+                             objSpec->getName->objSpec; 
+                             objSpec.dclRef->dclId;
+                             (* pass D instead of desc;
+                              * see evbody:externalVirtual*)
+                             (EV[],dclId[],D[],isVirt,K)-> externalVirtual
+                          else
+                             (if D.label = gram.nameApl then
+                                 D.descRef -> D;
+                                 restart L
+                              else
+                                 (EV[],objSpec[],desc[],isVirt)
+                                   -> insert (*A new virtual??? NO?*)
+                             if)
+                    if)#)
+                 else (* unexpanded or ptn var ? *)
+                    (EV[],objSpec[],desc[],isVirt)->insert 
+                if)
+     if)if)#);
+do (if stest then
+       301->trace(# do 'evcase:'->xT; EV[]->xA#);
+   if);
+   L:
+     (if EV.label
+      // gram.assignmentEvaluation then 
+         EV.son->EV1; EV1.brother->EV2; (EV1[],EV2[])-> assign
+      // gram.insertedItem then DescCase
+      // gram.objectDenotation then objCase
+      // gram.dynamicItemGeneration then
+	 (# desc,objSpec: @ASTindex; isVirt: @integer
+         do EV.son->objSpec->Descrip-> desc;
+            (if desc.label 
+             // gram.objectDescriptor then
+                (if (desc->DescKind)
+                 // generalKind // callBackKind then  EV[]->dynItem
+                    (*(EV[],objSpec[],desc[],isVirt)->insert*)
+                 // constKind then (EV[],desc.attSize)->constDesc
+                 // externalKind then (EV[],objSpec[],desc[],isVirt)->cProcDesc
+                 // stanDardKind then EV[]->standardDesc
+                 else   EV[]->dynItem
+		    (*(EV[],objSpec[],desc[],isVirt)->insert *)
+                if)
+             else (* virtual, binding or unexpanded *) EV[]->dynItem
+		(* (EV[],objSpec[],desc[],isVirt)->insert *)
+		(* perhaps a new virtual *)
+         if)#)
+      // gram.dynamicComponentGeneration then  EV[]->dynComp
+      // gram.computedObjectEvaluation then 
+         EV.son->EV1; EV1[]->EV[]; restart L
+      // gram.objectReference then 
+         EV.son->EV1;
+         (if EV1.label 
+          // gram.DynamicItemGeneration then EV1[]->dynItemRef
+          // gram.DynamicComponentGeneration then EV1[]->dynCompRef
+          else EV1[]->objRef
+         if)
+      // gram.evalList then EV[]->evalList;
+      // gram.RepetitionSlice then
+         (# EV1,EV2: @ASTindex
+	 do EV.son->EV1; EV1.brother->EV1; EV1.brother->EV2;
+	    (EV[],EV.evalKind,EV1[],EV2[])->repetition
+	 #)
+      // gram.StructureReference then EV[]->StrucRef
+      // gram.primitive then EV[]->primitive
+      // gram.address then EV[]->address
+      // gram.integerConst then EV[]->intCst
+      // gram.textConst then EV[]->txtCst
+      // gram.noneExp  then EV[]->noneExp
+      // gram.unaryMinusExp then EV[]->unMinus
+      // gram.unaryPlusExp then EV[]->unPlus
+      // gram.notExp then EV[]->notExp
+      // gram.primitiveExp then EV[]->newBinaryPrim
+      // gram.unaryPrimitiveExp then EV[]->newUnaryPrim
+      else (* !!!!!! evalClass may not be called with lexems *)
+         (if (EV.label->SemAtt.evalClass) = evalClass.binOp then 
+             EV.son->EV1; EV1.brother->EV2;
+             (EV1[],EV2[])->binOp
+         if)
+     if);
+#)
+
+---isStandard:doPart---
+do (if desc.label 
+    // gram.objectDescriptor then
+       (desc->DescKind)=standardKind -> value
+    // gram.unexpanded // gram.mainPart then 
+       false->value
+    // gram.labelledImp then
+       (* can happen in error situations; see descSonsRef *)
+       false->value
+    else (desc,'isStandard') -> &TypeErr 
+if)
+---isSigned:doPart---
+do (if d -> isStandard then
+       d.attSize >= 0 -> value
+   if)
+
+---cProcDecoder:descriptor---
+(#	      
+   GetExtKind:
+     (# getEntry:
+          (#
+          do (if hasEntry then
+                 (if extEntry.label = gram.textconst then
+                     extEntry.gettext->callId[];
+                     true->explicitCallId
+                  else 'cProc syntax error'->messagestream.putline
+          if)if)#);
+     enter hasEntry
+     do (if stest then
+            301 -> trace(#do  'cProc2:'->xT; extId[]->xA #)
+        if);
+        (if extId.label= gram.nameApl then
+            (if true 
+             // 'CallC'->extId.textEQ then cExt->extKind; getEntry
+             // 'CallPascal'->extId.textEQ 
+             // 'Pascal'->extId.textEQ then
+                pascExt->extKind; getEntry
+             // 'CallStd'->extId.textEQ then
+                stdExt->extKind; getEntry
+             // 'PascalTrap'->extId.textEQ then
+                (if true
+                 // (common.targetMachineId = common.ppcmac) 
+                 //  b2c  then
+		    (* gnore traps, just make a Pascal proc call *)
+		    pascExt->extKind; dclId[]->callId[];
+                 // nti then
+                    cExt->extKind; 
+		 else
+		    pascTrapExt->extKind; getEntry
+		if);
+             // 'cExternalEntry'->extId.textEQ then
+                cCallBackExt->extKind; getEntry
+             // 'pascalExternalEntry'->extId.textEQ then
+                pascCallBackExt->extKind; getEntry
+             // 'stdExternalEntry'->extId.textEQ then
+                stdCallBackExt->extKind; getEntry
+             else cCallBackExt->extKind; dclId[]->callId[]
+            if)
+         else cCallBackExt->extKind; dclId[]->callId[]
+        if)
+     #);
+   
+   pre,mainP,att,enterP,doP,exitP: ^ ASTindex;
+   D,preDesc,imp,extId: @ASTindex; 
+   hasEntry: @boolean; 
+do desc->D;
+   D[]->descSonsRef->(pre[],mainP[],att[],enterP[],doP[],exitP[]);
+   L:(if not (D->cprocdesc.equal) then
+         D[]->descSonsRef->(pre[],mainP[],att[],enterP[],doP[],exitP[]);
+         (* doP must be do-part of immediate sub of external *)
+         (if pre.label//gram.prefix then
+             pre.son->descrip-> preDesc;
+	     (*103->trace(#do 'cproc0:'->xT; preDesc[]->A #);*)
+             preDesc->D; 
+             restart L 
+          else 'cProcDecoder:no super external!'->thisTranslate.systemException
+     if)if);
+   (if stest then
+       301->trace(#do 'cproc1:'->xT; D[]->xA; pre[]->xA #)
+   if);
+   (if doP.label = gram.empty then
+       cExt->extKind; dclId[]->callId[]
+    else 
+       L: doP.son->ScanList(#do currentNode-> imp; leave L #);
+       (if stest then
+           301->trace(#do 'cprocX:'->xT; imp[] -> xA #)
+       if); 
+       (if imp.isNull then
+           (* no imperatives after do *)
+           cExt -> extKind; dclId[] -> callId[]
+        else
+           (if stest then
+               301->trace(#do 'cprocY:'->xT;  imp.label -> xI #)
+           if); 
+           (if imp.label
+            // gram.assignmentEvaluation then (* 'xxx'->YY *)
+               imp.son -> extEntry; 
+               extEntry.brother -> extId; extId.son -> extid;
+               true -> getExtKind;
+            // gram.objectDenotation then
+               imp.son -> extID; false -> getExtKind;
+               dclId[] -> callId[]
+            else 
+               cCallBackExt -> extKind; dclId[] -> callId[]
+   if)if)if);
+   (*103->trace
+   (#do 'cProc:'->xT; dclId[]->xT; ':'->tracestream.put;
+    extKind->I; ':'->tracestream.put; callId[]->tracestream.putline#);*)
+#)
+---NXrep:descriptor--
+(* consider a super chain D1,D2, ... Dn where Di+1: Di(# ... #)
+ * exit NXelms for each Di and corresponding chains Ci.
+ * Ci includes Di and may be used to lookup the NXelm's of Di
+ *)
+(# NXelms: [5] ^ASTindex; PNL: [5] @ Integer; (* should be revised !*)
+   chains: [5] ^BV.SuperChain
+#)
+---NXScanner:descriptor---
+(# mkNXlst:
+     (# desc,pre,mainP,att,enterP,doP,exitP,NX: ^ASTindex;
+        D: @ASTindex; isVirtual, PL: @Integer;
+        newNXelm: @
+          (# D: @ASTindex; PL: @integer
+          enter(D,PL)
+          do (if (length+1->length) > NXrep.NXelms.range  then
+                 NXrep.NXelms.range->NXrep.NXelms.extend;
+                 NXrep.PNL.range->NXrep.PNL.extend;
+                 NXrep.chains.range->NXrep.chains.extend
+             if);
+             &ASTindex[]->NXrep.NXelms[length][];
+             D->NXrep.NXelms[length]; PL->NXrep.PNL[length];
+             chain[]->NXrep.chains[length][];
+          #);
+        chain,chain1: ^BV.SuperChain
+     enter(desc[],PL,chain[])
+     do desc[]->descSonsRef->(pre[],mainP[],att[],enterP[],doP[],exitP[]);
+        (*177->trace
+        (# ss: @ASTindex 
+        do 'mkNXlst:'->xT; desc[]->xA; 
+           (if chain[] = none then 'Chain is none'->xT 
+            else 
+               (if chain.kind=3 then 'Kind=nest'->xT else 'Kind<>nest'->xT if);
+               (if chain.kind=2 then 
+                   chain.preden[]->xA;
+                   chain.preden.dclRef->ss; ss.sort->ss; ss[]->xA
+               if);
+               chain;
+         if)#);*)
+        (if pre.label = gram.prefix then
+            pre->D; (*D.son->sematt.descrip-> D*)
+            (* Problem when called for CNXscanner (cProc's):
+             * chain is the NONE. Should be made more clean.
+             * When called from itemEvVal, chain is NOT used by
+             * getTheDesc, since getTheDesc uses sematt.descrip.
+             * But chain is used to compute the chains exited by getNXelm. 
+             * Chain covers desc and may be used to lookup elements of desc,
+             * but chain cannot be used to lookup the prefix of Di.
+             * Note: in the initial call, the first element of chain
+             * is of kind='nest', since chain covers desc.
+             * When going up the prefix, kind='plain' or similar.
+             * chain[]->ENC is the same as chain.pred[] when kind='nest'
+             * but otherwise NOT.
+             *)
+            (if chain[]<>none then chain[]->BV.ENC->chain1[] if);
+            (D.son,chain1[])->GetTheDesc->(D,chain1[]);
+            (if chain[] <> NONE then chain[]->BV.PRE->chain1[] if);
+            (D[],PL+1,chain1[])->&mkNXlst
+        if);
+        (if isN then enterP[]->NX[] else exitP[]->NX[] if);
+        (if NX.label <> gram.empty then 
+            NX.son->D; 
+            (if D.label = gram.evalList then
+                D.son->scanList
+                (# 
+                do (currentNode,PL)->newNXelm
+                #)
+             else (D,PL)->newNXelm
+     if)if)#);
+   
+do (* decode NX-list *) 
+   (desc[],0,chain[])->mkNXlst;
+   (*(if switch[350] then
+       '\nSematt:scanNxAdr:'->xTracestream.puttext;
+       (if isN then '/N:'->tracestream.puttext else 
+           '/X:'->tracestream.puttext if);
+       (desc[],tracestream[],10)->thePP;
+       length->tracestream.putint; ':' ->tracestream.put;
+       (for i: length repeat
+            (NXrep.NXelms[i][],tracestream[],10)->thePP
+    for)if)*)
+#)
+---getNXelm:doPart---
+do NXrep.NXelms[inx][]->NXelm[]; NXrep.PNL[inx]->PL;
+   NXrep.chains[inx][]->chain[]
+---GeneralNXScannerReset:descriptor---
+(#
+do none->desc[]; none->chain[];
+   (for i: nxRep.NXelms.range repeat
+        none->nxRep.NXelms[i][]; none->nxRep.chains[i][]
+   for)
+#)
+---ScanCNX:descriptor---
+(# NXscan: @NXscanner; EV: ^ASTindex; EV1,sort: @ASTindex; 
+   isVirtual,PL: @Integer; chain: ^BV.SuperChain
+do (desc[],isN,NONE)->NXscan;
+   scanPar:
+     (for i: (NXscan.length->theLength) repeat
+	  i->NXscan.getNXelm->(EV[],PL,chain[]); EV->EV1;
+          L: (if EV1.label 
+              // gram.ObjectDenotation then
+              // gram.ObjectReference then 
+                 EV1.son->EV1; 
+                 restart L
+	      // gram.StructureReference then
+              else 
+                 EV->theParam; 
+                 Error;
+                 leave scanPar
+             if);
+          EV1.son -> theParam; 
+          (if theParam.label <> gram.nameApl then 
+              Warn;
+              theParam -> GetName -> theParam
+          if);
+          theParam.dclRef->theDecl;
+          theDecl.sort->sort; theParam.descRef ->theDesc;
+        (if sort.label
+         // gram.simpleDecl then
+            (if true
+             // theDesc->sematt.integerDesc.equal 
+             // theDesc->sematt.int32Desc.equal 
+             // theDesc->sematt.int32uDesc.equal 
+                then longPar
+             // theDesc->sematt.charDesc.equal
+             // theDesc->sematt.boolDesc.equal 
+             // theDesc->sematt.int8Desc.equal 
+             // theDesc->sematt.int8uDesc.equal 
+                then bytePar
+             // theDesc->sematt.int16Desc.equal 
+             // theDesc->sematt.int16uDesc.equal 
+             // theDesc->Sematt.shortDesc.equal 
+             // theDesc->Sematt.wCharDesc.equal 
+                then shortPar
+             // theDesc->Sematt.int64Desc.equal
+             // theDesc->Sematt.int64uDesc.equal
+                then int64par
+             // theDesc->sematt.realDesc.equal then doublePar
+             // theDesc->sematt.BSTRdesc.equal then BSTR
+             else 
+                sort.son->sort; sort.brother->sort;
+                (* in the following cases, theDesc may not have been checked;
+                 * this MUST be done in chkDescBody:(chkCprocDesc,ChkComDesc)
+                 *)
+                (*312->trace(#do'ScanCNX:'->xT;desc[]->xA;theDesc[]->xA;
+                                 thedesc->descKind->xI;
+                 #);*)
+                (if sort.label 
+                 // gram.staticItem then
+                    partObjectPar
+                 // gram.dynamicItem then
+                    (* S: ^cStruct; S: ^wtext *)
+                    refObjectPar
+                 // gram.variablePattern then 
+                    (* F: ##external *)
+                    varPtn
+                 else
+                    EV->theParam; Error
+            if)if)
+         // gram.repetitionDecl then 
+            (if true 
+             // theDesc->sematt.charDesc.equal then textPar 
+             // theDesc->Sematt.wCharDesc.equal then true -> textPar
+             // theDesc->sematt.integerDesc.equal then repPar 
+             else 
+                sort.son->sort; sort.brother->sort; sort.brother->sort;
+                (if sort.label//gram.variablePattern then varPtn
+                 else Error
+            if)if)
+         else Error
+        if)
+   for)
+#)
+---primitiveToNumber:descriptor---
+(# T: ^text
+do node.gettext->T[]; (*->putLine;*)
+   (if true
+    // 'bnot' ->T.EqualNCS then 1->opCode
+    // 'band'->T.EqualNCS then 2->opCode
+    // 'bor'->T.EqualNCS then 3->opCode
+    // 'bxor'->T.EqualNCS then 4->opCode
+    // 'getByte' ->T.EqualNCS then 5->opCode
+    // 'getShort'->T.EqualNCS then 6->opCode
+    // 'getSignedByte'  ->T.EqualNCS then 7->opCode
+    // 'getSignedShort'->T.equalNCS then 8->opCode
+    // 'putByte' ->T.EqualNCS then 9->opCode
+    // 'putShort'->T.EqualNCS then 10->opCode
+    // 'putLong'->T.EqualNCS then 31->opCode
+    // 'getLong' ->T.EqualNCS then 13->opCode
+    // 'getBits' ->T.EqualNCS then 19->opCode
+    // 'getSignedBits'->T.EqualNCS then 20->opCode
+    // 'putBits' ->T.EqualNCS then 21->opCode
+    // 'srl' ->T.EqualNCS then 22->opCode
+    // 'sll'  ->T.EqualNCS then 23->opCode
+    // 'sra' ->T.EqualNCS then 24->opCode
+    // 'sla' ->T.EqualNCS then 25->opCode
+    // 'getByteAt' ->T.EqualNCS then 26->opCode
+    // 'getShortAt' ->T.EqualNCS then 27->opCode
+    // 'getSignedByteAt' ->T.EqualNCS then 28->opCode
+    // 'getSignedShortAt' ->T.EqualNCS then 29->opCode
+    // 'getLongAt' ->T.EqualNCS then 30->opCode
+    // 'byteSwapShort' -> T.EqualNCS then 32->opCode
+               (* currently ONLY on Intel 486 *)
+    // 'byteSwapLong' -> T.EqualNCS then 33->opCode
+               (* currently ONLY on Intel 486 *)
+    // 'putByteAt'->T.equalNCS then 34->opCode
+    // 'putShortAt'->T.equalNCS then 35->opCode
+    // 'putLongAt'->T.equalNCS then 36->opCode
+    // 'rol'->T.equalNCS then 37->opCode
+    // 'ror'->T.equalNCS then 38->opCode
+    // 'lock' -> T.EqualNCS then 39->opCode
+    // 'unlock' -> T.EqualNCS then 40->opCode
+    // 'enablepreemption' -> T.EqualNCS then 41->opCode
+    // 'disablepreemption' -> T.EqualNCS then 42->opCode
+    // 'thiss' -> T.equalNCS then 43 -> opCode (* %thiss object *)
+    // 'xsuspend' -> T.equalNCS then 44 -> opCode
+    // 'break' -> T.equalNCS then 45 -> opCode
+    else (* illegal opCode *)
+       Error
+   if)
+#)
+---ParsePrimitive:descriptor---
+(# OP: @ASTindex; OPtxt: ^text; T: @text; ch: @char; OpCode,I1,I2: @integer;
+   
+   nch: (* get next char *)
+     (#
+     do (if OPtxt.eos  then ascii.fs->ch else OPtxt.get->ch if)
+     #);
+   nInt:
+     (# N: @integer
+     do nch;
+        L:
+          (if (('0'<=ch) and (ch<='9'))  then 
+              N*10 + ch - '0' -> N;
+              nch; restart L
+          if)
+     exit N
+     #);
+   
+do node.son->OP;
+   (if OP.label // gram.textConst then
+       OP.gettext->OPtxt[]; 0->OPtxt.setPos;
+       nch;
+       (if ch // '%' then
+           (* OpTxt = '%op'  | '%op[i]'  | '%op[i,j]' *)
+           nch;
+           L: (if (('a'<=(ch->ascii.lowCase)) and ((ch->ascii.lowCase)<='z'))
+                then
+                  ch->T.put; nch; restart L
+              if);
+           (if ch // '[' then
+               nint -> I1;
+               (if ch //',' then nInt -> I2 if);
+           if);
+           (if true 
+            // 'not' ->T.EqualNCS then 1->opCode
+	    // 'and'->T.EqualNCS then 2->opCode
+	    // 'or'->T.EqualNCS then 3->opCode
+            // 'xor'->T.EqualNCS then 4->opCode
+            // 'getByte' ->T.EqualNCS then 5->opCode
+            // 'getShort'->T.EqualNCS then 6->opCode
+            // 'getSignedByte'  ->T.EqualNCS then 7->opCode
+	    // 'getSignedShort'->T.equalNCS then 8->opCode
+            // 'putByte' ->T.EqualNCS then 9->opCode
+            // 'putShort'->T.EqualNCS then 10->opCode
+	    // 'putLong'->T.EqualNCS then 31->opCode
+            // 'inxGetByte' ->T.EqualNCS then 11->opCode
+            // 'inxGetShort'->T.EqualNCS then 12->opCode
+            // 'inxGetLong' ->T.EqualNCS then 13->opCode
+            // 'inxGetSignedByte'  ->T.EqualNCS then 14->opCode
+	    // 'inxGetSignedShort'->T.equalNCS then 15->opCode
+            // 'inxPutByte' ->T.EqualNCS then 16->opCode
+            // 'inxPutShort'->T.EqualNCS then 17->opCode
+            // 'inxPutLong' ->T.EqualNCS then 18->opCode
+            // 'getBits' ->T.EqualNCS then 19->opCode
+	    // 'getSignedBits'->T.EqualNCS then 20->opCode
+            // 'putBits' ->T.EqualNCS then 21->opCode
+            // 'shiftRight' ->T.EqualNCS then 22->opCode
+            // 'shiftLeft'  ->T.EqualNCS then 23->opCode
+            // 'aritShiftRight' ->T.EqualNCS then 24->opCode
+            // 'aritShiftLeft' ->T.EqualNCS then 25->opCode
+            // 'adrGetByte' ->T.EqualNCS then 26->opCode
+            // 'adrGetShort' ->T.EqualNCS then 27->opCode
+            // 'adrGetSignedByte' ->T.EqualNCS then 28->opCode
+            // 'adrGetSignedShort' ->T.EqualNCS then 29->opCode
+            // 'adrGetLong' ->T.EqualNCS then 30->opCode
+	       (*!!! note 31=putLong, see above *)
+            // 'byteSwapShort' -> T.EqualNCS then 32->opCode
+               (* currently ONLY on Intel 486 *)
+            // 'byteSwapLong' -> T.EqualNCS then 33->opCode
+               (* currently ONLY on Intel 486 *)
+            else (* illegal opCode *) &Error
+           if);
+           (opCode,I1,I2) -> &inLineOp
+        else OpTxt->&ExternalOp
+       if)
+    else &ExternalOp
+if)#)
+---GetName2:doPart---
+do &ASTindex[] -> N[];
+   node -> N;
+   L: (if N.label
+       // gram.indexed then
+          N.son -> N ; restart L
+       // gram.remote 
+       // gram.computedRemote then
+          N.son -> N; N.brother -> N
+       // gram.thisObject then N.son -> N
+       // gram.objectDenotation then
+          N.son -> N; restart L
+       // gram.objectReference  (* R[] assumed *)then
+          N.son -> N; N.son -> N; restart L
+       // gram.staticItem // gram.dynamicItem
+       // gram.staticComponent // gram.dynamicComponent 
+       // gram.variablePattern then
+          N.son -> N;
+          restart L
+      if)
+---getSort2:doPart---
+do node[] -> GetName2 -> sort[]; (* sort = gram.nameApl *)
+   sort.dclRef -> sort;        (* sort = gram.nameDcl *)
+   sort.sort -> sort           (* sort in gram.[simpleDecl,repetition,...]
+                                *)
+---descOfSort:doPart---
+do &ASTindex[] -> desc[];
+   (* sort in [simpleDecl,repetitionDecl, ...] *)
+   (*301->trace(#do 'descOfSort1: ' -> xT; sort[] -> xA #);*)
+   sort.son -> desc; 
+   desc.brother -> desc;
+   (if sort.label = gram.repetitionDecl then
+       desc.brother -> desc
+   if);
+   (* desc = gram.[staticItem, ...] *)
+   desc[] -> DescOfSpec -> desc[];
+       (*301->trace(#do 'descOfSort2: ' -> xT; desc[] -> xA #);*)
+---DescOfSpec:doPart---
+do N[] -> getName2 -> N[];
+   (* 301->trace(#do 'DescOfSpec1: ' -> xT; N[] -> xA #);*)
+   (if N.label
+    // gram.objectDescriptor
+    // gram.unexpanded then
+       N[] -> desc[] (* should we copy here?*)
+    // gram.doPart then
+       N[] -> desc[]; (* ???*)
+       'Sematt:DescOfSpec:doPart!'-> ThisTranslate.SystemException
+    else
+       &ASTindex[] -> desc[];
+       N.descRef -> desc;
+       (if desc.isNull then N[] -> descRefError if)
+   if)
+---Descrip:doPart---
+do N -> GetName -> N;
+   (if N.label 
+    // gram.objectDescriptor // gram.unExpanded then 
+       N -> desc
+    // gram.mainPart then
+       N -> desc
+    // gram.doPart then
+       N -> desc; (* ???*)
+       'Sematt:Descrip:doPart!'-> ThisTranslate.SystemException
+    else  
+       N.descRef ->desc;
+       (if desc.isNull then N[] -> descRefError if)
+   if)
+---encDesc:dopart---
+do node.father->desc;
+   findDescNode:
+     (if desc.label
+      // gram.objectDescriptor then (* OK *)
+         (if desc[]->sematt.insertable then
+             (* '%'->put; *) desc.origin->desc; restart findDescNode
+         if)
+      // gram.descriptorForm // gram.attributesForm then
+         desc.xOrigin->desc;
+         restart findDescNode
+      // gram.unExpanded then
+         desc.slotOrigin->desc; 
+         restart findDescNode
+      // gram.doPart //gram.mainPart then
+         (# D: @ASTindex
+         do desc.father->D;
+            (if D.isNull then
+                (* the doPart is a form: '---x:doPart---' *)
+                (if desc.descNo//0 then
+                    desc.xOrigin->desc;
+                    restart findDescNode
+                 else (* desc is encDesc; leave *)
+                if)
+             else D->desc; restart findDescNode
+         if)#)
+      else (* other AST nodes *)
+         desc.father->desc;
+         restart findDescNode
+     if)
+--DescOrigin:dopart--
+do (if desc.label = gram.doPart then
+       desc.xOrigin->D
+    else
+       desc.origin->D
+   if);
+   findDescNode:
+     (if D.label
+      // gram.objectDescriptor then (* skip *)
+            (if D[]->sematt.insertable then
+                (* '*'->put;*) D.origin->D; restart findDescNode
+            if)
+      // gram.descriptorForm // gram.attributesForm then
+         D.xOrigin->D;
+         (if not D.isNull then restart findDescNode if)
+      // gram.unExpanded then
+         D.slotOrigin->D; 
+         restart findDescNode
+      // gram.doPart then
+         (if D.descNo = 0 then (* no tmp. data *)
+             D.xOrigin->D;              
+             restart findDescNode 
+         if)
+      // gram.mainPart then
+         D.xOrigin->D; 
+         restart findDescNode
+      // gram.forImp // gram.repetitionDecl // gram.labelledImp then
+         D.origin -> D;
+         restart findDescNode
+      else (* only in case of semantic errors or compiler errors;
+            * we just return integerDesc
+            *)
+         integerDesc -> D
+     if)
+--ChkQua:doPart---
+do (# sub1,super1: @ASTindex
+   do sub -> sub1; super -> super1;(* dont modify enter parameters! *)
+      (*167->trace(#do sub[]->A; super[]->A #);*)
+      L:
+        (if (sub1->super1.equal)  then (* finito *)
+            0 -> PD; true -> found
+         else
+            sub1.son -> pref;
+            (if pref.label
+             // gram.prefix then
+                pref.son -> Descrip-> sub1;
+                (if sub1.label
+                 // gram.virtualDecl // gram.bindingDecl // gram.finalDecl then 
+                    (* to handle V ::< (# ... #)   *)
+                    sub1.son -> sub1; sub1.brother -> descrip-> sub1;
+                if);
+                (*(sub[],super[]) -> &ChkQua -> (PD,found);*)
+                PD +1 -> PD;
+                restart L
+             // gram.empty then 
+                (superObject->super1.equal)->found
+   if)if)#)
+---TopDesc:doPart---
+do (# desc,pref: @ASTindex; D: ^ASTindex
+   do N -> QuaDesc -> desc;
+      desc->topDesc;
+      (if false (*ctst*) then
+          301->trace(#do 'TopDesc:'->xT;
+                   desc[]->xA;
+                   desc.isSlot -> xB;
+                   desc[]->hasOnlyInner->xB
+                    #);
+      if);
+      (* 08/03/99: major change here *)
+      M:
+        (if desc.label
+         // gram.objectDescriptor then
+            L:
+            (if not (desc[]->hasOnlyInner) then
+                desc.son->pref;
+                (if pref.label = gram.prefix then
+                    desc->topDesc;
+                    pref.son -> QuaDesc -> desc;
+                    restart L
+                 else desc->topDesc
+            if)if)
+          // gram.unExpanded then
+             
+          // gram.mainPart then        
+             desc[] -> MainPartDesc -> D[];
+             D -> desc;
+             restart M
+          else
+             'TopDesc:missing_case:' -> ThisTranslate.SystemException
+        if)
+   #)
+      (*312->trace(#do 'TopDesc:'->T; topDesc[]->A #)*)
+---SemattFragErr:doPart---
+do (if not reBind then
+       '\n\n***** Error in fragment:\n\t'->msg; FG.FullName->msg.Puttext;
+       '.'->msg.put;msg.newline;
+       (if errNo
+        // 1 then
+           'Two or more slots have the name: '->msg.puttext;
+           slot.name->msg.puttext;
+        // 2 then
+           'No free slot found for: ' -> msg.Puttext; FF.name->msg.puttext;
+        // 3 then
+           'Category of fragment: ' ->msg.puttext; FF.name->msg.puttext;
+           ' does not correspond to category of slot'->msg.puttext;
+        // 4 then
+           'The slot: '->msg.Puttext; FF.name->msg.puttext;
+           ' Is already bound' -> msg.Puttext
+        // 5 then
+           'Category of: '->msg.Puttext; FF.name -> msg.Puttext;
+           ' must be either: ' -> msg.Putline;
+           'Descriptor (ObjectDescriptor, DescriptorForm) or '->msg.puttext;
+           'Attributes (AttributeDecl, AttributesForm)'->msg.putline;
+        // 6 then 
+           'Category of the following slot is not supported!\n\n\t'->msg.putText;
+           slot.name->msg.putLine;
+           '\nCategory must be: descriptor, attributes or doPart'->msg.putLine
+        // 7 then 
+           'Warning: mainPart-slots are NOT fully supported!'->msg.putLine;
+           msg[]->putline;
+           true->continue;
+           leave FragErr
+        // 8 then
+           'The slot: "'->msg.puttext; slot.name->msg.putText;
+           '" has the same name as the fragment-file!'->msg.putLine;
+       if);
+       msg.newline;
+       INNER FragErr
+    else 
+       true->continue;
+if)
+---BindSlots:descriptor---
+(# ChkDub: (* check if some slots have the same name *)
+     (# mark: @
+          (# Telm: 
+               (# slot: ^slotDesc; T: @Text; succ: ^Telm;
+                  collect:
+                    (# slotList: ^text
+                    enter slotList[]
+                    do (if slot[] <> NONE then
+                           ' '->slotList.put; t[] -> slotList.append;
+                           ' '->slotList.put; slot.category -> slotList.putint
+                       if);
+                       (if succ[] <> NONE then slotList[] -> succ.collect if)
+                    #)
+               #);
+             T: ^text; Root,R: ^Telm; 
+             slot: ^slotDesc;
+             errNo: @integer
+          enter(slot[],T[],errNo)
+          do (if slot[] <> NONE then (* slot[]=NONE in a call below *);
+                 slot.name->T[];
+                 (*197->trace(#do 'Slot: "'->xT; slot.name ->xT #)*)
+             if);
+             Root[] -> R[];
+             L: (if (R[]<>NONE)  then
+                    (if (T[] -> R.T.equal)  then
+                        (FG[],NONE,R.slot[],errNo) -> &FragErr
+                    if);
+                    R.succ[] -> R[];
+                    restart L
+                if);
+             &Telm[] -> R[]; slot[]->R.slot[]; T->R.T; 
+             Root[]->R.succ[]; R[]->Root[]
+          #);
+        FG: ^FragmentGroup;
+        hasAttributes: @boolean;
+        t: ^text; p: @integer
+     enter FG[]
+     do FG.ScanSlots
+        (# 
+        do (current[],none,1)->mark;
+           (if current.category 
+	    // gram.objectDescriptor // gram.doPart
+	    // gram.descriptorForm then (* ok *)
+            // gram.attributes // gram.attributesForm // gram.attributeDecl
+            then (* OK, but check that fragment file name is not the same
+                  * as a slot name; this is only a local hack, and a general
+                  * check for slot/file name conflicts is mising
+                  *)
+               true->hasAttributes
+            // gram.mainPart then (* ok *)
+               (* used to be 
+                *    (FG[],NONE,current[],7)->&FragErr
+                * with print of N as in else-part below
+                *)
+	    else 
+               (FG[],NONE,current[],6)->&FragErr;
+               (# N: @ASTindex
+               do (* the following is NOT printed for error 6 *)
+                  '\t'->messagestream.puttext;
+                  current.father -> (*N.a*) AstAsAstIndex -> N; 
+                  (N[],screen[],100)->thePP;
+               #)
+        if)#);
+        (if hasAttributes then
+            FG.name->t[];
+            thePathHandler.directoryChar->t.FindAll (#  do inx->P #);
+            (P+1,t.length)->t.sub->t[];
+            (*'\n***fragment-file: '->puttext; t[]->putline;*)
+            (NONE,t[],8)->Mark
+        if);
+        (# slotList: ^text
+        do &text[] -> slotList[]; 
+           (if mark.root[] <> none then slotList[] -> mark.root.collect if);
+               (*197->trace(#do 'mandatoryslots1'->xT; slotList[]->xT #);*)
+           'slots'-> FG.prop.addprop(#do slotList[]->addstring #);
+                                       (*197->trace(#do 'mandatoryslots2'->xT; slotList[]->xT #)*)
+        #)
+     #);
+   
+   FG: ^FragmentGroup;
+do (* Bind fragments defined in F *)
+   F[]-> &ChkDub; 
+   (if F.FragType
+    // FormType then F.BindToOrigin
+    // GroupType then
+       F[] -> FG[];
+       (if common.switch[72] (* dynamic compilation *) then
+           (# oRG: ^fragmentGroup 
+           do (if FG.originR[] = NONE then
+                  (* '\n*** In bindSlots: origin is none for: ' -> puttext;
+                   * FG.name -> putline;  *)                
+               else
+                  FG.originR[] -> oRG[];
+                  (if not oRG.isRealOpen then
+                      '\n*** In bindslots origin was not real open: '
+                        -> puttext;
+                      FG.originR.name -> putline;
+                      oRG.realOpen
+       if)if)#)if);
+
+       FG.Scan
+       (# FF: ^FragmentForm
+       do (if current.FragType // FormType then
+              current[] -> FF[];
+              (*197->trace
+               (#do 'Form: "'-> xT; FF.name -> xT; FF.category->xI; xN #);*)
+              (if (FF[] -> FG.Bind -> FF.Binding[]) = NONE then
+                  (FG[],FF[],NONE,2) ->FragErr;
+               else 
+                  (if FF.binding.isBound  then
+                      (FG[],FF[],NONE,4) -> FragErr
+                   else
+                      (if FF.Category
+                       // gram.objectDescriptor // gram.descriptorForm then
+                          (if  FF.binding.Category 
+                           // gram.objectDescriptor // gram.descriptorForm then
+                           else (FG[],FF[],NONE,3) ->&FragErr if);
+                          True -> FF.binding.isBound
+                       // gram.attributesForm // gram.attributeDecl then
+                          (if  FF.binding.Category 
+                           // gram.attributesForm // gram.attributeDecl  then
+                           else (FG[],FF[],NONE,3) ->&FragErr if);
+                          (* Note isBound should not be set for attributes *)
+                       // gram.doPart then
+                          (if  FF.binding.Category // gram.doPart then
+                           else (FG[],FF[],NONE,3)->&FragErr 
+                          if);
+                          True->FF.binding.isBound
+                       // gram.mainPart then
+                          (if  FF.binding.Category // gram.mainPart then
+                           else (FG[],FF[],NONE,3)->&FragErr 
+                          if);
+                          True->FF.binding.isBound
+                       else (FG[],FF[],NONE,5) -> &FragErr
+       if)if)if)if)#)
+   if)
+#)
+---RepAttId:descriptor---
+(# N: @ ASTindex; T: ^Text
+do R.son -> N; N.brother ->N; N.gettext->T[];
+   (if  true
+    // 'range'->T.equalNCS then 1->descId
+    // 'new'->T.equalNCS then 2->descId
+    // 'extend'->T.equalNCS then 3->descId
+   if)
+#)
+

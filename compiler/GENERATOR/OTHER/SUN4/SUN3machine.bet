@@ -1,0 +1,823 @@
+ORIGIN 'machine'
+(* Machine body for SUN3 - not completed *)
+--mstate:descriptor--
+  (# vtInx :@ integer;
+     descInx :@ integer;
+     curdntInx: @integer;
+
+     outVt :
+     (# t :@text;
+        thisVtInx,lgth :@ integer
+     enter t
+     do '\tvt\n\tvtbytes\t' -> BC.putT;
+        t.length -> lgth;
+        t.scanAll
+        (# inx :@ integer 
+        do ch -> BC.putI;
+             (if ((inx+1 -> inx) mod 16)
+             //0 then '\n\tvtbytes\t' -> BC.putT
+             else ',' -> BC.putC;
+             if)
+        #);
+        '0\n' -> BC.putT;
+         vtInx -> thisVtInx;
+         thisVtInx + lgth + 1 -> vtInx
+     exit thisVTInx
+     #);
+  #)
+---machineAtt:attributes--
+putFP0: (# rN: @integer enter rN do 'FP'->BC.putT; rN->BC.putI #);
+putFP1: (# rN: @integer enter rN do 'xFP'->BC.putT; rN->BC.putI #);
+saveD0D1: 
+  (#do '\tmovl\td0,sp@-\n\tmovl\td1,sp@-\n'->BC.putT #);
+restoreD0D1: 
+  (#do '\tmovl\tsp@+,d1\n\tmovl\tsp@+,d0\n'->BC.putT #);
+restoreD0: 
+  (#do '\tmovl\tsp@+,d0\n'->BC.putT #);
+saveA0A1: (#do '\tmovl\ta0,sp@-\n\tmovl\ta1,sp@-\n'->BC.putT #);
+restoreA0A1: (#do '\n\tmovl\tsp@+,a1\n\tmovl\tsp@+,a0\n'->BC.putT #);
+floatOpToAreg:
+  (# op1: ^mOperand; aReg: @adrRegOperand
+  enter op1[]
+  do (if op1.struc//stackTopAdr## then popFloat->op1[] if);
+     (* lea op1 to aReg. op1 may use d0,d1 for indexing *)
+     aReg.alloc;
+     '\tlea\t'->BC.putT; op1.putOp; BC.sep; aReg.putOp; BC.putNL
+  exit aReg
+  #);
+floatRegToD0D1:
+  (# Freg: ^floatRegOp
+  enter Freg[]
+  do '\tmovl\t'->BC.putT; Freg.rN->putFP0; ',d0\n'->BC.putT;
+     '\tmovl\t'->BC.putT; Freg.rN->putFP1; ',d1\n'->BC.putT
+  #);
+popFloat:
+  (# FR: @floatRegOp
+  do 8->FR.rN;
+     '\tmovl\tsp@+,'->BC.putT; 8->putFP1;
+     '\n\tmovl\tsp@+,'->BC.putT; 8->putFP0; BC.putNL
+  exit FR[]
+  #);
+loadFloat:
+  (* load float to float reg*)
+  (# op: ^moperand; FR: ^floatRegOp; Areg: @adrRegOperand
+  enter(op[],FR[])
+  do Areg.alloc;
+     '\tlea\t'->BC.putT; op.putOp; BC.sep; aReg.putOp; 
+     '\n\tmovl\t'->BC.putT; aReg.putOp; '@,'->BC.putT; FR.rN->putFP0;
+     '\n\tmovl\t'->BC.putT; aReg.putOp; '@(4),'->BC.putT; FR.rN->putFP1;
+     BC.putNL;
+     aReg.deAlloc
+  #);
+doFloatOp:
+  (* op2->d0,d1
+   * @op1->a0
+   *)
+  (# op1: ^mOperand; op2: ^floatRegOp; 
+     op1InFreg: @boolean; opr: @text; 
+     aReg: @adrRegOperand
+  enter(op1[],op2[],op1InFreg,opr)
+  do op1[]->floatOpToAreg->aReg;
+     saveD0D1;
+     saveA0A1;
+     (* op2 -> d0,d1 *)
+     op2[]->floatRegToD0D1;
+     (* '\tmovl\t'->BC.putT; op2.rN->putFP0; ',d0\n'->BC.putT;
+      * '\tmovl\t'->BC.putT; op2.rN->putFP1; ',d1\n'->BC.putT;
+      *)
+     (* @op1[]->a0 *)
+     '\tmovl\t'->BC.putT; aReg.putOp; ',a0\n'->BC.putT;
+     aReg.deAlloc;
+     opr->jsrT;
+     (*  d0,d1 -> op2 *)
+     '\tmovl\td0,'->BC.putT; op2.Rn->putFP0; 
+     '\n\tmovl\td1,'->BC.putT; op2.Rn->putFP1; 
+     (* restore a0,d0,d1*)
+     restoreA0A1; 
+     restoreD0D1
+  #);
+--AssemblerHeader:descriptor--
+  (# 
+  do '|\t\tSUN3 assembler'->BC.putLine;
+     SwitchToData; 
+     (* floating point registers are represented as memory cells*)
+     'FP0: .long 0 \n'->BC.putT;
+     'xFP0: .long 0 \n'->BC.putT;
+     'FP1: .long 0 \n'->BC.putT;
+     'xFP1: .long 0 \n'->BC.putT;
+     'FP2: .long 0 \n'->BC.putT;
+     'xFP2: .long 0 \n'->BC.putT;
+     'FP3: .long 0 \n'->BC.putT;
+     'xFP3: .long 0 \n'->BC.putT;
+     'FP4: .long 0 \n'->BC.putT;
+     'xFP4: .long 0 \n'->BC.putT;
+     'FP5: .long 0 \n'->BC.putT;
+     'xFP5: .long 0 \n'->BC.putT;
+     'FP6: .long 0 \n'->BC.putT;
+     'xFP6: .long 0 \n'->BC.putT;
+     'FP7: .long 0 \n'->BC.putT;
+     'xFP7: .long 0 \n'->BC.putT;
+     'FP8: .long 0 \n'->BC.putT; (* used for as tmp. locations *)
+     'xFP8: .long 0 \n'->BC.putT;
+     switchToCode;
+  #)
+--debugHeader:descriptor--
+(#
+do '.stabs "beta:debugger",32,0,1989,0\n'->BC.putT;
+   '.stabs "'->BC.putT; localPath->BC.putT; '",34,0,1989,0\n'->BC.putT
+#)
+--CstOpPut:descriptor--
+  (#
+  do '#'->BC.putC; C->BC.putI
+  #)
+--TextOpPut:descriptor--
+  (#
+  do T->BC.putT
+  #)
+--textOpLoadAdr:descriptor---
+  (##)
+--DataRegOpPut:descriptor--
+  (#
+  do 'd'->BC.putT; rN->BC.putI
+  #)
+--pushFloatReg:descriptor--
+(#
+do '\tmovl\t'->BC.putT; rN->putFP0; ',sp@-\n'->BC.putT;
+   '\tmovl\t'->BC.putT; rN->putFP1; ',sp@-\n'->BC.putT
+#)
+--popFloatReg:descriptor--
+(#
+do '\tmovl\tsp@+,'->BC.putT; rN->putFP1; '\n'->BC.putT;
+   '\tmovl\tsp@+,'->BC.putT; rN->putFP0; '\n'->BC.putT
+#)
+--FloatRegOpPut:descriptor--
+  (#do 'FP'->BC.putT; rN->BC.putI #)
+--FloatRegOpLoad:descriptor--
+(# A1: ^address
+do '\tmovl\t'->BC.putT; A.putOp; ','->BC.putC; rN->putFP0; BC.putnl;
+   A.copy->A1[]; 4->A1.addOff->A1[];
+   '\tmovl\t'->BC.putT; A1.putOp; ','->BC.putC; rN->putFP1; BC.putnl;
+#)
+--FloatRegOpStore:descriptor--
+(# A1: ^address
+do '\tmovl\t'->BC.putT; rN->putFP0; ','->BC.putC; A.putOp; BC.putNL;
+   A.copy->A1[]; 4->A1.addOff->A1[];
+   '\tmovl\t'->BC.putT; rN->putFP1; ','->BC.putC; A1.putOp; BC.putNL;
+#)
+--FloatRegOpStoreTmp:descriptor--
+(# 
+do '\tmovl\t'->BC.putT; rN->putFP0; ',sp@-\n'->BC.putT;
+   '\tmovl\t'->BC.putT; rN->putFP1; ',sp@-\n'->BC.putT;   
+   &stackTopAdr[]->A[]
+#)
+--floatRegOpStore2int:descriptor--
+ (# Dr: [3] @integer; D1: @dataRegOperand; aReg: @adrRegOperand;
+ do saveD0D1; saveA0A1;
+    aReg.alloc;
+    '\tlea\t'->BC.putT; A.putOp; BC.sep; aReg.putOp;
+    '\n\tmovl\t'->BC.putT; aReg.putOp; ',sp@-\n'->BC.putT;
+    A.freeAdr; 
+    this(floatRegOp)[]->floatRegToD0D1; 'Fintd'->jsrT; (* res. in d0 *)
+    '\tmovl\tsp@+,'->BC.putT; aReg.putOp;
+    '\n\tmovl\td0,'->BC.putT; aReg.putOp; '@\n'->BC.putT;
+    aReg.deAlloc;
+    L:
+      (for i:3 repeat 
+           D.alloc; D->Dr[i];
+           (if (1<D)//true then (*  not d0,d1*)
+               '\tmovl\td0,'->BC.putT; D.putOp; BC.putNL;
+               (for j:i-1 repeat Dr[j]->D1; D1.deAlloc for);
+               leave L
+           if);
+      for);
+    restoreA0A1;
+    restoreD0D1;
+    deAlloc
+ #)
+--floatConst:descriptor---
+  (# Lab: @ localLab;
+  do switchToData;
+     FR.alloc;
+     Lab.new; Lab.def; 
+     '\t.double\t0r'->BC.putT; T->BC.putT; BC.putNL;
+     switchToCode;
+     (Lab[],FR[])->loadFloat
+  #)
+--int2float:descriptor--
+  (#
+  do FR.alloc; 
+     saveD0D1; saveA0A1;
+     '\tmovl\t'->BC.putT; A.putOp; ',d0\n\tjsr\tFfltd\n'->BC.putT;
+       '\tmovl\td0,'->BC.putT; FR.rN->putFP0;
+     '\n\tmovl\td1,'->BC.putT; FR.rN->putFP1; 
+     restoreA0A1; restoreD0D1
+  #)
+--intReg2float:descriptor--
+  (#
+  do FR.alloc; 
+     saveD0D1; saveA0A1;
+     '\tmovl\t'->BC.putT; A.putOp; ',d0\n\tjsr\tFfltd\n'->BC.putT;
+       '\tmovl\td0,'->BC.putT; FR.rN->putFP0;
+     '\n\tmovl\td1,'->BC.putT; FR.rN->putFP1; 
+     restoreA0A1; restoreD0D1
+  #)
+--cmpFloat:descriptor--
+(* note that the order of LF and A has been switched *)
+(# aReg: @adrRegOperand
+do A[]->floatOpToAreg->aReg;
+   saveD0D1; 
+   saveA0A1;
+   LF[]->floatRegToD0D1;
+   '\tmovl\t'->BC.putT; aReg.putOp; ',a0\n'->BC.putT;
+   aReg.deAlloc;
+   'Fcmpd'->jsrT;
+   '\tmovw\tcc,d7\n'->BC.putT; (* OBS d7 has not been allocated *)
+   restoreA0A1;
+   restoreD0D1;
+   '\tmovw\td7,cc\n'->BC.putT
+#)
+--fBeq:descriptor--
+  (#do '\tjfeq\t'->BC.putT; op.putOp; BC.putNl #)
+--fBge:descriptor--
+  (#do '\tjfge\t'->BC.putT; op.putOp; BC.putNl #)
+--fBle:descriptor--
+  (#do '\tjfle\t'->BC.putT; op.putOp; BC.putNl #)
+--fBne:descriptor--
+  (#do '\tjfneq\t'->BC.putT; op.putOp; BC.putNl #)
+--fBgt:descriptor--
+  (#do '\tjfgt\t'->BC.putT; op.putOp; BC.putNl #)
+--fBlt:descriptor--
+  (#do '\tjflt\t'->BC.putT; op.putOp; BC.putNl #)
+--addFloat:descriptor--
+(#do (A[],LF[],AinFreg,'Faddd')->doFloatOp#)
+--subFloat:descriptor--
+(#do (A[],LF[],true,'Fsubd')->doFloatOp#)
+--mulFloat:descriptor--
+(#do (A[],LF[],AinFreg,'Fmuld')->doFloatOp#)
+--divFloat:descriptor--
+(#do (A[],LF[],true,'Fdivd')->doFloatOp#)
+--negFloat:descriptor--
+(#
+do '\tbchg\t#31,'->BC.putT; F.rN->putFP0; BC.putNL
+#)
+--AdrRegOpPut:descriptor--
+(#
+do (if ind// true  then 'a'->BC.putT; rN->BC.putI; '@'->BC.putC
+    else 'a'->BC.putT; rN->BC.putI
+if)#)
+--stackTopAdrPutOp:descriptor--
+(#do 'sp@+'->BC.putT #)
+--doubleDataRegPut:descriptor-- (* see e.g. divsll *)
+  (#
+  do 'd'->BC.putT; dNo1->BC.putI; ':'->BC.putC; 'd'->BC.putT; dNo2->BC.putI
+  #)
+--LocalLabDef:descriptor--
+  (#
+  do 'L'->BC.putC; labNo->BC.putI; ':'->BC.putC
+  #)
+--VirtLabDef:descriptor--
+  (# do 'L' -> BC.putC; labNo -> BC.putI; ':' -> BC.putC #)  
+--LocalLabPut:descriptor--
+  (#
+  do'L'->BC.putC; labNo->BC.putI 
+  #)
+--localLabLoadAdr:descriptor--
+  (#  #)
+--ldCst:descriptor--
+  (#do '\tmovl\t'->BC.putT; C.putOp; BC.sep; R.putOP; BC.putNl #)
+--cstLoadOp:descriptor--
+  (##)
+--cstOpLoadToReg:descriptor--
+  (##)
+--stCst:descriptor--
+  (#do '\tmov'->BC.putT; size->BC.putS; C.putOp; BC.sep; A.putOP; BC.putNl #)
+--ldByte:descriptor---
+  (#
+  do '\tmovb\t'->BC.putT; op1.putOp; BC.sep; op2.putOP; BC.putNl
+  #)
+--ldHalf:descriptor---
+  (#
+  do '\tmovw\t'->BC.putT; op1.putOp; BC.sep; op2.putOP; BC.putNl
+  #)
+--ldVal:descriptor--
+  (#do '\tmovl\t'->BC.putT; A.putOp; BC.sep; R.putOP; BC.putNl #)
+--ldVl:descriptor--
+(#
+do (if size//4 then else R[]->gClr if);
+   '\tmov'->BC.putT; size->BC.putS; A.putOp; BC.sep; R.putOP; BC.putNl 
+#)
+--stByte:descriptor---
+  (#
+  do '\tmovb\t'->BC.putT; op1.putOp; BC.sep; op2.putOP; BC.putNl
+  #)
+--stHalf:descriptor---
+  (#
+  do '\tmovw\t'->BC.putT; op1.putOp; BC.sep; op2.putOP; BC.putNl
+  #)
+--stVal:descriptor--
+  (#do '\tmovl\t'->BC.putT; R.putOp; BC.sep; A.putOP; BC.putNl #)
+--cpReg:descriptor--
+  (#do '\tmovl\t'->BC.putT; R1.putOp; BC.sep; R2.putOP; BC.putNl #)
+--cpByteMem:descriptor--
+  (#do '\tmovb\t'->BC.putT; A1.putOp; BC.sep; A2.putOP; BC.putNl #)
+--cpHalfMem:descriptor--
+  (#do '\tmovw\t'->BC.putT; A1.putOp; BC.sep; A2.putOP; BC.putNl #)
+--cpMem:descriptor--
+  (#do '\tmovl\t'->BC.putT; A1.putOp; BC.sep; A2.putOP; BC.putNl #)
+--ldLabAdr:descriptor--
+  (#do '\tmovl\t'->BC.putT; L.putOp; BC.sep; R.putOP; BC.putNl #)
+--stValInText:descriptor--
+  (#do '\tmovl\t'->BC.putT; op.putOp; BC.sep; L.putOP; BC.putNl #)
+--comment:descriptor--
+  (#
+  do '#  '->BC.putT; T->BC.putT; BC.putNL
+  #)
+--Export:descriptor--
+  (#
+  do '.globl '-> BC.putT; Lab->BC.putT; BC.putNL
+  #)
+--Import:descriptor--
+  (#
+  do (* empty for HP *)
+  #)
+--ImportData:descriptor--
+  (#
+  do (* empty for HP *)
+  #)
+--RelativeAdr:descriptor--
+  (#
+  do '.word '->BC.putT; L1.putOp; '-'->BC.putC; L2->BC.putT; BC.putNl
+  #)
+
+--jsrT:descriptor--
+  (#
+  do '\tjsr\t'->BC.putT; T->BC.putT; BC.putNl
+  #)
+--jmpT:descriptor--
+  (#
+  do '\tjmp\t'->BC.putT; T->BC.putT; BC.putNl
+  #)
+--gJmp:descriptor--
+  (#
+  do '\tjmp\t'->BC.putT; op.putOp; BC.putNl
+  #)
+--gJsr:descriptor--
+  (#
+  do '\tjsr\t'->BC.putT; op.putOp; BC.putNl
+  #)
+--rts:descriptor--
+  (#
+  do '\trts\t'->BC.putT; BC.putNl
+  #)
+--gClr:descriptor--
+  (#
+  do '\tclrl\t'->BC.putT; op.putOp; BC.putNl
+  #)
+--pushAdr:descriptor--
+  (#
+  do '\tpea\t'->BC.putT; op.putOp; BC.putNL
+  #)
+--Push:descriptor--
+  (#
+  do '\tmovl\t'->BC.putT; op.putOp; ',sp@-'->BC.putT;BC.putNL
+  #)
+--Pop:descriptor--
+  (#
+  do '\tmovl\t'->BC.putT; 'sp@+,'->BC.putT; op.putOp;BC.putNL
+  #)
+--SetTop:descriptor--
+  (#
+  do '\tlea\t'->BC.putT;
+     'sp@'->BC.putT;
+     (if off//0 then else '('->BC.putC; off->BC.putI; ')'->BC.putC if);
+     ',sp\n' -> BC.putT
+  #)
+--gLea:descriptor---
+  (#
+  do '\tlea\t'->BC.putT; op1.putOp; BC.sep; op2.putOP; BC.putNl
+  #)
+--gLeaLabel:descriptor---
+  (#
+  do '\tlea\t'->BC.putT; op1.putOp; BC.sep; op2.putOP; BC.putNl
+  #)
+--ChkIndex:descriptor--
+  (#
+  do '\tchk2l\t'->BC.putT; op1.putOp; BC.sep; op2.putOP; BC.putNl
+  #)
+--ChkHeap:descriptor--
+  (# L: @ localLab
+  do '\tcmp2l\t'->BC.putT; '_IOA,'->BC.putT; op.putOp; BC.putNL;
+     L.New; L[]->jumpIfTrue;
+     op[]->push;
+     'ChkRA'->jsrT;
+     L.def
+  #)
+--SignExtByte:descriptor--
+  (#
+  do '\textbl\t'->BC.putT; op.putOp; BC.putNl
+  #)
+--SignExtWord:descriptor--
+  (#
+  do '\textl\t'->BC.putT; op.putOp; BC.putNl (* ext.w ?? *)
+  #)
+--GetBits:descriptor--
+  (#
+  do '\tbfextu\t'->BC.putT; op1.putOp;
+	(pos,length)->bitField; BC.sep; op2.putOp; BC.putNl
+  #)
+--GetSignedBits:descriptor--
+  (#
+  do '\tbfexts\t'->BC.putT; op1.putOp;
+	(pos,length)->bitField; BC.sep; op2.putOp; BC.putNl
+  #)
+--PutBits:descriptor--
+  (#
+  do '\tbfins\t'->BC.putT; op1.putOp;
+	BC.sep; op2.putOp; (pos,length)->bitField;  BC.putNl
+  #)
+--gAdd:descriptor--
+(#do '\tadd'->BC.putT; size->BC.putS; op1.putOp; BC.sep; op2.putOP; BC.putNl #)
+--gSub:descriptor--
+(#do '\tsub'->BC.putT; size->BC.putS; op1.putOp; BC.sep; op2.putOP; BC.putNl #)
+--gNeg:descriptor--
+  (#do '\tneg'->BC.putT; size->BC.putS; op.putOp; BC.putNl #)
+--gCmp:descriptor--
+  (# (* HP: Notice order of operands *)
+  do '\tcmp'->BC.putT; size->BC.putS; op1.putOp; BC.sep; op2.putOp; BC.putNl
+  #)
+--gMult:descriptor--
+(# (* SUN: <mulsl ?? ;
+    * Note that size can only be 2 or 4 *)
+do '\tmuls'->BC.putT; size->BC.putS; op1.putOp; BC.sep; op2.putOP; BC.putNl
+#)
+--gDiv:descriptor--
+(# (* Note that size can only be 4 *)
+do '\tdivsll\t'->BC.putT; op1.putOp; BC.sep; op2.putOP; BC.putNl
+#)
+--gOr:descriptor--
+(#do '\tor'->BC.putT; size->BC.putS; op1.putOp; BC.sep; op2.putOP; BC.putNl #)
+--gAnd:descriptor--
+(#do '\tand'->BC.putT; size->BC.putS; op1.putOp; BC.sep; op2.putOP; BC.putNl #)
+--gXor:descriptor--
+(#do '\teor'->BC.putT; size->BC.putS; op1.putOp; BC.sep; op2.putOP; BC.putNl #)
+--gNot:descriptor--
+  (#
+  do '\taddq'->BC.putT; size->BC.putS; '#1'->BC.putT; BC.sep; op.putOp; BC.putNl;
+     '\tandl\t#1'->BC.putT; BC.sep; op.putOp; BC.putNl
+  #)
+--LogNot:descriptor--
+  (#
+  do '\tnot'->BC.putT; size->BC.putS; op.putOp; BC.putNL
+  #)
+--gGetDataByte:descriptor--
+  (#
+  do (if byteNo
+      // 0 then (* rotate left 8 bits *)
+	 '\troll\t'->BC.putT; '#8,'->BC.putT; op1.putOp; BC.putNl;
+      // 1 then (* swap register halves *)
+	 '\tswap\t'->BC.putT; op1.putOp; BC.putNL; 
+      // 2 then (* rotate right 8 bits *)
+	 '\trorw\t'->BC.putT; '#8,'->BC.putT; op1.putOp; BC.putNl;
+     if);
+     '\tandl\t'->BC.putT; '#255,'->BC.putT; op1.putOp; BC.putNL
+  #)
+--gGetDataWord:descriptor--
+  (#
+  do (if wordNo//0 then
+	 '\tswap\t'->BC.putT; op1.putOp; BC.putNL;
+     if);
+     '\tandl\t'->BC.putT; '#'->BC.putC; 255*256+255->BC.putI;
+	BC.sep; op1.putOp; BC.putNL
+  #)
+--JumpIfTrue:descriptor--                        (* byte, word or long ?? *)
+  (#
+  do '\tbcc\t'->BC.putT; op.putOp; BC.putNl
+  #)
+--gBeq:descriptor--
+  (#
+  do '\tbeq\t'->BC.putT; op.putOp; BC.putNl
+  #)
+--gBge:descriptor--
+  (#
+  do '\tbge\t'->BC.putT; op.putOp; BC.putNl
+  #)
+--gBle:descriptor--
+  (#
+  do '\tble\t'->BC.putT; op.putOp; BC.putNl
+  #)
+--gBne:descriptor--
+  (#
+  do '\tbne\t'->BC.putT; op.putOp; BC.putNl
+  #)
+--gBgt:descriptor--
+  (#
+  do '\tbgt\t'->BC.putT; op.putOp; BC.putNl
+  #)
+--gBlt:descriptor--
+  (#
+  do '\tblt\t'->BC.putT; op.putOp; BC.putNl
+  #)
+--trap:descriptor--
+(* should make a case on trap, cond=4 => le *)
+(#do '\ttraple\n'->BC.putT #)
+--initExternalCall:descriptor--
+(# #)
+--CallCproc:descriptor--
+  (#
+  do '\tjsr\t'->BC.putT; '_'->BC.putC; T->BC.putT; BC.putNl
+  #)
+--CallPrimitive:descriptor--
+  (#
+  do '\tjsr\t'->BC.putT; T->BC.putT; BC.putNl
+  #)
+--PushClong:descriptor--
+  (#
+  do op[]->Push
+  #)
+--PushCword:descriptor--
+  (#
+  do op[]->Push (* gMoveWord for Mac? *)
+  #)
+--PushCbyte:descriptor--
+  (#
+  do op[]->Push (* gMoveByte for Mac? *)
+  #)
+--PushCDoubleAdr:descriptor--
+(# A1: ^address
+do A.copy->A1[]; (*addOff changes A*)
+   4->A.addOff->pushClong; A1[]->pushClong;
+#)
+--PushCtext:descriptor--
+(##)
+--PushCfloat:descriptor--
+(#
+do '\tmovl\t'->BC.putT; F.rN->putFP0; ',sp@-\n'->BC.putT;
+   '\tmovl\t'->BC.putT; F.rN->putFP1; ',sp@-\n'->BC.putT 
+#)
+--PopCword:descriptor--
+  (#
+  do '\tmovw\tsp@+,'->BC.putT; op.putOp; BC.putNL
+  #)
+--PopCbyte:descriptor--
+  (#
+  do '\tmovw\tsp@+,'->BC.putT; op.putOp; BC.putNL
+  #)
+--Xpar:descriptor--
+(# extKind,top,(*parSize,*)longSize,wordSize: @integer;
+   SP: @stackOff;
+#)
+--initGetXpar:descriptor-- (* must be fixed for Pascal also *)
+(# 
+do (if extKind->Xpar.extKind// 5 (*sematt.cCallBackExt*) then
+       72->Xpar.top; 4->Xpar.longSize->Xpar.wordSize
+       (* note cTop=pascTop+4 => cTop=72, pascTop=68 *)
+    else (*pascCallBackExt*)
+       68+((BC+SC)*2+LC*4(*->Xpar.parSize*))->Xpar.TOP;
+       -4->Xpar.longSize; -2->Xpar.wordSize;
+   if);
+#)
+--getXlong:descriptor--
+(*for C, long,word, and byte are always long *)
+(#
+do Xpar.top->Xpar.SP; (XPar.SP[],dr[])->ldVal;
+   Xpar.top+Xpar.longSize->Xpar.top
+#)
+---GetXword:descriptor--
+(* only for MAC Pascal, byte and word are always word *)
+(#
+do Xpar.top->Xpar.SP; (XPar.SP[],dr[])->ldHalf;
+   Xpar.top+Xpar.wordSize->Xpar.top
+#)
+---GetXbyte:descriptor--
+(* only for MAC Pascal, byte and word are always word *)
+(#
+do Xpar.top->Xpar.SP; (XPar.SP[],dr[])->ldHalf;
+   Xpar.top+Xpar.wordSize->Xpar.top
+#)
+--toXres:descriptor--
+(# #)
+--StackOffPut:descriptor--
+  (#
+  do 'sp@'->BC.putT; 
+     (if off//0 then else '('->BC.putC; off->BC.putI; ')'->BC.putC if)
+  #)
+--SaveReg:descriptor--     (* Save registers a0 and a1 *)
+  (#
+  do '\tmovl\ta0,sp@-\n\tmovl\ta1,sp@-'->BC.putT; BC.putNL
+  #)
+--SaveHeapTop:descriptor---
+  (#
+  do '\tmovl\tsp,_BetaStackTop'->BC.putT; BC.putNL
+  #)
+--RestoreReg:descriptor--  (* Restore registers a0 and a1 *)
+  (#
+  do '\tmovl\tsp@+,a1\n\tmovl\tsp@+,a0'->BC.putT; BC.putNL
+  #)
+--popCallStack:descriptor--
+  (#
+  do '\tlea\t'->BC.putT;
+	'sp@('->BC.putT; (Bn+Sn+Ln) *4 ->BC.putI; '),sp\n'->BC.putT
+  #)
+--AlcPascResult:descriptor--
+  (# 
+  #)
+--PascalTrap:descriptor--
+  (# (* only meaningful on  Macintosh *)
+  do '# PascalTrap: '->BC.putT; TrapId->BC.putT; BC.putNL
+  #)
+--SwitchToData:descriptor--
+(# (* perhaps it should not be evn here ?*)
+do '.even '->BC.putT; BC.putNL; '.data' -> BC.putT; BC.putNL
+#)
+--SwitchToCode:descriptor--
+  (#
+  do '.even '->BC.putT; BC.putNL; '.text' -> BC.putT; BC.putNL
+  #)
+--DeclareLong:descriptor--
+  (#
+  do '.long ' -> BC.putT; N->BC.putI; BC.putNL
+  #)
+--DeclareAddress:descriptor--
+  (#
+  do '.long ' -> BC.putT; op.putOp; BC.putNL
+  #)
+--DeclareWord:descriptor--
+  (#
+  do '.word ' -> BC.putT; N->BC.putI; BC.putNL
+  #)
+--DclWord:descriptor--
+  (#
+  do '.word ' -> BC.putT; N ->BC.putI; BC.putNL
+  #)
+--Skip:descriptor--
+  (#
+  do '.skip ' ->BC.putT; BN->BC.putI; BC.putNL
+  #)
+--AsciiText:descriptor--
+  (* For hp the output has the form
+   *    asciz "........"
+   * Chars with a value less that ' ' (32) are converted to
+   * the form \ooo where ooo is the octal value of the character.
+   * The char '"' is printed as '\"'.
+   *)
+  (#
+  do '.asciz "' -> BC.putT;
+      T.scanAll
+        (#
+        do (if (ch<' ')//true then
+               '\\'->BC.putC;
+               '0'+(ch div 64)->BC.putC; (ch mod 64)->ch;
+               '0'+(ch div  8)->BC.putC; (ch mod  8)->ch;
+               '0'+ch->BC.putC;
+            else
+              (if ch
+               // '"' then '\\'->BC.putC; '"'->BC.putC
+               // '\\' then '\\'->BC.putC; '\\'->BC.putC
+              else 
+                (if (ch>255)//true then
+          	  ' ' -> BC.putC;
+                 else
+          	  ch->BC.putC 
+                if);
+              if)
+            if)
+         #);
+     '"' -> BC.putC; BC.PutNL;
+     '.even' -> BC.putT; BC.PutNL;
+  #)
+--LabelDef:descriptor--
+  (#
+  do T->BC.putT; ':'->BC.putC 
+  #)
+--defineMainLabel:descriptor--
+  (# T: @text
+  do '_main' -> T ; T[] -> export;  T[] -> labelDef;
+     'SetArgValues'->jsrT
+  #)
+--arithShiftLeft:descriptor-- 
+  (#
+  do '\tasll\t'->BC.putT; op1.putOp; BC.sep; op2.putOp; BC.putNL
+  #)
+--arithShiftRight:descriptor-- 
+  (#
+  do '\tasrl\t'->BC.putT; op1.putOp; BC.sep; op2.putOp; BC.putNL
+  #)
+--logicalShiftLeft:descriptor-- 
+  (#
+  do '\tlsll\t'->BC.putT; op1.putOp; BC.sep; op2.putOp; BC.putNL
+  #)
+--logicalShiftRight:descriptor-- 
+  (#
+  do '\tlsrl\t'->BC.putT; op1.putOp; BC.sep; op2.putOp; BC.putNL
+  #)
+--nop:descriptor--
+(#do '\tnop\n'->BC.putT #)
+--RegAdrPutOp:descriptor--
+  (# (* Address Register Indirect with Displacement *)
+  do 'a'->BC.putC; Reg->BC.putI; '@'->BC.putC;
+     off->RegisterOffSet
+  #)
+--AdrLoadFloatOp:descriptor--
+(##)
+--RegInd:descriptor--
+  (# (* Address Register Indirect *)
+  do 'a'->BC.putC; R->BC.putI; '@'->BC.putC
+  #)
+--RegisterOffSet:descriptor---
+  (# 
+  do (if (offset <> 0) // true then
+         '('->BC.putC; offset->BC.putI; ')'->BC.putC if)
+  #)
+--ByteRegAdrPutOp:descriptor--
+  (# (* MC68020: Address Register Indirect with Displacement *)
+     (* d16 <-> "byte" ???? *)
+  do aReg->BC.putA; '@'->BC.putC;
+     (if (off <> 0) // true then '('->BC.putT; off->BC.putI; ')'->BC.putT if);
+  #)
+
+(* 2.8.3: Register indirect with index *)
+--InxRegAdrPutOp:descriptor--
+  (# (* 2.8.3.2: Address Register Indirect with Index (Base Displacement) *)
+     (* HP:      Address Register Indirect with Index Plus Base Displacement*)
+     (* off = long displacement
+        aReg  = base register
+        dReg  = index register *)
+  do aReg->BC.putA; '@'->BC.putC;
+     '('->BC.putC; off->BC.putI; ':l'->BC.putT; BC.sep; dReg->BC.putD;
+     ':l:'->BC.putT; size->BC.putI; ')'->BC.putC
+  #)
+--ByteInxRegAdrPutOp:descriptor--
+  (# (* 2.8.3.1 Address Register Indirect with Index (8 Bit Displacement) *)
+     (* HP:     Address Register Indirect with Index plus Displacement *)
+     (* off   = 8 bit displacement
+        aReg  = base register
+        dReg  = index register *)
+  do aReg->BC.putA; '@'->BC.putC;
+     '('->BC.putC; 
+     off->BC.putI;
+     BC.sep; 
+     dReg->BC.putD;  
+     ':l)'->BC.putT
+  #)
+--BitField:descriptor--
+  (#
+  do'{'->BC.putC; off->BC.imm; ':'->BC.putC; wd->BC.imm; '}'->BC.putC
+  #)
+
+--debugImpInfo:descriptor--
+  (#
+  do '.stabn 68,0,' -> BC.putT; astRef->BC.putI; BC.sep; lab.putOp; BC.putNL
+  #)  
+--debugBeforeEndMinfo:descriptor---
+  (#
+  do '.stabn 68,0,0,' -> BC.putT; lab.putop; BC.putNL
+  #)
+--debugAfterEndMinfo:descriptor--
+(##)
+--debugGpartInfo:descriptor--
+(# 
+do '.stabs "'->BC.putT; thisFormName-> BC.putT; '",38,0,'->BC.putT;
+   astRef -> BC.putI; BC.sep; Tlab->BC.putT; BC.putNL
+#)
+--debugProtoInfo:descriptor--
+  (#
+  do  '|'->BC.putC; Tlab->BC.putT; BC.PUTnl
+  #)
+
+(************************* registers ******************************)
+--DataRegMax:descriptor--
+  (# do 5->val #)
+--thisO:descriptor-- (#do 0->rNo #)
+--callO:descriptor-- (#do 1->rNo #)
+--originO:descriptor-- (#do 2->rNo #)
+(**************************************)
+--AssemblerTail:descriptor--
+(# #)
+---EndDebugCode:descriptor---
+(# #)
+---BeginProtoTypes:descriptor---
+(##)
+--xParForward:descriptor--
+  (#
+  do (if extKind
+      // 1 (* sematt.cExt*) then false->forward
+      // 2 (* sematt.pascExt*) // 3 (* sematt.pascTrapExt*) then true->forward
+  if)#)
+--putS:descriptor--
+(#
+do (if size
+    // 4 then 'l\t'->putT
+    // 1 then 'b\t'->putT
+    else (* 2 *) 'w\t'->putT
+   if)
+#)
+--putA:descriptor--
+(#do 'a'->putC; n->putI #)
+--putD:descriptor--
+(#do 'd'->putC; n->putI #)
+--imm:descriptor--
+(#do '#'->put; off-> putI #)
+--Newdesc:descriptor--
+(#do 10->NCmax #)
+--newCtextOp:descriptor--
+(# S: @text do '_'->S.put; T[]->S.puttext; S[]->op #)

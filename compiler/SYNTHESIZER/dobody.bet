@@ -1,0 +1,1161 @@
+ORIGIN 'genlib';
+LIB_ITEM 'betacodegen';
+INCLUDE '~beta/sysutils/endian'
+---GenDo:doPart---
+do
+   (# Scan: 
+        (# genLabel: 
+             (# imp,lab: @ASTindex; restartLab,leaveLab: @mch.localLab ;
+                generate,internalDesc,internalSlot: @Boolean;
+                sonImp: @ASTindex;
+                as: ^expanded;
+             enter imp (* imp = (label <nameDcl> <Imp+;>) *)
+             do imp.son->lab;
+
+                not b2c -> generate; (* OLM: 'generate' is a boolean 
+                                      * introduced by KJM to handle b2c; 
+                                      * it is always true for not b2c
+                                      *)
+                (* the following suffixWalk was introduced by KJM to handle
+                 * b2c. For sgi we also need it to find out if there are
+                 * (1) Nested internal descriptors that may contain a
+                 * leave/restart to be executed by 'ExO'. The current check
+                 * is conservative, assuming that a nested descriptor has
+                 * a leave/restart. The check could be made more precise by
+                 * checking if the descriptor in fact contains a leave/restart
+                 * to the considered label; perhaps it would be better to
+                 * check for each "leave/restart L" if L=lab and L.on>0 (this
+                 * must take insertable descriptors into account).
+                 * (2) Slots in the code enclosed by a label as in:
+                 *     L: ( ...; <<SLOT ..>>; ...); 
+                 * The slot may execute leave/restart and this may
+                 * cause a jump from one shared object file to another,
+                 * and such jumps must restore the context pointer for
+                 * the shared object (GP for sgi).
+                 * The b2c version terminated the suffixWalk when either a 
+                 * descriptor or a slot was found; we now continue until 
+                 * a slot is found (if any exists).
+                 *)
+                lab.brother->sonImp;
+                (*321->trace(# do 'genLabel:Scan: '->xT; sonImp[]->xA #);*)
+                sonImp.asAST -> as[];
+                (*sonImp.inx->sonImp.frag.indexToNode->as[];*)
+                L: as.suffixWalk
+                  (# 
+                  do (if current.symbol
+                      // gram.objectDescriptor then
+                         current[] -> AstAsAstIndex -> sonImp;
+                         (* (current.index,current.frag[])->sonImp;*)
+                         (if not (sonImp[]->sematt.insertable) then
+                             (* a real objectdescriptor *)
+                             (*321->trace(# do 'Found desc'->xT #);*)
+                             true->generate->internalDesc; (*leave L *)
+                         if);
+                      // gram.unexpanded then
+                         true->generate->internalDesc->internalSlot; leave L 
+                     if);
+                  #);
+                (*321->trace(# do (if generate then 'Generate'->xT
+                 else 'Don\'t Generate'->xT if)#)*)
+
+                restartLab.new; leaveLab.New;
+                (if internalDesc or internalSlot then
+                    (* the label may be referred from other descriptors*)
+                    true->restartLab.betaLabel->leaveLab.betalabel;
+                    restartLab.codeLocal -> restartLab.type;
+                    leaveLab.codeLocal -> leaveLab.type;
+                    (if internalSlot then
+                        (* mark localLab as interFragment *)
+                        restartLab.interFragment -> restartLab.type;
+                        ('R',thisDescNo,thisForm[],not common.switch[30])
+                          -> gen.sysLab
+                          -> restartLab.descId[];
+                        leaveLab.interFragment -> leaveLab.type;
+                        ('L',thisDescNo,thisForm[],not common.switch[30])
+                          -> gen.sysLab
+                          -> leaveLab.descId[]
+                    if)
+                if);
+
+                restartLab.def; 
+                (if internalSlot then
+                    - restartLab -> lab.restartAdr;
+                    - leaveLab -> lab.leaveAdr
+                 else
+                    restartLab -> lab.restartAdr;
+                    leaveLab -> lab.leaveAdr
+                if);
+                
+                (if generate then
+                    (restartLab[],leaveLab[],lab.off,internalDesc,internalSlot)
+                      ->mch.BeginLabel;
+                if);
+
+                lab.brother->&Scan;
+                
+                (if generate and b2c then 
+                    (* KIM: can endLabel be called after leaveLab.def 
+                     * as for the not b2c case?
+                     *)
+                    (lab.off,internalDesc,internalSlot) ->mch.endLabel
+                if);
+
+                leaveLab.def;
+                (if generate and not b2c then
+                    (lab.off,internalDesc,internalSlot) -> mch.endLabel 
+                if)
+             #);
+           Break: (* used by genRestart and genLeave *)
+             (# imp: ^ASTindex;
+                isLeave: @boolean;
+                lab,labDcl,labSort: @ASTindex;
+                on,     (* no. of origin levels to encl. desc. containing lab*)
+                off,    (* offset of label in enclosing desc *)
+                thisDescOrgOff: @integer; (* origin offset in this desc *)
+                jmpAdr: @ mch.localLab;
+                A: ^mch.address;
+                as: ^expanded;
+                sonimp: @ASTindex;
+
+                (* KIM: I have removed "FindFirstDesc:", and "ScanLabelled"
+                 * and some b2c (if false then ...if) code, since it was not
+                 * used anymore! If you need it, look at an older version
+                 * of dobody. /olm
+                 *)
+                EncDescOrFragment:
+                  (* similar to sematt.encDesc, but don't stop
+                   * when meeting a do-part slot!
+                   *)
+                  (# node: ^ ASTindex; desc: @ASTindex
+                  enter node[]
+                  do node.father->desc;
+                     findDescNode:
+                       (if desc.label
+                        // gram.objectDescriptor then (* OK *)
+                           (if desc[]->sematt.insertable then
+                               desc.origin->desc; 
+                               restart findDescNode
+                           if)
+                        // gram.descriptorForm // gram.attributesForm then
+                           desc.xOrigin->desc;
+                           restart findDescNode
+                        // gram.unExpanded then
+                           desc.slotOrigin->desc; 
+                           restart findDescNode
+                        // gram.doPart //gram.mainPart then
+                           (# D: @ASTindex
+                           do desc.father->D;
+                              (if D.isNull then
+                                  (* the doPart is a form: '---x:doPart---' *)
+                                  (* here we differ from sematt.encDesc *)
+                                  desc.xOrigin->desc;
+                                  restart findDescNode
+                               else D->desc; restart findDescNode
+                           if)#)
+                        else (* other AST nodes *)
+                           desc.father->desc;
+                           restart findDescNode
+                       if)
+                  exit desc[]
+                  #);
+                
+                origin: ^ASTindex;                
+	        count: @Integer; (* count origin levels *)
+	        interSlots: @boolean;
+                ch: @char; descNo: @integer; form: ^text
+             enter(imp[],isLeave) (*on,off,thisDescOrgOff,lab*)
+             do imp.son->lab; lab.dclRef->labDcl; labDcl.sort->labSort;
+                labDcl.off->off; lab.on->on;
+                (if labSort.label = gram.labelledImp then
+                    (if isLeave then labDcl.leaveAdr->jmpAdr
+                     else labDcl.restartAdr->jmpAdr
+                    if);                    
+
+                   (* 312 -> trace(#do 'jmpAdr1:'->xT; jmpAdr->xI;
+                    ' On:'->xT; on->xI #);*)
+                    (if isBigEndian then
+                        1 -> jmpAdr.labNo.%getSignedShort -> jmpAdr
+                     else
+                        0 -> jmpAdr.labNo.%getSignedShort -> jmpAdr
+                    if);
+                    (if jmpAdr < 0  then
+                        (* getSignedShort should be used in labDcl.leaveAdr
+                         * and labDcl.restartAdr in index.bet
+                         *)
+                        (*312 -> trace(#do 'jmpAdr2:'->xT; jmpAdr->xI #);*)
+                        - jmpAdr -> jmpAdr;
+                        true -> interSlots;
+                    if);
+
+                    (if (0 < on) then
+                        (if interSlots then
+                            (* Currently the fragment containing an inter
+                             * fragment label MUST be code generated together
+                             * with body fragments referring the label!
+                             * The reason is that the local label numbers
+                             * are generated during codegeneration and
+                             * that they are not saved in the AST. They
+                             * have to be generated and ssaved during checking.
+                             * This requires a way of counting labels during
+                             * checking, and this counting MUST not conflict
+                             * with the standard localLab counting.
+                             * 
+                             * When a labelDcl is processes, a negative
+                             * label is used to indicate an inter fragment 
+                             * label.
+                             * An inter fragment label can be referred
+                             * from within the same fragment. To test if
+                             * the use and decl of a label is within
+                             * the same fragment, the test
+                             *    labDcl.frag[] <> lab.frag[] 
+                             * is used below to generate an import.
+                             * This test could also be used to avoid
+                             * calling the label as inter fragment (i.e.
+                             * using the R11FOO label). However, a codeLocal
+                             * label has the form L5 (.L5), but currently
+                             * there is no support for having both types
+                             * of label. Perhaps codeLocal should just also
+                             * be on the form R11FO?
+                             *)
+                            jmpAdr.interFragment -> jmpAdr.type;
+                            (if isLeave then 'L' -> ch
+                             else 'R' -> ch
+                            if);
+                            labDcl[] -> EncDescOrFragment -> origin[];
+                            origin.descId -> (form[],descNo);
+                            (ch,descNo,form[],not common.switch[30])
+                              -> gen.sysLab
+                              -> jmpAdr.descId[];
+                            (if not (labDcl -> lab.inSameFragment)
+                                (*labDcl.frag[] <> lab.frag[]*)  then 
+                                jmpAdr.asText -> mch.import
+                            if);
+                         else
+                            jmpAdr.codeLocal -> jmpAdr.type
+                        if);
+                        true->jmpAdr.betaLabel;  
+                        gen.thisRegAdr->A[]; 
+                        (*(on,false) -> A.goOrigin -> A[];*)
+                        (*(on,false) 
+                         * -> A.goOrigin 
+                         * -> GoOrigin
+                         * -> A[];
+                         *)
+                        (if common.switch[89] then
+                            (* experiment with new ExitObject (ExO)
+                             * routine - will call Ex0x
+                             *)
+                            on - 1 -> on
+                        if);
+                        (A[],A.copy,on,false) -> GoOrigin -> A[];
+                        
+                        (*!!! OBS !!! d0 is used here. 
+                         * Check that this NEVER conflicts
+                         * with registerallocation 
+                         *)
+                        A.toCallReg;
+                        (off,jmpAdr[],isLeave)->mch.break;
+                     else
+			(if b2c then 
+			    (* if labDcl sub-ast contains descriptors or slots
+			     * generate free 
+			     *)
+                            labDcl.brother->sonImp;
+			    (*321->trace(# do 'Break. Scan: '->xT; sonImp[]->xA #);*)
+			    sonImp.asAST -> as[];
+                            (*sonImp.inx->labDcl.frag.indexToNode->as[];*)
+			    L: as.suffixWalk
+				 (# 
+				 do (if current.symbol
+				     // gram.objectDescriptor then
+                                        current[] -> AstAsAstIndex -> sonImp;
+					(*(current.index,current.frag[])
+                                         * ->sonImp;
+                                         *)
+					(if not (sonImp[]->sematt.insertable) then
+					    (* a real objectdescriptor *)
+					    (*321->trace(# do 'Found desc'->xT #);*)
+					    gen.thisRegAdr->A[]; 
+					    A.toCallReg;
+					    off->mch.freeLabel;
+					    leave L;
+					 else
+    					    (*321->trace(# do 'Found ins. desc'->xT; sonImp[]->xA #);*)
+					if);
+				     // gram.unexpanded then
+					    (*321->trace(# do 'Found unexp'->xT #);*)
+					gen.thisRegAdr->A[]; 
+					A.toCallReg;
+					off->mch.freeLabel;
+					leave L;
+				    if);
+				 #);
+			if);
+		        jmpAdr[]->mch.gJmp
+                    if)
+                 else
+                        (*312->trace(#do ' leave ptn!'->T #);*)
+                    (if on > 1 then
+                        (*  In P: (# do ... leave P ... #), P.on>0 always *)
+                        '\nleave/restart PTN, with PTN.on>1\n'->bugstream.puttext;
+                        gen.thisRegAdr->A[]; 
+                        (*(on-1,false) -> A.goOrigin -> A[];*)
+                        (*(on-1,false) -> A.goOrigin -> GoOrigin -> A[];*)
+                        (A[],A.copy,on,false) -> GoOrigin -> A[];
+                        A.toCallReg; (* callReg = p-instance *)
+
+                        (if isLeave then
+                            0->mch.initPrimCall;
+                            'ExPL'->mch.callPrim
+                         else
+                            (# desc: @ASTindex; local: @boolean; 
+                               T: ^text
+                            do 1->mch.initPrimCall;
+                               (*labDcl is a pattern *)
+                               (*312->trace(#do 'break1:'->xT; labDcl[]->xA#);*)
+                               lab->sematt.descrip-> desc;
+                               (*312->trace(#do 'break2:'->xT; desc[]->xA#);*)
+                               'ExPR'->mch.callprim;
+                               ('M',desc[])->mkEntryPoint->(T[],local);
+                               (if not local then T[]->mch.import if);
+                               (T,none)->mch.jmpTlong;
+                                   (*312->trace(#do 'break3:'->xT #);*)
+
+                        #)if);
+                        0->mch.getPrimRes
+                     else
+                        (* P.on = 1 implies that leave P is in the
+                         * do-part of P and NOT in an internal singular
+                         * descriptor in the do-part of P
+                         *)
+                        (if isLeave then
+                            (if false (*b2c*) then
+			        (****************************
+                                  (if topReturn then 
+				    'a1=a0;\n\ta0=(*(--RefSP) & ~1);\n\t'->mch.BC.putT;
+				if);
+                                'return;\n\t'->mch.BC.putT
+                                ******************************)
+                             else
+                                (if topReturn then 
+                                    (true,returnOff)  -> mch.return (* pre-emptive *)
+                                 else
+                                    (ReturnOff,true) -> mch.returnInner
+                            if)if)
+                         else
+                            restartLab[]->mch.gJmp
+                        if)
+                    if)
+                if)
+             #);
+           GenFor: 
+             (* imp = (for <index> <implst> )
+              * <index> = (index <evaluation>)
+              *         | (namedIndex NAME <evaluation>) 
+              * Code:
+              * clrl th@(off)           
+              * move 'range',th@(off+4) 
+              * jmp L2
+              * L1:...
+              *    ...
+              * L2: addi #1, off(th)
+              * move off(th),T1      ; index -> T1
+              * cmp  off+4(th),T1    ; range-T1
+              * ble L1 
+              *)
+             (# imp,index,EV,impLst: @ ASTindex;
+                off: @integer; start,end: @mch.localLab;
+                EH: @EvalHandler; V: ^EH.EvVal; A: ^mch.address;
+                dr: ^mch.dataRegOperand;
+                forBaseReg:
+                  (# off: @integer; A: ^mch.address; sp: @mch.regAdr
+                  enter off
+                  do gen.thisRegAdr->A[];
+                     off->A.addOff->A[]
+                  exit A[]
+                  #)
+             enter(imp,off) (* off should not be enter param!!!!!! *)
+             do imp.son->index; index.brother->impLst; index.son->EV;
+                1->imp.getAttribute->off;
+                (if index.label = gram.namedIndex then EV.brother->EV if);
+                (gen.thisRegAdr,EV[],false,ThisSuperChain)
+                  -> &EH.ExpEval
+                  -> V[]; (* V=range *)
+                forBaseReg->A[]; off->A.addOff->A[]; 
+                (0->mch.newCstOp,A[],4)->mch.stCst; (* index var*)
+                4->A.addOff->A[]; 4->A.size; A[]->V.asgToAdr->V[]; (* store range*) 
+                V.release; (* A.freeAdr;*)
+                (* there is probably an asymmetri in asgToAdr with respect to
+                 * release of left/right operand *)
+                start.new; end.new;
+                end[]->mch.gJmp;
+                start.def;
+                impLst->&Scan;
+                off->forBaseReg->A[]; 4->A.size;
+                end.Def;
+                (1->mch.NewCstOp,A[])->mch.addMem->dr[];
+                4->A.addOff->A[];
+                (4(*gBle*),A[],dr[],4,start[])->mch.cmpAndJmp;
+                dr.deAlloc
+             #);
+           genSimpleIf:
+             (* (if E then I1 else I2 if)
+              *  E->D
+              *  cmp,D,true
+              *  jmpFalse E
+              *     <I1>
+              *  E:
+              *     <I2>
+              *  X:
+              *)
+             (# imp,eval,thenP,elseP,N: @ASTindex; 
+                EH: @EvalHandler; Elab,Xlab: @mch.localLab;
+                EV0: ^EH.evVal; dr: ^mch.dataRegOperand;
+                V: @integer;
+             enter imp
+             do imp.son->eval; eval.brother->thenP; thenP.brother->elseP;
+                
+                (* check constant condition: if true then ... else ... if *)
+                (if eval.label = gram.objectDenotation then
+                    eval.son -> N;
+                    (if N.label = gram.nameApl then
+                        N.descRef -> N;
+                        (if (N -> sematt.descKind) = sematt.constKind then
+                            (if (N.attSize -> V) = 1 then
+                                311->trace(#do 'Take THEN branch'-> xT #);
+                                thenP -> &Scan;
+                                leave GenSimpleIf
+                             else
+                                (if V = 0  then
+                                    (if elseP.label = gram.elsePart then
+                                        311->trace(#do 'Take ELSE branch'->xT #);
+                                        elseP.son -> &Scan;
+                                     else
+                                        311->trace(#do 'Take NO branch'->xT #)
+                                    if);
+                                   leave GenSimpleIf
+                if)if)if)if)if);
+                
+                Xlab.new;
+                (if elseP.label = gram.elsePart then Elab.new
+                 else Xlab->Elab
+                if);
+                (gen.thisRegAdr,eval[],false,ThisSuperChain,Elab[],false)
+                  -> &EH.BoolExpEval
+                  -> EV0[];
+                thenP->&Scan;
+                (if elseP.label=gram.elsePart then 
+                    Xlab[]->mch.Gjmp;
+                    Elab.def;
+                    elseP.son->&Scan 
+                if);
+                Xlab.def;
+             #);
+           genIf: 
+             (* new code generation for if-imp
+              *  <GeneralIfImp> ::= 
+              *      '(if' <Evaluation> <Alternatives> <ElsePartOpt> if';
+              *  <Alternatives> ::+ <Alternative> ;
+              *  <Alternative> ::= <Selections> 'then' <Imperatives>;
+              *  <Selections>::+ <Selection> ;
+              *  <Selection> ::| <CaseSelection> ;
+              *  <CaseSelection> ::= '//' <evaluation>;
+              *  <ElsePartOpt> ::? <ElsePart>;
+              *  <ElsePart> ::= 'else' <Imperatives>;
+              *)
+             (# imp,cond: @ASTindex; thenP: ^ASTindex;
+                alt: [8] ^alternative; top: @integer;
+                theElse: @ASTindex;
+                alternative:
+                  (# eval: [3] ^ASTindex; top: @integer; thenP: ^ASTindex #);
+                isConst: @
+                  (# EV: ^ASTindex; yes: @boolean; 
+                     N,Cmin,Cmax,count: @integer; 
+                     C: ^text; desc: @ASTindex;
+                     cases,labels,scases,slabels: [8]@integer;
+                     Sort:
+                       (# change: @boolean; R: @integer
+                       do false->change;
+                          (for i: count-1 repeat
+                               (if scases[i]>scases[i+1] then
+                                   scases[i]->R;
+                                   scases[i+1]->scases[i];
+                                   R->scases[i+1];
+                                   slabels[i]->R;
+                                   slabels[i+1]->slabels[i];
+                                   R->slabels[i+1];
+                                   true->change
+                          if)for);
+                          (if change then restart sort if)
+                       #);
+                     addConst:@
+                       (# N,R: @integer
+                       enter N
+                       do (* Check that N has NOT been met before *)
+                          (if count=0 then N->Cmin->Cmax 
+                           else 
+                              (for i: count repeat
+                                   (if cases[i]=N then 
+                                       false->yes;
+                                       (*(EV,?)->&Warning; - not possible
+                                        * since we are not in the checker:-(
+                                        *)
+                                       leave addConst
+                              if)for);
+                              (N,Cmin)->Min->Cmin;
+                              (N,cMax)->Max->Cmax
+                          if);
+                          (if (count+1->count) > cases.range then
+                              cases.range->R->cases.extend; 
+                              labels.range->labels.extend;
+                              R->scases.extend; 
+                              R->slabels.extend
+                          if);
+                          N->cases[count]->scases[count];
+                       #)
+                  enter EV[]
+                  do (if EV.label
+                      //gram.integerConst then
+                         EV.gettext->C[]; 0->C.setPos; C.getInt->AddConst
+                         (*//gram.textConst then*)
+                      // gram.objectDenotation then
+                         (if EV.evalKind=semAtt.insEval then
+                             EV.son->sematt.descrip-> desc;
+                             (if desc.label=gram.objectDescriptor then
+                                 (if (desc->sematt.DescKind)=sematt.constKind then
+                                     desc.attSize->AddConst
+                                  else false->yes
+                                 if)
+                              else false->yes
+                             if)
+                          else false->yes
+                         if)
+                      else false->yes
+                     if)
+                  #);
+                Decode:
+                  (# imp1: @ASTindex
+                  do true->isConst.yes;
+                     imp.son->cond;
+                     cond.brother->imp1->scanList
+                     (* scan <Alternatives> *)
+                     (# thisAlt: ^alternative; thisAltIndex,evals,imp1: @ASTindex
+                     do (if top>=alt.range then alt.range->alt.extend if);
+                        &alternative[]->alt[top+1->top][]->thisAlt[];
+                        currentNode->thisAltIndex; 
+                        thisAltIndex.son->evals;
+                        evals->scanList
+                        (* scan <Selections> *)
+                        (# EV: ^ASTindex
+                        do &ASTindex[]->EV[]; currentNode->EV; EV.son->EV;
+                           (if thisAlt.top>=thisAlt.eval.range then
+                               thisAlt.eval.range->thisAlt.eval.extend
+                           if);
+                           EV[]->thisAlt.eval[thisAlt.top+1->thisAlt.top][];
+                           (if isConst.yes then EV[]->isConst if)
+                        #);
+                        &ASTindex[]->thenP[];
+                        evals.brother->thenP; 
+                        thenP[]->thisAlt.thenP[];
+                     #);
+                     imp1.brother->imp1;
+                     (if imp1.label//gram.elsePart then imp1.son->theElse if)
+                  #);
+                GenCode:
+                  (* generate code
+                   * (if E0
+                   * // E11 // E12 then I1
+                   * // E2 then I2
+                   * // E3 then I3
+                   * else I
+                   * if)
+                   *    <E0> -> D
+                   *    <E11> -> V
+                   *    cmp D,V
+                   *    jmpTrue L1
+                   *    <E12> -> V
+                   *    jmpFalse C1
+                   * L1:        
+                   *    <I1>
+                   *    jmp X
+                   * C1:
+                   *    <E2> -> V
+                   *    cmp D,V
+                   *    jmpFalse C2
+                   *    <I2>
+                   *    jmp X
+                   * C2:
+                   *    <E3> -> V
+                   *    cmp D,V
+                   *    jmpFalse C3:
+                   *    <I3>
+                   *    jmp X
+                   * C3:
+                   *    <I>
+                   * X:
+                   *    
+                   *)
+                  (# EH: @EvalHandler; EV0,EV,V1,V2: ^EH.evVal; 
+                     thisAlt: ^alternative;
+                     Llab,Clab,Xlab: @mch.localLab; lab: ^mch.localLab;
+                     binType,jmpCond: @integer; trueVal: ^EH.evVal
+                  do Xlab.new;
+                     (gen.thisRegAdr,cond[],false,ThisSuperChain)->&EH.ExpEval
+                       ->EV0[];
+                     select:
+                       (if EV0.evType->binType//-1 then 
+                           (* EV0 is itemEval, exit elm must be computed *)
+                           EV0.loadVal->EV0[];
+                           restart select
+                        // 0 then
+                           'OBS evtype is zero'->bugstream.putline
+                       if);
+                     EV0.loadVal2->EV0[]; (* in register, if not a constant *)
+                     (for i:top repeat
+                          alt[i][]->thisAlt[];
+                          Clab.new;
+                          (if thisAlt.top>1 then Llab.new if);
+                          (for j: thisAlt.top repeat
+                               thisAlt.eval[j].nodeId->mch.newEval;
+                               (gen.thisRegAdr,thisAlt.eval[j][],false
+                               ,thisSuperChain)
+                                 ->&EH.ExpEval->EV[];
+                               (if j<thisAlt.top then
+                                   1(*Beq*)->jmpCond;
+                                   Llab[]->lab[]
+                                else
+                                   2(*Bne*)->jmpCond;
+                                   Clab[]->lab[]
+                               if);
+                               select:
+                                 (if binType
+                                  //1//2 then
+                                     (EV0[],0,jmpCond,lab[])->EV.cmp->V1[];
+                                  // 3 (* real *) then
+                                     EV.mkReal->EV[];
+                                     (EV0[],0,jmpCond,lab[])->EV.rcmp->V1[];
+                                  // 4 then
+                                     (if EV.evType//4 (* struc *) then
+                                         (EV0[],gram.eqExp)->EV.sCmp->V2[];
+                                         1->EH.mkConstVal->trueVal[];
+                                         (V2[],0,jmpCond,lab[])
+                                           ->trueVal.cmp->V1[];
+                                         V2.release
+                                      else (*NONE *) 
+                                         (EV0[],0,jmpCond,lab[])->EV.cmp->V1[]
+                                     if)
+                                  else
+                                     EV.loadVal->EV[];
+                                     restart select
+                                 if);
+                               EV.release
+                          for);
+                          (if thisAlt.top>1 then Llab.def if);
+                          EV0.release; 
+                          (* registers must be free during code-gen of thenPart *)
+                          thisAlt.thenP->&Scan; 
+                          (if (i<top) or (not theElse.isNull) then
+                              Xlab[]->mch.Gjmp;
+                              EV0.reAlloc; 
+                              (* either cst, computedEv/Adr-!! FIX this for 
+                               * real, and struc also - release may free
+                               * som FP- and/or A-registers
+                               *)
+                          if);
+                          Clab.def;
+                     for);
+                     (if binType = 3(*real*) then mch.popFstack if);
+                     (if not theElse.isNull  then
+                         theElse->&Scan
+                     if);
+                     Xlab.def;
+                  #);
+                GenCase:
+                  (# EH: @EvalHandler;
+                     EV0: ^EH.evVal; dr: ^mch.dataRegOperand; 
+                     Xlab,jumpTableLab,elseL,lab: @mch.localLab;
+                     binType,k,last: @integer; thisAlt: ^alternative;
+                     ar: @mch.adrRegOperand; A: @mch.InxRegAdr
+                  do Xlab.new;
+                     (gen.thisRegAdr,cond[],false,ThisSuperChain)
+                       -> &EH.ExpEval
+                       -> EV0[];
+                     select:
+                       (if EV0.evType->binType
+                        // -1 then 
+                           (* EV0 is itemEval, exit elm must be computed *)
+                           EV0.loadVal->EV0[];
+                           restart select
+                        // 0 then
+                           'OBS evtype is zero'-> bugstream.putline
+                       if);
+                     EV0.loadVal2->EV0[]; (* in register, if not a constant *)
+                     EV0.toDataReg->dr[];
+                     jumpTableLab.new; 
+                     (if common.switch[62] then 
+                         true->jumpTableLab.isTextAdr
+                      else
+                         true->jumpTableLab.betaLabel
+                     if);
+                     jumpTableLab.caseStart -> jumpTableLab.type;
+                     elseL.new; true->elseL.betaLabel;
+                     elseL.caseEnd -> elseL.type;
+                     (isConst.Cmin->mch.newCstOp,dr[],4)->mch.gSub;
+                     (isConst.cMin,isConst.Cmax,dr[],elseL[])->mch.chkCase;
+                     (* Note: for sun4(s):chkcase: dr[] is shifted 2 left*)
+                     ar.alloc;
+                     (jumpTableLab[],ar[])->mch.gLeaLabel;
+                     ar->A.aReg; dr->A.dReg; 4->A.size;
+                     (if common.targetMachineId = common.ppcmac then
+                         (# ar1: @mch.adrRegOperand; A1: @mch.RegAdr
+                         do ar1.alloc;
+                            (A[],ar1[]) -> mch.gLea;
+                            ar1->A1.reg;
+                            (A1[],ar[])->mch.ldVal;
+                            (ar1[],ar[],4) -> mch.gAdd;
+                            ar1.deAlloc
+                         #)
+                      else
+                         (A[],ar[])->mch.ldVal
+                     if);
+                     (ar[],true)->mch.jmpReg;
+                     jumpTableLab.def; 
+                     (for i: isConst.count repeat
+                          lab.new; lab->isConst.labels[i]->isConst.slabels[i]
+                     for);
+                     (* sort table *)
+                     isConst.sort;
+                     isConst.cMin->last;
+                     (* probably an align 4 here.
+                      * datpete: in that case: remember to update mch.IP!
+                      *)
+                     (for i: isConst.count repeat
+                          (for isConst.scases[i]-(last+1) repeat
+                               elseL[]->mch.declareAddress;
+                               4 -> mch.incIP; (* datpete 2/6/95 *)
+                          for);
+                          isConst.scases[i]->last;
+                          isConst.slabels[i]->lab; 
+                          lab.caseEntry -> lab.type;
+                          true->lab.betaLabel;
+                          lab[]->mch.declareAddress
+                     for);
+                     (if isConst.count > 0 then
+                         isConst.count*4->mch.incIP; (* datpete 2/6/95 *)
+                     if);
+                     (for i: top repeat
+                          alt[i][]->thisAlt[];
+                          (for j: thisAlt.top repeat
+                               isConst.labels[k+1->k]->lab;
+                               true->lab.betaLabel; lab.caseEntry -> lab.type;
+                               lab.def;
+                               thisAlt.thenP->&Scan;
+                               Xlab[]->mch.Gjmp;
+                          for)
+                     for);
+                     'Else part'->mch.comment;
+                     elseL.def;
+                     (if theElse.isNull=false then
+                         theElse->&Scan
+                     if);
+                     Xlab.def;
+                  #);
+             enter imp
+             do Decode;
+                (if (isConst.yes) and not b2c 
+                    and (common.mac<>common.targetMachineId) then
+                    (if (isConst.count>=8) and
+                        ((isConst.cMax-isConst.cMin+1) <= isConst.count*2)
+                        then
+                        (*200->trace
+                        (#do 'Case-imp:'->T; isConst.Cmin->I;','->put; 
+                           isConst.Cmax->I; ','->put; isConst.count->putInt; 
+                           imp[]->A
+                         #);*)
+                        GenCase
+                     else GenCode
+                    if)
+                 else 
+                    GenCode
+                if);
+             #);
+           genInner: 
+                  (* (if on>0 then push a0, movl a0^on->a0 if)
+                   * movel a0@,a1
+                   * lea   a1@((prefixLevel+1)*4),a1
+                   * movel a1@,a1
+                   * jsr   a1@
+                   * (if on>0 then pop -> a0 if)
+                   *)
+             (# prefixLevel,on: @integer; imp,pName,D,D1: @ASTindex;
+                A: ^mch.regAdr; A2: ^mch.regAdr; aR: @mch.adrRegOperand;
+                isExternalCallBack,asCall: @boolean
+             enter imp
+             do imp.son->pName;
+                (if pName.label = gram.empty then 
+                    (if insertDo[]<>none then
+                        (* inner in singular insertable as in
+                         *  foo: (# do ... (# do inner #); ... #)
+                         * A warning has been given by checker.
+                         * Is empty action
+                         *)
+                        leave genInner 
+                    if);
+                    ThisDesc->D;
+                    (if D.label = gram.doPart then 
+                        (if D.descNo <> 0 then 
+                            (* the doPart has tmp. attributes *)
+                            2->on
+                        if);
+                        D.xOrigin->D; D.slotOrigin->D         
+                    if)
+                 else 
+                    pName.descRef->D; pName.on->on;
+                    (if D.label // gram.virtualDecl // gram.bindingDecl then 
+                        D.son->D; D.brother->D
+                if)if);
+                (* D is the descriptor of P in
+                 *     P: (# do ..... inner P #)
+                 *)
+                    (*312->trace(#do D[]->A; #);*)
+                D->semAtt.descChain->(D1,prefixlevel);
+                    (*312->trace(#do prefixlevel->I; D1[]->A; #);*)
+                (if (D1->sematt.cProcDesc.equal) then
+                    (* this is a call-back external pattern *)
+                    (* perhaps descChain should skip external prefix?*)
+                    prefixLevel-1->prefixlevel;
+                    true->isExternalCallBack
+                if);
+                (*(on,prefixLevel+2)->gen.innerr*)
+                common.switch[61] or common.switch[64] -> asCall;
+                L:
+                  (if (on>1) or isDoPartForm then
+                      (* P: (# do inner P #) has P.on=1; on >= 1 always.
+                       * P on outer block level or 
+                       * inner doPart form with tmp. attributes
+                       * a:  ---P:doPart--- do ... inner P ...
+                       *    in this case P.on defines on>1 and the origin chain
+                       *    is traversed the appropiate number of times
+                       * b:  ---P:doPart--- do ... inner ...
+                       *     in this case 2->on is executed above to define an
+                       *     appropriate on
+                       *)
+                      (if not asCall then mch.ThisRegOp[]->mch.push if); 
+                      gen.thisRegAdr->A2[];
+                      (for on-1 repeat 
+                           (if A2.bAdr.localDesc.label //gram.doPart then
+                               (*'\nInner:doPartForm\n'->output.puttext;*)
+                               8->A2.off
+                            else
+                               A2.bAdr.localDesc.originOff->A2.off
+                           if);
+                           (if asCall then
+                               (A2[],mch.CallRegOp[])->mch.ldVal;
+                               mch.callO -> A2.reg
+                            else
+                               (A2[],mch.ThisRegOp[])->mch.ldVal
+                           if);
+                           A2.bAdr.LocalDesc[]->sematt.descOrigin
+                             ->A2.bAdr.LocalDesc[]
+                      for);
+                   else
+                      (if asCall then
+                          (mch.thisRegOp[],mch.callRegOp[]) -> mch.cpReg
+                      if)
+                  if);
+                (if asCall then
+                    gen.callRegAdr->A[];
+                    aR.alloc;
+                    (A[],aR[])->mch.ldVal;
+                    &mch.RegAdr[] -> A2[]; aR -> A2.reg
+                 else
+                    gen.thisRegAdr->A[];
+                    (A[],mch.CallRegOp[])->mch.ldVal;
+                    gen.CallRegAdr->A2[]; 
+                if);
+                (if b2c then
+                    20+(prefixLevel+2)*8->A2.addOff->A2[]
+                 else
+                    (* Let D : D1 (# ... #)
+                     *     D1: D0 (# ... #)
+                     * Then prototype for D or sub of D has the form
+                     *              0:
+                     *              4:
+                     *              8:
+                     *             12:
+                     *             16:
+                     *             20: 0 or externalEntryLab
+                     *    COM->    24: Mentry for D0
+                     *             28: ...
+                     *               : ... virtuals declared in D0
+                     * 20+D0.virtSize: M-entry for D1
+                     *               : ...  virtuals declared in D1
+                     * 20+D1.virtSize: M-entry for D
+                     *               : ... virtuales declared in D
+                     * 20+D.virtSize : RETURN or M-entry for sub of D
+                     *               : ...
+                     *     
+                     *)
+                    (*312->trace(#do'InnerOff:'->xT;D.virtSize->xI;D[]->xA#);*)
+                    (if not common.switch[76] then
+                        (* datpete: 2/11/98: COM prototypes *)
+                        20 - 24(* FIXME: common.protoSize-4 *) + D.virtSize -> A2.addOff -> A2[]
+                     else
+                        (* old style BETA *)
+                        20 + D.virtSize -> A2.addOff -> A2[]
+                    if);
+                if); 
+                true->A2.inCode;
+                (A2[],false)->mch.JsrTable; A2.freeAdr;
+                (if not asCall and (isDoPartForm or (on>1))  then
+                    mch.ThisRegOp[]->mch.pop
+                if)
+             #);
+           genCode: 
+             (# imp: @ ASTindex;
+             enter imp
+             do '(code .. code) is no longer supported' 
+                  -> thisTranslate.systemException;
+                (*****************************************
+                imp.son -> scanList
+                (# N: @ currentNode; N1: @ ASTindex; S: ^text
+                do N->N1; N1.getText->S[];
+                   S.scanAll(#do ch->mch.Bc.putC #); mch.BC.putNL
+                 #)
+                 ****************************************)
+             #);
+
+           node: @ ASTindex;
+        enter node
+        do node -> scanList
+           (# impTracer: @ 
+                (* switch 60 and the following code is for being able
+                 * to trace imperatives that have a qua-check generated.
+                 * At the point of the qua-check the compiler may bee deeply
+                 * inside enter/exit lists of patterns and may have no easy
+                 * access to the original imperative. It is important to be
+                 * able to trace this to compare it with qua-checks issued by
+                 * the checker.
+                 * The imp is PPed to a global variable, impTrace.
+                 * This variable is later printed if the imp implies
+                 * generation of a qua-check.
+                 *)
+                (# 
+                do (if common.switch[311] then  
+                       311->trace(#do (*imp.nodeId->xI;*) imp[]->xA;  #)if);
+                   (if common.switch[60] then
+                       impTrace.clear;
+                       (imp[],impTrace[],100)->thePP;
+                   if)
+                #);
+              imp: @ ASTindex
+           do currentNode -> imp; 
+              impTracer;
+              imp.nodeId->mch.newImp;
+              (if common.switch[28] then imp[]->gen.comment if);
+              (if imp.label   
+               // gram.simpleIfImp then imp->genSimpleIf
+               // gram.generalIfImp then imp->genIf
+               // gram.forImp then (imp,offCount) -> genFor
+               // gram.labelledImp then  imp ->genLabel
+               // gram.restartImp then (imp[],false)->Break
+               // gram.leaveImp then (imp[],true)->Break
+               // gram.innerImp then imp->genInner
+               // gram.suspendImp then gen.doSuspend
+               // gram.codeImp then  imp -> genCode
+               else (* evaluation *) 
+                  (# EH: @EvalHandler ;
+                     baseAdr: ^mch.RegAdr;
+                     chain: ^DH.superChain;
+                  do gen.thisRegAdr->baseAdr[];
+                     (if evalChain[] = NONE then 
+                         thisSuperChain->chain[]
+                      else 
+                         evalChain[]->chain[];
+                         (*true->baseAdr.isOrigin;
+                         evalChain.desc[]->sematt.descOrigin
+                          ->baseAdr.bAdr.localDesc[];*)
+                     if);
+                     (baseAdr[],imp[],key.single,chain[])->EH.genEval;
+                     (*351->trace(#do imp[]->A; mch.dumpReg #) *)
+                  #)
+              if);
+           #);
+           node.nodeId->mch.newImp          
+        #);
+      ReturnOff:
+        (# off: @integer
+        do (if isDoPartForm then
+               theRealDesc.ReturnOff -> off
+            else
+               thisDesc.ReturnOff -> off
+           if)
+        exit off
+        #);
+      writeBackHolders:
+        (# N: ^ASTindex;
+           A,A1: ^ mch.address;
+           A2: @mch.RegAdr;
+           aR: @mch.adrRegOperand;
+           L: @mch.localLab;
+           dr:^ mch.dataRegOperand
+        do (for i: holders.top repeat 
+                mch.releaseReg;
+                holders.L[i][] -> N[];
+                (gen.thisRegAdr,N[],false,thisSuperChain)
+                  -> GenAdr 
+                  -> A[];
+                A.copy -> A1[];
+                12 -> A.addOff -> A[];    (* adr *);
+                16 -> A1.addOff -> A1[];  (* value/ref *)
+                aR.alloc;
+                (A[],aR[]) -> mch.ldVal;
+                L.new;
+                (if common.targetMachineId = common.sgi then
+                    (common.cond_eq,0->mch.newCstOp,aR[],4,L[]) 
+                      -> mch.cmpAndJmp                    
+                 else
+                    (* why don't we use cmpAndJmp here ?*)
+                    (0->mch.newCstOp,aR[],4) -> mch.gCmp;
+                    L[] -> mch.gBeq;                
+                if);
+                aR -> A2.reg;
+                (if ((A1[],A2[]) -> mch.cpMem -> dr[]) <> none then
+                    dr.deAlloc
+                if);
+                A1.freeAdr; A2.freeAdr;
+                L.def
+           for)   
+        #);
+      pReg: ^mch.mOperand;
+      lab,restartLab: @mch.localLab;
+      topReturn, isDoPartForm: @boolean;
+      nCOMarg,dataByValueByteSize: @integer; 
+      RL: ^RepList;
+      Mlab: ^text
+   do 310->trace(#do doP[]->xA; thisPrefDesc[]->xA  #);
+      (if hasPref then
+          thisPrefDesc[] -> sematt.hasOnlyInner -> topReturn
+       else (hasPref=false)->topReturn
+      if);
+      doGen:
+        (if insertDo[] = NONE then
+            (* define M-entry-point of do-part*)
+            ('M',thisDescNo,thisForm[],NOT common.switch[30])
+              -> gen.sysLab 
+              -> Mlab[];
+            (if (not common.switch[120]) or globalMlab then
+                (* we not generate an M-entrypoint;
+                 * this could done in general for all platforms
+                 * independent of switch 120
+                 *)
+                (doP.nodeId,Mlab[],false) -> mch.initDo;
+             else
+                MLab[] -> mch.labelDef
+            if);
+            (if switch181 then
+                (if thisDesc.label = gram.objectDescriptor then
+                    (* Cannot be attSize, since this will overwrite
+                     * storage for for-imp, etc
+                     *)
+                    (thisDesc.returnOff,thisDesc.size) -> NXA.init;
+                    311->trace(#do 'ReturnOff'->xT; thisDesc.returnOff->xI #)
+                 else
+                    'Switch 181: doPart: is not objectDescriptor'
+                    -> putline
+                if)
+            if);
+            (if true (*common.switch[64]*) then
+                (if doP.label = gram.empty then
+                    (* This optimization should also be applicable when
+                     * switch 64 is not set. It is NOT implemented since
+                     * we are close to a freeze of r4.1
+                     *)
+                    (* 301->trace(#do 'Empty do-part - just return'-> xT #);*)
+                    mch.rts;
+                    leave doGen
+            if)if);
+            size > 0 -> isDoPartForm; (* dopart slot with tmp. attributes *)
+            
+            (if topReturn then 
+                (if not isComVirtual then
+                    (false,ReturnOff) -> mch.saveReturn
+                if)
+             else ReturnOff -> mch.saveInnerReturn 
+            if);
+            restartLab.new; 
+            restartLab.def; (* jump here for restart P in
+                             * P: (# do ...; restart P #)
+                             *)
+            (if isDoPartForm then
+                (* dopart slot with tmp. attributes *)
+                size -> mch.allocDoPartObject
+            if);            
+            
+            (if (doP.label <> gram.empty) then doP -> &Scan if);
+            
+            (if size <> 0 then size -> mch.deAllocDoPartObject if);
+            (* generate return code for do-part*)
+            lab.new;
+            lab.def;
+            (if topReturn then 
+                (if isComVirtual then
+                    writeBackHolders;
+                    ScanCOMargs -> (nCOMarg,dataByValueByteSize,RL[]);
+                    (if stest then
+                        301->cTrace
+                        (#
+                        do 'COMvirtual:exitDo: '->xT;
+                           'noOfComArg =' -> xT; nComArg -> xI;
+                           ' dataByValueSize =' -> xT; 
+                           dataByValueByteSize -> xI;
+                    #)if);
+                    (if exitP.label <> gram.empty then 
+                        (* return possible value for COM virtual pattern *)
+                        (# ex: @ASTindex; V: ^EH.evVal; EH: @EvalHandler;
+                           exitDescSize: @integer
+                        do L: (thisDesc[],false) 
+                             -> sematt.scanCNX
+                           (# partObjectPar::
+                                (#
+                                do theDesc.size -> exitDescSize
+                                #);
+                              error::
+                                (#
+                                do '\nNo exit match'->putline;
+                                   leave L
+                                #)
+                           #);
+                           exitP.son -> ex; (* check that ONLY one exit elm *)
+                           (gen.thisRegAdr,ex[],false,ThisSuperChain) 
+                             -> EH.ExpEval -> V[];
+                           (if stest then
+                               301->trace(#do 'ComVirtual:exitVal:'->xT;
+                                            V.display; xN; 
+                                            ' exitDescSize =' ->xT;
+                                            exitDescSize -> xI
+                                         #)
+                           if);
+                           (* OBS! does not work when returning a dataByValue:
+                            * exitDescSize > 0 - address of data-object
+                            * (struct) on stack MUST be returned for Intel
+                            *)
+                           (if exitDescSize > 0 then
+                               '\n warning: return of data-object by value does not work' -> putline
+                           if);
+                           V.toDataRegA;
+                        #);
+                    if); 
+                    (nCOMArg,dataByValueByteSize,ReturnOff) 
+                      -> mch.returnVirtualCOM
+                 else
+                    (false,ReturnOff) -> mch.return 
+                if)
+             else
+                (ReturnOff,false) -> mch.returnInner 
+            if);
+         else
+            (* may be called in this way for itemevval:exeDo *)
+            (if (insertDo.label <> gram.empty) then insertDo -> &Scan if)
+        if)
+   #)

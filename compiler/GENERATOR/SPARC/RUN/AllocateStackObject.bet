@@ -1,0 +1,68 @@
+ORIGIN 'BetaRun';
+
+--BetaRunAlloSO: descriptor--
+(* Allocates a stack object and stores it in TSD variable ActiveStack 
+ * 
+ * Registers:
+ *   Destroys two local registers (used for dr and activeStack).
+ *   May destroy %i1 and %o5.
+ *)
+(# dr,activeStackOp: @dataRegOperand;
+   requestedNumBytes: (#  exit dataTopOff+4+stackInitialBodySize #);
+do 'AlloSO'->ExtLabel;
+   NumAlloSO->IncNum; 
+   activeStackOp.alloc;
+   (ActiveStackOp,requestedNumBytes,true,'call_doGC',false) -> GenIOAAlloc;
+   (if true (* debug_runtime *) then
+       (# NotAOA, Msg: @LocalLab; o0op: @dataRegOperand;
+       do (* test that the stack object was not allocated in AOA! *)
+          NotAOA.new;
+          Msg.new;
+          true->Msg.isTextAdr; 
+          switchToData;
+          Msg.def;
+          ('\nFatal error! StackObject 0x%x allocated in AOA!\n',false)
+            ->asciitext;
+          switchToCode;
+          (ActiveStackOp,O5) -> MOV -> emit;
+          (SP,-64,SP) -> SAVE_I -> emit;
+          (I5,O0) -> MOV -> emit;
+          'isInAOA' -> jsrT;
+          (O0,0) -> CMP_I -> emit;
+          (NotAOA -> mstate.labs.off) div 4 -> BE -> emit;
+          (* Call printf *)
+          O0 -> O0op; (Msg.asText, O0op[]) -> PutSetText;
+          (I5,O1) -> MOV -> emit;
+          'printf' -> jsrT;
+          (1,O0)->mov->emit;
+          (if debug_runtime then
+              'Illegal' -> jsrT;
+          if);
+          (*'BetaExit'->jsrT;*)
+          (1,O0) -> MOV_I -> emit;
+          'exit' -> jsrT;
+          NotAOA.def;
+          (G0,G0,G0) -> RESTORE -> emit;
+       #);
+   if);
+   ActiveStackOp->storeActiveStack;
+   (* Setup header of stackobj *)
+   dr.alloc;
+   (common.StackObjectPTValue ->newCstOp,dr[])->ldCst;
+   (ActiveStackOp,0,dr)->ST_I->emit;
+   (if common.IOAMinAge<>0 then
+       (common.IOAMinAge->newCstOp,dr[])->ldCst;
+       (ActiveStackOp,4,dr)->ST_I->emit;
+   if);
+   (stackInitialBodySize->newCstOp,dr[])->ldCst;
+   (ActiveStackOp,stackSizeOff,dr)->ST_I->emit;
+   dr.dealloc;
+   (refStackStartOff,regRefTopOff)->MOV_I->emit;
+   (dataStackStartOff,regDataTopOff)->MOV_I->emit;
+   ActiveStackOp->PackStackOff;
+   ;
+   (ActiveStackOp, 'AlloSO', 'ActiveStackOp') -> EmitCk;
+   ;
+   rts;
+   activeStackOp.dealloc     
+#)

@@ -1,0 +1,1195 @@
+ORIGIN '../backendrisc';
+INCLUDE 'mips';
+BODY 'backendmips_appendToBC'
+---backendatt:attributes---
+(************* this section MUTS be revised!!! *)
+
+trace: (# exit true #);
+TODO: 
+  (# t:^Text
+  enter t[]
+  do 
+     (if t[]=NONE then
+         'TODO: (with no arg)'->T[];
+      else
+     if);
+     (if trace then
+         'TODO:'->screen.putText;
+         t[]->screen.putLine;
+      else
+         (failureTrace, t[])->stop;
+     if)
+  #);
+callregbusy: (#b: @boolean exit b #);
+moperand: (# reg1,offset: @integer;
+             loadFloatOp: (# OP: ^moperand exit op[] #)#);
+registeroperand: moperand (# rn: @integer enter rn exit rn #);
+dataRegOperand: moperand(# val,rn: @integer enter reg1 exit reg1 #);
+floatregop: moperand(# rn: @integer enter rn exit rn #);
+adrregoperand: moperand(# rn: @integer enter rn exit rn #);
+(*********************************************************************
+ * Register assignment:
+ * 
+ *      th               $30     s8
+ *      ca               $5      a1      2nd argument
+ *      or               $4      a0      1st external argument
+ *      a2,a3,a4         $16-18  s0-s2
+ *      d0,d1,d2,d3      $8 -12  t0-t4
+ *      dataTmp1-2       $13-14  t5-t6
+ *      adrTmp1-2        $19-20  s3-4
+ *      ca is saved in adrTmp1 during primitive calls
+ *      IOAbotReg        $21     s5
+ *      IOAusedReg       $22     s6
+ * According to the ABI: t0-t9 are NOT saved across function calls;
+ *                       s0-s8 are saved accross function calls
+ *)
+maxOff: (# exit 32767 #);
+minOff: (# exit -32768 #);
+originReg: (#exit mips_r4 #);
+refTmp: (# n: @integer (* 1,2,3*) enter n exit mips_R15 + n #);
+(*refTmpOp: (# ar: @adrRegOperand; n: @integer ( * 1,2,3* ) 
+          enter n -> refTmp ->ar.rn  exit ar[] 
+          #);*)
+dataTmp1: (#exit mips_r13 #);
+dataTmp2: (#exit mips_r14 #);
+adrTmp1: (#exit mips_r19 #);
+adrTmp2: (#exit mips_r20 #);
+PICcallReg: (#exit mips_R25 #); (* When calling PIC functions, r25 must 
+                                * contain the addres of the called function
+                                *)
+MaxNoOfPrimReg: (#exit 4 #);
+mips_RAop: (# ra: @adrRegOperand do mips_RA->ra exit ra[] #);
+IOAbotReg: (#exit mips_R21 #);
+IOAusedReg: (#exit mips_R22 #);
+adrTmpOp: 
+  (# n: @integer; (* 1-4 *) ar: @adrRegOperand 
+  enter n do mips_R18 + n ->ar.rn 
+  exit ar[] #);
+Log2FysRefReg:
+  (# a: @integer
+  enter a
+  exit a - 2 + mips_R16
+  #);
+
+(* REMEMBER: When using the branch macros, you should be aware of what
+ * is executed in the delay slot, the macros do not emit anything into
+ * the delay slot.
+ *)
+BLT_macro:
+  (# I: ^backendInstruction; dTmp: @integer
+  enter I[]
+  do dataTmp->dTmp;
+     (I.readReg2,I.readReg,dTmp) -> SLT -> mstate.b.emit;
+     (dTmp,0, (I.labNo->mstate.labs.off) div 4) -> BNE ->mstate.b.emit
+  #);
+BLTU_macro:
+  (# I: ^backendInstruction; dTmp: @integer
+  enter I[]
+  do dataTmp->dTmp;
+     (* readReg<readReg2 -> readReg *)
+     (I.readReg2,I.readReg,dTmp) -> SLTU -> mstate.b.emit; 
+     (dTmp,0, (I.labNo->mstate.labs.off) div 4) -> BNE ->mstate.b.emit
+  #);
+BLE_macro:
+  (# I: ^backendInstruction; dTmp: @integer
+  enter I[] (* index <= range  => not (range < index ) *)
+  do dataTmp->dTmp;
+     (I.readReg2,I.readReg,dTmp) ->  SLT -> mstate.b.emit; (*  R2 < R1 -> R1 *)
+     (* comparing to 0 introduces the NOT from the comment above *)
+     (dTmp,0, (I.labNo->mstate.labs.off) div 4) -> BEQ ->mstate.b.emit
+  #);
+BLEU_macro: (* fixed like BLE_macro*)
+  (# I: ^backendInstruction; dTmp: @integer
+  enter I[]
+  do dataTmp->dTmp;;
+     (I.readReg2,I.readReg,dTmp)->  SLTU -> mstate.b.emit;
+     (dTmp,0, (I.labNo->mstate.labs.off) div 4) -> BEQ ->mstate.b.emit
+  #);
+BGT_macro:
+  (# I: ^backendInstruction; dTmp: @integer
+  enter I[]
+  do dataTmp->dTmp;;
+     (I.readReg,I.readReg2,dTmp) ->  SLT -> mstate.b.emit;
+     (dTmp,0, (I.labNo->mstate.labs.off) div 4) -> BNE ->mstate.b.emit
+  #);
+BGTIU_macro:
+  (# I: ^backendInstruction; dTmp: @integer
+  enter I[]
+  do dataTmp->dTmp;
+     (dTmp,I.readReg2,I.imm+1) ->  SLTIU -> mstate.b.emit;  (* not (R1 < C+1)
+                                                 * <==>
+                                                 * R1 >= C
+                                                 *)
+     (dTmp,0, (I.labNo->mstate.labs.off) div 4) -> BEQ ->mstate.b.emit
+  #);
+BGE_macro:
+  (# I: ^backendInstruction; dTmp: @integer
+  enter I[]  (* R1 >=  R2   ==>  not (R1 < R2) *)
+  do dataTmp->dTmp;
+     (I.readReg2,I.readReg,dTmp) ->  SLT -> mstate.b.emit;
+     (dTmp,0, (I.labNo->mstate.labs.off) div 4) -> BEQ ->mstate.b.emit
+  #);
+CMP_FLOAT_macro:
+  (# cond: @integer; op1: ^mOperand; op2,op: ^ floatRegOp; 
+     lab: ^backendlocallab; branchT: @boolean;
+  enter(cond,op1[],op2[],lab[])
+  do op1.loadFloatOp->op[];
+     (if cond (* IF T1 cc R then goto L *)
+      // 1 (* =  *) then
+         (op2.rn,op.rn) -> C_EQ_D -> mstate.b.emit;
+         true -> branchT
+      // 2 (* <> *) then 
+         (op2.rn,op.rn) -> C_EQ_D -> mstate.b.emit;
+      // 3 (* <  *) then 
+         (op2.rn,op.rn) -> C_LT_D -> mstate.b.emit;
+         true -> branchT
+      // 4 (* <= *) then
+         (op2.rn,op.rn) -> C_LE_D -> mstate.b.emit;
+         true -> branchT
+      // 5 (* >  *) then 
+         (op2.rn,op.rn) -> C_NGT_D -> mstate.b.emit;
+      // 6 (* >= *) then 
+         (op2.rn,op.rn) -> C_NGE_D -> mstate.b.emit;
+     if) ;
+     xNOP -> mstate.b.emit;
+     (if branchT then
+         (lab.labNo->mstate.labs.off) div 4-> BC1T -> mstate.b.emit
+      else
+         (lab.labNo->mstate.labs.off) div 4-> BC1F -> mstate.b.emit
+     if);
+  #);
+OregOperand: (* revise *)
+  (# reg,offset,no: @integer;
+     reg1: (# exit reg #)
+  enter reg
+  exit reg
+  #);
+locallabText:
+  (# T: ^text;
+     labNo: @integer
+  enter labNo
+  do &text[]->T[];
+     '.L'->T;
+     labNo->T.putInt
+  exit T[]
+  #);
+(* perhaps adrTmp and dataTmp should alternate between %i5, %l6,%l7 *)
+adrTmp:
+  (# A: @adrRegOperand
+  do adrTmp1->A
+  exit A[]
+  #);
+dataTmp: 
+  (* alternates between allocating %r13 and %r14 *)
+  (# D: @integer
+  do 
+     (if mstate.dataTmp6 then dataTmp1->D else dataTmp2->D if);
+     NOT mstate.datatmp6 -> mstate.dataTmp6
+  exit D
+  #);
+floatTmp:  (* to be like dataTmp *)
+  (# F: @floatRegOp
+  do (if mstate.floatTmp then 30->F.rN else 28->F.rN if);
+     NOT mstate.floatTmp -> mstate.floatTmp
+  exit F[]
+  #);
+Fmov:
+  (# f1,f2: ^floatRegOp
+  enter(f1[],f2[])
+  do (f2.rn,f1.rn)-> MOV_D  ->mstate.b.emit  
+  #);
+InxRegAdrToReg: (* not needed any more? See InxRegAdrLoadAdrOp *)
+  (# 
+  #);
+(*SaveRegisters:
+  (#
+  do (for i: 3 repeat i->refTmpOp ->pushData for);
+     (for i: 4 repeat i->adrTmpOp ->pushData for)     
+  #);
+RestoreRegisters:
+  (#
+  do (for i: 4 repeat 5-i->adrTmpOp -> popData for);
+     (for i: 3 repeat 4-i->refTmpOp -> popData for)
+  #);*)
+SPtoPrimReg:
+  (# pNo,pushThis: @integer
+  enter(pNo,pushThis)
+  do (if pNo <= 4 then
+         mstate.stacks.popFrame;
+         (mips_R3 + pNo, mips_SP,0) -> ADDIU -> mstate.b.emit
+      else
+         mstate.stacks.popFrame;
+         (dataTmp1, mips_SP,0) -> ADDIU -> mstate.b.emit;       
+         (dataTmp1,mips_SP, (pNo - 1 )*4) -> SW -> mstate.b.emit
+     if);
+     (if pushThis > 0 then 
+         thisO -> pushRef;
+         pushThis -> mstate.popThis
+     if)
+  #);
+RestoreGP:
+  (#
+  do (if common.switch[62] then
+         mstate.stacks.GPsave;
+         (mips_GP,mips_SP,0) -> LW -> mstate.b.emit;
+         (*(mips_GP,mips_R23) -> MOV -> mstate.b.emit*)
+     if);
+  #);
+SaveStackFrame:
+  (# 
+  do (if common.switch[62] then ComputeGP if);
+     
+     mstate.stacks.newFrame;
+     (mips_sp,mips_sp,0)-> ADDIU ->mstate.b.emit;
+     
+     (if common.switch[62] then
+         mstate.stacks.GPsave;
+         (mips_GP,mips_SP,0) -> SW -> mstate.b.emit;
+         (*(mips_R23,mips_GP) -> MOV -> mstate.b.emit*)
+     if);
+  #);
+ComputeGP:
+  (#
+  do ('_gp_disp',setHiMark)->mstate.b.mark;
+     (mips_GP,0,0)-> LUI ->mstate.b.emit;
+     ('_gp_disp',setLoMark)->mstate.b.mark;
+     (mips_GP,mips_GP,0)-> ADDIU ->mstate.b.emit;
+     (mips_R25,mips_GP,mips_GP)-> ADDU ->mstate.b.emit;
+  #);
+DoReturn:
+  (# 
+  do mips_ra-> JR ->mstate.b.emit;
+     mstate.stacks.popFrame;
+     (mips_sp,mips_sp,0)-> ADDIU ->mstate.b.emit;
+     false -> mstate.stacks.markRef.clearTop (* make sure that NO clear
+                                              * appear in possible following
+                                              * code for virtual bindings
+                                              *)
+  #);
+
+DoPatch:
+  (#
+  do mstate.stacks.patch
+     (# entry::
+          (#
+          do mstate.b.buffer[inx div 4 + 1] 
+             %bor ((-stackFrameSize ) %band 0xffff)
+               -> mstate.b.buffer[inx div 4 + 1];
+          #);
+        exitt::
+          (# inst,off: @integer
+          do mstate.b.buffer[inx div 4 + 1] -> inst;
+             inst %band 0xffff -> off;
+             inst %band 0xffff0000 -> inst;
+             inst %bor (stackFrameSize + off) -> mstate.b.buffer[inx div 4 + 1];
+          #);
+        data::
+          (# off: @integer
+          do inx div 4 +1 -> i;
+             (*(16,16) -> mstate.b.buffer[i].%getSignedBits -> off;*)
+             1 -> mstate.b.buffer[i].%getSignedShort -> off;
+             dataStart + off -> off;
+             (*(off %band 0xffff,16,16) -> mstate.b.buffer[i].%putBits*)
+             (off %band 0xffff,1) -> mstate.b.buffer[i].%putShort
+          #);
+        float::
+          (# off: @integer
+          do inx div 4 +1 -> i;
+             (*(16,16) -> mstate.b.buffer[i].%getSignedBits -> off;*)
+             1 -> mstate.b.buffer[i].%getSignedShort -> off;
+             floatStart + off -> off;
+             (*(off %band 0xffff,16,16) -> mstate.b.buffer[i].%putBits*)
+             (off %band 0xffff,1) -> mstate.b.buffer[i].%putShort
+          #);
+        GP::
+          (# 
+          do (GPoff %band 0xffff,16,16) -> mstate.b.buffer[inx div 4 + 1].%putBits
+          #);
+        i,off: @integer;
+     do inx div 4 + 1 -> i;
+        (*(16,16) -> mstate.b.buffer[i].%getSignedBits -> off;*)
+        1 -> mstate.b.buffer[i].%getSignedShort -> off;
+        (if mstate.stacks.debug then 
+            ' stackStart='->puttext; stackStart->putint;
+            ' off='->puttext; off ->putint
+        if);
+        stackStart + stackFrameSize - 4 - off -> off;
+        (if mstate.stacks.debug then ' off='->puttext; off ->putint; ' '->put if);
+        (*(off %band 0xffff,16,16) -> mstate.b.buffer[i].%putBits*)
+        (off %band 0xffff,1) -> mstate.b.buffer[i].%putShort
+     #);
+  #);
+ClearStackTop:
+  (# noNop: @boolean
+  enter noNop
+  do (if mstate.stacks.markRef.clearTop then
+         mstate.stacks.markRef;
+         (mips_R0,mips_SP,mstate.stacks.refTop*4) -> SW -> mstate.b.emit;
+         false -> mstate.stacks.markRef.clearTop;
+      else 
+         (if not noNop then xNOP -> mstate.b.emit if)
+     if)
+  #);
+PushReturn:
+  (#
+  do (mips_ra,mips_sp,mstate.stacks.pushRef)-> SW ->mstate.b.emit;
+     thisO -> PushRef;
+     (*callRegOp[] -> PushRef; (* temporary -- needed by GC *)
+  #);
+PopReturn:
+  (* this is a bit tricky! The return address is pushed once,
+   * but may be used several times, due to leave P (pattern).
+   * A raInx is therefore used below instead of a popRef;
+   * this only works since the segment returns to its caller
+   * after the faked pop of ra. The ra is always the first element
+   * on the stack.
+   *)
+  (#
+  do (mips_ra,mips_sp,mstate.stacks.raInx)-> LW ->mstate.b.emit;
+  #);
+PopThis:
+  (* like PopReturn - pushed once, but perhaps popped several times *)
+  (#
+  do (thisO,mips_sp,mstate.stacks.thisInx)-> LW ->mstate.b.emit;
+  #);
+PushRealThis:
+  (# op: ^registerOperand
+  do (if mstate.thisPushCount = 0 then
+         mstate.stacks.pushRef -> mstate.realThisSpOff;
+         (thisO,mips_sp,mstate.realThisSpOff) -> SW -> mstate.b.emit;
+      else
+         thisO -> pushRef
+     if);
+     mstate.thisPushCount + 1 -> mstate.thisPushCount
+  #);
+PopRealThis:
+  (#
+  do mstate.thisPushCount - 1 -> mstate.thisPushCount;
+     thisO -> popRef
+  #);
+PushRef:
+  (# reg: @integer
+  enter reg
+  do (reg,mips_sp,mstate.stacks.pushRef)-> SW ->mstate.b.emit;
+  #);
+PopRef:
+  (# reg: @integer
+  enter reg
+  do (reg,mips_sp,mstate.stacks.popRef)-> LW ->mstate.b.emit;
+  #);
+PushData:
+  (# reg: @integer
+  enter reg
+  do (reg,mips_sp,mstate.stacks.pushData)-> SW ->mstate.b.emit;
+  #);
+PopData:
+  (# reg: @integer
+  enter reg
+  do (reg,mips_sp,mstate.stacks.popData)-> LW ->mstate.b.emit;
+  #);
+saveData:  
+  (# reg: @integer
+  enter reg
+  do mstate.stacks.DataRegSave;
+     (reg,mips_SP,(reg-mips_R8)*4) -> SW -> mstate.b.emit;
+  #);
+restoreData:
+  (# reg: @integer
+  enter reg
+  do mstate.stacks.DataRegSave;
+     (reg,mips_SP,(reg-mips_R8)*4) -> LW -> mstate.b.emit;
+  #);
+SaveFloat:
+  (# op: @floatRegOp
+  enter op.rn
+  do mstate.stacks.FloatRegsave;
+     (op.rn,mips_sp,op.rn*4) -> SDC1 -> mstate.b.emit
+  #);
+RestoreFloat:
+  (# op: @floatRegOp
+  enter op.rn
+  do mstate.stacks.FloatRegsave;
+     (* op.rn in [0,2,4,...,15] *)
+     (op.rn,mips_sp,op.rn*4) -> LDC1 -> mstate.b.emit
+  #);
+PushCpar:
+  (# op: ^backendInstruction; OReg: ^OregOperand; dr: @ dataRegOperand
+  enter op[]
+  do mstate.xGetOreg->OReg[];
+     true -> mstate.hasIntPar;
+     (if Oreg < mips_r8 (* a0-a3 = mips_r4-mips_r8 *) then
+         Oreg -> op.writeReg;
+         op[]->cpRegImpl
+      else 
+         (* arg0 ->  0(SP) / mips_R4
+          * arg1 ->  4(SP) / mips_R5
+          * arg2 ->  8(SP) / mips_R6
+          * arg3 -> 12(SP) / mips_R7
+          * arg4 -> 16(SP)
+          *)
+         (op.readReg,mips_SP,oReg*4)->SW->mstate.b.emit; (* check!*)
+
+     if)
+  #);
+PushOregisters:
+  (# Oreg: @adrRegOperand; n: @integer; 
+     busyCall: @boolean
+  enter n
+  do (for i: (n,MaxNoOfPrimReg) -> Min repeat 
+          mips_R4 + (i-1)->oReg.rn; 
+          (if not ((oReg=mips_R5) and callRegBusy) then
+              (* oReg[] -> pushData;*)
+           else
+              true->busyCall;
+              (if common.switch[315] then
+                  '\n*** callRegBusy - don\'t push arg 2!'->putline
+              if)
+          if)
+     for);
+     (* push n mark for GC*)
+     dataTmp -> oReg.rn;
+     (for i: n - MaxNoOfPrimReg repeat
+          (* remaining parameters on SP-stack *)
+          (oReg.reg1,mips_SP, 12 + i*4) -> LW -> mstate.b.emit;
+          (*          oReg[] -> pushData*)
+     for);
+  exit busyCall
+  #);
+PopOregisters:
+  (# Oreg: @adrRegOperand; n,max: @integer; 
+     busyCall: @boolean
+  enter(n,busyCall)
+  do dataTmp -> oReg.rn; n - MaxNoOfPrimReg -> max;
+     (for i: max repeat
+          (*oReg[] -> popData;*)
+          (oReg.reg1,mips_SP, 16 + (max - i)*4) -> SW -> mstate.b.emit
+     for);
+     (n,MaxNoOfPrimReg) -> Min -> max;
+     (for i: max repeat 
+          mips_r4 + max - i -> oReg.rn; 
+          (if not ((oReg=mips_R5) and busyCall) then
+              (*oReg[] -> popData*)
+              (* mips_r4 + i - 1 -> oReg.rn; 
+               * (Oreg.reg1,mips_SP,4*(i - 1))->LW->mstate.b.emit; *)
+           else
+              (if common.switch[315] then              
+                  '\n*** callRegBusy - don\'t pop arg 2!'->putline
+              if)
+          if)
+     for)
+  #);
+GetXpar:
+  (* get next parameter for callback function *)
+  (# dr: ^dataRegOperand; drG: @ dataRegOperand;
+  enter dr[]
+  do (*(dr.reg1,mips_SP,mstate.stacks.callBackStackOffset + (Xpar.no-1) * 4) 
+       -> LW -> mstate.b.emit;
+     (mips_R2,dr.reg1) -> MOV -> mstate.b.emit; ( * needed for textpar* )
+     Xpar.no+1 -> Xpar.no*)
+  #);
+PutSet:
+  (# C,R: @integer;
+  enter (R,C)
+  do (if ((0xffff, C) -> TOS'%and') = 0 then
+         (* one instruction *)
+         (R,0,C->HI)->LUI->mstate.b.emit;
+      else
+         (if (minOff <= C) and (C <= maxOff) then
+             (* one instruction *)
+             (R,0,C)-> ADDI ->mstate.b.emit;
+          else
+             (* two instructions *)
+             (R,0,C->HI)->LUI->mstate.b.emit;
+	     (R,R,C->LO)-> ORI ->mstate.b.emit
+             (* note that PutSetText uses ADDIU *)
+         if)
+     if)
+  #);
+PutSetText:
+  (# T: ^Text; reg: @integer
+  enter (T[],reg)
+  do (if common.switch[62] then
+         (T[],dataMark) -> mstate.b.mark; 
+         (reg,mips_GP,0) -> LW -> mstate.b.emit;
+      else
+         (* always two instructions - address not know at this time *)
+         (T[],setHiMark)->mstate.b.mark;
+         (reg,0,0)->LUI->mstate.b.emit;
+         (* consider an INNER here to make use of delay slot
+          * if the next instruction is a jump
+          *)
+         (T[],setLoMark)->mstate.b.mark;
+         (reg,reg,0)->ADDIU->mstate.b.emit;
+     if)
+  #);
+PutSetLocalDatalab:
+  (# T: ^Text;
+     reg: @integer
+  enter (T[],reg)
+  do (if common.switch[62] then
+         (T[],dataMark) -> mstate.b.mark; 
+         (reg,mips_GP,0) -> LW -> mstate.b.emit;
+         (T[],setLoMark)->mstate.b.mark;
+         (reg,reg,0) -> ADDIU -> mstate.b.emit;
+      else
+         (* always two instructions - address not know at this time *)
+         (T[],setHiMark)->mstate.b.mark;
+         (reg,0,0)->LUI->mstate.b.emit;
+         (* consider an INNER here to make use of delay slot
+          * if the next instruction is a jump
+          *)
+         (T[],setLoMark)->mstate.b.mark;
+         (reg,reg,0)->ADDIU->mstate.b.emit;
+     if)
+  #);
+
+ClearAdrTmpRegs: (* clear registers that may hold addresses *)
+  (#
+  do (*true->rep.clearA[2]->rep.clearA[3]->rep.clearA[4];*)
+  #);
+definePrim:
+  (# T: ^text
+  enter T[]
+  do (T[],false)->entrypoints.addDef
+  #);
+
+markMax: (# exit 13 #);
+
+MipsImage: RiscImage
+  (# (* LIP: byte offsets of next item to be emitted 
+      * LIP:0 = buffer[1];
+      *  LIP:4 = buffer[2];
+      *  ...
+      *)         
+     appendToBC: <<SLOT backendMIPSappendToBC: descriptor>>;
+     mark: @
+       (# t: ^text; type: @integer; E: ^EntryPointInfo;
+       enter (t[],type)
+       do (if (markTop+1->markTop) > marks.range then
+              marks.range->marks.extend;
+              types.range->types.extend;
+              epElm.range->epElm.extend; (*'$'->screen.put*)
+          if);
+          (LIP div 4) + 1 ->marks[markTop];
+          type->types[markTop];
+          (if type = entryDefMark then 
+              (T[],not mstate.inCode)->entryPoints.addDef->epElm[markTop][];
+              (* is called in CODEmachine for all entry points 
+               * T117FOO, M117FOO, etc.
+               * For local labels like  '.L12' it is called below
+               * for markBackendlocallab -- OOPS not used consistently.
+               * And for labels BETA_code1eddDef is NOT
+               * called - i.e. we must call here - FIX IT!
+               *)
+           else
+              (*(T[],LIP)->entryPoints.markUse->E[];*)
+              T[]->entryPoints.find
+              (# notFound:: (#do E[]->entryPoints.insert #)
+              #)
+                ->epElm[markTop][];
+              noOfRel +1 -> noOfRel
+          if)
+       #);
+     markLocalLabBcc:
+       (# labNo: @integer; T: ^text
+       enter labNo
+       do labNo->LocalLabtext->T[];
+          (T[],bgtuMark)->mstate.b.mark
+       #);
+     markLocalLab: @
+       (# labNo: @integer; T: ^text
+       enter labNo
+       do labNo->LocalLabText->T[];
+          (*(T[],not inCode)->entryPoints.addDef;*)
+          (T[],entryDefMark)->mstate.d.mark
+       #);
+  #);
+
+--backendmstate:descriptor--
+(# NoComSupport: @
+     (# reported: @boolean
+     do (if not reported then
+            '\n\n*** COM support has not yet been implemented for SGI' -> putline;
+            true -> reported
+        if)
+     #);
+   inBindVirtuals: @boolean;(* generating code for binding virtuals
+                             * genlib:bindvirtual:final2virt;
+                             * used in jmpReg
+                             *)
+   realThisSpOff, thisPushCount: @integer;
+   popThis: @integer;  (* 1: this MUST be popped after primitive op;
+                        * 2: just decrement stack top
+                        *)
+   stacks: @
+     (#
+        first,  (* first instruction in this segment *)
+        dataSize, (* no of data registers *)
+        floatSize, (* no of float registers *)
+        xMax, (* current max of external parameter stack *)
+        refTop, refMax, (* top and current max of refStack *)
+        dataStop,dataMax (* top and current max of dataStack *)
+        : @integer; 
+        debug,
+        saveData, (* dataRegs must be saved *)
+        saveFloat (* floatRegs must be saved *)
+        : @boolean; 
+        last: [4] @integer; lastTop: @integer;
+        (* last/lastTop keep track of instructions where  the stack
+         * must be popped; it is always the last instruction of a
+         * segment, but leave P (where P is a pattern) may generate
+         * additional sp pops
+         *)
+        comEntry: @boolean; (* see allocObj *)
+        init: @
+          (#
+          do (if comEntry then
+                 false -> comEntry
+              else
+                 (if first > 0 then 
+                 (* currently ad hoc to call DoPatch here;
+                  * a mch slot should be called 
+                  * to indicate the end of a segment (G as well as M)
+                  *)
+                 doPatch 
+             if);
+             0->first->refTop->refMax->markRef.top->dataTop->lastTop->floatTop
+               ->dataSize->floatSize->callBackFrameSize->dataStop->dataMax
+             ->markData.top -> GPsave.top;
+             5 -> xMax; (* max. no. of parameters to a betarun routine *)
+             false->saveData->saveFloat;
+                 common.switch[195] -> debug;
+             if)
+          #);
+        CodeMark:
+          (# codeInx: [20] @integer; top: @integer; 
+             clearTop: @boolean; (* refTop*4(SP) MUST be cleared before a call;
+                                  * not used in markData 
+                                  *)
+             dump:
+               (# T: ^text
+               enter T[]
+               do (for i: top repeat ' '->T.put; codeInx[i] -> T.putInt for)
+               #);
+          do (if (top + 1 -> top) > codeInx.range then
+                 codeInx.range -> codeInx.extend
+             if);
+             b.LIP-> codeInx[top];
+             true -> clearTop;
+          #);
+        markRef: @ CodeMark;
+        pushRef: @
+          (# off: @integer
+          do  refTop * 4 -> off;
+             (if (refTop + 1 -> refTop) > refMax then refTop -> refMax if);
+             markRef;
+          exit off
+          #);
+        popRef: @
+          (# 
+          do refTop - 1 -> refTop;
+             markRef
+          exit refTop * 4
+          #);
+        popRefTop: @
+          (# 
+          do refTop - 1 -> refTop;
+          exit refTop * 4
+          #);
+        markData: @ CodeMark;
+        pushData: @
+          (# off: @integer
+          do dataStop * 4 -> off;
+             (if (dataStop + 1 -> dataStop) > dataMax then dataStop ->dataMax if);
+             
+             markData
+          exit off
+          #);
+        popData: @
+          (# 
+          do dataStop - 1 -> dataStop;
+             markData
+          exit dataStop * 4
+          #);
+        raInx: (# do markRef exit 0  #);
+        thisInx: (#do markRef exit 4 #);
+        newFrame: (#do init; mstate.b.LIP -> first #);
+        popFrame:
+          (# 
+          do (if (lastTop + 1 -> lastTop) > last.range then 
+                 last.range -> last.extend
+             if);
+             mstate.b.LIP -> last[lastTop];
+          #);
+        GPsave: @
+          (# inx: [10] @integer; top: @integer;
+             size: @
+               (# s: @integer
+               do (if common.switch[62] then 4 -> s else 0 -> s if)
+               exit s
+               #);
+          do (if (top + 1 -> top) > inx.range then
+                 inx.range -> inx.extend 
+             if);
+             b.LIP -> inx[top];             
+          #);
+        dataInx: [10] @integer; dataTop: @integer;
+        dataRegSave:
+          (#
+          do (if (dataTop + 1 -> dataTop) > dataInx.range then
+                 dataInx.range -> dataInx.extend 
+             if);
+             b.LIP -> dataInx[dataTop];
+             true -> saveData
+          #);
+        floats: [10] @integer; floatTop: @integer;
+        floatRegSave:
+          (#
+          do (if (floatTop + 1 -> floatTop) > floats.range then
+                 floats.range -> floats.extend
+             if);
+             b.LIP -> floats[floatTop];
+             true->saveFloat
+          #);
+        xFrame: @
+          (# noOfPar: @integer
+          enter noOfPar
+          do (if noOfPar > xMax then noOfPar -> xMax if);
+          #);
+        callBackFrameSize: @integer;
+        callBackStackOffset:
+          (#  
+          do (xMax + refMax+1 + dataMax) * 4 -> callBackFrameSize;
+             (if (callBackFrameSize mod 8) > 0 then
+                 callBackFrameSize + 4 -> callBackFrameSize
+             if)
+          exit callBackFrameSize
+          #);
+        patch:
+          (# entry:< 
+               (# inx: @integer 
+               enter inx 
+               do (if debug then 
+                      '\nfirst:'->T.puttext; inx->T.putint; ' '->T.put
+                  if); 
+                  inner 
+               #);
+             exitt:<
+               (# inx: @integer 
+               do (if debug then
+                      'last:'->T.puttext; inx->T.putint; ' '->T.put; 
+                  if);
+                  (for i: lastTop repeat 
+                       last[i] -> inx;
+                       inner 
+                  for)
+               #);
+             data:<
+               (# inx,dataStart: @integer;   
+               do xMax * 4 -> dataStart;
+                  (if debug then '; data:'->T.puttext if);
+                  (for i: dataTop repeat
+                       dataInx[i] -> inx;
+                       (if debug then inx -> T.putint; ' '->T.put if); 
+                       INNER
+                  for);
+               #);
+             float:<
+               (# inx,floatStart: @integer
+               do xMax*4 + dataSize -> floatStart;
+                  (if debug then '; float:'->T.puttext if);
+                  (for i: floatTop repeat
+                       floats[i] -> inx;
+                       (if debug then inx -> T.putint; ' '->T.put if);
+                       inner
+                  for)
+               #);
+             GP:<
+               (# inx,GPoff: @integer
+               do xMax*4 + dataSize + floatSize -> GPoff;
+                  (if debug then
+                      'GP: '->T.puttext;
+                      dataSize -> T.putint; ' ' -> T.put;
+                      GPoff->T.putint;T.newline;
+                  if);
+                  (for i: GPsave.top repeat
+                       GPsave.inx[i] -> inx;
+                       INNER
+                  for)
+               #);
+             stackFrameSize,  (* see genPrim below where an assumption
+                               * on stackFrameSize is made *)
+             inx,stackStart: @integer;
+             T: @text;
+             (*
+              *    |
+              *    |
+              *    |---
+              *    | GP
+              *    |-----
+              *    | float
+              *    |---
+              *    | data
+              *    |---
+              *    | X arg
+              * 0: |
+              *    |---
+              *)
+          do (if saveData then 
+                 4 * 6 (* d0-d5 *) -> dataSize
+             if);
+             (if saveFloat then 
+                 4 * 32 (* f0-f32 *) -> floatSize;
+                 (* float saves must be 8-byte aligned *)
+                 (if (xMax mod 2) = 1 then xMax + 1 -> xMax if)
+             if);                 
+             (* refTop/refMax is next free element on stack *)
+             (refMax+1) * 4 + dataMax * 4 + GPsave.size  
+            + dataSize +  floatSize + xMax * 4 
+               -> stackFrameSize;
+             (if (stackFrameSize mod 8) > 0 then 
+                 stackFrameSize + 4 -> stackFrameSize
+             if);
+             (if (callBackFrameSize > 0) 
+                 and (callBackFrameSize <> stackFrameSize)  then
+                 '\n**** Inconsistent stack frame size for callback entry! CallBackFrameSize: '
+                   -> puttext;
+                 callBackFrameSize -> putint; 
+                 ' StackFrameSize: '-> puttext; StackFrameSize -> putint; 
+                 newline;
+                 true -> debug
+             if);
+             T.clear;
+             (if debug then
+                 'StackFrameSize='->T.puttext; stackFrameSize->T.putint; 
+                 ' xMax='->T.puttext; xMax->T.putint
+             if);
+             first->entry;
+             exitt;
+             Data;
+             Float;
+             (if common.switch[62] then GP if);
+             (if debug then T[]->dump if);
+             (* patch refStack *)
+             0 -> stackStart;
+             (for i: markRef.top repeat
+                  markRef.codeInx[i] -> inx;
+                  INNER
+             for);
+             (* patch dataStack: why refMax + 1 *)
+             - (refMax + 1) * 4 -> stackStart;
+             (for i: markData.top repeat
+                  markData.codeInx[i] -> inx;
+                  INNER
+             for)
+          #);        
+        dump: @ 
+          (# T: ^text
+          enter T[]
+          do (if common.switch[18] and (refMax>0) then
+                 'refMax='->T.puttext; refMax->T.putInt; 
+                 (if refTop <> 0 then
+                     ' refTop='->T.puttext; refTop->T.putInt
+                 if);
+                 T[] -> markRef.dump;
+                 '\ndataMax= '->T.putText; dataMax->T.putInt;
+                 T[] -> markData.dump;
+                 T[] -> screen.putLine
+             if)
+          #)
+        (* External call stack handling *)
+        
+     #);
+
+   
+   a1InTmp, AlloDO,restoreCallReg,initPrimCall: @boolean; 
+   (* see initprimcall, jsrTable, callAlloI *)
+   lastMfHiLo: @integer; (* LIP of last MFHI or MFLO instruction*)
+   alloI: @boolean;
+   textStrTblSTart,dataStrTblSTart: @integer;
+   parspace: @integer;
+   Init:
+     (#
+     do 10000 -> B.buffer.new;
+        10000 -> D.buffer.new;
+        4->B.IPinc;
+        mstate.strTbl.init;
+        (if common.targetMachineId
+         // common.sgi // common.sun4s then
+            2->mstate.symtabTop; (* 2 first symbols are 'sections' 
+                                  * for text and data. sun4s/elf
+                                  * counts from one
+                                  *)
+            '.text'->mstate.strTbl.insert->textStrTblStart;
+            '.data'->mstate.strTbl.insert->dataStrTblStart
+         else 
+            0->mstate.symtabTop (* sun4/a.out counts from zero,
+                                 * but the index is added one
+                                 * in the compiler. 1 is subtacted
+                                 * when emitting symbinx in SUN4aout
+                                 *)
+        if)
+     #);
+   inCode: @boolean;
+   symtabTop: @integer; (* counter for no of symtab entries *)
+   
+   emitCodeToFile: <<SLOT backendemitCodeToFile: descriptor>>;
+   
+   B,D: @ MipsImage; (* B for code/text, D for data *)
+   labs: @
+     (# adr: [500] @integer; top: @integer; 
+        use: [500] ^loc;
+        loc: (# off: @integer; next: ^loc #);
+        def: @
+          (# l,patchAdr,patchInst: @integer; s: ^loc
+          enter l
+          do (if l>adr.range then 
+                 l+adr.range->adr.extend;
+                 l+use.range->use.extend; (*'&'->put*)
+             if);
+             b.LIP->adr[l];
+             use[l][]->s[]; none->use[l][];
+             LL: 
+               (if s[] <> none then
+                   (* '\nPatch L'->putText; l->putInt; '='->put;
+                    b.LIP->putint; ' in:'->putText; s.off->putint;  ';'->put;
+                    *)                
+                   (s.off div 4) + 1 ->patchAdr; (* ->putInt;*)
+
+                   (* patch *)
+                   (*'!'->BC.putC; (B.buffer[patchAdr],true)->bcPutHex; ':'->BC.putC;*)
+                   (*B.buffer[patchAdr] %band 0xFFC00000 -> patchInst; *)
+                   B.buffer[patchAdr] -> patchInst; 
+                   (if patchInst %srl 26
+                    // 2 (* j bit26 *) then
+                       'J'->put;
+                       patchInst %band 0xfc000000 -> patchInst; 
+                       (* J is a funny form of PC relative:
+                        * J (PC %band 0xfc000000) + bit26
+                        *)
+                       patchInst %bor ((b.LIP div 4) %band 0x3FFFFFFF)
+                         -> B.buffer[patchAdr];
+                    else
+                       (* 'b'->put;                       *)
+                       patchInst %band 0xFFFF0000 -> patchInst; 
+                       (*(patchInst,true)->bcPutHex; BC.putnl;
+                        * patchInst %bor (((b.LIP-s.off) div 4) %band 0xFFFFF)
+                        *)
+                       (*' dest='->puttext; ((b.LIP div 4) %band 0xFFFFF)->putint;
+                        newline;
+                        *)
+                       patchInst %bor (((b.LIP - s.off - 4) div 4) %band 0xFFFFF)
+                         -> B.buffer[patchAdr];
+                   if);
+                   (*'!'->putLine;*)
+                   s.next[]->s[];
+                   restart LL
+             if)
+          #);
+        off: @
+          (# l,of: @integer; s: ^loc;
+          enter l
+          do (if l>adr.range then 
+                 l+adr.range->adr.extend;
+                 l+use.range->use.extend
+             if);
+             (if adr[l]=0 then (* forward ref *)
+                 (*'\nUse L'->puttext; l->putInt; ' in:'->puttext; 
+                  b.LIP->putint; newline;*)
+                 &loc[]->s[];
+                 b.LIP->s.off; use[l][]->s.next[]; s[]->use[l][];
+                 b.LIP->of; (* to get a zero *)
+              else
+                 adr[l]->of
+             if)
+          exit of-b.LIP-4
+          #);
+     #);
+   defDataLab:
+     (# L: @backendlocallab; S: ^text;
+     do switchToData;
+        L.new; true->L.isTextAdr; L.def; 
+        inner;
+
+        switchToCode;
+        L.labNo->LocalLabText->S[];
+     exit S[]
+     #);
+   strTbl: @
+     (# str: @text;
+        init:
+          (#
+          do 1000->str.extend;
+             0->str.put; 
+             (if common.targetMachineId = common.sun4 then
+                 (for i: 3 repeat 0->str.put
+             for)if)
+          #);
+        insert: @
+          (# T: ^text; index: @integer
+          enter T[]
+          do str.length->index;
+             T.scanAll(#do ch->str.put #);
+             0->str.put
+          exit index
+          #);
+        scan:
+          (# inx: @integer; ch: @char
+          enter inx 
+          do inx+1->inx; (* for ELF the strTbl is index form zero, 
+                          * for BETA from 1
+                          *)
+             (if inx<=0 then '\nstrTbl inx=0'->putline; 
+                 '????'->bc.putX
+             if);
+             str.T[inx]->ch;
+             L: (if ch<>0 then
+                    INNER;
+                    str.T[inx+1->inx]->ch;
+                    restart L
+                if)
+          #)
+     #);
+   dataTmp6,floatTmp: @ boolean;
+   proto: ^text; (* prototype label used by doCall to fill delay slot*)
+   
+   floatReg: [14] @ integer; 
+   (* the SPARC has 32 float reg. They may hold 16 double float values in
+    * pairs (%f0,%f1), (%f2,%f3), etc. (%f28,%f29) and (%f30,%f31) are used
+    * for tmp. values as allocated by the floatTmp proc.
+    *)
+   isBetaEnv: @boolean; (* true if initial betaenv *)
+   
+   F0notUsed: @boolean; (* True during call of external function, returning
+                         * a value in %f0. It signals that %f0 should NOT
+                         * be pushed/popped before/after the external call
+                         * %f0 may be busy before the call, in which case
+                         * the old %f0 is saved in saveF0
+                         *)
+   saveF0: ^floatRegOp; (* save busy %f0 during externall call returning
+                         * value in %f0
+                         *)
+   xInitOreg:
+       (# noOfReg:@ integer; oReg: @adrRegOperand; 
+       enter noOfREg
+       do noOfReg->mstate.stacks.xFrame;
+          (if (Xlevel+1->Xlevel) > busyO.range then
+              busyO.range->busyO.extend;
+              busyF.range->busyF.extend;
+              busyCallReg.range->busyCallReg.extend
+          if);
+          (if Xlevel > 1 then
+              xCnt->PushOregisters->busyCall; 
+              (for i:  fCnt div 2 repeat
+                   (* fCnt = 0: no external float arguments
+                    *      = 2: $f12 in use
+                    *      = 4: $f12 and $f14 in use
+                    *)
+                   10 + i*2 -> SaveFloat
+              for);
+              (* push xCnt,fCnt *)
+              xCnt->busyO[Xlevel-1];
+              fCnt->busyF[Xlevel-1]; 
+              busyCall->busyCallReg[Xlevel-1];
+          if);
+         
+          noOfReg->xPno; 0->xCnt->fCnt; 
+          false -> mstate.hasIntPar
+       #);
+   xGetOreg:
+     (* if oRegNo=0, then get oRegisters in the order 0,1,2,...
+      * if oRegNo>0 then get %(oRegNo-1), 
+      *)
+     (# OReg: @OregOperand;
+        oRegNo: @integer; 
+     enter oRegNo
+     do (if (0 < oRegNo) then
+            oRegNo-1 -> OReg -> Oreg
+         else 
+            mips_R4 + xCnt -> Oreg
+        if);
+        xCnt+1->xCnt
+     exit Oreg[]
+     #);
+   getFparPair:
+     (* Get a floating point register pair (12,13)  or (13,14)
+      * and an integer argument pair ($4,$5), ($6,$7), 
+      * or a stack address.
+      * 
+      * The rules for passing floating point arguments to external C functions
+      * are complicated! Consider an argument list:
+      * 
+      *    a0,a1,a2,a3,....
+      * 
+      * If a0 is a float then a0 is passed in $FR12
+      * If a0 and a1 are floats the a0 is passed in $FR12 and a1 in $FR14
+      * If ai is integer and aj is float and i < j then aj is passed in
+      * the integer argument registers or on the stack; registers pairs and
+      * stack offset must be 8-byte aligned.
+      * 
+      * NOTE! If the external C-procedure has a variable number of arguments,
+      * then the floats MUST always be passed in integer arg. registers and/or
+      * on the stack. 
+      * THIS IS CURRENTLY NOT IMPLEMENTED!
+      * This is, however, ONLY a problem if the argument list starts
+      * with 1 or 2 reals. In e.g. printf and tstvarargs, the first argument is
+      * an integer and therefore the subsequent floats go to int args.
+      *)
+     (# res: ^ OregOperand; FR: ^floatRegOp
+     do (if not hasIntPar and (fCnt < 4) then
+            (* fCnt = 0, 2, 4 *)
+            &floatRegOp[] -> FR[];
+            12 + fCnt -> FR.rn;
+            fCnt + 2 -> fCnt;
+        if);
+        (* allocate integer register pair *)
+        (if (xCnt mod 2) = 1 then xCnt+1 -> xCnt if); (* align *)
+        xGetOreg -> res[];
+        xCnt + 1 -> xCnt; 
+     exit(FR[],res[])
+     #);
+   xMovePrimToX: (* see GetPrimRes*)
+       (# Oreg: @adrRegOperand; On: @integer
+       do (if Xlevel > 1 then
+              busyO[Xlevel-1]->oN; oN + mips_R4 ->Oreg;              
+              (if Oreg <= mips_R7 then
+                  (* move result of primCall to Oreg*)
+                  (mips_R2,0,Oreg.reg1)->ADD->mstate.b.emit
+               else 
+                  (mips_R2,mips_SP,4*(Oreg - 4)) -> SW ->mstate.b.emit;
+                  (* stack:
+                   * lowAdr     sp               highAdr
+                   *             0  4  8  12 16 ... 
+                   * --------------------------------------
+                   *            |a0 a1 a2 a3 a4 a5 ...
+                   * --------------------------------------
+                   *)
+              if);
+              xFreeOreg;
+              oN+1->xCnt;
+           else cError(#do'xMovePrimToX'->T #)
+          if)
+       #);
+   xFreeOreg:
+       (# oReg: @adrRegOperand; 
+       do xLevel-1->Xlevel;
+          (if Xlevel > 0 then
+              busyO[xLevel] -> xCnt;
+              busyF[xLevel] -> fCnt;
+              busyCallReg[xLevel] -> busyCall;
+              (for i: fCnt div 2 repeat
+                   10 + i*2 -> restoreFloat
+              for);
+              (xCnt,busyCall) -> PopOregisters;
+          if);
+          (if Xlevel = 0 then 0->xCnt->xPno->fCnt; false->busyCall if)
+       #);
+   tmpText: ^Text;
+   busyCallReg: [8]@boolean;  (* true if callReg is busyat this level *)
+   busyCall: @boolean;
+   busyF, (* busy Float Arg. Regs. pr. level *)
+   busyO: [8]@integer; (* busy Integer Arg. Regs. pr. level *)
+   xPno,xCnt,fCnt,Xlevel: @integer;
+   hasIntPar: @boolean
+#)
+

@@ -1,0 +1,143 @@
+ORIGIN '~beta/basiclib/basicsystemenv';
+LIB_ITEM 'interactive';
+INCLUDE '~beta/process/processmanager';
+INCLUDE '~beta/process/commpipe';
+INCLUDE '../CONTROL/com.bet';
+---systemlib:attributes---
+RunJobFile:
+  (# jobfileProcess: ^process;
+     backGroundJobProcess: ^process; 
+     (* possible job process running in background *)
+     error:< exception
+       (# t: ^text
+       enter t[]
+       do t[] -> msg.append;
+          INNER
+       #);
+     rsh:    
+       (# rsh: ^text;
+       do &Text[]->rsh[];
+          (if true
+          //('sun4' -> hostMachineType.equal) then '/usr/bin/rsh'->rsh[];
+          //('sun4s' -> hostMachineType.equal) then '/usr/bin/rsh'->rsh[];
+          //('snake' -> hostMachineType.equal) then '/usr/bin/remsh'->rsh[];
+           //('hpux8' -> hostMachineType.equal)  then '/usr/bin/remsh'->rsh[];
+           //('hpux9pa' -> hostMachineType.equal) then '/usr/bin/remsh'->rsh[]
+           //('hpux9mc' -> hostMachineType.equal) then '/usr/bin/remsh'->rsh[]
+           //('hp' -> hostMachineType.equal) then '/usr/bin/remsh'->rsh[];
+           //('linux' -> hostMachineType.equal) then '/usr/bin/rsh'->rsh[];
+           //('sgi' -> hostMachineType.equal)  then '/usr/bsd/rsh'->rsh[];
+           //('sun3' -> hostMachineType.equal) then '/usr/bin/rsh'->rsh[];
+           else
+              'Remote shell not supported on platform'->messagestream.puttext
+          if)
+       exit rsh[]
+       #);
+     AFF: ^file;
+     common: ^commonDef;
+     infoStream,messagestream: ^stream;
+     hostMachineType,
+     targetmachine,
+     jobfilemachine: ^text;
+     interactiveCompiler: @boolean;     
+     output: ^stream;
+     outchannel: @pipe;
+  enter(AFF[],common[],infoStream[],messageStream[],
+     hostMachineType[],
+     targetmachine[],
+     jobfilemachine[],
+     interactiveCompiler)
+  do 
+     (if backGroundJobProcess[] <> NONE then
+         (* a backGroundJobProcess is still running; 
+          * wait for it to stop *)
+         backGroundJobProcess.awaitStopped
+         (# error::<
+              (# T: @text;
+              do 'An unknown error occured when executing job file.\n'->T;
+                 'The error may be due to lack of free memory?\n'->T.append;
+                 message[]->T.append;
+                 T[]->this(runJobFile).Error;
+              #) 
+         #);
+         NONE->backGroundJobProcess[]; (* clear backGroundJobProcess *)
+     if);
+     (* ----- execute AFF-file -----------*)
+     &process[] -> jobfileProcess[];
+     (if ('b2c'->TargetMachine.equal) then
+         (* override remote shell when BETA -> C compilation *)
+         NONE ->jobFilemachine[]
+     if);
+     (if jobFilemachine[] =  NONE then     (* Execute jobfile HERE. *)
+         AFF.name -> jobfileProcess.init;
+      else     
+         (* Remote execution of jobfile. *)
+         'remote shell to ' -> infostream.puttext;
+         jobFilemachine[] -> infostream.putline;
+         (if not (targetMachine[]->common.RshSupport) then
+             targetMachine[]->this(runJobFile).Error;
+         if);
+         (if not (hostMachineType[]->common.RshSupport) then
+             hostMachineType[]->this(runJobFile).Error;
+         if);
+         rsh -> jobfileProcess.init;
+         jobFilemachine[] -> jobfileProcess.Argument.Append;
+         '-n' -> jobfileProcess.Argument.Append;
+         (* -n to avoid hanging on tty input. *)
+         (if ('b2c'->TargetMachine.equal) then
+             (# TT: ^Text;
+             do 'csh "source .login; '-> TT[];
+                AFF.name -> TT.append;
+                '"'->TT.put;
+                TT[] -> jobfileProcess.Argument.Append;
+             #)
+          else
+             AFF.name -> jobfileProcess.Argument.Append;
+         if)
+     if);
+     (if not interactiveCompiler then
+         outchannel.init;
+         outchannel.writeEnd[] -> jobfileProcess.redirectToChannel;
+         outchannel.readEnd[] -> output[];
+     if);
+     jobfileProcess.start
+     (# error::<
+          (# T: @text
+          do 'Could not start execution of job file.\n'->T;
+             'This may be due to lack of free memory?\n'->T.append;
+             message[]->T.append;
+             T[]->this(runJobFile).error
+     #)#);
+     (if not interactiveCompiler then
+         loop:
+           (# (* read jobfileprocess output, into *)
+           do (if not output.eos then
+                  output.getline -> messageStream.putLine;
+                  restart loop
+              if)
+           #);
+         outchannel.readEnd.close
+     if);
+     (if interactiveCompiler then
+         jobfileProcess.awaitStopped
+         (# error::<
+              (# T: @text;
+              do 'An unknown error occured when executing job file.\n'->T;
+                 'The error may be due to lack of free memory?\n'->T.append;
+                 message[]->T.append;
+                 T[]->this(runJobFile).Error;
+              #) 
+         #);
+      else
+         jobfileProcess[]->backGroundJobProcess[];
+     if);
+     (if common.switch[18] then true -> common.switch[23] if);
+     (if (not common.switch[23]) and (backGroundJobProcess[]=NONE) then
+         (* remove .job-file *)
+         (if AFF.entry.exists then
+             (* someone may have removed tjhe jobfile during compilation *)
+             AFF.delete
+         if)
+     if)
+  exit jobFileProcess[]
+  #)

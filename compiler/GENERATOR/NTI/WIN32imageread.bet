@@ -1,0 +1,95 @@
+ORIGIN '../COFF/COFFimageread';
+INCLUDE '../COFF/coff_ms';
+
+--ImageReadMapOffset: dopart--
+do 
+        
+--ImageReadMapRelType: dopart--
+do (if reltype
+    // IMAGE_REL_I386_ABSOLUTE then entryDefMark -> map
+    // IMAGE_REL_I386_DIR32 then wordMark -> map
+    // IMAGE_REL_I386_REL32 then jmpMark -> map
+   if);
+   
+--ImageReadMapSym: dopart--
+do (if (sym.n_numaux>0) (* Needed to prevent ignoring BETA_code1 *)
+       and (sym.n_sclass=IMAGE_SYM_CLASS_STATIC) 
+       and (sym.n_value=0) then
+       (* it's a section name - ignore *)
+    else
+       &EntryPointInfo[] -> ep[];
+       (sym.n_name1_4, sym.n_name5_8) -> gn -> ep.T[];
+       (if sym.n_scnum=IMAGE_SYM_UNDEFINED then
+           false -> ep.local;
+           false -> ep.export;
+           (if sym.n_type=IMAGE_SYM_TYPE_NULL then
+               true -> ep.data;
+            else
+               (* There's a function attribute - see WIN32coff *)
+               false -> ep.data;
+           if)
+        else
+           true -> ep.local;
+           (sym.n_sclass=IMAGE_SYM_CLASS_EXTERNAL) -> ep.export;
+           (if f.cache.scnhdrs.range=0 then f.ScanScnhdrs if);
+           f.cache.scnhdrs[sym.n_scnum][] -> shdr[];
+           '.data' 
+             -> ((shdr.s_name1_4, shdr.s_name5_8)->gn).equal
+             -> ep.data;
+       if);
+       sym.n_value -> ep.LIP;
+   if)
+   
+--ImageReadMapAuxSym: dopart--
+do 
+   
+--ImageReadRelocation: descriptor--
+(# rel_inx: @integer;
+
+   maprel: @
+     (* Compare with the generation of Reloc entries in WIN32coff *)
+     (# rel: ^Reloc;
+        mark, type: @integer;
+        ep: ^EntryPointInfo;
+     enter rel[]
+     do rel.r_vaddr -> mark;
+        rel.r_type -> mapreltype -> type;
+        rel.r_symndx -> f.getSyment -> mapsym -> ep[];
+     exit (mark, type, ep[])
+     #);
+do 
+   f.scanDataReloc;
+   f.cache.data_reloc.range -> data_image.noOfRel;
+   data_image.markTop -> rel_inx;
+   data_image.noOfRel + data_image.markTop -> data_image.marktop;
+   (if data_image.marktop > data_image.marks.range then
+       data_image.marktop -> data_image.marks.extend;
+       data_image.marktop -> data_image.types.extend;
+       data_image.marktop -> data_image.epElm.extend;
+   if);
+   (for i:data_image.noOfRel repeat
+        rel_inx+1 -> rel_inx;
+        f.cache.data_reloc[i][] -> maprel -> 
+        (data_image.marks[rel_inx] 
+        ,data_image.types[rel_inx]
+        ,data_image.epElm[rel_inx][]);
+   for);
+   f.scanTextReloc;
+   f.cache.text_reloc.range -> text_image.noOfRel;
+   text_image.markTop -> rel_inx;
+   text_image.noOfRel + text_image.markTop -> text_image.marktop;
+   (if text_image.marktop > text_image.marks.range then
+       text_image.marktop -> text_image.marks.extend;
+       text_image.marktop -> text_image.types.extend;
+       text_image.marktop -> text_image.epElm.extend;
+   if);
+   (for i:text_image.noOfRel repeat
+        rel_inx+1 -> rel_inx;
+        f.cache.text_reloc[i][] -> maprel -> 
+        (text_image.marks[rel_inx] 
+        ,text_image.types[rel_inx]
+        ,text_image.epElm[rel_inx][]);
+   for);
+#)
+   
+   

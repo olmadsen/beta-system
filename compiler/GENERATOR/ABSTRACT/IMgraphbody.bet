@@ -1,0 +1,654 @@
+ORIGIN 'IMgraph';
+INCLUDE '~beta/basiclib/formatio';
+-- dumpvcg: DoPart --
+do (# FN,t1: ^text; 
+      f: @file;
+   do filename.copy->FN[];
+      (FN.length-5,FN.length)->FN.sub->t1[];
+      (if '-BETA-'->t1.equal then (FN.length-5,FN.length)->FN.delete if);
+      '.vcg'->FN.append;
+      FN[]->f.name;
+      'VCGname is'->logfile.puttext;
+      FN[]->logfile.putline;
+      f.openWrite;
+      'graph: { \n' 'manhattan_edges: yes \n' 'layout_algorithm: maxindegree\n' 'straight_phase: yes\n' 'priority_phase: yes\n'  'port_sharing: no\n'
+        ->f.putline;
+      fragments.scan
+      (# 
+      do 'SCANNINGFragments'->logfile.putline;
+         current.doparts.scan
+         (# 
+         do current.name[]->logfile.putline;
+            'alfkjaasdfasdf'->logfile.putline;
+            current.lastAnalysis[]->current.graph.dumpvcg->f.puttext;
+         #)
+      #);
+      '}'->f.putline;
+      f.close;
+   #);
+-- getindex: DoPart --
+do labNo->e.p.labNo;
+   e[]->get->ne[];
+   (if ne[] = none then 
+       '!!!!!!! ERROR: IMgraphbody:getindex: ne is none ' -> putline;
+       &elm[] -> ne[]; (* just to avoid returning NONE! *)
+    else        
+       (if labNo <> ne.p.labno then
+           &elm[]->ne[];
+       if);
+   if)
+   
+--printbbInstructions: DoPart--
+do edgecount->logfile.putint;
+   logfile.newline;
+   name[]->logfile.putline;
+   BBcodescan
+   (# 
+   do (current[],logfile[])->printinst; 
+      logfile.newline
+   #);
+   'Labellist: (labNO,index)'->logfile.putline;
+   logfile[]->labels.printdepthfirst;
+
+--buildrealGraphInBB: DoPart--
+do (if not built then
+       &intlist[]->potentialdead[];
+       &intlist[]->tobedeleted[];
+       exitnode[]->appendnode;
+       true->built;
+       (if nodecnt > 2 then
+           nodelist[2][]->tmp1[];
+           nodelist[tmp1.next][]->tmp2[];
+       if);
+       loop: (if tmp1[]<>tmp2[] then
+                 tmp1.lastrealnode[]->r[];
+                 (if r[]->ib then
+                     r.inst.labNo(*imm*)->labels.getindex->labinx;
+                     (if r[]->ija then
+                         (tmp1.index,labinx)->AppendEdge;
+                         1->tmp1.jmpedgenumber;
+                         (if tmp1.hasbackedge then
+                             (tmp1.index,exitnode.index)->AppendEdge
+                         if)
+                      else
+                         (if tmp1.hasbackedge then
+                             1->tmp1.jmpedgenumber;
+                             (tmp1.index,labinx)->AppendEdge;
+                             (tmp1.index,tmp2.index)->AppendEdge;
+                          else
+                             2->tmp1.jmpedgenumber;
+                             (tmp1.index,tmp2.index)->AppendEdge;
+                             (tmp1.index,labinx)->AppendEdge;
+                         if);
+                     if);
+                  else
+                     (if (tmp1.type=IdeclareAddress) and r.inst.condition then
+                         (tmp1.index, r.inst.labNo->labels.getindex)->AppendEdge
+                      else
+                         (tmp1.index,tmp2.index)->AppendEdge
+                     if)
+                 if);
+                 (if (tmp1.predtop=0) and (tmp1.type>=0) then
+                     tmp1.index->potentialdead.append;
+                 if);
+                 tmp2[]->tmp1[];
+                 (if tmp2.next <> 0 then
+                     nodelist[tmp2.next][]->tmp2[];
+                 if);
+                 restart loop;
+             if);
+       l:(if false and (potentialdead.top > 0) then
+             potentialdead.scan
+             (# 
+             do (if nodelist[current].predtop = 0 then
+                    current->tobedeleted.append;
+                if);
+             #);
+             0->potentialdead.top;
+             tobedeleted.scan
+             (# 
+             do
+                (if  nodelist[current][]<>none then
+                    (for ii:nodelist[current].succtop repeat
+                         (if nodelist[nodelist[current].succI[ii]].type>=0 then
+                             nodelist[current].succI[ii]->potentialdead.append
+                         if)
+                    for);
+                    current->removenode;
+                if)
+             #);
+             0->tobedeleted.top;
+             restart l;
+         if);
+       none->potentialdead[]->tobedeleted[];
+   if);
+--bbgraphdumpvcg: DoPart--
+do 'DUMPING '->logfile.puttext;
+   name[]->logfile.putline;
+   (if a[]<>none then
+       a.rep.range->logfile.putint; logfile.newline;
+       (if a.rep.range<edgecount then none->a[]; 'cleared a, edgecound=%d'
+             ->logfile.putformat(# do edgecount->d #)
+       if);
+   if);
+   'graph: ' '\n{ title: "'->s.puttext; 'BB'->s.puttext;
+   name[]->s.puttext;
+   '"\n' 'color: lightyellow\n'->s.putline;
+   scan
+   (# tt: ^text;
+      rr: ^realnode;
+   do &text[]->tt[];
+      'BB'->tt[];
+      name[]->tt.puttext;
+      'node: { title: "%s%d"\n'->s.putformat (# do tt[]->s; current.index->d #);
+      'label: "'->s.puttext;
+      current.index->s.putint;
+      s.newline;
+      (if current.index = 1 then
+          tt[]->s.puttext;
+      if);
+      (if current.index = nodecnt then
+          'Exit'->s.puttext;
+      if);
+      s.newline;
+      current.realgraph[]->rr[];
+      (if false and (rr[] <> none) then
+          (if rr.genf <> 0 then
+              (if a[] <> none then
+                  (if a.rep[rr.genf][] <> none then
+                      s.newline;
+                      '                '->s.puttext;;
+                      s[]->(rr.genf->a.find).print
+                   else
+                      s.newline
+                  if);
+               else
+                  s.newline
+              if);
+          if);
+          s.newline;
+          (rr[],s[])->printinst; 
+          rr.next[]->rr[];
+          s.newline;
+      if);
+      l: (if rr[] <> none then
+             (if a.isForward then
+                 (if rr.genf <> 0 then
+                     (if a[] <> none then
+                         (if a.rep[rr.genf][] <> none then
+                             s.newline;
+                             '               '->s.puttext;
+                             s[]->(rr.genf->a.find).print
+                          else
+                             s.newline
+                         if)
+                      else
+                         s.newline
+                     if)
+                 if); 
+                 s.newline;
+                 (rr[],s[])->printinst;
+              else
+                 (rr[],s[])->printinst;
+                 (if rr.genf <> 0 then
+                     (if a[] <> none then
+                         (if a.rep[rr.genf][] <> none then
+                             s.newline;
+                             '               '->s.puttext;
+                             s[]->(rr.genf->a.find).print
+                          else
+                             s.newline
+                         if)
+                      else
+                         s.newline
+                     if)
+                  else
+                     s.newline
+                 if);
+                 s.newline;
+             if);
+             rr.next[]->rr[];
+             restart l
+         if);
+      '"'->s.putline;
+      'color: '->s.puttext;
+      (if current.index = 1 then
+          'lightblue'->s.puttext; 
+       else
+          (if current.index = nodecnt then
+              'lightblue'->s.puttext;
+           else
+              'lightyellow'->s.puttext; 
+          if);
+      if);
+      '\nshape: box\n' '}'->s.putline;
+      (for j: current.succTop repeat (* print int. node*)
+           'node: { title: "BB%s%d-%d"\n'
+             ->s.putformat (# do name[]->s; current.index->d; current.succI[j]->d #);
+           'label: "'->s.puttext;
+           (if a[] <> none then 
+               (if a.rep[current.succA[j]][]<>none then
+                   s[]->a.rep[current.succA[j]].print 
+                else
+                   '{}'->s.puttext;
+                   'a.rep[%d] was none'->logfile.putformat(# do current.succA[j]->d #)
+               if);
+            else
+               '{}'->s.puttext;
+           if);
+           '"\n'->s.puttext;
+           'borderwidth: 0\n}\n'->s.putformat;
+           (* print first part-edge *)
+           (if current.hasbackedge then
+               (if j = current.jmpedgenumber then
+                   'back'->s.puttext;
+               if);
+           if);
+           'edge: { sourcename: "BB%s%d"\n'
+             ->s.putformat (# do name[]->s; current.index->d;  #);
+           'targetname: "BB%s%d-%d"\n'
+             ->s.putformat (# do name[]->s; current.index->d; current.succI[j]->d #);
+           'arrowstyle: none\n'->s.puttext;
+           (if current.jmpedgenumber = j then
+               (if current.hasbackedge then
+                   'color: red\n'->s.puttext;
+                else
+                   'color: blue\n'->s.puttext;
+               if);
+           if);
+           '}\n'->s.puttext;
+           (* print second part-edge *)
+           (if current.hasbackedge then
+               (if j = current.jmpedgenumber then
+                   'back'->s.puttext;
+               if);
+           if);
+           'edge: { targetname: "BB%s%d"\n'
+             ->s.putformat (# do name[]->s; current.succI[j]->d;  #);
+           'sourcename: "BB%s%d-%d"\n'
+             ->s.putformat (# do name[]->s; current.index->d; current.succI[j]->d #);
+           (if current.jmpedgenumber = j then
+               (if current.hasbackedge then
+                   'color: red\n'->s.puttext;
+                else
+                   'color: blue\n'->s.puttext;
+               if);
+           if);
+           '}\n'->s.puttext;
+      for)
+   #);
+   '}'->s.putline;
+   
+--printbbints: DoPart--
+do rea.inst[]->inst[];
+   (if rea[]<>none then
+       rea.inx->s.putint; ': ' -> s.puttext;
+       (if rea.type
+        //Inop then
+           'Inop'->s.puttext
+        //IldCst then
+           'IldCst\t%d -> r%d'->s.putformat(# do inst.imm->d;inst.writeReg->d #)
+        //IstCst then
+           'IstCst\t%d -> r%d[%d]'->s.putformat(# do inst.imm->d; inst.readReg->d; inst.readOffset->d #)
+        //IldvalFromLab then
+           'IldvalFromLab'->s.puttext
+        //IldVal then
+           'IldVal\tr%d[%d] -> r%d'->s.putformat(# do inst.readReg->d; inst.readOffset->d; inst.writeReg->d #)
+        //IstVal then
+           'IstVal\t r%d -> r%d[%d]'->s.putformat(# do inst.readReg2->d; inst.readReg->d; inst.readOffset->d #)
+        //IstValInLab then
+           'IstValInLab'->s.puttext
+        //IcpReg then
+           'IcpReg\t'->s.puttext;
+           'r%d -> r%d'->s.putformat(# do inst.readReg->d; inst.writeReg->d #)
+        //IstValInText then
+           'IstValInText'->s.puttext
+        //IdoAsgRefAdr then
+           'IdoAsgRefAdr\t'->s.puttext;
+        //IdoAsgRefReg then
+           'IdoAsgRefReg'->s.puttext
+        //IChkHeap then
+           'IChkHeap'->s.puttext
+        //IgAddImm then
+           'IgAddImm\t%d,%d -> %d'->s.putformat
+           (# do inst.readreg2->d; inst.imm->d; inst.writeReg->d #)
+        //IgAddReg then
+           'IgAddReg\t%d,%d->%d'->s.putformat
+           (# do inst.readreg->d; inst.readreg2->d; inst.writeReg->d #);
+        //IgNeg then
+           'IgNeg\t%d'->s.putformat(# do inst.readreg->d #);
+        //IgSubImm then
+           'IgSubImm\t%d,%d -> %d'->s.putformat
+           (# do inst.readreg2->d; inst.imm->d; inst.writeReg->d #);
+        //IgSubReg then
+           'IgSubReg\t%d,%d->%d'->s.putformat
+           (# do inst.readreg->d; inst.readreg2->d; inst.writeReg->d #);
+        //IgMultImm then
+           'IgMultImm %d,%d -> %d'->s.putformat
+           (# do  inst.readreg2->d; inst.imm->d; inst.writeReg->d #);
+        //IgMultReg then
+           'IgMultReg\t%d,%d->%d'->s.putformat
+           (# do  inst.readreg->d; inst.readreg2->d; inst.writeReg->d #);
+        //IgDIVImm then
+           'IgDIVImm%d,%d -> %d'->s.putformat
+           (# do inst.readreg2->d; inst.imm->d; inst.writeReg->d #);
+        //IgDIVReg then
+           'IgDIVReg'->s.puttext
+        //IgOrImm then
+           'IgOrImm'->s.puttext
+        //IgAndImm then
+           'IgAndImm %d,%d -> %d'->s.putformat
+           (# do inst.readreg2->d; inst.imm->d; inst.writeReg->d #);
+        //IgXorImm then
+           'IgXorImm\t%d,%d -> %d'->s.putformat
+           (# do  inst.readreg2->d; inst.imm->d; inst.writeReg->d #);
+        //IgOrReg then
+           'IgOrReg\t%d,%d->%d'->s.putformat
+           (# do inst.readreg->d; inst.readreg2->d; inst.writeReg->d #);
+        //IgAndReg then
+           'IgAndReg\t%d,%d->%d'->s.putformat
+           (# do inst.readreg->d; inst.readreg2->d; inst.writeReg->d #);
+        //IgAndNReg then
+           'IgAndN\t%d,%d->%d'->s.putformat
+           (# do inst.readreg->d; inst.readreg2->d; inst.writeReg->d #);
+        //IgAndNImm then
+           'IgAndNImm'->s.puttext
+        //IgXorReg then
+           'IgXorReg\t%d,%d->%d'->s.putformat
+           (# do inst.readreg->d; inst.readreg2->d; inst.writeReg->d #);
+        //IgNot then
+           'IgNot'->s.puttext
+        //IlogNot then
+           'IlogNot\t%d'->s.putformat(# do inst.readReg->d #)
+        //IgCmpImm then
+           'IgCmpImm'->s.puttext
+        //ISignExtByte then
+           'ISignExtByte'->s.puttext
+        //ISignExtWord then
+           'ISignExtWord'->s.puttext
+        //IgetBits then
+           'IgetBits'->s.puttext
+        //IGetSignedBits then
+           'IGetSignedBits'->s.puttext
+        //IgGetBits then
+           'IgGetBits'->s.puttext
+        //IgGetSignedBits then
+           'IgGetSignedBits'->s.puttext
+        //IputBits then
+           'IputBits'->s.puttext
+        //IgPutBits then
+           'IgPutBits'->s.puttext
+        //IByteSwap then
+           'IByteSwap'->s.puttext
+        //IgGetDataByte then
+           'IgGetDataByte'->s.puttext
+        //IgGetDataWord then
+           'IgGetDataWord'->s.puttext
+        //IarithShiftLeftImm then
+           'IarithShiftLeftImm'->s.puttext
+        //IlogicalShiftLeftImm then
+           'IlogicalShiftLeftImm\tr%d,%d->r%d'->s.putformat
+           (# do inst.readreg->d; inst.imm->d; inst.writeReg->d #)
+        //IarithShiftrightImm then
+           'IarithShiftrightImm'->s.puttext
+        //IlogicalShiftRightImm then
+           'IlogicalShiftRightImm'->s.puttext
+        //IrotateLeftImm then
+           'IrotateLeftImm'->s.puttext
+        //IrotateRightImm then
+           'IrotateRightImm'->s.puttext
+        //IarithShiftLeftReg then
+           'IarithShiftLeftReg'->s.puttext
+        //IlogicalShiftLeftReg then
+           'IlogicalShiftLeftReg\tr%d,r%d->r%d'->s.putformat
+           (# do inst.readreg->d; inst.readreg2->d; inst.writeReg->d #)
+        //IarithShiftrightReg then
+           'IarithShiftrightReg'->s.puttext
+        //IlogicalShiftRightReg then
+           'IlogicalShiftRight'->s.puttext
+        //IrotateLeftReg then
+           'IrotateLeftReg'->s.puttext
+        //IrotateRightReg then
+           'IrotateRightReg'->s.puttext
+        //IjumpIfTrue then
+           'IjumpIfTrue'->s.puttext
+        //ItstNone then
+           'ItstNone'->s.puttext; 
+        //IgBeq then
+           'IgBeq'->s.puttext
+        //IgBne then
+           'IgBne'->s.puttext
+        //IgBge then
+           'IgBge'->s.puttext
+        //IgBae then
+           'IgBae'->s.puttext
+        //IgBle then
+           'IgBle'->s.puttext
+        //IgBbe then
+           'IgBbe'->s.puttext
+        //IgBgt then
+           'IgBgt'->s.puttext
+        //IgBab then
+           'IgBab'->s.puttext
+        //IgBlt then
+           'IgBlt'->s.puttext
+        //IgBbl then
+           'IgBbl'->s.puttext
+        //Itrap then
+           'Itrap'->s.puttext
+        //Ireturn then
+           'Ireturn'->s.puttext; 
+        //Ilabel then
+           'Ilabel\t%d'->s.putformat(# do rea.inst.labNO->d #); 
+        //IjsrTable then
+           'IjsrTable'->s.puttext
+        //IjmpTlong then
+           'IjmpTlong'->s.puttext
+        //IjmpT then
+           'IjmpT'->s.puttext
+        //IjsrT then
+           'IjsrT'->s.puttext
+        //IjsrReg then
+           'IjsrReg'->s.puttext
+        //IjmpReg then
+           'IjmpReg'->s.puttext
+        //IgJmp then
+           'IgJmp'->s.puttext
+        //IgJsr then
+           'IgJsr %s'->s.putformat(# do rea.inst.label[] -> s #)
+        //IjsrTableTest then
+           'IjsrTableTest'->s.puttext
+        //IBeginLabel then
+           'IBeginLabel'->s.puttext
+        //IFreeLabel then
+           'IFreeLabel'->s.puttext
+        //IEndLabel then
+           'IEndLabel'->s.puttext
+        //IsaveInnerReturn then
+           'IsaveInnerReturn'->s.puttext
+        //ISpillDataReg then 
+           'SpillDataReg:%d'->s.putformat(# do rea.inst.readreg->d #)
+        //ILoadSpilledDataReg then
+           'LoadSpilledDataReg:%d'->s.putformat(# do rea.inst.writeReg->d #);
+        //IreturnInner then
+           'IreturnInner'->s.puttext
+        //IEmitTextConst then
+           'IEmitTextConst'->s.puttext
+        //IsaveReturn then
+           'SaveReturnAdr'->s.puttext
+        //IRts then
+           'Irts'->s.puttext
+        //IGetPRimRes then
+           'IGetPRimRes'->s.puttext
+        //IDeclareAddress then
+           'IDeclareAddress'->s.puttext
+        // ISaveReg then
+           'ISaveReg'->s.puttext
+        // IRestoreReg then
+           'IRestoreReg'->s.puttext
+        //Iglea then
+           'Iglea\t'->s.puttext;
+        //IgleaLabel then
+           'IgleaLabel'->s.puttext
+        //IleaToPrimReg then
+           'IleaToPrimReg'->s.puttext
+        //IgleaText then
+           'IIgleaText'->s.puttext
+        //IgClr then
+           'IgClr\t%d'->s.putformat(# do inst.writereg->d #)
+        //IpushAdr then
+           'IpushAdr'->s.puttext
+        //IPush then
+           'IPush'->s.puttext
+        //IPop then
+           'IPop'->s.puttext
+        //IPushThisOrCall then
+           'IPushThisOrCall'->s.puttext
+        //IpopThisOrCall then
+           'IpopThisOrCall'->s.puttext
+        //IsetTop then
+           'IsetTop'->s.puttext
+        //IChkCase then
+           'IChkCase'->s.puttext
+        //IChkIndex then
+           'IChkIndex'->s.puttext
+        //IChkConstIndex then
+           'IChkConstIndex'->s.puttext; 
+        //IcmpToBool then
+           'IcmpToBool'->s.puttext
+        //IcmpAndJmp then
+           'IcmpAndJmp'->s.puttext
+        //IcmpAndJmpImm then
+           'IcmpAndJmpImm'->s.puttext
+        //IcmpBoolAndJmp then
+           'IcmpBoolAndJmp'->s.puttext
+        //IfloatConst then
+           'IfloatConst'->s.puttext
+        //Iint2float then
+           'Iint2float'->s.puttext
+        //IintReg2float then
+           'IintReg2float'->s.puttext
+        //Ifloat2int then
+           'Ifloat2int'->s.puttext
+        // IstoreFloat then
+           'storeFloat'->s.puttext
+        // IstoreFloatInx then
+           'storeFloatInx'->s.puttext
+        // IstoreFloat2int then
+           'storeFloat2int'->s.puttext
+        // IstoreFloat2intInx then
+           'storeFloat2intInx'->s.puttext
+        // IloadInt2float then
+           'loadInt2float'->s.puttext
+        //IcmpToBoolFloat then
+           'IcmpToBoolFloat'->s.puttext
+        //IcmpAndJmpFloat then
+           'IcmpAndJmpFloat'->s.puttext
+        //IpopFStack then
+           'IpopFStack'->s.puttext
+        //IcmpFloat then
+           'IcmpFloat'->s.puttext
+        //IfBeq then
+           'IfBeq'->s.puttext
+        //IfBge then
+           'IfBge'->s.puttext
+        //IfBle then
+           'IfBle'->s.puttext
+        //IfBne then
+           'IfBne'->s.puttext
+        //IfBgt then
+           'IfBgt'->s.puttext
+        //IfBlt then
+           'IfBlt'->s.puttext
+        //IaddFloat then
+           'IaddFloat'->s.puttext
+        //IsubFloat then
+           'IsubFloat'->s.puttext
+        //ImulFloat then
+           'ImulFloat'->s.puttext
+        //IdivFloat then
+           'IdivFloat'->s.puttext
+        //InegFloat then
+           'InegFloat'->s.puttext
+        //Ilock then
+           'Ilock'->s.puttext
+        //IFreeAdr then
+           'IFreeAdr'->s.puttext
+        //IFreeData then
+           'IFreeData'->s.puttext
+        //IReleaseReg then
+           'IReleaseReg'->s.puttext
+        //IthisO then
+           'IthisO'->s.puttext
+        //IcallO then
+           'IcallO'->s.puttext
+        //IDecrCallReg then
+           'IDecrCallReg'->s.puttext
+        //IGetCallReg then
+           'IGetCallReg'->s.puttext
+        //IFreeCallReg then
+           'IFreeCallReg'->s.puttext
+        //CallRegInPrimReg2I then
+           'CallRegInPrimReg2I'->s.puttext
+        //IGetOriginReg then
+           'IGetOriginReg'->s.puttext
+        //IFreeOriginReg then
+           'IFreeOriginReg'->s.puttext
+        //IDataRegMax then
+           'IDataRegMax'->s.puttext
+        //INoOfFreeDataReg then
+           'INoOfFreeDataReg'->s.puttext
+        //IDumpReg then
+           'IDumpReg'->s.puttext
+        //IPushReg then
+           'IPushReg'->s.puttext
+        //IPopReg then
+           'IPopReg'->s.puttext
+        //IPushDataReg then
+           'IPushDataReg'->s.puttext
+        //IPopDataReg then
+           'IPopDataReg'->s.puttext
+        //IPushFloatReg then
+           'IPushFloatReg'->s.puttext
+        //IPopFloatReg then
+           'IPopFloatReg'->s.puttext
+        //ICallPrim then
+           'IcallPrim'->s.puttext
+        //ICallAlloPrim then
+           'ICallAlloPrim'->s.puttext
+        //IinitPrimCall then
+           'IinitPrimCall\t'->s.puttext
+        //IinitExternalCall then
+           'IinitExternalCall'->s.puttext
+        //IcallCProc then
+           'IcallCproc %s'->s.putformat(# do inst.label[]->s #)
+        //IpushCLong then
+           'IPushCLong'->s.puttext;
+        //IpushCFloat then
+           'pushCfloat'->s.puttext
+        // IGetFloatXres then
+           'GetFloatXres'->s.puttext
+        // IGetDoubleXres then
+           'IGetDoubleXres'->s.puttext
+        // ISaveHeapTop then
+           'SaveHeapTop'->s.puttext
+        // IGetRegForXres then
+           'GetRegForXres'->s.puttext           
+        //IEntryNode then
+           'Entry'->s.puttext
+        //IExitNode then
+           'Exit'->s.puttext
+        //IGlobalCodeLabelDef then
+           'GlobalCodeLabelDef'->s.puttext
+        //InewFragment then
+           'InewFragment'->s.puttext
+        // InewProto then
+           'INewProto'->s.puttext
+        // InewImp then
+           'InewImp'->s.puttext
+        // InewEval then
+           'InewEval'->s.puttext
+        else 
+           'unknown inst type=%d'->s.putformat(# do rea.type->d #)
+       if);
+   if);

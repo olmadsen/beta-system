@@ -1,0 +1,2328 @@
+ORIGIN '../backend';
+-- backendatt: attributes --
+trace: (# exit true #);
+
+TODO: 
+  (# t:^Text
+  enter t[]
+  do (if trace then
+         'TODO: '->screen.putText;
+         (if t[] = NONE then
+             '(with no arg)'->screen.putline
+          else
+             t[]->screen.putLine;
+         if)
+      else
+         (failureTrace, t[])->stop;
+     if)
+  #);
+
+
+(*************************************************************
+ * This file is part of the BETA compiler.
+ * Copyright (C) 1992-94 Mjolner Informatics Aps.
+ * The port to the HPPA architecture was done by Peter Orbaek, based
+ * on the Sun4 codegenerator by O. L. Madsen.
+ * 
+ * Upgraded to beta4.5 by OLM. Corrections marked by OLM:Jan.94.
+ * Register assignment:
+ *
+ * r0 = 0
+ * r1 = scratch
+ * r2 = return pointer
+ * r3 = th
+ * r4 = ca
+ * r5 = or   (or is now primReg1 / OLM:Jan.94.)
+ * r5 - r8 = address registers 
+ * 	     The logical address registers a2-a4 are mapped to r5-r7.
+ * 	     r8=a5 is used as a temporary address register, but does NOT
+ * 	     hold addresses of objects, i.e. it shall NOT be garbage collected.
+ * 	     The registers r3-r7 can refer to objects and MUST be garbage collected.
+ *
+ * r9 - r13 = dataregisters
+ * r14 = NOT USED, was: Reference Stack Pointer, RefSP
+ * r15 - r16 = temp. dataregisters
+ * 
+ * r17 = IOAbot IN MEMORY CELL IOA
+ * r18 = IOAsize IN MEMORY AS: IOATop-IOA
+ * 
+ * r22 = PrimReg5
+ * r23 - r26 = parameters to external C routines, %r26 = arg0, %r25 = arg1,...
+ *       Also PrimReg1=r26, PrimReg2=r25, PrimReg3=r24, PrimReg4=r23.
+ * r27 = start of global data, not used ??
+ * r28 = return value from C calls
+ * r29 = return value from millicode calls
+ * r30 = stackpointer (the stack grows upwards)
+ * r31 = scratch
+ * ***********************
+ * fr0-fr3 = status registers, quite unusable
+ * fr4-11  = general caller-saves registers, parameters to C
+ * fr12-21 = callee-saves registers, >15 only on PA-RISC1.1
+ *)
+
+GenerateDbgInf: (# exit true (* datpete: 23/11/98 *) #);
+
+adrRegStart: (# exit 3 #); (* number of first usable addressregister = th *)
+dataRegStart: (# exit 9 #); (* number of first usable dataregister *)
+floatRegStart: (# exit 12 #); (* number of first usable FPU register *)
+putThisReg: (# do '%r3' -> BC.putT #);
+putCallReg: (# do '%r4' -> BC.putT #);
+
+putOriginReg: (# do '%r5' -> BC.putT #);
+putIOAbotReg: (# do '%r17'->BC.putT #);
+putIOAsizeReg: (# do '%r18' -> BC.putT #);
+eoi: (* datpete 19/7/94 *)
+  (* end-of instruction. Used to indicate that ONE instruction has
+   * Just been generated to BC. If several are generated in conjunction,
+   * the form 4 * NoOfInstructions -> incIP is used.
+   * IP and incIP are placed in machine.bet. IP is reset each time 
+   * code generation for an M-entry is started.
+   *)
+  (#
+  do (if GenerateDbgInf then
+         (*4->incIP; *)
+         (if common.switch[498] then
+             ';  '->BC.putT; IP->BC.putInt; BC.putNL
+         if);
+     if);
+  #);
+imm: (# off: @ integer enter(off) do off-> BC.imm #);
+sep: (# do ','->BC.putC #);
+
+regDst:
+  (# I: ^backendInstruction;
+  enter I[]
+  do '%r'->BC.putT; I.writeReg->BC.putI;
+  #);
+regDst2:
+  (# I: ^backendInstruction;
+  enter I[]
+  do '%r'->BC.putT; I.writeReg2->BC.putI;
+  #);
+regSrc:
+  (# I: ^backendInstruction;
+  enter I[]
+  do '%r'->BC.putT; I.readReg->BC.putI;
+  #);
+regSrc2:
+  (# I: ^backendInstruction;
+  enter I[]
+  do '%r'->BC.putT; I.readReg2->BC.putI;
+  #);
+regInx:
+  (# I: ^backendInstruction;
+  enter I[]
+  do '%r'->BC.putT; I.inxReg->BC.putI;
+  #);
+fregDst:
+  (# I: ^backendInstruction;
+  enter I[]
+  do '%fr'->BC.putT; I.writeReg->BC.putI;
+  #);
+fregDst2:
+  (# I: ^backendInstruction;
+  enter I[]
+  do '%fr'->BC.putT; I.writeReg2->BC.putI;
+  #);
+fregSrc:
+  (# I: ^backendInstruction;
+  enter I[]
+  do '%fr'->BC.putT; I.readReg->BC.putI;
+  #);
+fregSrc2:
+  (# I: ^backendInstruction;
+  enter I[]
+  do '%fr'->BC.putT; I.readReg2->BC.putI;
+  #);
+LDO2R1:
+  (* load effective addres (readReg,readOffSet) -> %r1 *)
+  (# I: ^backendInstruction
+  enter I[]
+  do '\tLDO\t'->BC.putT; I.readOffSet->BC.putI; 
+     '('->BC.putT; I[]->regSrc; '),%r1\n'->BC.putT;
+  #);
+dataTmp: 
+  (* alternates between allocating %r15 and %r16 *)
+  (# tmp: @integer
+  do (if mstate.dataTmp15 then 15->tmp else 16->tmp if);
+     NOT mstate.datatmp15 -> mstate.dataTmp15
+  exit tmp
+  #);
+emitReg:
+  (# reg: @integer
+  enter reg
+  do '%r'->BC.putT; reg->BC.putI
+  #);
+emitFreg:
+  (# reg: @integer
+  enter reg
+  do '%fr'->BC.putT; reg->BC.putI
+  #);
+regOff: 
+  (# I: ^backendInstruction;
+  enter I[]
+  do I.readOffSet->BC.putI; '(0,'->BC.putT; I.readReg->BC.putA; ')'->BC.putT;
+  #);
+regOff2: 
+  (# I: ^backendInstruction;
+  enter I[]
+  do I.readOffSet->BC.putI; '(0,'->BC.putT; I.readReg2->BC.putA; ')'->BC.putT;
+  #);
+nopDelay: 
+  (# 
+  do '\n\tNOP\n'->BC.putT; 
+     (if GenerateDbgInf then (*4->incIP*) if) 
+  #);
+copyReg:
+  (* OBS! copy physical registers - i.e. logical register numbers
+   * MUST have been added the correponding physical number
+   *)
+  (# src,dst: @integer
+  enter(src,dst)
+  do '\tCOPY\t %r'->BC.putT; src->BC.putI; 
+     ', %r'->BC.putT; dst->BC.putI;  BC.putNl;
+  #);
+doMult:
+  (# I: ^backendInstruction;
+     isImm: @boolean;
+     R: @integer
+  enter(I[],isImm)
+  do mstate.saveLiveArgs;
+     dataTmp->R;
+     (if isImm then
+         &backendInstruction(#do R->writeReg; I.imm->imm #)->ldCstImpl
+     if);
+     '\tCOPY\t'->BC.putT;
+     (if isImm then
+         R->emitReg
+      else
+         I[]->regSrc; 
+     if);
+     ',%r26\n'->BC.putT;
+     '\tBL\t$$mulI,%r31\n'->BC.putT; (* notice: uses %r31 to hold retaddr *)
+     '\tCOPY\t'->BC.putT; I[]->regSrc2; ',%r25\n'->BC.putT;
+     '\tCOPY\t%r29,'->BC.putT; I[]->regDst; BC.putNL;
+     mstate.restoreDeadArgs;
+     (if GenerateDbgInf then 12 -> mstate.incIP if);
+  #);
+doDiv:
+  (* (if isImm then
+   *     (I.readReg div?mod I.imm)  -> I.writeReg
+   * else
+   *     (I.readReg div?mod I.readReg2)  -> I.writeReg
+   * if)
+   * %r26  divI?remI %r25     )  -> %r29
+   *)
+  (# I: ^backendInstruction;
+     isImm: @boolean;
+     R: @integer
+  enter(I[],isImm)
+  do mstate.saveLiveArgs;
+     (if isImm then
+         dataTmp->R;
+         &backendInstruction(#do R->writeReg; I.imm->imm #)->ldCstImpl
+     if);
+     '\tCOPY\t'->BC.putT; I[]->regSrc; ',%r26\n'->BC.putT;
+    
+     (if I.isDiv then
+         '\tBL\t$$divI,%r31\n'->BC.putT; (*uses %r31 to hold retaddr *)
+      else
+         '\tBL\t$$remI,%r31\n'->BC.putT; (*uses %r31 to hold retaddr *)
+     if);
+     '\tCOPY\t'->BC.putT; 
+     (if isImm then
+         R->emitReg
+      else
+         I[]->regSrc2; 
+     if);          
+     ',%r25\n'->BC.putT;
+     
+     '\tCOPY\t%r29,'->BC.putT; I[]->regDst; BC.putNL;
+
+     mstate.restoreDeadArgs;
+     (if GenerateDbgInf then 12 -> mstate.incIP if);
+  #);
+pushData:
+  (# I: ^ backendInstruction
+  enter I[]
+  do '\tSTW\t'->BC.putT; I[]->regSrc; ',-36(0,%r30)\n'->BC.putT;
+     '\tLDO\t64(%r30),%r30\n'->BC.putT;
+      8 -> mstate.incIP
+  #);
+popData:
+  (# I: ^ backendInstruction
+  enter I[]
+  do '\tLDO\t-64(%r30),%r30\n'->BC.putT;
+     '\tLDW\t-36(0,%r30),'->BC.putT; I[]->regSrc; BC.putNL;
+     8 -> mstate.incIP
+  #);
+pushFloat:
+  (# reg: @integer
+  enter reg
+  do '\tLDO\t-40(%r30),%r1\n'->BC.putT;
+     '\tFSTDX\t'->BC.putT; reg->emitFreg; ',%r0(0,%r1)\n'->BC.putT;
+     '\tLDO\t64(%r30),%r30\n'->BC.putT;
+     12 -> mstate.incIP
+  #);
+popFloat:
+  (# reg: @integer
+  enter reg
+  do '\tLDO\t-64(%r30),%r30\n'->BC.putT;
+     '\tLDO\t-40(%r30),%r1\n'->BC.putT;
+     '\tFLDDX\t%r0(0,%r1),'->BC.putT; reg->emitFreg; BC.putNL;
+     12 -> mstate.incIP
+  #);
+loadIOAReg: 
+  (#
+  do '\tLDIL\tLR\'IOA,%r17\n'->BC.putT; 
+     '\tLDW\tRR\'IOA(0,%r17),%r17\n'->BC.putT; 
+     (if GenerateDbgInf then 8 -> mstate.incIP; if);
+  #);
+loadIOASizeReg:
+  (# 
+  do '\tLDIL\tLR\'IOATop,%r18\n'->BC.putT; 
+     '\tLDW\tRR\'IOATop(0,%r18),%r18\n'->BC.putT; 
+     '\tSUB\t%r18,%r17,%r18\n'->BC.putT;  (* WARNING IOA must be loaded before*)
+     (if GenerateDbgInf then  12 -> mstate.incIP if);
+  #);
+
+
+(* called before pushing arguments to external C routines / RT routines
+ * called with the number of longs that are to be passed, ie. two for
+ * each double (noOPar) *)
+doInitExternalCall:
+  (# noOfPar: @integer;
+  enter noOfPar
+  do mstate.saveLiveArgs;
+     noOfPar -> mstate.cArgCount;
+     noOfPar -> mstate.noOfArgs;
+     
+     '\t.CALL '->mstate.CallDirective[];
+     
+     (if noOfPar <= 8 then
+         0 -> mstate.cStackInc; (* use the current stackframe *)
+      else
+         (* increment sp with a multiple of 64 bytes *)
+         ((4*(noOfPar-8)+63) div 64)*64 -> mstate.cStackInc;
+         '\tLDO\t'->BC.putT; mstate.cStackInc->BC.putI; 
+         '(%r30),%r30\n'->BC.putT; 
+         (if GenerateDbgInf then mstate.eoi if);
+     if);
+  #);
+
+(* Push a parameter to a C routine, the first into the 4 parameter registers,
+ * then the rest on the stack. This is called with the last argument
+ * first (sometimes!). We rely on doInitExternalCall to set mstate.cArgCount
+ * to the 
+ * number of arguments to be passed. doInitExternalCall must also assure 
+ * that enough stack space is available beneath %r30 (sometimes) *)
+pushCParameter:  
+  (#(* op: ^mOperand;
+     r:  @dataRegOperand;
+     r2: ^dataRegOperand;*)
+     reg,rN: @integer
+  enter reg
+  do '; noOfArgst='->BC.putT; mstate.noOfArgs->BC.putI; 
+     '; cargcount='->BC.putT; mstate.cArgCount->BC.putI; 
+     BC.putNL;
+     (if (mstate.noOfArgs - mstate.cArgCount) < 4  then
+         (****** pushes first parm first **********)
+         26-(mstate.noOfArgs - mstate.cArgCount)-> rN;
+         (reg,rN) -> copyReg;
+         'ARGW'->mstate.CallDirective.append;
+         (mstate.noOfArgs - mstate.cArgCount)->mstate.CallDirective.putint;
+         '=GR,'->mstate.CallDirective.append;
+      else
+         1 -> rN;
+         '\tCOPY\t'->BC.putT; reg->emitReg; sep; rN->emitReg;  BC.putNl;
+         '\tSTW\t%r1,'->BC.putT;
+         -4*((mstate.noOfArgs-mstate.cArgCount)+13-4) ->BC.putI;
+         '(0,%r30)\n'->BC.putT; 
+         mstate.eoi
+     if);
+     mstate.cArgCount-1 -> mstate.cArgCount;
+  #);
+DoPushCFloat:
+  (# emitStackOff:
+       (# N: @integer;
+       do (if (mstate.noOfArgs mod 2) = 1 then
+              (* int real real  -> noOfArgs = 5  OK
+               * real int real  -> noOfArgs = 5  ?
+               *)
+              mstate.noOfArgs + 1 -> N
+           else
+              mstate.noOfArgs -> N
+          if);
+          -((4*((N - mstate.cArgCount)+13-4)+7) div 8)*8
+            -> BC.putI;
+       #);
+     SetCall:
+       (# 
+       do (if mstate.CallDirective[] = NONE then
+              '\t.CALL '->mstate.CallDirective[];
+          if);
+          'ARGW'->mstate.CallDirective.append;
+          firstReg->mstate.CallDirective.putint;
+          '=FR,'->mstate.CallDirective.append;
+          'ARGW'->mstate.CallDirective.append;
+          firstReg+1->mstate.CallDirective.putint;
+          '=FU,'->mstate.CallDirective.append;
+          true->mstate.DumpCallDirective;
+       #);
+     no,firstReg: @integer
+  do ';; pushCFloat:' -> BC.putT; 
+     mstate.cArgCount->BC.putint; BC.putNL;
+     (* Initially:   cArgCount = noOfArgs *)
+     (if true 
+      // (mstate.cArgCount = mstate.noOfArgs) then
+         (* first argument (this one) : a real *)
+         5 -> no; 
+         1 -> mstate.floatRegsUsed;
+         0 -> firstReg
+      // (mstate.cArgCount + 1) = mstate.noOfArgs      
+         (* tested         :  +
+          * first argument : int
+          * second argument: real
+          *)
+      // (mstate.cArgCount + 2) = mstate.noOfArgs 
+         (* tested         :  +      +
+          * first argument : real   int
+          * second argument: this   int
+          * third argument :        this
+          *)
+         (* two doubles *) then 
+         7 -> no;
+         2 -> mstate.floatRegsUsed;
+         (* olm: *) 2->firstReg
+      else
+         (* tested         :  +     +      +    +    ?
+          * first argument : real  int    int  int  int
+          * second argument: real  real   int  int  int
+          * third argument : this  this   real int  int
+          * fourth argument:              this this int
+          * fifth argument :                        this
+          * ...            : ...         ...
+          *)
+         100 -> no;
+     if);
+     INNER;
+     mstate.cArgCount - 2 -> mstate.cArgCount;
+  #);
+GetExternalResult:
+  (# getSimpleRes: 
+       (# I: ^backendInstruction
+       enter I[]
+       do (if I.writeReg<>28 then
+              '\tCOPY\t%r28,'->BC.putT; I[]->regDst;
+ 	      BC.putNL; 
+              mstate.eoi
+          if)
+       #);
+     getDoubleRes:
+       (# I: ^backendInstruction
+       enter I[] 
+       do '\tCOPY\t%r28,'->BC.putT; I[]->regDst;
+          BC.putNL; 
+          mstate.eoi;
+          '\tCOPY\t%r29,'->BC.putT; I[]->regDst2;
+          BC.putNL; 
+          mstate.eoi
+       #)
+  do inner;
+     mstate.restoreDeadArgs
+  #);
+
+PushReference:
+  (# reg: @integer
+  enter reg
+  do '\tLDIL\tLR\'RefSP,%r1\n'->BC.putT; 
+     '\tLDW\tRR\'RefSP(%r1),%r14\n'->BC.putT; 
+     '\tSTWS,MA\t'->BC.putT; reg->emitReg; ',4(0,%r14)\n'->BC.putT; 
+     '\tSTW\t%r14,RR\'RefSP(0,%r1)\n'->BC.putT; 
+     (if GenerateDbgInf then 16->mstate.incIP if);
+  #);
+
+Push2Refs:
+  (# reg1,reg2: @integer
+  enter(reg1,reg2)
+  do '\tLDIL\tLR\'RefSP,%r1\n'->BC.putT; 
+     '\tLDW\tRR\'RefSP(%r1),%r14\n'->BC.putT; 
+     '\tSTWS,MA\t'->BC.putT; reg1->emitReg; ',4(0,%r14)\n'->BC.putT; 
+     '\tSTWS,MA\t'->BC.putT; reg2->emitReg; ',4(0,%r14)\n'->BC.putT; 
+     '\tSTW\t%r14,RR\'RefSP(0,%r1)\n'->BC.putT; 
+     (if GenerateDbgInf then 20->mstate.incIP if);
+    #);
+
+PopReference:
+  (# reg: @integer
+  enter reg
+  do '\tLDIL\tLR\'RefSP,%r1\n'->BC.putT; 
+     '\tLDW\tRR\'RefSP(%r1),%r14\n'->BC.putT; 
+     '\tLDWS,MB\t-4(0,%r14),'->BC.putT; reg->emitReg; BC.putNL; 
+     '\tSTW\t%r14,RR\'RefSP(0,%r1)\n'->BC.putT; 
+     (if GenerateDbgInf then 16->mstate.incIP if);
+  #);
+
+Pop2Refs:
+  (# reg1,reg2: @integer
+  enter(reg1,reg2)
+  do '\tLDIL\tLR\'RefSP,%r1\n'->BC.putT; 
+     '\tLDW\tRR\'RefSP(%r1),%r14\n'->BC.putT; 
+     '\tLDWS,MB\t-4(0,%r14),'->BC.putT; reg1->emitReg; BC.putNL; 
+     '\tLDWS,MB\t-4(0,%r14),'->BC.putT; reg2->emitReg; BC.putNL; 
+     '\tSTW\t%r14,RR\'RefSP(0,%r1)\n'->BC.putT; 
+     (if GenerateDbgInf then 20->mstate.incIP if);
+  #);
+--backendmstate:descriptor--
+(# init:
+     (#
+     do FIXME.init;
+        NOTUSED.init
+     #);
+   FIXME: @
+     (# init:
+          (#
+          do 'chkIndex is not complete' -> msg[1][];
+             'missing: beginProtoTypes' -> msg[2][];
+             'pushReg: missing push of floats' -> msg[3][]; 
+             'popReg' -> msg[4][]; 
+             'saveHeapTop' -> msg[5][]; 
+             'tstNone' -> msg[6][]; 
+             'Fix dataRegA for CopyCT,ExO' -> msg[7][]; 
+             'backendAllocObj' -> msg[8][]; 
+             'backendGetCOMpar' -> msg[9][]; 
+             'backendExternalDispatch' -> msg[10][]; 
+             'backendReturnVirtualCOM' -> msg[11][]; 
+             '' -> msg[12][]; 
+             
+          #);
+        reported: [12] @boolean;
+        msg: [12] ^text;
+        no: @integer
+     enter no
+     do (if (1 <= no) and (no <= reported.range) then
+            (if not reported[no] then 
+                '\n*** FIXME: snakebackend: ' -> puttext;              
+                msg[no][] -> putline 
+            if);
+            true-> reported[no];              
+        if)
+     #);
+   NOTUSED: @
+     (# init:
+          (#
+          do 'backendgGetBits' -> msg[1][];
+             'backendgPutBits' -> msg[2][];
+             'backendrotateLeftImm' -> msg[3][];
+             'backendrotateLeftReg' -> msg[4][];
+             'backendrotateRightImm' -> msg[5][];
+             'backendrotateRightReg' -> msg[6][];
+             'backendEmitTextConst' -> msg[7][];
+             'backendpushAdr' -> msg[8][];
+             'backendPutBits' -> msg[10][];
+             'backendByteSwap' -> msg[11][];
+             'backendgCmpImm' -> msg[12][];
+             'backendgCmpReg' -> msg[13][];
+             'backendlock' -> msg[14][];
+             'backendallRegInPrimReg2I' -> msg[15][];
+             'backendgBeq' -> msg[16][];
+             '' -> msg[23][];
+             '' -> msg[24][];
+          #);
+        reported: [24] @boolean;
+        msg: [24] ^text;
+        no: @integer
+     enter no
+     do (if (1 <= no) and (no <= reported.range) then
+            (if not reported[no] then 
+                '\n*** snakebackend: call of slot that should NOT be used:\n\t'
+                  -> puttext;              
+                msg[no][] -> putline 
+            if);
+            true-> reported[no];              
+        if)
+     #);
+
+   NoComSupport: @
+     (# reported: @boolean
+     do (if not reported then
+            '\n\n*** COM support has not yet been implemented for HP' 
+              -> putline;
+            true -> reported
+        if)
+     #);  
+   proto: ^text; (* ref to prototype - used in CallAloPrim and JsrT *)
+   (* # of args to pass to the next C routine, set by initExternalCall, 
+    * and used by pushCParameter *)
+   cArgCount: @integer;
+   (* the number of bytes that initExternalCall increased the stack with *)
+   cStackInc: @integer;
+   noOfArgs: @integer;  (* const. number of args to pass *)
+   STenable: @boolean;
+   floatRegsUsed: @integer;
+   CallDirective: ^Text;
+   dumpCallDirective: @Boolean;;
+   
+   eoi: @this(backend).eoi; (* static instance *)
+   incIP: @
+     (* static instance with trace *)
+     (# i: @integer 
+     enter i 
+     do (if GenerateDbgInf then
+            (if common.switch[498] then
+                ';  +'->BC.putT; i->BC.putInt; 
+                ' = ' ->BC.putT; IP->BC.putInt; BC.putNL; 
+            if);
+            (*i->this(backend).incIP *)
+        if)
+     #);
+   printIP: @ 
+     (# 
+     do (if GenerateDbgInf then
+            ';  '->BC.putT; IP->BC.putInt; BC.putNL
+        if)
+     #);
+   
+   dataTmp15, floatTmp: @boolean;
+   
+   floatReg: [32] @ integer; 
+   (* the PA-RISC 1.1 has 32 fp registers 64 bits each, registers 12-21 are
+    * callee saves registers *)
+   
+   deadArgs: 
+     (# next: ^deadArgs;
+        ac, si, noa: @integer;
+        fru: @integer;
+        callDir: ^text;
+        kill: 
+          (#
+          do cArgCount->ac;
+             cStackInc->si;
+             noOfArgs->noa;
+             floatRegsUsed->fru;
+             latestDeadArgs[]->next[];
+             callDirective[] -> callDir[];
+             this(deadArgs)[]->latestDeadArgs[];
+          #);
+        reincarnate:
+          (#
+          do ac->cArgCount;
+             si->cStackInc;
+             noa->noOfArgs;
+             fru->floatRegsUsed;
+             callDir[] -> callDirective[];
+             next[] -> latestDeadArgs[];
+          #);
+     #);   
+   latestDeadArgs: ^deadArgs;
+   
+   saveLiveArgs:
+     (# (* assume all parameters are pushed first to last, ie. forwards *)
+        n: @integer;
+        da: ^deadArgs;
+     do (* more braindamage-control *)
+        (if cArgCount <= 0 then
+            0 - cArgCount -> n;
+         else
+            (noOfArgs-cArgCount) -> n;
+        if);
+        (if n > 4 then 4 -> n if);
+        n-(floatRegsUsed*2) -> n;
+        (if n > 0 then ';; saveLiveArgs\n' -> BC.putT; if);
+        
+        (for i:n repeat   (* push r26, r25, r24, r23 *)
+             '\tSTW\t%r'->BC.putT; (27-i)->BC.putI; sep; -(32+(4*i))->BC.putI;
+             '(%r30)\n'->BC.putT;
+             (* (27-i) - dataRegStart -> NewDataRegOp -> push; *)
+        for);
+        4*n -> mstate.incIP;
+        
+        (if floatRegsUsed > 0 then
+            ';; saveLiveFloatArgs\n'->BC.putT;
+            '\tLDO\t-48(%r30),%r1\n'->BC.putT;
+            '\tFSTDX\t%fr5,%r0(0,%r1)\n'->BC.putT;
+            (if GenerateDbgInf then 8 -> mstate.incIP if);
+        if);
+        (if floatRegsUsed // 2 then
+            '\tFSTDS\t%fr7,8(0,%r1)\n'->BC.putT; 
+            (if GenerateDbgInf then mstate.eoi if);
+        if);
+        
+        (if (n>0) or (floatRegsUsed>0) then
+            '\tLDO\t64(%r30),%r30\n'->BC.putT;
+            (if GenerateDbgInf then mstate.eoi if);
+        if);
+        &deadArgs[]->da[]; da.kill;
+     #);
+   
+   restoreDeadArgs:
+     (# n: @integer;
+     do latestDeadArgs.reincarnate;
+        (if cArgCount <= 0 then
+            0 - cArgCount -> n;
+         else
+            (noOfArgs-cArgCount)->n;
+        if);
+        (if n > 4 then 4->n if);
+        n-(floatRegsUsed*2)->n;
+        (if n > 0 then ';; restoreDeadArgs\n'->BC.putT; if);
+        (if (n>0) or (floatRegsUsed>0) then
+            '\tLDO\t-64(%r30),%r30\n'->BC.putT;
+            (if GenerateDbgInf then mstate.eoi if);
+        if);
+        
+        (for i:n repeat   (* pop r23, r24, r25, r26 *)
+             '\tLDW\t'->BC.putT; -(32+(4*i))->BC.putI; '(%r30),%r'->BC.putT;
+             (27-i)->BC.putI; BC.putNL;
+             (* (i+(26-n)) - dataRegStart -> NewDataRegOp -> pop; *)
+        for);
+        4*n -> mstate.incIP;
+        
+        (if floatRegsUsed > 0 then
+            '\tLDO\t-48(%r30),%r1\n'->BC.putT;
+            '\tFLDDX\t%r0(0,%r1),%fr5\n'->BC.putT;
+            (if GenerateDbgInf then 8 -> mstate.incIP if);
+        if);
+        (if floatRegsUsed = 2 then
+            '\tFLDDS\t8(0,%r1),%fr7\n'->BC.putT;
+            (if GenerateDbgInf then mstate.eoi if);
+        if);
+     #);
+   
+#)
+
+---backendThisO: dopart---
+do 3->rNo
+
+---backendCallO: dopart---
+do 4->rNo
+
+--getRegisterOffsets:doPart--
+do 8->dataOff;
+   5->adrOff;
+   26->primOff (* OBS used in reverse order: consider originReg !!*)
+   
+--getNumberOfDataRegisters:dopart--
+do 5->regCount
+
+--getNumberOfAdrRegisters:dopart--
+do 3->regCount
+   
+--getNumberOfRegisters:dopart--
+do (* See DOC/Registers.html *)
+   (if type
+    // 1 (*dataReg*) then 5->number
+    // 2 (*adrReg*)  then 2+3->number (* this+call counts too *)
+    // 3 (*floatReg*) then 16->number
+    // 4 (*primReg*) then 4->number
+   if)
+   
+--getPhysicalRegisterNumber:dopart--
+do (* See DOC/Registers.html *)
+   (if type
+    // 1 (*dataReg*) then
+       9-1+reg -> physicalregister (* r9,r10,r11,r12,13*)
+    // 2 (*AdrReg*) then
+       5-1+reg->physicalregister (* r5,r6,r7 *)
+    // 3 (*float*) then
+       reg->physicalregister
+    // 4 then
+       26-reg->physicalregister (* r26,r25,r24,r23,r22*)
+   if)    
+   
+--primRegIsReg:doPart--
+do true->value
+   
+--primRegIsRegAdr:doPart--
+do false->value
+   
+--backendIsSmallAluConstant:doPart--
+do (-1024 <= c) and (c <= 1023) -> value
+   
+--backendIsSmallAdrOff:doPart--
+do (-8192 < c) and (c <= 8191) -> value
+   
+--backendHasRotateInstr:doPart--
+do false->value
+   
+--backendScaledIndex:doPart--
+do false->value
+
+---backendDoHead:descriptor---
+(#
+do ';;\tHP 9000 series 700/800 assembler\n'->BC.putT;
+   '\t.COPYRIGHT "Mjolner Informatics ApS, 1992-95"\n'->BC.putT;
+   '\t.VERSION "Mjolner BETA Compiler version 5.1"\n'->BC.putT;
+   '\t.LEVEL 1.1\n'->BC.putT;
+   '\t.SPACE $PRIVATE$\n'->BC.putT;
+   '\t.SUBSPA $DATA$,QUAD=1,ALIGN=8,ACCESS=0x1F\n'->BC.putT;
+   '\t.SPACE $TEXT$\n'->BC.putT;
+   '\t.SUBSPA $CODE$,QUAD=0,ALIGN=8,ACCESS=0x2C,CODE_ONLY\n'->BC.putT;
+   '\t.ALIGN 4\n'->BC.putT;
+   '\t.IMPORT $$mulI,MILLICODE\n\t.IMPORT $$divI,MILLICODE\n'->BC.putT;
+   '\t.IMPORT $$remI,MILLICODE\n'->BC.putT;
+   
+   (* Data symbols from RTS used in BETA code *)
+   '\t.IMPORT TextProto,DATA\n'->BC.putT;
+   '\t.IMPORT IOA,DATA\n'->BC.putT;
+   '\t.IMPORT IOATop,DATA\n'->BC.putT;
+   '\t.IMPORT RefSP,DATA\n'->BC.putT;
+   '\t.IMPORT ReferenceStack,DATA\n'->BC.putT;
+   '\t.IMPORT lastCompBlock,DATA\n'->BC.putT;
+   
+   (* Functions called from slots in SNAKEmachine, and thus
+    * not necessarily imported by high level mechanisms
+    * in the compiler.
+    *)
+   '\t.IMPORT HandleIndexErr,CODE\n'->BC.putT;
+   '\t.IMPORT RefNone,CODE\n'->BC.putT;
+   '\t.IMPORT Return,CODE\n'->BC.putT;
+   '\t.IMPORT AttBC,CODE\n'->BC.putT;
+   '\t.IMPORT ChkRA,CODE\n'->BC.putT;
+   true -> mstate.STenable; (* enable StackTracing *)
+#)
+
+-- backendNop: dopart --
+do '\tNOP\n'->BC.putT; 
+   mstate.eoi 
+
+-- backendgLea:doPart--
+do (if not (I.imm->cap.isSmallAluConstant) then
+       '\n***OBS! backendgLea: I.imm out of range'->putline
+    else
+       '\tADDI\t'->BC.putT; I.imm->BC.putI; sep; I[]->regSrc; sep; I[] ->regDst;
+       BC.putNL;
+       mstate.eoi
+   if)
+   
+-- backendgLeaInx:doPart--
+do '\tADD\t'->BC.putT; I[]->regSrc; sep; I[]->regSrc2; sep; I[] ->regDst;
+   BC.putNL;
+   (if I.imm <> 0 then
+       '\tADDI\t'->BC.putT; I.imm->BC.putI; sep; I[]->regDst; 
+       sep; I[] ->regDst; BC.putNL;
+   if)
+   
+-- backendgLeaText:doPart--
+do '\tLDIL\tLR\'' -> BC.putT; I.label -> BC.putT; sep; I[]->regDst; BC.putNL;
+   '\tLDO\tRR\'' -> BC.putT; I.label -> BC.putT; '(' -> BC.putT;
+   I[]->regDst; '), ' -> BC.putT; I[]-> regDst; BC.putNL;
+   8 -> mstate.incIP 
+   
+-- backendgLeaLabel:doPart--
+do 'L$C'->I.label[];  
+   I.labNo->I.label.putint;
+   I[]-> gLeaTextImpl
+   
+-- backendldCst:dopart --
+do  (if (I.imm < -8192) or (I.imm >= 8192) then
+        (*'***** large offset 1'->comment;*)
+       '\tLDIL\tLR\'' -> BC.putT; I.imm -> BC.putI; sep; I[]->regDst; 
+       '\n\tLDO\tRR\'' -> BC.putT; I.imm -> BC.putI; '(' -> BC.putT;
+       I[]->regDst; '), ' -> BC.putT; I[]->regDst;  BC.putNL;
+       8 -> mstate.incIP
+    else
+       '\tLDI\t' -> BC.putT; I.imm -> BC.putI; sep; I[]->regDst; BC.putNL;
+       mstate.eoi
+   if)
+
+-- backendstCst:dopart --
+do (failureTrace,'backendstCst NOT supported on hpuxpa')->stop
+
+-- backendldVal:dopart --
+do (if (I.readOffSet < -8192) or (8192 <= I.readOffSet) then
+       8000->I.readOffSet;
+       '\n***OBS backendldVl: offSet out of range'->putline
+   if);
+   (if I.size = 4 then
+       '\tLDW\t'->BC.putT; I[]->regOff; sep; I[]->regDst
+    else
+       (if I.size = 1 then
+           '\tLDB\t'->BC.putT; I[]->regOff; sep; I[]->regDst;
+           (if I.signed then
+               '\n\tEXTRS\t'->BC.putT; I[]->regDst; ',31,8,'->BC.putT; 
+               I[]->regDst
+           if)
+        else (* size=2*)
+           '\tLDH\t'->BC.putT; I[]->regOff; sep; I[]->regDst;
+           (if I.signed then
+               '\n\tEXTRS\t'->BC.putT; I[]->regDst; ',31,16,'->BC.putT; 
+               I[]->regDst
+           if)
+   if)if);  
+   
+   BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+   
+-- backendldVlInx:dopart --
+do (# tmp: @integer
+   do '\tADDI\t'->BC.putT; I.readOffset->BC.putI; sep; 
+      I[]->regInx; sep; I[]->regInx; 
+      
+      '\n\tADD\t'->BC.putT; I[]->regSrc; sep; I[]->regInx; sep; 
+      dataTmp->tmp->emitReg; 
+      BC.putNL;
+      tmp->I.readReg; 0 -> I.readOffSet;
+      I[]->ldValImpl
+   #)
+   
+-- backendstVal:dopart --
+do  (if (I.readOffSet < -8192) or (8192 <= I.readOffSet) then
+       8000->I.readOffSet;
+       '\n***OBS backendstVAl: offSet out of range'->putline
+   if);
+   (if I.size = 4 then
+       '\tSTW\t'->BC.putT; 
+    else
+       (if I.size = 1 then
+            '\tSTB\t'->BC.putT;
+        else
+           (*size = 2 *) 
+           '\tSTH\t'->BC.putT
+   if)if);
+   I[] -> regSrc2; sep; I[]->regOff; BC.putNl;
+   mstate.eoi
+   
+-- backendstValInx:dopart --
+do (# tmp: @integer
+   do '\tADDI\t'->BC.putT; I.readOffset->BC.putI; sep;
+      I[]->regInx; sep; I[]->regInx; 
+      
+      '\n\tADD\t'->BC.putT; I[]->regSrc; sep; I[]->regInx; sep; 
+      dataTmp->tmp->emitReg; 
+      BC.putNL;
+      tmp->I.readReg; 0 -> I.readOffSet;
+      I[]->stValImpl
+   #)
+   
+-- backendcpReg:dopart --
+do '\tCOPY\t'->BC.putT; I[]->regSrc; sep; I[]->regDst;  BC.putNl;
+   mstate.eoi
+   
+-- backendstValInText:dopart --
+do '\tLDIL\tLR\''->BC.putT; I.label->BC.putT; ',%r1\n' -> BC.putT;
+   '\tSTW\t'->BC.putT; I[]->regSrc; ',RR\''->BC.putT; I.label->BC.putT;
+   '(0,%r1)\n'->BC.putT;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+   
+-- backenddoAsgRefAdr:dopart --
+do (* empty?*)
+
+-- backenddoAsgRefReg:dopart --
+do (*empty?*)
+
+-- backendChkHeap:dopart --
+   (*  SUB	OP,%IOAbot,%r1	; r1 = op - IOAbot
+    *  COPY	OP,%r28         ; res0 register
+    *  COMCLR,<<=	%r1,%IOAsize,OP	; OP=0, nullify next if r1<=IOAsize
+    *  BL	ChkRA,%r2	; in delayslot of COMCLR
+    *  NOP
+    *)
+do '\tSTW\t'->BC.putT; I[] -> regSrc; sep; I[]->regOff2; BC.putNl;
+   mstate.eoi;
+   (if not I.withQua then
+       loadIOAReg;
+       '\tSUB\t'->BC.putT; I[]->regSrc2; sep; putIOAbotReg; ',%r1\n'->BC.putT;
+       '\tCOPY\t'->BC.putT; I[]->regSrc2; ',%r28\n'->BC.putT;
+       loadIOASizeReg;
+       '\tCOMCLR,<<=\t%r1,'->BC.putT; putIOAsizeReg; sep; I[]->regSrc2; BC.putNL;
+       '\tBL\tChkRA,%r2\n'->BC.putT;
+       '\tNOP\n'->BC.putT; 
+       20 -> mstate.incIP;
+       '\tCOPY\t%r0,'->BC.putT; I[]->regSrc2; BC.putNL;
+       (* can't use bl,n here, if ChkRA is called it skips the next instr.
+        * upon return *)
+   if)
+   
+-- backendgAddImm:dopart --
+do '\tADDI\t'->BC.putT; I.imm->BC.putI; sep; I[]->regSrc2; sep; I[]->regDst;
+   BC.putNL;
+   mstate.eoi
+
+-- backendgAddReg:dopart --
+do '\tADD\t'->BC.putT; I[]->regSrc; sep; I[]->regSrc2; sep; I[] -> regDst;
+   BC.putNL;
+   mstate.eoi
+
+-- backendaddMem:dopart --
+do (* not used on snake *)
+
+-- backendgNeg:dopart --
+do '\tSUB\t%r0,'->BC.putT; I[]->regSrc; sep;  I[]->regDst; BC.putNl;
+   mstate.eoi
+
+-- backendgSubImm:dopart --
+   (* generate: src2 - imm -> dst
+    * the SNAKE does have a SUBI, but apparently on the form
+    *    SUBI   imm, %r2, %rd
+    * but we need 
+    *    SUBI   %r2, imm, %rd
+    *)
+do '\tLDI\t'->BC.putT; I.imm->BC.putI; ',%r1\n'->BC.putT;
+   '\tSUB\t'->BC.putT; I[]->regSrc2; ',%r1,'->BC.putT; I[]->regDst;
+   BC.putNL;
+   8->mstate.incIP
+   
+-- backendgSubReg:dopart --
+   (* generate  src2 - src -> dst *)
+do '\tSUB\t'->BC.putT; I[]->regSrc2; sep; I[]->regSrc; sep; I[] -> regDst;
+   BC.putNL;
+   mstate.eoi
+
+-- backendgMultImm:dopart --
+do (I[],true)->doMult
+   
+--backendgMultReg:dopart --
+do (I[],false)->doMult
+
+--backendgDIVImm:dopart --
+do (I[],true)->doDiv
+
+--backendgDIVReg:dopart --
+do (I[],false)->doDiv
+
+--backendgOrImm:dopart --
+do (# dr: @integer
+   do '\tLDI\t' -> BC.putT; I.imm -> BC.putI; 
+      sep; dataTmp->dr->emitReg; BC.putNL;
+      '\tOR\t'->BC.putT; dr->emitReg; sep; I[]->regSrc2; sep; I[]->regDst;
+      BC.putNL;
+      mstate.eoi
+   #)
+   
+--backendgOrReg:dopart --
+do '\tOR\t'->BC.putT; I[]->regSrc; sep; I[]->regSrc2; sep; I[]->regDst;
+   BC.putNL;
+   mstate.eoi
+   
+--backendgAndImm:dopart --
+do (# dr: @integer
+   do '\tLDI\t' -> BC.putT; I.imm -> BC.putI; 
+      sep; dataTmp->dr->emitReg; BC.putNL;
+      '\tAND\t'->BC.putT; dr->emitReg; sep; I[]->regSrc2; sep; I[]->regDst;
+      BC.putNL;
+      mstate.eoi
+   #)
+   
+--backendgAndReg:dopart --
+do '\tAND\t'->BC.putT; I[]->regSrc; sep; I[]->regSrc2; sep; I[]->regDst;
+   BC.putNL;
+   8->mstate.incIP
+   
+--backendgxOrImm:dopart --
+do (# dr: @integer
+   do '\tLDI\t' -> BC.putT; I.imm -> BC.putI; 
+      sep; dataTmp->dr->emitReg; 
+      '\n\tXOR\t'->BC.putT; dr->emitReg; sep; I[]->regSrc2; sep; I[]->regDst;
+      BC.putNL;
+      mstate.eoi 
+   #)
+
+--backendgxOrReg:dopart --
+do '\tXOR\t'->BC.putT; I[]->regSrc; sep; I[]->regSrc2; sep; I[]->regDst;
+   BC.putNL;
+   mstate.eoi
+
+--backendgAndNReg:dopart --
+(* NOT regSrc2 -> regSrc2;
+ * regSrc AND regSrc2 -> regDst
+ *)
+do '\tSUB\t%r0,'->BC.putT; I[]->regSrc2; sep;  I[]->regSrc2;   
+   '\n\tAND\t'->BC.putT; I[]->regSrc; sep; I[]->regSrc2; sep; I[]->regDst;
+   BC.putNL;
+   8->mstate.incIP
+   
+--backendgNot:dopart --
+do '\tADDI\t1,'->BC.putT; I[]->regDst; ', %r1\n' -> BC.putT;
+   '\tZDEP\t%r1,31,1,'->BC.putT; I[]->regDst; BC.putNL;
+   8 -> mstate.incIP
+
+--backendlogNot:dopart --
+do '\tUADDCM\t%r0,'->BC.putT; I[]->regSrc; sep; I[]->regDst; BC.putNL;
+   mstate.eoi  
+
+--backendgCmpImm:dopart --
+do 12->mstate.notUsed
+   
+--backendgCmpReg:dopart --
+do 13->mstate.notUsed
+
+--backendSignExtByte:dopart --
+do '\tEXTRS\t'->BC.putT; I[]->regSrc; ',31,8,'->BC.putT; I[]->regDst;
+   BC.putNL;
+   mstate.eoi  
+
+--backendSignExtWord:dopart --
+do '\tEXTRS\t'->BC.putT; I[]->regSrc; ',31,16,'->BC.putT; I[]->regDst;
+   BC.putNL;
+   mstate.eoi  
+
+--backendGetBits:dopart --
+   (* pos = i.imm; length = i.size, signed flag. *)
+do '\tEXTRU\t'->BC.putT; I[]->regSrc; sep; I.imm+I.size-1 ->BC.putI; sep;
+   I.size->BC.putI; sep; I[]->regDst; BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+
+     
+--backendgGetBits:dopart --
+do 1 -> mstate.NOTUSED
+   
+--backendputBits:dopart --
+do 10 -> mstate.NOTUSED
+   
+--backendgPutBits:dopart --
+do 2 -> mstate.NOTUSED
+   
+--backendByteSwap:dopart --
+do 11 -> mstate.NOTUSED
+
+--backendgGetDataByte:dopart --
+do  (if I.imm (*byteNo*)
+    // 0 then (* upper byte *)
+       '\tEXTRU\t'->BC.putT; I[]->regSrc; ',7,8,'->BC.putT; 
+    // 1 then (* upper middle byte *)
+       '\tEXTRU\t'->BC.putT; I[]->regSrc; ',15,8,'->BC.putT; 
+    // 2 then 
+       '\tEXTRU\t'->BC.putT; I[]->regSrc; ',23,8,'->BC.putT; 
+    // 3 then 
+       '\tEXTRU\t'->BC.putT; I[]->regSrc; ',31,8,'->BC.putT; 
+   if);
+   I[]->regDst;
+   BC.putNL;
+   mstate.eoi
+   
+--backendgGetDataWord:dopart --
+do (if I.imm (*wordNo*) = 0then
+       '\tEXTRU\t'->BC.putT; I[]->regSrc; ',15,16,'->BC.putT; 
+    else
+       '\tEXTRU\t'->BC.putT; I[]->regSrc; ',31,16,'->BC.putT; 
+   if);
+   I[]->regDst;
+   BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+   
+--backendarithShiftLeftImm:dopart --
+do '\tZDEP\t'->BC.putT; I[]->regSrc; 
+   sep; 31-I.imm->BC.putI; (* pos *)
+   sep; 32-I.imm->BC.putI; (* len *)
+   sep; I[]->regDst; BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+   
+--backendarithShiftLeftReg:dopart --
+do '\tSUBI,<<\t31,'->BC.putT; I[]->regSrc; ',%r1\n'->BC.putT;
+   '\tMTSAR\t%r1\n'->BC.putT;
+   '\tCOMICLR,<<\t31,%r1,%r31\n'->BC.putT;
+   '\tZVDEP\t'->BC.putT;  I[]->regDst; ',32,%r31\n'->BC.putT;
+   '\tCOPY\t%r31,'->BC.putT; I[]->regDst; BC.putNL;
+   (if GenerateDbgInf then 20 -> mstate.incIP if);
+   
+--backendlogicalShiftLeftImm:dopart --
+do '\tZDEP\t'->BC.putT; I[]->regSrc;
+   sep; 31-I.imm->BC.putI; (* pos *)
+   sep; 32-I.imm->BC.putI; (* len *)
+   sep; I[]->regDst; BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+
+--backendlogicalShiftLeftReg:dopart --
+do '\tSUBI,<<\t31,'->BC.putT; I[]->regSrc2; ',%r1\n'->BC.putT;
+   '\tMTSAR\t%r1\n'->BC.putT;
+   '\tCOMICLR,<<\t31,%r1,%r31\n'->BC.putT;
+   '\tZVDEP\t'->BC.putT; I[]->regDst; ',32,%r31\n'->BC.putT;
+   '\tCOPY\t%r31,'->BC.putT; I[]->regDst; BC.putNL;
+   (if GenerateDbgInf then 20 -> mstate.incIP if);
+
+--backendarithShiftRightImm:dopart --
+do '\tEXTRS\t'->BC.putT; I[]->regSrc;
+   sep; 31-I.imm->BC.putI; (* pos *)
+   sep; 32-I.imm->BC.putI; (* len *)
+   sep; I[]->regDst; BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+
+--backendarithShiftRightReg:dopart --
+do '\tEXTRS\t'->BC.putT; I[]->regSrc; ',0,1,%r1\n'->BC.putT;
+   '\tMTSAR\t'->BC.putT; I[]->regSrc2; BC.putNL;
+   '\tVSHD\t%r1,'->BC.putT; I[]->regDst; sep; I[]->regDst; BC.putNL;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+   
+--backendlogicalShiftRightImm:dopart --
+do '\tEXTRU\t'->BC.putT;  I[]->regSrc;
+   sep; 31-I.imm->BC.putI; (* pos *)
+   sep; 32-I.imm->BC.putI; (* len *)
+   sep; I[]->regDst; BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+   
+--backendlogicalShiftRightReg:dopart --
+do '\tMTSAR\t'->BC.putT;  I[]->regSrc2; BC.putNL;
+   '\tVSHD\t%r0,'->BC.putT; I[]->regDst;sep; I[]->regDst; BC.putNL;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+
+--backendrotateLeftImm:dopart --
+do 3 -> mstate.NOTUSED
+   
+--backendrotateLeftReg:dopart --
+do 4 -> mstate.NOTUSED
+   
+--backendrotateRightImm:dopart --
+do 5 -> mstate.NOTUSED
+   
+--backendrotateRightReg:dopart --
+do 6 -> mstate.NOTUSED
+   
+--backendBeginLabel:dopart --
+do '\tLDIL\tLR\'lastCompBlock,%r1\n'->BC.putT;
+   '\tLDW\tRR\'lastCompBlock(%r1),%r1\n'->BC.putT;
+   '\tSUB\t%r30,%r1,%r1\n'->BC.putT;
+   '\tSTW\t'->BC.putT; '%r1,'->BC.putT; I.imm->BC.putI; '(0,'->BC.putT;
+   putThisReg; ')\n'->BC.putT;
+   (if GenerateDbgInf then 16 -> mstate.incIP if);
+
+--backendFreeLabel:dopart --
+do (* empty *)
+
+--backendEndLabel:dopart --
+do (* empty *)
+
+--backendsaveInnerReturn:dopart --
+do '\tSTW\t%r2,-20(0,%r30)\n'->BC.putT;
+   '\tLDO\t64(%r30),%r30\n'->BC.putT;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+   
+---backendExternalMark:doPart---
+do (* empty *)
+   
+---backendExternalReturn:doPart---
+do returnImpl
+   
+---backendinitXpar:doPart---
+do 1(*->Xpar.putNo*)->Xpar.getNo
+   
+---backendPreGetXpar:doPart---
+do (*'\tCOPY\t'->BC.putT; 26+1-xPar.putNo->emitReg; sep; I[]->regDst; BC.putNl;
+   xPar.putNo+1->xPar.putNo;  
+   mstate.eoi*)
+   
+---backendNoOfPreGetXpar:doPart---
+do (*(4,noOfPar)->min -> xPar.last->value;*)
+   1 -> value (* tricky! *)
+   
+--- backendgetXlong:doPart---
+do (if Xpar.getNo <= 4 then
+       '\tCOPY\t'->BC.putT; 26+1-xPar.getNo->emitReg; sep; 
+       I[]->regDst; BC.putNl
+    else
+       '\tLDW\t-116(0,%r30),%r1\n' -> BC.putT; (* see Callback.c *)
+       '\tLDW\t'->BC.putT; -(4*(Xpar.getNo-5)) -> BC.putI;
+       '(0,%r1),'->BC.putT; I[]->regDst; BC.putNL;
+       (if GenerateDbgInf then 8 -> mstate.incIP if);
+   if);
+   Xpar.getno+1->Xpar.getno
+
+---backendgetXword:doPart---
+do (* not used *)
+
+---backendgetXbyte:doPart---
+do (* not used *)
+
+---backendtoXres:doPart---
+do (*'\tCOPY\t%r9,%r28\n'->BC.putT; (* a better solution is needed here
+                                   * dataRegA is copied to returnReg;
+                                   * used when returning a value from
+                                   * a BETA callBack pattern
+                                   *)
+   '\tCOPY\t'->BC.putT; I[]->regSrc; ',%r28\n'->BC.putT;
+   mstate.eoi;
+---backendXpar:descriptor---
+(# putNo,getNo,last: @integer; dreg: [5] @integer #) (*???*)
+   
+---backendGetRegForXres:doPart---
+do saveHeapTopImpl
+
+--backendreturnInner:dopart --
+do '\tLDW\t-84(0,%r30),%r2\n'->BC.putT;
+   '\tBV\t%r0(%r2)\n'->BC.putT;
+   '\tLDO\t-64(%r30),%r30\n'->BC.putT;
+   (if GenerateDbgInf then 12 -> mstate.incIP if);
+   
+---backendExternalEntry:doPart---
+do I.label[]->labelDef; SaveReturnImpl
+   
+--backendEmitTextConst:dopart --
+do 7->mstate.NOTUSED
+
+--backendgClr:dopart --
+do (if I.writereg < 27 (* some sun4s specific code in IMmachine *) then
+       '\tCOPY\t%r0,'->BC.putT; I[]->regDst; BC.putNL;
+       (if GenerateDbgInf then mstate.eoi if)
+   if)
+   
+--backendpushAdr:dopart --
+do 8->mstate.NOTUSED
+
+--backendPush:dopart --
+do (if I.condition then
+       I[]->pushData
+    else
+       I.readReg->pushReference
+   if)
+
+--backendPop:dopart --
+do (if I.condition then
+       I[]->popData
+    else
+       I.writeReg->popReference
+   if)
+
+--backendPushThisOrCall:dopart --
+do (if I.bool then 
+       (if I.bool2 then 
+           (thisO, callO)->Push2Refs
+        else
+           thisO->PushReference
+       if)
+    else
+       (if I.bool2 then callO->PushReference if)
+   if)
+
+--backendpopThisOrCall:dopart --
+do (if I.bool then 
+       (if I.bool2 then 
+           (callO, thisO)->Pop2Refs
+        else
+           thisO->PopReference
+       if)
+    else
+       (if I.bool2 then callO->PopReference if)
+   if)
+
+--backendsetTop:dopart --
+do '\tLDO\t'->BC.putT;
+   (if I.imm <> 0 then
+       -64 * I.imm ->BC.putI;
+   if);
+   '(%r30),%r30\n' -> BC.putT;
+    mstate.eoi
+
+--backendChkCase:dopart --
+   (* if inx > (unsigned) (max-min)) then 'goto elseLab'
+    * if (unsigned) (max-min) < inx then 'goto elseLab'
+    * if (unsigned) (max-min) >= inx then skip 'goto elseLab'
+    *)
+do '\tCOMICLR,>>=\t'->BC.putT; 
+   (I.size(*max*)-I.readOffSet(*min*))->BC.putI; sep; I[]->regSrc; 
+   ',%r0\n' -> BC.putT;
+   '\tB,N\tL$C'->BC.putT; I.labNo->BC.putI; BC.putNL;
+   2->I.imm;
+   I[]->logicalShiftLeftImmImpl; 
+   8->mstate.incIP;
+
+
+--backendChkIndex:dopart --
+do (# mult: @boolean; log: @integer
+   do 1->MSTATE.FIXME;
+      (if I.condition (*isSimple*) then
+          (if I.size
+           // 4 then
+              '\tSH2ADD\t'->BC.putT; I[]->regInx; ',%r0,'->BC.putT; 
+              I[]->regInx; BC.putNL;
+           // 2 then
+              '\tSH1ADD\t'->BC.putT; I[]->regInx; ',%r0,'->BC.putT; 
+              I[]->regInx; BC.putNL;
+           // 1 then
+           // 8 then
+              '\tSH3ADD\t'->BC.putT; I[]->regInx; ',%r0,'->BC.putT; 
+              I[]->regInx; BC.putNL;
+          if)
+       else
+          (if (I.size->exact_log2->log) <> - 1 then
+              &backendInstruction
+              (#
+              do I.inxReg->readReg->writeReg;
+                 log->imm
+              #) -> logicalShiftLeftImmImpl
+           else
+              true->mult; 
+              (*(if indexCheck then EmitDelayNOP if); *)
+          if)
+      if);
+      (if mult then 
+          I.size->I.imm;
+          I.inxReg->I.readReg2->I.writeReg;
+          i[]->gMultImmImpl 
+      if);
+   #)
+
+--backendcmpToBool:dopart --
+do '\tCOMCLR,' -> BC.putT;
+   (if I.cond (* IF T1 cc R then goto L *)
+    // 1 (* =  *) then '<>'->BC.putT
+    // 2 (* <> *) then '='->BC.putT
+    // 3 (* <  *) then '>='->BC.putT
+    // 4 (* <= *) then '>'->BC.putT
+    // 5 (* >  *) then '<='->BC.putT
+    // 6 (* >= *) then '<'->BC.putT
+   if);
+   (* notice operand order! *)
+   '\t' -> BC.putT; I[]->regSrc2; sep; I[]->regSrc; sep; I[]->regDst; 
+   '\n\tLDI\t1,'->BC.putT;  I[]->regDst; BC.putNL;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+
+--backendLoadFloat:doPart---
+do '\tLDI\t'->BC.putT; I.readOffSet->BC.putI; ',%r1\n'->BC.putT;
+   '\tFLDDX\t%r1('->BC.putT; I[]->regSrc; '),'->BC.putT; 
+   I[]->fregDst; BC.putNL;
+   8 -> mstate.incIP
+   
+--backendLoadFloatInx:doPart---
+do (if I.readOffSet <> 0 then
+       '\tADDI\t'->BC.putT; I.readOffSet->BC.putI; sep; I[]->regInx; 
+       sep; I[]->regInx; BC.putNL;
+       mstate.eoi
+   if);
+   '\tFLDDX\t'->BC.putT; 
+   I[]->regInx; '('->BC.putT; I[]->regSrc; '),'->BC.putT; 
+   I[]->fregDst; BC.putNL;
+   4 -> mstate.incIP   
+   
+--backendStoreFloat:doPart---
+do '\tLDI\t'->BC.putT; I.readOffSet->BC.putI; ',%r1\n'->BC.putT;
+   '\tFSTDX\t'->BC.putT; I[]->fregSrc2; sep;
+   '%r1('->BC.putT; I[]->regSrc; ')\n'->BC.putT; 
+   8 -> mstate.incIP
+   
+--backendStoreFloatInx:doPart---
+do  (if I.readOffSet <> 0 then
+       '\tADDI\t'->BC.putT; I.readOffSet->BC.putI; sep; I[]->regInx; 
+       sep; I[]->regInx; BC.putNL;
+       mstate.eoi
+    if);
+   '\tFSTDX\t'->BC.putT; I[]->fregSrc2; sep;
+   I[]->regInx; '('->BC.putT; I[]->regSrc; ')\n'->BC.putT; 
+   4 -> mstate.incIP 
+   
+---backendStoreFloat2int:dopart---
+do '\tFCNVFXT,DBL,SGL '->BC.putT; I[]->fregSrc2; sep; I[]->fregDst;
+   '\n\tLDO\t'->BC.putT; 
+   I.readOffSet->BC.putI; '('->BC.put; I[]->regSrc; '),%r1'->BC.putT;
+   '\n\tFSTWS\t'->BC.putT; I[]->fregDst; sep; '0(%r1)\n'->BC.putT;   
+   12 -> mstate.incIP
+
+---backendStoreFloat2intInx:dopart---
+do  (if I.readOffSet <> 0 then
+       '\tADDI\t'->BC.putT; I.readOffSet->BC.putI; sep; I[]->regInx; 
+       sep; I[]->regInx; BC.putNL;
+       mstate.eoi
+    if);
+   '\tFCNVFXT,DBL,SGL '->BC.putT; I[]->fregSrc2; sep; I[]->fregDst;
+   '\n\tLDO\t'->BC.putT; I[]->regInx; 
+   '('->BC.put; I[]->regSrc; '),%r1'->BC.putT;
+   '\n\tFSTWS\t'->BC.putT; I[]->fregDst; sep; '0(%r1)\n'->BC.putT;   
+   12 -> mstate.incIP 
+   
+---backendLoadInt2Float:dopart---
+do '\tLDO\t'->BC.putT; I.readOffSet->BC.putI; 
+   '('->BC.putT; I[]->regSrc; '),%r1\n'->BC.putT;
+   '\tFLDWS\t 0(%r1),'->BC.putT; I[]->fregDst; BC.putNL;
+   8-> mstate.incIP;
+   
+---backendLoadInt2FloatInx:dopart---
+do '\tADD\t'->BC.putT; I[]->regSrc; sep; I[]->regInx; ',%r1\n;'->BC.putT;
+   (if I.readOffSet <> 0 then
+       '\tADDI\t'->BC.putT; I.readOffSet->BC.putI; '%r1,%r1\n'->BC.putT;
+       mstate.eoi
+   if);
+   '\tFLDWS\t 0(%r1),'->BC.putT; I[]->fregDst; BC.putNL;
+   8-> mstate.incIP;
+   
+--backendfloatConst:dopart --
+do (# Lab: @ backendLocalLab; labT: ^text
+   do switchToData;
+      Lab.new; Lab.def;  Lab.astext-> labT[];
+      '\t.DOUBLE\t'->BC.putT; I.label -> BC.putT; BC.putNL;
+      switchToCode;      
+      '\tLDIL\tLR\''->BC.putT; labT->BC.putT; ',%r1\n'->BC.putT;
+      '\tLDO\tRR\''->BC.putT; labT->BC.putT; '(%r1), %r1\n'->BC.putT;
+      '\tFLDDS\t0(0,%r1),'->BC.putT; I[]->fregDst; BC.putNL;
+      12 -> mstate.incIP
+#)
+
+--backendint2float:dopart --
+do '\tFCNVXF,SGL,DBL '->BC.putT; I[]->fregSrc; sep; I[]->fregDst; 
+   BC.putNL;
+   mstate.eoi
+
+--backendintReg2float:dopart --
+do (# Lab: @backendLocalLab; 
+      labT: ^text;
+   do switchToData; (*'IntReg2Float'->tracestream.puttext;*)
+      Lab.new; Lab.def; lab.asText->labT[];
+      '\t.WORD\t0\n'->BC.putT;
+      switchToCode;
+      '\tLDIL\tLR\''->BC.putT; labT->BC.putT; ',%r1'->BC.putT; 
+      '\n\tLDO\tRR\''->BC.putT; labT->BC.putT; '(%r1),%r1'->BC.putT; 
+      '\n\tSTW\t'->BC.putT; I[]->regSrc; ',(%r1)\n'->BC.putT;
+      '\tFLDWS\t0(0,%r1),%fr30'->BC.putT; (*I[]->fregDst2;*)
+      (*OBS! writeReg2 does not seem to wokr for flo - se also sparc *)
+      '\n\tFCNVXF,SGL,DBL %fr30'->BC.putT; (*I[]->fregDst2;*) sep;
+      I[]->fregDst; BC.putNL;
+      20 -> mstate.incIP
+   #)
+
+
+--backendfloat2int:dopart --
+do (# lab: @backendLocallab;
+      labT: ^text
+   do switchToData;
+      Lab.new; Lab.def; Lab.asText->labT[];
+      '\t.WORD\t0\n'->BC.putT; 
+      switchToCode;
+      '\tLDIL\tLR\''->BC.putT; LabT->BC.putT; ',%r1\n'->BC.putT;
+      '\tLDO\tRR\''->BC.putT; LabT->BC.putT;'(%r1),%r1\n'->BC.putT; 
+      '\tFCNVFXT,DBL,SGL '->BC.putT; I[]->fregSrc; sep; I[]->fregDst2;
+      '\n\tFSTWS\t'->BC.putT; ;I[]->fregDst2; ',(%r1)'->BC.putT;
+      '\n\tLDW\t(%r1),'->BC.putT; I[]->regDst; BC.putNL;
+      20 -> mstate.incIP
+   #)
+
+--backendcmpToBoolFloat:dopart --
+do '\tLDI\t1,' -> BC.putT; I[]->regDst; 
+   '\n\tFTEST\n' -> BC.putT; (* nullify next if FP C bit is set *)
+   '\tCOPY\t%r0,' -> BC.putT; I[]->regDst; BC.putNL;
+   12 -> mstate.incIP
+
+--backendpopFStack:dopart --
+do (* not used on SNAKE *)
+
+--backendcmpFloat:dopart --
+do '\tFCMP,DBL,' -> BC.putT;
+   (if I.cond
+    // 1 (* =  *) then '='-> BC.putT
+    // 2 (* <> *) then '!='->BC.putT
+    // 3 (* <  *) then '<'-> BC.putT
+    // 4 (* <= *) then '<='->BC.putT
+    // 5 (* >  *) then '>'-> BC.putT
+    // 6 (* >= *) then '>='->BC.putT
+   if);
+   '\t' -> BC.putT; I[]->fregSrc; sep; I[]->fregSrc2; BC.putNL;
+   mstate.eoi
+   
+--backendaddFloat:dopart --
+do '\tFADD,DBL\t'->BC.putT; I[]->fregSrc; sep; I[]->fregSrc2; sep; I[]->fregDst;
+   BC.putNL;
+   mstate.eoi
+
+--backendsubFloat:dopart --
+do '\tFSUB,DBL\t'->BC.putT; I[]->fregSrc; sep; I[]->fregSrc2; sep; I[]->fregDst;
+   BC.putNL;
+   mstate.eoi
+
+--backendmulFloat:dopart --
+do '\tFMPY,DBL\t'->BC.putT; I[]->fregSrc; sep; I[]->fregSrc2; sep; I[]->fregDst;
+   BC.putNL;
+   mstate.eoi
+
+--backenddivFloat:dopart --
+do'\tFDIV,DBL\t'->BC.putT; I[]->fregSrc; sep; I[]->fregSrc2; sep; I[]->fregDst;
+   BC.putNL;
+   mstate.eoi
+
+--backendnegFloat:dopart --
+do '\tFSUB,DBL\t%fr0,'->BC.putT; I[]->fregSrc; sep; I[]->fregDst;
+   BC.putNL;
+   mstate.eoi
+
+--backendLoadSpilledDataRegImpl:dopart --
+do 'backendLoadSpilledDataRegImpl'->TODO
+   
+--backendSpillDataRegImpl:dopart--
+do 'backendSpillDataRegImpl'->TODO
+   
+--backendlock:dopart --
+do 14->mstate.notUsed
+
+--backendallRegInPrimReg2I:dopart --
+do 15->mstate.notUsed
+
+--backendGetOriginReg:dopart --
+do (* empty *)
+
+--backendFreeOriginReg:dopart --
+do (* empty *)
+
+--backendDataRegMax:dopart --
+do 'backendDataRegMax'->TODO (* not used *)
+
+--backendNoOfFreeDataReg:dopart --
+do 'backendNoOfFreeDataReg'->TODO (* not used *)
+
+--backendDumpReg:dopart --
+do' backendDumpReg'->TODO (* not used *)
+
+--backendPushReg:dopart --
+do (# dataCount: @integer
+   do liveAdr[]->scanBitVektor32
+      (#
+      do (if  (current <> thisO) and (current <> callO) then;
+             (*'pushRef: '-> puttext; current->putint; newline;*)
+             current -> pushReference 
+         if)
+      #);
+      liveData[]->scanBitVektor32
+      (#
+      do (*'pushData: '-> puttext; current->putint; newline;*)
+         dataCount+1->dataCount;
+         &backendInstruction(#do current->readReg#)->pushData;      
+      #);
+      (* required: mstate.floatReg[1:32]=false *)
+      liveFloats[]->scanBitVektor32
+      (#
+      do 1->mstate.floatReg[current+1];
+         current-> pushFloat;
+         (*'pushFloat: '-> puttext; current->putint; newline;*)
+      #);
+      (* NO mark is push for data/float registers, since there is
+       * a separate reference stack *)
+   #)
+
+--backendPopReg:dopart --
+do (# Areg,Dreg: [32]@boolean;
+      dataCount: @integer;
+   do liveData[]->scanBitvektor32
+      (# 
+      do true -> Dreg[current+1];
+         dataCount+1->dataCount
+      #);
+      
+      liveAdr[]->scanBitvektor32
+      (# 
+      do (if (current <> thisO) and (current <> callO) then
+             true -> Areg[current+1]
+         if)
+      #);
+      (for i: mstate.floatReg.range repeat
+           (if mstate.floatReg[32-i+1] > 0 then
+               (*'popFloat: '-> puttext; 32-i->putint; newline;*)
+               32-i -> popFloat;
+               0->mstate.floatReg[32-i+1];
+      if)for);
+      (if dataCount>0 then
+          (*   NO datamark since separate reference stack *)
+          (for i: 32 repeat
+               (if dReg[32-i+1] then
+                   (*'popData: '-> puttext; 32-i->putint; newline;*)
+                   &backendInstruction(# do 32-i->readReg #) -> popData
+               if)
+          for)
+      if);
+      (for i: 32 repeat
+           (if aReg[32-i+1] then 
+               (*'popRef: '-> puttext; 32-i->putint; newline;*)
+               32-i -> popReference
+           if)
+      for);
+   #)
+
+--backendPushDataReg:dopart --
+do 'backendPushDataReg'->TODO (* not used ?*)
+
+--backendPopDataReg:dopart --
+do 'backendPopDataReg'->TODO (* not used ?*)
+
+--backendPushFloatReg:dopart --
+do 'backendPushFloatReg'->TODO
+
+--backendPopFloatReg:dopart --
+do 'backendPopFloatReg'->TODO
+   
+--backendSPtoPrim:doPart--
+do (* not used on hp *)
+   
+--backendtstNone:dopart --
+do (if common.switch[77] then
+       (* force read of R to %r0 to check for NONE or lazy ref;
+        * used for new persistence implementation.
+        *)       
+       '\tLDW\t('->BC.putT; I[]->regDst; ')'->BC.putT; sep; 
+       dataTmp -> emitReg;
+       BC.putNl;
+       mstate.eoi;       
+   if); (* should there be an else here? *)
+   '\tCOMCLR,<\t%r0,'->BC.putT;  I[]->regDst; ',%r0\n'->BC.putT;
+   '\tBL\tRefNone,%rp\n'->BC.putT; (* was NONE; goto RT *)
+   '\tCOPY\t'->BC.putT;  I[]->regDst; sep; '%r31\n'->BC.putT;
+   12 -> mstate.incIP
+   
+--backendtrap:dopart --
+do 'backendtrap'->TODO (* not used *)
+
+--backendreturn:dopart --
+do '\tLDW\t-84(0,%r30),%r2\n'->BC.putT;
+   (thisO,callO)->copyReg;
+   '\tLDIL\tLR\'RefSP,%r1\n'->BC.putT;
+   '\tLDW\tRR\'RefSP(%r1),%r14\n'->BC.putT;
+   '\tLDWS,MB\t-4(0,%r14),'->BC.putT; putThisReg; BC.putNL;
+   (if mstate.STenable then
+       (* clear tag for beta.dump *)
+       '\tDEPI\t0,31,1,'->BC.putT; putThisReg; BC.putNL;
+       (if GenerateDbgInf then 4 -> mstate.incIP if);
+       (* Valhalla: Her skal return address poppes, hvis gemt paa RefStack:
+        * (if common.switch[41] then
+        *     '\tLDO\t-4(%r14),%r14' -> BC.putT; BC.putNL;
+        *     (if GenerateDbgInf then 4 -> mstate.incIP if);
+        * if);
+        *)
+   if);
+   '\tSTW\t%r14,RR\'RefSP(0,%r1)\n'->BC.putT;
+   '\tBV\t%r0(%r2)\n' ->BC.putT;
+   '\tLDO\t-64(%r30),%r30\n'->BC.putT;
+   (if GenerateDbgInf then 28 -> mstate.incIP if);
+   
+--backendsaveReturn:dopart --
+(* ordinary snake calling convention for non-leaf routines uses this *)
+do '\tSTW\t%r2,-20(0,%r30)\n'->BC.putT;
+   '\tLDIL\tLR\'RefSP,%r1\n'->BC.putT;
+   '\tLDW\tRR\'RefSP(%r1),%r14\n'->BC.putT;
+   (if mstate.STenable then
+       (* tag reference for beta.dump *)
+       '\tDEPI\t1,31,1,'->BC.putT; putThisReg; BC.putNL; 
+       (if GenerateDbgInf then 4 -> mstate.incIP if);
+       (* Valhalla: Her kan Return address (%r2) gemmes paa RefStack:
+        * (if common.switch[41] then
+        *     '\tSTWS,MA\t%r2,4(0,%r14)\n'->BC.putT;
+        *     (if GenerateDbgInf then 4 -> mstate.incIP if);
+        * if);
+        *)
+   if);
+   (* push This on reference stack *)
+   '\tSTWS,MA\t'->BC.putT; putThisReg; ',4(0,%r14)\n'->BC.putT;
+   '\tSTW\t%r14,RR\'RefSP(0,%r1)\n'->BC.putT;
+   '\tLDO\t64(%r30),%r30\n'->BC.putT;
+   (callO,thisO)->copyReg;
+   (if GenerateDbgInf then 24 -> mstate.incIP if);
+
+--backendrts:dopart --
+do '\tBV\t%r0(%r2)\n'->BC.putT;
+   '\tNOP\n'->BC.putT;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+
+--backendSaveReg:dopart --
+do (thisO, callO)->Push2Refs
+
+--backendRestoreReg:dopart --
+do (callO, thisO) -> Pop2Refs;
+
+--backendGetPrimRes:dopart --
+do (if I.imm (*res*)
+    // 0 then (* ignore result (void) *)
+       mstate.restoreDeadArgs;
+    // 1 // 3 then (* use the result *)
+       (* 3 should be optimized as for MIPS *)
+       '\tCOPY\t%r28,'->BC.putT; I[]->regDst; BC.putNL; 
+       (if GenerateDbgInf then mstate.eoi if);
+       mstate.restoreDeadArgs;
+    // 2 then (* result is an X-parameter, whatever that is *)
+       mstate.restoreDeadArgs;
+       28 (* return reg from C *) ->pushCParameter
+   if);
+
+--backenddeclareLong: doPart--
+do '\t.WORD ' -> BC.putT; N->BC.putI; BC.putNL
+   
+--backenddeclareWord: doPart--
+do '\t.HALF ' -> BC.putT; N->BC.putI; BC.putNL
+   
+--backenddclWord: doPart--
+do '\t.HALF ' -> BC.putT; N->BC.putI; BC.putNL
+   
+--backendemitByte: doPart--
+do 
+
+--backendDeclareAddress:dopart --
+do '\t.WORD ' -> BC.putT; 'L$C'->BC.putT; I.labNo->BC.putI; BC.putNL
+   
+--declareDataSegmentLabelAddressImpl:dopart--
+do '\t.WORD ' -> BC.putT; 'L$C'->BC.putT; I.labNo->BC.putI; BC.putNL   
+   
+--declareDataSegmentTextAddressImpl:dopart--
+do '\t.WORD ' -> BC.putT; I.label->BC.putT; BC.putNL   
+   
+--backendChkConstIndex:dopart --
+do 'backendChkConstIndex'->TODO
+
+--backendjsrTable:dopart --
+do I[]->jsrRegImpl
+
+--backendjmpTlong:dopart --
+do (* note, a distinction between long and short jumps has bee made.
+    * jmpT is a short jump. This difference is perhaps not reflected in
+    * the current def. og jumTlong and jumpT.
+    *) 
+   '\tB\t'->BC.putT; I.label->BC.putT; 
+   '\n\tNOP\n'->BC.putT;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+   
+--backendjmpT:dopart --
+do '\tB\t'->BC.putT; I.label->BC.putT; BC.putNL;
+   '\tNOP\n'->BC.putT;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+
+--backendjsrT:dopart --
+do (if mstate.proto[] <> NONE then
+       '\tLDIL\tLR\'' -> BC.putT; mstate.proto -> BC.putT; sep; 
+       CallO->emitReg; BC.putNL;
+       (if GenerateDbgInf then 4 -> mstate.incIP if);
+   if);
+   I.label[]->Import;
+   '\tBL\t'->BC.putT; I.label->BC.putT; ',%r2\n'->BC.putT;
+   (if mstate.proto[] <> NONE then
+       '\tLDO\tRR\'' -> BC.putT; mstate.proto -> BC.putT; '(' -> BC.putT;
+       CallO->emitReg; '), ' -> BC.putT; CallO->emitReg; BC.putNL;
+    else
+       '\tNOP\n'->BC.putT;
+   if);
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+
+
+--backendjsrReg:dopart --
+do (# L:@backendLocalLab; T: ^text
+   do mstate.saveLiveArgs;
+      L.new; 
+      L.asText->T[];      
+      '\tLDIL\tLR\''->BC.putT; T->BC.putT; ',%r2\n'->BC.putT;
+      '\tBV\t%r0('->BC.putT; I[]->regSrc; ')\n'->BC.putT;
+      '\tLDO\tRR\''->BC.putT; T->BC.putT; '(%r2),%r2\n'->BC.putT;
+      L.def;
+   #)
+
+--backendjmpReg:dopart --
+do '\tBV\t%r0('->BC.putT; I[]->regSrc; ')\n'->BC.putT; 
+   nopDelay; 
+   (if GenerateDbgInf then 4 -> mstate.incIP if);
+
+--backendgJsr:dopart --
+do mstate.saveLiveArgs;
+   '\tBL\t'->BC.putT; I.label->BC.putT; ',%r2\n'->BC.putT;
+   '\tNOP\n'->BC.putT;
+   mstate.restoreDeadArgs;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+   
+--backendjsrTableTest:dopart --
+do 'backendjsrTableTest'->TODO
+
+--backendJumpIfTrue:dopart --
+do 'backendJumpIfTrue'->TODO (* not used*)
+
+--backendgBeq:dopart --
+do 16->mstate.NOTUSED
+
+--backendgBne:dopart --
+do 'backendgBne'->TODO
+
+--backendgBge:dopart --
+do 'backendgBge'->TODO
+
+--backendgBae:dopart --
+do 'backendgBae'->TODO
+
+--backendgBle:dopart --
+do 'backendgBle'->TODO
+
+--backendgBbe:dopart --
+do 'backendgBbe'->TODO
+
+--backendgBgt:dopart --
+do 'backendgBgt'->TODO
+
+--backendgBab:dopart --
+do 'backendgBab'->TODO
+
+--backendgBlt:dopart --
+do 'backendgBlt'->TODO
+
+--backendgBbl:dopart --
+do 'backendgBbl'->TODO
+
+--backendcmpAndJmp:dopart --
+do '\tCOMCLR,'->BC.putT;
+   (if I.cond (* IF T1 cc R then goto L *)
+    // 1 (* =  *) then '<>'->BC.putT
+    // 2 (* <> *) then '='->BC.putT
+    // 3 (* <  *) then '>='->BC.putT
+    // 4 (* <= *) then '>'->BC.putT
+    // 5 (* >  *) then '<='->BC.putT
+    // 6 (* >= *) then '<'->BC.putT
+   if);
+   '\t'->BC.putT; I[]->regSrc; sep; I[]->regSrc2; ',%r0\n'->BC.putT;
+   '\tBL\t L$C'->BC.putT; I.labNo->BC.putI; ',%r0\n'->BC.putT;
+   '\n\tNOP\n'->BC.putT;
+   (if GenerateDbgInf then 12 -> mstate.incIP if);
+
+--backendcmpAndJmpImm:dopart --
+do (# dr: @integer
+   do '\tLDI\t' -> BC.putT; I.imm -> BC.putI; 
+      sep; dataTmp->dr->emitReg; BC.putNL;
+      '\tCOMCLR,'->BC.putT;
+      (if I.cond (* IF T1 cc R then goto L *)
+       // 1 (* =  *) then '<>'->BC.putT
+       // 2 (* <> *) then '='->BC.putT
+       // 3 (* <  *) then '>='->BC.putT
+       // 4 (* <= *) then '>'->BC.putT
+       // 5 (* >  *) then '<='->BC.putT
+       // 6 (* >= *) then '<'->BC.putT
+      if);
+      '\t'->BC.putT; I[]->regSrc; sep;  dr->emitReg; ',%r0\n'->BC.putT;
+      '\tBL\t L$C'->BC.putT; I.labNo->BC.putI; ',%r0\n'->BC.putT;
+      '\n\tNOP\n'->BC.putT;
+      16->mstate.incIP 
+   #)
+
+--backendcmpBoolAndJmp:dopart --
+do '\tCOMCLR,'->BC.putT;
+   (if I.cond (* IF T1 cc R then goto L *)
+    // 1 (* =  *) then '<>'->BC.putT
+    // 2 (* <> *) then '='->BC.putT
+    // 3 (* <  *) then '>='->BC.putT
+    // 4 (* <= *) then '>'->BC.putT
+    // 5 (* >  *) then '<='->BC.putT
+    // 6 (* >= *) then '<'->BC.putT
+   if);
+   '\t,%r0,'->BC.putT; I[]->regSrc; ',%r0\n'->BC.putT;
+   '\tBL\t L$C'->BC.putT; I.labNo->BC.putI; ',%r0\n'->BC.putT;
+   '\n\tNOP\n'->BC.putT;
+   12 -> mstate.incIP
+
+--backendcmpAndJmpFloat:dopart --
+do '\tFTEST\n'->BC.putT;
+   '\tB\tL$C'->BC.putT;  I.labNo->BC.putI; 
+   '\n\tNOP\n'->BC.putT;
+   12 -> mstate.incIP
+
+--backendfBeq:dopart --
+do 'backendfBeq'->TODO
+
+--backendfBge:dopart --
+do 'backendfBge'->TODO
+   
+--backendfBle:dopart --
+do 'backendfBle'->TODO
+
+--backendfBne:dopart --
+do 'backendfBne'->TODO
+
+--backendfBgt:dopart --
+do 'backendfBgt'->TODO
+
+--backendfBlt:dopart --
+do 'backendfBlt'->TODO
+
+--backendgJmp:dopart --
+do '\tB\t L$C'->BC.putT; I.labNo->BC.putI;
+   '\n\tNOP\n'->BC.putT;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+
+--backendCallPrim:dopart --
+do 7->mstate.FIXME;
+   I.label[]->Import;
+   '; CallPrimitive: '->BC.putT; I.label[] -> BC.putline;
+   (if 'CopyCT'->I.label.equal then
+       '\tCOPY\t%r26,%r9\n'->BC.putT; 
+    else
+       (if 'ExO'->I.label.equal then
+           '\tLDI\t'->BC.putT; I.imm->BC.putI; ',%r9\n'->BC.putT; 
+   if)if);
+   '\tBL\t'->BC.putT; I.label->BC.putT; ',%r2\n'->BC.putT;
+   '\tNOP\n'->BC.putT;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+
+--backendCallAlloPrim:dopart --
+do I.proto[]->mstate.proto[];
+   I[]->jsrTImpl; 
+   NONE->mstate.proto[];
+
+--backendinitPrimCall:dopart --
+do ';; initPrimCall called\n'->BC.putT;
+   I.size->doInitExternalCall;
+
+--backendPushClong:dopart --
+do I.readReg->PushCParameter
+   
+--backendPushCdouble:dopart --
+do DoPushCfloat
+   (#
+   do (if no = 100 then
+          ';; float par via stack(Cdouble)\n' -> BC.putT; 
+          (* OBS %fr4 is used here - should probably be a tmp register??*)
+          I[]->LDO2R1;
+          '\tFLDDS\t0(%r1),%fr4\n'->BC.putT;
+          '\tLDO\t'->BC.putT;
+          emitStackOff;
+          '(%r30),%r31\n'->BC.putT;
+          '\tFSTDS\t%fr4,0(0,%r31)\n'->BC.putT;
+          12 -> mstate.incIP
+       else
+          I[]->LDO2R1;
+          '\tFLDDS\t0(%r1),'->BC.putT; no->emitFreg; BC.putNL;
+          mstate.eoi;
+          SetCall;
+      if);
+   #)
+   
+--backendPushCfloat:dopart --
+do DoPushCfloat
+   (#
+   do (if no = 100 then
+          ';; float par via stack(Cfloat):\n' -> BC.putT; 
+          '\tLDO\t'->BC.putT; 
+          emitStackOff;
+          '(%r30),%r31\n'->BC.putT;
+          '\tFSTDS\t'->BC.putT; I[]->fregSrc; ',(%r31)\n'->BC.putT;
+          8 -> mstate.incIP
+       else
+          '\tFCPY,DBL\t'->BC.putT; I[]->fregSrc; sep; no->emitFreg; BC.putNL;
+          mstate.eoi;
+          SetCall
+      if);
+   #)
+
+   
+--backendInitExternalCall:dopart --
+(* called before pushing arguments to external C routines,
+ * called with the number of longs that are to be passed, ie. two for
+ * each double (noOPar) *)
+do ';; initExternalCall called: '->BC.putT;
+   I.size -> BC.putI; BC.putNL;
+   (if common.switch[22] then 
+       (* NOTE! This is a hack to cheat mstate.saveLiveArgs to save
+        * all the parameters of the external call being traced.
+        * The logic of saveLiveArgs is to save only parameters
+        * transferred so far - and it does NOT save arguments, if
+        * ALL argumesn have ben passed, which is the case when calling
+        * TraceXcall. noOfPar is therefore incremented to cheat!
+        * This may have some unforeseen side effects.
+        * saveLiveArgs is probaly clumsy because initExternal may not
+        * always have been called before calling callCproc. This should
+        * be cleaned up
+        *)
+       I.size+1->I.size
+   if);
+   I.size -> doInitExternalCall;
+
+   
+--backendCallC:dopart --
+do (* C routines are not prepended an underscore on the snake *)
+   (* %r2 and other volatile registers must be saved somewhere *)
+   (* This is done in by saveReturn & SaveReg *)
+   
+   I.label[]->Import;
+   
+   '; CallCProc: '->BC.putt; I.label -> BC.putt; BC.putNL;
+      
+   (* Save r3 during external call to prevent i being restored upon return
+    * by HPPA calling convetions although r3 may have been changed in a 
+    * callback that has caused GC
+    *)
+   '\tLDIL\tLR\'RefSP,%r17\n'->BC.putT;
+   '\tLDW\tRR\'RefSP(%r17),%r14\n'->BC.putT;
+   '\tSTWS,MA\t%r3,4(0,%r14)\n'->BC.putT;
+   (if mstate.DumpCallDirective then
+       (* Emit the .CALL directive *)
+       (mstate.CallDirective.length,mstate.CallDirective.length)
+         -> mstate.CallDirective.delete;
+       mstate.CallDirective->BC.putT; 
+       BC.putNL;
+       false->mstate.DumpCallDirective;
+   if);
+   '\tBL\t'->BC.putT; I.label->BC.putT; ',%r2\n'->BC.putT;
+   (*'\tNOP\n'->BC.putT;*)
+   '\tSTW\t%r14,RR\'RefSP(0,%r17)\n'->BC.putT;
+   
+   (* restore r3 *)
+   (* r17 is LR\'RefSP - safe across the previous C call *)
+   '\tLDW\tRR\'RefSP(%r17),%r14\n'->BC.putT;
+   '\tLDWS,MB\t-4(0,%r14),%r3' -> BC.putT; BC.putNL;
+   '\tSTW\t%r14,RR\'RefSP(0,%r17)\n'->BC.putT;
+   
+   (if GenerateDbgInf then 32 -> mstate.incIP if);
+   
+   (if mstate.cStackInc > 0 then
+       '\tLDO\t' -> BC.putT; -mstate.cStackInc->BC.putI; 
+       '(%r30),%r30\n'->BC.putT;
+       (if GenerateDbgInf then mstate.eoi if);
+   if);
+   
+   (* reset to known state, because some braindamage elsewhere in the
+    * compiler does not adhere to the correct calling convention, and
+    * therefore doesn't call initPrimCall before pushing parameters
+    * to a primitive RT routine. *)
+   0->mstate.cStackInc; 0->mstate.cArgCount; 0->mstate.floatRegsUsed;
+   NONE->mstate.CallDirective[];
+   
+---backendNoXres:doPart---
+do GetExternalResult
+
+---backendgetSimpleXres:doPart---
+do GetExternalResult(# do I[]->getSimpleRes #)
+      
+---backendgetTextXres:doPart---
+do GetExternalResult
+   (#
+   do (* copy input to dataRegA*)
+      '\tCOPY\t%r28,%r9\n'->BC.putT; 
+      'CopyCT'->I.label[];
+      I[] -> jsrTImpl;
+      '\tCOPY\t%r26,'->BC.putT; 
+      I[]->regDst; BC.putNL;
+      mstate.eoi
+   #)
+   
+---realXresIsDouble:doPart---
+do false -> value
+   
+---backendgetDoubleXres:doPart---
+do getExternalResult
+   (#
+   do I[]->getDoubleRes
+   #)
+   
+---backendgetFloatXres:doPart---
+do getExternalResult
+   (#
+   do '\tFCPY,DBL\t%fr4,'->BC.putT; 
+      I[]->fregDst; 
+      BC.putNL; 
+      mstate.eoi
+   #)
+   
+---backendgetDataRefXres:doPart---
+do GetExternalResult(# do I[]->getSimpleRes #)
+   
+---backendgetDataPartXres:doPart---
+do 'backendgetDataPartXres'->TODO;
+   GetExternalResult(# do I[]->getSimpleRes #)   
+   
+---backendgetSaveHeapTop:doPart---
+do (* not used *)
+   
+---backendXparForward:doPart--
+do true->value
+
+--backendInlineAlloiNGNP:dopart --
+do 'backendInlineAlloiNGNP'->TODO
+
+--backenddeAllocIOA:dopart --
+do 'backenddeAllocIOA'->TODO
+
+--backendStackAlloPrim:dopart --
+do 'backendStackAlloPrim'->TODO
+  
+--backendasciiText:doPart--
+do 
+   (* For hppa the output has the form
+ *    .STRINGZ "........"
+ * Chars with a value less that ' ' (32) are converted to
+ * the form \xHH where HH is the ASCII-kode in hex,
+ * The char '"' is printed as '\"'.
+ * This braindamaged pa-risc assembler doesn't understand octal.
+ * In a future version, putBased should be used! /datpete 19/7/94.
+ *)
+(# hexdigits: [16]@char;
+do '\t.STRINGZ\t"' -> BC.putT;
+   '0123456789ABCDEF'->hexdigits;
+   T.scanAll
+   (#
+   do (if (ch<' ') then
+          '\\x'->BC.putT;
+          hexdigits[(ch div 16)+1]->BC.putC;
+          hexdigits[(ch mod 16)+1]->BC.putC;
+       else
+          (if ch
+           // '"' then '\\'->BC.putC; '"'->BC.putC
+           // '\\' then '\\'->BC.putC; '\\'->BC.putC
+           else 
+              (if (ch>255) then
+                  ' ' -> BC.putC;
+               else
+                  ch->BC.putC 
+              if);
+          if)
+      if)
+   #);
+   '"' -> BC.putC; BC.PutNL;
+   '\t.ALIGN 8' -> BC.putT; BC.PutNL;
+#)
+
+   
+---backendInitMachine:descriptor---
+(#
+do mstate.init;
+   500->newlab.lab;
+   (if GenerateDbgInf then
+       openDbgInf 
+   if);
+   name.copy -> BC.name;
+   BC.openWrite; 
+#)
+--backendClose:doPart--
+do (* This is slot EndDataSeg which used to be in CODEmachine *)
+   'BETA_data3'->LabelDef;
+   (***** end EndDataSeg *)
+   
+   (* output external declarations to bottom of BC *)
+   entryPoints.scan
+   (#
+   do (if current.local then
+          '\t.EXPORT\t'->BC.putT; current.T->BC.putT;
+       else
+          '\t.IMPORT\t'->BC.putT; current.T->BC.putT;
+      if);
+      (if current.data then
+          ',DATA\n'->BC.putT;
+       else
+          ',CODE\n'->BC.putT;
+      if);
+   #);
+   '\t.END\n' -> BC.putT;
+   
+   (if GenerateDbgInf then
+       (* produce debug tables in foo.db file *)
+       (# FN: ^text
+       do BC.name->FN[];
+          (* delete ..s from name *)
+          (FN.length-2,FN.length)->FN.delete; 
+          (* FN[]->saveDbgInf;*)
+       #)
+   if);
+   BC.close;
+
+   
+--backenddefineMainLabel:doPart--
+do '\t.EXPORT main,ENTRY\n' -> BC.putT;
+   'main' -> labelDef;
+   '\tSTW\t%r2,-20(%r30)\n'->BC.putT;
+   '\tLDO\t64(%r30),%r30\n'->BC.putT;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+   'Initialize'->Import;
+   &backendInstruction(#do 'SetArgValues'->label[]#)->jsrTimpl;
+   '\tCOPY\t%r0,%r5\n'->BC.putT;
+   '\tCOPY\t%r0,%r6\n'->BC.putT;
+   '\tCOPY\t%r0,%r7\n'->BC.putT;
+   (if GenerateDbgInf then 12 -> mstate.incIP if);
+
+--backendswitchToCode:doPart--
+do '\t.SPACE $TEXT$\n\t.SUBSPA $CODE$\n\t.ALIGN 4\n' -> BC.putT
+   
+--backendswitchToData:doPart--
+do '\t.SPACE $PRIVATE$\n\t.SUBSPA $DATA$'->BC.putT;
+   (if (localFilePath[]=NONE) AND (group_hash[]=NONE) then
+       (* called from creatBetaDataFile - riscy test!*)
+       ',ACCESS=0x1F'->BC.putT
+   if);
+   '\n\t.ALIGN 8\n'->BC.putT
+   
+--backendexport:doPart--
+do '\t.EXPORT '-> BC.putT; Lab->BC.putT;
+   (if group_hash[] = NONE then
+       (* HACK! 
+        * This is export of the BETA_DATA symbol in the BETA_DATA-file
+        *)
+       ',DATA\n'->BC.putT
+    else
+       '\n'->BC.putT
+   if);
+
+--backendlabelDef:doPart--
+do lab->BC.putT;  BC.putNL
+
+---backendputD:descriptor--
+(#
+do '%r'->putT;
+   (*n+dataRegStart->n->putI;*)
+   n->putI
+#)
+
+---backendputA:descriptor--
+(#
+do '%r'->putT; n->putI;
+#) 
+
+---backendimm:descriptor--
+(##)
+
+-- backendputS: DoPart --
+do 'backendputS'->TODO (* not used*)
+ 
+---backendstValInLab: doPart---
+do 'backendstValInLab'->TODO (* not used*)
+
+---backendldValFromLab: dopart---
+do 'backendldValFromLab'->TODO (* not used*)
+   
+---backendEndCodeSeg: dopart---
+do 'BETA_code2'->LabelDef;
+   nopImpl;
+   
+   switchToData;
+   
+   'BETA_data2'->LabelDef
+
+---backendentryPointsInsert: dopart---
+do 
+
+---backendentryPointsEqual: descriptor---
+(# #)
+   
+---backendaddTargetInfo: doPart---
+do 
+
+---backendLocalLabDef: doPart---
+do (if type = interFragment then
+       asText -> export;
+       asText -> labelDef; BC.putNL
+   if);
+   'L$C'->BC.putT; labNo->BC.putI; '\n'->BC.putT
+   
+---backendInitCreateDataFile: doPart---
+do (none,common[],fileName.copy,none) -> init;
+   switchToData;
+   'BETA_DATA' ->export;
+   'BETA_DATA' -> labelDef;
+   ';; \n' -> BC.putT (* for the benefit of the assembler *)
+   
+--backendNextGroup: dopart---
+do (id[],false) ->importData;
+   &backendinstruction(#do id[]->label[] #) 
+     ->  declareDataSegmentTextAddressImpl
+   
+---backendEndCreateDataFile:dopart---
+do  (* Double NULL termination to allow for extension of 
+    * BETA_DATA list (by runtime system)
+    *)
+   0 -> declareLong;
+   0 -> declareLong;
+   close;
+   
+---backendAsText:doPart---
+do &text[]->localLabText[];
+   (if type = interFragment then
+       descId[]->localLabText.puttext; 
+       labNo->localLabText.putInt; 
+    else
+       'L$C'->localLabText.putText; labNo->localLabText.putInt
+   if)
+   
+---GlobalCodeLabelDef:doPart---
+do I.label->BC.putT;  BC.putNL
+   
+--backendAllocObj:doPart--
+do 8->mstate.FIXME
+   
+--backendGetCOMpar:doPart--
+do 9->mstate.FIXME
+   
+--backendExternalDispatch:doPart--
+do 10->mstate.FIXME
+   
+---backendReturnVirtualCOM:doPart--
+do 11->mstate.FIXME
+   
+---backendtargetentrypointinfo:descriptor---
+(##)

@@ -1,0 +1,1043 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE '~beta/basiclib/file';
+INCLUDE '~beta/containers/hashTable';
+INCLUDE '~beta/basiclib/numberio';
+INCLUDE '../CONTROL/com'; 
+INCLUDE 'ABSTRACT/IMconstants';
+INCLUDE 'image';
+INCLUDE '../OPTIMIZER/carriers';
+BODY 'backendbody';
+MDBODY  sun4s 'SPARC/sparcbackend'
+        sgi   'MIPS/mipsbackend'
+        linux 'INTEL/intelbackend' 
+        ppcmac 'PPC/ppcbackend'
+        hpux9pa 'HPUXPA/snakebackend'
+        default 'dummybackend';
+-- lib: attributes --
+BackendInstruction: 
+  (# opCode: @Integer;
+     (* Union of all instruction parameters.
+      * readReg,readReg2,imm,readOffset,size,inxReg,writeReg,isDiv,label
+      * Instruction groups: 
+      * (attempt to show protypical instructions and their arguments-
+      *  Is not yet complete 
+      * )
+      * cpReg        : readReg,writeReg
+      * ldCst        : imm, writeReg                 
+      * stCst        : imm, readReg, size, readOffset
+      * ldVl         : readReg,size,readOffset,signed,writeReg
+      * ldValInx     : readReg,size,readOffset,signed,writeReg,inxReg
+      * stValInText  : readReg,label
+      * index        : readReg,inxReg,writeReg,size,isSimple,indexCheck
+      * gNot         : readReg,size,writeReg
+      * addImm       : readReg2,imm,writeReg
+      * addReg       : readReg,reagOffSet,readReg2,writeReg
+      * isDiv        : readReg,readReg2, writeReg, isDiv
+      * initExternal : imm(externalType), size(noOfPar)
+      * pushClong    : readReg
+      * callCproc    : label, imm(extType),size(noOfParam),type(exitType)
+      * getSimpleXres: writeReg
+      * initPrimCall : imm(noOfPar)
+      * callAlloPrim : label,proto
+      * getprimRes   : imm(res), writeReg
+      * bEq           : labNo
+      * cmpAndJmpImm  : readReg,labNo,cond,imm
+      * cmpAndJmp     : readReg,labNo,cond,readReg2
+      * cmpBoolAndJmp : readReg,labNo,cond
+      * cmpToBool     : readReg,readReg2,writeReg,cond
+      * cmpFloat      : readReg,readReg2,cond,popFloatStack
+      * cmpAndJmpFloat: cond,labNo,popFloatStack
+      *)
+     writeReg,writeReg2, InxReg: @Integer;
+     readReg, readReg2, readReg3: @Integer;
+     readOffset: @Integer;
+     imm, size: @Integer;
+     pos,length: @integer; (* putbits, ... *)
+     floatVal: @real;
+     label, proto: ^Text;
+     condition,signed,indexCheck,popFloatStack: @boolean;
+     withQua: (# enter condition exit condition #);
+     lab: ^IbackendLocalLab;
+     labNo: @integer; (* labels, jumps, etc *)
+     type: @integer; (* labels/jumps *)
+     
+     isDiv: @boolean; (* div/mod *)
+     cond: @integer; (* cmpAndJmp *)
+
+     bool,bool2: @boolean;
+     isLeave: @boolean; (* break *)
+     noOfEnterPar: @integer;
+     RToff,paramNo: @integer; (* COM *)
+     isLocal: @boolean; (* GlobalLabelDef*)
+     hasSideEffects: @boolean; (* used in IMmachinebody but not elsewhere?*)
+     index,astRef: @integer; (* newFragment,newImp, etc. ... *)
+  do inner 
+  exit this(backEndInstruction)[]
+  #);
+IbackendLocalLab: (# new:< object; def:< object; display:<object #);
+
+backendImpl:backend(# #);
+backend: 
+  (# trace_back: (#exit common.switch[123] #);
+     
+     opCodeMap: [512]^InstrImpl;
+     liveAdr, liveData, liveFloats:^Bitvektor32;
+     
+     (* recalculate liveData for the current instruction *)
+     calculateLiveData:<Object;
+     
+     (* number of stack cells used for, data, adr, float and primregs *)
+     stackCells:[4]@integer;
+     mstate: @<<SLOT backendmstate: descriptor>>;
+     <<SLOT backendatt: attributes>>;
+     
+     CAP: @ (* Capabilities of the backends *)
+       (# getRegisterOffsets:
+            (# dataOff,adrOff,primOff: @integer
+              <<SLOT getRegisterOffsets:doPart>>
+            exit(dataOff,adrOff,primOff)
+            #);
+          getNumberOfDataRegisters:
+            (# regCount:@integer
+              <<SLOT getNumberOfDataRegisters:dopart>>
+            exit regCount
+            #);
+          getNumberOfAdrRegisters:
+            (# regCount:@integer
+              <<SLOT getNumberOfAdrRegisters:dopart>>
+            exit regCount
+            #);
+          getPhysicalRegisterNumber:
+            (# type,reg,physicalregister:@integer;
+            enter (type,reg)
+            <<SLOT getPhysicalRegisterNumber:dopart>>
+            exit physicalregister
+            #);
+          getNumberOfRegisters:
+            (# type:@integer;
+               number:@integer
+            enter type
+            <<SLOT getNumberOfRegisters:dopart>>
+            exit number
+            #);
+          primRegIsReg: 
+            booleanValue
+            (# reg: @integer
+            enter reg <<SLOT primRegIsReg:doPart>>
+            #); 
+          primRegIsRegAdr: 
+            booleanValue
+            (# reg: @integer
+            enter reg <<SLOT primRegIsRegAdr:doPart>>#);
+          isSmallAluConstant: booleanValue
+            (# C: @integer
+            enter C <<SLOT backendIsSmallAluConstant:doPart>>
+            #);
+          isSmallAdrOff: booleanValue
+            (# C: @integer
+            enter C <<SLOT backendIsSmallAdrOff:doPart>>
+            #);
+          hasRotateInstr: booleanValue
+            (#<<SLOT backendHasRotateInstr:doPart>>#);
+          
+          CanStoreConstant: booleanValue
+            (# C: @integer
+            enter C
+            do isIntel -> value 
+            #);
+          
+          AluFromMemory: booleanValue
+            (#
+            do (if false (*isIntel*) then true->value if)
+            #);
+          AluToMemory: booleanValue
+            (#
+            do (if false (*isIntel*) then true->value if)  
+            #);
+          
+          isIntel:@boolean;
+          
+          (* Best Register for different instructions *)
+          (* should be zero = no preference 
+           * or the index for the prefered register
+           * as found in getPhysicalRegisterNumber *)
+          ShiftRegister:@integer;
+          TstNoneRegister:@integer;
+          externalResultRegister:@integer;
+          
+          (* Set the following values to TRUE for backends
+           * that have these capabilities.
+           * We should consider wheter all CAP's are booleans
+           * or slots; currently a mixture, but perhaps slots
+           * are overkill?
+           *)
+          
+          hasPutBits:  @boolean;
+          hasGetBits:  @boolean;
+          hasGputBits: @boolean;
+          hasGgetBits: @boolean;
+          hasByteSwap: @boolean; (* INTEL should set to TRUE *)
+          
+          ScaledIndex: booleanValue(#<<SLOT backendScaledIndex:doPart>>#);
+       #);
+     
+     thisO:
+       (# rNo: @integer
+       <<SLOT backendThisO:doPart>>
+       exit rNo
+       #);
+     callO:
+       (# rNo: @integer
+       <<SLOT backendCallO:doPart>>
+       exit rNo
+       #);
+     InstrImpl: 
+       (# i: ^BackendInstruction
+       enter i[]
+       do INNER
+       #);
+     
+     nopImpl:InstrImpl
+       (# <<SLOT backendNop: dopart>> #);
+     
+     (* added gLeaImpl since it is generated by INTERMEDIATEmachine *)
+     gLeaImpl: InstrImpl(# <<SLOT backendgLea:doPart>> #);
+     gLeaInxImpl: InstrImpl(# <<SLOT backendgLeaInx:doPart>> #);
+     gLeaTextImpl: InstrImpl(# <<SLOT backendgLeaText:doPart>> #);
+     gLeaLabelImpl: InstrImpl(# <<SLOT backendgLeaLabel:doPart>> #);
+     
+     ldCstImpl: InstrImpl
+       (# <<SLOT backendldCst:dopart>> #);
+          
+     stCstImpl: InstrImpl
+       (# <<SLOT backendstCst:dopart>> #);
+     
+     ldValImpl: InstrImpl
+       (# <<SLOT backendldVal:dopart>> #);
+     
+     ldValFromLabImpl: InstrImpl
+       (# <<SLOT backendldValFromLab:dopart>> #);
+     
+     ldVlInxImpl: InstrImpl
+       (# <<SLOT backendldVlinx:dopart>> #);
+     
+     stValImpl: InstrImpl
+       (# <<SLOT backendstVal:dopart>> #);
+     
+     stValInxImpl: InstrImpl
+       (# 
+         <<SLOT backendstValInx:dopart>> 
+       #);
+     
+     stValInLabImpl: InstrImpl
+       (# <<SLOT backendstValInLab:dopart>> #);
+     
+     cpRegImpl: InstrImpl
+       (#  <<SLOT backendcpReg:dopart>> #);
+     
+     stValInTextImpl: InstrImpl
+       (# 
+         <<SLOT backendstValInText:dopart>> 
+       #);
+     
+     doAsgRefAdrImpl: InstrImpl
+       (#  <<SLOT backenddoAsgRefAdr:dopart>> #);
+     
+     doAsgRefRegImpl: InstrImpl
+       (#  <<SLOT backenddoAsgRefReg:dopart>> #);
+     
+     ChkHeapImpl: InstrImpl
+       (# 
+       <<SLOT backendChkHeap:dopart>> 
+       #);
+     
+     (* Arithmetic *)
+     gAddImmImpl: InstrImpl
+       (# <<SLOT backendgAddImm:dopart>> #);
+     gAddRegImpl: InstrImpl
+       (# <<SLOT backendgAddReg:dopart>> #);
+     addMemImpl: InstrImpl
+       (# <<SLOT backendaddMem:dopart>> #);
+     gNegImpl: InstrImpl
+       (# <<SLOT backendgNeg:dopart>> #);
+     gSubImmImpl: InstrImpl
+       (# <<SLOT backendgSubImm:dopart>> #);
+     gSubRegImpl: InstrImpl
+       (# <<SLOT backendgSubReg:dopart>> #);
+     gMultImmImpl: InstrImpl
+       (# <<SLOT backendgMultImm:dopart>> #);
+     gMultRegImpl: InstrImpl
+       (# <<SLOT backendgMultReg:dopart>> #);
+     gDIVRegImpl: InstrImpl
+       (# <<SLOT backendgDIVReg:dopart>> #);
+     gDIVImmImpl: InstrImpl
+       (# <<SLOT backendgDIVImm:dopart>> #);
+     gOrImmImpl: InstrImpl
+       (# <<SLOT backendgOrImm:dopart>> #);
+     gOrRegImpl: InstrImpl
+       (# <<SLOT backendgOrReg:dopart>> #);
+     gAndImmImpl: InstrImpl
+       (# <<SLOT backendgAndImm:dopart>> #);
+     gAndRegImpl: InstrImpl
+       (# <<SLOT backendgAndReg:dopart>> #);
+     gXorImmImpl: InstrImpl
+       (# <<SLOT backendgXorImm:dopart>> #);
+     gXorRegImpl: InstrImpl
+       (# <<SLOT backendgXorReg:dopart>> #);
+     gAndNregImpl: InstrImpl
+       (# <<SLOT backendgAndNReg:dopart>> #);
+     gNotImpl: InstrImpl
+       (# <<SLOT backendgNot:dopart>> #);
+     logNotImpl: InstrImpl
+       (# <<SLOT backendlogNot:dopart>> #);
+     gCmpImmImpl: InstrImpl
+       (# <<SLOT backendgCmpImm:dopart>> #);
+     gCmpRegImpl: InstrImpl
+       (# <<SLOT backendgCmpReg:dopart>> #);
+     (* Bit operations *)
+     SignExtByteImpl: InstrImpl
+       (# <<SLOT backendSignExtByte:dopart>> #);
+     SignExtWordImpl: InstrImpl
+       (# <<SLOT backendSignExtWord:dopart>> #);
+     getBitsImpl: InstrImpl
+       (# <<SLOT backendgetBits:dopart>> #);
+     gGetBitsImpl: InstrImpl
+       (# <<SLOT backendgGetBits:dopart>> #);
+     putBitsImpl: InstrImpl
+       (# <<SLOT backendputBits:dopart>> #);
+     gPutBitsImpl: InstrImpl
+       (# <<SLOT backendgPutBits:dopart>> #);
+     ByteSwapImpl: InstrImpl
+       (# <<SLOT backendByteSwap:dopart>> #);
+     gGetDataByteImpl: InstrImpl
+       (# <<SLOT backendgGetDataByte:dopart>> #);
+     gGetDataWordImpl: InstrImpl
+       (# <<SLOT backendgGetDataWord:dopart>> #);
+     arithShiftLeftImmImpl: InstrImpl
+       (# <<SLOT backendarithShiftLeftImm:dopart>> #);
+     arithShiftLeftRegImpl: InstrImpl
+       (# <<SLOT backendarithShiftLeftReg:dopart>> #);
+     logicalShiftLeftImmImpl: InstrImpl
+       (# <<SLOT backendlogicalShiftLeftImm:dopart>> #);
+     logicalShiftLeftRegImpl: InstrImpl
+       (# <<SLOT backendlogicalShiftLeftReg:dopart>> #);
+     arithShiftRightImmImpl: InstrImpl
+       (# <<SLOT backendarithShiftRightImm:dopart>> #);
+     arithShiftRightRegImpl: InstrImpl
+       (# <<SLOT backendarithShiftRightReg:dopart>> #);
+     logicalShiftRightImmImpl: InstrImpl
+       (# <<SLOT backendlogicalShiftRightImm:dopart>> #);
+     logicalShiftRightRegImpl: InstrImpl
+       (# <<SLOT backendlogicalShiftRightReg:dopart>> #);
+     rotateLeftImmImpl: InstrImpl
+       (# <<SLOT backendrotateLeftImm:dopart>> #);
+     rotateLeftRegImpl: InstrImpl
+       (# <<SLOT backendrotateLeftReg:dopart>> #);
+     rotateRightImmImpl: InstrImpl
+       (# <<SLOT backendrotateRightImm:dopart>> #);
+     rotateRightRegImpl: InstrImpl
+       (# <<SLOT backendrotateRightReg:dopart>> #);
+     BeginLabelImpl: InstrImpl
+       (# <<SLOT backendBeginLabel:dopart>> #);
+     FreeLabelImpl: InstrImpl
+       (# <<SLOT backendFreeLabel:dopart>> #);
+     EndLabelImpl: InstrImpl
+       (# <<SLOT backendEndLabel:dopart>> #);
+     AllocObjImpl: InstrImpl(#<<SLOT backendAllocObj:doPart>> #);
+     saveInnerReturnImpl: InstrImpl
+       (# <<SLOT backendsaveInnerReturn:dopart>> #);
+     returnInnerImpl: InstrImpl
+       (# <<SLOT backendreturnInner:dopart>> #);
+     ReturnVirtualCOMImpl: 
+       InstrImpl(#<<SLOT backendReturnVirtualCOM:doPart>>#);
+     ExternalEntryImpl: InstrImpl
+       (# 
+       do (#<<SLOT backendExternalEntry_defineEntry:doPart>>#);
+          (#<<SLOT backendExternalEntry:doPart>> #)
+       #);
+     ExternalMarkImpl: InstrImpl(# <<SLOT backendExternalMark:doPart>> #);
+     ExternalReturnImpl: 
+       InstrImpl(# <<SLOT backendExternalReturn:doPart>> #);
+     Xpar: @<<SLOT backendXpar:Descriptor>>;
+     initXparImpl: InstrImpl(# <<SLOT backendInitXpar:doPart>> #);
+     noOfPreGetXpar: integerValue
+       (# noOfPar: @integer 
+       enter noOfPar <<SLOT backendNoOfPreGetXpar:doPart>> 
+       #);
+     preGetXParImpl: InstrImpl(# <<SLOT backendPreGetXpar:doPart>> #);
+     getXlongImpl: InstrImpl(# <<SLOT backendgetXlong:doPart>> #);
+     getXwordImpl: InstrImpl(# <<SLOT backendgetXword:doPart>> #);
+     getXbyteImpl: InstrImpl(# <<SLOT backendgetXbyte:doPart>> #);
+     toXresImpl: InstrImpl(# <<SLOT backendtoXres:doPart>> #);
+     GetRegForXresImpl: InstrImpl(# <<SLOT backendGetRegForXres:doPart>> #);
+     GetCOMparImpl: InstrImpl(#<<SLOT backendGetCOMpar:doPart>> #);
+     
+     EmitTextConstImpl: InstrImpl
+       (# <<SLOT backendEmitTextConst:dopart>> #);
+     gClrImpl: InstrImpl
+       (# <<SLOT backendgClr:dopart>> #);
+     pushAdrImpl: InstrImpl
+       (# <<SLOT backendpushAdr:dopart>> #);
+     PushImpl: InstrImpl
+       (# <<SLOT backendPush:dopart>> #);
+     PopImpl: InstrImpl
+       (# <<SLOT backendPop:dopart>> #);
+     PushThisOrCallImpl: InstrImpl
+       (# <<SLOT backendPushThisOrCall:dopart>> #);
+     popThisOrCallImpl: InstrImpl
+       (# <<SLOT backendpopThisOrCall:dopart>> #);
+     setTopImpl: InstrImpl
+       (# <<SLOT backendsetTop:dopart>> #);
+     ChkCaseImpl: InstrImpl
+       (# <<SLOT backendChkCase:dopart>> #);
+     ChkIndexImpl: InstrImpl
+       (# <<SLOT backendChkIndex:dopart>> #);
+     cmpToBoolImpl: InstrImpl
+       (# <<SLOT backendcmpToBool:dopart>> #);
+
+     (* Floating point operations *)
+     loadFloatImpl: InstrImpl(# <<SLOT backendLoadFloat:doPart>> #);
+     loadFloatInxImpl: InstrImpl(# <<SLOT backendLoadFloatInx:doPart>> #);;
+     storeFloatImpl: InstrImpl(# <<SLOT backendStoreFloat:doPart>> #);
+     storeFloatInxImpl: InstrImpl(# <<SLOT backendStoreFloatInx:doPart>> #);;
+     storeFloat2intImpl: InstrImpl(# <<SLOT backendStoreFloat2int:doPart>> #);
+     storeFloat2intInxImpl: InstrImpl(# <<SLOT backendStoreFloat2intInx:doPart>> #);;
+     loadInt2floatImpl: InstrImpl(# <<SLOT backendLoadInt2Float:doPart>> #);;
+     loadInt2floatInxImpl: InstrImpl(# <<SLOT backendLoadInt2FloatInx:doPart>> #);;
+     floatConstImpl: InstrImpl
+       (# <<SLOT backendfloatConst:dopart>> #);
+     int2floatImpl: InstrImpl
+       (# <<SLOT backendint2float:dopart>> #);
+     intReg2floatImpl: InstrImpl
+       (# <<SLOT backendintReg2float:dopart>> #);
+     float2intImpl: InstrImpl
+       (# <<SLOT backendfloat2int:dopart>> #);
+     cmpToBoolFloatImpl: InstrImpl
+       (# <<SLOT backendcmpToBoolFloat:dopart>> #);
+     popFStackImpl: InstrImpl
+       (# <<SLOT backendpopFStack:dopart>> #);
+     cmpFloatImpl: InstrImpl
+       (# <<SLOT backendcmpFloat:dopart>> #);
+     addFloatImpl: InstrImpl
+       (# <<SLOT backendaddFloat:dopart>> #);
+     subFloatImpl: InstrImpl
+       (# <<SLOT backendsubFloat:dopart>> #);
+     mulFloatImpl: InstrImpl
+       (# <<SLOT backendmulFloat:dopart>> #);
+     divFloatImpl: InstrImpl
+       (# <<SLOT backenddivFloat:dopart>> #);
+     negFloatImpl: InstrImpl
+       (# <<SLOT backendnegFloat:dopart>> #);
+     SpillDataRegImpl: InstrImpl
+       (# <<SLOT backendSpillDataRegImpl:dopart>> #);
+     LoadSpilledDataRegImpl: InstrImpl
+       (# <<SLOT backendLoadSpilledDataRegImpl:dopart>> #);
+     (* concurrency not used? *)
+     lockImpl: InstrImpl
+       (# <<SLOT backendlock:dopart>> #);
+     
+     (* register Allocation *)
+     allRegInPrimReg2IImpl: InstrImpl
+       (# <<SLOT backendallRegInPrimReg2I:dopart>> #);
+     GetOriginRegImpl: InstrImpl
+       (# <<SLOT backendGetOriginReg:dopart>> #);
+     FreeOriginRegImpl: InstrImpl
+       (# <<SLOT backendFreeOriginReg:dopart>> #);
+     DataRegMaxImpl: InstrImpl
+       (# <<SLOT backendDataRegMax:dopart>> #);
+     NoOfFreeDataRegImpl: InstrImpl
+       (# <<SLOT backendNoOfFreeDataReg:dopart>> #);
+     DumpRegImpl: InstrImpl
+       (# <<SLOT backendDumpReg:dopart>> #);
+     PushRegImpl: InstrImpl
+       (# <<SLOT backendPushReg:dopart>> #);
+     PopRegImpl: InstrImpl
+       (# <<SLOT backendPopReg:dopart>> #);
+     PushDataRegImpl: InstrImpl
+       (# <<SLOT backendPushDataReg:dopart>> #);
+     PopDataRegImpl: InstrImpl
+       (# <<SLOT backendPopDataReg:dopart>> #);
+     SPtoPrim: InstrImpl(#<<SLOT backendSPtoPrim:doPart>> #);
+     PushFloatRegImpl: InstrImpl
+       (# <<SLOT backendPushFloatReg:dopart>> #);
+     PopFloatRegImpl: InstrImpl
+       (# <<SLOT backendPopFloatReg:dopart>> #);
+     tstNoneImpl: InstrImpl
+       (# <<SLOT backendtstNone:dopart>> #);
+     trapImpl: InstrImpl
+       (# <<SLOT backendtrap:dopart>> #);
+     returnImpl: InstrImpl
+       (# <<SLOT backendreturn:dopart>> #);
+     saveReturnImpl: InstrImpl
+       (# <<SLOT backendsaveReturn:dopart>> #);
+
+     rtsImpl: InstrImpl
+       (# <<SLOT backendrts:dopart>> #);
+     labelImpl: InstrImpl
+       (# <<SLOT backendlabel:dopart>> #);
+     SaveRegImpl: InstrImpl
+       (# <<SLOT backendSaveReg:dopart>> #);
+     RestoreRegImpl: InstrImpl
+       (# <<SLOT backendRestoreReg:dopart>> #);
+     GetPRimResImpl: InstrImpl
+       (# <<SLOT backendGetPRimRes:dopart>> #);
+     DeclareAddressImpl: InstrImpl
+       (# <<SLOT backendDeclareAddress:dopart>> #);
+     declareDataSegmentTextAddressImpl: InstrImpl
+       (# <<SLOT declareDataSegmentTextAddressImpl:dopart>> #);
+     declareDataSegmentLabelAddressImpl: InstrImpl
+       (# <<SLOT declareDataSegmentLabelAddressImpl:dopart>> #);
+     ChkConstIndexImpl: InstrImpl
+       (# <<SLOT backendChkConstIndex:dopart>> #);
+
+     (* Control Flow operations *)
+     (* external (out of dopart) *)
+     jsrTableImpl: InstrImpl
+       (# <<SLOT backendjsrTable:dopart>> #);
+     jmpTlongImpl: InstrImpl
+       (# 
+          <<SLOT backendjmpTlong:dopart>> 
+       #);
+     jmpTImpl: InstrImpl
+       (# <<SLOT backendjmpT:dopart>> #);
+     jsrTImpl: InstrImpl
+       (# 
+          <<SLOT backendjsrT:dopart>> 
+       #);
+     jsrRegImpl: InstrImpl
+       (# <<SLOT backendjsrReg:dopart>> #);
+     jmpRegImpl: InstrImpl
+       (# <<SLOT backendjmpReg:dopart>> #);
+     gJsrImpl: InstrImpl
+       (# 
+          <<SLOT backendgJsr:dopart>> 
+       #);
+     jsrTableTestImpl: InstrImpl
+       (# <<SLOT backendjsrTableTest:dopart>> #);
+
+     (* local *)
+     
+     jumpIfTrueImpl: InstrImpl
+       (# <<SLOT backendJumpIfTrue:dopart>> #);
+     gBeqImpl: InstrImpl
+       (# <<SLOT backendgBeq:dopart>> #);
+     gBneImpl: InstrImpl
+       (# <<SLOT backendgBne:dopart>> #);
+     gBgeImpl: InstrImpl
+       (# <<SLOT backendgBge:dopart>> #);
+     gBaeImpl: InstrImpl
+       (# <<SLOT backendgBae:dopart>> #);
+     gBleImpl: InstrImpl
+       (# <<SLOT backendgBle:dopart>> #);
+     gBbeImpl: InstrImpl
+       (# <<SLOT backendgBbe:dopart>> #);
+     gBgtImpl: InstrImpl
+       (# <<SLOT backendgBgt:dopart>> #);
+     gBabImpl: InstrImpl
+       (# <<SLOT backendgBab:dopart>> #);
+     gBltImpl: InstrImpl
+       (# <<SLOT backendgBlt:dopart>> #);
+     gBblImpl: InstrImpl
+       (# <<SLOT backendgBbl:dopart>> #);
+     cmpAndJmpImpl: InstrImpl
+       (# <<SLOT backendcmpAndJmp:dopart>> #);
+     cmpAndJmpImmImpl: InstrImpl
+       (# <<SLOT backendcmpAndJmpImm:dopart>> #);
+     cmpBoolAndJmpImpl: InstrImpl
+       (# <<SLOT backendcmpBoolAndJmp:dopart>> #);
+     cmpAndJmpFloatImpl: InstrImpl
+       (# <<SLOT backendcmpAndJmpFloat:dopart>> #);
+     fBeqImpl: InstrImpl
+       (# <<SLOT backendfBeq:dopart>> #);
+     fBgeImpl: InstrImpl
+       (# <<SLOT backendfBge:dopart>> #);
+     fBleImpl: InstrImpl
+       (# <<SLOT backendfBle:dopart>> #);
+     fBneImpl: InstrImpl
+       (# <<SLOT backendfBne:dopart>> #);
+     fBgtImpl: InstrImpl
+       (# <<SLOT backendfBgt:dopart>> #);
+     fBltImpl: InstrImpl
+       (# <<SLOT backendfBlt:dopart>> #);
+
+     (* local jump allways *)
+     gJmpImpl: InstrImpl
+       (# <<SLOT backendgJmp:dopart>> #);
+
+     (* RuntimeCalls & externals *)
+     CallPrimImpl: InstrImpl(# <<SLOT backendCallPrim:dopart>>#);
+     CallAlloPrimImpl: InstrImpl(# <<SLOT backendCallAlloPrim:dopart>>#);
+     initPrimCallImpl: InstrImpl(# <<SLOT backendinitPrimCall:dopart>> #);
+     InitExternalCall: InstrImpl
+       (# <<SLOT backendInitExternalCall:dopart>> #);
+     PushClongImpl: InstrImpl
+       (# <<SLOT backendPushClong:dopart>> #);
+     PushClongImmImpl: InstrImpl
+       (# <<SLOT backendPushClongImm:dopart>> #);
+     PushCdoubleImpl: InstrImpl
+       (# <<SLOT backendPushCdouble:dopart>> #);
+     PushCfloatImpl: InstrImpl
+       (# <<SLOT backendPushCfloat:dopart>> #);
+
+     CallCImpl: InstrImpl(# <<SLOT backendCallC:dopart>>#);
+     externalDispatchImpl: 
+       InstrImpl(#<<SLOT backendExternalDispatch:doPart>> #);
+     noXresImpl: InstrImpl(# <<SLOT backendNoXres:doPart>>#);
+     getSimpleXresImpl: InstrImpl(# <<SLOT backendgetSimpleXres:doPart>>#);
+     getTextXresImpl: InstrImpl(# <<SLOT backendgetTextXres:doPart>>#);
+     realXresIsDouble: booleanValue(# extType: @integer enter extType <<SLOT realXresIsDouble:doPart>> #);
+     getDoubleXresImpl: InstrImpl(# <<SLOT backendgetDoubleXres:doPart>>#);
+     getFloatXresImpl: InstrImpl(# <<SLOT backendgetFloatXres:doPart>>#);
+     getDataRefXresImpl: InstrImpl(# <<SLOT backendgetDataRefXres:doPart>>#);
+     getDataPartXresImpl: InstrImpl(# <<SLOT backendgetDataPartXres:doPart>>#);
+     saveHeapTopImpl: InstrImpl(# <<SLOT backendgetSaveHeapTop:doPart>>#);
+     
+     xParForward: booleanValue
+       (# extKind: @integer 
+       enter extKind <<SLOT backendxParForward:doPart>> #);
+     
+     InlineAlloiNGNPImpl: InstrImpl
+       (# <<SLOT backendInlineAlloiNGNP:dopart>> #);
+
+     (*other *)
+     deAllocIOAImpl: InstrImpl
+       (# <<SLOT backenddeAllocIOA:dopart>> #);
+     StackAlloPrimImpl: InstrImpl
+       (# <<SLOT backendStackAlloPrim:dopart>> #);
+     
+     declareLong:
+       (# N: @integer
+       enter n
+       <<SLOT backenddeclareLong:doPart>>
+       #);
+     declareWord:
+       (# N: @integer
+       enter N
+       <<SLOT backenddeclareWord:doPart>>
+       #);
+     dclWord:
+       (# N: @integer
+       enter N
+       <<SLOT backenddclWord:doPart>>
+       #);
+     emitByte:
+       (# B: @int8u
+       enter B
+       <<SLOT backendEmitByte:doPart>>
+        #);
+     asciiText:
+       (# T: ^text; isWtext: @boolean
+       enter(T[],isWtext)
+       <<SLOT backendasciiText:doPart>>
+       #);
+     defineMainLabel:
+       (#
+       <<SLOT backenddefineMainLabel:doPart>>
+       #);
+     switchToCode:
+       (#
+       <<SLOT backendswitchToCode:doPart>>
+       #);
+     switchToData:
+       (#
+       <<SLOT backendswitchToData:doPart>>
+       #);
+     import:
+       (# lab: ^text
+       enter lab[]
+       <<SLOT backendimport:doPart>>
+       #);
+     importData:
+       (# Lab: ^text; local: @boolean
+       enter (lab[],local)
+       <<SLOT backendimportData:doPart>>
+       #);
+     export:
+       (# lab: ^text
+       enter lab[]
+       <<SLOT backendexport:doPart>>
+       #);
+     labelDef:
+       (# lab: ^text
+       enter lab[]
+       <<SLOT backendlabelDef:doPart>>
+       #);
+     initGen:
+       (# nodeId: @integer;
+          EP: ^text;
+          data: @boolean
+       enter (nodeId,EP[],data)
+       <<SLOT backendinitGen:doPart>>
+       #);
+     initDo:
+       (# nodeId: @integer; EP: ^text; data: @boolean
+       enter (nodeId,EP[],data)
+       <<SLOT backendInitDo:doPart>>
+       #);
+     InitDataSeg:
+       (# initialBetaEnv: @boolean
+       enter initialBetaEnv
+       <<SLOT backendInitDataSeg:doPart>>
+       #);
+     doHead: (* called from backendbody:InitDataSeg*)
+       <<SLOT backendDoHead:descriptor>>;
+     newFragment: 
+       (# FN: ^text; (* name of the fragment *)
+          astLabel: @integer;
+           (*    label of the top AST node of the fragment.
+           *    Either
+           *       gram.descriptorForm,
+           *       gram.attributesForm,
+           *       gram.doPart,
+           *       gram.mainPart
+            *)
+       enter(FN[],astLabel)
+       <<SLOT backendnewFragment:DoPart>>
+       #);
+     newProto: InstrImpl(# <<SLOT backendnewProto:doPart>> #);
+     newImp: InstrImpl(# <<SLOT backendnewImp:doPart>> #);
+     newEval: InstrImpl(# <<SLOT backendNewEval:doPart>> #);
+     backEndDbgInf: @ <<SLOT backenddbgInf:Descriptor>>;
+     openDbgInf: InstrImpl(# <<SLOT backendOpenDbgInf:doPart>> #);
+     saveDbgInf:InstrImpl(# <<SLOT backendSaveDbgInf:doPart>> #);
+     EndCodeSeg: (# <<SLOT backendEndCodeSeg:doPart>> #);
+     GlobalCodeLabelDefImpl: InstrImpl
+       (# <<SLOT GlobalCodeLabelDef:doPart>>#);
+     GlobalDataLabelDef: 
+       (# xLab: ^text; data: @boolean
+       enter(xLab[],data)
+       <<SLOT backendGlobalDataLabelDef:doPart>>
+       #); 
+     
+     InitEmitProtoIndexTable:
+       (# noOfPT: @integer;
+       enter noOfPT <<SLOT backendinitEmitProtoIndexTable:DoPart>> #);
+     EmitProtoIndex:
+       (# PT: ^text
+       enter PT[] <<SLOT backendEmitProtoIndex:DoPart>>#);
+     EndEmitProtoIndexTable:
+       (# <<SLOT backendendEmitProtoIndexTable:DoPart>> #);
+     EmitProto:
+       (# thisTLab,thisGlab,superTlab,externalEntryLab: ^text;
+          GCtableOffset,originOff,size,topMentryOff,formIndex,astNumber:
+            @integer;          
+       enter(thisTLab[],GCtableOffset,OriginOff,thisGlab[],superTlab[],size,
+          topMentryOff,formIndex,astNumber,externalEntryLab[])
+       <<SLOT backendEmitProto:DoPart>> 
+       #);
+     EmitInnerTable:
+       (# NoOfentries: @integer;               
+       enter noOfEntries
+       <<SLOT backendEmitInnerTable:DoPart>> #);
+     InnerEntry:
+       (# entry: ^text
+       enter entry[] <<SLOT backendInnerEntry:DoPart>> #);
+
+     EmitVirtTextAdr:
+       (# label: ^text
+       enter label[] <<SLOT backendEmitVirtTextAdr:DoPart>> #);
+     
+     EmitVirtLabelAdr:
+       (# labNo: @integer
+       enter labNo <<SLOT backendEmitVirtLabelAdr:DoPart>> #);
+     
+     EmitObjTableOff:
+       (# offNo,off: @integer enter(offNo,off) 
+       <<SLOT backendemitObjTableOff:DoPart>> 
+       exit offNo
+       #);
+     EmitText:
+       (# offNo: @integer; T: ^text; local: @boolean
+       enter (offNo,T[],local)
+       <<SLOT backendemitText:DoPart>> 
+       exit offNo 
+       #);
+
+     EmitRefTableOff:
+       (# off: @integer enter off <<SLOT backendemitRefTableOff:DoPart>> #);
+     
+     init:
+       (# name: ^text
+       enter(localFilePath[],common[],name[],group_hash[])
+       do <<SLOT backendInit:descriptor>>;
+          <<SLOT backendInitMachine:descriptor>>;
+       #);
+     
+     close:
+       (#
+       <<SLOT backendClose:doPart>>
+       #);
+     
+     initCreateDataFile: 
+       (# fileName: ^text
+       enter (fileName[],common[])
+       <<SLOT backendInitCreateDataFile:DoPart>>
+       #);
+     endCreateDataFile: 
+       (# fileName: ^text
+       enter (fileName[],common[])
+       <<SLOT backendEndCreateDataFile:DoPart>>
+       #);
+     NextGroup:
+       (# id,groupName: ^text;
+          isBetaenv: @boolean
+       enter (id[],groupName[],isBetaenv)
+       <<SLOT backendNextGroup:DoPart>>
+       #);
+     
+     (*********** backend label generation ***************)
+     newLocalLab:
+       (# labNo,type: @integer;
+          betaLabel,isTextAdr: @boolean;
+          descId: ^text;
+          lab: ^backendLocalLab
+       enter(labNo,type,betaLabel,isTextAdr,descId[])
+       do &backendLocalLab[]->lab[];
+          labNo ->lab.labno;
+          type->lab.type;
+          betalabel->lab.betaLabel;
+          isTextAdr->lab.isTextAdr;
+          (if descId[] <> none then descId.copy->lab.descId[] if);
+       exit lab[]
+       #);
+     
+     backEndLocalLab: IbackEndLocalLab
+       (# type: @integer;
+          descLocal: (#  exit 0 #);
+          codeLocal: (#  exit 1 #);
+          codeToData: (#  exit 2 #);
+          interFragment: (#  exit 3 #);
+          caseStart: (#  exit 4 #);
+          caseEntry: (#  exit 5 #);
+          caseEnd: (#  exit 6 #);
+          dataLocal: (#  exit 7 #);
+          dataToCode: (#  exit 8 #);
+          betaLabel,
+          (* the label corresponds to the restart or leave
+           * address of a BETA label like "L: (if ... if)".
+           * Such labels may be addressed from another
+           * descriptor than they are defined.
+           *) 
+          isTextAdr: @boolean;
+          descId: ^text;         
+          new:: (# <<SLOT backendLocalLabNew:doPart>> #);
+          def:: (# <<SLOT backendLocalLabDef:doPart>>#);
+          display:: 
+            (#
+            do 'bL'->puttext; labNo->putint; ':'->put;
+               ' type='->puttext; type->putint;
+            #);
+          VirtLabDef:< (# do inner #);
+          asText:< 
+            (# localLabText: ^text 
+              <<SLOT backendAsText:doPart>>
+            exit localLabText[] 
+            #);
+          labNo: @integer;
+       enter labNo
+       exit labNo  
+       #);
+
+     newLab: @
+       (# n,lab: @integer
+       enter n
+       do lab+n->lab
+       exit lab
+       #);
+     
+     
+     (*entrypoint handling *)
+     entryPoints: @hashTable
+       (# <<SLOT entrypointsAtt:Attributes>>;
+          rangeInitial::< (# do 717->value #);
+          ElementType: EntryPointInfo
+            (# m: @<<SLOT backendtargetEntryPointInfo:Descriptor>>;
+               display: (# <<SLOT backendentrypointselmDisplay:dopart>> #);
+            #);
+          element::< ElementType; 
+          hashFunction::< 
+            (# <<SLOT backendentrypointsHashfunc:dopart>> #);
+          insert:: (* elm: ^element *) 
+            (#  <<SLOT backendentryPointsInsert:DoPart>> #);
+          equal::< 
+            (# 
+            do left.t[]->right.t.equal->value;
+               <<SLOT backendentryPointsEqual:Descriptor>>
+            #);
+          add: @
+            (* called from import - adds the symbol T[] 
+             * with local=false
+             *)
+            (# T: ^text; data,wasAdded: @boolean; E: ^element
+            enter (T[],data)
+            <<SLOT backendentrypointsAdd:dopart>>
+            exit wasAdded
+            #);
+          addDef: @
+            (* called when defining an external visible entry-point,
+             * like T117FOO, M117FOO
+             *)
+            (# T: ^text;
+               data: @boolean;
+               E: ^element;
+               addTargetInfo:
+                 (# E: ^element
+                 enter E[] 
+                 <<SLOT backendaddTargetInfo:DoPart>> 
+                 #)
+            enter (T[],data)
+            <<SLOT backendentrypointsAddDef:dopart>>   
+            exit E[]
+            #);
+          find:
+            (# T: ^text;
+               E: ^element;
+               notFound:<
+                 (# E: ^element
+                 enter E[]
+                 do INNER
+                 #);
+            enter T[]
+            <<SLOT backendentrypointsFind:dopart>>   
+            exit E[]
+            #)
+       #);
+     (*************** file for code generation ******************)
+     BC: @file
+       (# accesserror::<  (#  do name->common.PassCodeFileAccessError #);
+          NoSpaceError::< (* disk is full *) 
+            (#  do delete; common.PassNoSpaceError #);
+          WriteError::< (* disk is full *) 
+            (#  do delete; common.PassNoSpaceError #);
+          OtherError:: (* e.g. disc quota exceeded *)
+            (# do (name,m[])->common.PassOtherError #);
+          putC: @put;
+          putI: @
+            (# c: [50] @char; (*should be big enough!*) n,i: @integer; 
+            enter n
+            do
+               (if n = minint then (* cannot negate minint!! *)
+                   '-2147483648'->putX; 
+                else
+                   (if n >= 0 then
+                       (n mod 10)+'0'->c[1]; 
+                    else
+                       '-'->putC; ((- n->n) mod 10)+'0'->c[1]; 
+                   if);
+                   n div 10->n;
+                   1->i;
+                   loop:
+                   (if 0 < n then
+                       i+1->i; (n mod 10)+'0'->c[i]; n div 10->n; restart loop
+                   if);
+                   (for l: i repeat c[i-(l-1)]->putC for)
+               if);
+               
+            #);
+          putX: @puttext;
+          putt: @ (# r: @text enter r do r[]->putX #);
+          puttab: @ (#  do ascii.ht->putc #);
+          putnl: @ (#  do ascii.newline->putc; (*lc+1->lc *) #);
+          imm: @ (# off: @integer enter off do <<SLOT backendimm:Descriptor>> #);
+          putS: @ (# size: @integer enter size <<SLOT backendputS:DoPart>> #);
+          sep: @ (#  do ','->putC #);
+          putA: @
+            (# n: @integer
+            enter n
+            do <<SLOT backendputA:Descriptor>>
+            #);
+          putD: @
+            (# n: @integer
+            enter n
+            do
+               <<SLOT backendputD:Descriptor>>
+            #);
+          putHx: @ PutHex;
+          putHexByte: @
+            (# X,Y: @integer
+            enter X
+            do
+               '0'->putC;
+               'x'->putC;
+               X div 16->Y;
+               X mod 16->X;
+               (if (0 <= Y) and (Y <= 9) then
+                   '0'+Y->putC
+                else
+                   'A'+Y-10->putC
+               if);
+               (if (0 <= X) and (X <= 9) then
+                   '0'+X->putC
+                else
+                   'A'+X-10->putC
+               if);
+               
+            #);
+          
+       #);
+     cError:
+       (# T:(# T1: ^text
+            enter T1[]
+            do T1[]->common.bugstream.puttext
+            #);
+          I:(# 
+            enter common.bugstream.putInt
+            #)
+       enter T
+       do '\n***Should NOT happen: ' -> puttext; INNER;
+       #);
+     cTrace:
+       (# xT:
+            (# T: ^text
+            enter T[]
+            do T[]->common.tracestream.putText
+            #);
+          xI:
+            (# n: @integer
+            enter n
+            do
+               ' '->xC;
+               n->common.traceStream.putInt;
+               ' '->xC
+            #);
+          xC:
+            (# ch: @char
+            enter ch
+            do ch->common.traceStream.put
+            #);
+          xB:
+            (# b: @boolean
+            enter b
+            do
+               (if b then
+                   ' true '->xT
+                else
+                   ' false '->xT
+               if)
+            #);
+          xN:
+            (# 
+            do common.tracestream.newline
+            #);
+          N: @integer;
+          
+       enter N
+       do
+          (if common.switch[N] then
+              xN;
+              '%'->xC;
+              N->common.traceStream.putInt;
+              ':'->xC;
+              ' '->xC;
+              INNER
+          if)
+       #);
+
+     common: ^commonDef;
+     localFilePath, (* local path relative to ~beta of this fragment file *) 
+     group_hash: (* 'unique' id of this fragment file *) ^text;
+     groupIdLab: @backendLocalLab;
+     bugstream: ^ stream; (* CHECK?? - use common.bugStream !!*)
+     IP: @integer;  (* instruction pointer *)
+  #)
+

@@ -1,0 +1,472 @@
+ORIGIN '../INTEL/INTELBmachine';
+INCLUDE '../ELF/elffile';
+INCLUDE '../ELF/elf_intel';
+
+--Cidentifier: dopart--
+do (* No underscores for ELF *)
+   
+--DefineMainMD: descriptor--
+(# #)   
+
+--VirtLabDef:descriptor--
+(# 
+do '== VirtLabDef' -> comment;
+   (if type = interFragment then
+       asText -> export;
+       asText -> labelDef
+   if);
+   THIS(locallab)[]->mstate.labs.def;
+   eoo;
+#)
+
+--LocalLabDef:dopart--
+do '== LocalLabDef' -> comment;
+   (if type = interFragment then
+       asText -> export;
+       (asText,entryDefMark) -> mstate.b.mark
+   if);
+   THIS(locallab)[]->mstate.labs.def;
+   eoo;
+   
+--LocalLabPutWithReloc:descriptor--
+(# 
+do (* FIXME: use L.type generally below *)
+     
+   (L[], not mstate.inCode) -> mstate.labs.use -> off;
+   (* off is now the offset to the lab in the segment it is
+    * declared in (or zero if yet undefined).
+    *)
+   
+   (if L.isTextAdr (* stupid name!! *) then
+       (* L is in the data segment *)
+       (if mstate.incode then
+           (* mark datalabel (relative to .data) 
+            * referenced from code segment
+            *)
+           (NONE,datamark)->mstate.b.mark;
+        else
+           (* mark datalabel (relative to .data) 
+            * referenced from data segment
+            *)
+           (NONE,datamark)->mstate.d.mark;
+       if);
+    else
+       (* L is in the code segment *)
+       (if mstate.incode then
+           (* mark codelabel (relative to .text)
+            * referenced from code segment
+            *)
+           (NONE,codemark)->mstate.b.mark;
+        else
+           (* mark codelabel (relative to .text) 
+            * referenced from data segment
+            *)
+           (NONE,codemark)->mstate.d.mark;
+       if)
+   if);
+#)
+   
+---emitCodeToFile:descriptor---'
+(#
+   align4: @
+     (# n: @integer
+     enter n
+     exit (n + 3) %band (%bnot 3)
+     #);
+   SectionStringTable: @
+     (* Data for section string table *)
+     (# shstr: ^text;
+        sectionStringStart,
+        textStart,
+        dataStart,
+        relTextStart,
+        relDataStart,
+        strtabStart,
+        symtabStart: @integer;
+        init:
+          (#
+          do &text[]->shstr[];
+             0->shstr.put;
+             shstr.length->sectionStringStart;
+	     '.shstrtab'->shstr.append; 0->shstr.put;
+             shstr.lgth->textStart;
+             '.text'->shstr.append; 0->shstr.put;
+             shstr.lgth->dataStart;
+             '.data'->shstr.append; 0->shstr.put;
+             shstr.lgth->relTextStart;
+             '.rel.text'->shstr.append; 0->shstr.put;
+             shstr.lgth->relDataStart;
+             '.rel.data'->shstr.append; 0->shstr.put;
+             shstr.lgth->strtabStart;
+             '.strtab'->shstr.append; 0->shstr.put;
+             shstr.lgth->symtabStart;
+             '.symtab'->shstr.append; 0->shstr.put;
+     #)#);
+
+   sections: @
+     (# sectionInx: (#exit 1 #);
+        sectionStringStart: @ (#exit elfHeaderSize #);
+        sectionStringSize: @ (#exit SectionStringTable.shstr.lgth (*NO GC!*)#);
+        textInx: (#exit 2 #);
+        textStart: @ (#exit sectionStringStart + sectionStringSize->align4 #);
+        textSize: @ (#exit b.LIP->align4 #);
+        dataInx: (#exit 3 #);
+        dataStart: @ (#exit textStart + textSize #);
+        dataSize: @ (#exit d.LIP->align4 #);
+        symTabInx: (#exit 4 #);
+        symtabStart: @ (#exit dataStart + dataSize #);
+        symtabSize: @ (#exit (mstate.symtabTop + 1 (* initial sym *) ) * symEntSize #);
+        stringInx: (#exit 5 #);
+        stringStart: @ (#exit symtabStart + symtabSize #);
+        stringSize: @ (#exit mstate.strTbl.str.lgth (* be sure its static *)#);
+        relTextInx: (#exit 6 #);
+        relTextStart: @ (#exit stringStart + stringSize->align4 #);
+        relTextSize: @ (#exit mstate.b.noOfRel * relSize #);
+        relDataInx: (#exit 7 #);
+        relDataStart: @ (#exit relTextStart + relTextSize #);
+        relDataSize: @ (#exit mstate.d.noOfRel * relSize #);
+        headerStart: @ (#exit relDataStart + relDataSize #);
+
+     #);
+   EmitHeader:
+     (* Construct elf header *)
+     (#
+     do
+        (
+        0 (* No entry point *), 
+        sections.headerStart (* offset to section header table in foo.o*), 
+        0 (* no flags *), 
+        8 (* undefined, section string, text, data, reltext, relData,
+           * string, symtab
+           *),
+        sections.sectionInx (* index of .shstrndx in section header table *)
+        ) -> EF.putEhdr;
+     #);
+   EmitText:
+     (# textsize: @integer;
+     do sections.textSize -> textsize;
+        (@@b.buffer[1],textsize)->putB;
+     #);
+   EmitData:
+     (# datasize: @integer;
+     do sections.dataSize -> datasize;
+        (@@d.buffer[1],datasize)->putB;
+     #);
+   EmitRel:
+     (# im: ^IntelImage;
+        relType: [markMax] @integer; 
+        mark,symtabInx,relInfo,n: @integer
+     do R_386_NONE	-> relType[entryDefMark];
+        R_386_32	-> relType[wordMark];
+        R_386_PC32	-> relType[jmpMark];
+        -1              -> relType[datamark] (* treated specially *);
+        -2              -> relType[codemark] (* treated specially *);
+
+        INNER; (* define im to be one of mstate.d or mstate.b *)
+        (for i: im.markTop repeat
+             (if im.types[i]->mark
+              // entryDefMark then
+              // datamark then
+                 (* Generate relocation entry with symbol being the special
+                  * SECTION symbol generated for .data section.
+                  * Used for refering local labels in data segment.
+                  *)
+                 (dataSectionSymbolIndex %sll 8) + R_386_32 -> relInfo;
+                 (im.marks[i],relInfo)->EF.putRelEnt;
+                 n+1->n;
+              // codemark then
+                 (* Generate relocation entry with symbol being the special
+                  * SECTION symbol generated for .text section.
+                  * Used for refering local labels in text segment.
+                  *)
+                 (textSectionSymbolIndex %sll 8) + R_386_32 -> relInfo;
+                 (im.marks[i],relInfo)->EF.putRelEnt;
+                 n+1->n;
+              else
+                 (* symtab indexes are counted 0,1,... *)
+                 im.epElm[i].m.symtabInx ->symtabInx;
+                 (symtabInx %sll 8) + relType[mark]->relInfo;
+                 (im.marks[i],relInfo)->EF.putRelEnt;
+                 n+1->n;
+             if)
+        for);
+        (if n <> im.noOfRel then 
+            '\nWARNING rel count inconsistencies: '->putText;
+            n->putint; ' '->put; im.noOfRel->putint; newline
+        if)
+     #);
+   EmitRelText: EmitRel(#do mstate.b[]->im[] #);
+   EmitRelData: EmitRel(#do mstate.d[]->im[] #);
+   
+   (* Indices of .data and .text in .symtab *)
+   dataSectionSymbolIndex: (# exit 2 #);
+   textSectionSymbolIndex: (# exit 1 #);
+   
+   lastLocalInSymtab: @integer;
+   
+   EmitSymbolTable:
+     (# sort:
+          (* local symbols MUST preceede global symbols *)
+          (# first,last: @integer; S: ^EntryPointInfo
+          do 3->first; mstate.symtabTop->last;
+             findGlobal:
+               (* ep[1..first-1]=local and ep[last+1..ep.range]=global 
+                * and first < last
+                *)
+               (if first < last then
+                   (if ep[first][]->isGlobal then
+                       findLocal:
+                         (if first < last then
+                             (if ep[last][]->isGlobal then
+                                 last-1->last;
+                                 restart findLocal
+                              else
+                                 (* ep[first]=global and  ep[last]=local*)
+                                 (* swap *)
+                                 ep[first][]->S[]; ep[last][]->ep[first][];
+                                 S[]->ep[last][];
+                                 first->ep[first].m.symTabInx;
+                                 last->ep[last].m.symTabInx;
+                                 (* ep[first]=local and ep[last]=global *)
+                                 last-1->last
+                   if)if)if);
+                   (* ep[first]=local*)
+                   first+1->first;
+                   restart findGlobal;
+               if)
+          #);
+        isGlobal:
+          (# S: ^EntryPointInfo; b: @boolean
+          enter S[]
+          exit (S.local and S.export) or not S.local
+          #);
+        defSec, n: @integer; 
+        ep: [mstate.symtabTop] ^EntryPoints.ElementType;
+                
+     do (* FIXME: No need to copy entrypoints into ep.
+         * Just do an entrypoints.scan below instead of 
+         * the for-loop iterating ep.
+         *)
+        
+        entryPoints.scan
+        (#
+        do current[]->ep[current.m.symtabInx][] ; n+1->n
+        #);
+        (if (n + 2) <> mstate.symtabTop then
+            '\n WARNING: inconsistencies in symtab size:'->puttext;
+            n->putint; ' '->put; mstate.symtabTop->putint; newline;
+        if);
+        sort;
+        (0,0,0,0,0,SHN_UNDEF)->EF.putSymEnt; (* 0: initial entry *)
+        (0,0,0,STT_SECTION,0,sections.textInx)->EF.putSymEnt; (* 1 *)
+        (0,0,0,STT_SECTION,0,sections.dataInx)->EF.putSymEnt; (* 2 *)
+        
+        (* NB. If other symbols are put in before the .data and .text symbol,
+         * case dataSectionSymbolIndex and dataSectionSymbolIndex above must be
+         *  changed accordingly, as emitRel use these special symbols.
+         *)
+        
+        (for i: ep.range-2 repeat
+             (# current: ^EntryPoints.ElementType; binding,type,info: @integer
+             do ep[i+2][]->current[];
+                
+                (* how do we know if a symb is imported? -
+                 * Apparently: any symbol not being defined is global.
+                 * binding is thus redefined below if not a def 
+                 *)
+                (if current.local then (*defined in this fragment *)
+                    (* define a symtab entry for a label def. *)
+                    (if current.export then (* exported from this fragment *)
+                        STB_GLOBAL->binding
+                     else 
+                        STB_LOCAL->binding;
+                        i+2->lastLocalInSymtab;
+                    if);
+                    (if current.data then (*defined in data fragment *)
+                        STT_OBJECT->type;
+                        sections.dataInx->defSec
+                     else
+                        (*STT_FUNC*) STT_NOTYPE->type;
+                        sections.textInx->defSec
+                    if)
+                 else
+                    0->defSec;
+                    STB_GLOBAL->binding;
+                    (if current.data then
+                        (*STT_OBJECT*) STT_OBJECT->type
+                     else
+                        (* STT_FUNC *) STT_NOTYPE->type
+                if)if);
+                (*STT_NOTYPE->type;*)
+                (binding %sll 4) + type -> info;
+                (current.m.strInx (* index into strTable *)
+                , current.LIP   (* offset where symb is defined, if defined*)
+                , 0               (* size *)
+                , info
+                , 0               (* other *)
+                , defSec          (* st_shndx - section defining symbol *)
+                )->EF.putSymEnt;
+        #)for);
+     #);
+   EmitSectionStringTable:
+     (* Write section string table *)
+     (# size: @integer;
+     do sections.sectionStringSize->align4 -> size;
+        (@@sectionStringTable.shstr.T[1], size) -> putB;
+     #);
+   EmitStringTable:
+     (# size: @integer;
+     do sections.stringSize->align4 -> size;
+        (@@mstate.strTbl.str.T[1],size)->putB;
+     #);
+   EmitSectionHeaderTable:
+     (#
+     do (* Write the empty section header (always present) *)
+        (0, SHT_NULL, 0, 0, 0, 0, SHN_UNDEF, 0, 0, 0) -> EF.putShdr;
+        
+        (* Write the section string table header *)
+        (1 (* name is index 1 in .shstrtab *), 
+        SHT_STRTAB (* type *), 
+        0 (* flags *), 
+        0 (* address in executable unspecified *),
+        elfheadersize (* Offset to section in file *), 
+        sections.sectionStringSize,
+        SHN_UNDEF (* no link info *), 
+        0 (* No info *), 
+        1 (* byte alignment *), 
+        0 (* not fixed size entries *)
+        ) -> EF.putShdr;        
+
+        (* Write the text section table header *)
+        (sectionStringTable.textStart (* start in .shstrtab *),
+        SHT_PROGBITS (* type !!!*), 
+        SHF_WRITE + SHF_ALLOC + SHF_EXECINSTR(* flags !!!*), 
+        0 (* address in executable unspecified !!! *),
+        sections.textStart (* Offset to section in file !!!*), 
+        sections.textSize,
+        SHN_UNDEF (* no link info !!!*), 
+        0 (* No info *), 
+        textalign (* alignment *), 
+        0 (* not fixed size entries !!!*)
+        ) -> EF.putShdr;        
+
+
+        (* Write the data section table header *)
+        (sectionStringTable.dataStart,
+        SHT_PROGBITS (* type !!!*), 
+        SHF_ALLOC + SHF_WRITE (* flags !!!*), 
+        0 (* address in executable unspecified !!!*),
+        sections.dataStart (* Offset to section in file !!!*), 
+        sections.dataSize,
+        SHN_UNDEF (* no link info !!!*), 
+        0 (* No info *), 
+        dataalign (* alignment *), 
+        0 (* not fixed size entries !!!*)
+        ) -> EF.putShdr;        
+        
+        (* Write the .symtab header *)
+        (sectionStringTable.symtabStart, 
+        SHT_SYMTAB (* type *), 
+        SHF_ALLOC (* flags *), 
+        0 (* address in executable unspecified *),
+        sections.symtabStart (* Offset to section in file *), 
+        sections.symtabSize,
+        sections.stringInx,  (* sh_link *)
+        lastLocalInSymtab+1, (* sh_inf0 *)
+        4 (* byte alignment *), 
+        symEntSize    (* size of a symtab entry *)
+        ) -> EF.putShdr;
+        (* Write the string table header *)
+
+        (sectionStringTable.strtabStart, 
+        SHT_STRTAB (* type *), 
+        SHF_ALLOC (* flags *), 
+        0 (* address in executable unspecified *),
+        sections.stringStart (* Offset to section in file *), 
+        sections.stringSize,
+        SHN_UNDEF (* no link info *), 
+        0 (* No info *), 
+        1 (* byte alignment *), 
+        0 (* not fixed size entries *)
+        ) -> EF.putShdr;
+
+        (* Write the .rel.text section table header *)
+        (sectionStringTable.relTextStart,
+        SHT_REL (* type !!!*), 
+        SHF_ALLOC (* flags !!!*), 
+        0 (* address in executable unspecified !!!*),
+        sections.relTextStart (* Offset to section in file !!!*), 
+        sections.relTextSize,
+        sections.symtabInx,   (* sh_link *)
+        sections.textInx,     (* sh_info *)
+        4 (* alignment *), 
+        relSize
+        ) -> EF.putShdr;        
+        
+        (* Write the .rel.data section table header *)
+        (sectionStringTable.relDataStart,
+        SHT_REL (* type !!!*), 
+        SHF_ALLOC (* flags !!!*), 
+        0 (* address in executable unspecified !!!*),
+        sections.relDataStart (* Offset to section in file !!!*), 
+        sections.relDataSize,
+        sections.symtabInx,   (* sh_link *)
+        sections.dataInx,     (* sh_info *)
+        4 (* alignment *), 
+        relSize
+        ) -> EF.putShdr;
+     #);
+   
+   EF: @elffile
+     (# accesserror::< (#do name->common.PassCodeFileAccessError #);
+        NoSpaceError::< (* disk is full *)
+          (#do delete; common.PassNoSpaceError #);
+        WriteError::< (* disk is full *)
+          (#do delete; common.PassNoSpaceError #);
+     #);
+
+   putb: @EF.putbytes;
+   
+   T: ^text;
+do (BC.name).copy->T[];
+   (*asmlink.binext->T.append->EF.name;*)
+   '.o'->T.append->EF.name;
+   
+   (if false then
+       screen.newline;
+       'Displaying data image for ' -> screen.puttext;
+       EF.name -> screen.putline;
+       mstate.d.display;
+       'Displaying text image for ' -> screen.puttext;
+       EF.name -> screen.putline;
+       mstate.b.display;
+   if);
+   
+   EF.openWrite;
+   SectionStringTable.init;
+   
+   (* '1' -> put; *)
+   EmitHeader;
+   (* '2' -> put; *)
+   EmitSectionStringTable;
+   (* '3' -> put; *)
+   EmitText;
+   (* '4' -> put; *)
+   EmitData;
+   (* '5' -> put; *)
+   EmitSymbolTable;
+   (* '6' -> put; *)
+   EmitStringTable;
+   (* '7' -> put; *)
+   EmitRelText;
+   (* '8' -> put; *)
+   EmitRelData;
+   (* '9' -> put; *)
+   EmitSectionHeaderTable;
+   (* '0' -> put; *)
+   
+   EF.close;
+   
+   
+#)
+

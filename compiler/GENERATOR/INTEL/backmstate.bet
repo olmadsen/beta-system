@@ -1,0 +1,1970 @@
+ORIGIN  '../backend';
+INCLUDE '../image';
+INCLUDE 'intel';
+
+(*
+ * helper patterns for slots in intelbackend.bet.
+ * For documentation on binary code generation for intel, see
+ * ../../DOC/IntelBinary.html.
+ *)
+
+--backendatt:attributes--
+
+(* TRACING: change this to disable/enable tracing *)
+intel_trace: (# exit true #);
+
+TODO: 
+  (# t:^Text
+  enter t[]
+  do 
+     (if t[]=NONE then
+         'TODO: (with no arg)'->T[];
+         (dumpStack, 'TODO trace') -> stop;
+     if);
+     (if intel_trace then
+         'TODO: '->screen.putText;
+         '[B.LIP='->puttext; 
+         mstate.b.lip->puthex; 
+         ', D.LIP='->puttext;
+         mstate.d.lip->puthex;
+         ']: '->puttext;
+         t[]->screen.putLine;
+      else
+         'TODO: '->puttext;
+         t[]->putline;
+     if)
+  #);
+
+putval: 
+  (# name: ^text; val: @integer; 
+  enter (name[], val)
+  do ' '->put;
+     name[] -> puttext;
+     '='->put;
+     val ->putint;
+     INNER;
+  #);
+putreg: putval
+  (# 
+  do (if val
+         // eax then ' (EAX)'->puttext;
+         // ecx then ' (ECX)'->puttext;
+         // edx then ' (EDX)'->puttext;
+         // ebx then ' (EBX)'->puttext;
+         // esp then ' (ESP)'->puttext;
+         // ebp then ' (EBP)'->puttext;
+         // esi then ' (ESI)'->puttext;
+         // edi then ' (EDI)'->puttext;
+     if);
+  #);
+putfreg: putval
+  (# 
+  do ' (ST['->puttext;
+     val -> putint;
+     '])' -> puttext;
+  #);
+putbool: 
+  (# name: ^text; val: @boolean; 
+  enter (name[], val)
+  do ' '->put;
+     name[] -> puttext;
+     '='->put;
+     (if val then '1'->put else '0'->put if);
+  #);
+
+check_size:
+  (# size: @integer;
+  enter size
+  do (if size=0 then
+         4 -> size;
+         (dumpstack, 'WARNING: size=0 corrected to size=4') -> stop;
+     if);
+  exit size
+  #);
+
+(* Number of relocation types used - see image.bet for constants *)
+markMax:      (# exit 5 #);
+
+textalign: (# exit 4 #);
+dataalign: (# exit 4 #);
+
+
+(* "defines" for conditional code *)
+resolve_local_calls: (# exit true #);
+call_chkra_unconditionally: (# exit false #);
+
+
+(* Tracing/debug stuff *)
+comment: 
+  (# T: ^text 
+  enter T[] 
+  do (if intel_trace then
+         '== trace: [B.LIP='->puttext; 
+         mstate.b.lip->puthex; 
+         ', D.LIP='->puttext;
+         mstate.d.lip->puthex;
+         ']: '->puttext;
+         T[]->putline;
+     if)
+  #);
+
+dumpR: (# (* <<SLOT DumpR: descriptor>>;*) #);
+
+isGnu:       (# exit common.targetMachineId = common.nti_gnu #);
+isBorland:   (# exit common.targetMachineId = common.nti_bor #);
+isMicrosoft: (# exit common.targetMachineId = common.nti_ms  #);
+isLinux:     (# exit common.targetMachineId = common.linux   #);
+isX86sol:    (# exit common.targetMachineId = common.x86sol  #);
+
+isNti: (# exit isGnu or isMicrosoft #);
+
+datareg:(# exit 1 #);
+Adrreg:(# exit 2 #);
+Floatreg:(# exit 3 #);
+Primreg:(# exit 4 #);
+
+eoo: (* end-of-operation*)(# do mstate.b.eoo #);
+B_emitbyte: (# enter mstate.b.emitbyte #);
+emithalf: (# enter mstate.b.emithalf #);
+emit2bytes: (# enter mstate.b.emit2bytes #);
+emit3bytes: (# enter mstate.b.emit3bytes #);
+emitlong: (# enter mstate.b.emitlong #);
+emitrel8off: (# enter mstate.b.emitrel8off #);
+emitrel32off: (# enter mstate.b.emitrel32off #);
+emitAluImmReg: (# enter mstate.b.emitAluImmReg #);
+emitALUinstImm: (# enter mstate.b.emitALUinstImm #);
+emitALUinstReg: (# enter mstate.b.emitALUinstReg #);
+emitALUinstText: (# enter mstate.b.emitALUinstText #);
+emitCondJmp: (# enter mstate.b.emitCondJmp #);
+emitSHIFTreg: (# enter mstate.b.emitSHIFTreg #);
+emitSHIFTimm: (# enter mstate.b.emitSHIFTimm #);
+emitINVreg: (# enter mstate.b.emitINVreg #);
+emitsib: (# enter mstate.b.emitsib #);
+emitinc: (# enter mstate.b.emitinc #);
+emitdec: (# enter mstate.b.emitdec #);
+emitCmpRegReg: (# enter mstate.b.emitCmpRegReg #);
+emitCmpImmReg: (# enter mstate.b.emitCmpImmReg #);
+emitMovRegMemIndirect: (# enter mstate.b.emitMovRegMemIndirect #);
+emitJsrT: (# enter mstate.b.emitJsrT #);
+emitSwapFreg: (#do 1 -> fxch -> emit2bytes; eoo #);
+emitMovAddressToReg: (# enter mstate.b.emitMovAddressToReg #);
+emitMovAddressInxToReg: (# enter mstate.b.emitMovAddressInxToReg #);
+emitPopCallStack: (# enter mstate.b.emitPopCallStack #);
+
+(* Size = 4 assumed in the ones below *)
+emitMovlRegText: (# enter mstate.b.emitMovlRegText #);
+emitMovlImmReg: (# enter mstate.b.emitMovlImmReg #);
+emitMovlImmText: (# enter mstate.b.emitMovlImmText #);
+emitMovlTextReg: (# enter mstate.b.emitMovlTextReg #);
+
+swapFreg: booleanValue
+  (# fr1, fr2: @integer;
+  enter (fr1, fr2)
+  do (fr1>fr2) -> value;
+     (if intel_trace then
+         (if value then
+             'swapFstack: '-> puttext;
+             ('fr1',fr1) -> putval;
+             ('fr2',fr2) -> putval;
+         if);
+     if);
+  #);
+
+PushBusyRegDuring:
+  (# reg: @integer;
+     busy: @boolean;
+  enter reg
+  do calculateLiveData;
+     reg -> liveData.has -> busy;
+     (if busy then
+         doPush(# do reg -> _pushl_r -> B_emitbyte; #);
+     if);
+     INNER;
+     (if busy then
+         doPop(# do reg -> _popl_r -> B_emitbyte; #);
+     if);
+  #);
+
+TstFloat:
+  (# 
+  do (if intel_trace then 'TstFloat' -> comment if);
+     eax -> PushBusyRegDuring
+     (# 
+     do (* Test for unordered result - see chapter 17.4, page 17.4 in 
+         * "Intel486 Microprocessor Family - Programmer's Reference manual, 
+         * Intel 1992, ISBN 1-55512-159-4"
+         *)
+        fstsw_ax -> emit2bytes; (* move FP condition codes to ax *)
+        sahf -> B_emitbyte; (* store ah into flags *)
+        jp -> emit2bytes; (* jump to UoFV if parity (ie. if 0x400 is set in ax) *)
+        ('UoFV'->mstate.Cidentifier,jmpMark)->mstate.b.mark;
+        mstate.B.LIP -> emitrel32off;
+        INNER TstFloat;
+     #);
+  #);
+SynchronizeFPU:
+  (* Causes the processor to check for and handle pending, unmasked, 
+   * floating-point exceptions before proceeding. 
+   * FWAIT is an alternate mnemonic for the WAIT.
+   * This instruction is useful for synchronizing exceptions 
+   * in critical sections of code. Coding a WAIT instruction 
+   * after a floating-point instruction insures that any unmasked 
+   * floating-point exceptions the instruction may raise are handled
+   * before the processor can modify the instruc-tion's results.
+   * See the section titled "Floating-Point Exception Synchronization"
+   * in Chapter 7 of the Intel Architecture Software Developer's Manual,
+   * Volume 1, for more information on using the WAIT/FWAIT instruction.
+   *)
+  (# do fwait -> B_emitbyte #);
+
+
+saveProfStackTop:
+  (#
+  do (esp, 'ProfBetaStackTop'->mstate.Cidentifier)
+       -> mstate.b.emitMovlRegText;
+     mstate.b.eoo;
+  #);
+
+IndirectReg:
+  (# RegNo, Offset: @integer; 
+  enter (RegNo, Offset)
+  do (if intel_trace then 'IndirectReg' -> comment;
+         ('reg',regno) -> putreg;
+         ('offset', offset)->putval;
+         newline;
+     if);
+     (if intel_trace then dumpR if);
+     (* Assuming previous emit has put out mod_rm byte containing TTT *)
+     (if offset=0 then
+         (* e.g (%edx) *)
+         (if RegNo=ebp then
+             (* Not possible using ea_ind *)
+             ea_ind_d8+ebp -> mstate.b.patchLastByte;
+             0 -> B_emitbyte;
+          else
+             (* ea_ind is 0 *)
+             RegNo -> mstate.b.patchLastByte;
+             (if regno=esp then 
+                 (* yet another special case: (%esp) uses s-i-b with "no index reg" *)
+                 2x00100100 -> B_emitbyte;
+                 (* equivalent to (0, no_index, esp) -> emitsib *)
+             if);
+         if)
+      else
+         (if offset->mstate.is8bit then
+             (* e.g. 12(%edx) *)
+             ea_ind_d8+(RegNo) -> mstate.b.patchLastByte;
+             (if regno=esp then
+                 (* yet another special case: 4(%esp) uses s-i-b with "no index reg" *)
+                 2x00100100 -> B_emitbyte;
+                 (* equivalent to (0, no_index, esp) -> emitsib *)
+             if);
+             offset -> B_emitbyte;
+          else
+             (* e.g. 2356(%edx) *)
+             ea_ind_d32+(RegNo) -> mstate.b.patchLastByte;
+             (if regno=esp then
+                 (* yet another special case: 4(%esp) uses s-i-b with "no index reg" *)
+                 2x00100100 -> B_emitbyte;
+                 (* equivalent to (0, no_index, esp) -> emitsib *)
+             if);
+             offset -> emitlong;
+         if);
+     if); 
+     (if intel_trace then newline; 'end IndirectReg' -> comment if);
+     (if intel_trace then dumpR if);
+  #);
+IndexReg:
+  (# RegNo, IndexReg, Scale, Offset: @integer; 
+  enter (RegNo, IndexReg, Scale, Offset)
+  do (if intel_trace then 
+         'IndexReg' -> comment;
+         ('reg',regno) -> putreg;
+         ('indexReg', indexreg)->putreg;
+         ('scale', scale)->putval;
+         ('offset', offset)->putval;
+         newline;
+
+     if);
+     (* Assuming previous emit has put out mod_rm byte containing TTT *)
+     (* inline log_2(scale) *)
+     (if scale
+      // 1 then 0 -> scale
+      // 2 then 1 -> scale
+      // 4 then 2 -> scale
+      // 8 then 3 -> scale
+      else
+         cError(# do 'IndexReg: unknown scale' -> T #);
+     if);
+     (if offset=0 then
+         (* e.g (%edx, %eax, 4) *)
+         (if RegNo=ebp then
+             (* not possible using ea_sib *)
+             ea_sib_d8 -> mstate.b.patchLastByte; (* mod_rm *)
+             (scale, IndexReg, RegNo)-> emitsib; (* s-i-b *)
+             0 -> B_emitbyte;
+          else
+             ea_sib -> mstate.b.patchLastByte; (* mod_rm *)
+             (scale, IndexReg, RegNo)-> emitsib; (* s-i-b *)
+         if);
+      else
+         (if offset->mstate.is8bit then
+             (* e.g. 12(%edx, %eax, 4) *)
+             ea_sib_d8 -> mstate.b.patchLastByte; (* mod_rm *)
+             (scale, IndexReg, RegNo)-> emitsib; (* s-i-b *)
+             offset -> B_emitbyte;
+          else
+             (* e.g. 2356(%edx, %eax, 4) *)
+             ea_sib_d32 -> mstate.b.patchLastByte; (* mod_rm *)
+             (scale, IndexReg, RegNo)-> emitsib; (* s-i-b *)
+             offset -> emitlong;
+         if);
+     if);
+     (if intel_trace then newline; 'end IndexReg' -> comment if);
+  #);
+
+
+IntelImage: Image
+  (* Since the inherited buffer is an integer buffer, and we have to
+   * use byte offsets, all emit operations are implemented using
+   * %get and %put operators.
+   *)
+  (# EntryPointElement::< EntryPoints.ElementType;
+     
+     (*  LIP:0 .. LIP=3 are in buffer[1];
+      *  LIP:4 .. LIP=7 are in buffer[2];
+      *  ...
+      *)
+     patchLastByte: @
+       (# patch: @char;
+          addr: @integer;
+       enter patch
+       do (if intel_trace then
+              (*<<SLOT TracePatchLastByte: descriptor>>*)
+          if);
+          @@buffer[1]-1+LIP -> addr;
+          ((%getByteAt(addr)) %bor patch) %putByteAt(addr)
+       #);
+     emitByte: @ 
+       (# val: @integer
+       enter val
+       do (if intel_trace then
+              (*<<SLOT TraceEmitByte: descriptor>>*)
+          if);
+          (if LIP+1 > 4*buffer.range then
+              buffer.range->buffer.extend;
+          if);
+          (val) %putByteAt(@@buffer[1]+LIP);
+          LIP+1 -> LIP;
+       #);
+     emitlong: @
+       (# val: @integer
+       enter val
+       do (if intel_trace then
+              (*<<SLOT TraceEmitLong: descriptor>>*)
+          if);
+          (if LIP+4 > 4*buffer.range then
+              buffer.range->buffer.extend; 
+          if);
+          (val) %putLongAt (@@buffer[1]+LIP);
+          LIP + 4 -> LIP; 
+       #);
+     emitHalf: @
+       (# val: @integer
+       enter val
+       do (if intel_trace then
+              (*<<SLOT TraceEmitHalf: descriptor>>*)
+          if);
+          (if LIP+2 > 4*buffer.range then
+              buffer.range->buffer.extend ; 
+          if);
+          val %putShortAt (@@buffer[1]+LIP);
+          LIP+2->LIP;
+       #);
+     emit2bytes: @ 
+       (# b1, b2: @char;
+       enter (b1, b2)
+       do (if intel_trace then
+              (*<<SLOT TraceEmit2Bytes: descriptor>>*)
+          if);
+          (if LIP+2 > 4*buffer.range then
+              buffer.range->buffer.extend; 
+          if);
+          ((b2 %sll 8) %bor b1) %putShortAt (@@buffer[1]+LIP);
+          LIP+2->LIP;
+       #);
+     emit3bytes: @ 
+       (# b1, b2, b3: @char;
+          addr: @integer;
+       enter (b1, b2, b3)
+       do (if intel_trace then
+              (*<<SLOT TraceEmit3Bytes: descriptor>>*)
+          if);
+          (if LIP+3 > 4*buffer.range then
+              buffer.range->buffer.extend ; 
+          if);
+          @@buffer[1]+LIP -> addr;
+          ((b2 %sll 8) %bor b1) %putShortAt addr;
+          b3                    %putByteAt  (addr+2);
+          LIP+3->LIP;
+       #);
+     align:<
+       (# v: @integer;
+          val:<integervalue;
+          newLIP: @integer;
+       enter v
+       do (if v
+           // 2 
+           // 4 
+           // 8 then (LIP+v-1) %band %bnot (v-1) -> newLIP;
+           else
+              '\n****** align NOT 2, 4 or 8 '->putLine
+          if);
+          (for newLIP-LIP repeat val -> emitbyte for)
+       #);
+     mark: @
+       (# T: ^text; 
+          type: @integer; 
+          E: ^EntryPointInfo;
+       enter (t[],type)
+       do (* Prevent calling operations from surviewing because of
+           * reference from this table: Take a copy of the entered
+           * text.
+           *)
+          (if t[]<>NONE then t.copy -> t[]; if);
+          (if (markTop+1->markTop) > marks.range then
+              marks.range->marks.extend;
+              types.range->types.extend;
+              epElm.range->epElm.extend; 
+          if);
+          (* define address to relocate (r_offset) *)
+          LIP ->marks[markTop];
+          (* define type of relocation to perform (r_info) *)
+          type->types[markTop];
+          (* define symbol of relocation (r_info) *)
+          (if type
+           // entryDefMark then
+              (* FIXME:
+               * addDef is called in CODEmachine for all entry points 
+               * T117FOO, M117FOO, etc.
+               * For labels BETA_code1 addDef is NOT
+               * called - i.e. we must call here.
+               *)
+              (* FIXME: why does this give link errors? *)
+              (* T.copy-> entrypoints.find
+               * (# notfound::
+               *      (# 
+               *      do (E.T[],not mstate.inCode)
+               *           ->entryPoints.addDef->epElm[markTop][];
+               *      #)
+               * #);
+               *)
+              (T[],not mstate.inCode)->entryPoints.addDef->epElm[markTop][]
+           // datamark then (* hack *)
+              none->epElm[markTop][];
+              noOfRel +1 -> noOfRel
+           // codemark then (* hack *)
+              none->epElm[markTop][];
+              noOfRel +1 -> noOfRel
+           // wordMark then
+              T.copy->entryPoints.find
+              (# notFound:: (# do E[]->entryPoints.insert; true->E.data #)#)
+                -> epElm[markTop][];
+              noOfRel +1 -> noOfRel
+           else
+              T.copy->entryPoints.find
+              (# notFound:: (# do E[]->entryPoints.insert #)#) 
+                -> epElm[markTop][];
+              noOfRel +1 -> noOfRel
+          if)
+       #);
+  #);
+
+localLabPutWithReloc:
+  (* Used for LocalLabs USES that express absolute adresses,
+   * like in "leal L1" and "fldl L1".
+   *)
+  (# labno, type, off, offset, patch: @integer;
+     isAsciiTextAdr: @boolean;
+     useSiteData, defSiteData: @boolean;
+     mark: @integer;
+     asText:
+       (# exit labno->localLabText #);
+  enter (labno, type, isAsciiTextAdr, off, offset, patch)
+  do 
+     (if intel_trace then
+         'localLabPutWithReloc: '->comment;
+         astext -> puttext;
+         ('type',type)->putval;
+         ('isAsciiText(data)',isAsciiTextAdr) -> putbool;
+         ('off',off)->putval;
+         ('offset',offset)->putval;
+         ('patch',patch)->putval;
+         newline;
+     if);    
+     
+     (if patch <> 0 then
+         (* last byte in code segment should be patched - typically with
+          * ea_d32 to mark that this is an absolute 32 bit value.
+          *)
+         patch -> mstate.b.patchLastByte;
+     if);
+     
+     (if type = interFragment then
+         asText -> export;
+         (asText,entryDefMark) -> mstate.b.mark;
+      else
+         (if isLinux then
+             (* platform supports relocation .data+NN and .text+NN *)
+             not mstate.inCode    -> useSiteData;
+             isAsciiTextAdr       -> defSiteData;
+             (labno, useSiteData) -> mstate.labs.use -> off;
+             (if defSiteData then
+                 (* off relative to .data *)
+                 datamark -> mark;
+              else
+                 (* off relative to .text *)
+                 codemark -> mark;
+             if);
+             (if useSiteData then
+                 (NONE, mark) -> mstate.d.mark;
+              else
+                 (NONE, mark) -> mstate.b.mark;
+             if);
+          else
+             (* platform does not support relocation .data+NN and .text+NN *)
+             (if type
+              // dataToCode
+              // codeToData
+              // codeLocal then
+                 (asText,entryDefMark) -> mstate.d.mark
+              else
+                 (if isAsciiTextAdr then
+                     (* L is in the data segment *)
+                     (asText,entryDefMark)->mstate.d.mark
+                  else
+                     (if true (*betaLabel*) then
+                         (* as in L: (if ... leave L ; ...if)
+                          * or start label of  case-imp
+                          *)
+                         (asText,entryDefMark)->mstate.b.mark;
+                      else
+                         'localLabPutWithReloc: Unknown type' ->putline;
+                     if)
+                 if);
+             if)
+         if);
+     if);
+     
+     (* Add the off and the userspecified offset from the lab and
+      * put this value into the cell, which has now been marked with
+      * relocation 
+      *)
+     (if mstate.inCode then
+         (* The use-site is in code segment *)
+         off+offset -> mstate.b.emitlong;
+      else
+         (* The use-site is in data segment *)
+         off+offset -> mstate.d.emitlong;
+     if);
+     
+     eoo;
+  #);
+localLabText:
+  (# T: ^text; labNo: @integer
+  enter labNo
+  do 'L'->T[];
+     labNo->T.putInt
+  exit T[]
+  #);
+stRegInLab:
+  (# reg: @integer;
+     L: ^backendLocalLab;
+  enter (reg, L[])
+  do (if reg=eax then
+         (* special opcode for eax *)
+         movl_eax_m -> B_emitbyte;
+         (L.labno, L.type, L.isTextAdr, 0, 0, 0) -> LocalLabPutWithReloc;
+
+      else
+         reg -> movl_rm -> emit2bytes;
+         (L.labno, L.type, L.isTextAdr, 0, 0, ea_d32) -> LocalLabPutWithReloc;
+     if);
+  #);
+ldRegFromLab:
+  (# reg: @integer;
+     L: ^backendLocalLab;
+  enter (L[], reg)
+  do (if reg=eax then
+         movl_m_eax -> B_emitbyte;
+         (L.labno, L.type, L.isTextAdr, 0, 0, 0) -> LocalLabPutWithReloc;
+      else
+         reg -> movl_mr -> emit2bytes;
+         (L.labno, L.type, L.isTextAdr, 0, 0, ea_d32) -> LocalLabPutWithReloc;
+     if);
+  #);
+
+doPush:
+  (# 
+  do mstate.numPush+1 -> mstate.numPush;
+     (if intel_trace then
+         '==doPush#'->puttext;
+         mstate.numPush -> putint; newline;
+     if);
+     INNER;
+  #);
+doPop:
+  (# 
+  do (if intel_trace then
+         '==doPop#'->puttext;
+         mstate.numPush -> putint; newline;
+     if);
+     mstate.numPush-1 -> mstate.numPush;
+     (if mstate.numPush<0 then
+         (dumpstack, '******** Pop underflow! *********') -> stop;
+     if);
+     INNER;
+  #);
+pushPopCheck:
+  (# num: @integer;
+  enter num
+  do (if mstate.numPush<>num then
+         '***********\n\nPush Count is: '->puttext; mstate.numPush->putint; 
+         '; should be: '->puttext;
+         num -> putint; newline;
+         (dumpstack, 'pushPopCheck failed!\n\n***********') -> stop;
+     if);
+  #);
+
+pushProtectTag:
+  (* Constant tag for protecting N 4-byte longs on the machine stack
+   * from being considered by GC. When pushed, these N longs AND the two longs
+   * constituting the tag are skipped.
+   *)
+  (# N: @integer;
+  enter N
+  do (if N>0 then
+         doPush(# do pushl_i8 -> B_emitbyte; -(N+4) -> B_emitbyte; #);
+     if);
+  #);
+
+getExternalResult:
+  (# I: ^backendInstruction;
+     extType: (# exit i.imm #);
+     parsize: (# exit i.size #);
+     exitType: (# exit i.type #);
+     exitSize: (# exit i.length #);
+     
+     copyEAX:
+       (# 
+       do (if I.writeReg<>EAX then
+              (EAX, I.writeReg) -> movl_rr -> emit2bytes;
+          if)
+       #);
+     
+  enter I[]
+  do (if intel_trace then 'getExternalResult' -> comment if);
+     INNER;
+     (if extType 
+      // 1 (*sematt.cExt OOPS*) then
+         (* RedHat 6.2 *)
+         (if exitSize = 0 then
+             (parSize,exitSize)->emitPopCallStack 
+          else
+             (parSize-1,exitSize)->emitPopCallStack
+         if)
+      // 7 (*sematt.callStd *) then
+         (if isLinux or isX86sol then
+             (* RedHat 6.2 *)
+             (if exitSize = 0 then
+                 (parSize,exitSize)->emitPopCallStack 
+              else
+                 (parSize-1,exitSize)->emitPopCallStack
+             if)
+          else  (* Nti uses pascal: callee has pop'ed arguments.
+                 * However, if exitSize > 0 then a struct is returned
+                 * and callee has NOT popped the stack space
+                 * allocated for the returned struct. We thus
+                 * pop the returned struct.
+                 * OBS! The caller needs to access the returned struct.
+                 * Popping the stack is thus dangerous, since new values
+                 * may be pushed before the returned struct has been read.
+                 * We probably have to do something about this. 
+                 * Currently we pray that no push is made!!!
+                 *)
+             (if exitSize > 0 then (0,exitSize)->emitPopCallStack if)
+         if)       
+      // 9 (* virtExt *) 
+      // 10 (* dispatchExt *) then 
+         (if isLinux or isX86sol then
+             (* add for the object itself.
+              * Note that parSize+1 would be more correct than exitSize+1
+              * since there is an extra argument (the object). 
+              * It does, however, 
+              * NOT matter, and we don't make such changes close to
+              * freezing a release.
+              * 
+              * 23/7/00: we changed exitSize+1 to parSize+1
+              * And we adapted to Redhat 6.2 conventions for 
+              * return by-value of struct. 
+              * if exitSize > 0 then struc is returned by-value
+              * and there is also an extra argumnet here. This one is
+              * popped by callee
+              *)
+             (* RedHat 6.2 *)
+             (if exitSize = 0 then
+                 (parSize+1,exitSize)->emitPopCallStack 
+              else
+                 (parSize,exitSize)->emitPopCallStack
+             if)
+          else (* Nti uses pascal: callee has pop'ed arguments,
+                * but not a possible returned struct value. See
+                * comment above for callStd.
+                * Note:
+                *       exitSize =  ((byte size of exitDescriptor) div 4) + 1
+                * where 1 is the ref to the struct being pushed as
+                * an extra argument (required by StdC).
+                * exitSize = 1: should never happen
+                *    = 2: 4 bytes struct is returned
+                *    = 3: 8 bytes struct is returned
+                *    = ... gene ral struct is returned
+                * 4- and 8-bytes struct are returened in EAX and EAX/EBX,
+                * i.e no stack-popping is necessary for exitSize <= 3
+                *)
+             (if exitSize > 3 then (0,exitSize-1)->emitPopCallStack if)
+         if);
+      else
+         CError(# do 'GetExternalResult: unknown external kind: '->T; extType->I #);
+     if);
+     (* The following is matched by code in getRegForXres *)
+     esi -> _popl_r -> B_emitbyte;
+     ebp -> _popl_r -> B_emitbyte;
+     restoreRegImpl; (* pop edi, edx *)
+     eoo;
+  #);
+
+
+--backendmstate:descriptor--
+(# numPush: @integer;
+   reg: @ 
+     (# aReg,dReg,aMap,dmap,fMap: [8] @Integer; dMax: @integer;
+        in_memory: (# exit -1 #);
+        unassigned: (# exit 0 #);
+        
+        (* floatReg keeps track of allocation of floating point registers.
+         * The i386, however, has NO floating point registers,
+         * but a stack! The registers are therefore hypothetical.
+         * A FP register represents a value on the FPU stack.
+         * Since the FPU is a stack it is necessary to keep track
+         * of the order of the FP registers on the stack. They are pushed 
+         * in order they are allocated. The array floatMap keep
+         * track of the allocation order of FP registers.
+         * In a given expression, the registers may be allocated
+         * in the order
+         *    fp0, fp1, fp2, fp0
+         * after allocation of fp2, fp0 is released and then allocated
+         * again. The register number can therefore NOT be used to determine
+         * the order on the stack. When a fp-register is allocated, it
+         * is assigned an increasing value kept in floatMap. For the above
+         * sequence we have
+         *    fM[fp0]=1, fM[fp1]=2, fM[fp2]=3, fM[fp0]=4
+         * Given two FP registers, the one with the highest fM number
+         * is on top of the stack. This info is used in swapFreg
+         *)
+        floatReg,
+        floatMap: [8] @ integer; 
+        fMax,floatMapTop: @integer; 
+        float: @
+          (* Handle save and restore of floating point stack.
+           * The strategy is that all registers marked as busy
+           * in mstate.reg.floatReg are poped from float stack and pushed
+           * on call stack. For this to work, register allocation
+           * MUST work properly, i.e. allocation/dealloction/reuse
+           * should be precise.
+           *)
+          (# 
+          #);
+        dummyReg:[100]@integer; (* used by getRegForX /endX*)
+     #);
+   labs: @
+     (# adr: [500] @integer; (* defsite *)
+        top: @integer; 
+        uses: [500] ^loc;
+        isData: @boolean;
+        loc: (# usesite: @integer; (* LIP when used *)
+                fromData: @boolean; (* referenced from data? *)
+                next: ^loc #);
+        def: @
+          (# labno, patchaddr, defvalue: @integer; s: ^loc;
+             isData: @boolean
+          enter(labNo,isData)
+          do (if intel_trace then 
+                 'mstate.labs.def' ->comment;
+                 'L'->put; labNo -> putint; newline;
+             if);
+             (if labno>adr.range then 
+                 labno+adr.range->adr.extend;
+                 labno+uses.range->uses.extend; 
+             if);
+             (if adr[labno]<>0 then
+                 'Locallab redefined!' -> TODO;
+                 (dumpstack, 'Locallab redefined!') -> stop;
+             if);
+             (if isData then
+                 D.LIP -> defvalue;
+              else
+                 b.LIP -> defvalue;
+             if);
+             defvalue -> adr[labno];
+             
+             (* now check if there are any previous undefined
+              * references to lab
+              *)
+             uses[labno][]->s[]; none->uses[labno][];
+             LL: 
+               (if s[] <> none then
+                   (if s.fromdata then
+                       @@D.buffer[1]+s.usesite -> patchaddr;
+                    else
+                       @@B.buffer[1]+s.usesite -> patchaddr;
+                   if);
+                   
+                   (* patch *)
+                   (%getLongAt patchaddr + defvalue) %putLongAt patchaddr;
+                   (* %get above is needed because of the form L1+8 *)
+                   
+                   s.next[]->s[];
+                   restart LL
+               if)
+          #);
+        val:
+          (* return byte position in segment to local label
+           * "lab" if known, otherwise zero.
+           * Nothing is remembered about this "peek".
+           *)
+          (# labno: @integer;
+          enter labNo
+          do (if labno > adr.range then 
+                 labno+adr.range->adr.extend;
+                 labno+uses.range->uses.extend; 
+             if);
+          exit adr[labno]
+          #);
+        use: @
+          (* return byte position in segment to local label "lab".
+           * If local label number labno is not yet defined,
+           * 0 is returned, and the use-site is remembered.
+           * It is then patched when the definition site becomes known.
+           *)
+          (# labno, value: @integer;
+             fromData: @boolean;
+             s: ^loc;
+          enter (labNo, fromData)
+          do (if intel_trace then 'mstate.labs.use: ' ->comment; if);
+             (if labno>adr.range then 
+                 labno+adr.range->adr.extend;
+                 labno+uses.range->uses.extend
+             if);
+             (if adr[labno]=0 then
+                 (* not yet defined, i.e. forward ref *)
+                 &loc[]->s[];
+                 fromData -> s.fromData;
+                 (if fromdata then
+                     D.LIP->s.usesite; 
+                     (if intel_trace then
+                         '\nUse of undefined L'->puttext; labno->putInt; 
+                         ' from .data at:'->puttext; 
+                         D.LIP->puthex; newline;
+                     if);
+                  else
+                     b.LIP->s.usesite; 
+                     (if intel_trace then
+                         '\nUse of undefined L'->puttext; labno->putInt; 
+                         ' from .text at:'->puttext; 
+                         B.LIP->puthex; newline;
+                     if);
+                 if);
+                 0 -> value;
+                 uses[labno][]->s.next[]; 
+                 s[]->uses[labno][];
+              else
+                 (* defined, i.e. backward ref *)
+                 adr[labno]->value
+             if);
+             (if intel_trace then 'mstate.labs.use: L' ->puttext; labno->putint; ': value='->puttext; value->putint; newline; if);
+          exit value
+          #);
+     #);
+
+   (* type conversion patterns. should probably be made attributes of 
+    * mOperand instead.
+    *)
+   
+   is8bit: @
+     (# i: @integer; 
+     enter i
+     exit ((-128 < i) and (i <127))
+     #);
+   
+   is16bit: @
+     (# i: @integer; 
+     enter i
+     exit ((-32768 < i) and (i < 32767))
+     #);
+   Cidentifier: @
+     (* Prepend underscore to id if needed for C identifiers *)
+     (# id: ^text;
+     enter id[]
+     <<SLOT backendCidentifier: dopart>>
+     exit id[]
+     #);
+   Init:
+     (#
+     do 10000 -> B.buffer.new;
+        10000 -> D.buffer.new;
+        strTbl.init; 
+        2->symtabTop; (* 2 first symbols are 'sections' 
+                       * for text and data. elf
+                       * counts from one
+                       *)
+     #);
+   inCode: @boolean;
+   symtabTop: @integer; (* counter for no of symtab entries *)
+   
+   emitCodeToFile: <<SLOT backendemitCodeToFile: descriptor>>;
+   
+   puthex: @
+     (# i: @integer;
+        printf: external
+          (# fmt: [1]@char;
+             val: @integer
+          enter (fmt, val)
+          #);
+     enter i
+     do ('0x%x', i) -> printf;
+     #);
+   (* images: B for code/text, D for data *)
+   B: @ IntelImage
+     (# eoo: 
+          (* end of operation *)
+          (# OldLIP: @integer; (* LIP when eoo was last called *)
+          do (LIP-OldLIP) + IP -> IP;
+             LIP -> OldLIP;
+          #);
+        align:: (# val:: (# do intel_nop->value #)#);
+        emitrel32off: @
+          (# pos: @integer; 
+          enter pos
+          do pos-(LIP+4) -> emitlong;
+          #);
+        emitrel8off: @
+          (# pos: @integer;
+          enter pos
+          do pos-(LIP+1) -> emitbyte;
+          #);
+        emitsib: @
+          (* emit s-i-b byte *)
+          (# scale, inxReg, baseReg: @char
+          enter (scale, inxReg, baseReg)
+          do scale %sll 6 + inxReg %sll 3 + baseReg -> emitbyte;
+          #);
+        erase: @
+          (# num: @integer;
+          enter num
+          do (if intel_trace then
+                 '## erase: ' -> puttext; num -> putint; newline;
+             if);
+             LIP-num->LIP
+          #);
+        emitCallLocal: @
+          (* Call entrypoint in the code segment of THIS fragment *)
+          (# entry: @text
+          enter entry
+          do (if intel_trace then
+                 'emitCallLocal' -> comment;
+             if);
+             call_direct -> emitbyte;
+             (if resolve_local_calls then
+                 entry[] -> entryPoints.getAddr -> emitrel32off;
+              else
+                 (entry[],jmpMark)->mstate.b.mark;
+                 mstate.B.LIP -> emitrel32off;
+             if);
+             eoo;
+          #);
+        emitCallExtern: @
+          (* Call entrypoint in the code segment of ANOTHER fragment *)
+          (# entry: @text
+          enter entry
+          do (if intel_trace then
+                 'emitCallExtern' -> comment;
+             if);
+             call_direct -> emitbyte;
+             (entry[],jmpMark)->mstate.b.mark;
+             mstate.B.LIP -> emitrel32off; 
+             eoo;
+          #);
+        emitJmpLocal: @
+          (* Jump to entrypoint in the code segment of THIS fragment *)
+          (# entry: @text; addr: @integer;
+          enter entry
+          do (if intel_trace then
+                 'emitJmpLocal' -> comment;
+             if);
+             jmp_direct -> emitbyte;
+             (if resolve_local_calls then
+                 entry[] -> entryPoints.getAddr -> addr;
+                 (if ((addr<>0) and ((addr-(LIP+1(*byteoff*)))->is8bit)) then
+                     (* short backward jump *)
+                     (if intel_trace then
+                         'Optimized short backward jump from LIP='->puttext;
+                         LIP-1->puthex;
+                         ' to entry '->puttext;
+                         entry[] -> putline;
+                     if);
+                     (* erase jmp_direct *)
+                     1 -> erase;
+                     jmp_short -> emitbyte;
+                     addr -> emitrel8off;
+                  else
+                     addr->emitrel32off;
+                 if)
+              else
+                 (entry[],jmpMark)->mstate.b.mark;
+                 mstate.B.LIP -> emitrel32off; 
+             if);
+             eoo;
+          #);
+        emitJmpExtern: @
+          (* Jump to entrypoint in the code segment of ANOTHER fragment *)
+          (# entry: ^text
+          enter entry[]
+          do (if intel_trace then
+                 'emitJmpExtern' -> comment;
+             if);
+             jmp_direct -> emitbyte;
+             (entry[],jmpMark)->mstate.b.mark;
+             mstate.B.LIP -> emitrel32off; 
+             eoo;
+          #);
+        emitJsrT: @
+          (# id: ^text;
+          enter id[]
+          do (if common.switch[87] 
+                 and (id.length > 0)
+                 and (id.T[1] <> '_')
+                 and (id.T[1] <> 'M')
+                 and (id.T[1] <> 'G') then
+                 (if TRUE
+                  //'AttBC' -> id.equal
+                  //'CopyCT' -> id.equal
+                  //'TraceXres' -> id.equal
+                  //'ChkRA_EBP' -> id.equal
+                  //'ChkRA_ESI' -> id.equal
+                     (* //'ChkRA' -> id.equal *)
+                  //'doGC' -> id.equal
+                  //'BetaError' -> id.equal
+                  //'AlloSICB' -> id.equal then
+                     saveProfStackTop;
+             if)if);
+             id -> emitCallExtern;
+          #);
+        emitinc: @
+          (# regF, size: @integer;
+          enter (regF, size)
+          do (if size
+              // 1 then
+                 (inc_ttt, regF) -> byoneb_r -> emit2bytes;
+              // 2 then
+                 op_size_prefix -> emitbyte;
+                 (inc_ttt, regF) -> _byonel_r -> emitbyte;
+              // 4 then
+                 (inc_ttt, regF) -> _byonel_r -> emitbyte;
+             if);
+          #);
+        emitdec: @
+          (# regF, size: @integer;
+          enter (regF, size)
+          do (if size
+              // 1 then
+                 (dec_ttt, regF) -> byoneb_r -> emit2bytes;
+              // 2 then
+                 op_size_prefix -> emitbyte;
+                 (dec_ttt, regF) -> _byonel_r -> emitbyte;
+              // 4 then
+                 (dec_ttt, regF) -> _byonel_r -> emitbyte;
+             if);
+          #);
+        emitINVreg: @
+          (* Implements NEG and NOT on registers.
+           * No special opcodes for eax operands.
+           *)
+          (# TTT: @char;
+             regF: @integer;
+             size: @integer;
+          enter (TTT, regF, size)
+          do (if intel_trace then 'emitINVreg' -> comment if);
+             size -> check_size -> size;
+             (if size=2 then op_size_prefix -> emitbyte; if);
+             (if size 
+              // 1 then
+                 (TTT, regF) -> invb_r -> emit2bytes
+              // 2 
+              // 4 then
+                 (TTT, regF) -> invl_r -> emit2bytes
+             if)
+          #);  
+        GetCL:
+          (# regF, countRegF: @integer;
+             r: @integer;
+             ecxInUse, countIsECX, regIsECX: @boolean;
+          enter (regF, countRegF)
+          do 
+             (if intel_trace then '== GetCL' -> comment if);
+             calculateLiveData;
+             ecx -> liveData.has -> ecxInUse;
+             (countRegF = ECX) -> countIsECX;
+             (regF = ECX) -> regIsECX;
+             (if regIsECX then
+                 (* Register to shift is ECX, which is needed for shift count.
+                  * Swap regF and count register.
+                  *)
+                 (if intel_trace then 'GetCL: swap' -> putline if);
+                 (if countIsECX then
+                     (failuretrace, 'GetCL: reg=count=exc') -> stop;
+                 if);
+                 (if countRegF=EAX then
+                     ECX -> xchgl_r_eax -> B_emitbyte 
+                  else
+                     (countRegF, regF) -> xchgl_rr -> emit2bytes;
+                 if);
+                 true -> countIsECX;
+                 countRegF -> r;
+              else
+                 regF -> r;
+             if);
+             (if not countIsECX then (* Action needed *)
+                 (if ecxInUse then 
+                     (* Need push, pop *)
+                     doPush(# do ecx -> _pushl_r -> B_emitbyte; #);
+                 if);
+                 (* Load shiftCountOp to ECX *)
+                 (countRegF, ecx) -> movl_rr -> emit2bytes;
+             if);
+             INNER (* shift register number r *);
+             (if regIsECX then
+                 (* movl cheaper than xchl *)
+                 (countRegF, regF) -> movl_rr -> emit2bytes;
+             if);
+             (if (not countIsECX) and (ecxInUse) then
+                 doPop(# do ecx -> _popl_r -> B_emitbyte; #);
+             if);
+          #);
+        emitSHIFTreg: @
+          (* Implement shift/rotate of regF by regOp for
+           * ROL, ROR, SAL, SAR, SHL, SHR.
+           * No special opcodes for eax operands.
+           *)
+          (# 
+             TTT: @char;
+             regF: @integer;
+             regCt: @integer;
+          enter (TTT, regF, regCt)
+          do (if intel_trace then 'emitSHIFTreg' -> comment if);
+             (* shift regF by regCt loaded to CL *)
+             (regF, regCt) -> GetCL(# do (TTT, r) -> shiftl_rc -> emit2bytes #)
+          #);
+        emitSHIFTimm: @
+          (* Implement shift/rotate of regF by immOp for
+           * ROL, ROR, SAL, SAR, SHL, SHR.
+           * No special opcodes for eax operands.
+           *)
+          (# 
+             TTT: @char;
+             regF: @integer;
+             immOp: @integer;;
+          enter (TTT, regF, immOp)
+          do (if intel_trace then '== emitSHIFTimm' -> comment if);
+             (* shift regF by immediate immOp *)
+             (if immOp=1 then
+                 (TTT, regF) -> shiftl_r1 -> emit2bytes;
+              else
+                 (if immOp -> is8bit then
+                     (TTT, regF) -> shiftl_ri8 -> emit2bytes;
+                     immOp -> emitbyte;
+                  else 
+                     'emitSHIFTimm: Shift by constant>255' -> putline;
+                 if);
+             if)
+          #);
+        emitCmpRegReg: @
+          (# regF1, regF2, size: @integer;
+          enter (regF1, regF2, size)
+          do (if size=1 then
+                 (regF1, regF2) -> cmpb_rr -> emit2bytes;
+              else
+                 (if size=2 then op_size_prefix -> mstate.b.emitbyte if);
+                 (regF1, regF2) -> cmpl_rr -> emit2bytes;
+             if);
+          #);
+
+        emitCmpImmReg: @
+          (* Emit "cmp imm, regF" checking for special opcodes to use
+           * for eax.
+           * PRECONDITION: if size=2 then op_size_prefix is already emitted.
+           *)
+          (# imm: @integer;
+             regF: @integer;
+             size: @integer;
+          enter (imm, regF, size)
+          do (if size=1 then
+                 (if (imm->is8bit) then
+                     (if imm=0 then
+                         (* Compare reg with 0: here we can use the TEST
+                          * instruction, since if you AND a value with itself,
+                          * and that sets the zero flag, the value was zero. The
+                          * test instruction fills less than CMP with 0, do not
+                          * cause AGI, and is pairable on the pentium
+                          *)
+                         (regF, regF) -> testb_rr -> emit2bytes;
+                      else
+                         (if regF = eax then
+                             (* special case *)
+                             cmpb_i_al -> emitbyte;
+                          else
+                             (* no need to sign extend *)
+                             regF -> cmpb_ir -> emit2bytes;
+                         if);
+                         imm %band 0xff -> emitbyte;
+                     if);
+                  else
+                     'emitCmpImmReg: size=1 and imm not 8 bit'->putline;
+                 if)
+              else
+                 (if (imm->is8bit) then
+                     (if imm=0 then
+                         (* Compare reg with 0: here we can use the TEST
+                          * instruction, since if you AND a value with itself,
+                          * and that sets the zero flag, the value was zero. The
+                          * test instruction fills less than CMP with 0, do not
+                          * cause AGI, and is pairable on the pentium
+                          *)
+                         (regF, regF) -> testl_rr -> emit2bytes;
+                      else
+                         regF -> cmpl_sir -> emit2bytes;
+                         imm %band 0xff -> emitbyte;
+                     if);
+                  else
+                     (if regF=eax then
+                         (* special case *)
+                         cmpl_i_eax -> emitbyte;
+                      else
+                         regF -> cmpl_ir -> emit2bytes;
+                     if);
+                     (if size
+                      // 2 then imm -> emithalf;
+                      // 4 then imm -> emitlong;
+                      else
+                         'emitCmpImmReg: bad size' -> putline
+                     if);
+                 if)
+             if)
+          #);
+        emitMovRegMemIndirect:
+          (# readReg, writeReg, writeOffset, size: @integer;
+          enter (readReg, writeReg, writeOffset, size)
+          do (if size = 2 then op_size_prefix -> emitbyte if);
+             (if size = 1 then
+                 readReg -> movb_rm -> emit2bytes;
+              else
+                 readReg -> movl_rm -> emit2bytes;
+             if);
+             (writeReg,writeOffSet) -> IndirectReg; 
+          #);
+        emitMovAddressToReg:
+          (# I: ^backendInstruction
+          enter I[]
+          do (if intel_trace then 
+                 'MovAddressToReg'->comment; 
+                 ('writereg',I.writereg) -> putreg;
+                 ('readreg',I.readreg) -> putreg;
+                 ('readoffset',I.readoffset) -> putval;
+                 ('size',I.size) -> putval;
+                 ('signed',I.signed) -> putbool;
+                 newline;
+             if);
+             (if I.size
+              // 1 then
+                 (if I.signed then
+                     I.writeReg -> movsxbl_mr -> emit3bytes;
+                  else
+                     I.writeReg -> movzxbl_mr -> emit3bytes;
+                     (* FIXME: Use xor+movb here instead? *)
+                 if);
+                 (I.readReg,I.readOffSet) -> IndirectReg
+              // 2 then
+                 (if I.signed then
+                     (* Not easy to signextend in a cheap way, so
+                      * we use the special instruction.
+                      *)
+                     I.writeReg -> movsxwl_mr -> emit3bytes;
+                     (I.readReg,I.readOffSet) -> IndirectReg
+                  else
+                     (* movzxwl_mr not by default used for unsigned load 
+                      * of 16 bit, since it is unpairible on Pentium.
+                      * And the zero extension is cheap to do using a
+                      * clear (xor).
+                      * Furthermore xor+movw fills the same in bytes
+                      * as movzxwl.
+                      * However if the writeReg is the same register
+                      * as either the readReg, the movzxwl_mr
+                      * must be used, since we cannot then clear the writeReg
+                      * prior to the move.
+                      *)
+                     (if (I.writeReg<>I.readReg) then
+                         (* clear *)
+                         (xor_ttt, I.writeReg, I.writeReg)->alul_rr 
+                           -> emit2bytes; 
+                         (* movw *)
+                         op_size_prefix -> B_emitbyte;
+                         I.writeReg -> movl_mr -> emit2bytes;
+                      else
+                         I.writeReg -> movzxwl_mr -> emit3bytes;
+                     if);
+                     (I.readReg,I.readOffSet) -> IndirectReg
+                 if);
+              // 4 then
+                 I.writeReg-> movl_mr -> emit2bytes;
+                 (I.readReg,I.readOffSet) -> IndirectReg
+              else
+                 'MovAddressToReg: unknown size: '-> puttext;
+                 I.size -> putint;
+                 newline;
+             if);
+             (if intel_trace then 'end MovAddressToReg' -> comment if)
+          #);
+        emitMovAddressInxToReg:
+          (# I: ^backendInstruction
+          enter I[]
+          do (if intel_trace then 'MovAddressInxToReg'->comment;
+                 ('ReadReg', I.readReg) -> putreg;
+                 ('ReadReg2', I.readReg2) -> putreg;
+                 ('InxReg', I.inxReg) -> putreg;
+                 ('WriteReg', I.WriteReg) -> putreg;
+                 ('ReadOffset', I.ReadOffset) -> putval;
+                 newline;
+             if);
+             (if I.size
+              // 1 then
+                 (if I.signed then
+                     I.writeReg -> movsxbl_mr -> emit3bytes;
+                  else
+                     I.writeReg -> movzxbl_mr -> emit3bytes;
+                     (* FIXME: Use xor+movb here instead? *)
+                 if);
+                 (I.readReg,I.inxReg, I.size, I.readOffSet) -> IndexReg
+              // 2 then
+                 (if I.signed then
+                     (* Not easy to signextend in a cheap way, so
+                      * we use the special instruction.
+                      *)
+                     I.writeReg -> movsxwl_mr -> emit3bytes;
+                     (I.readReg,I.inxReg, I.size, I.readOffSet) -> Indexreg
+                  else
+                     (* movzxwl_mr not by default used for unsigned load of 
+                      * 16 bit, since it is unpairible on Pentium.
+                      * And the zero extension is cheap to do using a
+                      * clear (xor).
+                      * Furthermore xor+movw fills the same in bytes
+                      * as movzxwl.
+                      * However if the writeReg is the same register
+                      * as either the readReg or the inxReg, the movzxwl_mr
+                      * must be used, since we cannot then clear the writeReg
+                      * prior to the move.
+                      *)
+                     (if (I.writeReg<>I.inxReg) and (I.writeReg<>I.readReg)then
+                         (* clear *)
+                         (xor_ttt, I.writeReg, I.writeReg)->alul_rr 
+                           -> emit2bytes; 
+                         (* movw *)
+                         op_size_prefix -> B_emitbyte;
+                         I.writeReg -> movl_mr -> emit2bytes;
+                      else
+                         I.writeReg -> movzxwl_mr -> emit3bytes;
+                     if);
+                     (I.readReg,I.inxReg, I.size, I.readOffSet) -> Indexreg
+                 if);
+              // 4 then
+                 I.writeReg-> movl_mr -> emit2bytes;
+                 (I.readReg,I.inxReg, I.size, I.readOffSet) -> Indexreg
+              else
+                 'MovAddressInxToReg: unknown size: '-> puttext;
+                 I.size -> putint;
+                 newline;
+             if);
+             (if intel_trace then 'end MovAddressToReg' -> comment if)
+          #);
+        emitPopCallStack:
+          (# Bn,Ln,N: @integer
+          enter(Bn,Ln)
+          do (if (((Bn+Ln)->N) > 0) then 
+                 mstate.numPush - N -> mstate.numPush;
+                 (add_ttt, N*4, esp, 4) -> emitAluInstImm;
+                 (if intel_trace then
+                     '==emitPopCallStack#'->puttext;
+                     mstate.numPush -> putint; newline;
+                 if);
+                 eoo;  
+             if)
+          #);        
+        emitMovlRegText: @
+          (# T: ^text;
+             regF: @integer;
+          enter (regF, T[])
+          do (if regF=eax then
+                 (* special opcode for eax *)
+                 movl_eax_m -> emitbyte;
+                 (T[],wordMark)->mstate.b.mark;
+                 0 -> emitlong;
+              else
+                 regF -> movl_rm -> emit2bytes; 
+                 ea_d32 -> mstate.b.patchLastByte;
+                 (T[],wordMark)->mstate.b.mark;
+                 0 -> emitlong;
+             if)
+          #);          
+        emitMovlImmReg: @
+          (# imm, reg: @integer;
+          enter (imm, reg)
+          do (if imm = 0 then
+                 (* clear *)
+                 (xor_ttt, reg, reg) -> alul_rr -> emit2bytes;
+              else
+                 reg -> _movl_ir -> B_emitbyte; imm-> emitlong;
+             if);
+          #);
+        emitMovlImmText: @
+          (# T: ^text;
+             imm: @integer;
+          enter (imm, T[])
+          do movl_im -> emit2bytes; 
+             ea_d32 -> mstate.b.patchLastByte;
+             (T[],wordMark)->mstate.b.mark;
+             0 -> emitlong;
+             imm -> emitlong;
+          #);             
+        emitMovlTextReg: @
+          (# T: ^text;
+             regF: @integer;
+          enter (T[], regF)
+          do T[]->mstate.Cidentifier;
+             (if regF=eax then
+                 (* special opcode for eax *)
+                 movl_m_eax -> emitbyte;
+                 (T[],wordMark)->mstate.b.mark;
+                 0 -> emitlong;
+              else
+                 regF -> movl_mr -> emit2bytes; 
+                 ea_d32 -> mstate.b.patchLastByte;
+                 (T[],wordMark)->mstate.b.mark;
+                 0 -> emitlong;
+             if)
+          #);             
+        emitJumpLab: 
+          (# labno: @integer;
+             labpos: @integer;
+             isShort: @boolean;
+          enter labno
+          do (if intel_trace then 'emitJumpLab' -> comment if);
+             labNo -> mstate.labs.val -> labpos;
+             (if (labpos<>0) and 
+                 ((labpos-(LIP+1(*jmp_short/jcc_short*)+1(*byteoff*)))
+                   ->is8bit) 
+                 then
+                 (* short backward jump *)
+                 true -> isShort;
+                 INNER;
+                 labpos -> emitrel8off;
+              else
+                 (* forward (yet unknown) or long backward jump *)
+                 false -> isShort;
+                 INNER;
+                 (if labpos<>0 then
+                     (* known long backward jump *)
+                     labpos -> emitrel32off;
+                  else
+                     (* forward (unknown) jump; remember use-site *)
+                     (labNo, false) -> mstate.labs.use -> emitrel32off;
+                 if);
+             if);
+          #);
+        emitCondJmp: @
+          (# cond: @char;
+             labno: @integer;
+             labpos: @integer;
+          enter (cond, labno)
+          do (if intel_trace then 'emitCondJmp' -> comment if);
+             labno -> emitJumpLab
+             (# 
+             do (if isShort then
+                    cond -> jccc_short -> emitbyte;
+                 else
+                    cond -> jccc -> emit2bytes;
+                if);
+                eoo;
+             #);
+          #);
+        emitAluImmReg: @
+          (* Emit "alu imm, regF" checking for special opcodes to use
+           * for eax.
+           * PRECONDITION: if size=2 then op_size_prefix is already emitted.
+           *)
+          (# imm: @integer;
+             regF: @integer;
+             size: @integer;
+             TTT: @integer;
+          enter (TTT, imm, regF, size)
+          do (if intel_trace then 
+                 'emitAluImmReg' -> comment;
+                 'TTT='->puttext; TTT->putint; 
+                 ', imm='->puttext; imm->putint; 
+                 ', reg='->puttext; regF->putint; 
+                 ', size='->puttext; size->putint; 
+                 newline;
+             if);
+             (if true
+              // imm -> is8bit then
+                 (if intel_trace then 'imm 8-bit' -> putline if);
+                 (if size=1 then
+                     (if regF=eax then
+                         (* save one byte *)
+                         TTT -> alub_i_eax -> emitbyte;
+                      else
+                         (TTT, regF) -> alub_i8r ->emit2bytes;
+                     if);
+                  else
+                     (* No check for eax: general form fills
+                      * less, e.g.
+                      *    addl $2,%eax
+                      * is
+                      *    05 00 00 00 02  in eax form
+                      *    83 C0 02        in general form
+                      * (and for addw, both would be 3 bytes)
+                      *)
+                     (TTT, regF) -> alul_i8r ->emit2bytes;
+                 if);
+                 imm -> emitbyte;
+              // imm -> is16bit then
+                 (if intel_trace then 'imm 16-bit' -> putline if);
+                 (if size 
+                  // 1 then
+                     'emitAluImmReg: imm is 16 bit, and size is 1'->putline;
+                  else
+                     (if regF=eax then
+                         (* save one byte *)
+                         TTT -> alul_i_eax -> emitbyte;
+                      else
+                         (TTT, regF) -> alul_ir -> emit2bytes;
+                     if)
+                 if);
+                 (if size
+                  // 2 then imm -> emithalf;
+                  // 4 then imm -> emitlong;
+                 if);
+              else
+                 (if intel_trace then 'imm 32-bit' -> putline if);
+                 (if size=4 then
+                     (if regF=eax then
+                         (* save one byte *)
+                         TTT -> alul_i_eax -> emitbyte;
+                      else
+                         (TTT, regF) -> alul_ir -> emit2bytes;
+                     if);
+                     imm -> emitlong;
+                  else
+                     'emitAluImmReg: imm is 32 bit, and size is 2/1'->putline;
+                 if);
+             if)
+          #);
+        emitALUinstImm: @
+          (* ADD, ADDC, AND, OR, SUB, SBB, XOR *)
+          (# (* e.g. add imm to reg *)
+             (* Possible combinations: 
+              * 
+              *    80 C3 02           addb    $2,%bl
+              *    66 83 C3 02        addw    $2,%bx
+              *    83 C3 02           addl    $2,%ebx
+              *    80 C3 D0           addb    $2000,%bl    ; err: imm truncated
+              *    66 81 C3 D0 07     addw    $2000,%bx
+              *    81 C3 D0 07 00 00  addl    $2000,%ebx
+              *    80 C3 80           addb    $2000000,%bl ; err: imm truncated
+              *    66 81 C3 80 84     addw    $2000000,%bx ; err: imm truncated
+              *    81 C3 80 84 1E 00  addl    $2000000,%ebx
+              *    
+              *)
+             
+             TTT: @char;
+             size: @integer;
+             op1IsCstOp, op2IsPrimReg: @boolean;
+             op1val, op2regF: @integer;
+          enter (TTT, op1val, op2regF, size)
+          do (if intel_trace then 
+                 'emitALUinstImm' -> comment;
+                 ('TTT',TTT)->putval;
+                 ('imm',op1val)->putval; 
+                 ('reg',op2regF)->putreg; 
+                 ('size',size)->putval; 
+                 newline;
+             if);
+             size -> check_size -> size;
+             genALU:
+               (# 
+               do (* Check for optimizations with constants -1, 0, 1 *)
+                  (if op1val
+                   // 0 then
+                      (if TTT
+                       // add_ttt then (* nop *) leave genALU;
+                       // or_ttt then  (* nop *) leave genALU;
+                       // sub_ttt then (* nop *) leave genALU;
+                       // xor_ttt then (* nop *) leave genALU;
+                      if);                           
+                   // 1 then
+                      (if TTT
+                       // add_ttt then
+                          (op2regF, size) -> emitinc;
+                          leave genALU;
+                       // sub_ttt then
+                          (op2regF, size) -> emitdec;
+                          leave genALU;
+                      if); 
+                   // -1 then
+                      (if TTT
+                       // add_ttt then
+                          (op2regF, size) -> emitdec;
+                          leave genALU;
+                       // and_ttt then (* nop *) leave genALU;
+                       // sub_ttt then
+                          (op2regF, size) -> emitinc;
+                          leave genALU;
+                      if); 
+                  if);
+                  
+                  (* Handle normal cases - if any of the special
+                   * cases above has has handled the instruction, it
+                   * will have issued a "leave genALU" and this point
+                   * will not be reached.
+                   *)
+                  (if size=2 then op_size_prefix -> emitbyte; if);
+                  (TTT, op1val, op2regF, size) -> emitAluImmReg;
+               #); (* genALU *)
+          #);
+        emitALUinstReg: @
+          (* ADD, ADDC, AND, OR, SUB, SBB, XOR *)
+          (# (* e.g. add reg to reg *)
+             (* Possible combinations: 
+              * 
+              *    00 C3              addb    %al,%bl
+              *    66 01C3            addw    %ax,%bx
+              *    01 C3              addl    %eax,%ebx
+              *)
+             
+             TTT: @char;
+             size: @integer;
+             op1IsCstOp, op2IsPrimReg: @boolean;
+             op1regF, op2regF: @integer;
+          enter (TTT, op1regF, op2regF, size)
+          do (if intel_trace then 
+                 'emitALUinstReg' -> comment;
+                 ('TTT',TTT)->putval; 
+                 ('reg1',op1regF)->putreg; 
+                 ('reg2',op2regF)->putreg; 
+                 ('size',size)->putval; 
+                 newline;
+             if);
+             size -> check_size -> size;
+             (if size=2 then op_size_prefix -> emitbyte; if);
+             (if size
+              // 1 then
+                 (TTT, op1regF, op2regF) -> alub_rr -> emit2bytes;
+              // 2 // 4 // 0 then
+                 (TTT, op1regF, op2regF) 
+                   -> alul_rr -> emit2bytes;
+             if)
+          #);
+        emitALUinstText: @
+          (* ADD, ADDC, AND, OR, SUB, SBB, XOR *)
+          (# (* e.g. add reg to reg *)
+             (* Possible combinations: 
+              * 
+              *    00 C3              addb    %al,%bl
+              *    66 01C3            addw    %ax,%bx
+              *    01 C3              addl    %eax,%ebx
+              *)
+             
+             TTT: @char;
+             size: @integer;
+             op1IsCstOp, op2IsPrimReg: @boolean;
+             op1txt: ^text; 
+             op2regF: @integer;
+          enter (TTT, op1txt[], op2regF, size)
+          do (if intel_trace then 
+                 'emitALUinstText' -> comment;
+                 ('TTT',TTT)->putval; 
+                 ' reg1: '->puttext; op1txt[] -> puttext;
+                 ('reg2',op2regF)->putreg; 
+                 ('size',size)->putval; 
+                 newline;
+             if);
+             size -> check_size -> size;
+             (if size=2 then op_size_prefix -> emitbyte; if);
+             (if size 
+              // 1 then
+                 (TTT, op2regF) -> alub_mr -> emit2bytes;
+              // 2 
+              // 4 then
+                 (TTT, op2regF) -> alul_mr -> emit2bytes;
+             if);
+             ea_d32 -> mstate.b.patchLastByte;
+             (op1txt[],wordMark)->mstate.b.mark;
+             0 -> emitlong;
+          #);
+
+     #); 
+   D: @ IntelImage
+     (# TmpLab: @
+          (* Used for e.g. floatconst etc, which need to put
+           * up to 8 bytes into a temporary data location.
+           * Warning: Make sure that this location is never used
+           * by more than one at the time!
+           *)
+          (# lab: ^BackendLocallab;
+          do (if lab[]=NONE then
+                 (if intel_trace then
+                     '=== Image D: TmpLab def at LIP=' -> puttext;
+                     LIP->putint;
+                     newline;
+                 if);
+                 8 -> align;
+                 defDataLab
+                 (#
+                 do 0->emitlong;
+                    0->emitlong;
+                 #) -> lab[];
+             if);
+          exit lab[]
+          #); 
+     #);
+
+   defDataLab:
+     (# L: ^backendLocalLab; 
+     do switchToData;
+        &backendLocalLab[] -> L[];
+        L.new;
+        true->L.isTextAdr;
+        L.def;
+        INNER ;
+        switchToCode;
+     exit L[]
+     #);
+   
+   strTbl: @
+     (# str: @text;
+        init:
+          (#
+          do 1000->str.extend;
+             0->str.put; 
+             (if isNti then
+                 (* nti uses pe-coff - and the first long must
+                  * hold the size of strTbl; space for size
+                  * is reserved by init
+                  *)
+                 (for i: 3 repeat 0->str.put
+                 for)
+             if)
+          #);
+        insert: @
+          (# T: ^text; index: @integer
+          enter T[]
+          do str.length->index;
+             T.scanAll(#do ch->str.put #);
+             0->str.put
+          exit index
+          #);
+        scan:
+          (# inx: @integer; ch: @char
+          enter inx 
+          do inx+1->inx; (* for ELF the strTbl is index form zero, 
+                          * for BETA from 1
+                          *)
+             (if inx<=0 then 
+                 '\nstrTbl inx=0'->putline; 
+             if);
+             str.T[inx]->ch;
+             L: (if ch<>0 then
+                    INNER;
+                    str.T[inx+1->inx]->ch;
+                    restart L
+                if)
+          #)
+     #);
+   
+   verifyRelocations:
+     (# 
+     do (if resolve_local_calls then
+            entryPoints.scan
+            (# 
+            do (if current.m.uses[] <> NONE then
+                   '\nCode-relocation error on symbol: '->putText;
+                   current.T[]->putText; '. Uses:'->putLine;
+                   current.m.dumpUses;
+               if);
+            #);            
+        if);
+     #);
+   
+#)
+--entryPointsAtt: attributes--
+puthex:
+  (# i: @integer;
+     printf: external
+       (# i: @integer;
+          fmt: [0]@char
+       enter (fmt,i)
+       #)
+  enter i
+  do ('0x%x', i) ->printf;
+  #);
+epUse:
+  (# usesite: @integer (* address of use *);
+     next: ^epUse;
+  #);
+getAddr: integerValue
+  (* return byte position in segment to local entrypoint "entry".
+   * If it is not yet defined, 0 is returned, and the use-site is 
+   * remembered.
+   * It is then patched when the definition site becomes known.
+   *)  
+  (# entry: ^text;
+     s: ^epUse;
+     notFoundWasCalled: @boolean;
+  enter entry[]
+  do (if resolve_local_calls then
+         FALSE -> notFoundWasCalled;
+         (if intel_trace then
+             '(getAddr '->putText; entry[]-> puttext; newLine;
+         if);
+         entry.copy -> entryPoints.find
+         (# addEpUse:
+              (#
+              do &epUse[]->s[];
+                 mstate.B.LIP->s.usesite;
+                 (if intel_trace then
+                     '\nUse of undefined local entrypoint '->puttext; 
+                     entry[]-> puttext;
+                     ' from .text at: '->puttext; 
+                     mstate.B.LIP->puthex; ' e.LIP='->putText;
+                     e.LIP->puthex;
+                     newline;
+                 if);
+                 E.m.uses[]->s.next[]; 
+                 s[]->E.m.uses[];
+              #);
+            notfound::
+              (# 
+              do (* not yet defined, i.e. forward ref *)
+                 0 -> value;
+                 -1 -> E.LIP; (* indicates not yet defined *)
+                 addEpUse;
+                 true -> E.local;
+                 false -> E.data;
+                 E[] -> entryPoints.insert;
+                 TRUE->notFoundWasCalled;
+              #);
+         do (if not notFoundWasCalled then
+                (if E.LIP=-1 then
+                    (if intel_trace then
+                        'Second or later use of undefined entry'->putLine;
+                    if);
+                    addEpUse;
+                    0 -> value;
+                 else
+                    (* defined, i.e. backward ref *)
+                    (if intel_trace then
+                        '\nUse of defined local entrypoint '->puttext; 
+                        entry[]-> puttext;
+                        ' from .text at: '->puttext; 
+                        mstate.B.LIP->puthex; newline;
+                    if);
+                    E.LIP->value
+                if)
+            if);
+         #);
+         (if intel_trace then
+             entry[]-> puttext; ' getAddr)'->putText; newLine;
+         if);
+     if);
+  #);
+
+---backendentryPointsInsert:doPart---
+do (* 'entryPointsInsert: ' -> puttext; elm.T[] -> putline; *)
+   elm.T[]->mstate.strTbl.insert->elm.m.strInx;
+   mstate.symtabTop + 1 -> mstate.symtabTop -> elm.m.symtabInx;
+   
+---backendtargetEntryPointInfo:descriptor--
+(# LIP: @integer;   (* local offset of this entry-point*)
+   symtabInx,       (* symtab index *)
+   strInx: @integer (* index into string table *);
+   uses: ^epUse     (* List of usages *);
+   
+   dumpUses:
+     (# u: ^epUse;
+     do (if resolve_local_calls then
+            uses[]->u[];
+            L:(if u[] <> NONE then
+                  'usesite = '->putText; u.usesite->puthex; newLine;
+                  u.next[]->u[];
+                  restart L
+              if);
+        if);
+     #);   
+#)
+---backendaddTargetInfo:doPart----
+do (* 'addTargetInfo: ' -> puttext; T[] -> putline; *)
+   (if data then
+       mstate.d.LIP->E.LIP
+    else
+       (* Code address *)
+       mstate.b.LIP->E.LIP;
+       (if resolve_local_calls then
+           (if E.m.uses[] <> NONE then
+               (* Entrypoint is referred without relocation from
+                * the code segment of this file.
+                * Resolve usesites by patching up with the now
+                * known definition site.
+                *)
+               (# s: ^epUse;
+                  defvalue, patchaddr: @integer;
+               do E.m.uses[]->s[]; NONE->E.m.uses[];
+                  LL: 
+                    (if s[] <> NONE then
+                        (* simulate E.LIP->emitrel32off at s.usesite *)
+                        E.LIP - (s.usesite+4) -> defvalue;
+                        (if intel_trace then
+                            'Patched entrypoint usesite='->puttext;
+                            s.usesite->puthex;
+                            ' with value: ' ->puttext;
+                            defvalue->puthex; 
+                            ' at definition site: '->puttext;
+                            E.LIP -> puthex; newline;
+                            '(='->puttext; E.T[]->puttext; ')'->putline;
+                        if);
+                        @@mstate.B.buffer[1]+s.usesite -> patchaddr;
+                        (* patch *)
+                        defvalue %putLongAt patchaddr;
+                        s.next[]->s[];
+                        restart LL
+                    if)
+               #)
+           if)
+       if)
+   if)

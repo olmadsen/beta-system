@@ -1,0 +1,412 @@
+ORIGIN '~beta/betaast/index';
+INCLUDE '~beta/betaast/betasemops';
+LIB_DEF 'betacompiler' '../lib';
+INCLUDE '~beta/basiclib/file';
+INCLUDE '~beta/basiclib/directory';
+INCLUDE '~beta/basiclib/numberio';
+INCLUDE '~beta/containers/hashTable';
+INCLUDE '~beta/sysutils/mjolnerprop';
+INCLUDE '~beta/sysutils/envstring';
+INCLUDE '~beta/betaast/donecheck';
+INCLUDE '~beta/betaast/compact';
+INCLUDE '~beta/mps/grammarinit';
+INCLUDE 'com';
+INCLUDE '../GENERATOR/image';
+BODY 'transDepGraph'; 
+BODY 'systembody';
+BODY 'systembody_translatedobody';
+---AstInterfaceLib: ATTRIBUTES---
+(* This fragment defines the programmatic interface to the BETA compiler.
+ * The simple way of using the BETA compiler is create an instance of the
+ * ``compiler'' pattern below and call ``init'' on the instance. After this
+ * has been done, the operation ``translate'' may be called a number of
+ * times, each call parametrized by the name of a fragment to be translated.
+ * 
+ * It is however possible to use a ``compiler'' instance in more advanced
+ * ways. 
+ * 
+ * - jobFileMach may be assigned the name of a workstation at which
+ *   the assembly and linking should be performed. Default is the 
+ *   machine on which the compiler is running.
+ *
+ * - outputFile may be assigned the name of a file. The semantics is 
+ *   that this will be the file holding the resulting executable 
+ *   image of the compilation.
+ *   
+ * The above attributes may be changed in between calls of ``translate''.
+ * This fact does not apply to the following two.
+ * 
+ * - The compiler may change (close, reread and check) open fragments.
+ *   Such manipulations may be taken into account by other applications
+ *   by further binding the relevant notifications (c.f. translate).
+ * 
+ * - The compiler acts according to changes imposed on open fragments.
+ *   Changes are signalled to the compiler by means of setting the
+ *  ``doneCheck'' property false (c.f. ~beta/ast/current/donecheck).
+ * 
+ * In each activation of ``translate'', all fragments on which the
+ * rootFragment depends are opened in order to examine the ``doneCheck''
+ * property of these fragments. Furthermore, a consistency check is 
+ * performed in order to ensure that an open fragment is not obsolete
+ * compared to its disc representation (c.f. semiOpen in ./control).
+ * In case of obsoletion, the fragment is reread after a possible 
+ * parsing. In case of parse errors, the parsed fragment is closed.
+ *)
+
+compiler:
+  (# <<SLOT SysLib: attributes>>;
+     
+     (* The following boolean-patterns are 
+      * for internal compiler testing;
+      * see also beginning of pattern translate::trans
+      *)
+     ctst: (#exit true #);  (* test of checker fragments *)
+     vtest: (#exit true #); (* test of CHECK/virtual.bet *)
+     stest: (#exit true #); (* test of synthesizer/codegen fragments *)
+   
+     init:<
+       (#
+       enter interactiveCompiler
+       do <<SLOT systemInitBody: descriptor>>; 
+          INNER;
+       #);
+     translate:
+       (* Starts the actual translation of the fragment denoted
+        * by rootFragment. Once a compiler instance has been initialized, 
+        * translate may be called a number of times, and fragments used 
+        * in previous calls are kept in memory for future calls, 
+        * thereby possibly saving time. Note that the compiler exception 
+        * and notification patterns may be bound in each activation of 
+        * translate.
+        *)
+       (# init:< (# do &trans.semAttType[] -> trans.semAtt[]; INNER #);
+          
+          JobFileRunner:< 
+            (# AFF: ^file;
+               common: ^commonDef;
+               infoStream,messagestream: ^stream;
+               hostMachineType,
+               targetmachine,
+               jobfilemachine: ^text;
+               interactiveCompiler: @boolean;     
+            enter(AFF[],common[],infoStream[],messageStream[],
+               hostMachineType[],targetmachine[],jobfilemachine[],
+               interactiveCompiler)
+            do INNER
+            #);
+          (***************** Notifications ****************
+           * Notification of actions performed on fragments. 
+           * They are called AFTER the action has been performed
+           *)
+          Notification: (*  abstract superpattern *)
+            (# fullFN: ^text;
+               proceed: @Boolean;
+            enter fullFN[] <<SLOT NotificationBody: dopart>>
+            exit proceed
+            #);
+          AddedFragment:< Notification; (* A fragment has been added 
+                                         * to the dependency graph *)
+          AddedTranslate:< Notification; (* A fragment has been scheduled 
+                                          * for translation *)            
+          AddedToJobFile:< Notification
+            (* an entry has been made to the job file *)
+            (# kind: @integer;  (* kinds defined in asmLink 
+                                 * - should be moved common *)
+               asm: @boolean;   (* if true, then file will be assembled; 
+                                 * not relevant if binary codegen*)
+               inLink: @boolean (* if true, objfile in library? *)
+            enter(kind,asm,inLink)
+            do INNER 
+            #);
+          ReReadFragment:< Notification;
+            (* A fragment has been reread because of inconsistencies *)
+          CheckedFragment:< Notification; (* A fragment has been checked *)
+          CodegenFragment:< Notification; (* Code has been generated 
+                                           * for a fragment *)
+          closedFragment:<   
+            (* A fragment has been closed e.g. because of fragment garbage 
+             * collection or parse errors.
+             * Note that this notification is activated when a fragment is 
+             * closed logically, so even though a reread is implemented as 
+             * close;open,  this notification is NOT called in case of a 
+             * close operation being part of a reread. 
+             *)
+            Notification;
+          
+          (*********** Exceptions **************)
+          MsgException:< Exception
+            (# FG: ^fragmentGroup; no: @ integer; 
+            enter(FG[],no) <<SLOT MsgException:doPart>> #);
+          TransAccessException:< Exception
+            (# FN: ^text
+            enter FN[] <<SLOT TransAccessException: doPart>> #);
+          TransCreateDirException:< Exception
+            (# FN: ^text
+            enter FN[] <<SLOT TransCreateDirException:doPart>> #);
+          NoSpaceException:< Exception
+            (# <<SLOT NoSpaceException:doPart>> #);
+          MPSException:< exception
+            (# T: ^text; 
+            enter T[] <<SLOT MPSException:doPart>>#);
+          notExistingException:< exception
+            (# FullFN: ^text
+            enter FullFN[]
+            do <<SLOT notExistingException: descriptor >>;
+               INNER;
+            #);
+          parseException:< exception (* OK *)
+            (# FullFN: ^text
+            enter FullFN[]
+            do <<SLOT parseExceptionBody: descriptor>>; 
+               INNER;
+            #);            
+          jobFileException:<  exception (* ok *)
+            (# message: ^text;
+            enter message[]
+            do <<SLOT jobFileExceptionBody: descriptor>>;
+               INNER;
+            #); 
+          otherFileError:< Exception
+            (# FN,m : ^text 
+            enter(FN[],m[]) <<SLOT otherFileError:dopart>> #);
+          doubleFormException:< Exception (* ok *)
+            (# n: ^text
+            enter n[] do <<SLOT doubleFormExceptionBody:descriptor>>
+            #);
+          fragmentException:< exception
+            (# FG: ^fragmentGroup;
+               FF: ^fragmentForm;
+               slot: ^slotDesc;
+               errNo: @integer;
+               errMsg: ^text;
+               CloseGroup: ^object;
+            enter(FG[],FF[],slot[],errNo,errMsg[],CloseGroup[]) 
+            do errMsg->msg;
+               INNER 
+            #);
+          propertyException:< exception
+            (# FG: ^fragmentGroup;
+               p,t: ^text;
+               n: @integer;
+               CloseGroup: ^Object;
+               warning: @boolean
+            enter(FG[],p[],t[],n,CloseGroup[])
+            <<SLOT propertyException: doPart>>
+            #);
+          systemException:< exception
+            (# T: ^text
+            enter T[] <<SLOT SystemExceptionType:dopart>>
+            #);
+
+          (* Notifications for user environment; e.g Sif *)
+          groupSavedNotification:<
+            (# fg: ^FragmentGroup;
+            enter fg[]
+            do INNER
+            #);
+          semanticErrorsNotification:< 
+            (# ff: ^FragmentForm;
+            enter ff[]
+            do INNER  
+            #);          
+          rootFragment: ^text;                
+       enter rootFragment[]
+       do <<SLOT systemTranslateBody: descriptor>>;
+          INNER;
+       #);
+     DynamicTranslate: translate
+       (# init::<
+            (#
+            do rootOrigin[] -> trans.dynamicCompilationContext.rootOrigin[]
+            #);
+          rootOrigin: ^ ASTindex
+       enter rootOrigin[]
+       #);
+     
+     infostream,   (* informative messages: Open, Binding, Checking ...  *)
+     tracestream,  (* trace information generated by trace switches *)
+     messagestream,(* for warnings and syntax/semantic errors *)
+     bugstream: ^Stream; (* for stuff like compiler bugs and like *)
+     
+     GetImagePair: 
+       (* returns data- nad code images for the last group being compiled *)
+       (# exit(trans.data[],trans.codeIm[])#);
+     
+     TargetMachine:
+       (* Set/return the name of a machine for which the compiler 
+        * should generate code. Default is the machine on which
+        * the compiler is running. 
+        *)
+       (# targetMach: ^text
+       enter (# enter targetMach[] <<SLOT SetTargetMachine:doPart>> #)
+       exit (# <<SLOT getTargetMachine:doPart>> exit targetMach[] #)
+       #);
+     
+     setSwitch: 
+       (* switch is an array of booleans, each denoting a compiler option. 
+        * See DOC/Switches.html for a description of available switches.
+        * To have option ``i'' take effect, switch[i] must be set to true.
+        *)
+       (# v: @boolean; n: @integer 
+       enter(v,n) do <<SLOT setSwitch:descriptor>> 
+       #);
+     switchOn: (# n: @integer enter n do<<SLOT switchOn:descriptor>> #);
+     switchOff: (# n: @integer enter n do<<SLOT switchOff:descriptor>> #);
+     
+     
+     (************************** compiler objects **************************)
+     trans: @
+       (* The object representing a BETA translator; 
+        * may be activated several times from translate
+        *)
+       (# <<SLOT translib:attributes>>;
+          switch180: (# exit false #); (* test of code for N/X entry points *)
+          switch181: (* test of new N/X code generation - alternative to 180*)
+            (# exit false #); (* (# exit common.switch[181]#);*)
+          switch64: (#exit false #); (* multiprocessor *)
+          switch68: (#exit false #); (* V-entry *)
+          
+          
+          doTranslate:
+            (# FN : ^ text
+            enter(thisTranslate[],FN[] -> rootFragment[])
+            <<SLOT doTranslateBody:doPart>>
+            #);
+          
+          rootFragment: ^ text;
+          Common: @ commonDef
+            (# passCodeFileAccessError::
+                 (#do FN[]-> thisTranslate.transAccessException #);
+               passNoSpaceError:: (#do thisTranslate.noSpaceException #);
+               passOtherError:: 
+                 (# 
+                 do (FN[],msg[]) -> thisTranslate.otherFileError 
+                 #);
+            #);
+          Gram: @Grammar; 
+          SemAttType: <<SLOT SemAtt: descriptor>>;
+          semAtt: ^semAttType;
+          Synthesizer:
+            (# theGroup: ^FragmentGroup;       
+               (* current group being translated *)
+               BCname: ^text; (* name of file for assembly code *)
+               BCerror: @boolean;
+            enter(theGroup[],BCname[])
+            do <<SLOT synthesizer:descriptor>>
+            exit BCerror
+            #);
+          data,codeIm: ^ image;
+
+          (*******************************************************)
+          lst: ^file; (* used for error messages *)
+          asmLink: @ <<SLOT translate_AsmLink:descriptor>>;
+          depGraph: @ depGraphType;
+          depGraphType: <<SLOT transDepGraph:descriptor>>;
+          SharedLibs: @ <<SLOT translate_sharedLibs:descriptor>>;
+          (********************************************************)
+          thePP: @
+            (# PP: ^ PrettyPrinter;
+	       (* it is expensive to instantiate a pretty printer *)
+               D: ^ASTindex; S: ^stream; L: @integer
+            enter(D[],S[],L) <<SLOT thePP:doPart>>
+            #);
+          dynamicCompilationContext: @
+            (# rootOrigin: ^ ASTindex
+            #);
+          thisTranslate: ^translate;
+          ReadSwitches:
+            (# S: ^Stream
+            enter S[]
+            do <<SLOT ReadSwitchesBody: descriptor>>;
+            #);
+          TraceIF: 
+            (# xH: (# enter xT do xN #);
+               xT: (# xT: ^text enter xT[] do xT[]->tracestream.putText #);
+               xI: (# n: @integer 
+                   enter n 
+                   do ' '->tracestream.put; n->tracestream.putint; 
+                      ' '->tracestream.put 
+                   #);
+               xB: (# b: @boolean
+                   enter b
+                   do (if b then ' true '->traceStream.puttext 
+                       else ' false '->traceStream.puttext 
+                   if)#);
+               xC: (# ch: @char enter ch do ch ->traceStream.put #);
+               xA: (# T: ^ASTindex enter T[] <<SLOT trace_xA:doPart>>#);
+               xN: (# <<SLOT trace_xN:doPart>> #);
+               xU: (# do traceLevel+1 -> traceLevel #);
+               xD: (# do traceLevel-1 -> traceLevel #);
+            do inner
+            #);
+          trace: traceIF
+            (# no: @ integer;
+            enter no
+            do <<SLOT Trace:descriptor>>
+            #);
+          traceLevel: @integer;
+          dStat: @
+            (# init: <<SLOT dStat_init:descriptor>>;
+               new:
+                 (# desc: ^ASTindex; kind: @integer
+                 enter(desc[],kind)
+                 <<SLOT dStat_new:dopart>>
+                 #);
+               print: <<SLOT dStat_Print:descriptor>>;
+               P: @ <<SLOT dStat_Private:descriptor>>
+            #);
+          impTrace: @text;
+          
+          NotImpl: 
+            (# T: ^text
+            enter T[]
+            do ' has not been implemented!'-> T.puttext;
+               T[] -> thisTranslate.SystemException
+            #)
+
+       #);
+
+     (*******************************************************************)
+     
+     interactiveCompiler, (* true if the file interactive.bet is in use *)
+     isRepeatMode, (* used by controller *)     
+     nti,  (* true if this is an nti compiler *)
+     b2c,  (* true if this is a b2c compiler *)
+     demoVersion: @boolean; (* true if this is a demo version *)
+     verboseLevel: @ (* Level of output during compilation: *)
+       (# v: @Integer;
+          verbose: (# exit 0 #); (* more than default? *)
+          default: (# exit 1 #); (* normal, the old way, open, bind, etc. *)
+          actions: (# exit 2 #); (* only if somthing happens, parse, etc.*)
+          nothing: (# exit 3 #); (* nothing, only errors *)
+       enter v
+       exit v
+       #);
+     
+     targetMachinetext: @text;  (* target machine text *)
+     compilerVersion: (* version text for compiler *)
+       (# t: @text <<SLOT compilerVersion:doPart>> exit t[] #);
+     betarunVersion: (* returns current betarun for targetMachine *)
+       (# targetMachine: ^text; betarun: @text
+       enter targetMachine[]
+       <<SLOT betarunVersion: doPart>>
+       exit betarun[]
+       #); 
+     (* If the attributes below are NONE, default values are looked
+      * up in the global .Mjolnerrc file. These attributes may be changed
+      * between calls of translate.
+      *)
+     jobFileMach: ^text;  (* The machine to execute jobfile *)
+     
+     outputFile: ^text;   (* Name of the file to contain the resulting binary image *)
+     
+     betarunSwitch: ^text;   (* Name of the betarun file to link with *)
+     
+     link_libs: ^Text;     (* command line libs to add to link dir *)
+     
+  #);
+
+
+
+
+

@@ -1,0 +1,325 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE '~beta/basiclib/formatio';
+INCLUDE 'carriers';
+BODY 'bbgraphbody';
+-- lib: Attributes --
+singlegraph:
+  (#
+     node:< (# succI: [1] @integer; succA: [1] @integer; type,succTop,index:@integer; #);
+     EntryNode,ExitNode:@node;
+     nodeList: [16] ^node;
+     nodeCnt,nodetop,inffound:@integer;
+     Append:<
+      (# i: ^Node; 
+       enter i[]
+       <<SLOT AppendNode:DoPart>>
+       #);
+     AppendNode: @Append;
+       
+     EdgeCount:@integer;
+     EdgeInsert:<
+       (# connectTo,connectFrom:@integer; 
+       enter (connectFrom,connectTo)
+       <<SLOT EdgeInsert:DoPart>>
+       #);
+     AppendEdge: @EdgeInsert;
+     init:< 
+       (#  
+       do 1->nodeCnt;
+          0->edgeCount;
+          1->EntryNode.index;
+          EntryNode[]->nodeList[1][];
+          INNER 
+       #);
+     firstNode:<(# n:^node do INNER exit n[] #);
+     scan:
+       (# current:^node;
+       do 
+          (for i:nodeCnt repeat
+             (if nodeList[i][]<>none then
+                 nodeList[i][]->current[];
+                 inner
+             if);
+          for);
+       #)
+  #);
+doublegraph: singlegraph
+  (#
+     node::<  (# predI: [1] @integer; predTop: @integer #);
+     EdgeInsert::< 
+       (#   <<SLOT DoubleEdgeInsert:DoPart>> #);
+     init::< 
+       (# 
+       do INNER
+       #);
+     removeNode:<
+       (# inx:@integer;
+          remnode,othnode:^node;
+       enter inx
+       <<SLOT doubleremodenode:dopart >>
+       #);
+     moveEdge:<
+       (# 
+          fn,tn,nn:^node;
+          i,inx:@integer;
+       enter (fn[],tn[],nn[])
+          <<SLOT doublemoveedge:dopart>>
+       #);
+  #);
+
+mergelists:
+  (# r,p:[0]@integer;
+     result:[0]@integer;
+     top1,top2,top,except:@integer;
+     found:@boolean;
+  enter (r,top1,p,top2,except)
+  do r[1:top1]->result;
+     top1->top;
+     top2->result.extend;
+     (for i:top2 repeat
+        (if p[i]<>except then
+            false->found;
+            l:(for j:top repeat
+                 (if p[i]=result[j] then
+                     true->found;
+                     leave l
+                 if)
+              for);
+            (if not found then
+                top+1->top;
+                p[i]->result[top];
+            if);
+        if);
+     for);
+     result[1:top]->result;
+  exit result
+  #);
+
+codegraph:doublegraph
+  (# 
+     node::<(# next,prev:@integer #);
+     init::<
+       (# 
+       do 
+          inner 
+       #);
+     removenode::<(# <<SLOT CodeRemoveNode:dopart >> #);
+     append::<(# <<SLOT CodeAppendNode:DoPart>>#);
+     codescan:
+       (#
+          curr:^node;
+       do
+          EntryNode[]->curr[];
+          l:(if curr.next <> 0 then
+                INNER;
+                nodelist[curr.next][]->curr[];
+                restart l;
+             else
+                INNER;
+            if);
+       #)
+  #);
+
+BBgraph:codegraph
+  (# 
+     graphsize:@integer;
+     realNodes:[1]^realnode;
+     realNodesTop:@integer;
+     node::<
+       (# 
+          onstack:@Boolean;
+          hasbackedge:@boolean;
+          killA: [1] @integer;
+          killf:@integer;
+          genf,ingen,inkill:@integer;
+          realgraph,lastrealnode:^realnode;
+          jmpedgenumber:@integer;
+          realnodetop:@integer;
+          loop:^loopnode;
+       #);
+     Append::<
+       (# 
+       do
+          INNER;
+          nodelist[nodecnt][]->lastseen[];
+       #);
+     lastseen:^node;
+     init::<
+       (# 
+       do
+          INNER;
+       #);
+     EdgeInsert::< 
+       (#   <<SLOT BBEdgeInsert:DoPart>> #);
+     realnode:<
+       (# 
+          <<SLOT realnodelib:attributes>>;
+          genf,killf,mynode,inx:@integer;
+          next,prev:^realnode;
+       #);
+     insertrealnodeInNode:
+       (# 
+          r:^realnode;
+       enter r[]
+       do
+          graphsize + 1 -> graphsize->r.inx;
+          
+          (* extra by gram *)
+          (if graphsize>realNodes.range then
+              graphsize->realNodes.extend;
+          if);
+          r[]->realNodes[graphsize][];
+          
+          (if lastseen.lastrealnode[] <> none then
+              lastseen.lastrealnode[]->r.prev[];
+              r[]->lastseen.lastrealnode.next[];
+              r[]->lastseen.lastrealnode[];
+           else
+              r[]->lastseen.lastrealnode[];
+              r[]->lastseen.realgraph[];
+          if);
+          lastseen.index->r.mynode;
+          lastseen.realnodetop + 1 -> lastseen.realnodetop;
+       #);
+     irin:@insertrealnodeInNode;
+     insertRealnodeBefore:
+       (# new,before:^realnode;
+       enter (new[],before[])
+       do before.mynode->new.mynode;
+          new[]->before.prev.next[];
+          before.prev[]->new.prev[];
+          before[]->new.next[];
+          new[]->before.prev[];
+          graphsize+1 -> graphsize -> new.inx;;
+          
+          (* extra by gram *)
+          (if graphsize>realNodes.range then
+              graphsize->realNodes.extend;
+          if);
+          new[]->realNodes[graphsize][];
+       #);
+     insertRealNodeAfter:
+       (# new,after:^realnode;
+       enter (new[],after[])
+       do (new[],after[])->insertRealnodeBefore;
+          new.shiftdown;
+       #);
+     removerealnode:
+       (# 
+          r:^realnode;
+          n:^node;
+       enter r[]
+       do
+          nodelist[r.mynode][]->n[];
+          (if r.prev[] = none then
+              (if r.next[] = none then
+                  none->n.lastrealnode[];
+                  none->n.realgraph[];
+               else
+                  r.next[]->n.realgraph[];
+                  none->n.realgraph.prev[];
+              if);
+           else
+              (if r.next[] = none then
+                  r.prev[]->n.lastrealnode[];
+                  none->r.prev.next[];
+               else
+                  r.next[]->r.prev.next[];
+                  r.prev[]->r.next.prev[];
+              if);
+          if);
+       #);
+     BBcodescan:codescan
+       (#
+          current:^realnode;
+       do
+          curr.realgraph[]->current[];
+          go:(if current[] <> none then
+                 INNER;
+                 current.next[]->current[];
+                 restart go
+             if);
+       #);
+     nextrealnode:
+       (# 
+          r,n:^realnode;
+          nn:^node;
+       enter n[]
+       do
+          (if n[] <> none then
+              (if n.next[] <> none then
+                  n.next[]->r[];
+               else
+                  nodelist[n.mynode][]->nn[];
+                  l:(if nn[] <> none then
+                        nn.realgraph[]->n[];
+                        (if n[] <> none then
+                            n[]->r[];
+                         else
+                            (if nn.next <> 0 then
+                                nodelist[nn.next][]->nn[];
+                                restart l;
+                            if);
+                        if);
+                    if);
+              if);
+          if);
+       exit r[]
+       #);
+     Loopnode:
+       (# 
+          footerpair:(# leaving,leaveto:@integer; enter (leaving,leaveto) #);
+          header:^node;
+          footers:[1]^footerpair;
+          footertop:@integer;
+          appendfooter:
+            (# 
+               l,lt:@integer;
+            enter (l,lt)
+            do
+               footertop + 1 -> footertop;
+               &footerpair[]->footers[footertop][];
+               (l,lt)->footers[footertop];
+               (if footertop >= footers.range then
+                   footertop -> footers.extend;
+               if);
+            #);
+          innerStructure:^Loopnode;
+          next:^Loopnode;
+          isbuilt:@boolean;
+          inf,outer:^BIset;
+       #);
+     LoopGraph:^LoopNode;
+     loops:^BIset;
+  #);
+
+
+
+
+
+--realnodelib:attributes--
+shiftdown:
+  (# node,next,prev,nextnext:^realnode;
+  do this(realnode)[]->node[];
+     node.next[]->next[];
+     node.prev[]->prev[];
+     (if next[]<>none then
+         next.next[]->nextnext[]->node.next[];
+         node[]->next.next[];
+         (if prev[]<>none then
+             next[]->prev.next[]
+         if);
+         prev[]->next.prev[];
+         next[]->node.prev[];
+         (if nextnext[]<>none then
+             node[]->nextnext.prev[]
+         if)
+     if)
+  #)
+
+
+
+
+
+
+

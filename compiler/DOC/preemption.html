@@ -1,0 +1,1953 @@
+<HTML>
+
+<HEAD>
+<TITLE>Preemption Implementation</TITLE>
+<LINK REV="made" HREF="mailto:olm@daimi.aau.dk">
+</HEAD>
+
+<BODY>
+<H1>Preemption Implementation</H1>
+
+<H2>Contents</H2>
+
+<UL>
+<LI><A HREF="#STATUS"><EM>Current status of implementation</EM></A>
+
+<LI><A HREF="#ideas">Original Ideas</A>
+
+<LI><A HREF="#newprim">New %-Primitives</A>
+<UL>
+<LI><A HREF="#prim_effect">Explanation of intended effect of the new %-primitives
+</A>
+<LI><A HREF="#prim_impl">Implementation details</A>
+
+<UL>
+<LI><A HREF="#preemptionlevel_impl">PreemptionLevel</A>
+<LI><A HREF="#sighandler_details">Signalhandler details</A>
+<LI><A HREF="#preemptionhandler_impl">Preemptionhandler</A>
+<LI><A HREF="#suspX">%xsuspend implementation</A>
+<LI><A HREF="#prim_assert">Assertions</A>
+</UL>
+</UL>
+
+<LI><A HREF="#signals">Signal Handling</A>
+
+<LI><A HREF="#registers">Global Registers</A>
+
+<UL>
+<LI><A HREF="#reg_libc_a">Global Registers used by <CODE>/lib/libc.a</CODE></A>
+<LI><A HREF="#reg_libc_so">Global Registers used by <CODE>/lib/libc.so</CODE></A>
+<LI><A HREF="#reg_libm_a">Global Registers used by <CODE>/lib/libm.a</CODE></A>
+<LI><A HREF="#reg_libm_so">Global Registers used by <CODE>/lib/libm.so</CODE></A>
+<LI><A HREF="#reg_libthread_so">Global Registers used by <CODE>/lib/libthread.so</CODE></A>
+<LI><A HREF="#reg_conclusion">Conclusion</A>
+</UL>
+
+<LI><A HREF="#globals">Global Variables</A>
+<UL>
+<LI><A HREF="#var_proto">1. Prototypes</A>
+<LI><A HREF="#var_string">2. String and real constants</A>
+<LI><A HREF="#var_beta_data">3. BETA_DATA</A>
+<LI><A HREF="#var_betarun">4. Global symbols in the C runtime system</A>
+
+<UL>
+<LI><A HREF="#sharing_methods">4.1 Sharing Methods</A>
+<LI><A HREF="#var_ro">4.2 Read-only variables</A>
+<LI><A HREF="#var_debug">4.3 Debug Variables</A>
+<LI><A HREF="#var_lvra">4.4 LVRA Heap</A>
+<LI><A HREF="#var_aoa">4.5 AOA heap</A>
+<LI><A HREF="#var_cbfa">4.6 CBFA Heap</A>
+<LI><A HREF="#var_betadump">4.7 beta.dump</A>    
+<LI><A HREF="#var_valhalla">4.8 Valhalla</A>
+<LI><A HREF="#var_dot">4.9 DOT</A>
+<LI><A HREF="#var_aoatoioa">4.10 AOA to IOA Table</A>
+<LI><A HREF="#var_lazy">4.11 Lazy Fetch Related Variables</A>
+<LI><A HREF="#var_oneshot">4.12 Variables set only once</A>
+<LI><A HREF="#var_tracexcall">4.13 Trace External Call</A>
+<LI><A HREF="#var_ioagc">4.14 IOA GC Related Variables</A>
+<LI><A HREF="#file_pointers">4.15 File Pointers and <CODE>printf</CODE></A>
+<LI><A HREF="#var_critical">4.16 Critical Variables</A>
+</UL>
+</UL>
+
+<LI><A HREF="#bibliography">Bibliography</A>
+
+</UL>
+
+<H2><A NAME="STATUS"><EM>Current status of implementation</EM></A></H2>
+<PRE>
+
+Experimentielt release
+======================
+
+I ~beta/r4.1.MT er der checket et helt release 4.1 ud.
+BETA scriptet i releaset er rettet til s&aring; det altid s&aelig;tter 
+switch 65.
+
+Visse ting er oversat i sporet, men endnu er ingen multiprocessor-
+eksperimenter foretaget deri.
+Almindelige basiclib demoer (f.eks. beer.bet og record.bet) virker.
+
+De eneste multiprocessor-eksperimenter, der er foretaget, er lavet
+med sm&aring; demo programmer baseret p&aring; tstenv (se 
+"Multiprogrammer" nedenfor).
+
+Compileren kan IKKE med switch 65 sat overs&aelig;tte guienv programmer
+(se nedenfor).
+
+Switch 65 checkning og kodegenerering (mini V-entries uden register 
+vinduer)
+============================================================================
+
+ - I ~beta/r4.1.MT sker f&oslash;lgende ved overs&aelig;ttelse af
+   guienv demo (med --tracecode, output komprimeret):
+
+	% 311 :assertOpen  
+	% 311 :private.theMenubar[]->theBar[]  
+	% 311 :assertOpen  
+	% 311 :(XtNtitle,theTitle[])->setStringResource  
+	% 311 :assertOpen  
+	% 311 :XtNtitle->getStringResource->theTitle[]  
+	% 311 :(# (*)  do <<Imperatives>> #)  
+	% 311 :assertOpen  
+	**** Fatal error in compiler!!!
+	Pre is empty/null(virtual binding)
+
+   Ingen beta.dump genereres.
+   Det er guienv_unixbody er kodegenereres.
+   Ole har konstateret, at det er en tricky fejl at rette, men at
+   en dummyvariable i guienv_unixbody forhindrer fejlen i at komme.
+
+ - St&oslash;rste problem er at allokering af stack objecter
+   IKKE m&aring; foreg&aring; direkte i AOA: Generelt skal stack
+   objeckter holdes v&aelig;k fra AOA, da vi ellers skal checke for
+   ChkRA ved hver push.
+
+ - R.%suspend er implementeret (non-preemptive version).
+   TODO: Preemptive version mangler.
+
+ - TODO: newR: der skal laves check for LVRA allokering.
+   Hvis LVRACalloc skal kaldes, skal regObj gemmes over kaldet.
+
+ - TODO: ExO seems not to be complete
+
+ - CopyCPP:
+   We could use %g2 and %g3 in the dynamically generated code instead of 
+   SAVE/RESTORE, since these stack pointers are reloaded from the activeStack 
+   upon entry of the callback-stub anyway.
+
+ - F&oslash;lgende runtime routiner er stadig skrevet i C.
+   De b&oslash;r genereres i betaRun.bet af effektivitetsgrunde.
+   PT har C-funktionerne temmeligt dyre assembler wrappere for at
+   kunne fungere med switch 65.
+	HandleIndexErr
+	*AlloVRI, AlloVRC
+	*ExtRR
+	*ExtVR1, ExtVR2, ExtVR4, ExtVR8
+	*ExtVRI, ExtVRC
+	*CopyRR, CopyVR1, CopyVR2, CopyVR4, CopyVR8
+	*CopyVRI, CopyVRC
+	*CopySRR, CopySVR1, CopySVR2, CopySVR4, CopySVR8
+	*CopySVRI, CopySVRC,
+	*Qua
+	*AlloDO
+        *CopyCT
+        *CopyT
+        CpkVT, CpkSVT
+	*ltS, gtS, leS, geS
+	neS, eqS
+   The ones marked with '*' can cause GC.
+
+ - gen1body:storeorigin:
+   TODO: Temporary hack for ChkRA in storing of origin - should be fixed!
+   Also a problem in ordinary (non-switch65) code!!
+
+Preemption
+==========
+ - TODO: generelt kendes status af dette ikke efter switch til mini V-entries
+   ??????
+
+ - TODO: Der skal muligvis defineres et felt i TSD til gemning af psusp_comp
+
+ - Notat fra m&oslash;de omkring fremtidig impl:
+   Der skal defineres en Timer og et ExecuteEvery pattern.
+   To mulige implementationer:
+   a. et timeobject, der enter active[]
+   b. en timer, og ved brug af r.%suspend
+   (jeg forst&aring;r ikke selv dette notat mere! /Peter)
+
+ - ThisThreadInx er implementeret
+   TODO: Der skal implementeres ThisBasicComponent (p&aring; beta niveau).
+
+ - TODO: Hvad med preemeptive suspend af basic component?
+
+ - TODO: Hvad med preemeptive suspend af scheduler?
+
+ - TODO: IOALimit=0 strategien skal overvejes igen.
+   Det er uklart hvordan den spiller samme med synkroniseringen
+   i forbindelse med GC.
+
+BasicSystemEnv
+==============
+  
+ - Korrekt semaphore implementation er gennemf&oslash;rt 
+   (kan sameksistere med GC uden deadlocks)
+
+ - TODO: skal udvides
+
+ - TODO: status i&oslash;vrigt ukendt.
+
+SystemEnv
+=========
+
+ - mini-udgave findes
+
+ - TODO: status i&oslash;vrigt ukendt.
+
+Multiprogrammer
+===============
+
+ - matrixMult: virker med standard heap (pr&oslash;vet 50 gange i tr&aelig;k).
+   Med mindre heaps, f.eks. IOA=40 fejler den oftere, dog som
+   regel pga den kendte fejl med at der allokeres stackobject i AOA,
+   men af og til med bus-error, segmentation-fault eller refnone.
+   Dette p&aring; trods af, at TST ikke kan provokere fejl mere.
+   *** Last Checked: Thu Sep 11 14:39:27 MET DST 1997
+
+ - stringsearch: virker med standard heap.
+   K&oslash;rer ogs&aring; med IOA=4, men mindre foresager
+   stack allokering i AOA, da der startes 4 tråde.
+   *** Last Checked: Thu Sep 11 16:09:43 MET DST 1997
+
+ - realConc1: virker med standard heap.
+   K&oslash;rer ogs&aring; med IOA=4, men mindre foresager
+   stack allokering i AOA, da der startes 4 tråde.
+   *** Last Checked: Thu Sep 11 16:09:43 MET DST 1997
+
+ - threads: virker med standard heap.
+   K&oslash;rer ogs&aring; med IOA=3, men mindre foresager
+   stack allokering i AOA, da der startes 3 tråde.
+   *** Last Checked: Thu Sep 11 16:05:04 MET DST 1997
+
+
+ - manythreads: virker med standard heap (argument 50).
+   Ser ogs&aring; ud til at kunne k&oslash;re (omend langsomt) selv hvis
+   antallet af tr&aring;de, der startes er lige s&aring; stort
+   som antal K i IOA (og husk at hver tr&aelig;d allokerer et 1K stackobject).
+   *** Last Checked: Thu Sep 11 16:00:30 MET DST 1997
+
+ - TODO: signaler skal overvejes - skal der v&aelig;re een tr&aelig;d der 
+   h&aring;ndterer alle unix signaler, eller skal alle have mulighed for at
+   modtage alle signaler.
+
+TST
+===
+ - status af diverse stress-tests af tst:
+
+   Med do_unconditional_gc sat til true i BetaRun.bet og 
+   i betarun/C/define.h k&oslash;rer tst nu helt igennem 
+   med standard heap! 13027 IOAGc's.
+   *** Last Checked: Thu Sep 11 14:09:49 MET DST 1997
+
+   Med BETART sat til checkheap:debugall:stopatillegal:infofile=tst.info:IOA=XX
+   og med program oversat med switch 13 (debug runtime system):
+
+   IOA=1      : AlloSO in AOA (fatal error) in AttBC
+   IOA=2-5    : AlloSO in AOA (fatal error) in tstcomp
+   IOA=6-21   : AlloSO in AOA (fatal error) in tstgeneralrep
+   IOA=22     : tst completes without errors
+
+   Larger IOA sizes are all expected to work.
+   *** Last Checked: Thu Sep 11 14:33:20 MET DST 1997
+
+Generelt
+=========
+ - TODO: Den &oslash;vrige del af denne fil er ikke s&aelig;rlig up-to-date.
+   Se bl.a. CHANGES for design-beslutninger lavet hen ad vejen.
+
+ - TODO: Skal der *b}de* v{re mulighed for schedulering vha OS tr{de
+   (AttToProcessor) og for at skrive scheuler selv.
+   Kan vi selv lave en bedre scheduler end Solaris?
+   Skal der b}de v{re BETA semaphorer (%lock) og solaris semaphorer
+   (mutex_lock)? Hvordan spiller de sammen?
+   Ulempe ved l&oslash;sning baseret p&aring; kun OS tr&aring;de:
+   Der bliver meget sm&aring; IOA slices ved mange tr&aring;de.
+
+ - TODO: Alternation (som beskrevet i beta bogen) skal overvejes.
+
+Dokumentation
+=============
+
+TODO: 
+Dette dokument er langt fra opdateret.
+Der mangler beskrivelser af
+ - sliced IOA
+ - basicsystemenv/systemenv design
+ - faktiske preemeption strategi
+ - TSD i detaljer
+ - ... mere (?) ...
+
+Meget af dette kan graves frem fra mails, kodekommentarer, 
+og/eller CHANGES.
+
+</PRE>
+
+
+<H2><A NAME="ideas">Original Ideas</A></H2>
+
+<PRE>
+
+Issues in implementing true concurrency including multiprocessor support
+=========================================================================
+
+The purpose of this note is to discuss issues related to the
+implementation of preemptive scheduling on single- as well as
+multi-processors. The goal is to obtain a detailed design of how to
+implement preemptive scheduling.
+
+It is assumed that the reader is familiar with the current definition
+and implementation of components in BETA.
+
+Another goal is to decide if a first step should be to implement
+preemptive scheduling on a single processor and then later on a
+multi-processor. The problem with such an approach might be that the
+work in implementing single processor concurrency might not be general
+enough to be re-used for a multi-processor. Since we have limited
+resources we may not be able to afford re-doing work. I.e.  it should
+be done right the first time.
+
+It is important that we soon get direct support for concurrency as
+this has been argued as one of the unique features of BETA.  The
+non-preemptive scheduling is better than most other languages and the
+distribution support is also superior to most other systems.  But for
+completeness we need preemptive scheduling very soon!
+
+Muti-processors like the Sun 10/20 are becoming more and more
+interesting from a commercial point of view. It is an architecture
+that other vendors might offer soon. People here says that the PowerPC
+is prepared for this and so is Intels new P6.  The Sparc
+multi-processor is difficult to program. If BETA can support this we
+are in a good position to create interest here.
+
+1	Basic idea
+-------------------
+
+The current implementation of concurency supports non-preemptive
+scheduling of components. I.e. a component must explicit give up the
+processor by directly/indirectly executing a SUSPEND;
+
+To handle preemptive scheduling the idea is to enforce a SUSPEND on a
+component. The SUSPEND will then return the control to the component
+that called the component. The caller may then schedule a new
+component.  A scheduled component may then later be called at the
+point where it was resumed.
+
+The following sub-tasks must be carried out:
+
+1.2	Implementation of preemptive suspend operation
+
+	This sub-task is about writing a run-time routine that can suspend
+	a component at an (almost) arbitrary point.
+
+	This routine is independent on the remaining subtasks
+	and a necessary first step
+
+	It is necessary to make a few language changes to support
+	preemptive suspend. See section 2.
+
+1.3	Decide on how when to call the preemptive suspend.
+
+	There are a number of different ways in which the preemptive 
+	suspend can be called. See section 3.
+
+1.4	Stack allocation
+
+	An old issue has been the handling of stacks for components.
+	This is discussed in section 5.
+
+1.5	Support for multi-processor
+
+	Section 5 discuss the additional issues involved in supporting 
+	multi-processors.
+
+1.6	Section 6 is a summary of general problems taht have to be considered
+	when dealing with (Solaris) leigt-weight processes and 
+	multi-processors.
+		
+2.	Preemptive SUSPEND and Language changes
+-----------------------------------------------
+
+It is probably necessary to make minor changes to the semantics of
+suspend and call of components (coroutines). The problem is that the
+current call/suspend mechanism only works at one level, and this may
+not be sufficient to handle true concurrency.  In the following
+program the emphasis is to focus on the call/suspend mechanism. The
+idea in the example is to show the organization of the current form of
+concurrency.
+
+---------
+systemenv
+
+   semaphore: 
+      (# P: (# do ... (if blocked then ... SUSPEND; .. if) ..; .#); 
+         V: (# do ....; {make a possible waiting component active} #);
+       #);
+   scheduler: | @ 
+      (# active: @ queue...;
+      do cycle(#do 
+	   active.next->current[];
+	   current; (* call next component to be scheduled *)
+           (* return here when current component suspends *)
+          #);
+       #);
+----------
+User program
+
+   p1: @ | system
+       (#  go: @ | (# a,b: @integer;
+	           enter a
+		   do  cycle(#do
+			 m.P;
+			 a + shared -> shared -> b;
+			 m.V;
+			 SUSPEND
+		     #)
+		  exit b
+		  #);
+	   m: @semaphore
+	do  111-> go -> w; (* a SUSPEND in go returns here and assign w *)
+        #);
+   p2: @ | system(# ... #);
+
+   m: @semaphore; shared: @integer; ...
+...
+   p1[]->fork; p2[]->fork; ...
+
+The components p1 and p2 are executed concurrently. They synchronize acces
+to a variable 'shared' using the semaphore 'm'. P1 is implemented using
+a component 'go'. In 'go', the semaphore 'm' is accessed. 'Go' suspends
+whenever it has produced a new value.
+
+The above program has the  following problems:
+
+2.1	Suspend in semaphore
+
+	If the call 'm.p' in 'go' results in SUSPEND, then 'go' suspends to
+	the place where 'go' was called. This is WRONG!! Instead p1 should
+	be suspended and another process should be scheduled.
+
+	This is ALREADY a problem with the current implementation.
+
+2.2	Preemptive suspend
+
+	The same problem exists if the system enforces a suspend while 
+	'go' is executing. This suspend should return to the scheduler.
+
+We thus have the following different situations where call/suspend
+applies:
+
+2.3	Call/suspend for 'normal' component with enter/exit parameters
+
+2.4	Call/suspend for semaphore operations
+
+2.5	Call/suspend for preemptive call/suspend;
+
+2.4 and 2.5 may happen to be the same, but it may be desirable to be
+able to distinguish them. One technical difference is that in 2.4, the
+suspend is an explicit Beta suspend-imp, whereas this is not the case
+in 2.5.
+
+In order to implement alternation as described in chapter 15 of the
+Beta book, yet another call/suspend situation may arise (as far as I
+remember).
+
+2.6	Call/suspend with level parameter
+
+Consider a component 
+
+	C: @ | (# ..... #)
+
+A component may be executed (called) by 
+
+	level -> C.call
+
+and it may suspend its execution by
+
+	level -> suspend
+
+where level is a non-negative integer.
+
+C.call is similar to a normal call using the syntax 'C', but without
+enter/exit parameters. The call marks 'C' to be at level 'level'.
+
+Execution of  'level -> suspend' finds the nearest dynamically enclosing
+component at level 'level' and suspend it. Suspend may thus involve a
+stack of components instead of just one componet as in the current
+implementation.
+
+A 'normal' component call 'C' with/without penter/exit parameters is
+considered a call at an infinite level.
+
+A preemptive call/suspend is considered to take place at level 0.
+
+A semaphore call/suspend is considered to take place at level 1.
+
+It is thus possible for a user program to take over control of
+scheduling etc. by calling components at the appropritate levels just
+as this can be used to program alternation as described in chapter 15.
+
+If you consider the example in 2 above, it should be (hopefully) clear
+that if the scheduler calls 'current' at level 0, then a preemptive
+suspend in 'go' will return to the scheduler and not to 'p1'
+
+Disclaimer: it is some time ago (just before Lars left) that this was
+last discussed, so I may have forgotten details. I think that there
+should be some document around describing previous versions of
+this. If any of you have it please send med a copy:-)
+
+2.7	Static suspend
+
+The semantics of suspend in Simula was at some point changed to be
+static in the sense that suspend cna refer to any statically enclosing
+coroutine as in
+
+	class T: 
+           (# ...; 
+              class A: (# ... suspend this(A); 
+                          ... suspend this(T); 
+                          ...    
+                        #)
+           #)
+
+We should consider if we should use the same semantics for BETA.  It
+is , however, not obvious if this will be sufficient to define the
+implementation of semaphore and schedulers in BETA as we currently do!
+If someone thinks this might work, it may be simpler than the
+level-based approach above.
+
+3.	When can a preemptive suspend be performed
+----------------------------------------------------
+
+3.1	A preemptive suspend can only take place at well defined places.
+	On a given platform, the BETA run-time system assumes that the
+	only values in a designated set of address register are always
+	references to objects. Between calls to run-time routines some
+	of these registers may hold values which are NOT references.
+	If a preemptive suspend can take place at an arbitrary point of
+	execution, there is no way for the garbage collector to know which
+	registers hold references.
+
+	It is only the register content at the point of interrupt that is
+	a problem. For the sparc it is only the 'top' register window.
+
+3a	Fix the garbage collector and/or compiler with respect to registers
+---------------------------------------------------------------------------
+
+3a.1	Fix the compiler
+
+	The compiler currenlys has a static division of the registers.
+	A subset of the regsiters may hold object references.
+	These registers are from now referred to as 
+
+			OBJECT-registers
+
+	The compiler could be fixed such that there is never an arbitrary
+	value in the object-registers. Its is not know how easy this is.
+
+	It has also been suggested during the discussion to have a more
+	dynamic definition of object-regsiters. I.e. the compiler allocates
+	object-registers on the fly. There must then be a way for the
+	GC to find out about this. The self compiler uses the delay slot
+	after a call to describe which registers are object-registers.
+
+	It will take some amount of work to make this change and it dont
+	help with respect to knowing this at the point of interrupt.
+	here it would be necessary to set the corresponding bit for a 
+	register when it is allocated and deallocated. I.e extra code
+	will be generated.
+
+	An intermediate solution could be used: there is a register
+	or memory value that holds a bit vector telling wheter or not a
+	register holds an object-reference. Initially this bit vector
+	is set for the current object-registers the compiler currently
+	uses. When one of these are NOT used for an object ref, the
+	bit is cleared.
+
+3b.1	Change the garbage collector to handle arbitrary values in
+	registers.
+
+
+The following possibilities for preemptive suspends exists:
+
+3.1	Before a call to a run-time routine.
+
+	The problem with this is that a component with a tight loop may 
+	monopolize the processor.
+
+3.2a	Well defined places with code to check.
+
+	A timer is set up to generate an interrupt. The handler of the
+	interrupt sets a bit to indicate that a preemptive suspend must
+	take place at the next well defined point in the execution.
+
+	At each call-instruction and each backward jump-instruction, it is
+	tested whether or not the suspend-bit is set. If set a call to
+	a preemptive suspend routine is performed.
+
+	The problem with this solution is that extra code is generated
+	for each call and each loop. This takes extra memory as well as time
+	to excute. This code will always have to be there since it is NOT
+	know if a given fragment will be executed in the context of a
+	concurrent program. It is of course possible (but not desirable)
+	to have 2 sets of objects-files.
+
+3.2b	Well defined places before RT-call and at backward jump
+
+	The  well-defined places are at a call to a run-time routine
+	and at backward jumps.
+
+	* The suspend-bit is tested at selected RT routines
+
+	  If the test is made at object-allocation, the interrupt
+	  handler can set IOAtop=0 which will force a GC. This makes
+	  the suspend-bit check at each allocation indirect.
+
+	* At each backward jump the suspend bit is tested
+	  For a direct jump a conditional jum capn be made (restart)
+
+	  For a conditinal jump as in for-loops it will cost more.
+	  And the 'price' will be paid for tight for-loops. And this is 
+ 	  where we are in competition with C.
+
+3.3a	Well defined places with insertion of break.
+
+	As described in 3.2, but here the interrupt handler looks for
+	the next call- or jump-instruction and replaces it with a break.
+	Then execution is resumed. When the break happens the preemptive
+	suspend is executed.
+
+	Disadvantages: search for call- or -jump; 2 traps/interrupts needed
+	to handle a preemptive suspend. Not possible with shared libraries
+
+	Perhaps a direct call of the pre-emptive suspend can be inserted
+	instead of the break.
+
+3.3b	Well defined places, but code copy with insertion of break.
+	
+	To overcome the problem in 3.3a with shared libraries, the 
+	code from the interrupt point and to the next well defined place
+	may be copied to a buffer. Execution is resumed in the code
+	in the buffer and the suspend will happen when the break is
+	executed in the buffer.
+
+3.4	Preemptive suspend at arbitrary points but coordination before GC
+
+	The preemptive suspend can take place at any point in the code.
+	Before a GC, each component is resumed to a well-defined point.
+	
+	May be combinded with 3.3
+
+3.6	The GC is modified to handle arbitrary values in all registers.
+	I.e. no requirment for only having object references in the
+	specific adr. registers
+
+4.	Stack handling
+----------------------
+
+	We should discuss the current handling of stacks for components.
+	It has often been proposed thta each component should have its own
+	stack alloacted. The problem with this has been that for programs
+	with many components (like Simulation programs), there might be
+	too many stacks allocated.
+
+	It is probaly a good idea that components corresponding to LW processes
+	have their own stack. (See also the discussion below on multi-processor
+	supprt).
+
+	The BETA compciler currently pushes temporary values on the stack, just
+	as dynamic links and return-addresses are saved on the stack.
+	If these values instead are saved in the objects, the stack might be
+	completely eliminated for the BETA code. This will simplify garbage collection
+	and attach/suspend in general. It is easy to save dynamic link and return
+	addresses in the objects, but some more work to save temporary values
+	in objects. (A previous version of the BETA implementation
+	saved dynamic links and return addresses in the objects).
+
+	On some platforms, (e.g. SGI, PowerMAC), we may not be able to eliminate 
+	the stack, since pointers to tables for position independent code are
+	saved on the stack. We might thus have to invent  our own mechanims for
+	this.
+
+5.	Multi-processor support
+-------------------------------
+
+5.0	BETA level access to multiple processors
+
+	Instead of one singular Scheduler object as described in section 1,
+	Scheduler is a pattern, and a Scheduler-object is instantiated
+	for each multi-processor. The active-queue is a shared object
+	that may be accessed by all the schedulers probably implemented as a
+	monitor.
+
+		active: @queue...;
+
+		scheduler: 
+	           (#
+		   do cycle(#do 
+		       active.next->current[];
+		       current; (* call next component to be scheduled *)
+	               (* return here when current component suspends *)
+	             #);
+	           #);
+
+		SC: [1] @ | scheduler
+		...
+		numberOfProcessors -> SC.new;
+		(for i: SC.range repeat
+		     &|scheduler[] -> SC[i][];
+		     SC[i][] -> attachToProcessor
+		for);
+	
+	'numberOfProcessors' gets its value form the RT. 
+
+	'attachToProcessor' assigns the component to a physical processor.
+	The implementation of this operation should work independtly of
+	how many physical processors there actucally exists. I.e. there
+	may be fewer components that processors and more components than
+	processors may be attached. The operation is thus similar to fork,
+	but is a hint to the implementation that these components should run 
+	in true concurrency if possible.
+	Perhaps we should require that #components being attached is less
+	than or equal to #processors. We will need to look at the details
+	for this.
+
+5.1	Stack handling
+
+	There must be at least one stack pr. processor?
+
+5.2	Exclusiveness of run-time routines
+
+	In the  case of multi-processors, it must be investigated
+	to which extent concurrent execution of run-time routines 
+	can access shared data.
+
+	When RT operations take place all components must be passive
+
+5.3	The implementation of semaphores will have to be revised to assure
+	indivisibility
+
+5.4.	One eden-area pr. processor
+
+	It may be expensive to lock for each allocation operation.
+	An alternative may be to have an even-area pr. processor.
+	I.e each processor has its own stack and even-area. 
+	Allocation can then be made without locking.
+	
+	When one processors fills its eden-area, scavenging is done for
+	the eden-area of all processors. This (still) requires that
+	all processors are stopped.
+
+	To refresh: the original scavenging operates with 3 areas
+	for new objects: eden-, to- and from-space. New objects are allocated
+	in eden. Scavenging is performed  by copying objects from 'from-space'
+	and eden-space to to-space whereafter to- and from-space are swapped
+	and allocation starts all over in eden.
+	The BETA system has no eden-space but only the to- from-spaces.
+
+	If eden is introduced there will be an eden-space pr processor
+	and common to-, and from-spaces.
+
+	I have no idea of how much work it will be to make the above
+	change to the current garbage collector.
+
+	Pros: no blocking/syncronization at allocation time
+
+	Cons: expensive to allocate an eden-area pr processor?
+
+5.5	Garbage collection
+
+	All components must be passive during grabage collection, unless,
+	of course, we implement a concurrent bgrabage collector.
+
+
+6.	Solaris leight-weight and multi-processor issues.
+-----------------------------------------------------------
+
+	The following documents are highly recomendable relevant
+	documentation for Sparc/Solaris:
+
+        <A HREF="#MTguide">[MTguide]</A>
+
+	<A HREF="#SPARC8">[SPARC8]</A>
+
+		Chapter 6 describes the memory model
+		Appendix J is 'Programming with the memory model'
+			It shows a number of examples on synchronizing
+			concurrent processes using the various
+			store orderings and memory sync operations
+		Appendix K is a formal def of the memory model
+
+6.1.	Partial store ordering/weakly ordered memory operations.
+----------------------------------------------------------------
+	A multi-processor like the Sparc-10/20 uses so-called weakly
+	ordered memory operations. "So, if one processor stores values
+	in location A and then in location B, other processors loading
+	data from location B and then location A may see the new value of 
+	B but the old value of A." (SunOS 5.2, Guide to Multi-Thread 
+	Programming p. 11). In order to synchronize data access, the 
+	processors have special instructions that force an order on 
+	memory operations.
+
+	The Sparc has special instructions to syncronize memory in
+	the case of partial store ordering.
+	These instructions are used to implement syncronization primitives.
+	The Sparc can also be run in a mode where partial store ordering
+	is disabled.
+
+	But in short, I dont think that partial store ordering will be 
+	a problem.
+
+6.2.	Multiple memory cycles
+-------------------------------
+	On some processors a read/store of memory may require multiple
+	memory cycles. This is e.g. the case on processors where a 4-byte
+	long need NOT be 4-byte aligned. On such multi-processors an
+	unsyncronized read/write between tow processors may result in the
+	read gettiung 2 bytes from the old value and 2 bytes from the
+	new value.
+
+	For primitive data types like integer, real, etc this is probably
+	not a problem. It may give random results, but the philosophy
+	is that the programmer MUST synchronize access to shared objects.
+
+	It is, however, a problem that reading/writing references may give
+	undefined results and thereby unsafe programs. This is NOT acceptable.
+	On the other hand it will be very expensive to implement syncronized
+	read/write for all manipulations of references!!
+
+	On the Sparc, 4-byte longs, however, MUST alwasy be 4-byte aligned,
+	i.e. the above problem does NOT exist for the Sparc.
+	We must, however, be sure that this is really the case!
+
+	Again I dont think this will be a problem.
+	
+6.3.	LWP-safe libraries
+--------------------------
+
+	All literature on LWP discuss LWP-safe libraries. I.e. if a given library
+	can be used in a concurrent situation. We should alos discuss this!
+
+7.	Concrete proposal
+-------------------------
+
+7.1 	Components and suspend/attach are extended to have a priority
+	parameter
+
+7.2	A timer is used to generate an interrupt
+
+7.3	When an interrupt happens, the current process is suspended;
+	when garbage collection is needed all suspende processes are
+	brought to a well-defined state as described in 3.3b.
+	GC is then carried out.
+	
+	(this is the critical point - I am not sure tha this is the best
+	solution; I know thta others prefer 3.2; but I think we should
+	have a solution that have no cost to non-concurrent programs;
+	I am, however, willing to be convinced:-)
+
+7.4	No thread switch when executing run-time routines.
+	When the interrupt happens - a bit is set and tested
+	for at the end of the routine
+
+7.5	Semaphores
+
+	Must be re-implemented since semaphore operations cannot be
+	interrupted.
+
+7.6	Multi-processor
+
+7.6.1	For each processor (NOTE: processor - not process) a separate stack 
+	is allocated
+
+7.6.2	An OS thread is assigned to each processor and runs a BETA scheduler.
+	The schedulers must syncronize access to the process queues.
+
+7.6.3	For each processor an eden-area is allocated - alternatively
+	object allocation must be syncronized.
+
+7.6.4	Alle processesors must be stopped before a GC starts
+
+8.	Various comments
+------------------------
+
+8.1	Extracts from discussions between Soren Brandt and Rene
+---------------------------------------------------------------
+
+(I have lost track of who means what, and there might be copy-past-errors:-)
+
+	Test for thread shift at well defined points only
+
+   -1: Alle runtime rutiner skal nu betragtes som kritiske regioner. Kommer
+       der et interrupt under udfoerslen af en RT rutine, maa haandteringen
+       af dette interrupt altsaa udsaettes til RT rutinen terminerer. At 
+       lave runtime rutiner til kritiske regioner kraever mindst at der
+       saettes og cleares en bit ved indgangen til hhv. udgang fra hver 
+       RT rutine, hvilket saa skal ske udeleligt...
+
+       Hypotese: Dette er vaesentligt dyrere end at checke paa veldefinerede 
+       punkter om der har vaeret et interrupt siden sidste veldefinerede punkt.
+
+   -2: Det bliver langt dyrere/svaerere at implementere semaforer naar 
+       interrupts kan komme naar som helst.
+
+Med den loesning jeg stadig favoriserer, nemlig at interrupts saetter en bit
+som saa forcer et threadskift ved naeste veldefinerede punkt, bliver det
+meget lettere at implementere kritiske regioner, da vi jo saa ved hvor et
+threadskift kan forekomme. Endvidere mener jeg altsaa at det faktisk vil give
+bedre performance end at kunne skifte naar som helst.
+
+Bemaerk at begge loesninger haandterer interrupts under udfoerelse af 
+externals. Da en external per definition er et "veldefineret punkt" (vi
+antager jo alligevel at der ikke er object referencer i registre under
+udfoerslen af en external), kan begge metoder tage threadskiftet med det
+samme, hvis interruptet altsaa kommer under udfoerslen af en external.
+
+.......
+	
+	Thread shift at arbitrary points
+   
+Naar vi har flere threads koerende paa engang bliver vi uundvaerligt
+noed til at synkronisere adgang til run-time systemts variable. Denne
+synkronisering boer ikke noedvendigvis at blive gjort 'per rutine', men
+kan sandsynligvis blive gjort med hensyn til hvilke variable der bliver
+brugt. Dette vil foroege parallismen i systemet.
+
+Der er ikke noget i vejen for at run-time rutiner kan blive preemted.
+Paa naer de meget specielle, saa som semapore implementationen og
+garbage collection.
+
+> 
+>        Hypotese: Dette er vaesentligt dyrere end at checke paa veldefinerede 
+>        punkter om der har vaeret et interrupt siden sidste veldefinerede punkt.
+
+Det er ikke klart for mig hvor godt en saadan implementation skalere
+til mutiprocessor arkitecture. 
+
+Jeg har dog ogsaa et eller andet imod den ide at gennere speciel kode
+for at supportere threads. Naar vi nu har set at GB kan aendres saa
+det kan klare arbitraere schedulering. GB aendringen har ogsaa den
+dejlige egenskab at for ikke threaded-kode er der ingen overhead 
+(ok, maaske et par maskininstruktioner per GBing). Hvor explicit 
+check i koden vil vaere vaesentlig dyre.
+
+> 
+>    -2: Det bliver langt dyrere/svaerere at implementere semaforer naar 
+>        interrupts kan komme naar som helst.
+> 
+
+Du vil faa samme problem naar der er flere processore. Den eneste maade
+er at bruge spin-locks, eller maaske de nyere load-linked, store-conditional
+
+> Med den loesning jeg stadig favoriserer, nemlig at interrupts saetter en bit
+> som saa forcer et threadskift ved naeste veldefinerede punkt, bliver det
+> meget lettere at implementere kritiske regioner, da vi jo saa ved hvor et
+> threadskift kan forekomme. Endvidere mener jeg altsaa at det faktisk vil give
+> bedre performance end at kunne skifte naar som helst.
+>   
+>    ....
+> Det er ikke klart for mig hvor godt en saadan implementation skalere
+> til mutiprocessor arkitecture.
+
+Fint (vil jeg tro). Med Ole's eden omraade skal processorerne blot synkronisere
+GC samt adgang til AOAtoIOA og CBFA.
+
+> Saa paastanden er: "min" loesning er ihvertifald ikke langsommer end
+> Soeren's, og den generalisere sig bedre til en multiprocessor tid.
+
+Det er der nu ikke nogen evidens for...
+
+.............
+
+> Se det er jo netop min pointe. Med min favorit loesning er der slet ikke
+> behov for at synkronisere adgang, da vi jo netop ved at thread skift 
+> ikke kan ske i midten af en runtime rutine. Og jeg mener ikke at en
+> hoej grad af parallelisme i runtime systemet er vaerd at bruge krudt paa,
+> da det jo netop vil oege overheadet til laasning af semaforer og den slags.
+> 
+
+Her ligger en antagelse om et eden-space per processor. Det er muligvis en 
+god ide (hvis man da ikke har 128 processor eller flere). Man kunne godt 
+forstille sig skaerve fordelinger memory-forbrug af threads, saa flere af
+disse eden-spaces vil altid ligge oede hen.
+  
+Jeg kender ikke saa meget til GB og slet ikke parallel GB til at vudere om
+dette er maaden at goere det  paa.
+
+8.2	Jacob on Garbage Collection
+-----------------------------------
+
+   	En objekt reference er sund hvis den peger paa noget der peger paa en 
+        prototype:
+
+              ref -------> ptref -------> pt
+
+      saa hvis vi kan genkende at noget er en prototype er vi paa den
+      groenne gren. Men vi har jo allerede en tabel over prototyper til
+      brug for persistensen. For hvert af de potentielt farlige registre
+      goer GC altsaa foelgende:
+
+          (if ref peger ind i IOA, AOA eller LVRA then
+             loop:
+		 (if ptref peger ned i data segmentet then
+		    (if ptref findes i en prototype tabel then
+			ref er en objekt reference
+		    else
+                        ref-4->ref; restart loop;
+		    if)
+		 else
+                    ref-4->ref; restart loop;
+		 if)
+          else
+             ref er ikke en objekt reference
+          if)
+
+      Jeg antager ovenfor at "potentielt farlige registre" ikke kan indeholde
+      integers hvis vaerdi tilfaeldigvis kunne pege ind i heapen. Hvis dette
+      alligevel er tilfaeldet, vil ovenstaaend konservativt holde objekter i
+      live. Om det er et problem maa andre bedoemme.
+
+Cons:
+
+Det er et problem. Ikke bare vil man blive n&oslash;dt til at holde "objekter", 
+der i virkeligheden er data, kunstigt i live. Man kan heller ikke tillade 
+sig at flytte p&aring; de objekter, de ser ud til at udpege, for t&aelig;nk nu, hvis 
+det i virkeligheden var integer-atributter, ikke referencer, man derefter 
+opdaterede... (se evt. mit og Steffens speciale, afsnit 2.5.4).
+
+Konservativ GC passer med andre ord *rigtigt d&aring;rligt* sammen med 
+compaction og dermed f.eks. copying collection. Der findes avancerede 
+"mostly copying" konservative spildopsamlingsteknikker, men tro mig, n&aring;r 
+jeg siger, at det ikke er noget, I har lyst til at give jer i kast med!
+	
+
+9.	Conclusion
+------------------
+
+As can bee seen most of the work is in the run-time system.
+
+I also currently think that an incremental strategi with implementing
+this for single processor first is feasible.
+
+But the discussion is not finished:-)
+
+</PRE>
+
+<H2><A NAME="newprim">New %-Primitives</A></H2>
+
+
+<H3><A NAME="prim_effect">Explanation of intended effect of the new %-primitives</A></H3>
+
+<DL>
+
+<DT><CODE>%lockSpinLock</CODE>
+<DD>Wait for a specified byte to become zero, then set 
+it to one in an atomic fashion. (Using ldstub and ldub on Sparc)
+
+<DT>%unlockSpinLock
+<DD>Release the lock simply by setting it to zero. (Using stbar on Sparc)
+
+<DT>%disablePreemptiveSuspend
+<DD>First, aquire the (single) spinlock associated with the PreemptionLevel.
+Then increment it, and release the lock.
+
+<DT>%enablePreemptiveSuspend
+<DD>Like disable, except the PreemptionLevel is decremented.
+
+<DT>%xsuspend
+<DD>Suspend to any (attached) component - not just the one
+that (immediately) attached me.
+
+</DL>
+
+<H3><A NAME="prim_impl">Implementation details</A></H3>
+
+<H4><A NAME="preemptionlevel_impl">PreemptionLevel</A></H4>
+  When the PreemptionLevel is zero, preemption may take place. Otherwise 
+  the preemtionhandler must exit immediately. Is should be 1 initially, so
+  that the system can decrement it (using %enablePreemptiveSuspend) once 
+  it has prepared for preemption.
+  For details on the preemptionhandler, see below.
+
+
+<H4><A NAME="sighandler_details">Signalhandler details</A></H4>
+  The signalhandler starts out by trying to lock the preemptionlevel.
+  It must not block doing so, so it should only try once. If it fails, 
+  the PreemptionLevel is considered to be possitive, that is, preemption
+  is not allowed. Otherwise it reads the PreemptionLevel. 
+  If the PreemptionLevel is zero, then check the GC flag. If it is not set,
+  force a GC, which will in turn force a preemptive suspend.
+  Cleanup by releasing the lock, if it was acquired earlier.
+  Pseudecode:
+
+<PRE>
+  (if trylock(PreemptionLevel.Lock) then
+     (if PreemptionLevel.value=0 then
+        (if PreemptionLevel.inGC=0 then
+	   0-&gt;IOALimit (* Force GC, which will force preemptive suspend *)
+	if)
+     if)
+     FreeLock(PreemptionLevel.Lock)
+  if)
+</PRE>
+
+<H4><A NAME="preemptionhandler_impl">Preemptionhandler</A></H4>
+  This is currently implemented as a wrapper on the GC.
+  Whenever you want to do a GC, do the following:
+
+<PRE>
+  1-&gt;PreemptionLevel.inGC
+  (if IOALimit=0 then
+     (Recalculated IOALimit) -&gt; IOALimit
+     (if PreemptionLevel.Lock=0 and PreemptionLevel.value=0 then
+	Suspend
+     if)
+  if)
+  (if GC-is-needed then
+     GC-and-alloc-obj
+  else
+     Alloc-the-obj
+  if)
+  0-&gt;PreemptionLevel.inGC
+</PRE>
+
+<H4><A NAME="suspX">%Xsuspend implementation</A></H4>
+Consider the following:
+ 
+<PRE>
+
+   X: @|(# X1: (# do ...; Y; ... #); do ...; X1; ... #);
+   Y: @|(# Y1: (# do ...; Z; ... #); do ...; Y1; ... #);
+   Z: @|(# Z1: (# do ...; Y.suspend; ... #); do ...; Z1; ... #);
+</PRE>
+
+For a component Z, there may be no BETA item frames and Z1 may 
+be identical to Z (body part of component).
+Similarly for X and Y.<BR>
+Also X and Y may be identical, corresponding to a normal suspend
+(i.e. THIS.suspend).
+<P>
+Now consider the execution of Y.suspend in Z1. This will involve
+changing the following picture:
+ 
+<PRE>
+
+                           
+      ____________         ____________           ____________ 
+     |            | ,---->|            |   ,---->|            |
+     |  Z1 item   | |     |  Y1 item   |   |     |  X1 item   |
+     | = current  | |     |            |   |     |            |
+     | object (I0)| |     |            |   |     |            |
+     |____________| |     |____________|   |     |____________|
+                    |                      |                  
+      Z component   |                      |                  
+  = ActiveComponent |      Y component     |      X component  
+      ____________  |      ____________    |      ____________ 
+,--->| Proto = -1 | | ,-->| Proto = -1 |   | ,-->| Proto = -1 |
+|    | GCAttr     | | |   | GCAttr     |   | |   | GCAttr     |
+|    | StackObj   |-|-|-. | StackObj   |---|-|-. | StackObj   |--.
+|    | CallerObj  |-' | | | CallerObj  |---' | | | CallerObj  |  |
+|    | CallerComp |---' | | CallerComp |-----' | | CallerComp |  |
+|    | CallerLSC  |=-1  | | CallerLSC  |=PC(Y1)| | CallerLSC  |=PC(X1)
+|    |------------|     | |------------|       | |------------|  |
+|    | Z item     |     | | Y item     |       | | X item     |  |
+|    |____________|     | |____________|       | |____________|  |
+|     ____________      |  ____________        |  ____________   |
+| ,->|            |<----' |            |<------' |            |<-'
+| |  | Z stackobj |       | Y stackobj |         | X stackobj |
+| |  |____________|       |____________|         |____________|
+| |                        
+| |                           
+| |              TSD              
+| |               _________________ 
+| |              | ...             |
+`-|--------------| ActiveComponent |
+  |              | ...             |
+  `--------------| ActiveStack     |
+                 | ...             |
+                 |_________________|
+
+</PRE>
+
+to this:
+
+<PRE>
+  ____________            ____________          ____________ 
+ |            |<--. ,--->|            |        |            |
+ |  Z1 item   |   | |    |  Y1 item   |        |  X1 item   |
+ |            |   | |    |            |        | = current  |  
+ |            |   | |    |            |        | object (I0)|    
+ |____________|   | |    |____________|        |____________|   
+                  `-|------------------------.                  
+                    |                        |                    
+  Z component       |     Y component        |  X component      
+  (suspended)     ,-|----------------------. |  = ActiveComponent
+  ____________    | |     ____________     | |  ____________      
+ | Proto = -1 |<--' | ,->| Proto = -1 |    | | | Proto = -1 |<----.
+ | GCAttr     |     | |  | GCAttr     |    | | | GCAttr     |     |
+ | StackObj   |--.  | |  | StackObj   |--. | | | StackObj   |---. |
+ | CallerObj  |--|--' |  | CallerObj  |--|-|-' | CallerObj  |   | |
+ | CallerComp |--|----'  | CallerComp |--|-'   | CallerComp |   | |
+ | CallerLSC  |=PC(Z1)   | CallerLSC  |=PC(Y1) | CallerLSC  |   | |
+ |------------|  |       |------------|  |     |------------|   | |
+ | .........  |  |       | ......     |  |     | ......     |   | |
+ |____________|  |       |____________|  |     |____________|   | |
+  ____________   |        ____________   |      ____________    | |
+ |            |<-'       |            |<-'     |            |<==< |
+ | Z stackobj |          | Y stackobj |        | X stackobj |   | |
+ |____________|          |____________|        |____________|   | |
+                                                                | |
+                                                                | |
+             TSD                                                | |
+              _______ __________                                | |
+             | ...             |                                | |
+             | ActiveComponent |--------------------------------|-'
+             | ...             |                                |
+             | ActiveStack     |--------------------------------'
+             | ...             |
+             |_________________|
+</PRE>
+
+
+<H3><A NAME="prim_assert">Assertions</A></H3>
+  There are some assertions on the state of the system:
+
+<OL>
+<LI>Only one processer/thread is running at the moment. The others are in
+  a well-known state, where the root-set for the GC can be determined.
+  This also implies that there is no need to lock anything while GC'ing, as
+  nothing else will happen concurrently.
+<LI>The PreemptionLevel.inGC flag ensures that the signalhandler does not
+  interfere with the GC
+</OL>
+
+
+<H2><A NAME="signals">Signal Handling</A></H2>
+
+According to <A HREF="#Primer">[Primer]</A>, one should designate a
+special thread for handling all the signals in a process. We will
+probably do this, but we need to investigate whether the
+<CODE>AlarmHandler</CODE> mechanism used to force a preemptive suspend
+will work, if it is the same specific thread, that always receive the
+<CODE>SIGVTALRM</CODE> signals.
+
+<H2><A NAME="registers">Global Registers</A></H2>
+
+The <A HREF="SPARC-ABI">[SPARC-ABI]</A> defines global SPARC registers
+<CODE>%g2-%g4</CODE> to be free to use by software, whereas 
+<CODE>%g5-%g7</CODE> are reserved for the system. 
+<P>
+In BETA code we like to have some global registers pointing out the
+IOA heap. And for the V-entry based implementation we currently also need
+to point to a stack object, and offset into two parts of this stack (for the
+data stack and reference stack, respectively), because the runtime-stack
+has not yet been eliminated (are to be inlined in objects).
+<P>
+The current allocation is:
+<PRE>
+	IOA              %g5
+	IOATopOff        %g6
+	RefTopOff        %g2
+	DataTopOff       %g3
+	IOALimit         %g4
+</PRE>
+
+This is <EM>not</EM> in conformance with the 
+<A HREF="SPARC-ABI">[SPARC-ABI]</A>,
+but has been derived "ad hoc".
+<P>
+An examination of standard libraries support the choice, though:
+
+Using 
+<PRE>
+	objdump -d &lt;libfile&gt; | egrep "%g[2-7]"
+</PRE>
+
+one can check what global variables are used by <CODE>&lt;libfile&gt;</CODE>.
+<P>
+A minimal threaded BETA program is linked with <CODE>-lm -lthread -lc</CODE>.
+An examination of these libraries (in Solaris 2.5.1) is summarized below.
+<H3><A NAME="reg_libc_a">Global Registers used by <CODE>/lib/libc.a</CODE></A></H3>
+
+<PRE>
+Function		Register
+--------------------------------
+_door_return		%g7
+_memcmp			%g2
+</PRE>
+
+<H3><A NAME="reg_libc_so">Global Registers used by <CODE>/lib/libc.so</CODE></A></H3>
+
+<PRE>
+Function		Register
+--------------------------------
+_door_return		%g7
+_memcmp			%g2
+memcmp			%g2
+</PRE>
+
+<H3><A NAME="reg_libm_a">Global Registers used by <CODE>/lib/libm.a</CODE></A></H3>
+
+<EM>NONE.</EM>
+
+<H3><A NAME="reg_libm_so">Global Registers used by <CODE>/lib/libm.so</CODE></A></H3>
+
+<EM>NONE.</EM>
+
+<H3><A NAME="reg_libthread_so">Global Registers used by <CODE>/lib/libthread.so</CODE></A></H3>
+
+<PRE>
+Function		Register
+--------------------------------
+hrestime		%g2
+hrestime		%g3
+&lt;<EM>several</EM>&gt;		%g7
+</PRE>
+
+<PRE>
+NOTE: 
+   globale sparc registre smadres af og til i processskift
+   (f.eks. i en fprintf blokkeret p} i/o), hvis der er flere
+   tr&aring;de end, der er fysiske processorer.
+   Pt er solaris 2.5.1 patch m&aring;ske p&aring; vej.
+   Denne fejl er erkendt at Sun, og vi har modtaget patchet.
+   Vi bruger nu kun registrene <CODE>%g2-%g4</CODE>
+</PRE>
+
+<H3><A NAME="reg_conclusion">Conclusion</A></H3>
+
+From the above it is evident, that using <CODE>%g5-%g6</CODE> for the IOA heap 
+is a good idea, since these are not used in standard library functions.
+Using <CODE>%g2-%g4</CODE> for the component stack is OK, as long as
+we don't call <CODE>memcmp</CODE>, <CODE>_door_return</CODE>, (Solaris 2.5 
+internal implementation detail according to man-page), and 
+<CODE>hrestime</CODE>.
+<P>
+Notice, that <CODE>gcc</CODE> will use <CODE>%g2-%g3</CODE> as temporary
+registers (without saving them) unless <CODE>-ffixed-g3 -ffixed-g3</CODE>
+is specified on the command line (and this seems not to work in 
+<CODE>gcc-2.7.2 (:-(</CODE>).
+
+
+
+
+<H2>Library Calls and MT Safeness</H2>
+
+For all calls of C library routines we have to check, whether
+the function calls are <EM>MT Safe</EM> (or <EM>MT Hot</EM>, which
+means that it is not only MT safe, but also <EM>very efficient</EM>).
+The manual pages for the different function calls specify the
+MT safeness.
+<P>
+A definition of MT safeness can be found at
+<A HREF="ftp://sunsite.unc.edu/pub/sun-info/development-tools/multi-threaded/drop-site/MT-safe.ps.Z">ftp://sunsite.unc.edu/pub/sun-info/development-tools/multi-threaded/drop-site/MT-safe.ps.Z</A>.
+
+<H2><A NAME="globals">Global Variables</A></H2>
+
+
+For each global variable (including static C variables, see below) 
+it most be considered if it is to be shared between threads, and if so, 
+how synchronization is obtained (if needed).
+
+The global data resides in three sections in the object files:
+
+<PRE>
+  .data   contains initialized writeable data
+  .rodata contains initialized read-only data
+  .bss    contains uninitialized data (in practice initialized to 0)
+</PRE>
+
+There are 4 kinds of global variables in BETA, these are 
+described in the next sections.
+
+<H3><A NAME="var_proto">1. Prototypes</A></H3>
+
+     These are currently declared in section .data.
+     We do not need to considerer synchronization of these since they 
+     are only read.
+     Should be defined in section .rodata instead.
+
+<H3><A NAME="var_string">2. String and real constants</A></H3>
+
+     These are currently declared in section .data.
+     We do not need to considerer synchronization of these since they 
+     are only read.
+     Should be defined in section .rodata instead.
+
+<H3><A NAME="var_beta_data">3. BETA_DATA</A></H3>
+     In each object file, a global symbol
+<PRE>
+	BETA_DATA_&lt;modtime&gt;_&lt;hash&gt;
+</PRE>
+
+     is defined. This symbol is only read.
+     It points out a record like this in the data segment:
+
+<PRE>
+	struct group_header
+	{
+	  struct group_header *data_start;
+	  long                *protoTable;
+	  struct group_header *data_end;
+	  long                code_start;
+	  long                code_end;
+	  char                *group_name;
+	  struct {
+	    unsigned long     hash;
+	    unsigned long     modtime;
+	  } unique_group_id;
+	  struct group_header **ptr; /* pointer back to beta_data file */
+	}	       
+</PRE>
+
+     All entries in this record are only read, except 
+     the last field (ptr), which is manipulated by NextGroup in the
+     runtime system.
+<P>
+     Finally there is one global symbol BETA_DATA, which is set up at 
+     link time to point out a list of all the 
+     <CODE>BETA_DATA_&lt;modtime&gt;_&lt;hash&gt;</CODE>
+     symbols. This symbol and the table is only read.
+<P>
+     The only synchronization needed here is on the NextGroup calls.
+     Proposed solution:
+<P>
+       NextGroup synchronizes on a mutex to ensure that only
+       one processor executes it at a time.
+<P>
+     This is only needed by some of the persistence/distribution stuff,
+     the debugger and beta.dump generation. So possibly it can be ignored
+     in the initial version. 
+
+<H3><A NAME="var_betarun">4. Global symbols in the C runtime system</A></H3>
+
+     All global variables except the ones noted upon above are declared in 
+     the C runtime system.
+<P>
+     The global variables in C betarun are declared in two ways:
+     
+<OL>
+<LI>      Non-static variables, which are supposed to be visible outside
+	  a given object file.
+	  Most of these variables are declared in C/data.gen, which is
+	  preprocessed into C/data.c (substance) and C/data.h (interface).
+<LI>      Static variables, which are local to a given object file.
+</OL>
+ 
+     Below follows a walk-through of the global variables, and proposed
+     sharing method.
+
+<H4><A name="sharing_methods">4.1 Sharing Methods</A></H4>
+
+The sharing methods proposed are:
+
+<OL>
+<LI>       Mutual exclusion (mutex)<BR>
+           By using either a home made semaphore or the solaris
+           mutex_lock() and mutex_unlock() functions, the function(s)
+           manipulating a given (set of) variable(s) are forced to
+           manipulate the variable(s) in a mutually exclusive way - i.e.
+           only one processor/thread updates the variable(s) at the time.
+<P>
+<LI>       Thread Specific Data (TSD)<BR>
+           TSD means that you can update the same data in different threads
+           without changing the values seen by other threads.
+           In effect there is one separate set of variables for each thread.
+           There are (at least) two ways to create TSD.
+<P>
+<LI>	   The solution we have adapted is a variant of the solaris 
+	   TSD: We allocate one struct in global memory when creating 
+	   a new thread, and then uses a global register in each
+	   thread to point out this struct. This means that storing and
+	   loading from TSD can be done in one instruction.
+<OL>
+
+<LI>Using the solaris <CODE>thr_setspecific()</CODE> and
+<CODE>thr_getspecific()</CODE> functions.
+The overhead in these are estimated to approximately 40
+instructions per access in <A HREF="#Primer">[Primer]</A>,
+compared to one instruction for a load/store of a global
+variable.
+
+<LI>Having a record of variables per thread with a copy of
+each variable in each. This record needs to be adressable
+from the thread, either by having a register point to it, or
+by using the solaris <CODE>thr_setspecific()</CODE> and
+<CODE>thr_getspecific()</CODE> functions.
+</OL>
+</OL>
+ 
+     Here follows the global variables in betarun_debug_mt.o, divided into 
+     logically related variables:
+     
+<H4><A NAME="var_ro">4.2 Read-only variables</A></H4>
+     
+     There is no need to consider synchronization of these.
+     
+<PRE>
+     Visibility   Section    Name
+     -----------------------------------------------
+     static       .rodata    errorTable
+</PRE>
+     
+     errorTable contains the strings used in beta.dump.
+     
+     
+<H4><A NAME="var_debug">4.3 Debug Variables</A></H4>
+     
+     These are only present in debug runtime systems, and we 
+     ignore the sharing aspect for these at the moment.
+     
+<PRE>
+     Visibility   Section    Name
+     -----------------------------------------------
+     static       .bss       __CkString
+     global       .data      DebugAOA
+     global       .data      DebugAlloI
+     global       .data      DebugCBFA
+     global       .data      DebugIOA
+     global       .data      DebugLVRA
+     global       .data      DebugMT
+     global       .data      DebugStack
+     global       .data      DebugStackAtGcNum
+     global       .data      DebugValhalla
+     global       .data      NumAOAAlloc
+     global       .data      NumAOAGc
+     global       .data      NumIOAGc
+     global       .data      NumLVRAGc
+     global       .data      lastObj
+     global       .data      prevRep
+     global       .data      CheckHeap
+     global       .data      lastAOAObj
+</PRE>
+     
+     
+<H4><A NAME="var_lvra">4.4 LVRA Heap</A></H4>
+
+     The LVRA heap must be visible from all threads and there can only be one
+     set of the variables.
+     Thus a mutex solution will be used for the two main functions <CODE>LVRAAlloc()</CODE>
+     and <CODE>LVRAcalloc()</CODE> called from outside lvra.c.
+     An LVRA GC can only triggered by calls to one of the above functions, so
+     there is no need to protect the GC part of LVRA, since other threads will
+     be kept out of LVRA by <CODE>LVRAAlloc</CODE> and <CODE>LVRAcalloc</CODE>.
+<P>
+     Calls of <CODE>LVRAAlloc</CODE> and <CODE>LVRAcalloc</CODE> are not frequent.
+
+<PRE>
+     Visibility   Section    Name
+     -----------------------------------------------
+     static       .bss       LVRATable
+     static       .bss       LVRATopBlock
+     static       .data      LVRACreateNewBlock
+     static       .data      LVRAFreeListAvailable
+     static       .data      LVRALastIOAGc
+     global       .data      LVRABlockSize
+     global       .data      LVRAMinFree
+     global       .data      LVRANeedCompaction
+     global       .data      LVRANumOfBlocks
+     global       .data      LVRAPercentage
+</PRE>
+
+<EM>Implementation status:</EM> <STRONG>DONE</STRONG>.
+
+<H4><A NAME="var_aoa">4.5 AOA heap</A></H4>
+
+     The AOA heap must be visible from all threads and there can only be one
+     set of the variables.
+     Thus a mutex solution will be used for the two main functions <CODE>AOAAlloc</CODE>
+     and <CODE>AOAcalloc</CODE> called from outside lvra.c.
+     An AOA GC can only triggered by an IOAGc, so there is no need to protect
+     the GC part of AOA, since IOAGc is assumed to be done by <EM>one</EM>
+     thread only.
+<P>
+     Calls of <CODE>AOAAlloc</CODE> and <CODE>AOAcalloc</CODE> are not frequent.
+
+<PRE>
+     Visibility   Section    Name
+     -----------------------------------------------
+     static       .bss       RAFStackBase
+     static       .bss       RAFStackLimit
+     static       .bss       RAFStackTop
+     static       .data      AOACreateNewBlock
+     global       .data      AOABaseBlock
+     global       .data      AOABlockSize
+     global       .data      AOAMinFree
+     global       .data      AOANeedCompaction
+     global       .data      AOAPercentage
+     global       .data      AOATopBlock
+     global       .data      AOAcopied
+     global       .data      AOArootsLimit
+     global       .data      AOArootsPtr
+     global       .data      AOAtoLVRAsize
+     global       .data      AOAtoLVRAtable
+     global       .data      tempAOAroots
+</PRE>
+     
+<EM>Implementation status:</EM> <STRONG>DONE</STRONG>.
+
+<H4><A NAME="var_cbfa">4.6 CBFA Heap</A></H4>
+
+     The CBFA heap must be visible from all threads and there can only be one
+     set of the variables. The function to serialize is <CODE>CopyCPP</CODE>.
+	
+<PRE>
+     Visibility   Section    Name
+     -----------------------------------------------
+     static       .data      lastCBFA
+     global       .data      CBFA
+     global       .data      CBFABlockSize
+     global       .data      CBFALimit
+     global       .data      CBFATop
+</PRE>
+     
+<EM>Implementation status:</EM> <STRONG>DONE in C, and in BetaRun.bet</STRONG>.
+     
+<H4><A NAME="var_betadump">4.7 beta.dump</A></H4>    
+
+     The following variables are used in producing beta.dump.
+     This is assumed being done by one thread only (the same as the one
+     that catches signals). So no synchronization is needed.
+
+<PRE>
+     Visibility   Section    Name
+     -----------------------------------------------
+     static       .bss       UnknownError
+     static       .bss       c_on_top
+     static       .bss       error_pc
+     static       .data      basic_dumped
+     static       .data      isMakingDump
+     static       .data      lastDisplayedObject
+     global       .data      BetaErrorString
+</PRE>
+
+<H4><A NAME="var_valhalla">4.8 Valhalla</A></H4>
+
+The following variables are only used when <CODE>valhalla</CODE>
+is active. We ignore sharing aspects of these for now.
+
+<PRE>
+     Visibility   Section    Name
+     -----------------------------------------------
+     static       .bss       inetAddrOfThisHostCache
+     static       .data      inetAddrOfThisHostCached
+     static       .bss       psock
+     static       .bss       rbuf
+     static       .bss       rheader
+     static       .bss       rlen
+     static       .bss       rnext
+     static       .bss       sock
+     static       .bss       wbuf
+     static       .bss       wheader
+     static       .bss       wnext
+     static       .data      invops
+     global       .data      valhallaID
+     global       .data      valhallaIsStepping
+</PRE>
+
+
+
+<H4><A NAME="var_dot">4.9 DOT</A></H4>
+
+The Debug Object Table (<CODE>DOT</CODE>) is used by <CODE>valhalla</CODE>
+and <CODE>objectserver</CODE>. We ignore sharing aspects of these variables
+for now.
+
+<PRE>
+     Visibility   Section    Name
+     -----------------------------------------------
+     static       .bss       firstFreeHandle
+     static       .bss       handleTable
+     static       .bss       handleTableLimit
+     static       .bss       nextHandle
+     static       .bss       onDeleteTable
+     global       .data      DOT
+     global       .data      DOTLimit
+     global       .data      DOTSize
+     global       .data      DOTTop
+</PRE>
+
+
+<H4><A NAME="var_aoatoioa">4.10 AOA to IOA Table</A></H4>
+
+The AOAtoIOAtable is used to maintain roots from the old objects
+in <CODE>AOA</CODE> to the new objects in <CODE>IOA</CODE>.
+Sharing aspects are still being considered. Two possibilities exists:
+
+<OL>
+<LI>One table only<BR>
+Using only one table, we will have to lock access to the 
+<CODE>AOAtoIOAinsert</CODE> function, which updates the table (called
+from <CODE>ChkRA</CODE>).
+<LI>One table per thread<BR>
+Using one table per thread (implemented as described in 
+<A HREF="#sharing_methods">Sharing Methods</A>).
+</OL>
+
+<PRE>
+     Visibility   Section    Name
+     -----------------------------------------------
+     static       .data      prim_index
+     static       .data      primes
+     global       .data      AOAtoIOACount
+     global       .data      AOAtoIOAtable
+     global       .data      AOAtoIOAtableSize
+</PRE>
+
+<EM>Implementation status:</EM> <STRONG>DONE (one table/mutex)</STRONG>.
+
+<H4><A NAME="var_lazy">4.11 Lazy Fetch Related Variables</A></H4>
+
+We currently ignore sharing aspects on these variables.
+
+<PRE>
+     Visibility   Section    Name
+     -----------------------------------------------
+     global       .data      findDanglingProto
+     global       .data      lastDangler
+     global       .data      negAOArefs
+     global       .data      negAOArefsINSERT
+     global       .data      negAOArefsRESET
+     global       .data      negAOAsize
+     global       .data      negIOArefs
+     global       .data      negIOArefsINSERT
+     global       .data      LazyDangler
+     global       .data      LazyItem
+</PRE>
+
+<H4><A NAME="var_oneshot">4.12 Variables set only once</A></H4>
+
+The following variables are not read-only, but they are set only once
+uring startup of the BETA program. Thus sharing need not be considered.
+
+<PRE>
+     Visibility   Section    Name
+     -----------------------------------------------
+     global       .data      ArgCount
+     global       .data      ArgVector
+     global       .data      Info0
+     global       .data      InfoAOA
+     global       .data      InfoCBFA
+     global       .data      InfoDOT
+     global       .data      InfoIOA
+     global       .data      InfoLVRA
+     global       .data      InfoLVRAAlloc
+     global       .data      isStatRecordOn
+     global       .data      BasicItem
+     global       .data      BasicProto
+     global       .data      StopAtIllegal
+     global       .data      SuspCont
+     global       .data      TextProto
+     global       .data      QuaCont
+</PRE>
+
+
+<H4><A NAME="var_tracexcall">4.13 Trace External Call</A></H4>
+
+Two variables are related to trace of external calls (switch 22 in compiler).
+We currently ignore sharing aspects on these variables.
+
+<PRE>
+     Visibility   Section    Name
+     -----------------------------------------------
+     global       .data      XcallName
+     global       .data      XcallNum
+</PRE>
+
+
+<H4><A NAME="var_ioagc">4.14 IOA GC Related Variables</A></H4>
+
+The following variables are only updated during IOA GC.
+This is assumed to execute in one thread only, so sharing aspects
+can be ignored.
+
+<PRE>
+     Visibility   Section    Name
+     -----------------------------------------------
+     global       .data      CurrentObject
+     global       .data      Origin
+     global       .data      HandledAOABlock
+     global       .data      HandledInAOA
+     global       .data      HandledInToSpace
+     global       .data      IOAActive
+     global       .data      IOAPercentage
+     global       .data      IOASize
+     global       .data      IOAStackObjectNum
+     global       .data      IOAStackObjectSum
+     global       .data      IOAcopied
+     global       .data      IOAtoAOAtreshold
+     global       .data      ReqObjectSize
+     global       .data      ToSpace
+     global       .data      ToSpaceLimit
+     global       .data      ToSpaceTop
+</PRE>
+
+
+<H4><A NAME="file_pointers">4.15 File Pointers and <CODE>printf</CODE></A></H4>
+
+<PRE>
+     Visibility   Section    Name
+     -----------------------------------------------
+     global       .data      output
+</PRE>
+
+The <CODE>output</CODE> variable is a <CODE>FILE *</CODE>
+used for printing out information and errors from BETA.
+Unless specified differently using the environment variable
+<CODE>BETART</CODE>, it is set to reference <CODE>stderr</CODE>.
+<P>
+During <CODE>beta.dump</CODE> generation, <CODE>output</CODE>
+is re-used for the dump file pointer.
+<P>
+
+According to <CODE>man 3s printf</CODE>
+<BLOCKQUOTE>
+<EM>
+"printf() and fprintf() are Async-Safe in multi-thread applications.  
+sprintf() is MT-Safe in multi-thread applications."
+</EM>
+</BLOCKQUOTE>
+
+So there should not be any need for synchronization of fprintf
+and the <CODE>output</CODE> variable. Of course the outputs from
+the different threads will get intermixed, but that is another
+issue.
+<P>
+
+
+<H4><A NAME="var_critical">4.16 Critical Variables</A></H4>
+
+The following global variables all need special attention
+with respect to sharing.
+
+<PRE>
+     Visibility   Section    Name
+     -----------------------------------------------
+     global       .data      ActiveComponent
+     global       .data      ActiveStack
+     global       .data      AlarmOccured
+     global       .data      CTextPool
+     global       .data      CTextPoolEnd
+     global       .data      IOALimit
+     global       .data      MallocExhausted
+</PRE>
+
+<H5>4.16.1 ActiveComponent </H5>
+
+ActiveComponent holds a reference to the curently executing
+component in a thread. Thus it needs to be thread specific.
+<P><EM>Implementation status:</EM> <STRONG>DONE (TSD)</STRONG>.
+
+<H5>4.16.2 ActiveStack</H5>
+
+ActiveStack points to the stack object of ActiveComponent.
+The observations for ActiveComponent thus apply to ActiveStack
+as well.
+<P><EM>Implementation status:</EM> <STRONG>DONE (TSD)</STRONG>.
+
+<H5>4.16.3 AlarmOccured</H5>
+
+Incremented in the signal handler AlarmHandler, which is 
+probably treated by a special signal processing thread.
+Thus there is probably no problem with AlarmOccured.
+<P><EM>Implementation status:</EM> <STRONG>DONE</STRONG>.
+
+<H5>4.16.4 CTextPool and CTextPoolEnd</H5>
+
+Manipulated by <CODE>CpkVT</CODE> and <CODE>CpkSVT</CODE>
+to set up string parameters to external calls.
+External call may happen in several threads simultaneously,
+so these need to be thread specific.
+<P><EM>Implementation status:</EM> <STRONG>DONE (TSD)</STRONG>.
+
+<H5>4.16.5 IOALimit</H5>
+
+Set to 0 when preemptive suspend is to appear in a thread.
+Thus this needs to be thread specific.
+<P><EM>Implementation status:</EM> <STRONG>DONE (TSD)</STRONG>.
+
+<H5>4.16.6 MallocExhausted</H5>
+
+Set in both LVRA and AOA operations.
+This may force us to use the same mutex for both LVRA and AOA operations
+or to have a special mutex for updates of <CODE>MallocExhausted</CODE>.
+<P><EM>Implementation status:</EM> <STRONG>DONE (TSD)</STRONG>.
+
+<H2><A NAME="bibliography">Bibliography</A></H2>
+
+
+<DL>
+
+<DT><A NAME="MTguide">[MTguide]</A>
+<DD><EM>Solaris 2.5 - Multithreaded Programming Guide</EM><br>
+Part of <A HREF="http://www.daimi.aau.dk/DAIMI/OnlineSysDoc.html#ANSWERBOOK">Solaris Answer Book</A>.
+<P>
+
+<DT><A NAME="Primer">[Primer]</A>
+<DD><EM>Thread Primer - A guide to multithreaded programming</EM><br>
+Bil Lewis and Daniel J. Berg<br>
+SunSoft Press (A Prentice Hall Title) 1996<br>
+ISBN 0-13-443698-9
+<P>
+
+<DT><A NAME="SPARC8">[SPARC8]</A>
+<DD><EM>The SPARC Architecture Manual, Version 8</EM><br>
+SPARC International Inc, Prentice Hall 1992<br> 
+ISBN 0-13-825001-4.
+<P>
+
+<DT><A NAME="SPARC9">[SPARC9]</A>
+<DD><EM>The SPARC Architecture Manual, Version 9</EM><br>
+SPARC International Inc, Prentice Hall 1994<br> 
+ISBN 0-13-099227-5.
+<P>
+
+<DT><A NAME="SPARC-ABI">[SPARC-ABI]</A>
+<DD><EM>System V Application Binary Interface</EM><br>
+SPARC Processor Supplement, Third Edition<br>
+UNIX Press (A Prentice Hall Title) 1993<br>
+ISBN 0-13-104696-9
+<P>
+
+<DT><A NAME="MT-Smalltalk">[MT-Smalltalk]</A>
+<DD><EM>Multiprocessor Smalltalk: Implementation, Performance, and Analysis</EM><br>
+Joseph Ira Pallas<br>
+Report No. STAN-CS-90-1315<br>
+Department of Computer Science<br>
+Stanford University<br>
+Stanford, California 94305
+<P>
+
+<DT><A NAME="MT-Simula">[MT-Simula]</A>
+<DD><EM>Using the simioprocess library on Unix Systems</EM><br>
+Lund Simula Documentation<br>
+For Lund Simula version 4.16<br>
+Lund Softwre House AB, Sweden.
+<P>
+
+<DT><A NAME="MT-WWW">[MT-WWW]</A>
+<DD><EM>Threads on the WWW</EM><br>
+The URL <A HREF="http://www.sun.com/sunsoft/Products/Developer-products/sig/threads/">http://www.sun.com/sunsoft/Products/Developer-products/sig/threads/</A>
+is a nice starting point for finding threads related information. It also links to the 
+example programs in <A HREF="#Primer">[Primer]</A>.
+<P>
+
+<DT><A NAME="MT-FTP">[MT-FTP]</A>
+<DD><EM>Threads on FTP</EM><br>
+The URL <A HREF="ftp://sunsite.unc.edu/pub/sun-info/development-tools/multi-threaded/drop-site/">ftp://sunsite.unc.edu/pub/sun-info/development-tools/multi-threaded/drop-site/</A>
+contains various downloadable stuff relating to threads.
+<P>
+
+</DL>
+
+</BODY>
+</HTML>

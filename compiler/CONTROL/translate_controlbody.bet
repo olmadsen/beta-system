@@ -1,0 +1,900 @@
+ORIGIN 'transDepGraph';
+LIB_ITEM 'betacompiler';
+INCLUDE '../CHECKER/sematt';
+INCLUDE '../GENERATOR/machine';
+INCLUDE '~beta/dependency/checkslots';
+(* The controller controls calling of AST-interface, checker, codegenerator,
+ *  assembly and linking.
+ *
+ * The list below is NOT accurate - some of the tracing is now
+ * in dependency; MUST be cleaned UP
+ * switch[381-400]
+ * 381: trace groupList
+ * 382: use groupList when re-doing same translation.
+ * 383: trace bodylist complete
+ * 384: trace grouplist scan when re-translating
+ * 385: trace doneExamine
+ * 386: print correspondance between BETA_DATA-id's and group-file names
+ * 387: trace read properties
+ * 388: dump groupList
+ * 389: make modtime test
+ * 390: Trace checkslots
+ * 392: trace local switches 
+ * 393: make slow file modtime check 
+ * 394: trace LIBRARY handling
+ * 395: DO not translate, just build graph
+ * 396: trace real/compact open
+ * 397: Trace Buildgraph
+ * 398: Trace translate 
+ * 399: Force Make (used with new makefile handling)
+ * 400: Trace BUILD property
+ *)
+
+---xDependencyLib:attributes---
+BetaLibLocalName:
+  (# AST: ^ASTinterface;
+     absolutePath,localPath: ^text
+  enter (AST[],absolutePath[])
+  do (absolutePath[],thepathHandler.betaLib) 
+       -> thePathhandler.localPath
+       -> localPath[];
+  exit localPath[]
+  #);
+calcGroupID: (* calculate 'unique' hash value for filename *)
+  (# g:^FragmentGroup; id: @text
+  enter g[]
+  <<SLOT calcGroupId:doPart>>
+  exit id[]
+  #);
+ControlSetGroupID: 
+  (# g: ^fragmentGroup;
+  enter g[]
+  do <<SLOT ControlSetGroupID:descriptor>> 
+  #);
+CreateLstFileName: 
+  (# g: ^FragmentGroup; t: ^Text;
+  enter g[]
+  do common.LstExt -> (g.NameT.copy).append -> t[];
+  exit t[]
+  #);
+checkCodeSubDir: 
+  (* Checks whether or not the code sub directory denoted by
+   targetDirectory has already been created. If not then
+   it is created now ! 
+   *)
+  (# g: ^FragmentGroup; asmDir: @boolean
+  enter(g[],asmDir)
+  do <<SLOT CheckCodeSubDir: descriptor>>
+  #);
+PutInJobfile: 
+  (# asm,inLink: @boolean;   (* asm=true: do assemble file
+                              * inLink=true: object file in library
+                              *)
+     kind: @integer;  (* See Asmlink for def. of the kinds. *)
+     fullname: ^Text;
+  enter(fullname[],asm,kind,inLink)
+  do (if kind 
+      // asmlink.BetaKind // asmLink.BetaEnvKind // asmLink.BetaDataKind then
+         ((fullname.copy,false)->insertSubDir,kind,asm,inLink)
+           -> AsmLink.TX.insert;
+      else
+         (fullname[],kind,false,false) -> AsmLink.TX.insert;
+     if);
+     (fullname[],kind,asm,inLink) -> thisTranslate.addedToJobfile
+  #);
+
+DoRealOpen: 
+  (# g: ^FragmentGroup;
+     isRealOpen: 
+       (# isOpen: @Boolean;
+       do scanner: g.fragmentList.scan
+            (#  ff: ^fragmentForm
+            do (if current.type = formType then 
+                   (if current.f[]<>NONE  then true->isOpen;
+                       current.f[] -> ff[];     
+                       (if ff.root[] = NONE then 
+                           false -> isOpen; 
+                           (if common.switch[396] then
+                               '\n*** root was NONE: '->puttext;
+                               g.name->putline;
+                           if);
+                           leave scanner 
+                       if)
+                    else
+                       (if common.switch[396] then 
+                           '\n*** current.f was NONE:'->puttext;
+                           g.name->putline;
+                       if)
+                   if)
+            if)#)
+       exit isOpen
+       #)
+  enter g[]
+  do (if not isRealOpen then (* open g real *)
+         (if verboseLevel < verboseLevel.actions then
+             'Open: '->infostream.puttext; g[]->printFN; infostream.newline;
+         if);
+         (if (g.controller.status >= DoCodeGen)
+             (* WE MUST realOpen if checking here !*)
+             (* and not common.switch[5]*)
+             then
+             (if common.switch[396] then 'real open'->tracestream.putline if);
+             g.realOpen
+             (# OpenError:
+                  (# msg: ^text
+                  enter msg[]
+                  do NONE -> theCatcher[];
+                     msg[] -> thisTranslate.MPSexception
+                  #);                     
+                astOverflow:: (#do msg[] -> OpenError #);
+                fragmentNotExisting:: (#do msg[] -> OpenError #);
+                badFormat:: (#do msg[] -> OpenError #);
+                grammarNotFound:: (#do msg[] -> OpenError #);
+                doubleFormDeclaration:: (#do msg[] -> OpenError #);
+                readAccessError:: (#do msg[] -> OpenError #);
+                noSuchFileError:: (#do msg[] -> OpenError #);
+                otherFileError:: (#do msg[] -> OpenError #);
+             #)
+          else
+             (if common.switch[396] then 
+                 'compact open'->tracestream.putline 
+             if);
+             g[]->CompactOpen;
+         if);
+      else
+         (* If donecheck is true and the group is real open then we 
+          * re-access the same group.
+          * If donecheck is false and the group is real open the group
+          * is just parsed up. Don't write anything.
+          *)
+         (if verboseLevel<verboseLevel.actions then
+             (if (This(AstInterface)[],g[])->getDoneCheckProperty then
+                 'Re-access: '->infostream.puttext;
+                 g[]->printFN; infostream.newline;
+         if)if);
+     if);
+     g[]->ScanForms
+     (# sysForm: @ASTindex;
+     do (if current[] = NONE then
+            '\n*** current is NONE '->bugstream.putline;
+            g.realOpen
+        if);
+        (if current.root[] = NONE then
+            '\n***root is NONE'->putline
+        if);
+        (if current.grammar[] = NONE then
+            '\n**grammar is NONE'->putline
+        if);
+        current.theGSForm->sysForm; 
+        (if current.Category
+         //gram.doPart
+         //gram.mainPart then
+            (* do not initialize decsNo *)
+         else
+            0->sysForm.descNo;
+        if);
+
+        (* descNo contains the index of the search cash
+         * for this form; must be zero initially.
+         * this is also done by the checker; however is also
+         * necessary for fragments that are NOT checked
+         * but used when checking other fragments;
+         * should be cleaned up *)
+     #);
+  #);
+
+DoTheChecking: 
+  (* Perform static semantic check of THIS fragment *)
+  (# g: ^FragmentGroup; error,fatalError: @boolean;
+     lstFile: @File
+       (# AccessError:: (#do FN -> thisTranslate.TransAccessException #);
+          NoSuchFileError:: (#do FN -> thisTranslate.NotExistingException #);
+          NoSpaceError:: (#do thisTranslate.NoSpaceException #);
+          OtherError:: 
+            (#
+            do (FN,msg[]) -> thisTranslate.otherFileError 
+            #);
+          FN: 
+            (# T: ^text do '.lst'-> (g.nameT.Copy).Append -> T[] exit T[] #);
+          init: 
+            (# 
+            do g[]->CreateLstFileName->Name; openWrite;
+               lstFile[]->lst[];
+            #);
+       #);
+     Prepare:
+       (#
+       do LstFile.init;
+          (if verboseLevel<=verboseLevel.actions then
+              '!Checking'->infostream.puttext;
+          if);
+       #);
+     Conclude:
+       (#
+       do g.name -> thisTranslate.checkedFragment;
+          (not fatalError,this(AstInterface)[],g[])->setDoneCheckProperty;
+          g[]->ControlSetGroupID;
+          g.MarkAsChanged
+          (# writeAccessError::< 
+               (#
+               do (* cleanUpAfterException;*)
+                  astFileExtension
+                    -> (G.nameT.Copy).Append
+                    -> thisTranslate.TransAccessException;
+               #);
+          #);
+          g[]-> thisTranslate.groupSavedNotification;
+          (if fatalError  and (not common.switch[21]) then 
+              (g[],14) -> thisTranslate.msgException 
+          if);
+          (if lstFile.entry.exists then
+              (* Another BETA compilation may have closed it!
+               * Be careful with running concurrent BETA compilations!
+               *)
+              lstFile.close; 
+              (if lstFile.entry.exists and (lstFile.length = 0) then 
+                  lstFile.delete 
+              if)
+          if);
+          none->lst[]; (* a call of msg will do lst.close otherwise *)
+          (if verboseLevel<=verboseLevel.actions then
+              '!'->infostream.put;
+          if);
+       #)
+  enter g[]
+  do Prepare;
+     
+     (G[],not ((this(AstInterface)[],g[])->getDoneCheckProperty))
+       -> SemAtt.Checker
+       -> (error,fatalError);
+     
+     Conclude
+  #); (* DoTheChecking *)
+
+MakeBetaDataFile: (#do <<SLOT MakeBetaDataFile:descriptor>> #);
+
+----handleFragmentsLib:attributes----
+(* Is here because of createAsmFileName *)
+DoTheCodeGen: 
+  (* Generate code for g fragment. *) 
+  (# g: ^FragmentGroup; 
+     (* theSynthesizer: ^Synthesizer;*)
+     Prepare:
+       (#
+       do (if verboseLevel <= verboseLevel.actions then
+              'Code generation'->infostream.puttext
+          if);
+          (if b2c or nti then
+              (g[],true)->checkCodeSubDir;
+              (g[],false)->checkCodeSubDir;
+              (if ((this(AstInterface)[],g[])->getGroupIDProperty) = NONE then
+                  (* temporary set GroupID, it must not be saved on disk! *)
+                  g[]->ControlSetGroupID;
+              if)
+           else 
+              (g[],false)->checkCodeSubDir;
+              (if ((this(AstInterface)[],g[])->getGroupIDProperty)= NONE then
+                  (* temporary set GroupID, it must not be saved on disk! *)
+                  g[]->ControlSetGroupID;
+              if)
+          if);
+       #);
+     Conclude:
+       (#
+       do G.name -> thisTranslate.codegenFragment;
+          (*none->theSyntheSizer[];*)
+       #)
+  enter g[]
+  do Prepare;
+     
+     (* &Synthesizer[]->theSynthesizer[];*)
+     (if (G[],g[]->CreateAsmFileName)->(*the*)Synthesizer then 
+         (g[],16)-> thisTranslate.msgException
+     if);
+     
+     Conclude;
+  #);
+
+---TranslateDo:doPart---
+   (* Translate is called if a fragment group MUST be compiled.
+    * THis is the case if doCheck or doCodeGen are true for THIS
+    * fragment OR if the fragment is an ancestor of a
+    * fragment where doCheck or doCodeGen are true. ``Ancestor''
+    * is defined by means of ORIGIN and INCLUDE relations.  
+    * So, whenever translate is called, THIS fragment must be
+    * real opened, and the slots in THIS fragment and its ancestors
+    * must be bound. 
+    *)   
+do (# switchList: @singleLinkedList
+        (* Used to store information about switches defined locally in 
+         fragment groups by means of ON/OFF properties. Note that such
+         switches only have the fragment group in which they are defined
+         as scope. The slot oldValue is used to push global switch values
+         while the local ones are valid. I.e. during check and codeGen.
+         For details confer the translate pattern.
+         *)
+        (# insert::< 
+             (# theSwitch: @integer;
+                theValue: @boolean;
+             enter(theSwitch,theValue)
+             do theSwitch->E.switch;
+                theValue->E.newValue;
+             #);
+           readSwitches: 
+             (#
+             do fg.prop.ScanProp
+                (# doProp::< 
+                     (# 
+                     do prop.makelc;
+                        (if true 
+                         // 'on'->prop.equal then
+                            ScanParameters
+                            (# doConst::< 
+                                 (# 
+                                 do (if ((1<=C) 
+                                        and (C<=common.switch.range))  then 
+                                        (C,True)->switchList.insert;
+                            if)#)#);
+                         // 'off'->prop.equal then 
+                            ScanParameters
+                            (# doConst::< 
+                                 (# 
+                                 do (if ((1<=C) and (C<=common.switch.range))  then 
+                                        (C,False)->switchList.insert;
+                     if)#)#)if)#);
+                #);
+             #);
+           defineLocalSwitches: 
+             (* Save global switches and define local switches *)
+             (#
+             do readSwitches;
+                scan
+                (#
+                do common.switch[thisElm.switch]->thisElm.oldValue; 
+                   (thisElm.newValue,thisElm.switch)->setSwitch;
+                   (*thisElm.newValue->common.switch[thisElm.switch];*)
+                   (if common.switch[392] then
+                       'defining local switch '->tracestream.puttext;
+                       (if thisElm.newValue then 'true'->tracestream.puttext
+                        else 'false'->tracestream.puttext
+                       if);
+                       ' in fragment: '->tracestream.puttext;
+                       fg.nameT[]->tracestream.putline;
+             if)#)#); 
+           restoreGlobalSwitches: 
+             (* restore global switches *)
+             (#
+             do scan(# do (thisElm.oldValue,thisElm.switch)->SetSwitch #);
+             #); 
+           elm::< (# switch: @integer; newValue,oldValue: @boolean; #);
+        #);
+      verB,hasBasicPatterns: @ boolean;
+      Prepare:
+        (#
+        do NONE->lst[]; (*avoid closing a closed/non-existing' file*)
+           fg[]->DoRealOpen;
+           (if fg.origin <> NONE then
+               fg.origin -> &Translate
+           if);
+           fg[]->ScanLinks
+           (# FN,ext: ^ text
+           do (current[](*.name*),fg.nameT[]->stripPathName)
+                ->thePathHandler.convertFilePath
+                ->FN[];
+              (if FN.length > 4 then
+                  (FN.length-3,FN.length) -> FN.sub -> ext[];
+                  (if common.SrcExt -> ext.equalNCS then
+                      (FN.length-3,FN.length) -> FN.delete
+              if)if);
+              FN[] 
+                -> DGP.groupList.findgroup
+                -> Translate;
+           #);
+           fg.nameT[] -> common.theGroupName[];  
+           (verboseLevel < verboseLevel.actions)            (* verbose *)
+           or ((verboseLevel <= verboseLevel.actions)       (* normal *)
+               and ((fg.controller.status >= doCheck)       (* if checking *)
+                    or ((fg.controller.status >= doCodeGen) (* or codegen *)
+                        and not common.switch[5]))) 
+             -> verB;
+           (if fg.origin = NONE then (* betaenv *) 
+               (if verB then 
+                   'Basic BETA environment: '->infostream.puttext; 
+                   fg[]->printFN;
+               if);
+               (* OBS! BindSlots is called even for BETAENV which has no
+                * origin, i.e. the form BETAENV cannot be bound.
+                * BindSlots is, however, called to build up the property
+                * 'SLOTS' which is used to check for unbound slots; otherwise
+                * unbound slots in betaenv will not be reported! Note, that
+                * the enter parameter reBind is TRUE. This is used to indicate
+                * that BindSlots should NOT produce an error message for the 
+                * unbound slot BETAENV. In BindSlots reBind should be renamed
+                * to indicate that it is only used to suppress error messages
+                *)
+               (fg[],true) -> SemAtt.BindSlots
+            else (* origin exists *)
+               (if verB then
+                   'Bind fragments in: '->infostream.puttext; 
+                   fg[]->printFN
+               if);
+               
+               (************** BINDING SLOTS ***************
+                * when binding slots for groups compiled with a 
+                * compilation context, no error messages should 
+                * be given for unbound slots
+                *)
+               (fg[],common.switch[72]) -> SemAtt.BindSlots
+               (# fragErr::
+                    (#
+                    do (fg[],FF[],slot[],errNo
+                       ,msg[],CloseGroup(#do fg[] -> g[]#))
+                         -> thisTranslate.fragmentException
+                    #)
+               #)
+           if);
+           switchList.defineLocalSwitches;
+        #);
+      Conclude:
+        (#
+        do (if verB then infostream.newline if);
+           switchList.restoreGlobalSwitches;
+           doneTranslate->fg.controller.status;
+        #)
+   do (if common.switch[398] then
+          'Translate: '->tracestream.puttext; fg[]->printFN;
+          tracestream.newline;
+      if);
+      (if fg.controller.status > doneTranslate then 
+          Prepare;
+
+          (******** semantic checking *********)
+          (if fg.controller.status>= doCheck  then
+              (* (if hasBasicPatterns then
+               (fg[],true)->sematt.InitWithoutCheck
+               if);*)
+              fg[] -> doTheChecking;
+           else
+              (fg[],(fg.origin<>NONE))->sematt.InitWithoutCheck
+          if);
+          
+          (******** code generation ***********)
+          (if not common.switch[5] then
+              (if fg.controller.status >= doCodeGen  then
+                  fg[] -> doTheCodeGen
+              if)
+           else 33 -> switchOn
+          if);
+          
+          Conclude;
+      if)
+   #)
+---translateAfterGroup:dopart---
+do (# inLib: @boolean
+   do (fg[],doAsm) ->sharedLibs.scanLibraryProp -> inLib;
+      (if fg.origin = none then (* betaenv *)
+          (fg.NameT[],doAsm,asmlink.BetaEnvKind,inLib)->PutInJobfile
+       else
+          (fg.NameT[],doAsm,asmlink.BetaKind,inLib)->PutInJobfile
+   if)#)
+---BuildProperty:doPart--
+do (if command[] <> NONE then
+       (directory[],command[]) -> asmlink.build.insert
+   if);
+   (objFile[],false,asmLink.objKind,false) -> putInJobFile;
+   
+---currentProperty:doPart---
+do (if propKind
+    // makeProperty then 
+       (arg[],false,asmLink.MakeKind,false) -> putInJobFile
+    // objfileProperty then
+       (arg[],false,asmLink.objKind,false) -> putInJobFile
+    // libFileProperty then
+       (arg[],false,asmLink.libKind,false) -> putInJobFile
+    // linkoptProperty then
+       (arg[],false,asmLink.linkOptKind,false) -> putInJobFile
+    // resourceProperty then
+       (arg[],false,asmLink.ResourceKind,false) -> putInJobFile
+    // betarunProperty then
+       (if asmlink.betarun.length=0 then
+           (if b2c then
+               arg[]-> expandEnvVar -> arg[];
+               rundkoersel: '$' -> arg.findAll
+               (# bt: @Text;
+               do (* Delete the '$'. *)
+                  (inx,inx) -> arg.Delete;
+                  'b2c'->bt;
+                  thePathHandler.directoryChar->bt.put;
+                  (bt[],inx) -> arg.Insert;
+                  inx+4->inx;
+                  (TargetDirectory[],inx) -> arg.Insert;
+                  (* Necessary? *)
+                  restart rundkoersel
+               #);
+           if);
+           (arg[],theGroup.nameT[]->stripPathName) 
+             -> thePathHandler.convertFilePath
+             -> arg[]
+             -> isFile;
+       if);
+       arg -> asmLink.betarun;
+    else
+       '\n**** unknown property!'->putline 
+   if)
+---translateAddVirtualSuper:dopart---
+   (* used for compacting AST's Notice, the FragmentGroup must 
+    * also be checked before closed in order to be compacted
+    *)
+do FG[]->ScanForms
+   (# R: ^Expanded; S: @ASTindex; B,BS,BSpre: @ASTindex
+   do current.root[]->R[];
+      R.scan
+      (#
+      do current[] -> (*S.a*) AstAsAstIndex -> S; '.'->infostream.put;
+         (if S.label
+          // gram.bindingDecl // gram.finalDecl then
+             infostream.newline;
+             S.son->B; B.brother->BS; 
+             (if BS.label = gram.objectDescriptor then
+                 BS.son->BSpre; 
+                 (if BSpre.label = gram.empty then
+                     BS->addPrefix
+                     (# astOverflow:: 
+                          (#do msg[]->thisTranslate.MPSexception #) 
+                     #)
+      if)if)if)#)
+   #)
+---handleFragmentsdo:doPart---
+do rootFragment[] -> asmlink.rootFragment[];       
+   (if (asmLink.jobFileMachine[] <> NONE) and (outputFile[] = NONE) then
+       (* ensure that full path is used for output file
+        * when using remote shell
+        *)
+       rootFragment[] -> outputFile[];
+       true -> clearOutputFile;
+   if);
+   397->trace(#do 'Root:'->xT; rootFragment[]->xT #);
+   (if outputFile[] = NONE then
+       (* objName is same name as rootFragment *)
+       rootfragment[] -> asmLink.ObjName[]
+    else 
+       (outputFile[],'')
+         -> thePathHandler.ConvertFilePath
+         -> asmLink.ObjName[]; 
+   if);
+   (if clearOutputFile then NONE -> outputFile[] if);
+   397->trace(#do 'ObjName:'->xT;asmLink.objName[]->xT #);
+    
+   SharedLibs.Make;
+   
+   (*do not link if no program SLOT*)
+   (common.switch[6]) or (not DGP.hasProgramSlot)->common.switch[6];
+   (* no betadata if nolink or nocode *)
+   (if not common.switch[6] and not common.switch[5] 
+       or common.switch[372] then
+       common.switch[390] ->
+       CheckSlots
+       (# unBoundSlots: @boolean;
+          UnboundSlot::
+            (#
+            do (if common.switch[198] or hasProgramSlot then
+                   (* It should be discussed when the  message below
+                    * should be given
+                    *)
+                   '\n**** The slot: "'->puttext;
+                   slot[] -> puttext;
+                   '" defined in fragment:\n\t'->puttext;
+                   FG.fullname->putline;
+                   'is not bound by any fragment!'->putline
+               if);
+               true -> unBoundSlots;
+            #);
+          DoubleDeclaration::
+            (#
+            do '\n**** The slot: "'->puttext;
+               slot[] -> puttext; (* ':'->put; category[] -> puttext; *)
+               '" is defined in the following two fragments:\n\t'
+                 -> puttext;
+               FG1[] -> putline; '\t'->puttext;
+               FG2[] -> putline
+            #);
+          PerhapsMissingBinds::
+            (#
+            do '\n**** Warning!\n     The slot: "'->puttext;
+               slot[] -> puttext;
+               '" is defined in '->puttext;
+               noOfDefs->putint;
+               ' fragment(s),\n     but only bound in '->puttext;
+               noOfbinds->putint;
+               ' fragment(s)!'->puttext;
+               '\n     This may cause an "Undefined symbol"'->puttext;
+               '\n     error message from the linker!\n'->puttext
+            #)
+          
+       do (if unBoundSlots then 
+              (* we override the value of hasProgramSlot;
+               * i.e. hasProgramSlot now means that the program
+               * may be linked; if false it means that there
+               * are unbound slots
+               *)              
+              false -> DGP.hasProgramSlot 
+          if);
+       #);
+
+       MakeBetaDataFile 
+   if);
+   (common.switch[6]) or (not DGP.hasProgramSlot)->common.switch[6];
+   (* see MakeBetaDataFile, where hasProgramSlot may be overwritten *)
+   (* <<SLOT analyzeHeap:descriptor>>;*)
+   
+---- CheckCodeSubDir: descriptor ----
+(# codeDir: @directory
+     (# doCreateDir: createDir
+          (# error::< 
+               (* createDir can fail (UNIX only?) if path is empty 
+                * or for one of the following reasons (from "man 2 mkdir"):
+                * [EACCES] A component of the path prefix denies search
+                *          permission.                
+                * [EACCES] The parent directory of the new directory 
+                *          denies write permission.                
+                * [EEXIST] The named file already exists.                
+                * [EFAULT] path points outside the process's allocated address
+                *          space.  The reliable detection of this error is
+                *          implementation dependent.                
+                * [EIO] An I/O error occurred while writing to the file system.
+                * [ELOOP] Too many symbolic links are encountered in 
+                *         translating the path name.                
+                * [EMLINK] The maximum number of links to the parent directory,
+                *          {LINK_MAX}, would be exceeded.                
+                * [ENAMETOOLONG] The length of the specified path name 
+                *                exceeds PATH_MAX bytes, or the length of a 
+                *                component of the path name exceeds NAME_MAX 
+                *                bytes while _POSIX_NO_TRUNC is in effect.
+                * [ENOENT] A component of the path prefix does not exist.
+                * [ENOSPC] Not enough space on the file system.
+                * [ENOTDIR] A component of the path prefix is not a directory.
+                * [EROFS] The named file resides on a read-only file system.
+                *)               
+               (# 
+               do (*cleanUpAfterException;*) 
+                  codeDirPath[]->thisTranslate.transCreateDirException
+               #)
+          #)
+     #);
+   codeDirEntry: @diskEntry
+     (# doExists: exists
+          (# error::< 
+               (* exists can fail for the following reasons (UNIX only?):
+                *   1. path is empty
+                *   or (from "man lstat")
+                *   2. A component of the path prefix is not a directory.
+                *   3. Search permission is denied for a component of 
+                *      the path prefix.
+                *   4. Too many symbolic links were encountered in 
+                *       translating the path name.
+                *   5. The length of the specified path name exceeds PATH_MAX 
+                *      (255 or 1023 machine dependent) bytes
+                *)
+               (# T: @text
+               do (*cleanUpAfterException; *)
+                  (* the *** in order to distingusihthis exception from
+                   * the above one
+                   *)
+                  '      ***'-> (codeDirPath.copy).Append
+                    -> thisTranslate.transCreateDirException
+     #)#)#);
+   asmFileName,FullFN,codeDirPath,codeSubDir: ^text; 
+   dirCh: @char; lastslash: @integer;
+   
+   (* NOTE: a change has been made to also handle b2c compiler variants.
+    * checkCodeSubDir has been extended with an additional parameter
+    *    subDir
+    * which for non b2c compilers is asmLink.asmExt.
+    * For b2c compilers the procedure is called twice:
+    *    1.  subDir = 'b2c'
+    *    2.  subDir = asmLink.asmExt
+    *)
+do (*g[]-> createAsmFileName -> asmFileName[];*)
+   (g.nameT.copy,asmDir)->insertSubDir(#do asmLink.asmExt->path.append #)
+     ->asmFileName[];
+   thePathHandler.DirectoryChar->asmFilename.findAll(#do inx->lastSlash #);
+   
+   (0,lastSlash-1)->asmFilename.sub->codeDirPath[]->codeDirEntry.path;
+   (* codeDirPath = (users/borge/mycode/foo/sun4s (e.g.) *)   
+   thePathHandler.DirectoryChar
+     ->codeDirPath.findAll(# do inx -> lastSlash #);
+   
+   (0,lastSlash-1)->codeDirPath.sub->codeDir.name;
+   (lastSlash+1,codeDirPath.length)->codeDirPath.sub->codeSubDir[];
+
+   
+   (* codeDir = /users/borge/mycode/foo *)
+
+   (if common.switch[397] then 
+       '\nChekCodeSubDir:\n'->tracestream.puttext; 
+       codeDir.name->tracestream.putline;
+       codeDirEntry.path->tracestream.putline;
+       codeSubDir[]->tracestream.putline
+   if);
+   (if not codeDirEntry.doexists then
+       (if common.switch[397] then
+           'Does NOT exists: '->tracestream.puttext;
+           codeDirEntry.path->tracestream.putline
+       if);
+       codeSubDir[]->codeDir.docreateDir
+   if);
+
+#)
+
+--CalcGroupId:doPart--
+do (# hash: @integer; localPath: ^text;
+   do (this(AstInterface)[],g.fullName) -> BetaLibLocalName -> localPath[];
+      386->trace(#do 'CalcGroupId: LocalPath: ' -> xT; localPath[] -> xT #);
+      (* localPath.scanAll(# do (ch*517)+hash->hash #);  
+       * hash->id.putint;
+       *)
+      localPath[] -> common.honeyM.hash -> id.putint;
+      '_'->id.put; 
+      g.modtime->id.putint;
+   #)
+--ControlSetGroupID:descriptor--
+(# T: ^Text; hash: @integer;
+do g[] -> CalcGroupId -> T[];
+   (T[],this(AstInterface)[],g[])->setGroupIDProperty;
+#)
+--MakeBetaDataFile:descriptor--
+(# f: @File;
+   noOfFiles,i:@Integer;
+   betaenv: ^FragmentGroup;
+   name,c_file_name,id: ^Text;
+   mchFactory: @machineFactory;
+   mch: ^mchFactory.abstractMachine;
+   checkConsistency:
+     (# fg: ^fragmentGroup;
+        noneC,defC: @integer;
+        msg:
+          (# n: @integer
+          enter n
+          do (if n < 4 then
+                 '\n\n**** Inconsistent fragment group:\n\t'
+                   -> bugstream.puttext;
+              else
+                 '\nConsistencey check for:\n\t'-> messagestream.puttext
+             if);
+             fg.name->bugstream.puttext;
+             (if n
+              // 1 then '\nMix of open and closed forms' -> bugstream.putline
+              // 2 then '\nOpen forms and prop[]=NONE' 
+                   -> bugstream.putline
+              // 3 then
+                 '\ngrammar is NONE!'-> bugstream.putline;
+              // 4then
+                 '\ndefC='->messageStream.puttext; defC->messageStream.putint;
+                 ' noneC='->messageStream.puttext; noneC->messageStream.putint;
+                 ' prop[] '->messageStream.puttext; 
+                 (if fg.prop[] = NONE then '= NONE\n'->messagestream.puttext
+                  else
+                     '<> NONE\n'->messagestream.puttext
+                 if)
+             if)
+          #)
+     enter fg[]
+     do fg.fragmentlist.scan
+        (# ff: ^fragmentForm
+        do (if current.type = formType then
+               (if current.f[] = NONE then noneC + 1 -> noneC
+                else defC + 1 -> defC;
+                   current.f[] -> ff[];
+                   (if ff.grammar[] = NONE then 3 -> msg if);
+               if);
+
+           if)
+        #);
+        (if verboseLevel <= verboseLevel.verbose then 
+            4 -> msg
+        if);
+        (if (noneC > 0) and (defC > 0) then 1 -> msg if);
+        (if (defC > 0) and (fg.prop[] = NONE) then 2 -> msg if);
+     #);
+do (if b2c then
+       'Creating betadata file...'->infostream.puttext;
+       asmLink.ObjName.copy->expandToFullPath->name[];
+       thePathHandler.DirectoryChar->name.findAll(# do inx->i #);
+       (i+1,name.length)->name.delete; 
+       name.copy->c_file_name[];'b2c'->c_file_name.append; 
+       thePathHandler.DirectoryChar->c_file_name.put;
+       'betadata'->c_file_name.append;
+       '.c'->c_file_name.append;
+       'betadata'->name.append;
+       c_file_name[]->f.name;
+       f.openwrite;
+       '\n/* auto-generated BETA_DATA file */\n\n'->f.puttext;
+       DGP.groupList.scan
+       (#
+       do (if current.g.controller.status>justOpen then
+              'extern long BETA_DATA_'->f.puttext;
+              (this(AstInterface)[],current.g[])->getGroupIDProperty->id[];
+              (if id[] = NONE then current.g[]->calcGroupID->id[] if);
+              id[]->f.puttext;
+              ';\n'->f.puttext;
+              noOfFiles+1->noOfFiles;
+              (if current.g.origin = NONE then current.g[]->betaenv[] if);
+          if)
+       #);
+       'long *BETA_data1['->f.puttext; noOfFiles+1->f.putint;
+       '] = {\n\t&BETA_DATA_'->f.puttext;
+       (this(astInterface)[],betaenv[])->getGroupIDProperty->id[];
+       (if id[] = NONE then betaenv[]->calcGroupID->id[] if);
+       id[]->f.puttext;
+       ',\n\t'->f.puttext;
+       DGP.groupList.scan
+       (#
+       do (if current.g.controller.status>justOpen then
+              (if current.g.origin<>NONE then 
+                  '&BETA_DATA_'->f.puttext;
+                  (this(AstInterface)[],current.g[])->getGroupIDProperty->id[];
+                  (if id[] = NONE then current.g[]->calcGroupID->id[] if);
+                  id[]->f.puttext; 
+                  ', /*'->f.puttext; 
+                  current.g.fullname->f.puttext;
+                  '*/\n\t'->f.puttext;
+              if);
+          if)
+       #);
+       '0\n};\n'->f.puttext;
+       f.close;
+       (name[],true,asmlink.BetaKind,false)->PutInJobfile;
+       infostream.newline;
+    else
+       (* MUST be unified with the b2c case;
+        * In addition to creation of BETA_DATA, a check for dublicate
+        * and unbound slots is made.
+        *)
+       (if verboseLevel <= verboseLevel.verbose then 
+           'Creating betadata file...'->infostream.puttext
+       if);
+       (# F: @file
+       do astFileExtension 
+            -> (asmLink.rootFragment.copy
+            -> expandToFullPath).append 
+            -> f.name;  
+          (*'\nbeta-data1: ' -> puttext; f.name -> putline;*)
+          f.entry.path.head -> name[];
+          (*'head: "' -> puttext; name[] -> puttext; '"'->put;newline;*)
+          thePathHandler.directoryChar -> name.put;
+          f.entry.modtime -> name.putint;
+          (*'\nbeta-data2: ' -> puttext; name[] -> putline;*)
+       #);
+       common[] -> mchFactory -> mch[];
+       ((name.copy,(not nti))
+         ->InsertSubDir(#do Asmlink.asmExt->path.append #)
+       ,common[]) 
+         -> mch.createDataFile
+       (#
+       do DGP.groupList.scan
+          (# idx: ^text
+          do (if common.switch[67] then current.g[]->CheckConsistency if);
+             (if current.g.controller.status > justOpen then
+                 (this(AstInterface)[],current.g[])->getGroupIDProperty->id[];
+                 391->trace(#do 'id: '-> xT; id[] -> xT #);
+                 (if id[] = NONE then 
+                     current.g[]->calcGroupID->id[];
+                     391->trace(#do ' NONE: '-> xT; id[]-> xT #);
+                 if);
+                 id.copy -> idx[];
+                 'BETA_DATA_'->idx.prepend;
+                 (idx[],current.g.fullName,current.g.origin=NONE) 
+                   -> mch.NextGroup;
+                 386->trace
+                 (#do idx[]->xT; ' '->put; 
+                    (this(AstInterface)[],current.g.fullName) -> BetaLibLocalname->xT 
+                 #);
+             if);
+             
+       #)#);
+
+       (name[],true,asmlink.BetaDataKind,false)->PutInJobfile;
+       (if verboseLevel <= verboseLevel.verbose then infostream.newline if);
+   if)
+#)
+

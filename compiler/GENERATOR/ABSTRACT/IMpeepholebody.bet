@@ -1,0 +1,261 @@
+ORIGIN 'IMmachinebody'
+--collapseLabels:DoPart--
+do
+   (if ((n.type <> IentryNode) and (n.type <> IexitNode)) then
+       (if n.realgraph[] <> none then
+           (if ((n.realgraph.type = Ilabel) and (n.realnodetop = 1)) then
+               thegraph.nodelist[n.succI[1]][]->tmp[];
+               (if tmp.realgraph[] <> none then
+                   (if tmp.realgraph.type = Ilabel then
+                       (for ii:n.predtop repeat
+                            thegraph.nodelist[n.predI[ii]][]->tmp2[];
+                            (tmp2[],n[],tmp[])->thegraph.moveedge;
+                            tmp2.lastrealnode[]->rn[];
+                            (if rn.inst.labNo = n.realgraph.inst.labNo then
+                                'Changed labels'->putline;
+                                tmp.realgraph.inst.labNo->rn.inst.labNo;
+                            if);
+                            true->changed
+                       for)
+                   if)
+               if)
+           if)
+       if);
+   if)
+   
+--jumpjumpbody:dopart--
+do
+   n.lastrealnode[]->rn[];
+   (if rn[] <> none then
+       (if ((rn.type >= localjumpnr) AND (rn.type <= igjmp)) then
+           (for j:n.succtop repeat
+                thegraph.nodelist[n.succI[j]][]->tmp[];
+                tmp.realgraph[]->tmprn[];
+                (if tmprn[] <> none then
+                    (if tmprn.inst.labNo = rn.inst.labNo then
+                        (if ((tmp.realnodetop=2) AND 
+                            (tmprn.next.type = igjmp)) then
+                            thegraph.nodelist[tmp.succI[1]][]->tmp2[];
+                             tmp.hasbackedge->n.hasbackedge; 
+                            (n[],tmp[],tmp2[])->thegraph.moveedge;
+                            true->changed;
+                            tmp2.realgraph.inst.labNo->rn.inst.labNo;
+                        if);
+                    if);
+                if);
+           for);
+       if);
+   if);
+--poppushbody:dopart--
+do
+   scannode
+     (# 
+        do
+        (if rr.type = IpopThisOrCall then
+            (if ((not rr.inst.bool) and (rr.inst.bool2)) then
+                rr[]->thegraph.nextrealnode->tmp[];
+                (if tmp.type = IPushThisOrCall then
+                    (if ((not tmp.inst.bool) and (tmp.inst.bool2)) then 
+                        rr[]->thegraph.removerealnode;
+                        tmp[]->thegraph.removerealnode;
+                        true->changed
+                    if)
+                if)
+            if)
+        if)
+     #)
+
+--stldbody:dopart--
+do 
+   scannode
+   (# (*a1,a2:^regAdrEssence;*)
+   do
+      (if rr.type = IstVal then
+          (if rr.next[]<>none then
+              rr.next[]->nexti[];
+              (if nexti.type 
+               //IldVal //ItstNone then
+                  (*(if rr.ess1<>nexti.ess2  (* registers not equal * ) then
+                     (if rr.ess2 = nexti.ess1 then (* address reg equal * )
+                          (if rr.inst.(*const2* )<>nexti.inst.imm(*const2* ) then
+                              'shiftdown'->(*opl* )screen.puttext;
+                              rr.shiftdown;
+                              true->changed
+                          if)
+                       if)
+                      (* is this right, why did we had the above? 
+                       * aliases? * )
+                      (if rr.imm(*const2* )<>nexti.imm(*const2* ) then
+                          'shiftdown'->(*opl* )screen.puttext;
+                          rr.shiftdown;
+                          true->changed
+                      if)    
+                  if)*)
+              if)
+          if)
+       else
+          (if rr.type=IcmpAndJmp then
+              (if (rr.prev[]<>none) and (rr.prev.type=IstVal) then
+                  (*
+                  (if (rr.ess1.type=RegAdrEsstype) and (rr.prev.ess2.type=RegAdrEsstype) then
+                      rr.ess1[]->a1[];
+                      rr.prev.ess2[]->a2[];
+                      (if (a1=a2) and (a1.off<>a2.off) then
+                          'Allow one in delay: %d\n'->screen.putformat
+                          (# do rr.mynode->d #);
+                          true->rr.prev.inst.bool;
+                      if)
+                   else
+                      'Allow one in delay: %d\n'->screen.putformat
+                      (# do rr.mynode->d #);
+                      true->rr.prev.inst.bool
+                   if)
+                   *)
+              if)
+           else
+              (if (rr.type=Igjmp) and (rr.prev[]<>none) then
+                  (if rr.prev.type = IstVal then
+                      'Allow one in delay: %d\n'->screen.putformat
+                      (# do rr.mynode->d #);
+                      true->rr.prev.inst.bool
+                  if)
+               else
+                  (if (rr.type=IReturn) and (rr.prev[]<>none) then
+                      (if rr.prev.type = IstVal then
+                          'Allow one in delay: %d\n'->screen.putformat
+                          (# do rr.mynode->d #);
+                          true->rr.prev.inst.bool
+                      if)
+                  if)    
+              if)
+          if)
+      if)
+   #)
+   
+--tstnoneToLd:dopart--
+do (* convert tstnone to ldval, if next instruction is ldval,
+    * will also do refnone trap, but will improve cache behaviour *)
+   scannode
+   (# (*a1,a2:^regAdrEssence;*)
+   do
+      (if rr.type = ItstNone then
+          (if rr.next[]<>none then
+              rr.next[]->nexti[];
+              (if nexti.type 
+               //IldVal //ItstNone then
+                  (if (rr.inst.writereg = nexti.inst.readreg) and
+                      (nexti.inst.imm(*const2*)<4096) then
+                      IldVal->rr.type;
+                      true->changed
+                  if)
+               //IdoAsgRefAdr then
+                  (if nexti.inst.readreg2 = rr.inst.writereg then
+                      IldVal->rr.type;
+                      true->changed
+                      (*Only the one it reads from is ok 
+                       * else 
+                      (if nexti.inst.readreg2 = rr.inst.writereg then
+                          IldVal->rr.type;
+                          true->changed
+                    if)*)
+                  if)
+              if)
+          if);
+          (if changed then 'one tstnone to ldval'->(*opl*)screen.puttext if)
+      if)
+   #)
+
+--deadCodeRem:doPart--
+do
+   (# 
+      intList:
+        (# 
+           r:[16]@integer;
+           top:@integer;
+           append:
+             (# e:@integer;
+             enter e
+             do top+1->top;
+                e->r[top];
+                (if top>=r.range then
+                    top->r.extend
+                if);
+             #);
+           scan:
+             (# current:@integer;
+             do (for i:top repeat
+                     r[i]->current;
+                     inner
+                for);
+             #);
+        #);
+      dead,potentialdead:^intlist;
+   do
+      (if n.type <> IEntryNode then
+          (if n.predtop = 0 then
+              &intlist[]->dead[];
+              &intlist[]->potentialdead[];
+              (for ii:n.succtop repeat
+                   thegraph.nodelist[n.succI[ii]].index->potentialdead.append;
+              for);
+              n.index->dead.append;
+              l:(if ((potentialdead.top <> 0) or (dead.top <> 0)) then
+                    potentialdead.scan
+                    (# 
+                    do
+                       (if thegraph.nodelist[current].predtop = 0 then
+                           current->dead.append;
+                       if);
+                    #);
+                    0->potentialdead.top;
+                    dead.scan
+                    (# 
+                    do
+                       (for jj:thegraph.nodelist[current].succtop repeat
+                            thegraph.nodelist[current].succI[jj]->
+                            potentialdead.append;
+                       for);
+                       current->Thegraph.removenode;
+                       true->changed
+                    #);
+                    0->dead.top;
+                    restart l;
+                if);
+          if);
+      if);
+   #);
+   
+   
+--stst:dopart--
+do
+   scannode
+   (# (*a1,a2:^regAdrEssence;*)
+   do
+      (if rr.type = IstCst then
+          (if rr.next[]<>none then
+              rr.next[]->nexti[];
+              (if nexti.type= IstCst then
+                 (* rr.ess2[]->a1[];
+                  nexti.ess2[]->a2[];
+                  (if (a1=a2) and (a1.off=a2.off) then
+                      rr[]->thegraph.removerealnode;
+                      'removed on stcst'->(*opl* )screen.puttext;
+                      true->changed
+                  if)*)
+              if)
+          if)
+      if)
+   #)
+      
+--peepinit:doPart--
+do
+   &jumpjump[]->addfunction;  
+   &collapseLabels[]->addfunction; 
+   &deadCodeRem[]->addfunction; 
+   &poppush[]->addfunction;
+   &stld[]->addfunction
+   
+--peep2init:doPart--
+do &tstnonetold[]->addfunction;
+   &stst[]->addfunction
+   

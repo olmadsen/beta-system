@@ -1,0 +1,322 @@
+<HTML>
+
+<HEAD>
+<TITLE>Compiler General Documentation</TITLE>
+<LINK REV="made" HREF="mailto:olm@daimi.aau.dk">
+</HEAD>
+
+<BODY>
+<H1>Compiler General Documentation</H1>
+
+<PRE>
+This file is supposed to be the first version of a document
+documenting details about the BETA compiler.
+
+0.     Compiler Use and Organization
+====================================
+
+4/4/98: 
+
+A major reorganization of the compiler is being made in order to
+
+(1)     Make a cleaner interface to the dynamic compiler
+        and prepare for a clean interface to fecth code images 
+	and object files being generated during a compilation.
+
+(2)	To isolate compiler fragments being dependent on process
+        (the parts executing jobfiles)
+
+(3)	To replace declarations of the form
+
+              S: @AST.index
+
+	with
+
+	      S: @index
+
+	(@AST.index generates a ref none check since AST is a dynamic ref;
+	i.e. the change is to eliminate these ref none checks)
+
+Current structure
+-----------------
+
+The following are 4 main files seen from a compiler user perspective
+and as they look like in the current official compiler version.  The
+idea is to show the parts that the compiler user has to know about. The
+next section shows the changes.
+
+        CONTROL/system.bet:
+	===================
+        ORIGIN 'basicsystemenv';
+        INCLUDE 'processmanager';
+	...
+        ---systemLib:attributes---
+	compiler:
+           (# init:< ...
+              translate: 
+	         (# MsgException:< ...
+		    ...  other exceptions
+		 do ...
+		 #);
+	      AST: ^ASTinterface;
+	      rootFragment: ^text;
+	      groupSaved:< ...
+	      semanticErrors:< ...
+	      ...
+	    #);
+
+	CONTROL/interactive.bet:
+	========================
+        ORIGIN 'system'
+        ---systemLib:attributes---
+        interactiveCompiler:
+           (# ...
+	      comp: @ compiler;
+	      activateCompiler:
+	      (#
+	      do L: comp.translate
+	            (# MsgException:: ...;
+		       ... other exception bindings
+		     #)
+	      #)
+	    do ...
+	       comp.init;
+	       ...
+	       afileName[] -> comp.rootFragment;
+	       activateCompiler
+            #)
+
+        compiler.bet
+	============
+        ORIGIN 'CONTROL/interactive';
+        BODY 'SYNTHESIZER/synthesizer';
+        MDBODY sun4s   'GENERATOR/SUN4S/SUN4Sbeta'
+               sgi     'GENERATOR/SGI/SGIbeta'
+	       linux   'GENERATOR/LINUX/LINUXBbeta'
+	       hpux9pa 'GENERATOR/HPUXPA/HPUX9PAbeta'
+	       ppcmac  'GENERATOR/PPCMAC/PPCMACbeta'
+	       nti     'GENERATOR/NTI/NTIBbeta'
+        ---systemLib:attributes---
+	BetaTarget: ...
+    
+	beta.bet:
+	========
+        ORIGIN 'compiler'
+        INCLUDE 'systemenv'
+        ---program:descriptor---
+        systemenv
+        (# IC: @interactiveCompiler
+        do IC[] -> BetaTarget;
+           IC
+        #)
+
+New organisation
+----------------
+
+The changes are as follows
+
+(a) System defines the compiler as an astInterface attribute.
+    This has an impact on how Sif, etc is using the compiler.
+
+(b) AST in compiler should no longer be used. The compiler still has it
+    since there are many places that AST.someThing is used. It is
+    currently set up to this(astInterface)[]
+
+(c) Some compiler declarations have been moved to translate.
+    This means that all external interfaces to the compiler
+    are made by calling translate. 
+
+(d) Systemenv dependencies have been moved to a new runJobFile fragment
+    and to interactive (interactive is NOT used by Sif as I remember)
+    Translate defines a new virtual, jobFileRunner, for this purpose.
+    A compiler user MUST therefore currently call runJobFile within
+    jobFileRunner. This may perhaps be made easier??
+
+
+        CONTROL/system.bet:
+	===================
+        ORIGIN 'betaast/index'; (* new origin *)
+	....			(* no include of processmanager *)
+        ---astInterfaceLib:attributes---    (* in astinterface *)
+        compiler:
+           (# init:< ...
+              translate: 
+	         (# MsgException:< ...
+		    ...  other exceptions
+		    groupSaved:< ...    (* moved from compiler level *)
+		    semanticErrors:< ...(* moved from compiler level *)
+		    jobFileRunner:< ... (* new virtual *)
+		    rootFragment: ^text;
+		 enter rootFragment[] (* new enter parameter *)
+		 do ...	    
+		 #);
+	      AST: ^ASTinterface; (* DON't use it anymore *)
+	      ...
+	    #);
+
+	CONTROL/interactive.bet:
+	========================
+        ORIGIN 'basicsystemenv'              (* new origin *)
+        INCLUDE 'system'                     (* new include *)
+        INCLUDE '../GENERATOR/runJobFile'    (* new file that takes care of
+	                                      * executing the jobfile; this
+					      * fragment includes 
+					      * processmanager
+					      *)
+        ---systemLib:attributes---
+        interactiveCompiler:
+           (# ...
+              BETAastIF: @ASTInterface;
+	      beta: ^BETAastIF.treeLevel;
+	      comp: @BETAastIF.compiler;
+
+	      activateCompiler:
+	         (# rootFragment: ^text
+	         enter rootFragment[]
+	         do L: rootFragment[] -> comp.translate
+	               (# MsgException:: ...;
+		          ... other exception bindings
+		          groupSaved:: ...      (* new virtual *)
+		          semanticErrors:: ...  (* new virtual *)
+		          jobFileRunner::       (* new virtual *)
+		             (#
+			     do ... runJobFile ...
+			     #)
+		        #)
+	         #)
+	    do ...
+	       comp.init;
+               (* init BETAastIF, beta ... *)
+	       ...
+	       afileName[] -> activateCompiler
+            #)
+
+        compiler.bet
+	============
+        ORIGIN 'CONTROL/interactive';
+        BODY 'SYNTHESIZER/synthesizer';
+        MDBODY sun4s   'GENERATOR/SUN4S/SUN4Sbeta'
+               sgi     'GENERATOR/SGI/SGIbeta'
+	       linux   'GENERATOR/LINUX/LINUXBbeta'
+	       hpux9pa 'GENERATOR/HPUXPA/HPUX9PAbeta'
+	       ppcmac  'GENERATOR/PPCMAC/PPCMACbeta'
+	       nti     'GENERATOR/NTI/NTIBbeta'
+        ---systemLib:attributes---
+	BetaTarget: ...
+    
+	beta.bet:
+	========
+        ORIGIN 'compiler'
+        INCLUDE 'systemenv'
+        ---program:descriptor---
+        systemenv
+        (# IC: @interactiveCompiler
+        do IC[] -> BetaTarget;
+           IC
+        #)
+
+1.	Semantic Checking
+=========================
+
+1.1	Semantic attributes
+</PRE>
+See <A HREF="SemanticAttributes.html">Semantic Attributes</A>.
+<PRE>
+1.2	Packing of attributes in the AST
+
+1.3	Slots
+-------------
+
+All slot names defined within a fragmentGroup (a file) MUST be different.
+
+Slot names for descriptor- and mainpart slots MUST be unique in the
+extent of a program. If e.g. "foo" is a descriptor slot defined in
+some fragment, then no other fragment may define a descriptor slot by
+the name "foo".
+
+Slot names for attributes slots can be the same if defined in
+different files.  The same is true for dopart slots.
+
+A program can only linked if all descriptor-, mainpart- and dopart
+slots have been bound by some fragment. 
+
+A descriptor-, mainpart- and dopart slot can only have one binding.
+
+An attributes slot can have several bindings.
+
+2.	Code Generator
+======================
+
+Entry-points
+------------
+
+All descriptors in a form are numbered starting from 1.  For
+attributes-forms, the numbering is unique.  For descriptor forms, the
+numbering starts from 1 for each form.  Descriptors are numbered in
+the order they textually appear in the file.
+
+Consider:
+
+File foo.bet
+
+---lib:attributes--
+   P1: (#{1} #);
+   P2: (#{2} P3: (#{3} ... #); P4: (#{4} ... #) #)
+   P5: (#{5} #)
+---libx:attributes---
+   A1: (#{6} #);
+   A2: (#{7} #)
+---F1:descriptor--
+(#{1} 
+   B1: (#{2} #);
+do (#{3} #)
+#)
+---F2:descriptor---
+(#{1} 
+   C1: (#{2} #);
+   C2: (#{3} #);
+#)
+ 
+
+For each descriptor 3 entry points are generated, one for the
+prototype, one for object generation and one for the do-part.
+
+An entry-point is a concatenation of one of the letters 'T', 'G', or
+'M', the descriptor number and either the file-name or the form-name.
+
+The file name is used for descriptors in attributes-forms.
+The form name is used for descriptors in descriptor-forms.
+
+All entry-points are in upper-case
+
+For the above example the following entry-points are generated:
+
+For P1,...,P5
+
+	T1FOO, G1FOO, M1FOO, ... T5FOO, G5FOO, M5FOO
+
+For A1,A2
+
+	T6FOO, G6FOO, M6FOO, T7FOO, G7FOO, M7FOO, 
+
+For the form F1:
+
+	T1F1, G1F1, M1F1, T2F1, G2F1, M2F1
+
+For F2:
+
+	T1F2, G1F2, M1F2, ..., T3F2, G3F2, M3F2
+
+
+All entry-points in a program must be unique. The entry-points are 
+constructed to obtain uniqueness. This is achieved if:
+
+	- All files containing attributes-forms must have different names.
+	- All descriptor forms must have different names.
+
+These restrictions are NOT checked by the compiler
+
+</PRE>
+
+</BODY>
+</HTML>

@@ -1,0 +1,117 @@
+ORIGIN 'machine';
+LIB_ITEM 'betacodegen';
+INCLUDE '~beta/sysutils/binarystream';
+---asgRepAdr:descriptor---
+(* some kind of a hack *)
+(# A1: ^regAdr
+do A[]->A1[]; (A1.reg[],this(address)[])->stVal
+#)
+
+---RegAdrToTmp:doPart---
+(* Note! Previous versions used (this(inxRegAdr)[],aR[]) -> gLea;
+ * this implied that sometimes aR was loaded with a ref. into 
+ * a simple var. in an object, which confuses the GC;
+ * now we just copy the A-reg from callReg to some tmp reg
+ *)
+do (# A1: @regAdr; aR: @AdrRegOperand
+   do (if access 
+       // common.cstInd // common.varInd then
+          0->addOff->A[]; (if A.useCallReg then A.toTmp->A[] if)
+       else 
+          aR.alloc; aR->A1.reg; 
+          this(RegAdr).off -> A1.off;
+          (this(RegAdr).reg[],aR[]) -> cpReg;
+          A1[]->A[]
+      if);
+      A[]->bAdr.copy   
+   #) 
+   
+--InxRegAdrToTmp:doPart---
+do (# A1: @inxRegAdr; aR: @adrRegOperand 
+   do (if access
+       // common.cstInd // common.varInd then 
+          0->addOff->A[]; (if A.useCallReg then A.toTmp->A[] if)
+       else
+          reAlloc -> aR -> A1.aReg; 
+          this(inxRegAdr).dReg -> A1.dReg;
+          this(inxRegAdr).off -> A1.off;
+          (this(InxRegAdr).aReg[],aR[]) ->  cpReg;
+          A1[]->A[]; 
+          (* NO: freeAdr; since dReg is still in use *)
+      if);
+      A[]->bAdr.copy
+   #)
+  
+--inlineNx:doPart--
+do (# inliningFailed: @boolean;
+      oldAdrRegOverflow,oldDataRegOverflow: ^RegisterOverflow;
+      inlineOverflow: @RegisterOverflow(#do true -> inliningFailed #)
+   do dataRegOverflow[] -> oldDataRegOverflow[];
+      adrRegOverflow[] -> oldAdrRegOverflow[];
+      inlineOverflow[] -> DataRegOverflow[] -> adrRegOverflow[];
+
+      SaveCodeState;
+      INNER InlineNx;
+      (if inliningFailed then 
+          oldDataRegOverflow[] -> DataRegOverflow[];
+          oldAdrRegOverflow[] -> AdrRegOverflow[];
+          Failed 
+      if);
+   #)
+
+---StoreOrigin:doPart---
+do (# aX: ^RegAdr; isOrg: @boolean
+   do (if A.isRegAdr then
+          A[] -> Ax[];
+          Ax.reg = -11 (* originReg*) -> isOrg
+      if);
+      (if isOrg then
+          (# p: ^mOperand; aR: @adrRegOperand
+          do 1 -> initPrimCall;
+             1 -> getPrimReg -> P[];
+             (* OLM: 8.5.98: NOTE! Original the intention of P.isPrimRegOp
+              * was to return true if primReg was a register
+              * and false if a memory location. This has, however,
+              * been misunderstood, since primRegOperand resturns
+              * true also for Intel despite the fact that primRegs
+              * are memory locations. All tests: P.isPrimRegOp
+              * are therfore useless. The folloiwng is a fix for this
+              * but a more permanent solution should be made
+              *)
+             (if common.isIntel then
+                 aR.alloc; 
+                 (P[],aR[]) -> cpReg;
+                 (aR[],this(address)[]) -> stVal;
+                 aR.deAlloc
+              else
+                 (P[],this(address)[]) -> stVal
+             if);
+             0-> getPrimRes;
+          #)
+       else
+          (if common.switch[65] then
+              (* datpete 14/8/97:
+               * FIXME: temporary hack for switch 65.
+               * When storing origin for a computed remote, the origin is
+               * actually allocated later than the item it is origin for.
+               * This means, that the item may have been moved to AOA
+               * before the origin is allocated, in which case ChkRA should 
+               * be called after the assignment.
+               * Example: V94TSTCOMPREM2.
+               * This is a general problem (not only switch 65), 
+               * and should probably
+               * be fixed by having two different StoreOrigin patterns 
+               * - the new one should perform ChkHeap, and should be the 
+               * one used in association with computed remote.
+               *)
+              (A[],false) -> AsgRefAdr-> chkHeap;
+           else
+              (# aR: @adrRegOperand
+              do A.toReg2 -> aR;
+                 (aR[],this(address)[]) -> stVal;
+                 (*301->trace(#do 'storeOrigin:'->xT; aR->xI; dumpreg #);*)
+                 aR.deAlloc;
+                 (*301->trace(#do 'storeOrigin2:'->xT; aR->xI; dumpreg #);*)
+              #)
+   if)if)#)
+   

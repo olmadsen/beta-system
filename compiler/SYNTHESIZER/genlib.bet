@@ -1,0 +1,654 @@
+ORIGIN 'evlib';
+LIB_ITEM 'betacodegen';
+INCLUDE 'prototype'
+        'gen'
+        'synthlib';
+BODY 'genlib_alloc' 'genexternal';
+BODY 'genlib_com';
+BODY 'genlib_bindvirtuals'
+-- GS: Descriptor --
+(#
+   thisPT: ^ProtoType;
+   (* must be dynamic *)
+   (**** not used : ***)
+   InsStack: @
+     (#
+        DS: [1] ^ASTindex;
+        top: @integer;
+        push:
+          (# d: @ASTindex
+          enter d
+          do
+             (if ((top+1->top) <= DS.range) then
+                 d[]->DS[top][]
+              else
+                 'OOPS'->bugstream.puttext
+             if)
+          #);
+        pop: (# d: @ASTindex do top-1->top;  exit (DS[top]) #);
+        init: (#  do 0->top #)
+     #);
+   insSwitch: @boolean;
+   (* if true then insert insertions *)
+   insOff: @integer;
+   (* offset to be added when translating insertions *)
+   
+do none ->thisPT[]
+#)  
+
+-- TheGenLib: Attributes --
+(* in the prototype, the offset of all dynamic references are included.
+ * this offset is 4-byte aligned. i.e. the two least significant bits are not
+ * used. These two bits are then used for tagging some of the references:
+ * origin references are marked with tag 10
+ * references to virtual/slot part objects are marked by 01
+ *)
+orgTag: (#  exit 2 #);
+partRefTag: (#  exit 1 #);
+GenSymbTable:
+  (# nameId: ^text; Singular: @boolean; descName: ^text; 
+  enter (nameId[],Singular)
+  do
+     theFormIndex->GS.thisPT.formIndex;
+     thisDesc.nodeId->GS.thisPT.nodeId;
+     thisForm[]->GS.thisPT.formId[];
+     ThisDescNo->GS.thisPT.descNo;
+     thisDesc.size->GS.thisPT.size;
+     prefFormId[]->GS.thisPT.prefFormId[];
+     prefDescNo->GS.thisPT.prefDescNo;
+     externalEntryLab[]->GS.thisPT.externalEntryLab[];
+     thisDescOrgOff->GS.thisPT.orgOff;
+     thisDesc->GS.thisPT.desc;
+     thisPrefDesc->GS.thisPT.prefDesc;
+     pref->GS.thisPT.pref;
+     att->GS.thisPT.att;
+     (if nameId[] = none then
+         '*'->descName[]->GS.thisPT.descId[]; (* singular insertion *) 
+      else
+         nameId.copy->descName[]->GS.thisPT.descId[];
+         (if singular then '~'->descName.put else '#'->descName.put if)
+     if);
+     (if desc2Alias then
+         (if thisDescNo = 2 then true->GS.thisPT.desc2Alias if)
+     if)
+  #);
+BindVirtuals:
+  (# pref,att: ^ASTindex     
+  enter (pref[],att[])
+  <<SLOT BindVirtuals:doPart>>
+  #);
+SaveReturn:
+  (# 
+  do (if not returnSaved then (*true->returnSaved; *)
+         (if thisDesc[]->sematt.hasAcode->returnSaved then
+             (true,thisDesc.returnOff)->mch.SaveReturn
+         if)
+     if)
+  #);
+EmitImpGCtab:
+  (* no tmp. sto. is used for if-imp's any more, 
+   * so this pattern may be eliminated *)
+  (#
+     scan:
+       (# node: ^ASTindex; off: @integer
+       enter node[]
+       do
+          node
+            ->scanList
+              (# imp: @ASTindex
+              do
+                 currentNode->imp;
+                 (*313->trace(#do imp[]->A #);*)
+                 (if imp.label
+                  // gram.labelledImp // gram.forImp then
+                     imp.son->imp; imp.brother->imp; imp[]->&scan
+                  // gram.generalIfImp then
+                     1->imp.getAttribute->off;
+                     (if off < 0 then - off->GS.thisPT.dyn.add if);
+                     imp.son->imp;
+                     imp.brother->imp
+                       ->scanList (*alternatives*)
+                         (# im: @ASTindex
+                         do
+                            currentNode->im;
+                            im.son->im;
+                            im.brother->im;
+                            im[]->&scan
+                         #);
+                     imp.brother->imp;
+                     (if imp.label
+                      // gram.elsePart then imp.son->imp; imp[]->&scan
+                     if)
+                 if)
+              #)
+       #);
+     doP: ^ASTindex
+  enter doP[]
+  do (if doP.label <> gram.empty then doP[]->&scan if)
+  #);
+EmitSuperGCtab: (* emit GC table for superptn *)
+  (#
+     prefDesc,pref,mainP,att,enterP,doP,exitP: ^ASTindex;
+     SD: @ASTindex;
+     orgOff,superOrgOff,off: @integer;
+     
+  enter prefDesc[]
+  do
+     prefDesc[]->sematt.descSonsRef
+       ->(pref[],mainP[],att[],enterP[],doP[],exitP[]);
+     (if pref.label = gram.prefix then
+         pref.son->sematt.descrip-> SD;
+         (if not (SD->sematt.CprocDesc.equal) then
+             SD[]->&emitSuperGCtab->superOrgOff; 
+         if)
+     if);
+     (if (prefDesc.originOff->orgOff) <> superOrgOff then
+         orgOff+orgTag->GS.thisPT.dyn.add
+     if);
+     (if common.switch[64] and ((prefDesc.returnOff->off) <> 0) then
+         off->GS.thisPT.dyn.add
+     if);
+     att
+       ->scanList
+         (# dcl: @currentNode; dcl1,nameL,ES,desc: @ASTindex; 
+         do
+            dcl->dcl1;
+            (if not dcl1.isSlot then
+                dcl1.son->nameL;
+                nameL.brother->ES;
+                nameL
+                  ->scanList
+                    (# N: @currentNode; N1: @ASTindex; descKind: @integer
+                    do
+                       N->N1;
+                       (if dcl1.label
+                        // gram.simpleDecl then
+                           ES.son->sematt.descrip-> desc;
+                           (if desc.label
+                            // gram.objectDescriptor then
+                               desc->sematt.descKind->descKind
+                            else
+                           (* a virtual/patternVar is always generalKind! *)
+                               sematt.generalKind->descKind
+                           if);
+                           (if ES.label
+                            // gram.dynamicItem // gram.dynamicComponent
+                            // gram.variablePattern then
+                               (if descKind
+                                // sematt.generalKind // sematt.standardKind
+                                // sematt.externalKind // sematt.callBackKind
+                                then
+                                (* For references R: ^external; F: ##external,
+                                 * descKind is standardKind
+                                 *)
+                                   N1.off->GS.thisPT.dyn.add
+                               if)
+                            else
+                           (* static objects *)
+                               (if desc.label
+                                // gram.objectdescriptor then
+                                   (if descKind
+                                    // sematt.standardKind then
+                                       (if desc.size
+                                        // 4 then
+                                           N1.off->GS.thisPT.longs.add
+                                        // 1 then
+                                           N1.off->GS.thisPT.bytes.add
+                                        // 8 then
+                                           N1.off->GS.thisPT.reals.add
+                                        // 2 then
+                                           N1.off->GS.thisPT.shorts.add
+                                        else
+                                           Cerror
+                                             (# 
+                                             do
+                                                'Unkown size(standard descriptor prefix):'
+                                                  ->xT;
+                                                desc.size->xI
+                                             #)
+                                       if)
+                                    // sematt.generalKind then
+                                       (if desc[]->sematt.descAccess
+                                        // common.direct then
+                                        (*N1.off->GS.thisPT.Stat.add *)
+                                        (* it seems that the stat-table is no
+                                         * longer used. See instead
+                                         * emitObjecTemplate where the static
+                                         * objecttable is emitted
+                                         *)
+                                           
+                                        else
+                                       (* mainPart of doPart*)
+                                           N1.off->GS.thisPT.dyn.add
+                                       if)
+                                   if)
+                                else
+                                   N1.off+partRefTag->GS.thisPT.Dyn.add
+                               if)
+                           if)
+                        // gram.repetitionDecl then
+                           N1.off+partRefTag->GS.thisPT.dyn.add
+                       if)
+                    #)
+            if)
+         #);
+     
+  exit orgOff
+  #);
+MainAdr:
+  (# PD,SD: @ASTindex
+  enter PD
+  do
+     (if PD.label = gram.prefix then
+         PD.son->SemAtt.descrip-> SD;
+         (if (SD[]->Sematt.HasDo) then SD[]->GS.thisPT.mainAdr if);
+         (if not (SD->sematt.cProcDesc.equal) then SD.son->&MainAdr if)
+     if)
+  #);
+GenPrefix:
+  (#
+     IsSpecialVirtual: (* ... 
+                        *       V::< (# ... #);  *)
+       (#
+          special,rem: @boolean;
+          preName,preX,preSort,realPreN: @ASTindex
+       do
+          preDen->sematt.getName->preName;
+          preName.dclRef->preSort;
+          preSort.sort->preSort;
+          (if preSort.label
+           // gram.virtualDecl // gram.bindingDecl then
+           (* thisDesc is V :: < (# ... #)                   
+            * the super may then be  V :< (# ... #)
+            *        no problems on generating origin
+            * or                  V :< A
+            *        special code for generating origin
+            *        if A is not at the same level as V
+            * or                   V:< R.A
+            *        same as above
+            *)
+              preSort.son->realPre;
+              realPre.brother->realPre;
+              (if realPre.label
+               // gram.objectDescriptor then
+                  
+               // gram.nameApl then (* V:< A *)
+                  realPre->sematt.getName->realPreN;
+                  (if (realPreN.on > 0) then true->special if)
+               // gram.remote then
+                  true->special
+               else
+                  'Unknown implicit super-pattern' 
+                    -> thisTranslate.SystemException
+              if);
+              (if special then
+                  thisDesc[]->semAtt.DescOrigin->thisDescOrigin[];
+                  thisDescOrigin->preDescOrg;
+                  ThisSuperChain->chain[];
+                  chain[]->DH.ENC->chain[];
+                  (for i: preName.pn repeat
+                    preDescOrg.son->preX;
+                    preX.son->sematt.Descrip-> preDescOrg;
+                    chain[]->DH.PRE->chain[]
+                  for);
+                  
+              if)
+          if)
+       exit special
+       #);
+     pref,prefDesc,preDen,realPre: @ASTindex;
+     thisDescOrigin: ^ASTindex;
+     preDescOrg: @ASTindex;
+     superOrgOff,kind,off: @integer;
+     chain: ^DH.SuperChain
+  enter (pref,kind)
+  do (if (thisDesc[]->Sematt.hasDo) then thisDesc[]->GS.thisPT.mainAdr if);
+     L:
+       (if hasPref then (*pref.label // gram.prefix then*)
+           SaveReturn;
+           pref.son->preDen->SemAtt.descrip-> prefDesc;
+           (if (prefDesc->sematt.cProcdesc.equal) then
+               false->hasPref; restart L (* dirty *)
+           if);
+           prefDesc[]->emitSuperGCtab->superOrgOff;
+           (if superOrgOff <> ThisDescOrgOff then
+               (# prebase: ^mch.address;
+                  originDesc: ^ASTindex;
+               do (* origin for prefix must be added one *)
+                  Gen.ThisRegAdr->preBase[];
+                  (*(1,false)->preBase.goOrigin->preBase[];*)
+                  (*(1,false)
+                   *-> preBase.goOrigin
+                   *-> goOrigin
+                   *-> preBase[];*)
+                  (preBase[],preBase.copy,1,false) -> GoOrigin -> preBase[];
+                  
+                  (if (*switch[480] and*) IsSpecialVirtual then
+                      preDescOrg[]->preBase.bAdr.localDesc[];
+                      (preBase[],originDesc[],realPre[],chain[])
+                        -> genOrgAdr
+                        -> preBase[];
+                   else
+                      thisDesc[]
+                        -> sematt.descOrigin
+                        -> originDesc[]
+                        -> preBase.bAdr.LocalDesc[];
+                      thisSuperChain->chain[];
+                      chain[]->DH.ENC->chain[];
+                      (* this imp is superflous and makes the compiler crash;
+                       * furthemore bAdr.originOff is no longer used.
+                       * originDesc.originOff->originOff->preBase.bAdr.originOff;
+                       *)
+                      (preBase[],originDesc[],preDen[],chain[])
+                        -> genOrgAdr
+                        -> preBase[];
+                  if);
+                  preBase[] -> (prefDesc.originOff->&Gen.ThisRegAdr).storeOrigin;
+                  prebase.freeAdr;
+                  thisDescOrgOff+orgTag->GS.thisPT.dyn.add
+               #)
+         if);
+         INNER          
+      else
+         thisDescOrgOff+orgTag->GS.thisPT.dyn.add;
+         sematt.superObject.descId->(prefFormId[],prefDescNo);
+         sematt.superObject->thisPrefDesc (* used to generate prototypes *)
+     if);
+     (if common.switch[64] and ((thisDesc.returnOff->off) <> 0) then
+         off->GS.thisPT.dyn.add
+     if)
+  #);
+PrefixAlloc: genPrefix
+  (# 
+  do prefDesc.descId->(prefFormId[],prefDescNo);
+     prefDesc->thisPrefDesc;
+     (if prefDesc[] -> sematt.hasAcode then          
+         (if common.switch[68] then
+             (mch.thisRegOp[],2->mch.getPrimReg)->mch.cpReg; (* sun4s only*)
+             (- 1->mch.newCstOp,1->mch.getPrimReg)->mch.ldCst;
+             (* origin *)
+             5 -> common.count; ('V',prefDesc[],3)->callEntry;
+             (*(if common.switch[64] then
+              (# p,m,at,n,d,x: ^ASTindex
+              do prefDesc[] ->sematt.descSonsRef -> (p[],m[],at[],n[],d[],x[]);
+              (at,0,&RepList[]) -> GenAlloc
+              #)if)*)         
+          else
+             (mch.thisRegOp[],mch.callRegOp[])->mch.cpReg;
+             ('G',prefDesc[],3)->callEntry 
+         if)
+     if);
+     (if (prefDesc[]->Sematt.hasDo) then prefDesc[]->GS.thisPT.mainAdr if);
+     prefDesc.son->&MainAdr
+  #);
+       
+GenAlloc:
+  (# att: @ASTindex;
+     base: @integer; (*  base only when switch[64] *)
+     reps: ^RepList; (* Only for COM objects *)
+  enter (att,base,reps[])
+  <<SLOT genlib_alloc:doPart>>
+  #);
+GetSingular: (* find possible singular descs in enter/exit-parts *)
+  (# N: @ASTindex
+  enter N
+  do
+     (if not N.isNull then
+         (*301->trace(#do 0->&N.lispPrint #);*)
+         (if N.label
+          // gram.objectDescriptor then
+             (*'Singular found'->tracestream.puttext;*)
+             (N,common.itemKind,0(*common.insCons*),null)->DS.push;
+             (* kind,cons are not correct !!!*)
+             N.brother->&getSingular             
+          // gram.nameApl // gram.nameDcl // gram.textConst
+          // gram.integerConst // gram.codeString // gram.empty then
+          else
+             (if not N.isSlot then
+                 (if N.nodeClass
+                  // kinds.cons then
+                     N.son->&GetSingular; N.brother->&GetSingular
+                  // kinds.list then
+                     N->scanList (#  do currentNode->&GetSingular #)
+                  // kinds.dummy then
+                     N.son->&GetSingular
+                 if)
+             if)
+         if)
+     if)
+  #);
+GenNpart:
+  (# exitOffStart: @integer
+    <<SLOT genNpart:doPart>>
+  exit exitOffStart
+  #);
+GenDo:
+  (* generate code for the do-part.
+   * If size>0 then this is a code gen for a dopart slot,
+   * where tmp. attributes are needed
+   *)
+  (# size: @integer; insertDo: ^ASTindex; 
+     evalChain: ^DH.superChain; 
+     globalMlab,isComVirtual: @boolean
+  enter(size,insertDo[],evalChain[],globalMlab,isComVirtual)
+  <<SLOT genDo:DoPart>>
+  #);
+GenXPart:
+  (# exitOffStart: @integer
+  enter exitOffStart
+  <<SLOT genXpart:doPart>>
+  #);
+singularData: (#exit 1 #);
+dynamicObj: (#exit 2 #);
+inForm: (# exit 0 #); (* a descriptor inside some form: the normal kind*)
+doPartForm: (# exit 1 #); (* a doPart form *)
+mainPartForm: (# exit 2 #); (* a mainPartForm *)
+GenObj:
+  (* generate code for a descriptor used as an item *)
+  (# R: ^ProtoType; hasAcode: @boolean; N: @ASTindex;
+     objKind2: @integer;
+     isComVirtual: @boolean;
+     
+     objKind,formKind: @integer;
+  enter(objKind,formKind)
+  do &ProtoType[]->R[];
+     ProtoHead[]->R.succ[];
+     R[]->GS.thisPT[]->Protohead[];
+     objKind -> R.objKind;
+     307->trace
+     (#do 'genlib: ' -> xT; thisDesc[] -> xA;
+        thisDesc[]->sematt.hasAcode-> xB;
+        returnSaved -> xB
+     #);
+     (objKind = sematt.externalVirtualKind) -> isComVirtual;
+     (if (thisDesc[]->sematt.hasAcode->hasAcode) 
+         or common.switch[68] (* V-entry points *) 
+         or isComVirtual then
+         thisDesc.father -> N;
+         (*301 -> trace(# do 'descFather:'->xT; N[] ->xA #);*)
+         (if N.label 
+          // gram.staticItem // gram.staticComponent then
+             singularData -> objKind2;
+          // gram.descriptorForm // gram.virtualDecl // gram.bindingDecl then
+             dynamicObj -> objKind2
+         if);
+         (thisFormName[],thisForm[],thisDescNo,theFormIndex
+         ,thisDesc.nodeId
+         ,ThisDesc.size,hasAcode
+         ,objKind2)
+           -> gen.BeginAlloc;    
+         (if isComVirtual and not ReturnSaved then
+             (true,thisDesc.returnOff)->mch.SaveReturn;
+             true -> ReturnSaved
+         if)
+     if);
+     (if objKind <> sematt.stateKind then
+         (pref,common.itemKind)->PrefixAlloc;
+     if);
+     (att,0,&RepList[])->GenAlloc;
+     (if isComVirtual then
+         (* do NOT generate normal return 
+          * Transfer arguments to object
+          * May be proto should not be in %i1 and
+          * may be we should call G direcly a la V-entry,
+          * i.e. NO AlloCom
+          *)
+         (*<<SLOT TransferCOMarguments:descriptor>>*)
+      else
+         (* normal object*)
+         (if common.switch[68] then
+             (if hasAcode or (common.targetMachineId = common.sgi)
+                 (*or common.switch[68]*) then
+                 (false,thisDesc.returnOff)->mch.return
+              else
+                 (if common.switch[65] then
+                     (if hasAcode then mch.rts if)
+                  else 
+                     (if common.switch[64] then mch.rts if)
+             if)if)
+          else
+             (if hasAcode then
+                 (if returnSaved (*probably always true?*) then
+                     (false,thisDesc.returnOff)->mch.return
+                  else
+                     mch.rts
+                 if)
+             if)
+     if)if);
+     (# exitOffStart: @integer
+     do (if (thisDesc[] -> sematt.hasNcode) AND common.switch[180] then
+            GenNpart -> exitOffStart
+         else
+            thisDesc.returnOff -> exitOffStart;
+            (if enterP.label <> gram.empty then 
+                (* with switch[180] not necessary, since there will be Ncode
+                 * if there are singular descriptors
+                 *)
+                enterP.son->getSingular;
+        if)if);
+        (if (thisDescNo = 1) 
+            or (ThisDesc[]->Sematt.hasDo) 
+            or (formKind = mainPartForm) then
+            (if not (ThisDesc[]->sematt.hasOnlyInner) then
+                (if not doP.isSlot then 
+                    (0,NONE,NONE,NOT isComVirtual,isComVirtual) -> GenDo
+                if)
+            if)
+        if);
+        (if (thisDesc[] -> sematt.hasXcode) AND common.switch[180] then
+            exitOffStart -> GenXpart
+         else
+            (if exitP.label <> gram.empty then 
+                exitP.son->getSingular;
+        if)if);
+     #);
+     (pref[],att[])->BindVirtuals;
+     (nameId[],singular)->genSymbTable
+  #);
+
+GenCom: <<SLOT GenCom:descriptor>>;
+
+
+GenComVirtual: <<SLOT genComVirtual:descriptor>>;
+
+ScanCOMArgs: 
+  (# noOfCOMargs,dataByValueByteSize: @integer;
+     RL: @RepList;     
+     EH: @EvalHandler;
+     arg: ^EH.evVal;
+     nScan: @ | EH.scanNAdr;
+  do <<SLOT ScanCOMargs:descriptor>>;
+  exit(noOfCOMargs,dataByValueByteSize,RL[])
+  #);
+  
+GenCproc: (* call back *) <<SLOT genCallBack:Descriptor>>;
+
+(****Not used: **************)
+GenProc:
+(* generate code for a descriptor used as a procedure *) (#  #);
+insAtt:
+  (# pref,att: @ASTindex; p,a,n,d,x: ^ASTindex
+  enter (pref,att)
+  do
+     (pref,common.itemKind)
+       ->GenPrefix
+         (# 
+         do
+            pref[]->preDescSons->(p[],a[],n[],d[],x[]);
+            GS.insOff+common.preStrucSize->GS.insOff;
+            (p,a)->&insAtt;
+            GS.insOff-common.preStrucSize->GS.insOff;
+            
+         #);
+     (att,0,&RepList[])->&GenAlloc
+  #);
+insEnter:
+  (# pref,entP: @ASTindex; p,a,n,d,x: ^ASTindex
+  enter (pref,entP)
+  do
+     (if pref.label
+      // gram.prefix then
+         pref[]->preDescSons->(p[],a[],n[],d[],x[]);
+         (p,n)->&insEnter;
+         GS.insOff-common.preStrucSize->GS.insOff;
+         
+     if);
+     (*      entP -> &genEnter*)
+     
+  #);
+insDo:
+  (# pref,doP: @ASTindex; p,a,n,d,x: ^ASTindex
+  enter (pref,doP)
+  do
+     (if (pref.label = gram.prefix) then
+         (doP)->GS.InsStack.push;
+         GS.insOff+common.preStrucSize->GS.insOff;
+         pref[]->preDescSons->(p[],a[],n[],d[],x[]);
+         (p,d)->&insDo;
+         GS.InsStack.pop;
+         GS.insOff-common.preStrucSize->GS.insOff;
+         
+      else
+     (* doP -> &genDo*)
+         
+     if)
+  #);
+insExit:
+  (# pref,exitP: @ASTindex; p,a,n,d,x: ^ASTindex
+  enter (pref,exitP)
+  do (*exitP -> &genExit;*)
+     (if pref.label
+      // gram.prefix then
+         pref[]->preDescSons->(p[],a[],n[],d[],x[]);
+         GS.insOff+common.preStrucSize->GS.insOff;
+         (p,x)->&insExit;
+         GS.insOff-common.preStrucSize->GS.insOff;
+         
+     if)
+  #);
+insItem:
+  (# 
+  do (* way skal med som param. *) (* gen.begInsItem; *)
+  (* (start,ThisDesc,pref) -> *) Insertion
+  #);
+PreDescSons: (* preliminary **)
+  (# desc,descRef: @ASTindex; pref,p,m,a,n,d,x: ^ASTindex
+  enter pref[]
+  do pref.son->SemAtt.descrip-> descRef;
+     descRef[]->semAtt.descSonsRef->(p[],m[],a[],n[],d[],x[])
+  exit (p[],a[],n[],d[],x[])
+  #);
+Insertion:
+  (# start: @integer; desc,pref: @ASTindex
+  enter (start,desc,pref)
+  do
+     start+GS.insOff->GS.insOff;
+     (pref,att)->insAtt;
+     (pref,enterP)->insEnter;
+     (pref,acP)->insDo;
+     (pref,exitP)->insExit;
+     start-GS.insOff->GS.insOff;
+     
+  #);
+  
+

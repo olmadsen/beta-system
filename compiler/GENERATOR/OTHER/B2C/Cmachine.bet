@@ -1,0 +1,2382 @@
+ORIGIN 'machine'
+--machineAtt: attributes--
+endS: (# do ';\n\t'->BC.putT; 4->mstate.adrSize (*long is default*) #);
+emitLocalDecl: 
+  (# 
+  do 'LOCAL_DECLS;\n\t'->BC.putT;
+  #);
+shift16: 
+  (# V1,V2: @integer
+  enter (V1,V2)
+  do '(long*)(('->BC.putT; V1->BC.putI; '<<16)|(0xffff&'->BC.putT; V2->BC.putI; '))'->BC.putT
+  #);
+asgToReal: 
+  (# 
+  do '(double)'->BC.putT; 8->mstate.setAS
+  #);
+pushRef: 
+  (# op: ^mOperand
+  enter op[]
+  do '*RefSP++=(long)'->BC.putT; op.putOp; endS
+  #);
+popRef: 
+  (# op: ^mOperand
+  enter op[]
+  do op.putOp; '=*(--RefSP)'->BC.putT; endS
+  #);
+pushCparByte: 
+  (# op: ^mOperand
+  enter op[]
+  do '*cIntStackPtr++'->BC.putT; '=(long)/*1*/'->BC.putT; op.putOp; endS;
+     (if not mstate.inPrimitive then (1,1)->mstate.cPar if);
+  #);
+pushCparShort: 
+  (# op: ^mOperand
+  enter op[]
+  do '*cIntStackPtr++'->BC.putT; '=(long)/*1*/'->BC.putT; op.putOp; endS;
+     (if not mstate.inPrimitive then (1,2)->mstate.cPar if);
+  #);
+pushCpar:  (* long *)
+  (# op: ^mOperand
+  enter op[]
+  do '*cIntStackPtr++'->BC.putT; '=(long)/*1*/'->BC.putT; op.putOp; endS;
+     (if not mstate.inPrimitive then (1,4)->mstate.cPar if);
+  #);
+pushCfloatPar: 
+  (* Note: some bookkeeping must be done to keep track of which
+   * parameters are real
+   *)
+  (# op: ^mOperand
+  enter op[]
+  do '*cFloatStackPtr++'->BC.putT; '='->BC.putT; asgToReal; op.putOp; endS;
+     (if not mstate.inPrimitive then (2,8)->mstate.cPar if);
+  #);
+genTextConstT:
+  (# 
+  do 'T'->BC.putC;
+     mstate.textTop->BC.putI;
+	 mstate.textTop-1->mstate.textTop;
+	 (if mstate.textTop<0 then cError(# do 'Text Const underflow'->T #)if)
+  #);
+error: 
+  (# T: ^text; S: @text
+  enter T[]
+  do '\n\n*** error: '->S.puttext; T[]->S.puttext; S.newline;
+     S[]->puttext; S->comment
+  #)
+--mstate: descriptor--
+(# adrSize: @integer; (* size of operands: 1=byte,2=short,4=long,8=real*)
+   setAS: @(# enter adrSize #);
+   localAregs: @Boolean;
+   localFilePath_hash: @Text;
+   
+   protoT: @text;
+   innerTab: [1] ^mOperand; innerTabTop,dispatchSize: @integer;
+   
+   off1, (* used by emitOff1 to save a value between two consequtive calls*)
+   vLabNo: @integer;
+   genVLab: (# T: @text do 'V'->T; vLabNo+1->vLabNo->T.putInt exit T #);   
+   
+   (* for external calls *)
+   
+   inPrimitive: @boolean;
+   isPascal: @boolean;
+   
+   (* for pascal callbacks *)
+   univProcInfo: @Integer;
+   
+   textTop: @Integer; (* counter for char *T<num> text consts *)
+   cVarC,cVarF: @integer;
+   cParType: [10] @integer; cParSize: [10] @integer; cParNo: @integer;
+   nested: @boolean; (* True if in nested external call *)
+   NoExNest: @integer; (* Number of nesting levels of external calls *)
+   nestLevel: @integer; (* Count nesting levels for storing on stack *)
+   s: [70] @integer; t: @integer; (* Stack for saving values in nested external calls *)
+   push: @
+     (# do (if nestLevel>0//true then
+               t+3->t;
+               (if t>s.range//true then s.range->s.extend if);
+               cVarC->s[t-2];
+               cVarF->s[t-1];
+               cparNo->s[t]; 
+               (for i: cParType.range repeat
+                    t+1->t;
+                    (if t>s.range//true then s.range->s.extend if);
+                    cParType[i]->s[t];
+               for);
+               (for i: cParSize.range repeat
+                    t+1->t;
+                    (if t>s.range//true then s.range->s.extend if);
+                    cParSize[i]->s[t];
+               for);
+           if);
+        nestLevel+1->nestLevel;
+     #);
+   pop: @
+     (# do (if nestLevel>1//true then
+               (if t<=0//true then 
+                   cError(# do 'mstate stack underflow'->T#);
+                else
+                   (for i: cParSize.range repeat
+                        (if t<=0//true then 
+                            cError(# do 'mstate stack underflow'->T#);
+                         else
+                            s[t]->cParSize[cParSize.range-i+1];
+                            t-1->t;
+                        if)
+                   for);
+                   (for i: cParType.range repeat
+                        (if t<=0//true then 
+                            cError(# do 'mstate stack underflow'->T#);
+                         else
+                            s[t]->cParType[cParType.range-i+1];
+                            t-1->t;
+                        if)
+                   for);
+                   s[t]->cparNo;
+                   s[t-1]->cVarF;
+                   s[t-2]->cVarC;
+                   t-3->t;
+               if);
+               nestLevel-1->nestLevel;
+            else
+               0->cVarC->cVarF->cParNo; (* to be sure *)
+               0->nestLevel;
+           if);
+     #);
+   cPar: @
+     (# type,size: @integer
+     enter (type,size)
+     do (if (cParNo+1->cParNo)>cParType.range//true then
+	        'extend cParReps'->putline;
+            cParType.range->cParType.extend;
+            cParSize.range->cParSize.extend
+        if);
+        type->cParType[cParNo];
+        size->cParSize[cParNo]
+     #);
+   cResDr: @dataRegOperand; cResFr: @floatRegOp;
+   HF: @file
+     (# externLabel: 
+          (# PT: ^text
+          enter PT[]
+          do (*'extern struct ProtoType '->putT; PT[]->putT; ';\n'->putT*)
+             'extern long '->putT; PT[]->putT; '[];\n'->putT
+          #);
+        externProto: 
+          (# PT: ^text
+          enter PT[]
+          do (*'extern struct ProtoType '->putT; PT[]->putT; ';\n'->putT*)
+             'extern long *'->putT; PT[]->putT; '[];\n'->putT
+          #);
+        extern: 
+          (# EP: ^text
+          enter EP[]
+          do 'extern void '->putT; EP[]->putT; 
+	     (if mstate.localAregs then
+	         '(long,long);\n'->putT;
+	      else
+	         '(void);\n'->putT;
+             if);
+          #);
+        putT: @puttext;
+     #)
+#)
+--AssemblerHeader: descriptor--
+(# T,S: ^text;
+   i: @Integer;
+do true->common.switch[37];
+   '#include <betarun.h>\n'->BC.putT;
+   (*'#include <setjmp.h>\n'->BC.putT;*)
+   BC.name->T[]; (T.length,T.length)->T.delete; 'h'->T.put;
+   T[]->mstate.HF.name; mstate.HF.openWrite;
+
+   ':'->T.findAll(# do inx->i #);
+   '#include "'->BC.putT; 
+   (i+1,T.lgth)->T.sub->S[];
+   S->BC.putT; 
+   '"\n\n'->BC.putT;
+
+   'extern long lastCompBlock;\n'->mstate.HF.putT;
+
+   4->mstate.adrSize; (* long is default *)
+#)
+--debugHeader: descriptor--
+(# #)
+--CstOpPut: dopart--
+do C->BC.putI
+--TextOpPut: dopart--
+do T->BC.putT
+--textOpLoadAdr: dopart---
+do
+--DataRegOpPut: dopart--
+do 'd'->BC.putT; rN->BC.putI;
+--FloatRegOpPut: descriptor--
+(# do 'fp'->BC.putT; rN->BC.putI #)
+--FloatRegOpLoad: descriptor--
+(# do asgToReal; putOp; '=(double)'->BC.putT; A.putOp; endS #)
+--FloatRegOpStore: descriptor--
+(# do asgToReal; A.putOp; '=(double)'->BC.putT; putOp; endS #)
+--FloatRegOpStoreTmp: descriptor--
+(# do asgToReal; 'fTmp=(double)'->BC.putT; putOp; endS;
+   &stackTopAdr[]->A[];
+#)
+--floatRegOpStore2int: descriptor--
+(# 
+do D.alloc; (* there is a dealloc later of D*)
+   D.putop; '=(long)'->BC.putT;
+   8->mstate.setAS; putOp; endS;
+   '(long)'->BC.putT; A.putOp; '=(long)/*2*/'->BC.putT; putOp; endS;
+   (* 8->mstate.setAS; putOp; endS; 
+    D.alloc *)
+#)
+--floatConst: descriptor---
+(# Lab: @localLab;
+do FR.alloc; asgToReal; FR.putOp; '=/*3*/'->BC.putT; T->BC.putT; endS
+#)
+--float2int:doPart---
+   (* datpete 6/3/96: NOT tested! *)
+do dr.putOp; '=/*float2int*/(long)'->BC.putT; FR.putOp;
+--int2float: descriptor--
+(# 
+do FR.alloc; asgToReal;
+   FR.putOp; '=(double)/*4*/'->BC.putT; 4->mstate.setAS; A.putOp; endS 
+#)
+--intReg2float: descriptor--
+(# 
+do FR.alloc; asgToReal;
+   FR.putOp; '=(double)/*5*/'->BC.putT; 4->mstate.setAS; A.putOp; endS 
+#)
+--cmpFloat: descriptor--
+(* note that the order of LF and A has been switched *)
+(# do (* '\tfcmp.d\t'->BC.putT; LF.putOp; ','->BC.putC; A.putOp; BC.putNL *)#)
+--fBeq: descriptor--
+(# do (* '\tfbeq\t'->BC.putT; op.putOp; BC.putNl *) #)
+--fBge: descriptor--
+(# do (* '\tfbge\t'->BC.putT; op.putOp; BC.putNl *)#)
+--fBle: descriptor--
+(# do (* '\tfble\t'->BC.putT; op.putOp; BC.putNl *)#)
+--fBne: descriptor--
+(# do (* '\tfbne\t'->BC.putT; op.putOp; BC.putNl *)#)
+--fBgt: descriptor--
+(# do (* '\tfbgt\t'->BC.putT; op.putOp; BC.putNl *)#)
+--fBlt: descriptor--
+(# do (* '\tfblt\t'->BC.putT; op.putOp; BC.putNl *)#)
+--addFloat: descriptor--
+(# do asgToReal; LF.putOp; '=/*6*/'->BC.putT; LF.putOp; '+'->BC.putC; A.putOp; endS #)
+--subFloat: descriptor--
+(# do asgToReal; LF.putOp; '=/*7*/'->BC.putT; LF.putOp; '-'->BC.putC; A.putOp; endS #)
+--mulFloat: descriptor--
+(# do asgToReal; LF.putOp; '=/*8*/'->BC.putT; LF.putOp; '*'->BC.putC; A.putOp; endS #)
+--divFloat: descriptor--
+(# do asgToReal; LF.putOp; '=/*9*/'->BC.putT; LF.putOp; ' / '->BC.putT; A.putOp; endS #)
+--negFloat: descriptor--
+(# do asgToReal; F.putOp; '=-'->BC.putT; F.putOp; endS #)
+--pushFloatReg: descriptor--
+(# do (* '\tfmov.d\t%fp'->BC.putT; rN->BC.putI; ',-(%sp)\n'->BC.putT *)#)
+--popFloatReg: descriptor--
+(# do (* '\tfmov.d\t(%sp)+,%fp'->BC.putT; rN->BC.putI; '\n'->BC.putT *)#)
+--AdrRegOpPut: dopart--
+do (if ind//true  then 
+       (if mstate.adrSize 
+        //4 then '/*10*/((long *)a'->BC.putT; rn->BC.putI; ')[0]'->BC.putT;
+        //1 then '/*10a*/((unsigned char *)a'->BC.putT; rN->BC.putI; ')[0]'->BC.putT
+        //8 then '/*10b*/((double *)a'->BC.putT; rN->BC.putI; ')[0]'->BC.putT
+        //2 then '/*10c*/((unsigned short *)a'->BC.putT; rN->BC.putI; ')[0]'->BC.putT
+        else
+           'AdrRegOpPut'->error
+       if)
+    else  'a'->BC.putT; rN->BC.putI
+   if)
+--stackTopAdrPutOp: descriptor--
+(# do 'fTmp'->BC.putT #)
+--doubleDataRegPut: descriptor-- (* see e.g. divsl.l *)
+(# 
+do 'd'->BC.putT; dNo1->BC.putI; ':'->BC.putC; 'd'->BC.putT; dNo2->BC.putI
+#)
+--LocalLabDef: dopart--
+do 'L'->BC.putC; labNo->BC.putI; ':'->BC.putC
+--VirtLabDef: descriptor--
+(# 
+do 'static long* L'->BC.putT; labNo->BC.putI; '(long * org){\n\t'->BC.putT;
+   emitLocalDecl;
+   'd7=(long)org;\n\t'->BC.putT
+#)  
+--LocalLabPut: dopart--
+do 'L'->BC.putC; labNo->BC.putI 
+--localLabLoadAdr: dopart--
+do
+--ldCst: dopart--
+do R.putOp; '=/*11*/'->BC.putT; C.putOp; endS
+--cstLoadOp: dopart--
+do
+--cstOpLoadToReg: dopart--
+do
+--stCst: descriptor-- 
+(# do size->mstate.setAS; A.putOp; '=/*12*/'->BC.putT; C.putOp; endS #)
+--ldByte: descriptor---
+(# do 1->mstate.setAS; op2.putOp; '=(unsigned char)/*13*/'->BC.putT; op1.putOp; endS #) 
+--ldHalf: descriptor---
+(# do 2->mstate.setAS;  op2.putOp; '=(unsigned short)/*14*/'->BC.putT; op1.putOp; endS #) 
+--ldVal: descriptor--
+(# do R.putOp; '=/*15*/'->BC.putT; A.putOp; endS#)
+--ldValFromLab: dopart--
+do R.putOp; '=/*15a*/'->BC.putT; L.putOp; endS
+--ldVl: descriptor--
+(# do size->mstate.setAS; R.putOp; '=/*16*/'->BC.putT; A.putOp; endS #)
+--ldSignedVl: descriptor--
+(# 
+do size->mstate.setAS; 
+   R.putOp; 
+   (if size
+    // 1 then '= (signed char)  /*16a*/'->BC.putT; 
+    // 2 then '= (signed short) /*16b*/'->BC.putT; 
+    // 4 then '= (signed long)  /*16c*/'->BC.putT; 
+    // 8 then '= (signed double)/*16d*/'->BC.putT; 
+    else (* error *)
+       '= /*16e*/'->BC.putT;
+   if);
+   A.putOp; endS
+#)
+--stByte: descriptor---
+(# do 1->mstate.setAS; op2.putOp; '=/*17*/(char)'->BC.putT; op1.putOp; endS #) 
+--stHalf: descriptor---
+(# do 2->mstate.setAS; op2.putOp; '=/*18*/(unsigned short)'->BC.putT; op1.putOp; endS #) 
+--stVal: descriptor--
+(# do A.putOp; '=/*19*/'->BC.putT; R.putOp; endS #)
+--stValInLab: dopart--
+do L.putOp; '=/*19a*/'->BC.putT; R.putOp; endS
+--cpReg: dopart--
+do R2.putOp; '=/*20*/'->BC.putT; R1.putOp; endS
+--cpByteMem: descriptor--
+(# do 1->mstate.setAS; A2.putOp; '=(unsigned char)/*21*/'->BC.putT; A1.putOp; endS #) 
+--cpHalfMem: descriptor--
+(# do 2->mstate.setAS;  A2.putOp; '=(unsigned short)/*22*/'->BC.putT; A1.putOp; endS #)
+--cpMem: descriptor--
+(* NOTE that this op is also called when assigning x->where x,y: @real.
+ * if  R[i]->R[j] where R: [..]@real, then putOp assumes float, but
+ * should use int
+ *)
+(# do 4->mstate.setAS; A2.putOp; '=/*23*/'->BC.putT; A1.putOp; endS #)
+
+(* datpete 6/3/96: obsolete
+ * --ldLabAdr: dopart--
+ * do {* '\tmov.l\t'->BC.putT; L.putOp; BC.sep; R.putOP; BC.putNl *}
+ *)
+--stValInText: dopart--
+do L.putOp; '=/*24*/'->BC.putT; op.putOp; '/* val in text*/'->BC.putT; endS
+--comment: dopart--
+do '/*'->BC.putT; T->BC.putT; '*/\n\t'->BC.putT
+--Export: dopart--
+do
+--Import: descriptor--
+(# 
+do (if wasAdded//true then lab[]->mstate.HF.extern if)
+#)
+--ImportData: descriptor--
+(# 
+do (if wasAdded//true then
+       (if local//false then lab[]->mstate.HF.externLabel
+if)if)#)
+
+(* datpete 6/3/96: obsolete
+ * --RelativeAdr: descriptor--
+ * (# 
+ * do 'short '->BC.putT; L1.putOp; '-'->BC.putC; L2->BC.putT; BC.putNl
+ * #)
+ *)
+
+--jsrT: dopart--
+do (if true
+    //'AttBC'->T.equal then 
+       'SaveCurrSP();\n\t'->BC.putT;
+       'AttBC((struct Item *)a0,(struct Component *)a1);\n\t'->BC.putT
+    //'CopyCT'->T.equal then 'd7=(long)CopyCT((unsigned char*) d0);\n\t'->BC.putT
+    else
+       T->BC.putT; 
+       (if mstate.localAregs then
+           '(a0,a1)'->BC.putT; 
+        else
+           '()'->BC.putT;
+       if);
+       endS
+   if)
+--jmpT: dopart--
+do T->BC.putT; 
+   (if mstate.localAregs then
+      '(a0,a1)'->BC.putT; 
+   else
+      '()'->BC.putT;
+   if);
+   endS;
+--gJmp: dopart--
+do 'goto '->BC.putT; op.putOp; endS
+--gJsr: dopart--
+do op.putOp; 
+   (if mstate.localAregs then
+      '(a0,a1)'->BC.putT; 
+   else
+      '()'->BC.putT;
+   if);
+   endS
+--rts: dopart--
+(* Notice: the "{}" is necessary if the C-function is terminated by a label as in: 
+ * L31: }. This is NOT a legal C-construction! A labelled statement has to be followed
+ * by a statement: 
+ * L31: {} }
+ *)
+do '{}}\n'->BC.putT
+--gClr: dopart--
+do op.putOp; '=0'->BC.putT; endS
+--pushAdr: descriptor--
+(# do op[]->pushRef #)
+--Push: descriptor--
+(# 
+do (if op.struc//AdrRegOperand## then op[]->pushRef if)
+#)
+--Pop: descriptor--
+(# 
+do (if op.struc//AdrRegOperand## then op[]->popRef if)
+#)
+--SetTop: descriptor--
+(# 
+do (* '\tlea.l\t'->BC.putT;
+    (if off//0 then else off( * *4 * )->BC.putI; if);
+    '(%sp),%sp'->BC.putT; BC.putNL
+    *)
+#)
+--gLea: descriptor---
+(# bl: ^textOperand
+do 4->mstate.setAS; op2.putOp; '=/*25*/(long)&('->BC.putT;
+   op1.putOp; ')'->BC.putC;
+   endS
+#)
+--gLeaLabel: descriptor---
+(# 
+do 4->mstate.setAS; op2.putOp; '=/*26*/(long)&('->BC.putT;
+   op1.putOp; ')'->BC.putC; endS
+#)
+--ChkCase:doPart--
+do (* not used in B2C *)
+
+--ChkIndex: descriptor--
+(# 
+do 'if ( (('->BC.putT; op1.putOp; ')<'->BC.putT; op2.putOp;
+   ') || (1>'->BC.PutT; op2.putOp;
+   ') )\n\t\t{ SaveCurrSP(); BetaError(-3,(Object *)a0); }\n\t'->BC.putT;
+#)
+--ChkHeap: descriptor--
+(# L: @localLab
+do 'if (((long) IOA > (long)'->BC.putT; op.putOp; 
+   ') || ((long)'->BC.putT; op.putOp; ' > (long)IOATop))'->BC.putT; 
+   'ChkRA((struct Object**)'->BC.putT; op.putOp; ')'->BC.putC; endS;
+   (* The above is just a guess! 
+    '\tcmp2.l\t'->BC.putT; op.putOp; ',_IOA'->BC.putT; BC.putNL;     
+    L.New; L[]->jumpIfTrue;
+    op[]->push;
+    'ChkRA'->jsrT;
+    L.def
+    *)
+#)
+--SignExtByte: descriptor--
+(# 
+do '(long)'->BC.putT; op.putOp; '=SignExtByte((signed char)'->BC.putT; op.putOp; ')'->BC.putC; endS
+#)
+--SignExtWord: descriptor--
+(# 
+do op.putOp; '=SignExtWord((signed short)'->BC.putT; op.putOp; ')'->BC.putC; endS
+#)
+--GetBits: descriptor--
+(# 
+do op2.putOp; '=GetBits((unsigned long)'->BC.putT; op1.putOp; BC.sep;
+   '(int)'->BC.putT; pos->BC.putI; BC.sep;
+   '(int)'->BC.putT; length->BC.putI; ')'->BC.putC; endS
+#)
+--GetSignedBits: descriptor--
+(# 
+do op2.putOp; '=GetSignedBits((unsigned long)'->BC.putT; op1.putOp; BC.sep; 
+   '(int)'->BC.putT; pos->BC.putI; BC.sep;
+   '(int)'->BC.putT; length->BC.putI; ')'->BC.putC; endS
+#)
+--gGetBits: doPart--
+   (* unsigned int getbits(unsigned int rd, unsigned int pDr, unsigned int lDr)
+    * {
+    * return (rd << pDr) >> (32-lDr);
+    * }
+    *)
+do '(unsigned)'->BC.putT;
+   dr.putop; '=(unsigned)'->BC.putT; ' ((unsigned)'->BC.putT; dr.putop; 
+   ' << (unsigned)'->BC.putT; pDr.putOp; 
+   ') >> (unsigned)(32-(unsigned)'->BC.putT; lDr.putOp; ');\n\t'->BC.putT;
+--gGetSignedBits: doPart--
+   (* int getbits( int dr,  int pDr,  int lDr)
+    * {
+    * return (dr << pDr) >> (32-lDr);
+    * }
+    *)
+do dr.putop; '='->BC.putC; ' ('->BC.putT; dr.putop; ' << '->BC.putT;
+   pDr.putOp; ') >> (32-'->BC.putT; lDr.putOp; ');\n\t'->BC.putT;
+--PutBits: dopart--
+do (# ar: ^adrRegOperand
+   do op2[]->ar[]; 
+      false->ar.ind; (* is made indirect in gen1body and this wont work here *)
+      (*op2.putOp;*) 'PutBits((unsigned long)'->BC.putT; op1.putOp; BC.sep; 
+      '(unsigned long *)'->BC.putT; op2.putOp; BC.sep;  
+      '(int)'->BC.putT; pos->BC.putI; BC.sep; 
+      '(int)'->BC.putT; length->BC.putI; ')'->BC.putC; endS
+   #)
+--gPutBits: doPart--
+   (* unsigned int putbits(unsigned int dr, unsigned int pDr,
+    *                      unsigned int lDr, unsigned long * ar)
+    * { unsigned long mask=((unsigned long) ((-1)<<(32-lDr)))>>pDr;
+    *   unsigned long bits=(dr << (32-lDr)) >> pDr;
+    *   *ar= (*ar & ~mask) | bits;
+    *  }
+    *)
+do '{ unsigned long mask, bits;\n\t\t'->BC.putT;
+   'mask=((unsigned long) ((-1)<<(32-(unsigned)'->BC.putT; lDr.putOp;
+   ')))>>(unsigned)'->BC.putT;
+   pDr.putOp; endS;
+   '\tbits=((unsigned)'->BC.putT; dr.putOp; ' << (32-(unsigned)'->BC.putT;
+   lDr.putOp; ')) >> (unsigned)'->BC.putT; 
+   pDr.putOp; endS; '\t'->BC.putT;
+   ar.putOp; '= ('->BC.putT; ar.putOp; ' & ~mask) | bits;\n\t}\n\t'->BC.putT; 
+   
+--gAdd: descriptor--
+(# 
+do size->mstate.setAS;
+   op2.putOp; '=/*27*/'->BC.putT; op2.putOp; '+'->BC.putC; op1.putOP; endS #)
+--gSub: descriptor--
+(# do size->mstate.setAS;
+   op2.putOp; '=/*28*/'->BC.putT; op2.putOp; '-'->BC.putC; op1.putOP; endS #)
+--gNeg: descriptor--
+(# do size->mstate.setAS;
+   op.putOp; '= -'->BC.putT; op.putOp; endS #)
+--gCmp: descriptor--
+(# (* HP: Notice order of operands *)
+do (* '\tcmp'->BC.putT; size->BC.putS; op2.putOp; BC.sep; op1.putOp; BC.putNl*)
+#)
+--gMult: descriptor--
+(# do size->mstate.setAS;
+   op2.putOp; '=/*29*/'->BC.putT;
+   op2.putOp; '*'->BC.putC; op1.putOP; endS #)
+--gDiv: descriptor--
+(# 
+do (if isDiv//true then 
+       '(long)'->BC.putT; op2.dNo2.putOp; '=/*30*/'->BC.putT; 
+       '(long)'->BC.putT; op2.dNo2.putOp; ' / '->BC.putT 
+    else 
+       '(long)'->BC.putT; op2.dNo1.putOp; '=/*31*/'->BC.putT; 
+       '(long)'->BC.putT; op2.dNo2.putOp; '%'->BC.putC 
+   if); 
+   '(long)'->BC.putT; op1.putOP; endS 
+#)
+--gOr: descriptor--
+(# do size->mstate.setAS;
+   op2.putOp; '=/*32*/'->BC.putT; 
+   op1.putOp; ' | '->BC.putT; op2.putOP; endS #)
+--gAnd: descriptor--
+(# do size->mstate.setAS;
+   op2.putOp; '=/*33*/'->BC.putT; 
+   op1.putOp; ' & '->BC.putT; op2.putOP; endS #)
+--gXor: descriptor--
+(# do size->mstate.setAS;
+   op2.putOp; '=/*34*/'->BC.putT; 
+   op1.putOp; ' ^'->BC.putT; op2.putOP; endS #)
+--gNot: descriptor--
+(# do size->mstate.setAS; 
+   op.putOp; '= !'->BC.putT; op.putOp; endS #)
+--LogNot: descriptor--
+(# do size->mstate.setAS; 
+   op.putOp; '=~'->BC.putT; op.putOp; endS #)
+--gGetDataByte: descriptor--
+(# 
+do op1.putOp; '=(long)GetByte('->BC.putT;
+   op1.putOp; BC.sep; byteNo->BC.putI; ')'->BC.putC; endS
+#)
+--gGetDataWord: descriptor--
+(# 
+do op1.putOp; '=(long)GetShort('->BC.putT; op1.putOp; BC.sep; 
+   (if wordno
+    //0 then 0->BC.putI;
+    //2 then 1->BC.putI;
+    else
+       cError(# do 'GetDataWord: illegal wordno: '->T; wordno->I #);
+   if);
+   ')'->BC.putC; endS
+#)
+--JumpIfTrue: descriptor--                        (* byte, word or long ?? *)
+(# 
+do (* '\tbcc\t'->BC.putT; op.putOp; BC.putNl *)
+#)
+--gBeq: descriptor--
+(# do (* '\tbeq\t'->BC.putT; op.putOp; BC.putNl *) #)
+--gBne: descriptor--
+(# do (* '\tbne\t'->BC.putT; op.putOp; BC.putNl *) #)
+--gBge: descriptor--
+(# do (* '\tbge\t'->BC.putT; op.putOp; BC.putNl *) #)
+--gBae: descriptor--
+(# do (* '\tbge\t'->BC.putT; op.putOp; BC.putNl *) #)
+--gBle: descriptor--
+(# do (* '\tble\t'->BC.putT; op.putOp; BC.putNl *) #)
+--gBbe: descriptor--
+(# do (* '\tble\t'->BC.putT; op.putOp; BC.putNl *) #)
+--gBgt: descriptor--
+(# do (* '\tbgt\t'->BC.putT; op.putOp; BC.putNl *) #)
+--gBab: descriptor--
+(# do (* '\tbgt\t'->BC.putT; op.putOp; BC.putNl *) #)
+--gBlt: descriptor--
+(# do (* '\tblt\t'->BC.putT; op.putOp; BC.putNl *) #)
+--gBbl: descriptor--
+(# do (* '\tblt\t'->BC.putT; op.putOp; BC.putNl *) #)
+--trap: descriptor--
+(* should make a case on trap, cond=4 => le *)
+(# do (* '\ttle\n'->BC.putT *) #)
+--initExternalCall: dopart--
+do (if extType<>0 then  (* not a primitive *)
+       (if mstate.NoExNest>0//true then true->mstate.nested if);
+       mstate.NoExNest+1->mstate.NoExNest;
+       mstate.push; (* Save call paramteres on stack if nested calls *)
+       0->mstate.cVarC->mstate.cVarF->mstate.cParNo;
+       false->mstate.inPrimitive;
+       (extType=2) or (extType=3) ->mstate.isPascal;
+    else
+       (* a primitive call that uses cIntStack *)
+       true->mstate.inPrimitive;
+       false->mstate.isPascal;
+   if);
+--InitExternalParams: dopart--
+do info->mstate.univProcInfo;
+--CallCproc: descriptor--
+(# cVarNo,fVarNo, cur: @integer;
+do mstate.cVarC+1->cVarNo; mstate.cVarF+1->fVarNo;
+   (if mstate.inPrimitive then
+       'OOPS: inPrimitive is true when in CallCproc: '->puttext;
+       T[]->putline;
+   if);
+   
+   (*'CallCProc: '->puttext;
+   T[]->puttext;
+   mstate.cParNo->putint;*)
+
+   (* PowerPC C compiler bug??, read arguments first into C/F vars *)
+   
+   (for i: mstate.cParNo repeat
+	(if mstate.cParType[mstate.cParNo-i+1]
+	 //1 then
+		'C'->BC.putC; i->BC.putI;
+		'=*(--cIntStackPtr);\n\t'->BC.putT;
+	 //2 then  
+		'F'->BC.putC; i->BC.putI;
+		'=*(--cFloatStackPtr);\n\t'->BC.putT;
+	 else
+		'unknown cParType: '->bugstream.puttext; 
+		mstate.cParType[i]->bugstream.putint; bugstream.newline;
+		'C'->BC.putC; i->BC.putI;
+		'=*(--cIntStackPtr);\n\t'->BC.putT;
+	if)
+   for);
+   
+   (* return value *)
+   (if extType (* external type: C or Pascal (for PPC)  *)
+    //1 (*sematt.cExt OOPS*) then 'extern '->mstate.HF.putT
+    //2 (*sematt.pascExt OOPS*) then 'extern pascal '->mstate.HF.putT
+    else  'extern '->mstate.HF.putT
+   if);
+   (if exitType
+    //0 then (* no result *)
+       'void '->mstate.HF.putT
+    //1 then (* no result *)
+       'char '->mstate.HF.putT;
+       mstate.cResDr.alloc;
+       mstate.cResDr.putOp; '=/*35*/'->BC.putT;
+    //2 then (* no result *)
+       'short '->mstate.HF.putT;
+       mstate.cResDr.alloc;
+       mstate.cResDr.putOp; '=/*35*/'->BC.putT;
+    //7 (* double/float *)then
+       mstate.cResFr.alloc;
+       mstate.cResFr.putOp; '=/*35*/'->BC.putT;
+       'double '->mstate.HF.putT
+    else
+       mstate.cResDr.alloc;
+       mstate.cResDr.putOp; '=/*36*/'->BC.putT;
+       'long '->mstate.HF.putT
+   if);
+   (* make call *)
+   T->BC.putT; '('->BC.putC; 
+   T[]->mstate.HF.putT; '('->mstate.HF.put;
+   (if mstate.cParNo//0 then 'void'->mstate.HF.putT
+    else 
+       (for i: mstate.cParNo repeat
+            (if i>1 then BC.sep;','->mstate.HF.put if);
+			mstate.cParNo-i+1->cur;
+	        (if mstate.cParType[cur]
+             //1 then
+                (if mstate.cParSize[cur]
+				   //5 then 'char *'->mstate.HF.putT;
+				            '(char *)'->BC.putT; mstate.textTop-1->mstate.textTop;
+				   //4 then 'long'->mstate.HF.putT;
+				   //2 then 'short'->mstate.HF.putT;
+				            '(short)'->BC.putT;
+				   //1 then 'char'->mstate.HF.putT;
+				            '(char)'->BC.putT;
+				  else 
+                    'unknown cParSize: '->bugstream.puttext; 
+                     mstate.cParSize[cur]->bugstream.putint; 
+					 bugstream.newline;
+				    'long'->mstate.HF.putT
+                if);
+                'C'->BC.putC; i->BC.putI;
+             //2 then  
+                'F'->BC.putC; i->BC.putI;
+                'double'->mstate.HF.putT
+             else
+                'unknown cParType: '->bugstream.puttext; 
+                mstate.cParType[cur]->bugstream.putint;
+				bugstream.newline;
+                'C'->BC.putC; i->BC.putI;
+                'long'->mstate.HF.putT
+            if)
+   for)if);
+   ');'->BC.putT; '\n\t'->BC.putT;
+   ');\n'->mstate.HF.putT;
+   
+   (if mstate.inPrimitive then
+       false->mstate.inPrimitive;
+    else
+       (* Pop parameters from stack if nested calls. Otherwise zero variables *)
+       (if extType<>0//true then
+           (if mstate.NoExNest
+            //1 then
+               false->mstate.nested;
+           if);
+           mstate.NoExNest-1->mstate.NoExNest;
+       if);
+       mstate.pop; 
+   if);
+   false->mstate.isPascal;
+#)
+
+(* datpete 6/3/96: obsolete
+ * --CallPrimitive: descriptor--
+ * (# 
+ * do (if true
+ *     //'ThisS'->T.equal then 'd0=(long)ThisS((struct Object *} a0);\n\t'->BC.putT
+ *     //'MkTO'->T.equal then 
+ *       'C1=*(cIntStackPtr-1);\n\t'->BC.putT;
+ *       'C2=*(cIntStackPtr-2);\n\t'->BC.putT;
+ *       'MkTO((char *}'->BC.putT; genTextConstT; ',(struct Item *}(C2),(unsigned)(C1));\n\t'->BC.putT;
+ *       'cIntStackPtr=cIntStackPtr-2;\n\t'->BC.putT;
+ *     //'CopyT'->T.equal then 
+ *       'C1=*(cIntStackPtr-1);\n\t'->BC.putT;
+ *       'C2=*(cIntStackPtr-2);\n\t'->BC.putT;
+ *       'CopyT((char *}'->BC.putT; genTextConstT; ',(struct Item *}(C2),(unsigned)(C1));\n\t'->BC.putT;
+ *       'cIntStackPtr=cIntStackPtr-2;\n\t'->BC.putT;
+ *     else 
+ *        T->BC.putT; '()'->BC.putT; endS
+ *    if);
+ *    {*0->mstate.cVarC->mstate.cVarF->mstate.cParNo {* to be sure *}
+ *    false->mstate.inPrimitive;
+ * #)
+ *)
+
+--PushClong: descriptor--
+(# 
+do op[]->PushCpar;
+#)
+--PushCword: descriptor--
+(# 
+do op[]->PushCparShort;
+#)
+--PushCbyte: descriptor--
+(# 
+do op[]->PushCparByte;
+#)
+--PushCDoubleAdr: descriptor--
+(# A1: ^address
+do (* A.copy->A1[]; ( *addOff changes A* )
+    4->A.addOff->pushClong; A1[]->pushClong;
+    *)
+   A[]->pushCfloatPar
+#)
+--PushCtext: descriptor--
+(# #)
+--PushCfloat: descriptor--
+(# do F[]->pushCfloatPar #)
+--PopCword: descriptor--
+(# 
+do (* '\tmov.w\t(%sp)+,'->BC.putT; op.putOp; BC.putNL *)
+#)
+--PopCbyte: descriptor--
+(# 
+do (* '\tmov.w\t(%sp)+,'->BC.putT; op.putOp; BC.putNL *)
+#)
+--Xpar: descriptor--
+(# extKind,exitType,no: @integer;
+#)
+--initGetXpar: descriptor-- (* must be fixed for Pascal also *)
+(# 
+do (if extKind->Xpar.extKind//5 (*sematt.cCallBackExt*) then
+       1->Xpar.no;
+       '('->this(machine).BC.putC; 
+       (for i: BC+LC+SC repeat
+            (if i>1 then ', '->THIS(machine).BC.putT if);
+            'long arg'->this(machine).BC.putT; i->this(machine).BC.putI;
+       for);
+       ')\n{\t'->this(machine).BC.putT;
+       emitLocalDecl;
+       (* Make sure that a0=theObj is done as the first thing *)
+       (*'a0=theObj'->this(machine).BC.putT; endS;
+        * a0 is set in HandleCB *)
+    else (*pascCallBackExt*)
+       1->Xpar.no;
+       '('->this(machine).BC.putC; 
+       (for i: BC+LC+SC repeat
+            (if i>1 then ', '->THIS(machine).BC.putT if);
+            'long arg'->this(machine).BC.putT; i->this(machine).BC.putI;
+       for);
+(*****
+       'long *ParamPtr'->this(machine).BC.putT;
+******)
+       ')\n{\t'->this(machine).BC.putT;
+       emitLocalDecl;
+       (* Make sure that a0=theObj is done as the first thing *)
+       (* 'a0=theObj'->this(machine).BC.putT; endS; 
+        * a0 is set in HandlePCB *)
+   if);
+#)
+--getXlong: descriptor--
+(*for C, long,word, and byte are always long *)
+(# t: @Text;
+do (if Xpar.extKind//5 (*sematt.cCallBackExt*) then 
+       'CallBackPar'->t;
+	else
+       'CallBackPar'->t;
+   if);   
+   (if Xpar.no<=6//true then
+       t->BC.putT; Xpar.no->BC.putI; 
+       '(d'->BC.putT; dr.rN->BC.putI; ')'->BC.putC; endS;
+    else
+       t->BC.putT;
+       'N(oldSP, d'->BC.putT; dr.rN->BC.putI; ' ,'->BC.putT;
+       Xpar.no->BC.putI; ')'->BC.putC; endS;
+   if);
+   Xpar.no+1->Xpar.no;
+#)
+---GetXword: descriptor--
+(* only for MAC Pascal, byte and word are always word *)
+(# 
+do (if Xpar.no<=6//true then
+       'CallBackPar'->BC.putT; Xpar.no->BC.putI; 
+       '(d'->BC.putT; dr.rN->BC.putI; ')'->BC.putC; endS;
+    else
+       'CallBackParN'->BC.putT; 
+       '(oldSP, d'->BC.putT; dr.rN->BC.putI; ' ,'->BC.putT;
+       Xpar.no->BC.putI; ')'->BC.putC; endS;
+   if);
+   Xpar.no+1->Xpar.no;
+#)
+---GetXbyte: descriptor--
+(* only for MAC Pascal, byte and word are always word *)
+(# 
+do (if Xpar.no<=6//true then
+       'CallBackPar'->BC.putT; Xpar.no->BC.putI; 
+       '(d'->BC.putT; dr.rN->BC.putI; ')'->BC.putC; endS;
+    else
+       'CallBackParN'->BC.putT; 
+       '(oldSP, d'->BC.putT; dr.rN->BC.putI; ' ,'->BC.putT;
+       Xpar.no->BC.putI; ')'->BC.putC; endS;
+   if);
+   Xpar.no+1->Xpar.no;
+#)
+--toXres: descriptor--
+(# (* is d0 always the return register in C-machine? It looks so! *)
+do (if Xpar.exitType
+	//1 then 'return (char) d0'->BC.putT; 
+	//2 then 'return (short) d0'->BC.putT; 
+	//3 then 'return (long) d0'->BC.putT; 
+	else 'return (void *) d0'->BC.putT; 
+   if);
+   endS;
+#)
+--StackOffPut: descriptor--
+(# 
+   (* do 'CallBackPar('->BC.putT; off->BC.putI; ')'->BC.putC; endS  *)
+#)
+--SaveReg: descriptor--     (* Save registers a0 and a1 *)
+(# 
+do thisRegOp[]->pushRef; callRegOp[]->pushRef   
+#)
+--SaveHeapTop: descriptor---
+(# 
+do (*' save_BetaStackTop'->comment*)
+#)
+--RestoreReg: descriptor--  (* Restore registers a0 and a1 *)
+(# 
+do callRegOp[]->popRef; thisRegOp[]->popRef
+#)
+--popCallStack: descriptor--
+(# 
+do (*'pop call stack'->comment*)
+#)
+--AlcPascResult: descriptor--
+(# #)
+--PascalTrap: descriptor--
+(# (* only meaningful on  Macintosh *)
+do '# PascalTrap: '->BC.putT; TrapId->BC.putT; BC.putNL
+#)
+--SwitchToData: descriptor--
+(# #)
+--SwitchToCode: descriptor--
+(# #)
+--DeclareLong: descriptor--
+(# 
+do 'proto[i++]='->BC.putT; N->BC.putI; endS
+#)
+--DeclareAddress: descriptor--
+(# bl: ^textOperand
+do '(long*)&'->BC.putT; op.putOp
+   (*
+    (if op.struc//textOperand## then 
+    ( * this can be more more efficiently in initDataSeg * )
+    op[]->bl[];
+    (if bl.BETAlab//true then '(long)&'->BC.putT 
+    else
+    '(long)'->BC.putT
+    if)
+    else
+    '(long)'->BC.putT
+    if); 
+    op.putOp*)
+#)
+--DeclareWord: descriptor--
+(# 
+do 'proto[i++]='->BC.putT; '(short)'->BC.putT; N->BC.putI; endS
+#)
+--DclWord: descriptor--
+(# 
+do 'proto[i++]='->BC.putT; '(short)'->BC.putT; N->BC.putI; endS
+#)
+---EmitBytes: descriptor--
+(# #)
+--EmitByte: descriptor--
+(# #)
+--Skip: descriptor--
+(# 
+do (* 'space '->BC.putT; BN->BC.putI; BC.putNL *)
+#)
+--AsciiZ: descriptor--
+(* For hp the output has the form
+ *    asciz "........"
+ * Chars with a value less that ' ' (32) are converted to
+ * the form \ooo where ooo is the octal value of the character.
+ * The char '"' is printed as '\"'.
+ *)
+(# dummyV: @Text
+do '"'->BC.putT;
+   (if mstate.isPascal then '\\'->BC.putC; 'p'->BC.putC if);
+   T.scanAll
+   (# i: @integer; 
+   do i+1->i;
+      (if (ch<' ')//true then
+          '\\'->BC.putC;
+          '0'+(ch div 64)->BC.putC; (ch mod 64)->ch;
+          '0'+(ch div  8)->BC.putC; (ch mod  8)->ch;
+          '0'+ch->BC.putC;
+       else
+          (if ch
+           //'"' then '\\'->BC.putC; '"'->BC.putC
+           //'\\' then '\\'->BC.putC; '\\'->BC.putC
+           else 
+              (if (ch>255)//true then
+          	  ' '->BC.putC;
+               else
+          	  ch->BC.putC 
+              if);
+          if)
+      if)
+   #);
+   '";\n\t'->BC.putT
+#)
+--LabelDef: descriptor--
+(# 
+do (* T->BC.putT; ': '->BC.putT; BC.putNL *)
+   T[]->mstate.HF.extern;
+   '\nvoid '->BC.putT; T->BC.putT; 
+   (if mstate.localAregs then
+       '(long a0, long a1){'->BC.putT;
+    else
+       '(){'->BC.putT;
+   if);
+#)
+--defineMainLabel1: descriptor--
+(# T: @text
+do '\nvoid main(long argc, char *argv[]){long d7; \n\t'->BC.putT;
+   'SetArgValues(argc,argv);\n\t'->BC.putT; 
+   'extern long TextProto;\n'->mstate.HF.puttext;
+   INNER defineMainLabel
+#)
+--defineMainLabel2: descriptor--
+(# 
+do '}\n\t'->BC.putT
+#)
+--ByteSwap: descriptor--
+(# T: @text
+do '******** No byte swap implemented \n'->T;
+   common.messagestream.newline;
+   T[]->common.messagestream.putline;
+   T->comment
+#)
+(****OBS no distinction between arith/logical shift! *)
+--arithShiftLeft: dopart-- 
+do op2.putOp; '=/*37*/'->BC.putT; 
+   '(long)'->BC.putT; op2.putOp; '<<'->BC.putT; '(long)'->BC.putT; op1.putOp; endS
+--arithShiftRight: dopart-- 
+do op2.putOp; '=/*38*/'->BC.putT; 
+   '(long)'->BC.putT; op2.putOp; '>>'->BC.putT; '(long)'->BC.putT; op1.putOp; endS
+--logicalShiftLeft: dopart-- 
+do op2.putOp; '=/*39*/'->BC.putT; 
+   '(long)'->BC.putT; op2.putOp; '<<'->BC.putT; '(long)'->BC.putT; op1.putOp; endS
+--logicalShiftRight: dopart-- 
+do op2.putOp; '=/*40*/'->BC.putT; 
+   '(long)'->BC.putT; op2.putOp; '>>'->BC.putT; '(long)'->BC.putT; op1.putOp; endS
+--rotateLeft: doPart-- 
+   (* ((rd << pDr) | (rd >> (32-pDr))) *)
+do op2.putop; '='->BC.putC; '(('->BC.putT; op2.putOp; ' << '->BC.putT; op1.putOp;
+   ') | ('->BC.putT; op2.putop; ' >> (32-'->BC.putT; op1.putOp; ')));\n\t'->BC.putT;
+--rotateRight: doPart---
+   (* ((rd >> pDr) | (rd << (32-pDr))) *)
+do op2.putop; '='->BC.putC; '(('->BC.putT; op2.putOp; ' >> '->BC.putT; op1.putOp;
+   ') | ('->BC.putT; op2.putop; ' << (32-'->BC.putT; op1.putOp; ')));\n\t'->BC.putT;
+--nop: descriptor--
+(# #)
+--RegAdrPutOp: dopart--
+(* Address Register Indirect with Displacement *)
+do (if mstate.adrSize
+    //4 then 
+       '/*41*/(((long *)(a'->BC.putT; Reg->BC.putI; 
+       '+'->BC.putC; off->RegisterOffset; '))[0])'->BC.putT;
+    //1 then 
+       '/*41a*/(((unsigned char *)a'->BC.putT; Reg->BC.putI; 
+       ')['->BC.putT; off->RegisterOffSet; '])'->BC.putT;
+    //2 then
+       '/*41b*/(((unsigned short*)(a'->BC.putT; Reg->BC.putI;
+       '+'->BC.putC; off->RegisterOffSet;
+       '))[0])'->BC.putT
+    //8 then
+       '/*41c*/(((double*)(a'->BC.putT; Reg->BC.putI;
+       '+'->BC.putC; off->RegisterOffSet;
+       '))[0])'->BC.putT
+    else 'RegAdrPutOp'->error
+   if);
+--AdrLoadFloatOp: descriptor--
+(# #) 
+--RegInd: dopart--
+(* Address Register Indirect *)
+do (if mstate.adrSize
+    //4 then '/*42*/(((long *)(a'->BC.putT; R->BC.putI; '))[0])'->BC.putT 
+    //1 then '/*42a*/(((unsigned char *)a'->BC.putT; R->BC.putI; ')[0])'->BC.putT 
+    //2 then '/*42b*/(((unsigned short*)(a'->BC.putT; R->BC.putI; '))[0])'->BC.putT
+    //8 then '/*42c*/(((double*)(a'->BC.putT; R->BC.putI; '))[0])'->BC.putT
+    else 'RegInd'->error
+   if)
+--RegisterOffSet: dopart---
+do offset->BC.putI
+
+(* 2.8.3: Register indirect with index *)
+--InxRegAdrPutOp: dopart--
+   (* 2.8.3.2: Address Register Indirect with Index (Base Displacement) *)
+   (* HP: Address Register Indirect with Index Plus Base Displacement*)
+   (* off = long displacement
+    aReg  = base register
+    dReg  = index register *)
+do (if mstate.adrSize (* note that cpMem may override size (logically)
+                       * in the case R[i]->R[j] where R: [..]@real
+                       *)
+    //4 then 
+       '/*44*/(((long *)(a'->BC.putT; aReg->BC.putI; 
+       '+'->BC.putC; off->RegisterOffSet; '+'->BC.putC;
+       dReg->BC.putD; '*'->BC.putT; size->BC.putI; '))[0])'->BC.putT
+    //1 then 
+       '/*44a*/(((unsigned char *)a'->BC.putT; aReg->BC.putI; 
+       ')['->BC.putT; off->RegisterOffSet; 
+       '+'->BC.putC; dReg->BC.putD; '])'->BC.putT;
+    //2 then 
+       '/*44b*/(((unsigned short*)(a'->BC.putT; aReg->BC.putI; 
+       '+'->BC.putC; off->RegisterOffSet;  '+'->BC.putC;
+       dReg->BC.putD; '*'->BC.putT; size->BC.putI; '))[0])'->BC.putT;
+    //8 then 
+       '/*44c*/(((double*)(a'->BC.putT; aReg->BC.putI; 
+       '+'->BC.putC; off->RegisterOffSet;  '+'->BC.putC;
+       dReg->BC.putD; '*'->BC.putT; size->BC.putI; '))[0])'->BC.putT;
+    else 'InxRegAdrPutOp'->error
+   if);
+
+(* datpete 6/3/96: obsolete   
+ * --BitField: descriptor--
+ * (# 
+ * do '{'->BC.putC; off->BC.imm; ':'->BC.putC; wd->BC.imm; '}'->BC.putC
+ * #)
+ *)
+   
+--debugImpInfo: descriptor--
+(# #)  
+--debugBeforeEndMinfo: descriptor---
+(# #)
+--debugAfterEndMinfo: descriptor--
+(# #)
+--debugGpartInfo: descriptor--
+(# #)
+--debugProtoInfo: descriptor--
+(# #)
+
+(************************* registers ******************************)
+-- DataRegMax: dopart --
+do 5->val 
+-- thisO: dopart --
+do 0->rNo 
+-- callO: dopart --
+do 1->rNo 
+(****--originO: descriptor-- (# do -1->rNo #)***)
+(**************************************)
+(* The hp assembler do not allow a label to occur immediately before the
+ "text", "data" or "bss" pseudo-operations. Therefore, we precede any
+ of these operations with a null-effect pseudo-operation: "lalign 1".
+ *)
+---EndDebugCode: descriptor--
+(# 
+#)
+---BeginProtoTypes: descriptor---
+(# #)
+--xParForward: descriptor--
+(# 
+do (if extKind
+    //1 (* sematt.cExt*) then false->forward
+    //2 (* sematt.pascExt*)//3 (* sematt.pascTrapExt*) then false->forward
+    else cError(# do 'xParForward unknown extKind: '->T; extKind->I #);
+if)#)
+(*** BC file ***)
+--putS: dopart--
+do (if size
+    //4 then '.l\t'->putT
+    //1 then '.b\t'->putT
+    else (* 2 *) '.w\t'->putT
+   if)
+--putA: descriptor--
+(# do 'a'->putT; n->putI #)
+--putD: descriptor--
+(# do 'd'->putT; n->putI #)
+--imm: descriptor--
+(# do '&'->put; off->putI #)
+--Newdesc: descriptor--
+(# do 10->NCmax #)
+--newCtextOp: descriptor--
+(# S: @text do (*'_'->S.put;*) T[]->S.puttext; S[]->op #)
+--leaToPrimReg: descriptor--
+(# ar: @AdrRegOperand
+do ar.alloc; (op1[],ar[])->gLea;
+   (ar[],op2[])->cpReg;
+#)
+--beginLabel: dopart--
+do (# sp,aReg: @adrRegOperand; A: @regAdr
+   do 'if (setjmp( *GetJmpBuf((int)a0,'->BC.putT; '(int)'->BC.putT; off->BC.putI;
+      '))) if (leave) {goto '->BC.putT; leaveLab.putOp; 
+      ';} else goto '->BC.putT; restartLab.putOp; 
+      endS
+   #)
+--Break: dopart--
+do (if isLeave//true then
+       'leave=1;'->BC.putT
+    else
+       'leave=0;'->BC.putT
+   if); 
+   'longjmp( *UseJmpBuf((int)a1,'->BC.putT; '(int)'->BC.putT; off->BC.putI; '),1);\n\t'->BC.putT
+--freeLabel: dopart--
+do 'FreeJmpBuf((int)a1,'->BC.putT; '(int)'->BC.putT; off->BC.putI; ');\n\t'->BC.putT
+--endLabel: dopart--
+do 'FreeJmpBuf((int)a0,'->BC.putT; '(int)'->BC.putT; off->BC.putI; ');\n\t'->BC.putT
+--pushThisOrCall: descriptor--
+(# 
+do (if pushTh//true then thisRegOp[]->pushRef if);
+   (if pushCa//true then callRegOp[]->pushRef if)
+#)
+--popThisOrCall: descriptor--
+(# 
+do (if popCa//true then callRegOp[]->popRef if);
+   (if popTh//true then thisRegOp[]->popRef if)
+#)
+--InxRegAdrPushRegAndOff: descriptor--
+(# 
+do ((off div 4)->newCstOp,dReg[],4)->gAdd; 
+   aReg[]->pushClong; dReg[]->pushClong
+#)
+--cmpToBool: descriptor--
+(# unSign: @(# do (if size//4 then else '(unsigned)'->BC.putT if)#)
+do size->mstate.setAS;
+   'if ('->BC.putT; unSign; op2.putOp; 
+   (if cond 
+    //1 (* =  *) then '=='->BC.putT
+    //2 (* <> *) then '!='->BC.putT
+    //3 (* <  *) then '<'->BC.putC;
+    //4 (* <= *) then '<='->BC.putT
+    //5 (* >  *) then '>'->BC.putC;
+    //6 (* >= *) then '>='->BC.putT
+    else cError(# do 'cmpToBool: unknown cond: '->T; cond->I #);
+   if);
+   unSign; op1.putOp; ')'->BC.putT; 
+   op3.putOp; '=1; else '->BC.putT; op3.putOp; '=0'->BC.putT; endS
+#)
+--cmpAndJmp: descriptor--
+(# unSign: @(# do (if size//4 then else '(unsigned)'->BC.putT if)#)
+do size->mstate.setAS;
+   'if ('->BC.putT; unSign; op2.putOp; 
+   (if cond 
+    //1 (* =  *) then '=='->BC.putT
+    //2 (* <> *) then '!='->BC.putT
+    //3 (* <  *) then '<'->BC.putC;
+    //4 (* <= *) then '<='->BC.putT
+    //5 (* >  *) then '>'->BC.putC;
+    //6 (* >= *) then '>='->BC.putT
+    else cError(# do 'cmpAndJmp: unknown cond: '->T; cond->I #);
+   if);
+   unSign; op1.putOp; ') goto '->BC.putT; Lab.putOp; endS
+#)
+--cmpBoolAndJmp:descriptor--
+(# unSign: @(# do (if size//4 then else '(unsigned)'->BC.putT if)#)
+do size->mstate.setAS;
+   'if ('->BC.putT; unSign; op.putOp;
+   (if cond
+    //1 (* =  *) then '==0'->BC.putT
+    //2 (* <> *) then '!=0'->BC.putT
+    //3 (* <  *) then '<0'->BC.putT;
+    //4 (* <= *) then '<=0'->BC.putT
+    //5 (* >  *) then '>0'->BC.putT;
+    //6 (* >= *) then '>=0'->BC.putT
+    else cError(# do 'cmpAndJmp: unknown cond: '->T; cond->I #);
+   if);
+   ') goto '->BC.putT; Lab.putOp; endS
+#)
+--cmpToBoolFloat: descriptor--
+(# Lab: @localLab
+do 'if ((double)'->BC.putT; 8->mstate.setAS; op2.putOp; 
+   (if cond 
+    //1 (* =  *) then '=='->BC.putT
+    //2 (* <> *) then '!='->BC.putT
+    //3 (* <  *) then '<'->BC.putC;
+    //4 (* <= *) then '<='->BC.putT
+    //5 (* >  *) then '>'->BC.putC;
+    //6 (* >= *) then '>='->BC.putT
+    else cError(# do 'cmpToBoolFloat: unknown cond: '->T; cond->I #);
+   if);
+   op1.putOp; ')'->BC.putT; 
+   op3.putOp; '=1; else '->BC.putT; op3.putOp; '=0'->BC.putT; endS
+#)
+--cmpAndJmpFloat: descriptor--
+(# 
+do 'if ((double)'->BC.putT; 8->mstate.setAS; op2.putOp; 
+   (if cond 
+    //1 (* =  *) then '=='->BC.putT
+    //2 (* <> *) then '!='->BC.putT
+    //3 (* <  *) then '<'->BC.putC;
+    //4 (* <= *) then '<='->BC.putT
+    //5 (* >  *) then '>'->BC.putC;
+    //6 (* >= *) then '>='->BC.putT
+    else cError(# do 'cmpAndJmpFloat: unknown cond: '->T; cond->I #);
+   if);
+   op1.putOp; ') goto '->BC.putT; Lab.putOp; endS
+#)
+--tstNone: descriptor--
+(# dr: @dataRegOperand;
+do dr.alloc; (A[],dr[])->ldVal; 
+   'if ('->BC.putT; dr.putOp; '<=0) { SaveCurrSP(); BetaError(-1,(Object*)a0); }\n\t'->BC.putT;
+   (dr[],R[])->cpReg;
+   dr.deAlloc
+#)
+--SaveReturn: descriptor--
+(# 
+do '*RefSP++=(a0 | 1);\n\ta0=a1;\n\t'->BC.putT
+#)
+--Return: descriptor--
+(# 
+do 'a1=a0;\n\ta0=(*(--RefSP) & ~1);\n\t'->BC.putT;
+   rts 
+#)
+--ExternalEntry: descriptor--
+(# 
+do (if extType//6 then (*pascCallBackExt*)
+       (if exitType
+	    //0 then '\npascal void '->BC.putT; 
+		//1 then '\npascal char '->BC.putT; 
+		//2 then '\npascal short '->BC.putT; 
+		//3 then '\npascal long '->BC.putT; 
+		else '\npascal void * '->BC.putT; 
+	   if);
+    else
+       '\nvoid * '->BC.putT; 
+   if);
+   entryId->BC.putT;
+   (* Rest follows in initGetXpar *)
+   exitType->Xpar.exitType;
+#)
+--SaveInnerReturn: dopart--
+do
+--ExternalReturn: descriptor--
+(# do rts #)
+--ReturnInner: dopart--
+do rts
+--RegAdrIndex: descriptor--
+(# IA: @InxRegAdr; aR: @adrRegOperand; A1: @RegAdr; log: @integer;
+do reAlloc->aR; (thisOp,aR[])->ldVal; freeAdr;
+   aR->A1.reg; 12->A1.off;
+   (if common.switch[14]//false then (A1[],dReg[])->ChkIndex if);
+    
+   (* @@R[i] = R.start + protoHead.size + (i-1)*size
+    *        = R.start + protoHead.size - size + i*size
+    * where 
+    *    protohead.size = 16  if  simple
+    *    protohead.size = 24  if  not simple
+    *)
+   (if isSimple then
+       (if size
+        //1 then 15->IA.off
+        //2 then 14->IA.off
+        //4 then 12->IA.off
+        //8 then 8->IA.off
+        else cerror(# do '\nIllegal index offset!'->T #)
+       if);    
+       size->IA.size; (* OBS only OK for size=1,2,4,8 *)
+    else
+       24-size->IA.off;
+       (* No need to check for mult optimization: 
+        * C compiler will do this 
+        *)
+       (size->newCstOp,dReg[],4)->gMult;
+       1->IA.size; (* prevent IA.putop from multiplying too *)
+   if);
+   aR->IA.aReg; dReg->IA.dReg;
+   access->IA.access;
+   IA[]->A[]
+#)
+---RegAdrLoadOp: descriptor--
+(# #)
+--InxRegAdrLoadFloatOp: descriptor---
+(# #)
+---RegAdrLoadAdrOp: descriptor--
+(# do this(RegAdr)[]->op[] #)
+--RegAdrLoadAdr: dopart--
+do
+--InxRegAdrLoadOp: descriptor---
+(##)
+--InxRegAdrLoadAdrOp: descriptor--
+(# #)
+--InxRegAdrLoadAdr: dopart---
+do
+--addMem: descriptor--
+(# dr: @dataRegOperand
+do (op1[],op2[],4)->gAdd;
+   dr.alloc; (op2[],dr[])->ldVal; dr[]->R[]
+#)
+(******************** external calls ***************)
+--getRegForXres: descriptor--
+(# drX: @dataRegOperand
+do -1->max;
+   pushDataReg->max;
+   (* max>-1 if some data registers are in use;
+    * data registers [0,max] are pushed; d0, d1 may still be free;
+    * make sure they are allocated, since popReg will overwrite them.
+    * OBS! It should be checked if this works for nested C-calls
+    *)
+   0->dummyMax;
+   L: 
+     (for i: max repeat
+	  drX.alloc; drX->Rep.dummyReg[i]; (* D0,d1,...Dmax-1 *)
+          (* datpete 6/3/96: changed use of "trace" to use the new x-prefixed
+           * variables
+           *)
+          353->trace(# do 'DummyAlloc: d'->xT; drX->xI #);
+	  (if (drX>max)//true then
+              353->trace(# do 'releasedAgain'->xT #);
+	      drX.deAlloc; i-1->dummyMax; 
+              leave L
+     if)for);
+   saveReg; (*saveHeapTop;*)
+#)
+--endX: descriptor--
+(# drX: @dataRegOperand
+do (for j: dummyMax repeat
+        (* datpete 6/3/96: changed use of "trace" to use the new x-prefixed
+         * variables
+         *)
+        353->trace(# do 'DummyRelease: d'->xT; Rep.dummyReg[j]->xI #);
+        Rep.dummyReg[j]->drX; drX.deAlloc 
+   for);
+   (if extType
+    //1 (*sematt.cExt OOPS*) then (BC,SC,LC)->popCallStack
+    //2 (*sematt.pascExt OOPS*)
+    //3 (*semAtt.pascTrapExt OOPS*) then (BC,SC,LC)->popCallStack
+    else cError (# do 'endX: unknown extType: '->T; extType->I #);
+   if);
+   restoreReg;
+       (* (if (max>=0)//true then max->popDataReg if) *)
+   max->popDataReg;
+#)
+--getXres: descriptor--
+(# endXcalled: @boolean;
+   drA,drB,drT: @dataRegOperand;
+do (*'getXres: '->screen.puttext; extType->screen.putint; ' '->screen.put; exitType->screen.putint; screen.newline;*)
+   (if extType
+    //1//2//3 then
+       (if exitType
+         //0 then (* no exit type, skip *)
+         //1//2//3 then 
+            mstate.cResDr[]->simpleRes;
+         //4 then (* text *)
+            (*'getCres: text\n'->screen.puttext; *)
+            (extType,exitType,BC,SC,LC,max,dummyMax)->endX; 
+            true->endXcalled;
+            (* this situation can be very complicated: 
+	     * gen.copyCtext assume text in dataRegA;
+	     * drA may not be dataRegA;
+	     *)
+            (if mstate.cResDr//dataRegA then textRes
+	     else
+	        drT.alloc;
+	        (if drT//dataRegA then (* now ist free! gylle!*)
+	            (mstate.cResDr[],dataRegA[])->cpReg;
+	            textRes;
+	         else 
+	            (dataRegA[],drT[])->cpReg;
+	            (mstate.cResDr[],dataRegA[])->cpReg;
+	            textRes; 
+	            (drT[],dataRegA[])->cpReg;
+	        if);
+	        drT.deAlloc;
+            if); 
+         //5 then (* rep *)  cError(# do 'Exit cProc: general rep'->t #)
+         //6 then (* cStruc *)
+            (* create an instance of theDesc->rA;
+             * movl d0-12(16?),rA@(12)
+             * this makes theDesc.R denotes the cStruc
+             * The adjustment of d0 is necessary,since the cStruc
+             * has no BETA structural attributes (PT,GC,low,high)
+             * access of the form rA.R[inx] with index check
+             * will NOT be possible *)
+            cError(# do 'Exit cProc: cStruc exit'->t #)
+         //7 (*double*) then
+	     mstate.cResFr[]->floatRes
+         //10(*data*) then
+             mstate.cResDr[]->dataRefRes
+         else cError (# do 'getCres: unknown exitType: '->T; exitType->I #);
+        if)    
+    else cError(# do 'Illegal external external type: '->T; extType->I #)
+   if);
+   (if endXcalled//false then 
+       (extType,exitType,BC,SC,LC,max,dummyMax)->endX;
+   if);
+#)
+(**************************************************
+ * CopyText, and LoadOrigin
+ * are the same for all Motorola 68xxx,
+ * i.e. SUN-3, HP-9000, Apollo-3500, Mac-II  (and even VAX?)
+ * and should NOT have appeared here.
+ * However they differ for Intel-80386!!!
+ *)
+(* datpete 6/3/96: obsolete
+ * --CopyText: dopart--
+ * do 'C2=*(cIntStackPtr-2);\n\t'->BC.putT;
+ *    'C1=*(cIntStackPtr-1);\n\t'->BC.putT;
+ *    'CopyT((char *}'->BC.putT; genTextConstT; ',(struct Item *}(C2),(unsigned)(C1));\n\t'->BC.putT;
+ *    'cIntStackPtr=cIntStackPtr-2;\n\t'->BC.putT;
+ *)
+--jsrReg: dopart--
+do (*op.mkIndirect; *)
+   (if mstate.localAregs then
+       '((void(*)())('->BC.putT; op.putOp;'))(a0,a1)'->BC.putT; endS
+    else
+       '((void(*)())('->BC.putT; op.putOp;'))()'->BC.putT; endS
+   if);
+--jmpReg: dopart--
+do (*op.mkIndirect; *)
+   (if mstate.localAregs then
+        '((void(*)())('->BC.putT; op.putOp;'))(a0,a1)'->BC.putT; endS
+    else
+        '((void(*)())('->BC.putT; op.putOp;'))()'->BC.putT; endS
+   if);
+--JsrTable: descriptor--
+(# aR: @adrRegOperand
+do callO->aR; (A[],aR[])->ldVal; (*aR.mkIndirect;*) 
+   (if newVirt//true then
+       (* call of virtual ptn *)
+       false->aR.ind;
+       (* int ptr *)
+       'd7=((long(*)())('->BC.putT; ar.putOp;'))(d7)'->BC.putT; endS
+    else 
+       (* INNER call? *)
+       aR[]->JsrReg
+   if)
+#)
+--RegAdrToOriginReg: descriptor--
+(* access = common.direct;
+ * reg and off may be defined
+ *)
+(# 
+do (reg[],dataRegX[])->cpReg;
+   (if off//0 then (* offset may be negative *)
+    else (off->newCstOp,dataRegX[],4)->gAdd if)
+#)
+(****
+--LoadOrigin: descriptor-- 
+(# 
+do (Op[],originRegOp[])->gLea;
+ #)
+ *****)
+---PushReg: descriptor---
+(# ar: @adrRegOperand
+do (for i: rep.aReg.range repeat
+        (if (rep.aReg[i]>0)//true then
+            (if (i<>callO+1)//true then
+                i-1->ar; ar[]->Push
+   if)if)for);
+#)
+---PushDataReg: descriptor---
+(# #)
+---PopDataReg: descriptor---
+(# #)
+---PopReg: descriptor---
+(# ar: @adrRegOperand; i: @integer
+do (for j: rep.aReg.range repeat
+        rep.aReg.range+1-j->i; (* i in [rep.aReg.range..1] *)
+        (if (i<>(callO+1))//true then
+            (if (rep.aReg[i]>0)//true then
+                i-1->ar; ar[]->pop
+   if)if)for);
+#)
+---primRep: descriptor--
+(# saved,used,busy: [8] @boolean; someSaved,a5Saved: @boolean; 
+   noOfPar: @integer (* will nested prim calls work here?*)
+#)
+---initPrimCall: descriptor--
+(# dr: @dataRegOperand; saved: @integer; ar: @adrRegOperand
+do (if rep.aReg[6] (* a5 *) >0//true then
+       'InitPrimCall: a5 is busy - OK!'->putline;
+       true->primRep.a5Saved;
+       6->ar; ar[]->push;
+   if);
+   (for i: noOfPar->primRep.noOfPar repeat
+        (if rep.dReg[9-i]>0//true then
+            8-i->dr;
+            dr[]->push; 
+            0->rep.dReg[9-i];
+            true->primRep.saved[9-i]->primRep.someSaved; saved+1->saved
+   if)for);
+   (if saved >0//true then (* push mark?*) if);
+   true->mstate.inPrimitive;
+   (* (if mstate.NoExNest>0//true then true->mstate.nested if);
+    * mstate.NoExNest+1->mstate.NoExNest;
+    * mstate.push; {* Save call paramteres on stack if nested calls *}
+    * 0->mstate.cVarC->mstate.cVarF->mstate.cParNo;
+    *)
+#)
+--getPrimReg: descriptor--
+(# dr: @dataRegOperand;
+   pn: @integer
+do (* allocate register D[pNo] *)
+   8-pNo->pN; (* parameters are transferred in d7,d6,d5,... *)
+   (* the following may be superflous *)
+   (if rep.dReg[pN+1]>0//true then
+       '\nprim reg is busy\n'->puttext
+   if);
+   1->rep.dReg[pN+1]; true->primRep.used[pN+1];
+   pN->dr;
+   dr[]->primReg[]
+#)
+--CallPrim: descriptor--
+(# 
+do (for i: 8 repeat 
+        (if primRep.used[i]//true then 
+            0->rep.dReg[i]; false->primRep.used[i]
+   if)for);
+   (if true
+    //'AlloVR1'->T.equal then 
+       'AlloVR1((struct Object*)a0,(unsigned)d0,(int)d1);\n\t'->BC.putT
+    //'AlloVR2'->T.equal then 
+       'AlloVR2((struct Object *)a0, (unsigned)d0,(int)d1);\n\t'->BC.putT
+    //'AlloVR4'->T.equal then 
+       'AlloVR4((struct Object *)a0,(unsigned)d0,(int)d1);\n\t'->BC.putT
+    //'AlloVR8'->T.equal then 
+       'AlloVR8((struct Object *)a0,(unsigned)d0,(int)d1);\n\t'->BC.putT
+    //'AlloRR'->T.equal then 
+       'AlloRR((struct Object *)a0,(unsigned)d0,(int)d1);\n\t'->BC.putT
+    //'AlloDO'->T.equal then 
+       'a0=(long)AlloDO((unsigned)d7,(struct Object *)a0);\n\t'->BC.putT
+
+    (* params are: struct Object *origin,
+	               struct Object *theObj,
+				   unsigned offset,
+				   struct ProtoType *proto,
+				   int range *)
+    (* AlloORGC(d7, a0, d0, a1, d1); *)
+
+    //'AlloORG'->T.equal then 
+       'AlloORG((struct Object *)d7, (struct Object *)a0, (unsigned) d0, (struct ProtoType *)a1, (int)d1);\n\t'->BC.putT
+    //'AlloORGC'->T.equal then 
+       'AlloORGC((struct Object *)d7, (struct Object *)a0, (unsigned) d0, (struct ProtoType *)a1, (int)d1);\n\t'->BC.putT
+    //'AlloORR'->T.equal then 
+       'AlloORR((struct Object *)d7, (struct Object *)a0, (unsigned) d0, (struct ProtoType *)a1, (int)d1);\n\t'->BC.putT
+    //'AlloORRC'->T.equal then 
+       'AlloORRC((struct Object *)d7, (struct Object *)a0, (unsigned) d0, (struct ProtoType *)a1, (int)d1);\n\t'->BC.putT
+
+    //'Qua'->T.equal then 
+       'Qua((struct ProtoType *)a1,(struct Object **)d6,(struct Object *)d7,(struct Object *)a0);\n\t'->BC.putT
+    //'ThisS'->T.equal then 
+       'd0=(long)ThisS((struct Object *)a0);\n\t'->BC.putT
+    //'CopyVR'->T.equal then 
+       'C1=*(cIntStackPtr-1);\n\t'->BC.putT;
+       'C2=*(cIntStackPtr-2);\n\t'->BC.putT;
+       'C3=*(cIntStackPtr-3);\n\t'->BC.putT;
+       'CopyVR((struct ValRep *)(C3),(struct Object *)(C2), (unsigned) (C1));\n\t'->BC.putT;
+       'cIntStackPtr=cIntStackPtr-3;\n\t'->BC.putT;
+    //'CopyRR'->T.equal then 
+       'C1=*(cIntStackPtr-1);\n\t'->BC.putT;
+       'C2=*(cIntStackPtr-2);\n\t'->BC.putT;
+       'C3=*(cIntStackPtr-3);\n\t'->BC.putT;
+       'CopyRR((struct ValRep *)(C3),(struct Object *)(C2),(unsigned)(C1));\n\t'->BC.putT;
+       'cIntStackPtr=cIntStackPtr-3;\n\t'->BC.putT;
+    //'CopySVR'->T.equal then 
+       'C1=*(cIntStackPtr-1);\n\t'->BC.putT;
+       'C2=*(cIntStackPtr-2);\n\t'->BC.putT;
+       'C3=*(cIntStackPtr-3);\n\t'->BC.putT;
+       'CopySVR((struct RefRep *)(C3), (struct Item *)(C2), (unsigned)(C1),(unsigned)d7,(unsigned)d6);\n\t'->BC.putT;
+       'cIntStackPtr=cIntStackPtr-3;\n\t'->BC.putT;
+    //'CopySRR'->T.equal then 
+       'C1=*(cIntStackPtr-1);\n\t'->BC.putT;
+       'C2=*(cIntStackPtr-2);\n\t'->BC.putT;
+       'C3=*(cIntStackPtr-3);\n\t'->BC.putT;
+       'CopySRR((struct RefRep *)(C3),(struct Item *)(C2),(unsigned)(C1),(unsigned)d7,(unsigned)d6);\n\t'->BC.putT;
+       'cIntStackPtr=cIntStackPtr-3;\n\t'->BC.putT;
+    //'CpkVT'->T.equal then 
+       'd0=(long)CpkVT((struct Object *)a0,(struct ValRep *)d7);\n\t'->BC.putT
+    //'PpkVT'->T.equal then 
+       'd0=(long)PpkVT((struct Object *)a0,(struct ValRep *)d7);\n\t'->BC.putT
+    //'CpkSVT'->T.equal then
+       'd0=(long)CpkSVT((struct Object *)a1,(struct ValRep *)d7, (unsigned)d6, (long)d5);\n\t'->BC.putT
+    //'PpkSVT'->T.equal then
+       'd0=(long)PpkSVT((struct Object *)a1,(struct ValRep *)d7, (unsigned)d6, (long)d5);\n\t'->BC.putT
+    //'PpkCT'->T.equal then
+(********* don't bother, C does the job: '\p.....'
+       'd0=(long)PpkCT((struct Object * )a1,'->BC.putT; genTextConstT; ');\n\t'->BC.putT;
+	   'move d0 to C parameter stack!!'->comment;
+**************)
+    //'CopyCT'->T.equal then 
+       'd0=(long)CopyCT((unsigned char *)d0);\n\t'->BC.putT
+    //'CopyCPP'->T.equal then 
+       'SaveCurrSP();\n\t'->BC.putT;
+       'C1=*(cIntStackPtr-1);\n\t'->BC.putT;
+       'd0=(long)CopyCPP((struct Structure *)(C1),(struct Object *)a0);\n\t'->BC.putT;
+       'cIntStackPtr=cIntStackPtr-1;\n\t'->BC.putT;
+    //'CopyPPP'->T.equal then 
+       'SaveCurrSP();\n\t'->BC.putT;
+       'C1=*(cIntStackPtr-1);\n\t'->BC.putT;
+       'C2=*(cIntStackPtr-2);\n\t'->BC.putT;
+       'C3='->BC.putT; mstate.univProcInfo->BC.putI; ';\n\t'->BC.putT;
+       'd0=(long)CopyPPP((struct Structure *)(C2),C1,(struct Object *)a0,C3);\n\t'->BC.putT;
+       'cIntStackPtr=cIntStackPtr-2;\n\t'->BC.putT;
+    //'ExtVR'->T.equal then 
+       'C1=*(cIntStackPtr-1);\n\t'->BC.putT;
+       'C2=*(cIntStackPtr-2);\n\t'->BC.putT;
+       'ExtVR((struct Object *)(C2),(unsigned)(C1),(unsigned)d7);\n\t'->BC.putT;
+       'cIntStackPtr=cIntStackPtr-2;\n\t'->BC.putT;
+    //'NewVR'->T.equal then 
+       'C1=*(cIntStackPtr-1);\n\t'->BC.putT;
+       'C2=*(cIntStackPtr-2);\n\t'->BC.putT;
+       'NewVR((struct Object *)(C2), (long)(C1),(long)d7);\n\t'->BC.putT;
+       'cIntStackPtr=cIntStackPtr-2;\n\t'->BC.putT;
+    //'ExtRR'->T.equal then 
+       'C1=*(cIntStackPtr-1);\n\t'->BC.putT;
+       'C2=*(cIntStackPtr-2);\n\t'->BC.putT;
+       'ExtRR((struct Object *)(C2),(unsigned)(C1),(long)d7);\n\t'->BC.putT;
+       'cIntStackPtr=cIntStackPtr-2;\n\t'->BC.putT;
+    //'NewRR'->T.equal then 
+       'C1=*(cIntStackPtr-1);\n\t'->BC.putT;
+       'C2=*(cIntStackPtr-2);\n\t'->BC.putT;
+       'NewRR((struct Object *)(C2),(long)(C1),(long)d7);\n\t'->BC.putT;
+       'cIntStackPtr=cIntStackPtr-2;\n\t'->BC.putT;
+    //'CopyT'->T.equal then 
+       'C1=*(cIntStackPtr-1);\n\t'->BC.putT;
+       'C2=*(cIntStackPtr-2);\n\t'->BC.putT;
+       'CopyT((char *)'->BC.putT; genTextConstT; ',(struct Item *)(C2),(unsigned)(C1));\n\t'->BC.putT;
+       'cIntStackPtr=cIntStackPtr-2;\n\t'->BC.putT;
+    //'AttBC'->T.equal then 
+       'SaveCurrSP();\n\t'->BC.putT;
+       'AttBC((struct Item *)a0,(struct Component *)a1);\n\t'->BC.putT;
+    //'Att'->T.equal then 
+       'SaveCompState();\n\t'->BC.putT;
+       'Att((struct Item *)a0,(struct Component *)a1);\n\t'->BC.putT;
+       'RestoreCompState();\n\t'->BC.putT;
+    //'Susp'->T.equal then 
+       'SaveCompState();\n\t'->BC.putT;
+       'Susp((struct Object *)a0);\n\t'->BC.putT;
+       'RestoreCompState();\n\t'->BC.putT;
+    //'ObjS'->T.equal then 
+       'd0=(long)ObjS((struct Object *)d7);\n\t'->BC.putT;
+    //'MkTO'->T.equal then 
+       'C1=*(cIntStackPtr-1);\n\t'->BC.putT;
+       'C2=*(cIntStackPtr-2);\n\t'->BC.putT;
+       'MkTO((char *)'->BC.putT; genTextConstT; ',(struct Item *)(C2),(unsigned)(C1));\n\t'->BC.putT;
+       'cIntStackPtr=cIntStackPtr-2;\n\t'->BC.putT;
+    //'eqS'->T.equal then 
+       'd0=(long)eqS((struct Structure *)d7,(struct Structure *)d6);\n\t'->BC.putT;
+    //'neS'->T.equal then 
+       'd0=(long)neS((struct Structure *)d7,(struct Structure *)d6);\n\t'->BC.putT;
+    //'leS'->T.equal then 
+       'd0=(long)leS((struct Structure *)d7,(struct Structure *)d6);\n\t'->BC.putT;
+    //'ltS'->T.equal then 
+       'd0=(long)ltS((struct Structure *)d7,(struct Structure *)d6);\n\t'->BC.putT;
+    //'geS'->T.equal then 
+       'd0=(long)geS((struct Structure *)d7,(struct Structure *)d6);\n\t'->BC.putT;
+    //'gtS'->T.equal then 
+       'd0=(long)gtS((struct Structure *)d7,(struct Structure *)d6);\n\t'->BC.putT;
+    else
+       T->jsrT
+   if);
+   (* not used in primitive calls?? 
+    * 0->mstate.cVarC->mstate.cVarF->mstate.cParNo  {* to be sure *}
+    * mstate.pop;
+    *)
+   false->mstate.inPrimitive;
+#)
+--getPrimRes: descriptor--
+(# drx: @dataRegOperand; ar: @adrRegOperand
+do (if primRep.someSaved//true then
+       (* realloc *)
+       (for i: 8 repeat
+            (if primRep.saved[9-i]//true then
+                1->rep.dReg[9-i]
+       if)for);
+       (if res//0//2 then (* ignore result*)
+        else (*1*) dr.alloc; (drx[],dr[])->cpReg
+       if);
+       (* pop mark *)
+       (for i: 8 repeat
+            (if primRep.saved[9-i]//true then
+                false->primRep.saved[9-i];
+                8-i->drx; drx[]->pop
+       if)for);
+       false->primRep.someSaved
+    else (* allocation/deallocation of primreg MUST be cleaned UP*)
+       (for i: primrep.noOfPar repeat
+            0->rep.dReg[9-i]; false->primRep.used[9-i]
+       for);
+       (if res
+        //0 (*ignore result*) then
+        //2 (* push primResult to external (C) *) then
+           dr.alloc;
+           (if dr//0 then 
+            else cError(# do 'PrimRes: result register busy\n'->T #)
+           if);
+           dr[]->pushClong; (* all primResults are pushed as longs!! *)
+           dr.dealloc
+        else
+           dr.alloc;
+           (if dr//0 then 
+            else cError(# do 'PrimRes: nonOk\n'->T #)
+   if)if)if);
+   (if primRep.a5Saved//true then
+       'restore a5'->putline;
+       6->ar; ar[]->pop
+   if)
+#)
+(**************** register allocation ***************)
+---GetAdr: dopart---
+(* allocate a2,a3,a4,... *)
+do 10->rNo; (* just during testing *)
+   L: (for i: 5 repeat
+           (if (rep.aReg[i+2]>0)//false then
+               rep.aReg[i+2]+1->rep.aReg[i+2];
+               i+1->rNo;
+               leave L
+      if)for);
+   (if (rNo>4)//true then
+       (if rNo
+        //5 then cError(# do 'AdrReg overflow (a5)'->T #)
+        //6 then cError(# do 'AdrReg overflow (a6)'->T #)
+        //7 then cError(# do 'AdrReg overflow (a7)'->T #)
+	else cError(# do 'AdrReg overflow (a8...)'->T #)
+   if)if)
+---GetData: dopart---
+do 10->rNo; (* just during testing *)
+   L: (for i: 6 repeat
+           (if (rep.dReg[i]>0)//false then
+               rep.dReg[i]+1->rep.dReg[i];
+               i-1->rNo;
+               leave L
+      if)for);
+   (if rNo//10 then cError(# do 'DataReg overflow'->T #) if)
+---freeAdr: dopart---
+   (* do not try to deallocate thisO or callO.
+    * sometimes they are allocated, 
+    * which they should not have been
+    *)
+do (if (callO<rNo)and(rNo<8)//true then 
+       rep.aReg[rNo+1]-1->rep.aReg[rNo+1];
+       (if (rep.aReg[rNo+1]<0)//true then
+           cError
+           (# S: @text
+           do 'AdrReg negative: a'->S; rNo->S.putInt; S[]->T; S->comment;
+       0->rep.aReg[rNo+1] #)if)if)
+-- adrRegInUse: dopart --
+do rep.aReg[rN+1]>0->value 
+-- dataRegInUse: dopart --
+do rep.dReg[rN+1]>0->value 
+---freeData: dopart---
+do (if (0<=rNo)and(rNo<8)//true then
+       rep.dReg[rNo+1]-1->rep.dReg[rNo+1];
+       (if (rep.dReg[rNo+1]<0)//true then
+           cError
+           (# S: @text
+           do 'DataReg negative: d'->S; rNo->S.putInt; S[]->T; S->comment;
+              0->rep.dReg[rNo+1] 
+#)if)if)
+---releaseReg: descriptor---
+(# 
+do (for i: rep.aReg.range repeat 0->rep.aReg[i]->rep.dReg[i] for);
+   (for i: rep.floatReg.range repeat 0->rep.floatReg[i] for)
+#)
+--noOfFreeDataReg: descriptor---
+(# do (for i: dataRegMax repeat (if rep.dReg[i+1]//0 then val+1->val if)for)#)
+--DataRegOpReUse: descriptor--
+(# N: @integer
+do rN+1->N;
+   (if (0<N) and (N<=rep.dReg.range)//true  then
+       rep.dReg[N]+1->rep.dReg[N]
+    else (*cError(# do 'DataRegOpReuse: index error'->T #)*)
+       'DataRegOpReuse: index error'->bugstream.putline
+if)#)
+-- AdrRegOpReUse: dopart --
+do rep.aReg[rN+1]+1->rep.aReg[rN+1]
+
+---RegRep: descriptor---
+(# aReg,dReg: [8] @Integer; dMax: @integer;
+   floatReg: [8] @integer; fMax: @integer; 
+   dummyReg: [100]@integer; (* used by getRegForX /endX*)
+#)
+--FloatRegOpAlloc: descriptor--
+(# 
+do 10->rN;
+   L: 
+     (for i: rep.floatReg.range repeat
+ 	  (if rep.floatReg[i]//0 then
+	      rep.floatReg[i]+1->rep.floatReg[i]; i-1->rN;
+              leave L
+if)for)#)
+--FloatRegOpDeAlloc: descriptor--
+(# do (if (0<=rN) and (rN<rep.floatReg.range)//true then
+          rep.floatReg[rN+1]-1->rep.floatReg[rN+1] 
+       else 'FloatReg inx err.'->putLine
+if)#)
+--FloatRegOpReUse: descriptor--
+(# do rep.floatReg[rN+1]+1->rep.floatReg[rN+1]  #)
+---DumpReg: descriptor--
+(# dmp: 
+     (# R: @char; i,V: @integer;
+     enter(R,i,V)
+     do R->T.put; i-1->T.putInt; ':'->T.put; V->T.putInt
+     #);
+   T: @text
+do newline;
+   (for i: rep.aReg.range repeat ('a',i,rep.aReg[i])->dmp for);
+   (for i: rep.dReg.range repeat ('d',i,rep.dReg[i])->dmp for);
+   T[]->putText; (*T->comment;*) newline
+#)
+---GetCallReg: descriptor--
+(# ar: @adrRegOperand
+do (*(if (rep.aReg[callO+1]>0)//true then
+    CallO->ar; ar[]->push
+    if); *)
+   rep.aReg[callO+1]+1->rep.aReg[callO+1];
+   (*351->cTrace(# do 'GetCallReg'->T #)*)
+#)
+---DecrCallReg: descriptor---
+(# 
+do rep.aReg[callO+1]-1->rep.aReg[callO+1];
+   (if (rep.aReg[callO+1]<0)//true then
+       0->rep.aReg[callO+1];
+       cError(# do 'CallReg negative: a1'->T#);
+if)#)
+---FreeCallReg: descriptor--
+(# ar: @adrRegOperand; (*A1: @RegAdr*)
+do rep.aReg[callO+1]-1->rep.aReg[callO+1];
+#)
+--CallRegBusy: dopart--
+   (* datpete 6/3/96: changed to dopart *)
+do (rep.aReg[callO+1]>0)->value
+--GetOriginReg: descriptor--
+(# #)
+--freeOriginReg: descriptor--
+(# #)
+--callAlloPrim: descriptor--
+(# 
+do (* very inefficient - must be improved, either by using hashTable
+    * or add new operation where the routine is selected using
+    * an integer number
+    *)
+   (if true
+    //'AlloI'->T.equal then 
+       '/*a1=(long)*/AlloI((struct Object*) d7,(struct ProtoType*) a1);\n\t'->BC.putT
+    //'AlloC'->T.equal then 
+       'a1=(long)AlloC((struct Object *)d7,(struct ProtoType *)a1);\n\t'->BC.putT
+    //'AlloS'->T.equal then 
+       'a1=(long)AlloS((struct Object *)d7,(struct ProtoType *)a1);\n\t'->BC.putT
+    //'AlloSI'->T.equal then 
+       'a1=(long)AlloSI((struct Structure *)a1);\n\t'->BC.putT
+    //'AlloSC'->T.equal then 
+       'a1=(long)AlloSC((struct Structure *)a1);\n\t'->BC.putT
+    else T->jsrT
+   if);
+   false->mstate.inPrimitive;
+#)
+--jmptLong: dopart--
+do T->jsrT
+--getVirtualoriginStart1: descriptor--
+(* the code generated here may be called from a place where the address
+ * registers are in use. aR.alloc is thus not a safe way of allocating
+ * an address register. Its current value must thus be saved (pushed)
+ * before it is used.
+ *)
+(# A1: @RegAdr; aR: @adrRegOperand; pReg: @dataRegOperand
+do aR.alloc; aR[]->push;
+   7->pReg; (pReg[],ar[])->cpReg;
+   aR->A1.reg; A1[]->startA[]
+#)
+--getVirtualoriginStart2: descriptor--
+(# A1: ^RegAdr; pReg: @dataRegOperand
+do startA[]->A1[]; (* inefficient*)
+   (* 7->pReg;(A1.reg[],pReg[])->cpReg;*)
+   A1.toOriginReg; (* will deAlloc A1.reg*)
+   A1.reg[]->pop;
+   (* A1.reg.deAlloc*)
+#)
+---Final2VirtJump:descriptor--
+(* datpete 6/3/96: NYI *)
+(# do '##### Final2VirtJump NOT implemented for b2c' -> screen.putline; #)
+--popFstack: descriptor--
+(* only used by LINUX/NTImachine *)
+(# #)
+---initGen: descriptor--
+(# 
+do EP[]->mstate.HF.extern;
+   '\nvoid '->BC.putT; EP->BC.putT; 
+   (if mstate.localAregs then
+       '(long a0, long a1){'->BC.putT;
+    else
+       '()\n{\t'->BC.putT;
+   if);
+   emitLocalDecl
+#)
+---InitDataSeg: descriptor---
+(# dataLab: @NewCtextOp;
+   T: @Text;
+   hash: @Integer;
+do doHead; true->dataLab.op.BETAlab;
+
+   'static void BETA_code1(){}\n\t'->BC.putT;
+   
+   (* calculate 'unique' hash value for filename *)
+   localFilePath.scanAll(# do (ch*517)+hash->hash #);  
+   hash->mstate.localFilePath_hash.putint;
+   '_'->mstate.localFilePath_hash.put; 
+   BC.entry.modtime->mstate.localFilePath_hash.putint;
+   
+#)
+---endCodeSeg: descriptor---
+(# dataLab: @NewCtextOp;
+do '\nstatic void BETA_code2(){}\n'->BC.putT;
+   beginProtoTypes;
+#)
+---EndDataSeg: descriptor---
+(##)
+---EmitLabId:dopart---
+do 'static char *'->BC.putT; 
+   mstate.genVLab->BC.putT; 
+   '='->BC.putC;
+   lab[]->asciiText;
+---EmitProtoIndexTable: descriptor---
+(# vlab1, vlab2: @text;
+   T: @Text;
+do 
+   (* 
+    * datpete 6/3/96:
+    * generate:
+    * 
+    * static long *V1[N+1]{
+    *   ( long * )N,
+    *   proto1,
+    *   proto2,
+    *   ...
+    *   protoN
+    * }
+    * 
+    * where N is Number of prototypes in fragment group
+    *)
+   
+   (if noOfPT>0 then
+       '\nstatic long *'->BC.putT; mstate.genVLab->vlab1->BC.putT; 
+       '['->BC.putC; noOfPT+1->BC.putI; ']={\n\t'->BC.putT;
+       '(long *)' -> BC.putT; noOfPT->BC.putI; '\n\t'->BC.putT;
+       true->first;
+       INNER EmitProtoIndexTable;
+       '};\n'->BC.putT;
+    else 
+       0->vlab1.putint;
+   if);
+   
+   (* 
+    * datpete 6/3/96: added this comment:
+    * generate:
+    * 
+    * static char *V2="/a/home/fraxinus1/beta/foo";
+    * 
+    *)
+   'static char *'->BC.putT; mstate.genVLab->vlab2->BC.putT; '='->BC.putC;
+   localFilePath[]->asciiText;
+   
+   (* 
+    * datpete 6/3/96: The following changed to match
+    * general NextGroup implementation in betarun/v2.8.
+    * 
+    * generate: 
+    * long* BETA_DATA_1391764_726500316[4]={
+    *      0,           /* actually BETA_data1 but not applicable for b2c */
+    *      (long* )V2,  /* prototable - used to be indirect  */
+    *      0,           /* actually BETA_data2 but not applicable for b2c */
+    *      (long* )BETA_code1,
+    *      (long* )BETA_code2,
+    *      (long* )V1,  /* group_id */
+    *      0            /* used to store ptr back to list in */
+    * };
+    *)
+   'BETA_DATA_'->T; group_hash[]->T.puttext;
+   '\nlong *'->BC.putT; T->BC.putT; '[5]={\n'->BC.putT;
+   '\t0,\n'->BC.putT;
+   '\t(long*)'->BC.putT; vlab2->BC.putT; ',\n\t(long*)'->BC.putT;
+   '\t0,\n'->BC.putT;
+   '\t(long*)BETA_code1,\n'->BC.putT;
+   '\t(long*)BETA_code2,\n'->BC.putT;
+   '\t(long*)'->BC.putT; vlab1->BC.putT; ',\n'->BC.putT;
+   '\t0\n'->BC.putT;
+   '\n};\n\n'->BC.putT;
+#)
+---EmitProtoIndex: descriptor---
+(# 
+do (if first//false then BC.sep if);
+   false->first;
+   PT[]->newTextOp->declareAddress;
+#)
+
+---initDo: descriptor--
+(# 
+do EP[]->mstate.HF.extern;
+   'void '->BC.putT; EP->BC.putT; 
+   (if mstate.localAregs then
+       '(long a0, long a1){'->BC.putT;
+    else
+       '()\n{\t'->BC.putT;
+   if);
+   emitLocalDecl;
+#)
+---InnerEntry: descriptor---
+(# 
+do entry[]->mstate.innerTab[mstate.innerTabTop+1->mstate.innerTabTop][]
+#)
+---EmitInnerTable: descriptor--
+(# T: @text; 
+do 'innerTableSize='->T; innerTableSize+1->T.putint;
+   ',fixedProtoSize='->T.append; fixedProtoSize->T.putInt;
+   ',objTmpSize='->T.append; objTmpSize+1->T.putInt;
+   ',dynGCsize='->T.append;  dynGCsize+1->T.putInt;
+   ',virtSize='->T.append;   virtSize->T.putInt;
+   T->comment;
+   BC.newline;
+   (innerTableSize+1,virtSize)->max->mstate.dispatchSize->mstate.innerTab.new;
+   
+   0->mstate.innerTabTop;
+   'Return'->newTextOp->mstate.innerTab[mstate.innerTabTop+1->mstate.innerTabTop][];
+   INNER EmitInnerTable;   
+#)
+---EmitProto: descriptor--
+(# 
+do 
+   thisTlab[]->mstate.HF.externProto;
+   mstate.protoT.clear;
+   'struct ProtoType *'->mstate.ProtoT; thisTLab[]->mstate.protoT.append;
+   '=(struct ProtoType *)'->mstate.protoT.append;
+   
+   'long *'->BC.putT; thisTlab->BC.putT;
+   '['->BC.putC;
+   ']={\n\t'->BC.putT;
+   
+   (if externalEntryLab[]//None then else
+       (* Since externalEntryLab is always present in Cmachine, the extra offset added
+        * in synthlibbody should be removed.
+        *)
+       GCtableOffSet-4->GCtableOffSet; 
+   if);
+   (GCtableOffSet+4 (*externalEntryLab is always there!*)
+   - virtSize*4 + mstate.dispatchSize*8
+   ,OriginOff div 4)
+     ->shift16;
+   (*2: OriginOff   *) 
+   BC.sep;
+   (*4: G-entry     *) '(long*)&'->BC.putT; thisGlab->BC.putT; BC.sep; 
+   (*8: superTlab   *) '(long*)'->BC.putT; superTlab->BC.putT; BC.sep;
+   (*12: size       *) (size,0)->shift16; 
+   (*14: form       *) BC.sep;
+   (*16: formIndex  *) (formIndex,astNumber)->shift16;
+   (*18: AST        *) 
+   (if externalEntryLab[]//NONE then BC.sep; 0->BC.putI;
+    else
+       BC.sep;
+        '(long*)&'->BC.putT; 
+       externalEntryLab->BC.putT
+   if);
+   '\n\t'->BC.putT;
+#)
+---EmitVirtTable: descriptor---
+(# op: ^mOperand; dispatchDiff: @integer;
+do mstate.dispatchSize-size->dispatchDiff;
+   mstate.innerTabTop+1->mstate.innerTabTop;
+   (if size>0//true then 
+       (for i: size repeat 
+            i->index;
+            BC.sep;
+            INNER EmitVirtTable 
+       for);
+   if);
+   (for  i: dispatchDiff repeat
+        ',0,'->BC.putT;
+        (if mstate.innertab[mstate.innertabTop-1->mstate.innerTabTop][]->op[]//none then
+            '0\n'->BC.putT;
+         else  
+            op[]->declareAddress; BC.putNL
+   if)for)
+#)
+---EmitVirtAdr: descriptor--
+(# T: ^mOperand
+do lab[]->declareAddress;
+   (if (mstate.innertabTop-1->mstate.innerTabTop)<=0//true then 
+       ',0\n'->BC.putT;
+    else
+       BC.sep; 
+       mstate.innerTab[mstate.innertabTop][]->declareAddress; 
+       BC.putNL
+   if)
+#)
+---EmitObjTable: descriptor---
+(# 
+do (if size>0//true then 
+       0->offNo;
+       (for i: size repeat 
+            i->inx; INNER EmitObjTable
+       for);
+   if)
+#)
+---emitOff1: descriptor---
+(# 
+do (if (offNo+1->offNo) mod 3 
+    //1 then BC.sep; off->mstate.off1
+    //2 then (mstate.off1,off)->shift16
+    //0 then BC.sep; '(long*)'->BC.putT; off->BC.putI
+   if)
+#)
+---emitText: descriptor---
+(# 
+do (if local//false then T[]->mstate.HF.externLabel if);
+   offNo+1->offNo;  
+   ','->BC.putC; T[]->NewTextOp->declareAddress; 
+#)
+---EmitRefTable: descriptor---
+(# 
+do 0->EmitOff;
+   (* initial zero terminates ObjTable *)
+   (for i: size repeat 
+        i->inx; INNER EmitRefTable
+   for);
+   (if size mod 2 
+    //1 then (*',0'->BC.putT; weird! kjm *)
+    //0 then 0->EmitOff;
+   if);
+   ',0'->BC.putT; (* end prototype with 0 *)
+   ',(long*)&V'->BC.putT;
+   mstate.vLabNo->BC.putI;
+   '};\n'->BC.putT;
+   (*'static char *V'->BC.putT; 
+   mstate.vLabNo->BC.putI; '='->BC.putC; *) (* ascii text follows *)
+#)
+---EmitOff2: descriptor---
+(# 
+do (if (offNo+1->offNo) mod 2
+    //1 then BC.sep; off->mstate.off1
+    //0 then (mstate.off1,off)->shift16
+   if)
+#)
+---EmitTextConst: descriptor---
+(# 
+do mstate.textTop+1->mstate.textTop;
+   (if mstate.textTop>10 then cError(# do 'Text Const overflow (max 10 in externals)'->T #)if);
+   'T'->BC.putC; mstate.textTop->BC.putI; '='->BC.putT; S[]->asciiText;
+   (if not mstate.inPrimitive then 
+      '*cIntStackPtr++'->BC.putT; '=(long)'->BC.putT; 'T'->BC.putC;  
+      mstate.textTop->BC.putI; endS;
+      (1,4)->mstate.cPar; (* should be 5, but text vars are pushed as longs..., see pushCpar in evval2.bet *)
+   if);
+#)
+--InitMachine: descriptor--
+(# 
+do true->loadPrototype;
+   BC.openWrite; 
+   (if group_hash[]//NONE then
+       cError (# do 'group hash value none'->T #);
+    else
+       group_hash->mstate.localFilePath_hash;
+   if);
+#)
+--CloseMachine: descriptor--
+(# 
+do (* output external declarations *)
+   mstate.HF.close;
+   '\n'->BC.putT;
+   BC.close
+#)
+(* --asgRefAdr:descriptor--
+ *   {* assign A to thisAddress *}
+ *   (# aR,aR1,aR2: @adrRegOperand; L: @localLab; T: @Text;
+ *      A1: @regAdr; dr: @dataRegOperand
+ *   do common.direct->access; {* this Address is a dynamic reference *}
+ *      {* this is a hack. Will not work for arrays !!!*}
+ *      toReg2->aR->aR2; {* aR=destination *}
+ *      (if A.access //common.direct then
+ *          {*(if aR1//thisO then true->A1.frozenReg {*else aR1.deAlloc * )if);*}
+ *          {* aR1 = thisO possible in this(P)[]->R[] *}
+ *          (if A.regType//thisO//callO then 
+ *              A.toReg2->aR1; {* 12.10.92*} {* aR1=source *}
+ *              {* A.freeAdr; 12.10.92: in evval1: asgToAdr: A[]->rA.asgRefAdr->..
+ *               * A[] is used in thisVal and cannot be released.
+ *               * The problem is if this can imply that regs are not released?
+ *               *}
+ *              aR.mkIndirect;
+ *              (aR1[],aR[])->stVal;
+ *              aR1.deAlloc
+ *           else
+ *              {* A and aR1 use the same register - dont deAlloc aR1.
+ *               * However A is invalidated since aR1 is redefined
+ *               *}
+ *              aR[]->push;
+ *              (A[],aR[])->gLea; dr.alloc; (aR[],dr[])->cpReg;
+ *              aR[]->pop; 
+ *              aR.mkIndirect; {* dont do this before push/pop *}
+ *              (dr[],aR[])->stVal; dr.deAlloc
+ *          if)
+ *          {*aR1.deAlloc; 12.10.92*} {* 2.9.92*}
+ *          {* A1[]->A[] 2.9.92*}
+ *       else aR.mkIndirect;
+ *          (A[],aR[])->cpMem
+ *      if);
+ *      aR2[]->dest[]
+ *   #)
+ * --asgRefReg:descriptor-- {* MUST be fixed like asgRefAdr above *}
+ *   {* as asgRefAdr, but A is an adrRegOperand *}
+ *   (# aR,aR1,aR2: @adrRegOperand; L: @localLab; T: @Text;
+ *   do common.direct->access; {* this Address is a dynamic reference *}
+ *      toReg2->aR->aR2; {* aR=destination *}
+ *      aR.mkIndirect;
+ *      (A[],aR[])->stVal;
+ *      {* aR2[]->ChkHeap;
+ *       aR2.deAlloc*}
+ *      aR2[]->dest[]
+ *   #)
+ *)
+--asgRefAdr:descriptor--
+(* assign A to thisAddress *)
+(# aR,aR1,aR2: @adrRegOperand; L: @localLab; T: @Text;
+   A1: @regAdr; dr: @dataRegOperand
+do common.direct->access; (* this Address is a dynamic reference *)
+   (* this is a hack. Will not work for arrays !!!*)
+   toReg2->aR->aR2; (* aR=destination *)
+   (if A.access //common.direct then
+       (*(if aR1//thisO then true->A1.frozenReg (*else aR1.deAlloc * )if);*)
+       (* aR1 = thisO possible in this(P)[]->R[] *)
+       (if A.regType//thisO//callO then
+           A.toReg2->aR1; (* 12.10.92*) (* aR1=source *)
+           (* A.freeAdr; 12.10.92: in evval1: asgToAdr: A[]->rA.asgRefAdr->..
+            * A[] is used in thisVal and cannot be released.
+            * The problem is if this can imply that regs are not released?
+            *)
+           (*aR.mkIndirect; olm: ? - eliminated *)
+           (* (aR1[],aR[])->stVal; *) (* datpete: ?? *)
+           aR->A1.reg; (* olm: ? *) 
+           (aR1[],A1[])->stVal;
+           aR1.deAlloc
+        else
+           (* A and aR1 use the same register - dont deAlloc aR1.
+            * However A is invalidated since aR1 is redefined
+            *)
+           aR[]->push;
+           (A[],aR[])->gLea; dr.alloc; (aR[],dr[])->cpReg;
+           aR[]->pop;
+           (* aR.mkIndirect; olm: ? - elim*)(* dont do this before push/pop *)
+           (* (dr[],aR[])->stVal; *) (* datpete: ?? *)
+           (*olm: ? *) aR->A1.reg; (dr[],A1[])->stVal;
+           dr.deAlloc
+       if)
+       (*aR1.deAlloc; 12.10.92*) (* 2.9.92*)
+       (* A1[]->A[] 2.9.92*)
+    else 
+       (*aR.mkIndirect; olm: ? - eliminated*)
+       (* (A[],aR[])->cpMem *) (* datpete: ?? *)
+       (*olm: ? *) aR->A1.reg; (A[],A1[])->cpMem;
+   if);
+   aR2[]->dest[]
+#)
+--asgRefReg:descriptor-- (* MUST be fixed like asgRefAdr above *)
+(* as asgRefAdr, but A is an adrRegOperand *)
+(# aR,aR1,aR2: @adrRegOperand; L: @localLab; T: @Text; A1: @RegAdr
+do common.direct->access; (* this Address is a dynamic reference *)
+   toReg2->aR->aR2; (* aR=destination *)
+   (* aR.mkIndirect; olm: ? - eliminated *)
+   (* (A[],aR[])->stVal; *) (* datpete: ?? *)
+   (*olm: ? *) aR->A1.reg; (A[],A1[])->stVal;
+   (* aR2[]->ChkHeap;
+    aR2.deAlloc*)
+   aR2[]->dest[]
+#)
+---targetEntryPointInfo:descriptor--
+(##)
+---addTargetInfo:doPart----
+do
+---entryPointsInsert:doPart---
+do
+--DataRegOpRegF: dopart--
+do (* regF not used in Cmachine *)
+--AdrRegOpRegF: dopart--
+do (* regF not used in Cmachine *)
+--FloatRegOpRegF: dopart--
+do (* regF not used in Cmachine *)
+   
+   (* datpete 6/3/96: added these empty slots - probably not used for b2c *)
+--entryPointsEqual:descriptor---   
+(##)
+---SPtoPrimReg:doPart---
+do
+--ExternalMark:descriptor---
+(##)
+--CallRegInPrimReg2:doPart--
+do 
+   
+   (* datpete 6/3/96: probably these should be fixed for b2c
+    * (move some stuff from controlbody?)
+    *)
+-- NextGroup: doPart--
+do 
+-- CreateDataFile: doPart--
+do

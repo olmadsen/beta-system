@@ -1,0 +1,545 @@
+ORIGIN 'machine';
+BODY 'MachinearrayBody';
+INCLUDE 'MachineTrie';
+INCLUDE '~beta/basiclib/file';
+INCLUDE '~beta/containers/hashTable';
+INCLUDE '~beta/basiclib/private/binfile';
+
+(* Machinearray contains a structure for makeing a binary output file for a linker *)
+(*  ©1993,1994 by Mj¿lner Informatics ApS (C)-1993,1994 *)
+
+(* logging: turn on table usage listing in file <objfilename>.log *)
+
+--- MachineAtt: attributes--
+
+LabAdr: 
+  (#	labNo, adr, off: @Integer; BR, isData: @Boolean;
+  Enter	(labNo, adr, off, BR, isData)
+  Exit	(labNo, adr, off, BR, isData)
+  #);
+
+LocalLabel:
+  (# adr, mId: @Integer; isData: @Boolean;
+  Enter (adr, isData, mId)
+  Exit  (adr, isData, mId)
+  #);
+
+CompRefAdr:
+  (#	labNo, adr, off: @Integer; tLabel: ^Text;
+  Enter	(labNo, tLabel[], adr, off)
+  Exit	(labNo, tLabel[], adr, off)
+  #);
+
+StabEntry:
+  (#	offset, astIndex: @Integer;
+  Enter	(offset, astIndex)
+  Exit	(offset, astIndex)
+  #);
+
+MachineArray: 
+  (# theArray: [0] @Integer; (* 5000 *)
+     theRecords: [0] ^Records; (* 200 *)
+     currContentsRec: ^ContentsRecord;
+     currSegId, currCompRefCounter, currDataModuleId, currEntryCounter: @Integer;
+     currDicIndex, currDicStart, dataRecStart, currRecId: @Integer;
+     dataMName: @Text;
+     contextData, aligned: @Boolean;
+     dataCounter, codeCounter, counter: @Integer;
+     recOffset, recCounter, gOffset, contentsStart: @Integer;
+     idCounter: @Integer;
+     address: @integer;
+     compRefTabel: [0] ^CompRefAdr; (*100 *)
+     labelTabel: [0] ^LocalLabel; (* 500 *)
+     unsolvedRefs: [0] ^LabAdr; (* 500 *)
+     currURefIndex: @Integer;
+     segName: ^text;
+
+     ImportTabel, ExportTabel: @Trie (# rangeInitial::< (# do 717(*271*)->value #)#);
+     EntryTabel: @Trie (# rangeInitial::< (# do 717->value #)#);
+     UnsolvedLabel: @Trie (# rangeInitial::< (# do 717->value #)#);
+     
+     BRelative, A5Rel: @Boolean;
+     inst, noOfOp, operandNo, iSize: @Integer;
+     moduleNo: @Integer;
+     hasCodeModule, hasDataModule: @Boolean;
+     firstModule, firstProc: @Boolean;
+     dataOffset: @Integer
+       (* When data follows an operand, this variable tells the length *);
+     oFile: @binfile;
+     sFile: @File;
+     logFile: ^Stream;
+     logging: @boolean;
+     currDescriptorAdr, currTEntryIndex, noOfDescriptor: @Integer;
+     TEntryTable: [50]^Text;
+     BetaArray: @(* Keep track of BETA_DATA/CODE labels *)
+       (# aCounter, dCounter: @Integer;
+          TArray: [5]^Text;     (* Label name *)
+          AArray: [5]@Integer;  (* Address where used *)
+          DTArray: [5]^Text;    (* Label name *)
+          DAArray: [5]@Integer; (* Address where declared *)
+          
+          Insert:
+            (# lab: ^Text;
+            enter lab[]
+            <<SLOT BetaArrayInsert: dopart>>
+            #);
+          Declare:
+            (# tLab: ^Text; adr: @Integer;
+            enter (tLab[], adr)
+            <<SLOT BetaArrayDeclare: dopart>>
+            #);
+          Solve: 
+            (# 
+            do <<SLOT BetaArraySolve: descriptor>>;
+            #);
+       #);
+     
+     (* DEBUG *)
+
+     opdateCounter: @
+       (#
+       <<SLOT MachineArrayUpdateCounter: dopart>>
+       #);
+     
+     inxputbyte: @
+       (# offset, value: @integer;
+       enter (offset,value)
+       <<SLOT MachineArrayInxPutByte: dopart>>
+       #);
+     inxputshort: @
+       (# offset, value: @integer;
+       enter (offset,value)
+       <<SLOT MachineArrayInxPutShort: dopart>>
+       #);
+     inxputlong: @
+       (# offset, value: @integer;
+       enter (offset,value)
+       <<SLOT MachineArrayInxPutLong: dopart>>
+       #);
+     
+     PutInst: @
+       (# 
+       Enter (inst, noOfOp)
+       <<SLOT MachineArrayPutInst: dopart>>
+       #);
+     
+     PutFPInst: @
+       (# fpInst, noOfOp: @Integer;
+       Enter (fpInst, noOfOp)
+       <<SLOT MachineArrayPutFPInst: dopart>>
+       #);
+     
+     PutAReg: @
+       (# regNo: @Integer;
+       Enter regNo
+       <<SLOT MachineArrayPutAReg: dopart>>
+       #);
+     
+     PutDReg: @
+       (# regNo: @Integer;
+       Enter regNo
+       <<SLOT MachineArrayPutDReg: dopart>>
+       #);
+     
+     PutConst: @
+       (# c: @Integer;
+       Enter c
+       <<SLOT MachineArrayPutConst: dopart>>
+       #);
+     
+     PutFPReg: @
+       (# regNo: @Integer;
+       Enter regNo
+       <<SLOT MachineArrayFPReg: dopart>>
+       #);
+     
+     PutFPLLabel: 
+       (# lNo: @Integer;
+          (*
+           * When using the instruction cpBcc we don't modify the instruction, 
+           * this method is only used with
+           * floating point brances.
+           *)
+       Enter lNo
+       do <<SLOT PutFPLLabel: descriptor>>;
+       #); 
+     
+     PutLLabel: 
+       (# lNo: @Integer; textAdr, found: @Boolean;
+          it: @<<SLOT PutLLabel: descriptor>>
+       Enter (lNo, textAdr)
+       do it;
+       #);
+     
+     PutTLabel: 
+       (# tLabel: @Text; tLabelNo: @Integer; tempLabAdr: ^LabAdr; 
+          temp: ^Text; found: @Boolean; more: ^MoreList;
+          it: @<<SLOT PutTLabel: descriptor>>;
+       Enter tLabel
+       do it;
+       #);
+     
+     PutTOp: 
+       (* See TextOpPut in MacMachine *)
+       (# tLabel: @Text; fctd, found: @Boolean; tLabelNo: @Integer; 
+          tempLabAdr: ^LabAdr;
+          temp: ^Text; more: ^MoreList;
+       Enter (tLabel, fctd)
+       <<SLOT PutTOp: dopart>>
+       #);
+     
+     DefTLabel: 
+       (# tLabel: ^Text;
+       Enter tLabel[]
+       <<SLOT MachineArrayDefTlabel: dopart>>
+       #);
+     
+     PutSP: @
+       (# 
+       <<SLOT MachineArrayPutSP: dopart>>
+       #);
+     
+     PutNSP: @(* -(sp) *)
+       (# 
+       <<SLOT MachineArrayPutNSP: dopart>>
+       #);
+     
+     PutPSP: @(* (sp)+ *)
+       (# 
+       <<SLOT MachineArrayPutPSP: dopart>>
+       #);
+     
+     PutStackOff: @
+       (# off: @Integer;
+       Enter off
+       <<SLOT MachineArrayPutStackOff: dopart>>
+       #);
+     
+     Indirect: @
+       (# mode, off: @Integer; reg: @Integer;
+       Enter (mode, off, reg)
+       <<SLOT MachineArrayIndirect: dopart>>
+       #);
+     
+     IndirectIndx: @
+       (# mode, off, scaleWord, tempReg: @Integer; aReg, dReg: @Integer;
+       Enter (mode, off, scaleWord, aReg, dReg)
+       <<SLOT MachineArrayIndirectIndx: dopart>>
+       #);
+     
+     DefLLabel: @
+       (# lNo: @Integer;
+       Enter lNo
+       <<SLOT MachineArrayDefLLabel: dopart>>
+       #);
+     
+     ComputedRef: @
+       (# l1: @Integer;(*^mOperand;*) l2: ^Text; temp: ^CompRefAdr;
+       Enter (l1, l2[])
+       <<SLOT MachineArrayComputedRef: dopart>>
+       #);
+     
+     PutLong: @
+       (# l: @Integer;
+       Enter l
+       <<SLOT MachineArrayPutLong: dopart>>
+       #);
+     
+     PutWord: @
+       (# w: @Integer;
+       Enter w
+       <<SLOT MachineArrayPutWord: dopart>>
+       #);
+     
+     PutDC: @
+       (# c, size: @Integer;
+       Enter (c, size)
+       <<SLOT MachineArrayPutDC: dopart>>
+       #);
+     
+     PutDCB: @
+       (# t: ^Text; tempChar: @Char;
+       Enter t[]
+       <<SLOT MachineArrayPutDCB: dopart>>
+       #);
+     
+     DeclareAddress: @
+       (# 
+       <<SLOT MachineArrayDeclareAddress: dopart>>
+       #);
+     
+     switchtodata: @
+       (# 
+       <<slot switchtodatabody: dopart>>
+       #);
+     
+     switchtocode: @
+       (# 
+       <<slot switchtocodebody: dopart>>
+       #);
+     
+     import: @
+       (# t: ^text;
+       enter t[]
+       <<slot importbody: dopart>>
+       #);
+     
+     importdata: @
+       (# t: ^text;
+       enter t[]
+       <<slot importdatabody: dopart>>
+       #);
+     
+     export: @
+       (# t: ^text; 
+       enter t[]
+       <<slot exportbody: dopart>>
+       #);
+     
+     entry: @
+       (# labno: @integer;
+          it: @<<slot entrybody: descriptor>>;
+       enter labno
+       do it
+       #);
+     
+     Proc: @
+       (# 
+       <<SLOT ProcBody: dopart>>
+       #);
+     
+     EndProc: @
+       (# it: @<<SLOT EndProcBody: descriptor>>;
+       Do it
+       #);
+     
+     Record: @
+       (# name: ^Text;
+          it: @<<SLOT RecordBody: descriptor>>;
+       Enter name[]
+       Do it  
+       #);
+     
+     EndRecord: @
+       (# tempRec: ^SizeRecord;
+          it: @<<SLOT EndRecordBody: descriptor>>;
+       Do it
+       #);
+     
+     recordlog: @
+       (# 
+       <<SLOT MachineArrayRecordLog: dopart>>
+       #);
+     
+     Seg: @
+       (# name, newName,logName: ^Text;
+          segNo: @Integer;
+       Enter (segNo, name[])
+       <<SLOT MachineArraySeg: dopart>>
+       #);
+     
+     NewModule: <<SLOT MachineArrayNewModule: descriptor>>;
+     
+     EndModule: <<SLOT MachineArrayEndModule: descriptor>>;
+     
+     UpdateTabels: 
+       (# isCode: @Boolean;
+       Enter isCode
+       Do <<SLOT UpdateTabelsBody: descriptor>>;
+       #);
+     
+     NewDictionary: <<SLOT MachineArrayNewDictionary: descriptor>>;
+     
+     Stab: 
+       (# astRef: @Integer;
+       Enter astRef
+       <<SLOT MachineArrayStab: dopart>>
+       #);
+     
+     EndMEntry: (* This tells us when a MEntry is finished *)
+       (# 
+       <<SLOT MachineArrayEndMentry: dopart>>
+       #);
+     
+     StartUp: 
+       (# tempRec: ^FirstRecord; tempRec2: ^DictionaryRecord;
+          name,groupname: ^Text;
+          group: @File;
+          i,groupLength: @integer;
+       enter name[]
+       <<SLOT MachineArrayStartUp: dopart>>
+       #);
+     
+     ShutDown: <<SLOT MachineArrayShutDown: descriptor>>;
+       
+     currDescEntry: ^descriptorEntry;
+     
+     DescriptorEntry:
+       (#	mName: @Text; StabList: [25]^StabEntry; currEntry: @Integer;
+          Insert: @
+            (# offset, astIndex: @Integer;
+            Enter	(offset, astIndex)
+            <<SLOT MachineArrayDescriptorEntryInsert: dopart>>
+            #);
+          Dump: @<<SLOT MachineArrayDescriptorEntryDump: descriptor>>;
+       Enter	mName
+       #);
+     
+     descriptorList: @HashTable		(*[25] ^DescriptorEntry;*)
+       (#	element::< DescriptorEntry;
+          
+          hashFunction::< 
+            (#	inx: @Integer;
+            <<SLOT MachineArrayDescriptorListHash: dopart>>
+            #);
+          
+          dump: @
+            (# tName: @Text; inx, theIndex: @Integer; temp: ^DescriptorEntry;
+            Enter	tName
+            <<SLOT MachineArrayDescriptorListDump: dopart>>
+            #);
+       #);
+     
+     Records: 
+       (#	no: @Integer;
+          Insert:<
+            (# name: ^Text;
+            Enter name[]
+            Do INNER;
+            #);
+          Dump:< 
+            (#
+            Do no->oFile.putbyte;
+               INNER;
+            #);
+       Enter no
+       Exit	no
+       #);
+     
+     FirstRecord: Records
+       (#	flags, version: @Integer;
+          Dump::< 
+            (# 
+            Do flags->oFile.putbyte;
+               version->oFile.putshort;
+            #);
+       Enter (flags, version)
+       Exit (flags, version)
+       #);
+     
+     LastRecord: Records
+       (#
+          Dump::< 
+            (# Do 0->oFile.putbyte; #);
+       #);
+     
+     DictionaryRecord: Records
+       (#	flags, firstID, size, repCount: @Integer; nameRep: [100] ^Text;
+          Insert::<
+	    (#
+	    <<SLOT MachineArrayDictionaryRecordInsert: dopart>>
+            #);
+          Dump::< 
+            (# 
+               <<SLOT MachineArrayDictionaryRecordDump: dopart>>
+            #);
+       Enter	(flags, firstID)
+       Exit	(flags, firstID)
+       #);
+     
+     ModuleRecord: Records
+       (#	flags, moduleID, segID: @Integer;
+          Dump::< 
+            (# Do flags->oFile.putbyte;
+               moduleID->oFile.putshort;
+               segID->oFile.putshort;
+            #);
+       Enter	(flags, moduleID, segID)
+       Exit	(flags, moduleID, segID)
+       #);
+     
+     EntryRecord: Records
+       (#	flags, entryID, offset: @Integer;
+          Dump::< 
+            (# Do flags->oFile.putbyte;
+               entryID->oFile.putshort;
+               offset->oFile.putlong;
+            #);
+       Enter	(flags, entryID, offset)
+       Exit	(flags, entryID, offset)
+       #);
+     
+     SizeRecord: Records
+       (#	flags, moduleSize: @Integer;
+          Dump::< 
+            (# Do flags->oFile.putbyte;
+               moduleSize->oFile.putlong;
+            #);
+       Enter	(flags, moduleSize)
+       Exit	(flags, moduleSize)
+       #);
+     
+     ContentsRecord: Records
+       (#	flags, size, offset, index: @Integer;
+          Dump::< 
+            (# sizemod, loop: @Integer;
+            <<SLOT MachineArrayContentsRecordDump: dopart>>
+            #);
+       Enter (flags, size, offset, index)
+       Exit	 (flags, size, offset, index)
+       #);
+     
+     ReferenceRecord: Records
+       (# flags, refId: @Integer; codeOffRep, dataOffRep: [0]@Integer;
+          isContextData: @Boolean;
+          fromCode, fromData: @Boolean
+            (* used to check if referenced from code AND data *);
+          countData, countCode: @Integer; (* and how many of each *)
+          Insert::<
+            (# off: @Integer; isContextData: @Boolean;
+            Enter (off, isContextData)
+            <<SLOT MachineArrayReferenceRecordInsert: dopart>>
+            #);
+          
+          Dump::<
+            (#
+            <<SLOT MachineArrayReferenceRecordDump: dopart>>
+            #);
+       Enter (flags, refId, isContextData)
+       Exit (flags, refId, isContextData)
+       #);
+     
+     ComputedRefRecord: Records
+       (# flags, size, id1, id2, repCounter: @Integer;  
+          offRep: [100]@Integer; isLong: @Boolean;
+          Insert::<
+	    (# off: @Integer;
+	    Enter off
+	    <<SLOT MachineArrayComputedRefRecordInsert: dopart>>
+	    #);
+          
+          Dump::<
+	    (#
+	    <<SLOT MachineArrayComputedRefRecordDump: dopart>>
+	    #);
+       Enter (flags, size, id1, id2)
+       Exit   (flags, size, id1, id2)
+       #);
+  #);
+
+OOPS:
+   (# T: ^text
+   enter T[]
+  <<SLOT MachineArrayOOPS: dopart>>
+  #);
+SysError: OOPS
+  (# continue: @boolean;
+  <<SLOT MachineArraySysError: dopart>>
+  #);
+
+
+
+
+
+
+

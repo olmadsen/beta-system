@@ -1,0 +1,251 @@
+ORIGIN 'BetaRun';
+
+--BetaRunCallDoGC: descriptor--
+(* Called from BetaRun.bet.
+ * Fix parameters and call C function.
+ *)
+(# IOATopOp: @dataRegOperand;
+   originReg: @oRegOperand;
+do O0 -> originReg;
+   'call_doGC' -> extlabel;
+   (*  
+    * On entry here:
+    *   regIOATop (in TSD) contains IOATop before current heaprequest.
+    *   regNewTop contains IOATop after current pending heaprequest. 
+    *   (=IOATop+size)
+    * 
+    * Returns:
+    *   new object in I1
+    * 
+    * Destroys:
+    *   %o4 if IOATopInTSD
+    *   %o5
+    *)     
+   (if IOATopInTSD then
+       O4->loadIOATop;  (* Not safe to alloc reg here *)
+    else
+       regIOATop->IOATopOp
+   if);
+   (* Save this in TSD. Origin is saved from GENIOAAlloc if needed *)
+   thisRegOp->storeCurrentObject;
+   ;
+   (regNewTop,O5) -> MOV -> emit;
+   (SP,-64,SP) -> SAVE_I -> emit;
+   ('doGC',callMark) -> mstate.b.mark;
+   0 -> CALL -> emit;
+   (if IOATopInTSD then
+       (I5, I4, O0) -> SUB -> emit; (* delay slot *)
+    else
+       (I5, IOATopOp, O0) -> SUB -> emit; (* delay slot *)
+   if);
+   ;
+   (O0,G0,I1)->RESTORE->emit;
+   ;
+   (* restore this, origin, activeComponent from TSD *)
+   thisRegOp->loadCurrentObject;
+   G0->storeCurrentObject;
+   regActiveComponent -> loadActiveComponent;
+   ;
+   O7 -> AssertRegisterNotZero;
+   RETL->emit;
+   emitnop;
+#)
+
+--BetaRunCallPSuspDoGC: descriptor--
+(*  
+ * (Implicit) Parameters:
+ *   regIOATop contains IOATop before current heaprequest.
+ *   regNewTop contains IOATop after current pending heaprequest. 
+ *   (=IOATop+size)
+ *   
+ * Returns:
+ *   new object in I1
+ * 
+ * Destroys:
+ *   %i1 (for new object) and %o5
+ *)
+(#
+   originReg: @oRegOperand;
+   checkGC,afterGC: @localLab;
+   regSize,dr,levelAdr: @dataRegOperand;
+   activeStackOp: @dataRegOperand;
+   IOALimitOp: @dataRegOperand;
+do 
+   
+   'call_psusp_doGC'->ExtLabel;
+   ;
+   (* initialization *)
+   checkGC.new;
+   afterGC.new;
+   O0->originReg;
+   
+   L0 -> activeStackOp;
+   L1 -> regSize;
+   L2 -> dr;
+   L3 -> IOALimitOp;
+   L4 -> LevelAdr;
+   ;
+   (* Free 5 local registers to use here *)
+   (5, I1) -> CheckDataTmp;
+   ;
+   O5 -> loadActiveStack;
+   (L0, O5) -> pushDataTmp;
+   (L1, O5) -> pushDataTmp;
+   (L2, O5) -> pushDataTmp;
+   (L3, O5) -> pushDataTmp;
+   (L4, O5) -> pushDataTmp;
+   ;
+   (O5,activeStackOp) -> MOV -> emit;
+   (* Save stack offsets, so that GC can traverse stack object *)
+   activeStackOp->PackStackOff;
+   ;
+   (* Assume for a start that the current top becomes new object *)
+   (* calculate size of object to be allocated: *)
+   (if IOATopInTSD then
+       regNewObj -> loadIOATop;
+       (regNewTop,regNewObj,regSize)->SUB->emit;
+    else
+       (regIOATop, regNewObj) -> MOV -> emit;
+       (regNewTop,regIOATop,regSize)->SUB->emit;
+   if);
+   (* Set PreemptionLevel.inGC *)
+   ('PreemptionLevel',dr[])->PutSetText;
+   (dr,8,dr)->LDSTUB_I->emit;
+   (* Ignore result *)
+   ;
+   (* Test for possible interrupt and process change *)
+   IOALimitOp->loadIOALimit;
+   (2 (* ne *) ,0->newCstOp,IOALimitOp[],4,checkGC[])->cmpAndJmp;
+   ;
+   (* IOALimit is 0: We have a possible preemptive suspend *)
+   'PreemptiveSusp'->ExtLabel;
+   ;
+   (* IOALimit was 0: Restore original IOALimit from TSD *)
+   IOALimitOp->loadSavedIOALimit;
+   IOALimitOp->storeIOALimit;
+   ('PreemptionLevel',setHiMark)->mstate.b.mark;
+   (levelAdr,0)->SETHI->emit;
+   ('PreemptionLevel',setLoMarkLd)->mstate.b.mark;
+   (levelAdr,0,dr)->LD_I->emit;
+   dr->TST->emit;
+   (checkGC.labNo->mstate.labs.off) div 4->BNE->emit;
+   (* PreemptionLevel.value is 4 bytes after PreemptionLevel.lock *)
+   (levelAdr,4,levelAdr)->ADD_I->emit;
+   ('PreemptionLevel',setLoMarkLd)->mstate.b.mark;
+   (levelAdr,0,dr)->LD_I->emit;
+   dr->TST->emit;
+   (checkGC.labNo->mstate.labs.off) div 4->BNE->emit;
+   ;
+   (* save necessary registers/variables and call preemptive-suspend;
+    * we must save:
+    *   1.  ref: originReg, 
+    *   2. data: O7 (return to calling V-entry point), 
+    *   3. data: regSavedReturn (return from calling V-entry point),
+    *   4. data: regSize (size),
+    *   5. data: I2 (prototype);
+    *   6.  ref: ThisO
+    *   7. data: I7
+    * FIXME: This may be too many.
+    *)
+   ;
+   (5, I1) -> checkDataTmp;
+   (2, I1) -> checkRefTmp;
+   ;
+   O5 -> loadActiveStack;
+   (regSize,        O5) -> pushDataTmp;
+   (regSavedReturn, O5) -> pushDataTmp;
+   (O7,             O5) -> pushDataTmp;
+   (I2,             O5) -> pushDataTmp;
+   (I7,             O5) -> pushDataTmp;
+   (ThisO,          O5) -> pushRefTmp;
+   (originReg,      O5) -> pushRefTmp;
+   ;
+   (* Clear PreemptionLevel.inGC *)
+   ('PreemptionLevel',dr[])->PutSetText;
+   (dr,8,g0)->STB_I->emit;
+   (* Ignore result *)
+   ;
+   'Susp'->jsrT;
+   ;
+   'PreemptiveCall'->ExtLabel;
+   ;
+   (* Set PreemptionLevel.inGC *)
+   ('PreemptionLevel',dr[])->PutSetText;
+   (dr,8,dr)->LDSTUB_I->emit;
+   (* Ignore result *)
+   ;
+   O5 -> loadActiveStack;
+   (originReg,      O5) -> popRefTmp;
+   (ThisO,          O5) -> popRefTmp;
+   (I7,             O5) -> popDataTmp;
+   (I2,             O5) -> popDataTmp;
+   (O7,             O5) -> popDataTmp;
+   (regSavedReturn, O5) -> popDataTmp;
+   (regSize,        O5) -> popDataTmp;
+   ;
+   (* make sure the initial assumption for regNewObj and regNewTop
+    * holds here:
+    * They may have been destroyed and/or there may have been a GC
+    * during the suspend.
+    *)
+   (if IOATopInTSD then
+       regNewObj->loadIOATop
+    else
+       (regIOATop,regNewObj)->MOV->emit
+   if);
+   (regNewObj,regSize,regNewTop)->ADD->emit;
+   IOALimitOp->loadIOALimit;
+   ;
+   checkGC.def;
+   'checkGC' -> ExtLabel;
+   (if not do_unconditional_gc then
+       (* Check if GC is really needed *)
+       (regNewTop,IOALimitOp)->CMP->emit;
+       (if IOATopInTSD then
+           O5->loadIOATop;
+           (O5,regSize,O5)->ADD->emit; (* does not affect condition codes *)
+           (afterGC.labNo->mstate.labs.off) div 4->BLT_A->emit;
+           O5->storeIOATop (* Delay slot: Only if jump taken *)
+        else
+           (afterGC.labNo->mstate.labs.off) div 4->BLT_A->emit;
+           (regIOATop,regSize,regIOATop)->ADD->emit (* Delay slot: Only if jump taken *)
+       if);
+   if);
+   ;
+   (* Prepare for doGC, possibly a GC.
+    * doGC returns address of object in %o0
+    *)
+   ;
+   (* Save this in TSD. Origin is saved from GENIOAAlloc if needed *)
+   thisRegOp->storeCurrentObject;
+   ;
+   (* Call doGC(regSize) *)
+   (regSize,O5)->MOV->emit;
+   (SP,- 64,SP)->SAVE_I->emit;
+   (I5,O0)->MOV->emit;
+   'doGC'->jsrT;
+   (O0,G0,regNewObj)->RESTORE->emit; 
+   ;
+   (* restore this, origin, activeComponent from TSD *)
+   thisRegOp->loadCurrentObject;
+   G0->storeCurrentObject;
+   regActiveComponent -> loadActiveComponent;
+   ;
+   afterGC.def;
+   'afterGC' -> ExtLabel;
+   ('PreemptionLevel',dr[])->PutSetText;
+   (dr,8,G0)->STB_I->emit;
+   
+   O5 -> loadActiveStack;
+   (L4, O5) -> popDataTmp;
+   (L3, O5) -> popDataTmp;
+   (L2, O5) -> popDataTmp;
+   (L1, O5) -> popDataTmp;
+   (L0, O5) -> popDataTmp;
+   
+   ;
+   O7 -> AssertRegisterNotZero;
+   RETL -> emit;
+   emitnop;(* Delay slot *)
+   ;
+#)

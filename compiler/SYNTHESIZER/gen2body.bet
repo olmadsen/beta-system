@@ -1,0 +1,372 @@
+ORIGIN 'gen';
+LIB_ITEM 'betacodegen';
+INCLUDE 'synthlib';
+INCLUDE 'prototype'
+---Protohead:descriptor---
+(# #)
+---SpecialInitDesc:descriptor---
+(# L: ^text; local: @boolean
+do (if switch68 then
+       (('V',1,thisForm[],true)->sysLab,false)->defineGlobEntry;
+       ('V',2,thisForm[],true)->syslab->L[]; L->mch.jmpT;
+    else
+       (('G',1,thisForm[],true)->sysLab,false)->defineGlobEntry;
+       (if prefDesc[] -> sematt.hasAcode then
+           mch.SubDescriptorSlotEntry;
+           ('G',2,thisForm[],true)->syslab->L[]; L->mch.jmpT;
+           (* datpete 8/9/97: FIXME: is L always local? *)
+           (if b2c then mch.rts if);
+        else
+           mch.rts
+       if);
+   if);
+   (('M',1,thisForm[],true)->sysLab,false)->defineGlobEntry;
+   (if (prefDesc[]->sematt.hasDo) then
+       mch.SubDescriptorSlotEntry;
+       ('M',prefDesc[])->mkEntryPoint->(L[],local);
+       (if local then
+           L->mch.jmpT; 
+        else
+           L[]->mch.import; 
+           (L, NONE)->mch.jmpTlong;
+       if); 
+       (if b2c then mch.rts if);
+    else mch.rts
+   if)
+#)
+---BeginAlloc:descriptor---
+(# Vlab,Glab,Tlab: ^Text;
+do (if switch68 then
+       (# top,off: ^mch.adrRegOperand; 
+          afterAlloc,L: @mch.localLab;
+          A, A1: @mch.RegAdr;
+          ar: @mch.AdrRegOperand;
+          IOAop: @ mch.NewCtextOp;
+          theObj: ^mch.RegisterOperand;
+          protoReg: @mch.adrRegOperand;
+          (* for loadProto and loadProto2 compare with 
+           * doLoadProto which uses mkEntryPoint *)
+          LoadProto:
+            (# Tlab: ^text;
+            do protoReg.alloc;
+               ('T',thisDescNo,thisForm[],true) -> gen.SysLab -> Tlab[];
+               (Tlab[]->mch.newTextOp,protoReg[]) -> mch.gLea;
+            #);
+          LoadProtoAndAlloc2:
+            (# Tlab: ^text;
+            do ('T',thisDescNo,thisForm[],true) -> gen.SysLab -> Tlab[];
+               (if common.switch[61] then 
+                   (Tlab[]->mch.NewTextToDataOp,2->mch.getPrimReg)->mch.gLea;
+               if);
+               
+               ('AlloI2',Tlab[])->mch.callAlloPrim;
+            #);
+          LoadProtoAndAlloc3:
+            (# Tlab: ^text;
+            do ('T',thisDescNo,thisForm[],true) -> gen.SysLab -> Tlab[];
+               (if common.switch[61] then 
+                   (Tlab[]->mch.NewTextToDataOp,2->mch.getPrimReg)->mch.gLea;
+                   (3,1) ->  mch.SPtoPrimReg;
+               if);
+               (if common.switch[65] then
+                   ('AlloI1',Tlab[]) ->mch.jmpTlong
+                else
+                   ('AlloI',Tlab[]) ->mch.jmpTlong
+               if)
+            #);
+          StoreProto: 
+            (* Can this give PC problemes? If a GC happens before
+             * proto is stored, then ...?
+             * It may happen during prefix V-entry part
+             *)
+            (# A: @mch.regAdr;
+               ar: @mch.adrRegOperand; L: @mch.localLab
+            do mch.callO -> A.reg;
+               L.new;
+               (* originReg=-1 if this is a super ptn;*)
+               (4(*le*),-1->mch.newCstOp,1->mch.getPrimReg,4,L[]) 
+                 -> mch.cmpAndJmp;
+               0 -> A.off;
+               (protoReg[],A[]) -> mch.stVal;
+               (* Now that prototype is set up, it is safe to call Ck *)
+               (mch.CallO, 'AllocObj', 'CallO') -> mch.EmitCk;
+               protoReg.dealloc;
+               L.def
+            #);
+       do (***********************************************************
+           * At V-entry the registers are as follows (SPARC only):
+           * 
+           *         |    %o0   |    %i1
+           * ---------------------------------
+           * dynamic | origin   |  undefined
+           * part    |    0     |  object
+           * prefix  |   -1     |  object
+           *)
+          
+          ('V',descNo,thisForm[],NOT common.switch[30])->SysLab->Vlab[];
+          (if true (*hasAcode or (objKind <> 1 singularData) *) then
+              (*Vlab[] -> mch.Export;
+               Vlab[] -> mch.LabelDef;
+               (Vlab[],false) -> mch.entryPoints.addDef;*)
+              (Vlab[],false) -> mch.GlobalLabelDef
+          if);
+          true->mch.inGpart;
+          (* callReg is undefined here and should NOT be 
+           * copied to thisReg;
+           * i.e. we should have a parameter to saveReturn.
+           * callReg may be used to distinguish between
+           * static and dynamic generation
+           *)
+          afterAlloc.new;
+          (if switch64 (* multi-processor *) 
+              and NOT common.switch[65] then 
+              (* we SHOULD NEVER come here anymore! *)
+              (if common.targetMachineId = common.sun4s then
+                  LoadProto;
+                  (4(*le*),thisDesc.originOff div 4->mch.newCstOp
+                  ,1->mch.getPrimReg,4,afterAlloc[])
+                    -> mch.cmpAndJmp;
+                  (NONE,size,not (thisDesc[]->sematt.hasAcode))  -> mch.AllocObj;
+                  &mch.adrRegOperand[] -> theObj[];
+              if);
+              mch.callO -> A.reg;
+              thisDesc.originOff -> A.off;
+              (1->mch.getPrimReg,A[]) -> mch.stVal;
+              4 -> A.off;
+              (if common.IOAMinAge<>0 then
+                  (common.IOAMinAge->mch.newCstOp,A[],4) -> mch.stCst;
+              if);
+              afterAlloc.def;
+              StoreProto;
+              (if thisDesc[] -> sematt.hasAcode then
+                  (true,thisDesc.returnOff) -> mch.saveReturn;
+                  mch.thisO -> A.reg;
+              if);
+              true -> theGen.ReturnSaved;
+           else
+              (* descriptor cases
+               * 
+               * 1,noV:     singular data item with no part objetcs,
+               *            can never be dynmaic
+               * 2,simple:  no part objects - call AlloI
+               * 3,dynamic: has part objects, always dynamic (never part)
+               * 4,general: has part objects, can be static or dynamic
+               *)
+              (if hasAcode then
+                  (true,thisDesc.returnOff) -> mch.saveReturn;
+                  true -> theGen.ReturnSaved;
+                  (if objKind <> 2(*dynamicObj*) then  
+                      (* case 4,general *)
+                      4 -> common.count; 
+                   else
+                      (* case 3,dynamic *)
+                      3 -> common.count; 
+                  if);
+                  (* origin must be in primReg1 *)
+                  (*(mch.thisRegOp[],1->mch.getPrimReg) -> mch.cpReg;*)
+                  LoadProtoAndAlloc2;
+                  afterAlloc.def;
+
+               else
+                  (if true (* objKind <> 1 singularData
+                            * It is NOT possible to have NO -entry
+                            * for singular data, since R## may imply
+                            * that a V-entry called can be made*)
+                            then
+                      (* case 2,dynamic *)
+                      2 -> common.count; 
+                      (if common.targetMachineId = common.sgi then
+                          (true,thisDesc.returnOff) -> mch.saveReturn;
+                          true -> theGen.ReturnSaved;
+                          LoadProtoAndAlloc2;
+                          (mch.callRegOp[],mch.thisRegOp[]) -> mch.cpReg;
+                       else
+                          LoadProtoAndAlloc3 
+                      if)
+                   else
+                      (* case 1,noV *)
+                      1 -> common.count; 
+                  if)
+              if)
+          if)
+       #)
+    else
+       ('G',descNo,thisForm[],NOT common.switch[30])->SysLab->Glab[];
+       (astRef div 2,Glab[],false)->mch.initGen
+   if)
+#)
+---doSuspend:descriptor---
+(# pDest: ^mch.mOperand; rAdr: @mch.localLab; aR: @mch.adrRegOperand;
+do (if common.switch[61] then
+       (if mch.callRegBusy then
+           'Suspend:callRegBusy!'->putline
+       if);
+       4->mch.initPrimCall; 
+       1->mch.thisRegOp.toPrimDest;
+       (2,1)->mch.SPtoPrimReg;
+       (* arg 3 and 4 are currently passed in callPrim *)
+       'Susp'->mch.callprim; 
+       0->mch.getPrimRes;
+    else       
+       0->mch.initPrimCall; 
+       'Susp'->mch.callprim; 
+       0->mch.getPrimRes
+   if)
+#)
+---attach:descriptor---
+(# 
+do (*callReg has been allocated to contain adr of component to be attached;
+    * i.e. no calReg protection needed for MIPS/PPC
+    *)
+   0->mch.initPrimCall; 
+   'Att'->mch.callPrim; 
+   0->mch.getPrimRes 
+#)
+---DescIdf:descriptor---
+(#
+do (if b2c then
+       T[]->mch.EmitLabID;
+    else
+       (T[],false)->mch.asciiText
+   if);
+#)
+--mkDataSeg:descriptor--
+(# TL : @mch.textOperand; 
+   dataLab: @mch.NewCtextOp;
+   L: @text; FN: ^text; emitT1: @boolean; 
+   noOfProtoTypes: @integer;   
+do (******** mch.EndCodeSeg 
+    * defines BETA_code2
+    * call mch.beginProtoTypes
+    * defines BETA_data2
+    *)
+   mch.EndCodeSeg;
+   
+   (*********************** computing prototypes ***************)
+   noofforms->protoIndexTable.new; (* used to be noofforms+1, but this 
+                                    * was probably one too much?
+                                    *)
+   (for i: protoIndexTable.range repeat 
+        &protoIndex[]->protoIndexTable[i][]
+   for);
+   
+   (if protoHead[] <> NONE then protoHead if);
+   
+   (* count number of prototypes to be emitted *)
+   (for i: protoIndexTable.range repeat 
+        (for j: protoIndexTable[i].pt.range repeat
+             (if protoIndexTable[i].pt[j][] <> NONE then
+                 noOfPrototypes+1->noOfProtoTypes
+   if)for)for);
+   Loop:
+     (if (*hasAttributesForm*)false then
+         (* currently eliminated; the dummy prototype was necessary
+          * in order to generate the table for initfragment for persistent 
+          * store. See above. It may be needed if we return to thta table.
+          * It was a problem when a lib file, foo, started with a pattern
+          * with a dopart slot, since the T1FOO for this pattern would then
+          * be generated in the body file. However, T-entry points for
+          * dopart descriptors are now in the file containig the descriptor,
+          * NOT ithe dopart!
+          *)
+         (* an attributesform consisting of only externals and constants
+          * will not generate any prototypes. For such forms a dummy prototype
+          * is generated
+          *)
+         (if protoIndexTable[1].pt[1][] = NONE then
+             (* test if a form has the same name as the file *)
+             formNames[1][]->FN[];
+             TestFileVersusForm:
+               (for i: noOfForms-1 repeat
+                    (if formNames[i+1][]->FN.equalNCS then
+                        (*305->trace(#do 'file = some form'->T #);*)
+                        (if protoIndexTable[i+1].pt[1][] = NONE then
+                            Leave TestFileVersusForm
+                        if);
+                        (*n->mch.declareLong;*)
+                        leave Loop
+               if)for);
+             (*n+1->mch.declareLong;*);
+             noOfProtoTypes+1->noOfProtoTypes;                        
+                    (*305->trace(#do 'no prototypes in this form'->T #);*)
+             'T1'->L.putText; formNames[1][]->L.putText;L[]->mch.export;
+             true->emitT1;
+             (* switch 39 is default:
+              * (if switch[39] then L[]->TL;TL[]->mch.declareAddress if)
+              *)
+             L[]->TL; TL[]->mch.declareAddress
+          else(* n->mch.declareLong*)
+         if)
+         (*else
+          n->mch.declareLong*)
+     if);
+   
+   (******************* emit the PROTOTYPE INDEX TABLE *******************)
+   noOfPrototypes->mch.EmitProtoIndexTable
+   (# pt: ^protoObject; pt1: ^main.protoType; 
+      ptIndex: @integer; empty: @boolean
+   do (for i: protoIndexTable.range repeat 
+           true->empty;
+           (for j: protoIndexTable[i].pt.range repeat
+                (if (protoIndexTable[i].pt[j][]->pt[]) <> NONE then 
+                    (if pt## = main.protoType## then 
+                        pt[]->pt1[];
+                        (ptIndex+1->ptIndex,pt1.nodeid)->mch.newProto
+                     else
+                        (* this case happens for
+                         * ---x:A-- P(# ... #)
+                         * where descNo 1 is not a 'real' descriptor
+                         * but just transfer the calls to descNo 2
+                         * which is the descriptor for P(# ... #)
+                         *)
+                        (*(ptIndex+1->ptIndex,0)->mch.newProto*)
+                        ptIndex+1->ptIndex (* not shure about the increment,
+                                            * but ptIndex is currently NOT used
+                                            * in mch.newProto
+                                            *)
+                    if);
+                    false->empty;
+                    L.clear;
+                    'T'->L.put; j->L.putInt; formNames[i][]->L.puttext;
+                    L[]->mch.export; 
+                    L[]->TL; L[]->mch.EmitProtoIndex
+           if)for);
+           (if i>1 then
+               (* index=1 does NOT represent a form, but the file name
+                * of the group - even in the case where the gorup has no
+                * attributes form.
+                *)
+               (0,0)->mch.newProto (* separator between prototypes *)
+           if)
+   for)#);
+   
+   (*************** emit the local path of this fragment *******************)
+   (* the path is relative to ~beta *)
+   (* (theGroup.FullName,'~beta')->thePathHandler.localPath->mch.asciiText;
+    * Now done i CODEmachine: emotProtoIndexTable
+    *)
+   
+   (************** emit possible dummy prototype T1FOO *********************)
+   (if emitT1 then
+       L.clear; 'T1'->L.putText; formNames[1][]->L.putText;
+       (L[],true)->gen.DefineGlobEntry;
+       (* 0-11 *) (for i:3 repeat 0->mch.declareLong for);
+       (* 12 *) 0->mch.declareWord;
+       (* 14 *) 0->mch.declareWord (*(gen.formLab[],L[])->mch.relativeAdr*)
+   if);
+
+   (******************* emit the prototypes *******************************)
+   (for i: protoIndexTable.range repeat 
+        (for j: protoIndexTable[i].pt.range repeat
+             (if protoIndexTable[i].pt[j][] <> NONE then
+                 protoIndexTable[i].pt[j].EmitProtoType
+             if);
+        for);
+   for);
+   (********* emit final BETA_data3 label, finish codegen, close BC file ****)
+   (if verboseLevel < verboseLevel.actions then                
+       '\n   Writing codefile:' -> infostream.puttext;
+   if);
+   mch.close
+#)
+

@@ -1,0 +1,286 @@
+ORIGIN '../asmlinkbody';
+INCLUDE '~beta/unixlib/unixfile';
+BODY '../UNIXasmlink'
+--asmState:descriptor--
+(# tmpCount: @integer #)
+--HasSharedLibs:descriptor--
+(#do common.switch[53]->value#)
+--asmlinklib: attributes ---
+stripPath:
+  (# T: ^text; pos: @integer
+  enter T[]
+  do thePathhandler.directoryChar->T.findAll(#do inx->pos #);
+     (if pos//0 then else (pos+1,T.length)->T.sub->T[] if)
+  exit T[]
+  #);
+ldUNIXtmpFile:
+  (# tmpArgs,TmpF: ^text
+  enter tmpArgs[]
+  do  (if asmState.tmpCount//0 then
+          'trap "echo :linking interrupted.; '->AFF.puttext;
+          rmTmpFiles;
+          '; exit 2" 2 9 10'->AFF.putLine;
+      if);
+     &text[]->TmpF[]; 
+     '${TMPDIR}/'->TmpF; (* NOTE wont work if concurrent compilations *)
+     objName[]->stripPath->TmpF.puttext; '.$$.'->TmpF.putText;
+     asmState.tmpCount+1->asmState.tmpCount->TmpF.putInt;
+     (false, TmpF[])->remove;
+     INNER;
+     TmpF[]->AFF.putText; 
+     ' \\\n\t' ->AFF.putText;
+     tmpArgs[]->AFF.putText;
+  exit tmpF[]
+  #);
+rmTmpFiles:
+  (#
+  do (* patter 'remove' could be used here *)
+     '/bin/rm -f '->AFF.puttext;
+     '${TMPDIR}/'->AFF.putText; objName[]->stripPath->AFF.putText; '.$$.*'->AFF.puttext;
+  #)   
+---cont: descriptor --
+(#
+do '\\'->AFF.put; AFF.newLine; ascii.ht->AFF.put;
+#)
+---header: descriptor ---
+(#
+do '#! /bin/sh '->AFF.putLine;
+   'BETALIB='->AFF.putText; BetaLib[]->AFF.putLine;
+   'export BETALIB'->AFF.putLine;
+   'CC=${CC-"gcc -O6"}\nexport CC'-> AFF.putLine;
+   'MACHINETYPE='->AFF.putText; targetMachine->AFF.putLine;
+   'export MACHINETYPE'->AFF.putLine;
+   'TMPDIR=${TMPDIR-/tmp}'->AFF.putLine;
+#)
+---AsmExt: descriptor ---
+(# do '-BETA-'->ext #) 
+---BinExt: descriptor ---
+(# 
+do '.o'->ext
+#)
+---LibExt: descriptor ---
+(#
+do '.so'->ext
+#)
+---JobExt: descriptor ---
+(#do '..job'->ext #)
+---ExeExt:descriptor---
+(* the extension for an executable file is empty 
+ * on most platforms except Windows NT 
+ *)
+(#do ''->ext #)
+---Echo: descriptor ---
+(#do 'echo '->AFF.puttext #)
+---Remove: descriptor ---
+(#
+do '/bin/rm -f '->AFF.puttext; name[]->AFF.putLine;
+#)
+---ChangeDirectory:doPart---
+do 'cd '->AFF.puttext; dir[] -> AFF.putline
+---AddCommand:doPart---
+do ' 2>&1' -> (cmd.copy).append -> AFF.putline;
+   'if [ $? -ne 0 ]; then echo BUILD failed. Exiting.; exit 1; fi' -> AFF.putline;
+---Make: descriptor ---
+(# 
+do (if first then
+       'BetaMake(){'                                            -> AFF.putLine;
+       '  dir=`dirname $1`; export dir'                         -> AFF.putLine;
+       '  file=`basename $1`; export file'                      -> AFF.putLine;
+       '  sh -c \'\\'                                           -> AFF.putLine;
+       '    cd $dir; \\'                                        -> AFF.putLine;
+       '    make -q -f $file MACHINETYPE=$MACHINETYPE 2>&1; \\' -> AFF.putLine;
+       '    if [ $? -ne 0 ]; then \\'                           -> AFF.putLine;
+       (if verboseLevel<verboseLevel.nothing then
+           '        echo make $dir/$file; \\'                   -> AFF.putLine;
+       if);
+       '        make -f $file MACHINETYPE=$MACHINETYPE 2>&1; \\'-> AFF.putLine;
+       '        if [ $? -ne 0 ]; then exit 1; fi; \\'           -> AFF.putLine;
+       '    fi; \\'                                             -> AFF.putLine;
+       '    exit 0\''                                           -> AFF.putLine;
+       '  if [ $? -ne 0 ]; then'                                -> AFF.putLine;
+       '     echo Make failed. Exiting.'                        -> AFF.putLine;
+       '     exit 1'                                            -> AFF.putLine;
+       '  fi'                                                   -> AFF.putLine;
+       '}'                                                      -> AFF.putLine;
+
+       'trap "echo make interrupted.; exit 2" 2 9 10' ->AFF.putLine;
+   if);
+   (* test makefile dependencies *)
+   'BetaMake '->AFF.putText; m[]->AFF.putLine;
+#)
+---resource: descriptor ---
+(##)
+---assemble: descriptor ---
+(##)
+--linkLibraries:descriptor--
+(* to be fixed *)
+(#
+do (if common.switch[53] then 
+       Libs.scan
+       (#
+       do (if thisElm.args.length//0 then 
+           else
+              'echo linking shared lib: '->AFF.puttext; thisElm.T[]->AFF.putLine;
+              
+              'ld -dy -G \\\n\t-o '->AFF.puttext;
+              thisElm.T[]->AFF.puttext; ' '->AFF.put;
+              thisElm.args[]->AFF.putline
+          if)
+   #)if)
+#)
+--contCh:descriptor--
+(#do '\\'->value #)
+--ldArgMax:descriptor--
+(#do 9000->value #)
+--ldTmp:descriptor--
+(#
+do tmpArgs[]
+     ->ldUNIXtmpFile(#do 'ld -r -o '->AFF.putText #)
+     ->TmpF[] 
+#)
+---link: descriptor ---
+(# betaLinkOpt: ^text; ldLibPath: ^text;
+   start: @integer;
+   e: @diskentry;
+do 'trap "echo :linking interrupted.; /bin/rm -f '->AFF.puttext;
+   objName[]->AFF.puttext;
+   '; exit 2" 2 9 10'->AFF.putLine;
+   
+   '$(BETALINKOPTIONS)'
+     ->expandEnvVar
+   (# defaultValue::<
+        (# f: @DiskEntry;
+           T: ^Text;
+        do '/lib/ld-linux.so.2' -> f.path;
+           (if f.exists then
+               ' /lib/ld-linux.so.2' -> T[];
+            else
+               ' /lib/ld-linux.so.1' -> T[];
+           if);
+           '-L/usr/X11R6/lib -m elf_i386 -dynamic-linker' -> envvarValue[];
+           T[] -> envvarValue.append;
+           ' -dc -dp -Bstatic -X' -> envvarValue.append;
+        #)
+   #)
+     ->betaLinkOpt[];
+   (if not common.switch[41] then ' -s '->betaLinkOpt.append if);
+   'ld '->AFF.puttext;
+   
+   ('$(LD_LIBRARY_PATH)'->expandEnvVar, ':') -> scanSearchPath
+   (# 
+   do (if path.length>0 then ' -L'->AFF.putText; path[]->AFF.puttext if)
+   #);
+   (*    Safety: The following has been replaced with the above
+    *    11/may/98.  Delete this when it has been tested properly.
+    * 
+    *    '$(LD_LIBRARY_PATH)'->expandEnvVar->ldLibPath[];
+    *    (if ldLibPath.length<>0 then 
+    *        {* parse ':' separated list of directories *}
+    *        1->start;
+    *        ldLibPath.reset;
+    *        ':'->ldLibPath.findAll
+    *        (#
+    *        do 
+    *           (if (inx-1>start) then 
+    *               ' -L'->AFF.putText; 
+    *               (start,inx-1)->ldLibPath.sub->AFF.putText;
+    *           if);
+    *           inx+1->start;
+    *        #);
+    *        (if start-1<ldLibPath.length then
+    *            ' -L'->AFF.putText; 
+    *            (start,ldLibPath.length)->ldLibPath.sub->AFF.putText;
+    *        if);
+    *    if);
+    * 
+    *)   
+   
+   ' '->AFF.put;
+   betaLinkOpt[]->AFF.putText; ' -o '->AFF.puttext;
+   asmlink.ExeExt->objName.copyAppend->AFF.puttext; 
+   ' '->AFF.put; cont;
+   
+   (if true//common.switch[29]//common.switch[30]//common.switch[31] then
+       ' /lib/mcrt0.o /lib/Fcrt1.o '->AFF.puttext
+    else
+       '/usr/lib/crt1.o' -> AFF.puttext;
+       ' /usr/lib/crti.o' ->AFF.puttext;
+       (if common.switch[13] (* full debug (betarun_debug.o) *) then
+           '/usr/lib/crtbegin.o' -> e.path;
+           (if e.exists then
+               ' /usr/lib/crtbegin.o'->AFF.puttext;
+           if);
+       if);
+   if);
+   cont;
+#)
+---linkObj:descriptor ---
+(#
+do lobj[]->ldA.putText; ' \\\n\t'->ldA.putText;
+#)
+---addBetaRun:descriptor---
+(* the following can be for most platforms except Windows NT *)
+(#
+do (if userDefinedBetaRun then
+       betaRun[]->linkObj
+    else
+       '.o'->betaRun.CopyAppend->linkObj
+   if)
+#)
+--asmlinkdynamic:descriptor--
+(#
+do (if common.switch[17] then
+       '-Bstatic \\\n\t'->ldA.puttext 
+    else
+       '-Bdynamic \\\n\t'->ldA.puttext 
+   if);
+#)
+---libraries: descriptor ---
+(# e: @diskentry
+do (if common.switch[17] then
+       (* static X libraries requires -lSM -lICE *)
+       ' -lSM -lICE' -> ldA.puttext;
+   if);
+   (if true (* common.switch[41] {* not nodebug *} *) then 
+       (* We have to include this all the time: Even when using -d.
+        * The reason is that when a Personal Edition is sent to
+        * people, both betarun.o and betarun_v.o will in fact be
+        * betarun_pe.o, which now refers the dlXXX symbols.
+        * So if we do not include -ldl, people will get
+        * unresolved symbols when using 'beta -d'.
+        *)
+       ' -export-dynamic -ldl'->ldA.puttext
+   if);
+   ' -lm -lc'->ldA.puttext;
+   (if common.switch[13] (* full debug (betarun_debug.o) *) then
+       '/usr/lib/crtend.o' -> e.path;
+       (if e.exists then
+           ' /usr/lib/crtend.o' -> ldA.putText;
+       if);
+   if);
+   ' /usr/lib/crtn.o' -> ldA.puttext;
+   ' 2>&1' -> ldA.puttext;
+   ldA.newline;
+#)
+---linkTrailer: descriptor ---
+(# 
+do (* "case ..." MUST be the first thing done here.
+    * It tests status of preceding link.
+    *)
+   'case $? in'->AFF.putLine;
+   '0)'->AFF.putText; AFF.newline;
+   (if verboseLevel<=verboseLevel.actions then
+       'echo Object program on file: '->AFF.puttext;
+       '  '->AFF.puttext; 
+       objname[]->AFF.putLine;
+   if);
+   ';;'->AFF.putLine;
+   '*)'->AFF.putLine; 
+   '   /bin/rm -f '->AFF.PutText; objName[]->AFF.putLine;
+   'esac'->AFF.PutLine;
+   (if asmState.tmpCount<>0 then 
+       rmTmpFiles; AFF.newLine
+   if);
+#)
+---trailer: descriptor ---
+(# #)

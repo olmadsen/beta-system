@@ -1,0 +1,189 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<HTML>
+
+<HEAD>
+<TITLE>Windows PE COFF specifics</TITLE>
+<LINK REV="made" HREF="mailto:datpete@daimi.aau.dk">
+</HEAD>
+
+<BODY>
+<H1>Windows PE COFF specifics</H1>
+
+<H2><A NAME="intro">Introduction</A></H2>
+
+The object files for targets <CODE>nti_ms</CODE> and
+<CODE>nti_gnu</CODE>
+are in <EM>Portable Executable COFF file format</EM>.
+A general description of this can be found in 
+<A HREF="#pecoff">[PECOFF]</A>.
+
+<H2><A NAME="files">File organization</A></H2>
+
+The files constituting the PE COFF specifics are 
+(paths relative to directory GENERATOR):
+
+<P>
+<TABLE BORDER CELLPADDING=5 CELLSPACING=0>
+<TR>
+<TD><CODE>COFF/coff_ms.bet</CODE></TD>
+<TD>Definitions of data types and constants corresponding to the
+IMAGE specific stuff in <CODE>WINNT.H</CODE>. Most data types and
+constants are aliases to the general COFF definitions in 
+<CODE>COFF/coff.bet</CODE>.
+</TD>
+</TR>
+
+<TR>
+<TD><CODE>NTI/WIN32coff.bet</CODE></TD>
+<TD>
+File binding COFF specific SLOTs in <CODE>INTEL/INTELmstate.bet</CODE>
+and <CODE>INTEL/INTELBmachine.bet</CODE>. For instance the emission of
+the image as a PE COFF file is in here.
+</TD>
+</TR>
+
+</TABLE>
+
+<H2>Special Codegeneration Issues</H2>
+
+<H3><A NAME="relocation"></A>Relocation types</H3>
+There are only three relocation types in use:
+<P>
+<TABLE BORDER CELLPADDING=5 CELLSPACING=0>
+<TR>
+<TH ALIGN=CENTER VALIGN=CENTER>BETA abstraction</TH>
+<TH ALIGN=CENTER VALIGN=CENTER>PE COFF relocation type</TH>
+</TR>
+<TR><TD><TT>entryDefMark</TT></TD><TD><TT>IMAGE_REL_I386_ABSOLUTE</TT></TD></TR>
+<TR><TD><TT>wordMark</TT></TD><TD><TT>IMAGE_REL_I386_DIR32</TT></TD></TR>
+<TR><TD><TT>jmpMark</TT></TD><TD><TT>IMAGE_REL_I386_REL32</TT></TD></TR>
+<TR><TD><TT>dataMark</TT> (actually not used for PE)</TD><TD><TT>IMAGE_REL_I386_DIR32</TT></TD></TR>
+<TR><TD><TT>codeMark</TT> (actually not used for PE)</TD><TD><TT>IMAGE_REL_I386_DIR32</TT></TD></TR>
+<CAPTION ALIGN=BOTTOM><EM>PE COFF relocation types</EM></CAPTION>
+</TABLE>
+
+<H3><A NAME="jmpMark">Off-by-4 patch needed for jmpMark</A></H3>
+
+In emitCodeToFile.EmitText a special hack is performed for PE COFF:
+The value at the use site must be 4 greater on windows than on linux
+to make the Microsoft linker happy. This is fixed by scanning through
+all relocations, and finding all places marked with jmpMark, and then
+adding 4 to the (platform independently generated) value at the use site.
+
+<H3><A NAME="local_calls">Resolving Local Calls</A></H3>
+Compile-time resolving of calls
+to local entry points are needed for SDK=gnu on
+NTI.
+<P>
+This is implemented in <CODE>INTEL/INTELBmachine</CODE>:
+Added four utilitypatterns (emitCallLocal, emitCallExtern,
+emitJmpLocal, emitJmpExtern) to mstate.
+<P>
+A mechanism much like the resolving of LocalLabs is
+added to "entrypoints" (defined in machine.bet) via SLOTS.
+No new SLOTS needed.
+In short the pattern entryPoints.getAddr returns the address
+of an entrypoint if it is known or 0 if not known.
+In the latter case the usesite is remembered, and when 
+entryPoints.addDef is later called, the various use sites are
+patched up with the now known address of the entry point.
+This mechanism could easily be lifted into machine.bet with
+only the patching part being in MD fragments.
+It will generate less relocation entries for the linker
+to handle (SGI and PPCMAC would probably benefit from this).
+<P>
+The implementation caused about 10% less relocation symbols
+to be generated for TST.
+Also this mechanism allowed me to optimize short local
+jumps to use jmp_short instruction.
+<P>
+A particularly annoying problem was discovered during
+implementation of this mechanism: EntryPoints is a hashtable.
+The following construct
+<PRE>
+T[]->entryPoints.find
+       (# 
+          notFound::(# do E[]->entrypoints.insert #)
+       #)
+</PRE>
+
+can make the hashtable become inconsistent if T[] is later
+reused for another text. USE T.COPY IN THESE CASES!!!
+
+
+<H3><A NAME="IMAGE_SYM_DTYPE_FUNCTION">External functions and the IMAGE_SYM_DTYPE_FUNCTION attribute</A></H3>
+
+External undefined <EM>functions</EM> in PE-COFF object files need to be
+declared as IMAGE_SYM_DTYPE_FUNCTION, in order for DLL versioning to
+work. E.g. the following program fails to run on machines without
+comctl32.dll with version > 4.70, although the test should ensure
+this.  The problem is that the refered function (which is present in
+the new versions of the DLL, but not in the old) causes runtime link
+errors if the function is not attributed as IMAGE_SYM_DTYPE_FUNCTION.
+This is fixed in WIN32coff.bet.  
+
+<PRE>
+
+ORIGIN '~beta/guienv/v1.6/guienv';
+INCLUDE
+'~beta/guienv/v1.6/preliminary/listview/private/winnt/listview_win32Body'
+'~beta/win32lib/v1.6/commctrl';
+
+-- program: descriptor --
+(# dllMajor, dllMinor: @shortint;
+   getDllVersion:
+     (# 
+     do (@@dllMajor,@@dllMinor) -> GetComCtlVersion;
+     #);
+   lpInitCtrls: @INITCOMMONCONTROLSEX_ext;
+do getDllVersion;
+   (if (dllMajor>=4) and (dllMinor>=70) then
+       sizeOf_INITCOMMONCONTROLSEX_ext->malloc->lpInitCtrls.ptr;
+       sizeOf_INITCOMMONCONTROLSEX_ext -> lpInitCtrls.dwSize;
+       ICC_LISTVIEW_CLASSES -> lpInitCtrls.dwICC;
+       lpInitCtrls.ptr -> InitCommonControlsEx;
+       lpInitCtrls.ptr -> free;
+    else
+       InitCommonControls;
+    if);
+#)
+</PRE>
+
+
+<H2><A NAME="bibliography">Bibliography</A></H2>
+
+<DL>
+
+<DT><A NAME="coffbook">[COFFBOOK]</A>
+<DD>
+<EM>Understanding and Using COFF - UNIX Common Object File Format</EM><br>
+by Gintaras R. Gircys, O'Reilly &amp; Associates, Inc, 1988<BR>
+<P>
+
+<DT><A NAME="pecoff">[PECOFF]</A>
+<DD>
+<EM><A HREF="http://premium.microsoft.com/isapi/devonly/prodinfo/msdnprod/msdnlib.idc?theURL=/msdn/library/specs/pecoff/microsoftportableexecutableandcommonobjectfileformatspecification.htm">
+Microsoft Portable Executable and Common Object File Format Specification</A></EM><br>
+<P>
+
+<DT><A NAME="COFFPPC">[COFFPPC]</A>
+<DD>
+<I><A
+HREF="http://www.mot.com/SPS/MCORE/EVScdrom/diab/data/html/linkppc/link5.htm#1211101">Common
+Object File Format (COFF)(PowerPC Linker)</A></I></DD>
+</DT>
+
+<DT><A NAME="XCOFF">[XCOFF]</A>
+<DD>
+<I><A
+HREF="http://www.daimi.aau.dk/~devise/Internal/beta/PDF/PowerOpen.pdf">PowerOpen ABI - Application Binary Interface,
+Big Endian 32 Bit Hardware Implementation, June 30, 1994</A></I>
+(XCOFF specification, local PDF file).
+</DD>
+</DT>
+
+</DL>
+
+</BODY>
+</HTML>
+

@@ -1,0 +1,430 @@
+ORIGIN '~beta/betaast/index';
+INCLUDE '../CONTROL/system'
+        '../GENERATOR/imageread'
+        'imagepair'
+        '~beta/toollibs/labelnametable/name_to_address_table';
+lib_def 'dynamiccompiler' '../../lib';
+(* '../compiler' - otherwise lib_def is confused for sgi *)
+BODY 'private/dynlibbody';
+-- lib: Attributes --
+contList: list (#  #);   
+
+-- AstInterfaceLib: Attributes --
+(***************** Environment for dynamic BETA compiler ***************
+ * Preliminary version; changes are needed before
+ * a public version can be made; especially the interface 
+ * has not been stabilized
+ * 
+ * --------------
+ * OLM: 17/5/98:
+ * Added a number of changes to facilitate binding of various compiler
+ * exceptions from applications, especially for providing feedback
+ * for compilation and loading of files for e.g. Frigg.
+ * The changes are mentioned here, but should be added to the 
+ * documentation below.
+ * - A pattern DynamicTranslate has been addded. It is a subpattern
+ *   of Translate. This makes it possible to call DynamicTranslate and
+ *   thereby bind exceptions and notifications
+ * - ActivateCompiler is now a subpattern of DynamicTranslator
+ *   with all exceptions bound. A new virtual Report may be bound
+ *   to terminate the compilation in case of errors.
+ * - DynamicTranslate and ActivateCompiler have notifications
+ *    - addedFragment  : a group is added to the dependency graph;
+ *    - addedTranslate : a group is scheduled for translation
+ *    - checkedFragment: a group has been checked
+ *    - codegenFragment: a group has been code generated
+ *   These notifications may be used to provide feedback during
+ *   translation. E.g.: AddedTranslate is called for each fragment that
+ *   is going to be called. codegenFragment us called when a 
+ *   fragment has been compiled.
+ * - The load part of CompileAndLoad has been defined as a new pattern
+ *   LoadFiles. CompileAndLoad now calles ActivaeCompiler and LoadFiles.
+ *   LoadFiles has a notification
+ *   - LoadingFile that is called when a file is loaded. The parameters
+ *     is the fileName, the current fileNo and the total number of files
+ *     to be loaded.
+ * - See LoadFileButton in dynenv for an exmple of how to use
+ *   ActivateCompiler and LoadFilkes with feedback
+ * ------------------
+ * 
+ * 
+ * Defines an AST interface attribute
+ * 
+ *   DynamicCompiler: compiler(# ... #);
+ * 
+ * Usage
+ *   MPS: @ASTinterface;
+ *   DC: @ MPS.DynamicCompiler(# initDyn:: (# ... #) #)
+ * 
+ * Important concepts:
+ * 
+ * ImagePair
+ * ---------
+ * - an ImagePair holds data, code and relocation information for a fragment
+ * - see file imagepair.bet
+ * 
+ * Compiler instance
+ * -----------------
+ * - DC is a subpattern of pattern 'compiler' which is the 
+ *   standard BETA compiler 
+ * - a dynamic compilation may be invoked on DC
+ *   by the operations DC.ActivateCompiler or DC.DynamicTranslate
+ * 
+ * Dependency Graph (DG)
+ * ---------------------
+ * - DC  holds a global dependency graph;
+ * - the DG is kept between each call of ActivateCompiler;
+ * - fragments met during a call are added to the DG
+ *   if they are not already in the graph.
+ * 
+ * Local fragment list
+ * -------------------
+ * - DC has an object, fragList, where fragments added to the 
+ *   DG during a call of ActivateCompiler are added.
+ * - after a call to ActivateCompiler, fragList thus holds all new
+ *   fragments added by this call of ActivateCompiler
+ * 
+ * Local imagePair list
+ * --------------------
+ * - DC has an object, imageList
+ * - after a call of ActivateCompiler, imageList holds imagePairs for
+ *   all new fragments in fragList
+ * 
+ * Initialization
+ * --------------
+ * - DC must be initialized by calling DC.initDyn
+ * - further initialization may be needed to initialize the DG with
+ *   the fragments of this executable:
+ *   > 'this executable' is the linked BETA program containing DC
+ *     and currently being executed. The name of this executable
+ *     may be obtained by
+ *          1 -> Arguments -> thisExecutable[]
+ *     where
+ *          thisExecutable: ^text
+ *   > By calling
+ *          (thisExecutabel[],none) -> DC.ActivateCompiler -> (OK,IM[])
+ *     the DG will be initialized with all fragments belonging
+ *     to (the extent of) this executable.
+ *     Subsequent calls of ActivateCompiler will therefore only 
+ *     add new fragments not in this executable.
+ * 
+ * Loading BETA object files
+ * -------------------------
+ * - Let fname: ^text be the name of a BETA fragment file
+ * - A call
+ *     fname[] -> DC.CompileAndLoad -> (OK,fnameIm[])
+ *   will
+ *   > call ActivateCompiler for fname and compile the extent of fname;
+ *     if the extent of fname is already compiled, no fragments are
+ *     compiled, but new fragments met during the call will be added 
+ *     to fragList
+ *   > all fragments in fragList will be loaded and relocated
+ *     fnameIm[] is the imagePair for fname
+ * 
+ * Executing Dynamically linked Descriptors
+ * ----------------------------------------
+ * - Let IMP: ^ImagePair be obtained from ActivateCompiler
+ * - A call
+ *       'foo' -> IMP.namedOff -> ProrotypeAddress
+ *   or
+ *       inx -> IMP.indexedOff -> PrototypeAddress
+ *   returns the address of the prototype of 'foo' or the prototype
+ *   with index 'inx' (note: the index numbering is quite arbitrary)
+ * - Let org: ^object be an object reference
+ * - A call
+ *       (obj[],PrototypeAdress) -> DC.MakeStruc -> F##
+ *   creates a structure object with origin obj and prototype
+ *   at address prototypeAddress
+ *   (MakeStruc is defined in linkobject.bet)
+ * - F may now be used as any other prototype
+ * 
+ * - ExecuteObject creates a Struc for prototype no 1 and executes it
+ * 
+ * Contexts: Fragments with origin in arbitrary object/fragments
+ * -------------------------------------------------------------
+ * Consider a fragment with an object-descriptor D
+ *    foo.bet:
+ *    ORIGIN ...;
+ *    INCLUDE ...;
+ *    ----x:A:---
+ *    ....
+ *    D: (# i: @integer; ... do ... #)
+ *    ....
+ * (D can be singular as well as pattern-defined)
+ * 
+ * Let R be a reference to an instance of D.
+ * 
+ * Let the text T hold an object-descriptor
+ *    '(# do i -> putint #)'
+ * 
+ * Assume that T is to be compiled and executed with R as origin.
+ * 
+ * A fragment group, bar.bet, of the following form must be created
+ *     bar.bet:
+ *     ORIGIN 'foo'
+ *     ---dummy:attributes---
+ *     bar: (#do i -> putint #)
+ * 
+ * To compile bar, the compiler must be called in the following way
+ *    ('bar',R[]) -> DC.ActivateCompiler -> error;
+ * 
+ * Note: the descriptor D has NO SLOT. The fragment name (here 'dummy')
+ * is therefore ignored by the compiler, since R[] <> NONE.
+ * (if R[] = NONE, the fragment MUST obey the usual rules
+ * where there must be a slot corresponding to the froms)
+ *)
+abstractDynamicCompiler: Compiler
+  (# 
+     DynamicTranslate:< Translate
+       (#
+          init::<  (#  do fragList.clear; imageList.clear; INNER init #);
+          addedFragment::< 
+            (# 
+            do
+               (if false then 'Added: '->puttext; fullFN[]->putline if);
+               fullFN[]->fragList.append;
+               INNER
+            #);
+          addedToJobFile::<  (#  do (fullFN[],kind)->jobList.add; INNER #)
+       #);
+     fragList: @contList (# element:: Text #);
+     jobList: @hashtable
+       (#
+          element::  (# fn: ^text; kind: @integer #);
+          hashFunction::  (#  do e.fn[]->H.hash->value #);
+          equal::  (#  do left.fn[]->right.fn.equal->value #);
+          add:
+            (# fn: ^text; kind: @integer; e: ^element
+            enter (fn[],kind)
+            <<SLOT dynlib_jobList_add:DoPart>>
+            #);
+          init: (#  do H.init #);
+          H: @honeyMan
+       #);
+     trace,traceLoad: @boolean;
+     LoadFile:
+     (* Loads a BETA object file and return the corresponding ImagePair
+      * where the code and data images are represented as instances
+      * of inProcessFileImage
+      *)
+       (# fn: ^text; IM: ^imagePair
+       enter fn[]
+       <<SLOT dynlib_LoadFile:DoPart>>
+       exit IM[]
+       #);
+     GetImagePair:
+     (* Returns an ImagePair consisting of the last compiled fragment.
+      * If outProcess is
+      * true:  the code and data images are represented as instances
+      *        of OutProcessImage
+      * false: the code and data images are represented as instances
+      *        of InProcessImage
+      * may be obtained. 
+      *)
+       (# outProcess: @boolean; IM: ^imagePair
+       enter outProcess
+       <<SLOT dynlib_GetImagePair:DoPart>>
+       exit IM[]
+       #);
+     LoadFiles:
+       (#
+          LoadingFile:<
+            (#
+               thisFN: ^text;
+               thisNo,noOfFiles: @integer;
+               
+            enter
+            (thisFN[],thisNo,noOfFiles)
+            do INNER
+            #);
+          fname: ^text;
+          fNameIm: ^ImagePair;
+          
+       enter fname[]
+       <<SLOT dynlib_loadFiles:DoPart>>
+       exit fNameIm[]
+       #);
+     ExecuteObject: (* Load and execute IM with origin theOrigin[] *)
+       (# theOrigin: ^object; IM: ^ImagePair; R: ^object; 
+       enter (theOrigin[],IM[])
+       <<SLOT dynlib_ExecuteObject:DoPart>>
+       exit R[]
+       #);
+     StripBetaExtension:
+     (* strips '.bet', '.ast' or 'astL' from fname *)
+       (# fname,oname: ^text
+       enter fname[]
+       <<SLOT dynlib_StripBetaExtension:DoPart>>
+       exit oname[]
+       #);
+     mkObjectFileName:
+     (* converts beta file name 'xxxx/hello' into 'xxxx/sun4s/hello' *)
+       (# fname,oname: ^text
+       enter fname[]
+       <<SLOT dynlib_mkObjectFileName:DoPart>>
+       exit oname[]
+       #);
+     MakeStruc:
+       (#
+          theOrigin: ^object;
+          PTadr: @integer;
+          F: ##Object;
+          
+       enter (theOrigin[],PTadr)
+       <<SLOT dynlib_MakeStruc:DoPart>>
+       exit F##
+       #);
+     InitDyn:< (* initializes dynamic environment *)
+       (# T: ^text <<SLOT dynlib_InitDyn:DoPart>> #);
+     imageList: @contList
+       (# element:: imagePair #);
+     NT: @name_to_address_table;
+     info,msg: ^stream
+  #);
+valhallaDynamicCompiler: abstractDynamicCompiler
+  (#
+     dynamicTranslate:: 
+       (#
+          init::< 
+            (# 
+            <<SLOT valhallaDC_init:DoPart>>
+            #);
+          contextIndex: ^ASTindex;
+          contextFG: ^FragmentGroup
+       enter (contextIndex[],contextFG[])
+       #);
+     activateCompiler: dynamicTranslate
+       (#
+          Report:<
+            (# msg: ^text
+            enter msg[]
+            do msg[]->messagestream.putline; true->error; INNER
+            #);
+          MsgException::<  (#  do msg[]->Report #);
+          TransAccessException::<  (#  do msg[]->Report #);
+          TransCreateDirException::<  (#  do msg[]->Report #);
+          NoSpaceException::<  (#  do msg[]->Report #);
+          MPSException::<  (#  do msg[]->Report #);
+          notExistingException::<  (#  do msg[]->Report #);
+          parseException::<  (#  do msg[]->Report #);
+          jobFileException::<  (#  do msg[]->Report #);
+          doubleFormException::<  (#  do msg[]->Report #);
+          fragmentException::<
+          (* Note that the group is closed here.
+           * Sif and other tools may NOT want to do this!
+           *)  (#  do msg[]->Report #);
+          propertyException::< 
+            (# 
+            do
+               (if warning then
+                   msg[]->messagestream.putLine; true->continue
+                else
+                   CloseGroup; msg[]->Report
+               if)
+            #);
+          SystemException::<  (#  do msg[]->Report #);
+          error: @boolean
+       exit error
+       #)
+  #);
+DynamicCompiler: abstractDynamicCompiler
+  (#
+     DynamicTranslate::
+     (* Calls the BETA compiler on the fragment rootFragment;
+      * (rootFragmnet is the enter parameter of Translate)
+      * normal compilation, including dependency analysis, checking,
+      * and code generation.
+      * Initially fragList and imageList are cleared;
+      * All new fragments meet during dependency analysis are added to 
+      * the fragList and corresponding images are added to imageList.
+      * - context is a reference to a possible origin OBJECT
+      *   for descriptors in rootFragment. See the above part on 
+      *   'Context' above.
+      *   Origin[] may be NONE in which case it is ignored.
+      * A tailorable and more general version may be needed.
+      * The folloiwng notifications may be bound
+      * - addedFragment  : a group is added to the dependency graph;
+      * - addedTranslate : a groud is scheduled for translation
+      * - checkedFragment: a gorup has been checked
+      * - codegenFragment: a groupd has been code generated
+      *         
+      *) 
+       (#
+          init::<  (#  <<SLOT dynlib_DynamicTranslateInit:DoPart>> #);
+          context: ^object
+       enter context[]
+       #);
+     ActivateCompiler:
+      DynamicTranslate
+     (* A subpattern of DynamicTranslate that binds all exceptions 
+      * and terminates if there are errors during  compilation;
+      * otherwise identical to DynamicTranslate.
+      * When calling ActivateCompiler, 
+      *    bind Report to terminate compilation
+      * Unbound notifications that may be futher bound:
+      *   AddedFragment
+      *   AddedTranslate
+      *   CheckedFragment
+      *   CodegenFragment
+      *)
+       (#
+          Report:<
+            (# msg: ^text
+            enter msg[]
+            do msg[]->messagestream.putline; true->error; INNER
+            #);
+          (************ bound exceptions ****************)
+          MsgException::<  (#  do msg[]->Report #);
+          TransAccessException::<  (#  do msg[]->Report #);
+          TransCreateDirException::<  (#  do msg[]->Report #);
+          NoSpaceException::<  (#  do msg[]->Report #);
+          MPSException::<  (#  do msg[]->Report #);
+          notExistingException::<  (#  do msg[]->Report #);
+          parseException::<  (#  do msg[]->Report #);
+          jobFileException::<  (#  do msg[]->Report #);
+          doubleFormException::<  (#  do msg[]->Report #);
+          fragmentException::<
+          (* Note that the group is closed here.
+           * Sif and other tools may NOT want to do this!
+           *) 
+            (# doCloseGroup:< booleanValue (#  do true->value; INNER #)
+            do (if doCloseGroup then CloseGroup if); msg[]->Report
+            #);
+          propertyException::< 
+            (# 
+            do
+               (if warning then
+                   msg[]->messagestream.putLine; true->continue
+                else
+                   CloseGroup; msg[]->Report
+               if)
+            #);
+          SystemException::<  (#  do msg[]->Report #);
+          error: @boolean
+       exit error
+       #);
+     CompileAndLoad:
+     (* Calls ActivateCompiler and load all new 
+      * fragments and images met during compilation;
+      * the load part should perhaps be split into a separate operation.
+      *)
+       (# fname: ^text; OK: @boolean; fNameIm: ^ImagePair
+       enter fname[]
+       <<SLOT CompileAndLoad:DoPart>>
+       exit (OK,fNameIm[])
+       #)
+  #);
+dumpObject:
+  (# start,length: @integer
+  enter (start,length)
+  do
+     'Object: '->puttext;
+     start->putHex;
+     newline;
+     (for i: length repeat
+       (%getLongAt (start+(i-1)*4))->putHex;
+       newline
+     for)
+  #);
+  
+

@@ -1,0 +1,764 @@
+ORIGIN 'checkerdopart';
+LIB_ITEM 'betacompiler';
+INCLUDE 'origin'
+        'checklib';
+-- LocalSearch: DoPart --
+do (# node: @ ASTindex;
+      inSuper: @boolean;
+      pn1: @integer;
+      loopCheck: @boolean;
+      prefixLoop:
+        (# b: @boolean;
+           d,pref: @ASTindex;
+           PL: [4] ^ASTindex;
+           top: @integer
+        enter (d,pref)
+        do &ASTindex[]->PL[1][];
+           d->PL[1->top];
+           loop:
+             (# 
+             do pref.son->SetUp->(dclRef,d);
+                (for i: top repeat
+                     (if PL[i]->d.equal then
+                         (pref,113)->WE.SemError; true->b; leave Loop
+                     if)                     
+                for);
+                (if (top+1->top) > PL.range then PL.range->PL.extend if);
+                &ASTindex[]->PL[top][];
+                d->PL[top];
+                d.son->pref;
+                (if pref.label = gram.prefix then restart loop if)
+             #)
+        exit b
+        #)        
+   do Search:
+        (# 
+        do (if ctst then
+               165->trace(#do 'localSearch-X:'->xT; desc[]->xA#)
+           if);
+           desc.dclRoot->node;
+           (if ctst then
+               165->trace(#do 'localSearch:'->xT; node[]->xA#)
+           if);
+           (* node is the nameTree of desc;
+            * search subject in nameTree (node)
+            *)
+           (if (*node.index< 0*) not node.isNull then
+               Scan:
+                 (#
+                 do (if ctst then 165 -> trace(# do node[] -> xA #)if);
+                    (if ((subject,node(*->dclRef*))->theCMP)
+                  // less then
+                     (* since we are in the same ast, it is only
+                      * necessary to assign the index; the frag[]
+                      * part need not be assigned
+                      *)
+                     node.left -> node; 
+                     (*
+                     node.frag.a[node.index+offset.attribute+1]
+                       -> tos'%getShort[0]'
+                       -> tos'%shiftLeft[1]'
+                      -> node.index;
+                      *)
+                     (if (*node.index<>0*) not node.isNull then restart Scan if)
+                  // greater then 
+                     node.right -> node;
+                     (*
+                     node.frag.a[node.index+offset.attribute+1]
+                       -> tos'%getShort[1]'
+                       -> tos'%shiftLeft[1]'
+                      -> node.index;
+                      *)
+                     (if (*node.index<>0*) not node.isNull then restart Scan if)
+                  else
+                     (*equal*)
+                     true->isFound; 
+                     node -> dclRef;
+                     leave Search
+                 if)#)
+           if);
+           (* Not found, try possible libraries *)
+           desc.Lib->node;
+           (if (*node.index <> 0*) not node.isNull then
+               Desc
+                 -> theLibCash.Scan
+               (# 
+               do (*171->trace(#do 'InLib: '->xT;thisForm.FullName->xT #);*)
+                  (subject[],thisForm.theGSForm)
+                    -> &LocalSearch
+                    -> (isFound,pn1,dclRef);
+                  (********************^^^^*********)
+                  (if isFound then leave Search if)                   
+               #)
+           if);
+           (* not found in local list. Try prefix *)
+           desc.son->node;
+           (if node.label = gram.prefix then (* pref=prefix[D] *)
+               (if not LoopCheck and ((desc->sematt.descKind) = sematt.unDefined)
+                   then (* check that no loops occur during checking *)
+                   (if (desc,node)->PrefixLoop then leave Search if)
+               if);
+               ;
+               true->loopCheck;
+               pn+1->pn;
+               (*(node.son->&getDesc->desc;*)
+               node.son->&SetUp->(dclRef (* dummy here *),desc (*overwrite*));
+               (* prefix must be objectdescriptor; can be other in case of
+                * semantic errors in program *)
+               (if desc.label = gram.objectDescriptor then restart Search if)
+            else
+               (if not inSuper then
+                   true->inSuper; superObject->desc; restart Search
+                else
+                   errorName->dclRef; (* In case not found *) 
+               if)
+           if)
+   #)#)    
+
+-- SetUp: Descriptor --
+(# (* set up *)
+   HandleOrigin:
+   (* For groups of the form:
+    *    ---WL:attributes---
+    *       TE: AS(# open:< (# CR::< (# do <<SLOT MTCE: descriptor>> #)#)#)
+    *    ---MTCE:descriptor---
+    *       (#do inner CR #)
+    * MTCE may be checked before WL. When inner CR then is checked search
+    * is peformed in CR, AS and TE. Since these descriptors have not
+    * been checked, the implict virtual prefix has not been setup. This
+    * will cause semantic errors.
+    * This pattern therefore checks if origin has been checked
+    * and otherwise checks all enclosing descriptors with virtual
+    * elements
+    *)
+     (# origin: ^ASTindex
+     enter origin[]
+     do (if ctst then
+            165->trace(# do 'HandleOrigin:'-> xT; origin[] -> xA #);
+        if);
+        (if origin.label = gram.ObjectDescriptor then
+            (* 16/10/00: origin may a labelled imp - 
+             * we MUST reconsider this case;
+             * discovered while testing newindex
+             *)
+            (if (origin->sematt.descKind) = sematt.undefined then
+                (* NOT yet checked *)
+                (# N: ^ASTindex; D: [2] ^ASTindex; top: @integer
+                do &ASTindex[]->N[];
+                   origin->N;
+                   L:
+                     (# F: @ASTindex
+                     do (if (top+1->top) > D.range then D.range->D.extend if);
+                        N[]->D[top][];
+                        N.father->F;
+                        (*165->trace(#do 'father:'->xT; F[] -> xA #);*)
+                        (if not F.isNull then
+                            (if F.label
+                             // gram.bindingDecl // gram.finalDecl then
+                                F[]->EncDesc->N[]; restart L; 
+                            if)
+                        if)
+                     #);
+                   (for i: top repeat
+                        (*165->trace(#do 'Check:'->xT; D[top-i+1][]->xA #);*)
+                        (D[top-i+1][],false,none ,- 1)->&ChkForm
+                   for)
+                #)
+        if)if)
+     #);
+   tryCash:
+     (# cashInx: @integer; cashRef: ^CashHandler.elm; on1: @integer
+     do (*173->trace(#do 'TryCash:'->xT; N.getText->xT #);*)
+        (if (origin.descNo->cashInx) = 0 then (* skip *)
+            (*173->trace(#do 'No Cash.'-> xT #);*)
+            CashHandler.new->CashInx->origin.descNo
+        if);
+        (if not common.switch[72] then
+            (*173->trace(#do 'USing cashHandler'->xT #);*)
+            N[]->Cashhandler.R[cashInx].find->(cashRef[],found); 
+            (*else
+             173->trace (#  do 'TryCash: CashHandler is avoided'->xT #) *)
+        if);
+        (if found then
+            (*173->trace
+            (#
+            do 'Found in cash.'-> xT;
+               'Should not happend during dynamic compilation'
+                     -> xT
+             #);*)
+            CashRef.dclRef -> dclRef;
+            CashRef.on+on -> on;
+            CashRef.pn -> pn
+         else
+            (*173->trace(#do  'Not in cash.'->xT #);*)
+            origin.xOrigin->origin;
+            (*173
+              ->trace
+                (# 
+                do 'TryCash:After origin.xOrigin->origin;'->xT;
+                   origin[]->xA
+             #);*)
+            (* origin of this fragment *)
+            (if not origin.isNull then
+                (if origin.label <> gram.objectDescriptor then
+                    origin.slotOrigin->origin
+                    (*else
+                     * 173->trace (#  do 'TryCash:Dynamic'->xT #)*)
+                if);
+                origin[]->HandleOrigin;
+                on->on1;
+                N[]->Find;
+                    (*173->trace(#do 'Found?='->xT; found->xB #);*)
+            if);
+            (* if not found, then errorname is inserted in cash; this is
+             * necessary to ensure that cashRef.dclRef is well defined *)
+            (if not common.switch[72] then
+                &ASTindex[]->cashRef.dclRef[];
+                dclRef->cashRef.dclRef;
+                on-on1->cashRef.on;
+                pn->cashRef.pn;
+               (* 
+             else
+                173->trace(#do 'TryCash: CashHandler is avoided'->xT #)*)
+            if);
+            (if not found then (* name not declared *)
+                  (# T: ^text; descRef: @ASTindex
+                  do N.gettext->T[];
+                     (if 'origin'->T.equalNCS then
+                         N.origin->descRef;
+                         (N[],descRef[])
+                           -> AddOrigin
+                           -> (dclRef,descRef);
+                         0->on->pn;
+                         true->found->wasOrigin
+                      else
+                         (*(N,2)->&WE.SemError; *)
+                         (N[],false)-> WE.MakeError
+                         (# 
+                         do '"' -> XT; N[] -> XA;
+                            '" is not declared' -> XT
+                         #);
+                         (on-1,0)->max->on; 
+                     if)
+                  #)
+            if)
+        if)
+     #);
+   MainPartSearch:
+     (# N,mainP,pref,att,enterP,doP,exitP: ^ASTindex;
+        found: @boolean; pn: @integer; dclRef,D: @ASTindex;
+     enter(N[],mainP[])
+     do (if ctst then
+            165->trace(#do 'mainPartSeach;'->xT; N[]->xA; mainP[]->xA#)
+        if);
+        mainP[] 
+          -> sematt.mainPartSons 
+          -> (D,pref[],att[],enterP[],doP[],exitP[]);
+        find:
+          (* here we just perform a linear search;
+           * we lack an attribute for save dclRoot
+           *)
+          att -> scanList
+        (# dcl: @ASTindex; theCMP: @CMP
+        do currentNode -> dcl;
+           errorName -> dclRef; (* in case not found *)
+           dcl.son -> scanList
+           (# 
+           do (if ctst then
+                  165->trace
+                  (# N: @ASTindex do 'try:'->xT;currentNode->N;N[]->xA#)
+              if);
+              (if ((N,currentNode) -> theCMP) = equal then
+                  currentNode -> dclRef;
+                  true -> found;
+                  leave find
+              if)
+        #)#);
+        (* NO search in possible lib slots is performed *)
+     exit(found,pn,dclRef)
+     #);
+   Find: (* calls TryCash which calls Find, i.e. recursion *)
+     (# N: ^ASTindex
+     enter N[]
+     do loop:
+          (# 
+          do (if ctst then
+                 165->trace (#  do 'Find:'->xT; N[] -> xA; xN;
+                               'origin = ' -> xT; origin[]->xA #);
+             if);
+             (if origin.label
+              // gram.objectDescriptor then 
+                 (N[],origin)->&localSearch->(found,pn,dclRef);
+                 (if not found then
+                     (if not (origin[]->sematt.insertable) then
+                         on+1->on (*else '>'->put*)
+                     if);
+                     origin.origin->origin;
+                     restart loop
+                 if)
+              // gram.attributesForm then
+                 (N[],origin)->&localSearch->(found,pn,dclRef);
+                 (if not found then TryCash if);
+                 0->pn;
+                 (* originOff not relevant since only patterns here *)
+              // gram.descriptorForm then
+                 tryCash
+              // gram.doPart then
+                 (* no cash here - is represented via desc.descNo *)
+                 (* if origin.descNo (size of the dopart) >0, 
+                  * then a simple data object is allocated for 
+                  * the dopart with origin in the object
+                  * having the dopart slot
+                  *)
+                 (if origin.descNo <> 0 then on+1->on if);
+                 origin.xorigin->origin;
+                 restart loop
+              // gram.mainPart then
+                 (# mainPart: @ASTindex
+                 do origin -> mainPart;
+                    origin.xorigin->origin;
+                    origin.slotOrigin->origin;
+                    origin[]->HandleOrigin;
+                    (N[],mainPart[]) -> mainPartSearch -> (found,pn,dclRef);
+                    (if not found then
+                        (* mainPartSeach just searches the mainPart;
+                         * to seartch the prefix we just continue with
+                         * origin = desc(mainPart)
+                         *)
+                        restart loop
+                    if)
+                 #)
+              // gram.unExpanded then
+                 origin.slotOrigin->origin;
+                 origin[]->HandleOrigin;
+                 restart loop
+              // gram.forImp then (* (forL <INDEX> <IMP+;>) *)
+                 (origin.son,N)->&semiSearch->(found,pn,dclref);
+                 (if not found then origin.origin->origin; restart loop if);
+              // gram.repetitionDecl then
+              (* (repetition (<NL> <INDEX> <SPEC>)) *)
+                 origin.son->desc;
+                 (desc.brother,N)->&semiSearch->(found,pn,dclRef);
+                 (if not found then origin.origin->origin; restart loop if)
+              // gram.labelledImp then (* (label <nameDcl> <imp*;>) *)
+                 (origin,N)->&semiSearch->(found,pn,dclRef);
+                 (if not found then origin.origin->origin; restart loop if)
+             if)
+          #)
+     #);
+   adError:
+     (# N: ^ASTindex; errNo: @integer
+     enter (N[],errNo)
+     do (if father.label = gram.prefix then (N,48)->&WE.SemError
+         else
+            (if errNo (* perhaps more refined messages here!*)
+             // 1 then (* dynamic ref; warning in stat/dynQual *)
+                (N,95)->WE.Warning
+             // 2 // 4 (* R[e] *) // 3 // 5 then (* computedRemote*)
+             (* another msg MUST be given *)
+                (N,96)->&WE.SemError
+             else
+                (N,48)->&WE.SemError
+            if)            
+        if)
+     #);
+   noQual: (#  exit 1 #);
+   dynQual: (#  exit 2 #);
+   statQual: (#  exit 3 #);
+   father: @ASTindex;
+   encDeclOrImp:
+     (# node: ^ASTindex; kind: @integer
+     enter node[]
+     do noQual->kind;
+        node.father->father;
+        L:
+        (if father.label
+         // gram.dynamicItem // gram.dynamicComponent 
+         // gram.variablePattern then
+            dynQual->kind
+         // gram.staticItem // gram.staticComponent then
+            statQual->kind
+         // gram.prefix then
+            (* descriptors in declarations like
+             *   P: AD(# ... #)
+             * MUST have a static AD as super pattern, whereas 
+             * descriptors in imperatives, like
+             *   ;R.X[e].P(# ... #);
+             * can have a dynamic denotation as a super-pattern
+             *)
+            father.father->father;
+            (* a descriptor *)
+            father.father->father;
+            (* perhaps a decl. *)
+            (if father.label
+             // gram.patternDecl // gram.virtualDecl // gram.bindingDecl
+             // gram.simpleDecl // gram.repetitionDecl // gram.finalDecl then
+                statQual->kind
+            if)
+         // gram.remote // gram.indexed // gram.thisObject
+         // gram.computedRemote // gram.remotePrimitive then
+            father.father->father; restart L
+        if);
+     exit kind
+     #);
+   FatherDesc:
+     (# node,D,desc: @ASTindex; 
+     enter node
+     do
+        node.father->desc;
+        FindDescNode:
+        (if desc.label
+         // gram.objectDescriptor then
+            
+         // gram.descriptorForm // gram.attributesForm then
+            desc.xOrigin->desc; restart findDescNode
+         // gram.unExpanded then
+            desc.slotOrigin->desc; restart findDescNode
+         // gram.doPart // gram.mainPart then
+            desc.father->D;
+            (if D.isNull then (* the doPart is a form: '---x:doPart---' *)
+                (if desc.descNo = 0 then
+                    desc.xOrigin->desc; restart findDescNode
+                 else
+                (* desc is encDesc; leave *)
+                    
+                if)
+             else
+                D->desc; restart findDescNode
+            if);
+            
+         // gram.prefix then
+         (* node appear as prefix as in D = (R).foo(# ... #);
+          * and the descriptor enclosing D must be used
+          *)
+            desc.father->desc;
+            (* descriptor*)
+            desc.father->desc;
+            restart FindDescNode
+         else
+        (* other AST nodes *)
+            desc.father->desc; restart findDescNode
+        if)
+     exit desc
+     #);
+   attQual: @integer;
+   wasOrigin: @boolean;
+   origin,dclRef,sort,desc,catSort,son1,descLoc,descRef: @ASTindex;
+   found,remote,hasCode: @boolean;
+   isCst,on,pn,MN,cstVal,type: @integer;
+   
+do (if ctst then
+       165->trace (#  do 'SetUp:'->xT; node[]->xA #)
+   if);
+   node->getName->(N,remote);
+   N.dclRef->dclRef;
+   (if ctst then
+       165->trace (#  do 'SetUp:'->xT; node[]->xA; dclRef[]->xA #)
+   if);
+   
+   SetUpBody:
+   (if dclRef.isNull then
+       N.descRef->descRef;
+       (if (descRef->integerDesc.equal) then
+       (* declarations of the form X: @ X used to create an infinite
+        * loop in the checker. Such recursions were catched by versions
+        * of the compiler that did not use the MPS. When the MPS was
+        * taken into use, the same technique could not be used.
+        * The current technique does not work as intended:
+        * For a name being searched, its descRef is set to integerDesc
+        * A name with dclRef=NULL and descRef=integerDesc is then
+        * being recursively searched! This does however not give rise
+        * to an error message in these cases????
+        * The reason is probably that dclRef is set to a value by
+        * search before the next search is started. However, since
+        * since descRef is well defined, a correct error message seems
+        * to be given. However, since this is not well understood, it
+        * should be further analysed!!!!!!!!!!!!!!!!!!!
+        *)
+           errorName->N.dclRef; integerDesc->N.descRef; (node,29)->&WE.SemError
+        else
+           integerDesc->N.descRef;
+           (* to prevent recursion in GetDesc *)
+           0->on;
+           N.origin->DescLoc;
+           search:
+           (if node.label
+            // gram.nameApl then
+               N.origin->origin;
+               (*note origin, on share space*)
+               N[]->Find;
+               (if wasOrigin then leave setUpBody if)
+            // gram.remote then
+               node.son->son1->&Setup->(dclRef,descRef);
+               (if son1.label = gram.thisObject then
+                   (descLoc,son1)->actualDesc->(descRef,MN)
+                else
+                   (*(son1,dclRef)->isObject( * inefficient * )
+                    * OBS this test accepts
+                    * F.x where F: ##
+                    * Check other uses of isObject
+                    * A simple/repetition may be a variablePtn!!!
+                    * (# error::<
+                    * (#do 0->on->pn; errorName->dclRef; leave search#)#)
+                    *)
+                   dclRef.sort->sort;
+                   (if ctst then
+                       192->trace(#do 'Setup:'->xT; son1[]->xA; #)
+                   if);
+                   node[]->encDeclOrImp->attQual;
+                   (if ctst then
+                       192->trace(#do 'Setup:'->xT; attQual->xI; sort[]->xA;dclRef[]->xA  #)
+                   if);
+                   (if sort.label
+                    // gram.simpleDecl then
+                       (* node = R.w or S.R.w, where R: @<AD1>; R: ^<AD2>*)
+                       (if attQual <> noQual then
+                           (* one of: P: R.w(# #); X: @R.w; Y: ^R.w;
+                            * Since R is simpleDecl, 
+                            * son1.label=gram.nameApl//gram.remote, and
+                            * sort.label=gram.simpleDecl;
+                            * Check that R is a static object!
+                            *)
+                           sort.son->sort;
+                           sort.brother->sort;
+                           (if sort.label
+                            // gram.staticItem // gram.staticComponent then 
+                            else
+                               (son1[],1)->adError;
+                               (* don't leave here, since adError 1 
+                                * is a warning!
+                                *)
+                           if)
+                       if);
+                       (descLoc,son1)->actualDesc->(descRef,MN);
+                    // gram.repetitionDecl then
+                       (if son1.label
+                        // gram.nameApl // gram.remote then
+                        (* R.w where R is a repetition *)
+                           repDesc->descRef
+                        else
+                           (* R[e].T *)
+                           (if attQual <> noQual then
+                               (son1[],2)->&adError
+                           if);
+                           (descLoc,son1)->actualDesc->(descRef,MN)
+                       if)
+                    // gram.patternDecl // gram.virtualDecl // gram.bindingDecl
+                    // gram.finalDecl then
+                       (* this is only legal in ref. qualifications:
+                        *    R: ^P.A
+                        * where P may be a pattern
+                        *)
+                       (if attQual <> dynQual then (son1,15)->&WE.SemError if);
+                       (descLoc,son1)->actualDesc->(descRef,MN)
+                    else
+                       (son1,15)->WE.SemError;
+                       0->on->pn;
+                       errorName->dclRef;
+                       leave search
+                   if)
+               if);
+               (if descRef.label = gram.labelledImp then 
+                   (son1,15) -> WE.SemError;
+                   leave search 
+               if);
+               (if ctst then
+                   165 -> trace(#do 'Remote:'->xT; N[]->xA; descRef[]->xA #)
+               if);
+               (if descRef.label = gram.mainPart then
+                   (N[],descRef[]) -> MainPartSearch ->(found,pn,dclRef);
+                   (if not found then
+                       (* mainPartSearch only searches the main part;
+                        * we must continue search in super;
+                        * Assumption:descRef = gram.mainPart slot
+                        *)
+                       descRef.xOrigin -> descRef;
+                       (if ctst then
+                           165->trace(#do'remote:mainpart1:'->xT;descRef[]->xA#)
+                       if);
+                       descref.slotOrigin -> descRef;
+                       (if ctst then
+                           165->trace(#do'remote:mainpart2:'->xT;descRef[]->xA#)
+                       if);
+                       descRef.son -> descRef;
+                       (if ctst then
+                           165->trace(#do'remote:mainpart3:'->xT;descRef[]->xA#)
+                       if);
+                       (if descRef.label = gram.prefix then
+                           descRef.son -> SetUp -> (dclRef,descRef);
+                           (if ctst then
+                               165->trace(#do'remote:mainpart4:'->xT; descRef[]->xA#)
+                           if);
+                           (N[],descRef) -> LocalSearch ->(found,pn,dclRef);
+                           (if ctst then
+                               165->trace(#do'remote:mainpart5:'->xT; dclRef[]->xA#)
+                           if);
+                           (*pn + 1 -> pn*)
+                       if)
+                   if)
+                else
+                   (N[],descRef) -> LocalSearch ->(found,pn,dclRef)
+               if);
+               (if not found then
+                   (if ctst then
+                       165->trace(#do 'NotFound:'->xT; dclRef[] -> xA#)
+                   if);
+                   (# T: ^text; originDcl: ^ASTindex; 
+                   do N.gettext->T[];
+                      (if 'origin'->T.equalNCS then
+                          (N[],descRef[])->addOrigin->(dclRef,descRef);
+                          leave SetUpBody
+                       else
+                          (* (node ( * N * )  ,3)->&WE.SemError *)
+                          (N[],false) -> WE.MakeError
+                          (# 
+                          do 'The attribute "' -> XT; N[] -> XA;
+                             '" is not declared' -> XT
+                          #)
+                      if)
+                   #)
+               if)
+            // gram.indexed then
+                   (*  P: R[e](# #);
+                    *  X: @R[e];
+                    *  R: ^R[e]
+                    * are NOT allowed! Is catched at the place where
+                    * setUp is called
+                    *)
+               null -> N.descRef;
+               node.son -> son1 -> &setUp -> (dclref,descRef);
+               (*(node,dclRef.sort)->isRep; *)
+               (if son1.label
+                // gram.nameApl // gram.remote // gram.computedRemote then
+                   dclRef.sort->sort;
+                   (if sort.label <> gram.repetitionDecl then
+                       (son1,6)->&WE.SemError
+                   if)
+                else
+                   (son1,6)->&WE.SemError
+               if);
+               (DescLoc,son1.brother->son1,key.exitt,false)
+                 -> &ChkEval
+                 -> (isCst,cstVal,mn,hasCode,type);
+               (descLoc,node,UnaryCompKind,son1,valType,son1,type)
+                 -> &CmpLst;
+               leave SetUpBody
+            // gram.thisObject then
+               (# encDesc: @ASTindex
+               do (if ctst then
+                      166->trace(#do 'thisSetUp0:'-> xT; N[]->xA; #);
+                  if);
+                  N.origin->origin;
+                  N[]->Find;
+                  (* dont call SetUp here, since this will then 
+                   * report a loop. And this is why we must 
+                   * save on, descRef, etc.
+                   *)
+                  on->N.on;
+                  pn->N.pn;
+                  dclRef->N.dclRef;
+                  dclRef.sort->getCatSort->N.descRef;
+                  descLoc->encDesc;
+                  L:
+                    (if encDesc.label
+                     // gram.objectDescriptor then
+                        
+                     // gram.doPart // gram.mainPart then
+                        (if encDesc.descNo = 0 then
+                            encDesc.xorigin->encDesc; restart L
+                        if)
+                     // gram.unexpanded then
+                        encDesc.slotOrigin->encDesc; restart L
+                     else
+                        encDesc.origin->encDesc; restart L
+                    if);
+                    (*166->trace(#do 'thisSetUp:'->xT; N.on->xI; N[]->xA #);*)
+                  (N[],encDesc,N.on,1 (*this*) )->isEnclosing;
+                        (*166->trace(#Do 'AfterIsEnc:'-> xT #);*)
+                  leave SetUpBody
+               #)
+            // gram.computedRemote then
+                 (#
+                    remEv,N1,ref,refDesc: ^ASTindex;
+                    MN: @integer;
+                    chain: ^actualDesc.DB.superChain
+                 do
+                 (* The follwing computation is a temporary solution!
+                  * The problem is used of computed-remote in
+                  * exit-parts as in
+                  * A: (# V:< ...; foo: (# S: ^V do ... exit S.R[] #) #)
+                  * used as 
+                  * D: (# ... do ...  A->B #)
+                  * When checking A->B, the descriptor for D was 
+                  * previously used to compute chain[] using:
+                  *    thisDesc->actualDesc.DB.newSingle->chain[];
+                  * Instead a superChain should be passed from A->B to
+                  * setUp. Otherwise the virtula binding of V will not 
+                  * be found.
+                  * As a temporary solution, instead of thisDesc,
+                  * the descriptor enclosing this computedRemote
+                  * is used to compute chain. If the computed-remote
+                  * is NOT in an exit-part, it should be equaivalent to
+                  * thisDesc
+                  *)
+                    node->FatherDesc->actualDesc.DB.newSingle->chain[];
+                    (node[],actualDesc.DB[],chain[])
+                      -> chkComputedEval
+                    (# error::<  
+                         (#
+                         do (no,EV[],desc[]) -> WE.ComputedRemoteError
+                         #) 
+                    #)
+                      -> (remEv[],N1[],ref[],refDesc[],chain[]);
+                    (*166->trace
+                     (#do 'SetUp:computedRemote:'->xT; remEv[]->xA;
+                        N1[]->xA; ref[]->xA; refDesc[]->xA;
+                     #);*)
+                     (* computedRemote has the form
+                     *  (remEv).N1
+                     * This means that remEv MUST be handled in the context
+                     * of descLoc and NOT refDesc.
+                     *)
+                    (descLoc,remEv,key.single,false)->&ChkEval;
+                    (if (node[]->encDeclOrImp) <> noQual then
+                        (node[],3)->adError
+                    if);
+                    N1->N;
+                    (* ugly *)
+                    (N[],refDesc)->&localSearch->(found,pn,dclRef);
+                    (if not found then 
+                        (*(N,3)->WE.SemError*)
+                        (N[],false) -> WE.MakeError
+                        (# 
+                          do 'The attribute "' -> XT; N[] -> XA;
+                             '" is not declared' -> XT
+                          #)
+                    if);
+                 #)
+           if);
+           (* if NOT found then dclRef=errorName *)
+           (if ctst then
+               165->trace
+               (#
+               do 'setup:afterSearch: '->xT; N[]->xA; on->xI; ','->put; pn->xI
+               #)
+           if);
+           on->N.on;
+           pn->N.pn;
+           dclRef->N.dclRef;
+           dclRef.sort->getCatSort->N.descRef;           
+       if);
+       
+   if);
+   (if ctst then
+       166 -> trace
+       (# node: @ASTindex
+       do 'setup:end:'-> xT; N[] -> xA; 
+          'on/pn='->xT; N.on->xI; N.PN->xI; xN;
+          dclRef[]->xA;
+          N.dclref->node; node[] -> xA; xN;
+          N.descref->node; node[] -> xA;
+   #)if)
+   
+#)  
+

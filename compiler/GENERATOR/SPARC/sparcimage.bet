@@ -1,0 +1,936 @@
+ORIGIN '../backendrisc';
+INCLUDE 'sparc_disass';
+INCLUDE 'sparc';
+---backendatt:attributes---
+(************* this section MUTS be revised!!! *)
+
+trace: (# exit true #);
+TODO: 
+  (# t:^Text
+  enter t[]
+  do 
+     (if t[]=NONE then
+         'TODO: (with no arg)'->T[];
+      else
+     if);
+     (if trace then
+         'TODO:'->screen.putText;
+         t[]->screen.putLine;
+      else
+         (failureTrace, t[])->stop;
+     if)
+  #);
+stack_alloc_trace: (# exit false #);
+stack_alloc_parspace_trace: (# exit false #);
+frame_size: (* double decl - see also sparcbackend *)
+  (# exit 112 #);
+align8:
+  (# i: @integer;
+  enter i
+  exit (i+7) %Band (%Bnot 7)
+  #);
+
+ldProtectTag:
+  (* Constant tag for protecting N 4-byte longs on the machine stack
+   * from being considered by GC. When pushed, these N longs AND the two longs
+   * constituting the tag are skipped.
+   *)
+  (# N: @integer;
+  enter N
+  do 3->mstate.FIXME;
+     &BackendInstruction(#do -(N+4) -> imm; L7->writeReg #) ->ldCstImpl;
+  exit L7
+  #);
+OregOperand:
+  (# reg: @integer;
+     reg1: (# exit reg #)
+  enter reg
+  exit reg
+  #);
+(***************************************)
+
+localLabText:
+  (# T: ^text; labNo: @integer
+  enter labNo
+  do '.L'->T[];
+     labNo->T.putInt
+  exit T[]
+  #);
+bcPutHex:
+  (# x: @integer; putLeadingZeros: @boolean;
+  enter(x,putLeadingZeros)
+  do 
+     (if putLeadingZeros then
+         '0'->BC.put; 'x'->BC.put;    
+         x -> BC.putHex(# do true -> zeroPadding #)
+      else
+      (*x -> BC.putHex(# do false -> zeroPadding; 0 -> width #)*)
+         (0,x)->BC.putBased(#do false -> zeroPadding; 0 -> width #)
+     if)
+  #);
+
+SparcImage: RiscImage
+  (# 
+     (*  LIP:0 = buffer[1];
+      *  LIP:4 = buffer[2];
+      *  ...
+      *)
+     swap: @
+       (* 
+        * LIP-8: | instr      | swap with LIP - 4
+        * LIP-4: | call/X     | swap with LIP - 8
+        * LIP:   | delay slot |
+        *)
+       (# instr,ix1,ix2: @integer
+       do buffer[((LIP - 8) div 4) + 1 -> ix1] -> instr;
+          buffer[((LIP - 4) div 4) + 1 -> ix2] -> buffer[ix1];
+          instr -> buffer[ix2];
+          pushMarkBack
+       #);
+     
+     appendToBC:
+       (# DA: @disass;
+          emitElm:
+            (# i: @integer; T: ^text
+            enter i
+            do
+               (if common.switch[39] then
+                   '\t.word\t'->BC.putT;
+                   (buffer[i],true)->bcPutHex;
+                   '.word\t0x12345678'->Tab
+                else
+                   '\t'->BC.putX;
+                   buffer[i] -> DA -> T[] -> BC.putX;
+                   T[] -> tab
+               if)
+            #);
+          tab: @ (*assume: T='op \toperands'*)
+            (# T: ^text; ht,n: @integer
+            enter T[]
+            do
+               0->n;
+               T.scanAll
+               (# 
+               do n+1->n; (if ch = ascii.ht then ht+1->ht; 0->n if)
+               #);
+               (* i no. of chars after '\t' if one exists *)
+                  (*(for i: 1 - ht repeat ascii.ht->BC.putC for);*)
+               n->emitSp
+            #);
+          emitSp:
+            (# n: @integer
+            enter n
+            do (for i: 30-n repeat ' '->BC.putC for); 
+            #);
+          emitReg:
+            (# i,sc,in: @integer
+            enter (i,sc)
+            do
+               buffer[i]->in;
+               (in %srl sc) %band 0x1F->in;
+               '%'->BC.putC;
+               (if true
+                // (24 <= in) and (in <= 31) then
+                   'i'->BC.putC; in-24->BC.putI; 
+                // (0 <= in) and (in <= 7) then
+                   'g'->BC.putC; in->BC.putI
+                // (8 <= in) and (in <= 15) then
+                   'o'->BC.putC; in-8->BC.putI
+                // (16 <= in) and (in <= 23) then
+                   'l'->BC.putC; in-16->BC.putI
+               if);
+               
+            #);
+          emitFReg:
+            (# i,sc,in: @integer
+            enter (i,sc)
+            do
+               buffer[i]->in;
+               (in %srl sc) %band 0x1F->in;
+               '%'->BC.putC;
+               'f'->BC.putC;
+               in->BC.putI;
+               (if in < 10 then ' '->BC.putC if)
+            #);
+          emitSym:
+            (# inx,n: @integer
+            enter inx
+            do epElm[inx].m.strInx
+                 ->mstate.strTbl.scan(#do ch->BC.putC; n+1->n #);
+            exit n
+            #);
+          fromLastEntry,n: @integer
+       do
+          (if lastMark = 0 then 1->lastMark if);
+          (for i: LIP div 4 repeat
+               L:
+                 (if marks[lastMark] = i then (* relocatable item *)
+                     (if types[lastMark]
+                      // callMark then
+                         '\tcall\t'->BC.putX; lastMark->emitSym->emitSp
+                      // bgtuMark then
+                         '\tbgtu\t'->BC.putX; lastMark->emitSym->emitSp
+                      // jmpMark then
+                         'ba\t'->BC.putX; lastMark->emitSym->emitSp
+                      // setHiMark then
+                         '\tsethi\t%hi('->BC.putX;
+                         lastMark->emitSym->n;
+                         '),'->BC.putX;
+                         (i,25)->emitReg;
+                         n+4+2+3->emitSp;
+                         
+                      // setLoMark then
+                         '\tor\t'->BC.putX;
+                         (i,14)->emitReg;
+                         ',%lo('->BC.putX;
+                         lastMark->emitSym->n;
+                         '),'->BC.putX;
+                         (i,25)->emitReg;
+                         n+8+2+3->emitSp;
+                         
+                      // setLoMarkSt then
+                         '\tst\t'->BC.putX;
+                         (i,25)->emitReg;
+                         ',[%lo('->BC.putX;
+                         lastMark->emitSym->n;
+                         ')+'->BC.putX;
+                         (i,14)->emitReg;
+                         ']'->BC.putX;
+                         n+9+2+3+1->emitSp;
+                         
+                      // setLoMarkJmp then
+                         '\tjmp\t%i5+%lo('->BC.putX;
+                         lastMark->emitSym->n;
+                         ')'->BC.putX;
+                         n+8+1->emitSp;
+                         
+                      // setLoMarkLdd then
+                         '\tldd\t[%lo('->BC.putX;
+                         lastMark->emitSym->n;
+                         ')+%g1],'->BC.putX;
+                         (i,25)->emitFreg;
+                         n+5+5+4-1->emitSp;
+                         
+                      // setLoMarkLd then
+                         '\tld\t[%lo('->BC.putX;
+                         lastMark->emitSym->n;
+                         ')+%g1],'->BC.putX;
+                         (i,25)->emitFreg;
+                         n+5+5+4->emitSp;
+                         
+                      // wordMark then
+                         '\t.word\t'->BC.putX; lastMark->emitSym->emitSp; 
+                      // entryDefMark then
+                         (if epElm[lastMark].export then
+                             '\n.globl\t'->BC.putX; lastMark->emitSym; BC.putNl; 
+                         if);
+                         lastMark->emitSym;
+                         ':'->BC.putC;
+                         BC.putNL;
+                         (if (lastMark+1) <= marks.range then
+                             (if marks[lastMark+1] = i then
+                                 (* several marks at same adr*)
+                                 lastMark+1->lastMark; restart L
+                             if)
+                         if);
+                         0->fromLastEntry;
+                         i->emitElm;
+                     if);
+                     (if lastMark < marks.range then
+                         lastMark+1->lastMark
+                      else
+                         0->marks[lastMark]
+                     if)
+                  else
+                     i->emitElm
+                 if);
+               '!'->BC.putC;
+               ' '->BC.putC;
+               (*(fromLastEntry,false)->bcPutHex;*)
+               fromLastEntry->BC.PutHex;
+               ' '->BC.putC;
+               '('->BC.putC;
+               fromLastEntry->BC.putI;
+               ')'->BC.putC;
+               fromLastEntry+4->fromLastEntry;
+               ascii.ht->BC.putC;
+               ((i-1)*4,false)->bcPutHex;
+               ' '->BC.putC;
+               '('->BC.putC;
+               (i-1)*4->BC.putI;
+               ')'->BC.putC;
+               BC.putNl;
+          for);
+          
+       #);
+     (* no of relocatable items *)
+     mark: @
+       (# t: ^text; type: @integer; E: ^EntryPointInfo; 
+       enter (t[],type)
+       do
+          (if (markTop+1->markTop) > marks.range then
+              marks.range->marks.extend;
+              types.range->types.extend;
+              epElm.range->epElm.extend;
+              (*'$'->screen.put*)
+              
+          if);
+          (LIP div 4)+1->marks[markTop];
+          type->types[markTop];
+          (if type = entryDefMark then
+              (T[],not mstate.inCode)->entryPoints.addDef->epElm[markTop][];
+              (* is called in CODEmachine for all entry points 
+               * T117FOO, M117FOO, etc.
+               * For local labels like  '.L12' it is called below
+               * for markLocalLab -- OOPS not used consistently.
+               * And for labels BETA_code1eddDef is NOT
+               * called - i.e. we must call here - FIX IT!
+               *)
+              
+           else
+              T[]
+                ->entryPoints.find
+              (# notFound:: (#do E[]->entryPoints.insert #) #)
+                ->epElm[markTop][];
+              noOfRel+1->noOfRel
+          if)
+       #);
+     MarkLastAsData:
+       (* why does sthis not work for all SetLoMarkSt *)
+       (#
+       do true-> epElm[mstate.B.markTop].data;
+       #);
+     ClearDelay:
+       (#
+       do 0 -> mstate.lastDelay
+       #);
+     PotentialDelaySlot:
+       (#
+       exit (mstate.lastDelay < (mstate.B.LIP - 8)) 
+          (* mstate.B.LIP-8 and mstate.B.LIP-4 cannot
+           * be delays slots
+           *)
+          AND 
+          (mstate.lastDelay > 0) (* implies that mstate.B.LIP > 8 
+                                  * and that mstate.B.LIP-4 has no label
+                                  *)
+       #);
+     
+     pushMarkBack:
+       (* used by swap when moving instruction before CALL to a delay slot.
+        * 
+        * marks[markTop-1] -> | ...    |
+        *              LIP-8: | instr  |  (LIP div 4) - 1
+        * marks[markTop] ->   | call/X |  (LIP div 4)
+        *              LIP:   | ...    |  (LIP div 4) + 1
+        * instr and call/X has been swapped;
+        * the call/X mark must be decremented;
+        * if marsk[markTop-1] = (LIP div 4) - 1 then swap marks 
+        *)
+       (# m: @integer; ep: ^EntryPointInfo
+       do marks[markTop] - 1 -> marks[markTop];
+          (if markTop > 1 then
+              (if marks[markTop-1] = ((LIP div 4) - 1) then
+                  (*'\nswap1:'->puttext;
+                   marks[markTop-1] -> putint; ':'->put; 
+                   types[markTop-1] -> putint; ','->put;
+                   marks[markTop] -> putint; ':'->put;
+                   types[markTop] -> putint; newline;*)
+                  (* swap marks and increment *)
+                  marks[markTop] -> m;
+                  marks[markTop-1] + 1-> marks[markTop];
+                  m -> marks[markTop-1]; 
+                  
+                  types[markTop] -> m;
+                  types[markTop-1] -> types[markTop];
+                  m -> types[markTop-1];
+                  
+                  epElm[markTop][] -> ep[];
+                  epElm[markTop-1][] -> epElm[markTop][];
+                  ep[] -> epElm[markTop-1][];
+                  
+                  (*'swap2:'->puttext; 
+                   marks[markTop-1] -> putint; ':'->put;
+                   types[markTop-1] -> putint; ','->put;
+                   marks[markTop] -> putint; ':'->put;
+                   types[markTop] -> putint;
+                   newline;*)
+       if)if)#);
+     markLocalLabBcc:
+       (# labNo: @integer; T: ^text
+       enter labNo
+       do labNo->LocalLabtext->T[]; (T[],bgtuMark)->mstate.b.mark
+       #);
+     markLocalLab: @
+       (# labNo: @integer; T: ^text
+       enter labNo
+       do labNo->LocalLabText->T[];
+          (*(T[],not inCode)->entryPoints.addDef;*)
+          (T[],entryDefMark)->mstate.d.mark
+       #);
+  #);
+-- backendmstate: descriptor --
+(# FIXME: @
+     (# init:
+          (#
+          do 'L6 and L7 are used by ChkIndex' -> msg[1][];
+             'missing: beginProtoTypes' -> msg[2][];
+             'MUST fix L7 in ldProtectTag' -> msg[3][]; 
+             'backendgetFloatXres: PROBLEM with return value' -> msg[4][]; 
+             'backendgetDataPartXres is NOT implemented' -> msg[5][];   
+             'CopyCT uses %L0 - should use %O0' -> msg[6][];
+          #);
+        reported: [10] @boolean;
+        msg: [10] ^text;
+        no: @integer
+     enter no
+     do (if (1 <= no) and (no <= reported.range) then
+            (if not reported[no] then 
+                '\n*** FIXME: sparcbackend: ' -> puttext;              
+                msg[no][] -> putline 
+            if);
+            true-> reported[no];              
+        if)
+     #);
+
+   B,D: @SparcImage;
+   emit: (# enter b.emit #);
+   setTop: 
+     (# top: @integer 
+     enter top
+     do &BackendInstruction(# do top->imm#) -> setTopImpl
+     #);
+   Init:
+     (# 
+     do FIXME.init;
+        10000 -> B.buffer.new;
+        10000 -> D.buffer.new;
+        4->B.IPinc;
+        mstate.strTbl.init;
+        (if common.targetMachineId
+         // common.sun4s 
+         // common.sgi then
+            (* should rather be a test for elf;
+             * sgi added to make bootstrap possible
+             *)
+            2->mstate.symtabTop;
+            (* 2 first symbols are 'sections' 
+             * for text and data. sun4s/elf
+             * counts from one
+             *)
+         else
+            'sun4:a.out is not supported' -> TODO
+        if)
+     #);
+   symtabTop: @integer; (* counter for no of symtab entries *)   
+   inCode: @boolean;
+   labs: @
+     (# adr: [500] @integer;
+        top: @integer;
+        use: [500] ^loc;
+        loc: (# off: @integer; next: ^loc #);
+        def: @
+          (# l,patchAdr,patchInst: @integer; s: ^loc
+          enter l
+          do
+             (if l > adr.range then
+                 l+adr.range->adr.extend;
+                 l+use.range->use.extend;
+                 (*'&'->put*)
+                 
+             if);
+             b.LIP->adr[l];
+             use[l][]->s[];
+             none ->use[l][];
+             LL:
+               (if s[] <> none then
+                   (*'\nPatch L'->putText; l->putInt; '='->put;
+                    * b.LIP->putint; ' in:'->putText; s.off->putint;  ';'->put;
+                    *)
+                   (s.off div 4)+1->patchAdr;
+                   (*->putInt;*)
+                   (* patch *)
+                   (*'!'->BC.putC; B.buffer[patchAdr]->bcPutHex; ':'->BC.putC;*)
+                   B.buffer[patchAdr] %band 0xFFC00000->patchInst;
+                   (*patchInst->bcPutHex; BC.putnl;*)
+                   patchInst %bor (((b.LIP-s.off) div 4) %band 0x3FFFFF)
+                     ->B.buffer[patchAdr];
+                   (*'!'->putLine;*)
+                   s.next[]->s[];
+                   restart LL
+               if)
+          #);
+        off: @
+          (# l,of: @integer; s: ^loc; 
+          enter l
+          do
+             (if l > adr.range then
+                 l+adr.range->adr.extend; l+use.range->use.extend
+             if);
+             (if adr[l] = 0 then (* forward ref *)
+                 (*'\nUse L'->puttext; l->putInt; ' in:'->puttext; 
+                  b.LIP->putint; newline;*)
+                 &loc[]->s[];
+                 b.LIP->s.off;
+                 use[l][]->s.next[];
+                 s[]->use[l][];
+                 b.LIP->of;
+                 (* to get a zero *)
+                 
+              else
+                 adr[l]->of
+             if)
+          exit of-b.LIP
+          #);
+        
+     #);   
+   defDataLab:
+     (# L: @backendLocalLab; S: ^text; 
+     do
+        switchToData;
+        L.new;
+        true->L.isTextAdr;
+        L.def;
+        INNER ;
+        switchToCode;
+        L.labNo->LocalLabText->S[];
+        
+     exit S[]
+     #);
+   strTbl: @
+     (#
+        str: @text;
+        init:
+          (# 
+          do
+             1000->str.extend;
+             0->str.put;
+          #);
+        insert: @
+          (# T: ^text; index: @integer
+          enter T[]
+          do str.length->index; T.scanAll (#  do ch->str.put #); 0->str.put
+          exit index
+          #);
+        scan:
+          (# inx: @integer; ch: @char
+          enter inx
+          do
+             inx+1->inx;
+             (* for ELF the strTbl is index form zero, 
+              * for BETA from 1
+              *)
+             (if inx <= 0 then '\nstrTbl inx=0'->putline; '????'->bc.putX if);
+             str.T[inx]->ch;
+             L:
+               (if ch <> 0 then INNER ; str.T[inx+1->inx]->ch; restart L if)
+          #)
+     #);
+
+   emitCodeToFile: <<SLOT backendemitCodeToFile:Descriptor>>;
+   
+
+   lastDelay: @integer; 
+   
+   
+   (************ Float, & O-registers ****)
+   floatRec: (# R: [16] @integer #);
+   float2IntTmp,dataTmp6,floatTmp: @boolean;
+
+   (* prototype label used by doCall to fill delay slot*)
+   floatReg: @FloatRec;
+   (* the SPARC has 32 float reg. They may hold 16 double float values in
+    * pairs (%f0,%f1), (%f2,%f3), etc. 
+    * (%f28,%f29) and (%f30,%f31) are used
+    * for tmp. values as allocated by the floatTmp proc.
+    *)
+   floatRegBusy:
+     (# inx: @integer;
+        floatbusy: @boolean;
+     do (* we assume that no float tmps are busy at the start of
+         * an external call. One of them may become busy to save
+         * FR0 - possible float result - In this case FR0 will be
+         * busy here and floatRegBusy returns true
+         *)
+        (*'{'->screen.put;*)
+        (*0 -> floatReg.R[15] -> floatReg.R[16];*)
+        (for i: floatReg.R.range repeat
+             (if floatReg.R[i] > 0 then 
+                 i -> inx;
+                 true -> floatBusy;
+                 (*'[%fr' -> screen.puttext;
+                 (i-1)*2 -> screen.putint;
+                 ']'->screen.puttext;*)
+                 INNER;
+                 leave floatRegBusy
+              else
+                 (*'[' -> screen.puttext;
+                 (i-1)*2 -> screen.putint;
+                 ']'->screen.puttext;*)
+             if)
+        for);
+        (*'}'->screen.put;*)
+     exit floatBusy
+     #);  
+   floatRegOtherThanF0Busy: FloatRegBusy
+     (# 
+     do (if inx=1 then false -> floatbusy if);
+     #);
+   SaveBusyReg:
+     (* Allocate stack space for the parameters specified in ParSpace (bytes) 
+      * and for 6 %o registers, 16 double %fr registers and a tag.
+      * Then save as many of the %o registers and %fr registers as is needed.
+      * See http://www.daimi.au.dk/~beta/doc/betarun/internal/SparcStack.html#savebusy
+      * for details.
+      * In INNER one or more of AllocateSpace, SaveOregs/SaveFloats must be called -
+      * the pattern itself is only for organization.
+      *)
+     (# parSpace: 
+          (* Number of bytes needed besides the space for saving registers *) 
+          @integer;
+        reg: @integer;
+        AllocateSpace:
+          (# who: @integer;
+             allocate: @boolean;
+          enter who
+          do (if stack_alloc_trace then
+                 '<SaveBusyReg.AllocateSpace: who=' -> bugstream.puttext;
+                 who -> bugstream.putint;
+                 ', x=' -> bugstream.puttext;
+                 (if xbusyallocated then 
+                     'true'->bugstream.puttext; 
+                  else 
+                     'false' -> bugstream.puttext
+                 if);
+                 ', d=' -> bugstream.puttext;
+                 (if dbusyallocated then 
+                     'true'->bugstream.puttext; 
+                  else 
+                     'false' -> bugstream.puttext
+                 if);
+                 '>' -> bugstream.putline;
+             if);
+             (if who
+              // 1 (* XinitOreg *) then
+                 (if xbusyallocated then
+                     'SaveBusyReg.AllocateSpace: multiple X allocation'
+                       -> bugstream.putline;
+                  else
+                     true -> xbusyallocated;
+                     not dbusyallocated -> allocate;
+                 if);
+              // 2 (* PushDataReg *) then
+                 (if dbusyallocated then
+                     'SaveBusyReg.AllocateSpace: multiple D allocation'
+                       -> bugstream.putline;
+                  else
+                     true -> dbusyallocated;
+                     not xbusyallocated -> allocate;
+                 if);
+              else 
+                 'SaveBusyReg.AllocateSpace: illegal "who" specification: '
+                   -> bugstream.puttext;
+                 who -> bugstream.putint; bugstream.newline;
+             if);
+             (if allocate then
+                 (* Allocate stack space *)
+                 -(parSpace+184) -> align8 -> settop;
+                 44 -> ldProtectTag -> reg;
+                 (* Push GC protection tag *)
+                 (SP,parspace+frame_size+0, reg) -> ST_I -> emit;
+             if);
+          #);
+        SaveFloats:
+          (# f0_too: @boolean;
+             who: @integer;
+          enter (who, f0_too)
+          do (if true
+              // (who=1 (* XinitOreg *)) and (not xbusyallocated) then
+                 (* may happen if floats get busy during parameter evaluation for external *)
+                 1->AllocateSpace;
+              // (who=2 (* PushDataReg *)) and (not dbusyallocated) then
+                 (* may happen if floats get busy during parameter evaluation for external *)
+                 2->AllocateSpace;
+             if);
+             (* Save busy floating point registers *)
+             (if floatRegbusy then
+                 (for i: floatReg.R.range repeat
+                      (if (floatReg.R[i]>0) and ((i>1) or f0_too) then
+                          (SP, parspace+frame_size + i*8, (i-1)*2) -> STDF_I -> mstate.b.emit
+                      if)
+                 for);
+             if);
+          #);
+        SaveOregs:
+          (# 
+          do (if not xbusyallocated then
+                 'SaveBusyReg.SaveOregs: warning: nothing allocated'
+                   -> bugstream.putline;
+                 1->AllocateSpace;
+             if);
+             
+             (* Save busy %o registers *)
+             (for i: (XCnt,6)->min repeat
+                  (SP, parspace+frame_size + (128+8) + i*4, O0+(i-1)) -> ST_I -> emit
+             for);
+          #);
+     enter parSpace
+     do INNER;
+     #);
+   RestoreBusyReg:
+     (* Reverse of SaveBusyReg.
+      * See 
+      * http://www.daimi.au.dk/~beta/doc/betarun/internal/SparcStack.html#savebusy
+      * for details.
+      *)
+     (# parSpace: 
+          (* Number of bytes in frame besides the space for 
+           * saving registers 
+           *) 
+          @integer;
+        RestoreFloats:
+          (# f0_too: @boolean;
+          enter f0_too
+          do (if floatRegBusy then
+                 (if not (xbusyallocated or dbusyallocated) then
+                     'RestoreBusyReg.RestoreFloats: warning: nothing allocated'
+                       -> bugstream.putline;
+                  else
+                     (* Restore floating point registers *)
+                     (for i: floatReg.R.range repeat
+                          (if (floatReg.R[i] > 0) and ((i>1) or f0_too) then
+                              (SP, parspace+frame_size + i*8, (i-1)*2) 
+                                -> LDDF_I -> mstate.b.emit
+                          if)
+                     for);
+                 if)
+             if);
+          #);
+        RestoreOregs:
+          (# 
+          do (if not xbusyallocated then
+                 'RestoreBusyReg.RestoreOregs: warning: no X allocation'
+                   -> bugstream.putline;
+              else
+                 (* Restore busy %o registers *)
+                 (for i: (XCnt,6)->min repeat
+                      (SP, parspace+frame_size + (128+8) + i*4, O0+(i-1))
+                        -> LD_I -> emit
+                 for);
+             if);
+          #);
+        DeallocateSpace:
+          (# who: @integer;
+             deallocate: @boolean;
+          enter who
+          do (if stack_alloc_trace then
+                 '<RestoreBusyReg.DeallocateSpace: who=' -> bugstream.puttext;
+                 who -> bugstream.putint;
+                 ', x=' -> bugstream.puttext;
+                 (if xbusyallocated then 
+                     'true'->bugstream.puttext; 
+                  else 
+                     'false' -> bugstream.puttext
+                 if);
+                 ', d=' -> bugstream.puttext;
+                 (if dbusyallocated then 
+                     'true'->bugstream.puttext; 
+                  else 
+                     'false' -> bugstream.puttext
+                 if);
+                 '>' -> bugstream.putline;
+             if);
+             (if who
+              // 1 (* XinitOreg *) then
+                 (if not xbusyallocated then
+                     'SaveBusyReg.DeallocateSpace: no X allocation'
+                       -> bugstream.putline;
+                  else
+                     false -> xbusyallocated;
+                     not dbusyallocated -> deallocate;
+                 if);
+              // 2 (* PushDataReg *) then
+                 (if not dbusyallocated then
+                     'SaveBusyReg.DeallocateSpace: no D allocation'
+                       -> bugstream.putline;
+                  else
+                     false -> dbusyallocated;
+                     not xbusyallocated -> deallocate;
+                 if);
+              else 
+                 'SaveBusyReg.DeallocateSpace: illegal "who" specification: '
+                   -> bugstream.puttext;
+                 who -> bugstream.putint; bugstream.newline;
+             if);
+             (* Deallocate stack space *)
+             (if deallocate then
+                 (parSpace+184) -> align8 -> settop;
+             if);
+          #);
+     enter parSpace
+     do INNER;
+        
+     #);
+    xInitOreg:
+     (# noOfPar: @integer; (*oReg: @oRegOperand;*)
+        isPrim: @boolean;
+     enter (noOfPar, isPrim)
+     do (if noOfPar>11 then
+            4*(noOfPar-11) -> align8 -> parspace;
+         else
+            0 -> parspace;
+        if);
+        (if (Xlevel+1->Xlevel) > busyO.range then
+            busyO.range->busyO.extend; 
+            busyX.range->busyX.extend; 
+            parS.range->parS.extend;
+            floatS.range -> floatS.extend;
+        if);
+        
+        (if Xlevel > 1 then
+            (* push xCnt *)
+            xCnt->busyO[Xlevel-1];
+            (* push xbusyallocated *)
+            xbusyallocated->busyX[Xlevel-1];
+            false -> xbusyallocated;
+            (* push parSpace *)
+            parSpace->parS[Xlevel-1];
+            floatReg.R -> floatS[Xlevel-1].R;
+        
+            (if XCnt>0 then
+                (if stack_alloc_trace then
+                    '\n<xInitOreg:3>'->screen.puttext;
+                if);
+                parspace -> SaveBusyReg(# do 1->AllocateSpace; SaveOregs #);
+             else
+                (if (not isPrim) and floatRegOtherThanF0Busy then
+                    (if stack_alloc_trace then
+                        '\n<xInitOreg:4>'->screen.puttext;
+                    if);
+                    parspace -> SaveBusyReg(# do 1->AllocateSpace #);
+                    (* Floats will be saved by CallCProc/PushDataReg *)
+                 else
+                    (if stack_alloc_trace then
+                        (if stack_alloc_parspace_trace or (parspace<>0) then
+                            '\n<xInitOreg4:SETTOP>'->screen.puttext;
+                        if);
+                    if);
+                    -parspace -> settop;
+                if)
+            if);
+            0->parSpace;
+         else
+            (if (not isPrim) and floatRegOtherThanF0Busy then
+                (if stack_alloc_trace then
+                    '\n<xInitOreg:5>'->screen.puttext;
+                if);
+                parspace -> SaveBusyReg(# do 1->AllocateSpace #);
+             else
+                (if stack_alloc_trace then
+                    (if stack_alloc_parspace_trace or (parspace<>0) then
+                        '\n<xInitOreg5:SETTOP>'->screen.puttext;
+                    if);
+                if);
+                -parspace -> settop;
+            if)
+        if);
+        0 -> xCnt
+     #);
+   xFreeOreg:
+     (# (*oReg: @oRegOperand;*)
+        isPrim: @boolean;
+     enter isPrim
+     do Xlevel-1->Xlevel;
+        (if Xlevel > 0 then
+            busyO[Xlevel]->xCnt; 
+            parS[Xlevel]->parSpace; 
+            (*floatS[Xlevel].R->floatReg.R;*)  
+            (if XCnt>0 then
+                (if stack_alloc_trace then
+                    '\n<xFreeOreg:-3>'->screen.puttext;
+                if);
+                parspace -> RestoreBusyReg(# do RestoreOregs; 1->DeallocateSpace #);
+             else
+                (if (not isPrim) and (*floatRegOtherThanF0busy*)xbusyallocated then
+                    (* Floats already restored by callCProc/PopDataReg *)
+                    (if stack_alloc_trace then
+                        '\n<xFreeOreg:-4>'->screen.puttext;
+                    if);
+                    parspace -> RestoreBusyReg(# do 1->DeallocateSpace #);
+                 else
+                    (if stack_alloc_trace then
+                        (if stack_alloc_parspace_trace or (parspace<>0) then
+                            '\n<xFreeOreg-4:SETTOP>'->screen.puttext;
+                        if);
+                    if);
+                    parspace -> settop;
+                if)
+            if);
+            busyX[Xlevel]->xbusyallocated; 
+         else
+            (if (not isPrim) and (*floatRegOtherThanF0Busy*)xbusyallocated then
+                (if stack_alloc_trace then
+                    '\n<xFreeOreg-5>'->screen.puttext;
+                if);
+                parspace -> RestoreBusyReg(# do 1->DeallocateSpace #);
+             else
+                (if stack_alloc_trace then
+                    (if stack_alloc_parspace_trace or (parspace<>0) then
+                        '\n<xFreeOreg-5:SETTOP>'->screen.puttext;
+                    if);
+                if);
+                parspace -> settop;
+            if);
+        if);
+        (if Xlevel = 0 then 0->xCnt; false -> xbusyAllocated  if)
+     #);
+   xGetOreg:
+     (* if oRegNo=0, then get oRegisters in the order 0,1,2,...
+      * if oRegNo>0 then get %(oRegNo-1), 
+      *)
+     (# OReg: @oRegOperand(* (# isPrimRegOp:: trueValue #); *) ;       
+        oRegNo: @integer
+     enter oRegNo
+     do (if oRegNo > 0 then O0+oRegNo-1->Oreg else O0+xCnt->OReg if);
+        xCnt+1->xCnt
+     exit OReg[]
+     #);
+   
+   Xlevel (* no of levels of nested External/prim calls *), 
+   xCnt (* no. of par processed *): @integer;
+   
+   parSpace:
+     (* space reserved on stack for C call
+      * must be stacked if nested C calls, 
+      * i.e. C calls in argument list of other C calls.
+      *) @integer;
+   
+   (* xbusyallocated/dbusyallocated:
+    * Two booleans needed to keep track of which of xInitOreg and
+    * PushDataReg should allocate/deallocate stack space for the current frame.
+    * The idea is that the one of the two that first triggers an allocation
+    * is the one that does it. And then the corresponding xFreeOreg/PopDataReg
+    * should do the deallocation.
+    *)
+   xbusyallocated: 
+     (* has stackpart for busy floats/oregs been allocated by xInitOreg? *)
+     @boolean;
+   dbusyallocated: 
+     (* has stackpart for busy floats/oregs been allocated by PushDataReg? *)
+     @boolean;
+   
+   parS (* parSpace used pr. level *), 
+   busyO (* no of reg. used pr. level *): [8] @integer;
+   busyX (* xbusyallocated pr. level *) : [8]@boolean;
+   floatS: (* Indication of any busy floats pr. level *) [8] @FloatRec;
+   
+   (*crTmp,orTmp: @dataRegOperand;*)
+   (* tmp reg. for originReg - %o1 *)
+   isBetaEnv: @boolean;
+   (* true if initial betaenv *)
+   (*   saveF0: ^floatRegOp;*)
+   (* save busy %f0 during externall call returning
+    * value in %f0
+    *)
+   tmpText: ^Text;
+#)

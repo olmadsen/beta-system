@@ -1,0 +1,467 @@
+ORIGIN 'checker';
+LIB_ITEM 'betacompiler';
+BODY 'chkformbody';
+BODY 'docheckbody';
+BODY 'chkevalbody';
+BODY 'searchbody';
+BODY 'chklst' 
+---CheckerDoPart:doPart---
+do
+(* Fragment structure:
+ |      
+ |    ---CheckerDoPart:descriptor---
+ |    (# ...    
+ |       ChkForm: 
+ |       (# <<SLOT CheckerLib:attributes>>;
+ |          ...         
+ |          ActualDesc:                 
+ |          (# <<SLOT doBind:>> ... virtual.bet ...
+ |             ...
+ |          #); 
+ |          ...         
+ |          CmpLst:             
+ |          (# <<SLOT cmpLstBody:>> ... chkLst.bet ...  
+ |             ...
+ |          #); 
+ |          ...         
+ |          <<SLOT ChkFormBody:>> ... ChkFormbody.bet
+ |         ...  
+ |       #)                                     
+ |    #)                                                                *)
+(# ChkForm: 
+     (*********** Checking of a descriptor, attributes or doPart *********)
+     (# <<SLOT ChkFormLib: attributes>>; 
+        isSingleName: @
+          (# N: @ASTindex; V: @integer
+          enter N
+          do 0->V;
+             N->ScanList (* might be prettyer *)
+             (#do  V+1->V; (if V=2 then (N,12)->WE.SemError if);
+                currentNode->N
+             #)
+          exit N
+          #);
+        isVirtual: @
+          (# V,B: @ ASTindex; (* B is a virtual binding; V is the decl. *)
+             ok: @boolean
+          enter(V,B)
+          do false->ok;
+             (if V.label // gram.virtualDecl // gram.bindingDecl then true->ok
+              else (B,13)->WE.SemError
+             if)
+          exit ok
+          #);
+        
+        ThisDesc,preDesc: @ASTindex; (* the descriptor being translated *)
+        (*pre,mainP,att,entP,exitP,doP: ^ ASTindex;*)
+        
+        innerFound: @boolean; (* true if INNER or SLOT in do-part*)
+        
+        ScanCatLst:
+               (* (for Desc in [D, D.prefixDesc,... ] repeat INNER for) *)
+          (# desc,head,pre: @ASTindex
+          enter(desc->head) 
+          do L: (if desc.label = gram.objectDescriptor then
+                    inner;
+                    desc.son->pre;
+                    (if pre.label = gram.prefix then
+                        pre.son->&GetDesc->desc;
+                        (if (desc->head.equal) then
+                            (desc,19)->&WE.SemError;
+                            leave L
+                        if);
+                        restart L
+                if)if)
+          exit desc (* descriptor for top-most superpattern *)
+          #);
+        
+        ActualDesc: @
+          (* ES may be either a denotation or a descriptor *)
+          (# DB: @ BindVirtual
+               (# GetDclAndDesc::< (#do N->&SetUp->(dclRef,DescRef) #);
+                  VirtualError::<(#do (T,no)->&WE.SemError #);
+                  CheckVirtualBinding::<(#do VD->&ChkVB #);
+                  QuaDist::<(# ok:@boolean do(aDesc,vDesc)->ChkQua->(PD,ok)#);
+                  GetTheDesc::<(#do iD->&GetDesc->oD #);
+                  ChkCompEval::<
+                    (#
+                    do (*175->trace(#do 'ActualDesc:chkCompEV'->T #);*)
+                       (EV[],DB[],chain[])
+                         -> ChkComputedEval
+                       (# error::<
+                            (#do (no,EV[],desc[])->WE.ComputedRemoteError#)#)
+                         ->
+                       (remEv[],N[],ref[],refDesc[],chain[]);
+                   #)
+               #);
+             (* The item DB is used by Form cmpLstBody      *)
+             
+             thisDesc,ES,desc: @ ASTindex; MN: @integer
+          enter(thisDesc,ES)
+          do (if ctst then 168->trace(#do ES[]->xA #)if);
+             (thisDesc,ES)->dB.ActualDesc->(desc,MN)
+          exit(desc,MN)
+          #);
+        
+        
+        (* a denotation node has one of the forms: *)
+        (* node= (nameApl) | (remote <den> <name>) | (inx <den> <eval>) *)
+        
+        GetName: @
+          (# node,n: @ ASTindex; remote : @ boolean;
+          enter(node)
+          do false->remote;
+             L:(if node.label
+                // gram.indexed then
+                   node.son->node; restart L
+                // gram.remote // gram.computedRemote then
+                   node.son->node; node.brother->node; true->remote
+                // gram.thisObject then node.son->node
+               if);
+                   (*161->trace(#do node[]->A #)*)
+          exit(node,remote)
+          #);
+        
+        GetSort: 
+          (* gets the sort of a denotation *)
+          (# node,sort,n,dclRef: @ ASTindex; remote: @ boolean;
+          enter node
+          do node->getName->(n,remote); N.dclRef->dclRef;
+             (if dclRef.isNull  then node->&setUp if);
+             n.dclRef->sort; 
+             sort.sort->sort; (*sort=SORT[N,T]*)
+          exit sort
+          #);
+        GetCatSort:
+          (# sort,spec,descRef,son: @ ASTindex
+          enter sort
+          do sort.son->son;
+             (if sort.label
+              // gram.simpleDecl then (* getSpecOfSort *)
+                 son.brother->son;
+                 (if son.label = gram.variablePattern then 
+                     son->descRef
+                  else 
+                     son.son->&GetDesc->descRef
+                 if)
+              // gram.repetitionDecl then (* GetSpecOfSort *)
+                 son.brother->son; son.brother->son;
+                 (if son.label = gram.variablePattern then 
+                     son->descRef
+                  else 
+                     son.son->&GetDesc->descRef
+                 if)
+              // gram.patternDecl then 
+                 son.brother->&GetDesc->descRef
+              // gram.finalDecl then 
+                 sort->ChkVB;
+                 son.brother->&GetDesc->descRef
+              // gram.virtualDecl // gram.bindingDecl then sort->descRef 
+                 (* // gram.renameDecl then integerDesc->descRef *)
+              // gram.forImp // gram.repetitionDecl(*?????*) then
+                 integerDesc->descRef
+              // gram.labelledImp then sort->descRef (* MUST be defined *)
+             if);
+          exit descRef
+          #);
+        
+        GetDesc: 
+          (* returns the descriptor of a this entity-spec*)
+          (# node,catSort,dclRef: @ ASTindex
+          enter node
+          do (if node.label 
+              // gram.objectDescriptor then 
+                 node->catSort;
+                 (node[],0,0,NONE)->DS.put (* not always pattern *)
+              // gram.unExpanded then (*****!!!!!!!!!!!!!!!!*****)
+                 node->catSort
+              else node->&SetUp->(dclRef,catSort)
+             if);
+                 (*164->trace(#do catSort[]->A #)*)
+          exit catSort
+          #);
+        
+        ChkQua:
+          (* check qualification of actualDesc and the original virtual *)
+          (# sub,super,pref,firstSub: @ASTindex; 
+             PD: @integer; Found: @boolean;
+             Error:< object
+          enter(sub,super)
+          do (*167->trace(#do sub[]->xA; super[]->xA #);*)
+             sub->firstSub;
+             L:
+             (if (sub->super.equal)  then (* finito *)
+                 0->PD; true->found
+              else
+                 sub.son->pref;
+                 (if pref.label
+                  // gram.prefix then
+                     pref.son -> &GetDesc -> sub;
+                     (if sub.label
+                      //gram.virtualDecl //gram.bindingDecl //gram.finalDecl then 
+                         (* to handle V ::< (# ... #)   *)
+                         sub.son->sub; sub.brother->&GetDesc->sub
+                      // gram.unExpanded then 
+                         (* sub: <<SLOT qqq:descriptor>>;
+                          * foo: sub(# ... #)
+                          * this is an error
+                          *)
+                         &Error
+                     if);
+                     (*(sub,super)->&ChkQua->(PD,found);*)
+                     (if (PD+1->PD)> 15 then (* ad hoc limit *)
+                         (if sub->firstSub.equal then (* prefix loop*) 
+                             -1->PD;
+                             leave L
+                          else restart L
+                     if)if);
+                     restart L
+                  // gram.empty then 
+                     (superObject->super.equal)->found
+             if)if)
+          exit(PD,Found)
+          #);
+        
+        dump: 
+          (# N: @ASTindex
+          enter N
+          do (if N.isNull then
+                 '\nNull descriptor\n'->tracestream.puttext
+              else
+                 (if common.switch[100] then 0->&N.LispPrint
+                  else tracestream.newline; (N[],messagestream[],5) ->thePP
+          if)if)#);
+        
+        GetPreDesc:
+          (# node,desc,pre,preName,dclRef,vName,originPreDesc: @ASTindex;
+             rem: @boolean; D: ^ASTindex
+          enter node
+          do L :
+               (if node.isNull then 
+                   'GetPreDesc: NULL descriptor'->bugstream.puttext
+                else
+                   (*172->trace(#do node[]->A #);*)
+                   (if node.label 
+                    // gram.objectDescriptor then
+                       node.son->pre;
+                       (if pre.label = gram.prefix then
+                           pre.son->GetName->(preName,rem);
+                           preName.dclRef->dclRef;
+                           (if dclRef.isNull  then
+                               (if preName.StringLength // 0 then 
+                                   (* the prefix is the empty string added to some
+                                    V ::< (# ... #)   *)
+                                   preName.descRef -> &chkVB;
+                                else 
+                                   pre.son->&SetUp->(dclRef,desc)
+                               if)
+                           if);
+                           preName.descRef ->desc;
+                        else (* no prefix possible in error case like:
+                              T: (# V::< XXX #) *)
+                       if)
+                    // gram.descriptorForm // gram.attributesForm then
+                       node.xOrigin->node; restart L
+                    // gram.mainPart then
+                       node[] -> MainPartDesc -> D[];
+                       D -> node;
+                       restart L
+                    // gram.unExpanded then (* should not happen *)
+                       'OOPS: look at docheck.getPreDesc ' -> bugstream.puttext;
+                       node.slotOrigin->node; restart L
+                    else node.origin->node; restart L
+               if)if);
+             (if not desc.isNull then (*172->trace(#do desc[]->A #)*)if)
+          exit desc
+          #);
+        
+        (* a descriptor node has the form desc[PRE,ATT,ACP] *)
+        theCMP: @CMP;
+        LocalSearch: 
+          (# subject: ^ASTindex; desc: @ASTindex; 
+             (* subject is the nameApl to be searched *)
+             (* desc is a descriptor to be searched: 
+              * is overwritten by localsearch 
+              *)
+             isFound: @ boolean; 
+             pn: @ integer;
+             dclRef: @ ASTindex;
+          enter(subject[],desc)
+          <<SLOT LocalSearch:doPart>>
+          exit(isFound,pn,dclRef)
+          #) (* localSearch *);
+        semiSearch: 
+          (# index,name,n: @ ASTindex; (*index=namedIndex[nameDcl] *)
+          enter(index,n)
+          do (*169->trace(#do index[]->A#)*); index.son->name;
+          exit( (n,name)->EQS, 0, name)
+          #);
+        SetUp:
+          (# node,N,descRef: @ASTindex; 
+          enter node
+          do <<SLOT SetUp:descriptor>>;
+             N.descRef->descRef;
+          exit(N.dclRef,descRef)
+          #);
+        ChkEval: 
+          (# ThisDesc,EV: @ASTindex;
+             way: @integer;
+             inNXlist: @boolean; (* EV is in an enter/exit list;
+                                  * all objectDenotations must be checked,
+                                  * i.e. ;X; must bechecked
+                                  *)
+             expKind: @integer; (* eval classification - see chkEvalBody *)
+             hasCode: @boolean; (*this eval implies execution of an object*)
+
+             cstVal, (* if isCst then the value *)
+             dRegNo, (*no. of data registers needed for computing this eval*)
+             type       (* type of this eval *)
+             : @integer
+          enter(ThisDesc,EV,way,inNXlist)
+          do <<SLOT ChkEvalBody: descriptor>>
+          exit(expKind,cstVal,dRegNo,hasCode,type)
+          #);
+      
+        binaryCompKind: (#exit 1 #);
+        unaryCompKind:  (#exit 2 #);
+        assignCompKind: (#exit 3 #);
+        CmpLst: 
+          (# ThisDesc,EV,LV,RV: @ ASTindex; 
+             compKind,typeKind,Ltype,Rtype: @integer
+          enter(ThisDesc,EV,compKind,LV,Ltype,RV,Rtype)
+          do <<SLOT CmpLstBody: descriptor>>;
+          exit typeKind
+          #);
+        ChkVB:
+          (* vDcl is a declaration of a virtual or a binding of a virtual
+           * if vDcl is a binding, it may have the form:
+           *    vDcl = vName ::< (# ... #)
+           * In this case the (empty) prefix may not have been set up.
+           * This pattern test for this situation and performs the set up
+           *)
+          (# vDcl,vName,vSpec,vSpecN,vDclOrigin,vDclPref,vdpDesc,vDclref,
+             son,dclRef: @ASTindex; node: ^ASTindex;
+             rem:@boolean
+          enter vDcl
+          <<SLOT ChkVB:doPart>>
+          #);
+        CheckBinding:
+          (# vDcl,vName,vDclRef,BindSpec,originPreDesc: @ASTindex; 
+             (* why is it called originPreDesc? It is the prefic
+              * descriptor where to search for the virtual binding?
+              *)
+             theOriginDesc: ^ASTindex
+          enter(vDcl,vName,BindSpec,originPreDesc,theOriginDesc[])
+          <<SLOT CheckBinding:doPart>>
+          #);
+        
+        (* Attributes used for storage allocation *)
+        offCount,     (* offset of allocated storage *)
+        insMax,       (* current max. of storage for insertions*)
+        relInsOff,    (* relative offset of insertion from insertion start!*)
+        virtOff:      (* offset of virtual patterns in prototype *)
+          @ integer;
+        
+        NXtmp: @
+          (* for switch 181 to generate simple N/X code *)
+          (# maxNXdepth: @integer;
+             alloc:
+               (# L: @integer
+               enter L
+               do (L,maxNXdepth) -> Max -> maxNXdepth
+               #)
+          #);
+        TmpSto: @
+          (* allocation of temporary storage for for-imp, expressions, etc *)
+          (# Alloc: @ (* allocate N consequtive locations *)
+               (# N,off: @Integer
+               enter N
+               do offCount->off; offCount+N->offCount
+               exit off
+               #);
+             DeAlloc: (* de-allocate N consequtive locations starting from off *)
+               (# N,off: @Integer
+               enter(off,N) 
+                  (* not yet implemented *)
+               #)
+          #);
+        
+        insLst: @
+          (* list of insertions in this descriptor *)
+          (# head: ^ Elm;
+             Elm: (# R: ^ASTindex; relInsOff: @integer; next: ^Elm #);
+             Insert:
+               (# R: ^ASTindex; size: @integer; E: ^Elm
+               enter(R[],size)
+               do &Elm[]->E[]; R[]->E.R[]; 
+                  relInsOff->E.relInsOff; relInsOff+size->relInsOff;
+                  head[]->E.next[]; E[]->head[];
+                  (if (relInsOff>insMax) then relInsOff->insMax 
+               if)#);
+             alloc:
+               (# E: ^Elm; start: @Integer
+               do offCount->start; head[]->E[];
+                  scan:
+                    (if E[] <> NONE then
+                        start + E.relInsOff->E.R.InsOff;
+                        E.next[]->E[];
+                        restart scan
+                    if);
+                  offCount+insMax->offCount
+               #)
+          #);
+
+        descOK: @boolean;
+        
+        desc,id: ^ASTindex; singular: @boolean; insertOff: @integer
+     enter(desc[],singular,id[],insertOff)
+     do <<SLOT ChkFormBody: descriptor>>
+     exit descOK
+     #);
+   Prepare:
+     (#
+     do (common[],gram[],theGroup[],lst[],messageStream[],verboseLevel)
+          -> WE.init;
+        DS.init;
+        ClearErrorMsgList;
+        false -> error -> fatalError -> fatalInitFormError;
+        theGroup[] -> theLibCash.init;
+        theGroup.FragmentList.Scan
+        (# F: ^FragmentForm
+        do (if current.type = formType then current.open->F[]; F.Reset if)
+        #);   
+     #);
+   (* form     = (descriptor ... )                                    *)
+   (*          | (form <name> <descriptor> )                          *)
+   (* formDesc = (descriptor <prefix> <attribute-part> <action-part>) *)   
+
+do Prepare;
+   
+   (* Initialize forms *)
+   theGroup.FragmentList.Scan   
+   (# 
+   do (if current.type = formType then
+          current.open -> InitForm
+      if)
+   #);
+   
+   (* InitForm has been called to initialize the AST.
+    * During InitForm, various semantic checks have been performed,
+    * including check for double declarations, unexpanded nonterminals, etc.
+    * The pattern ChkForm performs the remaining semantic checks.
+    * ChkForm may fail, if the AST has unexpanded nonterminals, so to be
+    * safe, ChkForm is NOT performed if InitForm discovers such errors.
+    * Other errors will first be discovered by a subsequent compiler call.
+    *) 
+   (if not fatalInitFormError then
+       DS.getAllForms
+       (#
+       do (form[],(kind>0),id[],-1) -> ChkForm;
+       #)
+   if);
+   
+   WE.EmitWarningsAndErrors -> (error,fatalError);
+   
+   theLibCash.clear
+#)
+

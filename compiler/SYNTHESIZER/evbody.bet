@@ -1,0 +1,1659 @@
+ORIGIN 'synthlib'; 
+LIB_ITEM 'betacodegen';
+INCLUDE 'genlib';
+INCLUDE 'evlib';
+INCLUDE 'inlinNXitem';
+INCLUDE 'asgtoitem';
+INCLUDE '../GENERATOR/registerContent'
+------evalLib:attributes-------
+CoerceTypes:
+  (# lv,rv: ^EvVal; binType: @integer
+  enter(lv[],rv[])
+  do (if stest then
+         301 ->cTrace(#do 'Coerce: lEv='->xT; lv.display; 
+                       ' rEv='->xT; rv.display #)
+     if);
+     (if lv.evType->binType
+      // 1 // 2 (*simple or ref*) then 
+         CoerceType2:
+           (if rv.evType
+            // 3 (*real*) then lv.mkReal -> lv[]; 3 ->binType 
+            // -1 (* object *) then
+               rv.loadVal -> rv[];
+               restart CoerceType2
+           if)
+      // 3 (*real*) then rv.mkReal->rv[];
+      // 4 (*struc*) then 
+         CoerceType2:
+           (if rv.evType
+            // 1 then (*NONE*) 1 -> binType 
+            // -1 (* object *) then
+               rv.loadVal -> rv[];
+               restart CoerceType2
+           if)
+      // -1 (* object *) then 
+         lv.loadVal -> lv[];
+         restart CoerceTypes
+      else 1 -> binType;
+         cError(#do 'BinOp: left-op illegal evType'->xT; (*EV[]->A*) #)
+     if);
+         (*301->cTrace(#do 'Binop:'->xT; lv.display; rv.display #);*)
+  exit(lv[],rv[],binType)
+  #);
+putValAt:
+  (# lDr,rDr: ^mch.dataregOperand; rEv: ^ASTindex; size: @integer;
+     lv,rv: ^evVal;  ar: @mch.RegAdr;
+     EH: @evalHandler;
+  enter(lv[],rEV[],size)
+  do (baseadr.copy,rEv[],false,ThisSuperChain)->EH.ExpEval->rv[];
+     (*NOTE: baseAdr.copy because operations like addOff kas a side-effect
+      * on an address and a baseadr MUST not be modified. addOff, etc., 
+      * should NOT have a side effect
+      *)
+     lv.loadVal2->lv[]; lv.toDataReg->lDr[];
+     rv.loadVal2->rv[]; rv.toDataReg->rDr[];
+     ar.reg.alloc; (rDr[],ar.reg[])->mch.cpReg; (*ar.mkIndirect;*)
+     (if size
+      //1 then (lDr[],ar[])->mch.stByte
+      //2 then (lDr[],ar[])->mch.stHalf
+      //4 then (lDr[],ar[])->mch.stVal
+     if);
+     rDr.deAlloc; ar.reg.deAlloc; (*and clear *)(*false->ar.ind;*) ar.reg[]->mch.gClr
+  exit lDr[]
+  #);
+getValAt:
+  (# lDr: ^ mch.dataRegOperand; size: @integer; signed: @boolean;
+     (*aR: @mch.adrRegOperand; *) aR: @mch.regAdr
+  enter(lDr[],size,signed)
+  do ar.reg.alloc; (lDr[],ar.reg[])->mch.cpReg; (*ar.mkIndirect;*)
+     signed -> ar.signed;
+     (ar[],lDr[],size)->mch.ldVl;
+     (* (if signed then (ar[],lDr[],size)->mch.ldSignedVl
+      * else (ar[],lDr[],size)->mch.ldVl
+      * if);
+      *)
+     ar.reg[]->mch.gClr;
+     ar.reg.deAlloc
+  #);
+----- EvalBody: descriptor ----
+(# V: ^evVal;
+do (if stest then
+       301->cTrace(#do 'EvBody: '->xT; Eval[]->xA;
+                    mch.dumpreg; (*EHchain[]->printChain*) #)
+   if);
+   Eval[]->Sematt.evCase
+   (# (* simple, realEv and repetition should not appear *)
+      itemEv::<
+        (#
+        do (if switch181 then
+               (baseAdr[],EV[],false,EHchain[])->doItem->V[] 
+            else
+               (baseAdr.copy,EV[],false,EHchain[])->doItem->V[] 
+           if)
+        #);
+      compEv::<
+        (#
+        do (if switch181 then
+               (baseAdr[],EV[],false,EHchain[])->doComp->V[] 
+            else
+               (baseAdr.copy,EV[],false,EHchain[])->doComp->V[] 
+           if)
+        #);
+      sysEv::< (#do 'Simple System Evaluation'->notImpl#);
+      insert::<
+        (# callRegOnStack: @boolean; OA: ^mch.address;
+           p,mp,att,n,doP,x: ^ASTindex;
+           EVx: @ASTindex;
+           chain: ^DH.superChain;
+           D: @ASTindex; MN: @integer; isV: @integer
+        do (if desc.label = gram.objectDescriptor then
+               (if desc[]->sematt.inlineDO then
+                   'InlineDO'->mch.comment;
+                   pushThis;
+                   EV.son->EVx;
+                   (baseAdr.copy,thisDesc[],EVx[],EHchain[])
+                     -> genOrgAdr
+                     -> OA[];
+                   (OA[],mch.thisRegOp[])->mch.gLea;
+
+                   desc[]->semAtt.descSonsRef->(p[],mp[],att[],n[],doP[],x[]);
+                   (* genDo should probably get OA as its baseAdr? NO?
+                    * GenDo evaluates starting from gen.thisReg, but it
+                    * should get isOrigin set to true;
+                    * The global ThisDesc should be stacked and temporarily
+                    * be replaced by desc and popped afterwards;
+                    * EHchain[] should also be fixed to reflect the
+                    * situation
+                    *)
+                   (0,doP[],desc->DH.newSingle,true,false)
+                     -> &theGen.genDo;
+                   popThis;
+                   leave insert
+           if)if);
+           (if switch181 then
+               (baseAdr[],EV[],false,EHchain[],false) -> doGenItem -> V[] 
+            else
+               (baseAdr.copy,EV[],false,EHchain[],false)->doGenItem->V[] 
+           if)
+        #);
+      computedObj::< (#do 'Single Computed Obj'->notImpl #);
+      dynItem::<
+        (#
+        do (if switch181 then
+               (baseAdr[],EV[],false,EHchain[],true) -> doGenItem -> V[] 
+            else
+               (baseAdr.copy,EV[],false,EHchain[],true) -> doGenItem -> V[] 
+           if)
+        #);
+      dynComp::< 
+        (#
+        do (if switch181 then
+               (baseAdr[],EV[],false,EHchain[],true) 
+                 -> doGenComp
+                 -> V[] 
+            else
+               (baseAdr.copy,EV[],false,EHchain[],true) 
+                 -> doGenComp
+                 -> V[] 
+           if)
+           #);
+      repOp::<(# do 'Single RepOp has no meaning'->bugstream.putline #);
+      cProcDesc::<
+        (# CP: @ExternalCall; V: ^evVal
+        do (callId,desc[],extKind,EV.son)->CP; CP.call; CP.getExitP->V[]
+           (* necessary to get possible exit result to deallocate
+            * possible call stack area, at least necessary for SPARC
+            *)
+        #);
+      externalVirtual::
+        (# CP: @ExternalCall; V: ^evVal
+        do (*301->cTrace(#do 'Calling external virtual: '->xT; callId[]->xT #);*)
+           (':VDT:',desc[],sematt.virtExt->extKind,EV.son)->CP; 
+           CP.call; 
+           CP.getExitP->V[]
+        #);
+      primitive::<
+        (# PC: @primitiveCall 
+        do EV->SemAtt.ParsePrimitive 
+           (# ExternalOp::<
+                (#
+                do (if not OpTxt.empty then (0,OpTxt[])->PC; PC.call if)
+                #);
+              InLineOp::<
+                (#do (*(OpCode,I1,I2)->V.asgToInLinePrimitive->V[]*)
+                   'SingleInline'->notImpl  #)
+        #)#);(* primitive*)
+      newBinaryPrim::
+        (# EV1,EV2,op: @ASTindex; lv: ^evVal; 
+	   lDr: ^mch.dataRegOperand;
+	   EH: @EvalHandler;
+        do EV.son->EV1; EV1.brother ->op; op.brother->EV2;
+	   (baseadr.copy,EV1[],false,EHchain[])->EH.ExpEval->lv[];
+           (if op[]->sematt.primitiveToNumber 
+	    // 34 (* Val %putByteAt Adr *) then (lv[],EV2[],1)->putValAt
+            // 35 (* Val %putShortAt Adr *) then (lv[],EV2[],2)->putValAt
+            // 36 (* Val %putLongAt Adr *) then (lv[],EV2[],4)->putValAt
+           if);
+        #);
+      newRemotePrim::
+        (# EV1,op: @ASTindex; A: ^mch.address; ar: @mch.adrRegOperand
+        do (*312 -> cTrace(#do 'NewRemotePrim: '->xT; EV[]->xA #);*)
+           EV.son->EV1; EV1.son -> EV1; EV1.brother->op;
+           (baseAdr.copy,EV1[],false,EHchain[])->genAdr->A[];
+           A.toReg2->ar;
+           (if op[]->sematt.primitiveToNumber
+            // 32 (* R.%byteSwapShort *) then
+               (* currently ONLY available for INTEL 486 *)
+               (ar,false)->mch.byteSwap
+            // 33 (* R.%byteSwapLong *) then  
+               (* currently ONLY available for INTEL 486 *)
+               (ar,true)->mch.byteSwap
+            // 39 (* R.%lock *) then
+               (* currently ONLY available for sparc *)
+               ar->mch.lock;
+            // 40 (* R.%lock *) then
+               (* currently ONLY available for sparc *)
+               ar->mch.unlock;
+            // 41 (* R.%enablePreemption *) then
+               (* currently ONLY available for sparc *)
+               ar->mch.enablepreemption;
+            // 42 (* R.%disablePreemption *) then
+               (* currently ONLY available for sparc *)
+               ar->mch.disablepreemption;
+            // 44 (* R.%suspend *) then
+               (# pDest: ^mch.mOperand
+               do (if common.switch[61] then
+                   else
+                      1 -> mch.initPrimCall;
+                      1 -> ar.toPrimDest;
+                      'SuspX' -> mch.callPrim;
+                      0 -> mch.getPrimRes
+               if)#)
+            // 45 (* R.%break *) then
+               mch.SetBreak
+           if); 
+           ar[]->mch.gClr; 
+        #);
+      assign::<
+        (# EH: @EvalHandler; chain1: ^DH.SuperChain (* see comment at 
+                                                     * assign::< below
+                                                     *)
+        do (if stest then
+               301->ctrace
+               (#do 'EvalBody:assign:A'->xH;
+                  EV1[] -> xA; xN;
+                  baseAdr.display->xT
+           #)if);                  
+           (if switch181 then
+               (baseAdr[],EV1[],false,EHchain[]->chain1[])
+                 -> EH.ExpEval
+                 -> V[];
+            else
+               (baseAdr.copy,EV1[],false,EHchain[]->chain1[])
+                 -> EH.ExpEval
+                 -> V[];
+           if);
+           (if stest then
+               301->ctrace
+               (#do 'EvalBody:assign:B'->xH;
+                  (if V[] = none then
+                      'V is none' -> putline
+                   else
+                      V.display; xN;
+                  if);
+                  EV2[] -> xA; xN;
+                  baseAdr.display->xT
+           #)if);                  
+           (if switch181 then
+               (baseAdr[],V[],EV2[],chain1[])->EH.assignValToEval->V[];
+            else
+               (baseAdr.copy,V[],EV2[],chain1[])->EH.assignValToEval->V[];
+           if);
+           (if stest then
+               301->ctrace
+               (#do 'EvalBody:assign:C'->xH;
+                  (if V[] = none then 'V is none'->xT
+                   else 
+                      V.display
+                  if);
+                  xN;
+                  baseAdr.display->xT
+           #)if);                  
+
+           (* check if this is ok - assignments may be embedded *)
+        #);
+      evalList::
+        (# EH: @EvalHandler
+        do (*312->cTrace(#do EV[] ->xA #); *)
+           EV.son -> scanList
+           (# E: @ASTindex 
+           do currentNode -> E; (*312->cTrace(#do E[] ->xA #); *)
+              (baseAdr.copy,E[],way,EHchain[]) -> EH.GenEval
+           #)
+        #);
+      unMinus::(#do (baseAdr.copy,EV[],false,EHchain[]) -> ExpEval -> V[] #);
+      unPlus::(#do (baseAdr.copy,EV[],false,EHchain[]) -> ExpEval -> V[] #);
+      notExp::(#do (baseAdr.copy,EV[],false,EHchain[]) -> ExpEval -> V[] #);
+      binOp::(#do (baseAdr.copy,EV[],false,EHchain[]) -> ExpEval -> V[] #);
+      (* all others should not appear *)
+   #);
+   (if V[] <> NONE then V.release if);
+   none->eval[]; none->baseAdr[]; none->EHChain[]; none->V[];
+#)
+---ExpEval:descriptor---
+(# newObject: (* integrate with exeObj *)
+     (# EV,ES: @ASTindex; kind: @integer; W: ^EvVal; 
+        descKind,MN,isVirtual: @integer; desc,sort: @ASTindex;
+        D: ^ASTindex; callRegOnStack: @boolean;
+        A: ^mch.address; EVchain: ^DH.superChain
+     enter(EV,kind)
+     do EV.son->ES;
+        (if ES.label = (gram.objectDescriptor->descKind) then
+            (ES,common.itemKind,0,null)->DS.push; ES->desc;
+            (* kind,cons are not correct *)
+         else 
+            ES->sematt.getSort->sort;
+            (if sort.label <> (gram.variablePattern->descKind) then
+                baseAdr.bAdr.localDesc[]->D[];
+                (*306->cTrace
+                 (#do 'NewObj1:'->T; ES[]->A; 
+                 (if chain[] = NONE then 'chain is none'->T
+                 else chain
+                 if)#);*)
+                ES->sematt.descrip-> desc;
+                desc.label->descKind;
+                (chain1[],ES)->DH.theDesc->(desc,MN,EVchain[],isVirtual);
+                (*306->cTrace
+                 (#do 'NewObj2:'->T; ES[]->A; desc[]->A;
+                 (if EVchain[] = NONE then 'EVchain is none'->T
+                 else EVchain
+                 if)#);*)
+        if)if);
+        (baseAdr.copy,ES[],desc[],kind,descKind,chain1[]) 
+          -> GenerateObject 
+          -> (A[],callRegOnStack);
+        (if callRegOnStack then 
+            (# aR: @mch.adrRegOperand 
+            do aR.alloc; 
+               (aR,true,ES[],chain1[])->mkComputedRefEvVal->W[];
+               (mch.callRegOp[],aR[])->mch.cpReg;
+               true->PopCall
+            #)
+         else 
+            (* Why true here and in the call above?
+             * true means struc ref??? Should be false?
+             * For computedRefEvval, strucRef is only used in pushCpar,
+             * i.e. only for COMobject (&myCom[] -> somExternal)
+             * does it matter, and this is why the problem was discovered.
+             * We should change to false, but NOT just before a freeze 
+             * of r4.1!
+             *)
+            (if common.switch[125] then 
+                (# A1: ^mch.RegAdr
+                do A[] -> A1[];
+                   (A.reg1,true,ES[],chain1[])->mkComputedRefEvVal->W[]
+                #)
+             else
+                (mch.callO,true,ES[],chain1[])->mkComputedRefEvVal->W[]
+            if)
+        if) 
+     exit W[]
+     #);
+   singleList: (# enter EV[] #); 
+   V: ^evVal; EH: @EvalHandler; EVx: @ASTindex;
+   chain1: ^DH.SuperChain (* the following calls assign chain to
+                           * the global variable i EH. This means
+                           * that chain may have changed during
+                           * execution of EH.ExpEval. Therefore
+                           * the original value is saved in chain1
+                           * for the call EH.assignValToEval.
+                           * Should have been more clean
+                           *)
+do (if stest then
+       301->cTrace(#do 'ExpEval:'->xT; EV[]->xA; xN;
+                     'baseAdr='->xT; baseAdr.display->xT;
+                     mch.dumpreg; (*EHchain[]->printChain*) #)
+   if);
+   EHchain[]->chain1[]; 
+   EvalCase:
+     EV[]-> sematt.evCase
+   (# assign::<
+        (# 
+        do (if stest then
+               301->ctrace
+               (#do 'ExpEval:assign:A'->xH;
+                  EV1[] -> xA; xN;
+                  baseAdr.display->xT
+           #)if);                  
+           
+           (if switch181 then
+               (baseAdr[],EV1[],false,chain1[])->EH.ExpEval->V[];
+            else
+               (baseAdr.copy,EV1[],false,chain1[])->EH.ExpEval->V[];
+           if);
+           (if stest then
+               301->ctrace
+               (#do 'ExpEval:assign:B'->xH;
+                  V.display; xN;
+                  EV2[] -> xA; xN;
+                  baseAdr.display->xT
+           #)if);                  
+           (if switch181 then
+               (baseAdr[],V[],EV2[],chain1[])->EH.assignValToEval->V[];
+            else
+               (baseAdr.copy,V[],EV2[],chain1[])->EH.assignValToEval->V[];
+           if);
+           (if stest then
+               301->ctrace
+               (#do 'ExpEval:assign:C'->xH;
+                  (if V[] = none then 'V is none' -> xT 
+                   else
+                      V.display; xN;
+                  if);
+                  baseAdr.display->xT
+           #)if)
+        #);
+      simple::<
+        (# A: ^mch.address
+        do EV.son->EVx; 
+           (if common.switch[211] then
+               (if ((EV[]->theGen.RegCont.inReg->V[]) <> NONE) then
+                   leave simple
+           if)if);
+           (baseAdr.copy,EVx[],false,chain1[])->genAdr-> A[];
+           (if A.isNotObjRef then
+               (# dr: @mch.dataRegOperand
+               do dr.alloc;
+                  (A[],dr[],A.size) -> mch.ldVl;
+                  (dr,false,false,false)->mkComputedEvVal->V[];
+                  true -> A.freeAdr
+               #)
+            else
+               A[] -> mkSImpleVal->V[]
+           if)
+        #);
+      realEv::<
+        (#
+        do EV.son->EVx; 
+           (baseAdr.copy,EVx[],false,chain1[])->genAdr->mkRealEvVal->V[]
+        #);
+      repetition::<
+        (# slice: @boolean
+        do NOT (EV1[]=NONE)->slice;
+           (baseAdr.copy,EV[],evalKind,slice)->mkTxtVarEvVal->V[]
+        #);
+      inlineNX::
+        (# W: ^inlineNXitem; chain2: ^DH.SuperChain;
+           D: @ASTindex; MN: @integer; isV: @integer
+        do (*195->cTrace(#do 'No-do-X:'->T; EV[]->A #);*)
+           mch.InlineNX
+           (# Failed::
+                (#
+                do '\nInlining failed 1!' -> screen.putline
+                #)
+           do (chain1[],EV.son)->DH.theDesc->(D,MN,chain2[],isV);
+              (EV[],desc[],baseAdr.copy,chain2[],thisDesc[])
+                -> mkInlineItemEval
+                -> W[];
+              chain1[] -> W.eval -> V[]
+           #);
+        #);
+      insert::<
+        (# D: @ASTindex
+        do (if desc.label = gram.objectDescriptor then
+               desc->sematt.TopDesc->D;
+               (*213->cTrace(#do desc[]->A; D[]->A; #);*)
+               (if D[]->sematt.hasOnlyNX then
+                   (*213->cTrace(#do 'NoDoX:'->T; EV[]->A #);*)
+                   (* just get the exit part -
+                    * OBS MUST have NO attributes
+                    *)
+                   (# D: @ASTindex; MN: @integer; isV: @integer;
+                      chain2: ^DH.SuperChain;
+                      XS: @| sematt.NXScanner
+                   do (chain1[],EV.son)->DH.theDesc->(D,MN,chain2[],isV);
+                      (desc[],true,chain2[])->XS;
+                      (if XS.length = 1 then
+                          (* XS.getNXelm->(ev[],pl,chain3[]);*)
+                          
+                      if)
+                   #)
+           if)if);
+           (if switch181 then
+               (baseAdr[],EV[],succIsObj,chain1[],false)->doGenItem->V[] 
+            else
+               (baseAdr.copy,EV[],succIsObj,chain1[],false)->doGenItem->V[] 
+           if)
+        #);
+      itemEv::< 
+        (# 
+        do (if switch181 then
+               (baseAdr[],EV[],succIsObj,chain1[])->doItem->V[] 
+            else
+               (baseAdr.copy,EV[],succIsObj,chain1[])->doItem->V[] 
+           if)
+        #);
+      compEv::< 
+        (# 
+        do (if switch181 then
+               (baseAdr[],EV[],succIsObj,chain1[])->doComp->V[] 
+            else
+               (baseAdr.copy,EV[],succIsObj,chain1[])->doComp->V[] 
+           if)
+        #);
+      sysEv::< (#do 'Exit System Eval'->notImpl #);
+      dynItem::<
+        (#
+        do (if switch181 then
+               (baseAdr[],EV[],succIsObj,chain1[],true)->doGenItem->V[] 
+            else
+               (baseAdr.copy,EV[],succIsObj,chain1[],true)->doGenItem->V[] 
+           if)
+        #);
+      dynComp::<
+        (#
+        do (if switch181 then
+               (baseAdr[],EV[],succIsObj,chain1[],true)->doGenComp->V[] 
+            else
+               (baseAdr.copy,EV[],succIsObj,chain1[],true)->doGenComp->V[] 
+           if)
+        #);
+      computedObj::< (#do 'Exit Computed Object'->notImpl #);
+      dynItemRef::< (#do (EV,common.itemKind)->newObject->V[] #);
+      dynCompRef::< (#do (EV,common.compKind)->newObject->V[] #);
+      objRef::< 
+        (#
+        do EV.son->EVx;
+           ((baseAdr.copy,EVx[],false,chain1[])
+             -> genAdr,false,EVx[],chain1[])
+             -> mkRefEvVal
+             -> V[]
+        #);
+      strucRef::<
+        (# ObjStruc:
+             (* R##, where R is an object-reference *)
+             (# onStack: @boolean; pReg: ^mch.mOperand;
+                ar: @mch.adrRegOperand; dr: @mch.dataRegOperand;
+                isComponent,pop: @boolean
+             enter isComponent
+             do (baseAdr.copy,EVx[],false,chain1[])->genAdr->A[];
+                (* test if item or component and adjust A *)
+                (if isComponent then common.compHeadSize*4->A.addOff->A[] if);
+                (if mch.CallRegInPrimReg2 
+                    (*mch.callRegBusy and common.switch[61]*) then
+                    (false,true) -> mch.pushThisOrCall;
+                    true -> pop
+                if);
+                2->mch.initPrimCall;
+                1->mch.getPrimReg->pReg[];
+                (if A.access = common.direct then
+                    ar.alloc;
+                    (A[],ar[])->mch.gLea;
+                    A.freeAdr
+                 else
+                    (* make sure that a none test is generated here!
+                     * also needed to handle possible dangling persistent
+                     * ref to pstore
+                     *)
+                    A.toReg3->ar; (* used to be: toReg2, which makes freeAdr,
+                                   * and a reUse of the register;
+                                   * i.e. A.freeAdr must be executed again.
+                                   * Instead toReg3 is used which makes
+                                   * use of a possible register in A;
+                                   * see comment in machine:toReg(# 2,3,4#)
+                                   *)
+                if);
+                (if pReg.isPrimRegOp then
+                    (ar[],pReg[])->mch.cpReg
+                 else
+                    (ar[],pReg[])->mch.stVal
+                if);
+                ar.dealloc;
+                (if common.switch[61] then (2,1) -> mch.SPtoPrimReg if);
+                'ObjS'->mch.callPrim;
+                3->mch.getPrimRes->dr; ar.alloc; (dr[],ar[])->mch.cpReg;
+                dr.deAlloc;
+                (if pop then (false,true) -> mch.popThisOrCall if);
+                (ar,true,EVx[],chain1[])->mkComputedRefEvVal->V[]
+             #);
+           varPtn:
+             (#
+             do (baseAdr.copy,EVx[],false,chain1[])->genAdr->A[];
+                (A[],true,EVx[],chain1[])->mkRefEvVal->V[]
+             #);
+           sort: @ASTindex; A: ^mch.address; lab: @integer
+        do EV.son->EVx;
+           (if EVx.label = gram.thisObject then ObjStruc
+            else
+               EVx->semAtt.getSort->sort;
+               (if sort.label->lab 
+                // gram.simpleDecl// gram.repetitionDecl then
+                   sort.son->sort; sort.brother->sort;
+                   (if lab=gram.repetitionDecl then
+                       sort.brother->sort
+                   if);
+                   (if sort.label
+                    //gram.variablePattern then varPtn
+                    //gram.staticItem// gram.dynamicItem then false->ObjStruc
+                    else (* component *) true->ObjStruc
+                   if)
+                else (EV,common.strucKind)->newObject->V[];
+        if)if)#);
+      evalList::< 
+        (# E: @ASTindex; N: @Integer 
+        do EV.son -> EVx;
+           Elim:             
+             EVx -> ScanList
+           (#
+           do currentNode->E; N+1->N;
+              (if N = 2 then leave Elim if);
+              (* more than one elm in list *)
+           #);
+           (if N = 1 then 
+               E[]->singleList; 
+               restart EvalCase 
+           if);
+           301->trace(# do EVx[]->xA #);
+           (EVx[],baseAdr.copy,chain1[])->mkListVal->V[];
+        #);
+      RepOp::<
+        (# RN,RN1: @ASTindex; A: ^mch.address
+        do (*350->cTrace(#do 'RepOp'->t #);*)
+           EV.son->RN; (* RN = R.x *) RN.son->RN1;
+           (baseAdr.copy,RN1[],false,chain1[])->genAdr->A[];
+           (if (RN[]->semAtt.repAttId) = 1 (* range *) then 
+               (# 
+               do common.cstInd->A.access; 4->A.size;
+                  common.rangeOff*4->A.addOff->mkSImpleVal->V[]
+               #)
+            else 'Illegal RepOp in RepOp->E' ->bugstream.putline
+           if);
+        #);
+      cProcDesc::<
+        (# CP: @ExternalCall
+        do (callId,desc[],extKind,EV.son)->CP;
+           CP.call; CP.getExitP->V[];
+        #);
+      externalVirtual::
+        (# CP: @ExternalCall
+        do (*301->cTrace(#do 'Calling external virtual: '->xT; callId[]->xT #);*)
+           (':VDT:',desc[],sematt.virtExt->extKind,EV.son)->CP; 
+           CP.call; 
+           CP.getExitP->V[]
+        #);
+      newBinaryPrim::
+        (# EV1,EV2,op: @ASTindex; 
+	   LogOp:
+             (# rv: ^evVal; lDr: ^mch.dataRegOperand; 
+             do (baseadr.copy,EV2[],false,chain1[])->EH.ExpEval->rv[];
+	        lv.loadVal2->lv[]; lv.toDataReg->lDr[]; 
+	        rv.loadVal2->rv[]; rv.toDataReg->dr[];
+	        (*dr->dr.reUse;*)
+	        INNER;
+                lDr.deAlloc
+             #);
+	   shift:
+             (# shiftBy: ^mch.mOperand; T: ^text; rv: ^evVal;
+             do lv.loadVal2->lv[]; lv.toDataReg->dr[];
+	        (if EV2.label = gram.integerConst then 
+		    EV2.getText->T[]; 0->T.setPos;
+	    	    T.getInt->mch.NewCstOp->shiftBy[];
+		    (* in the 'old' prim version it was tested if the
+	  	     * constant was < 8
+		     *)
+		 else 
+	            (baseadr.copy,EV2[],false,chain1[])->EH.ExpEval->rv[];
+	            rv.loadVal2->rv[]; rv.toDataReg->shiftBy[];
+                if);
+                INNER;
+             #);
+	   lv: ^evVal; dr: ^mch.dataRegOperand
+             (***** We need to consider alloc/dealloc of registers! *)
+        do EV.son->EV1; EV1.brother ->op; op.brother->EV2;
+	   (baseadr.copy,EV1[],false,chain1[])->EH.ExpEval->lv[];
+           (if op[]->sematt.primitiveToNumber 
+            // 2 (* band *) then LogOp(#do (lDr[],dr[],4)->mch.gAnd #)
+            // 3 (* bor  *) then LogOp(#do (lDr[],dr[],4)->mch.gOr #)
+            // 4 (* bxor *) then LogOp(#do (lDr[],dr[],4)->mch.gXor #)
+            // 22 (* srl *) then 
+	       Shift(#do (shiftBy[],dr[])->mch.logicalShiftRight #)
+            // 23 (* sll *) then 
+	       Shift(#do (shiftBy[],dr[])->mch.logicalShiftLeft #)
+            // 24 (* sra *) then 
+	       Shift(#do (shiftBy[],dr[])->mch.arithShiftRight #)
+            // 25 (* sla*) then
+	       Shift(#do (shiftBy[],dr[])->mch.arithShiftLeft #)
+            // 37 (* rol *) then 
+	       Shift(#do (shiftBy[],dr[])->mch.rotateLeft #)
+            // 38 (* ror *) then
+	       Shift(#do (shiftBy[],dr[])->mch.rotateRight #)
+	    // 34 (* Val %putByteAt Adr *) then (lv[],EV2[],1)->putValAt->dr[]
+            // 35 (* Val %putShortAt Adr *) then (lv[],EV2[],2)->putValAt->dr[]
+            // 36 (* Val %putLongAt Adr *) then (lv[],EV2[],4)->putValAt->dr[]
+           if);
+ 	   (dr,false,false,false)->mkComputedEvVal->V[]
+        #);
+      newUnaryPrim:: (* %thiss object - many changes *)
+        (# EV1,op: @ASTindex; lv: ^evVal;
+	   lDr: ^mch.dataRegOperand; 
+           primNo: @integer
+        do EV.son->op; 
+           (if (op[]->sematt.primitiveToNumber -> primNo) 
+               = 43 (* %thiss object *) then
+               (mch.thisRegOp,false,none,chain1[]) -> mkComputedRefEvVal -> V[]
+            else
+               op.brother->EV1;
+	       (baseadr.copy,EV1[],false,chain1[])->EH.ExpEval->lv[];
+               lv.loadVal2->lv[]; lv.toDataReg->lDr[];
+               (if primNo
+                // 1 (* not *) then (lDr[],4)->mch.logNot
+                // 26 (* %getByteAt Adr *) then (lDr[],1,false)->getValAt
+                // 27 (* %getShortAt Adr *) then (lDr[],2,false)->getValAt
+                // 28 (* %getSignedByteAt Adr *) then (lDr[],1,true)->getValAt
+                // 29 (* %getSignedShortAt Adr *) then (lDr[],2,true)->getValAt
+                // 30 (* %getLongAt Adr *) then (lDr[],4,false)->getValAt
+               if);
+ 	       (lDr,false,false,false)->mkComputedEvVal->V[]
+           if)
+        #);
+      primitive::<
+        (# PC: @primitiveCall 
+        do EV->SemAtt.ParsePrimitive
+           (# ExternalOp::<
+                (#
+                do (if not OpTxt.empty then (0,OpTxt[])->PC; PC.call->V[] if)
+                #);
+              InLineOp::<
+                (#do(* (OpCode,I1,I2)->V.asgToInLinePrimitive->V[]  *)
+                   'ExitInlinePrimitive'->notImpl #)
+        #)#);(* primitive*)
+      address::< 
+        (# 
+        do EV.son->EVx; 
+           mkComputedEvVal->V[];
+           (baseAdr.copy,EVx[],false,chain1[])->genAdr->V.toDreg
+        #);
+      constDesc::<(#do val->mkConstVal->V[] #);
+      intCst::<
+        (# T: ^text; F: @ASTindex
+        do EV.getText -> T[];
+           EV.father -> F;
+           (if F.label = gram.unaryMinusExp then
+               (* To be able to handle 
+                *    -2147483648 = minInt
+                * we must prepend the '-' sign before
+                * calling getNumber to avoid number overflow;
+                * see also chkevalbody: call of getNumber
+                *)
+               '-' -> T.prepend
+           if);
+           0->T.setPos;
+           T.getNumber 
+           (# integerValue::< (#do value->mkConstVal->V[] #);
+              basedValue::< (#do value->mkConstVal->V[] #);
+              realValue::<
+                (#do (T[],value)->mch.floatConst->mkFloatEvVal->V[] #)
+           #);
+        #);
+      txtCst::< 
+        (# T: ^text do EV.gettext->T[]; T->mkTxtCstEvVal->V[] #);
+      noneExp::< (#do common.noneVal->mkConstVal->V[] #);
+      unMinus::<
+        (# V1: ^evval
+        do EV.son->EVx; 
+           (baseAdr.copy,EVx[],false,chain1[]) -> &EH.ExpEval -> V1[];
+           (if EVx.label <> gram.integerConst then
+               (* see intCst above *)
+               V1.unMinus -> V[];
+               V1.release
+            else V1[] -> V[]
+           if);
+        #);
+      unPlus::<
+        (#
+        do EV.son->EVx; (baseAdr.copy,EVx[],false,chain1[])->&EH.ExpEval->V[]
+        #);
+      notExp::<
+        (# V1: ^evval
+        do EV.son->EVx; (baseAdr.copy,EVx[],false,chain1[])->&EH.ExpEval->V1[];
+           V1.notExp->V[]; V1.release 
+        #);
+      binOp::< 
+        (# lv,rV: ^evVal; lNo,rNo,evNo,freeReg,binType: @integer;
+           L,Lx: @mch.localLab; dr: ^mch.dataRegOperand;
+           mkComputedVal:
+             (# dr: ^mch.dataRegOperand;
+                ev: ^EvVal
+             enter dr[]
+             do (dr,false,false,false)->mkComputedEvVal->ev[]
+             exit ev[]
+             #);
+        do (if ev.label
+            // gram.andExp then
+               (*     <EV1>
+                *     jmpFalse L
+                *     <EV2>
+                *     jmp Lx - not the smartest code here
+                * L:  0->dr
+                * Lx: ...
+                *)
+               L.new;
+               (baseAdr.copy,EV1[],succIsObj,EHChain[],L[],false)
+                 ->BoolExpEval->lv[];
+               (baseAdr.copy,EV2[],succIsObj,EHChain[])->ExpEval->Rv[];
+               rv.loadVal2->rv[]; rv.toDataReg->dr[];
+               Lx.new; 
+               Lx[]->mch.gJmp;
+               L.def;
+               dr[]->mch.gClr;
+               Lx.def;
+               lv.release; 
+               (dr,false,false,false)->mkComputedEvVal->V[];
+               leave binOp
+            // gram.orExp then
+               (*     <EV1>
+                *     jmpTrue L
+                *     <EV2>
+                *     jmp Lx - not the smartest code here
+                * L:  1->dr
+                * Lx: ...
+                *)
+               L.new;
+               (baseAdr.copy,EV1[],succIsObj,EHChain[],L[],True)
+                 ->BoolExpEval->lv[];
+               (baseAdr.copy,EV2[],succIsObj,EHChain[])->ExpEval->Rv[];
+               rv.loadVal2->rv[]; rv.toDataReg->dr[];
+               Lx.new; 
+               Lx[]->mch.gJmp;
+               L.def;
+               (1->mch.newCstOp,dr[])->mch.ldCst;
+               Lx.def;
+               (dr,false,false,false)->mkComputedEvVal->V[];
+               lv.release; 
+               leave binOp
+
+           if);
+           1->ev.getAttribute->lNo; lNo->TOS'%getShort[1]'->rNo;
+           lNo->TOS'%getShort[0]'->lNo; 2->ev.getAttribute->evNo;
+           mch.dataRegMax->freeReg;
+           (*307->cTrace
+            (#do EV[]->A; lNo->I; rNo->I; evNo->I; 
+            ' MaxReg:'->T; freeReg->I;
+            ' FreeReg:'->T; mch.noOfFreeDataReg->I 
+            #);*)
+           (if switch181 or common.switch[129] then
+               (* we always evaluate from left to right and hopefully
+                * Flemming & Anders will optimze register usage
+                *)
+               (baseAdr[],ev1[],false,chain1[])->&EH.ExpEval->lv[];
+               (if stest then
+                   301 -> ctrace
+                   (#
+                   do 'expEval:binOp:before:loadVal:' -> xH;
+                      'baseAdr=' -> xT; baseAdr.display->xT; xN;
+                      lv.display; 
+                   #);
+               if);
+               (* here we may temporarily free baseadr if it does
+                * not use the same a-reg as lv;
+                * lv.loadVal may imply an exit-part like 'exit A+1'
+                * where A is an object to be recursively evaluated
+                * and use more a-registers
+                *)
+               (* switch181: perhaps save baseAdr before loadVal?*)
+               (if switch181 then
+                   lv.loadVal->lv[]
+                else
+                   lv.loadVal2-> lv[]
+               if);
+               
+               (if stest then
+                   301 -> ctrace
+                   (#
+                   do 'expEval:binOp:after:loadVal:' -> xH;
+                      'baseAdr=' -> xT; baseAdr.display->xT; xN;
+                      lv.display; 
+                   #);
+               if);
+               (if switch181 then
+                   (if lv.theReg = mch.callO then
+                   (* possible for T##values *)
+                   lv.toTmp
+               if)if);
+               (baseAdr[],ev2[],false,chain1[])->&EH.ExpEval->rv[];
+               (if common.switch[121] then
+                   rv.loadVal2-> rv[]
+                else
+                   rv.toDataReg->mkComputedVal->rv[]
+               if)
+            else
+               (if true
+                // rNo=0 then 
+                   (baseAdr.copy,ev1[],false,chain1[])->&EH.ExpEval->lv[];
+                   lv.loadVal->lv[];
+                   (baseAdr.copy,ev2[],false,chain1[])->&EH.ExpEval->rv[];
+                // (0<=lNo) and (lNo<=rNo) and (lNo<freeReg) then
+                   (baseAdr.copy,ev2[],false,chain1[])->&EH.ExpEval->rv[];
+                   rv.loadVal->rv[];
+                   (baseAdr.copy,ev1[],false,chain1[])->&EH.ExpEval->lv[];
+                // (1<=rNo) and (rNo<=lNo) and (rNo<freeReg) then
+                   (baseAdr.copy,ev1[],false,chain1[])->&EH.ExpEval->lv[];
+                   lv.loadVal->lv[];
+                   (baseAdr.copy,ev2[],false,chain1[])->&EH.ExpEval->rv[];
+                // (freeReg<=lNo) and (freeReg<=rNo) then
+                   cError(#do 'BinOp: out of data registers'->xT; EV[]->xA #);
+                   (baseAdr.copy,ev2[],false,chain1[])->&EH.ExpEval->rv[];
+                   rv.loadVal->rv[];
+                   (* rv to tmp *)
+                   (baseAdr.copy,ev1[],false,chain1[])->&EH.ExpEval->lv[];
+                   (* tmp to reg *)
+                else cError(#do 'Binop: missing case'->xT #);
+                   (baseAdr.copy,ev1[],false,chain1[])->&EH.ExpEval->lv[];
+                   lv.loadVal->lv[];
+                   (baseAdr.copy,ev2[],false,chain1[])->&EH.ExpEval->rv[];
+               if);
+           if);
+
+           (lv[],rv[]) -> CoerceTypes -> (lv[],rv[],binType);
+
+           (if ev.label = gram.realDivExp then
+               lv.mkReal->lv[]; rv.mkReal->rv[]; 3->binType
+           if);
+           (if binType
+            // 1 // 2 then (* simple values *)
+               (if ev.label
+                // gram.plusExp then lv[]->rv.add->V[]
+                // gram.minusExp then lv[]->rv.sub->V[]
+                // gram.orExp then 
+                   '\V.orr called' -> putline;
+                   lv[]->rv.orr->V[]
+                // gram.timesExp then lv[]->rv.times->V[]
+                // gram.intDivExp then (lv[],true)->rv.divMod->V[]
+                // gram.modExp then (lv[],false)->rv.divMod->V[]
+                // gram.andExp then 
+                   lv[]->rv.andd->V[]
+                // gram.eqExp then (lv[],gram.eqExp,0,NONE)->rv.cmp->V[]
+                // gram.neExp then (lv[],gram.neExp,0,NONE)->rv.cmp->V[]
+                // gram.ltExp then (lv[],gram.ltExp,0,NONE)->rv.cmp->V[]
+                // gram.leExp then (lv[],gram.leExp,0,NONE)->rv.cmp->V[]
+                // gram.gtExp then (lv[],gram.gtExp,0,NONE)->rv.cmp->V[]
+                // gram.geExp then (lv[],gram.geExp,0,NONE)->rv.cmp->V[]
+                // gram.xorExp then
+                   (* fast solution:
+                    * loadVal2 ensures that lv/rv are in registers;
+                    * toDataReg gets the registers;
+                    * lv.release, rv.release freesthe registers below.
+                    * toDataReg does NOT reuse the registers???
+                    *)
+                   (# lDr,rDr: ^mch.dataRegOperand
+                   do lv.loadVal2->lv[]; lv.toDataReg->lDr[]; 
+                      rv.loadVal2->rv[]; rv.toDataReg->rDr[];
+                      rDr->rDr.reUse;
+                      (lDr[],rDr[],4)->mch.gXor;
+                      (rDr,false,false,false)->mkComputedEvVal->V[]
+                   #)
+               if)
+            // 3 then (* real *)
+               (if ev.label
+                // gram.plusExp then lv[]->rv.rAdd->V[]
+                // gram.minusExp then lv[]->rv.rSub->V[]
+                // gram.orExp then (*lv[]->rv.orr->V[]*)
+                // gram.timesExp then lv[]->rv.rMult->V[]
+                // gram.realDivExp then lv[]->rv.rDiv->V[]
+                // gram.intDivExp then lv[]->rv.rDiv->V[]
+                // gram.modExp then (*(lv[],false)->rv.divMod->V[]*)
+                // gram.andExp then (*lv[]->rv.andd->V[]*)
+                // gram.eqExp then (lv[],gram.eqExp,0,NONE)->rv.rCmp->V[]
+                // gram.neExp then (lv[],gram.neExp,0,NONE)->rv.rCmp->V[]
+                // gram.ltExp then (lv[],gram.ltExp,0,NONE)->rv.rCmp->V[]
+                // gram.leExp then (lv[],gram.leExp,0,NONE)->rv.rCmp->V[]
+                // gram.gtExp then (lv[],gram.gtExp,0,NONE)->rv.rCmp->V[]
+                // gram.geExp then (lv[],gram.geExp,0,NONE)->rv.rCmp->V[]
+               if)
+            // 4 then
+               (if ev.label
+                // gram.plusExp then (*lv[]->rv.rAdd->V[]*)
+                // gram.minusExp then (*lv[]->rv.rSub->V[]*)
+                // gram.orExp then (*lv[]->rv.orr->V[]*)
+                // gram.timesExp then (*lv[]->rv.times->V[]*)
+                // gram.intDivExp then (*(lv[],true)->rv.divMod->V[]*)
+                // gram.realDivExp then (*(lv[],true)->rv.divMod->V[]*)
+                // gram.modExp then (*(lv[],false)->rv.divMod->V[]*)
+                // gram.andExp then (*lv[]->rv.andd->V[]*)
+                // gram.eqExp then (lv[],gram.eqExp)->rv.sCmp->V[]
+                // gram.neExp then (lv[],gram.neExp)->rv.sCmp->V[]
+                // gram.ltExp then (lv[],gram.ltExp)->rv.sCmp->V[]
+                // gram.leExp then (lv[],gram.leExp)->rv.sCmp->V[]
+                // gram.gtExp then (lv[],gram.gtExp)->rv.sCmp->V[]
+                // gram.geExp then (lv[],gram.geExp)->rv.sCmp->V[]
+               if)
+               
+           if);
+           lV.release; 
+           rV.release;
+        #)
+   #);
+   V[]->RV[];
+#)
+---AssignValToEval:descriptor---
+(* assign the value V[] (form an exit list) to the evaluation EV *)
+(* Consider if succIsobj must be included!!!!!!!! *)
+(# EH: @EvalHandler;
+   SimpleAdr:
+     (# EV: ^ASTindex; xES: @ASTindex; A1: ^Mch.Address
+     enter EV[]
+     do EV.son->xES; baseAdr.copy->A1[]; (* A1.freezeReg; *)
+        (A1[],xES[],false,chain1[])->genAdr->A1[]
+     exit A1[]
+     #); 
+   singleList: (# enter EV[] #); 
+   lEV1,V: ^evVal;
+   chain1: ^DH.SuperChain
+do lEV[]->lEV1[]; 
+   (if stest then
+       301->cTrace
+       (# 
+       do 'AsgValToEval: '->xT; xN;
+          'baseAdr='->xT; baseAdr.display->xT; xN;
+          'lEV1='->xT; lEV1.display; 
+          'assignTo: ' -> xT; EV[]->xA ; xN;
+          (*EHchain[]->printChain*)
+       #)
+   if);
+   EHchain[]->chain1[];
+   EvalCase:
+     EV[]->sematt.evCase
+   (# simple::<
+        (# rA: ^mch.address;
+        do (if common.switch[213] then
+               (if ((EV[]->theGen.RegCont.inReg->V[]) <> none) then
+                   (* indirect way of getting the dataReg of V: instance
+                    * of computedEvVal
+                    *)
+                   V.toDataReg->lEV1.asgToDataReg->V[];
+                   leave simple
+           if)if);
+           (if switch181 then
+               (baseAdr[],EV[],chain1[]) -> lEV1.asgToSImpleEv -> V[]
+            else
+               EV[] -> SimpleAdr -> lEV1.asgToAdr -> V[]
+           if)
+        #);
+      realEv::<
+        (#
+        do EV[]->simpleAdr->lEV1.asgToRealAdr->V[]
+        #);
+      repetition::<
+        (# 
+        do (* We might just as well only pass EV[]
+            * and evaluate the address when needed
+            *)
+           (EV[]->SimpleAdr,EV[],chain1[]) ->lEV1.asgToRepAdr->V[]
+        #);
+      itemEV::<
+        (#
+        do (* Here it seems that we must copy baseAdr, since it is
+            * modified in exeObj - the super of doEnterItem;
+            * in most other places copy should not be necessary
+            * since we assign to the same baseAdr-variable in EvalHandler
+            *)
+           (if switch181 then
+               (baseAdr[],Ev[],false,chain1[],lEV1[])->doEnterItem->V[]
+            else
+               (baseAdr.copy,Ev[],false,chain1[],lEV1[])->doEnterItem->V[]
+           if);
+        #);
+      compEv::<
+        (#
+        do (if switch181 then
+               (baseAdr[],Ev[],false,chain1[],lEV1[])->doEnterComp->V[];
+            else
+               (baseAdr.copy,Ev[],false,chain1[],lEV1[])->doEnterComp->V[];
+           if);
+        #);
+      sysEv::<(#do 'Assign to System Eval'->notImpl #);
+      inlineNX::
+        (* EV denotes a (inserted?) pattern P with descriptor desc;
+         * P has only an enter or an exit lists, and these may be inlined.
+         *)
+        (# W: ^inlineNXitem; chain2: ^DH.SuperChain;
+           D: @ASTindex; MN: @integer; isV: @integer
+        do (* needed to compute chain2; D = desc, I think! *)
+           mch.InlineNX
+           (# Failed::
+                (#
+                do '\nInlining failed 2!' -> screen.putline
+                #)
+           do (chain1[],EV.son)->DH.theDesc->(D,MN,chain2[],isV);
+              (if stest then
+                  195->cTrace(#do 'No-do:'->xT; EV[]->xA; desc[]->xA; D[]->xA#)
+              if);
+              (EV[],desc[],baseAdr.copy,chain2[],thisDesc[])
+                ->mkInlineItemEval
+                ->W[];
+              (desc[],W[],chain1[])->lEV1.asgToInlineItem->V[];
+              chain1[]->W.eval->V[]
+           #)
+        #);
+      insert::<
+        (# D: @ASTindex
+        do (if desc.label = gram.objectDescriptor then
+               desc->sematt.TopDesc->D;
+               (if D[]->sematt.hasOnlyNX then
+                   (*195->cTrace(#do 'NoDoN:'->T; EV[]->A #);*)
+                   (*(chain1[],EV.son)->DH.theDesc->(D,MN,chain2[],isV);*)
+           if)if);
+           (if switch181 then
+               (baseAdr[],EV[],false,chain1[],false,lEV1[])
+                 -> doEnterGenItem
+                 -> V[]
+            else
+               (baseAdr.copy,EV[],false,chain1[],false,lEV1[])
+                 ->doEnterGenItem
+                 ->V[]
+           if);
+        #);
+      dynItem::< 
+        (#
+        do (if switch181 then
+               (baseAdr[],Ev[],false,chain1[],true,lEV1[])
+                 -> doEnterGenItem
+                 -> V[];
+            else
+               (baseAdr.copy,Ev[],false,chain1[],true,lEV1[])
+                 -> doEnterGenItem
+                 -> V[];
+           if)
+        #);
+      dynComp::<
+        (#
+        do (if switch181 then
+               (baseAdr[],Ev[],false,chain1[],true,lEV1[])
+                 ->doEnterGenComp->V[];
+            else
+               (baseAdr.copy,Ev[],false,chain1[],true,lEV1[])
+                 ->doEnterGenComp->V[];
+           if);
+        #); 
+      evalList::<
+        (# EVx,E: @ASTindex; N: @integer
+        do (* strip evalList *)
+           (*350->cTrace(#do 'assign To :'->T; EV[]->A #);*)
+           EV.son->EVx;
+           Elim:
+             EVx->ScanList
+           (#
+           do currentNode->E; N+1->N;
+              (if N = 2 then leave Elim if);
+              (* more than one elm in list *)
+           #); 
+           (if N = 1 then 
+               E[]->singleList; 
+               restart EvalCase 
+           if);
+           EV.son->EVx; 
+           (if switch181 then
+               (baseAdr[],EVx[],chain1[])->lEV1.asgToList->V[]; 
+            else
+               (baseAdr.copy,EVx[],chain1[])->lEV1.asgToList->V[]; 
+           if);
+           (*(if isExitEval  then
+            ' ...->(e1,e2,...)->...' ->NotImpl
+            if)*)
+        #);
+      objRef::<
+        (# 
+        do true->lEV1.sourceIsRef;
+           (baseAdr.copy,EV[],chain1[])->lEV1.asgToRefAdr->V[]
+        #);
+      strucRef::<
+        (# 
+        do (baseAdr.copy,EV[],chain1[])->lEV1.asgToRefAdr->V[] 
+        #);
+      computedObj::< (#do 'Assign to Computed Obj'->notImpl #); 
+      repOp::<
+        (# isExtend,isValueRep,isStaticItem: @boolean; size: @integer;
+           RN,RN1,sort: @ASTindex; A: ^mch.address; pop: @boolean  ;
+           c: @char; T: @text; evalK: @integer; old61: @boolean
+        do (if stest then 301->cTrace(#do 'AsgToRepOp: '->xT; EV[]->xA#)if);
+           EV.son->RN; RN.son->RN1;  
+           (baseAdr.copy,RN1[],false,chain1[])->GenAdr->A[];
+           (if true then
+               (if (RN[]->semAtt.repAttId)
+                // 2 (* new *) then  
+                // 3 (* extend *) then  true -> isExtend
+                else 'Illegal RepOp in E->repOp' -> bugstream.putline
+               if);
+               RN1 -> sematt.SimpleOrRepA -> sort;
+               (if sort.label -> EvalK
+                // gram.dynamicItem
+                // gram.dynamicComponent
+                // gram.variablePattern then
+                   false -> isValueRep
+                // gram.staticItem then
+                   true -> isValueRep;
+                   true -> isStaticItem;
+                   sort.son -> RN1; (*  R: [..] @ RN1 *)
+                   RN1 -> sematt.descrip -> RN1;
+                   RN1.size -> size;  
+                // gram.staticComponent then
+                   true -> isValueRep;
+               if);
+               (A[],isExtend,isValueRep,isStaticItem,size) -> gen.NewRep
+               (# genRange:: (#do 3 -> lEV1.toPrimDest #)
+               #)
+            else
+               common.switch[61] -> old61;
+               true -> common.switch[61];
+               (if common.switch[61] then
+                   4->mch.initPrimCall;
+                else
+                   2->mch.initPrimCall
+               if);
+               (if mch.callRegInPrimReg2 (*mch.callRegBusy*) then
+                   true->pop;
+                   (false,true) -> mch.pushThisOrCall
+               if);
+               (if common.switch[61] then
+                   3->lEV1.toPrimDest
+                else
+                   lEV1.toDataRegX
+               if);
+               old61 -> common.switch[61];
+               (if common.switch[61] then
+                   (4,1) -> mch.SpToPrimReg
+               if);
+               common.switch[61] -> old61;
+               true -> common.switch[61];
+               1 -> A.pushRegAndOff; (* should be toPrimDest *)
+               old61 -> common.switch[61];
+               RN1 -> sematt.SimpleOrRepA -> sort;
+               (if sort.label -> EvalK
+                // gram.dynamicItem// gram.dynamicComponent
+                // gram.variablePattern then
+                   (if (RN[]->semAtt.repAttId)
+                    // 2 (* new *) then 'NewRR'->mch.callprim
+                    // 3 (* extend *) then 'ExtRR'->mch.callprim 
+                    else 'Illegal RepOp in E->repOp'->bugstream.putline
+                   if)
+                // gram.staticItem//gram.staticComponent then
+                   sort.son -> RN1; (*  R: [..] @ RN1 *)
+                   RN1 -> sematt.descrip -> RN1;
+                   (if RN1.label = gram.objectDescriptor then
+                       (If RN1.size 
+                        // 1 then '1' -> c
+                        // 2 then '2' -> c
+                        // 4 then '4' -> c
+                        // 8 then '8' -> c
+                        else 
+                           (if evalK = gram.staticItem then
+                               'I' -> c
+                            else 'C' -> c
+                           if)
+                       if)
+                    else  
+                       (if evalK = gram.staticItem then
+                           'I' -> c
+                        else 'C' -> c
+                       if)
+                   if);
+                   (if (RN[]->semAtt.repAttId)
+                    // 2 (* new *) then  'NewVR'->T;
+                    // 3 (* extend *) then  'ExtVR'->T;
+                    else 'Illegal RepOp in E->repOp'->bugstream.putline
+                   if);
+                   c -> T.put; 
+                   T -> mch.callprim
+               if);
+               0->mch.getPrimRes;
+               (if pop then (false,true) -> mch.popThisOrCall if);
+           if)
+        #);             
+      cProcDesc::<
+        (#
+        do (EV[],CallId[],desc[],extKind)->lEV1.asgToCproc->V[]
+        #);
+      externalVirtual::
+        (# isInCOM: booleanValue
+             (# E: @ASTindex; T: ^text
+             enter E
+             do E.son -> E;
+                (if E.label = gram.remote then
+                    E -> sematt.getname -> E;
+                    E.gettext -> T[];
+                    (if true
+                     // 'queryInterface' -> T.equalNCS 
+                     // 'addRef' -> T.equalNCS 
+                     // 'deleteRef' -> T.equalNCS 
+                     // 'getIdsOfNames' -> T.equalNCS  
+                     // 'invoke' -> T.equalNCS  then
+                        true -> value
+                     else
+                        false -> value
+                    if)
+                 else
+                    true -> value
+             if)#);
+        do (if stest then
+               301->cTrace(#do 'AssignTo externalVkind:'->XT #)
+           if);
+           (if (extKind = sematt.dispatchVirtualKind)
+               and not(EV -> isInCOM) then
+               (EV[],'::DISPATCH::',desc[],extKind) -> lEV1.asgToDispatch -> V[]
+            else
+               sematt.virtExt -> extKind;           
+               (EV[],'::VDT::',desc[],extKind)->lEV1.asgToCproc->V[]
+           if)
+        #);
+      newRemotePrim::
+        (#
+        do (if stest then 301->cTrace(#do 'newRemotePrim: '-> xT#) if);
+           (baseAdr.copy,EV[],chain1[])->lEV1.asgToNewPrim->V[] ;
+           (if stest then
+               301->cTrace(#do 'newRemotePrim:2 '-> xT; 
+                            (if V[]=none then
+                                'Prim: NONE ' -> xt;
+                            if)
+                         #)
+           if);
+        #);
+      primitive::<
+        (#
+        do (if stest then
+               301->cTrace(#do 'primitive:'->xT; EV[]->xA #)
+           if);
+           EV->SemAtt.ParsePrimitive
+           (# ExternalOp::<
+                (#
+                do (if OpTxt.empty//false then OpTxt[]->lEV1.asgToPrimitive->V[] if)
+                #);
+              InLineOp::<
+                (#
+                do (if stest then
+                       301->ctrace(#do 'InlineOp:'->xT; lEV1.display #)
+                   if);
+                   (OpCode,I1,I2)->lEV1.asgToInLinePrimitive->V[] 
+                #)
+        #)#);(* primitive*)
+      assign::<
+        (# 
+        do (if stest then
+               301->ctrace
+               (#do 'assignValToEval:assign:A'->xH;
+                  lEV1.display; xN;
+                  EV1[] -> xA; xN;
+                  baseAdr.display->xT
+           #)if);                  
+           (if switch181 then
+               (baseAdr[],lEV1[],EV1[],chain1[])->&EH.AssignValToEval->V[];
+            else
+               (baseAdr.copy,lEV1[],EV1[],chain1[])->&EH.AssignValToEval->V[];
+           if);
+           (if stest then
+               301->ctrace
+               (#do 'assignValToEval:assign:B'->xH;
+                  V.display; xN;
+                  EV2[] -> xA; xN;
+                  baseAdr.display->xT
+           #)if); 
+           (if switch181 then
+               (baseAdr[],V[],EV2[],chain1[])->&EH.AssignValToEval->V[]
+            else
+               (baseAdr.copy,V[],EV2[],chain1[])->&EH.AssignValToEval->V[]
+           if);
+           (if stest then
+               301->ctrace
+               (#do 'assignValToEval:assign:C'->xH; 
+                  (if V[] =none then 'V is none'->xT;
+                   else
+                      V.display
+                  if);
+                  xN;
+                  baseAdr.display->xT
+           #)if);                             
+        #)
+   #);
+   V[]->RV[];
+   (if stest then
+       301->ctrace 
+       (#do 'assignValToEval:exitEval:'->xH; 
+          (if RV[]=none then 'RV is none' -> xT 
+           else
+              RV.display
+          if);
+          xN;
+          'baseAdr:'->xT; baseAdr.display->xT;
+   #)if)
+                    
+#)
+---boolExpEval:doPart---
+   (* (if EV is true then
+    *     (if jmpCond then goto lab else continue if)
+    * else 
+    *     (if jmpCond then continue else goto lab if)
+    * if)
+    *)
+do (if stest then
+       301->cTrace(#do 'BoolExp:'->xT; EV[]-> xA#)
+   if);
+   (# lv,rv: ^evVal; dr,dr1,dr2: ^ mch.dataRegOperand; EV1,EV2: @ASTindex;
+      cond,binType: @integer;
+      cmpAndJmp:
+        (#
+        do select:
+             (if V.evType//-1 then 
+                 (* V is itemEval, exit elm must be computed *)
+                 V.loadVal->V[];
+                 restart select
+              // 0 then
+                 'OBS evtype is zero'->bugstream.putline
+             if);
+           V.toDataReg->dr[];
+           (dr,false,false,false)->mkComputedEvVal->V[];
+           (if jmpCond then
+               (lab[],2)->V.cmpBoolAndJmp
+            else
+               (lab[],1)->V.cmpBoolAndJmp
+           if)
+
+        #);
+      E: @ASTindex;
+      xLab: @mch.localLab;
+      theCond:
+        (#
+        do (if jmpCond then
+               (if ev.label
+                // gram.eqExp then 1->cond
+                // gram.neExp then 2->cond
+                // gram.ltExp then 3->cond
+                // gram.leExp then 4->cond
+                // gram.gtExp then 5->cond
+                // gram.geExp then 6->cond
+               if)
+            else
+               (if ev.label
+                // gram.eqExp then 2->cond
+                // gram.neExp then 1->cond
+                // gram.ltExp then 6->cond
+                // gram.leExp then 5->cond
+                // gram.gtExp then 4->cond
+                // gram.geExp then 3->cond
+           if)if);
+        #);
+      nilTst:
+        (# c: @char
+        enter C
+        do (*306->cTrace
+            (#do C->put;
+            (if lv[]=none then 'lv is nil'->T else 'lv is NOT nil'->T if);
+            (if rv[]=none then 'rv is nil'->T else 'rv is NOT nil'->T if)
+            #)*)
+        #);
+      lx: ^EvVal
+   do EvCase:
+        (if EV.label
+         // gram.evalList then
+            elim: EV.son->scanList
+            (# N: @integer
+            do currentNode->E; N+1->N;
+               (if N=2 then 
+                   (baseAdr.copy,EV[],succIsObj,EHchain[])->ExpEval->V[];
+                   cmpAndJmp;
+                   leave EvCase
+
+            if)#);
+            E[]->EV[];
+            restart EvCase
+         // gram.andExp then
+            EV.son->EV1; EV1.brother->EV2;
+            (if jmpCond then
+                (*     <EV1>
+                 *     jmpFalse Lx
+                 *     <EV2>
+                 *     jmpTrue L
+                 * Lx: ...
+                 * L:  ...
+                 *)
+                xLab.new;
+                (baseAdr.copy,EV1[],succIsObj,EHChain[],xLab[],false)
+                  ->BoolExpEval->lv[];
+                lv.release;
+                'X'->nilTst;
+                (baseAdr.copy,EV2[],succIsObj,EHChain[],lab[],true)
+                  ->BoolExpEval->Rv[];
+                'Y'->nilTst;
+                xLab.def
+             else
+                (*     <EV1>
+                 *     jmpFalse L
+                 *     <EV2>
+                 *     jmpFalse L
+                 *     ...
+                 * L:  ...
+                 *)
+                (baseAdr.copy,EV1[],succIsObj,EHChain[],lab[],false)
+                  ->BoolExpEval->lv[];
+                lv.release;
+                'Z'->nilTst;
+                (baseAdr.copy,EV2[],succIsObj,EHChain[],lab[],false)
+                  ->BoolExpEval->Rv[];
+                'V'->nilTst;
+            if);
+
+            rv[]->V[] (*??*)
+         // gram.orExp then
+            EV.son->EV1; EV1.brother->EV2;
+            (if jmpCond then
+                (*     <EV1>
+                 *     jmpTrue L
+                 *     <EV2>
+                 *     jmpTrue L
+                 *     ...
+                 * L:  ...
+                 *)
+
+                (baseAdr.copy,EV1[],succIsObj,EHChain[],lab[],true)
+                  ->BoolExpEval->lv[];
+                lv.release;
+                (baseAdr.copy,EV2[],succIsObj,EHChain[],lab[],true)
+                  ->BoolExpEval->Rv[];
+             else
+                (*     <EV1>
+                 *     jmpTrue Lx
+                 *     <EV2>
+                 *     jmpFalse L
+                 * Lx: ...
+                 * L:  ...
+                 *)
+                xLab.new;
+                (baseAdr.copy,EV1[],succIsObj,EHChain[],xLab[],true)
+                  ->BoolExpEval->lv[];
+                lv.release;
+                (baseAdr.copy,EV2[],succIsObj,EHChain[],lab[],false)
+                  ->BoolExpEval->Rv[];
+                xLab.def;
+            if);
+
+            rv[]->V[] (*??*)
+         // gram.notExp then
+            EV.son->EV1;
+            (baseAdr.copy,EV1[],succIsObj,EHChain[],lab[],not jmpCond)
+              ->BoolExpEval->V[]
+         // gram.eqExp 
+         // gram.neExp 
+         // gram.ltExp 
+         // gram.leExp
+         // gram.gtExp
+         // gram.geExp then
+            EV.son->EV1; EV1.brother->EV2;
+            (baseAdr.copy,EV1[],succIsObj,EHChain[])->ExpEval->lv[];
+            (* 16.7.98: FIX for 
+             *   (if (c1->ascii.lowCase) <> (c2 -> ascii.lowCase)
+             *)
+            (if lv.evType = -1 then
+                (* This makes part of coerceType superflous *)
+                lv[] -> lx[];
+                lv.loadVal -> lv[] (* remember the itemEv
+                                    * for possible release*) 
+            if);
+            (if lv.evType = 1 then
+                lv.loadVal2 -> lv[];
+                (if lx[] <> NONE then lx.release if)
+            if);
+            (* end fix *)
+            (baseAdr.copy,EV2[],succIsObj,EHChain[])->ExpEval->Rv[];
+            (lv[],Rv[])->CoerceTypes->(lv[],rv[],binType);
+            (if binType
+             // 1 (*simple types*) // 2 (* ref *) then
+                theCond;
+                lv.loadVal2->lv[]; 
+                lv.toDataReg->dr1[];
+                rv.loadVal2->Rv[]; 
+                Rv.toDataReg->dr2[];
+                (* confusing order of dr1,dr2!*)
+                (cond,dr2[],dr1[],4,lab[])->mch.cmpAndJmp;
+                (* lv.release; - done in toDataReg! 
+                 * rv.release; - done in toDataReg! 
+                 * OBS! rv[] should not be used aymore *)
+                dr1.deAlloc; dr2.deAlloc;
+                true->lv.released->rv.released; 
+                (* ugly, but a subsequent V.release will create a dataReg 
+                 * negative since we have already deallocated dr2.
+                 * We could return a computedEvVal with dr2
+                 *)
+                rv[]->V[];
+             // -2 (*ref*) then
+                (if ev.label
+                 // gram.plusExp then lv[]->rv.add->V[]
+                 // gram.minusExp then lv[]->rv.sub->V[]
+                 // gram.orExp then lv[]->rv.orr->V[]
+                 // gram.timesExp then lv[]->rv.times->V[]
+                 // gram.intDivExp then (lv[],true)->rv.divMod->V[]
+                 // gram.modExp then (lv[],false)->rv.divMod->V[]
+                 // gram.andExp then lv[]->rv.andd->V[]
+                 // gram.eqExp then (lv[],gram.eqExp,0,NONE)->rv.cmp->V[]
+                 // gram.neExp then (lv[],gram.neExp,0,NONE)->rv.cmp->V[]
+                 // gram.ltExp then (lv[],gram.ltExp,0,NONE)->rv.cmp->V[]
+                 // gram.leExp then (lv[],gram.leExp,0,NONE)->rv.cmp->V[]
+                 // gram.gtExp then (lv[],gram.gtExp,0,NONE)->rv.cmp->V[]
+                 // gram.geExp then (lv[],gram.geExp,0,NONE)->rv.cmp->V[]
+                 // gram.xorExp then
+                    (* fast solution:
+                     * loadVal2 ensures that lv/rv are in registers;
+                     * toDataReg gets the registers;
+                     * lv.release, rv.release freesthe registers below.
+                     * toDataReg does NOT reuse the registers???
+                     *)
+                    (# lDr,rDr: ^mch.dataRegOperand
+                    do lv.loadVal2->lv[]; lv.toDataReg->lDr[]; 
+                       rv.loadVal2->rv[]; rv.toDataReg->rDr[];
+                       rDr->rDr.reUse;
+                       (lDr[],rDr[],4)->mch.gXor;
+                       (rDr,false,false,false)->mkComputedEvVal->V[]
+                    #)
+                if);
+                rv.release; lv.release;
+                cmpAndJmp
+             // 3 (* real *)  then
+                (# fr1,fr2: ^mch.floatRegOp
+                do theCond;
+                   lv.loadFloat->fr1[]; (* op2 *)
+                   rv.loadFloat->fr2[]; (* op1 *)
+                   (cond,fr2[],fr1[],lab[],true)->mch.cmpAndJmpFloat;
+                   (* In SUN4, MC68  (op2[],op1[])->cmpFloat is called
+                    * On MC68, cmpFloat generates
+                    *       fcmp.d  op2, op1
+                    * and op1 can NOT be a floatRegisterOperand, but MUST
+                    * be a memory location - at least the HP assembler 
+                    * requires this
+                    *)
+                   lv.release; rv.release; 
+                   fr1.deAlloc; fr2.deAlloc; (* 27/12/95*)
+                   rv[]->V[] (* is it meaningful to return rv[] here? *)
+                #)
+             // 4 (* struc *) then
+                (if ev.label
+                 // gram.plusExp then (*lv[]->rv.rAdd->V[]*)
+                 // gram.minusExp then (*lv[]->rv.rSub->V[]*)
+                 // gram.orExp then (*lv[]->rv.orr->V[]*)
+                 // gram.timesExp then (*lv[]->rv.times->V[]*)
+                 // gram.intDivExp then (*(lv[],true)->rv.divMod->V[]*)
+                 // gram.realDivExp then (*(lv[],true)->rv.divMod->V[]*)
+                 // gram.modExp then (*(lv[],false)->rv.divMod->V[]*)
+                 // gram.andExp then (*lv[]->rv.andd->V[]*)
+                 // gram.eqExp then (lv[],gram.eqExp)->rv.sCmp->V[]
+                 // gram.neExp then (lv[],gram.neExp)->rv.sCmp->V[]
+                 // gram.ltExp then (lv[],gram.ltExp)->rv.sCmp->V[]
+                 // gram.leExp then (lv[],gram.leExp)->rv.sCmp->V[]
+                 // gram.gtExp then (lv[],gram.gtExp)->rv.sCmp->V[]
+                 // gram.geExp then (lv[],gram.geExp)->rv.sCmp->V[]
+                if);
+                lv.release;rv.release;
+                cmpAndJmp
+            if)
+         else
+            (baseAdr.copy,EV[],succIsObj,EHchain[])->ExpEval->V[];
+            cmpAndJmp
+        if)
+   #)
+   

@@ -1,0 +1,3046 @@
+ORIGIN '../machine' ;
+BODY '../CODEmachine';
+INCLUDE '~beta/basiclib/numberio';
+(*
+ *      Logical registers               Physical registers
+ *
+ *      th                              EDX
+ *      ca                              EDI
+ *
+ *      Address registers
+ *
+ *      R1 (a2)                         share EBP and ESI
+ *      R2 (a3)
+ *      R3 (a4)
+ *
+ *      a7 (sp)                         ESP
+ *
+ *      d0                              share EAX, EBX and ECX
+ *      d1
+ *      d2
+ *      d3
+ *      ...
+ *      d7:
+ *
+ *      Numbers for physical registers
+ *
+ *              1               edx
+ *              2               edi
+ *              3               ebp
+ *              4               esi
+ *              5               eax
+ *              6               ebx
+ *              7               ecx
+ *              8               esp
+ *
+ * ai, i=0:7, aMap[i+1] in [-1,0,1:4,8]
+ * di, i=0:7, dMap[i+1] in [-1,0,5-7]
+ * where        -1: in tmp. location
+ *               0: not allocated to any register
+ *               k,k>0: mapped to physical register k
+ *
+ * i=1,8: fMap[i] in [1,8]
+ *)
+--mstate:descriptor--
+(# addressSize: @integer;
+   (* LASSE hack fra larsp/beta/system/v4.2/gen1.bet.
+    * 0: long
+    * 1: word
+    * 2: byte
+    * should be in accordance with size value from codegen:
+    * byte:1, word:2, long:4
+    *)
+   segNo : @integer;
+   floatReg: [8] @ integer; (*???*)
+   whichSegment: @integer; (* 0=nothing, 1=code, 2=data *)
+   TmpLab: @
+     (# lab: ^Locallab;
+     do (if lab[]=NONE then
+            &locallab[] -> lab[];
+            lab.new;
+            switchtodata;
+            'tmplab' -> comment;
+            lab.def;
+            '\tdq\t0, 0'->BC.putLine; (* Works for borland and microsoft *)
+            switchtocode;
+        if);
+     exit lab[]
+     #);
+   UoFV_defined: @boolean; 
+#)
+--DataRegOpRegF: dopart--
+do (* regF not used in NTImachine *)
+--AdrRegOpRegF: dopart--
+do (* regF not used in NTImachine *)
+--FloatRegOpRegF: dopart--
+do (* regF not used in NTImachine *)
+--isObjectReg:descriptor--
+(##)
+
+--machineatt:attributes--
+edx: (#exit 1 #); edi: (#exit 2 #); ebp: (#exit 3 #); esi: (#exit 4 #);
+eax: (#exit 5 #); ebx: (#exit 6 #); ecx: (#exit 7 #); esp: (#exit 8 #);
+
+eoo: (* end-of-operation*)
+  (#do 0->mState.AddressSize; BC.putNL #);
+eo: (#do 0->mState.addressSize #);
+
+SetCC:
+  (# cond,size: @integer; op: ^mOperand
+  enter(cond,op[],size)
+  do (op[],none)->ldOps;
+     (* in most cases  (a<b>)->X, X is a boolean. It is therefore NOT
+      * necessary to clear op before executing set. However, X may be
+      * an integer in which case op MUST be cleared. The type of X is
+      * NOT know here, therefore op is always cleared.
+      * If the compiler introduces typechecking, X will always be a boolean
+      * and clear may be avoided
+      *)
+     0->mstate.addressSize; '\tmov\t'->BC.putT; op.putOp; ',0'->BC.putT; BC.putNL;
+
+     (if cond (* setCOND op *)
+      // 1 (* =  *) then '\tsete\t'->BC.putT
+      // 2 (* <> *) then '\tsetne\t'->BC.putT
+      // 3 (* <  *) then
+         (if size
+          //4 then '\tsetl\t'->BC.putT
+          //2 then '\tsetb\t'->BC.putT (* unsigned compare *)
+          //1 then '\tsetb\t'->BC.putT (* unsigned compare *)
+         if)
+      // 4 (* <= *) then
+         (if size
+          //4 then '\tsetle\t'->BC.putT
+          //2 then '\tsetbe\t'->BC.putT (* unsigned compare *)
+          //1 then '\tsetbe\t'->BC.putT (* unsigned compare *)
+         if)
+      // 5 (* >  *) then
+         (if size
+          // 4 then'\tsetg\t'->BC.putT
+          // 2 then'\tseta\t'->BC.putT (* unsigned compare *)
+          // 1 then'\tseta\t'->BC.putT (* unsigned compare *)
+         if)
+      // 6 (* >= *) then
+         (if size
+          // 4 then '\tsetge\t'->BC.putT
+          // 2 then '\tsetae\t'->BC.putT (* unsigned compare *)
+          // 1 then '\tsetae\t'->BC.putT (* unsigned compare *)
+         if)
+     if);
+     2->mstate.addressSize;
+     op.putOp; eoo
+  #);
+regA: 
+  (# T: ^Stream; n: @integer (* n in [0:7] *)
+  enter(T[],n)
+  do (if n
+      // 0 then 'edx' -> T.puttext (* f1 *)
+      // 1 then 'edi' -> T.puttext (* f2 *)
+      // 7 then 'esp' -> T.puttext (* f8 *)
+      else
+         (if rep.aMap[n+1]
+          // ebp then 'ebp' -> T.puttext (* f3 *)
+          // esi then 'esi' -> T.puttext (* f4 *)
+          // -1 then 'tmp'->T.puttext
+  if)if)#);
+regD:
+  (# T: ^stream; n: @integer
+  enter(T[],n)
+  do (if rep.dMap[n+1]
+      // eax then 'eax' -> T.puttext (* f5 *)
+      // ebx then 'ebx' -> T.puttext (* f6 *)
+      // ecx then 'ecx' -> T.puttext (* f7 *)
+      // -1 then 'tmp'->T.puttext
+      else 'dReg:'->T.putText; n->T.putint
+     if)
+  #);
+regF:
+  (# T: ^stream; n: @integer ; (* f1-8 *)
+  enter(T[],n)
+  do (if n
+      // edx then 'edx' -> T.putText
+      // edi then 'edi' -> T.putText
+      // ebp then 'ebp' -> T.putText
+      // esi then 'esi' -> T.putText
+      // eax then 'eax' -> T.putText
+      // ebx then 'ebx' -> T.putText
+      // ecx then 'ecx' -> T.putText
+      // esp then 'esp' -> T.putText
+         else 'fReg:'->T.putText; n->T.putint
+     if)
+  #);
+regT:
+  (# T: ^stream; R: @char; n: @integer
+  enter(T[],R,n)
+  do '_'->T.put; R->T.put; n->T.putInt
+  #);
+dumpR:
+  (# T: @text; ch: @char
+  do (if common.switch[45] then
+         (for i:5 repeat
+              'a'->T.put; i-1->T.putInt; '='->T.put; (T[],i-1)->regA; ' '->T.put;
+         for);
+         T->comment; T.clear;
+         (for i:5 repeat
+              'd'->T.put; i-1->T.putInt; '='->T.put; (T[],i-1)->regD; ' '->T.put;
+         for);
+         T->comment; T.clear;
+         (for i: 8 repeat
+              (if i
+               //1//2//3//4 then 'a'->ch
+               //5//6//7 then 'd'->ch
+               //8 then 'S'->ch
+              if);
+              (T[],i)->regF; '='->T.put; (T[],ch,rep.fMap[i]-1)->regT; ' '->T.put
+         for);
+         T->comment; T.clear
+     if);
+  #);
+UseFreg:
+  (* returns true if op uses a datareg assigned to physical register fNo *)
+  (# op: ^mOperand; fNo,ano,dno: @integer; useOp: @ boolean
+  enter(op[],fNo)
+  do op.getReg->(ano,dno);
+     (if dno>0 then rep.dMap[dno]=fNo -> useOp if)
+  exit useOp
+  #);
+GetFreg:
+  (* get a specific physical register: fNo.
+   * Pre-condition: fNo is NOT used by op1!
+   * Do NOT conflict with op1: 
+   * op1 does NOT use fNo, but
+   * must NOT be assigned to fNo
+   *)
+  (# op1: ^mOperand; fNo: @integer; dr,oldDr: @dataRegOperand; T: @text
+  enter(op1[],fNo)
+  do (if common.switch[45] then 'getF1:'->comment; dumpR if);
+     (if (rep.fMap[fNo]->oldDr)>0 then 
+         oldDr-1->oldDr;
+         '\tmov\t'->BC.putT; (BC[],'d',oldDr)->regT; sep;
+         (BC[],fNo)->regF; BC.putNL;
+         -1->rep.dMap[oldDr+1]; (* oldDr is now in tmp. location *)
+     if);
+     dr.alloc; dr.deAlloc; (* it seems that the prealloc spoils it *)
+     dr.alloc; 
+     (if common.switch[45] then
+         'DataReg:'->T; dr->T.putInt; T->comment;
+     if);
+     fNo->rep.dMap[dr+1]; dr+1->rep.fMap[fNo];
+     (* A problem if op1 uses fNo!!
+      * It is a precondition of this proc. that op1 does NOT use fNo
+      *)
+     (dr[],op1[])->ldOps;
+     (if common.switch[45] then
+         'getF2:'->comment; dumpR;
+     if);
+     dr.deAlloc; (* now dumpR will not show allocation of dr *)
+  exit oldDr
+  #);
+AssignRegToFreg:
+  (* assign register to a specific physical register *)
+  (# dr: @dataRegOperand; FR: @integer; T: @text
+  enter(dr,FR)
+  do (if common.switch[45] then
+         'AssignRegtoFreg:'->T; dr->T.putInt; ','->T.put; FR->T.putInt;
+         T->comment; dumpR;
+     if);
+     (if rep.dmap[dr+1]>0 then
+       '! fReg already assigned'->comment;
+       0->rep.fMap[rep.dMap[dr+1]]
+     if);
+     (NONE,FR)->GetFreg;
+     FR->rep.dMap[dr+1]; dr+1->rep.fMap[FR]
+  #);
+allocA:
+  (# ano1,ano2,OLDano1Map,fno: @integer
+  enter(ano1,ano2)
+  do (if ano1>0 then
+         (if rep.aMap[ano1]<=0 then
+             (* allocate freg to ano1 *)
+             alloc:
+               (# T: @text
+               do (if common.switch[45] then
+                      'Alloc '->T; (T[],ano1-1)->regA; T->comment
+                  if);
+                  (* check if there is an unused freg *)
+                  (for i:2 repeat
+                       (if rep.fmap[i+2]=0 then
+                           (if common.switch[45] then
+                               ' free freg found'->comment
+                           if);
+                           i+2->fno;
+                           leave alloc
+                  if)for);
+
+                  (* there are no unused freg's.
+                   * find one that is not allocated to ano2
+                   *)
+                  (for i: 2 repeat
+                       (if rep.fmap[i+2]<>ano2 then
+                           (* store rep.fmap[i+2] *)
+                           '\tmov'->BC.putT; 4->BC.putS;
+                           (BC[],'a',rep.fMap[i+2]-1)->regT; sep;
+                           (BC[],rep.fMap[i+2]-1)->regA;
+                           BC.putNL;
+                           -1->rep.aMap[rep.fMap[i+2]];
+                           i+2->fno;
+                           leave alloc
+                  if)for);
+                  'Error in adr. reg alloc'->bugstream.putLine;
+                  'Error in adr. reg alloc'->comment
+               #);
+             (* check if physical register needs to be restored *)
+             rep.aMap[ano1]->OLDano1Map;
+             ano1->rep.fmap[fno]; fno->rep.aMap[ano1];
+             (if OLDano1Map=-1 then (* in tmp store *)
+                 '\tmov'->BC.putT; 4->BC.putS;
+                 (BC[],ano1-1)->regA; sep;
+                 (BC[],'a',ano1-1)->regT;
+                 (*'Restore reg from tmp'->comment;*)
+                 BC.putNL;
+  if)if)if)#);
+
+allocD:
+  (# dno1,dno2,fno,OLDdno1Map: @integer; (* dn01,dno2 in [1-8] *)
+  enter(dno1,dno2)
+  do (if dno1>0 then
+         (if rep.dMap[dno1]<=0 then (* dno1 NOT already assigned to freg *)
+             (* allocate freg to dno1 *)
+             alloc:
+               (# T: @text
+               do (if common.switch[45] then
+                      'Alloc '->T; (T[],dno1-1)->regD; T->comment
+                  if);
+                  (* check if there is an unused freg *)
+                  (for i:3 repeat
+                       (if rep.fmap[i+4]=0 then
+                           (if common.switch[45] then
+                               'free freg found'->comment
+                           if);
+                           i+4->fno;
+                           leave alloc
+                  if)for);
+
+                  (* there are no unused freg's.
+                   * find one that is not alloacted to dno2
+                   *)
+                  (for i: 3 repeat
+                       (if rep.fmap[i+4]<>dno2 then
+                           (* store rep.fmap[i+4] *)
+                           '\tmov'->BC.putT; 4->BC.putS;
+                           (BC[],'d',rep.fMap[i+4]-1)->regT; sep;
+                           (BC[],rep.fMap[i+4]-1)->regD;
+			   BC.putNL;
+                           -1->rep.dMap[rep.fMap[i+4]];
+                           i+4->fno;
+                           leave alloc
+                  if)for);
+                  'Error in data reg alloc'->bugstream.putLine;
+                  'Error in data reg alloc'->comment
+               #);
+             (* check if physical register needs to be restored *)
+             rep.dMap[dno1]->OLDdno1Map;
+             dno1->rep.fmap[fno]; fno->rep.dMap[dno1];
+             (if OLDdno1Map=-1 then (* in tmp store *)
+                 '\tmov'->BC.putT; 4->BC.putS;
+                 (BC[],dno1-1)->regD; sep;
+                 (BC[],'d',dno1-1)->regT;
+                 (*'Restore reg from tmp'->comment;*)
+                 BC.putNL;
+  if)if)if)#);
+
+ldOps:
+  (# op1,op2: ^mOperand; ano1,ano2,dno1,dno2: @integer;
+     T: @text;
+     pA: (# n: @integer
+         enter n
+         do (if n<>0 then
+                ' a'->T.putText; n-1->T.putint
+         if)#);
+     pD: (# n: @integer
+         enter n
+         do (if n<>0 then
+                ' d'->T.putText; n-1->T.putint
+         if)#);
+
+  enter(op1[],op2[])
+  do op1.getReg->(ano1,dno1);
+     (if op2[]<>NONE then op2.getReg->(ano2,dno2) if);
+     (ano1,ano2)->allocA; (ano2,ano1)->allocA;
+     (dno1,dno2)->allocD; (dno2,dno1)->allocD;
+
+     (if common.switch[45] then
+         'Use: '->T; ano1->pA; dno1->pD; ano2->pA; dno2->pD; T->comment;
+         dumpR
+     if)
+  #);
+chkEmitReg:
+  (# op1,op2: ^mOperand; size: @integer; dr: @dataRegOperand
+  enter(op1[],op2[],size)
+  do (if op2.isPrimRegOp then
+         dr.alloc;
+         (op1[],dr[])->ldOps;
+         '\tmov'->BC.putT; 4->BC.putS; dr.putOp; sep; op1.putOp; eoo;
+         (op2[],dr[])->ldOps;
+         '\tmov'->BC.putT; 4->BC.putS; op2.putOp; sep; dr.putOp; eoo;
+         dr.deAlloc;
+      else
+         (if size <> 4 then op2[]->gClr if);
+         '\tmov'->BC.putT; size->BC.putS; op2.putOp; BC.sep;
+         op1.putOp; eoo
+     if);
+  #);
+
+swapFreg:
+  (# F1,F2: ^floatRegOp; swap: @boolean
+  enter(F1[],F2[])
+  do (rep.floatMap[F1.rN+1]>rep.floatMap[F2.rN+1])->swap;
+     (if common.switch[350] then
+         (# T:@text
+         do 'swapFstack: '->T.puttext;
+            F1.rn->T.putint; '='->T.put; rep.floatMap[F1.rN+1]->T.putint;
+            ','->T.put;
+            F2.rn->T.putint; '='->T.put; rep.floatMap[F2.rN+1]->T.putint;
+            (if swap then' swap'->T.puttext else' noswap'->T.puttext if);
+            T->comment; T[]->bugstream.putline
+     #)if)
+  exit swap
+  #);
+NotCompleted:
+  (# routine: @text
+  enter routine
+  do '[ ' -> common.tracestream.putText;
+     routine[] -> common.tracestream.putText;
+     ' not impl. ]' -> common.tracestream.putText;
+     '\t# [ ' -> BC.putT; routine -> BC.putT;
+     ' not impl. ]' -> BC.putT; eoo
+  #);
+NotTested:
+  (# routine: @text
+  enter routine
+  do '[ ' -> common.tracestream.putText;
+     routine[] -> common.tracestream.putText;
+     ' not tested ]' -> common.tracestream.putText;
+  #);
+
+primRegOperand: registerOperand
+  (* due to the small number of registers on the INTEL processor,
+   * the primitive registers are allocated as memory cells:
+   *
+   *    pReg1:
+   *    pReg2:
+   *    pReg3:
+   *    pReg4:
+   *    pReg5:
+   *)
+  (# putOp::<(#do 'dword ptr _pReg'->BC.putT; rN->BC.putI #);
+     loadOp::<(#do this(primRegOperand)[]->op[] #);
+     isPrimRegOp:: TrueValue;
+     pushCpar::<(#do (this(primRegOperand)[],R[])->cpReg #);
+     alloc::< (#do cError(#do 'Attempt to alloc primReg'->T#)#);
+     deAlloc::< (#do cError(#do 'Attempt to deAlloc primReg'->T #) #);
+     reUse::< (#do cError(#do 'Attempt to reUse primReg'->T#) #);
+     display::<(#do ' Primreg'->T #)
+  #);
+physRegOperand: registerOperand
+  (* representation of physical registers.
+   * dataRegA/B are represented this way
+   *)
+  (# putOp::<(#do (BC[],rN)->this(machine).regF #);
+     loadOp::<(#do this(physRegOperand)[]->op[] #);
+     pushCpar::<(#do (this(physRegOperand)[],R[])->cpReg #);
+     alloc::< (#do cError(#do 'Attempt to alloc physReg'->T#)#);
+     deAlloc::< (#do cError(#do 'Attempt to deAlloc physReg'->T #) #);
+     reUse::< (#do cError(#do 'Attempt to reUse physReg'->T#) #);
+     display::<(#do ' PhysReg:'->T; rN->T.putInt #)
+  #);
+TstFloat:
+  (# oldDr: @dataRegOperand
+  do (* allocate %ax (16-bit of %eax): NOT YET DONE! *)
+     (NONE,eax)->getFreg->oldDr;
+     '\tfstsw\tax'->BC.putLine; (* move FP condition codes to ax *)
+     
+     (if not mstate.UoFV_defined then
+       'extrn\tUoFV:proc'->BC.putLine;
+       true -> mstate.Uofv_Defined;
+     if);
+     '\tsahf\n\tjp\tUoFV'->BC.putLine;
+     (oldDr[],none)->ldOps;
+     INNER
+  #);
+GetCL:
+  (* the shl and shr operations has one of the forms:
+   *    shl   op,imm
+   *    shl   op,cl
+   * This operation allocates cl for these operations.
+   * cl is the lower 8-bit of ecx.
+   * ecx is  dataReg2.
+   * 
+   * The ecxRegister is the register assumed to contain ecx (cl)
+   * 
+   * The plan goes as follows:
+   * 
+   * if ecx not in use:
+   *   mov ecx,ecxRegister
+   *   INNER
+   * else /*ecx in use*/
+   *   if ecxRegsiter is ecx
+   *     INNER
+   *   else
+   *     push ecx
+   *     mov ecx,ecxregister
+   *     INNER
+   *     pop ecx
+   *   fi
+   * fi
+   * 
+   *)
+  (# ecxRegister: ^mOperand;
+     ecxInUse: @boolean;
+     ecxRight: @boolean;
+  enter ecxRegister[]
+  do (rep.dReg[3]<>0) -> ecxInUse;
+     ( (# a,d:@integer do ecxRegister.getReg->(a,d) exit d #) = 3)
+       -> ecxRight;
+     (if not ecxRight then (* Action needed *)
+         (if ecxInUse then (* Need pus, pop *)
+             '\tpush\tecx'->BC.putLine
+         if);
+         '\tmov\tecx,'->BC.putT; ecxRegister.putOp; BC.putNL
+     if);
+     INNER;
+     (if (not ecxRight) and (ecxInUse) then
+         '\tpop\tecx'->BC.putLine;
+     if);
+  #);
+AdrReg:
+  (# RegNo: @integer
+  enter RegNo
+  do (if RegNo
+      // 0 then 'edx' -> BC.putT
+      // 1 then 'edi' -> BC.putT
+      // 7 then 'esp' -> BC.putT
+      else
+         (if rep.aMap[RegNo+1]
+          // 3 then 'ebp' -> BC.putT
+          // 4 then 'esi' -> BC.putT
+          else
+             ('AdrReg wrong regno = ', RegNo) -> reportErrorInt;
+             '[A'->BC.putT;RegNo->BC.putI;']'->BC.putC;
+     if)if);
+     INNER;
+  #);
+IndirectReg:
+  (# RegNo, Offset: @integer
+  enter (RegNo, Offset)
+  do (if Mstate.AddressSize
+     // 8 then 'qword ptr ' -> BC.putT;
+     // 0 then 'dword ptr ' -> BC.putT;
+     // 1 then 'word ptr ' -> BC.putT;
+     // 2 then 'byte ptr ' -> BC.putT;
+     if);
+
+     '[' -> BC.putC; RegNo -> AdrReg;
+     (if Offset <> 0 then
+         (if Offset > 0 then '+'->BC.put if);
+         Offset -> BC.putI
+     if);
+     ']' -> BC.putC;
+  #);
+IndexReg:
+  (# RegNo, IndexReg, Scale, Offset: @integer
+  enter (RegNo, IndexReg, Scale, Offset)
+  do (if Mstate.AddressSize
+     // 8 then 'qword ptr ' -> BC.putT;
+     // 0 then 'dword ptr ' -> BC.putT;
+     // 1 then 'word ptr ' -> BC.putT;
+     // 2 then 'byte ptr ' -> BC.putT;
+     if);
+
+     '['->BC.putC;
+     RegNo -> AdrReg;
+     '+'->BC.putC;
+     IndexReg -> DataRegOne;
+     (if Scale<>1 then '*'->BC.putC; Scale -> BC.PutI; if);
+     (if Offset <> 0 then
+         (if Offset > 0 then '+'->BC.put if);
+         Offset -> BC.putI
+     if);
+     ']' -> BC.putC;
+  #);
+reportError:
+  (# mess: @text;
+  enter mess
+  do
+     'Codegen error for intel:' -> bugstream.putText;
+     mess[] -> bugstream.putText;
+
+     eoo;
+     '; Codegen error for intel:' -> BC.putT;
+     mess -> BC.putT;
+
+     inner;
+
+     bugstream.newLine; eoo
+  #);
+reportErrorInt: reportError
+  (# theInt: @integer
+  enter theInt
+  do
+     theInt -> bugstream.putInt;
+     theInt -> BC.putI;
+  #);
+DataReg:
+  (# RegNo: @integer
+  enter RegNo
+  do (if rep.dMap[RegNo+1]
+      // 5 then
+         (if Mstate.AddressSize
+          // 0 then  'eax' -> BC.putT
+          // 1 then  'ax'  -> BC.putT
+          // 2 then  'al'  -> BC.putT
+         if)
+      // 6 then
+         (if Mstate.AddressSize
+          // 0 then  'ebx' -> BC.putT
+          // 1 then  'bx'  -> BC.putT
+          // 2 then  'bl'  -> BC.putT
+         if)
+      // 7 then
+         (if Mstate.AddressSize
+          // 0 then  'ecx' -> BC.putT
+          // 1 then  'cx'  -> BC.putT
+          // 2 then  'cl'  -> BC.putT
+         if)
+      else
+         ('DataReg wrong regno = ', RegNo) -> reportErrorInt;
+         '[D'->BC.putT;RegNo->BC.putI;']'->BC.putC;
+     if);
+
+  #);
+DataRegOne:
+  (# RegNo: @integer
+  enter RegNo
+  do (if rep.dMap[RegNo+1]
+      // 5 then 'eax' -> BC.putT
+      // 6 then 'ebx' -> BC.putT
+      // 7 then 'ecx' -> BC.putT;
+      else
+         ('DataReg wrong regno = ', regNo) -> reportErrorInt;
+         '[D'->BC.putT;RegNo->BC.putI;']'->BC.putC;
+     if);
+
+  #);
+Areg: (# number:@integer enter number do number -> AdrReg  #);
+Dreg: (# number:@integer enter number do   number -> DataReg #);
+imm: (# off: @ integer enter(off) do off-> BC.putI #);
+sep: (#do ','->BC.putC #);
+isMicrosoft: (# exit common.sdk=1 #);
+isBorland: (# exit common.sdk=2 #);
+noSegment: (# exit 0 #);
+codeSegment: (# exit 1 #); (* See comment at declaration of whichSegment *)
+dataSegment: (# exit 2 #);
+switchToSegment:
+  (# segm: @integer
+  enter segm
+  do (if segm <> mstate.whichSegment then
+         (if mstate.whichSegment
+          // codeSegment then '_TEXT\tends'->BC.putLine;
+          // dataSegment then '_DATA\tends'->BC.putLine;
+         if);
+         (if segm
+          // codeSegment then '_TEXT\tsegment'->BC.putLine;
+          // dataSegment then '_DATA\tsegment'->BC.putLine;
+         if)
+     if);
+     segm->mstate.whichSegment;
+  #);
+--DataRegMax:dopart--
+do 5->val
+--popCallStack:descriptor--
+(# do '\tadd\tesp,'->BC.putT; N*4-> BC.putI; eoo #)
+--SaveReg:descriptor--
+(* On entry to a c function call. *)
+(#
+do '\tpush\tedx' -> BC.putT; eoo;
+   '\tpush\tedi' -> BC.putT; eoo
+#)
+--RestoreReg:descriptor--
+(* On exit to a c function call. *)
+(#
+do '\tpop\tedi' ->BC.putT; eoo;
+   '\tpop\tedx' ->BC.putT; eoo
+#)
+--AlcPascResult:descriptor--
+  (#
+  do '; AlcPascalResult'->BC.putT; eoo
+  #)
+--PascalTrap:descriptor--
+  (* no meaning for DX200 *)
+  (#
+  do '; PascalTrap\t'->BC.putT; TrapId->BC.putT; eoo
+  #)
+--SetTop:descriptor--
+  (#
+  do '\tlea\t'->BC.putT; 7 -> AdrReg; sep;
+     (7,off) -> IndirectReg; eoo
+  #)
+--comment:dopart--
+do '; ' -> BC.putT;
+   (if T.length>509 then
+       (# x:^text; do (1,506)->T.sub->x[];x->BC.putT; '...'->BC.putT; #)
+    else
+       T -> BC.putT;
+   if);
+   eoo
+--VirtLabDef:descriptor--
+(#do 'L' -> BC.putC; labNo -> BC.putI; ':' -> BC.putC #)  
+--jsrT:dopart--
+do '\tcall\t'->BC.putT; T->BC.putT; eoo
+--jmpT:dopart--
+do '\tjmp\t' -> BC.putT; T->BC.putT; eoo
+--jmpTlong:dopart--
+do '\tjmp\t' -> BC.putT; T->BC.putT; eoo
+--gJmp:dopart--
+do '\tjmp\t' -> BC.putT; op.putOp; eoo
+--gJsr:dopart--
+do '\tcall\t' -> BC.putT; op.putOp; eoo
+--rts:dopart--
+do '\tret' -> BC.putT; eoo
+--gClr:dopart--
+do (op[],none)->ldOps;
+   '\tmov' -> BC.putT; 4->BC.putS; op.putOp; ',0' -> BC.putT; eoo
+--Push:descriptor--
+(#
+do (op[],none)->ldOps; 0->mstate.addressSize;
+   '\tpush\t' -> BC.putT; op.putOp; eoo
+#)
+--Pop:descriptor--
+(#
+do (op[],none)->ldOps; 0->mstate.addressSize;
+   '\tpop\t'->BC.putT; op.putOp; eoo
+#)
+--ldCst:dopart--
+do (R[],none)->ldOps;
+   '\tmov'->BC.putT; 4->BC.putS; R.putOp; BC.sep; C.putOP; eoo
+--cstLoadOp:dopart--
+do
+--cstOpLoadToReg:dopart--
+do
+--stCst:descriptor--
+(#
+do (A[],none)->ldOps;
+   '\tmov'->BC.putT; size->BC.putS; A.putOp; BC.sep; C.putOP; eoo
+#)
+--ldByte:descriptor--
+(#
+do (op1[],op2[])->ldOps;
+   (op1[],op2[],1)->chkEmitReg
+#)
+--ldHalf:descriptor--
+(#
+do (op1[],op2[])->ldOps;
+   (op1[],op2[],2)->chkEmitReg
+#)
+--ldVal:descriptor--
+(#
+do (A[],R[])->ldOps;
+   (A[],R[],4)->chkEmitReg
+#)
+--ldValFromLab:dopart--
+do (L[],R[])->ldOps;
+   (L[],R[],4)->chkEmitReg
+--ldVl:descriptor--
+(#
+do (A[],R[])->ldOps;
+   (A[],R[],size)->chkEmitReg
+#)
+--stByte:descriptor--
+(#
+do (op1[],op2[])->ldOps;
+   '\tmov'->BC.putT; 1->BC.putS; op2.putOp; BC.sep; op1.putOP; eoo
+#)
+--stHalf:descriptor--
+(#
+do (op1[],op2[])->ldOps;
+   '\tmov'->BC.putT; 2->BC.putS; op2.putOp; BC.sep; op1.putOP; eoo
+#)
+--stVal:descriptor--
+(#
+do (R[],A[])->ldOps;
+   '\tmov'->BC.putT; 4->BC.putS;
+   (if A## = LocalLab## then
+     (if Mstate.AddressSize
+      // 8 then 'qword ptr ' -> BC.putT;
+      // 0 then 'dword ptr '->BC.putT;
+      // 1 then 'word ptr '->BC.putT;
+      // 2 then 'byte ptr '->BC.putT;
+     if);
+   if);
+   A.putOp; BC.sep; R.putOP; eoo
+#)
+--stValInLab:dopart--
+do (R[],L[])->ldOps;
+   'TEST'->comment;
+   '\tmov\t'->BC.putT;
+   (if Mstate.AddressSize
+    // 8 then 'qword ptr ' -> BC.putT;
+    // 0 then 'dword ptr '->BC.putT;
+    // 1 then 'word ptr '->BC.putT;
+    // 2 then 'byte ptr '->BC.putT;
+   if);
+   L.putOp; BC.sep; R.putOP; eoo;
+--cpReg:dopart--
+do (R1[],R2[])->ldOps;
+   '\tmov'->BC.putT; 4->BC.putS; R2.putOp; BC.sep; R1.putOP; eoo
+--cpByteMem:descriptor--
+(# dr: @dataRegOperand
+do dr.alloc;
+   (A1[],dr[])->ldOps;
+   '\tmov'->BC.putT; 1->BC.putS; dr.putOp; sep; A1.putOp; eoo;
+   (A2[],dr[])->ldOps;
+   '\tmov'->BC.putT; 1->BC.putS; A2.putOp; sep; dr.putOp; eoo;
+   dr.deAlloc;
+#)
+--cpHalfMem:descriptor--
+(# dr: @dataRegOperand
+do dr.alloc;
+   (A1[],dr[])->ldOps;
+   '\tmov'->BC.putT; 2->BC.putS; dr.putOp; sep; A1.putOp; eoo;
+   (A2[],dr[])->ldOps;
+   '\tmov'->BC.putT; 2->BC.putS; A2.putOp; sep; dr.putOp; eoo;
+   dr.deAlloc;
+#)
+--cpMem:descriptor--
+(# regNo: @integer; dr: @dataRegOperand
+do (* move Memory to Memory:
+    * op1 and op2 are both memory locations.
+    * For Motorola 68xxx this is the same as gmove;
+    * for Intel 80386 it is not possible to move one
+    * memory location to another
+    *)
+   dr.alloc;
+   (A1[],dr[])->ldOps;
+   '\tmov'->BC.putT; 4->BC.putS; dr.putOp; sep; A1.putOp; eoo;
+   (A2[],dr[])->ldOps;
+   '\tmov'->BC.putT; 4->BC.putS; A2.putOp; sep; dr.putOp; eoo;
+   dr.deAlloc
+#)
+--stValInText:dopart--
+do (op[],none)->ldOps;
+   '\tmov\t'->BC.putT; L.putOp; BC.sep; op.putOP; eoo
+--gLea:descriptor--
+(# adr: ^adrRegoperand
+do (op1[],op2[])->ldOps;
+   '\tlea\t'->BC.putT; op2.putOp; sep; op1.putOP; eoo
+#)
+--leaToPrimReg:descriptor--
+(# ar: @AdrRegOperand
+do ar.alloc;
+   (op1[],ar[])->ldOps; (op1[],ar[])->gLea;
+   (ar[],op2[])->ldOps; (ar[],op2[])->cpReg;
+#)
+--gLeaLabel:descriptor--
+(#
+do (op1[],op2[])->gLea
+#)
+--ChkCase:dopart--
+   (* inx = caseIndex-min
+    * if inx >unsigned  (max-min) the  goto elseLab
+    * This ALSO works if caseIndex < min.
+    * Similar to ChkIndex below.
+    * Note that min is NOT used here.
+    *)
+do '\tcmp\t'->BC.putT; inx.putOp; sep; (max-min)->BC.putI; 
+   '\n\tja\t'->BC.putT; elseLab.putOp; BC.putNL;
+--ChkIndex:descriptor--
+(#
+do (op1[],op2[])->ldOps;
+   '\tbound'->BC.putT; 4->BC.putS; op2.putOp; sep; 8->mState.addressSize; op1.putOP; eoo
+#)
+--ChkHeap:descriptor--
+(#  Lok,Lfail: @LocalLab
+do Lfail.new; Lok.new;
+   dumpR;
+   (op[],none)->ldOps;
+   '\tcmp\t'->BC.putT; op.putOp; ',_IOA'->BC.putLine;
+   '\tjb\t'->BC.putT; Lfail.putOp; 
+   '\n\tcmp\t'->BC.putT; op.putOp; ',_IOA+4'->BC.putLine;
+   '\tjb\t'->BC.putT; Lok.putOp; BC.putNL;
+   Lfail.def;
+   op[]->push;
+   'ChkRA'->jsrT;
+   Lok.def;
+   op[]->gClr;
+   dumpR
+#)
+--SignExtByte:descriptor--
+(#
+do (op[],none)->ldOps;
+  '\tmovsx'->BC.putT; 4->BC.putS;
+  0->mstate.addressSize; op.putOp; sep;
+  2->mstate.addressSize; op.putOp; eoo
+#)
+--SignExtWord:descriptor--
+(#
+do (op[],none)->ldOps;
+   '\tmovsx'->BC.putT; 4->BC.putS;
+   0->mstate.addressSize; op.putOp; sep;
+   1->mstate.addressSize; op.putOp; eoo
+#)
+--GetBits:descriptor--
+(************** NOTE: since the IX386 is little endian, the bit position (pos)
+ * is transformed as follows:
+ * 
+ * 	32 - (pos+length) -> pos
+ * 
+ *)
+(*  shift left op1,pos:         shl   op1,pos
+ *  shift right p1,32-length    shr   op1,32-length
+ * Note that op1=op2=some data register
+ *)
+(#
+do 32 - (pos+length) -> pos;
+   (op1[],none)->ldOps;
+   '\tshl'->BC.putT; 4->BC.putS; op1.putOp; sep; pos->BC.putI;
+   '\n\tshr'->BC.putT; 4->BC.putS; op1.putOp; sep; 32-length->BC.putI; eoo
+#)
+--GetSignedBits:descriptor--
+(*  shift  left op1,pos:                shl   op1,pos
+ *  ashift right p1,32-length           sar   op1,32-length
+ * Note that op1=op2=some data register
+ *)
+(#
+do 32 - (pos+length) -> pos;
+   (op1[],none)->ldOps;
+   '\tshl'->BC.putT; 4->BC.putS; op1.putOp; sep; pos->BC.putI;
+   '\n\tsar'->BC.putT; 4->BC.putS; op1.putOp; sep; 32-length->BC.putI; eoo
+#)
+--gGetBits:dopart--
+(* NOTE: since the IX386 is little endian, the bit position (pos)
+ * is transformed as follows:
+ * 
+ * 	32 - (pos+length) -> pos
+ * 
+ *)
+(*  shift left op1,pos:         shl   op1,pos
+ *  shift right p1,32-length    shr   op1,32-length
+ * Note that op1=op2=some data register
+ *)
+do(dr[],none)->ldOps;
+   '\tadd'->BC.putT; 4->BC.putS; pDr.putOp; sep; lDr.putOp;
+   '\n\tneg'->BC.putT; 4->BC.putS; pDr.putOp;
+   '\n\tadd'->BC.putT; 4->BC.putS; pDr.putOp; ',32'->BC.putLine;
+   pDr[]->GetCL
+   (# do '\tshl'->BC.putT; 4->BC.putS; dr.putOp; ',cl'->BC.putLine #);
+   '\tneg'->BC.putT; 4->BC.putS; lDr.putOp;
+   '\n\tadd'->BC.putT; 4->BC.putS; lDr.putOp; ',32'->BC.putLine;
+   lDr[]->GetCL
+   (# do '\tshr'->BC.putT; 4->BC.putS; dr.putOp; ',cl'->BC.putLine #)
+--gGetSignedBits:dopart--
+(*  shift  left op1,pos:                shl   op1,pos
+ *  ashift right p1,32-length           sar   op1,32-length
+ * Note that op1=op2=some data register
+ *)
+do (dr[],none)->ldOps;
+   '\tadd'->BC.putT; 4->BC.putS; pDr.putOp; sep; lDr.putOp;
+   '\n\tneg'->BC.putT; 4->BC.putS; pDr.putOp;
+   '\n\tadd'->BC.putT; 4->BC.putS; pDr.putOp; ',32'->BC.putLine;
+   pDr[]->GetCL
+   (# do '\tshl'->BC.putT; 4->BC.putS; dr.putOp; ',cl'->BC.putLine #);
+   '\n\tneg'->BC.putT; 4->BC.putS; lDr.putOp;
+   '\n\tadd'->BC.putT; 4->BC.putS; lDr.putOp; ',32'->BC.putLine;
+   lDr[]->GetCL
+   (# do '\tsar'->BC.putT; 4->BC.putS; dr.putOp; ',cl'->BC.putLine #);
+--PutBits:dopart--
+(*  op1 -> op2[pos:length]
+ *
+ *  and   op1,mask1 		   clear bits outside bitfield of source
+ *  shl   op1,32-(pos+length)
+ *  mov   dr,op2		   get destination 
+ *  and   dr,NOT(mask2)            clear bitfield in destination
+ *  or    dr,op1		   or destination with source -> destination
+ *  mov   op2,dr		   store destination back
+ *
+ * NOTE: drF is a free data register. In operations like
+ *    (@@X,7)->TOS'%putBits[12,9]
+ * drF is used to compute drF, but it is free when putBits is called.
+ * It could have been freed in gen1 before calling putbits, but
+ * this will also require changes to evval2:listEvVal:asgToInlinePrim.
+ *)
+do (# dr: @dataRegOperand; rN,m: @integer; mask: @text;
+   
+      putHex:  (* should be moved to betaenv.stream *)
+        (# i,j,n,noOfSpaces: @ integer; 
+           negative: @ boolean; c: [20] @ integer;
+           max: (#a,b: @integer
+                enter(a,b)
+                do (if a<b then b->a if)
+                exit a
+                #);
+           width:<(# value: @integer do 8->value; inner exit value#)
+        enter n
+        do (n<0)->negative ;
+           (if negative then -n-1->n if);
+           0->i;
+           loop:
+             (if ((i=0) or (0 < n)) then
+                 i+1->i;
+                 (n mod 16)->c[i];
+                 n div 16->n;
+                 restart loop
+             if);
+           (0,(width-i))->max->noOfspaces;
+           (# t: [i+noOfspaces] @char
+           do
+              (if not negative then (for l: noOfspaces repeat '0'->t[l] for);
+               else (for l: noOfspaces repeat 'F'->t[l] for);
+              if);
+              (for l: i repeat 
+                   c[i-(l-1)]->j;
+                   (if negative then 15-j->j if);
+                   (if (j<10) then j+'0'->t[l+noOfspaces];
+                    else j-10+'A'->t[l+noOfspaces] 
+              if)for);
+              '0'->BC.putC;
+              (for i:T.range repeat T[i]->BC.putC for);
+              'h'->BC.putC;
+        #)#)
+   
+   do 32 - (pos+length) -> pos;
+      1->m;
+      (for i:length repeat m->TOS'%shiftLeft[1]'->m for);
+      m-1->m;
+      
+      (op1[],none)->ldOps;
+      '\tand\t'->BC.putT; op1.putOp; sep; m->putHex; eoo;
+      
+      '\tshl\t'->BC.putT; op1.putOp; sep; 32-pos-length->BC.putI; eoo;
+   
+      dr.alloc;
+      (dr[],op2[])->ldOps;
+      '\tmov\t'->BC.putT; dr.putOp; sep; op2.putOp; eoo;
+   
+      m->TOS'%not'->m;
+      (for i: 32-pos-length repeat (m->TOS'%ShiftLeft[1]')+1->m for);
+      '\tand\t'->BC.putT; dr.putOp; sep; m->putHex;
+      (op1[],dr[])->ldOps;
+      '\n\tor\t'->BC.putT; dr.putOp; sep; op1.putOp; eoo;
+      (dr[],op2[])->ldOps;
+      '\tmov\t'->BC.putT; op2.putOp; sep; dr.putOp; eoo;
+      dr.deAlloc
+   #)
+--gPutBits:dopart--
+(*  dr -> ar[pDr:lDr]
+ *
+ *  and   op1,mask1 		   clear bits outside bitfield of source
+ *  shl   op1,32-(pos+length)
+ *  mov   dr,op2		   get destination 
+ *  and   dr,NOT(mask2)            clear bitfield in destination
+ *  or    dr,op1		   or destination with source -> destination
+ *  mov   op2,dr		   store destination back
+ *
+ * NOTE: drF is a free data register. In operations like
+ *    (@@X,7)->TOS'%putBits[12,9]
+ * drF is used to compute drF, but it is free when putBits is called.
+ * It could have been freed in gen1 before calling putbits, but
+ * this will also require changes to evval2:listEvVal:asgToInlinePrim.
+ *)
+do (* shift dr into correct position *)
+   pDr[]->GetCL
+   (# do '\tshl\t'->BC.putT; dr.putOp; ',cl'->BC.putLine #);
+   
+   (* save dr *)
+   '\tpush\t'->BC.putT; dr.putOp; BC.putNL;
+   
+   (* build mask *)
+   '\tmov\t'->BC.putT; dr.putOp; ',1'->BC.putLine;
+   lDr[]->GetCL
+   (# do '\tshl\t'->BC.putT; dr.putOp; ',cl'->BC.putLine #);
+   '\tdec\t'->BC.putT; dr.putOp; BC.putNL;
+   
+   (* shift mask into position *)
+   pDr[]->GetCL
+   (# do '\tshl\t'->BC.putT; dr.putOp; ',cl'->BC.putLine #);
+   
+   (* pDr no longer needed *)
+   
+   (* clear bits in ar *)
+   '\tnot\t'->BC.putT; dr.putOp;
+   '\n\tand\t'->BC.putT; ar.putOp; sep; dr.putOp; BC.putNL;
+   
+   (* restore dr *)
+   '\tnot\t'->BC.putT; dr.putOp; BC.putNL;
+   
+   (* restore dr into pDr *)
+   '\tpop\t'->BC.putT; pDr.putOp; BC.putNL;
+   
+   (* clear unused bits in dr (alias pDr) *)
+   '\tand\t'->BC.putT; pDr.putOp; sep; dr.putOp; BC.putNL;
+   
+   (* Put value in place *)
+   '\tor\t'->BC.putT; ar.putOp; sep; pDr.putOp; eoo;
+--ByteSwap:descriptor--
+(# dr1: @dataRegOperand; restoreEAX: @boolean;
+   prevSize: @integer;
+do dr1.alloc;
+   (ar[],dr1[])->ldOps;
+   (if long then
+       '\tmov\t'->BC.putT; dr1.putOp; ',dword ptr ['->BC.putT; ar.putOp; ']'->BC.put
+    else
+       Mstate.addressSize->prevSize; 1->Mstate.addressSize;
+       '\tmov\t'->BC.putT; dr1.putOp; ',word ptr ['->BC.putT;
+       prevSize->Mstate.addressSize; ar.putOp; ']'->BC.put
+   if);
+   BC.putNL;
+   (if rep.dmap[dr1.rn+1] <> eax then (*not ok*)
+       true->restoreEAX;
+       '\tpush\teax\n\tmov\teax,'->BC.putT; dr1.putOp; BC.putNL;
+   if);
+   (if long then
+       '\txchg\tah,al\n\tror\teax,16\n\txchg\tah,al'->BC.putLine
+    else (* short *)
+       '\txchg\tah,al'->BC.putLine
+   if);
+   (if restoreEAX then 
+       '\tmov\t'->BC.putT; dr1.putOp; ',eax\n\tpop\teax'->BC.putLine
+   if);
+   (if long then
+       '\tmov\tdword ptr ['->BC.putT; ar.putOp; '],'->BC.putT; dr1.putOp
+    else
+       '\tmov\tword ptr ['->BC.putT; ar.putOp; '],'->BC.putT;
+       Mstate.addressSize->prevSize; 1->Mstate.addressSize;
+       dr1.putOp;
+       prevSize->Mstate.addressSize
+   if);
+   BC.putNL;
+   dr1.deAlloc
+#)
+--arithShiftLeft:dopart-- 
+(* in most (all?) cases shiftleft is a with a constant argument.
+ * The code below is thus very inefficient
+ * In evval1.:asgToInline and gen1.inlineprimitive
+ * it should be possible to optimize this situation.
+ * Note cl is lower byte of ecx.
+ * Note: the description of shiftArith (sal) and shift logical (shl)
+ * in the Intel book seem to be identical? This is because arithmetic
+ * and logical shift is almost the same for INTEL arithmetic shift shifts
+ * in the sign byte whereas logical does NOT.
+ * BETA logical shift corresponds to INTEL rotate instructions:
+ * NO! I seem to be wrong - BETA logical shift is NOT rotate
+ *)
+do (op1[],op2[])->ldOps;
+   (if op1.isCstOp then
+       '\tsal'->BC.putT; 4->BC.putS; op2.putOp; sep; op1.putOp; eoo
+    else
+       op1[]->GetCL
+       (# do '\tsal'->BC.putT; 4->BC.putS; op2.putOp; ',cl'->BC.putT; eoo #)
+   if)
+--arithShiftRight:dopart--
+do (op1[],op2[])->ldOps;
+   (if op1.isCstOp then
+       '\tsar'->BC.putT; 4->BC.putS; op2.putOp; sep; op1.putOp; eoo
+    else
+       op1[]->GetCL
+       (# do '\tsar'->BC.putT; 4->BC.putS; op2.putOp; ',cl'->BC.putT; eoo #)
+   if)
+--logicalShiftLeft:dopart--
+do (op1[],op2[])->ldOps;
+   (if op1.isCstOp then
+       '\tshl'->BC.putT; 4->BC.putS; op2.putOp; sep; op1.putOp; eoo
+    else
+       op1[]->GetCL
+       (# do '\tshl'->BC.putT; 4->BC.putS; op2.putOp; ',cl'->BC.putT; eoo #)
+   if)
+--logicalShiftRight:dopart--
+do (op1[],op2[])->ldOps;
+   (if op1.isCstOp then
+       '\tshr'->BC.putT; 4->BC.putS; op2.putOp; sep; op1.putOp; eoo
+    else
+       op1[]->GetCL
+       (# do '\tshr'->BC.putT; 4->BC.putS; op2.putOp; ',cl'->BC.putT; eoo #)
+   if)
+--rotateLeft:doPart-- 
+do (if op1.isCstOp then
+       '\trol\t'->BC.putT; op2.putOp; sep; op1.putOp; eoo
+    else
+       op1[]->GetCL
+       (# do '\trol\t'->BC.putT; op2.putOp; ',cl'->BC.putLine #)
+   if)
+--rotateRight:doPart---
+do (if op1.isCstOp then
+       '\tror\t'->BC.putT; op2.putOp; sep; op1.putOp; eoo
+    else
+       op1[]->GetCL
+       (# do '\tror\t'->BC.putT; op2.putOp; ',cl'->BC.putLine #)
+   if)
+--gAdd:descriptor--
+(#
+do (op1[],op2[])->ldOps;
+   '\tadd'->BC.putT; size->BC.putS; op2.putOp; sep; op1.putOP; eoo
+#)
+--gSub:descriptor--
+(#
+do (op1[],op2[])->ldOps;
+   '\tsub'->BC.putT; size->BC.putS; op2.putOp; sep; op1.putOP; eoo
+#)
+--gNeg:descriptor--
+(#
+do (op[],none)->ldOps; '\tneg'->BC.putT; size->BC.putS; op.putOp; eoo
+#)
+--gCmp:descriptor--
+(#
+do (op1[],op2[])->ldOps;
+   '\tcmp'->BC.putT; size->BC.putS; op2.putOp; sep; op1.putOP; eoo
+#)
+--gMult:descriptor--
+(#
+do (op1[],op2[])->ldOps;
+   '\timul\t' -> BC.putT; op2.putOp; sep; op1.putOP; eoo
+#)
+--gDiv:descriptor--
+(* op1: ^mOperand, op2: ^ doubleDataRegOperand
+ *
+ * NOTE: op1 may be a DataRegOperand in op2.dNo1 - ugly!
+ * (This is no longer possible!!)
+ * 
+ * Generate code for:
+ * 	op2.dNo2 div op1 -> (op2.dNo1,op2.dNo2)
+ * 
+ * where op2.dNo1 is remainder, 
+ * and   op2.dNo2 is quotient
+ * 
+ * Intel 386 instruction:
+ *	idiv r/m32, eax:	signed divide edx:eax by r/m32 ;
+ * 				where edx is sign-extension of eax;
+ *	 			results: eax=quotient, edx=remainder
+ * 
+ * push edx	edx is thisReg, bit used by idiv
+ * op1->eax
+ * op2->ebx
+ * cdq		sign extend eax to edx
+ * idiv ebx,eax
+ * eax->op2.dNo1
+ * edx->ebx->op2.dNo1
+ * pop edx
+ *
+ *)
+(# 
+   swap: 
+     (* eax->edx, ebx->eax, edx->ebx *)
+     (#
+     do (if common.switch[45] then 'swap'->comment if);
+        '\tmov\tedx,eax\n\tmov\teax,ebx\n\tmov\tebx,edx'->BC.putLine;
+     #);
+   op1ToEBX:
+     (* move op1 to register ebx *)
+     (#
+     do (if common.switch[45] then 'op1ToEBX'->comment if);
+        L: (#
+           do (if op1.isDataRegOp then
+                  (if rep.dMap[op1Reg+1] = ebx then 
+                      (* op1 already in edx *) leave L 
+              if)if);
+              (op1[],EBX)->getFreg;
+              (if true
+               // op1.isAddress then
+                  (op1[],dataRegB[])->ldVal; 
+               // op1.isLocalLabOp then
+                  (op1[],dataRegB[])->ldValFromLab; 
+               // op1.isRegOp then
+                  (op1[],dataRegB[])->cpReg; 
+               else
+                  cError(# do 'op1ToEBX: unKnown op1' -> T #);
+              if) 
+           #)#);
+   op2ToEAX:
+     (* move op2 to register eax *)
+     (#
+     do (if common.switch[45] then 'op2ToEAX'->comment if);
+        (if rep.dmap[op2.dNo2+1] <> eax then (* op2 NOT already in eax *)
+            (* get EAX *)
+            (op2.dNo2[],EAX)->getFreg;
+            (op2.dNo2[],dataRegA[])->cpReg
+        if);
+        (*op2.dNo2.deAlloc*)
+     #);
+   isFreg:
+     (* returns true if logical register rn is assigned 
+      * to physical register fn
+      *)
+     (# rn,fn: @integer; b: @boolean
+     enter(rn,fn)
+     do rep.dMap[rn+1]=fn -> b
+     exit b
+     #);
+   op1Reg: ^dataRegOperand;
+   op1InEAX,op2InEBX: @boolean;
+do dumpR;
+   
+   '\tpush\tedx' -> BC.putT; eoo; (* save edx = thisObj *)
+   
+   (* find out in which registers op1/op2 are *)
+   (if op1.isDataRegOp then
+       op1[]->op1Reg[];
+       (if op2.dNo1 = op1Reg then (* suk! *) 
+           (* op1 is in a register but NOT op2.dNo1 *)
+           (* this can never happen *)
+           cerror(#do '\ngdiv argument error'->T #);
+        (* else op1 is in the register op2.dNo1 *)
+       if);
+      (op1reg.rN,eax)->isFreg->op1InEAX
+   if);
+   op2.dNo1.deAlloc;
+   (op2.dNo2,ebx)->isFreg->op2InEBX;
+   
+   (if op1InEAX and op2InEBX then 
+       (* op1 are in eax but should be in ebx;
+        * op2 are in ebx but should be in eax;
+        * i.e. eax and ebx must be swapped
+        *)
+       swap
+    else
+       (if op1InEAX then
+           (* op1 is in eax (i.e. NOT ebx), 
+            * and op2 is NOT in ebx;
+            * we may move op1 to ebx
+            *)
+           op1ToEBX;
+           op2ToEAX
+        else
+           (* op1 is NOT in eax; we may move op2 to eax *)
+           op2ToEAX;
+           op1ToEBX
+   if)if);
+   op2.dNo2.deAlloc;
+
+   '\tcdq'->BC.putLine; 			(* sign extend eax to edx *)
+   '\tidiv\tebx'->BC.putLine;	(* finally we may divide! *)
+
+   dumpR;
+   
+   (* at this point eax and ebx are allocated to idiv *)
+   (* in some situations op2.dNo2 is via reUse alloacted twice.
+    * i.e. op2.dNo2 may still be assigned to eg eax
+    *)
+   (if rep.dReg[op2.dno2+1] = 0 then 
+       op2.dNo2.Alloc
+    else
+       cError(#do 'WinNT:gDiv:op2.dno2>0'-> T #)
+   if);
+
+   (* assign dNo2 to eax *)
+   eax->rep.dMap[op2.dNo2+1]; op2.dNo2+1->rep.fMap[eax];
+
+   (* assign dNo1 to ebx *)
+   op2.dNo1.alloc;
+   (*(none,EBX)->GetFreg;*)
+   ebx->rep.dMap[op2.dNo1+1]; op2.dNo1+1->rep.fMap[ebx];
+   '\tmov\tebx,edx' -> BC.putLine;
+
+   '\tpop\tedx' -> BC.putLine;    (* restore edx = thisObj *)
+   dumpR;  
+#)
+--gOr:descriptor--
+(#
+do (op1[],op2[])->ldOps;
+   '\tor'->BC.putT; size->BC.putS; op2.putOp; sep; op1.putOP; eoo
+#)
+--gAnd:descriptor--
+(#
+do (op1[],op2[])->ldOps;
+   '\tand'->BC.putT; size->BC.putS; op2.putOp; sep; op1.putOP; eoo
+#)
+--gXor:descriptor--
+(#
+do (op1[],op2[])->ldOps;
+   '\txor'->BC.putT; size->BC.putS; op2.putOp; sep; op1.putOP; eoo
+#)
+--gNot:descriptor--
+(#
+do (op[],none)->ldOps;
+   '\tadd' -> BC.putT; size->BC.putS; op.putOp; ',1'->BC.putLine;
+   '\tand\t' -> BC.putT; op.putOp; ',1'->BC.putT; eoo
+#)
+--LogNot:descriptor--
+(#
+do (op[],none)->ldOps;
+   '\tnot'->BC.putT; size->BC.putS; op.putOp; eoo
+#)
+--gGetDataByte:descriptor--
+(* this slot implements
+ * 	 X->TOS'%getByte[i]', where i=0,1,2,3
+ * X is loaded to a register. Since the IX386 is little-endian
+ * byte[0] is the least significant bits
+ * ...
+ * byte[3] are the most significant. 
+ * The if- cases 0,1,2,3 are thus reverse of the big-endian MC68
+ *)
+(#
+do (op1[],none)->ldOps;
+   (if byteNo
+    // 3 then (* rotate left 8 bits *)
+       '\trol'->BC.putT; 4->BC.putS; op1.putOp; ',8'->BC.putT; eoo
+    // 2 then 
+       (* swap register halves.
+        * the 486 has a bswap operation, but this is not on the 386.
+        * the xchg operation seems only for swapping bytes?
+        *)
+       '\trol'->BC.putT; 4->BC.putS; op1.putOp; ',16'->BC.putT; eoo
+    // 1 then (* rotate right 8 bits *)
+       '\tror'->BC.putT; 4->BC.putS; op1.putOp; ',8'->BC.putT; eoo
+   if);
+   '\tand'->BC.putT; 4->BC.putS; op1.putop; ',255'->BC.putT; eoo
+#)
+--gGetDataWord:descriptor--
+(* Supports
+ * 	X->TOS'%getShort[i]', where i=0,1
+ * X is loaded into register. 
+ * As for gGetDataByte, the if-cases are reverse of the MC68.
+ * See above
+ *)
+(#
+do (op1[],none)->ldOps;
+   (if wordNo = 2 then
+       (* for some reason wordNo=2*i for i in getShort[i] *)
+       '\tror'->BC.putT; 4->BC.putS; op1.putOp; ',16'->BC.putT; eoo
+   if);
+   '\tand'->BC.putT; 4->BC.putS; op1.putOp; ',0ffffh'->BC.putT; eoo
+#)
+--JumpIfTrue:descriptor--
+(#do '\tjnc\t'->BC.putT; op.putOp; eoo#)
+--gBeq:descriptor--
+(#do '\tje\t'->BC.putT; op.putOp; eoo#)
+--gBge:descriptor--
+(#do '\tjge\t'->BC.putT; op.putOp; eoo#)
+--gBne:descriptor--
+(#do '\tjne\t'->BC.putT; op.putOp; eoo#)
+--gBae:descriptor--
+(#do '\tjae\t'->BC.putT; op.putOp; eoo#)
+--gBle:descriptor--
+(#do '\tjle\t'->BC.putT; op.putOp; eoo#)
+--gBbe:descriptor--
+(#do '\tjbe\t'->BC.putT; op.putOp; eoo#)
+--gBgt:descriptor--
+(#do '\tjnle\t'->BC.putT; op.putOp; eoo#)
+--gBab:descriptor--
+(#do '\tja\t'->BC.putT; op.putOp; eoo#)
+--gBlt:descriptor--
+(#do '\tjl\t'->BC.putT; op.putOp; eoo#)
+--gBbl:descriptor--
+(#do '\tjb\t'->BC.putT; op.putOp; eoo#)
+--trap:descriptor--
+(* should make a case on trap, cond=4 => le *)
+(* OLM: it seems that one of the instructions int/into should be used *)
+(# #)
+--initExternalCall:dopart--
+do
+--CallCproc:descriptor--
+(#
+do (if extType
+   // 1 (*sematt.cExt*) then
+     '_'->T.prepend;
+   // 2 (*sematt.pascExt*) then
+     T.MakeUC;
+   // 7 (*sematt.stdExt*) then
+       (if isMicrosoft then
+           '__imp__'->T.prepend;
+           '@'->T.append; (* Sets text-pointer to EOS *)
+           noOfParam*4->T.putInt;
+       if);
+   if);
+   T[] -> import;
+   '\tcall\t'->BC.putT;
+   (if (extType=7) and isMicrosoft then
+       'dword ptr '->BC.putT;
+   if);
+   T->BC.putT; eoo
+#)
+--PopCword:descriptor--
+(#do '\tpop\tax'->BC.putT; eoo #)
+--CstOpPut:dopart--
+do C->BC.putI
+--TextOpPut:dopart--
+do T->BC.putT
+--DataRegOpPut:dopart--
+do rN -> DataReg
+--AdrRegOpPut:dopart--
+do (if ind then (rN, 0) -> IndirectReg
+   else rN -> AdrReg if)
+--stackTopAdrPutOp:descriptor--
+(#do '(sp)+'->BC.putT #)             (*???*)
+--doubleDataRegPut:descriptor--
+(#do 'doubleDataReg' -> NotCompleted #)
+--LocalLabDef:dopart--
+do (if type = interFragment then
+       asText -> export;
+       asText -> labelDef
+   if);
+   'L' -> BC.putC; labNo->BC.putI; ':'->BC.putC; eoo
+--LocalLabPut:dopart--
+do (if type = interFragment then
+       asText -> BC.putline;
+       (* astext -> import; *)
+    else
+       'L' -> BC.putC; labNo->BC.putI
+   if)
+--StackOffPut:descriptor--
+(#do (7,off) -> IndirectReg #)
+--AssemblerHeader:descriptor--
+(#
+do 'INTEL-386 for WinNT generated by beta compiler' -> comment;
+   '\tTITLE\tBETA_program'->BC.putLine;
+   '.386P'->BC.putLine;
+   (if isBorland then
+       '\tmodel\tflat'->BC.putLine;
+       '_TEXT\tsegment dword public use32 ''CODE'''->BC.putLine;
+       '_TEXT\tends'->BC.putLine;
+       '_DATA\tsegment dword public use32 ''DATA'''->BC.putLine;
+       '_DATA\tends'->BC.putLine;
+       'CONST\tsegment dword public use32 ''CONST'''->BC.putLine;
+       'CONST\tends'->BC.putLine;
+       '_BSS\tsegment dword public use32 ''BSS'''->BC.putLine;
+       '_BSS\tends'->BC.putLine;
+       'DGROUP\tgroup\t_BSS,_DATA'->BC.putLine;
+       'extrn\t__setargv__:proc'->BC.putLine;
+    else
+       'if @Version gt 510'->BC.putLine;
+       '.model\tFLAT'->BC.putLine;
+       'else'->BC.putLine;
+       '_TEXT\tsegment para use32 public ''CODE'''->BC.putLine;
+       '_TEXT\tends'->BC.putLine;
+       '_DATA\tsegment dword use32 public ''DATA'''->BC.putLine;
+       '_DATA\tends'->BC.putLine;
+       'CONST\tsegment dword use32 public ''CONST'''->BC.putLine;
+       'CONST\tends'->BC.putLine;
+       '_BSS\tsegment dword use32 public ''BSS'''->BC.putLine;
+       '_BSS\tends'->BC.putLine;
+       '_TLS\tsegment dword use32 public ''TLS'''->BC.putLine;
+       '_TLS\tends'->BC.putLine;
+       'FLAT\tGROUP _DATA, CONST, _BSS'->BC.putLine;
+       '\tASSUME\tCS: FLAT, DS: FLAT, SS: FLAT'->BC.putLine;
+       'endif'->BC.putLine;
+       'if @Version ge 610'->BC.putLine;
+       'option nokeyword:<leS>'->BC.putLine;
+       'endif'->BC.putLine;
+   if);
+   'extrn\t_Return:proc'->BC.putLine;
+   'extrn\tAlloC:proc'->BC.putLine;
+   'extrn\tAlloDO:proc'->BC.putLine;
+   'extrn\tAlloI:proc'->BC.putLine;
+   'extrn\tAlloRR:proc'->BC.putLine;
+   'extrn\tAlloS:proc'->BC.putLine;
+   'extrn\tAlloSC:proc'->BC.putLine;
+   'extrn\tAlloSI:proc'->BC.putLine;
+   'extrn\tAlloSO:proc'->BC.putLine;
+   'extrn\tAlloVRC:proc'->BC.putLine;
+   'extrn\tAlloVRI:proc'->BC.putLine;
+   'extrn\tAlloVR1:proc'->BC.putLine;
+   'extrn\tAlloVR2:proc'->BC.putLine;
+   'extrn\tAlloVR4:proc'->BC.putLine;
+   'extrn\tAlloVR8:proc'->BC.putLine;
+   'extrn\tAtt:proc'->BC.putLine;
+   'extrn\tAttBC:proc'->BC.putLine;
+   'extrn\t_BetaError:proc'->BC.putLine;
+   'extrn\tChkRA:proc'->BC.putLine;
+   'extrn\tCinitT:proc'->BC.putLine;
+   'extrn\tCopyCPP:proc'->BC.putLine;
+   'extrn\tCopyCT:proc'->BC.putLine;
+   'extrn\tCopyPPP:proc'->BC.putLine;
+   'extrn\tCopyRR:proc'->BC.putLine;
+   'extrn\tCopySPP:proc'->BC.putLine;
+   'extrn\tCopySRR:proc'->BC.putLine;
+   'extrn\tCopySVRC:proc'->BC.putLine;
+   'extrn\tCopySVRI:proc'->BC.putLine;
+   'extrn\tCopySVR1:proc'->BC.putLine;
+   'extrn\tCopySVR2:proc'->BC.putLine;
+   'extrn\tCopySVR4:proc'->BC.putLine;
+   'extrn\tCopySVR8:proc'->BC.putLine;
+   'extrn\tCopyT:proc'->BC.putLine;
+   'extrn\tCopyVRC:proc'->BC.putLine;
+   'extrn\tCopyVRI:proc'->BC.putLine;
+   'extrn\tCopyVR1:proc'->BC.putLine;
+   'extrn\tCopyVR2:proc'->BC.putLine;
+   'extrn\tCopyVR4:proc'->BC.putLine;
+   'extrn\tCopyVR8:proc'->BC.putLine;
+   'extrn\tCpkSVT:proc'->BC.putLine;
+   'extrn\tCpkVT:proc'->BC.putLine;
+   'extrn\tDoGC:proc'->BC.putLine;
+   'extrn\tdoGC:proc'->BC.putLine;
+   'extrn\teqS:proc'->BC.putLine;
+   'extrn\tExO:proc'->BC.putLine;
+   'extrn\tExtRR:proc'->BC.putLine;
+   'extrn\tExtVRC:proc'->BC.putLine;
+   'extrn\tExtVRI:proc'->BC.putLine;
+   'extrn\tExtVR1:proc'->BC.putLine;
+   'extrn\tExtVR2:proc'->BC.putLine;
+   'extrn\tExtVR4:proc'->BC.putLine;
+   'extrn\tExtVR8:proc'->BC.putLine;
+   'extrn\tgeS:proc'->BC.putLine;
+   'extrn\tgtS:proc'->BC.putLine;
+   'extrn\tleS:proc'->BC.putLine;
+   'extrn\tltS:proc'->BC.putLine;
+   'extrn\tMkTO:proc'->BC.putLine;
+   'extrn\tneS:proc'->BC.putLine;
+   'extrn\tNewRR:proc'->BC.putLine;
+   'extrn\tNewVRC:proc'->BC.putLine;
+   'extrn\tNewVRI:proc'->BC.putLine;
+   'extrn\tNewVR1:proc'->BC.putLine;
+   'extrn\tNewVR2:proc'->BC.putLine;
+   'extrn\tNewVR4:proc'->BC.putLine;
+   'extrn\tNewVR8:proc'->BC.putLine;
+   'extrn\tObjS:proc'->BC.putLine;
+   'extrn\tQua:proc'->BC.putLine;
+   'extrn\tRefNone:proc'->BC.putLine;
+   'extrn\tSetArgValues:proc'->BC.putLine;
+   'extrn\tSusp:proc'->BC.putLine;
+   'extrn\t_BetaStackTop:dword'->BC.putLine;
+   'extrn\t_IOA:dword'->BC.putLine;
+   'extrn\t_lastCompBlock:dword'->BC.putLine;
+   'extrn\t_SetupArgValues:proc'->BC.putLine;
+   'extrn\t_TextProto:dword'->BC.putLine;
+   
+   'extrn\t_pReg1:dword'->BC.putLine;
+   'extrn\t_pReg2:dword'->BC.putLine;
+   'extrn\t_pReg3:dword'->BC.putLine;
+   'extrn\t_pReg4:dword'->BC.putLine;
+   'extrn\t_pReg5:dword'->BC.putLine;
+   
+   'extrn\t_a2:dword'->BC.putLine;
+   'extrn\t_a3:dword'->BC.putLine;
+   'extrn\t_a4:dword'->BC.putLine;
+   
+   'extrn\t_d0:dword'->BC.putLine;
+   'extrn\t_d1:dword'->BC.putLine;
+   'extrn\t_d2:dword'->BC.putLine;
+   'extrn\t_d3:dword'->BC.putLine;
+   'extrn\t_d4:dword'->BC.putLine;
+   'extrn\t_d5:dword'->BC.putLine;
+
+   &physRegOperand[]->dataRegA[]; 5->dataRegA;
+   &physRegOperand[]->dataRegB[]; 6->dataRegB;
+   &primRegOperand[]->dataRegX[]; 1->dataRegX;
+   &primRegOperand[]->dataRegY[]; 2->dataRegY;
+   
+   (* initial allocation - is not necessary when all ldOps have been
+    * inserted in the code
+    *)
+   (* assign th,ca,a2,a3 to physical registers *)
+   (for i:4 repeat
+        i->rep.aMap[i]; i->rep.fMap[i]
+   for);
+   (* assign sp to physical register *)
+   8->rep.aMap[8]; 8->rep.fMap[8];
+   (* assign d0,d1,d2 to physical registers *)
+   (for i:3 repeat
+        i+4->rep.dMap[i]; i->rep.fMap[i+4]
+   for);
+   SwitchToCode
+#)
+--DebugHeader:descriptor--
+(##)
+--BeginProtoTypes:descriptor--
+(# do SwitchToData #)
+--SwitchToData:descriptor--
+(#do dataSegment->switchToSegment #)
+--SwitchToCode:descriptor--
+(#do codeSegment->switchToSegment #)
+--Export:dopart--
+do 'public\t'-> BC.putT; Lab->BC.putT; eoo;
+--Import:descriptor--
+(#
+do (if wasAdded then
+       'extrn\t'->BC.putT; Lab->BC.putT; ':proc'->BC.putLine;
+   if);
+#)
+--ImportData:descriptor--
+(#
+do (if wasAdded then
+       (if not local then
+           'extrn\t'->BC.putT; Lab->BC.putT; ':dword'->BC.putLine;
+   if) if)
+#)
+--DeclareLong:descriptor--
+(#do '\tdd\t' -> BC.putT;  N->BC.putI; eoo #)
+--DeclareAddress:descriptor--
+(#do '\tdd\tOFFSET FLAT:' -> BC.putT;  op.putOp; eoo #)
+--DeclareWord:descriptor--
+(#do '\tdw\t' -> BC.putT; N->BC.putI;  eoo #)
+--DclWord:descriptor--
+(#do '\tdw\t' -> BC.putT;  n ->BC.putI; eoo #)
+--EmitBytes:descriptor--
+(#do INNER emitBytes; BC.putNl #)
+--EmitByte:descriptor--
+(# putHexByte: @   
+     (# x: @integer;
+        putOneHex: @
+          (# x: @integer;
+          enter x
+          do (if x < 10 then
+                 '0'+x->BC.putC
+              else
+                 'A'+x-10->BC.putC
+             if)
+          #);
+     enter X
+     do '0'->BC.putC;
+        x div 16 -> putOneHex;
+        x mod 16 -> putOneHex;
+        'h'->BC.putC;
+     #);
+do (if (cnt mod 10) = 0 then 
+       (if cnt <> 0 then BC.putNL if);
+       '\tdb\t'->BC.putT 
+    else BC.sep 
+   if);
+   B->putHexByte
+#)
+--Skip:descriptor--
+(#  #)
+--AsciiZ:descriptor--
+(* For sun3 the output has the form
+ *\t.asciz "........"
+ * Chars with a value less that ' ' (32) are converted to
+ * the form \ooo where ooo is the octal value of the character.
+ * Chars with an ascii value greater than 128 are converted to ' '.
+ * The char '"' is printed as '\"'.
+ *)
+(# p: @integer; intext: @boolean;
+do T.scanAll
+   (#
+   do (if (p mod 64) = 0 then
+         (if p <> 0 then
+	    (if intext then '"'->BC.putC; if);
+            BC.putNL; if);
+         '\tdb\t'->BC.putT; false->intext; if);
+      (if true
+         // ch < 32
+	 // ch > 126 then
+	   (if intext then '"'->BC.putT; false->intext; if);
+	   (if (p mod 64) <> 0 then ','->BC.putC; if);
+	   ch->BC.putI;
+	 else (if not intext then
+		 (if (p mod 64) <> 0 then ','->BC.putC; if);
+                 '"'->BC.putC; true->intext; if);
+           (if ch = '"' then '"'->BC.putC; '"'->BC.putC
+            else ch->BC.putC if);
+      if);
+      p+1->p;
+   #);
+   (if intext then '"'->BC.putC; if);
+   (if T.length = 0 then '\tdb\t0'->BC.putT
+    else ',0' -> BC.putT if);
+   eoo;
+   '\talign\t4'->BC.putLine
+#)
+--defineMainLabel1:descriptor--
+(# T, L: @text
+do 'UoFV' -> T ; T[] -> export;  T[] -> labelDef;
+   '\tpush\tedx\n' -> BC.PutT;
+   '\tpush\t-37\n' 
+     -> BC.PutT; (* UnorderedFval - see betarun/C/betaerror.h *)
+   '_BetaError' -> jsrT;
+   rts;	
+   true -> mstate.UoFV_defined;
+   
+   (if isBorland then 'WinMain' -> T else '_WinMain@16' -> T if);
+   T[] -> export; T[] -> labelDef;
+   '_SetupArgValues'->jsrT;
+   'commonentry'->L; L->jmpT;
+   '_main' -> T ; T[] -> export; T[] -> labelDef;
+   'SetArgValues'->jsrT;
+   L[]->labelDef;
+   '\tmov\tebp,0\n\tmov\tesi,0\n\t\mov\tedi,0\n\tmov\tedx,0'->BC.putLine
+#)
+--LabelDef:descriptor--
+(#
+do T->BC.putT; ':'->BC.putT; eoo;
+#)
+--RegInd:dopart--
+do (R, 0) -> IndirectReg
+--RegisterOffSet:dopart--
+do 'RegisterOffSet' -> NotCompleted
+--FloatRegOpPut:descriptor--
+(##)
+--FloatRegOpLoad:descriptor--
+(#
+do (A[],none)->ldOps;
+   '\tfld'->BC.putT; 8->BC.putS; A.putOp; eoo 
+#)
+--FloatRegOpStore:descriptor--
+(#do (A[],none)->ldOps; '\tfstp'->BC.putT; 8->BC.putS; A.putOp; eoo #)
+--FloatRegOpStoreTmp:descriptor--
+(#
+do
+   this(floatRegOp)[]->A[] (*???*)
+#)
+--floatRegOpStore2int:descriptor--
+(#
+do D.alloc; (A[],none)->ldOps;
+   
+   '\tpush\teax'->BC.putLine;
+   '\tfnstcw\t[esp-4]'->BC.putLine;
+   '\tmov\teax,[esp-4]'->BC.putLine;
+   '\tmov\tah,12'->BC.putLine;
+   '\tmov\t[esp-8],eax'->BC.putLine;
+   '\tfldcw\t[esp-8]'->BC.putLine;
+   '\tpop\teax'->BC.putLine;
+   
+   '\tfistp'->BC.putT; 4->BC.putS; A.putOp; eoo;
+   
+   '\tfldcw\tword ptr [esp-8]'->BC.putLine;
+   
+   (A[],D[])->ldOps;
+   '\tmov\t'->BC.putT; D.putOp; BC.sep; A.putOp; eoo;
+   deAlloc
+#)
+--float2int:doPart---
+   (* FR: ^floatRegOp; dr: ^registerOperand *)
+do (mstate.tmplab,none)->ldOps;
+   
+   '\tpush\teax'->BC.putLine;
+   '\tfnstcw\t[esp-4]'->BC.putLine;
+   '\tmov\teax,[esp-4]'->BC.putLine;
+   '\tmov\tah,12'->BC.putLine;
+   '\tmov\t[esp-8],eax'->BC.putLine;
+   '\tfldcw\t[esp-8]'->BC.putLine;
+   '\tpop\teax'->BC.putLine;
+   
+   '\tfistp'->BC.putT; 
+   4->BC.putS; 'dword ptr '->BC.putT; (mstate.tmplab).putOp; eoo;
+   
+   '\tfldcw\tword ptr [esp-8]'->BC.putLine;
+   
+   (* inlined modified chkemitreg *)
+   (mstate.tmplab, dr[]) -> ldops;
+   (if dr.isPrimRegOp then
+       (# xdr: @dataRegOperand
+       do xdr.alloc;
+          (mstate.tmplab,xdr[])->ldOps;
+          '\tmov'->BC.putT; 4->BC.putS; xdr.putOp; 
+          BC.sep; 'dword ptr '->BC.putT; (mstate.tmplab).putOp; eoo;
+          (dr[],xdr[])->ldOps;
+          '\tmov'->BC.putT; 4->BC.putS; dr.putOp; sep; xdr.putOp; eoo;
+          xdr.deAlloc;
+       #)
+    else
+       '\tmov'->BC.putT; 4->BC.putS; dr.putOp; BC.sep;
+       'dword ptr '->BC.putT; (mstate.tmplab).putOp; eoo
+   if);
+
+--floatConst:descriptor--
+(# Lab: @ localLab;
+   putAsmReal:
+     (# t: ^text;
+        r: @real;
+        putHexByte: @
+          (# x: @integer;
+             putOneHex: @
+               (# x: @integer;
+               enter x
+               do (if x < 10 then
+                      '0'+x->BC.putC
+                   else
+                      'A'+x-10->BC.putC
+                  if)
+               #);
+          enter X
+          do x div 16 -> putOneHex;
+             x mod 16 -> putOneHex;
+          #);
+     enter t[]
+     do t.reset; t.getReal->r;
+        '0'->BC.put;
+        (* Little endian -- must scan backwards *)
+        @@r->TOS'%adrGetByte[7]'->putHexByte;
+        @@r->TOS'%adrGetByte[6]'->putHexByte;
+        @@r->TOS'%adrGetByte[5]'->putHexByte;
+        @@r->TOS'%adrGetByte[4]'->putHexByte;
+        @@r->TOS'%adrGetByte[3]'->putHexByte;
+        @@r->TOS'%adrGetByte[2]'->putHexByte;
+        @@r->TOS'%adrGetByte[1]'->putHexByte;
+        @@r->TOS'%adrGetByte[0]'->putHexByte;
+        'r'->BC.put;
+     exit r
+     #);
+
+do switchToData;
+   FR.alloc;
+   Lab.new; Lab.def;
+   '\tdq\t'->BC.putT;
+   (if isBorland then
+       T->BC.putT;
+    else
+       T[]->putAsmReal; '\t; '->BC.putT; T->BC.putT;
+   if);
+   eoo;
+   switchToCode;
+   '\tfld\tqword ptr '->BC.putT; Lab.putOp; eoo
+#)
+--intReg2float:descriptor--
+(# A1: @RegAdr; F: ^floatRegOp
+do (A[],mstate.tmplab)->stValInLab;
+   A1.reg.alloc;
+   (mstate.tmplab,A1.reg[])->gLeaLabel;
+   A1[]->int2float->F[]; F->FR; (* clumsy *)
+   A1.reg.deAlloc
+#)
+--int2float:descriptor--
+(#
+do (A[],none)->ldOps; FR.alloc; '\tfild'->BC.putT; 0->BC.putS; A.putOp; eoo
+#)
+--cmpFloat:descriptor--
+(#
+do (A[],none)->ldOps;
+   (if A.isFloatRegOp then 
+       (* stack top operations. Generate fcompp - i.e. pop arguments*)
+       (if (A[],LF[])->swapFreg then
+           (* swap top fstack elements before compare *)
+           '\tfxch\tst(1)\n\tfcompp'->BC.putLine
+        else       
+           '\tfcompp'->BC.putT
+       if)
+    else '\tfcomp'->BC.putT; 8->BC.putS; A.putOp  (* cmp mem32 to stacktop *)
+   if);
+   eoo
+#)
+--fBeq:descriptor--
+(#
+do TstFloat
+   (#
+   do '\tje\t'->BC.putT; op.putOp; eoo
+#)#)
+--fBge:descriptor--
+(#
+do TstFloat
+   (#
+   do '\tjae\t'->BC.putT; op.putOp; eoo;
+#)#)
+--fBle:descriptor--
+(#
+do TstFloat
+   (#
+   do '\tjbe\t'->BC.putT; op.putOp; eoo;
+#)#)
+--fBne:descriptor--
+(#
+do TstFloat
+   (#
+   do '\tjnz\t'->BC.putT; op.putOp; eoo
+#)#)
+--fBgt:descriptor--
+(#
+do TstFloat
+   (#
+   do '\tja\t'->BC.putT; op.putOp; eoo
+#)#)
+--fBlt:descriptor--
+(#
+do TstFloat
+   (#
+   do '\tjb\t'->BC.putT; op.putOp; eoo
+#)#)
+--addFloat:descriptor--
+(#
+do (A[],none)->ldOps;
+   '\tfadd'->BC.putT;
+   (if AinFreg then (* fadd two top stack elements *)
+       'p\tst(1),st'->BC.putT
+    else 8->BC.putS; A.putOp (* add mem32 to top stak element *)
+   if);
+   eoo
+#)
+--subFloat:descriptor--
+(#
+do (A[],none)->ldOps;
+   (* AinReg may be false even if A is in Freg.
+    * see evval2:floatEvVal:sub
+    *)
+   '\tfsub'->BC.putT;
+   (if A.isFloatRegOp then (* fsub two top stack elements *)
+       (* Please note that LINUX and NTI confuse fsubp and fsubrp *)
+       (if (A[],LF[])->swapFreg then
+           'p'->BC.putC
+        else
+           'rp'->BC.putT
+       if);
+       '\tst(1),st'->BC.putT
+    else 8->BC.putS; A.putOp (* add mem32 to top stak element *)
+   if);
+   eoo
+#)
+--mulFloat:descriptor--
+(#
+do (A[],none)->ldOps;
+   '\tfmul'->BC.putT; 
+   (* AinReg may be false even if A is in Freg.
+    * see evval2:floatEvVal:sub
+    *)
+   (if A.isFloatRegOp then (* fmul two top stack elements *)
+       'p\tst(1),st'->BC.putT;
+       (* NOTE: linux asm converts 'fmul' into 'fmul ST,ST(1)' 
+        * which does NOT pop. 'fmulp' is accepted although it is NOT in
+        * the I486 manual.
+        * Same seems to happen for fadd, fsub,fdiv
+        *)
+    else 8->BC.putS; A.putOp (* add mem32 to top stak element *)
+   if);
+   eoo
+#)
+--divFloat:descriptor--
+(#
+do (A[],none)->ldOps;
+   (* AinReg may be false even if A is in Freg.
+    * see evval2:floatEvVal:sub
+    *)
+   (if A.isFloatRegOp then (* fdiv two top stack elements *)
+       (* Please note that LINUX and NTI confuse fdivp and fdivrp *)
+       (if (A[],LF[])->swapFreg then
+           '\tfdivp'->BC.putT
+        else
+           '\tfdivrp'->BC.putT
+       if);
+       '\tst(1),st'->BC.putT;
+    else '\tfdiv\t'->BC.putT; 8->BC.putS; A.putOp (* add mem32 to top stak element *)
+   if);
+   eoo 
+#)
+--pushFloatReg:descriptor--
+(#do 'pushFloatReg'->comment #)
+--popFloatReg:descriptor--
+(#do 'popFloatReg'->comment #)
+--negFloat:descriptor--
+(#
+do '\tfchs\n'->BC.putT
+#)
+--PopCbyte:descriptor--
+(* only relevant for MAC Pascal *)
+(#
+do '!!error: popCbyte'->BC.putT
+#)
+--xpar:descriptor--
+(# extKind,top,(*parSize,*)longSize,wordSize: @integer;
+   SP: @stackOff;
+#)
+--debugProtoInfo:descriptor--
+(##)
+--debuggPartInfo:descriptor--
+(##)
+--debugImpInfo:descriptor--
+(##)
+--debugBeforeEndMinfo:descriptor--
+(##)
+--debugAfterEndMinfo:descriptor--
+(##)
+--endDebugCode:descriptor--
+(##)
+--xParForward:descriptor--
+(#
+do (if extKind
+    // 1 (* sematt.cExt*) // 7 (* sematt.stdExt*) then false->forward
+    // 2 (* sematt.pascExt*) // 3 (* sematt.pascTrapExt*) then true->forward
+if)#)
+--toXres:descriptor--
+(##)
+--GetXbyte:descriptor--
+(* only for MAC Pascal, byte and word are always word *)
+(#
+do Xpar.top->Xpar.SP; (XPar.SP[],dr[])->ldHalf;
+   Xpar.top+Xpar.wordSize->Xpar.top
+#)
+--getXword:descriptor--
+(#
+do Xpar.top->Xpar.SP; (XPar.SP[],dr[])->ldHalf;
+   Xpar.top+Xpar.wordSize->Xpar.top
+#)
+--getXlong:descriptor--
+(#
+do Xpar.top->Xpar.SP; (XPar.SP[],dr[])->ldVal;
+   Xpar.top+Xpar.longSize->Xpar.top
+#)
+--initGetXpar:descriptor--
+(#
+do (if extKind->Xpar.extKind//5 (*sematt.cCallBackExt*)
+                            //8 (*sematt.stdCallBackExt*) then
+       (* note on HP and MAC, 72->Xpar.top is the correct value.
+        * On NTI fewer registers are pushed
+        *)
+       48->Xpar.top; 4->Xpar.longSize->Xpar.wordSize
+       (* note cTop=pascTop+4 => cTop=48, pascTop=?? *)
+    else (*pascCallBackExt*)
+       (* NOTE: this has NOT bben fixed for Pascal - 68 is the same as for hp *)
+       44+(BC+SC+LC)*4(*->Xpar.parSize*)->Xpar.TOP;
+       -4->Xpar.longSize->Xpar.wordSize;
+   if);
+#)
+--saveheapTop:descriptor--
+(#
+do '\tmov\t_BetaStackTop,esp'->BC.putLine
+#)
+--pushCfloat:descriptor--
+(* is on top of f-stack - push to activation-stack *)
+(#
+do '\tsub\tesp,8\n\tfstp\tqword ptr [esp]'->BC.putLine
+#)
+--PushClong:descriptor--
+(#
+do (op[],none)->ldOps; op[]->Push
+#)
+--PushCword:descriptor--
+(#
+do (op[],none)->ldOps; op[]->Push
+#)
+--PushCbyte:descriptor--
+(#
+do (op[],none)->ldOps; op[]->Push
+#)
+--PushCDoubleAdr:descriptor--
+(# A1: ^address
+do A.copy->A1[]; (*addOff changes A*)
+   4->A.addOff->pushClong; A1[]->pushClong;
+#)
+--PushCtext:descriptor--
+(##)
+--callO:dopart--
+do 1->rNo
+--thisO:dopart--
+do 0->rNo
+--pushAdr:descriptor--
+(# do '\tpush\tOFFSET FLAT:'->BC.putT; op.putOp; eoo #)
+--inxRegAdrPutOp:dopart--
+do (aReg,dReg,size,off)->IndexReg
+--adrLoadFloatOp:descriptor--
+(##)
+--nop:descriptor--
+(#do '\tnop'->BC.putLine #)
+--regAdrPutOp:dopart--
+do (* guessing:*)
+   (reg,off)->IndirectReg
+--localLabLoadAdr:dopart--
+do
+--localLabAstext:descriptor--
+(#
+do 'L'->localLabText.puttext; labNo->localLabText.putInt;
+#)
+--textOpLoadAdr:dopart--
+do
+--putS:dopart--
+do
+(* MASM do NOT use movl e.t.c. it finds out itself. *)
+   (if size
+    //8 then 8->mstate.addressSize; (*'l'->BC.putC;*)
+    //4 then 0->mstate.addressSize; (*'l'->BC.putC;*)
+    //2 then 1->mstate.addressSize; (*'w'->BC.putC;*)
+    //1 then 2->mstate.addressSize; (*'b'->BC.putC *)
+   if);
+   '\t'->BC.putT
+--putA:descriptor--
+(##)
+--putD:descriptor--
+(##)
+--imm:descriptor--
+(#do off-> putI #)
+--newCtextOp:descriptor--
+(# S: @text do '_'->S.put; T[]->S.puttext; S[]->op #)
+
+--BeginLabel:dopart--
+do (# sp:@adrRegOperand; 
+      dReg: @dataRegOperand;
+      A: @regAdr;
+   do dReg.alloc; 7->sp; 
+      (sp[],dReg[])->cpReg;
+      ('lastCompBlock'->NewCtextOp,dReg[],4)->gSub;
+      thisO->A.reg; common.direct->A.access; off->A.off;
+      (dReg[],A[])->stVal;
+      dReg.deAlloc;
+   #)
+--EndLabel: dopart--
+do
+--pushThisOrCall:descriptor--
+(#
+do (if pushTh then thisRegOp[]->push if);
+   (if pushCa then callRegOp[]->push if)
+#)
+--popThisOrCall:descriptor--
+(#
+do (if popCa then callRegOp[]->pop if);
+   (if popTh then thisRegOp[]->pop if)
+#)
+--InxRegAdrPushRegAndOff:descriptor--
+(#
+do ((off div 4)->newCstOp,dReg[],4)->gAdd;
+   aReg[]->pushClong; dReg[]->pushClong
+#)
+--cmpToBool:descriptor--
+(# Lab: @localLab
+do (if true then
+       (op1[],op2[],size)->gCmp;
+       (cond,op3[],size)->SetCC
+    else
+       (1->NewCstOp,op3[])->ldCst;
+       (op1[],op2[],size)->gCmp;
+       Lab.new;
+       (if cond (* IF T1 cc R then goto L *)
+        // 1 (* =  *) then Lab[]->gBeq
+        // 2 (* <> *) then Lab[]->gBne
+        // 3 (* <  *) then 
+           (if size = 4 then Lab[]->gBlt else Lab[]->gBbl if)
+        // 4 (* <= *) then 
+           (if size = 4 then Lab[]->gBle else Lab[]->gBbe if)
+        // 5 (* >  *) then 
+           (if size = 4 then Lab[]->gBgt else  Lab[]->gBab if)
+        // 6 (* >= *) then 
+           (if size = 4 then Lab[]->gBge else Lab[]->gBae if)
+       if);
+       (op3[],none)->ldOps;
+       op3[]->gClr;
+       Lab.Def;
+   if)
+#)
+--cmpAndJmp:descriptor--
+(#
+do (op1[],op2[])->ldOps;
+   (op1[],op2[],size)->gCmp;
+   (if cond (* IF T1 cc R then goto L *)
+    // 1 (* =  *) then Lab[]->gBeq
+    // 2 (* <> *) then Lab[]->gBne
+    // 3 (* <  *) then 
+       (if size = 4 then Lab[]->gBlt else Lab[]->gBbl if)
+    // 4 (* <= *) then 
+       (if size = 4 then Lab[]->gBle else Lab[]->gBbe if)
+    // 5 (* >  *) then 
+       (if size = 4 then Lab[]->gBgt else Lab[]->gBab if)
+    // 6 (* >= *) then 
+       (if size = 4 then Lab[]->gBge else Lab[]->gBae if)
+   if)
+#)
+--cmpBoolAndJmp:descriptor--
+(#
+do (0->NewCstOp,op[],size)->gCmp;
+   (if cond (* IF T1 cc R then goto L *)
+    // 1 (* =  *) then Lab[]->gBeq
+    // 2 (* <> *) then Lab[]->gBne
+    // 3 (* <  *) then 
+       (if size = 4 then Lab[]->gBlt else Lab[]->gBbl if)
+    // 4 (* <= *) then 
+       (if size = 4 then Lab[]->gBle else Lab[]->gBbe if)
+    // 5 (* >  *) then 
+       (if size = 4 then Lab[]->gBgt else Lab[]->gBab if)
+    // 6 (* >= *) then 
+       (if size = 4 then Lab[]->gBge else Lab[]->gBae if)
+   if);
+#)
+--cmpToBoolFloat:descriptor--
+(# Lab: @localLab
+do (if false then
+       (op2[],op1[])->cmpFloat; (* notice operand order *)
+       (* a  SetCC for float is necessary -
+        * fCond codes must be moved to EHFLAGS before testing!
+        * And probably other tests (below instead of less )
+        * must be used
+        *)
+       (cond,op3[],0)->SetCC (** DONT WORK - BUT IS NOT USED *)
+    else
+       (op3[],none)->ldOps;
+       (1->NewCstOp,op3[])->ldCst;
+       (op2[],op1[])->cmpFloat; (* notice operand order *)
+       Lab.new;
+       (if cond (* IF T1 cc R then goto L *)
+        // 1 (* =  *) then Lab[]->fBeq
+        // 2 (* <> *) then Lab[]->fBne
+        // 3 (* <  *) then Lab[]->fBlt
+        // 4 (* <= *) then Lab[]->fBle
+        // 5 (* >  *) then Lab[]->fBgt
+        // 6 (* >= *) then Lab[]->fBge
+       if);
+       op3[]->gClr;
+       Lab.Def
+   if)
+#)
+--cmpAndJmpFloat:descriptor--
+(#
+do (if op1.isFloatRegOp then
+       (* stack top operation - compare top elements, 
+        * BUT unless pop is true top-1 MUST be kept on the stack after compare,
+        * since it may be used in subsequent compares
+        *)
+       (if (op1[],op2[])->swapFreg then
+           (* Reverse condition instead of operands for non-symmetric conditions *)
+           (if cond
+                // 3 (* <  *) then 5 (* >  *) -> cond
+                // 4 (* <= *) then 6 (* >= *) -> cond
+                // 5 (* >  *) then 3 (* <  *) -> cond
+                // 6 (* >= *) then 4 (* <= *) -> cond
+           if);
+       if);
+       (if pop then
+           (* Compare and pop two operands *)
+           '\tfcompp\t'->BC.putT
+        else
+           (* Compare and pop only one operand *)
+           '\tfcomp\tst(1)'->BC.putT
+       if);
+    else 
+       '\tfcom\t'->BC.putT;
+       8->mstate.addressSize; op1.putOp  (* cmp mem64 op1 to stacktop *)
+   if); 
+   eoo ;
+   (if cond (* IF T1 cc R then goto L *)
+    // 1 (* =  *) then Lab[]->fBeq
+    // 2 (* <> *) then Lab[]->fBne
+    // 3 (* <  *) then Lab[]->fBlt
+    // 4 (* <= *) then Lab[]->fBle
+    // 5 (* >  *) then Lab[]->fBgt
+    // 6 (* >= *) then Lab[]->fBge
+   if);
+   (if not pop then
+       (* If branch not taken *)
+       popFstack;
+   if)
+#)
+--popFstack:descriptor--
+(* during cmpAndJmpFloat the fval is kept on the fstack - it must
+ * be popped when no more tests are to be performed - before 'else'
+ * of if no 'else' after 'if'.
+ *)
+(#
+do (* '\tfldz\nfcompp\n'->BC.putT; *) (* 9 clock cycles *)
+   '\tffree\tst(0)\nfincstp\n'->BC.putT; (* 6 clock cycles *)
+
+#)
+--tstNone:descriptor--
+(# dr: @dataRegOperand; L: @localLab
+do dr.alloc; 
+   (A[],dr[])->ldOps;
+   (A[],dr[])->ldVal; 
+   4 (*le*) -> trap;
+   (* since no trap currently, an explicit test is carried out.
+    * Only a temporary solution
+    *)
+   L.new;
+   (0->newCstOp,dr[],4)->gCmp;
+   L[]->gBgt;
+   'RefNone'->jsrT;
+   L.def;
+   (dr[],R[])->ldOps;
+   (dr[],R[])->cpReg;
+   dr.deAlloc
+#)
+--SaveReturn:descriptor--
+(* this fragment contains fragment forms which are common for all
+ * Motorola based machines
+ *)
+(#
+do thisRegOp[]->push;
+   (callRegOp[],thisRegOp[])->cpReg
+#)
+--Return:descriptor--
+(#
+do (thisRegOp[],callRegOp[])->cpReg;
+   thisRegOp[]->Pop;
+   rts
+#)
+--ExternalEntry:descriptor--
+(#  
+do entryId[]->labelDef;
+#)
+--SaveInnerReturn:dopart--
+do
+--ExternalMark:descriptor---
+(##)
+--ExternalReturn:descriptor--
+(#do rts #)
+--ReturnInner:dopart--
+do rts
+--RegAdrIndex:descriptor--
+(# IA: @InxRegAdr; aR: @adrRegOperand; A1: @RegAdr; log: @integer;
+do reAlloc->aR; (thisOp,aR[])->ldVal; freeAdr;
+   aR->A1.reg; 8->A1.off;
+   (if not common.switch[14] then 
+       (*'ChkIndex from RegAdrIndex'->comment;*)
+       (A1[],dReg[])->ChkIndex 
+   if);
+   
+   (* @@R[i] = R.start + protoHead.size + (i-1)*size
+    *        = R.start + protoHead.size - size + i*size
+    * where 
+    *    protohead.size = 16  if  simple
+    *    protohead.size = 24  if  not simple
+    *)
+   (if isSimple then
+       (if size
+        // 1 then 15->IA.off
+        // 2 then 14->IA.off
+        // 4 then 12->IA.off
+        // 8 then 8->IA.off
+        else cerror(#do '\nIllegal index offset!'->T #)
+       if);    
+       size->IA.size; (* OBS only OK for size=1,2,4,8 *)
+    else
+       24-size->IA.off;
+       (if size
+        // 4 
+        // 8 then
+           (* use indexed adressing with scale *)
+           size -> IA.size;
+        else
+           (* multiply *)
+           (if (size->exact_log2->log) <> -1 then
+               (log->newCstOp,dreg[])->logicalShiftLeft;
+            else
+               (size->newCstOp,dReg[],4)->gMult
+           if);
+           1->IA.size;
+       if);
+   if);
+   aR->IA.aReg; dReg->IA.dReg; 
+   access->IA.access;
+   IA[]->A[];
+#)
+--RegAdrLoadOp:descriptor--
+(##)
+--InxRegAdrLoadFloatOp:descriptor--
+(##)
+--RegAdrLoadAdrOp:descriptor--
+(#do this(RegAdr)[]->op[] #)
+--RegAdrLoadAdr:dopart--
+do
+--InxRegAdrLoadOp:descriptor--
+(##)
+--InxRegAdrLoadAdrOp:descriptor--
+(##)
+--InxRegAdrLoadAdr:dopart--
+do
+--addMem:descriptor--
+(# dr: @dataRegOperand
+do (op1[],op2[],4)->gAdd;
+   dr.alloc; (op2[],dr[])->ldVal; dr[]->R[]
+#)
+(******************** external calls ***************)
+--getRegForXres:descriptor--
+(# drX: @ dataRegOperand
+do -1->max;
+   pushDataReg->max;
+         (* max>-1 if some data registers are in use;
+          * data registers [0,max] are pushed; d0, d1 may still be free;
+          * make sure they are allocated, since popReg will overwrite them.
+          * OBS! It should be checked if this works for nested C-calls
+          *)
+   0->dummyMax;
+   L:
+     (for i: max repeat
+          drX.alloc; drX->Rep.dummyReg[i]; (* D0,d1,...Dmax-1 *)
+          353->trace(#do 'DummyAlloc:d'->xT; drX->xI;
+                       ' max='->xT; max->xI
+                    #);
+          (if (drX>max) then
+              353->trace(#do 'releasedAgain'->xT #);
+              drX.deAlloc; i-1->dummyMax;
+              leave L
+    if)for);
+    saveReg;
+    '\tpush\tebp' -> this(machine).BC.putLine;
+    '\tpush\tesi' -> this(machine).BC.putLine;
+#)
+--endX:descriptor--
+(# drX: @ dataRegOperand
+do (for j:dummyMax repeat
+        353->trace(#do 'DummyRelease:d'->xT; Rep.dummyReg[j]->xI #);
+        Rep.dummyReg[j]->drX; drX.deAlloc
+   for);
+   (if extType
+    // 1 (*sematt.cExt OOPS*) then (BC,SC,LC)->popCallStack
+   if);
+   '\tpop\tesi' ->this(machine).BC.putLine;
+   '\tpop\tebp' ->this(machine).BC.putLine; 
+   restoreReg;
+       (* (if (max>=0) then max->popDataReg if) *)
+   max->popDataReg
+#)
+--getXres:descriptor--
+(#
+   getCres:
+     (#
+     do (if (max>=0) then (dataRegA[],drA[])->cpReg if);
+	(if exitType
+	 //1 //2 //3 then drA[]->simpleRes
+	 // 4 then (* text *)
+	    (# drT: @dataRegOperand
+	    do (extType,exitType,BC,SC,LC,max,dummyMax)->endX; 
+	       true->endXcalled;
+		   (* this situation can be very complicated:
+		    * gen.copyCtext assume text in dataRegA;
+		    * drA may not be dataRegA=EAX;
+		    *)
+	       (if (drA[],EAX)->UseFreg then textRes
+		else
+		  drT.alloc;
+		   (if (drT[],EAX)->UseFreg then 
+                       (* now its free! gylle! should NOT happen, since
+                        * drT has not been assigned to a physical register
+                        *)
+		      (drA[],dataRegA[])->cpReg;
+		      textRes;
+		   else 
+		      (dataRegA[],drT[])->cpReg;
+		      (drA[],dataRegA[])->cpReg;
+		      textRes; 
+		      (drT[],dataRegA[])->cpReg;
+		   if);
+		   drT.deAlloc;
+	       if); 
+	       drA.deAlloc
+	    #)
+	 // 5 then (* rep *)  cError(#do 'Exit cProc: general rep'->t #)
+	 // 6 then (* cStruc *)
+		(* create an instance of theDesc->rA;
+		 * movl d0-12(16?),rA@(12)
+		 * this makes theDesc.R denotes the cStruc
+		 * The adjustment of d0 is necessary,since the cStruc
+		 * has no BETA structural attributes (PT,GC,low,high)
+	         * access of the form rA.R[inx] with index check
+		 * will NOT be possible *)
+	     cError(#do 'Exit cProc: cStruc exit'->t #)
+	 // 7 (*double*) then
+	    (# FP: @floatRegOp
+            do drA.deAlloc; (* NOT used when result is a flota val.
+                             * Perhaps the drA.alloc; etc below should
+                             * be moved to the places where drA is actually
+                             * used!
+                             *)
+               FP.alloc; (* result on top of F-stack *)
+               FP[]->floatRes
+            #)
+         // 10 (*data*) then
+            (# dr: @dataRegOperand
+            do dr.alloc;
+               (* result is stored in memory cell corresponding to dr,
+                * since all adr registers are popped later in endX 
+                *)
+               '\tmov\t'->this(machine).BC.putT;
+               (this(machine).BC[],'d',dr.Rn)->regT; sep;
+               4->this(machine).BC.putS; drA.putOp;
+               this(machine).BC.putNL;
+               -1->rep.dMap[dr.rN+1]; (* dr NOT i register *)
+               (*(drA[],dr[])->cpReg;*)
+               dr[]->dataRefRes;
+            #)
+        if)
+     #);
+   getPascRes:
+     (#
+     do (if exitType
+         //1//2//3 (*byte,word,long*) then drA[]->simpleRes
+         //4 (*text*) then 
+            'UnpackPascalText'->jsrT;
+            (* address of Pascal text is on top of SP-stack;
+             * UnpackPascalText must deliver adr. of BETA text somewhere!
+             *)
+            'ExternalPasc: exit text'->notImpl
+         //5 (*rep*) then cError(#do 'ExternalPasc:exit rep'->T #)
+         //6 (*cStruc*) then cError(#do 'ExternalPasc:exit cStruc'->T #)
+         //7 (*double*) then
+            (#
+            do drB.alloc;
+               (drB,EDI)->AssignRegToFreg;
+               (drA[],drB[])->doubleRes
+            #)
+        if)
+     #);
+   endXcalled: @boolean;
+   drA,drB: @dataRegOperand
+do drA.alloc;
+   (drA,EAX)->AssignRegToFreg;
+   (* Does the next imp. have a mening on Ix86?*)
+   (if (max>=drA) then cError(#do 'External: max>=drA'->T #)if);
+   (if extType
+    // 8 (*semAtt.stdExt (similar to C) OOPS*)
+    // 7 (*semAtt.stdCallBackExt (similar to C) OOPS*)
+    // 1 (*semAtt.cExt OOPS*)
+    // 5 (*semAtt.cCallBackExt OOPS*) then getCres
+    // 2 (*semAtt.pascExt OOPS*)
+    // 6 (*semAtt.pascCallBackExt*) then getPascRes
+    else cError(#do 'Illegal external exit type:'->T; extType->I #)
+   if);
+   (if not endXcalled then (extType,exitType,BC,SC,LC,max,dummyMax)->endX if);
+#)
+--jsrReg:dopart--
+do '\tcall\t'->BC.putT; op.putOp; eoo
+--jmpReg:dopart--
+do '\tjmp\t'->BC.putT; op.putOp; eoo
+--JsrTable:descriptor--
+(# do (A[],callRegOp[])->ldVal; callRegOp[]->JsrReg; #)
+--RegAdrToOriginReg:descriptor--
+(* access = common.direct;
+ * reg and off may be defined
+ *)
+(#
+do (reg[],dataRegX[])->cpReg;
+   (if off <> 0 then (* off may be negative *)
+       (off->newCstOp,dataRegX[],4)->gAdd if)
+#)
+--PushReg:descriptor--
+   (# ar: @adrRegOperand
+   do (*351->cTrace(#do 'PushReg'->xT #);*)
+      (for i: rep.aReg.range repeat
+           (if (rep.aReg[i]>0) then
+               (if (i<>callO+1) then
+                   i-1->ar; ar[]->Push
+      if)if)for);
+      PushDataReg->max
+   #)
+--PushDataReg:descriptor--
+   (# tag: @integer;
+   do (* push possible busy dataregisters *)
+      -1->rep.dMax;
+      (for i: rep.dReg.range repeat
+           (if (rep.dReg[i]>0) then i-1->rep.dMax
+      if)for);
+      (if (rep.dMax>-1) then
+          (for i: rep.dMax+1 repeat
+               (i-1)->NewDataRegOp->push
+      for)if);
+      (* OLM: 7/1/96: it gives NO meaning to push float registers,
+       * since these are on the float stack. It is an unsolved
+       * problem to handle overflow on the float register stack!
+       * In addition rep.fMax DON't work if nested calls to pushDataReg
+       * and popDataReg. Note that rep.dMax is communicated via the 
+       * max parameter
+       *)
+      (*       {* push possible busy float registers *}
+       *       -1->rep.fMax;
+       *       (for i: rep.floatReg.range repeat
+       *            (if rep.floatReg[i]>0 then i-1->rep.fMax
+       *       if)for);
+       *       (if rep.fMax>-1 then
+       *           (for i: rep.fMax+1 repeat
+       *                (i-1)->pushFloatReg
+       *       for)if);
+       * 
+       *)
+      (* push data/float reg mark *)
+      -((rep.dMax+1) (* +(rep.fMax+1)*2 *) + 4) -> tag;
+      (if tag<-4 then
+          tag->NewCstOp->push;
+      if);
+      rep.dMax->max (* max is ONLY dataReg max *)
+   #)
+--PopDataReg:descriptor--
+   (# 
+   do (if (max(*rep.dMax +rep.fMax*) > (*-2*) -1) then
+          4->setTop
+      if);
+          (* (for i: rep.fMax+1 repeat (rep.fMax-i+1)->popFloatReg for);*)
+      (for i:max+1 repeat  (max-i+1)->NewDataRegOp->pop for)
+   #)
+--PopReg:descriptor--
+   (# ar: @adrRegOperand; i: @integer
+   do max->PopDataReg;
+      (for j: rep.aReg.range repeat
+           rep.aReg.range+1-j->i; (* i in [rep.aReg.range..1] *)
+           (if (i<>(callO+1)) then
+               (if (rep.aReg[i]>0) then
+                    i-1->ar; ar[]->pop
+      if)if)for);
+   #)
+---initPrimCall:descriptor--
+(# dr: @dataRegOperand; saved: @integer; ar: @adrRegOperand
+do (if rep.aReg[6] (* a5 *) >0 then
+       'InitPrimCall:a5 is busy - OK!'->bugstream.putline;
+       true->primRep.a5Saved;
+       6->ar; ar[]->push;
+   if)
+#)
+--primRep:descriptor--
+(# saved,used,busy: [8] @boolean; someSaved,a5Saved: @boolean;
+   noOfPar: @integer (* will nested prim calls work here?*)
+#)
+--getPrimReg:descriptor--
+(# dr: @primRegOperand;
+do (* allocate prim register pNo *)
+   pNo->dr;
+   dr[]->primReg[]
+#)
+--CallPrim:descriptor--
+(# d0: @dataRegOperand; (* initial value d0*)
+do d0.alloc;
+   (d0,EAX)->AssignRegToFreg;
+   d0.dealloc;
+   (* any previous assigment of EAX to some registers should now be undone*)
+   T->jsrT
+#)
+--getPrimRes:descriptor--
+(# 
+do (if res
+    //0 (* ignore result *) 
+    //2 then (* push to C *)
+    else (*1*)
+       (* the result is returned in physical register EAX
+        * a logical register must be allocated and assigned to EAX
+        *)
+       dr.alloc;
+       (dr,EAX)->AssignRegToFreg;
+       (* dr.dealloc; OLM 8/3/95: why was this deallochere before??
+        * should give a lot of dataReg negative!
+        *)
+   if)
+#)
+(**************** register allocation ***************)
+--GetAdr:dopart--
+(* allocate a2,a3,a4,... *)
+do 10->rN; (* just during testing *)
+   L: (for i:5 repeat
+           (if (rep.aReg[i+2] <= 0) then
+               rep.aReg[i+2]+1->rep.aReg[i+2];
+               i+1->rN;
+               leave L
+      if)for);
+   (if (rN>4) then
+       (if rN
+        // 5 then cError(#do 'AdrReg overflow (a5)'->T #)
+        // 6 then cError(#do 'AdrReg overflow (a6)'->T #)
+        // 7 then cError(#do 'AdrReg overflow (a7)'->T #)
+        else
+           cError(#do 'AdrReg overflow (a8...)'->T #);
+           'AdrReg overflow'->comment; 2->rN; (* prevent index error *)
+   if)if)
+--GetData:dopart--
+do 10->rN; (* just during testing *)
+   L: (for i:6 repeat
+           (if (rep.dReg[i] <= 0) then
+               rep.dReg[i]+1->rep.dReg[i];
+               i-1->rN;
+               leave L
+      if)for);
+   (if rN = 10 then
+       cError(#do 'DataReg overflow'->T #);
+       'DataReg overflow'->comment; 0->rN; (* prevent index error *)
+   if)
+---freeAdr:dopart---
+do (# fNo: @integer
+   do (if (callO<rNo)and(rNo<8) then
+          (* count down rep.aReg[rNo+1] *)
+          rep.aReg[rNo+1]-1->rep.aReg[rNo+1];
+          (if rep.aReg[rNo+1]=0 then
+              (* rNo need not be assigned to physical register anymore *)
+              rep.aMap[rNo+1]->fNo; 
+              0->rep.aMap[rNo+1]; 
+              (if fNo>0 then 
+                  0->rep.fMap[fNo]; 
+              if);
+              (* Save current physical assignment in 
+               * THIS(RegisterOperand).fn for possible
+               * later use in ReUse.
+               *)
+              fNo->fn;
+           else
+              (if (rep.aReg[rNo+1]<0) then
+                  cError
+                  (# S: @text
+                  do 'AdrReg negative:a'->S; rNo->S.putInt; S[]->T; S->comment;
+                     0->rep.aReg[rNo+1] 
+                  #)
+              if)
+          if)
+      if);
+   #)
+--adrRegInUse:dopart--
+do rep.aReg[rN+1]>0 -> value
+--dataRegInUse:dopart--
+do rep.dReg[rN+1]>0 -> value
+---freeData:dopart---
+do (# fNo: @integer
+   do (if (0<=rNo)and(rNo<8) then
+          (* count down rep.dReg[rNo+1] *)
+          rep.dReg[rNo+1]-1->rep.dReg[rNo+1];
+          (if rep.dReg[rNo+1]=0 then 
+              (* rNo need not be assigned to physical register anymore *)
+              rep.dMap[rNo+1]->fNo; 
+              0->rep.dMap[rNo+1]; 
+              (if fNo>0 then 
+                  0->rep.fMap[fNo];
+              if);
+              (* Save current physical assignment in 
+               * THIS(RegisterOperand).fn for possible
+               * later use in ReUse.
+               *)
+              fNo->fn;
+           else
+              (if (rep.dReg[rNo+1]<0) then
+                  cError
+                  (# S: @text
+                  do 'DataReg negative:d'->S; rNo->S.putInt; S[]->T;S->comment;
+                     0->rep.dReg[rNo+1] 
+                  #)
+              if)
+          if)
+      if)
+   #)
+--releaseReg:descriptor--
+(#
+do (for i: rep.aReg.range repeat 
+        0->rep.aReg[i]->rep.dReg[i]->rep.dMap[i]
+   for);
+   (for i:3 repeat (* clear assignment to a2,a3,a4 
+                    * aMap[1]= a0
+                    * aMap[2]= a1
+                    * aMap[3-5]= a2-a4
+                    * aMap[6-7]= unused
+                    * aMap[8]= sp
+                    *)
+        0->rep.aMap[i+2]
+   for);
+   (* clear assignment of %ebp, %esi. %eax, %ebx, %ecx *)
+   (for i: 5 repeat  0->rep.fMap[i+2] for);
+
+   (for i: rep.floatReg.range repeat 0->rep.floatReg[i]->rep.floatMap[i] for);
+   0->rep.floatMapTop
+#)
+--noOfFreeDataReg:descriptor--
+  (#do (for i: dataRegMax repeat (if rep.dReg[i+1] = 0 then val+1->val if)for)#)
+--DataRegOpReUse:descriptor--
+(# N: @integer; 
+do rN+1->N;
+   (if (0<N) and (N<=rep.dReg.range) then
+       rep.dReg[N]+1->rep.dReg[N];
+       (if fn
+        // 0 then
+           (* not reusable *)
+        // -1 then
+           (* reuse from memory cell *)
+           (* indicate in dMap that rN is in memory *)
+           -1->rep.dMap[N]; 
+        else
+           (* in physical register *)
+           (* indicate in dMap that rN is in fn *)
+           fn->rep.dMap[N]; 
+           (* indicate in fmap, that fn is used for rN *)
+           N->rep.fMap[fn];
+       if)
+    else 
+       'DataRegOpReuse: index error'->bugstream.putline
+   if)
+#)
+--AdrRegOpReUse:dopart--
+do rep.aReg[rN+1]+1->rep.aReg[rN+1];
+   (if fn
+    // 0 then
+       (* not reusable *)
+    // -1 then
+       (* reuse from memory cell *)
+       (* indicate in aMap that rN is in memory *)
+       -1->rep.aMap[rN+1]; 
+    else
+       (* in physical register *)
+       (* indicate in aMap that rN is in fn *)
+       fn->rep.aMap[rN+1]; 
+       (* indicate in fmap, that fn is used for rN *)
+       rN+1->rep.fMap[fn];
+   if);
+--RegRep:descriptor--
+(# aReg,dReg,aMap,dmap,fMap: [8] @ Integer; dMax: @integer;
+   
+   (* floatReg keeps track of allocation of floating point regsiters.
+    * The i386, however, has NO floating point registers,
+    * but a stack! The registers are therefore hypothetical.
+    * A FP register represents a value on the FPU stack.
+    * Since the FPU is a stack it is necessary to keep track
+    * of the order of the FP registers on the stack. They are pushed 
+    * in order they are allocated. The array floatMap keep
+    * track of the allocation order of FP registers.
+    * In a given expression, the registers may be allocated
+    * in the order
+    *    fp0, fp1, fp2, fp0
+    * after allocation of fp2, fp0 is released and then allocated
+    * again. The register number can therefore NOT be used to determine
+    * the order on the stack. When a fp-register is allocated, it
+    * i assigned an increasing value kept in floatMap. For the above
+    * sequence we have
+    *    fM[fp0]=1, fM[fp1]=2, fM[fp2]=3, fM[fp0]=4
+    * Given two FP resgisters, the one with the highest fM number
+    * is on top of the stack. This info is used in swapFreg
+    *)
+   floatReg,
+   floatMap: [8] @ integer; 
+   fMax,floatMapTop: @integer; 
+   dummyReg:[100]@integer; (* used by getRegForX /endX*)
+#)
+--FloatRegOpAlloc:descriptor--
+(#
+do 10->rN;
+   L:
+     (for i: rep.floatReg.range repeat
+ 	  (if rep.floatReg[i] = 0 then
+	      rep.floatReg[i]+1->rep.floatReg[i]; 
+              rep.floatMapTop+1->rep.floatMapTop->rep.floatMap[i];
+              i-1->rN;
+              leave L
+if)for)#)
+--FloatRegOpDeAlloc:descriptor--
+(#do (if (0<=rN) and (rN<rep.floatReg.range) then
+         rep.floatReg[rN+1]-1->rep.floatReg[rN+1]
+      else 'FloatReg inx err.'->bugstream.putLine
+if)#)
+--FloatRegOpReUse:descriptor--
+(#do rep.floatReg[rN+1]+1->rep.floatReg[rN+1]  #)
+--DumpReg:descriptor--
+   (# dmp:
+      (# R: @char; i,V: @integer;
+      enter(R,i,V)
+      do R->T.put; i-1->T.putInt; ':'->T.put; V->T.putInt
+      #);
+      T: @text
+   do common.tracestream.newline;
+      (for i:rep.aReg.range repeat ('a',i,rep.aReg[i])->dmp for);
+      (for i:rep.dReg.range repeat ('d',i,rep.dReg[i])->dmp for);
+      T[]->common.tracestream.putText; (*T->comment;*) common.tracestream.newline;
+      dumpR
+   #)
+--GetCallReg:descriptor--
+   (# ar: @adrRegOperand
+   do (*(if (rep.aReg[callO+1]>0) then
+          CallO->ar; ar[]->push
+      if); *)
+      rep.aReg[callO+1]+1->rep.aReg[callO+1];
+      (*351->cTrace(#do 'GetCallReg'->xT #)*)
+   #)
+--DecrCallReg:descriptor--
+   (#
+   do rep.aReg[callO+1]-1->rep.aReg[callO+1];
+      (if (rep.aReg[callO+1]<0) then
+          0->rep.aReg[callO+1];
+          cError(#do 'CallReg negative: a1'-> T#);
+   if)#)
+--FreeCallReg:descriptor--
+   (# ar: @adrRegOperand; (*A1: @RegAdr*)
+   do rep.aReg[callO+1]-1->rep.aReg[callO+1];
+   #)
+--CallRegBusy:dopart--
+do (rep.aReg[callO+1]>0) -> value
+--CallRegInPrimReg2:doPart--
+do false -> value 
+--GetOriginReg:descriptor--
+(# #)
+--freeOriginReg:descriptor--
+(##)
+--callAlloPrim:descriptor--
+(#do T->jsrT #)
+--getVirtualOriginStart1:descriptor--
+(* the code generated here may be called from a place where the address
+ * registers are in use. aR.alloc is thus not a safe way of allocating
+ * an address register. Its current value must thus be saved (pushed)
+ * before it is used.
+ *)
+(# A1: @RegAdr; aR: @adrRegOperand; pReg: @primRegOperand
+do aR.alloc; aR[]->push;
+   1->pReg; (pReg[],ar[])->cpReg;
+   aR->A1.reg; A1[]->startA[]
+#)
+--getVirtualOriginStart2:descriptor--
+(# A1: ^ RegAdr; pReg: @primRegOperand
+do startA[]->A1[]; (* inefficient*)
+   (*1->pReg; (A1.reg[],pReg[])->cpReg;*)
+   A1.toOriginReg; (* will deAlloc A1.reg *)
+   A1.reg[]->pop;
+   (*A1.reg.deAlloc*)
+#)
+---Final2VirtJump:descriptor--
+(# A1: ^ RegAdr
+do startA[]->A1[]; (* inefficient*)
+   A1[] -> pop
+#) 
+--InitMachine:descriptor--
+(#
+do BC.openWrite; 
+   true->loadPrototype;
+   (if group_hash[] = NONE then
+       (* HACK for beta-data *)
+       dohead;
+   if);
+#)
+--CloseMachine:descriptor--
+(#do noSegment->switchToSegment; '\tend'->BC.putLine; BC.close #)
+
+--asgRefAdr:descriptor--
+  (* assign A to thisAddress *)
+  (# aR,aR1,aR2: @adrRegOperand; L: @localLab; T: @Text;
+     A1: @regAdr; dr: @dataRegOperand
+  do common.direct->access; (* this Address is a dynamic reference *)
+     (* this is a hack. Will not work for arrays !!!*)
+     toReg2->aR->aR2; (* aR=destination *)
+     (if A.access //common.direct then
+         (*(if aR1//thisO then true->A1.frozenReg (*else aR1.deAlloc * )if);*)
+         (* aR1 = thisO possible in this(P)[]->R[] *)
+         (if A.regType//thisO//callO then 
+             A.toReg2->aR1; (* 12.10.92*) (* aR1=source *)
+             (* A.freeAdr; 12.10.92: in evval1: asgToAdr: A[]->rA.asgRefAdr->..
+              * A[] is used in thisVal and cannot be released.
+              * The problem is if this can imply that regs are not released?
+              *)
+             (*aR.mkIndirect; olm: ? - eliminated *)
+             (* (aR1[],aR[])->stVal; *) (* datpete: ?? *)
+             aR->A1.reg; (* olm: ? *) 
+             (aR1[],A1[])->stVal;
+             aR1.deAlloc
+          else
+             (* A and aR1 use the same register - dont deAlloc aR1.
+              * However A is invalidated since aR1 is redefined
+              *)
+             aR[]->push;
+             (A[],aR[])->gLea; dr.alloc; (aR[],dr[])->cpReg;
+             aR[]->pop;
+             (* aR.mkIndirect; olm: ? - elim*)(* dont do this before push/pop *)
+             (* (dr[],aR[])->stVal; *) (* datpete: ?? *)
+             (*olm: ? *) aR->A1.reg; (dr[],A1[])->stVal;
+             dr.deAlloc
+         if)
+         (*aR1.deAlloc; 12.10.92*) (* 2.9.92*)
+         (* A1[]->A[] 2.9.92*)
+      else 
+         (*aR.mkIndirect; olm: ? - eliminated*)
+         (* (A[],aR[])->cpMem *) (* datpete: ?? *)
+         (*olm: ? *) aR->A1.reg; (A[],A1[])->cpMem;
+     if);
+     aR2[]->dest[]
+  #)
+--asgRefReg:descriptor-- (* MUST be fixed like asgRefAdr above *)
+(* as asgRefAdr, but A is an adrRegOperand *)
+(# aR,aR1,aR2: @adrRegOperand; L: @localLab; T: @Text; A1: @RegAdr
+do common.direct->access; (* this Address is a dynamic reference *)
+   toReg2->aR->aR2; (* aR=destination *)
+   (* aR.mkIndirect; olm: ? - eliminated *)
+   (* (A[],aR[])->stVal; *) (* datpete: ?? *)
+   (*olm: ? *) aR->A1.reg; (A[],A1[])->stVal;
+   (* aR2[]->ChkHeap;
+    aR2.deAlloc*)
+   aR2[]->dest[]
+#)
+---targetEntryPointInfo:descriptor--
+(##)
+---addTargetInfo:dopart----
+do
+---entryPointsInsert:dopart---
+do
+--entryPointsEqual:descriptor---   
+(##)
+---SPtoPrimReg:doPart---
+do
+--externalDispatch:descriptor--
+(# do 'externalDispatch'->putline; #)
+--Lock:descriptor--
+(# do 'Lock'->putline; #)
+--Unlock:descriptor--
+(# do 'Unlock'->putline; #)
+--enablePreemption:descriptor--
+(# do 'enablePreemption'->putline; #)
+--disablePreemption:descriptor--
+(# do 'disablePreemption'->putline; #)
+--allocObj:dopart--
+do 'allocObj'->putline;
+--SaveCodeState:doPart--
+do
+   
+--restoreCodeState:doPart--
+do
+   
+--EmitCk: descriptor--
+(##)

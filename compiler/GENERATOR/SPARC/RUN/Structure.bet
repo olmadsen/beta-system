@@ -1,0 +1,227 @@
+ORIGIN 'BetaRun';
+
+-- MachineAtt: attributes --
+
+(* Structures: Notice that the *V_ENTRY* and not the prototype is
+ * used in the iProto field.
+ *)
+
+GenAlloSbody:
+  (* Implicit input parameters:
+   *   %o0: iOrigin
+   *   %i1: iProto (V_Entry)
+   * Implicit return value:
+   *   %i5: sObj
+   *)
+  (# dr1, dr2: @dataRegOperand;
+  do (* initialization *)
+     dr1.alloc;
+     (* save %i1 across call_psusp_doGC (which destroys %i1) *)
+     (I1,dr1) -> MOV -> emit;
+     (* allocate *)
+     (I5, 16, true, 'call_psusp_doGC',true) ->
+     GenIOAAlloc
+     (# BeforeDoGC:: (# do O0 -> PushRefRegister #);
+        AfterDoGC :: (# do O0 -> PopRefRegister #);
+     #);
+     (* save iOrigin *)
+     (I5,8,O0,true)->AssignRef;
+     (* save iProto, i.e. V entry *)
+     (I5,12,dr1)->ST_I->emit;
+     (* Setup header *)
+     (* proto *)
+     (common.StructurePTValue->newCstOp,dr1[])->ldCst;
+     (I5,0,dr1.reg1)->ST_I->emit;
+     (* age *)
+     (if common.IOAMinAge<>0 then
+         (common.IOAMinAge->newCstOp,dr1[])->ldCst;
+         (I5,4,dr1.reg1)->ST_I->emit;
+     if);
+     dr1.dealloc;
+  #);
+
+(* FIXME: These are not implemented!
+ * 
+ * rel:
+ *   {* A relational operation between struc objects.
+ *    * 
+ *    * Parameters: 
+ *    *   %o0 is struc1
+ *    *   %o1 is struc2
+ *    * Returns:
+ *    *   boolean value in %o0.
+ *    * 
+ *    * FIXME: Not completely implemented (always returns false)
+ *    *}
+ *   (# op: ^text
+ *   enter op[]
+ *   do
+ *      op[]->extLabel;
+ *      {*'Num'->(op.copy).prepend->IncVar; *}
+ *      (O0,12,O0)->LD_I->emit;
+ *      (O0,L6,L7) -> findProto;
+ *      (L6,O0)->MOV->emit;
+ *      (O1,12,O1)->LD_I->emit;
+ *      (O1,L6,L7) -> findProto;
+ *      (L6,O1)->MOV->emit;
+ *      O7 -> AssertRegisterNotZero;
+ *      RETL->emit;
+ *      O0->newOregOp->gClr
+ *   #);
+ *)
+
+--BetaRunAlloS: descriptor--
+(* Implicit input parameters:
+ *   %o0: iOrigin
+ *   %i1: iProto (V_Entry)
+ * Implicit return value:
+ *   %i1: sObj
+ *)
+(# 
+do
+   'AlloS'->ExtLabel;
+   NumAlloS->IncNum; 
+   GenAlloSbody;
+   ;
+   (I5, 'AlloS', 'I5') -> EmitCk;
+   ;
+   O7 -> AssertRegisterNotZero;
+   RETL->emit;
+   (I5,I1)->MOV->emit
+#)
+
+--BetaRunAlloSI: descriptor--
+(* Allocate item from a struc object
+ * 
+ * Parameters:
+ *   %i1 is struc object
+ * 
+ * Set up origin in %o0, V-entry in %i5, and jump to V entry
+ *)
+(# 
+do
+   'AlloSI'->ExtLabel;
+   NumAlloSI->IncNum; 
+   (I1,12,I5)->LD_I->emit;
+   I5 -> AssertRegisterNotZero;
+   (I5,0,G0)->JMPL_I->emit;
+   (I1,8,O0)->LD_I->emit;
+#)
+
+--BetaRunAlloSC: descriptor--
+(* Allocate component from a struc object
+ * 
+ * Parameters:
+ *   %i1 is struc object
+ * 
+ * Set up origin in %o0, V-entry in %i1, and jump to AlloC
+ *)
+(# 
+do
+   'AlloSC'->ExtLabel;
+   NumAlloSC->IncNum; 
+   (I1,8,O0)->LD_I->emit;
+   (I1,12,I1)->LD_I->emit;
+   'AlloC'->jmpT;
+#)
+
+--BetaRunObjS: descriptor--
+(* Allocate a structObject for theObj.
+ * 
+ * parameters: 
+ *    %o0: theObj
+ *)
+(# 
+do
+   'ObjS'->ExtLabel;
+   NumObjS->IncNum; 
+   I1->storeSavedCallO;
+   (O0,0,I1)->LD_I->emit;
+   (I1,2,O1)->LDUH_I->emit;
+   (O1,2,O1)->SLL_I->emit;
+   (I1,4,I1)->LD_I->emit;
+   (O0,O1,O0)->LD->emit;
+   GenAlloSBody;
+   (I5,O0)->MOV->emit;
+   O7 -> AssertRegisterNotZero;
+   RETL->emit;
+   I1->loadSavedCallO;
+#)
+
+--BetaRunleS: descriptor--
+(# (* do 'leS'->rel *) #)
+--BetaRungeS: descriptor--
+(# (* do 'geS'->rel *) #)
+--BetaRunltS: descriptor--
+(# (* do 'ltS'->rel *) #)
+--BetaRungtS: descriptor--
+(# (* do 'gtS'->rel *) #)
+
+--BetaRuneqS: descriptor--
+(* Answer true is struc1 is equivalent with struc2.
+ * 
+ * Parameters: 
+ *   %o0 is struc1
+ *   %o1 is struc2
+ * Returns:
+ *   boolean value in %o0.
+ *)
+(# (* L1,L2,L3,L4: @LocalLab; dr1,dr2: @dataregoperand; 
+    * do
+    *    'eqS'->extlabel;
+    *    NumeqS->IncNum; 
+    *    L1.new;
+    *    L2.new;
+    *    L3.new;
+    *    L4.new;
+    *    dr1.alloc;
+    *    dr2.alloc;
+    *    (o0,0)->cmp->emit;
+    *    (L1.labNo->mstate.labs.off) div 4->bne->emit;
+    *    (o1,0)->cmp->emit;
+    *    (L4.labNo->mstate.labs.off) div 4->ba->emit;
+    *    (g0,o1,g0)->subcc->emit;
+    *    L1.def;
+    *    (L2.labNo->mstate.labs.off) div 4->be_a->emit;
+    *    (0,o0)->mov->emit;
+    *    (o0,12,dr1.reg1)->ld_i->emit;
+    *    (o1,12,dr2.reg1)->ld_i->emit;
+    *    (dr1.reg1,dr2.reg1)->cmp->emit;
+    *    (L3.labNo->mstate.labs.off) div 4->be_a->emit;
+    *    (o0,8,dr2.reg1)->ld_i->emit;
+    *    (L2.labNo->mstate.labs.off) div 4->ba->emit;
+    *    (0,o0)->mov_i->emit;
+    *    L3.def;
+    *    (o1,8,dr1.reg1)->ld_i->emit;
+    *    (dr2.reg1,dr1.reg1,dr2.reg1)->sparc_xor->emit;
+    *    (g0,dr2.reg1,g0)->subcc->emit;
+    *    L4.def;
+    *    (g0,- 1,o0)->subx_i->emit;
+    *    L2.def;
+    *    O7 -> AssertRegisterNotZero;
+    *    RETL->emit;
+    *    emitnop;
+    *    dr1.dealloc;
+    *    dr2.dealloc;
+    *)
+#)
+
+--BetaRunneS: descriptor--
+(* Answer true is struc1 is not equivalent with struc2.
+ * 
+ * Parameters: 
+ *   %o0 is struc1
+ *   %o1 is struc2
+ * Returns:
+ *   boolean value in %o0.
+ *)
+(# 
+do (* 'neS'->extlabel;
+    *    NumneS->IncNum; 
+    *    'eqS'->jmpT;
+    *    (g0,o0,g0)->subcc->emit;
+    *    O7 -> AssertRegisterNotZero;
+    *    RETL->emit;
+    *    (g0,- 1,o0)->subx_i->emit;
+    *)
+#)

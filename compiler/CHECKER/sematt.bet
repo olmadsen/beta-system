@@ -1,0 +1,1036 @@
+ORIGIN '../CONTROL/system';
+LIB_ITEM 'betacompiler';
+INCLUDE 'cashhandling';
+BODY 'checker' 'virtual' 'semattbody';
+---SemAtt: descriptor---
+(* Semantic AST-operations 
+ * Contains POST check for semantic checker
+ * switch[100:130] 
+ * 100: LispPrint  
+ * 101: getPostDesc
+ * 102: dump standard descriptor index
+ * 103: trace cProc decoding
+ *)
+(# <<SLOT semattLib:attributes>>;
+   Init: (#do evalClass.init #);
+   AttDesc:
+     (# node,
+        apl: ^ASTindex;
+        dcl,
+        sort,
+        spec: @ASTindex;
+        desc: ^ASTindex;
+        isItem: booleanValue
+          (# 
+          do (spec.label = gram.staticItem) 
+             or (spec.label = gram.dynamicItem) 
+               -> value
+          #);
+        isComponent: booleanValue
+          (# 
+          do (spec.label = gram.staticComponent) 
+             or (spec.label = gram.dynamicComponent) 
+               -> value
+          #);
+        isPtnVar: booleanValue
+          (#do spec.label = gram.variablePattern -> value #);
+        isRep: @boolean;
+        kind: (# k: @integer do desc -> sematt.descKind -> K exit K #);
+        display:< (# <<SLOT sematt_attDesc_display:dopart>> #);
+     enter node[]
+     <<SLOT sematt_attDesc:doPart>>
+     exit this(AttDesc)[]
+     #);
+
+   NonVirtualForm: (#exit 0#);
+   VirtualForm: (#exit 1 #);
+   VirtualInPtnForm :(#exit 2 #);
+   BindVirtual:
+     (# GetDclAndDesc:<
+          (# N: ^ ASTindex; dclRef,descRef: @ASTindex
+          enter N[]
+          do INNER
+          exit(dclRef,descRef)
+          #);
+        VirtualError:< 
+          (# T: ^ASTindex; no: @integer
+          enter(T[],no) do INNER 
+          #);
+        CheckVirtualBinding:< (# VD: ^ASTindex enter VD[] do INNER #);
+        QuaDist:<
+          (# aDesc,vDesc: ^ASTindex; PD: @integer
+          enter(aDesc[],vDesc[]) do INNER exit PD #);
+        GetTheDesc:< 
+          (# iD,oD: @ASTindex enter iD do INNER exit oD #);
+        ChkCompEval:<
+          (* Enter computedRemote: EV = (remEv).N,
+           * Computes remEv,N and find the reference (ref) 
+           * computed by remEv.
+           * refDesc is the actual descriptor for ref
+           *)
+          (# EV,remEv,N,ref,refDesc: ^ASTindex;
+             chain: ^superChain;
+             theDesc:< (# EV,desc: @ASTindex enter EV do INNER exit desc #);
+             error:< (* called when semantic error *)
+               (# no: @integer enter no do INNER #)
+          enter(EV[],chain[])
+          do INNER
+          exit(remEv[],N[],ref[],refDesc[],chain[])
+          #);
+        ActualDesc:
+          (# thisDesc,ES,desc: @ASTindex; MN: @Integer
+          enter(thisDesc,ES) <<SLOT ActualDesc:doPart>>
+          exit(desc,MN)
+          #);
+        NewSingle:
+          (# D: @ASTindex;  L: ^ SuperChain
+          enter D <<SLOT NewSingle:doPart>>
+          exit L[]
+          #);
+        SuperChain:
+          (* A SuperChain represents a descriptor chain
+           * 
+           *       D1, D2, ... Dn
+           * 
+           * where Di is the super pattern of Di-1, i>1
+           * 
+           * Dn is represented by this(SuperChain)
+           *)
+          (# virtDcl: ^ASTindex;
+             ptnForm: @integer;
+             pred: ^ SuperChain; (* denotes D1,D2,..., Dn-1 *)
+             kind: @ integer;
+             (* A SuperChain may be of 6 kinds dependent on Dn and n.
+              *     
+              * Single: n=1 ; on,pn,on1,pn1 desc is defined.
+              * plain: 1<n and Dn is the name of a category.
+              *   on,pn,on1,pn1 desc is defined
+              * remotePre: 1<n and Dn is a remote name.
+              *   on=on1=0, preDen defined.
+              * nest: 1<n, Dn is a descritor local to Dn-1, desc is defined.
+              * implicitPre: 1<n, on,pn,on1,pn1 defined. 
+              *   Dn-1 of the form V::< (# #)
+              *   Dn of the form V:< A
+              * implicitRemotePre: 1<n, on=on1=0, preDen defined
+              *   Dn-1 of the form V::< (# #)
+              *   Dn of the form V:< R.A
+              *)
+             desc: @ ASTindex;  (* Dn *)
+             on,pn: @ integer; (* path from Dn-1 : Dn(# ... #) to Dn *)
+             preDen: @ ASTindex; 
+             (* defined for remotePre and implicitRemotePre.
+              * If remote prefix is  <R>.P then preDen is <R>, 
+              * where <R> may be a
+              * single name X or another remote name like X.Y
+              *)
+             on1,pn1: @ Integer; (* extra path in case of implicit pre *)
+             ES: @ASTindex;
+             Print: <<SLOT SuperChainPrint:descriptor>>;
+          <<SLOT SuperChain:doPart>>
+          #);
+        (* represents a descriptor chain D1, D2, ... Dn *)
+        SuperPred: 
+          (# SC:  ^SuperChain 
+          enter SC[] <<SLOT SuperPred:doPart>> exit SC[]
+          #);
+        TheDesc:
+          (# ES,desc: @ASTindex; MN: @integer;
+             LL: ^SuperChain; ptnForm: @integer
+          enter(LL[],ES) <<SLOT TheDesc:doPart>>
+          exit(desc,MN,LL[],ptnForm)
+          #);
+        ENC: (# L: ^SuperChain enter L[] <<SLOT ENC:doPart>> exit L[] #);
+        PRE: (# L: ^SuperChain enter L[] <<SLOT PRE:doPart>> exit L[] #);
+        <<SLOT VirtualBody:attributes>>
+     #);
+   ChkComputedEval:
+     (* Enter computedRemote: EV = (remEv).N,
+      * Computes remEv,N and find the reference (ref) 
+      * computed by remEv.
+      * refDesc is the actual desc. for ref.
+      * The exit value ref is not used
+      *)
+     (# EV,remEv,N,ref,refDesc: ^ASTindex;
+        error:< (* semError *) 
+          (# no: @integer; EV,desc: ^ASTindex
+          enter(no,EV[],desc[]) do INNER 
+          #);
+        DB: ^BindVirtual; chain: ^DB.SuperChain
+     enter(EV[],DB[],chain[])
+     do <<SLOT chkComputedEval:descriptor>>
+     exit(remEv[],N[],ref[],refDesc[],chain[])
+     #);
+   TypeErr:
+     (# D: @ASTindex; T: @text
+     enter(D,T)
+     do '\n********* '->bugstream.putText; T[]->bugstream.putText;
+        ' called with:\n '->bugstream.putText;
+        (D[],messagestream[],100)->thePP;
+        'Checker: TypeErr' -> thisTranslate.SystemException
+     #);
+   SingleName:
+     (# N: @ASTindex (* list of exactly one name *)
+     enter N
+     do N->ScanList(#do CurrentNode->N #)
+     exit N
+     #);
+
+   (*-------------------- desc kind -------------------
+    *  descriptors are classified into
+    *  beingChecked: curently being checked by chkDesc
+    *  undefined: has not yet been checked
+    *  standard: like integer, boolean, char, true, ...
+    *  const:    like integer, (#exit 9#),
+    *  cProc:    a direct subpattern of Cproc 
+    *  general:  a general user defined pattern
+    * 
+    *  In addition various properties are associated with each  descriptor
+    *
+    *  descKind and the properties are packed into the AST attribute 'kind':
+    *  descKind   = kind[0-7]
+    *  hasNcode   = kind[8]
+    *  hasDcode   = kind[9]
+    *  hasXcode   = kind[10]
+    *  isData     = kind[11]
+    *  hasInner   = kind[12]
+    *  insertable = kind[13]
+    *  descAccess = kind[14]
+    *  interpreted= kind[15]  used by interpreter: descriptor is interpreted
+    *  hasAcode   = kind[16]  Allocation-code is needed (non-empty G-part)
+    *  hasOnlyInner= kind[17] On the form P(# ... do inner #), where P also
+    *                         hasOnlyInner - enter/exit-parts may appear
+    *  inlineNX    = kind[18] Form: (# a,b,c: @integer enter(a,b,c) exit E #)
+    *                         Code is inlined
+    *  enter/exit  = kind[25:26] Used by compciler to check for recursion
+    *                            in enter/exit list; chklst.bet
+    *  type        = kind[27:31] The type of basic patterns like
+    *                            boolean, char, short, integer, real
+    * 
+    *)
+   beingChecked: (#exit 50(*must be positive*) #);
+   unDefined: (#exit 0 #);
+   standardKind: (#exit 1#); constKind: (#exit 2#); 
+   externalKind: (#exit 3#); generalKind: (#exit 4#);
+   dataKind: (#exit 5#); callBackKind: (#exit 6#);
+   externalVirtualKind: (#exit 7 #);
+   comKind: (#exit 8 #); holderKind: (#exit 9 #);
+   stateKind: (#exit 10 #);
+   dispatchKind: (#exit 11 #);  
+   dispatchVirtualKind: (#exit 12 #);  
+   
+   insEval: (#exit 1#); simpleEval: (#exit 2#); 
+   repValEval: (#exit 3#); repRefEval: (#exit 4 #);
+   itemEval: (#exit 5#); compEval: (#exit 6#); sysKind: (#exit 7#);
+   repKind: (#exit 8#); realEval: (#exit 9#);
+   
+   (* enter-exit list are classified using the following categories;
+    * see chkEvalBody
+    *)
+   constEval: (#exit 1 #);
+   simpleVarListEval: (#exit 2 #);
+   inlineNXeval: (#exit 3 #);
+   simpleExpEval: (#exit 4 #);
+   generalEval: (#exit 5 #);
+   
+   (* for some unknown reason there seems to be a memory leak
+    * if the patterns below are made static items!
+    * Each of them should at most be able to hold on to one
+    * ref., but they seem to hold onto much more??
+    *)
+   (* Operations using D.kind may fail if the descriptor (D) is
+    * not an objectDesciptor; this only occurs in very
+    * special cases; e.g. compiler/compiler/TST/FEJL/container.
+    * Perhaps all the operations below should check that
+    * D is a descriptor??
+    *)
+   markBeingChecked: 
+     (# D: ^ASTindex; K: @integer
+     enter D[] 
+     do (beingChecked,0) -> K.%putByte; K->D.kind
+     #);
+   descKind:  (# D: @ASTindex enter D exit D.kind->TOS'%getByte[0]' #);
+   hasNcode:  (# d: ^ASTindex enter d[] exit d.kind->TOS'%getBits[8,1]' #);
+   hasDo:     (# d: ^ASTindex enter d[] exit d.kind->TOS'%getBits[9,1]' #);
+   hasXcode:  (# d: ^ASTindex enter d[] exit d.kind->TOS'%getBits[10,1]' #);
+   isData:    (# d: ^ASTindex enter d[] exit d.kind->TOS'%getBits[11,1]' #);
+   hasInner:  (# d: ^ASTindex enter d[] exit d.kind->TOS'%getBits[12,1]' #);
+   insertable:(# d: ^ASTindex enter d[] exit d.kind->TOS'%getBits[13,1]' #);
+   descAccess:(# d: ^ASTindex enter d[] exit d.kind->TOS'%getBits[14,1]' #);
+   hasAcode:
+     (# d: ^ASTindex; b: @boolean 
+     enter d[] 
+     do (if common.switch[214] then 
+            (if common.switch[64] and not common.switch[65] then true->b
+             else
+                d.kind->TOS'%getBits[16,1]'->b
+            if)
+         else true->b
+        if)
+     exit b
+     #);
+   hasOnlyInner:(# d: ^ASTindex enter d[] exit d.kind->TOS'%getBits[17,1]'#);
+   inlineNX:    (# d: ^ASTindex enter d[] exit d.kind->TOS'%getBits[18,1]'#);
+   inlineDO:    (# d: ^ASTindex enter d[] exit d.kind->TOS'%getBits[19,1]'#);
+   hasOnlyNX:   (# d: ^ASTindex enter d[] exit d.kind->TOS'%getBits[20,1]'#);
+   type:        (# d: ^ASTindex enter d[] exit d.kind->TOS'%getBits[27,5]'#);
+   Key: @ 
+     (# single: (#exit 4#); exitt:(#exit 5#);
+        enterr: (#exit 6#); trans: (#exit 7#);
+        exitTail: (#exit 8#) 
+     #);
+   EvalClass: @
+     (* classifies evaluation nodes into BinOp, unOp, other 
+      *  Cannot be called with lexems!!!!!!!!!!!!!!!!!!!!!!!!
+      *)
+     (# Other: (#exit 0#); BinOp: (#exit 1 #); unOp: (#exit 2 #);
+        AddOp: (#exit 3#); ModOp: (#exit 4#); 
+        RelOp: (#exit 5 #); AllRelOp: (#exit 6#); BoolOp: (#exit 7#);
+        EC,opT: [500] @Integer;
+        OperandMap:
+          (# T: [28*32] @integer;
+             def:
+               (# t1,t2,V: @integer
+               enter(t1,t2,V)
+               do V->T[t1*32+t2+1]
+               #);
+             init:< (#do inner #);
+             t1,t2: @ integer;
+          enter(t1,t2)
+          exit T[t1*32+t2+1]
+          #);
+        addMap,modMap,relMap,allRelMap,boolMap,assignMap: @OperandMap;
+        map: @
+          (# op,t1,t2,ot,m: @integer
+          enter(op,t1,t2)
+          do op->OpType->ot;
+             (if ot
+              // addOp then (t1,t2)->addMap->m
+              // relOp then (t1,t2)->relMap->m
+              // allRelOp then (t1,t2)->allRelMap->m
+              // boolOp then (t1,t2)->boolMap->m
+              // modOp then (t1,t2)->modMap->m
+              else 0->m
+             if)
+          exit m
+          #);
+        OpType:
+          (#
+          enter lab
+          exit opT[lab]
+          #);
+        OpString:
+          (# ot: @integer; T: @text
+          enter ot
+          do (if ot
+              // Other then 'Other'->T
+              // BinOp then 'BinOp'->T
+              // unOp then 'UnOp'->T
+              // AddOp then 'AddOp'->T
+              // RelOp then 'RelOp'->T
+              // AllRelOp then 'AllRelOp'->T
+              // BoolOp then 'BoolOp'->T
+             if)
+          exit T
+          #);
+        TypeString:
+          (# T: @integer; S: @text
+          enter T <<SLOT typeString:doPart>> exit S[]#);
+        init: <<SLOT evalClassInit:descriptor>>;
+        lab: @integer
+     enter lab
+     exit EC[lab]
+     #);
+   DescSonsRef:
+     (* Decomposes a desc node into its sons *)
+     (# desc: ^ ASTindex; 
+        pre, mainP, att,withP,enterP,doP,exitP: @ ASTindex
+     enter desc[] <<SLOT descSonsRef:doPart>>
+     exit(pre[],mainP[],att[],enterP[],doP[],exitP[])
+     #);
+   MainPartSons:
+     (* decompose a mainPart node; note the prefix is 
+      * obtained form the father of the mainPart node
+      *)
+     (# mainP,pre,att,enterP,doP,exitP: ^ASTindex;
+        theSlot,thisDesc: @ASTindex; 
+     enter mainP[]
+     <<SLOT mainPartSons:doPart>>
+     exit(thisDesc,pre[],att[],enterP[],doP[],exitP[])
+     #);
+   MainPartDesc:
+     (* Get the objedctDescriptor AST of a mainPart *)
+     (# mainP,theDesc: ^ASTindex
+     enter mainP[]
+     <<SLOT MainPartDesc:doPart>>
+     exit theDesc[]
+     #);
+   EnterSize:
+     (# desc: @ ASTindex; size: @integer
+     enter desc
+     do <<SLOT EnterSize: descriptor>>
+     exit size
+     #);
+   ExitSize:
+     (# desc: @ ASTindex; size: @integer
+     enter desc
+     do <<SLOT ExitSize: descriptor>>
+     exit size
+     #);
+   EvCase:
+     (# unEv: (# EV: ^ASTindex enter EV[] do INNER #);
+        binEv: (# EV1,EV2: ^ASTindex enter(EV1[],EV2[]) do INNER #);
+        simple:< unEv; realEv:< UnEv;
+        repetition:<
+          (# EV,EV1,EV2: ^ASTindex; evalKind: @integer 
+          enter(EV[],evalKind,EV1[],EV2[]) 
+          do INNER 
+          #);
+        itemEv:< unEv; compEv:< unEv; sysEv:< unEv; repOp:< unEv;
+        constDesc:<(# EV: ^ASTindex; val: @integer enter(EV[],val) do INNER#);
+        standardDesc:<unEv;
+        DescOp:
+          (# EV,objSpec,desc: ^ASTindex; isVirt: @integer
+          enter(EV[],objSpec[],desc[],isVirt)
+          do INNER 
+          #);
+        inlineNX:< DescOp;
+        insert:< DescOp; 
+        cProcDesc:< DescOp
+          (# callId: ^text; extKind: @integer; 
+          do (EV[],objSpec.gettext,desc[],isVirt)
+               ->cProcDecoder->(callId[],extKind);
+             INNER
+          #);
+        externalVirtual:< DescOp
+          (# extKind: @integer; 
+          enter extKind
+          do INNER
+          #);
+        assign:< binEv;  objDen:< unEv; dynItem:< unEv;
+        dynComp:< unEv; computedObj:< unEv;
+        dynItemRef:< unEv; dynCompRef:< unEv; objRef:< unEv;
+        evalList:< unEv;
+	newRemotePrim:< unEv;
+        newUnaryPrim:< unEv;
+	newBinaryPrim:< unEv; (* will eventually replace primitive *)
+        primitive:< unEv; address:< unEv; intCst:< unEv; txtCst:< unEv;
+        noneExp:< unEv; unMinus:<unEv; unPlus:< unEv; notExp:< unEv;
+        binOp:< binEv;
+        StrucRef:<
+          (# EV: ^ASTindex; desc: @ASTindex
+          enter EV[] 
+          do EV.son -> Descrip -> desc;
+             INNER 
+          #);
+        EV: ^ASTindex; EV1,EV2: @ASTindex
+     enter EV[]
+     do <<SLOT evCase:descriptor>>
+     #);
+   isStandard: booleanValue
+     (# desc: @ ASTindex
+     enter desc <<SLOT isStandard:doPart>> 
+     #);
+   isSigned: booleanValue
+     (# d: ^ASTindex
+     enter d[]
+     <<SLOT isSigned:doPart>>
+     #);
+   
+   (* int8-int64u are currently NOT implemented - just for experiments*)
+   int8Desc,int8uDesc,       (*   8 bits signed/unsigned integers *)
+   wcharDesc,                (*  16 bit unsigned integers *)
+   int16Desc,int16uDesc,     (*  16 bits signed/unsigned integers *)
+   int32Desc,int32uDesc,     (*  32 bits signed/unsigned integers *)
+   int64Desc,int64uDesc,     (*  64 bits signed/unsigned integers *)
+   boolDesc,                 (* desc. for pattern boolean *)
+   realDesc,                 (* desc. for pattern real *)
+   xrealdesc,                (* tmp. real desc *)
+   repDesc,                  (* desc for general repetition *)
+   superObject,              (* desc for the general super object *)
+   holderDesc,               (* desc for Holder; used by COM/IDL to define 
+                              * an object holding a reference to a simple
+                              * value or a reference to a reference
+                              *)
+   comDesc,                  (* super for COM objects *)
+   dispatchDesc,             (* super for COM dispatch objects *)
+   BSTRdesc,                 (* pattern representing a BSTR - for COM *)
+   stateDesc,                (* super for STATE patterns *)
+   CprocDesc,                (* desc. for interface to C routines *)
+   cStrucDesc,               (* desc. for interface to cStruc *)
+   dataDesc,                 (* super desc. for simple data objects *)
+   errorName,                (* A name-decl referred to by undecl. name-apl*)
+   falseDesc, trueDesc,      (* refer to descriptors for false/true *)
+   byteDesc,                 (* desc. for byte desc - preliminary *)
+   charDesc,                 (* descriptor for pattern char *)
+   textDesc,                 (* desc. for pattern text *)
+   wtextDesc,                (* desc. for pattern wtext (UniCode) *)
+   shortDesc,                (* desc. for pattern ShortInt *)
+   integerDesc: @ ASTindex; (* refer to the descriptor for ptn integer *)
+   (* used when computing desc. for for/repetition *)
+
+   DumpStd:
+     (#
+        (****
+         Dump:
+         (# T: @Text; N: @ASTindex
+         enter(T,N)
+         do tracestream.newline; T->tracestream.putText; '=  '->tracestream.puttext;
+         N.F.FullName->tracestream.Puttext; (N.inx)->tracestream.putInt;
+         #);
+         do (if common.switch[102]  then
+         ('IntegerDesc',integerDesc)->dump;
+         ('falseDesc',falseDesc)->dump;
+         ('TrueDesc',trueDesc)->dump;
+         ('ErrorName',errorName)->dump;
+         ('CprocDesc',CprocDesc)->dump
+         if);
+         *********)
+     #);
+   
+   Handler:  (# node: @ ASTindex enter node do inner #);
+
+   emptyType: (#exit 0#); 
+   boolType:  (#exit 1 #); cBoolType: (#exit 17 #); (*constTypes + 16 *)
+   CharType:  (#exit 2 #); cCharType: (#exit 18 #); 
+   (* no short currently *)
+   valType:   (#exit 3 #); cValType:  (#exit 19 #);
+   realType:  (#exit 4 #); cRealType: (#exit 20 #);
+   VIrefType: (#exit 5 #); CIrefType: (#exit 21 #); 
+   VCrefType: (#exit 6 #); CCrefType: (#exit 22 #); 
+   noneType:  (#exit 7 #);
+   vStrucType:(#exit 8 #); cStrucType:(#exit 24 #);
+   repType:   (#exit 9 #); cRepType:  (#exit 25 #); (* there should be a 
+                                                     * distinction between
+                                                     * value- and ref-rep
+                                                     *)
+   primType: (#exit 10 #); cPrimType: (#exit 26#);
+   listType:  (#exit 11 #);
+   tosType :  (#exit 12 #); 
+   int64Type: (#exit 13 #);
+   ref2repType: (# exit 14 #);
+   
+   IsRep:
+     (* Returns true if 'den' denotes a repetition R 
+      * declared as R: [...] ...
+      *)
+     (# den,sort: @ASTindex; RepEval: @boolean
+     enter den
+     do False->repEval;
+        (if den.label // gram.nameApl // gram.remote then
+            den -> &GetSort -> sort;
+            (sort.label=gram.repetitionDecl)->repEval
+        if)
+     exit RepEval
+     #);
+   SimpleOrRep:
+     (* Checks if den denotes a repetition declared as R: [...] ...
+      * separate between dynamic and static
+      *)
+     (# den,sort: @ASTindex; evalK: @integer
+     enter den
+     do (if den.label // gram.nameApl // gram.remote then
+            den -> &GetSort -> sort; 
+            (if sort.label = gram.repetitionDecl then
+                sort.son->sort; sort.brother->sort; sort.brother->sort;
+                sort.label->evalK
+        if)if)
+     exit evalK
+     (*dynamicItem,dynamicComponent,staticItem,staticComponent, simpleDecl *)
+     #);
+   SimpleOrRepA:
+     (* Checks if den denotes a repetition declared as R: [...] ...
+      * separate between dynamic and static.
+      * Should be unified with the one in sematt!
+      *)
+     (# den,sort: @ASTindex;
+     enter den
+     do (if den.label // gram.nameApl // gram.remote then
+            den -> &GetSort -> sort; 
+            (if sort.label = gram.repetitionDecl then
+                sort.son->sort; sort.brother->sort; sort.brother->sort;
+
+        if)if)
+     exit sort
+     #);
+   RepSize:
+     (# RN: ^ASTindex; sort,RN1: @ASTindex; c: @char; evalK: @integer
+     enter RN[]
+     do RN -> sematt.SimpleOrRepA -> sort;
+        sort.son -> RN1; (*  R: [..] @ RN1 *)
+        RN1 -> Descrip -> RN1;
+        (if RN1.label = gram.objectDescriptor then
+            (If RN1.size 
+             // 1 then '1' -> c
+             // 2 then '2' -> c
+             // 4 then '4' -> c
+             // 8 then '8' -> c
+             else 
+                (if evalK = gram.staticItem then
+                    'I' -> c
+                 else 'C' -> c
+                if)
+            if)
+         else  
+            (if evalK = gram.staticItem then
+                'I' -> c
+             else 'C' -> c
+            if)
+        if);
+     exit c
+     #);
+   GetName:
+     (* node = attributeDen or objectDescriptor *)
+     (# node: @ ASTindex
+     enter node
+     do L: (if node.label
+            // gram.indexed then
+               node.son->node; restart L
+            // gram.remote // gram.computedRemote then
+               node.son->node; node.brother->node
+            // gram.thisObject then node.son->node
+           if)
+     exit node
+     #);
+   GetName2:
+     (# node,N: ^ASTindex;
+     enter node[]
+     <<SLOT GetName2:doPart>>
+     exit N[]
+     #);
+   GetSort2:
+     (# node,sort: ^AStindex
+     enter node[]
+     <<SLOT GetSort2:doPart>>
+     exit sort[]
+     #);
+   GetSort:
+     (# node,sort: @ ASTindex
+     enter(node->GetName->node)
+     do node.dclRef->sort
+     exit sort.sort
+     #);
+   GetNameAndKind:
+     (* N denotes a simpel repetition:
+      *    (simple <Nd> <DataSpec>)
+      *    (repetition <Nd> <index> <DataSpec>)
+      * where DataSpec =
+      *     (StaticInstance <spec>)
+      *     (DynamicInstance <spec>)
+      *     (StaticComponent <spec>)
+      *     (DynamicComponent <spec>)
+      *)
+     (# N (* attribute application *)
+        ,sort,spec: @ASTindex
+     enter N
+     do N->getName->N; N.dclRef->sort;(*Nd*) sort.sort->sort; (*sort*)
+        sort.son->spec;(*Nd*) spec.brother->spec; (*DataSpec or Index*)
+        (if sort.label // gram.repetitionDecl then spec.brother->spec if);
+     exit(N[],spec[])
+     #);
+   GetSpecOfSort: 
+     (* get the specification part of a sort node SORT[N,T]
+      * which has one of the forms:
+      * -- ptn[N,desc[...]],     -- virtual[N,P],
+      * -- bind[N,SPEC],         -- finalBind[N,P],
+      * -- simple[N,DATASPEC],   -- repetition[N,INDEX,DATASPEC].
+      * -- forL[Index,ImpL]      -- label[N,Imp]
+      * Where DATASPEC=
+      * -- staticInstance[SPEC], -- dynamicInstance[SPEC],
+      * -- staticObject[SPEC],   -- dynamicObject[SPEC],
+      * Where SPEC=
+      * -- desc[...],i.e. singular
+      * -- DENOTATION[...],i.e. category
+      *)
+     (# sort,spec: @ ASTindex;
+     enter sort
+     do sort.son->spec; spec.brother->spec;      (*spec=T *)
+        (if sort.label
+         // gram.simpleDecl then spec.son->spec;
+         // gram.repetitionDecl then spec.brother->spec; spec.son->spec;
+         // gram.forImp // gram.labelledImp then integerDesc->spec
+        if);
+        (* spec=SPEC; i.e. spec=desc[...] or spec=DENOTATION[...] *)
+            (*163->trace(#do spec[]->A #)*)
+     exit spec
+     #);
+   Descrip:
+     (# N,desc: @ ASTindex
+     enter N <<SLOT descrip:doPart>>
+     exit desc
+     #);
+   DescOfSort:
+     (# sort,desc: ^ASTindex
+     enter sort[]
+     <<SLOT DescOfSort:dopart>>
+     exit desc[]
+     #);
+   DescOfSpec:
+     (* return the descriptor for a transaction or specification N *)
+     (# N,desc: ^ASTindex;
+     enter N[]
+     <<SLOT DescOfSpec:doPart>>
+     exit desc[]
+     #);
+   EncDesc:
+     (* get enclosing desc of 'node, where enclosing desc
+      * may be objectDescriptor or doPart(with tmp.data)
+      *)
+     (# node: ^ASTindex; desc: @ASTindex
+     enter node[] <<SLOT EncDesc:doPart>> exit desc[] #);
+   DescOrigin: 
+     (* get origin of 'desc', where 'desc' may be objectDescriptor
+      * or doPart(with tmp. data)
+      *)
+     (# desc: ^ASTindex; D: @ASTindex
+     enter desc[]
+     <<SLOT descOrigin:dopart>>
+     exit D[]
+     #);
+   GetPostDesc:
+     (# fragDesc: @ ASTindex; T: ^text;
+     enter fragDesc (* (fragDesc <name> ) *) 
+     do (*101->trace(#do fragDesc[]->A #);*)
+        fragDesc.theSlotName->T[]; T.makeUC
+     exit T[]
+     #);
+   ChkQua:
+     (* this routine should be integrated with the same one in docheck.
+      * The problem is GetDesc.
+      * Check qualification of actualDesc and the original virtual 
+      *)
+     (# sub,super: ^ASTindex;
+        pref: @ASTindex; isVirt,PD: @integer; Found: @boolean
+     enter(sub[],super[]) <<SLOT ChkQua:doPart>>
+     exit(PD,Found)
+     #);
+   QuaDesc:
+     (* return the qualifying descriptor of N *)
+     (# N,D: @ASTindex
+     enter N
+     do N -> Descrip -> D;
+        L:
+          (if D.label 
+           // gram.virtualDecl // gram.bindingDecl //gram.finalDecl then
+              (* should never happen due to isvirt!!*)
+              D.son->D; D.brother -> Descrip -> D;
+              restart L
+          if);
+     exit D
+     #);
+   DescChain: 
+     (* N is a name application
+      * returns descriptor for top prefix
+      * and distance to top prefix
+      *)
+     (# N,desc,pref: @ ASTindex;
+        K,PL: @ integer;
+     enter N
+     do N->&QuaDesc -> desc;
+        0->PL;
+        L:
+          (if not desc.isSlot then
+              desc.son->pref;
+              (if pref.label = gram.prefix then
+                  pref.son->&QuaDesc-> desc;
+                  PL+1->PL;
+                  restart L
+          if)if)
+     exit(desc,PL)
+     #);
+   TopDesc:
+     (* N is a name application. Returns descriptor for topmost descriptor
+      * where hasOnlyInner=false
+      *)
+     (# N,topDesc: @ ASTindex
+     enter N <<SLOT TopDesc: do Part>>
+     exit topDesc
+     #);
+
+   (***********
+    CheckBindings: 
+    (# G: ^FragmentGroup;
+    enter G[]
+    do '\nChecking bindings in\n'->Puttext;
+    FTable.Scan (* theFragment is a FragmentGroup * )
+     (#
+     do theFragment.FullName->Puttext; newline;
+        theFragment.Scan (* thisFragment is a FragmentForm * )
+          (# MyInner::<
+              (# FG: ^FragmentForm;
+              do current[]->FG[];
+                'Slots in '->Puttext; FG.FullName->puttext; ':'->put;
+                newline;
+                FG.theGSForm->FindSlots
+                  (# Found ::<
+                          (# B: ^Fragment; N: @ASTindex
+                          do N.GetText->PutText; 
+                             G[]->theNode.GetBinding
+                              (# Found::<
+                                   (#
+                                   do (if theBinding[] 
+                                       // NONE then ' is not bound '->Puttext
+                                       else ' is bound to '->Puttext; 
+                                            theBinding.FullName->Puttext
+                                       if)#)#);
+                                       newline
+                                #)#);
+                          gram.nameApl->Find
+                          (# found::< 
+                          (# N: @ASTindex
+                          do theNode.dclRef->N;
+                          'DclRef of '->Puttext;
+                          theNode.getText->Puttext; ' is '->Puttext;
+                          (if N.isNull then ' null'->PutText
+                          else
+                          N.getText->Puttext; ' in '->puttext;
+                          N.F.FullName->Puttext;
+                          
+                          if); newline
+                          #)
+                          do FG.theGSForm->&Scan
+                          #);
+                          #)#)#)#);
+   ******************)
+
+   Find:
+     (# Scan:
+          (# N: @ASTindex
+          enter N
+          do (if not N.isNull then
+                 (if N.label // label then N->&Found if);
+                 N.brother->&Scan;
+                 (if N.Internal then N.son->&Scan if)
+          if)#);
+        Found:< (# theNode: @ASTindex enter theNode do INNER #);
+        label: @Integer
+     enter label
+     do INNER
+     #);
+   BindSlots:
+     (# FragErr: < exception
+          (# FG: ^fragmentGroup;
+             FF: ^fragmentForm;
+             slot: ^slotDesc;
+             errNo: @integer
+          enter(FG[],FF[],slot[],errNo)
+          <<SLOT SemattFragErr:doPart>>
+          #);
+        F: ^Fragment; 
+        reBind: @boolean (* if true, then this is a rebinding *)
+     enter(F[],reBind)
+     do <<SLOT BindSlots:descriptor>>
+     #);
+   FindSlots: (* This is just for testing *)
+     (# Found:< (# theNode: @ASTindex enter theNode do INNER #);
+        Scan:
+          (# N: @ASTindex
+          enter N
+          do (if not N.isNull then
+                 (if N.label = gram.unExpanded then
+                     (if N.isSlot then N->&Found if)
+                 if);
+                 N.brother->&Scan;
+                 (if N.Internal then N.son->&Scan if)
+          if)#);
+        N: @ASTindex;
+     enter N
+     do  N->&Scan
+     #);
+   RepAttId:
+     (# R: ^ASTindex; descId: @integer
+     enter R[] (* R = X.N where X is a repetition *)
+     do <<SLOT RepAttId:descriptor>>
+     exit descId
+     #);
+   NXScanner: GeneralNXScanner
+     (# GetTheDesc::< (# do N->descrip-> N #)#);
+   GeneralNXScanner: 
+     (# GetTheDesc:< 
+          (# N: @ASTindex ; chain: ^BV.SuperChain
+          enter(N,chain[]) do INNER exit(N,chain[]) #);
+        desc: ^ASTindex; isN: @boolean; length: @integer;
+        GetNXelm: 
+          (# NXelm: ^ASTindex; inx,PL: @integer; chain: ^BV.SuperChain
+          enter inx <<SLOT GetNXelm:doPart>>
+          exit(NXelm[],PL,chain[])
+          #);
+        clear: <<SLOT GeneralNXScannerReset:descriptor>>;
+        NXrep: @ <<SLOT NXrep:descriptor>>;
+        chain: ^BV.SuperChain
+     enter(desc[],isN,chain[])
+     do <<SLOT NXScanner:descriptor>>
+     #);
+   BV: @BindVirtual (*Used for qualifying chain in generalNXScanner*)   
+     (# GetDclAndDesc::<
+          (# node: @ASTindex; 
+          do N->node;
+             L: (if node.label
+                 // gram.nameApl then (* OK *)
+                 // gram.remote then
+                    node.son -> node; node.brother -> node
+                 // gram.indexed then node.son -> node; restart L
+                 // gram.thisObject then node.son->node
+                 // gram.computedRemote then
+                    (*306->trace(#do 'GetDclAndDesc:compRem:'->T; N[]->A #);*)
+                    node.son->node; node.brother->node
+                 else 'OOPS: GetDcl.. N is not <AttDen>'->putline
+                if);
+             node.dclRef->dclRef;
+             node.DescRef->descRef
+          #);
+        VirtualError::<
+          (#do '\nOOPS:VirtError called:'-> puttext; no->putInt; ' '->put;
+             (T[],messagestream[],50)->thePP
+          #);
+        QuaDist::<
+          (# sub,super,pref: @ASTindex; 
+          do aDesc->sub; vDesc->super;
+             (*167->trace(#do sub[]->A; super[]->A #);*)
+             L: (if (sub->super.equal) then (* finito *)
+                 else
+                    sub.son -> pref;
+                    (if pref.label
+                     // gram.prefix then
+                        pref.son->&SemAtt.descrip-> sub;
+                        (if sub.label
+                         // gram.virtualDecl // gram.bindingDecl then 
+                            (* to handle V ::< (# ... #)   *)
+                            sub.son->sub;
+                            sub.brother->&semAtt.descrip-> sub
+                        if);
+                        PD +1 -> PD; restart L
+                     // gram.empty then (* should not happen *)
+                if)if);
+          #);
+        GetTheDesc::<
+          (# dclRef: @ASTindex
+          do (*iD->&GetDesc->oD *)
+             (if iD.label 
+              // gram.objectDescriptor then iD->oD
+              // gram.unExpanded then iD->oD (* ??? *)
+              else iD[]->GetDclAndDesc->(dclRef,oD)
+          if)#);
+        ChkCompEval::<
+          (#
+          do (*175->trace(#do 'ActualDesc:chkCompEV'->T #);*)
+             (EV[],BV[],chain[])
+               ->sematt.ChkComputedEval
+             (# error::<(#do (EV[],no)->VirtualError#)#)
+               ->(remEv[],N[],ref[],refDesc[],chain[])
+          #)
+        
+     #);
+   ScanCNX:
+     (* scan enter/exit of a Cproc-pattern *)
+     (# bytePar:< Object; shortPar:< Object; longPar:< Object;
+        int64Par:< Object;
+        doublePar:< Object; 
+        TextPar:< (# isWtext: @boolean enter isWtext do inner #); 
+        BSTR:< Object;
+        RepPar :< Object;
+        refObjectPar:< Object; partObjectPar:< object; varPtn:< Object; 
+        Error:< Object;
+        Warn:< Object;
+        theParam,theDecl,theDesc: @ASTindex; (* current parameter*)
+        theLength: @integer;
+        desc: ^ASTindex; isN: @boolean
+     enter(desc[],isN)
+     do <<SLOT ScanCNX:descriptor>>
+     exit theLength
+     #);
+
+   DescStack:
+     (* pattern used by check and synthesizer *)
+     (# Desc,    (* a desriptor to be checked  *)
+        Id:      (* an identifaction of the descriptor *)
+          [100] ^ASTindex;
+        Kind,Cons: [100] @Integer; 
+        (* kind and construction mode; 
+         * kind=0 means that desc is a general pattern and cons is also 0; 
+         * kind<>1 means singular and Cons describes the construction mode.
+         *)
+        top: @ integer;
+        
+        Push: 
+          (# D,I: @ ASTindex ; K,C: @integer
+          enter(D,K,C,I)
+          do (if D.label
+              // gram.objectDescriptor // gram.attributesForm //gram.doPart then
+                 top+1->top;
+                 (if (top >= Desc.range) then
+                     (desc.range )->desc.extend;
+                     (id.range)->id.extend;
+                     (kind.range)->kind.extend;
+                     (cons.range)->cons.extend;
+                 if);
+                 &ASTindex[]->Desc[top][]; D->Desc[top]; 
+                 &ASTindex[]->Id[top][]; I->Id[top];
+                 K->Kind[top]; C->Cons[top]
+          if)#);
+
+        Pop:
+          (# D,I: ^ ASTindex; K,C: @ Integer
+          do (if top = 0  then NONE->D[]
+              else
+                 Desc[Top][]->D[]; NONE->Desc[top][];
+                 Cons[top]->C; Kind[Top]->K;
+                 Id[top][]->I[]; NONE->Id[top][];
+                 top-1->top
+             if)
+          exit(D[],K,C,I[])
+          #);
+
+        init: (# do 0->top #)
+     #);
+
+   (*** constants describing external procedure callss *)
+   cExt: (#exit 1#); pascExt: (#exit 2#); pascTrapExt: (#exit 3 #);
+   asmExt: (#exit 4#); cCallBackExt: (#exit 5#); pascCallBackExt: (#exit 6#);
+   stdExt: (#exit 7#); stdCallBackExt: (#exit 8#);
+   virtExt: (#exit 9 #); dispatchExt: (# exit 10 #);
+   cProcDecoder:
+     (# EV,desc: ^ASTindex; isVirt: @integer;
+        dclId,callId: ^text; extKind: @integer;
+        explicitCallId: @boolean; extEntry: @ASTindex
+     enter(EV[],dclId[],desc[],isVirt)                   
+     do <<SLOT cProcDecoder:descriptor>>;
+        INNER
+     exit(callId[],extKind)
+     #);
+   ParsePrimitive:
+     (# ExternalOp:< (# OpTxt: @text enter OpTxt do INNER #);
+        InLineOp:< (# opCode,I1,I2: @Integer enter(opCode,I1,I2) do INNER #);
+        Error:< Object;
+        node: @ASTindex
+     enter node
+     do <<SLOT ParsePrimitive:descriptor>>
+     #);
+
+   primitiveToNumber:
+     (# node: ^ASTindex; opCode: @integer;
+        error:< object
+     enter node[] do <<SLOT primitiveToNumber:descriptor>> exit opCode 
+     #);
+
+   CashHandler: @ FragmentCash;
+
+   theGroup: ^FragmentGroup; (* the group of forms being translated *)
+
+   InitBasicDescs:
+     (# base: @ASTindex
+     enter base
+     <<SLOT InitBasicDescs:doPart>>
+     #);
+   InitWithoutCheck:
+     (# hasOrigin: @boolean; (* if false then theGroup is BetaEnv *)
+     enter(theGroup[],hasorigin)
+     do <<SLOT InitWithoutCheck:descriptor>>
+     #);
+   Checker:
+     (# wasChanged, (* has been changed: parsed or NOT doneCheckProperty *)
+        error,fatalError: @ Boolean
+     enter(theGroup[],wasChanged)
+     do <<SLOT checker: descriptor>> (*********************)
+     exit(error,fatalError)
+     #)
+#)

@@ -1,0 +1,99 @@
+ORIGIN '~beta/betaast/betacfl';
+INCLUDE '~beta/basiclib/numberio'
+        '~beta/sysutils/time'
+        '~beta/toollibs/utils/fileExtensions'
+        '~beta/basiclib/file';
+-- betaAttributes: Attributes --
+(* 
+ * This library is experimental and the functions are NOT! general 
+ * and safe enough for usage in connection with other files than 
+ * compilerfacade.bet
+ * 
+ *)
+parseText:
+  (#
+     T: ^Text;
+     aFF: ^fragmentForm;
+     syntacticCategory: @integer;
+     btabFile: @Text;
+     parseError:< (#  do true->errors; INNER #);
+     errors: @boolean
+  enter (syntacticCategory,T[],aFF[])
+  do
+     T.reset;
+     (if not THIS(beta).parser.haveBeenInitialized then
+         THIS(beta).init;
+         '~beta/grammars/beta/v2.6/beta-parser'->btabFile;
+         parserFileExtension->btabFile.puttext;
+         btabFile[]->expandToFullPath->THIS(beta).parser.initialize
+     if);
+     (if
+     ((syntacticCategory,T[],screen[],aFF[])
+        ->THIS(beta).parser.doParse
+          (#
+             parseErrors::  (#  do true->continue; parseError #);
+             fatalParseError::  (#  do true->continue; parseError #)
+          #))
+      // false then parseError
+     if)
+  exit aFF.root[]
+  #);
+makeBETAfragmentForm:
+  (# formName: ^Text; aFF: ^fragmentForm
+  enter formName[]
+  do THIS(beta)[]->newFragmentForm->aFF[]; formName.copy->aFF.name
+  exit aFF[]
+  #);
+openBETAfragmentGroup:
+  (#
+     astFile,textFile: @file;
+     astFileName,textFileName: ^Text;
+     editorNumber: @integer;
+     groupName: ^Text;
+     exists: @boolean;
+     aFG: ^fragmentGroup;
+     fileWriteable:
+     (* test whether the path is OK and the dir can be written into and whether the file can be written
+      on if the path is OK and the file exists *)
+       (# f: @file enter f.name exit f.entry.writeable #);
+     constructGroupName:< (# FGname: @Text do INNER exit FGname[] #)
+  enter groupName[]
+  do
+     create:
+       (# 
+       do
+          (if groupName[] = none then
+              constructGroupName->groupName[]
+           else
+              betfileExtension->groupname.stripExtension;
+              astfileExtension->groupname.stripExtension
+          if);
+          groupName.copy->textFileName[];
+          groupName.copy->astFileName[];
+          astFileExtension->astFileName.appendExtension;
+          astFilename[]->astFile.name;
+          betFileExtension->textFileName.appendExtension;
+          textFilename[]->textFile.name;
+          (* '\n*** astFile' -> puttext; astFile.name -> putline;*)
+          (if astFile.entry.exists or textFile.entry.exists then
+              true->exists; leave create
+           else
+              groupName[]->expandToFullPath
+                ->top.newGroup
+                  (# alreadyOpen::<  (#  do true->continue #) #)->aFG[];
+              THIS(beta)[]->aFG.defaultGrammar[];
+              (if aFG[] = none then
+                  groupName[]->putText; ' fragment group not created'->putLine; 
+               else
+                  (if aFG.name->expandToFullPath->fileWriteable then
+                      aFG.init; aFG.markAsChanged
+                  if)
+              if)
+          if)
+       #);
+     (if exists then
+         (groupName[]->expandToFullPath,screen[])->top.open->aFG[]
+     if);
+  exit aFG[]
+  #)  
+

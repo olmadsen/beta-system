@@ -1,0 +1,266 @@
+ORIGIN '../machine';
+INCLUDE '../../OPTIMIZER/bbgraph'
+        '../../OPTIMIZER/OPTdatastructures' 
+        '../../OPTIMIZER/carriers'
+        'IMconstants'
+        '~beta/basiclib/formatio'
+        '~beta/basiclib/textUtils'
+       '../backend';
+BODY 'IMgraphbody';
+-- AbstractMachinelib: Attributes --
+(* using I's to avoid nameclashes *)
+
+IfragmentList:
+  (# fragments:@smallList(# type::Ifragment #);
+     logfile:^stream;
+     filename:^text;
+     newfragment:
+       (# ifrg:@Ifragment;
+       enter (ifrg.FN[],ifrg.astLabel)
+       do ifrg[]->fragments.append;
+          logfile[]->ifrg.logfile[]
+       exit ifrg[]
+       #);
+     printgraphs:
+       (# do fragments.scan
+          (# do current.printgraphs #);
+       #);
+     dumpvcg:
+       (# 
+       <<SLOT dumpvcg:DoPart>>
+       #);
+     dumpObjectCode:(# #)
+  #);
+
+Ifragment:
+  (# FN: ^text;
+     logfile:^stream;
+     (* name of the fragment *)
+     astLabel: @integer;
+     (* label of the top AST node of the fragment.*)
+     doparts:@smallList (#  type::Idopart #);
+     gparts:@smallList (# type::IGpart #);
+     (* are we missing something. *)
+     
+     
+     newDoP:(# dp:@IdoPart;
+            enter (dp.nodeId,dp.name[],dp.data)
+            do dp.init;
+               dp[]->doparts.append;
+               logfile[]->dp.graph.logfile[];
+            exit dp.graph[]
+            #);
+     newGP:(# gp:@IGPart;
+           enter (gp.nodeId,gp.name[],gp.data)
+           do gp.init;
+              logfile[]->gp.graph.logfile[];
+              gp[]->gparts.append;
+           exit gp.graph[]
+           #);          
+     printgraphs:
+       (# 
+       do doparts.scan
+          (# 
+          do current.graph.buildgraph;
+             current.graph.printinstructions
+          #);
+       #);
+  #);
+
+Ipart:
+  (# graph:@intermachineBBgraph;
+     lastAnalysis:^analysisinformation;
+     liveAnalysis:^analysisinformation;
+     clearAnalysis:^analysisinformation;
+     name:^text;
+     nodeID:@integer;
+     data,codeAsLeaf:@boolean;
+     colors:[1]@integer;
+     StackCells:[4]@integer;
+     init: (# enter (nodeId,name[],data)  
+           do name[]->graph.name[];
+           #);
+  #);
+IdoPart:Ipart(# #);
+
+IGpart:Ipart(# #);
+
+intermachineBBgraph:BBgraph
+  (# 
+     <<SLOT BBgraph:Attributes>>;
+     logfile:^stream;
+     realnode::
+       (# type: (# enter inst.opCode exit inst.opCode #);
+          inst: ^BackendInstruction;
+       #);
+     insertjumpinnode:
+       (# 
+          r:^realnode;
+       enter r[]
+       do
+          (if (r.inst.labNO (* .imm *)->labels.getindex)<>0 then
+              true->lastseen.hasbackedge;
+          if);
+          r[]->irin;
+          &node[]->appendnode;
+       #);
+     insertlabinnode:
+       (# 
+          r:^realnode
+       enter r[]
+       do
+          (if lastseen.realgraph[] <> none then
+              &node[]->appendnode;
+          if);
+          r[]->irin;
+       #);
+     ijin:@insertjumpinnode;
+     ilin:@insertlabinnode;
+     primregs,preColor,regs:[1]@int8u; 
+     regstop:@integer;
+     (* map from labNo to nodelist-index. *)
+     pair:
+       (# labno: @integer; index: @integer; 
+       enter (labno,index)
+       exit (labno,index)
+       #);
+     stackoffset:[1]@integer;
+     stackcount,totalStackSize:@integer;
+     isLeaf:@boolean;
+
+     labellist: [16] ^pair;
+     labels: @labelssearch;
+     AppendLabel: @
+       (# labNO,cnt: @integer; 
+       enter labNO
+       do
+          (if lastseen.realgraph[] = none then
+              nodecnt->cnt;
+           else
+              nodecnt+1->cnt;
+          if);
+          (labNo,cnt)->labels.insertlabel; 
+       #);
+     built:@boolean;
+     firstnode::(# do nodelist[1][]->n[] #);
+     name:^text;
+     init::<(# enter name[] do 
+               labels.init;
+               IEntryNode->EntryNode.type;
+               IExitNode->ExitNode.type;
+               &node[]->lastseen[];
+               lastseen[]->appendnode;
+               (entrynode.index,lastseen.index)->appendedge;
+               inner;
+            #);
+  #);
+
+labelssearch: SplayTree
+  (#
+     elm::
+       (#
+          p: @pair;
+          equal:: (#  do (e.p.labno = p.labno)->res #);
+          lessOrEqual:: (#  do (e.p.labno >= p.labno)->res #);
+          printelm::
+            (# 
+            do '(%d,%d)'->s.putformat (#  do p.labno->d; p.index->d #); 
+            #);
+          
+       #);
+     insertlabel:
+       (# p: @pair; e: ^elm; 
+       enter p
+       do &elm[]->e[]; p->e.p; e.init; e[]->insert
+       #);
+     getindex:
+       (# labNo: @integer; e: @elm; ne: ^elm; 
+       enter labNo
+       <<SLOT getindex:DoPart>>
+       exit ne.p.index
+       #);
+     pair:
+       (# labno: @integer; index: @integer; 
+       enter (labno,index)
+       exit (labno,index)
+       #);
+  #);
+
+--BBgraph:Attributes--
+<<SLOT IntermachinegraphWithBB:Attributes>>;
+(* regtypes and count of this graph *)
+dumpvcg: (# a:^ analysisinformation;
+            s: @text; 
+         enter a[]
+         <<SLOT BBgraphdumpvcg:DoPart>> exit s[] #);
+printInstructions:
+  (#  <<SLOT printbbInstructions:DoPart>> #);
+printinst:
+  (# 
+     rea:^realnode;s: ^stream; 
+     inst:^backendInstruction;
+  enter (rea[],s[])
+     <<SLOT printbbints:DoPart>>
+  #);
+
+--IntermachinegraphWithBB:Attributes--
+isJumpAllways:
+ booleanValue
+  (# i: ^realnode; 
+  enter i[]
+  do ((i.type >= localjumpallways) and (i.type<runtimecalls))->value; 
+  #);
+isBranch: booleanValue
+  (# i: ^realnode; 
+  enter i[]
+  do 
+     ((i.type >= localjumpnr) and  (i.type<runtimecalls))->value ;
+  #);
+isLabel: booleanValue
+  (# 
+     n:^realnode;
+     i:@integer;
+  enter n[]
+  do
+     n.type->i;
+     ((i=IEndLabel) or (i=IFreeLabel) or (i=IBeginLabel) or (i=Ilabel)
+     or (i=IgleaLabel))->value;
+  #);
+
+buildgraph:
+  (# ija: @isjumpallways; 
+     ib: @isBranch; 
+     tmp1,tmp2: ^node;
+     potentialdead:^intList;
+     tobedeleted:^intlist;
+     labinx:@integer;
+     r:^realnode;
+  <<SLOT buildrealGraphInBB:DoPart>>
+  #);
+intList:
+  (# 
+     r:[16]@integer;
+     top:@integer;
+     append:
+       (# e:@integer;
+       enter e
+       do top+1->top;
+          e->r[top];
+          (if top>=r.range then
+              top->r.extend
+          if);
+       #);
+     scan:
+       (# current:@integer;
+       do (for i:top repeat
+               r[i]->current;
+               inner
+          for);
+       #);
+  #);
+
+
+
+
+
+

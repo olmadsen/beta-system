@@ -1,0 +1,4133 @@
+ORIGIN '../machine';
+INCLUDE 'IMgraph' 
+        '~beta/basiclib/textUtils';
+BODY 'IMmachinebody';
+LIB_ITEM 'betacodegen';
+
+-- streamlib: Attributes --
+ptab: (* put tab *) (#  do '\t'->put;  #);   
+
+-- lib: Attributes --
+IMtrace: (# exit true #); (* olm *)
+isIntel: (# exit false #); (* olm *)
+OriginReg: (#  exit 3 #);   
+b2d:
+  (# b:@boolean; d:@integer;
+  enter b
+  do (if b then 1->d if)
+  exit d
+  #);
+
+
+-- MachineFactoryLIB: Attributes --
+IntermediateMachine: abstractMachine
+  (#
+     <<SLOT IntermediateMachinelib:attributes >>;
+     
+     IMtrace_low: (# exit common.switch[124] #);
+     
+     FIXME: @
+       (# init:
+            (#
+            do 'notUsed' -> msg[1][];
+               'notUsed' -> msg[2][];
+               'notUsed' -> msg[3][]; 
+               'ChkIndex: size,isISmple,repAdr,toReg,index' -> msg[4][]; 
+               'StackAlloPrim: stackCount,size,proto,s,t' -> msg[5][];
+               '' -> msg[6][];
+               'warn adrreg inuse called' -> msg[7][];
+               'ChkIndex' -> msg[8][];
+               'Endlabel (not used for sparc, but needed for MIPS)'
+                 -> msg[9][];
+               'MIPS/PPC: "callRegInPrimReg2" must be improved!'-> msg[10][];
+            #);
+          reported: [10] @boolean;
+          msg: [10] ^text;
+          no: @integer
+       enter no
+       do (if (1 <= no) and (no <= reported.range) then
+              (if not reported[no] then 
+                  '\n*** FIXME: ' -> puttext;              
+                  msg[no][] -> putline 
+              if);
+              true-> reported[no];              
+          if)
+       #);
+     
+     backend: @
+       BackendImpl
+       (# 
+          CurrentInstructionAnalysisNumber:@integer;
+          currentIP:^IPart;
+
+          calculateLiveData::
+            (# 
+            do liveData.clear;
+               currentIP.liveAnalysis.rep[CurrentInstructionAnalysisNumber][]->
+               scanBIset
+               (# 
+               do (if currentIP.graph.regs[current] = DataReg then
+                      currentIP.colors[current]->liveData.insert
+                  if)
+               #)
+            #);
+       #);
+     InitBackend:
+       (# 
+       do (localFilePath[],common[],BCname[],group_hash[])->backend.init;
+          (*
+           * &RegisterOverflow[]->
+           * realmch.DataRegOverflow[]->
+           * realmch.adrRegOverflow[];
+           * &RegisterOverflow[]->
+           * DataRegOverflow[]->
+           * adrRegOverflow[];
+           *)
+       #);
+     datareg:(# exit 1 #);
+     Adrreg:(# exit 2 #);
+     Floatreg:(# exit 3 #);
+     Primreg:(# exit 4 #); (* zero is unused *);
+     G0:(# exit 5 #);
+     primregs,regs,precolor:[3]@int8u;     
+     dumpObjectCode: (#  <<SLOT dumpObjectCode:DoPart>> #);
+     IFragmentSet: @IfragmentList;
+     lpl: logfile.putline (# #);
+     logfile,optfile:@file;
+     ThisFragment: ^Ifragment;
+     IntermediateGraf: ^intermachineBBgraph;
+     (* ----------------------------------------------------------------- *)
+     NewCtextOp::  (# S: @text do T[]->S.puttext; S[]->op #);
+     CstOperand::  
+       (# out::  (#  do 'C'->amc.put;C->amc.putint #);  
+          loadOp:: (# do THIS(CstOperand)[]->op[] #);
+          loadToReg:: (# do (THIS(cstOperand)[],R[])->ldCst; R[]->res[] #)
+       #);
+     TextOperand::  
+       (# out::  (#  do T[]->amc.puttext #);  
+       #);
+     DataRegOperand:: 
+       (# out::  (#  do '%'->amc.put; 'D'->amc.put; rn->amc.putint #);
+          loadOp:: (# do THIS(dataRegOperand)[]->op[] #);
+          alloc::  
+            (#  
+            do (* regalloc*)
+               regCount+1->regCount->rN;
+               'DataRegOperand.alloc: %d\n'->lpf(# do RegCount->d#);
+               (if regCount>regs.range then 
+                   regCount->regs.extend;
+                   regCount->preColor.extend;                   
+                   regCount->primregs.extend
+               if);
+               datareg->regs[regCount]
+            #);
+          reg1::  (#  do rn->value #); 
+          dealloc::(# do 'Warn dealloc called'->lpl; (* alloc *) #);
+          reUse::(# do 'Warn DataRegOperand.reuse called'->lpl; (*alloc*) #);
+          inuse::(# do 'warn datareg inuse called'->putline #);
+       #);
+     doubleDataRegOperand::
+       (# 
+          out::(# do '%DD['->amc.puttext; dno1.out;dno2.out;']'->amc.put #);
+       #);
+     AdrRegOperand:: 
+       (# out::  (#  do '%'->amc.put; 'A'->amc.put; rn->amc.putint #);
+          alloc::  
+            (#  
+            do regCount+1->regCount->rN;
+               'AdrRegOperand.alloc: %d\n'->lpf(# do regCount->d#);
+               (if regCount>regs.range then 
+                   regCount->regs.extend;
+                   regCount->preColor.extend;
+                   regCount->primregs.extend
+               if);
+               adrreg->regs[regCount];
+            #); 
+          reg1::  (#  do rn->value #);  
+          loadOp::<  (#  do THIS(adrRegOperand)[]->op[] #);
+          loadAdrOp::<  
+            (#  
+            do 'AdrRegOperand.loadAdrOp'->lpl;
+               THIS(adrRegOperand)[]->op[] 
+            #);
+          inuse::
+            (# 
+            do 7 -> FIXME;
+               true->value
+            #);
+          isCallReg::(# do (rn=2)->value #);
+       #);
+     regCount: @integer;
+     (* we never deallocate;
+      * we clear at end of
+      * each entry point
+      *)
+     stackcount,totalStackSize:@integer;
+     stackoffset:[1]@integer;
+     
+     externalCall: @
+       (* for linking initExternalCall to callC/externalDispatch *)
+       (# stack:[1]^backendInstruction;
+          offset:@integer;
+          init: (#do 0 -> offset #);
+          markInit:
+            (# bi: ^BackendInstruction;
+            enter bi[]
+            do offset+1->offset;          
+               bi[]->stack[offset][];
+               (if offset = stack.range then
+                   offset->stack.extend
+               if)
+            #);
+          markCall: 
+            (* write this node's index into the initExternalCall node *)
+            (# inx: @integer
+            enter inx
+            do inx->stack[offset].pos;
+               none->stack[offset][];
+               offset - 1 -> offset
+            #)
+       #);
+     
+     PushPopStack: @
+       (* for linking pushReg with popReg *)
+       (# stack:[1]^backendInstruction;
+          offset:@integer;
+          init: (#do 0 -> offset #);
+          markPush:
+            (# bi: ^BackendInstruction;
+            enter bi[]
+            do offset+1->offset;          
+               bi[]->stack[offset][];
+               (if offset = stack.range then
+                   offset->stack.extend
+               if)
+            #);
+          markPop: 
+            (* write this node's index into the initExternalCall node *)
+            (# bi: ^BackendInstruction;
+            enter bi[]
+            do bi.pos->stack[offset].pos;
+               none->stack[offset][];
+               offset - 1 -> offset
+            #)
+       #);
+
+     (* used for leaf routine optimization *)
+     isLeaf:@boolean;
+     FloatRegOp::  
+       (# out:: (# do '%'->amc.put; 'F'->amc.put;  rN->amc.putint #); 
+          loadOp:: (# do THIS(floatRegOp)[]->op[] #);   
+          loadFloatOp::  (#  do THIS(floatRegOp)[]->op[] #);
+          load::
+            (# I: ^backendInstruction;
+               dr: @dataRegOperand;
+            do (if A.isInxRegAdr then
+                   (*dr.alloc;
+                    (A.reg2,A.offSet,dr.reg1) -> addImm; *)
+                   (if IMtrace then 
+                       (# IX: @inxRegAdr
+                       do A.reg1->IX.aReg; dr->IX.dreg; 
+                          ('loadFloatInx',IX[],this(floatRegOp)[])->amc.emit2
+                   #)if);
+                   IloadFloatInx->addNewNode->i[];
+                   A.reg1->I.readReg;
+                   (*dr.reg1->I.inxReg;*)
+                   A.reg2->I.inxReg;
+                   A.offSet->I.readOffset;
+                   reg1-> I.writeReg
+                else
+                   (if IMtrace then 
+                       ('loadFloat',A[],this(floatRegOp)[])->amc.emit2
+                   if);
+                   IloadFloat->addNewNode->i[];
+                   A.reg1->I.readReg;
+                   A.offSet->I.readOffSet;
+                   reg1-> I.writeReg
+               if)
+            #);
+          store::
+            (# I: ^backendInstruction;
+               dr: @dataRegOperand;
+            do (if A.isInxRegAdr then
+                   (*dr.alloc;                                      
+                   (A.reg2,A.offSet,dr.reg1) -> addImm;*)
+                   (if IMtrace then
+                        (# IX: @inxRegAdr
+                        do A.reg1->IX.areg; dr->IX.dreg; 
+                           ('storeFloatInx',IX[],this(floatRegOp)[])
+                             ->amc.emit2
+                    #)if);
+                   IstoreFloatInx->addNewNode->i[];
+                   A.reg1->I.readReg;
+                  (* dr.reg1->I.inxReg;*)
+                   A.reg2->I.inxReg;
+                   A.offSet->I.readOffSet;
+                   reg1-> I.readReg2;
+                else
+                   (if IMtrace then 
+                       ('storeFloat',A[],this(floatRegOp)[]) -> amc.emit2
+                   if);
+                   IstoreFloat->addNewNode->i[];
+                   A.reg1->I.readReg;
+                   A.offSet->I.readOffSet;
+                   reg1-> I.readReg2
+               if)
+            #);
+          loadInt:
+            (# A: ^address;
+               I: ^backendInstruction;
+               dr: @dataRegOperand;
+            enter A[]
+            do (if A.isInxRegAdr then
+                   (*dr.alloc;
+                   (A.reg2,A.offSet,dr.reg1) -> addImm;*)
+                   (if IMtrace then
+                       (# IX: @inxRegadr
+                       do A.reg1->IX.areg; dr->IX.dreg; 
+                          ('loadInt2floatInx',IX[],this(floatRegOp)[])
+                            ->amc.emit2
+                   #)if);
+                   IloadInt2floatInx->addNewNode->i[];
+                   A.reg1->I.readReg;
+                   (*dr.reg1->I.inxReg;*)
+                   A.reg2->I.inxReg;
+                   A.offSet->I.readOffSet;
+                   reg1-> I.writeReg
+                else
+                   (if IMtrace then 
+                       ('loadInt2float',A[],this(floatRegOp)[])->amc.emit2
+                   if);
+                   IloadInt2Float->addNewNode->i[];
+                   A.reg1->I.readReg;
+                   A.offSet->I.readOffSet;
+                   reg1-> I.writeReg
+               if)
+            #);               
+          storeTmp:: (# do THIS(floatRegOp)[]->A[] #);
+          store2Int:: 
+            (# op: ^address;
+               F: @floatRegOp; 
+               I: ^backendInstruction
+            do A.loadAdrOp->op[]; 
+               F.alloc;
+               (if op.isInxRegAdr then
+                    (if IMtrace then
+                       ('storeFloat2intInx',A[],this(floatRegOp)[])->amc.emit2
+                   if);
+                   IstoreFloat2intInx->addNewNode->I[];
+                   op.reg2->I.inxReg;
+                else
+                   (if IMtrace then
+                       ('storeFloat2int',A[],this(floatRegOp)[])->amc.emit2
+                   if);
+                   IstoreFloat2int->addNewNode->I[];
+               if);
+               op.reg1->I.readReg;
+               op.offSet->I.readOffset;
+               rN->I.readReg2;
+               F.reg1->I.writeReg;
+               D.alloc;
+               (op[],D[])->ldVal
+            #);
+          alloc::  
+            (#  
+            do (* regalloc*)
+               regCount+1->regCount->rN;
+               'FloatRegOp.alloc: %d\n'->lpf(# do RegCount->d#);
+               (if regCount>regs.range then 
+                   regCount->regs.extend;
+                   regCount->preColor.extend;
+                   regCount->primregs.extend
+               if);
+               floatreg->regs[regCount]
+            #);
+          reg1::  (#  do rn->value #); 
+          dealloc::(# do 'Warn dealloc called'->lpl; (* alloc *) #);
+          reUse::(# do 'Warn DataRegOperand.reuse called'->lpl; (*alloc*) #);
+          inuse::(# do 'warn datareg inuse called'->putline #);
+       #);
+     LocalLab:: 
+       (#
+          def:: 
+            (# i:^backendInstruction;
+            do (if IMtrace then 
+                   out;
+                   ':'->amc.put;
+                   type->amc.putint;
+                   ':'->amc.put;
+                   betalabel->b2d->amc.putint;
+                   ' '->amc.put;
+                   (* amc.newline  *)
+               if);
+               labNO->IntermediateGraf.appendlabel;               
+               
+               (if type = dataToCode then
+                   (* this is ugly! *)
+                   &backendInstruction[] -> i[]
+                else
+                   iLabel->addNewLabelNode->i[]
+               if);
+               (*labNO->i.labNo;
+               type->i.type;
+               betalabel->i.betaLabel;
+               isTextAdr->i.isTextAdr;
+               (if type=interfragment then
+                   descid.copy->i.label[];
+                   labNO->i.label.putint
+               if);*)
+               (labNo,type,betalabel,isTextAdr,descId[])
+                 ->backend.newLocalLab
+                 ->I.lab[];
+               (if type = dataToCode then  
+                   i[]->backend.labelImpl
+               if)
+            #);
+          VirtLabDef::
+            (# i:^backendInstruction;
+            do (if IMtrace then  
+                   out;
+                   'V:'->amc.puttext;
+                   ' '->amc.put;
+                   (* amc.newline *)
+               if);
+               (if IntermediateGraf[] = NONE then
+                   (* should probably be cleaned up:
+                    * we may arrive here if a descriptor
+                    * has no G-part code, no Do-part code
+                    * and virtual bindings that require 
+                    * code to be generated
+                    *)
+                   (999998,'Bind',false,false) -> newIntermediateGraf;
+               if);
+               labNO->IntermediateGraf.appendlabel;
+               
+               iLabel->addNewLabelNode->i[];
+               (*labNO->i.labNo;
+                codeToData->type->i.type; *)
+               codeToData->type;
+               (labNo,type,betalabel,isTextAdr,descId[])
+                 ->backend.newLocalLab
+                 ->I.lab[];
+            #);
+          out::  (# do astext->amc.puttext #);
+          AsText:: 
+            (# 
+            do &text[]->localLabText[];
+               (if type = interFragment then
+                   descId[]->localLabText.puttext; 
+                   labNo->localLabText.putInt; 
+                else
+                   (* OBS! Gives 'L7' on ALL platforms;
+                    * for sparc we may need '.L7';
+                    * Clean up
+                    *)
+                   'L'->localLabText.put;
+                   labNO->localLabText.putint
+               if)
+            #)
+       #);
+     RegAdr:: 
+       (# loadAdrOp::<  
+            (# xreg: @dataRegOperand; AIX: @InxRegAdr
+            do 'RegAdr.loadAdrOp'->lpl;
+               (if off->backend.CAP.isSmallAdrOff then
+                   THIS(RegAdr)[]->op[] 
+                else
+                   xreg.alloc;
+                   (off->newCstOp,xreg[])->ldCst;
+                   reg -> AIX.areg;
+                   xreg-> AIX.dreg;
+                   0->AIX.off;
+                   size->AIX.size;
+                   AIX[]->op[]
+               if)
+            #);
+          loadFloatOp::
+            (# I: ^backendInstruction
+            do &floatRegOp[]->op[];
+               op.alloc;
+               (if IMtrace then
+                   '\tloadFloatOp\t'->amc.puttext;
+                   out;
+                   amc.ptab;
+                   op.out;
+                   amc.newline
+               if);
+               IloadFloat->addNewNode->I[]; 
+               reg1->I.readReg;
+               off->I.readOffset;
+               op.reg1->I.writeReg
+            #);
+          loadOp::
+            (# D: @dataRegOperand
+            do D.alloc;
+               D[] -> op[];                
+               (thisOp,op[],size)->ldVl;
+            #);
+          out:: 
+            (# 
+            do
+               reg.out;
+               '('->amc.put;
+               off->amc.putint;
+               ')'->amc.put;
+               size->amc.putint;
+               ':'->amc.put;
+               access->amc.putint;
+               ':'->amc.put;
+               (if signed then 'S'->amc.put if);
+               
+            #);
+          (*
+            constIndex::
+            (# aR:@RegAdr;
+            do
+               aR.reg.alloc;
+               (THIS(RegAdr)[],aR.reg[])->ldVal;
+               size->aR.size;
+               access->aR.access;
+               aR[]->a[];
+               (c,size,isSimple,aR[],true)->chkConstIndex;
+               (if size
+                // 1 then
+                   c+15->aR.off
+                // 2 then
+                   c*2+14->aR.off
+                // 4 then
+                   c*4+12->aR.off
+                // 8 then
+                   c*8+8->aR.off
+               if)
+           #);
+           *)
+          index::< 
+            (# i:^backendInstruction;
+               aR: @adrRegOperand; IA: @InxRegAdr; toReg:@InxRegAdr;
+            do reAlloc->aR;
+               (if IMtrace then
+                   '\tindex:'->amc.puttext;
+                   size ->amc.putint;
+                   '\t'->amc.put;
+                   aR.out;
+                   '\t'->amc.put;
+                   this(RegAdr).out;
+                   '+'->amc.put;
+                   dReg.out;
+                   '\t{'->amc.puttext;
+                   amc.newline
+               if);
+
+               (THIS(RegAdr)[],aR[])->ldVal;
+               access->toReg.access;
+               aR->toReg.aReg;
+               dReg->toReg.dReg;
+               size->toReg.size;
+               (if isSimple then
+                   (if size
+                    // 1 then
+                       15->toReg.off
+                    // 2 then
+                       14->toReg.off 
+                    // 4 then
+                       12->toReg.off
+                    // 8 then
+                       8->toReg.off
+                   if)
+                else
+                    24-size->toReg.off;
+               if);
+               (if IMtrace then
+                   '\t}'->amc.putline
+               if);
+               
+               (* I assume that the following is done here (olm):
+                * - checkIndexBound aR[8], aR[12];
+                * - dReg -> adjustIndex -> dReg (if necessary)
+                * - return toReg = (aR,dR,size)
+                *)
+               IChkIndex->addNewNode->i[];
+               aR.reg1->i.readReg;
+               dReg.reg1->i.inxreg;
+               dReg.reg1->i.writeReg;
+               size->i.size;
+               isSimple->i.condition;
+               (* Note! The SYNTHESIZER uses switch [14] to
+                * switch index check on and off. Certain
+                * instructions, like (e,i)->R.%putByte
+                * uses index, but no index check should be generated;
+                * since IMmachine delays calls to the backend, it is
+                *  necessary to read switch[14] here.
+                *)
+               not common.switch[14]->I.indexCheck;
+               toReg[]->a[]
+            #);
+          toTmp::
+            (# A1: @regAdr; aR: @AdrRegOperand
+            do 'regadr totmp'->amc.putline;
+               (if access 
+                // common.cstInd // common.varInd then
+                   0->addOff->A[]; (if A.useCallReg then A.toTmp->A[] if)
+                else 
+                   aR.alloc; aR->A1.reg; 
+                   this(RegAdr).off -> A1.off;
+                   (this(RegAdr).reg[],aR[]) -> cpReg;
+                   A1[]->A[]
+               if);
+               A[]->bAdr.copy   
+            #);
+          toOriginReg::< 
+            (# A: ^address;
+               oReg: ^primRegOperand
+            do (if reg <> -11 (* hack *) then
+                   (if access // common.cstInd // common.varInd then
+                       0->addOff->A[]; A.toOriginReg
+                    else
+                       (if off = 0 then 
+                           (* to handle primReg1 (origin) 
+                            * in register or memory *)
+                           1->reg.toPrimDest                           
+                        else
+                           'WARNING: toOriginreg nonzero'->lpl;
+                           1->getPrimReg->oReg[];
+                           (this(RegAdr)[],oreg[])->leaToPrimReg;
+                       if)
+                   if)
+               if)
+            #);
+       #);
+     InxRegAdr::
+       (# isInxRegAdr:: TrueValue;
+          out:: 
+            (# do  '('->amc.put; areg.out;'+'->amc.put; dreg.out; 
+               '+'->amc.put; off->amc.putint;
+               ')'->amc.put;
+            #);
+
+          loadAdr::
+            (# do 'InxRegAdr.loadAdr'->amc.putline #);
+          loadOp::
+            (# dr: @dataRegOperand
+            do dr.alloc;
+               (this(InxRegAdr)[],dr[],size)->ldVlImpl;
+               dr[]->op[]
+            #);
+          loadAdrOp::
+            (# IX: @inxRegAdr
+            do (if IMtrace then
+                   '\tPseudo:loadAdrOp'->amc.putline
+               if);
+               (if true then
+                   (if off -> backend.CAP.isSmallAdrOff then
+                       this(inxRegAdr)[]->op[]
+                    else
+                       IX.dreg.alloc;
+                       (off->newCstOp,IX.dreg[])->ldCst;
+                       (dReg.reg1,IX.dReg.reg1,IX.dreg.reg1)->addReg;
+                       aReg->IX.aReg;
+                       size->IX.size;
+                       signed->IX.signed;
+                       IX[] -> op[];
+                   if);  
+                else               
+                   (if off <> 0 then
+                       IX.dreg.alloc;
+                       (if off -> backend.CAP.isSmallAdrOff then
+                           (dReg.reg1,off,IX.dreg.reg1)->addImm
+                        else
+                           (off->newCstOp,IX.dreg[])->ldCst;
+                           (dReg.reg1,IX.dReg.reg1,IX.dreg.reg1)->addReg
+                       if);
+                       aReg->IX.aReg;
+                       size->IX.size;
+                       signed->IX.signed;
+                       IX[] -> op[];
+                    else
+                       this(inxRegAdr)[]->op[]
+               if)if);
+            #);
+          loadFloatOp::
+            (# tmp: ^inxRegAdr
+            do (if IMtrace then
+                   '\tPseudo:loadFlotOp'->amc.putline
+               if);
+               &floatRegOp[]->op[];
+               op.alloc; (* dest *)
+               loadAdrOp -> tmp[];
+               tmp[]->op.load
+            #);
+          toTmp::
+            (# A1: @inxRegAdr; aR: @adrRegOperand 
+            do (* only tested in case common.varInd !! *)
+               (if access
+                // common.cstInd // common.varInd then 
+                   0->addOff->A[]; 
+                   (if A.useCallReg then
+                       A.toTmp->A[] 
+                   if)
+                else
+                   reAlloc -> aR -> A1.aReg; 
+                   this(inxRegAdr).dReg -> A1.dReg;
+                   this(inxRegAdr).off -> A1.off;
+                   (this(InxRegAdr).aReg[],aR[]) ->  cpReg;
+                   A1[]->A[]; 
+                   (* NO: freeAdr; since dReg is still in use *)
+               if);
+               A[]->bAdr.copy;
+            #);
+          pushRegAndOff::
+            (* pushRegAndOff for RegAdr is in machine - clean up*)
+            (#
+            do (off->newCstOp,dReg[],4)->gAdd;
+               (2->newCstOp,dReg[])->arithShiftRight;
+               aReg[]->pushClong;
+               dReg[]->pushClong
+            #)
+       #);
+     PrimRegOperand: registerOperand
+       (# isPrimRegOp:: trueValue;
+          primRegIsReg::
+            (#
+            do rN->backend.CAP.primRegIsReg->value
+            #);
+          primRegIsRegAdr::
+            (#
+            do rN->backend.CAP.primRegIsRegAdr->value
+            #);
+          asText:: (* currently INTEL/LINUX specific: FIX '_' for WIN32 *)
+            (# 
+            do 'pReg'->T; primRegs[rN]->T.putInt; 
+            #);
+          out::  
+            (# 
+            do '%'->amc.put; 'P'->amc.put; rn->amc.putint; 
+               ','->amc.put; primregs[rn]->amc.putint
+            #);
+          reg1::(#do rn -> value #);
+          loadOp:: (#  do THIS(PrimRegOperand)[]->op[] #);
+       #);
+     
+     newIntermediateGraf:
+       (# nodeId: @integer; nodeLab: ^text; isData,isG: @boolean
+       enter(nodeId,nodeLab[],isData,isG)
+       do nodeLab[]->lpl; 
+          saveState;
+          clearState;
+          (* perhaps we should check if G-part and then
+           * use newGP instead?*)
+          (nodeId,nodeLab[],isData)->thisFragment.newDoP->Intermediategraf[];
+          IntermediateGraf.init;
+          isG -> inGpart;
+       #);
+     addNewNode: 
+       (# rn: ^intermachineBBgraph.realnode;
+          i: ^BackendInstruction; 
+          opCode: @Integer;
+       enter opCode
+       do &Intermediategraf.realnode[] -> rn[];
+          &BackendInstruction[]->rn.inst[]->i[];
+          (*-1->i.writeReg->i.writeReg2->i.InxReg;
+           -1->i.readReg->i.readReg2->i.readReg3;
+           -1->i.labNO->i.type->i.cond;*)
+          opCode -> rn.inst.opCode;
+          rn[]->Intermediategraf.irin 
+       exit rn.inst[] 
+       #);
+     addNewJumpNode:
+       (# rn: ^intermachineBBgraph.realnode;
+          opCode: @Integer;
+       enter opCode
+       do &Intermediategraf.realnode[] -> rn[];
+          &BackendInstruction[]->rn.inst[];
+          opCode -> rn.inst.opCode;
+          INNER;
+          rn[]->Intermediategraf.ijin 
+       exit rn.inst[] 
+       #);
+     
+     addNewLabelNode: 
+       (# rn: ^intermachineBBgraph.realnode;
+          opCode: @Integer;
+       enter opCode
+       do &Intermediategraf.realnode[] -> rn[];
+          &BackendInstruction[]->rn.inst[];
+          opCode -> rn.inst.opCode;
+          rn[]->Intermediategraf.ilin 
+       exit rn.inst[] 
+       #);
+     
+     (* register operations *)
+     nop:: 
+       (# i: ^BackendInstruction; 
+       do
+          (if IMtrace then
+              '\tNop'->amc.putline;
+          if);
+          Inop->addNewNode;
+       #);
+     
+     ldCst:: 
+       (# i: ^BackendInstruction; 
+       do (if R.isPrimRegOp and not R.primRegIsReg then
+              (* this might perhaps better be handled
+               * in repAlloc in genlib_alloc and other calles
+               * with primRegOperands
+               *)
+              (# reg: @dataRegOperand
+              do reg.alloc;
+                 (C->newCstOp,reg[])->ldCst;
+                 (reg[],R.asText) -> stValInText
+              #)
+           else
+              (if IMtrace then
+                  '\tldCst\t '->amc.puttext; 
+                  R.out;
+                  '\t'->amc.put;
+                  C->amc.putint;
+                  amc.newline 
+              if);              
+              IldCst -> addNewNode -> i[];
+              R -> i.writeReg;
+              C -> i.imm;
+          if)
+       #);
+     
+     stCst:: 
+       (# i: ^backendInstruction; 
+          tmpReg: @dataregOperand;
+       do (if IMtrace then 
+              '\tstCst\t '->amc.puttext;
+              C->amc.putint;
+              '\t'->amc.put;
+              A.out;
+          if);
+          
+          (if c->backend.Cap.CanStoreConstant then
+              IstCst->addNewNode->i[];
+              (* reduce parameters to simple values 
+               * and save in instruction node. 
+               * We should stregthen the qualifications.
+               * FIXME: What does this comment say?? *)
+              c->i.imm;
+              size->i.size;
+              a.reg1->i.readReg;
+              a.offset->i.readOffset;
+              (* FIXME: datpete: 1/5/2001: temporary hack in the lack of stCstInx: *)
+              (if A.isInxRegAdr then
+                  true -> I.condition;
+                  (# IA: ^InxRegAdr;
+                  do A[]->IA[];
+                     IA.dreg->I.inxReg;
+                  #);
+              if);
+                  
+           else
+              (* The backend cannot store a constant: Turn into load into
+               * a temporary register, then a store.
+               *)
+              (if IMtrace then
+                  '\t{'->amc.puttext;
+              if);
+              tmpReg.alloc;
+	      (C[], tmpReg[])->ldCst;
+              (tmpReg[],A[],size)->stValImpl;
+              (if IMtrace then
+                  '\n\t}'->amc.puttext;
+              if);
+          if);
+          (if IMtrace then 
+              amc.newline
+          if)
+       #);
+     
+     ldvlImpl:
+       (# i: ^backendInstruction; 
+          ii: ^BackendInstruction;
+          IA: ^inxregadr;
+          A: ^address; R: ^registerOperand; size: @integer
+       enter (A[], R[], size)
+       do (if IMtrace then 
+              '\tldVl-'->amc.puttext;
+              size->amc.putint;
+              '\t'->amc.put;
+              R.out;
+              '\t'->amc.put;
+              A.out;
+              '\t'->amc.put;
+              amc.newline
+          if);
+	  A.loadAdrOp->A[];
+          (if A.isInxRegAdr then
+              IldValInx->addNewNode->ii[]->i[];
+              A[]->IA[];
+              IA.dreg->ii.inxreg;
+              
+              (* FIXME: offset is not used in this case, right?
+               * If it is, then we need a CAP to check if
+               * load from (reg+reg+off) is supported.
+               * INTEL-note: Do we get to utilize load
+               * from (reg+scale*reg+off)? (scale=1,2,4,8)
+               *)              
+           else
+              IldVal->addNewNode->i[];
+          if);
+          A.reg1->i.readReg;
+          A.offset->i.readOffset;
+          A.signed->i.signed;
+          R.reg1->i.writereg;
+          size->i.size;
+       #);
+     
+     ldByte:: 
+       (# 
+       do (op1[], op2[], 1)->ldvlImpl
+       #);
+     ldHalf:: 
+       (# 
+       do (op1[], op2[], 2)->ldvlImpl
+       #);
+     ldVal:: 
+       (# dr:@dataregoperand;
+       do (if backend.CAP.primRegIsReg then
+              (A[], R[], 4)->ldvlImpl
+           else
+              (if r.isPrimRegOp then
+                  dr.alloc;
+                  (A[], dr[], 4)->ldvlImpl;
+                  (dr[], R[])->cpreg;
+               else
+                  (A[], R[], 4)->ldvlImpl
+              if)
+          if)
+       #);
+     ldVl:: 
+       (# 
+       do (A[], R[], size)->ldvlImpl
+       #);
+     
+     ldvalFromLab:: 
+       (# 
+       do (failureTrace,'ldvalFromLab NOT supported')->stop
+       #);
+     
+     stByte:: 
+       (# 
+       do (op1[], op2[], 1)->stValImpl
+       #);
+     stHalf:: 
+       (# 
+       do (op1[], op2[], 2)->stValImpl
+       #);
+     stVal::
+       (# 
+       do (R[], A[], 4)->stValImpl
+       #);
+     
+     stValImpl:
+       (# i:  ^backendInstruction; 
+          ii: ^BackendInstruction;
+          IA:^inxregadr;
+          A: ^address; R: ^registerOperand; size: @integer
+       enter (R[], A[], size)
+       do (if IMtrace then 
+              '\tstVal-'->amc.puttext;
+              size->amc.putInt;
+              '\t'->amc.put;
+              R.out;
+              (if r.rn=0 then (* FIXME: Why? *)
+                  (*(failuretrace,'fgc')->stop*)
+              if);
+              '\t'->amc.put;
+              A.out;
+              amc.newline
+          if);
+          A.loadAdrOp->A[];
+          (if A.isInxregadr then
+              IstValInx->addNewNode->ii[]->i[];
+              A[]->IA[];
+              IA.dreg->ii.inxReg;
+	      (if backend.CAP.ScaledIndex then
+               else
+                  ii.inxReg->ii.readReg3
+              if);
+              (* FIXME: offset is not used in this case, right?
+               * If it is, then we need a CAP to check if
+               * store to (reg+reg+off) is supported.
+               * INTEL-note: Do we get to utilize store
+               * to (reg+scale*reg+off)? (scale=1,2,4,8)
+               *)  
+           else
+              IstVal->addNewNode->i[]
+          if);
+          A.reg1->i.readReg;
+          A.offset->i.readOffset;
+          A.signed->i.signed;
+          R.reg1->i.readReg2;
+          size->i.size;
+          (if IMtrace_low then
+              'stValInx: readReg:' -> puttext;
+              i.readreg -> putint; ' size:'->puttext;
+              size -> putint; 'inxReg:'->puttext;
+              i.inxreg -> putint; ' readReg2: '->puttext;
+              i.readreg2 -> putint; ' size:'->puttext;
+              size ->putint; newline
+          if)
+       #);
+     
+     stValInLab:: 
+       (# 
+       do (failureTrace,'stValInLab')->stop
+       #);
+     
+     cpReg:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              ('cpReg',R1[],R2[])->amc.emit2;
+          if);
+          
+          (if backend.CAP.primRegIsReg then
+              IcpReg->addNewNode->i[];
+              r1.reg1->i.readReg;
+              r2.reg1->i.writeReg    
+           else
+              (if true
+               // R1.isPrimRegOp then
+                  (* should be ldvalfromtext, but used?? *)
+                  (failureTrace,'CPreg called with r1=primreg')->stop                 
+               // r2.isPrimRegOp then
+                  '\tCPreg:\t'->amc.puttext;
+                  (R1[], R2.asText) -> stValInText
+               else
+                  IcpReg->addNewNode->i[];
+                  r1.reg1->i.readReg;
+                  r2.reg1->i.writeReg    
+              if)
+          if);
+       #);
+     
+     cpByteMem:: 
+       (# i: ^backendInstruction; 
+       do &dataregOperand[]->dr[];
+          dr.alloc;
+          (* no current machine can copy mem to mem *)
+          (a1[],dr[])->ldByte;
+          (dr[],a2[])->stByte;
+       #);
+     cpHalfMem:: 
+       (# i: ^backendInstruction; 
+       do &dataregOperand[]->dr[];
+          dr.alloc;
+          (if IMtrace then 
+              ('cpHalfMem',A1[],A2[]) -> amc.emit2
+          if);
+          (a1[],dr[])->ldHalf;
+          (dr[],a2[])->stHalf;
+       #);
+     cpMem:: 
+       (# i: ^backendInstruction; 
+       do &dataregOperand[]->dr[];
+          dr.alloc; (* use the one returned by cpMem *)
+          (A1[],dr[])->ldVal;
+          (dr[],A2[])->stVal   
+       #);
+     
+     stValInText:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              ('stValInText',op[],l[]) -> amc.emit2
+          if);
+          
+          IstValInText->addNewLabelNode->i[];
+          op.reg1->i.readReg;
+          l.T[]->i.label[];
+       #);
+     
+     addMem::
+       (* op1 is cstOperand, op2 is address *) 
+       (# dr1: @dataRegOperand;
+          i: ^backendInstruction; 
+       do
+          (if backend.CAP.AluToMemory then
+              IAddMem->addNewNode->i[];
+              op1.val->i.imm;
+              op2.reg1 -> i.readReg;
+              op2.offset -> i.readOffset;
+           else
+              (* op1 + op2 -> dr1 -> op2 *)
+              dr1.alloc;
+              (op2[],dr1[])->ldVal;
+              (op1[],dr1[],4)->gAdd;
+              (dr1[],op2[])->stVal;
+              dr1[]->R[]
+          if)
+       #);
+     
+     sizedUnOpHelper: sizedUnOp
+       (# i: ^backendInstruction; 
+          immopcode, regopcode: @Integer;          
+       enter regopcode
+       do (if IMtrace then 
+              size->amc.putint;
+              '\t'->amc.put;
+              op.out;
+              amc.newline
+          if);
+          (if backend.CAP.AluFromMemory then
+              op.loadAdrOp->op[]
+           else
+              op.loadOp->op[]
+          if);
+          regopcode->addNewNode->i[];
+          op.reg1 -> i.readReg -> i.writereg;
+          size->i.size
+       #);
+     gNot:: 
+       (# 
+       do (if IMtrace then 
+              '\tgNot:'->amc.puttext;
+          if);
+          (op[], size, IgNot)->sizedUnOpHelper
+       #);
+
+     logNot:: 
+       (# 
+       do (if IMtrace then 
+              '\tlogNot:'->amc.puttext;
+          if);
+          (op[], size, ILogNot)->sizedUnOpHelper
+       #);
+
+     gNeg:: 
+       (# 
+       do (if IMtrace then 
+              '\tgNeg:'->amc.puttext;
+          if);
+          (op[], size, IgNeg)->sizedUnOpHelper
+       #);
+     
+     
+     sizedBinOpHelper: sizedBinOp
+       (# i: ^backendInstruction; 
+          op: ^mOperand;
+          dr1: @dataRegOperand;
+          immopcode, regopcode: @Integer;  
+          emitInst:
+            (# opr: @integer
+            enter opr
+            do opr->ins2text->amc.puttext;
+               amc.putline
+            #)
+       enter (immopcode, regopcode)
+       do (if IMtrace then 
+              size->amc.putint;
+              '\t'->amc.put;
+              op2.out;
+              '\t'->amc.put;
+              op1.out;
+              '\t{'->amc.puttext;
+              amc.newline
+          if);
+          (* olm: I think the operand order is as follows:
+           *      op2 operator op1 -> op2
+           * op2 is supposed to be a dataRegOperand
+           * op1 may be a constant, address or dataRegOperand
+           *)
+          (if backend.CAP.AluFromMemory then
+              op1.loadAdrOp->op[]
+           else
+              op1.loadOp->op[]
+              (* op is now either a constant or a dataRegOperand *)
+          if);
+          (if op.isCstOp then
+              (if op.val->backend.CAP.isSmallAluConstant then
+                  (if IMtrace then 
+                      (immopcode->ins2text,op[],op2[])->amc.emit2
+                  if);
+                  (* Generate: readReg2 immOp imm -> writeReg 
+                   * NOTE: HPUX9PA does NOT have such immediate instructions;
+                   * it has the reverse ones: imm immOp readReg2 -> writeReg
+                   * we do NOT do anything this for the moment;
+                   *)
+                  immopcode->addNewNode->i[];
+                  op.val -> i.imm;
+                  (* why readreg2 and not readreg? *)
+                  op2.reg1 -> i.readReg2 -> i.writereg;
+               else
+                  dr1.alloc;
+                  (op[](*.val*), dr1[])->ldCst;
+                  (if IMtrace then 
+                       (regopcode->ins2text,dr1[],op2[])->amc.emit2
+                  if);
+                  (* Generate: readReg2 immOp readReg -> writeReg *)
+                  regopcode->addNewNode->i[];
+                  dr1.reg1 -> i.readReg;
+                  op2.reg1 -> i.readReg2 -> i.writereg;
+              if);
+           else
+              (if IMtrace then 
+                  (regopcode->ins2text,op[],op2[])->amc.emit2
+              if);
+              (* Generate: readReg2 immOp readReg -> writeReg *)
+              regopcode->addNewNode->i[];
+              op.reg1 -> i.readReg;
+              op.offset -> i.readOffset; (* olm: not meaningful here?
+                                          * op is always a register??
+                                          *)
+              op2.reg1 -> i.readReg2 -> i.writereg;
+          if);
+          size->I.size;
+          (if IMtrace then 
+              '\t}'->amc.putline
+          if)
+       #);
+     addImm:
+       (# readReg,imm,writeReg: @integer;
+          I: ^backendInstruction
+       enter(readReg,imm,writeReg)
+       do (if IMtrace then
+              '\tAddImm\t%D'->amc.puttext; 
+              readReg->amc.putint;
+              amc.ptab;
+              imm -> amc.putint;
+              '\t%D'->amc.puttext; writeReg->amc.putint;
+              amc.newline
+          if);
+          IgAddImm->addNewNode->i[];
+          readReg->i.readReg2; (* why readReg2 and not readReg?
+                                * see alos sizedBinOpHelper
+                                *)
+          4 -> I.size;
+          imm -> i.imm;
+          writeReg-> i.writereg;
+       #);
+     addReg:
+       (# readReg,readReg2,writeReg: @integer;
+          I: ^backendInstruction
+       enter(readReg,readReg2,writeReg)
+       do (if IMtrace then
+              '\tAddReg\t%D'->amc.puttext; 
+              readReg->amc.putint;
+              '\t%D'->amc.puttext; readReg2->amc.putint;
+              '\t%D'->amc.puttext; writeReg->amc.putint;
+              amc.newline
+          if);
+          IgAddReg->addNewNode->i[];
+          4 -> I.size;
+          readReg->i.readReg;
+          readReg2->i.readReg2;
+          writeReg-> i.writereg;
+       #);
+     gAdd:: 
+       (# 
+       do (if IMtrace then 
+              '\tgAdd:'->amc.puttext
+          if);
+          (op1[],op2[],size,IgAddImm,IgAddReg)->sizedBinOpHelper
+       #);
+     gSub:: 
+       (# 
+       do (if IMtrace then 
+              '\tgSub:'->amc.puttext
+          if);
+          (op1[],op2[],size,IgSubImm,IgSubReg)->sizedBinOpHelper
+       #);
+     gOr:: 
+       (# 
+       do (if IMtrace then 
+              '\tgOr:'->amc.puttext;
+          if);
+          (op1[],op2[],size,IgOrImm,IgOrReg)->sizedBinOpHelper
+       #);
+     gAnd:: 
+       (# 
+       do (if IMtrace then 
+              '\tgAnd:'->amc.puttext;
+          if);
+          (op1[],op2[],size,IgAndImm,IgAndReg)->sizedBinOpHelper
+       #);
+     gAndNReg:<  (* FIXME: not in machine *)
+       (# op1, op2: ^dataRegOperand;
+          I: ^backendInstruction;
+          (* (not op1) and (op2) -> op2 *)
+       enter (op1[], op2[])
+       do (if IMtrace then 
+              '\tgAndNReg:'->amc.puttext;
+              op1.out;
+              amc.ptab;
+              op2.out;
+              amc.newline
+          if);
+          (* Generate: readReg2 immOp readReg -> writeReg *)
+          IgAndNReg->addNewNode->i[];
+          op1.reg1 -> i.readReg2; (* the one being not'ed *)
+          op2.reg1 -> i.readReg -> i.writereg;
+          4 -> I.size;
+       #);
+     gAndNImm:< 
+       (# op1imm: ^cstOperand;
+          op2: ^dataRegOperand;
+          (* (not op1imm) and (op2) -> op2 *)
+       enter (op1imm[], op2[])
+       do (if IMtrace then 
+              '\tgAndNImm:'->amc.puttext;
+          if);
+          (%Bnot(op1imm.val)->NewCstOp,op2[],4) -> gAnd;
+       #);
+     gXor:: 
+       (# 
+       do (if IMtrace then 
+              '\tgXor:'->amc.puttext;
+          if);
+          (op1[],op2[],size,IgXorImm,IgXorReg)->sizedBinOpHelper
+       #);
+     
+     gCmp:: 
+       (# 
+       do (if IMtrace then 
+              '\tgCmp:'->amc.puttext;
+          if);
+          (op1[],op2[],size,IgCmpImm,IgCmpReg)->sizedBinOpHelper
+       #);
+     
+     gMult:: 
+       (# 
+       do (if IMtrace then 
+              '\tgMult:'->amc.puttext;
+          if);
+          (op1[],op2[],size,IgMultImm,IgMultReg)->sizedBinOpHelper
+       #);
+     gDIV:: 
+       (# i: ^backendInstruction; 
+          tmpReg:@dataRegOperand;
+       do (if IMtrace then 
+              '\tDIV:'->amc.puttext;
+              op2.out;
+              '\t'->amc.put;
+              op1.out;
+              amc.ptab;
+              isdiv->amc.putboolean;
+              amc.newline
+          if);
+          (if op1.isCstOp then
+              tmpReg.alloc;
+	      (op1.val->newCstOp, tmpReg[])->ldCst;
+              tmpReg[]->op1[]
+           else
+              op1.loadOp->op1[];
+          if);
+          
+          (if isdiv then
+              
+              IgDIVReg->addNewNode->i[];
+              true -> i.isDiv;
+              (* (op2.dNo2.reg1,op1.reg1,op2.dNo2.reg1)->SDIV->mstate.b.emit2 *)
+              op2.dNo2.reg1 -> i.readReg;
+              op1.reg1 -> i.readReg2;
+              op2.dNo2.reg1 -> i.writeReg;
+           else
+              
+              IgDIVReg->addNewNode->i[];
+              false -> i.isDiv;
+              op2.dNo2.reg1 -> i.readReg;
+              op1.reg1 -> i.readReg2;
+              op2.dNo1.reg1 -> i.writeReg;
+          if)
+          
+       #);
+     (* Bit operations *)
+     SignExtByte:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tSignExtByte\t'->amc.puttext;
+              op.out;
+              amc.newline
+          if);
+          
+          ISignExtByte->addNewNode->i[];
+          op.reg1 -> i.readReg -> i.writeReg
+       #);
+     SignExtWord:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tSignExtWord\t'->amc.puttext;
+              op.out;
+              amc.newline
+          if);
+          
+          ISignExtWord->addNewNode->i[];
+          op.reg1 -> i.readReg -> i.writeReg
+       #);
+     getBitsImpl:
+       (# i: ^backendInstruction; 
+          op1,op2,drF,op: ^mOperand;
+          pos,length:@Integer;
+          isSigned: @boolean
+       enter (op1[],pos,length,op2[],drF[],isSigned)
+       <<SLOT IMgetBits:doPart>>
+       #);
+     getBits:: 
+       (# 
+       do (op1[],pos,length,op2[],drF[],false)->getBitsImpl;
+       #);
+     GetSignedBits:: 
+       (# 
+       do (op1[],pos,length,op2[],drF[],true)->getBitsImpl
+       #);
+     
+     gGetBitsImpl:
+       (# i: ^backendInstruction; 
+          dr,pDr,lDr: ^dataRegOperand;
+          isSigned: @boolean;
+       enter (dr[],pDr[],lDr[])
+       <<SLOT IMgGetBits:doPart>>
+       #);
+     gGetBits:: 
+       (# do (dr[],pDr[],lDr[])->gGetBitsImpl 
+       #);
+     gGetSignedBits:: 
+       (# do (dr[],pDr[],lDr[])->
+          gGetBitsImpl
+          (# 
+          do true -> isSigned
+          #);
+       #);     
+     putBits:: 
+       (# i: ^backendInstruction; 
+       <<SLOT IMputBits:doPart>>
+       #);
+     gPutBits:: 
+       (# i: ^backendInstruction; 
+       <<SLOT IMgPutBits:doPart>>
+       #);
+     doAndImm:
+       (# src,imm,dst: @integer;
+          I: ^backendInstruction
+       enter(src,imm,dst)
+       do IgAndImm->addNewNode->I[];
+          src->I.readReg2;
+          imm->I.imm;
+          dst->I.writeReg
+       #);
+     doLogicalShiftLeftImm:
+       (# src,imm,dst: @integer;
+          I: ^backendInstruction
+       enter(src,imm,dst)
+       do IlogicalShiftLeftImm->addNewNode->I[];
+          src->I.readReg;
+          imm->I.imm;
+          dst->I.writeReg
+       #);
+     doLogicalShiftRightImm:
+       (# src,imm,dst: @integer;
+          I: ^backendInstruction
+       enter(src,imm,dst)
+       do IlogicalShiftRightImm->addNewNode->I[];
+          src->I.readReg;
+          imm->I.imm;
+          dst->I.writeReg
+       #);
+          
+     ByteSwap:: 
+       (# dr,dr1,dr2: @dataRegOperand;
+       <<SLOT IMbyteSwap:doPart>>
+       #);
+     doAsgRefAdr:: 
+       (# i: ^backendInstruction; value: @adrRegOperand
+       do value.alloc;
+          (if IMtrace then
+              'doAsgRefAdr'->lpl;
+              '\tdoAsgRefAdr\t'->amc.puttext;
+              thisAdr.out;
+              '\t'->amc.put;
+              A.out; 
+              amc.ptab;
+              withQua->b2d->amc.putint;
+              amc.ptab;
+              value.out;
+              '\t{'->amc.putline
+          if);           
+          
+          (if A.access = common.direct then
+              (A[],value[])->gLea
+           else
+              (A[],value[])->ldVal
+          if);
+          &adrRegOperand[]->dest[];
+          dest.alloc;
+          (thisAdr[],dest[])->gLea;
+          
+          (* FIXME: WithQua ignored *)
+          IChkHeap->addNewNode->i[];          
+          value.reg1->i.readReg;
+          dest.reg1->i.readReg2;          
+          withQua->i.withQua;
+          (if IMtrace then
+              '\t'->amc.putline
+          if);
+       #);
+     doAsgRefReg:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tstRefReg\t'->amc.puttext;
+              A.out;
+              (* a register *)
+              '\t'->amc.put;
+              thisAdr.out;
+              amc.newline
+          if);
+
+          &adrRegOperand[]->dest[];
+          dest.alloc;
+          (thisAdr[],dest[])->gLea;
+          
+          (* FIXME: WithQua ignored *)
+          IChkHeap->addNewNode->i[];
+          A.reg1->i.readReg;            (* source *)
+          dest.reg1->i.readReg2;
+          withQua->i.withQua;
+       #);
+     ChkHeap:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tChkHeap\t'->amc.puttext;
+              (if op[] <> NONE then op.out if) ;
+              amc.newline
+          if);
+          (* the code is generated in asgRefAdr/asgRegAdr *)
+       #);
+     (* Arithmetic *)
+     gGetDataByte:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tgGetDataByte\t'->amc.puttext;
+              op1.out;
+              amc.ptab;
+              byteNo->amc.putint;
+              amc.newline
+          if);
+          
+          IgGetDataByte->addNewNode->i[];
+          op1.reg1 -> i.readreg -> i.writeReg;
+          byteNo->i.imm
+       #);
+     gGetDataWord:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tgGetDataWord\t'->amc.puttext;
+              op1.out;
+              amc.ptab;
+              WordNo->amc.putint;
+              amc.newline
+          if);
+          
+          IgGetDataWord->addNewNode->i[];
+          op1.reg1->i.readreg -> i.writeReg;
+          wordNo->i.imm
+       #);
+     arithShiftLeft:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tarithShiftLeft\t'->amc.puttext;
+              op1.out;
+              amc.ptab;
+              op2.out;
+              amc.ptab;
+              amc.newline
+          if);
+          
+          (if op1.isCstOp then
+              IarithShiftLeftImm->addNewNode->i[];
+              op1.val -> i.imm;
+           else
+              IarithShiftLeftReg->addNewNode->i[];
+              op1.reg1->i.readreg2;
+          if);
+          op2.reg1->i.readReg -> i.writeReg
+       #);
+     logicalShiftLeft:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tlogicalShiftLeft\t'->amc.puttext;
+              op1.out;
+              amc.ptab;
+              op2.out;
+              amc.ptab;
+              amc.newline
+          if);
+          
+          (if op1.isCstOp then
+              IlogicalShiftLeftImm->addNewNode->i[];
+              op1.val -> i.imm;
+           else
+              IlogicalShiftLeftReg->addNewNode->i[];
+              op1.reg1->i.readreg2;
+              
+              (* on intel this will select ECX, if available *)
+              backend.CAP.shiftRegister -> preColor[i.readReg2]
+          if);
+          op2.reg1->i.readReg -> i.writeReg
+          #);
+     arithShiftright:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tarithShiftright\t'->amc.puttext;
+              op1.out;
+              amc.ptab;
+              op2.out;
+              amc.ptab;
+              amc.newline
+          if);
+          
+          (if op1.isCstOp then
+              IarithShiftrightImm->addNewNode->i[];
+              op1.val -> i.imm;
+           else
+              IarithShiftrightReg->addNewNode->i[];
+              op1.reg1->i.readreg2;
+          if);
+          op2.reg1->i.readReg -> i.writeReg
+           #);
+     logicalShiftRight:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tlogicalShiftRight\t'->amc.puttext;
+              op1.out;
+              amc.ptab;
+              op2.out;
+              amc.ptab;
+              amc.newline
+          if);
+          
+          (if op1.isCstOp then
+              IlogicalShiftrightImm->addNewNode->i[];
+              op1.val -> i.imm;
+           else
+              IlogicalShiftrightReg->addNewNode->i[];
+              op1.reg1->i.readreg2;
+              
+              (* on intel this will select ECX if available *)
+              backend.CAP.shiftRegister -> preColor[i.readReg2]
+          if);
+          op2.reg1->i.readReg -> i.writeReg
+       #);
+     rotateLeft:: 
+       (# i: ^backendInstruction; 
+          tmp,tmp2: @DataRegOperand;
+          CO: @cstOperand;
+       do (if IMtrace then 
+              '\trotateLeft\t'->amc.puttext;
+              op1.out;
+              amc.ptab;
+              op2.out;
+              amc.ptab;
+              amc.newline
+          if);
+          (if backend.CAP.hasRotateInstr then
+              (if op1.isCstOp then
+                  IrotateLeftImm->addNewNode->i[];
+                  op1.val -> i.imm;
+               else
+                  IrotateLeftReg->addNewNode->i[];
+                  op1.reg1->i.readreg2;
+                  
+                  (* on intel this will select ECX if available *)
+                  backend.CAP.shiftRegister -> preColor[i.readReg2]
+              if);
+              op2.reg1->i.readReg -> i.writeReg
+           else
+              tmp.alloc;
+              (op2[], tmp[])->cpReg;
+              (op1[], op2[])->logicalShiftLeft;
+              (if op1.isCstOp then
+                  32-op1.val->CO;
+                  (CO[], tmp[])->logicalShiftRight;
+               else
+                  tmp2.alloc;
+                  32->CO;
+                  (CO[], tmp2[])->ldCst;
+                  (op1[],tmp2[],4)->gSub;
+                  (tmp2[], tmp[])->logicalShiftRight;
+              if);
+              (tmp[], op2[], 4)->gOr;
+          if)
+       #);
+     rotateRight:: 
+       (# i: ^backendInstruction;  
+          tmp,tmp2: @DataRegOperand;
+          CO: @cstOperand;
+       do (if IMtrace then 
+              '\trotateRight\t'->amc.puttext;
+              op1.out;
+              amc.ptab;
+              op2.out;
+              amc.ptab;
+              amc.newline
+          if);
+          (if backend.CAP.hasRotateInstr then
+              (if op1.isCstOp then
+                  IrotateRightImm->addNewNode->i[];
+                  op1.val -> i.imm;
+               else
+                  IrotateRightReg->addNewNode->i[];
+                  op1.reg1->i.readreg2;
+                  
+                  (* on intel this will select ECX if available *)
+                  backend.CAP.shiftRegister -> preColor[i.readReg2]
+              if);
+              op2.reg1->i.readReg -> i.writeReg
+           else
+              tmp.alloc;
+              (op2[], tmp[])->cpReg;
+              (op1[], op2[])->logicalShiftRight;
+              (if op1.isCstOp then
+                  32-op1.val->CO;
+                  (CO[], tmp[])->logicalShiftLeft
+               else
+                  tmp2.alloc;
+                  32->CO;
+                  (CO[], tmp2[])->ldCst;
+                  (op1[],tmp2[],4)->gSub;
+                  (tmp2[], tmp[])->logicalShiftLeft;
+              if);
+              (tmp[], op2[], 4)->gOr;
+          if)
+       #);
+     
+     (* Control Flow operations *)
+     jumpIfTrue:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tjumpIfTrue\t'->amc.puttext;
+              op.out;
+              amc.newline
+          if);
+          
+          IjumpIfTrue->addNewJumpNode
+          (# 
+          do op.labNO -> rn.inst.labNo
+          #)
+       #);
+     tstNone:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\ttstNone\t'->amc.puttext;
+              A.out;
+              amc.ptab;
+              R.out;
+              amc.newline
+          if);
+          (A[],R[],4)->ldVlImpl;
+          ItstNone->addNewNode->i[];
+          R.reg1 -> i.writereg;
+          
+          (* on intel this will select ESI (ie. not ebp), if available *)
+          backend.CAP.tstnoneregister -> preColor[i.writeReg] 
+       #);
+     gBeq:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              ('gBeq',op[]) -> amc.emit1
+          if);
+          IgBeq->addNewJumpNode
+          (# 
+          do op.labNO->rn.inst.labNo
+          #)
+       #);
+     gBne:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              ('gBne',op[]) -> amc.emit1             
+          if);
+          IgBne->addNewJumpNode
+          (# 
+          do op.labNO->rn.inst.labNo
+          #)
+       #);
+     gBge:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              ('gBge',op[]) -> amc.emit1
+          if);
+          IgBge->addNewJumpNode
+          (#
+          do op.labNO->rn.inst.labNo
+          #)
+       #);
+     gBae:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              ('gBae',op[]) -> amc.emit1
+          if);
+          IgBae->addNewJumpNode   
+          (#
+          do op.labNO->rn.inst.labNo
+          #)
+       #);
+     gBle:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              ('gBle',op[]) -> amc.emit1
+          if);
+          IgBle->addNewJumpNode
+          (#
+          do op.labNO->rn.inst.labNo
+          #)
+       #);
+     gBbe:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              ('gBbe',op[]) -> amc.emit1
+          if);
+          IgBbe->addNewJumpNode
+          (#
+          do op.labNO->rn.inst.labNo
+          #)
+       #);
+     gBgt:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              ('gBgt',op[]) -> amc.emit1
+          if);
+          IgBgt->addNewJumpNode
+          (#
+          do op.labNO->rn.inst.labNo
+          #)
+       #);
+     gBab:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              ('gBab',op[]) -> amc.emit1
+          if);
+          IgBab->addNewJumpNode
+          (#
+          do op.labNO->rn.inst.labNo
+          #)
+       #);
+     gBlt:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              ('gBlt',op[]) -> amc.emit1
+          if);
+          IgBlt->addNewJumpNode
+          (#
+          do op.labNO->rn.inst.labNo
+          #)
+       #);
+     gBbl:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              ('gBbl',op[]) -> amc.emit1
+          if);
+          IgBbl->addNewJumpNode
+          (#
+          do op.labNO->rn.inst.labNo
+          #)
+       #);
+     trap:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tTrap\t'->amc.puttext;
+              cond->amc.putint;
+              amc.newline
+          if);
+          
+          Itrap->addNewNode->i[];
+          cond->i.imm;
+          false->isLeaf
+       #);
+     jsrTable:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tjsrTable\t'->amc.puttext;
+              A.out;
+              amc.ptab;
+              newVirt->amc.putboolean;
+              amc.newline
+          if);
+          (A[],callRegOp[]) -> ldVal;
+              
+          IjsrTable->addNewNode->i[];
+          callRegOp.reg1 -> i.readreg;
+          newVirt-> i.condition;
+          false->isLeaf          
+       #);
+     
+     (* this is only for testing class tests in synthesizer, 
+      * note virtdecl, not binding! *)
+     jsrTableTest:<
+       (# 
+          i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tjsrTableTest\t'->amc.puttext;
+              (*A.out; not declared *)
+              amc.ptab;
+              (*newVirt->amc.putboolean; *)
+              amc.ptab;
+              (*proto[]->amc.putline              *)
+          if);
+          (* only used to test classtest based jumps ! *)
+       #);
+     jmpTlong:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tjmpTlong\t'->amc.puttext;
+              t[]->amc.puttext;
+              amc.ptab;
+              labArg[]->puttext;
+              amc.newline
+          if);
+          IjmpTlong->addNewNode->i[];
+          T.copy->i.label[];
+          (if labArg[]<>none then
+              '!!!!!!!! jmpTlong: labArg[] <> NONE: ' -> puttext;
+              labArg[] -> puttext; T[] -> putline;
+              labArg.copy->i.proto[]
+          if);
+          false->isLeaf;
+       #);
+     jmpT:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tjmpT\t'->amc.puttext;
+              t[]->amc.putline;
+              
+          if);
+          IjmpT->addNewNode->i[];
+          t.copy->i.label[];
+       #);
+     jsrT:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tjsrT\t'->amc.puttext;
+              t[]->amc.putline;
+              
+          if);
+          IjsrT->addNewNode->i[];
+          t.copy->i.label[];
+          false->isLeaf;
+       #);
+     jsrReg:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tJSRreg\t'->amc.puttext;
+              op.out;
+              amc.newline
+          if);
+          
+          IjsrReg->addNewNode->i[];
+          op.reg1->i.readReg          
+       #);
+     jmpReg:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tJMPreg\t'->amc.puttext;
+              op.out;amc.ptab;iscase->b2d->amc.putint;
+              amc.newline
+          if);
+          
+          IjmpReg->addNewNode->i[];
+          op.reg1 -> i.readReg;
+          isCase  -> i.condition;
+          false->isLeaf          
+       #);
+     gJmp:: 
+       (# i: ^backendInstruction; 
+          LL: ^localLab
+       do (if IMtrace then 
+              '\tgJmp\t'->amc.puttext;
+              op.out;
+              amc.newline
+          if);
+          op[] -> LL[]; (* strengteh qualification of op i machine *)
+          (if LL.type = interfragment then
+              (if false then
+                  (* why a stop here ?*)
+                  (failuretrace, 'gJmp interfragment') -> stop;
+              if)
+          if);
+          
+          IgJmp->addNewJumpNode
+          (# 
+          do LL.labNO->rn.inst.labNo;
+             (LL.labNo,LL.type,LL.betalabel,LL.isTextAdr,LL.descId[])
+            -> backend.newLocalLab
+            -> rn.inst.lab[];
+          #)
+       #);
+     gJsr:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tgJSR\t'->amc.puttext;
+              op.out;
+              amc.newline
+          if);
+          IgJsr->addNewNode->i[];
+          op.T[] -> i.label[]; 
+          (* callRegOp -> i.readReg; *)
+          (* gOrM->i.ch; *)
+          false->isLeaf;
+       #);
+     BeginLabel:: 
+       (# i: ^backEndInstruction; 
+          dr: @DataRegOperand;
+       do 
+          (if IMtrace then 
+              'BeginLabel' -> amc.putline;
+          if);
+          
+          IFakeRegisterWrite->addNewNode -> i[];
+          dr.alloc;
+          dr.reg1 -> I.writeReg;
+
+          IBeginLabel->addNewNode -> i[];
+          dr.reg1 -> I.readReg (* used by intel *);
+          restartLab.labNO->i.labNo;
+          (*leaveLab.labNO->i.lab2;*)
+          off->i.imm (*int*);
+          hasCalls->i.bool;
+          hasSlots->i.bool2;
+       #);
+     Break:: 
+       (# i: ^backendInstruction; 
+          T: @textOperand;
+          ExO: ^text
+       do (if IMtrace then  
+              '\tBreak\t'->amc.puttext;
+              off->amc.putint;
+              amc.ptab;
+              jmpAdr.out;
+              amc.ptab;
+              isLeave->amc.putboolean;
+              amc.newline
+          if);
+          
+          (if common.isIntel then
+              (* (off->NewCstOp,DataRegA[])->ldCst; 
+               * datpete: 20/04/2001
+               * FIXME: temporarily done in callprim, 
+               * since DataRegA is NOT currently bound to EAX.
+               *)
+              else
+              (if (common.targetMachineId=common.hpux9pa) then
+                  (* DataRegA don't work:
+                   * dataRegA is currently bound to this
+                   * co nnow handled in callPrim
+                   * (off->NewCstOp,DataRegA[])->ldCst;
+                   *)
+               else
+                  (* not used by sun4s, and sgi/ppcmac *)
+              if);
+          if);
+          1->initPrimCall;
+          (* clean-up is necessary here - we should only
+           * transfer jmpAdr in I.lab
+           *)
+          (if jmpAdr.type = interFragment then
+              jmpAdr.descId.copy -> T.T[];
+              jmpAdr.labNo->T.T.putint;
+              (if backend.CAP.primRegIsReg then
+                  (T[],1->getPrimReg) -> gLea;
+               else
+                  (* datpete 20/04/2001 *)
+                  (* OBS! getPrimReg returns address on INTEL *)
+                  (T->NewTextOp,1->getPrimReg)->leaToPrimReg;
+              if)
+           else
+              (jmpAdr[],1->getPrimReg)->leaToPrimReg;
+          if);
+        
+          (* Note exitObj is in callReg *)
+          (if common.switch[89] then
+              'ExOx'->ExO[]
+           else
+              'ExO'->ExO[]
+          if);
+          ExO-> callprim
+          (# 
+          do off-> I.imm;
+             (jmpAdr.labNo,jmpAdr.type,jmpAdr.betalabel
+             ,jmpAdr.isTextAdr,jmpAdr.descId[])
+               -> backend.newLocalLab
+               -> I.lab[];
+          #);
+          0->getPrimRes
+       #);
+     FreeLabel:: 
+       (# i: ^backendInstruction; 
+       do (* NOT used anymore ! *)
+       #);
+     EndLabel:: 
+       (# i: ^backendInstruction; 
+       do (* USED in MIPSmachine and perhaps other ones *)
+          (if IMtrace then              
+              ('EndLabel',none,none) -> amc.emit2
+          if);
+          
+          (* &backInstruction[]->i[];
+           * IEndLabel->i.type;
+           * off->i.imm(*int* );
+           * hasCalls->i.bool;
+           * hasSlots->i.bool2;
+           * i[]->Intermediategraf.Irin;
+                        *)
+          9->FIXME
+       #);
+     saveInnerReturn:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tSaveInnerReturn\trtoff:'->amc.puttext;
+              RToff->amc.putint;
+              amc.newline
+          if);
+          
+          IsaveInnerReturn->addNewNode->i[];
+          Rtoff->i.imm          
+       #);
+     returnInner:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\treturnInner\trtoff:'->amc.puttext;
+              RToff->amc.putint;
+              isLeavePtn->amc.putboolean;
+              amc.newline
+          if);
+          
+          IreturnInner->addNewNode->i[];
+          RToff->i.imm;
+          isLeavePtn->i.condition          
+       #);
+     EmitTextConst:: 
+       (# i: ^backendInstruction; 
+          lab: @ localLab; pDest: ^mOperand; aR: @adrRegOperand
+       do (if IMtrace then 
+              '\tEmitTextconst\t\''->amc.puttext;
+              s[]->amc.puttext;'\''->amc.put;
+              amc.ptab;
+              'primNo:'->amc.puttext; pNo->amc.putint; ' {'->amc.puttext;
+              amc.newline
+          if);
+
+          Lab.new; true->Lab.isTextAdr; lab.dataToCode -> Lab.type;
+          switchToData;
+          Lab.def;
+          (S[],isWtext) -> asciiText;
+          switchToCode;
+          (if pNo = -1 then (* argument to external function*)
+              lab [] -> pushAdr
+           else
+              (if common.switch[61] then
+                  (* consider textOperand:toPrimDest *)
+                  pNo -> GetPrimReg->pDest[];
+                  (if pDest.primRegIsReg then
+                      aR.alloc;
+                      (lab[],aR[]) -> gLeaLabel; (* cannot load
+                                                  * to primReg -
+                                                  * FIX
+                                                  *)
+                      (aR[],pDest[]) -> cpReg
+                   else
+                      (lab[], pDest[])->leaToPrimReg
+                  if)
+               else       
+                  lab[]->pushAdr
+              if)
+          if);
+          
+          (if IMtrace then 
+              '\t}'->amc.putline
+          if)
+       #);
+     
+     rts::
+       (# i:^backendInstruction
+       do (if IMtrace then 
+              '\trts'->amc.putline              
+          if);
+          Irts->addNewNode          
+       #);
+     glea:: 
+       (# i: ^backendInstruction; 
+          ot: ^textOperand
+       do (if IMtrace then 
+              '\tglea\t'->amc.puttext;
+              op1.out;
+              amc.ptab;
+              op2.out;
+          if);
+          (if true
+           // op1.isTextOp then
+              (if IMtrace then
+                  '{\n\tgLeaText\t' -> amc.puttext;
+                  op1.out;
+                  amc.ptab;
+                  op2.out;
+                  '\n\t}'->amc.puttext;
+              if);
+              IgleaText->addNewNode->i[];
+              op1[] -> ot[];
+              ot.T[] -> i.label[];
+              op2.reg1 -> i.writereg;
+           // op1.isInxRegAdr then
+              (# XA: ^InxRegAdr
+              do op1[]->XA[];
+                 (if IMtrace then
+                     ' (InxRegAdr){' -> amc.putline;
+                     '\tgLeaInx\t' -> amc.puttext;
+                 if);
+                 IgleaInx->addNewNode->i[];
+                 (if op1.offSet->backend.CAP.isSmallAluConstant then
+                     XA.offSet  -> i.imm; 
+                  else
+                     (if IMtrace then
+                         '\n' -> amc.puttext;
+                     if);
+                     (# dr: @dataRegOperand;
+                     do dr.alloc;
+                        (op1.offSet->newCstOp,dr[])->ldCst;
+                        (dr[],XA.dReg[],4) -> gAdd;
+                        0 -> i.imm
+                     #);
+                 if);
+                 XA.aReg.reg1 -> i.readReg;
+                 XA.dReg.reg1 -> i.readreg2;
+                 op2.reg1 -> i.writereg;
+                 XA.size->I.size;
+                 (if IMtrace then
+                     '\n\t}' -> amc.puttext;
+                 if);
+              #);
+           else (* regAdr - perhaps not always?? *)
+              (if op1.offSet->backend.CAP.isSmallAluConstant then
+                  (if IMtrace then
+                      ' (regadr/small)' -> amc.puttext;
+                  if);
+                  Iglea->addNewNode->i[];
+                  op1.reg1 -> i.readreg;
+                  op1.offSet  -> i.imm;              
+                  op2.reg1 -> i.writereg;
+               else
+                  (if IMtrace then
+                      ' (regadr/big){' -> amc.putline;
+                  if);
+                  (# dr: @dataRegOperand;
+                  do dr.alloc;
+                     (op1.offSet->newCstOp,dr[])->ldCst;
+                     IgAddReg->addNewNode->I[];
+                     op1.reg1->I.readReg;
+                     dr.reg1->I.readReg2;
+                     op2.reg1->I.writeReg;
+                     (if IMtrace then
+                         '\tgAddReg\t'->amc.puttext;
+                         op1.out;
+                         amc.ptab;
+                         dr.out;
+                         amc.ptab;
+                         op2.out;
+                         '\n\t}' -> amc.puttext;
+                     if);
+                  #);
+              if);
+              (* NO size needed here??*)
+          if);
+          (if IMtrace then
+              amc.newline;
+          if);
+       #);
+     gleaLabel:: 
+       (# i: ^backendInstruction; 
+          l: ^localLab;
+       do (if IMtrace then 
+              ('gleaLabel',op1[],op2[])->amc.emit2
+          if);
+          
+          IgleaLabel->addNewNode->i[];
+          op1[] -> l[];
+          L.labNo -> i.labNo;
+          L.isTextAdr -> I.condition; (* datpete *)
+          L.type -> I.type;
+          op2.reg1 -> i.writereg;          
+       #);
+     leaToPrimReg:: 
+       (# i: ^backendInstruction;   
+          l: ^localLab;
+          txt: ^textOperand;
+          Pr:^PrimRegOperand;
+          da:@dataRegOperand;
+       do (if IMtrace then 
+              '\tleaToPrimReg\t'->amc.puttext;
+              op1.out;
+              amc.ptab;
+              op2.out;
+              amc.ptab; '{'->amc.put;
+              amc.newline
+          if);
+          (if true
+           // op1.isLocalLabOp then
+              op1[] -> l[];
+              (if backend.CAP.primRegIsReg then
+                  IgleaLabel->addNewNode->i[];             
+                  op2.reg1 -> i.writereg; 
+                  l.labNo -> i.labNo;
+               else
+                  da.alloc;
+                  IgleaLabel->addNewNode->i[];
+                  da.reg1 -> i.writeReg;
+                  l.labNo -> i.labNo;
+                  l.isTextAdr -> I.condition; (* datpete *)
+                  IStvalInText -> addNewNode -> i[];
+                  da.reg1 -> i.readReg;
+                  (op2.asText).T.copy -> I.label[];
+              if);
+              L.type->I.type
+           // op1.isTextOp then (* datpete 20/04/2001 *)
+              op1[] -> txt[];
+              (if backend.CAP.primRegIsReg then
+                  IgleaText->addNewNode->i[];             
+                  op2.reg1 -> i.writereg; 
+                  txt.t.copy -> i.label[];
+               else
+                  da.alloc;
+                  IgleaText->addNewNode->i[];
+                  da.reg1 -> i.writeReg;
+                  txt.t.copy -> i.label[];
+                  IStvalInText -> addNewNode -> i[];
+                  da.reg1 -> i.readReg;
+                  (op2.asText).T.copy -> I.label[];
+              if);
+           // op1.isRegAdr then
+              (if backend.CAP.primRegIsReg then
+                  (op1[],op2[])->glea
+               else
+                  (* lea value into da *)
+                  da.alloc;
+                  (op1[],da[])->glea;
+                  
+                  (da[],op2.asText)->stValInText
+              if);
+           else
+              'IMmachine.leaToPrimReg unknown operand' -> putline;
+          if);
+          (if IMtrace then 
+              '\t}'->amc.putline
+          if)
+       #);
+     gClr:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              ('gClr',op[],none)->amc.emit2;
+          if);
+          
+          IgClr->addNewNode->i[];
+          op.reg1 -> i.writereg          
+       #);
+     pushAdr:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              ('PushAdr',op[],none)->amc.emit2
+          if);
+           (* we should have a virtual call like
+           *  op.loadAdr -> op[]
+           * to avoid testing isLocalOp, ...
+           * however, loadAdr is perhaps not the right
+           * one to use. Other alternatives are loadToReg
+           * and loadAdrOp. This should be checked!
+           *)
+          (if op.isLocalLabOp then
+              (# aR: @adrRegOperand
+              do aR.alloc;
+                 (op[],aR[]) -> gLeaLabel;
+                 (* this is perhaps not the most obvious semantice,
+                  * but apparently how it has to work!
+                  *)
+                 IPushClong->addNewNode->i[];
+                 aR.reg1 -> i.readReg;
+              #)
+           else
+              IpushAdr->addNewNode->i[];
+              op.reg1 -> i.readReg (*imm?*)
+          if);
+       #);
+     Push:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tPush\t'->amc.puttext;
+              op.out;
+              amc.newline
+          if);
+
+          IPush->addNewNode->i[];
+          op.reg1->I.readReg;
+          (if true
+           // op.isDataRegOp then
+              true->I.condition
+           // op.isAdrRegOp then
+              false->I.condition
+           else
+              '\n++++ push of non adrReg- or dataRegOperand'->putline
+          if)
+       #);
+     Pop:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tPop\t'->amc.puttext;
+              op.out;
+              amc.newline
+          if);
+          
+          IPop->addNewNode->i[];
+          op.reg1->I.writeReg;         
+          (if true 
+           // op.isDataRegOp then
+              true->I.condition
+           // op.isAdrRegOp then
+              false->I.condition
+           else
+              '\n++++ pop of non adrReg- or dataRegOperand'->putline
+          if)
+       #);
+     PushThisOrCall:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tPushThisOrCall\t'->amc.puttext;
+              pushTh->amc.putboolean;
+              amc.ptab;
+              pushca->amc.putboolean;
+              amc.newline
+          if);
+          
+          IPushThisOrCall->addNewNode->i[];
+          pushTh->i.bool;
+          pushCa->i.bool2;          
+          
+       #);
+     popThisOrCall:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tPopThisOrCall\t'->amc.puttext;
+              popth->amc.putboolean;
+              amc.ptab;
+              popca->amc.putboolean;
+              amc.newline
+          if);
+          
+          IpopThisOrCall->addNewNode->i[];
+          popTh->i.bool;
+          popCa->i.bool2;
+          
+          
+       #);
+     setTop:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tsetTop\t'->amc.puttext;
+              off->amc.putint;
+              amc.newline
+          if);
+          
+          IsetTop->addNewNode->i[];
+          off->i.imm(*int*);
+          
+          
+       #);
+     ChkCase:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tChkCase\t'->amc.puttext;
+              min->amc.putint;
+              amc.ptab;
+              max->amc.putint;
+              amc.ptab;
+              inx.out;
+              amc.ptab;
+              elseLab.out;
+              amc.newline
+          if);
+          
+          IChkCase->addNewJumpNode->i[];
+          inx.reg1->i.readReg;
+          inx.reg1->i.writeReg;
+          min->i.readOffSet; (* UGLY*)
+          max->i.size;
+          elselab.labNO->i.labNo;
+       #);
+     ChkIndex:: 
+       (# i: ^backendInstruction; 
+          size: @integer;
+          isSimple: @boolean;
+          repAdr: ^mOperand;
+          toReg: ^inxRegAdr
+       do 4 -> FIXME;
+          (if IMtrace then 
+              '\tChkIndex\t'->amc.puttext;
+              repadr.out;
+              '+'->amc.put;
+              (*index.out;*)
+              '*%d -> '->amc.putformat(# do (*size->d *) #);
+              toreg.out;
+              (if isSimple then '\tsimple'->amc.puttext if);
+              amc.newline
+          if);
+          
+          IChkIndex->addNewNode->i[];
+          8 -> FIXME;
+          
+          (*
+          repAdr.createEssence->i.ess1[]->i.readreg[];
+          index.createEssence->i.ess2[]->i.readreg2[];
+          size->i.size(*int* );
+          isSimple->i.bool;
+          toReg.createEssence->i.ess3[];
+          toReg.Areg.createEssence->i.readreg3[];
+          *)
+       #);
+     (* for using const rep. lookup in synthesizer, note not binding ! *)
+     chkConstIndex:<
+       (# i:^backendInstruction;
+          isSimple: @boolean;
+          index,size: @integer;
+       do (if IMtrace then  '\tChkConstIndex\t'->amc.puttext;
+              (*toReg.out;*)
+              '['->amc.put;
+              index->amc.putint;
+              '*'->amc.put; 
+              size->amc.putint;
+              ']'->amc.put;
+              amc.newline
+          if);
+          
+          
+          IChkConstIndex->addNewNode->i[];
+          index->i.imm(*int*);
+          size->i.size(*int2*);
+          '\n*** FIX: chkConstIndex: isSimple, index, size' -> putline;
+          isSimple->i.bool;
+          true->i.bool2; (* perform check *)
+          (*  toReg.createEssence->i.ess1[];*)
+       #);
+     cmpToBool:: 
+       (# i: ^backendInstruction; dr: @dataRegOperand
+       do dr.alloc;
+          dr[] -> op1.loadToReg -> op1[];
+          (if IMtrace then 
+              '\tcmpToBool: '->amc.puttext;
+              cond->cond2text->amc.puttext;
+              ':'->amc.put;
+              size->amc.putint;
+              '\t'->amc.put;
+              op1.out;
+              '\t'->amc.put;
+              op2.out;
+              '\t'->amc.put;
+              op3.out;
+              amc.newline
+          if);
+          IcmpToBool->addNewNode->i[];
+          cond->i.cond;
+          op1.reg1->i.readReg;
+          op2.reg1->i.readReg2;
+          op3.reg1->I.writeReg;
+          size->I.size;
+       #);
+     cmpAndJmp:: 
+       (# i,ii: ^backendInstruction; dr1: @dataRegOperand
+       do op1.loadOp->op1[]; 
+          (if IMtrace then 
+              '\tcmpAndJmp:'->amc.puttext;
+              cond->cond2text->amc.puttext;
+              ':'->amc.put;
+              size->amc.putint;
+              '\t'->amc.put;
+              op1.out;
+              '\t'->amc.put;
+              op2.out;
+              '\t'->amc.put;
+              lab.out;'-'->amc.put;
+              lab.type->amc.putint;
+              '\t'->amc.put;
+              amc.newline
+          if);
+                   
+          (if op1.isCstOp then
+              (if op1.val->backend.CAP.isSmallAluConstant then
+                  IcmpAndJmpImm->addNewJumpNode
+                  (#
+                  do lab.labNO->rn.inst.labNo
+                  #)->i[];
+                  op2.reg1->i.readReg;
+                  op1.val->i.imm
+               else
+                  dr1.alloc;
+                  (op1[], dr1[])->ldCst;
+                  IcmpAndJmp->addNewJumpNode
+                  (#
+                  do lab.labNO->rn.inst.labNo
+                  #)->i[];
+                  op2.reg1->i.readReg;
+                  dr1.reg1->i.readReg2;
+              if)
+           else
+              IcmpAndJmp->addNewJumpNode
+              (#
+              do lab.labNO->rn.inst.labNo
+              #)->i[];
+              op2.reg1->i.readReg;
+              op1.reg1->i.readReg2;
+          if);
+          cond -> i.cond;
+          size->i.size;
+          i[]->ii[];
+          'cmpandjmp extra:  i.readreg:%d, i.readreg2:%d, op1.reg1:%d, op2.reg1:%d\n'->amc.putformat
+          (# do ii.readreg->d; ii.readreg2->d; op1.reg1->d; op2.reg1->d #);
+       #);
+     cmpBoolAndJmp:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tcmpBoolAndJmp:'->amc.puttext;
+              cond->cond2text->amc.puttext;
+              ':'->amc.put;
+              size->amc.putint;
+              '\t'->amc.put;
+              op.out;
+              '\t'->amc.put;
+              lab.out;
+              '\t'->amc.put;
+              amc.newline
+          if);
+          
+          IcmpBoolAndJmp->addNewJumpNode
+          (#
+          do lab.labNO->rn.inst.labNo
+          #)->i[];
+          cond->i.cond;
+          op.reg1->i.readReg; (* op is always a dataRegOperand? *)
+          size->I.size;
+       #);
+     (* Floating point operations *)
+     floatConst:: 
+       (# i: ^backendInstruction; 
+       do FR.alloc;
+          (if IMtrace then 
+              '\tfloatconst\t'->amc.puttext;
+              value -> amc.putreal; 
+              amc.ptab;
+              T[] -> amc.puttext;
+              amc.ptab;
+              FR.out;
+              amc.newline
+          if);
+          IfloatConst->addNewNode->i[];
+          t.copy->i.label[];
+          value->i.floatVal;
+          FR.reg1->I.writeReg
+       #);
+     int2float:: 
+       (# i: ^backendInstruction; 
+          F: @floatRegOp
+       do (if IMtrace then 
+              '\tint2float\t'->amc.puttext;
+              a.out;
+              amc.newline
+          if);
+          F.alloc;
+          A[]->F.loadInt;
+          FR.alloc;
+          Iint2float->addNewNode->i[];
+          F.reg1->I.readReg;
+          FR.reg1->I.writeReg          
+       #);
+     intReg2float:: 
+       (# i: ^backendInstruction; 
+          fTmp: @floatRegOp
+       do FR.alloc;
+          fTmp.alloc;
+          (if IMtrace then 
+              ('intReg2float',A[],fTmp[],FR[]) -> amc.emit3
+          if);
+          
+          IintReg2float->addNewNode->i[];
+          A.reg1->I.readReg;          
+          FR.reg1->I.writeReg;
+          fTmp.reg1->I.writeReg2
+       #);
+     float2int:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tfloat2int\t'->amc.puttext;
+              Fr.out;
+              amc.ptab;
+              Dr.out;
+              amc.newline
+          if);
+          
+          Ifloat2int->addNewNode->i[];
+          FR.reg1->I.readReg;
+          FR.reg1->I.writeReg2;
+          dr.reg1->I.writeReg          
+       #);
+     cmpToBoolFloat:: 
+       (# i: ^backendInstruction; 
+       do (op2[],op1[])->cmpFloat(#do cond->I.cond #);
+          (if IMtrace then 
+              '\tcmpToBoolFloat\t'->amc.puttext;
+              cond->amc.putint;
+              amc.ptab;
+              op1.out;
+              amc.ptab;
+              op2.out;
+              amc.ptab;
+              op3.out;
+              amc.newline
+          if);
+          IcmpToBoolFloat->addNewNode->i[];
+          cond->i.cond;
+          op3.reg1->I.writeReg
+       #);
+     cmpAndJmpFloat:: 
+       (# i: ^backendInstruction; 
+       do (op2[],op1[])->cmpFloat
+          (#
+          do (if cond (* this is needed for HP - not tested for other 
+                       * platforms, but at least sparc does not use I.cond *)
+              // 1 (* =  *) then (* <> *) 2 -> I.cond
+              // 2 (* <> *) then (* =  *) 1 -> I.cond
+              // 3 (* <  *) then (* >= *) 6 -> I.cond
+              // 4 (* <= *) then (* >  *) 5 -> I.cond
+              // 5 (* >  *) then (* <= *) 4 -> I.cond
+              // 6 (* >= *) then (* <  *) 3 -> I.cond
+             if);   
+             pop->I.popFloatStack (* needed by INTEL *)
+          #);
+          (if IMtrace then 
+              '\tcmpAndJmpFloat\t'->amc.puttext;
+              cond->amc.putint;
+              amc.ptab;
+              op1.out;
+              amc.ptab;
+              op2.out;
+              amc.ptab;
+              lab.out;
+              amc.ptab;
+              pop->amc.putboolean;
+              amc.newline
+          if);          
+          IcmpAndJmpFloat->addNewJumpNode
+          (#
+          do lab.labNO->rn.inst.labNo
+          #)->i[];
+          cond->i.cond;
+          pop->I.popFloatStack (* perhaps needed for INTEL *)
+       #);
+     popFStack:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tpopFStack'->amc.putline;
+          if);
+          IpopFStack->addNewNode->i[];
+       #);
+     cmpFloat:: 
+       (# i: ^backendInstruction;  
+          op: ^floatRegOp
+       do (if IMtrace then 
+              ('cmpFloat',LF[],A[]) -> amc.emit2
+          if);
+          A.loadFloatOp->op[];
+          IcmpFloat->addNewNode->i[];
+          LF.reg1->I.readReg;
+          op.reg1->I.readReg2; 
+          INNER (* HP neeeds the condition to compare*)
+       #);
+     fBeq:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tfBeq\t'->amc.puttext;
+              op.out;
+              amc.newline
+          if);
+          
+          IfBeq->addNewJumpNode 
+          (#
+          do op.labNO->rn.inst.labNo
+          #)
+       #);
+     fBge:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tfBge\t'->amc.puttext;
+              op.out;
+              amc.newline
+          if);
+          
+          IfBge->addNewJumpNode
+          (#
+          do op.labNO->rn.inst.labNo
+          #)
+       #);
+     fBle:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tfBle\t'->amc.puttext;
+              op.out;
+              amc.newline
+          if);
+          
+          IfBle->addNewJumpNode->i[];
+          op.labNO->i.labNo;
+       #);
+     fBne:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tfBne\t'->amc.puttext;
+              op.out;
+              amc.newline
+          if);
+          
+          IfBne->addNewJumpNode->i[];
+          op.labNO->i.labNo;
+       #);
+     fBgt:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tfBgt\t'->amc.puttext;
+              op.out;
+              amc.newline
+          if);
+          
+          IfBgt->addNewJumpNode->i[];
+          op.labNO->i.labNo;
+       #);
+     fBlt:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tfBlt\t'->amc.puttext;
+              op.out;
+              amc.newline
+          if);
+          
+          IfBlt->addNewJumpNode->i[];
+          op.labNO->i.labNo;
+          
+       #);
+     FloatBinOp: floatSig
+       (# opcode: @integer;
+          I: ^backendInstruction; op: ^floatRegOp
+       enter(opcode)
+       do A.loadFloatOp->op[];
+          (if IMtrace then 
+              (opcode->ins2text,lf[],op[])->amc.emit2
+          if); 
+          opcode->addNewNode->I[];
+          LF.reg1->I.readReg;
+          op.reg1->I.readReg2;
+          LF.reg1->I.writeReg
+       #);
+       
+     addFloat:: 
+       (# 
+       do (LF[],A[],AinFreg,IaddFloat)->FloatBinOp
+       #);
+     subFloat:: 
+       (# 
+       do (LF[],A[],AinFreg,IsubFloat)->FloatBinOp          
+       #);
+     mulFloat:: 
+       (# 
+       do (LF[],A[],AinFreg,ImulFloat)->FloatBinOp                    
+       #);
+     divFloat:: 
+       (# 
+       do (LF[],A[],AinFreg,IdivFloat)->FloatBinOp
+       #);
+     negFloat:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tnegFloat\t'->amc.puttext;
+              f.out;
+              amc.newline
+          if);
+          
+          InegFloat->addNewNode->i[];
+          F.reg1->I.readReg->I.writeReg;
+          
+       #);
+     (* concurrency not used? *)
+     lock::  (#  do 'WARNING not in intermediate'->amc.putline #);
+     (* register Allocation *)
+     isInlining:@boolean;
+     inlinecallReg:@adrRegOperand;
+     SetNormalRegisters:
+       (# 
+       do false->isInlining;
+          1->ThisRegOp;
+          2->CallRegOp;
+        #);
+     SetInliningRegister:
+       (# 
+       do true->isInlining;
+          inlineCallReg.alloc;
+          2->ThisRegOp;
+          inlineCallReg->CallRegOp;
+       #);
+     GetZeroRegister:
+       (# reg: ^dataRegOperand
+       do &DataRegOperand[]->reg[];
+          reg.alloc;
+          G0->regs[regCount];
+       #);
+     FreeData::  (#  #);
+     ReleaseReg:: (# do 'treleasereg'->lpl; 0->callRegCount #);
+     thisO::  
+       (#  
+       do (if isInlining then
+              2->rNO
+           else
+              1->rNO 
+          if)
+       #);
+     callO::  
+       (#  
+       do (if isInlining then
+              inlinecallReg->rNO
+           else
+              2->rNO
+          if);
+       #);
+     primReg1: (# exit 3 #);
+     callRegCount:@integer;
+     CallRegBusy::
+       (# do 'callregBusy: %d\n'->
+          lpf(# do callRegCount->d #);
+                (* 'callregBusy: %d\n'->amc.putformat(# do callRegCount->d #);  *)
+          (callregCount>0)->value
+       #);
+     DecrCallReg::  
+       (# i: ^backEndInstruction;
+       do 'DecrCallReg'->lpl;
+          callRegCount-1->callRegCount;
+          (*'deccallreg: %d\n'->amc.putformat(# do callRegCount->d #);  *)
+          (*           &Backinstruction[]->i[];
+           *           iDecrCallReg->i.type;
+           *           i[]->Intermediategraf.Irin
+           *)
+       #);
+     GetCallReg::  
+       (# 
+       do (* FIXME: See CallRegInPrimReg2 !*)
+          'GetCallReg'->lpl;
+          callRegCount+1->callRegCount;
+          (* 'getcallreg: %d\n'->amc.putformat(# do callRegCount->d #);  *)
+          (*           &Backinstruction[]->i[];
+           *           iGetCallReg->i.type;
+           *           i[]->Intermediategraf.Irin
+           *)
+       #);
+     FreeCallReg::  (#  do 'FreeCallReg not impl'->amc.putline #);
+     CallRegInPrimReg2:: 
+       (#  
+       do (IF IMtrace THEN
+              'CallRegInPrimReg2'->amc.putline;
+              'CallRegInPrimReg2'->lpl
+          if);
+          (if common.targetMachineId
+           // common.ppcmac // common.sgi then
+              (* Should return TRUE if:
+               * 1. callReg and primReg2 is the same register;
+               *    this is the case for ppc and mips/sgi
+               * 2. callReg is in fact busy
+               * See synthlibbody::protectcallReg
+               * Note that mch.callRegIsprimReg2 includes the
+               * tst mch.callRegBusy, i.e. mch.callRegBusy can
+               * be eliminated in the old compiler.
+               * To implement a proper CallRegInPrimReg2,
+               * GetCallReg/FreeCallReg must probably be implemented
+               *)
+              true -> value;
+              10->FIXME
+          if)
+       #);
+     GetOriginReg::  
+       (# 
+       do 'getoriginreg not impl'->amc.putline;
+          'getoriginreg'->lpl;
+       #);
+     FreeOriginReg::  (#  #);
+     DataRegMax::  (#  do 5->val #);
+     NoOfFreeDataReg::  (#  do 'NoOfFreeDataReg not impl'->amc.putline #);
+     DumpReg::  (#  do 'DumpReg called'->lpl #);
+     PushReg:: 
+       (# i: ^backendInstruction;
+       do (if IMtrace then 'PushReg'->amc.emit if);
+          IPushReg->addNewNode->i[]; 
+          i[]-> PushPopStack.markPush
+       #);
+     PopReg:: 
+       (# i: ^backendInstruction;
+       do (if IMtrace then 'PopReg'->amc.emit if);
+          IPopReg->addNewNode->i[]; 
+          intermediategraf.irin.r.inx->i.pos;
+          i[]-> pushpopstack.markPop
+       #);
+     PushDataReg:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tPushDataReg\t'->amc.putline;              
+          if);
+          IPushDataReg->addNewNode->i[]; 
+       #);
+     PopDataReg:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tPopDataReg\t'->amc.putline;              
+          if);
+          IPopDataReg->addNewNode->i[];
+          max->i.imm 
+       #);
+     PushFloatReg:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tPushFloatReg\t'->amc.putline              
+          if);
+          IPushFloatReg->addNewNode->i[];
+          rn->i.imm
+       #);
+     PopFloatReg:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tPopFloatReg\t'->amc.putline;
+          if);
+          IPopFloatReg->addNewNode->i[];
+          rn->i.imm          
+       #);
+     (* external not working *)
+     InitExternalCall::
+       (# bi :^BackendInstruction;
+       do (if IMtrace then 'InitExternalCall'->amc.emit if);
+          IInitExternalCall->addNewNode->bi[];
+          extType->bi.imm;
+          noOfPar->bi.size;
+          
+          bi[]-> externalCall.markInit
+       #);
+     (* InitExternalParams not used anymore *)
+     
+     PushClong::
+       (# i: ^backendInstruction; 
+          dr: @dataRegOperand;
+       do (if IMtrace then  '\tPushClong\t'->amc.puttext; 
+              op.out; '\t\n'->amc.puttext
+          if);
+          (* we should verify that loadToReg is the right thing to do here!
+           * Is it Ok that we always use a data register?
+           * Note that loadToReg is defined in machine for most
+           * operands; for cstOperand it is definere here!
+           *)
+          (if op.isCstOp and backend.CAP.CanStoreConstant then
+              IPushClongImm->addNewNode->i[];
+              op.val -> i.imm
+           else
+              dr.alloc;
+              dr[]->op.loadToReg -> op[];
+              IPushClong->addNewNode->i[];
+              op.reg1 -> i.readReg;
+          if);
+          (if IMtrace then
+              '\t}\n'->amc.puttext
+          if)
+       #);
+     PushCword::< (# do op[] -> PushClong #);
+     PushCbyte::< (# do op[] -> PushClong #);
+     PushCdoubleAdr::<
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\pushCdouble:\t'->amc.puttext;
+              A.out;
+              amc.newline
+          if);
+          (if A.isInxRegAdr then
+              '\n***OBS! PushCdoubleAdr:inxRegAdr is NOT IMPLEMENTED!'->putline
+          if);
+          IpushCdouble->addNewNode->I[];
+          A.reg1->I.readReg;
+          A.offSet->I.readOffSet;
+          A.signed->I.signed;
+          A.size->I.size
+       #);
+     PushCfloat::<
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tpushCfloat:\t'->amc.puttext;
+              F.out;
+              amc.newline
+          if);
+          IpushCfloat->addNewNode->I[];
+          F.reg1->I.readReg
+       #);
+     PushCtext::<(# do 'PushCtext'->putline #);
+     CallCproc::
+       (# i:^backendInstruction;
+       do (if IMtrace then  
+              '\tCallCproc\t'->amc.puttext; 
+              t[]->amc.puttext; amc.ptab;
+              extType->amc.putint; amc.ptab;
+              noOfParam->amc.putint; amc.ptab;
+              exitType->amc.putint; 
+              amc.putline
+          if);
+          
+          iCallCproc->addNewNode->i[];
+          t.copy->i.label[];
+          extType->i.imm;
+          noOfParam->i.size;
+          exitType->i.type;          
+          
+          intermediategraf.irin.r.inx->externalCall.markCall
+       #);
+     SaveReg::
+       (#  i: ^backendInstruction; 
+       do (if IMtrace then 'SaveReg'->amc.emit if);
+          ISaveReg->addNewNode->i[];          
+       #);
+     RestoreReg::
+       (# i: ^backendInstruction
+       do (if IMtrace then 'RestoreReg'->amc.emit if);
+          IRestoreReg->addNewNode->i[];          
+       #);
+     
+     externalDispatch::
+       (# I: ^backendInstruction;
+       do (if IMtrace then
+              ('externalDispatch',reg[],none)->amc.emit2
+          if);
+          IexternalDispatch->addNewNode->I[];
+          reg.reg1->I.readReg;
+          (* do we need the remaining arguments here? *)
+          intermediategraf.irin.r.inx->externalCall.markCall
+       #);
+     noXres::
+       (# I: ^backendInstruction;
+       do (if IMtrace then 'noXres'->amc.emit if);
+          InoXres->addnewNode->i[];
+          extType->i.imm;
+          parSize->i.size;
+          exitType->i.type;          
+          exitSize->i.length; (* yikes! *)
+       #);
+     getSimpleXres::
+       (# I: ^backendInstruction; 
+       do drA.alloc;
+          (if IMtrace then 
+              '\tgetSimpleXres\t'->amc.puttext;
+              drA.out;
+              amc.newline
+          if);
+          IgetSimpleXres->addNewNode->I[];
+          drA.reg1 -> I.writeReg;
+          extType->i.imm;
+          parSize->i.size;
+          exitType->i.type;          
+          exitSize->i.length; (* yikes! *)
+          
+          backend.CAP.externalResultRegister -> preColor[i.writeReg];
+       #);
+     getTextXres::
+       (# I: ^backendInstruction; 
+       do (if IMtrace then 'getTextXres'->amc.emit if);
+          IgetTextXres->addNewNode->I[];
+          aR.alloc;
+          aR.reg1 -> I.writeReg;
+          extType->i.imm;
+          parSize->i.size;
+          exitType->i.type;          
+          exitSize->i.length; (* yikes! *)
+       #);
+     realXresIsDouble::
+       (# 
+       do extType -> backend.realXresIsDouble -> value
+       #);
+     getDoubleXres::
+       (# I: ^backendInstruction; 
+       do drA.alloc; drB.alloc;
+          (if IMtrace then
+              ('getDoubleXres',drA[],drB[])->amc.emit2
+          if);
+          IgetDoubleXres->addNewNode->I[]; 
+          drA.reg1 -> I.writeReg;
+          drB.reg1 -> I.writeReg2;
+          (* In some situations writeReg2 is not used;
+           * we thus have to fake a use to avoid a 'clever'
+           * register allocator
+           *)
+          IFakeRegisterWrite->addNewNode->I[];
+          drA.reg1-> I.readreg;
+          drB.reg1-> I.readreg2;
+       #);
+     getFloatXres::
+       (# I: ^backendInstruction; 
+       do fp.alloc;
+          (if IMtrace then
+              ('getFloatXres',fp[],none)->amc.emit2
+          if);
+          IgetFloatXres->addNewNode->I[]; 
+          fp.reg1 -> I.writeReg;          
+          extType->i.imm;
+          parSize->i.size;
+          exitType->i.type;          
+          exitSize->i.length; (* yikes! *)
+       #);
+     getDataRefXres::
+       (# I: ^backendInstruction; 
+       do (if IMtrace then
+              '\ngetDataRefXres'->amc.putline
+          if);
+          IgetDataRefXres->addNewNode->I[];
+          drA.alloc;
+          drA.reg1 -> I.writeReg;
+       #);
+     getDataPartXres::
+       (# I: ^backendInstruction
+       do (if IMtrace then
+              '\ngetDataPartXres'->amc.putline
+          if);
+          IgetDataPartXres->addNewNode->I[];
+          drA.alloc;
+          drA.reg1 -> I.writeReg;
+       #);
+     SaveHeapTop::
+       (# I: ^backendInstruction; 
+       do (if IMtrace then
+              '\tsaveHeapTop'->amc.putline
+          if);
+          IsaveHeapTop->addNewNode->I[];
+       #);
+     PopCallStack::
+       (# 
+       do '\n**** Not Implemented: PopCallStack' -> putline
+       #);
+     AllocExternalResult::
+       (# 
+       do 
+       #);
+     PascalTrap::
+       (* Only meaningful on  Macintosh *)
+       (# 
+       do '\n**** Not Implemented: PascalTrap' -> putline
+       #);
+     
+     xParForward:: (# do extKind->backend.xParForward -> forward #);
+     
+     (* BETA run-time routines *)
+     GetPrimReg::  
+       (# pR: @primRegOperand;  
+          prn:@integer;
+       do 'getPrimReg called, pno=%d prn=%d\n'->lpf
+          (# do pno->d; regcount+1->d #);
+          (* primreg1 is preAllocated in register 3 *)
+          (if pno<>1 then
+              regCount+1->regCount->prn;
+              (if regCount>regs.range then 
+                  regCount->regs.extend; 
+                  regCount->preColor.extend; 
+                  regCount->primregs.extend
+              if);
+              this(IntermediateMachine).primreg->regs[regCount];
+              pno->primregs[regCount]
+           else
+              primreg1->prn
+           if);
+          prn->pR; pR[]->primReg[];
+       #);
+     initPrimCall::
+       (# i: ^backendInstruction;
+       do (if IMtrace then  
+              '\tInitPrimCall\t'->amc.puttext; noOfPar->amc.putint; 
+              amc.newline
+          if);
+          
+          IinitPrimCall->addNewNode->i[];
+          noOfPar->i.imm(*int*);
+          
+       #);
+     CallPrim::  
+       (# i: ^backendInstruction; 
+       do (if IMtrace then  
+              '\tCallPRIM\t'->amc.puttext; T[]->amc.putline;
+              
+          if);
+          ICallPrim->addNewNode->i[];
+          t.copy->i.label(*txt*)[];
+          false->isLeaf;
+          INNER (* used by intel Break call *)
+       #);
+     CallAlloPrim:: 
+       (# p:@PrimRegOperand;
+          i: ^backendInstruction;
+          hasnogp: @boolean
+       do (if IMtrace then 
+              '\tPRIMAlloc\t lp='->amc.puttext;
+              loadprototype->b2d->amc.putint; amc.ptab;
+              T[]->amc.puttext;
+              '\t'->amc.put;
+              (if proto[] = none then
+                  '%CallReg'->amc.putline (* probably a virtual is allocated *)
+               else
+                  proto[]->amc.putline
+              if);
+              
+          if);
+          ICallAlloPrim->addNewNode->i[]; 
+          t.copy->i.label[];
+          2 (* callReg *) -> i.writeReg;
+          
+          (if proto[] <> none then
+              proto[] -> puttext;
+              proto.copy->i.proto[]
+           else
+              2 (* callReg *) -> i.readReg
+          if);
+       #);
+     StackAlloPrim:
+       (# p:@PrimRegOperand;
+          i: ^backendInstruction;
+          proto,t,s: ^text;
+          stackCount,size: @integer
+       do 5 -> FIXME;
+          (if IMtrace then  
+              '\tStackAlloPrim %s %d\n'
+                ->amc.putformat(# do (* t[]->s;  size->d*)  #);
+               (*'\tStackAlloPrim %s %d\n'->opf(# do t[]->s; size->d #);*)
+          if);
+          IStackAlloPrim->addNewNode->i[];
+          t.copy->i.label(*txt*)[];
+          (if proto[]<>none then
+              proto.copy->i.proto(*txt2*)[];
+          if);
+          size->i.size(*int*);
+          (if stackCount>=stackoffset.range then
+              stackCount->stackoffset.extend
+          if);
+          1+stackCount->stackCount;
+          totalStackSize->stackoffSet[stackCount];
+          totalStackSize+size->totalStackSize;
+          stackCount->i.size(*int2*);
+          primreg1->p; 
+          '++++ StackAlloPrim!!!' -> putline;
+          (*
+           p.reg1->i.readreg[];
+           *)
+          false->isLeaf          
+       #);
+     InlineAlloiNGNP:
+       (# i: ^backendInstruction;
+          p:@PrimRegOperand;
+          size,orgOff: @integer;
+          proto: ^text;
+       do '\n*** InlineAlloiNGNP: size,orgOff,proto' -> putline;
+          (if IMtrace then  
+              '\ InlineAlloiNGNP %d,%s\n'
+                ->amc.putformat(# do(* size->d; proto[]->s *)#);
+              'IOALimit'->backend.import;              
+          if);
+          IInlineAlloiNGNP->addNewNode->i[];
+          size->i.imm(*int*);
+          orgoff->i.size(*int2*);
+          proto.copy->i.label(*txt*)[];
+          false->isLeaf;
+          primreg1->p; 
+          '+++++ InlineAlloiNGNP!!!! ' -> putline
+          (*
+           p.createEssence->i.readreg[];     
+           *)
+       #);
+     deAllocIOA:
+       (# i: ^backendInstruction
+       do (if IMtrace then  
+              '\tdeAllocIOA %d\n'->amc.putformat(# do (*size->d *)#);
+          if);
+          IdeAllocIOA->addNewNode->i[];
+          '++++ deAllocIOA!!! ' -> putline;
+          (*
+           size->i.imm(*int* );    
+                       *)
+       #);
+     GetPrimRes:: 
+       (# i: ^backendInstruction; 
+          o:^primRegOperand;
+       do (if IMtrace then  
+              '\tGetPrimRes\t'->amc.puttext; res->amc.putint; amc.newline
+          if);
+          dr.alloc;
+          IGetPRimRes->addNewNode->i[];
+          res->i.imm;
+          dr.reg1->i.writeReg
+       #);
+     
+     SPtoPrimReg::
+       (# pReg: ^primRegOperand; I: ^backendInstruction
+       do 'WARN  SPtoPrimReg pNo: %d, pushthis:%d\n'->logfile.putformat
+          (# do pNo->d; pushthis->d #);
+          ISPtoPrimReg->addNewNode->I[];
+          pNo->getPrimReg->pReg[];
+          pReg.reg1->I.writeReg;
+          pushThis->I.imm;
+          (if IMtrace then
+              'SPtoPrim'->amc.emit
+              (#
+              do ' primNo:'-> amc.puttext; pNo->amc.putint; 
+                 pReg.out;
+                 ' pushThis:'->amc.puttext; pushThis->amc.putint;
+              #)
+          if);
+       #);
+     LabelDef:: 
+       (* is ONLY called for M-part labels in COM virtuals *)
+       (# I: ^ backEndInstruction
+       do (if IMtrace then
+              'ENTRY\t'->amc.puttext; 
+              T[]->amc.putline;
+          if);
+          IGlobalCodeLabelDef -> addNewNode -> I[];
+          T[]->I.label[];
+          true->I.isLocal
+       #);
+     GlobalLabelDef:: 
+       (# I: ^ backEndInstruction
+       do (if IntermediateGraf[] = NONE then
+              (999997,'GlobalLab',data,false(*?*)) -> newIntermediateGraf;
+          if);
+
+          (if data then
+              (xLab[],data)->backend.GlobalDataLabelDef 
+           else
+              IGlobalCodeLabelDef -> addNewNode -> I[];
+              xLab[]->I.label[]
+          if)
+       #);
+     (* entry point / return *)
+     Export::   
+       (#  
+       do 'Export Called: %s\n'->lpf(# do lab[]->s #);
+          lab[]->backend.export
+       #);
+     Import:: 
+       (#  
+       do 
+          'Import Called: %s\n'->lpf(# do lab[]->s #);
+          lab[]->backend.import
+       #);
+     ImportData::
+       (#  
+       do 'ImportData: %s,%d\n'->lpf(# do lab[]->s;local->b2d->d #);
+          (lab[],local)->backend.importData
+       #);
+     switchToData::
+       (#  
+       do 'switchToData'->logfile.putline;
+          backend.switchToData
+       #);
+     switchToCode::
+       (# 
+       do 'switchToCode'->logfile.putline;  
+          backend.switchToCode
+       #);
+     declareAddress:: 
+       (# l:^locallab;
+          t:^textOPerand;
+          i: ^backendInstruction;
+          dataLab:
+            (#
+            do
+            #)
+       do
+          (if op.isLocalLabOp then
+              op[]->l[]; (* must convert to realmch locallab *)
+              '\tdeclareAdr:'->amc.puttext;
+              l.out;
+              amc.newline;
+              
+              &backendInstruction[]->i[];
+              IDeclareAddress->i.opcode;
+              l.labNO -> i.imm;
+              l.betaLabel -> i.condition;
+              L.type->I.type;
+              (if l.betaLabel then 
+                  (* in codesegment, must be collected 
+                   * and generated along with other code 
+                   *)
+                  IdeclareAddress->addNewJumpNode->I[];
+                  L.type->I.type;
+                  l.labNo->i.labNo;
+               else
+                  &backendInstruction[]->I[];
+                  L.type->I.type;
+                  l.labNo->I.labNo;
+                  i[] -> backend.declareDataSegmentLabelAddressImpl
+              if)
+           else
+              op[]->t[];
+              'declareAddress: T(%s)\n'
+                -> lpf(# do this(declareAddress).t.t[]->s#);
+              'declareAddress: T(%s)\n'
+                -> amc.putformat(# do this(declareAddress).t.t[]->s#);
+              &backendInstruction[]->i[];
+              IDeclareAddress->i.opcode;
+              t.t[] -> i.label[];
+              i[] -> backend.declareDataSegmentTextAddressImpl
+          if)
+       #);
+     declareLong::  
+       (#  
+       do 'declareLong: %d\n'->lpf(# do this(declareLong).n->d #);
+          n->backend.declareLong
+       #);
+     declareWord::  
+       (#  
+       do 'declareWord: %d\n'->lpf(# do this(declareWord).n->d #);
+          n->backend.declareWord
+       #);
+     dclWord::
+       (# 
+       do 'dclWord: %d\n'->lpf(# do this(dclWord).n->d #);
+          n->backend.dclWord
+       #);
+     emitByte::
+       (# 
+       do 'emitbyte: %d\n'->lpf(# do this(emitByte).b->d#);
+          b->backend.emitbyte
+       #);
+     asciiText::
+       (# 
+       do 'asciiText: %s\n'->lpf(# do t[]->s#);
+          (t[],isWtext)->backend.asciiText
+       #);
+     DefineMainLabel1::
+       (# 
+       do 'DefineMainLabel1'->lpl; 
+          (* something is needed to generate start and main entrypoints*)
+          saveState;
+          clearState;
+          (999999,'mainCode',false)->thisFragment.newDoP->Intermediategraf[];
+          IntermediateGraf.init;
+          false -> inGpart;
+          
+          backend.definemainlabel;
+       #);
+     doFinal2VirtJump::
+       (# do 'WARNING doFinal2VirtJump'->lpl #);
+     GetVirtualOriginStart1:: 
+       (# A1: @RegAdr; 
+          orgReg: ^primregOperand;
+          aR: @adrRegOperand;
+       do (if IMtrace then
+              'GetVirtualOriginStart1'->amc.emit
+          if);
+          (*OriginReg->aR->A1.reg; *)
+          1->getPrimReg->orgReg[];
+          (if orgReg.primRegIsReg then
+              orgReg->aR->A1.reg
+           else (* primRegIsRegAdr assumed: INTEL
+                 * we attempt to do the same as the 
+                 * corresponding slot in INTELBmachine
+                 *)
+              aR.alloc;
+              
+              (* the push instruction has aR as read register, ie. 
+               * it is live upwards until the first write of AR!!
+               * Since aR is allocated here there can not be any write instruction
+               * at all!.
+               * Ar will reserve a physical register from here and backwards!
+               * 
+               * IFakeRegisterWrite is a fake write instruction which
+               * tells the allocator that Ar is written here!
+               *)
+              aR.reg1 -> (IFakeRegisterWrite->addNewNode).writeReg;
+              
+              aR[]->push;
+              (*(orgReg[],ar[])->ldVal; cannot have orgReg as arg *)
+              (orgReg.asText,ar[])->gLea;
+              aR->A1.reg;
+              (A1[],aR[])->ldVal
+          if);
+          A1[]->startA[]
+       #);
+     GetVirtualOriginStart2:: 
+       (# A1: ^ RegAdr; orgReg: ^primregOperand;
+       do (if IMtrace then 'GetVirtualOriginStart2'->amc.emit if);
+          1->getPrimReg->orgReg[];
+          (if orgReg.primRegIsReg then
+              startA.toOriginReg
+           else
+              startA[]->A1[]; (* inefficient *)
+              (if not OriginRegIsDefined then
+                  (* OLM: 8.5.98 *)
+                  A1.toOriginReg; (* will deAlloc A1.reg*)
+              if);
+              A1.reg[]->pop;
+          if)
+       #);
+     AllocObj::
+       (# I: ^backendInstruction
+       do (if IMtrace then
+              ('AllocObj',none)->amc.emit1(#do Tentry[]->amc.puttext #);
+          if);
+          IallocObj->addNewNode->I[];
+          (* 'AlloI' -> I.label[] in sparcbackend;
+           * perhaps this should be done in general?
+           *)
+          Tentry[]->I.proto[];          
+       #);
+     allocDoPartObject::
+       (# ar: @adrRegOperand
+       do (if IMtrace then
+              '\tAllocDoPartObject' -> amc.putline
+          if);
+          (if common.switch[61] then
+               3->initPrimCall;
+              (size->newCstOp,1->getPrimReg) -> ldCst;
+              (thisRegOp[],2->getPrimReg) -> cpReg;
+              (3,1) -> SPtoPrimReg
+           else
+              1->initPrimCall;
+              (size->newCstOp,1->getPrimReg)->ldCst;
+          if);
+          'AlloDO'->callPrim;
+          (if common.switch[61] then
+              3 -> getPrimRes -> ar;
+              (ar[],thisRegOp[]) -> cpReg
+           else
+              0->getPrimRes
+          if)
+       #);
+     deAllocDoPartObject::
+       (# A: @RegAdr
+       do (if IMtrace then
+              '\tdeAllocDoPartObject' -> amc.putline
+          if);
+          (* before return, thisReg must be defined to be the object 
+           * containing the dopart. This object is the origin of the 
+           * dopart object
+           *)
+          thisO->A.reg; 8->A.addOff;
+          (A[],thisRegOp[])->ldVal
+       #);
+     SaveReturn::
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tSave Return-adr'->amc.putline;              
+          if);
+          iSaveReturn->addNewNode->i[];
+          isGpart->i.bool;
+          RToff->i.imm(*int*);
+       #);
+     Return:: 
+       (# i: ^backendInstruction; 
+       do (if IMtrace then 
+              '\tRETURN'->amc.putline;              
+          if);
+          iReturn->addNewNode->i[];
+          isLeavePtn->i.bool;
+          RToff->i.imm(*int*);
+       #);
+     ReturnVirtualCom::
+       (# i: ^backendInstruction; 
+       do (if IMtrace then
+              ('ReturnVirtualCOM',none,none)->amc.emit2
+          if);
+          IReturnVirtualCOM->addNewNode->I[];
+          RToff->I.RToff;
+       #);
+     ExternalEntry::
+       (# i: ^backendInstruction; 
+       do (*saveState;
+          clearState;
+          (descNo,entryId[],false)->thisFragment.newDoP->IntermediateGraf[];
+          IntermediateGraf.init;
+           false->inGpart;*)
+          (if IMtrace then
+              '\tEXTERNALENTRY\t'->amc.puttext;
+              entryID[] -> amc.puttext;
+              ':' ->amc.put;
+              noOfEnterPar->amc.putint;
+              amc.newline
+          if); 
+          iExternalEntry->addNewNode->i[];
+          entryId[] -> I.label[];
+          noOfEnterPar->I.noOfEnterPar
+       #);
+     ExternalMark::
+       (# I: ^backendInstruction; 
+       do (if IMtrace then
+              'EXTERNALMARK'->amc.emit
+          if);
+          iExternalMark->addNewNode->I[];
+       #);
+     ExternalReturn::
+       (# i: ^backendInstruction; 
+       do (if IMtrace then
+              'EXTERNALRETURN'->amc.emit
+          if);
+          iExternalReturn->addNewNode->i[];
+       #);
+     initXpar::
+       (# I: ^backendInstruction;
+          dr: @dataRegOperand
+            (*enter (extKind,BC,SC,LC)*)
+       do (if IMtrace then
+              'initXpar'->amc.emit;
+              BC+SC+LC->amc.putint;
+              amc.newline
+          if);
+          IinitXpar->addNewNode->I[];
+          
+          xPar.init;
+          (for (BC+SC+LC->backend.noOfPreGetXpar) repeat
+               IpreGetXpar->addNewNode->i[];
+               dr.alloc;
+               dr.reg1->i.writeReg;
+               dr.reg1->xPar.put;
+               (if IMtrace then
+                   '\tpreGetXpar\t%D'->amc.puttext;
+                   dr.reg1->amc.putint;
+                   amc.newline
+               if);               
+          for);
+       #);
+     xPar: @
+       (# top,no: @integer;
+          D: [3] @integer;
+          init: (# do 0->top->no #);
+          put:
+            (# dr: @integer
+            enter dr
+            do (if (top+1->top) > D.range then
+                   D.range->D.extend
+               if);
+               dr->D[top]
+            #);
+          newReg: (#exit 1 #);
+          pairReg: (#exit 2 #);
+          preReg: (#exit 3 #);
+          nextReg: integerValue
+            (# 
+            do (if top = 0 then
+                   newReg -> value
+                else
+                   (if  no >= (top-1) then pairReg -> value
+                    else
+                       preReg -> value
+               if)if)
+            #);
+          getPre:
+            (# reg: @integer
+            do no+1->no;
+               (if no < top then
+                   D[no]->reg
+                else 
+                   '\nERROR: getPre call'->putline
+               if)
+            exit reg
+            #);
+          getNew:
+            (# rReg,wReg: @integer; dr: @dataRegOperand
+            do dr.alloc;
+               dr.reg1->wReg;
+               D[top]->rReg;
+            exit(rReg,wReg)
+            #)
+       #);
+     getXlong::
+       (# I: ^backendInstruction; 
+       do IgetXlong->addNewNode->i[];
+          (if xPar.nextReg 
+           // xPar.newReg then
+              dr->I.writeReg
+           // xPar.pairReg then  
+              xPar.getNew -> (I.readReg,dr->I.writeReg)
+           // xPar.preReg then 
+              xPar.getPre->dr->I.readReg;
+          if);
+          (if IMtrace then 
+              '\tgetXlong\t%D'->amc.puttext;
+              I.readReg->amc.putint;
+              '\t%D'->amc.puttext;
+              I.writeReg->amc.putint;
+              amc.newline
+          if)          
+       #);
+     getXword::
+       (# I: ^backendInstruction
+            (*enter dr[]*)
+       do (if IMtrace then
+              '\tgetXword'->amc.puttext;
+          if);
+          IgetXword->addNewNode->i[];
+          (*xPar.get->dr->I.writeReg*)
+       #);
+     getXbyte::
+       (# I: ^backendInstruction
+            (*enter dr[]*)
+       do (if IMtrace then
+              '\tgetXbyte'->amc.puttext;
+          if);
+          IgetXbyte->addNewNode->i[];
+          (*xPar.get->dr->I.writeReg*)
+       #);
+     toXres:: 
+       (* return result of BETA callbackpattern:
+        * move register rNo to return register
+        *)
+       (# I: ^backendInstruction
+            (*enter rNo*)
+       do (if IMtrace then
+              '\ttoXres\t'->amc.puttext;
+              rNo->amc.putint;
+              amc.newline
+          if);
+          ItoXres->addNewNode->i[];
+          rNo -> i.readReg;
+       #);
+     GetRegForXres:: (* allocate register(s) for result of external call *)
+       (#I: ^backendInstruction
+       do (if IMtrace then 'GetRegForXres'->amc.emit if);
+          IGetRegForXres->addNewNode->i[];
+          (*exit (max,dummyMax)*)
+       #);
+     endX:<
+       (# I: ^backendInstruction
+            (*enter (extType,exitType,BC,SC,LC,max,dummyMax)*)
+       do  (if IMtrace then
+              '\tendX'->amc.puttext;
+          if);          
+          IendX->addNewNode->i[];
+       #);
+     GetComPar::
+       (# I: ^backendInstruction
+       do (if IMtrace then
+              ('GetCOMpar',none,none)->amc.emit2
+          if);
+          (if isValPar then
+              &dataRegOperand[]->paramAdr[]
+           else
+              &adrRegOperand[]->paramAdr[]
+          if); 
+          paramAdr.alloc;
+          IGetCOMpar->addNewNode->I[];
+          paramAdr.reg1->I.writeReg;
+          paramNo->I.paramNo
+       #);
+     doHead::< (*FIXME*) 
+       (# 
+       do '\tDOHEAD'->amc.putline;
+          1->thisRegOp;
+          2->callRegOp;
+          &dataRegOperand[]->dataRegA[];
+          (if common.targetMachineId
+           // common.sun4s then thisRegOp[]->dataRegA[] (* adrReg !!!*)
+           (*// common.hpux9pa then 28->DataRegA;
+           else ??? 
+              24->DataRegA;*)
+          if);
+          &dataRegOperand[]->dataRegB[];
+          25->DataRegB;
+          &dataRegOperand[]->dataRegX[];
+          &dataRegOperand[]->dataRegY[];
+          7->dataRegX;
+          6->dataRegY;
+          (* we start after this and callee*) 
+          2->regCount;
+          (* next from 2 *)           
+          
+          externalCall.init;
+          pushpopstack.init
+       #);
+
+     InitDataSeg::
+       (# 
+       do 
+          'InitDataSeg called, isbetaenv:%d\n'
+            -> lpf(# do initialBetaEnv->b2d->d#);
+          doHead; (* moved from SPARCmachine *)
+          initialBetaEnv->backend.InitDataSeg;
+       #);
+     newFragment::< 
+       (# I: ^backendInstruction;
+       do (FN[],astLabel)->IFragmentSet.newfragment->ThisFragment[];
+          'NewFragment: %s %d\n'->lpf (#  do fn[]->s; astLabel->d #);
+          (FN[],astLabel)->backend.newFragment
+       #);
+     newProto::
+       (# I: ^backendInstruction;
+       do InewProto->addNewNode-> I[];
+          index->I.index; 
+          astRef->I.astRef;
+       #);
+     newImp::
+       (# I: ^backendInstruction;
+       do releaseReg; 
+          (if IMtrace then
+              '---newImp: '->amc.emit
+              (#do astRef->amc.putint#)
+          if);
+          InewImp->addNewNode-> I[];
+          astRef->I.astRef;
+       #);
+     newEval::
+       (# I: ^backendInstruction;
+       do InewEval->addNewNode-> I[];
+          astRef->I.astRef
+       #); 
+     openDbgInf::
+       (# I: ^backendInstruction;
+       do IopenDbgInf->addNewNode-> I[];
+       #);
+     saveDbgInf::
+       (# I: ^backendInstruction;
+       do IsaveDbgInf->addNewNode-> I[];
+          fname[]->I.label[]
+       #);
+     saveState:
+       (# (* save regs. state of present graph *)
+       do (if IntermediateGraf[]<>none then
+              regs->IntermediateGraf.regs;
+              primregs->IntermediateGraf.primRegs;
+              preColor->IntermediateGraf.preColor;
+              regCount->IntermediateGraf.regsTop;
+              'savestate for %s, top=%d totalstack:%d\n'->lpf
+              (# 
+              do IntermediateGraf.name[]->s; 
+                 regCount->d; totalstacksize->d 
+              #);
+              stackOffset->IntermediateGraf.stackOffset;
+              stackCount->IntermediateGraf.stackCount;
+              totalStackSize->IntermediateGraf.totalStackSize;
+              isleaf->IntermediateGraf.isLeaf;
+          if);
+       #);
+     clearState:
+       (# 
+       do 0->callRegCount;
+          3->regCount;
+          3->regs.new;
+          3->preColor.new;
+          3->primregs.new;
+          Adrreg->regs[1];
+          Adrreg->regs[2];
+          primReg->regs[3];
+          1->primregs[3];
+          1->stackOffset.new;
+          0->totalstacksize->stackCount;
+          externalCall.init; 
+          (if common.switch[87] then
+              true->isLeaf;
+           else
+              false->isLeaf
+          if)
+       #);
+     initGen:: (*FIXME*)
+       (# 
+       do saveState;
+          clearState;
+          true->inGpart;
+          'INITGEN, gpart-name: \n%s:\n'->lpf (#  do EP[]->s #);
+          (if IMtrace then
+              'INITGEN, gpart-name: \n%s:\n'->amc.putformat(#  do EP[]->s #);
+          if);
+          (nodeId,EP[],data)->thisFragment.newGP->IntermediateGraf[];
+          IntermediateGraf.init;
+          (EP[],data)->GlobalLabelDef;
+       #);
+     initDo:: (*FIXME*)
+       (# 
+       do (* we start allocation after thisObj, callee and primreg1 *)
+          saveState;
+          clearState;
+          'INITDO, dopart-name: %s\n'->lpf (#  do EP[]->s #);
+          'INITDO, dopart-name:\n%s:\n'->amc.putformat (#  do EP[]->s #);
+          
+          (nodeId,EP[],data)->thisFragment.newDoP->IntermediateGraf[];
+          IntermediateGraf.init;
+          false->inGpart;
+          (EP[],data)->GlobalLabelDef;
+       #);
+     EndCodeSeg:: (*FIXME*)
+       (# 
+       do 'EndcodeSeg called'->lpl;
+          saveState;
+          dumpObjectCode;
+       #);
+     
+     (********** handling of prototypes ********)
+     
+     InitEmitProtoIndexTable:: 
+       (# 
+       do noOfPT -> backend.initEmitProtoIndexTable;
+       #);
+     EmitProtoIndex:: 
+       (# 
+       do PT[] -> backend.emitProtoIndex
+       #);
+     EndEmitProtoIndexTable:: 
+       (# 
+       do backend.endEmitProtoIndexTable
+       #);
+     EmitProto:: 
+       (# 
+       do (thisTLab[],GCtableOffset,OriginOff,thisGlab[],superTlab[],size,
+          topMentryOff,formIndex,astNumber,externalEntryLab[])
+            -> backend.emitProto
+       #);
+     EmitInnerTable:: 
+       (# 
+       do noOfEntries -> backend.emitInnerTable
+       #);
+     InnerEntry:: 
+       (# 
+       do entry.T[] -> backend.InnerEntry          
+       #);
+     EmitVirtAdr:: 
+       (# TO: ^textOperand; labOp: ^localLab;
+       do (* optimize this: eliminate ## *)
+          (if lab.isTextOp then
+              lab[] -> TO[];
+              TO.T[] -> backend.emitVirtTextAdr 
+           else
+              (if lab.isLocalLabOp  then 
+                  lab[] -> labOp[];
+                  labOp.labNo->backend.emitVirtLabelAdr
+               else
+                  '\n+++++OBS EmitVirtAdr: NEITHER textOperand- or localLab'
+                    -> putline
+          if)if)
+       #); 
+     EmitObjTableOff:: 
+       (# 
+       do (offNo,off) -> backend.emitObjTableOff -> offNo 
+       #);
+     EmitText:: 
+       (# 
+       do (offNo,T[],local) -> backend.EmitText -> offNo
+       #);
+     EmitRefTableOff::
+       (# 
+       do off -> backend.EmitRefTableOff
+       #);
+
+
+     init:: (*FIXME*)
+       (# FN,T,t2: ^text
+       do FIXME.init;
+          BCname.copy->FN[];
+          FN.copy->IFragmentSet.filename[];
+          (if FN.length >= 5 then
+              (FN.length-5,FN.length)->FN.sub->T[];
+              (if '-BETA-'->T.equal then
+                  (FN.length-5,FN.length)->FN.delete;
+               else
+                  'OOPS:'->puttext; FN[]->putline
+              if)
+           else
+              'OOPS:'->puttext; FN[]->putline
+          if);
+          FN.copy->t[];
+          FN.copy->t2[]; 
+          '.amc'->FN.append;
+          &amcFile[]->amc[];
+          FN[]->amc.name;
+          '.log'->t.append;
+          t[]->logfile.name;
+          '.opt'->t2.append;
+          t2[]->optfile.name;
+          optfile.openWrite;
+          logfile.openWrite;
+          (if IMtrace_low then
+              '\nLogfile-name:%s\n'->screen.putformat (#  do t[]->s #)
+          if);
+          'Opening .amc file: %s\n'->lpf (#  do fn[]->s #);
+          amc.openWrite;
+          (if IMtrace_low then
+              '\nAmcfile-name:%s\n'->screen.putformat (#  do amc.name->s #)
+          if);
+          logfile[]->IfragmentSet.logfile[];
+          
+          initBackEnd;
+          1->ThisRegOp;
+          2->CallRegOp;
+          'Init called: Created real machine'->lpl
+       #);
+     close:: (*FIXME*)
+       (# 
+       do amc.close;
+          'Closed amc-file'->logfile.putline;
+          'Instructions:'->logfile.putline;
+          (* IFragmentSet.printgraphs; *)
+          (* (if not common.switch[250] then IFragmentSet.dumpvcg if); *)
+          (* dumpObjectCode; *)
+          backend.close;
+          'Closed RealMachine'->lpl;
+
+          logfile.close;
+          optfile.close;
+       #);
+     
+     initCreateDataFile::
+       (# 
+       do (fileName[],common[]) -> backend.initCreateDataFile;
+       #);
+     
+     NextGroup::
+       (#
+       do (id[],groupName[],isBetaenv) -> backend.NextGroup
+       #);
+     
+     endCreateDataFile:: 
+       (# 
+       do backend.endCreateDataFile;
+       #);
+     
+     (*amcComment::
+       (# do cmt[]->amc.putline
+      #);
+      *)
+     amc: ^amcFile;
+     amcFile: file
+       (#  emit:
+            (# opr: ^text
+            enter opr[]
+            do ptab;
+               opr[] ->puttext;
+               ptab;
+               INNER;
+               amc.newline
+            #);
+          emit1: emit
+            (# op1: ^moperand
+            enter op1[]
+            do (if op1[]<>none then
+                   op1.out;
+                   ptab;
+               if);
+               INNER;
+            #);
+          emit2: emit1
+            (# op2: ^moperand
+            enter op2[]
+            do (if op2[]<>none then 
+                   op2.out;
+                   ptab;
+               if);
+               INNER;
+            #);
+          emit3: emit2
+            (# op3: ^moperand
+            enter op3[]
+            do (if op3[]<>none then 
+                   op3.out;
+                   ptab;
+               if);
+               INNER;
+            #);
+       #);
+
+     (* experiment for writing abstract machine code *)
+     (* set by init in machine *)
+     lpf: logfile.putformat(# do inner #);
+  #)  
+

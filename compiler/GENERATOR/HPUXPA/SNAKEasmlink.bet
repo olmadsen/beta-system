@@ -1,0 +1,275 @@
+ORIGIN '../asmlinkbody';
+INCLUDE '~beta/unixlib/unixfile';
+BODY '../UNIXasmlink'
+--asmlinklib: attributes ---
+stripPath:
+  (# T: ^text; pos: @integer
+  enter T[]
+  do thePathhandler.directoryChar->T.findAll(#do inx->pos #);
+     (if pos//0 then else (pos+1,T.length)->T.sub->T[] if)
+  exit T[]
+  #);
+ldUNIXtmpFile:
+  (# tmpArgs,TmpF: ^text
+  enter tmpArgs[]
+  do  (if asmState.tmpCount//0 then
+          'trap "echo :linking interrupted.; '->AFF.puttext;
+          rmTmpFiles;
+          '; exit 2" 2 9 10'->AFF.putLine;
+      if);
+     &text[]->TmpF[]; 
+     '${TMPDIR}/'->TmpF; (* NOTE wont work if concurrent compilations *)
+     objName[]->stripPath->TmpF.puttext; '.$$.'->TmpF.putText;
+     asmState.tmpCount+1->asmState.tmpCount->TmpF.putInt;
+     'rm -f '->AFF.putText; TmpF[]->AFF.putLine;
+     INNER;
+     TmpF[]->AFF.putText; 
+     ' \\\n\t' ->AFF.putText;
+     tmpArgs[]->AFF.putText;
+  exit tmpF[]
+  #);
+rmTmpFiles:
+  (#
+  do '/bin/rm -f '->AFF.puttext;
+     '${TMPDIR}/'->AFF.putText; objName[]->stripPath->AFF.putText; '.$$.*'->AFF.puttext;
+  #)   
+--asmState:descriptor--
+(# tmpCount: @integer #)
+--HasSharedLibs:descriptor--
+(#do false -> value #)
+---cont: descriptor --
+(#
+do '\\'->AFF.put; AFF.newLine; ascii.ht->AFF.put;
+#)
+---header: descriptor ---
+(# as: @diskEntry
+do '#! /bin/sh '->AFF.putLine;
+   'BETALIB='->AFF.putText; BetaLib[]->AFF.putLine;
+   'export BETALIB'->AFF.putLine;
+   'CC=${CC-"gcc -O6"}\nexport CC'-> AFF.putLine;
+   'MACHINETYPE='->AFF.putText; TargetMachine->AFF.putLine;
+   'export MACHINETYPE'->AFF.putLine;
+   'CC=${CC-"gcc -O6"}\nexport CC'-> AFF.putLine;
+   'TMPDIR=${TMPDIR-/tmp}'->AFF.putLine; 
+   'BetaAsm(){'->AFF.putLine;
+   '  trap "echo assembling interrupted.; /bin/rm -f $1.o; exit 2"  2 9 10'
+     ->AFF.putLine;
+   (if verboseLevel <= verboseLevel.actions then
+       '  echo assembling $1'->AFF.puttext; AsmExt->AFF.PutLine
+   if);
+   '/usr/ccs/bin/as' -> as.path;
+   (if as.exists then
+       (*'echo \'Using "/usr/ccs/bin/as" for HP UX 10\'' -> AFF.putline; *)
+       '  if /usr/ccs/bin/as -o $1' -> AFF.puttext;
+    else
+       '  if /bin/as -o $1' -> AFF.puttext;
+   if);
+   BinExt->AFF.Puttext;
+   ' $1'->AFF.puttext; AsmExt->AFF.PutLine;
+   '  then'->AFF.putLine;
+   (if common.switch[18]//false then 
+       '    /bin/rm -f $1'->AFF.puttext; AsmExt->AFF.PutLine; 
+    else
+       '    return' ->AFF.putLine
+   if);
+   '  else '->AFF.putLine;
+   '    /bin/rm -f $1'->AFF.puttext; BinExt->AFF.putline; 
+   '    echo  Aborted.; exit 1'->AFF.putLine;
+   '  fi  '->AFF.putLine;
+   '}'->AFF.putLine;
+  
+#)
+---AsmExt: descriptor ---
+(# do '..s'->ext #) 
+---BinExt: descriptor ---
+(# do '.o'->ext #)
+---LibExt: descriptor ---
+(# do '.sl'->ext #)
+---JobExt: descriptor ---
+(# do '..job'->ext #)
+---ExeExt:descriptor---
+(* the extension for an executable file is empty 
+ * on most platforms except Windows NT 
+ *)
+(#do ''->ext #)
+---Echo: descriptor ---
+(# do 'echo '->AFF.puttext #)
+---Remove: descriptor ---
+(# do '/bin/rm -f '->AFF.puttext; name[]->AFF.putline #)
+---ChangeDirectory:doPart---
+do 'cd '->AFF.puttext; dir[] -> AFF.putline
+---AddCommand:doPart---
+do ' 2>&1' -> (cmd.copy).append -> AFF.putline;
+   'if [ $? -ne 0 ]; then echo BUILD failed. Exiting.; exit 1; fi' -> AFF.putline;
+---Make: descriptor ---
+(# 
+do (if first then
+       'BetaMake(){'                                            -> AFF.putLine;
+       '  dir=`dirname $1`; export dir'                         -> AFF.putLine;
+       '  file=`basename $1`; export file'                      -> AFF.putLine;
+       '  sh -c \'\\'                                           -> AFF.putLine;
+       '    cd $dir; \\'                                        -> AFF.putLine;
+       '    make -q -f $file MACHINETYPE=$MACHINETYPE 2>&1; \\' -> AFF.putLine;
+       '    if [ $? -ne 0 ]; then \\'                           -> AFF.putLine;
+       (if verboseLevel<verboseLevel.nothing then
+           '        echo make $dir/$file; \\'                   -> AFF.putLine;
+       if);
+       '        make -f $file MACHINETYPE=$MACHINETYPE 2>&1; \\'-> AFF.putLine;
+       '        if [ $? -ne 0 ]; then exit 1; fi; \\'           -> AFF.putLine;
+       '    fi; \\'                                             -> AFF.putLine;
+       '    exit 0\''                                           -> AFF.putLine;
+       '  if [ $? -ne 0 ]; then'                                -> AFF.putLine;
+       '     echo Make failed. Exiting.'                        -> AFF.putLine;
+       '     exit 1'                                            -> AFF.putLine;
+       '  fi'                                                   -> AFF.putLine;
+       '}'                                                      -> AFF.putLine;
+       
+       'trap "echo make interrupted.; exit 2" 2 9 10' ->AFF.putLine;
+   if);
+   (* test makefile dependencies *)
+   'BetaMake '->AFF.putText; m[]->AFF.putLine;
+#)
+--- resource: descriptor ---
+(##)
+---assemble: descriptor ---
+(# 
+do 'BetaAsm '->AFF.putText; F[]->AFF.putLine
+#)
+--linkLibraries:descriptor--
+(#
+do (* -b below is not enough*)
+   (if common.switch[53]//true then
+       Libs.scan
+       (#
+       do (if thisElm.args.length//0 then 
+           else
+              'echo linking shared lib: '->AFF.puttext; thisElm.T[]->AFF.putLine;
+              
+              'ld -b -q \\\n\t-o '->AFF.puttext;
+              thisElm.T[]->AFF.puttext; ' '->AFF.put;
+              thisElm.args[]->AFF.putline
+          if)
+   #)if)
+#)
+--contCh:descriptor--
+(#do '\\'->value #)
+--ldArgMax:descriptor--
+(#do 9000->value #)
+--ldTmp:descriptor--
+(#
+do tmpArgs[]
+     ->ldUNIXtmpFile(#do 'ld -r -o '->AFF.putText #)
+     ->TmpF[] 
+#)
+---link: descriptor ---
+(# betaLinkOpt, ldLibPath: ^text;
+   start:@Integer;
+do 'trap "echo :linking interrupted.; /bin/rm -f '->AFF.puttext;
+   objName[]->AFF.puttext;
+   '; exit 2" 2 9 10'->AFF.putLine;
+   
+   '$(BETALINKOPTIONS)'
+     ->expandEnvVar
+   (# defaultValue::<
+        (#
+        do  ' -u main'->envvarValue[]
+   #)#)
+     ->betaLinkOpt[];
+   (if not common.switch[41] then ' -s '->betaLinkOpt.append if);
+   
+   'ld '->AFF.puttext; 
+   
+   (* FIXME: the following should be replaced by:
+    * 
+    * ('$(LD_LIBRARY_PATH)'->expandEnvVar, ':') -> scanSearchPath
+    *    (# 
+    *    do (if path.length>0 then ' -L'->AFF.putText; path[]->AFF.puttext if)
+    *    #);
+    *)
+  
+   '$(LD_LIBRARY_PATH)'->expandEnvVar->ldLibPath[];
+   (if ldLibPath.length//0 then (* skip *)
+    else (* parse ':' separated list of directories *)
+       1->start;
+       ldLibPath.reset;
+       ':'->ldLibPath.findAll
+       (#
+       do 
+          (if (inx-1>start)//true then 
+              ' -L'->AFF.putText; 
+              (start,inx-1)->ldLibPath.sub->AFF.putText;
+          if);
+          inx+1->start;
+       #);
+       (if start-1<ldLibPath.length // true then
+           ' -L'->AFF.putText; 
+           (start,ldLibPath.length)->ldLibPath.sub->AFF.putText;
+       if);
+   if);
+   
+   ' -a default '->AFF.putText;
+   betaLinkOpt[]->AFF.putText; 
+   ' -o '->AFF.puttext;
+   objName[]->AFF.puttext; ' '->AFF.put; cont;
+   ' /lib/crt0.o ' ->AFF.puttext;
+   cont;
+#)
+---addBetaRun:descriptor---
+(* the following can be for most platforms except Windows NT *)
+(# as: @diskEntry
+do (if userDefinedBetaRun then
+       betaRun[]->linkObj
+    else
+       '.o'->betaRun.Append -> quote -> linkObj
+   if);
+   '/usr/ccs/bin/as' -> as.path;
+   (if not as.exists then   
+       (if true 
+        // common.switch[13] // common.switch[29] // common.switch[30] // common.switch[31]
+        // userDefinedBetaRun then
+           (* does apparently NOT exist on HP UX 10 *)
+           '/usr/lib/end.o' -> linkObj;
+   if)if)
+#)
+--asmlinkdynamic:descriptor--
+(#
+do (if common.switch[17] then
+       '-a archive \\\n\t'->ldA.puttext
+    else
+       '  \\\n\t'->ldA.puttext
+   if);
+#)
+---linkObj:descriptor ---
+(#
+do lobj[] -> ldA.putText; ' \\\n\t'->ldA.putText
+#)
+---libraries: descriptor ---
+(# 
+do (if common.switch[17] then
+       '-a archive '->ldA.puttext
+    else
+       ' '->ldA.puttext
+   if);
+   '-lm -lc '->ldA.putText;
+   '2>&1 ' -> ldA.puttext;
+   ldA.newline;
+#)
+---linktrailer: descriptor ---
+(# 
+do 'case $? in'->AFF.putLine;
+   '0)\n'->AFF.putText; 
+   (if verboseLevel <= verboseLevel.actions then
+       'echo Object program on file: ' -> AFF.puttext; 
+       objname[] -> AFF.putLine;
+   if);
+   ';;' -> AFF.putLine;
+   '*)' -> AFF.putLine; 
+   '/bin/rm -f ' -> AFF.PutText;  
+   objName[] -> AFF.putLine;
+   'esac' -> AFF.PutLine;
+   (if asmState.tmpCount <> 0 then
+       rmTmpFiles; AFF.putLine
+   if);
+#)
+--trailer: descriptor--
+(# #)

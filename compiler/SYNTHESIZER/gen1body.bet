@@ -1,0 +1,510 @@
+ORIGIN 'gen';
+LIB_ITEM 'betacodegen';
+INCLUDE 'synthlib';
+INCLUDE '~beta/betaast/scanBetaText'
+---newAddress:doPart---
+do theAdr.reg.alloc;
+   localDesc[]->theAdr.bAdr.localDesc[]; 
+   INNER newAddress
+
+---mkAddress:descriptor--
+(# A1: @mch.regAdr
+do aR->A1.reg; localDesc[]->A1.bAdr.localDesc[]; A1[]->A[]
+#)
+---DefineGlobEntry:dopart---
+do (xLab[],data)->mch.GlobalLabelDef
+---SysLab:doPart---
+do &text[]->Lab[];
+   (if not global then 'L'->lab.put if);
+   L->lab.put; descNo->lab.putInt; 
+   formId.makeUC; formId[] -> lab.puttext;   
+---InitialSeq:descriptor---
+(# L: ^Text; T: @text; formId: ^text; descno: @integer;
+   ar: @mch.adrRegOperand; 
+do mch.switchToCode;
+   mch.defineMainLabel;
+   (# pR: ^mch.mOperand; local: @boolean; T: ^text
+   do (if common.switch[61] then
+          (false,thisDesc.returnOff) -> mch.saveReturn;
+          2->mch.initPrimCall;
+          1->mch.getPrimReg->pr[];
+          ('T1BETAENV'->mch.newTextOp,pR[])->mch.gLea;
+          (if sematt.textDesc[] <> NONE then
+              sematt.textDesc[] -> (*main.doLoadProto*) main.doLoadProto
+          if);
+          (if common.targetMachineId = common.ppcmac then
+              'SetProtos'->mch.callPrim
+           else
+              'SetProtos'->mch.callPrim
+          if);
+          0->mch.getPrimRes;
+          (if common.switch[68] then
+              6->common.count; ('V',rootDesc[],1) -> Callentry;
+              ('M',rootDesc[],0) -> Callentry;
+              (* ('V1BETAENV'->mch.newTextOp,'V',local) -> mch.gJsr;
+               * ('M1BETAENV'->mch.newTextOp,'M',local) -> mch.gJsr;
+               *)
+          if);
+          (false,rootDesc.returnOff) -> mch.return; (* ???*)
+       else
+          (if not common.switch[65] then
+              (sematt.cExt,0)->mch.initExternalCall;
+              ('Initialize',sematt.cExt,0,0)->mch.callCproc;
+              (sematt.cExt,0,0,0,0,0) -> mch.noXres
+              
+          if);
+          (if sematt.textDesc[] <> NONE then 
+              sematt.textDesc[] -> main.doLoadProto;
+              (mch.callRegOp[],'TextProto'->mch.NewCTextOp) -> mch.stValInText
+          if);
+          (if common.targetMachineId 
+           // common.sun4
+           // common.sun4s then
+              (* datpete: 7/11/96: don't do this on sparc! *)
+              (* The code in the else part would clear G2-G4 on SPARC! *)
+           else
+              (for i: 3 repeat
+                   i+1->ar; 
+                   ar[]->mch.gClr
+              for)
+          if);
+          1->mch.initPrimCall;
+          (if true then
+              1->(0->mch.NewCstOp).toPrimDest
+           else
+              (0->mch.NewCstOp,1->mch.getPrimReg)->mch.ldCst;
+          if);
+          0->mch.getPrimRes;
+          (0->mch.NewCstOp,mch.ThisRegOp[])->mch.ldCst;
+          (if common.switch[65] then
+              (# T: ^text; local: @boolean; ar: @mch.adrRegOperand
+              do       
+                 false->common.switch[64]; (* to assure return with RESTORE on sparc*)
+                 mch.thisRegOp[] -> mch.gClr;
+                 (0->mch.NewCstOp,1->mch.getPrimReg)->mch.ldCst;
+                 ('V',rootdesc[]) -> mkEntrypoint->(T[],local);
+                 (* ar.alloc;
+                  * (T[]->mch.newtextOp,ar[]) -> mch.gLea;
+                  * (ar[],'BasicProto'->mch.newTextOp) 
+                  *   -> mch.stValIntext;
+                  * ar.dealloc;
+                  *)
+                 ('AlloC',T[])->mch.callAlloPrim;
+                 (*
+                  * ('V',rootDesc[]) -> CallEntry;
+                  * ('M',rootDesc[]) -> CallEntry;
+                  *)
+                 'AttBC' -> mch.jsrT;
+                 mch.return;
+                 (*mch.return;*)
+                 true->common.switch[64];
+              #)
+           else
+              (if common.switch[68] then
+                  (* this is just to ensure that a V-entry is not
+                   * loaded as input to AlloC;
+                   * should be reconsidered
+                   *)
+                  (*68 -> switchOff;
+                  (rootDesc[],common.compKind)->main.doLoadProtoAndAlloc;
+                  ('AttBC',none)->mch.jmpTlong;
+                   68 -> SwitchOn;*)
+  
+                  (16->mch.NewCstOp,1->mch.getPrimReg)->mch.ldCst;
+                  (* ('V',rootdesc[]) -> mkEntrypoint->(T[],local);
+                   * (T[]->mch.newTextOp,'V',local) -> mch.gJsr;
+                   *)
+                  6 -> common.count; ('V',rootDesc[],1) -> CallEntry;
+                  (if not common.switch[65] then
+                      (mch.callRegOp[],'ActiveComponent'->mch.newTextOp)
+                        ->mch.stValInText;
+                      (mch.callRegOp[],'BasicItem'->mch.newTextOp)
+                        ->mch.stValInText;
+                  if);
+                  ('M',rootDesc[],0) -> CallEntry;
+                  mch.return
+               else
+                  (rootDesc[],common.compKind)->main.doLoadProtoAndAlloc;
+                  (# x: @char do
+                     ('AttBC',none)->mch.jmpTlong
+                  #);
+              if)
+          if);
+      if)
+   #)
+#)
+--TextConst:descriptor--
+(# S: @text
+do T.scanBeta(#do ch->S.put #);
+   (S[],pNo,isWtext) -> mch.EmitTextConst
+#)
+---NewVirt:descriptor---
+(* A: address of P-object with virtual V at offset virtOff *)
+(# ar,ar1: @mch.adrRegOperand; A1: @mch.RegAdr; pr: ^mch.mOperand
+do 
+   (* A.reg may be callReg; A may be direct or indirect *)
+   (if A.access = common.direct then
+       (A[],mch.callRegOp[])->mch.gLea; (* origin -> callReg*)
+    else
+       (A[],mch.callRegOp[])->mch.ldVal; (* origin -> callReg*)
+   if);
+   (if true then
+       1->mch.callRegOp.toPrimDest
+    else
+       1->mch.getPrimReg -> pr[];
+       (if pr.isPrimRegOp then
+           (mch.callRegOp[],pr[])->mch.cpReg
+        else
+           (mch.callRegOp[],pr[])->mch.stVal
+       if);
+   if);
+   mch.callO -> A1.reg;
+   (A1[],mch.callRegOp[])->mch.ldVal;  
+   (if not common.switch[76] then
+       (* COM prototype format;
+        * Note: this is not tested and 
+        * there may be a +/- 1(4) problem
+        *) 
+       (* virtOff - 8 -> A1.off; *)
+       (* datpete: 2/11/98: Changed to virtOff+20 - 24 *)
+       virtOff+20 - 24 (* FIXME: common.protoSize-4 *) -> A1.off
+       (*A1.off ->putint; newline*)
+    else
+       (* OLD BETA format *)
+       virtOff+20 -> A1.off
+   if);
+   A.freeAdr;
+   (if access = common.cstInd then
+       true->A1.inCode;
+       (if final2virt then 
+           (*  &W[], W where W::V; V:< ...; *)
+           (# aR: @mch.adrRegOperand
+           do mch.callO->aR; (A1[],aR[])->mch.ldVal;
+              INNER NewVirt; (* VERY tricky *)
+              (aR[],false)->mch.jmpReg
+           #)
+        else
+           (A1[],true)->mch.JsrTable
+       if)
+    else
+       (A1[],mch.callRegOp[])->mch.ldVal;
+   if);
+   A1.freeAdr
+#)
+---newRep:doPart---
+do (# c: @char; T: @text; 
+      old61,pop: @boolean;        
+   do 
+      (if mch.callRegBusy then
+          (if common.isIntel then
+              true -> pop
+              (* NewRR etc uses callReg on Intel *)
+          if)
+      if);
+          
+      (if common.switch[61] then
+          4 -> mch.initPrimCall
+       else
+          3 -> mch.initPrimCall
+      if);
+      
+      common.switch[61] -> old61;
+      true -> common.switch[61];
+      (if mch.callRegInPrimReg2 (*mch.callRegBusy*) or pop then
+          true->pop;
+          (false,true) -> mch.pushThisOrCall
+      if);
+      genRange;
+      (if old61 then (4,1) -> mch.SpToPrimReg if);
+      1 -> A.pushRegAndOff; (* should be toPrimDest *)
+      old61 -> common.switch[61];
+      
+      (if isExtend then
+          'Ext' -> T
+       else
+          'New'->T
+      if);
+      (if isValueRep then
+          'VR'-> T.puttext;
+          (if isStaticItem then
+              (if size <= 8 then
+                  size -> T.putint
+               else              
+                  'I' -> T.put
+              if)
+           else 
+              'C'-> T.put
+          if)
+       else
+          'RR'->T.puttext
+      if);
+      (* c -> T.put; *)
+      T -> mch.callprim;
+      0 -> mch.getPrimRes;
+      (if pop then (false,true) -> mch.popThisOrCall if)
+   #)
+--exeTop:descriptor--
+(# ar: @mch.adrRegOperand; A2: @mch.regAdr
+do ar.alloc; (A[],ar[])->mch.ldVal;
+   ar->A2.reg; 
+   (if b2c then
+       (* datpete: 4/11/98: is this really used for sgi?? *)
+       (if not common.switch[76] then
+           (* datpete: 4/11/998: COM prototypes *)
+           28 - 24 (* FIXME: common.protoSize-4 *)->A2.off; 
+        else
+           28->A2.off; 
+       if);
+    else
+       (if not common.switch[76] then
+           (* datpete: 2/11/998: COM prototypes *)
+           24 - 24(* FIXME: common.protoSize-4 *) -> A2.off;
+        else
+           (* Old style BETA protoypes *)
+           24 -> A2.off
+       if);
+   if);
+   true->A2.inCode;
+   (A2[],ar[])->mch.ldVal;
+   ar[]->mch.JsrReg;
+   ar.deAlloc
+#)
+---InLinePrimitive:descriptor---
+(# clrAndDeAlloc:
+     (# ar: @mch.adrRegOperand
+     enter ar
+     do ar[]->mch.gClr; ar.deAlloc
+     #);
+   getBW: (* A -> get/byte/word -> B *)
+     (# size,reg: @integer; signed,adr: @boolean;
+        aR: @mch.adrRegOperand; T0,D1: @mch.dataRegOperand; 
+        A1: @mch.RegAdr 
+     enter(size,signed,adr)
+     do D[1]->D1;
+	 (if adr then
+	     (* fetch byte/word form adr. in D[1] *)
+	     T0.alloc; aR.alloc; 
+	     (D1[],aR[])->mch.cpReg;
+            aR->A1.reg; I1->A1.off; 
+            (if size
+             // 0 then 
+                1->A1.size; (*T0[]->mch.gClr;*) (A1[],T0[])->mch.ldByte;
+             // 1 then 
+                2->A1.size; (*T0[]->mch.gClr;*) (A1[],T0[])->mch.ldHalf
+             // 2 then 4->A1.size; (A1[],T0[])->mch.ldVal
+             if);
+	     aR->clrAndDeAlloc
+	 else (* fecth byte/word form data register D[1] *)
+             (if size
+	      // 0 then (* byte *)
+	 	 (D1[],I1)->mch.gGetDataByte
+	      // 1 then 
+		 (D1[],I1)->mch.gGetDataWord
+	     if);
+	     D[1]->T0
+	 if);
+         (if signed then
+             (if size
+              // 0 then T0[]->mch.SignExtByte
+              // 1 then T0[]->mch.SignExtWord
+         if)if);
+	 T0->dRes;
+	     (*351->trace(#do 'get byte/..dRes='->T; dRes->I; mch.dumpReg #)*)
+      #);
+
+      putBW:
+	(* (@@A,val)->putByte/Short *) 
+     (# size: @integer; aR: @integer; A1: @mch.RegAdr; aRg: @mch.adrRegOperand
+     enter size
+     do  (* @@A in D[1]; val in D[2] *)
+        (*mch.getAdr->aR->A1.reg;*)
+        aRg.alloc; aRg -> aR -> A1.reg; I1->A1.off; 
+        (D[1]->mch.NewDataRegOp,aRg[] (*aR->mch.NewAdrRegOp*))->mch.cpReg;
+        (if size
+         // 0 then 1->A1.size; (D[2]->mch.NewDataRegOp,A1[])->mch.stByte
+         // 1 then 2->A1.size; (D[2]->mch.NewDataRegOp,A1[])->mch.stHalf
+         // 2 then 4->A1.size; (D[2]->mch.NewDataRegOp,A1[])->mch.stVal
+         if);
+	 aR->clrAndDeAlloc
+      #);
+
+      inxPut:
+	(* (R,inx,val) -> inxPut/byte/short/long 
+         * R is a repetition
+	 * D[1]=adr(R), D[2]=inx, D[3]=val 
+         *)
+     (# val: @mch.dataRegOperand; dr: ^mch.dataRegOperand; 
+        ar: @mch.adrRegOperand;
+        A: @mch.InxRegAdr; 
+	 size: @integer (* 0=byte, 1=word, 2=long *)
+      enter size
+      do D[3]->val.rN; 
+        (*since D[1] is the start of the repetition, the index
+         * is computed direcly, not using RegAdr.index;
+         * Since byte-offsets are always used, 16 is the right
+         * constant also, for short and long
+         *)
+        (16->mch.NewCstOp,D[2]->mch.NewDataRegOp,4)->mch.gAdd;
+        ar.alloc; (D[1]->mch.NewDataRegOp,ar[])->mch.cpReg;;
+        ar->A.aReg; 
+        D[2]->mch.NewDataRegOp->dr[]; dr->A.dReg; 1->A.size;
+        (if size
+         // 0 then (val[],A[])->mch.stByte
+         // 1 then (val[],A[])->mch.stHalf
+         // 2 then (val[],A[])->mch.stVal
+        if);
+	ar->clrAndDeAlloc
+       #);
+
+   inxGet:
+     (* (R,inx) -> inxGet/byte/short/long -> val
+      * R is a repetition
+      *)
+     (# val: @mch.dataRegOperand; dr: ^mch.dataRegOperand;
+        A: @mch.InxRegAdr;
+        ar: @mch.adrRegOperand; 
+        size: @integer; signed: @boolean
+      enter(size,signed)
+      do val.alloc;
+        (16->mch.NewCstOp,D[2]->mch.NewDataRegOp,4)->mch.gAdd;
+        ar.alloc; (D[1]->mch.NewDataRegOp,ar[])->mch.cpReg;
+        ar->A.aReg;  
+        D[2]->mch.NewDataRegOp->dr[]; dr->A.dReg; 1->A.size;
+        (if size
+         // 0 then (*val[]->mch.gClr;*) (A[],val[])->mch.ldByte
+         // 1 then (*val[]->mch.gClr;*) (A[],val[])->mch.ldHalf
+         // 2 then (A[],val[])->mch.ldVal
+        if);
+        (if signed then
+            (if size
+             // 0 then val[]->mch.SignExtByte
+             // 1 then val[]->mch.SignExtWord
+        if)if);
+	ar->clrAndDeAlloc;
+	val.rN->dRes;
+	    (*351->trace(#do 'getInxByte/..dRes='->T; dRes->I; mch.dumpReg #)*)
+      #);
+
+      logOp:
+      (# dr1,dr2: @mch.dataRegOperand
+      do D[2]->dr1; D[1]->dr2;
+	 INNER; (* and, or, xor *)
+	 dr2->dRes
+      #);
+
+      shift:
+      (# T1,D1: @mch.dataRegOperand; op1: ^mch.mOperand
+      do (if (I1>8) then
+	     T1.alloc; (I1->mch.newCstOp,T1[])->mch.ldCst; T1[]->op1[]
+	 else I1->mch.newCstOp->op1[]
+	 if);
+	 D[1]->D1;
+         INNER; (* asl, asr, lsl, lsr *)
+         (if (I1>8) then  T1->Mch.FreeData if);
+         D1->dRes
+      #);
+
+      D1,D2: @mch.dataRegOperand
+
+do -1->dRes; (* void if no result *)
+      (if OpCode
+       // 1 (* not *) then D[1]->dRes->D1; (D1[],4)->mch.logNot
+       // 2 (* and *) then logOp(#do (dr1[],dr2[],4)->mch.gAnd #)
+       // 3 (* or *) then logOp(#do (dr1[],dr2[],4)->mch.gOr #)
+       // 4 (* xor *) then logOp(#do (dr1[],dr2[],4)->mch.gXor #)
+       // 5 (* getByte *) then (0,false,false)->getBW
+       // 6 (* getShort *) then I1*2->I1; (1,false,false)->getBW
+       // 7 (* getSignedByte *) then (0,true,false)->getBW
+       // 8 (* getSignedShort *) then I1*2->I1; (1,true,false)->getBW
+       // 9 (* putByte *) then 0->putBW
+       // 10 (* putShort *) then I1*2->I1; 1->putBW
+       // 31 (* putLong *) then 2->putBW
+       // 11 (* inxGetByte  *) then (0,false)->inxGet
+       // 12 (* inxGetShort *) then (1,false)->inxGet
+       // 13 (* inxGetLong *) then (2,false)->inxGet
+       // 14 (* inxGetSignedByte  *) then (0,true)->inxGet
+       // 15 (* inxGetSignedShort  *) then (1,true)->inxGet
+       // 16 (* inxPutByte *) then 0->inxPut
+       // 17 (* inxPutShort*) then 1->inxPut
+       // 18 (* inxPutLong *) then 2->inxPut
+       // 19 (* A->getBits[I1,I2] *) then
+	  D[1]->D1; (D1[],I1,I2,D1[],NONE)->mch.GetBits; D1->dRes
+       // 20 (* mch.getSignedBits *) then
+	  D[1]->D1; (D1[],I1,I2,D1[],NONE)->mch.GetSignedBits; D1->dRes
+       // 21 (* (@@X,val)->mch.putBits[I1,I2] *) then
+          (# ar: @mch.adrRegOperand; drF: ^mch.dataRegOperand
+	  do ar.alloc; D[2]->D2;
+	     (D[1]->mch.newDataRegOp->drF[],ar[])->mch.cpReg; aR.mkIndirect;
+	     (D2[],I1,I2,aR[],drF[])->mch.PutBits;
+	     ar->ClrAndDeAlloc
+	  #)
+       // 22 (*shiftRight*) then shift(#do (op1[],D1[])->mch.logicalShiftRight #)
+       // 23 (* shiftLeft *) then shift(#do (op1[],D1[])->mch.logicalShiftLeft #)
+       // 24 (*aritShiftRight*) then shift(#do (op1[],D1[])->mch.arithShiftRight #)
+       // 25 (*aritShiftLeft *) then shift(#do (op1[],D1[])->mch.arithShiftLeft #)
+       // 26 (* adrGetByte *) then (0,false,true)->getBW
+       // 27 (* adrGetShort *) then I1*2->I1; (1,false,true)->getBW
+       // 28 (* adrGetSignedByte *) then (0,true,true)->getBW
+       // 29 (* adrGetSignedShort *) then I1*2->I1; (1,true,true)->getBW
+       // 30 (* adrGetLong *) then 0->I1; (2,true,true)->getBW
+       // 32 (* @@R->%byteSwapShort *) 
+       // 33 (* @@R->%byteSwapLong *) then
+          (* currently ONLY available for INTEL 486 *)
+          (# ar: @mch.adrRegOperand
+          do ar.alloc;
+             (D[1]->mch.newDataRegOp,ar[]) -> mch.cpReg;
+             (ar,opCode=33)->mch.byteSwap; 
+             D[1]->mch.newDataRegOp->mch.gClr;
+             ar[] ->mch.gClr;
+             ar.deAlloc
+          #)
+      if)
+#)
+---CopyCtext:descriptor---
+(# aR: @mch.AdrRegOperand; A1: @mch.regAdr; 
+   pDest: ^mch.mOperand; dr: @mch.dataRegOperand
+do (if common.switch[121] then
+       (if common.switch[61] then
+           '\n***OBS FIX CopyCT for MIPS/PPC'->putline
+        else
+           1->mch.initPrimCall;
+           1->cTxt.toPrimDest;
+           'CopyCT'->mch.callPrim;
+           3 -> mch.getPrimRes -> dr;
+           ar.alloc;
+           (dr[],ar[]) -> mch.cpReg
+       if);
+       aR->A1.reg; A1[]->A[]
+    else
+       (if common.switch[61] then
+           (* this is very tricky - the C char-pointer is assumed to
+            * be in dataRegA; it should be 'lifted' to a parameter
+            *)
+           2-> mch.initPrimcall;
+           1->mch.dataRegA.toPrimDest;
+           (2,1) -> mch.SPtoPrimReg;
+           'CopyCT'->mch.callPrim;
+           3 -> mch.getPrimRes -> dr;
+           ar.alloc;
+           (dr[],ar[]) -> mch.cpReg
+        else
+           'CopyCT'->mch.jsrT;
+           (* create BETA char repetition;
+            * copy C-text referred by d0;
+            * return reference in primReg1 *)
+           1->mch.initPrimCall;
+           aR.alloc; 
+           (1->mch.getPrimReg,aR[])->mch.cpReg;
+           0->mch.getPrimRes;
+       if);
+       aR->A1.reg; A1[]->A[]
+   if)
+#)
+--ThisRegAdr:doPart--
+do (*(thisDesc[],thisDescOrgOff)->A.bAdr.mkThis; *)
+   thisDesc[] -> A.bAdr.localDesc[];
+   mch.thisO->A.reg; common.direct->A.access; true->A.frozenReg;
+   off->A.off
+--CallRegAdr:doPart--
+do A.mkCall
+

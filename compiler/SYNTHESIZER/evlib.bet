@@ -1,0 +1,380 @@
+ORIGIN 'synthlib';
+LIB_ITEM 'betacodegen';
+BODY 'nxoffsetsval';
+BODY 'constval';
+BODY 'simpleval';
+BODY 'computedval';
+BODY 'listval';
+BODY 'itemevval'; 
+BODY 'refevval';
+BODY 'computedAdrVal';
+BODY 'realval';
+BODY 'textval';
+---EvalLib:attributes---
+scanNXadr:
+  (# <<SLOT scanNXadrLib:attributes>>;
+     
+     prepareBaseAdr:< Object;
+     baseAdr:<	(# A: ^mch.address do INNER exit A[] #);
+     (* thisA is either thisReg or callReg; thisA may be on adrStack *)
+     
+     reset: (# <<SLOT scanNXadrReset:dopart>> #);
+     N,PL: @integer;
+     more, (* true if more NX elms *) last, (* last elm *)
+     isN: @boolean; (* if enter then true else false *)
+     thisEv: ^ASTindex; (* current eval when scanning NX-list *)
+     thisChain: ^DH.superChain; (* chain for thisEv *)
+     desc,NX: ^ASTindex; 
+     thisA: ^mch.address; (* address of this Object *)
+     topOff: @integer;
+     reverse: @boolean; (* scan list backwards *)
+     chain: ^DH.superChain;
+     NXS: @sematt.NXScanner; j: @integer;
+     withNXO: @boolean;
+     NXO: ^sematt.NXoffSets; 
+     
+  enter(desc[],thisA[],topOff,chain[])
+  <<SLOT ScanNXadr:doPart>>
+  exit more
+  #);
+scanNadr: scanNXadr
+  (#  prepareBaseAdr::<
+       (* thisA in [thisReg,callReg] (if Ncode then thisA=callReg if) *)
+       (#
+       do (if (desc.label = gram.objectDescriptor)
+              (* newindex.bet problem *)
+              AND (desc[]->sematt.HasNCode) then 
+              (* rA use callReg *)
+              1->case;
+          if)
+       #);
+     case: @integer;
+     BaseAdr::< 
+       (#
+       do thisA.copy->A[]; 
+          (*(A[],PL)->A.bAdr.SetSuperDesc->A[] *)
+          (A[],PL,A[]) -> SetSuperDesc->A[] 
+       #);
+     
+     asgToComNelm:
+       (# lV: ^evVal;
+          rA: ^mch.address;
+       enter lv[]
+       <<SLOT asgToComNelm:doPart>>
+       exit rA[]
+       #);
+     asgToNelm:
+       (* In evaluations of the form:  ... E -> F ...
+        * where F is an item, transfer of enter-part to F is handled
+        * by 'asgToNelm'. 
+        * E may be some evaluation, lV is the value computed by E
+        * If E is an object, then lV is the result of an exit-elm in E.
+        * baseAdr[] refers to the object F.
+        * lV may include an address denoting an object, etc.
+        * Cases:
+        * 1. 		F has Ncode, baseAdr=callReg, assured by exeObj
+        *	        thisReg denotes F during evaluation of enter-part
+        * other:	F has no Ncode
+        *)
+       (# lV: ^evVal;
+          rA: ^mch.address;
+       enter lV[]
+       <<SLOT asgToNelm:doPart>>
+       exit rA[]
+       #)
+  enter isN 
+     (*  do t.enterP[]->NX[]*)
+  #);
+scanXadr: scanNXadr
+  (# prepareBaseAdr::<
+       (* Cases:
+        * thisA.regType:
+        *	thisReg:	SUCC in callReg or Not Object
+        *	callReg:	SUCC in thisReg or Not Object
+        *	others:		SUCC Not Object, i.e. callReg not to be used
+        * not Object means that SUCC uses thisReg
+        *
+        * (if others then thisA->callReg if)
+        *
+        * not Xcode:	simple
+        *
+        * thisReg and xCode:	push callReg
+        *			E1->V1
+        *			V1.elimCallReg
+        *			pop callReg
+        * callReg and xCode:	push thisReg/callReg
+        *			E1->V1
+        *			V.elimThisAndCall
+        *			pop thisReg/callReg
+        *)	
+       (#
+       do (if thisA.regType // mch.thisO // mch.callO then
+	   else (* disabled when trying to eliminate pushThis
+                 * cError(#do 'exit-baseAdr is other'->xT #)
+                 *)
+          if);
+          (* thisA in [thisReg,callReg] *)
+       #);
+     case: @ integer; callRegOnStack: @boolean;
+      
+     BaseAdr::<
+       (#
+       do thisA.copy->A[]; 
+          (A[],PL,A[]) -> SetSuperDesc -> A[] 
+       #);
+     getExitVal:
+       (# EH: @evalHandler; V: ^evVal; a1: ^mch.address; t1: @text
+       do (if stest then
+              179->Trace
+              (#
+              do 'GetExitVal: '->xT; thisEV[]->xA; 
+                 '  hasNXlist: ' -> xT; withNXO -> xB;
+                 xN; 'baseAdr= ' -> xT;  baseAdr->a1[]; a1.display->xT; 
+                 xN; 'baseAdr.localDesc: ' -> xT; a1.bAdr.localDesc[]->xA;
+                 mch.dumpreg
+              #)
+          if);
+          (if withNXO then
+              (baseAdr,thisEv[],NXO[],false) -> mkNXoffSetsVal -> V[]
+           else
+	      (baseAdr,thisEv[],false,thisChain[]) -> EH.expEval -> V[]
+          if);
+          (if stest then
+              179->trace(#do 'GetExitVal2:'->xT; baseAdr->a1[];
+                           a1.display->xT; mch.dumpreg
+                        #)
+          if)
+       exit V[]
+       #);
+     (*  do t.exitP[]->NX[]*)
+  #);
+GenerateObject:
+  (# baseAdr: ^mch.address; ES,desc: ^ASTindex; 
+     kind,astDescKind: @integer; chain: ^DH.SuperChain;
+     A: ^mch.address; callRegOnStack: @boolean; (* exit value *)
+  enter(baseAdr[],ES[],desc[],kind,astDescKind,chain[])
+  do <<SLOT GenerateObject:descriptor>>
+  exit(A[],callRegOnStack)
+  #);
+ExeObj:
+  (# GenObj: Object
+       (# kind: @integer; dyn: @boolean
+       enter(kind,dyn)
+       do predToTmp;
+          (baseAdr[],ES[],desc[],kind,descKind,chain[]) 
+            -> GenerateObject 
+            -> (A[],callRegOnStack);
+       #);
+     beforeAdr:< (# do (if not predInTmp then INNER; true->predInTmp if)#);
+     afterAdr:< Object;
+     getAdr:< Object; (* computed address of this Object to A *)
+     PredToTmp:<
+       (* if pred is an object, then move its adr. from callReg to tmp reg. *)
+       (# do (if not predInTmp then INNER; true->predInTmp if)#);
+     TransferEnter:< Object;
+     BeforeEnter: (# <<SLOT BeforeEnter:doPart>> #);
+     (* Bindings of transferEnter MUST be sub of BeforeEnter *)
+       
+     baseAdr,A: ^mch.Address;
+     EV: ^ASTindex;
+     ES,desc,topDesc,descQ: @ASTindex;
+     formId,topFormId: ^Text; 
+     descNo,topDescNo,PL,descKind,max: @Integer;
+     isVirtual: @integer;
+
+     doExit,hasDo,callRegOnStack,callRegOnStack2,
+     predInTmp,isComponent: @boolean; 
+     W: ^evVal; 
+     chain (* chain where to bind  EV *)
+     ,EVchain: ^DH.superChain (* chain including desc of EV *)
+
+  enter(baseAdr[],EV[],doExit,chain[])
+  do <<SLOT ExeObj:descriptor>>
+  exit W[]
+  #);
+exeItem: exeObj
+  (# L: ^text; local: @boolean
+  do (*350->cTrace(#do 'exeItem'->T #);*)
+     (if (topDesc->semAtt.superObject.equal) then
+	 (* in execution of e.g.  R: ^ Object,
+	  * the object denoted by R may be implicitly prefixed
+	  * by "Object". This means that direct execution of "Object"
+	  * will not work
+	  *)
+         (*350->cTrace(#do 'TopDesc is Object: exe INNER'->T #);*)
+         A[]->gen.ExeTop
+      else 
+         (if common.switch[44] or (topDesc[]->sematt.hasOnlyInner)
+             (*NOTE: combine with superObject above, since superObject
+              * hasOnlyInner 
+              *)
+             then A[]->gen.ExeTop (* avoid external entry-pt*)
+          else
+             (*(topDescNo,topFormId[])->gen.exeDo*)
+             ('M',topDesc[],0)->callEntry
+     if)if)
+  #);
+exeComp: exeObj
+  (#
+  do (*350->cTrace(#do 'Attach comp'->T #);*)
+     (* temporary push of CallReg. Should be done handled by RTS *)
+     (false,true)->Mch.pushThisOrCall;
+     (topDescNo,topFormId[])->gen.attach; (* topDescNo,topFormId NOT used *)
+     (* temporary load of CallReg. Should be done in RTS *)
+     (false,true)->mch.popThisOrCall;
+     true->isComponent
+  #);
+doGenItem: ExeItem
+  (# getAdr::< (#do (common.itemKind,dyn)->genObj #);
+     dyn: @boolean; (* dynamic=true, inserted=false *)
+  enter dyn
+  #);
+doEnterGenItem: doGenItem
+  (# beforeAdr::< (#do true -> V.toTmp #);
+     afterAdr::< (#do V.restoreTmp #);
+     PredToTmp::< (#do V.toTmp #);
+     TransferEnter::< 
+       BeforeEnter(# <<SLOT doEnterGenItemTransferEnter:doPart>> #);
+     V: ^EvVal
+  enter V[]
+  #);
+doGenComp: ExeComp
+  (# getAdr::< (#do (common.compKind,dyn)->genObj #);
+     dyn: @boolean; (* dynamic=true, inserted=false *)
+  enter dyn
+  #);
+doEnterGenComp: doGenComp
+  (# PredToTmp::< (#do V.toTmp #);
+     TransferEnter::<
+       BeforeEnter(# <<SLOT doEnterGenCompTransferEnter:doPart>> #);
+     V: ^EvVal
+  enter V[]
+  #);
+doItem: exeItem
+  (# getAdr::<
+       (# EVx: @ASTindex
+       do (*350->cTrace(#do 'getAdr'->T; EV[]->A #);*)
+          EV.son -> EVx; 
+          (baseAdr[],EVx[],false,chain[]) -> genAdr -> A[]
+       #)
+  #);
+doComp: exeComp
+  (# getAdr::<
+       (#(* EVx: @ASTindex *)
+       do (*EV.son->EVx; *)
+          (if switch181 then
+              (baseAdr[],EV.sonRef,false,chain[]) -> genAdr -> A[]
+           else
+              (* using genLocalAdr seems to be an error that should be
+               * fixed as for switch181 above; in e.g. tstcomp.bet:
+               * exitComp: foo -> ( ...) the call of C in foo.exit
+               * accidentially works, since %a0 is moved to %a1
+               *)
+              (EV.sonRef(*EVx[]*),false,chain[]) -> genLocalAdr->A[]
+          if)
+       #)
+  #);
+doEnterItem: doItem
+  (# beforeAdr::< (#do true->V.toTmp #);
+     afterAdr::< (#do V.restoreTmp #);
+     PredToTmp::< (#do V.toTmp #);
+     TransferEnter::< 
+       BeforeEnter(# <<SLOT doEnterItemTransferEnter:doPart>> #);
+     V: ^EvVal
+  enter V[]
+  #);
+doEnterComp: doComp
+  (# PredToTmp::<(#do V.toTmp #);
+     TransferEnter::<
+       BeforeEnter(# <<SLOT doEnterCompTransferEnter:dopart>> #);
+     V: ^EvVal
+  enter V[]
+  #);
+
+
+doQua:
+  (# destEval,dDesc: ^ ASTindex; raBase: ^mch.address;
+     rChain: ^DH.superChain;
+     rAx: ^mch.address;
+     VN,VNN: @ASTindex; 
+     destIsPtnDotPtn,vQua: @boolean;
+     doAssign:< 
+       (# destx: ^mch.registerOperand 
+       enter rAx[] do INNER exit destx[] 
+       #)
+  enter (destEval[],dDesc[],raBase[],rChain[]) 
+  <<SLOT doQua:doPart>>
+  #);
+simpleQua: doQua(# <<SLOT simpleQua:doPart>> #);
+virtualQua: doQua(# <<SLOT virtualQua:doPart>> #);
+
+(*******************************************
+ * Attributes for handling external calls
+ * Implementation forms in  genexternal.bet
+ * *****************************************)
+
+ExternalCall: 
+  (# GetEnterP: @ |
+       (# forward: @boolean; pType,inx: @integer;
+          size: (#exit pSize[inx] #)
+       enter forward <<SLOT ExternalCallgetEnterP:doPart>>
+       exit pType
+       #);
+     PascalTraps:
+       (# T: ^Text enter T[] <<SLOT ExternalCallPascalTraps:doPart>> #);
+     Call:  <<SLOT ExternalCallCall:descriptor>>;
+     GetExitP:
+       (* construct an evVal containing result registers.
+        * Either cExt or pascExt or semAtt.pascTrapExt
+        *)
+       (# V: ^evVal <<SLOT ExternalCallGetExitP:doPart>>
+       exit V[]
+       #);
+     AddPL: (# P: @integer enter P <<SLOT ExternalCallAddPl:doPart>> #);
+     InitPl: <<SLOT ExternalCallInitPl: descriptor>>;
+     InitExitType: <<SLOT ExternalCallInitExitType:descriptor>>;
+     
+     TransferObject:
+       (# EV: @ASTindex; transNow: @boolean
+       enter(EV,transNow) <<SLOT ExternalCallTransferObject:dopart>> 
+       #);
+     objectReg: @mch.adrRegOperand;
+     
+     (* representation *)
+     BC,SC,LC: @integer;
+     (* BC:	no.of. byte parameters
+      * SC:	no.of. short parameters
+      * LC:	no.of. long, double (counts twice), 
+      *      text, cStruc and varPtn parameters
+      *)
+     PL,pSize: [20]@integer; top: @integer;
+     pascExtProcInfo: @integer;
+     (* PL keeps the type of the external parameters:  bytePar, etc. *)
+     drA,drB,drX: @mch.dataRegOperand; 
+     (* data registers for possible external result;
+      * drA for single result, drA and drB for double result 
+      *)
+     max: @integer; (* max. of data reg. pushed *)
+     dummyMax: @integer;
+     p,m,a,enterP,doP,exitP: ^ASTindex; hasTextPar: @boolean;
+     exitDescSize,              (* size of possible exit part obejct (data)*)
+     exitType: @integer;	(* type of possible exit parameter *)
+     
+     externalName: @text; 	(* name of external routine *)
+     extType: @integer; (* cExt, pascExt, pascTrapExt, asmExt, stdExt *)
+     desc: ^ASTindex; 
+     theES: @ASTindex
+  enter(externalName,desc[],extType,theES)
+  <<SLOT ExternalCallDo:doPart>>
+  #);
+
+PrimitiveCall:
+  (# call:
+       (# V: ^EvVal;
+       <<SLOT PrimitiveCallCall:dopart>>       
+       exit V[]
+       #);
+     noOfPar: @integer; T: ^Text; isThisS: @boolean
+  enter(noOfPar,T[])
+  <<SLOT PrimitiveCall:doPart>>
+  #);

@@ -1,0 +1,552 @@
+ORIGIN 'genlib';
+LIB_ITEM 'betacodegen';
+INCLUDE 'evlib';
+INCLUDE 'nxoffsetsval';
+INCLUDE '../CHECKER/nxoffsets';
+INCLUDE '../CHECKER/setnxoffsets';
+---genlib_alloc:doPart---
+do (# SimpleAlloc:
+        (# dataSpec,N,desc,es,son,VN: @ASTindex;
+           first: @boolean;
+           kind,descNo,PL,baseOff,Noff,max: @integer;
+           formId: ^text;
+           A,OA,A1: ^mch.address;
+           newInStat:
+             (# kind: @integer;
+                A: ^mch.address;
+                L: ^Text;
+                A1: @mch.RegAdr;
+                dest: ^mch.registerOperand;
+                desc: ^ASTindex
+             enter (kind,desc[])
+             do (desc[],kind)->doLoadProtoAndAlloc;
+                &main.gen.thisRegAdr->A[];
+                N.off->A.addOff->A[];
+                A1.mkCall;
+                (A1[],false)->A.asgRefAdr->dest[]->mch.chkHeap
+             #);
+           SlotOrComDesc:
+             (# A1,OA: ^mch.address; refTag: @integer
+             enter refTag
+             do SaveReturn;
+                (Gen.ThisRegAdr,thisDesc[],es[],thisSuperChain)
+                  -> genOrgAdr
+                  -> A1[];
+                A1.toOriginReg;
+                (Kind,desc[])->newInStat;
+                N.off+refTag->GS.thisPT.Dyn.add
+             #);
+           descKind: @integer
+        enter (N,dataSpec,first) (* no allocation for dynIns *)
+        do dataSpec.son->es;
+           (es,first,N)->&descrip-> desc;
+           (if desc.label = gram.objectDescriptor then 
+               desc->sematt.descKind->descKind
+            else
+               (* a virtual/patternVar is always generalKind! *)
+               sematt.generalKind->descKind
+           if);
+           (if (dataSpec.label->kind)
+            // gram.dynamicItem // gram.dynamicComponent // gram.variablePattern
+               then
+               (if descKind
+                // sematt.generalKind // sematt.standardKind
+                // sematt.externalKind // sematt.callBackKind 
+                // sematt.comKind // sematt.holderKind then
+                   (* For references R: ^external; F: ##external,
+                    * descKind is standardKind
+                    *)
+                   N.off->GS.thisPT.Dyn.add
+               if)
+            // gram.staticItem // gram.staticComponent then
+               (if kind = gram.staticItem then common.itemKind->kind
+                else
+                   common.compKind->kind
+               if);
+               (if desc.label
+                // gram.objectDescriptor then
+                   (if desc->sematt.DescKind
+                    // sematt.standardKind then 
+                       (if desc.size
+                        // 4 then
+                           N.off->GS.thisPT.longs.add
+                        // 1 then
+                           N.off->GS.thisPT.bytes.add
+                        // 8 then
+                           N.off->GS.thisPT.reals.add
+                        // 2 then
+                           N.off->GS.thisPT.shorts.add
+                        else
+                           Cerror
+                           (# 
+                           do 'Unkown size(standard descriptor):'->xT;
+                              desc.size->xI
+                           #)
+                       if)
+                    // sematt.constKind then
+                           (* m:(#exit 4#); x:@m; y: @|m 
+                            * seems to work fine!
+                            *)                       
+                    // sematt.generalKind 
+                    // sematt.holderKind (* OBS GC problem*) then
+                       (if desc[]->sematt.descAccess
+                        // common.direct then
+                           SaveReturn;
+                           &Gen.ThisRegAdr->A[];
+                           N.off->Noff->A.addOff->A[];
+                           (if kind = common.compKind then
+                               (if common.switch[64] and NOT common.switch[65] then
+                                   (# A1: ^mch.regAdr
+                                   do (- 1->mch.newCstOp,A[],4)->mch.stCst;
+                                      A.copy->A1[];
+                                      4->A1.addOff->A1[];
+                                      (- Noff div 4->mch.newCstOp,A1[],4)
+                                        ->mch.stCst;
+                                   #)
+                               if);
+                               common.compHeadSize*4->A.addOff->A[];
+                           if);
+                           (Gen.ThisRegAdr,thisDesc[],es[],thisSuperChain)
+                             -> genOrgAdr
+                             -> A1[];
+                           desc.descId->(formId[],descNo);
+                           (if common.switch[68] then
+                               (# p,m,at,n1,d,x: ^ASTindex;
+                                  T: ^text;
+                                  local: @boolean;
+                                  dr: @mch.dataRegOperand
+                               do desc[]
+                                    ->sematt.descSonsRef
+                                    ->(p[],m[],at[],n1[],d[],x[]);
+                                  A.toCallReg->A[];
+                                  &gen.callRegAdr -> OA[];
+                                  4 -> OA.addOff -> OA[];
+                                  (if common.switch[64] and not common.switch[65] then 
+                                      (*for 68 AlloI inline
+                                       * location and prototype
+                                       *)
+                                      (if kind = common.compKind then
+                                          (- common.compHeadSize->mch.newCstOp,
+                                          OA[],4)->mch.stCst
+                                       else
+                                          (- Noff div 4->mch.newCstOp,OA[],4)
+                                            ->mch.stCst
+                                  if)if);
+                                  (*-4 -> OA.addOff -> OA[];*)
+                                  (if desc[] -> sematt.hasAcode then
+                                      desc.originOff - 4-> OA.addOff-> OA[];
+                                      A1[] -> OA.storeOrigin;
+                                   else
+                                      desc.originOff -> A.addOff -> A[];
+                                      A1[] -> A.storeOrigin
+                                  if);
+                                  (if false (* inlining *) then
+                                      (* store prototype *)
+                                      ('T',desc[])->mkEntrypoint->(T[],local);
+                                      (T[],local)->mch.importData;
+                                      (T[]->mch.NewTextToDataOp,
+                                      mch.callRegOp[])->mch.gLea;
+                                      (mch.callRegOp[],OA[])->mch.stVal;
+                                      
+                                  if);
+                                  A1.freeAdr;
+                                  OA.freeAdr;
+                                  (if false (* inlining *) then
+                                      (* gen alloc for desc.Gpart *)
+                                      (at,Noff,&RepList[])->&GenAlloc; 
+                                   else
+                                      (if desc[] -> sematt.hasAcode then
+                                          1->mch.getPrimReg->mch.gClr;
+                                          (* origin *)
+
+                                          (mch.callRegOp[],2->mch.getPrimReg)
+                                            ->mch.cpReg; (* sun4s only*)
+                                          5->common.count; 
+                                          ('V',desc[],2)->callEntry;
+                                  if)if);
+                               #)
+                            else
+                               (if desc[]->sematt.hasAcode then
+                                   A.toCallReg->A[];
+                                   &gen.callRegAdr->OA[];
+                                   desc.originOff->OA.addOff->OA[];
+                                   A1[] -> OA.storeOrigin;
+                                   A1.freeAdr;
+                                   OA.freeAdr;
+                                   ('G',desc[],2)->callEntry
+                                else
+                                   desc.originOff->A.addOff->A[];
+                                   A1[] -> A.storeOrigin;
+                                   A1.freeAdr;
+                               if);
+                               A.freeAdr;
+                           if);
+                        else
+                           (* desc with mainPart of doPart slot *)
+                           partRefTag -> SlotOrComDesc
+                       if)
+                    // sematt.comKind (*// sematt.holderKind*) then
+                       common.comKind -> kind; (* common.comKind and 
+                                                * sematt.comKind
+                                                * is NOT the same! MESS!
+                                                *)
+                       0 -> SlotOrComDesc 
+                       (* changes needed here! AT least the ref tag
+                        * in the proto table must be changed*)
+                    (*// sematt.holderKind then
+                       ( * OBS! a holder object cannot be moved by the GC;
+                        * we must handle this in a special way;
+                        * )
+                       common.holderKind -> kind; ( * see comkind case above* )
+                     0 -> SlotOrComDesc    *)
+                    // sematt.dataKind then (*skip*)
+                    // sematt.externalKind then
+                       cError
+                       (#  do 'External part object not possible!'->xT #);
+                   if)
+                // gram.virtualDecl // gram.bindingDecl then
+                   (* desc = (virtual <V> <BS>) | (bind <V> <BS>)
+                    * N: @ es where es = <V>
+                    * NO alloc code to be generated?
+                    *)
+                   saveReturn;
+                   ES->SemAtt.getname->VN;
+                   VN.dclref->VN;
+                   (Gen.ThisRegAdr,thisDesc[],ES[],thisSuperChain)->genOrgAdr
+                     ->OA[];
+                   1->mch.initprimCall;
+                   (OA[],VN.off,VN.access,false)->gen.NewVirt;
+                   0->mch.getPrimRes;
+                   mch.pushReg->max;
+                   (if common.switch[68] then
+                       (if kind
+                        // common.itemKind then
+                           mch.callRegOp[]->mch.jsrReg
+                        // common.compKind then
+                           ('AlloC',none )->mch.callAlloPrim
+                       if)
+                    else
+                       (if kind
+                        // common.itemKind then
+                           ('AlloI',none )->mch.callAlloPrim
+                        // common.compKind then
+                           ('AlloC',none )->mch.callAlloPrim
+                       if)
+                   if);
+                   N.off->Gen.ThisRegAdr->A[];
+                   (# A2: @mch.regadr; dest: ^mch.registerOperand; 
+                   do
+                      A2.mkCall; 
+                      (A2[],false)->A.asgRefAdr->dest[]->mch.chkHeap
+                   #);
+                   max->mch.popReg;
+                   N.off+partRefTag->GS.thisPT.Dyn.add
+                // gram.unExpanded then
+                   partRefTag -> SlotOrComDesc
+               if)
+           if)
+        #);
+      RepAlloc:
+        (# dataSpec,index,N,desc,eval,spec: @ASTindex;
+           first: @boolean;
+           Noff,descKind,kind: @integer;
+           EH: @EvalHandler;
+           V: ^EH.EvVal;
+           AllocRep:
+             (# n,p: @integer;
+                prim: @text;
+                generalRep,pop: @boolean;
+                LoadOriginAndProto:<
+                  (# 
+                  do (if mch.callRegBusy then
+                         'genlib:generallib:callregbusy'
+                           -> thisTranslate.systemException
+                     if);
+                     INNER                     
+                  #);
+                callRegOnStack: @boolean
+             enter n
+             do n+1 (* SP *) ->mch.initPrimCall;
+                INNER ;
+                (* parameters:
+                 * simple:  p1 = off , 
+                 *          p2 = range, 
+                 *          p3 = this (SGI/PPC)
+                 *          p4 = SP, (SGI/PPC)
+                 * general  p1 = originReg = origin, 
+                 *          p2 = callReg = proto, NOTE that on some platforms,
+                 *                                e.g. sparc, p2 <> callReg
+                 *                                so proto is then NOT in p2
+                 *          p3 = off, 
+                 *          p4 = range,
+                 *          p5 = this (SGI/PPC)
+                 *          p6 = SP   (SGI/PPC)
+                 *)
+                (if generalRep then 2->p else 0->p if);
+                (if common.switch[61] then
+                    (if mch.callRegBusy then
+                        true->pop; (false,true)->mch.pushThisOrCall
+                    if)
+                if);
+                (* p2/p4*)
+                (* We override callReg *)
+                p+2->V.toPrimDest;
+                V.release;
+                (* p1/p3 *)
+                (*(Noff->mch.NewCstOp,p+1->mch.getPrimReg)->mch.ldCst;*)
+                p+1->(Noff->mch.NewCstOp).toPrimDest;
+                (if common.switch[61] then (* 3/5 *)
+                    p+3->mch.thisRegOp.toPrimDest;
+                    (* 4/6 *)
+                    (p+4,1)->mch.SPtoPrimReg;
+                if);
+                (if generalRep then
+                    LoadOriginAndProto;
+                    (if kind = gram.staticItem then
+                        'I'->prim.put
+                     else
+                        'C'->prim.put
+                    if)
+                if);
+                prim->mch.callPrim; 
+                0->mch.getPrimRes;
+                (if pop then (false,true)->mch.popThisOrCall if)
+             #)
+        enter (N,index,dataSpec,first)
+        do (* (repetition <nameList> <Index> <DataSpec>) *)
+           (* <index> = (index <int-eval> )              *)
+           (*         | (namedIndex <name> <int-eval>)   *)
+                (*313->trace(#do dataSpec[]->A #);*)
+           SaveReturn;
+           (N.off -> Noff) + partRefTag -> GS.thisPT.Dyn.add;
+           (if N[] -> reps.has then
+               (*301->trace(#do '\nIn repList'-> xT; N[] -> xA #);*)
+               leave RepAlloc
+           if);
+           index.son->eval;
+           (if index.label // gram.namedIndex then eval.brother->eval if);
+           (gen.thisRegadr,eval[],false,ThisSuperChain)->EH.ExpEval->V[];
+           (if dataSpec.label->kind
+            // gram.dynamicItem // gram.dynamicComponent // gram.variablePattern
+               then
+               3 -> AllocRep(#do 'AlloRR'->prim #)
+            // gram.staticItem // gram.staticComponent then
+               (dataSpec.son->spec,first,N)->descrip->desc;
+               (if desc.label
+                // gram.objectDescriptor then
+                   desc->sematt.descKind->descKind;
+                   (if desckind
+                    // sematt.standardKind then
+                       3
+                         ->AllocRep
+                       (# 
+                       do
+                          (if desc.size
+                           // 1 then
+                              'AlloVR1'->prim
+                           // 2 then
+                              'AlloVR2'->prim
+                           // 8 then
+                              'AlloVR8'->prim
+                           else
+                              'AlloVR4'->prim
+                          if)
+                       #)
+                    // sematt.generalKind then
+                       5
+                         ->AllocRep
+                       (#
+                          formId: ^text;
+                          descNo: @integer;
+                          OA: ^mch.address;
+                          LoadOriginAndProto:: 
+                            (# 
+                            do
+                               desc.descId->(formId[],descNo);
+                               (gen.thisRegAdr,thisDesc[],spec[],
+                               thisSuperChain)->genOrgAdr->OA[];
+                               OA.toOriginReg;
+                               desc[]-> doLoadProto
+                            #)
+                       do
+                          'AlloVR'->prim;
+                          true->generalRep (*'AlloORG'->prim;*)
+                       #)
+                   if)
+                // gram.virtualDecl // gram.bindingDecl then
+                   5
+                     ->AllocRep
+                   (#
+                      OA: ^mch.address;
+                      formId: ^text;
+                      descNo: @integer;
+                      VN: @ASTindex;
+                      LoadOriginAndProto:: 
+                        (# 
+                        do
+                           spec->semAtt.getName->VN;
+                           VN.dclRef->VN;
+                           (gen.thisRegAdr,thisDesc[],spec[],thisSuperChain)
+                             ->genOrgAdr->OA[];
+                           spec->sematt.getName->VN;
+                           VN.dclRef->VN;
+                           (OA[],VN.off,VN.access,false)->gen.newVirt;
+                           
+                        #);
+                      
+                   do 'AlloVR'->prim; true->generalRep
+                   #)
+                // gram.unExpanded then
+                   5
+                     ->AllocRep
+                   (#
+                      OA: ^mch.address;
+                      formId: ^text;
+                      descNo: @integer;
+                      LoadOriginAndProto:: 
+                        (# 
+                        do
+                           desc->sematt.getPostDesc->formId[];
+                           1 -> descNo;
+                           (gen.thisRegAdr,thisDesc[],spec[],thisSuperChain)
+                             ->genOrgAdr->OA[];
+                           OA.toOriginReg;
+                           desc[]->doLoadProto
+                           
+                        #)
+                   do 'AlloVR'->prim; true->generalRep
+                   #)
+               if)
+           if)
+        #);
+      
+   do
+      att
+        ->scanList
+      (# dcl,nameL,ES,desc: @ASTindex; first: @boolean
+      do
+         currentNode->dcl;
+         308->trace (#  do dcl[]->xA #);
+         (if common.switch[28] then dcl[]->gen.comment if);
+         (if not dcl.isSlot then
+             dcl.son->nameL;
+             nameL.brother->ES;
+             true->first;
+             nameL
+               ->scanList
+             (# N: @currentNode
+             do
+                (if dcl.label
+                 // gram.simpleDecl then
+                    (N,ES,first)->simpleAlloc
+                 // gram.repetitionDecl then
+                    (N,ES,ES.brother,first)->repAlloc
+                 // gram.patternDecl then
+                    (ES,0,0,N)->DS.push
+                 // gram.virtualDecl // gram.bindingDecl
+                 // gram.finalDecl then
+                    (if ES.label = gram.objectDescriptor then
+                        (ES,0,0,N)->DS.push
+                    if)
+                if);
+                false->first;
+                
+             #)
+         if)
+      #)
+
+   #)
+--- genNpart:doPart---
+do
+(# EH: @evalHandler;
+   Vlab: ^text;
+   nScan: @ | EH.scanNadr;
+   more: @boolean; 
+   NO: ^sematt.NXoffSets;
+   NV: ^EH.NXoffSetsVal;
+do 307->trace(#do 'GenNpart: '->xT; thisDesc[] -> xA #);
+   &sematt.NXoffSets[] -> NO[];
+   (thisDesc[],true,thisDesc->DH.newSingle,thisDesc.returnOff) 
+     -> NO.setNXOffSets;
+   (if NO.top > 0 then 
+       (* a descriptor may have an 'enter aVirtualPtn
+        * where aVirtualPtn has an empty enter list;
+        * the virtual may be extended with an enter list
+        * in a subpattern; see example in tstnxoff2
+        *)
+       (for i: NO.top repeat
+            (if NO.kind[i]
+             // NO.refTmp // NO.repTmp then
+                NO.off[i] -> GS.thisPT.dyn.add
+       if)for);
+       
+       ('N',thisDescNo,thisForm[],NOT common.switch[30])->gen.SysLab->Vlab[];
+       (Vlab[],false) -> mch.GlobalLabelDef;
+       mch.savereturn;
+       
+       (thisDesc[],gen.thisRegAdr,0,thisSuperChain,true) -> nScan -> more;
+       0 -> nScan.case;
+       (gen.thisRegAdr,thisDesc[],NO[],true) -> EH.mkNXOffSetsVal -> NV[];
+       true -> NV.Exe.executedXpart;
+       L: (# A: ^mch.address; off: @integer; isRef: @boolean
+          do NV[] -> nScan.asgToNelm;
+             (*NV.release;*)
+             mch.releaseReg;         
+             (if nScan-> more then restart L if)
+          #);
+       mch.return
+   if);
+   NO.startOff -> exitOffStart
+#)
+---genXpart:doPart---
+do
+(# EH: @evalHandler;
+   Vlab: ^text;
+   xScan: @ | EH.scanXadr;
+   more: @boolean;
+   NO,XO: ^sematt.NXoffSets;
+   xStartOff: @integer
+do 307->trace(#do 'GenXpart: exitOffSet:'->xT; exitOffStart -> xI; 
+                XN; thisDesc[] -> xA ;                
+             #);
+   &sematt.NXoffSets[] -> NO[];
+   (* optimize call of SetNoffset twice 
+   (if thisDesc[] -> sematt.hasNcode then
+       (thisDesc[],true,thisDesc->DH.newSingle,thisDesc.returnOff) 
+         -> NO.setNXOffSets; 
+       NO.startOff -> xStartOff
+    else
+       thisDesc.returnOff -> xStartOff
+    if);
+    178->trace(#do 'NO.startOff='->xT; xStartOff -> xI#);
+    *)
+   &sematt.NXoffSets[] -> XO[];
+   (thisDesc[],false,thisDesc->DH.newSingle,exitOffstart) -> XO.setNXOffSets;
+   (if XO.top > 0 then 
+       (for i: XO.top repeat
+            (if XO.kind[i]
+             // XO.refTmp // XO.repTmp then
+                XO.off[i] -> GS.thisPT.dyn.add
+       if)for);
+       
+       ('X',thisDescNo,thisForm[],NOT common.switch[30])->gen.SysLab->Vlab[];
+       (Vlab[],false) -> mch.GlobalLabelDef;
+       mch.savereturn;
+       
+       (thisDesc[],gen.thisRegAdr,0,thisSuperChain) -> xScan -> more;
+       L: (# XV: ^EH.evVal
+          do xScan.getExitVal -> XV[]; (* may be object or list *)
+             (gen.thisRegAdr,XO[],true) -> XV.asgToNXoffSets;
+
+             (* assign to offset *)
+             XV.release;
+             mch.releaseReg;
+             (if stest then
+                 178->trace(#do 'GenXpart2:'->xT; mch.dumpreg #)
+             if);
+             (if xScan-> more then restart L if)
+          #);
+       mch.return
+   if)
+#)
+   

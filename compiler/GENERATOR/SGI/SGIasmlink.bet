@@ -1,0 +1,470 @@
+ORIGIN '../asmlinkbody' ;
+LIB_ITEM 'betacodegen';
+INCLUDE '~beta/unixlib/unixfile';
+INCLUDE '../../CONTROL/touchdir';
+BODY '../UNIXasmlink'
+--asmlinklib: attributes ---
+new_32:  (# exit common.switch[84] #);
+quote :
+  (# t : @text
+  enter t
+  exit t[]
+  #);
+stripPath:
+  (# T: ^text; pos: @integer
+  enter T[]
+  do thePathhandler.directoryChar->T.findAll(#do inx->pos #);
+     (if pos <> 0 then (pos+1,T.length)->T.sub->T[] if)
+  exit T[]
+  #);
+scanTmpFiles:
+  (# tmpF: ^text
+  do (for i: asmState.tmpCount repeat
+          &text[]->TmpF[]; 
+          objName[]->stripPath->TmpF.puttext;
+          i->TmpF.putInt;
+          (* '.'-> TmpF.put; [datpete: why the extra '.' ?] *)
+          libExt -> TmpF.append;
+          INNER
+     for)
+  #);    
+mkTmpDir:
+  (* tmpDir2 is the directory where shared objects will be placed.
+   * 
+   * For 'beta tst'  (i.e. no -o option) tmpDir2 will be sgi in CWD (./sgi).
+   * For 'beta -o fisk tst' tmpDir2 will be sgi in CWD (./sgi).
+   * For 'beta -o aaa/bbb/ccc/kuk tst' tmpdir2 will be aaa/bbb/ccc
+   * 
+   * datpete: 21/6/99: Why not put *.so into sgi subdirectory
+   * in the third case too?
+   *)
+  (# T: ^text; lastSlash: @integer;
+  do (objName[],'')->thePathHandler.ConvertFilePath->T[];
+     thePathHandler.DirectoryChar->T.findAll(#do inx->lastSlash #);
+     (0,lastSlash) ->T.sub ->T[];
+     T.copy -> asmState.tmpDir1[];
+     objDirectory.copy -> asmState.tmpDir2[]; 
+     '/' -> asmState.tmpDir2.put;
+     
+     (* If objName is  '/..../kuk/foo' then tmpDir2 will be '/..../kuk'.
+      * i.e. objDirectory.
+      * If objName is  'foo' then targetDirectory needs to be appended to
+      * tmpDir2. This is checked and handled below.
+      * 
+      * (!) In case  'beta -o Xfoo foo' objName is unfortunately expanded to
+      * a full path '/.../Xfoo' which means that (lastSlash = 0) is not 
+      * enough to identify the case where sgi has to be appended.
+      *)
+     (# full: ^text
+     do (rootfragment[],thePathhandler.currentDirectory)
+          -> thePathHandler.convertFilePath 
+          -> full[];
+        (* full is the full path of the root fragment;
+         * we check if objName is in the same directory as 
+         * the root fragment;
+         * T[] is the directory of objName;
+         *)
+        
+        0 -> lastSlash;
+        thePathHandler.DirectoryChar 
+          -> full.findAll(#do inx -> lastSlash #);       
+        (if (lastSlash = 0) 
+            or ((1,lastSlash) -> full.sub -> T.equal)
+            then
+            Common.targetDirectory[] -> asmState.tmpDir2.append; 
+            '/' -> asmState.tmpDir2.put
+        if);
+     #);
+     asmState.tmpDir2[] -> (&directory[]).touchDir;
+     371->trace
+     (#
+     do '\n\tTmpDir2         : '->xT; asmState.tmpDir2[] -> xT; xN 
+     #)
+  #);
+ldUNIXtmpFile:
+  (# tmpArgs,TmpF: ^text
+  enter tmpArgs[]
+  do (if asmstate.tmpDir1[] = NONE then mkTmpDir if);
+     (if asmState.tmpCount = 0 then
+          'trap "echo :linking interrupted.; '->AFF.puttext;
+          rmTmpFiles;
+          '; exit 2" 2 9 10'->AFF.putLine;
+      if);
+     &text[]->TmpF[]; 
+     (* '${TMPDIR}/'->TmpF; - rld problems if used *)
+     objName[]->stripPath->TmpF.puttext;
+     (*'.$$.'->TmpF.putText;*)
+     asmState.tmpCount+1->asmState.tmpCount->TmpF.putInt;
+     (*'.'-> TmpF.put;  [datpete: why the extra '.' ?] *)
+     libExt -> TmpF.append;
+     
+     (* datpete: 21/6/99: Added the ChangeDirectory below to link directly 
+      * into final location, and to get so_locations file placed there too.
+      *)
+
+     (if CWD[] = NONE then
+         thePathHandler.currentDirectory -> CWD[];
+     if);
+     asmState.TmpDir2[] -> ChangeDirectory;
+     '/bin/rm -f '->AFF.putText; 
+     TmpF[]->AFF.putLine;
+     (if verboseLevel<=verboseLevel.actions then
+         'echo Linking local shared lib: ' -> AFF.puttext;
+         asmState.TmpDir2[] -> AFF.puttext;
+         TmpF[] -> AFF.putline
+     if);
+     INNER;
+     TmpF[]->AFF.putText; ' \\\n\t' ->AFF.putText;
+     tmpArgs[]->AFF.putText;
+     (if CWD[] <> NONE then CWD[] -> ChangeDirectory if);
+     asmState.TmpDir2[] -> TmpF.prepend;
+  exit tmpF[]
+  #);
+rmTmpFiles:
+  (#
+  do scanTmpFiles
+     (#
+     do (* datpete: 21/6/99: Not needed anymore.
+         * '/bin/rm -f '->AFF.puttext; 
+         * asmState.tmpDir1[] -> AFF.putText; tmpF[] -> AFF.putline;
+         *)
+        '/bin/rm -f '->AFF.puttext; 
+        asmState.tmpDir2[] -> AFF.putText; tmpF[] -> AFF.putline;
+     #);
+  #)   ;
+(* datpete: 21/6/99: Not needed anymore.
+ * mvTmpFiles:
+ *   (#
+ *   do scanTmpFiles
+ *      (#
+ *      do '/bin/mv -f '->AFF.puttext; 
+ *         tmpF[] -> AFF.putText; ' ' -> AFF.put;
+ *         asmState.tmpDir2[] -> AFF.putLine
+ *      #);
+ *   #)  
+ *) 
+--asmState:descriptor--
+(# tmpCount: @integer;
+   tmpDir1,tmpDir2: ^text
+#)
+--HasSharedLibs:descriptor--
+(#
+do true -> value 
+#)
+---cont: descriptor --
+(#
+do '\\'->AFF.put; AFF.newLine; ascii.ht->AFF.put;
+#)
+---header: descriptor ---
+(#
+do '#! /bin/sh '->AFF.putLine;
+   'BETALIB='->AFF.putText; BetaLib[]->AFF.putLine;
+   'export BETALIB'->AFF.putLine;
+   'LD_LIBRARY_PATH=${LD_LIBRARY_PATH-'->AFF.putText;
+   '$(LD_LIBRARY_PATH)'->expandEnvVar->AFF.puttext; '}\n'->AFF.puttext;
+   'export LD_LIBRARY_PATH\n'->AFF.putline;
+   (if common.switch[62] then
+       (if new_32 then
+           'CC=${CC-"gcc -O6 "}\nexport CC'-> AFF.putLine;
+        else
+           'CC=${CC-"cc -O2 -32 "}\nexport CC'-> AFF.putLine;
+       if);
+    else
+       'CC=${CC-"cc -O2 -32 -non_shared"}\nexport CC'-> AFF.putLine;
+   if);
+   (* 'LD_RUN_PATH=${LD_RUN_PATH-$LD_LIBRARY_PATH}\n'->AFF.puttext;
+    * 'export LD_RUN_PATH'->AFF.putLine;
+    *)
+   'MACHINETYPE='->AFF.putText; TargetMachine->AFF.putLine;
+   'export MACHINETYPE'->AFF.putLine;
+   (*'TMPDIR=${TMPDIR-/tmp}'->AFF.putLine;*)
+   (*'TMPDIR=sgi'->AFF.putLine;*)
+
+#)
+---AsmExt: descriptor ---
+(#
+do (if common.switch[120] then
+       (* new backend: '-BETA' is used on SUN
+        * mysterious whyt '-BT-' is used on sgi?
+        *)
+       '-BETA-'->ext
+    else
+       '-BT-'->ext
+   if)
+#) 
+---BinExt: descriptor ---
+(# 
+do '.o'->ext
+#)
+---LibExt: descriptor ---
+(# 
+do '.so'->ext
+#)
+---JobExt: descriptor ---
+(# do '..job'->ext #)
+---ExeExt:descriptor---
+(* the extension for an executable file is empty 
+ * on most platforms except Windows NT 
+ *)
+(#do ''->ext #)
+---Echo: descriptor ---
+(# do 'echo '->AFF.puttext #)
+---Remove: descriptor ---
+(# do '/bin/rm -f '->AFF.puttext; name[]->AFF.putline #)
+---ChangeDirectory:doPart---
+do 'cd '->AFF.puttext; dir[] -> AFF.putline
+---AddCommand:doPart---
+do ' 2>&1' -> (cmd.copy).append -> AFF.putline;
+   'if [ $? -ne 0 ]; then echo BUILD failed. Exiting.; exit 1; fi' -> AFF.putline;
+---Make: descriptor ---
+(# T: ^text; F: @file; 
+do (if first then
+       'BetaMake(){'                                            -> AFF.putLine;
+       '  dir=`dirname $1`; export dir'                         -> AFF.putLine;
+       '  file=`basename $1`; export file'                      -> AFF.putLine;
+       '  sh -c \'\\'                                           -> AFF.putLine;
+       '    cd $dir; \\'                                        -> AFF.putLine;
+       '    make -q -f $file MACHINETYPE=$MACHINETYPE 2>&1; \\' -> AFF.putLine;
+       '    if [ $? -ne 0 ]; then \\'                           -> AFF.putLine;
+       (if verboseLevel<verboseLevel.nothing then
+           '        echo make $dir/$file; \\'                   -> AFF.putLine;
+       if);
+       '        make -f $file MACHINETYPE=$MACHINETYPE 2>&1; \\'-> AFF.putLine;
+       '        if [ $? -ne 0 ]; then exit 1; fi; \\'           -> AFF.putLine;
+       '    fi; \\'                                             -> AFF.putLine;
+       '    exit 0\''                                           -> AFF.putLine;
+       '  if [ $? -ne 0 ]; then'                                -> AFF.putLine;
+       '     echo Make failed. Exiting.'                        -> AFF.putLine;
+       '     exit 1'                                            -> AFF.putLine;
+       '  fi'                                                   -> AFF.putLine;
+       '}'                                                      -> AFF.putLine;
+       
+       'trap "echo make interrupted.; exit 2" 2 9 10' ->AFF.putLine;
+   if);
+   (* test makefile dependencies *)
+   '_sgi'-> m.copyAppend -> T[];
+   T[] -> F.name;
+   'BetaMake '->AFF.putText;
+   (if F.entry.exists then T[]->AFF.putLine
+    else m[]->AFF.putLine
+   if)
+#) 
+---resource:descriptor---
+(##)
+---assemble: descriptor ---
+(# #)
+--linkLibraries:descriptor--
+(#
+do Libs.scan
+   (#
+   do (if thisElm.args.length <> 0 then
+          (if verboseLevel<=verboseLevel.actions then
+              'echo Linking shared lib: '->AFF.puttext; thisElm.T[]->AFF.putLine;
+          if);
+          (if new_32 then
+              '/bin/rm -f '->AFF.puttext; thisElm.T[]->AFF.putline;
+              '/bin/ld -shared -woff 47,56,84,133,85 \\\n\t -n32 -o '->AFF.puttext;
+           else
+              '/bin/rm -f '->AFF.puttext; thisElm.T[]->AFF.putline;
+              '/bin/ld -shared -woff 47,56,84,133,85 \\\n\t -32 -o '->AFF.puttext;
+          if);
+          thisElm.T[]->AFF.puttext; ' '->AFF.put;
+          thisElm.args[]->AFF.putline
+      if)
+   #)
+#)
+--contCh:descriptor--
+(#do '\\'->value #)
+--ldArgMax:descriptor--
+(#
+do (if common.switch[73] then
+       100 -> value
+    else
+       3000 -> value 
+if)#)
+--ldTmp:descriptor--
+(# 
+do (if hasBetaEnv then
+       tmpArgs[] ->ldUNIXtmpFile
+       (#
+       do (if new_32 then
+              '/bin/ld -woff 47,56,84,133 -r -n32 -o '->AFF.putText
+           else
+              '/bin/ld -woff 47,56,84,133 -r -32 -o '->AFF.putText
+          if)
+       #) ->TmpF[] 
+    else       
+       tmpArgs[] ->ldUNIXtmpFile
+       (#
+       do (if new_32 then
+              '/bin/ld -woff 47,56,84,133 -shared -n32 -o '->AFF.putText;
+           else
+              '/bin/ld -woff 47,56,84,133 -shared -32 -o '->AFF.putText;
+          if);
+       #) ->TmpF[] 
+   if)
+#)
+---link: descriptor ---
+(# betaLinkOpt: ^text
+do (if false (*HasSharedLibs*) then
+       (* datpete: this has already been reported from asmlink.bet *)
+       'echo '->AFF.puttext;
+       '"Using shared BETA libraries!"'->AFF.putline
+   if);
+   'trap "echo :linking interrupted.; /bin/rm -f '->AFF.puttext;
+   objName[]->AFF.puttext;
+   '; exit 2" 2 9 10'->AFF.putLine;
+   
+   '$(BETALINKOPTIONS)'
+     ->expandEnvVar(# defaultValue::<(#do ''(*'-Bstatic '*)->envvarValue[] #)#)
+     ->betaLinkOpt[];
+   (if not common.switch[41] then ' -s '->betaLinkOpt.append if);
+   
+   (if common.switch[16] then
+       'quarker '->AFF.puttext; '.sym'->objname.copyAppend->AFF.putText; 
+       ' '->AFF.put; cont
+    else
+       (if common.switch[62] then
+           '/bin/ld -woff 47,56,84,133 '->AFF.puttext
+        else
+           '/bin/ld -non_shared  -woff 47,56,84,133 '->AFF.puttext; 
+       if);
+       (* '/bin/ld -non_shared -e _start '->AFF.puttext; *)
+       
+       betaLinkOpt[]->AFF.putText; 
+       (if new_32 then
+           ' -n32 -o '->AFF.puttext; objName[]->AFF.puttext; ' '->AFF.put; cont;
+        else
+           ' -32 -o '->AFF.puttext; objName[]->AFF.puttext; ' '->AFF.put; cont;
+       if);
+       (* Add of -L directive for each component in LD_LIBRARY_PATH
+        * used to be here. However, this fails when using bootbeta,
+        * since LD_LIBRARY_PATH is in that case both used to specify
+        * where bootbeta should find it's so-files AND what libraries
+        * the generated application should be linked with. 
+        * The latter should NOT be the same as the ones used to run
+        * bootbeta.
+        * And the -L directives are not needed here anyway:
+        * Each library specified using -l<lib> is preceeded with -L<libloc>
+        * below anyway.
+        * The only need for extra -L directives are for 3'rd party libraries 
+        * located in non-standard places. Thus it has been moved to the
+        * end of the link directive, just before the LINKOPT expansion.
+        *)
+       (if common.switch[62] then
+           (if new_32 then
+               '/usr/lib32/crt1.o'->AFF.puttext; cont;
+            else
+               '/usr/lib/crt1.o'->AFF.puttext; cont;
+           if)
+        else
+           '/usr/lib/nonshared/crt1.o'->AFF.puttext; cont;
+       if);
+       
+   if);
+   (if true//common.switch[29]//common.switch[30]//common.switch[31] then
+       ' /lib/mcrt0.o /lib/Fcrt1.o ' ->AFF.puttext
+   if);
+#)
+---addBetaRun:descriptor---
+(* the following can be for most platforms except Windows NT *)
+(#
+do (if userDefinedBetaRun then
+       betaRun[]->linkObj
+    else
+       '.o'->betaRun.CopyAppend->linkObj
+   if)
+#)
+--asmlinkdynamic:descriptor--
+(#
+(*do (if not common.switch[16] then 
+       (if common.switch[17] then
+           '-Bstatic \\\n\t'->ldA.puttext 
+        else
+           '-Bdynamic \\\n\t'->ldA.puttext 
+       if);
+ if)
+ *)
+#)
+---linkObj:descriptor ---
+(#
+do lobj[] -> ldA.putText; ' \\\n\t'->ldA.putText;
+#)
+---libraries: descriptor ---
+(#
+do (* add command line libs *)
+   (if link_libs[]<>NONE then 
+       link_libs[]->ldA.puttext; 
+       '\\\n\t'->ldA.puttext;
+   if);
+   (if common.switch[16] then 
+       '/usr/lib/libc.so /usr/lib/libm.so  \n'->ldA.puttext
+    else 
+       '-lc -lm '->ldA.putText;
+       (*'-lc -delay_load -lm '->ldA.putText;*)
+       cont;
+       (if common.switch[62] then
+           (if new_32 then
+               '/usr/lib32/crtn.o '->ldA.putText 
+            else
+               '/usr/lib/crtn.o '->ldA.putText 
+           if)
+        else
+           '/usr/lib/nonshared/crtn.o '->ldA.putText
+       if);
+       ' 2>&1'->ldA.putText;
+       ldA.newline;
+   if)
+#)
+--linktrailer:descriptor--
+(# 
+do 'case $? in'->AFF.putLine;
+   '0)\n'->AFF.putText; 
+   (* mvTmpFiles; [datpete: 21/6/99: Not needed anymore *)
+   (if verboseLevel<=verboseLevel.actions then
+       (if common.switch[16] then
+           'echo Symbol file for incremental link on file:'->AFF.puttext
+        else
+           'echo Object program on file: '->AFF.puttext;
+       if);
+       '   '->aff.puttext;
+       objname[]->AFF.putText;
+   if);
+   (if common.switch[16] then '.sym'->AFF.putline else AFF.newline if);
+   (if HasSharedLibs then
+       'echo Note! Program uses shared libraries. Suggested LD_LIBRARY_PATH:'
+         ->AFF.putline;
+       'echo \"    \"\'${LD_LIBRARY_PATH}\'' -> AFF.puttext;
+       (for i:isNew.top repeat
+            ':' -> AFF.put;
+            isNew.T[i][] -> AFF.puttext;
+       for);
+       (if asmState.tmpCount <> 0 then
+           ':' -> AFF.put;
+           asmState.tmpDir2[] -> AFF.putline;
+        else
+           AFF.newline;
+       if);
+    else
+       (if asmState.tmpCount <> 0 then
+           'echo Note! Program uses local shared libraries. Suggested LD_LIBRARY_PATH:'
+             ->AFF.putline;
+           'echo \"    \"\'${LD_LIBRARY_PATH}:\'' -> AFF.puttext;
+           asmState.tmpDir2[] -> AFF.putline;
+       if);
+   if);
+   ';;'->AFF.putLine;
+   '*)'->AFF.putLine; 
+   '   /bin/rm -f '->AFF.PutText;  
+   objName[]->AFF.putLine;
+   (if asmState.tmpCount <> 0 then
+       (* SGI rmTmpFiles may only be done in else part of case,
+        * since the tmpfiles include .so files generated in sgi directory!
+        *)
+       rmTmpFiles; AFF.putLine
+   if);
+   'esac'->AFF.PutLine;
+#)
+---trailer: descriptor ---
+(##)
+

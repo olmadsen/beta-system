@@ -1,0 +1,713 @@
+ORIGIN 'machine';
+LIB_ITEM 'betacodegen';
+INCLUDE '~beta/basiclib/file';
+INCLUDE '~beta/containers/hashTable';
+INCLUDE '~beta/basiclib/numberio';
+INCLUDE 'image';
+BODY 'REALmachinebody';
+BODY 'CODEmachine';
+
+-- MachineFactoryLIB: Attributes --
+Machine: AbstractMachine
+  (************** interface to machine operations **************)
+  (# <<SLOT machineatt:Attributes>>;
+     
+     mState: @ <<SLOT mstate:Descriptor>>;
+
+     cstOperand::
+       (# putOp::<  (#  <<SLOT cstOpPut:DoPart>> #);
+          loadOp::< (#  <<SLOT cstLoadOp:DoPart>> #);
+          loadToReg::< (# <<SLOT cstOpLoadToReg:DoPart>> #);
+       #);
+     textOperand::
+       (# putOp::<  (#  <<SLOT textOpPut:DoPart>> #);
+          loadAdr::< (#  <<SLOT textOpLoadAdr:DoPart>> #);          
+       #);
+     dataRegOperand::
+       (# thisClass:: dataRegOperand;
+          reg1::  (#  do rn->value #);
+          regF::  (#  <<SLOT DataRegOpRegF:DoPart>> #);
+          putOp::< (#  <<SLOT dataRegOpPut:DoPart>> #);
+          loadOp::<  (#  do THIS(dataRegOperand)[]->op[] #);
+          pushCpar::<  (#  do (THIS(dataRegOperand)[],R[])->cpReg #);
+          alloc::< (# <<SLOT getData:DoPart>> #);
+          deAlloc::<  (#  do rN->freeData->fn #);
+          reUse::<  (#  do <<SLOT dataRegOpReUse:Descriptor>> #);
+          getReg::<  (#  do rn+1->dNo #);
+          inUse::< (# <<SLOT dataRegInUse:DoPart>> #)
+       #);
+     doubleDataRegOperand::
+       (# thisClass:: doubledataRegOperand;
+          putOp::<  (#  do <<SLOT doubleDataRegPut:Descriptor>> #);
+       #);
+
+     
+     (********** machine operations ************)
+     floatConst:: (# do <<SLOT floatConst:Descriptor>> #);
+     int2float:: (# do <<SLOT int2float:Descriptor>> #);
+     intReg2float:: (# do <<SLOT intReg2float:Descriptor>> #);
+     float2int:: (# <<SLOT float2int:DoPart>> #);
+     cmpToBoolFloat:: (# do <<SLOT cmpToBoolFloat:Descriptor>> #);
+     cmpAndJmpFloat:: (# do <<SLOT cmpAndJmpFloat:Descriptor>> #);
+     popFstack:: (# do <<SLOT popFstack:Descriptor>> #);
+     cmpFloat:: (# do <<SLOT cmpFloat:Descriptor>> #);
+     fBeq:: (#  do <<SLOT fBeq:Descriptor>> #);
+     fBge:: (#do<<SLOT fBge:Descriptor>> #);
+     fBle:: (#  do <<SLOT fBle:Descriptor>> #);
+     fBne:: (#  do <<SLOT fBne:Descriptor>> #);
+     fBgt::(#  do <<SLOT fBgt:Descriptor>> #);
+     fBlt::(#  do <<SLOT fBlt:Descriptor>> #);
+     (* For the 4 operations addFloat, subFloat, mulFloat, and divFloat:
+      * For HP/motorola, the  A operand is always an address.
+      * For the SPARC, the  A operand may also be a FloatRegOp
+      *)
+     addFloat:: (#  do <<SLOT addFloat:Descriptor>> #);
+     subFloat:: (# do <<SLOT subFloat:Descriptor>> #);
+     mulFloat:: (# do <<SLOT mulFloat:Descriptor>> #);
+     divFloat::(#  do <<SLOT divFloat:Descriptor>> #);
+     negFloat:: (# do <<SLOT negFloat:Descriptor>>#);
+     floatRegOp::
+       (# regF::  (#  <<SLOT FloatRegOpRegF:DoPart>> #);
+          putOp:: (# do <<SLOT floatRegOpPut:Descriptor>> #);
+          pushCpar::  (#  do 'push float'->BC.putT #);
+          loadOp::  (#  do THIS(FloatRegOp)[]->op[] #);
+          loadFloatOp::  (#  do THIS(floatRegOp)[]->op[] #);
+          alloc::  (#  do <<SLOT floatRegOpAlloc:Descriptor>> #);
+          deAlloc::< (# do <<SLOT floatRegOpDeAlloc:Descriptor>> #);
+          reUse::<  (#  do <<SLOT floatRegOpReUse:Descriptor>> #);
+          load:: (# do <<SLOT floatRegOpLoad:Descriptor>> #);
+          store:: (# do <<SLOT floatRegOpStore:Descriptor>> #);
+          storeTmp:: (# do <<SLOT floatRegOpStoreTmp:Descriptor>> #);
+          store2Int:: (# do <<SLOT floatRegOpStore2int:Descriptor>> #)
+       #);
+     stackTopAdr::
+       (# putOp::<  (#  do <<SLOT stackTopAdrPutOp:Descriptor>> #) #);
+
+     adrRegOperand::
+       (# thisClass:: adrRegOperand;
+          regF:: (# <<SLOT AdrRegOpRegF:DoPart>> #);
+          isObjectReg::< 
+            (# X: @ <<SLOT isObjectReg:Descriptor>> do true->value; X #);
+          reg1::  (#  do rn->value #);
+          putOp::< (# <<SLOT AdrRegOpPut:DoPart>> #);
+          pushCpar::< (#  do (THIS(adrRegOperand)[],R[])->cpReg #);
+          loadOp::<  (#  do THIS(adrRegOperand)[]->op[] #);
+          loadAdrOp::<  (#  do THIS(adrRegOperand)[]->op[] #);
+          alloc::< (# <<SLOT getAdr:DoPart>> #);
+          reUse::<  (#  <<SLOT adrRegOpReUse:DoPart>> #);
+          deAlloc::< (#  do rN->freeAdr->fn #);
+          isCallReg:: (#  do rN = callO->value #);
+          getReg::< (#  do rn+1->aNo #);
+          inUse::< (#  <<SLOT adrRegInUse:DoPart>> #)
+       #);
+     LocalLab::
+       (# Def:: (#  <<SLOT LocalLabDef:DoPart>> #);
+          VirtLabDef:: (#do <<SLOT VirtLabDef:Descriptor>> #);
+          putOp::<  (#  <<SLOT LocalLabPut:DoPart>> #);
+          loadAdr::< (# <<SLOT localLabLoadAdr:DoPart>> #);
+          pushCpar::< (#  do R[]->loadAdr #);
+          asText::
+            (# 
+            do &text[]->localLabText[];
+               (if type = interFragment then
+                   descId[]->localLabText.puttext; 
+                   labNo->localLabText.putInt; 
+                else
+                   <<SLOT localLabAsText:Descriptor>>
+               if)
+            #);
+       #);
+     doAsgRefAdr:: (# <<SLOT asgRefAdr:doPart>> #);
+     doAsgRefReg:: (# <<SLOT asgRefReg:doPArt>> #);
+     
+     RegAdr::
+       (# thisClass:: RegAdr;
+          getReg::<  (#  do reg+1->aNo #);
+          putOp::< 
+            (#  <<SLOT RegAdrPutOp:DoPart>> #);
+          loadOp::< 
+            (# 
+            do <<SLOT RegAdrLoadOp:Descriptor>>
+            #);
+          loadAdrOp::<  (#  do <<SLOT RegAdrLoadAdrOp:Descriptor>> #);
+          loadFloatOp::< (# do <<SLOT adrLoadFloatOp:Descriptor>> #);
+          loadAdr::<  (#  <<SLOT RegAdrLoadAdr:DoPart>> #);
+          toOriginReg::< 
+            (# A: ^address
+            do (if reg <> -11 (* hack *) then
+                   (if access // common.cstInd // common.varInd then
+                       0->addOff->A[]; A.toOriginReg
+                    else
+                       <<SLOT RegAdrToOriginReg:Descriptor>>; freeAdr
+                   if)
+                else freeAdr
+               if)
+            #);
+          index::<  (#  do <<SLOT RegAdrIndex:Descriptor>> #);
+       #);
+     InxRegAdr::
+       (# isInxRegAdr:: TrueValue;
+          thisClass:: InxRegAdr;
+          loadOp::<  (#  do <<SLOT InxRegAdrLoadOp:Descriptor>> #);
+          loadFloatOp::< 
+            (# 
+            do <<SLOT InxRegAdrLoadFloatOp:Descriptor>>
+            #);
+          loadAdrOp::<  (#  do <<SLOT InxRegAdrLoadAdrOp:Descriptor>> #);
+          putOp::<  (#  <<SLOT InxRegAdrPutOp:DoPart>> #);
+          loadAdr::< (# <<SLOT InxRegAdrLoadAdr:DoPart>> #);
+          pushRegAndOff::<
+            (* aReg is adr of rep. object. 
+             * push aReg and long offset to rep. element
+             *)  
+            (#  do <<SLOT inxRegAdrPushRegAndOff:Descriptor>> #);
+       #);
+     RegInd:
+       (# R: @integer
+       enter R
+       <<SLOT RegInd:DoPart>>
+       #);
+     RegisterOffset:
+       (# offset: @integer;  enter offset <<SLOT RegisterOffSet:DoPart>> #);
+     
+     StandardAdrRegOverflow:  RegisterOverflow
+       (#
+       do cError 
+          (# S: @text
+          do 'AdrReg overflow('->S; n->S.putint; ')'->S.put; S[]-> T
+       #)#);
+
+
+     (*********************** instructions *********************)
+     ldCst:: (# <<SLOT ldCst:DoPart>> #);
+     stCst:: (# do <<SLOT stCst:Descriptor>> #);
+     ldByte:: (# do <<SLOT ldByte:Descriptor>> #);
+     ldHalf:: (# do <<SLOT ldHalf:Descriptor>> #);
+     ldVal:: (# do <<SLOT ldVal:Descriptor>> #);
+     ldvalFromLab:: (# <<SLOT LdValFromLab:DoPart>> #);
+     ldVl:: (# do <<SLOT ldVl:Descriptor>> #);
+     stByte:: (# do <<SLOT stByte:Descriptor>> #);
+     stHalf:: (# do <<SLOT stHalf:Descriptor>> #);
+     stVal:: (# do <<SLOT stVal:Descriptor>> #);
+     stValInLab:: (# <<SLOT StValInLab:DoPart>> #);
+     cpReg:: (# <<SLOT cpReg:DoPart>> #);
+     (* the copymem operations on some architectures (e.g. RISC)
+      * may use an intermediate register for the copying. This
+      * (data-)register may be returned in dr
+      *)
+     cpByteMem:: (# do <<SLOT cpByteMem:Descriptor>> #);
+     cpHalfMem:: (# do <<SLOT cpHalfMem:Descriptor>> #);
+     cpMem:: (# do <<SLOT cpMem:Descriptor>> #);
+     stValInText:: (# <<SLOT stValInText:DoPart>> #);
+     BeginProtoTypes: <<SLOT BeginProtoTypes:Descriptor>>;
+     jumpIfTrue:: (#  do <<SLOT jumpIfTrue:Descriptor>> #);
+     JsrTable:: (# do <<SLOT jsrTable:Descriptor>> #);
+     jmpTlong:: (# <<SLOT jmpTlong:DoPart>> #);
+     jmpT:: (# <<SLOT jmpT:DoPart>> #);
+     jsrT:: (#<<SLOT jsrT:DoPart>> #);
+     jsrReg:: (# <<SLOT jsrReg:DoPart>> #);
+     jmpReg:: (# <<SLOT jmpReg:DoPart>> #);
+     gJmp:: (#  <<SLOT gJmp:DoPart>> #);
+     gJsr:: (# <<SLOT gJsr:DoPart>> #);
+     saveInnerReturn:: (# <<SLOT saveInnerReturn:DoPart>> #);
+     returnInner:: (# <<SLOT returnInner:DoPart>> #);
+     rts:: (#  <<SLOT rts:DoPart>> #);
+     gLea:: (# do <<SLOT gLea:Descriptor>> #);
+     gLeaLabel:: (# do <<SLOT gLeaLabel:Descriptor>> #);
+     leaToPrimReg:: (# do <<SLOT leaToPrimReg:Descriptor>> #);
+     gClr:: (# <<SLOT gClr:DoPart>> #);
+     PushAdr:: (# do <<SLOT pushAdr:Descriptor>> #);
+     Push:: (# do <<SLOT push:Descriptor>> #);
+     Pop:: (# do <<SLOT pop:Descriptor>> #);
+     PushThisOrCall:: (# do <<SLOT PushThisOrCall:Descriptor>> #);
+     PopThisOrCall:: (# do <<SLOT PopThisOrCall:Descriptor>> #);
+     SetTop:: (# do <<SLOT SetTop:Descriptor>> #);
+     ChkCase:: (# <<SLOT ChkCase:DoPart>> #);
+     ChkIndex:: (#  do <<SLOT ChkIndex:Descriptor>> #);
+     ChkHeap:: (# do <<SLOT ChkHeap:Descriptor>> #);
+     
+     SignExtByte:: (# do <<SLOT SignExtByte:Descriptor>> #);
+     SignExtWord:: (# do <<SLOT SignExtWord:Descriptor>> #);
+     GetBits:: (# do <<SLOT GetBits:Descriptor>> #);
+     GetSignedBits:: (# do <<SLOT GetSignedBits:Descriptor>> #);
+     gGetBits:: (# <<SLOT gGetBits:DoPart>> #);
+     gGetSignedBits:: (# <<SLOT gGetSignedBits:DoPart>> #);
+     PutBits:: (# <<SLOT PutBits:DoPart>> #);
+     gPutBits:: (# <<SLOT gPutBits:DoPart>> #);
+     ByteSwap:: (# do <<SLOT ByteSwap:Descriptor>> #);
+ 
+     Lock:: (# do <<SLOT Lock:Descriptor>> #);
+     UnLock:: (# do <<SLOT UnLock:Descriptor>> #);
+     EnablePreemption:: (# do <<SLOT EnablePreemption:Descriptor>> #);
+     DisablePreemption:: (# do <<SLOT DisablePreemption:Descriptor>> #);
+     
+     gAdd:: (# do <<SLOT gAdd:Descriptor>> #);
+     addMem:: (# do <<SLOT addMem:Descriptor>> #);
+     gNeg:: (# do <<SLOT gNeg:Descriptor>> #);
+     gSub:: (# do <<SLOT gSub:Descriptor>> #);
+     cmpToBool:: (# do <<SLOT cmpToBool:Descriptor>> #);
+     cmpAndJmp:: (# do <<SLOT cmpAndJmp:Descriptor>> #);
+     cmpBoolAndJmp:: (# do <<SLOT cmpBoolAndJmp:Descriptor>> #);
+     gCmp:: (#  do <<SLOT gCmp:Descriptor>> #);
+     gMult:: (# do <<SLOT gMult:Descriptor>> #);
+     gDiv:: (# do <<SLOT gDiv:Descriptor>> #);
+     gOr:: (# do <<SLOT gOr:Descriptor>> #);
+     gAnd:: (# do <<SLOT gAnd:Descriptor>> #);
+     gXor:: sizedBinOp (#  do <<SLOT gXor:Descriptor>> #);
+     gNot:: (#  do <<SLOT gNot:Descriptor>> #);
+     logNot:: (# do <<SLOT logNot:Descriptor>> #);
+     gGetDataByte:: (# do <<SLOT gGetDataByte:Descriptor>> #);
+     gGetDataWord:: (# do <<SLOT gGetDataWord:Descriptor>> #);
+     arithShiftLeft:: (# <<SLOT arithShiftLeft:DoPart>> #);
+     logicalShiftLeft:: (#  <<SLOT logicalShiftLeft:DoPart>> #);
+     arithShiftright:: (# <<SLOT arithShiftRight:DoPart>> #);
+     logicalShiftRight:: (#  <<SLOT logicalShiftRight:DoPart>> #);
+     rotateLeft:: (#  <<SLOT rotateLeft:DoPart>> #);
+     rotateRight:: (#  <<SLOT rotateRight:DoPart>> #);
+
+     tstNone:: (# do <<SLOT tstNone:Descriptor>> #);
+     gBeq:: (# do <<SLOT gBeq:Descriptor>> #);
+     gBne:: (#  do <<SLOT gBne:Descriptor>> #);
+     gBge:: (#  do <<SLOT gBge:Descriptor>> #);
+     gBae:: (#  do <<SLOT gBae:Descriptor>> #);
+     gBle:: (#  do <<SLOT gBle:Descriptor>> #);
+     gBbe:: (#  do <<SLOT gBbe:Descriptor>> #);
+     gBgt:: (#  do <<SLOT gBgt:Descriptor>> #);
+     gBab:: (#  do <<SLOT gBab:Descriptor>> #);
+     gBlt:: (#  do <<SLOT gBlt:Descriptor>> #);
+     gBbl:: (#  do <<SLOT gBbl:Descriptor>> #);
+     trap:: (# do <<SLOT trap:Descriptor>> #);
+     
+     nop::(#do  <<SLOT nop:Descriptor>> #);
+     (*********************** high level instructions*********************)
+     AllocObj:: (# <<SLOT AllocObj:DoPart>> #);
+     EmitCk:: (# do <<SLOT EmitCk: descriptor>> #);
+     SaveReturn:: (# do <<SLOT SaveReturn:Descriptor>> #);
+     Return:: (# do <<SLOT return:Descriptor>> #);
+     ReturnVirtualCOM:: (# <<SLOT ReturnVirtualCOM:doPart>> #);
+     ExternalEntry:: 
+       (# 
+       do entryId[]->export;
+          (entryId[],false)->entryPoints.addDef;
+          <<SLOT ExternalEntry:Descriptor>>; 
+       #);
+     ExternalMark:: (# do <<SLOT ExternalMark:Descriptor>> #);
+     ExternalReturn:: (#do <<SLOT ExternalReturn:Descriptor>> #);
+     (********************** pseudo operations *****************)
+     comment:: (# <<SLOT comment:DoPart>> #);
+     Export:: (# <<SLOT export:DoPart>> #);
+     Import::
+       (# 
+       do (lab[],false)
+            ->entryPoints.add
+            ->wasAdded;
+          <<SLOT import:Descriptor>>
+       #);
+     ImportData::
+       (# 
+       do (lab[],true)->entrypoints.add->wasAdded;
+          <<SLOT importData:Descriptor>>
+       #);
+     switchToData:: (# do <<SLOT switchToData:Descriptor>> #);
+     switchToCode:: (# do <<SLOT switchToCode:Descriptor>> #);
+     declareAddress:: (# do <<SLOT declareAddress:Descriptor>> #);
+     declareLong:: (# do <<SLOT declareLong:Descriptor>> #);
+     declareWord:: (# do <<SLOT declareWord:Descriptor>> #);
+     dclWord:: (# do <<SLOT dclWord:Descriptor>> #);
+     emitByte:: (#do <<SLOT EmitByte:Descriptor>> #);
+     skip:: (# do <<SLOT skip:Descriptor>> #);
+     asciiText:: (# do <<SLOT asciiText:Descriptor>> #);
+     LabelDef:: (# do <<SLOT labelDef:Descriptor>> #);
+     GlobalLabelDef:: (# do (xLab[],data) -> entrypoints.addDef #);
+     SubDescriptorSlotEntry:: 
+       (#do <<SLOT SubDescriptorSlotEntry:descriptor>> #);
+     DefineMainLabel1:: (# do <<SLOT DefineMainLabel1:Descriptor>> #);
+     (*******************************)
+     thisO:: (# <<SLOT thisO:DoPart>>#);
+     callO:: (# <<SLOT callO:DoPart>> #);
+     DecrCallReg:: (#do <<SLOT DecrCallReg:Descriptor>>#);
+     GetCallReg:: (#do <<SLOT getCallReg:Descriptor>> #);
+     FreeCallReg:: (# do <<SLOT freeCallReg:Descriptor>> #);
+     CallRegBusy:: (# <<SLOT CallRegBusy:DoPart>> #);
+     CallRegInPrimReg2:: (# <<SLOT CallRegInPrimReg2:DoPart>> #);
+     GetOriginReg:: (#do <<SLOT GetOriginReg:Descriptor>> #);  
+     FreeOriginReg:: (#do <<SLOT FreeOriginReg:Descriptor>> #);
+
+     PushReg:: (# do <<SLOT PushReg:Descriptor>> #);
+     PopReg:: (# do <<SLOT PopReg:Descriptor>> #);
+     PushDataReg:: (# do <<SLOT PushDataReg:Descriptor>> #);
+     PopDataReg:: (# do <<SLOT PopDataReg:Descriptor>> #);
+     PushFloatReg:: (# do <<SLOT pushFloatReg:Descriptor>> #);
+     PopFloatReg:: (# do <<SLOT popFloatReg:Descriptor>> #);
+
+     NewCtextOp:: (# do <<SLOT NewCtextOp:Descriptor>> #);
+
+     (* primitiveRegOperand *)
+     StackOff::
+       (# putOp::<  (#  do <<SLOT StackOffPut:Descriptor>> #);          
+       #);
+     SPtoPrimReg:: (# <<SLOT SPtoPrimReg:DoPart>> #);
+     SaveReg:: (#  do <<SLOT SaveReg:Descriptor>> #);
+     RestoreReg:: (# do <<SLOT RestoreReg:Descriptor>> #);
+     SaveAllReg:: (#  <<SLOT SaveAllReg:doPart>> #);
+     RestoreAllReg:: (# <<SLOT RestoreAllReg:doPart>> #);
+
+     (***** primitive BETA run-time routine interface ****)
+     initPrimCall::
+       (# 
+       do <<SLOT initPrimCall:Descriptor>>
+       #);
+     primRep: @<<SLOT primRep:Descriptor>>;
+     getPrimReg:: (# do <<SLOT getPrimReg:Descriptor>> #);
+     CallPrim:: (# do <<SLOT CallPrim:Descriptor>> #);
+     CallAlloPrim:: (# do <<SLOT CallAlloPrim:Descriptor>> #);
+     GetPrimRes:: (# do <<SLOT getPrimRes:Descriptor>> #);
+     InitExternalCall:: (# <<SLOT InitExternalCall:DoPart>> #);
+     InitExternalParams:: (# <<SLOT InitExternalParams:DoPart>> #);
+     PushClong:: (#  do <<SLOT PushClong:Descriptor>> #);
+     PushCword:: (#  do <<SLOT PushCword:Descriptor>> #);
+     PushCbyte:: (#  do <<SLOT PushCbyte:Descriptor>> #);
+     PushCdoubleAdr:: (# do <<SLOT pushCdoubleAdr:Descriptor>> #);
+     PushCfloat:: (# do <<SLOT pushCfloat:Descriptor>> #);
+     PushCtext:: (#do <<SLOT PushCtext:Descriptor>> #);
+     PopCword:: (#  do <<SLOT PopCword:Descriptor>> #);
+     PopCbyte:: (#  do <<SLOT PopCbyte:Descriptor>> #);
+     (* no. of nested C calls*)
+     CallCproc::(# do <<SLOT CallCproc:Descriptor>> #);
+     externalDispatch:: (# do <<SLOT externalDispatch:Descriptor>> #);
+     noXres:: (# <<SLOT noXres:doPart>> #);
+     getSimpleXres::(# <<SLOT getSimpleXres:doPart>> #);
+     getTextXres::(# <<SLOT getTextXres:doPart>> #);
+     realXresIsDouble::(# <<SLOT realXresIsDouble:doPart>> #);
+     getDoubleXres::(# <<SLOT getDoubleXres:doPart>> #);
+     getFloatXres ::(# <<SLOT getFloatXres:doPart>> #);
+     getDataRefXres ::(# <<SLOT getDataRefXres :doPart>> #);
+     getDataPartXres::(# <<SLOT getDataPartXres:doPart>> #);
+     
+     SaveHeapTop:: (# do <<SLOT SaveHeapTop:Descriptor>> #);
+     PopCallStack::(# do <<SLOT popCallStack:Descriptor>> #);
+     AllocExternalResult:: (# <<SLOT AllocExternalResult:doPart>> #);
+     PascalTrap:: (# do <<SLOT PascalTrap:Descriptor>> #);
+     SetBreak:: (# <<SLOT SetBreak:dopart>>#);
+     (* get external parameters from call-back *)
+     Xpar: @<<SLOT Xpar:Descriptor>>;
+     initXpar:: (# do <<SLOT initGetXpar:Descriptor>> #);
+     getXlong:: (# do <<SLOT getXlong:Descriptor>> #);
+     getXword:: (# do <<SLOT getXword:Descriptor>> #);
+     getXbyte:: (# do <<SLOT getXbyte:Descriptor>> #);
+     toXres:: (# do <<SLOT toXres:Descriptor>> #);
+     GetRegForXres:: (# do <<SLOT getRegForXres:Descriptor>> #);
+     endX:: (# do <<SLOT endX:Descriptor>> #);
+     GetComPar:: (# <<SLOT GetComPar:dopart>> #);
+     xParForward:: (# do <<SLOT xParForward:Descriptor>> #);
+     (********************** register allocation ***************************)
+     (* GetAdr: (# rNo: @integer <<SLOT getAdr:DoPart>> exit rNo #);
+      * GetData:
+      *  (# rNo: @integer
+      *  <<SLOT getData:DoPart>>
+      *  exit rNo
+      * #);
+      * FreeAdr,FreeData should also be eliminated 
+      *)
+     FreeAdr:: (# <<SLOT freeAdr:DoPart>> #);
+     FreeData:: (# <<SLOT freeData:DoPart>> #);
+     ReleaseReg:: (#do <<SLOT ReleaseReg:Descriptor>>;#);
+     DataRegMax:: (# <<SLOT DataRegMax:DoPart>> #);
+     NoOfFreeDataReg:: (# do <<SLOT noOfFreeDataReg:Descriptor>> #);
+     DumpReg:: (# do  <<SLOT DumpReg:Descriptor>>#);
+     Rep: @<<SLOT regRep:Descriptor>>;
+     (* OBS! An object!! *)
+     (**********************************************************************)
+     doHead::
+       (# 
+       do thisO->thisRegOp; 
+          callO->callRegOp; 
+          &dataRegOperand[]->dataRegA[];
+          &dataRegOperand[]->dataRegB[];
+          0->DataRegA;
+          1->DataRegB;
+          &dataRegOperand[]->dataRegX[];
+          &dataRegOperand[]->dataRegY[];
+          7->dataRegX;
+          6->dataRegY;
+          <<SLOT AssemblerHeader:Descriptor>>
+       #);
+     InitDataSeg:: (# do <<SLOT InitDataSeg:Descriptor>> #);
+     NewFragment:: (# <<SLOT newFragment:DoPart>> #);
+     NewProto:: (# <<SLOT newProto:DoPart>> #);
+     NewImp:: (# <<SLOT newImp:DoPart>> #);
+     NewEval:: (# <<SLOT newEval:DoPart>> #);
+     dbgInf: @ <<SLOT dbgInf:Descriptor>>;
+     openDbgInf:: (# <<SLOT machineOpenDbgInf:DoPart>> #);
+     saveDbgInf:: (# <<SLOT machineSaveDbgInf:DoPart>> #);
+     allocDoPartObject::
+       (#
+       do <<SLOT allocDoPartObject:Descriptor>>
+       #);
+     deAllocDoPartObject::
+       (#
+       do <<SLOT deAllocDoPartObject:Descriptor>>
+       #);
+     doFinal2VirtJump:: (#do <<SLOT Final2VirtJump:Descriptor>> #);
+     GetVirtualOriginStart1::
+       (# do <<SLOT getVirtualOriginStart1:Descriptor>>#);
+     GetVirtualOriginStart2::
+       (# do <<SLOT getVirtualOriginStart2:Descriptor>>#);
+
+     GetImages:: (# <<SLOT GetImages:dopart>> #);
+
+     (***********************   entry point table **************)
+               
+     entryPoints: @hashTable
+       (# <<SLOT entrypointsAtt:Attributes>>;
+          rangeInitial::< (# do 717->value #);
+          ElementType: EntryPointInfo
+            (# m: @<<SLOT targetEntryPointInfo:Descriptor>>;
+               display: (# <<SLOT entrypointselmDisplay:dopart>> #);
+            #);
+          element::< ElementType;
+          hashFunction::< 
+            (# <<SLOT entrypointsHashfunc:dopart>> #);
+          insert:: (* elm: ^element *) 
+            (#  <<SLOT entryPointsInsert:DoPart>> #);
+          equal::< 
+            (# 
+            do left.t[]->right.t.equal->value;
+               <<SLOT entryPointsEqual:Descriptor>>
+            #);
+          add: @
+            (* called from import - adds the symbol T[] 
+             * with local=false
+             *)
+            (# T: ^text; data,wasAdded: @boolean; E: ^element
+            enter (T[],data)
+            <<SLOT entrypointsAdd:dopart>>
+            exit wasAdded
+            #);
+          addDef: @
+            (* called when defining an external visible entry-point,
+             * like T117FOO, M117FOO
+             *)
+            (# T: ^text;
+               data: @boolean;
+               E: ^element;
+               addTargetInfo:
+                 (# E: ^element
+                 enter E[] 
+                 <<SLOT addTargetInfo:DoPart>> 
+                 #)
+            enter (T[],data)
+            <<SLOT entrypointsAddDef:dopart>>   
+            exit E[]
+            #);
+          find:
+            (# T: ^text;
+               E: ^element;
+               notFound:<
+                 (# E: ^element
+                 enter E[]
+                 do INNER
+                 #);
+            enter T[]
+            <<SLOT entrypointsFind:dopart>>   
+            exit E[]
+            #)
+       #);
+     (*************** file for code generation ******************)
+     BC: @file
+       (# accesserror::< (# do name->common.PassCodeFileAccessError #);
+          NoSpaceError::< (* disk is full *) 
+            (# do delete; common.PassNoSpaceError #);
+          WriteError::< (* disk is full *) 
+            (#  do delete; common.PassNoSpaceError #);
+          OtherError:: (* e.g. disc quota exceeded *)
+            (# do (name,msg[])->common.PassOtherError #);
+          putC: @put;
+          putI: @
+            (# c: [50] @char; (*should be big enough!*) n,i: @integer; 
+            enter n
+            do
+               (if n = minint then (* cannot negate minint!! *)
+                   '-2147483648'->putX; 
+                else
+                   (if n >= 0 then
+                       (n mod 10)+'0'->c[1]; 
+                    else
+                       '-'->putC; ((- n->n) mod 10)+'0'->c[1]; 
+                   if);
+                   n div 10->n;
+                   1->i;
+                   loop:
+                   (if 0 < n then
+                       i+1->i; (n mod 10)+'0'->c[i]; n div 10->n; restart loop
+                   if);
+                   (for l: i repeat c[i-(l-1)]->putC for)
+               if);
+               
+            #);
+          putX: @puttext;
+          putt: @ (# r: @text enter r do r[]->putX #);
+          puttab: @ (#  do ascii.ht->putc #);
+          putnl: @ (#  do ascii.newline->putc; (*lc+1->lc *) #);
+          imm: @ (# off: @integer enter off do <<SLOT imm:Descriptor>> #);
+          putS: @ (# size: @integer enter size <<SLOT putS:DoPart>> #);
+          sep: @ (#  do ','->putC #);
+          putA: @
+            (# n: @integer
+            enter n
+            do <<SLOT putA:Descriptor>>
+            #);
+          putD: @
+            (# n: @integer
+            enter n
+            do
+               <<SLOT putD:Descriptor>>
+            #);
+          putHx: @ PutHex;
+          putHexByte: @
+            (# X,Y: @integer
+            enter X
+            do
+               '0'->putC;
+               'x'->putC;
+               X div 16->Y;
+               X mod 16->X;
+               (if (0 <= Y) and (Y <= 9) then
+                   '0'+Y->putC
+                else
+                   'A'+Y-10->putC
+               if);
+               (if (0 <= X) and (X <= 9) then
+                   '0'+X->putC
+                else
+                   'A'+X-10->putC
+               if);
+               
+            #);
+          
+       #);
+     initGen:: (# do <<SLOT initGen:Descriptor>>; #);
+     initDo::
+       (# 
+       do <<SLOT newDebugDesc:Descriptor>>; (* in REALmachinebody.bet *)
+          <<SLOT initDo:Descriptor>>;
+          (* in XXmachine.bet *)          
+       #);
+
+     EndCodeSeg:: (# do <<SLOT EndCodeSeg:Descriptor>> #);
+     EmitLabId:: (# <<SLOT EmitLabId:DoPart>> #);
+     EmitTextConst:: (# do <<SLOT EmitTextConst:Descriptor>> #);
+     BeginLabel:: (# <<SLOT BeginLabel:DoPart>> #);
+     Break:: (# <<SLOT Break:DoPart>> #);
+     FreeLabel:: (# <<SLOT FreeLabel:DoPart>> #);
+     EndLabel:: (# <<SLOT EndLabel:DoPart>> #);
+     SaveCodeState:: (# <<SLOT saveCodeState:doPart>> #);
+     RestoreCodeState:: (# <<SLOT RestoreCodeState:doPart>> #);
+     
+     InitEmitProtoIndexTable:: (# <<SLOT initEmitProtoIndexTable:DoPart>> #);
+     EmitProtoIndex:: (# <<SLOT EmitProtoIndex:DoPart>>#);
+     EndEmitProtoIndexTable:: (# <<SLOT endEmitProtoIndexTable:DoPart>> #);
+     EmitProto:: (# <<SLOT EmitProto:DoPart>> #);
+     EmitInnerTable:: (# <<SLOT EmitInnerTable:DoPart>> #);
+     InnerEntry:: (# <<SLOT InnerEntry:DoPart>> #);
+
+     EmitVirtAdr:: (# <<SLOT EmitVirtAdr:DoPart>> #);
+
+     EmitObjTableOff:: (# <<SLOT emitObjTableOff:DoPart>> #);
+     EmitText:: (# <<SLOT emitText:DoPart>> #);
+
+     EmitRefTableOff:: (# <<SLOT emitRefTableOff:DoPart>> #);     
+     
+     trace:
+       (# xT:
+            (# T: ^text
+            enter T[]
+            do T[]->common.tracestream.putText
+            #);
+          xI:
+            (# n: @integer
+            enter n
+            do
+               ' '->xC;
+               n->common.traceStream.putInt;
+               ' '->xC
+            #);
+          xC:
+            (# ch: @char
+            enter ch
+            do ch->common.traceStream.put
+            #);
+          xB:
+            (# b: @boolean
+            enter b
+            do
+               (if b then
+                   ' true '->xT
+                else
+                   ' false '->xT
+               if)
+            #);
+          xN:
+            (# 
+            do common.tracestream.newline
+            #);
+          N: @integer;
+          
+       enter N
+       do
+          (if common.switch[N] then
+              xN;
+              '%'->xC;
+              N->common.traceStream.putInt;
+              ':'->xC;
+              ' '->xC;
+              INNER
+          if)
+       #);
+     cTrace: trace (#  do INNER #);
+
+     bugstream: ^stream;
+
+     init::
+       (# 
+       do name[] -> BC.name;
+          (# FN,T: ^text
+          do <<SLOT initMachine:Descriptor>>;
+          #);
+          ('linux'->common.targetMachine.equal)
+          or ('nti'->common.targetMachine.equal)
+          or ('nti_ms'->common.targetMachine.equal)
+          or ('nti_gnu'->common.targetMachine.equal)
+          or ('nti_bor'->common.targetMachine.equal)
+          or ('x86sol'->common.targetMachine.equal)
+            -> floatStackUnit;
+          common.bugstream[] -> bugstream[];
+          &StandardDataRegOverflow[] -> DataRegOverflow[];
+          &StandardAdrRegOverflow[] -> AdrRegOverflow[];
+       #);
+     close::
+       (# 
+       do <<SLOT EndDataSeg:Descriptor>>;
+          <<SLOT closeMachine:Descriptor>>;
+          entryPoints.clear ;
+       #);
+     initCreateDataFile::
+       (# 
+       <<SLOT initCreateDataFile:DoPart>>
+       #); 
+     endCreateDataFile::
+       (# 
+       <<SLOT endCreateDataFile:DoPart>>
+       #); 
+     NextGroup::
+       (# 
+       <<SLOT NextGroup:DoPart>>
+       #);
+     
+     groupIdLab, isNoneLab: @localLab;
+     
+     incIP:: (# do IP+n->IP #);
+     IP: @integer; (* instruction pointer *)    
+  #);
+  
+

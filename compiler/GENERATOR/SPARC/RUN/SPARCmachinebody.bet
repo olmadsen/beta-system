@@ -1,0 +1,249 @@
+ORIGIN 'BetaRun';
+
+(* Switch 65 dependent fragments binding SLOTs in SPARCmachine *)
+
+-- SaveReturn: Descriptor --
+(* I0: thisObject (callee)
+ * I1: calledObject
+ *)
+(# 
+do (if common.switch[65] then
+       (if RToff<0 then
+           '\nWarning: negative RToff: ' -> puttext;
+           RToff -> putint; newline;
+       if);
+       (if RToff+4>4095 then
+           '\nNotice: large RToff: ' -> puttext;
+           RToff -> putint; newline;
+       if);
+       (if RToff=0 then
+           '\nWarning: RToff is zero for switch 65. Forgot to check?' -> putline;
+           (*(failuretrace,'')->stop;*)
+       if); 
+       (if isGpart (* really Vpart here *) then
+           (* V-entry: Move RTOff to L6 *)
+           (if RToff+4 <= 4095 (* cannot be negative *) then
+               (RToff,L6) -> MOV_I -> mstate.b.emit
+            else
+               (* large offset. 
+                * Do NOT optimize with single sethi , 
+                * since this will annoy findProto
+                *)
+               (L6,RToff->HI)->SETHI->mstate.b.emit;
+               (L6,RToff->LO,L6)->OR_I->mstate.b.emit
+           if);
+        else
+           (* M-entry: Move RTOff to L6 and save dyn *)
+           (if RToff+4 <= 4095 (* cannot be negative *) then
+               (* Save dyn *)
+               (I1,RToff,I0,true) -> AssignRef;
+               (* save returnAdr *)
+               (I1,RToff+4,O7)->ST_I->mstate.b.emit;
+            else
+               (* large offset *)
+               (L6,RToff->HI)->SETHI->mstate.b.emit;
+               (L6,RToff->LO,L6)->OR_I->mstate.b.emit;
+               (I1,L6,I0,false) -> AssignRef;
+               (L6,4,L6) -> ADD_I -> emit;
+               (I1,L6,O7)->ST->mstate.b.emit (* save returnAdr *);
+           if);
+           (I1,I0)->MOV->mstate.b.emit;
+       if)
+    else
+       (if common.switch[68] then
+           (if not isGpart then (I1,O0)->MOV->mstate.b.emit if);
+        else
+           (I1,O0)->MOV->mstate.b.emit           
+       if);
+       (SP,-frame_size,SP)->SAVE_I->mstate.b.emit;
+       (if not common.switch[68] then ClearAdrTmpRegs if)
+   if);
+   (if common.switch[31] then	
+       (* sethi %hi(.LLP2),%o0
+        * call mcount
+        * add %o0,%lo(.LLP2),%o0
+        *)
+       (# L,L1: @localLab; S,S1: ^text
+       do switchToData;
+          L.new;
+          true -> L.isTextAdr;
+          L.def;
+          0->mstate.d.emit;
+          L.labNo->localLabText->S[];
+          
+          L1.new;
+          true -> L1.isTextAdr;
+          L1.def;
+          0->mstate.d.emit;
+          L1.labNo->localLabText->S1[];          
+          switchToCode;
+          
+          (S1[],setHiMark) -> mstate.b.mark;
+          (O0,0) -> SETHI -> mstate.b.emit;
+          (S1[],setLoMark) -> mstate.b.mark;
+          (O0,0,O0) ->  ADD_I -> mstate.b.emit;
+          (O0,0,G2) -> ST_I -> mstate.b.emit;
+
+          (S[],setHiMark)->mstate.b.mark;
+          (O0,0)->SETHI->mstate.b.emit;
+          ('mcount',callMark)->mstate.b.mark; 
+          0->CALL->mstate.b.emit; 
+          (S[],setLoMark)->mstate.b.mark;
+          (O0,0,O0)->add_I->mstate.b.emit;
+          
+          (S1[],setHiMark) -> mstate.b.mark;
+          (O0,0) -> SETHI -> mstate.b.emit;
+          (S1[],setLoMark) -> mstate.b.mark;
+          (O0,0,O0) ->  ADD_I -> mstate.b.emit;
+          (O0,0,G2) -> LD_I -> mstate.b.emit
+
+       #)
+   if);
+   (if common.switch[83] and NOT isGpart then
+       (I0,O0) -> MOV -> mstate.b.emit;
+       'traceCall' -> jsrT;
+       true -> mstate.inMpart
+   if)
+#) 
+--SaveReg65:descriptor--
+(# dr: @dataRegOperand;
+do dr.alloc;
+   (* Make overflow check for 2 pushes at once *)
+   (2, dr) -> CheckRefTmp;
+   dr -> loadActiveStack;
+   (I0, dr) -> pushRefTmp;
+   (I1, dr) -> pushRefTmp;
+   dr.dealloc;
+#)
+--RestoreReg65:descriptor--
+(# dr: @dataRegOperand;
+do dr.alloc;
+   dr -> loadActiveStack;
+   (I1, dr) -> popRefTmp;
+   (I0, dr) -> popRefTmp;
+   dr.dealloc;
+#)
+--EmitCk:descriptor--
+(* Emit a consistency check for reference in
+ * register RegRef with description in RefName
+ * used in routine RoutineName.
+ * 
+ * Destroys %o5 (probably no problem).
+ *)
+(# Lroutine, Lrefname: @LocalLab;
+   O1op, O3op: @oRegOperand;
+do (if debug_runtime then
+       Lroutine.new; 
+       true->Lroutine.isTextAdr; 
+       Lroutine.dataToCode -> Lroutine.type;
+       ;
+       Lrefname.new;
+       true->Lrefname.isTextAdr; 
+       Lrefname.dataToCode -> Lrefname.type;
+       ;
+       switchToData;
+       Lroutine.def;
+       (RoutineName[],false)->asciitext;
+       Lrefname.def;
+       (RefName[],false)->asciitext;
+       switchtoCode;
+       ;
+       (RegRef,O5) -> MOV -> emit;
+       (SP,-frame_size,SP)->SAVE_I->emit;
+       (I5,O0) -> MOV -> emit;
+       O1 -> O1op; (Lroutine.asText, O1op[]) -> PutSetText;
+       (G0,O2) -> MOV -> emit; (* line number not known *)
+       O3 -> O3op; (Lrefname.asText, O3op[]) -> PutSetText;
+       'CCk' -> jsrT;
+       (G0,G0,G0) -> RESTORE -> emit;
+       regActiveComponent -> loadActiveComponent;
+   if);
+#)
+--AssertRegisterNotZero:dopart--
+do (if false then
+       L.new;
+       (reg, 0) -> CMP_I -> mstate.b.emit;
+       (L.labNo->mstate.labs.off) div 4->BNE->mstate.b.emit;
+       EmitDelayNOP;
+       UNIMP->mstate.b.emit; (* will break gdb *)
+       L.def;
+       L.new;
+       (reg, 8) -> CMP_I -> mstate.b.emit;
+       (L.labNo->mstate.labs.off) div 4->BNE->mstate.b.emit;
+       EmitDelayNOP;
+       UNIMP->mstate.b.emit; (* will break gdb *)
+       L.def;
+   if)
+   
+
+-- CallCprocSaveStack: Descriptor --
+(# activeStackOp: @dataRegOperand;
+   regActiveStack: (#  exit activeStackOp.reg1 #);
+do
+   (* Save current object during C-calls to get it updated 
+    * in case of GC during callbacks from the C-call
+    *)
+   ThisO -> PushRefRegister;
+   activeStackOp.alloc;
+   regActiveStack->loadActiveStack;
+   regActiveStack->PackStackOff;
+   activeStackOp.dealloc;
+#)  
+
+-- CallCprocRestoreStack: Descriptor --
+(# activeStackOp: @dataRegOperand;
+   regActiveStack: (#  exit activeStackOp.reg1 #);
+do
+   activeStackOp.alloc;
+   regActiveStack->loadActiveStack;
+   regActiveStack->unPackStackOff;
+   activeStackOp.dealloc;
+   ThisO -> PopRefRegister;
+#) 
+
+-- externalEntrySaveStack:Descriptor ---
+(# activeStackOp: @dataRegOperand;
+   regActiveStack: (# exit activeStackOp.reg1 #);
+do
+   activeStackOp.alloc;
+   regActiveStack->loadActiveStack;
+   regActiveStack->PackStackOff;
+   activeStackOp.dealloc;
+#)  
+
+-- externalEntryRestoreStack: Descriptor --
+(# activeStackOp: @dataRegOperand;
+   regActiveStack: (# exit activeStackOp.reg1 #);
+do
+   activeStackOp.alloc;
+   regActiveStack->loadActiveStack;
+   regActiveStack->unPackStackOff;
+   activeStackOp.dealloc;
+#)  
+
+-- AllocObj: DoPart --
+(* %o0 = origin
+ * %o1 = 1. arg
+ * %o2 = 2. arg
+ * %o3 = ...
+ * 
+ * FIXME! The entry code here must be fixed to be
+ * able to work with garbage collection.
+ * Should look like a call back entry, but also
+ * be prepared to be called from C
+ *)
+do (O1,L7) -> MOV -> mstate.b.emit;     (* save 1. arg. in L7 *)
+   (SP,-frame_size,SP) -> SAVE_I -> mstate.b.emit;
+   (* now %i0 = origin, %i1 = free, %i2 = 2. arg *)
+   (I0,O0) -> MOV -> mstate.b.emit;     (* origin -> %o0 *)
+
+   ('AlloI',Tentry[]) -> CallAlloPrim;
+
+   (* I1 = new object; I2 = 2. arg  *)
+   (I1,I0) -> MOV -> mstate.b.emit; (* new object -> I0 *)
+   
+   (G0,G0,G0) -> RESTORE -> mstate.b.emit; 
+   (L7,O1) -> MOV -> mstate.b.emit;
+   (SP,-frame_size,SP) -> SAVE_I -> mstate.b.emit;
+   (* I0 = new object, I1 = 1. arg, I2 = 2. arg, ... *)
+

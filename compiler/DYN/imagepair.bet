@@ -1,0 +1,435 @@
+ORIGIN '../GENERATOR/image';
+LIB_ITEM 'dynamiccompiler';
+INCLUDE '~beta/basiclib/numberio';
+INCLUDE '~beta/sysutils/objinterface';
+INCLUDE '~beta/containers/hashTable';
+INCLUDE '~beta/toollibs/labelnametable/name_to_address_table';
+BODY 'private/imagepairbody';
+
+---lib:attributes---
+(* An ImagePair holds data, code and relocation information for a fragment;
+ * 
+ * See also DOC/DynamicCompilation.html
+ * 
+ * An imagePair may be located in different places dependent on how
+ * it is created and whether it is going to linked in-process
+ * or out-of-process (e.g. by Valhalla) or whether or not it is loaded
+ * from a BETA object file. This is represented through the patterns
+ * 
+ * 	LoadableImage: (# ... #);
+ *      InProcessImage: LoadableImage (# ... #);
+ *      InProcessFileImage: LoadableImage(# ... #);
+ *      OutProcessImage: LoadableImage(# ... #);
+ *      OutProcessFileImage: LoadableImage(# ... #); - not yet existing 
+ * 
+ * See comments below at each pattern.
+ * 
+ * The following operations are important:
+ * 
+ *    xAllocImage
+ *    xCollectExternals
+ *    xColleactEntries
+ *    xRelocate
+ *    xLoadImage
+ *    xTransferImage
+ * 
+ * Summary of situations
+ * ---------------------
+ * 
+ * A.   In image-buffers    
+ * 
+ * B1.  In Image buffers      in-process buffers allocated
+ *
+ * B2.  In Image buffers      out-process buffers allocated
+ * 
+ * C.   Not in image buffers  in in-process buffers
+ * 
+ * D1.  Relocated and in in-process buffers
+ * 
+ * D2.  Relocated and in out-process buffers
+ * 
+ * Scenarios
+ * ---------
+ * 
+ * S1.   A -> B1 -> D1
+ * S2.   A -> B2 -> D2
+ * S3.   C -> D1
+ * S4.   C -> D2
+ * 
+ * An ImagePair may be constructed by operations in dynlib
+ * 
+ * The primary user interface is
+ * - namedOff
+ * - IndexOff
+ * - scanBetaNames
+ * - AllocImage
+ * - LoadImage
+ *)
+NeedsGOT: (* true if Global Offset Table must be constructed *)
+  booleanValue(# <<SLOT needsGOT:doPart>> #);
+
+ImagePair:
+  (# <<SLOT ImagePairLib:attributes>>;
+     trace: @boolean;
+     mapoffset: @IntegerObject(# <<SLOT RelocateMapOffset: dopart>> #);
+     LoadableImage:
+       (* Defines the general properties of a lodableImage *)
+       (# im: ^image;
+          NT: ^name_to_address_table;
+          isCode: @boolean; (* image is a code segment *);
+          imStart: @ integer; (* start address of this image in memory *)
+          getItemProc:<
+            (# relativeOff,item: @integer
+            enter relativeOff
+            do INNER
+            exit item
+            #);
+          getItem: @ getItemProc;
+          patchProc:<
+            (# item,relativeOff: @integer
+            enter(item,relativeOff)
+            do INNER
+            #);
+          patch: @ patchProc;
+          allocateImage: external
+            (# numBytes,startAdr: @integer
+            enter numBytes
+            exit startAdr
+            #);
+          AllocImage:<
+            (# optionalStart: @integer
+            enter optionalStart
+            do INNER; 
+            exit imStart
+            #);
+          AllocGOT:<
+            (#
+            do INNER
+            #);
+          LoadImage:<
+            (# noOfBytes: @integer
+              <<SLOT LoadableImage_loadImage:doPart>>
+            #);
+          ChkAdr:
+            (# adr,start,length: @integer; where: ^ text
+            enter(adr,start,length,where[])
+            do (if not ((start <= adr) and (adr <= start+length)) then
+                   '\n***range error: ' -> puttext;
+                   where[] -> puttext;
+                   start -> puthex; ' ' -> put;
+                   length -> puthex; ' ' -> put;
+                   adr -> puthex; newline
+               if);
+            #);
+          LoadGOT:
+            (# <<SLOT loadableImage_loadGot:doPart>>
+            #);
+          TransferImage:<
+            (# theImage: ^image
+            do (if trace then 'Transfer image:' -> putline if);
+               INNER;
+            exit theImage[]
+            #);
+          ScanMarks:
+            (# <<SLOT ScanMarksLib:attributes>>;
+               
+               mark,             (* current mark; a mark referes to a
+                                  *    - data-item in IMP.data
+                                  * or a
+                                  *    - code-item in IMP.codeIm
+                                  * The data- or code-item is referred to as 
+                                  * current item
+                                  *)
+               relativeOff,      (* relative offset of current item in 
+                                  * within image buffers (data,codeIm) *)
+               absAdr,           (* absolute address of current item 
+                                  * in memory buffer 
+                                  *)
+               xAdr: @integer;   (* address of symbol referred from current item,
+                                  * described by current mark, and to be patched
+                                  * into current item
+                                  *)
+               name: ^text;
+               ep: ^EntryPointInfo;
+               instr: @integer;
+               pInx: @integer;
+               isBetaPrototype: @ booleanValue
+                 (* A BETA prototype entry has the form:
+                  *    T17FOO
+                  * i.e. it starts with 'T'.
+                  * NO other data-entry point generated by the 
+                  * BETA compiler MAY start with 'T'
+                  *)
+                 (# name: ^text
+                 enter name[]
+                 do ((1->name.inxget) = 'T') -> value
+                 #);
+            enter NT[]
+            <<SLOT scanMarks:doPart>>
+            #);
+          CollectExternals: ScanMarks
+            (# isLocal,isData: @boolean
+              <<SLOT CollectExternals:doPart>>
+            #);
+          CollectEntries: ScanMarks
+            (# 
+            <<SLOT CollectEntries:doPart>>
+            #);
+          Relocate: ScanMarks
+            (# wasData: @boolean (* sgi hack *)
+              <<SLOT Relocate:doPart>>
+            #);
+
+       #);
+     InProcessImage: LoadableImage
+       (* This describes an image which is the result of a 
+        * dynamic compilation of one or more descriptors. 
+        * The resulting code and data are placed in the Beta repetitions:
+	*     data and codeIm
+        * in GENERATOR/image.
+        *)
+       (# getItemProc::<
+            (#
+            do (%GetLongAt (@@im.buffer[1] + relativeOff)) -> item
+               (*NOTE! its is not easy to index into buffer since
+                * relativeOff is a byte offset and it is not 4-byte
+                * aligned on Intel
+                *)
+            #);
+          patchProc::<
+            (#
+            do (item) %PutLongAt (@@im.buffer[1] + relativeOff)
+            #);
+          AllocImage::<
+            (* Allocate space for an in-process image *)
+            (# numBytes: @integer
+              <<SLOT InProcessImage_AllocImage:doPart>>
+            #);
+          LoadImage::<
+            (# adr: @integer
+              <<SLOT InProcessImage_LoadImage:doPart>>
+            #);
+          TransferImage::
+            (# 
+            do 'TransferImage:not meaningfull for InProcessImage'
+                 -> putline
+            #)         
+       #);
+     InProcessFileImage: LoadableImage
+       (* Represents an image resulting from loading a Beta object file.
+        * The images are loaded directly to in-process memory.
+        * I.e. data and codeIm are not used as for InProcessImage.
+        * dataStart and codeStart are the start addresses of the 
+        * static memory
+        *)
+       (# getItemProc::<
+            (#
+            do (%getLongAt (imStart + relativeOff)) -> item
+            #);
+          patchProc::<
+            (#
+            do (item) %putLongAt (imStart + relativeOff)
+            #);
+          AllocImage::<
+            (#
+            do Im.buffer_ptr -> imStart;
+            #);
+          AllocGOT::<
+            (#
+            <<SLOT InProcessFileImage_AllocGOT:doPart>>
+            #);
+          LoadImage::<
+            (# <<SLOT InProcessFileImage_LoadImage:doPart>>
+            #);
+          TransferImage::
+            (# 
+            do 'TransferImage:not meaningfull for InProcessFileImage'
+                 -> putline
+            #)
+       #);
+     OutProcessImage: LoadableImage
+       (* Similar to InProcessImage, but represents an image that is going to
+        * be loaded out-of-process to be used by e.g. Valhalla
+        *)
+       (# getItemProc::<
+            (#
+            do (%GetLongAt (@@im.buffer[1] + relativeOff)) -> item
+            #);
+          patchProc::<
+            (#
+            do (item) %PutLongAt (@@im.buffer[1] + relativeOff)
+            #);
+          AllocImage::< (# <<SLOT OutProcessImage_AllocImage:doPart>> #);
+          TransFerImage::<
+            (#
+            do im[] -> theImage[]
+            #);
+       #);
+     OutProcessFileImage: LoadableImage 
+       (* Similar to InProcessFileImage, but to be loaded out-of-process
+        * to be used by e.g. Valhalla.
+        * NOT YET IMPLEMENTED
+        *)
+       (##);
+     LinkObject:
+       (* perhaps move to dynlib?*)
+       (# NT: ^name_to_address_table
+       enter NT[]
+       do NT[] -> xCollectExternals;
+          xAllocImage;
+          NT[] -> xCollectEntries;
+          NT[] -> xRelocate; 
+          xloadImage;
+          (if trace then dump if);
+          INNER;
+          (if trace then 'End linkObject'->putline if)
+       #);
+     xAllocImage:
+       (* Allocates memory space for this(imagePair);
+        * if optionalDataStart and optionalCodeStart are zero
+        * the InProcess space is allocated otherwise it is 
+        * assumed that space has been allocated elsewhere.
+        * Note: an InProcessImage cannot be placed in BETA repetitions
+        * during execution of the ir content since the repetitions may
+        * be moved by the Beta garbage collector. They will thus have
+        * to be moved to static memory not moved by the Beta GC
+        *)
+       (# optionalDataStart,optionalCodeStart: @integer
+            (* enter parameters are only meaningful  for OutProcessImage*)
+       enter(optionalDataStart,optionalCodeStart)
+       do optionalDataStart -> xData.AllocImage -> dataStart;
+          xData.allocGOT; (* only bound for fileImage;
+                           * part of data alloc for inProcessImage
+                           *)
+          optionalCodeStart -> xCode.AllocImage -> codeStart;
+          (if trace then displayImageBounds if);
+       #);
+     xCollectExternals:
+       (* Collect all external symbols referred by this image *)
+       (# NT: ^name_to_address_table
+       enter NT[] <<SLOT imagepair_CollectExternals:do Part>> #);
+     xCollectEntries:
+       (* Collect all symbol entries defined by this image *)
+       (# NT: ^name_to_address_table
+       enter NT[] <<SLOT imagePair_CollectEntries:doPart>>
+       #);
+     xRelocate:
+       (* Relocates the imagePair. This operations delegates to
+        * the actual loadableImage. 
+        *)
+       (# NT: ^name_to_address_table
+       enter NT[] <<SLOT imagePair_Relocate:doPart>>
+       #);
+     xLoadImage:
+       (* Loads an inProcessImage to the allocated static buffers *)
+       (#
+       do xCode.loadImage;
+          xData.loadImage;          
+       #);
+     xTransferImage:
+       (* Transfers an outProcessImage to the outProcess *)
+       (# item, outProcessAdr: @integer
+         <<SLOT imagePair_transferImage:doPart>> 
+       #);
+     
+     (* Implementation stuff that should be moved to the private part.
+      * It must, however first be checked that it is not used by any
+      * imagePair clients.
+      *)
+     groupName: ^text;
+     xData,xCode: ^loadableImage;
+     protoOff: [1] @ integer;
+     protoNames,betaNames: [1] ^text; 
+     protoTop: @integer;
+     dataStart,codeStart,GOTstart,GOTnoOfBytes: @integer;
+     DisplayImageBounds:
+       (# <<SLOT imagepair_displayImageBounds:doPart>>
+       #);
+     isFileImage,
+     isCode: @boolean;
+     add:
+       (# name: ^text; relOff,absAdr: @integer;
+       enter(name[],relOff,absAdr)
+       do (# PT: @prototype; T: ^text
+          do
+             (if isFileImage then
+                 dataStart + relOff -> PT
+              else
+                 (* OBS for Intel relOff is a byte address in buffer
+                  * and it is apparently NOT 4 byte aligned
+                  *)
+                 @@xData.im.buffer[1] + relOff -> PT; 
+                 (* OBS no GC must happen here !*)
+             if);
+             PT.labId -> T[];
+             (if trace then
+                 'Add: '->puttext; name[] -> puttext; ' ' -> put;
+                 T[] -> putline;
+             if);
+             (if T.length= 0 then
+                 'ImagePair.add: error: ProtoType at address ' 
+                   -> screen.puttext;
+                 relOff -> puthex;
+                 ' has LabId with length 0 - skipped' -> screen.putline;
+              else
+                 (if (protoTop+1->protoTop) > protoOff.range then
+                     protoOff.range->protoOff.extend;
+                     protoNames.range -> protoNames.extend;
+                     betaNames.range -> betaNames.extend
+                 if);
+                 (if (T.length -> T.inxGet) = '#' then
+                     (T.length,T.length) -> T.delete
+                 if);
+                 absAdr -> protoOff[protoTop];
+                 name[] -> protoNames[protoTop][];
+                 T[] -> betaNames[protoTop][];
+             if);
+          #)
+       #);
+     IndexedOff:
+       (# inx: @integer
+       enter inx
+       do (if (inx < 1) or (protoTop < inx) then
+              NoSuchPrototype
+          if)
+       exit protoOff[inx]
+       #);
+     NamedOff:
+       (# n: ^text; off: @integer
+       enter N[]
+       do L: (#
+             do (for i: protoTop repeat
+                     (if betaNames[i][] -> N.equalNCS then
+                         protoOff[i] -> off;
+                         leave L
+                if)for);
+                NoSuchPrototype
+             #)
+       exit off
+       #); 
+     scanBetaNames:
+       (# current: ^text
+       do (for i: protoTop repeat
+               betaNames[i][] -> current[];
+               inner scanBetaNames
+          for)
+       #);
+     NoSuchPrototype:< exception;
+     dump:
+       (#
+       do 'Prototypes:\n-----------' -> putline;
+          (for i: protoTop repeat
+               i -> putint; ':'->put; ' ' -> put;
+               betaNames[i][] -> puttext; ' ' ->put;
+               protoNames[i][] -> puttext; ' ' ->put;
+               protoOff[i]->putHex; ':'->put; newline;
+               (for j: 10 repeat
+                    '\t'->put;
+                    (%getLongAt (protoOff[i]+(j-1)*4))->putHex; newline
+               for);
+               newline;
+          for)
+       #);
+     private: @ <<SLOT imagepair_private:descriptor>>;
+     
+  #);

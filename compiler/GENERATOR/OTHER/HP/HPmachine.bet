@@ -1,0 +1,1167 @@
+ORIGIN 'machine'
+--machineAtt:attributes--
+loadDLT:
+  (* used when generating position indepdendent code (PIC) *)
+  (# xL: @localLab
+  do xL.new; xL.def;
+     '\tmov.l\t&DLT,%a5\n'->BC.putT;
+     '\tlea.l\t'->BC.putT; xL.putOP; '+2(%pc,%a5.l),%a5\n'->BC.putT;
+     (* the +2 above does not occur in the HP documentation,
+      * but seems necessary!!??
+      *)
+     INNER  
+  #);
+BitField:
+  (# off,wd: @integer
+  enter(off,wd)
+  do'{'->BC.putC; off->BC.imm; ':'->BC.putC; wd->BC.imm; '}'->BC.putC
+  #);
+
+--mstate:descriptor--
+(# 
+   
+   vtInx :@ integer;
+   descInx :@ integer;
+   curdntInx: @integer;
+
+   outVt :
+     (# t :@text;
+        thisVtInx,lgth :@ integer
+     enter t
+     do '\tvt\n\tvtbytes\t' -> BC.putT;
+        t.length -> lgth;
+        t.scanAll
+        (# inx :@ integer 
+        do ch -> BC.putI;
+           (if ((inx+1 -> inx) mod 16)
+            //0 then '\n\tvtbytes\t' -> BC.putT
+            else ',' -> BC.putC;
+           if)
+        #);
+        '0\n' -> BC.putT;
+        vtInx -> thisVtInx;
+        thisVtInx + lgth + 1 -> vtInx
+     exit thisVTInx
+     #);
+#)
+
+--AssemblerHeader:descriptor--
+(# 
+do '#\thp assembler\nversion 2\n'->BC.putT
+#)
+--debugHeader:descriptor--
+(#
+do (if (switch38) then
+       (* HP-UX 8 or 9 stab syntax *)
+       (# dbgInx,fragInx :@ integer
+       do''->MState.outVt;
+          localPath-> MState.outVt -> fragInx;
+          'beta:debugger' -> MState.outVt -> dbgInx;
+          '\tlntt\n\tdnt_srcfile\t1,1,0\n\tdnt_module\t1,0,1\n\tdnt_srcfile\t1,1,2\n\tdnt_function\t1,1,0,0,0,0,0,'
+            -> BC.putT;
+          fragInx -> BC.putI;
+          ',0,0xffffffff,11,debugstart,0xc30007c5,debugstart,debugend\n\tdnt_begin\t0,4\n'
+            -> BC.putT;
+          '\tdnt_end\t4,0,5,0x80000007\n\tdnt_end\t2,0,7,0x80000004\n\ttext\n' -> BC.putT;
+          'sltspecial\t1,1,0x80000000\nsltspecial\t2,1,0x80000001\n' -> BC.putT;
+          'sltspecial\t1,1,0x80000003\nsltspecial\t3,1,0x80000004\n' -> BC.putT;
+          'sltspecial\t5,2,0x80000007\nsltspecial\t6,4,0x80000008\n' -> BC.putT;
+          'sltexit\t5\nsltspecial\t6,4,0x80000009\ndebugstart:nop\n' -> BC.putT;
+          10 -> MState.descInx;
+       #)
+    else
+       '\tdntt\n\tdnt_module\t"' -> BC.putT;
+       localPath->BC.putT;
+       '",1\n\tdnt_function\t1,1,"beta:debugger","xx",0xffffffff,11,debugstart,0xc30007c5,debugend\n\tversion 2\n\ttext\n\tdebugstart:\n' 
+         -> BC.putT; 
+   if)
+#)
+-- CstOpPut: dopart --
+do '&'->BC.putC; C->BC.putI
+   
+-- TextOpPut: dopart --
+do T->BC.putT
+   
+-- textOpLoadAdr: dopart --
+do 
+-- DataRegOpPut: dopart --
+do '%d'->BC.putT; rN->BC.putI
+   
+--FloatRegOpPut:descriptor--
+(#do '%fp'->BC.putT; rN->BC.putI #)
+--FloatRegOpLoad:descriptor--
+(#do '\tfmov.d\t'->BC.putT; A.putOp; ','->BC.putC; putOp; BC.putnl #)
+--FloatRegOpStore:descriptor--
+(#do '\tfmov.d\t'->BC.putT; putOp; ','->BC.putC; A.putOp; BC.putNL #)
+--FloatRegOpStoreTmp:descriptor--
+(#do '\tfmov.d\t'->BC.putT; putOp; ',-(%sp)\n'->BC.putT;
+   &stackTopAdr[]->A[]
+#)
+--floatRegOpStore2int:descriptor--
+(#
+do D.alloc;
+   '\tfintrz.x\t'->BC.putT; putOp;
+   '\n\tfmov.l\t'->BC.putT; putOp; ','->BC.putC; D.putOp;
+   '\n\tmov.l\t'->BC.putT; D.putOp; ','->BC.putC; A.putOp; BC.putNL;
+   deAlloc
+#)
+--floatConst:descriptor---
+(# Lab: @ localLab;
+do switchToData;
+   FR.alloc;
+   Lab.new; Lab.def; 
+   '\tdouble\t0f'->BC.putT; T->BC.putT; BC.putNL;
+   switchToCode;
+
+   (if common.switch[53] then
+       loadDLT
+       (#
+       do '\tmov.l\t'->BC.putT; Lab.putOp; '(%a5),%a5\n'->BC.putT;
+          '\tfmov.d\t(%a5)'->BC.putT
+       #)
+    else '\tfmov.d\t'->BC.putT; Lab.putOp;
+   if);
+   ','->BC.putC; FR.putOp; BC.putNL
+#)
+--int2float:descriptor--
+(#
+do FR.alloc; '\tfmov.l\t'->BC.putT; A.putOp; ','->BC.putC; FR.putOp; BC.putNL
+#)
+--intReg2float:descriptor--
+(#
+do FR.alloc; '\tfmov.l\t'->BC.putT; A.putOp; ','->BC.putC; FR.putOp; BC.putNL
+#)
+--float2Int:doPart--
+do '\tfintrz.x\t'->BC.putT; FR.putOp;
+   '\n\tfmov.l\t'->BC.putT; FR.putOp; ','->BC.putC; dr.putOp; BC.putNL
+   
+--cmpFloat:descriptor--
+(* Note that the order of LF and A has been switched - stupid HP "feature" *)
+(# fr: ^floatRegOp;
+do (if A.isFloatRegOp then
+       (* Yet another stupid HP difference: 
+        *   fcmp.d %freg,%freg
+        * is not allowed - second operand must be EA!
+        *)
+       A[] -> fr[];
+       fr.storeTmp -> A[];
+   if);
+   '\tfcmp.d\t'->BC.putT; LF.putOp; ','->BC.putC; A.putOp; BC.putNL;
+#)
+--fBeq:descriptor--
+(#do '\tfbeq\t'->BC.putT; op.putOp; BC.putNl #)
+--fBge:descriptor--
+(#do '\tfbge\t'->BC.putT; op.putOp; BC.putNl #)
+--fBle:descriptor--
+(#do '\tfble\t'->BC.putT; op.putOp; BC.putNl #)
+--fBne:descriptor--
+(#do '\tfbne\t'->BC.putT; op.putOp; BC.putNl #)
+--fBgt:descriptor--
+(#do '\tfbgt\t'->BC.putT; op.putOp; BC.putNl #)
+--fBlt:descriptor--
+(#do '\tfblt\t'->BC.putT; op.putOp; BC.putNl #)
+--addFloat:descriptor--
+(#
+do '\tfadd.'->BC.putT;
+   (if AinFreg then 'x\t'->BC.putT else 'd\t'->BC.putT if);
+   A.putOp; ','->BC.putC; LF.putOp; BC.putNL 
+#)
+--subFloat:descriptor--
+(#do '\tfsub.d\t'->BC.putT; A.putOp; ','->BC.putC; LF.putOp; BC.putNL #)
+--mulFloat:descriptor--
+(#do '\tfmul.d\t'->BC.putT; A.putOp; ','->BC.putC; LF.putOp; BC.putNL #)
+--divFloat:descriptor--
+(#do '\tfdiv.d\t'->BC.putT; A.putOp; ','->BC.putC; LF.putOp; BC.putNL #)
+--negFloat:descriptor--
+(#do '\tfneg.x\t'->BC.putT; F.putOp; BC.putNL #)
+--pushFloatReg:descriptor--
+(#do '\tfmov.d\t%fp'->BC.putT; rN->BC.putI; ',-(%sp)\n'->BC.putT #)
+--popFloatReg:descriptor--
+(#do '\tfmov.d\t(%sp)+,%fp'->BC.putT; rN->BC.putI; '\n'->BC.putT #)
+-- AdrRegOpPut: dopart --
+do (if ind then '(%a'->BC.putT; rN->BC.putI; ')'->BC.putC;
+    else  '%a'->BC.putT; rN->BC.putI;  
+   if)
+   
+--stackTopAdrPutOp:descriptor--
+(#do '(%sp)+'->BC.putT #)
+--doubleDataRegPut:descriptor-- (* see e.g. divsl.l *)
+(#
+do '%d'->BC.putT; dNo1->BC.putI; ':'->BC.putC; '%d'->BC.putT; dNo2->BC.putI
+#)
+-- LocalLabDef: dopart --
+do (if type = interFragment then
+       asText -> export;
+       asText -> labelDef
+   if);
+   'L'->BC.putC; labNo->BC.putI; ':'->BC.putC 
+--VirtLabDef:descriptor--
+(# do 'L' -> BC.putC; labNo -> BC.putI; ':' -> BC.putC #)  
+-- LocalLabPut: dopart --
+do (if type = interFragment then
+       asText -> BC.putText
+    else
+       'L'->BC.putC; labNo->BC.putI 
+   if)
+-- localLabLoadAdr: dopart --
+do 
+--localLabAstext:descriptor--
+(#
+do 'L'->localLabText.put; labNo->localLabText.putInt
+#)
+-- ldCst: dopart --
+do '\tmov.l\t'->BC.putT; C.putOp; BC.sep; R.putOP; BC.putNl 
+-- cstLoadOp: dopart --
+do 
+-- cstOpLoadToReg: dopart --
+do 
+-- stCst: descriptor --
+(# do '\tmov'->BC.putT; size->BC.putS; C.putOp; BC.sep; A.putOP; BC.putNl #)
+--ldByte:descriptor---
+(#
+do '\tmov.b\t'->BC.putT; op1.putOp; BC.sep; op2.putOP; BC.putNl
+#)
+--ldHalf:descriptor---
+(#
+do '\tmov.w\t'->BC.putT; op1.putOp; BC.sep; op2.putOP; BC.putNl
+#)
+--ldVal:descriptor--
+(#do '\tmov.l\t'->BC.putT; A.putOp; BC.sep; R.putOP; BC.putNl #)
+--ldValFromLab: dopart--
+do '\tmov.l\t'->BC.putT; L.putOp; BC.sep; R.putOP; BC.putNl
+--ldVl:descriptor--
+(#
+do (if size//4 then else R[]->gClr if);
+   '\tmov'->BC.putT; size->BC.putS; A.putOp; BC.sep; R.putOP; BC.putNl 
+#)
+--ldSignedVl:descriptor--
+(#
+do (if size//4 then else R[]->gClr if);
+   '\tmov'->BC.putT; size->BC.putS; A.putOp; BC.sep; R.putOP; BC.putNl; 
+   (if size
+    // 2 then
+       '\text.l\t'->BC.putT; R.putOP; BC.putNl
+    // 1 then
+       '\textb.l\t'->BC.putT; R.putOP; BC.putNl
+   if);
+#)
+--stByte:descriptor---
+(#
+do '\tmov.b\t'->BC.putT; op1.putOp; BC.sep; op2.putOP; BC.putNl
+#)
+--stHalf:descriptor---
+(#
+do '\tmov.w\t'->BC.putT; op1.putOp; BC.sep; op2.putOP; BC.putNl
+#)
+--stVal:descriptor--
+(#do '\tmov.l\t'->BC.putT; R.putOp; BC.sep; A.putOP; BC.putNl #)
+--stValInLab: dopart--
+do '\tmov.l\t'->BC.putT; R.putOp; BC.sep; L.putOP; BC.putNl
+-- cpReg: dopart --
+do '\tmov.l\t'->BC.putT; R1.putOp; BC.sep; R2.putOP; BC.putNl 
+--cpByteMem:descriptor--
+(#do '\tmov.b\t'->BC.putT; A1.putOp; BC.sep; A2.putOP; BC.putNl #)
+--cpHalfMem:descriptor--
+(#do '\tmov.w\t'->BC.putT; A1.putOp; BC.sep; A2.putOP; BC.putNl #)
+--cpMem:descriptor--
+(#do '\tmov.l\t'->BC.putT; A1.putOp; BC.sep; A2.putOP; BC.putNl #)
+--stValInText:dopart--
+do (if common.switch[53] then
+       (* data relative adressing necessary! *)
+       loadDLT
+       (#
+       do '\tlea.l\t'->BC.putT; L.putOp; '(%a5),%a5\n'->BC.putT;
+          '\tmov.l\t'->BC.putT; op.putOp; ',(%a5)'->BC.putT 
+       #)
+    else
+       '\tmov.l\t'->BC.putT; op.putOp; BC.sep; L.putOP;        
+   if);    
+   BC.putNl 
+--comment:dopart--
+do '#  '->BC.putT; T->BC.putT; BC.putNL
+-- Export: dopart --
+do 'global '-> BC.putT; Lab->BC.putT; BC.putNL
+   
+--Import:descriptor--
+(#
+do (* empty for HP *)
+#)
+--ImportData:descriptor--
+(#
+do (* empty for HP *)
+#)
+-- jsrT: dopart --
+do (if common.switch[53] then
+       '\tbsr.l\t'->BC.putT; 
+    else '\tjsr\t'->BC.putT; 
+   if);
+   T->BC.putT; BC.putNl
+
+-- jmpT: dopart --
+do (if common.switch[53] then '\tbsr.l\t'->BC.putT
+    else '\tjmp\t'->BC.putT 
+   if);    
+   T->BC.putT; BC.putNl
+-- jsrReg: dopart --
+do op.mkIndirect; 
+   '\tjsr\t'->BC.putT; op.putOp; BC.putNl;
+-- gJmp: dopart --
+do (if op##//textOperand## then 
+       '\tbr\t'->BC.putT; op.putOp; BC.putNl
+    else
+       '\tjmp\t'->BC.putT; op.putOp; BC.putNl;
+   if)  
+-- gJsr:dopart --
+do (if common.switch[53] then
+       (if op.istextOp then (* always textOperand now *)
+           '\tbsr.l\t'->BC.putT 
+        else
+           '\tjsr\t'->BC.putT
+       if); 
+    else
+       '\tjsr\t'->BC.putT
+   if); 
+   op.putOp; BC.putNl
+-- rts: dopart --
+do '\trts\t'->BC.putT; BC.putNl
+   
+-- gClr:dopart --
+do (if op.isadrRegOp then
+       '\tmov.l\t&0,\t'->BC.putT 
+    else '\tclr.l\t'->BC.putT
+   if);
+   op.putOp; BC.putNl
+--pushAdr:descriptor--
+(#
+do 
+   (if common.switch[53] then
+       loadDLT
+       (#
+       do '\tmov.l\t'->BC.putT; op.putOP; '(%a5),-(%sp)\n'->BC.putT; 
+       #)
+    else
+       '\tpea\t'->BC.putT; op.putOp; BC.putNL
+   if);    
+
+#)
+--Push:descriptor--
+(#
+do '\tmov.l\t'->BC.putT; op.putOp; ',-(%sp)'->BC.putT;BC.putNL
+#)
+--Pop:descriptor--
+(#
+do '\tmov.l\t'->BC.putT; '(%sp)+,'->BC.putT; op.putOp;BC.putNL
+#)
+--SetTop:descriptor--
+(#
+do '\tlea.l\t'->BC.putT;
+   (if off//0 then else off(* *4 *)->BC.putI; if);
+   '(%sp),%sp' -> BC.putT; BC.putNL
+#)
+--gLea:descriptor---
+(#
+do (if common.switch[53] then
+       (if (op1.istextOp or op1.islocalLabOp) then
+           (* data relative adressing necessary! *)
+           loadDLT
+           (#do '\tmov.l\t'->BC.putT; op1.putOP; '(%a5),'->BC.putT #)
+        else
+           '\tlea.l\t'->BC.putT; op1.putOp; BC.sep
+       if)
+    else
+       '\tlea.l\t'->BC.putT; op1.putOp; BC.sep
+   if);
+   op2.putOP; BC.putNl
+#)
+--gLeaLabel:descriptor---
+(#
+do (if common.switch[53] then
+       (if (op1.istextOp or op1.islocalLabOp) then
+           (* data relative adressing necessary! *)
+           loadDLT
+           (#do '\tmov.l\t'->BC.putT; op1.putOP; '(%a5),'->BC.putT #)
+        else
+           '\tlea.l\t'->BC.putT; op1.putOp; BC.sep
+       if)
+    else
+       '\tlea.l\t'->BC.putT; op1.putOp; BC.sep
+   if);
+   op2.putOP; BC.putNl
+#)
+--tstNone:descriptor--
+(# dr: @dataRegOperand;
+do dr.alloc; (A[],dr[])->ldVal; 
+   4 (*le*) -> trap;
+   (dr[],R[])->cpReg;
+   dr.deAlloc
+#)
+--ChkCase:doPart--
+do (* inx = caseIndex-min
+    *   if inx >unsigned  (max-min) the  goto elseLab
+    * which is equivalent to
+    *   if inx >=unsigned  (max-min+1) the  goto elseLab
+    * This ALSO works if caseIndex < min.
+    * Similar to ChkIndex below.
+    * MC68 has no bgtu but has a bgeu called bcc.
+    *)
+   '\tcmp\t'->BC.putT; inx.putOp; BC.sep; (max-min+1)->BC.imm; 
+   '\n\tbcc\t'->BC.putT; elseLab.putOp; BC.putNl;
+--ChkIndex:descriptor--
+(#
+do '\tchk2.l\t'->BC.putT; op1.putOp; BC.sep; op2.putOP; BC.putNl
+#)
+--ChkHeap:descriptor--
+(# L: @ localLab
+do 
+   (if common.switch[53] then 
+       loadDLT
+       (#
+       do '\tmov.l\t_IOA(%a5),%a5\n'->BC.putT;
+          '\tcmp2.l\t'->BC.putT; op.putOp; ',(%a5)'->BC.putT;
+       #)
+    else '\tcmp2.l\t'->BC.putT; op.putOp; ',_IOA'->BC.putT;
+   if);
+   BC.putNL;     
+   L.New; L[]->jumpIfTrue;
+   op[]->push;
+   'ChkRA'->jsrT;
+   L.def;
+   op[]->gClr; (***<<<<<<<<<<<<<<<<<<< *******)
+#)
+--SignExtByte:descriptor--
+(#
+do '\textb.l\t'->BC.putT; op.putOp; BC.putNl
+#)
+--SignExtWord:descriptor--
+(#
+do '\text.l\t'->BC.putT; op.putOp; BC.putNl (* ext.w ?? *)
+#)
+--GetBits:descriptor--
+(#
+do '\tbfextu\t'->BC.putT; op1.putOp;
+   (pos,length)->bitField; BC.sep; op2.putOp; BC.putNl
+#)
+--GetSignedBits:descriptor--
+(#
+do '\tbfexts\t'->BC.putT; op1.putOp;
+   (pos,length)->bitField; BC.sep; op2.putOp; BC.putNl
+#)
+-- gGetBits:doPart --
+do '\tbfextu\t'->BC.putT; dr.putOp;
+   '{'->BC.putC; pDr.putop; ':'->BC.putC; lDr.putOp; '}'->BC.putC;
+   BC.sep; dr.putOp; BC.putNl
+-- gGetSignedBits:doPart --
+do '\tbfexts\t'->BC.putT; dr.putOp;
+   '{'->BC.putC; pDr.putop; ':'->BC.putC; lDr.putOp; '}'->BC.putC;
+   BC.sep; dr.putOp; BC.putNl
+-- PutBits: dopart --
+do '\tbfins\t'->BC.putT; op1.putOp;
+   BC.sep; op2.putOp; (pos,length)->bitField;  BC.putNl
+-- gPutBits:doPart --
+do '\tbfins\t'->BC.putT; dr.putOp;
+   BC.sep; ar.putOp; '{'->BC.putC; pDr.putop; ':'->BC.putC; lDr.putOp; '}'->BC.putC;
+   BC.putNl
+--gAdd:descriptor--
+(#do '\tadd'->BC.putT; size->BC.putS; op1.putOp; BC.sep; op2.putOP; BC.putNl #)
+--gSub:descriptor--
+(#
+do (if common.switch[53] then
+       (if op1.istextOp then
+           loadDLT
+           (#
+           do '\tlea.l\t'->BC.putT; op1.putOp; '(%a5),%a5\n'->BC.putT;
+              '\tsub'->BC.putT; size->BC.putS; '(%a5)'->BC.putT
+           #)
+        else '\tsub'->BC.putT; size->BC.putS; op1.putOp
+       if)
+    else '\tsub'->BC.putT; size->BC.putS; op1.putOp
+   if);
+   BC.sep; op2.putOP; BC.putNl
+#)
+--gNeg:descriptor--
+(#do '\tneg'->BC.putT; size->BC.putS; op.putOp; BC.putNl #)
+--gCmp:descriptor--
+(# (* HP: Notice order of operands *)
+do '\tcmp'->BC.putT; size->BC.putS; op2.putOp; BC.sep; op1.putOp; BC.putNl
+#)
+--gMult:descriptor--
+(# (* SUN: mulsl ?? ;
+    * Note that size can only be 2 or 4 *)
+do '\tmuls'->BC.putT; size->BC.putS; op1.putOp; BC.sep; op2.putOP; BC.putNl
+#)
+--gDiv:descriptor--
+(# (* Note that size can only be 4 *)
+do '\tdivsl.l\t'->BC.putT; op1.putOp; BC.sep; op2.putOP; BC.putNl
+#)
+--gOr:descriptor--
+(#do '\tor'->BC.putT; size->BC.putS; op1.putOp; BC.sep; op2.putOP; BC.putNl #)
+--gAnd:descriptor--
+(#do '\tand'->BC.putT; size->BC.putS; op1.putOp; BC.sep; op2.putOP; BC.putNl #)
+--gXor:descriptor--
+(#do '\teor'->BC.putT; size->BC.putS; op1.putOp; BC.sep; op2.putOP; BC.putNl #)
+--gNot:descriptor--
+(#
+do '\taddq'->BC.putT; size->BC.putS; '&1'->BC.putT; BC.sep; op.putOp; BC.putNl;
+   '\tand\t&1'->BC.putT; BC.sep; op.putOp; BC.putNl
+#)
+--LogNot:descriptor--
+(#
+do '\tnot'->BC.putT; size->BC.putS; op.putOp; BC.putNL
+#)
+--gGetDataByte:descriptor--
+(#
+do (if byteNo
+    // 0 then (* rotate left 8 bits *)
+       '\trol.l\t'->BC.putT; '&8,'->BC.putT; op1.putOp; BC.putNl;
+    // 1 then (* swap register halves *)
+       '\tswap.w\t'->BC.putT; op1.putOp; BC.putNL; 
+    // 2 then (* rotate right 8 bits *)
+       '\tror.w\t'->BC.putT; '&8,'->BC.putT; op1.putOp; BC.putNl;
+   if);
+   '\tand.l\t'->BC.putT; '&255,'->BC.putT; op1.putOp; BC.putNL
+#)
+--gGetDataWord:descriptor--
+(#
+do (if wordNo//0 then
+       '\tswap.w\t'->BC.putT; op1.putOp; BC.putNL;
+   if);
+   '\tand.l\t'->BC.putT; '&'->BC.putC; 255*256+255->BC.putI;
+   BC.sep; op1.putOp; BC.putNL
+#)
+--JumpIfTrue:descriptor--                        (* byte, word or long ?? *)
+(#
+do '\tbcc\t'->BC.putT; op.putOp; BC.putNl
+#)
+--gBeq:descriptor--
+(#do '\tbeq\t'->BC.putT; op.putOp; BC.putNl  #)
+--gBne:descriptor--
+(#do '\tbne\t'->BC.putT; op.putOp; BC.putNl #)
+--gBge:descriptor--
+(#do '\tbge\t'->BC.putT; op.putOp; BC.putNl  #)
+--gBae:descriptor--
+(#do '\tbhs\t'->BC.putT; op.putOp; BC.putNl  #) (* to be fixed etc *)
+--gBle:descriptor--
+(#do '\tble\t'->BC.putT; op.putOp; BC.putNl #)
+--gBbe:descriptor--
+(#do '\tbls\t'->BC.putT; op.putOp; BC.putNl #)
+--gBgt:descriptor--
+(#do '\tbgt\t'->BC.putT; op.putOp; BC.putNl#)
+--gBab:descriptor--
+(#do '\tbhi\t'->BC.putT; op.putOp; BC.putNl#)
+--gBlt:descriptor--
+(#do '\tblt\t'->BC.putT; op.putOp; BC.putNl #)
+--gBbl:descriptor--
+(#do '\tblo\t'->BC.putT; op.putOp; BC.putNl #)
+--trap:descriptor--
+(* should make a case on trap, cond=4 => le *)
+(#do '\ttle\n'->BC.putT #)
+--initExternalCall:dopart--
+do
+--CallCproc:descriptor--
+(#
+do (if common.switch[53] then '\tbsr.l\t'->BC.putT; 
+    else '\tjsr\t'->BC.putT
+   if);
+   '_'->BC.putC; T->BC.putT; BC.putNl
+#)
+--PushClong:descriptor--
+(#
+do op[]->Push
+#)
+--PushCword:descriptor--
+(#
+do op[]->Push (* gMoveWord for Mac? *)
+#)
+--PushCbyte:descriptor--
+(#
+do op[]->Push (* gMoveByte for Mac? *)
+#)
+--PushCDoubleAdr:descriptor--
+(# A1: ^address
+do A.copy->A1[]; (*addOff changes A*)
+   4->A.addOff->pushClong; A1[]->pushClong;
+#)
+--PushCtext:descriptor--
+(##)
+--PushCfloat:descriptor--
+(#do '\tfmov.d\t'->BC.putT; F.putOp; ',-(%sp)\n'->BC.putT #)
+--PopCword:descriptor--
+(#
+do '\tmov.w\t(%sp)+,'->BC.putT; op.putOp; BC.putNL
+#)
+--PopCbyte:descriptor--
+(#
+do '\tmov.w\t(%sp)+,'->BC.putT; op.putOp; BC.putNL
+#)
+--Xpar:descriptor--
+(# extKind,top,(*parSize,*)longSize,wordSize: @integer;
+   SP: @stackOff;
+#)
+--initGetXpar:descriptor-- (* must be fixed for Pascal also *)
+(# 
+do (if extKind->Xpar.extKind// 5 (*sematt.cCallBackExt*) then
+       72->Xpar.top; 4->Xpar.longSize->Xpar.wordSize
+       (* note cTop=pascTop+4 => cTop=72, pascTop=68 *)
+    else (*pascCallBackExt*)
+       68+((BC+SC)*2+LC*4(*->Xpar.parSize*))->Xpar.TOP;
+       -4->Xpar.longSize; -2->Xpar.wordSize;
+   if);
+#)
+--getXlong:descriptor--
+(*for C, long,word, and byte are always long *)
+(#
+do Xpar.top->Xpar.SP; (XPar.SP[],dr[])->ldVal;
+   Xpar.top+Xpar.longSize->Xpar.top
+#)
+---GetXword:descriptor--
+(* only for MAC Pascal, byte and word are always word *)
+(#
+do Xpar.top->Xpar.SP; (XPar.SP[],dr[])->ldHalf;
+   Xpar.top+Xpar.wordSize->Xpar.top
+#)
+---GetXbyte:descriptor--
+(* only for MAC Pascal, byte and word are always word *)
+(#
+do Xpar.top->Xpar.SP; (XPar.SP[],dr[])->ldHalf;
+   Xpar.top+Xpar.wordSize->Xpar.top
+#)
+--toXres:descriptor--
+(# #)
+--StackOffPut:descriptor--
+(#
+do (if off//0 then else off->BC.putI if); '(%sp)'->BC.putT
+#)
+--SaveReg:descriptor--     (* Save registers a0 and a1 *)
+(#
+do '\tmov.l\t%a0,-(%sp)\n\tmov.l\t%a1,-(%sp)'->BC.putT; BC.putNL
+#)
+--SaveHeapTop:descriptor---
+(#
+do (if common.switch[53] then
+       (* data relative adressing necessary! *)
+       loadDLT
+       (#
+       do '\tlea.l\t_BetaStackTop(%a5),%a5\n'->BC.putT;
+          '\tmov.l\t%sp,%a5'->BC.putT
+       #)
+    else
+       '\tmov.l\t%sp,_BetaStackTop'->BC.putT;          
+   if);    
+   BC.putNL
+#)
+--RestoreReg:descriptor--  (* Restore registers a0 and a1 *)
+(#
+do '\tmov.l\t(%sp)+,%a1\n\tmov.l\t(%sp)+,%a0'->BC.putT; BC.putNL
+#)
+--popCallStack:descriptor--
+(#
+do '\tlea.l\t'->BC.putT; N*4 ->BC.putI; '(%sp),%sp'->BC.putT; BC.putNL
+#)
+--AlcPascResult:descriptor--
+(# 
+#)
+--PascalTrap:descriptor--
+(# (* only meaningful on  Macintosh *)
+do '# PascalTrap: '->BC.putT; TrapId->BC.putT; BC.putNL
+#)
+--SwitchToData:descriptor--
+(#
+do 'lalign 2'->BC.putT; BC.putNL; 'data' -> BC.putT; BC.putNL
+#)
+--SwitchToCode:descriptor--
+(#
+do 'lalign 2'->BC.putT; BC.putNL; 'text' -> BC.putT; BC.putNL
+#)
+--DeclareLong:descriptor--
+(#
+do 'long ' -> BC.putT; N->BC.putI; BC.putNL
+#)
+--DeclareAddress:descriptor--
+(#
+do 'long ' -> BC.putT; op.putOp; BC.putNL
+#)
+--DeclareWord:descriptor--
+(#
+do 'short ' -> BC.putT; N->BC.putI; BC.putNL
+#)
+--DclWord:descriptor--
+(#
+do 'short ' -> BC.putT; N ->BC.putI; BC.putNL
+#)
+--Skip:descriptor--
+(#
+do 'space ' ->BC.putT; BN->BC.putI; BC.putNL
+#)
+--AsciiZ:descriptor--
+(* For hp the output has the form
+ *    asciz "........"
+ * Chars with a value less that ' ' (32) are converted to
+ * the form \ooo where ooo is the octal value of the character.
+ * The char '"' is printed as '\"'.
+ *)
+(#
+do 'byte "' -> BC.putT;
+   T.scanAll
+   (# i: @integer; 
+   do i+1->i;
+      (if (ch<' ') then
+          '\\'->BC.putC;
+          '0'+(ch div 64)->BC.putC; (ch mod 64)->ch;
+          '0'+(ch div  8)->BC.putC; (ch mod  8)->ch;
+          '0'+ch->BC.putC;
+       else
+          (if ch
+           // '"' then '\\'->BC.putC; '"'->BC.putC
+           // '\\' then '\\'->BC.putC; '\\'->BC.putC
+           else 
+              (if (ch>255) then
+          	  ' ' -> BC.putC;
+               else
+          	  ch->BC.putC 
+              if);
+          if)
+      if);
+      (* a text string may contain no more than 256 chars on HP*)
+      (if (i mod 256) // 0 then '"\n\tbyte "' -> BC.putT if)
+      (* if i=t.length then an additional line 'byte "0' will be generated
+       *)
+   #);
+   '\\'->BC.putC; 
+   '000"\nlalign 4\n' -> BC.putT
+#)
+--LabelDef:descriptor--
+(#
+do T->BC.putT; ':'->BC.putC 
+#)
+--defineMainLabel1:descriptor--
+(# T: @text
+do '_main' -> T ; T[] -> export;  T[] -> labelDef;
+   'SetArgValues'->jsrT;
+#)
+--ByteSwap:descriptor--
+(# T: @text
+do '******** No byte swap implemented \n'->T;
+   common.messagestream.newline;
+   T[]->common.messagestream.putline;
+   T->comment
+#)
+-- arithShiftLeft: dopart --
+do (*'\tasl.l\t'->BC.putT; op1.putOp; BC.sep; op2.putOp; BC.putNL*)
+   (# c: ^cstOperand; dr: @dataRegOperand;
+   do (if op1.iscstOp  then
+          op1[]->c[];
+          (if c.C>8  then
+              dr.alloc;
+              (c[],dr[])->ldCst;
+              '\tasl.l\t'->BC.putT; dr.putOp; BC.sep; op2.putOp; BC.putNL;
+              dr.dealloc;
+           else
+              '\tasl.l\t'->BC.putT; op1.putOp; BC.sep; op2.putOp; BC.putNL
+          if);
+       else
+          '\tasl.l\t'->BC.putT; op1.putOp; BC.sep; op2.putOp; BC.putNL
+      if);
+   #)
+-- arithShiftRight: dopart --
+do (*'\tasr.l\t'->BC.putT; op1.putOp; BC.sep; op2.putOp; BC.putNL*)
+   (# c: ^cstOperand; dr: @dataRegOperand;
+   do (if op1.iscstOp  then
+          op1[]->c[];
+          (if c.C>8  then
+              dr.alloc;
+              (c[],dr[])->ldCst;
+              '\tasr.l\t'->BC.putT; dr.putOp; BC.sep; op2.putOp; BC.putNL;
+              dr.dealloc;
+           else
+              '\tasr.l\t'->BC.putT; op1.putOp; BC.sep; op2.putOp; BC.putNL
+          if)
+       else
+          '\tasr.l\t'->BC.putT; op1.putOp; BC.sep; op2.putOp; BC.putNL
+      if);
+   #)
+--logicalShiftLeft:dopart-- 
+do (# c: ^cstOperand; dr: @dataRegOperand;
+   do (if op1.iscstOp  then
+          op1[]->c[];
+          (if c.C>8  then
+              dr.alloc;
+              (c[],dr[])->ldCst;
+              '\tlsl.l\t'->BC.putT; dr.putOp; BC.sep; op2.putOp; BC.putNL;
+              dr.dealloc;
+           else
+              '\tlsl.l\t'->BC.putT; op1.putOp; BC.sep; op2.putOp; BC.putNL
+          if);
+       else
+          '\tlsl.l\t'->BC.putT; op1.putOp; BC.sep; op2.putOp; BC.putNL
+      if);
+   #)
+--logicalShiftRight:dopart-- 
+do (# c: ^cstOperand; dr: @dataRegOperand;
+   do (if op1.isCstOp  then
+          op1[]->c[];
+          (if c.C>8  then
+              dr.alloc;
+              (c[],dr[])->ldCst;
+              '\tlsr.l\t'->BC.putT; dr.putOp; BC.sep; op2.putOp; BC.putNL;
+              dr.dealloc;
+           else
+              '\tlsr.l\t'->BC.putT; op1.putOp; BC.sep; op2.putOp; BC.putNL
+          if)
+       else
+          '\tlsr.l\t'->BC.putT; op1.putOp; BC.sep; op2.putOp; BC.putNL
+      if);
+   #)
+-- rotateLeft: doPart --
+do '\trol.l\t'->BC.putT; op1.putOp; BC.sep; op2.putOp; BC.putNL;
+-- rotateRight: doPart --
+do '\tror.l\t'->BC.putT; op1.putOp; BC.sep; op2.putOp; BC.putNL;
+--nop:descriptor--
+(#do '\tnop\n'->BC.putT #)
+--RegAdrPutOp:dopart--
+   (* Address Register Indirect with Displacement *)
+do off->RegisterOffSet;
+   '(%a'->BC.putT; Reg->BC.putI; ')'->BC.putC;
+--AdrLoadFloatOp:descriptor--
+(##) 
+--RegInd:dopart--
+   (* Address Register Indirect *)
+do '(%a'->BC.putT; R->BC.putI; ')'->BC.putC
+--RegisterOffSet:dopart---
+do (if (offset <> 0)  then (offset (* *4 *) )->BC.putI if)
+
+   (* 2.8.3: Register indirect with index *)
+--InxRegAdrPutOp:dopart--
+   (* 2.8.3.2: Address Register Indirect with Index (Base Displacement) *)
+   (* HP:      Address Register Indirect with Index Plus Base Displacement*)
+   (* off = long displacement
+    aReg  = base register
+    dReg  = index register *)
+do (if size//0 then 1->size if);
+   '('->BC.putC; off->BC.putI; BC.sep; aReg->BC.putA; BC.sep; dReg->BC.putD;
+   '.l*'->BC.putT; size->BC.putI; ')'->BC.putC;
+   
+--debugImpInfo:descriptor--
+(#
+do 'sltnormal\t' -> BC.putT; astRef->BC.putI; BC.putNL
+#)  
+--debugBeforeEndMinfo:descriptor---
+(#
+do 'sltnormal\t0\n' -> BC.putT
+#)
+--debugAfterEndMinfo:descriptor--
+(##)
+--debugGpartInfo:descriptor--
+(# Lab : @text;
+   vtInx :@ integer;
+
+   outSlt :@
+     (# major,inx :@ integer
+     enter (major,inx)
+     do 'sltspecial\t' -> BC.putT;
+	major -> BC.putI;
+	',4,0x8000' -> BC.putT;
+        inx -> BC.putHex;
+        BC.putNl;
+     #);
+
+do (if (switch38) then 
+       (* HPUX 8 or 9 stab syntax *)
+       (1,MState.descInx) -> outSlt;
+       (3,MState.descInx+1) -> outSlt;
+       (5,MState.descInx+4) -> outSlt;
+       (6,MState.descInx+7) -> outSlt;
+       'sltexit\t9\n' -> BC.putT;
+       (6,MState.descInx+8) -> outSlt;
+       thisFormName -> MState.outVt -> vtInx;
+       '\tlntt\n\tdnt_srcfile\t1,1,8\n\tdnt_function    1,1,0,0,0,0,0,' -> BC.putT;
+       vtInx -> BC.putI;
+       ',0,0xffffffff,0,' -> BC.putT;
+       GLab -> BC.putT;
+       ',0xc300' -> BC.putT;
+       astRef -> BC.putHex;
+       ',' -> BC.putC;
+       GLab -> Lab;
+       GLab -> BC.putT;
+       ',' -> BC.putC;
+       GLab -> BC.putT;
+       '\n\tdnt_begin\t0,10\n\tdnt_svar  1,0,0,0,0,0,' -> BC.putT;
+       ('T',1) -> Lab.inxPut;
+       Lab -> BC.putT;
+       ',0xc3000020,0,0\n\tdnt_end\t4,0,11,0x8000' -> BC.putT;
+       MState.descInx+4 -> BC.putHex;
+       '\n\tdnt_end\t2,0,13,0x8000' -> BC.putT;
+       MState.descInx+1 -> BC.putHex;
+       '\n\ttext\n' -> BC.putT;
+       9 + mState.descInx -> MState.descInx;
+    else
+       ' sltspecial      1,1,0x80000000\n        dntt\n  dnt_function    1,1,"' -> BC.putT;
+       thisFormName -> BC.putT;
+       '","' -> BC.putT;
+       thisFormName -> BC.putT;
+       '",0xffffffff,0,' -> BC.putT;
+       GLab -> BC.putT;
+       ',0xc300' -> BC.putT;
+       astRef -> BC.putHex;
+       ',' -> BC.putC;
+       GLab -> Lab;
+       (* ('M',1) -> Lab.inxPut; *)
+       GLab -> BC.putT;
+       '\n\tdnt_svar\t1,0,"' -> BC.putT;
+       thisFormName -> BC.putT;
+       '",' -> BC.putT;
+       ('T',1) -> Lab.inxPut;
+       Lab -> BC.putT;
+       ',0xc3000020,0,0\n\ttext\n' -> BC.putT
+   if)
+#)
+--debugProtoInfo:descriptor--
+(#
+do (* '#'->BC.putC; Tlab->BC.puttext; BC.PUTnl *)
+#)
+
+(************************* registers ******************************)
+-- DataRegMax: dopart --
+do 5->val 
+-- thisO: dopart --
+do 0->rNo 
+-- callO: dopart --
+do 1->rNo 
+   (* --originO:descriptor-- (#do -1->rNo #) *)
+   (**************************************)
+---EndDebugCode:descriptor--
+(* The hp assembler do not allow a label to occur immediately before the
+ * "text", "data" or "bss" pseudo-operations. Therefore, we precede any
+ * of these operations with a null-effect pseudo-operation: "lalign 1".
+ *)
+(#
+do (if (switch38) then
+       (* HPUX 8 or 9 stab syntax *)
+       '\tlntt\n\tdnt_end\t1,0,20,0x80000001\n\ttext\nsltspecial 6,9,0x8000' -> BC.putT;
+       mState.descInx -> BC.putHex;
+       BC.putNL;
+   if);
+   'debugend:\nlalign 2\n' -> BC.putT
+#)
+---BeginProtoTypes:descriptor---
+(# 
+do 'data\n' -> BC.putT ;
+   'd0tmp' -> comment;
+   d0Tmp.def;
+   'long 0\n' ->BC.putT
+#)
+--getXres:descriptor--
+(# 
+   getCres:
+     (# 
+     do (if (max>=0) then (dataRegA[],drA[])->cpReg if);
+	(if exitType
+	 //1 //2 //3 then drA[]->simpleRes
+	 // 4 then (* text *)
+	    (# drT: @dataRegOperand
+	    do (extType,exitType,BC,SC,LC,max,dummyMax)->endX; 
+	       true->endXcalled;
+               (* this situation can be very complicated:
+                * gen.copyCtext assume text in dataRegA;
+                * drA may not be dataRegA;
+                *)
+	       (if drA//dataRegA then textRes
+		else
+		   drT.alloc;
+		   (if drT//dataRegA then (* now ist free! gylle!*)
+		       (drA[],dataRegA[])->cpReg;
+		       textRes;
+		    else 
+		       (dataRegA[],drT[])->cpReg;
+		       (drA[],dataRegA[])->cpReg;
+		       textRes; 
+		       (drT[],dataRegA[])->cpReg;
+		   if);
+		   drT.deAlloc;
+	       if); 
+	       drA.deAlloc
+	    #)
+	 // 5 then (* rep *)  cError(#do 'Exit cProc: general rep'->t #)
+	 // 6 then (* cStruc *)
+            (* create an instance of theDesc->rA;
+             * movl d0-12(16?),rA@(12)
+             * this makes theDesc.R denotes the cStruc
+             * The adjustment of d0 is necessary,since the cStruc
+             * has no BETA structural attributes (PT,GC,low,high)
+             * access of the form rA.R[inx] with index check
+             * will NOT be possible *)
+            cError(#do 'Exit cProc: cStruc exit'->t #)
+	 // 7 (*double*) then
+	    (# 
+	    do drB.alloc;
+	       (if (max>=drB) then
+                   cError(#do'ExternalC:max>=drB'->T#)if);
+	       (if (max>0) then (dataRegB[],drB[])->cpReg if);
+	       (drA[],drB[])->doubleRes;
+	    #)
+         // 10 (*data*) then
+            (# ar: @dataRegOperand
+            do ar.alloc;
+               (drA[],ar[])->cpReg;
+               ar[]->dataRefRes
+            #)
+        if)
+     #);
+   getPascRes:
+     (#
+     do (if exitType
+         //1 (*byte*) then
+            drA[]->gClr; drA[]->popCbyte; drA[]->simpleRes
+         //2 (*word*) then
+            drA[]->gClr; drA[]->popCword; drA[]->simpleRes
+         //3 (*long*) then drA[]->pop; drA[]->simpleRes
+         //4 (*text*) then 
+            'UnpackPascalText'->jsrT;
+            (* address of Pascal text is on top of SP-stack;
+             * UnpackPascalText must deliver adr. of BETA text somewhere!
+             *)
+            'ExternalPasc: exit text'->notImpl
+         //5 (*rep*) then cError(#do 'ExternalPasc:exit rep'->T #)
+         //6 (*cStruc*) then cError(#do 'ExternalPasc:exit cStruc'->T #)
+         //7 (*double*) then
+            (# 
+            do drB.alloc;
+               (if (max>=drB) then
+                   cError(#do'ExternalPasc:max>=drB'->T#)if);
+               drB[]->pop; drA[]->pop;
+               (drA[],drB[])->doubleRes
+            #)
+         // 10 (*data*) then
+            (# ar: @dataRegOperand
+            do ar.alloc;
+               (drA[],ar[])->cpReg;
+               ar[]->dataRefRes;
+               '\n\n**** warning: Pascal external with exit of data Ref!xn'->bugstream.putline
+            #)            
+        if)
+     #);
+   endXcalled: @boolean;
+   drA,drB: @dataRegOperand
+do drA.alloc;
+   (if (max>=drA) then cError(#do 'External: max>=drA'->T #)if);
+   (if extType
+    // 1 (*semAtt.cExt OOPS*) then getCres
+    // 2 (*semAtt.pascExt OOPS*)//3 (*semAtt.pascTrapExt OOPS*) then getPascRes
+    else cError(#do 'Illegal external exit type:'->T; extType->I #)
+   if);
+   (if not endXcalled then (extType,exitType,BC,SC,LC,max,dummyMax)->endX if);
+#)
+--xParForward:descriptor--
+(#
+do (if extKind
+    // 1 (* sematt.cExt*) then false->forward
+    // 2 (* sematt.pascExt*) // 3 (* sematt.pascTrapExt*) then true->forward
+if)#)
+(*** BC file ***)
+--putS:doPart--
+do (if size
+    // 4 then '.l\t'->putT
+    // 1 then '.b\t'->putT
+    else (* 2 *) '.w\t'->putT
+   if)
+--putA:descriptor--
+(#do '%a'->putT; n->putI #)
+--putD:descriptor--
+(#do '%d'->putT; n->putI #)
+--imm:descriptor--
+(#do '&'->put; off-> putI #)
+--Newdesc:descriptor--
+(#do 10->NCmax #)
+--newCtextOp:descriptor--
+(# S: @text do '_'->S.put; T[]->S.puttext; S[]->op #)
+--InitMachine:descriptor--
+(#
+do BC.openWrite; true->loadPrototype; 
+   d0tmp.new; (* datpete *);
+   (if true
+    // 'hpux9mc' -> common.targetMachine.equal 
+    // 'hpux8' -> common.targetMachine.equal 
+       then true -> switch38 -> common.switch[38];
+   if);
+#)
+--CloseMachine:descriptor--
+(# imp: @ 
+     (# T: @text enter T do '#'->BC.put; T->BC.putT; ':import\n'->BC.putT #);
+do (* ouput imported symbols *)
+   (*
+    entryPoints.scan
+    (#
+    do '#'->BC.putc; current.T->BC.putT; 
+    (if current.local  then ':export'->BC.putt
+    else
+    ':import'->BC.putt
+    if);
+    (if current.data then 'Data'->BC.putT if);
+    BC.putNL
+    #);
+    *)
+   (* import run-time routines *)
+   (*'AlloI'->imp;   'AlloC'->imp;   'EqS'->imp;*)
+   (* etc *)
+   BC.close
+#)
+--asgRefAdr:descriptor--
+(* assign A to thisAddress *)
+(# aR,aR1,aR2: @adrRegOperand; L: @localLab; T: @Text;
+   A1: @regAdr; dr: @dataRegOperand
+do common.direct->access; (* this Address is a dynamic reference *)
+   (* this is a hack. Will not work for arrays !!!*)
+   toReg2->aR->aR2; (* aR=destination *)
+   (if A.access //common.direct then
+       (*(if aR1//thisO then true->A1.frozenReg (*else aR1.deAlloc * )if);*)
+       (* aR1 = thisO possible in this(P)[]->R[] *)
+       (if A.regType//thisO//callO then
+           A.toReg2->aR1; (* 12.10.92*) (* aR1=source *)
+           (* A.freeAdr; 12.10.92: in evval1: asgToAdr: A[]->rA.asgRefAdr->..
+            * A[] is used in thisVal and cannot be released.
+            * The problem is if this can imply that regs are not released?
+            *)
+           (*aR.mkIndirect; olm: ? - eliminated *)
+           (* (aR1[],aR[])->stVal; *) (* datpete: ?? *)
+           aR->A1.reg; (* olm: ? *) 
+           (aR1[],A1[])->stVal;
+           aR1.deAlloc
+        else
+           (* A and aR1 use the same register - dont deAlloc aR1.
+            * However A is invalidated since aR1 is redefined
+            *)
+           aR[]->push;
+           (A[],aR[])->gLea; dr.alloc; (aR[],dr[])->cpReg;
+           aR[]->pop;
+           (* aR.mkIndirect; olm: ? - elim*)(* dont do this before push/pop *)
+           (* (dr[],aR[])->stVal; *) (* datpete: ?? *)
+           (*olm: ? *) aR->A1.reg; (dr[],A1[])->stVal;
+           dr.deAlloc
+       if)
+       (*aR1.deAlloc; 12.10.92*) (* 2.9.92*)
+       (* A1[]->A[] 2.9.92*)
+    else 
+       (*aR.mkIndirect; olm: ? - eliminated*)
+       (* (A[],aR[])->cpMem *) (* datpete: ?? *)
+       (*olm: ? *) aR->A1.reg; (A[],A1[])->cpMem;
+   if);
+   aR2[]->dest[]
+#)
+--asgRefReg:descriptor-- (* MUST be fixed like asgRefAdr above *)
+(* as asgRefAdr, but A is an adrRegOperand *)
+(# aR,aR1,aR2: @adrRegOperand; L: @localLab; T: @Text; A1: @RegAdr
+do common.direct->access; (* this Address is a dynamic reference *)
+   toReg2->aR->aR2; (* aR=destination *)
+   (* aR.mkIndirect; olm: ? - eliminated *)
+   (* (A[],aR[])->stVal; *) (* datpete: ?? *)
+   (*olm: ? *) aR->A1.reg; (A[],A1[])->stVal;
+   (* aR2[]->ChkHeap;
+    aR2.deAlloc*)
+   aR2[]->dest[]
+#)
+--DataRegOpRegF: dopart--
+do (* regF not used in HPmachine *)
+--AdrRegOpRegF: dopart--
+do (* regF not used in HPmachine *)
+--FloatRegOpRegF: dopart--
+do (* regF not used in HPmachine *)
+   

@@ -1,0 +1,156 @@
+ORIGIN 'imagepairbody';
+LIB_ITEM 'dynamiccompiler';
+INCLUDE '../../GENERATOR/MIPS/mips';
+INCLUDE '../../GENERATOR/MIPS/MIPSmachine' (* For themachine.mstate *);
+INCLUDE '~beta/unixlib/dlfcn';
+
+--RelocateMapOffset: dopart--
+do (value-1)*4 -> value
+   
+---NeedsGOT:doPart---
+do true -> value
+   
+--- FlushCodeCache:descriptor---
+(# cacheflush: external
+     (# start,size,mode,res: @integer
+     enter(start,size,mode)
+     exit res
+     #);
+   BCACHE: (#exit 0x3 #);
+   res: @integer
+do (if false then
+       '\nFlushing: ' -> puttext; start -> puthex; ' ' -> put; 
+       start + size - 1 -> puthex;  newline;
+   if);
+   (if ((start,start+size,BCACHE) -> cacheflush) <> 0  then
+       '\n**** Flush cache failed' -> putline
+   if)
+#)
+--RelocateBody: descriptor--
+(# GOToff: @integer
+do (if mark
+    // callMark then
+       (* The code generated for a call is:
+        *   (T[],callMark) -> mstate.b.mark; 
+        *   (mips_R25,mips_GP,0) -> LW   -> mstate.b.emit;
+        *   (mips_R25,mips_RA)   -> JALR -> mstate.b.emit;
+        * The 0 must be patched with the offset of name into the GOT table
+        *)
+       name[] -> private.xRef.lookUp -> GOToff;
+       ((mips_R25,mips_GP,GOToff) -> LW) -> instr;
+       (if trace then
+           'patching callMark: relativeOff='->puttext; relativeOff->puthex;
+           ',GOToff= ' -> puttext; GOToff -> putHex;
+           ', absAdr=' -> puttext; absAdr->puthex; 
+           ', instr='->puttext; instr -> puthex; 
+           ', name="'->puttext; name[]->puttext; '"'->put;
+           newline;
+       if);
+       (instr,relativeOff) -> patch
+    // datamark then
+       (* Relocate MIPS_R_GOT16 *)
+       relativeOff -> getItem -> instr;
+       name[] -> private.xRef.lookUp -> GOToff;
+       (instr %bor GOToff,relativeOff) -> patch;
+       true -> wasData
+    // setHiMark then
+       (if '_gp_disp' -> name.equal then
+           (if trace then 'Skipping _gp_disp' -> putline if);
+           relativeOff -> getItem -> instr;
+           (if (instr %band 0xffff) = 0  then
+               (* see comment for PatchGOT in imagepairbody *)
+               (relativeOff,absAdr) -> PatchGot
+           if)
+        else
+           '\n****OBS! Relocation type is "setHiMark" NOT correctly implemented!'
+             -> putline;
+           relativeOff -> getItem ->instr;
+           (instr %bor (absAdr->HI)) ->instr;
+           (if trace then
+               'patching setHiMark: relativeOff='->puttext; relativeOff->puthex;
+               ', absAdr=' -> puttext; absAdr->puthex; 
+               ', instr='->puttext; instr -> puthex;
+               ', name="'->puttext; name[]->puttext; '"'->put;
+               newline;
+           if);
+           (instr,relativeOff) -> patch;
+       if)
+    // setLoMark 
+    // setLoMarkSt 
+    // setLoMarkJmp
+    // setLoMarkLd
+    // setLoMarkLdd then
+        (if '_gp_disp' -> name.equal then
+            (if trace then 'Skipping _gp_disp' -> putline if)
+         else
+            (if not wasData then
+                (* handling of .L3 appearing from 'hello' -> putline
+                 * gives a datamark followed by setLoMark;
+                 * currently I don't understand what goes on
+                 *)
+                '\n****OBS! Relocation type is "setLoMark" NOT correctly implemented!'
+                  -> putline;
+                relativeOff -> getItem -> instr;
+                (instr %bor (absAdr->LO)) -> instr;
+                (if trace then
+                    'patching setLoMark: relativeOff='->puttext; relativeOff->puthex;
+                    ', absAdr=' -> puttext; absAdr->puthex; 
+                    ', instr='->puttext; instr -> puthex;
+                    ', name="'->puttext; name[]->puttext; '"'->put;
+                    newline;
+                if);
+                (instr,relativeOff) -> patch
+            if);
+            false -> wasData;
+        if)
+    // wordMark then
+       (if trace then
+           'patching wordmark: relativeOff='->puttext; relativeOff->puthex;
+           ', absAdr=' -> puttext; absAdr->puthex;
+           ', name="'->puttext; name[]->puttext; '"'->put;
+           ', xAdr='->puttext; xAdr->puthex;
+            newline;
+       if);
+       (xAdr,relativeOff) -> patch
+    // jmpMark then
+       'OBS! Missing relocation for jmpMark!'->putline
+    // bgtuMark then
+       'OBS! Missing relocation for bgtuMark!'->putline
+    else
+       'OBS! Missing relocation for unknown mark: '->putText;
+       mark -> putInt;
+       '!' -> putline;
+   if);
+   
+#)
+---PatchGOT:descriptor---
+(# gp_disp,instr: @integer
+do (if trace then
+       'PatchGOT: ' -> puttext; name[] -> puttext; 
+       ' relativeOff: ' -> puttext; relativeOff -> putint; 
+       ' absAdr: ' -> puttext; absAdr -> putHex; 
+       ' GOT: ' -> puttext; GOTstart -> puthex;  
+   if);
+   
+   relativeOff -> getItem -> instr;
+   (if (instr %band 0xff000000) = 0x3c000000 then
+       (GOTstart - absAdr) -> gp_disp;
+       (if trace then ' gp_disp: ' -> puttext; gp_disp -> putint if);
+   
+       (mips_GP,0,gp_disp -> HI) -> LUI -> instr;
+       (instr,relativeOff) -> patch;
+   
+       (mips_GP,mips_GP,gp_disp -> LO) -> ORI -> instr;
+       (* Note the code generated by the compiler is 
+        * (as prescribed in the MIPS calling sequence)
+        * an ADDIU instruction; however ADDUI is sign
+        * extending the I-operand before adding;
+        * It seems easier to use ORI instead of 
+        * adjusting for the sign-extension
+        *)
+       (instr,relativeOff+4) -> patch;
+   if);
+   (if trace then newline if)
+   
+#)
+

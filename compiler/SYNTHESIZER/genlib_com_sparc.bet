@@ -1,0 +1,105 @@
+ORIGIN 'genlib';
+(*********************************************************************
+ * See the file DOC/Com.html for status of current COM implementation
+ *********************************************************************
+ *)
+---genCom:descriptor---
+(#  
+do 301 ->trace(#Do 'Generating code for COM-object:'-> xT #);
+   sematt.comKind -> GenObj;
+#)
+---genComVirtual:descriptor---
+(# R: ^ProtoType; hasAcode: @boolean; N: @AStindex;
+   objKind: @integer;
+   objKind2: @integer;
+   isComVirtual: @boolean
+do 301->trace(#do 'Generating code for Com-Virtual:'->xT #);
+
+   &ProtoType[]->R[];
+   ProtoHead[]->R.succ[];
+   R[]->GS.thisPT[]->Protohead[];
+   sematt.externalVirtualKind -> R.objKind;
+
+   (*(if N.label 
+    // gram.staticItem // gram.staticComponent then
+       singularData -> objKind2;
+    // gram.descriptorForm // gram.virtualDecl // gram.bindingDecl then
+       dynamicObj -> objKind2
+   if);
+    *)
+   (thisFormName[],thisForm[],thisDescNo,theFormIndex
+   ,thisDesc.nodeId
+   ,ThisDesc.size,hasAcode
+   ,objKind2)
+     -> gen.BeginAlloc;
+   
+   (('T',thisDescNo,thisForm[],true) -> gen.SysLab,0,false)
+     ->  mch.AllocObj;
+   
+   (if not ReturnSaved then
+       (*(true,thisDesc.returnOff)->mch.SaveReturn;*)
+       true -> ReturnSaved
+   if);
+
+   (pref,common.itemKind)->PrefixAlloc;
+   (att,0)->GenAlloc;
+
+   (* do NOT generate normal return 
+    * Transfer arguments to object
+    * May be proto should not be in %i1 and
+    * may be we should call G direcly a la V-entry,
+    * i.e. NO AlloCom
+    *)
+   <<SLOT TransferCOMarguments:descriptor>>;
+   
+   (if hasPref then
+       (# topD: @AStindex; ep: ^text; descNo: @integer; local: @boolean
+       do 301->trace(#do 'ThisPreDesc: '->xT; thisPrefDesc[] -> xA #);
+          thisPrefDesc -> sematt.TopDesc -> topD;
+          ('M',topD[]) -> mkEntryPoint -> (ep[],local);
+          (if local then
+              ep -> mch.jmpT
+           else
+              (ep,NONE) -> mch.jmpTLong
+          if)
+       #)
+   if);
+   (if (thisDescNo = 1) or (ThisDesc[]->Sematt.hasDo) then
+       (if not (ThisDesc[]->sematt.hasOnlyInner) then
+           (if not doP.isSlot then 
+               (0,NONE,NONE,true) -> GenDo
+           if)
+       if)
+   if);
+   
+   (pref[],att[])->BindVirtuals;
+   (nameId[],singular)->genSymbTable
+#)
+---transferCOMarguments:descriptor---
+(# NS: @ sematt.NXScanner;
+   thisEV: ^AStindex; PL: @integer; thisChain: ^DH.superChain;
+   EH: @EvalHandler;
+   V: ^EH.evVal;
+   dr: @mch.dataRegOperand;
+   nScan: @ | EH.scanNAdr;
+   more: @boolean;
+   pReg: ^mch.mOperand;
+   I: @integer;
+   IR: @mch.adrRegOperand
+do (thisDesc[],gen.thisRegAdr,0,ThisSuperChain,true) -> nScan -> more;
+
+   1 -> i;
+   L: (if more then
+          301 -> trace(#do 'NX:'->xT; thisEV[] -> xA #);
+          mch.thisO + i -> IR;
+          i + 1 -> i;
+          dr.alloc;
+          (IR[],dr[]) -> mch.cpReg;
+          (dr,false,false)->EH.mkComputedEvVal->V[];
+          (*(gen.thisRegAdr,V[],false,thisSuperChain) 
+           -> EH.ExpEval*)
+          V[] -> nScan.asgToNelm;
+          nScan -> more;
+          restart L
+      if);
+#)

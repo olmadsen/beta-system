@@ -1,0 +1,2789 @@
+ORIGIN '../REALmachine';
+
+--machineatt:attributes---
+(*************************************************************
+ * This file is part of the BETA compiler.
+ * Copyright (C) 1992-94 Mjolner Informatics Aps.
+ * The port to the HPPA architecture was done by Peter Orbaek, based
+ * on the Sun4 codegenerator by O. L. Madsen.
+ * 
+ * Upgraded to beta4.5 by OLM. Corrections marked by OLM:Jan.94.
+ * Register assignment:
+ *
+ * r0 = 0
+ * r1 = scratch
+ * r2 = return pointer
+ * r3 = th
+ * r4 = ca
+ * r5 = or   (or is now primReg1 / OLM:Jan.94.)
+ * r5 - r8 = address registers 
+ * 	     The logical address registers a2-a4 are mapped to r5-r7.
+ * 	     r8=a5 is used as a temporary address register, but does NOT
+ * 	     hold addresses of objects, i.e. it shall NOT be garbage collected.
+ * 	     The registers r3-r7 can refer to objects and MUST be garbage collected.
+ *
+ * r9 - r13 = dataregisters
+ * r14 = NOT USED, was: Reference Stack Pointer, RefSP
+ * r15 - r16 = temp. dataregisters
+ * 
+ * r17 = IOAbot IN MEMORY CELL IOA
+ * r18 = IOAsize IN MEMORY AS: IOATop-IOA
+ * 
+ * r22 = PrimReg5
+ * r23 - r26 = parameters to external C routines, %r26 = arg0, %r25 = arg1,...
+ *       Also PrimReg1=r26, PrimReg2=r25, PrimReg3=r24, PrimReg4=r23.
+ * r27 = start of global data, not used ??
+ * r28 = return value from C calls
+ * r29 = return value from millicode calls
+ * r30 = stackpointer (the stack grows upwards)
+ * r31 = scratch
+ * ***********************
+ * fr0-fr3 = status registers, quite unusable
+ * fr4-11  = general caller-saves registers, parameters to C
+ * fr12-21 = callee-saves registers, >15 only on PA-RISC1.1
+ *)
+
+GenerateDbgInf: (# exit true (* datpete: 23/11/98 *) #);
+
+eoi: (* datpete 19/7/94 *)
+  (* end-of instruction. Used to indicate that ONE instruction has
+   * Just been generated to BC. If several are generated in conjunction,
+   * the form 4 * NoOfInstructions -> incIP is used.
+   * IP and incIP are placed in machine.bet. IP is reset each time 
+   * code generation for an M-entry is started.
+   *)
+  (#
+  do (if GenerateDbgInf then
+         4->incIP; 
+         (if common.switch[498] then
+             ';  '->BC.putT; IP->BC.putInt; BC.putNL
+         if);
+     if);
+  #);
+imm: (# off: @ integer enter(off) do off-> BC.imm #);
+sep: (# do ','->BC.putC #);
+nopDelay: 
+  (# 
+  do '\n\tNOP\n'->BC.putT; 
+     (if GenerateDbgInf then 4->incIP if) 
+  #);
+
+primReg:
+  (# pNo: @integer (* 1-5 *); dr: @dataRegOperand;  
+  enter pNo
+  do (27-pNo)-dataRegStart -> dr.rN;
+     (* 
+      * primReg1: %r26 (arg0)
+      * primReg2: %r25 (arg1)
+      * primReg3: %r24 (arg2)
+      * primReg4: %r23 (arg3)
+      * primReg5: %r22
+      *)
+  exit dr[]     
+  #);
+dataTmp: 
+  (* alternates between allocating %r15 and %r16 *)
+  (# D: ^dataRegOperand 
+  do &dataRegOperand[]->D[]; 
+     (if mstate.dataTmp6 then 6->D.rN else 7->D.rN if);
+     NOT mstate.datatmp6 -> mstate.dataTmp6
+  exit D[]
+  #);
+floatTmp:  (* to be like dataTmp *)
+  (# F: @floatRegOp
+  do (if mstate.floatTmp then 9->F.rN else 8->F.rN if);
+     NOT mstate.floatTmp -> mstate.floatTmp
+  exit F[]
+  #);
+
+longBL:
+  (* added by datpete 13/3/97: can be used for long jumps,
+   * if the compiler acn figure out when this is needed.
+   *)
+  (# T: ^text;
+  enter T[]
+  do 'Long Jump' -> comment;
+     '\tLDIL\tL\''->BC.putT; T->BC.putT; ',%r1\n'->BC.putT;
+     '\tBLE\tR\''->BC.putT; T->BC.putT; '(sr4,%r1)\n'->BC.putT;
+     '\tCOPY\t%r31,%r2\n'->BC.putT;
+     (if GenerateDbgInf then 12 -> mstate.incIP; if);
+  #);
+
+adrRegStart: (# exit 3 #); (* number of first usable addressregister = th *)
+dataRegStart: (# exit 9 #); (* number of first usable dataregister *)
+floatRegStart: (# exit 12 #); (* number of first usable FPU register *)
+putThisReg: (# do '%r3' -> BC.putT #);
+putCallReg: (# do '%r4' -> BC.putT #);
+putOriginReg: (# do '%r5' -> BC.putT #);
+putIOAbotReg: (# do '%r17'->BC.putT #);
+putIOAsizeReg: (# do '%r18' -> BC.putT #);
+loadIOAReg: 
+  (#
+  do '\tLDIL\tLR\'IOA,%r17\n'->BC.putT; 
+     '\tLDW\tRR\'IOA(0,%r17),%r17\n'->BC.putT; 
+     (if GenerateDbgInf then 8 -> mstate.incIP; if);
+  #);
+loadIOASizeReg:
+  (# 
+  do '\tLDIL\tLR\'IOATop,%r18\n'->BC.putT; 
+     '\tLDW\tRR\'IOATop(0,%r18),%r18\n'->BC.putT; 
+     '\tSUB\t%r18,%r17,%r18\n'->BC.putT;  (* WARNING IOA must be loaded before*)
+     (if GenerateDbgInf then  12 -> mstate.incIP if);
+  #);
+
+putA: (# enter BC.putA #); 
+
+putD: (# enter BC.putD #);
+
+(* called before pushing arguments to external C routines / RT routines
+ * called with the number of longs that are to be passed, ie. two for
+ * each double (noOPar) *)
+doInitExternalCall:
+  (# noOfPar: @integer;
+  enter noOfPar
+  do mstate.saveLiveArgs;
+     noOfPar -> mstate.cArgCount;
+     noOfPar -> mstate.noOfArgs;
+     
+     '\t.CALL '->mstate.CallDirective[];
+     
+     (if noOfPar <= 8 then
+         0 -> mstate.cStackInc; (* use the current stackframe *)
+      else
+         (* increment sp with a multiple of 64 bytes *)
+         ((4*(noOfPar-8)+63) div 64)*64 -> mstate.cStackInc;
+         '\tLDO\t'->BC.putT; mstate.cStackInc->BC.putI; 
+         '(%r30),%r30\n'->BC.putT; 
+         (if GenerateDbgInf then mstate.eoi if);
+     if);
+  #);
+
+(* Push a parameter to a C routine, the first into the 4 parameter registers,
+ * then the rest on the stack. This is called with the last argument
+ * first (sometimes!). We rely on doInitExternalCall to set mstate.cArgCount
+ * to the 
+ * number of arguments to be passed. doInitExternalCall must also assure 
+ * that enough stack space is available beneath %r30 (sometimes) *)
+pushCParameter:  
+  (# op: ^mOperand;
+     r:  @dataRegOperand;
+     r2: ^dataRegOperand;
+  enter op[]
+  do '; cargcount='->BC.putT; mstate.cArgCount->BC.putI; BC.putNL;
+     (if (mstate.noOfArgs - mstate.cArgCount) < 4  then
+         (****** pushes first parm first **********)
+         26-(mstate.noOfArgs - mstate.cArgCount)-dataRegStart -> r.rN;
+         r[] -> op.loadToReg -> op[];
+         r[] -> op.pushCpar;
+         'ARGW'->mstate.CallDirective.append;
+         (mstate.noOfArgs - mstate.cArgCount)->mstate.CallDirective.putint;
+         '=GR,'->mstate.CallDirective.append;
+      else
+         1 - dataRegStart -> r.rN;
+         r[] -> op.loadToReg -> op[];
+         r[] -> op.pushCpar;
+         '\tSTW\t%r1,'->BC.putT;
+         -4*((mstate.noOfArgs-mstate.cArgCount)+13-4) ->BC.putI;
+         '(0,%r30)\n'->BC.putT; 
+         (if GenerateDbgInf then mstate.eoi if);
+     if);
+     mstate.cArgCount-1 -> mstate.cArgCount;
+  #);
+DoPushCFloat:
+  (# emitStackOff:
+       (# N: @integer;
+       do (if (mstate.noOfArgs mod 2) = 1 then
+              (* int real real  -> noOfArgs = 5  OK
+               * real int real  -> noOfArgs = 5  ?
+               *)
+              mstate.noOfArgs + 1 -> N
+           else
+              mstate.noOfArgs -> N
+          if);
+          -((4*((N - mstate.cArgCount)+13-4)+7) div 8)*8
+            -> BC.putI;
+       #);
+     SetCall:
+       (# 
+       do (if mstate.CallDirective[] = NONE then
+              '\t.CALL '->mstate.CallDirective[];
+          if);
+          'ARGW'->mstate.CallDirective.append;
+          firstReg->mstate.CallDirective.putint;
+          '=FR,'->mstate.CallDirective.append;
+          'ARGW'->mstate.CallDirective.append;
+          firstReg+1->mstate.CallDirective.putint;
+          '=FU,'->mstate.CallDirective.append;
+          true->mstate.DumpCallDirective;
+       #);
+     no,firstReg: @integer
+  do ';; pushCFloat:' -> BC.putT; 
+     mstate.cArgCount->BC.putint; BC.putNL;
+     (* Initially:   cArgCount = noOfArgs *)
+     (if true 
+      // (mstate.cArgCount = mstate.noOfArgs) then
+         (* first argument (this one) : a real *)
+         5-floatRegStart -> no; (* floatRegStart is added in FloatRegOpPut;
+                                 * (5 - floatRegStart ->) no = -7;
+                                 * (-7 + floatRegStart) = 5; ie %fr5
+                                 *)
+         1 -> mstate.floatRegsUsed;
+         0 -> firstReg
+      // (mstate.cArgCount + 1) = mstate.noOfArgs      
+         (* tested         :  +
+          * first argument : int
+          * second argument: real
+          *)
+      // (mstate.cArgCount + 2) = mstate.noOfArgs 
+         (* tested         :  +      +
+          * first argument : real   int
+          * second argument: this   int
+          * third argument :        this
+          *)
+         (* two doubles *) then 
+         7-floatRegStart -> no;
+         2 -> mstate.floatRegsUsed;
+         (* olm: *) 2->firstReg
+      else
+         (* tested         :  +     +      +    +    ?
+          * first argument : real  int    int  int  int
+          * second argument: real  real   int  int  int
+          * third argument : this  this   real int  int
+          * fourth argument:              this this int
+          * fifth argument :                        this
+          * ...            : ...         ...
+          *)
+         100 -> no;
+     if);
+     INNER;
+     mstate.cArgCount - 2 -> mstate.cArgCount;
+  #);
+GetExternalResult:
+  (# getSimpleRes: 
+       (# drA: @dataRegOperand
+       do drA.alloc;
+          (if drA.regF<>28 then
+              '\tCOPY\t%r28,'->this(machine).BC.putT; drA.putOp; (* ??? *)
+ 	      this(machine).BC.putNL; 
+              (if GenerateDbgInf then this(machine).mstate.eoi if);
+          if)
+       exit drA
+       #);
+     getDoubleRes:
+       (# drA: @doubleDataRegOperand
+       do drA.alloc;
+          '\tCOPY\t%r28,'->this(machine).BC.putT; drA.dNo1.putOp; 
+          this(machine).BC.putNL; 
+          (if GenerateDbgInf then this(machine).mstate.eoi if);
+          '\tCOPY\t%r29,'->this(machine).BC.putT; drA.dNo2.putOp;
+          this(machine).BC.putNL; 
+          (if GenerateDbgInf then this(machine).mstate.eoi if);
+       exit drA
+       #)
+  do
+     inner;
+     mstate.restoreDeadArgs
+  #);
+PushReference:
+  (# op,opl: ^mOperand
+  enter op[]
+  do op.loadOp->opl[];
+     '\tLDIL\tLR\'RefSP,%r1\n'->BC.putT; 
+     '\tLDW\tRR\'RefSP(%r1),%r14\n'->BC.putT; 
+     '\tSTWS,MA\t'->BC.putT; opl.putOp; ',4(0,%r14)\n'->BC.putT; 
+     '\tSTW\t%r14,RR\'RefSP(0,%r1)\n'->BC.putT; 
+     (if GenerateDbgInf then 16->mstate.incIP if);
+  #);
+
+Push2Refs:
+  (# op1, op2: ^registerOperand;
+     opl1, opl2: ^mOperand;
+  enter (op1[], op2[])
+  do op1.loadOp->opl1[];
+     op2.loadOp->opl2[];
+     '\tLDIL\tLR\'RefSP,%r1\n'->BC.putT; 
+     '\tLDW\tRR\'RefSP(%r1),%r14\n'->BC.putT; 
+     '\tSTWS,MA\t'->BC.putT; opl1.putOp; ',4(0,%r14)\n'->BC.putT; 
+     '\tSTWS,MA\t'->BC.putT; opl2.putOp; ',4(0,%r14)\n'->BC.putT; 
+     '\tSTW\t%r14,RR\'RefSP(0,%r1)\n'->BC.putT; 
+     (if GenerateDbgInf then 20->mstate.incIP if);
+    #);
+
+PopReference:
+  (# op: ^mOperand;
+  enter op[]
+  do '\tLDIL\tLR\'RefSP,%r1\n'->BC.putT; 
+     '\tLDW\tRR\'RefSP(%r1),%r14\n'->BC.putT; 
+     '\tLDWS,MB\t-4(0,%r14),'->BC.putT; op.putOp; BC.putNL; 
+     '\tSTW\t%r14,RR\'RefSP(0,%r1)\n'->BC.putT; 
+     (if GenerateDbgInf then 16->mstate.incIP if);
+  #);
+
+Pop2Refs:
+  (# op1, op2: ^registerOperand;
+  enter (op1[], op2[])
+  do '\tLDIL\tLR\'RefSP,%r1\n'->BC.putT; 
+     '\tLDW\tRR\'RefSP(%r1),%r14\n'->BC.putT; 
+     '\tLDWS,MB\t-4(0,%r14),'->BC.putT; op1.putOp; BC.putNL; 
+     '\tLDWS,MB\t-4(0,%r14),'->BC.putT; op2.putOp; BC.putNL; 
+     '\tSTW\t%r14,RR\'RefSP(0,%r1)\n'->BC.putT; 
+     (if GenerateDbgInf then 20->mstate.incIP if);
+  #);
+--mstate:descriptor--
+(# NoComSupport: @
+     (# reported: @boolean
+     do (if not reported then
+            '\n\n*** COM support has not yet been implemented for HP' -> putline;
+            true -> reported
+        if)
+     #);  
+   proto: ^text; (* ref to prototype - used in CallAloPrim and JsrT *)
+   (* # of args to pass to the next C routine, set by initExternalCall, 
+    * and used by pushCParameter *)
+   cArgCount: @integer;
+   (* the number of bytes that initExternalCall increased the stack with *)
+   cStackInc: @integer;
+   noOfArgs: @integer;  (* const. number of args to pass *)
+   STenable: @boolean;
+   floatRegsUsed: @integer;
+   CallDirective: ^Text;
+   dumpCallDirective: @Boolean;;
+   
+   eoi: @this(machine).eoi; (* static instance *)
+   incIP: @
+     (* static instance with trace *)
+     (# i: @integer 
+     enter i 
+     do (if GenerateDbgInf then
+            (if common.switch[498] then
+                ';  +'->BC.putT; i->BC.putInt; 
+                ' = ' ->BC.putT; IP->BC.putInt; BC.putNL; 
+            if);
+            i->this(machine).incIP 
+        if)
+     #);
+   printIP: @ 
+     (# 
+     do (if GenerateDbgInf then
+            ';  '->BC.putT; IP->BC.putInt; BC.putNL
+        if)
+     #);
+   
+   dataTmp6, floatTmp: @boolean;
+   
+   floatReg: [10] @ integer; 
+   (* the PA-RISC 1.1 has 32 fp registers 64 bits each, registers 12-21 are
+    * callee saves registers *)
+   
+   deadArgs: 
+     (# next: ^deadArgs;
+        ac, si, noa: @integer;
+        fru: @integer;
+        callDir: ^text;
+        kill: 
+          (#
+          do cArgCount->ac;
+             cStackInc->si;
+             noOfArgs->noa;
+             floatRegsUsed->fru;
+             latestDeadArgs[]->next[];
+             callDirective[] -> callDir[];
+             this(deadArgs)[]->latestDeadArgs[];
+          #);
+        reincarnate:
+          (#
+          do ac->cArgCount;
+             si->cStackInc;
+             noa->noOfArgs;
+             fru->floatRegsUsed;
+             callDir[] -> callDirective[];
+             next[] -> latestDeadArgs[];
+          #);
+     #);   
+   latestDeadArgs: ^deadArgs;
+   
+   saveLiveArgs:
+     (# (* assume all parameters are pushed first to last, ie. forwards *)
+        n: @integer;
+        da: ^deadArgs;
+     do (* more braindamage-control *)
+        (if cArgCount <= 0 then
+            0 - cArgCount -> n;
+         else
+            (noOfArgs-cArgCount) -> n;
+        if);
+        (if n > 4 then 4 -> n if);
+        n-(floatRegsUsed*2) -> n;
+        (if n > 0 then ';; saveLiveArgs\n' -> BC.putT; if);
+        
+        (for i:n repeat   (* push r26, r25, r24, r23 *)
+             '\tSTW\t%r'->BC.putT; (27-i)->BC.putI; sep; -(32+(4*i))->BC.putI;
+             '(%r30)\n'->BC.putT;
+             (* (27-i) - dataRegStart -> NewDataRegOp -> push; *)
+        for);
+        4*n -> mstate.incIP;
+        
+        (if floatRegsUsed > 0 then
+            ';; saveLiveFloatArgs\n'->BC.putT;
+            '\tLDO\t-48(%r30),%r1\n'->BC.putT;
+            '\tFSTDX\t%fr5,%r0(0,%r1)\n'->BC.putT;
+            (if GenerateDbgInf then 8 -> mstate.incIP if);
+        if);
+        (if floatRegsUsed // 2 then
+            '\tFSTDS\t%fr7,8(0,%r1)\n'->BC.putT; 
+            (if GenerateDbgInf then mstate.eoi if);
+        if);
+        
+        (if (n>0) or (floatRegsUsed>0) then
+            '\tLDO\t64(%r30),%r30\n'->BC.putT;
+            (if GenerateDbgInf then mstate.eoi if);
+        if);
+        &deadArgs[]->da[]; da.kill;
+     #);
+   
+   restoreDeadArgs:
+     (# n: @integer;
+        r: @dataRegOperand;
+     do latestDeadArgs.reincarnate;
+        (if cArgCount <= 0 then
+            0 - cArgCount -> n;
+         else
+            (noOfArgs-cArgCount)->n;
+        if);
+        (if n > 4 then 4->n if);
+        n-(floatRegsUsed*2)->n;
+        (if n > 0 then ';; restoreDeadArgs\n'->BC.putT; if);
+        (if (n>0) or (floatRegsUsed>0) then
+            '\tLDO\t-64(%r30),%r30\n'->BC.putT;
+            (if GenerateDbgInf then mstate.eoi if);
+        if);
+        
+        (for i:n repeat   (* pop r23, r24, r25, r26 *)
+             '\tLDW\t'->BC.putT; -(32+(4*i))->BC.putI; '(%r30),%r'->BC.putT;
+             (27-i)->BC.putI; BC.putNL;
+             (* (i+(26-n)) - dataRegStart -> NewDataRegOp -> pop; *)
+        for);
+        4*n -> mstate.incIP;
+        
+        (if floatRegsUsed > 0 then
+            '\tLDO\t-48(%r30),%r1\n'->BC.putT;
+            '\tFLDDX\t%r0(0,%r1),%fr5\n'->BC.putT;
+            (if GenerateDbgInf then 8 -> mstate.incIP if);
+        if);
+        (if floatRegsUsed = 2 then
+            '\tFLDDS\t8(0,%r1),%fr7\n'->BC.putT;
+            (if GenerateDbgInf then mstate.eoi if);
+        if);
+     #);
+   
+#)
+--AssemblerHeader:descriptor--
+(# 
+do ';;\tHP 9000 series 700/800 assembler\n'->BC.putT;
+   '\t.COPYRIGHT "Mjolner Informatics ApS, 1992-95"\n'->BC.putT;
+   '\t.VERSION "Mjolner BETA Compiler version 5.1"\n'->BC.putT;
+   '\t.LEVEL 1.1\n'->BC.putT;
+   '\t.SPACE $PRIVATE$\n'->BC.putT;
+   '\t.SUBSPA $DATA$,QUAD=1,ALIGN=8,ACCESS=0x1F\n'->BC.putT;
+   '\t.SPACE $TEXT$\n'->BC.putT;
+   '\t.SUBSPA $CODE$,QUAD=0,ALIGN=8,ACCESS=0x2C,CODE_ONLY\n'->BC.putT;
+   '\t.ALIGN 4\n'->BC.putT;
+   '\t.IMPORT $$mulI,MILLICODE\n\t.IMPORT $$divI,MILLICODE\n'->BC.putT;
+   '\t.IMPORT $$remI,MILLICODE\n'->BC.putT;
+   
+   (* Data symbols from RTS used in BETA code *)
+   '\t.IMPORT TextProto,DATA\n'->BC.putT;
+   '\t.IMPORT IOA,DATA\n'->BC.putT;
+   '\t.IMPORT IOATop,DATA\n'->BC.putT;
+   '\t.IMPORT RefSP,DATA\n'->BC.putT;
+   '\t.IMPORT ReferenceStack,DATA\n'->BC.putT;
+   '\t.IMPORT lastCompBlock,DATA\n'->BC.putT;
+   
+   (* Functions called from slots in SNAKEmachine, and thus
+    * not necessarily imported by high level mechanisms
+    * in the compiler.
+    *)
+   '\t.IMPORT HandleIndexErr,CODE\n'->BC.putT;
+   '\t.IMPORT RefNone,CODE\n'->BC.putT;
+   '\t.IMPORT Return,CODE\n'->BC.putT;
+   '\t.IMPORT AttBC,CODE\n'->BC.putT;
+   '\t.IMPORT ChkRA,CODE\n'->BC.putT;
+   true -> mstate.STenable; (* enable StackTracing *)
+#)
+
+--CstOpPut:dopart--
+do C->BC.putI
+--cstLoadOp:dopart--
+do dataTmp->op[];
+   (if (C < -8192) or (C >= 8192) then
+       '\tLDIL\tLR\'' -> BC.putT; C -> BC.putI; sep; op.putOp; BC.putNL;
+       '\tLDO\tRR\'' -> BC.putT; C -> BC.putI; '(' -> BC.putT;
+       op.PutOp; '), ' -> BC.putT; op.PutOp; BC.putNL;
+       (if GenerateDbgInf then 8 -> mstate.incIP if);
+    else
+       '\tLDI\t' -> BC.putT; C -> BC.putI; sep; op.putOp; BC.putNL;
+       (if GenerateDbgInf then mstate.eoi if);
+   if)
+--cstOpLoadToReg:dopart--
+do (if (C < -8192) or (C >= 8192) then
+       '\tLDIL\tLR\'' -> BC.putT; C -> BC.putI; sep; R.putOp; BC.putNL;
+       '\tLDO\tRR\'' -> BC.putT; C -> BC.putI; '(' -> BC.putT;
+       R.PutOp; '), ' -> BC.putT; R.PutOp; BC.putNL;
+       (if GenerateDbgInf then 8 -> mstate.incIP if);
+    else
+       '\tLDI\t' -> BC.putT; C -> BC.putI; sep; R.putOp; BC.putNL;
+       (if GenerateDbgInf then mstate.eoi if);
+   if);
+   R[] -> res[];
+--TextOpPut:dopart--
+do T->BC.putT
+--TextOpLoadAdr:dopart--
+do '\tLDIL\tLR\'' -> BC.putT; T -> BC.putT; sep; R.putOp; BC.putNL;
+   '\tLDO\tRR\'' -> BC.putT; T -> BC.putT; '(' -> BC.putT;
+   R.PutOp; '), ' -> BC.putT; R.PutOp; BC.putNL;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+--DataRegOpPut:dopart--
+do rN->putD
+--FloatRegOpPut:descriptor--
+(#do  '%fr'->BC.putT; rN + floatRegStart ->BC.putI #)
+--FloatRegOpAlloc:descriptor--
+(#
+do 100->rN;
+   L:
+     (for i: mstate.floatReg.range repeat
+ 	  (if mstate.floatReg[i]//0 then
+	      mstate.floatReg[i]+1->mstate.floatReg[i]; i-1->rN;
+              (*              'alloc:'->tracestream.puttext; rN->tracestream.putint; tracestream.newline;*)
+              leave L
+if)for)#)
+--FloatRegOpDeAlloc:descriptor--
+(# n: @integer (* don't overwrite rN - used in float:asgToCpar after deAlloc *)
+do (*'dealloc:'->tracestream.puttext; rN->tracestream.putint;tracestream.newline;*)
+   rN->n;
+   (if (0<=n) and (n<mstate.floatReg.range) then
+       mstate.floatReg[n+1]-1->mstate.floatReg[n+1] 
+    else 'FloatReg inx err.'->bugstream.putline
+if)#)
+--FloatRegOpReUse:descriptor--
+(# N: @integer do rN+1->N; mstate.floatReg[N]+1->mstate.floatReg[N]  #)
+--FloatRegOpLoad:descriptor--
+(# ra: ^RegAdr;
+do A.loadAdrOp -> ra[];
+   '\tLDI\t'->BC.putT; ra.off->BC.putI; ',%r1\n'->BC.putT;
+   '\tFLDDX\t%r1('->BC.putT; ra.reg.putOp; '),'->BC.putT; putOp; BC.putNL;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+#)
+--FloatRegOpStore:descriptor--
+(* Rather ugly.... But we can't address doubles the same way we do ints *)
+(# ra: ^RegAdr;
+do A.loadAdrOp -> ra[];
+   '\tLDI\t'->BC.putT; ra.off->BC.putI; ',%r1\n'->BC.putT;
+   '\tFSTDX\t'->BC.putT; putOp; ',%r1(0,'->BC.putT; ra.reg.putOp;
+   ')\n'->BC.putT;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+#)
+--FloatRegOpStoreTmp:descriptor--
+(#do this(floatRegOp)[]->A[] #) (* is this really machine dependent?? *)
+--floatRegOpStore2int:descriptor--
+(# F: @floatRegOp;
+   (* unfortunately it is not possible to move directly from a FPU register
+    * to an ordinary integer register *)
+   ra: @adrRegOperand;
+do F.alloc; 
+   1-adrRegStart->ra.rN; ra[]->A.loadAdr; ra.mkIndirect;
+   
+   '\tFCNVFXT,DBL,SGL '->BC.putT; putOp; sep; F.putOp; (* 'R\n'->BC.putT; *) BC.putNL;
+   '\tFSTWS\t'->BC.putT; F.putOp; (*'R,'->BC.putT;*)','->BC.put; ra.putOp; BC.putNL;
+   F.deAlloc; D.alloc;
+   '\tLDW\t'->BC.putT; ra.putOp; sep; D.putOp; BC.putNL;
+   deAlloc;
+   (if GenerateDbgInf then 12 -> mstate.incIP if);
+#)
+--floatConst:descriptor---
+(# Lab: @ localLab;
+do switchToData;
+   FR.alloc;
+   Lab.new; Lab.def; 
+   '\t.DOUBLE\t'->BC.putT; T -> BC.putT; BC.putNL;
+   switchToCode;
+   '\tLDIL\tLR\''->BC.putT; Lab.putOp; ',%r1\n'->BC.putT;
+   '\tLDO\tRR\''->BC.putT; Lab.putOp; '(%r1), %r1\n'->BC.putT;
+   '\tFLDDS\t0(0,%r1),'->BC.putT; FR.putOp; BC.putNL;
+   (if GenerateDbgInf then 12 -> mstate.incIP if);
+#)
+--int2float:descriptor--
+(# F: @floatRegOp;
+   ra: @adrRegOperand;
+do FR.alloc; F.alloc;
+   1-adrRegStart->ra.rN; ra[]->A.loadAdr; ra.mkIndirect;
+   '\tFLDWS\t'(*0(0,%r1),'*)->BC.putT; ra.putop; sep; F.putOp; BC.putNL;
+   '\tFCNVXF,SGL,DBL '->BC.putT; F.putOp; ','->BC.put; FR.putOp; BC.putNL;
+   F.deAlloc;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+#)
+--intReg2float:descriptor--
+(# Lab: @localLab;
+   F: @floatRegOp;
+   ra: @adrRegOperand;
+do switchToData; (*'IntReg2Float'->tracestream.puttext;*)
+   Lab.new; Lab.def;
+   '\t.WORD\t0\n'->BC.putT;
+   switchToCode;
+   '\tLDIL\tLR\''->BC.putT; Lab.putOp; ',%r1'->BC.putT; BC.putNL;
+   (* OLM 14/11/97: removed ',' in ',(%r1),%r1' in next line *)
+   '\tLDO\tRR\''->BC.putT; Lab.putOp;'(%r1),%r1'->BC.putT; BC.putNL;
+   '\tSTW\t'->BC.putT; A.putop; ',(%r1)\n'->BC.putT;
+   FR.alloc; F.alloc; 
+   '\tFLDWS\t0(0,%r1),'->BC.putT; F.putOp; BC.putNL;
+   '\tFCNVXF,SGL,DBL '->BC.putT; F.putOp; ','->BC.put; FR.putOp; BC.putNL;
+   F.deAlloc;
+   (if GenerateDbgInf then 20 -> mstate.incIP if);
+#)
+--float2int:doPart--
+do (# F: @floatRegOp;
+      lab: @locallab;
+   do switchToData;
+      Lab.new; Lab.def; 
+      '\t.WORD\t0\n'->BC.putT; 
+      switchToCode;
+      F.alloc;
+      '\tLDIL\tLR\''->BC.putT; Lab.putOp; ',%r1\n'->BC.putT;
+      (* OLM 14/11/97: removed ',' in ',(%r1),%r1' in next line *)
+      '\tLDO\tRR\''->BC.putT; Lab.putOp;'(%r1),%r1\n'->BC.putT; 
+      '\tFCNVFXT,DBL,SGL '->BC.putT; FR.putOp; sep; F.putOp;
+      '\n\tFSTWS\t'->BC.putT; F.putOp; ',(%r1)\n'->BC.putT;
+      '\tLDW\t(%r1),'->BC.putT; dr.putOp; BC.putNL;
+      F.deAlloc;
+      (if GenerateDbgInf then 20 -> mstate.incIP if);
+   #)
+   
+--cmpToBoolFloat:descriptor--
+(# Lab: @localLab
+do op1.loadFloatOp -> op1[];
+   '\tFCMP,DBL,' -> BC.putT;
+   (if cond
+    // 1 (* =  *) then '='-> BC.putT
+    // 2 (* <> *) then '!='->BC.putT
+    // 3 (* <  *) then '<'-> BC.putT
+    // 4 (* <= *) then '<='->BC.putT
+    // 5 (* >  *) then '>'-> BC.putT
+    // 6 (* >= *) then '>='->BC.putT
+   if);
+   '\t' -> BC.putT; op2.putOp; sep; op1.putOp; BC.putNL; (*revert order?? *)
+   '\tLDI\t1,' -> BC.putT; op3.putOp; BC.putNL;
+   '\tFTEST\n' -> BC.putT; (* nullify next if FP C bit is set *)
+   '\tCOPY\t%r0,' -> BC.putT; op3.putOp; BC.putNL;
+   (if GenerateDbgInf then 16 -> mstate.incIP if);
+#)
+--cmpAndJmpFloat:descriptor--
+(#  
+do op1.loadFloatOp -> op1[];
+   (*OLM:Jan.94.*)
+   '\tFCMP,DBL,'-> BC.putT; 
+   (* if op1 cond op2 then do not exe B after FTEST *)
+   (if cond 
+    // 1 (* = *) then '<>\t'->BC.putT 
+    // 2 (* <> *) then '=\t'->BC.putT
+    // 3 (* <  *) then '>=\t'->BC.putT
+    // 4 (* <= *) then '>\t'->BC.putT
+    // 5 (* >  *) then '<=\t'->BC.putT
+    // 6 (* >= *) then '<\t'->BC.putT
+   if);
+   op2.putOp; sep; op1.putOp; BC.putNL;
+   '\tFTEST\n'->BC.putT;
+   '\tB\t'->BC.putT; Lab.putOp; BC.putNL;
+   '\tNOP\n'->BC.putT;
+   (if GenerateDbgInf then 16 -> mstate.incIP if);
+#)
+--popFstack:descriptor--
+(##)
+--cmpFloat:descriptor--
+(* not used anymore on the snake *)
+(##)
+--fBeq:descriptor--
+(##)
+--fBne:descriptor--
+(##)
+--fBge:descriptor--
+(##)
+--fBle:descriptor--
+(##)
+--fBgt:descriptor--
+(##)
+--fBlt:descriptor--
+(##)
+--addFloat:descriptor--
+(# op: ^ mOperand
+do  A.loadFloatOp->op[];
+   '\tFADD,DBL\t'->BC.putT; LF.putOp; sep; op.putOp; sep; LF.putOp; BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--subFloat:descriptor--
+(# op: ^ mOperand
+do  A.loadFloatOp->op[];
+   '\tFSUB,DBL\t'->BC.putT; LF.putOp; sep; op.putOp; sep; LF.putOp; BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--mulFloat:descriptor--
+(# op: ^ mOperand
+do  A.loadFloatOp->op[];
+   '\tFMPY,DBL\t'->BC.putT; LF.putOp; sep; op.putOp; sep; LF.putOp; BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--divFloat:descriptor--
+(# op: ^ mOperand
+do  A.loadFloatOp->op[];
+   '\tFDIV,DBL\t'->BC.putT; LF.putOp; sep; op.putOp; sep; LF.putOp; BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--negFloat:descriptor--
+(# (* beware, this is probably just done to one reg of a pair on the
+    * sparc, and 68k, we can't do that on the snake, as one register
+    * contains an entire double *)
+do '\tFSUB,DBL\t%fr0,'->BC.putT; F.putOp; BC.sep; F.putOp; BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--pushFloatReg:descriptor--
+(#
+do '\tLDO\t-40(%r30),%r1\n'->BC.putT;
+   '\tFSTDX\t%fr'->BC.putT; rN+floatRegStart->BC.putI; ',%r0(0,%r1)\n'->BC.putT;
+   '\tLDO\t64(%r30),%r30\n'->BC.putT;
+   (if GenerateDbgInf then 12 -> mstate.incIP if);
+#)
+--popFloatReg:descriptor--
+(#
+do '\tLDO\t-64(%r30),%r30\n'->BC.putT;
+   '\tLDO\t-40(%r30),%r1\n'->BC.putT;
+   '\tFLDDX\t%r0(0,%r1),%fr'->BC.putT; rN+floatRegStart->BC.putI; BC.putNL;
+   (if GenerateDbgInf then 12 -> mstate.incIP if);
+#)
+--AdrRegOpPut:dopart--
+do (if not ind then
+       rN -> putA;
+    else
+       '0(0,' -> BC.putT; rN -> putA; ')' -> BC.putT;
+   if)
+--stackTopAdrPutOp:descriptor--
+(##)
+--doubleDataRegPut:descriptor-- 
+cError(#do 'doubleDataRegPut' -> T#)
+--LocalLabDef:dopart--
+do  (if type = interFragment then
+       asText -> export;
+       asText -> labelDef; BC.putNL
+   if);
+   'L$C'->BC.putT; labNo->BC.putI; '\n'->BC.putT
+--VirtLabDef:descriptor--
+(# do 'L$C'->BC.putT; labNo -> BC.putI #)  
+--LocalLabPut:dopart--
+do (if type = interFragment then
+       (*asText -> import; OLM 16/7/96*)
+       asText -> BC.putText
+    else
+       'L$C'->BC.putT; labNo->BC.putI 
+   if)
+--localLabLoadAdr:dopart--
+do (if type = interFragment then
+       (*asText -> import; OLM: 26/7/96 *)
+       '\tLDIL\tLR\'' -> BC.putT; asText -> BC.putText; sep; R.putOp; 
+       '\n\tLDO\tRR\'' -> BC.putT; asText -> BC.putText; 
+    else
+       '\tLDIL\tLR\'L$C' -> BC.putT; labNo->BC.putI; sep; R.putOp;
+       '\n\tLDO\tRR\'L$C' -> BC.putT; labNo->BC.putI; 
+   if);
+   '(' ->BC.putT; R.putOp; '),' -> BC.putT; R.putOp; BC.putNL;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+--localLabAstext:descriptor--
+(#
+do 'L$C'->localLabText.putText; labNo->localLabText.putInt
+#)
+-- ldCst: dopart --
+do (if (C < -8192) or (C >= 8192) then
+       '***** large offset 1'->comment;
+       '\tLDIL\tLR\'' -> BC.putT; C -> BC.putI; sep; R.putOp; BC.putNL;
+       '\tLDO\tRR\'' -> BC.putT; C -> BC.putI; '(' -> BC.putT;
+       R.PutOp; '), ' -> BC.putT; R.PutOp; BC.putNL;
+       (if GenerateDbgInf then 8 -> mstate.incIP if);
+    else
+       '\tLDI\t' -> BC.putT; C -> BC.putI; sep; R.putOp; BC.putNL;
+       (if GenerateDbgInf then mstate.eoi if);
+   if)
+
+--stCst:descriptor--
+(# op: ^mOperand;
+do A.loadAdrOp->op[];
+   (if (C < -8192) or (C >= 8192) then
+       '***** large offset 2'->comment;
+       '\tLDIL\tLR\'' -> BC.putT; C -> BC.putI; ',%r1\n'->BC.putT;
+       '\tLDO\tRR\'' -> BC.putT; C -> BC.putI; '(%r1), %r1\n' -> BC.putT;
+       (if GenerateDbgInf then 8 -> mstate.incIP if);
+    else
+       '\tLDI\t' -> BC.putT; C -> BC.putI; ', %r1\n' -> BC.putT;
+       (if GenerateDbgInf then mstate.eoi if);
+   if);
+   '\tST' -> BC.putT; size -> BC.putS; '%r1,' -> BC.putT;
+   op.putOp; BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--ldByte:descriptor---
+(# op: ^mOperand;
+do op1.loadAdrOp->op[];
+   op2[] -> gClr;
+   '\tLDB\t'->BC.putT; op.putOp; sep; op2.putOP;
+   (if op1.signed then
+       '\n\tEXTRS\t'->BC.putT; op2.putOp; ',31,8,'->BC.putT; op2.putOp
+   if);
+   BC.putNl;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--ldHalf:descriptor---
+(# op:^mOperand;
+   t:^text;
+do
+   op1.loadAdrOp->op[];
+   op2[] -> gClr;
+   '\tLDH\t'->BC.putT; op.putOp; sep; op2.putOP;
+   (if op1.signed then
+       '\n\tEXTRS\t'->BC.putT; op2.putOp; ',31,16,'->BC.putT; op2.putOp
+   if);
+   BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--ldVal:descriptor--
+(# op:^mOperand;
+do  A.loadAdrOp->op[];
+   '\tLDW\t'->BC.putT; op.putOp; sep; R.putOP; BC.putNl;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--ldVl:descriptor--
+(# op: ^mOperand;
+do (*A.loadAdrOp->op[];
+   (if size
+    // 4 then '\tLDW\t'->BC.putT
+    // 1 then '\tLDB\t'->BC.putT
+    else '\tLDH\t'->BC.putT
+   if); 
+   op.putOp; sep; R.putOP; BC.putNl;
+    (if GenerateDbgInf then mstate.eoi if);
+    * changed to the following to make proper 
+    * implementation of signed operands
+    *)
+   (if size
+    // 4 then (A[],R[])->ldVal
+    // 1 then (A[],R[])->ldByte
+    else
+       (A[],R[])->ldHalf
+   if);
+
+#)
+--stByte:descriptor---
+(# op:^mOperand;
+do op2.loadAdrOp->op[];
+   '\tSTB\t'->BC.putT; op1.putOp; sep; op.putOP; BC.putNl;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--stHalf:descriptor---
+(# op:^mOperand;
+do op2.loadAdrOp->op[];
+   '\tSTH\t'->BC.putT; op1.putOp; sep; op.putOP; BC.putNl;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--stVal:descriptor--
+(# op:^mOperand;
+do A.loadAdrOp->op[];
+   '\tSTW\t'->BC.putT; R.putOp; sep; op.putOP; BC.putNl;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--stValInLab: dopart--
+do 'stValInLab'->screen.putline;
+--ldValFromLab: dopart--
+do 'ldValFromLab'->screen.putline;
+--cpReg:dopart--
+do R1.loadOp->R1[]; (* R1 may be a const. What braindamage! *)
+   (* R1 and R2 are known to be registers now, but they have the wrong
+    * type, so we can't check for COPY r,r unless we take extra pains...
+    * And the codegenerator *will* generate such operations without
+    * hesitation, Grrr! *)
+   (if R1.regF<>R2.regF then
+       '\tCOPY\t'->BC.putT; R1.putOp; sep; R2.putOP; BC.putNl;
+       (if GenerateDbgInf then mstate.eoi if);
+   if)
+--cpByteMem:descriptor--
+(# op1,op2: ^mOperand;
+do A1.loadAdrOp->op1[];
+   (* this is very ugly, loadAdrOp must *not* use r28!!! *)
+   '\tLDB\t'->BC.putT; op1.putOp; ',%r28\n'->BC.putT;
+   A2.loadAdrOp->op2[]; 
+   '\tSTB\t%r28,'->BC.putT; op2.putOP; BC.putNl;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+#)
+--cpHalfMem:descriptor--
+(# op1,op2:^mOperand;
+do A1.loadAdrOp->op1[];
+   (* this is very ugly, loadAdrOp must *not* use r28!!! *)
+   '\tLDH\t'->BC.putT; op1.putOp; ',%r28\n'->BC.putT;
+   A2.loadAdrOp->op2[]; 
+   '\tSTH\t%r28,'->BC.putT; op2.putOP; BC.putNl;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+#)
+--cpMem:descriptor--
+(# op1,op2:^mOperand;
+do A1.loadAdrOp->op1[];
+   (* this is very ugly, loadAdrOp must *not* use r28!!! *)
+   '\tLDW\t'->BC.putT; op1.putOp; ',%r28\n'->BC.putT;
+   A2.loadAdrOp->op2[]; 
+   '\tSTW\t%r28,'->BC.putT; op2.putOP; BC.putNl;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+#)
+--stValInText:dopart--
+do '\tLDIL\tLR\''->BC.putT; L.putOp; ',%r1\n' -> BC.putT;
+   '\tSTW\t'->BC.putT; op.putOp; ',RR\''->BC.putT; L.putOp;
+   '(0,%r1)\n'->BC.putT;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+--comment:dopart--
+do ';  '->BC.putT; T->BC.putT; BC.putNL
+--Export:dopart--
+do '\t.EXPORT '-> BC.putT; Lab->BC.putT;
+   (if group_hash[] = NONE then
+       (* HACK! 
+        * This is export of the BETA_DATA symbol in the BETA_DATA-file
+        *)
+       ',DATA\n'->BC.putT
+    else
+       '\n'->BC.putT
+   if);
+--Import:descriptor--
+(# #)
+--ImportData:descriptor--
+(#
+do '\t.IMPORT '->BC.putT; Lab->BC.putT; ',DATA\n'->BC.putT;
+#)
+--JsrTable:descriptor--
+(# aR: @adrRegOperand
+do callO->aR; (A[],aR[])->ldVal; aR[]->JsrReg
+#)
+--RegAdrToOriginReg:descriptor--
+(* OLM:Jan.94.
+ * I think that an immediate operand can be max 11 bit!
+ *)
+(# dr:  ^dataRegOperand; 
+do 1->primReg->dr[];
+   (if off//0 then (* offset may be negative, zero or positive *)
+       (if reg.regF<>dr.regF then
+           '\tCOPY\t'->BC.putT; reg.putOp;
+           sep; dr.putOp; BC.putNl; (if GenerateDbgInf then mstate.eoi if);
+       if)
+    else
+       (if (-2048<=off) and (off<2048) then 
+           '\tLDO\t'->BC.putT;
+           off->BC.putI; '('->BC.putT; reg.putOp; ')'->BC.putT;
+        else
+           '***** large offset 3'->comment;
+           (off->newCstOp,dr[])->ldCst;
+           '\tADD\t'->BC.putT; reg.putOp; sep; dr.putOP; sep; dr.putOp; BC.putNL;
+           '\tLDO\t0('->BC.putT; DR.putOp; ')'->BC.putT;
+           (if GenerateDbgInf then 4 -> mstate.incIP if);
+       if);
+       sep; dr.putOp; BC.putNl; (if GenerateDbgInf then mstate.eoi if);
+   if);
+#)
+-- jsrT: dopart --
+do (if mstate.proto[] <> NONE then
+       '\tLDIL\tLR\'' -> BC.putT; mstate.proto -> BC.putT; sep; 
+       CallRegOp.putOp; BC.putNL;
+       (if GenerateDbgInf then 4 -> mstate.incIP if);
+   if);
+   T[]->Import;
+   '\tBL\t'->BC.putT; T->BC.putT; ',%r2\n'->BC.putT;
+   (if mstate.proto[] <> NONE then
+       '\tLDO\tRR\'' -> BC.putT; mstate.proto -> BC.putT; '(' -> BC.putT;
+       CallRegOp.PutOp; '), ' -> BC.putT; CallRegOp.PutOp; BC.putNL;
+    else
+       '\tNOP\n'->BC.putT;
+   if);
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+
+--jsrReg:dopart--
+do(# L:@localLab;
+do mstate.saveLiveArgs;
+   L.new; 
+   '\tLDIL\tLR\''->BC.putT; L.putOp; ',%r2\n'->BC.putT;
+   '\tBV\t%r0('->BC.putT; op.putOp; ')\n'->BC.putT;
+   '\tLDO\tRR\''->BC.putT; L.putOp; '(%r2),%r2\n'->BC.putT;
+   L.def;
+   mstate.restoreDeadArgs;
+   (if GenerateDbgInf then 12 -> mstate.incIP if);
+  #)
+--jmpReg:doPart--
+do '\tBV\t%r0('->BC.putT; op.putOp; ')\n'->BC.putT; 
+   nopDelay; 
+   (if GenerateDbgInf then 4 -> mstate.incIP if);
+--jmpTlong:dopart--
+(* note, a distinction between long and short jumps has bee made.
+ * jmpT is a short jump. This difference is perhaps not reflected in
+ * the current def. og jumTlong and jumpT.
+ *)
+do '\tB\t'->BC.putT; T->BC.putT; 
+   '\n\tNOP\n'->BC.putT;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+-- jmpT: dopart --
+do '\tB\t'->BC.putT; T->BC.putT; BC.putNL;
+   '\tNOP\n'->BC.putT;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+
+-- gJmp: dopart --
+do '\tB\t'->BC.putT; op.putOp; BC.putNL;
+   '\tNOP\n'->BC.putT;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+
+--gJsr:dopart--
+(* is this used on the snake?, hope not... It IS! Yuck *)
+do mstate.saveLiveArgs;
+   '\tBL\t'->BC.putT; op.putOp; ',%r2\n'->BC.putT;
+   '\tNOP\n'->BC.putT;
+   mstate.restoreDeadArgs;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+-- saveInnerReturn: dopart --
+do '\tSTW\t%r2,-20(0,%r30)\n'->BC.putT;
+   '\tLDO\t64(%r30),%r30\n'->BC.putT;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+
+-- returnInner: dopart --
+do '\tLDW\t-84(0,%r30),%r2\n'->BC.putT;
+   '\tBV\t%r0(%r2)\n'->BC.putT;
+   '\tLDO\t-64(%r30),%r30\n'->BC.putT;
+   (if GenerateDbgInf then 12 -> mstate.incIP if);
+
+-- rts: dopart --
+do '\tBV\t%r0(%r2)\n'->BC.putT;
+   '\tNOP\n'->BC.putT;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+
+--gClr:dopart--
+do (if op.isRegOp then
+       '\tCOPY\t%r0,'->BC.putT; op.putOp; BC.putNL;
+       (if GenerateDbgInf then mstate.eoi if);
+    else
+       cError(# do 'gClr: not register' -> T #);
+   if)
+--pushAdr:descriptor--
+(#
+do op[]->pushCParameter (* to O-register *)
+#)
+
+(************* are push and pop ever used on the snake? YES! ***************)
+--BeginLabel:doPart--
+do '\tLDIL\tLR\'lastCompBlock,%r1\n'->BC.putT;
+   '\tLDW\tRR\'lastCompBlock(%r1),%r1\n'->BC.putT;
+   '\tSUB\t%r30,%r1,%r1\n'->BC.putT;
+   '\tSTW\t'->BC.putT; '%r1,'->BC.putT; off->BC.putI; '(0,'->BC.putT;
+   putThisReg; ')\n'->BC.putT;
+   (if GenerateDbgInf then 16 -> mstate.incIP if);
+--EndLabel:doPart--
+do
+--pushThisOrCall:descriptor--
+(# 
+do (if pushTh then 
+       (if pushCa then 
+           (thisRegOp[], callRegOp[])->Push2Refs
+        else
+           thisRegOp[]->PushReference
+       if)
+    else
+       (if pushCa then callRegOp[]->PushReference if)
+   if)
+#)
+--popThisOrCall:descriptor--
+(#
+do (if PopTh then 
+       (if PopCa then 
+           (callRegOp[], thisRegOp[])->Pop2Refs
+        else
+           thisRegOp[]->PopReference
+       if)
+    else
+       (if PopCa then callRegOp[]->PopReference if)
+   if)
+#)
+--Push:descriptor--
+(# op1: ^registerOperand;
+   pushdata:
+     (#
+     do '\tSTW\t'->BC.putT; op1.putOp; ',-36(0,%r30)\n'->BC.putT;
+        '\tLDO\t64(%r30),%r30\n'->BC.putT;
+        (if GenerateDbgInf then 8 -> mstate.incIP if);
+     #)
+do op.loadOp->op1[];
+   (if op1.isAdrRegOp then
+       (if op1.rn 
+        // thisO 
+        // callO 
+        // 2 
+        // 3 
+        // 4 then
+           op1[]->pushReference
+        else pushdata
+       if)
+    else pushdata
+   if);
+#)
+--Pop:descriptor--
+(# op1: ^registerOperand;  
+   popdata:
+     (#
+     do '\tLDO\t-64(%r30),%r30\n'->BC.putT;
+        '\tLDW\t-36(0,%r30),'->BC.putT; op.putOp; BC.putNL;
+        (if GenerateDbgInf then 8 -> mstate.incIP if);
+     #)
+do op[] -> op1[];
+   (if op1.isAdrRegOp then
+       (if op1.rn 
+        // thisO 
+        // callO 
+        // 2 
+        // 3 
+        //4 then
+           op[]->popReference
+        else popdata
+       if)
+    else popdata
+   if)
+#)
+--PushReg:descriptor--
+(# ar: @adrRegOperand
+do (*351->cTrace(#do 'PushReg'->T #);*)
+   (for i: rep.aReg.range repeat
+	(if (rep.aReg[i]>0) then
+	    (*****i-1 -> ar; ar[] -> pushReference; ********)
+	    (if (i<>callO+1) then
+		i-1->ar; ar[]->PushReference;
+      	    if)
+	if)
+   for);
+   PushDataReg->max;
+#)
+--PushDataReg:descriptor--
+(# T: @text
+do -1->rep.dMax;
+   (for i: rep.dReg.range repeat
+	(if (rep.dReg[i]>0) then i-1->rep.dMax if)for);
+   (if (rep.dMax>-1) then
+       (for i: rep.dMax+1 repeat
+	    (i-1)->NewDataRegOp->push
+       for);
+   if);
+   rep.dMax->max;
+   
+   -1->rep.fMax;
+   (for i: mstate.floatReg.range repeat
+	(if mstate.floatReg[i]>0 then i-1->rep.fMax
+   if)for);
+   (if rep.fMax>-1 then
+       (for i: rep.fMax+1 repeat
+	    (i-1)->pushFloatReg
+       for)
+   if);
+   (* max is NOT used here *)
+#)
+--PopDataReg:descriptor--
+(# T: @text
+do (*351->cTrace(#do 'PopReg'->T #);*)
+   (if (rep.fMax>-1) then
+       (*4->setTop*)
+   if);
+   (for i: rep.fMax+1 repeat (rep.fMax-i+1)->popFloatReg for);
+   
+   (if (max(*rep.dMax*)>-1) then
+       (* 4->setTop; *)
+       (for i:max+1 repeat  (max-i+1)->NewDataRegOp->pop for);
+   if);
+#)
+--popReg:descriptor--
+(# ar: @adrRegOperand; i: @integer
+do max->PopDataReg;
+   (for j: rep.aReg.range repeat
+        rep.aReg.range+1-j->i; (* i in [rep.aReg.range..1] *)
+        (if (i<>(callO+1)) then
+	    (if (rep.aReg[i]>0) then
+	        i-1->ar; ar[]->PopReference;
+       	    if)
+        if)
+   for);
+#)
+--SetTop:descriptor--
+(#
+do '\tLDO\t'->BC.putT;
+   (if off <> 0 then
+       -64 * off ->BC.putI;
+   if);
+   '(%r30),%r30\n' -> BC.putT;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--gLea:descriptor---
+(# (* op2 is always an address register *)
+do op2[]->op1.loadAdr
+#)
+--gLeaLabel:descriptor---
+(#
+do op2[]->op1.loadAdr
+#)
+--leaToPrimReg:descriptor--
+(* OLM:Jan.94. *)
+(#
+do (op1[],op2[])->gLea;
+#)
+--ChkCase:doPart--
+   (* if inx > (unsigned) (max-min) then 'goto elseLab'
+    * if (unsigned) (max-min) < inx then 'goto elseLab'
+    * if (unsigned) (max-min) >= inx then skip 'goto elseLab'
+    *)
+do '\tCOMICLR,>>=\t'->BC.putT; (max-min)->BC.putI; sep; inx.putOp; 
+   ',%r0\n' -> BC.putT;
+   '\tB,N\t'->BC.putT; elseLab.putOp; BC.putNL;
+   (2->newCstOp,inx[])->logicalShiftLeft; (* datpete 10-3-95 *)
+   8->incIP;
+--ChkIndex:descriptor--
+(# L: @localLab;
+do ';; check index\n'->BC.putT;
+   op1.loadOp -> op1[];
+   (* this must change when the lower-bound can differ from 1 *)
+   L.new;
+   '\tCOMIB,>\t1,'->BC.putT; op2.putOp; sep; L.putOp; BC.putNL;
+   '\tLDW\t12('->BC.putT; op1.putOp; '), %r1\n'->BC.putT;
+   '\tCOMCLR,>=\t%r1,'->BC.putT; op2.putOp; ',%r0\n'->BC.putT;
+   L.def;
+   '\tBL,N\tHandleIndexErr,%rp\n'->BC.putT;
+   (if GenerateDbgInf then 16 -> mstate.incIP if);
+#)
+--ChkHeap:descriptor--
+(*  SUB	OP,%IOAbot,%r1	; r1 = op - IOAbot
+ *  COPY	OP,%r28         ; res0 register
+ *  COMCLR,<<=	%r1,%IOAsize,OP	; OP=0, nullify next if r1<=IOAsize
+ *  BL	ChkRA,%r2	; in delayslot of COMCLR
+ *  NOP
+ *) 
+(# 
+do loadIOAReg;
+   '\tSUB\t'->BC.putT; op.putOp; sep; putIOAbotReg; ',%r1\n'->BC.putT;
+   '\tCOPY\t'->BC.putT; op.putOp; ',%r28\n'->BC.putT;
+   loadIOASizeReg;
+   '\tCOMCLR,<<=\t%r1,'->BC.putT; putIOAsizeReg; sep; op.putOp; BC.putNL;
+   '\tBL\tChkRA,%r2\n'->BC.putT;
+   '\tNOP\n'->BC.putT; 
+   (if GenerateDbgInf then 20 -> mstate.incIP if);
+   op[]->gClr; (***<<<<<<<<<<<<<<<<<<< *******)
+   (* can't use bl,n here, if ChkRA is called it skips the next instr.
+    * upon return *)
+#)
+--SignExtByte:descriptor--
+(#
+do '\tEXTRS\t'->BC.putT; op.putOp; ',31,8,'->BC.putT; op.putOp; BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--SignExtWord:descriptor--
+(#
+do '\tEXTRS\t'->BC.putT; op.putOp; ',31,16,'->BC.putT; op.putOp; BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--GetBits:descriptor--
+(#
+do '\tEXTRU\t'->BC.putT; op1.putOp; sep; pos+length-1 ->BC.putI; sep;
+   length->BC.putI; sep; op2.putOp; BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--GetSignedBits:descriptor--
+(#
+do '\tEXTRS\t'->BC.putT; op1.putOp; sep; pos+length-1 ->BC.putI; sep;
+   length->BC.putI; sep; op2.putOp; BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--gGetBits:doPart--
+   (* unsigned int getbits(unsigned int rd, unsigned int pDr, unsigned int lDr)
+    * {
+    * return (rd << pDr) >> (32-lDr);
+    * }
+    * subi 31,pRd,pDr
+    * mtsar pDr
+    * zvdep dr,32,dr
+    * subi 32,lDr,lDr
+    * mtsar lDr
+    * vshd 0,dr,%r28
+    *)
+do '\tSUBI\t31,'->BC.putT; pDr.putOp; sep; pDr.putOp; BC.putNL;
+   '\tMTSAR\t'->BC.putT; pDr.putOp; BC.putNL;
+   '\tZVDEP\t'->BC.putT; dr.putOp; ',32,'->BC.putT; dr.putOp; BC.putNL;
+   '\tSUBI\t32,'->BC.putT; lDr.putOp; sep; lDr.putOp; BC.putNL;
+   '\tMTSAR\t'->BC.putT; lDr.putOp; BC.putNL; 
+   '\tVSHD\t0,'->BC.putT; dr.putOp; sep; dr.putOp; BC.putNL;
+   (if GenerateDbgInf then 24->mstate.incIP if);
+    
+--gGetSignedBits:doPart--
+   (* int getbits( int rd,  int pDr,  int lDr)
+    * {
+    * return (rd << pDr) >> (32-lDr);
+    * }
+    * subi 31,pDr,pDr
+    * mtsar pDr
+    * zvdep dr,32,dr
+    * ldo -1(lDr),lDr
+    * mtsar lDr
+    * vextrs dr,32,%r28
+    *)
+do '\tSUBI\t31,'->BC.putT; pDr.putOp; sep; pDr.putOp; BC.putNL;
+   '\tMTSAR\t'->BC.putT; pDr.putOp; BC.putNL;
+   '\tZVDEP\t'->BC.putT; dr.putOp; ',32,'->BC.putT; dr.putOp; BC.putNL;
+   '\tLDO\t-1('->BC.putT; lDr.putOp; '),'->BC.putT;; lDr.putOp; BC.putNL;
+   '\tMTSAR\t'->BC.putT; lDr.putOp; BC.putNL; 
+   '\tVEXTRS\t'->BC.putT; dr.putOp; ',32,'->BC.putT; dr.putOp; BC.putNL;
+   (if GenerateDbgInf then 24->mstate.incIP if);
+   
+--PutBits:dopart--
+do '\tLDW\t'->BC.putT; op2.putOp; ',%r1\n'->BC.putT;
+   '\tDEP\t'->BC.putT; op1.putOp; sep; pos+length-1 ->BC.putI; sep; 
+   length->BC.putI; ',%r1\n'->BC.putT;
+   '\tSTW\t%r1,'->BC.putT; op2.putOp; BC.putNL;
+   (if GenerateDbgInf then 12 -> mstate.incIP if);
+--gPutBits:doPart--
+   (* unsigned int putbits(unsigned int rd, unsigned int pDr,
+    *                      unsigned int lDr, unsigned long * ar)
+    * { unsigned long mask=((unsigned long) ((-1)<<(32-lDr)))>>pDr;
+    *   unsigned long bits=(rd << (32-lDr)) >> pDr;
+    *   *ar= (*ar & ~mask) | bits;
+    *  }
+    * ldo -1(lDr),lDr
+    * mtsar lDr
+    * zvdepi -1,32,%r19
+    * mtsar pDr
+    * vshd 0,%r19,%r19
+    * mtsar lDr
+    * zvdep rd,32,rd
+    * mtsar pDr
+    * ldw 0(0,ar),%r20
+    * vshd 0,rd,rd
+    * andcm %r20,%r19,%r19
+    * or %r19,rd,%r19
+    * bv 0(%r2)
+    * stw %r19,0(0,ar)
+    *)
+do '\tLDO\t-1('->BC.putT; lDr.putOp; '),'->BC.putT; lDr.putOp; BC.putNL;
+   '\tMTSAR\t'->BC.putT; lDr.putOp; BC.putNL;
+   '\tZVDEPI\t-1,32,%r15'->BC.putT; BC.putNL;
+   '\tMTSAR\t'->BC.putT; pDr.putOp; BC.putNL;
+   '\tVSHD\t0,%r15,%r15'->BC.putT; BC.putNL;
+   '\tMTSAR\t'->BC.putT; lDr.putOP; BC.putNL;
+   '\tZVDEP\t'->BC.putT; dr.putOP; ',32,'->BC.putT; dr.putOP; BC.putNL;
+   '\tMTSAR\t'->BC.putT; pDr.putOp; BC.putNL;
+   '\tLDW\t'->BC.putT; ar.putOp; ',%r16'->BC.putT; BC.putNL;
+   '\tVSHD\t0,'->BC.putT; dr.putOp; sep; dr.putOP; BC.putNL;
+   '\tANDCM\t%r16,%r15,%r15'->BC.putT; BC.putNL;
+   '\tOR\t%r15,'->BC.putT; dr.putop; ',%r15'->BC.putT; BC.putNL;
+   '\tSTW\t%r15,'->BC.putT; ar.putOp; BC.putNL;
+   (if GenerateDbgInf then 52->mstate.incIP if);
+--gAdd:descriptor--
+(# (* op2 is a register *)
+do op1.loadOp->op1[]; 
+   '\tADD\t'->BC.putT; op1.putOp; sep; op2.putOP; sep; op2.putOp; BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--addMem:descriptor--
+(* notice: This modifes R as well as the memorycell, this is important *)
+(# op: ^mOperand
+do op1.loadOp->R[]; op2.loadAdrOp->op[]; (* op2 may include a largeoffset *)
+   '\tLDW\t'->BC.putT; op.putOp; ',%r1\n'->BC.putT;
+   '\tADD\t%r1,'->BC.putT; R.putOp; sep; R.putOp; BC.putNL;
+   '\tSTW\t'->BC.putT; R.putOp; sep; op.putOp; BC.putNL;
+   (if GenerateDbgInf then 12 -> mstate.incIP if);
+   (***!!!! this is very tricky:
+    * R may use a dataTmp and op may use a dataTmp;
+    * the next dataTmp allocation will allocate the one possibly used by
+    * R, but R is returned as value of addmem. i.e. R MUTS be saved.
+    * We thus have to release the one used by op2:
+    *)
+   (if R.rN
+    // 6 then false->mstate.dataTmp6 (* allocate 7 *)
+    // 7 then  true->mstate.dataTmp6(* allocate 6 *)
+   if)
+#)
+--gSub:descriptor--
+(# (* op2-op1 ? *)
+do op1.loadOp->op1[]; (* op2 has to be a register *)
+   '\tSUB\t'->BC.putT; op2.putOp; sep; op1.putOp; sep; op2.putOp; BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--gNeg:descriptor--
+(#
+do '\tSUB\t%r0,'->BC.putT; op.putOp; sep; op.putOp; BC.putNl;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--cmpToBool:descriptor--
+(# 
+do op1.loadOp -> op1[];
+   '\tCOMCLR,' -> BC.putT;
+   (if cond (* IF T1 cc R then goto L *)
+    // 1 (* =  *) then '<>'->BC.putT
+    // 2 (* <> *) then '='->BC.putT
+    // 3 (* <  *) then '>='->BC.putT
+    // 4 (* <= *) then '>'->BC.putT
+    // 5 (* >  *) then '<='->BC.putT
+    // 6 (* >= *) then '<'->BC.putT
+   if);
+   (* notice operand order! *)
+   '\t' -> BC.putT; op2.putOp; sep; op1.putOp; sep; op3.putOp; BC.putNL;
+   '\tLDI\t1,'->BC.putT; op3.putOp; BC.putNL;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+#)
+--cmpAndJmp:descriptor--
+(#
+do op1.loadOp->op1[];
+   '\tCOMCLR,'->BC.putT;
+   (if cond (* IF T1 cc R then goto L *)
+    // 1 (* =  *) then '<>'->BC.putT
+    // 2 (* <> *) then '='->BC.putT
+    // 3 (* <  *) then '>='->BC.putT
+    // 4 (* <= *) then '>'->BC.putT
+    // 5 (* >  *) then '<='->BC.putT
+    // 6 (* >= *) then '<'->BC.putT
+   if);
+   '\t'->BC.putT; op2.putOp; sep; op1.putOp; ',%r0\n'->BC.putT;
+   '\tBL\t'->BC.putT; Lab.putOp; ',%r0\n'->BC.putT;  BC.putNL;
+   '\tNOP\n'->BC.putT;
+   (if GenerateDbgInf then 12 -> mstate.incIP if);
+#)
+--cmpBoolAndJmp:descriptor--
+(#
+do op.loadOp->op[];
+   '\tCOMCLR,'->BC.putT;
+   (if cond (* IF T1 cc R then goto L *)
+    // 1 (* =  *) then '<>'->BC.putT
+    // 2 (* <> *) then '='->BC.putT
+    // 3 (* <  *) then '>='->BC.putT
+    // 4 (* <= *) then '>'->BC.putT
+    // 5 (* >  *) then '<='->BC.putT
+    // 6 (* >= *) then '<'->BC.putT
+   if);
+   '\t,%r0,'->BC.putT; op.putOp; ',%r0\n'->BC.putT;
+   '\tBL\t'->BC.putT; Lab.putOp; ',%r0\n'->BC.putT;  BC.putNL;
+   '\tNOP\n'->BC.putT;
+   (if GenerateDbgInf then 12 -> mstate.incIP if);
+#)
+--gCmp:descriptor--
+cError(# do 'gCmp called' -> T #)
+--gMult:descriptor--
+(# r: @dataRegOperand;
+do mstate.saveLiveArgs;
+   26-dataRegStart -> r.rN;
+   r[] -> op1.loadToReg->op1[];
+   r[] -> op1.pushCpar; (* see pushCParameter for an explanation *)
+   '\tBL\t$$mulI,%r31\n'->BC.putT; (* notice: uses %r31 to hold retaddr *)
+   '\tCOPY\t'->BC.putT; op2.putOp; ',%r25\n'->BC.putT;
+   '\tCOPY\t%r29,'->BC.putT; op2.putOp; BC.putNL;
+   mstate.restoreDeadArgs;
+   (if GenerateDbgInf then 12 -> mstate.incIP if);
+#)
+--gDiv:descriptor--
+(# r: @dataRegOperand;
+do mstate.saveLiveArgs;
+   25-dataRegStart -> r.rN;
+   r[] -> op1.loadToReg->op1[];
+   r[] -> op1.pushCpar; (* see pushCParameter for an explanation *)
+   (if isDiv then
+       '\tBL\t$$divI,%r31\n'->BC.putT;
+       '\tCOPY\t'->BC.putT; op2.dNo2.putOp; ',%r26\n'->BC.putT;
+       '\tCOPY\t%r29,'->BC.putT; op2.dNo2.putOp; BC.putNL;
+    else
+       '\tBL\t$$remI,%r31\n'->BC.putT;
+       '\tCOPY\t'->BC.putT; op2.dNo2.putOp; ',%r26\n'->BC.putT;
+       '\tCOPY\t%r29,'->BC.putT; op2.dNo1.putOp; BC.putNL;
+   if);
+   (* note that the caller of gDiv assumes that div returns
+    * the result in op2.dNo2 whereas rem returns in op2.dNo1.
+    * This has 'survived' since div on the motorola returns
+    * div in d0 and rem in d1.
+    *)
+   mstate.restoreDeadArgs;
+   (if GenerateDbgInf then 12 -> mstate.incIP if);
+#)
+--gOr:descriptor--
+(#
+do op1.loadOp->op1[];
+   '\tOR\t'->BC.putT; op1.putOp; sep; op2.putOP; sep; op2.putOp; BC.putNl;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--gAnd:descriptor--
+(#
+do op1.loadOp->op1[];
+   '\tAND\t'->BC.putT; op1.putOp; sep; op2.putOP; sep; op2.putOp; BC.putNl;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--gXor:descriptor--
+(#
+do op1.loadOp->op1[];
+   '\tXOR\t'->BC.putT; op1.putOp; sep;  op2.putOp; sep; op2.putOp; BC.putNl;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--gNot:descriptor--
+(# 
+do '\tADDI\t1,'->BC.putT; op.putOp; ', %r1\n' -> BC.putT;
+   '\tZDEP\t%r1,31,1,'->BC.putT; op.putOp; BC.putNL;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+#)
+--LogNot:descriptor--
+(#
+do '\tUADDCM\t%r0,'->BC.putT; op.putOp; sep; op.putOp; BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--gGetDataByte:descriptor--
+(#
+do (if byteNo
+    // 0 then (* upper byte *)
+       '\tEXTRU\t'->BC.putT; op1.putOp; ',7,8,'->BC.putT; 
+    // 1 then (* upper middle byte *)
+       '\tEXTRU\t'->BC.putT; op1.putOp; ',15,8,'->BC.putT; 
+    // 2 then 
+       '\tEXTRU\t'->BC.putT; op1.putOp; ',23,8,'->BC.putT; 
+    // 3 then 
+       '\tEXTRU\t'->BC.putT; op1.putOp; ',31,8,'->BC.putT; 
+   if);
+   op1.putOp;
+   BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--gGetDataWord:descriptor--
+(#
+do (if wordNo//0 then
+       '\tEXTRU\t'->BC.putT; op1.putOp; ',15,16,'->BC.putT; 
+    else
+       '\tEXTRU\t'->BC.putT; op1.putOp; ',31,16,'->BC.putT; 
+   if);
+   op1.putOp;
+   BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+#)
+--tstNone:descriptor--
+(* OLM:Jan.94. *)
+(# op: ^mOperand; dr: ^dataRegOperand
+do A.loadAdrOp -> op[];
+   (A[],R[])->ldVal; 
+   (if common.switch[77] then
+       (* force read of R to %r0 to check for NONE or lazy ref;
+        * used for new persistence implementation.
+        *)       
+       '\tLDW\t('->BC.putT; R.putOp; ')'->BC.putT; sep; 
+       dataTmp -> dr[];
+       dr.putOp;
+       BC.putNl;
+       (if GenerateDbgInf then mstate.eoi if);
+   if);
+   '\tCOMCLR,<\t%r0,'->BC.putT; R.putOp; ',%r0\n'->BC.putT;
+   '\tBL\tRefNone,%rp\n'->BC.putT; (* was NONE; goto RT *)
+   '\tCOPY\t'->BC.putT; R.putOp; sep; '%r31\n'->BC.putT;
+   (if GenerateDbgInf then 12 -> mstate.incIP if);
+#)
+
+(****** These jump/branch thingies are now obsolete *********)
+--JumpIfTrue:descriptor--
+cError(# do 'JumpIfTrue called' -> T #)
+--gBeq:descriptor--
+cError(# do 'gBeq called' -> T #)
+--gBne:descriptor--
+cError(# do 'gBne called' -> T #)
+--gBge:descriptor--
+cError(# do 'gBge called' -> T #)
+--gBae:descriptor--
+cError(# do 'gBae called' -> T #)
+--gBle:descriptor--
+cError(# do 'gBle called' -> T #)
+--gBbe:descriptor--
+cError(# do 'gBbe called' -> T #)
+--gBgt:descriptor--
+cError(# do 'gBgt called' -> T #)
+--gBab:descriptor--
+cError(# do 'gBab called' -> T #)
+--gBlt:descriptor--
+cError(# do 'gBlt called' -> T #)
+--gBbl:descriptor--
+cError(# do 'gBbl called' -> T #)
+--trap:descriptor--
+cError(# do 'trap called' -> T #)
+
+(********************** C interface **********************)
+--initExternalCall:dopart--
+(* called before pushing arguments to external C routines,
+ * called with the number of longs that are to be passed, ie. two for
+ * each double (noOPar) *)
+do ';; initExternalCall called: '->BC.putT;
+   noOfPar -> BC.putI; BC.putNL;
+   (if common.switch[22] then 
+       (* NOTE! This is a hack to cheat mstate.saveLiveArgs to save
+        * all the parameters of the external call being traced.
+        * The logic of saveLiveArgs is to save only parameters
+        * transferred so far - and it does NOT save arguments, if
+        * ALL argumesn have ben passed, which is the case when calling
+        * TraceXcall. noOfPar is therefore incremented to cheat!
+        * This may have some unforeseen side effects.
+        * saveLiveArgs is probaly clumsy because initExternal may not
+        * always have been called before calling callCproc. This should
+        * be cleaned up
+        *)
+       noOfPar+1->noOfPar;
+   if);
+   noOfPar -> doInitExternalCall;
+--CallCproc:descriptor--
+(#
+do (* C routines are not prepended an underscore on the snake *)
+   (* %r2 and other volatile registers must be saved somewhere *)
+   (* This is done in by saveReturn & SaveReg *)
+   
+   T[]->Import;
+   
+   '; CallCProc: '->BC.putt; t -> BC.putt; BC.putNL;
+      
+   (* Save r3 during external call to prevent i being restored upon return
+    * by HPPA calling convetions although r3 may have been changed in a 
+    * callback that has caused GC
+    *)
+   '\tLDIL\tLR\'RefSP,%r17\n'->BC.putT;
+   '\tLDW\tRR\'RefSP(%r17),%r14\n'->BC.putT;
+   '\tSTWS,MA\t%r3,4(0,%r14)\n'->BC.putT;
+   (if mstate.DumpCallDirective then
+       (* Emit the .CALL directive *)
+       (mstate.CallDirective.length,mstate.CallDirective.length)
+         -> mstate.CallDirective.delete;
+       mstate.CallDirective->BC.putT; 
+       BC.putNL;
+       false->mstate.DumpCallDirective;
+   if);
+   '\tBL\t'->BC.putT; T->BC.putT; ',%r2\n'->BC.putT;
+   (*'\tNOP\n'->BC.putT;*)
+   '\tSTW\t%r14,RR\'RefSP(0,%r17)\n'->BC.putT;
+   
+   (* restore r3 *)
+   (* r17 is LR\'RefSP - safe across the previous C call *)
+   '\tLDW\tRR\'RefSP(%r17),%r14\n'->BC.putT;
+   '\tLDWS,MB\t-4(0,%r14),%r3' -> BC.putT; BC.putNL;
+   '\tSTW\t%r14,RR\'RefSP(0,%r17)\n'->BC.putT;
+   
+   (if GenerateDbgInf then 32 -> mstate.incIP if);
+   
+   (if mstate.cStackInc > 0 then
+       '\tLDO\t' -> BC.putT; -mstate.cStackInc->BC.putI; 
+       '(%r30),%r30\n'->BC.putT;
+       (if GenerateDbgInf then mstate.eoi if);
+   if);
+   
+   (* reset to known state, because some braindamage elsewhere in the
+    * compiler does not adhere to the correct calling convention, and
+    * therefore doesn't call initPrimCall before pushing parameters
+    * to a primitive RT routine. *)
+   0->mstate.cStackInc; 0->mstate.cArgCount; 0->mstate.floatRegsUsed;
+   NONE->mstate.CallDirective[];
+#)
+--PushClong:descriptor--
+(#
+do op[]->PushCParameter
+#)
+--PushCword:descriptor--
+(#
+do op[]->PushCParameter
+#)
+--PushCbyte:descriptor--
+(#
+do op[]->PushCParameter
+#)
+--PushCdoubleAdr:descriptor--
+(# ra: @adrRegOperand;
+   FR: @floatRegOp;
+do (* 'pushCdoubleAdr really *was* needed on the snake :-(\n'->BC.putT; *)
+   (* Strangely enough, this is used to pass floatingpoint arguments
+    * (doubles) to C routines, and pushCfloat is not used for that
+    * purpose... This may get us in trouble later.... It did! :-(
+    *)
+   1-adrRegStart->ra.rN; ra[]->A.loadAdr; ra.mkIndirect;
+   
+   DoPushCfloat
+   (#
+   do (if no = 100 then
+          ';; float par via stack(Cdouble)\n' -> BC.putT; 
+          '\tFLDDS\t'->BC.putT; ra.putOp; ',%fr4\n'->BC.putT;
+          '\tLDO\t'->BC.putT;
+          emitStackOff;
+          '(%r30),%r31\n'->BC.putT;
+          '\tFSTDS\t%fr4,0(0,%r31)\n'->BC.putT;
+          (if GenerateDbgInf then 12 -> mstate.incIP if);
+       else
+          no->FR.rN;
+          '\tFLDDS\t'->BC.putT; ra.putOp; sep; FR.putOp; BC.putNL;
+          (if GenerateDbgInf then mstate.eoi if);
+          SetCall;
+      if);
+   #)
+#)
+--PushCfloat:descriptor--
+(# L: @ localLab;
+   FR: @floatRegOp;
+do (* 'So pushCfloat really was needed on the snake :-(\n'->BC.putT; *)
+   DoPushCfloat
+   (#
+   do (if no = 100 then
+          ';; float par via stack(Cfloat):\n' -> BC.putT; 
+          '\tLDO\t'->BC.putT; 
+          emitStackOff;
+          '(%r30),%r31\n'->BC.putT;
+          '\tFSTDS\t'->BC.putT; F.putOp; ',(%r31)\n'->BC.putT;
+          (if GenerateDbgInf then 8 -> mstate.incIP if);
+       else
+          no->FR.rN;
+          '\tFCPY,DBL\t'->BC.putT; F.putOp; sep; FR.putOp; BC.putNL;
+          (if GenerateDbgInf then mstate.eoi if);
+          SetCall
+      if);
+   #)
+#)
+--PushCtext:descriptor--
+cError(# do 'pushCtext'->T #)
+--PopCword:descriptor--
+cError(# do 'popCword'->T #)
+--PopCbyte:descriptor--
+cError(# do 'popCbyte'->T #)   
+--Xpar:descriptor--
+(# no: @integer
+#)
+--initGetXpar:descriptor-- (* must be fixed for Pascal also *)
+(#do  1->Xpar.no #)
+--getXlong:descriptor--
+(* for C, long,word, and byte are always long *)
+(# regnum: @integer;
+do (if Xpar.no <= 4 then
+       (27 - Xpar.no) -> regnum;
+       (if dr.regF<>regnum then
+           '\tCOPY\t%r'->BC.putT; regnum->BC.putI; sep; dr.putOp; BC.putNL;
+           (if GenerateDbgInf then mstate.eoi if);
+       if);
+    else
+       '\tLDW\t-116(0,%r30),%r1\n' -> BC.putT; (* see Callback.c *)
+       '\tLDW\t'->BC.putT; -(4*(Xpar.no-5)) -> BC.putI;
+       '(0,%r1),'->BC.putT; dr.putOp; BC.putNL;
+       (if GenerateDbgInf then 8 -> mstate.incIP if);
+   if);
+   Xpar.no+1->Xpar.no
+#)
+---GetXword:descriptor--
+cError(# do 'getxword'->T #)
+---GetXbyte:descriptor--
+cError(# do 'getxbyte'->T #)
+--toXres:descriptor--
+(#
+do (if rNo=0 then
+       '\tCOPY\t'->BC.putT; rNo->putD; ',%r28\n'->BC.putT;
+       (if GenerateDbgInf then mstate.eoi if);
+    else cError(#do 'Error in register no. for call-back'->T #)
+   if)
+#)
+--StackOffPut:descriptor--
+(#
+do off->BC.putI; '(0,%r30)'->BC.putT
+#)
+--SaveReg:descriptor--     (* Save registers a0 and a1 *)
+(* saveReg/restoreReg are called from evlib:pushThisAndCall and
+ * when calling externals.
+ * These two situations should be distinguished
+ *)
+(# 
+do (thisRegOp[], callRegOp[]) -> Push2Refs;
+#)
+---SaveAllReg:doPart---
+do
+
+---RestoreAllReg:doPart---
+do 
+--SaveHeapTop:descriptor---
+(##)
+--RestoreReg:descriptor-- 
+(#
+do (callRegOp[], thisRegOp[]) -> Pop2Refs;
+#)
+--popCallStack:descriptor--
+(# #)
+--AllocExternalResult:doPart--
+do 
+--PascalTrap:descriptor--
+(# #)
+---SetBreak:dopart---
+do '\tbreak\t0,0' -> BC.putT; BC.putNL;
+   (if GenerateDbgInf then mstate.eoi if);
+
+--SwitchToData:descriptor--
+(#
+do '\t.SPACE $PRIVATE$\n\t.SUBSPA $DATA$'->BC.putT;
+   (if (localFilePath[]=NONE) AND (group_hash[]=NONE) then
+       (* called from creatBetaDataFile - riscy test!*)
+       ',ACCESS=0x1F'->BC.putT
+   if);
+   '\n\t.ALIGN 8\n'->BC.putT
+#)
+--SwitchToCode:descriptor--
+(#
+do '\t.SPACE $TEXT$\n\t.SUBSPA $CODE$\n\t.ALIGN 4\n' -> BC.putT
+#)
+--DeclareLong:descriptor--
+(#
+do '\t.WORD ' -> BC.putT; N->BC.putI; BC.putNL
+#)
+--DeclareAddress:descriptor--
+(#
+do '\t.WORD ' -> BC.putT; op.putOp; BC.putNL
+#)
+--DeclareWord:descriptor--
+(#
+do '\t.HALF ' -> BC.putT; N->BC.putI; BC.putNL
+#)
+--DclWord:descriptor--
+(#
+do '\t.HALF ' -> BC.putT; N ->BC.putI; BC.putNL
+#)
+--Skip:descriptor--
+(# (* skip BN bytes *)
+do '\t.BLOCKZ ' ->BC.putT; BN->BC.putI; BC.putNL;
+#)
+--AsciiText:descriptor--
+(* For hppa the output has the form
+ *    .STRINGZ "........"
+ * Chars with a value less that ' ' (32) are converted to
+ * the form \xHH where HH is the ASCII-kode in hex,
+ * The char '"' is printed as '\"'.
+ * This braindamaged pa-risc assembler doesn't understand octal.
+ * In a future version, putBased should be used! /datpete 19/7/94.
+ *)
+(# hexdigits: [16]@char;
+do '\t.STRINGZ\t"' -> BC.putT;
+   '0123456789ABCDEF'->hexdigits;
+   T.scanAll
+   (#
+   do (if (ch<' ') then
+          '\\x'->BC.putT;
+          hexdigits[(ch div 16)+1]->BC.putC;
+          hexdigits[(ch mod 16)+1]->BC.putC;
+       else
+          (if ch
+           // '"' then '\\'->BC.putC; '"'->BC.putC
+           // '\\' then '\\'->BC.putC; '\\'->BC.putC
+           else 
+              (if (ch>255) then
+                  ' ' -> BC.putC;
+               else
+                  ch->BC.putC 
+              if);
+          if)
+      if)
+   #);
+   '"' -> BC.putC; BC.PutNL;
+   '\t.ALIGN 8' -> BC.putT; BC.PutNL;
+#)
+--LabelDef:descriptor--
+(#
+do T->BC.putT;  BC.putNL
+#)
+--SubDescriptorSlotEntry:descriptor--
+(# #)
+--defineMainLabel1:descriptor--
+(#
+do '\t.EXPORT main,ENTRY\n' -> BC.putT;
+   'main' -> labelDef;
+   (* SaveReturn; *)
+   '\tSTW\t%r2,-20(%r30)\n'->BC.putT;
+   '\tLDO\t64(%r30),%r30\n'->BC.putT;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+   'Initialize'->Import;
+   'SetArgValues'->jsrT;
+   '\tCOPY\t%r0,%r5\n'->BC.putT;
+   '\tCOPY\t%r0,%r6\n'->BC.putT;
+   '\tCOPY\t%r0,%r7\n'->BC.putT;
+   (if GenerateDbgInf then 12 -> mstate.incIP if);
+#)
+--ByteSwap:descriptor--
+(# T: @text;
+   dt1:^registerOperand;
+     
+do 
+   (if long then
+       '\tLDW\t 0(0,'->BC.putT; ar.putOp; ')'->BC.putC; sep; '%r'->BC.putT; 15->BC.putI; BC.putNl;
+       '\tDEPW,z %r15,7,8,%r16\n'->BC.putT;
+       '\tEXTRW,u %r15,23,8,%r1\n'->BC.putT;
+       '\tDEPW,z %r1,15,16,%r1\n'->BC.putT;
+       '\tOR %r16,%r1,%r16\n'->BC.putT;
+       '\tEXTRW,u %r15,15,8,%r1\n'->BC.putT;
+       '\tDEPW,z %r1,23,24,%r1\n'->BC.putT;
+       '\tOR %r16,%r1,%r16\n'->BC.putT;
+       '\tEXTRW,u %r15,7,8,%r15\n'->BC.putT;
+       '\tOR %r16,%r15,%r16\n'->BC.putT;
+       '\tSTW\t %r16,0(0,'->BC.putT; ar.putOp; ')'->BC.putC; BC.putNl;
+        (if GenerateDbgInf then 44 -> mstate.incIP if);
+    else
+       (* ldh 0(sr0,r19),r20 *)
+       '\tLDH\t 0(0,'->BC.putT; ar.putOp; ')'->BC.putC; sep; '%r'->BC.putT; 15->BC.putI; BC.putNl;
+       '\tEXTRW,u %r15,31,16,%r15\n'->BC.putT;
+       '\tDEPW,z %r15,23,8,%r16\n'->BC.putT;
+       '\tEXTRW,u %r15,23,24,%r15\n'->BC.putT;
+       '\tOR %r15,%r16,%r16\n'->BC.putT;
+       '\tSTH\t %r16,0(0,'->BC.putT; ar.putOp; ')'->BC.putC; BC.putNl;
+       (if GenerateDbgInf then 24 -> mstate.incIP if);
+   if)
+
+   
+#)
+--arithShiftLeft:dopart-- 
+do(# (* op2 = (signed) op2 << op1 *)
+   cstOp: ^cstOperand;
+do (if op1.isCstOp then (* datpete 20/7/94 *)
+       op1[] -> cstOp[];
+       '\tZDEP\t'->BC.putT; op2.putOp; 
+       sep; 31-cstOp.c->BC.putI; (* pos *)
+       sep; 32-cstOp.c->BC.putI; (* len *)
+       sep; op2.putOp; BC.putNL;
+       (if GenerateDbgInf then mstate.eoi if);
+    else
+       op1.loadOp->op1[];
+       '\tSUBI,<<\t31,'->BC.putT; op1.putOp; ',%r1\n'->BC.putT;
+       '\tMTSAR\t%r1\n'->BC.putT;
+       '\tCOMICLR,<<\t31,%r1,%r31\n'->BC.putT;
+       '\tZVDEP\t'->BC.putT; op2.putOp; ',32,%r31\n'->BC.putT;
+       '\tCOPY\t%r31,'->BC.putT; op2.putOp; BC.putNL;
+       (if GenerateDbgInf then 20 -> mstate.incIP if);
+   if);
+#)
+--arithShiftRight:dopart-- 
+do(# (* op2 = (signed)op2 >> op1 *)
+   cstOp: ^cstOperand;
+do (if op1.isCstOp then (* datpete 20/7/94 *)
+       op1[] -> cstOp[];
+       '\tEXTRS\t'->BC.putT; op2.putOp; 
+       sep; 31-cstOp.c->BC.putI; (* pos *)
+       sep; 32-cstOp.c->BC.putI; (* len *)
+       sep; op2.putOp; BC.putNL;
+       (if GenerateDbgInf then mstate.eoi if);
+    else
+       op1.loadOp->op1[];
+       '\tEXTRS\t'->BC.putT; op2.putOp; ',0,1,%r1\n'->BC.putT;
+       '\tMTSAR\t'->BC.putT; op1.putOp; BC.putNL;
+       '\tVSHD\t%r1,'->BC.putT; op2.putOp; sep; op2.putOp; BC.putNL;
+       (if GenerateDbgInf then 12 -> mstate.incIP if);
+   if);
+#)
+--logicalShiftLeft:dopart-- 
+do(# (* op2 = (unsigned) op2 << op1 *)
+   cstOp: ^cstOperand;
+do (if op1.isCstOp then (* datpete 20/7/94 *)
+       op1[] -> cstOp[];
+       '\tZDEP\t'->BC.putT; op2.putOp; 
+       sep; 31-cstOp.c->BC.putI; (* pos *)
+       sep; 32-cstOp.c->BC.putI; (* len *)
+       sep; op2.putOp; BC.putNL;
+       (if GenerateDbgInf then mstate.eoi if);
+    else
+       op1.loadOp->op1[];
+       '\tSUBI,<<\t31,'->BC.putT; op1.putOp; ',%r1\n'->BC.putT;
+       '\tMTSAR\t%r1\n'->BC.putT;
+       '\tCOMICLR,<<\t31,%r1,%r31\n'->BC.putT;
+       '\tZVDEP\t'->BC.putT; op2.putOp; ',32,%r31\n'->BC.putT;
+       '\tCOPY\t%r31,'->BC.putT; op2.putOp; BC.putNL;
+       (if GenerateDbgInf then 20 -> mstate.incIP if);
+   if);
+#)
+--logicalShiftRight:dopart-- 
+do(# (* op2 = (signed) op2 >> op1 *)
+   cstOp: ^cstOperand;
+do (if op1.isCstOp then (* datpete 20/7/94 *)
+       op1[] -> cstOp[];
+       '\tEXTRU\t'->BC.putT; op2.putOp; 
+       sep; 31-cstOp.c->BC.putI; (* pos *)
+       sep; 32-cstOp.c->BC.putI; (* len *)
+       sep; op2.putOp; BC.putNL;
+       (if GenerateDbgInf then mstate.eoi if);
+    else 
+       op1.loadOp->op1[];
+       '\tMTSAR\t'->BC.putT; op1.putOp; BC.putNL;
+       '\tVSHD\t%r0,'->BC.putT; op2.putOp; sep; op2.putOp; BC.putNL;
+       (if GenerateDbgInf then 8 -> mstate.incIP if);
+   if);
+  #)
+--rotateLeft:doPart-- 
+do
+   (if op1.isCstOp then
+       (#  CO: ^cstOperand
+       do (* shd %r26,%r26,29,%r28 *)
+          op1[]->CO[];
+          '\tSHD\t'->BC.putT; op2.putOp; sep; op2.putOp; sep; 
+          32-CO->BC.putI; sep; op2.putOp; BC.putNL;
+          (if GenerateDbgInf then 4->mstate.incIP if);
+       #);
+    else
+       (* op1=r25, op2=r26
+        * subi 31,%r25,%r28
+        * mtsar %r28
+        * zvdep %r26,32,%r28
+        * subi 32,%r25,%r25
+        * mtsar %r25
+        * vshd 0,%r26,%r26
+        * or %r28,%r26,%r28
+        *)
+       '\tSUBI\t31,'->BC.putT; op1.putOp; ',%r15\n'->BC.PutT;
+       '\tMTSAR\t%r15\n'->BC.putT;
+       '\tZVDEP\t'->BC.putT; op2.putOp; ',32,%r15\n'->BC.putT;
+       '\tSUBI\t32,'->BC.putT; op1.putOp; sep; op1.putOp; BC.putNL;
+       '\tMTSAR\t'->BC.putT; op1.putOp; BC.putNL;
+       '\tVSHD\t0,'->BC.putT; op2.putOp; sep; op2.putOp; BC.putNL;
+       '\tOR\t%r15,'->BC.putT; op2.putOp; sep; op2.putop; BC.putNL;
+       (if GenerateDbgInf then 28->mstate.incIP if)
+   if);
+--rotateRight:doPart---
+do
+   (if op1.isCstOp then
+       (#  CO: ^cstOperand
+       do (* shd %r26,%r26,4,%r28*)
+          op1[]->CO[];
+          '\tSHD\t'->BC.putT; op2.putOp; sep; op2.putOp; sep;
+          CO->BC.putI; sep; op2.putOp; BC.putNL;
+          (if GenerateDbgInf then 4->mstate.incIP if);
+       #);
+    else 
+       (* op1=r25, op2=r26
+        * mtsar %r25
+        * vshd 0,%r26,%r28
+        * ldo -1(%r25),%r25
+        * mtsar %r25
+        * zvdep %r26,32,%r26
+        * or %r28,%r26,%r28
+        *)
+       '\tMTSAR\t'->BC.putT; op1.putOp; BC.putNL;
+       '\tVSHD\t0,'->BC.putT; op2.putOp; ',%r15\n'->BC.putT;
+       '\tLDO\t-1('->BC.putT; op1.putOp; '),'->BC.putT; op1.putOp; BC.putNL;
+       '\tMTSAR\t'->BC.putT; op1.putOp; BC.putNL;
+       '\tZVDEP\t'->BC.putT; op2.putOp; ',32,'->BC.putT; op2.putOp; BC.putNL;
+       '\tOR\t%r15,'->BC.putT; op2.putOp; sep; op2.putop; BC.putNL;
+       (if GenerateDbgInf then 24->mstate.incIP if)
+   if);
+--nop:descriptor--
+(# 
+do '\tNOP\n'->BC.putT; (if GenerateDbgInf then mstate.eoi if);
+#)
+--RegAdrPutOp:dopart--
+(* Address Register Indirect with Displacement *)
+do off->BC.putI; '(0,'->BC.putT; reg->putA; ')'->BC.putT;
+--RegAdrLoadAdr:dopart--
+(* OLM:Feb.94.: test for off in 14 bits *)
+do (if (off < -8192) or (off >= 8192) then
+       (# op: ^mOperand
+       do dataTmp->op[];
+          '\tLDIL\tLR\''->BC.putT; off->BC.putint; sep; op.putOp; BC.putNL;
+          '\tLDO\tRR\''->BC.putT; off->BC.putint; 
+          '('->BC.put; op.putOp; ')'->BC.put; sep; op.putOp; BC.putNL;
+          8 -> incIP;
+          '\tADD\t'->BC.putT; reg.putOp; sep; op.putOp; sep;  R.putOp;
+       #);
+       BC.putNL;
+       (if GenerateDbgInf then mstate.eoi if);
+    else
+       '\tLDO\t'->BC.putT; off->BC.putI; '('->BC.putT; reg.putOp; '),'->BC.putT;
+       R.putOp;
+       BC.putNL;
+       (if GenerateDbgInf then mstate.eoi if);
+   if);
+   
+--adrLoadFloatOp:descriptor--
+(# 
+do floatTmp->op[];
+   (if (off >= -16) and (off < 16) then
+       '\tFLDDS\t'->BC.putT; off->BC.putI; '(0,'->BC.putT; Reg->putA;
+       '),'->BC.putT; 
+       op.putOp; 
+       BC.putNL;
+       (if GenerateDbgInf then mstate.eoi if);
+    else
+       '\tLDI\t'->BC.putT; off->BC.putI; ',%r1\n'->BC.putT;
+       '\tFLDDX\t%r1(0,'->BC.putT; Reg->putA; '),'->BC.putT; 
+       op.putOp; 
+       BC.putNL;
+       (if GenerateDbgInf then 8 -> mstate.incIP if);
+   if);
+   
+#)
+--RegAdrLoadOp:descriptor--
+(# 
+do dataTmp->op[];
+   (if (off < -8192) or (off >= 8192) then
+       '***** large offset 5'->comment;
+       (off->newCstOp,op[])->ldCst;
+       '\tADD\t'->BC.putT; reg.putOp; sep; op.putOP; sep; op.putOp; 
+       '\n\tLD'->BC.putT; size->BC.putS; 
+       '0(0,'->BC.putT; op.putOp; '),'->BC.putT;
+       op.putOp; 
+       BC.putNL;
+       (if GenerateDbgInf then 8 -> mstate.incIP if);
+    else 
+       '\tLD'->BC.putT; size->BC.putS; off->BC.putI; 
+       '(0,'->BC.putT; Reg->putA; '),'->BC.putT; 
+       op.putOp; 
+       BC.putNL;
+       (if GenerateDbgInf then mstate.eoi if);
+   if);
+#)
+--RegAdrLoadAdrOp:descriptor--
+(# DR: ^dataRegOperand; A1: @RegAdr;
+do (if (off<-4096) or (4095<off) then
+       '***** large offset 6 (max)'->comment;
+       dataTmp->DR[];
+       (off->newCstOp,DR[])->ldCst;
+       '\tADD\t'->BC.putT; reg.putOp; sep; DR.putOP; sep; DR.putOp; BC.putNL;
+       (if GenerateDbgInf then mstate.eoi if);
+       DR.rN+dataRegStart->A1.reg; (* A1.off=0*)
+       A1[]->op[]
+    else this(RegAdr)[]->op[]
+   if)
+#)
+--RegInd:dopart--
+   (* Address Register Indirect NOT USED?? *)
+do '0(0,'->BC.putT; R->putA; ')'->BC.putC;
+--RegisterOffSet:dopart---
+do(* not used on the snake *)
+(********** Register indirect with index *********)
+--InxRegAdrPutOp:dopart--
+(* not possible for SNAKE *) 
+do cError(# do 'inxRegAdrPutOp'->T #);
+--InxRegAdrLoadAdr:dopart---
+do '\tADD\t'->BC.putT; aReg.putOp; sep; dReg.putop; sep; dReg.putOp;BC.putNL;
+   '\tLDO\t'->BC.putT; off->BC.putI; '('->BC.putC; dReg.putOp;
+   '),'->BC.putT; R.putOp; BC.putNL;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+--InxRegAdrPushRegAndOff:descriptor--
+(* OLM:Jan.94. *)
+(#
+do (off->newCstOp,dReg[],4)->gAdd; 
+   (2->newCstOp,dReg[])->arithShiftRight;
+   aReg[]->pushClong; dReg[]->pushClong
+#)
+
+(************* registers ************)
+-- DataRegMax: dopart --
+do 5->val 
+-- thisO: dopart --
+do 0->rNo 
+-- callO: dopart --
+do 1->rNo 
+   
+(******************************************)
+---BeginProtoTypes:descriptor---
+(#
+do '\t.SPACE\t$PRIVATE$\n'->BC.putT;
+   '\t.SUBSPA\t$DATA$\n'->BC.putT;
+#)
+
+(********************** high level instructions ************)
+--SaveReturn:descriptor---
+(# (* ordinary snake calling convention for non-leaf routines uses this *)
+do '\tSTW\t%r2,-20(0,%r30)\n'->BC.putT;
+   '\tLDIL\tLR\'RefSP,%r1\n'->BC.putT;
+   '\tLDW\tRR\'RefSP(%r1),%r14\n'->BC.putT;
+   (if mstate.STenable then
+       (* tag reference for beta.dump *)
+       '\tDEPI\t1,31,1,'->BC.putT; putThisReg; BC.putNL; 
+       (if GenerateDbgInf then 4 -> mstate.incIP if);
+       (* Valhalla: Her kan Return address (%r2) gemmes paa RefStack:
+        * (if common.switch[41] then
+        *     '\tSTWS,MA\t%r2,4(0,%r14)\n'->BC.putT;
+        *     (if GenerateDbgInf then 4 -> mstate.incIP if);
+        * if);
+        *)
+   if);
+   (* push This on reference stack *)
+   '\tSTWS,MA\t'->BC.putT; putThisReg; ',4(0,%r14)\n'->BC.putT;
+   '\tSTW\t%r14,RR\'RefSP(0,%r1)\n'->BC.putT;
+   '\tLDO\t64(%r30),%r30\n'->BC.putT;
+   (callRegOp[],thisRegOp[])->cpReg;
+   (if GenerateDbgInf then 24 -> mstate.incIP if);
+#)
+--Return:descriptor--
+(#
+do '\tLDW\t-84(0,%r30),%r2\n'->BC.putT;
+   (thisRegOp[],callRegOp[])->cpReg;
+   '\tLDIL\tLR\'RefSP,%r1\n'->BC.putT;
+   '\tLDW\tRR\'RefSP(%r1),%r14\n'->BC.putT;
+   '\tLDWS,MB\t-4(0,%r14),'->BC.putT; putThisReg; BC.putNL;
+   (if mstate.STenable then
+       (* clear tag for beta.dump *)
+       '\tDEPI\t0,31,1,'->BC.putT; putThisReg; BC.putNL;
+       (if GenerateDbgInf then 4 -> mstate.incIP if);
+       (* Valhalla: Her skal return address poppes, hvis gemt paa RefStack:
+        * (if common.switch[41] then
+        *     '\tLDO\t-4(%r14),%r14' -> BC.putT; BC.putNL;
+        *     (if GenerateDbgInf then 4 -> mstate.incIP if);
+        * if);
+        *)
+   if);
+   '\tSTW\t%r14,RR\'RefSP(0,%r1)\n'->BC.putT;
+   '\tBV\t%r0(%r2)\n' ->BC.putT;
+   '\tLDO\t-64(%r30),%r30\n'->BC.putT;
+   (if GenerateDbgInf then 28 -> mstate.incIP if);
+#)
+---ReturnVirtualCOM:dopart--
+do (false,RToff) -> Return
+--ExternalEntry:descriptor--
+(#  
+do entryId[]->labelDef; SaveReturn
+#)
+--ExternalMark:descriptor---
+(##)
+--ExternalReturn:descriptor--
+(# do Return; #)
+(****************** indexed addressing ************************)
+--RegAdrIndex:descriptor--
+(# IA: @ InxRegAdr; aR: @adrRegOperand; log: @integer;
+do reAlloc->aR; (thisOp,aR[])->ldVal; freeAdr;
+   (if not common.switch[14] then (aR[],dReg[])->ChkIndex if);
+      
+   (* @@R[i] = R.start + protoHead.size + (i-1)*size
+    *        = R.start + protoHead.size - size + i*size
+    * where 
+    *    protohead.size = 16  if  simple
+    *    protohead.size = 24  if  not simple
+    *)
+   (if isSimple then
+       (if size 
+        // 1 then 
+           15->IA.off;
+        // 2 then
+           14->IA.off;
+           '\tSH1ADD\t'->BC.putT; dReg.putOp; ',%r0,'->BC.putT; 
+           dReg.putOp;
+        // 4 then
+           12->IA.off;
+           '\tSH2ADD\t'->BC.putT; dReg.putOp; ',%r0,'->BC.putT; 
+           dReg.putOp;
+        // 8 then
+           8->IA.off;
+           '\tSH3ADD\t'->BC.putT; dReg.putOp; ',%r0,'->BC.putT; 
+           dReg.putOp;
+        else
+       if);
+       BC.putNL;
+       (if GenerateDbgInf then mstate.eoi if);
+    else
+       24-size->IA.off;
+       (if (size->exact_log2->log) <> -1 then
+           (log->newCstOp,dreg[])->logicalShiftLeft;
+        else
+           (size->newCstOp,dReg[],4)->gMult
+       if);
+   if);
+   aR->IA.aReg; dReg->IA.dReg; 
+   size->IA.size; (* OBS only OK for size=1,2,4,8 *)
+   access->IA.access;
+   IA[]->A[];
+#)
+--InxRegAdrLoadOp:descriptor---
+(#
+do loadAdrOp->op[]; (* add repAdr+inxReg->inxReg *)
+   op.loadOp->op[]
+#)
+--InxRegAdrLoadFloatOp:descriptor---
+(# aa: ^Address;
+do loadAdrOp->aa[]; (* add repAdr+inxReg->inxReg *)
+   aa.loadFloatOp->op[]
+#)
+--InxRegAdrLoadAdrOp:descriptor--
+(# IA :@RegAdr; Rx: @adrRegOperand;
+do (* @@R[i] = R.start + (i-1)*size +16 *)
+   5->Rx.rn;
+   (* !!!!! OBS!!!! special adr reg. allocated here. Is only used fo rep. inx.
+    * Deallocation should ignore areg=4
+    *)
+   '\tADD\t'->BC.putT; aReg.putOp; sep; dReg.putOp; sep; Rx.putOp;BC.putNL; 
+   (if GenerateDbgInf then mstate.eoi if);
+   (* dReg->freeData; --- free by freeAdr of thisOp*)
+   Rx->IA.Reg;  off->IA.off; access->IA.access; size->IA.size;
+   IA[]->op[]
+#)
+
+(******************** external calls *************)
+--getRegForXres:descriptor--
+(# 
+do saveHeapTop
+#)
+--endX:descriptor--
+(##)
+--noXres:doPart---
+do GetExternalResult
+   
+---getSimpleXres:doPart---
+do GetExternalResult(#do getSimpleRes -> drA #)
+   
+---getTextXres:doPart---
+do (* create BETA char repetition;
+    * copy C-text referred by d0;
+    * return reference in primReg1 
+    *)
+   getExternalResult
+   (# drA: @dataRegOperand
+   do drA.alloc; (* %r9 *)
+      '\tCOPY\t%r28,%r9\n'->this(machine).BC.putT; 
+      'CopyCT' -> jsrT;
+      aR.alloc; 
+      1 -> initPrimCall;
+      (1->getPrimReg,aR[]) -> cpReg;
+      0 -> getPrimRes;
+      drA.deAlloc; (* ??? *)
+      (if GenerateDbgInf then this(machine).mstate.eoi if);
+   #)
+---realXresIsDouble:doPart---
+do false -> value
+   
+---getDoubleXres:doPart---
+do GetExternalResult(#do getDoubleRes -> (drA,drB) #)
+   
+---getFloatXres:doPart---
+do getExternalResult
+   (#
+   do FP.alloc;
+      '\tFCPY,DBL\t%fr4,'->this(machine).BC.putT; FP.putOp;
+      this(machine).BC.putNL; 
+      (if GenerateDbgInf then this(machine).mstate.eoi if);
+   #)
+---getDataRefXres :doPart---
+do GetExternalResult(#do getSimpleRes -> drA #)
+   
+---getDataPartXres:doPart---
+do '\New external result is NOT implemented' -> putline;
+   GetExternalResult(#do getSimpleRes -> drA #)
+
+--GetComPar:dopart--
+do mstate.noCOMsupport;
+   (if isValPar then
+       &DataRegOperand[] -> paramAdr[]
+    else
+       &AdrRegOperand[] -> paramAdr[]
+   if);
+   paramAdr.alloc;
+   (* paramNo = 0 is origin which has been handled *)
+   '\tLDW\t-116(0,%r30),%r1\n' -> BC.putT; (* see Callback.c *)
+   '\tLDW\t'->BC.putT; -(4*(paramNo-5)) -> BC.putI;
+   '(0,%r1),'->BC.putT; paramAdr.putOp; BC.putNL;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+
+   
+--xParForward:descriptor--
+(#
+do true->forward
+#)
+(****************** interface to runtime system *******************)
+---initPrimCall:descriptor--
+(* Is now always called before a primCall *)
+(# 
+do ';; initPrimCall called\n'->BC.putT;
+   noOfPar->doInitExternalCall;
+#)
+---primRep:descriptor--
+(# used,busy: [8] @boolean #)
+--getPrimReg:descriptor--
+(# r: ^dataRegOperand;
+do &dataRegOperand
+   (# isPrimRegOp:: trueValue;
+      primRegIsReg:: trueValue 
+   #)[] -> r[];
+   (27-pNo)-dataRegStart ->r.rN;
+   r[]->primReg[];
+#)
+--CallPrim:descriptor--
+(#
+do (* (T,0,0,0)->callCproc; *)
+   T[]->Import;
+   '; CallPrimitive: '->BC.putT; t[] -> BC.putline;
+   '\tBL\t'->BC.putT; T->BC.putT; ',%r2\n'->BC.putT;
+   '\tNOP\n'->BC.putT;
+   (if GenerateDbgInf then 8 -> mstate.incIP if);
+#)
+---GetPrimRes:descriptor--
+(# reg: @dataRegOperand;
+do (if res
+    // 0 then (* ignore result (void) *)
+       mstate.restoreDeadArgs;
+    // 1 // 3 then (* use the result *)
+       (* 3 should be optimized as for MIPS *)
+       dr.alloc;
+       '\tCOPY\t%r28,'->BC.putT; dr.putOp; BC.putNL; 
+       (if GenerateDbgInf then mstate.eoi if);
+       mstate.restoreDeadArgs;
+    // 2 then (* result is an X-parameter, whatever that is *)
+       mstate.restoreDeadArgs;
+       28 - dataRegStart -> reg.rN; reg[]->pushCParameter;
+   if);
+#)
+(************************* register allocation *********************)
+--getAdr:dopart--
+(* OLM:Jan.94.*)
+do 10->rN; (* just during testing *)
+   L: (for i:5 repeat
+           (if not (rep.aReg[i+2] > 0) then
+               rep.aReg[i+2]+1->rep.aReg[i+2];
+               i+1->rN;
+               leave L
+      if)for);
+   (* rN=2,3,4,...*)
+   (if (rN > 4) then rN -> AdrRegOverflow if)
+--getData:dopart--
+do 10->rN; (* just during testing *)
+   L: (for i:6 repeat
+           (if not (rep.dReg[i] > 0)  then
+               rep.dReg[i]+1->rep.dReg[i];
+               i-1->rN;
+               leave L
+      if)for);
+   (if rN = 10 then DataRegOverflow if)
+--freeAdr:dopart--
+   (* OLM: 19.11.93.
+    * do not try to deallocate thisO or callO.
+    * sometimes they are allocated, 
+    * which they should not have been
+    *)
+do (if (callO<rNo) and (rNo<8) then
+       rep.aReg[rNo+1]-1->rep.aReg[rNo+1];
+       (if (rep.aReg[rNo+1]<0) then
+           cError
+           (# S: @text
+           do 'AdrReg negative:a'->S; rNo->S.putInt; S[]->T; S->comment;
+              0->rep.aReg[rNo+1] 
+#)if)if)
+-- adrRegInUse: dopart --
+do rep.aReg[rN+1]>0 -> value 
+-- dataRegInUse: dopart --
+do rep.dReg[rN+1]>0 -> value 
+--freeData:dopart--
+do (if (0<=rNo)and(rNo<8) then
+       rep.dReg[rNo+1]-1->rep.dReg[rNo+1];
+       (if rNo<6 then
+           (if (rep.dReg[rNo+1]<0) then
+               cError
+               (# S: @text
+               do 'DataReg negative:d'->S; rNo->S.putInt; S[]->T; S->comment;
+                  0->rep.dReg[rNo+1]
+#)if)if)if)
+--releaseReg:descriptor--
+(#
+do (for i: rep.aReg.range repeat 0->rep.aReg[i]->rep.dReg[i] for);
+   (for i: mstate.floatReg.range repeat 0->mstate.floatReg[i] for)
+#)
+--noOfFreeDataReg:descriptor--
+(#do (for i: dataRegMax repeat (if rep.dReg[i+1]//0 then val+1->val if)for)#)
+--dataRegOpReUse:descriptor--
+(# N: @integer
+do rN+1->N;
+   (if (0<N) and (N<=rep.dReg.range) then
+       rep.dReg[N]+1->rep.dReg[N]
+    else
+       cError(# do 'DataRegOpReuse: index error'->T #)
+if)#)
+--adrRegOpReUse:dopart--
+do rep.aReg[rN+1]+1->rep.aReg[rN+1]
+--RegRep:descriptor--
+(#
+   aReg,dReg: [8] @ Integer; dMax: @integer; fMax: @integer;
+#)
+--decrCallReg:descriptor--
+(#
+do rep.aReg[callO+1]-1->rep.aReg[callO+1];
+   (if (rep.aReg[callO+1]<0) then
+       0->rep.aReg[callO+1];
+       cError(#do 'CallReg negative: a1'-> T#);
+if)#)
+--getCallReg:descriptor--
+(# ar: @adrRegOperand
+do rep.aReg[callO+1]+1->rep.aReg[callO+1];
+   (*351->cTrace(#do 'GetCallReg'->T #)*)
+#)
+---DumpReg:descriptor--
+(# dmp:
+     (# R: @char; i,V: @integer;
+     enter(R,i,V)
+     do R->T.put; i-1->T.putInt; ':'->T.put; V->T.putInt
+     #);
+   T: @text
+do common.tracestream.newline;
+   (for i:rep.aReg.range repeat ('a',i,rep.aReg[i])->dmp for);
+   (for i:rep.dReg.range repeat ('d',i,rep.dReg[i])->dmp for);
+   T[]->putText; (*T->comment;*) common.tracestream.newline
+#)
+--getOriginReg:descriptor--
+(##)
+--freeOriginReg:descriptor--
+(##)
+--CallAlloPrim:descriptor--
+(# 
+do proto[]->mstate.proto[];
+   T->jsrT; 
+   NONE->mstate.proto[];
+#)
+--CallRegBusy:doPart--
+do (rep.aReg[callO+1]>0) -> value
+--CallRegInPrimReg2:doPart--
+do false -> value
+--freeCallReg:descriptor--
+(# ar: @adrRegOperand; (*A1: @RegAdr*)
+do rep.aReg[callO+1]-1->rep.aReg[callO+1];
+#)
+(********************** BC file *****************************)
+--putS:dopart--
+do (if size
+    // 4 then 'W\t'->putT
+    // 1 then 'B\t'->putT
+    // 2 then 'H\t'->putT
+    // -4 then 'W\t'->putT
+    // -1 then 'B\t'->putT
+    else (* 2 *) 'H\t'->putT
+   if)
+--putA:descriptor--
+(# (* write an addressregister string %rN *)
+do '%r'->putT;
+   (* sanity check *)
+   (if true
+    // (n >= 20) and (n <= 23) then
+       (* argreg ok *)
+    // n = 7 then
+       (* The upper parts of the compiler thinks this is the stack-
+	* pointer. Somebody thought that register 7 on all machines
+	* is SP, just because it's so on the 68k. We just fake it,
+	* heh, heh :-) *)
+       30-adrRegStart -> n;
+    // (n=15) or (n=16) then 
+       (* tmp data reg, used in regAdrOpLoadOp - 
+        * n =(6,7)+dataRegStart(9)=(15,16)
+        * perhaps a hack?
+        *)
+       n-adrRegStart->n
+    // (n < -2) or (n > 6) then
+       cError(# S: @text 
+             do 'illegal adr. reg.: '->S; n->S.putInt;
+                S[]->T; S->comment
+             #);
+       n->bugstream.putint; 0->n; 27 div n->n;
+   if);
+   n+adrRegStart->putI;
+#)
+--DataRegOpRegF: dopart--
+do rn+dataRegStart -> value
+--AdrRegOpRegF: dopart--
+do rn+adrRegStart -> value
+--isObjectReg:descriptor--
+(##)
+--FloatRegOpRegF: dopart--
+do rn+floatRegStart -> value;
+
+--putD:descriptor--
+(# (* write a dataregister string %rN *)
+do '%r'->putT;
+   n+dataRegStart->n->putI;
+   (* sanity check *)
+   (if ((n>=23) and (n<=26)) (* arg0-arg4 *) 
+       or (n=22) (* datpete 9/10/96: PrimReg5 *)
+       or (n=28) (* ret0 *) 
+       then
+       (* OK *)
+    else 
+       (if (n<1) or (n>16) or (n=14) then (* NOT OK *)
+           (# T: ^text;
+           do bugstream.newline;
+	      'Illegal dataregister '->T[]; 
+              n+dataRegStart->T.putInt; 
+              ' used.'->T.putLine;
+              T[] -> bugstream.putline;
+              T -> comment;
+              (if not common.switch[21] then (* 21 is not a good number *)
+	          (failureTrace, 
+                  'Compilation aborted: illegal data register')->Stop;
+              if);
+           #);
+       if)
+   if);
+   
+#)
+--imm:descriptor--
+(#
+do off->putI;
+#)
+--newCtextOp:descriptor--
+(# S: @text do T[]->S.puttext; S[]->op #)
+--getVirtualoriginStart1:descriptor--
+(* OLM:Jan.94.*)
+(# A1: @RegAdr; aR: @adrRegOperand
+do 5->aR->A1.reg; 
+   (1->primReg,aR[])->cpReg;
+   A1[]->startA[];
+   1->rep.aReg[5+1]; (* a5/i5 should not be allocated elsewhere *)
+   '!!! to be tested!!'->comment
+#)
+--getVirtualoriginStart2:descriptor--
+(* OLM:Jan.94. *)
+(# aR: @adrRegOperand
+do (*5->aR; (aR[],1->primReg)->cpReg;*)
+   (if not OriginRegIsDefined then
+       startA.toOriginReg  (* will deAlloc A1.reg*)
+   if);
+   '!!! to be tested!!'->comment
+#)
+---Final2VirtJump:descriptor--
+(# #)
+--InitMachine:descriptor--
+(#
+do (if GenerateDbgInf then
+       openDbgInf 
+   if);
+   (if not common.switch[24] then
+       BC.openWrite; 
+   if);
+   (* true->loadPrototype*)
+#)
+--CloseMachine:descriptor--
+(# FN: ^text  
+do (* output external declarations to bottom of BC *)
+   entryPoints.scan
+   (#
+   do (if current.local then
+          '\t.EXPORT\t'->BC.putT; current.T->BC.putT;
+       else
+          '\t.IMPORT\t'->BC.putT; current.T->BC.putT;
+      if);
+      (if current.data then
+          ',DATA\n'->BC.putT;
+       else
+          ',CODE\n'->BC.putT;
+      if);
+   #);
+   '\t.END\n' -> BC.putT;
+   
+   (if GenerateDbgInf then
+       (* produce debug tables in foo.db file *)
+       BC.name->FN[];
+       (* delete ..s from name *)
+       (FN.length-2,FN.length)->FN.delete; 
+       FN[]->saveDbgInf;
+   if);
+   (if not switch24 then 
+       BC.close;
+   if); 
+#)
+--EmitByte:descriptor--
+(# #)
+--asgRefAdr:doPart---
+do  (* assign A to thisAddress *)
+  (# aR,aR1,aR2: @adrRegOperand; L: @localLab; T: @Text;
+     A1: @regAdr; dr: @dataRegOperand
+  do common.direct->thisAdr.access; (* thisAdr is a dynamic reference *)
+     (* this is a hack. Will not work for arrays !!!*)
+     thisAdr.toReg2->aR->aR2; (* aR=destination *)
+     (if A.access //common.direct then
+         (*(if aR1//thisO then true->A1.frozenReg (*else aR1.deAlloc * )if);*)
+         (* aR1 = thisO possible in this(P)[]->R[] *)
+         (if A.regType//thisO//callO then 
+             A.toReg2->aR1; (* 12.10.92*) (* aR1=source *)
+             (* A.freeAdr; 12.10.92: in evval1: asgToAdr: A[]->rA.asgRefAdr->..
+              * A[] is used in thisVal and cannot be released.
+              * The problem is if this can imply that regs are not released?
+              *)
+             (* aR.mkIndirect;
+              * (aR1[],aR[])->stVal;
+              *)
+             aR->A1.reg;
+             (aR1[],A1[])->stVal;
+             aR1.deAlloc
+          else
+             (* A and aR1 use the same register - dont deAlloc aR1.
+              * However A is invalidated since aR1 is redefined
+              *)
+             aR[]->push;
+             (A[],aR[])->gLea; dr.alloc; (aR[],dr[])->cpReg;
+             aR[]->pop; 
+             (* aR.mkIndirect;*) (* dont do this before push/pop *)
+             (* (dr[],aR[])->stVal; *)
+             aR->A1.reg; 
+             (dr[],A1[])->stVal;
+             dr.deAlloc
+         if)
+         (*aR1.deAlloc; 12.10.92*) (* 2.9.92*)
+         (* A1[]->A[] 2.9.92*)
+      else 
+         (* aR.mkIndirect;
+          * (A[],aR[])->cpMem
+          *)
+         aR->A1.reg; 
+         (A[],A1[])->cpMem;
+     if);
+     aR2[]->dest[]
+  #)
+--asgRefReg:doPart--
+do (* MUST be fixed like asgRefAdr above *)
+  (* as asgRefAdr, but A is an adrRegOperand *)
+  (# aR,aR1,aR2: @adrRegOperand; L: @localLab; T: @Text; A1: @RegAdr;
+  do common.direct->thisAdr.access; (* thisAdr is a dynamic reference *)
+     thisAdr.toReg2->aR->aR2; (* aR=destination *)
+     (* aR.mkIndirect;
+      * (A[],aR[])->stVal;
+      *)
+     aR->A1.reg; (A[],A1[])->stVal;
+     (* aR2[]->ChkHeap;
+      * aR2.deAlloc
+      *)
+     aR2[]->dest[]
+  #)
+--targetEntryPointInfo: descriptor --
+(# #)
+--addTargetInfo: doPart--
+do
+--entryPointsInsert: doPart--
+do
+--entryPointsEqual:descriptor---   
+(##)
+---SPtoPrimReg:doPart---
+do
+--externalDispatch:descriptor--
+(# 
+do mstate.noCOMSupport;
+   reg[] -> jsrReg
+#)
+--Lock:descriptor--
+(# do 'Lock'->putline; #)
+--Unlock:descriptor--
+(# do 'Unlock'->putline; #)
+--enablePreemption:descriptor--
+(# do 'enablePreemption'->putline; #)
+--disablePreemption:descriptor--
+(# do 'disablePreemption'->putline; #)
+--allocObj:dopart--
+(* %a0 = origin
+ * %a1 = 1. arg
+ * %a2 = 2. arg
+ * %a3 = ...
+ * 
+ * FIXME! The entry code here must be fixed to be
+ * able to work with garbage collection.
+ * Should look like a call back entry, but also
+ * be prepared to be called from C
+ *)
+do mstate.noCOMsupport;
+   saveReturn;
+   
+   (* save arguments *)
+   (for i: 4 repeat        
+        '\tSTW\t%r1,'->BC.putT; -4*(i + 13 -4 ) ->BC.putI; '(0,%r30)\n'->BC.putT; 
+        (if GenerateDbgInf then mstate.eoi if);
+   for);
+   (Tentry[]->newTextToDataOp,callRegOp[]) -> gLea;
+   ('AlloI',Tentry[]) -> CallAlloPrim;
+   (callRegop[],thisRegOp[]) -> cpReg
+
+   
+---EmitCk:descriptor---
+(##)
+
+---SaveCodeState:doPart--
+do
+---RestoreCodeState:doPart---
+do
+---GetImages:dopart---
+do

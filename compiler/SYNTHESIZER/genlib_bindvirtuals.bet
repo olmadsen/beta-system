@@ -1,0 +1,159 @@
+ORIGIN 'genlib';
+LIB_ITEM 'betacodegen';
+---BindVirtuals:doPart---
+do (# LocalDesc: ^ASTindex;
+      virtSize,originOff: @integer;
+      chain: ^DH.SuperChain
+   do (*301->trace(#do 'BindVirtuals: '->xT;  thisDesc[] -> xA #);*)
+      thisDesc.virtSize->virtSize;
+      ThisDescOrgOff->originOff;
+      thisDesc[]->LocalDesc[];
+      (if virtSize > 0 then
+          Bind:
+            (# prefDesc: @ASTindex; N,D,X: ^ASTindex; 
+            do att
+                 ->scanList
+               (# D,B,VS,N,desc: @ASTindex;
+                  off,descNo: @integer;
+                  formId: ^text;
+                  lab: @mch.localLab;
+                  Final2Virt:
+                    (* Called if handling W::V where V:<..; V::< ...; 
+                     * Code must be generated to make actual binding of V!
+                     * The following code is just an expriment and has not
+                     * been completely tested
+                     *)
+                    (# D: ^ASTindex; OA: ^mch.address; VN: @ASTindex
+                    enter D[]
+                    do (*301->trace(#do 'final2virt: '->xT; D[]->xA#);*)
+                       lab.new;
+                       lab.virtLabDef;
+                       mch.getVirtualOriginStart
+                       (# start: ^mch.RegAdr; 
+                          Aix: ^mch.InxRegAdr;
+                          aR: @mch.adrRegOperand
+                       do (if true then
+                              startA[] -> OA[];
+                              (*originOff -> OA.bAdr.originOff;*)
+                              thisDesc[] -> OA.bAdr.localDesc[];
+                              (OA[],VS[],true,thisSuperChain)
+                                -> genAdr
+                                -> OA[]
+                                -> startA[]; 
+                           else
+                              thisDesc[] -> startA.bAdr.localDesc[];
+                              aR.alloc;
+                              (startA[],aR[]) -> mch.gLea;
+                              (aR,thisDesc[]) -> gen.mkAddress->start[];
+                              start.freezeReg;
+                              (start[],thisDesc[],VS[],thisSuperChain)
+                                -> genOrgAdr->OA[];
+                          if); 
+                          VS->sematt.getName->VN;
+                          VN.dclRef->VN;
+                          (OA[],VN.off,VN.access,true)
+                            -> gen.newVirt
+                          (# 
+                          do Final2VirtJump
+                             (* in getVirtualOriginStart *)
+                          #);
+                          true -> OriginRegIsDefined;
+                          (* the following clearing of 'off' can be 
+                           * eliminated if OriginIsDefined is tested
+                           * in getVirrualOriginStart2. This is necessary
+                           * and done in INTELBmachine
+                           *)
+                          (if startA## = mch.RegAdr## then
+                              startA[] -> start[];
+                              0 -> start.off; (* OA->originReg in newVirt *)
+                           else
+                              (if startA## = mch.InxRegAdr## then
+                                  startA[] -> Aix[];
+                                  0 -> Aix.off
+                               else
+                                  Cerror(#do 'Bindvirtuals:unknownAddress: '->xT#)
+                              if)
+                          if)
+                       #);
+                       Return                          
+                    #);
+                  Return: @
+                    (# restore: @boolean
+                    enter restore
+                    do (*(if b2c then ( * hack * )
+                           'return (long* )d7;\n\t'->main.mch.BC.putT
+                        if);*)  
+                       (if restore then
+                           (false,thisDesc.returnOff)->mch.return
+                        else
+                           mch.rts
+                       if);
+                       (N.off,lab)->GS.thisPT.markVirt
+                    #)
+               do currentNode->D;
+                  false->common.switch[59];
+                  (if D.label
+                   // gram.bindingDecl // gram.finalDecl // gram.virtualDecl
+                      then (* D (bind/final/virtual <B> <VS>) *)
+                      D.son->B;
+                      B.brother->VS;
+                      B ->scanList
+                      (# descRef: ^ASTindex
+                      do currentNode->N;
+                         (*301 -> trace
+                         (#do 'Vbind:'-> xT; N[] -> xA; ' '->put;
+                            virtSize -> XI; ' '->put;
+                            N.off -> xI; N.access -> xI; 
+                          #);*)
+                         (if not (N.off->GS.thisPT.isMarked) then
+                             virtSize-4->virtSize;
+                             VS->&SemAtt.descrip-> desc;
+                             (if desc.label
+                              // gram.virtualDecl // gram.bindingDecl
+                                 then
+                                 desc[]->Final2Virt; 
+                              else
+                                 (*312->trace
+                                  (#do 'Vbind'->xT; N.gettext->xT; ' '->put;
+                                  N.access->xI;desc[] ->xA #);*)
+                                 (if N.access = common.direct then
+                                     (* must copy desc to avoid aliasing *)
+                                     &ASTindex[]->descRef[];
+                                     desc->descRef;
+                                     (N.off,descRef[])
+                                       ->GS.thisPT.markVirt2
+                                  else
+                                     lab.new;
+                                     lab.virtLabDef;
+                                     (desc[],VS[],originOff,LocalDesc[],
+                                     LocalDesc->DH.newSingle)
+                                       -> GenVirtOrgAdr;
+                                     desc[] -> doLoadProto;
+                                     Return
+                                 if)
+                             if)
+                         if)
+                      #)
+                  if)
+               #);
+               (if pref.label = gram.prefix (*virtSize > 0*) then
+                   (* the test for virtSize > 0 cannot be used
+                    * when the inner dispacth table is merged with the
+                    * virtual dispatch table, since virtSize will
+                    * never reach zero - it will reach prefixLevel*4 + 4
+                    * 8?
+                    *)
+                   pref.son->sematt.descrip-> prefDesc;
+                   (if prefDesc -> sematt.stateDesc.Equal then
+                       (*'\n*** bind state virtual'->putline;*)
+                       thisDesc.origin -> prefDesc
+                   if);
+                   prefDesc.originOff->originOff;
+                   prefDesc[]->LocalDesc[];
+                   prefDesc[]->sematt.DescSonsRef
+                     ->(pref[],mainP[],att[],N[],D[],X[]);
+                   restart Bind
+               if)
+            #)
+      if)
+   #)

@@ -1,0 +1,80 @@
+ORIGIN 'asmlinkbody';
+LIB_ITEM 'betacodegen';
+INCLUDE '~beta/unixlib/unixfile';
+INCLUDE '../CONTROL/touchdir'
+
+--AddSharedLibFile: descriptor--
+(# (* We currently generate
+    *   '-L /users/beta/../lib -lfoo'
+    * We do not repeat generation of '-L path'
+    * if path has already been mentioned in a '-L' directive.
+    * Too many '-L' directives will make the SGI linker crash
+    *)
+   F,path,x: ^text
+do libFile[] -> stripPath -> F[];
+   (1,libFile.length-F.length) -> libFile.sub -> path[];
+   
+   (* assume the form 'libfoo.so' *)
+   (4,F.length) -> F.sub -> F[];
+   (* we assume that it has LibExt, e.g. '.so' *)
+   libExt -> x[];
+   (1,F.length - x.length) -> F.sub -> F[];
+   (if path[] -> isNew then
+       '-L ' -> res[];
+       path[] -> res.puttext;
+       (* (if common.targetMachineId
+        *  // common.linux
+        *  // common.sgi then
+        *     ' -rpath ' -> res.puttext;
+        *     path[] -> res.puttext;
+        *  // common.sun4s then
+        *     ' -R ' -> res.puttext;
+        *     path[] -> res.puttext;
+        * if);
+        *)
+       ' ' -> res.put;
+    else 
+       &text[] -> res[]
+   if);
+   '-l' -> res.puttext;
+   F[] -> res.puttext
+#)
+
+-- jobFilePermission: descriptor --
+(# (* change permission on the jobfile so it can be excuted *)
+   ue: @unixentry
+     (# permissionDesc::
+          (# ChangePermError:: 
+               (# do AFF.name -> thisTranslate.TransAccessException #);
+             OtherError:: 
+               (# do AFF.name -> thisTranslate.TransAccessException #);
+          #)
+     #);
+do AFF.name -> ue.path;
+   ('a','x') -> ue.permission.add
+#)
+
+--AddLinkDirs: descriptor--
+(# e: @diskentry;
+do (* Add a -L directive for each component in LD_LIBRARY_PATH.
+    * May be needed for 3'rd party libraries specified by LINKOPT.
+    *)
+   ('$(LD_LIBRARY_PATH)'->expandEnvVar, ':') -> scanSearchPath
+   (# 
+   do (if (path.length>0) and (not(path[]->isNew.isMember)) then 
+          path[] -> e.path;
+          (if e.exists and e.isDirectory then
+              '-L '->ldA.putText; path[]->ldA.puttext; ' \\\n\t'->ldA.puttext;
+           else
+              (if verboseLevel<=verboseLevel.verbose then
+                  'Not adding ' -> infostream.puttext;
+                  path[] -> infostream.puttext;
+                  ' from LD_LIBRARY_PATH to link directive:' 
+                    -> infostream.putline;
+                  'No such directory.' -> infostream.putline;
+              if)
+          if);
+      if)
+   #);
+   
+#)

@@ -1,0 +1,143 @@
+ORIGIN 'BetaRun';
+
+--BetaRunCopyCPP: descriptor--
+(* Generate code for a callback entry in CBFA as described below.
+ * 
+ * Parameters:
+ *   %o0: struc object
+ * 
+ * When the callback entry is called from C input parameters are in
+ *   %o0,%o1, ..., %o5, SP(...)
+ * We cannot use %i-registers and %l-registers.
+ * We need 2 registers for entry (V-entry) and start, thus a 
+ * save-restore is generated (the restore is in foo).
+ * FIXME: We could use %g2 and %g3 in the dynamically generated code,
+ * since these stack pointers are reloaded from the activeStack upon
+ * entry of the callback-stub anyway.
+ * 
+ * 
+ * Code generated: 
+ *   start:
+ *   struct: CBFATop[0]  = struc
+ *   code:   CBFATop[4]  = save %sp,-64,%sp         - input in %i-regs 
+ *           CBFATop[8]  = sethi hi(entry), %o1     - callbackentry in %o1
+ *           CBFATop[12] = ori   %o1,lo(entry), %o1
+ *           CBFATop[16] = sethi hi(start), %o0     - start in %o0 
+ *           CBFATop[20] = jmp   %o1
+ *           CBFATop[24] = ori   %o0,lo(start), %o0
+ * 
+ * Assume that 'foo' is the Beta call-back pattern; 
+ * the situation at the foo-entry in BETA is the following
+ * 
+ *    %o0: address of struc
+ *    %i0-%i5, SP(64+...) parameters
+ * 
+ * foo: see SUN4Bmachine: ExternalEntry
+ * 
+ * Note that the dynamically generated CallBack code
+ * contains a SAVE which is matched by a RESTORE when
+ * returning from foo.
+ * NOTE: the code for foo contains yet another SAVE/RESTORE pair!
+ *)
+(# CBFAtop,CBFAlimit,O4reg: ^oRegOperand;
+   NotNull, RoomInCBFA: @localLab;
+   SizeOfCallbackEntry: 
+     (* NOTICE: MUST match struct CallBackEntry in betarun/C/object.h *)
+     (# exit 1(*struct*)+6(*code*) #);
+do
+   'CopyCPP'->ExtLabel;
+   NumCopyCPP->IncNum;
+   ;
+   (* registers: %o0:struc-object *)
+   (* If struc is 0, a NULL function pointer was given in C *)
+   NotNull.new;
+   (O0, 0) -> CMP_I -> emit;
+   (NotNull->mstate.labs.off) div 4 -> BNE_A -> emit;
+   emitNop;
+   (* return 0 *)
+   RETL -> emit;
+   (0,O0) -> MOV_I -> emit;
+   ;
+   NotNull.def;
+   (* registers: %o0:struc-object *)
+   (O0,12,O3)->LD_I->emit (* load V-entry from struc *);
+   (* O3 contains V-entry *)
+   (O3,O1,O2) -> FindProto;
+   (* O1 contains proto. Load callback routine (entry) from proto *)
+   (O1,20,O1)->LD_I->emit;
+   (* registers: %o0:struc-object, %o1:entry *)
+   (* Load CBFATop *)
+   ('mutex_lock','cbfa_lock')->EmitFuncText;
+   (O3->newOregOp->CBFATop[],'CBFATop'->newTextOp)->ldValFromText;
+   (* registers: %o0:struc-object, %o1:entry, %o3:CBFATop *)
+   ;
+   (* Check for CBFA overflow *)
+   RoomInCBFA.new;
+   (CBFATop,SizeOfCallbackEntry*4,O4)->ADD_I->emit;
+   (O5->newOregOp->CBFALimit[],'CBFALimit'->newTextOp)->ldValFromText;
+   (O4,O5) -> CMP -> emit;
+   (RoomInCBFA->mstate.labs.off) div 4 -> BLE -> emit;
+   emitNop;
+   (SP,-64,SP) -> SAVE_I -> emit;
+   'CBFArelloc' -> jsrT;
+   RESTORE -> emit;
+   (O3->newOregOp->CBFATop[],'CBFATop'->newTextOp)->ldValFromText;
+   ;
+   RoomInCBFA.def;
+   (* registers: %o0:struc-object, %o1:entry, %o3:CBFATop *)
+   ;
+   (* CBFATop[0] = struc *)
+   (CBFATop,0,O0)->ST_I->emit;
+   ;
+   (* CBFATop[4]  = save %sp,-64,%sp *)
+   ((SP,- 64,SP)->SAVE_I,O4->newOregOp->O4reg[])->PutSet;
+   (CBFATop,4,O4reg)->ST_I->emit;
+   ;
+   (* CBFATop[8]  = sethi hi(entry), %o1 *)
+   ((O1,0)->SETHI,O4reg[])->PutSet;
+   (O1,10,O5)->SRL_I->emit;
+   (O4reg,O5,O4reg)->sparc_OR->emit;
+   (CBFATop,8,O4reg)->ST_I->emit;
+   ;
+   (* CBFATop[12] = ori %o1,lo(entry), %o1 *)
+   ((O1,0,O1)->OR_I,O4reg[])->PutSet;
+   (O1,0x3ff,O5)->AND_I->emit;
+   (O4reg,O5,O4reg)->sparc_OR->emit;
+   (CBFATop,12,O4reg)->ST_I->emit;
+   ;
+   (* CBFATop[16] = sethi hi(start), %o0 *)
+   ((O0,0)->SETHI,O4reg[])->PutSet;
+   (CBFATop,10,O5)->SRL_I->emit;
+   (O4reg,O5,O4reg)->sparc_OR->emit;
+   (CBFATop,16,O4reg)->ST_I->emit;
+   ;
+   (* CBFATop[20] = jmp %o1 *)
+   ((O1,0,G0)->JMPL_I,O4reg[])->PutSet;
+   (CBFATop,20,O4reg)->ST_I->emit;
+   ;
+   (* CBFATop[24] = ori %o0,lo(start), %o0 *)
+   ((O0,0,O0)->OR_I,O4reg[])->PutSet;
+   (CBFATop,0x3ff,O5)->AND_I->emit;
+   (O4reg,O5,O4reg)->sparc_OR->emit;
+   (CBFATop,24,O4reg)->ST_I->emit;
+   ;
+   (* return CBFAtop *)
+   (CBFATop,4,O0)->ADD_I->emit;
+   ;
+   (* Flush CBFATop+1..CBFATop+SizeOfCallbackEntry *)
+   (* IFLUSH flushes at least a double word *)
+   (for i: SizeOfCallbackEntry div 2 repeat
+        
+        (CBFATop,4+(*skip struct*)(i-1)*8,G0) -> IFLUSH_I -> emit;
+   for);
+   ;
+   (* CBFATop++ *)
+   (CBFATop,SizeOfCallbackEntry*4,CBFATop)->ADD_I->emit;
+   (CBFATop[],'CBFATop'->newTextOp)->stValInText;
+   ;
+   ('mutex_unlock','cbfa_lock')->EmitFuncText;
+   ;
+   O7 -> AssertRegisterNotZero;
+   RETL->emit;
+   xNOP->emit;
+#)

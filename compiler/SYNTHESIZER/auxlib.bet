@@ -1,0 +1,487 @@
+ORIGIN 'evlib';
+LIB_ITEM 'betacodegen';
+BODY 'auxlibbody'
+---EvalLib:attributes---
+     
+AllocCallReg:
+  (* allocate callreg; if callReg busy then push CallReg *)
+  (# callRegOnStack: @boolean
+  do pushCall->callRegOnStack;
+     mch.GetCallReg;
+  exit callRegOnStack
+  #);	
+pushCall:
+  (# busy:@ boolean
+  do (if (mch.callRegBusy->busy) then
+	 (false,true)->mch.pushThisOrCall; mch.decrCallReg
+     if)
+  exit busy
+  #);
+popCall:
+  (# busy: @boolean
+  enter busy
+  do (if busy then (false,true)->mch.popThisOrCall; mch.getCallReg if)
+  #);
+pushThis: (#do (true,false)->mch.pushThisOrCall #);
+popThis: (#do (true,false)->mch.popThisOrCall #);
+pushThisAndCall: 
+  (# busy:@ boolean
+  do (if (mch.callRegBusy->busy) then mch.SaveReg; mch.decrCallReg
+      else pushThis
+     if)
+  exit busy
+  #);
+popThisAndCall: 
+  (# busy: @boolean
+  enter busy
+  do (if busy then mch.restoreReg; mch.getCallReg else popThis if)
+  #);
+toThis:
+  (# A: ^mch.address; localDesc: ^ASTindex
+  enter A[]
+  do 0->A.addOff->A[]; A.bAdr.localDesc[]->localDesc[];
+     (A[],mch.thisRegOp[])->mch.gLea; A.freeAdr;
+     gen.thisRegAdr->A[]; localDesc[]->A.bAdr.localDesc[]
+  exit A[]
+  #);
+moveToCallReg:
+  (* 27.4.93: problem with
+   * mini: @min; maxi: @max; ((3,2)->mini,1)->maxi->a;
+   *)
+  (# thisA: ^mch.address; pushed: @boolean
+  enter thisA[]
+  do (if thisA.regType//mch.callO then INNER
+      else 
+         pushCall->pushed; thisA.toCallReg->thisA[]; mch.getCallReg;
+         INNER;
+         (if pushed then
+             (* 27.4.93: if thisA is callReg it may be used for executing
+              * after popCall has restored old value of callReg
+              * so thisA must be move to tmp. reg. using elimReg
+              *)
+             (false,true)->thisA.elimReg; mch.decrCallReg;
+             true->popCall
+         if)
+     if)
+  exit thisA[] (* 27.4.93 *)
+  #);
+printChain:
+  (# chain: ^DH.SuperChain
+  enter chain[]
+  do (if chain[] = none then 'chain is none!'->bugstream.puttext
+      else
+         chain
+  if)#);
+
+genCopyPPP:
+  (* for PPCMAC Pascal CallBack *)
+  (# univProcInfo: @integer; op: ^mch.mOperand; size: ^mch.cstOperand
+  enter(univProcInfo,op[],size[])
+  do (univProcInfo)->mch.initExternalParams;
+	 (* NB! initExternalParams is empty in CODEmachine, 
+	  * which is used by PPCMACbeta
+	  *)
+     3 -> mch.initPrimCall;
+     op[]->mch.pushClong;  (* should be prim *)
+     size[]->mch.pushClong; (* prim!*)
+     (if common.switch[61] then (* ppcmac *)
+         univProcInfo -> mch.newCstOp -> mch.pushClong
+     if);
+     protectCallReg(#do 'CopyPPP'->mch.callprim #);
+     2->mch.getPrimRes
+  #);
+cstMult: (* datpete 22/7/94 *)
+  (* Optimize: 
+   *     op1 * op2 -> op1
+   *)
+  (# op1: ^mch.dataRegOperand;
+     op2: ^mch.cstOperand;
+     size: @integer;
+     log: @integer;
+  enter (op1[], op2[], size)
+  do (if op2.C
+      // 0 then (* optimize 0*x *)
+         op1[] -> mch.gClr;
+      // 1 then (* optimize 1*x *)
+      // -1 then
+         (op1[],4)->mch.gNeg 
+      else
+         (if op2.C < 0 then -op2.C->log else op2.C->log if);
+         (if (log->exact_log2->log) <> -1  then
+             (* exact power of two: use shifts *)
+             (log->mch.newCstOp,op1[])->mch.logicalShiftLeft;
+             (if op2.C < 0 then
+                 (op1[],4)->mch.gNeg
+             if)
+          else
+             (op2[],op1[],size)->mch.gMult;
+         if)
+     if);
+  #);
+cstDiv: (* datpete 22/7/94 *)
+  (* Optimize: 
+   *   op1 div op2 -> res
+   *   op1 mod op2 -> res
+   *)
+  (# op1: ^mch.dataRegOperand;
+     op2: ^mch.cstOperand;
+     isDiv: @boolean;
+     C,log: @integer;
+     size: @integer;
+     ddr: @mch.doubleDataRegOperand; 
+     drx: @mch.dataRegOperand;
+     res: @mch.dataRegOperand;
+  enter (op1[], op2[], size, isDiv)
+  do (if op2.C
+         (*       // 0 then 
+          *          (if isDiv
+          *            then {* optimize x div 0 -> res *}
+          *              'Divide by zero!!!' -> mch.comment; 
+          *              {* Should probably make compilation stop *}
+          *           // false then {* optimize x mod 0 -> res *}
+          *              'Modulus by zero!!!' -> mch.comment;
+          *              {* Should probably make compilation stop *}
+          *          if);
+          * 
+          *)
+   // 1 then 
+         (if isDiv then (* optimize x div 1 -> res *)
+          else (* optimize x mod 1 -> res *)
+             op1[] -> mch.gClr;
+         if);
+      // -1 then
+         (if isDiv then
+             (op1[],4)->mch.gNeg
+          else
+             op1[]->mch.gClr
+         if)
+      else
+         (if op2.C < 0 then -op2.C->C else op2.C->C if);
+         (if (C->exact_log2->log) <> -1 then
+             (* exact power of two: use shifts *)
+             (# L: @mch.localLab; dr: @mch.dataRegOperand
+             do (if isDiv then (* Optimize divide by power of two *)
+                    (*'Optimizing divide' -> mch.comment;*)
+                    L.new;
+                    (* datpete 11/7/95:
+                     * These are not implemented on snake.
+                     * (0->mch.newCstOp,op1[],4)->mch.gCmp;
+                     * L[]->mch.gBge;
+                     *)
+                    (6 (*>=*),0->mch.newCstOp,op1[],4,L[])
+                      -> mch.cmpAndJmp;
+                    
+                    (C-1->mch.newCstOp,op1[],4)->mch.gAdd;
+                    L.def;
+                    (log->mch.newCstOp,op1(*res*)[])->mch.arithShiftRight;
+                    (if op2.C < 0 then (op1[],4)->mch.gNeg if)
+
+                 else  (* Optimize modulus by power of two *)    
+                    (*'Optimizing modulus' -> mch.comment;*)
+                    dr.alloc;
+                    (* on sparc a 'orcc op1,%g0,dr' can be used instead
+                     * of the next 2 instructions
+                     *)
+                    (op1[],dr[])->mch.cpReg;
+                    (if log > 1 then
+                        L.new;
+                        (* datpete 11/7/95:
+                         * These are not implemented on snake.
+                         * (0->mch.newCstOp,op1[],4)->mch.gCmp;
+                         * L[]->mch.gBge;
+                         *)
+                        (6 (*>=*),0->mch.newCstOp,op1[],4,L[]) 
+                          -> mch.cmpAndJmp;
+                        (C-1->mch.newCstOp,dr[],4)->mch.gAdd;
+                        L.def
+                    if);
+                    (-C->mch.newCstOp,dr[],size)->mch.gAnd;
+                    (dr[],op1[],4)->mch.gSub; 
+                    (* !! apparently  V mod K = V mod -K,
+                     * i.e. NO sign change for negative constant 
+                     *)
+                    dr.deAlloc
+                if);
+             #)
+          else
+             (* Perform division/remainder in register pair *)
+             (* Should only be in MC68machine!!! *)
+             op1->ddr.dNo2;       (* e.g. %do - result if div *)
+             op1.fn->ddr.dNo2.fn; 
+             ddr.dNo1.alloc;      (* e.g. %d1 - result if mod *)
+             drx.alloc;           (* e.g. %d2 - the constant *)
+             (op2[],drx[])->mch.ldCst; 
+             (drx[],ddr[],isDiv)->mch.gDiv; (* dr div rN *) 
+             (* ddr.alloc; (op1[],ddr.dNo2[],size)->mch.ldVl;
+              * drx.alloc;
+              * (op2[],drx[])->mch.ldCst;
+              * (drx[],ddr[],isDiv)->mch.gDiv; 
+              *)
+             (if isDiv then
+                 ddr.dNo2->op1; ddr.dNo1.deAlloc
+              else ddr.dNo1->op1; ddr.dNo2.deAlloc
+             if);
+             drx.deAlloc;
+         if)
+     if);
+     op1->res;
+  exit res (* should be op1, but problem with compiler error-fixed in beta5.1*)
+  #);
+asgToNewRep:
+  (* first version of 
+   *       (e1,e2, ...) -> aRep
+   * and
+   *        e -> aRep
+   * A repetition object is allocated;
+   * - the elements in the evaluation (evl) are evaluated and assigned to 
+   *   the corresponding elements of the repetition;
+   * - during evaluation of evl, the address of the repetition 
+   *   is in a register;
+   * - for each element in evl, its value is stored relative to the
+   *   repetition address;
+   * - it is important that the register always refers the
+   *   repetition and not its elements, since a GC may happen
+   *   during evaluation of evl;
+   * - after evaluation of evl, the register is stored
+   *   back in the attribute (rA), since someone may have
+   *   manipulated the repetitoon attribute, e.g. changed its
+   *   range and the is no range check for assigning elements
+   *   of evl to the repetition elements.
+   * Missing:
+   * - decide value or ref rep or general rep;
+   *   not so easy, since asgToRepAdr is used for texts returned
+   *   from external, etc.
+   * - re-consider if we can run out of address registers,
+   *   since aR and rA are busy during the evaluation of evl 
+   *)
+  (# isValueRep: @boolean; 
+     size,theRange,inx: @integer;
+     rA: ^mch.address;
+     rAelm: @mch.RegAdr; 
+     aR,RR: @mch.AdrRegOperand;
+     restore_rA: @boolean;
+     NextElmAdr: @
+       (#
+       do inx +1 -> inx;
+          4*4 + (inx-1)*size -> rAelm.off;
+       exit rAelm[]
+       #);
+  enter(isValueRep,size,theRange,rA[])
+  <<SLOT asgToNewRep:doPart>>
+  exit rA[]
+  #);
+loadAdrOp: 
+  (* in cases like ch: @char; a,b: @integer;
+   * a*b+ch, code like addByte,ch,dataReg has to be generated.
+   * ch must be loaded to dataReg since addByte(ch),dataReg only will
+   * operate on 8-bit of MC68 dataReg
+   *)
+  (# Ax: ^mch.address; op: ^mch.mOperand; drx: @mch.dataRegOperand
+  enter Ax[]
+  do (if Ax.size//1//2 then (* byte/word*)
+         drx.alloc; (Ax[],drx[],AX.size)->mch.ldVl; drx[]->op[];
+         INNER;
+         drx.deAlloc
+      else (*long*) Ax[]->op[]; INNER
+     if)
+  #);
+const2Reg:
+  (# V: ^evVal; val: @integer; dr: ^mch.dataRegOperand
+  enter(V[],val)
+  do (if V[]=none then
+         &mch.dataRegOperand[]->dr[]; dr.alloc; 
+         (val->mch.newCstOp,dr[])->mch.ldCst
+      else
+         V.toDataReg->dr[]
+     if)
+  exit dr[]
+  #);
+primIndex:
+  (* used for implementing
+   *    (val,e)->X.%putByte, etc where X is a simple integer, etc.
+   * A  is the address of X and dr has the value of e.
+   * primIndex returns an inxRegAdr denoting the byte, etc.
+   *)
+  (# A: ^mch.address; dr: ^mch.dataRegOperand; size: @integer;
+     IA: @mch.inxRegAdr; RA: ^mch.regAdr; 
+  enter(A[],dr[],size)
+  do (if size=4 then leave primIndex if);
+     (if size=2 then
+         (1->mch.newCstOp,dr[])->mch.logicalShiftLeft
+     if);
+     (0x3->mch.newcstOp,dr[],4)->mch.gAnd; (* dr mod 4 -> dr *)
+     (if A.access = common.direct then
+         (if A## = mch.regAdr## then
+             A[]->RA[];
+             RA.reg->IA.aReg; RA.off->IA.off
+          else 
+             A.toReg2->IA.aReg
+         if)
+      else
+         '\n***Indirect in primIndex: never tested!'->putLine;
+         A.toReg2->IA.aReg; 
+     if);
+     dr->IA.dReg; A.frozenReg->IA.frozenReg; 
+     (if size // 1 // 2 then
+         1->IA.size; (* Note we set the size to 1 here!
+                      * (x.%getByte) (x.%getShort)
+                      * Note that we set size to 1 for byte AND short.
+                      * The reason is that IA is a byte address,
+                      * but the index HAS been multiplied by the size.
+                      * Only Intel uses the size.
+                      * This is ugly.
+                      * This may be a problem elsewhere
+                      *)
+     if);
+     IA[]->A[]
+  exit A[]
+  #);
+primGet2:
+  (* get mem[A + (dr mod 4 )]  *)
+  (# A: ^mch.Address; dr: ^mch.dataRegOperand; 
+     size: @integer; signed: @boolean;
+     V: ^evVal;
+     val: @mch.dataRegOperand; 
+  enter(A[],dr[],size,signed)
+  do val.alloc;
+     (A[],dr[],size)->primIndex->A[]; signed -> A.signed;
+     (if size
+      // 1 then (*val[]->mch.gClr;*) (A[],val[])->mch.ldByte
+      // 2 then (*val[]->mch.gClr;*) (A[],val[])->mch.ldHalf
+      // 4 then (A[],val[])->mch.ldVal
+     if);
+     (if true
+         // common.targetMachineId = common.sun4s
+         // common.isIntel then
+         (* sign extension is done in XXXmachine.LdByte etc. *)
+      else
+         (if signed then
+             (if size
+              // 1 then val[]->mch.SignExtByte
+              // 2 then val[]->mch.SignExtWord
+             if)
+         if)
+     if);
+     (*A is NOT referring an object - must be cleared upon release *)
+     A.freeAdr; (* is cleared if InxRegAdr - no clear needed for RegAdr *)
+     (val,false,false,false)->mkComputedEvVal->V[]
+  exit V[]
+  #);
+primGet:
+  (# A: ^mch.Address; I1,size,reg: @integer; signed: @boolean;
+     V: ^evVal; T0: @mch.dataRegOperand; 
+  enter(A[],I1,size,signed)
+  do T0.alloc;
+     I1->A.addOff; signed -> A.signed;
+     (if size
+      // 1 then (*T0[]->mch.gClr;*) (A[],T0[])->mch.ldByte;
+      // 2 then (*T0[]->mch.gClr;*) (A[],T0[])->mch.ldHalf
+      // 4 then (A[],T0[])->mch.ldVal
+     if);
+     (if true
+         // common.targetMachineId = common.sun4s
+         // common.isIntel then
+         (* sign extension is done in XXXmachine for ldByte etc. *)
+      else
+         (if signed then
+             (if size
+              // 1 then T0[]->mch.SignExtByte
+              // 2 then T0[]->mch.SignExtWord
+             if)
+         if)
+     if);
+     (T0,false,false,false)->mkComputedEvVal->V[];
+     (* A.aReg should denote a real object - no clear needed! *)
+  exit V[]
+  #);
+primInxGet:
+  (* inx ->R.%inxGet/byte/short/long -> val
+   * R is a repetition
+   * dr: register with 'inx'
+   * rA: address of R
+   *)
+  (# rA: ^mch.address;
+     dr: ^mch.dataRegOperand; val: @mch.dataRegOperand; 
+     size: @integer; signed: @boolean;
+     V: ^evVal; oldS14,oldS15: @boolean
+  enter(dr[],rA[],size,signed)
+  do common.switch[14]->oldS14; common.switch[15]->oldS15;
+     true->common.switch[14]->common.switch[15];
+     val.alloc; 
+     (if size
+      // 1 then 
+         (dr,true,1)->rA.index->rA[];
+         1->rA.addOff->rA[];
+         (*val[]->mch.gClr; *)
+         signed -> rA.signed;
+         (rA[],val[])->mch.ldByte
+      // 2 then 
+         (dr,true,2)->rA.index->rA[];
+         2->rA.addOff->rA[];
+         (*val[]->mch.gClr; *)
+         signed -> rA.signed;
+         (rA[],val[])->mch.ldHalf
+      // 4 then 
+         (dr,true,4)->rA.index->rA[];
+         4->rA.addOff->rA[];
+         signed -> rA.signed;
+         (rA[],val[])->mch.ldVal
+     if);
+     (if true
+         // common.targetMachineId = common.sun4s
+         // common.isIntel then
+         (* sign extension is done in XXXmachine for ldByte etc *)
+      else
+         (if signed then
+             (if size
+              // 1 then val[]->mch.SignExtByte
+              // 2 then val[]->mch.SignExtWord
+             if)
+         if)
+     if);
+     (* rA.aReg does NOT denote a real object - release *)
+     rA.freeAdr; (* cleared if inxRegAdr which it is! *)
+     (val,false,false,false)->mkComputedEvVal->V[];
+     oldS14->common.switch[14]; oldS15->common.switch[15]
+
+  exit V[]
+  #);
+CopyT:
+  (# resType: @integer;
+     dr: @mch.DataRegOperand;
+     old61,restore61: @boolean;
+     rA: ^mch.address;
+  enter(rA[],resType)
+  do 4 -> mch.initPrimCall;
+     (if common.switch[120] then 
+         (if common.isIntel then
+          else
+             common.switch[61] -> old61; 
+             true->common.switch[61];
+             true->restore61
+     if)if);
+     INNER;
+     2 -> rA.pushRegAndOff;
+     (if restore61 then old61 -> common.switch[61] if);
+     'CopyT'-> mch.callPrim;
+     resType -> mch.getPrimRes -> dr
+  exit dr
+  #);
+GenCOMdispatch:
+  (# EV,desc: ^ASTindex; V: ^evVal; 
+     N: @ASTindex; externalName: ^text; extKind: @integer;
+     forward: @boolean;
+     CP: @ExternalCall;
+     PushDispatchPar:
+       (# argEV: ^evval
+       enter argEv[]
+       do (forward->CP.getEnterP
+          ,sematt.cExt
+          ,CP.getEnterP.size
+          ,CP.pascExtProcInfo) 
+            -> argEv.PushCpar;
+       #)
+  enter(EV[],externalName[],desc[],extKind)
+  <<SLOT GenCOMdispatch:doPart>>
+  exit V[]
+  #);

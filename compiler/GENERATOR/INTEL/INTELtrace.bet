@@ -1,0 +1,314 @@
+ORIGIN 'INTELBmachine';
+INCLUDE '~beta/sysutils/objinterface';
+INCLUDE 'INTELmstate';
+
+(* NOTICE: intel_trace is declared in INTELmstate *)
+
+--machineatt: attributes--
+printf: external
+  (# fmt: [0]@char;
+  enter fmt
+  do 'printf' -> callC;
+  #);
+printf2: printf
+  (# arg1, arg2: @integer;
+  enter (arg1, arg2)
+  #);
+printf3: printf
+  (# arg1, arg2, arg3: @integer;
+  enter (arg1, arg2, arg3)
+  #);
+
+regA_text:
+  (# n: @integer (* n in [0:7] *)
+  enter(n)
+  do (if intel_trace then
+         (if n
+          // 0 then '%edx' -> screen.puttext (* f1 *)
+          // 1 then '%edi' -> screen.puttext (* f2 *)
+          // 7 then '%esp' -> screen.puttext (* f8 *)
+          else
+             (if rep.aMap[n+1]
+              // ebp+1 then '%ebp' -> screen.puttext (* f3 *)
+              // esi+1 then '%esi' -> screen.puttext (* f4 *)
+              // -1 then 
+                 (* output memory cell *)
+                 (*'%tmp'->screen.puttext*)
+                 '<'->screen.put; 
+                 &text[] -> mstate.CIdentifier -> screen.puttext;
+                 'a' -> screen.put;
+                 n -> screen.putint;
+                 '>'->screen.put;
+              // 0 then
+                 '    '->screen.puttext;
+              else
+                 'aReg:'->screen.putText;n->screen.putint;
+             if)
+         if)
+     if)
+  #);
+
+regD_text:
+  (# n: @integer 
+  enter(n) 
+  do (if intel_trace then
+         (if rep.dMap[n+1]
+          // eax+1 then '%eax' -> screen.puttext (* f5 *)
+          // ebx+1 then '%ebx' -> screen.puttext (* f6 *)
+          // ecx+1 then '%ecx' -> screen.puttext (* f7 *)
+          // -1 then 
+             (*'%tmp'->screen.puttext*)
+             (* output memory cell *)
+             '<'->screen.put; 
+             &text[] -> mstate.CIdentifier -> screen.puttext;
+             'a' -> screen.put;
+             n -> screen.putint;
+             '>'->screen.put;
+          // 0 then
+             '    '->screen.puttext;
+          else
+             'dReg:'->screen.putText; n->screen.putint;
+         if) 
+     if)
+  #);
+
+regT_text:
+  (# R: @char; n: @integer;
+  enter(R,n)
+  do (if intel_trace then
+         (if n=-1 then
+             (* not assigned logical register *)
+             '  '->screen.puttext;
+          else
+             R->screen.put;
+             n->screen.putInt;
+         if);
+     if)
+  #);
+
+regF_text: 
+  (# n: @integer ; (* f1-8 *)
+  enter(n) 
+  do (if intel_trace then
+         (if n
+          // eax (* 0 *) then '%eax' -> screen.puttext
+          // ecx (* 1 *) then '%ecx' -> screen.puttext
+          // edx (* 2 *) then '%edx' -> screen.puttext
+          // ebx (* 3 *) then '%ebx' -> screen.puttext
+          // esp (* 4 *) then '%esp' -> screen.putText
+          // ebp (* 5 *) then '%ebp' -> screen.puttext
+          // esi (* 6 *) then '%esi' -> screen.puttext
+          // edi (* 7 *) then '%edi' -> screen.puttext
+          else 'regF:'->screen.putText; n->screen.putint
+         if) 
+     if)
+  #);
+
+--TracePatchLastByte: descriptor--
+(# 
+do (if intel_trace then
+       THIS(image)[] -> getpatternname -> puttext;
+       (': patchlast: LIP=0x%x: val=0x%x, patch=0x%x\n',
+       LIP, %getByteAt(@@buffer[1]+LIP), patch) -> printf3;
+   if)
+#)
+--TraceEmitByte: descriptor--
+(# 
+do (if intel_trace then
+       THIS(image)[] -> getpatternname -> puttext;
+       (': emitbyte: LIP=0x%x: val=0x%x\n',
+       LIP, val) -> printf2;
+   if)
+#)
+--TraceEmitLong: descriptor--
+(# 
+do (if intel_trace then
+       THIS(image)[] -> getpatternname -> puttext;
+       (': emitlong: LIP=0x%x: val=0x%x\n', LIP, val) -> printf2;
+   if)
+#)
+--TraceEmitHalf: descriptor--
+(# 
+do (if intel_trace then
+       THIS(image)[] -> getpatternname -> puttext;
+       (': emithalf: LIP=0x%x: val=0x%x\n', LIP, val) -> printf2;
+   if)
+#)
+--TraceEmit2Bytes: descriptor--
+(# 
+do (if intel_trace then
+       THIS(image)[] -> getpatternname -> puttext;
+       (': emit2bytes: LIP=0x%x: val1=0x%x', LIP, b1) -> printf2;
+       (', LIP=0x%x: val2=0x%x\n', LIP+1, b2) -> printf2;
+   if)
+#)
+--TraceEmit3Bytes: descriptor--
+(# 
+do (if intel_trace then
+       THIS(image)[] -> getpatternname -> puttext;
+       (': emit3bytes: LIP=0x%x: val1=0x%x', LIP, b1) -> printf2;
+       (', LIP=0x%x: val2=0x%x', LIP+1, b2) -> printf2;
+       (', LIP=0x%x: val3=0x%x\n', LIP+2, b3) -> printf2;
+   if)
+#)
+
+--comment:dopart--
+do (if T.length = 0 then
+       (* just a hack to get the PC when tracing *)
+       'pc='->puttext; mstate.b.LIP -> Puthex
+   if);
+   (if intel_trace then T[] -> putline; if)
+   
+--traceOps: dopart--
+do (if intel_trace then
+       'operand types: '-> puttext;
+       (if op1[]=NONE then
+           'NONE, ' -> puttext;
+        else
+           op1[] -> getpatternname -> puttext;
+           ', '->puttext;
+       if);
+       (if op2[]=NONE then
+           'NONE' -> puttext;
+        else
+           op2[] -> getpatternname -> puttext;
+       if);
+       newline;
+   if)
+   
+-- DumpR: descriptor--
+(# ch: @char;
+   fNo: @Integer;
+do (if intel_trace then
+       (for i:5 repeat
+            'a'->screen.put; i-1->screen.putInt; '='->screen.put; 
+            (i-1)->regA_text; ' '->screen.put; 
+       for);
+       newline;
+       
+       (for i:5 repeat
+            'd'->screen.put; i-1->screen.putInt; '='->screen.put; 
+            (i-1)->regD_text; ' '->screen.put; 
+       for);
+       newline;
+       
+       'a'->ch;
+       (edx)->regF_text; '='->screen.put; 
+       (ch,rep.fMap[edx+1]-1)->regT_text; ' '->screen.put;
+       (edi)->regF_text; '='->screen.put; 
+       (ch,rep.fMap[edi+1]-1)->regT_text; ' '->screen.put;
+       (ebp)->regF_text; '='->screen.put; 
+       (ch,rep.fMap[ebp+1]-1)->regT_text; ' '->screen.put;
+       (esi)->regF_text; '='->screen.put; 
+       (ch,rep.fMap[esi+1]-1)->regT_text; ' '->screen.put;
+       
+       'd'->ch;
+       (eax)->regF_text; '='->screen.put; 
+       (ch,rep.fMap[eax+1]-1)->regT_text; ' '->screen.put;
+       (ebx)->regF_text; '='->screen.put; 
+       (ch,rep.fMap[ebx+1]-1)->regT_text; ' '->screen.put;
+       (ecx)->regF_text; '='->screen.put; 
+       (ch,rep.fMap[ecx+1]-1)->regT_text; ' '->screen.put;
+       
+       'S'->ch;
+       (esp)->regF_text; '='->screen.put; 
+       (ch,rep.fMap[esp+1]-1)->regT_text; ' '->screen.put;
+       newline;
+       
+       (* Check addr-reg conflicts *)
+       (for n:5 repeat 
+            (* n-1 is logical addr-reg *)
+            rep.aMap[n] -> fNo;
+            (* fNo is 0 (unallocated), -1 (memory cell), or
+             * physical register number plus 1
+             *)
+            (if fNo 
+             // 0
+             // -1 then
+                (* not in physical register *)
+             else
+                fNo-1 -> fNo;
+                (* fNo is physical register number *)
+                (if rep.fMap[fNo+1] <> n then
+                    '*** OBS! aMap/fMap conflict: logical=a' -> screen.puttext;
+                    n-1->screen.putint; 
+                    ', physical=' -> screen.puttext;
+                    fNo -> screen.putint;
+                    '***' -> screen.putline;
+                if)
+            if)
+       for);
+       
+       (* Check data-reg conflicts *)
+       (for n:5 repeat 
+            (* n-1 is logical data-reg *)
+            rep.dMap[n] -> fNo;
+            (* fNo is 0 (unallocated), -1 (memorycell), 
+             * or physical register number plus 1
+             *)
+            (if fNo 
+             // 0
+             // -1 then
+                (* not in physical register *)
+             else
+                fNo-1 -> fNo;
+                (* fNo is physical register number *)
+                (if rep.fMap[fNo+1] <> n then
+                    '*** OBS! dMap/fMap conflict: logical=d' -> screen.puttext;
+                    n-1->screen.putint;
+                    ', physical=' -> screen.puttext;
+                    fNo -> screen.putint;
+                    '***' -> screen.putline;
+                if)
+            if)
+       for)
+   if)
+#)
+-- DumpReg:descriptor --
+(# dmp:
+     (# R: @char; i,V: @integer;
+     enter(R,i,V)
+     do R->T.put; i-1->T.putInt; ':'->T.put; V->T.putInt
+     #);
+   T: @text
+do common.tracestream.newline;
+   (for i:rep.aReg.range repeat ('a',i,rep.aReg[i])->dmp for);
+   (for i:rep.dReg.range repeat ('d',i,rep.dReg[i])->dmp for);
+   T[]->common.tracestream.putText; 
+   common.tracestream.newline;
+   dumpR
+#)
+
+
+--AllocAFreeFregFound: descriptor--
+(# 
+do (if intel_trace then
+       'free freg found: '->puttext;
+       fNo -> regF_text;
+       newline;
+   if)
+#)
+--AllocDFreeFregFound: descriptor--
+(# 
+do (if intel_trace then
+       'free freg found: '->puttext;
+       fNo -> regF_text;
+       newline;
+   if)
+#)
+--TraceDataRegOpReuse:descriptor--
+(# 
+do (if intel_trace then
+       'Reused from ' -> screen.puttext;
+       fn -> regF_text;
+       screen.newline;
+   if)
+#)
+--TraceAdrRegOpReuse:descriptor--
+(# 
+do (if intel_trace then
+       'Reused from ' -> screen.puttext;
+       fn -> regF_text;
+       screen.newline;
+   if)
+#)

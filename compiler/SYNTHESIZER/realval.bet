@@ -1,0 +1,657 @@
+ORIGIN 'evlib';
+LIB_ITEM 'betacodegen';
+INCLUDE 'auxlib'
+---mkDoubleEvVal:descriptor---
+(# DV: ^DoubleEvVal
+do &DoubleEvVal[]->DV[]->V[]; (drX,drY)->DV
+#)
+---mkRealEvVal:descriptor---
+(# RV: ^RealEvVal
+do &RealEvVal[]->RV[]->V[]; A[]->RV.A[]
+#)
+---mkFloatEvVal:descriptor---
+(# RV: ^FloatEvVal
+do &FloatEvVal[]->RV[]->V[]; FR->RV.FL
+#)
+---EvalLib:attributes---
+DoubleEvVal: EvVal
+  (# thisVal::<(#V: @DoubleEvVal do (drX,drY)->V; V[]->thisV[] #);
+     evId:: (# do 'DoubleVal:'-> id[] #);
+     display::<(#do 'dReg='->xT; drX->xI; drY->xI #);
+     reUse: (# do drX->drX.reUse; drY->drY.reuse #);
+     needExtraAreg:: (# do false -> value #);     
+     loadVal::<(#do this(DoubleEvVal)[]->V[] #);
+     loadVal2::<(#do loadVal->V[] #);
+     release::<(#do drX.deAlloc; drY.deAlloc #);
+     realloc:: (# do drX -> drX.reUse; drY -> drY.reUse #);
+     evType::<(#do 3->type#);
+     mkReal::<(# do this(DoubleEvVal)[]->V[] #);      
+     loadFloat::<
+	(# FR: @mch.floatRegOp
+	do FR.alloc; drY[]->mch.pushClong; drX[]->mch.pushClong; release;
+	   &mch.stackTopAdr[]->FR.load; 
+           FR[]->res[]
+	#);
+     AsgToRepAdr::<
+       (#
+       do (if stest then
+              301->trace(#do 'DoubleVal:asgToRepAdr:'->xT; display#)
+          if);
+          (true,8(*size*),1(*range*),rA[]) -> asgToNewRep
+          (#
+          do NextElmAdr -> asgToRealAdr
+          #);
+          rA.freeAdr;
+          this(DoubleEvVal)[] -> V[]
+       #);
+     AsgToRepElm::
+       (#
+       do (if rA.size = 8 then
+              rA[] -> AsgToRealAdr
+           else
+              rA[] -> AsgToAdr
+          if);
+          rA.freeAdr;
+          this(DoubleEvVal)[] -> V[] 
+       #);
+     AsgToAdr::<
+       (* NOTE; This is just for eperimenting with returing int64 values
+        * from external routines - see genexternal
+        *)
+       (# rAx: ^ mch.address
+       do (if stest then
+              301->trace(#do 'DoubleEvVal:asgToAdr:size'->xT; ra.size -> xI; xN#)
+          if);
+          (if rA.size
+           // 8 then
+              rA.copy -> rAx[];
+              (*4 -> rAx.size;*)
+              (drX[],rAx[])->mch.stVal; 
+              (drY[],4->rAx.addOff)->mch.stVal;
+           // 4 then (drY[],rA[])->mch.stVal
+           // 2 then (drY[],rA[])->mch.stHalf
+           // 1 then (drY[],rA[])->mch.stByte
+          if);
+          rA.freeAdr; 
+          this(DoubleEvVal)[]->V[]
+       #);
+     AsgToRealAdr::<
+	(#do (drX[],rA[])->mch.stVal; (drY[],4->rA.addOff)->mch.stVal;
+	     rA.freeAdr; this(DoubleEvVal)[]->V[]
+        #);
+     rCmp::<
+	(# FV: ^floatEvVal
+	do loadFloat->mkFloatEvVal->FV[]; 
+           (lV[],op,jmpCond,lab[])->FV.rCmp->res[]
+	#);
+     unMinus::<
+       (# FR: ^mch.floatRegOp 
+       do loadFloat->FR[]->mch.negFloat; FR[]->mkFloatEvVal->res[]
+       #);
+     rAdd::< (* lV + this(DoubleEvVal) *)
+	(# FV: ^floatEvVal
+	do loadFloat->mkFloatEvVal->FV[]; lV[]->FV.rAdd->res[]
+	#);
+     rSub::<
+	(# FV: ^floatEvVal
+	do loadFloat->mkFloatEvVal->FV[]; lV[]->FV.rSub->res[]
+	#);
+     rMult::<
+	(# FV: ^floatEvVal
+	do loadFloat->mkFloatEvVal->FV[]; lV[]->FV.rMult->res[]
+	#);
+     rDiv::<
+	(# FV: ^floatEvVal
+	do loadFloat->mkFloatEvVal->FV[]; lV[]->FV.rDiv->res[]
+	#);
+     asgToItem::<
+       (# (*W: @computedEvVal; *) W: ^ evVal;
+          A: ^mch.address; nScan: @ | scanNadr
+	do (*352->trace(#do 'DoubleEvVal:asgToItem'->T #);*)
+	   (if (rDesc->sematt.realDesc.equal) then
+		rA.copy->A[];
+
+               12->A.addOff; 
+               (*drX->W.dr; *) 
+               (drX,false,false,false) -> mkComputedEvVal -> W[];
+               A[]->W.asgToAdr;
+               
+               4->A.addOff; 
+               (*drY->W.dr; *)
+               (drY,false,false,false) -> mkComputedEvVal -> W[];
+               A[]->W.asgToAdr;
+            else 
+               (rDesc[],rA[],0,rChain[],true)->nScan;
+               this(DoubleEvVal)[]->nScan.asgToNelm -> rAx[];
+               nScan.reset
+	   if)#);
+     asgToNxOffsets:: 
+       (# off: @integer
+       do (if stest then
+              178-> trace(#do 'doubleVal:asgToNxoffSets:'-> xT #)
+          if);
+          NX.getNext -> off;
+          (if NOT (inXpart AND (NX.getKind = NX.valOff)) then
+              off -> (rA.copy).addOff -> asgToRealAdr    
+          if);
+       #);
+     asgToList::<(#do toListOne #);
+     asgToDispatch::
+       (# 
+       do (if stest then
+              311 -> cTrace(#do 'doubleVal:asgToDispatch:'->xT; EV[]->xA#)
+          if);
+          (EV[],externalName[],desc[],extKind)
+            -> GenCOMdispatch
+          (# 
+          do this(doubleEvVal)[] -> PushDispatchPar
+          #) -> V[]
+       #);
+     asgToCproc::<
+       (# CP: @ExTernalCall
+       do release; (* see also pushCpar *)
+          (externalName,Desc[],extKind,EV.son)->CP; (* init *)
+          (CP.getEnterP,extKind,CP.getEnterP.size,CP.pascExtProcInfo)
+            -> pushCpar;
+          CP.call; CP.getExitP->V[]; 
+       #);
+     pushCpar::< 
+       (#
+       do (if released then reAlloc if);
+          drX[]->mch.pushClong;
+          drY[]->mch.pushClong; 
+          release;(* may have been done by asgToCproc *)
+       #);
+     drX,drY: @mch.dataRegOperand;
+  enter(drX,drY)
+  #);
+FloatEvVal: EvVal
+  (# thisVal::<(# V: @FloatEvVal do FL->V; V[]->thisV[] #);
+     evId:: (# do 'FloatVal:'-> id[] #);
+     display::< (#do '%frNo='->xT;  FL.rn->xI #);
+     reUse: (# do  #);
+     needExtraAreg:: (# do false -> value #);     
+     loadVal::<(#do this(FloatEvVal)[]->V[] #);
+     loadVal2::<(#do this(FloatEvVal)[]->V[] #);
+     release::<(#do FL.deAlloc #);
+     reAlloc::<(#do FL.rN->FL.reUse #);
+     evType::<(#do 3->type#);
+     mkReal::<(# do this(FloatEvVal)[]->V[] #);      
+     toDataRegA:: 
+       (#
+       do 'FloatEvVal:toDataRegA: BETA call-back cannot return a float'
+            -> thisTranslate.systemException
+       #);
+     toDataRegX:: (#do (FL[],mch.dataRegX[]) -> mch.float2int #);
+     toDataRegY:: (#do (FL[],mch.dataRegY[]) -> mch.float2int #);
+     toRangeReg:: (#do (FL[],mch.dataRegB[]) -> mch.float2int #);
+     toDataReg:: (#do (FL[],dReg[]) -> mch.float2int #);
+     toPrimDest::
+       (# 
+       do (* pNo->FL.toPrimdest - NOT defined - FIX *)
+          (if primDest.isPrimRegOp then
+              (FL[],primDest[]) -> mch.float2int 
+           else
+              (# dr: @mch.dataRegOperand
+              do dr.alloc;
+                 (FL[],dr[]) -> mch.float2int ;
+                 (dr[],primDest[]) -> mch.stVal;
+                 dr.deAlloc;
+              #)
+          if)
+       #);
+     asgToAdr::< 
+       (# D: ^mch.dataRegOperand; 
+       do rA[]->FL.store2Int->D[]; 
+          (D,false,false,false)->mkComputedEvVal->V[]
+       #);
+     asgToRealAdr::< 
+       (#
+       do (if stest then
+              301 -> trace
+              (#do 'FloatVal:asgToRealAdr:'->xT; display; rA.display->xT #)
+          if);
+          rA[]->FL.store; 
+          (if mch.floatStackUnit then 
+              release; rA[]->mkRealEvVal->V[]
+           else rA.freeAdr; this(FloatEvVal)[]->V[] 
+          if)
+       #);
+     AsgToRepAdr::<
+       (#
+       do (if stest then
+              301->trace(#do 'FloatVal:asgToRepAdr:'->xT; display#)
+          if);
+          (true,8(*size*),1(*range*),rA[]) -> asgToNewRep
+          (#
+          do NextElmAdr -> asgToRealAdr
+          #);
+          rA.freeAdr;
+          this(FloatEvVal)[] -> V[]
+       #);
+     AsgToRepElm::
+       (#
+       do (if rA.size = 8 then
+              rA[] -> AsgToRealAdr
+           else
+              rA[] -> AsgToAdr
+          if);
+          rA.freeAdr;
+          this(FloatEvVal)[] -> V[] 
+       #);
+     loadFloat::< (#do FL.rn -> FL.reuse; FL[]->res[] #);
+     getFloatArg::<
+       (#
+       do (if stest then
+              301->trace(#do 'floatVal:getFloatArg:'->xT; display#)
+          if);
+          FL[]->F[]; true->inFreg 
+       #);
+     rCmp::<
+       (# LF: ^mch.floatRegOp; A: ^mch.mOperand (*address*)
+	do FL.storeTmp->A[]; (* when is A released *)
+          (A[],lV.loadFloat->LF[],0,false,false)->doCmp;
+          LF.deAlloc
+	#);
+     unMinus::<
+       (#
+       do FL[]->mch.negFloat; 
+          FL.rN->FL.reUse; 
+          FL[] -> mkFloatEvVal -> res[]
+          (* used to be:
+           *      this(FloatEvVal)[]->res[] 
+           *)
+       #);
+     rAdd::< (* lV + this(FloatEvVal).FL *)
+       (# LF: ^mch.floatRegOp; A: ^mch.mOperand;  Fval: @ floatEvVal;
+          F: ^mch.mOperand; inFreg: @boolean
+       do (if stest then
+              301 -> trace
+              (#do 'floatRegOp:rAdd:' -> xT; display;
+                 ' lV:'->xT; lV.display
+              #)
+          if);
+          lV.getFloatArg -> (F[],inFreg);
+          (FL[],F[],inFreg) -> mch.addFloat;
+          (* FL hold result:
+           * FL.reUse is made since binop will release this(floatEvVal)
+           * we return a new floatEvVal, since this(floatEvVal)
+           * is release and even if FL.reUse has been made,
+           * a subsequent release will never make a FL.deAlloc
+           *)
+          FL.rN->FL.reUse;  
+          FL[]->mkFloatEvVal->res[]
+          (* used to be
+              FL.rN->FL.reUse;  
+              this(FloatEvVal)[]->res[]
+           *)
+	#);
+     rSub::< (* lV + this(DoubleEvVal) *)
+       (# LF: ^mch.floatRegOp; A: ^mch.mOperand;  Fval: @ floatEvVal
+       do (if stest then
+              301 -> trace
+              (#do 'floatRegOp:Sub:' -> xT; display;
+                 ' lV:'->xT; lV.display
+              #)
+          if);          
+          lV.loadFloat->LF[];
+          FL.storeTmp->A[];
+          (LF[],A[],false)->mch.subFloat;
+          LF->Fval; 
+          Fval[]->res[];
+          (* problem to do as for rAdd, since this will switch
+           * the order of the arguments to subFloat
+           *)
+          release (* not really necessary, since binop does release?*)
+	#);
+     rMult::<
+	(# LF: ^mch.floatRegOp; A: ^mch.mOperand;  Fval: @ floatEvVal
+	do lV.loadFloat->LF[]; 
+           FL.storeTmp->A[];
+	   (LF[],A[],false)->mch.mulFloat;
+	   LF->Fval; 
+           Fval[]->res[]
+	#);
+     rDiv::<
+	(# LF: ^mch.floatRegOp; A: ^mch.mOperand;  Fval: @ floatEvVal
+	do lV.loadFloat->LF[]; 
+           FL.storeTmp->A[];
+	   (LF[],A[],false)->mch.divFloat;
+	   LF->Fval; 
+           Fval[]->res[]
+	#);
+     asgToItem::<
+	(# nScan: @ | scanNadr
+	do (*352->trace(#do 'FloatEvVal:asgToItem'->T #);*)
+           (rDesc[],rA[],0,rChain[],true)->nScan; 
+           this(FloatEvVal)[]->nScan.asgToNelm -> rAx[];
+           nScan.reset
+	#);
+     asgToNxOffsets:: 
+       (# off: @integer
+       do (if stest then
+              178->trace(#do 'floatVal:asgToNxoffSets:'-> xT #)
+          if);
+          NX.getNext -> off;
+          (if NOT (inXpart AND (NX.getKind = NX.valOff)) then
+              off -> (rA.copy).addOff -> asgToRealAdr    
+          if);
+       #);
+     asgToList::<(#do toListOne #);
+     asgToDispatch::
+       (# 
+       do (if stest then
+              311 -> cTrace(#do 'floatVal:asgToDispatch:'->xT; EV[]->xA#)
+          if);
+          (EV[],externalName[],desc[],extKind)
+            -> GenCOMdispatch
+          (# 
+          do this(floatEvVal)[] -> PushDispatchPar
+          #) -> V[]
+       #);
+     asgToCproc::<
+	(# CP: @ExTernalCall
+        do release; (* see also pushCpar *)
+	   (externalName,Desc[],extKind,EV.son)->CP; (* init *)
+	   (CP.getEnterP,extKind,CP.getEnterP.size,CP.pascExtProcInfo)
+             -> pushCpar;
+	   CP.call; CP.getExitP->V[]; 
+	#);
+     pushCpar::< 
+	(# doRelease: @boolean; dr: @mch.dataRegOperand;
+	do (if released then reAlloc; true -> doRelease if);
+           (if type
+            // common.byteXpar 
+            // common.shortXpar
+            // common.longXpar then
+               dr.alloc;
+               (FL[],dr[]) -> mch.float2int;
+               (if type
+                // common.byteXpar then dr[]->mch.pushCbyte
+                // common.shortXpar then dr[]->mch.pushCword
+                // common.longXpar then dr[]->mch.pushClong
+               if);
+               dr.deAlloc;
+            // common.doubleXpar then
+               FL[]->mch.pushCfloat; 
+           if);
+           (if doRelease then
+               (* in this case 'release' will not work, since
+                * 'released=true' will prevent 'release' to be executed
+                *)
+               FL.deAlloc
+            else
+               release
+           if)
+	#);
+     FL: @mch.floatRegOp
+   enter FL
+   #);
+RealEvVal: EvVal
+  (# thisVal::< (* NOTE: super thisVal has true->released! *)
+       (# do A[]->mkRealEvVal->thisV[] #);
+     evId:: (# do 'RealVal:'-> id[] #);
+     display::<
+       (# 
+       do 'A='->xT; A.display->xT;
+          (if released then 'R+'->xT else 'R-'->xT
+       if)#); 
+     evType::<(#do 3->type #);
+     needExtraAreg:: (# do false -> value #);
+     theReg::<(#do A.theReg -> aR #);
+     release::<
+       (#do (*351->trace(#do 'ReavEvval:release'->T; display#);*) A.freeAdr #);
+     (* reAlloc::< *)
+     mkReal::<(# do this(RealEvVal)[]->V[] #);      
+     loadVal::<(#do this(RealEvVal)[]->V[]#);
+     loadVal2::<
+       (# fVal: @floatEvVal; F: ^mch.floatRegOp
+       do loadFloat->F[]; F->Fval; release; Fval[]->V[]
+       #);
+     toTmp::< (#do(if A.useCallReg then A.toTmp->A[] if)#);
+     elimReg::< (# do (elimThis,elimCall)->A.elimReg #);
+     toDataRegA:: 
+       (#
+       do 'FloatEvVal:toDataRegA: BETA call-back cannot return a float'
+            -> thisTranslate.systemException
+       #);
+     toDataRegX:: 
+       (# FL: @mch.floatRegOp
+       do FL.alloc; A[]->FL.load; 
+          (FL[],mch.dataRegX[]) -> mch.float2int; FL.deAlloc
+       #);
+     toDataRegY:: 
+       (# FL: @mch.floatRegOp
+       do FL.alloc; A[]->FL.load; 
+          (FL[],mch.dataRegY[]) -> mch.float2int; FL.deAlloc
+       #);
+     toRangeReG:: 
+       (# FL: @mch.floatRegOp
+       do FL.alloc; A[]->FL.load; 
+          (FL[],mch.dataRegB[]) -> mch.float2int; FL.deAlloc
+       #);
+     toDataReg:: 
+       (# FL: @mch.floatRegOp
+       do FL.alloc; A[]->FL.load; 
+          (FL[],dReg[]) -> mch.float2int; FL.deAlloc
+       #);
+     toPrimDest::
+       (# FL: @mch.floatRegOp; dr: @mch.dataRegOperand
+       do FL.alloc; A[]->FL.load; 
+          (if primDest.isPrimRegOp then
+              (FL[],primDest[]) -> mch.float2int;
+           else
+              dr.alloc;
+              (dr[],primDest[]) -> mch.stVal;
+              (FL[],dr[]) -> mch.float2int;
+              dr.deAlloc;               
+          if);
+          FL.deAlloc
+       #);
+     (* getRefEval::<; theAdr::<; adrVal::< *)
+     real2int:
+       (# A: ^mch.address; 
+          dr: @mch.dataRegOperand;
+          FL: @mch.floatRegOp;
+       enter A[]
+       do FL.alloc; 
+          dr.alloc;
+          A[]->FL.load; 
+          (FL[],dr[]) -> mch.float2int;
+          FL.deAlloc;
+       exit dr[]
+       #);
+     asgToAdr::<
+       (# FL: @ mch.floatRegOp;  D: ^mch.dataRegOperand
+       do FL.alloc; A[]->FL.load; rA[]->FL.store2int->D[];
+          Release; rA.freeAdr;
+	  (D,false,false,false)->mkComputedEvVal->V[]
+       #);
+     asgToRealAdr::<
+       (# A1,A2: ^mch.address; dr: ^mch.dataRegOperand
+       do (if stest then
+              301 -> trace
+              (#do 'FloatVal:asgToRealAdr:'->xT; display; rA.display->xT #)
+          if);
+          (if common.switch[120] then
+              (* currently we cannot copy mem since the new
+               * backend has a sideeffect on the index register
+               * of a repetition element
+               *)
+              (# F: @mch.floatRegOp
+              do F.alloc;
+                 A[]->F.load;
+                 rA[]->F.store
+              #)
+           else
+              (A[],rA[])->mch.cpMem->dr[]; 
+              (if dr[]<>none then dr.deAlloc if);
+              A.copy->A1[]; rA.copy->A2[];
+              (4->A1.addOff,4->A2.addOff)->mch.cpMem->dr[];
+              (if dr[]<>none then dr.deAlloc if);
+          if);
+          rA.freeAdr; this(RealEvVal)[]->V[];
+          (*351->trace(#do 'RealEvVal:asgToRealAdr'->T; V.display #)*)
+       #);
+     AsgToRepAdr::<
+       (#
+       do (if stest then
+              301->trace(#do 'RealVal:asgToRepAdr:'->xT; display#)
+          if);
+          (true,8(*size*),1(*range*),rA[]) -> asgToNewRep
+          (#
+          do NextElmAdr -> asgToRealAdr
+          #);
+          rA.freeAdr;
+          this(RealEvVal)[] -> V[]
+       #);
+     AsgToRepElm::
+       (#
+       do (if rA.size = 8 then
+              rA[] -> AsgToRealAdr
+           else
+              rA[] -> AsgToAdr
+          if);
+          rA.freeAdr;
+          this(RealEvVal)[] -> V[] 
+       #);
+     asgToItem::<
+       (# A: ^mch.address; nScan: @ | scanNadr
+       do (*352->trace(#do 'RealEvVal:asgToItem'->T #);*)
+          (rDesc[],rA[],0,rChain[],true)->nScan; 
+          this(RealEvVal)[]->nScan.asgToNelm -> rAx[];
+          nScan.reset
+       #);
+     asgToNxOffsets:: 
+       (# off: @integer
+       do (if stest then
+              179->trace(#do'realVal:asgToNxoffSets:'-> xT#)
+          if);   
+          NX.getNext -> off;
+          (if NOT (inXpart AND (NX.getKind = NX.valOff)) then
+              off  -> (rA.copy).addOff -> asgToRealAdr    
+          if);
+       #);
+     asgToList::<(#do toListOne #);
+     asgToDispatch::
+       (# 
+       do (if stest then
+              311 -> cTrace(#do 'realVal:asgToDispatch:'->xT; EV[]->xA#)
+          if);
+          (EV[],externalName[],desc[],extKind)
+            -> GenCOMdispatch
+          (# 
+          do this(realEvVal)[] -> PushDispatchPar
+          #) -> V[]
+       #);
+     asgToCproc::<
+       (# CP: @ExTernalCall
+       do (if A._struc = mch.InxRegAdr## then
+              (* The execution of CP will push all busy registers, including
+               * the ones possibly used by A. If A is a repetition index, like
+               * R[i], A will be an instance of InxRegAdr. If release is called
+               * for A, the adr. register will be cleared. This happens
+               * before A is pushed and will thus result in an error. In this
+               * case A is move to a dataregister before the release.
+               * It would be better to have a cleaner solution
+               *)
+              loadVal2->V[];
+              (EV[],externalName[],desc[],extKind)->V.asgToCproc->V[]
+           else              
+              release; (* see also pushCpar *)
+              (externalName,Desc[],extKind,EV.son)->CP; (* init *)
+              (CP.getEnterP,extKind,CP.getEnterP.size,CP.pascExtProcInfo)
+                -> pushCpar;
+              CP.call; CP.getExitP->V[]; 
+          if)
+       #);
+     (* asgToPrimitive::< asgToInlinePrimitive::< *)
+     pushCpar::< 
+       (# dr: ^ mch.dataRegOperand
+       do (if released then reAlloc if);
+          (if type
+           // common.byteXpar 
+           // common.shortXpar
+           // common.longXpar then
+              A[] -> real2int -> dr[];
+              (if type
+               // common.byteXpar then dr[]->mch.pushCbyte
+               // common.shortXpar then dr[]->mch.pushCword
+               // common.longXpar then dr[]->mch.pushClong
+              if);
+              dr.deAlloc;
+           // common.doubleXpar then
+              A[]->mch.pushCdoubleAdr;
+           else
+              'realVal:pushCpar:unknown type' 
+                -> thisTranslate.systemException
+          if);
+          release; (*may have been done by asgToCproc*)
+       #);
+     rCmp::<
+       (# LF: ^ mch.floatRegOp
+       do (A[],lV.loadFloat,0,false,true)->doCmp
+          (* Release?*)
+       #);
+     unMinus::<
+       (# Fval: @floatEvVal; F: ^mch.floatRegOp
+       do loadFloat->F[]->mch.negFloat; F->Fval; Release; Fval[]->res[] 
+       #);
+     (* they following operations are only there to avoid compiler chrash;
+      * they do not give meaningful results!
+      *)
+     notExp::< (#do 1->mkConstval->res[] #);
+     orr:: <(#do A[]->lV.adrOr->res[] #);
+     adrOr::< (#do 1->mkConstval->V[] #);
+     cstOr::< (#do 1->mkConstval->V[] #);
+     regOr::< (#do 1->mkConstval->V[] #);
+     andd::< (#do A[]->lV.adrAnd->res[] #);
+     adrAnd::< (#do 1->mkConstval->V[] #);
+     cstAnd::< (#do 1->mkConstval->V[] #);
+     regAnd::< (#do 1->mkConstval->V[] #);
+     
+     rAdd::< (* lV + this(RealVal) *)
+       (# LF: ^ mch.floatRegOp; Fval: @ floatEvVal
+       do lV.loadFloat->LF[]; (LF[],A[],false)->mch.addFloat;
+          LF->Fval; Release; Fval[]->res[]
+       #);
+     rSub::< (* lV - this(RealVal) *)
+       (# LF: ^ mch.floatRegOp; Fval: @ floatEvVal
+       do (if stest then
+              301 -> trace
+              (#do 'RealVal:Sub:' -> xT;
+                 display;
+                 ' lV:'->xT; lV.display
+              #)
+          if);          
+          
+          lV.loadFloat->LF[]; 
+          (LF[],A[],false)->mch.subFloat;
+          LF->Fval; 
+          Release; 
+          Fval[]->res[]
+       #);
+     rMult::< (* lV * this(RealVal) *)
+       (# LF: ^ mch.floatRegOp; Fval: @ floatEvVal
+       do lV.loadFloat->LF[]; (LF[],A[],false)->mch.mulFloat;
+          LF->Fval; Release; Fval[]->res[]
+       #);
+     rDiv::< (* lV / this(RealVal) *)
+       (# LF: ^ mch.floatRegOp; Fval: @ floatEvVal
+       do lV.loadFloat->LF[]; (LF[],A[],false)->mch.divFloat;
+          LF->Fval; Release; Fval[]->res[]
+       #);
+     loadFloat::< 
+       (# FL: @ mch.floatRegOp 
+       do FL.alloc; A[]->FL.load; Release; FL[]->res[] 
+       #);
+     getFloatArg::<
+       (#
+       do (if stest then
+              301->trace(#do 'realVal:getFloatArg:'->xT; display#)
+          if);
+          A[]->F[] 
+       #);
+      A: ^mch.Address
+  #)
+

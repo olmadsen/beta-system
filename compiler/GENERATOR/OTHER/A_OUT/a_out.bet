@@ -1,0 +1,368 @@
+ORIGIN '~beta/basiclib/betaenv';
+
+(* a_out.bet:
+ *   Low level interface to a.out files from BETA.
+ *   Based on declarations in C header files.
+ * 
+ *   $Id: a_out.bet,v 1.1 2001-05-29 13:26:02 corry Exp $
+ *)
+
+--LIB: attributes--
+
+(*** From <exec.h> and <a.out.h> ***)
+
+(*
+ * format of the exec header
+ * known by kernel and by user programs
+ *)
+
+exec: 
+  (# word1:     @integer; (* different purposes *)
+     a_text:    @integer; (* size of text segment *)
+     a_data:	@integer; (* size of initialized data *)
+     a_bss:	@integer; (* size of uninitialized data *)
+     a_syms:	@integer; (* size of symbol table *)
+     a_entry:	@integer; (* entry point *)
+     a_trsize:	@integer; (* size of text relocation *)
+     a_drsize:	@integer; (* size of data relocation *)
+     
+     a_magic_default:   (* Magic number on non-sparcs *)
+       (# enter word1 exit word1 #);
+     
+     (* Sparc specific attributes - from <sparc/a.out.h> *)
+     
+     a_dynamic:
+       (# set: 
+            (# x: @integer;
+            enter x
+            do (x, 0, 1) -> word1.%putBits
+            #);
+       enter set
+       exit (0, 1) -> word1.%getBits
+       #);
+     a_toolversion:
+       (# set: 
+            (# x: @integer;
+            enter x
+            do (x, 1, 7) -> word1.%putBits
+            #);
+       enter set
+       exit (1, 7) -> word1.%getBits
+       #);
+     a_machtype: 
+       (# set: 
+            (# x: @char;
+            enter x
+            do (x, 1) -> word1.%putByte
+            #);
+       enter set
+       exit 1 -> word1.%getByte
+       #);
+     a_magic:
+       (# set: 
+            (# x: @shortint;
+            enter x
+            do (x, 1) -> word1.%putShort
+            #);
+       enter set
+       exit 1 -> word1.%getShort
+       #);
+     
+     (*
+      * relocation parameters. These are architecture-dependent
+      * and can be deduced from the machine type.  They are used
+      * to calculate offsets of segments within the object file;
+      * See N_TXTOFF(x), etc. below.
+      *)
+     
+     N_PAGSIZ: integervalue
+       (# 
+       do (if a_machtype=M_OLDSUN2 then
+              OLD_PAGSIZ->value
+           else
+              PAGSIZ->value
+          if)
+       #);
+     N_SEGSIZ: integervalue
+       (# 
+       do (if a_machtype=M_OLDSUN2 then
+              OLD_SEGSIZ->value
+           else
+              SEGSIZ->value
+          if)
+       #);
+     
+     (*
+      * returns 1 if an object file type is invalid, i.e., if the other macros
+      * defined below will not yield the correct offsets.  Note that a file may
+      * have N_BADMAG(x) = 0 and may be fully linked, but still may not be
+      * executable.
+      *)
+     
+     N_BADMAG: 
+       (# 
+       exit (a_magic<>OMAGIC) and (a_magic<>NMAGIC) and (a_magic<>ZMAGIC)
+       #);
+     
+     (*
+      * offsets of various sections of an object file.
+      *)
+     
+     N_TXTOFF: integervalue
+       (* text segment *)
+       (# 
+       do (if a_machtype = M_OLDSUN2 then
+              (if a_magic=ZMAGIC then 
+                  N_PAGSIZ -> value
+               else execsize->value
+              if)
+           else 
+              (if a_magic=ZMAGIC then
+                  0->value
+               else 
+                  execsize->value
+              if)
+          if)
+       #);
+     
+     N_DATOFF: 
+       (* data segment *)
+       (# 
+       exit N_TXTOFF + a_text
+       #);
+     
+     N_TRELOFF: 
+       (* text reloc'n *) 
+       (#
+       exit N_DATOFF + a_data
+       #);
+     
+     N_DRELOFF: 
+       (* data relocation*)	
+       (# 
+       exit N_TRELOFF + a_trsize
+       #);
+     
+     N_SYMOFF: 
+       (* symbol table *)
+       (# 
+       exit N_TXTOFF+a_text+a_data+a_trsize+a_drsize
+       #);
+     
+     N_STROFF:
+       (* string table *)
+       (# 
+       exit N_SYMOFF + a_syms
+       #);
+     
+     (*
+      * Macros which take exec structures as arguments and tell where the
+      * various pieces will be loaded.
+      *)
+     
+     _N_BASEADDR: integervalue
+       (# 
+       do (if (a_magic = ZMAGIC) and (a_entry < N_PAGSIZ) then
+              0 -> value
+           else
+              N_PAGSIZ -> value
+          if)
+       #);
+     
+     N_TXTADDR: integervalue
+       (# 
+       do (if a_machtype = M_OLDSUN2 then
+              N_SEGSIZ -> value
+           else 
+              _N_BASEADDR -> value
+          if)
+       #);
+     
+     N_DATADDR: integervalue
+       (# 
+       do (if a_magic=OMAGIC then
+              N_TXTADDR+a_text -> value
+           else
+              N_SEGSIZ + ( (N_TXTADDR + a_text - 1) %band (%bnot (N_SEGSIZ-1)) )
+                -> value
+          if)
+       #);
+     
+     N_BSSADDR: 
+       (#  
+       exit N_DATADDR+a_data
+       #);
+     
+     
+     <<SLOT ExecLib: attributes>>
+  #);
+
+OMAGIC: (# exit 8x0407 #);		(* old impure format *)
+NMAGIC: (# exit 8x0410 #);		(* read-only text *)
+ZMAGIC: (# exit 8x0413 #);		(* demand load format *)
+
+(* machine types *)
+
+M_OLDSUN2: (# exit 0 #);(* old sun-2 executable files *)
+M_68010: (# exit 1 #);	(* runs on either 68010 or 68020 *)
+M_68020: (# exit 2 #);	(* runs only on 68020 *)
+M_SPARC: (# exit 3 #);	(* runs only on SPARC *)
+
+TV_SUN2_SUN3: (# exit 0 #);
+TV_SUN4: (# exit 1 #);
+
+(*
+ * Format of a symbol table entry
+ *)
+
+nlist: 
+  (# word1:   @integer 		(* different purposes *);
+     n_type:  @char;		(* type flag (N_TEXT,..)  *)
+     n_other: @char;		(* unused *)
+     n_desc:  @shortint;	(* see <stab.h> *)
+     n_value: @integer;		(* value of symbol (or sdb offset) *)
+     
+     n_name: 
+       (* for use when in-core *)
+       (# enter word1 exit word1 #);
+     n_strx:
+       (* index into file string table *)
+       (# enter word1 exit word1 #);
+  #);
+
+(*
+ * Simple values for n_type.
+ *)
+N_UNDF: (# exit 0x0 #);		(* undefined *)
+N_ABS:  (# exit 0x2 #);		(* absolute *)
+N_TEXT: (# exit 0x4 #);		(* text *)
+N_DATA: (# exit 0x6 #);		(* data *)
+N_BSS:  (# exit 0x8 #);		(* bss *)
+N_COMM: (# exit 0x12 #);	(* common (internal to ld) *)
+N_FN:   (# exit 0x1e #);	(* file name symbol *)
+
+N_EXT:  (# exit 01 #);		(* external bit, or'ed in *)
+N_TYPE: (# exit 0x1e #);	(* mask for all the type bits *)
+
+(*
+ * Dbx entries have some of the N_STAB bits set.
+ * These are given in <stab.h>
+ *)
+
+N_STAB: (# exit 0xe0 #);	(* if any of these bits set, a dbx symbol *)
+
+(*
+ * secondary sections.
+ * this stuff follows the string table.
+ * not even its presence or absence is noted in the
+ * exec header (?). the secondary header gives
+ * the number of sections. following it is an
+ * array of "extra_nsects" int's which give the
+ * sizeof of the individual sections. the presence of
+ * even the header is optional.
+ *)
+
+EXTRA_MAGIC: (# exit 1040 #);            (* taxing concept  *)
+EXTRA_IDENT: (# exit 0 #);               (* ident's in 0th extra section *)
+
+extra_sections: 
+  (# 
+     extra_magic:  @integer;             (* should be EXTRA_MAGIC *)
+     extra_nsects: @integer;             (* number of extra sections *)
+  #);
+
+(*
+ * memory management parameters
+ *)
+
+PAGSIZ: (# exit 0x02000 #);
+SEGSIZ: (# exit PAGSIZ #);
+OLD_PAGSIZ: (# exit 0x00800 #);	(*  Page   size under Release 2.0 *)
+OLD_SEGSIZ: (# exit 0x08000 #);	(* Segment size under Release 2.0 *)
+
+
+(*
+ * Sparc relocation types
+ *)
+
+(* simplest relocs    *)
+RELOC_8:         (# exit 0 #);
+RELOC_16:        (# exit 1 #);
+RELOC_32:        (# exit 2 #);	
+(* Disp's (pc-rel)    *)
+RELOC_DISP8:     (# exit 3 #);
+RELOC_DISP16:    (# exit 4 #);
+RELOC_DISP32:    (# exit 5 #);	
+(* SR word disp's     *)
+RELOC_WDISP30:   (# exit 6 #);
+RELOC_WDISP22:   (# exit 7 #);		
+(* SR 22-bit relocs   *)
+RELOC_HI22:      (# exit 8 #);
+RELOC_22:        (# exit 9 #);	
+(* SR 13&10-bit relocs*)
+RELOC_13:        (# exit 10 #);	
+RELOC_LO10:      (# exit 11 #);	
+(* SR S.F.A. relocs   *)
+RELOC_SFA_BASE:  (# exit 12 #);
+RELOC_SFA_OFF13: (# exit 13 #);	
+(* base_relative pic *)
+RELOC_BASE10:    (# exit 14 #);
+RELOC_BASE13:    (# exit 15 #);
+RELOC_BASE22:    (# exit 16 #);	
+(* special pc-rel pic*)
+RELOC_PC10:      (# exit 17 #);	
+RELOC_PC22:      (# exit 18 #);	
+(* jmp_tbl_rel in pic *)
+RELOC_JMP_TBL:   (# exit 19 #);		
+(* ShLib offset-in-seg*)
+RELOC_SEGOFF16:  (# exit 20 #);
+(* rtld relocs        *)
+RELOC_GLOB_DAT:  (# exit 21 #); 
+RELOC_JMP_SLOT:  (# exit 22 #); 
+RELOC_RELATIVE:  (# exit 23 #); 
+
+(*
+ * Format of a SPARC relocation datum.
+ *)
+
+reloc_info_sparc: 
+  (* used when header.a_machtype = M_SPARC *)
+  (# 
+     r_address: @integer;	(* relocation addr (offset in segment) *)
+     word2:     @integer        (* Bit fields, see below *);
+     r_addend:  @integer;	(* addend for relocation value	      *)
+     
+     r_index: (* segment index or symbol index      *)
+       (# set: 
+            (# x: @integer
+            enter x
+            do (x, 0, 24) -> word2.%putBits
+            #)
+       enter set
+       exit (0, 24) -> word2.%getBits
+       #);
+     r_extern: (* if F, r_index=SEG#; if T, SYM idx *)
+       (# set: 
+            (# x: @integer
+            enter x
+            do (x, 24, 1) -> word2.%putBits
+            #)
+       enter set
+       exit (24, 1) -> word2.%getBits
+       #);
+     r_type: (* type of relocation to perform      *)
+       (# set: 
+            (# x: @integer
+            enter x
+            do (x, 27, 5) -> word2.%putBits
+            #) 
+       enter set
+       exit (27, 5) -> word2.%getbits
+       #);
+  #);
+
+(* Entry sizes *)
+execsize:  (# exit 32 #);
+nlistsize: (# exit 12 #);
+reloc_info_sparc_size: (# exit 12 #);
+

@@ -1,0 +1,298 @@
+ORIGIN 'nxalloc';
+LIB_ITEM 'betacompiler';
+---nxAlloc_Rep:descriptor---
+(# tmp:[4] @integer;
+   first,top: @integer
+#)
+
+---nxAlloc_init:dopart---
+do first -> rep.first;
+   
+   ((last-first) div 4) + 1  -> rep.tmp.new;
+   (* the '+1' should not be there, so something
+    * is wrong between allocation in checker and
+    * use in synthesizer
+    *)
+   
+   301 -> trace(#do 'nxAlloc:init:' -> xT;
+                  first -> xI; last -> xI;
+                  rep.tmp.range -> xI
+               #)
+   
+---nxAlloc_alloc:doPart---
+do L:
+     (#
+     do (for i: rep.tmp.range repeat
+             (if rep.tmp[i] = 0 then
+                 i -> value;
+                 rep.first + (i-1)*4 -> rep.tmp[i];
+                 301->trace
+                 (#
+                 do 'nxAlloc:'->xT; i-> xI; rep.tmp[i]->xI
+                 #);            
+                 leave L
+        if)for);
+        '\n*** OBS! NXalloc:no free N/X tmp storage location:'->putline;
+        (* to avoid index error *)
+        1 -> value;
+        rep.first -> rep.tmp[1]
+     #)
+   
+---nxAlloc_tmpAdr:doPart--
+do rep.tmp[inx] -> off;
+   
+---nxAlloc_deAlloc:doPart--- 
+do 301->trace(#do 'nxDeAlloc:'-> xT; tmpInx->xI; rep.tmp[tmpInx]->xI #);   
+   0 -> rep.tmp[tmpInx];
+   
+---nxDepth:doPart---
+do (# incLevel: 
+        (# 
+        do NXlevel + 1 ->NXlevel;
+           179->trace(#do 'incLevel:'->xT; NXlevel->xI #);
+        #);
+      getMaxLevel:
+        (# maxLevel,initialLevel: @integer;
+           checkMaxLevel: @
+             (#
+             do (NXlevel,maxLevel) -> Max -> maxLevel;
+                initialLevel -> nxLevel;
+             #)
+        do nxLevel -> initialLevel -> maxLevel;
+           INNER;
+           maxLevel -> NXlevel
+        #);
+      GeneralDesc:
+        (# AllocPrefNX: @
+             (* perhaps tricky - see docheck:GetPreDesc *)
+             (# preDesc: @ASTindex; mn,isV: @integer
+             do (if pref.label = gram.prefix then
+                    (* the computation of chain is tricky; an explanation
+                     * should be added. It is code copied from:
+                     *    sematt.bet: NXScanner:mkNXlst: 
+                     *         (if pre.label = gram.prefix then ...
+                     *)
+                    chain[] -> BV.ENC -> chain2[]; 
+                    (chain2[],pref.son) 
+                      -> BV.theDesc 
+                      -> (preDesc,mn,chain2[],isV);
+                    chain[] -> BV.PRE -> chain1[];
+                    (preDesc[],isN,outer,chain1[]) -> GeneralDesc
+                if)
+             #);
+           pref,mainP,att,entP,doP,exitP: ^ASTindex;
+           desc,EV: ^ASTindex; E1: @ASTindex;
+           isN,outer: @boolean;
+           chain,chain1,chain2: ^BV.superChain;
+           PL: @integer
+        enter(desc[],isN,outer,chain[])
+        do (if ctst then
+               179->trace
+               (#do 'GeneralDesc:'->xT; desc[] -> xA; (*chain.print*) #)
+           if);
+           (if (desc ->sematt.descKind)
+            // sematt.undefined then 
+               desc[] -> testAndCheckDesc;
+            // sematt.beingChecked then 
+               '\n***Being Checked' -> putline;
+               leave GeneralDesc; (* MUST be FIXED *)
+           if);
+           desc[]
+             -> DescSonsRef
+             -> (pref[],mainP[],att[],entP[],doP[],exitP[]);
+           AllocPrefNX;
+           GetMaxLevel
+           (#
+           do (if entP.label <> gram.empty then
+                  entP.son -> E1;
+                  (E1[],true,desc[],chain[],outer) -> AllocNXtmp;
+                  CheckMaxLevel;
+              if);
+              (if exitP.label <> gram.empty then
+                  exitP.son -> E1;
+                  (E1[],false,desc[],chain[],outer) -> AllocNXtmp;
+                  CheckMaxLevel;
+              if)
+           #)
+        #);
+
+      AllocNXtmp:
+        (# EV,encDesc: ^ASTindex; EVx: @ASTindex; isN: @boolean;
+           AllocForObj: 
+             (# E: ^ASTindex;
+                E1,desc: @ASTindex;  MN: @integer; isV: @integer;
+                pref,mainP,att,entP,doP,exitP: ^ASTindex;
+                chain1: ^BV.superChain
+             enter E[]
+             do (if ctst then
+                    179->trace(#do 'AllocForObj:'-> xT; E[]->xA; xN; chain.print #)
+                if);
+                E.son -> E1;
+                (if E1.label = gram.remotePrimitive then
+                    (*(E[],chain[],4) -> AllocVal*)
+                 else 
+                    (chain[],E1)
+                      -> BV.theDesc 
+                      -> (desc,MN,chain1[],isV); (* virtual*)
+                    (if ctst then
+                        179->trace(#do 'theDesc:'->xT; desc[] -> xA #)
+                    if);
+                    (if (E1->sematt.SimpleOrRep)
+                     // gram.dynamicItem // gram.dynamicComponent
+                     // gram.variablePattern
+                     // gram.staticItem //gram.staticComponent then 
+                        (if ctst then 
+                            179->trace(#do 'IsRep:'-> xT; E1[]-> xA #)
+                        if);
+                        (*(E[],chain[],4) -> AllocRep*)
+                     else 
+                        L:
+                          (if (desc -> sematt.descKind) 
+                           // sematt.standardKind // sematt.constKind then
+                              (# D: @ASTindex
+                              do E.son -> D;
+                                 (if outer and (D.label = gram.nameApl) then
+                                     (if D.on = 0 then 
+                                         D.dclRef -> D;
+                                         (* (E[],none,desc.size,D.off) -> MarkVal;*)
+                                         leave L
+                              if)if)#);
+                              (* (E[],chain[],desc.size) -> AllocVal*)
+                           else
+                              true -> hasCode;
+                              IncLevel;
+                              (desc[],isN,false,chain1[]) -> GeneralDesc
+                if)if)if)
+             #);
+           chain: ^BV.superChain; outer: @boolean
+        enter(EV[],isN,encDesc[],chain[],outer)
+        do (if ctst then
+               179->trace(#do 'AllocNXtmp:'-> xT; NXlevel->xI;
+                            EV[]-> xA; (*chain.print*) #)
+           if);
+           L:
+             (if EV.label
+              // gram.assignmentEvaluation then
+                 true -> hasCode;
+                 EV.son -> EVx;
+                 (EVx[],isN,encDesc[],chain[],outer) -> AllocNXtmp;
+                 EVx.brother -> EVx;
+                 (EVx[],isN,encDesc[],chain[],outer) -> AllocNXtmp;
+              // gram.insertedItem 
+              // gram.objectDenotation 
+              // gram.dynamicItemGeneration 
+              // gram.dynamicComponentGeneration then
+                 EV[] -> AllocForObj
+              // gram.computedObjectEvaluation then 
+                 true -> hasCode;
+                 '\n***AllocNXtmp:ComputedEv'->thisTranslate.systemException
+              // gram.objectReference 
+              // gram.structureReference then
+                 (*
+                 (# D: @ASTindex; isStruc: @boolean
+                 do EV.son -> D; D.son->D;
+                    EV.label = gram.structureReference -> isStruc;
+                    (if ctst then
+                        178->trace(#do 'nxOff:ref:'->xT; outer->xB; D.on->xI; 
+                                     100->switchOn; D[]->xA; 100->switchOff 
+                                  #)
+                    if);
+                    (if outer AND (D.label = gram.nameApl) AND (D.on = 0) then
+                        D.dclRef -> D;
+                        (if D.access = common.direct then
+                            ( * (EV[],chain[],4,isStruc) -> AllocRef* )
+                         else
+                            ( *  (EV[],chain[],4,D.off,isStruc) -> MarkRef* )
+                        if)
+                     else 
+                        ( * (EV[],chain[],4,isStruc) -> AllocRef* )
+                  if)#)
+                  *)
+              // gram.evalList then 
+                 GetMaxLevel
+                 (#
+                 do EV.son -> EVx; 
+                    EVx -> scanList
+                    (# E: ^ASTindex; 
+                    do &ASTindex[] -> E[]; 
+                       currentNode -> E;
+                       (E[],isN,encDesc[],chain[],outer) -> AllocNXtmp;
+                       checkMaxLevel;
+                       (if ctst then
+                           179->trace(#do 'List:'->xT; NXlevel->xI; 
+                                        EV[] -> xA;
+                                        chain.print #)
+                       if)
+                    #);
+                    (if ctst then
+                        179->trace(#do 'List-end:'->xT; NXlevel->xI#)
+                    if)                    
+                 #)
+              // gram.integerConst // gram.noneExp then 
+              // gram.textConst then
+              // gram.repetitionSlice then
+              // gram.notExp 
+              // gram.unaryMinusExp // gram.unaryPlusExp then
+              // gram.unaryPrimitiveExp 
+              // gram.primitive 
+              // gram.address then
+              // gram.unExpanded then 
+              // gram.mainPart then
+                 (* should we do something here? *)
+              // gram.primitiveExp then
+                 (# EV1,EV2: @AStindex
+                 do EV.son -> EV1; EV1.brother -> EV2;
+                    EV2.brother -> EV2;
+                    (* perhaps we should just compute the max *)
+                    (EV1[],isN,encDesc[],chain[],outer) -> AllocNXtmp;
+                    (EV2[],isN,encDesc[],chain[],outer) -> AllocNXtmp;
+                 #) 
+              else
+                 (if (EV.label -> EvalClass) = EvalClass.binOp then
+                     (*  (EV[],chain[],4) -> AllocVal*)
+                     (# EV1,EV2: @AStindex
+                     do EV.son -> EV1; EV1.brother -> EV2;
+                        (* perhaps we should just compute the max *)
+                        (EV1[],isN,encDesc[],chain[],outer) -> AllocNXtmp;
+                        (EV2[],isN,encDesc[],chain[],outer) -> AllocNXtmp;
+                     #)
+                  else
+                         '\n*** NXdepth:no match for EV' -> putline
+                 if)
+             if)
+        #);
+   do (*desc->BV.newSingle -> chain[];*)
+      (if ctst then
+          178->trace
+          (#
+          do 'SetNXoffSets:\n' -> xT; desc[] -> xA; newline; chain.print
+          #)
+      if);
+      (if desc.label = gram.objectDescriptor then
+          (* we should handle other cases like
+           * slot, virtual, ... as well.
+           * If SLOT, then the body may be included at the calling place
+           * and may have enter/exit parts
+           *)
+          (desc[],isEnter,true,chain[]) -> GeneralDesc
+       else
+          (desc[],isEnter,none(* encDesc is NOT used *),chain[],true) 
+            -> AllocNXtmp
+      if);
+      301->trace
+      (#do 'Depth: ' -> xT; nxLevel->xI ; hasCode -> xB; xN;
+         desc[] -> xA
+      #);
+      (if ctst then
+          178->trace
+          (#
+          do (if isEnter then 'SetNOffSets:\n'->xT 
+              else 'SetXoffSets:\n'->xT 
+             if);
+             desc[]->xA; xN;
+             (*dump *)
+          #)
+      if)
+      
+   #)
+   

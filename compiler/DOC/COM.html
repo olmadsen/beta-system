@@ -1,0 +1,1215 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<HTML>
+<HEAD>
+   <TITLE>Design of BETA COM Implementation</TITLE>
+   <META NAME="GENERATOR" CONTENT="User-Agent: Mozilla/3.01Gold (Macintosh; I; PPC)">
+</HEAD>
+<BODY BGCOLOR="#FFFF99">
+
+<P><LINK REV="made" HREF="mailto:olm@daimi.aau.dk"></P>
+
+<H1><A NAME="design"></A>Design of BETA COM Implementation</H1>
+
+<P>This note describes design, implementation and status for support of
+the Microsoft COM model in BETA. Section 1 gives a short introduction to
+COM. Section 2 describes the current design for COM support in BETA. Section
+3 describes the compiler implementation. Section 4 describes design of
+run-time elements. Section 5 is a list of open issues. </P>
+
+<P>Since this note describes work in progress, parts of it may be incomplete.
+</P>
+
+<H1>Contents</H1>
+
+<UL>
+<LI><A HREF="#model">1. Microsoft COM object model</A></LI>
+
+<UL>
+<LI><A HREF="#layout">Object layout</A></LI>
+
+<LI><A HREF="#call">Call</A></LI>
+
+<LI><A HREF="#interfaces">Interfaces</A></LI>
+
+<LI><A HREF="#uuid">Unique interface ID</A></LI>
+
+<LI><A HREF="#refcount">Reference counting</A></LI>
+
+<LI><A HREF="#predefined">Predefined virtual functions</A></LI>
+
+<LI><A HREF="#odl">ODL</A></LI>
+
+<LI><A HREF="#tlb">Type libraries</A></LI>
+</UL>
+
+<LI><A HREF="#betacom">2. COM support in BETA</A></LI>
+
+<UL>
+<LI><A HREF="#BasicCOM">2.1 Basic COM</A></LI>
+
+<UL>
+<LI><A HREF="#ImportingBasicCOM">2.1.1 Importing basic COM objects to BETA</A></LI>
+
+<LI><A HREF="#ImplementingBasicCom">2.1.2 Implementing basic COM objects
+in BETA</A></LI>
+
+<LI><A HREF="#ParametersToBasicCOM">2.1.3 Parameters to basic COM objects</A></LI>
+</UL>
+
+<LI><A HREF="#BasicCOMwithIUnknown">2.2 Basic COM with IUnknown</A></LI>
+
+<LI><A HREF="#multiintf">2.3</A><A HREF="#ComWithSeveralInterfaces"> Implementing
+COM objects with Several Interfaces in BETA</A></LI>
+
+<LI><A HREF="#RulesForUsingCOM">2.4 Rules for Using COM Objects in BETA</A></LI>
+
+<LI><A HREF="#odl_tlb">2.5 ODL and Type Libraries</A></LI>
+</UL>
+
+<LI><A HREF="#implementation">3. Implementation</A></LI>
+
+<UL>
+<LI><A HREF="#object_layout">3.1 COM Object Layout</A></LI>
+
+<LI><A HREF="#checking">3.2 Changes to Semantic Checking</A></LI>
+
+<LI><A HREF="#coding">3.3 Changes to code generation</A></LI>
+</UL>
+
+<LI><A HREF="#rts">4. Run-Time System Issues</A></LI>
+
+<LI><A HREF="#todo">5. Open Issues</A></LI>
+
+<UL>
+<LI><A HREF="#holder_objects">Compiler Support for Holder objects</A></LI>
+</UL>
+</UL>
+
+<P>
+<HR></P>
+
+<H1><A NAME="model"></A>1. Microsoft COM object model</H1>
+
+<P>COM is a binary object model that defines the memory layout of objects
+and the calling sequence for dispatch of virtual functions. </P>
+
+<P>COM is a mechanism for exchanging objects at run-time and for reusing
+objects developed by others. COM is language independent in the sense that
+COM objects may be developed in any programming language that supports
+the COM model. COM is, of course, a minimal common subset. </P>
+
+<P>COM may be used for supporting distributed objects. The actual object
+accessed via a COM interface may be located at another location. The distribution
+support for COM is called DCOM </P>
+
+<P>COM is the basis for MS OLE/ActiveX, which are class libraries available
+for building applications. Win 95 supplies a number of such class libraries.
+3rd party, users, etc. may define their own OLE/ActiveX class libraries.
+</P>
+
+<H2><A NAME="layout"></A>Object layout</H2>
+
+<PRE>
+
+   Reference     Object                   VDT
+
+                ---------               ---------
+    R: ^T ----&gt; |       | ---------&gt;    |       | ----&gt; f1
+                ---------               |-------|
+                                        |       | ----&gt; f2
+                                        |-------|
+                                        |       | ----&gt; f3
+                                        |-------|
+                                        | ...   |
+                                        ---------
+
+</PRE>
+
+<H2><A NAME="call"></A>Call</H2>
+
+<PRE>
+        (e1,e2,e3) -&gt; R.f2 -&gt; V
+
+</PRE>
+
+<H2><A NAME="interfaces"></A>Interfaces</H2>
+
+<P>An object may have several interfaces: </P>
+
+<PRE>
+                    A
+                ---------
+                |       |
+              B |   X   | C
+                |       |
+                ---------
+
+</PRE>
+
+<P>The object X has 3 interfaces A, B, and C. An interface is &quot;just&quot;
+a COM object. </P>
+
+<P>An interface is an object with a dispatch table: </P>
+
+<PRE>
+   Reference     Object                   VDT
+
+                ---------       ---------
+    R: ^A ----&gt; |       | ----&gt; |       | ----&gt; f1
+                ---------       |-------|
+                |       |       |       | ----&gt; f2
+                ---------       |-------|
+                    ^           |       | ----&gt; f3
+                    |           |-------|
+                    |           | ...   |
+                    |           ---------
+                    |
+                    |-----------------------------------------&gt; ---------
+                                                                |       |
+                ---------       ---------                       |       |
+    S: ^B ----&gt; |       | ----&gt; |       | ----&gt; g1              |       |
+                ---------       |-------|                       |   X   |
+                |       |       |       | ----&gt; g2              |       |
+                ---------       |-------|                       |       |
+                    |           |       | ----&gt; g3              ---------
+                    |           |-------|                       ^       ^
+                    |           | ...   |                       |       |
+                    |           ---------                       |       |
+                    |                                           |       |
+                    |--------------------------------------------       |
+                                                                        |
+                ---------       ---------                               |
+    T: ^C ----&gt; |       | ----&gt; |       | ----&gt; h1                      |
+                ---------       |-------|                               |
+                |       |       |       | ----&gt; h2                      |
+                ---------       |-------|                               |
+                    |           |       | ----&gt; h3                      |
+                    |           |-------|                               |
+                    |           | ...   |                               |
+                    |           ---------                               |
+                    |                                                   |
+                    |----------------------------------------------------
+
+
+
+</PRE>
+
+<H2><A NAME="uuid"></A>Unique interface ID</H2>
+
+<P>All interfaces are assigned a unique id in the form of a 128 bit key.
+If an interface is changed, it will be assigned a new id. </P>
+
+<H2><A NAME="refcount"></A>Reference counting</H2>
+
+<P>Memory management of COM objects is based on reference counting. It
+is the user of a COM interface who is responsible for maintaining the reference
+count, by using predefined virtual functions (see below) </P>
+
+<H2><A NAME="predefined"></A>Predefined virtual functions</H2>
+
+<P>All COM objects must support the following 3 predefined virtual functions:
+</P>
+
+<PRE>
+        QueryInterface  Query interface and return IF it it exists
+                        It is possible to ask an object if it supports a
+                        given interface, and if so this interface is returned.
+
+        AddRef
+        Release
+
+</PRE>
+
+<P>Reference counting must be done in the following way: </P>
+
+<PRE>
+   Reference assignment:
+
+        S[] -&gt; R[];     
+
+            (if R[] &lt;&gt; NONE then R.Release if);
+            execute: S[] -&gt; R[]
+            (if R[] &lt;&gt; NONE then R.AddRef if);
+
+   None assignment
+
+        NONE -&gt; S[];
+
+             (if S[] &lt;&gt; NONE then S.Release if); 
+             execute: NONE -&gt; S[];
+
+</PRE>
+
+<H2><A NAME="odl"></A>ODL</H2>
+
+<P>ODL is an IDL inspired language for describing COM interfaces </P>
+
+<H2><A NAME="tlb"></A>Type libraries</H2>
+
+<P>Type libraries are a binary representation of COM interfaces. </P>
+
+<H1><A NAME="betacom"></A>2. COM support in BETA</H1>
+
+<P>In this section design of COM support for BETA is described. Real working
+examples may be found in the cvs project 'TST'. </P>
+
+<P>At a first glance COM appears to be a simple model, but in order to
+implement full support for Microsoft COM there are a lot of nasty details,
+especially with respect to parameters. In this document we thus describe
+COM support in BETA at the following three levels:</P>
+
+<UL>
+<LI>Basic COM</LI>
+
+<LI>Basic COM with IUnknown</LI>
+
+<LI>Full COM</LI>
+</UL>
+
+<H2><A NAME="BasicCOM"></A>2.1 Basic COM</H2>
+
+<P>At this level the only changes to BETA and its implementation is support
+for the COM object-layout and parameters in the form of basic patterns
+(integer, char, boolean, real) and references to COM objects.</P>
+
+<P>The compiler assumes the existence of a predefined pattern COM:</P>
+
+<PRE>        COM: (# #);
+</PRE>
+
+<P>A class pattern may be declared as a subpattern of COM:</P>
+
+<UL>
+<PRE>myClass: COM
+    (# foo1:&lt; (# ... #);
+       foo2:&lt; (# ... #);
+       ...
+       foon:&lt; (# ... #)
+    #)</PRE>
+</UL>
+
+<P>If we have a reference to myClass</P>
+
+<UL>
+<PRE>R: ^myClass</PRE>
+</UL>
+
+<P>then R may be used as a normal object reference, i.e. it is possible
+to invoke a virtual pattern in R:</P>
+
+<UL>
+<PRE>R.foo1</PRE>
+</UL>
+
+<P>One difference between a COM object an an ordinary object is that the
+first field in a COM object points to the virtual dispatch table in the
+prototype and not as for normal objects directly to the prototype. This
+is further described in the section on implementation.</P>
+
+<P>Another important differnce is that the virtual patterns declared inside
+a subpattern of COM cannot be used as general patterns. They can only be
+used as procedure pattern invocations. Thye can e.g. NOT be used as class
+patterns. The reason is that the code generated for COM virtuals is following
+the calling conventions for virtual COM functions.</P>
+
+<H3><A NAME="ImportingBasicCOM"></A>2.1.1 Importing basicCOM Objects to
+BETA</H3>
+
+<P>The above specification of myClass may have the form of an interface,
+i.e. only the parameters of virtual functions are described:</P>
+
+<UL>
+<PRE>myClass: COM
+   (# foo1:&lt; (# #);
+      foo2:&lt; (# a,b,c: @integer enter(a,b,c) exit c #);
+      foo3:&lt; (# R: ^myClass; r: @real enter R[] exit R #)
+   #)</PRE>
+</UL>
+
+<P>By means of an external function, it is then possible to obtain a reference
+to COM object:</P>
+
+<UL>
+<PRE>getObject: external(# R: ^myClass exit R[] #)</PRE>
+</UL>
+
+<PRE>With declarations:  </PRE>
+
+<UL>
+<PRE>myObj: ^myClass; V: @integer; r: @real</PRE>
+</UL>
+
+<P>An instance of myClass may be imported from an external language like
+C by calling a function like getObject: </P>
+
+<UL>
+<PRE>getObject -&gt; myObj[];
+myObj.foo1;
+(e1,e2,e3) -&gt; myObj.foo2 -&gt; V;</PRE>
+
+<PRE>myObj[] -&gt; myObj.foo3 -&gt; r;</PRE>
+</UL>
+
+<P>NOTE: there is no security regarding a COM object imported from an external
+language. It is completely up to the external language to make sure that
+the imported refeence is in fact a reference to a COM object. Using COM
+is thus an insecure way of programming.</P>
+
+<P>An example of importing a COM object from C may be found in the TST
+examples: </P>
+
+<UL>
+<PRE>
+  CaccountUser.bet Caccount.c</PRE>
+</UL>
+
+<H3><BR>
+<A NAME="ImplementingBasicCom"></A>2.1.2 Implementing basic COM objects
+in BETA</H3>
+
+<P>A subpattern of COM may be used to implement COM objects in BETA. Consider
+the following pattern:</P>
+
+<UL>
+<PRE>myCOMClass: COM
+   (# foo1:&lt; (# do ... #);
+      foo2:&lt; (# a,b,c: @integer enter(a,b,c) do ... exit c #);
+      foo3:&lt; (# R: ^myClass; r: @real enter R[] do ... exit R #)
+   #)</PRE>
+</UL>
+
+<P>In the above subpattern of COM the virtual patterns have a do-part.
+Instances of myCOMClass will now be have like COM-objects and can be exported
+to external languages. Consider a function:</P>
+
+<UL>
+<PRE>putObject: external(# R: ^myCOMClass enter R[] #)</PRE>
+</UL>
+
+<P>and declarations</P>
+
+<UL>
+<PRE>myCOM: @myCOMClass</PRE>
+</UL>
+
+<P>The object myCOm may now be exported by executing</P>
+
+<UL>
+<PRE>myCOM[] -&gt; putObject</PRE>
+</UL>
+
+<P>As for importing COM objects, there is is no security regarding exportinga
+COM object to an external language.</P>
+
+<H3><A NAME="ParametersToBasicCOM"></A>2.1.3 Parameters to basic COM objects</H3>
+
+<P>At the basic COM level, the only type of parameters that are considered,
+are basic patterns like integer, boolean, char and real and references
+to COM objects. For the basic patterns, a call-by-vaulue semantics is used
+and for references to COM objects, the reference is copied. This is a nice
+and clean principle. As we shall later see, the parameter situation with
+Microsoft COM is much more complicated.</P>
+
+<H2><A NAME="BasicCOMwithIUnknown"></A>2.2 Basic COM with IUnknown</H2>
+
+<P>At this level, a standard pattern IUnknown is added corresponding to
+the Microsoft COM IUnknown classes. IUnknown and corresponding classes
+aredeclared as follows:</P>
+
+<UL>
+<PRE>HRESULT: (# ... #);</PRE>
+
+<PRE>GUID: (# ... #); </PRE>
+
+<PRE>CLSID: GUID(# ... #);</PRE>
+
+<PRE>IID: GUID(# ... #);</PRE>
+
+<PRE>IUnknown: COM
+    (# QueryInterface:&lt; 
+         (# iidref: @int32; theIID: ^IUnknownHolder; hres: @int32
+         enter(iidref,theIID[])
+         exit hres
+         #);
+       AddRef:&lt; (# ... #);
+       Release:&lt; (# ... #)
+   #);
+
+CoInitialize: external (# ... #);</PRE>
+
+<PRE>CoUnitialize: external(# ... #);</PRE>
+
+<PRE>CoCreateInstance: (# ... #);</PRE>
+
+<PRE>CLSCTX_INPROC_SERVER: (#exit 1 #);</PRE>
+
+<PRE>ComErrorMessage: external (# ... #)</PRE>
+</UL>
+
+<P><BR>
+All COM class patterns that are going to be used together with Mircrosoft
+Windows must be subpatterns of IUnknown. An interface to en imported IUnknown
+object may look as:</P>
+
+<UL>
+<PRE>myMSCOMclass: IUnknown
+      (# f1:&lt; (# ...  #);
+         f2:&lt; (# ...  #);
+         f3:&lt; (# ... #);
+      #)</PRE>
+</UL>
+
+<P>An IUnknown object implemented in BETA may look as follows:</P>
+
+<UL>
+<PRE>myMSCOMclass2: IUnknown
+      (# QueryInterface::&lt; (# ... do ... #);
+         AddRef::&lt; (# ... do ... #);
+         Release::&lt; (# ... do ... #);
+         f1:&lt; (# ... do ... #);
+         f2:&lt; (# ... do ... #);
+         f3:&lt; (# ... do ... #);
+
+         ... data items implementing myCOMclass ....
+       #)
+</PRE>
+</UL>
+
+<P>Here we bind QueryInterface, AddRef and Release and define new COM virtuals
+and data-items to represent the COM object.</P>
+
+<P>An example of implementing a COM object in BETA and exporting it to
+C may be found in the TST example:<BR>
+</P>
+
+<PRE>    COMaccount.bet COMaccountUser.c
+</PRE>
+
+<H2><A NAME="Full COM"></A>2.3 Full COM</H2>
+
+<P>So far we have only allowed basic patterns and references to COM objects
+as parameters. Reality is much more complicated. We will return to this
+matter.</P>
+
+<H2><A NAME="ComWithSeveralInterfaces"></A>2.4 Implementing COM objects
+with Several Interfaces in BETA</H2>
+
+<P>Nested classes seem well suited to implement the notion of several interfaces.
+The following example shows how an object X with interfaces A, B, and C
+may be implemented using nested classes.<BR>
+ </P>
+
+<PRE>         CX: (# IA: IUnknown
+                  (# QueryInterface::&lt;
+                        (#
+                        do (if IFID
+                        // IAID then this(IA)[][] -&gt; IF[]
+                        // IBID then &amp;IB[] -&gt; IF[]
+                        // ICID then &amp;IC[] -&gt; IF[]
+                        else 
+                           NONE -&gt; IF[]
+                        if)
+                        #);
+
+                      AddRef::&lt; (#... #);
+                      Release:&lt; (# ... #);
+                      f1:&lt; ...
+                      f2:&lt; ...
+                      f3:&lt; ...
+                    #);
+
+                IB: IUnknown
+                   (# ...
+                      g1:&lt; ...
+                      g2:&lt; ...
+                      g3:&lt; ...
+                    #);
+ 
+                IC. IUnknown
+                   (# ...
+                      h1:&lt; ...
+                      h2:&lt; ...
+                      h3:&lt; ...
+                    #);
+           #)</PRE>
+
+<P><BR>
+<BR>
+An example of a COM object with several interfaces implemented in BETA<BR>
+and exported to C may be found in the TST examples:</P>
+
+<PRE>
+
+   IUnknown.bet  
+
+   MiniThought.beta   MiniThoughtUser.c      
+
+   MiniThought2.beta   MiniThoughtUser2.c</PRE>
+
+<P><BR>
+<BR>
+Currently IUnknown defines 2 versions of Iunknown, A nice BETA version
+(IUnknown) and a more correct COM version (IUnknown2) (see below). MiniThought
+uses the nice solution whereas MiniThought2 uses the 'real' COM definition.
+And of course the real COM solution should be called IUnknown!<BR>
+</P>
+
+<H2><A NAME="RulesForUsingCOM"></A>2.5 Rules for Using COM Objects in BETA</H2>
+
+<PRE>
+The predefined Pattern COM 
+--------------------------
+
+The predefined pattern
+
+   COM: (# #)
+
+is an abstract superpattern. Any descriptor that specialises pattern
+COM describes a COM object. It may be either a COM object imported
+form external languages or a COM object implemented in BETA. Basic COM
+objects in BETA are defined by the general layout of COM objects.
+Pattern COM does not define 'QueryInterface,' 'AddRef' and 'Release'.
+
+There is currently NO explicit distinction between importing or
+exporting COM objects. Perhaps there should!
+
+Patterns IID and IUnknown
+-------------------------
+
+The pattern Unkown is supposed to be defined in a library and to 
+define 'QueryInterface,' 'AddRef' and 'Release':
+
+   IUnknown: COM
+      (# Query:
+           (# theIID: ^IID;  
+              ppv: @ Integer;
+              ppvObj: ^IUnknown;
+              returnPPV: (# ... #);
+              H: @integer;
+           enter(theIID[],ppv)
+           exit H
+           #);
+         QueryInterface:&lt; Query;            
+         AddRef:&lt; ...
+         Release:&lt; ...
+      #)
+
+The pattern IID represents the Globally Unique Identifier:
+
+   IID: data(# ... #);
+
+There will also be a pattern
+
+   HRESULT: ...
+
+that represents return values. Currently iyt is not used, as it does
+not work in the current implementation. Probably easy to fix.
+
+Consider references
+
+    anIID: ^IID; R: ^IUnknown; S: ^IUnknown; V: @integer
+
+A call of QueryInterface may then look like:
+
+   (anId[],@@R) -&gt; S.QueryInterface -&gt; V;
+
+Problems
+--------
+
+The COM standard as expressed through the definition of QueryInterface
+is not ideal seen from a BETA point of view (perhaps ugly in
+general). COM states that all functions must return a HRESULT which is
+an integer defining the status of the result. All other return values
+must be passed as input parameters. This means that return values in
+the form of objects (interfaces) must be passed as the address of a
+pointer variable. In pseudo BETA this would make QueryInterface look
+like:
+
+         Query:
+           (# theIID: ^IID;  
+              ppvObj: ^^IUnknown;
+              H: @HRESULT;
+           enter(theIID[],ppvObj[])
+           exit H
+           #);
+
+and the corresponding calll:
+
+   (anId[],R[][]) -&gt; S.QueryInterface -&gt; V;
+
+However, BETA cannot express a reference to a reference.
+
+What we really would  like to have is in the following style
+
+         Query:
+           (# theIID: ^IID;  
+              ppvObj: ^IUnknown;
+              H: @HVALUE;
+           enter theIID[]
+           exit(H,ppvObj[])
+           #);
+
+with calls of the form:
+
+   anId[] -&gt; S.QueryInterface -&gt; (R[],V)
+
+This is, however, not the usual C-style! In the future we should
+consider various alternatives to improve on the interface definition.
+At least some form of parameter type checking of return references
+must be provided. The following is a summary of the problems:
+
+   - we must have syntax for marking an enter reference as a return value.
+     this could be by means of a predefined pattern like:
+
+         RefToComRef: (# E:&lt; IUnknown; adr: @integer #)
+
+   - we must have a syntax for passing the address of a COM reference 
+     variable. We can use @@U, but perhaps we should avoid this.
+
+   - we must be sure that the object containing the return ref is NOT
+     moved during the call. This can be handled by 
+     (1) making sure that NO GC happens during the call; we must, however,
+         be sure that the callee (foo) does not use the addres after the 
+         call. In addition we must consider the concurrency situation.
+     (2) only allowed return references to be declared inside COM objects
+
+
+Dynamic Reference declaration
+-----------------------------
+
+A COM object may be referenced from a dynamic reference in the usual
+way:
+
+        R: ^ myClass;
+
+Generation
+----------
+
+Dynamic COM objects can be generated in the usual way:
+
+        &amp;myClass[] -&gt; R[];
+
+Since references to COM objects can be passed to external languages
+such as C, COM objects will have to be allocated in a special heap.
+COM objects cannot be moved by the garbage collector. Memory
+management for COM objects is through the use of AddRef and Release.
+
+Static Reference Declaration
+----------------------------
+
+A static COM object can be part of a general object or a COM object
+
+   yourComClass: COM (# ... #);
+
+   myComClass: COM                              (1)
+      (# ...
+         myPart: @ yourComClass                 
+      #);
+
+   myClass: (# ...; X: @yourComClass #)         (2)
+
+In case (1) the COM part object (myPart) is allocated in-line as for
+general non-virtual/descriptor-slot part objects.
+
+In case (2) the COM object is alloacted off-lin. I.e. X is represented
+as a reference to the instance of yourComClass.
+
+The reason for the difference is as mentioned in the section on
+dynamic generation, that COM objects must be allocated in a heap where
+they are not moved by the standard BETA garbage collector. In case (1)
+the COM object can be allocated in-line since the enclosing COM object
+is guaranted not to move. In case (2) the enclosing object may be move
+and therefore the COM part object is allocated in the COM object
+heap.
+
+References qualified by Object
+------------------------------
+
+A reference
+
+   R: ^object
+
+cannot refer to a COM object. I.e. an assignment
+
+    myComObj[] -&gt; R[]
+
+is not legal. The reason is that the current implementation of suhc
+referencs assume that the prototype of R is a standard BETA
+prototype. Perhaps this restriction may be removed, but it requires a
+reconsideration of general objects.  Perhaps references qualified by
+object should always refer directly to the dispatch table?? Perhaps
+all objects should?
+
+An implication of this restriction is that COM object cannot be
+members of containers. They will have to be wrapped by general
+objects.
+
+This restriction is currently NOT checked.
+
+Data objects reconsidered
+-------------------------
+
+Pattern Data does not work as intended. They have to be allocated
+outside the BETA heap to be able to pass to C. And there are problems
+with references to data-objects in registers.
+
+With respect to allocation, we could change the meaning of pattern
+'data' such that data objects are ONLY allowed as part objects of
+COM-objects and/or data-objects. This will ensure that data-objects
+are always at the same address. And a data-object exists as long as
+the enclosing COM-object exists.
+
+Do Part
+-------
+
+A COM object cannot have a do-part. This may be reconsidered in
+connection with design of an object factory mechanism for BETA COM
+objects. A possible DO-part may be used to specify code that
+instatiates a COM-object.
+
+Enter- and Exit Part
+--------------------
+
+A COM object cannot have an enter- or exit-part. This may agian have
+to be reconsidered for a possible object factory mechanism.
+
+A COM virtual pattern may have an enter part with the types
+
+    basic patterns, text, cstruct?, data?, ref. to COM object, 
+
+A COM virtual pattern may have an exit part with one element:
+
+   basic pattern, text, cstruct?, data?, ref. to COM object,
+
+Call of attribute functions
+---------------------------
+
+A COM virtual pattern may be executed as a procedure/function in the
+usual way:
+
+        (e1,e2,e3) -&gt; R.foo1 -&gt; x;
+
+From external languages
+-----------------------
+
+If foo is a C-function then foo may return a COM-object:
+
+                foo -&gt; R[];
+
+And similarly an external function bar may receive a COM object
+
+                R[] -&gt; bar
+
+Qua-check and other security issues
+-----------------------------------
+
+Consider
+
+   A: COM(# ... #); R: ^A, S: ^B
+
+and a reference assignment
+
+   R[] -&gt; S[]
+
+For general BETA objects, this assigment will give rise to a QUA-check
+that checks that R actually refers to an instance of B (or subpattern
+of B). THis may not be possible with COM objects.
+
+1.   If R denotes an external COM object, then the standrad BETA QUA checking
+     cannot work, since an external COM object does not have a BETA-like 
+     prototype.
+
+2.   If R denotes a BETA implemented COM object, standard QUA-checking
+     should be possible. 
+
+In general the QUA mechanism should at run-time be able to distinguish
+between (1) and (2) and do the QUA-checking in case (2). In case (1)
+the assignment will be insecure.
+
+For case (1) it might be possible use the COM class-id and
+QueryInterface to check the legality of the assignment. This will,
+however, have to be further investigated.
+
+Currently Qua-checking is just disabled for COM objects!
+
+In general use of COM is insecure, since BETA has no way of checking
+that an imported COM object is safe. Similary a client of an exported
+COM object may be unsafe. In general good debugging mechanisms should
+be investigated.
+
+</PRE>
+
+<H2><A NAME="odl_tlb"></A>2.6 ODL and Type Libraries</H2>
+
+<PRE>
+ODL
+---
+
+From ODL, corresponding descriptors of BETA interfaces can be
+generated. Similarly ODL definitions may be generated from BETA.
+
+Type libraries
+--------------
+
+It may be better to use type libraries directly In BETA. For import of
+COM objects, a corresponding type library may be included by BETA.
+Similarly a type library may be generated from BETA implemented COM
+objects.
+
+</PRE>
+
+<H1><A NAME="implementation"></A>3. Implementation</H1>
+
+<P>This section describes the implementation of COM support in BETA. </P>
+
+<H2><A NAME="object_layout"></A>3.1 COM Object Layout</H2>
+
+<PRE>
+A COM object may be implemented as follows:
+
+        myClass: IUnknown
+           (# a: @integer;
+              b: @char;
+              foo1:&lt; (# ... #);
+              foo2:&lt; (# ... #);
+              ...
+              foon:&lt; (# ... #);
+              c: @real
+           #)
+
+As described above, there are certain restrictions on the use of COM
+objects and COM virtuals.  Also there are restrictions on how to
+define COM objects and COM virtuals. However, there are no restrictions
+on the data-items that can be used to represent COM objects.
+
+The layout for a COM object is as follows:
+
+                 Object                   Prototype
+                                        ---------
+                                        |       | BETA prototype start
+                                        | ...   |
+                                        |       |
+                ---------               |-------|
+                |       | -------&gt; VDT: |       | ----&gt; f1
+                |-------|               |-------|
+                | GC-f  |               |       | ----&gt; f2
+                |-------|               |-------|
+                |   a   |               |       | ----&gt; f3
+                |-------|               |-------|
+                |   b   |               | ...   |
+                |-------|               ---------
+                |   c   |
+                ---------
+
+The only difference from a standrad BETA object is that the prototype
+for the object refers directly to the dispatch table in the prototype.
+The prototype has the usual form, but the object does NOT refer to its
+start. Note that there is a fixed (negative) offset from the VDT-start
+to the start of the prototype.
+
+</PRE>
+
+<H2><A NAME="checking"></A>3.2 Changes to Semantic Checking</H2>
+
+<PRE>
+- A pattern ChkComDesc (chkdescbody.bet) performs the main checking of
+  a COM descriptor
+
+COM object-descriptors will during checking be marked as:
+
+-  ComKind              : A COM object imported to BETA
+
+-  ComKind              : A COM object implemented in BETA
+
+-  externalVirtualKind  : A virtual pattern inside a COM object, either an
+                          imported object or a BETA implemented COM object.
+                          Perhaps 2 kinds are needed for this!
+
+As mentioned elsewhere we should perhaps distinguish between imported
+and exported COM objects.
+
+Missing semantic checks:
+
+- A COM virtual can have at most one exit element.
+
+</PRE>
+
+<H2><A NAME="coding"></A>3.3 Changes to code generation</H2>
+
+<P>Code layout for a COM virtual pattern with NO super pattern. I.e. the
+topmost descriptor of a COM virtual: </P>
+
+<PRE>
+ G11FOO:  saveReturn
+          Allocate activation object
+          ...           - standard G-part
+          ...
+          <store arguments in object> perhaps before standard G-part?
+ M11FOO:  ...             - there is no save return here
+          ...             - standard M-part
+
+          returnExitElement
+          return
+
+The idea is that a COM virtual is called by placing arguments to the
+virtual (including the object = origin) in standard input registers,
+%o0, %o1, ...,  and then calling the G-part. After execution of the
+standard G-part, the arguments are stored in the object and the M-part
+is immediately executed. Finally the exit element is returned.
+ 
+
+Code layout for a virtual COM subpattern. (We assume that G11FOO,
+M11FOO is the superpattern)
+
+* The problem here is to avoid allocating the object twice by
+  calling the G-part of the super (G11FOO). I.e. currently
+  there can be no CODE in the super part! We will have to handle
+  this as for V-entry points!
+
+ G21FOO: saveReturn
+         Allocate activation object
+         
+         ...          - standard G-part
+         ...
+        <store arguments in object> perhaps before standard G-part?
+        JMP M11FOO  - execute Top-DO part
+
+ M21FOO: saveInnerRetun
+         ...
+         ...        - standard M-part
+         innerReturn
+        
+
+When calling the pattern above, G21FOO will be the entry-point.
+G21FOO will jump to M11FO. M11FOO may through inner call M21FOO. This
+works in the usual way since the object has a normal BETA prototype
+with a dispatch table containing the inner dispatch table.
+
+Generation of COM object
+
+* The slot AllocObj in machine.bet is preliminary used to generate in the
+  G-entry part for allocation of a COM virtual function. This is similar to
+  dynamic generation in V-entries.
+
+* A routine AlloCOM is called; the prototype of the generated object must be
+  adjusted to point to the dispatch table. I.e. negative offsets are used
+  to the start of the fixed part of the prototype. Note this negative offset
+  is constant (currently 24 bytes). AlloCOM must allocate
+  the object outside the BETA heap. A very preliminary AlloCOM is generated
+  in BetaRun. It just calls AlloI and then adjusts the prototype ref.
+
+* No INNER entries should be generated for a COM dispatch table; this
+  is implemented, however, one zero-entry is currently generated before
+  the virtual-dispatch-table. Should be eliminated. Until this has been
+  done, it can be fixed by AlloCOM that just MUST point to the start of
+  the VDT.
+
+* G-entries are used in the dispatch-table instead of T-entries
+
+Call of a COM virtual function
+
+* Currently a call of an external virtual is made in the same way whether 
+  it is a BETA COM virtual or an external COM virtual;
+  perhaps we should distinguish! Currently a C call is made.
+
+* Transfer of a COM object to C has been implemented - just the reference
+  is passed. BUT a call to addRef must be made.
+
+STATUS
+
+- Some incomplete code is generated for COM object and COM virtual
+  patterns that are just used to specify interfaces to external
+  languages. This should be cleaned up. And we should consider to
+  forbid generating objects in BETA from such interface patterns.
+
+- Reconsider transfer of text objects. In the G-part of virtual,
+  an ASCIZ text MUST be expected, since we may come from C.
+  OK for text const - must be fixed for text object and
+  char-rep.
+
+- Reconsider M-entry-label for virtual Com; initDo is currently not called
+  which means that in some cases, dbgInf is NONE. 
+
+- Avoid double allocation in G-part of virtual COM subpatterns.
+
+</PRE>
+
+<H1><A NAME="rts"></A>4. Run-Time System Issues</H1>
+
+<PRE>
+This section is very incomplete.
+
+Allocation of COM objects
+-------------------------
+
+* AlloCOM must be implemented. It must allocate the object outside the
+  BETA heap. And otherwise work as AlloI.
+
+- A ComQua check should be designed
+
+- Check reference assignment (ChkRA) must be reconsidered when involving
+  COM objects.
+
+Garbage collection
+------------------
+
+* There may be references between the BETA heap and the COM heap.
+  Should the compiler use a special tag for references to COM-objects
+  in the dynamic reference table in prototypes? We currently mark as
+  normal ref, origin or constant ref. A 4th marking could be COM ref.
+
+* As for pattern data: GC-registers may hold references to 
+  COM objects, and these should NOT be garbage collected.
+  The GC must thus be able to decide if a reference is to an object
+  outside the BETA heap. Peter says that it already does! Note a COM
+  reference may point into the BETA COM heap or into some place
+  allocated by an external language.
+
+* A strategy for GC of COM objects must be invented. This might be 
+  something like: the refCount in a COM object counts the number of external
+  reference to the object. If zero then there is no external references.
+  A COM object is alive as long as refCount is greater than zero or there
+  the COM object may be reached from a live object in the BETA heap.
+  For BETA implemented COM objects, the GC must be able to access the 
+  reference counter.
+
+... probably much more.
+
+
+</PRE>
+
+<H1><A NAME="todo"></A>5. Open Issues</H1>
+
+<PRE>
+* The calling convention for COM is  __stdcall (Pascal). This means that the
+  called function must pop the arguments from the stack. Except if the 
+  function has a variable number of arguments, in which case the caller
+  must pop the stack. Poping of arguments is done in XXXmachine slot
+  getXres. If 'extType = 9 (* externalDispatch *)' then we have a
+  COM virtual call.
+
+  For UNIX we can perhaps just use standard C calling convention and only
+  use stdcall for Windows? 
+
+* ClassFactory and instantiation!
+
+* When passing ref to ref from stack variables in C to BETA, the address
+  may apparently be a negative value. This means that NONE check for
+  COM object refs must NOT trap on negative values!
+
+* Use of UniCode strings.
+
+  We must handle wchar, wchar_t, OLECHAR, LPOLESTR, ...
+
+  Currently a first version of unicodetext (wtext) has been implemented.
+  See the description in:
+  <A HREF="http://www.daimi.aau.dk/~olm/DOC/UniCode.html">http://www.daimi.aau.dk/~olm/DOC/UniCode.html</A>
+</PRE>
+
+<H3><A NAME="holder_objects"></A>Compiler Support for Holder objects</H3>
+
+<P>A basic pattern of the form </P>
+
+<PRE>   holder: (# adr: @integer #);
+</PRE>
+
+<P>has been introduced to hold addresses of basic values (integer, etc.)
+and references to other COM objects. </P>
+
+<P>Subpatterns of the form </P>
+
+<PRE>   intHolder: holder  
+     (# value: @integer;
+        writeBack: (#do value %putLongAt adr #)
+     enter value
+     exit value 
+     #);
+   refHolder: holder
+     (# type:&lt; object;
+        ref: ^type;
+        writeBack: (#do (%getLongAt (@@ref)) %putLongAt adr #)
+     enter ref[]
+     exit ref[]
+     #)
+</PRE>
+
+<P>can be defined. </P>
+
+<P>A virtual COM function having an Out or InOut parameter being a reference
+to a basic value or a reference to a reference, the corresponding BETA
+enter parameter must be a reference to a holder object. </P>
+
+<P>When a BETA call is made of such a function, the address of 'value'
+or 'ref' is passed as a parameter to the virtual function. </P>
+
+<P>For a virtual COM function implemented in BETA, a holder object is generated
+for each Out and InOut parameter, and the address passed as parameter and
+the value or reference at that address is stored in the Holder object.
+The writeBack pattern may be used to write the value back to the actual
+parameter (later the compiler will automatically generate code for this.)
+</P>
+
+<P>In the following example (TST/comTst), foo has an enter parameter which
+is a reference to an integer. Bar has an enter parameter which is a reference
+to a reference. </P>
+
+<PRE>(# myClass: COM
+     (# foo:&lt;  
+          (# n: @integer; S: ^intHolder; 
+          enter(n,S[])  
+          do n -&gt; putint; ' ' -&gt; put; S -&gt; putint; ' '-&gt;put;
+             n + S -&gt; S; S -&gt; putint; newline;
+             S.writeBack;
+          #);
+        bar:&lt;
+          (# n: @integer; R: ^myClassHolder
+          enter(n,R[])
+          do &amp;myClass[] -&gt; R;
+             n -&gt; R.ref.kuk;
+             R.writeBack
+          #);
+        kuk: @integer
+     #);
+   myClassHolder: refHolder(# type::myClass #);   
+   R: @myClass;
+   Q: @intHolder;
+   P: @myClassHolder 
+do 111-&gt;Q;
+   (11,Q[]) -&gt; R.foo;
+   Q -&gt; putint; newline;
+   (333,P[]) -&gt; R.bar;
+   P.ref.kuk -&gt; putint; newline;
+#)
+
+Problems to be fixed:
+
+-   If first parameter (%i1) is holder value then it must be saved during
+    generation of holderObject, since %i1 is used for this.
+    This is fixed by using data registers, but GC problems should be
+    considered. This includes considering what happens if a GC appear
+    during allocaion of a holder object.
+
+-   A virtual COM specified by name may be inconsistent if name is used
+    for other purposes than a virtual COM
+
+    myClass: COM
+       (# f1:&lt; object; (* always illegal *)
+          f2:&lt; foo;    (* OK if foo is NOT used for other purposes *)
+       #)
+
+    This is not properly checked in chkComDesc
+
+-   The calling convention for reals as arguments to COM virtual
+    functions must be checked, and correct code must be generated. 
+    Currently, when a COM virtual has a real argument, a compiler
+    message 'computedAdrVal:asgToRealAdr' will be printed.
+
+-   A data/cstruct can be passed by value to external and returned by value
+    from external. Implemented for INTEL but not for SPARC.
+    It is NOT implemented the other way around: i.e. a BETA COM component
+    cannot have call-by-enter and exit- data/cstruct parameters.
+
+</PRE>
+
+</BODY>
+</HTML>

@@ -1,0 +1,569 @@
+ORIGIN 'evlib';
+LIB_ITEM 'betacodegen';
+INCLUDE '~beta/betaast/scanBetaText';
+INCLUDE 'auxlib';
+INCLUDE 'inlinNXitem';
+INCLUDE 'storeReg';
+INCLUDE 'asgtoitem'
+---mkComputedEvVal:descriptor--
+(# CV: ^ComputedEvVal
+do &ComputedEvVal[]->CV[]->V[]; 
+   dr->CV.dr; 
+   isAreg->CV.isAreg; strucRef->CV.strucRef;
+   comTxt -> CV.comTxt
+#)
+
+---EvalLib:attributes---
+ComputedEvVal: EvVal 
+  (* Holds the result of an evaluation 
+   * - in most cases data register dr holds a (non reference) value
+   * - if isAreg is true dr holds an address to an object
+   * - if strucRef, dr refers an structure object (ptn var)
+   * - if comTxt, dr is the address of an (external) text 
+   *   passed to a COM virtual
+   *)
+  (# dr: @mch.DataRegOperand; (* result in data register 'dr' *)
+     isAreg: @boolean; (* result in address register 'dr' *)
+     (* this is only possible for references to dynamic objects*)
+     strucRef: @boolean; (* adr. register has a structureReference,dirty! *)
+     comTxt: @boolean;
+     thisVal::<
+       (#V: @ComputedEvVal 
+       do dr->V.dr; 
+          isAreg->V.isAreg; strucRef->V.strucRef; comTxt->V.comTxt;
+          V[]->thisV[] 
+       #);
+     EvId:: (# do 'ComputedVal:' -> id[] #);
+     display::<
+       (#
+       do (if isAreg then 'aReg='->xT else 'dReg='->xT if);
+          dr->xI
+       #);
+     reUse: 
+       (#
+       do (if isAreg then (# aR: @mch.adrRegOperand do dr->aR.reUse #)
+           else dr->dr.reUse 
+          if)
+       #);
+     loadVal::<(#do this(ComputedEvVal)[]->V[] #);
+     loadVal2::<(#do this(ComputedEvVal)[]->V[] #);
+     thisReg:
+       (# RA: @mch.adrRegOperand; op: ^mch.mOperand
+       do (if isAreg then dr->RA; RA[]->op[] else dr[]->op[] if)
+       exit op[]
+       #);
+     needExtraAreg:: (# do false -> value #);
+     theReg:: (#do (if isAreg then dr -> aR if)#);
+     release::<
+       (#
+       do (if isAreg then dr->mch.freeAdr else dr.deAlloc if)
+       #);
+     reAlloc::< (#do reUse #);
+     toTmp::<
+       (#
+       do (if isAreg then 
+              (if dr = mch.callO then
+                  (* this(ComputedEvVal) is &T[] *)
+                  (# aR1,aR2: @mch.adrRegOperand
+                  do dr->aR1; aR2.alloc; (aR1[],aR2[])->mch.cpReg;
+                     aR2->dr;
+                     mch.decrCallReg
+       #)if)if)#);
+     toDataRegA::< (* OBS! is d0 always free here ?*)
+       (#
+       do (if dr <> 0 then (dr[],mch.DataRegA[])->mch.cpReg; dr.deAlloc if)
+       #);
+     toDataRegX::< 
+       (#
+       do (if dr <> 7 then (dr[],mch.DataRegX[])->mch.cpReg; release if)
+       #);
+     toDataRegY::<
+       (#
+       do (if dr <> 6 then (dr[],mch.DataRegY[])->Mch.CpReg; dr.deAlloc if)
+       #);
+     toRangeReg::< (* OBS! is d1 always free here ? *)  
+       (#
+       do (if dr <> 1 then 
+              (dr[],mch.dataRegB[])->Mch.CpReg;
+	      (* dr.deAlloc*)
+          if)
+       #);
+     toDataReg::<
+       (#
+       do dReg.deAlloc; (* this was introduced in order to free an otherwise
+                         * unused dataregister, which may cause data reg overflow.
+                         * The code in comments below was here before the LINUX 
+                         * implementation - reuse cannot be used - hopefully
+                         * this correction will work!
+                         *)
+          dr->dReg; dr.fn->dReg.fn; 
+          (*dReg->mch.freeData; dr->dReg.reUse !!*) 
+       #);
+     toPrimDest::<
+       (# 
+       do pNo->(mkReg).toPrimDest
+          (*(if primDest.isPrimRegOp then
+              (mkReg,primDest[])->mch.cpReg
+           else
+              (mkReg,primDest[]) -> mch.stVal
+          if)*)
+       #);
+     evType::<(#do (if strucRef then 4->type else 1->type if)#);
+     mkReal::<
+       (# (*W: @floatEvVal; FR: ^mch.floatRegOp*)
+       do (*thisReg->mch.intReg2Float->FR[]; FR->W.FL; W[]->V[]; *)
+          thisReg->mch.intReg2Float-> mkFloatEvVal -> V[];
+          release
+       #);
+     asgToSimpleEv::
+       (#
+       do (if stest then
+              301->ctrace(#do 'computedVal:asgToSimpleEv:'->xH;
+                           rBaseAdr.display->xT; xN;
+                           rEv[] -> xA;
+                           mch.dumpreg;
+                        #);
+          if);
+          rEvAdr -> asgToAdr -> V[]
+       #);
+
+     asgToAdr::<
+       (#
+       do (if StrucRef then (thisReg,false)->rA.asgRefReg
+           else 
+              (if rA.size
+               // 1 then (thisReg,rA[])->mch.stByte
+               // 2 then (thisReg,rA[])->mch.stHalf
+               else (* 4 or undefined *)
+                    (* OBS! Error here!
+                     * strucRef may be false if the reference is computed as 
+                     * a result of a TOS call as in R.struc. This is bad 
+                     * since a checkRefAsg will not be generated. Also stByte
+                     * is generated instead of stVal.
+                     *)
+                  (thisReg,rA[])->mch.stVal
+          if)if);
+          rA.isNotObjRef -> rA.freeAdr; 
+          this(ComputedEvVal)[]->V[] 
+       #);
+     asgToRefAdr::<
+       (# rA: ^mch.address; EV: @ASTindex
+       do (if stest then
+              301->ctrace(#do 'computedVal:asgToRefAdr:'->xT; destEV[]->xA#);
+          if);
+          (* do we ever come here or is this just a leftover from
+           * early COM experiments?
+           * YES: we come here via e.g. GetXobj -> xR[]
+           * where a COMobject is exited from an external
+           * 'computedVal:asgToRefAdr:'->systemError;
+           * In genexternal.bet:common.COMobjectXpar
+           * generates a ComputedEvVal. This should be perhaps
+           * be changed ??? and generation of something else
+           * than computedEvVal, perhaps unite with genlib_COM.bet
+           * evVals.....
+           *)
+          destEV.son -> EV;
+          (EV[],strucRef,rAbase[],thisReg,0,rChain[]) -> storeRegRef -> rA[];
+          (rAbase[],EV[],false,rChain[]) -> genAdr -> rA[];
+          rA.freeAdr; 
+          this(ComputedEvVal)[] -> V[]
+       #);
+     asgToRepAdr:: 
+       (* This operation is called when assigning a text to
+        * a char rep in a COM virtual function. It does NOT
+        * necessarily work in all cases, including switch[61],
+        * etc.
+        *)
+       (# 
+       do (if stest then
+              301->trace(#do 'computedVal:asgToRepAdr:'->xT; dr.display->xT #)
+          if);
+          (if comTxt then
+              (rA[],0) -> CopyT(#do 1 -> dr.toPrimDest #);
+              rA.freeAdr;
+              this(ComputedEvVal)[] -> V[]
+           else
+              (* val -> aRep *)
+              (true,rA.size,1,rA[]) -> asgToNewRep
+              (#
+              do NextElmAdr -> asgToAdr -> V[]
+              #);
+          if);
+       #);
+     asgToRepElm::<
+       (#
+       do (if stest then
+              301->trace(#do 'ComputedVal:asgToRepElm: '-> xT #)
+          if);
+          rA[] -> asgToAdr -> V[]
+       #);
+     asgToRealAdr::<
+       (# FR: ^mch.floatRegOp;
+       do thisReg->mch.intReg2float->FR[];
+          rA[]->FR.store; FR.deAlloc; rA.freeAdr;
+          this(ComputedEvVal)[]->V[] ;
+          release
+       #);
+     asgToItem::< 
+       (* A -> rA *)
+       (# nScan: @ | scanNadr
+       do (rDesc[],rA[],0,rChain[],true)->nScan;
+          this(ComputedEvVal)[]->nScan.AsgToNelm -> rAx[];
+          nScan.reset
+       #);
+     asgToNXoffSets::
+       (# off: @integer; rAx: ^mch.address
+       do (if stest then
+              179->trace(#do 'computedVal:asgToNxOffSetsVal:'->xT#);
+          if);
+          NX.getNext -> off;
+          off -> (rA.copy).addOff -> rAx[];
+          NX.getSize-> rAx.size;
+          (if rAx.size 
+           // 4 then (thisReg,rAx[]) -> mch.stVal
+           // 1 then (thisReg,rAx[]) -> mch.stByte
+           // 2 then (thisReg,rAx[]) -> mch.stHalf
+           else
+              cError(#do 'ComputedEvVal:asgToNXoffSetsVal:UndefSize'->xT#)
+          if);
+          release
+       #);
+     asgToDataReg::
+       (#
+       do (*312->trace(#do'computedEvVal:asgToDataReg:'->xT #);*)
+          (dr[],destDR[])->mch.cpReg;
+          (*release;
+           (destDR,false,false,false)->mkComputedEvVal->V[]*)
+          this(computedEvVal)[]->V[]
+       #);
+     asgToInlineItem::
+       (# inx: ^inlineNXitem
+       do inlNX[]->inx[];
+          dr[]->inx.dataRegToN;
+          (*inx.eval->V[]*)
+       #);
+     asgToList::<(#do toListOne #);
+     asgToDispatch::
+       (# 
+       do (if stest then
+              311 -> cTrace(#do 'computedVal:asgToDispatch:'->xT; EV[]->xA#)
+          if);
+          (EV[],externalName[],desc[],extKind)
+            -> GenCOMdispatch
+          (# 
+          do this(computedEvVal)[] -> PushDispatchPar
+          #) -> V[]
+       #);
+
+     asgToCproc::<
+       (# CP: @ExTernalCall
+       do release;
+          (externalName,Desc[],extKind,EV.son)->CP; (* init *)
+          (CP.getEnterP,extKind,CP.getEnterP.size,CP.pascExtProcInfo)
+            -> pushCpar;
+          CP.call;
+          CP.getExitP->V[];
+       #);
+     asgToPrimitive::<
+       (# CP: @primitiveCall
+       do (1,T[])->CP;
+          (3(* always long *),sematt.asmExt,0,0)->(*thisEvVal.*)pushCpar;
+          CP.call->V[]
+       #);
+     asgToInLinePrimitive::<
+       (# D: [1]@integer; dRes: @integer;
+          W: @ComputedEvVal
+       do (*dr->dr.reUse; *) dr->D[1]; 
+          (opCode,I1,I2,D)->gen.inLinePrimitive->dRes->W.dr;
+          W[]->V[];
+          (if dRes // D[1] then else D[1]->mch.freeData if)
+       #);
+     asgToNewPrim::<
+       (# EV1,op: @ASTindex;
+	  rA: ^mch.address;
+       do (if stest then
+              301->trace
+              (#do 'computedVal: '->xT; EV[] -> xA; 
+                 baseA.display-> xT;
+              #)
+          if);
+          EV.son->EV1; EV1.son->EV1; EV1.brother->op;	  
+          (baseA.copy,EV1[],false,rchain[])->genAdr->rA[];
+          (if op[]->sematt.primitiveToNumber
+           // 5 (* getByte *) then 
+	      (if EV.evalKind = sematt.repValEval then 
+		  (dr[],rA[],1,false)->primInxGet->V[]
+               else
+                  (rA[],dr[],1,false)->primGet2->V[]
+              if);
+           // 6 (* getShort *) then 
+	      (if EV.evalKind = sematt.repValEval then 
+	          (dr[],rA[],2,false)->primInxGet->V[]
+               else
+	          (rA[],dr[],2,false)->primGet2->V[]
+              if)
+           // 7 (* getSignedByte *) then
+	      (if EV.evalKind = sematt.repValEval then 
+		  (dr[],rA[],1,true)->primInxGet->V[]
+               else
+                  (rA[],dr[],1,true)->primGet2->V[] 
+              if)
+           // 8 (* getSignedShort *) then
+	      (if EV.evalKind = sematt.repValEval then 
+		  (dr[],rA[],2,true)->primInxGet->V[]
+               else
+		  (rA[],dr[],2,true)->primGet2->V[]
+              if)
+           // 13 (* getLong *) then
+	      (if EV.evalKind = sematt.repValEval then 
+		  (dr[],rA[],4,true)->primInxGet->V[]
+               else
+		  (rA[],dr[],4,true)->primGet2->V[]
+              if)
+          if);
+          (*rA.freeAdr - is cleared by primGet2 *)
+       #);
+     pushCpar::<
+       (# V: ^evval
+       do (if released then reAlloc if); (* necessary for I386 *)
+          (if type
+           // common.byteXpar then dr[]->mch.pushCbyte
+           // common.shortXpar then dr[]->mch.pushCword
+           // common.longXpar
+           // common.dataXpar (* may be called from refEvval:asgToCproc *) 
+           // common.textXpar (* may be called from itemEvVal:pushCpar *)
+           // common.BSTRXpar
+           // common.cStructXpar 
+              (* a hack:
+               * IUnknown: (# ...; R: @RefToCOMref
+               *           enter (...,R) ...
+               * scanCNX is incomplete and returns cStructXpar
+               *)
+              then mkReg->mch.pushClong
+              (* may be called from scmp, with adr. reg. *)
+           // common.doubleXpar  then mkReal->V[]; (7,extKind,size,0)->V.pushCpar
+           // common.int64Xpar then
+              0 -> mch.NewCstOp -> mch.pushClong;
+              dr[] -> mch.pushClong
+           // common.varPtnCXpar then (* c *)
+              1->mch.initPrimCall;
+              (if common.switch[61] or common.switch[64] then
+                  (if true then
+                      1-> (mkAreg).toPrimDest
+                   else
+                      (mkAreg,1->mch.getPrimReg) -> mch.cpReg
+                  if)
+               else                      
+                  mkAreg->mch.pushClong;  (* should be prim *)
+              if);
+              protectCallReg(# do 'CopyCPP'->mch.callprim #); 
+              2->mch.getPrimRes
+           // common.varPtnPascalXpar then
+	      (univProcInfo,mkAreg,size[]) -> genCopyPPP
+           // common.varPtnStdXpar then
+              7 ->mch.initPrimCall;
+              mkAreg->mch.pushClong; size[]->mch.pushClong;
+              'CopySPP'->mch.callPrim;
+              2->mch.getPrimRes
+	      (* others not used *)
+           else
+              'ComputedVal:pushCpar:unKnownType'
+                -> thisTranslate.systemException
+          if);
+          release
+       #);
+     mkTrue::< (#do d1->dr; (1->mch.NewCstOp,dr[])->mch.ldCst #);
+     relOp::<
+       (#
+       do (# Lab: @mch.localLab
+          do Lab.new;
+             (if op	      (* IF T1 cc R then goto L *)
+              // gram.eqExp then Lab[]->mch.gBeq
+              // gram.neExp then Lab[]->mch.gBne
+              // gram.ltExp then Lab[]->mch.gBlt
+              // gram.leExp then Lab[]->mch.gBle
+              // gram.gtExp then Lab[]->mch.gBgt
+              // gram.geExp then Lab[]->mch.gBge
+             if);
+             dr[]->mch.gClr;
+             Lab.Def
+       #)#);
+     relRealOp::<
+       (#
+       do (# Lab: @mch.localLab
+          do Lab.new;
+             (if op	      (* IF T1 cc R then goto L *)
+              // gram.eqExp then Lab[]->mch.fBeq
+              // gram.neExp then Lab[]->mch.fBne
+              // gram.ltExp then Lab[]->mch.fBlt
+              // gram.leExp then Lab[]->mch.fBle
+              // gram.gtExp then Lab[]->mch.fBgt
+              // gram.geExp then Lab[]->mch.fBge
+             if);
+             dr[]->mch.gClr;
+             Lab.Def
+       #)#);
+     unMinus::<
+       (# W: @computedEvVal do dr->W.dr.reUse; (dr[],4)->mch.gNeg; W[]->res[]#);
+     notEXP::<
+       (# W: @computedEvVal do dr->W.dr.reUse; (dr[],4)->mch.gNot; W[]->res[]#);
+     cmpBoolAndJmp::
+       (#
+       do (cond,dr[],4,lab[])->mch.cmpBoolAndJmp
+       #);
+     cmp::<(#do dr->Lv.regCmp->doCmp (*gCmp(#do dr->lV.regCmp #)*)#);
+     cstCmp::< (* dr COMP rC *) 
+       (#
+       do (*(rC[],dr[],4)->mch.gCmp *)
+          rC[]->op1[]; dr[]->op2[]; 4->size; (*deAllocOp2=false*)
+       #);
+     adrCmp::<(* dr COMP rA *)
+       (# dn: @mch.dataRegOperand
+       do dn.alloc; (rA[],dn[],rA.size)->Mch.ldVl;
+          (*(dn[],dr[],4)->mch.gCmp; dn.deAlloc;*)
+          dn[]->op1[]; dr[]->op2[]; 4->size; true->deAllocOp1
+       #);
+     regCmp::<(* dr COMP rReg *)
+       (#do (*(rReg[],dr[],4)->mch.gCmp*)
+          rReg[]->op1[]; dr[]->op2[]; 4->size; (*deAllocOp2=false*)
+       #);
+     add::< (#do dr->lV.regAdd->res[] #);
+     adrAdd::<
+       (# W: @computedEvVal 
+       do dr->W.dr.reUse; 
+          rA[]->loadAdrOp(#do (op[],dr[],4)->mch.gAdd#); W[]->V[]
+       #);
+     cstAdd::<
+       (# W: @computedEvVal 
+       do dr->W.dr.reUse; (rN[],dr[],4)->mch.gAdd; W[]->V[]#);
+     regAdd::<
+       (# W: @computedEvVal 
+       do dr->W.dr.reUse; (rReg[],dr[],4)->mch.gAdd;  W[]->V[] 
+       #);
+     sub::< (#do dr->lV.regSub->res[] #);
+     adrSub::<
+       (# W: @computedEvVal
+       do dr->W.dr.reUse; rA[]->loadAdrOp(#do (op[],dr[],4)->mch.gSub#); 
+          W[]->V[]
+       #);
+     cstSub::<
+       (# W: @computedEvVal
+       do dr->W.dr.reUse; (rN[],dr[],4)->mch.gSub; W[]->V[]
+       #);
+     regSub::<
+       (# W1: @computedEvVal 
+       do dr->W1.dr.reUse; (rReg[],dr[],4)->mch.gSub; W1[]->V[] 
+       #);
+     times::<(#do dr->lV.regTimes->res[] #);
+     adrTimes::<
+       (# W: @computedEvVal 
+       do dr->W.dr.reUse;
+          (if rA.size//1 then
+              (# dl: @mch.dataRegOperand
+              do dl.alloc; dl[]->mch.gClr; (rA[],dl[])->mch.ldByte;
+                 (dl[],W.dr[],4)->mch.gMult; dl.deAlloc
+              #)
+           else (* MC680x0 only accepts word and long for mult*)
+              rA[]->loadAdrOp(#do (op[],W.dr[],4)->mch.gMult#)
+          if); 
+          W[]->V[] 
+       #);
+     cstTimes::<
+       (# W: @computedEvVal
+       do dr->W.dr.reUse; 
+          (* datpete 22/7/94: optimization *)
+          (dr[], rN[], 4) -> cstMult;
+          (* (rN->mch.NewCstOp,dr[],4)->mch.gMult; *)
+          W[]->V[]
+       #);
+     regTimes::<
+       (# W: @computedEvVal 
+       do rReg->W.dr.reUse; (dr[],rReg[],4)->mch.gMult; W[]->V[]
+       #);
+     divMod::< (#do (dr,isDiv)->lV.regDivMod->res[] #);
+     cstDivMod::<
+       (* dataReg alloc is messy here and below:
+        * ddr.dNo1 is allocated - ddr.dNo1 takes over from dr.
+        * dr is allocated a new register to avoid release problems
+        * of dr and ddr
+        *)
+       (# ddr: @mch.doubleDataRegOperand; drx: @mch.dataRegOperand;
+          W: @ComputedEvVal
+       do (* dr->ddr.dNo2; dr.fn->ddr.dNo2.fn; 
+           * ddr.dNo1.alloc; dr.alloc;
+           * drx.alloc; (rN[],drx[])->mch.ldCst; 
+           * (drx[],ddr[],isDiv)->mch.gDiv; 
+           * (if isDiv then
+           *     ddr.dNo2->W.dr; ddr.dNo1.deAlloc
+           *  else ddr.dNo1->W.dr; ddr.dNo2.deAlloc
+           * if);
+           * drx.deAlloc;
+           *)
+          (dr[],rN[],4,isDiv)->cstDiv->W.dr;
+          (* if isDiv then result is dr
+           * else dr has been deAllocated.
+           * Alloc new dr to avoid data reg negative
+           *)
+          dr.alloc;
+          W[]->V[]
+       #);
+     adrDivMod::<
+       (# drx: @mch.dataRegOperand
+       do dr->ddr.dNo2; dr.fn->ddr.dNo2.fn; 
+          ddr.dNo1.alloc; dr.alloc;
+          drx.alloc; (rA[],drx[],rA.size)->mch.ldVl; 
+          (*dr->ddr.dNo2.reUse;*)
+          (drx[],ddr[],isDiv)->mch.gDiv; (* dr div rA *)
+       #);
+     regDivMod::<
+       (# 
+       do dr->ddr.dNo2; dr.fn->ddr.dNo2.fn; 
+          ddr.dNo1.alloc; dr.alloc;
+          (* rReg->ddr.dNo1.reUse;*)
+          (rReg[],ddr[],isDiv)->mch.gDiv; (* dr div rReg *)
+       #);
+     orr::<(#do dr->lV.regOr->res[] #);
+     adrOr::< (# W: @computedEvVal 
+	      do dr->W.dr.reUse; (rA[],dr[],rA.size)->mch.gOr; W[]->V[]
+	      #);
+     cstOr::<  
+       (# W: @computedEvVal 
+       do dr->W.dr.reUse; (rN[],dr[],4)->mch.gOr; W[]->V[]
+       #);
+     regOr::< 
+       (# W: @computedEvVal
+       do rReg->W.dr.reUse; (dr[],rReg[],4)->mch.gOr; W[]->V[]
+       #);
+     andd::<(#do dr->lV.regAnd->res[] #);
+     adrAnd::< 
+       (# W: @computedEvVal 
+       do dr->W.dr.reUse; (rA[],dr[],rA.size)->mch.gAnd; W[]->V[]
+       #);
+     cstAnd::< 
+       (# W: @computedEvVal 
+       do dr->W.dr.reUse; (rN[],dr[],4)->mch.gAnd; W[]->V[]
+       #);
+     regAnd::<
+       (# W: @computedEvVal 
+       do dr->W.dr.reUse; (rReg[],dr[],4)->mch.gAnd; W[]->V[]
+       #);
+     ToDreg::<
+       (* used when computing primitive address expressions like @@ch;
+        * the address of ch is in A; mch.move A to the 'dr' data register
+        *)
+       (# aReg: @mch.adrRegOperand
+       do aReg.alloc; (A[],aReg[])->mch.gLea;
+	  dr.alloc; (aReg[],dr[])->mch.CpReg;
+	  (*(0->mch.newCstOp,aReg[])->mch.ldCst;*) aReg[]->mch.gClr;
+	  (* in order NOT to confuse garbage collection *)
+	  aReg.deAlloc; A.freeAdr
+       #);
+     mkAreg: (# aR: @mch.adrRegOperand do dr->aR exit aR[] #);
+     mkReg:
+       (# R: ^mch.mOperand
+       do (if isAreg then mkAreg->R[] else dr[]->R[] if)
+       exit R[]
+       #);
+     
+     scmp::<(#do doCmp(#do 2->toPrimDest#)#);
+  #);

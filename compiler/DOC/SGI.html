@@ -1,0 +1,774 @@
+<HTML>
+
+<HEAD>
+<TITLE>SGI specifics</TITLE>
+<LINK REV="made" HREF="mailto:olm@daimi.aau.dk">
+</HEAD>
+
+<BODY>
+<H1>SGI specifics</H1>
+ 
+Documentation for the SGI/MIPS BETA implementation
+
+<UL>
+<LI><A HREF="#registers">0. Register model</A></LI>
+<LI><A HREF="#stack">1. Stack organization</A></LI>
+<LI><A HREF="#components">2. Component handling</A></LI>
+<LI><A HREF="#stacktraversal">3. Stack traversal</A></LI>
+<LI><A HREF="#leave_restart">4. Global leave and restart</A></LI>
+<LI><A HREF="#todo">Missing tasks</A></LI>
+<LI><A HREF="#oldstuff">Old stuff</A></LI>
+<LI><A HREF="#n32">n32 Object File Format Considerations</A></LI>
+<LI><A HREF="#bibliography">Bibliography</A></LI>
+</UL>
+
+
+<H2><A NAME="registers">0. Register model</A></H2>
+
+<PRE>
+		 $0      zero	 Always zero
+                 $1      at      temporary
+                 $2-3    v0-v1   return values in C convention
+
+this             $30     s8      
+origin           $4      a0      1st external argument
+caller           $5      a1      2nd external argument
+                 $6-7    a2-a3   3rd to 4th external argument
+r1,r2,r3         $16-18  s0-s2
+d0,d1,d2,d3,d4   $8 -12  t0-t4
+dataTmp1-2       $13-14  t5-t6
+adrTmp1-2        $19-20  s3-4
+
+                 $26-27  kt0-kt1 Used only by operating system
+                 $28     gp      Global context pointer
+                 $29     sp      Stack pointer
+                 $31     ra      Return register
+
+caller is saved in adrTmp1 during primitive calls
+
+IOAbotReg        $21     s5      (now in memory cell)
+IOAusedReg       $22     s6      (now in memory cell)
+
+According to the ABI: 
+  NOT saved across function calls:
+      t0-t9   ($8-$15,$24-$25)
+      a0-a3   ($4-$7)
+      ra      ($31)
+      kt0,kt1 ($26-$27)
+  Saved across function calls:
+      s0-s8 ($16-$23,$30)
+      
+</PRE>
+
+<H2><A NAME="stack">1. Stack organization</A></H2>
+
+<PRE>
+	When the do-part of an object is executed, the corresponding
+	stack frame has the following organization:
+
+			|			|
+	  high address  |			|
+			|			|
+	       oldSP -&gt;	|			|
+		       	|-----------------------|
+		       	|  	RTS		| PC corresp. to prev. object
+		       	|  	dyn		| previous object
+			|  	ref1		|
+			|  	ref2		|
+			|  	...		| reference stack
+	     refTop -&gt;	| 	refn=this	|
+			|  	0		|
+			|  	...		|
+		SPr -&gt;	|  	x		|                      |
+			|-----------------------|                      |
+			|			|                      | Stack grows
+			|  16 double words for	| float reg save area  | downwards
+			|  saving float regs	|                      |
+			|			|                     \/
+			|-----------------------|
+			|  			|
+			|  6 longs for saving	| data reg save area
+			|  d0-d5		|
+		SPd -&gt; 	| 			|
+			|-----------------------|
+			|  	xArgi		|
+			|    	...		| external argument area
+			|  	xArg1		|
+		SP  -&gt;	|  	aArg0		|
+			|-----------------------|
+			|  			|
+          low address
+
+1.1	Reference stack
+
+	The reference stack is used for pushing references. The element
+	above the topmost element is always set to 0 (zero) before
+	calling other BETA objects, BetaRun operations or external calls.
+	The GC can thus use this zero to find the top of the reference stack.
+
+	In many situations, RTS, and dyn are the only elements on the reference
+	stack.
+
+1.2	Dynamic link
+
+	The  dynamic link (dyn) is only pushed for an object with no
+	super pattern, i.e. a sub of object. I.e. 'dyn' is NOT present
+	when exectuing the do-part for descriptor that is a sub of some
+	real pattern.
+
+1.3	Data reg save area and float reg save area
+
+	These areas are ONLY allocated if data registers and/or floating
+	point registers need to be saved during calls to other BETA objects,
+	etc. They are lloacted independtly. i.e. they may both be present,
+	one of them may be present, or none of them may be present.
+
+1.4	External argument area
+
+	This are is used for passing arguments to BetaRun operations
+	and external calls (C). Space is allocated for the call that
+	requires the most arguments. If no external functions are called,
+	space is alloacted to the BetaRun operation that require most
+	arguments.
+
+1.5	Nested external calls &lt;----------- OBS!
+
+	Currently NO solution has been made to handle nested external calls
+	including BetaRun operations:
+
+		(e1, (e2,e3)-&gt;bar,e4,(e5)-&gt;snort) -&gt; foo -&gt; V
+
+	Either the compiler MUST generated code for these situations
+	inside out or allocated extra space for the calls in the argument
+	list. Both solutions have some problems or are complicated
+
+1.6     Wrapper frames.
+
+	To support valhalla and beta.dump (and to reduce codesize a
+        little) wrapper functions have been introduced for various
+        runtime routines. That is, a small stub corresponding to,
+        e.g. Qua, is generated in betaenv.o. This stub sets up a
+        normal BETA stack frame (mainly for saving the return address
+	in the BETA code) before calling the actual (C) runtime
+	routine.
+	This allows the stack traversal in valhalla/beta.dump to get
+	both object, SP *and* PC for the topmost activation of normal
+	BETA code (the code that called the wrapper stub), since all
+	of this is saved in the wrapper frame. If the runtime routine
+	(in C) was called directly, there would be no way for the
+	stack traversal routine in valhalla to get the PC for the
+	topmost object, since this is saved in an unknown place in the
+	stack frame corresponding to the C runtime routine.
+
+	Wrpper functions are thus needed for calling runtime routines,
+	that may cause runtime errors (i.e. call BetaError).
+
+	Not to be confused with runtime routines, that may cause GC:
+	These need the (second-to-topmost) SP as argument to allow
+	updating references in the stack frames. But they do not
+	really need PC (unless, of course, they may also trigger
+	BetaError).
+
+</PRE>
+
+<H2><A NAME="components">2. Component handling</A></H2>
+
+<PRE>
+When a suspend is executed, the betaRun operation Susp is executed.
+Within Susp, the stack has the following structure:
+
+
+		HighAdr	|		|
+			|===============|
+			|  X:		|
+			|  calling 	|
+			|  component	|
+			|---------------|
+			|  BETA item	|
+			|  frames	|
+			|---------------|
+			|  topX item	|
+	          SPx -&gt;|		|
+	                |===============|
+	          	|		|
+	                |  Att frame	|
+	          SPy -&gt;| 		|
+	                |---------------|
+			|		|
+			|  Y: BETA	|
+			|  component	|
+			|  frame	|
+			|---------------|
+	                |  BETA item	|
+	                |  frames	|
+			|---------------|
+			| topY item	|
+	          SPz -&gt;| 		|
+	                |---------------|
+			|		|
+	                | Susp frame	|
+	          SP -&gt; |		|
+	                |---------------|
+			|		|
+
+
+In the above situation the calling component is X; the called
+component is Y.
+
+For a component Y, there may be no BETA item frames and topY may be Y.
+Similarly for X and other components. I.e. the component may be the
+only object on the component stack.
+
+The component objects have the following content
+
+	X:	|-----------------------------------------------|
+		| StackObj:	not used 			|
+		| CallerObj: 	topObject of calling component	|
+		| CallerComp: 	calling component		|
+		| CallerLSC:	return address in topX		|
+		| Body: 	item-part of X			|
+		|-----------------------------------------------|
+
+	Y:	|-----------------------------------------------|
+		| StackObj:	not used 			|
+		| CallerObj: 	topX 				|
+		| CallerComp: 	X				|
+		| CallerLSC:	not used			|
+		| Body: 	item-part of Y			|
+		|-----------------------------------------------|
+
+The suspend operation does the following
+
+	* allocates a StackObject and copy the stack area SPz - SPy
+	  to this StackObject. Y.StackObj is set refer to this StackObject.
+
+	* Y.CallerLSC is set to the address following Susp in topX
+
+	* Y.CallerObj is set to topY
+
+	* Y.CallerComp is set to -1 (0?)
+
+	* SP is set to SPx
+
+	* this is set to topX
+
+	* currentComponent is set to X
+
+	* execution is resumed at the point in topX where
+	  Y was attached.
+
+After suspend the situation is 
+
+	X:	|-----------------------------------------------|
+		| StackObj:	not used 			|
+		| CallerObj: 	topObject of calling component	|
+		| CallerComp: 	calling component		|
+		| CallerLSC:	not used			|
+		| Body: 	item-part of X			|
+		|-----------------------------------------------|
+
+	Y:	|-----------------------------------------------|
+		| StackObj:	StackObject for Y		|
+		| CallerObj: 	topY 				|
+		| CallerComp: 	Not used			|
+		| CallerLSC:	ponit to resume in topY		|
+		| Body: 	item-part of Y			|
+		|-----------------------------------------------|
+
+
+A subsequent attach of Y in X is the "reverse" of suspend:-)
+
+Attach explicitly checks if this is the first attach of a componet.
+Alternatively AlloC may set up the component so there is no special
+first case in Attach.
+
+If a component terminates it returns to the place in Att where it was
+called. The compoent is marked as terminated and return is performed
+similarly to a suspend, since the code after Att is the same in the
+case of a suspend or a termination.
+
+The following issues have been considered for handling components:
+
+Q1)	When attaching a new component, should calling component
+	be on the stack?
+
+	Currently this is the case!
+
+Q2)	Shall Att frame be on  the stack when attaching?
+
+	Att could return the address to jump to, and a call could
+	be made after Att.
+	However, ca must also be defined.
+
+	Not easy, since Att must copy stackObject of called component
+	to the SP-stack while Att itself is on the stack!
+
+	So Att is kept on the stack.
+
+Q3)	At Suspend, shall Att frame be copied into stackObject?
+	May give problems, since the Att frame is a C frame!
+	So probably NOT! So Att frame is NOT copied to StackObject
+
+Q4)	How is the return address obtained?
+	Currently it is passed as an explicit parameter to Susp and Att.
+
+Q5)	How to get SP?
+	For Att and Susp, Sp of the calling object is passed as an explicit
+	parameter. To obtain the SP of Att and Susp frames, the address of 
+	first variable in a C-frame.
+
+Q6)	How to set SP?
+
+	Return from Att and Susp is done as a C-call with 2 arguments,
+	the new SP and the this-object. Code is generated after Att and
+	Susp to set SP and this properly.
+
+2.1	Dynamic link for components
+-----------------------------------
+
+</PRE>
+
+<H2><A NAME="stacktraversal">3. Stack traversal</A></H2>
+
+<PRE>
+The stack layout makes it possible to traverse the stack along the
+call chain of objects. I.e. to follow the dynamic link.  This is
+described by the following pseudo procedure (see the comment/notes
+below):
+
+	dyn:
+          (* obj:	an object
+	   * SP:	the SP for obj
+	   * LSC:	the LSC in a do-part of obj
+           *)
+	  (#
+	  enter(obj[],SP,LSC)
+          do obj.descriptor.prefixlevel -&gt; PL;
+	     (obj[],PL) -&gt; GetSPoff -&gt; SPoff;	    
+	     SP + SPoff -&gt; callerSP;
+	     callerSP[-1] -&gt; callerLSC;
+             (if PL = 1 then 
+		 (* obj.descriptor is a toplevel descriptor 
+		  * that is a sub of Object
+		  *)
+	          callerSP[-2] -&gt; caller[]
+	      else
+		(* find out wheter caller is the do-part of super or
+	         * a nested descriptor in the do-part of super
+	         *)
+	        (if ((callerLSC,callerSP)
+                       -&gt;NestedCaller-&gt;caller[]) = NONE then
+		     obj[] -&gt; caller[]
+		if)
+              if)
+	  exit (caller[],callerSP,callerLSC)
+	  #)
+
+where
+
+	GetSPoff:
+	  (#
+	  enter(obj[],PL)
+	  do obj.proto[-PL] -&gt; codeStart; (* M-entry point *)
+	     - codeStart[0].signExtendBits(16:16) -&gt; SPoff;
+	  exit SPoff
+	  #);
+
+	NestedCaller:
+	  (#
+	  enter (callerLSC,callerSP)
+	  do callerLSC[0] -&gt; instr; (* first instruction to be executed 
+				     * after return to caller
+				     *)
+	     (if instr = "lw  $30, offset($sp)" then          
+		 callerSP[-offset/4] -&gt; caller[]
+	      else none -&gt; caller[]
+	     if)
+	  exit caller[]
+	  #)
+
+The above 2 procedures are MIPS dependent, but similar implementations
+for other platforms should be possible.
+
+Comment:
+
+Let obj be an instance of the following descriptor X:
+
+	X: A(# .... do ... #);
+
+	A: B(# ... do ...; INNER A; ... #);
+
+	B: C(# ... do ...; (# ... do ...; INNER B; ... #); .... #);
+
+        C: ...
+
+Note 1: When dyn is called, the execution of obj may be in one of the
+	do-parts corresponding to X,A.B,C, etc.  The exact do-part MUST be
+	determined in order to traverse the stack.
+
+Note 2: It is necessary to know whether the do-part of a sub-pattern is called 
+
+	(1) via inner direcly from the do-part of the super-pattern, or
+
+	(2) from a nested descriptor within the do-part of the
+	   super pattern.
+
+	The do-part of X above is an example of (1), since it is assumed to be
+	called direcly form the do-part of A. The do-part of A is an example
+	of (2) since it is called from a descriptor nested within the do-part
+	of B.
+
+	
+OBS!	The above routine/description does NOT work if the PC is within a 
+	G-part. The G-part MUST be considered when traversing the super-chain.
+	There is no problem in this, since it is just a matter of testing
+	both for the M- and G-parts.
+
+</PRE>
+
+<H2><A NAME="leave_restart">4. Global leave and restart</A></H2>
+
+<PRE>
+	To execute a global leave or restart, the stack must be popped
+	frame by frame until the object being denoted by leave/restart
+	is met. Consider:
+
+	    X:  (# ...
+		do ...;
+		   L: (q ...; A(# ... do ... leave L; ... #); ... q);
+		   ...;
+		#)
+
+	Assume that leave L (the following also holds for restart) is
+	executed in the object Y. 
+
+	We then have the situation:
+
+		-----           
+		| X |           
+		----- &lt;		 
+		  ^  	\
+		  |	 ........\
+		  .	          \
+		  .		   -----
+		  .		 &gt; | Q |
+		  .		/  -----
+		  .	       /
+		  .       -----
+		  .     &gt; | Z |
+		  ^    /  ----- 
+		  |   /
+		-----
+		| Y |   
+		-----
+
+The virtual line using | shows the origin chain for Y. This origin chain
+will eventually end in X.
+
+The lines drawn using / and \ shows the dynamic (call) chain.  Y is
+called from Z which is called from Q.  Eventually the call chain also
+ends up in X.
+
+ExO must pop the stack frames corresponding to the call frame until 
+X is met. If X is NOT met there is a run-time error.
+
+The ExO pattern works as follows:
+
+	ExO:
+	  (#
+	  enter(exitObj[],PC,this,SP)
+	  do this[] -&gt; a[]; SP -&gt; SP1; PC -&gt;LSC;
+	     (while a[] &lt;&gt; exitObj[] do
+		(a[],SP1,LSC) -&gt; Dyn -&gt; (a[],SP1,LSC)
+	     while);
+	  exit SP1
+	  #)
+
+Note that ExO returns SP1. The code following ExO is supposed to set
+th(this) and SP properly and then jump to the leave/restart address.
+
+Note:  	madsn has an example where the above is NOT enough, but this is a 
+	problem for all other platforms as well. But is fixable:-)
+	
+Q1:	Why is ExO using dyn? In some implementations, SP is saved in this
+	at each label, and used at the corresponding leave/restart?
+	Is it posssible just to calculated exitObj, set SP and jump?
+
+Q2:	What if leave/restart is out of activeComponent?
+	Is this tested in the official betarun?
+
+</PRE>
+
+<H2><A NAME="todo">Missing tasks</A></H2>
+
+<PRE>
+1.	Element above top element on refStack MUST be cleared before
+	all calls, that can result in a GC.		&lt;---------- done
+
+2.	Floating point arguments to externals
+
+	Currently only 2 float arguments can be passed
+	Extra arguments must be passed on the stack as for int arguments.
+	This is NOT so difficult, but the current interface may
+	have a problem, since it only (in initExternalCall) gives
+	the number of longs used for arguments. The float arguments
+	MUST be 8-byte aligned in the SP-stack. It is thus NOT
+	enough just to count longs, and counting a float as
+	2 longs. In e.g.
+
+		void foo(int a,b,c; float x)
+
+	It is probably necessary to align the stack in this case;
+	but the ABI should be studied more carefully.
+	And this is probably machine specific.
+
+3.	ChkRA currently assumes that IOAtop and IOAmax are in registers.
+	A strategi must be devised to keep them there. Is complicated by
+	external calls, callback, etc.
+
+4.	Mixed stack handling
+
+	The current MIPS implementation does NOT keep track of which
+	part of the stack is  Beta, and which is external calls, and
+	callback frames. It must be possible to distinguish Beta frames
+	from external/callback frames.
+	
+5.	When cleaning-up parameter transfer to primitive routines, then
+	the virtuals toPrimReg in evval make use of ldCts, ldVal,
+	etc. These operations MUST be prepared to handle primregs &gt; maxPreg
+	(mips_R7)
+
+6.	Problem with callReg in a1; in some situations callReg/a1 is busy
+	but a parameter is transferred to a1 as a C- or prim-argument.
+	Solution: callReg could be mips_R2 (result reg) or another reg.
+	In both cases callReg MUST be moved to a1 before AlloI, etc.
+	A more ugly solution will be to use R2 as a1 and then move R2
+	to a1 before each external call, but ugly.
+	We could keep callReg in a1, and then test if callReg is busy before
+	each external-call, and if busy then save callReg and delay
+	assignment to a1 via e.g. R2. We need not save callReg unless
+	a1 is actually used; could be tested in xGetOreg
+
+</PRE>
+
+<H2><A NAME="oldstuff">Old stuff</A></H2>
+
+<PRE>
+
+1.	A better stack allocation strategi must be invented;
+	C saves its arguments above sp; this means that for all calls
+	to C including primitives, there must be room above sp
+	for the arguments to these.
+	We can allocate room for e.g. 4 arguments at entry to each
+	beta  routine; this is enough for most primitives; we
+	can then allocate more stac space for C routines and primitives
+	if they have more than 4 arguments;
+	We should probably at each Beta entry allocate enough for
+	all primitives;
+
+	A remaining problme is that values (data and refs) are also
+	pushed on the stack; if sucxh values are pushed, stack space
+	must be alloacted for eaxh C or primitive call; 
+
+	For the data values, we may allocate space at entry to each
+	Beta routine, since data values are only for saving registers
+	when calling other rouitnes;
+
+	This cannot be done ref values, since we dont know the
+	number of elements being pushed; We may count this
+	in MIPSmachine, and then patch the addui allocating
+	stack space; this might make stack traversal easier??
+
+2.	Computed remote
+
+	In an evaluation
+			((e1,e2) -&gt; F).A
+	the following callas are made
+
+		initPrimCall		for AlloI of A
+		   initPrimCall		for AlloI of F
+		   callAlloPrim
+		   getPrimRes
+		callAlloPrim		for A
+		getPrimRes
+
+	This is a situation of nested primcalls, which allocates
+	frames on the stack.
+	Should handled inside out! Require changes at itemevval level:-(
+
+	This eval is also complicated due to callReg in a1!
+
+	The above has been fixed by changing itemevval!
+
+3.	Nested inner calls spoils the stack structure
+
+		P: (# do ... (# do ... inner P #) ... #);
+
+		PP: P (# do ... #)
+
+	In the code for PP there is no way of knowing whether the
+	inner comes form P or an internal object in P.
+
+	The nested inner P in P, pushes this and redfines this before
+	the inner; at the do-part in PP, there is no way of finding
+	out about the caller. 
+
+	Solutions:
+
+	1)	inner P could always be made as a normal call using
+		ca, etc; this will provide extra overhead for
+		non nested inners.
+
+	2)	store the Prefix level on the refStack at saveInnerReturn;
+		will again be extra overhead, ...
+
+4.	Problem with callReg in a1, when BETA calls happen during
+	external calls. The argument registers may be pushed
+	and pop'ed form the stack; this makes it hard to keep
+	callReg to be in a1. Several booleans controls this by now:
+	e.g. a1InTmp.
+
+5.	CopyCT is to transformed C text returned by a C call  BUT ALSO
+	to transform a C text being input to a BETA call back function.
+
+
+</PRE>
+
+<H2><A NAME="n32">n32 Object File Format Considerations</A></H2>
+
+An initial attempt to use the new <CODE>n32</CODE> object file format
+has been made. The idea is to use switch 84 in the compiler to control
+this.
+
+<H3>Changes to betarun</H3>
+
+Since SGI betarun is in pure C, all that is needed is to change all
+<CODE>-32</CODE> to <CODE>-n32</CODE> in Makefiles in the
+<CODE>C</CODE>, the <CODE>GC</CODE>, the <CODE>P</CODE>, and the
+<CODE>NEWRUN</CODE> directories (remember the ymakefiles).
+
+<H3>Changes to asmlink</H3>
+
+A few changes are needed:
+<OL>
+<LI>Change <CODE>-32</CODE> to <CODE>-n32</CODE>
+<LI>Link with <CODE>crt1</CODE> and <CODE>crtn</CODE> in
+<CODE>/usr/lib32</CODE> instead of the ones from
+<CODE>/usr/lib</CODE>.
+<LI><CODE>gcc -O6</CODE> should now be possible to use for
+<CODE>CC</CODE> in BUILDs.
+</OL>
+
+<H3>Changes in code generation</H3>
+
+I have realized that a few changes are nedded in code generation. All
+in all they seem to reduce the code size!
+<P>
+There is a detailed explanation in
+<A
+HREF="http://techpubs.sgi.com:80/library/tpl/cgi-bin/getdoc.cgi?db=bks&srch=&fname=/SGI_Developer/Mpro_n32_ABI/">MIPSpro
+N32 ABI Handbook</A>.
+
+Specific issues (see <A HREF="http://techpubs.sgi.com:80/library/dynaweb_bin/ebt-bin/0650/nph-infosrch.cgi/infosrchtpl/SGI_Developer/Mpro_n32_ABI/@InfoSearch__BookTextView/1920;he=0">N32 Implications for Assembly Code</A>):
+<OL>
+<LI><A
+HREF="http://techpubs.sgi.com:80/library/dynaweb_bin/ebt-bin/0650/nph-infosrch.cgi/infosrchtpl/SGI_Developer/Mpro_n32_ABI/@ebt-link;he=0?target=%25N%14_1954_START_RESTART_N%25">Callee
+saved <CODE>%gp</CODE></A>
+<LI><A
+HREF="http://techpubs.sgi.com:80/library/dynaweb_bin/ebt-bin/0650/nph-infosrch.cgi/infosrchtpl/SGI_Developer/Mpro_n32_ABI/@InfoSearch__BookTextView/2108;he=0">Different
+register sizes</A>
+<LI><A
+HREF="http://techpubs.sgi.com:80/library/dynaweb_bin/ebt-bin/0650/nph-infosrch.cgi/infosrchtpl/SGI_Developer/Mpro_n32_ABI/@InfoSearch__BookTextView/2173;he=0">Changes
+in calling conventions</A> (8 arguments can now be transferred in
+registers - previously 4)
+<UL>
+<LI>Expanded pseudo instructions can be found at
+<A
+HREF="http://techpubs.sgi.com:80/library/tpl/cgi-bin/getdoc.cgi?coll=0650&db=bks&srch=&fname=/SGI_Developer/MProAsLg_PG/10628">Pseudo
+opcodes (Directives)</A>
+</UL>
+
+<LI><A
+HREF="http://techpubs.sgi.com:80/library/dynaweb_bin/ebt-bin/0650/nph-infosrch.cgi/infosrchtpl/SGI_Developer/Mpro_n32_ABI/@InfoSearch__BookTextView/2260;he=0">More
+floating point registers can be used</A>
+</OL>
+
+None of these changes to code generation has been made. We should
+consider this in the near future, since this will assure that we are
+up-to-date with the architecture, and since it will allow us to link
+object files produced by gcc with BETA programs.
+
+<H2><A NAME="bibliography">Bibliography</A></H2>
+
+
+<DL>
+
+<DT><A NAME="r10000">[R10000]</A>
+<DD>
+<EM><A
+HREF="http://www.sgi.com/MIPS/products/r10k/UMan_V1.1/t5.Ver.1.1.book_1.html">
+R10000 Microprocessor User's Manual</A></EM>
+<P>
+
+</DL>
+
+<!-- padding for better scrolling -->
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+
+</BODY>
+</HTML>

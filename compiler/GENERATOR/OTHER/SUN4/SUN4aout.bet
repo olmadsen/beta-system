@@ -1,0 +1,269 @@
+ORIGIN 'SUN4Bmachine';
+INCLUDE 'A_OUT/aoutfile';
+MAKE sun4 'A_OUT/makefile';
+---emitCodeToFile:descriptor---'
+(#
+   align4: @
+     (# n: @integer
+     enter n
+     exit (n + 3) %band (%bnot 3)
+     #);
+   SectionStringTable: @
+     (* Data for section string table *)
+     (# shstr: ^text;
+        sectionStringStart,
+        textStart,
+        dataStart,
+        relTextStart,
+        relDataStart,
+        strtabStart,
+        symtabStart: @integer;
+        init:
+          (#
+          do &text[]->shstr[];
+             0->shstr.put;
+             shstr.length->sectionStringStart;
+	     '.shstrtab'->shstr.append; 0->shstr.put;
+             shstr.lgth->textStart;
+             '.text'->shstr.append; 0->shstr.put;
+             shstr.lgth->dataStart;
+             '.data'->shstr.append; 0->shstr.put;
+             shstr.lgth->relTextStart;
+             '.rela.text'->shstr.append; 0->shstr.put;
+             shstr.lgth->relDataStart;
+             '.rela.data'->shstr.append; 0->shstr.put;
+             shstr.lgth->strtabStart;
+             '.strtab'->shstr.append; 0->shstr.put;
+             shstr.lgth->symtabStart;
+             '.symtab'->shstr.append; 0->shstr.put;
+     #)#);
+
+   sections: @
+     (# sectionInx: (#exit 1 #);
+        sectionStringStart: @ (#exit 0 (*elfHeaderSize*) #);
+        sectionStringSize: @ (#exit SectionStringTable.shstr.lgth (*NO GC!*)#);
+        textInx: (#exit 2 #);
+        textStart: @ (#exit sectionStringStart (* + sectionStringSize->align4*) #);
+        textSize: @ (#exit b.LIP->align4 #);
+        dataInx: (#exit 3 #);
+        dataStart: @ (#exit textStart + textSize #);
+        dataSize: @ (#exit d.LIP->align4 #);
+        symTabInx: (#exit 4 #);
+        symtabStart: @ (#exit dataStart + dataSize #);
+        symtabSize: @ (#exit (mstate.symtabTop) * nlistsize #);
+        stringInx: (#exit 5 #);
+        stringStart: @ (#exit symtabStart + symtabSize #);
+        stringSize: @ (#exit mstate.strTbl.str.lgth (* be sure its static *)#);
+        relTextInx: (#exit 6 #);
+        relTextStart: @ (#exit stringStart + stringSize->align4 #);
+        relTextSize: @ (#exit mstate.b.noOfRel * reloc_info_sparc_size #);
+        relDataInx: (#exit 7 #);
+        relDataStart: @ (#exit relTextStart + relTextSize #);
+        relDataSize: @ (#exit mstate.d.noOfRel * reloc_info_sparc_size #);
+        headerStart: @ (#exit relDataStart + relDataSize #);
+
+     #);
+   EmitHeader:
+     (* Construct a.out header *)
+     (#
+     do (0 (* not dynamic library *),
+        1 (* linker will only accept toolversion 1 *),
+        M_SPARC (* sparc file *),
+        OMAGIC,
+        sections.textSize,
+        sections.dataSize,
+        0 (* bss size *),
+        sections.symtabSize,
+        0 (* entry point *),
+        sections.relTextSize,
+        sections.relDataSize)
+          -> EF.putSparcExec;
+     #);
+   EmitText:
+     (# S: @integer
+     do sections.textSize->S;
+        (*(@@S,4)->putB;*)
+        (@@b.buffer[1],sections.textSize)->putB;
+     #);
+   EmitData:
+     (# S: @integer
+     do sections.dataSize->S;
+        (*(@@S,4)->putB;*)
+        (@@d.buffer[1],sections.dataSize)->putB;
+     #);
+   EmitRel:
+     (# im: ^Image;
+        relType: [markMax] @integer; 
+        mark,symtabInx,relInfo,n,extern,offSet,addend,reloc: @integer;
+        ep: ^EntryPointInfo
+     do RELOC_WDISP30->relType[callMark];
+        RELOC_HI22   ->relType[setHiMark];
+        RELOC_LO10  ->relType[setLoMark];
+        RELOC_LO10  ->relType[setLoMarkSt];
+        RELOC_LO10  ->relType[setLoMarkJmp];
+        RELOC_LO10  ->relType[setLoMarkLdd];
+        RELOC_LO10  ->relType[setLoMarkLd];
+        RELOC_32     ->relType[wordMark];
+        0(*RELOC_NONE*)   ->relType[entryDefMark];
+        RELOC_WDISP22     ->relType[jmpMark];
+        RELOC_WDISP22     ->relType[bgtuMark];
+        INNER; (* define im to be one of mstate.d or mstate.b *)
+        (for i: im.markTop repeat
+             (im.marks[i]-1)*4->offSet;
+             (if im.types[i]->mark
+              // entryDefMark then
+              else
+                 (* symtab indexes are counted 0,1,... *)
+                 im.epElm[i][]->ep[];
+                 relType[mark]->reloc;
+                 (if ep.local 
+                     and (reloc<>RELOC_WDISP30) 
+                     (*and (reloc<>RELOC_WDISP22)*) then
+                     (* reference to local symbol *)
+                     0->extern;
+                     (if ep.data then
+                         N_DATA->symtabInx;
+                         sections.textSize+ep.LIP -> addend
+                      else
+                         N_TEXT->symtabInx;
+                         ep.LIP->addend
+                     if);
+                  else
+                     (* external reference *)
+                     ep.m.symtabInx - 1 ->symtabInx; (* counts from zero*)
+                     1->extern;
+                     (if reloc // RELOC_WDISP30 (*// RELOC_WDISP22*) then
+                         -offSet->addend
+                      else
+                         0->addend
+                 if)if);
+                 (offSet,symTabInx,extern,reloc,addend)
+                   ->EF.putSparcReloc;
+                 n+1->n;
+             if)
+        for);
+        (if n <> im.noOfRel then 
+            '\nWARNIG rel count inconsistencies: '->putText;
+            n->putint; ' '->put; im.noOfRel->putint; newline
+        if)
+     #);
+   EmitRelText: EmitRel(#do mstate.b[]->im[] #);
+   EmitRelData: EmitRel(#do mstate.d[]->im[] #);
+   lastLocalInSymtab: @integer;
+   EmitSymbolTable: @
+     (# sort:
+          (* local symbols MUST preceede global symbols *)
+          (# first,last: @integer; S: ^EntryPointInfo
+          do 1->first; mstate.symtabTop->last;
+             findGlobal:
+               (* ep[1..first-1]=local and ep[last+1..ep.range]=global 
+                * and first < last
+                *)
+               (if first < last then
+                   (if ep[first][]->isGlobal then
+                       findLocal:
+                         (if first < last then
+                             (if ep[last][]->isGlobal then
+                                 last-1->last;
+                                 restart findLocal
+                              else
+                                 (* ep[first]=global and  ep[last]=local*)
+                                 (* swap *)
+                                 ep[first][]->S[]; ep[last][]->ep[first][];
+                                 S[]->ep[last][];
+                                 first->ep[first].m.symTabInx;
+                                 last->ep[last].m.symTabInx;
+                                 (* ep[first]=local and ep[last]=global *)
+                                 last-1->last
+                   if)if)if);
+                   (* ep[first]=local*)
+                   first+1->first;
+                   restart findGlobal;
+               if)
+          #);
+        isGlobal:
+          (# S: ^EntryPointInfo; b: @boolean
+          enter S[]
+          exit (S.local and S.export) or not S.local
+          #);
+        defSec, n: @integer; 
+        ep: [mstate.symtabTop] ^EntryPointInfo;
+        init:
+          (#
+          do entryPoints.scan
+             (#
+             do current[]->ep[current.m.symtabInx][] ; n+1->n
+             #);
+             (if (n) <> mstate.symtabTop then
+                 '\n WARNIG: inconistencies in symtab size:'->puttext;
+                 n->putint; ' '->put; mstate.symtabTop->putint; newline;
+             if);
+             sort;
+          #);
+        base: @integer
+     do
+        (for i: ep.range repeat
+             (# current: ^ EntryPointInfo; binding,type,info: @integer
+             do ep[i][]->current[];
+                (if current.local then
+                    (if current.export then
+                        N_EXT->binding
+                     else
+                    if);
+                    (if current.data then
+                        N_DATA->type;
+                        sections.textSize->base
+                     else
+                        N_TEXT->type;
+                        0->base
+                    if)
+                 else
+                    N_UNDF->type;
+                    N_EXT->binding;
+                    0->base
+                if);             
+                (current.m.strInx
+                ,type %bor binding
+                ,base + current.LIP)->EF.putNlist
+        #)for)
+     #);
+   EmitSectionStringTable:
+     (* Write section string table *)
+     (#
+     do (@@sectionStringTable.shstr.T[1], sections.sectionStringSize->align4) 
+          -> putb
+     #);
+   EmitStringTable:
+     (# S: @integer
+     do sections.stringSize->S; 
+        (@@S,4)->putB;
+        (@@mstate.strTbl.str.T[5],sections.stringSize-4)->putb
+     #);
+   
+   EF: @aoutfile;
+
+   putb: @EF.putbytes;
+   
+   T: ^text;
+do (BC.name).copy->T[];
+   (*(T.length-1,T.length)->T.delete; ( * T = '.../foo.' *)
+   (if common.switch[55] then '.go'->T.append->EF.name
+    else '.o'->T.append->EF.name
+   if);
+   
+   EF.openWrite;
+   SectionStringTable.init;
+   EmitSymbolTable.init;
+   
+   EmitHeader;
+
+   EmitText;
+   EmitData;
+   EmitRelText;
+   EmitRelData;
+   EmitSymbolTable;
+   EmitStringTable;
+
+   EF.close;
+#)
+

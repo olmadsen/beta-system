@@ -1,0 +1,117 @@
+ORIGIN 'system';
+INCLUDE 'transDepGraph';
+INCLUDE '../GENERATOR/asmlink';
+LIB_ITEM 'betacompiler'
+---doTranslateBody:doPart---
+do
+(# initTarget:
+     (* TargetMachine denotes the target machine. 
+      * If TargetMachine is none, 
+      * the host machine on which the compiler is running is 
+      * used as default target machine.
+      * TargetMachId is an integer representing the 
+      * target machine;  see com.bet for possible values.
+      * Set the variables TargetDirectory and asmLink.jobFileMachine.
+      * The following strategy is used.
+      * If the attributes targetMach and jobfileMach are NONE,
+      * the variable asmLink.jobfileMachine is set to NONE
+      * (this signals that the jobfile should be executed on THIS machine).
+      * If targetMachine is NONE and jobfileMachine is not,
+      * then jobfileMachine is assigned to asmLink.jobfileMachine.
+      * If targetMachine is <> NONE (i.e. another machine than THIS
+      * machine is the target) then
+      * - if jobfileMachine is<>NONE, it is assigned to asmlink.jobfileMachine
+      * - else a default value for asmlink.jobfileMachine is looked up in
+      *   the global Mjolnerrc.
+      *) 
+     (# found, setJobFileMachine: @boolean; T: ^text
+     do (if TargetMachine  = NONE then 
+            &text[] -> T[]; 
+            machine_typeexternal -> T; T[] ->TargetMachine;
+            jobFileMach[]->asmlink.jobFileMachine[];
+         else 
+            (* old strategy is a mess; TargetMach[] <> NONE
+             * signalled that jobFileMachine should be set;
+             * the new simplification for TargetMAchine
+             * does not work with recursive compiler
+             * compiler should probably have an 
+             * interface for this which should be called
+             * from interactive
+             * 
+             * (if jobFileMach[] = NONE then true->setJobFileMachine
+             *   else jobFileMach[]->asmlink.jobFileMachine[]
+             * if);
+             *)
+        if);
+        (if verboseLevel < verboseLevel.nothing then
+            'Target machine type '->infostream.puttext;
+            TargetMachine ->infostream.putLine;
+        if);
+        (* Look for a global property : machine.<TargetMachine>: ... *)
+        TargetMachine -> T[];
+        (GlobalOnly,'machine',T)->ScanMjolnerProps
+        (# count: @integer;
+        do propVal.scanTokens
+           (#
+           do count+1->count;
+              (if true
+               //(count=1) then
+                  token -> common.targetDirectory;
+               //((count=2) and setJobFileMachine) then
+                  token[]->asmlink.jobFileMachine[];
+              if);
+           #);
+           (if found then
+               (# T: @text
+               do 'Multiple defined property, machine.'->T.puttext;
+                  TargetMachine -> T.putline;
+                  T[] -> thisTranslate.SystemException
+               #)
+           if);
+           true->found;
+        #);
+        (if not found then
+            (# T: @text
+            do 'Unknown target machine type: '->T.puttext;
+               TargetMachine -> T.putline;
+               T[] -> thisTranslate.SystemException
+            #)
+        if);
+     #);
+   T: ^text;
+   oldSW6: @boolean;
+   
+   init:<
+     (#
+     do 214 -> SwitchOn; (* No code is generated for empty G-parts *)
+        (if common.switch[64] or common.switch[65] then 
+            (* 65 => 64 *) 64 -> switchOn; 
+            68 -> SwitchOn 
+        if);
+        depGraph.Init;
+        initTarget;
+        TargetMachine -> T[]; 
+        T -> depGraph.targetMachine;
+        T -> depGraph.targetDirectory;
+        SharedLibs.Init;
+        asmlink.init;
+        (*asmLink.TX.clear; asmLink.Libs.clear; asmLink.build.clear;
+         &text[]->asmLink.fSwitch[]; &text[]->asmLink.BetaRun[];
+         (if betarunSwitch[]<>NONE then betarunSwitch->asmLink.betaRun if);
+         &text[]->asmLink.ObjName[]; ( *  to assure NOT none *)
+
+        (* The hasProgramSlot code in controlbody may override switch[6];
+         * here we make sure to restore the original value
+         *)   
+        common.switch[6] -> oldSW6;
+        dStat.init;
+     #)
+do init;
+   
+   rootFragment[] -> depGraph.handleFragments;
+   
+   (if not (common.switch[5] or common.switch[24] or common.switch[75]) then
+       asmLink
+   if);
+   oldSW6 -> common.switch[6]
+#)

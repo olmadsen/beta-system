@@ -1,0 +1,401 @@
+ORIGIN 'sematt';
+LIB_ITEM 'betacompiler';
+INCLUDE '~beta/betaast/semanticerrortext';
+BODY 'checkbody' 'docheck' 'chkdescbody' 'chklst' 'initterm';
+---Checker:descriptor---
+(************************* Static Semantic checker *******************
+ *
+ *  Checker:
+ *  (#
+ *      InitTerm:
+ *      (#
+ *      enter theFragment[]
+ *      do ...
+ *      #)
+ *
+ *      doCheck:
+ *      (#
+ *      do ...
+ *      #)
+ *
+ *   enter theGroup[]
+ *   #)
+ *--------------------------------------------------------------------
+ * switch[191:199]
+ * 191: desc trace
+ * 192: dcl trace 
+ * 193: imp trace 
+ * 194: cst desc val
+ * 195: desc after check, elim.
+ * 196: dump att storage allocation
+ * 198: detailed checker trace
+ **********************************************************************
+ *)
+(# <<SLOT checklib:attributes>>;
+   
+   CheckState: @ <<SLOT CheckState:descriptor>>;
+   
+   SemError: 
+     (* FORM doCheck may crash if there is semantic errors !!!! 
+      * Semantic errors: see ~beta/betaast/$V/semanticerrortext.bet
+      *)
+     (# node: @ AStindex; errNo: @integer
+     enter(node,errNo) do <<SLOT SemError:descriptor>>
+     #);
+   Warning:
+     (* for reporting warnings *)
+     (# node: @ AStindex; errNo: @integer
+     enter(node,errNo) do<<SLOT warning:descriptor>>
+     #);
+   MakeError:
+     (# L: [0] ^text; E: [0] ^ASTindex;
+        XT:
+          (# T: ^text
+          enter T[]
+          do 1 -> L.extend;
+             T[] -> L[L.range][]
+          #);
+        XTl: (* add text to the last item *)
+          (# T: ^text
+          enter T[]
+          do T[] -> L[L.range].append
+          #);
+        XA:
+          (# ev: ^ASTindex;
+          enter ev[]
+          do 1 -> E.extend;
+             ev[] -> E[E.range][]
+          #);
+        EV: ^ASTindex;
+        isWarning: @boolean
+     enter(EV[],isWarning)
+     do INNER;
+        (EV[],L,E,isWarning) -> ErrorReport
+     #);                           
+   ErrorReport:
+     (# EV: ^AStindex; L: [1] ^text; E: [1] ^ASTindex; 
+        isWarning: @boolean
+     enter(EV[],L,E,isWarning) (* PRE: L.range = (E.range + 1) *)
+     <<SLOT errorReport:doPart>>
+     #);
+   NewError:
+     (# EV: ^ASTindex; m: ^text; 
+     enter(EV[],m[])
+     <<SLOT NewError:doPart>>
+     #);  
+   NoInner:
+     (* mark that the super descriptor has no inner *)
+     (# preDesc,desc: ^AStindex
+     enter(preDesc[],desc[]) <<SLOT NoInner:doPart>>
+     #);
+   EmitDelayedMsg:
+     (* Delayed error messages are emitted. This includes possible
+      *  'super has no inner' an warnings.
+      * For 'super has no inner', it is checked 
+      * if the super still has no inner.
+      * In situations like
+      *    P: (# do ...; &(# do ...; inner P; ... #);
+      *    P(# do ... #)
+      * the descriptor P(# ... #) may be announced as having no inner,
+      * since the the inner singular descriptor of P may not have been
+      * checked before P(# ... #) is checked.
+      * This procedure checks if the super desc still has no inner in which
+      * case an error message is given.
+      *)
+     (# errCount,warnCount: @integer
+     do <<SLOT EmitDelayedMsg:descriptor>>
+     exit(errCount,warnCount)
+     #);
+   Errorprint: <<SLOT ErrorPrint:descriptor>>;
+
+   Find: 
+     (* traverse binary tree of nameDcl's, *)
+     (* find Name in tree with root nameTree. *)
+   (# father: @AStindex; (* nameDcl *)
+      Left:< (#do INNER #);
+      Right:< (#do INNER #);
+
+      nameTree,name: @AStindex
+   enter(nameTree,name)
+   do (if not nameTree.isNull then 
+          Scan:
+            (if ((Name,nameTree->Father) -> CMP)
+             // less then
+                nameTree.left -> nameTree;
+                (if nameTree.isNull then Left else  restart Scan if)
+             // greater then
+                nameTree.right -> nameTree;
+                (if nameTree.isNull then Right else restart Scan if)
+             else (*equal*) INNER
+   if)if)#);
+   
+   FindApl: @
+     (# father: @AStindex; (* nameDcl *)
+        nameTree,name: @AStindex;
+        theCMP: @CMP;
+        found: @boolean
+     enter(nameTree,name)
+     do false->found;
+        (if not nameTree.isNull then 
+            Scan:
+              (if ((Name,nameTree->Father) ->theCMP)
+               // less then
+                  nameTree.left -> nameTree;
+                  (if not nameTree.isNull then  restart Scan if)
+               // greater then
+                  nameTree.right -> nameTree;
+                  (if not nameTree.isNull then restart Scan if)
+               else (*equal*) 
+                  true->found
+        if)if)
+     exit found
+     #);
+
+   descNo,attDescNo: @integer; (* used by initterm *)
+   (*! OBS. the decl. of descNo in sematt can be removed *)
+   InitTerm:
+     (**********************************************)
+     (* initialization of the AST: insert origin,  *)
+   (* check double decl.                         *)
+   (*!!!!!!!!!!!!!! Possible to optimize if only recheck is performed !!!!!!!*)
+   (# FF: ^FragmentForm 
+   enter FF[]
+   do <<SLOT InitTerm:descriptor>>
+   #);
+
+   DS: @ (* stack descriptors that must be checked *)
+     DescStack
+   (# 
+      put:
+        (# desc,id: ^AStindex; K,C: @integer
+        enter(desc[],K,C,id[]) 
+        do (if (desc->DescKind) = undefined then
+               (* clumsy!!!! *)
+               (if id[] = none then (desc,K,C,null) -> &Push
+                else (desc,K,C,id) -> &Push 
+               if);
+               (* copy is necessary because of aliasing *)
+        if)#);
+      get:
+        (# D,I: ^AStindex; K,C: @integer
+        do L:
+             cycle
+             (#do &Pop -> (D[],K,C,I[]);
+                (if D[] = NONE then leave L
+                 else (if (D->DescKind) = undefined then leave L if)if)
+             #)
+        exit(D[],K,C,I[])
+        #);
+
+      putDo:
+        (# doP,origin: ^AStindex
+        enter(doP[],origin[])
+        do (if ((top+1->top)>doPl.range) then
+               doPL.range->doPl.extend; 
+               doPorg.range->doPorg.extend
+           if);
+           &AStindex[]->doPl[top][]; &AStindex[]->doPorg[top][];
+           doP->dopL[top]; origin->doPorg[top]
+        #);
+      getDo:
+        (# doP,origin: ^AStindex
+        do (if (top>0) then
+               doPl[top][]->doP[]; none->doPl[top][];
+               doPorg[top][]->origin[]; none->doPorg[top][];
+               top-1->top
+           if)
+        exit(doP[],origin[])
+        #);
+      doPl,doPorg: [10] ^AStindex; top: @Integer;
+   #);
+
+   
+   DoCheck:
+     (*---------------------- do checking of forms ---------------*)
+     (#
+     do <<SLOT doCheck: descriptor>>; 
+     exit(error,FatalError)
+     #);
+   
+   LibCash: @
+     (* LibCash keeps track of bindings of libSlots for descriptors being
+      * searched for names during checking of a given fragmentGroup (theGroup).
+      * 
+      * When checking of theGroup starts, LibCash is empty.
+      * 
+      * Consider a descriptor D of the form
+      * 
+      *         D: (# ... <<SLOT LIB1:attributes>>; 
+      *               ... <<SLOT LIB2:attributes>>;
+      * 
+      *               ... <<SLOT LIBn:attributes>>; ...
+      *            #)
+      * The LIB slots are collected in a list:
+      *         D.lib->lib1; lib1.next->lib2; ...
+      * This list is created in initterm.bet
+      * 
+      * When a name is searched (see searchBody.bet) in D, localSearch checks
+      * if D.lib is non null. If D.lib <> null then it executes
+      *         D->libCash.scan(# ... #)
+      * which iterates over all fragments bound to LIB slots in D.
+      * See localSearch for details of how these fragments are used
+      * for searching.
+      * 
+      * LibCash lazily builds a cash to keep track of fragments bound 
+      * to lib slots. 
+      * 
+      * DD:     has an entry pr. descriptor that until now has been called
+      *         via scan. 
+      * B:      has a corresponding entry being a list of fragments bound
+      *         to lib-slots in the descriptor
+      * 
+      * When theGroup has been checked, LibCash contains the bindings
+      * of slots in descriptors that have been searched for names.
+      * If a descriptor has NOT been searched for a name, it will not
+      * appear in the cash and neither will the bindings of its lib-slots!
+      * 
+      * ScanAll: iterates over all descriptors at a given point in time.
+      *)
+     (# Init: (* not used since B/DD are NONE pr. default *)
+          (#do (for i: B.range repeat NONE->B[i][]; NONE->DD[i][]; 0->inx for)
+          #);
+        
+        Scan:
+          (* scan all fragments bound to LIB-slots in D *)
+          (# D: @AStindex; thisForm: ^FragmentForm;
+             ix: @integer; R: ^Elm
+          enter D
+          do (* check if D has been searched before 
+              * in which case there is an entry in DD
+              *)
+             L:
+               (#
+               do (for i: inx repeat 
+                       (if (D->DD[i].equal) then B[i(*->ix*)][]->R[]; leave L 
+                  if)for);
+                  
+                  (* D has not been searched before, then create an entry *)
+                       (* (if ix = 0 then D -> &Add  ->R[] if);*)
+                  D -> &Add -> R[];
+               #);
+             (* iterate over all fragments bound to lib-slots in D *)
+             Search:
+               (if (R[]<>NONE) then
+                   R.F[] -> thisForm[];
+                   INNER;
+                   R.succ[] -> R[];
+                   restart Search
+               if);
+          #);
+        
+        ScanAll:
+          (* iterates over all descriptors currently in the cash *)
+          (# currentDesc: ^ AStindex
+          do (for i: inx repeat DD[i][]->currentDesc[]; INNER for)
+          #);
+        
+        (*------- private ---------*)
+        inx: @integer;
+        B: [100] ^elm; DD: [100] ^AStindex;
+        elm:
+          (* the elements of a list of fragments bound to a lib-slot.
+           * The do-part inserts F in the list if it is not already there
+           *)
+          (# F: ^FragmentForm; succ: ^elm;
+          enter F[]
+          do Insert:
+               (# R: ^Elm
+               do B[inx][]->R[];
+                  L:
+                    (if (R[]<>NONE) then
+                        (if R.F[] = F[] then 
+                            leave Insert
+                        if);
+                        R.succ[] -> R[];
+                        restart L
+                    if);
+                  (* (if switch[171] then
+                   *     tracestream.newline;
+                   *     '&' -> tracestream.put;inx->tracestream.putint;
+                   *     F.Fullname->tracestream.puttext;
+                   * if); 
+                   *)
+                  &Elm[]->R[]; F[]->R.F[]; B[inx][]->R.succ[]; R[]->B[inx][]
+          #)#);
+        add:
+          (* creates a new entry in DD/B to hold binding s in lib-slots of D *)
+          (# D: @AStindex; Lib: @AStindex
+          enter D
+          do (*(if switch[171] then 
+              tracestream.newline; '+'->tracestream.put; 
+              inx->tracestream.putInt 
+              if);*)
+             (if (inx+1->inx) > B.range then
+                 B.range->B.extend; DD.range->DD.extend;
+             if); 
+             
+             (* go through all LIB-slots in D *)
+             D.Lib -> Lib;
+             LibSearch:
+               (if not lib.isNull then
+                   (* get the bindings of lib.
+                    * GetBinding calls Found for all bindings of lib.
+                    * An element &elm is created for each binding
+                    *)
+                   theGroup[]
+                     -> lib.GetBinding(# Found::<(#do theBinding[]->&elm #)#);
+                   lib.next -> lib;
+                   restart LibSearch
+               if);
+             &AStindex[]->DD[inx][]; D->DD[inx]
+          exit B[inx][]
+          #)                
+     #);
+   fatalInitTermError: @boolean;
+<<SLOT CheckDoPart:doPart>>
+#)
+---CashHandler:descriptor---
+(# elm: (# dclRef,descRef: ^AStindex; on,pn: @integer; left,right: ^elm #);
+
+   Cash:
+     (# root: ^elm;
+
+        Find:
+          (# N: ^AStindex; R,R1: ^Elm; found: @boolean
+          enter N[]
+          do (if Root[] = NONE then 
+                 &elm[]->Root[]->R[]
+              else
+                 Root[]->R[];
+                 scan:
+                   (if ((R.dclRef,N)->CMP)
+                    // less then
+                       R[]->R1[];
+                       R.left[]->R[];
+                       (if R[] // NONE then
+                           &elm[]->R1.left[]->R[]
+                        else restart scan
+                       if)
+                    // greater then
+                       R[]->R1[];
+                       R.right[]->R[];
+                       (if R[]// NONE then
+                           &elm[]->R1.right[]->R[]
+                        else restart scan
+                       if)
+                    // equal then true->found
+             if)if)
+          exit(R[],found)
+          #)
+     #);
+
+   new:
+     (#
+     do (if ((top+1->top)>R.range) then R.range->R.extend if);
+        &Cash[]->R[top][]
+     exit top
+     #);
+
+   R: [1000] ^Cash; top: @integer
+#)
+

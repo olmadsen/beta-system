@@ -1,0 +1,593 @@
+ORIGIN '../asmlinkbody';
+(*BODY 'DesFileCompressor'*)
+INCLUDE '~beta/maclib/appleevents';
+
+-- lib: attributes --
+unQuote:
+  (# t: ^text;
+  enter t[]
+  do (if ((1 -> t.inxGet) = '"') AND ((t.length -> t.inxGet) = '"') then
+         (2, t.length - 1) -> t.sub -> t[];
+     if);
+  exit t[]
+  #);
+containerList: list (# #);
+
+-- streamLib: attributes --
+continue:
+  (#
+  do 182->put; newLine; ascii.ht->put;
+  #);
+
+-- asmlinklib: attributes --
+
+textList: containerList
+  (# element:: text;
+  #);
+
+sharedLibrary:
+  (# name: ^text;
+     touched: @boolean;
+     objectFiles: @textList;
+     xfiles: @textList;
+     init:
+       (#
+       enter name[]
+       do objectFiles.init;
+          xfiles.init;
+          THIS(sharedLibrary)[] -> asmState.sharedLibs.append;
+       #);
+     add:
+       (# objectFile: ^text;
+          xfile: ^text;
+          e: @diskEntry;
+          base: ^text;
+       enter objectFile[]
+       do objectFile[] -> objectFiles.append;
+          (1, objectFile.length - 3) -> objectFile.sub -> base[];
+          
+          'x' -> (base.copy).append -> xfile[] -> e.path;
+          (if e.exists then
+              xfile[] -> xfiles.append;
+           else
+              'c.x' -> (base.copy).append -> xfile[] -> e.path;
+              (if e.exists then
+                  xfile[] -> xfiles.append;
+              if);
+          if);
+          (if (base[] -> asmState.touchedFiles.findByName) <> NONE then
+              true -> touched;
+          if);
+       #);
+     
+     ppcmacDirectory:
+       (# name: ^text
+       do ':ppcmac:' -> (objDirectory.copy).append -> name[];
+       exit name[]
+       #);
+     exportName:
+       (# exportName: ^text;
+       do name.copy -> exportName[];
+          ppcmacDirectory -> exportName.prepend;
+          'Export' -> exportName.append;
+       exit exportName[]
+       #);
+     libName:
+       (# libName: ^text;
+       do name.copy -> libName[];
+          ppcmacDirectory -> libName.prepend;
+       exit libName[]
+       #);
+     stubName:
+       (# stubName: ^text;
+       do name.copy -> stubName[];
+          ppcmacDirectory -> stubName.prepend;
+          'Stub' -> stubName.append;
+       exit stubName[]
+       #);
+     empty: booleanValue
+       (#
+       do xfiles.empty -> value;
+       #);
+     makeStub:
+       (# s: ^stream;
+       enter s[]
+       do (if NOT empty then
+              'Catenate ' -> s.putText;
+              xfiles.scan
+              (#
+              do current[] -> quote -> s.putText;
+                 s.continue;
+              #);
+              ' > ' -> s.putText;
+              exportName -> quote -> s.putLine;
+              'MakeStub -fragname ' -> s.putText;
+              name[] -> quote -> s.putText;
+              ' -o ' -> s.putText;
+              stubName -> quote -> s.putText;
+              ' ' -> s.putText;
+              exportName -> quote -> s.putLine;
+              s.newLine;
+          if);
+       #);
+     link:
+       (# s: ^stream;
+       enter s[]
+       do (if NOT empty then
+	   		  '   echo "linking sharedlibrary ' -> s.puttext;
+			  libName -> s.puttext;
+			  '"' -> s.putline;
+			  
+              linkerName -> s.putText;
+              ' -o ' -> s.putText;
+              libName -> quote -> s.puttext;
+              s.continue;
+              '\t-xm s -t "shlb" -c "????" ' -> s.puttext;
+              s.continue;
+              '{BetaPPCLinkOptions} ' -> s.putText; 
+              s.continue;
+              '-@export ' -> s.putText;
+              exportName -> quote -> s.putText;
+              s.continue;
+              asmState.sharedLibs.scan
+              (#
+              do (if current[] <> THIS(sharedLibrary)[] then
+                     (if current.hasStub then
+                         current.stubName -> quote -> s.putText;
+                         s.continue;
+                     if);
+                 if);
+              #);
+              objectFiles.scan
+              (#
+              do current[] -> quote -> s.putText;
+                 ' ' -> s.put;
+                 s.continue;
+              #);
+              '{BetaSharedLibs}'->s.putText;
+              s.newLine;
+              s.newLine;
+          if);
+       #);
+     hasStub: booleanValue
+       (#
+       do NOT xfiles.empty -> value;
+       #);
+  #);
+
+
+linkerName:
+  (# name: ^text;
+  do (if common.switch[70] then
+         (* Use Metrowerks CodeWarrior Linker *)
+         'MWLinkPPC' -> name[];
+      else
+         (* Use the MPW linker *)
+         'PPClink' -> name[];
+     if);
+  exit name[]
+  #);
+
+isStandardLib1: booleanValue
+  (# fileName: ^text;
+  enter fileName[]
+  do (# betalib: ^text;
+        lib: ^text;
+     do thePathHandler.betalib -> betalib[];
+        (if fileName.length > betalib.length then
+            (if (1, betalib.length) -> fileName.sub -> betalib.equalNCS then
+                &text[] -> lib[];
+                betalib.length -> fileName.position;
+                scan: fileName.scan
+                  (#
+                  do	(if ch = ':' then
+                            leave scan;
+                         else
+                            ch -> lib.put;
+                        if);
+                  #);
+                (if TRUE
+                 //'basiclib' -> lib.equal then true -> value;
+                 //'guienv' -> lib.equal then true -> value;
+                 //'betarun' -> lib.equal then true -> value;
+                 //'betaast' -> lib.equal then true -> value;
+                 //'bifrost' -> lib.equal then true -> value;
+                 //'bobs' -> lib.equal then true -> value;
+                 //'bobsgen' -> lib.equal then true -> value;
+                 //'containers' -> lib.equal then true -> value;
+                 //'maclib' -> lib.equal then true -> value;
+                 //'meta' -> lib.equal then true -> value;
+                 //'mps' -> lib.equal then true -> value;
+                 //'pretty' -> lib.equal then true -> value;
+                 //'process' -> lib.equal then true -> value;
+                 //'sysutils' -> lib.equal then true -> value;
+                 //'editor' -> lib.equal then true -> value;
+                if);
+            if);
+        if);
+     #);
+  #);
+
+isStandardLib: booleanValue
+  (# lib: ^text;
+  enter lib[]
+  do (if TRUE
+      //'basiclib' -> lib.equal then true -> value;
+      //'guienv' -> lib.equal then true -> value;
+      //'betarun' -> lib.equal then true -> value;
+      //'betaast' -> lib.equal then true -> value;
+      //'bifrost' -> lib.equal then true -> value;
+      //'bobs' -> lib.equal then true -> value;
+      //'bobsgen' -> lib.equal then true -> value;
+      //'containers' -> lib.equal then true -> value;
+      //'maclib' -> lib.equal then true -> value;
+      //'meta' -> lib.equal then true -> value;
+      //'mps' -> lib.equal then true -> value;
+      //'pretty' -> lib.equal then true -> value;
+      //'process' -> lib.equal then true -> value;
+      //'sysutils' -> lib.equal then true -> value;
+     if);
+  #);
+
+
+addSharedObject:
+  (# libraryName: ^text;
+     objectFile: ^text;
+     sharedLib: ^sharedLibrary;
+  enter (libraryName[], objectFile[])
+  do libraryName[] -> asmState.sharedLibs.findByName -> sharedLib[];
+     (if sharedLib[] = NONE then
+         &sharedLibrary[] -> sharedLib[];
+         libraryName[] -> sharedLib.init;
+     if);
+     objectFile[] -> sharedLib.add;
+  #);
+addObject:
+  (# objectFile: ^text;
+  enter objectFile[]
+  do (# betalib: ^text;
+        lib: ^text;
+        done: @boolean;
+     do thePathHandler.betalib -> betalib[];
+        (if objectFile.length > betalib.length then
+            (if (1, betalib.length) -> objectFile.sub -> betalib.equalNCS then
+                &text[] -> lib[];
+                betalib.length -> objectFile.position;
+                scan: objectFile.scan
+                  (#
+                  do	(if ch = ':' then
+                            leave scan;
+                         else
+                            ch -> lib.put;
+                        if);
+                  #);
+                (if lib[] -> isStandardLib then
+                    ('StandardLib', objectFile[]) -> addSharedObject;
+                 else
+                    (lib[], objectFile[]) -> addSharedObject;
+                if);
+                true -> done;
+            if);
+        if);
+        (if not done then
+            ('BetaProgram', objectFile[]) -> addSharedObject;
+        if);
+     #);
+  #);
+
+continue:
+  (#
+  do 182->AFF.put; AFF.newLine; ascii.ht->AFF.put;
+  #);
+
+
+--- asmlinkdynamic:descriptor --- (# #)
+
+
+--asmState:descriptor--
+(# tmpCount: @integer;
+   job: @File;
+   
+   sharedLibs: @containerList
+     (# element:: sharedLibrary;
+        findByName: find
+          (# predicate::
+               (#
+               do name[] -> current.name.equalNCS -> value;
+               #);
+             name: ^text;
+          enter name[]
+          #);
+     #);
+   touchedFiles: @textList
+     (# findByName: find
+          (# predicate::
+               (#
+               do name[] -> current.equalNCS -> value;
+               #);
+             name: ^text;
+          enter name[]
+          #);
+     #);
+#)
+--- hasSharedLibs:descriptor(*dopart*) ---
+(#
+do false->value;
+#)
+--- cont: descriptor --
+(#
+do 182->Aff.put; aff.newLine; ascii.ht->aff.put;
+#)
+--- header: descriptor ---
+(# betalib: ^Text;
+
+do 'set -e betalib ' -> AFF.puttext;
+   thePathHandler.betalib -> betalib[];
+   betalib[] -> Quote -> AFF.puttext;
+   AFF.newline;
+   'Execute "{betalib}scripts:Environment"' -> AFF.putline;
+
+	
+   asmState.sharedLibs.init;
+   asmState.touchedFiles.init;
+   
+   (* true->common.switch[33]; *)(* we cannot execute the jobfile from compiler *)
+   
+   (if common.switch[63] then
+       TX.scan
+       (#
+       do (if thisElm.kind = BetaEnvKind then
+              BinExt -> thisElm.T.CopyAppend 
+                -> addObject;
+          if)
+       #);
+       TX.scan
+       (#
+       do (if thisElm.kind = BetaDataKind then
+              BinExt -> thisElm.T.CopyAppend 
+                -> addObject;
+          if)
+       #);
+   if);
+#)
+--- AsmExt: descriptor --- 
+(# 
+do (if common.switch[34] then
+       '..s'->ext
+    else
+       '-BT-'->ext
+   if)
+#)
+--- BinExt: descriptor --- 
+(# do '.obj'->ext #)
+---LibExt: descriptor ---
+(# do '.o'->ext #)
+---ExeExt:descriptor---
+(* the extension for an executable file is empty 
+ * on most platforms except Windows NT 
+ *)
+(#do ''->ext #)
+--- JobExt: descriptor ---
+(# do '.job'->ext #)
+--- Echo: descriptor ---
+(# 
+do 'echo ' ->AFF.puttext;
+#)
+--- Remove: descriptor ---
+(# 
+do 'delete -i '->AFF.puttext; name[]->quote->AFF.putline; 
+
+#)
+---ChangeDirectory:doPart---
+do 'directory '->AFF.puttext; dir[] -> quote -> AFF.putline;
+   
+---AddCommand:doPart---
+do cmd[] -> AFF.putline;
+   
+--- Make: descriptor ---
+(# 
+do '"{betalib}scripts:BetaMake" '->AFF.puttext;
+   m[]->quote->AFF.putText; ' '->AFF.put; objName[]->quote->AFF.putLine;
+   'Exit If {Status} != 0' -> AFF.putLine;
+
+#)
+---Resource:descriptor---
+(# i: @Integer;
+   ext: @Text;
+do m.reset;
+   '.'->m.findAll(# do inx -> i #);
+   (if (i>0) and (i<m.lgth)  then
+       m.T[i+1:m.lgth] -> ext;
+       (if true
+        // ('rsrc'->ext.equalNCS) then '"{betalib}scripts:BetaRez" '->AFF.puttext;
+        // ('r'->ext.equalNCS) then '"{betalib}scripts:BetaResource" '->AFF.puttext;
+        else
+           '\n**** Warning: unknown extension in resource: '->messagestream.puttext;
+           m[]->messagestream.putline;
+           '"{betalib}scripts:BetaRez" '->AFF.puttext;
+       if);
+    else
+       '\n**** Warning: no extension in resource: '->messagestream.puttext;
+       m[]->messagestream.putline;
+       '"{betalib}scripts:BetaRez" '->AFF.puttext;
+   if);
+   m[]->quote->AFF.putText; ' '->AFF.put; objName[]->quote->AFF.putLine;
+   'Exit If {Status} != 0' -> AFF.putLine;
+
+#)
+(*--- RemoteShell: descriptor ---
+ (# do ': '->rsh #)*)
+--- assemble: descriptor ---
+(# t,G: ^text; p: @integer;
+do 
+   (* generate call 'BetaPPCC <...>:b2c:foo <...>:b2c:mac:foo' 
+    *                                   ^source           ^object file
+    * OLM: not needed for native code gen
+    F.copy->G[];
+    thePathHandler.directoryChar->G.findAll(#do inx-> p #);
+    (p - TargetMachine).length,p)->G.delete; 
+    'BetaPPCC ' ->AFF.putText;
+    G[]->quote->AFF.putText; ' ' ->AFF.put;
+    F[]->quote->AFF.putLine;
+
+    'Exit If {Status} != 0' -> AFF.putLine;
+    (if not common.switch[18] then
+    ( * delete .c and .h files * )
+    'delete -y -i '->AFF.putText;
+    G[]->AFF.puttext; '.c'->AFF.putline;
+    'delete -y -i '->AFF.putText;
+    G[]->AFF.puttext; '.h'->AFF.putline;
+    if);
+    *)
+#)
+
+--ldArgMax:descriptor--
+(#do maxint->value #)
+
+--ldTmp:descriptor--
+(# (* What is this on the Mac? -pjs *)
+   (*do tmpArgs[]
+    ->ldUNIXtmpFile(#do 'ld -r -o '->AFF.putText #)
+    ->TmpF[] *)
+#)
+
+--contCh:descriptor--
+(#do '\266'->value #)
+
+--- link: descriptor ---
+(#
+do (if NOT common.switch[63] then
+       'If {betalinktype} == "APPL"' -> AFF.putline;
+       '\techo "Linking Macintosh application"' -> AFF.putline;
+       'Else' -> AFF.putline;
+       '\techo "Linking MPW tool"' -> AFF.putline;
+       'End' -> AFF.putline;
+       
+       (if common.switch[70] then
+           (* Use Metrowerks CodeWarrior Linker *)
+           '"{MPW}"tools:MWLinkPPC  -o '->AFF.putText;
+        else
+           (* Use the MPW linker *)
+           '"{MPW}"tools:PPClink  -o '->AFF.putText;
+       if);
+       
+       objName[]->quote->AFF.puttext;  cont;
+       
+       '\t-xm e -t "{BetaLinkType}" -c "{BetaLinkCreator}" '->AFF.puttext; cont;
+       '{BetaPPCLinkOptions}'->Aff.putText;  cont;
+    else
+       NONE -> lda[]; (*** Clear the lda, its not needed ***)
+       (*** Generate the STUB libraries ***)
+       
+       asmState.sharedLibs.scan
+       (#
+       do AFF[] -> current.makeStub;
+       #);
+       
+       (*** Link the Shared Libraries ***)
+       
+       asmState.sharedLibs.scan
+       (#
+       do AFF[] -> current.link;
+       #);
+       
+       (****  Link the application ****)
+       
+       linkerName -> AFF.putText;
+       ' "{PPCLibraries}"StdCRuntime.o "{SharedLibraries}"StdCLib ' -> AFF.putText;
+       continue;
+       asmState.sharedLibs.scan
+       (#
+       do (if NOT current.empty then
+              current.libName -> quote -> AFF.putText;
+              continue;
+          if);
+       #);
+       '-o ' -> AFF.putText;
+       objName[]->quote->AFF.puttext;
+       continue;
+       '-xm e -t "{BetaLinkType}" -c "{BetaLinkCreator}" ' -> AFF.putLine;
+       
+       (*** Merge all libraries into the main program ***)
+       
+	   'If {betalinktype} == "APPL"' -> AFF.putline;
+       '\techo "Merging fragments to macintosh application"' -> AFF.putline;
+       'Else' -> AFF.putline;
+       '\techo "Merging fragments to MPW tool"' -> AFF.putline;
+       'End' -> AFF.putline;
+
+       'MergeFragment ' -> AFF.putText;
+       asmState.sharedLibs.scan
+       (#
+       do (if NOT current.empty then
+              current.libName -> quote -> AFF.putText;
+              continue;
+          if);
+       #);
+       objName[]->quote->AFF.putLine;
+       AFF.newLine;
+       
+       (*** Delete the libraries ***)
+       
+       'Delete ' -> AFF.putText;
+       asmState.sharedLibs.scan
+       (#
+       do (if NOT current.empty then
+              current.libName -> quote -> AFF.putText;
+              continue;
+          if);
+       #);
+       AFF.newLine;
+       AFF.newLine;
+       (*** END ***)
+   if);
+   
+#)
+--linkLibraries:descriptor--
+(##)
+--- linkObj:descriptor ---
+(# 
+do 
+   lobj[] -> unQuote -> addObject;
+
+   lobj[]-> ldA.putText; 
+   ' \266\n\t'->ldA.putText;
+#)
+--- addBetaRun:descriptor ---
+(* the following can be for most platforms except Windows NT *)
+(#
+do (if userDefinedBetaRun then
+       betaRun[] -> quote -> linkObj
+    else
+       asmLink.binExt -> betaRun.CopyAppend -> quote -> linkObj
+   if)
+#)
+--- libraries: descriptor ---
+(# do '{BetaPPCLinkLibs}'->ldA.putText;
+#)
+--- linktrailer: descriptor ---
+(# 
+do AFF.newline;
+
+   'If {Status} == 0'->AFF.putLine;   
+   '   echo "Object program on file: "'->AFF.puttext;
+    objname[] -> quote  ->AFF.putline;
+   'Else'->AFF.putLine;   
+   '   delete -i -y '->AFF.PutText; objName[]->quote->AFF.putLine;
+   '   Exit 5' -> AFF.putLine;
+   'End'->AFF.PutLine;
+   (if not common.switch[18] then
+       'delete -i -y '->AFF.putText; AFF.name->quote->AFF.putLine;
+   if);
+   true -> common.switch[23]; (* currently the job-file is NOT removed *)
+#)
+--- trailer: descriptor ---
+(##)
+--AddSharedLibFile: descriptor--
+(# #)
+
+--jobFilePermission: descriptor--
+(# #)
+
+--AddLinkDirs: descriptor--
+(# #)

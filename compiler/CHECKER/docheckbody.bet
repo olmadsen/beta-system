@@ -1,0 +1,228 @@
+ORIGIN 'checkerdopart'; 
+LIB_ITEM 'betacompiler'
+---ChkVB:doPart---
+do (if ctst then 173->trace(#do 'ChkVB: '->xT; vDcl->&Dump #)if);
+   L:
+     (if vDcl.label // gram.bindingDecl //gram.finalDecl (*?*) then
+         vDcl.son->son->singleName->vName;
+         (* Error if more than one name. Will be handled by CheckBind*)
+         vName.virtDcl->vDclRef; (* just aux var *)
+         (if vDclRef.isNull  then
+             son.brother->vSpec;
+             (if vSpec.label 
+              // gram.objectDescriptor then
+                 vSpec.origin->vDclOrigin
+              // gram.unExpanded then (* thisis a semantic error *)
+                 vSpec.slotOrigin -> vDclOrigin;
+                 (*173->trace(#DO vDclOrigin[] -> xA #);*)
+              else (* name apl *)
+                 vSpec->GetName->(vSpecN,rem);
+                 (* here was an error when vSpecN was vSpec:
+                  *  V::<R.P *)
+
+                 vSpecN.dclRef->dclRef;
+                 (**********************
+                  * the following check was made, since only if
+                  * dclRef.isNull, vSpecN.origin is well-defined.
+                  * Apparently the situation happens in practice.
+                  * Instead, the EncDesc-pattern is used to find
+                  * the origin. Note that EncDesc will NOT
+                  * work for insertable patterns, but cannot happen
+                  * here since insertable patterns CANNOT have 
+                  * virtual attributes (insertable means (#do ... #)).
+                  * If the def. of insertable is changed, encDesc 
+                  * cannot be used below.
+                  * (if not dclRef.isNull then
+                  *   ( * vDcl is currently being checked ????!!!!* )
+                  *  leave L
+                  *if);
+                  *vSpecN.origin->vDclOrigin
+                  *)
+                 vSpecN[]->&EncDesc->node[]; 
+                 node->vDclOrigin;
+             if);
+             vDclOrigin -> &GetPreDesc -> vdpDesc;
+             (* why do we pass none instead of vDclOrigin in the next call?*)
+             (vDcl,vName,vSpec,vdpDesc,none) -> &CheckBinding;
+             (if not vdpDesc.isNull then
+                 (* error message in CheckBinding if isNull *)
+                 vName.virtDcl->vDclref;
+                 vDclRef.sort->&ChkVB
+     if)if)if)   
+---CheckBinding:doPart---
+do
+   (# dclRef,sort,vSpec: @ASTindex; 
+      ok: @boolean; pl: @integer;
+      Error:
+        (# node,N,pre: @ASTindex; no: @integer; rem: @boolean
+        enter(node,no)
+        do (if no <> 0 then (node,no)->WE.SemError if);
+           errorName->vName.virtDcl;
+           (if not BindSpec.isNull then
+               (if BindSpec.label = gram.objectDescriptor then
+                   BindSpec.son->Pre;
+                   (if pre.label = gram.prefix then
+                       pre.son->getName->(N,rem);
+                       errorName->N.dclRef; integerDesc->N.descRef; 0 -> N.on;
+        if)if)if)#);
+      FixBind: @
+        (* V :< VS or V::< VS     *)
+        (* B ::< BS               *)
+      (* PL: prefixDist from BS to VS *)
+      (# V,BS,VS,vDesc,bspre,BsPn: @ASTindex;
+         PL: @integer; addPre,rem: @boolean
+      enter(V,BS,VS,PL)
+      do VS -> &GetDesc -> vDesc; 
+         (if ctst then
+             170->trace
+             (#do 'FixBind: PL='->xT; PL->xI; V[]->xA; BS[]->xA; VS[]->xA #)
+         if);
+         (if BS.label 
+          // gram.objectDescriptor then
+             (BS[],0,0,NONE) -> DS.put;
+             BS.son -> bsPre; false -> addPre;
+             (if bsPre.label
+              // gram.empty then 
+                 true->addPre;
+                 BS
+                   -> addPrefix(# astOverflow:: 
+                                    (#do msg[]->thisTranslate.MPSexception #)
+                               #)
+                   -> BsPn;
+              // gram.prefix then
+                 bspre.son->BsPn->getName->(BsPn,rem);
+                 (BsPn.stringlength=0)->addPre
+                 (* this may be the case for a form  *)
+                 (* that has NOT been reparsed *)
+             if);
+             (if addPre  then 
+                 V->BSpn.dclRef; vDesc->BsPn.descRef;
+                 PL->BsPn.pn; 0->BsPn.on
+                 (* the values for on and pn represent the searchpath to
+                  * the virtual declaration V from BS. In the following case:
+                  *  V:<A and V::<(# ... #)
+                  * the implicit super in the binding  is  A. 
+                  * I.e. V::< A(# ... #). In this case the search-pathn (on,pn)
+                  * should represent the search path to the declaration of A.
+                  * This search path is complicated to compute. The problem
+                  * is handled in virtual.bet and gdbody.bet. In virtual.bet
+                  * the kind implicitPre handles the computaion of ENC
+                  * and in gdbody, special treatment is made for code
+                  * generation in the case of instantiation of the A superpart.
+                  * See also the file ~olm/betasystem/v4.3.2/HISTORY
+                  *)
+             if)
+          // gram.unExpanded then (* V::< <<SLOT foo:descriptor>> *)
+             (BS,107)->&error;
+             integerDesc->BS->vDesc
+          else 
+             (* save BS in V for possible error msg. (ugly:-)*)
+             BS -> V -> &SetUp -> (dclRef,BS); 
+             dclRef.sort -> sort;
+                 (*  B::< BS; BS: T(# ... #); BS :: T(# ... #); *)
+             (if sort.label
+              // gram.patternDecl then
+                 (* BS either non-virtual or  defined by finalDecl *)
+                 (* A virtual binding MUST be to a used defined descriptor,
+                  * i.e. NOT a basic pattern. A descriptor being unDefined
+                  * or beingChecked cannot be a basic pattern. 
+                  * What about externalKind,callBackKind,constKind or dataKind?
+                  *)
+                 (if BS->sematt.descKind
+                  // sematt.generalKind
+                  // sematt.externalvirtualKind (* virtual COM pattern *)
+                  // sematt.comKind 
+                  // sematt.dispatchKind
+                  // sematt.unDefined // sematt.beingChecked then
+                  else 
+                     (V,94)->&WE.SemError
+                 if)
+              // gram.finalDecl then 
+                 sort (*BsPn-is null!*) -> ChkVB
+              // gram.virtualDecl // gram.bindingDecl then
+                 (if vDcl.label = gram.finalDecl then 
+                     (* (V,99)->&WE.Warning; *)
+                     (* ok if B :: BS *)
+                     
+                     (* 24.2.2000
+                      * BS.son -> BS; BS.brother -> BS;        
+                      * (thisDesc,BS) -> ActualDesc -> (BS,PL);
+                      * to:
+                      *)
+                     (# D: ^ASTindex; T: @ASTindex
+                     do BS.son -> T; T.brother -> T;        
+                        BS[] -> &EncDesc -> D[]; 
+                        (if ctst then
+                            170->trace(#do 'FixBind:vDcl=final: ' ->xT;
+                                         T[] -> xA; xN;
+                                         D[] -> xA
+                        #)if);
+                        (D,T) -> ActualDesc -> (BS,PL);
+                     #)
+                  else (vDcl,100)->&Error
+                 if);
+              else 
+                 (if vDcl.label = gram.finalDecl then
+                     (vDcl,101)->&Error
+                  else (vDcl,100)->&Error
+             if)if);
+         if)
+      exit(BS,vDesc)
+      #);
+
+   do (* Check the binding of
+       *    vName ::< BindSpec
+       *)
+      (if ctst then
+          170->trace
+          (#do 'CheckBinding: vDcl= '->xT; vDcl[]->xA; 
+             ' vName= '->xT; vName[] -> xA; xN; 
+             'BindSpec= ' -> xT; BindSpec[]->xA; xN;
+             'OriginPreDesc= '->xT; originPreDesc[]->xA; xN;
+             'theOriginDesc= '->xT; theOriginDesc[]->xA;
+          #)
+      if);
+      vName -> isSingleName -> vName;
+      (if not originPreDesc.isNull then
+          (if originPreDesc.label = gram.objectDescriptor then
+              (vName[],originPreDesc)->&LocalSearch->(ok,pl,vDclRef);
+              (* If the prefix is virtual or slot, there is an error
+               * which will be handled when the descriptor containing
+               * the prefix is checked! In this case it is abandoned to 
+               * check if there is a virtual decl. corresponding to
+               * vName, since this may give a rolling error.
+               * The error routine is called to make sure that certain
+               * attributes are well defined
+               *)
+              (if not ok and (theOriginDesc[] <> none) then
+                  (* we may be binding virtuals in state patterns*)
+                  (vName[],theOriginDesc)->&LocalSearch->(ok,pl,vDclRef);
+              if);
+              (if not ok then
+                  (* vName i not declared *)
+                  (vName,54)->Error
+               else
+                  vDclRef->vName.virtDcl;
+                  (if ((vDclRef.sort->sort,vDcl)->isVirtual)  then
+                      (*170->trace(#do 'InIf:'->T #);*)
+                      vDclRef.off->vName.off; 
+                      vDclRef.access->vName.access;
+                      (*common.direct->vName.access; *)
+                      sort.son->vSpec; vSpec.brother->vSpec;
+                      (vDclRef,bindSpec,vSpec,pl+1)
+                        -> FixBind
+                        -> &ChkQua
+                        -> (pl,ok);
+                      (if not ok then
+                          (if pl = -1 then (* loop in prefix-chain*)
+                              (vDcl,102)->&WE.SemError
+                           else
+                              (vDcl,14)->&WE.SemError
+                      if)if)
+                   else (vName,0)->error (*! no err.msg. is printed *)
+              if)if)
+           else (vName,0)->error (*! no err.msg. is printed *)
+          if)
+       else (vDcl,42)->Error
+   if)#);
+

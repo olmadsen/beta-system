@@ -1,0 +1,323 @@
+ORIGIN '../dynlib';
+INCLUDE '~beta/objectserver/runAlloc'
+        '../AstOfObject';
+lib_item 'dynamiccompiler';
+BODY '../../SYNTHESIZER/synthesizer';
+MDBODY ppcmac '../../GENERATOR/PPCMAC/PPCMACasmlink'
+       sun4s '../../GENERATOR/SUN4S/SUN4SBasmlink'
+       sgi '../../GENERATOR/SGI/SGIasmlink'
+       nti '../../GENERATOR/NTI/NTIBasmlink'
+       linux '../../GENERATOR/LINUX/LINUXBasmlink'
+       x86sol '../../GENERATOR/X86SOL/X86SOLasmlink'
+       hpux9pa '../../GENERATOR/HPUXPA/SNAKEasmlink';
+-- lib: Attributes --
+(* The following constants are dublicated from asmlink. 
+ * Should be placed in common
+ *)
+BetaEnvKind: (#  exit 1 #);
+BetaKind: (#  exit 2 #);
+ObjKind: (#  exit 3 #);
+LibKind: (#  exit 4 #);
+MakeKind: (#  exit 5 #);
+LinkOptKind: (#  exit 6 #);
+(* KJM *)
+ResourceKind: (#  exit 7 #);
+(* KJM *)
+BetaDataKind: (#  exit 8 #);
+  
+
+-- astInterfaceLib: Attributes --
+HandleContext:
+  (#
+     rootFragment: ^text;
+     context: ^object;
+     rootOrigin: ^ASTindex;
+     rootGroup,FG: ^FragmentGroup
+  enter (rootFragment[],context[])
+  do
+     true->doRealOpen;
+     (rootFragment[],screen[])->Top.Open->rootGroup[];
+     context[]->AstIndexOfObject->(rootOrigin[],FG[]);
+     (if false then 'Origin: '->puttext; FG.name->putline if);
+     (if not FG.isRealOpen then
+     (* a possible realOpen here is necessary when guienv
+      * is used as origin in dynenv. Here origin is set
+      * to bifrost, but the context is myWindow in
+      * dynenv. Origin should instead be set to dynenv.
+      * With bifrost as origin, the dynenv group is
+      * not realOpened.
+      * The realOpen below will not work if dynenv
+      * includes other files not openened with 
+      * bifrost as origin. This is, however, not the case.
+      * Dynenv should be fixed to use dynenv as origin
+      *)
+         (if false then 'NOT real open'->putline if); FG.realOpen
+     if);
+     (if false then 'Root: '->puttext; rootGroup.name->putline if);
+     (if not rootGroup.isRealOpen then
+         'Root group NOT real open'->putline; (*rootGroup.realOpen;*) 
+     if);
+     FG[]->rootGroup.origin
+  exit rootOrigin[]
+  #)  
+
+-- valhallaDC_init: DoPart --
+do
+     (# rootGroup,FG: ^FragmentGroup
+     do
+        (if contextIndex[] <> none then
+            (true,72)->SetSwitch;
+            true->doRealOpen;
+            (rootFragment[],screen[])->Top.Open->rootGroup[];
+            (if not contextFG.isRealOpen then
+            (* a possible realOpen here is necessary when guienv
+             * is used as origin in dynenv. Here origin is set
+             * to bifrost, but the context is myWindow in
+             * dynenv. Origin should instead be set to dynenv.
+             * With bifrost as origin, the dynenv group is
+             * not realOpened.
+             * The realOpen below will not work if dynenv
+             * includes other files not openened with 
+             * bifrost as origin. This is, however, not the case.
+             * Dynenv should be fixed to use dynenv as origin
+             *)
+                contextFG.realOpen
+            if);
+            (if not rootGroup.isRealOpen then
+                'Root group NOT real open'->putline; (*rootGroup.realOpen;*) 
+            if);
+            contextFG[]->rootGroup.origin;
+            contextIndex[]->trans.dynamicCompilationContext.rootOrigin[]
+        if);
+        INNER init
+     #)  
+
+-- dynlib_DynamicTranslateInit: DoPart --
+do
+   (if context[] <> none then
+       (true,72)->SetSwitch;
+       (rootFragment[],context[])->HandleContext
+         ->trans.dynamicCompilationContext.rootOrigin[]
+   if);
+   (* (true,165) -> SetSwitch;
+    * (true,173) -> SetSwitch;
+    *)
+   INNER init  
+
+-- dynlib_LoadFile: DoPart --
+do
+   (if traceLoad then 'Loading: '->puttext; fn[]->puttext if);
+   &ImagePair
+     (#
+        NoSuchProtoType:: 
+          (# 
+          do (if trace then 'NoSuchPrototype'->putline if); true->continue
+          #)
+     #)[]->IM[];
+   &IM.InprocessFileImage[]->IM.xData[];
+   &IM.InprocessFileImage[]->IM.xCode[];
+   fn[]->readDataAndTextImages->(IM.xData.im[],IM.xCode.im[]);
+   true->IM.xCode.isCode;
+   true->IM.isFileImage;
+   fn[]->IM.groupName[];
+   (if trace then IM.xData.im.display; IM.xCode.im.display;  if)  
+
+-- dynlib_GetImagePair: DoPart --
+do
+   &imagePair (# NoSuchProtoType::  (#  do true->continue #) #)[]->IM[];
+   (if outProcess then
+       &IM.OutProcessImage[]->IM.xdata[]; &IM.OutProcessImage[]->IM.xCode[]; 
+    else
+       &IM.InProcessImage[]->IM.xdata[]; &IM.InProcessImage[]->IM.xCode[]; 
+   if);
+   true->IM.xCode.isCode;
+   trans.data[]->IM.xData.im[];
+   trans.codeIm[]->IM.xCode.im[];
+     
+
+-- dynlib_loadFiles: DoPart --
+do
+     (# IM: ^ImagePair; 
+     do
+        fragList.scan
+          (# oname: ^text; ix: @integer
+          do
+             (current[],ix+1->ix,fragList.size)->loadingFile;
+             (current[],none )->thePathhandler.convertFilePath->current[];
+             current[]->StripBetaExtension->mkObjectFileName->oname[];
+             oname[]->loadFile->IM[]->imageList.append;
+             NT[]->IM.xCollectExternals;
+             IM.xAllocImage;
+             NT[]->IM.xCollectEntries;
+             (if traceLoad then newline if);
+             (* equalNCS is needed for NTI, but really shouldn't harm
+              * on other platforms
+              *)
+             (if current[]->fname.equalNCS then IM[]->fNameIM[];  if)
+          #);
+        (if traceload then
+            newline;
+            'Name Table Statistics: '->tracestream.putline;
+            NT.statistics
+              (#  do tracestream[]->print #)
+        if);
+        imageList.scan
+          (# 
+          do
+             (if traceload then
+                 'Relocate: '->puttext; current.groupName[]->puttext
+             if);
+             NT[]->current.xRelocate;
+             current.xLoadImage;
+             (if traceload then newline if)
+          #);
+        
+     #)  
+
+-- CompileAndLoad: DoPart --
+do
+(* ConvertFilePath stuff added to prevent
+ * problems with /users/datpete/... and
+ * /a/home/ariel1/datpete/... being
+ * different. The pathhandler checks for
+ * aliases to the same file.
+ *)
+   (fname[],none )-> (*BETAastIF.*) thePathhandler.convertFilePath
+     ->StripBetaExtension->fname[];
+   (if not ((fname[],none )->ActivateCompiler) then
+       true->OK; fname[]->LoadFiles->fNameIm[]; 
+   if)  
+
+-- dynlib_ExecuteObject: DoPart --
+do
+     (# F: ##object; ProtoTypeAdr: @integer
+     do
+        'Linking images!'->info.putline;
+        NT[]->IM.linkObject;
+        (if trace then IM.dump if);
+        (if theOrigin[] = none then
+            (if trace then 'Use betaenv as origin'->putline if);
+            objectPool[]->getOrigin->theOrigin[]
+        if);
+        (if ProtoTypeAdr = 0 then 1->IM.indexedOff->ProtoTypeAdr if);
+        (theOrigin[],ProtoTypeAdr)->MakeStruc->F##;
+        'Executing:'->info.putLine;
+        &F[]->R[];
+          (# dummy: @char do R #);
+        'End-execute!'->info.putline
+     #)  
+
+-- dynlib_StripBetaExtension: DoPart --
+do
+     (# ext,extL: ^text
+     do
+        fname.copy->oname[];
+        (oname.length-3,oname.length)->oname.sub->ext[];
+        (oname.length-4,oname.length)->oname.sub->extL[];
+        (if true
+         // '.bet'->ext.equal // '.ast'->ext.equal then
+            (oname.length-3,oname.length)->oname.delete
+         // 'astL'->extL.equal then
+            (oname.length-4,oname.length)->oname.delete
+        if)
+     #)  
+
+-- dynlib_mkObjectFileName: DoPart --
+do
+     (# lastSlash: @integer; nti:@boolean; (* Who sets this nti???? *)
+     do
+        fname.copy->oname[];
+        oname.scanall
+          (# pos: @integer
+          do pos+1->pos; 
+             (if nti then (* Could directoryChar remove this test? *)
+                 (if ch = '\\' then pos->lastSlash if)
+              else
+                 (if ch = '/' then pos->lastSlash if)
+             if);
+          #);
+        (*   xxxxxxxx/hello
+         *           ^lastSlash
+         *)
+        ('/',lastSlash)->oname.insert;
+        (trans.common.targetMachine[],lastSlash+1)->oname.insert;
+        (*  xxxxxxxxx/sun4s/hello *)
+        objFileExtension->oname.appendExtension;
+        
+     #)  
+
+-- dynlib_InitDyn: DoPart --
+do
+   screen[]->infostream[];
+   screen[]->tracestream[];
+   screen[]->messagestream[];
+   screen[]->bugstream[];
+   (if needsGOT then
+   (* we need to set 61 and 62 for SGI; initTarget, etc has not been called
+    * here since the compiler has not been called. This should be fixed.
+    * So far we assume that needsGOT implies SGI and that 61 and 62 are set;
+    * should cleaned up
+    *) (*  this(abstractDynamicCompiler)[] -> betaTarget; - not visible *)
+       61->SwitchOn;
+       (* save SP at external calls - needed for SGI *)
+       62->SwitchOn;
+       (* PIC code - needed for SGI*)
+       
+   if);
+   init;
+   (true,6)->setSwitch;
+   (true,33)->setSwitch;
+   (true,75)->setSwitch;
+   &stream[]->info[];
+   verboseLevel.nothing->verboseLevel;
+   (true,19)->setSwitch;
+   (true,90)->setSwitch;
+   INNER InitDyn  
+
+-- dynlib_jobList_add: DoPart --
+do
+   (if kind
+    // BetaenvKind // BetaKind then 
+    else
+       &element[]->e[];
+       fn[]->e.fn[];
+       kind->e.kind;
+       (if trace and (not (e[]->has)) then
+           'Added to jobfile '->puttext;
+           (if kind
+            // ObjKind then
+               'ObjFile: '->puttext
+            // LibKind then
+               'LibKind; '->puttext
+            // MakeKind then
+               'MakeKind: '->puttext
+            // LinkOptKind then
+               'LinkOptKind: '->puttext
+            // ResourceKind then
+               'ResourceKind: '->puttext
+            // BetaDataKind then
+               'BetaDataKind: '->puttext
+            else
+               'Other?: '->puttext
+           if);
+           fn[]->putline;
+           e[]->insert;
+           
+       if)
+   if)  
+
+-- dynlib_makeStruc: DoPart --
+do
+     (# RA: @runtimeAllocator; x: @ (# F: ##Object #); 
+     do
+        (PTadr,theOrigin[],x[],12)->RA.allocStructure;
+        (if false then
+            (if x.F## <> none then
+                (%getLongAt (@@ x.F),4)->dumpObject
+             else
+                'x.F## is none: This should not happend'->putLine; stop
+            if)
+        if);
+        x.F##->F##
+     #)  
+

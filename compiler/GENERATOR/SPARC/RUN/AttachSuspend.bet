@@ -1,0 +1,396 @@
+ORIGIN 'BetaRun';
+
+--BetaRunAttachSuspend: descriptor--
+(#
+   activeStackOp: @dataRegOperand;
+   regActiveStack: (#  exit activeStackOp.reg1 #);
+
+   BETA_MT_Suspend:
+     (# 
+     do 'BETA_MT_suspend'->ExtLabel;
+        (* The C-function BETA_MT_csuspend will put
+         * the current thread into a position, where it
+         * accepts that another thread will do a GC.
+         * Thus live registers in the current thread will
+         * have to be saved in GC'ed memory during the call.
+         * Hence this wrapper.
+         *)
+        (i0,o0) -> MOV -> emit;
+        (SP,-64,SP) -> SAVE_I -> emit;
+        i0 -> storeCurrentObject;
+        'BETA_MT_csuspend' -> jsrT;
+        i0 -> loadCurrentObject;
+        RET->emit;
+        (i0,g0,i0) -> RESTORE -> emit;
+     #);
+
+   AttachNew:
+     (# NotFirst,AfterFirst,NotRecursive,NotTerminated: @localLab; 
+        skipFirstTest: @boolean;
+        futureActiveComponent: @dataRegOperand;
+     enter skipFirstTest
+     do futureActiveComponent.alloc;
+        I2->I2Op;
+        NotFirst.new;
+        NotRecursive.new;
+        NotTerminated.new;
+        AfterFirst.new;
+        ;
+        (if not skipFirstTest then
+            (* load CallerLSC from CallO *)
+            (CallO,20,I2)->LD_I->emit;
+            ;
+            (* Check if this is the first attach *)
+            (2 (* ne *) ,0->newCstOp,I2op[],4,NotFirst[])->cmpAndJmp;
+        if);
+        (* First Attach *)
+        (* Save CallO across AlloSO. We cannot use dataRegs
+         * for this, since AlloSO allocs two dataRegs, and since
+         * dataRegs are not updated during a potential GC.
+         * And there is no stack...
+         * So a special field in the TSD has been allocated for this
+         * purpose. The assumption, that at most one AttachNew may be
+         * happening in each thread at a time seems to be fulfilled.
+         *)
+        CallO -> storeSavedCallO;
+        'AlloSO'->jsrT;
+        (* Restore CallO *)
+        CallO -> loadSavedCallO;
+        G0 -> storeSavedCallO;
+        (* New ActiveStack was saved in TSD by AlloSO: load it *)
+        regActiveStack->loadActiveStack;
+        (* No need to load stack offs from stackobj: done by AlloSO *)
+        (CallO,8,regActiveStack,true)->AssignRef;
+        (* Save future ActiveComponent in another register *)
+        (CallO, futureActiveComponent)->MOV->emit;
+        (* find top M-entry of component item*)
+        (CallO,24,I4)->ADD_I->emit (* I4 = comp.item = topObj*);
+        (I4,0,I2)->LD_I->emit (* comp.item.Proto -> I2 *);
+        (I2,24,I2)->LD_I->emit (* I2.topMentry -> I2 *);
+        ;
+        (if not skipFirstTest then
+            AfterFirst[]->gJmp;
+            ;
+            NotFirst.def;
+            (* We get here, if the component has previously been attached
+             * and subsequently suspended.
+             *)
+            ;
+            (* Get future current object from CallO.CallerObj into I4 *)
+            (CallO,12,I4)->LD_I->emit;
+            (* Get future ActiveComponent from CallO.CallerComp
+             * This is the one that is going to become active component,
+             * and is not always the same as CallO, if CallO was suspended
+             * using X.suspend.
+             *)
+            (CallO,16,futureActiveComponent)->LD_I->emit;
+            (* Load the old stackobject from futureActiveComponent *)
+            (futureActiveComponent,8,regActiveStack)->LD_I->emit; 
+            (* Load the offsets from the old stackobject *)
+            regActiveStack->UnpackStackOff;
+            (* Make old stackobject the new active stack in TSD *)
+            regActiveStack->storeActiveStack;
+            (* Load the return address of the future current object 
+             * from the component pointed to by futureActiveComponent.
+             *)
+            (futureActiveComponent,20,I2) -> LD_I -> emit;
+            I2 -> AssertRegisterNotZero;
+            ;
+            (* Check for errors. This is not needed for components being
+             * attached for the first time.
+             *)
+            (* Test for RECURSIVE attach *)
+            (2 (* ne *) ,- 1->newCstOp,I2op[],4,NotRecursive[])->cmpAndJmp;
+            common.RecursiveAttErr->CallBetaError;
+            NotRecursive.def;
+            ;
+            (* Test attach of already TERMINATED comp *)
+            (2 (* ne *) ,- 2->newCstOp,I2op[],4,NotTerminated[])->cmpAndJmp;
+            common.CompTerminatedErr->CallBetaError;
+            NotTerminated.def;
+            ;
+            (* SPARC specific: return to after delay slot *)
+            (I2,8,I2)->ADD_I->emit;
+        if);
+        ;
+        AfterFirst.def;
+        (* Save ActiveComponent in CallO.callerComp *)
+        (CallO,16,regActiveComponent,true)->AssignRef;
+        (* Save current object in CallO.callerObj *)
+        (CallO,12,thisO,true)->AssignRef;
+        (* -1->futureActiveComponent.callerLsc (indicate it is attached) *)
+        dr.alloc;
+        (-1,dr.reg1)->MOV_I->emit;
+        (futureActiveComponent,20,dr.reg1)->ST_I->emit;
+        dr.dealloc;
+        ;
+        (* futureActiveComponent -> ActiveComponent *)
+        (futureActiveComponent,regActiveComponent)->MOV->emit;
+        regActiveComponent->storeActiveComponent;
+        (* FIXME:
+         * At first attach comp.item assumes THIS to be in I1 (CallO);
+         * at subsequent attaches this is assumed to be in I0 (ThisO);
+         * should perhaps be cleaned up!
+         *)
+        (I4,CallO)->MOV->emit;
+        (I4,ThisO)->MOV->emit;
+        I2op[]->jsrReg;
+        regActiveComponent->loadActiveComponent;
+        futureActiveComponent.dealloc;
+     #);
+   TerminateActiveComponent:
+     (# dr: @dataregoperand; 
+     do
+        NumTermComp -> IncNum;
+        (regActiveComponent,regRefTopOff)->MOV->emit;
+        (regActiveComponent,12,thisO)->LD_I->emit;
+        (regActiveComponent,16,regActiveComponent)->LD_I->emit;
+        regActiveComponent->storeActiveComponent;
+        (regActiveComponent,20,I7)->LD_I->emit;
+        dr.alloc;
+        (* Indicate in previous ActiveComponent.CallerLSC, that it is terminated *)
+        (- 2->newCstOp,dr[])->ldCst;
+        (regRefTopOff,20,dr.reg1)->ST_I->emit;
+        (* Clear stack object in previous active component *)
+        (regRefTopOff,8,G0) -> ST_I -> emit;
+        dr.dealloc;
+        (regActiveComponent,8,regActiveStack)->LD_I->emit;
+        regActiveStack->storeActiveStack;
+        (regActiveStack,refTopOff,regRefTopOff)->LD_I->emit;
+        I7 -> AssertRegisterNotZero;
+        RET->emit;
+        (regActiveStack,dataTopOff,regDataTopOff)->LD_I->emit;
+
+     #);
+   AttBC:
+     (* Attach basic component 
+      * 
+      * Arguments: 
+      *   %o0 is component to attach.
+      *)
+     (# L0op: @DataRegOperand;
+     do L0 -> L0op;
+        'AttBC'->ExtLabel;
+        (G0,regActiveComponent) -> MOV -> emit;
+        regActiveComponent->storeActiveComponent;          
+        (CallO, Common.compHeadSize*4, L0) -> ADD_I -> emit;
+        (L0op[],'BasicItem'->newTextOp)->stValInText;
+        true->AttachNew;
+        'TerminateBasicComponent' -> ExtLabel;
+        (* Clear stack object in previous active component *)
+        regActiveComponent->loadActiveComponent;
+        (regActiveComponent,8,G0) -> ST_I -> emit;
+        ('BetaExit',callMark)->mstate.b.mark;
+        0->CALL->emit;
+        (g0,O0)->MOV->emit;
+     #);
+   AttTC:
+     (* Attach a component which runs in a separate 
+      * thread. 
+      * Given as main entry for new thread by attToProcessor.
+      * 
+      * Arguments: 
+      *   %o0 is pointer to TSD struct with component to attach in
+      *       _CurrentComponent field.
+      *)
+     (# 
+     do
+        'AttTC'->ExtLabel;
+        (O0,regTSD)->MOV->emit;
+        (SP,-64,SP) -> SAVE_I -> emit;
+        (if not IOATopInTSD then
+            (G0,regIOATop)->MOV->emit
+        if);
+        (0,regRefTopOff)->MOV_I->emit;
+        (0,regDataTopOff)->MOV_I->emit;
+        (0,ThisO) ->MOV_I->emit;
+        CallO -> loadActiveComponent (* load comp from TSD *);
+        (* Do as AttBC *)
+        (G0,regActiveComponent) -> MOV -> emit;
+        regActiveComponent->storeActiveComponent;
+        true->AttachNew;
+        'TerminateThreadComponent' -> ExtLabel;
+        (* Clear stack object in previous active component *)
+        regActiveComponent->loadActiveComponent;
+        (regActiveComponent,8,G0) -> ST_I -> emit;
+        (* Call BetaExit when this thread terminates *)
+        ('BetaExit',callMark)->mstate.b.mark;
+        0->CALL->emit;
+        (g0,O0)->MOV->emit;
+     #);
+   Att:
+     (* Attach a component. The component may have been previously
+      * suspended. Please reverse figure at Susp below for illustration.
+      * 
+      * Arguments: 
+      *   %o0 is component to attach.
+      *)
+     (# 
+     do
+        'Att'->ExtLabel;
+        NumAtt->IncNum; 
+        regActiveComponent->loadActiveComponent;
+        (* Get the stack for the current active comp *)
+        regActiveStack->loadActiveStack;
+        (* store the current offs in this stackobj *)
+        regActiveStack->PackStackOff;
+        (regActiveComponent,20,O7)->ST_I->emit;
+        false->AttachNew;
+        TerminateActiveComponent;
+     #);
+   Susp:
+     (* Suspend a particular component (as specified by argument)
+      * and resume the one that attached it.
+      * 
+      * Arguments: component to suspend in %o0
+      * 
+      * Consider the following:
+      *  
+      *    X: @|(# X1: (# do ...; Y; ... #); do ...; X1; ... #);
+      *    Y: @|(# Y1: (# do ...; Z; ... #); do ...; Y1; ... #);
+      *    Z: @|(# Z1: (# do ...; Y.suspend; ... #); do ...; Z1; ... #);
+      * 
+      * For a component Z, there may be no BETA item frames and Z1 may 
+      * be identical to Z (body part of component).
+      * Similarly for X and Y.
+      * Also X and Y may be identical, corresponding to a normal suspend
+      * (i.e. THIS.suspend).
+      * 
+      * Now consider the execution of Y.suspend in Z1. This will involve
+      * changing the following picture:
+      *                              
+      *                             
+      *       ____________         ____________ 	  ____________ 
+      *      |            | ,---->|            |   ,---->|            |
+      *      |  Z1 item   | |     |  Y1 item   |   |     |  X1 item   |
+      *      | = current  | |     |            |   |     |            |
+      *      | object (I0)| |     |            |   |     |            |
+      *      |____________| |     |____________|   |     |____________|
+      *                     |                      |                  
+      *       Z component   |                      |                  
+      *   = ActiveComponent |      Y component     |      X component  
+      *       ____________  |      ____________    |      ____________ 
+      * ,--->| Proto = -1 | | ,-->| Proto = -1 |   | ,-->| Proto = -1 |
+      * |    | GCAttr     | | |   | GCAttr     |   | |   | GCAttr     |
+      * |    | StackObj   |-|-|-. | StackObj   |---|-|-. | StackObj   |--.
+      * |    | CallerObj  |-' | | | CallerObj  |---' | | | CallerObj  |  |
+      * |    | CallerComp |---' | | CallerComp |-----' | | CallerComp |  |
+      * |    | CallerLSC  |=-1  | | CallerLSC  |=PC(Y1)| | CallerLSC  |=PC(X1)
+      * |    |------------|     | |------------|       | |------------|  |
+      * |    | Z item     |     | | Y item     |       | | X item     |  |
+      * |    |____________|     | |____________|       | |____________|  |
+      * |     ____________      |  ____________        |  ____________   |
+      * | ,->|            |<----' |            |<------' |            |<-'
+      * | |  | Z stackobj |       | Y stackobj |	 | X stackobj |
+      * | |  |____________|       |____________|	 |____________|
+      * | |                        
+      * | |			      
+      * | |              TSD              
+      * | |               _________________ 
+      * | |              | ...             |
+      * `-|--------------| ActiveComponent |
+      *   |              | ...             |
+      *   `--------------| ActiveStack     |
+      *                  | ...             |
+      *                  |_________________|
+      * 
+      * to this:
+      *   ____________            ____________          ____________ 
+      *  |            |<--. ,--->|            |        |            |
+      *  |  Z1 item   |   | |    |  Y1 item   |        |  X1 item   |
+      *  |            |   | |    |            |        | = current  |  
+      *  |            |   | |    |            |        | object (I0)|    
+      *  |____________|   | |    |____________|        |____________|   
+      *                   `-|------------------------.                  
+      *                     |                        |                    
+      *   Z component       |     Y component        |  X component      
+      *   (suspended)     ,-|----------------------. |  = ActiveComponent
+      *   ____________    | |     ____________     | |  ____________      
+      *  | Proto = -1 |<--' | ,->| Proto = -1 |    | | | Proto = -1 |<----.
+      *  | GCAttr     |     | |  | GCAttr     |    | | | GCAttr     |     |
+      *  | StackObj   |--.  | |  | StackObj   |--. | | | StackObj   |---. |
+      *  | CallerObj  |--|--' |  | CallerObj  |--|-|-' | CallerObj  |   | |
+      *  | CallerComp |--|----'  | CallerComp |--|-'   | CallerComp |   | |
+      *  | CallerLSC  |=PC(Z1)   | CallerLSC  |=PC(Y1) | CallerLSC  |   | |
+      *  |------------|  |       |------------|  |     |------------|   | |
+      *  | .........  |  |       | ......     |  |     | ......     |   | |
+      *  |____________|  |       |____________|  |     |____________|   | |
+      *   ____________   |        ____________   |      ____________    | |
+      *  |            |<-'       |            |<-'     |            |<==< |
+      *  | Z stackobj |          | Y stackobj |        | X stackobj |   | |
+      *  |____________|          |____________|        |____________|   | |
+      *                                                                 | |
+      *                                                                 | |
+      *              TSD                                                | |
+      *               _______ __________                                | |
+      *              | ...             |                                | |
+      *              | ActiveComponent |--------------------------------|-'
+      *              | ...             |                                |
+      *              | ActiveStack     |--------------------------------'
+      *              | ...             |
+      *              |_________________|
+      *)
+     
+   (# CallerLSC: @adrRegOperand;
+      theComp: @integer;
+   do I2->CallerLSC;
+      O0->theComp;
+      ;
+      'Susp'->ExtLabel;
+      NumSusp->IncNum;
+      theComp -> loadActiveComponent;
+      (* Fall through here *)
+      ;
+      'SuspX'->ExtLabel;
+      (* FIXME: NumSuspX->IncNum; *)
+      (* load current stack object from ActiveComponent (Z) *)
+      regActiveComponent -> loadActiveComponent;
+      (regActiveComponent, 8, regActiveStack) -> LD_I -> emit;
+      (* load CallerComp (X) from theComp (Y) into CallO *)
+      (theComp,16,CallO)->LD_I->emit;
+      (* load CallerObj (X1) from theComp (Y) into I4 *)
+      (theComp,12,I4)->LD_I->emit;
+      (* Load callerLSC (PC(X1)) from component to resume (X) *)
+      (CallO,20,I2)->LD_I->emit;
+      I2 -> AssertRegisterNotZero;
+      (* SPARC specific: return to after delay slot *)
+      (I2,8,I2)->ADD_I->emit;
+      (* Save current stack-offset registers in active stack (of Z) *)
+      regActiveStack->PackStackOff;
+      (* Save current object (I0/Z1) in CallerObj in theComp (Y) *)
+      (theComp,12,I0,true)->AssignRef;
+      (* Save ActiveComponent (Z) in CallerComp in theComp (Y) *)
+      (theComp,16,regActiveComponent,true)->AssignRef;
+      (* Save PC of current object (PC(Z1)) 
+       * in CallerLSC in ActiveComponent (Z) 
+       *)
+      (regActiveComponent,20,O7)->ST_I->emit;
+      ;
+      (* Load new ActiveStack from the component being resumed (X) *)
+      (CallO,8,regActiveStack)->LD_I->emit;
+      (* ... and store it in TSD *)
+      regActiveStack->storeActiveStack;
+      (* Load new stack-offset registers from new ActiveStack (of X) *)
+      regActiveStack -> UnpackStackOff;
+      (* Setup regActiveComponent (X) *)
+      (CallO,regActiveComponent)->MOV->emit;
+      (* ... and store the new ActiveComponent (X) in TSD *)
+      regActiveComponent->storeActiveComponent;
+      (* Change current object *)
+      (I4,I0)->MOV->emit;
+      (* Jump-subroutine to resume address (PC(X1)) *)
+      CallerLSC[]->jsrReg;
+   #);
+
+   L: @localLab;
+   I2op: @adrRegOperand;
+   dr: @dataRegOperand;
+   T: ^text
+do BETA_MT_Suspend;
+   activeStackOp.alloc; 
+   AttBC; 
+   AttTC;
+   Att; 
+   Susp; 
+   activeStackOp.dealloc; 
+#)

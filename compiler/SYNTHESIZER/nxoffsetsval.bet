@@ -1,0 +1,639 @@
+ORIGIN 'evlib';
+LIB_ITEM 'betacodegen';
+INCLUDE 'auxlib';
+(*INCLUDE 'nxoffsetslib'*)
+---mkNXoffSetsVal:descriptor--
+(#  NXV: ^NXoffSetsVal
+do &NXOffSetsVal[] -> NXV[] -> V[];
+   baseAdr[] -> NXV.baseAdr[]; 
+   thisVal[] -> NXV.lDesc[]; 
+   NXO[] -> NXV.NXO[];
+   isEnter -> NXV.isEnter
+#)       
+---EvalLib:attributes------
+NXoffSetsVal: evVal
+  (* Representation of an object evaluation that has an N- or X-entry point.
+   * If an object has an N- or X-entrypoint, then code has to be executed
+   * when assignment to/from the object takes place. In addition temporary
+   * locations in the object have been allocated to store N/X values
+   * computed by the N/X-entrypoint.
+   * 
+   * An NXoffSetsVal is used for the following 4 cases:
+   * 
+   * 1. Generation of code for a possible N-entry point
+   * 
+   * 2. Generation of code for a possible X-entry point
+   * 
+   * 3. Assignment to an object with an N-entry point
+   * 
+   * 4. Assignment form an object with a X-entry point
+   * 
+   * This means that code is executed to produce
+   * the exit-values. The exit-values are stored in locations in the
+   * object.
+   * baseAdr = address of the object;
+   *         = this             - never?
+   *         = call		- very likely
+   *         = a2-a4            - possible
+   * 
+   * Rightside address = this   - possible
+   *                   = call   - possible
+   *                   = a2-a4  - possible
+   *)
+  (# thisVal::
+       (#do (*should NXO.next be reset?*) this(NXoffSetsVal)[]->thisV[] #);
+     display:: (#do NXO.dump #);
+     evType::<(#do -1->type #);
+     hardRelease::
+       (* to assure that release bewlow has an effect;
+        * is called from asgToNelm in a situation when
+        * we know that this(NXoffSetsVal) is never
+        * to be used again; appears in
+        *     -> F;
+        *     F: (# enter Q do ... #)
+        * asgToNelm is called to assign to Q, which may have N code;
+        * after asgToNelm, Q is never used again
+        *)
+       (# do (if not isEnter then NXO.top -> NXO.next if) #);
+     release::
+       (#
+       do (if stest then
+              301->trace
+              (#do 'ReleaseNXoffSets:'->xT; 
+                 xN; 'baseADr = ' -> xT; baseAdr.display->xT;
+                 xN; 'releaseCallReg ='->xT; releaseCallReg->xB;
+                 ' unfreezeBeforeRelease =' ->xT;
+                 unfreezeBeforeRelease->xB;
+                 ' (NXO.next=NXO.top) =' -> xT;
+                 NXO.next=NXO.top -> xB;
+                 mch.dumpreg
+              #)
+          if);
+          (if NXO.next = NXO.top then
+              (* we only release if all elements in the list are used;
+               * this means that baseAdr may NOT be copied
+               * to evaluations that can be released elsewhere
+               *)
+              (if releaseCallReg then 
+                  (* this should be OK, but it isn't:-)
+                   * mch.decrCallReg 
+                   *)
+              if);
+              (if true then
+                  unfreezeBeforeRelease -> baseAdr.unFreeze;
+                  baseAdr.freeAdr
+               else
+                  (if unfreezeBeforeRelease then 
+                      baseAdr.freeReg
+                   else
+                      baseAdr.freeAdr; (* redundant?*)
+              if)if)
+          if);
+          (if stest then 
+              301->trace(#do 'ReleaseNXoffSets2:'->xT; mch.dumpreg #)
+          if);
+       #);
+     reAlloc:: (#do cError(#do 'NXoffSets:noBinding4'-> xT #)#);
+     mkReal:: (#do cError(#do 'NXoffSets:noBinding5'-> xT #)#);
+     loadVal::<(#do ItemVal(#do XV.loadVal->V[] #); release #);
+     loadVal2::<(#do ItemVal(#do XV.loadVal2->V[] #)#);
+     toTmP::
+       (* check toTmp for itemEvVal;
+        * should we freeze baseAdr after toTmp? *)
+       (#
+       do (if stest then
+              301->trace(#do 'nxOffSetsVal:toTmp:' -> xt #)
+          if);
+          (if not Exe.executedXpart then Exe if);
+          (if baseAdr.useCallReg then
+              (if baseAdr.isCallReg then mch.decrCallReg if);
+              baseAdr.toTmp -> baseAdr[]
+          if);
+       #);
+     elimReg::  (#do cError(#do 'NXoffSets:noBinding6'-> xT #)#);
+     toDataRegA::<(#do ItemVal(#do XV.toDataRegA; #); release #);
+     toDataRegX::<(#do ItemVal(#do XV.toDataRegX; #); release#);
+     toDataRegY::<(#do ItemVal(#do XV.toDataRegY; #); release#);
+     toRangeReg::<(#do ItemVal(#do XV.toRangeReg; #); release#);
+     toDataReg::<
+       (# xDr: ^mch.dataRegOperand
+       do (if stest then
+               178->trace(#do 'nxOffSetsVal:toDataReh:'->xT #)
+          if);
+          dReg.deAlloc;
+          ItemVal(#do XV.toDataReg->xDr[];
+                    xDr.fn->dReg.fn; xDr->dReg;
+                 #);
+          release
+       #);
+     toDreg::  (#do cError(#do 'NXoffSets:noBinding7'-> xT #)#);
+     toPrimDest::< (#do ItemVal(#do pNo -> XV.toPrimDest #); release#);     
+     getRefEval:: 
+       (#
+       do (if stest then
+              301->trace(#do 'NXoffSets:getRefEval:'-> xT;#)
+          if);
+          ItemVal -> V[]
+       #);
+     theAdr :: (#do cError(#do 'NXoffSets:theAdr:'-> xT;#) #);
+     asgToAdr::
+       (# A: ^mch.address; W: ^evVal; off: @integer; isRef: @boolean
+       do (if stest then
+              301->trace
+              (#do 'NXoffSets:asgToAdr:'-> xT; 
+                 xN; 'baseADr='->xT; baseadr.display->xT;
+                 xN; 'ra='->xT; rA.display ->xT;
+                 mch.dumpreg
+              #)
+          if);
+          Exe;
+
+          copyBaseAdr -> A[]; 
+          NXO.getNext -> off;
+          (if isEnter AND (NXO.getKind = NXO.valOff) then
+              this(nxOffSetsVal)[] -> V[]
+           else
+              NXO.getSize -> A.size;
+              off -> A.addOff -> mkSimpleVal -> W[];
+              rA[] -> W.asgToAdr -> V[];
+          if);
+          (if stest then
+              301->trace
+              (#do 'NXoffSets:endAsgToAdr:'->xT; 
+                 rA.display->xT;
+                 V.display;
+                 mch.dumpreg
+              #)
+          if);
+          release
+       #);
+     asgToRefAdr::
+       (# A: ^mch.address; W: ^evVal; off: @integer; isStruc: @boolean;
+          N: ^ASTindex
+       do Exe;
+          copyBaseAdr -> A[];
+          NXO.getNext -> off;
+          off -> A.addOff -> A[];          
+          common.varInd -> A.access;
+          (if stest then
+              301->trace
+              (#do 'NXoffSets:asgToRef:'-> xT; NXO.displayCurrent;
+                 A.display->xT; mch.dumpreg 
+          #)if);
+          NXO.getNode->N[]; N.son->N; 
+          (if NXO.getKind
+           // NXO.strucOff // NXO.strucTmp then
+              true -> isStruc
+           else
+              N.son->N
+          if);
+          (A[],isStruc,N[],NXO.getChain) 
+            -> mkRefEvVal 
+            -> W[];
+          (rAbase[],destEv[],rChain[]) -> W.asgToRefAdr;
+          (* We return an Eval describing the destination;
+           * W may be cleared if tmp; (not yet implemented)
+           *)
+          destEv.son->destEV; (* very inconsistent!*)
+          ((rAbase.copy,destEV[],false,rChain[])->genAdr
+          ,isStruc,destEV[],rChain[]) 
+            -> mkRefEvVal 
+            -> V[];
+          release;
+          (if stest then
+              301->trace
+              (#do 'NXoffSetsVal:asgToRef1:'->xT; V.display; mch.dumpreg #);
+          if);
+       #);
+     asgToRealAdr::  
+       (# A: ^mch.address; W: ^evVal; off: @integer; isRef: @boolean
+       do Exe;
+          copyBaseAdr -> A[]; 
+          NXO.getNext -> off;
+          (if isEnter AND (NXO.getKind = NXO.valOff) then
+              this(nxOffSetsVal)[] -> V[]
+           else
+              NXO.getSize -> A.size;
+              off -> A.addOff -> mkRealEvVal -> W[];
+              rA[] -> W.asgToRealAdr -> V[];
+          if);
+          (if stest then
+              301->trace(#do 'NXoffSets:endAsgToRealAdr:'->xT; 
+                           rA.display->xT;
+                           V.display;
+                           mch.dumpreg
+                        #)
+          if);
+          release
+       #);
+     asgToRepAdr::
+       (# A: ^mch.address; W: ^evVal; off: @integer; isRef: @boolean;
+          EV: ^ASTindex; dr: ^mch.dataRegOperand; T: ^text; k: @integer
+       do (if stest then
+              301->trace(#do 'NXoffSetsVal:asgToRepAdr:'-> xT #)
+          if);
+          Exe;
+          copyBaseAdr -> A[];
+          NXO.getNext -> off;
+          off -> A.addOff -> A[];          
+          common.varInd -> A.access;
+          (if NXO.getKind ->K
+           // NXO.repTmp // NXO.repOff (* ??? can ref happen ?*)
+           // NXO.refTmp // NXO.refOff then
+              
+              (A[],false) -> rA.asgRefAdr -> mch.chkHeap;
+              (*********
+              (if ((A[],rA[]) -> mch.cpMem -> dr[]) <> none then
+                  dr.dealloc
+               if);******)
+           else 
+              (* the destination is e.g. R: [1] @char;
+               * NX0 kind = valTmp in this case.
+               * The opposite situation:
+               *   valOff -> valTmp/valTmp
+               * should be covered by txtVarVal:asgToNxoffSet;
+               * check this!?!
+               *)
+              NXO.getNode -> EV[];
+              EV.gettext -> T[];
+              T -> mkTxtCstEvVal -> W[];
+              (rA[],rEv[],rChain[]) -> W.asgToRepAdr;
+          if);
+          release;
+       #);
+     asgToDataReg::  (#do cError(#do 'NXoffSets:noBinding9'-> xT #)#);
+     asgToItem::
+       (# nScan: @ | scanNadr;
+          more: @boolean;
+          nOff: @integer; 
+       do (* baseAdr can be in [a0,a1,ai] *)
+          (if stest then
+              301->trace
+              (#do 'NXoffSets:asgToItem: baseAdr= '-> xT;
+                 baseAdr.display->xT;
+                 xN; 'rA='->xT; rA.display->xT;
+                 xU;
+              #)
+          if);
+          Exe;
+          
+          (* rA in [a0,a1] ?? *)
+          
+          (rDesc[],rA[],0,rChain[],true) -> nScan -> more;
+
+          (* lA=thisReg and rA=callReg OR lA=callReg and rA=thisreg *)
+          L: (#
+             do (* since this(NXoffSetsVal) is passed, a release
+                 * may be made here
+                 *)
+                this(NXoffSetsVal)[]-> nScan.asgToNelm;
+                nScan -> more;
+                (if more then
+                    (* restore lA from tmp *)
+                    restart L
+             if)#);
+          nScan.reset; 
+          (*rA.freeAdr; (* 23/5/99 *)
+          release;
+          (if stest then
+              301->trace(#do 'NXoffsets:asgToItemEnd'->xT; mch.dumpreg; xD #)
+          if);
+       #); 
+     asgToNXoffSets::
+       (# lOff,rOff: @integer; 
+          lA,rAx: ^mch.regAdr; W: ^evVal; N,N1: ^ASTindex;
+          dr: ^mch.dataRegOperand;
+       do (if stest then
+              301->trace
+              (#do 'NXoffSets:asgToNXoffSets'-> xT;
+                 NX.top->xI; NX.next->xI;
+                 NXO.top->xI; NXO.next->xI; xU
+              #)
+          if); 
+          Exe;
+          (for i: (NX.top-NX.next,NXO.top-NXO.next) -> min (*???*) repeat
+               NXO.getNext -> lOff;
+               NX.getNext -> rOff;
+               copyBaseAdr -> lA[]; 
+               lOff -> lA.addOff -> lA[];
+               rOff ->(rA.copy).addOff -> rAx[];
+               (if NXO.getKind 
+                // NXO.refTmp // NXO.refOff then
+                   common.varInd -> lA.access;                   
+                   (*common.varInd -> rAx.access; inconsistent! *)
+                   (*    NXO   -> NX      | qua-ckeck: FIX THIS
+                    * refTmp   | refTmp   | No
+                    * refOff   | refTmp   | ?
+                    * refTmp   | refOff   | ?
+                    * refOff   | refOff   | perhaps
+                    *)
+                   (if NX.getKind 
+                    // NX.refTmp then
+                       (lA[],false) -> rAx.asgRefAdr -> mch.chkHeap;
+                    // NX.refOff then
+                       (lA[],false) -> rAx.asgRefAdr -> mch.chkHeap;
+                    else
+                       ' nxoffsets:asgToNxoff:ref:wrongKind: '->puttext;
+                       NX.getKind -> NX.displayKind; newline;
+                      (*  NXO.getNode->N[]; N.son->N; N.son->N;
+                       (lA[],false,N[],NXO.getChain) 
+                         -> mkRefEvVal 
+                         -> W[];
+                       NX.getNode->N1[]; N1.son->N1;
+                       (rAx[],N1[],NX.getChain) -> W.asgToRefAdr
+                       *)
+                   if)
+                // NXO.repTmp then 
+                   (* source  | destination
+                    *   NXO   |    NX   
+                    * -------------------------------------------
+                    *  repTmp | repTmp  : move tmp rep to tmp rep
+                    *  repTmp | repOff  : move tmp rep to obj rep
+                    *  repOff | repTmp  : copy obj rep to obj rep
+                    *  repOff | repOff  : copy obj rep to obj rep
+                    * -------------------------------------------
+                    * move: we can just copy the content of the 
+                    *       destination address to the source address 
+                    *       and clear the source.
+                    *       NO: we must ensure ChkRA!!!
+                    * copy: we must use Copy value/ref rep to copy
+                    *       the content of the repetition
+                    *)
+                   common.varInd -> lA.access;
+                   (lA[],false) -> rAx.asgRefAdr -> mch.chkHeap;
+                   (*************
+                   (if ((lA[],rAx[]) -> mch.cpMem -> dr[]) <> none then
+                       dr.deAlloc
+                    if);
+                    ********************)
+                   (0->mch.newCstOp,lA[],4) -> mch.stCst
+                // NXO.repOff then (* repOff is currently NOT used )
+                   (lA[],rAx[]) -> mch.cpMem -> dr[];
+                   dr.dealloc;
+                   
+                   (*NX.getNode->N[]; 
+                   301->trace
+                   (# S: @text
+                   do 'rep:'->xT; lOff->xI; rOff->xI;
+                      100->switchon;
+                      N[] -> xA;
+                      100->switchOff;
+                      lA.display->S; S[]->xT
+                   #);
+                   
+                   NXO.getChain->EHchain[]; ????? 
+                   (lA[],N[],sematt.repValEval,false) 
+                   ( *!! we need to distinguish between ref and val rep * )
+                     -> MkTxtVarEvVal 
+                     -> W[];
+                   rAx[] -> W.asgToRepAdr *)
+                else
+                   (# V1: ^evVal
+                   do NXO.getSize -> lA.size;
+                      NX.getSize -> rAx.size;                   
+                      lA[] -> mkSimpleVal -> W[];
+                      (* OLM: 2.1.99: originally the exit value below
+                       * was not collected. ->V[] was in a comment.
+                       * We collected the value in V1 and made a release
+                       * to fix data reg overflow in FEJL/time.bet.
+                       * Check if we can use V as exit value
+                       * or if a value V has to be returned from
+                       * asgToNxList
+                       *)
+                      rAx[] -> W.asgToAdr -> V1[] (* -> V[]*);
+                      V1.release
+                   #)
+               if);
+          for);
+          rA.freeAdr;
+          release;
+          (if stest then 301 -> trace(#do xD #)if);
+       #);
+     asgToInLineItem::  (#do cError(#do 'NXoffSets:noBinding10'-> xT #)#);
+     asgToList::
+       (#
+       do (if stest then 301->trace(#do 'NXoffSets:asgToList'-> xT #)if); 
+          Exe;
+          EV->scanList
+          (# E: @ASTindex;
+          do currentNode->E; 
+             (BA.copy,this(NXoffSetsVal)[],E[],rChain[])
+               -> AssignValToEval
+               -> V[];
+             V.release;
+          #);
+          (EV[],BA[],rChain[])->mkListVal->V[]
+       #);
+     asgToCproc::
+       (# CP: @ExTernalCall; 
+          forward: @boolean;
+          W: ^evVal; off: @integer; 
+          localBaseAdr,A: ^mch.address;
+       do (if stest then 301->trace(#do 'NXoffSets:asgToCproc:'->xT #)if);
+          Exe;
+          (externalName,Desc[],extKind,EV.son)->CP; (* init *)
+          extKind -> mch.xParForward -> forward;
+          (if NOT forward then
+              cError(#do 'NXoffSetsVal:asgToCproc:reverse'->xT #)
+          if);
+          copyBaseAdr -> localBaseAdr[];
+          (if localBaseAdr.useCallReg and common.switch[61] then
+              (* on MIPS and PPC. callReg = argReg2;
+               * baseAdr may use callReg;
+               * in this case we move baseAdr to a tmp. register
+               *)
+              localBaseAdr.toTmp -> localBaseAdr[];
+              localBaseAdr.doFreeze -> unFreezebeforeRelease
+          if);
+          (for i: CP.top repeat
+               NXO.getNext -> off;
+               (if NXO.getKind
+                // NXO.valOff // NXO.valTmp then
+                   localBaseAdr.copy ->A[];
+                   NXO.getSize -> A.size;
+                   off -> A.addOff -> mkSimpleVal -> W[];
+                else
+                   cError(#do 'NXOffSets:asgToCproc:ref'->xT #)
+               if);
+               (forward->CP.getEnterP,extKind,CP.getEnterP.size,CP.pascExtProcInfo)
+                 -> W.pushCpar;
+          for);
+          CP.call; CP.getExitP->V[]; 
+          release
+       #);
+     asgToNewPrim::  (#do cError(#do 'NXoffSets:noBinding12'-> xT #)#);
+     asgToPrimitive::  (#do cError(#do 'NXoffSets:noBinding13'-> xT #)#);
+     asgToInlInePrimitive:: 
+       (# W: ^evVal;
+          xDr: [3] ^mch.dataRegOperand;
+          D: [3]@integer; dMax,dRes,off: @integer; A: ^mch.address
+       do (if stest then
+              301->trace(#do 'NXoffSets:asgToInlinePrim:'->xT #)
+          if);
+          (* we assume that there is only one vale, but
+           * we actually don't know
+           *)
+          Exe;
+          NXO.getNext -> off;
+          copyBaseAdr -> A[];
+          NXO.getSize -> A.size;
+          off -> A.addOff -> mkSimpleVal -> W[];
+
+          W.toDataReg->xDr[dMax+1->dMax][]; 
+          xDr[Dmax]->D[Dmax]; 
+
+          ((opCode,I1,I2,D)->gen.inLinePrimitive->dRes,false,false,false)
+            -> mkComputedEvVal
+            -> V[];
+          (for i:dMax repeat
+               (if dRes <> D[i] then xDr[i].deAlloc if)
+          for);
+          release
+       #);
+     pushCpar:: 
+       (# A: ^mch.address; W: ^evVal; off: @integer; 
+       do (if stest then 301 -> trace(#do 'NXoffSets:pushCpar'-> xT #)if);
+          Exe;
+          copyBaseAdr -> A[]; 
+          NXO.getNext -> off;
+          (if isEnter AND (NXO.getKind = NXO.valOff) then
+              
+           else
+              NXO.getSize -> A.size;
+              off -> A.addOff -> mkSimpleVal -> W[];
+              (type,extKind,size,univProcInfo) -> W.pushCpar
+          if);
+          release
+       #);
+     unMinus:: (#do itemVal(#do XV.unMinus->res[] #)#);
+     notExp:: (#do itemVal(#do XV.notExp->res[] #)#);
+     mkTrue:: (#do cError(#do 'NXoffSets:noBinding18'-> xT #)#);
+     cmpBoolAndJmp:: (#do cError(#do 'NXoffSets:noBinding19'-> xT #)#);
+     relOp:: (#do cError(#do 'NXoffSets:noBinding20'-> xT #)#);
+     cmp:: (#do itemVal(#do (lV[],op,jmpCond,Lab[])->XV.cmp->res[] #)#);
+     adrCmp:: 
+       (#do ItemVal(#do rA[]->XV.adrCmp
+            -> (op1[],op2[],size,deAllocOp1,deAllocOp2) #)#);
+     cstCmp:: 
+       (#do ItemVal(#do rC->XV.cstCmp
+            ->(op1[],op2[],size,deAllocOp1,deAllocOp2) #)#);
+     regCmp:: 
+       (#do ItemVal(#do rReg->XV.regCmp
+            ->(op1[],op2[],size,deAllocOp1,deAllocOp2) #)#);
+     add:: (# do itemVal(#do lV[] -> XV.add -> res[] #)#);
+     adrAdd:: (# do itemVal(#do rA[] -> XV.adrAdd -> V[] #)#);
+     cstAdd:: (# do itemVal(#do rN -> XV.cstAdd -> V[] #)#);
+     regAdd::(# do itemVal(#do rReg -> XV.regAdd -> V[] #)#);
+     sub:: (# do itemVal(#do lV[] -> XV.sub -> res[] #)#);
+     adrSub:: (# do itemVal(#do rA[] -> XV.adrSub -> V[] #)#);
+     cstSub:: (# do itemVal(#do rN -> XV.cstSub -> V[] #)#);
+     regSub::(# do itemVal(#do rReg -> XV.regSub-> V[] #)#);
+     times:: (# do itemVal(#do lV[] -> XV.times -> res[] #)#);
+     adrTimes:: (# do itemVal(#do rA[] -> XV.adrTimes -> V[] #)#);
+     cstTimes:: (# do itemVal(#do rN -> XV.cstTimes -> V[] #)#);
+     regTimes::(# do itemVal(#do rReg -> XV.regTimes-> V[] #)#);
+     DivMod:: (# do itemVal(#do (lV[],isDiv) -> XV.DivMod -> res[] #)#);
+     adrDivMod:: 
+       (# V: ^(*computed*)EvVal
+       do itemVal
+          (#
+          do (rA[],isDiv) -> XV.adrDivMod -> V[]; 
+             cError(#do 'NXoffSets:div'->xT #) 
+       #)#);
+     cstDivMod:: (# do itemVal(#do (rN,isDiv) -> XV.cstDivMod -> V[] #)#);
+     regDivMod::
+       (# V: ^(*computed*)EvVal
+       do itemVal
+          (#
+          do (rReg,isDiv) -> XV.regDivMod-> V[];
+             cError(#do 'NXoffSets:div'->xT #) 
+       #)#);
+     (**** apparently the or/and operations below are no longer
+      * used after changing to short circuit boolean expressions
+      **********************************************************)
+     orr::<(#do ItemVal(#do lV[]->XV.orr-> res[] #); release #);
+     cstOr::<(#do ItemVal(#do rN->XV.cstOr->V[] #); release #);
+     adrOr::<(#do ItemVal(#do rA[]->XV.adrOr->V[] #); release #);
+     regOr::<(#do ItemVal(#do rReg->XV.regOr->V[] #); release #);
+     andd::<(#do ItemVal(#do lV[]->XV.andd-> res[] #)#);
+     cstAnd::<(#do ItemVal(#do rN->XV.cstAnd->V[] #)#);
+     adrAnd::<(#do ItemVal(#do rA[]->XV.adrAnd->V[] #)#);
+     regAnd::<(#do ItemVal(#do rReg->XV.regAnd->V[] #)#);
+     
+     ItemVal:
+       (# A: ^mch.address; XV: ^evVal; off: @integer; isRef: @boolean;
+          N: ^ASTindex
+       do (if stest then 
+              179 -> trace(# do 'NXoffsets:itemVal: ' -> xT #)
+          if);
+          Exe;
+          copyBaseadr -> A[]; 4 -> A.size;
+          NXO.getNext -> off;
+          off -> A.addOff -> A[];
+          (if NXO.getKind // NXO.refTmp // NXO.refOff then
+              (*!! may be struc, sourceEv, lChain missing!*)
+              common.cstInd -> A.access;
+              NXO.getNode->N[]; N.son->N; N.son->N;         
+              (A[],false,N[],NXO.getChain) -> mkRefEvVal -> XV[]
+           else              
+              A[] -> mkSimpleVal -> XV[]
+          if);
+          inner;
+       exit XV[]
+       #);
+     Exe: @
+       (# executedXpart,pop: @boolean; max: @integer
+       do false-> pop;
+          (if not executedXpart then
+              301->Trace(#do 'nxOffSets:exe1:'->xT; mch.dumpReg #);
+              (if not baseAdr.isCallReg then 
+                  (if not baseAdr.useCallReg then 
+                      true -> releaseCallReg;
+                      AllocCallReg -> pop 
+                  if);
+                  baseAdr.toCallReg -> baseAdr[];
+              if);   
+              mch.pushReg -> max;
+              ('X',lDesc[],0) -> CallEntry;
+              max -> mch.popReg;
+              (if pop then
+                  301->Trace(#do 'nxOffSets:exe2:'->xT; mch.dumpReg #);
+                  baseAdr.toTmp -> baseAdr[];
+                  (*baseAdr.freezeReg;
+                   true -> unFreezebeforeRelease;*)
+                  baseAdr.doFreeze -> unFreezebeforeRelease;
+                  mch.decrCallReg;
+                  false -> releaseCallReg;
+                  pop -> PopCall;
+              if);
+              true -> executedXpart
+          if)
+       #);
+     copyBaseAdr:
+       (# A: ^mch.address
+       do baseadr.copy -> A[]; 
+          (* A.freezeReg; *)
+          A.doFreeze;
+          (* prevent release  of registers in A;
+           * baseAdr will be release by caller of asgToItem *)
+       exit A[]
+       #);
+     baseAdr: ^mch.address; lDesc: ^ASTindex; 
+     NXO: ^sematt.NXoffSets;
+     isEnter,unFreezeBeforeRelease,releaseCallReg: @boolean 
+  #)
+(*
+----asgToNelm_release:descriptor---
+(#
+do (if V## = EH.NXoffSetsVal## then
+       (# VNX: ^EH.NXoffSetsVal
+       do (if stest then 
+              179 -> trace(#do 'asgToNelm:NXoffSetsVal:'->xT#)
+          if);
+          V[] -> VNX[];
+          VNX.NXO.top -> VNX.NXO.next;
+       #);
+   if)
+#)
+
+ *)

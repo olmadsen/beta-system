@@ -1,0 +1,2607 @@
+ORIGIN 'machine';
+(* Machine body for Macintosh - missing reals for pascal; otherwise completed *)
+(* This version is generating MPW object code *)
+(* ©1993,1994 by Mj¿lner Informatics ApS (C)1993,1994 *)
+
+INCLUDE 'machinebody';
+INCLUDE 'Machinearray';
+INCLUDE 'MC68machine';
+(* v1.3 ---INCLUDE '~beta/basiclib/v1.3/getnumber'*)
+INCLUDE 'compilernumberio';
+
+--machineatt:attributes---
+Fmov:
+  (# temp: @Integer;
+     f1,f2: ^floatRegOp
+  enter(f1[],f2[])
+  do (*'\tFMOVE.D\t'->BC.putT; f1.putOp; sep; f2.putOp; BC.putNL;*)
+     f2.rN -> TOS'%shiftleft[7]' -> temp;
+     (*(0xF200, temp) -> TOS'%or' -> temp;*)
+     (temp, f1.rN -> TOS'%shiftleft[10]') -> TOS'%or' -> temp;
+     (temp, 0) -> mstate.bitstream.PutFPInst;
+  #);
+FloatLoad:
+(# temp: @Integer;
+   fp: ^floatRegOp;
+   L: ^locallab;
+enter (l[],fp[])
+do (*'\tFMOVE.D\t'->BC.putT; A.putOp; ','->BC.putC; putOp; BC.putnl*)
+   fp.rN -> TOS'%shiftleft[7]' -> temp;
+   (0x5400, temp) -> TOS'%or' -> temp;
+   (temp, 1) -> mstate.bitstream.PutFPInst;
+   L.putOp;
+#);
+FloatStore:
+(# temp: @Integer;
+   fp: ^floatRegOp;
+   L: ^locallab;
+enter (l[],fp[])
+do (*'\tFMOVE.D\t'->BC.putT; putOp; ','->BC.putC; A.putOp; BC.putNL*)
+   fp.rN -> TOS'%shiftleft[7]' -> temp;
+   (0x7400, temp) -> TOS'%or' -> temp;
+   (temp, 1) -> mstate.bitstream.PutFPInst;
+   L.putOp;  
+#);
+
+
+--mstate:descriptor--
+(# 
+   indexErrorLab: @LocalLab;
+   segNo : @integer;
+   bitstream: @MachineArray;
+
+   makeNewCodeSegment :
+     (# t: ^Text;
+     do
+        (if (segNo>1)//true then mstate.bitstream.EndProc; (* ENDPROC *) if);
+        (*'	SEG	' -> BC.putT;
+         '''' -> BC.putC;
+         BC.name -> t[]; t -> BC.putT;
+         '#' -> BC.putC;
+         segNo -> BC.putI;
+         '''' -> BC.putC; BC.putNL; *)
+        BC.name -> t[];
+        (* '.o' -> t.append;*)
+	(segNo, t[]) -> mstate.bitstream.Seg;
+        segNo +1 -> segNo;
+        
+        'ArgCount'		-> mstate.bitstream.ImportData;
+        'ArgVector'		-> mstate.bitstream.ImportData;
+        'Initialize'		-> mstate.bitstream.Import;
+        'AlloC'			-> mstate.bitstream.Import;
+        'AttBC'			-> mstate.bitstream.Import; 
+        'AlloDO'			-> mstate.bitstream.Import;
+        'Struc'		-> mstate.bitstream.Import;
+        'RefNone'		-> mstate.bitstream.Import;
+        'IndexError'		-> mstate.bitstream.Import;
+        'AlloI'			-> mstate.bitstream.Import;
+        'ObjS'			-> mstate.bitstream.Import;
+        'CopyT'			-> mstate.bitstream.Import;
+        'CopyVR'		-> mstate.bitstream.Import;
+        'AlloVR1'		-> mstate.bitstream.Import;
+        'AlloVR2'		-> mstate.bitstream.Import;
+        'AlloVR4'		-> mstate.bitstream.Import;
+        'AlloVR8'		-> mstate.bitstream.Import;
+        'AlloRR'			-> mstate.bitstream.Import;
+        'Att'			-> mstate.bitstream.Import;
+        'ChkRA'			-> mstate.bitstream.Import;
+        'CopyCT'		-> mstate.bitstream.Import;
+        'CopyRR'		-> mstate.bitstream.Import;
+        'ExtRR'			-> mstate.bitstream.Import;
+        'ExtVR'			-> mstate.bitstream.Import;
+        'CinitT'			-> mstate.bitstream.Import;
+        'NewRR'			-> mstate.bitstream.Import;
+        'NewVR'			-> mstate.bitstream.Import;
+        'CpkVT'			-> mstate.bitstream.Import;
+        'CpkSVT'		-> mstate.bitstream.Import;
+        'PpkCT'			-> mstate.bitstream.Import;
+        'PpkVT'			-> mstate.bitstream.Import;
+        'PpkSVT'		-> mstate.bitstream.Import;
+        'ExitO'			-> mstate.bitstream.Import;
+        'ExO'			-> mstate.bitstream.Import;
+        'Susp'			-> mstate.bitstream.Import;
+        'ThisS'			-> mstate.bitstream.Import;
+        'AlloS'			-> mstate.bitstream.Import;
+        'AlloSI'			-> mstate.bitstream.Import;
+        'AlloSC'			-> mstate.bitstream.Import;
+        'eqS'			-> mstate.bitstream.Import;
+        'neS'			-> mstate.bitstream.Import;
+        'ltS'				-> mstate.bitstream.Import;
+        'gtS'			-> mstate.bitstream.Import;
+        'leS'			-> mstate.bitstream.Import;
+        'geS'			-> mstate.bitstream.Import;
+        'Qua'			-> mstate.bitstream.Import;
+        'MkTO'			-> mstate.bitstream.Import;
+        'DoGC'			-> mstate.bitstream.Import;
+        'CopySVR'		-> mstate.bitstream.Import;
+        'CopyCPP'		-> mstate.bitstream.Import;
+        'CopyPPP'		-> mstate.bitstream.Import;
+        'CopySRR'		-> mstate.bitstream.Import;
+        'IOA'			-> mstate.bitstream.ImportData;
+        'BetaStackTop'	-> mstate.bitstream.ImportData;
+        
+        (*(segNo, t[], False) -> mstate.bitstream.NewModule; *)
+        (* PROC *)
+        mstate.bitstream.Proc;
+     #);
+
+   (* for external calls *)
+   (* extType: external language: 0=primitive, 1=C, 2=pascal, 3=pascTrap,4=assembly
+    * noOfPars: number of parameters
+    *)
+   extType: @
+     (# s: [10] @integer; (* pairs of (ext,no) *)
+        t: @integer; (* top: points at the last no *)
+        push: (* push ext and no *)
+          (# ext,no: @integer;
+          enter (ext,no)
+          do t+2 ->t;
+             (if t>s.range //true then s.range -> s.extend if);
+             ext -> s[t-1];
+             no -> s[t];
+          #);
+        pop:
+          (# ext: @integer;
+          do (if t<=0//true then cError(# do 'extType stack underflow' -> T#);
+              else s[t-1] -> ext; t-2->t;
+             if);
+          exit ext
+          #);
+        top:
+          (# ext: @integer;
+          do (if t<=0//true then cError(# do 'extType stack underflow' -> T#);
+              else s[t-1] -> ext;
+             if);
+          exit ext
+          #);
+     #);
+  fp0tmp: @localLab;
+#)
+
+--DebugHeader: descriptor--
+(# t: ^Text;
+do (* MacsBug hack *) 
+   (*'macbugsdummy' -> BC.putT; ':\n	RTS ; MacsBug\n' -> BC.putT;
+    '	DC.B	$80, ' -> BC.putT;*) 
+   BC.name -> t[];
+   (*t.length -> BC.putI; 
+    ', ''' -> BC.putT; t -> BC.putT; ''' ; MacsBug\n' -> BC.putT;
+    (if (t.length mod 2)//1 then
+    '	DC.B	$00	; MacsBug\n' -> BC.putT;
+    if);
+    '	DC.W\t$0000	; MacsBug\n' -> BC.putT;
+    BC.putNL;*)
+   (*'macbugsdummy' -> mstate.bitstream.DefTLabel;*)
+   (2x0100111001110101, 0) -> mstate.bitstream.PutInst;
+   1 -> mstate.bitstream.iSize;
+   (16x80, 1) -> mstate.bitstream.PutDC;
+   (t.Length,1) -> mstate.bitstream.PutDC;
+   t[] -> mstate.bitstream.PutDCB;
+   2 -> mstate.bitstream.iSize;
+   (0, 2) -> mstate.bitstream.PutDC;
+#)
+--AssemblerHeader:descriptor--
+(# 
+do entryPoints.init;
+   BC.name -> mstate.bitstream.StartUp;
+   
+   (*'\t; MAC assembler\n\tMACHINE MC68020\n\tMC68881\n\tSTRING ASIS\n\tCASE ON\n' -> BC.putT;*)
+
+   1 -> mState.segNo;
+   mState.makeNewCodeSegment;
+   mState.indexErrorLab.New; mState.indexErrorLab.Def;
+   (* '	JMP	'->BC.putT;  'IndexError' ->BC.putT; BC.putNL*)
+   (2x0100111011000000, 1) -> mstate.bitstream.PutInst;
+   ('IndexError', FALSE) -> mstate.bitstream.PutTOp;
+   SwitchToCode;
+#)
+--NewDesc:descriptor--
+
+  (# (* This pattern is called before code is generated
+      * for a descriptor, so this is the place control
+      * segment changes.
+      * NCmax is set to 100 based on the number of descriptors 
+      * in macenv 192
+      *)
+  do 10000 -> NCmax; (* 10->NCmax;*) (* in this object code generating version we don't need to split a module *)
+    (*(if (NC mod NCmax)//0 then
+	  (if (NC<>0)//true then
+	    entrypoints.clear;
+		'Ups no good, we flushed the entrypoints' ->Bugstream.PutLine;
+        mState.makeNewCodeSegment;
+        mState.indexErrorLab.New; mState.indexErrorLab.Def;
+		'IndexError' -> jmpT;
+    if)if)*)
+#)
+
+--CstOpPut:dopart--
+do C -> mstate.bitstream.PutConst;
+--TextOpPut:dopart--
+do 	(*(if fromCodeToData
+      	   then 
+         '('->BC.putC; '('->BC.putC; T->BC.putT; ')'->BC.putC; '.'->BC.putC;
+         'L'->BC.putC; ','->BC.putC; 'A'->BC.putC; '5'->BC.putC; ')'->BC.putC;
+      	 // false then T->BC.putT*)
+   (T, fromCodeToData) -> mstate.bitstream.PutTOp;
+   (*if);*)
+--textOpLoadAdr:dopart---
+do
+--DataRegOpPut:dopart--
+do 	rN -> mstate.bitstream.PutDReg;
+--FloatRegOpPut:descriptor--
+
+  (#do (*'FP'->BC.putT; rN->BC.putI *)
+  		(*rN -> mstate.bitstream.PutFPReg;*)
+		mstate.bitstream.counter ->Bugstream.PutInt; '#Error: We should not be using FloatRegOpPut anymore' ->Bugstream.PutLine;
+		stop;
+	#)
+--FloatRegOpLoad:descriptor--
+(#	temp: @Integer;
+do (*'\tFMOVE.D\t'->BC.putT; A.putOp; ','->BC.putC; putOp; BC.putnl*)
+   rN -> TOS'%shiftleft[7]' -> temp;
+   (0x5400, temp) -> TOS'%or' -> temp;
+   (temp, 1) -> mstate.bitstream.PutFPInst;
+   A.putOp;
+#)
+--FloatRegOpStore:descriptor--
+(#	temp: @Integer;
+do (*'\tFMOVE.D\t'->BC.putT; putOp; ','->BC.putC; A.putOp; BC.putNL*)
+   rN -> TOS'%shiftleft[7]' -> temp;
+   (0x7400, temp) -> TOS'%or' -> temp;
+   (temp, 1) -> mstate.bitstream.PutFPInst;
+   A.putOp;  
+#)
+--FloatRegOpStoreTmp:descriptor--
+(#	temp: @Integer;
+do (*'\tFMOVE.D\t'->BC.putT; putOp; ',-(SP)\n'->BC.putT;*)
+   rN -> TOS'%shiftleft[7]' -> temp;
+   (0x7400, temp) -> TOS'%or' -> temp;
+   (temp, 1) -> mstate.bitstream.PutFPInst;
+   mstate.bitstream.PutNSP;   
+   &stackTopAdr[]->A[]
+#)
+--floatRegOpStore2int:descriptor--
+(#	temp: @Integer;
+do D.alloc;
+   (*'\tFINTRZ.X\t'->BC.putT; putOp; *)
+   (rN -> TOS'%shiftleft[7]', 0x0003) -> TOS'%or' -> temp;
+   (rN -> TOS'%shiftleft[10]', temp) -> TOS'%or' -> temp;
+   (temp, 0) -> mstate.bitstream.PutFPInst;
+   (*'\n\tFMOVE.L\t'->BC.putT; putOp; ','->BC.putC; D.putOp;*)
+   rN -> TOS'%shiftleft[7]' -> temp;
+   (0x6000, temp) -> TOS'%or' -> temp;
+   (temp, 1) -> mstate.bitstream.PutFPInst;
+   D.putOp;
+   (*'\n\tMOVE.L\t'->BC.putT; D.putOp; ','->BC.putC; A.putOp; BC.putNL;*)
+   (2x0010000000000000, 2) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   D.putOp;
+   A.putOp;
+   deAlloc
+#)
+--floatConst:descriptor---
+(# Lab: @ localLab;  (* x.yEz *) temp: @Integer;
+   sscanf: external
+     (#	s: [1]@Char;
+        f: [1]@Char;
+        adr: @Integer;
+     Enter (s,f,adr)
+     #);
+   
+   res: [2]@Integer;
+   
+do switchToData;
+   FR.alloc;
+   Lab.new; TRUE -> Lab.isTextAdr; Lab.def; 
+   (* '\tDC.D\t"'->BC.putT;*) 
+   (*  x->BC.putI; '.'->BC.putT;  
+    *  (for i:l repeat '0'->BC.putC for); y->BC.putI; 
+    *  'E'->BC.putT; z->BC.putI;
+    *  '"\n' -> BC.putT;
+    *)
+   (*T -> BC.putT; '"\n' -> BC.putT;*)
+   (t, '%lf', @@res[1]) -> sscanf;
+   (res[1], 4) -> mstate.bitstream.PutDC;
+   (res[2], 4) -> mstate.bitstream.PutDC;
+   switchToCode;
+   (*'\tFMOVE.D\t'->BC.putT; Lab.putOp; ','->BC.putC; FR.putOp; BC.putNL*)
+   FR.rN -> TOS'%shiftleft[7]' -> temp;
+   (0x5400, temp) -> TOS'%or' -> temp;
+   (temp, 1) -> mstate.bitstream.PutFPInst;
+   Lab.putOp;
+#)
+--int2float:descriptor--
+(#	temp: @Integer;
+do 	FR.alloc; (*'\tFMOVE.L\t'->BC.putT; A.putOp; ','->BC.putC; FR.putOp; BC.putNL*)
+   FR.rN -> TOS'%shiftleft[7]' -> temp;
+   (0x4000, temp) -> TOS'%or' -> temp;
+   (temp, 1) -> mstate.bitstream.PutFPInst;
+   A.putOp;  		
+#)
+--intReg2float:descriptor--
+(#	temp: @Integer;
+do FR.alloc; (*'\tFMOVE.l\t'->BC.putT; A.putOp; ','->BC.putC; FR.putOp; BC.putNL*)
+   FR.rN -> TOS'%shiftleft[7]' -> temp;
+   (0x4000, temp) -> TOS'%or' -> temp;
+   (temp, 1) -> mstate.bitstream.PutFPInst;
+   A.putOp;
+#)
+--cmpFloat:descriptor--
+(* note that the order of LF and A has been switched *)
+(#	temp, temp2: @Integer; Freg: ^FloatRegOp;
+do (*'\tFCMP.D\t'->BC.putT; A.putOp; ','->BC.putC; LF.putOp; BC.putNL*) 
+   LF.rN -> TOS'%shiftleft[7]' -> temp;
+   (if a.isFloatRegOp then
+       A[] -> Freg[];
+       Freg.rN -> TOS'%shiftleft[10]' -> temp2;
+       (temp, temp2) -> TOS'%or' -> temp;
+       (0x0038, temp) -> TOS'%or' -> temp;
+       (temp, 0) -> mstate.bitstream.PutFPInst;
+    else
+       (0x5438, temp) -> TOS'%or' -> temp;
+       (temp, 1) -> mstate.bitstream.PutFPInst;
+       A.putOp;
+   if);
+#)
+--fBeq:descriptor--
+(#
+do (*'\tFBEQ\t'->BC.putT; op.putOp; BC.putNl *)
+   (0xF281, 1) -> mstate.bitstream.PutInst;
+   op.labNo -> mstate.bitstream.PutFPLLabel;
+#)
+--fBge:descriptor--
+(#
+do (*'\tFBGE\t'->BC.putT; op.putOp; BC.putNl *)
+   (0xF293, 1) -> mstate.bitstream.PutInst;
+   op.labNo -> mstate.bitstream.PutFPLLabel;
+#)
+--fBle:descriptor--
+(#
+do (*'\tFBLE\t'->BC.putT; op.putOp; BC.putNl *)
+   (0xF295, 1) -> mstate.bitstream.PutInst;
+   op.labNo -> mstate.bitstream.PutFPLLabel;
+#)
+--fBne:descriptor--
+(#
+do (*'\tFBNE\t'->BC.putT; op.putOp; BC.putNl *)
+   (0xF28E, 1) -> mstate.bitstream.PutInst;
+   op.labNo -> mstate.bitstream.PutFPLLabel;
+#)
+--fBgt:descriptor--
+(#
+do (*'\tFBGT\t'->BC.putT; op.putOp; BC.putNl *)
+   (0xF292, 1) -> mstate.bitstream.PutInst;
+   op.labNo -> mstate.bitstream.PutFPLLabel;
+#)
+--fBlt:descriptor--
+(#
+do (*'\tFBLT\t'->BC.putT; op.putOp; BC.putNl *)
+   (0xF294, 1) -> mstate.bitstream.PutInst;
+   op.labNo -> mstate.bitstream.PutFPLLabel;
+#)
+--addFloat:descriptor--
+(#	temp, temp2: @Integer; Freg: ^FloatRegOp;
+do (*'\tFADD.'->BC.putT;
+    (if AinFreg//true then 'X\t'->BC.putT else 'D\t'->BC.putT if);
+    A.putOp; ','->BC.putC; LF.putOp; BC.putNL *)
+   LF.rN -> TOS'%shiftleft[7]' -> temp;
+   (if AinFreg//true then
+       (if a.isFloatRegOp then
+           A[] -> Freg[];
+           Freg.rN -> TOS'%shiftleft[10]' -> temp2;
+           (temp, temp2) -> TOS'%or' -> temp;
+           (0x0022, temp) -> TOS'%or' -> temp;
+           (temp, 0) -> mstate.bitstream.PutFPInst;
+        else
+           (0x0022, temp) -> TOS'%or' -> temp;
+           (temp, 1) -> mstate.bitstream.PutFPInst;
+           A.putOp;
+       if);
+    else
+       (0x5422, temp) -> TOS'%or' -> temp;
+       (temp, 1) -> mstate.bitstream.PutFPInst;
+       A.putOp;
+   if);
+   
+#)
+--subFloat:descriptor--
+(#	temp: @Integer;
+do (*'\tFSUB.D\t'->BC.putT; A.putOp; ','->BC.putC; LF.putOp; BC.putNL *)
+   LF.rN -> TOS'%shiftleft[7]' -> temp;
+   (0x5428, temp) -> TOS'%or' -> temp;
+   (temp, 1) -> mstate.bitstream.PutFPInst;
+   A.putOp;
+#)
+--mulFloat:descriptor--
+(#	temp: @Integer;
+do (*'\tFMUL.D\t'->BC.putT; A.putOp; ','->BC.putC; LF.putOp; BC.putNL *)
+   LF.rN -> TOS'%shiftleft[7]' -> temp;
+   (0x5423, temp) -> TOS'%or' -> temp;
+   (temp, 1) -> mstate.bitstream.PutFPInst;
+   A.putOp;
+#)
+--divFloat:descriptor--
+(#	temp: @Integer;
+do (*'\tFDIV.D\t'->BC.putT; A.putOp; ','->BC.putC; LF.putOp; BC.putNL *)
+   LF.rN -> TOS'%shiftleft[7]' -> temp;
+   (0x5420, temp) -> TOS'%or' -> temp;
+   (temp, 1) -> mstate.bitstream.PutFPInst;
+   A.putOp;
+#)
+--negFloat:descriptor--
+(#	temp: @Integer;
+do (*'\tFNEG.X\t'->BC.putT; F.putOp; BC.putNL *)
+   F.rN -> TOS'%shiftleft[7]' -> temp;
+   (0x001A, temp) -> TOS'%or' -> temp;
+   ((F.rN -> TOS'%shiftleft[10]'), temp) -> TOS'%or' -> temp;
+   (temp, 0) -> mstate.bitstream.PutFPInst;
+#)
+--pushFloatReg:descriptor--
+(#	temp: @Integer;
+do (*'\tFMOVE.D\tFP'->BC.putT; rN->BC.putI; ',-(SP)\n'->BC.putT *)
+   rN -> TOS'%shiftleft[7]' -> temp;
+   (0x7400, temp) -> TOS'%or' -> temp;
+   (temp, 1) -> mstate.bitstream.PutFPInst;
+   mstate.bitstream.PutNSP;
+#)
+--popFloatReg:descriptor--
+(#	temp: @Integer;
+do (*'\tFMOVE.D\t(SP)+,FP'->BC.putT; rN->BC.putI; '\n'->BC.putT *)
+   rN -> TOS'%shiftleft[7]' -> temp;
+   (0x5400, temp) -> TOS'%or' -> temp;
+   (temp, 1) -> mstate.bitstream.PutFPInst;
+   mstate.bitstream.PutPSP;
+#)
+--stackTopAdrPutOp:descriptor--
+(#do (*'(SP)+'->BC.putT *)
+   mstate.bitstream.PutPSP;
+#)
+--AdrRegOpPut:dopart--
+do (if ind
+    // true then (2x010, 0, rN) -> mstate.bitstream.Indirect; (* (ArN) *)
+    // false then rN -> mstate.bitstream.PutAReg; (* ArN *)
+   if)
+--doubleDataRegPut:descriptor-- (* see e.g. divsll *)
+(#
+do (* DdNo1:DdNo2 *)
+   cError(# do 'Ups! We do not use doubledataregput anymore' -> T #);
+#)
+--LocalLabDef:dopart--
+do	(if betaLabel//TRUE then
+            (* ENTRY LlabNo *)
+            labNo -> mstate.bitstream.Entry
+        if);
+   (* LlabNo: *)
+   (labNo) -> mstate.bitstream.DefLLabel;
+--VirtLabDef:descriptor--
+(# 
+do (* ENTRY LlabNo
+    LlabNo:*)
+   labNo -> mstate.bitstream.Entry;
+#)  
+--LocalLabPut:dopart--
+do (*(if isTextAdr
+    // true then
+    ((LlabNo).L, A5)
+    // false then
+    LlabNo
+    if);*)
+   (labNo, isTextAdr) -> mstate.bitstream.PutLLabel;
+--localLabLoadAdr:dopart--
+do
+--ldCst:dopart--
+do (* MOVE.L C, R *) 
+   (2x0010000000111100, 2) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   C.putOp; R.putOp;
+--cstLoadOp:dopart--
+do
+--cstOpLoadToReg:dopart--
+do
+--stCst:descriptor--
+(#do (* MOVE.size C, A *)
+   size -> mstate.bitstream.iSize;
+   (if size
+    // 1 then
+       (2x0001000000111100, 2) -> mstate.bitstream.PutInst;
+       C.C -> mstate.bitstream.putWord;
+    // 2 then 
+       (2x0011000000111100, 2) -> mstate.bitstream.PutInst;
+       C.C -> mstate.bitstream.putWord;
+    // 4 then 
+       (2x0010000000111100, 2) -> mstate.bitstream.PutInst;
+       C.C -> mstate.bitstream.putLong;
+   if);
+   A.putOp;
+#)
+--ldByte:descriptor---
+(#
+do (* MOVE.B op1, op2*)
+   (2x0001000000000000, 2) -> mstate.bitstream.PutInst;
+   1 -> mstate.bitstream.iSize;
+   op1.putOp; op2.putOp;
+#)
+--ldHalf:descriptor---
+(#
+do (*  MOVE.W op1, op2 *)
+   (2x0011000000000000, 2) -> mstate.bitstream.PutInst;
+   2 -> mstate.bitstream.iSize;
+   op1.putOp;
+   op2.putOp;
+#)
+--ldVal:descriptor--
+(#do (* MOVE.L  A, R *)
+   (2x0010000000000000, 2) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   A.putOp; R.putOp;
+#)
+--ldValFromLab: dopart--
+do (2x0010000000000000, 2) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   L.putOp; R.putOP;
+--ldVl:descriptor--
+(#
+do (if size//4 then else R[]->gClr if);
+   (* MOVE.size A, R *)
+   size -> mstate.bitstream.iSize;
+   (if size
+    // 1 then (2x0001000000000000, 2) -> mstate.bitstream.PutInst;
+    // 2 then (2x0011000000000000, 2) -> mstate.bitstream.PutInst;
+    // 4 then (2x0010000000000000, 2) -> mstate.bitstream.PutInst;
+   if);
+   A.putOp; R.putOp;
+#)
+--ldSignedVl:descriptor--
+(#
+do (if size//4 then else R[]->gClr if);
+   (*'\tmov'->BC.putT; size->BC.putS; A.putOp; BC.sep; R.putOP; BC.putNl; *)
+   size -> mstate.bitstream.iSize;
+   (if size
+    // 1 then (2x0001000000000000, 2) -> mstate.bitstream.PutInst;
+    // 2 then (2x0011000000000000, 2) -> mstate.bitstream.PutInst;
+    // 4 then (2x0010000000000000, 2) -> mstate.bitstream.PutInst;
+   if);
+   A.putOp; R.putOp;
+   (if size
+    // 2 then
+       (*'\text.l\t'->BC.putT; R.putOP; BC.putNl*)
+       (* EXT.L op *)
+       (2x0100100011000000, 1) -> mstate.bitstream.PutInst;
+       4 -> mstate.bitstream.iSize;
+       R.putOp;
+    // 1 then
+       (*'\textb.l\t'->BC.putT; R.putOP; BC.putNl*)
+       (* EXTB.L op *)
+       (2x0100100111000000, 1) -> mstate.bitstream.PutInst;
+       4 -> mstate.bitstream.iSize;
+       R.putOp;
+   if);
+#)
+--stByte:descriptor---
+(#
+do (* MOVE.B  op1, op2 *)
+   (2x0001000000000000, 2) -> mstate.bitstream.PutInst;
+   1 -> mstate.bitstream.iSize;
+   op1.putOp; op2.putOp;				
+#)
+--stHalf:descriptor---
+(#
+do (* 'MOVE.W op1, op2 *)
+   (2x0011000000000000, 2) -> mstate.bitstream.PutInst;
+   2 -> mstate.bitstream.iSize;
+   op1.putOp; op2.putOp;
+#)
+--stVal:descriptor--
+(#do (* MOVE.L R, A *)
+   (2x0010000000000000, 2) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   R.putOp; A.putOp;
+#)
+--stValInLab: dopart--
+do (2x0010000000000000, 2) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   R.putOp; L.putOP;
+--cpReg:dopart--
+do (* MOVE.L R1, R2 *)
+   (2x0010000000000000, 2) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   R1.putOp; R2.putOp;
+--cpByteMem:descriptor--
+(#do (*MOVE.B A1, A2 *)
+   (2x0001000000000000, 2) -> mstate.bitstream.PutInst;
+   1 -> mstate.bitstream.iSize;
+   A1.putOp; A2.putOp;
+#)
+--cpHalfMem:descriptor--
+(#do (* MOVE.W A1, A2 *)
+   (2x0011000000000000, 2) -> mstate.bitstream.PutInst;
+   2 -> mstate.bitstream.iSize;
+   A1.putOp; A2.putOp;
+#)
+--cpMem:descriptor--
+(#do (* MOVE.L A1, A2 *)
+   (2x0010000000000000, 2) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   A1.putOp; A2.putOp;
+#)
+--ldLabAdr:dopart--
+do (* MOVE.L L, R *)
+   (2x0010000000000000, 2) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   L.putOp; R.putOp;
+--stValInText:dopart--
+do (*' MOVE.L op, L *)
+   (2x0010000000000000, 2) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   op.putOp; L.putOp;
+
+--comment:dopart--
+do (*';  '->BC.putT; T->BC.putT; BC.putNL*)
+--Export:dopart--
+do (* EXPORT Lab *)
+   Lab[] -> mstate.bitstream.Export;
+   (Lab[],false) -> entryPoints.add;
+   (* exported entrypoints do not have to be imported *)
+--Import:descriptor--
+  (#
+  do (if (lab[]<>none)//true then
+	     (if wasAdded//true then
+             (* IMPORT Lab *)
+			 Lab[] -> mstate.bitstream.Import;
+	     if)
+     else
+	     '*** SHOULD NOT HAPPEN: No label in import!' ->bugstream.putline;
+     if)
+  #)
+--ImportData:descriptor--
+  (# betalabel: @Boolean;
+  do false -> betalabel;
+     (if 1 -> Lab.InxGet//'B' then
+         (if 2 -> Lab.InxGet//'E' then
+		     (if 3 -> Lab.InxGet//'T' then
+			     (if 4 -> Lab.InxGet//'A' then
+				     (if 5 -> Lab.InxGet//'_' then
+					     true -> betalabel;
+				     if);
+			     if);
+			  if);
+		 if);
+	 if);
+     
+	 (if (lab[]<>none)//true then
+         (if wasAdded//true then
+             (if local//false then
+                 (* IMPORT Lab:DATA *)
+				 (*(if betalabel//false then*)
+			         Lab[] -> mstate.bitstream.ImportData;
+			     (*if);*)
+			 if);
+		 if);
+     else
+	     '*** SHOULD NOT HAPPEN: No label in importData!' ->bugstream.putline;
+     if)
+  #)
+--RelativeAdr:descriptor--
+(#
+do (* DC.W L1 - L2 *)
+   (L1, L2[]) -> mstate.bitstream.ComputedRef;
+#)
+--jsrT:dopart--
+do (* JSR T *)
+   (2x0100111010111001, 1) -> mstate.bitstream.PutInst;
+   T -> mstate.bitstream.PutTLabel;
+--jmpT:dopart--
+do (* JMP  T *)
+   (2x0100111011111001, 1) -> mstate.bitstream.PutInst;
+   T -> mstate.bitstream.PutTLabel;
+--gJmp:dopart--
+do (* JMP  op *)
+   (2x0100111011000000, 1) -> mstate.bitstream.PutInst;
+   op.putOp;
+--gJsr:dopart--
+do (* JSR op *)
+   (2x0100111010000000, 1) -> mstate.bitstream.PutInst;
+   op.putOp;
+--rts:dopart--
+do (* RTS *)
+   (2x0100111001110101, 0) -> mstate.bitstream.PutInst; 
+--gClr:dopart--
+do (# temp, temp2: @Integer;
+   r: ^registerOperand;
+do (* CLR.L op *)
+   (if true
+    // op.isDataRegOp then
+       op[] -> r[];
+       (*'\tMOVEQ.L\t#0,'->BC.putT; op.putOp; BC.putNl;*)
+       r.rn -> TOS'%shiftleft[9]' -> temp;
+       (2x0111000000000000, temp) -> TOS'%or' -> temp;
+       (temp, 0) -> mstate.bitstream.PutInst;
+    // op.isAdrRegOp then
+       op[] -> r[];
+       (*'\tSUBA.L\t' -> BC.putT; op.PutOp; BC.sep; op.PutOp; BC.putNl;*)
+       r.rn -> TOS'%shiftleft[9]' -> temp;
+       (2x1001000111001000, temp) -> TOS'%or' -> temp;
+       (temp, r.rn) -> TOS'%or' -> temp;
+       (temp, 0) -> mstate.bitstream.PutInst;
+    else
+       (*'\tCLR.L\t'->BC.putT; op.putOp; BC.putNl;*)
+       (2x0100001010000000, 1) -> mstate.bitstream.PutInst;
+       4 -> mstate.bitstream.iSize;
+       op.putOp;
+   if);
+#)
+--pushAdr:descriptor--
+(#
+do (* PEA  op *)
+   (2x0100100001000000, 1) -> mstate.bitstream.PutInst;
+   op.putOp;
+#)
+--Push:descriptor--
+(#
+do (* MOVE.L op,-(SP) *)
+   (2x0010000000000000, 2) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   op.putOp; mstate.bitstream.PutNSP; (* -sp *);
+#)
+--Pop:descriptor--
+(#
+do (* MOVE.L (SP)+, op *)
+   (2x0010000000000000, 2) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   mstate.bitstream.PutPSP; (* sp+ *) op.PutOp;
+#)
+--SetTop:descriptor--
+(#
+do (* LEA.L off(SP),SP *)
+   4 -> mstate.bitstream.iSize;
+   (if off // 0 then
+       (2x0100111111010111, 0) -> mstate.bitstream.PutInst;
+    else
+       (2x0100111111101111, 1) -> mstate.bitstream.PutInst;
+       off -> mstate.bitstream.PutWord;
+   if);
+#)
+--gLea:descriptor---
+(#	temp: @Integer;
+do (* LEA.L op1, op2 *)
+   op2.rN -> temp; (* the second operand is always an address reg *)
+   temp -> TOS'%shiftleft[9]' -> temp;
+   (2x0100000111000000, temp) -> TOS'%or' -> temp;
+   (temp, 1) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   op1.putOp;
+#)
+--gLeaLabel:descriptor---
+(#	temp: @Integer;
+do (* LEA.L op1, op2 *)
+   op2.rN -> temp; (* the second operand is always an address reg *)
+   temp -> TOS'%shiftleft[9]' -> temp;
+   (2x0100000111000000, temp) -> TOS'%or' -> temp;
+   (temp, 1) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   op1.putOp;  
+#)
+--tstNone:descriptor--
+(# dr: @dataRegOperand;  L: @localLab
+do dr.alloc; 
+   (A[],dr[])->ldVal;
+   L.new;
+   L[]->gBgt;
+   (isNoneLab[],' ',false)->gJsr; (*OLM: fixed gJsr parameters - someone please check*)
+   L.def;
+   (dr[],R[])->cpReg;
+   dr.deAlloc
+#)
+--ChkCase:doPart--
+do (# cs: @CstOperand;
+do (* inx = caseIndex-min
+    * if inx >unsigned  (max-min) then goto elseLab
+    * This ALSO works if caseIndex < min.
+    * Similar to ChkIndex below.
+    * Note that min is NOT used here.
+    * '\tcmp\t'->BC.putT; inx.putOp; sep; (max-min)->BC.putI; 
+    * '\n\tbgt\t'->BC.putT; elseLab.putOp; BC.putNL;
+    *)
+	(max-min)->cs;
+	(cs[],inx[],4)->gCmp;
+	elseLab[]->gBle;
+   (*  '\tcmp\t'->BC.putT; inx.putOp; BC.sep; (max-min)->BC.imm; 
+    *  '\n\tbgt\t'->BC.putT; elseLab.putOp; BC.putNl
+	*)
+#)
+--ChkIndex:descriptor--
+(# (* On the Mac signalhandling is not supported,
+    * and the chk2 instruction can therefore not be used.
+    *)
+   temp: @Integer;
+   r: ^registerOperand;
+do (*	CMP2.L op1, op2
+    BCS mState.indexErrorLab *)
+   (2x0000010011000000, 1) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   op2[] -> r[];
+   r.rN -> temp;
+   temp -> TOS'%shiftleft[12]' -> temp;
+   (if op2.isAdrRegOp then
+       (2x1000000000000000, temp) -> TOS'%or' -> temp;
+   if);
+   (* Hack, op1 must be first, but we have to put a word before *)
+   mstate.bitstream.counter + 2 -> mstate.bitstream.counter;
+   (temp, 2) -> mstate.bitstream.PutDC;
+   mstate.bitstream.counter - 4 -> mstate.bitstream.counter;
+   mstate.bitstream.dataOffset + 2 -> mstate.bitstream.dataOffset; 
+   op1.putOp;
+   
+   (2x0110010111111111, 1) -> mstate.bitstream.PutInst;
+   TRUE -> mstate.bitstream.BRelative;
+   mState.indexErrorLab.putOp;
+   FALSE -> mstate.bitstream.BRelative;
+#)
+--ChkHeap:descriptor--
+(#  L: @ localLab; r: ^RegisterOperand; temp: @Integer;
+do (*'\tCMP2.L\t((IOA).L,a5),'->BC.putT; op.putOP; BC.putNL;*)
+   (2x0000010011000000, 1) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   op[] -> r[];
+   r.rN -> temp;
+   temp -> TOS'%shiftleft[12]' -> temp;
+   (if op.isAdrRegOp then
+       (2x1000000000000000, temp) -> TOS'%or' -> temp;
+   if);
+   (* Hack, op1 must be first, but we have to put a word before *)
+   mstate.bitstream.counter + 2 -> mstate.bitstream.counter;
+   (temp, 2) -> mstate.bitstream.PutDC;
+   mstate.bitstream.counter - 4 -> mstate.bitstream.counter;
+   mstate.bitstream.dataOffset + 2 -> mstate.bitstream.dataOffset; 
+   ('IOA', TRUE) -> mstate.bitstream.PutTOp;
+
+   L.New; L[]->jumpIfTrue;
+   op[]->push;
+   'ChkRA'->jsrT;
+   L.def
+#)
+--SignExtByte:descriptor--
+(#
+do (* EXTB.L op *)
+   (2x0100100111000000, 1) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   op.putOp;
+#)
+--SignExtWord:descriptor--
+(#
+do (* EXT.L  op  - ext.w ?? *)
+   (2x0100100011000000, 1) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   op.putOp;
+#)
+--GetBits:descriptor--
+(#	tempWord, temp: @Integer;
+   r: ^registerOperand;
+do (* BFEXTU op1(pos,length), op2 *)
+   (* Because pos and length can not contain a register, we assume that they are contants *)
+   (2x1110100111000000, 1) -> mstate.bitstream.PutInst;
+   op2[] -> r[];
+   r.rN -> temp; (* the second operand is always a data register *)
+   temp -> TOS'%shiftleft[12]' -> temp;
+   (temp, tempWord) -> TOS'%or' -> tempWord;
+   (length, tempWord) -> TOS'%or' -> tempWord;
+   pos -> temp;
+   temp -> TOS'%shiftleft[6]' -> temp;
+   (temp, tempWord) -> TOS'%or' -> tempWord;
+   (* Hack, op1 must be first, but we have to put a word before *)
+   mstate.bitstream.counter + 2 -> mstate.bitstream.counter;
+   (tempWord, 2) -> mstate.bitstream.PutDC;
+   mstate.bitstream.counter - 4 -> mstate.bitstream.counter;
+   mstate.bitstream.dataOffset + 2 -> mstate.bitstream.dataOffset; 
+   op1.putOp;
+#)
+--GetSignedBits:descriptor--
+(#	tempWord, temp: @Integer;
+   r: ^registerOperand;
+do (* BFEXTS op1(pos,length), op2 *)
+   (2x1110101111000000, 1) -> mstate.bitstream.PutInst;
+   op2[] -> r[];
+   r.rN -> temp; (* the second operand is always a data register *)
+   temp -> TOS'%shiftleft[12]' -> temp;
+   (temp, tempWord) -> TOS'%or' -> tempWord;
+   (length, tempWord) -> TOS'%or' -> tempWord;
+   pos -> temp;
+   temp -> TOS'%shiftleft[6]' -> temp;
+   (temp, tempWord) -> TOS'%or' -> tempWord;
+   (* Hack, op1 must be first, but we have to put a word before *)
+   mstate.bitstream.counter + 2 -> mstate.bitstream.counter;
+   (tempWord, 2) -> mstate.bitstream.PutDC;
+   mstate.bitstream.counter - 4 -> mstate.bitstream.counter;
+   mstate.bitstream.dataOffset + 2 -> mstate.bitstream.dataOffset; 
+   op1.putOp;
+#)
+-- gGetBits:doPart --
+do (* '\tbfextu\t'->BC.putT; dr.putOp;
+    * '{'->BC.putC; pDr.putop; ':'->BC.putC; lDr.putOp; '}'->BC.putC;
+    * BC.sep; dr.putOp; BC.putNl
+	*)
+(#	tempWord, temp: @Integer;
+do (* BFEXTU dr(pDr,lDr), dr *)
+   4 -> mstate.bitstream.iSize;
+   (2x1110100111000000, 1) -> mstate.bitstream.PutInst;
+   dr.rN -> temp; (* the first operand is always a data register *)
+   temp -> TOS'%shiftleft[12]' -> temp;
+   (temp, tempWord) -> TOS'%or' -> tempWord;
+   (lDr, tempWord) -> TOS'%or' -> tempWord;
+   pDr -> temp;
+   temp -> TOS'%shiftleft[6]' -> temp;
+   (temp, tempWord) -> TOS'%or' -> tempWord;
+   (* Hack, op1 must be first, but we have to put a word before *)
+   mstate.bitstream.counter + 2 -> mstate.bitstream.counter;
+   (tempWord, 2x0000100000100000) -> TOS'%or' -> tempWord;  (* set register bits *)
+   (tempWord, 2) -> mstate.bitstream.PutDC;
+   mstate.bitstream.counter - 4 -> mstate.bitstream.counter;
+   mstate.bitstream.dataOffset + 2 -> mstate.bitstream.dataOffset; 
+   dr.putOp;
+#)
+-- gGetSignedBits:doPart --
+do (* '\tbfexts\t'->BC.putT; dr.putOp;
+    * '{'->BC.putC; pDr.putop; ':'->BC.putC; lDr.putOp; '}'->BC.putC;
+    * BC.sep; dr.putOp; BC.putNl
+    *)
+(#	tempWord, temp: @Integer;
+do (* BFEXTS dr(pDr,lDr), dr *)
+   4 -> mstate.bitstream.iSize;
+   (2x1110101111000000, 1) -> mstate.bitstream.PutInst;
+   dr.rN -> temp; (* the first operand is always a data register *)
+   temp -> TOS'%shiftleft[12]' -> temp;
+   (temp, tempWord) -> TOS'%or' -> tempWord;
+   (lDr, tempWord) -> TOS'%or' -> tempWord;
+   pDr -> temp;
+   temp -> TOS'%shiftleft[6]' -> temp;
+   (temp, tempWord) -> TOS'%or' -> tempWord;
+   (* Hack, op1 must be first, but we have to put a word before *)
+   mstate.bitstream.counter + 2 -> mstate.bitstream.counter;
+   (tempWord, 2x0000100000100000) -> TOS'%or' -> tempWord;  (* set register bits *)
+   (tempWord, 2) -> mstate.bitstream.PutDC;
+   mstate.bitstream.counter - 4 -> mstate.bitstream.counter;
+   mstate.bitstream.dataOffset + 2 -> mstate.bitstream.dataOffset; 
+   dr.putOp;
+#)
+--PutBits:dopart--
+do (# tempWord, temp: @Integer;
+      r: ^RegisterOperand;
+do (* BFINS op1, op2 (pos,length) *)
+   (2x1110111111000000, 1) -> mstate.bitstream.PutInst;
+   op1[] -> r[];
+   r.rN -> temp; (* the first operand is always a data register *)
+   temp -> TOS'%shiftleft[12]' -> temp;
+   (temp, tempWord) -> TOS'%or' -> tempWord;
+   (length, tempWord) -> TOS'%or' -> tempWord;
+   pos -> temp;
+   temp -> TOS'%shiftleft[6]' -> temp;
+   (temp, tempWord) -> TOS'%or' -> tempWord;
+   (* Hack, op1 must be first, but we have to put a word before *)
+   mstate.bitstream.counter + 2 -> mstate.bitstream.counter;
+   (tempWord, 2) -> mstate.bitstream.PutDC;
+   mstate.bitstream.counter - 4 -> mstate.bitstream.counter;
+   mstate.bitstream.dataOffset + 2 -> mstate.bitstream.dataOffset; 
+   op2.putOp;
+#)
+-- gPutBits:doPart --
+do (*
+    * '\tbfins\t'->BC.putT; dr.putOp;
+    * BC.sep; ar.putOp; '{'->BC.putC; pDr.putop; ':'->BC.putC; lDr.putOp; '}'->BC.putC;
+    * BC.putNl
+    *)
+   (#	tempWord, temp: @Integer;
+do (* BFINS dr, ar (pDr,lDr) *)
+(* set m-bit!!! *)
+   4 -> mstate.bitstream.iSize;
+   (2x1110111111000000, 1) -> mstate.bitstream.PutInst;
+   dr.rN -> temp; (* the first operand is always a data register *)
+   temp -> TOS'%shiftleft[12]' -> temp;
+   (temp, tempWord) -> TOS'%or' -> tempWord;
+   (lDr, tempWord) -> TOS'%or' -> tempWord;
+   pDr -> temp;
+   temp -> TOS'%shiftleft[6]' -> temp;
+   (temp, tempWord) -> TOS'%or' -> tempWord;
+   (* Hack, op1 must be first, but we have to put a word before *)
+   mstate.bitstream.counter + 2 -> mstate.bitstream.counter;
+   (tempWord, 2x0000100000100000) -> TOS'%or' -> tempWord;  (* set register bits *)
+   (tempWord, 2) -> mstate.bitstream.PutDC;
+   mstate.bitstream.counter - 4 -> mstate.bitstream.counter;
+   mstate.bitstream.dataOffset + 2 -> mstate.bitstream.dataOffset; 
+   ar.putOp;
+#)
+--gAdd:descriptor--
+(#	tempReg, tempInst: @Integer; b1, b2, b3, b4: @Boolean;
+   r: ^registerOperand;
+   c: ^cstOperand;
+do (* ADD. size op1, op2. *)
+   op1.isDataRegOp -> b1;
+   op2.isDataRegOp -> b2;
+   op2.isAdrRegOp -> b3;
+   op1.isCstOp -> b4;
+   size -> mstate.bitstream.iSize;
+   (if true
+    // b1 and (not b2) and (NOT b3) and (NOT b4) then
+       op1[] -> r[];
+       r.rN -> TOS'%shiftleft[9]' -> tempReg;
+       (if size
+        // 1 then (2x1101000100000000) -> tempInst;
+        // 2 then (2x1101000101000000) -> tempInst;
+        // 4 then (2x1101000110000000) -> tempInst;
+       if);
+       (tempInst, tempReg) -> TOS'%or' -> tempInst;
+       (tempInst, 1) -> mstate.bitstream.PutInst;
+       op2.putOp;
+    // b2 and (NOT b3) then
+       op2[] -> r[];
+       r.rN -> TOS'%shiftleft[9]' -> tempReg;
+       (if size
+        // 1 then (2x1101000000000000) -> tempInst;
+        // 2 then (2x1101000001000000) -> tempInst;
+        // 4 then (2x1101000010000000) -> tempInst;
+       if);
+       (tempInst, tempReg) -> TOS'%or' -> tempInst;
+       (tempInst, 1) -> mstate.bitstream.PutInst;
+       op1.putOp;
+    // b4 and (NOT b3) then
+       op1[] -> c[];
+       (if c.C <= 8 then
+           (if c.C < 8 then
+               c.C -> TOS'%shiftleft[9]' -> tempReg;
+            else
+               0 -> tempReg;
+           if);
+           (if size
+            // 1 then (2x0101000000000000) -> tempInst;
+            // 2 then (2x0101000001000000) -> tempInst;
+            // 4 then (2x0101000010000000) -> tempInst;
+           if);
+           (tempInst, tempReg) -> TOS'%or' -> tempInst;
+           (tempInst, 1) -> mstate.bitstream.PutInst;
+           op2.putOp;
+        else
+           (if size
+            // 1 then (2x0000011000000000) -> tempInst;
+            // 2 then (2x0000011001000000) -> tempInst;
+            // 4 then (2x0000011010000000) -> tempInst;
+           if);
+           (tempInst, 2) -> mstate.bitstream.PutInst;
+           op2.putOp;
+           (if size // 4 then
+               c.C -> mstate.bitstream.PutLong;
+            else
+               c.C -> mstate.bitstream.PutWord;
+           if);
+       if);
+    // b3 then
+       op2[] -> r[];
+       r.rN -> TOS'%shiftleft[9]' -> tempInst;
+       (if size
+        // 2 then (2x1101000011000000, tempInst) -> TOS'%or' -> tempInst;
+        // 4 then (2x1101000111000000, tempInst) -> TOS'%or' -> tempInst;
+       if);
+       (tempinst, 1) -> mstate.bitstream.PutInst;
+       op1.PutOp;
+    else
+       cError(# do 'One operand in add is not a data/addresseregister or a constant' -> T; #);
+   if);
+#)
+--gSub:descriptor--
+(#	tempReg, tempInst: @Integer; b1, b2, b3, b4: @Boolean;
+   r: ^registerOperand;
+   c: ^cstOperand;
+
+	do (* SUB. size op1, op2 *)
+		op1.isDataRegOp -> b1;
+		op2.isDataRegOp -> b2;
+		op2.isAdrRegOp -> b3;
+		op1.isCstOp -> b4;
+		size -> mstate.bitstream.iSize;
+		(if True
+		// b1 and (NOT b2) and (NOT b3) and (NOT b4) then
+			op1[] -> r[];
+			r.rN -> TOS'%shiftleft[9]' -> tempReg;
+			(if size
+			// 1 then (2x1001000100000000) -> tempInst;
+			// 2 then (2x1001000101000000) -> tempInst;
+			// 4 then (2x1001000110000000) -> tempInst;
+			if);
+			(tempInst, tempReg) -> TOS'%or' -> tempInst;
+			(tempInst, 1) -> mstate.bitstream.PutInst;
+			op2.putOp;
+		// b2 and (NOT b3) then
+			op2[] -> r[];
+			r.rN -> TOS'%shiftleft[9]' -> tempReg;
+			(if size
+			// 1 then (2x1001000000000000) -> tempInst;
+			// 2 then (2x1001000001000000) -> tempInst;
+			// 4 then (2x1001000010000000) -> tempInst;
+			if);
+			(tempInst, tempReg) -> TOS'%or' -> tempInst;
+			(tempInst, 1) -> mstate.bitstream.PutInst;
+			op1.putOp;
+		// b4 and (NOT b3) then
+			op1[] -> c[];
+			(if c.C <= 8 then
+				(if c.C < 8 then
+					c.C -> TOS'%shiftleft[9]' -> tempReg;
+				else
+					0 -> tempReg;
+				if);
+				(if size
+				// 1 then (2x0101000100000000) -> tempInst;
+				// 2 then (2x0101000101000000) -> tempInst;
+				// 4 then (2x0101000110000000) -> tempInst;
+				if);
+				(tempInst, tempReg) -> TOS'%or' -> tempInst;
+				(tempInst, 1) -> mstate.bitstream.PutInst;
+				op2.putOp;
+			else
+				(if size
+				// 1 then (2x0000010000000000) -> tempInst;
+				// 2 then (2x0000010001000000) -> tempInst;
+				// 4 then (2x0000010010000000) -> tempInst;
+				if);
+				(tempInst, 2) -> mstate.bitstream.PutInst;
+				op2.putOp;
+				(if size // 4 then
+					c.C -> mstate.bitstream.PutLong;
+				else
+					c.C -> mstate.bitstream.PutWord;
+				if);
+			if);
+		// b3 then
+			op2[] -> r[];
+			r.rN -> TOS'%shiftleft[9]' -> tempInst;
+			(if size
+			// 1 then 'Error: SUBA size byte' ->Bugstream.PutText;
+			// 2 then (2x1001000011000000, tempInst) -> TOS'%or' -> tempInst;
+			// 4 then (2x1001000111000000, tempInst) -> TOS'%or' -> tempInst;
+			if);
+			(tempinst, 1) -> mstate.bitstream.PutInst;
+			op1.PutOp;
+		else
+			cError(# do 'One operand in sub is not a data/addressregister or a constant' -> T; #);
+		if);
+	#)
+--gNeg:descriptor--
+(#do (* NEG.size op.putOp *)
+   size -> mstate.bitstream.iSize;
+   (if size
+    // 1 then
+       (2x0100010000000000, 1) -> mstate.bitstream.PutInst;
+    // 2 then
+       (2x0100010001000000, 1) -> mstate.bitstream.PutInst;
+    // 4 then
+       (2x0100010010000000, 1) -> mstate.bitstream.PutInst;
+   if);
+   op.putOp;
+#)
+--gCmp:descriptor--
+  (#	tempReg: @Integer;
+  		r: ^registerOperand;
+  do (* CMP.size op1, op2 *)
+  		size -> mstate.bitstream.iSize;
+  		(if TRUE
+		 // op2.isDataRegOp then
+			op2[] -> r[];
+			r.rN -> tempReg; (* cmp Destination operand is always a dataregister *)
+			tempReg -> TOS'%shiftleft[9]' -> tempReg;
+			(if size
+			// 1 then
+				(2x1011000000000000, tempReg) -> TOS'%or' -> tempReg;
+			// 2 then
+				(2x1011000001000000, tempReg) -> TOS'%or' -> tempReg;
+			// 4 then
+				(2x1011000010000000, tempReg) -> TOS'%or' -> tempReg;
+			if);
+		 // op2.isAdrRegOp then
+		 	op2[] -> r[];
+			r.rN -> tempReg; (* cmp Destination operand is an addressregister *)
+			tempReg -> TOS'%shiftleft[9]' -> tempReg;
+			(if size
+			// 2 then
+				(2x1011000011000000, tempReg) -> TOS'%or' -> tempReg;
+			// 4 then
+				(2x1011000111000000, tempReg) -> TOS'%or' -> tempReg;
+			if);
+		 // op2.isCstOp then
+		 	'CMP is a constant' ->Bugstream.PutText; Bugstream.Newline;
+		 	(*op2[] -> c[];
+			c.C -> tempReg;
+			tempReg -> TOS'%shiftleft[9]' -> tempReg;
+			(if size
+			// 1 then
+				(2x1011000000000000, tempReg) -> TOS'%or' -> tempReg;
+			// 2 then
+				(2x1011000001000000, tempReg) -> TOS'%or' -> tempReg;
+			// 4 then
+				(2x1011000010000000, tempReg) -> TOS'%or' -> tempReg;
+			if);*)
+		else
+			cError(# do 'One operand in sub is not a data/addressregister or a constant' -> T; #);
+		if);
+		(tempReg, 1) -> mstate.bitstream.PutInst;
+		op1.putOp;
+  #)
+--gMult:descriptor--
+(# (* SUN: <mulsl ?? ;
+    * Note that size can only be 2 or 4 *)
+   temp: @Integer;
+   r: ^registerOperand;
+   dr: ^doubleDataRegOperand;
+do (* MULS.size op1.putOp, op2 *)
+   size -> mstate.bitstream.iSize;
+   (if size
+    // 2 then
+       op2[] -> r[];
+       r.rN -> temp;
+       temp -> TOS'%shiftleft[9]' -> temp;
+       (2x1100000111000000, temp) -> TOS'%or' -> temp;
+       (temp, 1) -> mstate.bitstream.PutInst;
+       op1.putOp;
+    // 4 then
+       (2x0100110000000000, 1) -> mstate.bitstream.PutInst;
+       (if op2.isDoubleDataRegOp then
+           op2[] -> dr[];
+           dr.dNo2 -> temp;
+           temp -> TOS'%shiftleft[12]' -> temp;
+           (temp, dr.dNo1) -> TOS'%or' -> temp;
+           (temp, 2x0000110000000000) -> TOS'%or' -> temp;
+        else
+           op2[] -> r[];
+           r.rN -> temp;
+           temp -> TOS'%shiftleft[12]' -> temp;
+           (temp, 2x0000100000000000) -> TOS'%or' -> temp;
+       if);
+       (* Hack, op1 must be first, but we have to put a word before *)
+       mstate.bitstream.counter + 2 -> mstate.bitstream.counter;
+       (temp, 2) -> mstate.bitstream.PutDC;
+       mstate.bitstream.counter - 4 -> mstate.bitstream.counter;
+       mstate.bitstream.dataOffset + 2 -> mstate.bitstream.dataOffset; 
+       op1.putOp;
+   if);
+#)
+--gDiv:descriptor--
+(# (* Note that size can only be 4 *)
+   temp: @Integer;
+do (*' TDIVS.L op1, op2. *)
+   (2x0100110001000000, 1) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   (if op2.isDoubleDataRegOp then
+       op2.dNo2 -> temp;
+       temp -> TOS'%shiftleft[12]' -> temp;
+       (temp, op2.dNo1) -> TOS'%or' -> temp;
+       (temp, 2x0000100000000000) -> TOS'%or' -> temp;
+    else
+       (* Operand 2 is always a double data register 
+        op2.rN -> temp;
+        temp -> TOS'%shiftleft[12]' -> temp;
+        (temp, 2x000010000000000) -> TOS'%or' -> temp;*)
+   if);
+   (* Hack, op1 must be first, but we have to put a word before *)
+   mstate.bitstream.counter + 2 -> mstate.bitstream.counter;
+   (temp, 2) -> mstate.bitstream.PutDC;
+   mstate.bitstream.counter - 4 -> mstate.bitstream.counter;
+   mstate.bitstream.dataOffset + 2 -> mstate.bitstream.dataOffset; 
+   op1.putOp;
+#)
+--gOr:descriptor--
+(#	tempInst, tempReg: @Integer; b1, b2, b3: @Boolean;
+   r: ^registerOperand;
+   c: ^cstOperand;
+do (* OR.size op1, op2 *)
+   op1.isDataRegOp -> b1;
+   op2.isDataRegOp -> b2;
+   op1.isCstOp -> b3;
+   size -> mstate.bitstream.iSize;
+   (if TRUE
+    //	b1 and (not b2) then
+       op1[] -> r[];
+       r.rN -> TOS'%shiftleft[9]' -> tempReg;
+       (if size
+        // 1 then (2x1000000100000000) -> tempInst;
+        // 2 then (2x1000000101000000) -> tempInst;
+        // 4 then (2x1000000110000000) -> tempInst;
+       if);
+       (tempInst, tempReg) -> TOS'%or' -> tempInst;
+       (tempInst, 1) -> mstate.bitstream.PutInst;
+       op2.putOp;
+    // b2 then
+       op2[] -> r[];
+       r.rN -> TOS'%shiftleft[9]' -> tempReg;
+       (if size
+        // 1 then (2x1000000000000000) -> tempInst;
+        // 2 then (2x1000000001000000) -> tempInst;
+        // 4 then (2x1000000010000000) -> tempInst;
+       if);
+       (tempInst, tempReg) -> TOS'%or' -> tempInst;
+       (tempInst, 1) -> mstate.bitstream.PutInst;
+       op1.putOp;
+    // b3 then
+       op1[] -> c[];
+       (if size
+        // 1 then (2x0000000000000000) -> tempInst;
+        // 2 then (2x0000000001000000) -> tempInst;
+        // 4 then (2x0000000010000000) -> tempInst;
+       if);
+       (tempInst, 2) -> mstate.bitstream.PutInst;
+       op2.putOp;
+       (if size
+        // 4 then
+           c.C -> mstate.bitstream.PutLong;
+        else
+           c.C -> mstate.bitstream.PutWord;
+       if);
+    else
+       cError(# do 'One operand in and is not a data/addressregister or a constant' -> T; #);
+   if);
+#)
+--gAnd:descriptor--
+(#	tempReg, tempInst: @Integer; b1, b2, b3: @Boolean;
+   r: ^registerOperand;
+   c: ^cstOperand;
+do (* AND.size op1, op2 *)
+   op1.isDataRegOp -> b1;
+   op2.isDataRegOp -> b2;
+   op1.isCstOp -> b3;
+   size -> mstate.bitstream.iSize;
+   (if TRUE
+    //	b1 and not b2 then
+       op1[] -> r[];
+       r.rN -> TOS'%shiftleft[9]' -> tempReg;
+       (if size
+        // 1 then (2x1100000100000000) -> tempInst;
+        // 2 then (2x1100000101000000) -> tempInst;
+        // 4 then (2x1100000110000000) -> tempInst;
+       if);
+       (tempInst, tempReg) -> TOS'%or' -> tempInst;
+       (tempInst, 1) -> mstate.bitstream.PutInst;
+       op2.putOp;
+    // b2 and (NOT b3)then
+       op2[] -> r[];
+       r.rN -> TOS'%shiftleft[9]' -> tempReg;
+       (if size
+        // 1 then (2x1100000000000000) -> tempInst;
+        // 2 then (2x1100000001000000) -> tempInst;
+        // 4 then (2x1100000010000000) -> tempInst;
+       if);
+       (tempInst, tempReg) -> TOS'%or' -> tempInst;
+       (tempInst, 1) -> mstate.bitstream.PutInst;
+       op1.putOp;
+    // b3 then
+       op1[] -> c[];
+       (if size
+        // 1 then (2x0000001000000000) -> tempInst;
+        // 2 then (2x0000001001000000) -> tempInst;
+        // 4 then (2x0000001010000000) -> tempInst;
+       if);
+       (tempInst, 2) -> mstate.bitstream.PutInst;
+       op2.putOp;
+       (if size
+        // 4 then
+           c.C -> mstate.bitstream.PutLong;
+        else
+           c.C -> mstate.bitstream.PutWord;
+       if);
+    else
+       cError(# do 'One operand in and is not a data/addressregister or a constant' -> T; #);
+   if);
+#)
+--gXor:descriptor--
+(#	tempReg: @Integer;
+   r: ^registerOperand;
+do (* EOR.size op1, op2 *)
+   op1[] -> r[];
+   r.rN -> tempReg; (* EOR source operand is always a dataregister *)
+   tempReg -> TOS'%shiftleft[9]' -> tempReg;
+   size -> mstate.bitstream.iSize;
+   (if size
+    // 1 then
+       (2x1011000100000000, tempReg) -> TOS'%or' -> tempReg;
+    // 2 then
+       (2x1011000101000000, tempReg) -> TOS'%or' -> tempReg;
+    // 4 then
+       (2x1011000110000000, tempReg) -> TOS'%or' -> tempReg;
+   if);
+   (tempReg, 1) -> mstate.bitstream.PutInst;
+   op2.putOp;
+#)
+--gNot:descriptor--
+(#	temp: @Integer;
+   r: ^registerOperand;
+do (* ADDQ. size #1, op
+    AND.L #1, op *)
+   size -> mstate.bitstream.iSize;
+   (if size
+    // 1 then (2x0101001000000000, 1) -> mstate.bitstream.PutInst;
+    // 2 then (2x0101001001000000, 1) -> mstate.bitstream.PutInst;
+    // 4 then (2x0101001010000000, 1) -> mstate.bitstream.PutInst;
+   if);
+   op.putOp;
+   op[] -> r[];
+   r.rn -> temp;
+   temp -> TOS'%shiftleft[9]' -> temp;
+   (2x1100000010000000, temp) -> TOS'%or' -> temp;
+   (temp, 1) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   1 -> mstate.bitstream.PutConst;	 
+#)
+--LogNot:descriptor--
+(#
+do (* NOT.size op *)
+   size -> mstate.bitstream.iSize;
+   (if size
+    // 1 then
+       (2x0100011000000000, 1) -> mstate.bitstream.PutInst;
+    // 2 then
+       (2x0100011001000000, 1) -> mstate.bitstream.PutInst;
+    // 4 then
+       (2x0100011010000000, 1) -> mstate.bitstream.PutInst;
+   if);
+   op.putOp;
+#)
+--gGetDataByte:descriptor--
+(#	temp: @Integer;
+do 
+   (if byteNo
+    // 0 then (* rotate left 8 bits *)
+       (* ROL.L #8 op1 *)
+       op1.rN -> temp; (* op1 can only be data register *)
+       (2x1110000110011000, temp) -> TOS'%or' -> temp;
+       (temp, 0) -> mstate.bitstream.PutInst;
+       4 -> mstate.bitstream.iSize;
+    // 1 then (* swap register halves *)
+       (* SWAP.W op1 *)
+       op1.rN -> temp; (* op1 can only be a data register *)
+       (2x0100100001000000, temp) -> TOS'%or' -> temp;
+       (temp, 0) -> mstate.bitstream.PutInst;
+       2 -> mstate.bitstream.iSize;
+    // 2 then (* rotate right 8 bits *)
+       (*' ROR.W #8,op *)
+       op1.rN -> temp;
+       (2x1110000001011000, temp) -> TOS'%or' -> temp;
+       (temp, 0) -> mstate.bitstream.PutInst;
+       2 -> mstate.bitstream.iSize;
+   if);
+   (* AND.L #255, op1 *)
+   op1.rN -> temp;
+   temp -> TOS'%shiftleft[9]' -> temp;
+   (2x1100000010000000, temp) -> TOS'%or' -> temp;
+   (temp, 1) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   255 -> mstate.bitstream.PutConst;
+   
+#)
+--gGetDataWord:descriptor--
+(#	temp: @Integer;
+do (if wordNo//0 then
+       (* SWAP.W op1 *)
+       op1.rN -> temp;
+       (2x0100100001000000, temp) -> TOS'%or' -> temp;
+       (temp, 0) -> mstate.bitstream.PutInst;
+       2 -> mstate.bitstream.iSize;
+   if);
+   (* AND.L #255*256+255, op1 *)
+   op1.rN -> temp;
+   temp -> TOS'%shiftleft[9]' -> temp;
+   (2x1100000010000000, temp) -> TOS'%or' -> temp;
+   (temp, 1) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   255*256+255 -> mstate.bitstream.PutConst;
+#)
+--JumpIfTrue:descriptor--                        (* byte, word or long ?? *)
+(#
+do (* BCC op.putOp *) (* op = localLabel *)
+   (2x0110010011111111, 1) -> mstate.bitstream.PutInst;
+   TRUE -> mstate.bitstream.BRelative;
+   op.putOp;
+   FALSE -> mstate.bitstream.BRelative;
+#)
+--gBae:descriptor--
+(# (* BCC *)
+do (2x0110010011111111, 1) -> mstate.bitstream.PutInst;
+   TRUE -> mstate.bitstream.BRelative;
+   op.putOp;
+   FALSE -> mstate.bitstream.BRelative;
+#)
+--gBbe:descriptor--
+(# (* BLS *)
+do (2x0110001111111111, 1) -> mstate.bitstream.PutInst;
+   TRUE -> mstate.bitstream.BRelative;
+   op.putOp;
+   FALSE -> mstate.bitstream.BRelative;
+#)
+--gBab:descriptor--
+(# (* BHI *)
+do (2x0110001011111111, 1) -> mstate.bitstream.PutInst;
+   TRUE -> mstate.bitstream.BRelative;
+   op.putOp;
+   FALSE -> mstate.bitstream.BRelative;
+#)
+--gBbl:descriptor--
+(# (* BCS *)
+do (2x0110010111111111, 1) -> mstate.bitstream.PutInst;
+   TRUE -> mstate.bitstream.BRelative;
+   op.putOp;
+   FALSE -> mstate.bitstream.BRelative;
+#)
+--gBeq:descriptor--
+(#
+do (* BEQ op *)
+   (2x0110011111111111, 1) -> mstate.bitstream.PutInst;
+   TRUE -> mstate.bitstream.BRelative;
+   op.putOp;
+   FALSE -> mstate.bitstream.BRelative;
+#)
+--gBge:descriptor--
+(#
+do (* BGE op.putOp *)
+   (2x0110110011111111, 1) -> mstate.bitstream.PutInst;
+   TRUE -> mstate.bitstream.BRelative;
+   op.putOp;
+   FALSE -> mstate.bitstream.BRelative;
+#)
+--gBle:descriptor--
+(#
+do (* BLE op *)
+   (2x0110111111111111, 1) -> mstate.bitstream.PutInst;
+   TRUE -> mstate.bitstream.BRelative;
+   op.putOp;
+   FALSE -> mstate.bitstream.BRelative;
+#)
+--gBne:descriptor--
+(#
+do (* BNE op *)
+   (2x0110011011111111, 1) -> mstate.bitstream.PutInst;
+   TRUE -> mstate.bitstream.BRelative;
+   op.putOp;
+   FALSE -> mstate.bitstream.BRelative;
+#)
+--gBgt:descriptor--
+(#
+do (* BGT op *)
+   (2x0110111011111111, 1) -> mstate.bitstream.PutInst;
+   TRUE -> mstate.bitstream.BRelative;
+   op.putOp;
+   FALSE -> mstate.bitstream.BRelative;
+#)
+--gBlt:descriptor--
+(#
+do (* BLT op.putOp *)
+   (2x0110110111111111, 1) -> mstate.bitstream.PutInst;
+   TRUE -> mstate.bitstream.BRelative;
+   op.putOp;
+   FALSE -> mstate.bitstream.BRelative;
+#)
+--initExternalCall:dopart--
+     (* extType: external language; 0=primitive, 1=C, 2=pascal, 3=pascTrap,4=assembly
+      * noOfPar
+      *)
+do (if (extType<>0) and (noOfPar>0) 
+    //true then (extType,noOfPar) -> mState.extType.push if);
+--InitExternalParams: dopart--
+do
+--CallCproc:descriptor--
+(# 
+do 
+   (if exitType=7 (*double*) then
+       (# fp,fp0: @floatRegOp;
+       do fp.alloc;
+          (if fp.rn=0 then (* ok *)
+           else (* %f0 is busy - save it until after the call *)
+	      (if mstate.fp0tmp.labNo=0 then
+	          switchToData;
+                  (*'d0Tmp'->dataLab; dataLab.op.T[]->LabelDef; (0, 4) -> mstate.bitstream.PutDC;*)
+		  mstate.fp0tmp.new; TRUE -> mstate.fp0tmp.isTextAdr; mstate.fp0tmp.def; 
+		  (0, 4) -> mstate.bitstream.PutDC;
+		  (0, 4) -> mstate.bitstream.PutDC;
+                  switchToCode;
+	      if);
+              (mstate.fp0tmp[],fp0[])->FloatStore;
+          if);
+          fp.deAlloc
+       #);
+   if);
+
+   (if extType
+    //2//3//6 then (* Pascal: make the text UPPER case *)
+	   T.MakeUC
+   if);
+   T[] -> import;
+   (* JSR T *)
+   (2x0100111010000000, 1) -> mstate.bitstream.PutInst;
+   T -> mstate.bitstream.PutTLabel;
+#)
+--CallPrimitive:descriptor--
+(#
+do (* JSR T *)
+   (2x0100111010000000, 1) -> mstate.bitstream.PutInst;
+   T -> mstate.bitstream.PutTLabel;
+#)
+--PushClong:descriptor--
+(#
+do op[]->Push
+#)
+--PushCword:descriptor--
+(#
+do 	(if mState.extType.top
+      	 //1//5 then (* C *)
+            op[]->Push;
+      	 //2//3//6 then (* Pascal *)
+	    (*' MOVE.W op,-(SP)*)
+            (2x0011111100000000, 1) -> mstate.bitstream.PutInst;
+            2 -> mstate.bitstream.iSize;
+            op.putOp;
+      	 //4 then (* asm *)
+	    (* MOVE.W op,-(SP) *)
+            (2x0011111100000000, 1) -> mstate.bitstream.PutInst;
+            2 -> mstate.bitstream.iSize;
+            op.putOp;
+         else
+            cError(# do 'PushCword: unknown external type' -> T; mState.extType.top->I #);
+        if);
+#)
+--PushCbyte:descriptor--
+(#
+do 	(if mState.extType.top
+      	 //1//5 then (* C *)
+            op[]->Push;
+      	 //2//3//6 then (* Pascal: MOVE.B   D0,-(SP) puts the byte on stack 
+                         *                           and decrements SP with 2!!
+                         *)
+	    (* MOVE.B op,-(SP)*)
+            (2x0001111100000000, 1) -> mstate.bitstream.PutInst;
+            1 -> mstate.bitstream.iSize;
+            op.putOp;
+      	 //4 then (* asm *)
+	    (* MOVE.B op,-(SP) *)
+            (2x0001111100000000, 1) -> mstate.bitstream.PutInst;
+            1 -> mstate.bitstream.iSize;
+            op.putOp;
+         else
+            cError(# do 'PushCbyte: unknown external type' -> T; mState.extType.top->I #);
+        if);
+#)
+--PushCDoubleAdr:descriptor--
+(# A1: ^address;
+   F: @floatRegOp;
+do (if mState.extType.top//1//5 then (* C *)
+       F.alloc;   (* allocate a register, if it fails we must save a register in DATA *)
+       A[] -> F.load; (* load into register *)
+       F[] -> PushCfloat; (* push register on stack *)
+       F.deAlloc;  (* deallocate register *)
+       (* restore value if register overflow *)
+    else
+       cError(# do 'PushCDoubleAdr: cannot pass reals to Pascal' -> T; mState.extType.top->I #);
+   if);
+#)
+--PushCtext:descriptor--
+(##)
+--PushCfloat:descriptor--
+(#	temp: @Integer;
+do (if mState.extType.top//1//5 then (* C *)
+       (* '\tFMOVE.X\t'->BC.putT; F.putOp; ',-(SP)\n'->BC.putT;*)
+       F.rN -> TOS'%shiftleft[7]' -> temp;
+       (0x6800, temp) -> TOS'%or' -> temp;
+       (temp, 1) -> mstate.bitstream.PutFPInst;
+       mstate.bitstream.PutNSP;
+    else
+       cError(# do 'PushCfloat: cannot pass reals to Pascal' -> T; mState.extType.top->I #);
+   if);
+#)
+--PopCword:descriptor--
+(#
+do (* MOVE.W (SP)+, op *)
+   (2x0011000000000000, 2) -> mstate.bitstream.PutInst;
+   2 -> mstate.bitstream.iSize;
+   mstate.bitstream.PutPSP;
+   op.putOp;
+#)
+--PopCbyte:descriptor--
+(#
+do (* MOVE.B\t(SP)+, op. *)
+   (2x0001000000000000, 2) -> mstate.bitstream.PutInst;
+   1 -> mstate.bitstream.iSize;
+   mstate.bitstream.PutPSP;
+   op.putOp;
+#)
+--Xpar:descriptor--
+(# extKind,top,(*parSize,*)longSize,wordSize,byteSize: @integer;
+   SP: @stackOff;
+#)
+--initGetXpar:descriptor--
+(# 
+do (if extKind->Xpar.extKind// 5 (*sematt.cCallBackExt*) then
+       72->Xpar.top; 4->Xpar.longSize->Xpar.wordSize
+       (* note cTop=pascTop+4 => cTop=72, pascTop=68 *)
+    else (*pascCallBackExt*)
+       72+((BC+SC)*2+LC*4(*->Xpar.parSize*))->Xpar.TOP;
+       -4->Xpar.longSize; -2->Xpar.wordSize; -2 -> Xpar.byteSize;
+   if);
+#)
+--getXlong:descriptor--
+(*for C, long,word, and byte are always long *)
+(#
+do (if Xpar.extKind// 5 then
+       Xpar.top->Xpar.SP; (XPar.SP[],dr[])->ldVal;
+       Xpar.top+Xpar.longSize->Xpar.top
+    else
+       Xpar.top+Xpar.longSize->Xpar.top;
+       Xpar.top->Xpar.SP; (XPar.SP[],dr[])->ldVal;
+   if);
+#)
+---GetXword:descriptor--
+(* only for MAC Pascal *)
+(#
+do Xpar.top+Xpar.wordSize->Xpar.top;
+   Xpar.top->Xpar.SP; (XPar.SP[],dr[])->ldHalf;
+#)
+---GetXbyte:descriptor--
+(* only for MAC Pascal *)
+(#
+do Xpar.top+Xpar.byteSize->Xpar.top;
+   Xpar.top->Xpar.SP; (XPar.SP[],dr[])->ldByte;
+#)
+--toXres:descriptor--
+(# #)
+--StackOffPut:descriptor--
+(#
+do (*(if off//0 then else off->BC.putI if); '(SP)'->BC.putT*)
+   off -> mstate.bitstream.PutStackOff;
+#)
+--SaveReg:descriptor--     (* Save registers a0 and a1 *)
+(#
+do (* MOVE.L A0,-(SP) MOVE.L A1,-(SP) *)
+   4 -> mstate.bitstream.iSize;
+   (2x0010111100001000, 0) -> mstate.bitstream.PutInst;
+   (2x0010111100001001, 0) -> mstate.bitstream.PutInst;
+#)
+--SaveHeapTop:descriptor---
+(#
+do (*' MOVE.L SP,((BetaStackTop).L,A5) *)
+   (2x0010000000000000, 2) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   mstate.bitstream.PutSP;
+   ('BetaStackTop', True) -> mstate.bitstream.PutTOp;
+#)
+--RestoreReg:descriptor--  (* Restore registers a0 and a1 *)
+(#
+do (* MOVE.L (SP)+,A1 MOVE.L (SP)+,A0 *)
+   4 -> mstate.bitstream.iSize;
+   (2x0010001001011111, 0) -> mstate.bitstream.PutInst;
+   (2x0010000001011111, 0) -> mstate.bitstream.PutInst;
+#)
+--popCallStack:descriptor--
+(# ext: @integer;
+do 	(if mState.extType.pop->ext//1 then (* C *)
+            (* LEA.L (Bn+Sn)*4 {2} + Ln*4 (SP),SP *)
+            (2x0100111111101111, 1) -> mstate.bitstream.PutInst;
+            4 -> mstate.bitstream.iSize;
+            (Bn + Sn) * 4 + Ln * 4 -> mstate.bitstream.PutWord;
+         //2//3 then (* 
+	    (* Pascal: don't pop real stack; only mState.extType stack
+             *)
+         else
+            ctrace(# do '\npopCallStack other type: ' ->T; ext->I#);
+        if);
+#)
+--AlcPascResult:descriptor--
+(# 
+do 	(if exitType
+      	 //1//2 then (* CLR.W -(SP)  { byte and short: gen1. }*)
+            (2x0100001001100111, 0) -> mstate.bitstream.PutInst;
+            2 -> mstate.bitstream.iSize;
+         //3//4//5//6 then (* CLR.L -(SP) *)
+            (2x0100001010100111, 0) -> mstate.bitstream.PutInst;
+            4 -> mstate.bitstream.iSize;
+         //7 then cError(# do '\tYou can not do that.' -> T #) (*-> BC.putT; BC.putNL*)
+    	if)
+#)
+--PascalTrap:descriptor--
+(# (* only meaningful on  Macintosh *)
+   Temp: ^Text; int, loop, loopEnd: @Integer; tmpChar: @Char;
+do (* DC.W *)
+   (* TrapID = '$XXXX' *)
+   '0x' -> Temp[];
+   TrapId.Reset;
+   trapId.Length -> loopEnd;
+   L:
+     (#
+     do TrapId.Get -> tmpChar;
+        loop + 1 -> loop;
+        (if tmpChar // '$' then
+            TrapId.Get -> tmpChar;
+            I: (if (tmpChar=',') or (tmpChar='}') then
+                   leave I;
+                else
+                   tmpChar -> temp.Put;
+                   loop + 1 -> loop;
+                   (if loop//loopend then leave I if);
+                   TrapId.Get -> tmpChar;
+                   restart I;
+               if);
+                   temp.Reset; (*temp.GetNumber(# intVal::< (# do val -> int#)#); v1.3*)
+            temp.getNumber (# basedValue::< (#do value->int #);#);
+            (int, 2) -> mstate.bitstream.PutDC;
+            temp.Clear;
+            '0x' -> Temp[];
+        if);
+        (if loop // loopEnd then
+            leave L;
+         else
+            restart L;
+        if);
+     #);
+#)
+--SwitchToData:descriptor--
+(# (* perhaps it should not be evn here ?*)
+do 	(* DATA *)
+   mstate.bitstream.SwitchToData;
+#)
+--SwitchToCode:descriptor--
+(#
+do 	(* CODE *)
+   mstate.bitstream.SwitchToCode;
+#)
+--DeclareLong:descriptor--
+(#
+do (* DC.L N *)
+   4 -> mstate.bitstream.iSize;
+   (N, 4) -> mstate.bitstream.PutDC;
+#)
+--DeclareAddress:descriptor--
+(# tempop: ^textOperand;
+do (* '\tDC.L\t' -> BC.putT; op.putOp; BC.putNL;*)
+   (* 3.10: DC.W <label>-* *)
+   (if op.isTextOp then
+       op[] -> tempop[];
+       (if tempop.BETAlab then
+           (if 'BETA_code1'->tempop.t.equal//true then
+               (* make 'BETA_code1' a unique label. *)
+               localFilePath[] -> tempop.t.prepend;
+               (* tempop is now, e.g.: '~beta/basiclib/v1.4/file/BETA_code1' *)
+               2 -> mstate.bitstream.iSize;
+               mstate.bitstream.DeclareAddress;
+               op.PutOp;
+               mstate.bitstream.counter + 6 -> mstate.bitstream.counter;
+            else
+               tempop.t[] -> mstate.bitstream.BetaArray.Insert;
+           if);
+        else
+           2 -> mstate.bitstream.iSize;
+           mstate.bitstream.DeclareAddress;
+           op.PutOp;
+           mstate.bitstream.counter + 6 -> mstate.bitstream.counter;
+       if);
+    else
+       2 -> mstate.bitstream.iSize;
+       mstate.bitstream.DeclareAddress;
+       op.PutOp;
+       mstate.bitstream.counter + 6 -> mstate.bitstream.counter;
+   if);
+#)
+--DeclareWord:descriptor--
+(#
+do (* DC.W N *)
+   2 -> mstate.bitstream.iSize;
+   (N, 2) -> mstate.bitstream.PutDC;
+#)
+--DclWord:descriptor--
+(#
+do (* DC.W N *)
+   2 -> mstate.bitstream.iSize;
+   (N, 2) -> mstate.bitstream.PutDC;
+#)
+--Skip:descriptor--
+  (#
+  do (*'\tDS.W\t' -> BC.putT; BN->BC.putI; BC.putNL*)
+     (*(BN, 2) -> mstate.bitstream.PutDC;*)
+	 'Skip' ->Bugstream.PutLine;
+  #)
+--trap:descriptor--
+(* should make a case on trap, cond=4 => le *)
+(#do (*'\ttle\t17\n'->BC.putT*) #)
+--AsciiZ:descriptor--
+(* For mac the output has the form
+ *    DC.B ''...'', x, y, ''...'', ...
+ * Chars with a value less that ' ' (32) are inserted literally (x,y).
+ * The assembler only accepts 25 items for each directive. If this limit
+ * is reached, a new line is started.
+ * The last line is completed with a null-byte (STRING ASIS is in function
+ cf. AssemblerHeader).
+ * The char '''' is printed as ''''''.
+ *)
+(# 
+   (* noOfItems: @Integer; *)(* No of Items on the current assembler line *)
+   (*textitem: @Boolean;  *)(* True if the current itemkind is text, false if 
+                             it's integer litteral *)
+   (* linebreak:
+    (#
+    do (if textitem//true then { complete last text item }
+    '''' -> BC.putC;
+    false -> textItem;
+    if);
+    0 -> noOfItems;
+    BC.putNL;
+    '\tDC.B\t' -> BC.putT;
+    #);*)
+do (*'\tDC.B\t' -> BC.putT;
+    0 -> noOfItems;
+    false -> textitem;
+    T.scanAll
+    (#
+    do (if (ch<' ')//true then
+    ({ Non printable char, is inserted litterally })
+    (if textitem//true then ({ Complete the previous text item })
+    '''' -> BC.putC;
+    ',' -> BC.putC;
+    false->textitem;
+    if);
+    ch -> BC.putI;
+    noOfItems+1->noOfItems;
+    (if noOfItems//24 
+    then linebreak
+    else
+    ',' -> BC.putC; 
+    if);
+    else
+    ({ ch either printable or will be replaced by ' ' })
+    (if textitem//false then ({ start new text item })
+    noOfItems+1->noOfItems;
+    (if noOfItems//24 then linebreak if);
+    '''' -> BC.putC; 
+    true -> textitem;
+    if);
+    (if ch
+    // '''' then ''''->BC.putC; ''''->BC.putC;
+    else 
+    (if (ch>255)//true then
+    ({ non printable, will be replaced by ' ' })
+    ' ' -> BC.putC;
+    else
+    ch->BC.putC 
+    if);
+    if)
+    if)
+    #);
+
+    (if textitem//true then ({ Complete last text item })
+    '''' -> BC.putC;
+    ',' -> BC.putC;
+    if);
+    0 -> BC.putI; ({ Zero terminator })
+    BC.putNL;
+    '\tALIGN' -> BC.putT; BC.putNL;*)
+   T[] -> mstate.bitstream.PutDCB;
+#)
+--LabelDef:descriptor--
+(#
+do (if 'BETA_code1'->T.equal//true then
+       (* make 'BETA_code1' a unique label and export it. *)
+       localFilePath[] -> T.prepend;
+       (* T is now, e.g.: '~beta/basiclib/v1.4/file/BETA_code1' *)
+       T[]->export;
+   if);
+   T[] -> mstate.bitstream.DefTLabel;
+#)
+--defineMainLabel1:descriptor--
+(# T: @text
+do 'main' -> T ; T[] -> export;  T[] -> labelDef; 
+   (* 	LEA.L ((ArgCount).L,A5),A0
+    MOVE.L 4(SP),(A0)
+    LEA.L ((ArgVector).L,A5),A0
+    MOVE.L 8(SP),(A0) *)
+   (2x0100000111000000, 1) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.iSize;
+   ('ArgCount', TRUE) -> mstate.bitstream.PutTOp;
+   
+   (2x0010000010101111, 1) -> mstate.bitstream.PutInst;
+   4 -> mstate.bitstream.PutWord;
+   
+   (2x0100000111000000, 1) -> mstate.bitstream.PutInst;
+   ('ArgVector', TRUE) -> mstate.bitstream.PutTOp;
+   
+   (2x0010000010101111, 1) -> mstate.bitstream.PutInst;
+   8 -> mstate.bitstream.PutWord;
+#)
+--byteSwap:descriptor--
+(# T: @text
+do '******** No byte swap implemented \n'->T;
+   common.messagestream.newline;
+   T[]->common.messagestream.putline;
+   T->comment
+#)
+--arithShiftLeft:dopart-- 
+do (# r: ^registerOperand; c: ^cstOperand; temp: @Integer;
+      dr: @dataRegOperand;
+do (* ASL.L op1, op2 *)
+   (if op1.isDataRegOp then
+       4 -> mstate.bitstream.iSize;
+       op1[] -> r[];
+       r.rN -> TOS'%shiftLeft[9]' -> temp;
+       op2[] -> r[];
+       (r.rN, temp) -> TOS'%or' -> temp;
+       (2x1110000110100000, temp) -> TOS'%or' -> temp;
+       (temp, 0) -> mstate.bitstream.PutInst;
+    else
+       (if op1.isCstOp then
+           op1[] -> c[];
+	   (if c.C > 8 then
+              dr.alloc;
+              (c[],dr[])->ldCst;
+              4 -> mstate.bitstream.iSize;
+              dr.rN -> TOS'%shiftLeft[9]' -> temp;
+              op2[] -> r[];
+              (r.rN, temp) -> TOS'%or' -> temp;
+              (2x1110000110100000, temp) -> TOS'%or' -> temp;
+              (temp, 0) -> mstate.bitstream.PutInst;
+              dr.dealloc;
+	    else
+               (if c.C = 8 then
+                    0 -> temp;
+                 else
+                    c.C -> temp;
+               if);
+               4 -> mstate.bitstream.iSize;
+               temp -> TOS'%shiftLeft[9]' -> temp;
+               op2[] -> r[];
+               (r.rN, temp) -> TOS'%or' -> temp;
+               (2x1110000110000000, temp) -> TOS'%or' -> temp;
+               (temp, 0) -> mstate.bitstream.PutInst;
+	   if);
+        else
+           4 -> mstate.bitstream.iSize;
+           (2x1110000111000000, 1) -> mstate.bitstream.PutInst;
+           op1.putOp;
+       if);
+   if);
+#)
+--arithShiftRight:dopart-- 
+do (# r: ^registerOperand; c: ^cstOperand; temp: @Integer;
+      dr: @dataRegOperand;
+do (* ASR.L op1, op2 *)
+   (if op1.isDataRegOp then
+       4 -> mstate.bitstream.iSize;
+       op1[] -> r[];
+       r.rN -> TOS'%shiftLeft[9]' -> temp;
+       op2[] -> r[];
+       (r.rN, temp) -> TOS'%or' -> temp;
+       (2x1110000010100000, temp) -> TOS'%or' -> temp;
+       (temp, 0) -> mstate.bitstream.PutInst;
+    else
+       (if op1.isCstOp then
+           op1[] -> c[];
+           (if c.C > 8 then
+               dr.alloc;
+               (c[],dr[])->ldCst;
+               4 -> mstate.bitstream.iSize;
+               dr.rN -> TOS'%shiftLeft[9]' -> temp;
+               op2[] -> r[];
+               (r.rN, temp) -> TOS'%or' -> temp;
+               (2x1110000010100000, temp) -> TOS'%or' -> temp;
+               (temp, 0) -> mstate.bitstream.PutInst;
+               dr.dealloc;
+	    else 
+               4 -> mstate.bitstream.iSize;
+	       (if c.C = 8 then
+                   0 -> temp;
+                else
+                   c.C -> temp;
+               if);
+               temp -> TOS'%shiftLeft[9]' -> temp;
+               op2[] -> r[];
+               (r.rN, temp) -> TOS'%or' -> temp;
+               (2x1110000010000000, temp) -> TOS'%or' -> temp;
+               (temp, 0) -> mstate.bitstream.PutInst;
+	   if);
+        else
+           4 -> mstate.bitstream.iSize;
+           (2x1110000011000000, 1) -> mstate.bitstream.PutInst;
+           op1.putOp;
+       if);
+   if);
+#)
+--logicalShiftLeft:dopart-- 
+do (# r: ^registerOperand; c: ^cstOperand; temp: @Integer;
+   dr: @dataRegOperand;
+do (* LSL.L op1, op2 *)
+   (if op1.isDataRegOp then
+       4 -> mstate.bitstream.iSize;
+       op1[] -> r[];
+       r.rN -> TOS'%shiftLeft[9]' -> temp;
+       op2[] -> r[];
+       (r.rN, temp) -> TOS'%or' -> temp;
+       (2x1110000110101000, temp) -> TOS'%or' -> temp;
+       (temp, 0) -> mstate.bitstream.PutInst;
+    else
+       L: 
+         (if op1.isCstOp then
+             op1[] -> c[];
+             (if true
+              // (c.C > 8) then
+                 dr.alloc;
+                 (c[],dr[])->ldCst;
+                 (dr[],op2[])->logicalShiftLeft; (* logical shift with two registers *)
+                 dr.dealloc;
+                 leave L;
+              // (c.C = 8) then
+                 0 -> temp;
+              else
+                 c.C -> TOS'%shiftLeft[9]' -> temp;
+             if);
+             4 -> mstate.bitstream.iSize;
+             op2[] -> r[];
+             (r.rN, temp) -> TOS'%or' -> temp;
+             (2x1110000110001000, temp) -> TOS'%or' -> temp;
+             (temp, 0) -> mstate.bitstream.PutInst;
+          else
+             (2x1110001111000000, 1) -> mstate.bitstream.PutInst;
+             op1.putOp;
+         if);
+   if);
+#)
+--logicalShiftRight:dopart-- 
+do (# r: ^registerOperand; c: ^cstOperand; temp: @Integer;
+   dr: @dataRegOperand;
+do (* LSR.L op1, op2 *)
+   4 -> mstate.bitstream.iSize;
+   (if op1.isDataRegOp then
+       op1[] -> r[];
+       r.rN -> TOS'%shiftLeft[9]' -> temp;
+       op2[] -> r[];
+       (r.rN, temp) -> TOS'%or' -> temp;
+       (2x1110000010101000, temp) -> TOS'%or' -> temp;
+       (temp, 0) -> mstate.bitstream.PutInst;
+    else
+       L: 
+         (if op1.isCstOp then
+             op1[] -> c[];
+             (if true
+              // (c.C > 8) then
+                 dr.alloc;
+                 (c[],dr[])->ldCst;
+                 (dr[],op2[])->logicalShiftRight; (* logical shift with two registers *)
+                 dr.dealloc;
+                 leave L;
+              // (c.C = 8) then
+                 0 -> temp;
+              else
+                 c.C -> temp;
+             if);
+             temp -> TOS'%shiftLeft[9]' -> temp;
+             op2[] -> r[];
+             (r.rN, temp) -> TOS'%or' -> temp;
+             (2x1110000010001000, temp) -> TOS'%or' -> temp;
+             (temp, 0) -> mstate.bitstream.PutInst;
+          else
+             (2x1110001011000000, 1) -> mstate.bitstream.PutInst;
+             op1.putOp;
+         if);
+   if);
+#)
+-- rotateLeft: doPart --
+do (* '\trol.l\t'->BC.putT; op1.putOp; BC.sep; op2.putOp; BC.putNL; *)
+   (# r: ^registerOperand; c: ^cstOperand; temp: @Integer;
+   dr: @dataRegOperand;
+do (* LSR.L op1, op2 *)
+   4 -> mstate.bitstream.iSize;
+   (if op1.isDataRegOp then
+       op1[] -> r[];
+       r.rN -> TOS'%shiftLeft[9]' -> temp;
+       op2[] -> r[];
+       (r.rN, temp) -> TOS'%or' -> temp;
+       (2x1110000110111000, temp) -> TOS'%or' -> temp;
+       (temp, 0) -> mstate.bitstream.PutInst;
+    else
+       L: 
+         (if op1.isCstOp then
+             op1[] -> c[];
+             (if true
+              // (c.C > 8) then
+                 dr.alloc;
+                 (c[],dr[])->ldCst;
+                 (dr[],op2[])->rotateLeft; (* rotate with two registers *)
+                 dr.dealloc;
+                 leave L;
+              // (c.C = 8) then
+                 0 -> temp;
+              else
+                 c.C -> temp;
+             if);
+             temp -> TOS'%shiftLeft[9]' -> temp;
+             op2[] -> r[];
+             (r.rN, temp) -> TOS'%or' -> temp;
+             (2x1110000110011000, temp) -> TOS'%or' -> temp;
+             (temp, 0) -> mstate.bitstream.PutInst;
+          else
+             (2x1110000110110000, 1) -> mstate.bitstream.PutInst;
+             op1.putOp;
+         if);
+   if);
+#)
+
+-- rotateRight: doPart --
+do (*'\tror.l\t'->BC.putT; op1.putOp; BC.sep; op2.putOp; BC.putNL;*)
+   (# r: ^registerOperand; c: ^cstOperand; temp: @Integer;
+   dr: @dataRegOperand;
+do (* LSR.L op1, op2 *)
+   4 -> mstate.bitstream.iSize;
+   (if op1.isDataRegOp then
+       op1[] -> r[];
+       r.rN -> TOS'%shiftLeft[9]' -> temp;
+       op2[] -> r[];
+       (r.rN, temp) -> TOS'%or' -> temp;
+       (2x1110000010111000, temp) -> TOS'%or' -> temp;
+       (temp, 0) -> mstate.bitstream.PutInst;
+    else
+       L: 
+         (if op1.isCstOp then
+             op1[] -> c[];
+             (if true
+              // (c.C > 8) then
+                 dr.alloc;
+                 (c[],dr[])->ldCst;
+                 (dr[],op2[])->rotateRight; (* rotate with two registers *)
+                 dr.dealloc;
+                 leave L;
+              // (c.C = 8) then
+                 0 -> temp;
+              else
+                 c.C -> temp;
+             if);
+             temp -> TOS'%shiftLeft[9]' -> temp;
+             op2[] -> r[];
+             (r.rN, temp) -> TOS'%or' -> temp;
+             (2x1110000010011000, temp) -> TOS'%or' -> temp;
+             (temp, 0) -> mstate.bitstream.PutInst;
+          else
+             (2x1110000010110000, 1) -> mstate.bitstream.PutInst;
+             op1.putOp;
+         if);
+   if);
+#)
+--nop:descriptor-- (# #)
+--RegAdrPutOp:dopart--
+  (* Address Register Indirect with Displacement *)
+do (*off->RegisterOffSet; (A Reg ) *)
+   (2x101, off, Reg.rN) -> mstate.bitstream.Indirect;
+--AdrLoadFloatOp:descriptor--
+(##)
+--RegInd:dopart--
+   (* Address Register Indirect *)
+do (* (AR ) *)
+   (2x010, 0, R) -> mstate.bitstream.Indirect;
+--RegisterOffSet:dopart---
+do (*(if (offset <> 0) then offset->BC.putI if)*)
+   cError(# do 'Ups! We still use RegisterOffSet descriptors' -> T #);
+
+(* 2.8.3: Register indirect with index *)
+--InxRegAdrPutOp:dopart--
+do (# (* 2.8.3.2: Address Register Indirect with Index (Base Displacement) *)
+   (* MAC: *)
+   (* off = long displacement
+    aReg  = base register
+    dReg  = index register *)
+   scaleWord: @Integer;
+do (* ((off).L, aReg, dReg.L*size) *)
+   size -> mstate.bitstream.iSize;
+   (if size (* OBS! first bit is set under the asumsion that the base reg is a data register. *)
+    // 1 then 2x0000100100110000 -> scaleWord;
+    // 2 then 2x0000101100110000 -> scaleWord;
+    // 4 then 2x0000110100110000 -> scaleWord;
+    // 8 then 2x0000111100110000 -> scaleWord;
+   if);
+   (2x110, off, scaleWord, aReg, dReg) -> mstate.bitstream.IndirectIndx;
+#)
+--InxRegAdrLoadAdr:dopart---
+do
+--BitField:descriptor--
+(#
+do (*'{'->BC.putC; off->BC.putI; ':'->BC.putC; wd->BC.putI; '}'->BC.putC *)
+   cError(# do 'Ups! We still use bitField descriptors' -> T #);
+   (* '{'->BC.putC; off->BC.putI; ':'->BC.putC; wd->BC.putI; '}'->BC.putC *)
+#)
+
+--debugImpInfo:descriptor--
+(#
+   (*do astRef -> mstate.bitstream.Stab;*)
+   (*';.stabn 68,0,' -> BC.putT; astRef->BC.putI; BC.sep; lab.putOp; BC.putNL*)
+#)
+--debugBeforeEndMinfo:descriptor---
+(##)
+--debugAfterEndMinfo:descriptor--
+(# local: ^Text; l: @Integer;
+do (* thisFormName *)
+   (if switch38//false then (* shoul be 37 *)
+       &Text[] -> local[];
+       (*  '\tDC.B\t$80, ' -> BC.putT; *)
+       'M' -> local; descNo -> local.putint; thisFormName[] -> local.puttext;
+       (*local.length -> l -> BC.putI; 
+        ', ''' -> BC.putT; local -> BC.putT; ''' ; MacsBug\n' -> BC.putT;
+        (if (l mod 2)//1 then
+        '\tDC.B\t$00\t; MacsBug\n' -> BC.putT;
+        if);
+        '\tDC.W\t$0000\t; MacsBug\n' -> BC.putT;*)
+       1 -> mstate.bitstream.iSize;
+       (16x80, 1) -> mstate.bitstream.PutDC;
+       (local.Length, 1) -> mstate.bitstream.PutDC;
+       local[] -> mstate.bitstream.PutDCB;
+       2 -> mstate.bitstream.iSize;
+       (0,2) -> mstate.bitstream.PutDC;
+       mstate.bitstream.EndMEntry;
+   if);
+#)
+--debugGpartInfo:descriptor--
+(#
+do (*';.stabs "'->BC.putT; thisFormName-> BC.putT; '",38,0,'->BC.putT;
+    astRef -> BC.putI; BC.sep; Tlab->BC.putT; BC.putNL *)
+#)
+--debugProtoInfo:descriptor--
+(#
+do (*';'->BC.putC; Tlab->BC.puttext; BC.PUTnl*)
+#)
+
+(************************* registers ******************************)
+--DataRegMax:dopart--
+do 5->val
+--thisO:dopart-- do 0->rNo
+--callO:dopart-- do 1->rNo
+(* --originO:dopart-- (#do -1->rNo #) *)
+(**************************************)
+(*--AssemblerTail:descriptor--
+ (# 
+ {'\t; assembler trailer' -> BC.putT; BC.putNL;
+ '\tENDR\n' -> BC.putT;
+ '\tEND\n' -> BC.putT;}
+ do	mstate.bitstream.EndRecord;
+ {mstate.bitstream.EndProc;}
+ mstate.bitstream.ShutDown;
+ #)*)
+---BeginProtoTypes:descriptor---
+(# recordName: ^text; fileName: ^text;
+do (*'\tENDPROC\n\n' -> BC.putT;*)
+   (*	mstate.bitstream.EndProc;
+    * &Text[] -> recordName[];
+    * BC.name -> filename[];
+    * filename.scanAll
+    * (#
+    * do (if TRUE
+    * // ((ch >= 'A') AND ( ch <= 'Z')) then ch -> recordName.put
+    * // ((ch >= 'a') AND ( ch <= 'z')) then ch -> recordName.put
+    * // ((ch >= '0') AND ( ch <= '9')) then ch -> recordName.put
+    * else '_' -> recordName.put
+    * if)
+    * #);
+    * (1,1) -> recordName.delete;
+    * {*recordName -> BC.putT; '\tRECORD\n' -> BC.putT;*}
+    * recordName[] -> mstate.bitstream.Record;
+    * entrypoints.clear;
+    *) (* reset the entrypoints table since we are beginning a new record *)
+   switchToData;
+   (*d0tmp.new;
+   0->declareLong;*)
+#)
+--getXres:descriptor--
+(# 
+   getCres:
+     (# 
+     do (if (max>=0)//true then (dataRegA[],drA[])->cpReg if);
+	(if exitType
+	 //1 //2 //3 then drA[]->simpleRes
+	 // 4 then (* text *)
+	    (# drT: @dataRegOperand
+	    do (extType,exitType,BC,SC,LC,max,dummyMax)->endX; 
+	       true->endXcalled;
+               (* this situation can be very complicated:
+                * gen.copyCtext assume text in dataRegA;
+                * drA may not be dataRegA;
+                *)
+	       (if drA//dataRegA then textRes
+		else
+		   drT.alloc;
+		   (if drT//dataRegA then (* now ist free! gylle!*)
+		       (drA[],dataRegA[])->cpReg;
+		       textRes;
+		    else 
+		       (dataRegA[],drT[])->cpReg;
+		       (drA[],dataRegA[])->cpReg;
+		       textRes; 
+		       (drT[],dataRegA[])->cpReg;
+		   if);
+		   drT.deAlloc;
+	       if); 
+	       drA.deAlloc
+	    #)
+	 // 5 then (* rep *)  cError(#do 'Exit cProc: general rep'->t #)
+	 // 6 then (* cStruc *)
+            (* create an instance of theDesc->rA;
+             * movl d0-12(16?),rA@(12)
+             * this makes theDesc.R denotes the cStruc
+             * The adjustment of d0 is necessary,since the cStruc
+             * has no BETA structural attributes (PT,GC,low,high)
+             * access of the form rA.R[inx] with index check
+             * will NOT be possible *)
+            cError(#do 'Exit cProc: cStruc exit'->t #)
+	 // 7 (*double*) then
+	    (# FP0,FP: @floatRegOp
+            do FP.alloc;
+               (if FP.rN=0 then 
+                else 
+                  (* move %f0,%FP 
+                   * move mstate.saveF0, %f0
+                   *)
+		  (fp0[],FP[])->Fmov;
+                  (mstate.fp0tmp[],fp0[])->FloatLoad;
+               if);   
+	       FP[]->floatRes;
+	       drA.dealloc;
+	    #);
+         // 10 (*data*) then
+            (# dr: @dataRegOperand
+            do dr.alloc;
+               (drA[],dr[])->cpReg;
+               dr[]->dataRefRes
+            #);
+        if)
+     #);
+   getPascRes:
+     (#
+     do (if exitType
+         //1 (*byte*) then
+            drA[]->gClr; drA[]->popCbyte; drA[]->simpleRes;
+         //2 (*word*) then
+            drA[]->gClr; drA[]->popCword; drA[]->simpleRes;
+         //3 (*long*) then drA[]->pop; drA[]->simpleRes
+         //4 (*text*) then 
+            'UnpackPascalText'->jsrT;
+            (* address of Pascal text is on top of SP-stack;
+             * UnpackPascalText must deliver adr. of BETA text somewhere!
+             *)
+            'ExternalPasc: exit text'->notImpl
+         //5 (*rep*) then cError(#do 'ExternalPasc:exit rep'->T #)
+         //6 (*cStruc*) then cError(#do 'ExternalPasc:exit cStruc'->T #)
+         //7 (*double*) then
+            (# 
+            do drB.alloc;
+               (if (max>=drB)//true then
+                   cError(#do'ExternalPasc:max>=drB'->T#)if);
+               drB[]->pop; drA[]->pop;
+               (drA[],drB[])->doubleRes
+            #)
+         // 10 (*data*) then
+            (# dr: @dataRegOperand
+            do dr.alloc;
+               (drA[],dr[])->cpReg;
+               dr[]->dataRefRes;
+               '\n\n**** warning: Pascal external with exit of data Ref!xn'->bugstream.putline
+            #)            
+        if)
+     #);
+   endXcalled: @boolean;
+   drA,drB: @dataRegOperand
+do drA.alloc;
+   (if (max>=drA)//true then cError(#do 'External: max>=drA'->T #)if);
+   (if extType
+    // 1 (*semAtt.cExt OOPS*) then getCres
+    // 2 (*semAtt.pascExt OOPS*)//3 (*semAtt.pascTrapExt OOPS*) then getPascRes
+    else cError(#do 'Illegal external exit type:'->T; extType->I #)
+   if);
+   (if endXcalled//false then (extType,exitType,BC,SC,LC,max,dummyMax)->endX if);
+#)
+---EndDebugCode:descriptor--
+(#
+do (*(if switch38 //true then    
+    '\tlntt\n\tdnt_end\t1,0,20,0x80000001\n\ttext\nsltspecial 6,9,0x8000' -> BC.putT;
+    mState.descInx -> BC.putHex;
+    BC.putNL;
+    if);
+    'debugend:\nlalign 1\n' -> BC.putT*)
+#)
+--xParForward:descriptor--
+(#
+do (if extKind
+    // 1 (* sematt.cExt*) then false->forward
+    // 2 (* sematt.pascExt*) // 3 (* sematt.pascTrapExt*) then true->forward
+if)#)
+--putS:dopart--
+do (* (if size
+    // 4 then 'L\t'->putT
+    // 1 then 'B\t'->putT
+    else 'W\t'->putT
+    if)*)
+   cError(# do 'Ups! We still use PutS descriptors' -> T #);
+--putA:descriptor--
+(#do (* A n *)
+   n -> mstate.bitstream.PutAReg;
+#)
+--putD:descriptor--
+(#do (* D n *)
+   n -> mstate.bitstream.PutDReg;
+#)
+--imm:descriptor--
+(#do (* # off *)
+   off -> mstate.bitstream.PutConst;
+#)
+--newCtextOp:descriptor--
+(# S: @text 
+do (T[], false) -> ImportData;
+   T[]->S.puttext; S[]->op;
+#)
+--initMachine:descriptor--
+(# do localFilePath[] -> mstate.bitstream.segName[]; true->loadPrototype #)
+--CloseMachine:descriptor--
+(# FN: ^text;
+do (*'\t; assembler trailer' -> BC.putT; BC.putNL;
+    '\tENDR\n' -> BC.putT;
+    '\tEND\n' -> BC.putT;*)
+   (*mstate.bitstream.EndRecord;*)
+   mstate.bitstream.EndProc;
+   mstate.bitstream.ShutDown;
+   
+   
+   (* producing debug tables *)
+   BC.name->FN[];  (* FN = 'foo' *)
+   '..db'->FN.append; (* FN = 'foo..db' *)
+   FN[]->dbgInf.saveBinFile;
+   (*BC.close*)
+#)
+--asgRefAdr:descriptor--
+(* assign A to thisAddress *)
+(# aR,aR1,aR2: @adrRegOperand; L: @localLab; T: @Text;
+   A1: @regAdr; dr: @dataRegOperand
+do common.direct->access; (* this Address is a dynamic reference *)
+   (* this is a hack. Will not work for arrays !!!*)
+   toReg2->aR->aR2; (* aR=destination *)
+   (if A.access //common.direct then
+       (*(if aR1//thisO then true->A1.frozenReg (*else aR1.deAlloc * )if);*)
+       (* aR1 = thisO possible in this(P)[]->R[] *)
+       (if A.regType//thisO//callO then
+           A.toReg2->aR1; (* 12.10.92*) (* aR1=source *)
+           (* A.freeAdr; 12.10.92: in evval1: asgToAdr: A[]->rA.asgRefAdr->..
+            * A[] is used in thisVal and cannot be released.
+            * The problem is if this can imply that regs are not released?
+            *)
+           (*aR.mkIndirect; olm: ? - eliminated *)
+           (* (aR1[],aR[])->stVal; *) (* datpete: ?? *)
+           aR->A1.reg; (* olm: ? *) 
+           (aR1[],A1[])->stVal;
+           aR1.deAlloc
+        else
+           (* A and aR1 use the same register - dont deAlloc aR1.
+            * However A is invalidated since aR1 is redefined
+            *)
+           aR[]->push;
+           (A[],aR[])->gLea; dr.alloc; (aR[],dr[])->cpReg;
+           aR[]->pop;
+           (* aR.mkIndirect; olm: ? - elim*)(* dont do this before push/pop *)
+           (* (dr[],aR[])->stVal; *) (* datpete: ?? *)
+           (*olm: ? *) aR->A1.reg; (dr[],A1[])->stVal;
+           dr.deAlloc
+       if)
+       (*aR1.deAlloc; 12.10.92*) (* 2.9.92*)
+       (* A1[]->A[] 2.9.92*)
+    else 
+       (*aR.mkIndirect; olm: ? - eliminated*)
+       (* (A[],aR[])->cpMem *) (* datpete: ?? *)
+       (*olm: ? *) aR->A1.reg; (A[],A1[])->cpMem;
+   if);
+   aR2[]->dest[]
+#)
+--asgRefReg:descriptor-- (* MUST be fixed like asgRefAdr above *)
+(* as asgRefAdr, but A is an adrRegOperand *)
+(# aR,aR1,aR2: @adrRegOperand; L: @localLab; T: @Text; A1: @RegAdr
+do common.direct->access; (* this Address is a dynamic reference *)
+   toReg2->aR->aR2; (* aR=destination *)
+   (* aR.mkIndirect; olm: ? - eliminated *)
+   (* (A[],aR[])->stVal; *) (* datpete: ?? *)
+   (*olm: ? *) aR->A1.reg; (A[],A1[])->stVal;
+   (* aR2[]->ChkHeap;
+    aR2.deAlloc*)
+   aR2[]->dest[]
+#)
+--DataRegOpRegF: dopart--
+do (* regF not used in MACmachine *)
+--AdrRegOpRegF: dopart--
+do (* regF not used in MACmachine *)
+--FloatRegOpRegF: dopart--
+do (* regF not used in MACmachine *)

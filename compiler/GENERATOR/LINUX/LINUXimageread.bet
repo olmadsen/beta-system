@@ -1,0 +1,93 @@
+ORIGIN '../ELF/ELFimageread';
+INCLUDE '../ELF/elf_intel';
+
+--ImageReadMapOffset: dopart--
+do 
+        
+--ImageReadMapRelType: dopart--
+do (if reltype
+    // R_386_NONE then entryDefMark -> map
+    // R_386_32 then wordMark -> map
+       (* Cannot determine if it should instead be
+        * dataMark or codeMark.
+        * Handled specially below.
+        *)
+    // R_386_PC32 then jmpMark -> map
+   if);
+   
+--ImageReadRelocation: descriptor--
+(# (* Linux uses Rel *)
+   
+   rel_inx: @integer;
+
+   maprel: @
+     (* Compare with the generation of Rel entries in LINUXelf *)
+     (# rel: ^Elf32_Rel;
+        mark, type: @integer;
+        ep: ^EntryPointInfo;
+        getsym: @f.getSymTabEnt;
+        getshstr: @f.getSectionName;
+        sym: ^Elf32_Sym;
+        hdr: ^Elf32_Shdr;
+        name: ^text;
+     enter rel[]
+     do rel.r_offset (* ->mapoffset (mapoffset is a nop) *) -> mark;
+        rel.r_info -> ELF32_R_SYM -> getsym -> (sym[], hdr[]);
+        sym[] -> mapsym -> ep[];
+        (if ep[]=NONE then
+            (* dataMark or codeMark - see LINUXelf for sym encoding *)
+            findName: f.scanShdrs
+            (# 
+            do (if sym.st_shndx=current_inx then
+                   (* Found the section header for the section sym represents *)
+                   current.sh_name ->getshstr -> name[];
+                   (if '.data' -> name.equal then
+                       dataMark -> type
+                    else
+                       codeMark -> type
+                   if);
+                   leave findName;
+               if);
+            #);
+         else
+            (* Normal case *)
+            rel.r_info -> ELF32_R_TYPE -> mapreltype -> type;
+        if);
+     exit (mark, type, ep[])
+     #);
+do 
+   f.scanDataRelEnts;
+   f.cache.data_rel.range -> data_image.noOfRel;
+   data_image.markTop -> rel_inx;
+   data_image.noOfRel + data_image.markTop -> data_image.marktop;
+   (if data_image.marktop > data_image.marks.range then
+       data_image.marktop -> data_image.marks.extend;
+       data_image.marktop -> data_image.types.extend;
+       data_image.marktop -> data_image.epElm.extend;
+   if);
+   (for i:data_image.noOfRel repeat
+        rel_inx+1 -> rel_inx;
+        f.cache.data_rel[i][] -> maprel -> 
+        (data_image.marks[rel_inx] 
+        ,data_image.types[rel_inx]
+        ,data_image.epElm[rel_inx][]);
+   for);
+   f.scanTextRelEnts;
+   f.cache.text_rel.range -> text_image.noOfRel;
+   text_image.markTop -> rel_inx;
+   text_image.noOfRel + text_image.markTop -> text_image.marktop;
+   (if text_image.marktop > text_image.marks.range then
+       text_image.marktop -> text_image.marks.extend;
+       text_image.marktop -> text_image.types.extend;
+       text_image.marktop -> text_image.epElm.extend;
+   if);
+   (for i:text_image.noOfRel repeat
+        rel_inx+1 -> rel_inx;
+        f.cache.text_rel[i][] -> maprel -> 
+        (text_image.marks[rel_inx] 
+        ,text_image.types[rel_inx]
+        ,text_image.epElm[rel_inx][]);
+   for);
+#)
+   
+   

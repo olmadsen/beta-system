@@ -1,0 +1,123 @@
+ORIGIN '../elfread';
+INCLUDE '~beta/basiclib/formatio';
+
+---PROGRAM:descriptor---
+(#
+   display_header:
+     (# eh: ^Elf32_Ehdr;
+     enter eh[]
+     do 'Section header offset: '-> screen.puttext; 
+        eh.e_shoff -> screen.putint; screen.newline;
+        'No.of section headers: '-> screen.puttext; 
+        eh.e_shnum -> screen.putint; screen.newline;
+     #);
+   display_rel_info:
+     (# rel_info,type: @integer;
+        sym: ^Elf32_Sym;
+        sh: ^Elf32_Shdr;
+     enter rel_info
+     do '%18s\t'
+          -> putformat(# do rel_info-> ELF32_R_TYPE -> rel_type_astext -> s #);
+        rel_info -> ELF32_R_SYM -> f.getSymTabEnt -> (sym[],sh[]);
+        (if (sym.st_info -> ELF32_ST_TYPE) = STT_SECTION then
+            findName: f.scanShdrs
+            (# 
+            do (if sym.st_shndx=current_inx then
+                   (* Found the section header for the section 
+                    * sym represents
+                    *)
+                   current.sh_name ->f.getSectionName -> puttext;
+                   leave findName;
+               if);
+            #);
+         else
+            (sh.sh_link,sym.st_name) -> f.getString -> puttext; 
+        if);
+        '\t'->put;
+     #);
+   puthex: (* Peter do not trust the one in formatio (:-) *)
+     (# i: @integer;
+        printf: external
+          (# fmt: [0]@char;
+             val: @integer;
+          enter (fmt,val)
+          #);
+     enter i
+     do ('0x%08x\t', i) -> printf;
+     #);
+
+   f: @ elfReader;
+   eh: ^Elf32_Ehdr;  
+   fname: ^text;
+   e: @diskentry;
+
+do (if noOfArguments < 2 then
+       'Usage: readelffile fragment' -> screen.putline;
+       stop;
+    else
+       2 -> arguments -> e.path;
+       e.path.head -> fname[];
+       (if fname.length>0 then '/' -> fname.append; if);
+       machine_type -> fname.append;;
+       '/' -> fname.append;
+       e.path.name -> fname.append;
+       '.o'->(fname.copy).append -> f.name;
+       (if not f.entry.exists then
+           'No object file corresponding to '->screen.puttext;
+           2 -> arguments -> putline;
+           stop;
+       if)
+   if);
+   f.openRead;
+   '\nELF header:'->putline;
+   f.getEhdr -> eh[] -> display_header;
+   
+   '\nSection Headers:'->putline;
+   f.scanShdrs
+   (# 
+   do current_inx -> putint;
+      ascii.ht->put; 
+      current.sh_type -> shdr_type_astext -> puttext;
+      ascii.ht->put; 
+      current.sh_name -> f.getSectionName -> putline;
+   #);
+   
+   '\nSymbol table:'->putline;
+   f.scanAllSyments
+   (# 
+   do current_inx -> putint; ascii.ht->put; 
+      current.st_value -> puthex;
+      (current_sec.sh_link, current.st_name) -> f.getstring -> putline
+   #);
+   '\nText relA entries:'->putline;
+   F.scanTextRelaEnts
+   (#
+   do current.r_offset -> puthex; ' '->put;
+      current.r_addend -> puthex;
+      current.r_info -> display_rel_info;
+      newline;
+      
+   #);
+   '\nText rel entries:'->putline;
+   F.scanTextRelEnts
+   (#
+   do current.r_offset -> puthex; ' '->put;
+      current.r_info -> display_rel_info;
+      newline;      
+   #);
+   '\nData relA entries:'->putline;
+   F.scanDataRelaEnts
+   (#
+   do current.r_offset -> puthex; ' '->put;
+      current.r_addend -> puthex;
+      current.r_info -> display_rel_info;
+      newline;
+   #);
+   '\nData rel entries:'->putline;
+   F.scanDataRelEnts
+   (#
+   do current.r_offset -> puthex; ' '->put;
+      current.r_info -> display_rel_info;
+      newline;      
+   #);
+#)

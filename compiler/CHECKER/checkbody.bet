@@ -1,0 +1,271 @@
+ORIGIN 'check';
+INCLUDE '~beta/mps/utils/ast2asciiMap';
+INCLUDE 'errormessages';
+LIB_ITEM 'betacompiler'
+--CheckState:descriptor--
+(# pd,md: [8] ^ASTindex; (* list of pairs, preDesc, desc, 
+                          * where preDesc has no inner. 
+                          * To be finally checked by CheckNoInner
+                          *)
+   top: @integer;
+   warn: [8] ^ASTindex; err: [8] @integer; wTop: @integer;
+   errCount: @integer;
+   
+   (* for a2s *)
+   a2s: @theGroup.a2sHandle;
+   
+   (* The following attributes are for collecting all nodes 
+    * marked with an error or warning. The error marking
+    * is cleared. It may subsequencently be restored.
+    *    eClear: initialization;
+    *    eScan: collect and clear;
+    *    eRestore: restore
+    * Is used when printing an error/warining for a node
+    * in order to assure that only the actual message is
+    * printed.
+    *)
+   eNodes: [4] ^ASTindex; eNumbers: [4] @integer; etop: @integer;
+   eClear: (# do 0 -> eTop #);
+   eScan:
+     (# N,F: @ASTindex; ix: @integer
+     enter N
+     do N -> F;
+        (*'\nscan:' -> puttext; (F[],messagestream[],20) -> thePP;*)
+        L:
+          (if not F.isNull and F.internal then
+              (if (F.errInx -> ix) <> 0 then
+                  (*newline; ix -> putint;*)
+                  (if (eTop+1 -> eTop) > eNodes.range then
+                      eNodes.range -> eNodes.extend;
+                      eNumbers.range -> eNumbers.extend
+                  if);
+                  &ASTindex[] -> eNodes[eTop][];
+                  F -> eNodes[eTop];
+                  ix -> eNumbers[eTop];
+                  F.clearError;
+              if);
+              F.son -> eScan;
+              F.brother -> F;
+              restart L
+          if);
+        
+     #);
+   eRestore:
+     (#
+     do (for i: eTop repeat
+             eNumbers[i] -> eNodes[i].errInx
+        for);
+        0 -> eTop
+     #);
+   (* Printing of error/warning *)
+   FindImpOrAtt:
+     (* Find nearest enclosing imperative or attribute of a node *)
+     (# node,F: @ ASTindex
+     enter node 
+     do node -> F;
+        L: (if not F.isNull then
+               (if F.label 
+                // gram.imperatives // gram.attributes then               
+                else
+                   F -> node; node.father -> F; 
+                   restart L
+           if)if)
+     exit node
+     #);
+   PrintMessage:
+     (* print error- or warning message *)
+     (# node,node1: @ASTindex; msgNo,fragNo: @integer;
+        start,end: @integer
+     enter(node,msgNo)
+     do node -> FindImpOrAtt -> node1;
+        checkState.eClear;
+        node1 -> checkState.eScan;
+        msgNo -> node.markerror;
+        
+        (node.frag[],node.index) -> a2s.getPos -> (start,end);
+
+        messagestream.newline;
+        messagestream.newline;
+        (node1[],messagestream[],20) -> thePP;	
+        
+        (if start > 0 then
+            '\n--------char positions: ' -> messagestream.puttext;
+            start -> messageStream.putint; 
+            ',' -> messageStream.put; 
+            end-> messageStream.putint;
+            '--------'-> messagestream.puttext;
+         else
+            '\n--------------------------------------------' 
+              -> messagestream.puttext;
+        if);
+        checkState.eRestore;     
+     #);   
+#)
+--semError:descriptor--
+(# n: @integer; node1,node2: @ASTindex
+do true -> error -> fatalError;
+   (if not node.LocalErr then
+       CheckState.errCount+1 -> CheckState.errCount;
+       (if CheckState.errCount = 1 then
+           node.frag[]->semanticErrors; (* notification in system.bet *)
+       if);
+       (node,errNo) -> CheckState.PrintMessage;       
+       (if errNo = 0 then stop if)
+   if)
+#)
+--warning:descriptor--
+(* Warnings are delayed until after the checking is completed.
+ * A node can only hold one error message or one warning.
+ * A warning on a node will thus block for an error message.
+ * The warnings will therefore first be inserted in the AST after
+ * the checking. I.e. when no more errors can occur.
+ *)
+(#
+do L:
+     (#do
+        (if errNo
+         // 24 (* qua*) then
+            (if (not switch[60]) and (switch[42] or switch[19]) then
+                leave L
+            if)
+         // 95 (* ^R.P dynamic *) then (if switch[90] then leave L if)
+        if);
+        (* all other warnings cannot be suppressed *)
+       (if not node.localErr then
+           (if (CheckState.wTop+1->CheckState.wTop) > CheckState.warn.range
+               then
+               CheckState.warn.range -> CheckState.warn.extend; 
+               CheckState.err.range -> CheckState.err.extend
+           if);
+           node[] -> CheckState.warn[CheckState.wTop][];
+           errNo -> CheckState.err[CheckState.wTop]  
+       if)
+     #)
+#)
+---ErrorReport:doPart---
+do (# T: ^text
+   do L[1][] -> T[];
+      (for i: L.range-1 repeat
+           (if (i <= E.range) and (E[i][] <> none) then
+               checkState.eClear;
+               E[i] -> checkState.eScan;
+               (E[i][],T[],10) -> thePP;
+               checkState.eRestore; 
+           if);
+           (if L[i+1][] <> none then
+               L[i+1][] -> T.append
+           if)
+      for);
+      (if isWarning then
+          (EV[],T[]) -> NewWarning
+       else
+          (EV[],T[]) -> NewError
+      if)
+   #)
+---NewError:doPart--
+do (# no: @integer
+   do m[] -> addErrorMsg -> no;
+      (EV,no) -> SemError
+   #)
+---noInner:doPart---
+do (if (CheckState.top+1->CheckState.top) > CheckState.pd.range then
+       CheckState.pd.range -> CheckState.pd.extend; 
+       CheckState.md.range -> CheckState.md.extend
+   if);
+   preDesc[] -> CheckState.pd[CheckState.top][]; 
+   desc[] -> CheckState.md[CheckState.top][]
+   
+---emitDelayedMsg:descriptor---
+(# node: ^ASTindex; first: @boolean; wrnNo: @integer
+do (*49->trace
+       (# pref,desc: ^ASTindex; p: @ASTindex; isVirt: @integer
+       do (for i: checkState.top repeat '$'->put;
+               checkstate.pd[i][]->pref[]; checkstate.md[i][]->desc[];
+               pref[]->A; desc[]->A;
+               desc.son -> p; 
+               (if p.label = gram.prefix then
+                   p.son -> sematt.descrip -> (P,isvirt);
+                   (if not (p->pref.equal) then
+                       '\n*** No inner problem: ' -> T;
+    if)if)for)#);*)
+   (for i: CheckState.top repeat
+        (if not (CheckState.pd[i][]->hasInner) then
+            (CheckState.md[i],41) -> &SemError 
+        if);
+        none -> CheckState.pd[i][] -> CheckState.md[i][]
+   for);
+   0 -> CheckState.top;
+   (* emit warnings *)
+   true -> first;
+   (for i: CheckState.wTop repeat
+        CheckState.warn[i][] -> node[];
+        L:
+        (if not node.localErr then
+            (if (CheckState.err[i]->wrnNo) = 201 then
+                (if not switch[2] then leave L if)
+            if);
+            (if first then 
+                '\n==================' -> messagestream.puttext;
+                '\nCompiler warnings:' -> messagestream.puttext;
+                '\n==================' -> messagestream.puttext;
+                false->first
+            if);
+            warnCount+1 -> warnCount;
+            (* it is not neccessary to find enclosing imp as in semErr,
+             * since the only current warning is a QUA-warning,
+             * which is always given on an imp.
+             * Not true with binOp warnings
+             *)
+            (node,wrnNo) -> checkState.PrintMessage;
+        if);
+        none -> CheckState.warn[i][]
+   for);
+   0 -> CheckState.wTop; false -> first;
+   (if warnCount > 0 then true -> error if);
+   CheckState.errCount -> ErrCount
+#)
+---ErrorPrint:descriptor---
+(# FF: ^FragmentForm
+do (if verboseLevel < verboseLevel.actions then
+       '\n\nPrinting lst-file' -> messagestream.puttext;
+   if);
+   theGroup.scan
+   (# R: @ASTindex
+   do (if current.type = FormType then 
+          current[] -> FF[]; 
+          '-------'->lst.PutText; 
+          FF.name -> lst.Puttext; 
+          ':' -> lst.Put; 
+          (if FF.Category
+           // gram.objectDescriptor // gram.descriptorForm then
+              'ObjectDescriptor' -> lst.puttext
+           // gram.attributesForm // gram.attributes // gram.attributeDecl
+              then 'Attributes' -> lst .puttext
+           // gram.doPart then 'DoPart' -> lst.puttext
+           // gram.mainPart then 'MainPart' -> lst.puttext
+           else '... ' -> lst.puttext
+          if);
+          '-------' -> lst.putLine;
+          FF.theGSForm->R; 
+          (R[],lst[],5000) ->thePP;
+   if)#);
+#)
+
+---CheckDoPart:doPart---
+do DS.init;
+   ClearErrorMsgList;
+   false->error->fatalError->fatalInitTermError;
+   theGroup.FragmentList.Scan
+   (# F: ^FragmentForm
+   do (if current.type = formType then current.open->F[]; F.Reset if)
+   #);
+   theGroup.FragmentList.Scan
+   (# F: ^FragmentForm; Fx: ^fragment
+   do (*current.origin.name->putline - Pre is empty error here *)      
+      (if current.type = formType then
+          current.open->F[];
+          F[] -> adjustForm;
+          F[] -> InitTerm;
+      if)
+   #);
+   doCheck -> (error,fatalError) 

@@ -1,0 +1,538 @@
+ORIGIN 'asmlink';
+LIB_ITEM 'betacodegen';
+INCLUDE '~beta/basiclib/betaenvold'; (*CopyAppend shouldbe eliminated *)
+---asmlink_init:doPart---
+do asmLink.TX.clear; asmLink.Libs.clear; asmLink.build.clear;
+   &text[] -> asmLink.fSwitch[]; &text[] -> asmLink.BetaRun[];
+   (if betarunSwitch[] <> NONE then betarunSwitch -> asmLink.betaRun if);
+   &text[]->asmLink.ObjName[]; (*  to assure NOT none *)
+--createCodeDirectory:descriptor---
+(# T: ^text; lastSlash: @integer
+do (if codeDirectory[] = NONE then
+       ((rootfragment[],thePathhandler.currentDirectory)
+         -> thePathHandler.convertFilePath
+       ,false)
+         -> insertSubDir(#do JobExt->path.append #)
+         -> T[];
+       thePathHandler.DirectoryChar -> T.findAll(#do inx -> lastSlash #);
+       (1,lastSlash-1) 
+         -> T.sub
+         -> codeDirectory[]
+         -> (&directory[]).touchDir
+       (# error::(#do T[]->thisTranslate.transCreateDirException#)#)
+   if)
+#)
+--createObjDirectory:descriptor---
+(# T: ^text; lastSlash: @integer
+do (if objDirectory[] = NONE then
+       (objName[],thePathhandler.currentDirectory)
+         -> thePathHandler.convertFilePath
+         -> T[];
+       thePathHandler.DirectoryChar -> T.findAll(#do inx -> lastSlash #);
+       (1,lastSlash-1) 
+         -> T.sub
+         -> objDirectory[];
+       (* if objName is  '/..../kuk/foo' then objDirectory is '/..../kuk'
+        * if objName is  'foo' then the pathHandler expands it to a full
+        * path, but the tagetDirectory needs to be appended; this is
+        * checked and handled below
+        * rubbish!!!
+        0 -> lastSlash;
+        thePathHandler.DirectoryChar 
+        -> objName.findAll(#do inx -> lastSlash #);
+        (if lastSlash = 0 then
+        '/' -> objDirectory.put;
+        targetDirectory[] -> objDirectory.append; 
+        if);
+        *)
+       objDirectory[] -> (&directory[]).touchDir
+       (# error::(#do T[]->thisTranslate.transCreateDirException #)#)
+   if)
+#)
+
+---asmlink_TextLst_insert:doPart---
+do actionPart:
+     (#
+     do (if kind = makeKind then
+            scan
+            (# 
+            do (if thisElm.kind = makeKind then
+                   (if (FullFN[]->thisElm.T.equal) then
+                       leave actionPart;
+        if)if)#)if);  
+        FullFN[]->E.T[]; kind->E.kind;  
+        assemble->E.assemble; inLib->E.inLib
+     #);  
+   
+---asmlink_Libs_insert:doPart---
+do T[]->E.T[]; &text[]->linkArgs[]->E.args[]
+   
+---asmlink_build_insert:doPart---             
+do d[] -> E.directory[]; c[] -> E.command[]
+   
+----AsmLink: descriptor----
+(*  Generation of assembler and linker directives. *)
+(# <<SLOT asmlinklib:attributes>>; (* XXXasmlink may use this slot for
+                                    * declaring auxillary patterns
+                                    *)
+   
+   asmState: @<<SLOT asmState:descriptor>>; (* XXXasmlink may use this slot for
+                                             * declaring auxillary variables
+                                             *)
+   
+   hasSharedLibs: booleanValue
+     (#
+     do <<SLOT hasSharedLibs:descriptor>> ;
+        (*(if not common.switch[63] then false -> value if)*)
+     #);
+   isNew: @booleanValue
+     (# T: [4] ^text; top: @integer;
+        P: ^text;
+        isMember: booleanValue
+          (* Check only (but fixes slashes in P[] *)
+          (# P: ^text;
+          enter P[]
+          do (P[], '/', 1) -> removeDoubleCh;
+             (if (P.length>1) and ((P.length->P.inxGet)='/') then
+                 (P.length, P.length) -> P.delete;
+             if);
+             (for i: top repeat
+                  (if T[i][] -> P.equal then
+                      true -> value;
+                      leave isMember
+                  if)
+             for);
+          #);
+     enter P[]
+     do (if (not(P[]->isMember)) -> value then
+            (if (top+1->top) > T.range then T.range -> T.extend if);
+            P[] -> T[top][];
+        if);
+     #);
+   addSharedLibFile:   
+     (# libFile, res: ^text
+     enter libFile[]
+     do <<SLOT AddSharedLibFile: descriptor>>
+     exit res[]
+     #);
+   echo:   (# do <<SLOT Echo:descriptor>> #);
+   remove:
+     (# name: ^text; check: @boolean
+     enter(check,name[]) do <<SLOT Remove:descriptor>>
+     #);
+   ChangeDirectory:
+     (# dir: ^text enter dir[] 
+     do (if verboseLevel<=verboseLevel.verbose then
+            echo; 'change directory: ' -> AFF.puttext; 
+            dir[] -> AFF.putLine;
+        if);
+        (#<<SLOT ChangeDirectory:doPart>> #)
+     #);
+   AddCommand:
+     (# cmd: ^text enter cmd[] <<SLOT AddCommand:doPart>> #);
+   make:   
+     (# m: @text; first: @boolean 
+     enter(first,m) do <<SLOT Make:descriptor>> 
+     #);
+   resource:   
+     (# m: @text; first: @boolean 
+     enter(first,m) do <<SLOT Resource:descriptor>> 
+     #);
+   stripPath:
+     (# t: ^text; i,last: @integer
+     enter t[]
+     do t.scanAll
+        (#
+        do i+1 -> i;
+           (if ch = thePathHandler.directoryChar then i -> last if);
+        #);
+        (last+1,t.length) -> t.sub -> t[]
+     exit t[]
+     #);
+   quote:
+     (# t: ^text; copy: ^Text;
+     enter t[]
+     do &Text[] -> copy[]; 
+        '"' -> copy.put;
+        (if common.switch[56] then
+            t[] -> stripPath -> copy.puttext
+         else
+            t[] -> copy.puttext;
+        if);
+        '"' -> copy.put;
+     exit copy[]
+     #);
+   cont:   (# do <<SLOT cont: descriptor>> #);
+   linkObj : (# lobj: ^ text enter lobj[] do <<SLOT linkObj:descriptor>> #);
+   userDefinedBetaRun: @boolean; (*true if betarun defined using BETARUN prop*)
+   addBetaRun: 
+     (# betarun: ^text; 
+     enter(betaRun[],userDefinedBetaRun)
+     do <<SLOT addBetaRun:descriptor>> 
+     #);
+   
+   Assembler:
+     (# F : ^ text; inFile,outFile: @Text
+     enter F[]
+     do <<SLOT assemble: descriptor >>;
+     #);
+   
+   contCh: charValue(#do <<SLOT contCh:descriptor>> #);   
+   
+   xLinkObj:
+     (# t: ^text; S: @text
+     enter t[]
+     do (*'"'->S.put;
+         t[] -> S.append; 
+         '"'->S.put; *)
+        t[] -> quote -> S.puttext;
+        contCh -> S.put; '\n\t'->S.append;
+        S[] -> ldA.prepend;
+     #);
+   
+   LinkLibraries: <<SLOT linkLibraries:descriptor>>;
+   
+   BetaLib,BetaRunLib: ^Text;
+   AFF: @File
+     (# AccessError:: (# do name -> thisTranslate.TransAccessException #);
+        NoSpaceError:: (# do NoSpaceError #);
+        WriteError:: (# do NoSpaceError #);
+        OtherError:: (# do (name,msg[]) -> thisTranslate.otherFileError #);
+        NoSuchFileError::
+          (* someone has removed the job-file during compilation;
+           * we could perhaps ignore it but to play it safe ...
+           *)
+          (#
+          do 'Someone has removed the job-file during compilation' -> msg;
+             (name,msg[]) -> thisTranslate.otherFileError
+          #)
+     #);
+   
+   Linker:
+     (# SplitLdA:
+          (* check if the list of beta.o files in ldA is too long
+           * for the link-directive and if it is, split the linking into
+           * a number of calls to the linker
+           *)
+          (# first,last,last1: @integer; T: ^text; TmpFiles: @text;
+             hasBetaEnv: @boolean
+          do (if ldA.length > ldArgMax  then
+                 1->first; (*true -> hasBetaEnv;*)
+                 split1:
+                   (#
+                   do (* search back from  ldA[start+ldArgMax-1] to
+                       * a char separating two file names in ldA
+                       *)
+                      split2:
+                        (for i: ldArgMax repeat
+                             (if ((first+ldArgMax-i)->last1) <= ldA.length 
+                                 then
+                                 (if (last1->ldA.inxGet) <= ' ' 
+                                     then leave split2
+                        if)if)for);
+                      last1->last;
+                      (* remove possible trailing cr/lf/tab and \ *)
+                      remove:
+                        (if last-1->last->ldA.inxGet
+                         // ' ' // ascii.ht // ascii.newline // contCh then
+                            restart remove
+                        if);
+                      (if first < last then (* datpete 6/7/95 *)
+                          (first,last)->ldA.sub->T[]; T.newline;
+                          (T[],hasBetaEnv)->ldTmp->quote->TmpFiles.append; 
+                          ' ' -> TmpFiles.put;
+                          contCh->TmpFiles.put;
+                          TmpFiles.newline;
+                          ascii.ht -> TmpFiles.put;
+                          false -> hasBetaEnv
+                      if);
+                      (if (last1+1->first) <= ldA.length  then 
+                          restart split1
+                      if)
+                   #);
+                 TmpFiles[]->ldA[];                 
+             if)
+          #);
+
+        ldArgMax: integerValue(#do <<SLOT ldArgMax:descriptor>> #);
+        ldTmp:
+          (# tmpArgs: ^text; TmpF: ^text; hasBetaEnv: @boolean
+          enter(tmpArgs[],hasBetaEnv)
+          do <<SLOT ldTmp:descriptor>>
+          exit TmpF[]
+          #);
+        betaenvObj: ^ text;  betaenvIsSharedLib: @boolean
+     do (* Put the beta .o into the link directive.
+         * 6/87/8:
+         * The following is probably no longer true:
+         * The beta.o files must appear consequtively in the link
+         * directive, since the initFragment part of the persistence
+         * store assumes that all data areas of beta.o files appear
+         * consequetively in the exe-file. This is currently an experiment
+         * but it may be abandoned if some of the linkers do not place
+         * these data segments consequetively!
+         * The first beta.o file MUST be betaenv/tstenv
+         *)
+             (*(if common.switch[16] then mkSym.init if);*)
+        L: TX.Scan
+          (#
+          do (if thisElm.kind = BetaEnvKind then 
+                 (*(if common.switch[16] then thisElm.T[]->mkSym.addFile if);*)
+                 BinExt -> thisElm.T.CopyAppend -> betaenvObj[];
+                 thisElm.inLib and hasSharedLibs -> betaenvIsSharedLib;
+                 (* Some linkers may have problems with betaenv 
+                  * if it is a shared library
+                  *)
+                 leave L (* there is only one betaenv *)
+             if);
+          #);
+        (if not common.switch[61] then
+            betaenvObj[] -> quote -> linkObj
+            (* ELSE
+             * On SGI, etc. we may have to split the link list
+             * before inserting betaenv
+             *)
+        if);
+
+        TX.Scan
+        (#
+        do (if thisElm.kind = BetaKind then 
+               (*(if common.switch[16] then thisElm.T[]->mkSym.addFile if);*)
+               (if not (thisElm.inLib and hasSharedLibs) then
+                   BinExt->thisElm.T.CopyAppend-> quote -> linkObj
+        if)if)#);
+        
+           (* (if common.switch[16] then mkSym.fini if);*)
+        
+        SplitLdA;
+        
+        (if common.switch[61] and not betaenvIsSharedLib then
+            (# S: @text
+            do (*'"'->S.put;
+                betaenvObj[] -> S.append; 
+                '"'->S.put; *)
+               betaenvObj[] -> quote -> S.append; 
+               contCh -> S.put; '\n\t'->S.append;
+               S[] -> ldA.prepend;
+        #)if);
+
+        (* put the BETA_DATA-file into the link directive;
+         * it must appear before any shared libraries; 
+         * otherwise  problmes for sgi.
+         *)
+        TX.scan
+        (#
+        do (if thisElm.kind = BetaDataKind then
+               thisElm.T[] -> betaDataFile[];
+	       (if (common.targetMachineId = common.nti_ms) 
+                   or (common.targetMachineId = common.nti_gnu) 
+                   or (common.targetMachineId = common.nti) then
+                   BinExt -> thisElm.T.CopyAppend -> LinkObj
+	        else 
+                   BinExt -> thisElm.T.CopyAppend -> xLinkObj
+               if)
+        if)#);
+        
+        
+        (BetaRun[],userDefinedBetaRun)->addBetaRun;
+        
+        (* Put the OBJFILES into the link directive *)
+        TX.Scan
+        (#
+        do (if thisElm.kind = ObjKind then 
+               thisElm.T[] -> quote -> linkObj
+        if)#);
+        
+        <<SLOT asmlinkdynamic:descriptor>>; (* solaris hack*)
+        
+        (* Put the shared libs into the link directive *)
+        Libs.scan
+        (#
+        do (if hasSharedLibs then 
+               thisElm.T[]-> addSharedLibFile -> linkObj 
+           if)
+        #);
+        
+        (* Put the LIBFILES into the link directive *)
+        TX.scan
+        (#
+        do (if thisElm.kind = LibKind then 
+               thisElm.T[]-> quote -> linkObj
+        if)#); 
+        
+        (* Specify directories needed by LINKOPT libraries *)
+        <<SLOT AddLinkDirs: descriptor>>;
+        
+        (* Put the LINKOPT into the link directive: will this work for MAC? *)
+        TX.scan
+        (#
+        do (if thisElm.kind = LinkOptKind then 
+               thisElm.T[] -> linkObj (* NO quote here *)
+        if)#); 
+        
+        <<SLOT libraries: descriptor>>;
+        
+        (*lda[]->putline;*)
+        
+        << SLOT link: descriptor >>;
+        ldA[]->AFF.putText
+     #);
+   
+   hostMachineType: @text;
+   CWD,        (* current working directory *)
+   ldA: ^text; (* to collect arguments to ld or quarker *)
+   betaDataFile: ^text
+do &text[]->ldA[];
+   machine_typeexternal->hostMachineType;
+   '~beta/'->BetaLib[]; 
+   TargetMachine -> betarunVersion->BetaLib.copyAppend->betaRunLib[];
+   (BetaLib[],thePathhandler.currentDirectory)
+     ->thePathHandler.convertFilePath->BetaLib[];
+   
+   (if demoVersion then 
+       'betarun.demo'->betaRunLib.CopyAppend-> betarun[]
+    else
+       (if betarun.empty then
+           (# BR: @text
+           do 'betarun' -> BR;
+              (if true 
+               // common.switch[69] then 
+                  (* use personal edition version *)
+                  '_pe' -> BR.append
+               // common.switch[80] then
+                  (* Unconditional GC debug runtime system *)
+                  '_ugc' -> BR.append
+               // common.switch[13] then 
+                  (* use debug runtime system *)
+                  '_debug' -> BR.append
+               // common.switch[88] then 
+                  (* use full speed runtime system with symbolic debug info *)
+                  '_sym' -> BR.append
+               // common.switch[41] then 
+                  (* use valhalla betarun system *)
+                  '_v' -> BR.append
+              if);
+              (if common.switch[64] then 
+                  (* multi-tasking - independent of above options *)
+                  '_mt' -> BR.append 
+              if);
+              BR[]->betaRunLib.CopyAppend-> betarun[]
+           #)
+        else true->userDefinedBetaRun
+       if)
+   if);
+   (betarun[],thePathhandler.currentDirectory)
+     ->thePathHandler.convertFilePath->betarun[];
+   
+   (if fSwitch.empty then 'switch'-> fSwitch if);
+   
+   (* The job-file is placed in the code directory; make sure it exists *)
+   CreateCodeDirectory;
+   
+   (* create job-file *)
+   ((rootfragment[],thePathhandler.currentDirectory)
+     -> thePathHandler.convertFilePath
+   ,false)
+     -> insertSubDir(#do JobExt->path.append #)
+     -> AFF.name; 
+   AFF.openWrite;
+   
+   (* check or create the director for the executable *)
+   CreateObjDirectory;
+   
+   371->trace
+   (# full: ^text
+   do (rootfragment[],thePathhandler.currentDirectory)
+        -> thePathHandler.convertFilePath -> full[];
+      '\tFragment file   : '->xT; rootFragment[] -> xT;
+      '\n\tFull path       : '->xT; full[] -> xT;
+      '\n\tObject file     : '->xT; objName[] -> xT;
+      '\n\tCode directory  : '->xT; codeDirectory[] -> xT;
+      '\n\tObject file dir : '->xT; objDirectory[] -> xT;
+      '\n\tJob file        : '->xT; AFF.name ->xT; xN
+   #);
+   <<SLOT header: descriptor>>;
+
+   (if nolink then true->common.switch[6] if);
+   (if (not common.switch[6]) and (not ('nti' -> hostMachineType.equal)) then
+       (* remove old version of objFile*)   
+       (true,(asmlink.ExeExt->objName.CopyAppend))->remove
+   if);
+   
+   (* Assemble (some of) the Beta files *)
+   TX.Scan
+   (#
+   do (if ThisElm.assemble then thisElm.T[]->&Assembler  if);
+   #);
+   
+   (* Put possible build commands into the job-file *)
+   build.scan
+   (# 
+   do (if thisElm.directory[] <>  NONE then
+          (if CWD[] = NONE then
+              thePathHandler.currentDirectory -> CWD[];
+          if);
+          thisElm.directory[] -> ChangeDirectory;
+      if);
+      (if verboseLevel < verboseLevel.nothing then
+          echo; thisElm.command[] -> quote -> AFF.putLine;
+      if);
+      thisElm.command[] -> AddCommand
+   #);
+   (if CWD[] <> NONE then CWD[] -> ChangeDirectory if);
+   
+   (* Put the make and resource files into the job file *)
+   TX.scan
+   (# notFirst: @boolean
+   do (if thisElm.kind 
+       // MakeKind then
+          (NOT notFirst,thisElm.T) -> make; true->notFirst    
+       //ResourceKind then
+          (if (not common.switch[6]) or ('nti' -> hostMachineType.equal) then
+              (* if not link then not resource (except on Windows NT) *)
+          (if verboseLevel<verboseLevel.nothing then
+              echo; 'Resource '->AFF.puttext; thisElm.T[] -> AFF.putLine;
+          if);
+          (NOT notFirst,thisElm.T) -> resource; true->notFirst    
+      if);
+      if);
+   #);
+   (if hasSharedLibs then LinkLibraries if);
+
+   (if not common.switch[6] then
+       (if verboseLevel <= verboseLevel.actions then
+           (if common.targetMachineId<>common.ppcmac then
+               (* ppcmac jobfile prints another message *)
+               (if HasSharedLibs then
+                   echo;
+                   'Linking using shared BETA libraries!\n'->AFF.putText
+                else
+                   echo;
+                   'Linking\n'->AFF.puttext; 
+               if)
+           if)
+       if);
+       Linker;
+       
+       <<SLOT linkTrailer:descriptor >>;
+   if);
+   <<SLOT trailer:descriptor >>;
+   
+   (if (not common.switch[18]) (* preserve *)
+       and (not common.switch[23]) (* preserve job file *)
+       and (betaDataFile[] <> NONE) then
+       (true,objFileExtension -> (betadataFile.copy).append) -> Remove;
+       (true,dbFileExtension -> (betadataFile.copy).append) -> Remove;
+   if);
+   AFF.close;
+
+   <<SLOT jobFilePermission:descriptor>>;
+   
+   L:
+   (if (not common.switch[33]) (* -j/--nojob *) then
+       (AFF[],common[],infoStream[],messageStream[],
+       hostMachineType[], TargetMachine, jobfilemachine[],
+       interactiveCompiler)
+         -> thisTranslate.JobFileRunner
+   if);
+#)

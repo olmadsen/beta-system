@@ -1,0 +1,226 @@
+ORIGIN 'evlib';
+INCLUDE '~beta/sysutils/objinterface';
+LIB_ITEM 'betacodegen';
+---EvalLib:attributes---
+toReg:
+  (# A: ^mch.address; aR: ^mch.AdrRegOperand
+  enter(A[],aR[])
+  do (if A.access 
+      // common.cstInd // common.varInd then
+         0 -> A.addOff -> A[]
+     if);
+     (A[],aR[]) -> mch.gLea
+  exit A[]
+  #);
+checkReg: booleanValue
+  (# rA1,rA2: @mch.adrRegOperand
+  enter(rA1,rA2)
+  do 301->cTrace
+     (#
+     do 'checkReg:'->xT; rA1.display->xT;
+        rA2.display -> xT
+     #);
+     (if (rA1 <> rA2) and (rA1 <> mch.thisO) then
+         true -> value
+     if);                             
+  #);
+
+AddressTmpHandler:
+  (* For temporarily storing the address register of
+   * and address in a tmp-location.
+   * A -> save will store for A;
+   * A new register for A is allocated by restore;
+   *)
+  (# A,Acopy: ^mch.address;
+     tmpInx: @integer;
+     tmpAdr: ^mch.address;
+     aR: @mch.adrRegOperand;
+     BR: ^mch.RegAdr;
+     BI: ^mch.InxRegAdr;
+     isFrozen: @boolean;
+     save:
+       (#
+       enter A[]
+       do A.theReg->aR;
+          (if (aR <> mch.thisO) and (not A.noTmp) then
+              NXA.alloc 
+                -> tmpInx 
+                -> NXA.tmpAdr 
+                -> gen.ThisRegAdr 
+                -> tmpAdr[];
+              (aR[],tmpAdr[]) -> mch.stVal;
+              (if aR <> mch.callO then
+                  (if A.frozenReg -> isFrozen then
+                      false -> A.frozenReg
+              if)if);
+              A[] -> Acopy[];
+              (if A.deAllocated then
+                  '\n*** TmpHandler:A is deAllocated:'->puttext;
+                  A.display->putline;
+              if);
+              (* for some unknown reason, tstsimplenx gives
+               * an additional overflow if A.freeAdr is used
+               * instead of aR.deAlloc; the above test on deAllocated
+               * does not reveal any symptons
+               *)
+              (* A.freeAdr; *) aR.deAlloc;
+              (if stest then
+                  301->ctrace(#do 'aTmpHandler:save: '->xH;
+                                'A='->xT;
+                                A.display->xT;
+                                mch.dumpReg
+          #)if)if)
+       #);
+     reSave:
+       (#
+       do (if tmpInx > 0 then
+              (if stest then
+                  301->ctrace(#do 'aTmpHandler:reSave: '->xH;
+              #)if);
+              A.copy -> Acopy[]; (* for the next time *)
+              A.theReg -> aR; aR.deAlloc
+          if)
+       #);
+     restore:
+       (#
+       do (if tmpInx > 0 then
+              (if stest then
+                  301->ctrace(#do 'aTmpHandler:restore:A tmpInx='->xT;
+                                tmpInx -> xI; xN;
+                                'tmpAdr= '->xT; tmpAdr.display->xT; xN;
+                                mch.dumpReg
+              #)if);
+
+              aR.alloc;
+              (tmpAdr[],aR[]) -> mch.ldVal;
+              (if Acopy##
+               // mch.RegAdr## then 
+                  Acopy[] -> BR[];
+                  aR -> BR.reg
+               // mch.InxRegAdr## then
+                  Acopy[] -> BI[];
+                  aR -> BI.aReg
+              if);
+              false ->  Acopy.deAllocated;
+              Acopy[] -> A[];
+              
+              isFrozen -> A.frozenReg;
+              (*(if isFrozen then true -> A.frozenReg if);*)
+              (if stest then
+                  301->ctrace(#do 'aTmpHandler:restore:B'->xH;
+                                'A='->xT; A.display -> xT;
+                                mch.dumpReg
+              #)if)
+          if);
+       #);
+     deAlloc: 
+       (#   
+       do (if tmpInx > 0 then 
+              (if stest then
+                  301->ctrace(#do 'aTmpHandler:deAlloc:A tmpInx='->xT;
+                                tmpInx -> xI; xN;
+                                'tmpAdr= '->xT; tmpAdr.display->xT; xN;
+                                mch.dumpReg
+                             #);
+                  tmpInx -> NXA.deAlloc;
+                  0 -> tmpInx
+          if)if);
+       #)
+  #);
+
+asgToN:
+  (# nextEnterEval: @
+       (#
+       do nScanN 
+       #);
+     dump: cTrace
+       (#
+       do INNER;
+          'rDesc='->xT; rDesc[]->xA; xN;
+          'rA='->xT; rA.display->xT; xN;
+          (if rObjAdr[] <> none then
+              'rObjAdr='->xT; rObjAdr.display->xT
+          if);
+          mch.dumpreg
+       #);
+     doNotRelease: @boolean;
+     newRA: @mch.RegAdr;
+     rObjAdr: ^mch.RegAdr;
+     inCallReg: @boolean;
+       
+     (* enter arguments *)
+     rDesc: ^ASTindex; 
+     rA: ^mch.Address; 
+     rChain: ^DH.SuperChain;
+     nScanN: ^ | scanNadr;
+     lIsSimple: @boolean; (* the left-side evaluation is simple:
+                           * no object allocation/execution needed and
+                           *  callReg will not be used in the evaluation
+                           *)
+  enter(rDesc[],rA[],rChain[],nScanN[],lIsSimple)
+  do (# aR: @mch.adrRegOperand;
+     do 301->dump(#do 'asgToN:'->xH #);
+        (if not rA.isRegAdr then
+            (* can we have a frozen areg in LA, 
+               * which is not released by toTmp?
+             *)
+            (*(rA[], 'inx2regAdr:') -> check;*)
+            rA.toTmp -> rA[] 
+        if);
+        rA.bAdr.localDesc[] -> newRA.bAdr.localDesc[]; 
+        (if rA.regType = -1 (* indirect *) then rA.toTmp -> rA[] if);
+        (if rA.regType
+         // mch.callO then
+            301->ctrace(#do 'asgToN:call:'->xT #);
+            (if not lIsSimple or (rDesc[] -> sematt.hasNcode) then
+                (* rA uses callReg; rA -> tmpReg *)
+                aR.alloc;
+                (rA[],aR[]) -> toReg -> rA[];
+                aR -> newRA.reg; 
+                0 -> newRA.off;
+                newRA[] -> rObjAdr[];
+                mch.decrCallreg; 
+             else
+                rA[] -> rObjAdr[]; true -> doNotRelease -> inCallReg
+            if)
+         // mch.thisO then
+            301->ctrace(#do 'asgToN:this:'->xT #);
+            rA[] -> rObjAdr[]
+         else
+            301->ctrace(#do 'asgToN:this/tmp: rA.frozen='->xT;
+                              rA.frozenReg -> xB
+                       #);
+            rA[] -> rObjAdr[];
+            (if rA.frozenReg then true -> doNotRelease if)
+        if);
+        
+        (if not doNotRelease then rObjAdr.freezeReg if);
+        301->dump
+        (#do 'asgToN/before_inner:' -> xH; 
+           'rObjAdr='->xT; rObjAdr.display->xT 
+        #);
+        
+        INNER asgToN;
+        
+        301->dump(#do 'asgToN:after_inner:'->xH #);
+        (if not inCallReg then
+            (if mch.callRegBusy then 
+                '\n***AsgToN:callReg is busy!' -> putline
+            if);
+            
+            (* the following should be made more elegantly *)
+            (if rObjAdr.theReg
+             // mch.thisO // mch.callO then
+             else
+                doNotRelease -> rObjAdr.frozenReg
+            if);            
+            rObjAdr.toCallReg -> rObjAdr[];
+            mch.GetCallReg;
+        if);
+        301->dump(#do 'asgToN:end:'->xH #);
+     #)
+  exit rObjAdr[] (* new rA of the object;
+                  * we have now completed transfer of enter to the object;
+                  * the object may later be executed
+                  *)
+  #);

@@ -1,0 +1,170 @@
+ORIGIN 'REALmachine';
+LIB_ITEM 'betacodegen';
+BODY 'machinebody';
+INCLUDE 'image'
+---machineatt:attributes---
+
+(* Number of marktypes used - see image.bet for constants *)
+markMax: (#exit 18 #);
+
+CASEstartType: (#exit 19#);
+
+RiscImage: Image
+  (# EntryPointElement::< EntryPoints.ElementType;
+     
+     IPinc: @integer; (* For code(B) IPinc=4, data(D)=0. It is used
+                       * to update the global machine.IP which is the
+                       * byte offset for .db-files
+                       *)
+     lastmark: @integer;
+     emit: @
+       (# instr,top: @integer
+       enter instr
+       do (* LIP = [0,4,8,...], top = [1,2,3,...] *)
+          (if ((LIP div 4) + 1 ->top) > buffer.range then
+              buffer.range->buffer.extend; (*'+'->screen.put*)
+          if);
+          instr->buffer[top];
+          LIP + 4 -> LIP; IP + IPinc -> IP;
+       #);
+     (* emitHalf and emitByte are NOT used for emitting code(B)*)
+     emitHalf: @
+       (* must be called in pairs or terminated by at least 4->align *)
+       (# val,top: @integer
+       enter val
+       do (* LIP=0, val -> buffer[1]:half[0];
+           * LIP=2, val -> buffer[1]:half[2];
+           * LIP=4, val -> buffer[2]:half[0];
+           * LIP=6, val -> buffer[2]:half[2];
+           * ...
+           * LIP=n  val -> buffer[(n div 4)+1]:half[n mod 4]
+           *)
+          (if ((LIP div 4) + 1 -> top) > buffer.range then 
+              buffer.range->buffer.extend; (*'+'->screen.put*)
+          if);
+          val %putShortAt (@@buffer[top] + (LIP mod 4));
+          LIP+2->LIP;
+       #);
+     emitByte: @ 
+       (* a sequence of emitByte  should always be 
+        * terminated by at least 4->align
+        *)
+       (# val,top: @integer
+       enter val
+       do (* LIP=0, val -> buffer[1]:byte[0];
+           * LIP=1, val -> buffer[1]:byte[1];
+           * LIP=2, val -> buffer[1]:byte[2];
+           * LIP=3, val -> buffer[1]:byte[3];
+           * LIP=4, val -> buffer[2]:byte[0];
+           * LIP=5, val -> buffer[2]:byte[1];
+           * LIP=6, val -> buffer[2]:byte[2];
+           * LIP=7, val -> buffer[2]:byte[3];
+           * LIP=n, val -> buffer[(n div 4) +1]:byte[n mod 4]
+           *)
+          (if ((LIP div 4) + 1 ->top) > buffer.range then
+              buffer.range->buffer.extend ; (*'+'->screen.put*)
+          if);
+          val %putByteAt (@@buffer[top] + LIP mod 4);
+          LIP+1->LIP;
+       #);
+     align:
+       (# v: @integer
+       enter v
+       do (if v
+           // 4 then (LIP+3) %band %bnot 3 -> LIP
+           // 8 then
+              (* note top = [1,2,3,...] i.e. starting from 1, NOT 0 *)
+              (LIP+7) %band %bnot 7 -> LIP
+           else
+              '\n****** align NOT 4 or 8 '->putLine
+          if)
+       #);
+     emitSymbols:
+       (# 
+       do '\n! Entry-points:'->BC.putx; BC.putNL;
+          entryPoints.scan
+          (#
+          do '! '->BC.putX; current.t[]->BC.putX;
+             (if current.data then ' DATA'->BC.putX if);
+             (if current.local then
+                 ' LOCAL('->BC.putX;
+                 (*current.LIP->BC.putI; ')'->BC.putC;
+                  ' CALLS:'->BC.putX;
+                  (for i: current.top repeat
+                  current.calls[i]->BC.putI; ' '->BC.putC
+                  for);*)
+              else ' EXTERNAL ' ->BC.putX
+             if);
+             BC.putNL
+          #)
+       #)
+
+  do INNER
+  #);
+
+---RegRep:descriptor---
+(* clearA is used to keep track of whether or not a clear instruction
+ * should be generated for %i3 and %i4 in delay slots of CALL;
+ * these registers should be cleared in order NOT to confuse GC;
+ * clearA is used in getaAdrm freeAdr and doCall
+ *)
+(# aReg,dReg: [8] @ Integer; clearA: [8] @boolean;
+   dMax: @integer; fMax: @integer
+#)
+---DumpReg:descriptor--
+(# dmp:
+     (# R: @char; i,V: @integer;
+     enter(R,i,V)
+     do R->T.put; i-1->T.putInt; ':'->T.put; V->T.putInt
+     #);
+   T: @text
+do common.tracestream.newline;
+   (for i:rep.aReg.range repeat ('a',i,rep.aReg[i])->dmp for);
+   (for i:rep.dReg.range repeat ('d',i,rep.dReg[i])->dmp for);
+   T[]->common.tracestream.putText; (*T->comment;*) common.tracestream.newline
+#)
+---putD:descriptor--
+(##)
+---putA:descriptor--
+(##)
+---imm:descriptor--
+(##)
+--newCtextOp:descriptor--
+(# S: @text 
+do (if common.targetMachineId//common.sun4 then
+       '_'->S.put; T[]->S.puttext; S[]->op
+    else (* sun4s assumed; no '_' in C-entry-points *)
+       T[]->S.puttext; S[]->op  
+   if)
+#)
+---targetEntryPointInfo:descriptor--
+(# lastLIP,         (* offset+4 of last instruction *)
+   symtabInx,       (* symtab index *)
+   strInx: @integer;  (* index into string table *)
+   TOCentry: @integer;(* PPCMAC specific *)
+   csect: ^text; (* For TOCentry = CASEstartType;
+                  * The symbol is defined relative to csect;
+                  * Ex.
+                  * csect = M17FOO,
+                  * at adr. LIP, a case-label-start is defined
+                  *)
+do (if TOCentry
+    // TOCstart then '-TOCanchor'->common.traceStream.puttext 
+    // TOCmarkDS then '-TOCmarkDS'->common.traceStream.puttext 
+    // TOCmarkRW then '-TOCmarkRW'->common.traceStream.puttext 
+    // TOCmarkTC then '-TOCmarkTC'->common.traceStream.puttext 
+    // CASEstartType then '-CASEstart'->common.traceStream.puttext
+   if);
+   
+   ' LIP='->common.traceStream.puttext; LIP->common.traceStream.putint;
+   ' lastLIP='->common.traceStream.puttext; lastLIP->common.traceStream.putint;
+#)
+
+--DataRegOpRegF: dopart--
+do (* regF not used in SUN4Bmachine *)
+--AdrRegOpRegF: dopart--
+do (* regF not used in SUN4Bmachine *)
+--isObjectReg:descriptor--
+(##)
+--FloatRegOpRegF: dopart--
+do (* regF not used in SUN4Bmachine *)

@@ -1,0 +1,153 @@
+ORIGIN 'BetaRun';
+
+--MachineAtt: attributes--
+
+NewR: AlloRep
+  (#
+     regObj, regOff, regRange, regSize: @adrRegOperand;
+     savedOff: @dataregoperand;
+     dr: @dataRegOperand;
+  do (* initialize *)
+     O0 -> regObj;
+     O1 -> regOff;
+     O2 -> regRange;
+     O3 -> regSize;
+     savedOff.alloc;
+     ;
+     (regOff, savedOff) -> MOV -> emit;
+     ;
+     (* FIXME: Check for allocation in LVRA *)
+     ;
+     (* Adjust range according to type. MUST match garbage collector's 
+      * way of determining object sizes 
+      * (see betarun/C/macro.h and betarun/GC/objectsize.c) 
+      *)
+     (if scale
+      // 0 (* byte rep *) then
+         (regRange,4,regSize) -> ADD_I -> emit;
+         (regSize,2,regSize)  -> SRL_I ->emit;
+         (regSize,2,regSize)  -> SLL_I ->emit;
+      // 1 (* short rep *) then
+         (regRange,1,regSize) -> SLL_I -> emit;
+         (regSize,3,regSize)  -> ADD_I ->emit;
+         (regSize,2,regSize)  -> SRL_I ->emit;
+         (regSize,2,regSize)  -> SLL_I ->emit;
+      // 2 (* long/ref rep *) then 
+         (regRange,2,regSize) -> SLL_I -> emit;
+      // 3 (* double rep *) then
+         (regRange,3,regSize) -> SLL_I -> emit;
+      else 
+         'NewR: Illegal Scale' -> putline;
+     if);
+     ;
+     (regObj, 'NewR', 'regObj before') -> EmitCk;
+     ;
+     (* add header size and align *)
+     (regSize,16,regSize)->ADD_I->emit;
+     regSize[] -> EmitAlign8;
+     ;
+     (regNewObj, regSize, false, 'call_psusp_doGC',true(* save regObj in GC *))
+       ->GenIOAAlloc;
+     ;
+     dr.alloc;
+     (repKind->newCstOp,dr[])->ldCst;
+     (regNewObj,0,dr.reg1)->ST_I->emit (* proto *) ;
+     (if common.IOAMinAge<>0 then
+         (common.IOAMinAge->newCstOp,dr[])->ldCst;
+         (regNewObj,4,dr.reg1)->ST_I->emit (* gc *) ;
+     if);
+     (1->newCstOp,dr[])->ldCst;
+     (regNewObj,8,dr.reg1)->ST_I->emit (* low *) ;
+     (regNewObj,12,regRange)->ST_I->emit (* high *) ;
+     dr.dealloc;
+     (savedOff,2,savedOff)->SLL_I->emit;
+     (regObj,savedOff,regNewObj,false)->AssignRef (* store rep in object *) ;
+     ;
+     (regObj, 'NewR', 'regObj after') -> EmitCk;
+     (regNewObj, 'NewR', 'regNewObj') -> EmitCk;
+     ;
+     O7 -> AssertRegisterNotZero;
+     RETL->emit;
+     xNOP->emit;
+     savedOff.dealloc;
+  #);
+AlloRep: 
+  (* Parameters: 
+   * %o0: obj
+   * %o1: off
+   * %o2: range 
+   *)
+  (# lab: ^text; (* name of routine *)
+     scale: @integer; (* log 2 scale factor for off *)
+     repKind: @integer; (* proto *)
+  enter (lab[],scale,repKind)
+  do
+     lab[]->ExtLabel;
+     (*'Num'->(lab.copy).prepend->IncVar;*)
+     INNER
+  #);
+AlloR: AlloRep 
+  (* parameters:
+   * %o0: off
+   * %o1: range
+   *)
+  (# newLab: ^text
+  enter newLab[]
+  do (* parameters(off,range) -> (this,off/4,range) *)
+     (O1,O2)->MOV->emit;
+     (O0,2,O1)->SRL_I->emit;
+     (thisO,O0)->MOV->emit;
+     newLab->jmpT;
+     
+  #);
+AlloVRIC:
+  (# 
+  do
+     (* 'AlloVRI'->ExtLabel;
+      * NumAlloVRI->IncNum; 
+      * O7 -> AssertRegisterNotZero;
+      * RETL->emit;
+      * xNOP->emit;
+      * ;
+      * 'AlloVRC'->ExtLabel;
+      * NumAlloVRC->IncNum; 
+      * O7 -> AssertRegisterNotZero;
+      * RETL->emit;
+      * xNOP->emit;
+      *)     
+  #);
+
+NewVRIC:
+  (# 
+  do
+     (* 'NewVRI'->ExtLabel;
+      * NumNewVRI->IncNum; 
+      * O7 -> AssertRegisterNotZero;
+      * RETL->emit;
+      * xNOP->emit;
+      * ;
+      * 'NewVRC'->ExtLabel;
+      * NumNewVRC->IncNum; 
+      * O7 -> AssertRegisterNotZero;
+      * RETL->emit;
+      * xNOP->emit;
+      *)
+     
+  #);
+
+--BetaRunGenAlloRep: descriptor--
+(# 
+do ('NewVR1',0,common.ByteRepPTvalue)->NewR;
+   ('NewVR2',1,common.ShortRepPTvalue)->NewR;
+   ('NewVR4',2,common.LongRepPTvalue)->NewR;
+   ('NewVR8',3,common.DoubleRepPTvalue)->NewR;
+   ('NewRR',2,common.RefRepPTvalue)->NewR;
+   ('AlloVR1',0,common.ByteRepPTvalue,'NewVR1')->AlloR;
+   ('AlloVR2',1,common.ShortRepPTvalue,'NewVR2')->AlloR;
+   ('AlloVR4',2,common.LongRepPTvalue,'NewVR4')->AlloR;
+   ('AlloVR8',3,common.DoubleRepPTvalue,'NewVR8')->AlloR;
+   ('AlloRR',2,common.RefRepPTvalue,'NewRR')->AlloR;
+   (* AlloVRIC;
+    * NewVRIC;
+    *)
+#)

@@ -1,0 +1,350 @@
+ORIGIN 'synthesizer';
+LIB_ITEM 'betacodegen';
+INCLUDE '../CHECKER/nxalloc';
+INCLUDE '../GENERATOR/machine';
+---synthesizerMain:descriptor---
+(# <<SLOT SynthesizerBodyLib:attributes>>;
+   
+   gen: @ <<slot generator: descriptor>>;
+   
+   Key: @ 
+     (# S:(#exit 0#); L:(#exit 1#); M:(#exit 2#); R:(#exit 3#);
+        single: (#exit 4#); exitt:(#exit 5#);
+        enterr: (#exit 6#); trans: (#exit 7#);
+        exitTail: (#exit 8#) 
+     #);
+   
+   NXA: @sematt.nxalloc;
+   
+   offCount: @ integer; 
+   (* Initially the start address of storage *)
+   (* for insertions, for-if- and label-imps  *)
+   (* Is updated during recursive scans of *)
+   (* for-if- and label-imps.   *)
+
+   doPartFormWithAttributes: @boolean;
+   (* true if doPart form being translated has attributes form e.g. for-imp *)
+   
+   
+   
+   DH: @semAtt.BindVirtual
+     (* (thisDesc,ES)->DH.ActualDesc->(desc,MN)*)
+     (# GetDclAndDesc::<
+          (# node: @ASTindex; 
+          do N->node;
+             L: (if node.label
+                 // gram.nameApl then (* OK *)
+                 // gram.remote then
+                    node.son -> node; node.brother -> node
+                 // gram.indexed then node.son -> node; restart L
+                 // gram.thisObject then node.son->node
+                 // gram.computedRemote then
+                    (*306->trace(#do 'GetDclAndDesc:compRem:'->T;
+                     N[]->A
+                     #);*)
+                    node.son->node; node.brother->node
+                 else 'OOPS: GetDcl.. N is not <AttDen>'->bugstream.putline
+                if);
+             node.dclRef->dclRef;
+             node.DescRef->descRef
+          #);
+        VirtualError::<
+          (# S: @ text
+          do 'Unknown virtual error in synthesizer:'-> S.puttext;
+             no->S.putint; ' '->S.put;
+             (T[],S[],50)->thePP;
+             S[] -> thisTranslate.SystemException
+          #);
+             (* empty CheckVirtualBinding::<(# #); *)
+        QuaDist::<
+          (# sub,super,pref: @ASTindex; 
+          do aDesc->sub; vDesc->super;
+             (*167->trace(#do sub[]->A; super[]->A #);*)
+             L: (if (sub->super.equal)  then (* finito *)
+                 else
+                    sub.son -> pref;
+                    (if pref.label
+                     // gram.prefix then
+                        pref.son->&SemAtt.descrip-> sub;
+                        (if sub.label
+                         // gram.virtualDecl // gram.bindingDecl then 
+                            (* to handle V ::< (# ... #)   *)
+                            sub.son->sub;
+                            sub.brother->&semAtt.descrip-> sub
+                        if);
+                        PD +1 -> PD; restart L
+                     // gram.empty then (* should not happen *)
+                if)if);
+          #);
+        GetTheDesc::<
+          (# dclRef: @ASTindex
+          do (*iD->&GetDesc->oD *)
+             (if iD.label 
+              // gram.objectDescriptor then iD->oD
+              // gram.unExpanded then iD->oD (* ??? *)
+              else iD[]->GetDclAndDesc->(dclRef,oD)
+          if)#);
+        ChkCompEval::<
+          (#
+          do (*175->trace(#do 'ActualDesc:chkCompEV'->T #);*)
+             (EV[],DH[],chain[])
+               ->sematt.ChkComputedEval
+             (# error::<(#do (EV[],no)->VirtualError#)#)
+               ->(remEv[],N[],ref[],refDesc[],chain[])
+          #)
+        
+     #);
+   GetActualDesc:
+     (# thisDesc,ES: ^ASTindex; desc: @ASTindex;
+        descKind,MN: @integer
+     enter(thisDesc[],ES[])
+     do ES->semAtt.descrip-> desc;
+        (if (desc.label->descKind)
+         // gram.virtualDecl//gram.bindingDecl
+         // gram.unExpanded
+         // gram.variablePattern then
+            (thisDesc,ES)->DH.actualDesc->(desc,MN)
+        if)
+     exit(desc,descKind)
+     #);
+   theRealDesc,thisDesc,thisPrefDesc: @ ASTindex; 
+   pref,mainP,att,acp,enp,wip,doP,exp: ^ ASTindex;
+   thisForm: ^Text; 
+   (* thisDescId=(thisForm,thisDescNo).
+    * If thisDesc is defined local to a DescriptorForm,
+    * then thisForm is the localname of the form.
+    * If thisDesc is defined in an AttributesForm,
+    * then thisForm is theGroupName (file-name) of the form.
+    *)
+   ThisDescNo,ThisDescOrgOff,attSize: @ integer;
+   (* ThisForm,thisDescNo, etc. are defined by initgen in gdBody
+    * and used at several places. For SpecialInitCall they
+    * are also defined below before calling SpecialInitCall.
+    *)
+   ThisSuperChain: @
+     (# chain: ^DH.SuperChain
+     do thisDesc->DH.newSingle->chain[] 
+     exit chain[]
+     #);
+   singular: @boolean; 
+   nameId: ^Text;
+   theGen: @ 
+     (# GS: @ <<SLOT GS:descriptor>>;
+        <<SLOT theGenLib:attributes>>;
+        (*dataByValueByteSize: @integer;  * total byte size of call-by-value
+                                         * data/struct parameters transferred
+                                         * to a COM virtual
+                                         *)
+        Holders: @repList;      
+        RepList:
+          (* List keeping track of repetitions in the 
+           * enter part of COM objects *)
+          (# L: [1] ^ASTindex; Top: @integer;
+             insert:
+               (# e: ^ASTindex
+               enter E[]
+               do (if (top+1 -> top) > L.range then L.range -> L.extend if);
+                  e[] -> L[top][]
+               #);
+             has: booleanValue
+               (# e: ^ASTindex
+               enter e[]
+               do (for i: top repeat 
+                       (if e -> L[i].equal then
+                           true -> value;
+                           leave has
+                  if)for)
+               #);
+          #);
+
+        enterP,exitP: ^ ASTindex;
+        hasPref,asItem,asProc,asComp,asCproc: @ boolean;
+        prefDesc: @ASTindex; prefDescNo: @integer; 
+        PrefFormId: ^text; (* defined by prefixalloc *)
+        externalEntryLab: ^text;
+        (* if NOT NONE, then thisDesc is used as an 
+         * external call-back routine.
+         * externalEntryLab is defined by genCproc.
+         *)
+        
+        returnSaved: @boolean;
+        
+        SpecialInitCall: <<SLOT SpecialInitCall:descriptor>>;
+        GenDesc: 
+          (******* code generation for a descriptor ********)
+          (#
+          enter(thisDesc,singular,nameId[])
+          do <<SLOT genDescBody: descriptor>>;
+          #);
+        GenDoPart:
+          (#
+          enter(thisDesc,singular,nameId[])
+          do <<SLOT GenDoPart:descriptor>>
+          #);
+        GenMainPart:
+          (#
+          enter(thisDesc,singular,nameId[])
+          do <<SLOT GenMainPart:descriptor>>
+          #);
+        regCont: @
+          (# <<SLOT registerContents:attributes>>;
+             rep: @ <<SLOT registerContentsRep:descriptor>>
+          #);
+     #);
+   mkDataSeg: <<SLOT mkDataSeg:descriptor>>;
+   
+   thisFormName: ^ text;
+   theFormDesc,formDesc: ^ASTindex;
+   (* formDesc = (descriptorForm <descriptor> )
+    *          | (attributesForm <pattern-attributes> )
+    *)
+   notFirst: @boolean (* hack *)
+enter(thisFormName[],theFormDesc[]->formDesc[])
+do (*309->trace(#do 'Translating:'->T;thisFormName[]->T;formDesc[]->A#);*)
+
+   (thisFormName[],theFormDesc.label)->mch.newFragment;
+   (if theFormDesc.label
+    // gram.descriptorForm then
+       theFormDesc.son->formDesc;
+       formDesc.descId->(thisForm[],thisDescNo);
+       (if (thisDescNo>1) then theGen.SpecialInitCall if);
+       (formDesc,True,'-'->(thisFormName.copy).Append) -> &theGen.GenDesc;
+    // gram.attributesForm then
+       true->hasAttributesForm;
+       theFormDesc.son 
+         -> ScanList
+       (# dcl,son,N: @ASTindex
+       do currentNode -> dcl; (* dcl = (ptn <name> <desc>) *)
+          (if not dcl.isSlot then
+              (* the checker accepts attributes-slots here, 
+               * perhaps it works*)
+              dcl.son->son->sematt.singleName->N; 
+              (son.brother,0,0,N) -> DS.Push
+          if)
+       #);
+    // gram.doPart then 
+       (theFormDesc,True,'-'->(thisFormName.copy).Append)
+         ->&theGen.GenDoPart
+    // gram.mainPart then
+       (theFormDesc,True,'-'->(thisFormName.copy).Append)
+         ->&theGen.GenMainPart
+    else 'Synthesizer called with illegal AST'->bugstream.putLine
+   if);
+   (# D,DI: ^ASTindex; K,C: @integer
+   do 
+      loop:
+        (# thisDescNo: @integer; thisForm,descId: ^Text
+        do DS.pop -> (D[],K,C,DI[]);
+           (if D[] <> NONE then (* skip *)
+               (if (D->sematt.DescKind)
+                // sematt.standardKind // sematt.constKind then
+                else 
+                   (if (D.descId->(thisForm[],thisDescno)
+                         ->descSet.notTranslated) then
+                       (if DI.isNull then none->descId[]
+                        else DI.getText->descID[]
+                       if);
+                       (D,(K<>0),descId[]) -> &theGen.genDesc; 
+                   if)
+               if);
+               restart loop
+   if)#)#)
+#) (* end main. Must be a static item! *)
+---synthesizerBody:dopart---
+do (***** Initialize mch *****)
+   common.switch[14] -> mch.switch14;
+   common.switch[24] -> mch.switch24;
+   ((theGroup.FullName,'~beta') -> thePathHandler.localPath
+   ,common[]
+   ,BCname[]
+   ,(this(AstInterface)[],theGroup[])->getGroupIDProperty
+   ) -> mch.init;
+   (theGroup.origin=NONE) -> mch.initDataSeg;
+   
+   (if not BCerror then
+       DS.init; 
+
+       theGroup.Name -> theGroupName[];
+       (* should give local name; but gives the fullName?? *)
+       thePathhandler.directoryChar -> theGroupName.findAll(#do inx->pos#);
+       (pos+1,theGroupName.length) -> theGroupName.sub -> theGroupName[];
+       
+       theGroup.FragmentList.scan
+       (# 
+       do (if current.Type = formType then noOfForms+1->noOfForms if)
+       #);
+       noOfForms+1 -> formNames.new;
+       noOfForms+1 -> formDescs.new;
+       noOfForms+1 -> localMap.new;
+       (*302->trace
+        (#do '\nGroup: '->T; theGroupName[]->T; newline;#);*)
+       1 -> noOfForms;
+
+       theGroupName.copy -> formNames[1][]; formNames[1].makeUC;
+       theGroup.FragmentList.scan
+       (# F: ^FragmentForm; T1: ^text
+       do (if current.Type = formType then
+              noOfForms + 1 -> noOfForms;
+              (* 'Form: '->output.puttext; *)
+              current.Open -> F[];
+              (if F.name = none then 'F.name is none'->tracestream.putline if);
+
+              F.name -> T1[];
+              T1.copy -> formNames[noOfForms][];
+              &ASTindex[] -> formDescs[noOfForms][];
+              F.theGSform -> formDescs[noOfForms];
+              formNames[noOfForms].makeUC;
+              (formNames[noOfForms][],noOfForms) -> formSet.add;  
+
+              (if F.category
+               // gram.attributesForm
+               // gram.attributes
+               // gram.attributeDecl then
+                  (*'\nHas attributes\n'->tracestream.puttext;*)
+                  true->hasAttributes
+               else
+                  noOfForms->localMap[noOfForms]
+          if)if);
+       #);
+       (if hasAttributes then
+           (* the group has at least one attributes form, and the  group
+            * name may be part of entry-point names
+            *)
+           (formNames[1][],1) -> formSet.add; 1 -> localMap[1]
+       if);
+       (for inx: noOfForms repeat 
+            (if (inx>1) then
+                (if verboseLevel < verboseLevel.actions then                
+                    '\n   Form:' -> infostream.puttext;
+                    formNames[inx][] -> infostream.puttext
+                if);
+                false->desc2Alias;
+                inx-1->theFormIndex;
+                (formNames[inx][],formDescs[inx][]) -> main
+       if)for);
+       (if verboseLevel < verboseLevel.actions then
+           '\n   Make data segment'->infostream.putText
+       if);
+       (* 305->trace
+        (#
+        do ' Formset: '->tracestream.putline;
+        formSet.statistics;
+        'DescSet:'->tracestream.putline;
+        descSet.statistics
+        #);*)
+       main.mkDataSeg
+   if);
+   (if verboseLevel < verboseLevel.actions then
+       '\n   Fragment group done!' -> infostream.puttext
+   if);
+   none->theGroupName[]; none->protoHead[];
+   main.theGen.GS; (* clears thisPT - ugly *)
+   (for inx: noOfForms repeat 
+        none->formNames[inx][]; none->formDescs[inx][] 
+   for);
+   (for i: protoindextable.range repeat none ->protoIndexTable[i][] for);
+   descSet.clear;
+   formset.clear;
+   mch.GetImages -> (data[],codeIm[]);
+   
+

@@ -1,0 +1,157 @@
+ORIGIN 'auxlib';
+LIB_ITEM 'betacodegen';
+---asgToNewRep:doPart---
+do (rA[],false,isValueRep,true,size) -> gen.newRep
+   (# genRange::
+        (#
+        do 3 -> (theRange -> mch.newCstOp).toPrimDest 
+        #)
+   #);
+   aR.alloc; 
+   aR -> rAelm.reg; size -> rAelm.size; rAelm.freezeReg;
+   (rA[],aR[]) -> mch.ldVal;
+   (if rA[] -> gen.useTmpReg then 
+       rA.theReg -> RR; 
+       (rA[],RR[]) -> mch.gLea;
+       RR[] -> mch.push; true -> restore_rA;
+       RR.deAlloc 
+   if);
+   (* Generate elements in INNER;
+    * NextElmAdr gives address of next element
+    *)
+   INNER; 
+   (if restore_rA then
+       (# AA: @mch.RegAdr
+       do AA.reg.alloc;
+          AA.reg[] -> mch.pop;
+          AA[] -> rA[]
+       #)
+   if);
+   (aR[],rA[]) -> mch.stVal; (* someone might have manipulated the
+                              * repetition during evaluation of INNER
+                              *)
+   false -> rAelm.frozenREg;
+   aR.deAlloc;
+   
+---GenCOMdispatch:doPart---
+do (# C: @mch.cstOperand;
+      A: ^mch.address; A1: @mch.RegAdr;
+      dr: @mch.dataRegOperand;
+      D: @ASTindex; msgName: ^text;
+      more: @boolean;
+      EH: @EvalHandler;
+      (*nScan: @ | EH.scanNAdr;*)
+      max,dummyMax: @integer; 
+      argReg: @mch.dataRegOperand;
+      callC:
+        (# entry: ^text; noOfArgs: @integer;
+           max,dummyMax: @integer; 
+           dr: @mch.dataRegOperand
+        enter(entry[],noOfArgs)
+        do (sematt.cExt,noOfArgs) -> mch.initExternalCall;
+           mch.getRegForXres->(max,dummyMax);
+           mch.saveHeapTop;
+           INNER;
+           (if entry[] <> none then
+               (entry,sematt.cExt,noOfArgs,0) -> mch.CallCproc;
+           if);
+           (sematt.cExt,common.longXpar,noOfArgs,0,max,dummyMax) 
+             -> mch.getSimpleXres 
+             -> dr; (* args *)
+        exit dr
+        #);
+      pushObj:
+        (# objReg: @mch.adrRegOperand;
+        do (gen.thisRegAdr,Desc[],EV[],thisSuperChain)
+             -> genOrgAdr->A[];
+           4 -> A.size; (* ???*)
+           objReg.alloc;
+           (A[],objReg[]) -> mch.gLea;
+           objReg[] -> mch.pushClong;
+           A.freeAdr;
+           objReg.deAlloc;
+           
+        #);
+      pushMsgName:
+        (#
+        do (*EV.son -> EV;*)
+           EV -> sematt.getName -> D; D.dclRef -> D;
+           D.gettext -> msgName[];
+           (*'\nname= '->puttext; msgName[] -> putline;*)
+           (common.wtextXpar,sematt.cExt,1,0) 
+             -> (msgName -> mkTxtCstEvVal).pushCpar
+        #);
+      pushTypes:
+        (# T: @text
+        do (if false then
+               (for i: C.C repeat
+                    forward -> CP.getenterP -> mch.newCstOp -> mch.pushCLong;
+               for) 
+            else
+               (for i: C.C repeat
+                    (if true -> CP.getenterP (* always forward *)
+                     // common.longXpar then
+                        'I' -> T.put
+                     // common.textXpar then
+                        'x' -> T.put
+                     // common.COMobjectXpar then
+                        'U' -> T.put
+                     // common.BSTRXpar then
+                        's' -> T.put
+                     // common.holderXpar then
+                        (* here we need to find out about
+                         * the holder element type
+                         *)
+                        '&' -> T.put; 'I' -> T.put
+                     else
+                    if);
+               for);
+               (*'\ntypes: ' -> puttext; T[] ->putline;*)
+               (common.textXpar,sematt.cExt,1,0) 
+                 -> (T -> mkTxtCstEvVal).pushCpar
+           if)
+        #);
+      push_Extra:
+        (# C: @mch.cstOperand
+        do (* extra arguments currently not in use.
+            * Transfer in forward order:
+            * push_wFlags;
+            * push_pvRet;
+            * push_pexcepinfo;
+            * push_pnArgErr
+            *)
+           0 -> C;
+           (for i: 4 repeat C[] -> mch.pushClong for);
+        #);
+      
+   do sematt.dispatchExt -> mch.xParForward -> forward;
+      externalName -> CP.externalName;
+      Desc[] -> CP.desc[];
+      sematt.dispatchExt -> CP.extType;
+      EV.son -> CP.theES;
+      CP.initPL;
+      CP.top -> C.C; 
+      
+      EV.son -> EV;
+      ('BETA_Invoke',CP.top+7) 
+        -> CallC  
+      (#
+      do (if forward then
+             pushObj;
+             push_Extra;            
+             pushMsgName;
+             (*C[] -> mch.pushClong; (* noOfArgs*) 
+             pushTypes;
+         if);
+         INNER GenCOMdispatch;
+         (if not forward then 
+             pushTypes;
+             (*C[] -> mch.pushClong; (* noOfArgs*) 
+             pushMsgName;
+             push_Extra;
+             pushObj
+         if)
+      #) -> dr;
+      (dr,false,false,false) -> mkComputedEvVal -> V[]
+   #)
+

@@ -1,0 +1,238 @@
+<HTML>
+
+<HEAD>
+<TITLE>Implementation of pattern data</TITLE>
+<LINK REV="made" HREF="mailto:olm@daimi.aau.dk">
+</HEAD>
+
+<BODY>
+<H1>Implementation of pattern data</H1>
+
+<PRE>
+Draft!
+
+The Data pattern
+----------------
+
+In general a BETA object has some structural attributes to be used for
+implementing virtual patterns, inner, garbage collection and block
+structure. For a more detailed description see (O.L. Madsen: The
+Implementation of BETA. In J.L. Knudsen, M. Lofgren, O.L. Madsen, B.
+Magnusson: Object-oriented Environments - The Mjolner Approach).
+
+In some cases it may be desirable to be able to define objects without
+such structural attributes. This may e.g. be the case when defining
+simple data-records or when communicating objects with external
+languages such as C.
+
+The pre-defined pattern 'data' makes it possible to define objects without
+structural attributes. E.g
+
+	msg: data
+	  (# id: @integer;
+	     c1,c2: @char;
+             size: @shortInt;
+	     content: ^data;
+	     c3: @char;
+	     T1: @integer;
+             S1: @shortInt;
+             T2: @integer;
+	     R: @real;
+             c3: @char;
+             S2: @shortInt
+          #)
+
+defines an object consisting of an 'id' field of size 4 bytes, two
+'c1', 'c2' fields of size 1 byte, a 'size' field c of size 2 bytes,
+etc.
+
+Some padding of bytes take place due to alignment constraints for
+allocation of basic patterns. On most architectures, a 4 byte integer
+must be allocated at a 4 byte memory address, etc.  The following
+table describes the possible attributes of a data-object, its size and
+alignment constraint:
+
+		      | part (@)    |  ref (^)	| size | alignment
+	---------------------------------------------------------
+	boolean       |   yes	    |    no     |  1   |  1
+	---------------------------------------------------------
+	char          |   yes       |    no     |  1   |  1
+	---------------------------------------------------------
+	shortInt      |   yes       |    no     |  2   |  2
+	---------------------------------------------------------
+	integer       |   yes       |    no     |  4   |  4
+        ---------------------------------------------------------
+	real          |   yes       |    no     |  8   |  8
+        ---------------------------------------------------------
+	data object   |   yes       |           |  n   |  8
+                      |             |    yes    |  4   |  4
+        ---------------------------------------------------------
+
+If A is the address of a 'msg'-object then:
+
+	address of 'id':	A
+	address of 'c1':	A+4
+	address of 'c2':	A+5
+	address of 'size':	A+6
+	address of 'content:	A+8
+	address of 'c3'		A+12
+	unused			A+13, A+14, A+15 due to padding
+	address of 'T1'		A+16
+	address of 'S1':	A+20
+	unused			A+21, A+22 due to padding
+	address of 'T2':	A+24
+	unused			A+28, A+29, A+30, A+31 due to padding
+	address of 'R':		A+32
+	address of 'c3:		A+40
+	unused			A+41 due to padding
+	address of 'S2':	A+42
+
+Restrictions
+------------
+
+There a number of restrictions on data-objects:
+
+A data-object may only contain declarations of part objects of basic
+objects and data-objects and references to data-objects as described in
+table X1 above.
+
+A data-object may NOT contaion declarations of repetitions.
+
+A data-object may NOT contain pattern declarations, virtual- binding- and
+final declarations. 
+
+A data-object may NOT contain declarations of pattern variables.
+
+The enter/exit part of a data-object may only contain the names
+of its own attributes.
+
+A data-object may NOT have a do-part
+
+The use of data-objects
+-----------------------
+
+It is legal to declare static part objects
+
+	X: @msg
+
+Note: The X-object will be allocated as part of the enclosing object.
+If the enclosing object is a general BETA object, then the address of
+X may change during garbage collection. This means that transfer of
+the address of X to external procedures may be unsafe!
+
+It is legal to declare references to data-objects
+
+	R1,R2: ^msg
+
+It is legal to assign references 
+
+	R1[] -&gt; R2[]
+
+It is NOT legal to obtain a reference to a data part-object as in
+
+	X[] -&gt; R1[]
+
+As described above, the address of X may change during garbage collection.
+
+It is legal to transfer a data-object references to an external procedure
+
+	foo: external (# in,out: ^data enter in[] exit out[] #)
+
+	R1[] -&gt; foo -&gt; R2[]
+
+It is also legal to transfer the address of a data part-object
+
+	X[] -&gt; foo -&gt; R1[]
+
+but the reference to X may change after the transfer if a garbage collection
+is carried out.
+
+Status
+------
+
+The checking for the sematic restrictions is currently NOT carried out!
+It is thus the responsibility of the programmer to enforce these
+restrictions!!
+
+It is currently only possible to allocate data-objects as 
+
+	part objects:		X: @msg
+
+	via external procedure class
+
+and NOT uisng new as in
+
+	&msg[]-&gt; R1[]
+
+The latter require support for allocation of objects outside the  BETA heaps.
+This is currently NOT supported.
+
+It may be considere to allow assigning an integer value to a data reference:
+
+	IntExp -&gt; R1[]
+
+since using low-level C-code, references to simple data records are often
+obtained as integers. It is NOT allowed currently.
+
+Example
+-------
+
+ORIGIN 'tstenv';
+MAKE default 'tstMake.make';
+OBJFILE default	'$/ctstcproc.o'
+(* 
+ * Example of how to interface to cstruct records using the
+ * standard pattern 'data'. 
+ * See ~olm/beta/system/v4.5/dataobject.doc
+ * for a description of data-objects
+ *)
+---program:descriptor--
+(# Xdata: data(# w: @integer; ch: @char; q: @char; y: @integer #);
+   Ydata: Xdata(# a,b: @char; d: @integer #);
+   
+   X: @Xdata;
+   S: ^Ydata;
+   
+   XdataToYdata: external(# R: ^Xdata; S: ^Ydata enter R[] exit S[] #)
+   
+do 99-&gt;X.w; 'a'-&gt;X.ch; 'q'-&gt;X.q; 111-&gt;X.y;
+   
+   X[]-&gt;XdataToYdata-&gt;S[];
+   'From beta: \t'-&gt;puttext;
+   'w:'-&gt;puttext; S.w-&gt;putint;
+   ', ch:'-&gt;puttext; S.ch-&gt;put;
+   ', q:'-&gt;puttext; S.q-&gt;put;
+   ', y:'-&gt;puttext; S.y-&gt;putint;
+   ', a:'-&gt;puttext; S.a-&gt;put;
+   ', b:'-&gt;puttext; S.b-&gt;put;
+   ', d:'-&gt;puttext; S.d-&gt;putint;
+   newline;  
+#)
+
+An interface is made to the following C-code:
+ 
+struct Xdata{int w; char ch,q; int y;};
+struct Ydata{int w; char ch,q; int y; char a,b; int d;};
+
+struct Ydata *XdataToYdata(r) struct Xdata *r;
+{ struct Ydata *s;
+  printf ("From C: \tw:%d, ch:%c, q:%c, y:%d\n",r-&gt;w,r-&gt;ch,r-&gt;q,r-&gt;y);
+
+  s=(struct Ydata* )malloc(sizeof(struct Ydata));
+  s-&gt;w=r-&gt;w-1;
+  s-&gt;ch='#';
+  s-&gt;q='$';
+  s-&gt;y=r-&gt;y-1;
+  s-&gt;a='+';
+  s-&gt;b='*';
+  s-&gt;d=444;
+  return s;
+}
+
+
+
+
+</PRE>
+
+</BODY>
+</HTML>

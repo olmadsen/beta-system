@@ -1,0 +1,185 @@
+ORIGIN 'system';
+LIB_DEF 'betacompiler' '../../lib';
+INCLUDE '~beta/dependency/dependency';
+INCLUDE '~beta/dependency/private/scanNonCompiledBody';
+INCLUDE '~beta/dependency/private/controlbody';
+INCLUDE '~beta/toollibs/utils/fileExtensions';
+INCLUDE '../CHECKER/sematt';
+INCLUDE 'misk';
+BODY   'translatebody';
+BODY   'translate_controlbody';
+BODY   'translate_libsbody';
+BODY   '../GENERATOR/asmlink';
+---translate_AsmLink:descriptor---
+(*------------ For assembling and linking  -------*)
+(# init:< (# <<SLOT asmlink_init:doPart>> #);
+   
+   fSwitch,  (* name of C floating point library *)
+   BetaRun,  (* file-name for BETA run-time system *)
+   rootFragment, (* the file being translated *)
+   ObjName,  (* file-name for object program *)
+   objDirectory, (* directory holding object program *)
+   codeDirectory: (* directory holding object files and jobfile*)^Text;
+   NoLink: @boolean; (* true ==> do not generate link directive *)
+   
+   (* The different kinds of files that can be put into the job file *) 
+   BetaEnvKind: (# exit 1 #);
+   BetaKind: (# exit 2 #);
+   ObjKind:  (# exit 3 #);  
+   LibKind:  (# exit 4 #);
+   MakeKind: (# exit 5 #);
+   LinkOptKind:  (# exit 6 #); (* KJM *)
+   ResourceKind: (# exit 7 #); (* KJM *)
+   BetaDataKind: (# exit 8 #);
+   
+   JobfileMachine: ^text;  (* The name of the machine on which the jobfile
+                            * will be executed. If = NONE then the jobfile
+                            * is executed on THIS machine.
+                            *)
+   CreateCodeDirectory: <<SLOT createCodeDirectory:descriptor>>;
+   CreateObjDirectory: <<SLOT createObjDirectory:descriptor>>;
+   TextLst: singleLinkedList
+     (# Insert::<
+          (* Makefiles are ``expensive'' to execute, so when makefiles
+           * are inserted we check for duplicates.
+           *) 
+          (# FullFN: ^text;
+             kind: @integer;
+             assemble,inLib: @boolean;
+          enter(FullFN[],kind,assemble,inLib)
+          do actionPart:
+               (#
+               do (if kind = makeKind then
+                      scan
+                      (# 
+                      do (if thisElm.kind = makeKind then
+                             (if (FullFN[]->thisElm.T.equal) then
+                                 leave actionPart;
+                  if)if)#)if);  
+                  FullFN[]->E.T[]; kind->E.kind;  
+                  assemble->E.assemble; inLib->E.inLib
+               #);  
+          #);  
+        
+        Elm::< (# T: ^Text; assemble,inLib: @boolean; kind: @integer; #);
+        (* inLib is true of the object file is in a library.
+         * For systems with (shared) libraries, such object files
+         * should not be included in the link directive
+         *)
+     #);   
+   
+   TX: @TextLst;
+   
+   Libs: @ singleLinkedList
+     (# elm::< (# T: ^text; doLink: @boolean; args: ^text #);
+        insert::<
+          (# T,linkArgs: ^text
+          enter T[]
+          do T[]->E.T[]; &text[]->linkArgs[]->E.args[];
+          exit linkArgs[]
+          #)
+     #);
+   
+   build: @ singleLinkedList
+     (# elm:: (# directory,command: ^text #);
+        insert::
+          (# d,c: ^text
+          enter(d[],c[])
+          do d[] -> E.directory[]; c[] -> E.command[]
+          #);
+     #);
+   AsmExt: (# ext: @text do <<SLOT AsmExt: descriptor>> exit ext[] #);
+   BinExt: (# ext: @text do <<SLOT BinExt: descriptor>> exit ext[] #);
+   LibExt: (# ext: @text do <<SLOT LibExt: descriptor>> exit ext[] #);
+   JobExt: (# ext: @text do <<SLOT JobExt: descriptor>> exit ext[] #);
+   ExeExt: (# ext: @text do <<SLOT ExeExt: descriptor>> exit ext[] #);
+   
+do <<SLOT AsmLink: descriptor>>
+#)
+(*------- end assemble and link part --------*)
+
+---translate_depGraph:descriptor---
+dependencyGraph
+(# <<SLOT xDependencyLib:attributes>>;
+   init:: (# 
+          do true -> notFirst (* ??? *);
+             this(compiler).infoStream[] -> infoStream[];
+             this(compiler).messageStream[] -> messageStream[];
+             this(compiler).traceStream[] -> traceStream[];
+             this(compiler).bugStream[] -> bugStream[];
+          #);
+        xcontroller: scanNonCompiled
+          (# <<SLOT xControllerLib:attributes>>;
+             init::
+               (#
+               do NONE -> lst[]; 
+                  sematt.init;
+                  false -> lastTransWasReal;
+                  asmLink.asmExt -> this(scanNonCompiled).asmExt[];
+                  asmLink.binExt -> this(scanNonCompiled).binExt[];
+                  this(compiler).b2c -> this(scanNonCompiled).b2c;
+                  this(compiler).nti -> this(scanNonCompiled).nti;
+                  verboseLevel -> xVerboseLevel;
+                  common.switch[4 ] -> this(depGraph).useCompact;
+                  common.switch[11] -> checkAll;
+                  common.switch[12] -> genAll;
+                  common.switch[35] -> this(depGraph).useFullNAme;
+                  (for i: 20 repeat
+                       common.switch[380+i] -> this(depGraph).switch[i]
+                  for)
+               #);
+             afterGroup:: (# <<SLOT translateAfterGroup:doPart>> #);
+             AddGroup:: (# do FG.name -> addGroupNotification #);
+             AddTranslate:: (# do FG.name -> addTranslateNotification #);
+             BuildProperty:: (# <<SLOT BuildProperty:doPart>> #);
+             CurrentProperty:: (# <<SLOT CurrentProperty:doPart>> #);
+             Translate:: (# <<SLOT TranslateDo:doPart>> #);
+             addVirtualSuper:: (# <<SLOT translateAddVirtualSuper:doPart>>#);
+             (****** exceptions *****)
+             isFile:: (#do msg[] -> infostream.putline #);
+             DoubleFormException::
+               (# do offendingFormName[]->DoubleFormError #);
+             transAccessException:: (#do FN[] -> TransAccessError #);
+             circularDependencyException::(#do (fg[],12)->this(compiler).Msg#);
+             unknownPropertyException:< exception
+               (# 
+               do (* hvem kalder den?*)
+               #);
+             emptyFragmentException:: (#do (fg[],2) -> this(compiler).Msg #);
+             parseException:: (# do FullFN[] -> ParseError #);
+             transCreateDirException:: (# do FN[] -> TransCreateDirError #);
+             MPSexception:: (#do T[] -> MPSerror #);
+             notExistingException:: (#do FullFN[] -> notExistingError #);
+             noSpaceException:: (#do NoSpaceError #);
+             fragmentException::
+               (#
+               do (FG[],FF[],slot[],errNo,errMsg[],CloseGroup[])->fragmentError
+               #);
+             propertyException:: 
+               (#
+               do (FG[],p[],t[],n,CloseGroup[]) -> propertyError;
+                  (* currently a warning if n >= 5, but this may change and
+                   * a better interface should be made 
+                   *)
+                  (if n >= 5 then true->continue; (* warning *) if)
+               #);
+          <<SLOT xcontrollerDo:doPart>>
+          #);
+        clearOutputFile,
+        lastTransWasReal,
+        binaryCodeGen,
+        notFirst: @boolean; (* only used in repeat mode *)
+#)
+---translate_sharedLibs:descriptor---
+(* keeps track of LIBRARY definitions in the fragments *)
+(# <<SLOT sharedLibraryLib:attributes>>;
+   init: <<SLOT libs_init:descriptor>>;
+   scanLibraryProp: 
+     (# fg: ^fragmentGroup; doAsm,inLib: @boolean
+     enter(fg[],doAsm)
+     <<SLOT scanLibraryProp:doPart>>
+     exit inLib
+     #);
+   Make: <<SLOT libsMake:descriptor>>;
+   private: @ <<SLOT libsprivate:descriptor>>
+#)

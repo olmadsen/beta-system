@@ -1,0 +1,342 @@
+ORIGIN 'transDepGraph';
+LIB_ITEM 'betacompiler';
+INCLUDE 'touchdir'
+(* Implementation of LIB_DEF and LIB_ITEM properties for shared libraries *)
+---transLib:attributes---
+CreateObjFileName: 
+  (* duplicated from dependency/v1.1/scanNonCompiled;
+   * a common machine fragment should be made
+   *)
+  (# g: ^FragmentGroup; T: ^text
+  enter g[]
+  do (g.NameT.copy,false)
+       -> InsertSubDir(# do asmLink.BinExt -> path.append #)
+       -> T[]
+  exit T[]
+  #);
+---sharedLibraryLib:attributes---
+getEntry:
+  (# G: ^fragmentGroup; libName: ^text; 
+     libEntry: ^ Library
+  enter(G[],libName[])
+  do <<SLOT libsgetentry:descriptor>>
+  exit libEntry[]
+  #);
+scan: (# current: ^Library do<<SLOT libsscan:descriptor>>#);
+Library:
+  (* defines a library.
+   * name:   the name of the library.
+   * group:  the group defining the library.
+   * name = group.fullname
+   * libFile: location of the library, e.g. '/users/beta/lib/sgi/libfoo.so'
+   *)
+  (# name: ^ text;
+     group: ^ fragmentGroup; 
+     libFile: ^text;
+     libFileModTime: @integer;
+     addmember:
+       (# memGroup: ^fragmentGroup; 
+          libName: ^text;
+          isDef: @boolean;
+          inx: @integer
+       enter(memGroup[],libName[],isDef)
+       do <<SLOT libsmembername:descriptor>>
+       #);
+     setLibDir: 
+       (# touch: @
+            (#
+            do dir[] -> (&Directory[]).touchDir
+               (# error::
+                    (#do dir[]->thisTranslate.transCreateDirException #)#);
+               (* we should catch possible execptions if touch fails *)
+            #);
+          dir: ^text
+       enter dir[]
+       do dir[] -> ExpandMacro;
+          (dir[],group.nameT[]->stripPathName)
+            -> thePathHandler.convertFilePath
+            -> dir[];
+          touch;
+          thePathHandler.directoryChar -> dir.put;
+          common.targetDirectory[] -> dir.append;
+          touch;
+          thePathHandler.directoryChar -> dir.put;    
+          (* Here we prepend 'lib' since lib 'foo.so' on unix
+           * must be called 'libfoo.so'; this may not
+           * be the case on other platforms, so perhaps
+           * some machine dependent stuff must be added here
+           *)
+          'lib' -> dir.append;
+          name[] -> dir.append -> dir[];
+          asmLink.LibExt -> dir.append;
+          dir[] -> libFile[];
+          libFile[] -> GetModTime -> libFileModTime;
+          (* the name of the librarys is e.g. 'foo.so'*)
+       #);
+     markDirty: <<SLOT libsMarkDirty:descriptor>>;
+     display: <<SLOT libsdisplay:descriptor>>;
+     private: @ <<SLOT libsmemberprivate:descriptor>>
+  #);
+--libsgetentry:descriptor--
+(#
+do find:
+     (#
+     do (for i: private.top repeat
+             (if private.lib[i].name[]->libName.equalNCS then
+                 private.lib[i][]->libEntry[];
+                 leave find
+        if)for);   
+        303->trace(#do 'LIB:getEntry: '->xT; libname[]->xT; xN; G.fullname->Xt #);
+        (if (private.top+1->private.top) > private.lib.range  then
+            private.lib.range->private.lib.extend
+        if);
+        &Library[]->libEntry[]->private.lib[private.top][];
+        (* very indirect way of defining these attributes *)
+        libName[]->libEntry.name[];
+        G[]->libEntry.group[]
+#)#)
+--libsScan:descriptor--
+(##)
+--libsmemberprivate:descriptor--
+(# mem: [10] ^fragmentGroup; top: @integer;
+   dirty: @boolean; (* a dirty lib must relinked *)
+#)
+--libsmembername:descriptor--
+(#
+do libName[] -> ExpandMacro;
+  (* (libName[],memGroup.nameT[]->stripPathName)
+     -> thePathHandler.convertFilePath
+   -> libName[];*)
+   (if isDef then
+       libName[] -> name[];
+       memGroup[] -> group[]
+   if);
+       
+   find:
+     (# objTime, libTime: @integer;
+     do (for i: private.top repeat
+             (if private.mem[i][] = memGroup[] then
+                 i -> inx;
+                 leave find
+        if)for);
+        (if (private.top+1->private.top) > private.mem.range  then
+            private.mem.range -> private.mem.extend
+        if);
+        memGroup[] -> private.mem[private.top][];
+#)#)
+--libsMarkDirty:descriptor--
+(# do true -> private.dirty #)
+---libsdisplay:descriptor---
+(#
+do '\nLIBRARY' -> putline;
+   '   name   : ' -> puttext; name[] -> putline;
+   '   group  : ' -> puttext; group.fullName -> putline;
+   '   libFile: ' -> puttext; libFile[] -> putline;
+   '   members: dirty=' -> putText; 
+   (if private.dirty then 
+       'true' -> putline
+    else 'false' -> putline
+   if);
+   (for i: private.top repeat
+        '      ' -> puttext; private.mem[i].fullName -> putline;
+   for)
+#)
+(****************************** slots in translate ************************)
+---libs_init:descriptor---
+(#
+do 0 -> private.top; 
+#)
+---scanLibraryProp:dopart---
+   (* a shared library is defined by a property:
+    *    LIB_DEF  'lib_name' 'lib_location'
+    * An element of a shared library is defined by
+    *    LIB_ITEM 'lib_name'
+    * where 'lib_location' is the directory where the 
+    * shared object file is placed
+    *)
+do (* should be optimized*)
+   fg.prop.scanProp
+   (# doProp::<
+        (# libEntry: ^sharedLibs.Library;
+           isDef: @boolean;
+           N: @integer
+        do prop.makeLc;
+           (if true
+            // 'lib_def' -> prop.equal -> isDef
+            // 'lib_item' -> prop.equal then 
+               true -> inLib; (* exit value of scanLibProp *)
+               0 -> N;
+               scanParameters
+               (# doString:: (* S *)
+                    (# T: ^text;
+                    do 303->trace
+                       (#do prop[]->xT; ':'->put; N+1 -> xI; 
+                          ':'->put; S[]->xT;
+                          ' :doAsm:'->xT; doAsm->xB
+                       #);
+                       S.copy -> T[];
+                       (if N + 1 -> N 
+                        // 1 then
+                           (fg[],T[]) -> sharedLibs.getEntry -> libEntry[];
+                           (fg[],T[],isDef) -> libEntry.addmember;
+                           (if doAsm then libEntry.markDirty if);
+                        // 2 then
+                           (if isDef then
+                               T[] -> libEntry.setLibDir
+                            else
+                               '\n***LIB_ITEM: too many arguments' -> putline
+                           if)
+                        else
+                           '\n***LIB_DEF/ITEM: too many arguments' -> putline
+                       if)
+                    #)
+               #)
+           if)
+   #)#)
+--libsMake:descriptor--
+(# current: ^Library; linkArgs,S: ^text; objTime: @integer; 
+   FG: ^fragmentGroup
+do (for i: private.top repeat
+        private.lib[i][] -> current[];
+        (if current.libFile[] = NONE then
+            (* fatal error *)
+            '\n\n**** Missing LIB_DEF for:' -> puttext;
+            current.display
+         else
+            L:
+              (if not current.private.dirty then
+                  (* check if some member is newer than lib *)
+                  (for i: current.private.top repeat
+                       current.private.mem[i][] 
+                         -> FG[]
+                         -> CreateObjFileName
+                         -> getModTime 
+                         -> objTime;
+                       303->trace
+                       (#do 'LIB:make:modTime:\n   ' -> xT;
+                          FG.fullName -> xT; 
+                          ':' -> put; objTime -> xI; 
+                          current.libFileModTime -> xI
+                       #);
+                       (if current.libFileModTime < objTime then
+                           current.markDirty;
+                           leave L
+                       if)
+                  for)
+              if);
+            (if common.switch[394] then current.display if);
+            (if common.switch[372] then
+                (# slots: @ hashTable
+                     (# rangeInitial::(#do 117->value #);
+                        element::
+                          (# slot: ^text;
+                             hasForm: @boolean; (* true if a corresponding 
+                                                 * form is found *)
+                          #);
+                        hashfunction ::<
+                          (#do e.slot.scanAll
+                             (#do (ch->ascii.Lowcase)*26+value-> value #)
+                          #);
+                        equal::<
+                          (#do (left.slot[]->right.slot.equalNCS)->value #);
+                        add:
+                          (# slot: ^ text; e: ^element; index: @integer
+                          enter slot[]
+                          do &element[]->e[]; slot[]->e.slot[];
+                             e[]->insert;
+                          #);
+                        define:
+                          (# slot: ^text; e1,e2: ^ element; 
+                          enter slot[]
+                          do &element[]->e1[]; slot[]->e1.slot[];
+                             e1[]->hashFunction
+                               ->findIndexed
+                             (# predicate::<
+                                  (#do (e1[],current[])->equal->value #);
+                                notFound::<
+                                  (#
+                                  do (*'Not found: ' -> puttext;
+                                      e1.slot[] -> putline;*)
+                                     true->continue 
+                                  #)
+                             do true -> current.hasForm;
+                                (*'Found: ' -> puttext;
+                                 e1.slot[] -> putline;*)
+                             #)
+                          #);
+                     #)
+                do '\nChecking unbound slots for library: '->puttext;
+                   current.name[] -> putline;
+                   (for i: current.private.top repeat
+                        current.private.mem[i].realOpen;
+                       (* current.private.mem[i].name -> putline;
+                        '\nSlots:'-> putline;*)
+                        current.private.mem[i].scanSlots
+                        (#
+                        do (if current.category
+                            // gram.objectDescriptor 
+                            // gram.doPart
+	                    // gram.descriptorForm 
+                            // gram.mainPart then 
+                               (*current.name -> puttext; ' ' -> put;*)
+                               current.name -> slots.add;
+                            // 0 then
+                               'Slot cat is null:' -> puttext; 
+                               current.name -> putline;
+                           if)
+                        #);
+                        (*newline;
+                         'Forms:' -> putline;*)
+                        current.private.mem[i].scan
+                        (# FF: ^fragmentForm
+                        do (if current.fragType = formType then
+                               current[] -> FF[];
+                               (if FF.category 
+                                // gram.objectDescriptor 
+                                // gram.descriptorForm 
+                                // gram.doPart then
+                                   (*'Desc:' -> puttext; 
+                                    FF.name -> putline*)
+                                   FF.name -> slots.define
+                                // 0 then
+                                   'Null:' -> puttext;
+                                   FF.name -> putline;
+                               if)
+                           if)
+                        #);
+                   for);
+                   'Unbound slots: ' -> puttext;
+                   slots.scan
+                   (#
+                   do (if not current.hasForm then
+                          (*Missing form: ' -> puttext;*)
+                          current.slot[] -> puttext; ' '->put;
+                      if)
+                   #);
+                   newline
+                #)
+            if);
+            current.libFile[] 
+              -> asmLink.Libs.insert 
+              -> linkArgs[];
+            (if current.private.dirty then
+                303->trace
+                (#do 'LinkLib: ' -> xT; current.name[]->xT; 
+                   ' as: ' -> xT; current.libFile[] -> xT;
+                   '\n\twith: ' -> xT
+                #);
+                
+                (for i: current.private.top repeat
+                     current.private.mem[i].name->S[];
+                     ' \\\n\t'->linkArgs.append;
+                     (S.copy,false)
+                       -> InsertSubDir(#do asmLink.BinExt->path.append#)
+                       -> S[]
+                       -> linkArgs.append;
+                     303->trace(#do '\t'->xT; S[]->xT #);                 
+        for)if)if)
+   for)
+#)
+---libsprivate:descriptor--
+(# lib: [10] ^Library; top: @integer; 
+#)

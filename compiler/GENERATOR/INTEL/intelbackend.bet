@@ -1,0 +1,2064 @@
+ORIGIN '../backend';
+INCLUDE 'backmstate';
+MDBODY linux '../LINUX/linuxbackendelf';
+(*
+ * Implementation of slots in ../backend.bet.
+ * For helper patterns; see backmstate.bet.
+ * For documentation on binary code generation for intel, see
+ * ../../DOC/IntelBinary.html.
+ *)
+
+--getRegisterOffsets:doPart--
+do eax-1 -> dataOff; (* first register is dataOff+1 = eax*) 
+   ebp-1 -> adrOff;
+   6(*?*)->primOff
+   
+--getNumberOfDataRegisters:dopart--
+do (* See DOC/Registers.html *)
+   3->regCount  (* EAX,EBX,ECX *)
+
+--getNumberOfAdrRegisters:dopart--
+do (* See DOC/Registers.html *)
+   2->regCount  (* EBP,ESI *)
+   
+--getNumberOfRegisters:dopart--
+do (* See DOC/Registers.html *)
+   (if type
+    // dataReg then 3->number
+    // adrReg  then 2+2->number (* this+call counts too *)
+    // floatReg then 6->number
+    // primReg then 0->number
+   if)
+   
+--getPhysicalRegisterNumber:dopart--
+do (* See DOC/Registers.html *)
+   (if type
+    // dataReg then
+       (if reg (* color *)
+        // 1 then EAX ->physicalregister
+        // 2 then EBX ->physicalregister
+        // 3 then ECX ->physicalregister
+        else
+           'OVERFLOW in datareg: %d\n'->putformat(# do reg->d #)
+       if)
+    // AdrReg then
+       (if reg (* color *)
+        // 2+1 then EBP -> physicalregister (* this+call adds 2 *)
+        // 2+2 then ESI -> physicalregister (* this+call adds 2 *)
+        else
+           'OVERFLOW in ADRREG: %d\t'->putformat(# do reg->d #)
+       if)
+    // FloatReg then
+       reg->physicalregister
+    // 4 then
+       (# t:^text;
+       do 'getPhysicalRegisterNumber: error, '->t[];
+          reg->t.putint;
+          (failuretrace, t[]) ->  stop
+       #)
+   if)
+   
+--primRegIsReg:doPart--
+do false->value
+   
+--primRegIsRegAdr:doPart--
+do false->value
+   
+--backendIsSmallAluConstant:doPart--
+do true -> value (* all immediates can be encoded in instruction *)
+   
+--backendIsSmallAdrOff:doPart--
+do true -> value (* all immediates can be encoded in instruction *)
+
+--backendHasRotateInstr:doPart--
+do true->value
+   
+--backendScaledIndex:doPart--
+do true->value
+
+-- backendNop: dopart --
+do (if intel_trace then 'backendNop'->comment if);
+   intel_nop -> B_emitbyte;
+   eoo;
+
+-- backendgLea:doPart--
+do (if intel_trace then 'backendgLea'->comment if);
+   I.writeReg -> leal -> emit2bytes;
+   (I.readReg,I.imm) -> IndirectReg
+   
+-- backendgLeaInx:doPart--
+do (if intel_trace then 'backendgLea'->comment if);
+   I.writeReg -> leal -> emit2bytes;
+   (I.readReg, I.readReg2 (*I.inxReg*), I.size, I.imm (*I.readOffset*) ) -> IndexReg
+   
+-- backendgLeaText:doPart--
+do (if intel_trace then 'backendgLeaText'->comment if);
+   I.writeReg -> leal -> emit2bytes;
+   ea_d32 -> mstate.b.patchLastByte;
+   (I.label[],wordMark)->mstate.b.mark;
+   0 -> emitlong;
+   eoo;
+   
+-- backendgLeaLabel:doPart--
+do (if intel_trace then 'backendgLeaLabel'->comment if);
+   I.writeReg -> leal -> emit2bytes;
+   (I.labno, I.type, I.condition, 0, 0, ea_d32)
+     -> LocalLabPutWithReloc;
+   eoo;
+   
+-- backendldCst:dopart --
+do (if intel_trace then 
+       'backendLdCst'->comment;
+       ('imm',I.imm) -> putval;
+       ('readreg',I.readreg) -> putreg;
+       ('writereg',I.writereg) -> putreg;
+       newline;
+   if);
+   (I.imm, I.writeReg) -> emitMovlImmReg;
+   eoo;
+
+-- backendstCst:dopart --
+do (if intel_trace then 'backendstCst' -> comment if);
+   (if I.size
+    // 1 then
+       movb_i8m -> emit2bytes;
+       (if I.condition then
+           (* FIXME: in the lack of stCstInx: *)
+           (i.readReg,i.inxReg,I.size,i.readOffset)->IndexReg;
+        else
+           (i.readReg,i.readOffset)->IndirectReg;
+       if);
+       i.imm -> B_emitbyte;
+    // 2 then
+       op_size_prefix -> B_emitbyte;
+       movl_im -> emit2bytes;
+       (if I.condition then
+           (* FIXME: in the lack of stCstInx: *)
+           (i.readReg,i.inxReg,I.size,i.readOffset)->IndexReg;
+        else
+           (i.readReg,i.readOffset)->IndirectReg;
+       if);
+       i.imm -> emithalf;
+    // 4 then
+       movl_im -> emit2bytes;
+       (if I.condition then
+           (* FIXME: in the lack of stCstInx: *)
+           (i.readReg,i.inxReg,I.size,i.readOffset)->IndexReg;
+        else
+           (i.readReg,i.readOffset)->IndirectReg;
+       if);
+       i.imm -> emitlong;
+   if);
+   eoo;
+
+-- backendldVal:dopart --
+do (if intel_trace then 'backendldVl' -> comment if);
+   I[]->emitMovAddressToReg;
+   eoo;
+   
+-- backendldVlInx:dopart --
+do (if intel_trace then 'backendldVlInx' -> comment if);
+   I[]->emitMovAddressInxToReg;
+   eoo;
+   
+-- backendstVal:dopart --
+do (if intel_trace then 
+       'backendStVal' -> comment;
+       ('size',I.size)->putreg;
+       ('readReg2',I.readReg2)->putreg;
+       ('readReg',I.readReg)->putreg;
+       ('readOffset',I.readOffset)->putreg;
+       newline;
+   if);
+   (I.readReg2, I.readReg, I.readOffset, I.size) -> emitMovRegMemIndirect;
+   eoo;
+   
+-- backendstValInx:dopart --
+do (if intel_trace then 
+       'backendStValInx' -> comment;
+       ('size',I.size)->putreg;
+       ('readReg2',I.readReg2)->putreg;
+       ('readReg',I.readReg)->putreg;
+       ('inxReg',I.inxReg)->putreg;
+       ('readOffset',I.readOffset)->putreg;
+       newline;
+   if);
+   (if I.size = 2 then op_size_prefix -> emitbyte if);
+   (if I.size = 1 then
+       I.readReg2 -> movb_rm -> emit2bytes;
+    else
+       I.readReg2 -> movl_rm -> emit2bytes;
+   if);
+   (I.readReg, I.inxReg, I.size, I.readOffSet) -> IndexReg;
+   eoo;
+   
+-- backendcpReg:dopart --
+do (if intel_trace then 'backendcpReg' -> comment if);
+   (I.readReg,I.writeReg)->movl_rr->emit2bytes;
+   eoo
+   
+-- backendstValInText:dopart --
+do (if intel_trace then 'backendstValInText' -> comment if);
+   (i.readReg, i.label[]) -> emitMovlRegText;
+   eoo
+   
+-- backenddoAsgRefAdr:dopart --
+do (if intel_trace then 'backenddoAsgRefAdr' -> comment if);
+   'backenddoAsgRefAdr' -> TODO;
+   eoo
+
+-- backenddoAsgRefReg:dopart --
+do (if intel_trace then 'backenddoAsgRefReg' -> comment if);
+   'backenddoAsgRefReg' -> TODO;
+   eoo
+
+-- backendChkHeap:dopart --
+do (if intel_trace then 'backendChkHeap' -> comment if);
+   (# ioaOp: @
+        (# putop: @ (* fills 4 bytes *)
+             (# offset: @integer;
+             enter offset
+             do (if intel_trace then 'ioaOpPutOp' -> comment if);
+                ea_d32 -> mstate.b.patchLastByte;
+                ('IOA'->mstate.Cidentifier,wordMark)->mstate.b.mark;
+                offset -> emitlong;
+             #)
+        #);
+      regF: @integer; 
+   do I.readReg2 -> regF;
+      
+      (* do the assignment *)
+      4 -> I.size;
+      (I.readReg, regF, I.readOffset, I.size) -> emitMovRegMemIndirect;
+      (if not i.withQua then
+          (if call_chkra_unconditionally then
+              (if regF
+               // EBP then 'ChkRA_EBP'->emitJsrT;
+               // ESI then 'ChkRA_ESI'->emitJsrT;
+               else
+                  'ChkHeap: unknown dst register: ' -> puttext;
+                  regF -> putint; 
+                  newline;
+              if);
+           else
+              (* Only call ChkRA if theCell is outside IOA *)
+              regF -> cmpl_rm -> emit2bytes;           (* cmpl reg, IOA *)
+              0 -> ioaOp.PutOp;
+              cond_b -> jccc_short -> B_emitbyte;      (* jb Lfail *)
+              mstate.b.LIP+2+4+2+1 -> emitrel8off;     (* 2 bytes *)
+              regF -> cmpl_rm -> emit2bytes;           (* 2 bytes *) (* cmpl reg,IOA+4 *)
+              4 -> ioaOp.PutOp;                        (* 4 bytes *)
+              cond_b -> jccc_short -> B_emitbyte;      (* jb Lok *)
+              (if common.switch[87] then
+                  mstate.b.LIP+1+5+5+1->emitrel8off;   (* 2 bytes *)
+               else
+                  mstate.b.LIP+1+5+1 -> emitrel8off;   (* 2 bytes *)
+              if);
+              
+              (* Lfail: *)
+              regF -> _pushl_r -> B_emitbyte;          (* 1 byte *)
+              (* Do NOT use doPush - ChkRA does the pop *)
+              (if common.switch[87] then
+                  saveProfStackTop;                    (* -s 87: 5 bytes *)
+              if);
+              'ChkRA'->emitJsrT;                       (* 5 bytes *)
+              
+              (* Lok.def *)
+              (xor_ttt, regF, regF) -> alul_rr -> emit2bytes; 
+          if)
+      if);
+      eoo;
+   #)
+   
+-- backendgAddImm:dopart --
+do (if intel_trace then 'backendgAddImm' -> comment if);
+   (add_ttt, I.imm, I.writeReg, I.size) -> emitALUinstImm;
+   eoo;
+
+-- backendgAddReg:dopart --
+do (if intel_trace then 'backendgAddReg' -> comment if);
+   (add_ttt, I.readReg, I.writeReg, I.size) -> emitALUinstReg;
+   eoo;
+
+-- backendaddMem:dopart --
+do (if intel_trace then 'backendaddMem' -> comment if);
+   'backendaddMem' -> TODO;
+
+-- backendgNeg:dopart --
+do (if intel_trace then 'backendgNeg' -> comment if);
+   (if I.readReg<>I.writereg then
+       'backendgNeg: different src/dst NYI!' -> TODO;
+   if);
+   (neg_ttt, I.readreg, I.size) -> emitINVreg;
+   eoo;
+   
+-- backendgSubImm:dopart --
+do (if intel_trace then 'backendgSubImm' -> comment if);
+   (sub_ttt, I.imm, I.writeReg, I.size) -> emitALUinstImm;
+   eoo;
+
+-- backendgSubReg:dopart --
+do (if intel_trace then 'backendgSubReg' -> comment if);
+   (sub_ttt, I.readReg, I.writeReg, I.size) -> emitALUinstReg;
+   eoo;
+
+-- backendgMultImm:dopart --
+do (if intel_trace then 'backendgMultImm' -> comment if);
+   (I.writeReg, I.readReg2) -> imul_rir -> emit2bytes;
+   I.imm -> emitlong;
+   eoo;
+   
+--backendgMultReg:dopart --
+do (if intel_trace then 'backendgMultReg' -> comment if);
+   (I.writeReg, I.readReg) -> imul_rr -> emit3bytes;
+   eoo;
+   
+--backendgDIVImm:dopart --
+do (if intel_trace then 'backendgDIVImm' -> comment if);
+   'backendgDIVImm' -> TODO;
+
+--backendgDIVReg:dopart --
+do (# numProtect, divReg: @integer;
+      esi_pushed, eax_pushed, edx_pushed: @boolean;
+   do (if intel_trace then 
+          'backendgDIVReg' -> comment;
+          ('ReadReg', I.readreg) -> putreg;
+          ('ReadReg2', I.readreg2) -> putreg;
+          ('WriteReg', I.writereg) -> putreg;
+          newline;
+      if);
+      (* [INTEL] p. 26-157:
+       *    IDIV EAX,r/m32
+       *    Signed divide EDX:EAX (where EDX must contain sign-extension
+       *    of AEX) by r/m dword (Results: EAX=Qua, EDX=Rem)
+       * 
+       * I.ReadReg:  Numerator  -> EDX:EAX
+       * I.ReadReg2: Divisor
+       * I.writeReg: Quotient/remainder
+       *)
+      
+      0 -> numProtect;
+      false -> eax_pushed -> esi_pushed -> edx_pushed;
+      
+      (if I.writeReg<>EDX then
+          (* Save EDX = this unless it's the destination reg *)
+          doPush(# do edx -> _pushl_r -> B_emitbyte; #);
+          true -> edx_pushed;
+      if);
+      (if (I.ReadReg2=EAX) or (I.ReadReg2=EDX) then
+          (* divisor in numerator reg: use ESI instead *)
+          doPush(# do ESI -> _pushl_r -> B_emitbyte; #);
+          true -> esi_pushed;
+          (* ESI is ref reg - no need for protect tag *)
+          (I.readReg2,ESI)->movl_rr->emit2bytes;
+          ESI -> divReg;
+       else
+          I.ReadReg2 -> divReg;
+      if);
+      
+      (if I.ReadReg<>EAX then
+          (if I.WriteReg<>EAX then
+              doPush(# do EAX -> _pushl_r -> B_emitbyte; #);
+              true -> eax_pushed;
+              numProtect+1 -> numProtect;
+          if);
+          (I.readReg,EAX)->movl_rr->emit2bytes;
+      if);
+      numProtect -> pushProtectTag;
+      
+      cdq -> B_emitbyte; (* sign extend %eax to %edx *)
+      divReg -> idivl_r -> emit2bytes; 
+      
+      (* Now: EAX=quotient, EDX=remainder *)
+      (if I.isDiv then
+          (if EAX<>I.WriteReg then
+              (EAX,I.WriteReg)->movl_rr->emit2bytes;
+          if);
+       else
+          (if EDX<>I.WriteReg then
+              (EDX,I.WriteReg)->movl_rr->emit2bytes;
+          if);
+      if);
+      
+      (* Restore saved regs *)
+      (if numProtect>0 then
+          doPop(# do EDX -> _popl_r -> B_emitbyte; (* Remove tag using EDX *) #)
+      if);
+      (if eax_pushed then
+          doPop(# do EAX -> _popl_r -> B_emitbyte; (* Restore EAX *) #)
+      if);
+      (if esi_pushed then
+          doPop(# do ESI -> _popl_r -> B_emitbyte; #)
+      if);
+      (if edx_pushed then
+          (* Restore EDX = this *)
+          doPop(# do EDX -> _popl_r -> B_emitbyte; #)
+      if);
+   #);
+   eoo;
+   
+--backendgOrImm:dopart --
+do (if intel_trace then 'backendgOrImm' -> comment if);
+   (if I.imm<>0 then
+       (or_ttt, I.imm, I.readReg2, I.size) -> emitALUinstImm;
+   if);
+   eoo;
+
+--backendgOrReg:dopart --
+do (if intel_trace then 'backendgOrReg' -> comment if);
+   (or_ttt, I.readReg, I.readReg2, I.size) -> emitALUinstReg;
+   eoo;
+  
+--backendgAndImm:dopart --
+do (if intel_trace then 'backendgAndImm' -> comment if);
+   (if I.imm<>0xffffffff then
+       (and_ttt, I.imm, I.readReg2, I.size) -> emitALUinstImm;
+   if);
+   eoo;
+
+--backendgAndReg:dopart --
+do (if intel_trace then 'backendgAndReg' -> comment if);
+   (and_ttt, I.readReg, I.readReg2, I.size) -> emitALUinstReg;
+   eoo;
+   
+--backendgAndNReg:dopart --
+do (if intel_trace then 'backendgAndNReg' -> comment if);
+   (not_ttt, I.readreg2, I.size) -> emitINVreg;
+   (and_ttt, I.readReg2, I.readReg, I.size) -> emitALUinstReg;
+   eoo;
+   
+--backendgxOrImm:dopart --
+do (if intel_trace then 'backendgxOrImm' -> comment if);
+   (xor_ttt, I.imm, I.readReg2, I.size) -> emitALUinstImm;
+   eoo;
+
+--backendgxOrReg:dopart --
+do (if intel_trace then 'backendgxOrReg' -> comment if);
+   (if I.readReg2<>I.writereg then
+       'backendgXOrReg: different src/dst NYI!' -> TODO;
+   if);
+   (xor_ttt, I.readReg, I.readReg2, I.size) -> emitALUinstReg;
+   eoo;
+
+--backendgNot:dopart --
+do (if intel_trace then 'backendgNot' -> comment if);
+   (if I.readReg<>I.writereg then
+       'backendgNot: different src/dst NYI!' -> TODO;
+   if);
+   (add_ttt, 1, I.readreg, I.size) -> emitALUinstImm;
+   (and_ttt, 1, I.readreg, I.size) -> emitALUinstImm;
+   eoo;
+
+--backendlogNot:dopart --
+do (if intel_trace then 'backendlogNot' -> comment if);
+   (not_ttt, I.readreg, I.size) -> emitINVreg;
+   eoo;
+
+--backendgCmpImm:dopart --
+do (if intel_trace then 'backendgCmpImm' -> comment if);
+   'backendgCmpImm' -> TODO;
+   eoo;
+   
+--backendgCmpReg:dopart --
+do (if intel_trace then 'backendgCmpReg' -> comment if);
+   'backendgCmpReg' -> TODO;
+   eoo;
+
+--backendSignExtByte:dopart --
+do (if intel_trace then 'backendSignExtByte' -> comment if);
+   (i.readReg, i.writeReg) -> movsxbl_rrr -> emit3bytes;   
+   eoo;
+
+--backendSignExtWord:dopart --
+do (if intel_trace then 'backendSignExtWord' -> comment if);
+   (i.readReg, i.writeReg) -> movsxwl_rrr -> emit3bytes;
+   eoo;
+
+--backendGetBits:dopart --
+   (* pos = i.imm; length = i.size, signed flag. *)
+do (if intel_trace then 'backendGetBits' -> comment if);
+   'backendGetBits' -> TODO;
+   eoo;
+   
+--backendgGetBits:dopart --
+do (if intel_trace then 'backendgGetBits' -> comment if);
+   'backendgGetBits' -> TODO;
+   eoo;
+   
+--backendputBits:dopart --
+do (if intel_trace then 'backendputBits' -> comment if);
+   'backendputBits' -> TODO;
+   eoo;
+   
+--backendgPutBits:dopart --
+do (if intel_trace then 'backendgPutBits' -> comment if);
+   'backendgPutBits' -> TODO;
+   eoo;
+
+--backendByteSwap:dopart --
+do (if intel_trace then 'backendByteSwap' -> comment if);
+   'backendByteSwap' -> TODO;
+   eoo;
+
+--backendgGetDataByte:dopart --
+do (if intel_trace then 'backendgGetDataByte' -> comment if);
+   (if I.imm (* byteNo *)
+    // 3 then (* rotate left 8 bits *)
+       (rol_ttt, I.readReg) -> shiftl_ri8 -> emit2bytes;
+       8 -> B_emitbyte;
+    // 2 then 
+       (* swap register halves. *)
+       (rol_ttt, I.readReg) -> shiftl_ri8 -> emit2bytes;
+       16 -> B_emitbyte;
+    // 1 then (* rotate right 8 bits *)
+       (ror_ttt, I.readReg) -> shiftl_ri8 -> emit2bytes;
+       8 -> B_emitbyte;
+   if);
+   (and_ttt, 0xff, I.readReg, 4) -> emitAluImmReg;
+   eoo;
+   
+--backendgGetDataWord:dopart --
+do (if intel_trace then 'backendgGetDataWord' -> comment if);
+   (if I.imm(*wordNo*)=2 then
+       (* for some reason wordNo=2*i for i in getShort[i] *)
+       (ror_ttt, I.readReg) -> shiftl_ri8 -> emit2bytes;
+       16 -> B_emitbyte;
+   if);
+   (and_ttt, 0xffff, I.readReg, 4) -> emitAluImmReg;
+   eoo;
+   
+--backendarithShiftLeftImm:dopart --
+do (if intel_trace then 'backendarithShiftLeftImm' -> comment if);
+   (if I.imm<>0 then
+       (sal_ttt, I.readReg, I.imm) -> emitSHIFTimm;
+   if);
+   eoo;
+   
+--backendarithShiftLeftReg:dopart --
+do (if intel_trace then 'backendarithShiftLeftReg' -> comment if);
+   (sal_ttt, I.readReg, I.readReg2) -> emitSHIFTreg;
+   eoo;
+     
+--backendlogicalShiftLeftImm:dopart --
+do (if intel_trace then 'backendlogicalShiftLeftImm' -> comment if);
+   (if I.imm<>0 then
+       (shl_ttt, I.readReg, I.imm) -> emitSHIFTimm;
+   if);
+   eoo;
+
+--backendlogicalShiftLeftReg:dopart --
+do (if intel_trace then 'backendlogicalShiftLeftReg' -> comment if);
+   (shl_ttt, I.readReg, I.readReg2) -> emitSHIFTreg;
+   eoo;
+
+--backendarithShiftRightImm:dopart --
+do (if intel_trace then 'backendarithShiftRightImm' -> comment if);
+   (if I.imm<>0 then
+       (sar_ttt, I.readReg, I.imm) -> emitSHIFTimm;
+   if);
+   eoo;
+
+--backendarithShiftRightReg:dopart --
+do (if intel_trace then 'backendarithShiftRightReg' -> comment if);
+   (sar_ttt, I.readReg, I.readReg2) -> emitSHIFTreg;
+   eoo;
+
+--backendlogicalShiftRightImm:dopart --
+do (if intel_trace then 'backendlogicalShiftRightImm' -> comment if);
+   (if I.imm<>0 then
+       (shr_ttt, I.readReg, I.imm) -> emitSHIFTimm;
+   if);
+   eoo;
+
+--backendlogicalShiftRightReg:dopart --
+do (if intel_trace then 'backendlogicalShiftRightReg' -> comment if);
+   (shr_ttt, I.readReg, I.readReg2) -> emitSHIFTreg;
+   eoo;
+
+--backendrotateLeftImm:dopart --
+do (if intel_trace then 'backendrotateLeftImm' -> comment if);
+   (if I.imm<>0 then
+       (rol_ttt, I.readReg, I.imm) -> emitSHIFTimm;
+   if);
+   eoo;
+   
+--backendrotateLeftReg:dopart --
+do (if intel_trace then 'backendrotateLeftReg' -> comment if);
+   (rol_ttt, I.readReg, I.readReg2) -> emitSHIFTreg;
+   eoo;
+   
+--backendrotateRightImm:dopart --
+do (if intel_trace then 'backendrotateRightImm' -> comment if);
+   (if I.imm<>0 then
+       (ror_ttt, I.readReg, I.imm) -> emitSHIFTimm;
+   if);
+   eoo;
+   
+--backendrotateRightReg:dopart --
+do (if intel_trace then 'backendrotateRightReg' -> comment if);
+   (ror_ttt, I.readReg, I.readReg2) -> emitSHIFTreg;
+   eoo;
+  
+--backendBeginLabel:dopart --
+do (if intel_trace then 'backendBeginLabel' -> comment if);
+   (ESP, I.readReg) -> movl_rr -> emit2bytes;
+   (sub_ttt, 'lastCompBlock', EAX, 4)->emitAluInstText;
+   (I.readReg, EDX, I.imm, 4) -> emitMovRegMemIndirect;
+   eoo;
+
+--backendFreeLabel:dopart --
+do (if intel_trace then 'backendFreeLabel' -> comment if);
+   'backendFreeLabel' -> TODO;
+   eoo;
+
+--backendEndLabel:dopart --
+do (if intel_trace then 'backendEndLabel' -> comment if);
+   'backendEndLabel' -> TODO;
+   eoo;
+
+--backendsaveInnerReturn:dopart --
+do (if intel_trace then 'backendsaveInnerReturn' -> comment if);
+   (* empty *)
+   eoo;
+   
+---backendExternalMark:doPart---
+do (if intel_trace then 'backendExternalMark' -> comment if);
+   'backendExternalMark' -> TODO;
+   eoo;
+   
+---backendExternalReturn:doPart---
+do (if intel_trace then 'backendExternalReturn' -> comment if);
+   'backendExternalReturn' -> TODO;
+   eoo;
+   
+---backendinitXpar:doPart---
+do (if intel_trace then 'backendinitXpar' -> comment if);
+   'backendinitXpar' -> TODO;
+   eoo;
+   
+---backendPreGetXpar:doPart---
+do (if intel_trace then 'backendPreGetXpar' -> comment if);
+   'backendPreGetXpar' -> TODO;
+   eoo;
+   
+---backendNoOfPreGetXpar:doPart---
+do (if intel_trace then 'backendNoOfPreGetXpar' -> comment if);
+   1->value; (* tricky! *)
+   eoo;
+   
+--- backendgetXlong:doPart---
+do (if intel_trace then 'backendgetXlong' -> comment if);
+   'backendgetXlong' -> TODO;
+   eoo;
+
+---backendgetXword:doPart---
+do (if intel_trace then 'backendgetXword' -> comment if);
+   'backendgetXword' -> TODO;
+   eoo;
+
+---backendgetXbyte:doPart---
+do (if intel_trace then 'backendgetXbyte' -> comment if);
+   'backendgetXbyte' -> TODO;
+   eoo;
+
+---backendtoXres:doPart---
+do (if intel_trace then 'backendtoXres' -> comment if);
+   'backendtoXres' -> TODO;
+   eoo;
+   
+---backendXpar:descriptor---
+(# 
+do (if intel_trace then 'backendXpar' -> comment if);
+   'backendXpar' -> TODO;
+   eoo;
+#)  
+
+---backendGetRegForXres:doPart---
+do (if intel_trace then 'backendGetRegForXres' -> comment; if);
+   (* The following is matched by code in getExternalResult *)
+   saveRegImpl;
+   ebp -> _pushl_r -> B_emitbyte;
+   esi -> _pushl_r -> B_emitbyte;
+   eoo;
+
+--backendreturnInner:dopart --
+do (if intel_trace then 'backendreturnInner' -> comment if);
+   rtsImpl;
+   eoo;
+   
+---backendExternalEntry:doPart---
+do (if intel_trace then 'backendExternalEntry' -> comment if);
+   'backendExternalEntry' -> TODO;
+   eoo;
+   
+--backendEmitTextConst:dopart --
+do (if intel_trace then 'backendEmitTextConst' -> comment if);
+   'backendEmitTextConst' -> TODO;
+   eoo;
+
+--backendgClr:dopart --
+do (if intel_trace then 'backendgClr'->comment;  if);
+   (xor_ttt, I.writeReg, I.writeReg) -> alul_rr -> emit2bytes;
+   (*
+    * The above xor form is preferred to "mov 0,reg", since it
+    * fills only two bytes. The xor form sets the condition codes, 
+    * but this should be OK.
+    *) 
+   eoo;
+
+--backendpushAdr:dopart --
+do (if intel_trace then 'backendpushAdr' -> comment if);
+   'backendpushAdr' -> TODO; (* should never be called! *)
+   eoo;
+
+--backendPush:dopart --
+do (if intel_trace then 'backendPush' ->comment if);
+   doPush(# do I.readReg -> _pushl_r -> B_emitbyte; #);
+   eoo;
+
+--backendPop:dopart --
+do (if intel_trace then 'backendPop' ->comment if);
+   doPop(# do I.writeReg -> _popl_r -> B_emitbyte; #);
+   eoo;
+   
+--backendPushThisOrCall:dopart --
+do (if intel_trace then 'backendPushThisOrCall' -> comment if);
+   (if I.bool  (* pushTh *) then doPush(# do EDX -> _pushl_r -> B_emitbyte#) if);
+   (if I.bool2 (* pushCa *) then doPush(# do EDI -> _pushl_r -> B_emitbyte#) if);
+   eoo;
+
+--backendpopThisOrCall:dopart --
+do (if intel_trace then 'backendpopThisOrCall' -> comment if);
+   (if I.bool  (* pushTh *) then doPop(# do EDX -> _popl_r -> B_emitbyte #) if);
+   (if I.bool2 (* pushCa *) then doPop(# do EDI -> _popl_r -> B_emitbyte #) if);
+   eoo;
+
+--backendsetTop:dopart --
+do (if intel_trace then 'backendsetTop' -> comment if);
+   'backendsetTop' -> TODO;
+   eoo;
+
+--backendChkCase:dopart --
+do (if intel_trace then 'backendChkCase' -> comment if);
+   (* inx = caseIndex-min (dataregoperand)
+    * if inx >unsigned  (max-min) the  goto elseLab
+    * This ALSO works if caseIndex < min.
+    *)
+   (# min, max: @integer;
+   do i.size       -> max;
+      i.readOffset -> min;
+      (if ((max-min)->mstate.is8bit) and (max<min) then
+          I.readReg -> cmpl_sir -> emit2bytes;
+          (max-min) %band 0xff -> B_emitbyte;
+       else
+          (max-min, I.readReg, 4) -> emitCmpImmReg;
+      if);
+      ja -> emit2bytes;
+      (I.labno,false) -> mstate.labs.use -> emitrel32off;
+   #);
+   eoo;
+
+--backendChkIndex:dopart --
+do (if intel_trace then 
+       'backendChkIndex' -> comment;
+       ('readReg', I.readReg) -> putreg;
+       ('inxReg', I.inxReg) -> putreg;
+       ('size', I.size) -> putval;
+       ('isSimple', I.condition) -> putbool;
+       newline;
+   if);
+   (if I.indexCheck then
+       (if not I.condition (*isSimple*) then
+           (* General rep currently implemented as refreps *)
+           (if I.size<>4 then
+               'backendChkIndex: general rep missing' -> TODO;
+           if);
+       if);
+       i.inxReg -> boundl_rm -> emit2bytes;
+       (* bound-check from theRep.low, i.e. theRep+8 *)
+       (i.readReg,8)->IndirectReg;
+   if);
+   eoo;
+
+--backendcmpToBool:dopart --
+do (if intel_trace then 'backendcmpToBool' -> comment if);
+   
+   I.size -> check_size -> I.size;
+   
+   (i.readReg,i.readReg2,I.size)->emitCmpRegReg;
+   
+   (* FIXME: OPTIMIZE:
+    * in most cases  (a<b>)->X, X is a boolean. It is therefore NOT
+    * necessary to clear op before executing set. However, X may be
+    * an integer in which case op MUST be cleared. The type of X is
+    * NOT know here, therefore op is always cleared.
+    * If the compiler introduces typechecking, X will always be a boolean
+    * and clear may be avoided. 
+    * This is not yet the case, since only a warning is given, by the 
+    * compiler on assigning boolean to integer.
+    * For now a boolean-parameter to cmpToBool indicating if destination 
+    * is boolean or integer would suffice.
+    * 
+    * datpete: 22/03/2001:
+    * NO! It does not work to skip the clear, even though
+    * the compiler now tests for assignment between bool/int.
+    * There are problems in other situations too, e.g. (if ...//true
+    * Lots of errors in tst, if the clear is removed.
+    *)
+   
+   I.writeReg -> _movl_ir -> B_emitbyte;
+   0 -> emitlong;
+   (* NB do NOT use gClr, if that is implemented by
+    * "xor reg, reg", since this will change the
+    * condition flags.
+    *)
+   (if I.cond (* setCCC I.writeReg *)
+    // common.cond_eq then 
+       (cond_e,  I.writeReg) -> setccc_r -> emit3bytes;
+    // common.cond_ne then 
+       (cond_ne, I.writeReg) -> setccc_r -> emit3bytes;
+    // common.cond_lt then  
+       (if I.size=4 then 
+           (cond_l,I.writeReg)->setccc_r->emit3bytes;
+        else
+           (* unsigned comp. *)
+           (cond_b,I.writeReg)->setccc_r->emit3bytes; 
+       if)
+    // common.cond_le then
+       (if I.size=4 then 
+           (cond_le,I.writeReg)->setccc_r->emit3bytes;
+        else
+           (* unsigned comp. *)
+           (cond_be,I.writeReg)->setccc_r->emit3bytes;
+       if)
+    // common.cond_gt then
+       (if I.size=4 then 
+           (cond_g,I.writeReg)->setccc_r->emit3bytes;
+        else
+           (* unsigned comp. *)
+           (cond_a,I.writeReg)->setccc_r->emit3bytes; 
+       if)
+    // common.cond_ge then
+       (if I.size=4 then 
+           (cond_ge,I.writeReg)->setccc_r->emit3bytes;
+        else
+           (* unsigned comp. *)
+           (cond_ae,I.writeReg)->setccc_r->emit3bytes;
+       if)
+   if);
+   eoo;
+
+--backendLoadFloat:doPart---
+do (if intel_trace then 'backendLoadFloat' -> comment if);
+   fldl -> emit2bytes;
+   (i.readReg, i.readOffset) -> IndirectReg; 
+   eoo;
+   
+--backendLoadFloatInx:doPart---
+do (if intel_trace then 'backendLoadFloatInx' -> comment if);
+   fldl -> emit2bytes;
+   (I.readReg, I.inxReg, 8, I.readOffSet) -> IndexReg;
+   eoo;
+  
+--backendStoreFloat:doPart---
+do (if intel_trace then 'backendStoreFloat' -> comment if);
+   fstpl -> emit2bytes;
+   (i.readReg, i.readOffset) -> IndirectReg; 
+   eoo;
+   
+--backendStoreFloatInx:doPart---
+do (if intel_trace then 'backendStoreFloatInx' -> comment if);
+   fstpl -> emit2bytes;
+   (I.readReg, I.inxReg, 8, I.readOffSet) -> IndexReg;
+   eoo;
+
+---backendStoreFloat2int:dopart---
+do (if intel_trace then 'backendStoreFloat2int' -> comment if);
+   fstpl -> emit2bytes;
+   (i.readReg, i.readOffset) -> IndirectReg; 
+   eoo;
+
+---backendLoadInt2FloatInx:dopart---
+do (if intel_trace then 'backendLoadInt2FloatInx' -> comment if);
+   fildl -> emit2bytes;
+   (i.readReg, i.inxReg, 8, i.readOffset) -> IndexReg; 
+   eoo;
+   
+---backendStoreFloat2intInx:dopart---
+do (if intel_trace then 'backendStoreFloat2intInx' -> comment if);
+   fstpl -> emit2bytes;
+   (I.readReg, I.inxReg, 8, I.readOffSet) -> IndexReg;
+   eoo;
+   
+---backendLoadInt2Float:dopart---
+do (if intel_trace then 'backendLoadInt2Float' -> comment if);
+   fildl -> emit2bytes;
+   (i.readReg, i.readOffset) -> IndirectReg; 
+   eoo;
+   
+--backendfloatConst:dopart --
+do (if intel_trace then 'backendfloatConst' -> comment if);
+   (if I.floatval
+    // -1.0 then
+       fld1 -> emit2bytes;
+       fchs -> emit2bytes;
+    //  1.0 then
+       fld1 -> emit2bytes;
+    //  0.0 then (* FIXME: should be merged with next entry, 
+                  * but beta5.1.1 fails to generate correct code
+                  * for this
+                  *)
+       fldz -> emit2bytes;
+    // -0.0 then
+       fldz -> emit2bytes;
+    else
+       (# labno: @integer;
+       do 8->mstate.d.align;
+          (mstate.defDataLab 
+          (#
+          do @@I.floatval->TOS'%AdrGetLong'->mstate.d.emitlong;
+             @@I.floatval+4->TOS'%AdrGetLong'->mstate.d.emitlong;
+          #)).labno-> labno;
+          fldl -> emit2bytes; 
+          (labno, dataToCode, true, 0, 0, ea_d32) -> LocalLabPutWithReloc; 
+       #);
+   if);
+   eoo;
+
+--backendint2float:dopart --
+do (if intel_trace then 'backendint2float' -> comment if);
+   fildl -> emit2bytes;
+   (I.readReg,I.readOffSet) -> IndirectReg;
+   eoo;
+
+--backendintReg2float:dopart --
+do (if intel_trace then 'backendintReg2float' -> comment if);
+   (i.readReg, mstate.d.tmplab) -> stRegInLab;
+   fildl -> emit2bytes;
+   (mstate.d.tmplab.lab.labno, mstate.d.tmplab.lab.type, true, 0, 0, ea_d32)
+     -> LocalLabPutWithReloc;
+   eoo;
+
+--backendfloat2int:dopart --
+do (if intel_trace then 'backendfloat2int' -> comment if);
+
+   (* save old FPU control word and set chopping *)
+   eax -> PushBusyRegDuring
+   (# 
+   do fstcw -> emit2bytes; (esp,-4) -> IndirectReg;
+      eax -> movl_mr -> emit2bytes; (esp,-4) -> IndirectReg;
+      ah -> _movb_i8r -> B_emitbyte; 12 -> B_emitbyte;
+      eax -> movl_rm -> emit2bytes; (esp,-8) -> IndirectReg;
+      fldcw -> emit2bytes; (esp,-8) -> IndirectReg;
+   #);
+   
+   fistpl -> emit2bytes; 
+   (mstate.d.tmplab.lab.labno, mstate.d.tmplab.lab.type, true, 0, 0, ea_d32)
+    -> LocalLabPutWithReloc;
+   (* restore old FPU control word *)
+   fldcw -> emit2bytes; (esp,-8) -> IndirectReg;
+   
+   (mstate.d.tmplab, I.writeReg) -> ldRegFromLab;
+
+
+--backendcmpToBoolFloat:dopart --
+do (if intel_trace then 'backendcmpToBoolFloat' -> comment if);
+   'backendcmpToBoolFloat' -> TODO;
+
+--backendpopFStack:dopart --
+do (if intel_trace then 'backendpopFStack' -> comment if);
+   (* during cmpAndJmpFloat the fval is kept on the fstack - it must
+    * be popped when no more tests are to be performed - before 'else'
+    * of if no 'else' after 'if'.
+    *)
+   (* ffree -> emit2bytes; fincstp -> emit2bytes; (4 bytes, 3+3=6 cycles *)
+   0 -> fcomp -> emit2bytes; (* 2 bytes, 4 cycles *)
+   eoo;
+
+--backendcmpFloat:dopart --
+do (if intel_trace then 'backendcmpFloat' -> comment if);
+   (* stack top operations. Generate fcompp - i.e. pop arguments*)
+   (if (I.readReg, I.readReg2)->swapFreg then
+       (if false then
+           (* swap top fstack elements before compare *)
+           1 -> fxch -> emit2bytes;
+        else
+           (* Reverse condition instead of operands for non-symmetric 
+            * conditions 
+            *)
+           (if I.cond
+            // common.cond_lt then common.cond_gt -> I.cond
+            // common.cond_le then common.cond_ge -> I.cond
+            // common.cond_gt then common.cond_lt -> I.cond
+            // common.cond_ge then common.cond_le -> I.cond
+           if);
+       if);
+   if);
+   (if I.PopFloatStack then
+       (* Compare and pop two operands *)
+       fcompp -> emit2bytes;
+    else
+       (* Compare and pop only one operand *)
+       1 -> fcomp -> emit2bytes;
+   if);
+   eoo;
+
+--backendaddFloat:dopart --
+do (if intel_trace then
+       'backendaddFloat' -> comment;
+       ('readreg', i.readReg) -> putfreg;
+       ('readreg2', i.readReg2) -> putfreg;
+       ('writereg', i.writeReg) -> putfreg;
+       newline;
+   if);
+   (if i.readReg=0 then (* fadd to top stack element *)
+       i.readreg2 -> faddp -> emit2bytes;
+    else
+       'backendaddFloat: op1 not ST[0]' -> TODO;
+   if);
+   (if common.switch[13] then SynchronizeFPU if); 
+   eoo;
+
+--backendsubFloat:dopart --
+do (if intel_trace then 'backendsubFloat' -> comment if);
+   'backendsubFloat' -> TODO;
+   eoo;
+
+--backendmulFloat:dopart --
+do (if intel_trace then 'backendmulFloat' -> comment if);
+   'backendmulFloat' -> TODO;
+   eoo;
+
+--backenddivFloat:dopart --
+do (if intel_trace then 'backenddivFloat' -> comment if);
+   'backenddivFloat' -> TODO;
+   eoo;
+
+--backendnegFloat:dopart --
+do (if intel_trace then 'backendnegFloat' -> comment if);
+   'backendnegFloat' -> TODO;
+
+--backendlock:dopart --
+do (if intel_trace then 'backendlock' -> comment if);
+   'backendlock' -> TODO;
+   eoo;
+
+--backendallRegInPrimReg2I:dopart --
+do (if intel_trace then 'backendallRegInPrimReg2I' -> comment if);
+   'backendallRegInPrimReg2I' -> TODO;
+   eoo;
+
+--backendGetOriginReg:dopart --
+do (if intel_trace then 'backendGetOriginReg' -> comment if);
+   'backendGetOriginReg' -> TODO;
+   eoo;
+
+--backendFreeOriginReg:dopart --
+do (if intel_trace then 'backendFreeOriginReg' -> comment if);
+   'backendFreeOriginReg' -> TODO;
+   eoo;
+
+--backendDataRegMax:dopart --
+do (if intel_trace then 'backendDataRegMax' -> comment if);
+   'backendDataRegMax' -> TODO;
+   eoo;
+
+--backendNoOfFreeDataReg:dopart --
+do (if intel_trace then 'backendNoOfFreeDataReg' -> comment if);
+   'backendNoOfFreeDataReg' -> TODO;
+   eoo;
+
+--backendDumpReg:dopart --
+do(if intel_trace then ' backendDumpReg' -> comment if);
+   'backendDumpReg' -> TODO;
+   eoo;
+
+--backendPushReg:dopart --
+do (if intel_trace then 'backendPushReg' -> comment if);
+   (# dataCount,tag:@integer;
+   do liveAdr[]->scanBitvektor32
+      (# 
+      do (if current<>EDI then (* CallReg/Ca/CallO *)
+             (*'intel.pushAdrreg, %d\n'->screen.putformat(# do current -> d #);*)
+             doPush(# do current-> _pushl_r -> B_emitbyte; #);
+         if)
+      #);
+      liveData[]->scanBitvektor32
+      (# 
+      do (*'intel.pushDatareg, %d\n'->screen.putformat(# do current -> d #);*)
+         dataCount+1->dataCount;
+         doPush(# do current -> _pushl_r -> B_emitbyte; #)
+      #);
+      dataCount->pushProtectTag
+   #);
+   eoo;
+   
+--backendPopReg:dopart --
+do (if intel_trace then 'backendPopReg' -> comment if);
+   (# Areg,Dreg:[8]@boolean;
+      dataCount:@integer;
+   do liveData[]->scanBitvektor32
+      (# 
+      do (*'intel.popDatareg, %d\n'->screen.putformat(# do current -> d #);*) 
+         true -> Dreg[current+1];
+         dataCount+1->dataCount
+      #);
+      
+      liveAdr[]->scanBitvektor32
+      (# 
+      do (if current<>EDI then
+             (*'intel.popAdrreg, %d\n'->screen.putformat(# do current -> d #);*) 
+             true -> Areg[current+1]
+         if)
+      #);
+      
+      (if dataCount>0 then
+          (for i:8 repeat
+               (if dReg[8-i+1] then
+                   (if dataCount>0 then
+                       (* pop data tag *)
+                       doPop(# do 8-i -> _popl_r -> b_emitbyte; #);
+                       0->dataCount
+                   if);
+                   doPop(# do 8-i -> _popl_r -> b_emitbyte #);
+               if)
+          for)
+      if);
+      (for i:8 repeat
+           (if aReg[8-i+1] then 
+               doPop(# do 8-i -> _popl_r -> b_emitbyte #);
+           if)
+      for)
+   #);
+   eoo;
+
+--backendPushDataReg:dopart --
+do (if intel_trace then 'backendPushDataReg' -> comment if);
+   'backendPushDataReg' -> TODO;
+   eoo;
+
+--backendPopDataReg:dopart --
+do (if intel_trace then 'backendPopDataReg' -> comment if);
+   'backendPopDataReg' -> TODO;
+   eoo;
+
+--backendPushFloatReg:dopart --
+do (if intel_trace then 'backendPushFloatReg' -> comment if);
+   'backendPushFloatReg' -> TODO;
+   eoo;
+
+--backendPopFloatReg:dopart --
+do (if intel_trace then 'backendPopFloatReg' -> comment if);
+   'backendPopFloatReg' -> TODO;
+   eoo;
+
+--backendtstNone:dopart --
+   (* FIXME: Could possibly be eliminated if we are sure code after
+    * none check loads from the address.
+    *)
+do (if intel_trace then 'backendtstNone' -> comment if);
+   (*   cmpb 0[R],0
+    *     - 4(3) bytes
+    *     - Trap if protected memory or ref none.
+    * Possibly cheaper:
+    *   mov 0[R],scratch
+    *     - 3 bytes
+    *)
+   I.writeReg->cmpb_rim->emit2bytes;
+   (if I.writeReg = ebp then
+       ea_ind_d8 -> mstate.B.patchLastByte;
+       (0,0)->emit2bytes;
+    else
+       0 -> B_emitbyte;
+   if);
+   eoo;
+
+--backendtrap:dopart --
+do (if intel_trace then 'backendtrap' -> comment if);
+   'backendtrap' -> TODO;
+   eoo;
+
+--backendreturn:dopart --
+do (if intel_trace then 'backendreturn' -> comment if);
+   (thisO,callO) -> movl_rr->emit2bytes; 
+   (* The following pop should NOT decrement mstate.numPush, since there may
+    * be multiple backendreturns, in case of "leave foo" inside "foo".
+    * However, since backendReturn is always the last thing executed in the 
+    * generated code, this should not destroy the offsets used in subsequent 
+    * instructions in this entry point. 
+    *)
+   thisO -> _popl_r -> B_emitbyte;
+   1 -> pushPopCheck;
+   rtsImpl;
+   eoo;
+   
+--backendsaveReturn:dopart --
+do (if intel_trace then 
+       'backendsaveReturn' -> comment;
+       (* '\tStackCells[data]=%d, StackCells[adr]=%d, StackCells[float]=%d, StackCells[prim]=%d\n'->
+        * screen.putformat
+        * (# do stackCells[1]->d; stackCells[2]->d; stackCells[3]->d; stackCells[4]->d #);
+        *)
+   if);
+   
+   (* As noted in backendReturn above, we cannot ensure that the push count of 
+    * the previous entry point always ends with 0, since backenReturn does 
+    * not decrement the counter. Thus we nullify the counter here on entry.
+    *)
+   0 -> mstate.numPush;
+   (if intel_trace then
+       '==saveReturn#'->puttext;
+       mstate.numPush -> putint; newline;
+   if);
+   doPush(# do thisO -> _pushl_r -> B_emitbyte; (* push thisO *) #);
+   (callO,thisO) -> movl_rr->emit2bytes; (* callO -> thisO *)
+   eoo
+
+--backendrts:dopart --
+do ret->B_emitbyte;
+   eoo;
+
+--backendSaveReg:dopart --
+do (if intel_trace then 'backendsaveReg' -> comment if);
+   doPush(# do edx -> _pushl_r -> B_emitbyte; #);
+   doPush(# do edi -> _pushl_r -> B_emitbyte; #);
+   (if intel_trace then 'backendsaveReg done' -> comment if);
+      eoo;
+
+--backendRestoreReg:dopart --
+do (if intel_trace then 'backendRestoreReg' -> comment if);
+   doPop(# do edi -> _popl_r -> B_emitbyte; #);
+   doPop(# do edx -> _popl_r -> B_emitbyte; #);
+   eoo;
+
+--backendGetPrimRes:dopart --
+do (if intel_trace then 'getprimres' -> comment if);
+   (if i.imm (*res*)
+    // 0 (* ignore result *) 
+    // 2 then (* push to C *)
+    // 1 
+    // 3 then
+       (* the result is returned in physical register EAX. *)
+       (if i.writereg<>EAX then
+           'getprimres: Use of explicit EAX' -> TODO;
+           (EAX,i.writeReg) -> movl_rr -> emit2bytes;
+       if)
+    // 4 then
+       (* text returned from BETA COM virtual *) 
+       (if intel_trace then 'backendGetPrimRes: COM' -> comment if);
+   'backendGetPrimRes: COM' -> TODO;
+   if);
+   eoo;
+
+--backenddeclareLong: doPart--
+do (if intel_trace then 'backenddeclareLong' -> comment if);
+   N->mstate.d.emitlong;
+   eoo;
+   
+--backenddeclareWord: doPart--
+do (if intel_trace then 'backenddeclareWord' -> comment if);
+   N->mstate.d.emitHalf;
+   eoo;
+   
+--backenddclWord: doPart--
+do (if intel_trace then 'backenddclWord' -> comment if);
+   N->mstate.d.emitHalf;
+   eoo;
+   
+--backendemitByte: doPart--
+do (if intel_trace then 'backenddeclareByte' -> comment if);
+   B->mstate.d.emitByte;
+   eoo;
+
+--backendDeclareAddress:dopart --
+do (if intel_trace then 'backendDeclareAddress' -> comment if);
+   (I.labno, I.type, false, 0, 0, 0) 
+     -> localLabPutWithReloc;
+   eoo;
+   
+--declareDataSegmentTextAddressImpl:dopart--
+do (if intel_trace then 'declareDataSegmentTextAddressImpl' -> comment if);
+   (i.label[],wordMark)->mstate.d.mark; 
+   0 ->mstate.d.emitlong;
+   eoo;
+   
+--declareDataSegmentLabelAddressImpl:dopart--
+do (if intel_trace then 'declareDataSegmentLabelAddressImpl' -> comment if);
+   (I.labno, I.type, not I.condition (*isData*), 0, 0, ea_d32) 
+     -> localLabPutWithReloc;
+   eoo;
+   
+--backendChkConstIndex:dopart --
+do (if intel_trace then 'backendChkConstIndex' -> comment if);
+   'backendChkConstIndex' -> TODO;
+   eoo;
+
+--backendjsrTable:dopart --
+do (if intel_trace then 'backendjsrTable' -> comment if);
+   I[]->JsrRegImpl;
+   eoo;
+
+--backendjmpTlong:dopart --
+do (if intel_trace then 'backendjmpTlong' -> comment if);
+   (* ASSUMPTION: Always called with an argument EXTERNAL to this fragment *)
+   I.label[] -> mstate.b.emitJmpExtern;
+   eoo;
+   
+--backendjmpT:dopart --
+do (if intel_trace then 'backendjmpT' -> comment if);
+   'backendjmpT' -> TODO;
+   eoo;
+
+--backendjsrT:dopart --
+do (if intel_trace then 'jsrT' -> comment if);
+   I.label[] -> emitJsrT;
+   eoo;
+
+--backendjsrReg:dopart --
+do (if intel_trace then 'backendJsrReg' -> comment if);
+   I.readReg -> call_r -> emit2bytes;
+   eoo;
+   
+--backendjmpReg:dopart --
+do (if intel_trace then 'backendjmpReg' -> comment if);
+   I.readReg -> jmp_r -> emit2bytes;
+   eoo;
+
+--backendgJsr:dopart --
+do (if intel_trace then 'gJsr' -> comment if);
+       (*(if intel_trace then (op[], none) -> traceOps; if);*)
+   (if common.switch[85] then
+       (* we rely on that NO values have been pushed
+        * on the stack since float.saveSpace in pushDataReg
+        *)
+       (*4 -> rep.float.nsave*)
+       (* restore is made in popDataReg *)
+   if);
+   (if I.isLocal then
+       I.label -> mstate.b.emitCallLocal;
+    else
+       I.label -> mstate.b.emitCallExtern;
+   if);
+   eoo;
+   
+--backendjsrTableTest:dopart --
+do (if intel_trace then 'backendjsrTableTest' -> comment if);
+   'backendjsrTableTest' -> TODO;
+   eoo;
+   
+--backendJumpIfTrue:dopart--
+do (if intel_trace then 'backendJumpIfTrue' -> comment if);
+   (cond_ae, I.labno) -> emitCondJmp; 
+   eoo
+   
+--backendgBeq:dopart--
+do (if intel_trace then 'backendgBeq' -> comment if);
+   (cond_e, I.labno) -> emitCondJmp;
+   eoo
+   
+--backendgBge:dopart--
+do (if intel_trace then 'backendgBge' -> comment if);
+   (cond_ge, I.labno) -> emitCondJmp; 
+   eoo 
+   
+--backendgBne:dopart--
+do (if intel_trace then 'backendgBne' -> comment if);
+   (cond_ne, I.labno) -> emitCondJmp; 
+   eoo 
+   
+--backendgBae:dopart--
+do (if intel_trace then 'backendgBae' -> comment if);
+   (cond_ae, I.labno) -> emitCondJmp; 
+   eoo 
+   
+--backendgBle:dopart--
+do (if intel_trace then 'backendgBle' -> comment if);
+   (cond_le, I.labno) -> emitCondJmp; 
+   eoo 
+   
+--backendgBbe:dopart--
+do (if intel_trace then 'backendgBbe' -> comment if);
+   (cond_be, I.labno) -> emitCondJmp; 
+   eoo 
+   
+--backendgBgt:dopart--
+do (if intel_trace then 'backendgBgt' -> comment if);
+   (cond_nle, I.labno) -> emitCondJmp; 
+   eoo 
+   
+--backendgBab:dopart--
+do (if intel_trace then 'backendgBab' -> comment if);
+   (cond_a, I.labno) -> emitCondJmp; 
+   eoo 
+   
+--backendgBlt:dopart--
+do (if intel_trace then 'backendgBlt' -> comment if);
+   (cond_l, I.labno) -> emitCondJmp; 
+   eoo 
+   
+--backendgBbl:dopart--
+do (if intel_trace then 'backendgBbl' -> comment if);
+   (cond_b, I.labno) -> emitCondJmp; 
+   eoo 
+
+--backendcmpAndJmp:dopart --
+do (if intel_trace then 
+       'backendcmpAndJmp' -> comment;
+   if);
+   I.size -> check_size -> I.size;
+   (I.readReg2,I.readReg,I.size)->emitCmpRegReg;
+   (if i.cond (* IF T1 cc R then goto L *)
+    // common.cond_eq then 
+       I[]->gBeqImpl;
+    // common.cond_ne then 
+       I[]->gBneImpl
+    // common.cond_lt then 
+       (if I.size=4 then I[]->gBltImpl else I[]->gBblImpl if)
+    // common.cond_le then 
+       (if I.size=4 then I[]->gBleImpl else I[]->gBbeImpl if)
+    // common.cond_gt then 
+       (if I.size=4 then I[]->gBgtImpl else I[]->gBabImpl if)
+    // common.cond_ge then 
+       (if I.size=4 then I[]->gBgeImpl else I[]->gBaeImpl if)
+   if);
+   eoo;
+
+--backendcmpAndJmpImm:dopart --
+do (if intel_trace then 
+       'backendcmpAndJmpImm' -> comment;
+       ('imm',I.imm) -> putval;
+       ('reg',I.readreg) -> putreg;
+       ('size',I.size) -> putval;
+   if);
+   I.size -> check_size -> I.size;
+   (I.imm,I.readReg,I.size)->emitCmpImmReg;
+   (if i.cond (* IF T1 cc R then goto L *)
+    // common.cond_eq then 
+       I[]->gBeqImpl;
+    // common.cond_ne then 
+       I[]->gBneImpl
+    // common.cond_lt then 
+       (if I.size=4 then I[]->gBltImpl else I[]->gBblImpl if)
+    // common.cond_le then 
+       (if I.size=4 then I[]->gBleImpl else I[]->gBbeImpl if)
+    // common.cond_gt then 
+       (if I.size=4 then I[]->gBgtImpl else I[]->gBabImpl if)
+    // common.cond_ge then 
+       (if I.size=4 then I[]->gBgeImpl else I[]->gBaeImpl if)
+   if);
+   eoo;
+
+--backendcmpBoolAndJmp:dopart --
+do (if intel_trace then 'backendcmpBoolAndJmp' -> comment if);
+   (0,I.readReg,I.size)->emitCmpImmReg;
+   (if i.cond (* IF T1 cc R then goto L *)
+    // common.cond_eq then 
+       I[]->gBeqImpl;
+    // common.cond_ne then 
+       I[]->gBneImpl
+    // common.cond_lt then 
+       (if I.size=4 then I[]->gBltImpl else I[]->gBblImpl if)
+    // common.cond_le then 
+       (if I.size=4 then I[]->gBleImpl else I[]->gBbeImpl if)
+    // common.cond_gt then 
+       (if I.size=4 then I[]->gBgtImpl else I[]->gBabImpl if)
+    // common.cond_ge then 
+       (if I.size=4 then I[]->gBgeImpl else I[]->gBaeImpl if)
+   if);
+   eoo;
+
+--backendcmpAndJmpFloat:dopart --
+do (if intel_trace then 'backendcmpAndJmpFloat' -> comment if);
+   (* stack top operation - compare top elements, 
+    * BUT unless pop is true top-1 MUST be kept on the stack after compare,
+    * since it may be used in subsequent compares
+    *)
+   (if I.cond (* IF T1 cc R then goto L *)
+    // common.cond_eq then I[]->fBeqImpl
+    // common.cond_ne then I[]->fBneImpl
+    // common.cond_lt then I[]->fBltImpl
+    // common.cond_le then I[]->fBeqImpl
+    // common.cond_gt then I[]->fBleImpl
+    // common.cond_ge then I[]->fBgeImpl
+   if);
+   (if not I.PopFloatStack then
+       (* pop fstack: if no jump then if alternative is selected *)
+       popFstackImpl;
+   if);
+   eoo;
+   
+--backendfBeq:dopart --
+do (if intel_trace then 'backendfBeq' -> comment if);
+   TstFloat(# do (cond_e, I.labno) -> emitCondJmp; eoo #);
+   eoo;
+
+--backendfBge:dopart --
+do (if intel_trace then 'backendfBge' -> comment if);
+   TstFloat(# do (cond_ae, I.labno) -> emitCondJmp; eoo #);
+   eoo;
+   
+--backendfBle:dopart --
+do (if intel_trace then 'backendfBle' -> comment if);
+   TstFloat(# do (cond_be, I.labno) -> emitCondJmp; eoo #);
+   eoo;
+
+--backendfBne:dopart --
+do (if intel_trace then 'backendfBne' -> comment if);
+   TstFloat(# do (cond_nz, I.labno) -> emitCondJmp; eoo #);
+   eoo;
+
+--backendfBgt:dopart --
+do (if intel_trace then 'backendfBgt' -> comment if);
+   TstFloat(# do (cond_a, I.labno) -> emitCondJmp; eoo #);
+   eoo;
+
+--backendfBlt:dopart --
+do (if intel_trace then 'backendfBlt' -> comment if);
+   TstFloat(# do (cond_b, I.labno) -> emitCondJmp; eoo #);
+   eoo;
+
+--backendgJmp:dopart --
+do (if intel_trace then 'backendgJmp' -> comment if);
+   I.labno -> mstate.b.emitJumpLab
+   (# 
+   do (if isShort then
+          jmp_short -> B_emitbyte;
+       else
+          jmp_direct -> B_emitbyte;
+      if);
+   #);
+   eoo;
+
+--backendCallPrim:dopart --
+do (if common.switch[87] then
+       (* profiling *)
+       saveProfStackTop; 
+   if);
+   (if true
+    // ('ExO'->I.label.equal)
+    // ('ExOx'->I.label.equal) then
+       (* FIXME: Temp. hack - see INTERMEDIATEmachine.break *)
+       (I.imm, EAX) -> emitMovlImmReg;
+    // ('CopyT'->I.label.equal)
+    // ('MkTO'->I.label.equal) then
+       (* CopyT and MkTO pops it's 3 arguments itself.
+        * Thus the 3 pops before it should be ignored by the
+        * pushpop counter.
+        *)
+       mstate.numPush - 3 -> mstate.numPush;
+    // ('CopyPPP'->I.label.equal)
+    // ('CopySPP'->I.label.equal) then
+       mstate.numPush - 1 -> mstate.numPush;
+   if);
+   i[]->jsrTimpl;
+   (if intel_trace then
+       '==callprim#'->puttext;
+       mstate.numPush -> putint; newline;
+   if);
+   eoo;
+
+--backendCallAlloPrim:dopart --
+do (if common.switch[85] then
+       (* we rely on that NO values have been pushed
+        * on the stack since float.saveSpace in pushDataReg
+        *)
+       (*4 -> rep.float.nsave*)
+       (* restore is made in popDataReg *)
+   if);
+   (if common.switch[87] then
+       saveProfStackTop;
+   if);
+   I[]->jsrTImpl;
+   eoo;
+
+--backendinitPrimCall:dopart --
+do (if intel_trace then 'backendinitPrimCall' -> comment if);
+   eoo;
+
+--backendPushClong:dopart --
+do (if intel_trace then 'backendPushClong' -> comment; if);
+   doPush(# do I.readReg -> _pushl_r -> B_emitbyte; #);
+   eoo;
+   
+--backendPushClongImm:dopart --
+do (if intel_trace then 'backendPushClong' -> comment; if);
+   (if i.imm->mstate.is8bit then
+       doPush(# do pushl_i8 -> B_emitbyte; i.imm -> B_emitbyte #);
+    else
+       doPush(# do pushl_i -> B_emitbyte; i.imm -> emitlong #);
+   if);
+   eoo;
+
+--backendPushCdouble:dopart --
+do (if intel_trace then 'backendPushCdouble' -> comment if);
+   (* OPTIMIZE: push_m takes 4 cycles on 486. The following takes
+    * only two cycles on a 486 and increses pairing oppotunity on 
+    * the pentium (but it will require a register):
+    *   movl mem, reg
+    *   push reg
+    *)
+   doPush(# do pushl_m -> emit2bytes; (I.readreg, I.readOffset+4) -> IndirectReg #);
+   doPush(# do pushl_m -> emit2bytes; (I.readreg, I.readOffset)   -> IndirectReg #);
+   eoo;
+   
+--backendPushCfloat:dopart --
+do (if intel_trace then 'backendPushCfloat' -> comment if);
+   (* Push 2 top elements of floating point stack onto activation-stack *)
+   (sub_ttt,8, esp, 4) -> emitAluImmReg;
+   mstate.numPush+2 -> mstate.numPush;
+   fstpl -> emit2bytes; (esp,0) -> IndirectReg;
+   eoo;
+   
+--backendInitExternalCall:dopart --
+do (if intel_trace then 'backendInitExternalCall' -> comment if);
+   (* Nothing to do - see getRegForXres *)
+   
+--backendCallC:dopart --
+do (# proc: (# exit I.label[] #);
+      extType: (# exit i.imm #);
+      noOfParam: (# exit i.size #);
+      exitType: (# exit i.type #);
+   do (if common.switch[85] then
+          (* stackOff is 
+           * noOfPar*4 + (stackMark+svavedRegisters)*4
+           *)
+          (*I.size*4 + (1+4)*4 -> mstate.reg.float.nsave*)
+      if);
+      I.label.copy -> I.label[];
+      (if common.switch[87] then
+          saveProfStackTop;
+      if);
+      (if I.imm (* extType *)
+       // 1 (* sematt.cExt *) then
+          proc -> mstate.Cidentifier;
+          I[]->jsrTImpl;
+       // 2 (* sematt.pascExt - not relevant for linux *) then
+          (proc).MakeUC;
+          I[]->jsrTImpl;
+       // 7 (* sematt.stdExt *) then
+          (if true
+           // isMicrosoft then
+              '__imp__'->(proc).prepend;
+              '@'->(proc).append; (* Sets text-pointer to EOS *)
+              I.size*4->(proc).putInt;
+              (* Call memory-indirect *)
+              call_m -> emit2bytes;
+              (*(proc[]->NewTextOp).putop;*)
+           // isGnu then
+              proc -> mstate.Cidentifier;
+              '@'->(proc).append; (* Sets text-pointer to EOS *)
+              I.size*4->(proc).putInt;
+              (* Call pc-relative *)
+              I[]->jsrTImpl;
+           // isX86sol
+           // isLinux then
+              proc -> mstate.Cidentifier;
+              I[]->jsrTImpl;           
+           else
+              'CallCproc: stdCall for wrong architecture'->putline
+          if);
+       else
+          'CallCproc: wrong type'->putline
+      if);
+   #);
+   eoo;
+   
+---backendNoXres:doPart---
+do (if intel_trace then 'backendNoXres' -> comment if);
+   I[] -> getExternalResult;
+   eoo;
+
+---backendgetSimpleXres:doPart---
+do (if intel_trace then 'backendgetSimpleXres' -> comment if);
+   I[] -> getExternalResult(# do copyEAX #);
+   eoo;
+   
+---backendgetTextXres:doPart---
+do (if intel_trace then 'backendgetTextXres' -> comment if);
+   (* Not used anymore *)
+   I[] -> getExternalResult(# do copyEAX #);
+   eoo;
+   
+---realXresIsDouble:doPart---
+do (if intel_trace then 'realXresIsDouble:doPart' -> comment if);
+   (extType = 6 (* pascal *)) -> value;
+   eoo;
+   
+---backendgetDoubleXres:doPart---
+do (if intel_trace then 'backendgetDoubleXres' -> comment if);
+   'backendgetDoubleXres' -> TODO;
+   eoo;
+   
+---backendgetFloatXres:doPart---
+do (if intel_trace then 'backendgetFloatXres' -> comment if);
+   I[] -> getExternalResult;
+   eoo;
+   
+---backendgetDataRefXres:doPart---
+do (if intel_trace then 'backendgetDataRefXres' -> comment if);
+   I[] -> getExternalResult(# do copyEAX #);
+   eoo;
+   
+---backendgetDataPartXres:doPart---
+do (if intel_trace then 'backendgetDataPartXres' -> comment if);
+   I[] -> getExternalResult(# do copyEAX #);
+   eoo;
+   
+---backendSPtoPrim:dopart---
+do (* empty *)
+   
+---backendgetSaveHeapTop:doPart---
+do (if intel_trace then 'backendgetSaveHeapTop' -> comment if);
+   (esp, 'BetaStackTop'->mstate.Cidentifier) -> emitMovlRegText;
+   eoo;
+   
+---backendXparForward:doPart--
+do (if intel_trace then 'backendXparForward' -> comment if);
+   (if extKind
+    // 1 (* sematt.cExt*) 
+    // 7 (* sematt.stdExt*)
+    // 9 (* sematt.externalDispatch *)
+    // 10 (* sematt.dispatchExt*) then
+       (* externalDispatch is StdCall, that uses C-parameters (right to left)
+        * and pascal style Callee-cleanup. On linux they're C 
+        *)
+       false->value
+    // 2 (* sematt.pascExt*) 
+    // 3 (* sematt.pascTrapExt*) then 
+       true->value
+    else
+       'backendXparForward: unknown type' -> TODO;
+   if);
+   eoo;
+
+--backendInlineAlloiNGNP:dopart --
+do (if intel_trace then 'backendInlineAlloiNGNP' -> comment if);
+   'backendInlineAlloiNGNP' -> TODO;
+   eoo;
+
+--backenddeAllocIOA:dopart --
+do (if intel_trace then 'backenddeAllocIOA' -> comment if);
+   'backenddeAllocIOA' -> TODO;
+   eoo;
+
+--backendStackAlloPrim:dopart --
+do (if intel_trace then 'backendStackAlloPrim' -> comment if);
+   'backendStackAlloPrim' -> TODO;
+   eoo;
+   
+--backendasciiText:doPart--
+do (if intel_trace then 'backendasciiText' -> comment if);
+   (if isWtext then
+       T.scanAll(#do ch->mstate.d.emitHalf #);
+       0->mstate.d.emitHalf;
+    else
+       T.scanAll(#do ch->mstate.d.emitByte  #);
+       0->mstate.d.emitByte;
+   if);
+   2->mstate.d.align;
+   eoo;
+   
+---backendInitMachine:descriptor---
+(#
+do (if intel_trace then 'backendInitMachine' -> comment if);
+   
+   true -> cap.isIntel;
+   
+   (* ECX *)
+   3 -> cap.shiftregister;
+   (* ESI, better than EBP *)
+   4 -> cap.tstnoneregister;
+   (* EAX for C-results *)
+   1 -> cap.externalResultRegister;
+   
+   name[] -> BC.name;
+   (*openDbgInf;*)
+   500->newlab.lab; (* FIXME *)
+   mstate.init; 
+   (*true->loadPrototype*)
+   eoo;
+#)
+
+--backendClose:doPart--
+do (if intel_trace then 'backendClose' -> comment if);
+   (* This is slot EndDataSeg which used to be in CODEmachine *)
+   'BETA_data3'->LabelDef;
+   (***** end EndDataSeg *)
+
+   (* Note, BC.name has the form:
+    *      'somePath/foo-BETA-'
+    * i.e. asmlink:asmExt returns '-BETA-'.
+    * This extension is removed below.
+    * 
+    * Switches:
+    *   24:   only generate .db. Has NOT been tested.
+    *)
+   (# FN,T,name: ^text; switch39: @boolean
+   do (if trace_back then
+          '>>>> closeMachine: ' -> puttext; BC.name -> putline
+      if);
+       textalign -> mstate.b.align;
+      dataalign -> mstate.d.align;
+      
+      BC.name->FN[];
+      (FN.length-5,FN.length)->FN.delete;
+      (* remove '-BETA-' *)
+      FN[]->BC.name;
+      (* producing debug tables *)
+      (* FN[]->saveDbgInf;*)
+      (if trace_back then
+          '>>>>> backendClose: missing: FN[]->saveDbgInf;' -> putline
+      if);
+      mstate.emitCodeToFile;
+      (if resolve_local_calls then
+          mstate.verifyRelocations;
+      if);
+   #);
+   eoo;
+   
+--backenddefineMainLabel:doPart--
+do (if intel_trace then 'backenddefineMainLabel' -> comment if);
+   (# T: ^text;
+   do 
+      (* Generate UoFV entry point before main *)
+      'UoFV' -> mstate.Cidentifier -> T[] -> export;  
+      T[] -> labelDef;
+      doPush(# do edx -> _pushl_r -> B_emitbyte; #);
+      doPush(# do pushl_i8 -> B_emitbyte; #);
+      -37 -> B_emitbyte; (* UnorderedFval - see betarun/C/betaerror.h *)
+      'BetaError' -> mstate.CIdentifier -> T[]; 
+      &BackendInstruction(# do 'BetaError'->label[] #)->gJsrImpl;
+      rtsImpl;	
+      
+      (* Generate main entrypoint *)
+      (if isNTI then
+          (* Generate the WinMain@16 entrypoint instead of main *)
+          '_WinMain@16' -> T[];
+          T[] -> export; T[] -> labelDef;
+          &BackendInstruction(# do '_SetupArgValues'->label[] #)->gJsrImpl;
+       else      
+          (* Generate main entrypoint *)
+          'main' -> mstate.Cidentifier -> T[];
+          T[] -> export;
+          T[] -> labelDef;
+          &BackendInstruction(# do 'SetArgValues'->label[] #)->gJsrImpl;
+      if);
+      
+      (if true then
+          (* Clear GC regs 
+           * - no need: SYNTHESIZER does this after calling Initialize
+           * - well, yes: SYNTHESIZER clears %edi, %esi, pReg1, %edx
+           * but not %ebp! FIXME
+           *)
+          (xor_ttt, ebp, ebp) -> alul_rr -> emit2bytes;
+          (if false then
+              (xor_ttt, esi, esi) -> alul_rr -> emit2bytes;
+              (xor_ttt, edi, edi) -> alul_rr -> emit2bytes;
+              (xor_ttt, edx, edx) -> alul_rr -> emit2bytes;
+          if);
+      if);
+      eoo;
+   #)
+--backendswitchToCode:doPart--
+do true->mstate.inCode;
+   eoo;
+   
+--backendswitchToData:doPart--
+do false->mstate.inCode;
+   eoo;
+   
+--backendexport:doPart--
+do (if intel_trace then 
+       'backendexport'->comment;
+       Lab.copy -> puttext; ':' -> putline;
+   if);
+   Lab.copy->entryPoints.find
+   (# notFound::
+        (#
+        do true->E.export; -1->E.LIP; E[]->entryPoints.insert;
+        #)
+   do true->E.export;
+   #);
+   eoo;
+
+--backendlabelDef:doPart--
+do (if intel_trace then
+       'backendlabelDef' -> comment; 
+       lab[] -> puttext;
+       (if mstate.inCode then ' inCode' -> putline else ' inData'->putline if);
+   if);
+
+   (if mstate.inCode then
+       (lab.copy,entryDefMark)->mstate.b.mark
+    else
+       (lab.copy,entryDefMark)->mstate.d.mark
+   if);
+   eoo;
+
+---backendputD:descriptor--
+(#
+do (if intel_trace then 'backendputD' -> comment if);
+   'backendputD' -> TODO;
+   eoo;
+#)
+
+---backendputA:descriptor--
+(#
+do (if intel_trace then 'backendputA' -> comment if);
+   'backendputA' -> TODO;
+   eoo;
+#) 
+
+---backendimm:descriptor--
+(#
+do (if intel_trace then 'backendimm' -> comment if);
+   'backendimm' -> TODO;
+   eoo;
+#)
+
+-- backendputS: DoPart --
+do (if intel_trace then 'backendputS' -> comment if);
+   'backendputS' -> TODO;
+   eoo;
+   
+---backendstValInLab: doPart---
+do (if intel_trace then 'backendstValInLab' -> comment if);
+   'backendstValInLab' -> TODO;
+   eoo;
+
+---backendldValFromLab: dopart---
+do (if intel_trace then 'backendldValFromLab' -> comment if);
+   'backendldValFromLab' -> TODO;
+   eoo;
+
+---backendEndCodeSeg: dopart---
+do (if intel_trace then 'backendEndCodeSeg' -> comment if);
+   'BETA_code2'->LabelDef;
+   nopImpl;
+   switchToData;
+   'BETA_data2'->LabelDef;
+   eoo;
+
+
+---backendCallO: dopart---
+do edi->rNo
+
+---backendThisO: dopart---
+do edx->rNo
+   
+---backendentryPointsEqual: descriptor---
+(#
+do (if intel_trace then 'backendentryPointsEqual' -> comment if);
+   'backendentryPointsEqual' -> TODO;
+   eoo;
+#)
+
+---backendLocalLabDef: doPart---
+do (if intel_trace then
+       'backendLocalLabDef'->comment;
+       astext->putline;
+   if);
+   (if type=interFragment then
+       asText->export; 
+       (asText,entryDefMark)->mstate.b.mark;
+       (labno,false)->mstate.labs.def;
+    else
+       (if mstate.inCode then
+           (labno,false)->mstate.labs.def;
+        else
+           (labno,true)->mstate.labs.def;
+       if);
+   if);
+   eoo;
+   
+---backendInitCreateDataFile: doPart---
+do (if intel_trace then 'backendInitCreateDataFile' -> comment if);
+   (none,common[],fileName.copy,none) -> init;
+   switchToData;
+   'BETA_DATA' ->export;
+   'BETA_DATA' -> labelDef;
+   eoo;
+   
+--backendNextGroup: dopart---
+do (if intel_trace then 'backendNextGroup' -> comment if);
+   (id[],false) ->importData;
+   &backendinstruction(#do id[]->label[] #) 
+     ->  declareDataSegmentTextAddressImpl
+   
+---backendEndCreateDataFile:dopart---
+do (if intel_trace then 'backendEndCreateDataFile' -> comment if);
+   (* Double NULL termination to allow for extension of 
+    * BETA_DATA list (by runtime system)
+    *)
+   0 -> declareLong;
+   0 -> declareLong;
+   close;
+   eoo;
+   
+---backendAsText:doPart---
+   (* part of this one was in REALmachine
+    * therest in SPARCmachine
+    *)
+do &text[]->localLabText[];
+   (if type = interFragment then
+       descId[]->localLabText.puttext; 
+       labNo->localLabText.putInt; 
+    else
+      'L'->localLabText;
+       labNo->localLabText.putInt
+   if);
+   eoo;
+   
+---GlobalCodeLabelDef:doPart---
+do (if intel_trace then 'GlobalCodeLabelDef' -> comment if);
+   (I.label.copy,entryDefMark)->mstate.b.mark;
+   (if NOT I.isLocal then
+       (I.label[],false) -> entrypoints.addDef  
+   if);
+   eoo;
+   
+--backendAllocObj:doPart--
+do (if intel_trace then 'backendAllocObj' -> comment if);
+   'backendAllocObj' -> TODO;
+   eoo;
+   
+--backendGetCOMpar:doPart--
+do (if intel_trace then 'backendGetCOMpar' -> comment if);
+   'backendGetCOMpar' -> TODO;
+   eoo;
+   
+--backendExternalDispatch:doPart--
+do (if intel_trace then 'backendExternalDispatch' -> comment if);
+   'backendExternalDispatch' -> TODO;
+   eoo;
+   
+---backendReturnVirtualCOM:doPart--
+do (if intel_trace then 'backendReturnVirtualCOM' -> comment if);
+   'backendReturnVirtualCOM' -> TODO;
+   eoo;
+   
+---backendDoHead:descriptor---
+(#
+do (if intel_trace then newline; 'backendDoHead' -> comment if);
+   eoo;
+#)
+
+--backendSpillDataRegImpl:dopart--
+do
+   (* i.readreg er det fysiske register, der skal spilles
+    * i.imm er stackcellens nummer plus antallet af fysiske registre.
+    * i.type er register type, datareg, adrreg, ...
+    *)
+   (# t:^text;
+   do 'pReg'->t[];
+      i.imm-(i.type->CAP.getNumberOfRegisters)->t.putint;
+      (i.readReg,t[])->emitMovlRegText
+   #)
+      
+--backendLoadSpilledDataRegImpl:dopart--
+do
+   (# t:^text;
+   do 'pReg'->t[];
+      i.imm-(i.type->CAP.getNumberOfRegisters)->t.putint;
+      (t[],i.writeReg)->emitMovlTextReg
+   #)

@@ -1,0 +1,617 @@
+ORIGIN '../asmlinkbody';
+INCLUDE '~beta/toollibs/utils/fileExtensions';
+--asmState:descriptor--
+(# (*Put local variables here*)
+   rspObjName: @Text;
+   rspResName: @Text;
+   rspLibName: @Text;
+   rspFile: @File; (* Not Borland *)
+   curDir: @Text; (* Holds prev. dir. changed to (i.e. current dir) *)
+   changedDisk: @boolean;
+#)
+--HasSharedLibs:descriptor--
+(# do common.switch[53]->value #)
+--asmlinklib: attributes ---
+BackslashToSlash: 
+  (# T: ^Text;
+  enter T[]
+  do (for i:T.lgth repeat
+          (if T.T[i] = '\\' then '/' -> T.T[i] if)
+     for);
+  exit T[]
+  #);
+AppendExe:
+  (# objname: ^text;
+  enter objname[]
+  do exeFileExtension -> objname.appendExtension
+  exit objname[]
+  #);
+smartChDir:
+  (# path: ^Text;
+     dest: ^Stream;
+     newPath: ^Text;
+     pathslash: @text;
+  enter (dest[],path[])
+  do (* Only emit 'cd path' if not already in that directory. *)
+     (if not (path[]->asmState.curDir.equalNcs) then
+         path->pathslash; '\\'->pathslash.put;
+         pathslash[]->newPath[];
+         (newPath.length,newPath.length)->newPath.delete;
+         (* Check if not on same drive *)
+         (if newPath.length > 1 then
+             (if (2->newPath.inxget) = ':' then
+                 (1,2)->newPath.sub->dest.putLine;
+                 true->asmState.changedDisk;
+             if)
+         if);
+         'cd '->dest.putText;
+         newpath[]->dest.putline;
+         path->asmState.curDir;
+     if)
+  #);
+
+isGnu:       (# exit common.targetMachineId = common.nti_gnu #);
+isBorland:   (# exit common.targetMachineId = common.nti_bor #);
+isMicrosoft: (# exit common.targetMachineId = common.nti_ms  #);
+---cont: descriptor --
+(# do '\\'->Aff.put; aff.newLine; ascii.ht->aff.put; #)
+---header: descriptor ---
+(# rspObjEntry: @DiskEntry;
+do '@echo off\n'->AFF.putText;
+   (if isBorland or isGnu then
+       thePathHandler.currentDirectory->asmState.curDir.putText;
+   if);
+   ((objName[],thePathhandler.currentDirectory)
+     ->thePathHandler.convertFilePath).copy -> rspObjEntry.path;
+       
+   asmState.rspObjName.clear;
+   '$(TMPDIR)'->expandEnvVar
+   (# defaultValue::
+        (#
+        do '$(TEMP)' ->expandEnvVar
+           (# defaultValue::
+                (#
+                do '$(TMP)'->expandEnvVar
+                   (# defaultValue::
+                        (# t: ^text;
+                        do &Text[]->t[];
+                           rspObjEntry.path.head -> t.putText;
+                           t[]->envvarvalue[];
+                        #)
+                   #) -> envvarvalue[];
+                #)
+           #) -> envvarvalue[]
+        #)
+   #) -> asmState.rspObjName.putText;
+   
+   (if (asmState.rspObjName.length->asmState.rspObjName.inxGet) <> '\\' then
+       '\\' -> asmState.rspObjName.put;
+   if);
+   '/'->asmState.rspObjName.findAll
+   (# do ('\\', inx)->asmState.rspObjName.inxput #);
+   rspObjEntry.path.name -> asmState.rspObjName.putText;
+   
+   (if true 
+    // isMicrosoft
+    // isGnu then
+       '.rsp'->asmState.rspObjName.append;
+       asmState.rspObjName[]->asmState.rspFile.name;
+       asmState.rspFile.openWrite;
+    // isBorland then
+       asmState.rspObjName->asmState.rspLibName;
+       '.rl'->asmState.rspLibName.append;
+       (true,asmState.rspLibName[])->remove;
+       
+       asmState.rspObjName->asmState.rspResName;
+       '.rr'->asmState.rspResName.append;
+       (true,asmState.rspResName[])->remove;
+       
+       '.ro'->asmState.rspObjName.append;
+       (true,asmState.rspObjName[])->remove;
+    else
+       'Unknown SDK' -> bugstream.putline;
+   if);
+#)
+---AsmExt: descriptor ---
+(# do '-BETA-'->ext #) 
+---BinExt: descriptor ---
+(# do '.obj'->ext #)
+---LibExt: descriptor ---
+(# do '.lib'->ext #)
+---JobExt: descriptor ---
+(# do '.bat' -> ext #)
+---ExeExt: descriptor ---
+(# do '.exe'->ext #)
+---Echo: descriptor ---
+(# do 'echo '->AFF.puttext #)
+---Remove: descriptor ---
+(#
+do (if check then
+       'if exist "'->AFF.putText; name[]->AFF.putText; '" '->AFF.putText
+   if);
+   'del "'->AFF.putText; name[]->AFF.putText; '" >nul'->AFF.putLine;
+#)
+---ChangeDirectory:doPart---
+do (if (dir.lgth>1) and (dir.T[2]=':') then
+       (* change drive *)
+       dir.T[1]->AFF.put; ':' -> AFF.put; AFF.newline;
+   if);
+   'cd '->AFF.puttext; dir[] -> AFF.putline
+---AddCommand:doPart---
+do cmd[] -> AFF.putline;
+   'if errorlevel 1 goto builderror' -> AFF.putLine;
+---Make: descriptor ---
+(# makename: ^text;
+   sepinx: @integer;
+   newDir: @Text;
+do (if true
+    // isBorland then
+       0->sepinx; '\\'->m.findAll(# do inx->sepinx #);
+       (if sepinx
+        // 0 then
+           m[]->makename[];
+        // 1 then
+           (AFF[],'\\')->smartChDir;
+           (2,m.Length)->m.Sub->makename[];
+        else
+           (AFF[],(1,sepinx-1)->m.Sub)->smartChDir;
+           (sepinx+1,m.Length)->m.Sub->makename[];
+       if);
+       'make -q -s -DWIN32 -f'->AFF.putText; makename[]->AFF.putText;
+       (if common.switch[12] then ' -B'->AFF.putText if);
+       ' -DSRCDIR=. -DASM_VERSION=4'->AFF.putText;
+       ' -DMACHINETYPE='->AFF.putText; targetmachine->AFF.putText;
+       ' >nul' -> AFF.putline;
+       (if verboselevel<verboseLevel.nothing then
+           'if errorlevel 1 echo Make '->AFF.putText; m[]->AFF.putLine;
+       if);
+       'if errorlevel 1 make -s -DWIN32 -f'->AFF.putText; makename[]->AFF.putText;
+       (if common.switch[12] then ' -B'->AFF.putText if);
+       ' -DSRCDIR=. -DASM_VERSION=4'->AFF.putText;
+       ' -DMACHINETYPE='->AFF.putText; targetmachine->AFF.putText;
+       AFF.newLine;
+    // isMicrosoft then
+       0->sepinx; '\\'->m.findAll(# do inx->sepinx #);
+       (if sepinx
+        // 0 then
+           '.'->makename[];
+        // 1 then
+           '\\'->makename[];
+        else
+           (1,sepinx-1)->m.Sub->makename[];
+       if);
+       'nmake -nologo -q -s "-f'->AFF.putText; m[]->AFF.putText; '"'->AFF.put;
+       (if common.switch[12] then ' -A'->AFF.putText if);
+       ' "SRCDIR='->AFF.putText; makename[]->AFF.putText; '"'->AFF.put;
+       ' ASM_VERSION=6'->AFF.puttext;
+       ' MACHINETYPE='->AFF.putText; targetmachine->AFF.putText;
+       AFF.newLine;
+       (if verboselevel<verboseLevel.nothing then
+           'if errorlevel 1 echo Make '->AFF.putText; m[]->AFF.putLine;
+       if);
+       'if errorlevel 1 nmake -nologo -s "-f'->AFF.putText;
+       m[]->AFF.putText; '"'->AFF.put;
+       (if common.switch[12] then ' -A'->AFF.putText if);
+       ' "SRCDIR='->AFF.putText; makename[]->AFF.putText; '"'->AFF.put;
+       ' ASM_VERSION=6'->AFF.puttext;
+       ' MACHINETYPE='->AFF.putText; targetmachine->AFF.putText;
+       AFF.newLine;
+    // isGnu then
+       'echo Ignoring GNU make: ' ->AFF.puttext;
+       makename[]->AFF.putline;
+    else
+       'Unknown SDK' -> bugstream.putline;
+   if);
+   'if errorlevel 1 goto makeerror'->AFF.putLine;
+#)
+---resource: descriptor ---
+(# rcpath,rcname,resname,resext: ^text;
+   sepinx: @integer;
+   rcentry, resentry: @diskentry;
+   compile: @boolean;
+   sep: ^text;
+   pathWithSep, t: ^text;
+   dir: @directory;
+   resdir: @text;
+do (* FIXME: Support for multiple resource files (Sdk=ms).
+    * Do this by using #include in a tmp file.
+    *)
+   0->sepinx; '\\'->m.findAll(# do inx->sepinx #);
+   (if sepinx
+    // 0 then
+       ''->rcpath[];
+       ''->sep[];
+       m[]->rcname[];
+    // 1 then
+       '\\'->rcpath[];
+       ''->sep[];
+       ((2,m.Length)->m.Sub)->rcname[];
+    else
+       ((1,sepinx-1)->m.Sub)->rcpath[];
+       '\\'->sep[];
+       ((sepinx+1,m.Length)->m.Sub)->rcname[];
+   if);
+   (* Now rcpath is the path of the .rc file. The rcname variable is the
+    * name of the .rc file without path.
+    *)
+   0->sepinx; '.'->rcname.findAll(# do inx->sepinx #);
+   (if isGnu then
+       'obj' -> resext[];
+    else
+       'res'->resext[];
+   if);
+   (if sepinx>0 then
+       resext[]->((1,sepinx)->rcname.Sub).copyAppend->resname[];
+    else
+       '.'->m.copyAppend->resname[]; resext[]->resname.append;
+   if);
+   (* Create directories *)
+   rcpath[]->dir.name;
+   (targetMachine).copy
+     -> t[] 
+     -> dir.createDir(# exists::(# do true->continue #)#);
+   
+   (* t is 'nti' or nti_ms, etc. *)
+   '\\' -> t.prepend;
+   t[] -> (rcpath.copy).append -> dir.name;
+   '\\'->resname.prepend;
+   targetmachine->resname.prepend;
+   (* resname is now the name of the .res file relative to rcpath
+    * i.e. nti_ms\foo.res if the previous line was enabled.
+    *)
+   (* Check if rcname contains the name of a .res file. If so, do NOT
+    * try to compile it. Simply add it to the .response file. sepinx
+    * still contains the index of the '.' in rcname.
+    *)
+   (if resext[]->((sepinx+1,rcname.length)->rcname.sub).equalNCS then
+       (if true
+        // isMicrosoft then
+           rcpath[]->asmState.rspFile.putText;
+           sep[]->asmState.rspFile.putText;
+           rcname[]->asmState.rspFile.putLine;
+        // isGnu then
+           'INPUT ( '->asmState.rspFile.putText;
+           rcpath[]->asmState.rspFile.putText;
+           sep[]->asmState.rspFile.putText;
+           rcname[]->asmState.rspFile.putText;
+           ' )'->asmState.rspFile.putLine;
+        // isBorland then
+           echo;
+           rcpath[]->AFF.putText; sep[]->AFF.putText; rcname[]->AFF.putText;
+           ' +>>'->AFF.putText; asmState.rspResName[]->AFF.putLine;
+        else
+           'Unknown SDK' -> bugstream.putline;
+       if)
+    else
+       (* Check if it is necessary to actually resource compile the file *)
+       (if common.switch[12] then
+           true->compile;
+        else
+           sep[]->rcpath.copyappend->pathWithSep[];
+           resname[]->pathWithSep.copyappend->resentry.path;
+           (if not resentry.exists then
+               true->compile;
+            else
+               rcname[]->pathWithSep.copyappend->rcentry.path;
+               (rcentry.modtime>resentry.modtime)->compile;
+       if) if);
+       (if true
+       // isMicrosoft then
+           (if compile then
+               'rc /dMACHINETYPE='->AFF.putText;
+               targetmachine->AFF.putText;
+               ' "/i'->AFF.putText; rcpath[]->AFF.putText;
+               '" "/fo'->AFF.putText; rcpath[]->AFF.putText;
+               sep[]->AFF.putText; resname[]->AFF.putText;
+               '" "'->AFF.putText; rcpath[]->AFF.putText;
+               sep[]->AFF.putText; rcname[]->AFF.putText; '"'->AFF.putLine;
+               'if errorlevel 1 goto reserror'->AFF.putLine;
+           if);
+           rcpath[]->asmState.rspFile.putText;
+           sep[]->asmState.rspFile.putText;
+           resname[]->asmState.rspFile.putLine;
+        // isGnu then
+           (if compile then
+               (* windres --define MACHINETYPE=nti_gnu -i <inputfil> 
+                *         -o <output fil> 
+                *         --include-dir <path>       
+                *)
+               asmstate.curDir->resdir; (* save currentdir *)
+               (AFF[],rcpath[])->smartChDir;
+               'windres --define MACHINETYPE=nti_gnu -i '->AFF.putText;
+               (* rcpath[]->AFF.putText;sep[]->AFF.putText;*) 
+               rcname[]->AFF.putText;
+               ' -o ' ->AFF.putText;
+               (* rcpath[]->AFF.putText;sep[]->AFF.putText;*)
+               resname[]->AFF.putText;
+               (* ' --include-dir '->AFF.putText;rcpath[]->AFF.putLine;*)
+               AFF.newLine;
+               'if errorlevel 1 goto reserror'->AFF.putLine;
+               (AFF[],resdir[])->smartChDir;
+           if);
+           (* Now Include resname in list of objectfiles. *)
+           'INPUT ( '->asmState.rspFile.putText;
+           rcpath[]->asmState.rspFile.putText;
+           sep[]->asmState.rspFile.putText;
+           resname[]->asmState.rspFile.putText;
+           ' )'->asmState.rspFile.putLine;
+        // isBorland then
+           (if compile then
+               (AFF[],rcpath[])->smartChDir;
+               'brcc32 -dMACHINETYPE='->AFF.putText;
+               targetmachine->AFF.putText;
+               ' -fo'->AFF.putText; resname[]->AFF.putText;
+               ' '->AFF.put; rcname[]->AFF.putLine;
+               'if errorlevel 1 goto reserror'->AFF.putLine;
+           if);
+           echo; rcpath[]->AFF.putText; sep[]->AFF.putText;
+           resname[]->AFF.putText;
+           ' +>>'->AFF.putText; asmState.rspResName[]->AFF.putLine;
+        else
+           'Unknown SDK' -> bugstream.putline;
+       if);
+   if)
+#)
+---assemble: descriptor ---
+(# (* no need (:-) *)#)
+--linkLibraries:descriptor--
+(* to be fixed *)
+(#
+do (if common.switch[53] then 
+       Libs.scan
+       (#
+       do (if thisElm.args.length=0 then 
+           else
+              'echo linking shared lib: '->AFF.puttext; thisElm.T[]->AFF.putLine;
+              
+              'ld -dy -G \\\n\t-o '->AFF.puttext;
+              thisElm.T[]->AFF.puttext; ' '->AFF.put;
+              thisElm.args[]->AFF.putline
+          if)
+   #)if)
+#)
+--contCh:descriptor--
+(#do '+'->value  #)
+--ldArgMax:descriptor--
+(#do MAXINT->value #)
+--ldTmp:descriptor--
+(#
+do 'Whoa!!!'->bugstream.putLine;
+#)
+---link: descriptor ---
+(# betaLinkOpt: ^text;
+do (if true
+    // isMicrosoft then
+       '$(BETALINKOPTIONS)'
+         ->expandEnvVar
+       (# defaultValue::<
+            (# BetaLib: ^Text;
+               (* 5-1-96: datpete: removed incremental link:
+                * it prevents persistence from working.
+                *)
+            do '/NOLOGO /MACHINE:ix86 /ENTRY:WinMainCRTStartup /INCREMENTAL:no'
+                 ->envvarValue[];
+               (if common.switch[71] then
+                   ' /SUBSYSTEM:WINDOWS' -> envvarValue.append
+                else
+                   ' /SUBSYSTEM:CONSOLE' -> envvarValue.append
+               if)
+       #)#)
+         ->betaLinkOpt[];
+       
+       'kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib wsock32.lib comctl32.lib' -> asmState.rspFile.putLine;
+       'LINK /OUT:'->AFF.puttext;
+       objname[] -> AppendExe -> AFF.puttext;
+       (if true
+        // common.switch[88] then
+           (* linking with full debug - betarun_sym.lib *)
+        // common.switch[13] then 
+           (* linking with full debug - betarun_debug.lib *)
+           ' /DEBUG /DEBUGTYPE:BOTH /PDB:'->AFF.putText;
+           objname[]->AFF.putText; '.pdb '->AFF.putText;
+        // (not common.switch[13]) and (not common.switch[88]) and common.switch[41] then
+           (* linking with betarun_v.lib *)
+           (* linker will only generate symbol table in execuable if
+            * DEBUGTYPE is COFF.
+            *)
+           ' /DEBUG /DEBUGTYPE:COFF '->AFF.putText;
+        else
+           (* linking with minimal betarun.o *)
+           ' '->AFF.put;
+       if);
+       betaLinkOpt[]->AFF.putText;
+       ' @'->AFF.putText; asmState.rspObjName[]->AFF.putText; ' '->AFF.put;
+    // isGnu then
+       '$(BETALINKOPTIONS)' -> expandEnvVar
+       (# 
+          defaultValue::< 
+            (# 
+            do (if common.switch[71] then
+                   ' -mwindows '->envvarValue[]
+                else
+                   ' '->envvarValue[]
+               if)
+            #)
+       #)
+         ->betaLinkOpt[];
+       (if not common.switch[41] then ' -Wl,-S '->betaLinkOpt.append if);
+       'gcc '->AFF.puttext;
+       
+       ('$(LD_LIBRARY_PATH)'->expandEnvVar, ';') -> scanSearchPath
+       (# 
+       do (if path.length>0 then 
+              ' -L'->AFF.putText; 
+              path[] -> BackslashToSlash ->AFF.puttext 
+          if)
+       #);
+   
+       ' '->AFF.put;
+       betaLinkOpt[]->AFF.putText; ' -o '->AFF.puttext;
+       objname[] -> AppendExe -> BackslashToSlash -> AFF.puttext;
+       ' '->AFF.put; 
+       
+       (if common.switch[13] or common.switch[88] then
+           '-g '->AFF.puttext;
+       if);
+       asmState.rspObjName[]->AFF.putText; ' '->AFF.put; AFF.newLine;
+    // isBorland then
+       '$(BETALINKOPTIONS)'
+         ->expandEnvVar
+       (# defaultValue::<
+            (# do  '-ap -c -n -Tpe' -> envvarValue[];
+       #)#)
+         ->betaLinkOpt[];
+       
+       'echo.>>'->AFF.putText; asmState.rspObjName[]->AFF.putLine;
+       'echo.>>'->AFF.putText; asmState.rspResName[]->AFF.putLine;
+       'echo.>>'->AFF.putText; asmState.rspLibName[]->AFF.putLine;
+       'tlink32 '->AFF.puttext;
+       (if common.switch[13] or common.switch[88] then '-v -m -s'->AFF.puttext
+        else '-x'->AFF.puttext if);
+       ' -L'->AFF.puttext;
+       '$(LD_LIBRARY_PATH)'->expandEnvVar
+       (# defaultValue::<
+            (# do '.' -> envvarValue[];
+       #)#)->AFF.puttext;
+       ' '->AFF.puttext;
+       betaLinkOpt[]->AFF.putText;
+       ' c0w32.obj'->AFF.puttext; (* GUI program *)
+       ' @'->AFF.putText; asmState.rspObjName[]->AFF.putText;
+    else
+       'Unknown SDK!'->bugStream.putLine
+   if)    
+#)
+---linkObj:descriptor ---
+(# sepinx: @integer;
+   ext: ^text;
+do (if lobj.length<>0 then
+       (if true
+        // isMicrosoft then
+           lobj[]->asmState.rspFile.putLine;
+        // isGnu then
+           'INPUT ( ' -> asmState.rspFile.putText;
+           lobj[] -> BackslashToSlash -> asmState.rspFile.putText;
+           ' )'->asmState.rspFile.putLine
+        // isBorland then
+           0->sepinx;
+           '.'->lobj.findAll(# do inx->sepinx #);
+           (sepinx,lobj.length)->lobj.sub->ext[];
+           (if '.lib'->ext.equalNCS then
+               (AFF[],thePathhandler.currentDirectory)->smartChDir;
+               echo; lobj[]->AFF.putText; ' +>>'->AFF.putText;
+               asmState.rspLibName[]->AFF.putLine;
+            else
+               (AFF[],thePathhandler.currentDirectory)->smartChDir;
+               echo; lobj[]->AFF.putText; ' +>>'->AFF.putText;
+               asmState.rspObjName[]->AFF.putLine;
+           if);
+       if);
+   if)
+#)
+---addBetaRun:descriptor---
+(# #)
+--asmlinkdynamic:descriptor--
+(# #)
+---libraries: descriptor ---
+(# betasys: @text
+do 
+   (if true
+    // isMicrosoft then
+       (if userDefinedBetaRun then
+           betaRun[]->ldA.putText
+        else
+           asmLink.libExt->betaRun.CopyAppend->ldA.putText
+       if);
+       ldA.newline;
+       'if errorlevel 1 goto linkerror'->ldA.putLine;
+    // isGnu then
+       (if userDefinedBetaRun then
+           betaRun[]->linkObj
+        else
+           '.lib'->betaRun.CopyAppend->linkObj
+       if);
+       (if not common.switch[71] then
+           '-luser32 -lgdi32 -lcomdlg32' -> linkObj
+       if);
+       '-lwsock32 -lole32 -loleaut32 -lwinspool -lcomctl32' -> linkObj;
+    // isBorland then
+       ','->ldA.put; 
+       objName[]->AppendExe->ldA.putText;
+       ','->ldA.put;
+       (if common.switch[13] or common.switch[88] then
+           objName[]->ldA.putText; '.map,'->ldA.putText
+        else
+           ','->ldA.put
+       if);
+       betaRun[]->ldA.putText;
+       (if not userDefinedBetaRun then asmLink.libExt->ldA.putText if);
+       ' cw32.lib import32.lib @'->ldA.putText;
+       asmState.rspLibName[]->ldA.putText;
+       ',,@'->ldA.putText; (* no .def file (,,) *)
+       asmState.rspResName[]->ldA.putLine;
+       'if errorlevel 1 goto linkerror'->ldA.putLine;
+    else
+       'Unknown SDK' -> bugstream.putline;
+   if);
+#)
+---linkTrailer: descriptor ---
+(#
+do (if isGnu and (not common.switch[13]) and (not common.switch[88]) and (not common.switch[41]) then
+       (* '-d' :  Strip *)
+       (if verboseLevel<=verboseLevel.actions then
+           'echo Stripping debug information'->AFF.putLine;
+       if);
+       'strip '->AFF.putText; objName[]->AppendExe->AFF.putLine;
+   if);       
+   (if verboseLevel<=verboseLevel.actions then
+       'echo Object program on file: '->AFF.putText;
+       objName[]->AppendExe->AFF.putLine;
+   if)
+#)
+---trailer: descriptor ---
+(# 
+do 'goto exit'->AFF.putLine;
+   ':builderror\necho A BUILD Error Occurred.\ngoto exit'->AFF.putLine;
+   ':makeerror\necho A Make Error Occurred.\ngoto exit'->AFF.putLine;
+   ':reserror\necho A Resource Compiler Error Occurred.\ngoto exit'
+     ->AFF.putLine;
+   
+   ':linkerror'->AFF.putLine;
+   (true,objName[]->AppendExe)->remove;
+   'echo A Link Error Occurred\ngoto exit'->AFF.putLine;
+   
+   ':exit'->AFF.putLine;
+   (* We cannot use smartChDir here because we may come here after an
+    * error in which case we could come from anywhere...
+    *)
+   (if not (common.switch[23] or common.switch[18]) then
+       (true,asmState.rspObjName[])->remove;
+       (if isBorland then
+           (true,asmState.rspResName[])->remove;
+           (true,asmState.rspLibName[])->remove;
+           (if asmState.changedDisk then
+               (1,2)->(thePathhandler.currentDirectory).sub->AFF.putLine;
+           if);
+           'cd '->AFF.putText; thePathhandler.currentDirectory->AFF.putLine;
+       if);
+   if);
+   
+   (if isMicrosoft or isGnu then
+       asmState.rspFile.close;
+       (if asmState.rspFile.Length=0 then
+           (* There is nothing to link, clean up. *)
+           asmState.rspFile.delete
+       if)
+   if);
+    
+   #)
+--AddSharedLibFile: descriptor--
+(# #)
+
+--jobFilePermission: descriptor--
+(# #)
+
+--AddLinkDirs: descriptor--
+(# #)
+
+

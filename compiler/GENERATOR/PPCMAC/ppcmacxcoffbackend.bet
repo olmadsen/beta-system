@@ -1,0 +1,637 @@
+ORIGIN '../PPC/ppcimage';
+INCLUDE '../PutHex'; (* temporarily *)
+INCLUDE '../COFF/cofffile';
+INCLUDE '../COFF/coff_ppc';
+INCLUDE '~beta/sysutils/time';
+
+(* Michael Lassen: To be able to set the file type *)
+INCLUDE '~beta/basiclib/private/file_macbody';
+
+---backendemitCodeToFile:descriptor---'
+(# dataStart:
+     (# value: @integer
+     do textSize -> value
+     exit value
+     #);
+   align4: @
+     (# n: @integer
+     enter n
+     exit (n + 3) %band (%bnot 3)
+     #);
+   
+   dataCoffName:
+     (* exit encoding of '.data' *)
+     (# 
+     exit (*(0x7461642e, 0x00000061)*) (0x2e646174,0x61000000)
+        (*   t a d .           a *)  (* .dat       a *)
+     #);
+   textCoffName:
+     (* exit encoding of '.text' *)
+     (# 
+     exit(* (0x7865742e, 0x00000074)*) (0x2e746578, 0x74000000)
+        (*   x e t .           t *)  (*  .txt          t *)
+     #);
+   
+   (* constants *)
+   textSize:    (# exit b.LIP->align4 #);
+   dataSize:    (# exit d.LIP->align4 #);
+   symtabSize:  (# exit (mstate.symtabTop + 2) * IMAGE_SIZEOF_SYMBOL #);
+   stringSize:  (# exit mstate.strTbl.str.lgth (* be sure its static *)#);
+   reltextNum:  (# exit mstate.b.noOfRel #);
+   relTextSize: (# exit mstate.b.noOfRel * IMAGE_SIZEOF_RELOCATION #);
+   reldataNum:  (# exit mstate.d.noOfRel #);
+   relDataSize: (# exit mstate.d.noOfRel * IMAGE_SIZEOF_RELOCATION #);
+   
+   EmitHeader:
+     (* Construct COFF header *)
+     (# h: @IMAGE_FILE_HEADER;
+     do(* newline;
+        textSize    ->sPutHex; newline;
+        dataSize    ->sPutHex; newline;
+        symtabSize  ->sPutHex; newline;
+        stringSize  ->sPutHex; newline;
+        reltextNum  ->sPutHex; newline;
+        relTextSize ->sPutHex; newline;
+        reldataNum  ->sPutHex; newline;
+        relDataSize ->sPutHex; newline;
+        *)
+        
+        IMAGE_FILE_MACHINE_POWERPC_BIG -> h.Machine;
+        2                       -> h.NumberOfSections; (* .text, .data *)
+        systemtime              -> h.TimeDateStamp;
+        IMAGE_SIZEOF_FILE_HEADER+
+        2*IMAGE_SIZEOF_SECTION_HEADER+
+        textSize+
+        dataSize+
+        relTextSize+
+        relDataSize             -> h.PointerToSymbolTable;
+        mstate.symtabTop*2      -> h.NumberOfSymbols;
+        0                       -> h.SizeOfOptionalHeader;
+        0                       -> h.Characteristics;
+        h[] -> CF.putfilehdr;
+     #);
+   EmitText:
+     (# 
+     do (@@b.buffer[1],textsize)->putB;
+     #);
+   EmitData:
+     (# 
+     do (@@d.buffer[1],datasize)->putB;
+     #);
+   EmitRel:
+     (# im: ^PPCImage;
+        relType: [markMax] @integer; 
+        mark,n,dataBase: @integer;
+        R: @reloc 
+     do xIMAGE_REL_PPC_TOCREL16 ->relType[datamark];
+        xIMAGE_REL_PPC_TOCREL16 ->relType[codeMark];
+        (* PPCMAC: codemark is used for code relocation; 
+         * address of TOC-entry for code-entry point; 
+         * should be replaced by the data TOC-entry symbol 
+         * corresponding to the codeentry point
+         *)
+        R_BR_S26  ->relType[callMark];
+        xIMAGE_REL_PPC_REFHI  ->relType[setHiMark];
+        xIMAGE_REL_PPC_REFLO  ->relType[setLoMark];
+        xIMAGE_REL_PPC_REFLO  ->relType[setLoMarkSt];
+        xIMAGE_REL_PPC_REFLO  ->relType[setLoMarkJmp];
+        xIMAGE_REL_PPC_REFLO  ->relType[setLoMarkLdd];
+        xIMAGE_REL_PPC_REFLO  ->relType[setLoMarkLd];
+        xIMAGE_REL_PPC_ADDR32      ->relType[wordMark];
+        xIMAGE_REL_PPC_ADDR32      ->relType[TOCwordMark];
+        xIMAGE_REL_PPC_ABSOLUTE    ->relType[entryDefMark];
+        R_BR_S26      ->relType[jmpMark];
+        (* R_SPARC_WDISP22     ->relType[bgtuMark];*)
+        xIMAGE_REL_PPC_ADDR32      ->relType[TOCstart];
+        xIMAGE_REL_PPC_ADDR32      ->relType[TOCmarkDS];
+        xIMAGE_REL_PPC_ADDR32      ->relType[TOCmarkRW];
+        xIMAGE_REL_PPC_ADDR32      ->relType[TOCmarkTC];
+
+        INNER; (* define im to be one of mstate.d or mstate.b *)
+        (for i: im.markTop repeat
+             (if (im.types[i]->mark) 
+              // entryDefMark // TOCstart 
+              // TOCmarkDS // TOCmarkRW // TOCmarkTC then
+              else
+                 (* symtab indexes are counted 0,1,... *)
+                 im.epElm[i].m.symtabInx*2 -2 -> R.r_symndx;
+                 relType[mark]             -> R.r_type;
+                 (if mark // dataMark // codeMark then
+                     (* apparently the addres MUST point to the
+                      * 16-bit operand and NOT the instruction??
+                      *)
+                     dataBase + (im.marks[i]-1)*4 + 2     -> R.r_vaddr
+                  else
+                     dataBase + (im.marks[i]-1)*4         -> R.r_vaddr
+                 if);
+                 R[]->CF.putReloc;
+                 n+1->n;
+             if)
+        for);
+        (if n <> im.noOfRel then 
+            '\nWARNING rel count inconsistencies: '->putText;
+            n->putint; ' '->put; im.noOfRel->putint; newline
+        if)
+     #);
+   EmitRelText: EmitRel(#do mstate.b[]->im[] #);
+   EmitRelData: EmitRel(#do mstate.d[]->im[]; dataStart ->  dataBAse #);
+   
+   (* Indices of .data and .text in symbol table *)
+   textSectionSymbolIndex: (# exit 1 #);
+   dataSectionSymbolIndex: (# exit 2 #);
+   
+   EmitSymbolTable:
+     (# n: @integer; 
+        ep: [mstate.symtabTop] ^EntryPoints.ElementType;
+        current: ^ EntryPoints.ElementType;
+        S: @IMAGE_SYMBOL;
+        AUX: ^ auxent;
+        AUX_SYMBOL: @IMAGE_AUX_SYMBOL_SECTION;
+        AUX_CSECT: @IMAGE_AUX_CSECT_ENTRY;
+        section, value, class: @integer;
+        first: @boolean
+     do ENTRYPOINTS.scan
+        (#
+        do current[]->ep[current.m.symtabInx][] ; n+1->n
+        #);
+        (if (n + 2) <> mstate.symtabTop then
+            '\n WARNING: inconsistencies in symtab size:'->puttext;
+            n->putint; ' '->put; mstate.symtabTop->putint; newline;
+        if);
+        (* possibly add .file section here *)
+        textCoffName           -> (S.N1_4, S.N5_8);
+        0                      -> S.value; (* represents section name *)
+        1                      -> S.SectionNumber;
+        IMAGE_SYM_TYPE_NULL    -> S.n_type;
+        IMAGE_SYM_CLASS_STATIC -> S.StorageClass;
+        1                      -> S.NumberOfAuxSymbols;
+        S[]   -> CF.putSymEnt; (* 0 *)
+        
+        textSize   -> AUX_SYMBOL.Length;
+        relTextNum -> AUX_SYMBOL.NumberOfRelocations;
+        0          -> AUX_SYMBOL.NumberOfLinenumbers;
+        0          -> AUX_SYMBOL.CheckSum;
+        1          -> AUX_SYMBOL.Number;
+        
+        AUX_SYMBOL[] -> CF.putAuxEnt; (* 1 *)
+        
+        dataCoffName           -> (S.N1_4, S.N5_8);
+        dataStart              -> S.value; (* represents section name *)
+        2                      -> S.SectionNumber;
+        IMAGE_SYM_TYPE_NULL    -> S.n_type;
+        IMAGE_SYM_CLASS_STATIC -> S.StorageClass;
+        1                      -> S.NumberOfAuxSymbols;
+        S[]   -> CF.putSymEnt; (* 2 *)
+        
+        dataSize   -> AUX_SYMBOL.Length;
+        relDataNum -> AUX_SYMBOL.NumberOfRelocations;
+        0          -> AUX_SYMBOL.NumberOfLinenumbers;
+        0          -> AUX_SYMBOL.CheckSum;
+        2          -> AUX_SYMBOL.Number;
+        
+        AUX_SYMBOL[] -> CF.putAuxEnt; (* 3 *)
+        
+        (* NB. If other symbols are put in before the .data and .text 
+         * symbol, case dataSectionSymbolIndex and dataSectionSymbolIndex
+         * above must be changed accordingly, as emitRel use these 
+         * special symbols.
+         *)
+        true -> first;
+        201->ctrace(#do 'Symboltable:\n'->xT #);
+        (for i: ep.range-2 repeat 
+             ep[i+2][]->current[];
+             201->ctrace
+             (#do current.display;
+                (*current.m.strInx->strTbl.scan(#do ch->screen.put #)*)
+             #);
+             (if current.local then (* defined in this fragment *)
+                 (* define a symtab entry for a label dCF. *)
+                 (if current.export then
+                     (* exported from this fragment *)
+                     IMAGE_SYM_CLASS_EXTERNAL -> class; 
+                     current.LIP            -> value;                     
+                     
+                     (current.m.lastLIP-current.LIP,0) -> Max
+                                         -> AUX_CSECT.x_scnlen;
+                     0                   -> AUX_CSECT.x_parmhash;
+                     0                   -> AUX_CSECT.x_snhash;
+                     (2 %sll 3) + XTY_SD -> AUX_CSECT.x_smtyp;
+                     0                   -> AUX_CSECT.x_stab;
+                     0                   -> AUX_CSECT.x_snstab;             
+                     AUX_CSECT[]         -> AUX[];
+                  else
+                     C_HIDEXT      -> class;
+                     current.LIP -> value;
+                     
+                     (current.m.lastLIP-current.LIP,0) -> Max
+                                         -> AUX_CSECT.x_scnlen;
+                     0                   -> AUX_CSECT.x_parmhash;
+                     0                   -> AUX_CSECT.x_snhash;
+                     (2 %sll 3) + XTY_SD -> AUX_CSECT.x_smtyp;
+
+                     0                   -> AUX_CSECT.x_stab;
+                     0                   -> AUX_CSECT.x_snstab;             
+                     AUX_CSECT[] -> AUX[];
+                 if);
+                 
+                 IMAGE_SYM_TYPE_NULL      -> S.n_type;
+                 (if current.m.TOCentry
+                  // TOCstart then
+                     dataSectionSymbolIndex -> section;
+                     0        -> AUX_CSECT.x_scnlen;
+                     XMC_TC0  -> AUX_CSECT.x_smclass;
+                     dataStart + value -> value
+                  // TOCmarkDS then
+                     dataSectionSymbolIndex   -> section;
+                     (if current.export then
+                         IMAGE_SYM_CLASS_EXTERNAL -> class;
+                      else
+                         C_HIDEXT -> class
+                     if);
+                     12     -> AUX_CSECT.x_scnlen;
+                     XMC_DS -> AUX_CSECT.x_smclass;
+                     dataStart + value -> value
+                  // TOCmarkRW then (* Not used? *)
+                     dataSectionSymbolIndex -> section;
+                     4       -> AUX_CSECT.x_scnlen;
+                     XMC_RW  -> AUX_CSECT.x_smclass;
+                     dataStart + value -> value
+                  // TOCmarkTC then
+                     dataSectionSymbolIndex -> section;
+                     4      -> AUX_CSECT.x_scnlen;
+                     XMC_TC -> AUX_CSECT.x_smclass;
+                     dataStart + value -> value
+                  // CASEstartType then
+                     current.display
+                  else
+                     (if current.data then
+                         dataSectionSymbolIndex -> section;
+                         (if current.export then
+                             XMC_RW (*XMC_TC?*)  -> AUX_CSECT.x_smclass
+                          else
+                             XMC_RW  -> AUX_CSECT.x_smclass
+                         if);
+                         IMAGE_SYM_TYPE_NULL      -> S.n_type;
+                         dataStart + value -> value
+                      else
+                         textSectionSymbolIndex -> section;
+                         XMC_PR -> AUX_CSECT.x_smclass;
+                         IMAGE_SYM_DTYPE_FUNCTION %sll 4  -> S.n_type;
+                 if)if)
+              else
+                 IMAGE_SYM_TYPE_NULL      -> S.n_type;
+                 
+                 IMAGE_SYM_UNDEFINED      -> section;
+                 IMAGE_SYM_CLASS_EXTERNAL -> class;
+                 0                        -> value;
+
+                 0   -> AUX_CSECT.x_scnlen;
+                 0   -> AUX_CSECT.x_parmhash;
+                 0   -> AUX_CSECT.x_snhash;
+                 0   -> AUX_CSECT.x_smtyp;
+                
+                 (if current.data then
+                     XMC_TC  -> AUX_CSECT.x_smclass;
+                  else
+                     XMC_PR -> AUX_CSECT.x_smclass 
+                 if);                     
+                 (if current.m.TOCentry 
+                  // TOCmarkDS then
+                     (*dataSectionSymbolIndex   -> section;*)
+                     (*12     -> AUX_CSECT.x_scnlen;*)
+                     XMC_DS -> AUX_CSECT.x_smclass;
+                  // TOCmarkTC then
+                     (*dataSectionSymbolIndex -> section;
+                      4      -> AUX_CSECT.x_scnlen;*)
+                     XMC_TC -> AUX_CSECT.x_smclass;
+                 if);
+
+                 0           -> AUX_CSECT.x_stab;
+                 0           -> AUX_CSECT.x_snstab;             
+                 AUX_CSECT[] -> AUX[];
+
+             if);
+
+             (* always use string table for BETA symbols - 
+              * most are longer than 8 bytes.
+              *)
+             0                      -> S.N1_4;
+             current.m.strInx       -> S.N5_8;
+             value                  -> S.value; 
+             section                -> S.SectionNumber;
+             class                  -> S.StorageClass;
+             1                      -> S.NumberOfAuxSymbols;
+             S[]->CF.putSymEnt;
+
+             AUX[] -> CF.putAuxEnt; 
+
+        for);
+     #);
+   EmitStringTable:
+     (# size: @integer;
+     do stringSize->align4 -> size;
+        size -> CF.putLong;
+        (@@mstate.strTbl.str.T[5],size-4)->putB;
+     #);
+   EmitSectionHeaderText:
+     (# h: @IMAGE_SECTION_HEADER;
+     do textCoffName                  -> (h.Name1_4, h.Name5_8);
+        0                             -> h.PhysicalAddress;
+        0                             -> h.VirtualAddress;
+        textSize                      -> h.SizeOfRawData;
+        IMAGE_SIZEOF_FILE_HEADER+
+        2*IMAGE_SIZEOF_SECTION_HEADER -> h.PointerToRawData;
+        IMAGE_SIZEOF_FILE_HEADER+
+        2*IMAGE_SIZEOF_SECTION_HEADER+
+        textsize+
+        datasize                      -> h.PointerToRelocations;
+        0                             -> h.PointerToLinenumbers;
+        relTextNum                    -> h.NumberOfRelocations;
+        0                             -> h.NumberOfLinenumbers;
+        (*IMAGE_SCN_CNT_CODE+*)
+        (*IMAGE_SCN_ALIGN_4BYTES+*)
+        IMAGE_SCN_MEM_EXECUTE 
+        (*+IMAGE_SCN_MEM_READ*)            -> h.Characteristics;
+        h[] -> CF.putscnhdr;
+     #);
+   EmitSectionHeaderData:
+     (# h: @IMAGE_SECTION_HEADER;
+     do dataCoffName                  -> (h.Name1_4, h.Name5_8);
+        textSize                            -> h.PhysicalAddress;
+        textSize                            -> h.VirtualAddress;
+        dataSize                      -> h.SizeOfRawData;
+        IMAGE_SIZEOF_FILE_HEADER+
+        2*IMAGE_SIZEOF_SECTION_HEADER+
+        textsize                      -> h.PointerToRawData;
+        IMAGE_SIZEOF_FILE_HEADER+
+        2*IMAGE_SIZEOF_SECTION_HEADER+
+        textsize+
+        datasize+
+        reltextsize                   -> h.PointerToRelocations;
+        0                             -> h.PointerToLinenumbers;
+        relDataNum                    -> h.NumberOfRelocations;
+        0                             -> h.NumberOfLinenumbers;
+        (*IMAGE_SCN_CNT_INITIALIZED_DATA+
+        IMAGE_SCN_ALIGN_4BYTES+
+         IMAGE_SCN_MEM_WRITE+*)
+        IMAGE_SCN_MEM_READ            -> h.Characteristics;
+        h[] -> CF.putscnhdr;
+     #);
+   
+   InsertSymbRefs:
+     (# epx: ^EntryPoints.ElementType; S: ^text
+     do 202->ctrace(#do 'InsertSymbRefs:\n'->xT#);
+        (for i: mstate.b.markTop repeat
+             (if mstate.b.types[i]
+              // callMark then
+                 mstate.b.epElm[i][] -> epx[];
+                 (if epx.local then
+                     ((epx.LIP - (mstate.b.marks[i]-1)*4) div 4, 6,24)
+                       -> mstate.b.buffer[mstate.b.marks[i]].%putBits
+                  else
+                     (- (mstate.b.marks[i]-1), 6,24)
+                       -> mstate.b.buffer[mstate.b.marks[i]].%putBits
+                 if)
+              // dataMark then
+                 (* dataMark:  la r12, T17FOO;  PutSetText
+                  *)
+                 mstate.b.epElm[i][] -> epx[];
+                 (* find and replace symbol with the corresponding TOC-entry *)
+                 202->ctrace(#do 'Replace: '->xT; epx.t[]->xT; xN #);
+                 (epx.t[],TOCmarkTC) 
+                   -> entryPoints.FindTyped 
+                   -> epx[]
+                   -> mstate.b.epElm[i][];
+                 (* note: both operands are relative to dataStart,
+                  * so dataStart is not needed in expression
+                  *)
+                 (epx.LIP - mstate.TOCanchorAddress ,1)
+                   -> mstate.b.buffer[mstate.b.marks[i]].%putShort
+              // codeMark then 
+                 (* codeMark:  la r12, .M17FOO; PutSetText2 *)
+                 mstate.b.epElm[i][] -> epx[];
+                 (* find and replace symbol with the corresponding TOC-entry *)
+                 202->ctrace(#do 'Replace: '->xT; epx.t[]->xT; xN; epx.display #);
+                 ((2,epx.t.length)->epx.t.sub,TOCmarkTC) 
+                   -> entryPoints.FindTyped 
+                   -> epx[]
+                   -> mstate.b.epElm[i][];
+                 (* note: both operands are relative to dataStart,
+                  * so dataStart is not needed in expression
+                  *)
+                 (epx.LIP - mstate.TOCanchorAddress ,1)
+                   -> mstate.b.buffer[mstate.b.marks[i]].%putShort;
+                 202->ctrace(#do 'ReplaceX: '->xT; epx.t[]->xT; xN; epx.display #);
+             if)
+        for);
+        PatchDataToCode:
+          (for i: mstate.d.markTop repeat
+               (if (mstate.d.marks[i]-1)*4 >= mstate.TOCanchorAddress then
+                   leave PatchDataToCode 
+               if);
+               (if mstate.d.types[i] = wordMark then
+                   mstate.d.epElm[i][] -> epx[];
+                   202->ctrace(#do 'DataRel: '->xT; epx.display #);
+                   (if epx.local then
+                       (if epx.data then
+                           dataStart + epx.LIP 
+                             -> mstate.d.buffer[mstate.d.marks[i]]
+                        else 
+                           ((2,epx.t.length)->epx.t.sub,TOCmarkDS) 
+                             -> entryPoints.FindTyped 
+                             -> epx[]
+                             -> mstate.d.epElm[i][];
+                           dataStart+epx.LIP
+                             -> mstate.d.buffer[mstate.d.marks[i]]
+                       if)
+                    else
+                       (if not epx.data then
+                           (* e.g. '.Return', or 
+                            * '.M11FOO' in inner table in external fragment;
+                            * apparently we must create symbol
+                            * 'Return' or 'M11FOO'
+                            *)
+                           (if (1->epx.T.inxGet) = '.' then
+                               (2,epx.T.length) -> epx.T.sub
+                                 -> S[];
+                               (S[],TOCmarkDS)
+                                 -> entryPoints.FindTyped
+                                 -> epx[]
+                                 -> mstate.d.epElm[i][];
+                           if);
+                           202->ctrace(#do 'Fix:'->xT; epx.display #)
+                       if)
+          if)if)for)
+     #);
+   
+   GenerateTOCentries:
+     (# EP: [100] ^ EntryPoints.ElementType; top: @integer;
+        epx: ^ EntryPoints.ElementType; s,t: ^text;
+        MakeTOCentry:
+          (# entry,source: ^text; off: @integer
+          enter(entry[],source[],off)
+          do (entry[],TOCmarkTC) -> mstate.d.mark;
+             (source[],wordMark) -> mstate.d.mark;
+             dataStart + off -> declareLong;
+          #);
+        oldMark: @integer; epp: ^EntryPoints.ElementType
+     do 203->ctrace(#do 'Generate TOC entries:\n'->xT #);
+        switchToData;
+
+        (* avoid modifying while scanning *);
+        ENTRYPOINTS.scan
+        (# 
+        do (if (top+1->top) > EP.range then EP.range -> EP.extend if);
+           current[] -> EP[top][];
+           (*current.t[]->putline;*)
+        #);
+
+        ('TOC',TOCstart) -> mstate.d.mark;
+        mstate.d.LIP -> mstate.TOCanchorAddress -> d.currentEntry.LIP;       
+
+        (for i: top repeat
+             EP[i][] -> epx[];
+             203->ctrace(#do epx.display #);
+             (if epx.local then
+                 epx.t.copy -> s[];
+                 (if epx.data then 
+                     (s[],TOCmarkTC) -> mstate.d.mark;
+                     (* foo[DS] *)
+                     (s[],TOCWordMark) -> mstate.d.mark;
+                     mstate.d.epElm[mstate.d.markTop][] -> epp[];
+                     203->ctrace
+                     (#do 'Found: '->xT; epp.T[]->xT; ','->put;
+                        epp.m.TOCentry->xI
+                     #);
+                     dataStart + epx.LIP -> declareLong;
+                  else 
+                     (if (1 -> s.InxGet) ='.' then
+                         (* TOC-entry*)
+                         (2,s.length) -> s.sub -> t[];
+                         (t[],TOCmarkTC) -> mstate.d.mark;
+                         
+                         (* foo[DS] *)
+                         (t[],wordMark) -> mstate.d.mark;
+                         dataStart + mstate.d.LIP + 4 -> declareLong;
+                         mstate.d.markTop -> oldMark;
+                         
+                         (* transition vector *)
+                         (t[],TOCmarkDS) -> mstate.d.mark; (* foo[DS] *)
+                         d.currentEntry[] -> mstate.d.epElm[oldMark][];
+                         epx.export -> d.currentEntry.export;
+                         mstate.d.LIP -> d.currentEntry.LIP;
+                         
+                         (* .foo[PR] *)
+                         (s[],wordMark)->mstate.d.mark;
+                         epx.LIP -> declareLong;
+                         
+                         ('TOC',wordMark) -> mstate.d.mark;
+                         dataStart + mstate.TOCanchorAddress -> declareLong;
+                         0 -> declareLong;
+                      else
+                         (if epx.m.TOCentry = CASEstartType then
+                             (*(S[],epx.m.csect[],epx.LIP) -> MakeTOCentry;*)
+                             TOCmarkTC -> epx.m.TOCentry;
+                             (epx.m.csect[],wordMark) -> mstate.d.mark;
+                             epx.LIP -> declareLong;
+                             mstate.d.LIP - 4 -> epx.LIP; 
+                             true-> epx.data
+                         if)                         
+                     if)
+                 if);
+              else
+                 epx.t.copy -> s[];
+                 (if epx.data then (* external data symbol *);
+                     (s[],TOCmarkTC) -> mstate.d.mark;
+                     (* foo[DS] *)
+                     (s[],TOCWordMark) -> mstate.d.mark;
+                     mstate.d.epElm[mstate.d.markTop][] -> epp[];
+                     (*epp.m.TOCentry->putint;*)
+                     0 -> declareLong;
+                  else (* external function symbol *)
+                     (* we apparently need a TOC-entry for functions
+                      * in prototypes, like Return, M1FOO, ...
+                      *)
+                     (if (1 -> s.InxGet) ='.' then
+                         
+                         (* TOC-entry*)
+                         (2,s.length) -> s.sub -> t[];
+                         (t[],TOCmarkTC) -> mstate.d.mark;
+                         
+                         (* foo[DS] *)
+                         (t[],wordMark) -> mstate.d.mark;
+                         0 -> declareLong;
+                         mstate.d.markTop -> oldMark;
+                         (* must refer to - the below is NOT tested;
+                          * And the corresponding patch above MUST be fixed
+                          *)
+                         (t[],true,TOCmarkDS) 
+                           -> entryPoints.AddDefPPC
+                           -> epx[]
+                           -> mstate.d.epElm[oldMark][];
+                         false->epx.local;
+                     if)
+                 if)
+             if)
+        for)
+     #);
+   
+  
+   CF: @cofffile
+     (# accesserror::< (#do name->common.PassCodeFileAccessError #);
+        NoSpaceError::< (* disk is full *)
+          (#do delete; common.PassNoSpaceError #);
+        WriteError::< (* disk is full *)
+          (#do delete; common.PassNoSpaceError #);
+     #);
+
+   putb: @CF.putbytes;
+   
+   T: ^text;
+do (BC.name).copy->T[];
+   (*asmlink.binext->T.append->CF.name;*)
+   '.obj'->T.append->CF.name; 
+   
+   GenerateTOCentries;
+   InsertSymbRefs;
+      
+   CF.openWrite;
+   
+   EmitHeader; (* OK *)
+   EmitSectionHeaderText; (* OK *)
+   EmitSectionHeaderData; (* OK *)
+   EmitText; (* OK *)
+   EmitData; (* OK *)
+   EmitRelText; (* OK *)
+   EmitRelData; (* OK *)
+   (*'\nSymboltable byte pos: '-> puttext; CF.getPos -> putint; newline;*)
+   EmitSymbolTable; (* OK *)
+   (*'\nStringtable byte pos: '-> puttext; CF.getPos -> putint; newline;*)
+   EmitStringTable; (* OK *)
+   (*'\nStringtable last pos: '-> puttext; CF.getPos -> putint; newline;*)
+   CF.close;
+   
+   (# spec: ^FSSpec;
+      info: @FInfo;
+      err: @integer;
+   do CF.entry.private.fs[] -> spec[];
+      (spec[], info[]) -> FSpGetFInfo -> err;
+      (if err = 0 then
+	  'XCOF' -> info.type;
+	  'MPS ' -> info.creator;
+	  (spec[], info[]) -> FSpSetFInfo -> err;
+       if);
+   #);
+   
+   (if false then
+       screen.newline;
+       'Displaying data image for ' -> screen.puttext;
+       CF.name -> screen.putline;
+       mstate.d.display;
+       'Displaying text image for ' -> screen.puttext;
+       CF.name -> screen.putline;
+       mstate.b.display;
+   if);
+   
+#)
+

@@ -1,0 +1,199 @@
+ORIGIN '../CONTROL/system';
+(* to include index and betasemops *)
+LIB_item 'betacompiler';
+---AstInterfaceLib:attributes---
+FragmentCash:
+  (* *)
+  (# elm: (# dclRef,descRef: ^ASTindex; on,pn: @integer; left,right: ^elm #);
+     theCMP: @CMP;
+     Cash:
+       (# root: ^elm;
+
+          Find:
+            (# N: ^ASTindex; R,R1: ^Elm; found: @boolean
+            enter N[]
+            do (if Root[] = NONE then 
+                   &elm[]->Root[]->R[]
+                else
+                   Root[]->R[];
+                   scan:
+                     (if ((R.dclRef,N)->theCMP)
+                      // less then
+                         R[]->R1[];
+                         R.left[]->R[];
+                         (if R[] = NONE then
+                             &elm[]->R1.left[]->R[]
+                          else restart scan
+                         if)
+                      // greater then
+                         R[]->R1[];
+                         R.right[]->R[];
+                         (if R[] = NONE then
+                             &elm[]->R1.right[]->R[]
+                          else restart scan
+                         if)
+                      else true->found
+               if)if)
+            exit(R[],found)
+            #)
+       #);
+
+     new:
+       (#
+       do (if ((top+1->top)>R.range) then R.range->R.extend if);
+          &Cash[]->R[top][]
+       exit top
+       #);
+
+     R: [1000] ^Cash; top: @integer
+  #);
+
+LibCash:
+  (* LibCash keeps track of bindings of libSlots for descriptors being
+   * searched for names during checking of a given fragmentGroup (theGroup).
+   * 
+   * When checking of theGroup starts, LibCash is empty.
+   * 
+   * Consider a descriptor D of the form
+   * 
+   *         D: (# ... <<SLOT LIB1:attributes>>; 
+   *               ... <<SLOT LIB2:attributes>>;
+   * 
+   *               ... <<SLOT LIBn:attributes>>; ...
+   *            #)
+   * The LIB slots are collected in a list:
+   *         D.lib->lib1; lib1.next->lib2; ...
+   * This list is created in initform.bet
+   * 
+   * When a name is searched (see searchBody.bet) in D, localSearch checks
+   * if D.lib is non null. If D.lib <> null then it executes
+   *         D->libCash.scan(# ... #)
+   * which iterates over all fragments bound to LIB slots in D.
+   * See localSearch for details of how these fragments are used
+   * for searching.
+   * 
+   * LibCash lazily builds a cash to keep track of fragments bound 
+   * to lib slots. 
+   * 
+   * DD:     has an entry pr. descriptor that until now has been called
+   *         via scan. 
+   * B:      has a corresponding entry being a list of fragments bound
+   *         to lib-slots in the descriptor
+   * 
+   * When theGroup has been checked, LibCash contains the bindings
+   * of slots in descriptors that have been searched for names.
+   * If a descriptor has NOT been searched for a name, it will not
+   * appear in the cash and neither will the bindings of its lib-slots!
+   * 
+   * ScanAll: iterates over all descriptors at a given point in time.
+   *)
+  (# Init: 
+       (# 
+       enter theGroup[]
+       do clear;
+       #);
+     clear: 
+       (#
+       do (for i: B.range repeat NONE->B[i][]; NONE->DD[i][]; 0->inx for)
+       #);
+     
+     Scan:
+       (* scan all fragments bound to LIB-slots in D *)
+       (# D: @ASTindex; thisForm: ^FragmentForm;
+          ix: @integer; R: ^Elm
+       enter D
+       do (* check if D has been searched before 
+           * in which case there is an entry in DD
+           *)
+          L:
+            (#
+            do (for i: inx repeat 
+                    (if (D->DD[i].equal) then B[i(*->ix*)][]->R[]; leave L 
+               if)for);
+               
+               (* D has not been searched before, then create an entry *)
+                    (* (if ix = 0 then D -> &Add  ->R[] if);*)
+               D -> &Add -> R[];
+            #);
+          (* iterate over all fragments bound to lib-slots in D *)
+          Search:
+            (if (R[]<>NONE) then
+                R.F[] -> thisForm[];
+                INNER;
+                R.succ[] -> R[];
+                restart Search
+            if);
+       #);
+     
+     ScanAll:
+       (* iterates over all descriptors currently in the cash *)
+       (# currentDesc: ^ ASTindex
+       do (for i: inx repeat DD[i][]->currentDesc[]; INNER for)
+       #);
+     
+     (*------- private ---------*)
+     theGroup: ^FragmentGroup;
+
+     inx: @integer;
+     B: [100] ^elm; DD: [100] ^ASTindex;
+     elm:
+       (* the elements of a list of fragments bound to a lib-slot.
+        * The do-part inserts F in the list if it is not already there
+        *)
+       (# F: ^FragmentForm; succ: ^elm;
+       enter F[]
+       do Insert:
+            (# R: ^Elm
+            do B[inx][]->R[];
+               L:
+                 (if (R[]<>NONE) then
+                     (if R.F[] = F[] then 
+                         leave Insert
+                     if);
+                     R.succ[] -> R[];
+                     restart L
+                 if);
+               (* (if switch[171] then
+                *     tracestream.newline;
+                *     '&' -> tracestream.put;inx->tracestream.putint;
+                *     F.Fullname->tracestream.puttext;
+                * if); 
+                *)
+               &Elm[]->R[]; F[]->R.F[]; B[inx][]->R.succ[]; R[]->B[inx][]
+       #)#);
+     add:
+       (* creates a new entry in DD/B to hold binding s in lib-slots of D *)
+       (# D: @ASTindex; Lib: @ASTindex;
+          slot: ^unExpanded
+       enter D
+       do (*(if switch[171] then 
+           tracestream.newline; '+'->tracestream.put; 
+           inx->tracestream.putInt 
+           if);*)
+          (if (inx+1->inx) > B.range then
+              B.range->B.extend; DD.range->DD.extend;
+          if); 
+          
+          (* go through all LIB-slots in D *)
+          D.Lib -> Lib;
+          LibSearch:
+            (if not lib.isNull then
+                (* get the bindings of lib.
+                 * GetBinding calls Found for all bindings of lib.
+                 * An element &elm is created for each binding
+                 *)
+                (if true then
+                    lib.asAst -> slot[];
+                    theGroup[]-> slot.getBinding
+                    (# Found::<(#do theBinding[]->&elm #)#);
+                 else
+                   (* theGroup[]-> lib.GetBinding
+                    (# Found::<(#do theBinding[]->&elm #)#);*)
+                if);
+                lib.next -> lib;
+                restart LibSearch
+            if);
+          &ASTindex[]->DD[inx][]; D->DD[inx]
+       exit B[inx][]
+       #)                
+  #);

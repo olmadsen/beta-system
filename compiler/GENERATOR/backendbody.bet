@@ -1,0 +1,627 @@
+ORIGIN 'backend';
+INCLUDE '~beta/sysutils/binarystream';
+
+---backendinitGen: dopart---
+do
+
+---backendInitDo: dopart---
+do nodeId->backendDbgInf.thisFrag.newDT; 
+   IP+backendDbgInf.IPsum->backendDbgInf.IPsum; 
+   0->IP->backendDbgInf.oldIP
+   
+---backendInitDataSeg: doPart---
+   (* used to be in CODEmachine*)
+do (# T: ^text;
+      I: @backendInstruction;
+        
+   do doHead; 
+
+      switchToCode; (* used to be called from assemblerHeader in doHead *)
+      
+      'BETA_code1' -> labelDef;
+      nopImpl;
+      switchToData;
+
+      group_hash.copy -> T[];
+      'BETA_DATA_' -> T.prepend;
+      T[] -> Export;
+      T[] -> LabelDef;    
+      
+      T[] -> I.label[]; I[] -> declareDataSegmentTextAddressImpl;
+      
+      ('BETA_data2',true)->importData;
+      'BETA_data2'->I.label[]; I[]->declareDataSegmentTextAddressImpl;
+      
+      ('BETA_data3',true)->importData;
+      'BETA_data3'->I.label[]; I[]->declareDataSegmentTextAddressImpl;
+      
+      'BETA_code1'->I.label[]; I[] ->declareDataSegmentTextAddressImpl;
+      
+      'BETA_code2'->I.label[]; I[]->declareDataSegmentTextAddressImpl;
+   
+      true->groupIdLab.isTextAdr; (* declared in machine *)
+      groupIdLab.new; 
+      (*groupIdLab[]*)
+      groupIdLab.labNo->I.labNo;
+      I[]-> declareDataSegmentLabelAddressImpl;
+      group_hash.reset;
+      group_hash.getint -> declareLong; group_hash.get; (* '-'*)
+      group_hash.getint -> declareLong;
+      0 -> declareLong; 
+   
+      switchToCode;
+   #)
+      
+--backendimport:doPart--
+do (lab[],false)
+     -> entryPoints.add
+   (*-> wasAdded; NOT used ???? *)
+
+--backendimportData:doPart--
+do (lab[],true)->entrypoints.add (* ->wasAdded; NOT used??? *)
+
+--backendGlobalDataLabelDef:doPart--
+do (if trace_back then
+       '>>> GlobalLabelDef: ' -> puttext; xLab[] -> puttext;
+       (if data then ' as data '->putline  
+        else ' as text!!!WRONG!!!' -> putline 
+   if)if);
+   (xLab[],data) -> entrypoints.addDef;
+   (* OBS! The following should be fixed for all platforms *)
+   xLab[]->labelDef
+   
+---backendExternalEntry_defineEntry:doPart--
+do I.label[]->export;
+   (I.label[],false)->entryPoints.addDef;
+   
+---backendinitEmitProtoIndexTable:dopart--
+do 
+   noOfPT->declareLong; 
+
+---backendendEmitProtoIndexTable:dopart---
+do   
+   groupIdLab.def; 
+   false->groupIdLab.isTextAdr;
+
+   (localFilePath[],false)->asciiText
+
+---backendEmitProtoIndex:dopart---
+do &backendInstruction(#do PT[]->label[]#)->declareDataSegmentTextAddressImpl
+
+---backendInnerEntry:dopart--
+do &backendInstruction(#do entry[]->label[]#)->declareAddressImpl
+
+---backendEmitInnerTable:doPart--
+do &backendInstruction(#do 'Return'->label[]#)
+     ->declareDataSegmentTextAddressImpl;
+   INNER EmitInnerTable
+
+   
+---backendEmitProto:doPart--
+do (if trace_back then
+       '>>> emitProto: ' -> puttext;  thisTlab[]-> puttext;
+       (if thisGlab[] <> none then
+           thisGlab[] -> putline
+        else
+           ' empty G-part ' -> putline
+   if)if);
+   (*thisTlab[] -> LabelDef; (* machine::GlobalLabelDef calls labelDef *)
+   (thisTlab[],true) -> GlobalDataLabelDef;
+   (*0:GCtableOffSet*) GCtableOffSet->declareWord;
+   (*2: OriginOff   *) OriginOff div 4 ->declareWord;
+   (*4: G-entry     *) 
+   (if thisGlab[] <>  NONE then 
+       &backendInstruction(#do thisGlab[]->label[] #)
+         ->declareDataSegmentTextAddressImpl
+    else
+       0 -> declareLong
+   if);
+   (*8: superTlab   *) 
+   &backendInstruction(#do superTlab[]->label[]#)
+     -> declareDataSegmentTextAddressImpl;
+   (*12: size       *) size->declareWord;
+   (*14: topMentryOff*) topMentryOff->declareWord;
+   (*16: formIndex  *) formIndex->declareWord;
+   (*18: AST        *) astNumber->declareWord;
+   (if externalEntryLab[] <> NONE then
+       (*16/20: externalEntry*) 
+       &backendInstruction(#do externalEntryLab[]->label[]#)
+         ->declareDataSegmentTextAddressImpl
+    else 0 -> declareLong 
+   if)
+   
+--backendEmitVirtTextAdr:DoPart--
+do &backendInstruction
+   (#
+   do this(EmitVirtTextAdr).label[]->label[];
+   #) ->declareDataSegmentTextAddressImpl;
+   
+--backendEmitVirtLabelAdr:DoPart--
+do &backendInstruction
+   (#
+   do this(EmitVirtLabelAdr).labno->labNo;
+      true -> condition (* label def is in code *)
+   #) ->declareDataSegmentLabelAddressImpl;
+
+---backendemitObjTableOff:dopart---
+do (if (offNo+1->offNo) mod 3 
+    // 1 // 2 then 
+       off->declareWord
+    // 0 then
+       off->declareLong (* component prototype *)
+   if)
+   
+---backendemitText:dopart---
+do offNo+1 -> offNo;
+   (if not local then (T[],false)->importData if);
+   &backendInstruction(#do T[]->label[]#)->declareDataSegmentTextAddressImpl
+   
+---backendEmitRefTableOff:dopart---
+do off->declareWord
+
+---backendInit:descriptor---
+(#
+do (if bugstream[] = NONE then screen[] -> bugstream[] if);
+   
+   &nopImpl[] -> opCodeMAp[Inop][];
+   &gLeaImpl[] -> opCodeMap[IgLea][];
+   &gLeaInxImpl[] -> opCodeMap[IgLeaInx][];
+   &gLeaLabelImpl[] -> opCodeMap[IgLeaLabel][];
+   &gLeaTextImpl[] -> opCodeMap[IgLeaText][];
+   &ldCstImpl[] -> opCodeMap[IldCst][];
+   &stCstImpl[] -> opCodeMap[IstCst][];
+   &ldvalFromLabImpl[] -> opCodeMap[IldvalFromLab][];
+   &ldValImpl[] -> opCodeMap[IldVal][];
+   &ldVlInxImpl[] -> opCodeMap[IldValInx][];
+   &stValImpl[] -> opCodeMap[IstVal][];
+   &stValInxImpl[] -> opCodeMap[IstValInx][];
+   &stValInLabImpl[] -> opCodeMap[IstValInLab][];
+   &cpRegImpl[] -> opCodeMap[IcpReg][];
+   &stValInTextImpl[] -> opCodeMap[IstValInText][];
+   &doAsgRefAdrImpl[] -> opCodeMap[IdoAsgRefAdr][];
+   &doAsgRefRegImpl[] -> opCodeMap[IdoAsgRefReg][];
+   &ChkHeapImpl[] -> opCodeMap[IChkHeap][];
+   &gAddImmImpl[] -> opCodeMap[IgAddImm][];
+   &gAddRegImpl[] -> opCodeMap[IgAddReg][];
+   &addMemImpl[] -> opCodeMap[IaddMem][];
+   &gNegImpl[] -> opCodeMap[IgNeg][];
+   &gSubImmImpl[] -> opCodeMap[IgSubImm][];
+   &gSubRegImpl[] -> opCodeMap[IgSubReg][];
+   &gMultImmImpl[] -> opCodeMap[IgMultImm][];
+   &gMultRegImpl[] -> opCodeMap[IgMultReg][];
+   &gDIVImmImpl[] -> opCodeMap[IgDIVImm][];
+   &gDIVRegImpl[] -> opCodeMap[IgDIVReg][];
+   &gOrImmImpl[] -> opCodeMap[IgOrImm][];
+   &gOrRegImpl[] -> opCodeMap[IgOrReg][];
+   &gAndImmImpl[] -> opCodeMap[IgAndImm][];
+   &gAndRegImpl[] -> opCodeMap[IgAndReg][];
+   &gXorImmImpl[] -> opCodeMap[IgXorImm][];
+   &gXorRegImpl[] -> opCodeMap[IgXorReg][];
+   &gAndNRegImpl[] -> opCodeMap[IgAndNReg][];
+   &gNotImpl[] -> opCodeMap[IgNot][];
+   &logNotImpl[] -> opCodeMap[IlogNot][];
+   &gCmpImmImpl[] -> opCodeMap[IgCmpImm][];
+   &gCmpRegImpl[] -> opCodeMap[IgCmpReg][];
+   &SignExtByteImpl[] -> opCodeMap[ISignExtByte][];
+   &SignExtWordImpl[] -> opCodeMap[ISignExtWord][];
+   &getBitsImpl[] -> opCodeMap[IgetBits][];
+   &gGetBitsImpl[] -> opCodeMap[IgGetBits][];
+   &putBitsImpl[] -> opCodeMap[IputBits][];
+   &gPutBitsImpl[] -> opCodeMap[IgPutBits][];
+   &ByteSwapImpl[] -> opCodeMap[IByteSwap][];
+   &gGetDataByteImpl[] -> opCodeMap[IgGetDataByte][];
+   &gGetDataWordImpl[] -> opCodeMap[IgGetDataWord][];
+   &arithShiftLeftImmImpl[] -> opCodeMap[IarithShiftLeftImm][];
+   &arithShiftLeftRegImpl[] -> opCodeMap[IarithShiftLeftReg][];
+   &logicalShiftLeftImmImpl[] -> opCodeMap[IlogicalShiftLeftImm][];
+   &logicalShiftLeftRegImpl[] -> opCodeMap[IlogicalShiftLeftReg][];
+   &arithShiftrightImmImpl[] -> opCodeMap[IarithShiftrightImm][];
+   &arithShiftrightRegImpl[] -> opCodeMap[IarithShiftrightReg][];
+   &logicalShiftRightImmImpl[] -> opCodeMap[IlogicalShiftRightImm][];
+   &logicalShiftRightRegImpl[] -> opCodeMap[IlogicalShiftRightReg][];
+   &rotateLeftImmImpl[] -> opCodeMap[IrotateLeftImm][];
+   &rotateLeftRegImpl[] -> opCodeMap[IrotateLeftReg][];
+   &rotateRightImmImpl[] -> opCodeMap[IrotateRightImm][];
+   &rotateRightRegImpl[] -> opCodeMap[IrotateRightReg][];
+   &BeginLabelImpl[] -> opCodeMap[IBeginLabel][];
+   &FreeLabelImpl[] -> opCodeMap[IFreeLabel][];
+   &EndLabelImpl[] -> opCodeMap[IEndLabel][];
+   &saveInnerReturnImpl[] -> opCodeMap[IsaveInnerReturn][];
+   &returnInnerImpl[] -> opCodeMap[IreturnInner][];
+   &EmitTextConstImpl[] -> opCodeMap[IEmitTextConst][];
+   &gClrImpl[] -> opCodeMap[IgClr][];
+   &pushAdrImpl[] -> opCodeMap[IpushAdr][];
+   &PushImpl[] -> opCodeMap[IPush][];
+   &PopImpl[] -> opCodeMap[IPop][];
+   &PushThisOrCallImpl[] -> opCodeMap[IPushThisOrCall][];
+   &popThisOrCallImpl[] -> opCodeMap[IpopThisOrCall][];
+   &setTopImpl[] -> opCodeMap[IsetTop][];
+   &ChkCaseImpl[] -> opCodeMap[IChkCase][];
+   &ChkIndexImpl[] -> opCodeMap[IChkIndex][];
+   &cmpToBoolImpl[] -> opCodeMap[IcmpToBool][];
+   &floatConstImpl[] -> opCodeMap[IfloatConst][];
+   &int2floatImpl[] -> opCodeMap[Iint2float][];
+   &intReg2floatImpl[] -> opCodeMap[IintReg2float][];
+   &float2intImpl[] -> opCodeMap[Ifloat2int][];
+   &cmpToBoolFloatImpl[] -> opCodeMap[IcmpToBoolFloat][];
+   &popFStackImpl[] -> opCodeMap[IpopFStack][];
+   &cmpFloatImpl[] -> opCodeMap[IcmpFloat][];
+   &addFloatImpl[] -> opCodeMap[IaddFloat][];
+   &subFloatImpl[] -> opCodeMap[IsubFloat][];
+   &mulFloatImpl[] -> opCodeMap[ImulFloat][];
+   &divFloatImpl[] -> opCodeMap[IdivFloat][];
+   &negFloatImpl[] -> opCodeMap[InegFloat][];
+   &SpillDataRegImpl[] -> opCodeMap[ISpillDataReg][];
+   &LoadSpilledDataRegImpl[] -> opCodeMap[ILoadSpilledDataReg][];
+   &lockImpl[] -> opCodeMap[Ilock][];
+   &DumpRegImpl[] -> opCodeMap[IDumpReg][];
+   &PushRegImpl[] -> opCodeMap[IPushReg][];
+   &PopRegImpl[] -> opCodeMap[IPopReg][];
+   &PushDataRegImpl[] -> opCodeMap[IPushDataReg][];
+   &PopDataRegImpl[] -> opCodeMap[IPopDataReg][];
+   &PushFloatRegImpl[] -> opCodeMap[IPushFloatReg][];
+   &PopFloatRegImpl[] -> opCodeMap[IPopFloatReg][];
+   &tstNoneImpl[] -> opCodeMap[ItstNone][];
+   &trapImpl[] -> opCodeMap[Itrap][];
+   &returnImpl[] -> opCodeMap[Ireturn][];
+   &saveReturnImpl[] -> opCodeMap[IsaveReturn][];
+   &rtsImpl[] -> opCodeMap[Irts][];
+   &labelImpl[] -> opCodeMap[Ilabel][];
+   &SaveRegImpl[] -> opCodeMap[ISaveReg][];
+   &RestoreRegImpl[] -> opCodeMap[IRestoreReg][];
+   &GetPRimResImpl[] -> opCodeMap[IGetPRimRes][];
+   &DeclareAddressImpl[] -> opCodeMap[IDeclareAddress][];
+   &ChkConstIndexImpl[] -> opCodeMap[IChkConstIndex][];
+   &jsrTableImpl[] -> opCodeMap[IjsrTable][];
+   &jmpTlongImpl[] -> opCodeMap[IjmpTlong][];
+   &jmpTImpl[] -> opCodeMap[IjmpT][];
+   &jsrTImpl[] -> opCodeMap[IjsrT][];
+   &jsrRegImpl[] -> opCodeMap[IjsrReg][];
+   &jmpRegImpl[] -> opCodeMap[IjmpReg][];
+   &gJsrImpl[] -> opCodeMap[IgJsr][];
+   &jsrTableTestImpl[] -> opCodeMap[IjsrTableTest][];
+   &jumpIfTrueImpl[] -> opCodeMap[IjumpIfTrue][];
+   &gBeqImpl[] -> opCodeMap[IgBeq][];
+   &gBneImpl[] -> opCodeMap[IgBne][];
+   &gBgeImpl[] -> opCodeMap[IgBge][];
+   &gBaeImpl[] -> opCodeMap[IgBae][];
+   &gBleImpl[] -> opCodeMap[IgBle][];
+   &gBbeImpl[] -> opCodeMap[IgBbe][];
+   &gBgtImpl[] -> opCodeMap[IgBgt][];
+   &gBabImpl[] -> opCodeMap[IgBab][];
+   &gBltImpl[] -> opCodeMap[IgBlt][];
+   &gBblImpl[] -> opCodeMap[IgBbl][];
+   &cmpAndJmpImpl[] -> opCodeMap[IcmpAndJmp][];
+   &cmpAndJmpImmImpl[] -> opCodeMap[IcmpAndJmpImm][];
+   &cmpBoolAndJmpImpl[] -> opCodeMap[IcmpBoolAndJmp][];
+   &cmpAndJmpFloatImpl[] -> opCodeMap[IcmpAndJmpFloat][];
+   &fBeqImpl[] -> opCodeMap[IfBeq][];
+   &fBgeImpl[] -> opCodeMap[IfBge][];
+   &fBleImpl[] -> opCodeMap[IfBle][];
+   &fBneImpl[] -> opCodeMap[IfBne][];
+   &fBgtImpl[] -> opCodeMap[IfBgt][];
+   &fBltImpl[] -> opCodeMap[IfBlt][];
+   &gJmpImpl[] -> opCodeMap[IgJmp][];
+   &CallPrimImpl[] -> opCodeMap[ICallPrim][];
+   &CallAlloPrimImpl[] -> opCodeMap[ICallAlloPrim][];
+   &initPrimCallImpl[] -> opCodeMap[IinitPrimCall][];
+   &PushClongImpl[] -> opCodeMap[IPushClong][];
+   &PushClongImmImpl[] -> opCodeMap[IPushClongImm][];
+   &PushCfloatImpl[] -> opCodeMap[IPushCfloat][];
+   &PushCdoubleImpl[] -> opCodeMap[IPushCdouble][];
+   &CallCImpl[] -> opCodeMap[ICallCProc][];
+   &noXresImpl[] -> opCodeMap[InoXres][];
+   &GetSimpleXresImpl[] ->  opCodeMap[IGetSimpleXres][];
+   &GetTextXresImpl[] ->  opCodeMap[IGetTextXres][];
+
+   &GetDoubleXresImpl[] ->  opCodeMap[IGetDoubleXres][];
+   &GetFloatXresImpl[] ->  opCodeMap[IGetFloatXres][];
+   &GetDataRefXresImpl[] ->  opCodeMap[IGetDataRefXres][];
+   &GetDataPartXresImpl[] ->  opCodeMap[IGetDataPartXres][];
+   &SaveHeapTopImpl[] -> opCodeMap[IsaveHeapTop][];
+   
+   &InlineAlloiNGNPImpl[] -> opCodeMap[IInlineAlloiNGNP][];
+   &GlobalCodeLabelDefImpl[] -> opCodeMap[IGlobalCodeLabelDef][];
+   &InitExternalCall[] -> opCodeMap[IInitExternalCall][];
+   &ExternalEntryImpl[] -> opCodeMap[IExternalEntry][];
+   &ExternalMarkImpl[] -> opCodeMap[IExternalMark][];
+   &ExternalReturnImpl[] -> opCodeMap[IExternalReturn][];
+
+   &initXparImpl[] -> opCodeMap[IinitXpar][];
+   &getXlongImpl[] -> opCodeMap[IgetXlong][];
+   &getXwordImpl[] -> opCodeMap[IgetXword][];
+   &getXbyteImpl[] -> opCodeMap[IgetXbyte][];
+   &toXresImpl[] -> opCodeMap[ItoXres][];
+   &GetRegForXresImpl[] -> opCodeMap[IGetRegForXres][];
+   &preGetXparImpl[] -> opcodeMap[IpreGetXpar][];
+   
+   &loadFloatImpl[] -> opCodeMap[IloadFloat][];
+   &loadFloatInxImpl[] -> opCodeMap[IloadFloatInx][];
+   &storeFloatImpl[] -> opCodeMap[IstoreFloat][];
+   &storeFloatInxImpl[] -> opCodeMap[IstoreFloatInx][];
+   &storeFloat2intImpl[] -> opCodeMap[IstoreFloat2int][];
+   &storeFloat2intInxImpl[] -> opCodeMap[IstoreFloat2intInx][];
+   &loadInt2floatImpl[] -> opCodeMap[IloadInt2float][];
+   &loadInt2floatInxImpl[] -> opCodeMap[IloadInt2floatInx][];
+   
+   &externalDispatchImpl[] -> opCodeMap[IexternalDispatch][];
+   &returnVirtualCOMImpl[] -> opCodeMap[IreturnVirtualCOM][];
+   &getCOMparImpl[] -> opCodeMap[IgetCOMpar][];
+   &AllocObjImpl[] -> opCodeMap[IallocObj][];
+   
+   &newProto[] -> opCodeMap[InewProto][];
+   &newImp[] -> opCodeMap[InewImp][];
+   &newEval[] -> opCodeMap[InewEval][];
+   &openDbgInf[] -> opCodeMap[IopenDbgInf][];
+   &saveDbgInf[] -> opCodeMap[IsaveDbgInf][];
+   
+   &InstrImpl[] -> opCodeMap[IFakeRegisterWrite][];
+   &SPtoPrim[] -> opCodeMap[ISPtoPrimReg][];
+#)
+
+---backendLocalLabNew:doPart---
+do 1->newLab->labNo   
+   
+--backendlabel:dopart --
+do (if trace_back then I.lab.display if);
+   I.lab.def;
+   
+---backendentrypointsHashfunc: doPart---
+do e.t[]-> common.honeyM.hash ->value;
+
+---backendentrypointsAdd: dopart---
+do &element[]->E[];
+   T[]->E.t[];
+   data->E.data;
+   false->wasAdded;
+   E[]->hashfunction
+     ->findIndexed
+   (# predicate::< 
+        (# 
+        do (current.t[]->t.equal) and (current.data = data) -> value
+        #);
+      notFound::< 
+        (# 
+        do E[]->insert; true->wasAdded; true->continue
+        #);
+   #)
+   
+---backendentrypointsAddDef: doPart---
+do (if trace_back then
+       '>>> entryPointsAddDef: ' -> puttext; T[] -> puttext;
+       (if data then ' data' -> putline else ' code' -> putline if);
+   if);
+   &element[]->E[];
+   T[]->E.T[];
+   true->E.local;
+   data->E.data;
+   E[]->hashfunction->findIndexed
+   (# predicate::< 
+        (# 
+        do (T[]->current.t.equal)->value;
+        #);
+      notFound::< 
+        (# 
+        do
+           E[]->addTargetInfo;
+           E[]->insert;
+           true->continue
+        #)
+   do true->current.local;
+      data->current.data;
+      current[]->addTargetInfo;
+      current[]->E[]
+   #);
+
+---backendentrypointsFind: doPart---
+do &element[]->E[];
+   T[]->E.T[];
+   E[]->hashfunction->findIndexed
+   (# predicate::< 
+        (# 
+        do (T[]->current.t.equal)->value;
+        #);
+      notFound::< 
+        (# 
+        do E[]->THIS(find).notFound;
+        #)
+   do current[]->E[] (* Only when found *)
+   #);
+   INNER find (*Called whether found or not *)
+   
+---backendentrypointselmDisplay: dopart---
+do 'EntryPoint: "'->common.traceStream.puttext;
+   t[]->common.traceStream.puttext;
+   '" '->common.traceStream.puttext;
+   (if data then '-data'->common.traceStream.puttext if);
+   (if local then '-local'->common.traceStream.puttext if);
+   (if export then '-export'->common.traceStream.puttext if);
+   m;
+   
+---backendnewFragment: dopart---
+do (FN[],astLabel)->backenddbgInf.NewFrag   
+
+--backendnewProto:doPart---
+do I.astRef->BackenddbgInf.addProto
+   
+--backendnewImp:doPart--
+do I.astRef->BackenddbgInf.thisDT.mark;
+   
+--backendNewEval:doPart---
+do I.astRef->BackenddbgInf.thisDT.mark;
+   
+---backenddbgInf:descriptor--
+(# NewFrag: @
+     (# FN: ^text; astLabel: @integer
+     enter(FN[],astLabel)
+     do (if (top+1->top) > FragTables.range  then
+            FragTables.range->FragTables.extend
+        if);
+        &FragTable[]->thisFrag[]->FragTables[top][];
+        FN[]->thisFrag.FN[]; astLabel->thisFrag.astLabel;
+        FN.length+3+FNlength->FNlength;
+        (if FNlength mod 2 // 1 then FNlength+1->FNlength if)
+     #);
+   FragTable:
+     (# FN: ^text; (* fragment name *)
+        astLabel: @integer; (* label at root of this fragment *)
+        DebugTables: [10] ^DebugTable; top: @integer;
+        DebugTable:
+          (# nodeId: @integer; (* of do part *)
+             imp,aRef: [10] @integer; top: @integer;
+             mark: @
+               (# astRef: @integer; T: @text
+               enter astRef
+               do (if (top+1->top)>imp.range  then 
+                      imp.range->imp.extend; aRef.range->aRef.extend
+                  if);
+                  IP-oldIP->imp[top]; astRef->aRef[top];
+                  (if common.switch[498] then 
+                      T.clear;
+                      '!'->TF.put; IP->TF.putHex; 
+                      '('->T.put; IP->T.putInt; ')'->T.put;
+                      ','->T.put; IP-oldIP->T.putInt; T->TFcom
+                   if);
+                  IP->oldIP
+               #)
+          #);
+
+        NewDT: @
+          (# nodeId: @integer;
+          enter nodeId
+          do (if (top+1->top)>DebugTables.range  then
+                 DebugTables.range->DebugTables.extend
+             if);
+             &DebugTable[]->thisDT[]->DebugTables[top][];
+             nodeId->thisDT.nodeId;
+          #);
+     #);
+   FragTables: [4] ^FragTable; top: @integer;
+
+   proto: [10] @integer; protoTop: @integer;
+   addProto: @
+     (# astRef: @integer
+     enter astRef
+     do (if (protoTop+1->protoTop) > proto.range  then
+            proto.range->proto.extend
+        if);
+        astRef->proto[protoTop]
+     #);
+   
+   thisFrag: ^FragTable;
+   
+   thisDT: ^thisFrag.DebugTable;
+   
+   FNlength,        (* sum of lengths of fragmentnames *)
+   oldIP,           (* IP at previous imp *)
+   IPsum: @integer; (* accumulated sum of IP *)
+   
+   B: @BinaryStream
+     (# AccessError::(#do FN[] -> common.PassCodeFileAccessError #);
+        WriteError::(#do common.PassNoSpaceError #);
+        NoSpaceError::(#do common.PassNoSpaceError #)
+     #);
+   
+   TF: @ file; (* for trace info *)
+   TFcom:
+     (# T: @text
+     enter T do T[] -> TF.putline
+     #);
+   
+   saveBinFile:
+     (# thisFrag: ^FragTable;
+        DT: ^thisFrag.DebugTable;
+        T: @text; FN: ^text
+     enter FN[]
+     do (if common.switch[498] then
+            (* producing test output *)
+            'no. of fragments: '->T.putText; top->T.putInt; T->TFcom;
+            T.clear; 'FN size:'->T.putText; FNlength->T.putInt; T->TFcom;
+            (for i: top repeat
+                 FragTables[i][]->thisFrag[];
+                 T.clear; 'Fragment: '->T.putText; thisFrag.FN[]->T.putText; 
+                 T->TFcom;
+                 T.clear; 
+                 'Root label: '->T.puttext; thisFrag.astLabel->T.putInt;
+                 T->TFcom;
+            for);
+            (*T.clear;'code size: '->T.putText; IPsum->T.putInt; T->TFcom;
+             *
+             * 'Prototypes: \n'->T.putText;
+             * (for i:protoTop repeat
+             *      T.clear; proto[i]->T.putInt; T->TFcom
+             * for);
+             *)
+        
+            (for i:top repeat
+                 FragTables[i][]->thisFrag[];
+                 T.clear; 'No.of. descriptors: '->T.putText; 
+                 thisFrag.top->T.putInt; T->TFcom;
+                 (for k:thisFrag.top repeat
+                      thisFrag.DebugTables[k][]->DT[];
+                      T.clear; 'AST index: '->T.putText; 
+                      DT.nodeId->T.putInt; T->TFcom;
+                      (for j:DT.top repeat
+                           T.clear; DT.imp[j]->T.putInt; ','->T.put;
+                           DT.aRef[j]->T.putInt; T->TFcom
+                      for);
+                      T.clear; -1->T.putInt; T->TFcom
+                 for)
+            for);
+            TF.close               
+        if);
+        
+        (* produce binary debug file (foo.db/foo..db) *)
+        top->B.putShort; FNlength->B.putLong;
+        (for i: top repeat
+             FragTables[i][]->thisFrag[];
+             thisFrag.FN[]->B.putText;
+             thisFrag.astLabel->B.putShort;
+        for);
+        (* IPsum->B.putLong;
+         * (for i: protoTop repeat proto[i]->B.putShort for);
+         *)
+        (for i: top repeat
+             FragTables[i][]->thisFrag[];
+             thisFrag.top->B.putShort;
+             (for k:thisFrag.top repeat
+                  thisFrag.DebugTables[k][]->DT[];
+                  DT.nodeId->B.putShort;
+                  (for j:DT.top repeat
+                       DT.imp[j]->B.putShort; 
+                       DT.aRef[j]->B.putShort
+                  for);
+                  -1->B.putShort
+             for)
+        for);
+        FN[]->B.save
+        (# openFailed::
+             (#
+             do '\n\n*** OBS! Save of debug information' 
+                'failed for file:\n\n\t'->puttext;
+                FN[] -> putline; 
+                newline;
+             #)
+        #);
+        none->thisFrag[]; none->thisDT[]
+     #)
+#)
+   
+--backendOpenDbgInf:doPart--
+do (if common.switch[498] then
+       (# FN: ^text
+       do (BC.name).copy->FN[];
+          (FN.length-5,FN.length)->FN.delete;
+          (* remove '-BETA-' *)
+          '...s' -> (FN.copy).append -> backendDbgInf.TF.name;
+          backendDbgInf.TF.openWrite
+       #)
+   if); 
+   
+--backendsaveDbgInf:doPart--
+do (if not ('.db' -> ((i.label.lgth-2,i.label.lgth)->i.label.sub).equal) then
+       '.db' -> (i.label.copy).append -> i.label[];
+   if);
+
+   I.label[] -> backendDbgInf.saveBinFile;
+   

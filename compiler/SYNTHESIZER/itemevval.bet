@@ -1,0 +1,2476 @@
+ORIGIN 'evlib';
+LIB_ITEM 'betacodegen';
+INCLUDE 'genlib';
+INCLUDE 'auxlib';
+INCLUDE 'asgtoitem';
+INCLUDE '../CHECKER/nxoffsets';
+INCLUDE '../CHECKER/setnxoffsets';
+INCLUDE '../CHECKER/nxallocbody';
+---mkItemEvVal:descriptor---
+(# IV: ^ItemEvVal
+do &ItemEvVal[]->IV[]->V[]; (lEV[],lES[],lDesc[],lA[],lChain[])->IV
+#)
+---asgToComNelm:doPart---
+do (# EH: @EvalHandler;
+      V: ^evVal;
+   do (baseAdr,lV[],thisEv[],thisChain[])->EH.assignValToEval->V[];
+      (if V[] <> none then V.release if)
+   #)
+---asgToNelm:doPart---
+do (# EH: @EvalHandler; 
+      V: ^evVal;  
+      localDesc: ^ASTindex; 
+      callRegOnStack: @boolean;
+      A,A1: ^mch.address;
+   do (if stest then
+          301->ctrace
+          (#
+          do 'asgToNelm: lV=' -> xT; lV.display;
+             mch.dumpreg;
+             (if not switch181 then 
+                 'thisEV:'->xT; thisEV[]->xA; xN;
+                 'case=' -> xT; case->xI; 
+                 thisChain.print; xU 
+      if)#)if);
+      (if switch181 then
+          (desc[],thisA[],chain[]
+          ,this(scanNXadr)[]->objectToComponent
+          ,true) -> asgToN
+          (# 
+          do (if stest then
+                 301->ctrace
+                 (#
+                 do 'asgToNelm:B: lV=' -> xT; lV.display; xN;
+                    'to: thisEv=' -> xT; nScanN.thisEv[]->xA;
+                    'PL='->xT; Pl->xI; xN;
+                    mch.dumpreg;
+                    nScanN.thisChain.print
+             #)if);
+             (* EH is very tricky: nScanN.thisChain[] is assigned
+              * to EH.EHchain. If EH.Assign is omitted, thisChain
+              * is instead assigned to the EH for LV, 
+              * which will not work. Should be cleaned-up!
+              *)
+             rObjAdr.bAdr.localDesc[] -> localDesc[];
+             (rObjAdr[],nScanN.PL,rObjAdr[]) -> SetSuperDesc -> rObjAdr[];
+             (rObjAdr[],lV[],nScanN.thisEv[],nScanN.thisChain[])
+               -> EH.AssignValToEval 
+               -> V[];
+             localDesc[] -> rObjAdr.bAdr.localDesc[];
+             (if V[] <> none then V.release if)
+          #)
+            -> rA[];
+       else
+          (if common.switch[125] then 0 -> case if);
+          (if case = 1  then
+	      (true,true)->lV.elimReg;
+	      pushThisAndCall->callRegOnStack;
+	      (thisA[],mch.thisRegOp[])->mch.glea;
+	      thisA.bAdr.localDesc[]->localDesc[]; 
+              gen.thisRegAdr->A[]; localDesc[]->A.bAdr.localDesc[];
+              (A[],PL,A[]) -> setSuperDesc -> A[];
+	      (A[],lV[],thisEv[],thisChain[])->EH.assignValToEval->V[]
+	   else
+	      (baseAdr,lV[],thisEv[],thisChain[])->EH.assignValToEval->V[];
+	  if);
+          (if V[] <> none then 
+              V.hardRelease;
+              V.release 
+          if);
+	  (if case = 1 then callRegOnStack->popThisAndCall if);
+      if);
+      (if stest then 
+          301-> ctrace
+          (#do 'doAsgToNelm:end: '->xT; xD;
+             (if rA[] = none then 'rA is none'->xT
+              else
+                 rA.display -> xT
+             if)
+          #)
+      if)      
+   #)
+      
+---ScanNXadrReset:doPart---
+do none->thisEV[]; none->thisChain[]->chain[]; none->desc[]->NX[];
+   NXS.clear
+   
+---ScanNXadr:doPart---
+do prepareBaseAdr;
+   (if stest then
+       179->cTrace
+       (#
+       do 'ScanNXAdr: '->xT; desc[]->xA; 
+          (*(if chain[] = none then 'Chain is none!'->xT else chain if)*)
+   #)if);
+
+   (* decode NX-list *)
+   (desc[],isN,chain[])->NXS;
+   true->more; NXS.length->N; (* in enclosing ScanNXadr *)
+   (for i: NXS.length repeat
+        (if reverse then NXS.length-i+1->j else i->j if);
+        j->NXS.getNXElm->(thisEv[],PL,thisChain[]); 
+        (i=NXS.length)->last;
+        
+        (if stest then
+            179->cTrace
+            (#
+            do 'EvLib:ScanNXadr:Thisev:'->xT; thisEv[] -> xA; 
+               mch.dumpReg
+               (* thisChain[]->printChain*)
+        #)if);
+        SUSPEND 
+   for);
+   false->more; SUSPEND;
+   cycle(#do cError(#do 'NX-list exhausted!'->xT; desc[]->xA #); SUSPEND #)
+---BeforeEnter:doPart---
+do (if (A.regType <> mch.callO) and not common.switch[125] then
+       (if (A.regType <> mch.thisO)
+           OR
+           ((desc.label = gram.objectDescriptor)
+           (* newindex.bet problem *)
+           AND 
+           (desc[]->sematt.hasNcode)) 
+           then
+           (if stest then
+               301->ctrace(#do 'BeforeEnter: A='->xT; 
+                             A.display->xT;
+                          #)
+           if);
+           predToTmp; (* may already be the case *)
+           (if switch181 then
+               (if not A.frozenReg then
+                   AllocCallReg->callRegOnStack;
+                   A.toCallReg->A[]
+               if);
+            else
+               AllocCallReg->callRegOnStack;
+               A.toCallReg->A[]
+           if)
+   if)if); 
+   (if switch181 then afterAdr if);
+   (* A in [thisReg,callReg] 
+    * and (if desc hasNcode then A=callReg if) *)
+   INNER BeforeEnter
+
+---doEnterGenItemTransferEnter:dopart---
+do (baseAdr.theReg,V[],desc[],A[],EVchain[]) -> doTransferEnter -> A[]
+   
+---doEnterItemTransferEnter:dopart---   
+do (baseAdr.theReg,V[],desc[],A[],EVchain[]) -> doTransferEnter -> A[]
+   
+---doEnterGenCompTransferEnter:dopart---
+do (baseAdr.theReg,V[],desc[],A[],EVchain[]) -> doTransferComEnter -> A[]
+   
+---doEnterCompTransferEnter:dopart---   
+do (baseAdr.theReg,V[],desc[],A[],EVchain[]) -> doTransferComEnter -> A[]
+
+---GenerateObject:descriptor---
+(# max: @integer;
+   OA: ^mch.address; VN: @ASTindex
+do (if stest then
+       301->cTrace
+       (#do 'GenerateObject:'->xT;
+          (if astDescKind
+           // gram.objectDescriptor then 'desc:'->xT
+           // gram.unexpanded then 'unexp:'->xT
+           // gram.virtualDecl then 'virt:'->xT
+           // gram.bindingDecl then 'bind:'->xT
+           // gram.finalDecl then 'final:NotCovered!!'->xT
+           // gram.variablePattern then 'varPtn:'->xT
+           else 'unknown:'->xT
+          if);
+          'ES='->xT; ES[]->xA; xN;
+          'desc='->xT; desc[]->xA ; xN;
+          'baseAdr='->xT; baseAdr.display->xT
+   #)if);
+   (if desc.label = gram.objectDescriptor then
+       (* newindex.bet problem! *)
+       (if (desc -> sematt.descKind) 
+        // sematt.comKind then
+           common.comKind -> kind; 
+        // sematt.externalVirtualKind then
+           common.comVirtualKind -> kind
+   if)if);
+
+   PushCall -> callRegOnStack;
+   (* Used to be a combined PushCall and allocation of CallReg:
+    *      AllocCallReg -> callRegOnStack; 
+    * CallReg cannot be allocated here in case of ES =(foo).bar, 
+    * callReg for "bar" will be allocated and be undefined during 
+    * evaluation of "foo", and this will confuse the GC. 
+    * We cannot move AllocCallReg -> callRegOnStack to be just
+    * before doLoadProtoAndAlloc, since this will place it
+    * between mch.pushReg and before mch.popReg, and this will 
+    * give errorneous push/pop's. AllocCallReg has thus been
+    * separated into PushCall and mch.GetCallReg where the latter
+    * is placed before doLoadProtoAndAlloc below.
+    *)
+   (if not common.switch[61] then
+       (* Why dont we just do an unconditional
+        *      2 -> mch.initPrimcall 
+        *)
+       1->mch.initPrimCall; 
+       (* intPrimCall MUST be before toOriginReg, since
+        * initPrimCall may store e.g. SPARC %o-registers
+        * and %o0 is also used as originReg
+        *)
+   if);
+   mch.pushReg->max;   
+   (* must be called before computing genOrgAdrToOrgReg->OA[],
+    * since OA may use a register (like a2) which then
+    * will be pushed and never popped since origin is
+    * moved to primReg. Origin must not be in primreg
+    * before pushReg is called since this will imply
+    * a push of d0-d7
+    *)
+   (if astDescKind
+    // gram.objectDescriptor then
+       (if common.switch[61] then 2->mch.initPrimCall if);
+       (baseAdr[],thisDesc[],ES[],chain[])->genOrgAdrToOrgReg->OA[];
+       (if stest then
+           301->cTrace(#do 'Alloc1:'->xT; OA.display->xT; mch.dumpreg #);
+       if);
+       OA.toOriginReg; (* implies freeAdr *)
+       mch.GetCallReg;
+       (desc[],kind)->doLoadProtoAndAlloc;
+           (*       301->cTrace(#do 'Alloc2:'->xT; mch.dumpreg #);*)
+       (*&gen.callRegAdr->A[];*)
+    // gram.unExpanded then
+       (# descQ: @ASTindex (* do NOT overwrite desc! *)
+       do ES->sematt.descrip-> descQ;
+          (if common.switch[61] then 2->mch.initPrimCall if);
+          (baseAdr[],thisDesc[],ES[],chain[])->genOrgAdrtoOrgReg->OA[];
+          OA.toOriginReg; (* implies freeAdr *)
+          mch.GetCallReg;
+          (descQ[],kind)->doLoadProtoAndAlloc; 
+          (*&gen.callRegAdr->A[];*)
+       #)
+    // gram.virtualDecl // gram.bindingDecl then
+       (* ES describes an application of a virtual pattern 
+        * OA refers to the origin for the virtual declaration.
+        *) 
+       (baseAdr[],thisDesc[],ES[],chain[])->genOrgAdr->OA[];
+       ES->sematt.getName->VN; VN.dclRef->VN; (* virtual decl *)
+       (if common.switch[61] then 2->mch.initPrimCall if);
+       mch.GetCallReg;
+       (OA[],VN.off,VN.access,false)->gen.newVirt; (*OA.freeReg;*)
+       (if common.switch[68] then
+           (if kind 
+            // common.itemKind then 
+               (* here is a problem with V-entry points;
+                * initPrimCall has been called above (but no primcall - 
+                * AlloI - is called for item allocation; it is  for
+                * component and struc allocation);
+                * origin is in %o0.
+                * The following jsrReg will save and restore %o0, but
+                * this will be erroneous, since the call computes the
+                * real origin
+                *)
+               mch.callRegOp[] -> mch.jsrReg
+            // common.compKind then ('AlloC',none)->mch.callAlloPrim
+            // common.strucKind then ('AlloS',none)->mch.callAlloPrim
+           if)
+        else
+           (if kind
+            // common.itemKind then ('AlloI',none)->mch.callAlloPrim
+            // common.compKind then ('AlloC',none)->mch.callAlloPrim
+            // common.strucKind then ('AlloS',none)->mch.callAlloPrim
+           if)
+       if);
+       (*&gen.callRegAdr->A[];*)
+    // gram.variablePattern then
+       (baseAdr[],ES[],false,chain[])->genAdr->A[];
+       (if common.switch[61] then 2->mch.initPrimCall if);
+       mch.GetCallReg;
+       A.toCallReg; (* use allocCallReg instead?*)
+       (if kind
+        // common.itemKind then ('AlloSI',none)->mch.callAlloPrim
+        // common.compKind then ('AlloSC',none)->mch.callAlloPrim
+       if);
+       (* In the case of F: [12] ## T, execution of
+        *    F[i]
+        * A is an instance of InxRegAdr. This is the case even if A has been
+        * moved to callreg. Subsequent use of A will add the index register
+        * to callReg. This may happen in transFerEnter.  
+        * Therefore the correction below, which in general should be done 
+        * perhaps in all cases where A.toCallReg is done?
+        *)
+       (*gen.callRegAdr->A[]*)
+   if);
+   (if common.switch[125] then
+       (# A1: @mch.regAdr
+       do A1.reg.alloc;
+          (mch.callRegOp[],A1.reg[]) -> mch.cpReg;
+          A1[] -> A[]; 
+          mch.decrCallreg
+       #)
+    else
+       gen.callRegAdr->A[]
+   if);
+   max->mch.PopReg;
+   0->mch.getPrimRes;
+   desc[]->A.bAdr.localDesc[];
+   (* Address of generated item is in callReg *)
+#)
+---ExeObj:descriptor---
+(# D,pre,att,mainP,enterP,doP,exitP: ^ASTindex; 
+   MN,isVirt: @integer; notEmpty: @boolean;;
+   dK: (#
+       do 301-> cTrace
+          (#
+          do (if DescKind
+              // gram.objectDescriptor then 'desc:'->xT
+              // gram.unExpanded then 'unexpanded:'->xT
+              // gram.bindingDecl then 'bind:'->xT
+              // gram.finalDecl then 'final:NotCovered!!'->xT
+              // gram.variablePattern then 'varptn:'->xT
+              else 'virtual:'->xT
+             if)
+       #)#);
+   baseAdrForThisObject:  ^mch.address
+do (if stest then
+       301 ->cTrace(#do 'ExeObj:A: EV='->xT; EV[]->xA; xN;
+                      'baseAdr='->xT; baseAdr.display->xT; xN;
+                      mch.dumpreg 
+   #)if);
+   EV.son->ES;
+   M:
+     (#do
+        (if ES.label = (gram.objectDescriptor -> descKind) then
+            ES->desc;
+            (* kind,cons are not correct *)
+            (*306->cTrace(#do 'ExeObjA1:'->T; ES[]->A; chain[]->printChain#);*)
+            
+            (chain[],ES)->DH.theDesc->(desc,MN,EVchain[],isVirt);
+            
+            (*306->cTrace
+             (#do 'ExeObjA2:'->xT; ES[]->A; desc[]->xA; EVchain[]->printChain#)
+             *)
+
+            (if (desc[]->sematt.insertable) then
+                desc[]->sematt.descSonsRef
+                  ->(pre[],mainP[],att[],enterP[],doP[],exitP[]);
+                
+                (*310->cTrace(#do'Comp. desc:'->xT;Desc[]->xA#);*)
+                (0,doP[],none,true,false)->&theGen.genDo;
+                (*310->cTrace(#do 'Comp. desc,thisDesc:'->xT; thisDesc.size->xI;
+                 thisDesc[]->xA #);*)
+                leave M
+            if);
+            (ES,common.itemKind,0,null)->DS.push
+         else 
+            baseAdr.bAdr.localDesc[]->D[];
+
+            (*310->cTrace
+            (#do'ExeObjB1:'->xT;dK; ES[]->xA; chain[]->printChain #);(*!*)
+            
+            ES->sematt.descrip-> desc;
+            desc.label->descKind;
+            (chain[],ES)->DH.theDesc->(desc,MN,EVchain[],isVirt);
+            
+            (*310->cTrace
+             (#do 'ExeObjB2:'->xT; dK; ES[]->xA; 
+                 desc[]->xA; EVchain[]->printChain #)(*!*)
+        if);
+        (if descKind
+         // gram.unexpanded then
+            ES->sematt.descrip-> descQ; (* inefficient *)
+            descQ
+              -> semAtt.GetPostDesc
+              -> formId[]->topFormId[];
+            1 -> descno -> topDescNo;
+            descQ->topDesc; (* by using callEntry, it should be possible
+                             * to eliminate GetPosDesc and descQ here
+                             *)
+            true->hasDo
+         // gram.virtualDecl // gram.bindingDecl then
+            desc->&TopVirtDesc->topDesc;
+            desc.descId->(formId[],descNo);
+            topDesc.descId->(topFormId[],topDescNo);
+            topDesc[]->sematt.hasDo->hasDo  
+         else desc->semAtt.TopDesc->topDesc; (* virtual ? *)
+            desc.descId->(formId[],descNo);
+            topDesc.descId->(topFormId[],topDescNo);
+            topDesc[]->sematt.hasDo->hasDo 
+        if);
+        (if stest then
+            301->ctrace
+            (#
+            do 'ExeObj:B:  ES='->xT; ES[] -> xA; 
+               ' hasDo ='->xT;  hasDo->xB; xN;
+               'baseAdr=' -> xT; baseAdr.display->xT; xN;
+               'desc= ' -> xT; desc[] -> xA; xN; 
+               'topDesc= '->xT; topDesc[] -> xA;
+               mch.dumpreg
+        #)if);
+        (if switch181 then
+            baseAdr[] -> baseAdrForThisObject[];
+            baseAdr.copy -> baseAdr[]
+        if);
+        (if switch181 then 
+            (if baseAdr[] -> gen.UseTmpReg then
+                beforeAdr 
+        if)if);
+        GetAdr; (* A may be in callReg *)
+        
+        TransferEnter; (* this may move A from callReg to tmpReg *)
+        (if stest then
+            301->cTrace(#do 'After:transferEnter:'->xH; 
+                      'A='->xT; A.display-> xT; mch.dumpreg 
+        #)if);
+        (if hasDo then
+            (if not A.isCallReg then
+                (*!! regType = callReg does NOT imply that off=0, etc
+                 * this may be a problem several places
+                 * enterComp creates such an address
+                 *)
+                (if switch180 then
+                    (* don't make changes to the NOT 180-case *)
+                    (if stest then
+                        301->cTrace(#do'ExeObj:A.useCallReg ='-> xT;A.useCallReg->xB#)
+                    if);
+                    (if not A.useCallReg then
+                        AllocCallReg->callRegOnStack2
+                        (* else ---
+                         * In this case A = [callReg,off] where off<>0;
+                         * this could be as in
+                         *    F: (# X: @T enter X do ... #)
+                         *    -> F
+                         * when executing X in whene executing the enter part
+                         * for F. However, with switch[180], there will then
+                         * be an N-part for F and and we probably don't 
+                         * encounter this situation. But the situation
+                         * is not completely understood. If
+                         * we add AllocCallReg -> callRegOnStackq,
+                         * we may get and adr reg underflow
+                         *)
+                    if)
+                 else
+                    AllocCallReg->callRegOnStack2
+                if);
+                (if stest then
+                    301->cTrace(#do 'Before:toCallReg:'->xT; A.display->xT;
+                                  mch.dumpreg #)
+                if);
+                A.toCallReg->A[];
+                (if stest then
+                    301->cTrace(#do 'After:toCallReg:'->xT; A.display->xT;
+                                  mch.dumpreg #)
+                if);
+            if);
+            mch.PushReg->max; (* push busy registers except callReg *)
+            INNER ExeObj; 
+            max->mch.PopReg;
+            (if common.switch[125] then
+                (if A.regType = mch.callO then 
+                    A.toTmp->A[];
+                    mch.decrCallreg
+                if)
+            if)
+
+        if);
+        (if stest then
+            301->cTrace(#do 'ExeObj:C: '->xT; A.display->xT; mch.dumpReg #)
+        if);
+        (if (callRegOnStack or callRegOnStack2) then
+            (if common.switch[125] then 
+                '\n*** ExeObj:callReg on stack!!!'->putline
+            if);
+            (if A.regType = mch.callO then A.toTmp->A[] if);
+            callRegOnStack->popCall;
+            callRegOnStack2->popCall
+        if);
+        (if isComponent then common.compHeadSize*4->A.addOff->A[] if);
+        (if switch180 AND (desc[] -> sematt.hasXcode) then
+            (* hasXcode may fail if newindex.bet *)
+            (# NO,XO: ^sematt.NXOffSets; exitStartOff: @integer
+            do (if desc[] -> sematt.hasNcode then
+                   &sematt.NXoffSets[] -> NO[];
+                   (desc[],true,EVchain[],desc.returnOff) ->NO.setNXOffSets; 
+                   NO.startOff -> exitStartOff
+                else
+                   desc.returnOff -> exitStartOff
+               if);
+               &sematt.NXoffSets[] -> XO[];
+               (* 179->cTrace(#do 'ExitItemVal:'->xT #);*)
+               (* A may not necessarily be callReg, 
+                * but NXoffSetsVal:Exe will move it to callReg.
+                *)
+               
+               (desc[],false,EVchain[],exitStartOff) -> XO.SetNXOffSets;
+               (A[],desc[],XO[],false) -> mkNXOffSetsVal -> W[];
+            #)
+         else
+            (EV[],ES[],desc[],A[],EVchain[])->mkItemEvVal->W[];
+            (if switch181 then
+                (# WW: ^ItemEvVal
+                do W[] -> WW[];
+                   (if false (*not baseAdr.frozenReg*) then
+                       '\n*** ExeObj:after:MkItemEvVal:baseReg is NOT frozen!' 
+                         -> putline
+                   if);
+                   (* baseAdr.theReg -> WW.baseReg;*)
+                   baseAdrForThisObject[] -> WW.theBaseAdr[]; 
+            #)if);
+            (if stest then
+                301->ctrace(#do 'ExeObj:return:ItemVal:'->xH;
+                             W.display; mch.dumpReg
+            #)if);
+        if)
+     #)
+#)
+---EvalLib:attributes------
+doTransferEnter:
+  (# NO: ^sematt.NXoffSets;
+     (* V is the leftSide of V -> thisItem
+      * Ex V = ('a',q1,'b',q2) -> T = thisItem
+      * from tstnx.bet.
+      * A is the address of thisItem; A may be callReg;
+      * CallReg may be needed during evaluation of q1 and q2,
+      * but A may be callReg;
+      * A could be temporarely moved to a tmpReg and then
+      * back to callReg before calling N-entry;
+      * only necessary if V has to use callReg;
+      * the A.toTmp, freeReg, etc below is a preliminary
+      * test of this.
+      * May be asgToNXoffSets should return the possibly modified
+      * address A. In asgToNXoffSets below, we could move A toTmp
+      * when executing an item that assigns to an NXoffSets!
+      * See asgToNXoffSets below - don't work - too late
+      * to do in asgToNXoffSets since item already executed:-( 
+      * See instead listEvVal:asgToNXoffSets
+      *)
+     rBaseReg: @mch.AdrRegOperand; V: ^evVal; 
+     desc: ^ASTindex; A: ^mch.address; EVchain:^ DH.superChain;
+     max: @integer; 
+  enter(rBaseReg,V[],desc[],A[],EVchain[])
+  do (if stest then
+         301 -> cTrace
+         (#do 'doTransferEnter_A: '-> xH; 
+            'from: V= '->xT; V.display; xN; 
+            'to: desc= ' ->xT; desc[] -> xA; xN;
+            'baseAdr= ' -> xT; baseAdr.display->xT; xN;
+            'A= ' -> xT; A.display->xT;
+            mch.dumpReg;
+            xU
+     #)if);
+     (if switch180 AND (desc[] -> sematt.hasNcode) then
+         (* hasNcode may fail if newindex.bet *)
+         (if stest then
+             301 -> ctrace(#do 'Exe N-part: A='-> xT; A.display->xT #)
+         if);
+         &sematt.NXoffSets[] -> NO[];
+         (desc[],true,EVchain[],desc.returnOff) -> NO.setNXOffSets; 
+         (if not A.isCallReg then 
+             cError(#do 'TransN1:not in CallReg'->xT #)if);
+         (A[],NO[],false) -> V.asgToNXoffSets -> A[];
+         (if not A.isCallReg then 
+             cError(#do 'TransN2:not in CallReg'->xT #)
+         if);
+         mch.pushReg -> max;
+         ('N',desc[],0) -> CallEntry;
+         max -> mch.popReg;
+      else
+         (* Here baseAdr is the one in EvalHandler, which is the context
+          * for evaluating an evaluation; we may temporarily free baseAdr
+          * and restore it around asgToItem
+          *)
+         (# rAtmpXInx: @integer;
+            rAtmpX: ^mch.RegAdr;
+            aR: @mch.adrRegOperand;
+            isFrozen: @boolean;
+            baseAdrCopy: ^mch.address
+         do
+            (if switch181 then 
+                (if (baseAdr.theReg <> A.theReg) 
+                    and (not baseAdr.noTmp)
+                    and (baseAdr.theReg <> mch.thisO) 
+                    and (baseAdr.theReg <> V.theReg) then
+                    (if baseAdr.theReg = mch.callO then
+                        '\n***transferEnter:baseAdr is callReg'->putline
+                    if);
+                    NXA.alloc 
+                      -> rAtmpXInx 
+                      -> NXA.tmpAdr 
+                      -> gen.ThisRegAdr 
+                      -> rAtmpX[];
+                    baseAdr.theReg->aR;
+                    (aR[],rAtmpX[]) -> mch.stVal;
+                    (* baseAdr should be RegAdr!! TEST and FIX *)
+                    (if baseAdr.frozenReg -> isFrozen then
+                        false -> baseAdr.frozenReg
+                    if);
+                    baseAdr[] -> baseAdrCopy[];
+                    baseAdr.freeAdr; 
+                    (if stest then
+                        301->ctrace(#do 'doTransferEnter_B:'->xH;
+                                     'baseAdr='->xT;
+                                     baseAdr.display->xT;
+                                     mch.dumpReg
+                    #)if)
+                 else
+                    (if A.theReg // mch.thisO // mch.callO then
+                     else
+                        (if baseAdr.theReg = A.theReg then
+                            true -> A.noTmp 
+                            (*shall we restore noTmp after asgToItem?*)
+                if)if)if)
+            if);
+            (rBaseReg,desc[],A[],EVchain[]) -> V.asgToItem ->A[];
+            (if rAtmpXinx > 0 then
+                (# aR: @mch.adrRegOperand; 
+                   BR: ^mch.RegAdr;
+                   BI: ^mch.InxRegAdr
+                do aR.alloc;
+                   (rAtmpX[],aR[]) -> mch.ldVal;
+                   (if baseAdrCopy##
+                    // mch.RegAdr## then 
+                       baseAdrCopy[] -> BR[];
+                       aR -> BR.reg
+                    // mch.InxRegAdr## then
+                       baseAdrCopy[] -> BI[];
+                       aR -> BI.aReg
+                   if); 
+                  (if isFrozen then true -> baseAdrCopy.frozenReg if);
+                   false ->  baseAdrCopy.deAllocated;
+                   baseAdrCopy[] -> baseAdr[];
+                   rAtmpXinx -> NXA.deAlloc;
+                   (if stest then
+                       301->ctrace(#do 'doTransferEnter_C:'->xH;
+                                    'baseAdr='->xT;
+                                    baseAdr.display -> xT;
+                                    mch.dumpReg
+                    #)if)
+
+            #)if)
+         #)
+     if);   
+     (if switch180 and (A[] <> NONE) then A.freeAdr if);
+     V.release; 
+     (if stest then 
+         301->ctrace
+         (#do 'doTransferEnter_D:'->xH; 
+            'to: desc= ' ->xT; desc[] -> xA; xN;
+            'A= ' -> xT; A.display->xT;
+            mch.dumpReg;
+            xD 
+     #)if);
+  exit A[]
+  #);
+doTransferComEnter:
+  (# rBaseReg: @mch.AdrRegOperand; 
+     V: ^evVal; 
+     desc: ^ASTindex; 
+     A: ^mch.address; 
+     EVchain:^ DH.superChain;
+     Aitem: ^mch.address; isCallReg: @boolean 
+  enter(rBaseReg,V[],desc[],A[],EVchain[])
+  do A.copy -> Aitem[]; 
+     Aitem.isCallReg -> isCallReg;
+     common.compHeadSize*4 -> Aitem.addOff -> Aitem[];
+     (if switch181 then
+         (if isCallReg then              
+             Aitem.toCallReg -> Aitem[]
+     if)if);      
+     (if stest then
+         301 -> ctrace(#do 'doEnterCompTransferA:'->xT; Aitem.display->xT#)
+     if);
+     (baseAdr.theReg,desc[],Aitem[],EVchain[]) -> V.asgToItem -> A[];
+     (if stest then
+         301 -> ctrace(#do 'doEnterCompTransferB:'->xT; A.display->xT#)
+     if);
+     A.isCallReg -> isCallReg;
+     (-common.compHeadSize*4) -> A.addOff -> A[];
+     (if switch181 then
+         (if isCallReg then              
+             A.toCallReg -> A[]
+     if)if);
+     (if stest then
+         301 -> ctrace(#do 'doEnterCompTransferC:'->xT; A.display->xT#)
+     if);
+     V.release
+  exit A[]
+  #);
+itemEvVal: EvVal
+  (* lEv is an item to be assigned to EV;
+   * lES is the ObjectSpec of lEV;
+   * lDesc is the descriptor of lEv
+   * 'lA' is the adr. of the item denoted by lEv
+   *
+   * In general E -> F where E is an object referred to by lA.
+   *    F may be referred by an address, hereafter called rA.
+   * Cases depending on F and 
+   *    F is NOT an object: lA and rA are adjusted by FixXadr below.
+   *    F an object:       handled by asgToItem; see further comment there
+   *)
+  (# thisVal::<
+       (# V: @ItemEvVal 
+       do (lEv[],lES[],lDesc[],lA[],lChain[])->V; V[]->ThisV[] 
+       #);
+     evId ::(# do 'ItemVal:'-> id[] #);
+     display::<
+       (# 
+       do 'lEs='->xT; lEs[]->xA; ' evType='->xT; evType -> xI; xN;
+          (if switch181 then
+              (if theBaseAdr[] <> none then
+                  (* is none until thie(ItemEvVal) is returned
+                   * from exeObj
+                   *)
+                  'theBaseAdr='->xT; theBaseAdr.display->xT; xN
+              if)
+          if);
+          'lA= ' -> xT; lA.display->xT; xN; 
+          'lDesc=' -> xT; xN; lDesc[]->xA;
+       #);
+     itemTrace: cTrace
+       (# 
+       do INNER; display;
+       #);
+     release::<
+       (#
+       do (if stest then 301->itemTrace(#do 'release: '->xT #)if);
+          (* in asgToItem, this(itemEvVal) is transferred in a way that
+           * imply that release may be called, but should not
+           * be executed. Otherwise a frozen lA may not be unfrozen
+           * resulting in register overflow; unsetRelease below
+           * handles this
+           *)
+          freeLA;
+          none->lChain[];
+          none->lEV[]->lES[]->lDesc[];
+          none->lA[];
+       #);
+     theReg:: (# do (* what about baseReg? *) lA.theReg -> aR #);
+     loadVal::<
+       (#
+       do (* The ItemEv cannot be released since
+           * V[] is an address using callReg *) 
+          (if stest then 301->itemTrace(#do 'loadVal:A ' -> xT #)if);
+          (if switch181 then
+              (* Use of thisRegAdr is to force scanExit 
+               * not to restore baseAdr
+               *)
+              gen.thisRegAdr -> ScanExit
+              (#
+              do (if stest then 
+                     301->itemTrace(#do 'loadVal:B ' -> xT; XV.display #)if);
+                 XV.loadVal -> V[];
+                 (if stest then
+                     301->itemTrace(#do 'loadVal:A ' -> xT; V.display #)if);
+              #);
+              release
+           else
+              true -> ItemVal(#do XV.loadVal->V[] #)
+          if)
+       #);
+     loadVal2::< (#do true->ItemVal(#do XV.loadVal2->V[] #)#);
+     toDataRegA::< (#do true->ItemVal(#do XV.toDataRegA; freeLA #)#);
+     toDataRegX::< (#do true->ItemVal(#do XV.toDataRegX; freeLA #)#);
+     toDataRegY::< (#do true->ItemVal(#do XV.toDataRegY; freeLA #)#);
+     toRangeReg::< (#do ItemVal(#do XV.toRangeReg;(* freeLA*) #)#);
+     toDataReg::<
+       (# xDr: ^mch.dataRegOperand
+       do dReg.deAlloc;
+          ItemVal(#do XV.toDataReg->xDr[];
+                    xDr.fn->dReg.fn; xDr->dReg;
+                    true->keep; (* do not release XV
+                    (*.reUse*); (*freeLA*) 
+                 #);
+       #);
+     toPrimDest::< (#do ItemVal(#do pNo -> XV.toPrimDest #)#);
+     evType::< (#do -1->type #);
+     mkReal::< (#do true->ItemVal(#do XV.mkReal->V[] #) #);
+     
+     scanExit:
+       (* scan exit elements of this object *)
+       (# xScan: @ | scanXadr; 
+          doNotRelease: @boolean;
+          aR: @mch.adrRegOperand;
+          XV: ^evVal;
+          lObjAdr: ^ mch.address;
+          newLA: @mch.RegAdr;
+          EH: @evalHandler; 
+          check:
+            (# A: ^mch.address; msg: ^text
+            enter(A[],msg[])
+            do (if A.theReg // mch.thisO // mch.callO then
+                else
+                   (if A.frozenReg then
+                       '\n*** In:scanExit: '->puttext;
+                       msg[]->puttext;
+                       ' the register in:\n'->putText;
+                       A.display->puttext;
+                       '\nis frozen!'->putline
+            if)if)#);
+          isObj: booleanValue
+            (* the test here is not good enough!*)
+            (# EV: ^ASTindex
+            enter EV[]
+            do NXA.rep.tmp.range > 1 -> value
+            #);
+          checkAreg:
+            (# rA1,rA2: @mch.adrRegOperand
+            enter(rA1,rA2)
+            do 301->cTrace
+               (#
+               do 'scanExit:checkAreg:'->xT; rA1.display->xT;
+                  rA2.display -> xT
+               #);
+               (if (xScan.thisEv[] -> isObj)
+                   and (rA1 <> rA2) and (rA1 <> mch.thisO) then
+                   (if doNotRelease then
+                       '\n***scanExit:checkAreg cannot release rObjAdr.reg:'
+                         -> putline;
+                       'lObjAdr='->puttext; lObjAdr.display->putline;
+                       'XV='->puttext; XV.display;
+                    else
+                       NXA.alloc 
+                         -> rAtmpXInx 
+                         -> NXA.tmpAdr 
+                         -> gen.ThisRegAdr 
+                         -> rAtmpX[];
+                       (rA1[],rAtmpX[]) -> mch.stVal;
+                       rA1.deAlloc;
+               if)if);                             
+            #);
+          
+          rAtmpX: ^mch.regAdr; 
+          rAtmpXInx: @integer;
+          
+          xmore: @boolean;
+          nextExitEval: @
+            (# rA: @mch.adrRegOperand; 
+               localDesc: ^ASTindex
+            do (if xscan -> xmore then 
+                   (if rAtmpX[] <> none then
+                       rA.alloc;
+                       rA -> newLA.reg; 
+                       0->newLA.off;
+                       newLA.freezeReg;
+                       newLA[]->lObjAdr[];
+                       (rAtmpX[],rA[]) -> mch.ldVal;
+                       none -> rATmpX[];
+                       rAtmpXInx -> NXA.deAlloc; 
+                       301->ctrace(#
+                                  do 'scanExit:nextExitEvalA:'->xH;
+                                     rA.display->xT; xN;
+                                  #)
+                   if);
+                   301->ctrace(#
+                              do 'scanExit:nextExitEvalB:'->xH;
+                                 'lObjAdr='->xT; lObjAdr.display->xT
+                              #);
+                   lObjAdr.bAdr.localDesc[] -> localDesc[]; 
+                   (* (lObjAdr[],xScan.PL,lObjAdr[]) 
+                    * -> SetSuperDesc -> lObjAdr[];
+                    *)
+                   
+                   (if baseAdrRestoreNeeded then theBaseAdrTmp.reSave if);
+                   (* Here we may have a problem since thisEV may
+                    * be complicated like
+                    *    A -> (c1,c3)
+                    * and A may have an arbitrarily complicated exit-part
+                    * that requires several registers and we need
+                    * lObjAdr for evaluating the address of A, c1, c2, etc.
+                    *)
+                   (lObjAdr[],xScan.thisEV[],false,xScan.thisChain[])
+                     -> EH.expEval 
+                     -> XV[];
+                   
+                   (* localDesc[] -> lObjAdr.bAdr.localDesc[];*)
+                   (if XV.evType <> -1 (* object *) then
+                       (lObjAdr.theReg,XV.theReg) -> checkAreg
+                   if);
+                   301->cTrace
+                   (#
+                   do 'scanExit:next:'-> xH;
+                      'XV='->xT; XV.display;
+                      mch.dumpreg;
+                   #);
+                   (if baseAdrRestoreNeeded then theBaseAdrTmp.restore if)
+               if);
+
+            #);
+          rBaseAdr: ^mch.address;
+          baseAdrRestoreNeeded,isReleased: @boolean
+       enter rBaseAdr[]
+       do 301->ctrace
+          (#do 'SCANEXIT:'->xH;
+             display; xN;
+             'rBaseAdr='->xT;     
+             (if rBaseAdr[] = none then 'none'->xT
+              else
+                 rBaseAdr.display->xT
+             if); 
+             xU;
+          #);
+          (* lObjAdr is the new address for this(object) replacing LA *)
+          (if not LA.isRegAdr then
+              (* can we have a frozen areg in LA, 
+               * which is not released by toTmp?
+               *)
+              (LA[], 'inx2regAdr:') -> check;
+              LA.toTmp -> LA[] 
+          if);
+          lA.bAdr.localDesc[] -> newLA.bAdr.localDesc[];
+          L:
+          (if lA.regType
+           // mch.callO then
+              (* alloc(a2); a1 -> a2; free(a1); freeze(a2) *)
+              301->cTrace(#do 'ScanExit:call:'->xT #);
+              lA.bAdr.localDesc[] -> newLA.bAdr.localDesc[];
+              aR.alloc;    
+              (LA[],aR[]) -> toReg -> LA[];
+              aR -> newLA.reg; 
+              0 -> newLA.off;
+              newLA[] -> lObjAdr[];
+              mch.decrCallreg; 
+              true -> released (* clean-up *)
+           // mch.thisO then 
+              301->cTrace(#do 'ScanExit:this:'->xT #);
+              LA[] -> lObjAdr[]
+           // -1 (* indirect as in X: ^A *) then
+              301->cTrace(#do 'ScanExit:indirect:'->xT #);
+              (* can we have a frozen areg in LA, 
+               * which is not released by toTmp?
+               *)
+              (LA[],'indirect2direct:') -> check;
+              lA.toTmp->lA[];
+              restart L
+           else
+              301->cTrace(#do 'ScanExit:tmp:'->xT #);
+              (* alloc(a2); lea(LA) -> a2; free(a1); freeze(a2) *)
+              (* LA uses an %ai-reg; say %a2
+               * - %a2 must be intact when returning from  this call.
+               * - we may save %a2 in tmp and restore it, but
+               *   %a2 may be in use, e.g. in a matching enter part
+               * - we can borrow %a2 until returning
+               * - we should not calle lObjAdr.freereg below
+               *   since this will release %a2
+               * - in checkAreg, we cannot release %a2.
+               * - if %a2 is NOT used in XV, we might replace
+               *   a register in XV by %a2, and save %a2 in tmp,
+               *   and releae the one used by XV
+               *)
+              LA[] -> lObjAdr[];
+              (if LA.frozenReg then true -> doNotRelease if);
+          if);
+          lObjAdr.freezeReg;
+          (* lObj may use one %ai register *)
+              
+          (lDesc[],lObjADr.copy,0,lChain[]) -> xScan; 
+          
+          (if (theBaseAdr.theReg,lObjAdr.theReg) -> CheckReg then
+              theBaseAdr[] -> theBaseAdrTmp.save
+          if);
+          
+          (* lObjAdr becomes baseAdr for XV;
+           * may be needed if XV is an object 
+           * where e.g. its exit-list is scanned
+           *)
+          (# localDesc: ^ASTindex
+          do lObjAdr.bAdr.localDesc[] -> localDesc[];
+             (* (lObjAdr[],xScan.PL,lObjAdr[]) -> SetSuperDesc -> lObjAdr[];*)
+             
+             (lObjAdr[],xScan.thisEV[],false,xScan.thisChain[])
+               -> EH.expEval 
+               -> XV[];  
+
+             (* localDesc[] -> lObjAdr.bAdr.localDesc[];*)
+          #);
+          (* XI & [XV may use another %aj]
+           * i.e at most two %ai registers may be in use
+           *)
+          301->ctrace
+          (# aR: @mch.adrRegOperand;
+          do 'scanExit:Check:base&XV: evType='->xT;
+             XV.evType -> xI; xN;
+             'theBaseAdr.reg='->xT; theBaseAdr.theReg -> aR; aR.display -> xT;
+             'lObjAdr.reg='->xT; lObjAdr.theReg->aR; aR.display -> xT;
+             'XV.reg='->xT; XV.theReg -> aR; aR.display -> xT;
+          #);
+          (if XV.evType <> -1 (* object*) then
+              (if XV.needExtraAreg then 
+                  (lObjAdr.theReg,XV.theReg) -> checkAreg
+               else
+                  (if xScan.N = 1 then '>'->put;
+                      (if not doNotRelease then lObjAdr.freeReg if);  
+                      true -> isReleased
+                  if)
+              if)
+          if); 
+          (* at most one %ai-register is in use *)
+          true -> released; (* clean-up - no-one should release this itemVal*)
+          (if ((theBaseAdr[] = rBaseAdr[]) or (rBaseAdr[] = NONE))
+                -> baseAdrRestoreNeeded then
+              theBaseAdrTmp.restore
+          if);
+              
+          301->cTrace
+          (#
+          do 'scanExit/before_inner:'->xH; display; xN;
+             'lObjAdr='->xT; lObjAdr.display->xT; xN;
+             'XV=' -> xT; XV.display;
+          #);
+          INNER;
+          301->cTrace(#do 'scanExit:after_inner:'->xT; 
+                        'rAtmpInx='->xT; rAtmpXinx -> xI; 
+                        'free_rAtmp='->xT; rAtmpX[]<>none -> xB; xN;
+                        'lObjAdr= '->xT; lObjAdr.display->xT; xN;
+                        mch.dumpreg #);
+          (if rATmpX[] <> none then 
+              (if not isReleased then rAtmpXInx -> NXA.deAlloc  if)
+              (* lObjAdr is free via checkAreg *)
+           else
+              (* free(a2) *)
+              (if not doNotRelease then lObjAdr.freeReg if);  
+          if);
+          true -> released; (* clean-up *)
+          (if not baseAdrRestoreNeeded then theBaseAdrTmp.restore if);
+          theBaseAdrTmp.deAlloc;
+          301->cTrace(#do 'SCANEXIT:end:'->xH;
+                        'theBaseAdr='->xT; theBaseAdr.display->xT;
+                        mch.dumpreg;
+                        xD
+                     #)
+       #); 
+     ScanExitOne:
+       (* scan an exit list for one element *)
+       (# xScan: @ | scanXadr;           
+          newLA: @mch.RegAdr;
+          aR: @mch.adrRegOperand;
+          lObjAdr: ^mch.address;
+          XV: ^evVal;
+          EH: @evalHandler; 
+       do 301->ctrace
+          (#do 'SCANEXITONE:'->xH;
+             display; 
+             xU;
+          #);
+          (* lObjAdr is the new address for this(object) replacing LA *)
+          (if not LA.isRegAdr then
+              (* can we have a frozen areg in LA, 
+               * which is not released by toTmp?
+               *)
+              LA.toTmp -> LA[] 
+          if);
+          lA.bAdr.localDesc[] -> newLA.bAdr.localDesc[];
+          (* lObj may use one %ai register *)
+          (if LA.regType = -1 then LA.toTmp -> LA[] if);
+          (if LA.regType = mch.callO then
+              lA.bAdr.localDesc[] -> newLA.bAdr.localDesc[];
+              aR.alloc;    
+              (LA[],aR[]) -> toReg -> LA[];
+              aR -> newLA.reg; 
+              0 -> newLA.off;
+              newLA[] -> lObjAdr[];
+              mch.decrCallreg; 
+           else
+              LA[] -> lObjAdr[]
+          if);
+          (lDesc[],lObjAdr.copy,0,lChain[]) -> xScan; 
+          
+          (* lObjAdr becomes baseAdr for XV;
+           * may be needed if XV is an object 
+           * where e.g. its exit-list is scanned
+           *)
+          (# localDesc: ^ASTindex
+          do lObjAdr.bAdr.localDesc[] -> localDesc[];
+             (* (lObjAdr[],xScan.PL,lObjAdr[]) -> SetSuperDesc -> lObjAdr[];*)
+             
+             (lObjAdr[],xScan.thisEV[],false,xScan.thisChain[])
+               -> EH.expEval 
+               -> XV[];  
+
+             (* localDesc[] -> lObjAdr.bAdr.localDesc[];*)
+          #);
+          (* XI & [XV may use another %aj]
+           * i.e at most two %ai registers may be in use
+           *)
+          301->ctrace
+          (# aR: @mch.adrRegOperand;
+          do 'scanExit:Check:base&XV: evType='->xT;
+             XV.evType -> xI; xN;
+             'theBaseAdr.reg='->xT; theBaseAdr.theReg -> aR; aR.display -> xT;
+             'XV= '->xT; XV.display
+          #);
+         (* (if lObjAdr.theReg <> XV.theReg then
+              lObjAdr.freeAdr
+          if);*) 
+              
+          301->cTrace
+          (#
+          do 'scanExit/before_inner:'->xH; display; xN;
+             'lObjAdr='->xT; lObjAdr.display->xT; xN;
+             'XV=' -> xT; XV.display;
+          #);
+          INNER;
+          301->cTrace(#do 'scanExit:after_inner:'->xT; 
+                        'lObjAdr= '->xT; lObjAdr.display->xT;
+                        mch.dumpreg #);
+          301->cTrace(#do 'SCANEXIT:end:'->xH;
+                        'theBaseAdr='->xT; theBaseAdr.display->xT;
+                        mch.dumpreg;
+                        xD
+                     #)
+       #);
+     FixXadr:
+       (* used when rA does NOT refer to an item.
+        * In general: after INNER, lA is not to be used again??
+        * !!! 26/1/95: this one is used to exit to a single value
+        * or to a list. Perhaps 2 routines should be made, one for 
+        * a single value and for exit to a list.
+        * When a single value is exitted, then lA is NOT
+        * used after the exit-value has been obtained.
+        *)
+       (# rA: ^mch.address; callRegOnStack,laIsCallReg: @boolean;
+          localDesc: ^ASTindex; case: @integer;
+          xScan: @ | scanXadr; V: ^evVal;
+          unfreeze: @boolean
+       enter rA[]
+       do (if switch181 then
+              rA[] -> scanExit
+              (#
+              do XV[] -> V[]; INNER FixXadr
+              #)
+           else
+          (if switch180 then
+              (* lA refers to item where no exit elements has code
+               * and needs additional nested adr registers to be compued.
+               * We still need to consider arrays elements
+               *)
+              (* make new operations:
+               * doFreeze:
+               *   (# unFreeze: @boolean
+               *   do (if not frozenReg then
+               *          true -> frozenReg -> unFreeze
+               *      if)
+               *   exit unFreeze
+               *   #)
+               * unFreeze:
+               *   (# unFreeze: @boolean
+               *    enter unFreeze 
+               *    do (if unfreeze then false -> frozenReg if)
+               *   #)
+               * 
+               * lA.doFreeze -> unfreeze;
+               * ....
+               * unfreeze -> lA.unFreeze
+               *)
+             (* (if lA.regType // mch.thisO // mch.callO then
+                  301->cTrace(#do 'FixXadr1:'->xT; mch.dumpReg #);
+               else
+                  301->cTrace(#do 'FixXadr2:'->xT; mch.dumpReg #);
+                  (if not lA.frozenReg then
+                      lA.freezeReg;
+                      true -> unFreeze
+                  if)
+              if);*)
+              lA.doFreeze -> unFreeze;
+              (lDesc[],lA[],0,lChain[])->xScan; 
+              (if stest then
+                  301->cTrace(#do 'FixXadr3:'->xT; lA.display->xT; mch.dumpReg #)
+              if);
+              xScan.getExitVal->V[]; 
+              (if stest then
+                  301->cTrace
+                  (#
+                  do 'FixXadr4:'->xT; V.display; xN;
+                     lA.display->xT; mch.dumpReg 
+              #)if);
+              INNER;
+              (if stest then
+                  301->cTrace
+                  (#
+                  do 'FixXadr5:'->xT; V.display; xN;
+                     lA.display->xT;  mch.dumpReg 
+              #)if);
+                 (* (if unFreeze then false -> lA.frozenReg if);*)
+              unFreeze -> lA.unFreeze
+           else
+              L:
+                (if lA.regType
+                 // mch.thisO then (* rA.other? *) 1->case
+                 // mch.callO then (* lA may have Xcode *)
+                    lA.isCallReg->laIsCallReg;
+                    (if rA.regType
+                     // mch.thisO then (* (call,this) *)
+                        (if (lDesc[]->sematt.hasXcode) then
+                            lA.toTmp->lA[]; 2->case;
+                            (if laIsCallReg then mch.decrCallReg if)
+                         else 1->case if)
+                     // mch.callO then cError(#do 'lA and rA in callReg'->xT #)
+                     else lA.toTmp->lA[]; 2->case;
+                        (if laIsCallReg then mch.decrCallReg if)
+                    if)
+                 // -1 then (* may happen if lA is indirect as in
+                             * X: (# ... a: ^AA
+                             *     exit a
+                             *     #)
+                             * the address of a is indirect, using callReg
+                             *)
+                    lA.toTmp->lA[];
+                    restart L
+                 else 
+                    (if common.switch[125] then
+                        1->case
+                     else
+                        (if rA.regType
+                         // mch.thisO then 2->case; (* 4 -> case;*)
+                         // mch.callO then 3->case
+                         else 
+                            2->case
+                if)if)if);
+              (if case
+               // 1 then
+                  (lDesc[],lA[],0,lChain[])->xScan; (* just one exit elm *)
+                  xScan.getExitVal->V[]; 
+                  INNER
+               // 4 then
+                  (* lA = other , rA = this *)
+                  AllocCallReg -> callRegOnStack;
+                  lA.mvToCallReg->lA[];
+                  (lDesc[],lA[],0,lChain[])->xScan; (* just one exit elm *)
+                  xScan.getExitVal->V[]; 
+                  INNER;
+                  callRegOnStack -> popCall
+               // 2 then (* lA NOT = callReg, i.e. callReg may be redefined*)
+                  (* 350->cTrace(#do 'PushThis1'-> xT #);*)
+                  pushThisAndCall->callRegOnStack;
+                  mch.getCallReg; rA.mvToCallReg->rA[];
+                  lA[]->toThis->lA[]; 
+                  (lDesc[],lA[],0,lChain[])->xScan; (* just one exit elm *)
+                  xScan.getExitVal->V[]; 
+                  INNER;
+                  (true,true)->V.elimReg;
+                  callRegOnStack->popThisAndCall;
+                  (*350->cTrace(#do 'GetExitValC2)'->mch.comment #)*)
+               // 3 then 
+                  (*350->cTrace(#do 'pushThis2'->xT #);*)
+                  pushThis;
+                  lA[]->toThis->lA[];
+                  (lDesc[],lA[],0,lChain[])->xScan; (* just one exit elm *)
+                  xScan.getExitVal->V[]; 
+                  INNER;
+                  (true,false)->V.elimReg;
+                  popThis;
+                  (*350->cTrace(#do 'GetExitValC3)'->mch.comment #)*)
+              if);
+          if);
+              xScan.reset; freeLA
+          if)
+       exit V[]
+       #);
+     SimpleFixXadr:
+       (* used when rA does NOT refer to an item.
+        * In general: after INNER, lA is not to be used again??
+        * !!! 26/1/95: this one is used to exit to a single value
+        * or to a list. Perhaps 2 routines should be made, one for 
+        * a single value and for exit to a list.
+        * When a single value is exitted, then lA is NOT
+        * used after the exit-value has been obtained.
+        * Experiment: this routine is an experiment to have two versions
+        * of fixXadr! It currently dont work.
+        * rA NOT a list.
+        * Cases
+        *           lA            rA
+        *          this          this        :  compiler error
+        *          this          call        :  simple (case 1)
+        *          this          other       :  simple (case 1)
+        *          call          this
+        *          call          call        :  compiler error
+        *          call          other
+        *          other         this
+        *          other         call
+        *          other         other
+        * In addition
+        *          lA.hasExitCode   
+        * and      lA.regType = -1 
+        * If lA=call and hasExitCode, then call needs to be used when 
+        * evaluating exit. If exit has the form
+        *    exit W
+        * Then lA need not be saved/restored, since it will NOT be used again.
+        * If the form is like
+        *    exit F+G
+        * then lA is needed when computing F and when computing G. I.e.
+        * it must be saved/restored.
+        * Critical case: lA=call and lA.hasXcode.
+        *    getExitVal will need call for executing the xCode.
+        *    After executing the xCode, the xCode object(s) adr is
+        *      is moved to tmp and call is restored. This is stupid
+        *      since the xCode object(s) are needed to get their
+        *      exit-value - which can be a complicated exp and the register
+        *      denoting the xCode object(s) must be frozen.
+        * Remaining:
+        *   regType= -1 , others??
+        *   can lA be freed?
+        * Also consider
+        *   F->G where F and G are objects
+        *   F: (# ... exit H #);  G: (# a: @integer enter a do ... #)
+        *   which will invoke H->a, i.e. this routine.
+        * 28/12/97: Consider F: (# .... exit exp #) where exp may be
+        * arbitrarely complicated as in 'n+(c->F)+G-m'; let the address of
+        * the F-object be in ai; when evaluating n,c,F,G,m, ai may be the
+        * same address. I.e. lA below must be a frozen register that cannot
+        * change
+        *)
+       (# rA: ^mch.address; callRegOnStack,laIsCallReg: @boolean;
+          localDesc: ^ASTindex; case: @integer;
+          xScan: @ | scanXadr; V: ^evVal;
+       enter rA[]
+       do (*350->cTrace(#do 'SimpleFixXAdr:'->xT#);*)
+          (if lA.regType
+           // mch.callO then
+              (*350->cTrace(#do 'CallReg'->xT #);*)
+              (if (lDesc[]->sematt.hasXcode) then
+                  (*this does NOT seem necessary - an optimization? *)
+                  3->case; mch.decrCallReg
+              if)
+           // -1 then 
+              3->case
+           // mch.thisO then
+           else 3->case
+           if);
+          (if case 
+           // 3  then (*dont work if rA=this*)
+              (*350->cTrace(#do 'PushThis3'-> xT #);*)
+              pushThis;
+              lA[]->toThis->lA[];
+              (lDesc[],lA[],0,lChain[])->xScan; (* just one exit elm *)
+              xScan.getExitVal->V[]; 
+              (true,false)->V.elimReg;
+              popThis;
+              INNER;
+           else
+              (lDesc[],lA[],0,lChain[])->xScan; (* just one exit elm *)
+              xScan.getExitVal->V[]; 
+              INNER;
+          if);
+          xScan.reset; (*freeLA - lA may be used in V[] *)
+       exit V[]
+       #);
+     
+     lAtmp: @addressTmpHandler;
+     toTmp::<
+       (#
+       do (if stest then
+              301->ctrace(#do 'ItemVal:toTmp:tmpPreferred='->xT; 
+                            tmpPreferred->xB; xN; display #)
+          if);
+          (if lA.useCallReg then
+              (if LA.isCallReg then mch.decrCallReg if);
+              (if switch181 then
+                  (if tmpPreferred AND (theBaseAdr[] -> gen.UseTmpReg) then
+                      lA[] -> lAtmp.save
+                   else
+                      lA.toTmp->lA[];
+                  if)
+                  (*(if theBaseAdr.theReg 
+                   // mch.thisO then
+                      lA.toTmp->lA[];
+                   else
+                      lA[] -> lAtmp.save
+                   if)*)
+               else
+                  lA.toTmp->lA[];
+              if)
+              (* the above if-imp used to be the one below. When lA was
+               * moved to a tmp register, lA could NOT be callReg??
+               * (if LA.isCallReg then  mch.decrCallReg if)
+               *)
+          if);
+          (if stest then
+               301->ctrace(#do 'ItemVal:toTmp2:'->xT; lA.display->xT; mch.dumpreg #)
+          if);
+          (if not switch181 then
+              (if lA.isCallReg then cError(#do 'ItemVal:toTmp:not callReg'->xT#)if)
+          if)
+       #); 
+     restoreTmp::< (# do lAtmp.restore; lAtmp.deAlloc #);
+     elimReg::< (# do (elimThis,elimCall)->lA.elimReg #);
+     getRefAdr::<
+       (* only if switch 181 *)
+       (#
+       do (if switch181 then
+              (if true then
+                  scanExitOne
+                  (#
+                  do 
+                     (if XV.evType 
+                      // 2 then
+                         XV.theAdr -> A[];
+                      // -1 then
+                         XV.getRefAdr -> A[]
+                     if)
+                  #)
+               else
+                  gen.thisRegAdr -> ScanExit
+                  (#
+                  do 
+                     (if XV.evType 
+                      // 2 then
+                         true -> doNotRelease;
+                         XV.theAdr -> A[];
+                      // -1 then
+                         XV.getRefAdr -> A[]
+                     if)
+                  #)
+          if)if)
+       #);
+     getRefEval::<
+       (# A: ^mch.address
+       do (if stest then
+              301->ctrace(#do 'ItemVal:getRefEval:A'->xH; display #)
+          if);
+          (* the enter parameter to fixXadr is only a dummy parameter
+           * which should never be used. It is currently NOT understood
+           * what will happen in the complicated cases. Currently
+           * fixXadr is used to return the single ref. eval exit elm.
+           * of this Object
+           *)
+          (if switch181 then 
+              '\n***itemVal:genRefEval was called'->putline
+          if);
+          gen.thisRegAdr -> fixXAdr -> V[];
+          (if stest then
+              301->ctrace
+              (#do 'ItemVal:getRefEval:B'->xH; V.display; mch.dumpReg #)
+          if);
+          (if V.evType 
+           //  2 then (* ok *)
+           // -1 then (* itemEval *) V.getRefEval->V[]
+           else 
+              cError(#do'Illegal evType:itemevval:getRefEval:'->xT;V.evType->xI#)
+          if);
+          (if stest then
+              301->ctrace
+              (#do 'ItemVal:getRefEval:C'->xH; V.display; mch.dumpReg #)
+          if)          
+       #);
+     asgToSimpleEv::<
+       (#
+       do (if stest then
+              301 -> ctrace
+              (#
+              do 'itemVal:asgToSimpleEv:'->xH;
+                 rBaseAdr.display-> xT;
+                 rEv[] -> xA;
+                 mch.dumpreg                 
+          #)if);
+         (* scanExit
+          (#
+          do (rBaseAdr[],rEv[],rChain[]) -> XV.asgToSimpleEV -> V[]
+          #)*)
+          loadVal -> V[];
+          (rBaseAdr[],rEv[],rChain[]) -> V.asgToSimpleEV -> V[];
+          true -> inInner
+       #);
+     asgToAdr::<
+       (* assign elements of exit list of lEv to adr. rA *)
+       (# 
+       do (if stest then
+              301->cTrace
+              (#
+              do 'itemVal:AsgToAdr:'->xT; lDesc[]->xA;
+                 ' lA:'-> xT; lA.display->xT; ' rA:'->xT; rA.display->xT;
+                 mch.dumpreg 
+          #)if);
+          rA[]->(*Simple*)FixXadr(#do rA[]->V.asgToAdr->V[] #)->V[];
+          (if stest then
+              301->cTrace
+              (#
+              do 'itemVal:AsgToAdrx:'->xT; V.display; mch.dumpreg 
+          #)if)
+       #);
+     asgToRefAdr::<
+       (* assign elements of exit list of lEv to adr. rA *)
+       (# 
+       do (*301->cTrace
+           (#do 'AsgExitToRefAdr: '->xT; lA.display->xT;lDesc[]->xA #);*)
+          rAbase[]->FixXadr
+          (#
+          do true->V.sourceIsRef; (rA[],destEv[],rChain[])->V.asgToRefAdr->V[];
+             (*312->cTrace(#do 'item:asgToRefAdr1:'->xT; V.display #);*)
+          #)->V[];
+             (*312->cTrace(#do 'item:asgToRefAdr2:'->xT; V.display #);*)
+       #);
+     asgToRepAdr::<
+       (# 
+       do (if stest then 301->cTrace(#do 'assignToRepAdr:'-> xT#)if);
+          rA[]->fixXadr(#do (rA[],rEv[],rChain[])->V.asgToRepAdr->V[] #)->V[]
+       #);
+     asgToRepElm::
+       (#
+       do (if stest then
+              301->itemTrace
+              (#
+              do 'itemVal:AsgToRepElm:'->xT; 
+                 (*lDesc[]->xA;
+                  ' lA:'-> xT; lA.display->xT;
+                  *)
+                 xN;
+                 'rA='->xT; rA.display->xT;
+                 mch.dumpreg
+          #)if);
+          rA[]->fixXadr(#do (rA[],rEV[],rChain[]) -> V.asgToRepElm -> V[] #) -> V[];
+          (if stest then 301->ctrace(#do 'itemVal:asgToRepElm:end'->xT;
+                                       V.display;
+                                       mch.dumpReg
+                                    #)
+          if)
+       #);
+     asgToRealAdr::<
+       (#
+       do rA[]->FixXadr(#do rA[]->V.asgToRealAdr->V[] #)->V[]
+       #);
+     asgToItem::<
+       (* Assign   E -> F 
+        * Transfer exit-part of E to enter-part of  F 
+        * lDesc -> rDesc; lA -> rA;
+        * Assertion from exeObj:
+        * rA in [thisReg,callReg] AND if F has Ncode then rA=callReg
+        * F has Ncode, then lA=thisReg and rA=callReg
+        *)
+       (# xScan: @ | scanXadr;
+          nScan: @ | scanNadr;
+          NA,A1: ^Mch.Address; XV: ^evVal;
+          popTh,callRegOnStack,lAtoThis,more1,more2,
+          unfreezeLA,unfreezeRA: @boolean;
+          nOff: @integer; localDesc: ^ASTindex;
+          tmpIx: @integer;
+          rAtmp,rA1: ^mch.address;
+          lHasCode: @boolean
+       do (* rA in [a0,a1] *)
+          (if switch181 then
+              (lDesc[] -> sematt.hasXcode)  -> lHasCode;
+              (if rA.useCallReg and lHasCode then
+                  (if stest then 301->cTrace
+                      (#do 'itemVal:asgToItem:save_rA=callReg_in_tmp:'
+                           ->xT;
+                         mch.dumpreg
+                  #)if);
+                  NXA.alloc -> tmpIx -> NXA.tmpAdr -> gen.ThisRegAdr 
+                    -> rAtmp[];
+                  (mch.callRegOp[],rAtmp[]) -> mch.stVal;
+                  mch.decrCallReg;
+                  rAtmp[] -> rA1[]
+               else
+                  rA[] -> rA1[]
+              if);
+              LLL:
+                rA1[] ->  ScanExit
+              (#
+              do (if tmpIx <> 0 then
+                     (if stest then
+                         301->ctrace
+                         (#do 'itemVal:asgToItem:restore_rA_before_asgToN:'
+                              ->xT;
+                            mch.dumpreg
+                     #)if);                            
+                     (rA.bAdr.localDesc[]) -> gen.newAddress
+                     (#
+                     do (rAtmp[],theAdr.reg[]) -> mch.ldVal
+                     #)
+                       -> rA[];
+                     (* rA.freezeReg;*)
+                     tmpIx -> NXA.deAlloc;
+                     0 -> tmpIx
+                 if);  
+                 (rDesc[],rA[](*not used*),0,rChain[],true) -> nScan;
+                 (* Consider
+                  *    X -> N
+                  * where X = (X1,X2,...Xk) N = (N1,N2,...Nk)
+                  * 
+                  * (xScan.N = 1 ) and (nScan.N > 1) 
+                  *      Assign  X1 ->N (use asgToItem)
+                  * (xScan.N > 1 ) and (nScan.N = 1) 
+                  *      Assign X -> N1
+                  * (xScan.N = 1 ) and (nScan.N = 1) 
+                  *      Assign X1 -> N1 - same as if N > 1?
+                  * (xScan.N > 1 ) and (nScan.N > 1) 
+                  *      Assign X1 -> N1, X2 -> N2, ...
+                  *)
+                 (if (xScan.N = 1) and (nScan.N > 1) then
+                     (if stest then
+                         301->ctrace(#do 'AsgToItem:X=1,N>1:'->xH; display;
+                                       'lObjAdr='->xT; lObjAdr.display->xT;
+                                       xN;
+                                       'rBaseReg='->xT;rBaseReg.display->xT;
+                                       xN;
+                                      (* 'rObjAdr='->xT; rObjAdr.display->xT;
+                                       xN;*)
+                                       'XV='->xT; XV.display; xN;
+                                       'rA='->xT; rA.display->xT;
+                                    #)
+                     if);
+                     (rBaseReg,rDesc[],rA[],rChain[]) 
+                       -> XV.asgToItem
+                       -> this(asgToItem).rAx[] -> this(asgToItem).rA[];
+                     (if stest then
+                         301->ctrace
+                         (#do 'asgToItem:X=1,N>1-end:'->xH; display; xN;
+                            'XV='->xT; XV.display; xN;
+                            'asgtoItem:rA='->xT; this(asgToItem).rA.display->xT
+                     #)if);
+                     XV.release;
+                  else
+                     (rDesc[],rA[],rchain[],nScan[],not lHasCode) 
+                       -> asgToN
+                     (# V: ^evVal
+                     do (if (xScan.N > 1) and (nScan.N = 1) then
+                            (if stest then
+                                301->ctrace(#do 'AsgToItem:X>1,N=1:'->xH; 
+                                              display; xN;
+                                              'rObjAdr='->xT; 
+                                              rObjAdr.display->xT; xN;
+                                              'thisEV='->xT; 
+                                              nscan.thisEv[]->xA
+                                           #)
+                            if);
+                            (rObjAdr[],this(ItemEvVal)[],nscan.thisEv[],
+                            nScanN.thisChain[])
+                              -> AssignValToEval 
+                              -> V[];
+                            (if stest then
+                                301->ctrace
+                                (#
+                                do 'AsgToItem:X>1,N=1-end:'->xT;
+                                   display; xN;
+                                   'rA='->xT; rA.display->xT
+                            #)if);
+                            (if V[] <> NONE then V.release
+                             else '\n***listEvVal:asgToItem:VISNone'->putline
+                            if);
+                            (*  leave LLL*)
+                         else  
+                            (* xScan.N = nScan.N *)                            
+                            Loop:
+                              (# EH: @evalHandler
+                              do (* Here we need %ai for XV;
+                                  * and %aj used by rObjAdr.
+                                  * Other registers used by ScanExit can be 
+                                  * released during AssignValToEval
+                                  *)
+                                 (if stest then
+                                     301->ctrace
+                                     (#
+                                     do 'itemVal:asgToItem:beforeElm:'->xH;
+                                        display; xN;
+                                        'rObjAdr='->xT; rObjAdr.display->xT;xN;
+                                        'elm:XV='->xT; XV.display;
+                                 #)if);
+                                 (rObjAdr[],XV[],nscan.thisEv[]
+                                 ,nScanN.thisChain[])
+                                   -> (*EH.*)AssignValToEval 
+                                   -> V[];
+                                 (if stest then
+                                     301->ctrace 
+                                     (#
+                                     do 'itemVal:asgotitem:afterElm:'->xH;
+                                        display;
+                                        'V='->xT; V.display;
+                                 #)if);
+                                 (if V[] <> NONE then V.release
+                                  else '\nlistEvVal:asgToItem:VISNone'->putline
+                                 if);
+                                 nextExitEval;
+                                 nextEnterEval;
+                                 (if xmore then restart loop if)
+                              #)
+                        if)
+                     #)
+                       -> rAx[] -> rA[]; (* rA is returned by asgToItem;
+                                          * hopefully someone will free it
+                                          *)
+                 if)
+              #) (* scanExit *)
+           else
+              (if switch180 then
+                  (* unify the following code with similar code
+                   * in asgToNXoffsets
+                   *)
+                  (if (rA.regType=mch.callO) and (lA.regType=mch.callO) then
+                      cError(#do 'ItemVal:asgToItem:callreg conflict'-> xT #)
+                  if);
+                  (if true then
+                      0 -> lA.addOff -> lA[]; (* Load possible indirect  W: ^T *)
+                      lA.doFreeze -> unfreezeLA;
+                      0 -> rA.addOff -> rA[]; (* Load possible indirect  W: ^T *)
+                      rA.doFreeze -> unfreezeRA;
+                   else                  
+                      (if lA.regType // mch.thisO (* never?*) // mch.callO then
+                       else
+                          (if not lA.frozenReg then
+                          (* if already frozen then don't freeze again
+                           * since we will then later unfreeze, and when
+                           * we return lA is not frozen
+                           *)
+                          (if stest then
+                              301->cTrace(#do 'itemVal:asgToItem:freezeReg:lA'->xT #)
+                          if);
+                      0 -> lA.addOff -> lA[]; (* To load a possible indirect
+                                               *    W: ^T
+                                               *)
+
+                      lA.freezeReg; true -> unfreezeLA 
+                      if)
+                  if);
+                  (if rA.regType // mch.thisO (* never? *) // mch.callO then
+                   else
+                      (if not rA.frozenReg then
+                          (if stest then
+                              301->cTrace(#do 'itemVal:asgToItem:freezeReg:rA'->xT #)
+                          if);
+                          0 -> rA.addOff -> rA[]; (* To load a possible 
+                                                   * indirect    W: ^T
+                                                   *)
+                          rA.freezeReg; true -> unfreezeRA
+                      if)
+                  if);
+              if);
+              (if stest then 301->cTrace(#do 'asgToItem2:'->xT#)if);
+           else
+              L:
+                (if lA.regType
+                 // mch.thisO // mch.callO then 
+                 // -1 then (* see FixXadr *)
+                    lA.toTmp->lA[];
+                    restart L
+                 else
+                    (if rA.regType
+                     // mch.thisO then (* lA -> call *)
+                     // mch.callO then (* lA -> this *)
+                     else (* lA -> this, rA -> call *)
+                    if);
+                    (if not rA.isCallReg (* made in beta4.4 *) then
+                        AllocCallReg->callRegOnStack; 
+                        rA.toCallReg -> rA[]
+                    if); (* this if-imp should be an operation *)
+                    (* perhaps this else part could be avoided in case of 
+                     * only one element in exit/enter list?
+                     *)
+                        (*350->cTrace(#do 'PushThis4'-> xT #);*)
+                    pushThis;
+                    lA[] -> toThis -> lA[];
+                    (* lA.freezeReg; - won't work since a freezeReg will be
+                     * performed for each nested enter/exit level; 
+                     * we will thus run out of registers
+                     *)
+                    true -> popTh;
+          if)if);
+          (lDesc[],lA[],nOff,lChain[]) -> xScan -> more1;
+          (rDesc[],rA[],0,rChain[],true) -> nScan -> more2;
+          (* lA=thisReg and rA=callReg OR lA=callReg and rA=thisreg *)
+          (if nScan.N = 1 (*isSingleObj*) then
+              (if stest then
+                  350->cTrace(#do 'Item->nList:isSingleA'->xH; rDesc[]->xA #)
+              if);
+              (if xScan.N = 1 (*isSingleObj*) then 
+                  (if stest then
+                      350->cTrace
+                      (#do 'Item->nList:isSingleB:'->xT; rDesc[]->xA;
+                         mch.dumpreg 
+                  #)if);
+                  xScan.getExitVal -> nScan.asgToNelm
+               else 
+                  (if true then
+                      unFreezeLA -> lA.unFreeze
+                   else
+                      (if unFreezeLA then
+                          (* this(itemEvVal) is transferred to asgToNelm
+                           * and release will be called on it and
+                           * set lA to NONE. If lA
+                           * is frozen then lA.reg will never be freed.
+                           * we thus unfreeze lA
+                           *)
+                          false -> lA.frozenReg
+                  if)if);
+                  this(itemEvVal)[] -> nScan.asgToNelm;
+                  (* This will result in release being called
+                   * on this(itemEvVal); a complicated handling
+                   * of this case is done in release; see release
+                   * for further details.
+                   *)
+              if);
+           else
+              (if xScan.N = 1 (*isSingleObj*) then
+                  (if stest then
+                      350->cTrace(#do 'Item->xList:isSingle'->xT; lDesc[]->xA #)
+                  if);
+                  xScan.getExitVal->XV[];
+                  (rBaseReg,rDesc[],rA[],rChain[]) -> XV.asgToItem->rA[];
+                  XV.release;
+               else
+                  L: (#
+                     do xScan.getExitVal->XV[] -> nScan.asgToNelm;
+                        XV.release;
+                        xScan->more1;
+                        (if more1 then
+                            nScan->more2;
+                            (* restore lA from tmp *)
+                            restart L
+                     if)#);
+              if);
+          if);
+          nScan.reset; 
+          xScan.reset;
+          (if stest then
+              301->cTrace(#do 'asgToItem4:'->xT; lA[]=none->xB; rA[]=none->xB #)
+          if);
+          (if popTh then
+              (true,callRegOnStack)->rA.elimReg;
+              popThis;
+              callRegOnStack->popCall
+          if);
+          (if true then
+              (if lA[]<>NONE then unFreezeLA -> lA.unFreeze if);
+              (if rA[]<>NONE  then unfreezeRA -> rA.unFreeze if);
+           else
+              (if (lA[]<>NONE) AND unfreezeLA then false -> lA.frozenReg if);
+              (if (rA[]<>NONE) AND unfreezeRA then false -> rA.frozenReg if);
+          if);
+          (if stest then
+              301->cTrace(#do 'asgToItem5:'->xT; mch.dumpreg; xD #)
+          if);
+              (*freeLA; done in transferEnter *)
+          if)
+       #);
+     asgToNXoffSets::
+       (* lA is some object, rA is an NXoffSetsVal
+        * lA  = this
+        *     = call
+        *     = tmp
+        * rA  = this
+        *     = call
+        *     = tmp
+        * 
+        * We have (rA[],NX[]) as enter to asgToNXoffSets;
+        * why rA? why not just the baseAdr in NXoffSetsVal?
+        * Ha! NX is not a sub of evVal, i.e. not an NXoffSetsVal
+        * 
+        *)
+       (# xScan: @ | scanXadr; XV: ^evVal; unfreezeLA: @boolean
+       do (if stest then
+              301->itemTrace(#do 'asgToNxOffSets: '->xT; xU #)
+          if);
+          
+          (* lA.toCallReg; (* NO! ??? *)
+          (* lA must be handled as in eg asgToItem since lA
+           * may be released during execution below.
+           * The following code is similar to asgToItem and
+           * should be moved to a common pattern
+           *)
+          (if true then
+              0 ->lA.addOff -> lA[]; (* Load possible dynamic  W: ^T*)
+              lA.doFreeze -> unfreezeLA
+           else
+              (if lA.regType
+               // mch.thisO (*never?*) then
+               // mch.callO then
+               else
+                  (if not lA.frozenReg then
+                      (if stest then
+                          301->cTrace(#do 'itemVal:asgToNxOffSets:freezeReg:lA'->xT #)
+                      if);
+                      0 ->lA.addOff -> lA[]; (* to load a possible dynamic
+                                              *    W: ^T
+                                              *)
+                      lA.freezeReg; true -> unfreezeLA
+          if)if)if);
+          (lDesc[],lA[],0(*??nOff*),lChain[]) -> xScan;
+          L: (#
+             do xScan.getExitVal->XV[];
+                (rA[],NX[],inXpart) -> XV.asgToNXoffSets -> rA[];
+                (* XV.release; ?? if register dont release *)
+                (if xScan then restart L if)
+             #);
+          (if true then
+              (if lA[]<>NONE then unfreezeLA -> lA.unFreeze if);
+           else
+              (if (lA[]<>NONE) AND unfreezeLA then false -> lA.frozenReg if);
+          if);
+          (* when is lA freed? In asgToItem this is done in transferEnter!*)
+          (if stest then 301 -> cTrace(#do xD #) if);
+       #);
+     asgtoInlineItem::
+       (# xScan: @ | scanXadr; XV: ^evVal
+       do (if stest then
+              301->cTrace(#do 'itemVal:asgToInLineItem: '->xT; display #)
+          if);
+          lA.toCallReg; (* is this the right thing to do? See asgToItem;
+                         * probably NOT. lA may be released *)
+          (lDesc[],lA[],0(*??nOff*),lChain[])->xScan;
+          L: (#
+             do xScan.getExitVal->XV[];
+                (rDesc[],inlNX[],rChain[])->XV.asgToInlineItem;
+                (* XV.release; ?? if register dont release *)
+                (if xScan then restart L if)
+             #)
+       #);
+     asgToNewPrim::<
+       (# xScan: @ | scanXadr; XV: ^evVal;
+          callRegOnStack: @boolean
+       do (if stest then
+              301->cTrace(#do 'itemVal:asgToNewPrim: '-> xT; display #)
+          if);
+          AllocCallReg -> callRegOnStack;
+          lA.toCallReg; (* is this the right thing to do? See asgToItem;
+                         * probably NOT. lA may be released *)
+          (lDesc[],lA[],0(*??nOff*),lChain[])->xScan;
+          L: (#
+             do xScan.getExitVal->XV[];
+                (baseA[],EV[],rChain[])->XV.asgToNewPrim -> V[];
+                (* XV.release; ?? if register dont release *)
+                (if xScan then restart L if)
+             #);
+          freeLA; 
+          callRegOnStack->popCall;
+       #);
+     asgToList::< (* assign this item to Eval List EV *)
+       (* EV=(E1,E2,...)
+        * lDesc.X1->E1; lDesc.X2->E2; ... *)
+     (# more: @boolean
+     do (if switch181 then
+            BA[] -> scanExit
+            (#
+            do (if xScan.N = 1 (*isSingleObj*) then
+                   301->cTrace(#do 'Item->list:isSingle '->xT; 
+                                 XV.display;
+                              BA.display->xT #);
+                   (BA[],EV[],rChain[]) 
+                     -> XV.asgToList 
+                     -> V[]
+                else
+                   EV -> scanList
+                   (# E: @ASTindex;
+                   do currentNode->E; 
+                      301->cTrace(#do 'asgToList:scan:'->xT; xN;
+                                    'BA='->xT; BA.display->xT; xN;
+                                    'XV='->xT; XV.display; 
+                                    'assignTo:'->xT; E[] -> xA 
+                                 #);
+                      
+                      (* Q -> (e1,e2,...,en)
+                       * Q.baseReg : baseReg for this(itemVal)
+                       * Q.lA      : address of Q
+                       * Q.lObjAdr : adrress of Q using baseReg
+                       * Check Q.baseReg = Ba.theReg
+                       *)
+                     (* (if BA[] <> theBaseAdr[] then
+                          theBaseAdrTmp.reSave
+                      if);*)
+                      (BA[],XV[],E[],rChain[]) 
+                        -> AssignValToEval 
+                        -> V[];
+                      (if V[] <> none then V.release 
+                       else 'V[] is none' -> putline 
+                      if);
+                    (*  (if BA[] <> theBaseAdr[] then
+                          theBaseAdrTmp.restore
+                     if);*)
+                      nextExitEval;
+                   #);
+                   (EV[],BA[],rChain[])->mkListVal->V[]
+               if)
+            #)
+         else
+            BA[]->fixXadr
+            (# 
+            do (* BA[] -> ... -> rA[] *)
+               (if xScan.N = 1 (*isSingleObj*) then
+                   (*350->cTrace(#do 'Item->list:isSingle '->T; EV[]->A #);*)
+                   (rA[],EV[],rChain[])->V.asgToList->V[]
+                else
+                   EV->scanList
+                   (# E: @ASTindex;
+                   do currentNode->E; 
+                      (*301->cTrace(#do 'AsgToList1:'->xT; mch.dumpreg #);*)
+                      (rA.copy,V[],E[],rChain[])->AssignValToEval->V[];
+                      V.release;
+                      (*301->cTrace(#do 'AsgToList2:'->xT; mch.dumpreg #);*)
+                      (if xScan then xScan.getExitVal->V[] if)
+                   #);
+                   (EV[],rA[],rChain[])->mkListVal->V[]
+               if)
+            #)->V[]
+        if)
+     #);
+     
+     asgToCproc::<
+       (# CP: @ExTernalCall; xScan: @ | scanXadr;
+          callRegOnStack,more,forward,isDataKind: @boolean; 
+          XV: ^evVal;
+          XI: ^itemEvval
+       do (if stest then
+              301->cTrace(#do 'ItemVal:asgToCproc: '->xT; lEV[] -> xA ; EV[]->xA #)
+          if);
+          (lDesc->sematt.descKind) = sematt.dataKind  -> isDataKind;
+          (if not isDataKind then
+              (if not lA.isCallReg then
+                  AllocCallReg -> callRegOnStack; 
+                  lA.toCallReg -> lA[] 
+              if);
+          if);
+          (externalName,Desc[],extKind,EV.son) -> CP; (* init *)
+          (if stest then
+              301->cTrace
+              (#
+              do 'ItemVal:asgToCproc2: '->xT; 
+                 CP.top->xI; 
+                 CP.GetEnterP.inx->xI;
+                 CP.GetEnterP.pType -> xI
+          #)if);
+          (if extKind->mch.xParForward then 
+              true->forward
+           else
+              true->xScan.reverse; (*forward=false*)
+          if);
+          (if isDataKind then 
+              (if (forward->CP.getEnterP) = common.dataXPartPar then
+                  (# A: ^ mch.RegAdr; aR: @mch.adrRegOperand
+                  do (if stest then
+                         301->cTrace(#do 'ItemVal:asgToCproc:'->xT; lDesc.size->xI #)
+                     if);
+                     (* lA.copy -> A[]; 4 -> A.size;*)
+                     aR.alloc;
+                     (lA[],aR[]) -> mch.gLea;
+                     &mch.RegAdr[] -> A[];
+                     aR -> A.reg;
+                     4 -> A.size;
+                     (if common.targetMachineId
+                      // common.sun4s 
+                      // common.hpux9pa then
+                         (* aR.alloc;
+                          * (A[],aR[]) -> mch.gLea; *)
+                         aR[] -> mch.pushClong;
+                         (*aR.deAlloc*)
+                      else (* linux, nti, sgi *)
+                         (*(if A.useCallReg then
+                             (false,true) -> A.elimReg
+                          if);*)
+                         (if not forward then
+                             lDesc.size - 4 -> A.addOff -> A[];
+                         if);
+                         (for i: lDesc.size div 4 repeat
+                              A[] -> mch.pushClong;
+                              (if forward then
+                                  4 -> A.addOff -> A[];
+                               else 
+                                  - 4 -> A.addOff -> A[];
+                         if)for)
+                     if);
+                     (* clear and free register in A *)
+                     aR[] -> mch.gClr;
+                     aR.deAlloc
+                  #)
+               else
+                  'itemVal:asgToCproc:Data parameter problem'->thisTranslate.systemException
+              if)
+           else
+              (lDesc[],lA[],0,lChain[])->xScan->more;
+              L: (#
+                 do xScan.getExitVal -> XV[];
+                    (if stest then
+                        301->cTrace(#do 'ItemVal:asgToCproc3: '->xT; XV.evType->xI #)
+                    if);
+                    (if XV.evType = -1 then
+                        (* OLM: 18.6.98: fix to handle
+                         *       F: (# ... exit(a,b,c) #);
+                         *       G: (# ... exit F #);
+                         *    do G -> external
+                         * 
+                         * With code for N/X, this should never happen
+                         *)
+                        XV[] -> XI[];
+                        XI.getExitElements 
+                        (#
+                        do (forward->CP.getEnterP,extKind,CP.getEnterP.size
+                           ,CP.pascExtProcInfo)
+                             -> X.pushCpar
+                        #)
+                     else
+                        (forward->CP.getEnterP,extKind,CP.getEnterP.size
+                        ,CP.pascExtProcInfo)
+                          -> XV.pushCpar
+                    if);
+                    (if xScan then restart L
+                 if)#);
+          if);
+          (if stest then
+              301->cTrace(#do 'ItemVal:asgToCproc4: '->xT;#)
+          if);
+          CP.call; CP.getExitP->V[]; 
+          xScan.reset; freeLA;
+          callRegOnStack->popCall
+       #);
+     getExitElements:
+       (* see asgToCproc *)
+       (# xScan: @ | scanXadr; X: ^evVal; isFrozen: @boolean
+       do (*311->cTrace(#do 'itemVal:getExitElements: ' -> xT; lEs[] -> xA #);*)
+          (*(if not lA.frozenReg then lA.freezeREg; true -> isFrozen if);*)
+          lA.doFreeze -> isFrozen;
+          (lDesc[],lA[],0,lChain[]) -> xScan;
+          L: (#
+             do xScan.getExitVal -> X[];
+                INNER getExitElements;
+                (if xScan then restart L
+             if)#);
+                (*(if isFrozen then false -> lA.frozenReg if);*)
+          isFrozen -> lA.unfreeze
+       #);
+     asgToInLinePrimitive::<
+       (# xScan: @ | scanXadr; XV: ^evVal;
+          xDr: [3] ^mch.dataRegOperand;
+          D: [3]@integer; dMax,dRes: @integer;
+          callRegOnStack,more: @boolean
+       do (if stest then
+              301->ctrace(#do 'asgToInLinePrimitive:'->xH; display #)
+          if);
+          (if switch181 then
+              scanExit
+              (#
+              do XV.toDataReg -> xDr[dMax+1->dMax][];
+                 xDr[Dmax]->D[Dmax]; (*XV.release; !!*)
+              #)
+           else
+              AllocCallReg->callRegOnStack; lA.toCallReg->lA[];
+              (lDesc[],lA[],0,lChain[])->xScan->more;
+              L:
+                (if more then
+                    xScan.getExitVal->XV[];
+                    XV.toDataReg->xDr[dMax+1->dMax][]; 
+                    xDr[Dmax]->D[Dmax]; (*XV.release; !!*)
+                    xScan->more
+                if);
+              xScan.reset;
+          if);
+          ((opCode,I1,I2,D) -> gen.inLinePrimitive -> dRes,false,false,false)
+                -> mkComputedEvVal
+                -> V[];
+          (for i:dMax repeat
+               (if dRes <> D[i] then xDr[i].deAlloc if)
+          for);
+          freeLA; 
+          callRegOnStack->popCall
+       #);
+     ItemVal: (* used when just a single EXIT value *)
+       (# xScan: @ | scanXadr; XV: ^evVal; case: @integer; 
+          callRegOnStack: @boolean;
+          keep: @boolean
+       enter  keep (* all uses of ItemVal should be checked *)
+       do (if stest then
+              301->cTrace(#do 'ItemEvVal:ItemVal:'->xT; display #)
+          if);
+          (if switch181 then
+              scanExit(#do XV[] -> this(ItemVal).XV[]; INNER ItemVal #)
+           else
+              (if lA.regType <> mch.thisO then 
+                  (if (lDesc[]->semAtt.hasXcode) then
+                      (* here we never come with NXoffSets *)
+                      (*350->cTrace(#do '(ItemVal:getExitVal'->xT #);*)
+                      (*350->cTrace(#do 'PushThis4b'-> xT #);*)
+                      pushThis; lA[]->toThis->lA[]; 3->case
+                   else 
+                      (if not lA.isCallReg then  (*OLM 25/1/95 *)
+                          AllocCallReg->callRegOnStack; lA.toCallReg->lA[]; 
+                          2->case (* does this work?*)
+                      if);
+              if)if);
+              (lDesc[],lA[],0,lChain[])->xScan; xScan.getExitVal->XV[]; 
+              xScan.reset;
+              (if case
+               // 2 then (false,true)->XV.elimReg; callRegOnStack->popCall
+               // 3 then
+                  (true,false)->XV.elimReg; 
+                  popThis;
+                  (*350->cTrace(#do 'ItemVal:getExitVal)'->mch.comment #)*)
+              if);
+              INNER;
+          if);
+          
+          (if not keep then (* some operations using ItemVal do release*)
+              XV.release 
+          if)
+       exit XV[]
+       #);
+     unMinus::<(#do ItemVal(#do XV.unMinus->res[] #)#);
+     notExp::<(#do ItemVal(#do XV.notExp->res[] #)#);
+     (* apparently the binary operations below are never called;
+      * for objects, loadVal is called to load the exit-value
+      *)
+     cmp::<
+       (#
+       do (if switch181 then
+              301->cTrace(#do 'ItemVal:cmp:'->xT #);
+              ScanExit(#do (lV[],op,jmpCond,Lab[])->XV.cmp->res[] #)
+           else
+              ItemVal(#do (lV[],op,jmpCond,Lab[])->XV.cmp->res[] #)
+          if)
+       #);
+     adrCmp::<
+       (#
+       do (if switch181 then
+              301->cTrace(#do 'ItemVal:adrCmp:'->xT #);
+              ScanExit(#do rA[]->XV.adrCmp
+                          -> (op1[],op2[],size,deAllocOp1,deAllocOp2) #)
+           else
+              ItemVal(#do rA[]->XV.adrCmp
+                          -> (op1[],op2[],size,deAllocOp1,deAllocOp2) #)
+          if)
+       #);
+     cstCmp::<
+       (#
+       do (if switch181 then
+              301->cTrace(#do 'ItemVal:cstCmp:'->xT #);
+              ScanExit(#do rC->XV.cstCmp
+                          ->(op1[],op2[],size,deAllocOp1,deAllocOp2) #)
+              
+           else
+              ItemVal(#do rC->XV.cstCmp
+                          ->(op1[],op2[],size,deAllocOp1,deAllocOp2) #)
+          if)
+       #);
+     regCmp::<
+       (#
+       do (if switch181 then
+              301->cTrace(#do 'ItemVal:regCmp:'->xT #);
+              ScanExit(#do rReg->XV.regCmp
+                          ->(op1[],op2[],size,deAllocOp1,deAllocOp2) #)
+           else
+              ItemVal(#do rReg->XV.regCmp
+                          ->(op1[],op2[],size,deAllocOp1,deAllocOp2) #)
+          if)
+       #);
+     scmp::< (#do ItemVal(#do (lV[],op)->XV.sCmp->this(sCmp).res[] #)#);
+     add::< 
+       (#
+       do (if stest then 301->cTrace(#do 'add:'-> xT #)if);
+          ItemVal(#do lV[]->XV.add->res[] #)
+       #);
+     adrAdd::< 
+       (#
+       do (if stest then 301->cTrace(#do 'adrAdd:'-> xT #)if);
+          ItemVal(#do rA[]->XV.adrAdd->V[] #)
+       #);
+     cstAdd::< 
+       (#
+       do (if stest then 301->cTrace(#do 'cstAdd:'-> xT #)if);
+          ItemVal(#do rN->XV.cstAdd->V[] #)
+       #);
+     regAdd::< 
+       (#
+       do (if stest then 301->cTrace(#do 'regAdd:'-> xT #)if);
+          ItemVal(#do rReg->XV.regAdd->V[] #)
+       #);
+     sub::< (#do ItemVal(#do lV[]->XV.sub->res[] #)#);
+     adrSub::< (#do ItemVal(#do rA[]->XV.adrSub->V[] #)#);
+     cstSub::< (#do ItemVal(#do rN->XV.cstSub->V[] #)#);
+     regSub::< (#do ItemVal(#do rReg->XV.regSub->V[] #)#);
+     times::< (#do ItemVal(#do lV[]->XV.times->res[] #)#);
+     adrTimes::< (#do ItemVal(#do rA[]->XV.adrTimes->V[] #)#);
+     cstTimes::< (#do ItemVal(#do rN->XV.cstTimes->V[] #)#);
+     regTimes::< (#do ItemVal(#do rReg->XV.regTimes->V[] #)#);
+     divMod::< (#do ItemVal(#do (lV[],isDiv)->XV.divMod->res[] #)#);
+     cstDivMod::< (#do ItemVal(#do (rN,isDiv)->XV.cstDivMod->V[] #)#);
+     adrDivMod::<
+       (# V: ^evVal; (*computedEvVal*)
+          dr: ^mch.dataRegOperand
+       do ItemVal
+          (#
+          do (rA[],isDiv)->XV.adrDivMod->V[];
+             (if isDiv then 
+                 (*V.dr->ddr.dNo2; *)                
+                 V.toDataReg->dr[]; dr->ddr.dNo2;
+                 ddr.dNo1.alloc (*dummy*) 
+              else 
+                 (* V.dr->ddr.dNo1; *)
+                 V.toDataReg->dr[]; dr->ddr.dNo1; 
+                 ddr.dNo2.alloc (*dummy*) 
+       if)#)#);
+     regDivMod::<
+       (# V: ^evVal (*computedEvval*);
+          dr: ^mch.dataRegOperand
+       do ItemVal
+          (#
+          do (rReg,isDiv)->XV.regDivMod->V[];
+             (if isDiv then 
+                 (*V.dr->ddr.dNo2; *)
+                 V.toDataReg->dr[]; dr->ddr.dNo2; 
+                 ddr.dNo1.alloc (*dummy*)
+              else 
+                 (*V.dr->ddr.dNo1; *)
+                 V.toDataReg->dr[]; dr->ddr.dNo1; 
+                 ddr.dNo2.alloc (*dummy*) 
+       if)#)#);
+     orr::< (#do ItemVal(#do lV[]->XV.orr-> res[] #)#);
+     cstOr::< (#do ItemVal(#do rN->XV.cstOr->V[] #)#);
+     adrOr::< (#do ItemVal(#do rA[]->XV.adrOr->V[] #)#);
+     regOr::< (#do ItemVal(#do rReg->XV.regOr->V[] #)#);
+     andd::< (#do ItemVal(#do lV[]->XV.andd-> res[] #)#);
+     cstAnd::< (#do ItemVal(#do rN->XV.cstAnd->V[] #)#);
+     adrAnd::< (#do ItemVal(#do rA[]->XV.adrAnd->V[] #)#);
+     regAnd::< (#do ItemVal(#do rReg->XV.regAnd->V[] #)#);
+     asgToDispatch:: 
+       (#
+       do true (* a release may have been made elsewhere *)-> ItemVal
+          (#
+          do (EV[],externalName[],desc[],extKind) -> XV.asgToDispatch -> V[] 
+          #) -> V[]
+       #);
+     pushCpar::<
+       (* lA refers an object with one exit-element to be pushed on C stack.
+        * The exit-element may be an object with a single exit-element.
+        * The following situations exist:
+        * 1:  lA is callReg. callReg refers to the object.
+        *    lA must be released after pushing the value.
+        * 2:  lA not in callReg, callReg NOT busy
+        *    lA refers to the object without using callReg.
+        *    lA.toCallReg will be computed and callReg
+        *    must be released after pushing the value
+        * 3:  lA not in callReg, callReg busy.
+        *    callReg is pushed and lA is move to callReg through toCallReg.
+        *    The pushed callReg has to be popped from stack since we
+        *    are pushing parameters to C. The exit-elm of lA can then be
+        *    pushed. Hereafter the callReg allocated to lA can be released.
+        * 
+        * For release of lA, freeLA may be used. However, lA is always in 
+        * callReg, so decrCallReg is used directly.
+        * 
+        * Initially callReg cannot be on the stack since we are pushing
+        * parameters to an external call.
+        * 
+        * Note, that pushCpar should always release this(evVal).
+        *)
+       (# xScan: @ | scanXadr; 
+          callRegOnStack,isDataKind,forward: @boolean;
+          XV: ^evVal;
+       do (if stest then
+              301->cTrace
+              (# 
+              do 'ItemVal:pushCpar: '->xT; lA.display->xT; mch.dumpreg 
+          #)if);
+          (lDesc->sematt.descKind) = sematt.dataKind  -> isDataKind;
+          (if switch181 then
+              scanExit
+              (#
+              do (type,extKind,0,0) -> XV.pushCpar; 
+              #)
+           else
+              (if not lA.isCallReg then (* situation 2 or 3 *)
+                  AllocCallReg -> callRegOnStack; lA.toCallReg -> lA[]
+                  (* else situation 1*)
+              if);
+              (* lA in callReg - and possibly callReg on stack also *)
+              (if isDataKind then 
+                  (* we may now simplify asgtocproc: the case with isDataKind
+                   * may be moved to be handled here!
+                   *)
+                  (if type = common.dataXPartPar then
+                      (# A: ^ mch.RegAdr; aR: @mch.adrRegOperand
+                      do (if stest then
+                             301->cTrace(#do 'ItemVal:asgToCproc:dataKind'->xT; 
+                                           lDesc.size->xI; xN;
+                                           'lA='->xT; lA.display->xT
+                                        #)
+                         if);
+                         (* lA in callReg *)
+                         (*lA.copy -> A[]; *)
+                         aR.alloc;
+                         (lA[],aR[]) -> mch.gLea;
+                         &mch.RegAdr[] -> A[];
+                         aR -> A.reg;
+                         4 -> A.size;
+                         (if common.targetMachineId
+                          // common.sun4s 
+                          // common.hpux9pa then
+                             (* aR.alloc;
+                              * (A[],aR[]) -> mch.gLea;*)
+                             aR[] -> mch.pushClong;
+                             (* aR.deAlloc; *)
+                          else (* linux, nti, sgi *)
+                             (* we miss the forward parameter here;
+                              * we assume forward for sgi and backwards for
+                              * linux and nti
+                              *)
+                             common.targetMachineId = common.sgi -> forward;
+                            (* (if A.useCallReg then
+                                 (false,true) -> A.elimReg
+                             if);*)
+                             (if not forward then
+                                 lDesc.size - 4 -> A.addOff -> A[];
+                             if);
+                             (for i: lDesc.size div 4 repeat
+                                  A[] -> mch.pushClong;
+                                  (if forward then
+                                      4 -> A.addOff -> A[];
+                                   else 
+                                      - 4 -> A.addOff -> A[];
+                             if)for)
+                         if);
+                         (* clear and free register in A *)
+                         aR[] -> mch.gClr;
+                         aR.deAlloc
+                      #)
+                   else
+                      'itemVal:asgToCproc:Data parameter problem'->thisTranslate.systemException
+                  if)
+               else
+                  (lDesc[],lA[],0,lChain[]) -> xScan;
+                  xScan.getExitVal -> XV[];
+
+                  (if callRegOnStack then
+                      (false,true) -> XV.elimReg; (* eliminate callReg*)
+                      true -> popCall; (* restore callreg *)
+                      (* We have eliminated callReg from XV and restored it through 
+                       * popCall. It does not matter whether or not callReg is used 
+                       * by XV. The callReg used by lA can be released and should be 
+                       * released.
+                       *)
+                  if);
+                  L: (#
+                     do (type,extKind,0,0) -> XV.pushCpar; 
+                        (if xScan then 
+                            (* there should at this place only be one
+                             * element in the exit-list; see asgToCproc
+                             *)
+                            'itemVal:pushCpar:eitListWithItem' 
+                              -> thisTranslate.systemException;
+                            xScan.getExitVal -> XV[];
+                            restart L 
+                        if)
+                     #);
+              if);
+              mch.decrCallReg;
+              xScan.reset 
+          if)
+       #);
+     freeLA:
+       (* lEV may be objectReference, insertion or dynamic object;
+        * lA will be callReg unless lEV is objectReference to
+        * object without do-part; the latter type of lA may not be released.
+        * isCallReg assures that off=0
+        *)
+       (#
+       do (if stest then
+              301->cTrace(#do 'FreeLA1:'->xT; display#)
+          if);
+          (if not released then
+              true -> released;
+              (if switch181 and wasFrozen then 
+                  lA.freeReg
+               else
+                  lA.freeAdr; 
+              if);
+              (if lA.isCallReg then mch.decrCallReg if)
+          if);
+          (if stest then 301->cTrace(#do 'FreeLA2:'->xT; mch.dumpreg #)if)
+       #);
+     lChain: ^DH.SuperChain;
+     lEV,lES,lDesc: ^ASTindex; 
+     lA: ^mch.Address; wasFrozen: @boolean; (* used by switch 181 *)
+     theBaseAdr: ^mch.address; (* switch181 only *)
+     theBaseAdrTmp: @addressTmpHandler
+     
+  enter(lEV[],lES[],lDesc[],lA[],lChain[])
+  #)
+

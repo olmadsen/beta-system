@@ -1,0 +1,357 @@
+<HTML>
+
+<HEAD>
+<TITLE>Prototype Layout</TITLE>
+<LINK REV="made" HREF="mailto:olm@daimi.aau.dk">
+</HEAD>
+
+<BODY>
+<H1>Prototype Layout</H1>
+
+<PRE>
+Data Segment
+------------
+
+The data segment has the following organization
+
+     BETA_DATA_hash_modtime:	BETA_DATA_hash_modtime
+			        ProtoTable
+                 		data_end
+                 		code_start
+                 		code_end
+                 		GroupId
+                 		hash
+                 		modtime
+                 		group_header
+     ProtoTable:		noOfProtoTypes
+			    	T1FOO
+				...
+				TnBAR
+     GroupId:			/users/dave/..../foo
+
+				&lt;constants&gt;
+
+				&lt;prototypes&gt;
+     
+    data_end:			;
+
+where
+	ProtoTable		is the label of the prototype table
+	hash			is a hash value computed from the file path.
+				Together BETA_DATA_hash_modtime forms an
+				almost unique identification of the file.
+				The first entry in the data segment points
+				to itself; this is currently no used!
+
+	modtime			is the modification time of the file
+	code_start		is first address of code segment
+	code_end		is first address after code segment
+	data_end		is first address after data segment
+	GroupId:		is label of asciiz text fo the file name
+
+	group_header		is initially 0 (zero); it is patched by the
+				RTS to point back to the beta_data_file
+
+	ProtoTable		is a list of all the prototypes as described
+				in the section below about prototypes
+	noOfProtoTypes		is the number of prototypes
+	
+
+Prototypes
+----------
+
+Each object-descriptor in a BETA fragments gives rise to a prototype.
+The format of the prototype has been changed from the one described in
+[MjolnerBook-CompilerDoc]. The main difference is that the
+inner-dispatch-table and the virtual-dispatch-table have been merged
+into one table as described below.
+
+Let 	D : D1 (# ... #);
+        D1: D0 (# ... #);
+	D0: ...
+
+Then the prototype for D has the form:
+
+  T17FOO:        0: GCTableOff		: 
+	 	 2: OriginOff		: 
+	         4: Gentry		: 
+	         8: SuperTentry		: 
+	        12: Size		: 
+		14: MpartOff		: 
+	        16: FormInx		: 
+	        20: ExternalEntryLab	:
+	 	24: TopMentry		: 
+		  : Dispatch-table	: 
+		  : ....		:
+		L1: ...			:
+		  : Static-object-table	:
+		  : ...			:
+		L2: ...			:
+		  : Dyn-ref-table	:
+		  : ...			:
+		  : EndianTable		:
+		L3: AsciText		:
+
+"T17FOO" is the label for the prototype.
+
+NOTE: starting with release 5.0 of the Mjølner System, the prototype
+field of an object (relative byte address zero) refers to the
+TopMentry of the prototype. I.e. 24 is added to the start address of
+the prototype.  Instances corresponding to "T17FOO" will thus have
+their first field refer to "T17FOO+24". The reason for this change is
+that support for the Microsoft COM model has been implemented.
+(See <A HREF="COM.html">Design of BETA COM Implementation</A> for details)
+
+The prototype fields have the following meaning:
+
+	GCTableOff	
+
+		Byte offset to the GC tables. These tables starts at the
+		label L1 above.
+
+	OriginOff
+
+		Long offset to the origin of the object
+
+	G-entry 
+
+		The address of the G-entry for D. If no G-entry exists,
+		then the field may contain 0 (zero). The compiler will
+		soon eliminate G-entries for descriptors where no G-code
+		is needed.
+
+	SuperTentry
+
+		The address of the prototype for the supperpattern of D, i.e
+		the protoype  for  D1.
+
+	Size
+
+		Size in longs of the object
+
+	MpartOff
+
+		With the new format of the prototypes, the location of
+		the M-entry point for the do-part of D is NOT a fixed offset.
+		MpartOff contains the offset. The M-entry for D may be found
+		by 
+
+			((long *)T17FOO[((short *)T17FOO)[ 14 / 2] / 4]
+
+		If D has no do-part, then MpartOff contains 0 (zero).
+
+	FormInx
+
+		Index into fragment form (AST) of this D.
+
+	ExternalEntryLab
+		If D is an CallBack pattern, the this is the address of
+		the code passed to C (or other external language). I.e.
+		when C calls D, execution is transferred to ExternalEntry.
+
+		For all other patterns, this field is 0 (zero).
+
+		Note that the field is always present. This is new compared
+		to the previosu format of the prototype.
+
+	TopMentry
+
+		This is the M-entry-point of the top most super pattern
+		for D. If D is a subpattern of A, where A is declared as
+
+			A : (# ... #); 
+
+		I.e. A has no superpattern. Then TopMentry is the address
+		of the do-part for A. If A has no do-part, then it is the
+		address of RETURN.
+
+		The TopMentry is actually the first element of the 
+		dispatch-table described belwo.
+
+EndianTable	The endian table holds information about the location in
+		the object about possible integer, short and real values
+		that  must be converted from/to big/little endian when
+		the object is exchanged between big/little endian machines.
+		This table is always generated for all platforms. It was
+		previously only generated for little endian machines.
+
+ 		a	A bit vector describing offsets holding a long 
+			attributes (i.e 4 bytes). If e.g. bit 12 is 1,
+			then byte offset 48 holds a long.
+
+			The length of the bit vector in bytes is:
+
+				((size - 1 ) div 32) + 1
+
+			Each byte holds information about 32 longs, one
+			pr. bit.
+
+		b	A zero terminated sequence of shorts (2 bytes) holding
+			byte offsets to attributes holding a short.
+
+		c	A zero terminated sequence of shorts (2 bytes) holding
+			byte offsets to attributes holding a real.
+
+		Note: the bit vector is padded with a possible byte to make
+		sure that the short- and real-lists are half-word aligned.
+
+		The following compaction is used:
+
+			An object has rarely shorts and/or reals. A bit 
+			indicates if the lists are present. 
+			Similarly for reals.
+
+			The first 2 bits in the long bit vector represents
+			information about offset 0 (zero) and 4. Offset 0
+			is the prototype pointer of the object and offset 4
+			is the GC-field. Since this is always the case, bits
+			0 and 1 are used to represent information about 
+			shorts and longs. Bit 0 marks if a short-list is 
+			present and bit 1 marks if the real-list is present.
+
+			If there is no short-list AND no real-list, then
+			there is NO padding of the long-bit-vector.
+			
+Dispatch Tables
+---------------
+
+A prototype contains a dispatch-table for inner-calls and virtual
+pattern generation. The part of the dispatch-table used for handling
+inner is called the inner-dispatch-table (IDT). The one for handling
+generation of virtual patterns is called the virtual-dispatch-table
+(VDT). Note, however, that the 2 tables are merged into one table.
+
+In the following it is assumed that D0 is the tomost super pattern
+of D, i.e. D0 is declared as
+
+		D0: (# ... #)
+
+The dispatch-table for D has the following format:
+
+        	24: M-entry for D0		:
+        	28: ...				:
+          	  : virtuals declared in D0	:
+		  : ...				:
+    20+D0.virtSize: M-entry for D1		:
+		  : ...				:
+                  : virtuals declared in D1	:
+		  : ...				:
+    20+D1.virtSize: M-entry for D		:
+                  : ... 			:
+		  : virtuals declared in D	:
+		  : ...				:
+    20+D.virtSize : RETURN 			:
+
+virtSize is an attribute in the AST for descriptor nodes.
+
+If R denotes an object then 
+	R[0] -&gt; PT is the prototype for the object, and
+	PT[24] is the top-level M-entrypoint for the object.
+	I.e.  call R[0][24] will execute the object.
+
+	Similarly call R[0][20+D.virtSize] will execute inner for
+	the descriptor D.
+                              
+Consider a subpattern D2 of D:
+
+		D2 : D(# ... #);
+
+The dispatch-table for D2 has the format:
+
+        	24: M-entry for D0		:
+        	28: ...				:
+          	  : virtuals declared in D0	:
+		  : ...				:
+    20+D0.virtSize: M-entry for D1		:
+                  : ... virtuals declared in D1	:
+    20+D1.virtSize: M-entry for D		:
+                  : ... 			:
+		  : virtuals declared in D	:
+    20+D.virtSize : M-entry for D2		:
+                  : ...				:
+                  : virtuals declared in D2	:
+                  : ...				:
+    20+D2.virtSize: RETURN 			:
+
+
+Static Object Table
+-------------------
+
+
+The static object table holds information about offset, location,
+and the prototype  for all part objects of the object.
+
+It is a zero-terminated list of the form
+
+		PartObj1
+		PartObj2
+		PartObj3
+		0 (short zero)
+
+Where eacvh PartObji has the form
+
+		offSet	 :      short			
+		Location :      short
+		prototype: 	long
+
+	offSet		: a byte offset from the start of the object;
+		  	  it is the address of part object
+
+	location	: a negative byte offset to the "location" of the
+			  part object; 
+
+	prototype	: is the prototype of the part object
+
+The "location" is the immediately enclosing object of the part object.
+Consider
+
+	X: (#  ...; A: @ T; ... #)
+
+	T: (#  ...; B: @ S; ... #);
+
+The Static Object Table for X will hold information of all par-object
+of X including part objects of part objects. I.e. the static object table
+for part objects is inlined in the table for X.
+
+For X this means that the table describes A which is an immediate part-object
+of X. The X-table also holds information about B, which is an immediate
+part-object for A.
+
+For an immediate part-object, like A, the location is the negative value
+of offSet. i.e.		"location = - offSet".
+
+The location for B in the X-table is the negative offset to the start
+of A in X. 
+
+In the table for T, the location for B will be the negative value of
+the offSet for B in T.
+
+
+Dynamic object Table
+--------------------
+
+The dynamic object table holds information about all dynamic references
+declared in the main-part of the object:
+
+		off1
+		off2
+		...
+		offn
+		0
+
+The list is a zero-terminated list of shorts.
+
+The least significant bits describes whether the reference is
+
+	an origin		:	2
+	a constant reference	:	1
+	a "normal" reference	:	0
+
+A constant reference is e.g. generated for objects like
+
+		X: @ &lt;&lt;SLOT X:descriptor&gt;&gt;;
+		R: @ V;	(* where V is virtual *)
+</PRE>
+
+</BODY>
+</HTML>

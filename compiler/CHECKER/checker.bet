@@ -1,0 +1,146 @@
+ORIGIN 'sematt';
+LIB_ITEM 'betacompiler';
+INCLUDE '~beta/betaast/semanticerrortext';
+INCLUDE 'warningsAndErrors';
+INCLUDE 'cashhandling';
+BODY 'initform' 'checkerdopart' 
+---Checker:descriptor---
+(************************* Static Semantic checker *******************
+ *
+ *  Checker:
+ *  (#
+ *      InitForm:
+ *      (#
+ *      enter theFragment[]
+ *      do ...
+ *      #)
+ *
+ *      doCheck:
+ *      (#
+ *      do ...
+ *      #)
+ *
+ *   enter theGroup[]
+ *   #)
+ **********************************************************************
+ *)
+(# <<SLOT checkerlib:attributes>>;
+   
+   WE: @WarningsAndErrors     
+     (# PP:: (# do (D[],S[],L) -> thePP #);
+        hasInner:: (# do  d[] -> sematt.hasInner -> value #);
+        errorNotification:: 
+          (# 
+          do  ff[] -> thisTranslate.semanticErrorsNotification
+          #)
+     #);
+   
+   descNo,attDescNo: @integer; (* used by InitForm *)
+   
+   InitForm:
+     (* initialization of the AST: 
+      * - insert origin, check double decl, etc.
+      * - collects all descriptors for checking
+      *)
+     (# FF: ^FragmentForm 
+     enter FF[]
+     do <<SLOT InitForm:descriptor>>
+     #);
+
+   Find: 
+     (* traverse binary tree of nameDcl's, 
+      * find Name in tree with root nameTree. *)
+     (# father: @ASTindex; (* nameDcl *)
+        Left:< (#do INNER #);
+        Right:< (#do INNER #);
+
+        nameTree,name: @ASTindex
+     enter(nameTree,name)
+     do (if not nameTree.isNull then 
+            Scan:
+              (if ((Name,nameTree->Father) -> CMP)
+               // less then
+                  nameTree.left -> nameTree;
+                  (if nameTree.isNull then Left else  restart Scan if)
+               // greater then
+                  nameTree.right -> nameTree;
+                  (if nameTree.isNull then Right else restart Scan if)
+               else (*equal*) INNER
+     if)if)#);
+   
+
+   DS: @  DescStack
+     (* stack descriptors that must be checked *)
+     (# put:
+          (# desc,id: ^ASTindex; K,C: @integer
+          enter(desc[],K,C,id[]) 
+          do (if (desc->DescKind) = undefined then
+                 (* clumsy!!!! *)
+                 (if id[] = none then (desc,K,C,null) -> &Push
+                  else (desc,K,C,id) -> &Push 
+                 if);
+                 (* copy is necessary because of aliasing *)
+          if)#);
+        get:
+          (# D,I: ^ASTindex; K,C: @integer
+          do L:
+               cycle
+               (#do &Pop -> (D[],K,C,I[]);
+                  (if D[] = NONE then leave L
+                   else (if (D->DescKind) = undefined then leave L if)if)
+               #)
+          exit(D[],K,C,I[])
+          #);
+
+        putDo:
+          (# doP,origin: ^ASTindex
+          enter(doP[],origin[])
+          do (if ((top+1->top)>doPl.range) then
+                 doPL.range->doPl.extend; 
+                 doPorg.range->doPorg.extend
+             if);
+             &ASTindex[]->doPl[top][]; &ASTindex[]->doPorg[top][];
+             doP->dopL[top]; origin->doPorg[top]
+          #);
+        getDo:
+          (# doP,origin: ^ASTindex
+          do (if (top>0) then
+                 doPl[top][]->doP[]; none->doPl[top][];
+                 doPorg[top][]->origin[]; none->doPorg[top][];
+                 top-1->top
+             if)
+          exit(doP[],origin[])
+          #);
+        getAllForms:
+          (# more: @boolean;
+             kind,cons: @integer;
+             form,ID: ^ASTindex; (* object-descriptor or attDescriptor *)
+          do WhileMore:
+               (# 
+               do loop:
+                    (#
+                    do DS.get -> (form[],kind,cons,ID[]);
+                       (if form[] <> NONE then
+                           INNER getAllForms;
+                           restart loop
+                    if)#);
+                  Loop:
+                    (# doP,origin: ^ASTindex
+                    do DS.getDo -> (form[],id[]);
+                       0 -> kind; (* just an arbitrary value *)
+                       (if form[] <> NONE then
+                           INNER getAllForms;
+                           true -> more;
+                           restart Loop
+                    if)#);
+                  (if more then false -> more; restart whileMore if)
+               #)
+          #);
+        doPl,doPorg: [10] ^ASTindex; top: @Integer;
+     #);
+   
+   theLibCash: @ LibCash;
+   
+   fatalInitFormError: @boolean;
+<<SLOT CheckerDoPart:doPart>>
+#)

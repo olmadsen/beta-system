@@ -1,0 +1,671 @@
+ORIGIN 'synthlib';
+LIB_ITEM 'betacodegen';
+INCLUDE 'evlib';
+INCLUDE '../GENERATOR/machine';
+--GenLocalAdr:descriptor--
+(#
+do (&gen.thisRegAdr,ad[],isOrigin,chain[])->GenAdr->A[]
+#)
+--GenAdr:descriptor---
+(* think about deRef in old version *)
+(# dcl,descRef,rDen,EV,N1: @ASTindex; N,spec,localDesc: ^ASTindex;
+   EH: @EvalHandler;  V: ^EH.EvVal;
+   descKind,size,
+   baseOff: @integer; (* 0 if item, compHeadSize if component *)
+   indexReg: ^mch.dataRegOperand;
+   (********************************************************
+   XvarAddress: mch.address
+     (# xName: ^text;
+        off: @integer;
+        addOff::<(# do off+v->off #);
+        putOp::<
+          (#do xName->mch.BC.putT; '+'->mch.BC.putC; off->mch.BC.putI #);
+    #);
+    *)
+   isData:
+     (# N,desc: @ASTindex; isData: @boolean;(* XA: ^XvarAddress*)
+     enter((*N[],*)desc)
+     do (if (desc.label = gram.objectDescriptor)
+            and 
+            (((desc->sematt.descKInd) = semAtt.dataKInd) -> isData) then
+           (* &XvarAddress[]->XA[];
+            N.getText->XA.xName[]*)
+
+        if)
+     exit isData
+     #);
+   isD: @boolean;
+   
+   doGoOrigin:
+     (# toOrgReg: @boolean; orgDesc: @ ASTindex;
+     enter toOrgReg
+     do (if ad.on > 0 then 
+            (* (ad.on,toOrgReg) -> A.goOrigin -> GoOrigin -> A[] *)
+            (A[],A.copy,ad.on,toOrgReg) -> GoOrigin -> A[] 
+        if);
+        (* follow super to correct superDesc *)
+        (if ad.pn > 0 then 
+            (A[],ad.pn,A[]) -> SetSuperDesc -> A[] 
+        if);
+     #);
+   isSimple: @boolean; isVirt,MN,access: @integer;
+   (* A is baseAdr *)
+do
+   (if ad.label
+    // gram.nameApl then
+       (if stest then
+           301->ctrace(#do'GenAdr:'->xT; ad[]->xA; ' on:'->xT; ad.on->xI;
+                         mch.dumpreg
+                      #)
+       if);
+       (chain[],ad)->DH.theDesc->(descRef,MN,chain[],isVirt);
+                    (*301->trace(#do 'GenAdr2:'->xT #);*)
+       ad.dclRef->dcl;
+       (*(ad[],descRef[])->isData;*)
+        
+
+       (* A refers to the start of the object that has 'ad' as attribute *)
+       (if isOrigin then
+           (* origin of ad is computed. 'ad' is a pattern *)
+           dcl.sort->dcl;
+           L:
+             (if dcl.label = gram.finalDecl then
+                 (* Consider  T: (#  X::B do ...; X; ... #).
+                  * Note: the case where
+                  *    B::C;
+                  *    C::D;
+                  *    etc
+                  * is not tested
+                  *)
+                 doGoOrigin;
+                 dcl.son->dcl; dcl.brother->dcl; (* dcl = B *)
+                 (if stest then
+                     301->ctrace
+                     (#do 'GenAdrOrg:Final: on='->xT; dcl.on->xI; dcl[]->xA;
+                        A.bAdr.localDesc[]->xA
+                 #)if);
+                 (* chain starts with the "real" desc for X, i.e. desc for B;
+                  * the chain to be used as argument for GenOrgAdr must
+                  * be one corresponding to the descriptor T above;
+                  * since we just need to "add" the origin for T, we can
+                  * just pass a chain consisting of the descriptor for T
+                  *)
+                 (if stest then
+                     301->ctrace(#do 'genAdr:1:A='->xT; A.display->xT #)
+                 if);
+                 (if dcl.label <> gram.objectDescriptor then
+                     (# dclSort: @ASTindex
+                     do dcl -> sematt.getSort -> dclSort;
+                        (if dclSort.label
+                         // gram.virtualDecl // gram.bindingDecl then
+                            (if stest then
+                                301 -> trace(#do 'GenAdrOrg:Final:virtual'->xT; 
+                                               dcl[]->xA; dclSort[] -> xA
+                            #)if);
+                            leave L
+                 if)#)if);
+                 dcl[]->sematt.encDesc->localDesc[];
+                 (A[],none,dcl[],localDesc->DH.newSingle)
+                   -> &GenOrgAdrToOrgReg
+                   -> A[];
+                 (if stest then
+                     301->trace(#do 'genAdr:2:='->xT; A.display->xT #)
+                 if)
+              else
+                 toOrgReg -> doGoOrigin
+             if)
+        else
+           doGoOrigin;
+           dcl.off->A.addOff->A[];
+           descRef[]->A.bAdr.localDesc[];
+           (if (dcl.access->A.access) = common.direct then 
+               descRef.size->A.Size;
+               (*descRef.attSize >= 0 -> A.signed;*)
+               descRef[] -> sematt.isSigned -> A.signed;
+               (*301->trace(#do 'Access/signed: '->xT; 
+                dcl[] -> xA;
+                A.signed -> xB
+                #);*)
+
+            else (* includes for-index*) 4->A.size
+           if)
+       if);
+    // gram.remote then(* R.X *)
+       A.bAdr.localDesc[]->localDesc[];
+       ad.son->rDen; (A[],rDen[],false,chain[])->&GenAdr->A[];
+       (if rDen.label = gram.nameApl then
+           rDen.descRef -> isData -> isD;
+       if);
+       rDen -> semAtt.GetNameAndKind -> (N[],spec[]);	
+
+       rDen.brother->rDen; rDen.dclRef->dcl; 
+
+       (if spec.label // gram.staticComponent // gram.dynamicComponent then
+           common.compHeadSize*4 -> baseOff
+       if);
+       (* A denotes R *)
+       (if isOrigin then
+           baseOff->A.addOff->A[];
+           (if rDen.pn>0 then 
+               (*(A[],rDen.pn)->A.bAdr.SetSuperDesc->A[]; *)
+               (A[],rDen.pn,A[]) -> SetSuperDesc -> A[] 
+           if);
+           dcl.sort->dcl;
+           L:
+           (if dcl.label = gram.finalDecl then
+               (* R.X where  e.g. R: @T; T: (#  X::B #).
+                * Note: the case where
+                *    B::C;
+                *    C::D;
+                *    etc
+                * is not tested
+                *)
+               dcl.son->dcl; dcl.brother->dcl; (* dcl = B *)
+               (* B may be declared as one of
+                *    B: (# ... #)
+                *    B:< ...
+                *)
+               (if dcl.label <> gram.objectdescriptor then
+                   (# dclSort: @ASTindex
+                   do dcl -> sematt.getSort -> dclSort;
+                      (if dclSort.label
+                       // gram.virtualDecl // gram.bindingDecl then
+                          (*301 -> trace(#do 'GenAdrOrg:Final:virtual'->xT; 
+                                         dcl[]->xA; dclSort[] -> xA
+                           #);*)
+                          leave L
+                   if)#)if);
+                   (*301->trace(#do 'GenAdrOrg:Final:'->xT; dcl[]->xA #);*)
+               dcl[]->sematt.encDesc->localDesc[];
+               (A[],none,dcl[],localDesc->DH.newSingle)->&GenOrgAdr->A[]
+           if)
+        else
+           (chain[],ad)->DH.theDesc->(descRef,MN,chain[],isVirt);
+           (if ((dcl.access->access) = common.direct) then                
+               descRef.size->size;
+               (* The following code is not used!
+                * It is for the case
+                *    R: [..] @ T; T: (# ... X: @S; ... #)
+                * where the repetition was allocated inline.
+                * (It is now allocated off-line, since this makes
+                * it a lot easier to handle R[e][] -> S[]; v->R.extend.)
+                * We have:
+                * R[e].X
+                * X.dcl.access = common.direct
+                * R[e] is inxRegAdr = (ai, di, s, off)
+                *  adr(R[e]) = ai + di*s +off
+                * In general dcl.off cannot be added to off
+                * and dcl.size cannot replace size of A
+                * Note: due to a register overflow error in FEJL/list2list,
+                * toReg2 has been replaced by toReg3 below, but this
+                * has not been tested very much.
+                * (if (A.access = common.direct) and
+                *      A.isInxRegAdr and (A.size <> size) then 
+                *     (# A1: @mch.RegAdr
+                *     do A.toReg3->A1.reg;
+                *        A.bAdr.localDesc[]->A1.bAdr.localDesc[];
+                *        A1[]->A[];
+                *     #)if)
+                *)
+            else 
+               4->size
+           if);
+
+           (if stest then
+               301 -> cTrace(# D: @ASTindex 
+                            do 'genAdr:remote: isData= '->xT;
+                               isD->xB; 
+                               ' indirect='->xT; A.access=common.varInd->xB;xN;
+                               A.display->xT
+           #)if);
+           (* we must handle S.c where
+            *    S: ^myData; myData: data(# c: .... #)
+            * A is address of S;
+            * aReg in A is the addres of a real object
+            * or A.isNotObjRef = true
+            *    A.addOff 
+            * below will load the address of
+            * a myData object to a register which will then
+            * be referring a data-object.
+            * Note: S: @myData does not have this problem
+            * since the offset is just added
+            *)
+           isD and (A.access <> common.direct) -> isD;
+           dcl.off+baseOff -> A.addOff -> A[];
+           isD -> A.isNotObjRef;
+           size -> A.Size;
+           descRef[] -> sematt.isSigned -> A.signed;
+           descRef[] -> A.bAdr.localDesc[];
+           access -> A.access
+       if)
+    // gram.indexed then
+       (if not A.frozenReg then
+           (* this will happen when used as a super-pattern as in
+            *    R[e].P(# ... #)
+            * It is assumed that even if A is frozen, there will
+            * be enough registers to compute R[e].P. If, however,
+            * 'R[e]' is very complicated we may ran out of registers
+            *)
+           (*312->trace(#do '\nObs! Index-baseadr NOT frozen'->T #);*)
+           A.freezeReg;
+       if);
+       A.bAdr.localDesc[]->localDesc[]; 
+       (* compute @@R[inx] relative to localDesc ?? *)
+       ad.son->rDen; rDen.brother->EV; 
+       (A.copy,EV[],false,chain[])->&EH.ExpEval->V[]; 
+       V.toDataReg->indexReg[]; (*V.release; !!*)
+       Rden -> SemAtt.getName -> N1; N1.dclRef -> dcl;
+       (A.copy,rDen[],false,chain[])->&GenAdr->A[];
+       (chain[],ad)->DH.theDesc->(descRef,MN,chain[],isVirt);
+       (if stest then
+           179->ctrace
+           (#
+           do 'Indexed:'->xT; dcl.access->xI; dcl[]->xA; 
+              A.display->xT; mch.dumpreg
+       #)if);
+       (if (dcl.access->A.access) 
+        // common.direct then
+           (* S: [...] @ T where T is simple or non-virtual*)
+           descRef.size->size;
+           (if not ((descRef->sematt.descKind) = sematt.standardKind->isSimple)
+               then 
+               false->isSimple;
+               4->size;
+               common.cstInd->A.access;
+               (*
+                * ((size + 7), 7->TOS'%not') ->TOS'%and' -> size
+                *)
+               (* size must be 8 byte aligned *)
+           if);
+           (* component or item? *)
+           (* (# spec: @ASTindex
+            * do dcl.sort->spec; ( *sort* ) spec.son->spec; ( * nameList* )
+            *    spec.brother->spec; ( * data spec or rep * ) spec.brother->spec;
+            *    (if spec.label = gram.staticComponent then
+            *    common.compHeadSize*4 + size -> size
+            * if)#)
+            *)
+        // common.varInd then
+           (* reference repetition *)
+           4->size ;
+           true->isSimple
+        else (*// common.cstInd then  S: [...] @T T slot or virtual *)
+           4->size
+       if);
+       (indexReg,isSimple,size)->A.index->A[];
+       descRef[]->A.bAdr.localDesc[];
+    // gram.thisObject then (* always this(P) *)
+       ad.son->rDen; 
+	   (* 'on' is adjusted during checking to avoid (for ...for) etc.
+            * Regarding onForThis, see comment in isEnclosing
+            *)
+       (if rDen.onForThis > 1 then 
+           (* (rDen.onForThis - 1,toOrgReg) -> A.goOrigin -> GoOrigin->A[]*)
+           (A[],A.copy,rDen.onForThis - 1,toOrgReg) -> GoOrigin->A[]
+       if);
+       (* rDen.on > 0 always !*)
+    // gram.computedRemote then
+       (# EV,N,descRef: @ASTindex; 
+          EH: @EvalHandler; isVirt: @integer;
+          LV,V: ^EH.EvVal
+       do (if not A.frozenReg then 
+              (* this will happen when used as a super-pattern as in
+               *    (foo).P(# ... #)
+               * It is assumed that even if A is frozen, there will
+               * be enough registers to compute (foo).P. If, however,
+               * 'foo' is very complicated we may ran out of registers
+               *)
+              (*193->trace(#do '\nObs! CompRem-baseadr NOT frozen'->T #);*)
+              A.freezeReg;
+          if);
+          ad.son -> EV; EV.brother -> N;
+          (*306->trace(#do ad[] -> A; N[] -> A #);(*!*)
+          L: EV->scanList(#do currentNode -> EV; leave L #);
+          
+          (A.copy,EV[],false(*?*),chain[]) -> EH.expEval -> V[];
+
+          (if stest then
+              301->ctrace
+              (#do 'GenAdr:computedRemote:A:'->xH; V.display; mch.dumpreg #)
+          if);
+          
+          (if switch181 then
+              V.getRefAdr -> A[]
+           else
+              V.getRefEval -> V[];           
+              (if stest then
+                  301->ctrace
+                  (#do'GenAdr:computedRemote:B:'->xH;V.display;mch.dumpreg#)
+              if);
+              V.theAdr -> A[];
+          if);
+          
+          (if stest then
+              301->ctrace
+              (#do'GenAdr:computedRemote:C:'->xH;A.display->xT;mch.dumpreg #)
+          if);
+          
+          (if isOrigin then 4->A.size; 
+           else
+              N.dclRef->dcl; dcl.off -> A.addOff -> A[];
+              (chain[],ad) -> DH.theDesc -> (descRef,MN,chain[],isVirt);
+              descRef[] -> A.bAdr.localDesc[];
+              (if (dcl.access->A.access) = common.direct then
+                  descRef.size -> A.Size
+               else 4->A.size
+          if)if);
+       #)
+   if);
+   (if stest then
+       301 -> ctrace(#do 'GenAdr:exit: '->xT; ad[]->xA; xN; A.display->xT;
+                       mch.dumpreg
+                    #)
+   if)
+#)
+--GenOrgAdr:descriptor--
+(* enter(desc,ES)
+ * where desc is the descriptor containing ES
+ *)
+(# originDesc: ^ASTindex 
+do (*306->trace(#do 'GenOrg:'->xT; es[]->xA; desc[]->xA #);(*!*)
+   (if ES.label//gram.objectDescriptor//gram.unExpanded then
+       baseAdr.copy->A[]
+    else 
+       (baseAdr.copy,ES[],true,chain[])->genAdr->A[]
+   if);
+#)
+--GenOrgAdrToOrgReg:descriptor--
+(* enter(desc,ES)
+ * where desc is the descriptor containing ES
+ *)
+(# originDesc: ^ASTindex ;
+   gA: @genAdr
+do (*306->trace(#do 'GenOrg:'->xT; es[]->xA; desc[]->xA #);(*!*)
+   (if ES.label//gram.objectDescriptor//gram.unExpanded then
+       baseAdr.copy->A[]
+    else 
+       true -> gA.toOrgReg; (* hack *)
+       (baseAdr[],ES[],true,chain[])->gA->A[];
+   if);
+#)
+--GenVirtOrgAdr:descriptor--
+(* MUST be revised *)	
+(*  V :< ES   or V ::< ES *)
+(# originDesc: ^ASTindex; ar: @mch.adrRegOperand; A1: @mch.RegAdr
+do (if ES.label = gram.objectDescriptor then
+       desc[]->semAtt.descOrigin->originDesc[];
+       (* no codegen here *)
+    else
+       (* this corresponds to virtuals defined like V:<A;
+        * if A is global to V, origin code is generated here;
+        * if A is at the same block level as V, then no code should be
+        * generated, but some superflous code is actual generated;
+        * may be possible to eliminate
+        *)
+       mch.getVirtualOriginStart
+       (#
+       do startA[]->A[];
+          (*originOff->A.bAdr.originOff;*)
+          LocalDesc[]->A.bAdr.localDesc[];
+          (A[],ES[],true,chain[])->genAdr->A[]->startA[];
+       #)
+   if);
+#)
+---callEntry:descriptor---
+(# T: ^text; local: @boolean
+do (L,desc[])->mkEntryPoint->(T[],local);
+   (if not local then T[]->mch.import if);
+   (T[]->mch.newTextOp,L,local)->mch.gJsr;
+   (if false (* collect statistics on descriptor usage *) then
+       (desc[],kind) -> dStat.new
+   if);
+#)
+(* mkEntryPoint should probably be eliminated *)
+---mkEntryPoint:descriptor--
+(# N: @ASTindex; T,S: ^text; inx: @integer
+do (if stest then
+       312->trace(#do 'mkEntryPoint:'->xT; L->put; descno->xI; desc[] -> xA #)
+   if);
+   &text[]->EP[]; L->EP.put;
+   (if desc.label = gram.mainPart then
+       desc[] -> sematt.MainPartDesc -> desc[]
+   if);
+   (if desc.label
+    //gram.objectDescriptor then
+       desc.descId->(formId[],descNo);
+       descNo->EP.putInt; 
+       formId.makeUC; formId[] -> EP.puttext;  
+       desc.son->N; N.brother->N;
+       (if N.isSlot then
+           (* desc has mainPart slot *)
+           N.theSlotName->S[]; S.makeUC; (S[]->formSet.isLocal)<>0 ->local;
+           (if stest then 312->trace(#do 'MainPart: '->xT; S[] -> xT#)if)
+        else
+           (if L = 'M' then
+               (* check if do-part is a slot *)
+               N.son->N;     (* att-part*)
+               N.brother->N; (* action-part*)
+               N.son->N;     (* enter-part*)
+               N.brother->N; (* do-part *)
+               (if N.isSlot then
+                   (* desc has do-part slot *)
+                   N.theSlotName->S[];
+                   S.makeUC;
+                   (S[]->formSet.isLocal)<>0 ->local;
+                   (*312->trace(#do 'Slot:'->xT; N.theSlotName->xT #);*)
+                else
+                   (formId[]->formSet.isLocal)<>0->local
+               if)
+            else
+               (formId[]->formSet.isLocal)<>0->local
+       if)if)
+    // gram.unExpanded then
+       desc->semAtt.GetPostDesc-> formId[]; 1 -> descNo; (*OBS*)
+       descNo->EP.putInt; 
+       formId.makeUC; 
+       formId[] -> EP.puttext;
+       (if (((formId[] -> formSet.isLocal -> inx) <> 0) -> local) and (L = 'M') then
+           (* the form bound to the slot is also in this group;
+            * check if the the form is a descriptor and if it has
+            * a do-part slot; if do-part slot check if the do-part
+            * form is local or not
+            *)
+           (# D: ^ ASTindex
+           do formDescs[inx][] -> D[];
+              (*304 -> trace(#do 'mkEntryPoint:\n'->xT; Desc[]->xA; D[] -> xA #);*)
+              (if (D[] <> NONE) and (D.label = gram.DescriptorForm) then
+                  D.son -> N; (* N= objectDescriptor *)
+                  N.son -> N; 
+                  N.brother -> N;
+                  N.son -> N;
+                  N.brother -> N;
+                  N.son -> N;
+                  N.brother -> N;
+                  (if N.isSlot then 
+                      N.theSlotName -> S[];
+                      S.makeUC;
+                      (S[]->formSet.isLocal) <> 0 -> local;
+                  if)                      
+              if);
+           #)
+       if);
+   if);
+   (if stest then 312->trace(#do 'EP:'->xT; EP[]->xT; local->xB #)if)
+#)
+--doLoadProto:descriptor--
+(# T: ^text; local: @boolean
+do (if switch68 then
+       ('V',desc[])->mkEntrypoint->(T[],local);
+       T[] ->mch.import;
+       (T[]->mch.newTextOp,mch.callRegOp[]) -> mch.gLea;
+    else       
+       ('T',desc[])->mkEntrypoint->(T[],local);
+       (T[],local)->mch.importData;
+       (if common.switch[61] then 
+           (T[]->mch.NewTextToDataOp,2->mch.getPrimReg)->mch.gLea
+        else
+           (T[]->mch.NewTextToDataOp,mch.callRegOp[])->mch.gLea
+   if)if);
+#)
+--doLoadProtoAndAlloc:descriptor--
+(# T: ^text; local: @boolean
+do (if switch68 then
+       6->common.count;
+       (if kind
+        // common.itemKind // common.holderKind then 
+           (* 
+            * (T[]->mch.newTextOp,'V',local) -> mch.gJsr;
+            *)
+           ('V',desc[],1) -> CallEntry;
+        // common.compKind then
+           ('V',desc[])->mkEntrypoint->(T[],local);
+           T[] ->mch.import;
+           ('AlloC',T[]) -> mch.callAlloPrim
+        // common.strucKind then
+           ('V',desc[])->mkEntrypoint->(T[],local);
+           T[] ->mch.import;
+           ('AlloS',T[]) -> mch.callAlloPrim
+        // common.comKind then ('AlloCOM',T[])->mch.callAlloPrim
+       if)
+    else  
+       desc[] -> doLoadProto;
+       (if kind
+        // common.itemKind then ('AlloI',T[])->mch.callAlloPrim
+        // common.compKind then ('AlloC',T[])->mch.callAlloPrim
+        // common.strucKind then ('AlloS',T[])->mch.callAlloPrim
+        // common.comKind    (* COM- objects and holder-objects *)
+        // common.holderKind (* must be allocated in non-moving area *)
+           then ('AlloCOM',T[])->mch.callAlloPrim
+       if);
+   if)
+#)
+---ProtectCallReg:dopart---
+do (if mch.callRegInPrimReg2 and mch.callRegBusy then 
+       (false,true) -> mch.pushThisOrCall;
+       INNER ProtectCallReg;
+       (false,true) -> mch.popThisOrCall;
+    else
+       INNER ProtectCallReg
+   if)
+---GoOrigin:doPart---
+do (# reg1: @mch.adrRegOperand; D: @ASTindex
+   do (* thisA = start address for goOrigin
+       * A1    = at entry a copy of thisA 
+       *         later used as tmp. var
+       * A2    = resulting address after goOrigin
+       * Perhaps A1 and A2 may be eliminated and 
+       * replaced by thisA!
+       *)
+      (if thisA.bAdr.LocalDesc[] = NONE then
+          'Fatal Error "goOrigin": LocalDesc is NONE' 
+            -> thisTranslate.systemException
+      if);
+      (if stest then
+          301->cTrace
+          (#
+          do 'goOrigin: on='->xT; on->xI; 
+             (if isOrigin then 'IsOrigin '-> xT if);
+             xN;
+             'thisA='->xT; thisA.display->xT; xN;
+             'localDesc=' -> xT; xN;
+             thisA.bAdr.localDesc[] -> xA;
+          #)
+      if);
+      
+      (if (thisA.bAdr.localDesc.label = gram.objectDescriptor) 
+          and (thisA.bAdr.localDesc[] -> sematt.InlineNX) then 
+          (* inlinenx may fail for non objectDesciptor;
+           * see sematt:inlineNX
+           *)
+          on - 1 -> on
+      if);
+      &mch.RegAdr[] -> A2[];
+      (if on > 0 then 
+          (if thisA.bAdr.localDesc.label = gram.doPart then
+              (* name in dopart slot *)
+              8->A1.addoff       
+           else
+              thisA.bAdr.LocalDesc.originOff->A1.addOff->A1[];
+          if);
+          (if isOrigin and (on = 1) then
+              1 -> mch.initPrimCall;
+              1 -> A1.toPrimDest;
+              0-> mch.getPrimRes;
+              (* A1.reg.dealloc; - don't work: webvise problem*)
+              -11 -> A2.reg; (* hack *)
+           else
+              thisA.bAdr.localDesc -> D;
+              (if (D.label=gram.objectDescriptor) (* discovered while
+                                                   * testing newindex
+                                                   *)
+                  and ((D -> sematt.descKind) = sematt.stateKind) then
+                  (if stest then
+                      301->ctrace(#Do 'StateDesc1:'-> xT #)
+                  if);
+                  A1[] -> A2[]
+               else
+                  (* allocate reg1 - reuse register in A1 *)
+                  (if A1.frozenReg then
+                      reg1.alloc
+                   else
+                      A1.theReg -> reg1
+                  if);
+                  (A1[],reg1[])->mch.ldVal; 
+                  reg1->A2.reg; common.direct->A2.access;
+              if)
+          if);
+          thisA.bAdr.LocalDesc[]->sematt.descOrigin->A2.bAdr.LocalDesc[];
+       else
+          (if stest then
+              301->ctrace(#do 'goOrigin3:'->xT; reg1.display-> xT; mch.dumpreg #)
+          if);
+          (* copy A1 to the object denoted by A2; A1[] -> A2[] won't do, 
+           * since
+           * A2 is a reference to an object in machine:regAdr:goOrigin
+           * and that object MUST be changed directly
+           *)
+          A1.reg -> A2.reg; A1.access -> A2.access; 
+          A1.frozenReg -> A2.frozenReg;
+          A1.off -> A2.off; (* not necessary; will be set to zero later?*)
+          A1[] -> A2.bAdr.copy; (* ? *)
+          
+          thisA.bAdr.LocalDesc[]->sematt.descOrigin->A2.bAdr.LocalDesc[];
+              (*195->trace(# S: @text do A2.display -> S; S[] ->xT #);*)
+      if);
+      
+      (for i: on - 1 repeat (* use dbb loop *)
+           (if A2.bAdr.localDesc.label = gram.doPart then
+               8->A2.off
+            else
+               A2.bAdr.localDesc.originOff->A2.off
+           if);
+           (if isOrigin and (i = on-1) then 
+               1 -> mch.initPrimCall;
+               1 -> A2.toPrimDest;
+               0-> mch.getPrimRes;
+               A2.reg.dealloc;
+               -11 -> A2.reg; (* hack *)
+            else
+               (if (A2.bAdr.localDesc.label = gram.objectDescriptor)
+                   and
+                   ((A2.bAdr.localDesc-> sematt.descKind) = sematt.stateKind)
+                   then
+                   (if stest then
+                       301->ctrace(#Do 'StateDesc2:'->xT #)
+                   if)
+                else
+                   (if false (*common.switch[121]*) then
+                       reg1.alloc;
+                       (A2[],reg1[])->mch.ldVal;
+                       A2.reg.deAlloc;
+                       reg1 -> A2.reg
+                    else
+                       (A2[],reg1[])->mch.ldVal;
+                   if)
+               if)
+           if);
+           A2.bAdr.LocalDesc[]->sematt.descOrigin->A2.bAdr.LocalDesc[];
+      for);
+      0 -> A2.off;
+      thisA.size -> A2.size
+   #)

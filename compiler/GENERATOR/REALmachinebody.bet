@@ -1,0 +1,273 @@
+ORIGIN 'REALmachine';
+LIB_ITEM 'betacodegen';
+INCLUDE '~beta/sysutils/binarystream';
+
+--entrypointsHashFunc:dopart--   
+do e.t[]-> common.honeyM.hash ->value;
+   
+--entrypointsAdd:dopart--   
+do &element[]->E[];
+   T[]->E.t[];
+   data->E.data;
+   false->wasAdded;
+   E[]->hashfunction
+     ->findIndexed
+   (# predicate::< 
+        (# 
+        do (current.t[]->t.equal) and (current.data = data) -> value
+        #);
+      notFound::< 
+        (# 
+        do E[]->insert; true->wasAdded; true->continue
+        #);
+   #)
+--entrypointsAddDef:dopart--   
+do &element[]->E[];
+   T[]->E.T[];
+   true->E.local;
+   data->E.data;
+   E[]->hashfunction->findIndexed
+   (# predicate::< 
+        (# 
+        do (T[]->current.t.equal)->value;
+        #);
+      notFound::< 
+        (# 
+        do
+           E[]->addTargetInfo;
+           E[]->insert;
+           true->continue
+        #)
+   do true->current.local;
+      data->current.data;
+      current[]->addTargetInfo;
+      current[]->E[]
+   #);
+--entrypointsFind:dopart--   
+do &element[]->E[];
+   T[]->E.T[];
+   E[]->hashfunction->findIndexed
+   (# predicate::< 
+        (# 
+        do (T[]->current.t.equal)->value;
+        #);
+      notFound::< 
+        (# 
+        do E[]->THIS(find).notFound;
+        #)
+   do current[]->E[] (* Only when found *)
+   #);
+   INNER find (*Called whether found or not *)
+   
+--entrypointselmDisplay:dopart--
+do 'EntryPoint: "'->common.traceStream.puttext;
+   t[]->common.traceStream.puttext;
+   '" '->common.traceStream.puttext;
+   (if data then '-data'->common.traceStream.puttext if);
+   (if local then '-local'->common.traceStream.puttext if);
+   (if export then '-export'->common.traceStream.puttext if);
+   m;
+   
+---newDebugDesc:descriptor--
+(#
+do nodeId->dbgInf.thisFrag.newDT; IP+dbgInf.IPsum->dbgInf.IPsum; 
+   0->IP->dbgInf.oldIP
+#)
+
+---dbgInf:descriptor--
+(# NewFrag: @
+     (# FN: ^text; astLabel: @integer
+     enter(FN[],astLabel)
+     do (if (top+1->top) > FragTables.range  then
+            FragTables.range->FragTables.extend
+        if);
+        &FragTable[]->thisFrag[]->FragTables[top][];
+        FN[]->thisFrag.FN[]; astLabel->thisFrag.astLabel;
+        FN.length+3+FNlength->FNlength;
+        (if FNlength mod 2 // 1 then FNlength+1->FNlength if)
+     #);
+   FragTable:
+     (# FN: ^text; (* fragment name *)
+        astLabel: @integer; (* label at root of this fragment *)
+        DebugTables: [10] ^DebugTable; top: @integer;
+        DebugTable:
+          (# nodeId: @integer; (* of do part *)
+             imp,aRef: [10] @integer; top: @integer;
+             mark: @
+               (# astRef: @integer; T: @text
+               enter astRef
+               do (if (top+1->top)>imp.range  then 
+                      imp.range->imp.extend; aRef.range->aRef.extend
+                  if);
+                  IP-oldIP->imp[top]; astRef->aRef[top];
+                  (if common.switch[498] then 
+                      T.clear;
+                      '!'->dbgInf.TF.put; IP->dbgInf.TF.putHex; 
+                      '('->T.put; IP->T.putInt; ')'->T.put;
+                      ','->T.put; IP-oldIP->T.putInt; T->TFcom
+                   if);
+                  IP->oldIP
+               #)
+          #);
+
+        NewDT: @
+          (# nodeId: @integer;
+          enter nodeId
+          do (if (top+1->top)>DebugTables.range  then
+                 DebugTables.range->DebugTables.extend
+             if);
+             &DebugTable[]->thisDT[]->DebugTables[top][];
+             nodeId->thisDT.nodeId;
+          #);
+     #);
+   FragTables: [4] ^FragTable; top: @integer;
+
+   proto: [10] @integer; protoTop: @integer;
+   addProto: @
+     (# astRef: @integer
+     enter astRef
+     do (if (dbgInf.protoTop+1->dbgInf.protoTop)>dbgInf.proto.range  then
+            dbgInf.proto.range->dbgInf.proto.extend
+        if);
+        astRef->dbgInf.proto[dbgInf.protoTop]
+     #);
+   
+   thisFrag: ^FragTable;
+   
+   thisDT: ^thisFrag.DebugTable;
+   
+   FNlength,        (* sum of lengths of fragmentnames *)
+   oldIP,           (* IP at previous imp *)
+   IPsum: @integer; (* accumulated sum of IP *)
+   
+   B: @BinaryStream
+     (# AccessError::(#do FN[] -> common.PassCodeFileAccessError #);
+        WriteError::(#do common.PassNoSpaceError #);
+        NoSpaceError::(#do common.PassNoSpaceError #)
+     #);
+   
+   TF: @ file; (* for trace info *)
+   TFcom:
+     (# T: @text
+     enter T do T[] -> TF.putline
+     #);
+   
+   saveBinFile:
+     (# thisFrag: ^FragTable;
+        DT: ^thisFrag.DebugTable;
+        T: @text; FN: ^text
+     enter FN[]
+     do (if common.switch[498] then
+            (* producing test output *)
+            'no. of fragments: '->T.putText; top->T.putInt; T->TFcom;
+            T.clear; 'FN size:'->T.putText; FNlength->T.putInt; T->TFcom;
+            (for i: top repeat
+                 FragTables[i][]->thisFrag[];
+                 T.clear; 'Fragment: '->T.putText; thisFrag.FN[]->T.putText; 
+                 T->TFcom;
+                 T.clear; 
+                 'Root label: '->T.puttext; thisFrag.astLabel->T.putInt;
+                 T->TFcom;
+            for);
+            (*T.clear;'code size: '->T.putText; IPsum->T.putInt; T->TFcom;
+             *
+             * 'Prototypes: \n'->T.putText;
+             * (for i:protoTop repeat
+             *      T.clear; proto[i]->T.putInt; T->TFcom
+             * for);
+             *)
+        
+            (for i:top repeat
+                 FragTables[i][]->thisFrag[];
+                 T.clear; 'No.of. descriptors: '->T.putText; 
+                 thisFrag.top->T.putInt; T->TFcom;
+                 (for k:thisFrag.top repeat
+                      thisFrag.DebugTables[k][]->DT[];
+                      T.clear; 'AST index: '->T.putText; 
+                      DT.nodeId->T.putInt; T->TFcom;
+                      (for j:DT.top repeat
+                           T.clear; DT.imp[j]->T.putInt; ','->T.put;
+                           DT.aRef[j]->T.putInt; T->TFcom
+                      for);
+                      T.clear; -1->T.putInt; T->TFcom
+                 for)
+            for);
+            TF.close               
+        if);
+        
+        (* produce binary debug file (foo.db/foo..db) *)
+        top->B.putShort; FNlength->B.putLong;
+        (for i: top repeat
+             FragTables[i][]->thisFrag[];
+             thisFrag.FN[]->B.putText;
+             thisFrag.astLabel->B.putShort;
+        for);
+        (* IPsum->B.putLong;
+         * (for i: protoTop repeat proto[i]->B.putShort for);
+         *)
+        (for i: top repeat
+             FragTables[i][]->thisFrag[];
+             thisFrag.top->B.putShort;
+             (for k:thisFrag.top repeat
+                  thisFrag.DebugTables[k][]->DT[];
+                  DT.nodeId->B.putShort;
+                  (for j:DT.top repeat
+                       DT.imp[j]->B.putShort; 
+                       DT.aRef[j]->B.putShort
+                  for);
+                  -1->B.putShort
+             for)
+        for);
+        FN[]->B.save
+        (# openFailed::
+             (#
+             do '\n\n*** OBS! Save of debug information' 
+                'failed for file:\n\n\t'->puttext;
+                FN[] -> putline; 
+                newline;
+             #)
+        #);
+        none->dbgInf.thisFrag[]; none->dbgInf.thisDT[]
+     #)
+#)
+
+---newFragment:doPart---
+do (FN[],astLabel)->dbgInf.NewFrag
+   
+--newProto:doPart--
+do astRef->dbgInf.addProto
+   
+---newImp:doPart---
+do astRef->dbgInf.thisDT.mark;
+   releaseReg;
+   
+---newEval:doPart---
+do astRef->dbgInf.thisDT.mark;
+   
+---machineOpenDbgInf: dopart---
+do (*(if switch24 then
+       (# name: ^text;
+       do '.db'->common.infostream.puttext;
+          BC.name->name[];
+          '.db'->(name.copy).append->BC.name;
+          BC.openwrite;
+          name[]->BC.name;
+       #);
+    if);*)
+   (if common.switch[498] then
+       (# FN: ^text
+       do BCname.copy->FN[];
+          (FN.length-5,FN.length)->FN.delete;
+          (* remove '-BETA-' *)
+          '...s' -> (FN.copy).append -> dbgInf.TF.name;
+          dbgInf.TF.openWrite
+       #)
+   if);
+   
+---machineSaveDbgInf: dopart---
+do (if not ('.db' -> ((fname.lgth-2,fname.lgth)->fname.sub).equal) then
+       '.db' -> (fname.copy).append -> fname[];
+   if);
+
+   fname[] -> dbgInf.saveBinFile;
+   

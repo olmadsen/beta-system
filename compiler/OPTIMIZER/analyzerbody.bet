@@ -1,0 +1,486 @@
+ORIGIN 'analyzer';
+INCLUDe '~beta/basiclib/formatio';
+
+--AnalyzerLib: attributes--
+
+WorkListNode: 
+  (# next: ^WorkListNode;
+     node: ^bbgraph.node;
+  #);
+
+InsertFirstNode: 
+  (# tmp: ^WorkListNode;
+  do analyzerP.ListHead[]->tmp[];
+     &WorklistNode[]->analyzerP.ListHead[];
+     firstNode->analyzerP.ListHead.node[]; (* get start node, or use default *)
+     (if firstnode=none then
+         analyzerP.graph.firstNode->analyzerP.ListHead.node[];
+     if);
+     true->analyzerP.ListHead.node.onstack;
+     tmp[]->analyzerP.ListHead.next[]
+  #);
+
+InsertNode: 
+  (# tmp: ^WorkListNode;
+     new: ^bbgraph.node;
+  enter new[]
+  do (* 'insertnode'->screen.puttext; 
+      new.index->screen.putint; newline; *)
+     (if (not (new.onstack)) then
+         &WorklistNode[]->tmp[];
+         analyzerP.ListHead[]->tmp.next[];
+         tmp[]->analyzerP.ListHead[];
+         new[]->tmp.node[];
+         true->new.onstack;
+     if);
+  #);
+
+RunListForward: 
+  (# currentWLN: ^WorkListNode;
+     changed: @boolean;
+     node,tmp: ^bbgraph.node;
+     rn: ^bbgraph.realnode;
+     out: ^analysisinformation;
+     in: ^carrier;
+     myInit: @init;
+     comb: @combine;
+     pushOnStack: @insertnode;
+  do (* currently only forward *)
+     analyzerP.ListHead[]->currentWLN[];
+     loop: 
+       (if currentWLN[]<>none then
+           (* pop off list *)
+           currentWLN.next[]->analyzerP.ListHead[];
+           currentWLN.node[]->node[];
+           false->node.onstack;
+           (* calculate in information *)
+           (*myInit*) none->in[];
+           (for i: node.predTop repeat
+                AnalyzerP.graph.nodeList[node.predI[i]][]->tmp[];
+                (for j: tmp.succTop repeat
+                   (if tmp.succI[j]=node.index then
+                       (in[],(tmp.succA[j]->thisAnalysis.find))->comb->in[];
+                   if);
+                for);
+           for);
+           
+           node.realgraph[]->rn[];
+           ll: (if rn[]<>none then
+                   (in[],rn.genf)->thisanalysis.append->rn.genf;
+                   (rn[],false,in[])->flowfunction->in[];
+                   rn.next[]->rn[];
+                   restart ll;
+               if); 
+           &analysisinformation[]->out[];
+
+           (* let user calculate out info for all edges *)
+           
+           (for inx: node.succTop repeat
+                (if node.realgraph[] <> none then
+                    (if inx=node.jmpedgenumber then
+                        (((node.lastrealnode[],true,in[])->flowfunction),0)->
+                        out.append;
+                     else
+                        (((node.lastrealnode[],false,in[])->flowfunction),0)->
+                        out.append;
+                    if);
+                 else
+                    (in[],0)->out.append;
+                if);
+           for);
+           
+           (* Check for changed info and then insert successors, patch analysis *)
+           (for i: node.succTop repeat
+              (if not ((out.rep[i][],(node.succA[i]->thisanalysis.find))->equal) then
+                  (if not (graph.nodeList[node.succI[i]].onstack) then
+                      analyzerP.graph.nodeList[node.succI[i]][]->pushOnStack;
+                  if);
+                  (* save edge info, after in info for all node *)
+                  (out.rep[i][],node.succA[i])->thisAnalysis.append->
+                  node.succA[i]
+                if)
+           for);
+           (* get first of list *)
+           analyzerP.ListHead[]->currentWLN[];
+           restart loop;
+       if);
+     thisanalysis.top->graph.inffound;
+     (* preferably in depth-first order *) 
+  #);
+
+RunListBackWard: 
+  (# currentWLN: ^WorkListNode;
+     changed: @boolean;
+     node,tmp: ^bbgraph.node;
+     rn: ^bbgraph.realnode;
+     out: ^analysisinformation;
+     in: ^carrier;
+     myInit: @init;
+     comb: @combine;
+     pushOnStack: @insertnode;
+  do (* 'RunBackward'->screen.putline; *)
+     analyzerP.ListHead[]->currentWLN[];
+     loop: 
+       (if currentWLN[]<>none then
+           (* pop off list *)
+           currentWLN.next[]->analyzerP.ListHead[];
+           currentWLN.node[]->node[];
+           false->node.onstack;
+           (* calculate in information *)
+           
+           myInit->in[];
+           (for i: node.succTop repeat
+                (in[],(node.succA[i]->thisAnalysis.find))->comb->in[];
+           for);
+           (in[],node.genf)->thisanalysis.append->node.genf;
+           node.lastrealnode[]->rn[];
+           
+           ll: (if rn[] <>none then
+                   (in[],rn.genf)->thisanalysis.append->rn.genf;
+                   (rn[],false,in[])->flowfunction->in[];
+                   rn.prev[]->rn[];
+                   restart ll;
+               if);
+           
+           &analysisinformation[]->out[];
+           (* Calculate the out info for all nodes predecessing this one *)
+           (* The ones pointing at this node, can be by jump, or not     *)
+           (* If it is by jump it is a true edge going into the next node*)
+           (* And false otherwise                                        *)
+           
+           (for inx: node.predtop repeat
+                analyzerP.graph.nodelist[node.predI[inx]][]->tmp[]; 
+                (if node.realgraph[] <> none then
+                    (for j: tmp.succtop repeat
+                         (if tmp.succI[j]=node.index then
+                             (if j=tmp.jmpedgenumber then
+                                 (((node.realgraph[],true,in[])->
+				   flowfunction),0)->out.append;
+                              else
+                                 (((node.realgraph[],false,in[])->
+				   flowfunction),0)->out.append;
+                             if);
+                         if);
+                    for);
+                 else
+                    (in[],0)->out.append;
+                if);  
+           for);
+           (* let user calculate out info for all edges *)
+           
+           
+           (* Check for changed info and then insert successors, patch analysis *)
+           (for i: node.predTop repeat (* find pred nodes succ edges pointing at node *)
+                AnalyzerP.graph.nodeList[node.predI[i]][]->tmp[];
+                (for j: tmp.succTop repeat
+                     (if tmp.succI[j]=node.index then 
+                         (* tmp's j' edge is pointing at node  *)
+                         (if not ((out.rep[i][],(tmp.succA[j]->thisAnalysis.find))->equal) then
+                             (if not tmp.onstack then
+                                 tmp[]->pushOnStack;
+                             if);
+                             (out.rep[i][],tmp.succA[j])->thisAnalysis.append->
+                             tmp.succA[j];
+                         if);
+                     if);
+                for);
+           for);
+
+           (* get first of list *)
+           analyzerP.ListHead[]->currentWLN[];
+           restart loop;
+       if);
+     thisanalysis.top->graph.inffound;
+     (* preferably in depth-first order *) 
+     (* 'Runbackward finished'->screen.putline *)
+  #);
+RunBBListBackWard: 
+  (# #);
+RunBBlistforward: 
+  (# 
+     currentWLN: ^WorkListNode;
+     changed: @boolean;
+     node,tmp: ^bbgraph.node;
+     out: ^analysisinformation;
+     in: ^carrier;
+     myInit: @init;
+     myinit_start:@init_start;
+     comb: @combine;
+     pushOnStack: @insertnode;
+  do (* currently only forward *)
+     analyzerP.ListHead[]->currentWLN[];
+     loop: 
+       (if currentWLN[]<>none then
+           (* pop off list *)
+           currentWLN.next[]->analyzerP.ListHead[];
+           currentWLN.node[]->node[];
+           false->node.onstack;
+           (* calculate in information *)
+           (if node.predtop = 0 then
+               myinit_start->in[];
+            else
+               myInit->in[];
+           if);
+           (for i: node.predTop repeat
+                AnalyzerP.graph.nodeList[node.predI[i]][]->tmp[];
+                
+                (for j: tmp.succTop repeat
+                     (if tmp.succI[j]=node.index then
+                         (in[],(tmp.succA[j]->thisAnalysis.find))->comb->in[];
+                     if);
+                for);
+           for);
+           
+           (in[],node.genf)->thisanalysis.append->node.genf;
+           &analysisinformation[]->out[];
+
+           (* let user calculate out info for all edges *)
+           
+           
+           (for inx: node.succTop repeat
+                (if inx=node.jmpedgenumber then
+                    (((node[],true,in[])->BBflowfunction),0)->
+                    out.append;
+                 else
+                    (((node[],false,in[])->BBflowfunction),0)->
+                    out.append;
+                if);
+           for);
+           
+           (* Check for changed info and then insert successors, patch analysis *)
+           (for i: node.succTop repeat
+                (if not ((out.rep[i][],(node.succA[i]->thisanalysis.find))->equal) then
+                    (if not (graph.nodeList[node.succI[i]].onstack) then
+                        analyzerP.graph.nodeList[node.succI[i]][]->pushOnStack;
+                    if);
+                    (* save edge info, after in info for all node *)
+                    (out.rep[i][],node.succA[i])->thisAnalysis.append->
+                    node.succA[i];
+                if);
+           for);
+           
+           (* get first of list *)
+           analyzerP.ListHead[]->currentWLN[];
+           restart loop;
+       if);
+     (* preferably in depth-first order *) 
+     thisanalysis.top->graph.inffound;
+  #);
+
+--analyzerPrivate: descriptor--
+(# 
+   ListHead: ^WorkListNode;
+   graph: ^BBgraph;
+#)
+
+--AnalyseGraph: dopart--
+do none->analyzerP.ListHead[];
+   graph[]->analyzerP.graph[];
+   &analysisinformation[]->thisanalysis[];
+   (direction##=forward##)->thisanalysis.isForward;
+   (graph.inffound)->thisanalysis.new;
+   (* insert node in graph in worklist *)
+   InsertFirstNode;
+   (*Run Through List until empty *);
+   (if direction##=forward## then
+       RunListForward
+    else
+       RunListBackward
+   if);
+--AnalyseBBGraph:dopart--
+do
+   none->analyzerP.ListHead[];
+   graph[]->analyzerP.graph[];
+   &analysisinformation[]->thisanalysis[];
+   graph.inffound->thisanalysis.new;
+   (* insert node in graph in worklist *)
+   InsertFirstNode;
+   (*Run Through List until empty *);
+   (if direction##=forward## then
+       RunBBListForward
+    else
+       RunBBListBackward
+   if)
+--fastAnalyzerLib: attributes--
+RunForward: 
+  (# 
+  do
+     doAllBBnodesForward;
+     stabilizeForward;
+
+  #);
+doAllBBnodesForward:
+  (#  prevkill,prevgen,tmpgen,tmpkill:^carrier;
+  do
+     graph.codescan
+     (# 
+       
+        r:^graph.realnode;
+     do
+        &carrier[]->prevkill[];
+        &carrier[]->prevgen[];
+        curr.realgraph[]->r[];
+        l:(if r[] <> none then
+              r[]->killset->tmpkill[];
+              r[]->genset->tmpgen[];
+              
+              (((tmpkill[],prevkill[])->killcombine),r.killf)->
+              thisanalysis.append->r.killf;
+              (((((prevgen[],tmpkill[])->kill),tmpgen[])->gen),r.genf)->
+              thisanalysis.append->r.genf; 
+              r.killf->thisanalysis.find->prevkill[];
+              r.genf->thisanalysis.find->prevgen[];
+              r.next[]->r[];
+              restart l;
+          if);
+        (prevkill[],curr.killf)->thisanalysis.append->curr.killf;
+        (prevgen[],curr.genf)->thisanalysis.append->curr.genf;
+     #);
+  #);
+doLoopsForward:
+  (# 
+     n:^graph.node;
+  do
+     
+  #);
+stabilizeForward:
+  (# 
+     node,tmp:^bbgraph.node;
+     tmpkill,tmpgen:^carrier;
+     inkill,ingen:^carrier;
+     changed:@boolean;
+     outkill,outgen:^carrier;
+  do 
+     insertfirstnode;
+     pop->node[];
+     loop:(if node[] <> none then
+              &carrier[]->inkill[];
+              &carrier[]->ingen[];
+              false->changed;
+              (if node.predtop <> 0 then
+                  (for i:node.predtop repeat
+                       graph.nodelist[node.predI[i]][]->tmp[];
+                       (for j:tmp.succtop repeat
+                            (if tmp.succI[j]=node.index then
+                                tmp.killA[j]->thisanalysis.find->tmpkill[];
+                                tmp.succA[j]->thisanalysis.find->tmpgen[];
+                                (tmpkill[],tmpgen[],inkill[],ingen[])->
+                                combine->(inkill[],ingen[]);
+                            if);
+                       for);
+                  for);
+              if);
+              (inkill[],node.inkill)->thisanalysis.append->node.inkill;
+              (ingen[],node.ingen)->thisanalysis.append->node.ingen;
+              node.killf->thisanalysis.find->tmpkill[];
+              (inkill[],tmpkill[])->killcombine->outkill[];
+              (ingen[],tmpkill[])->kill->outgen[];
+              node.genf->thisanalysis.find->tmpgen[];
+              (outgen[],tmpgen[])->gen->outgen[];
+              (outkill[],node.killf)->thisanalysis.append->node.killf;
+              (outgen[],node.genf)->thisanalysis.append->node.genf;
+              
+              (for i:node.succtop repeat
+                   node.succA[i]->thisanalysis.find->tmpgen[];
+                   node.killA[i]->thisanalysis.find->tmpkill[];
+                   (if (not ((tmpgen[],outgen[])->equal)) or
+                       (not ((tmpkill[],outkill[])->equal)) then
+                       graph.nodelist[node.succI[i]][]->insertnode;
+                       (outkill[],node.killA[i])->thisanalysis.append->
+                       node.killA[i];
+                       (outgen[],node.succA[i])->thisanalysis.append->
+                       node.succA[i];
+                   if);
+              for);
+              pop->node[];
+              restart loop;
+          if);
+     thisanalysis.top->graph.inffound;
+  #);
+RunBackward: 
+  (# 
+  do
+  #);
+doAllBBnodesBackward:
+  (# 
+  do
+  #);
+doLoopsBackward:
+  (# 
+  do
+  #);
+stabilizeBackward:
+  (# 
+  do
+  #);
+FastWorklistNode: 
+  (# 
+     next: ^FastWorklistNode;
+     node,tmp: ^BBgraph.node;
+  #);
+
+InsertFirstNode: 
+  (# tmp: ^FastWorkListNode;
+  do 
+     &FastWorklistNode[]->FastanalyzerP.ListHead[];
+     graph.entrynode[]->FastanalyzerP.ListHead.node[]; 
+     (* get start node, or use default *)
+     
+     
+  #);
+pop: 
+  (# 
+     tmp: ^FastWorklistNode;
+     thepop: ^BBgraph.node;
+  do FastanalyzerP.ListHead[]->tmp[];
+     (if tmp[]<>none then
+         tmp.node[]->thepop[];
+         false->thepop.onstack;
+         tmp.next[]->FastanalyzerP.ListHead[];
+      else
+         none->thepop[];
+     if);
+  exit thepop[]
+  #);
+InsertNode: 
+  (# tmp: ^FastWorkListNode;
+     new: ^BBgraph.node;
+  enter new[]
+  do 
+     (if new[] <> none then
+         (if not (new.onstack) then
+             &FastWorklistNode[]->tmp[];
+             FastanalyzerP.ListHead[]->tmp.next[];
+             tmp[]->FastanalyzerP.ListHead[];
+             new[]->tmp.node[];
+             true -> new.onstack;
+         if);
+     if);
+  #);
+
+--fastAnalyseGraph: dopart--
+do 
+   graph[]->fastanalyzerP.graph[];
+   &AnalysisInformation[]->thisanalysis[];
+   graph.inffound->thisanalysis.new;
+   (*Run Through List until empty *);
+   (if direction##=forward## then
+       RunForward
+    else
+       RunBackward
+   if)
+--fastanalyzerPrivate: descriptor--
+	 (# 
+	    graph: ^BBgraph;
+	    ListHead: ^FastWorklistNode;
+	 #)
+
+
+
+
+
+
+
+
+
+
