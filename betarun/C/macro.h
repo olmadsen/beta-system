@@ -81,12 +81,6 @@ extern int dmalloc_verify(int);
 
 #endif /* COM */
 
-#ifdef RTLAZY
-#define isLazyRef(ref) ((lastDangler <= ((int)(ref))) && (((int)(ref)) < -101))
-#else
-#define isLazyRef(ref) 0
-#endif
-
 #if defined (MAC)
 #define Notify(s1)           CPrompt(s1, "","","")
 #define Notify2(s1,s2)       CPrompt(s1, s2, "", "")

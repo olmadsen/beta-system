@@ -37,7 +37,7 @@ ParamObjOffRange(ExtRR)
     size = RefRepSize(newRange);
     do {
       if (newRange>LARGE_REP_SIZE || size>IOAMAXSIZE){
-	DEBUG_AOA(fprintf(output, "ExtRR allocates in AOA(newRange=%d)\n", newRange));
+	DEBUG_AOA(fprintf(output, "ExtRR allocates in AOA(newRange=%d)\n", (int)newRange));
 	newRep = (RefRep *)AOAcalloc(size);
 	DEBUG_AOA(if (!newRep) fprintf(output, "AOAcalloc failed\n"));
       }

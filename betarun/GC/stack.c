@@ -32,14 +32,7 @@ void PrintValhallaRefStack(void)
     fprintf(output, "  0x%08x: 0x%08x\n", (int)theCell, (int)theObj);
     if (theObj && inBetaHeap(theObj) && isObject(theObj)) {
       /* Normal object */
-    } 
-#ifdef RTLAZY
-    else if (isLazyRef(theObj)) {
-      DEBUG_LAZY(fprintf (output, "ProcessRefStack: Lazy ref: %d\n", (int)theObj));
-      ProcessReference((Object **)(theCell), REFTYPE_DYNAMIC);
-    }
-#endif
-    else {
+    } else {
       if (theObj 
 	  && !isProto(theObj) /* e.g. AlloI is called with prototype in ref. reg. */
 	  && !isCode(theObj)  /* e.g. at INNER a ref. reg contains code address */
@@ -67,11 +60,6 @@ void ProcessValhallaRefStack(void)
       ProcessReference(theCell, REFTYPE_DYNAMIC);
       CompleteScavenging();
     }
-#ifdef RTLAZY
-    else if (isLazyRef(theObj)) {
-      ProcessReference(theCell, REFTYPE_DYNAMIC);
-    }
-#endif /* RTLAZY */
   }
 }
 
@@ -664,7 +652,7 @@ void PrintRefStack(void)
   long size = ((long)RefSP - (long)&ReferenceStack[0])/4;
   fprintf(output, "RefStk: [%x .. %x[\n", (int)&ReferenceStack[0], (int)RefSP);
   for(; size > 0; size--, theCell++){
-    if (!isLazyRef(*theCell) && ((*theCell)!=ExternalMarker) && (*theCell & 1)){ 
+    if (((*theCell)!=ExternalMarker) && (*theCell & 1)){ 
       /* Used in beta.dump */
       fprintf(output, "  0x%08x: 0x%08x #\n", (int)theCell, (int)(*theCell));
     } else {
@@ -682,12 +670,9 @@ void ProcessRefStack(unsigned size, Object **bottom, CellProcessFunc func)
   DEBUG_IOA(PrintRefStack());
   theCell = bottom;
   for(; size > 0; size--, theCell++) {
-    if (!isLazyRef(*theCell)) {
-      i = ((unsigned)*theCell & 1);
-      *theCell = (Object *)((unsigned)*theCell & ~1);
-    } else {
-      i = 0;
-    }
+    i = ((unsigned)*theCell & 1);
+    *theCell = (Object *)((unsigned)*theCell & ~1);
+  }
 #ifdef RTVALHALLA
     /* If i=1 then the cell is tagged, and the previous cell that was
      * processed was actually a return address. This can newer be confused with
@@ -697,12 +682,6 @@ void ProcessRefStack(unsigned size, Object **bottom, CellProcessFunc func)
     DEBUG_IOA(fprintf(output, "ProcessRefStack: 0x%08x: 0x%08x\n", 
 		      (int)theCell, (int)(*theCell)));
     func(theCell, *theCell);
-    DEBUG_LAZY({
-      if (isLazyRef(*theCell)) {
-	fprintf(output, "ProcessRefStack: Lazy ref: %d\n",
-		(int)*theCell);
-      }
-    });
     DEBUG_CODE({
       if (*theCell
 	  && !inBetaHeap(*theCell) && !isObject(*theCell)
@@ -814,11 +793,6 @@ static __inline__ void ProcessStackCell(long *addr, char *desc, CellProcessFunc 
     return;
   } else if (strongIsObject(*(Object **)addr)) {
     func((Object **)addr, *(Object **)addr);
-    DEBUG_LAZY({
-      if (isLazyRef(*addr)) {
-	fprintf (output, "Lazy ref in %s: %d\n", desc, (int)(*addr));
-      }
-    });
   }
 }
 
@@ -1310,31 +1284,22 @@ void ProcessStackPart(long *low, long *high, CellProcessFunc whenObject)
       if (skip){
 	current += skip;
       } else {
-#ifdef RTLAZY
-	if (isLazyRef(*current)) {
-	  /* (*current) is a dangling reference */
-	  DEBUG_STACK(fprintf(output, "0x%08x: %d - LAZY\n", (int)current, (int)*current));
-	  whenObject((Object**)current, *(Object**)current);
-	} else 
-#endif /* RTLAZY */
-	  {
-	    DEBUG_STACK({
-	      fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
-	      if (*current) {
-		if (IsPrototypeOfProcess(*current)) {
-		  fprintf(output, ", is proto  (");
-		  PrintProto((ProtoType*)*current);
-		  fprintf(output, ")\n");
-		} else {
-		  fprintf(output, " ");
-		  PrintCodeAddress(*current);
-		  fprintf(output, "\n");
-		}
-	      } else {
-		fprintf(output, "\n");
-	      }
-	    });
+	DEBUG_STACK({
+	  fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
+	  if (*current) {
+	    if (IsPrototypeOfProcess(*current)) {
+	      fprintf(output, ", is proto  (");
+	      PrintProto((ProtoType*)*current);
+	      fprintf(output, ")\n");
+	    } else {
+	      fprintf(output, " ");
+	      PrintCodeAddress(*current);
+	      fprintf(output, "\n");
+	    }
+	  } else {
+	    fprintf(output, "\n");
 	  }
+	});
       }
     }
     current++;
@@ -1462,11 +1427,6 @@ void ProcessINTELStackObj(StackObject *sObj, CellProcessFunc func)
     if (skip){
       current += skip;
     } else {
-      DEBUG_LAZY({
-	if (isLazyRef(*current)) {
-	  fprintf(output, "Dangler on stack: 0x08%x: %d\n", (int)current, (int)*current);
-	}
-      });
       DEBUG_STACKOBJ(TraceStackObject((Object**)current)) /* DEBUG_STACKOBJ */;
       func((Object**)current, *(Object**)current);
     }

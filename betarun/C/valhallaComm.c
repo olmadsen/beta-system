@@ -1247,9 +1247,6 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       /* now the tricky part: check all refs outside objects: */
       HasRefDoRef((Object**)&ActiveComponent);
       HasRefDoRef((Object**)&BasicItem);
-#ifdef RTLAZY
-      HasRefDoRef((Object**)&LazyItem);
-#endif /* RTLAZY */
       DEBUG_VALHALLA(fprintf(output, "0\n"));
       valhalla_writeint(0);
       DEBUG_VALHALLA(fprintf(output, "\n"));

@@ -34,9 +34,6 @@
 #define RTVALHALLA
 #endif
 
-/* No need for interpretItem - only used for Jawahar's interpreter */
-#undef INTERPRETER
-
 /******* Define specific machine types *********/
 #ifdef sun
 #  ifdef sparc
@@ -115,15 +112,10 @@
 #define USEMMAP 
 #endif /* sparc || intel || defined(sgi) */
 
-#define RTLAZY /* Include support for lazy fetch */
-
-#ifndef RTLAZY
 #define MMAPANYADDR 1 /* If set to 1, allow mmap at any address. Otherwise,
 		       * mmap is only allowed to return in the positive
 		       * region of the address space.
-		       * RTLAZY requires a heap purely in positive addresses.
 		       */
-#endif /* !RTLAZY */
 
 /******** Misc. *******/
 #define FALSE	0
@@ -232,8 +224,6 @@
      if( TraceValhallaComm ) { code; }
 #  define DEBUG_SOCKETS(code) \
      if( DebugSockets ) { code; /* fflush(output); */ }
-#  define DEBUG_LAZY(code) \
-     if( DebugLazy ) { code; /* fflush(output); */ }
 #  define DEBUG_LABELS(code) \
      if( DebugLabels ) { code; /* fflush(output); */ }
 #  define TRACE_GROUP(code) \
@@ -258,7 +248,6 @@
 #  define TRACE_VALHALLACOMM(code)
 #  define DEBUG_STRONGISOBJECT(code)
 #  define DEBUG_SOCKETS(code)
-#  define DEBUG_LAZY(code)
 #  define DEBUG_LABELS(code)
 #  define TRACE_GROUP(code)
 #  define TRACE_DUMP(code)

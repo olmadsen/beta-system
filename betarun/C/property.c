@@ -104,7 +104,6 @@ static void BooleanProperty(char *name)
   ENTRY("DebugStack", DebugStack = TRUE);
   ENTRY("DebugStackObj", DebugStackObj = TRUE);
   ENTRY("DebugSockets", DebugSockets = TRUE);
-  ENTRY("DebugLazy", DebugLazy = TRUE);
   ENTRY("DebugStrongIsObject", DebugStrongIsObject = TRUE);
   ENTRY("FastIsObject", FastIsObject = TRUE);
   ENTRY("NoHeapClear", NoHeapClear = TRUE);
@@ -130,7 +129,6 @@ static void BooleanProperty(char *name)
 	DebugAOAtoIOA = TRUE;
 	DebugStack=TRUE;
 	DebugStackObj=TRUE;
-	DebugLazy = TRUE;
 	DebugCBFA=TRUE);
 #else
   ENTRY("DebugAll",   
@@ -139,7 +137,6 @@ static void BooleanProperty(char *name)
 	DebugAOAtoIOA = TRUE;
         DebugLIN = TRUE; 
 	DebugStack=TRUE; 
-	DebugLazy = TRUE;
 	DebugCBFA=TRUE);
 #endif
 #endif

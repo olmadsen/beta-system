@@ -53,54 +53,32 @@ ParamProtoCellOriginThis(Qua)
   
   if (src) {
     /* If src is NONE or indirect, all is well */
-    
-#ifdef RTLAZY
-    srcProto = 0;
-    /* 1. Check reference assignment */
-    if (isLazyRef(src)) {
-      /* Qua check on lazy reference */
-      if (! inIOA(theCell)) /* inAOA? */
-	/* in AOA area. */
-	negAOArefsINSERT((long)theCell);
-      srcProto = (ProtoType *) findDanglingProto((int)src);
-    } else {
-#endif /* RTLAZY */
-      if (! inIOA(theCell) /* inAOA? */&& inIOA(src)){
+    if (! inIOA(theCell) /* inAOA? */&& inIOA(src)){
 #ifdef MT
-	MT_AOAtoIOAInsert(theCell);
+      MT_AOAtoIOAInsert(theCell);
 #else /* MT */
-	AOAtoIOAInsert(theCell);
+      AOAtoIOAInsert(theCell);
 #endif /* MT */
-      }
-#ifdef RTLAZY
     }
-#endif /* RTLAZY */
-
+    
     Ck(src);
     
     /* 2. Qua Check */
-#ifdef RTLAZY
-    if (srcProto == 0) {
-      /* src was not a dangler so its prototype has not been looked up yet. */
-#endif
-      switch(SwitchProto(GETPROTO(src))){
-      case SwitchProto(StructurePTValue):
-	/* It was a pattern variable assignment: src is a struc-object */
-	srcProto  = ((Structure *)src)->iProto;
-	break;
-      case SwitchProto(ComponentPTValue):
-	/* It was a component-reference assignment: src points to a component */
-	src       = (Object *)((Component *)src)->Body;
-	srcProto  = GETPROTO(src);
-	break;
-      default:
-	/* It was a normal reference assignment: src is normal object */
-	srcProto  = GETPROTO(src);
-	break;
-      }
-#ifdef RTLAZY
+    switch(SwitchProto(GETPROTO(src))){
+    case SwitchProto(StructurePTValue):
+      /* It was a pattern variable assignment: src is a struc-object */
+      srcProto  = ((Structure *)src)->iProto;
+      break;
+    case SwitchProto(ComponentPTValue):
+      /* It was a component-reference assignment: src points to a component */
+      src       = (Object *)((Component *)src)->Body;
+      srcProto  = GETPROTO(src);
+      break;
+    default:
+      /* It was a normal reference assignment: src is normal object */
+      srcProto  = GETPROTO(src);
+      break;
     }
-#endif
     
     /* Check for eqS */
     if (srcProto == dstQuaProto){

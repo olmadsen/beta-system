@@ -490,7 +490,7 @@ static void AOARefStackHack(void)
   pointer = (long*)AOArootsPtr;
   while (pointer < (long*)AOArootsLimit) {
     cellptr = (long*)*pointer;
-    if (!isLazyRef(*cellptr) && (*cellptr & 1)) {
+    if (*cellptr & 1) {
       *cellptr &= ~1;
       *pointer |= 1;
     }
@@ -506,7 +506,7 @@ static void AOARefStackUnHack(void)
 
   pointer = (long*)AOArootsPtr;
   while (pointer < (long*)AOArootsLimit) {
-    if (!isLazyRef(*pointer) && (*pointer & 1)) {
+    if (*pointer & 1) {
       /* clear tag bit in table */
       *pointer &= ~1; 
       cellptr = (long*)*pointer;
@@ -823,25 +823,6 @@ void AOACheckReference(Object **theCell, long refType)
   long i; long * pointer = BlockStart( AOAtoIOAtable);
   long found = FALSE;
 
-#ifdef RTLAZY
-  if (isLazyRef(*theCell)) {
-    int i;
-    int found=0;
-    for (i=0; i<negAOAsize; i++) {
-      if ((*(long*)negAOArefs[i])==(long)*theCell){
-	found=1; break;
-      }
-    }
-    if (!found){
-      fprintf(output, 
-	      "Dangler in AOA, but NOT in negAOArefs table: 0x%x: %d\n", 
-	      (int)theCell, 
-	      (int)*theCell);
-      ILLEGAL;
-    }
-    return;
-  }
-#endif
   Claim((inAOA(theCell) || inIOA(theCell)),
 	"AOACheckReference: theCell in IOA, AOA");
   if (inIOA(*theCell)) {

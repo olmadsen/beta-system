@@ -109,12 +109,10 @@ int EqualNCS(char *s1, char *s2)
   return 0;
 }
 
-/* Used by objinterface.bet and lazyref_gc.c */
+/* Used by objinterface.bet */
 void assignRef(long *theCell, Item * newObject)
 /* If theCell is in AOA and will now reference an object in IOA, 
  * then insert in AOAtoIOA table.
- * If theCell is in AOA and will now reference a lazy dangler,
- * then insert in negAOArefs table. This may occur from e.g. missingRefs.replace.
  */
 {
   *(Item **)theCell = newObject;
@@ -128,12 +126,6 @@ void assignRef(long *theCell, Item * newObject)
 #endif /* MT */
       return;
     }
-#ifdef RTLAZY
-    else if (isLazyRef(newObject)){
-      negAOArefsINSERT((long)theCell);
-      return;
-    }
-#endif /* RTLAZY */
 #ifdef PERSIST
     else if (inPIT(newObject)) {
       newAOAclient((unsigned long)newObject, (Object **)theCell);
@@ -380,7 +372,6 @@ void CkReg(char *func,long value, char *reg)
 { 
   Object *theObj = (Object *)(value);                          
   if (theObj && /* Cleared registers are ok */                               
-      !isLazyRef(theObj) &&                                                  
       !isProto(theObj) && /* e.g. AlloI is called with proto in ref. reg. */ 
       !isCode(theObj) && /* e.g. at INNER a ref. reg contains code addr */   
       !(inBetaHeap(theObj) && isObject(theObj))){                            
@@ -603,18 +594,18 @@ void CCk(void *r, char *fname, int lineno, char *ref)
 #endif /* MT */
 
       /* Check alignment */
-      if (!(isLazyRef(r) || 
+      if (
 #ifdef PERSIST
 	    inPIT(r) || 
 #endif /* PERSIST */
-	    (ObjectAlign((unsigned)r)==(unsigned)r))) {
+	    (ObjectAlign((unsigned)r)==(unsigned)r)) {
 	fprintf(output, "CCk:%s:%d: Ck(%s): bad aligment: (%s=0x%x)\n",
 		fname, lineno, ref, ref, (int)(r));
 	fflush(output);
 	ILLEGAL;
       }
       /* Check it's in a heap */
-      if (!(inIOA(rr) || inAOA(rr) || isLazyRef(rr) 
+      if (!(inIOA(rr) || inAOA(rr)
 #ifdef PERSIST
 	    || inPIT(rr)
 #endif /* PERSIST */

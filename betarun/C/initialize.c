@@ -368,11 +368,6 @@ void Initialize()
   }
 #endif /* PE */
 
-#ifdef INTERPRETER
-  InterpretItem[0] = 0;
-  InterpretItem[1] = 0;
-#endif /* INTERPRETER */
-  
 #ifdef RTDEBUG
   { 
     char buf[512];

@@ -34,12 +34,6 @@ void ChkRA()
   
   if (!inIOA(*theCell)) {
     
-#ifdef RTLAZY
-    /* It may be a dangling (negative) reference */
-    if (isLazyRef(*theCell)) {
-      negAOArefsINSERT((long)theCell);
-    }
-#endif
 #ifdef PERSIST
     Claim(!inPIT(theCell), "ChkRA: theCell in PIT??");
     if (inPIT((void *)*theCell)) {

@@ -167,30 +167,14 @@ static long sourceReg(unsigned long instruction, ucontext_t *ucon, long returnSP
 	  reg_contents1 = getRegisterContents(rs1, ucon, returnSP);
 	  reg_contents2 = getRegisterContents(rs2, ucon, returnSP);
 	  
-	  if (inPIT(reg_contents1)
-#ifdef RTLAZY
-	      || isLazyRef(reg_contents1)
-#endif /* RTLAZY */
-	      ) {
+	  if (inPIT(reg_contents1)) {
 	    sourcereg = rs1;
 	    Claim(!inPIT(reg_contents2), 
 		  "sourceReg: proxy in both rs1 and rs2\n");
-#ifdef RTLAZY
-	    Claim(!isLazyRef(reg_contents2), 
-		  "sourceReg: proxy in both rs1 and rs2\n");
-#endif /* RTLAZY */
-	  } else if (inPIT(reg_contents2)
-#ifdef RTLAZY     
-		     || isLazyRef(reg_contents2)
-#endif /* RTLAZY */
-		     ) {
+	  } else if (inPIT(reg_contents2)) {
 	    sourcereg = rs2;
 	    Claim(!inPIT(reg_contents1), 
 		  "sourceReg: proxy in both rs1 and rs2\n");
-#ifdef RTLAZY
-	    Claim(!isLazyRef(reg_contents1), 
-		  "sourceReg: proxy in both rs1 and rs2\n");
-#endif /* RTLAZY */
 	  }
 	}
 	/* Source reg is now set to the register containing the
@@ -242,21 +226,9 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 	    BetaCallback(ucon, 
 			 returnSP, 
 			 absAddr = (long)unswizzleReference(ip));
-	  } 
-#ifdef RTLAZY
-	  else if (isLazyRef(ip)) {
-	    /* 'lazyTrapHandler' *will* call back into beta code to
-	       rebind special references. Thus the call is protected using
-	       the 'BetaCallback' abstraction. */
-	    BetaCallback(ucon, 
-			 returnSP, 
-			 absAddr = lazyTrapHandler((unsigned long)ip));
-	  }
-#else
-	  else {
+	  } else {
 	    DEBUG_CODE({fprintf(output, ", proxy not in PIT 0x%X)\n", (int)ip);};);
 	  }
-#endif /* RTLAZY */
       
 	  if (absAddr) {
 	    /* We have fetched the object, and should continue execution. */

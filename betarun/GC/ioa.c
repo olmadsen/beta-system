@@ -270,28 +270,6 @@ void IOAGc()
   ProcessReference( (Object **)&BasicItem, REFTYPE_DYNAMIC);
   DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
 
-#ifdef INTERPRETER
-  /* Only used by Jawahar's interpreter */
-  if (InterpretItem[0]) {
-    DEBUG_IOA(fprintf(output, " #(IOA: Root: InterpretItem[0]"); fflush(output));
-    ProcessReference( (Object **)(&InterpretItem[0]), REFTYPE_DYNAMIC );
-    DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
-  }
-  if (InterpretItem[1]) {
-    DEBUG_IOA(fprintf(output, " #(IOA: Root: InterpretItem[1]"); fflush(output));
-    ProcessReference( (Object **)(&InterpretItem[1]), REFTYPE_DYNAMIC );
-    DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
-  }
-#endif /* INTERPRETER */
-
-#ifdef RTLAZY
-  if (LazyItem) {
-    DEBUG_IOA(fprintf(output, " #(IOA: Root: LazyItem"); fflush(output));
-    ProcessReference( (Object **)(&LazyItem), REFTYPE_DYNAMIC );
-    DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
-  }
-#endif /* RTLAZY */
-
   CompleteScavenging();
   
 #ifdef MT
@@ -608,30 +586,18 @@ void DoStackCell(Object **theCell,Object *theObj)
       });
     }
   } else {
-#ifdef RTLAZY
-    if (isLazyRef(theObj)) {
-      DEBUG_LAZY(fprintf(output, 
-                         "DoStackCell: Lazy ref: %d\n", (int)theObj));
-      ProcessReference(theCell, REFTYPE_DYNAMIC);
-    } 
-#endif /* RTLAZY */
 #if defined(RTDEBUG) && defined(NEWRUN)
     /* Because of the very well-defined structure of stackframes
      * there should be no GC-able cells, that refer outside BETA heaps.
      */
-#ifdef RTLAZY
-    else 
-#endif /* RTLAZY */
-      {
-	if ((theObj!=CALLBACKMARK)&&(theObj!=GENMARK)){
-	  fprintf(output, 
-		  "DoStackCell: 0x%x: 0x%x is outside BETA heaps!\n", 
-		  theCell, 
-		  theObj);
-	  fflush(output);
-	  ILLEGAL;
-	}
-      }
+    if ((theObj!=CALLBACKMARK)&&(theObj!=GENMARK)){
+      fprintf(output, 
+	      "DoStackCell: 0x%x: 0x%x is outside BETA heaps!\n", 
+	      theCell, 
+	      theObj);
+      fflush(output);
+      ILLEGAL;
+    }
 #endif
   }
 }
@@ -735,14 +701,6 @@ void ProcessReference(Object ** theCell, long refType)
      */
     Claim(!inToSpace(*theCell), "*theCell is in to space ??");
 
-#ifdef RTLAZY
-    if (isLazyRef( *theCell)) {
-      if (negIOArefs)
-        /* This is a dangling reference, and we are currently 
-         * collecting as part of the trap handling */
-        negIOArefsINSERT((long) theCell);
-    } else
-#endif
     if (inAOA(*theCell)) {
       MCHECK();
       Claim(!inAOA(theCell), "!inAOA(theCell)");
@@ -862,12 +820,6 @@ static void ProcessAOAReference(Object ** theCell, long refType)
     newAOAclient(getPUID((void *)*theCell), theCell);
   }
 #endif /* PERSIST */
-
-#ifdef RTLAZY
-  else if (isLazyRef(*theCell)) {
-    negAOArefsINSERT((long) theCell);
-  }
-#endif
   
 }
 
@@ -1050,10 +1002,6 @@ void IOACheck()
 void IOACheckReference(REFERENCEACTIONARGSTYPE)
 {
   if (*theCell && inBetaHeap(*theCell) && isObject(*theCell)) {
-    if (isLazyRef(*theCell)){
-      fprintf(output, "Lazy in IOA: 0x%x: %d\n", (int)theCell, (int)*theCell);
-      return;
-    }
     if (!(inIOA(*theCell) || inAOA(*theCell))) {
       fprintf (output, "[IOACheckReference: Warning, target outside heap:"
 	       " theCell=0x%x, *theCell=0x%x]\n", (int)theCell, (int)(*theCell));

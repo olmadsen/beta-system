@@ -321,14 +321,6 @@ static int AOAtoIOAInsertImpl(Object **theCell)
 	ILLEGAL; /* useful to break in */
       }
 #endif
-      
-#ifdef RTLAZY
-    if ( isNegativeRef(*theCell)) {
-        /* This could happen if called from extobjinterface.assignRef. */
-        negAOArefsINSERT ((long) theCell);
-        return 0;
-    }
-#endif
 
     table = (unsigned long *)BlockStart( AOAtoIOAtable);
     /* First Hash function. */

@@ -15,11 +15,6 @@ void ChkRA(Object **theObjHandle)
   DEBUG_CODE(NumChkRA++);
 
   if (!inIOA(*theObjHandle)) {
-#ifdef RTLAZY
-    /* It may be a dangling (negative) reference */
-    if (isLazyRef(*theObjHandle))
-      negAOArefsINSERT((long) theObjHandle);
-#endif
     return; 
   }
 

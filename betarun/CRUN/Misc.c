@@ -57,44 +57,10 @@ Item *OAlloI(Object *origin, int i1, ProtoType *proto, int i3, int i4)
 
 void RefNone(Object * theObj)
 {
-#if (defined(hppa) && defined(RTLAZY))
-  /* Called with the possible dangling reference in %r31 */
-  __asm__ volatile ("\tCOPY\t%%r31,%0\n" : "=r" (theObj));
-  if (isLazyRef(theObj)){
-    /* save reference registers in case of dangling reference */
-    PushGCRegs();
-    CkReg("RefNone", *(RefSP-1), "%r7");
-    CkReg("RefNone", *(RefSP-2), "%r6");
-    CkReg("RefNone", *(RefSP-3), "%r5");
-    CkReg("RefNone", *(RefSP-4), "%r4");
-    CkReg("RefNone", *(RefSP-5), "%r3");
-    /* Save data registers on machine stack in case of dangling reference */
-    pushReg((void *)getD1Reg());
-    pushReg((void *)getD2Reg());
-    pushReg((void *)getD3Reg());
-    pushReg((void *)getD4Reg());
-    pushReg((void *)getR8Reg()); /* R8 is NOT to be GC'ed */
-    
-    LazyDangler = (long)theObj; /* dangling reference */
-    CallBetaEntry(OBJPROTOFIELD(LazyItem,TopMpart), LazyItem);
-    
-    setR8Reg((long)popReg());
-    setD4Reg((long)popReg());
-    setD3Reg((long)popReg());
-    setD2Reg((long)popReg());
-    setD1Reg((long)popReg());
-    PopGCRegs();
-  } else {
-    /* Reference was NONE */
-    theObj = (Object *)getThisReg(); /* Get current object */
-    BetaError(RefNoneErr, theObj);
-  }
-#else
 #ifdef hppa
-    theObj = (Object *)getThisReg(); /* Get current object */
+  theObj = (Object *)getThisReg(); /* Get current object */
 #endif
   BetaError(RefNoneErr, theObj);
-#endif /* hppa && RTLAZY */
 }
 
 #ifdef sparc

@@ -15,16 +15,10 @@ GLOBAL(int *RefNoneStackEnd) = 0;
 /* SBRANDT 7/6/94: RefNonePC is set by RefNone in Misc.run to point to return 
  * address after the "call RefNone" instruction during RefNone check. 
  * RefNoneStackEnd is set, also by RefNone, to point out the stackpart 
- * containing the lazy reference. */
-#ifdef RTLAZY
-static unsigned char regnum;
-static volatile int InLazyHandler;
-#endif /* RTLAZY */
+ * containing the lazy reference.
+ * datpete: 26/05/2000: probably not needed anymore.
+ */
 #endif /* RUN */
-
-#ifdef nti /* NOT linux */
-extern void CallLazyItem (void);
-#endif
 
 #ifdef RTVALHALLA
 #ifdef hppa
@@ -259,115 +253,9 @@ void BetaError(BetaErr err, Object *theObj)
 #endif /* intel */
       }
 
-#ifdef RTLAZY
-      /* Treat REFNONE errors specially */
-
 #ifdef intel
       else if (err==RefNoneErr) {
-
-	/* Check whether it is a genuine error or whether the RefNoneErr
-         * was caused by a lazy persistent reference */
-
-	if (LazyItem) {
-	  /* If LazyItem is 0, the reference cannot be a dangler, since
-	   * the objectserver has not been initialized.
-	   *
-	   * Fetch the register number from the "cmpl $0,%reg" instruction.
-           * This is the register containing the lazy or NONE reference. */ 
-
-	  /* Binary compiler generates this, regardless of which register:
-	   * 0:      testl  reg,reg    # register is in lower 3 bits of second byte
-	   * 2:      jg     L1
-	   * 4:      call   RefNone
-	   * 9:  L1:      
-	   */
-	  regnum = (* (unsigned char *) (RefNonePC-8)) & 7;
-	  DEBUG_LAZY(switch(regnum){
-	  case 0:
-	    fprintf(output, "Dangler in %%eax\n"); break;
-	  case 1:
-	    fprintf(output, "Dangler in %%ecx\n"); break;
-	  case 2:
-	    fprintf(output, "Dangler in %%edx\n"); break;
-	  case 3:
-	    fprintf(output, "Dangler in %%ebx\n"); break;
-	  case 4:
-	    fprintf(output, "Dangler in %%esp!\n"); break;
-	  case 5:
-	    fprintf(output, "Dangler in %%ebp\n"); break;
-	  case 6:
-	    fprintf(output, "Dangler in %%esi\n"); break;
-	  case 7:
-	    fprintf(output, "Dangler in %%edi\n"); break;
-	  });
-
-	  /* RefNone pushed data registers as shown below. The register
-	   * (if any) containing a lazy reference must be found  by the
-	   * garbage collector in order to be updated by the lazy fetch
-           * mechanism. This is ensured by clearing the "-5" pushed
-	   * after the relevant register.
-	   *
-	   * Notice: Stack grows downwards.
-	   *                      _____
-	   *                     | eax |
-	   *                     | -5  |
-	   *                     | ecx |
-	   *                     | -5  |
-	   *                     | ebx |
-	   * RefNoneStackEnd ->  | -5  |
-	   *                      -----                              */
-	  
-	  switch (regnum) {
-	  case 0: 
-	    LazyDangler = RefNoneStackEnd[5]; RefNoneStackEnd[4] = 0;
-	    break;
-	  case 3: 
-	    LazyDangler = RefNoneStackEnd[1]; RefNoneStackEnd[0] = 0;
-	    break;
-	  case 1: 
-	    LazyDangler = RefNoneStackEnd[3]; RefNoneStackEnd[2] = 0;
-	    break;
-	  default:
-	    LazyDangler = 0; break;
-	  }
-	  
-	  if (LazyDangler) {
-	    
-	    if (InLazyHandler)
-	      fprintf (output,"WARNING: Lazy fetch reentered !\n");
-	    
-	    /* The stack now hopefully has a layout that wont setup the
-	     * garbage collector. Call back to BETA to fetch the missing
-	     * object. */
-	    
-	    InLazyHandler = 1;
-	    
-	    /* call beta object handling the lazy fetch.
-	     * To ensure that the C return statement works correctly, we
-	     * need to save %ebp, the stack-base register. There's no 
-	     * need to save other registers, since we will be returning 
-	     * to RefNone immediately after calling BETA. */
-
-	    DEBUG_LAZY(fprintf(output, "Calling LazyItem\n"));
-#ifdef linux
-	    /* CallLazyItem: */
-	    __asm__ volatile ("pushl %ebp # Save base pointer for C");
-	    __asm__ volatile ("movl LazyItem,%edi # Call lazy handler");
-	    __asm__ volatile ("movl (%edi),%edx");
-	    __asm__ volatile ("movl 24(%edx),%edx");
-	    __asm__ volatile ("call *%edx");
-	    __asm__ volatile ("popl %ebp #restore base pointer");
-#else
-	    /* NTI: Borland C is not good at inline assembler */
-	    CallLazyItem();
-#endif /* linux */
-	    
-	    InLazyHandler = 0;
-	    
-	    return;
-	  }
-	}
-	/* Normal RefNone error: Display BETA stack.
+	/* RefNone error: Display BETA stack.
 	 * Adjust StackEnd before calling DisplayBetaStack.
 	 * Ignore 12 pushed registers/tags (see RefNone in Misc.run)
 	 * AND the return address to current object (current object
@@ -376,11 +264,9 @@ void BetaError(BetaErr err, Object *theObj)
 	StackEnd += 12+1;
 	thePC=(long *)RefNonePC;
       }
-#endif /* linux || nti */
-#endif /* RTLAZY */
+#endif /* intel */
       
-      /* If not QUA error with QuaCont or 
-       * REFNONE error with lazy reference, 
+      /* If not QUA error with QuaCont or REFNONE error, 
        * we fall through to here */
       if (DisplayBetaStack( err, theObj, thePC, 0))
 	break; /*  DisplayBetaStack <> 0 => continue execution */

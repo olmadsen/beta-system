@@ -586,7 +586,7 @@ void DisplayHPPAStack(long *thePC)
     if ((*theCell)==(Object *)ExternalMarker){
       TRACE_DUMP(fprintf(output, "  cb: "));
       fprintf(output, "  [ EXTERNAL ACTIVATION PART ]\n");
-    } else if (!isLazyRef(*theCell) && (unsigned)*theCell & 1) {
+    } else if ((unsigned)*theCell & 1) {
       /* The reference is tagged: Should appear in beta.dump */
       theObj = (Object *)((unsigned)*theCell & ~1);
       PC = 0; /* No way to tell the PC ?? */
