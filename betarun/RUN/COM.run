@@ -18,9 +18,9 @@ AlloCOM: public
      Offset:        Word      = DataReg2;
      DataReg2Long:  Long      = DataReg2; 
      TmpData:       Long      = DataReg1;
-     TmpAddr:       Long      = AddrReg1;
-     initTab:       CodeArea  = AddrReg1; { index in GC table in prototype }
-     Entry:         CodeArea  = AddrReg1;
+     TmpAddr:       Long      = { AddrReg1 } RegThis;
+     initTab:       CodeArea  = { AddrReg1 } RegThis; { index in GC table in prototype }
+     Entry:         CodeArea  = { AddrReg1 } RegThis; 
      theItem:       Item      = AddrReg2;
      theCell:       DataArea  = AddrReg1;
           
@@ -31,15 +31,15 @@ AlloCOM: public
      { General Stack Layout:
        <DataReg2>
        <AddrReg2>
-       <AddrReg1>
+       <RegThis>
      }
      
      again:
      
-     push AddrReg1, AddrReg2, DataReg2Long;
+     push { AddrReg1 } RegThis, AddrReg2, DataReg2Long;
      
      { Save registers before calling C }
-     push RegThis;
+     { push RegThis; }
      push a2;
      push a3;
      push a4;
@@ -62,7 +62,7 @@ AlloCOM: public
      pop a4;
      pop a3;
      pop a2;
-     pop RegThis;
+     { pop RegThis; }
 
      { The new Object is now allocated, but not initialized yet!}
      { initialize initTab here to increase pentium pairability }
@@ -94,34 +94,42 @@ AlloCOM: public
      (if HandOptimizedAlloI then
          AsmComment 'Optimized loop for partobj init (COM)';
          (if linux then
-             (code '	testl	$0xffff,(%ebp)		#u 1	' code);
+             (code '	testl	$0xffff,(%edx)		#u 1	' code);
              (code '	je	L5c			#v 1	' code);
              (code 'L4c:					' code);
-             (code '	movl	(%ebp),%eax		#u 2	' code);
-             (code '	movl	(%ebp),%ebx		#v 2	' code);
+             (code '	movl	(%edx),%eax		#u 2	' code);
+             (code '	movl	(%edx),%ebx		#v 2	' code);
              (code '	sarl	$16,%eax		#u 3	' code);
              (code '	andl	$0xffff,%ebx		#v 3	' code);
-             (code '	addl	$8,%ebp			#u 4	' code);
+             (code '	addl	$8,%edx			#u 4	' code);
              (code '	movl	%eax,4(%esi,%ebx,4)	#v 4	' code);
-             (code '	movl	-4(%ebp),%eax		#u 5	' code);
-             (code '	testl	$0xffff,(%ebp)		#v 5	' code);
-             (code '	movl	%eax,(%esi,%ebx,4)	#u 6	' code);
-             (code '	jne	L4c			#v 6	' code);
+             (code '	movl	-4(%edx),%eax		#u 5	' code);
+             (code '	testl	$0xffff,(%edx)		#v 5	' code);
+             (if COM then
+                 (code'	leal	DISP_OFF(%eax),%eax     #u 6 SETPROTO' code);
+                 (code'	nop				#v 6	' code);
+             if);
+             (code '	movl	%eax,(%esi,%ebx,4)	#u 6/7	' code);
+             (code '	jne	L4c			#v 6/7	' code);
              (code 'L5c:					' code);
          if);
          (if nti then
-             (code '	test	dword ptr [ebp],0ffffh	;u 1	' code);
+             (code '	test	dword ptr [edx],0ffffh	;u 1	' code);
              (code '    je	L5c			;v 1	' code);
-             (code 'L4c:mov	eax,[ebp]		;u 2	' code);
-             (code '    mov	ebx,[ebp]		;v 2	' code);
+             (code 'L4c:mov	eax,[edx]		;u 2	' code);
+             (code '    mov	ebx,[edx]		;v 2	' code);
              (code '    sar	eax,16			;u 3	' code);
              (code '    and	ebx,0ffffh		;v 3	' code);
-             (code '    add	ebp,8			;u 4	' code);
+             (code '    add	edx,8			;u 4	' code);
              (code '    mov	4[esi+4*ebx],eax	;v 4	' code);
-             (code '    mov	eax,[ebp-4]		;u 5	' code);
-             (code '    test	dword ptr [ebp],0ffffh	;v 5	' code);
-             (code '    mov	[esi+4*ebx],eax		;u 6	' code);
-             (code '    jne	L4c			;v 6	' code);
+             (code '    mov	eax,[edx-4]		;u 5	' code);
+             (code '    test	dword ptr [edx],0ffffh	;v 5	' code);
+             (if COM then
+                 (code'	lea	eax,DISP_OFF[eax]       ;u 6 SETPROTO' code);
+                 (code'	nop				;v 6	' code);
+             if);
+             (code '    mov	[esi+4*ebx],eax		;u 6/7	' code);
+             (code '    jne	L4c			;v 6/7	' code);
              (code 'L5c:					' code);
          if);
       else
@@ -149,6 +157,7 @@ AlloCOM: public
      { Now since theItem is allocated OUTSIDE IOA, we need to do
        a ChkRA here after having stored origin.
      }
+     push AddrReg1;
      theItem[Offset*4][] -> theCell;
      
      (if call_chkra_unconditionally then
@@ -158,6 +167,7 @@ AlloCOM: public
          push theCell;
          call ChkRA { No need to remove parameter. }
      if);
+     pop AddrReg1;
      
      { Get the G-part }
      protoType.GenPart -> Entry; { Must be before theItem -> Argument }
@@ -175,7 +185,7 @@ AlloCOM: public
          pop TmpData!l; {Discard Protect1Tag tag (to dummy DataReg)}
      if);
      
-     pop DataReg2Long, AddrReg2, AddrReg1;
+     pop DataReg2Long, AddrReg2, { AddrReg1 } RegThis;
      (if debug then call Ck if);
      return;
   #)
