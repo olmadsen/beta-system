@@ -8,6 +8,8 @@ sub usage
     exit(1);
 }
 
+# FIXME: use strict and -w, and define global variables here
+
 sub set_default_variable_values
 {
     $insert_validhtml40 = 1;
@@ -39,6 +41,23 @@ sub set_default_variable_values
     $leftmargin=25;
 }
 
+sub read_file
+{
+    local ($filename) = @_;
+    local ($line);
+    if (!open(FILE, "$filename")){
+	print "Cannot open $filename for reading: $!\n";
+	return;
+    }
+
+    $line="";
+    while (<FILE>) {
+	$line .= $_;
+    };
+    close (FILE);
+    return $line;
+}
+
 sub one_up
 {
     local ($path) = @_;
@@ -64,9 +83,11 @@ sub expand
     return $path;
 }
 
-sub quote_beta
+sub quote_html
 {
     local ($string) = @_;
+
+    #print STDERR "quote: $string\n";
     $string =~ s/&/&amp;/g;
     $string =~ s/</&lt;/g;
     $string =~ s/>/&gt;/g;
@@ -522,16 +543,18 @@ sub read_book_file
 
 sub parse_special_tags
 {
-    local ($done, $befone, $match, $after, $rest);
-    local ($in_h1, $in_h2, $in_h3, $in_h4, $in_h5, $in_h6);
-    local ($in_beta, $in_fig, $in_inx);
+    local ($done, $before, $match, $after, $i);
+    local (@num_h);
+    local ($num_beta, $num_fig, $num_inx);
     local ($htmlfile) = &strip_extension(&strip_path("$srcfiles[$filenumber]")) . ".html";   
 
-    $*=1;
+    #$*=1;
     $_=$srcline;
     $done = $before = $match = $after = "";
-    $in_h1 = $in_h2 = $in_h3 = $in_h4 = $in_h5 = $in_h6 = 0;
-    $in_beta = $in_fig = $in_inx = 0;
+    for ($i=0; $i<6; $i++){
+	$num_h[$i] = 0;
+    }
+    $num_beta = $num_fig = $num_inx = 0;
 
     while(m%\<H[1-6]\>|\</H[1-6]\>|\<BETA|\</BETA\>|\<FIG\>|\</FIG\>|\<INX\>|\</INX\>%i ){
 	$before = $`;
@@ -541,43 +564,57 @@ sub parse_special_tags
 	$done .= $before;
 	# perform stuff on $match
 	if  ($match =~ m%\<H([1-6])\>%i){
+	    # Found heading start.
 	    $done .= $match;
-	    local ($h, @heading);
+	    local ($h, $heading);
 	    $h = $1;
-	    # Found heading start
+	    $num_h[$h]++;
+	    # Start anchor to refer from TOC
+	    $done .= "<A NAME=\"H${h}_$num_h[$h]\">";
 	    if ($after =~ m%(.*)\</H$h\>%i){
-		$done .= $&;
+		$done .= $1 . "</A></H$h>";
 		$after = $';
 		$heading = $1;
 	    } else {
 		printf STDERR "Unterminated heading? (<H$h>)\n";
 	    }
-	    push (@headings, "H$h\@$heading\@$htmlfile");
+	    push (@headings, "$heading\@$htmlfile\#H${h}_$num_h[$h]");
 	} elsif ($match =~ m%\</H[1-6]\>%i){
 	    # Found heading end
 	    print STDERR "***Unmatched end-of-heading? ($&)\n";
 	    $done .= $match;
 	} elsif ($match =~ m%\<BETA%i){
 	    # Found BETA start
-	    print STDERR "Found beta: after=\"$after\"\n";
-	    if ($after =~ m%\>(.*)\</BETA\>%mi){
-		# Matched <BETA xxx>...</BETA>
-		$params = $`; # xxx
-		$beta = $2; # ...
+	    $done .= "<PRE CLASS=BETA>\n";
+	    if ($after =~ m%^([^>]*)\>%si){
+		# Matched <BETA xxx>
+		$params = $1; # xxx
+		# FIXME: fails for src="..." (with quotes)
+		print STDERR "params:'$params'\n";
 		$after = $';
-		if ($params ne ""){
-		    printf STDERR "BETA params not yet implemented\n";
+	    }
+	    if (($params =~ m%SRC\s*=\s*([^\s]+)%i) ||
+		($params =~ m%SRC\s*=\s*\"([^"]+)\"%i)){
+		$beta=&read_file(&expand($1));
+		# eat closing tag, if present
+		if ($after =~ m%^\s*\<\/BETA\>%si){
+		    $after = $';
 		}
-		$done .= "<PRE CLASS=BETA>\n";
-		$done .= &quote_html($beta); 
-		$done .= "</PRE>\n";
+	    }
+	    # FIXME : handle other parameters
+	    if ($after =~ m%^(.*)\<\/BETA\>%si){
+		# Matched <BETA xxx>...</BETA>
+		$beta = $1; # ...
+		$after = $';
 	    } else {
 		printf STDERR "***unhandled use of <BETA>\n";
 	    }
+	    $done .= &quote_html($beta); 
+	    $done .= "</PRE>\n";
 	} elsif ($match =~ m%\</BETA\>%i){
 	    # Found BETA end
 	    print STDERR "***Unmatched end-of-beta? (</BETA>)\n";
-	    $done .= $match;
+	    $done .= "</PRE>\n";
 	} elsif ($match =~ m%\<FIG\>%i){
 	    # Found FIG start
 	    $done .= $match;
@@ -600,7 +637,7 @@ sub parse_special_tags
     }
 
     $srcline=$done . $_;
-    $*=0;
+    #$*=0;
 }
 
 sub process_file
@@ -610,17 +647,7 @@ sub process_file
 
     printf STDERR "Reading src/$file ...\n" if $verbose==1;
 
-    if (!open(SRC, "src/$file")){
-	print "Cannot open src/$file for reading: $!\n";
-	return;
-    }
-
-    $line="";
-    while (<SRC>) {
-	$srcline .= $_;
-    };
-    close (SRC);
-
+    $srcline = &read_file("src/$file");
 
     printf STDERR "Writing to $file ... " if $verbose==1;
     if (!open (STDOUT, ">$file")){
@@ -648,9 +675,11 @@ sub process_src_files
 sub print_toc
 {
 
-    print STDERR "\nheadings:++++++++++++++++++++\n";
-    print STDERR join ("\n", @headings);
-    print STDERR "\n++++++++++++++++++++\n";
+    local ($headinfo, $link, $heading, $headnum);
+
+    #print STDERR "\nheadings:++++++++++++++++++++\n";
+    #print STDERR join ("\n", @headings);
+    #print STDERR "\n++++++++++++++++++++\n";
 
 
     print<<EOT;
@@ -662,9 +691,10 @@ sub print_toc
   <DL>
 EOT
 
-    for ($filenumber=0; $filenumber<=$#srcfiles; $filenumber++){
-	print "  <DT><A HREF=\"$srcfiles[$filenumber]\">";
-	print "$srcfiles[$filenumber]</A> (FIXME: extract heading)<DD>\n";
+    for ($headnum=0; $headnum<=$#headings; $headnum++){
+	$headinfo = $headings[$headnum];
+	($heading, $link) = split("\@", $headinfo);
+	print "  <DT><A HREF=\"$link\">$heading</A><DD>\n";
     }
 
     if ($#interfaces>0){
