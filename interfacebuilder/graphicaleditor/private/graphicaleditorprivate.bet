@@ -7,9 +7,8 @@ INCLUDE '~beta/guienv/v1.6/utils/guienvadds'
         '~beta/betaast/v5.2/betasematt'
         '~beta/guienv/v1.6/private/datastructures/sequence'
         '~beta/containers/v1.6/list'
-        '../../dialogs/editinfo'
+        '../../dialogs/griddialog'
         '../../dialogs/propertyInspector'
-        '../../dialogs/namedialog'
         '../../code/generate'
         '../../code/pattern'
         '../../code/followsemanticlink'
@@ -81,6 +80,17 @@ gridStart:
   do ((0,0),(contentsEditor).item[],THIS(window).contents)->translate->pt
   exit pt
   #);
+  
+  
+changeGrid:
+  (# theGridDialog: @gridDialog
+       (# type:: windowTypes.dialog;
+          onCancel:: (# do close #);
+          onConfirm:: (# do gridSizeFld.integerContents -> gridSize; close #);
+       #);
+  do gridSize -> theGridDialog.open;
+  #);
+  
 hasPrivateAttributes:
   (# 
   enter private.hasPrivateAttributes
@@ -251,9 +261,7 @@ makeData:
      false->data.hilite;
      false->data.borderVisible;
      borderstyles.shadowIn->data.borderStyle;
-     (contents).backgroundColor->data.backgroundColor;
      12->trace (#  do 'makeData: '->xT; xN; data[]->xData #);
-     
   exit data[]
   #);
 makeImperativeList:
@@ -356,9 +364,6 @@ adjustValue:
          ('width',width)->theData.setInt;
          ('height',height)->theData.setInt;
          
-      // 'backgroundColor'->name.equalNCS then
-         12->trace (#  do 'evaluate color'->xT #);
-         theEvaluation[]->betaGram.evaluateColor->theData.backgroundColor;
          
       // 'frame'->name.equalNCS then
          theEvaluation[]->betaGram.evaluateRect->(x,y,width,height);
@@ -502,6 +507,7 @@ clipBoard:
           tree.defaultData[]->editor.defaultData[];
           tree.theClassData[]->editor.theClassData[];
           tree.inherited->editor.inherited;
+          tree.vertical -> editor.vertical;
           (if top then
               (node[],node[]->makeUniqueName)->betaGram.setName; 
            else
@@ -1197,9 +1203,6 @@ moveControlPoints:
      if);
      
   #);
-editName: (#  do selection.scan (#  do current.editName;  #);  #);
-editScripts:
-  (#  do selection.scan (#  do current.editScripts;  #);  #);
 openSubEditor:
   (#  do selection.scan (#  do current.openSubEditor;  #);  #);
 isEditMenuPossible: booleanValue
@@ -1622,69 +1625,6 @@ assertWindowItem:
      
   do (if theWindowItem[] <> none then INNER ;  else error;  if); 
   #);
-editName:
-  (#
-     oldName,newName: ^text;
-     isIdentifier: @boolean;
-     isEqual: @boolean;
-     theNameDialog: @nameDialog
-       (#
-          open::  (#  do 'Edit Name'->title; oldName[]->name; hide;  #);
-          onOk:: 
-            (# 
-            do
-               name->newName[];
-               newName[]->checkIdentifier->isIdentifier;
-               (if isIdentifier then
-                   newName[]->oldName.equalNCS->isEqual;
-                   (if not isEqual then
-                         (#
-                            theNames: ^astInterface.beta.names;
-                            theNameDcl: ^astInterface.beta.nameDcl;
-                            theNameDecl: ^astInterface.nameDecl;
-                            oldNameDcl: ^astInterface.beta.nameDcl;
-                            
-                         do
-                            node[]->betaGram.getNames->theNames[];
-                            (if theNames[] <> none then
-                                1->theNames.get->oldNameDcl[];
-                                (theNames.frag[],newName[])->betaGram.newNameDcl
-                                  ->theNameDcl[];
-                                (1,theNameDcl[])->theNames.put;
-                                (true,theNames.frag[],oldNameDcl[],theNameDcl[])
-                                  ->theFragServer.notifyAstReplaced;
-                                
-                            if);
-                            
-                         #);
-                       (if owner[] <> none then
-                           (if isPrivateToOwner then
-                               'private.'->oldName.prepend;
-                               'private.'->newName.prepend;
-                               
-                           if);
-                           (oldName[],newName[])->owner.updateOpen;
-                           
-                       if);
-                       
-                   if);
-                   close;
-                   
-                else
-                   newName[]->putText; ' is not a legal name'->putLine; 
-               if);
-               
-            #);
-          onCancel::  (#  do close;  #);
-          
-       #);
-     
-  do
-     node[]->betaGram.getName->oldName[];
-     theNameDialog.open;
-     theNameDialog.showModal;
-     
-  #);
 changeName:
   (# oldName,newName: ^text; isIdentifier: @boolean; isEqual: @boolean
   enter newName[]
@@ -1724,39 +1664,6 @@ changeName:
          if);
          
      if)
-  #);
-editScripts:
-  (#
-     theScriptDialog: @scriptDialog
-       (#
-          open::  (#  do 'Edit virtuals'->title; theNames[]->names;  #);
-          onEdit:: 
-            (# name: ^text; 
-            do
-               currentName->name[];
-               (if name[] <> none then name[]->editVirtual;  if);
-               close;
-               
-            #);
-          onCancel::  (#  do close;  #);
-          
-       #);
-     theNames: @textList;
-     theInstantiator: ^instantiator;
-     
-  do
-     theNames.init;
-     className[]->lookup->theInstantiator[];
-     (if theInstantiator[] <> none then
-         (if theInstantiator.scripts[] <> none then
-             theInstantiator.scripts.scan
-               (#  do current[]->theNames.append;  #);
-             
-         if);
-         
-     if);
-     theScriptDialog.open;
-     
   #);
 openSubEditor: (#  do editAttributes;  #);
 addOpen:
@@ -2069,7 +1976,7 @@ changeData:
      oldValue: ^atom;
      defaultValue: ^atom;
      x,y,width,height: @integer;
-     doChangePosition,doChangeSize,doChangeColor: @boolean;
+     doChangePosition,doChangeSize: @boolean;
      
   enter (newData[],force)
   do
@@ -2087,13 +1994,7 @@ changeData:
            // 'height'->current.key.equalNCS then
               true->doChangeSize; 'height'->newData.getInt->height; 
            // 'width'->current.key.equalNCS then
-              true->doChangeSize; 'width'->newData.getInt->width; 
-           // 'red'->current.key.equalNCS // 'green'->current.key.equalNCS
-           // 'blue'->current.key.equalNCS then
-              true->doChangeColor;
-              (* // 'border.visible'->current.key.equalNCS then
-               <<@18562:SimpleIfImp>>; *)
-              
+              true->doChangeSize; 'width'->newData.getInt->width;               
            // 'thePixmap.read'->current.key.equalNCS then
               ('thePixmap.read',current.value[])
                 ->changeImperative
@@ -2149,7 +2050,6 @@ changeData:
          (width,height)->changeSize;
          
      if);
-     (if doChangeColor then newData.backgroundColor->changeColor;  if);
      
   #);
 changeColor:
@@ -2360,6 +2260,7 @@ createShadowTree:
      defaultData[]->tree.defaultData[];
      theClassData[]->tree.theClassData[];
      inherited->tree.inherited;
+     vertical -> tree.vertical;
      node[]->tree.node[];
      tree.children.init;
      (if THIS(windowItemEditor)## <= canvasEditor## then
@@ -3244,6 +3145,7 @@ shadowTree:
      data,defaultData: ^parameters;
      theClassData: ^classData;
      inherited: @boolean;
+     vertical: @boolean;
      node: ^astInterface.beta.attributeDecl;
      children: @list (# element:: shadowTree;  #);
      
@@ -3648,14 +3550,27 @@ hasInclude: booleanValue
              open::  (#  do 'Save'->name; 'S'->key;  #);
              
           #);
+        quitItem: @graphicalEditorItem
+          (#
+             eventHandler:: 
+               (#
+                  onStatus::  (#  do true->value;  #);
+                  onSelect::  (#  do quitApplication #);
+                  
+               #);
+             open::  (#  do 'Quit'->name; 'Q'->key;  #);
+             
+          #);
         open:: 
           (# 
           do
              'File'->name;
              closeItem.open;
              saveItem.open;
+             addSeparator;
              runItem.open;
-             (* saveItem.open;*)
+             addSeparator;
+             quitItem.open;
              
           #);
         
@@ -3754,6 +3669,18 @@ hasInclude: booleanValue
              open::  (#  do 'Delete'->name;  #);
              
           #);
+        gridItem: @graphicalEditorItem
+          (#
+             eventHandler:: 
+               (#
+                  onSelect::  (#  do changeGrid;  #);
+                  onStatus::  (#  do true -> value;  #);
+                  
+               #);
+             open::  (#  do 'Grid...'->name;  #);
+             
+          #);
+         
         findItem: @graphicalEditorItem
           (#
              eventHandler:: 
@@ -3776,28 +3703,6 @@ hasInclude: booleanValue
              open::  (#  do 'Find again'->name;  #);
              
           #);
-        editNameItem: @graphicalEditorItem
-          (#
-             eventHandler:: 
-               (#
-                  onSelect::  (#  do selection.editName;  #);
-                  onStatus::  (#  do selection.size = 1->value;  #);
-                  
-               #);
-             open::  (#  do 'Edit Name...'->name; 'N'->key;  #);
-             
-          #);
-        editScriptsItem: @graphicalEditorItem
-          (#
-             eventHandler:: 
-               (#
-                  onSelect::  (#  do selection.editScripts;  #);
-                  onStatus::  (#  do selection.size = 1->value;  #);
-                  
-               #);
-             open::  (#  do 'Edit Virtuals...'->name; 'K'->key;  #);
-             
-          #);
         openSubEditorItem: @graphicalEditorItem
           (#
              eventHandler:: 
@@ -3806,18 +3711,7 @@ hasInclude: booleanValue
                   onStatus::  (#  do selection.size >= 1->value;  #);
                   
                #);
-             open::  (#  do 'Open Subeditor'->name; 'J'->key;  #);
-             
-          #);
-        objectInfoItem: @graphicalEditorItem
-          (#
-             eventHandler:: 
-               (#
-                  onSelect::  (#  do selection.showInfo;  #);
-                  onStatus::  (#  do not selection.empty->value;  #);
-                  
-               #);
-             open::  (#  do 'Object info...'->name; 'I'->key;  #);
+             open::  (#  do 'Show Source Code'->name; 'J'->key;  #);
              
           #);
         inspectItem: @graphicalEditorItem
@@ -3876,16 +3770,17 @@ hasInclude: booleanValue
              pasteItem.open;
              deleteItem.open;
              addSeparator;
+             gridItem.open;
+             addSeparator;
              openSubEditorItem.open;
-             (* findItem.open;
-              *              findAgainItem.open;
-              *               addSeparator;
-              *)
              addSeparator;
              inspectItem.open;
              objectFitToContents.open;
-             addSeparator;
-             changeColorItem.open;
+             (*** The color feature is mature yet.
+              *** 
+              *** addSeparator;
+              *** changeColorItem.open;
+              ***)
              
           #);
         
