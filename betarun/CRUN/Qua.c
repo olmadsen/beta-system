@@ -18,22 +18,21 @@
 
 /* Sloppy qua-check, only prototypes are considered */
 
+#ifdef sparc
 asmlabel(Qua,
 	 "mov %i1,%o2;" /* dstQuaProto */
 	 "ba "CPREF"Qua;"
 	 "mov %i0,%o3;" /* This */
 	 );
-
-#ifdef hppa
-void Qua(ref(ProtoType) dstQuaProto,
-	 struct Object **theCell,
-	 ref(Object) dstQuaOrigin,
-	 ref(Object) this)
-#else
 void CQua(ref(Object) dstQuaOrigin,
 	  struct Object **theCell,
 	  ref(ProtoType) dstQuaProto,
 	  ref(Object) this)
+#else
+void Qua(ref(ProtoType) dstQuaProto,
+	 struct Object **theCell,
+	 ref(Object) dstQuaOrigin,
+	 ref(Object) this)
 #endif
 {
   ref(Object) src;
@@ -100,7 +99,7 @@ void CQua(ref(Object) dstQuaOrigin,
     }
 #endif
     
-    /* Check for EqS */
+    /* Check for eqS */
     if (srcProto == dstQuaProto){
       /* Structures are identical. All is OK */
     } else {
@@ -132,22 +131,22 @@ void CQua(ref(Object) dstQuaOrigin,
 
 /* Strict qua-check, also checking origins */
 
+#if 0 /* OQua not up-to-date */
+#ifdef sparc
 asmlabel(OQua,
 	 "mov %i1,%o2;" /* dstQuaProto */
 	 "ba "CPREF"OQua;"
 	 "mov %i0,%o3;" /* This */
 	 );
-
-#ifdef hppa
-void OQua(struct Object **theCell,
-	  ref(Object) this, 
-	  ref(ProtoType) dstQuaProto,
-	  ref(Object) dstQuaOrigin)
-#else
 void COQua(ref(Object) dstQuaOrigin,
 	   struct Object **theCell,
 	   ref(ProtoType) dstQuaProto,
 	   ref(Object) this)
+#else
+void OQua(struct Object **theCell,
+	  ref(Object) this, 
+	  ref(ProtoType) dstQuaProto,
+	  ref(Object) dstQuaOrigin)
 #endif
 {
   ref(Object) src;
@@ -202,7 +201,7 @@ void COQua(ref(Object) dstQuaOrigin,
       break;
     }
     
-    /* Check for EqS */
+    /* Check for eqS */
     if (srcProto == dstQuaProto && srcOrigin == dstQuaOrigin ){
       /* Structures are identical. All is OK */
     } else {
@@ -261,3 +260,4 @@ void COQua(ref(Object) dstQuaOrigin,
     }
   }
 }
+#endif /* 0 */
