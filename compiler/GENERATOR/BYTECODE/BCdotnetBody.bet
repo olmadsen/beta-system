@@ -25,6 +25,11 @@ trace_compares:
 trace_textop:
   (# exit false #);
 
+use_stack_check:
+  (# exit false #);
+trace_stack_height:
+  (# exit false #);
+
 use_reflection:
   (# exit false #);
 use_betarun:
@@ -33,6 +38,8 @@ use_modules:
   (# exit false #);
 generateLineNumbers:
   (# exit common.switch[41] #);
+fixme_is_comment:
+  (# exit false #);
 
 reversecond:
   (# cond: @integer
@@ -81,11 +88,14 @@ FIXME:
   enter T[]
   do 'FIXME: ' -> (T.copy).prepend -> T[];
      '\n***** ' -> screen.puttext; T[] -> screen.putline;
-     (*T[] -> emitcomment;*)
-     '\n\tldstr "'->out.puttext; 
-     T[]->out.puttext; 
-     '"' -> out.putline;
-     '\tcall void [mscorlib]System.Console::WriteLine(string)' -> out.puttext;
+     (if fixme_is_comment then
+         T[] -> emitcomment;
+      else
+         '\n\tldstr "'->out.puttext; 
+         T[]->out.puttext; 
+         '"' -> out.putline;
+         '\tcall void [mscorlib]System.Console::WriteLine(string)' -> out.puttext;
+     if)
   #);
 ConvertType:
   (# T: ^text
@@ -155,6 +165,56 @@ AddClass: ConvertType
      if);
   #);
 
+parseNumberOfArguments: 
+  (# numInputs, numOutputs: @integer;
+     signature: ^text;
+     start: @integer;
+     trace: (# exit false #);
+  enter signature[]
+  do (if trace then
+         'parseNumberOfArguments: ' -> screen.puttext;
+         signature[] -> screen.puttext;
+     if);
+     (if 'void ' -> ((1,5)->signature.sub).equal then
+         0 -> numOutputs;
+      else
+         1 -> numOutputs;
+     if);
+     '(' -> signature.findall(# do inx->start #);
+     (start+1, signature.length-1) -> signature.sub -> signature[];
+     (if true 
+      // signature.length=0 then
+         (* no parameters *)
+         0 -> numInputs;
+      // 'void' -> signature.equal then
+         0 -> numInputs;
+      else
+         1 -> numInputs;
+         ',' -> signature.findall(# do numInputs+1->numInputs #);
+     if);
+     (if trace then
+         (if false then
+             '. Arguments: "'->screen.puttext;
+             signature[] -> screen.puttext;
+             '"' -> screen.put;
+         if);
+         '. NoOfInputs: '->screen.puttext;
+         numInputs -> screen.putint; 
+         '. NoOfOutputs: '->screen.puttext;
+         numOutputs -> screen.putint; 
+         screen.newline;
+     if);
+  exit (numInputs, numOutputs)
+  #);
+
+function_stack_delta:
+  (# signature: ^text;
+     in, out: @integer;
+  enter signature[]
+  do signature[] -> parseNumberOfArguments -> (in, out);
+  exit out-in
+  #);
+  
 --FieldsNewDotnet:descriptor--
 (# 
 do (if methodClassTag
@@ -256,6 +316,47 @@ do (if currentTag
    betafile: @file(# pc: @positionConverter #);
    betafilename: ^text;
    line, column: @integer;
+   
+   stack_height: @integer;
+   stack_delta:
+     (# delta: @integer;
+     enter delta 
+     do delta+stack_height->stack_height;
+        (if trace_stack_height then
+            ' /* stack height: ' -> out.puttext;
+            stack_height -> out.putint;
+            ' */ ' -> out.puttext;
+        if);
+        (if use_stack_check then
+            (if (stack_height<0) and (stack_height-delta>=0) then
+                thisClassName.copy -> screen.puttext;
+                '::' -> screen.puttext;
+                thisSignature[] -> screen.puttext;
+                ':' -> screen.puttext;
+                'Stack underflow' -> fixme;
+            if);
+        if);
+     #);
+   check_stack_height:
+     (# predicted_height: @integer;
+        msg: ^text;
+     enter predicted_height
+     do (if use_stack_check then
+            (if stack_height<>predicted_height then
+                thisClassName.copy -> screen.puttext;
+                ':: ' -> screen.puttext;
+                thisSignature[] -> screen.puttext;
+                ':' -> screen.puttext;
+                'Unexpected stack height ' -> msg[];
+                stack_height -> msg.putint;
+                ' (' -> msg.puttext;
+                predicted_height -> msg.putint;
+                ' expected)' -> msg.puttext;
+                msg[] -> fixme;
+            if);
+        if);
+     #);
+   
    init:
      (# BCmch: ^ByteCodeMachine;
      do out.entry.path.name -> thisModuleName[];
@@ -297,7 +398,8 @@ do (if currentTag
          *)
      #);
    opLocal:
-     (# num: @integer
+     (# num: @integer;
+        delta: @integer;
      enter num
      do '\t' -> out.puttext;
         INNER;
@@ -310,12 +412,14 @@ do (if currentTag
          else
             ' ' -> out.put 
         if);
-        num -> out.putint; out.newline;
+        num -> out.putint; 
+        delta-> stack_delta; 
+        out.newline;
      #);
    storeLocal: 
-     opLocal(# do 'st' -> out.puttext; #);
+     opLocal(# do 'st' -> out.puttext; -1->delta; #);
    loadLocal: 
-     opLocal(# do 'ld' -> out.puttext; #);
+     opLocal(# do 'ld' -> out.puttext; 1->delta; #);
    numLocals:
      (# exit BCstate.fields.numLocals-1-BCstate.fields.numArguments #);
   
@@ -352,21 +456,6 @@ do (if currentTag
                '}\n' -> out.puttext;
            if);
         #);
-        (if false then
-            '// FIXME: hardcoded:\n'
-            '.assembly extern tstlib {}\n'
-            '.assembly extern tstarith {}\n'
-            '.assembly extern tstrelop {}\n'
-            '.assembly extern tstbool {}\n'
-            '.assembly extern tstblock {}\n'
-            '.assembly extern tstvirt {}\n'
-            '.assembly extern exe {}\n'
-            '.assembly extern fill {}\n'
-            '.assembly extern chk {}\n'
-            '.assembly extern isPlatform {}\n'
-            '.assembly extern tstenv {}\n'
-              ->out.puttext;
-        if);
      #);
    
    emitFileReferences:
@@ -487,7 +576,14 @@ do (if currentTag
             noOfArguments->('noOfArguments:'->tmp[]).putint -> emitcomment;
             tmp[] -> screen.putline;
             (dumpstack, 'Negative memory offset') -> stop;
-        if)
+        if);
+        (if 'ld'->op.equal then
+            (* ldarg/ldloc *)
+            1 -> stack_delta;
+         else
+            (* starg/stloc *)
+            -1 -> stack_delta;
+        if);
 
      #);
    dumpReg:
@@ -519,6 +615,7 @@ do (if currentTag
         (if (32<=i) and (i<=126) then
             ' // \'%c\'' -> out.putformat(# do THIS(pushCst).i->c #);
         if);
+        1 -> stack_delta;
      #);
    Address:
      (#
@@ -605,17 +702,20 @@ do (if currentTag
                   else
                      'ldelem.i4' -> out.puttext;
                      'missing fieldType' -> emitcomment;
-                 if)
+                 if);
+                 -1 -> stack_delta (* pops object, field name; pushes field value *);
               else
                  (if ONlevel > 0 then
                      'ldfld\t' -> out.puttext; 1->_n;
                      emitType;
                      emitField;
+                     0 -> stack_delta (* pops object; pushes field value *);
                   else
                      (if isField=1 then
                          'ldfld\t' -> out.puttext; 2->_n;
                          emitType;
                          emitField; 
+                         0 -> stack_delta (* pops object; pushes field value *);
                       else
                          (* method field (local variable/argument?)*)
                          ('ld',off) -> emitMemOp; 
@@ -642,21 +742,24 @@ do (if currentTag
                          'wrong fieldType: ' 
                            -> (fieldType.copy).prepend
                            -> emitcomment;
-                     if)
+                     if);
                   else
                      'iastore' -> out.puttext;
                      'missing fieldType' -> emitcomment
-                 if)
+                 if);
+                 -2 -> stack_delta (* pops object, field name; *)
               else
                  (if ONlevel > 0 then
                      'stfld\t' -> out.puttext; 2->_n;
                      emitType;
                      emitField;
+                     -2 -> stack_delta (* pops object, field name; *)
                   else
                      (if isField=1 then
                          'stfld\t' -> out.puttext; 3->_n;
                          emitType;
                          emitField;
+                         -2 -> stack_delta (* pops object, field name; *)
                       else
                          ('st',off) -> emitMemOp; 
                      if)
@@ -670,17 +773,20 @@ do (if currentTag
              (if withQua then
                  'castclass\t' -> out.puttext;
                  sig[] -> out.puttext;
-                 '\n\t'->out.puttext
+                 '\n\t'->out.puttext;
+                 (* stack neutral *)
              if);
              (if ONlevel > 0 then
                  'stfld\t' -> out.puttext; 4->_n;
                  (*emittype; *) sig[]->AddClass->out.puttext; ' '->out.put;
                  isOrigin -> emitField;
+                 -2 -> stack_delta (* pops object, field name; *)
               else           
                  (if isField = 1 then
                      'stfld\t' -> out.puttext; 5->_n;
                      (*emittype;*) sig[]->AddClass->out.puttext; ' '->out.put;
                      isOrigin -> emitField;
+                     -2 -> stack_delta (* pops object, field name; *)
                   else
                      ('st',off) -> emitMemOp;  
                  if);
@@ -694,11 +800,13 @@ do (if currentTag
                  'ldfld\t' -> out.puttext; 3->_n;
                  (*emittype;*) sig[]->AddClass->out.puttext; ' ' -> out.put;
                  emitField;
+                 0 -> stack_delta (* pops object; pushes field value *)
               else 
                  (if isField = 1 then
                      'ldfld\t' -> out.puttext; 4->_n;
                      (*emittype;*)sig[]->AddClass->out.puttext;' ' -> out.put;
                      emitField;
+                     0 -> stack_delta (* pops object; pushes field value *)
                   else
                      ('ld',off) -> emitMemOp;  
                  if);
@@ -706,7 +814,8 @@ do (if currentTag
              (if withQua then
                  '\n\tcastclass\t' -> out.puttext;
                  BC.gettext -> sig[]; 
-                 sig[] -> out.puttext
+                 sig[] -> out.puttext;
+                 (* stack nutral *)
              if);
           #);
         pushAdr:
@@ -715,6 +824,7 @@ do (if currentTag
                  (if reg
                   // thisO then
                      'ldarg.0' -> out.puttext; 3->_n;
+                     1 -> stack_delta;
                   else
                      '/* Warning: pushAdr:register not this */'->out.puttext;
                  if)
@@ -744,7 +854,7 @@ do (if currentTag
      #);
    emitLocals:
      (#
-     do '\t.maxstack 8\n' -> out.puttext;                        
+     do '\t.maxstack 1000\n' -> out.puttext;                        
      #);
    emitCmpJmp:
      (* Compare two top elements and jump conditionally *)
@@ -768,7 +878,8 @@ do (if currentTag
             'bge' -> out.puttext 
         if);
         '\tL'->out.puttext;
-        lab -> out.putint
+        lab -> out.putint;
+        -2 -> stack_delta;
      #);
    emitCmpToBool:
      (* Compare two top elements and push result *)
@@ -797,6 +908,7 @@ do (if currentTag
             '\tldc.i4.1\n'
             '\txor' -> out.puttext;
         if);
+        -1 -> stack_delta;
      #);
    emitCmpBoolJmp:
      (* Compare top with 0 and jump conditionally *)
@@ -806,6 +918,7 @@ do (if currentTag
             'emitCmpBoolJmp' -> emitcomment;
         if);
         'ldc.i4.0\n\t' -> out.puttext;
+        1 -> stack_delta;
         (cond->reversecond,L,lab) -> emitCmpJmp;
      #);
    emitLabDef:
@@ -822,7 +935,8 @@ do (if currentTag
    newArray:
      (# type: ^text
      enter type[]
-     do '\tnewarr ' -> out.puttext; type[] -> out.puttext
+     do '\tnewarr ' -> out.puttext; type[] -> out.puttext;
+        0 -> stack_delta;
      #);
    
    opCode, arg1: @integer;
@@ -855,9 +969,11 @@ do init;
              'object'->thisSuperOrgName[];
              BC.get -> subLevel; 
              BC.gettext -> thisOrgName[];
-             '  .field public ' -> out.puttext;
-             thisOrgName[] -> AddClass -> out.puttext;
-             ' origin'-> out.putline;
+             (if not ('-'->thisOrgName.equal) then
+                 '  .field public ' -> out.puttext;
+                 thisOrgName[] -> AddClass -> out.puttext;
+                 ' origin'-> out.putline;
+             if);
              313->ctrace(# do '%%%class: "'->xT;
                            thisClassName[] -> xT;
                            '" blocklevel: ' -> xT;
@@ -877,8 +993,11 @@ do init;
                 BC.get -> noOfArguments -> BCstate.fields.numArguments;
                 BC.get -> aux;
                 (if 'main' -> thisInnerMethodName.equal then
-                    '\n  .method public static void \'main\'(string[] args) cil managed\n  {' 
-                      -> out.putline;
+                    'static void \'main\'(string[] args)' -> thisSignature[];
+                    '\n  .method public ' -> out.puttext;
+                    0 -> stack_height;
+                    thisSignature[] -> out.puttext;
+                    ' cil managed\n  {' -> out.putline;
                     (if use_modules then
                         (* entrypoint defined by al.exe *)
                      else
@@ -893,12 +1012,17 @@ do init;
                     false -> isMainMethod;
                     (if aux = 0 then
                         '\n  .method public virtual void ' -> out.puttext;
-                        thisInnerMethodName[]-> quote -> out.puttext;
+                        0 -> stack_height;
+                        thisInnerMethodName[]
+                          -> quote 
+                          (* -> thisSignature[] *)
+                          -> out.puttext;
                         '() cil managed\n  {\n'
                         '\tret\n'
                         '  }\n' -> out.puttext;
                     if);
                     '\n  .method public ' -> out.puttext;
+                    0 -> stack_height;
                     thisSignature[] 
                       -> AddClass(# nonstatic::(# do 'virtual '->out.puttext #)#)
                       -> out.puttext; (* AddClass fixes return type, but not arguments *)
@@ -907,13 +1031,17 @@ do init;
                 emitLocals;
              #);
           // initCons then
-             '  /* instance constructor */\n'
-             '  .method public rtspecialname specialname hidebysig instance void .ctor('
-               -> out.puttext;
-             (if thisOrgname[]<>NONE then
-                 thisOrgName[] (*-> AddClass*) -> out.puttext;
+             'rtspecialname specialname hidebysig instance void .ctor('
+               -> thisSignature[];
+             (if not ('-' -> thisOrgname.equal) then
+                 thisOrgName[] (*-> AddClass*) -> thisSignature.puttext;
              if);
-             ')\n  {' -> out.putline;
+             ')' -> thisSignature.put;
+             '  /* instance constructor */\n'
+             '  .method public ' -> out.puttext;
+             0 -> stack_height;
+             thisSignature[] -> out.puttext;
+             '\n  {' -> out.putline;
           // field then
              (# F: @text
              do 'F' -> F; BC.get->F.putInt;
@@ -929,7 +1057,8 @@ do init;
              '  L'->out.puttext; BC.get->out.putint; 
              ':'->out.putline;
           // callPrim then
-             (# prim,arg: ^text
+             (# prim,arg: ^text;
+                delta: @integer;
              do BC.gettext -> prim[];
                 BC.getText -> arg[];
                 (if true 
@@ -940,19 +1069,32 @@ do init;
                     '\tcall\tinstance void '->out.puttext;
                     thisSuperName[] -> out.puttext;
                     '::.ctor(' -> out.puttext;
-                    (if not ('-'->arg.equal) then
-                        arg[] -> AddClass -> out.puttext
-                    if);
-                    ')\n' -> out.puttext;
-                    BCstate.fields.emitInit
-                 // 'init' -> prim.equal then
-                    '\tnewobj\tinstance void '-> out.puttext;
-                    class[] (* class name *) -> AddClass -> out.puttext;
-                    '::.ctor(' -> out.puttext;
-                    (if not ('-'->arg.equal) then
-                        arg[] (* origin name *) -> AddClass -> out.puttext;
+                    (if ('-'->arg.equal) then
+                        (* no arguments *)
+                        -1 -> delta;
+                     else
+                        arg[] -> AddClass -> out.puttext;
+                        -2 -> delta;
                     if);
                     ')' -> out.puttext;
+                    delta -> stack_delta;
+                    out.newline;
+                    BCstate.fields.emitInit
+                 // 'init' -> prim.equal then
+                    (# ctor_signature: ^text;
+                    do 'void ' -> ctor_signature[];
+                       class[] (* class name *) -> AddClass -> ctor_signature.puttext;
+                       '::.ctor(' -> ctor_signature.puttext;
+                       (if ('-'->arg.equal) then
+                           (* no arguments *)
+                        else
+                           arg[] (* origin name *) -> AddClass -> ctor_signature.puttext;
+                       if);
+                       ')' -> ctor_signature.puttext;
+                       '\tnewobj\tinstance '-> out.puttext;
+                       ctor_signature[] -> out.puttext;
+                       1+(ctor_signature[]->function_stack_delta) -> stack_delta
+                    #);
                  // 'AlloVR4' -> prim.equal then
                     'int32' -> newArray
                  // 'AlloVR1' -> prim.equal then
@@ -965,6 +1107,7 @@ do init;
                     if);
                     'callvirt instance char[] [mscorlib]System.String::ToCharArray()' 
                       -> out.puttext;
+                    0 -> stack_delta;
                  // 'Text2BetaText' -> prim.equal then
                     (* Note! Hardcoding of pattern 'text'
                      * including case, etc. Should be handled
@@ -975,28 +1118,36 @@ do init;
                         'Text2BetaText:'->emitcomment;
                         '\n\t' -> out.puttext;
                     if);
-                    'callvirt instance char[] [mscorlib]System.String::ToCharArray()\n\t' 
+                    'callvirt instance char[] [mscorlib]System.String::ToCharArray()' 
                       -> out.puttext;
+                    0 -> stack_delta;
+                    '\n\t' -> out.puttext;
                     'char []' -> allocLocal -> storeLocal;
-                    '\tldnull\n'
-                    '\tnewobj\tinstance void class [tstenv]text::.ctor(class [tstenv]tstenv)\n'
-                    '\tdup\n'
-                      -> out.puttext;
+                    '\tldnull' -> out.puttext;
+                    1 -> stack_delta;
+                    '\n\tnewobj\tinstance void class [tstenv]text::.ctor(class [tstenv]tstenv)' -> out.puttext;
+                    0 -> stack_delta;
+                    '\n\tdup' -> out.puttext;
+                    1 -> stack_delta;
+                    out.newline;
                     numLocals -> loadLocal;
                     numLocals -> releaseLocal;
-                    '\tcallvirt instance void class [tstenv]text::\'enter\'(char[])\n'
-                      -> out.puttext
+                    '\tcallvirt instance void class [tstenv]text::\'enter\'(char[])'
+                      -> out.puttext;
+                    -2 -> stack_delta;
                  // 'CharArray2String' -> prim.equal then
                     '\t' -> out.puttext;
                     (if trace_textop then
                         'CharArray2String:'->emitcomment;
                         '\n\t' -> out.puttext;
                     if);
-                    'newobj [mscorlib]System.String(char[])' -> out.puttext
+                    'newobj [mscorlib]System.String(char[])' -> out.puttext;
+                    0 -> stack_delta;
                  // 'Att' -> prim.equal then
                     'missing call of attach here' -> emitcomment;
                     'we pop the stack to avoid overflow' -> emitcomment;
                     '\tpop' -> out.puttext;
+                    -1 -> stack_delta;
                  else
                     'Primitive NYI: ' -> (prim[] -> ('(' -> (')' -> (arg.copy).append).prepend).prepend).prepend -> fixme;
                 if);
@@ -1008,6 +1159,7 @@ do init;
                 '\tcall\t' -> out.puttext;  
                 prim[] -> out.puttext;
                 out.newline;
+                prim[] -> function_stack_delta -> stack_delta;
              #)
           // callInner then
              '\tldarg.0' -> out.puttext; 4->_n; out.newline;
@@ -1017,7 +1169,9 @@ do init;
              thisClassName[] -> out.puttext;
              '::'->out.puttext;
              thisInnerMethodName[]->out.puttext;
-             '()'->out.putline
+             '()'->out.puttext;
+             0 -> stack_delta;
+             out.newline;
           // comment then
              (# T: ^text
              do BC.gettext -> T[];
@@ -1077,9 +1231,11 @@ do init;
                          * but we may do in BETA
                          *)
                         'ldnull' -> out.puttext;
+                        1 -> stack_delta;
                      else
                         (if ONlevel = 0 then
                             'ldarg.0' -> out.puttext; 1->_n;
+                            1 -> stack_delta;
                          else
                             'ldfld\t' -> out.puttext; 5->_n;
                             (if ftag = 0 then
@@ -1099,13 +1255,17 @@ do init;
                                 className[] -> quote -> AddClass -> out.puttext
                             if);
                             '::origin ' -> out.puttext; 3->_n;
+                            0 -> stack_delta;
                         if);
                     if)
                  #)
               // call then 
                  (# calltype: @integer;
+                    delta: @integer;
                  do BC.get -> calltype;
                     BC.getText->T[];
+                    (*'// call: ' -> out.puttext; T[]->out.putline;*)
+                    T[] -> function_stack_delta -> delta;
                     (if calltype = 1 then
                         'call' -> out.puttext 
                      else
@@ -1113,17 +1273,21 @@ do init;
                     if);
                     ' '->out.put;
                     2->_n;
-                    T[] -> AddClass(# static::(# do true->omitstatic #);
-                                      nonstatic::(# do 'instance '->out.puttext#)
+                    T[] -> AddClass(# static::(# do true->omitstatic; #);
+                                      nonstatic::(# do 'instance '->out.puttext; delta-1->delta #)
                                    #) ->out.puttext;
+                    delta -> stack_delta;
                     313->trace(#do '%%%call: '->xT; T[]->xT #)
                  #)
               // return then
                  (if BC.get 
-                  // 0 
+                  // 0 then 
+                     0 -> check_stack_height;
+                     'ret' -> out.puttext;
                   // 1
-                  // 2
-                     then 'ret' -> out.puttext
+                  // 2 then
+                     1 -> check_stack_height;
+                     'ret' -> out.puttext;
                   else (* error *) 
                      'xreturn' -> FIXME;
                  if);
@@ -1160,21 +1324,25 @@ do init;
               // pushVal then
                  'pushVal'->out.puttext
               // pushNone then
-                 'ldnull' -> out.puttext
+                 'ldnull' -> out.puttext;
+                 1 -> stack_delta;
               // dup then
                  BC.get -> arg1;
                  'dup' -> out.puttext;
+                 1 -> stack_delta;
                  (if arg1 > 0 then 
                      'IL has no dup_x1/dup_x2 instructions' -> FIXME;
                  if)     
               // pop then
                  'pop' -> out.puttext;
+                 -1 -> stack_delta;
               // allocAndStoreLocal then
                  BC.getText -> allocLocal -> storeLocal;
               // _loadLocal then
                  numLocals -> loadLocal;
               // loadRange then 
                  'ldlen' -> out.puttext;
+                 0 -> stack_delta;
               // pushReg then
                  '// pushReg '->out.puttext;
                  dumpReg
@@ -1184,12 +1352,8 @@ do init;
                  'index'->out.puttext
               // cmpAndJmp then
                  'cmpAndJmp'->out.puttext
-              // call then
-                 'call\tinstance '->out.puttext; 1->_n;
-              // callInner then 'callInner' ->out.puttext
-              // newVirt then 'newVirt' ->out.puttext
-              // return then
-                 'ret\n'->out.puttext
+              // newVirt then 
+                 'newVirt' ->out.puttext
               // label then
                  'L'->out.puttext
               // callPrim then
@@ -1201,15 +1365,7 @@ do init;
               // pushText then
                  'ldstr'->out.puttext;
                  ' "'->out.puttext; BC.getText->out.puttext; '"'->out.put;
-              // pushAdr then
-                 'pushAdr'->out.puttext
-              // loadRef then
-                 'loadRef' ->out.puttext
-              // storeRef then
-                 'storeRef'->out.puttext
-              // storeQref then
-                 'storeQref'->out.puttext
-              // dup then 'dup' ->out.puttext
+                 1 -> stack_delta;
               // jmp then
                  'br\t'->out.puttext;
                  (if BC.get
@@ -1217,45 +1373,63 @@ do init;
                   else '?' -> out.put;
                  if);
                  BC.get->out.putint; 
+                 0 -> stack_delta;
               // cmp then
                  'cmp'->out.puttext
               // func then
                  (# func: @integer;
+                    delta: @integer;
                  do BC.get->func;
                     (if func
                      // add then
                         'add'->out.puttext; 1->_n;
+                        -1 -> delta;
                      // sub then
-                        'sub'->out.puttext
+                        'sub'->out.puttext;
+                        -1 -> delta;
                      // orr then
-                        'or'->out.puttext
+                        'or'->out.puttext;
+                        -1 -> delta;
                      // andd then
-                        'and'->out.puttext
+                        'and'->out.puttext;
+                        -1 -> delta;
                      // xorr then
-                        'xor'->out.puttext
+                        'xor'->out.puttext;
+                        -1 -> delta;
                      // nott then
                         (* boolean not *)
                         '\tldc.i4.0\n' -> out.putline;
-                        '\tceq' -> out.putline;
+                        '\tceq' -> out.puttext;
+                        0 -> delta;
+                        out.newline;
                      // mult then
-                        'mul'->out.puttext
+                        'mul'->out.puttext;
+                        -1 -> delta;
                      // divv then
-                        'div'->out.puttext
+                        'div'->out.puttext;
+                        -1 -> delta;
                      // modd then
-                        'rem'->out.puttext
+                        -1 -> delta;
+                        'rem'->out.puttext;
                      // logNot then
                         (* bit not *)
-                        'not'->out.puttext
+                        'not'->out.puttext;
+                        0 -> delta;
                      // neg then
-                        'neg'->out.puttext
+                        'neg'->out.puttext;
+                        0 -> delta;
                      // logicalShiftLeft then 
-                        'shl'->out.puttext
+                        'shl'->out.puttext;
+                        -1 -> delta;
                      // arithShiftLeft then 
-                        'shl'->out.puttext
+                        'shl'->out.puttext;
+                        -1 -> delta;
                      // logicalShiftRight then 
-                        'shr.un'->out.puttext
+                        'shr.un'->out.puttext;
+                        -1 -> delta;
                      // arithShiftRight then 
-                        'shr'->out.puttext
+                        'shr'->out.puttext;
+                        -1 -> delta;
                      // rotateLeft then
                         (* Perform i %rol r *)
                         (* Implemented as:
@@ -1285,6 +1459,7 @@ do init;
                            '\tor' -> out.putline;
                            loc_i -> releaseLocal;
                            loc_r -> releaseLocal;
+                           -1 -> delta;
                         #)
                      // rotateRight then
                         (* Perform i %ror r *)
@@ -1316,10 +1491,12 @@ do init;
                            '\tor' -> out.putline;
                            loc_i -> releaseLocal;
                            loc_r -> releaseLocal;
-                        #)
+                           -1 -> delta;
+                        #);
                      else
                         'Unhandled bytecode func.' -> (func -> asText).prepend -> fixme;
                     if);
+                    delta -> stack_delta;
                     99->_n;
                     out.newline;
                  #)
@@ -1331,7 +1508,7 @@ do init;
              if);
              out.newline;
          if);
-         restart read
+         restart read;
      if);
    out.close
 #)  
