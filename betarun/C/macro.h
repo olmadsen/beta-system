@@ -7,9 +7,9 @@
 
 #if defined(MAC)
 #include <memory.h>
-extern Ptr ReAlloc(Ptr p, Size size);
+extern void *ReAlloc(void *p, Size size);
 #  define MALLOC(size) NewPtr(size)
-#  define REALLOC(src,size)  realloc(src,size)
+#  define REALLOC(src,size)  ReAlloc(src,size)
 #  define FREE(ptr) DisposPtr((Ptr)ptr)
 #else
    /* UNIX or Windows */

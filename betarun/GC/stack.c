@@ -86,7 +86,13 @@ void ProcessValhallaRefStack(void)
 
 long WindBackSP(long SP, Object *obj, long PC)
 {
+
+#ifdef ppcmac
+      SP = *(long*)SP; /* Use FramePointer */
+#else
   long SPoff /* size allocated on stack when theObj became active */;
+  
+  
   GetSPoff(SPoff, CodeEntry(GETPROTO(obj), PC)); 
   DEBUG_STACK({
     fprintf(output, "WindBackSP:\n");
@@ -96,6 +102,7 @@ long WindBackSP(long SP, Object *obj, long PC)
     fprintf(output, "New SP:      0x%x\n", SP+SPoff);
   });
   SP = (long)SP+SPoff;
+#endif /* ppcmac */
   return SP;
 }
 

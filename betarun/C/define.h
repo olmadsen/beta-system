@@ -31,9 +31,7 @@
 
 #define RTINFO  /* Include support for runtime info */
 #ifdef RTDEBUG
-#if (!defined(MAC) /*&& !defined(hppa)*/)
 #define RTVALHALLA
-#endif
 #endif
 
 /* No need for interpretItem - only used for Jawahar's interpreter */

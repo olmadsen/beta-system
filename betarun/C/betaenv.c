@@ -12,7 +12,7 @@
 #endif
 
 #ifdef MAC
-Ptr ReAlloc(Ptr p, Size size)
+void *ReAlloc(void *p, Size size)
 {
 	Ptr newp;
 	Size oldsize;
