@@ -327,7 +327,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
 	staticObj = cast(Object) ComponentItem(theObj);
 	break;
       case SwitchProto(DopartObjectPTValue):
-	staticObj = (cast(DopartObject)theObj)->Origin;
+	staticObj = (cast(DopartObject)staticObj)->Origin;
 	break;
 
       case SwitchProto(DynItemRepPTValue):
@@ -954,9 +954,8 @@ int DisplayBetaStack(enum BetaErr errorNumber,
 
 
 
-#define BETAENV_RUNTIME_HANDLER 0
-  /* FIXME: does not work with MT */
 #if BETAENV_RUNTIME_HANDLER
+  /* FIXME: does not work with MT */
 
   /* see TST/tstprogram.bet */
   
