@@ -159,6 +159,7 @@
 #  define DEBUG_VALHALLA(code) if( DebugValhalla ) { code; }
 #  define DEBUG_SOCKETS(code) if( DebugSockets ) { code; }
 #  define DEBUG_LAZY(code) if( DebugLazy ) { code; }
+#  define DEBUG_LABELS(code) if( DebugLabels ) { code; }
 #else
 #  define DEBUG_IOA(code)
 #  define DEBUG_MT(code)
@@ -174,6 +175,7 @@
 #  define DEBUG_VALHALLA(code)
 #  define DEBUG_SOCKETS(code)
 #  define DEBUG_LAZY(code)
+#  define DEBUG_LABELS(code)
 #endif
 
 #ifdef RTINFO
@@ -183,11 +185,13 @@
 #  define INFO_CBFA( code) if( InfoCBFA ){ code; }
 #  define INFO_HEAP_USAGE( code) if( InfoHeapUsage ){ code; }
 #  define INFO_DOT( code)  if( InfoDOT  ){ code; }
+#  define INFO_LABELS( code) if( InfoLabels ){ code; }
 #  define INFO_CODE( code) code;
 #else
 #  define INFO( code)
 #  define INFO_IOA( code)
 #  define INFO_AOA( code)
+#  define INFO_LABELS( code)
 #  define INFO_CODE( code)
 #  define INFO_HEAP_USAGE( code) 
 #endif

@@ -211,6 +211,31 @@ void CkReg(char *func,long value, char *reg)
   }								             
 }
 
+void PrintRef(Object *ref)
+{
+  if (ref) {
+    if (inBetaHeap(ref) && isObject(ref) ){
+      fprintf(output, ", is object");
+      if (IsPrototypeOfProcess((long)(ref)->Proto)) {
+	fprintf(output, " (");
+	DescribeObject(ref);
+	fprintf(output, ")");
+      } else {
+	fprintf(output, ", proto NOT ok: 0x%x", (int)ref->Proto);
+      }
+    } else {
+      fprintf(output, ", is NOT object");
+      if (isCode(ref)) {
+	char *lab = getLabel((long)ref);
+	fprintf(output, " (is code: <%s+0x%x>)", lab, (int)labelOffset);
+      } else {
+	PrintWhichHeap(ref); /* Will most often be "(not in beta heap)" */
+      }
+    }
+  }
+  fprintf(output, "\n");
+}
+
 void Illegal()
 { 
 #if defined(sgi) || defined(nti)
@@ -592,7 +617,7 @@ void PrintHeap(long * startaddr, long numlongs)
 #ifdef intel
 static void RegError(long pc1, long pc2, char *reg, Object * value)
 { 
-  int lab;
+  char *lab;
   fprintf(output, 
 	  "\nIllegal value for GC register %s at PC=0x%x (called from 0x%x): %s=0x%x\n", 
 	  reg, 
@@ -663,8 +688,6 @@ void CheckRegisters(void)
 /*************************** Label Debug ****************************/
 #ifdef RTDEBUG
 
-#undef DEBUG_LABELS 
-
 typedef struct _label {
   long address;
   char *id;
@@ -680,25 +703,24 @@ GLOBAL(long process_offset) = 0;
 
 static void initLabels()
 {
-
-#ifdef ppcmac
-  return;
-#endif
   char exefilename[500];
   char *theLabel;
   labeltable *table;
   long lastLab=0;
   long labelAddress;
 
-  fprintf(output, "[initLabels ... ");
-  fflush(output);
+#ifdef ppcmac
+  return;
+#endif /* ppcmac */
+
+  INFO_LABELS(fprintf(output, "[initLabels ... "); fflush(output););
   strcpy(exefilename, ArgVector[0]);
 #ifdef nti
   if ((strlen(exefilename)<=4) || 
       (EqualNCS(exefilename+strlen(exefilename)-4, ".exe")!=0)){
     strcat(exefilename, ".exe");
   }
-#endif
+#endif /* nti */
   table = initReadNameTable(exefilename, 1);
   if (!table){
     fprintf(output, "FAILED!]");
@@ -710,7 +732,7 @@ static void initLabels()
     extern void main();
     process_offset = getProcessOffset(table, (long)&main);
   }
-#endif
+#endif /* nti */
   labels=(label**)MALLOC(maxLabels * sizeof(label*));
   if (!labels) {
     fprintf(output, "Failed to allocate memory for labels\n");
@@ -735,12 +757,10 @@ static void initLabels()
       break;
     }
     theLabel = nextLabel(table);
-#if 0
-#ifdef DEBUG_LABELS
-    fprintf(output, "0x%08x %s\n",  (unsigned)labelAddress, theLabel);
-    fflush(output);
-#endif
-#endif
+    DEBUG_LABELS({
+      fprintf(output, "0x%08x %s\n",  (unsigned)labelAddress, theLabel);
+      fflush(output);
+    });
     lab->id = (char *)MALLOC(strlen(theLabel)+1);
     if (!lab) {
       fprintf(output, "Allocation of label id failed\n");
@@ -760,18 +780,17 @@ static void initLabels()
     labels[lastLab] = lab;
   }
   numLabels=lastLab;
-  fprintf(output, " done]");
-  fflush(output);
-#ifdef DEBUG_LABELS
-  fprintf(output, "Labels:\n");
-  { 
-    long n;
-    for (n=0; n<lastLab; n++){
-      fprintf(output, "0x%x\t%s\n", (unsigned)labels[n]->address, labels[n]->id);
+  INFO_LABELS(fprintf(output, " done]"); fflush(output));
+  DEBUG_LABELS({
+    fprintf(output, "Labels:\n");
+    { 
+      long n;
+      for (n=0; n<lastLab; n++){
+	fprintf(output, "0x%x\t%s\n", (unsigned)labels[n]->address, labels[n]->id);
+      }
     }
-  }
-  fflush(output);
-#endif
+    fflush(output);
+  });
 }
 
 char *getLabel (long addr)
@@ -781,7 +800,7 @@ char *getLabel (long addr)
 #ifdef ppcmac
   labelOffset=0;
   return "<unknown>";
-#endif
+#endif /* ppcmac */
 
 if (!labels) initLabels();
   if (!addr){

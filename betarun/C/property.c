@@ -10,18 +10,7 @@
  *    char *betart;
  *  Ex: SetupProperties("InfoIOA:IOA#2333");
  */
-#include <stdio.h>
 #include "beta.h"
-#include <ctype.h>
-
-#if defined(MAC)
-#include <String.h>
-#include <Files.h>
-#endif
-
-#ifdef RTVALHALLA
-#include <string.h>
-#endif
 
 static long intScan(char*,char*);
 static void ValueProperty(char *name, char *value);
@@ -40,6 +29,7 @@ static void BooleanProperty(char *name)
    ENTRY("infoaoa",  InfoAOA = TRUE);
    ENTRY("infocbfa", InfoCBFA = TRUE);
    ENTRY("infodot", InfoDOT = TRUE);
+   ENTRY("infolabels", InfoLabels = TRUE);
    ENTRY("infoall", 
 	 Info0 = TRUE; InfoIOA = TRUE; InfoAOA = TRUE; 
 	 InfoCBFA = TRUE; 
@@ -67,6 +57,7 @@ static void BooleanProperty(char *name)
   ENTRY("debugstackobj", DebugStackObj = TRUE);
   ENTRY("debugsockets", DebugSockets = TRUE);
   ENTRY("debuglazy", DebugLazy = TRUE);
+  ENTRY("debuglabels", DebugLabels = TRUE);
 #ifdef MT
   ENTRY("debugmt", DebugMT = TRUE);
 #endif

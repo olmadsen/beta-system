@@ -8,9 +8,6 @@
  * This file is used by both the debugger and the dynamic linker.
  * The debugger needs only the text (code) labels, whereas the dynamic
  * linker needs most symbols.
- * 
- * FIXME: In betarun/C/stack.c some of this code is replicated.
- * Probably this file should be included in betarun as "the one and only".
  */
 
 #ifdef nti_gnu
@@ -18,30 +15,6 @@
 #endif /* nti_gnu */
 
 #include "beta.h"
-
-#ifdef ppcmac
-
-char* nextLabel(labeltable *handle) 
-{ 
-  return 0;
-}
-
-int nextAddress(labeltable *handle) 
-{ 
-  return -1;
-}
-
-labeltable *initReadNameTable (char* execFileName, int full) { 
-  return 0;
-}
-
-void freeNameTable(labeltable *handle)
-{
-  FREE(handle);
-  return;
-}
-
-#else /* !ppcmac */
 
 #ifdef sgi
 #define FULL_NMCOMMAND  "/bin/nm -hvp %s"
@@ -89,6 +62,11 @@ void findNextLabel (labeltable *table)
   int type;
   int ch;
   int inx,val;
+
+#ifdef ppcmac
+  return 0;
+#endif
+
   while (1) {
     table->NextAddress=0;
     while ((ch=fgetc (table->fd))!=' ') {
@@ -141,6 +119,11 @@ labeltable *initReadNameTable (char* execFileName, int full)
 { 
   char command[100];
   labeltable *table = (labeltable*)MALLOC(sizeof(labeltable));
+
+#ifdef ppcmac
+  return 0;
+#endif
+
   if (!table){
     fprintf(output,"couldn't malloc label table for file %s\n", execFileName); 
     return 0;
@@ -200,6 +183,11 @@ long getProcessOffset(labeltable *table, long main_physical)
 
 int nextAddress(labeltable *table) 
 { 
+
+#ifdef ppcmac
+  return -1;
+#endif
+
   findNextLabel(table);
   /*fprintf(output, "nextAddress: 0x%x\n", table->NextAddress); fflush(output);*/
   return table->NextAddress;
@@ -217,9 +205,6 @@ static PSTR GetSZStorageClass(BYTE storageClass);
 static void DumpSymbolTable(labeltable *table,
 			    PIMAGE_SYMBOL pSymbolTable, 
 			    unsigned cSymbols);
-static void GetSectionName(WORD section,
-			   PSTR buffer, 
-			   unsigned cbBuffer);
 static void DumpSectionTable(labeltable *table,
 			     PIMAGE_SECTION_HEADER section,
 			     unsigned cSections,
@@ -423,18 +408,4 @@ static PSTR GetSZStorageClass(BYTE storageClass) {
     return "???";
 }
 
-static void GetSectionName(WORD section, PSTR buffer, unsigned cbBuffer) {
-  char tempbuffer[10];
-  
-  switch ( (SHORT)section ) {
-  case IMAGE_SYM_UNDEFINED: strcpy(tempbuffer, "U"); break;
-  case IMAGE_SYM_ABSOLUTE:  strcpy(tempbuffer, "A"); break;
-  case IMAGE_SYM_DEBUG:     strcpy(tempbuffer, "d"); break;
-  default: sprintf(tempbuffer, "%-5X", section);
-  }
-  strncpy(buffer, tempbuffer, cbBuffer-1);
-};
-
 #endif /* nti */
-
-#endif /* ppcmac */

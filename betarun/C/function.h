@@ -238,6 +238,7 @@ extern void Illegal(void);
 extern long inBetaHeap(Object *);
 extern char *getLabel (long addr);
 extern long labelOffset;
+extern void PrintRef(Object *ref);
 #if defined(MAC)
 extern void InitTheCursor(void);
 extern void RotateTheCursor(void);

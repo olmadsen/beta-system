@@ -9,12 +9,14 @@
 #include "define.h"
 
 #include <stdio.h>
+#include <ctype.h>
 
 #if defined (MAC)
 # include <Resources.h>
 # include <Memory.h>
 # include <StdLib.h>
 # include <String.h>
+# include <Files.h>
 # ifdef RTDEBUG
 #  include <Types.h>
 # endif
@@ -23,6 +25,10 @@
 # include <malloc.h>
 # include <memory.h>
 # include <stdlib.h>
+#endif
+
+#ifdef RTVALHALLA
+#include <string.h>
 #endif
 
 #ifdef nti
@@ -50,4 +56,4 @@
 #include "snakedep.h"
 #endif
 
-#endif
+#endif /* _BETA_H_ */

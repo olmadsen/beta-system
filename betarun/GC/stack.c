@@ -1015,7 +1015,7 @@ void ProcessStackPart(long *low, long *high)
 			ProtoTypeName((ProtoType*)*current), 
 			getLabel(*current));
 	      } else {
-		int lab = getLabel((long)*current);
+		char *lab = getLabel((long)*current);
 		fprintf(output, " <%s+0x%x>\n", lab, labelOffset);
 	      }
 	    } else {
@@ -1104,25 +1104,6 @@ void ProcessStackObj(StackObject *theStack, CellProcessFunc func)
 }
 
 #ifdef RTDEBUG
-void PrintRef(Object * ref)
-{
-  if (ref) {
-    if (inBetaHeap(ref) && isObject(ref) ){
-      fprintf(output, ", is object");
-      if (IsPrototypeOfProcess((long)(ref)->Proto)) {
-	fprintf(output, " (");
-	DescribeObject(ref);
-	fprintf(output, ")");
-      } else {
-	fprintf(output, ", proto NOT ok: 0x%x", (int)ref->Proto);
-      }
-    } else {
-      fprintf(output, ", is NOT object");
-      PrintWhichHeap(ref);
-    }
-  }
-  fprintf(output, "\n");
-}
 
 /* Traverse the StackArea [low..high] and print all references within it. */
 void PrintStackPart(long *low, long *high)
@@ -1189,8 +1170,8 @@ void PrintStackPart(long *low, long *high)
         } else {
 	  fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
 	  if (*current){
-	    int lab = getLabel((long)*current);
-	    fprintf(output, " (%s+0x%x)\n", lab, (int)labelOffset);
+	    char *lab = getLabel((long)*current);
+	    fprintf(output, " <%s+0x%x>\n", lab, (int)labelOffset);
 	  } else {
 	    fprintf(output, "\n");
 	  }
@@ -1258,42 +1239,15 @@ void PrintStack(long *StackEnd)
 
 #ifdef sparc
 
-void PrintRef(Object * ref)
-{
-  if (ref) {
-    if (inBetaHeap(ref) && isObject(ref) ){
-      fprintf(output, ", is object");
-      if (IsPrototypeOfProcess((int)((ref)->Proto))){
-	fprintf(output, ", proto ok: 0x%x (", 
-		(int)ref->Proto);
-	DescribeObject(ref);
-	fprintf(output, ")");
-      } else {
-	fprintf(output, ", proto NOT ok: 0x%x", (int)ref->Proto);
-      }
-    } else {
-      fprintf(output, ", is NOT object");
-      if (isCode(ref)) {
-	fprintf(output, 
-		" (is code: <%s+0x%x>)",
-		getLabel((long)ref),
-		(int)labelOffset);
-      } else {
-	PrintWhichHeap(ref); /* Will most often be (not in beta heap) */
-      }
-    }
-  }
-  fprintf(output, "\n");
-}
-
 void PrintCAR(struct RegWin *cAR)
 {
+  char *lab = getLabel(PC);
   fprintf(output, 
-	  "\n----- C AR: 0x%x, end: 0x%x, PC: 0x%x (%s+0x%x)\n",
+	  "\n----- C AR: 0x%x, end: 0x%x, PC: 0x%x <%s+0x%x>\n",
 	  (int)cAR, 
 	  (int)cAR->fp,
 	  (int)PC,
-	  getLabel(PC),
+	  lab,
 	  (int)labelOffset);
   fprintf(output, "%%fp: 0x%x\n", (int)cAR->fp); 
 }
@@ -1301,13 +1255,14 @@ void PrintCAR(struct RegWin *cAR)
 void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
 {
   Object **theCell = (Object **) &ar[1];
+  char *lab = getLabel(PC);
 
   fprintf(output, 
-	  "\n----- AR: 0x%x, theEnd: 0x%x, PC: 0x%x (%s+0x%x)\n",
+	  "\n----- AR: 0x%x, theEnd: 0x%x, PC: 0x%x <%s+0x%x>\n",
 	  (int)ar, 
 	  (int)theEnd,
 	  (int)PC,
-	  getLabel(PC),
+	  lab,
 	  (int)labelOffset);
 
   fprintf(output, "%%i0: 0x%x", (int)ar->i0); PrintRef((Object *)ar->i0);
