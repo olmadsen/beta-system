@@ -1,17 +1,20 @@
-ORIGIN '~beta/basiclib/betaenv';
+ORIGIN '~beta/basiclib/binfile';
+INCLUDE '~beta/sysutils/endian';
 --LIB: attributes--
 
 (* classfiledefs.bet:
  *   Patterns for manipulating Java class files.
  * 
  *   See http://java.sun.com/docs/books/vmspec/2nd-edition/html/ClassFile.doc.html
+ *   Section numbers below refer to this document.
  *
- *   $Id: classfiledefs.bet,v 1.1 2002-06-11 14:10:09 datpete Exp $
+ *   $Id: classfiledefs.bet,v 1.2 2002-06-12 14:00:25 datpete Exp $
  *)
 
+(* Section 4.1 *)
 JAVA_MAGIC: (# exit 0xcafebabe #);
-JAVA_MAJOR: (# exit 3 #);
-JAVA_MINOR: (# exit 45 #);
+JAVA_MAJOR: (# exit 45 #);
+JAVA_MINOR: (# exit 3 #);
 
 (* Access flags *)
 ACC_PUBLIC: (# exit 0x0001 #);
@@ -32,7 +35,6 @@ ACC_VISIBILITY:
   (# exit (ACC_PUBLIC %Bor ACC_PRIVATE %Bor ACC_PROTECTED) #);
 
 (* Constant types *)
-
 CONSTANT_Class: (# exit 7 #);
 CONSTANT_Fieldref: (# exit 9 #);
 CONSTANT_Methodref: (# exit 10 #);
@@ -46,22 +48,297 @@ CONSTANT_NameAndType: (# exit 12 #);
 CONSTANT_Utf8: (# exit 1 #);
 CONSTANT_Unicode: (# exit 2 #);
 
-DEFAULT_CLASS_PATH:
-  (# exit '.' #);
 
-(* /* Extract a character from a Java-style Utf8 string.
- *  * PTR points to the current character.
- *  * LIMIT points to the end of the Utf8 string.
- *  * PTR is incremented to point after the character that gets returned.
- *  * On an error, -1 is returned. */
- * #define UTF8_GET(PTR, LIMIT) \
- *   ((PTR) >= (LIMIT) ? -1 \
- *    : *(PTR) < 128 ? *(PTR)++ \
- *    : {*(PTR)&0xE0) == 0xC0 && ((PTR)+=2)<=(LIMIT) && ((PTR)[-1]&0xC0) == 0x80 \
- *    ? (((PTR)[-2] & 0x1F) << 6) + ((PTR)[-1] & 0x3F) \
- *    : {*(PTR) & 0xF0) == 0xE0 && ((PTR) += 3) <= (LIMIT) \
- *    && ((PTR)[-2] & 0xC0) == 0x80 && ((PTR)[-1] & 0xC0) == 0x80 \
- *    ? (((PTR)[-3]&0x0F) << 12) + (((PTR)[-2]&0x3F) << 6) + ((PTR)[-1]&0x3F) \
- *    : ((PTR)++, -1))
- * 
- *)
+--BinFilelib: attributes--
+
+(* Section 4.1 *)
+interface_info: entry
+  (# interface_name_index: @int16u;
+     write::
+       (# 
+       do interface_name_index -> htons -> putShort; 
+       #);
+  #);
+
+interface_table: entry_table(# entrytype::interface_info #);
+
+
+(* section 4.4: The Constant Pool *)
+
+cp_info: entry
+  (* Section 4.4 *)
+  (# tag:< charvalue;
+     write::<
+       (#
+       do tag->putByte;
+          INNER;
+       #);
+  exit THIS(cp_info)[]
+  #);
+nyi_cp_info: cp_info
+  (# write::(# do 'Attempt to write unimplemented cp_info'
+                 -> screen.putline;
+            #);
+  #);
+CONSTANT_Class_info: cp_info
+  (* Section 4.4.1 *)
+  (# tag:: (# do CONSTANT_Class->value #);
+     name_index: @int16u;
+     write:: 
+       (# 
+       do name_index -> htons -> putShort;
+       #);
+  enter name_index
+  #);
+CONSTANT_ref_info: cp_info
+  (* Section 4.4.2 *)
+  (# class_index: @int16u;
+     name_and_type_index: @int16u;
+     write:: 
+       (# 
+       do class_index -> htons -> putShort;
+          name_and_type_index -> htons -> putShort;
+       #);
+  enter (class_index, name_and_type_index)
+  #);
+CONSTANT_Fieldref_info: CONSTANT_ref_info
+  (* Section 4.4.2 *)
+  (# tag:: (# do CONSTANT_Fieldref->value #);
+  #);
+CONSTANT_Methodref_info: CONSTANT_ref_info
+  (* Section 4.4.2 *)
+  (# tag:: (# do CONSTANT_Methodref->value #);
+  #);
+CONSTANT_InterfaceMethodref_info: CONSTANT_ref_info
+  (* Section 4.4.2 *)
+  (# tag:: (# do CONSTANT_InterfaceMethodref->value #);
+  #);
+CONSTANT_String_info: cp_info
+  (* Section 4.4.3 *)
+  (# tag:: (# do CONSTANT_String->value #);
+     string_index: @int16u;
+     write:: (# do string_index -> htons -> putShort; #);
+  enter string_index
+  #);
+Constant_Integer_info: nyi_cp_info
+  (* Section 4.4.4 *)
+  (# #);
+Constant_Float_info: nyi_cp_info
+  (* Section 4.4.4 *)
+  (# #);
+Constant_Long_info: nyi_cp_info
+  (* Section 4.4.5 *)
+  (# #);
+Constant_Double_info: nyi_cp_info
+  (* Section 4.4.5 *)
+  (# #);
+CONSTANT_NameAndType_info: cp_info
+  (* Section 4.4.6 *)
+  (# tag:: (# do CONSTANT_NameAndType->value #);
+     name_index: @int16u;
+     descriptor_index: @int16u;
+     write:: 
+       (#
+       do name_index -> htons -> putShort;
+          descriptor_index -> htons -> putShort;
+       #);
+  enter (name_index, descriptor_index)
+  #);
+CONSTANT_Utf8_info: cp_info
+  (* Section 4.4.7 *)
+  (# tag:: (# do CONSTANT_Utf8->value #);
+     length: @int16u;
+     bytes: [8]@int8u;
+     write:: 
+       (# pb: ^BinFile.putBytes;
+       do length -> htons -> putShort; 
+          &putBytes[] -> pb[]; (* Must be preallocated *)
+          (@@bytes[1], length) -> pb;
+       #);
+     make_utf8:
+       (# s: ^text; (* Should really be a unicode string *)
+          inc:
+            (# 
+            do length+1->length;
+               (if length>bytes.range then
+                   bytes.range->bytes.extend;
+               if);
+            #);
+       enter s[]
+       do 0->length;
+          s.scanall
+          (# 
+          do (if (0x01<=ch) and (ch<=0x7f) then
+                 inc;
+                 ch -> bytes[length];
+              else
+                 'CONSTANT_Utf8_info.make_utf8: NYI for ch='
+                   -> screen.puttext;
+                 ch->screen.put;
+                 screen.newline;
+             if);
+          #);
+       #);
+  enter make_utf8
+  #);
+
+constant_pool_table: entry_table
+  (# entrytype::cp_info; 
+     usecount::(# do count+1->value (* stupid! *) #);
+  #);
+
+(* Section 4.5: Fields *)
+
+field_info: entry
+  (* Section 4.5 *)
+  (# (* NYI *)
+  exit THIS(field_info)[]
+  #);
+
+field_table: entry_table(# entrytype::field_info #);
+
+
+(* Section 4.6: Methods *)
+
+method_info: entry
+  (* Section 4.6 *)
+  (# access_flags: @int16u;
+     name_index: @int16u;
+     descriptor_index: @int16u;
+     attributes: @Attribute_table;
+     write::
+       (# ps: ^BinFile.putShort;
+       do &putShort[] -> ps[];
+          access_flags     -> htons -> ps;
+          name_index       -> htons -> ps;
+          descriptor_index -> htons -> ps;
+          attributes.write;
+       #);
+  enter (access_flags, name_index, descriptor_index)
+  exit THIS(method_info)[]
+  #);
+
+method_table: entry_table(# entrytype::method_info #);
+
+(* Section 4.7: Attributes *)
+
+attribute_info: entry
+  (* Section 4.7 *)
+  (# attribute_name_index: @int16u;
+     attribute_length:< integerValue;
+     write::<
+       (# 
+       do attribute_name_index -> htons -> putShort; 
+          attribute_length     -> htonl -> putLong;
+          INNER;
+       #);
+  enter attribute_name_index
+  exit THIS(attribute_info)[]
+  #);
+
+Code_attribute: attribute_info
+  (* Section 4.7.3 *)
+  (# 
+     attribute_length:: 
+       (# 
+       do 2+2+4+code_length+2+exceptions.length+2+attributes.length 
+            -> value
+       #);
+     max_stack: @int16u;
+     max_locals: @int16u;
+     code_length: @int32u;
+     _code: [128]@int8u;
+     exceptions: @Exception_table;
+     attributes: @Attribute_table;
+     putByte:
+       (# b: @int8u;
+       enter b
+       do code_length+1->code_length;
+          (if code_length>_code.range then
+              _code.range->_code.extend;
+          if);
+          b -> _code[code_length]
+       #);
+     putShort:
+       (# s: @int16u;
+       enter s
+       do code_length+2->code_length;
+          (if code_length>_code.range then
+              _code.range->_code.extend;
+          if);
+          s %srl 8     -> _code[code_length-1];
+          s %Band 0xff -> _code[code_length];
+       #);
+     write::
+       (# pb: ^BinFile.PutBytes;
+          ps: ^BinFile.PutShort;
+          pl: ^BinFile.PutLong;
+       do &THIS(BinFile).putBytes[] -> pb[];
+          &THIS(BinFile).putShort[] -> ps[];
+          &THIS(BinFile).putLong[]  -> pl[];
+          max_stack -> htons -> ps;
+          max_locals -> htons -> ps;
+          code_length -> htonl -> pl;
+          (@@_code[1], code_length) -> pb;
+          exceptions.write;
+          attributes.write;
+       #);
+  enter (max_stack, max_locals)
+  #);
+
+Attribute_table: entry_table
+  (# entrytype::Attribute_info;
+     length: integerValue
+       (# 
+       do (for i:count repeat
+               entries[i].attribute_length+value -> value;
+          for);
+       #);
+  #);
+
+Exception_info: entry
+  (* Section 4.7.3 *)
+  (# start_pc: @int16u;
+     end_pc: @int16u;
+     handler_pc: @int16u;
+     catch_type: @int16u;
+     write::
+       (# 
+       do start_pc -> htons -> putShort;
+          end_pc -> htons -> putShort;
+          handler_pc -> htons -> putShort;
+          catch_type -> htons -> putShort;
+       #);
+  #);
+
+Exception_table: entry_table
+  (# entrytype::Exception_info;
+     length: integerValue(# do count*8 -> value #);
+  #);
+
+(* Generic patterns used above *)
+entry:
+  (# write:< object #);
+
+entry_table:
+  (# entrytype:< entry;
+     entries: [8]^entrytype;
+     count: @int16u;
+     usecount:< integerValue(# do count->value; INNER #);
+     add:
+       (# e: ^entry;
+       enter e[]
+       do count+1 -> count;
+          (if count>entries.range then
+              entries.range->entries.extend;
+          if);
+          e[] -> entries[count][];
+       #);
+     write:
+       (# 
+       do usecount -> htons -> putShort;
+          (for i:count repeat
+               entries[i].write;
+          for);
+       #);
+  #);

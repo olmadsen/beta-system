@@ -6,6 +6,10 @@
  *   javac helloworld.java
  * or (GNU gcc3.1)
  *   gcj helloworld.java
+
+ * run with
+ *   java HelloWorld 
+
  * examine with (Sun)
  *   javap -c  -private -s -verbose HelloWorld
  * or (GNU gcc3.1)
