@@ -410,8 +410,10 @@ namespace beta.converter
 	  }
 	  if (returnType != null) {
 	    indent(); put("exit result");
-	    if (returnType.StartsWith("^"))
-	      put("[]");
+	    if (returnType.StartsWith("^")
+		|| returnType.StartsWith("[0]") /* using Ref2Rep */ ){
+		put("[]");
+	    }
 	    nl();
 	  }
 	  putln("#);");
