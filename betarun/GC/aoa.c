@@ -1097,14 +1097,13 @@ static void Phase3()
 ref(Object) lastAOAObj=0;
 
 static FILE *dump_aoa_file=NULL;
-static int dump_aoa_lastnum = 0;
 #define AOA_DUMP(code) { code; }
 #define AOA_DUMP_TEXT(text) \
   if (dump_aoa){ fprintf(dump_aoa_file, "%s", text); }
 #define AOA_DUMP_LONG(num) \
-  if (dump_aoa){ fprintf(dump_aoa_file, "0x%08x", num); }
+  if (dump_aoa){ fprintf(dump_aoa_file, "0x%08x", (int)num); }
 #define AOA_DUMP_INT(num) \
-  if (dump_aoa){ fprintf(dump_aoa_file, "%d", num); }
+  if (dump_aoa){ fprintf(dump_aoa_file, "%d", (int)num); }
 
 /* AOACheck: Consistency check on entire AOA area */
 void AOACheck()
@@ -1118,7 +1117,7 @@ void AOACheck()
     if (dump_aoa_file) {
       fclose(dump_aoa_file);
     }
-    sprintf(name,"aoa_dump%04d",NumAOAGc);
+    sprintf(name,"aoa_dump%04d", (int)NumAOAGc);
     dump_aoa_file = fopen(name, "w+");
     if (!dump_aoa_file) {
       fprintf(output, "failed to open aoa_dump_file\n");

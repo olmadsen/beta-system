@@ -1379,8 +1379,11 @@ void DescribeObject(theObject)
       return;
     case SwitchProto(DopartObjectPTValue):
       fprintf(output, 
-	      "Dopart: origin: 0x%x", 
-	      (int)((cast(DopartObject)theObject)->Origin));
+	      "Dopart: origin: 0x%x, proto: 0x%x (%s)", 
+	      (int)((cast(DopartObject)theObject)->Origin),
+	      (int)((cast(DopartObject)theObject)->Origin)->Proto,
+	      ProtoTypeName(((cast(DopartObject)theObject)->Origin)->Proto)
+	      );
       return;
     case SwitchProto(DynItemRepPTValue):
     case SwitchProto(DynCompRepPTValue):

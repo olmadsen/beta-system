@@ -13,7 +13,7 @@
 #ifdef sparc
 #include "../CRUN/crun.h"
 #ifdef RTDEBUG
-/*#define LD_SEGMENT_TEST*/
+/* #define SPARC_SKIP_TO_ETEXT 1*/
 #endif
 #endif
 
@@ -739,6 +739,8 @@ void ProcessStackPart(long *low, long *high)
 
 #ifdef sparc
 
+static long skipCparams=FALSE;
+
 #ifdef RTDEBUG
 struct RegWin *BottomAR=0, *lastAR=0;
 GLOBAL(long PC) = 0;
@@ -841,6 +843,13 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
     CompleteScavenging();
 
     /* Process the stack part */
+    if (skipCparams){
+      /* This AR called C, skip one hidden word, and (at least) 
+       * six parameters (compiler allocates 12, that may be too much...)
+       */
+      theCell = (struct Object **)((long)theCell+48);
+    }
+
     for (; theCell != (struct Object **) theEnd; theCell+=2)
       /* +2 because the compiler uses "dec %sp,8,%sp" before pushing */
       if (inBetaHeap(*theCell) && isObject(*theCell))
@@ -920,9 +929,12 @@ void ProcessStack()
 			});
 
 	    theAR = (struct RegWin *) theAR->l6; /* Skip to betaTop */
+
+	    skipCparams = TRUE;
 	  }
 	}
 	ProcessAR(theAR, (struct RegWin *) theAR->fp);
+	skipCparams=FALSE;
 	DEBUG_CODE(lastAR = theAR);
     }
     DEBUG_CODE(if (BottomAR) Claim(lastAR==BottomAR, "lastAR==BottomAR");
@@ -939,27 +951,33 @@ GLOBAL(long lastPC)=0;
 void ProcessStackObj(struct StackObject *theStack)
 {
     struct RegWin *theAR;
+#ifdef RTDEBUG
+    long oldDebugStack=DebugStack;
+#endif
 
     /* Start at theStack->Body[1], since theStack->Body[0] is saved FramePointer */
     long delta = (char *) &theStack->Body[1] - (char *) theStack->Body[0];
     
-    DEBUG_STACK(fprintf(output, " *-*-* StackObject *-*-* \n");
-		lastPC=PC;
-		/* The PC of the topmost AR is saved in CallerLCS of the comp this stackobj 
-		 * belongs to. It is not known here. 
-		 */
-		PC = 0;
-		)
+    DEBUG_STACKOBJ(fprintf(output, " *-*-* StackObject (age %d) *-*-*\n", (int)theStack->GCAttr);
+		   lastPC=PC;
+		   /* The PC of the topmost AR is saved in CallerLCS of the comp this stackobj 
+		    * belongs to. It is not known here. 
+		    */
+		   PC = 0;
+		   );
 
+    DEBUG_CODE(if (DebugStackObj){
+      DebugStack=TRUE;
+    } else {
+      DebugStack=FALSE;
+    });
+
+    for (theAR =  (struct RegWin *) &theStack->Body[1];
+	 theAR != (struct RegWin *) &theStack->Body[theStack->StackSize];
 #ifdef RTDEBUG
-    for (theAR =  (struct RegWin *) &theStack->Body[1];
-	 theAR != (struct RegWin *) &theStack->Body[theStack->StackSize];
-	 PC = theAR->i7 +8, theAR =  (struct RegWin *) (theAR->fp + delta))
-#else
-    for (theAR =  (struct RegWin *) &theStack->Body[1];
-	 theAR != (struct RegWin *) &theStack->Body[theStack->StackSize];
-	 theAR =  (struct RegWin *) (theAR->fp + delta))
+	 PC = theAR->i7 +8, 
 #endif
+	   theAR =  (struct RegWin *) (theAR->fp + delta))
       {
 	Claim(&theStack->Body[1] <= (long *) theAR
 	      && (long *) theAR <= &theStack->Body[theStack->StackSize],
@@ -967,9 +985,10 @@ void ProcessStackObj(struct StackObject *theStack)
 	ProcessAR(theAR, (struct RegWin *) (theAR->fp + delta));
       }
 
-    DEBUG_STACK(fprintf(output, " *-*-* End StackObject *-*-*\n");
-		PC=lastPC;
-		)
+    DEBUG_STACKOBJ(fprintf(output, " *-*-* End StackObject *-*-*\n");
+		   PC=lastPC;
+		   );
+    DEBUG_CODE(DebugStack=oldDebugStack);
 }
 #endif /* sparc */
 
@@ -1274,13 +1293,13 @@ static void initLabels()
   /* Find number of labels */
   thePipe = popen (command, "r");
 
-#ifdef SPARC_LD_SEGMENT_TEST
+#ifdef SPARC_SKIP_TO_ETEXT
   /* Skip to etext */
   for (;;){
-    fscanf(thePipe, "0x%08x %c %s\n", &labelAddress, &ch, theLabel);
+    fscanf(thePipe, "0x%08x %c %s\n", (int*)&labelAddress, &ch, theLabel);
     if (labelAddress==(long)&etext) break;
   }
-#endif /* SPARC_LD_SEGMENT_TEST */
+#endif /* SPARC_SKIP_TO_ETEXT */
   numLabels=0;
   for (;;){
     if (fscanf(thePipe, "0x%08x %c %s\n", (int *)&labelAddress, &ch, theLabel) == EOF)
@@ -1303,13 +1322,13 @@ static void initLabels()
       /* Read into labels */
       pclose (thePipe);
       thePipe = popen (command, "r");
-#ifdef SPARC_LD_SEGMENT_TEST
+#ifdef SPARC_SKIP_TO_ETEXT
       /* Skip to etext */
       for (;;){
 	fscanf(thePipe, "0x%08x %c %s\n", (int *)&labelAddress, &ch, theLabel);
 	if (labelAddress==(long)&etext) break;
       }
-#endif /* SPARC_LD_SEGMENT_TEST */
+#endif /* SPARC_SKIP_TO_ETEXT */
       /* Read labels */
       for (;;lastLab++){
 	struct label *lab;
@@ -1393,10 +1412,25 @@ void PrintRef(ref(Object) ref)
       }
     } else {
       fprintf(output, ", is NOT object");
-#ifdef SPARC_LD_SEGMENT_TEST
-      if (isCode(ref) && (((int)ref & 3) == 0)) fprintf(output, " (is code)");
-      if (isData(ref)) fprintf(output, " (is data)");
-#endif /* SPARC_LD_SEGMENT_TEST */
+      if (isCode(ref) && (((int)ref & 3) == 0)) {
+	fprintf(output, 
+		" (is code: %s+0x%x)",
+		getLabel((long*)ref),
+		(int)labelOffset);
+      } else {
+	if (inBetaHeap(ref)){
+	  if (inIOA(ref)) 
+	    fprintf(output, " (is in IOA)");
+	  if (inAOA(ref)) 
+	    fprintf(output, " (in in AOA)");
+	  if (inLVRA(ref)) 
+	    fprintf(output, " (is in LVRA)");
+	  if (ToSpace<=(long*)ref && (long*)ref<ToSpaceLimit)
+	    fprintf(output, " (is in ToSpace!)");
+	} else {
+	  fprintf(output, " (not in beta heap and not code)");
+	}
+      }
     }
   }
   fprintf(output, "\n");
@@ -1438,6 +1472,16 @@ void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
   /* Notice that in INNER some return adresses are pushed. This is no
    * danger.
    */
+  if (skipCparams){
+    /* This AR called C, skip one hidden word, and (at least) 
+     * six parameters
+     */
+    int i;
+    fprintf(output, "(Skipping 12 longs allocated for C-call)\n");
+    for (i=0; i<12; i++, theCell+=1) {
+      fprintf(output, "  (0x%x skipped)\n", (int)(*theCell));
+    }
+  }
   for (; theCell != (struct Object **) theEnd; theCell+=2) {
     fprintf(output, "0x%x", (int)(*theCell));
     PrintRef(cast(Object)(*theCell));
@@ -1465,6 +1509,8 @@ void PrintStack()
   /* end points to the activation record of PrintStack() */
   PC=((struct RegWin *) end)->i7 +8;
   end = (struct RegWin *)((struct RegWin *) end)->fp; /* Skip AR of PrintStack() */
+
+  skipCparams = TRUE; /* Skip 12 longs allocated for the call to PrintStack() */
 
   for (theAR =  (struct RegWin *) end;
        theAR != (struct RegWin *) 0;
@@ -1494,9 +1540,11 @@ void PrintStack()
 			});
 
 	    theAR = (struct RegWin *) theAR->l6; /* Skip to betaTop */
+	    skipCparams=TRUE;
       }
     }
     PrintAR(theAR, (struct RegWin *) theAR->fp);
+    skipCparams=FALSE;
   }
    
   fprintf(output, " *****  End of trace  *****\n");

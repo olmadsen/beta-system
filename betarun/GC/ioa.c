@@ -402,12 +402,14 @@ Program terminated.\n", (int)(4*ReqObjectSize));
 			(int)ToSpace, 
 			(int)ToSpaceTop, 
 			(int)ToSpaceLimit);
-		)
-      
+		);
 
 #ifdef hpux
-      /*    cachectl(CC_FLUSH, 0, 0); */
+    /*    cachectl(CC_FLUSH, 0, 0); */
 #endif
+
+    DEBUG_CODE(memset(ToSpace, 0, IOASize));
+
   }
 
 #ifndef KEEP_STACKOBJ_IN_IOA
