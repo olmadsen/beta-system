@@ -23,6 +23,8 @@ codeTextField  : textField
      
      myScan: scantext (# exit ch #);     
      
+     texteditingExtent:< (# start,end: @integer do INNER exit (start,end) #);
+     
      beginning_of_line:
        (# pos: @integer;   
        <<SLOT beginning: doPart>>
@@ -86,9 +88,25 @@ codeTextField  : textField
        exit depth
        #);
      
+     get_whitespace:
+       (# i: @integer;
+          result: ^text;
+       enter i
+       do &text[]->result[];
+          (for i repeat ' '->result.append for); 
+       exit result[]
+       #);
+     
+     frozen_indent_line:
+       (# do
+          disableUpdate;
+          indent_line;
+          enableUpdate;
+       #);
+     
      indent_line:<
        (# t: ^text;
-          indent_value,pos,pos2: @integer;
+          indent_value,pos,pos2,offset: @integer;
        do 
           disableUpdate;
           selection->(pos,pos2);
@@ -96,6 +114,7 @@ codeTextField  : textField
           
           (* We must calculate the start position *)
           beginning_of_line->pos2;
+          pos-pos2->offset;
           (if (pos-pos2)>indent_value then pos-indent_value->pos2; if); 
           INNER;
           (if indent_value>0 then indent_value + pos2 -> pos2; if);
@@ -153,6 +172,22 @@ codeTextField  : textField
        exit blockIndent
        #); 
      
+     indentHandler:
+       (* enter a selection to be indented *) 
+       (# 
+          begin,end,depth : @integer;
+       enter (begin,end)
+       do 
+          disableUpdate;
+          (begin,end)->depth_of_selection->depth;
+          (begin,begin)->selection;
+          indent_line;
+          (for depth-1 repeat
+               next_line;
+               indent_line;
+          for);
+          enableupdate;
+       #); 
      
      eventhandler::<
        (# 
@@ -179,6 +214,7 @@ codeTextField  : textField
             do
                (if trace and enterPushed then 'enterPushed'->putline; if);
                (if enterPushed and NOT(changingText) then  
+                   disableUpdate;
                    true->changingText;
                    previous_line;
                    indent_line;
@@ -186,6 +222,7 @@ codeTextField  : textField
                    beginning_of_line; 
                    indent_line;
                    false->enterPushed->changingText;
+                   enableUpdate;
                if); 
                INNER
             #);
@@ -193,7 +230,7 @@ codeTextField  : textField
           onBeforeChange::<
             (# T,t1: ^text;
                ch1: @char;
-               indent: @integer;
+               indent,begin,end: @integer;
             do 
                (if trace then 'onBeforeChange' -> putline; if); 
                (if (trace and controlmodified) then 
@@ -203,7 +240,6 @@ codeTextField  : textField
                (if (t[]<>NONE) AND (T.lgth=1) then
                    T.T[1] -> ch1;
                    (if trace then 
-                       'her 3'->screen.putline;
                        'ch1: '->screen.puttext; 
                        ch1->screen.putint; 
                        screen.newline;
@@ -211,34 +247,18 @@ codeTextField  : textField
                    (if ch1
                     // ascii.ht then 
                        (if trace then 'Tab' -> screen.putline; if);
-                       indent_line;
-                       false -> allow;
-                    // 'a'
-                    // 'A' then 
-                       (if controlmodified then 
-                           beginning_of_line; 
-                           false->allow;
+                       selection->(begin,end);
+                       (if begin<>end then (begin,end)->indentHandler; 
+                        else frozen_indent_line; 
                        if);
+                       false -> allow;
                     // 'e'
                     // 'E' then
                        (if controlmodified then 
+                           
                            end_of_line; 
                            false->allow; 
                        if);
-                    // 'p'
-                    // 'P' then
-                       (if controlmodified then 
-                           previous_line; 
-                           false->allow;
-                       if);
-                    // 'n'
-                    // 'N' then
-                       (if controlmodified then 
-                           next_line; 
-                           false->allow;
-                       if);
-                    // 10 then
-                       true->enterPushed;
                     else INNER
                    if);
                 else INNER

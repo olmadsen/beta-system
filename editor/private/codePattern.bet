@@ -2,70 +2,74 @@ Origin '~beta/editor/codeTextField.bet';
 
 --beginning: doPart--
 do
-   (# endpos,row,col: @integer;
-   do 
+   (# endpos,row,col,begin,end: @integer;
+   do      
       selection->(pos,endpos);
       pos->posToRowCol->(row,col);
       (row,1)->rowColToPos->pos;
+      texteditingExtent->(begin,end);
+      (if begin>pos then begin+3->pos if); 
       (pos,pos)->selection;
    #);
    
    
 --next: doPart--
 do
-   (# endpos,row,col: @integer;
+   (# endpos,row,col,begin,end: @integer;
       tmp: ^text;
-   do 
+   do
       selection->(pos,endpos);
       pos->posToRowCol->(row,col);
+      texteditingExtent->(begin,end);
       (if not(last_line) then
           (row+1,1)->rowColToPos->pos;
           (pos,pos)->selection;
           current_line->tmp[];
-          (if tmp.length>=col then 
-              pos+col-1->pos
+          (if last_line and (tmp.length+pos>end) then
+              (end-3,end-3)->selection; 
            else
-              pos+tmp.length->pos;
+              (if tmp.length>=col then pos+col-1->pos
+               else pos+tmp.length->pos if);
+              (pos,pos)->selection;
           if);
        else
-          end_of_line->pos;
+          (end-3,end-3)->selection;
       if);
-      (pos,pos)->selection;
    #);
    
 --previous: doPart--
 do
-   (# endpos,row,col: @integer;
+   (# endpos,row,col,begin,end: @integer;
       tmp: ^text;
    do 
       selection->(pos,endpos);
       pos->posToRowCol->(row,col);
-      (if not(row=1) then 
+      texteditingExtent->(begin,end);
+      (if not(first_line) then
           (row-1,1)->rowColToPos->pos;
           (pos,pos)->selection;
           current_line->tmp[];
-          (if tmp.length>=col then
-              pos+col-1->pos;
-           else
-              pos+tmp.length->pos;
-          if);
+          (if tmp.length>=col then pos+col-1->pos;
+           else pos+tmp.length->pos if);
+          (if pos<begin then begin+3->pos if);
        else
-          0->pos;
+          begin+3->pos;
       if);
-      (pos,pos)->selection;      
+      (pos,pos)->selection;
    #);
    
 --end: doPart--
 do
-   (# endpos,row,col: @integer;
+   (# endpos,row,col,begin,end: @integer;
    do 
       selection->(pos,endpos);
       pos->posToRowCol->(row,col);
+      texteditingExtent->(begin,end);
       (if not(last_line) then
           (row+1,0)->rowColToPos->pos;
-          pos-1-pos;
+          pos-1-pos; 
        else
-          length->pos;
+          end-3->pos; 
       if);
       (pos,pos)->selection; 
    #);
@@ -75,11 +79,8 @@ do
    (# pos,endpos : @integer;
    do 
       selection->(pos,endpos);
-      (beginning_of_line,end_of_line)
-        ->get_selection->t[];
-      (if regexp.nonCaseSensitive then
-          t[]->regexp.lowercase->t[];
-      if);
+      (beginning_of_line,end_of_line)->get_selection->t[];
+      (if regexp.nonCaseSensitive then t[]->regexp.lowercase->t[] if);
       (pos,endpos)->selection;
    #);
    
@@ -102,22 +103,25 @@ do
    
 --last: doPart-- 
 do
-   (# pos, endpos,row,col,lastrow,lastcol : @integer;
-   do            
+   (# pos, endpos,row,col,lastrow,lastcol,begin,end : @integer;
+   do 
       selection->(pos,endpos);
       pos->posToRowCol->(row,col);
-      length->posToRowCol->(lastrow,lastcol);
+      texteditingExtent->(begin,end);
+      end->posToRowCol->(lastrow,lastcol);
       (lastrow=row)->result;
-   #); 
+   #);
    
 --first: doPart--
 do
-   (# pos, endpos,row,col : @integer;
+   (# pos, endpos,row,col,begin,end,firstrow,firstcol : @integer;
    do      
       selection->(pos,endpos);
       pos->posToRowCol->(row,col);
-      (row=1)->result;
-   #); 
+      texteditingExtent->(begin,end);
+      begin->posToRowCol->(firstrow,firstcol);
+      (row=firstrow)->result;
+   #);
    
    
 --indent_by_int: doPart--
@@ -128,13 +132,12 @@ do
    do 
       current_line->regexp.eat_indent->(current_indent, t[]);
       (if (current_indent>indent) AND (indent>=0) then
-          (beginning_of_line,beginning_of_line+current_indent-indent)->selection;
+          (beginning_of_line,beginning_of_line+current_indent-indent)
+            ->selection;
           delete;
       if);
-      (if current_indent<indent then
-          ''->t[];
-          (for i:indent-current_indent repeat ' '->t.prepend; for); 
-          t[]->insert;    
+      (if (current_indent<indent) then 
+          indent-current_indent->get_whitespace->insert;
       if); 
    #); 
    
@@ -146,12 +149,16 @@ do
       ch: @char;
    do
       begin->i; 
-      loop: cycle
-        (# do 
-           (i,i+1)->myScan->ch;
-           (if ch=ascii.nl then depth+1->depth if);
-           (if (i>=end) then leave loop if);
-           i+1->i;
-        #);
-      (if begin>end then -1->depth if);
+      (if begin>end then -1->depth 
+       else
+          1->depth;
+          loop: cycle
+            (# do
+               (i,i+1)->myScan->ch;
+               (if (i>=end) then leave loop if);
+               (if ch=ascii.nl then depth+1->depth if);
+               i+1->i;
+            #);
+      if);
+      
    #);
