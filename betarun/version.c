@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(82)";
+char betarun_version[] = "BETARUN VERSION 5.3(82++)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.96  2002/03/19 12:59:15  datpete
+ * Removed obsolete Makefiles and GEN backends
+ * Betarun version number: 82
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.95  2002/03/19 11:52:00  grouleff
  * More ml<->gas changes. RUN/RunAlloc.run
  * Betarun version number: 81 
