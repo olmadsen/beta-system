@@ -1,3 +1,6 @@
+
+#if defined(sun4s) || defined(sgi) || defined(sun4) || defined(linux)
+
 #include <stdio.h>
 #include <unistd.h>
 
@@ -72,4 +75,54 @@ char *valhallaMachineName()
 {
   return machine_name();
 }
+
+#endif /* not sun4 or sun4s or linux or sgi */
+
+#if defined(nti)
+
+void initParamsAndEnv (int numParam, int numEnv) {
+  printf("initParamsAndEnv not implemented\n");
+  exit(1);
+}
+
+typedef void (*forEachEnv) (char*,char*);
+
+void extScanEnv (forEachEnv forEach) { 
+  printf("extScanEnv not implemented\n");
+  exit(1);
+}   
+
+void addEnv (char *name, char* value) { 
+  printf("addEnv not implemented\n");
+  exit(1);
+}
+
+void addParam (char *name) {
+  printf("addParam not implemented\n");
+  exit(1);
+}
+
+int executeProcess (char *execName) { 
+  printf("executeProcess not implemented\n");
+  exit(1);
+}
+
+extern char *machine_type(void); /* in betarun */
+char *valhallaMachineName() {
+  printf("valhallaMachineName not implemented\n");
+  exit(1);
+}
+
+#endif /* not nti */
+
+
+
+
+
+
+
+
+
+
+
 

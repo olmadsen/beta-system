@@ -1,9 +1,6 @@
 #ifndef COREACCESS_H
 #define COREACCESS_H
 
-#include <sys/types.h>
-
-
 #ifdef sparc
 #define BREAK_INST 0x00000000
 #endif
@@ -32,6 +29,9 @@
 #error BREAK_INST must be defined
 #endif
 
+#if defined(sun4s) || defined(sgi) || defined(sun4) || defined(linux)
+
+#include <sys/types.h>
 
 /* int SetBreak (pid_t pid, int address, int *oldInstruction)
  * =========================================================
@@ -80,4 +80,15 @@ int SendSIGINT (pid_t pid);
 void coreaccess_close(pid_t pid);
 #endif /* sun4s or sgi */
 
-#endif
+#endif /* not sun4 or sun4s or linux or sgi */
+
+#if defined(nti)
+
+int SetBreak (int pid, int address, int* oldInstruction); 
+  
+int UnsetBreak (int pid, int address, int oldInstruction);
+
+int SendSIGINT (int pid);
+
+#endif /* not nti */
+#endif /* COREACCESS_H allready included */

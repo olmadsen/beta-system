@@ -1,3 +1,6 @@
+
+#if defined(sun4s) || defined(sgi) || defined(sun4) || defined(linux)
+
 /* labelnametable.c
  *
  * Provides support for reading code labels from the nametable of an 
@@ -111,3 +114,29 @@ char* nextLabel ()
 { 
   return NextLabel;
 }
+
+#endif /* not sun4 or sun4s or linux or sgi */
+
+#if defined(nti)
+
+void findNextLabel () {
+  printf("findNextLabel not implemented\n");
+  exit(1);
+}
+
+void initReadNameTable (char* execFileName) {
+  printf("initReadNameTable not implemented\n");
+  exit(1);
+}
+
+int nextAddress () { 
+  printf("nextAddress not implemented\n");
+  exit(1);
+}
+
+char* nextLabel () { 
+  printf("nextLabel not implemented\n");
+  exit(1);
+}
+
+#endif /* not nti */

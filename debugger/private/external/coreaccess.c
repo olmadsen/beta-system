@@ -1,9 +1,11 @@
+#include "coreaccess.h"
+
+#if defined(sun4s) || defined(sgi) || defined(sun4) || defined(linux)
+
 #include <errno.h>
 #include <stdio.h>
 #include <signal.h>
 #include <unistd.h>
-
-#include "coreaccess.h"
 
 #if defined(sun4s) || defined(sgi)
 
@@ -147,8 +149,9 @@ int UnsetBreak (pid_t pid, int address, int oldInstruction)
   return WriteImage (pid, address, oldInstruction);
 }
 
+#endif /* not sun4s nor sgi */
 
-#else /* Neither Solaris nor sgi */
+#if defined(sun4) || defined(linux)
 
 /* Implementation of coreaccess.h using ptrace. */
 #include <sys/ptrace.h>
@@ -237,9 +240,65 @@ int UnsetBreak (pid_t pid, int address, int oldInstruction)
   return errno;
 }
 
-#endif /* not sun4s/sgi/linux */
+#endif /* not sun4 or linux */
 
 int SendSIGINT (pid_t pid)
 {
   return kill (pid, SIGINT);
 }
+
+#endif /* not sun4 or sun4s or linux or sgi */
+
+#if defined(nti)
+
+#include <stdio.h>
+#include <stdlib.h>
+
+int ReadImage (int pid, int address, int *value) {
+  errno = 0; 
+  printf("ReadImage not implemented\n");
+  exit(1);
+  return errno;
+}
+
+int WriteImage (int pid, int address, int value) { 
+  errno = 0;
+  printf("WriteImage not implemented\n");
+  exit(1);
+  return errno;
+}
+
+int SetBreak (int pid, int address, int* oldInstruction) { 
+  int res;
+  errno = 0;
+  printf("SetBreak not implemented\n");
+  exit(1);
+  return errno;
+}
+
+int UnsetBreak (int pid, int address, int oldInstruction) {
+  errno = 0;
+  printf("UnsetBreak not implemented\n");
+  exit(1);
+  return errno;
+}
+
+int SendSIGINT (int pid) {
+  printf("SendSIGINT not implemented\n");
+  exit(1);
+}
+
+#endif /* not nti */
+
+
+
+
+
+
+
+
+
+
+
+
+
