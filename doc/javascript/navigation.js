@@ -210,7 +210,7 @@ function onKey(e)
 {
   var c = document.layers ? e.which : document.all ? event.keyCode : document.getElementById ? e.keyCode : 1;
   var ch = String.fromCharCode(c);
-  window.status = 'pressed ' + c + ' "' + ch + '"';
+  //window.status = 'pressed ' + c + ' "' + ch + '"';
   if (ch=='?') {
     openhelp();
     return false;
