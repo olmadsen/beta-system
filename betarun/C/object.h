@@ -260,34 +260,6 @@ typedef struct group_header
   struct group_header **ptr; /* pointer back to beta_data file */
 } group_header;
 
-#if defined(linux) || defined(nti)
-/* Header files do not declare this! */
-struct sigcontext {
-  unsigned short gs, __gsh;
-  unsigned short fs, __fsh;
-  unsigned short es, __esh;
-  unsigned short ds, __dsh;
-  unsigned long edi;
-  unsigned long esi;
-  unsigned long ebp;
-  unsigned long esp;
-  unsigned long ebx;
-  unsigned long edx;
-  unsigned long ecx;
-  unsigned long eax;
-  unsigned long trapno;
-  unsigned long err;
-  unsigned long eip;
-  unsigned short cs, __csh;
-  unsigned long eflags;
-  unsigned long esp_at_signal;
-  unsigned short ss, __ssh;
-  unsigned long i387;
-  unsigned long oldmask;
-  unsigned long cr2;
-};
-#endif /* linux || nti */
-
 #ifdef NEWRUN
 typedef void (*CellProcessFunc)(struct Object **theCell,struct Object *theObj);
 #endif

@@ -29,7 +29,7 @@ void ProcessStackObj(struct StackObject *sObj)
   }
 }
 #else
-static IOALooksFullCount = 0; /* consecutive unsuccessful IOAGc's */
+GLOBAL(static IOALooksFullCount) = 0; /* consecutive unsuccessful IOAGc's */
 #endif
 
 /*
@@ -145,11 +145,8 @@ void IOAGc()
     
 #ifdef MT
     {
-      extern struct Object *This;
-      extern struct Object *Origin;
-      extern struct Object *ActiveStack;
-      INFO_IOA(fprintf(output, " #(IOA: This"); fflush(output));
-      ProcessReference((handle(Object))(&This));
+      INFO_IOA(fprintf(output, " #(IOA: CurrentObject"); fflush(output));
+      ProcessReference((handle(Object))(&CurrentObject));
       INFO_IOA(fprintf(output, ")"); fflush(output));
       INFO_IOA(fprintf(output, " #(IOA: Origin"); fflush(output));
       ProcessReference((handle(Object))(&Origin));

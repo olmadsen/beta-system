@@ -52,7 +52,7 @@ static void DoNothing(struct Object **theCell,struct Object *theObj)
 void Illegal()
 { 
 #if defined(sgi)
-  static unsigned break_inst;
+  GLOBAL(static unsigned break_inst);
   int (*f)(void);
 #endif
 
@@ -75,10 +75,7 @@ void Illegal()
     __asm__("int3");
 #endif
 
-#ifdef sun4s
-    __asm__("illtrap 0");
-#endif
-#ifdef sun4
+#ifdef sparc
     __asm__("unimp 0");
 #endif
 
@@ -101,7 +98,7 @@ void Illegal()
 #endif
 
 #ifdef RTDEBUG
-long isObjectState;
+GLOBAL(long isObjectState);
 #endif
 
 long isObject( theObj)
@@ -177,7 +174,7 @@ void Claim( expr, message)
 #endif
 
 #ifdef RTDEBUG
-static char __CkString[100];
+GLOBAL(static char __CkString[100]);
 void CCk(void *r, char *fname, int lineno, char *ref)
 {
   register struct Object* rr = (struct Object *)r; 
@@ -213,10 +210,22 @@ void CCk(void *r, char *fname, int lineno, char *ref)
 #endif
 
 #if defined(MAC)
-long gcRotateCursor=0;
-void InitTheCursor()   { if(StandAlone == 0 || gcRotateCursor) InitCursorCtl(0); }
-void RotateTheCursor() { if(StandAlone == 0 || gcRotateCursor) SpinCursor(32); }
-void RotateTheCursorBack() { if(StandAlone == 0 || gcRotateCursor) SpinCursor(-32); }
+GLOBAL(static long gcRotateCursor)=0;
+void InitTheCursor(void)   
+{ 
+  if(StandAlone == 0 || gcRotateCursor) InitCursorCtl(0); 
+}
+
+void RotateTheCursor() 
+{ 
+  if(StandAlone == 0 || gcRotateCursor) SpinCursor(32);
+}
+
+void RotateTheCursorBack()
+{
+  if(StandAlone == 0 || gcRotateCursor) SpinCursor(-32);
+}
+
 #endif
 
 
@@ -229,13 +238,13 @@ void NotifyRTDebug()
 }
 
 /* Only used in debug version, but declared unconditionally in Declaration.run */
-long CkPC1;
-long CkPC2;
-ref(Object) CkP1;
-ref(Object) CkP2;
-ref(Object) CkP3;
-ref(Object) CkP4;
-ref(Object) CkP5;
+GLOBAL(long CkPC1);
+GLOBAL(long CkPC2);
+GLOBAL(ref(Object) CkP1);
+GLOBAL(ref(Object) CkP2);
+GLOBAL(ref(Object) CkP3);
+GLOBAL(ref(Object) CkP4);
+GLOBAL(ref(Object) CkP5);
 
 #ifdef RTDEBUG
 #if defined(mc68020)||defined(nti)||defined(linux)

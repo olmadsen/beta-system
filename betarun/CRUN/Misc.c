@@ -168,8 +168,8 @@ void FailureExit()
 
 #ifdef crts
 /* Global address registers */
-long a0, a1, a2, a3, a4, a7; 
-long leave;
+GLOBAL(long a0, a1, a2, a3, a4, a7); 
+GLOBAL(long leave);
 
 void FailureExit()
 {
@@ -222,7 +222,7 @@ signed long SignExtWord(signed short a)
 #ifdef RTDEBUG
 
 #if 0
-long memcnt=0;
+GLOBAL(long memcnt)=0;
   memcnt+=size; \
   DEBUG_IOA(fprintf(output, "jmp-alloc: 0x%x total 0x%x\n",size, memcnt)); }
 #define INFO_FREE(size) {\

@@ -56,17 +56,17 @@
  * 
  * All indices in handleTable greater of equal to next are unused. */
 
-static int firstFreeHandle;
-static int nextHandle;
+GLOBAL(static int firstFreeHandle);
+GLOBAL(static int nextHandle);
 
 /* Mapping from handles to indices in the real DOT: */
-static int* handleTable;
+GLOBAL(static int* handleTable);
 
 /* Procedures to call when a handle is deleted: */
-static DOTonDelete* onDeleteTable; 
+GLOBAL(static DOTonDelete* onDeleteTable); 
    
 /* Max size of handleTable and DOTonDelete before extension: */
-static int handleTableLimit;
+GLOBAL(static int handleTableLimit);
 
 
 /* DOTscan

@@ -43,6 +43,11 @@ extern long mcheck_line;
 #define MCHECK()
 #endif
 
+/* macro to be used to declare global variables (including static ones)
+ * outside data.gen. 
+ */
+#define GLOBAL(var) var
+
 #ifdef RTLAZY
 #define isLazyRef(ref) ((lastDangler <= ((int)(ref))) && (((int)(ref)) < -101))
 #else
@@ -54,6 +59,22 @@ extern long mcheck_line;
 #define Notify2(s1,s2)       CPrompt(s1, s2, "", "")
 #define Notify3(s1,s2,s3)    CPrompt(s1, s2, s3, 0)
 #define Notify4(s1,s2,s3,s4) CPrompt(s1, s2, s3, s4)
+
+#define MakeMPWFile(path)          \
+/* Set file type and creator to make xxx.dump an MPW file */ \
+do {                               \
+  FInfo fn;                        \
+  OSErr err;                       \
+  Str255 fname;                    \
+  sprintf((char*)fname, "%c%s", strlen(path), path); \
+  err = GetFInfo(fname, 0, &fn);   \
+  if (err != noErr) break;         \
+  fn.fdType = 'TEXT';              \
+  fn.fdCreator = 'MPS ';           \
+  err = SetFInfo(fname, 0, &fn);   \
+  if (err != noErr) break;         \
+} while (0)
+
 #else /* not macintosh */
 #ifdef nti
 #include <windows.h>

@@ -6,6 +6,8 @@
  */
 #include "beta.h"
 
+GLOBAL(static long AOACreateNewBlock) = FALSE;
+
 #define REP ((struct ObjectRep *)theObj)
 
 static void FollowObject(Object * theObj);
@@ -57,8 +59,6 @@ void tempAOArootsFree(void)
   INFO_IOA(fprintf(output, "freed temporary AOAroots table\n"));
   DEBUG_IOA(fprintf(output, " [0x%x]", (int)roots));
 }
-
-long AOACreateNewBlock = FALSE;
 
 /* AOAallocate allocate 'size' number of bytes in the Adult object area.
  * If the allocation succeeds the function returns a reference to the allocated
@@ -149,8 +149,12 @@ extern void DoGC(void);
 
 struct Object *AOAalloc(AOA_ALLOC_PARAMS)
 {
-  struct Object *theObj = AOAallocate(numbytes);
+  struct Object *theObj;
+
+  MT_CODE(mutex_lock(&aoa_lock));
+
   DEBUG_CODE(NumAOAAlloc++);
+  theObj = AOAallocate(numbytes);
   if (!theObj){
     /* AOAallocate failed. This means that AOANeedCompaction will be
      * true now. Force an IOAGc.
@@ -174,6 +178,9 @@ struct Object *AOAalloc(AOA_ALLOC_PARAMS)
     fprintf(output, "AOAalloc: cannot allocate 0x%x bytes\n", (int)numbytes);
     BetaExit(1);
   }
+
+  MT_CODE(mutex_unlock(&aoa_lock));
+
   return theObj;
 }
 
@@ -341,9 +348,9 @@ void AOAGc()
 }
 
 
-static long *RAFStackBase;
-static long *RAFStackTop;
-static long *RAFStackLimit;
+GLOBAL(static long *RAFStackBase);
+GLOBAL(static long *RAFStackTop);
+GLOBAL(static long *RAFStackLimit);
 
 static void extendRAFStackArea(void)
 /* Extend (temporary) space used to hold unprocessed reverse-and-follow references. */

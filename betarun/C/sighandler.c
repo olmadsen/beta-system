@@ -5,6 +5,44 @@
  */
 #include "beta.h"
 
+#if defined(UNIX) || defined(nti)
+#include <signal.h>
+#endif /* UNIX || nti */
+
+#ifdef sun4s
+#include <siginfo.h>
+#include <sys/regset.h>
+#include <sys/ucontext.h>
+#endif
+
+#if defined(linux) || defined(nti)
+/* Header files do not declare this! */
+struct sigcontext {
+  unsigned short gs, __gsh;
+  unsigned short fs, __fsh;
+  unsigned short es, __esh;
+  unsigned short ds, __dsh;
+  unsigned long edi;
+  unsigned long esi;
+  unsigned long ebp;
+  unsigned long esp;
+  unsigned long ebx;
+  unsigned long edx;
+  unsigned long ecx;
+  unsigned long eax;
+  unsigned long trapno;
+  unsigned long err;
+  unsigned long eip;
+  unsigned short cs, __csh;
+  unsigned long eflags;
+  unsigned long esp_at_signal;
+  unsigned short ss, __ssh;
+  unsigned long i387;
+  unsigned long oldmask;
+  unsigned long cr2;
+};
+#endif /* linux || nti */
+
 #ifdef crts
 void BetaSignalHandler (long sig)
 {
@@ -17,7 +55,7 @@ void BetaSignalHandler (long sig)
 
 /****** BEGIN sun4s *****/
 
-void ExitHandler(int sig)
+static void ExitHandler(int sig)
 {
   DEBUG_CODE(fprintf(stderr, 
 		     "ExitHandler: Caught signal %d during signal handling\n",
@@ -43,13 +81,17 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 
   
   /* Set StackEnd to the stack pointer just before trap. */
+#ifndef MT
   StackEnd = (long *) ucon->uc_mcontext.gregs[REG_SP];
+#endif
   PC = (long *) ucon->uc_mcontext.gregs[REG_PC];
 
+#ifndef MT
   DEBUG_VALHALLA(fprintf(output,"BetaSignalHandler: StackEnd set to 0x%x\n",(int) StackEnd));
+#endif /* MT */
 
   /* Try to fetch the address of current Beta object from i0.*/
-  theCell = casthandle(Object) &(cast(RegWin)StackEnd)->i0;
+  theCell = casthandle(Object) &(cast(RegWin)ucon->uc_mcontext.gregs[REG_SP])->i0;
   if( inIOA( *theCell)) if( isObject( *theCell)) theObj  = *theCell;
 
   switch( sig){
@@ -86,11 +128,10 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 }
   
 /***** END sun4s ****/
+#endif /* sun4s */
 
-#else /* sun4s */
-#ifndef crts
-
-/***** BetaSignalHandler: the one used for all but sun4s and crts *****/
+#if !defined(sun4s) && !defined(crts) && !defined(ppcmac)
+/***** BetaSignalHandler: the one used for all but sun4s, crts, ppcmac *****/
 
 #if (defined(linux) || defined(nti))
 #define GetPCandSP() { PC = (long *) scp.eip; StackEnd = (long *) scp.esp_at_signal; }
@@ -120,7 +161,7 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
  * during execution of BetaSignalHandler.
  * Please Exit nicely.
  */
-static void ExitHandler(sig, code, scp, addr)
+static static void ExitHandler(sig, code, scp, addr)
   long sig, code;
   struct sigcontext *scp;
   char *addr;
@@ -385,5 +426,154 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   if (!todo) BetaExit(1);
 }
 
-#endif /* crts */
+#endif /* !sun4s, !crts, !ppcmac */
+
+
+#ifdef ppcmac
+
+#include <MachineExceptions.h>
+
+OSStatus BetaSignalHandler(ExceptionInformation *info)
+{
+  ref(Object) theObj;
+  long *PC;
+  long todo = 0;
+  ExceptionKind sig = info->theKind;
+
+  /* Set StackEnd to the stack pointer just before exception */
+  StackEnd = (long *)info->registerImage->R1.lo;
+  PC = (long *) info->machineState->PC.lo;
+
+  /* Try to fetch the address of current Beta object from i0.*/
+  theObj = cast(Object) info->registerImage->R31.lo;
+  if( !inIOA(theObj) || !isObject(theObj)) theObj = 0;
+
+  switch(sig){
+#if 0 /* Not used on PPC */
+  case integerException:
+    todo=DisplayBetaStack( ArithExceptErr, theObj, PC, sig); break;
+#endif
+  case trapException:
+    /* possibly some details in the exception records can determine
+	 * if it is a refnone or another trap.
+	 */
+    todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); break;
+  case illegalInstructionException:
+    todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig);break;
+  case accessException: 
+  case unmappedMemoryException: 
+  case excludedMemoryException: 
+  case readOnlyMemoryException: 
+  case unresolvablePageFaultException: 
+    todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
+  case floatingPointException:
+    todo=DisplayBetaStack( ArithExceptErr, theObj, PC, sig); break;
+  default:
+    todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig); break;
+  }
+
+  if (!todo) BetaExit(1);
+
+  return noErr;
+}
+
+#endif /* ppcmac */
+
+/* 
+ * InstallSigHandler: install a handler for sig.
+ */
+void InstallSigHandler (int sig)
+{
+#ifndef sun4s
+#ifdef UNIX
+     signal (sig, (void (*)(int))BetaSignalHandler);
+#endif
+#else /* sun4s */
+  { struct sigaction sa;
+    sa.sa_flags = SA_SIGINFO | SA_RESETHAND;
+    sigemptyset(&sa.sa_mask); 
+    sa.sa_handler = BetaSignalHandler;
+    sigaction(sig,&sa,0);
+  }
 #endif /* sun4s */
+}
+
+/* 
+ * SetupBetaSignalHandlers: install standard sig handlers for BETA.
+ * Called from Initialize().
+ */
+void SetupBetaSignalHandlers(void)
+{
+
+#ifdef ppcmac
+  InstallExceptionHandler((ExceptionHandler)BetaSignalHandler);
+#else /* ppcmac */
+#ifndef sun4s
+#if defined(UNIX) || defined(crts)
+  { /* Setup signal handles for the Beta system */
+#ifdef SIGTRAP
+#ifdef sgi
+    signal( SIGTRAP, (void (*)(int))BetaSignalHandler);
+#endif
+#if (defined(RTDEBUG) && defined(linux))
+    signal( SIGTRAP, (void (*)(int))BetaSignalHandler);
+#endif
+#endif
+#ifdef SIGFPE
+    signal( SIGFPE,  (void (*)(int))BetaSignalHandler);
+#endif
+#ifdef SIGILL
+    signal( SIGILL,  (void (*)(int))BetaSignalHandler);
+#endif
+#ifdef SIGBUS
+    signal( SIGBUS,  (void (*)(int))BetaSignalHandler);
+#endif
+#ifdef SIGSEGV
+    signal( SIGSEGV, (void (*)(int))BetaSignalHandler);
+#endif
+#ifdef SIGEMT
+    signal( SIGEMT,  (void (*)(int))BetaSignalHandler);
+#endif
+#ifdef RTDEBUG
+#ifdef SIGINT
+    signal( SIGINT,  (void (*)(int))BetaSignalHandler);
+#endif
+#endif
+  }
+#endif /* UNIX || crts */
+  
+#else /* sun4s */
+  
+  /* This is solaris */
+  
+#ifdef MT
+  SetupVirtualTimerHandler(100000); /* interrupt every 0.1 second */
+#endif
+  /* sbrandt 9/7 93. See man sigaction and <sys/signal.h>. */
+  { /* Setup signal handlers for the Beta system */
+    struct sigaction sa;
+    
+    /* Specify that we want full info about the signal, and that
+     * the handled signal should not be blocked while being handled: */
+    sa.sa_flags = SA_SIGINFO | SA_NODEFER;
+    
+    /* No further signals should be blocked while handling the specified
+     * signals. */
+    sigemptyset(&sa.sa_mask); 
+    
+    /* Specify handler: */
+    sa.sa_handler = BetaSignalHandler;
+    
+    sigaction( SIGFPE,  &sa, 0);
+    sigaction( SIGILL,  &sa, 0);
+    sigaction( SIGBUS,  &sa, 0);
+    sigaction( SIGSEGV, &sa, 0);
+    sigaction( SIGEMT,  &sa, 0);
+#ifdef RTDEBUG
+    sigaction( SIGINT,  &sa, 0);
+#endif
+  }
+#endif /* sun4s */
+#endif /* ppcmac */
+
+} /* SetupBetaSignalHandlers */

@@ -43,8 +43,8 @@
 unsigned long
 valhalla_inetAddrOfThisHost(void)
 {
-  static int inetAddrOfThisHostCached=0;
-  static unsigned long inetAddrOfThisHostCache;
+  GLOBAL(static int inetAddrOfThisHostCached)=0;
+  GLOBAL(static unsigned long inetAddrOfThisHostCache);
 
   if (!inetAddrOfThisHostCached) {
     struct hostent *pHostInfo=gethostbyname("localhost");

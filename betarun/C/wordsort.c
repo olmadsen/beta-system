@@ -20,9 +20,7 @@ typedef unsigned long elem;	/* for easy change of types */
 #define SWAP(a,b) do { elem t = *a; *a = *b; *b = t; } while(0)
 #define maxt 0
 
-void WordSort(v, size)
-elem *v;
-int size;
+void WordSort(elem *v, int size)
 {
   register elem p;
   elem *l, *r;

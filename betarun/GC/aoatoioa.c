@@ -7,12 +7,12 @@
 
 /* Some primes to use as the size of the AOAtoIOAtable. */
 /* primes(n+1) ~~ primes(n) * 1.5                          */
-static long primes[] = 
-{ 5879,  8821, 13241, 19867, 29803, 44711, 67079, 99991,
-    149993, 224993, 337511, 506269, 759431, 1139191, 
-    1708943, 2563441, 3845279, 5767999, 8651977, 0 };
+GLOBAL(static long primes[]) = 
+       { 5879,  8821, 13241, 19867, 29803, 44711, 67079, 99991,
+	 149993, 224993, 337511, 506269, 759431, 1139191, 
+	 1708943, 2563441, 3845279, 5767999, 8651977, 0 };
+GLOBAL(static long prim_index) = 0;
 
-static long prim_index = 0;
 /* Allocates the initial AOAtoIOAtable. */
 long AOAtoIOAalloc()
 {

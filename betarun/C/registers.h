@@ -7,8 +7,14 @@
  */
 
 #ifdef sparc
-register long     *IOA            __asm__("%g6");
-register unsigned  IOATopOff      __asm__("%g7");
+/* Using %g5 and %g6 is NOT compliant with the SPARC ABI.
+ * Instead %g2, %g3, %g4 should be used.
+ * But e.g. %g2 is destroyed by tau() in ctstcproc.o. %g2 is
+ * used as temp register by gcc unless -ffixed-g2 is used.
+ * Using %g7 makes programs linked with -lthread crash.
+ */
+register long     *IOA            __asm__("%g5");
+register unsigned  IOATopOff      __asm__("%g6");
 
 register long     *StackPointer   __asm__("%sp");
 register long     *FramePointer   __asm__("%fp");
@@ -21,8 +27,8 @@ register long     retAddress      __asm__("%i7");
  */
 register unsigned *RefTopOffReg   __asm__("%g2");
 register unsigned *DataTopOffReg  __asm__("%g3");
-register unsigned *ActiveStackReg __asm__("%g4");
-register unsigned *IOALimitReg    __asm__("%g5");
+register unsigned *IOALimitReg    __asm__("%g4");
+register unsigned *ActiveStackReg __asm__("%g7");
 
 #endif /* MT */
 

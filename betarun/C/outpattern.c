@@ -33,8 +33,8 @@
 #include "valhallaComm.h"
 #endif /* RTVALHALLA */
 
-static int basic_dumped=0;
-static int isMakingDump=0;
+GLOBAL(static int basic_dumped)=0;
+GLOBAL(static int isMakingDump)=0;
 
 static char *machine_name(void);
 
@@ -202,8 +202,8 @@ char *ProtoTypeName(struct ProtoType *theProto)
  * external code.
  * Error-pc is used to remember original PC when the error happened.
  */
-static signed   long c_on_top;
-static unsigned long error_pc;
+GLOBAL(static signed   long c_on_top=0);
+GLOBAL(static unsigned long error_pc);
 
 /*************************** ObjectDescription: **********************/
 
@@ -229,7 +229,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
      * Here we use both the G-entry and the M-entry. 
      * The prefix we are in is the one, where the distance from the 
      * G-entry or M-entry of the corresponding prefix-level
-     * to retAddress is smallest.
+     * to retAddress is smallest (and positive).
      */
     
     gDist  = retAddress - gPart; 
@@ -261,12 +261,28 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
       }
     }
     if (activeDist == MAXINT) return;
+#ifdef MAC
+    /* can't determine if an address is in a given
+     * object file on MAC, so we use the prototype instead. 
+     */
+    TRACE_GROUP(fprintf(output, "Calling GroupName with activeProto\n"));
+    groupname = GroupName((long)activeProto,0);
+#else
     TRACE_GROUP(fprintf(output, "Calling GroupName with return address\n"));
     groupname = GroupName(retAddress,1);
+#endif
   } else {
-    /* retAddress not known. Use the groupname of theObj's mPart */
+#ifdef MAC
+    /* retAddress not known. can't determine if an address is in a given
+     * object file on MAC, so we use the prototype instead. 
+     */
+    TRACE_GROUP(fprintf(output, "Calling GroupName with default activeProto\n"));
+    groupname = GroupName((long)activeProto,0);
+#else
+   /* retAddress not known. Use the groupname of theObj's mPart */
     TRACE_GROUP(fprintf(output, "Calling GroupName with default mPart\n"));
     groupname = GroupName(mPart,1);
+#endif
   }
 
   theProto = theObj->Proto;
@@ -387,7 +403,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
  * Called by DisplayBetaStack and BetaError (in case of QuaCont)
  */
 
-static struct Object *lastDisplayedObject=0;
+GLOBAL(static struct Object *lastDisplayedObject)=0;
 
 void DisplayObject(output,theObj,retAddress)
      ptr(FILE)   output;       /* Where to dump object */
@@ -475,7 +491,7 @@ void DisplayObject(output,theObj,retAddress)
 
 /******************** ErrorMessage ******************/
 
-static struct errorEntry 
+static const struct errorEntry 
 {
   enum BetaErr errorNumber;
   char *       errorMessage;
@@ -516,7 +532,7 @@ errorTable[] =
   { 0, 0 }
   };
 
-static char UnknownError[25];
+GLOBAL(static char UnknownError[25]);
 
 char *ErrorMessage(enum BetaErr errorNumber)
 {
@@ -718,7 +734,7 @@ static int OpenDumpFile(long errorNumber)
 #endif /* UNIX */
 
 #if defined(MAC)
-static char dumpname[33]; /* max filename length is 32 */
+GLOBAL(static char dumpname[33]); /* max filename length is 32 */
 static int OpenDumpFile(long errorNumber)
 {
   char dirCh;
@@ -816,7 +832,7 @@ static int OpenDumpFile(long errorNumber)
       /* macintosh, dump file opened OK: running as tool under MPW */
       fprintf(stderr, "\n# Beta execution aborted: ");
       fprintf(stderr, ErrorMessage(errorNumber));
-      fprintf(stderr, ".\n# Look at '%s'\n", dumpname);
+      fprintf(stderr, ".\nFile \"%s\"; Line 1\n", dumpname);
     }
     /* Dump file opened OK: Write diagnostics to dump file too */
     fprintf(output, "Beta execution aborted: ");
@@ -830,7 +846,7 @@ static int OpenDumpFile(long errorNumber)
 #ifdef nti
 static char *OpenDumpFile(long errorNumber)
 {
-  static char dumpname[500];
+  GLOBAL(static char dumpname[500]);
   char dirCh;
   char *execname, *localname;
 
@@ -905,17 +921,21 @@ int DisplayBetaStack(enum BetaErr errorNumber,
 		     errorNumber, 
 		     theObj, 
 		     thePC, 
-		     theSignal);
-	     fprintf(stdout, "StackEnd=0x%x, StackStart=0x%x\n", 
+		     theSignal));
+#ifndef MT
+  TRACE_DUMP(fprintf(stdout, "StackEnd=0x%x, StackStart=0x%x\n", 
 		     (long)StackEnd, 
 		     (long)StackStart
 		     ));
-  
+#endif
+  TRACE_DUMP(fflush(stdout));
 
-#ifdef ppcmac
-  fprintf(output, "DisplayBetaStack: NYI for ppcmac\n"); fflush(output);
+#ifdef MT
+  fprintf(output, "DisplayBetaStack: NYI for MT\n"); fflush(output);
   return 0;
 #endif
+
+#ifndef MT
 
 #ifdef RTVALHALLA
   if (valhallaID){
@@ -958,7 +978,7 @@ int DisplayBetaStack(enum BetaErr errorNumber,
   isMakingDump=1;
 
   if (thePC && !IsBetaCodeAddr((long)thePC)){
-    c_on_top = TRUE;
+    c_on_top = 1;
   }
 
   error_pc = (unsigned long)thePC;
@@ -1277,19 +1297,13 @@ P("      [ EXTERNAL ACTIVATION PART ]")
   fclose(output);
 
 #if defined(MAC)
-  /* Set file type and creator to make xxx.dump an MPW file */
-  {  FInfo fn;
-     Str255 fname;
-     sprintf((char*)fname, "%c%s", strlen(dumpname), dumpname);
-     if (GetFInfo(fname, 0, &fn) != noErr) return 0;
-     fn.fdType = 'TEXT';
-     fn.fdCreator = 'MPS ';
-     if (SetFInfo(fname, 0, &fn) != noErr) return 0;
-   }
-#endif
+  MakeMPWFile(dumpname);
+#endif /* MAC */
+
+#endif /* MT */
 
   return 0;
-}
+} /* DisplayBetaStack */
 
 
 

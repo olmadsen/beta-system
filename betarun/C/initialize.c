@@ -6,7 +6,7 @@
 #include "beta.h"
 
 #ifdef DMALLOC
-long mcheck_line;
+GLOBAL(long mcheck_line);
 #endif
 
 #ifdef RTVALHALLA
@@ -38,6 +38,7 @@ char *strerror(int err)
 #include <StdLib.h>
 #include <String.h>
 extern void _DataInit();
+QDGlobals qd;
 
 #define CPromptID 7130
 
@@ -220,25 +221,17 @@ static char *unscrambleString(unsigned char *p, int len, int sum)
 }
 #endif /* PE */
 
-#if defined(mac68k) && !defined(crts)
+#if defined(mac68k)
 /*
  * PatchDataLabels by Per Jessen Schmidt
  * Fix BETA_data labels for the Macintosh
  */
-
-//#include <osUtils.h>
-
 void PatchDataLabels(void)
 { long *start;
   long temp;
 
-  //Debugger();
   start = (long *)BETA_DATA1_ADDR;
-#ifdef mac68k
   *start = (long)BETA_DATA1_ADDR;
-#else
-  *start = (long *)BETA_DATA1_ADDR;
-#endif
   *(start+1) = *start+*(start+1);
   *(start+2) = *start+*(start+2);
   
@@ -248,20 +241,25 @@ void PatchDataLabels(void)
 	*start = temp;
     *(start+1) = *start+*(start+1);
     *(start+2) = *start+*(start+2);
-  }//while
+  }
 }
-#endif /* mac/crts */
+#endif /* mac68k */
 
-#ifdef MAC
-QDGlobals qd;
-#endif
-
+/* 
+ * Initialize: called from main.
+ */
 void Initialize()
 {
-  /* This hack is to cope with the sparc, where
-     IOA and IOATop(off) is register vars */
-  
   long *tmpIOA, *tmpIOATop;
+
+  SetupBetaSignalHandlers();
+
+  MT_CODE(initSynchVariables());
+
+  /* This hack is to cope with the sparc, where
+   * IOA and IOATop(off) is register vars
+   */
+  
 #ifdef mac68k
   InitGraf((Ptr) &qd.thePort);
   InitFonts();
@@ -276,27 +274,14 @@ void Initialize()
 #endif
   
 #ifdef macppc
-  if (StandAlone) {
-    /* PPC_InitApplication is found in
-     *  {betalib}basiclib/v1.4/private/ppc/betaenv_ppcconsole.o
-     * which is produced from 
-     *  {betalib}basiclib/v1.4/private/external/TextWindow/InlineInputSample.c
-     * Temporary hack for the PPC console.
-     */
-    //extern void PPC_InitApplication(); 
-    //PPC_InitApplication();
-	fprintf(output, "%s: %d: warning: PPC_InitApplication not called\n");
-	fflush(output);
-} else {
-    InitGraf((Ptr) &qd.thePort);
-    InitFonts();
-    InitWindows();
-    InitMenus();
-    TEInit();
-    InitDialogs(nil);
-    InitCursor();
-    InitTheCursor();
-  }
+  InitGraf((Ptr) &qd.thePort);
+  InitFonts();
+  InitWindows();
+  InitMenus();
+  TEInit();
+  InitDialogs(nil);
+  InitCursor();
+  InitTheCursor();
 #endif
 
   GetBetaEnv();
@@ -391,73 +376,7 @@ void Initialize()
 #endif /* NEWRUN */
   
   /* Allocate the Callback Function Area */
-  CBFAAlloc();
-
-#ifndef sun4s
-#if defined(UNIX) || defined(crts)
-   { /* Setup signal handles for the Beta system */
-#ifdef SIGTRAP
-#ifdef sgi
-     signal( SIGTRAP, (void (*)(int))BetaSignalHandler);
-#endif
-#if (defined(RTDEBUG) && defined(linux))
-     signal( SIGTRAP, (void (*)(int))BetaSignalHandler);
-#endif
-#endif
-#ifdef SIGFPE
-     signal( SIGFPE,  (void (*)(int))BetaSignalHandler);
-#endif
-#ifdef SIGILL
-     signal( SIGILL,  (void (*)(int))BetaSignalHandler);
-#endif
-#ifdef SIGBUS
-     signal( SIGBUS,  (void (*)(int))BetaSignalHandler);
-#endif
-#ifdef SIGSEGV
-     signal( SIGSEGV, (void (*)(int))BetaSignalHandler);
-#endif
-#ifdef SIGEMT
-     signal( SIGEMT,  (void (*)(int))BetaSignalHandler);
-#endif
-#ifdef RTDEBUG
-#ifdef SIGINT
-     signal( SIGINT,  (void (*)(int))BetaSignalHandler);
-#endif
-#endif
-   }
-#endif /* UNIX || crts */
-
-#else /* sun4s */
-
-#ifdef MT
-   fprintf(output, "Standard signalhandlers temporarily disabled for MT\n");
-   SetupVirtualTimerHandler(100000); /* interrupt every 0.1 second */
-#endif
-  /* sbrandt 9/7 93. See man sigaction and <sys/signal.h>. */
-  { /* Setup signal handlers for the Beta system */
-    struct sigaction sa;
-
-    /* Specify that we want full info about the signal, and that
-     * the handled signal should not be blocked while being handled: */
-    sa.sa_flags = SA_SIGINFO | SA_NODEFER;
-
-    /* No further signals should be blocked while handling the specified
-     * signals. */
-    sigemptyset(&sa.sa_mask); 
-
-    /* Specify handler: */
-    sa.sa_handler = BetaSignalHandler;
-    
-    sigaction( SIGFPE,  &sa, 0);
-    sigaction( SIGILL,  &sa, 0);
-    sigaction( SIGBUS,  &sa, 0);
-    sigaction( SIGSEGV, &sa, 0);
-    sigaction( SIGEMT,  &sa, 0);
-#ifdef RTDEBUG
-    sigaction( SIGINT,  &sa, 0);
-#endif
-  }
-#endif /* sun4s */
+  CBFAalloc();
 
 #if defined(crts) && defined(JUMPSTACK) 
   /* Initialize pool of jump buffers */

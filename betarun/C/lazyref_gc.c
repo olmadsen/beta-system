@@ -19,6 +19,8 @@
 #include "beta.h"
 #include "data.h"
 
+#ifndef MT
+
 #ifdef sparc
 #include "../CRUN/crun.h"
 #endif
@@ -53,13 +55,13 @@
 
 /* #define LAZYDEBUG 1 */
 
-static int negAOAmax = 0; 
+GLOBAL(static int negAOAmax) = 0; 
 /* Max number of integers possible to put into the negAOArefs table. */
 
-static int negIOAsize = 0; 
+GLOBAL(static int negIOAsize) = 0; 
 /* Current number of entries in the negIOArefs table. */
 
-static int negIOAmax = 0; 
+GLOBAL(static int negIOAmax) = 0; 
 /* Max number of integers possible to put into the negIOArefs table. */
 
 #define DEFAULTNEGTABLESIZE 25
@@ -195,7 +197,7 @@ typedef struct pNode {
   protoPtr next, prev;
 } protoElm;
 
-static protoPtr *roots = 0;
+GLOBAL(static protoPtr *roots) = 0;
 
 #define ROOTSIZE 5879
 
@@ -282,11 +284,14 @@ int FindDanglingProto (int dangler)
 }
 
 #if !defined(hppa) && !defined(linux)
-static volatile int returnPC;
-static volatile int returnSP;
+GLOBAL(static volatile int returnPC);
+GLOBAL(static volatile int returnSP);
 #endif
 
 #include <signal.h>
+#if defined(hpux)
+extern void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr);
+#endif
 
 /* Reference is NONE checks are handled as follows:
  *
@@ -343,13 +348,21 @@ static volatile int returnSP;
 #include <machine/trap.h>
 #endif
 
+#ifdef sun4s
+extern void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon);
+#endif
+#if defined(sun4)
+extern void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr);
+#endif
+
+
 #define KnownMask 0x80900000
 #define instructionOk(instruction) ((instruction & KnownMask) == (KnownMask))
 #define sourceReg(instruction) (instruction & 0x0000001F)
 
 #ifndef sun4s
 /* Temporary neccessary for trapHandler: */
-static volatile int smask;
+GLOBAL(static volatile int smask);
 #endif
 
 #ifdef sun4s
@@ -533,8 +546,8 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
 #define dataRegInx(n) n
 #define movInstOffset 6
   
-static int allregs[16];
-static int returnSP;
+GLOBAL(static int allregs[16]);
+GLOBAL(static int returnSP);
 
 void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
 {   
@@ -676,3 +689,5 @@ void initLazyTrapHandler (ref(Item) lazyHandler)
   negAOArefsRESET = NegAOArefsRESET;
   findDanglingProto = FindDanglingProto;
 }
+
+#endif /* MT */

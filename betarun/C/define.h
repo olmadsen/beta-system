@@ -4,16 +4,19 @@
  * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, Jacob Seligmann and S|ren Brandt
  */
 
+#ifdef MT
+#define _REEENTRANT 1
+#define MT_CODE(code) code
+#else
+#define MT_CODE(code)
+#endif
+
 #define RTINFO  /* Include support for runtime info */
 #define RTLAZY  /* Include support for lazy fetch */
 #ifdef RTDEBUG
 #if (!defined(nti) && !defined(MAC))
 #define RTVALHALLA
 #endif
-#endif
-
-#ifdef MT
-#define _REEENTRANT 1
 #endif
 
 #define BETARUN_ID "3.0"

@@ -23,9 +23,9 @@ struct TimeStamp {
   int            majflt;     /* Page faults with I/O */
 };
 
-static struct TimeStamp  labTime, startTime;
+GLOBAL(static struct TimeStamp  labTime, startTime);
 
-static struct TimeStamp BetaTime, GCTime, AllTime;
+GLOBAL(static struct TimeStamp BetaTime, GCTime, AllTime);
 
 static ZeroTime( theTime )
      struct TimeStamp *theTime;

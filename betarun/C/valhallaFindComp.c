@@ -178,11 +178,11 @@ int scanComponentStack (struct Component* comp,
 
 #ifdef NEWRUN
 
-static int CompFound;
-static int CompDone;
-static Component *TheComponent;
-static forEachCallType DoForEach;
-static int BasicItemShown;
+GLOBAL(static int CompFound);
+GLOBAL(static int CompDone);
+GLOBAL(static Component *TheComponent);
+GLOBAL(static forEachCallType DoForEach);
+GLOBAL(static int BasicItemShown);
 
 static void ShowCell(int PC, struct Object *theObj)
 {

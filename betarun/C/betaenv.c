@@ -54,10 +54,10 @@ void GetBetaEnv()
 
 #ifdef nti
 #include <windows.h>
-int beta_instance;
-int beta_previnstance;
-char *beta_cmdline;
-int beta_show;
+GLOBAL(static int beta_instance);
+GLOBAL(static int beta_previnstance);
+GLOBAL(static char *beta_cmdline);
+GLOBAL(static int beta_show);
 
 /* Create ArgVector and ArgCount from a command line string */
 void SetupArgValues(int ret, int inst, int prev, char *cmd, int show)

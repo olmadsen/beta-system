@@ -4,8 +4,7 @@ typedef int *intptr;
 extern long LVRANumOfBlocks;
 extern long LVRABaseBlock;
 
-int getHeapInfo(infoId)
-int infoId;
+int getHeapInfo(int infoId)
 {
   switch (infoId) {
     case 0 :  return (int)IOA;

@@ -5,30 +5,30 @@
  */
 #include "beta.h"
 
-void LVRACompaction(void);
+static void LVRACompaction(void);
 static void LVRAConstructFreeList(void);
 
 #define TableMAX 16
 
-struct LVRABlock *LVRABaseBlock;
-struct LVRABlock *LVRATopBlock;
+/* non-static since referred from heapview.c */
+GLOBAL(struct LVRABlock *LVRABaseBlock);
+GLOBAL(static struct LVRABlock *LVRATopBlock);
 
-long LVRAFreeListAvailable = FALSE;
-long LVRACreateNewBlock    = FALSE;
-long LVRANumOfBlocks       = 0;
+GLOBAL(static long LVRAFreeListAvailable) = FALSE;
+GLOBAL(static long LVRACreateNewBlock)    = FALSE;
+/* non-static since referred from heapview.c */
+GLOBAL(long LVRANumOfBlocks)       = 0;
 
 /* LVRALastIOAGc contains the value of NumIOAGc last time
  * LVRAConstructFreeList was executed.
  */
-long LVRALastIOAGc         = 0;
-
-long LVRAFreeListMemory;
+GLOBAL(static long LVRALastIOAGc)         = 0;
 
 #define LVRABigRange 100 * 256    /* ~ValRepSize > 100 Kb. */
 
-static struct ValRep *LVRATable[TableMAX+1];
+GLOBAL(static struct ValRep *LVRATable[TableMAX+1]);
 
-DEBUG_CODE(long LVRATabNum[TableMAX+1] )
+DEBUG_CODE(GLOBAL(long LVRATabNum[TableMAX+1]))
 
 #ifdef RTDEBUG
 
@@ -305,10 +305,7 @@ long inLVRA(ref(Object) theObj)
   return FALSE;
 }
 
-/* Needs to be non-static, since ~beta/Xt/.../private/external/getarg.c
- * uses it
- */
-long LVRARestInBlock(ref(LVRABlock) theBlock)
+static long LVRARestInBlock(ref(LVRABlock) theBlock)
 {
   return (long) theBlock->limit - (long) theBlock->top;
 }
@@ -338,10 +335,13 @@ static ref(ValRep)LVRAAllocInBlock(ref(ProtoType) proto, long range, long size)
 ref(ValRep) LVRAAlloc(ref(ProtoType) proto, long range)
 {
   ref(ValRep)    newRep;
-  long           size = DispatchValRepSize(proto, range);
+  long           size;
   ref(LVRABlock) block;
   long           rest;
 
+  MT_CODE(mutex_lock(&lvra_lock));
+
+  size = DispatchValRepSize(proto, range);
   INFO_LVRA_ALLOC({
     char type[30];
     switch (SwitchProto(proto)){
@@ -368,19 +368,21 @@ ref(ValRep) LVRAAlloc(ref(ProtoType) proto, long range)
   DEBUG_LVRA(Claim(isSpecialProtoType(proto), "isSpecialProtoType(proto)"));  
   if( LVRABaseBlock == 0 ){
     /* No LVRA blocks allocated yet */
-    if( LVRABlockSize == 0) return 0;
-    if( MallocExhausted ) return 0;
+    if( LVRABlockSize == 0) { newRep = 0; goto exit; }
+    if( MallocExhausted ) { newRep = 0; goto exit; }
     if( (LVRABaseBlock = newLVRABlock(size) ) == 0 ){
-      MallocExhausted = TRUE; return 0;
+      MallocExhausted = TRUE; 
+      newRep = 0;
+      goto exit;
     }
     LVRATopBlock = LVRABaseBlock;
   }
   if( LVRAFreeListAvailable )
     /* Try allocation in freeList */
-    if( (newRep = LVRAFindInFree(proto, range, size)) ) return newRep;
+    if( (newRep = LVRAFindInFree(proto, range, size)) ) goto exit;
   
   /* Allocation in freeList failed. Try allocation in top block */
-  if( (newRep = LVRAAllocInBlock(proto, range, size)) ) return newRep;
+  if( (newRep = LVRAAllocInBlock(proto, range, size)) ) goto exit;
   
   /* Allocation in top block failed. Mark rest of top block as free */
   rest = LVRARestInBlock(LVRATopBlock);
@@ -405,20 +407,20 @@ ref(ValRep) LVRAAlloc(ref(ProtoType) proto, long range)
     /* Try redoing the free list */
     LVRAConstructFreeList();
     /* Try allocation by the new freelist */
-    if( (newRep = LVRAFindInFree(proto, range, size)) ) return newRep;
+    if( (newRep = LVRAFindInFree(proto, range, size)) ) goto exit;
     
     if( LVRATopBlock->next ){
       LVRATopBlock = LVRATopBlock->next;
-      if( (newRep = LVRAAllocInBlock(proto, range, size)) ) return newRep;       
+      if( (newRep = LVRAAllocInBlock(proto, range, size)) ) goto exit;       
     }
     if( LVRACreateNewBlock || (range > LVRABigRange) ){
-      if( (block = newLVRABlock(size)) == 0) return 0;
+      if( (block = newLVRABlock(size)) == 0) {newRep = 0; goto exit; };
       block->next        = LVRATopBlock->next;
       LVRATopBlock->next = block;
       
       LVRATopBlock = LVRATopBlock->next;
       LVRACreateNewBlock = FALSE;
-      if( (newRep = LVRAAllocInBlock(proto, range, size)) ) return newRep;
+      if( (newRep = LVRAAllocInBlock(proto, range, size)) ) goto exit;
     }
   }
   
@@ -426,23 +428,26 @@ ref(ValRep) LVRAAlloc(ref(ProtoType) proto, long range)
   LVRACompaction();
   
   /* Now try allocation in top block */
-  if( (newRep = LVRAAllocInBlock(proto, range, size)) ) return newRep;
+  if( (newRep = LVRAAllocInBlock(proto, range, size)) ) goto exit;
   /* Allocation in top block failed. Try using the free list */
-  if( (newRep = LVRAFindInFree(proto, range, size)) ) return newRep;
+  if( (newRep = LVRAFindInFree(proto, range, size)) ) goto exit;
   
   /* None of the above succeeded. Try allocating a new block */
-  if( (block = newLVRABlock(size)) == 0) return 0;
+  if( (block = newLVRABlock(size)) == 0) { newRep = 0; goto exit; }
   block->next        = LVRATopBlock->next;
   LVRATopBlock->next = block;
   LVRATopBlock = LVRATopBlock->next;
   LVRACreateNewBlock = FALSE;
   
   /* Try allocating in the new top block */
-  if( (newRep = LVRAAllocInBlock(proto, range, size)) ) return newRep;
+  if( (newRep = LVRAAllocInBlock(proto, range, size)) ) { goto exit; }
   
   /* All hope is gone ! */
   DEBUG_LVRA(fprintf(output, "#LVRAAlloc failed!\n"));
-  return 0;
+
+exit:
+  MT_CODE(mutex_unlock(&lvra_lock));
+  return newRep;
 }
 
 /* LVRACAlloc: allocate a Value repetition in the LVRArea 
@@ -766,7 +771,7 @@ static void LVRAConstructFreeList(void)
 }
 
 #ifdef RTDEBUG
-ref(ValRep)    prevRep = cast(ValRep)0;
+GLOBAL(ref(ValRep) prevRep) = cast(ValRep)0;
 
 void LVRACheck(void)
 { ref(LVRABlock) theBlock;

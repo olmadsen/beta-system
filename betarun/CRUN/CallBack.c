@@ -21,7 +21,7 @@
 
 /* HandleCallBack is called from a CallBackEntry, setup like below. */ 
 
-long * oldSP;
+GLOBAL(static long * oldSP);
 extern long a0;
 
 #ifdef __powerc
@@ -213,6 +213,8 @@ void *CCopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 
     if (!theStruct) return (void *)0 /* NULL function pointer given to C */;
 
+    MT_CODE(mutex_lock(&cbfa_lock));
+
     /* Take the next free entry in the Call Back Functions Area.	*/
     /* This area is defined by 
      * [ lastCBFABlock->entries <= CBFATop < CBFALimit ].
@@ -233,6 +235,9 @@ void *CCopyCPP(ref(Structure) theStruct, ref(Object) theObj)
     __asm__("iflush %0"::"r" (&CBFATop->call_HandleCallBack));
     __asm__("iflush %0"::"r" (&CBFATop->nop));
     ++CBFATop;
+
+    MT_CODE(mutex_unlock(&cbfa_lock));
+
     return (void *)&(CBFATop-1)->mov_o7_g1;
 }
 

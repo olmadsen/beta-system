@@ -90,12 +90,20 @@ int IsBetaPrototype(group_header *gh, long data_addr)
  * Scan group to see if addr is within any BETA code segment.
  */
 int IsBetaCodeAddr(long addr) 
-{ group_header *current = 0;
+{ 
+#ifdef MAC
+  /* can't determine if an address is in a given object file on MAC.
+   * Let's assume that it is the case.
+   */
+  return TRUE;
+#else
+  group_header *current = 0;
   while ((current = NextGroup (current))) {
     if ((current->code_start<=addr) && (addr<=current->code_end))
       return TRUE;
   }
   return FALSE;
+#endif /* MAC */
 }
 
 /* GroupName: (generic)
@@ -113,6 +121,13 @@ char *GroupName(long address, int isCode)
 		       "GroupName(addr: 0x%x, %s)\n",
 		       (int)address,
 		       isCode ? "code" : "data"));
+
+#ifdef MAC
+  if (isCode){
+    /* can't determine if an address is in a given object file on MAC */
+    return "(unknown fragment group)";
+  }
+#endif
 
   current = NextGroup (0);  /* first (betaenv) data segment */
 

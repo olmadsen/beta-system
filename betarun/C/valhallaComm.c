@@ -47,12 +47,16 @@
 #define WSPACE (commbufsize-wnext)
 #define RAVAIL (rlen-rnext)
 
-char *wbuf, *rbuf;
-int *wheader, *rheader;
-int wnext, rnext, rlen;
+GLOBAL(static char *wbuf);
+GLOBAL(static char *rbuf);
+GLOBAL(static int *wheader);
+GLOBAL(static int *rheader);
+GLOBAL(static int wnext);
+GLOBAL(static int rnext);
+GLOBAL(static int rlen);
 
-int sock;  /* active socket */
-int psock; /* passive socket. Used if this process started valhalla. */
+GLOBAL(static int sock);  /* active socket */
+GLOBAL(static int psock); /* passive socket. Used if this process started valhalla. */
 
 void valhalla_create_buffers ()
 {
@@ -226,22 +230,6 @@ static int valhallaCommunicate (int curPC, struct Object *curObj);
 
 extern char *Argv (int);
 
-void InstallHandler (int sig)
-{
-#ifndef sun4s
-#ifdef UNIX
-     signal (sig, (void (*)(int))BetaSignalHandler);
-#endif
-#else /* sun4s */
-  { struct sigaction sa;
-    sa.sa_flags = SA_SIGINFO | SA_RESETHAND;
-    sigemptyset(&sa.sa_mask); 
-    sa.sa_handler = BetaSignalHandler;
-    sigaction(sig,&sa,0);
-  }
-#endif /* sun4s */
-}
-
 /* VALHALLAINIT
  * ============
  * 
@@ -315,7 +303,7 @@ void valhallaInit (int debug_valhalla)
    * it will be sent to DisplayBetaStack, and from there to
    * valhallaOnProcessStop that will recognize it as a breakpoint hit. */
   
-  InstallHandler(SIGINT);
+  InstallSigHandler(SIGINT);
 
   /* Initialize DOT */
 
@@ -601,10 +589,12 @@ void forEachAlive (int handle, int address, DOTonDelete onDelete)
  * Calls back to valhalla to inform that this process has stopped and
  * is ready to serve requests. */
 
-static int invops = 0; /* TRUE iff ValhallaOnProcessStop is active. Used to check
-			* for reentrance of ValhallaOnProcessStop. This could happen
-			* in case of bus-errors or the like during communication with
-			* valhalla . */
+GLOBAL(static int invops = 0); /* TRUE iff ValhallaOnProcessStop is active.
+				* Used to check for reentrance of 
+				* ValhallaOnProcessStop. This could happen
+				* in case of bus-errors or the like during
+				*  communication with valhalla.
+				*/
 
 
 int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj, 
@@ -679,14 +669,14 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
   /* If we came here through BetaSignalHandler, signals have been redirected to
    * ExitHandler. Reinstall BetaSignalHandler: */
 
-  InstallHandler(SIGFPE);
-  InstallHandler(SIGILL);
-  InstallHandler(SIGBUS);
-  InstallHandler(SIGSEGV);
+  InstallSigHandler(SIGFPE);
+  InstallSigHandler(SIGILL);
+  InstallSigHandler(SIGBUS);
+  InstallSigHandler(SIGSEGV);
 #ifndef linux
-  InstallHandler(SIGEMT);
+  InstallSigHandler(SIGEMT);
 #endif
-  InstallHandler(SIGINT);
+  InstallSigHandler(SIGINT);
 
   
   return res;

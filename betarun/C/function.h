@@ -66,7 +66,7 @@ extern void BetaError(enum BetaErr, ref(Object));
 #endif
 
 /* C/cbfa.c */
-extern void CBFAAlloc(void);
+extern void CBFAalloc(void);
 extern void CBFArelloc(void);
 extern void freeCBF(unsigned long);
 extern void freeCallbackCalled(void);
@@ -75,25 +75,12 @@ extern void CBFACheck(void);
 #endif
 
 /* C/sighandler.c */
-#ifdef sun4s
-extern void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon);
-#else
-#ifdef crts
-extern void BetaSignalHandler (long sig);
-#else
-#if defined(linux) || defined(nti)
-extern void BetaSignalHandler(long sig, struct sigcontext scp);
-#else
-/* Not sun4s, crts, linux, nti */
-#ifndef MAC
-extern void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr);
-#endif
-#endif /* linux || nti */
-#endif /* crts */
-#endif /* sun4s */
+extern void SetupBetaSignalHandlers(void);
+extern void InstallSigHandler(int sig);
 
 #ifdef MT
 /* C/multithread.c */
+extern void initSynchVariables(void);
 extern int numProcessors(int online);
 extern int attToProcessor(struct Component *comp);
 extern void SetupVirtualTimerHandler(unsigned usec);
@@ -175,7 +162,6 @@ extern void IOACheckReference(handle(Object));
 extern ref(ValRep) LVRAAlloc(ref(ProtoType), long);
 extern ref(ValRep) LVRACAlloc(ref(ProtoType), long);
 extern long inLVRA(ref(Object));
-extern long LVRARestInBlock(ref(LVRABlock));
 extern void LVRAkill(struct ValRep *);
 #ifdef CHECK_LVRA_IN_IOA
 extern ref(Object) CopyObjectToLVRA(ref(ValRep)); 

@@ -5,7 +5,11 @@
  */
 #include "beta.h"
 
-void CBFAAlloc()
+/* Pointer to the last Call Back Functions Area. */
+GLOBAL(static ref(CallBackArea) lastCBFA = 0);  
+
+
+void CBFAalloc()
 {
   /* Allocate the Call Back Functions Area. */
   if ( CBFABlockSize < 0 ) {
@@ -50,6 +54,9 @@ void CBFAAlloc()
 
 void CBFArelloc()
 {
+  
+  MT_CODE(mutex_lock(&cbfa_lock));
+
   if ( CBFABlockSize == 0 ) {
     Notify2("Using callbacks and CBFA size of 0Kb specified",
 	    "Check your BETART environment variable");
@@ -85,6 +92,10 @@ void CBFArelloc()
   
   INFO_CBFA( fprintf(output, "#(CBFA: new block allocated %dKb.)\n", 
 		     (int)CBFABlockSize/Kb) );
+
+  MT_CODE(mutex_unlock(&cbfa_lock));
+
+  return;
 }
 
 void freeCBF(external_entry)

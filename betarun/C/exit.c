@@ -108,14 +108,14 @@ void BetaExit(long number)
 
 #ifdef RTLAZY
 #if defined(linux) || defined(nti) || defined(mac68k)
-long RefNonePC = 0; 
-int *RefNoneStackEnd = 0;
+GLOBAL(static long RefNonePC) = 0; 
+GLOBAL(static int *RefNoneStackEnd) = 0;
 /* SBRANDT 7/6/94: RefNonePC is set by RefNone in Misc.run to point to return 
  * address after the "call RefNone" instruction during RefNone check. 
  * RefNoneStackEnd is set, also by RefNone, to point out the stackpart 
  * containing the lazy reference. */
-static unsigned char regnum;
-static volatile int InLazyHandler;
+GLOBAL(static unsigned char regnum);
+GLOBAL(static volatile int InLazyHandler);
 #endif
 #endif
 
@@ -189,7 +189,9 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 
 #ifdef sparc
       __asm__("ta 3");
+#ifndef MT
       StackEnd = (long *) ((struct RegWin *)FramePointer)->fp;
+#endif /* MT */
       thePC = (long *) ((struct RegWin *)FramePointer)->i7;
 #endif /* sparc */
 

@@ -61,7 +61,9 @@ static void BooleanProperty(char *name)
   ENTRY("debugaoa",   DebugAOA = TRUE);
   ENTRY("debuglvra",  DebugLVRA = TRUE);
   ENTRY("debugstack", DebugStack = TRUE);
+#ifdef MT
   ENTRY("debugmt", DebugMT = TRUE);
+#endif
 #ifdef RTVALHALLA
   ENTRY("debugvalhalla", DebugValhalla = TRUE);
 #endif
@@ -171,8 +173,16 @@ static void ValueProperty(char *name, char *value)
 	  LVRAPercentage = 97;
 	});
 
+#ifdef MAC
+#define MacCode(code) code
+#else
+#define MacCode(code)
+#endif /* MAC */
+
   ENTRY("infofile",
-    if( !(output = fopen(value, "w")) ){
+    if( (output = fopen(value, "w")) ){
+      MacCode(MakeMPWFile(value));
+    } else {
       char buf[100];
       output = stderr;
       sprintf(buf, "InfoFile '%s' couldn't be opened, stderr is used", value);

@@ -27,11 +27,6 @@ long  Argc(){ return ArgCount; }
 
 char *Argv(n) long n; { return ArgVector[n-1]; }
 
-
-
-char *XcallName;
-long  XcallNum;
-
 #include <stdarg.h>
 void TraceXcall(long arg1, ...)
 {

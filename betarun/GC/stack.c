@@ -165,7 +165,7 @@ DEBUG_STACK(fprintf(output, "---------------------\n", SP))
 
 
 #ifdef ppcmac
-static long StackObjEnd; /* extra "parameter" for ProcessStackFrames */
+GLOBAL(static long StackObjEnd); /* extra "parameter" for ProcessStackFrames */
 #endif
 
 /* ProcessStackFrames:
@@ -741,7 +741,7 @@ void ProcessStackPart(long *low, long *high)
 
 #ifdef RTDEBUG
 struct RegWin *BottomAR=0, *lastAR=0;
-long PC = 0;
+GLOBAL(long PC) = 0;
 void PrintAR(struct RegWin *ar, struct RegWin *theEnd);
 void PrintCAR(struct RegWin *cAR);
 #endif
@@ -933,7 +933,7 @@ void ProcessStack()
 }
 
 #ifdef RTDEBUG
-long lastPC=0;
+GLOBAL(long lastPC)=0;
 #endif
 
 void ProcessStackObj(struct StackObject *theStack)
@@ -1246,9 +1246,9 @@ struct label {
   char *id;
 };
 
-long labelOffset = 0;
-struct label **labels = 0;
-long numLabels = 0;
+GLOBAL(long labelOffset) = 0;
+GLOBAL(struct label **labels) = 0;
+GLOBAL(long numLabels) = 0;
 
 static void initLabels()
 {

@@ -6,9 +6,9 @@
  * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, and Jacob Seligmann
  */
 
-#include <stdio.h>
-
 #include "define.h"
+
+#include <stdio.h>
 
 extern struct group_header *BETA_DATA; /* Defined in BETA */
 
@@ -27,14 +27,12 @@ extern struct group_header *BETA_DATA; /* Defined in BETA */
 # include <stdlib.h>
 #endif
 
-#if defined(UNIX) || defined(nti)
-#include <signal.h>
-#endif /* UNIX || nti */
-
-#ifdef sun4s
-#include <siginfo.h>
-#include <sys/regset.h>
-#include <sys/ucontext.h>
+#ifdef MT
+#include <thread.h>
+/* synchronization variables */
+extern mutex_t lvra_lock;
+extern mutex_t aoa_lock;
+extern mutex_t cbfa_lock;
 #endif
 
 #include "betaerror.h"
