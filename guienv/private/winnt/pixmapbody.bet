@@ -1,17 +1,311 @@
 ORIGIN 'guienv_ntiprivate';
 
+MAKE default 'external/loadBitmapFile.make';
+OBJFILE default '$/loadBitmapFile.obj';
+
+INCLUDE 
+'../datastructures/association'
+'../pathmanager'
+'~beta/win32lib/v1.2/winbase'
+'~beta/sysutils/v1.5/cstring';
+
+-- lib: attributes --
+
+getPixmapPathManager: objectPool.get
+  (# type:: pixmapPathManager;
+     exact:: (# do true -> value #);
+     init:: (# do obj.init #);
+  #);
+
+pixmapPathManager: pathManager
+  (# init::
+       (# betalib: ^text;
+          pixmapDir: ^text;
+       do 'pixmapPathManager.init begin' -> putline;
+          '$(BETALIB)' -> expandEnvVar
+          (# defaultValue::
+               (# 
+               do 'c:\\beta' -> envvarvalue[];
+               #);
+          #) -> betalib[];
+          '.' -> add;
+          '.\\pixmaps' -> add;
+          '\\bitmap\\interfacebuilders' -> (betalib.copy).append -> add;
+          '\\bitmap\\objectbrowser' -> (betalib.copy).append -> add;
+          '\\bitmap' -> (betalib.copy).append -> add;
+          'e:\\beta\\dhm\\v1.6\\bitmap' -> add;
+          
+          '$(PIXMAPS)' -> expandEnvVar 
+          (# 
+          #) -> pixmapDir[];
+          (if pixmapDir[] <> NONE then
+              (if pixmapDir.length > 0 then
+                  (if (pixmapDir.length -> pixmapDir.inxGet) <> '\\' then
+                      '\\' -> pixmapDir.append;
+                  if);
+                  pixmapDir[] -> add;
+              if);
+          if);
+          
+          'pixmapPathManager.init done' -> putline;
+       #);
+     
+     
+  #);
+
+isBMPfile: external
+  (# 
+     filename: @integer; (* [1]@char; *)
+     result: @integer;
+  enter filename
+  do callC;
+  exit result
+  #);
+
+loadDIBitmapFile: external
+  (# 
+     filename: @integer; (* [1]@char; *)
+     theBitmapinfoheader_ext: @integer;
+     result: @integer;
+  enter (filename,theBitmapInfoHeader_ext)
+  do 'LoadDIBitmapFile'->callC
+  exit result
+  #);
+
+-- pixmapLib: attributes --
+
+search:
+  (# name: ^text;
+     expandedName: ^text;
+  enter name[]
+  do (# thePixmapPathManager: ^pixmapPathManager;
+     do 'search 1' -> screen.putline;
+        getPixmapPathManager -> thePixmapPathManager[];
+        'search 2' -> screen.putline;
+        name[] -> thePixmapPathManager.lookup -> expandedName[];
+        'search 3' -> screen.putline;
+     #);
+  exit expandedName[]
+  #);
+
+expandPixmapName:
+  (# name: ^text;
+     expandedName: ^text;
+     error:<
+       (# msg: ^text;
+       enter msg[]
+       do INNER;
+       #);
+     
+  enter name[]
+  do (# isPath: @boolean;
+        hasExtension: @boolean;
+        doesNotExists:
+          (# msg: ^text;
+          do &text[] -> msg[];
+             'pixmap file "' -> msg.putText;
+             name[] -> msg.putText;
+             '" does not exist' -> msg.putLine;
+             msg[] -> error;
+          #);
+        wasNotFound:
+          (# msg: ^text;
+          do &text[] -> msg[];
+             'pixmap file "' -> msg.putText;
+             name[] -> msg.putText;
+             '" was not found in any of the pixmap directories' -> msg.putLine;
+             msg[] -> error;
+          #);
+     do (if (name[] <> NONE) and (not name.empty) then
+            name.reset;
+            l: '\\' -> name.find (# do true -> isPath; leave l; #);
+            (if isPath then
+                '--a1--' -> putline;
+                (if name[] -> exists then
+                    '--a2--' -> putline;
+                    name.copy -> expandedName[];
+                 else
+                    doesNotExists;
+                if);
+             else
+                l: '.' -> name.find (# do true -> hasExtension; leave l #);
+                (if not hasExtension then
+                    '.bmp' -> (name.copy).append -> name[];
+                if);
+                '--a3--' -> putline;
+                'Looking for: ' -> puttext; name[] -> putline;
+                name[] -> search -> expandedName[];
+                '--a4--' -> putline;
+                (if expandedName[] = NONE then
+                    wasNotFound;
+                if);
+            if);
+        if);
+     #);
+  exit expandedName[]
+  #);
+
+guessPixmapFormat:
+  (# name: ^text; cstr: @cstring;
+     format: @integer;
+  enter name[]
+  do l: (# fail:
+             (# 
+             do unknown -> format;
+                leave l;
+             #);
+        do name[] -> cstr.set;
+           (if true
+            //((cstr -> isBMPfile)<>0) then
+               BMPformat -> format;
+            else
+               fail;
+           if);
+        #);
+     (if cstr<>0 then cstr.free; if);
+  exit format
+  #);
+
+BITMAPINFOHEADER_EXT: ExternalRecord
+  (# biSize: @long (# pos::< (# do 0 -> value; #); #);   (* DWORD *)
+     biWidth: @long (# pos::< (# do 4 -> value; #); #);  (* LONG *) 
+     biHeight: @long (# pos::< (# do 8 -> value; #); #);  (* LONG *) 
+     biPlanes: @short (# pos::< (# do 12 -> value; #); #);  (* WORD *) 
+     biBitCount: @short (# pos::< (# do 14 -> value; #); #);  (* WORD *) 
+     biCompression: @long (# pos::< (# do 16 -> value; #); #);   (* DWORD *)
+     biSizeImage: @long (# pos::< (# do 20 -> value; #); #);   (* DWORD *)
+     biXPelsPerMeter: @long (# pos::< (# do 24 -> value; #); #);  (* LONG *) 
+     biYPelsPerMeter: @long (# pos::< (# do 28 -> value; #); #);  (* LONG *) 
+     biClrUsed: @long (# pos::< (# do 32 -> value; #); #);   (* DWORD *) 
+     biClrImportant: @long (# pos::< (# do 36 -> value; #); #);   (* DWORD *)
+     hBitmap: @long (# pos::< (# do 40 -> value; #); #);   (* DWORD *)
+  #);
+
+sizeOf_BITMAPINFOHEADER_EXT: (# exit 44 #);
+
+BITMAP_OK: (# exit 1 #);
+ERR_OPEN_FILE: (# exit 2 #);
+ERR_READ_DI_BITMAPINFO: (# exit 3 #);
+ERR_REALLOCATE_HDIB: (# exit 4 #);
+ERR_READING_BITMAP_FROM_DIB: (# exit 5 #);
+ERR_NO_RETURN_BUFFER: (# exit 6 #);
+  
+
+unknown: (# exit 0 #);
+BMPformat: (# exit 1 #);
+MetaFileformat: (# exit 2 #);
+
+readBMPfile: 
+  (# name: ^text; cstr: @cstring;
+     error:<
+       (# msg: ^text;
+       enter msg[]
+       do INNER;
+       #);
+     errorMsg: ^text;
+     
+     result: @integer;
+     theBITMAPINFOHEADER_EXT: @BITMAPINFOHEADER_EXT;
+  enter name[]
+  do 
+     sizeOf_BITMAPINFOHEADER_EXT -> malloc -> theBITMAPINFOHEADER_EXT.ptr;
+     (if theBITMAPINFOHEADER_EXT.ptr<>0 then
+         name[] -> cstr.set;
+         (cstr,theBITMAPINFOHEADER_EXT.ptr)
+           -> loadDIBitmapFile-> result;
+         cstr.free;
+         (if result=BITMAP_OK then
+             theBITMAPINFOHEADER_EXT.hBitmap -> private.handleToPixmap;
+             theBITMAPINFOHEADER_EXT.biWidth -> private.width;
+             theBITMAPINFOHEADER_EXT.biHeight -> private.height;
+             theBITMAPINFOHEADER_EXT.biBitCount -> private.depth;
+          else
+             &text[] -> errorMsg[];
+             'Pixmap.read failed for: ' ->errorMsg.puttext;
+             name[] -> errorMsg.putline;
+             (if result
+              //ERR_OPEN_FILE then
+                 'Error: The file could not be opened.' -> errorMsg.putline;
+              //ERR_READ_DI_BITMAPINFO then
+                 'Error: Failed to read BITMAPINFO.' -> errorMsg.putline;
+              //ERR_REALLOCATE_HDIB then
+                 'Error: Failed to reallocate space for DIB.' -> errorMsg.putline;
+              //ERR_READING_BITMAP_FROM_DIB then
+                 'Error: Failed to read bitmap from DIB.' -> errorMsg.putline;
+              //ERR_NO_RETURN_BUFFER then
+                 'Error: Not enough space to load bitmap.' -> errorMsg.putline;
+             if);
+             errorMsg[] -> error;
+         if);
+         theBITMAPINFOHEADER_EXT.ptr -> free;
+     if);
+  #);
+
+readMetafile:
+  (# name: ^text;
+     error:<
+       (# msg: ^text;
+       enter msg[]
+       do INNER;
+       #);
+  enter name[]
+  do 
+  #);
+
 -- pixMapRead: doPart --
-do
+do l: (# expandedName: ^text;
+         format: @integer;
+         msg: ^text;
+      do '--aa--' -> putline;
+         name[] -> expandPixmapName 
+         (# error::
+              (# 
+              do 'expandPixmapName error' -> putline;
+                 msg[] -> this(read).error;
+                 leave l;
+              #);
+         #) -> expandedName[];
+         '--bb--' -> putline;
+         (if expandedName[] <> NONE then
+             '--a--' -> putline;
+             expandedName[] -> guessPixmapFormat -> format;
+             '--b--' -> putline;
+             (if format
+              //BMPformat then
+                 '--c--' -> putline;
+                 expandedName[] -> readBMPfile
+                 (# error:: (# do msg[] -> this(read).error #) #);
+                 '--d--' -> putline;
+              //MetaFileformat then
+                 expandedName[] -> readMetafile
+                 (# error:: (# do msg[] -> this(read).error #) #);
+              //unknown then
+                 &text[] -> msg[];
+                 'file "' -> msg.putText;
+                 expandedName[] -> msg.putText;
+                 '" has an unknown format!' -> msg.putLine;
+                 msg[] -> error;
+             if);
+         if); 
+      #);
 
 -- pixmapInit: doPart --
 do
 
 -- pixmapDispose: doPart --
-do
+do assertInitialized;
+   0 -> private.width;
+   0 -> private.height;
+   0 -> private.depth;
+   (if not private.isFromResource then
+       private.handleToPixmap -> DeleteObject;
+   if);
 
 -- pixmapWidth: doPart --
-do
+do assertInitialized;
+   private.width -> value;
 
 -- pixmapHeight: doPart --
-do
+do assertInitialized;
+   private.height -> value;
 
