@@ -55,6 +55,12 @@ if (lastmodnumber == 0) {
     // For dates in 2000:
     //   NetScape reports year=100;
     //   Internet explorer reports year=2000;
+    // For dates in 19xx
+    //   Both browsers report year=xx
+    // There is another function called getFullYear, which works,
+    // *except* that Netscape 4.5 for windows report year=1900 then (:-(
+    // The following works for all variants of the two browser, I have
+    // tried :
     year %= 100;
     if (year >= 98 )
       century = "19";
