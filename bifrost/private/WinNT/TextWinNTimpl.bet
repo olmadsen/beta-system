@@ -31,7 +31,18 @@ getOsVersionId: external
   exit osId
   #);
 
--- TextShapeGetWidthHeight: descriptor --
+-- TextListGetWidthHeight: descriptor --
+(# w: @integer;
+do 0->width;
+   theLines.scan
+   (# 
+   do (current[], nam, sty, siz) -> TextGetWidth -> w;
+      (if w>width then w -> width if);
+   #);
+   theLines.size*((nam,sty,siz)->TextLineHeight) -> height;
+#)
+
+--TextGetWidth: descriptor--
 (# theWin32Font: ^win32Font; 
    theWin32Fonts: ^win32Fonts;
    hdc: @integer;
@@ -56,7 +67,7 @@ do ('DISPLAY',0,0,0) -> CreateDC2 -> hdc;
                  -> theWin32Font[];
                
                (if theWin32Font[]=NONE then
-                   'Could not find font in TextShapeGetWidth. ' -> screen.putText;
+                   'Could not find font in TextGetWidth. ' -> screen.putText;
                    'nam= ' -> screen.putText; nam-> putint; ', ' -> puttext;
                    'sty= ' -> screen.putText; sty-> putint; ', ' -> puttext;
                    'siz= ' -> screen.putText; siz-> putint; newline;
@@ -71,34 +82,85 @@ do ('DISPLAY',0,0,0) -> CreateDC2 -> hdc;
        if);
        
        (hdc, theWin32Font.hFont) -> SelectObject;
-       (if (theLines.last).elm.length (* FIXME *) > 0 then
+       (if T.length> 0 then
            8 -> malloc -> theSizePtr;
-           (theLines.last).elm[] (* FIXME *) -> cstr.set;
+           T[] -> cstr.set;
            (hdc,cstr.charPtr,cstr.length,theSizePtr) -> GetTextExtentPoint32;
            theSizePtr -> getPointFromNtPointPtr -> (theSize.x,theSize.y);
-           theSize.x -> width;
-           theSize.y -> height;
-           
+           theSize.x -> value;
            cstr.free;
            theSizePtr -> free;
         else
-           0 -> width;
+           0 -> value;
        if);
        hdc -> DeleteDC;
-       
     else
-       'CreateDC2 failed in TextShapeGetWidth. Error code= ' -> screen.putText;
+       'CreateDC2 failed in TextGetWidth. Error code= ' -> screen.putText;
        GetLastError -> putInt; newline;
-       (theLines.last).elm.length (* FIXME *) * 4 -> width;
+       0 -> value;
    if);
 #)
 
---TextGetWidth: descriptor--
-(# 
-do 'TextGetWidth: NYI' -> putline;
+--TextGetHeight: descriptor--
+(# theWin32Font: ^win32Font; 
+   theWin32Fonts: ^win32Fonts;
+   hdc: @integer;
+   theSize: @point;
+   theSizePtr: @integer;
+   cstr: @cstring;
+   
+do ('DISPLAY',0,0,0) -> CreateDC2 -> hdc;
+   (if hdc<>0 then
+       objectPool.scan
+       (# type:: win32Fonts;
+       do current[] -> theWin32Fonts[];
+       #);
+       
+       (if theWin32Fonts[]<>NONE then
+           (nam, sty, siz) -> theWin32Fonts.theFontTable.find -> theWin32Font[];
+           (if theWin32Font[]=NONE then
+               (hdc, nam, sty, siz) 
+                 -> theWin32Fonts.createWin32Font;
+               (nam, sty, siz) 
+                 -> theWin32Fonts.theFontTable.find 
+                 -> theWin32Font[];
+               
+               (if theWin32Font[]=NONE then
+                   'Could not find font in TextGetHeight. ' -> screen.putText;
+                   'nam= ' -> screen.putText; nam-> putint; ', ' -> puttext;
+                   'sty= ' -> screen.putText; sty-> putint; ', ' -> puttext;
+                   'siz= ' -> screen.putText; siz-> putint; newline;
+                   
+                   &win32Font[] -> theWin32Font[];
+                   ANSI_VAR_FONT -> GetStockObject -> theWin32Font.hFont;
+               if);
+           if);
+        else
+           &win32Font[] -> theWin32Font[];
+           ANSI_VAR_FONT -> GetStockObject -> theWin32Font.hFont;
+       if);
+       
+       (hdc, theWin32Font.hFont) -> SelectObject;
+       (if T.length > 0 then
+           8 -> malloc -> theSizePtr;
+           T[] -> cstr.set;
+           (hdc,cstr.charPtr,cstr.length,theSizePtr) -> GetTextExtentPoint32;
+           theSizePtr -> getPointFromNtPointPtr -> (theSize.x,theSize.y);
+           theSize.y -> value;
+           cstr.free;
+           theSizePtr -> free;
+        else
+           0 -> value;
+       if);
+       hdc -> DeleteDC;
+    else
+       'CreateDC2 failed in TextGetHeight. Error code= ' -> screen.putText;
+       GetLastError -> putInt; newline;
+       0 -> value;
+   if);
 #)
 
--- TextShapeMaxDescent: dopart --
+--TextLineHeight: dopart--
 do (# theWin32Font: ^win32Font; 
       theWin32Fonts: ^win32Fonts;
       hdc: @integer;
@@ -121,13 +183,13 @@ do (# theWin32Font: ^win32Font;
                     -> theWin32Fonts.theFontTable.find 
                     -> theWin32Font[];
                   (if theWin32Font[]=NONE then
-                      'Could not find font in TextShapeMaxDescent.' -> screen.putLine;
+                      'Could not find font in TextLineHeight.' -> screen.putLine;
                       &win32Font[] -> theWin32Font[];
                       ANSI_VAR_FONT -> GetStockObject -> theWin32Font.hFont;
                   if);
               if);
            else
-              'WARNING: Did NOT find theWin32Fonts in TextShapeMaxDescent.'->screen.putLine;
+              'WARNING: Did NOT find theWin32Fonts in TextLineHeight.'->screen.putLine;
               &win32Font[] -> theWin32Font[];
               ANSI_VAR_FONT -> GetStockObject -> theWin32Font.hFont;
           if);
@@ -141,28 +203,145 @@ do (# theWin32Font: ^win32Font;
               sizeOfOUTLINETEXTMETRIC -> malloc -> infoPtr;
               (hdc,sizeOfOUTLINETEXTMETRIC,infoPtr) -> GetOutlineTextMetrics2 
                 -> sizeOfOUTLINETEXTMETRIC;
-              (%getLongAt (infoPtr + textmetricTmDescentOffset + 4)) -> desc;
+              (%getLongAt (infoPtr + textmetricTmHeightOffset + 4)) -> value;
            else
               56 -> malloc -> infoPtr;
               (hdc,infoPtr) -> GetTextMetrics;
-              (%getLongAt (infoPtr + textmetricTmDescentOffset)) -> desc;
+              (%getLongAt (infoPtr + textmetricTmHeightOffset)) -> value;
           if);
           
           (hdc,saved) -> SelectObject;
           hdc -> DeleteDC;
           infoPtr -> free;
        else
-          'WARNING: CreateDC failed in TextShapeMaxDescent. Error code= ' 
+          'WARNING: CreateDC failed in TextLineHeight. Error code= ' 
+            -> screen.putText;
+          GetLastError -> putInt; newline;
+      if);
+   #);
+
+-- TextMaxDescent: dopart --
+do (# theWin32Font: ^win32Font; 
+      theWin32Fonts: ^win32Fonts;
+      hdc: @integer;
+      saved: @integer;
+      infoPtr: @integer;
+      sizeOfOUTLINETEXTMETRIC: @integer;
+   do ('DISPLAY',0,0,0) -> CreateDC2 -> hdc;
+      (if hdc<>0 then
+          objectPool.scan
+          (# type:: win32Fonts;
+          do current[] -> theWin32Fonts[];
+          #);
+          
+          (if theWin32Fonts[]<>NONE then
+              (nam, sty, siz) -> theWin32Fonts.theFontTable.find -> theWin32Font[];
+              (if theWin32Font[]=NONE then
+                  (hdc, nam, sty, siz) 
+                    -> theWin32Fonts.createWin32Font;
+                  (nam, sty, siz) 
+                    -> theWin32Fonts.theFontTable.find 
+                    -> theWin32Font[];
+                  (if theWin32Font[]=NONE then
+                      'Could not find font in TextMaxDescent.' -> screen.putLine;
+                      &win32Font[] -> theWin32Font[];
+                      ANSI_VAR_FONT -> GetStockObject -> theWin32Font.hFont;
+                  if);
+              if);
+           else
+              'WARNING: Did NOT find theWin32Fonts in TextMaxDescent.'->screen.putLine;
+              &win32Font[] -> theWin32Font[];
+              ANSI_VAR_FONT -> GetStockObject -> theWin32Font.hFont;
+          if);
+          
+          (hdc,theWin32Font.hFont) -> SelectObject -> saved;
+          
+          (if theWin32Font.fontType
+           //TRUETYPE_FONTTYPE then
+              (hdc,0,0) -> GetOutlineTextMetrics2
+                -> sizeOfOUTLINETEXTMETRIC;
+              sizeOfOUTLINETEXTMETRIC -> malloc -> infoPtr;
+              (hdc,sizeOfOUTLINETEXTMETRIC,infoPtr) -> GetOutlineTextMetrics2 
+                -> sizeOfOUTLINETEXTMETRIC;
+              (%getLongAt (infoPtr + textmetricTmDescentOffset + 4)) -> value;
+           else
+              56 -> malloc -> infoPtr;
+              (hdc,infoPtr) -> GetTextMetrics;
+              (%getLongAt (infoPtr + textmetricTmDescentOffset)) -> value;
+          if);
+          
+          (hdc,saved) -> SelectObject;
+          hdc -> DeleteDC;
+          infoPtr -> free;
+       else
+          'WARNING: CreateDC failed in TextMaxDescent. Error code= ' 
             -> screen.putText;
           GetLastError -> putInt; newline;
       if);
    #);
    
---TextShapeMaxAscent: dopart--
-do 'TextShapeMaxAscent: NYI' -> putline;
-   
--- TextShapeUnderlineDepth: descriptor --
-(# #)
+--TextMaxAscent: dopart--
+do (# theWin32Font: ^win32Font; 
+      theWin32Fonts: ^win32Fonts;
+      hdc: @integer;
+      saved: @integer;
+      infoPtr: @integer;
+      sizeOfOUTLINETEXTMETRIC: @integer;
+   do ('DISPLAY',0,0,0) -> CreateDC2 -> hdc;
+      (if hdc<>0 then
+          objectPool.scan
+          (# type:: win32Fonts;
+          do current[] -> theWin32Fonts[];
+          #);
+          
+          (if theWin32Fonts[]<>NONE then
+              (nam, sty, siz) -> theWin32Fonts.theFontTable.find -> theWin32Font[];
+              (if theWin32Font[]=NONE then
+                  (hdc, nam, sty, siz) 
+                    -> theWin32Fonts.createWin32Font;
+                  (nam, sty, siz) 
+                    -> theWin32Fonts.theFontTable.find 
+                    -> theWin32Font[];
+                  (if theWin32Font[]=NONE then
+                      'Could not find font in TextMaxAscent.' -> screen.putLine;
+                      &win32Font[] -> theWin32Font[];
+                      ANSI_VAR_FONT -> GetStockObject -> theWin32Font.hFont;
+                  if);
+              if);
+           else
+              'WARNING: Did NOT find theWin32Fonts in TextMaxAscent.'->screen.putLine;
+              &win32Font[] -> theWin32Font[];
+              ANSI_VAR_FONT -> GetStockObject -> theWin32Font.hFont;
+          if);
+          
+          (hdc,theWin32Font.hFont) -> SelectObject -> saved;
+          
+          (if theWin32Font.fontType
+           //TRUETYPE_FONTTYPE then
+              (hdc,0,0) -> GetOutlineTextMetrics2
+                -> sizeOfOUTLINETEXTMETRIC;
+              sizeOfOUTLINETEXTMETRIC -> malloc -> infoPtr;
+              (hdc,sizeOfOUTLINETEXTMETRIC,infoPtr) -> GetOutlineTextMetrics2 
+                -> sizeOfOUTLINETEXTMETRIC;
+              (%getLongAt (infoPtr + textmetricTmAscentOffset + 4)) -> value;
+           else
+              56 -> malloc -> infoPtr;
+              (hdc,infoPtr) -> GetTextMetrics;
+              (%getLongAt (infoPtr + textmetricTmAscentOffset)) -> value;
+          if);
+          
+          (hdc,saved) -> SelectObject;
+          hdc -> DeleteDC;
+          infoPtr -> free;
+       else
+          'WARNING: CreateDC failed in TextMaxAscent. Error code= ' 
+            -> screen.putText;
+          GetLastError -> putInt; newline;
+      if);
+   #);
+  
+-- TextUnderlineDepth: descriptor --
+(# do 'TextUnderlineDepth: NYI' -> putline; #)
 
 (* TextShapeInteractiveCreate *)
 --TextShapeInteractiveCreateBodyPrivate: descriptor--
@@ -177,7 +356,7 @@ do 'TextShapeMaxAscent: NYI' -> putline;
 --TextShapeInteractiveCreateBodyDrawInsertionMark: descriptor--
 (#
 do theCanvas.prepareInteraction;
-   ((base_x,uppery-1 + private.maxDescent + private.tmAscent), (base_x,uppery-1))
+   ((base_x,uppery-1 + icprivate.maxDescent + icprivate.tmAscent), (base_x,uppery-1))
      -> theCanvas.immediateline;
    theCanvas.endInteraction;
    theCanvas[] -> thecanvas.privatepart.interactionpaint.setcanvaspaint;
@@ -185,21 +364,21 @@ do theCanvas.prepareInteraction;
 --TextShapeInteractiveCreateBodyLetterWidth: dopart--
 do (# ch: @Char; 
    enter ch
-   do (if private.osVersionId=VER_PLATFORM_WIN32_NT then
-          (theCanvas.implpart.hdc,ch,ch,private.tempCharWidth) -> GetCharWidth32;
-          (%getLongAt (private.tempCharWidth)) -> value;
+   do (if icprivate.osVersionId=VER_PLATFORM_WIN32_NT then
+          (theCanvas.implpart.hdc,ch,ch,icprivate.tempCharWidth) -> GetCharWidth32;
+          (%getLongAt (icprivate.tempCharWidth)) -> value;
        else
-          (theCanvas.implpart.hdc,ch,ch,private.tempCharWidth) -> GetCharWidth;
-          (%getLongAt (private.tempCharWidth)) -> value;
+          (theCanvas.implpart.hdc,ch,ch,icprivate.tempCharWidth) -> GetCharWidth;
+          (%getLongAt (icprivate.tempCharWidth)) -> value;
       if);
    #)
 --TextShapeInteractiveCreateBodyDrawCh: descriptor--
 (# 
 do (base_x,uppery,
    ChWidth+1,
-   private.tmAscent + private.maxDescent,
+   icprivate.tmAscent + icprivate.maxDescent,
    theCanvas.implpart.hdc, 
-   private.theBrush)
+   icprivate.theBrush)
      -> win32ClearArea;
    
    theCh -> chArray[1];
@@ -214,80 +393,78 @@ do (base_x,uppery,
 (#
 do (base_x-2,uppery,
    prevChWidth+3,
-   private.tmAscent + private.maxDescent,
+   icprivate.tmAscent + icprivate.maxDescent,
    theCanvas.implpart.hdc,
-   private.theBrush)
+   icprivate.theBrush)
      -> win32ClearArea;
 #)
 --TextShapeInteractiveCreateBodySetFontAndLine: descriptor--
 (#
-do    theCanvas.implpart.theWin32Fonts[] -> private.theWin32Fonts[];
+do    theCanvas.implpart.theWin32Fonts[] -> icprivate.theWin32Fonts[];
    
-   (if private.theWin32Fonts[]<>NONE then
+   (if icprivate.theWin32Fonts[]<>NONE then
        (textprivate.theFontName, textprivate.theStyle, textprivate.theSize) 
-         -> private.theWin32Fonts.theFontTable.find -> private.theWin32Font[];
-       (if private.theWin32Font[]=NONE then
+         -> icprivate.theWin32Fonts.theFontTable.find -> icprivate.theWin32Font[];
+       (if icprivate.theWin32Font[]=NONE then
            (theCanvas.implpart.hdc, 
            textprivate.theFontName,textprivate.theStyle,textprivate.theSize)
-             -> private.theWin32Fonts.createWin32Font;
+             -> icprivate.theWin32Fonts.createWin32Font;
            (textprivate.theFontName,textprivate.theStyle,textprivate.theSize) 
-             -> private.theWin32Fonts.theFontTable.find 
-             -> private.theWin32Font[];
+             -> icprivate.theWin32Fonts.theFontTable.find 
+             -> icprivate.theWin32Font[];
            
-           (if private.theWin32Font[]=NONE then
+           (if icprivate.theWin32Font[]=NONE then
                'Could not find font in TextShapeInteractiveCreateBody.' 
                  -> screen.putLine;
-               &win32Font[] -> private.theWin32Font[];
-               ANSI_VAR_FONT -> GetStockObject -> private.theWin32Font.hFont;
+               &win32Font[] -> icprivate.theWin32Font[];
+               ANSI_VAR_FONT -> GetStockObject -> icprivate.theWin32Font.hFont;
            if);
        if);
     else
-       'Could not find private.theWin32Fonts in TextShapeInteractiveCreateBody.' 
+       'Could not find icprivate.theWin32Fonts in TextShapeInteractiveCreateBody.' 
          -> screen.putLine;
-       &win32Font[] -> private.theWin32Font[];
-       ANSI_VAR_FONT -> GetStockObject -> private.theWin32Font.hFont;
+       &win32Font[] -> icprivate.theWin32Font[];
+       ANSI_VAR_FONT -> GetStockObject -> icprivate.theWin32Font.hFont;
    if);
    
-   56 -> malloc -> private.infoPtr;
-   (if private.infoPtr = 0 then 
-       'WARNING: 56 -> malloc -> private.infoPtr; failed in TextShapeInteractiveCreateBody.' 
+   56 -> malloc -> icprivate.infoPtr;
+   (if icprivate.infoPtr = 0 then 
+       'WARNING: 56 -> malloc -> icprivate.infoPtr; failed in TextShapeInteractiveCreateBody.' 
          -> screen.putLine;
    if);
-   4 -> malloc -> private.tempCharWidth;
-   (if private.tempCharWidth = 0 then
-       'WARNING: 4 -> malloc-> private.tempCharWidth; failed in TextShapeInteractiveCreateBody.' 
+   4 -> malloc -> icprivate.tempCharWidth;
+   (if icprivate.tempCharWidth = 0 then
+       'WARNING: 4 -> malloc-> icprivate.tempCharWidth; failed in TextShapeInteractiveCreateBody.' 
          -> screen.putLine;
    if);
    
-   (theCanvas.implpart.hdc,private.theWin32Font.hFont) -> SelectObject -> private.oldFont;
+   (theCanvas.implpart.hdc,icprivate.theWin32Font.hFont) -> SelectObject -> icprivate.oldFont;
    
-   getOsVersionId -> private.osVersionId;
-   (theCanvas.implpart.hdc,private.infoPtr) -> GetTextMetrics;  
+   getOsVersionId -> icprivate.osVersionId;
+   (theCanvas.implpart.hdc,icprivate.infoPtr) -> GetTextMetrics;  
    (if theCanvas.implpart.custumbackground then
        (if theCanvas.implpart.backGroundColorSet then
-           theCanvas.implpart.backGroundColor -> CreateSolidBrush -> private.theBrush;
+           theCanvas.implpart.backGroundColor -> CreateSolidBrush -> icprivate.theBrush;
         else
            (if theCanvas.implpart.backGroundBitmapSet then
                
            if);
        if);
     else
-       COLOR_BTNFACE -> GetSysColor -> CreateSolidBrush -> private.theBrush;
+       COLOR_BTNFACE -> GetSysColor -> CreateSolidBrush -> icprivate.theBrush;
    if);
    
-   (%getLongAt (private.infoPtr + textmetricTmDescentOffset)) -> private.maxDescent;
-   (%getLongAt (private.infoPtr + textmetricTmAscentOffset)) -> private.tmAscent;
+   (%getLongAt (icprivate.infoPtr + textmetricTmDescentOffset)) -> icprivate.maxDescent;
+   (%getLongAt (icprivate.infoPtr + textmetricTmAscentOffset)) -> icprivate.tmAscent;
 #)
 --TextShapeInteractiveCreateBodyFontAscent: dopart--
-do private.tmAscent -> value
---TextShapeInteractiveCreateBodyLineHeight: dopart--
-do 
+do icprivate.tmAscent -> value
 --TextShapeInteractiveCreateBodyCleanUp: descriptor--
 (# 
-do (theCanvas.implpart.hdc,private.oldFont) -> SelectObject;
-   private.infoPtr -> free;
-   private.tempCharWidth -> free;
-   private.theBrush -> DeleteObject;
+do (theCanvas.implpart.hdc,icprivate.oldFont) -> SelectObject;
+   icprivate.infoPtr -> free;
+   icprivate.tempCharWidth -> free;
+   icprivate.theBrush -> DeleteObject;
 #)
 
 -- TextShapeHiliteOutlineBody: descriptor --
