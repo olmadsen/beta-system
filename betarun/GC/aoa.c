@@ -151,22 +151,25 @@ void AOAGc()
   long blocks, size, used;
   
   NumAOAGc++;
-  INFO_AOA( fprintf( output, "\n#(AOA-%d ", NumAOAGc) );
+  INFO_AOA( fprintf( output, "\n#(AOA-%d ", NumAOAGc); fflush(output) );
   /* Mark all reachable objects within AOA and reverse all pointers. */
 #ifdef macintosh
   RotateTheCursorBack();
 #endif
-  Phase1();  DEBUG_AOA( fprintf( output, "1") );
+  DEBUG_AOA( fprintf( output, "1"); fflush(output) );
+  Phase1();  
   /* Calculate new addresses for the reachable objects and reverse pointers. */
 #ifdef macintosh
   RotateTheCursorBack();
 #endif
-  Phase2( &blocks, &size, &used);  DEBUG_AOA( fprintf( output, "2") );
+  DEBUG_AOA( fprintf( output, "2"); fflush(output) );
+  Phase2( &blocks, &size, &used); 
   /* Copy all reachable objects to their new locations. */
 #ifdef macintosh
   RotateTheCursorBack();
 #endif
-  Phase3();  DEBUG_AOA( fprintf( output, "3") );
+  DEBUG_AOA( fprintf( output, "3"); fflush(output) );
+  Phase3();  
 #ifdef macintosh
   RotateTheCursorBack();
 #endif
@@ -206,7 +209,7 @@ void AOAGc()
 #endif
   
   INFO_AOA( fprintf( output, "%dKb in %d blocks, %d%% free)\n", 
-		    toKb(size), blocks, 100 - (100 * used)/size));
+		    toKb(size), blocks, 100 - (100 * used)/size); fflush(output));
 }
 
 /* ReverseAndFollow is used during Phase1 of the Mark-Sweep GC. 
