@@ -35,7 +35,6 @@ extern int utimes(char *file, struct timeval *tvp);
 #define SYSV
 #endif
 
-struct stat statBuffer;        /* used for all calls to stat */
 
 int entryStatus(path,status,permission,follow)
      char *path;       /* IN par. denoting the path of the entry to be statted */
@@ -49,6 +48,7 @@ int entryStatus(path,status,permission,follow)
      int follow; /* follow links ? */
 {
   int entryType;
+  struct stat statBuffer;
   
   if (follow){
     if (stat(path,&statBuffer)<0 ) 
@@ -214,6 +214,52 @@ int touchEntry(path)
   return 0;
 }
 
+int isEntryDir(char *path, int follow)
+{
+  struct stat statBuffer;
+  
+  if (follow){
+    if (stat(path,&statBuffer)<0 ) 
+      return -1;    
+  } else {
+    if (lstat(path,&statBuffer)<0 ) 
+      return -1;
+  }
+  /* The type of the entry */
+  return (statBuffer.st_mode & S_IFMT) == S_IFDIR;
+} 
+
+int isEntryFile(char *path, int follow)
+{
+  struct stat statBuffer;
+  
+  if (follow){
+    if (stat(path,&statBuffer)<0 ) 
+      return -1;    
+  } else {
+    if (lstat(path,&statBuffer)<0 ) 
+      return -1;
+  }
+  /* The type of the entry */
+  return (statBuffer.st_mode & S_IFMT) == S_IFREG;
+} 
+
+
+int getEntryModtime(char *path, int follow)
+{
+  struct stat statBuffer;
+  
+  if (follow){
+    if (stat(path,&statBuffer)<0) 
+      return -1;    
+  } else {
+    if (lstat(path,&statBuffer)<0) 
+      return -1;
+  }
+  return statBuffer.st_mtime;
+} 
+
+
 int setEntryModtime(path, time)
      char *path;
      time_t time;
@@ -285,6 +331,7 @@ int entryExists(path, follow)
      char *path;
      int follow;
 {
+  struct stat statBuffer;
   if((char)(*path)=='\0')
     return -1;                  /* test for empty string */
   if (follow){

@@ -144,6 +144,27 @@ touchEntry: External
   exit status
   #);
 
+isEntryDir: External
+  (# path: [1]@char;
+     follow: @boolean;
+     isdir: @integer; (* -1 => error *)
+  enter (path,follow)
+  exit isdir
+  #);
+isEntryFile: External
+  (# path: [1]@char;
+     follow: @boolean;
+     isfile: @integer; (* -1 => error *)
+  enter (path,follow)
+  exit isfile
+  #);
+getEntryModtime: External
+  (# path: [1]@char;
+     follow: @boolean;
+     time: @integer; (* -1 => error *)
+  enter (path,follow)
+  exit time
+  #);
 setEntryModtime: External
   (# path: [1]@char;
      time: @integer;
@@ -192,56 +213,44 @@ do 'Disk entry exception for '''->msg.puttext;
 --DiskEntryPrivate: descriptor--
 (# path: @text;
    pathchanged: @boolean;
-   head, name, main, suf: @text;
+   head, name, main, suf: ^text;
    follow: @boolean;
    followset: @boolean;
-   checkfollow: @(# do (if not private.followset then true -> follow -> followset; if) #);
-   decomposepath: @
+   checkfollow: 
+     (# do (if not private.followset then true -> follow -> followset; if) #);
+   decomposepath: 
      (# i: @integer;
      do (if pathchanged then
 	    (* decompose path *)
 	    0->i;
             '/' -> path.findAll(# do inx -> i #);
-	    (if i=0 then head.clear; path -> name;
+            &text[]->head[];
+	    (if i=0 then 
+                path.copy -> name[];
 	     else
-		path.t[1:i-1] -> head;
+                &text[]->name[];
 		path.t[i+1:path.length] -> name;
+		path.t[1:i-1] -> head;
 	    if);
 	    (* decompose name *)
             0->i;
 	    '.' -> name.findAll(# do inx -> i #);
-	    (if i=0 then suf.clear; name -> main;
+            &text[]->suf[];
+	    (if i=0 then 
+                name.copy -> main[];
 	     else
+                &text[]->main[];
 		name.t[1:i-1] -> main;
 		name.t[i:name.length] -> suf;
 	    if);
 	    false -> pathchanged
 	if);
      #);
-   FullPath: @
-     (# p: ^text;
-     do (if true
-	 // path.t[1]='/' then
-	    (* Already full path *)
-	    &text[]->p[]; path -> p;
-	 // '.' -> private.path.equal then
-	    getCurrentDir -> p[];
-	 else
-	    (* path relative to CWD *)
-	    getCurrentDir -> p[];
-	    '/' -> p.append;
-	    path[] -> p.append;
-	if);
-     exit p[]
-     #);
     
    statBuf: [20] @integer;
    permBuf: [9] @integer;
    
-   dostat: @(# result: @boolean
-            do ( ((path,@@statBuf[1],@@permBuf[1], follow) -> entryStatus)<0 ) -> result;
-            exit result
-            #);
+   dostat: (# exit ((path,@@statBuf[1],@@permBuf[1],follow)->entryStatus)<0 #);
 #)
 
 --DiskEntryPathHead: dopart--
@@ -291,10 +300,12 @@ do (if private.dostat then -1 -> value; error
 
 --DiskEntrySetModTime:dopart--
 do (if ((private.path,time) -> setEntryModtime)=-1 then error if);
+   
 --DiskEntryGetModTime:dopart--
-do (if private.dostat then -1 -> time; error
-    else private.statbuf[17] -> time
-   if)
+do private.checkfollow;
+   (if ((private.path, private.follow) -> getEntryModtime -> time) = -1 then
+       error
+   if);
 
 --DiskEntryRename: dopart--
 do (if newpath[]=NONE then &text[]->newpath[] if);
@@ -324,16 +335,20 @@ do (if ((private.path, F_OK) -> access) = 0 then (* File exists *)
 #)
 
 --DiskEntryIsDir: dopart--
-do (if private.dostat then error
-    else private.statBuf[3]=1 -> value
-   if)
-
+do private.checkfollow;
+   (if ((private.path, private.follow) -> isEntryDir)
+    // -1 then error
+    // 0 then false -> value
+    // 1 then true -> value
+   if);
+   
 --DiskEntryIsFile: dopart--
-do (if private.dostat then error
-    else private.statBuf[6]=1 -> value
-   if)
-
-
+do private.checkfollow;
+   (if ((private.path, private.follow) -> isEntryFile)
+    // -1 then error
+    // 0 then false -> value
+    // 1 then true -> value
+   if);
 
 --FilePrivate:descriptor--
 (# outputFile: @boolean; (* True iff this file is opened for writing. *)
