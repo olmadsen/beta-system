@@ -150,7 +150,7 @@ sub quote_strings
     return  $processedline;
 }
 
-sub unquote_html
+sub unplus_html
 # replace '<+' with '<' and , '+>' with '>'
 {
     local ($string) = @_[0];
@@ -168,32 +168,35 @@ sub do_gram_file()
     while(<GRAM>){
 	$line = $_;
 	chomp($line);
-	$line = &quote_strings($line);
 	if (/^\s*Option\s*$/i){
 	    $line=&make_h2($line);
 	} elsif (/^\s*Rule\s*$/i){
 	    $line=&make_h2($line);
 	    $in_rules = 1;
 	} elsif (/^\s*Attribute\s*$/i){
-	    $line=&make_h2($line)
-	    } elsif ($in_rules){
-		if ($line =~ m/^(\s*)<([-\w]+)>(\s*)::/) {
-		    # line with rule definition
-		    #   <name>   :: ...
-		    #             ^ matched to here
-		    $w1 = $1; $name = $2; $w2 = $3; 
-		    $rest = $';
-		    $name = &make_anchor($name);
-		    # insert link from rightsides to corresponding leftsides:
-		    $rest = &make_hrefs($rest);
-		    $line = $w1 . $name . $w2 . "::" . $rest;
-		} else {
-		    #line without rule definition
-		    $line =~ s/<([-\w]+)>/<A HREF="#$1">&lt;$1&gt<\/A>/g;
-		    $line =~ s/<([-\w]+):([-\w]+)>/<A HREF="#$2">&lt;$1:$2&gt<\/A>/g;
-		}
+	    $line=&make_h2($line);
+	} elsif ($in_rules){
+	    $line = &quote_strings($line);
+	    if ($line =~ m/^(\s*)<([-\w]+)>(\s*)::/) {
+		# line with rule definition
+		#   <name>   :: ...
+		#             ^ matched to here
+		$w1 = $1; $name = $2; $w2 = $3; 
+		$rest = $';
+		$name = &make_anchor($name);
+		# insert link from rightsides to corresponding leftsides:
+		$rest = &make_hrefs($rest);
+		$line = $w1 . $name . $w2 . "::" . $rest;
+	    } else {
+		#line without rule definition
+		$line =~ s/<([-\w]+)>/<A HREF="#$1">&lt;$1&gt<\/A>/g;
+		$line =~ s/<([-\w]+):([-\w]+)>/<A HREF="#$2">&lt;$1:$2&gt<\/A>/g;
 	    }
-	$line = &unquote_html($line);
+	    $line = &unplus_html($line);
+	} else {
+	    # Not yet in rules section
+	    $line = &quote_html($line);
+	}
 	print "$line\n";
     }
     close(GRAM);
