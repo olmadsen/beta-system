@@ -71,7 +71,7 @@ newPassiveSocket (int *portNumber)
 
   memset((char *)&si, 0, sizeof(si)); /* clear si */
   si.sin_family = AF_INET;
-  si.sin_port = *portNumber; 
+  si.sin_port = htons(*portNumber);
   /* If portNumber == 0, the system decides on a port number to use. */
   si.sin_addr.s_addr = INADDR_ANY;
 
@@ -80,7 +80,7 @@ newPassiveSocket (int *portNumber)
   /* Get the port number assigned to newSock. */
   siSize = sizeof (si);
   if (getsockname (newSock, (struct sockaddr *) &si, &siSize) == -1) return -2;
-  (*portNumber) = si.sin_port;
+  (*portNumber) = ntohs(si.sin_port);
   
   /* Start listening on the socket: */
   if (listen (newSock, 5) == -1) return -3;
@@ -111,8 +111,8 @@ newActiveSocket (int hostAdr, int port, int *newSock, int block)
 
   memset((char *)&si, 0, sizeof(si)); /* clear si */
   si.sin_family = AF_INET;
-  si.sin_port = port; 
-  si.sin_addr.s_addr = hostAdr;
+  si.sin_port = htons(port);
+  si.sin_addr.s_addr = htonl(hostAdr);
     
   /* Now connect to server. */
   while (TRUE) {

@@ -60,3 +60,11 @@ struct hostent* thisHost ()
     return (struct hostent *)0; 
 }
 
+long BSD_ntohl(long i)
+{
+#ifdef linux
+  return ntohl(i);
+#else
+  return i;
+#endif
+}
