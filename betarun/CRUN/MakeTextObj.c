@@ -18,17 +18,20 @@
 
 #ifdef sparc
 
-/* Ensure that %i0 and %i1 are beta-references: rotate arguments */
-
-asmlabel(MkTO,	        			\
-	 "mov %o0,%g1;"				\
-	 "mov %o1,%o0;"				\
-	 "mov %o2,%o1;"				\
-	 "ba _CMkTO;"                           \
-	 "mov %g1,%o2;"				\
+asmlabel(MkTO,
+	 "mov %o0,%o5;"	
+	 "mov %o1,%o0;"	
+	 /* "mov %o2,%o2;" */
+         "clr %o1;"
+	 "clr %o3;"
+	 "ba _CMkTO;"
+         "clr %o4;"
 );	
 void CMkTO(ref(Item) theItem,
+	   int i1,
 	   unsigned offset, /* i ints */
+	   int i3,
+	   int i4,
 	   char *cText)
 
 #else

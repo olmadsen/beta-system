@@ -9,19 +9,26 @@
 #include "crun.h"
 
 asmlabel(NewVR, "
-	ba	_CNewVR
-	mov	%l7, %o2
+	mov	%o1, %o2
+	mov	%l7, %o5
+        clr     %o1
+        clr     %o3
+	b	_CNewVR
+        clr     %o4
 ");
 
 #ifdef hppa
-#  define CNewVR NewVR
-#  define CAlloVR1 AlloVR1
-#  define CAlloVR2 AlloVR2
-#  define CAlloVR4 AlloVR4
-#  define CAlloVR8 AlloVR8
+void NewVR(ref(Object) theObj, 
+	   long offset /* in ints */,
+	   long range)
+#else
+void CNewVR(ref(Object) theObj,
+	    int i1,
+	    long offset /* in ints */,
+	    int i3,
+	    int i4,
+	    long range)
 #endif
-
-void CNewVR(ref(Object) theObj, long offset /* in ints */, long range)
 {
     DeclReference1(struct ValRep *, theRep);
     GCable_Entry();
@@ -55,16 +62,16 @@ void CNewVR(ref(Object) theObj, long offset /* in ints */, long range)
 	      break;
 #else
 	    case (long) ByteRepPTValue:
-	      CAlloVR1(theObj, offset*4, range);
+	      AlloVR1(theObj, offset*4, range);
 	      break;
 	    case (long) WordRepPTValue:
-	      CAlloVR2(theObj, offset*4, range); 
+	      AlloVR2(theObj, offset*4, range); 
 	      break;
 	    case (long) ValRepPTValue:
-	      CAlloVR4(theObj, offset*4, range);
+	      AlloVR4(theObj, offset*4, range);
 	      break;
 	    case (long) DoubleRepPTValue:
-	      CAlloVR8(theObj, offset*4, range); 
+	      AlloVR8(theObj, offset*4, range); 
 	      break;
 #endif
 	    default:

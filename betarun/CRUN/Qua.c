@@ -20,8 +20,8 @@
 
 asmlabel(Qua,
 	 "mov %i1,%o1;"
-	 "mov %i2,%o2;"
-	 "mov %o0,%o3;"
+	 "mov %i2,%o3;"
+	 "mov %o0,%o2;"
 	 "ba _CQua;"
 	 "mov %i0,%o0;");
 
@@ -33,8 +33,9 @@ void Qua(struct Object **theCell,
 #else
 void CQua(ref(Object) this, 
 	  ref(ProtoType) dstQuaProto,
-	  ref(Object) dstQuaOrigin, 
-	  struct Object **theCell)
+	  struct Object **theCell,
+	  ref(Object) dstQuaOrigin 
+	  )
 #endif
 {
   ref(Object) src;
@@ -110,21 +111,22 @@ void CQua(ref(Object) this,
 
 asmlabel(OQua,
 	 "mov %i1,%o1;"
-	 "mov %i2,%o2;"
-	 "mov %o0,%o3;"
+	 "mov %i2,%o3;"
+	 "mov %o0,%o2;"
 	 "ba _COQua;"
 	 "mov %i0,%o0;");
 
 #ifdef hppa
 void OQua(struct Object **theCell,
-	 ref(Object) this, 
-	 ref(ProtoType) dstQuaProto,
-	 ref(Object) dstQuaOrigin)
+	  ref(Object) this, 
+	  ref(ProtoType) dstQuaProto,
+	  ref(Object) dstQuaOrigin)
 #else
 void COQua(ref(Object) this, 
-	  ref(ProtoType) dstQuaProto,
-	  ref(Object) dstQuaOrigin, 
-	  struct Object **theCell)
+	   ref(ProtoType) dstQuaProto,
+	   struct Object **theCell,
+	   ref(Object) dstQuaOrigin
+	  )
 #endif
 {
   ref(Object) src;

@@ -9,7 +9,6 @@
 #include "crun.h"
 
 #ifdef sparc
-/* Ensure that %i0 and %i1 are beta-references: rotate arguments */
 asmlabel(CopyT,
 	 "clr [%sp+0x6c];" /* ClearCParams */
 	 "clr [%sp+0x68];"
@@ -23,14 +22,19 @@ asmlabel(CopyT,
 	 "clr [%sp+0x48];"
 	 "clr [%sp+0x44];"
 	 "clr [%sp+0x40];"
-	 "mov %o0,%g1;"	
+	 "mov %o0,%o5;"	
 	 "mov %o1,%o0;"
-	 "mov %o2,%o1;"
+	 /* "mov %o2,%o2;" */
+         "clr %o1;"
+	 "clr %o3;"
 	 "ba _CCopyT;"
-         "mov %g1,%o2;"
+         "clr %o4;"
          );	
 void CCopyT(ref(Item) theItem,
+	    int i1,
 	    unsigned offset, /* i ints */
+	    int i3,
+	    int i4,
 	    char *asciz
            )
 #else

@@ -9,14 +9,25 @@
 #include "crun.h"
 
 asmlabel(NewRR, "
+	mov	%o1, %o2
+	mov	%l7, %o5
+        clr     %o1
+        clr     %o3
 	b	_CNewRR
-	mov	%l7, %o2
+        clr     %o4
 ");
 
 #ifdef hppa
-void NewRR(ref(Object) theObj, long offset, long range)
+void NewRR(ref(Object) theObj,
+	   long offset, 
+	   long range)
 #else
-void CNewRR(ref(Object) theObj, long offset /* in ints */, long range)
+void CNewRR(ref(Object) theObj, 
+	    int i1,
+	    long offset /* in ints */,
+	    int i3,
+	    int i4,
+	    long range)
 #endif
 {
     GCable_Entry();

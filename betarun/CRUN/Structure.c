@@ -8,6 +8,13 @@
 #include "beta.h"
 #include "crun.h"
 
+extern long 		 EqS() asm("eqS"); 
+extern long              NeS() asm("neS");
+extern long              GtS() asm("gtS");
+extern long              LeS() asm("leS");
+extern long              GeS() asm("geS");
+extern long              LtS() asm("ltS");
+
 ParamOriginProto(struct Structure *, AlloS)
 {
   register ref(Structure) newStruct;
@@ -144,7 +151,7 @@ long LeS(ref(Structure) arg1, ref(Structure) arg2)
   GCable_Entry();
   
   Ck(arg1); Ck(arg2);
-  return (EqS(arg1, arg2) || LtS(arg1, arg2));
+  return (EqS(arg1, arg2) || LtS(arg1, arg2, 0, 0, 0));
 }
 
 
@@ -161,11 +168,19 @@ long GtS(ref(Structure) arg1, ref(Structure) arg2)
   GCable_Entry();
   
   Ck(arg1); Ck(arg2);
-  return LtS(arg2, arg1);
+  return LtS(arg2, arg1, 0, 0, 0);
 }
 
-
+#ifdef sparc
+asmlabel(ltS, "
+	 clr %o2
+         clr %o3
+         b   _CLtS
+         clr %o4");
+long CLtS(ref(Structure) arg1, ref(Structure) arg2, int i2, int i3, int i4)
+#else
 long LtS(ref(Structure) arg1, ref(Structure) arg2)
+#endif
 {
   ref(ProtoType) proto1;
   ref(ProtoType) proto2;
