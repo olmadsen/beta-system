@@ -131,7 +131,9 @@ ParamThisComp(struct Component *, Att)
 	    }
 	    rw = cast(RegWin) rw->fp;
 	}
+#ifdef RTDEBUG
 	fprintf(stderr, "Upps, stack handling gone crazy\n");
+#endif
       ok:
 	lastCompBlock = cast(ComponentBlock) rw;
 	/* Fool gcc into believing that %i1 is used */

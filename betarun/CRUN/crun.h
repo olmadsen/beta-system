@@ -54,8 +54,10 @@ static inline
 long_clear(char *p, unsigned bytesize)
 {
   register long i;
+#ifdef RTDEBUG
   if (bytesize&3)
     fprintf(stderr, "What! bytesize&3 != 0\n");
+#endif
   for (i = bytesize-4; i >= 0; i -= 4)
     *(long *)(p+i) = 0;	/* Ugly Hacks Work Fast */
 }
