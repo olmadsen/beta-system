@@ -214,6 +214,7 @@ Att:
 ;; called with theComp in CA, and theObj in TH
 	STW	%r2,-20(0,SP)
 	LDO	128(SP),SP
+	/* FIXME:	 NumAtt++ */
 #ifdef UseRefStack
 	LDIL    LR'RefSP,%r1
         LDW     RR'RefSP(%r1),%r14
@@ -323,6 +324,7 @@ LnotStepping1:
 	BL	$$dyncall,%r31		; this activates the component
 	COPY	%r31,%r2
 TerminateComponent
+	/* FIXME:	 NumTermComp++ */
 	set(ActiveComponent,%r19)
 	LDW	0(0,%r19),CA
 	LDW	CallerComp(0,CA),%r1
@@ -425,6 +427,7 @@ Susp:
 ;; called with theObj in CA
 	STW	%r2,-20(SP)
 	LDO	64(SP),SP
+	/* FIXME:	 NumSusp++ */
 #ifdef UseRefStack
         LDIL    LR'RefSP,%r1
         LDW     RR'RefSP(%r1),%r14

@@ -42,11 +42,7 @@ ParamOriginProto(Item *,AlloCOM)
     setup_item(item, proto, origin); 
 
 #ifndef COM
-    /* COM objects have their prototype point AFTER the static part of 
-     * the proto type struct 
-     */
-    /* item->Proto++; does not work - adds 28 */
-    SETPROTO(item,(ProtoType *)((long)GETPROTO(item)+sizeof(ProtoType)-4));
+    item->Proto = (ProtoType *)((long)(item->Proto)+DISP_OFF);
 #endif /* COM */
 
     if (proto->GenPart){
