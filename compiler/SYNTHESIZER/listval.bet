@@ -6,6 +6,7 @@ INCLUDE 'inlinNXitem';
 INCLUDE 'storeReg';
 INCLUDE 'computedval';
 INCLUDE 'genlib_bytecode';
+INCLUDE 'bytecodeval';
 ---mkListVal:descriptor---
 (# LV: ^ListVal
 do &ListVal[]->LV[]->V[]; (evl[],thisBaseAdr[],lChain[])->LV
@@ -1340,13 +1341,20 @@ ListVal: EvVal
             #);
                
           getConst: 
-            (# E: ^ASTindex; T: ^text; val: @integer; V: ^evVal
+            (# EH: @evalHandler;
+               E: ^ASTindex; T: ^text; val: @integer; V: ^evVal;
+               Ex: @AStindex;
             enter E[]
             do (if E.label = gram.integerConst then
 	           E.getText->T[]; 0->T.setPos; T.getInt->val
 		else 
-		   (thisBaseAdr.copy,E[],false,rchain[])->ExpEval->V[]
-	       if)
+                   (if switch182 then
+                       E -> Ex; (* alisaing problem *)
+                       (thisBaseAdr.copy,Ex[],rchain[],false,none)
+                         -> EH.methodArgs -> V[]
+                    else
+		       (thisBaseAdr.copy,E[],false,rchain[])->ExpEval->V[]
+	       if)if)
             exit(val,V[])
             #);
           mask1:
@@ -1375,9 +1383,21 @@ ListVal: EvVal
              * store R
              *)
             (# val,pos,length: @integer;
-               V: ^evVal
-            enter(val,V[],pos,length)
-            do mch.duplicate; (* adr of object with field addressed by A *)
+               V: ^evVal;
+               isRep: @boolean
+            enter(val,V[],pos,length,isRep)
+            do (* duplicate adr of object with field addressed by A *)
+               (if isRep then
+                   (if isCLR then
+                       1->trace(#
+                               do 'putBitsForByteCode:FIX needed for CLR'->xT
+                               #);
+                   if);
+                   (0,2) -> mch.duplicate
+                else
+                   mch.duplicate
+               if);
+               
                (A[],mch.dataTop[]) -> mch.ldVal;
                ((length,32-length-pos,true)->Mask1->mch.newCstOp
                ,mch.dataTop[]) 
@@ -1463,7 +1483,8 @@ ListVal: EvVal
                  if);
               #);
               (if switch182 then
-                  (val,V[],pos,length) -> putBitsForByteCode
+                  (val,V[],pos,length,EV1.label=gram.indexed)
+                    -> putBitsForByteCode
                else
 	          A.toReg2->ar; ar.mkIndirect;
                   (V[],val)->const2Reg->lDr[];
