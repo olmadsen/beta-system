@@ -109,7 +109,7 @@ static void DoNothing(struct Object **theCell,struct Object *theObj)
 
 void Illegal()
 { 
-#if defined(sgi)
+#if defined(sgi) || defined(nti)
   GLOBAL(static unsigned break_inst);
   int (*f)(void);
 #endif
@@ -128,6 +128,12 @@ void Illegal()
   
   if (StopAtIllegal){
     fprintf(output, "Illegal: hardcoded break!\n");
+
+#ifdef nti
+    break_inst = 0xc39090cc; /* int 3 ; nop ; nop ; ret */
+    f = (int(*)(void))&break_inst;
+    f();
+#endif
 
 #ifdef linux
     __asm__("int3");
