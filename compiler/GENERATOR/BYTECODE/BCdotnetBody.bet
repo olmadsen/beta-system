@@ -6,10 +6,11 @@ INCLUDE '~beta/basiclib/formatio';
 INCLUDE '~beta/basiclib/pcre'; 
 INCLUDE '~beta/basiclib/streamPosition'; 
 INCLUDE '~beta/toollibs/utils/fileExtensions';
+INCLUDE '~beta/basiclib/texthash';
 
 --BCmachineLib: attributes--
 trace_opcodes: 
-  (# exit false #);
+  (# exit common.switch[190] #);
 trace_mem:
   (# exit false #);
 trace_locals:
@@ -101,7 +102,9 @@ FIXME:
   (# T: ^text
   enter T[]
   do 'FIXME: ' -> (T.copy).prepend -> T[];
-     '\n***** ' -> screen.puttext; T[] -> screen.putline;
+     (if not common.switch[188] then
+         '\n***** ' -> screen.puttext; T[] -> screen.putline;
+     if);
      (if fixme_is_comment then
          T[] -> emitcomment;
       else
@@ -161,24 +164,31 @@ AddClass: ConvertType
       // T.length=0
       // 'bool'     -> T.equal 
       // 'bool '    -> ((1,5)->T.sub).equal
+      // 'bool,'    -> ((1,5)->T.sub).equal
       // 'bool[]'   -> ((1,6)->T.sub).equal
       // 'char'     -> T.equal 
       // 'char '    -> ((1,5)->T.sub).equal
+      // 'char,'    -> ((1,5)->T.sub).equal
       // 'char[]'   -> ((1,6)->T.sub).equal
       // 'float64'  -> T.equal 
       // 'float64 ' -> ((1,8)->T.sub).equal
+      // 'float64,' -> ((1,8)->T.sub).equal
       // 'float64[]'-> ((1,9)->T.sub).equal
       // 'float32'  -> T.equal 
-      // 'float32 ' -> ((1,8)->T.sub).equal
+      // 'float32'  -> T.equal 
+      // 'float32,' -> ((1,8)->T.sub).equal
       // 'float32[]'-> ((1,9)->T.sub).equal
       // 'int8'     -> T.equal 
       // 'int8 '    -> ((1,5)->T.sub).equal
+      // 'int8,'    -> ((1,5)->T.sub).equal
       // 'int8[]'   -> ((1,6)->T.sub).equal
       // 'int16'    -> T.equal 
       // 'int16 '   -> ((1,6)->T.sub).equal
+      // 'int16,'   -> ((1,6)->T.sub).equal
       // 'int16[]'  -> ((1,7)->T.sub).equal
       // 'int32'    -> T.equal 
       // 'int32 '   -> ((1,6)->T.sub).equal
+      // 'int32,'   -> ((1,6)->T.sub).equal
       // 'int32[]'  -> ((1,7)->T.sub).equal
       // 'void '    -> ((1,5)->T.sub).equal
       // 'valuetype '-> ((1,10)->T.sub).equal
@@ -364,14 +374,16 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
        (* 1 -> stack_delta; not here (:-( *)
        out.nl;
        (if true
+        // 'bool' -> currentType.equal 
+        // 'Z' -> currentType.equal 
+           then
+           'ldc.i4.0' -> out.puttext; (* NOT ldc.i4.0! *)
         // 'char' -> currentType.equal 
         // 'C' -> currentType.equal 
         // 'int8' -> currentType.equal 
         // 'int16' -> currentType.equal 
         // 'int32' -> currentType.equal 
         // 'I' -> currentType.equal
-        // 'bool' -> currentType.equal 
-        // 'Z' -> currentType.equal 
            then
            'ldc.i4.0' -> out.puttext;
         // 'D' -> currentType.equal (* double/real *) then
@@ -542,9 +554,11 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
              '  L'->out.puttext;
              l -> out.putint;
              (if l<=0 then
-                 'Use of strange label L'->screen.puttext;
-                 l-> screen.putint;
-                 screen.newline;
+                 (# msg: ^text;
+                 do 'Use of strange label L'->msg[];
+                    l-> msg.putint;
+                    msg[] -> fixme;
+                 #)
              if);
              (if compute_stack_height then
                  (if l > stack_heights.range then
@@ -574,7 +588,9 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
    
    init:
      (# BCmch: ^ByteCodeMachine;
-     do out.entry.path.name -> thisModuleName[];
+     do ObjectPool.get(# type::assemblyinfohashtable #)
+          -> lookedup_assemblies[];
+        out.entry.path.name -> thisModuleName[];
         (if generateLineNumbers then
             (mch[]->BCmch[]).mstate.thisSourceFileName.copy -> betafilename[];
             '.bet' -> betafilename.append;
@@ -690,8 +706,14 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
         'mscorlib' -> importAssembly;
         (if use_betarun then
             out.indent;
-            '.assembly extern betarun {}\n'
-              -> out.puttext;
+            '.assembly extern%s betarun {}\n'
+              -> out.putformat(# 
+                              do (if common.switch[186] then 
+                                     ' retargetable'->s 
+                                  else 
+                                     ''->s
+                                 if)
+                              #);
         if);
      #);
    emitBETAAssemblyReferences:
@@ -708,27 +730,71 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
            if);
         #);
      #);
+   
+   imported_assemblies: @texthashtable;
+   
+   lookedup_assemblies: ^assemblyinfohashtable;
+   
    importAssembly:
-     (# assemblyname: ^text
+     (# assemblyname: ^text;
+        is_external: booleanValue
+          (* Only call gacutil for non-beta assemblies.
+           * Ideally imports should contain a flag indicating this,
+           * but it does not currenlty.
+           * So instead we test for the Microsoft .NET famework libraries.
+           * Will fail for third-party assemblies, though 
+           * (but they are probably not in GAC anyway.
+           *)
+          (# 
+          do (if true
+              // 'mscorlib'  -> ((1,8)->assemblyname.sub).equal
+              // 'System'    -> ((1,6)->assemblyname.sub).equal
+              // 'Microsoft' -> ((1,9)->assemblyname.sub).equal
+                 then
+                 true -> value;
+             if);
+          #);
      enter assemblyname[]
-     do out.indent;
-        '.assembly extern ' -> out.puttext;
-        assemblyname[] -> quote -> out.puttext;
-        (if hostIsWindows then
-            out.indent.inc;
-            ' {' -> out.putln;
-            '.ver %s\n'
-            '}' -> out.putformat(# do assemblyname[]->lookupAssemblyVersion -> s; #);
-            out.indent.dec;
-            out.putln;
-         else
-            ' {}' -> out.putline;
-        if);
+     do
+        (if assemblyname[] -> imported_assemblies.add then
+            out.indent;
+            '.assembly extern%s ' 
+              -> out.putformat(# 
+                              do (if common.switch[186] then 
+                                     ' retargetable'->s 
+                                  else 
+                                     ''->s
+                                 if)
+                              #);
+            assemblyname[] -> quote -> out.puttext;
+            (if hostIsWindows then
+                out.indent.inc;
+                ' {' -> out.puttext;
+                (if is_external then
+                    (# version, publickeytoken: ^text;
+                    do assemblyname[]
+                         -> lookupAssemblyVersion 
+                         -> (version[], publickeytoken[]);
+                       out.nl;
+                       '.ver %s'
+                         -> out.putformat(# do version[]->s; #);
+                       out.nl;
+                       '.publickeytoken = (%s)'
+                         -> out.putformat(# do publickeytoken[]->s #);
+                       out.newline;
+                    #);
+                if);
+                out.indent.dec;
+                '}' -> out.putln;
+             else
+                ' {}' -> out.putline;
+            if);
+        if)
      #);
-        
+   
    lookupAssemblyVersion:
      (# assemblyname: ^text;
-        version: ^text;
+        version, publickeytoken: ^text;
         
         gacutil: 
           (# gac, gacline: ^text;
@@ -741,12 +807,14 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
              regexp: @pcre;
           do (if false then
                  (* Calling execReadText apparently hangs in general in windows,
-                  * if output is more than one line (:-(*  
-                                                        *)
+                  * if output is more than one line (:-(  
+                  *)
                  ('gacutil','-l') -> (GetSystemenv).execReadText -> gac[];
               else
                  &text[] -> cmd[];
-                 'gacutil -l %s > gacutil.out' -> cmd.putformat(# do assemblyname[]->s #);
+                 'gacutil -l %s' -> cmd.putformat(# do assemblyname[]->s #);
+                 (*'\n' -> (cmd.copy).prepend -> screen.putline;*)
+                 ' > gacutil.out' -> cmd.append;
                  cmd -> system;
                  'gacutil.out' -> gacutil_output.name;
                  gacutil_output.openread;
@@ -772,8 +840,8 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
                    gacline[]
                      -> regexp.match(# 
                                     do (*'match of version in GAC'->screen.putline;*)
-                                       version.reset;
-                                       '%d:%d:%d:%d\n    .publickeytoken = (%s)'
+                                       &text[] -> version[];
+                                       '%d:%d:%d:%d'
                                          -> version.putformat(# sub: ^text;
                                                              do sub1 -> sub[];
                                                                 sub.reset; sub.getint->d;
@@ -783,21 +851,29 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
                                                                 sub.reset; sub.getint->d;
                                                                 sub4 -> sub[];
                                                                 sub.reset; sub.getint->d;
-                                                                sub5 -> s;
                                                              #);
+                                       sub5 -> publickeytoken[];
                                     #);
                    restart match;
                if);
              
           #);
+        was_there: @boolean;
      enter assemblyname[]
      do '1:0:0:0' -> version[];
         (* FIXME: 
          * could call gacutil -l and match "assemblyname, version=xxxx", 
          * or use IMetaDataAssemblyImport from unmanaged API 
          *)
-        gacutil;
-     exit version[]
+        assemblyname[] 
+          -> lookedup_assemblies.get
+          -> (was_there, version[], publickeytoken[]);
+        (if not was_there then
+            gacutil;
+            (assemblyname[], version[], publickeytoken[])
+              -> lookedup_assemblies.add;
+        if);
+     exit (version[], publickeytoken[])
      #);
    
    emitFileReferences:
@@ -829,7 +905,15 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
                '.module extern ' -> out.puttext;
             else
                out.indent;
-               '.assembly extern ' -> out.puttext;
+               '.assembly extern%s '
+                 -> out.putformat(# 
+                                 do (if common.switch[186] then 
+                                        ' retargetable'->s 
+                                     else 
+                                        ''->s
+                                    if);
+                                 #);
+                                    
            if);
            current[] -> quote -> out.puttext;
            (if use_modules then
@@ -847,7 +931,15 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
              '//********************************************\n'
              '\n'
              '/* Assembly declaration. */' -> out.putln;
-             '.assembly \'%s\' {' -> out.putFormat(# do thisModuleName[]->s #); 
+             '.assembly%s \'%s\' {'
+               -> out.putformat(# 
+                               do (if common.switch[186] then 
+                                      ' retargetable'->s 
+                                   else 
+                                      ''->s
+                                  if);
+                                  thisModuleName[]->s
+                               #);
              out.indent.inc; out.putln;
              '.hash algorithm 32772	// selected algorithm is SHA1' -> out.putln;
              '.ver 1:0:0:0		// version 1.0' -> out.putline;
@@ -978,13 +1070,15 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
                 c -> off(* sign extend *);
              #);
              (if (off>0) and (off<12) then
-                 '\n*** Address.get: strange offset: '->screen.puttext;
-                 off -> screen.putint; 
-                 (if hasFieldName=1 then
-                     '. Field name: '-> screen.puttext;
-                     fieldname[] -> screen.puttext;
-                 if);
-                 screen.newline;
+                 (# msg: ^text;
+                 do 'Address.get: strange offset: '-> msg[];
+                    off -> msg.putint; 
+                    (if hasFieldName=1 then
+                        '. Field name: '-> msg.puttext;
+                        fieldname[] -> msg.puttext;
+                    if);
+                    msg[] -> fixme;
+                 #);
              if);
              BC.get->size; 
              BC.get->ONlevel;
@@ -1034,10 +1128,12 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
                  (* array *)
                  (if fieldType[] <> none then
                      (if true
-                      // 'I' -> fieldType.equal 
-                      // 'int32' -> fieldType.equal 
                       // 'Z' -> fieldType.equal 
                       // 'bool' -> fieldType.equal 
+                         then
+                         'ldelem.i1' -> out.puttext
+                      // 'I' -> fieldType.equal 
+                      // 'int32' -> fieldType.equal 
                          then
                          'ldelem.i4' -> out.puttext
                       // 'C' -> fieldType.equal 
@@ -1089,10 +1185,12 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
                  (* array *)
                  (if fieldType[] <> none then
                      (if true
-                      // 'I' -> fieldType.equal 
-                      // 'int32' -> fieldType.equal 
                       // 'Z' -> fieldType.equal 
                       // 'bool' -> fieldType.equal 
+                         then
+                         'stelem.i1' -> out.puttext
+                      // 'I' -> fieldType.equal 
+                      // 'int32' -> fieldType.equal 
                          then
                          'stelem.i4' -> out.puttext
                       // 'C' -> fieldType.equal
@@ -1694,18 +1792,6 @@ do init;
                     prim[] -> function_stack_delta -> stack_delta;
                 if);
              #)
-          // callInner then
-             'ldarg.0' -> out.puttext; 4->_n;
-             out.nl;
-             1 -> stack_delta;
-             'callvirt ' -> out.puttext;
-             (* NOT in accordance with design - FIX *)
-             'instance void ' -> out.puttext;
-             thisClassName[] -> out.puttext;
-             '::'->out.puttext;
-             thisInnerMethodName[]->out.puttext;
-             '()'->out.puttext;
-             -1 -> stack_delta;
           // comment then
              (# T: ^text
              do BC.gettext -> T[];
@@ -1798,6 +1884,18 @@ do init;
                  'castclass  ' -> out.puttext;
                  BC.gettext -> out.putln;
                  (* stack neutral *)
+              // callInner then
+                 'ldarg.0' -> out.puttext; 4->_n;
+                 out.nl;
+                 1 -> stack_delta;
+                 'callvirt ' -> out.puttext;
+                 (* NOT in accordance with design - FIX *)
+                 'instance void ' -> out.puttext;
+                 thisClassName[] -> out.puttext;
+                 '::'->out.puttext;
+                 thisInnerMethodName[]->out.puttext;
+                 '()'->out.puttext;
+                 -1 -> stack_delta;
               // call then 
                  (# calltype: @integer;
                     delta: @integer;
@@ -2203,3 +2301,80 @@ do init;
      if);
    out.close
 #)  
+
+-- LIB:attributes--
+unQuote:
+  (# t: ^text;
+  enter t[]
+  do (if ((1 -> t.inxGet) = '"') AND ((t.length -> t.inxGet) = '"') then
+         (2, t.length - 1) -> t.sub -> t[];
+     if);
+  exit t[]
+  #);
+
+unTick:
+  (# t: ^text;
+  enter t[]
+  do (if ((1 -> t.inxGet) = '\'') AND ((t.length -> t.inxGet) = '\'') then
+         (2, t.length - 1) -> t.sub -> t[];
+     if);
+  exit t[]
+  #);
+
+textHashTable: hashTable
+  (# element::<(# T: ^text #);
+     honeyM: @honeyMan;
+     initialized: @boolean;
+     init::< (# do honeyM.init; INNER; true -> initialized; #);
+     hashFunction::<(# do e.t[]-> honeyM.hash -> value; INNER #);
+     equal::< (# do left.t[]->right.t.equal->value; INNER #);
+     get:<
+       (# T: ^text;
+          E: ^element;
+          was_there: @boolean;
+       enter T[]
+       do T[] -> unTick -> unQuote -> unTick -> T[];
+          (if not initialized then init if);
+          &element[] -> e[];
+          T[] -> e.T[];
+          e[]->hashfunction->findIndexed
+          (# predicate:: (# do (T[]->current.t.equal)->value; #);
+          do current[]->e[];
+             true->was_there;
+          #);
+          INNER;
+       exit was_there
+       #);
+     add:<
+       (* Returns true if T was not already here *)
+       (# T: ^text;
+          E: ^element;
+          was_inserted: @boolean;
+       enter T[]
+       do T[] -> unTick -> unQuote -> unTick -> T[];
+          (if not initialized then init if);
+          &element[] -> e[];
+          T[] -> e.T[];
+          INNER;
+          e[]->hashfunction->findIndexed
+          (# predicate:: (# do (T[]->current.t.equal)->value; #);
+             notFound:: (# do e[] -> insert; true -> was_inserted #)
+          do current[]->e[] (* Only when found *)
+          #);
+       exit was_inserted
+       #);
+  #);
+
+assemblyinfohashtable: texthashtable
+  (# element::< (# version, publickeytoken: ^text; #);
+     get::< (# version, publickeytoken: ^text;
+            do E.version[] -> version[];
+               E.publickeytoken[] -> publickeytoken[];
+            exit (version[], publickeytoken[])
+            #);
+     add::< (# version, publickeytoken: ^text;
+            enter (version[], publickeytoken[])
+            do version[] -> E.version[];
+               publickeytoken[] -> E.publickeytoken[];
+            #);
+  #);

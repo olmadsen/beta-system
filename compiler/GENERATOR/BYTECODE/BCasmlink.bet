@@ -2,6 +2,7 @@ ORIGIN '../asmlinkbody' ;
 INCLUDE '~beta/basiclib/fileSetExe';
 INCLUDE '~beta/basiclib/pcre';
 INCLUDE '~beta/basiclib/formatio';
+INCLUDE '~beta/containers/list';
 
 (* verboseLevels:
  * verbose: (# exit 0 #); {* more than default? *}
@@ -85,6 +86,7 @@ BackslashToSlash:
      for);
   exit T[]
   #);
+containerlist: list(# #);
 
 --translateasmlinklib: attributes ---
 isJava:  
@@ -105,6 +107,7 @@ jarfilename:
 
 --asmState:descriptor--
 (# link_line_length: @integer;
+   verifylist: @containerlist(# element::text #);
 #)
 --HasSharedLibs:descriptor--
 (#do false -> value #)
@@ -120,6 +123,7 @@ do (if hostIsWindows then
 (#
 do (if true
     // isIL or hostIsWindows then
+       asmstate.verifylist.init;
        '@echo off\n'
          ->AFF.putText;
        (if isIL then
@@ -255,32 +259,6 @@ do 'resource'->TODO
    out: ^text;
    FF: ^text;
    
-   GenerateDotnetVerify:
-     (# 
-     do (if common.switch[37] then
-            AFF.newline;
-            echo;
-            'verifying '->AFF.puttext;
-            F[] -> AFF.puttext;
-            (if use_dotnet_modules then
-                '.netmodule ' -> AFF.puttext;
-             else
-                '.dll ' -> AFF.puttext;
-            if);
-            AFF.newline;
-            'peverify /nologo '->AFF.puttext; 
-            F[] -> AFF.puttext;
-            (if use_dotnet_modules then
-                '.netmodule ' -> AFF.puttext;
-             else
-                '.dll ' -> AFF.puttext;
-            if);
-            AFF.newline;
-            (if not common.switch[21] then
-                'if errorlevel 1 goto verifyerror' -> AFF.putLine;
-            if);
-        if);
-     #);
 do (if common.switch[184] or common.switch[189] then
        asmext -> F.append;
    if);
@@ -320,10 +298,10 @@ do (if common.switch[184] or common.switch[189] then
        if);
        (if true
         // isIL then
-           (if isProgram then
-               (if false then
-                   'asmlink: skipped assembliung of program.il (done by link)' -> putline;
-               if)
+           (if isProgram and not common.switch[37] then
+               (* program.il is assembled to foo.exe by link phase.
+                * Only if doing verification should program.dll be created.
+                *)
             else
                'ilasm /nologo /dll '->AFF.puttext; 
                (if verboseLevel > verboseLevel.verbose then
@@ -348,7 +326,7 @@ do (if common.switch[184] or common.switch[189] then
                (if not common.switch[21] then
                    'if errorlevel 1 goto asmerror' -> AFF.putLine;
                if);
-               GenerateDotnetVerify;
+               F[] -> asmstate.verifylist.append;
            if)
         // isJava then
            (*'jasmin '->AFF.putText; F[]->AFF.putLine*)
@@ -448,19 +426,36 @@ do 'ldTmp'->TODO
    GenerateDotnetVerify:
      (# 
      do (if common.switch[37] then
-            AFF.newline;
-            echo;
-            'verifying '->AFF.puttext;
-            ObjName[] -> AFF.puttext;
-            '.exe ' -> AFF.putline;
-            'peverify /nologo '->AFF.puttext; 
-            ObjName[] -> AFF.puttext;
-            '.exe ' -> AFF.putline;
-            (if not common.switch[21] then
-                'if errorlevel 1 goto verifyerror' -> AFF.putLine;
-            if);
+            asmstate.verifylist.scan
+            (# F: ^text;
+            do (if '.exe' -> current.checkExtension then
+                   current[] -> F[];
+                else
+                   (if use_dotnet_modules then
+                       '.netmodule ' -> current.append -> f[];
+                    else
+                       '.dll ' -> current.append -> f[];
+                   if);
+               if);
+               AFF.newline;
+               'echo verifying '->AFF.puttext;
+               F[] -> AFF.puttext;
+               AFF.newline;
+               'peverify /nologo '->AFF.puttext; 
+               F[] -> AFF.puttext;
+               ' > peverify.out' -> AFF.putline;
+               'if errorlevel 1 goto verifyerror' -> AFF.putLine;
+               'goto verifydone' -> AFF.putline;
+               ':verifyerror' -> AFF.putline;
+               'echo.' -> AFF.putline;
+               'echo Verification errors:' -> AFF.putline;
+               'type peverify.out' -> AFF.putline;
+               ':verifydone' -> AFF.putline;
+               'del peverify.out' -> AFF.putline;
+               'echo.' -> AFF.putline;
+            #);
         if);
-     #)
+     #);
         
 do (if true
     // isJava then
@@ -532,8 +527,9 @@ do (if true
        (if not common.switch[21] then
            'if errorlevel 1 goto linkerror' -> AFF.putLine;
        if);
-       GenerateDotnetVerify;
        MakeDotnetConfigFile;
+       (*'.exe' -> (objname.copy).append -> asmstate.verifylist.append;*)
+       GenerateDotnetVerify;
     else
        'link' -> TODO;
    if);
