@@ -1,0 +1,104 @@
+ORIGIN '~beta/basiclib/v1.4/basicsystemenv';
+
+INCLUDE '~beta/unixlib/v1.4/iostate';
+INCLUDE '~beta/process/v1.4/processmanager';
+INCLUDE '~beta/process/v1.4/private/communication_unixbody';
+INCLUDE '~beta/process/v1.4/private/processmanager_unixbody';
+INCLUDE '~beta/process/v1.4/private/fdStreamBody';
+
+INCLUDE '~beta/debugger/v2.0/utils/buffered_io';
+(*
+ * COPYRIGHT
+ *   Copyright Mjolner Informatics, 1995-96
+ *   All rights reserved.
+ *)
+
+--- systemLib: attributes ---
+
+executeSystem: system
+  (# sink:<
+       (# t: ^text
+       enter t[]
+       do INNER sink
+       #);
+     puttext:
+       (# t: ^text
+       enter t[]
+       do (if not programTerminated (*program.stillRunning*) then
+              t[]->programInputPipe.writeend.puttext;
+              programInputPipe.writeend.newline;
+              programInputPipe.private.writech.flush
+          if)
+       #);
+     thisSystem: ^|system;
+     program: ^process;
+     programTerminated: @boolean;
+     programOutputPipe: @pipe;
+     programInputPipe: @pipe;
+     programOutputBuffer: @fd_buffer;
+     abortMsg,
+     endMsg: ^text;
+     abortSystem:
+       (#
+       do (if not programTerminated (*program.stillRunning*) then
+              program.private.pid->stopUnixProcess;
+              program.private.pid->awaitNotExecuting;
+              (* should be: program.stop; *)
+              
+          if);
+          (if shstatus <> SE_KILLED then
+              thisSystem[]->kill
+          if);
+          abortMsg[]->sink
+       #);
+     forkSystem:
+       (# prog, args: ^text;
+          fds: ^fdStream;
+          setbuf: external
+            (# stdout,state: @integer enter (stdout,state) #);
+       enter (prog[],args[])
+       do &process[]->program[];
+          prog[]->program.init;
+          programInputPipe.init;
+          programInputPipe.readEnd[]->program.redirectFromChannel;
+          programOutputPipe.init;
+          programOutputPipe.writeEnd[]->program.redirectToChannel;
+          (if args[] <> none then
+              args.reset;
+              args.scanwhitespace;
+              loop:
+              (if not args.eos then
+                  args.getatom->program.argument.append;
+                  args.scanwhitespace;
+                  restart loop
+              if);
+              
+          if);
+          false->programTerminated;
+          program.start;
+          programInputPipe.writeEnd[]->fds[];
+          (fds.private.unixStream,0)->setbuf;
+          programOutputPipe.readEnd[]->fds[];
+          (fds.private.unixStream,0)->setbuf;
+          (fds.private.index,FD_READ)->programOutputBuffer.init;
+          thisSystem[]->fork;
+       #)
+          
+  do
+     cycle:
+       (# t: @text; ch: @char; l: @integer;
+       do
+          (if not programTerminated (*program.stillRunning*) then
+              programOutputBuffer.getBufferContents
+              (#
+                 error:: 
+                   (#  do true->programTerminated; leave cycle #);
+                 endOfFile:: 
+                   (#  do true->programTerminated; leave cycle #)
+              #)->sink;
+              restart cycle
+          if)
+       #);
+     program.private.pid->awaitNotExecuting;
+     endMsg[]->sink
+  #)
