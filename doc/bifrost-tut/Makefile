@@ -1,4 +1,4 @@
-generated: appendix
+generated: appendix pdf
 
 appendix:
 	cp $(BETALIB)/bifrost/tutorial/subway7.bet .
@@ -6,5 +6,5 @@ appendix:
 	mv subway7.html final.html
 	rm subway7.bet
 
-
-
+pdf:
+	../bin/html2pdf.perl
