@@ -148,7 +148,14 @@ static int ReserveHeap(Block **BaseBlock,
 #ifdef MAC
 void increaseStackSize(Size extrabytes)
 {
-	SetApplLimit(GetApplLimit() - extrabytes);
+	
+	Ptr currentStackEnd;
+	Ptr newStackEnd;
+	
+	currentStackEnd = GetApplLimit();
+	
+	SetApplLimit(currentStackEnd - extrabytes);
+	newStackEnd = GetApplLimit();
 }
 
 #endif
@@ -159,7 +166,7 @@ void Initialize()
   
   
 #ifdef MAC
-	increaseStackSize(50*1024*1024);
+	increaseStackSize(2*1024*1024);
 #endif
 
   

@@ -116,6 +116,21 @@ unsigned long newPersistentObject(unsigned long storeID, Object *theObj)
 
 unsigned long currentStoreID;
 
+
+#define _EXPLICITRECURSION_
+
+#ifdef _EXPLICITRECURSION_
+
+#define INITIALSTACKSIZE 64
+
+static Object **stack;
+static long stackSize = 0;
+static long stackTop = 0;
+
+#endif /* _EXPLICITRECURSION_ */
+
+
+
 void markReachableObjects(REFERENCEACTIONARGSTYPE)
 {
   Object *realObj;
@@ -148,12 +163,22 @@ void markReachableObjects(REFERENCEACTIONARGSTYPE)
 		       currentStoreID,
 		       0,       /* Not assigned yet */
 		       realObj);
-	  
+			   
+			   
+#ifdef _EXPLICITRECURSION_
+	  stackTop++;
+      if(stackSize <= stackTop) {
+        stackSize = 2*stackSize;
+  	    stack = (Object **) REALLOC(stack, stackSize*sizeof(Object *));
+      }
+      stack[stackTop] = realObj;
+#else
 	  /* The referred object should be scanned as well */
 	  scanObject(realObj,
 		     markReachableObjects,
 		     NULL,
 		     TRUE);
+#endif /* _EXPLICITRECURSION_ */
 	} else {
 	  /* This object has been persistified already */
 	  ;
@@ -167,11 +192,20 @@ void markReachableObjects(REFERENCEACTIONARGSTYPE)
 	  /* What is the store into which this object should be saved ?" */
 	  newPersistentObject(currentStoreID, realObj);
 	  
+#ifdef _EXPLICITRECURSION_
+	  stackTop++;
+      if(stackSize <= stackTop) {
+        stackSize = 2*stackSize;
+  	    stack = (Object **) REALLOC(stack, stackSize * sizeof(Object *));
+      }
+      stack[stackTop] = realObj;
+#else
 	  /* The referred object should be scanned as well */
 	  scanObject(realObj,
 		     markReachableObjects,
 		     NULL,
 		     TRUE);
+#endif /* _EXPLICITRECURSION_ */
 	} else {
 	  /* The referred object is marked as a special object and
              should not be followed */
@@ -190,6 +224,38 @@ void markReachableObjects(REFERENCEACTIONARGSTYPE)
   /* AOAToIOATable need not be updated since all persistent objects in
      IOA will be moved to AOA at the next IOAGC. */
 }
+
+
+#ifdef _EXPLICITRECURSION_
+/* Marks the objects reachable from theObj as persistent. */
+/* NOTE: markReachable is not reentrant. */
+
+void markReachable(Object *theObj)
+{
+  
+  Object *current;
+  
+  if(stackSize == 0) {
+  	stack = (Object **) MALLOC(INITIALSTACKSIZE * sizeof(Object *));
+	stackSize = INITIALSTACKSIZE;
+  }
+  
+  stackTop++;
+  if(stackSize <= stackTop) {
+    stackSize = 2*stackSize;
+  	stack = (Object **) REALLOC(stack, stackSize * sizeof(Object *));
+  }
+  stack[stackTop] = theObj;
+  
+  while(stackTop > 0) {
+    current = stack[stackTop];
+	stackTop--;
+    scanObject(current, markReachableObjects, NULL, TRUE);
+  }
+}
+#endif
+
+
 
 void markOfflineAndOriginObjectsAlive(REFERENCEACTIONARGSTYPE)
 {

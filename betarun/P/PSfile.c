@@ -98,7 +98,7 @@ void windTo(int fd, unsigned long pos)
 {
 #ifdef MAC	
 	if(lseek(fd, 0, SEEK_END) < pos) {
-		ioctl(fd, FIOSETEOF, & (long) pos);
+		ioctl(fd, FIOSETEOF, (long *) pos);
 	}
 #endif
 

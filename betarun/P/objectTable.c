@@ -290,6 +290,13 @@ void flushDelayedEntries(void)
 
 extern unsigned long currentStoreID; /* defined in misc.c */
 
+#define _EXPLICITRECURSION_
+
+#ifdef _EXPLICITRECURSION_
+extern void markReachable(Object *theObj);
+#endif
+
+
 /* Collects the transitive closure of the persistent objects */
 void updatePersistentObjects(void)
 {
@@ -320,10 +327,14 @@ void updatePersistentObjects(void)
       
       currentStoreID = entry -> store;
       
+#ifdef _EXPLICITRECURSION_
+      markReachable(entry -> theObj);
+#else
       scanObject(entry -> theObj,
 		 markReachableObjects,
 		 NULL,
 		 TRUE);
+#endif
     } else {
       Claim(entry -> GCAttr == ENTRYDEAD, "What is GCAttr ?");
     }
