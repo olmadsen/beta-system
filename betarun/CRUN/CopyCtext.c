@@ -37,7 +37,7 @@ ref(ValRep) CCopyCT(unsigned char *textPtr)
 
       /* Allocate a ValueRepetition and initialize it with some text.    */
 
-    range = strlen(textPtr);
+    range = textPtr ? strlen(textPtr) : 0;
     size = ByteRepSize(range);
 
     /* LVRA missing */
