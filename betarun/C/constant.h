@@ -30,4 +30,4 @@
 
 #define MAXCTEXTPOOL	     1000
 
-#define LARGE_REP_SIZE	     200
+#define LARGE_REP_SIZE	     256
