@@ -1,4 +1,6 @@
 ORIGIN '../astlevel';
+LIB_ITEM 'mps';
+INCLUDE '~beta/sysutils/endian';
 INCLUDE  '../notifications'
         'indexPrivate'
         'propertyBody';
@@ -788,8 +790,13 @@ repSaveStruct: (* Private *)
 	 grammar.version -> gramVersion(*r.putInt*);
 	 grammar.grammarIdentification -> t.puttext; (*t[] -> r.putText*)
      if);
-     (@@version,gramVersion) -> TOS'%putShort[0]';
-     (@@version,lcurtop->tos'%ShiftRight[1]') -> TOS'%putShort[1]';
+     (if isLittleEndian then
+         (gramVersion,0) -> version.%putShort;
+         (lcurtop div 2,1) -> version.%putShort;
+      else
+         (gramVersion,1) -> version.%putShort;
+         (lcurtop div 2,0) -> version.%putShort;
+     if);
      version -> r.putInt;
      t[] -> r.putText;
      firstSlot -> r.putInt;
@@ -821,8 +828,13 @@ repRestoreStruct: (* Private *)
      r.getInt -> rootInx;
      (* rootInx -> indexToNode -> ... *)
      r.getInt -> version(*gramVersion*);
-     version->tos'%getShort[0]'->gramVersion;
-     version->tos'%getShort[1]'->tos'%ShiftLeft[1]'->lcurtop;
+     (if isLittleEndian then
+         0->version.%getShort->gramVersion;
+         (1->version.%getShort)*2->lcurtop;
+      else
+         1->version.%getShort->gramVersion;
+         (0->version.%getShort)*2->lcurtop;
+     if);
      r.getText -> t[];
      r.getInt -> firstSlot;
      r.getInt -> modificationStatus;
@@ -939,6 +951,20 @@ newLexemTextForParser:
      length: @integer;
      prod: @integer;
      frag: ^fragmentForm;
+     inx,lexInx: @integer;
+  enter (prod,length,frag[])
+  do (if frag.lcurtop>1 then
+         (prod,length,frag[])->newNewLexemTextForParser->(inx,lexInx)
+      else
+         (prod,length,frag[])->oldNewLexemTextForParser->(inx,lexInx)
+     if)
+  exit (inx,lexInx)
+  #);
+newNewLexemTextForParser:
+  (#
+     length: @integer;
+     prod: @integer;
+     frag: ^fragmentForm;
      theSize: @integer;
      inx,newWidthInLongs,lexInx,lexemSize: @integer;
   enter (prod,length,frag[])
@@ -972,6 +998,56 @@ newLexemTextForParser:
      frag.curTop + theSize (*+ lexemSize*) -> frag.curTop;
      frag.lcurTop + lexemSize -> frag.lcurTop;
 
+  exit (inx,lexInx*4)
+  #);
+oldNewLexemTextForParser:
+  (#
+     length: @integer;
+     prod: @integer;
+     frag: ^fragmentForm;
+     theSize: @integer;
+     inx,newWidthInLongs,lexInx: @integer;
+     
+  enter (prod,length,frag[])
+  do
+     (if prod
+      // prodNo.NameAppl then
+         offset.sizePerNameAppl->theSize; 
+      // prodNo.NameDecl then
+         offset.sizePerNameDecl->theSize; 
+      // prodNo.String then
+         offset.sizePerString->theSize; 
+      // prodNo.Comment then
+         offset.sizePerComment->theSize
+      // prodNo.Const then
+         offset.sizePerConst->theSize
+     if);
+     (* jlk:  Thu May  9, 1996: Trying to correct:
+      *       Repetition index out of range error
+      *       Inserted the following line to avoid negative extendA
+      *)
+     (if length < 0 then 0->length if);
+     1+((length+3) div 8)*2->newWidthInLongs;
+     (if (frag.curtop+theSize+newWidthInLongs+2 >= frag.a.range) then
+         (theSize+newWidthInLongs+2)->frag.extendA
+     if);
+     frag.curTop->inx;
+     0->frag.a[inx]->frag.a[inx+1];
+     (inx,prod)->frag.setSymbol;
+     (if prod = prodNo.Comment then
+         0->frag.a[inx+offset.commentType];
+         (* //prodNo.Const then (inx,true) -> frag.setSonInx; *)
+         
+     if);
+     (inx,(inx+theSize->lexInx))->frag.setSonInx;
+     0->frag.a[lexInx];
+     (@@ frag.a[lexInx],newWidthInLongs)->tos'%putShort[0]';
+     (* jlk:  Thu May  9, 1996: Trying to correct:
+      *       Repetition index out of range error
+      * lexInx + newWidthInLongs + 1  -> frag.curTop;
+      *)
+     lexInx+newWidthInLongs+1->frag.curTop;
+     
   exit (inx,lexInx*4)
   #);
 newAstForParser: (* PRIVATE except for the parser *)
