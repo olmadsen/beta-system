@@ -18,8 +18,8 @@ then
 	FILES=`/users/beta/export/distribution/r3.1.1/files/system-pe.files`
 	echo "\
 $FILES \
-./betarun/v2.7/${TARGET}/%SDK%/betarun.lib \
-./betarun/v2.7/${TARGET}/%SDK%/betarunv.lib\
+./betarun/v2.7/${CODEDIR}/%SDK%/betarun.lib \
+./betarun/v2.7/${CODEDIR}/%SDK%/betarunv.lib\
 " \
 | /users/beta/export/distribution/r3.1.1/misc/icomp $DST/system.cmd
 
@@ -65,8 +65,8 @@ else
 	cp /users/beta/betarun/v2.7/$TARGET/betarun.pe ./betarun/v2.7/$TARGET/betarunv.o
 
 	tar -rovhf $DST/system.tar \
-	  ./betarun/v2.7/${TARGET}/betarun.o \
-	  ./betarun/v2.7/${TARGET}/betarunv.o  \
+	  ./betarun/v2.7/${CODEDIR}/betarun.o \
+	  ./betarun/v2.7/${CODEDIR}/betarunv.o  \
 	>> $DST/system.lst
 
 	echo "Compressing..."

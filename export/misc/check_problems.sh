@@ -2,6 +2,11 @@
 
 check_pack()
 {
+	if [ "$COMPRESS" = "icomp" ]
+	then
+		exit 0
+	fi
+
 	echo Checking $1...
 	pack=$1
 	cd $DST
