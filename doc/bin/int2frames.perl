@@ -348,7 +348,7 @@ EOT
     print <<"EOT" if ($flags&$flag_hash);
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$hashfromparent"></SCRIPT>
 EOT
-    print <<"EOT" if (($flags&$flag_hash) && !$wiki);
+    print <<"EOT" if ($flags&$flag_hash);
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript">
 <!--
     CheckParent("$basename");
