@@ -483,7 +483,7 @@ static void DisplayStackPart( output, low, high, theComp)
   long retAddr=0;
   
 #ifdef RTDEBUG
-  fprintf(output, ">>> StackPart [0x%x..0x%x]\n", (int)low, (int)high);
+  /*fprintf(output, ">>> StackPart [0x%x..0x%x]\n", (int)low, (int)high);*/
 #endif
   while( current <= high ){
     retAddr=0;
@@ -664,7 +664,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
    * dump it.
    */
 #ifdef RTDEBUG
-  fprintf(output, ">>> Current object 0x%x\n", (int)theObj);
+  /*fprintf(output, ">>> Current object 0x%x\n", (int)theObj);*/
 #endif
   if( theObj != 0 ){
     if( isObject(theObj)){
