@@ -7,32 +7,18 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/timeb.h>
-#ifndef nti
-#include <netdb.h>
-#include <unistd.h>
-#include <sys/param.h>
-#include <sys/file.h>
-#include <sys/time.h>
-#include <sys/wait.h>
-#include <sys/resource.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#else
 #include <dos.h>
 #ifdef nti_bor
-#include <dir.h>
+# include <dir.h>
 #else
-#define MAXPATH 512
+# define MAXPATH 512
 #endif
 #include <stdlib.h>
 #include <windows.h>
 #include <winsock.h>
 
-#define MAXPATHLEN MAXPATH
-
 #undef INVSOCK
 #define INVSOCK(sock) ((sock)==INVALID_SOCKET)
-#endif
 
 #include <malloc.h>
 
@@ -40,10 +26,10 @@
 
 #define SEPARATOR      1 
  
-/*#define MAX_PATH       1024 */
+#define MAXPATHLEN MAXPATH
 
 #ifndef MAXHOSTNAMELEN
-#define MAXHOSTNAMELEN 512
+# define MAXHOSTNAMELEN 512
 #endif
 
 
@@ -453,7 +439,8 @@ int in,out;
   PROCESS_INFORMATION pi;
   BOOL res;
   char *name;
-  
+  char *s,*d;
+
   si.cb = sizeof(STARTUPINFO);
   si.lpReserved = NULL;
   si.lpDesktop = NULL;
@@ -467,6 +454,9 @@ int in,out;
   si.hStdOutput = stdout; /* Should have been out as file handle */
   si.hStdError = stderr;
 #endif
+
+/* Old version. I can't tell what is going on. It sure does NOT
+   Expand the SEPARATOR chars correctly.
 
   name = malloc(strlen(aname)+3);
   sprintf(name, "\"%s\"", aname);
@@ -482,11 +472,63 @@ int in,out;
   }
 
   free(name);
+*/
 
-  if (res) {
-    /* Process create OK */
-    return (int)pi.hProcess;
+/* New version by M.Grouleff June'96 */
+/* Set to get arguments quoted in "". It seems that CreateProcess 
+   parses the text, and removes the quotes, effectively creating argv.*/
+#define QOUTEARGS 1
+
+  name = malloc(strlen(aname) + strlen(args) + 8 + 2 * MAX_NO_OF_ARGS);
+  
+  sprintf(name, "\"%s\" ", aname); /* Copy cmd name into quotes.*/
+  
+  if (args)    /* Copy arguments, quoting them with "". */
+  {
+    int sepflag = 1;
+    d = name + strlen(name);
+#if QOUTEARGS
+    *d++ = '"';                  /* start-quote for first argument.*/
+#endif
+    for (s = args; *s; s++, d++)
+    {
+      if (*s == SEPARATOR)
+      {
+	sepflag = 1;
+#if QOUTEARGS
+	*d = '"';
+	*++d = ' ';
+	*++d = '"';
+#else
+	*d = ' ';
+#endif
+      }
+      else
+      {
+	sepflag = 0;
+	*d = *s;
+      }
+    }
+  
+    if (sepflag) /* Did it end with en extra separator? (Empty args does) */
+    {
+#if QOUTEARGS
+      d -= 2;
+#else
+      d -= 1;
+#endif 
+    }   
+    *d = 0;
   }
+  res = CreateProcess(NULL, name, NULL, NULL, TRUE, 0,
+		      NULL, NULL, &si, &pi);
+
+  free(name);
+/* End of M.Grouleffs new version. */
+
+  if (res)     /* Process create OK */
+    return (int)pi.hProcess;
+
   return -1;
 }
 
