@@ -10,6 +10,7 @@ rem location and duplicate the beta script.
 rem --- configuration---
 set OLD_BETALIB="e:\\beta"
 set OLD_COMPILER_VERSION="52"
+set OLD_BETARUN="e:\\beta\\betarun\\v2.9"
 
 rem --- don't change below ---
 
@@ -37,12 +38,13 @@ goto getopts
 
 :compile
 rem Start the compiler
-"%OLD_BETALIB%"\bin\%sdk%\ntibeta%OLD_COMPILER_VERSION% %BETAOPTS% %_opts_%
+"%OLD_BETALIB%"\bin\%sdk%\ntibeta%OLD_COMPILER_VERSION% --betarun %OLD_BETARUN%\\nti\\%SDK\\betarunv.lib %BETAOPTS% %_opts_%
 
 rem Clean-up
 set _opts_=
 set OLD_BETALIB=
 set OLD_COMPILER_VERSION=
+set OLD_BETARUN=
 goto done
 
 :usage
