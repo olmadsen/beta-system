@@ -33,7 +33,7 @@ ParamProtoCellOriginThis(Qua)
   src = *theCell;
 
 #ifdef RTDEBUG
-  if ((src) && !(inIOA(src) || inAOA(src) || inLVRA(src) || isLazyRef(src))) {
+  if ((src) && !(inIOA(src) || inAOA(src) || inLVRA(src) || isLazyRef(src) || isIndirRef(src))) {
     char buf[100];
     sprintf (buf, "Qua: src check failed. src = %d, theCell = %d\n", 
 	     (int) src, (int) theCell);
@@ -41,9 +41,9 @@ ParamProtoCellOriginThis(Qua)
   }
 #endif    
   
-  if (src){
-    /* If src is NONE, all is well */
-    
+  if (src && !isIndirRef(src)){
+    /* If src is NONE or indirect, all is well */
+      
 #ifdef RTLAZY
     srcProto = 0;
     /* 1. Check reference assignment */
