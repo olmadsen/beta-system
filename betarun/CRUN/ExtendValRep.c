@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: ExtendValRep.c,v 1.10 1992-09-04 14:24:36 beta Exp $
+ * Mod: $Id: ExtendValRep.c,v 1.11 1992-09-07 15:38:40 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -45,7 +45,7 @@ void CExtVR(ref(Object) theObj,
     newRange = theRep->HighBorder + add; /* Range of new repetition */
     
     if (newRange < 0) newRange = 0;
-    copyRange = DispatchValRepBodySize(theRep, (add < 0) ? newRange : theRep->HighBorder) >> 2;
+    copyRange = DispatchValRepBodySize(theRep->Proto, (add < 0) ? newRange : theRep->HighBorder) >> 2;
 
 #ifdef LVR_Area
     if (newRange > LARGE_REP_SIZE) newRep = LVRAAlloc(theRep->Proto, newRange);
@@ -66,7 +66,7 @@ void CExtVR(ref(Object) theObj,
 
     Protect2(theObj, theRep,
 	     newRep = cast(ValRep) 
-	                  IOAcalloc(DispatchValRepSize(theRep, newRange)));
+	                  IOAcalloc(DispatchValRepSize(theRep->Proto, newRange)));
 
     Ck(theRep);
 
