@@ -113,12 +113,21 @@ static ptr(char) ProtoTypeName(theProto)
   while (*(short *) stat) stat++;	/* Step over static gc entries */ 
   dyn = ((short *) stat) + 1;		/* Step over the zero */
   while (*dyn++);			/* Step over dynamic gc entries */
-  
+
+#if defined(linux) || defined(nti)
+  /* Step over little endian long/short/real position information */
+  {
+    dyn += (theProto->Size+15)>>4; /* step over 'long' bit vector */
+    while (*dyn++);                /* step over 'short' list */
+    while (*dyn++);                /* step over 'real' list */
+  }
+#endif
+
   return (ptr(char)) dyn;
 }
 
-/* c_on_top are used by beta.dump (only) to determine if things on top
- * of the stack is outside beta-code, i.e. a program has failed in 
+/* c_on_top is used by beta.dump (only) to determine if things on top
+ * of the stack are outside beta-code, i.e. a program has failed in 
  * external code.
  */
 static int c_on_top;
