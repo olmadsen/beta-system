@@ -180,6 +180,9 @@ void mmapInitial(unsigned long numbytes)
 		"trying half size %d\n", GetLastError(), numbytes);
       });
       numbytes /= 2;
+      if (!numbytes) {
+	exit(1);
+      }
     }
   }
 #else
