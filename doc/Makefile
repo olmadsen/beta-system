@@ -16,5 +16,7 @@ generated:
 	cd win32lib; make
 	cd comlib; make
 
+up: update
+
 update:
 	cvs update -dP
