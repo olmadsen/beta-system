@@ -56,11 +56,12 @@ static ptr(char) ProtoTypeName(theProto)
 typedef struct group_header
 {
  struct group_header *self;
- char *ascii;
+ char                *ascii;
  struct group_header *next;
+ long                code;
 } group_header;
 
-static char *GroupName(long address)
+static char *GroupName(long address, int isCode)
 {
   extern long *data1 asm("BETA_data1");
   struct group_header *group;
@@ -75,7 +76,10 @@ static char *GroupName(long address)
   while (more_segments){
 
     /* Check if the address is closer to the start of current segment than previous segments */
-    dist = address - (long) current;
+    if (isCode)
+      dist = address - current->code;
+    else
+      dist = address - (long) current;
     if (dist >= 0 && dist < distance) {
       distance = dist;
       group = current;
@@ -84,10 +88,14 @@ static char *GroupName(long address)
     /* Get next data segment if any. Padding by linker may have moved it some longs down */
     more_segments = 0;
     current=current->next;
-    for (limit=(long *)current+10;
+    for (limit=((long *)current)+10;
 	 (long*)current < limit;
-	 (long*)current++) /* Why does gcc complain that this is not used ? */
-      if (current->self == current) { more_segments=1; break; }
+	 ((long*)current)++) {
+      if (current->self == current) {
+	more_segments=1;
+	break; 
+      }
+    }
   }
   
   return group->ascii;
@@ -140,10 +148,10 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
   theProto = theObj->Proto;
   if (activeDist == gDist){
     fprintf(output,"  allocating %s ", type);
-    groupname = /* GroupName(gPart) */ GroupName((long)theProto);
+    groupname = GroupName(gPart,1);
   } else {
     fprintf(output,"  %s ", type);
-    groupname = /* GroupName(mPart) */ GroupName((long)theProto);
+    groupname = GroupName(mPart,1);
   }
   
   if(theProto==activeProto || /* active prefix */
@@ -187,7 +195,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
 	  theProto = theProto->Prefix;
 	  fprintf(output,"%s", ProtoTypeName(theProto));
 	}
-	fprintf(output, " in %s\n", GroupName((long)theObj->Proto));
+	fprintf(output, " in %s\n", GroupName((long)theObj->Proto,0) );
       }
   }
 }
@@ -208,7 +216,7 @@ void DisplayObject(output,theObj,retAddress)
       theItem = cast(Object) ComponentItem(theObj);
       if (theItem== cast(Object) BasicItem) {
 	fprintf(output,"  basic component in %s\n", 
-		GroupName((long)theItem->Proto));
+		GroupName((long)theItem->Proto,0) );
       } else {
 	ObjectDescription(theItem, retAddress, "comp", 0);
       }
