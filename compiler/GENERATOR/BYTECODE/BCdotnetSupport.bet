@@ -22,6 +22,20 @@ sigBetaArray:
   exit T[]
   #);
 
+sigBetaObject:
+  (# T: ^Text;
+  do &Text[] -> T[];
+     'class [\'%s\']\'BetaObject\'' -> T.putformat(# do common.BetaObjectLocation->s #);
+  exit T[]
+  #);
+
+sigComponent:
+  (# T: ^Text;
+  do &Text[] -> T[];
+     'class [\'%s\']\'%s\'' -> T.putformat(# do common.ComponentLocation->s; common.ComponentClass->s #);
+  exit T[]
+  #);
+
 
 GenerateClassExOException:
   (# 
@@ -633,5 +647,158 @@ GenerateClassBetaArray:
      out.indent.dec;
      out.indent;
      '}' -> out.putline;
+     out.indent.restore;
+  #);
+
+GenerateClassComponent:
+  (# 
+  do out.indent.save;
+     0 -> out.indent.set;
+     out.indent.inc;
+     '\n'
+     '//********************************************\n'
+     '//*       Class: Component\n'
+     '//********************************************\n'
+     '.class public auto ansi beforefieldinit Component extends [mscorlib]System.Object' -> out.putln;
+     '{' -> out.putln;
+     '  .field public static class Component current' -> out.putln;
+     '  .field private class Component caller' -> out.putln;
+     '  .field private %s body' -> out.putformat(# do sigBetaObject->s #); out.nl;
+     '  .field private class [mscorlib]System.Threading.Thread thread' -> out.putln;
+     
+     (*   Component(BetaObject b) { 
+      *     body = b; 
+      *     thread = new System.Threading.Thread(new System.Threading.ThreadStart(run));
+      *     thread.IsBackground = true;
+      *     b._comp = this;
+      *     caller = this;
+      *   }
+      *)
+     out.nl;
+     '  .method public hidebysig specialname rtspecialname instance void  .ctor(%s b) cil managed' -> out.putformat(# do sigBetaObject->s #); out.nl;
+     '  {' -> out.putln;
+     '  .maxstack  4' -> out.putln;
+     '  ldarg.0' -> out.putln;
+     '  call       instance void [mscorlib]System.Object::.ctor()' -> out.putln;
+     '  ldarg.0' -> out.putln;
+     '  ldarg.1' -> out.putln;
+     '  stfld      %s Component::body' -> out.putformat(# do sigBetaObject->s #); out.nl;
+     '  ldarg.0' -> out.putln;
+     '  ldarg.0' -> out.putln;
+     '  ldftn      instance void Component::run()' -> out.putln;
+     '  newobj     instance void [mscorlib]System.Threading.ThreadStart::.ctor(object,native int)' -> out.putln;
+     '  newobj     instance void [mscorlib]System.Threading.Thread::.ctor(class [mscorlib]System.Threading.ThreadStart)' -> out.putln;
+     '  stfld      class [mscorlib]System.Threading.Thread Component::thread' -> out.putln;
+     '  ldarg.0' -> out.putln;
+     '  ldfld      class [mscorlib]System.Threading.Thread Component::thread' -> out.putln;
+     '  ldc.i4.1' -> out.putln;
+     '  callvirt   instance void [mscorlib]System.Threading.Thread::set_IsBackground(bool)' -> out.putln;
+     '  ldarg.1' -> out.putln;
+     '  ldarg.0' -> out.putln;
+     '  stfld      %s %s::_comp' -> out.putformat(# do sigComponent->s; sigBetaObject->s #); out.nl;
+     '  ldarg.0' -> out.putln;
+     '  ldarg.0' -> out.putln;
+     '  stfld      class Component Component::caller' -> out.putln;
+     '  ret' -> out.putline;
+     '  } ' -> out.putln;
+     
+     (*   private void run() 
+      *     { 
+      *       body.@do();
+      *       lock(this) { 
+      * 	System.Threading.Monitor.Pulse(this);
+      *       }
+      *     }
+      *)
+     out.nl;
+     '  .method private hidebysig instance void run() cil managed' -> out.putln;
+     '  {' -> out.putln;
+     '    .maxstack  2' -> out.putln;
+     '    .locals init ([0] class Component)' -> out.putln;
+     '    ldarg.0' -> out.putln;
+     '    ldfld      %s Component::body' -> out.putformat(# do sigBetaObject->s #); out.nl;
+     '    callvirt   instance void %s::do()' -> out.putformat(# do sigBetaObject->s #); out.nl;
+     '    ldarg.0' -> out.putln;
+     '    dup' -> out.putln;
+     '    stloc.0' -> out.putln;
+     '    call       void [mscorlib]System.Threading.Monitor::Enter(object)' -> out.putln;
+     '    .try' -> out.putln;
+     '    {' -> out.putln;
+     '      ldarg.0' -> out.putln;
+     '      call       void [mscorlib]System.Threading.Monitor::Pulse(object)' -> out.putln;
+     '      leave.s    L1' -> out.putln;
+     '    } ' -> out.putln;
+     '    finally' -> out.putln;
+     '    {' -> out.putln;
+     '      ldloc.0' -> out.putln;
+     '      call       void [mscorlib]System.Threading.Monitor::Exit(object)' -> out.putln;
+     '      endfinally' -> out.putln;
+     '    } ' -> out.putln;
+     '  L1:' -> out.putln;
+     '    ret' -> out.putln;
+     '  } ' -> out.putln;
+     
+     (*   public void swap()
+      *     { 
+      *       lock (this){
+      * 	Component next = current;
+      * 	current = caller;
+      * 	caller = next;
+      * 	if (!thread.IsAlive) {
+      * 	  thread.Start(); // only relevant if attach
+      * 	} else { 
+      * 	  System.Threading.Monitor.Pulse(this);
+      * 	}
+      * 	System.Threading.Monitor.Wait(this);
+      *       }
+      *     }
+      *)
+     out.nl;
+     '  .method public hidebysig instance void swap() cil managed' -> out.putln;
+     '  {' -> out.putln;
+     '    .maxstack  2' -> out.putln;
+     '    .locals init ([0] class Component next,' -> out.putln;
+     '                  [1] class Component )' -> out.putln;
+     '    ldarg.0' -> out.putln;
+     '    dup' -> out.putln;
+     '    stloc.1' -> out.putln;
+     '    call       void [mscorlib]System.Threading.Monitor::Enter(object)' -> out.putln;
+     '    .try' -> out.putln;
+     '    {' -> out.putln;
+     '      ldsfld     class Component Component::current' -> out.putln;
+     '      stloc.0' -> out.putln;
+     '      ldarg.0' -> out.putln;
+     '      ldfld      class Component Component::caller' -> out.putln;
+     '      stsfld     class Component Component::current' -> out.putln;
+     '      ldarg.0' -> out.putln;
+     '      ldloc.0' -> out.putln;
+     '      stfld      class Component Component::caller' -> out.putln;
+     '      ldarg.0' -> out.putln;
+     '      ldfld      class [mscorlib]System.Threading.Thread Component::thread' -> out.putln;
+     '      callvirt   instance bool [mscorlib]System.Threading.Thread::get_IsAlive()' -> out.putln;
+     '      brtrue.s   L1' -> out.putln;
+     '      ldarg.0' -> out.putln;
+     '      ldfld      class [mscorlib]System.Threading.Thread Component::thread' -> out.putln;
+     '      callvirt   instance void [mscorlib]System.Threading.Thread::Start()' -> out.putln;
+     '      br.s       L2' -> out.putln;
+     '    L1:' -> out.putln;
+     '      ldarg.0' -> out.putln;
+     '      call       void [mscorlib]System.Threading.Monitor::Pulse(object)' -> out.putln;
+     '    L2:' -> out.putln;
+     '      ldarg.0' -> out.putln;
+     '      call       bool [mscorlib]System.Threading.Monitor::Wait(object)' -> out.putln;
+     '      pop' -> out.putln;
+     '      leave.s    L3' -> out.putln;
+     '    }  ' -> out.putln;
+     '    finally' -> out.putln;
+     '    {' -> out.putln;
+     '      ldloc.1' -> out.putln;
+     '      call       void [mscorlib]System.Threading.Monitor::Exit(object)' -> out.putln;
+     '      endfinally' -> out.putln;
+     '    } ' -> out.putln;
+     '  L3:' -> out.putln;
+     '    ret' -> out.putln;
+     '  }' -> out.putln;
+     '}' -> out.putln;
      out.indent.restore;
   #);
