@@ -39,13 +39,6 @@ void Return() {}
   BetaError(RefNoneErr, theObj);
 }
 
-#ifdef hppa
-SetArgValues(long argc, char *argv[])
-{
-  ArgCount = argc;
-  ArgVector = argv;
-}
-#endif
 #ifdef sparc
 /* Need to do this in assembler, as the arguments to
    my caller normally isn't accesseable */
@@ -56,6 +49,12 @@ asmlabel(SetArgValues, "
 	retl
 	st %i1, [%g1]
 ");
+#else
+SetArgValues(int argc, char *argv[])
+{
+  ArgCount = argc;
+  ArgVector = argv;
+}
 #endif
 
 
@@ -76,7 +75,7 @@ char *
   GCable_Entry();
   
   DEBUG_CODE(Claim(size>0, "IOAalloc: size>0"));
-#if (defined(sparc) || defined(hppa))
+#if (defined(sparc) || defined(hppa) || defined(crts))
   DEBUG_CODE(Claim( ((long)size&7)==0 , "IOAalloc: (size&7)==0"));
   DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "IOAalloc: (IOATop&7)==0"));
 #endif
@@ -111,7 +110,7 @@ char *
   GCable_Entry();
   
   DEBUG_CODE(Claim(size>0, "IOACalloc: size>0"));
-#if (defined(sparc) || defined(hppa))
+#if (defined(sparc) || defined(hppa) || defined(crts))
   DEBUG_CODE(Claim( ((long)size&7)==0 , "IOAcalloc: (size&7)==0"));
   DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "IOAcalloc: (IOATop&7)==0"));
 #endif
@@ -173,8 +172,8 @@ void CCk(ref(Object) r)
 #ifdef crts
 
 /* Global address registers */
-long *a0,*a1,*a2,*a3,*a4,*a7;
-int leave;
+char *a0,*a1,*a2,*a3,*a4,*a7;
+long leave;
 
 /* New RT routines for crts */
 static long *refstack[1000];
@@ -206,7 +205,7 @@ char GetByte(unsigned long a, int byteNo /* 0-3 */)
 { return (a >> (8*(3-byteNo))) & 0xff; /* big endian */ }
 
 unsigned short GetShort(unsigned long a,int shortNo /* 0-1 */)
-{ return (a >> (8*(1-shortNo))) & 0xffff; /* big endian */ }
+{ return (a >> (16*(1-shortNo))) & 0xffff; /* big endian */ }
 
 void PutBits(unsigned long a, unsigned long *b, int pos, int len)
 {
@@ -231,9 +230,57 @@ signed long SignExtByte(signed char a)
   return (a<<24)>>24;
 }
 
-signed long SignExtWord(signed char a)
+signed long SignExtWord(signed short a)
 {
   return (a<<16)>>16;
 }
 
+
+
+#include <setjmp.h>
+
+typedef struct jmpInfo {
+  jmp_buf *jumpBuffer;
+  long refTop;
+} jmpInfo;
+
+jmp_buf *CRTSjbp;
+
+/* 1. allocate a jmp_buf to be used by longjmp;   */
+/*    this is done below                          */
+/* 2. save stacktop of ref. stack;                */
+/*    this is currently NOT done                  */
+/* 3. save ref. for above info in a0[off]         */
+/*    currently only 1 is saved                   */
+/* 4. return jmp_buf                              */
+jmp_buf *GetJmpBuf(int addr, int off) 
+{
+  jmpInfo *p;
+
+  p = (struct jmpInfo *)malloc(sizeof(jmpInfo));
+  p->jumpBuffer = (jmp_buf *)malloc(sizeof(jmp_buf)); /* 1 */
+  p->refTop = reftop;                                 /* 2 */
+  *(jmpInfo **)(addr+off) = p;                        /* 3 */
+  return p->jumpBuffer;                               /* 4 */
+}
+ 
+/* 1. get ref. to stateinfo from a1[off]  */
+/* 2. restore ref stack top               */
+/*    NOT done                            */
+/* 3. restore a0 using a1                 */
+/* 4. return saved jmp_buf                */
+/* 5. jmp_buf should really be deallocaed */
+jmp_buf *UseJmpBuf(int addr, int off)
+{
+  struct jmpInfo *p;
+  jmp_buf *tmp;
+
+  a0 = (char *)addr;                                 /* 3 */
+  p = *(jmpInfo **)(addr+off);                       /* 1 */
+  reftop = p->refTop;                                /* 2 */
+  tmp = p->jumpBuffer;
+  free(p);                                           /* 5 */
+  CRTSjbp = p->jumpBuffer; /* To be free'd later! */ /* 5 */
+  return tmp;                                        /* 4 */
+}
 #endif /* crts */
