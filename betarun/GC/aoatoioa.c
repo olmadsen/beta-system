@@ -62,11 +62,20 @@ void AOAtoIOAReAlloc()
     freeBlock( oldBlock);    
 }
 
+
 void AOAtoIOAInsert( theCell)
      handle( Object) theCell;
 {
     ptr(long) table = BlockStart( AOAtoIOAtable);
     long      index, count;
+
+#ifdef RTLAZY
+    if ((*(int *) theCell) < 0) {
+      /* This could happen if called from extobjinterface.assignRef. */
+      negAOArefsINSERT (theCell);
+      return;
+    }
+#endif
     
     DEBUG_AOA( Claim( inAOA( theCell),"AOAtoIOAInsert: theCell in AOA"));
     
