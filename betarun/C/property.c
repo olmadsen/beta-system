@@ -34,6 +34,7 @@ static BooleanProperty( name)
   ENTRY("infolvra", InfoLVRA = TRUE);
   ENTRY("infocbfa", InfoCBFA = TRUE);
   ENTRY("infolvraalloc", InfoLVRAAlloc = TRUE);
+  ENTRY("infodot", InfoDOT = TRUE);
   ENTRY("infoall", 
 	Info0 = TRUE; InfoIOA = TRUE; InfoAOA = TRUE; 
 	InfoLVRA = TRUE; InfoCBFA = TRUE; InfoLVRAAlloc = TRUE);
