@@ -37,10 +37,10 @@ my $lastmodscript = "";
 my $hashfromparent = "";
 my $printframe = "";
 my $fixprintbutton = "";
-my $indexfile = "";
+my $gram_inxfile = "";
 my $indexnavfile = "";
 my $indexdocfile = "";
-my $tocfile = "";
+my $gram_tocfile = "";
 my $css = "";
 my $wiki = 0;
 
@@ -66,9 +66,9 @@ $hashfromparent = "$scriptdir/hashfromparent.js";
 $printframe = "$scriptdir/printframe.js";
 $fixprintbutton = "$scriptdir/fixprintbutton.js";
 if ($wiki){
-    $tocfile = $ENV{'TOCURL'};
+    $gram_tocfile = $ENV{'TOCURL'};
 } else {
-    $tocfile = "index.html";
+    $gram_tocfile = "index.html";
 }
 
 if (defined($c)){
@@ -337,8 +337,8 @@ sub print_gram_nav_frame
 EOT
 
     &print_button("top", $topfile, "Top: Manuals Main Entry");
-    &print_button("index", $inxfile, "\u$basename Grammar Index");
-    &print_button("content", $tocfile, "Contents: List of Grammars");
+    &print_button("index", $gram_inxfile, "\u$basename Grammar Index");
+    &print_button("content", $gram_tocfile, "Contents: List of Grammars");
     $javascript = &print_button("print", 
 				"javascript:if (parent && parent.${basename}Body){printframe(parent.${basename}Body)};",
 				"Print \u$basename Grammar Frame");
@@ -451,7 +451,7 @@ EOT
     $basename =~ s/-inx$//;
     &print_button("top", $topfile, "Top: Manuals Main Entry");
     &print_button("up", $htmlfile, "Up: \u$basename Grammar");
-    &print_button("content", $tocfile, "Contents: List of Grammars");
+    &print_button("content", $gram_tocfile, "Contents: List of Grammars");
 
     print<<EOT;
 </TD>
@@ -561,7 +561,7 @@ $htmlfile=$basename . ".html";
 $htmlnavfile=$basename . "-nav.html";
 $htmlbodyfile=$basename . "-body.html";
 $inxbasename=lc($title) . "-inx";
-$inxfile=$inxbasename . ".html";
+$gram_inxfile=$inxbasename . ".html";
 $inxnavfile=$inxbasename . "-nav.html";
 $inxbodyfile=$inxbasename . "-body.html";
 $title=ucfirst($basename) . " Grammar";
@@ -588,8 +588,8 @@ printf STDERR "done.\n" if $verbose;
 
 ### generate index frameset
 
-printf STDERR "\nWriting index frameset to $inxfile ... \n" if $verbose;
-open (STDOUT, ">$inxfile") || die "\nCannot open $inxfile for writing: $!\n";
+printf STDERR "\nWriting index frameset to $gram_inxfile ... \n" if $verbose;
+open (STDOUT, ">$gram_inxfile") || die "\nCannot open $gram_inxfile for writing: $!\n";
 &print_gram_frameset("$title: Index", $inxbasename, 100);
 close (STDOUT);
 
