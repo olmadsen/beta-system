@@ -1,134 +1,28 @@
 ORIGIN '~beta/basiclib/betaenv';
-INCLUDE '~beta/basiclib/numberio'
-        '~beta/containers/hashTable'
-        '~beta/basiclib/texthash'
-        '~beta/toollibs/utils/fileExtensions';
-lib_item 'dynamiccompiler';
-MDBODY nti 'private/nametable_ntibody'
-       default 'private/nametable_unixbody';
--- lib: Attributes --
-TextToInteger:
-  (# t: ^text; i: @integer
-  enter t[]
-  do INNER
-  exit i
+BUILD nti     'private/$$/labelnametable.o' 'private/external/labelnametable.c' 'betacc $0 $1'
+      ppcmac  ':private:$$/labelnametable.obj' ':private:external/labelnametable.c' 'MrC -shared_lib_export on -D ppcmac -o $0 $1'
+      default 'private/$$/labelnametable.o' 'private/external/labelnametable.c' '$CC -c -D$$ -o $0 $1';
+-- LIB: Attributes --
+initReadNameTable: external
+  (* Forks an nm process and sets up a pipe from which addresses and
+   * labels may be read using "nextAddress" and "nextLabel". 
+   *)
+  (# execFileName: [1] @Char;
+     allsymbols: @boolean;
+     handle: @integer;
+  enter (execFileName, allsymbols)
+  exit handle
   #);
-DYN_initReadNameTable: external
-(* Forks an nm process and sets up a pipe from which addresses and
- * labels may be read using "nextAddress" and "nextLabel". *)
-  (# execFileName: [1] @Char;  enter execFileName #);
-DYN_nextAddress: external (* exits 0 if no more code labels are available. *)
-  (# address: @Integer;  exit address #);
-DYN_nextLabel: external (# label: [1] @Char;  exit label #);
-nameTable: hashTable
-  (# out_of_process: @boolean
-       (* We are relocating an external process.
-        * Use the nm or equivalent to initialize nameTable;
-        * Used for Valhalla.
-        *);
-     H: @honeyMan;
-     traceStream,infoStream: ^stream;
-     logical2physical_offset: @integer
-       (* Always 0 on UNIX - only used on nti 
-        * FIXME: Should reside in _ntibody
-        *);
-     MDPrivate: @<<SLOT nameTableMDPrivate:descriptor>>;
-       
-     rangeInitial:: (#  do 5879->value #);
-     element::
-       (#
-          name: ^text;
-          adr: @integer;
-          display:
-            (# s: ^stream
-            enter s[]
-            do
-               (if s[] = none then screen[]->s[] if);
-               'Label:'->s.puttext;
-               adr->s.puthex;
-               ' '->s.put;
-               name[]->s.putline;
-               
-            #)
-       #);
-     ExternalLookup: ^TextToInteger
-       (* Reference set by init if init.ExternalLookup is further bound *);
-     init:
-       (# exeName: ^text; 
-          ExternalLookup:< TextToInteger
-            (* If out_of_process is true and ExternalLookup is
-             * further bound, ExternalLookup will be used
-             * for looking up symbols instead of nm.
-             *);
-       enter(exeName[],out_of_process)
-       <<SLOT NameTableInit:DoPart>> 
-       #);
-     dotsInit: init
-       (# i: @integer
-       enter infoStream[]
-       do
-          (if (i mod 500 = 0) and (i > 0) then
-              (if infoStream[] <> none then '.'->infoStream.put if)
-          if);
-          i+1->i
-       #);
-     hashFunction:: (#  do e.name[]->H.hash->value #);
-     equal:: (#  do left.name[]->right.name.equal->value #);
-     add:
-       (# name: ^text; adr: @integer; e: ^element
-       enter (name[],adr)
-       do &element[]->e[]; name[]->e.name[]; adr->e.adr; e[]->insert; 
-       #);
-     lookup: @
-       (#
-          name: ^text;
-          E: @element;
-          adr: @integer;
-          LookUpNative: @<<SLOT NameTableLookupNative:Descriptor>>;
-          hash: @hashfunction;
-          search: @findIndexed
-            (#
-               predicate::
-                 (# 
-                 do
-                    (e[],current[])
-                      ->equal->value
-                 #)
-            do (*current.display;*)
-               current.adr->adr; 
-            #);
-          
-       enter name[]
-       do (if tracestream[]<>NONE then
-              'Lookup: '->tracestream.puttext; 
-              name[]->tracestream.puttext; 
-          if);
-          0->adr;
-          name[]->E.name[]; 
-          E[]->hash->search;
-          (if adr=0 then
-              LookUpNative; 
-              (name[],adr)->add;
-              (if (adr=0) then
-                  'NameTable.LookupNative returned 0 for symbol ' ->screen.puttext; 
-                  name[] -> screen.putline;
-              if);
-          if);
-          (if tracestream[] <> none then
-              ' adr: '->tracestream.puttext;
-              adr->tracestream.putint;
-              tracestream.newline;
-          if);
-       exit adr
-       #);
-     lookupC:
-       (* Prepends an underscore on "name" on
-        * some platforms. Otherwise identical to lookup.
-        *)
-       (# name: ^text;
-       enter name[]
-       do <<SLOT NameTableLookupCFixName: descriptor>>;
-       exit name[] -> lookup
-       #)
-  #)  
-
+nextAddress: external 
+  (* exits 0 if no more code labels are available. *)
+  (# address: @Integer; 
+     handle: @integer;
+  enter handle
+  exit address
+  #);
+nextLabel: external 
+  (# label: [1] @Char;
+     handle: @integer;
+  enter handle
+  exit label
+  #);

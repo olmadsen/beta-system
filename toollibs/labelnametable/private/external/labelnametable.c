@@ -1,4 +1,4 @@
- /* labelnametable.c
+/* labelnametable.c
  *
  * Provides support for reading code labels from the nametable of an 
  * executable file.
@@ -8,53 +8,72 @@
  * This file is used by both the debugger and the dynamic linker.
  * The debugger needs only the text (code) labels, whereas the dynamic
  * linker needs most symbols.
- * The preprocessor symbol TEXT_ONLY is defined by default, but can be 
- * #undef'ed if all symbols are required.
- * The preprocessor symbol DYN is used with the dynamic linker. This implies
- * #undef of TEXT_ONLY.
- *
  */
-
-#define TEXT_ONLY 1  /* Default is only to process text-section symbols */
-#ifdef DYN           /* Dynamic linker needs all symbols */
-#undef TEXT_ONLY
-#endif
 
 #include <stdio.h>
 #include <string.h>
+#include <malloc.h>
 #ifdef nti_gnu
 #  include "winntdef.h"
 #endif
 
-static FILE *fd;     /* The file descriptor from which the nameTable is read */
-static int NextAddress;     /* The last address read from the fd. */
-static char NextLabel[200]; /* The last label read from the fd. */
+typedef struct _labeltable {
+  FILE *fd;            /* The file descriptor from which the nameTable is read */
+  int NextAddress;     /* The last address read from the fd. */
+  char NextLabel[200]; /* The last label read from the fd. */
+} labeltable;
+
+
+#ifdef ppcmac
+
+char* nextLabel(labelnametable *handle) 
+{ 
+  return 0;
+}
+
+int nextAddress(labelnametable *handle) 
+{ 
+  return -1;
+}
+
+labelnametable *initReadNameTable (char* execFileName) { 
+  return 0;
+}
+
+#else /* !ppcmac */
 
 #ifdef sgi
-#define nmcommand "/bin/nm -hvp %s"
+#define FULL_NMCOMMAND  "/bin/nm -hvp %s"
+#define TERSE_NMCOMMAND "/bin/nm -hvp %s"
 #define Decimal
 #endif
 
-/* OLM SGI used to be: #define nmcommand "/bin/nm -Bhnd %s" */
-
 #ifdef sun4s
-#define nmcommand "/usr/ccs/bin/nm -hvp %s"
+#define FULL_NMCOMMAND  "/usr/ccs/bin/nm -hvp %s"
+#define TERSE_NMCOMMAND "/usr/ccs/bin/nm -hvp %s"
 #define Decimal
 #endif
 
 #ifdef hpux9pa
-#ifdef TEXT_ONLY
-#define nmcommand "/bin/nm -hp %s | grep ' T ' | sort"
-#else /* TEXT_ONLY */
-#define nmcommand "/bin/nm -hp %s | sort"
-#endif /* TEXT_ONLY */
+#define FULL_NMCOMMAND  "/bin/nm -hp %s | sort"
+#define TERSE_NMCOMMAND "/bin/nm -hp %s | grep ' T ' | sort"
 #define Decimal
 #endif
 
 #ifdef linux
-#define nmcommand "nm -Bv -td %s | grep -v ' U '"
+#define FULL_NMCOMMAND  "nm -Bv -td %s | grep -v ' U '"
+#define TERSE_NMCOMMAND "nm -Bv -td %s | grep -v ' U '"
 #define Decimal
 #endif
+
+#ifndef nti
+#ifndef FULL_NMCOMMAND
+#error FULL_NMCOMMAND should be defined
+#endif 
+#ifndef TERSE_NMCOMMAND
+#error TERSE_NMCOMMAND should be defined
+#endif 
+#endif /* nti */
 
 #ifdef nti
 
@@ -64,26 +83,22 @@ static char NextLabel[200]; /* The last label read from the fd. */
 #define Hexadecimal
 #define NMOUTFILE "temp.nmoutfile"
 #define NMSORTOUTFILE "temp.nmsortoutfile"
-#define pclose(fd) fclose(fd); unlink(NMSORTOUTFILE) /* ; fprintf(stderr,"Close & deleting %s\n",NMSORTOUTFILE)*/
+#define pclose(table->fd) fclose(table->fd); unlink(NMSORTOUTFILE) /* ; fprintf(stderr,"Close & deleting %s\n",NMSORTOUTFILE)*/
 void DumpFile(LPSTR filename);
-unsigned long DYN_processOffset = 0;
-#else
-
-#ifndef nmcommand
-#error nmcommand should be defined
-#endif /* nmcommand */
+unsigned long processOffset = 0;
 #endif /* nti */
 
-void DYN_findNextLabel () { 
+void findNextLabel (labeltable *table)
+{ 
   int type;
   int ch;
   int inx,val;
   while (1) {
-    NextAddress=0;
-    while ((ch=fgetc (fd))!=' ') {
+    table->NextAddress=0;
+    while ((ch=fgetc (table->fd))!=' ') {
       if (ch==EOF) {
-	NextAddress = -1; /* datpete 14/3/96: changed from 0 */
-	pclose (fd);
+	table->NextAddress = -1; /* datpete 14/3/96: changed from 0 */
+	pclose (table->fd);
 	return;
       }
 #ifdef Hexadecimal
@@ -93,89 +108,102 @@ void DYN_findNextLabel () {
       } else {
 	val = 10+ch-'a';
       }
-      NextAddress = (NextAddress*16)+val;
+      table->NextAddress = (table->NextAddress*16)+val;
 #else
       val = ch-'0';
-      NextAddress = (NextAddress*10)+val;
+      table->NextAddress = (table->NextAddress*10)+val;
 #endif
     }
 
-    while ((ch=fgetc (fd))==' ') 
+    while ((ch=fgetc (table->fd))==' ') 
       ;
 
     type = ch;
 
 #ifdef TEXT_ONLY
     if ((type != 'N') && (type != 'T')) {
-      while (fgetc (fd) != '\n') continue;
+      while (fgetc (table->fd) != '\n') continue;
       continue;
     }
 #endif /* TEXT_ONLY */
 
-    fgetc (fd);
+    fgetc (table->fd);
 
     inx=0;
-    while ((ch = fgetc(fd))!='\n') {
+    while ((ch = fgetc(table->fd))!='\n') {
       if (ch==' ')
 	;
       else
-	NextLabel[inx++]=ch;
+	table->NextLabel[inx++]=ch;
     }
-    NextLabel[inx] = 0;
+    table->NextLabel[inx] = 0;
     return;
   }
 }
 
-void DYN_initReadNameTable (char* execFileName) { 
+labeltable *initReadNameTable (char* execFileName, int full)
+{ 
   char command[100];
+  labeltable *table = (labeltable*)malloc(sizeof(labeltable));
+  if (!table){
+    fprintf(stderr,"couldn't malloc label table for file %s\n", execFileName); 
+    return 0;
+  }
 #ifndef nti
-  sprintf (command,nmcommand,execFileName);
-  fd = popen (command, "r");
+  if (full){
+    sprintf (command,FULL_NMCOMMAND,execFileName);
+  } else {
+    sprintf (command,TERSE_NMCOMMAND,execFileName);
+  }
+  table->fd = popen (command, "r");
 #else
   /*fprintf(stderr,"Opening %s\n",NMOUTFILE);*/
-  if ((fd = fopen(NMOUTFILE,"w+"))==NULL) {
+  if ((table->fd = fopen(NMOUTFILE,"w+"))==NULL) {
     fprintf(stderr,"couldn't open file %s\n",NMOUTFILE); 
-    return;
+    free(table);
+    return 0;
   }
   
   /* run nm */
   DumpFile( execFileName );
   
-  fclose (fd);
+  fclose (table->fd);
 
   sprintf(command,"sort < %s > %s",NMOUTFILE,NMSORTOUTFILE);
   system(command);
   unlink(NMOUTFILE);
 
-  if ((fd = fopen(NMSORTOUTFILE,"r"))==NULL) {
+  if ((table->fd = fopen(NMSORTOUTFILE,"r"))==NULL) {
     fprintf(stderr,"couldn't open file %s\n",NMSORTOUTFILE); 
-    return;
+    free(table);
+    return 0;
   }
   
 #endif /* nti */
 
+  return table;
 }
 
-int DYN_nextAddress () 
+int nextAddress(labeltable *table) 
 { 
-  DYN_findNextLabel ();
+  findNextLabel(table);
 #ifdef nti
 #if 0
   fprintf(stderr, 
-	  "NextAddress: %d (0x%x), NextLabel: %s\n",
-	  NextAddress + DYN_processOffset,
-	  NextAddress + DYN_processOffset,
-	  NextLabel);
+	  "table->NextAddress: %d (0x%x), table->NextLabel: %s\n",
+	  table->NextAddress + processOffset,
+	  table->NextAddress + processOffset,
+	  table->NextLabel);
 #endif 
-  return NextAddress + DYN_processOffset;
+  return table->NextAddress + processOffset;
 #else
-  return NextAddress;
+  return table->NextAddress;
 #endif /* nti */
 }
 
-char* DYN_nextLabel () 
+char* nextLabel(labeltable *table) 
 { 
-  return NextLabel;
+  return table->NextLabel;
 }
 
 #ifdef nti
@@ -270,7 +298,7 @@ static void DumpSectionTable(PIMAGE_SECTION_HEADER section,
     }
 }
 
-static void DumpExeFile( PIMAGE_DOS_HEADER dosHeader ) {
+static void DumpExeFile(labeltable *table, PIMAGE_DOS_HEADER dosHeader) {
   PIMAGE_NT_HEADERS pNTHeader;
   DWORD base = (DWORD)dosHeader;
   
@@ -316,7 +344,7 @@ static void DumpExeFile( PIMAGE_DOS_HEADER dosHeader ) {
   if ( pNTHeader->FileHeader.NumberOfSymbols 
        && pNTHeader->FileHeader.PointerToSymbolTable) {
     DumpSymbolTable(PCOFFSymbolTable, COFFSymbolCount);
-    fprintf(fd,"\n");
+    fprintf(table->fd,"\n");
   }
 }
 
@@ -379,7 +407,9 @@ static void DumpFile(LPSTR filename) {
 #define SECTION_CONDITION 1
 #endif /* TEXT_ONLY */
 
-static void DumpSymbolTable(PIMAGE_SYMBOL pSymbolTable, unsigned cSymbols) {
+static void DumpSymbolTable(labeltable *table, 
+			    PIMAGE_SYMBOL pSymbolTable,
+			    unsigned cSymbols) {
   unsigned i;
   PSTR stringTable;
   char sectionName[10];
@@ -394,15 +424,15 @@ static void DumpSymbolTable(PIMAGE_SYMBOL pSymbolTable, unsigned cSymbols) {
 	/* this symbol passed */
 	sprintf(sectionName,"N"); /* Identification really don't matter for BETA */
 	if (pSymbolTable) {
-	  fprintf(fd,"%08X", pSymbolTable->Value);
+	  fprintf(table->fd,"%08X", pSymbolTable->Value);
 	} else 
 	  fprintf(stderr,"DumpSymbolTable (i=%d) pSymbolTable is NULL\n", pSymbolTable->Value);
-	fprintf(fd," %s ", sectionName);
+	fprintf(table->fd," %s ", sectionName);
 	if ( pSymbolTable->N.Name.Short != 0 )
-	  fprintf(fd,"%-20.8s", pSymbolTable->N.ShortName);
+	  fprintf(table->fd,"%-20.8s", pSymbolTable->N.ShortName);
 	else
-	  fprintf(fd,"%-20s", stringTable + pSymbolTable->N.Name.Long);
-	fprintf(fd,"\n");
+	  fprintf(table->fd,"%-20s", stringTable + pSymbolTable->N.Name.Long);
+	fprintf(table->fd,"\n");
       }
     }
     /* Take into account any aux symbols */
@@ -435,3 +465,5 @@ static void GetSectionName(WORD section, PSTR buffer, unsigned cbBuffer) {
 };
 
 #endif /* nti */
+
+#endif /* ppcmac */
