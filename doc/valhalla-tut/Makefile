@@ -1,11 +1,3 @@
-doc: always
-	@echo Generating documentation without PDF
-	@perl -s ../bin/makedoc -v -p valhalla-tut.book
-
-dist: always
-	@echo Generating documentation with PDF
-	@perl -s ../bin/makedoc valhalla-tut.book
-
 tags:
 	etags src/*.html
 
@@ -14,7 +6,7 @@ clean:
 
 distclean: clean
 	-/bin/rm -f *.html *.pdf
-	if [ -d interface ]; then /bin/rm -rf interface; fi
+	if [ -d interfaces ]; then /bin/rm -rf interfaces; fi
 
 always:
 	@echo ""

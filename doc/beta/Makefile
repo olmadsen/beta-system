@@ -18,7 +18,7 @@ clean:
 
 distclean: clean
 	-/bin/rm -f *.html *.pdf
-	if [ -d interface ]; then /bin/rm -rf interface; fi
+	if [ -d interfaces ]; then /bin/rm -rf interfaces; fi
 
 always:
 	@echo ""

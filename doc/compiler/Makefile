@@ -25,7 +25,7 @@ distclean: clean
 	-/bin/rm -f *.html *.pdf
 	-/bin/rm -f src/messages.html
 	-/bin/rm -f files/syntaxerror.err
-	if [ -d interface ]; then /bin/rm -rf interface; fi
+	if [ -d interfaces ]; then /bin/rm -rf interfaces; fi
 
 always: src/messages.html files/syntaxerror.err
 	@echo ""
