@@ -264,13 +264,12 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 
 #ifdef intel
       switch(err){
-      case RepLowRangeErr:
-      case RepHighRangeErr:
-      case CTextPoolErr:
-      case CompCallBackErr:
-      case RecursiveAttErr:
-      case CompTerminatedErr:
-      case QuaErr:
+      case RepLowRangeErr /* CpkSVT, CopySRR, CopySVRx,  */:
+      case RepHighRangeErr /* CpkSVT, CopySRR, CopySVRx,   */:
+      case CTextPoolErr /* CpkVT, CpkSVT */:
+      case CompCallBackErr /* Susp */:
+      case RecursiveAttErr /* Att */:
+      case CompTerminatedErr /* Att */:
 	/* Should be caught by valhalla, so thePC must be set up.
 	 * Current object was pushed as the first thing, when
 	 * the error was detected, but the PC was left on stack.
@@ -299,6 +298,12 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 	 * the error was detected. The "thing" just below
 	 * is the first real part of the Beta stack.
 	 * Hard to figure out thePC.
+	 * Caused by:
+	 *    RefNoneErr - OK: is handled specially below
+	 *    QuaErr - OK: is handled specially below
+	 *    LeaveBasicCompErr (ExO) - FIXME
+	 *    FIXME: should insert debug assertion that no other errors
+	 *           are met here.
 	 */
 	thePC = 0;
 	StackEnd = (ptr(long)) &theObj; StackEnd++;
@@ -327,11 +332,18 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 	}
 	/* Normal Qua error: Display BETA stack */
 #ifdef intel
-	/* Adjust StackEnd before calling DisplayBetaStack.
+	/* StackEnd initially set up by default case above.
+	 * Adjust StackEnd before calling DisplayBetaStack.
 	 * We have performed 'pushad' (8 longs), and also we have a return
 	 * address from call Qua to ignore.; see Qua.run.
 	 * Also the compiler has pushed %edi during the qua-check.
 	 * This sums up to 10 longs to skip.
+	 * Stack: 
+	 *    <theobj>
+	 *    <8 regs>   <-- StackEnd
+	 *    <return>   <-- StackEnd+8
+	 *    <%edi>     <-- StackEnd+9
+	 *               <-- StackEnd+10
 	 */
 	thePC=(long*)(StackEnd[8]); /* StackEnd is long* */
 	StackEnd+=10; /* StackEnd is long* */

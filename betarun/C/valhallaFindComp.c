@@ -86,9 +86,13 @@ int scanComponentStack (struct Component* comp,
 			 "scanComponentStack(comp=0x%x, obj=0x%x, PC=0x%x)\n",
 			 (int)comp, (int)curObj, PC));
 
-  if (comp->StackObj){
+  if ((long)(comp->StackObj)>0 /* -1 means active */
+      && (comp!=ActiveComponent) /* ActiveComponent may have a stack object,
+				  * if it has previously been suspended.
+				  */
+      ){
     struct StackObject *sObj = comp->StackObj;
-    DEBUG_VALHALLA(fprintf(output, "scanComponentStack: scanning stackObject\n"));
+    DEBUG_VALHALLA(fprintf(output, "scanComponentStack: scanning stackObject 0x%x\n", (int)comp->StackObj));
     ShowStackPart((long*)sObj->Body, 
 		  (long*)((long)sObj->Body + sObj->StackSize),
 		  forEach);
