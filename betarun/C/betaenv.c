@@ -71,6 +71,7 @@ void GetBetaEnv()
       valhallaEnv = *theHandle; length = valhallaEnv[0];
       valhallaEnv = strncpy( (Ptr) NewPtr(length+1), &valhallaEnv[1], length);
       valhallaEnv[length] = 0; SetupProperties( valhallaEnv);
+	  RemoveResource(theHandle);
     }
   }
 #else /* !MAC */
