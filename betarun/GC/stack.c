@@ -23,7 +23,7 @@ void PrintRefStack()
   long size = ((long)RefSP - (long)&ReferenceStack[0])/4;
   fprintf(output, "RefStk: [%x .. %x[\n", (long)&ReferenceStack[0], (long)RefSP);
   for(; size > 0; size--, theCell++){
-    if (*theCell & 1){ 
+    if (!isLazyRef(*theCell) && (*theCell & 1)){ 
       /* Used in beta.dump */
       fprintf(output, "  0x%08x: 0x%08x #\n", theCell, *theCell);
     } else {
@@ -44,25 +44,40 @@ void ProcessRefStack(size, bottom)
   DEBUG_IOA(PrintRefStack());
   theCell = (struct Object **)bottom;
   for(; size > 0; size--, theCell++) {
-    i = ((unsigned)*theCell & 1) ? 1 : 0;
-    *theCell = (struct Object *)((unsigned)*theCell & ~1);
+    if (!isLazyRef(*theCell)) {
+      i = ((unsigned)*theCell & 1) ? 1 : 0; 
+      *theCell = (struct Object *)((unsigned)*theCell & ~1);
+    } else {
+      i = 0;
+    }
     DEBUG_IOA(fprintf(output, "ProcessRefStack: 0x%08x: 0x%08x\n", theCell, *theCell));
     theObj = *theCell;
     if(theObj && inBetaHeap(theObj) && isObject(theObj)) {
       if( inLVRA( theObj)){
-        DEBUG_IOA( fprintf( output, "(STACK(%x) is *ValRep)", theCell));
+	DEBUG_IOA( fprintf( output, "(STACK(%x) is *ValRep)", theCell));
       } else {
-        ProcessReference(theCell);
-        CompleteScavenging();
+	ProcessReference(theCell);
+	CompleteScavenging();
       }
     }
+#ifdef RTLAZY
+    else if (isLazyRef(theObj)) {
+      DEBUG_IOA(fprintf (output, "ProcessRefStack: Lazy ref: %d\n", theObj));
+      ProcessReference(casthandle(Object)(theCell));
+    }
+#endif
 #ifdef RTDEBUG
     else {
-      if (theObj && !isProto(theObj) /* e.g. AlloI is called with prototype in ref. reg. */ ) {
+      if (theObj 
+	  && !isProto(theObj) /* e.g. AlloI is called with prototype in ref. reg. */
+	  && !isCode(theObj)  /* e.g. at INNER a ref. reg contains code address */
+	  ) {
 	if (isValRep(theObj)){
 	  fprintf(output, "[ProcessRefStack: ***ValRep: 0x%x: 0x%x]\n", theCell, theObj);
 	} else {
+	  extern void Illegal();
 	  fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", theCell, theObj);
+	  Illegal();
 	}
       }
     }
@@ -107,18 +122,6 @@ void ProcessStackObj(struct StackObject *theStackObject)
 #endif /* hppa */
 /*************************** SPARC *********************************/
 #ifdef sparc
-
-#ifdef SPARC_LD_SEGMENT_TEST
-
-#ifdef sun4s
-extern long *start asm("_start");
-#else
-extern long *start asm("start");
-#endif
-extern long *etext;
-#define isCode(addr) ( ((long*)&start <= (long*)(addr)) && ((long*)(addr) < (long*)&etext) )
-
-#endif /* SPARC_LD_SEGMENT_TEST */
 
 static long skipCparams=FALSE;
 
