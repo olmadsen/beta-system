@@ -196,20 +196,25 @@ long isObject(void *theObj)
   Object *obj;
   long gc;
 
+  if (FastIsObject){
+    /* Behave like non-debug isObject */
+    goto success;
+  }
+
   obj = (Object*)theObj;
   
   isObjectState = 99;
   if (!strongIsObject(obj)) {
-      return 0;
+      goto failure;
   }
   
   isObjectState = 1;
   if (ObjectAlign((unsigned)obj) != (unsigned)obj)
-    return 0;
+    goto failure;
 
   isObjectState = 2;
   if (!inBetaHeap(obj))
-    return 0;
+    goto failure;
 
   isObjectState = 3;
   proto = GETPROTO(obj);
@@ -218,47 +223,57 @@ long isObject(void *theObj)
   if (inAOA(obj)) {
     isObjectState = 4;
     if (gc == FREECHUNK)
-      return 0;
+      goto failure;
   }
   
   if (inIOA(obj)) {
     if (IOAActive) {
       isObjectState = 5;
       if (!(isStatic(gc) || isAutonomous(gc) || isForward(gc)))
-	return 0;
+	goto failure;
     } else {
       isObjectState = 6;
       if (!(isStatic(gc) || isAutonomous(gc)))
-	return 0;
+	goto failure;
     }
   } 
 
   if (inToSpace(obj)) {
     isObjectState = 7;
     if (!(isStatic(gc) || isAutonomous(gc)))
-      return 0;
+      goto failure;
   }
     
   if (!isSpecialProtoType(proto)) {
 #ifdef RISC
     isObjectState = 8;
     if (((long)proto) & 3)
-      return 0;
+      goto failure;
 #endif
 
     isObjectState = 9;
     if (!IsPrototypeOfProcess((long)proto))
-        return 0;
+        goto failure;
   }
   
   isObjectState = 10;
   if (ObjectSize(obj) <= 0)
-    return 0;
+    goto failure;
 
   isObjectState = 11;
   if (ObjectAlign(4*ObjectSize(obj))!=4*(unsigned)ObjectSize(obj))
-    return 0;
-
+    goto failure;
+failure:
+  /* Hmmm, here we have a situation where the debug runtime systems
+   * rejects an object reference that the non-debug version would
+   * accept (isObject is defined to TRUE in non-debug). 
+   * This is suspicious and gives a difference in behaviour
+   * - we have better issue a warning, and call Illegal().
+   */
+  fprintf(output, "RTS: DEBUG isObject(0x%x) returns FALSE.\n", (int)theObj);
+  Illegal();
+  return 0;
+success:
   return 1;
 }
 
