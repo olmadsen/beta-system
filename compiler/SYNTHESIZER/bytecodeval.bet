@@ -1,7 +1,9 @@
 ORIGIN 'evlib';
 INCLUDE 'auxlib';
 INCLUDE 'evlib';
+INCLUDE 'nxlength';
 INCLUDE 'signature';
+INCLUDE 'genlib_bytecode';
 ---mkMethodArgs:doPart---
 do (baseAdr[],lEv[],lChain[],isMultiple,llEV[]) -> MethodArgs -> V[]
    
@@ -368,6 +370,673 @@ methodArgs: evVal
   enter(baseAdr[],lEv[],lChain[],isMultiple,llEV[])
   exit this(methodArgs)[]
   #);
+methodCall: evVal
+  (# evId:: (#do 'MethodCall:'->id[] #);
+     display:: (# do sig.asText -> xT #);
+     loadVal:: 
+       (# 
+       do 301->trace(#do 'methodCall:loadVal' -> xT #);
+          (*this(methodCall)[] -> V[]; (* ???*) 
+          thisExitVal -> V[]
+       #);
+     evType:: 
+       (#
+       do (if not sig.isMultiValExit and (sig.XXsig.isRef) then
+              2 -> type
+           else 
+              (if exitValIsReal then 
+                  3 -> type 
+               else
+                  1 -> type 
+              if)
+          if)
+       #);
+     type::
+       (#
+       do (if (sig[]<>none) and (sig.XXsig[] <> none) then
+              sig.XXsig.theDesc -> desc[] 
+           else
+              '\nmethodCall:type:sig.XXsig is none'->putline
+          if)
+       #);
+     toDataReg:: 
+       (# 
+       do 301->trace(#do 'methodCall:toDataReg' -> xT #);
+       #);
+     loadVal2:: 
+       (# 
+       do 301->trace(#do 'methodCall:loadVal2' -> xT #);
+          thisExitVal -> V[]
+       #);
+     pushVal::
+       (# dr: @mch.dataRegOperand
+       do 301->trace(#do 'methodCall:pushVal' -> xT #);
+          '!methodCall:pushVal' -> mch.comment;
+          (* (dr,false,false,false) -> mkComputedEvVal -> V[];*)
+          (* the result of the methodcall is on the stack *)
+          (* this(methodCall)[] -> V[]*)
+          thisExitVal -> V[]
+       #);
+     mkReal::
+       (#
+       do &mch.floatRegOp[] -> mkFloatEvVal -> V[]
+       #);
+     loadFloat :: (# do &mch.floatRegOp[] -> res[] #);
+     getRefEval::
+       (#
+       do this(methodCall)[] -> V[]
+       #);
+     theAdr:: 
+       (# A: @mch.RegAdr; D: ^ASTindex
+       do (if sig.aplSig[] <> none then
+              sig.XXsig.theDesc -> D[];
+              (if not (D -> (sig.aplSig.theDesc).equal) then
+                  'cast' -> mch.comment;
+                  sig.aplSig.asText -> mch.checkCast
+          if)if);
+          A[] -> AV[]
+       #);
+     asgToAdr::
+       (# dr: @mch.dataRegOperand; D: ^ASTindex
+       do (* we assume a value on top of the stack *)
+          dr.alloc;
+          301->trace(#do 'asgToAdr: '->display; rA.display->xT #);
+          type -> D[];
+          (if sig.XXsig.elmType = 8 (* int64 *) then
+              mch.int64ToInt32
+          if);
+          (dr[],rA[]) -> mch.stVal; (* no handling of size *)
+          (dr,false,false,false) -> mkComputedEvVal -> V[];
+       #);
+     asgToRefAdr::
+       (# EV: @ASTindex
+       do 301 -> trace(#
+                      do 'asgToRefAdr: '->display;
+                         100 -> switchon;
+                         sig.exitVal[] -> xA;
+                         100 -> switchOff
+                      #);
+          sig.exitVal[]->sematt.evCase
+          (# objRef::
+               (#
+               do (0,false,EV.sonRef,chain[]) 
+                    -> mkComputedRefEvVal
+                    -> V[]
+               #);
+             dynItemRef::
+               (#
+               do (0,false,EV.sonRef,chain[]) 
+                    -> mkComputedRefEvVal
+                    -> V[]
+               #);
+             strucRef::
+               (#
+               do (0,false,EV.sonRef,chain[]) 
+                    -> mkComputedRefEvVal
+                    -> V[]
+               #);
+             txtCst::
+               (# T: ^text 
+               do EV.gettext->T[]; T->mkTxtCstEvVal->V[]
+               #)
+          #);
+          (rAbase[],destEV[],rChain[]) -> V.asgToRefAdr;
+          (0,false,destEv[],rChain[])->mkComputedRefEvVal->V[];
+       #);
+     asgToRealAdr::
+       (#
+       do rA[] -> (&mch.floatRegOp[] -> mkFloatEvVal).asgToRealAdr -> V[]
+       #);
+     asgToRepAdr::
+       (#
+       do 301 -> trace(#
+                      do 'methodCall:asgToRepAdr: '->xT;
+                         sig.exitVal[] -> xA
+                      #);
+          (if sig.isMultiValExit then
+              301->trace(#
+                      do 'asgToRepAdr:'->display;
+                         'method returning a list to be assigned to '
+                         'a repetition is NOT implemented'
+                         -> xT
+                      #)
+           else
+              (if sig.XXsig.elmType = 12 (* array *) then
+                  (* method has returned an array: store it in rA *)
+                  (&mch.dataRegOperand[],rA[]) -> mch.stVal
+               else
+                  (* method has returned a value (simple or ref)
+                   * that should be coerced into a repetition
+                   *)
+                  (rA[],rEV[],rChain[]) 
+                    -> ((0,false,false,false)->mkComputedEvVal).asgToRepAdr 
+                    -> V[]
+          if)if)
+       #);
+     asgToRepElm::
+       (#
+       do 301->trace(#do 'asgToRepElm:'->display #);
+          (rA[],rEv[],rChain[])
+            -> ((0,false,false,false)->mkComputedEvVal).asgToRepElm
+            -> V[]
+       #);
+     asgToItem::
+       (#
+       do '\nMethodCall:asgToItem' -> putline
+          
+       #);
+     asgVal2Rep: (* duplicate  form computedval *)
+       (# elmDesc,rEv: ^ASTindex; rChain: ^DH.superChain; 
+          rA: ^mch.address;  noStore: @boolean;
+          tA: ^mch.address;
+          V: ^evVal
+       enter(elmDesc[],rEV[],rChain[],rA[],noStore)
+       do (* val -> aRep *)
+          (*  stack = [... Val ] *)
+          (if switch182 then
+              sematt.integerDesc[] 
+                -> theGen.mkSignature 
+                -> theGen.allocAndStoreTmp 
+                -> tA[]
+          if);
+          (elmDesc[],true,false,rA.size,1,rA[],noStore) -> asgToNewRep
+          (#
+          do (if switch182 then
+                 (rEV[],rChain[],rA[]) -> asgToSingleElmArray
+                 (#
+                 do AI.bAdr.localDesc[]
+                      -> theGen.mkSignature 
+                      -> AI.fieldType[];
+                    (tA[],mch.dataTop[]) -> mch.ldVal
+                 #)
+              else
+                 NextElmAdr -> asgToAdr -> V[]
+             if)
+          #);
+       exit V[]
+       #);     
+
+     asgToMethod::
+       (* Assign m1 to m2 as in the following forsm
+        *    m1 -> m2
+        * or
+        *    (e1,e2,...,m1,...en) -> m2
+        * where m1 = this(methodCall)
+        * and m2 is described by arguments to asgToMethod;
+        * Push return value(s) from m1 as arguments to m2.
+        * Note: m1 determines how many values to push;
+        * m2 cannot be used to determine this, since
+        * there may be other arguments to m2 than m1 as shown
+        * by the 2. fomr above
+        *)
+       (# A: ^mch.address; aS: @mch.RegAdr; srcField: ^text; xNo: @integer;
+          gNXl: ^|sematt.getNXlength; 
+          rA: ^mch.address; desc: ^ASTindex;
+          checkText2ExternalString:
+            (# d: ^ASTindex;
+               leftIsRep: @boolean
+            enter(d[],leftIsRep)
+            do (if (d[]<>none) then
+                   (if true
+                    // (d->sematt.textDesc.equal) 
+                         and (enterTypes[next] = 13 (* external *)) then
+                       'BetaText2ExternalString' -> mch.callprim 
+                    // ((d->sematt.descKind) = sematt.externalClassKind)
+                       and (enterTypes[next] = 14 (* textDesc *) ) then
+                       'ExternalString2BetaText' -> mch.callprim
+                    // (d->sematt.textDesc.equal) 
+                       and  (enterTypes[next] = 12 (* array *)) then
+                       'text2char' -> mch.comment;
+                       'BetaText2BetaCharArray' -> mch.callPrim
+                    else
+                       (if not leftIsRep
+                           and (enterTypes[next] = 12 (* array *)) then
+                           baseAdr.copy -> rA[];
+                           (rElm[],rChain[],rA[]) -> getElmDesc -> desc[];
+                           301->trace(#
+                                     do rElm[]->xA; xN; 
+                                        desc[]->xA; desc.size -> xI 
+                                     #);
+                           desc.size -> rA.size;
+                           desc[] -> rA.bAdr.localDesc[];
+                           (desc[],rElm[],rChain[],rA[],true) -> asgVal2Rep
+                       if)
+               if)if)
+            #);
+            leftIsRep: @boolean
+       do 301->trace(#
+                    do 'MethodCall:asgToMethod: ' -> xT;
+                       sig.asText -> xT; ' ' -> put;
+                       noOfArgs -> xI; ':' -> put;
+                       (for i: (noOfArgs,entertypes.range) -> min repeat
+                            entertypes[i] -> xI; ' ' -> put;
+                       for);
+                    #);
+          (if sig.isMultiValExit then
+              sig.XXsig.asText -> theGen.AllocAndStoreTmp -> A[];
+              (* we need to get the right values instead of
+               * gen.thisRegAdr and thisSuperChain
+               * from the place where methodCall is instantiated
+               *)
+              'exit_' -> srcField[];
+              (sig.thisMethodDesc[] -> theGen.fieldSignature).asText 
+                -> aS.receiverType[];
+              true -> aS.isField;
+              sig.scanExit
+              (# desc: ^ASTindex
+              do (A[],&mch.adrRegOperand[]) -> mch.ldVal;
+                 xNo + 1 
+                   -> xNo   
+                   -> (srcField.copy).putint 
+                   -> aS.fieldName[];
+                 (if (current.elmType = 12)->leftIsRep (* array *) then
+                     '\nbingo'->putline;
+                     current.theDesc 
+                       -> desc[] 
+                       -> theGen.mkArraySignature 
+                       -> aS.fieldType[]
+                  else
+                     current.theDesc 
+                       -> desc[] 
+                       -> theGen.mkSignature 
+                       -> aS.fieldType[]
+                 if);
+                 (aS[],&mch.dataRegOperand[]) -> mch.ldVal;
+                 (desc[],leftIsRep) -> checkText2ExternalString;
+                 next + 1 -> next;                
+              #)
+           else
+              (sig.XXsig.theDesc,sig.XXsig.elmType=12(*array*))
+                -> checkText2ExternalString;
+              next+1 -> next;              
+          if)
+       #);
+     asgToExitArgs::
+       (* Assign
+        *    this(methodCall) -> (exit_exitNo, exit_exitNo+1, ...)
+        * rDesc    : the receiver object with fields exit_exitNo, ...
+        * exitNo   : next exit-field to be assigned
+        * originAdr: address of origin of ...
+        * rChain   : superChain 
+        *)
+       (# A: ^mch.address; aS,aD: @mch.RegAdr; 
+          srcField,destField: ^text; xNo: @integer;
+          xScan: @ | scanXadr; notFirst,more: @boolean;
+          rSig: @thegen.signature;
+       do (*'MethodCall:asgToExitArgs:'->puttext;*)
+          (if sig.isMultiValExit then
+              (* this(methodCall) returns a list of values *)
+              sig.XXsig.asText -> theGen.AllocAndStoreTmp -> A[];
+              (* we need to get the right values instead of
+               * gen.thisRegAdr and thisSuperChain
+               * from the place where methodCall is instantiated
+               *)
+              (sig.thisMethodDesc[],gen.thisRegAdr,0(*??nOff*),chain[]) 
+                -> xScan -> more;
+              'exit_' -> destField[];
+              'exit_' -> srcField[];
+              (sig.thisMethodDesc[] -> theGen.fieldSignature).asText 
+                -> aS.receiverType[];
+              (rDesc[] -> theGen.fieldSignature).asText 
+                -> aD.receiverType[];
+              (*'scanExit:'->puttext;*)
+              sig.scanExit
+              (#
+              do (if notFirst then
+                     (originAdr[],none) -> mch.ldVal
+                 if);
+                 true -> notFirst;
+                 (A[],&mch.adrRegOperand[]) -> mch.ldVal;
+                 true -> aS.isField;
+                 true -> aD.isField;
+                 xNo + 1 
+                   -> xNo 
+                   -> (srcField.copy).putint 
+                   -> aS.fieldName[];
+                 current.theDesc 
+                   -> theGen.mkSignature 
+                   -> aS.fieldType[]
+                   -> aD.fieldType[](* -> puttext;*);
+                 (aS[],&mch.dataRegOperand[]) -> mch.ldVal;
+                 exitNo + 1 
+                   -> exitNo
+                   -> (destField.copy).putint 
+                   -> aD.fieldName[];
+                 (* OBS: missing handling os isRep *)
+                 (current.theDesc,false) -> xTypes.add;
+                 (&mch.dataRegOperand[],aD[]) -> mch.stVal;
+              #);
+          if)
+       #);
+     asgToList::
+       (* Assign
+        *    M -> (E1,E2,...En)
+        * where M  = this(methodCall)
+        * and   EV = (E1,E2,...,En)
+        *)
+       (# lEV: @ExitMultiVal; exitNo: @integer;
+          nextEVlistElm: @|
+            (# E: @ASTindex
+            do EV -> scanList
+               (#
+               do currentNode -> E;
+                  SUSPEND
+               #)
+            exit E[]
+            #);
+          E: ^ASTindex
+               
+       do 301->trace(#do 'asgToList:'->display #);
+          
+          sig.XXsig.asText 
+            -> lEV.class[]
+            -> theGen.AllocAndStoreTmp 
+            -> lEV.tA[];
+          (* here we should probably use sig.scanExit
+           * to get the correct type of the exit-elements;
+           * we should use gNXL on each element Ei in EV
+           * to enumerate the enter-elements of Ei;
+           * this should fix the type problem in tstnxoff
+           * - which does not run with sun-java but is ok
+           * with gij
+           *)
+          sig.scanExit
+          (# more: @boolean; 
+             xNo: @integer;
+             gNXL: ^| sematt.getNXlength
+          do (if (xNo+1 -> xNo) = (exitNo+1) then
+                 nextEVListElm -> E[];
+                 &|sematt.getNXlength[] -> gNXL[];
+                 (E[],true,thisDesc[],rChain[]) -> gNXL -> more; 
+                 L: (if more then 
+                        exitNo+1 -> exitNo -> lEV;
+                        301->trace(# F: @ASTindex
+                                do 'exitNo: ' -> xT; exitNo->putInt; 
+                                   ' left:'->puttext;
+                                   current.asText -> puttext;
+                                   ' right:'->puttext;
+                                   current.theDesc->xA; xN;
+                                   (current.theDesc).father -> F;
+                                   F[]->xA
+                                #);
+                        current.theDesc -> lEV.elmDesc[];
+                        current.elmType = 12 -> lEV.isRep;
+                        (if lEV.isRep then
+                            301->trace(#do 'isRep:'->xT #)
+                        if);
+                        (BA[],lEV[],E[],false,rChain[]) 
+                          -> AssignValToEval 
+                          -> V[];
+                        C: (if (gNXL -> more) then
+                               exitNo+1 -> exitNo;
+                               restart C
+                           if)
+                    if);
+             if)
+          #)
+       #);
+     asgToCproc::
+       (#
+       do '\nOBS! MethodCall:asgToCproc:notImplemented'->putline;
+          this(methodCall)[] -> V[]; (* just a hack - doesn't work *)
+       #);
+     pushCpar::
+       (# D: ^ASTindex
+       do sig.XXsig.theDesc -> D[];
+          (if (D -> sematt.textDesc.equal) 
+              and (type = common.externalStringXpar) then
+              'BetaText2ExternalString' -> mch.callprim 
+          if);
+       #);
+     asgToInlinePrimitive::
+       (#
+       do 301->trace(#
+                    do 'asgToInlinePirmitive: ' ->display;
+                    #);
+          (OpCode,I1,I2) ->  (asComputedVal).asgToInlinePrimitive -> V[]
+          (*(0,false,false,false) -> mkComputedEvVal -> V[]*)
+       #);
+     unMinus::<
+       (# dr: @mch.dataRegOperand
+       do (dr[],4)->mch.gNeg;
+          (dr,false,false,false) -> mkComputedEvVal -> res[];          
+       #);
+     notExp::< 
+       (# dr: @mch.dataRegOperand
+       do (dr[],4)->mch.gNot;
+          (dr,false,false,false) -> mkComputedEvVal -> res[]; 
+       #);
+     cmpBoolAndJmp::<
+       (#
+       do (if not common.switch[188] then
+              '\nOBS! methodCall:cmpBoolAndJmp' -> putline;
+          if)
+       #);
+     cmp::< 
+       (# dr: @mch.dataRegOperand
+       do dr->lV.regCmp->doCmp; 
+       #);
+     adrCmp::< 
+       (# 
+       do (if not common.switch[188] then
+              '\nOBS! methodCall:AdrCmp'->putline 
+          if);
+          (evType=2) -> isRef
+       #);
+     cstCmp::< 
+       (* this(methodCall) CMP rC *)
+       (# 
+       do (if not common.switch[188] then
+              '\nOBS! methodCall:cstCmp'->putline
+          if);
+          rC[] -> op1[]; &mch.dataRegOperand[]->op2[]; 
+          (evType=2) -> isRef
+          (* op2 is top of stack (methodCall), so
+           * showuld we do a swap of reverse CMP-operator?
+           *)          
+       #);
+     regCmp::<(* this(methodCall) COMP rReg *)
+       (#
+       do 'methodCall:regCmp' -> mch.comment;
+          &mch.dataRegOperand[] -> op1[];
+          rreg[] -> op2[];
+          false -> deAllocOp1 -> deAllocOp2;
+          (evType=2) -> isRef
+       #);
+     
+     add::< 
+       (# 
+       do (if not common.switch[188] then
+              '\nOBS! methodCall:add'->putline 
+          if);
+          lv[] -> (asComputedVal).add -> res[]
+       #);
+               
+     adrAdd::<
+       (# 
+       do (if not common.switch[188] then
+              '\nOBS! methodCall:adrAdd'->putline
+          if);
+          rA[] -> (asComputedVal).adrAdd -> V[]
+       #);
+     cstAdd::<
+       (# 
+       do (if not common.switch[188] then
+              '\nOBS! methodCall:cstAdd'->putline;
+          if);
+          rN -> (asComputedVal).cstAdd -> V[]
+       #);
+     regAdd::<
+       (# 
+       do (if not common.switch[188] then
+                 '\nOBS! methodCall:regAdd'->putline 
+          if);
+          rReg -> (asComputedVal).regAdd -> V[]
+       #); 
+     sub::< 
+       (# 
+       do (if not common.switch[188] then
+              '\nOBS! methodCall:sub'->putline 
+          if);
+          lv[] -> (asComputedVal).sub -> res[]
+       #);
+               
+     adrSub::<
+       (# 
+       do (if not common.switch[188] then
+              '\nOBS! methodCall:adrSub'->putline
+          if);
+          rA[] -> (asComputedVal).adrSub -> V[]
+       #);
+     cstSub::<
+       (# 
+       do (if not common.switch[188] then
+              '\nOBS! methodCall:cstSub'->putline;
+          if);
+          rN -> (asComputedVal).cstSub -> V[]
+       #);
+     regSub::<
+       (# 
+       do (if not common.switch[188] then
+                 '\nOBS! methodCall:regSub'->putline 
+          if);
+          rReg -> (asComputedVal).regSub -> V[]
+       #); 
+          
+     times::
+       (#
+       do 301->trace(#
+                    do 'times:' -> display
+                    #);
+          lv[] -> (asComputedVal).times -> res[]          
+       #);
+     adrTimes::
+       (#
+       do 301->trace(#
+                    do 'adrTimes:' -> display
+                    #);
+          rA[] -> (asComputedVal).adrTimes -> V[]          
+       #);
+     cstTimes::
+       (#
+       do 301->trace(#
+                    do 'cstTimes:' -> display
+                    #);
+          rN -> (asComputedVal).cstTimes -> V[]          
+       #);
+     regTimes::
+       (#
+       do 301->trace(#
+                    do 'regTimes:' -> display
+                    #);
+          rReg -> (asComputedVal).regTimes -> V[]          
+       #);
+     divMod:: 
+       (# 
+       do (if not common.switch[188] then
+              '\nOBS! methodCall:divMod:' -> putline
+          if);
+          (lV[],isDiv) -> (asComputedVal).divMod -> res[]
+       #);
+     adrDivMod:: 
+       (# 
+       do (if not common.switch[188] then
+                 '\nOBS! methodCall:adrDivMod:' -> putline 
+          if);
+          (rA[],isDiv) -> (asComputedVal).adrDivMod -> W[];
+       #);
+     cstDivMod:: 
+       (# 
+       do (if not common.switch[188] then
+              '\nOBS! methodCall:cstDivMod:' -> putline;
+          if);
+          (rN,isDiv) -> (asComputedVal).cstDivMod -> V[]
+       #);
+     regDivMod:: 
+       (# 
+       do (if not common.switch[188] then
+                 '\nOBS! methodCall:regDivMod:' -> putline;
+          if);
+          (rReg,isDiv) -> (asComputedVal).regDivMod -> W[]
+       #);
+     orr::<
+       (# do (if not common.switch[188] then
+                 '\nOBS! methodCall:orr'->putline 
+       if)#);
+     adrOr::<
+       (# 
+       do (if not common.switch[188] then
+              '\nOBS! methodCall:adrOr'->putline
+          if)
+       #);
+     cstOr::<
+       (# 
+       do (if not common.switch[188] then
+              '\nOBS! methodCall:cstOr'->putline; 
+          if);
+          this(methodCall)[] -> V[] 
+       #);
+     regOr::<
+       (# do (if not common.switch[188] then
+                 '\nOBS! methodCall:regOr'->putline
+       if)#);
+     andd::< 
+       (# do (if not common.switch[188] then
+                 '\nOBS! methodCall:andd'->putline
+       if)#);
+     adrAnd::<
+       (# 
+       do (if not common.switch[188] then
+              '\nOBS! methodCall:adrAnd'->putline
+          if)
+       #);
+     cstAnd::<
+       (# 
+       do (if not common.switch[188] then
+              '\nOBS! methodCall:cstAnd'->putline;
+          if);
+          this(methodCall)[] -> V[] 
+       #);
+     regAnd::<
+       (# do (if not common.switch[188] then
+                 '\nOBS! methodCall:regAnd'->putline
+       if)#); 
+     rMult:: (# do   this(methodCall)[] -> res[] #);
+     asComputedVal:
+       (# EH: @evalHandler
+       exit (0,false,false,false)->EH.mkComputedEvVal
+       #);
+     exitValIsReal: booleanValue
+       (#
+       do (sig.XXsig.elmType = 6) (* real *) -> value
+       #);
+     thisExitVal:
+       (# V: ^evVal
+       do (if exitValIsReal then
+              mkReal -> V[]
+           else
+              (if sig.XXsig.isRef then
+                  this(methodCall)[] -> V[]; (* not logical, but
+                                              * we don't have thisEV
+                                              * in the next one below
+                                              *)
+                  (*(0,false,EV[],chain[]) -> mkComputedRefEvVal -> V[]*)
+               else
+                  (if sig.XXsig.elmType = 8 (* int64 *) then
+                      mch.int64ToInt32
+                  if);
+                  (0,evType=2,false,false) -> mkComputedEvVal -> V[]
+          if) if)
+       exit V[]
+       #); 
+
+     (* class: ^text*)
+     sig: ^theGen.signature;
+     chain: ^DH.superChain
+  enter(sig[],chain[])
+  exit this(methodCall)[]
+  #);
+
 EnterArgs: evVal
   (# off: @integer;
      pushNext:
