@@ -51,12 +51,14 @@ void initSynchVariables(void)
 }
 
 
-void create_TSD(void)
+TSD *create_TSD(void)
 {
+  TSD *tsd;
+  int inx;
+
   mutex_lock(&tsd_lock);
-  TSDReg = MALLOC(sizeof(TSD));
-  ThreadId = thr_self();
-  Nums = MALLOC(sizeof(nums));
+  tsd = (TSD*)MALLOC(sizeof(TSD));
+  tsd->_nums = MALLOC(sizeof(nums));
 
   /* insert newly created TSD into TSDlist */
   if (TSDlistlen <= NumTSD){
@@ -83,9 +85,10 @@ void create_TSD(void)
   }
 
   /* Find free entry in TSDlist */
-  for (TSDinx = 0; TSDlist[TSDinx]; TSDinx++)
+  for (inx = 0; TSDlist[inx]; inx++)
     ;
-  TSDlist[TSDinx] = TSDReg;
+  tsd->_TSDinx = inx;
+  TSDlist[inx] = tsd;
   
   mutex_unlock(&tsd_lock);
 
@@ -93,6 +96,8 @@ void create_TSD(void)
   mutex_lock(&cond_pause_lock);
   cond_broadcast(&cond_pause);
   mutex_unlock(&cond_pause_lock);
+
+  return tsd;
 }
 
 void destroy_TSD(void)
@@ -475,23 +480,24 @@ extern void *AttTC(void *);
 
 thread_t attToThread(struct Component *comp)
 { 
-  thread_t tid;
+  TSD *tsd = create_TSD();
+  tsd->_ActiveComponent = comp;
   if (thr_create(NULL                           /* stack base */,
 		 0                              /* stack size */,
 		 (void *(*)(void *))AttTC       /* func       */,
-		 (void *)comp                   /* arg        */,
+		 (void *)tsd                    /* arg        */,
 		 THR_NEW_LWP|THR_DETACHED       /* flags      */,
-		 &tid                           /* id         */)){
+		 &tsd->_thread_id               /* id         */)){
     fprintf(output, "Failed to create thread for component 0x%x\n", (int)comp);
     fflush(output);
     exit (1);
   }
   DEBUG_MT(fprintf(output, 
 		   "[Created thread 0x%x for comp 0x%x]\n", 
-		   (int)tid, 
+		   (int)tsd->_thread_id, 
 		   (int)comp);
 	   fflush(output););
-  return tid;
+  return tsd->_thread_id;
 }
 
 int thisThreadInx(void)
