@@ -36,9 +36,9 @@ parseEditor: window
 
 	      (* load LST text file *)
 	      '.lst'
-		->(path.copy).Append
+		->(path.copy).append
 		->contents.errorsList.contents.loadFile;
-	      path[]->fragmentDefaultName->((title).copy).Append->title;
+	      path[]->fragmentDefaultName->((title).copy).append->title;
 	  if)
        #);
      menubarType::
@@ -166,52 +166,55 @@ parseEditor: window
 	       errorsList.dobind;
 	    #);
 	  fileEditor: labelled
-	    (# loading: @boolean;
+	    (# loading, loaded: @boolean;
 	       contentsType::< textEditor
 		 (# path: ^text;
 		    textFile: @file;
 		    lineStarts: [1000]@integer;
 		    lineMax: @integer;
 		    loadFile:<
-		      (#  t: ^text;
-			 theText: @StyledText;
+		      (# t: ^text;
 			 pos, lineInx: @integer;
+                         loadStream:
+                           (# str: ^stream;
+                              theText: @StyledText;
+                           enter str[]
+                           do 0->pos->lineStarts[1];
+			      1->lineInx;
+                              str.reset;
+                              str.scan
+			      (# while:: (# do true->value #);
+			      do ch->theText.put;
+				 pos+1->pos;
+				 (if ch=ascii.newLine then
+				     lineInx+1->lineInx;
+				     (if lineInx=lineStarts.range then
+					 1000->lineStarts.extend if);
+				     pos->lineStarts[lineInx];
+				 if);
+			      #);
+			      lineInx+1->lineInx;
+			      (if lineInx=lineStarts.range then
+				  1000->lineStarts.extend if);
+			      pos->lineStarts[lineInx];
+			      lineInx->lineMax;
+			      true->loading;
+			      theText[]->contents.contents;
+                              false->loading;
+                           #)
 		      enter path[]
-		      do true->loading;
-			 path[]->textFile.name;
+		      do path[]->textFile.name;
 			 (if path[]->fileAvailable then
 			     textFile.openRead;
-			     0->pos->lineStarts[1];
-			     1->lineInx;
-			     textFile.scan
-			     (# while:: (# do true->value #);
-			     do ch->theText.put;
-				pos+1->pos;
-				(if ch=ascii.newLine then
-				    lineInx+1->lineInx;
-				    (if lineInx=lineStarts.range then
-					1000->lineStarts.extend if);
-				    pos->lineStarts[lineInx];
-				if);
-			     #);
-			     lineInx+1->lineInx;
-			     (if lineInx=lineStarts.range then
-				 1000->lineStarts.extend if);
-			     pos->lineStarts[lineInx];
-			     lineInx->lineMax;
-			     theText[]->contents.contents;
-			     textFile.close;
+                             textFile[]->loadStream;
+			     textFile.close; true->loaded;
 			  else
 			     'No read permissions to the file:\n     '->t[];
-			     textFile.name->t.puttext;
-			     (this(parseEditor)[], t[],'Read Error')
-			       ->alertUser;
-			     'no .lst file'->theText.puttext;
-			     0->pos->lineStarts[1]; 1->lineInx;
-			     12->lineStarts[2]; 2->lineMax;
-			     theText[]->contents.contents;
+			     textFile.name->t.putline;
+                             '\nCannot show any information'->t.putline;
+                             t[]->loadStream;
+                             false->loaded;
 			 if);
-			 false->loading;
 			 INNER
 		      #);
 		    saveFile:
@@ -268,7 +271,7 @@ parseEditor: window
 	    (# contentsType::
 		 (# contentsType::
 		      (# lineInx: @integer;
-			 selectLine:
+                         selectError:
 			   (#
 			   enter lineInx
 			   do (if lineInx>=lineMax then lineMax-3->lineInx if);
@@ -283,33 +286,38 @@ parseEditor: window
 				    t.reset;
 				    t.getInt(# syntaxError:: (# do leave l #) #)
 				      ->sourceEditor.contents.selectLine;
-				 #)
+				 #);
+                              (lineStarts[lineInx+2],lineStarts[lineInx+3]-1)
+                                ->selection;
+                              selection.scrollIntoView
 			   #);
 			 eventhandler::
 			   (# onBeforeChange:: (# do loading->allow #);
 			      onKeyDown::
 				(#
-				do (if ch
-				    // ascii.cr
-				    // ascii.nl then
-				       (if lineInx+8>=lineMax then
-					   0->lineInx
-				       if);
-				       lineInx+8->selectLine;
-				       (lineStarts[lineInx],lineStarts[lineInx])
-					 ->selection;
-				       selection.scrollIntoView
-				   if)
+				do (if loaded then
+                                       (if ch
+				        // ascii.cr
+				        // ascii.nl then
+				           (if lineInx+8>=lineMax then
+					       0->lineInx
+				           if);
+				           lineInx+8->selectError;
+				       if)
+                                   if)
 				#);
-			      onMouseDown::
+			      onMouseUp::
 				(#
-				do localPosition->ptToPos
-				     ->locateLine
-				     ->selectLine;
-				#)
+				do (if loaded then
+                                       localPosition->ptToPos
+				         ->locateLine
+				         ->selectError;
+				   if)
+                                #)
 			   #)
 		      #);
-		    loadFile:: (# do 1->contents.selectLine #);
+		    loadFile::
+                      (# do (if loaded then 1->contents.selectError if) #);
 		 #);
 	       open::
 		 (# w,h: @integer;
