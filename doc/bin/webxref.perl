@@ -1831,11 +1831,12 @@ print S "HEAD $path HTTP/1.0\n\n";
 $response = <S>;
 ($protocol, $status) = split(/ /, $response);
 while (<S>) {
-  #print;
+  #print STDERR;
 }
 close(S);
 
-#print "Status: $status\n";
+#print STDERR "Status: $status\n";
+
 return $status;
 
 }
