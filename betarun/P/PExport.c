@@ -448,7 +448,7 @@ static void exportScanObject(Object *obj, int doPartObjects)
               exportScanObject((Object *)ComponentItem( theComponent), TRUE);
            }
 #ifdef PSENDIAN
-           ((Component*)obj) -> CallerLSC = htonl(((Component*)obj) -> CallerLSC);
+           ((Component*)obj) -> CallerLSC = (pc_t)(htonl((long)(((Component*)obj) -> CallerLSC)));
 #endif
            break;
         }

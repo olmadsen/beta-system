@@ -701,7 +701,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   case SIGINT: /* Interrupt */
     todo=HandleInterrupt(theObj, pc, sig); break;
   case SIGTRAP: 
-    if (pc[-1] == (char)0xcc) {
+    if (pc[-1] == (unsigned char)0xcc) {
       /* int3 break */
       scp.eip -= 1; /* pc points just after int3 instruction */
       pc = (pc_t)scp.eip;
@@ -997,7 +997,7 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
     }
     break;
   case SIGTRAP: 
-    if ( pc[-1] == (char)0xcc ){
+    if ( pc[-1] == (unsigned char)0xcc ){
       /* int3 break */
       ucon->uc_mcontext.gregs[EIP] -= 1; /* pc points just after int3 instruction */
       pc = (pc_t) ucon->uc_mcontext.gregs[EIP];

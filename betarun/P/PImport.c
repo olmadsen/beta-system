@@ -447,7 +447,7 @@ static void importScanObject(Object *obj,
               importScanObject((Object *)ComponentItem( theComponent), TRUE, objInfo, forced);
            }
 #ifdef PSENDIAN
-           ((Component*)obj) -> CallerLSC = ntohl((u_long)((Component*)obj) -> CallerLSC);
+           ((Component*)obj) -> CallerLSC = (pc_t)(ntohl((long)((u_long)((Component*)obj) -> CallerLSC)));
 #endif
            break;
         }

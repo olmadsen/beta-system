@@ -1,7 +1,11 @@
-char betarun_version[] = "BETARUN VERSION 5.3(48)";
+char betarun_version[] = "BETARUN VERSION 5.3(49)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.48  2001/11/22 15:10:25  corry
+ * Let it compile on SPARC again
+ * Betarun version number: 48
+ *
  * Revision 1.47  2001/11/22 14:00:26  corry
  * Make it work on non-AMD chips again (oops!)
  * Betarun version number: 47
