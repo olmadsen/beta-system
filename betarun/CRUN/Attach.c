@@ -10,69 +10,196 @@
 #include "crun.h"
 
 #ifdef crts
-ParamThisComp(struct Component *, Att)
-/* struct Component * Att(struct Object *this, struct Component *comp) */
+extern long a0;
+struct Component * Att(struct Object *this, struct Component *comp)
+/* ParamThisComp(struct Component *, Att) */
 {  
-  /* By now the following variables are declared as locals. Should be
-   * global addressable when a component stack is implemented.
-   */
-  register ref(CallBackFrame)  callBackFrame;
-  register long              * nextCompBlock;
-  register long                level; /* This is SPARC specific? Needed*/
+  long first =  comp->CallerLSC == 0;
+  long attachStackSize;
+  long sizeToMove, sizeOfRefStack;
+  char * attachSaveArea;
+  struct StackObject * theStackObj;
+  long * newSP, *SP, *FP, RA;
 
-  long first = comp->CallerLSC == 0;
+  getret(RA); /* Fetch return address */
+    
+  /* fprintf(output, "\n Attach: Activecomponent: 0x%x \n", (int)ActiveComponent);
+  fprintf(output, " Attach: component: 0x%x \n",(int)comp); */
 
   GCable_Entry();
   FetchThisComp();
   Ck(comp); 
   Ck(this);
+  push(this); /* Push this (=a0) to refrence stack */
+
   if (comp->StackObj == cast(StackObject) -1 || comp == ActiveComponent)
     BetaError(RecursiveAttErr, this);
+  ActiveComponent->CallerLSC = RA;	/* Save our return address */
 
-  getret(ActiveComponent->CallerLSC);	/* Save our return address */
   AssignReference((long *)&comp->CallerComp, cast(Item) ActiveComponent);
   AssignReference((long *)&comp->CallerObj, cast(Item) this);
   
   /* -1 tells that ActiveComponent is active */
-  ActiveComponent->StackObj = cast(StackObject) -1;
+  ActiveComponent->StackObj = cast(StackObject) -1; 
   
-  /* Push a new Component Block. */
-  /* This is SPARC code! The components are pushed in register windows */
-  level = 0;
-  nextCompBlock = (long *) lastCompBlock;
-  callBackFrame = ActiveCallBackFrame;
- 
-  /* Clear the CallBackFrame list */
-  ActiveCallBackFrame = 0;
-  lastCompBlock = cast(ComponentBlock) RefSP; 
-
   if (first) {
     /* Hack to indicate that comp has now been attached once.
      * If this attachment of comp does not execute a suspend, there is no
      * other way to check this!
      */
     comp->CallerLSC = -1;
+
+    SaveCompState_sparc(); /* Save registers of current component on stack */
+    /* Pack current component block to stack */
+    theStackObj = ActiveComponent->StackObj;
+    GetFramePointer(FP);
+    sizeToMove = ((long)baseStackPtr-(long)FP)/4;/*Number of longs on run-time stack */
+    sizeOfRefStack = ((long)RefSP - (long)baseRefSP)/4; /* Number of longs on reference stack */
+    if ( ((long)theStackObj == 0) || ((long)theStackObj == -1) || 
+	((sizeToMove+sizeOfRefStack) > theStackObj->BodySize) ){
+      push(comp);
+      push(this);
+      theStackObj = AlloSO(sizeToMove+sizeOfRefStack+1);
+      pop(this);
+      pop(comp);
+      AssignReference((long *)&(ActiveComponent->StackObj), (struct Item *) theStackObj);
+    }
+    /* Save as number of longs as GC expects this! */
+    theStackObj->StackSize = sizeToMove; 
+
+    theStackObj->Body[0] = (long) FP; 
+    memcpy(theStackObj->Body+1, FP+1, sizeToMove*4);
+
+    /* Save referene stack */
+    memcpy(theStackObj->Body+1+sizeToMove, baseRefSP, sizeOfRefStack*4);
+
+    /* fprintf(output," Attach: ActiveComponent->StackObj = 0x%x \n",(int)ActiveComponent->StackObj); */
+
     ActiveComponent = comp;
-    
+
+    /* Move the Att part of the stack to the bottom of the stack */
+    GetStackPointer(SP);
+    attachStackSize = ((long)FP-(long)SP)/4;
+
+    memcpy(baseStackPtr-attachStackSize+1, SP+1, attachStackSize*4);
+    SetFramePointer(baseStackPtr);
+    SetStackPointer(baseStackPtr - attachStackSize);
+
+    push(this);
     CallBetaEntry(*((long *)((long)((cast(Item) &comp->Body)->Proto)+sizeof(struct ProtoType)+4)), &comp->Body);
-    
-    /* TerminateComponent: */
+    pop(this);
+
+    /* When the attached component terminates the following code is executed.  */
+
     comp = ActiveComponent;
-    /* printf("\nAttach: comp TERMINATED: 0x%08x\n", comp); 
+    a1 = (long)ActiveComponent;
+    ActiveComponent = comp->CallerComp;
+    a0 = (long)comp->CallerObj;
+
+    SaveCompState_sparc(); /* Save current registers to stack */
+    /* Save the Attach part of the stack */
+    GetStackPointer(SP);
+    GetFramePointer_Att(FP);
+    attachStackSize = ((long)FP-(long)SP)/4;
+    attachSaveArea = malloc(attachStackSize);
+    memcpy(attachSaveArea, SP+1, attachStackSize*4);
+  
+    if (ActiveComponent->StackObj == (struct StackObject *)0){
+      free(attachSaveArea);
+      BetaError(CompTerminatedErr, this);
+    }
+    theStackObj = ActiveComponent->StackObj;
+    sizeToMove = theStackObj->StackSize; /* SizeToMove now number of longs */
+
+    /* Restore the Attach part of the stack */
+    newSP = baseStackPtr-sizeToMove;
+    memcpy(newSP-attachStackSize+1, attachSaveArea, attachStackSize*4);
+    free(attachSaveArea);
+    SetFramePointer(newSP);
+    SetStackPointer(newSP - attachStackSize);
+
+    /* Activate new componont */
+    memcpy(newSP+1, theStackObj->Body+1, sizeToMove*4);
+
+    /* Restore reference stack */
+    sizeOfRefStack = theStackObj->BodySize-theStackObj->StackSize-1; /* In longs ! */
+    memcpy(baseRefSP, theStackObj->Body+1+sizeToMove, sizeOfRefStack*4);
+    RefSP = baseRefSP + sizeOfRefStack;
+    a0=(long)popAdr();
+
+    /* fprintf(output,"\nAttach: comp TERMINATED: 0x%08x\n", (int)comp); 
     fflush(stdout); */
-    ActiveComponent  = comp->CallerComp;
-    this             = comp->CallerObj;
+
+    /* TerminateComponent: */
     comp->StackObj   = 0;
     comp->CallerComp = 0;
     comp->CallerObj  = 0;
     
-    /* Pop the Component Block */
-    ActiveCallBackFrame = callBackFrame;
-    lastCompBlock = cast(ComponentBlock) nextCompBlock;
     setret(ActiveComponent->CallerLSC);
-    
     return comp;  
-  } 
+  }
+  /* This is what happens below:
+   * (1) Save the Att part of the stack.
+   * (2) Move the component block and activations to the stack.
+   * (3) Save the reference stack in the stack object belowe the runtime activations.
+   * (4) Restore the Att part of the stack at a location above the new component block.
+   * (5) Move the new component block from the heap to the stack.
+   * (6) Restore the component stack.
+   * (7) Restore stackpointer and framepointer according to the new stack layout and
+   *     set return address to the new component.
+   * (8) Return to the new component.
+   */
+
+  SaveCompState_sparc(); /* Save current registers to stack */
+  /* Save the Attach part of the stack */
+  GetStackPointer(SP);
+  GetFramePointer(FP);
+  attachStackSize = ((long)FP-(long)SP)/4;
+  attachSaveArea = malloc(attachStackSize*4);
+  memcpy(attachSaveArea, SP+1, attachStackSize*4);
+  
+  /* Pack current component block to stack */
+  theStackObj = ActiveComponent->StackObj;
+  sizeToMove = ((long)baseStackPtr-(long)FP)/4; /* Number of longs on run-time stack */
+  sizeOfRefStack = ((long)RefSP - (long)baseRefSP)/4; /* Number of longs on reference stack */
+  if ( ((long)theStackObj == 0) || ((long)theStackObj == -1) || 
+      ((sizeToMove+sizeOfRefStack) > theStackObj->BodySize) ){
+    push(this); push(comp);
+    theStackObj = AlloSO(sizeToMove+sizeOfRefStack+1);
+    pop(comp); pop(this);
+    AssignReference((long *)&(ActiveComponent->StackObj), (struct Item *) theStackObj);
+  }
+  theStackObj->StackSize = sizeToMove; /* Saved as number of longs, as GC expect this ! */
+  theStackObj->Body[0] = (long)FP;
+  memcpy(theStackObj->Body+1, FP+1, sizeToMove*4);
+  memcpy(theStackObj->Body+1+sizeToMove, baseRefSP, sizeOfRefStack*4);
+  
+  ActiveComponent = comp;
+  if (ActiveComponent->StackObj == (struct StackObject *)0){
+    free(attachSaveArea);
+    BetaError(CompTerminatedErr, this);
+  }
+  theStackObj = ActiveComponent->StackObj;
+  sizeToMove = theStackObj->StackSize; /* sizeToMove now number of longs! */
+  
+  /* Restore the Attach part of the stack */
+  newSP = baseStackPtr-sizeToMove;
+  memcpy(newSP-attachStackSize+1, attachSaveArea, attachStackSize*4);
+  SetStackPointer(newSP - attachStackSize);
+  SetFramePointer(newSP);
+  free(attachSaveArea);
+  
+  /* Activate new componont */
+  memcpy(newSP+1, theStackObj->Body+1, sizeToMove*4);
+
+  /* Restore reference stack */
+  sizeOfRefStack = theStackObj->BodySize-theStackObj->StackSize-1; /* In longs! */
+  RefSP = baseRefSP + sizeOfRefStack;
+  memcpy(baseRefSP, theStackObj->Body+1+sizeToMove, sizeOfRefStack*4);
+  a0=(long)popAdr();
+
+  setret(comp->CallerLSC);
+  return comp;
 }
 #endif
 
