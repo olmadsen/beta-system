@@ -1,18 +1,35 @@
 #! perl
 
-use File::DosGlob;
-use File::Copy;
-use File::Basename;
-use File::stat;
+# Configure all these to suit local needs:
 
-# Takes the list of files.z to be included as args. 
-# Configure:
+# Program locations:
+$ISBase = "U:\\win32app\\InstallShield Professional 6";
+$ISCom = "w:\\program files\\common files\\installshield";
+$PFTWbase = "U:\\win32app\\InstallShield Professional 6\\packagefortheweb";
 
+# Location of installshield project definition (.ipr file)
+$InstBase = "d:\\My Installations\\Mjolner System";
+
+# Temporary files:
 $ExtractedFiles = "U:\\beta-export";
+$Destination = "u:\\tmp";
+
+# Final resulting package location:
+$PackagePath = "Z:\\public_html\\beta";
+
+# Version to display in installer. Must match value in installshield GUI.
+$version = "5.2";
+
+
 
 ##############################################################
 # Impl, do not touch.
 ##############################################################
+
+use File::DosGlob;
+use File::Copy;
+use File::Basename;
+use File::stat;
 
 sub mayrm {
     foreach $file (@_) {
@@ -43,12 +60,23 @@ sub Usage {
 }
 
 $UseDefaults = 1 if ($u);   # perl -s does this to options...
+$Force = 1 if ($f);
 
 &Usage if ($#ARGV <= 0);
 $MIASDK = shift @ARGV;
 if ($MIASDK !~ /^(ms|gnu|bor)$/) {
     &Usage;
 }
+
+warn "\nIS 6 pro base not found." if (! -d $ISBase);
+warn "\nIS 6 pro common not found." if (! -d $ISCom);
+warn "\nWhere are the IS data files" if (! -d $InstBase);
+warn "\nDestination \"$Destination\" is missing" if (! -d $Destination);
+
+$Destination .= "\\$MIASDK";
+mkdir($Destination, 0777) if (!-d $Destination);
+die "Destination \"$Destination\" is missing" if (! -d $Destination);
+
 
 $ENV{'MIASDK'} = $MIASDK; # Export to other programs, if any should need it.
 $| = 1;   # Flush all read/writes
@@ -59,23 +87,28 @@ $log = "beta_${MIASDK}.lst";
 # $ExtractedFiles .= '\\' . $MIASDK;
 
 foreach $f (@ARGV) {
-    foreach $file (&File::DosGlob::doglob(1,$f)) {
-	if ($file =~ /^(.*)\.cmd$/i) {
-	    push(@FileList, $1);
-	} elsif ($file eq "-u") {
-	    $UseDefaults = 1;
-	    print "Using auto-chosen defaults!\n";
-	} else {
-	    print "Unable to handle argument '$file'.\n";
-	    exit 1;
+    if ($f =~ /cmd$/i) {
+	foreach $file (&File::DosGlob::doglob(1,$f)) {
+	    if ($f =~ /^(.*)\.cmd$/i) {
+		push(@FileList, $1);
+	    }
 	}
+    } elsif ($f eq "-u") {
+	$UseDefaults = 1;
+	print "Using auto-chosen defaults!\n";
+    } elsif ($f eq "-f") {
+	$Force = 1;
+	print "Using Force mode!\n";
+    } else {
+	print "Unable to handle argument '$f'.\n";
+	exit 1;
     }
 }
 
-# Check existance of some cricial files:
+# Check existance of some critical files:
 mkdir($ExtractedFiles, 0777) if (!-d $ExtractedFiles);
 
-if (-d "$ExtractedFiles/basiclib") {
+if (-d "$ExtractedFiles/$MIASDK/base/basiclib" && !$Force) {
     print "There is already a set of extracted files in $ExtractedFiles.\n";
     print "Please delete these and restart this script.\n";
     exit 1;
@@ -87,7 +120,7 @@ foreach $file (@FileList) {
     close CMD;
     chop $nam;
 
-    if ($nam =~ /^(doc)\d+\.cmd$/) {
+    if ($nam =~ /^(doc)\d+$/) {
 	$part = "doc";
     } else {
 	$part = "base";
@@ -145,3 +178,141 @@ foreach $file (@FileList) {
     close(IN);
     chdir $CWD;
 }
+
+
+sub DanceWithInstallShield {
+# Order InstallShield to build media from these files.
+# Preliminary support! Not well-tested.
+# Requirements:
+# Need project built using IS IDE specifying everything...
+
+    open (FGL, ">$InstBase/File Groups/BaseSystem.fgl") || die "base: $!";
+    print FGL<<"EOT";
+[DYNAMIC]
+WILDCARD0=*.*
+INCLUDESUBDIR=YES
+FOLDER=$ExtractedFiles\\$MIASDK\\base
+[GENERAL]
+VERSION=1.10.000
+TYPE=FILELIST
+EOT
+
+    close FGL;
+
+    open (FGL, ">$InstBase/File Groups/doc.fgl") || die "base: $!";
+    print FGL<<"EOT";
+[DYNAMIC]
+WILDCARD0=*.*
+INCLUDESUBDIR=YES
+FOLDER=$ExtractedFiles\\$MIASDK\\doc
+[GENERAL]
+VERSION=1.10.000
+TYPE=FILELIST
+EOT
+
+    close FGL;
+	
+    $arg .="\"$InstBase\\Script Files\\setup.rul\" ";
+    $arg .="\"$ISBase\\Script\\Ifx\\Lib\\Ifx.obl\" ";
+    $arg .="\"$ISBase\\Script\\Isrt\\Lib\\Isrt.obl\" ";
+    $arg .="\"-i$ISBase\\script\\ifx\\Include\" ";
+    $arg .="\"-i$ISBase\\script\\isrt\\Include\" ";
+    $arg .="\"-i$ISBase\\Include\" ";
+    $arg .="\"-i$InstBase\\Script Files\" ";
+    $arg .="-dMIASDK=\\\"$MIASDK\\\"";
+    $cmd = "\"$ISCom\\iscript\\Compile.exe\" $arg";
+    print "$cmd\n";
+    system $cmd;
+
+    $cmd = "\"$ISBase\\Program\\isbuild\"";
+    $cmd .= " \"-p$InstBase\"";
+    $cmd .= " \"-b$Destination\"";
+    if ($MIASDK =~ /ms/) {
+	$cmd .= ' "-mMjolner MS"';
+    } else {
+	$cmd .= ' "-mMjolner GNU"';
+    }
+
+    print "$cmd\n";
+    system $cmd;
+
+    open (PFW, ">$InstBase/MjolnerSystem-$MIASDK.pfw") || die "PFW: $!";
+    print PFW<<"EOT";
+[PackageForTheWeb]
+Version=2.0
+[Options]
+Title=MjolnerSystem-$MIASDK
+BasePath=$Destination\\Disk Images
+ImportPath=$Destination\\
+OutputSpec=$PackagePath\\MjolnerSystem-$MIASDK.exe
+Version=$version
+Company=Mjølner Informatics
+UseRTF=0
+SaveFiles=0
+SubFolders=1
+ApplicationName=Mjolner System
+Description=
+Comments=
+Notice=
+GUIDs=0
+Type=2
+Compress=1
+Sign=0
+Transfer=0
+Files=9
+
+[Engine]
+Setup=Disk1\\Setup.exe
+
+[Web Page]
+Generate=1
+Template=
+MSClient=
+NClient=
+
+[Runtime]
+Welcome=
+License=
+Prompt=
+Password=
+DefaultPath=
+Language=English
+WindowStyle=0
+Options=51
+Execute=Disk1\\Setup.exe
+CmdLine=
+
+[Extension]
+Server=
+Calls=0
+
+[Code Signing]
+CompanyURL=
+SpecFile=
+KeyFile=
+Method=0
+
+; ~~~~~~~~~~ File Section ~~~~~~~~~~~
+[SubFolders]
+Count=1
+Folder1=Disk1
+
+[File 1]
+Name=Setup.exe
+Path=$Destination\\Disk Images\\Disk1\\
+Flags=589825
+Disk=0
+EOT
+    
+    close PFW;
+
+    $cmd = "\"$PFTWbase\\pftwwiz.exe\"";
+    $cmd .= " \"$InstBase\\MjolnerSystem-$MIASDK.pfw\"";
+    $cmd .= " -a -s";
+
+    print "$cmd\n";
+    system $cmd;
+}
+
+&DanceWithInstallShield;
+
