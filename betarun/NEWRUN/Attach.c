@@ -53,7 +53,7 @@ static void TerminateActiveComponent(void)
   CallBetaEntry(RA, SPx, callerObj);
 }
 
-#ifdef ppcmac
+#ifdef ppcmac_
 
 /*************************** Solution using doAtt *********************/
 
@@ -200,6 +200,7 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
 #else
 
 /************************ Solution NOT using doAtt *******************/
+
 
 void Att(struct Object *this, struct Component *comp, long RA, long SPx)
 {
