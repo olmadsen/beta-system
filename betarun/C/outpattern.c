@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1991-04-03 07:31:43 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1991-04-09 08:48:20 $, SID: $Revision: 1.5 $
  * by Lars Bak
  */
 
@@ -123,6 +123,44 @@ ErrorMessage(output, errorNumber)
   fprintf(output,"Unknown error (%d)", errorNumber);
 }
 
+NotInHeap( address)
+  int address;
+{
+  if( inIOA(address) || inAOA(address) || inLVRA(address) ) return FALSE;
+  else return TRUE;
+}
+
+/* Traverse the StackArea [low..high] and Process all references within it. */
+static DisplayStackPart( output, low, high)
+  ptr(long) low;
+  ptr(long) high;
+  FILE *output;
+{
+  ptr(long) current = low;
+  ref(Object) theObj;
+  handle(Object) theCell;
+
+  while( current <= high ){
+    if( inBetaHeap( *current)){
+      theCell = (handle(Object)) current;
+      theObj  = *theCell;
+      if( inIOA(theObj) || inAOA(theObj) ){
+	if( isObject( theObj) && NotInHeap(*(current+1)))
+	  DisplayObject(output, theObj);
+      }
+    }else{
+      switch( *current){
+      case -8: current++;
+      case -7: current++;
+      case -6: current++;
+      case -5: current++;
+	break;
+      }
+    }
+    current++;
+  }
+}
+
 DisplayBetaStack( errorNumber, theObj)
   int errorNumber;
   ref(Object) theObj;
@@ -155,20 +193,18 @@ DisplayBetaStack( errorNumber, theObj)
 
   fprintf(output,"Dump of stack:\n");
 
-  for( stackptr = StackEnd; stackptr <= StackStart; stackptr++){
-    if( inIOA(*stackptr)){
-      if( isObject( *stackptr) && !inHeap(*(stackptr+1)))
-        DisplayObject(output, *stackptr);
-    }else{
-      switch( *stackptr){
-      case -8: stackptr++;
-      case -7: stackptr++;
-      case -6: stackptr++;
-      case -5: stackptr++;
-               break;
-      }
+  if( ActiveCallBackFrame ){
+    ptr(long)          theTop   = StackEnd;
+    ref(CallBackFrame) theFrame = ActiveCallBackFrame;
+    while( theFrame){
+      DisplayStackPart( output, theTop, (long) theFrame - 4);
+      fprintf( output,"  [ C activation part involving beta Call Back ]\n");
+      theTop   = theFrame->betaTop;
+      theFrame = theFrame->next;
     }
-  }
+    DisplayStackPart( output, theTop, StackStart);  
+  }else DisplayStackPart( output, StackEnd, StackStart);
+
   fclose(output);
 }
 
