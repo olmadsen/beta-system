@@ -12,7 +12,7 @@
 #include <unistd.h>
 #include <sys/time.h>
 
-#ifdef linux
+#if defined(linux) || defined(nti)
 #include <utime.h>
 #endif
 
@@ -234,7 +234,7 @@ int setEntryModtime(path, time)
 {
   if((char)(*path)=='\0')
     return -1;			/* test for empty string */
-#ifdef SYSV
+#if defined(SYSV) || defined(nti)
   { struct utimbuf times;
     times.actime=times.modtime=time;
     if(utime(path,&times)<0) return -1;
