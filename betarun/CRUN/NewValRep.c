@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: NewValRep.c,v 1.11 1992-09-07 14:41:41 poe Exp $
+ * Mod: $Id: NewValRep.c,v 1.12 1992-09-24 10:09:04 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -37,7 +37,7 @@ void CNewVR(ref(Object) theObj, int offset /* in ints */, int range)
 	    setD0Reg(offset * 4);
 	    setD1Reg(range);
 #endif
-
+	    if (range<0) range=0;
 	    theRep = (casthandle(ValRep)theObj)[offset];
 	    
 	    switch( (int) theRep->Proto){

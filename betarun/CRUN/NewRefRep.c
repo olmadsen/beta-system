@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: NewRefRep.c,v 1.13 1992-09-07 14:41:37 poe Exp $
+ * Mod: $Id: NewRefRep.c,v 1.14 1992-09-24 10:09:01 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -26,6 +26,7 @@ void CNewRR(ref(Object) theObj, int offset /* in ints */, int range)
 #ifdef hppa
     range = (int)getR2Reg();
 
+    if (range<0) range=0;
     pushReference(theObj);
     pushReference(getThisReg());
     setThisReg(theObj);
@@ -35,7 +36,7 @@ void CNewRR(ref(Object) theObj, int offset /* in ints */, int range)
     setThisReg(popReference());
     theObj = popReference();
 #else
-    Protect(theObj,CAlloRR(theObj, offset*4, range)); /* MP MP MP MP!!! */
+    Protect(theObj,if (range<0) range=0; CAlloRR(theObj, offset*4, range)); /* MP MP MP MP!!! */
 #endif
     if (! inIOA((struct Object **)theObj+offset) &&
 	inIOA(*(struct Object **)theObj+offset))
