@@ -43,7 +43,7 @@ my @intheadings = ();      # used to build interface descriptions part of table 
 my @index = ();            # used to build index
 my @num_h = (0,0,0,0,0,0); # array of occurrences of headings 1 to 6
 
-# variables
+# Other variables
 my $src = "src/";
 my $dst = "";
 my $intsrc = "";
@@ -75,6 +75,9 @@ my $do_figure_list = 0;
 my $leftmargin=25;
 my $tab_width = 8;
 my $htmldoc="htmldoc";
+
+# Variables used by grammar processing only
+my @gramfiles = ();
 
 sub set_default_variable_values
 {
@@ -851,6 +854,9 @@ sub read_book_file
 		push @intsrcfiles, &expand($intsrc . "$1");
 		push @intdstfiles, $intdst . &strip_extension(&strip_path(&expand("$1"))) . ".html";
 	    }
+	    if (m/^gram:\s*(.*)$/){
+		push @gramfiles, &expand($1);
+	    }
 	}
     }
 
@@ -1333,7 +1339,7 @@ EOT
 
     print_interface_toc("");
 
-    print<<EOT;
+    print<<EOT if (-f $indexfile);
   <DT><A HREF="$indexfile"><B>Index</B></A><DD>
     <DL>
 EOT
@@ -2354,6 +2360,256 @@ EOT
     close STDOUT;
 }
 
+### Routines for processing grammar files
+
+########## Helper functions #############################################
+
+sub quote_gram_html
+{
+    return &quote_html(@_);
+}
+
+sub make_gram_anchor
+{
+    local ($name) = @_;
+    push (@index, $name);
+    $name = "<A CLASS=leftside NAME=\"" . lc($name) . "\">&lt;$name&gt;</A>";
+    return $name;
+}
+
+sub isLexem
+{
+    local ($name) = @_;
+    $name = lc($name);
+    return (($name eq "const") || ($name eq "string") || ($name eq "nameappl") || ($name eq "namedecl"));
+}
+
+sub make_gram_href1
+{ 
+    local ($string) = @_;
+    if ($string =~ m/<([-\w]+)>/) {
+	return "&lt;$1&gt;" if (&isLexem($1));
+	return "<A HREF=\"#" . "\L$1" . "\">&lt;$1&gt;<\/A\>";
+    } else {
+	return $string;
+    }
+}
+sub make_gram_href2
+{ 
+    local ($string) = @_;
+    if ($string =~ m/<([-\w]+):([-\w]+)>/) {
+	return "&lt;$1:$2&gt;" if (&isLexem($2));
+	return "<A HREF=\"#" . "\L$2" . "\">&lt;$1:$2&gt;<\/A\>";
+    } else {
+	return $string;
+    }
+}
+sub make_gram_comment
+{
+    local ($string) = @_;
+    if ($string =~ m/\(\*(.*\*\))/) {
+	$string =~ s/&/&amp\;/g;
+	$string =~ s/>/&gt\;/g;
+	$string =~ s/</&lt\;/g;
+    }
+    return $string;
+}
+sub make_gram_hrefs
+{
+    local ($string) = @_;
+    $string =~ s/(\(\*.*\*\))/&make_gram_comment($1)/ge;
+    $string =~ s/(<[-\w]+>)/&make_gram_href1($1)/ge;
+    $string =~ s/(<[-\w]+:[-\w]+>)/&make_gram_href2($1)/ge;
+    return $string;
+}
+
+sub make_gram_h2
+{
+    local ($string) = @_;
+    return "</PRE>\n<H2>$string</H2>\n<PRE>";
+}
+
+sub quote_gram_strings
+# boldface literals and quote HTML in string constants
+{
+    local ($line) = @_;
+    local ($processedline) = "";
+
+    while (1){
+	if ($line =~ m/\'([^\']+)\'/){
+	    $processedline .= $`;
+	    $after = $';
+	    $literal = $1;
+	    $literal = &quote_gram_html($literal);
+	    # HTML tags are generated as <+...+> to avoid
+	    # interpreting, e.g. <B> as a rule in later
+	    # processing. The plus signs are removed by unquote_gram_html.
+	    $literal = "<+B+>$literal<+/B+>" if ($in_gram_rules);
+	    $literal = "\'$literal\'";
+	    $processedline .= $literal;
+	    $line = $after;
+	} else {
+	    $processedline .= $line;
+	    last;
+	}
+    }
+    return $processedline;
+}
+
+sub unplus_gram_html
+# replace '<+' with '<' and , '+>' with '>'
+{
+    local ($string) = @_;
+    $string =~ s/\<\+/\</g;
+    $string =~ s/\+\>/\>/g;
+    return $string;
+}
+
+sub print_gram_file()
+{
+
+    local ($file) = @_;
+    
+    &print_gram_header($title, $basename, $flag_hash);
+
+    print<<"EOT";
+<H1>$title</H1>
+<PRE CLASS=gram>
+EOT
+
+    open (GRAM, "$file") || die "cannot open $file: $!\n";
+    while(<GRAM>){
+	$line = $_;
+	chomp($line);
+	$line = &untabify($line);
+	if (/^\s*Option\s*$/i){
+	    $line=&make_gram_h2($line);
+	} elsif (/^\s*Rule\s*$/i){
+	    $line=&make_gram_h2($line);
+	    $in_gram_rules = 1;
+	} elsif (/^\s*Attribute\s*$/i){
+	    $line=&make_gram_h2($line);
+	} elsif ($in_gram_rules){
+	    $line = &quote_gram_strings($line);
+	    if ($line =~ m/^(\s*)<([-\w]+)>(\s*)::/) {
+		# line with rule definition
+		#   <name>   :: ...
+		#             ^ matched to here
+		$w1 = $1; $name = $2; $w2 = $3; 
+		$rest = $';
+		$name = &make_gram_anchor($name);
+		# insert link from rightsides to corresponding leftsides:
+		$rest = &make_gram_hrefs($rest);
+		$line = $w1 . $name . $w2 . "::" . $rest;
+	    } else {
+		#line without rule definition
+		$line = &make_gram_hrefs($line);
+	    }
+	    $line = &unplus_gram_html($line);
+	} else {
+	    # Not yet in rules section
+	    $line = &quote_gram_html($line);
+	}
+	print "$line\n";
+    }
+    close(GRAM);
+
+    print<<EOT;
+</PRE>
+EOT
+
+    &print_gram_trailer($title);
+
+print<<EOT;
+</BODY>
+</HTML>
+EOT
+
+}
+
+sub print_gram_index_toc()
+{
+    local ($i, $ch);
+    print "<HR>\n";
+    for ($i=65; $i<=90; $i++){
+	$ch = sprintf ("%c", $i);
+	if ($caps{$ch}){
+	    print "<STRONG><A HREF=\"#_$ch\" TARGET=${inxbasename}Body>$ch</A></STRONG> &nbsp; \n";
+	} else {
+	    # no indices starting with $ch
+	    print "<STRONG CLASS=disabled>$ch</STRONG> &nbsp; \n";
+	}	    
+    }
+    print "<HR>\n<P></P>\n";
+}
+
+sub calculate_gram_index()
+{
+    local ($initial_ch, $i, $htmlbodyfile);
+
+    # Sort index ignoring case
+    @index = sort {lc($a) cmp lc($b)} @index;
+        
+    for ($i = 0; $i <= $#index; $i++) {
+	# Generate caps heading at first occurrence of a letter.
+	$initial_ch = ucfirst (substr($index[$i], 0, 1));
+	if (! $caps{$initial_ch} ){
+	    $html_index .= "</PRE>\n<H2><A name=\"_$initial_ch\">$initial_ch<\/A><\/H2>\n<PRE CLASS=gram>\n";
+	    $caps{$initial_ch} = 1;
+	}
+	# Generate index line
+	($htmlbodyfile = $htmlfile) =~ s/\.html$/-body.html/;
+	$html_index .= "  <A href=\"$htmlbodyfile\#" . lc($index[$i]) . "\">&lt;" . $index[$i] . "&gt</A>\n";
+    }
+    &print_gram_index_toc;
+    print "<PRE CLASS=gram>\n$html_index</PRE>\n";
+}
+
+sub print_gram_index_frame()
+{
+    local ($title) = @_;
+
+    &print_gram_index_header($title);
+    print $html_index;
+    &print_gram_index_trailer($title);
+}
+
+sub process_gram_file 
+{
+    local ($file) = @_;
+
+    $title=$file;
+    $title=~s%.*/%%; # delete path
+    $title=~s/-meta.gram//; # delete -meta.gram
+    $basename=lc($title);
+    $htmlfile=$basename . ".html";
+    $gram_inxfile=lc($title) . "-inx.html";
+    $title=ucfirst($basename) . " Grammar";
+
+    printf STDERR "Writing grammar file to $htmlfile ... \n" if $verbose==1;
+    open (STDOUT, ">$htmlfile") || die "\nCannot open $htmlfile for writing: $!\n";
+    &print_gram_file($file);
+    close (STDOUT);
+    printf STDERR "done.\n" if $verbose;
+
+    printf STDERR "Writing grammar index file to $gram_inxfile ... \n" if $verbose;
+    open (STDOUT, ">$gram_inxfile") || die "\nCannot open $gram_inxfile for writing: $!\n";
+    &print_gram_index_file("$title: Index");
+    close (STDOUT);
+    printf STDERR "done.\n" if $verbose;
+
+    printf STDERR "$basename-meta.gram complete.\n" if $verbose;
+
+}
+
+sub process_grammar_files
+{
+    foreach $f (@gramfiles){
+	&process_gram_file($f);
+    }
+    &print_gram_toc_file();
+}
+
 ### main #######
 
 # variables
@@ -2367,12 +2623,23 @@ if ($book_file_name eq ""){
     &generate($ARGV[0], "PREVIEW");
 } else {
     &read_book_file;
-    &process_src_files;
-    &process_interface_files;
-    &generate_program_list_page;
-    &generate_figure_list_page;
-    &generate_index_page;
-    &generate_toc_page;
-    &generate_pdf;
+    if ($#gramfiles>=0){
+	if ($#srcfiles>=0){
+	    print STDERR "Ignoring src html files when grammars specified!\n";
+	}
+	if ($#intsrcfiles>=0){
+	    print STDERR "Ignoring interface files when grammars specified!\n";
+	}
+	print STDERR "Processing grammar files (only)\n" if ($verbose);
+	&process_grammar_files();
+    } else {
+	&process_src_files;
+	&process_interface_files;
+	&generate_program_list_page;
+	&generate_figure_list_page;
+	&generate_index_page;
+	&generate_toc_page;
+	&generate_pdf;
+    }
 
 }
