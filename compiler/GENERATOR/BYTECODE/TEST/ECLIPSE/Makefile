@@ -20,13 +20,13 @@ java_indenter: dummies
 
 beta_indenter: dummies
 	cd ..; rm -rf jvm; jbeta -s 188 tstenv.bet
-	jbeta -qwp -s 188 BetaAutoIndentStrategy.bet
+	jbeta -qw -s 188 BetaAutoIndentStrategy.bet
 
 eclipse:
 	javac -classpath jvm -d jvm Eclipse.java
 
 install: clean beta_indenter
-	cp ../jvm/*.class $(ECLIPSE_INSTALLDIR)
+	cp -r ../jvm/beta $(ECLIPSE_INSTALLDIR)
 	cp jvm/org/eclipse/ui/betaeditor/beta/*.class $(ECLIPSE_INSTALLDIR)/org/eclipse/ui/betaeditor/beta
 
 java_install: clean java_indenter
