@@ -17,6 +17,10 @@
 #define DEFAULT_CBFASIZE   1 * Kb
 #endif
 
+#ifndef DEFAULT_DOTSIZE
+#define DEFAULT_DOTSIZE   0
+#endif
+
 #ifndef DEFAULT_AOAMINFREE
 #define DEFAULT_AOAMINFREE     100 * Kb
 #endif

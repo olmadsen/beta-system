@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1991-02-11 14:27:55 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1991-02-26 08:54:22 $, SID: $Revision: 1.4 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -104,6 +104,16 @@ IOAGc()
        current += 3;
      }
      CompleteScavenging();
+  }
+
+  if( DOTSize > 0 ){
+    /* The Debugger Object Table is in use, so traverse this table. */
+    ptr(long) current = DOT;
+    while( current < DOTTop){
+      if( *current != 0 ) ProcessReference( current);
+      current++;
+    }
+    CompleteScavenging();
   }
 
 #ifdef AO_Area  
