@@ -859,7 +859,8 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
   if (invops) {
     fprintf (output,"FATAL: ValhallaOnProcessStop re-entered\n");
 #ifdef UNIX
-    DEBUG_CODE(fprintf(output,"Sleeping for 10 minuttes...\n"); sleep(10*60));
+    DEBUG_CODE(fprintf(output,"debuggee: sleeping for 10 minuttes...\n"); sleep(10*60));
+    DEBUG_CODE(fprintf(output, "debuggee: 10 minuttes past - dying...\n"));
 #endif /* UNIX */
     exit(99);
   } else {

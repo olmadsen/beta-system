@@ -132,8 +132,9 @@ void Illegal()
 #ifdef RTVALHALLA
 #ifdef UNIX
     if (valhallaID){
-      fprintf(output, "debuggee: Illegal called. Sleeping for 10 minuttes\n");
+      fprintf(output, "debuggee: Illegal called. sleeping for 10 minuttes...\n");
       sleep(10*60);
+      fprintf(output, "debuggee: 10 minuttes past - dying...\n");
     }
 #endif /* UNIX */
 #endif /* RTVALHALLA */

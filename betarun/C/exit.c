@@ -114,8 +114,9 @@ void BetaExit(long number)
     /* Tell valhalla that we are terminating: */
     ValhallaOnProcessStop (0,0,0,0,0);
 #ifdef UNIX
-    DEBUG_CODE(fprintf(output, "debuggee: sleeping for 10 minuttes.\n"));
+    DEBUG_CODE(fprintf(output, "debuggee: sleeping for 10 minuttes...\n"));
     DEBUG_CODE(sleep(10*60));
+    DEBUG_CODE(fprintf(output, "debuggee: 10 minuttes past - dying...\n"));
 #endif
   }
 #endif /* RTVALHALLA */
