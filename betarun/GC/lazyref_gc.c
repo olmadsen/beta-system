@@ -1,6 +1,14 @@
 #ifdef RTLAZY
 
 
+/* Created by Soren Brandt.
+ * 
+ * Necessary low level additions to the BETA RTS needed to handle
+ * lazy references to persistent objects. In addition a number of 
+ * changes has been made to other parts of the runtime system.
+ * These changes are all enclosed in #ifdef RTLAZY to be able
+ * to compile the RTS without them. */
+
 #include "../C/beta.h"
 
 
