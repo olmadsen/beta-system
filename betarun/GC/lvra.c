@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $Id: lvra.c,v 1.32 1992-10-27 08:26:04 beta Exp $
+ * Mod: $Id: lvra.c,v 1.33 1992-10-27 16:14:46 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
@@ -13,7 +13,7 @@ int LVRAAlive();
 #endif
 static LVRAConstructFreeList();
 
-#define TableMAX 15
+#define TableMAX 16
 
 struct LVRABlock *LVRABaseBlock;
 struct LVRABlock *LVRATopBlock;
@@ -33,7 +33,7 @@ long LVRAFreeListMemory;
 
 static struct ValRep *LVRATable[TableMAX+1];
 
-DEBUG_CODE(long LVRATabNum[16] );
+DEBUG_CODE(long LVRATabNum[TableMAX+1] );
 
 #ifdef RTDEBUG
 int LVRAAlive(theRep)
