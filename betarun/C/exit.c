@@ -12,26 +12,13 @@ void BetaExit( number )
 {
 #ifdef RTDEBUG
   char buf[100];
-#ifdef crts
-  extern long GetJumpStackSize(void);
-#endif
 #endif /* RTDEBUG */
 
   InfoS_End();
 #ifdef RTDEBUG
-#ifdef CRUN
-  { extern int NumAlloI;
-    sprintf(buf, "NumAlloI: %d, NumIOAGc: %d, NumAOAGc: %d, NumLVRAGc: %d", 
-	    (int)NumAlloI, (int)NumIOAGc, (int)NumAOAGc, (int)NumLVRAGc);
-  }
-#else
-  sprintf(buf, "NumAlloI: %d, NumIOAGc: %d, NumAOAGc: %d, NumLVRAGc: %d", 
-	  (int)NumAlloI, (int)NumIOAGc, (int)NumAOAGc, (int)NumLVRAGc);
-#endif
+  sprintf(buf, "NumIOAGc: %d, NumAOAGc: %d, NumLVRAGc: %d", 
+	  (int)NumIOAGc, (int)NumAOAGc, (int)NumLVRAGc);
   Notify(buf);
-#ifdef crts
-  fprintf(output,"jmp-buf stack: %d\n",GetJumpStackSize());
-#endif
 #endif /* RTDEBUG */
 #ifdef apollo
   AsmExit( number );
@@ -83,6 +70,9 @@ void BetaError(errorNo, theObj)
 #error Find out Stack End for hppa without Reference Stack
 #endif /* REFSTACK */
 #endif /* hppa */
+#ifdef crts
+      getret(thePC);
+#endif
 
 #if !(defined(hppa) || defined(sparc) || defined(crts))
       /* Ordinary MOTOROLA-like stack */

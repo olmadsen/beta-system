@@ -406,7 +406,6 @@ void Initialize()
   InterpretItem[1] = 0;
   
 #ifdef RTDEBUG
-  Notify("RTS Version: 2.7");
   Notify("RTS: Garbage collector may perform consistency checks on heaps (use BETART).");
 #endif
   

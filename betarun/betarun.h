@@ -5,7 +5,7 @@
  * Copyright (C) 1992-94 Mjolner Informatics Aps.
  * Written by Ole Lehrmann Madsen, Jacob Seligmann, and Peter Andersen.
  *
- * $Id: betarun.h,v 1.8 1995-01-24 11:00:06 beta Exp $
+ * $Id: betarun.h,v 1.9 1995-02-03 09:49:59 beta Exp $
  *
  */
 
@@ -124,7 +124,7 @@ extern void Trap(void);
      are pushed on the stack. The first parameter on the stack is then the		\
      seventh parameter and so one.							\
    */											\
-  dReg = *(long *)(oldStackPtr+(23+parNo-7)*4);
+  dReg = *(long *)(oldStackPtr+(23+parNo-7));
 
 #define SaveCompState()
 
@@ -219,7 +219,7 @@ extern void Trap(void);
 #define CallBackPar6(dReg) (dReg = arg6)
 
 #define CallBackParN(oldStackPtr, dReg, parNo)	\
-    dReg = *(long *)(oldStackPtr+(parNo-1)*4);
+    dReg = *(long *)(oldStackPtr+(parNo-1));
 
 #endif /* sgi */
 
@@ -247,7 +247,7 @@ extern void PPC_RestoreCompState(void);
 #define CallBackParN(oldStackPtr, dReg, parNo) \
     if (parNo==7) dReg = arg7;                 \
 	else if (parNo==8) dReg = arg8;            \
-	else dReg = *(long *)(oldStackPtr+(24*4)+(parNo-1)*4);
+	else dReg = *(long *)(oldStackPtr+(24)+(parNo-1));
 
 #define CallBackPascalPar1(dReg) (dReg = *(long *)(ParamPtr+(1-1)))
 #define CallBackPascalPar2(dReg) (dReg = *(long *)(ParamPtr+(2-1)))
@@ -306,7 +306,7 @@ extern void 			CopyT(char *asciz, struct Item *theItem, unsigned offset);
 extern void 			CopyVR(struct ValRep *theRep, struct Object *theObj, unsigned offset);
 extern void			ExtRR(struct Object *theObj, unsigned offset, long add);
 extern void			ExtVR(struct Object *theObj, unsigned offset, long add);
-extern void			HandleIndexErr(struct Item *this, struct Component *comp);
+extern void			HandleIndexErr(struct Item *this);
 extern void 			MkTO(char *cText, struct Item *theItem, unsigned offset);
 extern void			Return(void);
 extern void			RefNone(struct Object *theObj);

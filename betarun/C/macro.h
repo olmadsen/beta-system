@@ -119,7 +119,7 @@
 
 #if defined(macintosh) || defined(MAC)
 #  define MALLOC(size) NewPtr(size)
-#  define REALLOC(src,size) xxxxxxxPtr(src,size)
+#  define REALLOC(src,size) 0
 #  define FREE(ptr) DisposPtr((Ptr)ptr)
 #else
 #  define FREE(ptr) free(ptr)

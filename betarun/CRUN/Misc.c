@@ -72,9 +72,12 @@ void
 #ifdef hppa
     theObj = (struct Object *)getThisReg(); /* Get current object */
 #endif
+#ifdef crts
+  BetaError(RefNoneErr,theObj);
+#else
   BetaError(RefNoneErr, theObj);
+#endif
 #endif /* hppa && RTLAZY */
-  
 }
 
 #ifdef sparc
@@ -95,7 +98,6 @@ void SetArgValues(int argc, char *argv[])
 }
 #endif
 
-#ifdef MAC
 
 /* GC/PerformGC.c: Not declared in function.h, doGC should only be 
  * called from IOA(c)lloc or DoGC.
@@ -184,8 +186,6 @@ char *
   
   return p;
 }
-
-#endif /* MAC */
 
 #ifdef sparc
 #ifdef sun4s
@@ -289,8 +289,8 @@ signed long SignExtWord(signed short a)
 
 #ifdef RTDEBUG
 
+#if 0
 long memcnt=0;
-#define INFO_ALLOC(size) {\
   memcnt+=size; \
   DEBUG_IOA(fprintf(output, "jmp-alloc: 0x%x total 0x%x\n",size, memcnt)); }
 #define INFO_FREE(size) {\
@@ -299,7 +299,7 @@ long memcnt=0;
 #else
 #define INFO_FREE(size)
 #endif
-
+#endif
 
 /* Basis type in pool of jump buffers */
 typedef struct jmpInfoElem {
@@ -322,8 +322,14 @@ void initJmpPool()
 }
 
 void reallocJmpList()     
-{
+{ long off;
   fprintf(output,"***ERROR: Jump Stack Overflow...\n"); fflush(output); exit(1);
+#if 0
+  off= (long)jmp_buf_stack_top-(long)jmp_buf_stack;
+  jmp_buf_stack = (jmpInfoElem **) REALLOC(jmp_buf_stack,
+					 2*JmpStackSize*sizeof(jmpInfoElem*));
+  jmp_buf_stack_top=(jmpInfoElem **) (long)jmp_buf_stack+off;
+#endif
 }
 
 long GetJumpStackSize(void)
@@ -339,7 +345,7 @@ void PackAndFreeJmpBuf(long dest)
   }
   *(long*)dest=long_size; /* save long_size */
   dest+=4;
-  memcpy((char*)dest, jmp_buf_stack, long_size*4);
+  memcpy(dest, jmp_buf_stack, long_size*4);
   jmp_buf_stack_top=jmp_buf_stack; /* reset */
 }
 void UnPackAndAllocateJmpBuf(long src, long long_size)
@@ -348,7 +354,7 @@ void UnPackAndAllocateJmpBuf(long src, long long_size)
     jmp_buf_stack_top=jmp_buf_stack; /* reset */
     return;
   }
-  memcpy((char*)jmp_buf_stack, (char*)src, long_size*4);
+  memcpy(jmp_buf_stack, src, long_size*4);
   jmp_buf_stack_top = (jmpInfoElem *) ((long)jmp_buf_stack+(long_size*4));
 }
 
@@ -373,11 +379,9 @@ jmp_buf *GetJmpBuf(int addr, int off)
   jmp_buf_stack_top++;
   info->refTop = RefSP;
   *(jmpInfoElem **)(addr+off) = info;
-  /*fprintf(output,"GetJmpBuf (0x%x,%d)\n",addr,off);*/
   return &(info->jumpBuffer);
 }
 
-/*static long old_size=0;*/
 
 void FreeJmpBuf(int addr, int off)
 {
@@ -399,11 +403,6 @@ void FreeJmpBuf(int addr, int off)
   } else {
     fprintf(output,"WARNING: attempt to clear jmp_buf 0 in 0x%x, off: %d\n",addr,off);
   }
-  /*fprintf(output,"FreeJmpBuf (0x%x,%d)\n",addr,off);
-  if (old_size<GetJumpStackSize()) {
-    fprintf(output,"FreeJmpBuf Grow: (%d,%d)\n",old_size,GetJumpStackSize());
-    old_size=GetJumpStackSize();
-  }*/
 }
 
 /* 1. get ref. to stateinfo from a1[off]  */

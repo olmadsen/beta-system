@@ -4,7 +4,7 @@
    		    thus one can use the headsize macro
  */
 
-struct ProtoType{
+typedef struct ProtoType{
     short           GCTabOff;  /* Offset to the GC Table            */
     short           OriginOff; /* Where should the origin be        */
     ptr(long)       GenPart;   /* Reference to the generation code  */
@@ -14,37 +14,37 @@ struct ProtoType{
     short           FormInx;   /* FragmentForm index of this object-desc */
     short           AstRef;    /* AST index of this object-desc.*/
     long            (*CallBackRoutine)();
-};
+} ProtoType;
 
-struct Object{ 
+typedef struct Object{ 
     ref(ProtoType)  Proto;     /* Reference to the Prototype */
     long            GCAttr;    /* The GC attribute           */
     long            Body[1];   /* The body part              */ 
-};
+} Object;
 
-struct Item{ 
+typedef struct Item{ 
     ref(ProtoType)  Proto;     /* Reference to the Prototype */
     long            GCAttr;    /* The GC attribute           */
     long            Body[1];   /* The body part              */ 
-};
+} Item;
 
-struct DopartObject{ 
+typedef struct DopartObject{ 
     ref(ProtoType)  Proto;     /* Reference to the Prototype */
     long            GCAttr;    /* The GC attribute           */
     ref(Object)     Origin;    /* Origin of dopart object    */
     long            Size;      /* Size in BYTES of body      */
     long            Body[1];   /* The body part              */ 
-};
+} DopartObject;
 
-struct StackObject{
+typedef struct StackObject{
     ref(ProtoType)  Proto;     /* Reference to the Prototype  */
     long            GCAttr;    /* The GC attribute            */
     long            BodySize;  /* The size of the body part   */
     long            StackSize; /* Size of the packed stack    */
     long            Body[1];   /* The body part               */ 
-};
+} StackObject;
 
-struct Component{
+typedef struct Component{
     ref(ProtoType)  Proto;     /* Reference to the Prototype  */
     long            GCAttr;    /* The GC attribute            */
     ref(StackObject)StackObj;  /* Packed stack (suspended) 
@@ -54,34 +54,34 @@ struct Component{
     long            CallerLSC; /* Local sequence counter in
 				  calling object              */ 
     long            Body[1];   /* The body part               */ 
-};
+} Component;
 
-struct ValRep{
+typedef struct ValRep{
     ref(ProtoType)  Proto;     /* Reference to the Prototype  */
     long            GCAttr;    /* The GC attribute            */
     long            LowBorder; /* Lower bound of range        */
     long            HighBorder;/* Higher bound of range       */
     long            Body[1];   /* The body part               */ 
-};
+} ValRep;
 
-struct RefRep{
+typedef struct RefRep{
     ref(ProtoType)  Proto;     /* Reference to the Prototype  */
     long            GCAttr;    /* The GC attribute            */
     long            LowBorder; /* Lower bound of range        */
     long            HighBorder;/* Higher bound of range       */
     long            Body[1];   /* The body part               */ 
-};
+} RefRep;
 
-struct Structure{
+typedef struct Structure{
     ref(ProtoType)  Proto;     /* StructurePTValue	      */
     long            GCAttr;    /* The GC attribute            */
     ref(Object)     iOrigin;   /* The origin of the structure */
     ref(ProtoType)  iProto;    /* The protoType of the struc  */
     long	    Body[1];   /* Dummy. Makes headsize work. */
-};
+} Structure;
 
 /* Block is memory unit for AOArea and LVRArea. */
-struct Block{
+typedef struct Block{
     ref(Block)      next;      /* Refernece to the next Block     */
     union { 
              ptr(long) nextTop; 
@@ -89,24 +89,24 @@ struct Block{
           } info;
     ptr(long)       top;       /* Refers the top in this(Block)   */
     ptr(long)       limit;     /* Refers the limit of this(Block) */
-};
+} Block;
 
-struct LVRABlock{
+typedef struct LVRABlock{
     ref(LVRABlock)  next;
     long            state;
     ptr(long)       top;
     ptr(long)       limit;
-};
+} LVRABlock;
 
-struct CallBackFrame {
+typedef struct CallBackFrame {
     ref(CallBackFrame)  next;
 #if !(defined(hppa) && defined(REFSTACK))
     ptr(long)           betaTop;
 #endif
     long                tmp;
-};
+} CallBackFrame;
 
-struct CallBackEntry {
+typedef struct CallBackEntry {
 #ifdef crts
     ref(Structure)      theStruct;
 #ifdef __powerc
@@ -144,7 +144,7 @@ struct CallBackEntry {
     char                rts;
     short               disp; /* Only used for pascal and std call */
 #endif
-};
+} CallBackEntry;
 
 #ifdef linux
 #define CallBackEntrySize 10
@@ -157,35 +157,35 @@ struct CallBackEntry {
 #endif
 
 
-struct CallBackArea {
+typedef struct CallBackArea {
   ref(CallBackArea) next;
   ref(CallBackEntry) entries;
-};
+} CallBackArea;
 
-struct ComponentBlock{
+typedef struct ComponentBlock{
     ref(CallBackFrame)  callBackFrame;
     ref(ComponentBlock) next;
     long                level;
 #ifdef hppa
     void *              RefBlock;
 #endif
-};
+} ComponentBlock;
 
-struct GCEntry {
+typedef struct GCEntry {
     unsigned short StaticOff;
     short OrigOff;
     ref(ProtoType) Proto;
-};
+} GCEntry;
 
-struct PartObject {
+typedef struct PartObject {
     ref(ProtoType) Proto;
     long OrigOff;
-};
+} PartObject;
 
 /* Statistic structs */
 
 #ifdef GATHERSTATS
-struct IOAStatistic {
+typedef struct IOAStatistic {
    long NumOfMoved;
    long SizeOfMoved;
    long NumOfStatic;
@@ -195,9 +195,19 @@ struct IOAStatistic {
    long TotalSizeOfMoved;
    long TotalNumOfStatic;
    long TotalSizeOfStatic;
-};
+} IOAStatistic;
 #endif
 
+#ifdef crts
+typedef struct group_header
+{  
+  long                *code_start;
+  long                *code_end;
+  long                *protoTable;
+  long                *form_id;
+  long                NoOfPrototypes;
+} group_header;
+#else
 typedef struct group_header
 {
   struct group_header *self;
@@ -206,6 +216,7 @@ typedef struct group_header
   long                code_start;
   long                code_end;
 } group_header;
+#endif
 
 #if defined(linux) || defined(nti)
 /* Header files do not declare this! */

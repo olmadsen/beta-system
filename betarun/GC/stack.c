@@ -396,15 +396,10 @@ void ProcessStack()
     /* StackEnd points to the activation record of doGC, which in turn was called
      * from either DoGC, or IOA(c)alloc.
      */
-    DEBUG_CODE( PC=((struct RegWin *) StackEnd)->i7 +8);
     StackEnd = (long *)((struct RegWin *) StackEnd)->fp; /* Skip AR of doGC() */
-#if 0
-    /* IOA(c)alloc is now inlined ! 
-     */
     DEBUG_CODE( PC=((struct RegWin *) StackEnd)->i7 +8);
     StackEnd = (long *)((struct RegWin *) StackEnd)->fp
       /* Skip AR of IOA(c)alloc / DoGC() / lazyFetchIOAGc() */;
-#endif
 
 #ifdef RTDEBUG
     for (theAR =  (struct RegWin *) StackEnd;

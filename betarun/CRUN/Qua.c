@@ -238,7 +238,7 @@ void OQua(struct Object **theCell,
 	     */
 	    if (src->Proto == StructurePTValue){
 #ifdef sparc
-	      Protect(dstQuaOrigin, src = cast(Object) SPARC_AlloSI(cast(Structure)src, 0, 0, 0, 0));
+	      Protect(dstQuaOrigin, src = cast(Object) CAlloSI(cast(Structure)src, 0, 0, 0, 0));
 #endif
 #ifdef hppa
 	      Protect(dstQuaOrigin, src = cast(Object) CAlloSI(cast(Structure)src));

@@ -6,6 +6,11 @@
  * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, and Jacob Seligmann
  */
 
+#ifdef crts
+#undef sparc
+#undef hppa
+#endif
+
 #include <stdio.h>
 
 extern long *BETA_data1; /* C-variable */
@@ -54,17 +59,14 @@ extern long *BETA_end; /* C-variable */
 
 #ifdef crts
 #include "crtsdep.h"
-#define CRUN
 #endif
 
 #ifdef sparc
 #include "sparcdep.h"
-#define CRUN
 #endif
 
 #ifdef hppa
 #include "snakedep.h"
-#define CRUN
 #endif
 
 #ifdef __STDC__

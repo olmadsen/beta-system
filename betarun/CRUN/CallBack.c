@@ -97,6 +97,7 @@ long CBstub(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6)
 }
 #endif
 
+
 void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 {
   if (!theStruct) return (void *)0 /* NULL function pointer given to C */;
@@ -123,7 +124,7 @@ void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 #endif
 }
 
-#ifdef _powerc
+#ifdef __powerc
 
 void *CopyPPP(ref(Structure) theStruct, long size, ref(Object) theObj, long univProcInfo)
 {
@@ -183,8 +184,7 @@ void *CopyPPP(ref(Structure) theStruct, long size, ref(Object) theObj, long univ
   ++CBFATop;
   return (void *)(myCallBack);
 }
-#endif /* _powerc */
-
+#endif
 #endif /* crts */
 
 /**************************** sparc **************************/
@@ -264,7 +264,7 @@ long HandleCB(long a1, long a2, long a3, long a4, long a5, long a6)
     tmp     = 0;
     ActiveCallBackFrame = cast(CallBackFrame) StackPointer;
 
-    theObj = SPARC_AlloI(cb->theStruct->iOrigin, 0, cb->theStruct->iProto, 0, 0);
+    theObj = CAlloI(cb->theStruct->iOrigin, 0, cb->theStruct->iProto, 0, 0);
 
     /* Call the CallBack stub, with out first four args in %i1..%i4, and
        the rest on stack from %i5 and onwards */

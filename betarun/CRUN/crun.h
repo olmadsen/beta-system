@@ -15,16 +15,12 @@ extern struct Component*AlloC();
 extern struct Item     *AlloI();
 #endif
 
-/*
 extern char	       *IOAalloc();
 extern char	       *IOAcalloc();
-*/
 
 #ifdef sparc
-/* Wrappers for functions called from RTS */
-extern struct Item      *SPARC_AlloI(struct Object *origin, int i1, struct ProtoType *proto, int i3, int i4);
-extern struct Component *SPARC_AlloC(struct Object *origin, int i1, struct ProtoType *proto, int i3, int i4);
-
+extern struct Component*CAlloC();
+extern struct Item     *CAlloI();
 /* binding of entry names */
 extern void 		CinitT() asm("CinitT");
 extern ref(StackObject) AlloSO() asm("AlloSO");
@@ -83,7 +79,7 @@ long_clear(char *p, unsigned bytesize)
   register long i;
 #ifdef RTDEBUG
   if (bytesize&3)
-    fprintf(output, "What! bytesize&3 != 0\n");
+    fprintf(stderr, "What! bytesize&3 != 0\n");
 #endif
   for (i = bytesize-4; i >= 0; i -= 4)
     *(long *)(p+i) = 0;	/* Ugly Hacks Work Fast */
@@ -94,22 +90,6 @@ long_clear(char *p, unsigned bytesize)
 {  register long i;                         \
    for (i = (bytesize)-4; i >= 0; i -= 4)     \
        *(long *)(((char *)(dst))+i) = *(long *)(((char *)(src))+i); \
-}
-
-#ifdef MAC
-static void 
-#else
-static inline void 
-#endif
-zero_check(char *p, unsigned bytesize)
-{
-  register long i;
-#ifdef RTDEBUG
-  if (bytesize&3)
-    fprintf(output, "What! bytesize&3 != 0\n");
-#endif
-  for (i = bytesize-4; i >= 0; i -= 4)
-    if (*(long *)(p+i) != 0) fprintf(output, "zero_check failed\n");	
 }
 
 #ifdef MAC

@@ -34,7 +34,11 @@
 #define JUMP_TABLE(addr) (*(long *)(((long)(addr))+2))
 #define G_Part(proto) (long) JUMP_TABLE(proto->GenPart)
 #else
+#ifdef __powerc
+#define G_Part(proto) ((long) *(long*)proto->GenPart)
+#else
 #define G_Part(proto) (long) proto->GenPart
+#endif
 #endif
 
 static long M_Part(ref(ProtoType) proto)
@@ -52,6 +56,25 @@ static long M_Part(ref(ProtoType) proto)
       *
       * Should ONLY be called for a prototype which is known to correspond to 
       * object with do-part.
+	  * 
+	  * CRTS: prototype is, e.g.
+	  * long T18TSTVIRT[]={
+	        (48<<16)|(0xffff&2),
+			(long)&G18TSTVIRT,
+			(long)T15TSTVIRT,
+			(4<<16)|(0xffff&0),
+			(1<<16)|(0xffff&1090),
+			0,
+			0,
+			(long)&M15TSTVIRT, M-entry of prefix
+			0,
+			(long)&M18TSTVIRT, M-entry
+			0,
+			(long)&Return,
+			(0<<16)|(0xffff&10),
+			0,
+			(long)&V20
+		}; / *innerTableSize=3 * /
       */
 {
   extern void Return();
@@ -66,6 +89,7 @@ static long M_Part(ref(ProtoType) proto)
 	": "=r" (ret));
 #endif
 
+#ifndef crts
   m = (long *)proto - 1;
   r = m - 1;
   while ( (*r != ret) && (r != 0) ){
@@ -73,11 +97,25 @@ static long M_Part(ref(ProtoType) proto)
     m = r;
     r = m - 1;
   }
+#else /* crts */
+  m = (long *)proto + 7; /* first M-Part */
+  r = m + 2; /* next M-Part (possible Return) */
+  while ((r != 0) && (*r != ret)){
+    /* r != 0 just to avoid segmentation fault if something is wrong */
+    m = r;
+    r = m + 2;
+  }
+#endif /* !crts */
+  
   /* fprintf(output, "*m: 0x%x\n", *m); fflush(output); */
 #ifdef macintosh
   return JUMP_TABLE(*m);
 #else
+#ifdef __powerc
+  return *(long*)(*m);
+#else
   return *m;
+#endif
 #endif
 }
 
@@ -153,7 +191,22 @@ static ptr(char) ProtoTypeName(theProto)
   }
 #endif
 
+#ifdef crts
+/* skip 0's: at this point dyn points to prototype:
+  dyn      -> .half 0
+	      .half 0
+	      .half 0 
+	      .long ptr to ptr to text
+  * or
+  dyn      -> .half 0
+	      .half 0
+	      .long ptr to ptr to text
+  */
+  while ((*dyn)==0) dyn++;
+  return (char*) (**(long**)dyn);
+#else
   return (ptr(char)) dyn;
+#endif
 }
 
 /* c_on_top is used by beta.dump (only) to determine if things on top
@@ -166,7 +219,124 @@ static signed long c_on_top;
  * data-segments, in order to implement InitFragment.
  * It must be non-static.
  */
-struct group_header* NextGroup (struct group_header* current)
+
+#ifdef crts
+
+extern void BETA_code_end(void);
+
+/* NameOfGroup return the groupName corresponding to the group_header
+ * given as parameter. */
+char* NameOfGroup (group_header *group)
+{
+   return (char*) (*group->form_id);
+}
+
+static long* CURRENT_BETA_DATA;
+group_header* NextGroup (group_header* current)
+{ 
+  if (current) {
+    CURRENT_BETA_DATA++;
+    /*DEBUG_CODE(fprintf (output, "NextGroup. current = 0x%x\n", (long)CURRENT_BETA_DATA));*/
+    return (group_header *)*CURRENT_BETA_DATA;
+  } else {
+    CURRENT_BETA_DATA= (long*) &BETA_data1;
+    /*DEBUG_CODE(fprintf (output, "NextGroup. current = 0x%x\n", (long)CURRENT_BETA_DATA));*/
+    return (group_header *)*CURRENT_BETA_DATA;
+  }
+}
+
+int IsBetaPrototype(group_header *gh, long data_addr) 
+{ long* proto=gh->protoTable;
+  int i;
+  for (i=0; i<gh->NoOfPrototypes; i++)
+    if ((*proto)==data_addr) 
+       return 1;
+     else
+       proto++;
+  return 0;
+}
+
+/* GroupName is used by DisplayBetaStack (beta.dump) and objinterface.bet.
+ * It must be non-static.
+ */
+char *GroupName(long address, int isCode)
+{
+  group_header *group;
+  group_header *current;
+  group_header *last;
+  signed long dist, distance;
+  
+  TRACE_GROUP(fprintf (output, 
+		       "GroupName(addr: 0x%x, %s)\n",
+		       (int)address,
+		       isCode ? "code" : "data"));
+
+  current = last = group = NextGroup (0);  /* first (betaenv) data segment */
+#ifdef __powerc
+  if (isCode && (address<(*(long*)current->code_start))) { /* code addr < betaenv code start */
+#else
+  if (isCode && (address<current->code_start)) { /* code addr < betaenv code start */
+#endif
+     c_on_top++;
+     TRACE_GROUP(fprintf (output, "c_on_top\n"));
+     return ""; 
+  }
+  distance = MAXINT;
+  
+  while (current){
+    
+    if (!isCode) { /* data address; try find a Prototype... */
+       if (IsBetaPrototype(current,address))
+	  return NameOfGroup (current);
+    } else {
+#ifdef __powerc
+      dist = address - (*(long*)current->code_start);
+#else
+      dist = address - (long)current->code_start;
+#endif
+      if (dist >= 0 && dist < distance) {
+        distance = dist;
+        group = current;
+      }
+    }
+    TRACE_GROUP(if (isCode){
+      fprintf(output, 
+	      " cur->code: 0x%x-0x%x, dist: %d: %s\n", 
+	      (int)current->code_start,
+	      (int)current->code_end,
+	      (int)distance, 
+	      NameOfGroup(current));
+    } else {
+      fprintf(output, 
+	      " cur: 0x%x, dist: %d: %s\n", 
+	      (int)current,
+	      (int)distance, 
+	      NameOfGroup(current));
+    });
+    last = current;
+    current = NextGroup (current);
+  }
+  if (isCode && (address>(long)BETA_code_end)) { /* code addr > code end */
+    c_on_top++; 
+    return ""; 
+  } else {
+    /* GroupName succeeded. From now on we are in the beta-stack */
+    c_on_top=MININT;
+  }
+
+  return NameOfGroup (group);
+}
+
+#else /* !crts */
+
+/* NameOfGroup return the groupName corresponding to the group_header
+ * given as parameter. */
+char* NameOfGroup (struct group_header *group)
+{
+   return (char *) &(group->protoTable[(group->protoTable[0]) + 1]);
+}
+
+group_header* NextGroup (group_header* current)
      /* Return group in executable following current. 
       * If current is NULL, first group is returned. */
 { 
@@ -195,22 +365,14 @@ struct group_header* NextGroup (struct group_header* current)
   }
 }
 
-/* NameOfGroup return the groupName corresponding to the group_header
- * given as parameter. */
-char* NameOfGroup (struct group_header *group)
-{
-  return (char *) &(group->protoTable[(group->protoTable[0]) + 1]);
-}
-
-
 /* GroupName is used by DisplayBetaStack (beta.dump) and objinterface.bet.
  * It must be non-static.
  */
 char *GroupName(long address, int isCode)
 {
-  struct group_header *group;
-  struct group_header *current;
-  struct group_header *last;
+  group_header *group;
+  group_header *current;
+  group_header *last;
   signed long dist, distance;
   
   TRACE_GROUP(fprintf (output, 
@@ -229,7 +391,6 @@ char *GroupName(long address, int isCode)
     TRACE_GROUP(fprintf (output, "c_on_top\n"));
     return ""; 
   }
-  
   distance = MAXINT;
   
   while (current){
@@ -238,7 +399,7 @@ char *GroupName(long address, int isCode)
      * of current segment than previous segments 
      */
     if (isCode)
-      dist = address - current->code_start;
+      dist = address - (long)current->code_start;
     else
       dist = address - (long) current;
     if (dist >= 0 && dist < distance) {
@@ -267,7 +428,7 @@ char *GroupName(long address, int isCode)
       (isCode && (address>last->code_end))       /* code addr > code end */
       || 
 #endif
-      (!isCode && (address>(long)last->next)) ){ /* data addr > data end */
+         (!isCode && (address>(long)last->next)) ){ /* data addr > data end */
     c_on_top++; 
     return NULL; 
   } else {
@@ -277,6 +438,8 @@ char *GroupName(long address, int isCode)
 
   return NameOfGroup (group);
 }
+
+#endif
 
 static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, int print_origin)
 {
@@ -891,12 +1054,6 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
       if (theAR->fp != (long) nextCompBlock)
 	DisplayAR(output, theAR, PC);
     }
-  }
-#endif
-
-#ifdef crts
-  {
-    fprintf(output, " DisplayBetaStack <NYI> \n ");
   }
 #endif
 

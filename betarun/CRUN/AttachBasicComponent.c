@@ -37,6 +37,7 @@ ParamThisComp(void, AttBC)
 
 #ifdef crts
     lastCompBlock = (void *)RefSP;
+    StackStart = (long)RefSP; /* for beta.dump */
     GetStackPointer(baseStackPtr);
     getret(comp->CallerLSC);
 #endif
