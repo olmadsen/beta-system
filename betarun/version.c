@@ -1,7 +1,42 @@
-char betarun_version[] = "BETARUN VERSION 5.3(74)";
+char betarun_version[] = "BETARUN VERSION 5.3(74+)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.81  2002/03/13 14:14:20  henryml
+ * Betarun version number: 74
+ * Developer: hml+pa
+ *
+ * M C/constant.h
+ * M C/define.h
+ * M C/group.c
+ * M C/initialize.c
+ * M C/labelnametable.c
+ * M C/macro.h
+ * M C/object.h
+ * M C/outpattern.c
+ * M C/rtdebug.c
+ * M GC/newrun_stack.c
+ * M GC/stack.c
+ * M NEWRUN/CallBack.c
+ * M NEWRUN/Misc.c
+ * M NEWRUN/Suspend.c
+ *
+ *
+ * Lots of changes for macosx:
+ *
+ *    - Fixed Att
+ *    - Fixed stacktraversal
+ *    - Fixed labellookup
+ *    - Fixed Illegal() to break
+ *    - Changed all macppc to ppcmac
+ *    - Checked all ppcmac dependencies for macosx specifics
+ *
+ * In previous commits:
+ *
+ *    - Made mbs_make work
+ *    - Made betarun_ugc compile
+ *    - Made sockets.c compile
+ *
  * Revision 1.80  2002/03/10 17:37:05  henryml
  * Betarun version number: 73+++ (hml)
  *
