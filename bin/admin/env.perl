@@ -14,7 +14,7 @@
 # - The rest is only set at perl-vars, as exporting may be a bad thing to do
 #
 #   betalib	    set to the betalib with unixstyle '/' as seperator.
-#   SDK             set to SDK used (NTI only)
+#   MIASDK          set to SDK used (NTI_* only)
 #   TMP             set to either $TMP or '/tmp' or 'c:/temp' whichever exists.
 #   OS              set to either WIN, UNIX or MAC
 #   CURRENTDIR      set to '.' or ':' or whatever current-directory is.
@@ -41,11 +41,13 @@ require "utils.perl";
 
 $betalib=$ENV{'BETALIB'} || die "BETALIB must be set!\n";
 
-@MachineTypes = ('NTI', 'SUN4S', 'HPUX9PA', 'LINUX', 'SGI', 'PPCMAC');
-@ObjDirs =  ('nti', 'sun4s', 'hpux9pa', 'linux', 'sgi', 'ppcmac');
+@MachineTypes = ('NTI_MS', 'NTI_GNU', 'NTI_BOR', 'SUN4S', 'HPUX9PA', 'LINUX', 'SGI', 'PPCMAC');
+@ObjDirs =  ('nti_ms', 'nti_gnu', 'nti_bor', 'sun4s', 'hpux9pa', 'linux', 'sgi', 'ppcmac');
 @OsTypes = ('WIN', 'UNIX', 'MAC');
 
-%ObjExt = ('nti', 'obj',
+%ObjExt = ('nti_ms', 'obj',
+	   'nti_gnu', 'obj',
+	   'nti_bor', 'obj',
 	   'sun4s', 'o',
 	   'hpux9pa', 'o',
 	   'linux', 'o',
@@ -57,13 +59,13 @@ if (-e "c:\\") {
     $PARENTDIR='..';
     $betalib =~ s#\\#/#g;
     $OS='WIN';
-    $MACHINETYPE = "NTI";
-    if ($ENV{'OBJDIR'} =~ /^nti\_(ms|bor|gnu)$/) {
-	$SDK = $1;
-	$objdir = $ENV{'OBJDIR'};
+    if ($ENV{'MIASDK'} =~ /^(ms|bor|gnu)$/i) {
+	$MIASDK = $1;
+	$MACHINETYPE = "\UNTI_$MIASDK";
+	$objdir = "\L$MACHINETYPE";
     } else {
-	$SDK = $ENV{'SDK'} || "ms";
-	$objdir = "nti/$SDK";
+	print "MIASDK not set, giving up\n";
+	exit 1;
     }
     # LD_ stuff cannot be set here on nti. If you need it, you should set it!
     $TMP = $ENV{'TMP'} || $ENV{'TEMP'} || "c:/temp";
