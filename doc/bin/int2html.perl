@@ -198,7 +198,7 @@ EOT
 EOT
 }
 
-sub print_index_header
+sub print_index_header()
 {
     print<<EOT;
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
@@ -228,7 +228,7 @@ EOT
 EOT
 }
 
-sub print_index_trailer
+sub print_index_trailer()
 {
     print<<EOT;
 </PRE>
@@ -259,7 +259,7 @@ EOT
 sub print_index_toc
 {
     local ($i, $ch);
-    print "<P></P>\n</PRE>\n";
+    print "</PRE>\n<HR>\n";
     for ($i=65; $i<=90; $i++){
 	$ch = sprintf ("%c", $i);
 	if ($caps{$ch}){
@@ -269,7 +269,7 @@ sub print_index_toc
 	    print "<STRONG><FONT color=\"#BEBEBE\">$ch</FONT></STRONG> &nbsp; \n";
 	}	    
     }
-    print "<P></P>\n<HR>\n<P></P>\n<PRE CLASS=interface>\n";
+    print "<HR>\n<P></P>\n<PRE CLASS=interface>\n";
 }
 
 sub print_index()
