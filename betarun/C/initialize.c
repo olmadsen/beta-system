@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1991-03-09 12:06:04 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-02-27 13:23:18 $, SID: $Revision: 1.4 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -42,24 +42,24 @@ Initialize()
 
   /* Setup the Infant Object Area */
   if( !AllocateHeap( &IOA,     &IOATop,     &IOALimit, IOASize ) ){
-    fprintf(stderr,"#Beta: Couldn't allocate IOA (%dKb)\n", IOASize/Kb);
+    fprintf(output,"#Beta: Couldn't allocate IOA (%dKb)\n", IOASize/Kb);
     exit(1);
   }
   if( !AllocateHeap( &ToSpace, &ToSpaceTop, &ToSpaceLimit, IOASize ) ){
-    fprintf(stderr,"#Beta: Couldn't allocate ToSpace (%dKb)\n", IOASize/Kb);
+    fprintf(output,"#Beta: Couldn't allocate ToSpace (%dKb)\n", IOASize/Kb);
     exit(1);
   }
 
   /* Allocate the Call Back Functions Area. */
   if( !AllocateHeap( &CBFA,     &CBFATop,     &CBFALimit, CBFASize ) ){
-    fprintf(stderr,"#Beta: Couldn't allocate CBFA (%dKb)\n", CBFASize/Kb);
+    fprintf(output,"#Beta: Couldn't allocate CBFA (%dKb)\n", CBFASize/Kb);
     exit(1);
   }
 
   /* Allocate the Call Back Functions Area. */
   if( DOTSize > 0 )
     if( !AllocateHeap( &DOT,     &DOTTop,     &DOTLimit,  DOTSize ) ){
-      fprintf(stderr,"#Beta: Couldn't allocate DOT (%d)\n", DOTSize);
+      fprintf(output,"#Beta: Couldn't allocate DOT (%d)\n", DOTSize);
       exit(1);
     }
 

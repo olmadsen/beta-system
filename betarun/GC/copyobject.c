@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: copyobject.c,v $, rel: %R%, date: $Date: 1991-02-11 14:28:09 $, SID: $Revision: 1.2 $
+ * Mod: $RCSfile: copyobject.c,v $, rel: %R%, date: $Date: 1992-02-27 13:19:03 $, SID: $Revision: 1.3 $
  * by Lars Bak.
  */
 
@@ -39,8 +39,8 @@ ref(Object) CopyObject( theObj)
     ToSpaceTop = theEnd;
 #ifdef AO_Area
     if( ToSpaceTop >= ToSpacePtr ){
-      fprintf(stderr, "#CopyObject:::::::: ToSpaceTop > ToSpacePtr\n" );
-      fprintf(stderr, "#IOAtoAOAarea = %d longs\n",
+      fprintf(output, "#CopyObject:::::::: ToSpaceTop > ToSpacePtr\n" );
+      fprintf(output, "#IOAtoAOAarea = %d longs\n",
               ((long) ToSpaceLimit - (long) ToSpacePtr)/4 );
     }
 #endif

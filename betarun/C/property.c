@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: property.c,v $, rel: %R%, date: $Date: 1991-03-04 11:38:22 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: property.c,v $, rel: %R%, date: $Date: 1992-02-27 13:23:34 $, SID: $Revision: 1.8 $
  * by Lars Bak
  */
 
@@ -38,7 +38,7 @@ static BooleanProperty( name)
   ENTRY("InfoS", isStatRecordOn = TRUE);
 
   /* IF NO ENTRY IS SELECTED PLEASE REPORT UNKNOWN PROPERTY */
-  fprintf( stderr, "#Property '%s' not known!\n", name);
+  fprintf( output, "#Property '%s' not known!\n", name);
 }
 
 static ValueProperty( name, value)
@@ -102,7 +102,7 @@ static ValueProperty( name, value)
     });
    
   /* IF NO ENTRY IS SELECTED PLEASE REPORT UNKNOWN PROPERTY */
-  fprintf( stderr, "#Property '%s#%s' not known!\n", name, value);
+  fprintf( output, "#Property '%s#%s' not known!\n", name, value);
 }
 
 /**********************************************************/
@@ -119,7 +119,7 @@ static intScan( name, value)
     if( (*pointer >= '0') && ( *pointer <= '9') )
       result = result + (int) *pointer++ - (int) '0';
     else{
-      fprintf( stderr,"#Property '%s': '%s' is not an integer, 0 is assumed!\n", name, value);
+      fprintf( output,"#Property '%s': '%s' is not an integer, 0 is assumed!\n", name, value);
       return 0;
     }
   }
