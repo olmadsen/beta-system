@@ -1,17 +1,36 @@
 #include <windows.h>
-#include <shlwapi.h>
+/* #include <shlwapi.h> */
+/* From shlwapi.h which is a new header file included with INetSDK. */
 
-#if (_WIN32_IE >= 0x0400)
-#define ie 10
-#else
-#define ie 20
-#endif
+//
+//====== DllGetVersion  =======================================================
+//
+
+typedef struct _DllVersionInfo
+{
+        DWORD cbSize;
+        DWORD dwMajorVersion;                   // Major version
+        DWORD dwMinorVersion;                   // Minor version
+        DWORD dwBuildNumber;                    // Build number
+        DWORD dwPlatformID;                     // DLLVER_PLATFORM_*
+} DLLVERSIONINFO;
+
+// Platform IDs for DLLVERSIONINFO
+#define DLLVER_PLATFORM_WINDOWS         0x00000001      // Windows 95
+#define DLLVER_PLATFORM_NT              0x00000002      // Windows NT
+
+//
+// The caller should always GetProcAddress("DllGetVersion"), not
+// implicitly link to it.
+//
+
+typedef HRESULT (CALLBACK* DLLGETVERSIONPROC)(DLLVERSIONINFO *);
+
+/************** End of stuff from INetSDK **********************/
 
 HRESULT GetComCtlVersion(LPDWORD pdwMajor, LPDWORD pdwMinor)
 {
 HINSTANCE   hComCtl;
-
-printf("ie = %d \n", ie);
 
 if(   IsBadWritePtr(pdwMajor, sizeof(DWORD)) || 
       IsBadWritePtr(pdwMinor, sizeof(DWORD)))
