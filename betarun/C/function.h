@@ -144,4 +144,6 @@ extern int fprintf(FILE *, const char *, ...);
 extern int fflush(FILE *);
 extern int tolower(int);
 extern int fclose(FILE *);
+extern void pclose(FILE *);
+extern int fscanf(FILE *stream, const char *format, ...);
 #endif

@@ -279,19 +279,19 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
     /* Process GC registers of the activation record. */
     DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i0)) 
 		  && objIsValRep(cast(Object)(ar->i0)))
-	      fprintf(output, "ProcessAR: ar->i0 (0x%x) is *ValRep\n", ar->i0));
+	      fprintf(output, "ProcessAR: ar->i0 (0x%x) is *ValRep\n", (int)(ar->i0)));
     DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i1)) 
 		  && objIsValRep(cast(Object)(ar->i1)))
-	      fprintf(output, "ProcessAR: ar->i1 (0x%x) is *ValRep\n", ar->i1));
+	      fprintf(output, "ProcessAR: ar->i1 (0x%x) is *ValRep\n", (int)(ar->i1)));
     DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i2)) 
 		  && objIsValRep(cast(Object)(ar->i2)))
-	      fprintf(output, "ProcessAR: ar->i2 (0x%x) is *ValRep\n", ar->i2));
+	      fprintf(output, "ProcessAR: ar->i2 (0x%x) is *ValRep\n", (int)(ar->i2)));
     DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i3)) 
 		  && objIsValRep(cast(Object)(ar->i3)))
-	      fprintf(output, "ProcessAR: ar->i3 (0x%x) is *ValRep\n", ar->i3));
+	      fprintf(output, "ProcessAR: ar->i3 (0x%x) is *ValRep\n", (int)(ar->i3)));
     DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i4)) 
 		  && objIsValRep(cast(Object)(ar->i4)))
-	      fprintf(output, "ProcessAR: ar->i4 (0x%x) is *ValRep\n", ar->i4));
+	      fprintf(output, "ProcessAR: ar->i4 (0x%x) is *ValRep\n", (int)(ar->i4)));
 
     if (inBetaHeap(cast(Object)(ar->i0)) 
 	&& isObject(cast(Object)(ar->i0)) 
@@ -300,7 +300,7 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
 	ProcessReference(casthandle(Object)(&ar->i0)); } 
 #ifdef RTLAZY
     else if (isLazyRef(ar->i0)) {
-      DEBUG_IOA(fprintf (output, "Lazy ref in i0: %d\n", ar->i0));
+      DEBUG_IOA(fprintf (output, "Lazy ref in i0: %d\n", (int)(ar->i0)));
       ProcessReference(casthandle(Object)(&ar->i0));
     }
 #endif
@@ -311,7 +311,7 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
 	ProcessReference(casthandle(Object)(&ar->i1)); }
 #ifdef RTLAZY
     else if (isLazyRef(ar->i1)) {
-      DEBUG_IOA(fprintf (output, "Lazy ref in i1: %d\n", ar->i1));
+      DEBUG_IOA(fprintf (output, "Lazy ref in i1: %d\n", (int)(ar->i1)));
       ProcessReference(casthandle(Object)(&ar->i1));
     }
 #endif
@@ -322,7 +322,7 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
 	ProcessReference(casthandle(Object)(&ar->i2)); }
 #ifdef RTLAZY
     else if (isLazyRef(ar->i2)) {
-      DEBUG_IOA(fprintf (output, "Lazy ref in i2: %d\n", ar->i2));
+      DEBUG_IOA(fprintf (output, "Lazy ref in i2: %d\n", (int)(ar->i2)));
       ProcessReference(casthandle(Object)(&ar->i2));
     }
 #endif
@@ -333,7 +333,7 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
 	ProcessReference(casthandle(Object)(&ar->i3)); }
 #ifdef RTLAZY
     else if (isLazyRef(ar->i3)) {
-      DEBUG_IOA(fprintf (output, "Lazy ref in i3: %d\n", ar->i3));
+      DEBUG_IOA(fprintf (output, "Lazy ref in i3: %d\n", (int)(ar->i3)));
       ProcessReference(casthandle(Object)(&ar->i3));
     }
 #endif
@@ -344,7 +344,7 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
 	ProcessReference(casthandle(Object)(&ar->i4)); }
 #ifdef RTLAZY
     else if (isLazyRef(ar->i4)) {
-      DEBUG_IOA(fprintf (output, "Lazy ref in i4: %d\n", ar->i4));
+      DEBUG_IOA(fprintf (output, "Lazy ref in i4: %d\n", (int)(ar->i4)));
       ProcessReference(casthandle(Object)(&ar->i4));
     }
 #endif
@@ -810,7 +810,7 @@ static void initLabels()
 #endif /* SPARC_LD_SEGMENT_TEST */
   numLabels=0;
   for (;;){
-    if (fscanf(thePipe, "%x %c %s", &labelAddress, &ch, theLabel) == EOF)
+    if (fscanf(thePipe, "%x %c %s", (int)&labelAddress, &ch, theLabel) == EOF)
       break;
     numLabels++;
   }
@@ -836,7 +836,7 @@ static void initLabels()
       /* Read labels */
       for (;;lastLab++){
 	struct label *lab;
-	if (fscanf(thePipe, "%x %c %s", &labelAddress, &ch, theLabel) == EOF)
+	if (fscanf(thePipe, "%x %c %s", (int)&labelAddress, &ch, theLabel) == EOF)
 	  break;
 	if (! (lab = (struct label *) malloc(sizeof(struct label)))){
 	  fprintf(output, "Allocation of struct label failed\n");
@@ -940,18 +940,18 @@ void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
 	  "----- AR: 0x%x, theEnd: 0x%x, PC: 0x%x (%s+0x%x)\n",
 	  (int)ar, 
 	  (int)theEnd,
-	  PC,
+	  (int)PC,
 	  getLabel(PC),
-	  labelOffset);
+	  (int)labelOffset);
 
-  fprintf(output, "%%i0: 0x%x", ar->i0); PrintRef(cast(Object)ar->i0);
-  fprintf(output, "%%i1: 0x%x", ar->i1); PrintRef(cast(Object)ar->i1)
+  fprintf(output, "%%i0: 0x%x", (int)ar->i0); PrintRef(cast(Object)ar->i0);
+  fprintf(output, "%%i1: 0x%x", (int)ar->i1); PrintRef(cast(Object)ar->i1)
     /* Notice that CopyT, AlloVR1-4 gets an offset in this parameter.
      * This should be safe.
      */;
-  fprintf(output, "%%i2: 0x%x", ar->i2); PrintRef(cast(Object)ar->i2);
-  fprintf(output, "%%i3: 0x%x", ar->i3); PrintRef(cast(Object)ar->i3);
-  fprintf(output, "%%i4: 0x%x", ar->i4); PrintRef(cast(Object)ar->i4);
+  fprintf(output, "%%i2: 0x%x", (int)ar->i2); PrintRef(cast(Object)ar->i2);
+  fprintf(output, "%%i3: 0x%x", (int)ar->i3); PrintRef(cast(Object)ar->i3);
+  fprintf(output, "%%i4: 0x%x", (int)ar->i4); PrintRef(cast(Object)ar->i4);
 
   fprintf(output, "stackpart:\n");
   /* Notice that in INNER some return adresses are pushed. This is no
