@@ -3,12 +3,8 @@ MDBODY linux 'psLocation_littleBody'
        nti   'psLocation_littleBody'
        default 'psLocation_bigBody';
 (* 
- * $RCSfile: psLocationBody.bet,v $ 
- * $Revision: 1.19 $ 
- * $Date: 1997-10-06 11:48:47 $
- *
  * COPYRIGHT
- *       Copyright Mjolner Informatics, 1992-94
+ *       Copyright Mjolner Informatics, 1992-98
  *       All rights reserved.
  *)
 INCLUDE '~beta/basiclib/v1.6/file';
@@ -479,7 +475,10 @@ do
            if);
         #);
         
+        true->locOpen;
         THIS(pslocation)[] -> private.obs.locationList.insert;
+        THIS(pslocation)[] -> private.obs.lastlocation[];    
+        
         
         true -> locationGroups.init;
         true -> locationObjects.pslopriv.init;
@@ -573,13 +572,16 @@ do
         
         readWrite -> private.mode;
         
+        true->locOpen;
         THIS(pslocation)[] -> private.obs.locationList.insert;
+        THIS(pslocation)[] -> private.obs.lastlocation[];    
+        
         
         false -> locationGroups.init;
         false -> locationObjects.pslopriv.init;
         false -> FreeList.flpriv.table.init;
         private.data[] -> locationData.create;
-        
+        0->numberofUpdates;
         rootNames.init;
         crossLocRefs[] -> crossRefs[];
      #)
@@ -618,14 +620,40 @@ do
 --- pslocationClose:descriptor ---
 (# 
 do
-   THIS(pslocation)[] -> private.obs.locationList.delete
+   getPSObjectServer -> private.obs[];
+   
+   (if (not (this(pslocation)[]->private.obs.locationlist.thisTable.has))
+       then
+       (* hack *)
+       THIS(pslocation)[] -> private.obs.locationList.insert
+   if);
+   
+   THIS(pslocation)[] -> private.obs.locationList.delete 
    (# danglersExists::< (# do THIS(close).danglersExists #)#);
+   (if locOpen then
+       (0,fromend)->private.locg.setpos;
+       private.locg.close;
+       (0,fromend)->private.oinx.setpos;
+       private.oinx.close;
+       (0,fromend)->private.data.setpos;
+       private.data.close;
+   if);
+   false->locOpen;
+#)
+
+--- pslocationCommit:descriptor ---
+(# 
+do
+   THIS(pslocation)[] -> private.obs.locationList.thisTable.delete;
+
    (0,fromend)->private.locg.setpos;
    private.locg.close;
    (0,fromend)->private.oinx.setpos;
    private.oinx.close;
    (0,fromend)->private.data.setpos;
    private.data.close;
+   NONE->private.obs.lastlocation[];
+   false->locOpen;
 #)
 
 --- pslocationCompact:descriptor ---
@@ -659,6 +687,7 @@ do
      (# pbi: @locg.putBinInt;
      do
         (0,FromBeginning) -> locg.setpos;
+        numberofUpdates->pbi;
         nextOID.nextvalue->pbi;
         creationTime->pbi;
         rootNamesOID.a->pbi; rootNamesOID.b->pbi;
@@ -669,6 +698,7 @@ do
      (# gbi: @locg.getBinInt;
      do    
         (0,FromBeginning) -> locg.setpos;
+        gbi->numberofUpdates;
         gbi->nextOID.nextvalue;
         gbi->creationTime;
         gbi->rootNamesOID.a; gbi->rootNamesOID.b;
@@ -858,7 +888,7 @@ do
 
 --- lib: attributes ---
 
-simpleDataSize: (# exit 24 #);
+simpleDataSize: (# exit 28 #);
 
 makeFileNames:
   (# name, fullname: ^Text;

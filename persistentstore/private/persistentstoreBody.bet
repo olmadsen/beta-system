@@ -1,9 +1,7 @@
 ORIGIN '../persistentstore';
 (* 
- * $RCSfile: persistentstoreBody.bet,v $ $Revision: 1.13 $ $Date: 1997-10-06 11:48:47 $
- *
  * COPYRIGHT
- *       Copyright Mjolner Informatics, 1992-94
+ *       Copyright Mjolner Informatics, 1992-98
  *       All rights reserved.
  *)
 INCLUDE '../psObjectServer';
@@ -13,11 +11,114 @@ INCLUDE '~beta/containers/v1.6/list';
 INCLUDE '~beta/objectserver/v2.5/runtimeTypesTable';
 INCLUDE '~beta/objectserver/v2.5/specialObjectsTable';
 
+--- PersistentInit: descriptor ---
+(# 
+do 
+   getPSobjectServer ->  pspriv.os[];
+   &pspriv.locationImpl[] -> pspriv.location[];
+   pspriv.location[]->pspriv.os.lastlocation[];
+#)
+
+--- PersistentCommit: descriptor ---
+(#
+do
+   (if doCheckpoint //true then 
+       checkpoint;
+    else (if doUpdateInMemoryObjects then
+             -1->lastUpdate;
+         if);
+   if);
+   pspriv.location.commit;
+   none->pspriv.os.lastlocation[];
+#)
+
+--- PersistentReget: descriptor ---
+(# doreget:@boolean;
+   foundOID: @OIDtype;
+do
+   (if theObject[] // NONE  then
+       (if lastupdate = 0
+           then false->doreget;
+        else (if (pspriv.location.numberofUpdates > lastupdate)
+                 then 
+                 true->doreget;
+              else false->doreget;
+             if);
+       if);
+       (if doreget 
+        // true
+           then '=> REGETTING ....'->putline;
+           pspriv.location.numberofupdates->lastupdate;
+           regetIt:
+             (# 
+             do    
+                (if allowLazyFetch //true then
+                    pspriv.os.regetObjectsWithPartialClosure;;
+                 else
+                    pspriv.os.regetObjectsWithWholeClosure;
+                if);
+             #);
+           
+           (*check if roots are still valid or have been overwritten by another client*)
+           pspriv.oldroots.scan
+           (# theObj: ^Object;
+              newOID,oldOID:@OIDtype;
+              name:^text;
+           do 
+              current.obj[]->theObj[];
+              current.name[]->name[];
+              current.name[] -> pspriv.location.rootNames.findName
+              (# notfound::<
+                   (# 
+                   do '*** Error in scan old roots'->putline;
+                   #);
+                 found::< (# 
+                          do OID->newOID;
+                          #);
+              #);
+              pspriv.os.objects.oh.scan(# do (if (current.o[] = theObj[]) then
+                                                 current.OID->oldOID;
+                                             if);    
+                                       #);
+              (if (newOID,oldOID) -> equalOID //false then 
+                  current.name[]->NotFound;
+                  pspriv.oldroots.scan
+                  (# do (if current.name[] -> name.equal //true then
+                            current[]->pspriv.oldroots.at->pspriv.oldroots.delete;
+                        if);
+                  #);
+              if);
+           #);
+        // false then       
+           '=> NO UPDATE NECESSARY'->putline;
+       if);
+    else '=> REGET single object'->putline;
+       pspriv.os.objects.oh.scan(# do (if (current.o[] = theObject[]) then
+                                          current.OID->foundOID
+                                      if);    
+                                #);
+       (if (foundOID,noneOID) -> equalOID //true then 
+           '*** Error: object no persistent object'->putline;
+        else
+           (if allowLazyFetch //true then
+               (foundOID,0,foundOID) 
+                 ->pspriv.os.regetsingleObjectWithPartialClosure;;
+            else
+               (foundOID,0,foundOID)      
+                 ->pspriv.os.regetsingleObjectWithWholeClosure;
+           if);     
+       if);
+   if);
+   
+#)
+
 --- PersistentOpenRead: descriptor ---
 (# 
 do
    getPSobjectServer ->  pspriv.os[];
    &pspriv.locationImpl[] -> pspriv.location[];
+   pspriv.location[]->pspriv.os.lastlocation[];
+   name[]->pspriv.name[];
    pspriv.roots.init;
    &pspriv.os.specialObjectsTable[] -> pspriv.specialObjects[];
    pspriv.specialObjects.init;
@@ -38,6 +139,8 @@ do
 do
    getPSobjectServer ->  pspriv.os[];
    &pspriv.locationImpl[] -> pspriv.location[];
+   pspriv.location[]->pspriv.os.lastlocation[];
+   name[]->pspriv.name[];
    pspriv.roots.init;
    &pspriv.os.specialObjectsTable[] -> pspriv.specialObjects[];
    pspriv.specialObjects.init;
@@ -52,12 +155,14 @@ do
    #);
    true -> pspriv.writeAllowed;
 #)
-  
+
 --- PersistentCreate: descriptor ---
 (# 
 do
    getPSobjectServer ->  pspriv.os[];
    &pspriv.locationImpl[] -> pspriv.location[];
+   pspriv.location[]->pspriv.os.lastlocation[];
+   name[]->pspriv.name[];
    pspriv.roots.init;
    &pspriv.os.specialObjectsTable[] -> pspriv.specialObjects[];
    pspriv.specialObjects.init;
@@ -71,6 +176,7 @@ do
         (# do fullName[] -> creationError; leave docreate #);
    #);
    true -> pspriv.writeAllowed;
+   pspriv.location.numberofUpdates->lastUpdate;
 #)
 
 --- PersistentDelete: descriptor ---
@@ -124,6 +230,7 @@ do
                   #);
                #);
           #);
+          pspriv.location.numberofUpdates+1->pspriv.location.numberofUpdates->lastUpdate;
           
           (* Finally save location tables. *)
           pspriv.location.rootNames.save;
@@ -131,6 +238,11 @@ do
           pspriv.location.save;
           
           pspriv.specialObjects.afterputget;
+          pspriv.roots.scan
+          (#
+             (* gem liste af persistente roedder*)   
+          do (current.name[], current.obj[])->pspriv.oldroots.register
+          #);   
        #)
    if)
 
@@ -235,7 +347,7 @@ do getIt:
 #)
   
 --- PersistentPut: descriptor ---
-(# OID: @OIDtype; gcf: @Integer;
+(# OID: @OIDtype; gcf: @Integer; rootfound:@boolean;
 do 
    (if obj[] //NONE then
        0 -> gcf
@@ -251,8 +363,21 @@ do
        (failure, 'PersistentStore.put: Attempt to put inlined object') 
          -> stop;
    if);
-       
-   (name[],obj[]) -> pspriv.roots.register;    
+   false->rootfound;
+   name[] -> pspriv.location.rootNames.findName
+   (# 
+      found::< (# do true -> rootfound; #);
+   #);
+   (if rootfound then
+       (if (not dooverwrite) then
+           name[]->AlreadyThere;
+        else
+           name[]->HasOverWritten;
+           (name[],obj[]) -> pspriv.roots.register;
+       if);
+    else 
+       (name[],obj[]) -> pspriv.roots.register;
+   if); 
 #)
 
 --- lib:attributes ---
@@ -340,6 +465,7 @@ do
 (# os: ^PSobjectServer;
    
    specialObjects: ^PSobjectServer.specialObjectsTable;
+   name:^text;   
    
    locationImpl: psLocation
      (# crossLocRefsImpl::<
@@ -415,6 +541,36 @@ do
                #);
           exit obj[]
           #);
+     #);
+   oldroots: @list
+     (# element::<
+          (# name: ^Text;
+             obj: ^Object;
+          #);
+        register: @
+          (# name: ^Text; obj: ^Object;
+             elm: ^element; found: @Boolean;
+          enter (name[],obj[])
+          do 
+             false -> found;
+             find: scan
+               (# 
+               do (if current.name[] -> name.equal //true then
+                      obj[] -> current.obj[];
+                      true -> found;
+                      leave find;
+                  if);
+               #);
+             
+             (if found //false then
+                 &element[] -> elm[];
+                 name[] -> elm.name[];
+                 obj[] -> elm.obj[];
+                 elm[] -> append;
+             if);
+             
+          #);
+        
      #);
    
 #)

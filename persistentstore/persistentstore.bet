@@ -1,9 +1,7 @@
 ORIGIN '~beta/basiclib/v1.6/betaenv';
 (* 
- * $RCSfile: persistentstore.bet,v $ $Revision: 1.10 $ $Date: 1997-10-06 11:48:32 $
- *
  * COPYRIGHT
- *       Copyright Mjolner Informatics, 1992-96
+ *       Copyright Mjolner Informatics, 1992-98
  *       All rights reserved.
  *)
 BODY 'private/persistentstoreBody';
@@ -12,7 +10,58 @@ BODY 'private/persistentstoreBody';
 
 persistentstore:
   (# <<SLOT persistentstoreLib: attributes>>;
-          
+     lastupdate:@integer;
+     init:
+       (* used by the sharedpersistentstore 
+        *)
+       (#
+       do <<SLOT PersistentInit: descriptor>>;
+       #);
+     
+     commit:
+       (* used by the sharedpersistentstore
+        * doUpdateInMemoryObjects is always true, when docheckpoint is
+        * true. When doCheckpoint is false and doUpdateInMemoryObjects
+        * is true, the InMemoryObjects (copies of the persistent objects)
+        * are always refetched from disk, when the ps is accessed next time, 
+        * - no matter if the persistentstore has being updated by another 
+        * process in the meanwhile or not. In this way, the
+        * user can regret changes to inmemory objects, which haven't
+        * installed on disk. 
+        * When doCheckpoint is false and doUpdateInMemoryObjects is false,
+        * the in memory objects are, when the ps is accessed next time, 
+        * only refetched from disk, when the persistentstore has been 
+        * updated by another process in the meanwhile. By default, 
+        * doUpdateInMemoryObjects is false.
+        *)
+       (# doUpdateInMemoryObjects:< BooleanValue 
+            (# do false-> value; INNER #);
+          doCheckpoint:< BooleanValue 
+            (# do true -> value; INNER #);
+       do <<SLOT PersistentCommit: descriptor>>
+       #);
+     
+      reget:
+       (* used by the sharedpersistentstore
+        * NotFound exception is raised for every root object
+        * that has been overwritten by another root object with 
+        * the same name. The old root objects are deleted.
+        *)
+       (# NotFound:< PSException
+            (# 
+            do 'persistentstore.reget: Root "' -> msg.putText; 
+               fullname[] -> msg.putText;
+               '" has been overwritten by another client.' -> msg.putText;
+               'Your references are not longer valid.'->msg.puttext;
+               msg[]->putline;
+               true->continue;
+               INNER
+            #);
+          theObject: ^Object;
+       enter theObject[]   
+       do <<SLOT PersistentReget: descriptor>>;
+       #);
+     
      openRead:
        (* Opens THIS(persistentstore) for reading, i.e. it is not
         * allowed to write objects to the store.  Checkpoint
@@ -142,6 +191,8 @@ persistentstore:
         * the store. Ignoring should thus only be done if you are not
         * going to access the object (copies) fetched during the
         * "transaction" about to end.
+        * 
+        * choose toDo to be 2 for sharedPersistentstores        
         *)
        (# danglersExists:< 
             (# toDo: @Integer;
@@ -196,8 +247,37 @@ persistentstore:
        (* Turns obj into a persistent root with textual name
         * "name". The state of obj is not saved until a checkpoint
         * operation is performed.
+        * If dooverwrite is false, it is not possible to put a root, that
+        * has the same name than a root already in the list of 
+        * persistent roots. The AlreadyThere exception/warning is raised.
+        * If dooverwrite is true (the default), a persistent root 
+        * with the same name is overwritten. This causes the 
+        * HasOverWritten exception/warning to be raised. 
         *)
-       (# obj: ^Object; name: ^text;
+       (# 
+          
+         AlreadyThere:< PSexception 
+            (# 
+            do 'persistentstore.put: Root "' 
+                 -> msg.putText; fullName[] -> msg.putText;
+               '" ' -> msg.putText; 'already there.'->msg.puttext;
+               true->continue;
+               INNER
+               
+            #);
+     
+          HasOverWritten:< PSexception 
+            (# 
+            do 'persistentstore.put: Root "' 
+                 -> msg.putText; fullName[] -> msg.putText;
+               '" ' -> msg.putText; 'will overwrite an already existing root with same name at checkpoint time.'->msg.puttext;
+               true->continue;
+               INNER
+               
+            #); 
+          dooverwrite:< BooleanValue 
+            (# do true -> value; INNER #);
+          obj: ^Object; name: ^text;
        enter (obj[],name[])
        do <<SLOT PersistentPut: descriptor>>
        #);
@@ -287,10 +367,10 @@ persistentstore:
      
      registerSpecialObject:
        (* Special objects are registered once in the lifetime of a
-        * persistent store by supplying name and type of the object to
-        * this method. The type is saved in this persistentstore to be
-        * used for type checking when registering special object
-        * instances as described above.
+        * persistent store by supplying name and type of the object
+        * to this method. The type is saved in this persistentstore
+        * to be used for type checking when registering special
+        * object instances as described above.
         *)
         (# alreadyThere:< Exception
             (# 
