@@ -8,7 +8,17 @@
 #include "beta.h"
 #include "crun.h"
 
-void CopyVR(ref(ValRep) theRep,
+asmlabel(CopyVR, "
+        clr     %o3
+	ba	_CCopyVR
+        clr     %o4
+");
+
+#ifdef hppa
+#  define CCopyVR CopyVR
+#endif
+
+void CCopyVR(ref(ValRep) theRep,
 	    ref(Object) theObj,
 	    unsigned offset /* i ints */
 	    )

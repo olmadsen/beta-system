@@ -8,9 +8,19 @@
 #include "beta.h"
 #include "crun.h"
 
-void CopyRR(ref(ValRep) theRep,
+asmlabel(CopyRR, "
+        clr     %o3
+	ba	_CCopyRR
+        clr     %o4
+");
+
+#ifdef hppa
+#  define CCopyRR CopyRR
+#endif
+
+void CCopyRR(ref(ValRep) theRep,
 	    ref(Object) theObj,
-	    unsigned offset /* i ints */
+	    unsigned offset /* in ints */
 	    )
 {
     DeclReference1(struct RefRep *, newRep);
