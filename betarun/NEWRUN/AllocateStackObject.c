@@ -8,22 +8,28 @@
 
 struct StackObject *AlloSO(unsigned size, long *SP)
 {
-    struct StackObject *theStack;
+    struct StackObject *sObj;
+    unsigned long stacksize = StackObjectSize(size);
 
     DEBUG_CODE(NumAlloSO++);
 
-    theStack = (struct StackObject *)IOAalloc(StackObjectSize(size), SP);
+    if (stacksize>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "AlloSO allocates in AOA\n"));
+      sObj = (struct StackObject *)AOAalloc(stacksize);
+    } else {
+      sObj = (struct StackObject *)IOAalloc(stacksize, SP);
+    }
 
-    theStack->Proto = StackObjectPTValue;
-    theStack->GCAttr = 1;
-    theStack->BodySize = size;
-    theStack->StackSize = 0;
+    sObj->Proto = StackObjectPTValue;
+    sObj->GCAttr = 1;
+    sObj->BodySize = size;
+    sObj->StackSize = 0;
 
-    /*fprintf(output, "AlloSO: theObj: 0x%x, size=0x%x\n", theStack, size);*/
+    /*fprintf(output, "AlloSO: theObj: 0x%x, size=0x%x\n", sObj, size);*/
 
-    Ck(theStack);
+    Ck(sObj);
 
-    return theStack;
+    return sObj;
 }
 
 

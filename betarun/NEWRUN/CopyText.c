@@ -8,11 +8,11 @@
 
 /* Allocate a ValueRepetition and initialize it with some text.    */
   
-void CopyT(char *asciz,
-	   struct Item *theItem,
-	   unsigned offset /* in longs */, 
-	   long *SP
-	   )
+struct Item *CopyT(char *asciz,
+		   struct Item *theItem,
+		   unsigned offset /* in longs */, 
+		   long *SP
+		   )
 {
   struct ValRep * theRep=0;
   register unsigned range, size, i;
@@ -52,4 +52,7 @@ void CopyT(char *asciz,
   }
   
   AssignReference((long *)theItem + offset, (struct Item *)theRep);
+
+  /* return the (possibly moved) item */
+  return theItem;
 }

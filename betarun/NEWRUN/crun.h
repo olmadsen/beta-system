@@ -27,7 +27,7 @@ extern struct ValRep *	    CopyCT(unsigned char *textPtr, long *SP);
 extern void 		    CopyRR(struct ValRep *theRep, struct Object* theObj, unsigned offset, long *SP);
 extern void 		    CopySRR(struct RefRep *theRep, struct Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
 extern void 		    CopySVR(struct ValRep *theRep, struct Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
-extern void 		    CopyT(char *asciz, struct Item *theItem, unsigned offset, long *SP);
+extern struct Item *	    CopyT(char *asciz, struct Item *theItem, unsigned offset, long *SP);
 extern void 		    CopyVR(struct ValRep *theRep, struct Object *theObj, unsigned offset, long *SP);
 extern void		    ExtRR(struct Object *theObj, unsigned offset, long add, long *SP);
 extern void		    ExtVR(struct Object *theObj, unsigned offset, long add, long *SP);
@@ -72,7 +72,7 @@ extern void 		    DoGC(long *SP, struct Object *this);                         /
  * In that case we declare them here.
  * 
  * SGI note: It seems that the sgi cc compiler supports inlines
- * too by using "prarma intrinsic (func)" (see math.h).
+ * too by using "pragma intrinsic (func)" (see math.h).
  */
 #include "IOAAlloc.h"
 #else
@@ -81,25 +81,6 @@ extern void 		    DoGC(long *SP, struct Object *this);                         /
  */
 extern void *IOAalloc(unsigned size, long *SP);
 extern void *IOAcalloc(unsigned size, long *SP);
-extern void AssignReference(long *theCell, struct Item *newObject);
-extern void long_clear(char *p, unsigned bytesize);
-extern void zero_check(char *p, unsigned bytesize);
-extern void setup_item(struct Item *theItem,
-		       struct ProtoType *prototype,
-		       struct Object *origin
-		       );
 #endif
-
-/* Call address "entry" with "current" as first and "item" as second argument */
-#define CallBetaEntry(entry, current, item) \
-  /* fprintf(output, "CallBetaEntry(0x%x, 0x%x, 0x%x)\n", (long)entry, current, item); */ \
-  (* (void (*)(void *, void *))(entry)) ((void *)current, (void *)item)
-
-#define CallGPart(entry, item, SP) \
-  *++TraceSP = (long *) SP; \
-  *++TraceSP = (long *) GetSP(); \
-  (* (void (*)(void *, void *))(entry)) ((void *)0, (void *)item); \
-  TraceSP -= 2;
-
 
 #endif /* _CRUN_H_ */

@@ -10,8 +10,6 @@ struct Item *AlloI(struct Object *origin, struct ProtoType *proto, long *SP)
 {
   struct Item *item;
 
-  /* TODO: inline everything! */
-  
   Ck(origin);
   DEBUG_CODE(NumAlloI++;
 	     Claim(proto->Size > 0, "AlloI: proto->Size > 0") );

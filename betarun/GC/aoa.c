@@ -36,18 +36,18 @@ long AOACreateNewBlock = FALSE;
  *  == 1: Means try to allocate the object inside the Block AOATopBlock refers.
  *  == 2: We are out of memory, so return 0.
  */
-static ref(Object) AOAalloc(long size)
+struct Object *AOAalloc(long numbytes)
 {
   ptr(long)  oldTop;
 
-  DEBUG_CODE( Claim(size > 0, "AOAalloc: size > 0") );
+  DEBUG_CODE( Claim(numbytes > 0, "AOAalloc: numbytes > 0") );
   /*DEBUG_AOA(if (AOATopBlock) 
 	    fprintf(output, "AOATopBlock 0x%x, diff 0x%X\n",
 		    AOATopBlock, (long)AOATopBlock->limit - (long)AOATopBlock->top));*/
   
   if( AOABaseBlock == 0){
     if( MallocExhausted || (AOABlockSize == 0) ) return 0;
-    /* Check if the AOAtoIOAtable is allocated. If not the allocate it. */
+    /* Check if the AOAtoIOAtable is allocated. If not then allocate it. */
     if( AOAtoIOAtable == 0 ) 
       if( AOAtoIOAAlloc() == 0 ){
 	MallocExhausted = TRUE;
@@ -70,16 +70,16 @@ static ref(Object) AOAalloc(long size)
   }
   /* Try to find space between AOATopBlock->top and AOATopBlock->limit. */
   oldTop = AOATopBlock->top;
-  if( areaSize(oldTop,AOATopBlock->limit) > size){
-    AOATopBlock->top = (ptr(long)) Offset( oldTop, size);
+  if( areaSize(oldTop,AOATopBlock->limit) > numbytes){
+    AOATopBlock->top = (ptr(long)) Offset( oldTop, numbytes);
     return (ref(Object)) oldTop;
   }else{
     /* maybe there is a free block AOATopBlock->next. */
     if( AOATopBlock->next ){
       AOATopBlock = AOATopBlock->next;
       oldTop = AOATopBlock->top;
-      if( areaSize(oldTop,AOATopBlock->limit) > size){
-	AOATopBlock->top = (ptr(long)) Offset( oldTop, size);
+      if( areaSize(oldTop,AOATopBlock->limit) > numbytes){
+	AOATopBlock->top = (ptr(long)) Offset( oldTop, numbytes);
 	return (ref(Object)) oldTop;
       }
     }
@@ -92,8 +92,8 @@ static ref(Object) AOAalloc(long size)
       AOATopBlock = AOATopBlock->next;
       oldTop = AOATopBlock->top;
       AOACreateNewBlock = FALSE;
-      if( areaSize(oldTop,AOATopBlock->limit) > size){
-	AOATopBlock->top = (ptr(long)) Offset( oldTop, size);
+      if( areaSize(oldTop,AOATopBlock->limit) > numbytes){
+	AOATopBlock->top = (ptr(long)) Offset( oldTop, numbytes);
 	return (ref(Object)) oldTop;
       }else{
 	Notify("#AOA warning: Object size is larger then AOABlockSize"); 
@@ -111,6 +111,15 @@ static ref(Object) AOAalloc(long size)
     return 0;
   }    
 }
+
+#ifdef NEWRUN
+struct Object *AOAcalloc(long numbytes)
+{
+  struct Object *theObj = AOAalloc(numbytes);
+  if (theObj) long_clear(theObj, numbytes);
+  return theObj;
+}
+#endif
 
 ref(Object) CopyObjectToAOA( theObj)
      ref(Object) theObj;
@@ -400,6 +409,16 @@ static void PushAOACell(struct Object **theCell, struct Object *theObj)
       RAFPush(theCell);
   }
 }
+#ifdef RTDEBUG
+static void CheckAOACell(struct Object **theCell, struct Object *theObj)
+{
+  Ck(theObj);
+  if(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell)) {
+    if (isObject(*theCell))
+      AOACheckReference(theCell);
+  }
+}
+#endif
 #endif
 
 /* FollowObject is used during Phase1 of the Mark-Sweep GC. 
@@ -1179,10 +1198,14 @@ void AOACheckObject( theObj)
 	  }
         }
       }
-#else /* crts */
+#endif /* crts */
+#ifdef NEWRUN
+      ProcessStackObj((struct StackObject *)theObj, CheckAOACell);
+#endif /* NEWRUN */
+#if !(defined(crts)||defined(NEWRUN))
       fprintf(output, 
 	      "AOACheckObject: no check of stackobject 0x%x\n", theObj);
-#endif /* crts */
+#endif
 #endif /* KEEP_STACKOBJ_IN_IOA */
       return; 
     case (long) StructurePTValue:

@@ -48,6 +48,15 @@
  *          |               |
  */
 
+/* CheckReferences:
+ *  Used for updating stackobject allocated directly in AOA.
+ */
+static void CheckReferences(struct Object **theCell, struct Object *theObj)
+{
+  /* theCell is known to be in AOA (part of stack object */
+  if (inIOA(theObj)) AOAtoIOAInsert(theCell);
+}
+
 void Susp(struct Object *this, long prevSP, long RA, long SPz)
 {
    struct StackObject *sObj; 
@@ -84,6 +93,12 @@ void Susp(struct Object *this, long prevSP, long RA, long SPz)
     * Used by ProcessStackObj in stack.c.
     */
    sObj->StackSize = (long)prevSP - (long)SPz;
+
+   if (!inIOA(sObj)){
+     /* sObj was allocated directly in AOA */
+     ProcessStackObj(sObj, CheckReferences);
+   }
+
    /* Save sObj in ActiveComponent */
    AssignReference((long *)&ActiveComponent->StackObj, (struct Item *)sObj);   
 

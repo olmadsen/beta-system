@@ -42,3 +42,8 @@
 
 #define MAXINT (signed long)0x7fffffff
 #define MININT (signed long)0x80000000
+
+#ifdef NEWRUN
+#define CALLBACKMARK 4
+#define IOAMAXSIZE           (IOASize/8)
+#endif

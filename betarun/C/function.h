@@ -103,6 +103,10 @@ void AOAtoIOAReport(void);
 #endif
 
 /* GC/aoa.c */
+extern struct Object *AOAalloc(long numbytes);
+#ifdef NEWRUN
+extern struct Object *AOAcalloc(long numbytes);
+#endif
 extern ref(Object) CopyObjectToAOA(ref(Object));
 extern void AOAGc(void);
 #ifdef RTDEBUG

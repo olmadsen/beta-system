@@ -316,7 +316,74 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
 
 #endif /* RTDEBUG */
 
+
 #ifdef NEWRUN
+
+#define long_clear(p, bytesize)                                     \
+{                                                                   \
+  register long i;                                                  \
+  DEBUG_CODE(if ((bytesize)&3)                                      \
+	     fprintf(stderr, "long_clear: bytesize&3 != 0\n"));     \
+  for (i = (long)(bytesize)/4-1; i >= 0; i--) {                     \
+    *((long *)(p)+i) = 0;                                           \
+  }                                                                 \
+}
+
+#define AssignReference(theCell, newObject)                                  \
+  *(struct Item **)(theCell) = (struct Item *)(newObject);                   \
+  if (!inIOA((struct Item *)(theCell)) && inIOA((struct Item *)(newObject))) \
+    AOAtoIOAInsert((struct Object **)theCell)
+
+#define setup_item(theItem, proto, origin )                                     \
+{                                                                               \
+   register struct GCEntry *initTab;                                            \
+                                                                                \
+   ((struct Item *)(theItem))->Proto = ((struct ProtoType *)(proto));           \
+   ((struct Item *)(theItem))->GCAttr = 1; /* Set item age to 1 */              \
+                                                                                \
+   /* Initialize the body part of the item, according to the genTable. */       \
+                                                                                \
+   initTab = (struct GCEntry *)((char *)(proto)+((struct ProtoType *)(proto))->GCTabOff); \
+                                                                                \
+   /* initTab is now pointing to the static GCTable.                            \
+    * This table has zero or more elements terminated with a zero word.         \
+    * Each element looks like:                                                  \
+    *   WORD  Offset in the generated object, where this static object begins   \
+    *   WORD  Signed distance to inclosing object.                              \
+    *   LONG  ProtoType of this static object.                                  \
+    */                                                                          \
+                                                                                \
+   for (; initTab->StaticOff; ++initTab) {                                      \
+      register struct PartObject *po;                                           \
+      po = (struct PartObject *)(((long *)(theItem)) + initTab->StaticOff);     \
+      po->Proto = initTab->Proto;                                               \
+      po->OrigOff = initTab->OrigOff;                                           \
+   }                                                                            \
+                                                                                \
+   ((long *)(theItem))[((struct ProtoType *)(proto))->OriginOff]=(long)(origin);\
+}
+
+
+/* Call address "entry" with "current" as first and "item" as second argument */
+#define CallBetaEntry(entry, current, item) \
+  (* (void (*)(void *, void *))(entry)) ((void *)current, (void *)item)
+
+#define CallGPart(entry, item, SP) \
+  *++TraceSP = (long *) SP; \
+  *++TraceSP = (long *) GetSP(); \
+  (* (void (*)(void *, void *))(entry)) ((void *)0, (void *)item); \
+  TraceSP -= 2;
+
+#ifdef RTDEBUG
+#define zero_check(p, bytesize)                                        \
+{                                                                      \
+  register long i;                                                     \
+  if (bytesize&3)                                                      \
+    fprintf(output, "zero_check: bytesize&3 != 0\n");                  \
+  for (i = (long)(bytesize)/4-1; i >= 0; i--)                          \
+    if (*((long *)(p)+i) != 0) fprintf(output, "zero_check failed\n"); \
+}
+#endif
 
 #ifdef sgi
 typedef union FormatI
@@ -331,14 +398,11 @@ typedef union FormatI
 } FormatI;
 #define GetSPoff(SPoff, codeAddr)                              \
 { FormatI addiu;                                               \
-  /* Get the entry point from above the prototype */           \
   addiu.raw = *(long *)(codeAddr);                             \
   /* Get the stack size allocated for this frame */            \
   SPoff = -addiu.instr.offset;                                 \
 }
 #endif
-
-#define CALLBACKMARK 4
 
 #define IOATop ((long *) ((char *)IOA+IOATopOff))
 
