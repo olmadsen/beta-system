@@ -17,6 +17,9 @@ void CBFAAlloc()
 	INFO_CBFA( fprintf(output,"#CBFA: Warning, CBFA size of 0Kb specified\n"));
 	INFO_CBFA( fprintf(output,"#CBFA: Check your BETART environment variable\n"));
     } else {
+#ifdef hppa
+	(void) MALLOC(16); /* to avoid spurious bug, with overwriten CBFA */
+#endif
 	if ( ! (CBFA = cast(CallBackArea) MALLOC(sizeof(struct CallBackArea))) ) {
 	    fprintf(output,"#Beta: Couldn't allocate CBFA\n");
 	    exit(1);
