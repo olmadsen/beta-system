@@ -2,6 +2,7 @@ ORIGIN '../classes';
 INCLUDE '~beta/betaast/v5.1/gram';
 INCLUDE '~beta/betaast/v5.1/betasematt';
 INCLUDE '../../code/followsemanticlink';
+INCLUDE '../../code/generate';
 
 -- getClassesDoPart: doPart --
 do (# 
@@ -63,15 +64,24 @@ do (#
         #);
       theAttributesForm: ^astInterface.beta.attributesForm;
       gram: @grammar;
+      fragName: ^text;
    do &patternList[] -> classes[];
       classes.init;
-      group.fragmentList.scan
-      (# frag: ^astInterface.fragmentForm;
-      do (if current.type = mps.formType then
-             current.open -> frag[];
-             (if frag.category = gram.attributesForm then
-                 frag.root[] -> theAttributesForm[];
-                 theAttributesForm.getAttributes -> collectClasses;
+      (if true
+       //'window' -> prefix.equalNCS then
+          'GUIenvLib' -> fragName[];
+       //'canvas' -> prefix.equalNCS then
+          'windowLib' -> fragName[];
+       else
+          'GUIenvLib' -> fragName[];
+      if);
+      (mps[], group[], fragName[]) -> scanDomain
+      (# thePattern: ^pattern;
+      do (if current.symbol = gram.patternDecl then
+             (if (current[], prefix[]) -> inheritsFrom then
+                 &pattern[] -> thePattern[];
+                 current[] -> thePattern;
+                 thePattern[] -> classes.append;
              if);
          if);
       #);
@@ -87,4 +97,93 @@ do search: scan
             leave search;
         if);
      #);
-
+   
+-- scanDomainDoPart: doPart --
+do (# scanFragmentGroup:
+        (# group: ^astInterface.fragmentGroup;
+           gram: @grammar;
+        enter group[]
+        do group.fragmentList.scan
+           (# frag: ^astInterface.fragmentForm;
+           do   (if current.type = mps.formType then
+                    (if current.name[] -> fragName.equalNCS then
+                        current.open -> frag[];
+                        (if frag.root[] <> none then
+                            (if frag.root.symbol = gram.attributesForm then
+                                frag[] -> scanFragment;
+                            if);
+                        if);
+                    if)
+                if)
+           #);
+        #);
+      check:
+        (# anAst: ^astInterface.ast;
+        enter anAst[]
+        do (if anAst[] <> NONE then
+               (if anAst.kind <> mps.kinds.interior then
+                   NONE -> anAst[];
+               if);
+           if)
+        exit anAst[]
+        #);
+      scanFragment:
+        (# frag: ^astInterface.fragmentForm;
+           theAttributesForm: ^astInterface.beta.attributesForm;
+           theAttributes: ^astInterface.beta.attributes;
+        enter frag[]
+        do frag.root[] -> check -> theAttributesForm[];
+           (if theAttributesForm[] <> none then
+               theAttributesForm.getAttributes -> check -> theAttributes[];
+               (if theAttributes[] <> none then
+                   theAttributes.newScan
+                   (# 
+                   do current[] -> this(scanDomain).current[];
+                      inner scanDomain;
+                   #);
+               if);
+           if);
+        #);
+      openGroup:
+        (#
+           g: ^astInterface.FragmentGroup;
+           name,path,ext: ^Text;
+           fullname: ^Text;
+           
+           
+        enter (name[],path[])
+        do (name.length-3,name.length)->name.sub->ext[];
+           (if '.bet'->ext.equal then
+               (name.length-3,name.length)->name.delete
+           if);
+           (name[],path[]->MPS.stripPathName)->MPS.thePathHandler.convertFilePath
+             ->fullname[];
+           fullName[] -> MPS.safeOpen -> g[];
+            
+        exit g[]
+        #);
+   do group[] -> scanFragmentGroup;
+      group.fragmentList.scan (* scan links *)
+         (# next: ^astInterface.fragmentGroup;
+         do (if current.type
+             // mps.linkType then 
+                (if current.name.length = 0 then
+                    (# T: @text
+                    do '\n*** Error in property list of:\n\t'->T; 
+                       group.name->T.puttext; '\n\n\t'->T.puttext;
+                       'Empty filename in property "INCLUDE"\n'->T.puttext;
+                       
+                    #)
+                 else
+                    (current.Name[],group.name)
+                      -> OpenGroup 
+                      -> next[];
+                    (if next[] <> none then
+                        next[] -> scanFragmentGroup;
+                    if);
+                if);
+             
+            if) 
+         #);
+   #)
+ 
