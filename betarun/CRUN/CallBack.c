@@ -148,6 +148,8 @@ long HandleCB(long a1, long a2, long a3, long a4, long a5, long a6)
       ((char *) retAddress - ((char *)&cb->call_HandleCallBack - (char *)cb));
     retAddress = g1;
 
+    if (!cb->theStruct) { freeCallbackCalled(); return 0; }
+
     /* Push CallBackFrame. See StackLayout.doc */
     next    = ActiveCallBackFrame;
     betaTop = BetaStackTop;
