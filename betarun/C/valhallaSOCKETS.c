@@ -1,4 +1,4 @@
-#include "define.h"
+#include "beta.h"
 
 
 #ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
@@ -17,6 +17,8 @@
  *                 *
  *******************/
 
+#undef MININT
+#undef MAXINT
 
 #include <string.h>
 #include <unistd.h>
@@ -48,10 +50,20 @@ valhalla_inetAddrOfThisHost(void)
     struct hostent *pHostInfo=gethostbyname("localhost");
 
     if (!pHostInfo) {
+      fprintf(stderr, "valhalla_inetAddrOfThisHost: gethostbyname failed\n"); 
+      fflush(stderr);
       return -1;
     }
     inetAddrOfThisHostCache = *(unsigned long *)(*pHostInfo->h_addr_list);
     inetAddrOfThisHostCached=1;
+    DEBUG_VALHALLA(char * name = (char *)(*pHostInfo->h_addr_list);
+		   fprintf(output,"valhalla_inetAddrOfThisHost: %d.%d.%d.%d\n",
+			   (unsigned)name[0],
+			   (unsigned)name[1],
+			   (unsigned)name[2],
+			   (unsigned)name[3]
+			   );
+		   fflush(output));
   }
   return inetAddrOfThisHostCache;
 }
@@ -71,16 +83,22 @@ int valhalla_openActiveSocket(unsigned long inetAddr, long port)
 
   /* Create a socket */
   if((sock=socket(AF_INET,SOCK_STREAM,0))<0) {
+    fprintf(stderr, 
+	    "valhalla_openActiveSocket: socket(AF_INET,SOCK_STREAM,0) failed\n"); 
+    fflush(stderr);
     return -1;
   }
 
   /* And connect to the server */
   memset((char *)&addr,0,sizeof(addr)); /* instead of bzero */
   addr.sin_family=AF_INET;
-  addr.sin_port=(int)port;
+  addr.sin_port=htons((unsigned short)port);
   addr.sin_addr.s_addr=inetAddr;
 
   if(connect(sock,(struct sockaddr*)&addr,sizeof(addr))<0) {
+    fprintf(stderr, 
+	    "valhalla_openActiveSocket: connect failed\n"); 
+    fflush(stderr);
     return -1;
   }
 
@@ -125,7 +143,7 @@ int valhalla_createPassiveSocket(long *port)
   /* Bind the socket */
   memset((char *)&sockaddr,0,sizeof(sockaddr)); /* instead of bzero */
   sockaddr.sin_family=AF_INET;
-  sockaddr.sin_port=(int)*port;
+  sockaddr.sin_port=htons((unsigned short)*port);
   sockaddr.sin_addr.s_addr=INADDR_ANY;
   if(0>bind(listenSock,(struct sockaddr*)&sockaddr,sizeof(sockaddr))) {
     return -1;
@@ -137,7 +155,7 @@ int valhalla_createPassiveSocket(long *port)
     if (0>getsockname(listenSock,(struct sockaddr*)&sockaddr,&size)) {
       return -1;
     }
-    (*port) = sockaddr.sin_port;
+    (*port) = ntohs(sockaddr.sin_port);
   }
 
   /* Ask OS to create client request queue */
@@ -193,7 +211,7 @@ int valhalla_acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr)
     if (0>getpeername(newSock,(struct sockaddr*)&peer,&size)) {
       return -1;
     }
-    *pInetAddr=peer.sin_addr.s_addr;
+    *pInetAddr=ntohl(peer.sin_addr.s_addr);
   }
 
   return newSock;
