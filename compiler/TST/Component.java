@@ -1,96 +1,106 @@
 package beta;
 
-public class Component extends Thread
-{ static Component current;
-    static int id = 0;
-    int myId;
-    Component caller;
-    BetaObject body;
+public class Component { 
+    // A Component implements a BETA component.
+    // A Component has an associated Runner, a subclass of a Thread
+    // - A Runner object is associated when the Component is generated
+    // - When a Component is terminated, the associated Runner is
+    //   kept in a freelist to avoid expensive allocation of Threads
+
+    static Component current;        // The current executing Component
+    private static Runner firstFree; // First free Runner
+    private static int id = 0;       // Global counter of Component id's
+
+    private Runner myRunner ;       // The associated Runner
+    private int myId;               // The id of this Component
+    private Component caller;       // The Component calling/attaching
+                                    // this Component. When suspended,
+                                    // is refers to this(Component)
+    private BetaObject body;        // The BETA object of this Component
 
     static {
-	System.out.println("\n*** NOTICE:Using compiler/TST/Component.java!\n");
+     System.out.println("\n*** OBS:Using compiler/TST/Component.java!\n");
     }
 
     Component(BetaObject b) { 
 	body = b; 
-	setDaemon(true); 
 	b.comp$ = this; 
         caller = this;
-        id = id + 1;
-        myId = id;
+        myId = id = id + 1;
+	if (firstFree == null) {
+	    trace("New Runner ");
+	    myRunner = new Runner(this);
+	}
+	else {
+	    trace("Reusing Runner ");
+	    myRunner = firstFree;
+	    firstFree = firstFree.next;
+	    myRunner.myComponent = this;
+	};
     }
 
-    synchronized public void swap()
-	// attach : current is calling component
-	//          component being attached is locked
-	// suspend: current is component to be suspended
-	//          suspending component is locked
-        //          current == this
-    {  boolean isAttach = false;
-	if (current == this) 
-	    trace("suspend");
-	else
-	    {// trace("attach ");
-	    isAttach = true;
-	    };
-	Component old_current;
-	old_current = current;                                    
-	current = caller;
-	caller = old_current;
-	if (isAttach)  trace("attach ");
-	if (!isAlive()) start(); // only relevant if attach
-	else notify(); // attach:  attached component is notified,
-	               //          but awaits termination of swap
-                       // suspend: caller is waiting notify and gets it
-                       //          but awaits termination of swap
-	try{ wait();   // attach:  caller now waits notify from attached component
-                       //          lock on attached component is released
-                       //          attached component continues
-                       // suspend: suspending component now awaits notify
-                       //          from attaching component; lock is release
-                       //          and caller is resumed 
-           } catch (InterruptedException e){}
+    public void swap() {  
+	boolean isAttach = false;
+	synchronized(myRunner) {
+	    if (current == this) 
+		trace("suspend");
+	    else
+		isAttach = true;
+	    Component old_current;
+	    old_current = current;                                    
+	    current = caller;
+	    caller = old_current;
+	    if (isAttach) trace("attach");
+	    myRunner.go();
+	    try{ myRunner.wait(); } catch (InterruptedException e){}
+	}
     }
-
-    synchronized void att()
-    { 
-	trace("Component:att");
-	caller = current;
-	current = this;
-	if (!isAlive()) start();
-	else notify();
-	try{ wait(); } catch (InterruptedException e){}
-    }
-    
-    synchronized void susp()
-    { 
-	trace("Component:susp");
-	current = caller;
-	notify();
-	try{ wait(); } catch (InterruptedException e){}
-    } 
-
-    public void run() 
-    { 
-	trace("run");
-	body.xdo();
-	trace("terminated");
-        swap();
-	// synchronized(this) { notify();};
-    }
-    public void display()
-    { System.out.print("id:"+myId+':');
-      if ((caller != null) & (caller != this) & (id > 2))
-	  caller.display();
+ 
+    public void display() {
+	System.out.print("id:"+myId+':');
+	if ((caller != null) & (caller != this))
+	    caller.display();
     }
 	
-    public void trace(String T)
-    { 
+    public void trace(String T) { 
 	if (false) {
 	    Class C = body.getClass();
 	    System.out.println(T+':'+' '+C.getName());
 	    display();
 	    System.out.println();      
+	}
+    }
+
+    class Runner extends Thread
+    { Component myComponent;
+	Runner next;
+	Runner(Component c){
+	    myComponent = c;
+	    setDaemon(true);
+	}
+
+	public void run(){
+	    while (true) {
+		myComponent.body.xdo();
+		trace("Terminating Runner ");
+		swap();
+		myComponent = null;
+		next = firstFree;
+		firstFree = this;
+		trace("Pooled Runner waits");
+		synchronized (this)
+		    { try{wait(); } catch (InterruptedException e){}
+		    };
+		trace("Pooled Runner resumed");
+	    }
+	}
+	public void go() { 
+	    if (!isAlive()) { 
+		trace("Runner.go");
+		start();
+	    }
+	    else
+		synchronized(this) {notify();};
 	}
     }
 }
