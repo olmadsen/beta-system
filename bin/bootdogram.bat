@@ -4,7 +4,7 @@ rem Used to boot grammars by invoking the
 rem grammar tools of the previous release.
 
 rem --- configuration---
-set OLD_BETALIB=e:\beta
+set OLD_BETALIB=e:\beta\r4.0.2
 
 rem --- don't change below ---
 
@@ -12,8 +12,8 @@ set NEW_BETALIB=%BETALIB%
 set BETALIB=%OLD_BETALIB%
 
 rem Try to guess which SDK is being used
-if not exist "%BETALIB%"\bin\ms\ntibeta52.exe set sdk=bor
-if not exist "%BETALIB%"\bin\bor\ntibeta52.exe set sdk=ms
+if not exist "%BETALIB%"\system\nti\ms\beta.exe set sdk=bor
+if not exist "%BETALIB%"\system\nti\bor\beta.exe set sdk=ms
 
 rem Set SDK to either "bor" or "ms" for either Borland or Microsoft SDK.
 if "%sdk%"=="" goto usage
