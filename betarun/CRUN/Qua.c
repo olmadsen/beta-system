@@ -26,6 +26,7 @@ ParamProtoCellOriginThis(Qua)
   /* the source can be found in theCell since the assignment *has* been done */
   ref(ProtoType) srcProto;
   GCable_Entry();
+  FetchParamProtoCellOriginThis();
 
   DEBUG_CODE(NumQua++);
 

@@ -642,7 +642,7 @@ CAlloVRC(struct Object *origin,
 		  )
 
 #define SaveVar(var) pushReference(var)
-#define RestoreVar(var) popReference(var)
+#define RestoreVar(var) var = (__typeof__(var))popReference()
 
 #define Protect(var, code) \
   pushReference(var); { code; } var = (__typeof__(var))popReference();

@@ -40,7 +40,8 @@ void MkTO(char *asciz,
     struct TextObject* theText=0;
     unsigned long range, i, repsize, size, isInAOA;
     struct ValRep *theRep=0;
-    
+    GCable_Entry();
+
     DEBUG_CODE(NumMkTO++);
 
     Ck(theItem); Ck(BasicItem);
