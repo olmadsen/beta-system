@@ -128,9 +128,9 @@ else
 	 > $DST/system.tar
 
 	if [ ! -d ${BETALIB}/test ]; then mkdir ${BETALIB}/test; fi
-	cd ${BETALIB}/test
+	#cd ${BETALIB}/test
 	#echo "Adding betarun_pe.${BETARUN_EXT} as betarun.${BETARUN_EXT} and betarun_v.${BETARUN_EXT} from directory"
-	pwd
+	#pwd
 
 	/bin/rm -rf betarun
 	mkdir betarun
