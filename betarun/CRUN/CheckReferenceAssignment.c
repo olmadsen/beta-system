@@ -1,23 +1,22 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CheckReferenceAssignment.c,v 1.8 1992-09-03 12:55:45 beta Exp $
+ * Mod: $Id: CheckReferenceAssignment.c,v 1.9 1992-10-02 16:55:47 poe Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"
 #include "crun.h"
 
-void
-#ifdef sparc
 /* This is called with target in %g1, which is a super temp. */
-     ChkRA()
-#else
-/* On the snake we get the target in the ordinary argument register %r26 */
-     ChkRA(handle(Object) theObjHandle)
-#endif
+void ChkRA()
 {
 #ifdef sparc
   register handle(Object) theObjHandle asm("%g1");
+#endif
+#ifdef hppa
+  struct Object **theObjHandle;
+
+  asm volatile ("COPY %%r28,%0" : "=r" (theObjHandle));
 #endif
 
   /* The Assignment *theObjHandle = theObj has just been
