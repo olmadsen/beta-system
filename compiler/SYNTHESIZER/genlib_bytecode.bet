@@ -973,11 +973,14 @@ do (# sig: @Signature;
       exitVal: ^ASTindex;
       EVL,EV: @ASTindex; V: ^EH.evVal;
       orgName: ^text;
-      theDesc,objSpec,D: @ASTindex;
-      descKind: @integer;
+      theDesc,objSpec,D,pref,topSuperName: @ASTindex;
+      descKind,subLevel
+      : @integer;
       nonLocal: @boolean
    do 311->trace(#
-                do 'genPtnMethod: '->xT; patternName[] -> xT;
+                do 'genPtnMethod: '->xT; patternName[] -> xT; xN;
+                   'desc: ' -> xT; desc[] -> xA;
+                   'topDesc:' -> xT; topDesc[] -> XA;
                 #);
       desc -> objSpec;
       (if desc.label 
@@ -990,7 +993,17 @@ do (# sig: @Signature;
             -> (D,descKind);
           &ASTindex[] -> desc[]; (* to prevent aliasing; ugly! *)
           D -> desc;
+          none -> topDesc[]
       if);
+      (if topDesc[] = none then
+          desc.son -> pref;
+          &ASTindex[] -> topDesc[]; (* prevent aliasing *)
+          (if pref.label = gram.prefix then
+              pref.son -> topSuperName;
+              topSuperName -> sematt.descChain -> (topDesc,subLevel)
+           else
+              desc -> topDesc;
+      if)if);
       desc -> theDesc;
       (if desc.isSlot then 
           (*'\n*** OBS! Slots are not handled by genPtnMethod: '->puttext;
@@ -1015,7 +1028,7 @@ do (# sig: @Signature;
           (if isStatic then sig.markStatic if);
           thisDesc[] -> sig.addEnter;
           exitP[] -> sig.addExit;
-          thisDesc[] -> sematt.hasDo -> hasDoCode
+          topDesc[]  -> sematt.hasDo -> hasDoCode
       if);
       patternName[] -> sig.addMethod;
       sig.exitId -> exitId;
@@ -1052,28 +1065,8 @@ do (# sig: @Signature;
           false -> sig.isStatic;
           thisDesc[] -> sig.addEnter;
        else
-          (if true then
-              (theDesc[],objSpec[],originDesc[],nonLocal) -> newInstanceWithOrigin;
-           else
-          (if not nonLocal then
-              theDesc[] -> newThisInstance
-           else
-              theDesc[] -> newInstance
-              (# OA: ^mch.address
-              do 'ptnMethod:newInstance:' -> mch.comment;
-                 patternName -> mch.comment;
-                 true -> inEnterDoExitMethod;
-                 originDesc -> thisDesc; (* ugly: thisDesc is used 
-                                              * in genOrgAdrToOrgReg
-                                              *)
-                 (gen.thisRegAdr,originDesc[],objSpec[]
-                 ,originDesc->DH.newSingle)
-                   -> genOrgAdrToOrgReg 
-                   -> OA[];
-                 theDesc -> thisDesc;
-                 false -> inEnterDoExitMethod;
-              #)
-          if)if)
+          (theDesc[],objSpec[],originDesc[],nonLocal) 
+            -> newInstanceWithOrigin;
       if);
 
       (if hasNcode then
@@ -1216,7 +1209,7 @@ do (# genMain:
            sematt.textDesc[] -> newThisInstance;
            (false,2) -> mch.return; (* return reference *)
         #);
-      theDesc,preName,preDesc: @ASTindex;
+      theDesc,topSuperName,topDesc: @ASTindex;
       subLevel: @integer;
       superName: ^text;
       
@@ -1262,8 +1255,6 @@ do (# genMain:
           313->trace(#
                     do 'Path: ' -> xT; path[] -> xT
                     #);
-          (blockLevel = 0) and (doP.label <> gram.empty) -> isOuter;
-          
           (if not (common.switch[184] or common.switch[189]) then
               (# Jfile: ^text
               do className[]->path.append;
@@ -1277,13 +1268,13 @@ do (# genMain:
 
           (**** G-part ****)
           (if pref.label = gram.prefix then
-              pref.son -> preName;
-              preName[] -> getNameAsText -> superName[];
+              pref.son -> topSuperName;
+              topSuperName[] -> getNameAsText -> superName[];
               (* note: we need to do name manglig for the super name *)
-              preName -> sematt.quaDesc -> preDesc;
-              (preDesc[],true) -> EH.descName -> superName[];
+              topSuperName -> sematt.quaDesc -> topDesc;
+              (topDesc[],true) -> EH.descName -> superName[];
               
-              preName -> sematt.descChain -> (preDesc,subLevel); 
+              topSuperName -> sematt.descChain -> (topDesc,subLevel); 
               (* One super : subLevel = 0
                * Two super : subLevel = 1
                * ...
@@ -1313,9 +1304,11 @@ do (# genMain:
               if);              
               313->trace(#
                         do 'super: ' -> xT; subLevel -> xI;
-                           superName[] -> xT
+                           superName[] -> xT; xN;
+                           topDesc[] -> xA
                         #)
            else
+              thisDesc -> topDesc;
               (if true
                // common.targetMachineId = common.javabc then
                   'java/lang/Object'->supername[];
@@ -1326,8 +1319,14 @@ do (# genMain:
               if);
               0 -> subLevel
           if);
-          thisDesc[] 
-            -> sematt.descOrigin -> orgDesc[];
+          (* Perhaps there should be an outer static method
+           * also for patterns without a do-part, since they 
+           * may be executed anyway - such calls are perhaps 
+           * never generated by the compiler?
+           *)
+          (blockLevel = 0) and (topDesc[] -> sematt.hasDo) -> isOuter;
+          
+          thisDesc[] -> sematt.descOrigin -> orgDesc[];
           (if not orgDesc.isNull then
               orgDesc[] -> mkSignature -> orgName[]
                  (*
@@ -1387,7 +1386,8 @@ do (# genMain:
                  (if usPos > 0 then 
                      (usPos+1,className.length) -> className.sub -> classname[]
                  if);
-                 (className[],thisDesc[],true,theDesc[]) -> genPtnMethod;
+                 (className[],thisDesc[],true,theDesc[],topDesc[])
+                   -> genPtnMethod;
                  x[] -> exitP[];
                  d[] -> doP[];
                  n[] -> enterP[];
@@ -1457,7 +1457,7 @@ do (# genMain:
                      
                      (if common.switch[186] then
                          ((current[],false)->EH.descName
-                         ,current[],false,theDesc[]) 
+                         ,current[],false,theDesc[],none)
                            -> genPtnMethod;
                      if)
                   // gram.objectDescriptor then
@@ -1469,7 +1469,7 @@ do (# genMain:
                           * do we have the right ones here ?
                           *)
                          ((current[],false)->EH.descName
-                         ,current[],false,theDesc[]) 
+                         ,current[],false,theDesc[],none)
                            -> genPtnMethod;
                          ((current[],false)->EH.descName
                          ,current[],theDesc[]) 
@@ -1478,7 +1478,7 @@ do (# genMain:
                   else
                      (* attributeDenotation as 'A' in 'V:<A' *)
                      ((current[],false)->EH.descName
-                     ,current[],false,theDesc[]) 
+                     ,current[],false,theDesc[],none)
                        -> genPtnMethod;
                      ((current[],false)->EH.descName
                      ,current[],theDesc[]) 
