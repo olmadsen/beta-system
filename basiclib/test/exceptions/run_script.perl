@@ -2,48 +2,65 @@
 
 $num_files = 36;
 
-system ("rm log log13 log80");
+sub compile()
+{
+    local ($filename, $switch) = @_;
+    
+    system("beta -s $switch $filename.bet > logs/$filename.compile$switch");
+    if (!-x $filename){
+	print "$filename: compilation failed";
+	if ($switch ne ""){
+	    print " (switch $switch)";
+	}
+	print ":\n";
+	system("cat logs/$filename.compile$switch");
+    }
+}
+
+sub execute()
+{
+    local ($filename, $switch) = @_;
+     
+    if (-x $filename){
+	system("sh -c \"./$filename > logs/$filename.output$switch 2>logs/$filename.stderr$switch\"");
+    }
+}
+
+sub compare()
+{
+    local ($filename, $switch) = @_;
+     
+    @gr = `grep "Aborting" logs/$filename.output$switch`;
+    if ($#gr == -1) {
+	system("echo $filename >> logs/log$switch");
+    }
+}
+
+
+### main:
+
+mkdir("logs", 0755) if (! -d "logs") ;
+
+system ("rm -f *.dump logs/log* logs/*.compile* logs/*.output* logs/*.stderr*");
 
 for ($i=1; $i<=$num_files; $i++) 
 {
-    if ($i==21) {
-	$i++;
-    }
-    if ($i==23) {
-	$i++;
-    }
+    $filename = sprintf "tstexcept%02d", $i;
+    print "$filename\n";
 
-    if ($i<10)
-    {
-	$filename = "tstexcept0$i";
-    }
-    else
-    {
-	$filename = "tstexcept$i";
-    }
-    system("beta $filename.bet > $filename.compile");
-    system("./$filename > $filename.output");
+    next if ($i==21);
+    next if ($i==23);
 
-    @gr = `grep "Aborting" $filename.output`;
-    if ($#gr == -1) {
-	system("echo $filename >> log");
-    }
+    &compile($filename, "");
+    &execute($filename, "");
+    &compare($filename, "");
 
-    system("beta -s 13 $filename.bet > $filename.compile");
-    system("./$filename > $filename.output");
+    &compile($filename, "13");
+    &execute($filename, "13");
+    &compare($filename, "13");
 
-    @gr = `grep "Aborting" $filename.output`;
-    if ($#gr == -1) {
-	system("echo $filename >> log13");
-    }
-
-    system("beta -s 80 $filename.bet > $filename.compile");
-    system("./$filename > $filename.output");
-
-    @gr = `grep "Aborting" $filename.output`;
-    if ($#gr == -1) {
-	system("echo $filename >> log80");
-    }
-
+    &compile($filename, "80");
+    &execute($filename, "80");
+    &compare($filename, "80");
 }
 
