@@ -1,6 +1,6 @@
 /*
  * Low level support for scanning BETA objects in the
- * different kinds of heaps. Used by ~beta/sysutils/v1.4/scanobjects.bet.
+ * different kinds of heaps. Used by ~beta/sysutils/scanobjects.bet.
  *
  * COPYRIGHT
  *       Copyright Mjolner Informatics, 1994
@@ -228,6 +228,7 @@ scanIOAliveObjects(int printVisited,
 
 
 
+
 /*****************
  *               *
  *   Interface   *
@@ -263,4 +264,102 @@ lowScanAOA(long printVisited, long printOrigin, long printSize,
 		     rootProto,
 		     cb);
 }
+
+
+#define DEBUG_SCANREF 0
+void scanIOAliveForRef(ref(Object) target,
+		  int printName,
+		  void (*cb)(ref(Object)))
+{
+  ref(ProtoType) targetproto = target->Proto;
+  ref(Object) theObj = (ref(Object))IOA;
+  long objSize;
+  long SavedNumIOAGc = NumIOAGc;
+  struct GCEntry *gce;
+  short *dynoffptr;
+  long reftype;
+  long* refptr;
+
+  /* If 'cb' creates new objects, ignore them */
+  long *SavedIOATop = IOATop;
+#if DEBUG_SCANREF
+  fprintf(output, "ScanRefs:Looking for target %08X\n", (long)target);
+  fprintf(output, "ScanRefs:IOA=%08X, IOATop=%08X\n", (long)IOA, (long)IOATop);
+#endif
+
+  while ((long*)theObj < SavedIOATop) {
+    /* Check for IOA-GC */
+    if (SavedNumIOAGc != NumIOAGc) {
+      fprintf(MSG_DEST,GC_PANIC_MSG);
+      return;
+    }
+
+    /* Check the object */
+    if (((long) theObj->Proto) >= 0) {
+#if DEBUG_SCANREF
+      fprintf(output, "ScanRefs:Looking at %08X %s\n", 
+	      (long)theObj, ProtoTypeName(theObj->Proto));
+#endif
+      /* Real object: Scan refs or target */
+      gce = (struct GCEntry*)((long)theObj->Proto + theObj->Proto->GCTabOff);
+      while (gce->StaticOff) {
+	/* Check static refs here. */
+#if DEBUG_SCANREF
+	if (((long)gce->Proto) >0)
+	  fprintf(output, "ScanRefs:Looking at static part at %08X: %s\n",
+		  (long)theObj+(gce->StaticOff*4),ProtoTypeName(gce->Proto));
+#endif
+	if ((long)theObj+(gce->StaticOff*4) == (long)target) {
+	  /* Found a pointer at target */
+	  if (printName) {
+	    fprintf(output, "ScanRefs:Found target as static part of %s\n", 
+		    ProtoTypeName(theObj->Proto));
+	  }
+	  if (cb) 
+	    (*cb)(theObj);
+	}
+	gce++;
+      }
+      dynoffptr = (short*)gce;
+      dynoffptr++; /* Skip terminating zero */
+      while (*dynoffptr) {
+	reftype = *dynoffptr;
+	refptr = (long*)((reftype & ~3) + (long)theObj);
+	reftype &= 3;
+	if (*refptr == (long)target) {
+	  /* Found a pointer at target */
+	  if (printName) {
+	    fprintf(output, "ScanRefs:Found pointer to target from %s\n", 
+		    ProtoTypeName(theObj->Proto));
+	  }
+	  if (cb) 
+	    (*cb)(theObj);
+	}
+	dynoffptr++;
+      }
+    }
+    else {
+      /* Non-object: most are ignored for now */
+      switch ((long)(theObj->Proto)) {
+      case (long)ComponentPTValue:
+#if DEBUG_SCANREF
+	fprintf(output, "ScanRefs:Component, skipping header\n");
+#endif
+	theObj = (struct Object*)ComponentItem(theObj);
+	continue;
+      default:
+	;
+#if DEBUG_SCANREF
+	fprintf(output, "ScanRefs:skipping at %08X proto %08X\n", 
+		(long)theObj, (long)(theObj->Proto));
+#endif
+      }
+    }
+    
+    /* Go to next object */
+    objSize = 4*ObjectSize(theObj);
+    theObj = (ref(Object)) ((long)theObj + objSize);
+  }
+}
+
 #endif /* !MT */
