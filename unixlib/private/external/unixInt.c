@@ -29,6 +29,9 @@
 #define MAXHOSTNAMELEN 512
 #endif
 
+#define PATIENCE 5 /* times to retry syscalls when memory is tight */
+#define PATIENT_SLEEP(x) (1 << (PATIENCE - (x)))
+
 char *errstr(int err)
 {
   return strerror(err);
@@ -81,6 +84,8 @@ int startUnixProcess(char *name, char *args, int in, int out, int err)
      default : The process id of the new process
      */
 
+  int patience = PATIENCE;
+
   int i=0; 
   int pid;
   char *argRep[MAX_NO_OF_ARGS + 1];
@@ -114,6 +119,9 @@ int startUnixProcess(char *name, char *args, int in, int out, int err)
 #else
 #define FORK vfork
 #endif
+
+more_patience: 
+
   switch(pid=FORK()){
   case 0 : 
     /* Child: */
@@ -203,6 +211,15 @@ int startUnixProcess(char *name, char *args, int in, int out, int err)
   case -1 : 
     /* Error: */
     {
+      patience--;
+      if (patience > 0 && errno == EAGAIN) {
+        fprintf(stderr, "Memory is tight ... trying again to fork\n");
+        sleep(PATIENT_SLEEP(patience));
+        goto more_patience;
+      }
+      if (errno == ENOMEM) {
+        fprintf(stderr, "Not enough memory to fork...\n");
+      }
       return -1;
     }
   default : 
