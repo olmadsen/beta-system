@@ -46,17 +46,15 @@ do
    if);
 #)
 
----semTryP:descriptor---
-(# 
+---semTryP:dopart---
 do (if semrep.cnt < 1 then
        false -> value;
     else
        P; true -> value; 
    if)
-#)
 
----SemCount:descriptor---
-(# do semRep.Q.size -> value #)
+---SemCount:dopart---
+do semRep.Q.size -> value
    
 ---SemRep:descriptor---
 (# cnt: @Integer;
@@ -121,8 +119,7 @@ do
 ---MonitorReturn:descriptor---
 (# do (if urgent.count>0 then urgent.V else mutex.V if) #)
    
---- sleep:descriptor ---
-(#
+--- sleep:dopart ---
 do 
    (if time > 0 then
        theActive.ce[] -> theActive.q.delete;
@@ -131,7 +128,6 @@ do
        private.sleeping[] -> theActive.q[];
        SUSPEND;
    if)
-#)
 
 --BasicSystemEnvPrivate:descriptor--
 (# 
@@ -226,15 +222,55 @@ do
      #)
 #)
 (*********** System ****************)
---rPortAccept:descriptor--
-(# 
-do (theActive[] = sender[]) -> OK
+--rPortDelayed: descriptor--
+(# Q: (# sys: ^|sysHead;
+         sem: @semaphore;
+         next: ^Q; prev: ^Q
+      #);
+   top: ^Q;
+   wait:
+     (# tmp: ^Q
+     do &Q[]->tmp[];
+        top[]->tmp.next[];
+        (if top[]<>none then tmp[]->top.prev[] if);
+        tmp[]->top[];
+        theActive[]->top.sys[];
+        am.V; top.sem.P;
+     #);
+   release:
+     (# released: @boolean;
+        tmp: ^Q
+     do top[]->tmp[];
+        l: (if tmp[]<>none then
+               (if tmp.sys[]->acceptable then
+                   (* remove from list *)
+                   (if top[]=tmp[] then tmp.next[]->top[] if);
+                   (if tmp.next[]<>none then 
+                       tmp.prev[]->tmp.next.prev[]
+                   if);
+                   (if tmp.prev[]<>none then 
+                       tmp.next[]->tmp.prev.next[];
+                   if);
+                   tmp.sem.V; true->released;
+                   leave l
+                else tmp.next[]->tmp[]; restart l
+               if)
+           if)
+     exit released
+     #);
 #)
+--rPortAccept: dopart--
+do l: (# do am.P; (if not delayed.release then restart l else am.V if) #);
+   INNER; mx.P;
+--rPortRestrictedEntry: dopart--   
+do delayed.wait;
+   INNER restrictedEntry; 
+   mx.V   
+--oPortAcceptable:dopart--
+do (s[] = sender[]) -> OK
 
---oPortAccept:descriptor--
-(# 
-do (theActive##<=sender##)->OK
-#)
+--qPortAcceptable:dopart--
+do (s##<=sender##)->OK
 
 --InitSystemEnv:descriptor--
 (#
@@ -242,12 +278,10 @@ do private.init;
    SUSPEND;
 #)
 
---- systemConcStart:descriptor ---
-(# 
+--- systemConcStart:dopart ---
 do concPriv.pio[] -> s.caller[];
    s[] -> fork;
    concPriv.count+1 -> concPriv.count;
-#)
 
 --- systemConcPriv:descriptor ---
 (# count: @Integer;
@@ -263,12 +297,10 @@ do
    if);
 #)
 
---- systemEnvConcStart:descriptor ---
-(# 
+--- systemEnvConcStart:dopart ---
 do concPriv.pio[] -> s.caller[];
    s[] -> fork;
    concPriv.count+1 -> concPriv.count;
-#)
 
 --- systemEnvConcPriv:descriptor ---
 (# count: @Integer;
@@ -357,8 +389,7 @@ do
        onDel;
    if)
    
---- cyclicQueueScan:descriptor ---
-(# 
+--- cyclicQueueScan:dopart ---
 do
    first[] -> current[];
    loop:
@@ -369,7 +400,6 @@ do
              restart loop
          if);
      if);
-#)
    
 --- systemlib:attributes ---
 
