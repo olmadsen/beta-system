@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopyText.c,v $, rel: %R%, date: $Date: 1992-08-27 15:47:00 $, SID: $Revision: 1.9 $
+ * Mod: $RCSfile: CopyText.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:35 $, SID: $Revision: 1.10 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -14,7 +14,7 @@ void CopyT(char *asciz,
 	   unsigned offset /* i ints */
 	   )
 {
-    DeclReference1(struct ValRep *theRep);
+    DeclReference1(struct ValRep *, theRep);
     register unsigned range, size, i;
     
     GCable_Entry();
@@ -26,9 +26,8 @@ void CopyT(char *asciz,
     
     /* Allocate a value repetition */
     size = ByteRepSize(range);
-    theRep = cast(ValRep) IOAalloc(size);
+    Protect(theItem, theRep = cast(ValRep) IOAalloc(size));
 
-    ForceVolatileRef(theItem);
     Ck(theItem);
     
     theRep->Proto = ByteRepPTValue;

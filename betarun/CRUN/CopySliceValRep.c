@@ -1,8 +1,13 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopySliceValRep.c,v $, rel: %R%, date: $Date: 1992-08-27 15:46:48 $, SID: $Revision: 1.11 $
+ * Mod: $RCSfile: CopySliceValRep.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:32 $, SID: $Revision: 1.12 $
  * by Peter Andersen and Tommy Thorn.
  */
+
+#ifdef hppa
+register int _dummy8 asm("%r15"); /* really tmp data 1 */
+register int _dummy9 asm("%r16"); /* really tmp data 2 */
+#endif
 
 #define GCable_Module
 
@@ -15,6 +20,10 @@ asmlabel(CopySVR, "
 	mov	%l6, %o4
 ");
 
+#ifdef hppa
+#  define CCopySVR CopySVR
+#endif
+
 void CCopySVR(ref(ValRep) theRep,
 	      ref(Item) theItem,
 	      unsigned offset, /* i ints */
@@ -22,10 +31,15 @@ void CCopySVR(ref(ValRep) theRep,
 	      unsigned high
 	      )
 {
-    DeclReference1(struct ValRep *newRep);
+    DeclReference1(struct ValRep *, newRep);
     register long i;
     
     GCable_Entry();
+
+#ifdef hppa
+  low = (unsigned) getR2Reg();
+  high = (unsigned) getR1Reg();
+#endif
     
     Ck(theItem); Ck(theRep);
     /* Copy a slice of a Value Repetition. */

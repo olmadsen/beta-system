@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: ExtendRefRep.c,v $, rel: %R%, date: $Date: 1992-08-27 15:47:45 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: ExtendRefRep.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:41 $, SID: $Revision: 1.8 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -14,18 +14,26 @@ asmlabel(ExtRR, "
 	mov	%l7, %o2
 ");
 
+#ifdef hppa
+#  define CExtRR ExtRR
+#endif
+
 void CExtRR(ref(Object) theObj,
 	    unsigned offset, /* in longs */
 	    long add
 	    )
 {
-    DeclReference1(struct RefRep *theRep);
-    DeclReference2(struct RefRep *newRep);
+    DeclReference1(struct RefRep *, theRep);
+    DeclReference2(struct RefRep *, newRep);
     
     long newRange, copyRange, i;
     
     GCable_Entry();
-    
+
+#ifdef hppa
+    add = 0; puts("ExtRR:not yet tested on snake");
+#endif
+
     Ck(theObj);
     theRep = *casthandle(RefRep) ((long *) theObj + offset);
     newRange = theRep->HighBorder + add;
@@ -33,10 +41,11 @@ void CExtRR(ref(Object) theObj,
     
     if (newRange < 0)
       newRange = 0;
-    
-    newRep = cast(RefRep) IOAcalloc(RefRepSize(newRange));
+
+    Protect(theRep,
+	    Protect(theObj,
+		    newRep = cast(RefRep) IOAcalloc(RefRepSize(newRange))));
    
-    ForceVolatileRef(theObj);
     Ck(theObj);
 
     newRep->Proto = RefRepPTValue;

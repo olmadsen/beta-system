@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopyValRep.c,v $, rel: %R%, date: $Date: 1992-08-27 15:47:12 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: CopyValRep.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:38 $, SID: $Revision: 1.8 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -14,42 +14,50 @@ void CopyVR(ref(ValRep) theRep,
 	    unsigned offset /* i ints */
 	    )
 {
-    DeclReference1(struct ValRep *newRep);
+    DeclReference1(struct ValRep *, newRep);
     register unsigned range, i;
     
     GCable_Entry();
-    
+
     Ck(theRep); Ck(theObj);
     newRep = NULL;
     
     range = theRep->HighBorder;
-    if (range > LARGE_REP_SIZE)
-      switch( (int) theRep->Proto){
-	case (int) ByteRepPTValue:
-	  newRep = cast(ValRep) LVRAByteAlloc(range);
-	  break;
-	case (int) WordRepPTValue:
-	  newRep = cast(ValRep) LVRAWordAlloc(range);
-	  break;
-	case (int) ValRepPTValue:
-	  newRep = cast(ValRep) LVRAAlloc(range);
-	  break;
-	case (int) DoubleRepPTValue:
-	  newRep = cast(ValRep) LVRADoubleAlloc(range);
-	  break;
-	default:
-	  fprintf(output, "CopyValRep: wrong prototype\n");
-	  exit(1);
-      }
+    if (range > LARGE_REP_SIZE) {
+      Protect(theRep, 
+	      Protect(theObj,
+		      switch( (int) theRep->Proto){
+		      case (int) ByteRepPTValue:
+			newRep = cast(ValRep) LVRAByteAlloc(range);
+			break;
+		      case (int) WordRepPTValue:
+			newRep = cast(ValRep) LVRAWordAlloc(range);
+			break;
+		      case (int) ValRepPTValue:
+			newRep = cast(ValRep) LVRAAlloc(range);
+			break;
+		      case (int) DoubleRepPTValue:
+			newRep = cast(ValRep) LVRADoubleAlloc(range);
+			break;
+		      default:
+			fprintf(output, "CopyValRep: wrong prototype\n");
+			exit(1);
+		      });
+	      );
+    }
     if (newRep) {
 	/* Make the LVRA-cycle: theCell -> newRep.Age */
 	newRep->GCAttr = (int) ((int *) theObj + offset);
     }
     else
       {
-	  newRep = cast(ValRep) IOAcalloc(DispatchValRepSize(theRep,range));
-	  
-	  ForceVolatileRef(theObj);
+	  Protect(theObj,
+		  Protect(theRep,
+			  newRep = cast(ValRep) 
+			           IOAcalloc(DispatchValRepSize(theRep,range))
+			  );
+		  );
+
 	  Ck(theObj);
 	  newRep->Proto = theRep->Proto;
 	  newRep->GCAttr = 1;

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Misc.c,v $, rel: %R%, date: $Date: 1992-08-27 15:49:00 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: Misc.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:49 $, SID: $Revision: 1.8 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -9,7 +9,12 @@
 #include "beta.h"
 #include "crun.h"
 
+#ifdef hppa
+void Return() {}
+#endif
+#ifdef sparc
 asmlabel(Return, "retl; nop");
+#endif
 
 void
 RefNone(ref(Object) theObj)
@@ -17,6 +22,14 @@ RefNone(ref(Object) theObj)
     BetaError(-1, theObj);
 }
 
+#ifdef hppa
+SetArgValues(int argc, char *argv[])
+{
+  ArgCount = argc;
+  ArgVector = argv;
+}
+#endif
+#ifdef sparc
 /* Need to do this in assembler, as the arguments to
    my caller normally isn't accesseable */
 asmlabel(SetArgValues, "
@@ -26,6 +39,7 @@ asmlabel(SetArgValues, "
 	retl
 	st %i1, [%g1]
 ");
+#endif
 
 char *
 IOAalloc(unsigned size)
@@ -34,13 +48,18 @@ IOAalloc(unsigned size)
 
   GCable_Entry();
 
+  if(size & 7) { p = 1; *((long *)p) = 0; }
   while ((char *)IOATop+size > (char *)IOALimit) {
       ReqObjectSize = size / 4;
       DoGC();
   }
 
   p = (char *)IOATop;
+#ifdef hppa
+  setIOATopoffReg(getIOATopoffReg() + size);
+#else
   IOATopoff += size;
+#endif
 
   return p;
 }
@@ -57,7 +76,11 @@ char *IOAcalloc(unsigned size)
   }
 
   p = (char *)IOATop;
+#ifdef hppa
+  setIOATopoffReg(getIOATopoffReg() + size);
+#else
   IOATopoff += size;
+#endif
 
   int_clear(p, size);
   return p;

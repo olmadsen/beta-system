@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateValRep.c,v $, rel: %R%, date: $Date: 1992-08-27 15:38:14 $, SID: $Revision: 1.9 $
+ * Mod: $RCSfile: AllocateValRep.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:05 $, SID: $Revision: 1.10 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -15,15 +15,29 @@ asmlabel(AlloVR1, "
 	mov %l1, %o2
 ");
 
+#ifdef hppa
+#define CAlloVR1 AlloVR1
+#define CAlloVR2 AlloVR2
+#define CAlloVR4 AlloVR4
+#define CAlloVR8 AlloVR8
+#endif
+
 ref(ValRep) CAlloVR1(ref(Object) theObj,
 		     unsigned offset, /* i bytes */
 		     unsigned range
 		     )
 {
-    DeclReference1(struct ValRep *theRep);
+    DeclReference1(struct ValRep *, theRep);
     register unsigned Size;
 
     GCable_Entry();
+
+#ifdef hppa
+   /* must be the first instr. in the proc. because D1 is not kept from GCC */
+  range = (unsigned) getD1Reg();
+  theObj = cast(Object) getThisReg();
+  offset = (unsigned) getD0Reg();
+#endif
 
     if (range < 0) range = 0;
 
@@ -37,14 +51,13 @@ ref(ValRep) CAlloVR1(ref(Object) theObj,
 	    theRep->GCAttr = (int) ((char *) theObj + offset);
 	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
 	    int_clear((char*)theRep->Body, Size - headsize(ValRep));
-	    return theRep;
+	    RETURN(theRep);
 	}
     }
 
   
-    theRep = cast(ValRep) IOAcalloc(Size);
+    Protect(theObj, theRep = cast(ValRep) IOAcalloc(Size));
 
-    ForceVolatileRef(theObj);
     Ck(theObj);
   
     theRep->Proto = ByteRepPTValue;
@@ -68,10 +81,16 @@ ref(ValRep) CAlloVR2(ref(Object) theObj,
 		     unsigned range
 		     )
 {
-    DeclReference1(struct ValRep *theRep);
+    DeclReference1(struct ValRep *, theRep);
     register unsigned Size;
 
     GCable_Entry();
+
+#ifdef hppa
+  range = (unsigned) getD1Reg();
+  theObj = cast(Object) getThisReg();
+  offset = (unsigned) getD0Reg();
+#endif
 
     if (range < 0) range = 0;
 
@@ -88,9 +107,7 @@ ref(ValRep) CAlloVR2(ref(Object) theObj,
 	}
     }
 
-    theRep = cast(ValRep) IOAcalloc(Size);
-
-    ForceVolatileRef(theObj);
+    Protect(theObj, theRep = cast(ValRep) IOAcalloc(Size));
     Ck(theObj);
 
     theRep->Proto = WordRepPTValue;
@@ -114,10 +131,16 @@ ref(ValRep) CAlloVR4(ref(Object) theObj,
 			   unsigned range
 			   )
 {
-    DeclReference1(struct ValRep *theRep);
+    DeclReference1(struct ValRep *, theRep);
     register unsigned Size;
 
     GCable_Entry();
+
+#ifdef hppa
+  range = (unsigned) getD1Reg();
+  theObj = cast(Object) getThisReg();
+  offset = (unsigned) getD0Reg();
+#endif
 
     if (range < 0)
       range = 0;
@@ -135,9 +158,7 @@ ref(ValRep) CAlloVR4(ref(Object) theObj,
 	}
     }
 
-    theRep = cast(ValRep) IOAcalloc(Size);
-
-    ForceVolatileRef(theObj);
+    Protect(theObj, theRep = cast(ValRep) IOAcalloc(Size));
     Ck(theObj);
     
     theRep->Proto = ValRepPTValue;
@@ -164,10 +185,16 @@ ref(ValRep) CAlloVR8(ref(Object) theObj,
 		     unsigned range
 		     )
 {
-    DeclReference1(struct ValRep *theRep);
+    DeclReference1(struct ValRep *, theRep);
     register unsigned Size;
 
     GCable_Entry();
+
+#ifdef hppa
+  range = (unsigned) getD1Reg();
+  theObj = cast(Object) getThisReg();
+  offset = (unsigned) getD0Reg();
+#endif
 
     if (range < 0)
       range = 0;
@@ -185,9 +212,7 @@ ref(ValRep) CAlloVR8(ref(Object) theObj,
 	}
     }
 
-    theRep = cast(ValRep) IOAcalloc(Size);
-
-    ForceVolatileRef(theObj);
+    Protect(theObj, theRep = cast(ValRep) IOAcalloc(Size));
     Ck(theObj);
 
     theRep->Proto = DoubleRepPTValue;

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: MakeTextObj.c,v $, rel: %R%, date: $Date: 1992-08-27 15:48:22 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: MakeTextObj.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:47 $, SID: $Revision: 1.8 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -14,15 +14,19 @@
 
 void MkTO() asm("MkTO");
 
+#ifdef hppa
+#  define TextProto _TextProto
+#endif
+
 void MkTO(char *cText,
 	  ref(Item) theItem,
 	  unsigned offset /* i ints */ )
 {
-    DeclReference1(struct Item *theText);
+    DeclReference1(struct Item *, theText);
     GCable_Entry();
     
     Ck(theItem); Ck(BasicItem);
-    theText = CAlloI(BasicItem, TextProto);
+    Protect(theItem, theText = CAlloI((struct Object *)BasicItem, TextProto));
     
     AssignReference((long *)theItem + offset, theText);
     

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-08-27 15:18:52 $, SID: $Revision: 1.15 $
+ * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-08-31 10:03:52 $, SID: $Revision: 1.16 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -14,13 +14,14 @@ ParamOriginProto(struct Component *,AlloC)
   /* AlloC calls BETA code, thus we need to make sure GC can
      find and update the reference in comp. */
 
-    DeclReference1(struct Component *comp);
+    DeclReference1(struct Component *, comp);
     GCable_Entry();
     FetchOriginProto
 
     Ck(origin);
 
-    comp = cast(Component) IOAcalloc(ComponentSize(proto->Size));
+    Protect(origin, 
+	    comp = cast(Component) IOAcalloc(ComponentSize(proto->Size)));
 
     /* The new Component is now allocated, but not initialized yet! */
 
@@ -36,12 +37,13 @@ ParamOriginProto(struct Component *,AlloC)
 
     setup_item(cast(Item) &comp->Body, proto, origin);
 
-    (cast(Item) &comp->Body)->GCAttr = - headsize(Component)/4;
+    (cast(Item) &comp->Body)->GCAttr = -((headsize(Component))/4);
 
-    CallBetaEntry(proto->GenPart,&comp->Body);
+    Protect(comp, CallBetaEntry(proto->GenPart,&comp->Body));
 
-    ForceVolatileRef(comp);
     Ck(comp);
 
-    return comp;
+    GCable_Exit(1);
+    RETURN(comp);
 }
+

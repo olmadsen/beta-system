@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateStackObject.c,v $, rel: %R%, date: $Date: 1992-08-27 15:23:58 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: AllocateStackObject.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:02 $, SID: $Revision: 1.8 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -12,7 +12,7 @@
 ref(StackObject)
 AlloSO(unsigned size)
 {
-    DeclReference1(struct StackObject *theStack);
+    DeclReference1(struct StackObject *, theStack);
 
     GCable_Entry();
 

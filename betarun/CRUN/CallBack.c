@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-08-27 15:40:17 $, SID: $Revision: 1.18 $
+ * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:15 $, SID: $Revision: 1.19 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -8,6 +8,84 @@
 #include "crun.h"
 
 int HandleCB();
+
+#ifdef hppa
+/*
+ * these are used in the process of generating HP-PA machinecode. Now aren't
+ * these lovely?
+ */
+static unsigned long mangle21(unsigned long x)
+{
+  unsigned long bit20, bits9_19, bits5_6, bits0_4, bits7_8;
+
+  bit20 =     (x >> 20) & 0x0001;
+  bits9_19 =  (x >> 9)  & 0x07ff;
+  bits5_6 =   (x >> 7)  & 0x0003;
+  bits0_4 =   (x >> 2)  & 0x001f;
+  bits7_8 =       x     & 0x0003;
+
+  return (bits0_4<<16)|(bits5_6<<14)|(bits7_8<<12)|(bits9_19<<1)|bit20;
+}
+
+static unsigned long bletch(unsigned long x)
+{
+  return (x << 1) & 0x03ffe;
+}
+
+void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
+{
+    theObj = cast(Object) getThisReg();
+
+    if (CBFATop+1 > CBFALimit){
+      CBFArelloc();
+      setThisReg((long *)theObj);
+      RETURN(CopyCPP(theStruct, cast(Object) 0));
+    }
+
+    CBFATop->theStruct = theStruct;
+
+    /* Construct the following code in the CBF:
+     * 0 LDIL L'HandleCB, %r1
+     * 1 MFSP %sr4,%r31
+     * 2 LDO  R'HandleCB(%r1),%r1
+     * 3 MTSP %r31,%sr0
+     * 4 LDIL L'theStruct,%r28
+     * 5 BE   0(%sr4,%r1)
+     * 6 LDO  R'theStruct(%r28),%r28
+     */
+    CBFATop->code[0] = (8<<26)|(1<<21)
+      |mangle21(((unsigned long)HandleCB >> 11) & 0x1fffff);
+    CBFATop->code[1] = (1<<13)|(0x25<<5)|31;
+    CBFATop->code[2] = (0xd<<26)|(1<<21)|(1<<16)
+      |bletch((unsigned long)HandleCB & 0x7ff);
+    CBFATop->code[3] = (31<<16)|(0xc1<<5);
+    CBFATop->code[4] = (8<<26)|(28<<21)
+      |mangle21(((unsigned long)theStruct >> 11) & 0x1fffff);
+    CBFATop->code[5] = (0x38<<26)|(1<<21)|(1<<13); /* really sr4 - sic! */
+    CBFATop->code[6] = (0xd<<26)|(28<<21)|(28<<16)
+      |bletch((unsigned long)theStruct & 0x7ff);
+
+    /* now flush the code from the data cache */
+    asm volatile ("fdc\t0(0,%0)" : /* no out */
+                  : "r" (&CBFATop->code[0]));
+    asm volatile ("fdc\t0(0,%0)" : /* no out */
+                  : "r" (&CBFATop->code[2]));
+    asm volatile ("fdc\t0(0,%0)" : /* no out */
+                  : "r" (&CBFATop->code[4]));
+    asm volatile ("fdc\t0(0,%0)\n\tsync" : /* no out */
+                  : "r" (&CBFATop->code[6]));
+
+    ++CBFATop;
+
+    /* the following C call expects the function-pointer in arg1 - sic! */
+    asm("COPY %0, %%r26" : /*no out*/ : "r" (&(CBFATop-1)->code[0]) : "r26");
+    return((void *)&(CBFATop-1)->code[0]);
+}
+
+#endif /* hppa */
+
+/**************************** sparc **************************/
+#ifdef sparc
 
 asmlabel(CopyCPP, "
 	ba	_CCopyCPP
@@ -34,6 +112,7 @@ void *CCopyCPP(ref(Structure) theStruct, ref(Object) theObj)
     ++CBFATop;
     return (void *)&(CBFATop-1)->mov_o7_g1;
 }
+
 
 extern int HandleCB() asm("HandleCB");
 
@@ -92,3 +171,52 @@ int HandleCB(int a1, int a2, int a3, int a4, int a5, int a6)
     asm(""::"r" (&a6), "r" (next), "r" (betaTop), "r" (tmp)) ;
     return retval;
 }
+
+#endif /* sparc */
+
+/************************** snake ******************************/
+
+#ifdef hppa
+
+/* HandleCallBack is called from a CallBackEntry, setup like
+   above. This means that %r28 points to the struct.
+ */
+
+int HandleCB(int a1, int a2, int a3, int a4, int FOR)
+{
+    struct CallBackFrame        cbf;
+    ref(Structure)              theStruct;
+    int                         retval;
+    DeclReference1(struct Item *, theObj);
+
+    /* First things first, get a grib on the struct pointer */
+    asm volatile ("COPY %%r28,%0" : "=r" (theStruct));
+
+    /* Push CallBackFrame. */
+    cbf.next    = ActiveCallBackFrame;
+    cbf.betaTop = BetaStackTop;
+    /* cbf.tmp     = (long) getSPReg();  so the GC can find it */
+    ActiveCallBackFrame = &cbf;
+
+    setCallReg(theStruct->iProto);
+    setOriginReg(theStruct->iOrigin);
+    theObj = AlloI();
+
+    /* This is how the arguments will look to the callee:
+     * The first 4 integer arguments are in registers 26 - 23 as always.
+     * -52(sp) = pointer to the first of the rest of the args, call it 'ap'
+     * (ap) = arg#4, -4(ap) = arg#5,...
+     * Unfortunately this doesn't work for doubles :-(
+     */
+    setCallReg(theObj);
+    retval = theObj->Proto->CallBackRoutine(a1, a2, a3, a4, &FOR);
+
+    BETA_CLOBBER;
+
+    /* Pop CallBackFrame */
+    ActiveCallBackFrame = cbf.next;
+    BetaStackTop        = cbf.betaTop;
+
+    return retval;
+}
+#endif /* hppa */

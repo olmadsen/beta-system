@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-08-27 15:54:51 $, SID: $Revision: 1.11 $
+ * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-08-31 10:05:02 $, SID: $Revision: 1.12 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -8,16 +8,18 @@
 #ifndef _CRUN_H_
 #define _CRUN_H_
 
+#ifndef hppa
 extern struct Component* CAlloC();
 extern struct Item    * CAlloI();
+#endif
 extern ref(ValRep) 	AlloVR();
 extern char 	      * LVRAAlloc();
 extern char 	      * LVRAByteAlloc();
 extern ref(RefRep)	AlloRR();
 extern ref(StackObject) AlloSO() asm ("AlloSO");
 extern void		CopyT() asm ("CopyT");
-extern ref(RefRep)	CopySRR() asm ("CopySRR");
-extern ref(ValRep)	CopySVR() asm ("CopySVR");
+extern void		CopySRR() asm ("CopySRR");
+extern void		CopySVR() asm ("CopySVR");
 extern ref(Structure)	AlloS() asm("AlloS");
 extern ref(Structure)	ThisS() asm("ThisS");
 extern ref(Item)	AlloSI() asm("AlloSI");
@@ -130,9 +132,10 @@ setup_item(ref(Item) theItem,
 
 #ifdef DEBUG_IOA
 /* Consistency checks - Checks for valid references */
+static char __CkString[80];
 #define Ck(r) \
-  (r && Claim(inIOA(r) || inAOA(r) || inLVRA(r), \
-	      __FILE__":" #r ": none or inside IOA, AOA, or LVRA"))
+  { sprintf(__CkString, "%s:%d:Ck failed:%s", __FILE__, __LINE__, #r); \
+  if(r) Claim(inIOA(r) || inAOA(r) || inLVRA(r), __CkString); }
 
 #else
 #define Ck(r)

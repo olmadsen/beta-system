@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: ExtendValRep.c,v $, rel: %R%, date: $Date: 1992-08-27 15:47:56 $, SID: $Revision: 1.6 $
+ * Mod: $RCSfile: ExtendValRep.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:44 $, SID: $Revision: 1.7 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -14,45 +14,54 @@ asmlabel(ExtVR, "
 	mov	%l7, %o2
 ");
 
+#ifdef hppa
+#  define CExtVR ExtVR
+#endif
+
 void CExtVR(ref(Object) theObj,
 	    unsigned offset, /* in longs */
 	    long add /* What to extend the range with */
 	    )
 {
-    DeclReference1(struct ValRep *theRep);
-    DeclReference2(struct ValRep *newRep);
+    DeclReference1(struct ValRep *, theRep);
+    DeclReference2(struct ValRep *, newRep);
     long newRange; /* Range of new repetition */
     long copyRange; /* Range to copy from old rep */
     int i;
     
     GCable_Entry();
-    
+
+#ifdef hppa
+    add = getD0Reg(); puts("ExtVR:not tested on snake");
+#endif
+
     Ck(theObj);
     theRep = *casthandle(ValRep) ((long *) theObj + offset);
     newRange = theRep->HighBorder + add; /* Range of new repetition */
     
     if (newRange < 0) newRange = 0;
     copyRange = DispatchValRepBodySize(theRep, (add < 0) ? newRange : theRep->HighBorder) >> 2;
-    
+
     if (newRange > LARGE_REP_SIZE) {
-	switch((int) theRep->Proto){
-	  case (int) ByteRepPTValue:
-	    newRep = cast(ValRep) LVRAByteAlloc(newRange);
-	    break;
-	  case (int) WordRepPTValue:
-	    newRep = cast(ValRep) LVRAWordAlloc(newRange);
-	    break;
-	  case (int) ValRepPTValue:
-	    newRep = cast(ValRep) LVRAAlloc(newRange);
-	    break;
-	  case (int) DoubleRepPTValue:
-	    newRep = cast(ValRep) LVRADoubleAlloc(newRange);
-	    break;
-	  default:
-	    newRep = cast(ValRep) 0;
-	}
-	
-	if (newRep) {
+      Protect2(theObj, theRep, 
+        switch((int) theRep->Proto){
+	case (int) ByteRepPTValue:
+	  newRep = cast(ValRep) LVRAByteAlloc(newRange);
+	  break;
+	case (int) WordRepPTValue:
+	  newRep = cast(ValRep) LVRAWordAlloc(newRange);
+	  break;
+	case (int) ValRepPTValue:
+	  newRep = cast(ValRep) LVRAAlloc(newRange);
+	  break;
+	case (int) DoubleRepPTValue:
+	  newRep = cast(ValRep) LVRADoubleAlloc(newRange);
+	  break;
+	default:
+	  newRep = cast(ValRep) 0;
+	});
+
+        if (newRep) {
 	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
 	    newRep->GCAttr = (int) ((long *) theObj + offset);
 	    *casthandle(ValRep) ((long *) theObj + offset) = newRep;
@@ -66,9 +75,11 @@ void CExtVR(ref(Object) theObj,
     /* Allocate and nullify new repetition: There is a little overhead here;
      * only extension needs to be nullified
      */
-    newRep = cast(ValRep) IOAcalloc(DispatchValRepSize(theRep, newRange));
-    
-    ForceVolatileRef(theRep);
+
+    Protect2(theObj, theRep,
+	     newRep = cast(ValRep) 
+	                  IOAcalloc(DispatchValRepSize(theRep, newRange)));
+
     Ck(theRep);
 
     /* Assign structural part of new repetition */

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopyCtext.c,v $, rel: %R%, date: $Date: 1992-08-27 15:45:40 $, SID: $Revision: 1.10 $
+ * Mod: $RCSfile: CopyCtext.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:21 $, SID: $Revision: 1.11 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -11,12 +11,20 @@
 
 asmlabel(CopyCT, "ba _CCopyCT; mov %l0, %o0");
 
+#ifdef hppa
+#  define CCopyCT CopyCT
+#endif
+
 ref(ValRep) CCopyCT(unsigned char *textPtr)
 {
-    DeclReference1(struct ValRep *theRep);
+    DeclReference1(struct ValRep *, theRep);
     register unsigned range, size, i;
 
     GCable_Entry();
+
+#ifdef hppa
+    textPtr = (unsigned char *) getD0Reg();
+#endif
 
       /* Allocate a ValueRepetition and initialize it with some text.    */
 
@@ -37,10 +45,13 @@ ref(ValRep) CCopyCT(unsigned char *textPtr)
 	theRep->Body[i] = *((long *)textPtr + i);
     }
 
+#ifdef sparc
     /* hack hack. Olm wants the result in %i2 */
     __asm__("ret;restore %0, 0, %%i2"::"r" (theRep));
+#endif
+#ifdef hppa
+    setOriginReg(theRep);
+#endif
 
     return theRep; /* dummy, keeps gcc happy */
 }
-
-

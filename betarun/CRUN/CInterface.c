@@ -19,10 +19,20 @@ asmlabel(CpkVT, "
 	mov %i0, %o0
 ");
 
-char *CCpkVT(ref(Object) theObj, ref(ValRep) theRep)
+char *
+#ifdef sparc
+      CCpkVT(ref(Object) theObj, ref(ValRep) theRep)
+#else
+       CpkVT(ref(ValRep) theRep)
+#endif
 {
     long bodysize = ByteRepBodySize(theRep->HighBorder);
     long i;
+
+#ifdef hppa
+    ref(Object) theObj;
+    theObj = cast(Object) getThisReg();
+#endif
 
     /* Check range overflow on CTextPool.
      * nextText is used as a tmp. register only.
@@ -58,11 +68,21 @@ asmlabel(CpkSVT, "
 ");
 
 /* CCpkSVT: Copy Slice of variable text (byte rep) to C */
-char *CCpkSVT(ref(Object) currentObj, ref(ValRep) theRep, unsigned low, unsigned high)
+char *
+#ifdef sparc
+      CCpkSVT(ref(Object) currentObj, ref(ValRep) theRep, unsigned low,
+	      unsigned high)
+#else
+       CpkVTS(ref(ValRep) theRep, unsigned low, unsigned high)
+#endif
 {
     long bodysize;
     long i;
     unsigned char *oldBody;
+#ifdef hppa
+    ref(Object) currentObj;
+    currentObj = cast(Object) getThisReg();
+#endif
 
     Ck(currentObj); Ck(theRep);
     if (low<theRep->LowBorder) BetaError(-6, currentObj);

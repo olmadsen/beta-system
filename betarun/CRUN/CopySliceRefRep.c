@@ -1,10 +1,15 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopySliceRefRep.c,v $, rel: %R%, date: $Date: 1992-08-27 15:46:37 $, SID: $Revision: 1.11 $
+ * Mod: $RCSfile: CopySliceRefRep.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:29 $, SID: $Revision: 1.12 $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #define GCable_Module
+
+#ifdef hppa
+register int _dummy8 asm("%r15"); /* really tmp data 1 */
+register int _dummy9 asm("%r16"); /* really tmp data 2 */
+#endif
 
 #include "beta.h"
 #include "crun.h"
@@ -15,6 +20,10 @@ asmlabel(CopySRR, "
 	mov	%l6, %o4
 ");
 
+#ifdef hppa
+#  define CCopySRR CopySRR
+#endif
+
 void CCopySRR(ref(RefRep) theRep,
 	      ref(Item) theItem,
 	      unsigned offset, /* i ints */
@@ -22,11 +31,16 @@ void CCopySRR(ref(RefRep) theRep,
 	      unsigned high
 	      )
 {
-    DeclReference1(struct RefRep *newRep);
+    DeclReference1(struct RefRep *, newRep);
     register unsigned size;
     register int i;
     
     GCable_Entry();
+
+#ifdef hppa
+    low = (unsigned) getR2Reg();
+    high = (unsigned) getR1Reg();
+#endif
     
     Ck(theItem); Ck(theRep);
     /* Copy a slice of a Reference Repetition.
@@ -47,10 +61,9 @@ void CCopySRR(ref(RefRep) theRep,
     
     /* size is now converted to the range of the resulting repetition. */
     
-    newRep = cast(RefRep) IOAalloc(RefRepSize(size));
+    Protect(theItem,
+	    Protect(theRep, newRep = cast(RefRep) IOAalloc(RefRepSize(size))));
     
-    ForceVolatileRef(theItem);
-    ForceVolatileRef(theRep);
     Ck(theRep); Ck(theItem);
 
     /* The new Object is now allocated, but not assigned yet! */

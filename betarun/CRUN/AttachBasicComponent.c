@@ -21,23 +21,39 @@ ParamThisComp(void, AttBC)
     register long 		level 	      asm("%l7");
 #endif
 
+#ifdef hppa
+    long			dummy;
+    struct ComponentBlock       cb; /* don't move without changing Attach.S */
+
+    comp = cast(Component)getCallReg();
+#endif
+
     GCable_Entry();
-    FetchThisComp
 
     Ck(comp);
     /* Push the bottom component block. */
     /* Terminates the list of component blocks on the stack. */
-
+#ifdef sparc
     callBackFrame = cast(CallBackFrame) 0;
     nextCompBlock = cast(RegWin) 0;
     level = 0;
 
-    BasicItem = cast(Item) &comp->Body;
-
-    ActiveCallBackFrame = 0; lastCompBlock = cast(ComponentBlock) StackPointer;
+    lastCompBlock = cast(ComponentBlock) StackPointer;
     
     getret(comp->CallerLSC);
+#endif
+#ifdef hppa
+    cb.callBackFrame = cast(CallBackFrame) 0;
+    cb.next = cast(ComponentBlock) 0;
+    cb.level = 0;
+    cb.RefBlock = (void *)getRefSP();
+    lastCompBlock = (void *)getSPReg();
+    comp->CallerLSC = 1;
+#endif
 
+    BasicItem = cast(Item) &comp->Body;
+
+    ActiveCallBackFrame = 0;
     ActiveComponent = comp;
 
     /* ?? should set comp = 0 as done in Att.BasicComp.run */

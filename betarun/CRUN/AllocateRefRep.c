@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateRefRep.c,v $, rel: %R%, date: $Date: 1992-08-27 15:22:16 $, SID: $Revision: 1.8 $
+ * Mod: $RCSfile: AllocateRefRep.c,v $, rel: %R%, date: $Date: 1992-08-31 10:03:59 $, SID: $Revision: 1.9 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -18,18 +18,25 @@ asmlabel(AlloRR, "
         mov %l1, %o2
 ");
 
+#ifdef hppa
+#  define CAlloRR AlloRR
+#endif
+
 ref(RefRep) CAlloRR(ref(Object) theObj,
 		    unsigned offset, /* i bytes */
 		    unsigned range
 		    )
 {
-    DeclReference1(struct RefRep *theRep);
+    DeclReference1(struct RefRep *, theRep);
     GCable_Entry();
+#ifdef hppa
+    theObj = cast(Object) getThisReg();
+    offset = (unsigned) getD0Reg();
+    range  = (unsigned) getD1Reg();
+#endif
 
     Ck(theObj);
-    theRep = cast(RefRep) IOAcalloc(RefRepSize(range));
-    
-    ForceVolatileRef(theObj);
+    Protect(theObj, theRep = cast(RefRep) IOAcalloc(RefRepSize(range)));
     Ck(theObj);
 
     theRep->Proto = RefRepPTValue;
@@ -38,5 +45,5 @@ ref(RefRep) CAlloRR(ref(Object) theObj,
     theRep->HighBorder = range;
 
     AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
-    return theRep;
+    RETURN(theRep);
 }

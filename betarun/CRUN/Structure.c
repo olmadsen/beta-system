@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Structure.c,v $, rel: %R%, date: $Date: 1992-08-27 15:53:27 $, SID: $Revision: 1.16 $
+ * Mod: $RCSfile: Structure.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:59 $, SID: $Revision: 1.17 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -19,9 +19,7 @@ ParamOriginProto(struct Structure *, AlloS)
     /* Allocate a StructObject. */
 
     Ck(origin);
-    newStruct = cast(Structure) IOAalloc(StructureSize);
-
-    ForceVolatileRef(origin);
+    Protect(origin, newStruct = cast(Structure) IOAalloc(StructureSize));
     Ck(origin);
 
     newStruct->Proto = StructurePTValue;
@@ -29,7 +27,7 @@ ParamOriginProto(struct Structure *, AlloS)
     newStruct->iOrigin = origin;
     newStruct->iProto = proto;
 
-    return newStruct;
+    RETURN(newStruct);
 }
 
 ref(Structure) ThisS(ref(Object) this)
@@ -41,12 +39,14 @@ ref(Structure) ThisS(ref(Object) this)
 
     GCable_Entry();
 
+#ifdef hppa
+    this = cast(Object) getCallReg();
+#endif
+
     /* Allocate a StructObject. */
 
     Ck(this);
-    newStruct = cast(Structure) IOAalloc(StructureSize);
-
-    ForceVolatileRef(this);
+    Protect(this, newStruct = cast(Structure) IOAalloc(StructureSize));
     Ck(this);
 
     newStruct->Proto = StructurePTValue;
@@ -58,26 +58,39 @@ ref(Structure) ThisS(ref(Object) this)
     newStruct->iProto = origin->Proto;
     newStruct->iOrigin = (casthandle(Object)origin)[origin->Proto->OriginOff];
 
+#ifdef sparc
     /* MP */
     asm volatile ("restore %0, %%g0, %%l0;retl;nop"::"r" (newStruct));
+#endif
+#ifdef hppa
+    setD0Reg((int)newStruct);
+#endif
     return newStruct;
 }
 
-ParamStruc(struct Structure *, AlloSI)
+ParamStruc(struct Item *, AlloSI)
 {
+    struct Item *ss;
+
     GCable_Entry();
     FetchStruc
     Ck(struc);
-    return (struct Structure *)CAlloI(cast(Object) struc->iOrigin, struc->iProto);
+    Protect(struc, 
+	    ss = CAlloI(cast(Object) struc->iOrigin, struc->iProto));
+    RETURN(ss);
 }
 
-ParamStruc(struct Structure *, AlloSC)
+ParamStruc(struct Component *, AlloSC)
 {
+    struct Component *ss;
+
     GCable_Entry();
     FetchStruc
     Ck(struc);
-    return (struct Structure *)CAlloC(cast(Object) struc->iOrigin, struc->iProto);
-}
+    Protect(struc, 
+	    ss = CAlloC(cast(Object) struc->iOrigin, struc->iProto));
+    RETURN(ss);
+}    
 
 int EqS(ref(Structure) arg1, ref(Structure) arg2)
 {
@@ -136,7 +149,7 @@ int GtS(ref(Structure) arg1, ref(Structure) arg2)
 {
   ref(ProtoType) proto1;
   ref(ProtoType) proto2;
-  DeclReference1(struct Item *newObject);
+  DeclReference1(struct Item *, newObject);
 
   GCable_Entry();
 
@@ -173,9 +186,8 @@ int GtS(ref(Structure) arg1, ref(Structure) arg2)
 	 We need to generate a new item, as this is currently the only
 	 way we can get the origin. */
       
-      newObject = AlloSI(arg2);
+      Protect(arg1, newObject = AlloSI(arg2));
       return cast(Object)((long*)newObject)[proto2->OriginOff]==arg1->iOrigin;
     }
   return 0; 
 }
-
