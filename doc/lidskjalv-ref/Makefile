@@ -1,5 +1,8 @@
 interface: always
 	cd interface; ./makeHTML
+	cd interface-utils; ./makeHTML
+	cd interface-multimedia; ./makeHTML
+	cd interface-openGL; ./makeHTML
 
 tags:
 	etags demo/copyexpand interface/makeRTF interface/headers.perl
