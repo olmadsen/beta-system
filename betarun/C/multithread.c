@@ -62,14 +62,22 @@ void create_TSD(void)
   }
   NumTSD++;
   
+  /* Make sure there is enough slices in IOA for all threads.
+   * Add to NumIOASlices until there are more than TSDs.
+   * Forthcoming threads (including the one being created)
+   * will use the smaller slice size, whereas running threads will
+   * use the previous (larger) slice size) until they are forced to
+   * take a new slice (after a GC).
+   */
   while (NumIOASlices < NumTSD) {
     NumIOASlices += numProcessors(TRUE);
     IOASliceSize = ObjectAlignDown(IOASize / NumIOASlices);
     DEBUG_MT(fprintf(output,
 		     "create_TSD: NumIOASlices changed to %d, IOASliceSize to %d\n", 
-		     (int)NumIOASlices, IOASliceSize));
+		     (int)NumIOASlices, (int)IOASliceSize));
   }
 
+  /* Find free entry in TSDlist */
   for (TSDinx = 0; TSDlist[TSDinx]; TSDinx++)
     ;
   TSDlist[TSDinx] = TSDReg;
@@ -95,6 +103,14 @@ void destroy_TSD(void)
   NumTSD--;
 
   mutex_unlock(&tsd_lock);
+
+  /* Some other thread may be initiating a GC.  
+   * If we are the last to "join in", that thread wouldwait forever
+   * without this...
+   */
+  mutex_lock(&cond_startGC_lock);
+  cond_signal(&cond_startGC);
+  mutex_unlock(&cond_startGC_lock);
 }
 
 static struct Object *AllocObjectAndSlice(unsigned int numbytes, unsigned int reqsize)
@@ -102,6 +118,14 @@ static struct Object *AllocObjectAndSlice(unsigned int numbytes, unsigned int re
   /* ASSUMPTION: that max(numbytes,IOASliceSize) will fit into [gIOATop..gIOALimit[ */
 
   struct Object *newObj;
+
+#ifdef RTDEBUG
+  {
+    int max = (numbytes>IOASliceSize) ? numbytes : IOASliceSize;
+    Claim((int)gIOATop+max<(int)gIOALimit, 
+	  "AllocObjectAndSlice: gIOATop+max<gIOALimit");
+  }
+#endif	     
   
   if (IOALimit == gIOATop){
     /* No other threads have been given a new slice since we got 
@@ -273,7 +297,9 @@ struct Object *doGC(unsigned long numbytes)
 	       fflush(output);
 	       );
       mutex_lock(&cond_GCdone_lock);
+      mutex_lock(&cond_startGC_lock);
       cond_signal(&cond_startGC);
+      mutex_unlock(&cond_startGC_lock);
       mutex_unlock(&ioa_lock);
       /* FIXME: problem: The thread GC'ing may finish before I get to wait... */
       while (cond_wait(&cond_GCdone, &cond_GCdone_lock))
@@ -336,7 +362,7 @@ int numProcessors(int online)
 
 extern void *AttTC(void *);
 
-thread_t attToProcessor(struct Component *comp)
+thread_t attToThread(struct Component *comp)
 { 
   thread_t tid;
   if (thr_create(NULL                           /* stack base */,
@@ -355,6 +381,11 @@ thread_t attToProcessor(struct Component *comp)
 		   (int)comp);
 	   fflush(output););
   return tid;
+}
+
+int thisThreadInx(void)
+{
+  return TSDinx;
 }
 
 #ifdef RTDEBUG
@@ -382,7 +413,10 @@ static __inline__ void UnLock(unsigned long* l)
 struct S_PreemptionLevel PreemptionLevel;
 
 void SetupVirtualTimer(unsigned usec);
+void SetupRealTimeTimer(unsigned firstsec, unsigned firstusec, unsigned usecinterval);
 GLOBAL(int AlarmOccured) = 0;
+static int AlarmHandlerInitalized=0;
+
 void AlarmHandler(int sig, siginfo_t *sip, void *uap)
 {
   AlarmOccured++;
@@ -391,7 +425,7 @@ void AlarmHandler(int sig, siginfo_t *sip, void *uap)
     if (!PreemptionLevel.value) { 
       if (!PreemptionLevel.inGC) { /* We cannot reset IOALimit while GC'ing */
 	IOALimit = 0;
-	DEBUG_MT(fprintf(output, "IOALimit=0x%x\n", (int)IOALimit));
+	DEBUG_MT(fprintf(output, "AlarmOccured=0x%x\n", AlarmOccured));
       }
     }
     UnLock(&PreemptionLevel.lock);
@@ -402,31 +436,89 @@ void SetupVirtualTimerHandler()
 {
   struct sigaction act;
 
-  PreemptionLevel.lock = 0;
-  PreemptionLevel.value = 1;
-  act.sa_handler = NULL;            /* Unused */
-  act.sa_sigaction = &AlarmHandler; /* the handler */
-  act.sa_flags = SA_SIGINFO;        /* Use sa_sigaction, not sa_handler */ 
-  sigemptyset(&act.sa_mask);        /* Block no other signals in handler */
+  if (!(AlarmHandlerInitalized & 1)) {
+    PreemptionLevel.lock = 0;
+    PreemptionLevel.value = 1;
+    AlarmHandlerInitalized |= 1;
+  }
+  if (!(AlarmHandlerInitalized & 2)) {
+    act.sa_handler = NULL;            /* Unused */
+    act.sa_sigaction = &AlarmHandler; /* the handler */
+    act.sa_flags = SA_SIGINFO;        /* Use sa_sigaction, not sa_handler */ 
+    sigemptyset(&act.sa_mask);        /* Block no other signals in handler */
+    
+    if (sigaction(SIGVTALRM, &act, NULL)) {
+      fprintf(output,"sigaction SIGVTALRM failed. Errno=%d (%s)\n", errno,strerror(errno));
+      BetaExit(1);
+    }
+    AlarmHandlerInitalized |= 2;
+  }
+}
 
-  if (sigaction(SIGVTALRM, &act, NULL)) {
-    fprintf(output,"sigaction failed. Errno=%d (%s)\n", errno,strerror(errno));
-    BetaExit(1);
+void SetupRealTimeTimerHandler()
+{
+  struct sigaction act;
+
+  if (!(AlarmHandlerInitalized & 1)) {
+    PreemptionLevel.lock = 0;
+    PreemptionLevel.value = 1;
+    AlarmHandlerInitalized |= 1;
+  }
+  
+  if (!(AlarmHandlerInitalized & 4)) {
+    act.sa_handler = NULL;            /* Unused */
+    act.sa_sigaction = &AlarmHandler; /* the handler */
+    act.sa_flags = SA_SIGINFO;        /* Use sa_sigaction, not sa_handler */ 
+    sigemptyset(&act.sa_mask);        /* Block no other signals in handler */
+    
+    if (sigaction(SIGALRM, &act, NULL)) {
+      fprintf(output,"sigaction SIGALRM failed. Errno=%d (%s)\n", errno,strerror(errno));
+      BetaExit(1);
+    }
+    AlarmHandlerInitalized |= 4;
   }
 }
 
 void SetupVirtualTimer(unsigned usec)
 {
   struct itimerval interval;
-
-  /* setup timer tu trigger each usec microseconds */
+  if (!(AlarmHandlerInitalized & 2)) {
+    fprintf(output,"SetupVirtualTimer called before SetupVirtualTimerHandler\n");
+    BetaExit(1);
+  }
+  /* setup timer to trigger each usec microseconds */
   interval.it_value.tv_sec = 0;
   interval.it_value.tv_usec = usec;
   interval.it_interval.tv_sec = 0;
   interval.it_interval.tv_usec = usec;
 
   if (setitimer(ITIMER_VIRTUAL, &interval, NULL)) {
-    fprintf(output,"setitimer failed. Errno=%d (%s)\n", errno,strerror(errno));
+    fprintf(output,"setitimer ITIMER_VIRTUAL failed. Errno=%d (%s)\n", errno,strerror(errno));
+    BetaExit(1);
+  }  
+}
+
+void SetupRealTimeTimer(unsigned firstsec, 
+			unsigned firstusec, 
+			unsigned usecinterval)
+{
+  struct itimerval interval;
+
+  if (!(AlarmHandlerInitalized & 4)) {
+    fprintf(output,"SetupRealTimeTimer called before SetupRealTimeTimerHandler\n");
+    BetaExit(1);
+  }
+
+  /* setup timer to trigger each usec microseconds, starting
+   * firstsec:firstusec from now.
+   */
+  interval.it_value.tv_sec = firstsec;
+  interval.it_value.tv_usec = firstusec;
+  interval.it_interval.tv_sec = 0;
+  interval.it_interval.tv_usec = usecinterval;
+
+  if (setitimer(ITIMER_REAL, &interval, NULL)) {
+    fprintf(output,"setitimer ITIMER_REAL failed. Errno=%d (%s)\n", errno,strerror(errno));
     BetaExit(1);
   }  
 }

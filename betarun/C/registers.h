@@ -21,8 +21,11 @@
 register unsigned *RefTopOffReg   __asm__("%g2");
 register unsigned *DataTopOffReg  __asm__("%g3");
 register TSD      *TSDReg         __asm__("%g4");
+/* NB: If changed, TSDReg must be updated in CallWithSave in sparcdep.h */
 
+#ifndef IOATopInTSD
 register long     *IOATop         __asm__("%g5");
+#endif
 
 #else
 

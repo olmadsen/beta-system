@@ -335,7 +335,8 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
       case SwitchProto(RefRepPTValue):
 	/* This is an error */
 	fprintf(output,
-		"    -- Surrounding object damaged %s!\n", 
+		"    -- Surrounding object (0x%x) damaged %s!\n",
+		(int)staticObj,
 		ProtoTypeName(staticObj->Proto));
 	return;
       } 
@@ -343,7 +344,10 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
     if( staticObj && isObject( staticObj ) ){
       groupname = GroupName((long)staticObj->Proto,0);
       if (groupname==NULL){
-	fprintf(output,"    -- Surrounding object damaged!\n");
+	fprintf(output,
+		"    -- Surrounding object (0x%x) damaged!\n",
+		(int)staticObj
+		);
 	return;
       }
       fprintf(output,"    -- ");
@@ -357,9 +361,14 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
       fprintf(output, " in %s\n", groupname);
     } else {
       if (staticObj){
-	fprintf(output,"    -- Surrounding object damaged!\n");
+	fprintf(output,
+		"    -- Surrounding object (0x%x) damaged!\n",
+		(int)staticObj
+		);
       } else {
-	fprintf(output,"    -- Surrounding object is zero!\n");
+	fprintf(output,
+		"    -- Surrounding object is zero!\n"
+		);
       }
     }
   }
@@ -1012,7 +1021,10 @@ int DisplayBetaStack(enum BetaErr errorNumber,
 	DisplayObject(output, theObj, (long)thePC);
       }
     } else {
-      fprintf(output,"  Current object is damaged!\n");
+      fprintf(output,
+	      "  Current object (0x%x) is damaged!\n",
+	      (int)theObj
+	      );
     }
   } else {
     fprintf(output,"Current object is zero!\n");

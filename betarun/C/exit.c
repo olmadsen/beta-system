@@ -129,6 +129,9 @@ void BetaExit(long number)
 	   );
   destroy_TSD();
 
+  fflush(stdout);
+  fflush(stderr);
+  fflush(output);
   thr_exit(NULL);
 #else
   exit( number );

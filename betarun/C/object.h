@@ -72,10 +72,13 @@ typedef struct Component{
     long            GCAttr;    /* The GC attribute            */
     ref(StackObject)StackObj;  /* Packed stack (suspended) 
 				  or -1 (active)              */
-    ref(Object)     CallerObj; /* Calling object              */
+    ref(Object)     CallerObj; /* Calling object 
+                                * (called "Return Link" in the BETA book)
+				*/
     ref(Component)  CallerComp;/* Calling component           */ 
     long            CallerLSC; /* Local sequence counter in
-				* calling object              
+				* calling object.
+				* (called "Code Point" in BETA book)        
 				*/ 
     long            Body[1];   /* The body part               */ 
 } Component;
@@ -330,21 +333,25 @@ typedef struct TSD
   /*  0 */ struct Component   * _ActiveComponent;
   /*  4 */ struct StackObject * _ActiveStack;
   /*  8 */ long               * _IOALimit;
-  /* 12 */ long               * _savedIOALimit;
-  /* 16 */ long                 _MallocExhausted;
-  /* 20 */ thread_t             _thread_id;
-  /* 24 */ nums               * _nums;
-  /* 28 */ struct Object      * _CurrentObject;
+  /* 12 */ long               * _IOATop;
+  /* 16 */ long               * _savedIOALimit;
+  /* 20 */ long                 _MallocExhausted;
+  /* 24 */ thread_t             _thread_id;
+  /* 28 */ nums               * _nums;
+  /* 32 */ struct Object      * _CurrentObject;
   /*       NB: This offset is hardcoded into CallWithSave in sparcdep.h */
-  /* 32 */ struct Object      * _Origin;
-  /* 36 */ long                 _TSDinx;
-  /* 40 */ char               * _CTextPoolEnd;
-  /* 44 */ long                 _CTextPool [MAXCTEXTPOOL/4];
+  /* 36 */ struct Object      * _Origin;
+  /* 40 */ long                 _TSDinx;
+  /* 44 */ char               * _CTextPoolEnd;
+  /* 48 */ long                 _CTextPool [MAXCTEXTPOOL/4];
 } TSD;
 
 #define ActiveComponent TSDReg->_ActiveComponent
 #define ActiveStack     TSDReg->_ActiveStack
 #define IOALimit        TSDReg->_IOALimit
+#ifdef IOATopInTSD
+#  define IOATop        TSDReg->_IOATop
+#endif
 #define savedIOALimit   TSDReg->_savedIOALimit
 #define ThreadId        TSDReg->_thread_id
 #define Nums            TSDReg->_nums

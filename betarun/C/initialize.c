@@ -214,6 +214,11 @@ static char *unscrambleString(unsigned char *p, int len, int sum)
 void Initialize()
 {
   long *tmpIOA, *tmpIOATop;
+  
+#ifdef MT
+  setbuf(stdout,0); /* disable buffering of output */
+  setbuf(stderr,0);
+#endif
 
   SetupBetaSignalHandlers();
 

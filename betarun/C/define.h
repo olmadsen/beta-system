@@ -5,10 +5,11 @@
  */
 
 #ifdef MT
-#define _REEENTRANT 1
-#define MT_CODE(code) code
+# define _REEENTRANT 1
+# define MT_CODE(code) code
+# define IOATopInTSD 1 /* Should match define i BetaRun.bet! */
 #else
-#define MT_CODE(code)
+# define MT_CODE(code)
 #endif
 
 #define RTINFO  /* Include support for runtime info */
