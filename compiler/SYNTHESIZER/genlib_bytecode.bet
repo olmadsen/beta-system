@@ -33,7 +33,14 @@ methodArgs: evVal
               rA.bAdr.localDesc[] -> theGen.mkSignature -> rA.fieldType[]
           if);
           rA[] -> V.asgToAdr -> V[];
-          313->trace(#do 'methodArgs:asgToAdrZ: '->xT; V.display#);
+          313->trace(#
+                    do 'methodArgs:asgToAdrZ: '->xT; 
+                       (if V[] = none then
+                           'V is None' -> xT
+                        else
+                           V.display
+                       if)
+                    #);
        #);
      asgToRefAdr::
        (# rA: ^mch.address
@@ -141,6 +148,8 @@ EnterArgs: evVal
        enter class[]
        do off+4 -> off -> A.off;
           '!enterArgs:pushNext: '->T; off -> T.putInt; T -> mch.comment;
+          'arg_'->A.fieldName[];
+          off -> A.fieldName.putint;
           (if class[] <> none then              
               (A[],class[],none)->mch.loadRef
            else              
@@ -157,7 +166,7 @@ EnterArgs: evVal
      asgToRefAdr::
        (# sourceClassName,destClassName: ^text;
           dDesc: @ASTindex; mn,dKind: @integer; RC: ^DH.superChain;
-          rA: ^mch.address; destEval: @ASTindex; 
+          rA,rAx: ^mch.address; destEval: @ASTindex; 
        do '!EnterArgs:asgToRefAdr:'->mch.comment;
           destEv.son -> destEval; 
           (rChain[],destEval) 
@@ -170,7 +179,9 @@ EnterArgs: evVal
           if);
           (rAbase.copy,destEval[],false,rChain[])->genAdr->rA[];
           sourceClassName[] -> pushNext;
-          (&mch.RegAdr[],false,sourceClassName[],destClassName[])
+          'enter_ref' -> rA.fieldName[];
+          &mch.RegAdr[] -> rAx[];
+          (rAx[],false,sourceClassName[],destClassName[])
             -> rA.asgRefAdr       
        #);
      asgToRepAdr::
@@ -268,19 +279,6 @@ getNameAsText:
      if)
   exit name[]
   #);
-defaultSuperName:
-  (# superName: ^text
-  do (if true
-      // common.targetMachineId = common.javabc then
-         'java/lang/Object'->supername[];
-      // common.targetMachineId = common.dotnet then
-         '[mscorlib]System.Object'->supername[]; (*'/*1*/'->supername.append;*)
-         (*'object' -> supername[];*)
-      else
-         'Unknown_platform.Object' -> supername[];
-     if);
-  exit superName[]
-  #);
 descChain:
   (# desc: ^ASTindex; 
      pref: @ASTindex;
@@ -328,7 +326,9 @@ descChain:
   #);
 pushThis:
   (# thisObj: @mch.RegAdr; ar: @mch.adrRegOperand
-  do true -> thisObj.isRef; (thisObj[],ar[]) -> mch.ldVal
+  do true -> thisObj.isRef;      
+     'this' -> thisObj.fieldName[];
+     (thisObj[],ar[]) -> mch.ldVal
   #);
 pushArg:
   (* Push arg1, arg2, ...
@@ -340,6 +340,8 @@ pushArg:
   enter aNo
   do true -> thisObj.isRef;  
      8 + aNo * 4 -> thisObj.off;
+     'arg' -> thisObj.fieldName[];
+     aNo -> thisObj.fieldName.putint;
      (thisObj[],ar[]) -> mch.ldVal
   #);
 newInstance:
@@ -402,7 +404,8 @@ newThisInstance: newInstance
   #);
 newInstanceWithOrigin: 
   (# desc,objSpec,originDesc: ^ASTindex;
-     nonLocal: @boolean
+     nonLocal: @boolean;
+     rA: ^mch.RegAdr
   enter(desc[],objSpec[],originDesc[],nonLocal)
   do (if not nonLocal then
          desc[] -> newThisInstance
@@ -413,7 +416,9 @@ newInstanceWithOrigin:
             originDesc -> thisDesc; (* ugly: thisDesc is used 
                                      * in genOrgAdrToOrgReg
                                      *)
-            (gen.thisRegAdr,originDesc[],objSpec[]
+            gen.thisRegAdr->rA[];
+            (thisDesc[],true) -> EH.descName -> rA.fieldName[];
+            (rA[],originDesc[],objSpec[]
             ,originDesc->DH.newSingle)
               -> genOrgAdrToOrgReg 
               -> OA[];
@@ -607,7 +612,7 @@ scanFields:
 genFields: scanFields
   (# spec,desc,AD: @ASTindex; descKind: @integer; sig: ^text;
      EH: @EvalHandler;
-     ftag: ^text;
+     ftag: @char;
      isMethodFields: @boolean; (* true: scanning fields of a method *)
      declareRef:
        (# desc: ^ASTindex
@@ -630,10 +635,10 @@ genFields: scanFields
               'L'->sig.prepend; ';'->sig.append;
           if);
           if);
-          (N.off,sig[],fTag[]) -> mch.emitCk (* hack *)
+          (N.off,N.getText,sig[],fTag) -> mch.declareField (* hack *)
        #)
   enter isMethodFields
-  do (if isMethodFields then 'm'->fTag[] else 'c' -> fTag[] if);
+  do (if isMethodFields then 'm'->fTag else 'c' -> fTag if);
      (* fTag and emitCk should be replaced by a cleaner and
       * more efficient solution
       *)
@@ -666,8 +671,9 @@ genFields: scanFields
               // gram.objectDescriptor then
                  (if descKind 
                   // sematt.standardKind then                     
-                     (N.off,(desc[] -> valueSignature).asText,fTag[]) 
-                       -> mch.emitCk (* hack *)
+                     (N.off,N.getText
+                     ,(desc[] -> valueSignature).asText,fTag) 
+                       -> mch.declareField (* hack *)
                   // sematt.generalKind 
                   // sematt.classKind then
                      (* part object: we need origin type and
@@ -708,8 +714,8 @@ genFields: scanFields
              (thisDesc[],AD[]) -> GetActualDesc -> (desc,descKind)
          if);
          
-         (N.off,(desc[] -> valueSignature).asText,'[') 
-           -> mch.emitCk 
+         (N.off,N.getText,(desc[] -> valueSignature).asText,'[') 
+           -> mch.declareField 
      if)
   #);
 declareFields:
@@ -729,7 +735,7 @@ declareFields:
                   (if as## <= expanded## then
                       as[] -> exp[];
                       gram.forImp -> exp.suffixWalkForProd
-                      (# thisFor: @ASTindex
+                      (# thisFor: @ASTindex; inx,fRange: @text
                       do (*'got:for:' -> putText;*)
                          current[] -> astAsAstIndex -> thisFor;
                          (if thisFor.label = gram.forImp then
@@ -738,29 +744,35 @@ declareFields:
                                           1->thisFor.getAttribute->off;
                                           'off:'->xT; off -> xI
                                        #);
-                             (1->thisFor.getAttribute->off,'I',fTag[]) 
-                               -> mch.emitCk;
-                             (off+4,'I',fTag[]) -> mch.emitCk
+                             1->thisFor.getAttribute->off;
+                             'for_inx_' -> inx;
+                             off -> inx.putint;
+                             'for_range_'->fRange;
+                             off -> fRange.putint;
+                             (off,inx[],'I',fTag) 
+                               -> mch.declareField;
+                             (off+4,fRange[],'I',fTag) -> mch.declareField
                          if);
                   #)if)
                else
                   doP->scanList
-              (# imp: @ASTindex; off: @integer
-              do currentNode -> imp;
-                 (if imp.label = gram.forImp then
-                     313->trace(#
-                               do 'dclFields:for:'->xT;
-                                  1->imp.getAttribute->xI
-                               #);
-                     (1->imp.getAttribute->off,'I',fTag[]) -> mch.emitCk;
-                     (off+4,'I',fTag[]) -> mch.emitCk
-                 if)
-              #);
+                  (# imp: @ASTindex; off: @integer
+                  do currentNode -> imp;
+                     (if imp.label = gram.forImp then
+                         313->trace(#
+                                   do 'dclFields:for:'->xT;
+                                      1->imp.getAttribute->xI
+                                   #);
+                         (1->imp.getAttribute->off,none,'I',fTag) 
+                           -> mch.declareField;
+                         (off+4,none,'I',fTag) -> mch.declareField
+                     if)
+                  #);
               if);
               (if isMethodFields then
-                  (0,'','M') -> mch.emitCk
+                  (0,'methodField?','','M') -> mch.declareField
                else
-                  (0,'','C') -> mch.emitCk
+                  (0,'classField?','','C') -> mch.declareField
               if)
            #)
       #);
@@ -808,33 +820,6 @@ callNDX:
      if)
   #);
 
-isBETAsubOfExternalClass: booleanValue
-  (* test if desc is an interface to an external class
-   * or a real BETA subclass of an externalclass.
-   * if interface then no code should be generated;
-   * if 'real' then code should be generated.
-   * As a simple hack, a direct subclass of externalClass
-   * is considered to be an interface.
-   * Subclasses at level 2 and below are considerered 'real'.
-   * A better means for specifying interface og real
-   * should be invented
-   *)
-  (# desc: ^ASTindex;
-     pref,preName,preDesc: @ASTindex;
-     subLevel: @integer;
-  enter desc[]
-  do desc.son -> pref;
-     (if pref.label = gram.prefix then
-         pref.son -> preName;
-         313 -> ctrace(#
-                      do 'isBetaSubOfExternalClass:super:' -> xT;
-                         preName.gettext -> xT
-                      #);
-         preName -> sematt.descChain -> (preDesc,subLevel);
-         subLevel > 0 -> value;
-     if)        
-  #);
-     
 methodAndInnerName:
   (# methodName,innerName: ^text; subLevel: @integer
   enter(methodName[],subLevel)
@@ -910,6 +895,7 @@ genSuper:
                       #);
           'orgDescName:'->mch.comment;
           orgDescname -> mch.comment;
+          'origin' -> A.fieldName[];
           (none,false,'source',orgDescName[]) -> A.asgRefReg;
        #);
      genDefaultSuper:
@@ -920,7 +906,7 @@ genSuper:
                     do 'genDefaultSuper:'->xT; xN;
                        thisDesc[] -> xA; xN;
                     #);
-          storeOrigin
+          storeOrigin;
        #) ;
      IsSpecialVirtual: (* see the same pattern in genlib.bet 
                         * we should unify the two patterns
@@ -1001,6 +987,7 @@ genSuper:
          if);
          Gen.ThisRegAdr -> preBase[];
          12 -> preBase.addOff -> preBase[];
+         'origin' -> preBase.fieldName[];
          thisDesc[]
            -> sematt.descOrigin
            -> originDesc[];
@@ -1019,6 +1006,7 @@ genSuper:
                 (preBase[],none(*not used*),realPre[],chain[])
                   -> genOrgAdr
                   -> preBase[];
+                'origin' -> preBase.fieldName[];
                 (preBase.bAdr.localDesc[],true)
                   -> EH.descName 
                   -> orgName[];
@@ -1047,6 +1035,7 @@ genSuper:
                 (preBase[],originDesc[],preDen[],chain[])
                   -> genOrgAdr
                   -> preBase[];
+                'origin' -> preBase.fieldName[];
                 (preBase.bAdr.localDesc[],true)
                   -> EH.descName 
                   -> orgName[];
@@ -1060,8 +1049,8 @@ genSuper:
          if);
          storeOrigin;
       else
-         genDefaultSuper
-     if)
+         genDefaultSuper;
+     if);
   #);
 ---genPtnMethod:doPart---
    (* Calling a general pattern as a method
@@ -1220,6 +1209,7 @@ do (# sig: @Signature;
                  sig.scanEnter
                  (# 
                  do off + 4 -> off -> A.off;
+                    'enter'->A.fieldName[];
                     (if isRef -> A.isRef then
                         (A[],ar[]) -> mch.ldVal
                      else
@@ -1571,7 +1561,7 @@ do (# genMain:
                      currentDesc[] -> locals.save
                   // 2 (* singular inserted procedure item *) then
                      currentDesc.son -> pref;
-                     (if pref.label = gram.prefix then
+                     (if true (*pref.label = gram.prefix*) then
                          currentDesc[] -> locals.save
                       else
                          (* just generating a method is an
@@ -1593,7 +1583,7 @@ do (# genMain:
           #);
           locals.scanPtns
           (# D: @ASTindex; descKind: @integer
-          do thisDesc -> D; (* ugly *)
+          do theDesc -> D; (* ugly *)
              (if not (current[] -> skipDesc) then (* skip *)
                  (if current.label 
                   // gram.unExpanded then
@@ -1617,7 +1607,7 @@ do (# genMain:
                          ((current[],false)->EH.descName
                          ,current[],false,theDesc[],none)
                            -> genPtnMethod;
-                         D -> thisDesc;
+                         D -> theDesc -> thisDesc;
                          ((current[],false)->EH.descName
                          ,current[],theDesc[]) 
                            -> genPtnClass
@@ -1627,12 +1617,12 @@ do (# genMain:
                      ((current[],false)->EH.descName
                      ,current[],false,theDesc[],none)
                        -> genPtnMethod;
-                     D -> thisDesc;
+                     D -> thisDesc -> theDesc;
                      ((current[],false)->EH.descName
                      ,current[],theDesc[]) 
                        -> genPtnClass
              if)if);
-             D -> thisDesc
+             D -> thisDesc -> theDesc
           #);
           
           (if isMain then
@@ -1782,10 +1772,14 @@ do (# sig: @Signature;
             -> mch.initDo;
           (if (doP.label <> gram.empty) then doP -> (&GenDo[]).Scan if);
           (if simpleExit and (exitVal[] <> NONE ) then
-              (gen.thisRegAdr,exitVal[],false,ThisSuperChain) 
+              (# aR: ^mch.RegAdr
+              do gen.thisRegAdr -> aR[];
+                 'exitVal' -> aR.fieldName[];
+                 (aR[],exitVal[],false,ThisSuperChain) 
                 -> EH.ExpEval 
-                -> V[];
-              V.loadVal2;
+                   -> V[];
+                 V.loadVal2;
+              #)
           if);
           (false,exitId) -> mch.return
       if)
@@ -1796,7 +1790,8 @@ do (# sig: @Signature;
       exitVal: ^ASTindex;
       exitId: @integer;
       EH: @EvalHandler;
-      V: ^EH.evVal
+      V: ^EH.evVal;
+      aR: ^mch.RegAdr
    do 311->trace(#
                 do 'GenExitMethod:'->xT; desc[]->xA
                 #);      
@@ -1812,7 +1807,9 @@ do (# sig: @Signature;
           sig.exitVal[] -> exitVal[];
           (exitP.nodeId,'exit',false,sig.asText,sig.noOfEnterArgs) -> mch.initDo;
           313->trace(#do 'genExitMethod:ExpEval: '->xT; exitVal[] -> xA #);
-          (gen.thisRegAdr,exitVal[],false,ThisSuperChain) 
+          gen.thisRegAdr->aR[];
+          'exit'->aR.fieldName[];
+          (aR[],exitVal[],false,ThisSuperChain) 
             -> EH.ExpEval 
             -> V[];
           V.pushVal; (*V.loadVal2;*)
@@ -1829,7 +1826,8 @@ do (# sig: @Signature;
       V: ^EH.evVal;
       superName,innerName: ^text;
       superDesc: ^ASTindex;
-      subLevel: @integer
+      subLevel: @integer;
+      aR: ^mch.regAdr
    do (if desc.isSlot then
           '\nOBS! Slots not handled by genMethod'->putline;
           
@@ -1893,7 +1891,9 @@ do (# sig: @Signature;
           
           (if (doP.label <> gram.empty) then doP -> (&GenDo[]).Scan if);
           (if exitVal[] <> NONE  then 
-              (gen.thisRegAdr,exitVal[],false,ThisSuperChain) 
+              gen.thisRegAdr->aR[];
+              'exit_'->aR.fieldName[];
+              (aR[],exitVal[],false,ThisSuperChain) 
                 -> EH.ExpEval -> V[];
               V.loadVal2
               (* else call of foo/do leaves return value on stack *)
