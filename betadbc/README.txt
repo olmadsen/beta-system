@@ -1,13 +1,13 @@
-README for BDBC 
---------------- 
+README for BetaDBC 
+------------------
 
 This library contains the source for an ODBC compliant interface to
 relational databases.
 
-The examples/ directory will (eventually) contain programs showing the
+The tutorial/ directory contains programs showing the
 most important functionality.
 
-Currently the implementation only runs on Windows.
+Currently the implementation only runs on Windows and Unix.
 
 TYPE CONSIDERATIONS
 -------------------
@@ -28,15 +28,23 @@ INTEGER				integer
 REAL				real [There is no single precision float type in BETA]
 FLOAT(p)			real 
 DOUBLE PRECISION		real
-BIT				boolean [Is this true?]
+BOOLEAN				boolean 
 TINYINT				char
 BIGINT				text
 BINARY(n)			text
 VARBINARY(n)			text
 LONG VARBINARY			text
-DATE				date [As in ~beta/basiclib/current/timedate,
-				      Considering the year, month, day attr.]  [not implemented] 
-TIME(p)				date [Considering the hour, minute, sec attr.] [not implemented]
+DATE				time [As in ~beta/basiclib/current/timedate,
+				      Considering the year, month, day attr.]  
+TIME				time [Considering the hour,minute,sec,
+attr.] 
+TIMESTAMP			time [Considering the year, month,
+day, hour, minute, sec attr.]
+
+
+
+DON'T READ BELOW THIS LINE :-)
+------------------------------
 
 TYPE CONSIDERATIONS FOR INTERNAL USE
 ------------------------------------
