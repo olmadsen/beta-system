@@ -1,5 +1,5 @@
 #ifndef INT64
-#ifdef __GNUC__
+#if defined(__GNUC__) || defined(UNIX)
 #define INT64 signed long long int
 #endif /* __GNUC__ */
 #ifdef sgi
@@ -22,7 +22,7 @@ INT64 s64(INT64 a, INT64 b){ return a - b;}
  *   /usr/local/lib/gcc-lib/sparc-sun-solaris2.5.1/2.8.1/libgcc.a
  * on sparc.
  */
-#if 0
+#if 1
 INT64 m64(INT64 a, INT64 b){ return a * b;}
 INT64 d64(INT64 a, INT64 b){ return a / b;}
 INT64 r64(INT64 a, INT64 b){ return a % b;}
@@ -35,13 +35,21 @@ int le64(INT64 a, INT64 b){return a <= b;}
 int gt64(INT64 a, INT64 b){return a > b;}
 int ge64(INT64 a, INT64 b){return a >= b;}
 
-#define TEST 1
-#undef TEST
 #ifdef TEST
 #include <stdio.h>
 int main()
 {
   fprintf(stdout, "%d\n", (int)m64(2,3));
+  fprintf(stdout, "%d\n", (int)m64(3,3));
   fflush(stdout);
 }
 #endif
+
+void putint64(INT64 x)
+{
+  return;
+}
+void puthexint64(INT64 x)
+{
+  return;
+}
