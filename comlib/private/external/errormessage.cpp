@@ -24,11 +24,19 @@ void ComErrorMessage(const char* str, HRESULT hr)
 	) ;
 
 	// Display the string.
-	cout << str << "\r\n" ;
-	cout << "Error (" << hex << hr << "):  " 
-	     << (char*)pMsgBuf << endl ;
+	if (str){
+	  cout << str << "\r\n" ;
+	}
+	cout << "Error (" << hex << hr << "):  ";
+	if (pMsgBuf){
+	  cout << (char*)pMsgBuf << endl ;
+	} else {
+	  cout << "<No description>" << endl ;
+	}
 
 	// Free the buffer.
-	LocalFree( pMsgBuf ) ;
+	if (pMsgBuf){
+	  LocalFree( pMsgBuf ) ;
+	}
 
 }
