@@ -1,0 +1,273 @@
+ORIGIN '../dispatchhelp';
+
+--DispatchParamsPrivate: Descriptor--
+(# varg: @VARIANT;
+   rgvarg: @ExternalRepetition
+     (# elementSize::(# do 16->value (* sizeof(VARIANT) *) #);
+        inxCopy:
+          (# inx: @int32;
+          enter (inx)
+          do (%getlongAt (@@varg + 0))  %putLongAt (ptr+4*inx+0);
+             (%getlongAt (@@varg + 4))  %putLongAt (ptr+4*inx+4);
+             (%getlongAt (@@varg + 8))  %putLongAt (ptr+4*inx+8);
+             (%getlongAt (@@varg + 12)) %putLongAt (ptr+4*inx+12);
+          #);
+     #);
+   alpszArgNames: @ExternalRepetition
+     (# elementSize::(# do 4->value (* sizeof( OLECHAR* ) *)#)#);
+   rgdispidNamedArgs: @ExternalRepetition
+     (# elementSize::(# do 4->value (* sizeof( DISPID* ) *)#)#);
+   cArgs, cNamedArgs, maxArgs, maxNamedArgs: @integer;
+#)
+
+--DispatchParamsRelease: Descriptor--
+(# wstr: @wstring;
+do (0,0,0,0,0,0) -> private.varg;
+   private.rgvarg.free;
+   (for i:private.cNamedArgs repeat
+        (i-1) -> private.alpszArgNames.inxget -> wstr; wstr.free;
+   for);
+   private.alpszArgNames.free;
+   private.rgdispidNamedArgs.free;
+   0 -> private.cArgs -> private.cNamedArgs -> private.maxArgs -> private.maxNamedArgs;
+#)
+
+--DispatchParamsCheck: dopart--
+do (if private.cArgs+1>private.maxArgs then
+       ((2*private.rgvarg.range, private.cArgs+1) -> max) -> private.maxArgs;
+       private.maxArgs - private.rgvarg.range -> add;
+       add -> private.rgvarg.extend;
+   if);
+   (if private.alpszArgNames.range=0 then
+       (* Make room for member name *)
+       1 -> private.alpszArgNames.new;
+       1 -> private.rgdispidNamedArgs.new;
+   if);
+   (if (name[]<>NONE) and (private.cNamedArgs+1>private.maxNamedArgs) then
+       ((2*private.alpszArgNames.range, private.cNamedArgs+1) -> max) -> private.maxNamedArgs;
+       private.maxNamedArgs+1 - private.alpszArgNames.range -> add;
+       add -> private.alpszArgNames.extend;
+       add -> private.rgdispidNamedArgs.extend;
+   if);
+   INNER;
+
+--DispatchParamsPut: (*MainPart*) descriptor--
+(# wstr: @wstring;
+do (* If there is a name, add it *)
+   (if name[]<>NONE then
+       (* First increment namecounter. Deliberately done before
+        * argument is put, since arguments come from index 1 
+        * (index 0 is for member name).
+        *)
+       private.cNamedArgs+1 -> private.cNamedArgs;
+       name[] -> wstr.set;
+       (wstr, private.cNamedArgs) -> private.alpszArgNames.inxPut;
+   if);
+   (* Specializations fill in varg in INNER *)
+   INNER put;
+   private.cArgs -> private.rgvarg.inxCopy;
+   private.cArgs+1 -> private.cArgs;
+#)
+
+
+--DispatchParamsPutInt16: dopart--
+do private.varg[]->VARIANT_init
+   (# 
+   do VT_I2 -> vt;
+      value -> iVal;
+   #);
+   
+   
+--DispatchParamsPutBoolean: dopart--
+do private.varg[]->VARIANT_init
+   (# 
+   do VT_BOOL -> vt;
+      (if value then
+          VARIANT_TRUE -> bool;
+       else
+          VARIANT_FALSE -> bool;
+      if);                    
+   #);
+       
+--DispatchParamsPutReal: dopart--
+do private.varg[]->VARIANT_init
+   (# 
+   do VT_R8 -> vt;
+      value -> dblVal;
+   #);
+   
+--DispatchParamsPutString: dopart--
+do putString:
+     (# 
+     do value[] -> wstr.set;
+        wstr -> SysAllocString -> bstr;
+        (if bstr=0 then
+            'DispatchParams.putString: SysAllocString failed' -> putline;
+            leave putString;
+        if);
+        private.varg[]->VARIANT_init
+        (# 
+        do VT_BSTR -> vt;
+           bstr -> bstrVal;
+        #);
+     #)
+   
+--DispatchParamsPutStringArray: dopart--
+do putStringArray:
+     (# 
+     do (* R.range -> icount*);
+        R.size -> icount;
+        
+        0 -> saBound.lLbound;
+        iCount -> saBound.cElements;
+        
+        (VT_VARIANT, 1, saBound[]) -> SafeArrayCreate -> psa[];
+        (if psa[]=NONE then
+            'DispatchParams.putStringArray: SafeArrayCreate failed' -> putline;
+            leave putStringArray;
+        if);
+        
+        (* Lock the SAFEARRAY while accessing the data *)
+        (# dummy:@char do (psa[], pvarg[]) -> SafeArrayAccessData -> hr;#);
+        (if hr.succeeded then
+            (* Save pointer, we will increment pvarg in a while *)
+            pvarg -> pvargBase[];
+         else
+            'DispatchParams.putStringArray: SafeArrayCreate failed' 
+              -> putline;
+            psa[] -> SafeArrayDestroy;
+            leave putStringArray;
+        if);
+        
+        'pvarg.value: ' -> puttext;
+        (# dummy: @integer do 
+           %getLongAt(@@pvarg.value) -> theinteger;
+        #);
+        theInteger -> putint; newline;
+        
+        scan: R.scan
+          (# i: @integer;
+          do i+1 -> i;
+             setup: pvarg.value[] -> VARIANT_init
+             (# bstr: @integer;
+                wstr: @wstring;
+             do VT_BSTR -> vt;
+                current[] -> puttext; ': '->puttext;
+                
+                current[] -> wstr.set;
+                wstr -> SysAllocString -> bstr;
+                wstr.free;
+                (if bstr<>0 then
+                    bstr -> bstrVal;
+                 else
+                    'DispatchParams.putStringArray: SysAllocString failed' 
+                      -> putline;
+                    (* Clean up *)
+                    pvargBase[] -> pvarg;
+                    (for j:i repeat
+                         pvarg -> VARIANT_init
+                         (# do bstrVal -> SysFreeString #);
+                         pvarg.increment;
+                    for);
+                    psa[] -> SafeArrayDestroy;
+                    NONE -> psa[];
+                    leave setup;
+                if);
+             #);
+             (if psa[]=NONE then leave scan if);
+             pvarg.increment;
+             'pvarg.value: ' -> puttext;
+             (# dummy: @integer do 
+                %getLongAt(@@pvarg.value) -> theInteger;
+             #);      
+             theInteger -> putint; newline;
+          #);
+        (if psa[]=NONE then leave putStringArray if);
+        
+        (* Unlock *)
+        psa[] -> SafeArrayUnaccessData -> hr;
+        (if hr.succeeded then
+         else
+            'DispatchParams.putStringArray: SafeArrayUnaccessData' -> putline;
+            psa[] -> SafeArrayDestroy;
+            leave putStringArray;
+        if);
+        
+        (* Now set up argument *)
+        private.varg[]->VARIANT_init
+        (# 
+        do VT_VARIANT %Bor VT_ARRAY -> vt;
+           psa[] -> parray
+        #);
+     #)
+          
+--InvokeByName: dopart--
+do InvokeByName:
+     (# 
+     do true -> status;
+        LOCALE_USER_DEFAULT -> lcid;
+        params.private.cNamedArgs -> cNamedArgs;
+        (* Look up DISPIDs of member name, and any possibly arguments
+         * previously put to params.
+         *)
+        member[] -> params.check
+        (# wstr: @wstring;
+        do name[] -> wstr.set; 
+           (wstr, 0) -> params.private.alpszArgNames.inxPut;
+        #);
+        (# dummy:@char do (IID_NULL, params.private.alpszArgNames, 1+cNamedArgs, lcid, params.private.rgdispidNamedArgs)
+             -> pDisp.GetIdsOfNames
+             -> hr; #);
+        (if hr.succeeded then
+            0->params.private.rgdispidNamedArgs.inxGet -> dispidmember;
+            'Got Id for \'' -> puttext;
+            member[]->puttext;
+            '\': ' -> puttext;
+            dispidMember -> putint;
+            newline;
+         else
+            ('GetIdsOfNames Failed', hr.value) -> ComErrorMessage;
+            false -> status;
+            leave InvokeByName;
+        if);
+        
+        (* If doing a propertyput, we need to put adjust the first argument
+         * to have a named arg of DISPID_PROPERTYPUT
+         *)
+        (if (wAction %Band DISPATCH_PROPERTYPUT) <> 0 then
+            (* PROPERTY_PUT only have 1 named arg besides the "member name" *)
+            1 -> cNamedArgs; 
+            (DISPID_PROPERTYPUT, 1) -> params.private.rgdispidNamedArgs.inxPut;
+        if);
+        
+        (* Now fill in the DISPPARAMS structure *)
+        params.private.rgdispidNamedArgs + 4 -> dparms.rgdispidNamedArgs;
+        params.private.rgvarg -> dparms.rgvarg;
+        params.private.cArgs -> dparms.cArgs;
+        cNamedArgs -> dparms.cNamedArgs;
+        
+        (* Finally call invoke *)
+        (# dummy: @char do 
+           (dispidMember, IID_NULL, lcid, wAction, dParms[], vReturn[], NONE, NONE)
+             -> pDisp.Invoke
+             -> hr;
+        #);
+        (if hr.succeeded then
+            'Invoke succeeded' -> putline;
+         else
+            ('Invoke Failed', hr.value) -> ComErrorMessage;
+            false -> status;
+            leave InvokeByName;
+        if);
+     #);
+   
+--PropertyPutByName: dopart--
+do (pDisp[], member[], dparms[], DISPATCH_PROPERTYPUT, NONE) 
+     -> InvokeByName
+     -> status;
+   
+--PropertyGetByName: dopart--
+do (pDisp[], member[], dparms[], DISPATCH_PROPERTYGET, vResult[]) 
+     -> InvokeByName
+     -> status;
+   
