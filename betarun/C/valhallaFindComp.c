@@ -364,7 +364,6 @@ int scanComponentStack (struct Component* comp,
 #ifdef sparc
 
 #ifndef MT
-#define objIsValRep(theObj) inLVRA(theObj)
 
 
 struct ComponentStack{
@@ -404,8 +403,7 @@ void handleStackPart (struct RegWin *theAR, int lastReturnAdr, forEachCallType f
     if (isCode(this[0])) {
       theObj = (struct Object *) this[2];
       if (inBetaHeap(theObj) 
-	  && isObject(theObj) 
-	  && !objIsValRep(theObj)) {
+	  && isObject(theObj)) {
 	/* Add 8 to get the real SPARC return address. */
 	forEach (this[0]+8,(int) theObj);
 	lastObj= theObj;

@@ -21,28 +21,17 @@ void AlloVR1(unsigned offset /* in bytes */,
     Ck(theObj);
     size = ByteRepSize(range);
 
-    if (range > LARGE_REP_SIZE) {
+    if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
 	theRep = (struct ValRep *)LVRACAlloc(ByteRepPTValue, range);
 	if (theRep) {
-	    DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
-			     "AlloVR1: lvra structure ok"));
-	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-	    theRep->GCAttr = (long) ((char *) theObj + offset);
 	    *(struct ValRep **)((char *)theObj + offset) = theRep;
 	    return;
 	}
     }
 
     push(theObj);
-    if (size>IOAMAXSIZE){
-      DEBUG_AOA(fprintf(output, "AlloVR1 allocates in AOA\n"));
-      theRep = (struct ValRep *)AOAcalloc(size, SP);
-      DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
-    }
-    if (!theRep) {
-      theRep = (struct ValRep *)IOAalloc(size, SP);
-      if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
-    }
+    theRep = (struct ValRep *)IOAalloc(size, SP);
+    if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
     pop(theObj);
   
     theRep->Proto = ByteRepPTValue;
@@ -71,28 +60,17 @@ void AlloVR2(unsigned offset /* in bytes */,
 
     size = ShortRepSize(range);
 
-    if (range > LARGE_REP_SIZE) {
+    if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
 	theRep = (struct ValRep *)LVRACAlloc(ShortRepPTValue, range);
 	if (theRep) {
-	    DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
-			     "AlloVR2: lvra structure ok"));
-	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-	    theRep->GCAttr = (long) ((char *) theObj + offset);
 	    *(struct ValRep **)((char *)theObj + offset) = theRep;	   
 	    return;
 	}
     }
 
     push(theObj);
-    if (size>IOAMAXSIZE){
-      DEBUG_AOA(fprintf(output, "AlloVR2 allocates in AOA\n"));
-      theRep = (struct ValRep *)AOAcalloc(size, SP);
-      DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
-    }
-    if (!theRep) {
-      theRep = (struct ValRep *)IOAalloc(size, SP);
-      if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
-    }
+    theRep = (struct ValRep *)IOAalloc(size, SP);
+    if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
     pop(theObj);
 
     theRep->Proto = ShortRepPTValue;
@@ -120,28 +98,17 @@ void AlloVR4(unsigned offset /* in bytes */,
 
     size = LongRepSize(range);
 
-    if (range > LARGE_REP_SIZE) {
+    if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
 	theRep = (struct ValRep *)LVRACAlloc(LongRepPTValue, range);
 	if (theRep) {
-	    DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
-			     "AlloVR4: lvra structure ok"));
-	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-	    theRep->GCAttr = (long) ((char *) theObj + offset);
 	    *(struct ValRep **)((char *)theObj + offset) = theRep;
 	    return;
 	}
     }
 
     push(theObj);
-    if (size>IOAMAXSIZE){
-      DEBUG_AOA(fprintf(output, "AlloVR4 allocates in AOA\n"));
-      theRep = (struct ValRep *)AOAcalloc(size, SP);
-      DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
-    }
-    if (!theRep) {
-      theRep = (struct ValRep *)IOAalloc(size, SP);
-      if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
-    }
+    theRep = (struct ValRep *)IOAalloc(size, SP);
+    if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
     pop(theObj);
     
     theRep->Proto = LongRepPTValue;
@@ -173,25 +140,14 @@ void AlloVR8(unsigned offset /* in bytes */,
     if (range > LARGE_REP_SIZE) {
 	theRep = (struct ValRep *)LVRACAlloc(DoubleRepPTValue, range);
 	if (theRep) {
-	  DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
-			    "AlloVR8: lvra structure ok"));
-	   /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-	   theRep->GCAttr = (long) ((char *) theObj + offset);
 	   *(struct ValRep **)((char *)theObj + offset) = theRep;
 	    return;
 	}
     }
 
     push(theObj);
-    if (size>IOAMAXSIZE){
-      DEBUG_AOA(fprintf(output, "AlloVR8 allocates in AOA\n"));
-      theRep = (struct ValRep *)AOAcalloc(size, SP);
-      DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
-    }
-    if (!theRep) {
-      theRep = (struct ValRep *)IOAalloc(size, SP);
-      if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
-    }
+    theRep = (struct ValRep *)IOAalloc(size, SP);
+    if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
     pop(theObj);
 
     theRep->Proto = DoubleRepPTValue;

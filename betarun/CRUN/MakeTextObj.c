@@ -49,18 +49,11 @@ void MkTO(char *asciz,
     repsize = ByteRepSize(range);
 
     if (range > LARGE_REP_SIZE) {
-      DEBUG_LVRA(fprintf(output, "MkTO allocates in LVRA\n"));
       theRep = (struct ValRep *)LVRAAlloc(ByteRepPTValue, range);
-    }
-
-    if (theRep) {
-      DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
-		       "MkTO: lvra structure ok"));
-      /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-      theRep->GCAttr = (long) ((long *) theItem + offset);
-      *(struct ValRep **)((long *)theItem + offset) = theRep;
       /* theRep is now allocated, and the header of it is initialized */
-      
+
+      *(struct ValRep **)((long *)theItem + offset) = theRep;
+
       /* Allocate only theText in IOA */
       size = ItemSize(TextProto);
     } else {
@@ -80,7 +73,9 @@ void MkTO(char *asciz,
     } else {
       isInAOA=0;
       theText=(struct TextObject*)IOAalloc(size);
-      if (IOAMinAge!=0) theText->GCAttr = IOAMinAge;
+      if (IOAMinAge!=0) {
+          theText->GCAttr = IOAMinAge;
+      }
     }
     RestoreVar(theItem);
 
@@ -94,7 +89,7 @@ void MkTO(char *asciz,
 
     AssignReference((long *)theItem + offset, (struct Item *)theText);
       
-    if (!theRep){
+    if (!theRep) {
       /* An uninitialized value repetition is at the end of theText */
       theRep = (struct ValRep *)((long)theText+ItemSize(TextProto));
       theRep->Proto = ByteRepPTValue;
@@ -109,8 +104,8 @@ void MkTO(char *asciz,
     }
   
     /* No need for AssignReference. 
-     * Either both theText and theRep are in IOA/AOA
-     * or theText is in IOA/AOA and theRep in LVRA.
+     * Either both theText and theRep are in the same heap,
+     * or theText is in IOA and theRep is in AOA.
      */
     theText->T = theRep;
 

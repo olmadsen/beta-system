@@ -23,15 +23,11 @@ struct ValRep *CopyCT(unsigned char *textPtr, long *SP)
     range = textPtr ? strlen((char*)textPtr) : 0;
     size = ByteRepSize(range);
 
-    /* LVRA missing */
-
 #ifdef RTDEBUG
     if (range > LARGE_REP_SIZE) {
-      fprintf(output, "CopyCT: should allocate in LVRA (range=%d)\n", range);
+      fprintf(output, "CopyCT: should allocate in AOA (range=%d)\n", range);
     }
-    /* FIXME: Cannot allocate in LVRA, since address referencing the
-     * repetition is not known, i.e. the LVRA cycle cannot be
-     * established.
+    /* FIXME: Allocate in AOA
      */
 #endif
 

@@ -100,9 +100,9 @@ static void PrintNumVars(void)
   fprintf(output, "\n");
   fprintf(output, "IOAGc:    %-8d  ", (int)NumIOAGc);
   fprintf(output, "AOAGc:    %-8d  ", (int)NumAOAGc);
-  fprintf(output, "LVRAGc:   %-8d\n", (int)NumLVRAGc);
+  fprintf(output, "\n");  
   fflush(output);
-
+  
   fprintf(output, "\n");  
 }
 #endif /* RTDEBUG */
@@ -125,6 +125,8 @@ void BetaExit(long number)
 
   InfoS_End();
 
+  INFO_AOA(GCInfo());
+  
 #ifdef RTDEBUG
 #if defined(UNIX) || defined(NEWRUN) || defined(nti)
 #ifdef MT

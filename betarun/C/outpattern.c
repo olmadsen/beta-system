@@ -624,7 +624,7 @@ static void DumpCell(struct Object **theCell,struct Object *theObj)
 /********** Support routines for motorola-like stacks *************/
 
 #define NotInHeap(address) \
-  (!(inIOA(address) || inAOA(address) || inLVRA((ref(Object))address)))
+  (!(inIOA(address) || inAOA(address)))
 
 /* Traverse the StackArea [low..high] and Process all references within it. 
  * Stop when theComp is reached.
@@ -1046,8 +1046,6 @@ int DisplayBetaStack(enum BetaErr errorNumber,
 	fprintf(output, " (is in IOA)");
       if (inAOA(theObj)) 
 	fprintf(output, " (is in AOA)");
-      if (inLVRA(theObj)) 
-	fprintf(output, " (is in LVRA)");
       if (ToSpace<=(long*)theObj && (long*)theObj<ToSpaceLimit)
 	fprintf(output, " (is in ToSpace!)");
       fprintf(output, ".\n");

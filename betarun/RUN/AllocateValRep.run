@@ -39,17 +39,12 @@ AlloVR1: public
          push ByteRepPTValue; { Parameters to LVRACAlloc. }
          call LVRACAlloc;
          DataReg1 -> theRep;
-         4 -> SP+;
+         pop Offset;  {Discard ByteRepPTValue (to dummy Offset)}
          pop Range;
          pop Offset, RegCall, RegThis;
-         (if theRep <> 0 then
-             { Make the LVRA-cycle: theCell -> theRep.GCAttr }
-             Offset -> Value; theObj -> Value+;
-             Value -> theRep.GCAttr;
-             theRep -> theObj[Offset]; 
-             pop AddrReg2, AddrReg1;
-             return
-         if)
+         theRep -> theObj[Offset]; 
+         pop AddrReg2, AddrReg1;
+         return
      if);
      
      IOAAlloc:
@@ -61,9 +56,9 @@ AlloVR1: public
                  { See general comment in AllocateItem.run }
                  push Offset; 
                  Range -> BodySize;
-                 4 -> BodySize+;
-                 4 -> BodySize/;
-                 4 -> BodySize*;
+                 8 -> BodySize+;
+                 8 -> BodySize/;
+                 8 -> BodySize*;
                  goto GC;
              if);
          if);
@@ -71,7 +66,7 @@ AlloVR1: public
      
      again: 
      
-     { allocate 16+((range+1+3)/4)*4 bytes in IOA }
+     { allocate 16+((range+1+7)/8)*8 bytes in IOA }
      IOATop -> theRep;
      
      push Offset; {BodySize assignment destroys Offset}
@@ -158,18 +153,12 @@ AlloVR2: public
          push ShortRepPTValue;    { Parameter to LVRACAlloc. }
          call LVRACAlloc;
          DataReg1 -> theRep;
-         4 -> SP+;
+         pop Offset;  {Discard ShortRepPTValue (to dummy Offset)}
          pop Range;
          pop Offset, RegCall, RegThis;
-         (if theRep <> 0 then
-             { Make the LVRA-cycle: theCell -> theRep.GCAttr }
-             Offset -> Value; theObj -> Value+;
-             Value -> theRep.GCAttr;
-             
-             theRep -> theObj[Offset];
-             pop AddrReg2, AddrReg1;
-             return
-         if)
+         theRep -> theObj[Offset];
+         pop AddrReg2, AddrReg1;
+         return
      if);
      
      IOAAlloc:
@@ -180,25 +169,25 @@ AlloVR2: public
              push Offset; 
              Range -> BodySize;
              2 -> BodySize*;
-             3 -> BodySize+;
-             4 -> BodySize/;
-             4 -> BodySize*;
+             7 -> BodySize+;
+             8 -> BodySize/;
+             8 -> BodySize*;
              goto GC;
          if);
      if);
      
      again:
      
-     { allocate 16+((2*range+3)/4)*4 bytes in IOA }
+     { allocate 16+((2*range+7)/8)*8 bytes in IOA }
      IOATop -> theRep;
      
      push Offset; {BodySize assignment destroys Offset}
      
      Range -> BodySize;
      2 -> BodySize*;
-     3 -> BodySize+;
-     4 -> BodySize/;
-     4 -> BodySize*;
+     7 -> BodySize+;
+     8 -> BodySize/;
+     8 -> BodySize*;
      theRep[16+BodySize][] -> newTop;
      (if newTop > IOALimit then goto GC if);
      newTop -> IOATop;
@@ -259,6 +248,7 @@ AlloVR4: public
      newTop: DataArea   = AddrReg1;
      theCell: DataArea  = AddrReg1;
      theRep: Repetition = AddrReg2;
+     BodySize:  Long    = DataReg1; { the number of bytes to allocate     }
      Value:  Long       = DataReg2;
   do
      (if debug then call Ck if);
@@ -277,17 +267,12 @@ AlloVR4: public
          push LongRepPTValue;    { Parameter to LVRACAlloc. }
          call LVRACAlloc;
          DataReg1 -> theRep;
-         4 -> SP+;
+         pop Offset;  {Discard LongRepPTValue (to dummy Offset)}
          pop Range;
          pop Offset, RegCall, RegThis;
-         (if theRep <> 0 then
-             { Make the LVRA-cycle: theCell -> theRep.GCAttr }
-             Offset -> Value; theObj -> Value+;
-             Value -> theRep.GCAttr;
-             theRep -> theObj[Offset];  
-             pop AddrReg2, AddrReg1;
-             return
-         if)
+         theRep -> theObj[Offset];  
+         pop AddrReg2, AddrReg1;
+         return
      if);
      
      IOAAlloc:
@@ -295,6 +280,12 @@ AlloVR4: public
      (if debug then
          (if do_unconditional_GC then
              { See general comment in AllocateItem.run }
+             push Offset; 
+             Range -> BodySize;
+             4 -> BodySize*;
+             7 -> BodySize+;
+             8 -> BodySize/;
+             8 -> BodySize*;
              goto GC;
          if);
      if);
@@ -303,7 +294,16 @@ AlloVR4: public
      { allocate 16+Range*4 bytes in IOA }
      
      IOATop -> theRep;
-     theRep[16+Range*4][] -> newTop;
+     
+     push Offset; {BodySize assignment destroys Offset}
+     
+     Range -> BodySize;
+     4 -> BodySize*;
+     7 -> BodySize+;
+     8 -> BodySize/;
+     8 -> BodySize*;
+     theRep[16+BodySize][] -> newTop;
+
      (if newTop > IOALimit then goto GC if);
      newTop -> IOATop;
      
@@ -317,6 +317,8 @@ AlloVR4: public
      1     -> theRep.LowBorder;
      Range -> theRep.HighBorder;
      
+     pop Offset; {We're finished using BodySize, so restore Offset}
+
      theObj[Offset][] -> theCell;
      theRep -> theCell[0];
      
@@ -337,6 +339,7 @@ AlloVR4: public
      { The IOA heap is full, so we need a garbage collection.            }
      4 -> ReqObjectSize;     { Set the requested Object Size.            }
      Range -> ReqObjectSize+;
+     pop Offset; {Restore Offset}
      pop AddrReg2, AddrReg1;
      { Stack: as on entry - data registers are tagged properly. }
      call doGC;              { Call the Garbage Collector.               }
@@ -378,17 +381,12 @@ AlloVR8: public
          push DoubleRepPTValue;    { Parameter to LVRACAlloc. }
          call LVRACAlloc;
          DataReg1 -> theRep;
-         4 -> SP+;
+         pop Offset;  {Discard DoubleRepPTValue (to dummy Offset)}
          pop Range;
          pop Offset, RegCall, RegThis;
-         (if theRep <> 0 then
-             { Make the LVRA-cycle: theCell -> theRep.GCAttr }
-             Offset -> Value; theObj -> Value+;
-             Value -> theRep.GCAttr;
-             theRep -> theObj[Offset];
-             pop AddrReg2, AddrReg1;
-             return
-         if)
+         theRep -> theObj[Offset];
+         pop AddrReg2, AddrReg1;
+         return
      if);
      
      IOAalloc: 

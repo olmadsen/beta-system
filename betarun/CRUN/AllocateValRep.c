@@ -16,44 +16,41 @@
  *   primreg4 = SP, (SGI/PPC)
  */
 
-
 ParamThisOffRange(AlloVR1)
 {
-  DeclReference1(struct ValRep *, theRep);
-  register unsigned Size;
+    DeclReference1(struct ValRep *, theRep);
+    register unsigned Size;
 
-  GCable_Entry();
-  FetchThisOffRange();
+    GCable_Entry();
+    FetchThisOffRange();
   
-  if (range < 0) range = 0;
+    if (range < 0) range = 0;
 
-  DEBUG_CODE(NumAlloVR1++);
+    DEBUG_CODE(NumAlloVR1++);
 
-  Ck(theObj);
-  Size = ByteRepSize(range);
+    Ck(theObj);
+    Size = ByteRepSize(range);
 
-  if (range > LARGE_REP_SIZE) {
-    theRep = cast(ValRep) LVRACAlloc(ByteRepPTValue, range);
-    if (theRep) {
-      DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
-		       "AlloVR1: lvra structure ok"));
-      /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-      theRep->GCAttr = (long) ((char *) theObj + offset);
-      *casthandle(ValRep)((char *)theObj + offset) = theRep;
-      return;
+    if (range > LARGE_REP_SIZE) {
+        theRep = cast(ValRep) LVRACAlloc(ByteRepPTValue, range);
+        if (theRep) {
+            DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
+                             "AlloVR1: lvra structure ok"));
+            *casthandle(ValRep)((char *)theObj + offset) = theRep;
+            return;
+        }
     }
-  }
 
-  Protect(theObj, theRep = cast(ValRep) IOAalloc(Size));
+    Protect(theObj, theRep = cast(ValRep) IOAalloc(Size));
 
-  theRep->Proto = ByteRepPTValue;
-  if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
-  theRep->LowBorder = 1;
-  theRep->HighBorder = range;
+    theRep->Proto = ByteRepPTValue;
+    if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
+    theRep->LowBorder = 1;
+    theRep->HighBorder = range;
   
-  AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
+    AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
 
-  Ck(theObj); Ck(theRep);
+    Ck(theObj); Ck(theRep);
 }
 
 ParamThisOffRange(AlloVR2)
@@ -76,8 +73,6 @@ ParamThisOffRange(AlloVR2)
     if (theRep) {
       DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
 		       "AlloVR2: lvra structure ok"));
-      /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-      theRep->GCAttr = (long) ((char *) theObj + offset);
       *casthandle(ValRep)((char *)theObj + offset) = theRep;
       return;
     }
@@ -115,8 +110,6 @@ ParamThisOffRange(AlloVR4)
     if (theRep) {
       DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
 		       "AlloVR4: lvra structure ok"));
-      /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-      theRep->GCAttr = (long) ((char *) theObj + offset);
       *casthandle(ValRep)((char *)theObj + offset) = theRep;
       return;
     }
@@ -154,8 +147,6 @@ ParamThisOffRange(AlloVR8)
     if (theRep) {
       DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
 		       "AlloVR8: lvra structure ok"));
-      /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-      theRep->GCAttr = (long) ((char *) theObj + offset);
       *casthandle(ValRep)((char *)theObj + offset) = theRep;
       return;
     }

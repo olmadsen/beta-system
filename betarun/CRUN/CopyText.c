@@ -22,8 +22,6 @@ ParamItemAscii(struct Item *, CopyT)
   
   range = strlen(ascii);
   
-  /* LVRA missing */
-  
   /* Allocate a value repetition */
   size = ByteRepSize(range);
 

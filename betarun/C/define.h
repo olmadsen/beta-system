@@ -23,14 +23,7 @@
 #define do_unconditional_gc 0
 #endif
 
-#ifndef MAC
-/* #define USEMMAP */ /* Use mmap/VirtualAlloc rather than MALLOC for heaps */
-#endif
-
-#ifdef MGsparc /* only defined by mg+void for now */
-#define LIN  /* Include support for new Persistence system (void+mg). */
-#define NONMOVEAOAGC  /* Include support for NonMoveAOAGC property */
-#endif
+#define NONMOVEAOAGC
 
 #define RTINFO  /* Include support for runtime info */
 #define RTLAZY  /* Include support for lazy fetch */
@@ -143,24 +136,7 @@
 
 
 
-/* FIXME:
- * In general copy of object to LVRA should be avoided: 
- * If the cell refering a
- * large repetition is in a stackobject, the cycle-cell in the
- * repetition created in LVRA will point back to the *stackobject*
- * after CopyObjectToLVRA. This is certainly not the intension.
- * By skipping this, we risk copying potentionally large objects
- * around in the IOA heaps, but they are rare, since it is
- * only the CopyCT and CopySXX routines that are missing test for 
- * whether they should allocate directly in LVRA.
- * MUST be fixed by ensuring that all allocations of large repetitions
- * do it in LVRA at once.
- * And the allocation routines currently ud !inIOA() to deduce
- * that the rep is in LVRA, so they must never be moved to AOA.
- */
-#undef CHECK_LVRA_IN_IOA
-
-#ifdef NEWRUN
+#if defined(NEWRUN) || defined(intel) || defined(sparc)
 #undef KEEP_STACKOBJ_IN_IOA
 #else
 #define KEEP_STACKOBJ_IN_IOA
@@ -191,8 +167,6 @@
 #  define DEBUG_CBFA(code) if( DebugCBFA )  { code; }
 #  define DEBUG_AOA(code)  if( DebugAOA )  { code; }
 #  define DEBUG_AOAtoIOA(code)  if( DebugAOAtoIOA )  { code; }
-#  define DEBUG_AOAtoLVRA(code)  if( DebugAOAtoLVRA )  { code; }
-#  define DEBUG_LVRA(code) if( DebugLVRA ) { code; }
 #  define DEBUG_LIN(code) if( DebugLIN ) { code; }
 #  define DEBUG_CODE(code)  code;
 #  define DEBUG_STACK(code) if( DebugStack ) { code; }
@@ -208,8 +182,6 @@
 #  define DEBUG_CBFA(code)
 #  define DEBUG_AOA(code)
 #  define DEBUG_AOAtoIOA(code)
-#  define DEBUG_AOAtoLVRA(code)
-#  define DEBUG_LVRA(code)
 #  define DEBUG_LIN(code)
 #  define DEBUG_CODE(code)
 #  define DEBUG_STACK(code)
@@ -222,19 +194,15 @@
 #ifdef RTINFO
 #  define INFO( code)      if( Info0    ){ code; }
 #  define INFO_IOA( code)  if( InfoIOA  ){ code; }
-#  define INFO_AOA( code)  if( InfoAOA  ){ code; }
-#  define INFO_LVRA( code) if( InfoLVRA ){ code; }
+#  define INFO_AOA( code)  if( InfoAOA  ){ code; fflush(output); }
 #  define INFO_CBFA( code) if( InfoCBFA ){ code; }
 #  define INFO_HEAP_USAGE( code) if( InfoHeapUsage ){ code; }
 #  define INFO_DOT( code)  if( InfoDOT  ){ code; }
-#  define INFO_LVRA_ALLOC( code) if( InfoLVRAAlloc ){ code; }
 #  define INFO_CODE( code) code;
 #else
 #  define INFO( code)
 #  define INFO_IOA( code)
 #  define INFO_AOA( code)
-#  define INFO_LVRA( code)
-#  define INFO_LVRA_ALLOC( code)
 #  define INFO_CODE( code)
 #  define INFO_HEAP_USAGE( code) 
 #endif
@@ -253,8 +221,15 @@
 #endif
 
 
-#ifdef LIN
-#define REFERENCEACTIONARGSTYPE struct Object *obj, long offset, struct Object *target
-#define REFERENCEACTIONARGS obj, offset, target
+#ifdef NONMOVEAOAGC
+#define DEADOBJECT 1
+#define LIVEOBJECT 2
+#define FREECHUNCK 3
+#define LISTEND 4
+#define isLink(c) (c > LISTEND)
+#define isEnd(c) (c == LISTEND)
 
-#endif /* LIN */
+#define REFERENCEACTIONARGSTYPE struct Object **theCell
+#define REFERENCEACTIONARGS theCell
+
+#endif /* NONMOVEAOAGC */

@@ -42,16 +42,8 @@ typedef struct Heap {
 #define DEFAULT_AOASIZE  512 * Kb
 #endif
 
-#ifndef DEFAULT_LVRASIZE
-#define DEFAULT_LVRASIZE 512 * Kb
-#endif
-
 #ifndef DEFAULT_AOAMINFREE
 #define DEFAULT_AOAMINFREE     100 * Kb   /* Less on Macintosh? */
-#endif
-
-#ifndef DEFAULT_LVRAMINFREE
-#define DEFAULT_LVRAMINFREE    200 * Kb   /* Less on Macintosh? */
 #endif
 
 #ifndef DEFAULT_CBFASIZE
@@ -66,6 +58,3 @@ typedef struct Heap {
 #define DEFAULT_AOAPERCENTAGE  0
 #endif
 
-#ifndef DEFAULT_LVRAPERCENTAGE
-#define DEFAULT_LVRAPERCENTAGE 0
-#endif

@@ -1,13 +1,9 @@
 #include "beta.h"
 
-extern long   LVRANumOfBlocks;
-extern struct LVRABlock *LVRABaseBlock;
-
 void PrintHeapUsage(char *prompt)
 {
-  long aoasize, aoablocks, lvrasize, lvrablocks, cbfasize, cbfablocks;
+  long aoasize, aoablocks, cbfasize, cbfablocks;
   struct CallBackArea *cbfa;
-  struct LVRABlock    *lvra;
   struct Block        *aoa;
 
   fprintf(output, "Heap usage %s:\n", prompt);
@@ -41,24 +37,6 @@ void PrintHeapUsage(char *prompt)
 	  (int)AOAtoIOAtableSize*sizeof(long)/1024);
   fflush(output);
 
-  lvrablocks = 0; 
-  lvrasize = 0;
-  if (LVRABaseBlock){
-    lvra = LVRABaseBlock;
-    lvrablocks = 1; 
-    lvrasize = (long)lvra->limit - (long)LVRABlockStart(lvra);
-    while (lvra->next){    
-       lvrablocks++;
-       lvrasize += (long)lvra->limit - (long)LVRABlockStart(lvra);
-       lvra = lvra->next;
-    }
-  }
-  fprintf(output, 
-	  "  LVRA:           %8d Kb (%d blocks)\n", 
-	  (int)lvrasize/1024,
-	  (int)lvrablocks);
-  fflush(output);
-  
   cbfablocks = 0;
   if (CBFA){
     cbfa = CBFA;
@@ -95,20 +73,6 @@ int getHeapInfo(int infoId)
     case 12 : return (int)CBFATop;
     case 13 : return (int)CBFABlockSize;
     case 15 : return (int)((int)CBFATop - (int)CBFA);
-    case 20 : return (int)LVRANumOfBlocks;
-    case 23 : return (int)LVRABlockSize;
-    case 25 : {
-               int p = (int)LVRABaseBlock;
-               int count = 0;
-
-               while (p!=0)
-                {
-                  count +=  (* ((intptr) (p + 8))) - (p+16);
-                  p = * (intptr)p;
-                };
-                return count;
-              };
-               
     case 30 : return (int)AOABaseBlock;
     case 31 : return (int)AOATopBlock;
     case 33 : return (int)AOABlockSize;

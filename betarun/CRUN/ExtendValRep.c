@@ -41,51 +41,38 @@ ParamObjOffRange(ExtVR1)
   size = ByteRepSize(newRange);
   
   if (newRange > LARGE_REP_SIZE) {
-    newRep = LVRAXAlloc(ByteRepPTValue, oldRange, newRange);
-  }
-  if (newRep) {
-    /* LVRA allocation succeeded */
-    /* Recalculate theRep, it may have been moved by LVRACompaction */
-    theRep = *casthandle(ValRep) ((long *) theObj + offset);
-    DEBUG_CODE(Claim(newRep->Proto==theRep->Proto &&
-		     newRep->HighBorder==newRange &&
-		     newRep->LowBorder==1, 
-		     "ExtendValRep: lvra structure ok"));
-    
-    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-    newRep->GCAttr = (long) ((long *) theObj + offset);
-    *casthandle(ValRep) ((long *) theObj + offset) = newRep;
-    
-    /* Copy old rep */
-    for (i = 0; i < copyRange; ++i){
-      newRep->Body[i] = theRep->Body[i];
-    }
-    return;
-  } /* End LVRA allocation */
-  
-  /* NOT REACHED if LVRAXAlloc successfully called */
-  
-  /* Allocate new repetition in IOA */
-  
-  Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
-  
-  /* Assign structural part of new repetition */
-  newRep->Proto = ByteRepPTValue;
-  if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
-  newRep->LowBorder = theRep->LowBorder;
-  newRep->HighBorder = newRange;
-  
-  /* Assign into theObj */
-  AssignReference((long *) theObj + offset, cast(Item) newRep);
-  
-  /* Copy contents of old rep to new rep as longs */
-  for (i = 0; i < copyRange; ++i){
-    newRep->Body[i] = theRep->Body[i];
+      newRep = LVRAXAlloc(ByteRepPTValue, oldRange, newRange);
+      *casthandle(ValRep) ((long *) theObj + offset) = newRep;
+      
+      /* Copy old rep */
+      for (i = 0; i < copyRange; ++i){
+          newRep->Body[i] = theRep->Body[i];
+      }
+  } else {
+      /* Allocate new repetition in IOA */
+      
+      Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
+      
+      /* Assign structural part of new repetition */
+      newRep->Proto = ByteRepPTValue;
+
+      if (IOAMinAge!=0) {
+          newRep->GCAttr = IOAMinAge;
+      }
+      
+      newRep->LowBorder = theRep->LowBorder;
+      newRep->HighBorder = newRange;
+      
+      /* Assign into theObj */
+      AssignReference((long *) theObj + offset, cast(Item) newRep);
+      
+      /* Copy contents of old rep to new rep as longs */
+      for (i = 0; i < copyRange; ++i){
+          newRep->Body[i] = theRep->Body[i];
+      }
   }
   
   Ck(theRep); Ck(newRep); Ck(theObj);
-  
-  return;
 }
 
 ParamObjOffRange(ExtVR2)
@@ -116,51 +103,34 @@ ParamObjOffRange(ExtVR2)
   size = ShortRepSize(newRange);
   
   if (newRange > LARGE_REP_SIZE) {
-    newRep = LVRAXAlloc(ShortRepPTValue, oldRange, newRange);
+      newRep = LVRAXAlloc(ShortRepPTValue, oldRange, newRange);
+      *casthandle(ValRep) ((long *) theObj + offset) = newRep;
+      /* Copy old rep */
+      for (i = 0; i < copyRange; ++i){
+          newRep->Body[i] = theRep->Body[i];
+      }
+  } else {
+      /* Allocate new repetition in IOA */
+      
+      Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
+      
+      /* Assign structural part of new repetition */
+      newRep->Proto = ShortRepPTValue;
+      if (IOAMinAge!=0) {
+          newRep->GCAttr = IOAMinAge;
+      }
+      newRep->LowBorder = theRep->LowBorder;
+      newRep->HighBorder = newRange;
+      
+      /* Assign into theObj */
+      AssignReference((long *) theObj + offset, cast(Item) newRep);
+      
+      /* Copy contents of old rep to new rep as longs */
+      for (i = 0; i < copyRange; ++i){
+          newRep->Body[i] = theRep->Body[i];
+      }
   }
-  if (newRep) {
-    /* LVRA allocation succeeded */
-    /* Recalculate theRep, it may have been moved by LVRACompaction */
-    theRep = *casthandle(ValRep) ((long *) theObj + offset);
-    DEBUG_CODE(Claim(newRep->Proto==theRep->Proto &&
-		     newRep->HighBorder==newRange &&
-		     newRep->LowBorder==1, 
-		     "ExtendValRep: lvra structure ok"));
-    
-    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-    newRep->GCAttr = (long) ((long *) theObj + offset);
-    *casthandle(ValRep) ((long *) theObj + offset) = newRep;
-    
-    /* Copy old rep */
-    for (i = 0; i < copyRange; ++i){
-      newRep->Body[i] = theRep->Body[i];
-    }
-    return;
-  } /* End LVRA allocation */
-  
-  /* NOT REACHED if LVRAXAlloc successfully called */
-  
-  /* Allocate new repetition in IOA */
-  
-  Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
-  
-  /* Assign structural part of new repetition */
-  newRep->Proto = ShortRepPTValue;
-  if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
-  newRep->LowBorder = theRep->LowBorder;
-  newRep->HighBorder = newRange;
-  
-  /* Assign into theObj */
-  AssignReference((long *) theObj + offset, cast(Item) newRep);
-  
-  /* Copy contents of old rep to new rep as longs */
-  for (i = 0; i < copyRange; ++i){
-    newRep->Body[i] = theRep->Body[i];
-  }
-  
   Ck(theRep); Ck(newRep); Ck(theObj);
-  
-  return;
 }
 
 ParamObjOffRange(ExtVR4)
@@ -197,50 +167,32 @@ ParamObjOffRange(ExtVR4)
   
   if (newRange > LARGE_REP_SIZE) {
     newRep = LVRAXAlloc(LongRepPTValue, oldRange, newRange);
-  }
-  if (newRep) {
-    /* LVRA allocation succeeded */
-    /* Recalculate theRep, it may have been moved by LVRACompaction */
-    theRep = *casthandle(ValRep) ((long *) theObj + offset);
-    DEBUG_CODE(Claim(newRep->Proto==theRep->Proto &&
-		     newRep->HighBorder==newRange &&
-		     newRep->LowBorder==1, 
-		     "ExtendValRep: lvra structure ok"));
-    
-    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-    newRep->GCAttr = (long) ((long *) theObj + offset);
     *casthandle(ValRep) ((long *) theObj + offset) = newRep;
     
     /* Copy old rep */
     for (i = 0; i < copyRange; ++i){
       newRep->Body[i] = theRep->Body[i];
     }
-    return;
-  } /* End LVRA allocation */
-  
-  /* NOT REACHED if LVRAXAlloc successfully called */
-  
-  /* Allocate new repetition in IOA */
-  
-  Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
-  
-  /* Assign structural part of new repetition */
-  newRep->Proto = LongRepPTValue;
-  if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
-  newRep->LowBorder = theRep->LowBorder;
-  newRep->HighBorder = newRange;
-  
-  /* Assign into theObj */
-  AssignReference((long *) theObj + offset, cast(Item) newRep);
-  
-  /* Copy contents of old rep to new rep as longs */
-  for (i = 0; i < copyRange; ++i){
-    newRep->Body[i] = theRep->Body[i];
+  } else {
+      /* Allocate new repetition in IOA */
+      
+      Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
+      
+      /* Assign structural part of new repetition */
+      newRep->Proto = LongRepPTValue;
+      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
+      newRep->LowBorder = theRep->LowBorder;
+      newRep->HighBorder = newRange;
+      
+      /* Assign into theObj */
+      AssignReference((long *) theObj + offset, cast(Item) newRep);
+      
+      /* Copy contents of old rep to new rep as longs */
+      for (i = 0; i < copyRange; ++i){
+          newRep->Body[i] = theRep->Body[i];
+      }
   }
-  
   Ck(theRep); Ck(newRep); Ck(theObj);
-  
-  return;
 }
 
 ParamObjOffRange(ExtVR8)
@@ -271,51 +223,34 @@ ParamObjOffRange(ExtVR8)
   size = DoubleRepSize(newRange);
   
   if (newRange > LARGE_REP_SIZE) {
-    newRep = LVRAXAlloc(DoubleRepPTValue, oldRange, newRange);
+      newRep = LVRAXAlloc(DoubleRepPTValue, oldRange, newRange);
+      *casthandle(ValRep) ((long *) theObj + offset) = newRep;
+      /* Copy old rep */
+      for (i = 0; i < copyRange; ++i){
+          newRep->Body[i] = theRep->Body[i];
+      }
+  } else {
+      /* Allocate new repetition in IOA */
+      
+      Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
+      
+      /* Assign structural part of new repetition */
+      newRep->Proto = DoubleRepPTValue;
+      if (IOAMinAge!=0) {
+          newRep->GCAttr = IOAMinAge;
+      }
+      newRep->LowBorder = theRep->LowBorder;
+      newRep->HighBorder = newRange;
+      
+      /* Assign into theObj */
+      AssignReference((long *) theObj + offset, cast(Item) newRep);
+      
+      /* Copy contents of old rep to new rep as longs */
+      for (i = 0; i < copyRange; ++i){
+          newRep->Body[i] = theRep->Body[i];
+      }
   }
-  if (newRep) {
-    /* LVRA allocation succeeded */
-    /* Recalculate theRep, it may have been moved by LVRACompaction */
-    theRep = *casthandle(ValRep) ((long *) theObj + offset);
-    DEBUG_CODE(Claim(newRep->Proto==theRep->Proto &&
-		     newRep->HighBorder==newRange &&
-		     newRep->LowBorder==1, 
-		     "ExtendValRep: lvra structure ok"));
-    
-    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-    newRep->GCAttr = (long) ((long *) theObj + offset);
-    *casthandle(ValRep) ((long *) theObj + offset) = newRep;
-    
-    /* Copy old rep */
-    for (i = 0; i < copyRange; ++i){
-      newRep->Body[i] = theRep->Body[i];
-    }
-    return;
-  } /* End LVRA allocation */
-  
-  /* NOT REACHED if LVRAXAlloc successfully called */
-  
-  /* Allocate new repetition in IOA */
-  
-  Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
-  
-  /* Assign structural part of new repetition */
-  newRep->Proto = DoubleRepPTValue;
-  if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
-  newRep->LowBorder = theRep->LowBorder;
-  newRep->HighBorder = newRange;
-  
-  /* Assign into theObj */
-  AssignReference((long *) theObj + offset, cast(Item) newRep);
-  
-  /* Copy contents of old rep to new rep as longs */
-  for (i = 0; i < copyRange; ++i){
-    newRep->Body[i] = theRep->Body[i];
-  }
-  
   Ck(theRep); Ck(newRep); Ck(theObj);
-  
-  return;
 }
 
 /****** Object Repetitions *******/

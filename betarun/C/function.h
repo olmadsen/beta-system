@@ -59,6 +59,8 @@ extern char *ErrorMessage(enum BetaErr);
 extern int  DisplayBetaStack(enum BetaErr, ref(Object), long *, long);
 #ifdef RTDEBUG
 extern void DescribeObject(struct Object *);
+extern void DescribeProto(ref(ProtoType) theProto);
+
 #endif
 #ifdef NEWRUN
 extern unsigned long        CodeEntry(struct ProtoType *theProto, long PC);
@@ -170,6 +172,9 @@ void AOAtoIOAReport(void);
 /* GC/aoa.c */
 extern void tempAOArootsAlloc(void);
 extern void tempAOArootsFree(void);
+#ifdef NONMOVEAOAGC
+extern long sizeOfAOA(void);
+#endif /* NONMOVEAOAGC */
 #ifdef NEWRUN
 extern struct Object *AOAalloc(long numbytes, long *SP);
 extern struct Object *AOAcalloc(long numbytes, long *SP);
@@ -182,7 +187,7 @@ extern struct Object *AOAalloc(long numbytes);
 extern struct Object *AOAcalloc(long numbytes);
 #endif
 /* Allocate block without possibility of doing IOAGc: */
-struct Object *AOAallocate(long numbytes);
+extern struct Object *AOAallocate(long numbytes);
 
 extern ref(Object) CopyObjectToAOA(ref(Object));
 extern void AOAGc(void);
@@ -197,12 +202,15 @@ extern void AOACheckObjectSpecial(ref(Object));
 extern ref(Object) NewCopyObject(ref(Object), handle(Object));
 
 /* GC/stack.c */
-extern void ProcessStack(void);
-#ifdef NEWRUN
-extern void ProcessStackFrames(long SP, long StackStart, long stopAtComp, long dynOnly, CellProcessFunc func);
+#if !defined(KEEP_STACKOBJ_IN_IOA)
 extern void ProcessStackObj(struct StackObject *, CellProcessFunc func);
 #else
 extern void ProcessStackObj(struct StackObject *);
+#endif
+
+extern void ProcessStack(void);
+#ifdef NEWRUN
+extern void ProcessStackFrames(long SP, long StackStart, long stopAtComp, long dynOnly, CellProcessFunc func);
 #endif
 #if (defined(RTVALHALLA) && defined(intel))
 extern void ProcessRefStack(void);
@@ -212,30 +220,20 @@ extern void ProcessRefStack(void);
 extern void IOAGc(void);
 extern void ProcessReference(handle(Object));
 extern void ProcessObject(ref(Object));
-extern void ProcessAOAReference(handle(Object));
-extern void ProcessAOAObject(ref(Object));
 extern void CompleteScavenging(void);
-#ifdef NEWRUN
+#if !defined(KEEP_STACKOBJ_IN_IOA)
 extern void DoIOACell(struct Object **theCell,struct Object *theObj);
 #endif
 #ifdef RTDEBUG
 extern void IOACheck(void);
 extern void IOACheckObject(ref(Object));
-extern void IOACheckReference(handle(Object));
+extern void IOACheckReference(REFERENCEACTIONARGSTYPE);
 #endif
 
 /* GC/lvra.c */
 extern ref(ValRep) LVRAAlloc(ref(ProtoType), long);
 extern ref(ValRep) LVRACAlloc(ref(ProtoType), long);
 extern ref(ValRep) LVRAXAlloc(ref(ProtoType), long, long);
-extern long inLVRA(ref(Object));
-extern void LVRAkill(struct ValRep *);
-#ifdef CHECK_LVRA_IN_IOA
-extern ref(Object) CopyObjectToLVRA(ref(ValRep)); 
-#endif
-#ifdef RTDEBUG
-void LVRACheck(void);
-#endif
 
 /* GC/misc.c */
 extern void assignRef(long *theCell, ref(Item) newObject);
@@ -271,23 +269,32 @@ extern struct Object * GetThis(long *SP);
 #endif
 
 /* liniarize.c */
-#if defined(LIN)
-extern void addAnchorProto(struct ProtoType *proto);
-extern void appendToList(REFERENCEACTIONARGSTYPE);
-extern void appendToListNoIOA(REFERENCEACTIONARGSTYPE);
+extern void scanObject(struct Object *obj,
+                       void referenceAction(REFERENCEACTIONARGSTYPE),
+                       int doPartObjects);
+#ifdef NONMOVEAOAGC
+extern ref (Object) getRealObject(ref (Object) obj);
 extern void appendToListInAOA(REFERENCEACTIONARGSTYPE);
 extern void initialCollectList(ptr(Object) root,
                                void referenceAction(REFERENCEACTIONARGSTYPE));
 extern void extendCollectList(ptr(Object) root,
                               void referenceAction(REFERENCEACTIONARGSTYPE));
-extern void appendToListNeg(REFERENCEACTIONARGSTYPE);
-extern void appendToListNoIOANeg(REFERENCEACTIONARGSTYPE);
-extern void appendToListInAOANeg(REFERENCEACTIONARGSTYPE);
-extern void initialCollectListNeg(ptr(Object) root,
-                               void referenceAction(REFERENCEACTIONARGSTYPE));
-extern void extendCollectListNeg(ptr(Object) root,
-                              void referenceAction(REFERENCEACTIONARGSTYPE));
-extern ref (Object) copyObjectToLinearizationInAOA(ref (Object) theObj, long size);
-extern void copyAOAObjectToLinearizationInAOA(void);
+extern void scanList(ref (Object) root, void (foreach)(ref (Object) current));
+#endif /* NONMOVEAOAGC */
 
-#endif /* LIN */
+/* aoafreelist.c */
+extern void AOAFreeInFreeList(Object *chunck);
+extern Object *AOAAllocateFromFreeList(long numbytes);
+extern void AOAInsertFreeBlock(char *block, long numbytes); 
+extern void AOACleanFreeList(void);
+extern void AOADisplayFreeList(void);
+extern long AOAScanMemoryArea(long *start, long *end);
+extern void AOADisplayMemoryArea(long *start, long *end);
+extern void GCInfo(void) ;
+
+/* aoalog.c */
+extern void AOALogOpen(void);
+extern void AOALogClose(void);
+extern void AOALogPutText(char *str); 
+extern void AOALogNewLine(void);
+extern void AOALogPutInt(int i);

@@ -24,49 +24,14 @@ void CopyVR1(struct ValRep *theRep,
 
     size = ByteRepSize(range);
     
-    if (range > LARGE_REP_SIZE){
-      /* newRep should go into LVRA */
-      long *cycleCell  = 0;
-      
-      if (!inIOA(theRep)) {
-	/* theRep is in LVRA (it cannot be in AOA, cf. NewCopyObject). 
-	 * If LVRAAlloc causes an LVRACompaction
-	 * the value of theRep may be wrong after LVRAAlloc: this is the case
-	 * if the repetition pointed to by theRep was moved. To prevent this,
-	 * the cell actually referencing the repetition is remembered. This 
-	 * cell will be updated if the repetition is moved.
-	 */
-	cycleCell = (long *)theRep->GCAttr; /* Cell that references theRep */
-      }
-      
-      DEBUG_LVRA(fprintf(output, "CopyVR1 allocates in LVRA\n"));
-      
+    if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
       newRep = LVRAAlloc(ByteRepPTValue, range);
-      if (cycleCell) {
-	/* theRep was in LVRA. Since it may have been moved by
-	 * LVRACompaction, we update it.
-	 */
-	theRep = (struct ValRep *)*cycleCell;
-      }
-    }
-    if (newRep) {
-      /* Make the LVRA-cycle of the new repetition */
-      newRep->GCAttr = (long) ((long *) theObj + offset);
     } else {
-      /* Allocate newRep in IOA/AOA */
+      /* Allocate newRep in IOA */
       push(theObj);
-      push(theRep); /* Is NOT is LVRA and may thus not cause LVRA cycle problems */
-      if (size>IOAMAXSIZE){
-	DEBUG_AOA(fprintf(output, "CopyVR1 allocates in AOA\n"));
-	newRep = (struct ValRep *)AOAalloc(size, SP);
-	DEBUG_AOA(if (!theRep) fprintf(output, "AOAalloc failed\n"));
-      }
-      if (newRep) {
-	newRep->GCAttr = 0; /* In AOA */
-      } else {
-	newRep = (struct ValRep *)IOAalloc(size, SP);
-	if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
-      }
+      push(theRep);
+      newRep = (struct ValRep *)IOAalloc(size, SP);
+      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
       pop(theRep);
       pop(theObj);
       
@@ -106,49 +71,14 @@ void CopyVR2(struct ValRep *theRep,
 
     size = ShortRepSize(range);
     
-    if (range > LARGE_REP_SIZE){
-      /* newRep should go into LVRA */
-      long *cycleCell  = 0;
-      
-      if (!inIOA(theRep)) {
-	/* theRep is in LVRA (it cannot be in AOA, cf. NewCopyObject). 
-	 * If LVRAAlloc causes an LVRACompaction
-	 * the value of theRep may be wrong after LVRAAlloc: this is the case
-	 * if the repetition pointed to by theRep was moved. To prevent this,
-	 * the cell actually referencing the repetition is remembered. This 
-	 * cell will be updated if the repetition is moved.
-	 */
-	cycleCell = (long *)theRep->GCAttr; /* Cell that references theRep */
-      }
-      
-      DEBUG_LVRA(fprintf(output, "CopyVR2 allocates in LVRA\n"));
-      
+    if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
       newRep = LVRAAlloc(ShortRepPTValue, range);
-      if (cycleCell) {
-	/* theRep was in LVRA. Since it may have been moved by
-	 * LVRACompaction, we update it.
-	 */
-	theRep = (struct ValRep *)*cycleCell;
-      }
-    }
-    if (newRep) {
-      /* Make the LVRA-cycle of the new repetition */
-      newRep->GCAttr = (long) ((long *) theObj + offset);
     } else {
-      /* Allocate newRep in IOA/AOA */
+      /* Allocate newRep in IOA */
       push(theObj);
-      push(theRep); /* Is NOT is LVRA and may thus not cause LVRA cycle problems */
-      if (size>IOAMAXSIZE){
-	DEBUG_AOA(fprintf(output, "CopyVR2 allocates in AOA\n"));
-	newRep = (struct ValRep *)AOAalloc(size, SP);
-	DEBUG_AOA(if (!theRep) fprintf(output, "AOAalloc failed\n"));
-      }
-      if (newRep) {
-	newRep->GCAttr = 0; /* In AOA */
-      } else {
-	newRep = (struct ValRep *)IOAalloc(size, SP);
-	if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
-      }
+      push(theRep);
+      newRep = (struct ValRep *)IOAalloc(size, SP);
+      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
       pop(theRep);
       pop(theObj);
       
@@ -188,49 +118,14 @@ void CopyVR4(struct ValRep *theRep,
 
     size = LongRepSize(range);
     
-    if (range > LARGE_REP_SIZE){
-      /* newRep should go into LVRA */
-      long *cycleCell  = 0;
-      
-      if (!inIOA(theRep)) {
-	/* theRep is in LVRA (it cannot be in AOA, cf. NewCopyObject). 
-	 * If LVRAAlloc causes an LVRACompaction
-	 * the value of theRep may be wrong after LVRAAlloc: this is the case
-	 * if the repetition pointed to by theRep was moved. To prevent this,
-	 * the cell actually referencing the repetition is remembered. This 
-	 * cell will be updated if the repetition is moved.
-	 */
-	cycleCell = (long *)theRep->GCAttr; /* Cell that references theRep */
-      }
-      
-      DEBUG_LVRA(fprintf(output, "CopyVR2 allocates in LVRA\n"));
-      
+    if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
       newRep = LVRAAlloc(LongRepPTValue, range);
-      if (cycleCell) {
-	/* theRep was in LVRA. Since it may have been moved by
-	 * LVRACompaction, we update it.
-	 */
-	theRep = (struct ValRep *)*cycleCell;
-      }
-    }
-    if (newRep) {
-      /* Make the LVRA-cycle of the new repetition */
-      newRep->GCAttr = (long) ((long *) theObj + offset);
     } else {
-      /* Allocate newRep in IOA/AOA */
+      /* Allocate newRep in IOA */
       push(theObj);
-      push(theRep); /* Is NOT is LVRA and may thus not cause LVRA cycle problems */
-      if (size>IOAMAXSIZE){
-	DEBUG_AOA(fprintf(output, "CopyVR4 allocates in AOA\n"));
-	newRep = (struct ValRep *)AOAalloc(size, SP);
-	DEBUG_AOA(if (!theRep) fprintf(output, "AOAalloc failed\n"));
-      }
-      if (newRep) {
-	newRep->GCAttr = 0; /* In AOA */
-      } else {
-	newRep = (struct ValRep *)IOAalloc(size, SP);
-	if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
-      }
+      push(theRep);
+      newRep = (struct ValRep *)IOAalloc(size, SP);
+      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
       pop(theRep);
       pop(theObj);
       
@@ -270,49 +165,14 @@ void CopyVR8(struct ValRep *theRep,
 
     size = DoubleRepSize(range);
     
-    if (range > LARGE_REP_SIZE){
-      /* newRep should go into LVRA */
-      long *cycleCell  = 0;
-      
-      if (!inIOA(theRep)) {
-	/* theRep is in LVRA (it cannot be in AOA, cf. NewCopyObject). 
-	 * If LVRAAlloc causes an LVRACompaction
-	 * the value of theRep may be wrong after LVRAAlloc: this is the case
-	 * if the repetition pointed to by theRep was moved. To prevent this,
-	 * the cell actually referencing the repetition is remembered. This 
-	 * cell will be updated if the repetition is moved.
-	 */
-	cycleCell = (long *)theRep->GCAttr; /* Cell that references theRep */
-      }
-      
-      DEBUG_LVRA(fprintf(output, "CopyVR8 allocates in LVRA\n"));
-      
+    if (range > LARGE_REP_SIZE || size>IOAMAXSIZE){
       newRep = LVRAAlloc(DoubleRepPTValue, range);
-      if (cycleCell) {
-	/* theRep was in LVRA. Since it may have been moved by
-	 * LVRACompaction, we update it.
-	 */
-	theRep = (struct ValRep *)*cycleCell;
-      }
-    }
-    if (newRep) {
-      /* Make the LVRA-cycle of the new repetition */
-      newRep->GCAttr = (long) ((long *) theObj + offset);
     } else {
-      /* Allocate newRep in IOA/AOA */
+      /* Allocate newRep in IOA */
       push(theObj);
-      push(theRep); /* Is NOT is LVRA and may thus not cause LVRA cycle problems */
-      if (size>IOAMAXSIZE){
-	DEBUG_AOA(fprintf(output, "CopyVR8 allocates in AOA\n"));
-	newRep = (struct ValRep *)AOAalloc(size, SP);
-	DEBUG_AOA(if (!theRep) fprintf(output, "AOAalloc failed\n"));
-      }
-      if (newRep) {
-	newRep->GCAttr = 0; /* In AOA */
-      } else {
-	newRep = (struct ValRep *)IOAalloc(size, SP);
-	if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
-      }
+      push(theRep);
+      newRep = (struct ValRep *)IOAalloc(size, SP);
+      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
       pop(theRep);
       pop(theObj);
       
@@ -359,11 +219,7 @@ void CopyVRI(struct ObjectRep *theRep,
     if (size>IOAMAXSIZE){
       DEBUG_AOA(fprintf(output, "CopyVRI allocates in AOA\n"));
       newRep = (struct ObjectRep *)AOAalloc(size, SP);
-      if (newRep) newRep->GCAttr = 0;
       DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
-    } 
-    if (newRep){
-      newRep->GCAttr = 0; /* In AOA */
     } else {
       newRep = (struct ObjectRep *)IOAalloc(size, SP);
       if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
@@ -414,11 +270,7 @@ void CopyVRC(struct ObjectRep *theRep,
     if (size>IOAMAXSIZE){
       DEBUG_AOA(fprintf(output, "CopyVRC allocates in AOA\n"));
       newRep = (struct ObjectRep *)AOAalloc(size, SP);
-      if (newRep) newRep->GCAttr = 0;
       DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
-    } 
-    if (newRep){
-      newRep->GCAttr = 0; /* In AOA */
     } else {
       newRep = (struct ObjectRep *)IOAalloc(size, SP);
       if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */

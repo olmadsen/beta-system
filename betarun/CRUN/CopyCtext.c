@@ -24,7 +24,6 @@ ParamAscii(struct ValRep *, CopyCT)
   range = ascii ? strlen((const char *)ascii) : 0;
   size = ByteRepSize(range);
   
-  /* LVRA missing */
   theRep = cast(ValRep) IOAalloc(size);
   
   theRep->Proto = ByteRepPTValue;

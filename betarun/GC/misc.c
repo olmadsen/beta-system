@@ -234,7 +234,6 @@ long inBetaHeap( theObj)
   if (!isPositiveRef(theObj)) return FALSE;
   if (inIOA( theObj)) return TRUE;
   if (inAOA( theObj)) return TRUE;
-  if (inLVRA( theObj)) return TRUE;
   return FALSE;
 }
 
@@ -268,7 +267,7 @@ void CCk(void *r, char *fname, int lineno, char *ref)
 {
   register struct Object* rr = (struct Object *)r; 
 
-  CHECK_HEAP(IOACheck(); LVRACheck(); AOACheck());
+  CHECK_HEAP(IOACheck(); AOACheck());
 
 #if 0
   fprintf(output, "Ck: IOATop is 0x%x\n", (int)IOATop); fflush(output);
@@ -313,7 +312,7 @@ void CCk(void *r, char *fname, int lineno, char *ref)
       /* Check alignment */
       Claim(isLazyRef(r) || (((long)r&3)==0), __CkString);
       /* Check it's in a heap */
-      Claim(inIOA(rr) || inAOA(rr) || inLVRA(rr) || isLazyRef(rr) , __CkString);
+      Claim(inIOA(rr) || inAOA(rr) || isLazyRef(rr) , __CkString);
     }
 }
 
@@ -495,8 +494,6 @@ void PrintHeap(long * startaddr, long numlongs)
       fprintf(output, " (IOA)");
     if (inAOA(ref)) 
       fprintf(output, " (AOA)");
-    if (inLVRA(ref)) 
-      fprintf(output, " (LVRA)");
     if (ToSpace<=(long*)ref && (long*)ref<ToSpaceLimit)
       fprintf(output, " (ToSpace)");
   } else {
@@ -516,8 +513,6 @@ void PrintHeap(long * startaddr, long numlongs)
 	fprintf(output, " (IOA)");
       if (inAOA(ref)) 
 	fprintf(output, " (AOA)");
-      if (inLVRA(ref)) 
-	fprintf(output, " (LVRA)");
       if (ToSpace<=(long*)ref && (long*)ref<ToSpaceLimit)
 	fprintf(output, " (ToSpace)");
     } else {
@@ -549,9 +544,6 @@ static void RegError(long pc1, long pc2, char *reg, ref(Object) value)
   if (inAOA(value)){
     fprintf(output, "(is in AOA, but is not a legal object)\n");
   }
-  if (inLVRA(value)){
-    fprintf(output, "(is in LVRA)\n");
-  }
   if (inToSpace(value)){
     fprintf(output, "(is in ToSpace)\n");
   }
@@ -565,8 +557,7 @@ static long CheckCell(struct Object *theCell)
   if(theCell) {
     if (inBetaHeap(theCell)) {
       if (isObject(theCell) ||
-	  isValRep(theCell) ||
-	  inLVRA(theCell)  /* may point to old place in LVRA if there has just been an LVRA GC */
+	  isValRep(theCell) 
 	  ) 
 	return TRUE;
       return FALSE;
@@ -592,7 +583,7 @@ void CheckRegisters(void)
   ref(Object) edx = CkP3;
   ref(Object) edi = CkP4;
 
-  CHECK_HEAP(IOACheck(); LVRACheck(); AOACheck());
+  CHECK_HEAP(IOACheck(); AOACheck());
 
   if (!CheckCell(a2)) RegError(pc1, pc2, "_a2", a2);
   if (!CheckCell(a3)) RegError(pc1, pc2, "_a3", a3);

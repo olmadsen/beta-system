@@ -6,31 +6,48 @@
  */
 #include "beta.h"
 
-GLOBAL(static long AOACreateNewBlock) = FALSE;
-
 #define REP ((struct ObjectRep *)theObj)
 
-static void FollowObject(Object * theObj);
-static void Phase1(void);
-static void Phase2(long *numAddr, long *sizeAddr, long *usedAddr);
-static void Phase3(void);
 #ifdef NEWRUN
 extern void DoGC(long *SP);
 #else
 extern void DoGC(void);
 #endif
 
-#ifdef NONMOVEAOAGC
-static void NonMoveInitList(void);
-static void NonMoveAddRoot(long cellptr);
-static void HandleDeadObjects(void);
-#endif
+/* GLOBAL FUNCTIONS, declared in C/function.h
+ *
+ *  void tempAOArootsAlloc(void)
+ *  void tempAOArootsFree(void)
+ *  struct Object *AOAallocate(long numbytes)
+ *  struct Object *AOAalloc(AOA_ALLOC_PARAMS)
+ *  struct Object *AOAcalloc(AOA_ALLOC_PARAMS)
+ *  ref(Object) CopyObjectToAOA( ref(Object) theObj theObj)
+ *  long sizeOfAOA(void)
+ *  void AOAGc()
+ *  #ifdef nti 
+ *  void DoGC()
+ *  #endif
+ *  #ifdef RTDEBUG
+ *  void AOACheck()
+ *  void AOACheckObject(ref(Object) theObj)
+ *  void AOACheckReference(handle(Object) theCell)
+ *  void AOACheckObjectSpecial(ref(Object) theObj)
+ *  #endif
+ */
+
+/* LOCAL FUNCTIONS */
+static long AllocateBaseBlock(void);
+static void markObjectAlive(ref (Object) obj);
+static void AOANewBlock(long newBlockSize);
+
+/* LOCAL VARIABLES */
+static long totalFree = 0;
+static long totalAOASize = 0;
 
 /* tempAOArootsAlloc:
  *  Not enough room for the AOAroots table in ToSpace.
  *  Instead allocate offline and copy existing part of table over
  */
-
 void tempAOArootsAlloc(void)
 {
     ptr(long) oldPtr;        /* start of old table */
@@ -106,147 +123,103 @@ void tempAOArootsAlloc(void)
 void tempAOArootsFree(void)
 {
 #ifdef RTDEBUG
-  long roots = (long)tempAOAroots;
-  Claim(tempAOAroots!=NULL, "tempAOArootsFree: tempAOAroots allocated");
+    long roots = (long)tempAOAroots;
+    Claim(tempAOAroots!=NULL, "tempAOArootsFree: tempAOAroots allocated");
 #endif
-  MCHECK();
-  FREE(tempAOAroots);
-  MCHECK();
-  tempAOAroots = NULL;
-  INFO_IOA(fprintf(output, "freed temporary AOAroots table\n"));
-  DEBUG_IOA(fprintf(output, " [0x%x]", (int)roots));
+    MCHECK();
+    FREE(tempAOAroots);
+    MCHECK();
+    tempAOAroots = NULL;
+    INFO_IOA(fprintf(output, "freed temporary AOAroots table\n"));
+    DEBUG_IOA(fprintf(output, " [0x%x]", (int)roots));
 }
 
-int AOAAllocateBase(void)
+/* AllocateBaseBlock:
+ * Some of The functionality has been taken out of 'AOAallocate below
+ * and put in a function by itself. This function is only called the
+ * first time around where it allocates the first block in AOA. The
+ * jump to this code is very rarely taken. In shuch cases it improves
+ * both performance and readabillity to put such code in a function by
+ * itself.
+ */
+
+static long AllocateBaseBlock(void)
 {
-  if (MallocExhausted || (AOABlockSize == 0))
-    return 0;
-  /* Check if the AOAtoIOAtable is allocated. If not then allocate it. */
-  if (AOAtoIOAtable == 0) 
-    if (AOAtoIOAalloc() == 0) {
-      MallocExhausted = TRUE;
-      INFO_AOA( fprintf(output,
-			"#(AOA: AOAtoIOAtable allocation %d failed!.)\n",
-			(int)AOAtoIOAtableSize));
-      return 0;
+    if( MallocExhausted || (AOABlockSize == 0) ) return 0;
+    /* Check if the AOAtoIOAtable is allocated. If not then allocate it. */
+    if( AOAtoIOAtable == 0 ) 
+        if( AOAtoIOAalloc() == 0 ){
+            MallocExhausted = TRUE;
+            INFO_AOA( fprintf(output,
+                              "#(AOA: AOAtoIOAtable allocation %d failed!.)\n",
+                              (int)AOAtoIOAtableSize));
+            return 1;
+        }
+    /* Try to allocate a new AOA block. */
+    if( (AOABaseBlock = newBlock(AOABlockSize)) ){
+        INFO_AOA( fprintf(output, "#(AOA: new block allocated %dKb.)\n",
+                          (int)AOABlockSize/Kb));
+        AOATopBlock  = AOABaseBlock;
+        AOABlocks++;
+        totalFree += AOABlockSize;
+        totalAOASize += AOABlockSize;
+        
+        /* Insert the new block in the freelist */
+        AOAInsertFreeBlock((char *)AOATopBlock -> top, AOABlockSize);
+        INFO_HEAP_USAGE(PrintHeapUsage("after new AOA block"));
+    }else{
+        MallocExhausted = TRUE;
+        INFO_AOA( fprintf(output, "#(AOA: block allocation failed %dKb.)\n",
+                          (int)AOABlockSize/Kb));
+        return 1;
     }
-  INFO_AOA( fprintf(output,
-		    "#(AOA: AOAtoIOAtable allocated of size %d)\n",
-		    (int)AOAtoIOAtableSize));
-  
-#ifdef USEMMAP
-
-    AOATopBlock = AOABaseBlock;
-
-#else /* USEMMAP */
-  /* Try to allocate a new AOA block. */
-  if ((AOABaseBlock = newBlock(AOABlockSize))) {
-    INFO_AOA( fprintf(output, "#(AOA: new block allocated %dKb.)\n",
-		      (int)AOABlockSize/Kb));
-    AOATopBlock = AOABaseBlock;
-    INFO_HEAP_USAGE(PrintHeapUsage("after new AOA block"));
-  } else {
-    MallocExhausted = TRUE;
-    INFO_AOA( fprintf(output, "#(AOA: block allocation failed %dKb.)\n",
-		      (int)AOABlockSize/Kb));
     return 0;
-  }
-#endif /* USEMMAP */
-  return 1;
 }
 
 /* AOAallocate allocate 'size' number of bytes in the Adult object area.
  * If the allocation succeeds the function returns a reference to the allocated
- * object, 0 otherwise.
- */
+ * object, 0 otherwise.  */
 struct Object *AOAallocate(long numbytes)
 {
-  ptr(long)  oldTop;
-  long blksize;
-
-  if( AOABaseBlock == 0 || AOATopBlock == 0) {
-    if (!AOAAllocateBase())
-      return 0;
-  }
-
-  /* fprintf(output, "(#AOAallocate(%d) of free %d #)", 
-	  numbytes, areaSize(AOATopBlock->top,AOATopBlock->limit)); */
-  DEBUG_CODE( Claim(numbytes > 0, "AOAallocate: numbytes > 0") );
-  /*DEBUG_AOA(if (AOATopBlock) 
-	    fprintf(output, "AOATopBlock 0x%x, diff 0x%X\n",
-		    AOATopBlock, (long)AOATopBlock->limit - (long)AOATopBlock->top));*/
-  
-  /* Try to find space between AOATopBlock->top and AOATopBlock->limit. */
-  oldTop = AOATopBlock->top;
-  if (areaSize(oldTop,AOATopBlock->limit) > numbytes) {
-    AOATopBlock->top = (ptr(long)) Offset( oldTop, numbytes);
-    return (ref(Object)) oldTop;
-  } else {
-    /* maybe there is a free block AOATopBlock->next. */
-    if( AOATopBlock->next ){
-      AOATopBlock = AOATopBlock->next;
-      oldTop = AOATopBlock->top;
-      if( areaSize(oldTop,AOATopBlock->limit) > numbytes){
-	AOATopBlock->top = (ptr(long)) Offset( oldTop, numbytes);
-	return (ref(Object)) oldTop;
-      }
+    Object *newObj;
+    
+    DEBUG_CODE( Claim(numbytes > 0, "AOAallocate: numbytes > 0") );
+    
+    if( AOABaseBlock == 0) {
+        if (AllocateBaseBlock()) {
+            INFO_AOA(fprintf(output,"Could not allocate AOABaseBlock\n"));
+            return 0;
+        }
+        INFO_AOA(fprintf(output,"Allocated AOABaseBlock\n"));
     }
-  }
-  
-  if (noAOAGC || AOACreateNewBlock) {
-#ifdef USEMMAP
-    fprintf(output, "AOAallocate:extentBlock", numbytes);
-    blksize = AOABlockSize;
-    while (blksize<numbytes)
-      blksize *= 2;
-    if (extendBlock(AOATopBlock, blksize)) {
-      MallocExhausted = TRUE;
-      INFO_AOA( fprintf( output, "#(AOA: block extension failed %dKb.)\n",
-			 (int)AOABlockSize/Kb));
-      if (!noAOAGC)
-	AOANeedCompaction = TRUE;
-      return 0;
-    }
-    if (areaSize(oldTop,AOATopBlock->limit) > numbytes) {
-      AOATopBlock->top = (ptr(long))Offset(oldTop, numbytes);
-      return (ref(Object)) oldTop;
+    
+    /* Try to find a chunck of memory in the freelist */
+    newObj = AOAAllocateFromFreeList(numbytes);
+    if (newObj) {
+        totalFree -= numbytes;
+        newObj->GCAttr = DEADOBJECT;
+        
+        if (totalFree < AOAMinFree) {
+            AOANeedCompaction = TRUE;
+        }
+        
+        return newObj;
+        
     } else {
-      MallocExhausted = TRUE;
-      INFO_AOA( fprintf( output, "#(AOA: block extension failed %dKb.)\n",
-			 (int)AOABlockSize/Kb));
-      if (!noAOAGC)
-	AOANeedCompaction = TRUE;
-      return 0;
+        /* We add a new block and indicate that we want an AOAGC ASAP */
+        long newBlockSize;
+        
+        newBlockSize = (AOABlockSize < numbytes) ? numbytes : AOABlockSize;
+
+        INFO_AOA(fprintf(output,"Could not allocate %lu bytes, doing AOAGC\n",numbytes));
+        AOANewBlock(newBlockSize);
+        
+        if ((newObj = AOAallocate(numbytes))) {
+            AOANeedCompaction = TRUE;
+            return newObj;
+        }
     }
-#else
-    blksize = AOABlockSize < numbytes ? numbytes : AOABlockSize;
-    if( (AOATopBlock->next = newBlock( blksize)) ){
-      INFO_AOA( fprintf( output, "#(AOA: new block allocated %dKb.)\n",
-			(int)blksize/Kb) );
-      AOATopBlock = AOATopBlock->next;
-      oldTop = AOATopBlock->top;
-      INFO_HEAP_USAGE(PrintHeapUsage("after new AOA block"));
-      AOACreateNewBlock = FALSE;
-      if( areaSize(oldTop,AOATopBlock->limit) > numbytes){
-	AOATopBlock->top = (ptr(long)) Offset( oldTop, numbytes);
-	return (ref(Object)) oldTop;
-      }else{
-	Notify("#AOA warning: Object size is larger than AOABlockSize"); 
-	return 0;
-      }
-    }else{
-      MallocExhausted = TRUE;
-      INFO_AOA( fprintf( output, "#(AOA: block allocation failed %dKb.)\n",
-			(int)AOABlockSize/Kb));
-      if (!noAOAGC)
-	AOANeedCompaction = TRUE;
-      return 0;
-    }
-#endif
-  }else{
-    AOANeedCompaction = TRUE;
     return 0;
-  }    
 }
 
 #ifdef NEWRUN
@@ -261,1510 +234,620 @@ struct Object *AOAallocate(long numbytes)
  */
 void DoGC()
 {
-  fprintf(output, "ERROR: Ignoring DoGC from AOA(c)alloc\n");
+    fprintf(output, "ERROR: Ignoring DoGC from AOA(c)alloc\n");
 }
 #endif
 
 struct Object *AOAalloc(AOA_ALLOC_PARAMS)
 {
-  struct Object *theObj;
+    struct Object *theObj;
 
-  MT_CODE(mutex_lock(&aoa_lock));
+    MT_CODE(mutex_lock(&aoa_lock));
 
-  DEBUG_CODE(NumAOAAlloc++);
-  DEBUG_AOA(fprintf(output,"AOAalloc(numbytes=%d)",(int)numbytes));
-  theObj = AOAallocate(numbytes);
-  if (!theObj){
-    /* AOAallocate failed. This means that AOANeedCompaction will be
-     * true now. Force an IOAGc.
-     */
-    DEBUG_AOA(fprintf(output, "AOAalloc: forcing IOAGc and AOAGc\n"));
+    DEBUG_CODE(NumAOAAlloc++);
+    INFO_AOA(fprintf(output,"AOAalloc(numbytes=%d)",(int)numbytes));
+    theObj = AOAallocate(numbytes);
+    if (!theObj){
+        /* AOAallocate failed. This means that AOANeedCompaction will be
+         * true now. Force an IOAGc.
+         */
+        INFO_AOA(fprintf(output, "AOAalloc: forcing IOAGc and AOAGc\n"));
 #ifdef MT
-    fprintf(output,"FIXME:AOAalloc failed, has to GC here!!\n");
-    /*    ReqObjectSize = numbytes/4;
-	  IOAGc(); */
+        fprintf(output,"FIXME:AOAalloc failed, has to GC here!!\n");
+        /*    ReqObjectSize = numbytes/4;
+              IOAGc(); */
 #else
 #ifdef NEWRUN
-    DoGC(SP);
+        DoGC(SP);
 #else
-    DoGC();
+        DoGC();
 #endif
 #endif /* MT */
-    /* Try again */
-    theObj = AOAallocate(numbytes);
-  }
-  if (!theObj){
-    /* Arrgh. FIXME */
-    fprintf(output, "AOAalloc: cannot allocate 0x%x bytes\n", (int)numbytes);
-    BetaExit(1);
-  }
+        /* Try again */
+        theObj = AOAallocate(numbytes);
+    }
+    if (!theObj){
+        /* Arrgh. FIXME */
+        fprintf(output, "AOAalloc: cannot allocate 0x%x bytes\n", (int)numbytes);
+        BetaExit(1);
+    }
 
-  MT_CODE(mutex_unlock(&aoa_lock));
+    MT_CODE(mutex_unlock(&aoa_lock));
 
-  return theObj;
+    return theObj;
 }
 
 struct Object *AOAcalloc(AOA_ALLOC_PARAMS)
 {
-  struct Object *theObj;
+    struct Object *theObj;
+    long gca;
 #ifdef NEWRUN
-  theObj = AOAalloc(numbytes, SP);
+    theObj = AOAalloc(numbytes, SP);
 #else
-  theObj = AOAalloc(numbytes);
+    theObj = AOAalloc(numbytes);
 #endif
-  /* No need to check theObj!=0 since this is done in AOAalloc */
-  memset(theObj, 0, numbytes);
-  return theObj;
+    /* No need to check theObj!=0 since this is done in AOAalloc */
+    gca = theObj->GCAttr;
+    memset(theObj, 0, numbytes);
+    theObj->GCAttr = gca;
+    return theObj;
 }
-
 
 /* CopyObjectToAOA:
  *  move an object to AOA and return the address of the new location
  *  If the allocation in AOA failed the function returns 0;
  */
 ref(Object) CopyObjectToAOA( theObj)
-     ref(Object) theObj;
+ref(Object) theObj;
 {
-  ref(Object) newObj;
-  long        size;
-  register ptr(long) src;
-  register ptr(long) dst;
-  register ptr(long) theEnd;
+    ref(Object) newObj;
+    long        size;
+    register ptr(long) src;
+    register ptr(long) dst;
+    register ptr(long) theEnd;
   
-#if 0
-  if (theObj->Proto == RefRepPTValue){
-    fprintf(output, "ToAOA: RefRep=0x%x\n", theObj);
-    fprintf(output, "  0x%x\n", *((long*)theObj));
-    fprintf(output, "  0x%x\n", *((long*)theObj+1));
-    fprintf(output, "  0x%x\n", *((long*)theObj+2));
-    fprintf(output, "  0x%x\n", *((long*)theObj+3));
-    fprintf(output, "  0x%x\n", *((long*)theObj+4));
-    fprintf(output, "  0x%x\n", *((long*)theObj+5));
-    fprintf(output, "  0x%x\n", *((long*)theObj+6));
-    fprintf(output, "  0x%x\n", *((long*)theObj+7));
-    fprintf(output, "  ...\n");
-  }
-#endif
+    size = 4*ObjectSize( theObj); 
+    Claim(ObjectSize(theObj) > 0, "#ToAOA: ObjectSize(theObj) > 0");
+    Claim((size&7)==0, "#ToAOA: (size&7)==0 ");
   
-  size = 4*ObjectSize( theObj); 
-  DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "#ToAOA: ObjectSize(theObj) > 0") );
-#if defined(LIN)
-  /* If an object has been given an age of IOAMaxAge + 1 it is a
-   * request to IOAGc that the object is moved to the part of AOA that
-   * holds the current linearization */
-  if (theObj->GCAttr == IOAMaxAge+1) {
-      /* This can only happen if the GCAttribute has been explicitely
-       * set to this value by the linearizer.
-       */
-      newObj = copyObjectToLinearizationInAOA(theObj, size);
+#ifdef KEEP_STACKOBJ_IN_IOA
+    DEBUG_CODE(
+	       if (theObj -> Proto == StackObjectPTValue) {
+		 fprintf(output,"CopyObjectToAOA: Trying to move stack object to AOA\n");
+		 Illegal();
+	       });
+#endif /* NEWRUN */
       
-  } else {
-#endif /* LIN */
-      if( (newObj = AOAallocate( size)) == 0 ) return 0;
-      
-      theEnd = (ptr(long)) (((long) newObj) + size); 
-      
-      src = (ptr(long)) theObj; dst = (ptr(long)) newObj; 
-      while( dst < theEnd) *dst++ = *src++; 
-#if defined(LIN)
-  }
-#endif /* LIN */
+    if( (newObj = AOAallocate( size)) == 0 ) return 0;
   
-  newObj->GCAttr = 0;
+    theEnd = (ptr(long)) (((long) newObj) + size); 
   
-  /* Set one forward reference in theObj to newObj */
-  theObj->GCAttr = (long) newObj;
+    src = (ptr(long)) theObj; dst = (ptr(long)) newObj; 
+    while( dst < theEnd) *dst++ = *src++; 
   
-  DEBUG_AOA( AOAcopied += size );
+    if (!HandledInAOAHead) {
+        /* Start new list */
+        HandledInAOAHead = newObj;
+        HandledInAOATail = newObj;
+
+    } else {
+        /* append new object to list */
+        HandledInAOATail -> GCAttr = (long) newObj;
+        HandledInAOATail = newObj;
+    }
+    newObj->GCAttr = LISTEND;
+    
+    /* Set one forward reference in theObj to newObj */
+    theObj->GCAttr = (long) newObj;
   
-  DEBUG_AOA(if(isStackObject(theObj)) 
-	    fprintf(output, 
-		    "CopyObjectToAOA: moved StackObject to 0x%x\n", (int)newObj));
+    DEBUG_AOA( AOAcopied += size );
   
-#if 0
-  DEBUG_AOA( fprintf(output, 
-		     "#ToAOA: IOA-addr: 0x%x AOA-addr: 0x%x proto: 0x%x size: %d\n", 
-		     (int)theObj, (int)newObj, (int)(theObj->Proto), (int)size)); 
-#endif
-#if 0
-  if (theObj->Proto == RefRepPTValue){
-      fprintf(output, "ToAOA: RefRep=0x%x\n", newObj);
-  }
-#endif
+    DEBUG_AOA(if(isStackObject(theObj)) 
+              fprintf(output, 
+                      "CopyObjectToAOA: moved StackObject to 0x%x\n", (int)newObj));
   
-  /* Return the new object in AOA */
-  return newObj;
+    /* Return the new object in AOA */
+    return newObj;
+}
+
+static void markObjectAlive(ref (Object) obj)
+{
+    obj -> GCAttr = LIVEOBJECT;
+}
+
+long sizeOfAOA(void)
+{
+    ref (Block) current;
+    long numbytes = 0;
+    
+    current = AOABaseBlock;
+    
+    while(current) {
+        numbytes += 4*(current -> limit - current -> top);
+        current = current -> next;
+    }
+
+    return numbytes;
 }
 
 /*
  *  AOAGc: perform a mark/sweep garbagecollection on the AOA heap.
  *  Should be called after IOAGc when AOANeedCompaction == TRUE;
  */
+
 void AOAGc()
 {
-  /* Remember that AOAGc is called before ToSpace <-> IOA, so
-   * all reachable objects are in ToSpace, and IOA is junk.
-   * The space in IOA is used during the Mark Sweep.
-   */
-  long blocks, size, used;
-  
-  if (!AOABaseBlock)
-      return;
-  
-  NumAOAGc++;
+    long *pointer;
+    ptr(long) cellptr;
+    ptr(Object) target;
+    ptr(Object) root;
+    ref(Block) currentBlock;
 
-#ifdef NONMOVEAOAGC
-  if (NonMoveAOAGC) {
-      NonMoveInitList();
-  }
-#endif /* NONMOVEAOAGC */
-  
+    NumAOAGc++;
+    
+    INFO_AOA(fprintf(output,"(AOA - %lu:",NumAOAGc));
+    INFO_AOA(AOADisplayFreeList());
+    
+    /* Based on the AOARoots all objects reachable from those roots
+     * are collected in a linked list. After that AOA is scanned and
+     * objects not in the list are considered dead and inserted in the
+     * free lists.
+     */
+    
+    /* When collecting the list of live objects, only objects in AOA
+     * are considered.
+     */
+    
+    pointer = AOArootsPtr;
+    
+    root = NULL;
 
-#ifdef RTLAZY
-  /* Reset the table of fields in AOA containing negative references: */
-  if (negAOArefs)
-    negAOArefsRESET ();
-#endif
-
-  INFO_AOA( fprintf(output, "\n#(AOA-%d ", (int)NumAOAGc); fflush(output) );
-  /* Mark all reachable objects within AOA and reverse all pointers. */
-  
-  MAC_CODE(RotateTheCursorBack());
-  DEBUG_AOA( fprintf( output, "Phase1\n"); fflush(output) );
-
-  Phase1();  
-  /* Calculate new addresses for the reachable objects and reverse pointers. */
-  MAC_CODE(RotateTheCursorBack());
-
-  DEBUG_AOA( fprintf( output, "Phase2\n"); fflush(output) );
-  Phase2( &blocks, &size, &used); 
-  /* Copy all reachable objects to their new locations. */
-  MAC_CODE(RotateTheCursorBack());
-
-  DEBUG_AOA( fprintf( output, "Phase3\n"); fflush(output) );
-  Phase3();  
-  MAC_CODE(RotateTheCursorBack());
-  AOANeedCompaction = FALSE;
-
-#if 1
-#ifdef RTDEBUG
-  { /* Clear unused part of AOA to trigger errors earlier */
-    Block* theBlock = AOABaseBlock;
-    while (theBlock) {
-      memset(theBlock->top, 0, (long)theBlock->limit - (long)theBlock->top);
-      theBlock = theBlock->next;
+    /* Clear AOAtoIOAtable. This will be rebuild by extend- and
+       initialCollectList. */
+    AOAtoIOAClear();
+    
+    if (pointer < AOArootsLimit) {
+        /* Make cellptr point to the cell that contains an AOAroot. */
+        cellptr = (long*)(*pointer & ~1);
+        
+        /* Make target point to the actual object in AOA. */
+        root = target = (ptr(Object))*cellptr;
+        
+        /* It is necessary to call a special collecter the first
+         * time.
+         */
+        initialCollectList(target,
+                           appendToListInAOA);
+        
+        pointer++;
+        
+        /* Afterwards we call extendCollectList. */
+        while (pointer < AOArootsLimit) {
+            cellptr = (long*)(*pointer & ~1);
+            target = (ptr(Object))*cellptr;
+            extendCollectList(target,
+                              appendToListInAOA);
+            pointer++;
+        }
     }
-  }
-#endif  
-#endif  
+    
+    /* The object pointed to by the first entry in AOArootsPtr is now
+     * the head of the linked list of all live objects in AOA.
+     */
+    
+    /* All objects in the list are marked ALIVE */
+    /* If root is actually a staticly inlined part object
+       'getRealObject' will return the enclosing object.
+    */
+    if (root) {
+      scanList(getRealObject(root), markObjectAlive);
+    
+    /* Scan AOA and insert dead objects in the freelist */
+    
+    /* Clear the free lists */
+      AOACleanFreeList();
 
-  if( AOAMinFree ){
-    if( (size - used) < AOAMinFree )
-      /* if freeArea < AOAMinFree  then ... */
-      AOACreateNewBlock = TRUE;
-    else
-      AOACreateNewBlock = FALSE;
-  }else{
-    if( (100 - (100 * used)/size) < AOAPercentage )
-      /* if freeArea < AOAPercentage  then ... */
-      AOACreateNewBlock = TRUE;
-    else
-      AOACreateNewBlock = FALSE;
-  }
-  DEBUG_AOA( if( AOACreateNewBlock )fprintf( output, " new block needed, "));
+      /* All space is alive until proven dead */
+      totalFree = 0;
 
-#ifdef UseRefStack
-  {
-      long **pointer = (long **)AOArootsLimit;
+      /* Scan each block in AOA. */
+      currentBlock = AOABaseBlock;
+    
+      while (currentBlock) {
+        /* Then each chunck in the block is examined */
+        long freeInBlock;
 
-      /*
-       * Restore the tag bits saved from stackobjects in Phase1 from the
-       * AOAroots table. See Phase1() for a comment. - poe.
-       */
-      while ((long *)pointer > AOArootsPtr) {
-	  pointer--;
-	  if(!isLazyRef(*pointer) && ((long)*pointer & 1)) {
-	    /* clear tag bit in table */
-	    *pointer = (long*)((long)(*pointer) & ~1); 
-	    /* set tag in stackobject */
-	    **pointer |= 1;      
-	  }
+        freeInBlock = AOAScanMemoryArea(currentBlock -> top, currentBlock -> limit);
+        totalFree += freeInBlock;
+        
+        INFO_AOA(fprintf(output,"  Freed "));
+        INFO_AOA(fprintf(output,"%lu",collectedMem));
+        INFO_AOA(fprintf(output," bytes,"));
+        INFO_AOA(fprintf(output,"  Free in block "));
+        INFO_AOA(fprintf(output,"%lu",freeInBlock));
+        INFO_AOA(fprintf(output," bytes\n"));
+        
+        currentBlock = currentBlock -> next;
       }
-  }
-#endif
-  
-  INFO_AOA( fprintf(output, "%dKb in %d blocks, %d%% free)\n", 
-		    (int)toKb(size), 
-		    (int)blocks, 
-		    (int)(100 - used/(size/100))); 
-	   fflush(output));
-  INFO_HEAP_USAGE(PrintHeapUsage("after AOA GC"));
+    }
+    
+    while ((totalFree/(totalAOASize/100) < AOAPercentage) ||
+           (totalFree < AOAMinFree)) {
+      AOANewBlock(AOABlockSize);
+    }
+    
+    INFO_AOA(fprintf(output,"AOAGC finished, free space "));
+    INFO_AOA(fprintf(output,"%lu",totalFree));
+    INFO_AOA(fprintf(output," bytes)\n"));
+    
+    /* Now all blocks have been scanned and all dead objects inserted
+       in the freelists */
+
+    AOANeedCompaction = FALSE;
+    
+    return;
 }
 
-
-GLOBAL(static long *RAFStackBase);
-GLOBAL(static long *RAFStackTop);
-GLOBAL(static long *RAFStackLimit);
-
-static void extendRAFStackArea(void)
-/* Extend (temporary) space used to hold unprocessed reverse-and-follow references. */
+static void AOANewBlock(long newBlockSize) 
 {
-  long oldSize;
-  long newSize;
-  long *newBase;
-
-  oldSize = (long)RAFStackTop - (long)RAFStackBase;
-  newSize = oldSize * 2;
-  if ((newBase = (long *)MALLOC(newSize)) != NULL) {
-    INFO_AOA(fprintf(output, 
-		     "#(AOA: RAF stack area allocated: %d longs)\n", 
-		     (int)newSize/4));
-  } else {
-    char buf[512];
-    sprintf(buf,
-	    "AOA GC: Failed to allocate RAF stack area: %d longs.", 
-	    (int)newSize/4);
-#ifdef MAC
-    EnlargeMacHeap(buf);
-#else
-	Notify(buf);
-#endif
-    BetaExit(1);
-  }
-  memcpy(newBase, RAFStackBase, oldSize);
-  if (RAFStackBase != GLOBAL_IOA) {
-    FREE(RAFStackBase);
-    INFO_AOA(fprintf(output, 
-		     "#(AOA: RAF stack area freed: %d longs)\n", (int)oldSize/4));
-  }
-  RAFStackBase = newBase;
-  RAFStackLimit = (long*) ((long)RAFStackBase + newSize);
-  RAFStackTop = (long*)((long)RAFStackBase + oldSize);
-}
-
-static void freeRAFStackArea(void)
-/* Free any external space allocated to hold unprocessed RAF-references */
-{
-  if (RAFStackBase != GLOBAL_IOA) {
-    FREE(RAFStackBase);
-    INFO_AOA(fprintf(output, "#(AOA: RAF stack area freed: %d longs)\n", 
-		     (int)((long)RAFStackLimit - (long)RAFStackBase)/4));
-  }
-}
-
-#define RAFPush(p) { \
-    if (RAFStackTop >= RAFStackLimit) \
-      extendRAFStackArea(); \
-    *RAFStackTop++ = (long)(p); \
-  }
-
-/* ReverseAndFollow is used during Phase1 of the Mark-Sweep GC. 
- * It reverses the pointer and calls FollowObject iff the referenced 
- * object has not been followed.
- */
-
-static void ReverseAndFollow(void)
-{
-  handle(Object) theCell;
-  ref(Object) theObj;
-  ref(Object) autObj;
-
-  while (RAFStackTop > RAFStackBase) {
-    theCell = casthandle(Object)(*--RAFStackTop);
-    theObj = *theCell;
-  
-    if( inAOA( theObj) ){
-      if( theObj->GCAttr == 0 ){
-	/* theObj is autonomous and not marked. */
-	*theCell = (ref(Object)) 1; 
-	theObj->GCAttr = (long) theCell;
-	FollowObject( theObj);
-	continue;
-      }
-      if( !(isStatic(theObj->GCAttr)) ){
-	/* theObj is marked. */
-	*theCell = (ref(Object)) theObj->GCAttr; 
-	theObj->GCAttr = (long) theCell;
-	continue;
-      }
-      /* theObj-GCAttr < 0, so theObj is a static Item. */
-      autObj = theObj;
-      while( isStatic(autObj->GCAttr) )
-	autObj = (struct Object *) Offset( autObj, autObj->GCAttr*4 );
-      if( autObj->GCAttr == 0){
-	/* The autonomous objects is not marked: so mark it and follow the object.
-	 */
-	autObj->GCAttr = 1;    
-	*theCell = (ref(Object)) theObj->GCAttr; theObj->GCAttr = (long) theCell;
-	FollowObject( autObj);
-      }else{
-	*theCell = (ref(Object)) theObj->GCAttr; theObj->GCAttr = (long) theCell;
-      }
+    ref(Block) newblock;
+    if ((newblock = newBlock(newBlockSize))) {
+        totalFree += newBlockSize;
+        totalAOASize += newBlockSize;
+        
+        AOABlocks++;
+        AOATopBlock -> next = newblock;
+        AOATopBlock = newblock;
+        /* Insert the new block in the freelist */
+        AOAInsertFreeBlock((char *)AOATopBlock -> top, newBlockSize);
+        INFO_AOA(fprintf(output,"Allocated new block of %lu bytes\n",newBlockSize));
+        
     } else {
-      /* The referenced object is not in AOA */
-      /* FIXME: inAOA(theCell) should not be needed? */
-      if (inAOA(theCell) && inLVRA(theObj)) { 
-	/* Save theCell for later use */
-	if ((long *)RAFStackTop >= AOAtoLVRAtable){
-	  /* Next decrement of AOAtoLVRAtable will cross RAFStackTop.
-	   * See figure at Phase1().
-	   */
-	  if (AOAtoLVRAtable > GLOBAL_IOA) { 
-	    extendRAFStackArea(); 
-	  } else {
-	    /* We have reached bottom of IOA - no more space for AOAtoLVRAtable */
-#ifdef NEWRUN	   
-	    BetaError(AOAtoLVRAfullErr, CurrentObject, StackEnd, 0);
-#else
-	    BetaError(AOAtoLVRAfullErr, 0);
-#endif
-	  }
-	}
-	/* Save the reference from AOA to LVRA */
-	*--AOAtoLVRAtable = (long)theCell;
-	AOAtoLVRAsize++;
-	/* If RAF is still kept in bottom of IOA, decrease it's limit,
-	 * since AOAtoLVRAtable has now grown one cell downwards.
-	 */
-	if (RAFStackBase == GLOBAL_IOA) RAFStackLimit--;
-	DEBUG_LVRA( Claim( isValRep(*theCell), "Phase1: isValRep"));
-	DEBUG_LVRA( Claim( (*theCell)->GCAttr == (long) theCell,
-			  "Phase1: LVRA cycle"));
-      }
+        DEBUG_CODE(fprintf(output,"MallocExhausted\n"));
+        INFO_AOA(fprintf(output,"MallocExhausted\n"));
+        MallocExhausted = TRUE;
     }
-  }
 }
-
-static void FollowItem(ref(Item) theObj)
-{ 
-  ref(ProtoType) theProto  = theObj->Proto;
-  
-  ptr(short)     Tab;
-  ptr(long)      theCell;
-  
-  /* Calculate a pointer to the GCTable inside the ProtoType. */
-  Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
-  
-  while( *Tab != 0 ){
-    if( *Tab == -Tab[1] ) 
-      FollowObject( (struct Object*)Offset( theObj, *Tab * 4));
-    Tab += 4;
-  }
-  Tab++;
-  
-  /* Handle all the references in the Object. */
-  while( *Tab != 0 ){
-    theCell = (ptr(long)) Offset( theObj, ((*Tab++) & (short) ~3) );
-    /* sbrandt 24/1/1994: 2 least significant bits in prototype 
-     * dynamic offset table masked out. As offsets in this table are
-     * always multiples of 4, these bits may be used to distinguish
-     * different reference types. */ 
-#ifdef RTLAZY
-    if (isPositiveRef(*theCell))
-      {RAFPush(theCell);}
-    else 
-      if (isLazyRef (*theCell)) 
-	negAOArefsINSERT ((long) theCell);
-#else
-    if (*theCell != 0) 
-      RAFPush(theCell);
-#endif
-  }
-}
-
-#ifndef KEEP_STACKOBJ_IN_IOA
-/* PushAOACell:
- *  Used to process stackobjects in AOA object.
- */
-static void PushAOACell(struct Object **theCell,struct Object *theObj)
-{
-  DEBUG_CODE(if (!CheckHeap) Ck(theObj));
-  if(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell)) {
-    if (isObject(*theCell))
-      RAFPush(theCell);
-  }
-}
+    
 #ifdef RTDEBUG
 static void CheckAOACell(struct Object **theCell,struct Object *theObj)
 {
   DEBUG_CODE(if (!CheckHeap) Ck(theObj));
   AOACheckReference(theCell);
 }
-#endif
-#endif
 
-/* FollowObject:
- * FollowObject is used during Phase1 of the Mark-Sweep GC. 
- * For each referernce inside theObj it pushes the reference on the 
- * ReverseAndFollow stack, thus giving the already active ReverseAndFollow
- * invocation some more to work on.
- */
-
-static void FollowObject(ref(Object) theObj)
-{ 
-  ref(ProtoType) theProto;
-  
-  theProto = theObj->Proto;
-  
-  if( isSpecialProtoType(theProto) ){  
-    switch( SwitchProto(theProto) ){
-    case SwitchProto(ByteRepPTValue):
-    case SwitchProto(ShortRepPTValue):
-    case SwitchProto(DoubleRepPTValue):
-    case SwitchProto(LongRepPTValue): 
-      DEBUG_AOA(Claim(!inLVRA(theObj), "FollowObject: Should not be called for LVRA object"));
-      /* No references in a Value Repetition, so do nothing*/
-      return;
-    case SwitchProto(DynItemRepPTValue):
-    case SwitchProto(DynCompRepPTValue):
-      /* Follow the iOrigin */
-#ifdef RTLAZY
-      if( isPositiveRef(REP->iOrigin) ) 
-	{RAFPush(&REP->iOrigin);} 
-      else 
-	if (isLazyRef (REP->iOrigin))
-	  negAOArefsINSERT ((long)&REP->iOrigin);
-#else
-      /* no need to test for zero - the object is always there */
-      RAFPush(&REP->iOrigin);
-#endif
-      /* Follow rest of repetition */
-      switch( SwitchProto(theProto) ){
-      case SwitchProto(DynItemRepPTValue):
-      case SwitchProto(DynCompRepPTValue):
-	{ long *pointer;
-	  register long size, index;
-	  
-	  /* Scan the repetition and follow all entries */
-	  { 
-	    size = REP->HighBorder;
-	    pointer = (long *)&REP->Body[0];
-	    
-	    for (index=0; index<size; index++) {
-#ifdef RTLAZY
-	      if( isPositiveRef(*pointer) ) 
-		{RAFPush(pointer);} 
-	      else 
-		if (isLazyRef (*pointer))
-		  negAOArefsINSERT ((long)pointer);
-#else
-	      /* no need to test for zero - the object is always there */
-	      RAFPush(pointer);
-#endif
-	      pointer++;
-	    }
-	  }
-	}
-	break;
-      }
-      return;
-
-    case SwitchProto(RefRepPTValue):
-      /* Scan the repetition and follow all entries */
-      { ptr(long) pointer;
-	register long size, index;
-	
-	size = toRefRep(theObj)->HighBorder;
-	pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
-	
-	for (index=0; index<size; index++) {
-#ifdef RTLAZY
-	  if( isPositiveRef(*pointer) ) 
-	    {RAFPush(pointer);} 
-	  else 
-	    if (isLazyRef (*pointer))
-	      negAOArefsINSERT ((long)pointer);
-#else
-	  if( *pointer != 0) 
-	    RAFPush(pointer);
-#endif
-	  pointer++;
-	}
-      }
-      return;
-      
-    case SwitchProto(ComponentPTValue):
-      { ref(Component) theComponent;
-	
-	theComponent = Coerce( theObj, Component);
-	RAFPush(&theComponent->StackObj);
-	RAFPush(&theComponent->CallerComp);
-	RAFPush(&theComponent->CallerObj);
-	FollowItem( ComponentItem( theComponent));
-      }
-      return;
-      
-    case SwitchProto(StackObjectPTValue):
-#ifdef KEEP_STACKOBJ_IN_IOA
-      Notify("FollowObject: Error: StackObject in AOA.");
-#else
-      /* Machine dependant stackobj processing */
-#ifdef NEWRUN
-      ProcessStackObj((struct StackObject *)theObj, PushAOACell);
-#endif /* NEWRUN */
-#endif /* KEEP_STACKOBJ_IN_IOA */
-      return;
-      
-    case SwitchProto(StructurePTValue):
-      RAFPush(&(toStructure(theObj))->iOrigin);
-      return;
-
-    case SwitchProto(DopartObjectPTValue):
-      RAFPush(&(cast(DopartObject)(theObj))->Origin);
-      return;
-    }
-  }else FollowItem( (struct Item*) theObj);
-}
-
-/* Phase1:
- * Marking phase. 
- * Phase1 of the Mark-Sweep GC, reverse:
- *   all cells in root(AOA),
- *   all cells in AOA, where cells point into AOA
- */
-static void Phase1(void)
-{ /* Call FollowReference for each root to AOA. */
-
-  /*  During AOA GC, IOA (ie. from-space) is unused; during Phase 1, it is   */
-  /*  utilized as follows:                                                   */
-  /*  Unprocessed reverse-and-follow references are stored from IOA upwards; */
-  /*  references from AOA to LVRA are stored from IOALimit downwards.        */
-  /*  On clash, RAF area is allocated externally and freed at end of phase.  */
-  /*  If RAF area runs full, it is dynamically resized; if AOA-to-LVRA       */
-  /*  reference table runs full, AOAtoLVRAfullErr error is signalled.        */
-  /*                                                                         */
-  /*  IOA                                AOAtoLVRAtable          IOALimit    */
-  /*  v                                  v                       v           */
-  /*  +----------------+----------------+-----------------------+            */
-  /*  |xxxxxxxxxxxxxxxx|                |xxxxxxxxxxxxxxxxxxxxxxx|            */
-  /*  +----------------+----------------+-----------------------+            */
-  /*  ^                 ^                ^                                   */
-  /*  RAFStackBase      RAFStackTop      RAFStackLimit                       */
-
-  ptr(long) pointer = AOArootsLimit;
-
-  AOAtoLVRAtable = GLOBAL_IOALimit;
-  AOAtoLVRAsize = 0;
-  RAFStackBase = GLOBAL_IOA;
-  RAFStackTop = GLOBAL_IOA;
-  RAFStackLimit = AOAtoLVRAtable;
-
-#ifdef RTDEBUG
-  { /* Make sure that there are no duplicate AOA roots! */
-    long old=0;
-    WordSort((unsigned long *)AOArootsPtr, AOArootsLimit-AOArootsPtr);
-    while (pointer > AOArootsPtr){
-#ifdef UseRefStack
-      /* See below... */
-      if(!isLazyRef(*((long *)*(pointer-1))) && (*((long *)*(pointer-1)) & 1)) {
-	*((long *)*(pointer-1)) &= ~1; /* clear tag bit */
-	*(pointer-1) |= 1;                 /* set it in table */
-      }
-#endif
-      if (old == *--pointer){
-	INFO_AOA(fprintf(output, "Phase1: Duplicate AOA root: 0x%x\n", (int)old));
-      } else {
-	old = *pointer;
-#ifdef NONMOVEAOAGC
-        if (NonMoveAOAGC) {
-            NonMoveAddRoot(*pointer & ~1);
-        }
-        else {
-            RAFPush(*pointer & ~1);
-        }
-#else
-        RAFPush(*pointer & ~1);
-#endif            
-      }
-    }
-  }
-#else /* RTDEBUG */
-  while( pointer > AOArootsPtr) {
-    pointer--;
-#ifdef UseRefStack
-    /*
-     * Dreadful hack. We have to remove the tag bits from those references
-     * in stackobjects that have them, so the Follow*() can handle them,
-     * but we have to save them somewhere. They are saved in the LSB of
-     * the pointers in the AOAroots table. They are restored just
-     * before the AOAGc finishes in AOAGc().
-     */
-    if(!isLazyRef(*((long *)*pointer)) && (*((long *)*pointer) & 1)) {
-      *((long *)*pointer) &= ~1; /* clear tag bit in stackobject */
-      *pointer |= 1;         /* set it in table */
-    }
-#endif
-#ifdef NONMOVEAOAGC
-    if (NonMoveAOAGC) {
-        NonMoveAddRoot(*pointer & ~1);
-    }
-    else {
-        RAFPush(*pointer & ~1);
-    }
-#else
-    RAFPush(*pointer & ~1);
-#endif            
-  }
-#endif /* RTDEBUG */
-
-#ifdef NONMOVEAOAGC
-  if (NonMoveAOAGC) {
-      return;
-  }
-#endif
-  
-  ReverseAndFollow();
-  freeRAFStackArea();
-}
-
-#define isAlive(x)  (toObject(x)->GCAttr != 0)
-#define isMarked(x) (x->GCAttr == 1)
-#define endChain(x) (( -0xFFFF <= ((long) (x))) && (((long) (x)) <= 1))
-
-static void handleAliveStatic(ref(Object) theObj, ref(Object) freeObj)
-{
-  handle(Object) theCell;
-  handle(Object) nextCell;
-  ref(ProtoType) theProto = theObj->Proto;
-  ptr(short)     Tab;
-  
-  theCell = (handle(Object)) theObj->GCAttr;
-  while( !endChain(theCell)){
-    nextCell = (handle(Object)) *theCell;
-    *theCell = freeObj;
-    theCell = nextCell;
-  }
-  theObj->GCAttr = (long) theCell; /* Save forward pointer to Phase3. */
-  DEBUG_AOA( Claim( theObj->GCAttr < 0, "handleAliveStatic:  theObj->GCAttr < 0"));
-  
-  if( !isSpecialProtoType(theProto)){
-    /* theObj is an item. */
-    /* Calculate a pointer to the GCTable inside the ProtoType. */
-    Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
-    
-    while( *Tab != 0 ){
-      if( *Tab == -Tab[1] ){ 
-	handleAliveStatic( (struct Object*) Offset( theObj, *Tab * 4),(struct Object*) Offset( freeObj, *Tab * 4) );
-	DEBUG_AOA( Claim( *(ptr(long)) Offset( theObj, *Tab * 4 + 4)
-			 == (long) Tab[1],
-			 "AOACheckObject: EnclosingObject match GCTab entry."));
-      }
-      Tab += 4;
-    }
-  }else{
-    /* This is a component so update theObj and Proto to Item. */
-    if( theProto == ComponentPTValue )
-      handleAliveStatic( (struct Object*)ComponentItem( theObj), (struct Object*)ComponentItem( freeObj) );
-  } 
-}
-
-static void handleAliveObject(ref(Object) theObj, ref(Object) freeObj)
-{
-  handle(Object) theCell;
-  handle(Object) nextCell;
-  ref(ProtoType) theProto = theObj->Proto;
-  ptr(short)     Tab;
-  
-  theCell = (handle(Object)) theObj->GCAttr;
-  while( !endChain(theCell)){
-    nextCell = (handle(Object)) *theCell;
-    *theCell = freeObj;
-    theCell = nextCell;
-  }
-  DEBUG_AOA( Claim( (long) theCell == 1,
-		   "handleAliveObject:  chainEnd == 0 or 1"));
-  theObj->GCAttr = (long) freeObj; /* Save forward pointer to Phase3. */
-  
-  if( !isSpecialProtoType(theProto)){
-    /* theObj is an item. */
-    /* Calculate a pointer to the GCTable inside the ProtoType. */
-    Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
-    
-    while( *Tab != 0 ){
-      if( *Tab == -Tab[1] ){
-	handleAliveStatic( (struct Object*)Offset( theObj, *Tab * 4), (struct Object*)Offset( freeObj, *Tab * 4) );
-	DEBUG_AOA( Claim( *(ptr(long)) Offset( theObj, *Tab * 4 + 4)
-			 == (long) Tab[1],
-			 "AOACheckObject: EnclosingObject match GCTab entry."));
-      }
-      Tab += 4;
-    }
-  }else{
-    /* This is a component so update theObj and Proto to Item. */
-    if( theProto == ComponentPTValue )
-      handleAliveStatic( (struct Object*)ComponentItem( theObj), (struct Object*)ComponentItem( freeObj) );
-  } 
-}
-
-/*
- * Phase2:
- * All live objects now have a non-zero GCAttr.
- * Calculate new object addresses (diffs).
- */
-static void Phase2(ptr(long) numAddr, ptr(long) sizeAddr, ptr(long) usedAddr)
-{
-  ref(Block)  theBlock  = AOABaseBlock;
-  ref(Block)  freeBlock = AOABaseBlock;
-  ref(Object) theObj;
-  ref(Object) freeObj;
-  ref(Object) enclObj;
-  long        theObjectSize;
-  long        numOfBlocks = 0;
-  
-  long        usedSpace = 0;
-  long        allSpace  = 0;
-
-  int enclDist;
-  
-#ifdef LIN
-  copyAOAObjectToLinearizationInAOA();
-#endif /* LIN */
-#ifdef NONMOVEAOAGC
-  if (NonMoveAOAGC) {
-      HandleDeadObjects();
-      return;
-  }
-#endif
-
-  freeObj   = (ref(Object)) BlockStart( freeBlock);
-  
-  while( theBlock ){
-    numOfBlocks++;
-    theObj = (ref(Object)) BlockStart(theBlock);
-    while( (ptr(long)) theObj < theBlock->top ){
-#if 0
-      fprintf(output, "phase2: theObj=0x%x\n", theObj); fflush(output);
-#endif
-      theObjectSize = 4*ObjectSize( theObj);
-      DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "#Phase2: ObjectSize(theObj) > 0") );
-      if( isAlive( theObj)){
-	/* update freeObj if no space is available. */
-	if( (ptr(long)) Offset( freeObj, theObjectSize) > freeBlock->limit){
-	  freeBlock->info.nextTop = (ptr(long)) freeObj;
-	  freeBlock = freeBlock->next;
-	  freeObj   = (ref(Object)) BlockStart(freeBlock);
-	}
-	handleAliveObject( theObj, freeObj);
-	freeObj = (ref(Object)) Offset(freeObj, theObjectSize);
-	usedSpace += theObjectSize;
-      }
-      theObj = (ref(Object)) Offset( theObj, theObjectSize);
-      allSpace += theObjectSize;
-    }
-    theBlock = theBlock->next;
-  }
-  freeBlock->info.nextTop = (ptr(long)) freeObj;
-  
-  /* After AOAGc should freeBlock be the new AOATopBlock. */
-  AOATopBlock = freeBlock;
-  
-  /* If there exists Blocks after freeBlock, make them empty. */
-  freeBlock = freeBlock->next;
-  while( freeBlock ){
-    freeBlock->info.nextTop = BlockStart(freeBlock);
-    freeBlock = freeBlock->next;
-  }
-  
-  *numAddr  = numOfBlocks;
-  *sizeAddr = allSpace;
-  *usedAddr = usedSpace;
-
-  if( DOT ){
-    /* The Debugger Object Table is in use, so traverse this table. */
-    ptr(long) current = DOT;
-    while( current < DOTTop){
-      if( *current ) {
-	if (!inToSpace(*current)){
-
-	  theObj = cast(Object)(*current);
-	  if (isStatic(theObj->GCAttr)) {
-	    GetDistanceToEnclosingObject(theObj,enclDist);
-	    enclObj = cast(Object) Offset(theObj,enclDist);
-	    if (enclObj->GCAttr)
-	      theObj = cast(Object) Offset(enclObj->GCAttr,-enclDist);
-	    else
-	      theObj = 0; /* Enclosing object is dead */
-	  } else {
-	    /* It it not a static part object, so either the GCAttr is a
-             * forward reference to the objects new position, or it is
-             * NONE if the object is dead. */
-	    theObj = cast(Object) theObj->GCAttr;
-	  }
-	    
-	  INFO_DOT(fprintf(output, 
-			   "#DOT: updating AOA reference 0x%x to 0x%x\n", 
-			   (int)(*current), (int)theObj));
-	  *current = (long) theObj;
-	  if (!theObj) DOTSize--; /* Element was deleted. */
-
-	  DEBUG_AOA( Claim( (theObj == 0) || inAOA (theObj) ,"DOT element NONE or in AOA "));
-
-	}
-      }
-      current++;
-    }
-  }
-} 
-
-/* FindInterval:
- * Finds an interval in "table", where all elements are inside "block".
- * We assume that the table is sorted in increasing order.
- */
-static void FindInterval(long * table, long size, ref(Block) block, long * startAddr, long * stopAddr)
-{
-  long start, stop;
-  
-  start = 0;
-  while( (start < size) && (table[start] < (long)block)) start++;
-  stop = start;
-  while( (stop < size) && (table[stop] < (long)block->limit)) stop++;
-  *startAddr = start;
-  *stopAddr  = stop;
-}
-
-/* Phase3:
- *  Update the AOAtoIOATable,
- *  then sort the Table in area[ToSpaceLimit..ToSpaceTop].
- *  Slide objects into their new positions.
- */
-static void Phase3()
-{
-  long *   table; /* Local copy of AOAtoIOATable */
-  
-#ifdef NONMOVEAOAGC
-  if (NonMoveAOAGC) {
-      return;
-  }
-#endif
-  /* Calculate the size of table. */
-  AOAtoIOACount = 0;
-  {
-    long i; long * pointer = BlockStart( AOAtoIOAtable);
-    for(i=0; i<AOAtoIOAtableSize; i++) {
-#ifdef RTLAZY
-      if( isPositiveRef(*pointer) ) AOAtoIOACount++;
-      pointer++;
-#else
-      if( *pointer++ ) AOAtoIOACount++;
-#endif
-    }
-  }
-  
-  if ((long)AOAtoLVRAtable - (long)GLOBAL_IOA > AOAtoIOACount * 4)
-    table = GLOBAL_IOA;
-  else {
-    if( !(table = (long *) MALLOC( AOAtoIOACount * 4))){
-      char buf[512];
-      sprintf(buf,"#Phase3: allocation of AOAtoIOA table failed: %d longs\n", (int)AOAtoIOACount);
-#ifdef MAC
-      EnlargeMacHeap(buf);
-#else
-	  Notify(buf);
-#endif   
-      BetaExit(1);
-    }
-    INFO_AOA( fprintf(output, "#(AOA: new block for AOAtoIOA table allocated: %d longs)\n",
-		      (int)AOAtoIOACount));
-  }
-  
-  /* Move compact(AOAtoIOAtable) -> table. */
-  {
-    long i, counter = 0;  long * pointer = BlockStart( AOAtoIOAtable);
-    for(i=0; i < AOAtoIOAtableSize; i++){
-#ifdef RTLAZY
-      if( isPositiveRef(*pointer) ) table[counter++] = *pointer;
-#else
-      if( *pointer ) table[counter++] = *pointer;
-#endif
-      pointer++;
-    }
-    DEBUG_AOAtoIOA( Claim( counter == AOAtoIOACount,"Phase3: counter == AOAtoIOACount"));
-  }
-  
-  DEBUG_AOAtoIOA( fprintf(output,"(AOAtoIOA#%d)", (int)AOAtoIOACount));
-  DEBUG_AOAtoLVRA( fprintf(output,"(AOAtoLVRA#%d)", (int)AOAtoLVRAsize));
-  
-  /* Clear the AOAtoIOAtable. */
-  AOAtoIOAClear();
-  
-  WordSort((unsigned long*)table, AOAtoIOACount);
-  WordSort((unsigned long*)AOAtoLVRAtable, AOAtoLVRAsize);
-#ifdef RTLAZY
-  if (negAOArefs)
-    WordSort((unsigned long*)negAOArefs, negAOAsize);
-#endif
-
-  DEBUG_AOAtoLVRA({
-    int i;
-    fprintf(output, "Phase3: Dumping AOAtoLVRAtable:\n");
-    for (i=0; i<AOAtoLVRAsize; i++){
-      fprintf(output, "  [%d]: 0x%x\n", i, (int)AOAtoLVRAtable[i]);
-    }
-  });
-
-  {
-    ref(Block)  theBlock;
-    ref(Object) theObj;
-    ref(Object) nextObj;
-    long        theObjectSize;
-    long        start, stop;
-    long        start1, stop1;
-#ifdef RTLAZY
-    long        start2, stop2;
-#endif
-    
-    theBlock = AOABaseBlock;
-    while( theBlock ){
-      theObj = (ref(Object)) BlockStart(theBlock);
-      
-      FindInterval( table, AOAtoIOACount, theBlock, &start, &stop);
-      /* Now: table[start..stop] are all inside theBlock */
-      FindInterval( AOAtoLVRAtable, AOAtoLVRAsize, theBlock, &start1, &stop1);
-      /* Now: AOAtoLVRAtable[start1..stop1] are all inside theBlock */
-#ifdef RTLAZY
-      if (negAOArefs)
-	FindInterval( negAOArefs, negAOAsize, theBlock, &start2, &stop2);
-#endif
-      
-      while( (long *) theObj < theBlock->top ){
-	theObjectSize = 4*ObjectSize( theObj);
-	DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "#Phase3: ObjectSize(theObj) > 0") );
-	nextObj = (ref(Object)) Offset( theObj, theObjectSize); 
-	
-	DEBUG_AOA( if( start<stop ) Claim( table[start] > (long) theObj,
-					  "Phase3: table[start] > (long) theObj"));
-	if( theObj->GCAttr ){
-	  /* The forward pointer is present, so theObj is alive. */
-	  struct Object *newObj = (ref(Object)) theObj->GCAttr;
-	  long diff = (long) theObj - (long) newObj;
-
-	  if (diff) {
-	    DEBUG_AOA( Claim( theObj > newObj, "#Phase3: theObj > newObj"));
-	    /* theObj need a new location in AOA, so move it. */
-	    MACRO_CopyBlock( theObj, newObj, theObjectSize/4);
-	  }
-	  /* update the AOAtoIOAtable. */
-	  while ((start<stop) && (table[start] < (long)nextObj)) {
-	    if (inToSpace( *(long *) (table[start]-diff))){
-#ifdef MT
-	      MT_AOAtoIOAInsert( (handle(Object))(table[start]-diff));
-#else /* MT */
-	      AOAtoIOAInsert( (handle(Object))(table[start]-diff));
-#endif /* MT */
-	    }
-	    start++;
-	  }
-	  while( (start1<stop1) && (AOAtoLVRAtable[start1] < (long)nextObj) ){
-	    DEBUG_AOAtoLVRA( Claim( inLVRA( (ref(Object))(*(long *)(AOAtoLVRAtable[start1]-diff))),
-				    "Phase3: Pointer is in LVRA"));
-	    DEBUG_AOAtoLVRA(Claim((*((handle(ValRep)) (AOAtoLVRAtable[start1]-diff)))->GCAttr == AOAtoLVRAtable[start1], "Phase3: LVRAcycle is valid before update"));
-	    
-	    (*((handle(ValRep)) (AOAtoLVRAtable[start1]-diff)))->GCAttr =
-	      AOAtoLVRAtable[start1]-diff;
-	    DEBUG_AOAtoLVRA({
-	      fprintf(output, 
-		      "Phase3: AOAtoLVRAtable[%d]: Updated LVRAcycle: *0x%x = 0x%x\n", 
-		      (int)start1,
-		      (int)&((*((handle(ValRep)) (AOAtoLVRAtable[start1]-diff)))->GCAttr),
-		      (int)(AOAtoLVRAtable[start1]-diff));
-	    });
-	    start1++;
-	  }
-#ifdef RTLAZY
-	  if (negAOArefs)
-	    /* update the negAOArefs table. */
-	    while( (start2<stop2) && ((long)negAOArefs[start2] < (long)nextObj) ){
-	      negAOArefs[start2] = negAOArefs[start2] - diff;
-	      start2++;
-	    }
-#endif
-	  newObj->GCAttr = 0;
-	} else {
-	  /* theObj->GCAttr==0: theObj is not reachable. */
-	  
-	  /* Wind pointer into table to beginning of pointers for nextObj */
-	  while ((start<stop) && (table[start] < (long)nextObj)) start++;
-
-	  /* No-FIXME: The code in following while loop will never be called: 
-	   * There will never be 
-	   * any references from dead AOA objects to LVRA in AOAtoLVRAtable,
-	   * since this table is build by FollowObject in Phase1, and since 
-	   * FollowObject is only called for live objects.
-	   * The following code could thus be removed, but LVRA will have 
-	   * to do something extra to avoid keeping repetitions referred 
-	   * from dead AOA objects - if the object is not overwritten during
-	   * Phase3 (e.g. if it is at the end of a block), the LVRA cycle
-	   * will persist!
-	   * If the code is removed, it should probably be replaced with a 
-	   * Claim saying that (start1>=stop1).
-	   * And this explanation should be placed somewhere else!!!
-	   */
-#if 1
-	  DEBUG_CODE(Claim(start1>=stop1, "Phase3: No Refs from DEAD-AOA to LVRA"));
-#else
-	  
-	  while((start1<stop1) && (AOAtoLVRAtable[start1]<(long)nextObj)){
-	    DEBUG_AOAtoLVRA(Claim(inLVRA((ref(Object))(*(long *)(AOAtoLVRAtable[start1]))),
-				  "Phase3: Pointer is in LVRA"));
-	    
-	    DEBUG_AOAtoLVRA(fprintf(output, 
-				    "Phase3: AOAtoLVRAtable[%d]: Breaking LVRAcycle for rep 0x%x\n",
-				    (int)start1,
-				    (int)(*(struct ValRep **) AOAtoLVRAtable[start1])));
-	    
-	    LVRAkill(*(struct ValRep **) AOAtoLVRAtable[start1]);
-	    start1++;
-	  } /* End while */
-#endif	  
-	  /* End-of-else (object not reachable in AOA) */
-	}
-
-	theObj = nextObj;
-      }
-      theBlock->top = theBlock->info.nextTop;
-      theBlock = theBlock->next;
-    }
-  }
-  
-  /* if table was allocated with malloc, free it. */
-  if( table != GLOBAL_IOA ){
-    FREE( table);
-    INFO_AOA( fprintf(output, "#(AOA: block for AOAtoIOA table freed: %d longs)\n",
-		      (int)AOAtoIOACount));
-  }
-}
-
-#ifdef RTDEBUG
 ref(Object) lastAOAObj=0;
 
 static FILE *dump_aoa_file=NULL;
 #define AOA_DUMP(code) { code; }
 #define AOA_DUMP_TEXT(text) \
-  if (dump_aoa){ fprintf(dump_aoa_file, "%s", text); }
+if (dump_aoa){ fprintf(dump_aoa_file, "%s", text); }
 #define AOA_DUMP_LONG(num) \
-  if (dump_aoa){ fprintf(dump_aoa_file, "0x%08x", (int)num); }
+if (dump_aoa){ fprintf(dump_aoa_file, "0x%08x", (int)num); }
 #define AOA_DUMP_INT(num) \
-  if (dump_aoa){ fprintf(dump_aoa_file, "%d", (int)num); }
+if (dump_aoa){ fprintf(dump_aoa_file, "%d", (int)num); }
 
 /* AOACheck: Consistency check on entire AOA area */
 void AOACheck()
 {
-  ref(Block)  theBlock  = AOABaseBlock;
-  ref(Object) theObj;
-  long        theObjectSize;
+    ref(Block)  theBlock  = AOABaseBlock;
+    ref(Object) theObj;
+    long        theObjectSize;
 
-  if (dump_aoa) {
-    char name[16];
-    if (dump_aoa_file) {
-      fclose(dump_aoa_file);
-    }
-    sprintf(name,"aoa_dump%04d", (int)NumAOAGc);
-    dump_aoa_file = fopen(name, "w+");
-    if (!dump_aoa_file) {
-      fprintf(output, "failed to open aoa_dump_file\n");
-      dump_aoa=0;
-    } else {
-      AOA_DUMP_TEXT("========AOA-");
-      AOA_DUMP_LONG(NumAOAGc);
-      AOA_DUMP_TEXT("========\n");
-      AOA_DUMP_TEXT(" Object   : Proto    : size     :GCAttr: Name :\n");
-    }
-  }  
+    if (dump_aoa) {
+        char name[16];
+        if (dump_aoa_file) {
+            fclose(dump_aoa_file);
+        }
+        sprintf(name,"aoa_dump%04d", (int)NumAOAGc);
+        dump_aoa_file = fopen(name, "w+");
+        if (!dump_aoa_file) {
+            fprintf(output, "failed to open aoa_dump_file\n");
+            dump_aoa=0;
+        } else {
+            AOA_DUMP_TEXT("========AOA-");
+            AOA_DUMP_LONG(NumAOAGc);
+            AOA_DUMP_TEXT("========\n");
+            AOA_DUMP_TEXT(" Object   : Proto    : size     :GCAttr: Name :\n");
+        }
+    }  
 
-#if 0
-  if (theBlock != 0){
-     fprintf(output, 
-	     "AOACheck: AOABaseBlock: 0x%x, top: 0x%x\n", 
-	     (int)AOABaseBlock, (int)(AOABaseBlock->top));
-  }
-#endif
-  lastAOAObj=0;
-  while( theBlock ){
-    theObj = (ref(Object)) BlockStart(theBlock);
-    while( (long *) theObj < theBlock->top ){
-      theObjectSize = 4*ObjectSize( theObj);
-      /* fprintf(output,"AOACheck: ObjectSize=0x%x, ", (int)theObjectSize); */
-      Claim(ObjectSize(theObj) > 0, "#AOACheck: ObjectSize(theObj) > 0");
-      AOACheckObject( theObj);
-      lastAOAObj=theObj;
-      theObj = (ref(Object)) Offset( theObj, theObjectSize);
+    lastAOAObj=0;
+    while( theBlock ){
+        theObj = (ref(Object)) BlockStart(theBlock);
+        while( (long *) theObj < theBlock->top ){
+            theObjectSize = 4*ObjectSize(theObj);
+	    Claim((theObjectSize&7)==0, "#AOACheck: (TheObjectSize&7)==0 ");
+            Claim(ObjectSize(theObj) > 0, "#AOACheck: ObjectSize(theObj) > 0");
+            AOACheckObject( theObj);
+            lastAOAObj=theObj;
+            theObj = (ref(Object)) Offset( theObj, theObjectSize);
+        }
+        theBlock = theBlock->next;
     }
-    theBlock = theBlock->next;
-#if 0
-    if (theBlock != 0){
-      fprintf(output, "AOACheck: block: 0x%x, top: 0x%x\n", 
-	      (int)theBlock, (int)(theBlock->top)); 
-    }
-#endif
-  }
-  dump_aoa = 0;
+    dump_aoa = 0;
 } 
 
 /* AOACheckObject: Consistency check on AOA object */
 void AOACheckObject( theObj)
-     ref(Object) theObj;
+ref(Object) theObj;
 { ref(ProtoType) theProto;
   
-  theProto = theObj->Proto;
+ theProto = theObj->Proto;
 
 #ifdef MT
-  /* The way part objects are allocated in V-entries
-   * may leave part objects with uninitialized prototypes.
-   */
-  if (!theProto) return;
+ /* The way part objects are allocated in V-entries
+  * may leave part objects with uninitialized prototypes.
+  */
+ if (!theProto) return;
 #endif
 
-  Claim( !inBetaHeap((ref(Object))theProto),
+ Claim( !inBetaHeap((ref(Object))theProto),
 	"#AOACheckObject: !inBetaHeap(theProto)");
 
-  AOA_DUMP_TEXT(":");
-  AOA_DUMP_LONG(theObj);
-  AOA_DUMP_TEXT(":");
-  AOA_DUMP_LONG(theProto);
-  AOA_DUMP_TEXT(":");
-  AOA_DUMP_LONG(ObjectSize(theObj));
-  AOA_DUMP_TEXT(":");
-  AOA_DUMP_INT(theObj->GCAttr);
-  AOA_DUMP_TEXT(":");
-  AOA_DUMP_TEXT(ProtoTypeName(theProto));
-  if (theProto==ComponentPTValue){
-    AOA_DUMP_TEXT(" ");
-    AOA_DUMP_TEXT(ProtoTypeName((ComponentItem(theObj))->Proto));
-  }
-  AOA_DUMP_TEXT(":\n");
+ AOA_DUMP_TEXT(":");
+ AOA_DUMP_LONG(theObj);
+ AOA_DUMP_TEXT(":");
+ AOA_DUMP_LONG(theProto);
+ AOA_DUMP_TEXT(":");
+ AOA_DUMP_LONG(ObjectSize(theObj));
+ AOA_DUMP_TEXT(":");
+ AOA_DUMP_INT(theObj->GCAttr);
+ AOA_DUMP_TEXT(":");
+ AOA_DUMP_TEXT(ProtoTypeName(theProto));
+ if (theProto==ComponentPTValue){
+     AOA_DUMP_TEXT(" ");
+     AOA_DUMP_TEXT(ProtoTypeName((ComponentItem(theObj))->Proto));
+ }
+ AOA_DUMP_TEXT(":\n");
   
-  if( isSpecialProtoType(theProto) ){  
-    switch( SwitchProto(theProto) ){
-    case SwitchProto(ByteRepPTValue):
-    case SwitchProto(ShortRepPTValue):
-    case SwitchProto(DoubleRepPTValue):
-    case SwitchProto(LongRepPTValue): return; /* No references in the type of object, so do nothing*/
+ if( isSpecialProtoType(theProto) ){  
+     switch( SwitchProto(theProto) ){
+       case SwitchProto(ByteRepPTValue):
+       case SwitchProto(ShortRepPTValue):
+       case SwitchProto(DoubleRepPTValue):
+       case SwitchProto(LongRepPTValue): return; /* No references in the type of object, so do nothing*/
       
-    case SwitchProto(DynItemRepPTValue):
-    case SwitchProto(DynCompRepPTValue):
-      /* Check iOrigin */
-      AOACheckReference( (handle(Object))(&REP->iOrigin) );
-      /* Check rest of repetition */
-      switch(SwitchProto(theProto)){
-      case SwitchProto(DynItemRepPTValue):
-      case SwitchProto(DynCompRepPTValue):
-	{ long *pointer;
-	  register long size, index;
+       case SwitchProto(DynItemRepPTValue):
+       case SwitchProto(DynCompRepPTValue):
+           /* Check iOrigin */
+           AOACheckReference( (handle(Object))(&REP->iOrigin) );
+           /* Check rest of repetition */
+           switch(SwitchProto(theProto)){
+             case SwitchProto(DynItemRepPTValue):
+             case SwitchProto(DynCompRepPTValue):
+             { long *pointer;
+             register long size, index;
 	  
-	  /* Scan the repetition and follow all entries */
-	  { 
-	    size = REP->HighBorder;
-	    pointer = (long *)&REP->Body[0];
+             /* Scan the repetition and follow all entries */
+             { 
+                 size = REP->HighBorder;
+                 pointer = (long *)&REP->Body[0];
 	    
-	    for (index=0; index<size; index++) {
-	      AOACheckReference( (handle(Object))(pointer) );
-	      pointer++;
-	    }
-	  }
-	}
-	break;
-      }
-      return;
+                 for (index=0; index<size; index++) {
+                     AOACheckReference( (handle(Object))(pointer) );
+                     pointer++;
+                 }
+             }
+             }
+             break;
+           }
+           return;
 
-    case SwitchProto(RefRepPTValue):
-      /* Scan the repetition and follow all entries */
-      { long * pointer;
-	register long size, index;
+       case SwitchProto(RefRepPTValue):
+           /* Scan the repetition and follow all entries */
+       { long * pointer;
+       register long size, index;
 	
-	size = toRefRep(theObj)->HighBorder;
-	pointer =  (long *) &toRefRep(theObj)->Body[0];
+       size = toRefRep(theObj)->HighBorder;
+       pointer =  (long *) &toRefRep(theObj)->Body[0];
 	
-	for(index=0; index<size; index++) {
-	  AOACheckReference( (handle(Object))(pointer) );
-	  pointer++;
-	}
-      }
+       for(index=0; index<size; index++) {
+           AOACheckReference( (handle(Object))(pointer) );
+           pointer++;
+       }
+       }
       
-      return;
+       return;
       
-    case SwitchProto(ComponentPTValue):
-      { ref(Component) theComponent;
+       case SwitchProto(ComponentPTValue):
+       { ref(Component) theComponent;
 	
-	theComponent = Coerce( theObj, Component);
-	if (theComponent->StackObj == (ref(StackObject))-1) {
-	  /* printf("\nAOACheckObject: theComponent->StackObj=-1, skipped!\n"); */
-	} else {
-#if 0
-	  fprintf(output, 
-		  "AOACheckObject: &theComponent->StackObj: 0x%x, theComponent->StackObj: 0x%x\n", 
-		  (int)&theComponent->StackObj, (int)theComponent->StackObj);
-#endif
-	  AOACheckReference( (handle(Object))(&theComponent->StackObj));
-	}
-#if 0
-	fprintf(output, 
-		"AOACheckObject: &theComponent->CallerComp: 0x%x\n", 
-		(int)&theComponent->CallerComp);
-#endif
-	AOACheckReference( (handle(Object))(&theComponent->CallerComp));
-#if 0
-	fprintf(output, 
-		"AOACheckObject: &theComponent->CallerObj: 0x%x\n", 
-		(int)&theComponent->CallerObj);
-#endif
-	AOACheckReference( (handle(Object))(&theComponent->CallerObj));
-	AOACheckObject( (ref(Object))(ComponentItem( theComponent)));
-      }
-      return;   
-    case SwitchProto(StackObjectPTValue):
+       theComponent = Coerce( theObj, Component);
+       if (theComponent->StackObj == (ref(StackObject))-1) {
+           /* printf("\nAOACheckObject: theComponent->StackObj=-1, skipped!\n"); */
+       } else {
+           AOACheckReference( (handle(Object))(&theComponent->StackObj));
+       }
+       AOACheckReference( (handle(Object))(&theComponent->CallerComp));
+       AOACheckReference( (handle(Object))(&theComponent->CallerObj));
+       AOACheckObject( (ref(Object))(ComponentItem( theComponent)));
+       }
+       return;   
+       case SwitchProto(StackObjectPTValue):
 #ifdef KEEP_STACKOBJ_IN_IOA
-      Claim( FALSE, "AOACheckObject: theObj should not be StackObject.");
+           Claim( FALSE, "AOACheckObject: theObj should not be StackObject.");
 #else
-#ifdef NEWRUN
-      ProcessStackObj((struct StackObject *)theObj, CheckAOACell);
-#endif /* NEWRUN */
-#ifndef NEWRUN
-      fprintf(output, 
-	      "AOACheckObject: no check of stackobject 0x%x\n", theObj);
-#endif
+           ProcessStackObj((struct StackObject *)theObj, CheckAOACell);
 #endif /* KEEP_STACKOBJ_IN_IOA */
-      return; 
-    case SwitchProto(StructurePTValue):
-      AOACheckReference( &(toStructure(theObj))->iOrigin );
-      return;
-    case SwitchProto(DopartObjectPTValue):
-      AOACheckReference( &(cast(DopartObject)(theObj))->Origin );
-      return;
-    }
-  }else{
-    ptr(short)  Tab;
-    long *   theCell;
+           return; 
+       case SwitchProto(StructurePTValue):
+           AOACheckReference( &(toStructure(theObj))->iOrigin );
+           return;
+       case SwitchProto(DopartObjectPTValue):
+           AOACheckReference( &(cast(DopartObject)(theObj))->Origin );
+           return;
+     }
+ }else{
+     ptr(short)  Tab;
+     long *   theCell;
     
-    /* Calculate a pointer to the GCTable inside the ProtoType. */
-    Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
+     /* Calculate a pointer to the GCTable inside the ProtoType. */
+     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
     
-    /* Handle all the static objects. 
-     * The static table have the following structure:
-     * { .word Offset
-     *   .word Distance_To_Inclosing_Object
-     *   .long T_entry_point
-     * }*
-     * This table contains all static objects on all levels.
-     * Here vi only need to perform ProcessObject on static objects
-     * on 1 level. The recursion in ProcessObject handle other
-     * levels. 
-     * The way to determine the level of an static object is to 
-     * compare the Offset and the Distance_To_Inclosing_Object.
-     */
+     /* Handle all the static objects. 
+      * The static table have the following structure:
+      * { .word Offset
+      *   .word Distance_To_Inclosing_Object
+      *   .long T_entry_point
+      * }*
+      * This table contains all static objects on all levels.
+      * Here vi only need to perform ProcessObject on static objects
+      * on 1 level. The recursion in ProcessObject handle other
+      * levels. 
+      * The way to determine the level of an static object is to 
+      * compare the Offset and the Distance_To_Inclosing_Object.
+      */
     
-    while( *Tab != 0 ){
-      Claim( *(long *) Offset( theObj, *Tab * 4 + 4) == (long) Tab[1],
-	    "AOACheckObject: EnclosingObject match GCTab entry.");
-      if( *Tab == -Tab[1] ) 
-	AOACheckObject( (ref(Object))(Offset( theObj, *Tab * 4)));
-      Tab += 4;
-    }
-    Tab++;
+     while( *Tab != 0 ){
+         Claim( *(long *) Offset( theObj, *Tab * 4 + 4) == (long) Tab[1],
+                "AOACheckObject: EnclosingObject match GCTab entry.");
+         if( *Tab == -Tab[1] ) 
+             AOACheckObject( (ref(Object))(Offset( theObj, *Tab * 4)));
+         Tab += 4;
+     }
+     Tab++;
     
-    /* Handle all the references in the Object. */
-    while( *Tab != 0 ){
-      theCell = (long *) Offset( theObj, ((*Tab++) & (short) ~3) );
-      /* sbrandt 24/1/1994: 2 least significant bits in prototype 
-       * dynamic offset table masked out. As offsets in this table are
-       * always multiples of 4, these bits may be used to distinguish
-       * different reference types. */ 
-      AOACheckReference( (handle(Object))theCell );
-    }
-  }
+     /* Handle all the references in the Object. */
+     while( *Tab != 0 ){
+         theCell = (long *) Offset( theObj, ((*Tab++) & (short) ~3) );
+         /* sbrandt 24/1/1994: 2 least significant bits in prototype 
+          * dynamic offset table masked out. As offsets in this table are
+          * always multiples of 4, these bits may be used to distinguish
+          * different reference types. */ 
+         AOACheckReference( (handle(Object))theCell );
+     }
+ }
 }
 
 /* AOACheckReference: Consistency check on AOA reference */
 void AOACheckReference( theCell)
-     handle(Object) theCell;
+handle(Object) theCell;
 {
-  long i; long * pointer = BlockStart( AOAtoIOAtable);
-  long found = FALSE;
+    long i; long * pointer = BlockStart( AOAtoIOAtable);
+    long found = FALSE;
 
 #ifdef RTLAZY
-  if (isLazyRef(*theCell)){
-    int i;
-    int found=0;
-    for (i=0; i<negAOAsize; i++){
-#if 0
-      DEBUG_LAZY(fprintf(output,
-			 "negAOArefs[i]=%d, &negAOArefs[i]=0x%x *theCell=%d\n",
-			 negAOArefs[i],
-			 &negAOArefs[i], 
-			 *theCell));
+    if (isLazyRef(*theCell)){
+        int i;
+        int found=0;
+        for (i=0; i<negAOAsize; i++){
+            if ((*(long*)negAOArefs[i])==(long)*theCell){
+                found=1; break;
+            }
+        }
+        if (!found){
+            fprintf(output, 
+                    "Dangler in AOA, but NOT in negAOArefs table: 0x%x: %d\n", 
+                    (int)theCell, 
+                    (int)*theCell);
+            Illegal();
+        }
+        return;
+    }
 #endif
-      if ((*(long*)negAOArefs[i])==(long)*theCell){
-	found=1; break;
-      }
+    if ( *theCell ){
+        Claim(inAOA(*theCell) || inIOA(*theCell),
+              "AOACheckReference: *theCell in IOA, AOA");
+        if( inIOA( *theCell) ){
+            IOACheckObject( *theCell);
+            for(i=0; (i < AOAtoIOAtableSize) && (!found); i++){
+                if( *pointer ) found = (*pointer == (long) theCell);
+                pointer++;
+            }
+            if (!found){
+                char buf[512];
+                sprintf(buf, 
+                        "AOACheckReference: *theCell [*(0x%x)] in IOA but not in AOAtoIOAtable",
+                        (int)theCell);
+                Claim( found, buf);
+            }
+        }
     }
-    if (!found){
-      fprintf(output, 
-	      "Dangler in AOA, but NOT in negAOArefs table: 0x%x: %d\n", 
-	      (int)theCell, 
-	      (int)*theCell);
-      Illegal();
-    }
-    return;
-  }
-#endif
-  if ( *theCell ){
-    Claim(inAOA(*theCell) || inIOA(*theCell) || inLVRA(*theCell),
-	  "AOACheckReference: *theCell in IOA, AOA or LVRA");
-    if( inIOA( *theCell) ){
-      IOACheckObject( *theCell);
-      for(i=0; (i < AOAtoIOAtableSize) && (!found); i++){
-	if( *pointer ) found = (*pointer == (long) theCell);
-	pointer++;
-      }
-      if (!found){
-	char buf[512];
-	sprintf(buf, 
-		"AOACheckReference: *theCell [*(0x%x)] in IOA but not in AOAtoIOAtable",
-		(int)theCell);
-	Claim( found, buf);
-      }
-    }
-    if( inLVRA(*theCell) )
-      Claim( ((ref(ValRep)) *theCell)->GCAttr == (long) theCell,
-	    "IOACheckReference:  ((ref(ValRep)) *theCell)->GCAttr == theCell");
-  }
 }
 
 /* AOACheckObjectSpecial: Weak consistency check on AOA object */
 void AOACheckObjectSpecial( theObj)
-     ref(Object) theObj;
+ref(Object) theObj;
 { ref(ProtoType) theProto;
   
-  theProto = theObj->Proto;
+ theProto = theObj->Proto;
 
 #ifdef MT
-  /* The way part objects are allocated in V-entries
-   * may leave part objects with uninitialized prototypes.
-   */
-  if (!theProto) return;
+ /* The way part objects are allocated in V-entries
+  * may leave part objects with uninitialized prototypes.
+  */
+ if (!theProto) return;
 #endif
   
-  Claim( !inBetaHeap((ref(Object))theProto),
+ Claim( !inBetaHeap((ref(Object))theProto),
 	"#AOACheckObjectSpecial: !inBetaHeap(theProto)");
   
-  if( isSpecialProtoType(theProto) ){  
-    switch(SwitchProto(theProto)){
-    case SwitchProto(ByteRepPTValue):
-    case SwitchProto(ShortRepPTValue):
-    case SwitchProto(DoubleRepPTValue):
-    case SwitchProto(LongRepPTValue): return;
-    case SwitchProto(DynItemRepPTValue): return;
-    case SwitchProto(DynCompRepPTValue): return;
-    case SwitchProto(RefRepPTValue): return;
-    case SwitchProto(ComponentPTValue):
-      AOACheckObjectSpecial( (ref(Object))(ComponentItem( theObj)));
-      return;
-    case SwitchProto(StackObjectPTValue):
+ if( isSpecialProtoType(theProto) ){  
+     switch(SwitchProto(theProto)){
+       case SwitchProto(ByteRepPTValue):
+       case SwitchProto(ShortRepPTValue):
+       case SwitchProto(DoubleRepPTValue):
+       case SwitchProto(LongRepPTValue): return;
+       case SwitchProto(DynItemRepPTValue): return;
+       case SwitchProto(DynCompRepPTValue): return;
+       case SwitchProto(RefRepPTValue): return;
+       case SwitchProto(ComponentPTValue):
+           AOACheckObjectSpecial( (ref(Object))(ComponentItem( theObj)));
+           return;
+       case SwitchProto(StackObjectPTValue):
 #ifdef KEEP_STACKOBJ_IN_IOA
-      Claim( FALSE, "AOACheckObjectSpecial: theObj must not be StackObject.");
+           Claim( FALSE, "AOACheckObjectSpecial: theObj must not be StackObject.");
 #else
-      fprintf(output, 
-	      "AOACheckObjectSpecial: no check of stackobject 0x%x\n", theObj);
+           fprintf(output, 
+                   "AOACheckObjectSpecial: no check of stackobject 0x%x\n", (int)theObj);
 #endif
-      return;
-    case SwitchProto(StructurePTValue):
-      return;
-    case SwitchProto(DopartObjectPTValue):
-      return;
-    default:
-      Claim( FALSE, "AOACheckObjectSpecial: theObj must be KNOWN.");
-    }
-  }else{
-    ptr(short)  Tab;
-    long *   theCell;
+           return;
+       case SwitchProto(StructurePTValue):
+           return;
+       case SwitchProto(DopartObjectPTValue):
+           return;
+       default:
+           Claim( FALSE, "AOACheckObjectSpecial: theObj must be KNOWN.");
+     }
+ }else{
+     ptr(short)  Tab;
+     long *   theCell;
     
-    /* Calculate a pointer to the GCTable inside the ProtoType. */
-    Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
+     /* Calculate a pointer to the GCTable inside the ProtoType. */
+     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
     
-    /* Handle all the static objects. 
-     * The static table have the following structure:
-     * { .word Offset
-     *   .word Distance_To_Inclosing_Object
-     *   .long T_entry_point
-     * }*
-     * This table contains all static objects on all levels.
-     * Here vi only need to perform ProcessObject on static objects
-     * on 1 level. The recursion in ProcessObject handle other
-     * levels. 
-     * The way to determine the level of an static object is to 
-     * compare the Offset and the Distance_To_Inclosing_Object.
-     */
+     /* Handle all the static objects. 
+      * The static table have the following structure:
+      * { .word Offset
+      *   .word Distance_To_Inclosing_Object
+      *   .long T_entry_point
+      * }*
+      * This table contains all static objects on all levels.
+      * Here vi only need to perform ProcessObject on static objects
+      * on 1 level. The recursion in ProcessObject handle other
+      * levels. 
+      * The way to determine the level of an static object is to 
+      * compare the Offset and the Distance_To_Inclosing_Object.
+      */
     
-    while( *Tab != 0 ){
-      if( *Tab == -Tab[1] ) 
-	AOACheckObjectSpecial( (ref(Object))(Offset( theObj, *Tab * 4)));
-      Tab += 4;
-    }
-    Tab++;
+     while( *Tab != 0 ){
+         if( *Tab == -Tab[1] ) 
+             AOACheckObjectSpecial( (ref(Object))(Offset( theObj, *Tab * 4)));
+         Tab += 4;
+     }
+     Tab++;
     
-    /* Handle all the references in the Object. */
-    while( *Tab != 0 ){
-      theCell = (long *) Offset( theObj, ((*Tab++) & (short) ~3) );
-      /* sbrandt 24/1/1994: 2 least significant bits in prototype 
-       * dynamic offset table masked out. As offsets in this table are
-       * always multiples of 4, these bits may be used to distinguish
-       * different reference types. */ 
-    }
-  }
+     /* Handle all the references in the Object. */
+     while( *Tab != 0 ){
+         theCell = (long *) Offset( theObj, ((*Tab++) & (short) ~3) );
+         /* sbrandt 24/1/1994: 2 least significant bits in prototype 
+          * dynamic offset table masked out. As offsets in this table are
+          * always multiples of 4, these bits may be used to distinguish
+          * different reference types. */ 
+     }
+ }
 }
 
 #endif
 
-#ifdef NONMOVEAOAGC
-static long firstRef;
-
-static void NonMoveInitList(void)
-{
-    firstRef = TRUE;
-    initialCollectList(NULL, NULL);
-}
-
-static void NonMoveAddRoot(long cellptr)
-{
-    if (firstRef) {
-        initialCollectListNeg((ref(Object)) *(long*)cellptr,
-                              appendToListInAOANeg);
-        firstRef = FALSE;
-    }
-    else {
-        extendCollectListNeg((ref(Object)) *(long*)cellptr,
-                             appendToListInAOANeg);
-    }
-}
-
-static void HandleDeadObjects(void)
-{
-    ref(Block)  theBlock  = AOABaseBlock;
-    ref(Object) theObj;
-    long objSize;
-
-    long        usedSpace = 0;
-    long        allSpace  = 0;
-    
-    while (theBlock) {
-        theObj = (ref(Object))BlockStart(theBlock);
-        while ((ptr(long))theObj < theBlock->top) {
-            objSize = 4*ObjectSize(theObj);
-            allSpace += objSize;
-            if (theObj->GCAttr) {
-                /* Object is alive. */
-                usedSpace += objSize;
-                
-                /* Cleanup for next mark-sweep */
-                theObj->GCAttr = 0;
-            } else {
-                /* Object is dead, freelist it... */
-            }
-            theObj = (ref(Object))((char*)theObj + objSize);
-        }
-    }
-    INFO_AOA(fprintf(output,
-                     "#(AOA: HandleDeadObjects: used=%dKb, free=%dKb\n",
-                     (int)usedSpace/Kb, (int)(allSpace-usedSpace)/Kb));
-}
-
-#endif /* NONMOVEAOAGC */

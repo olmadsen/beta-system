@@ -15,8 +15,7 @@
 #endif
 
 #define inBlock( theB, addr) (((BlockStart( theB)) <= (ptr(long)) addr) \
-                              && ((ptr(long)) addr < theB->top) )
-
+                              && ((ptr(long)) addr < theB->limit) )
 #define inBlockUnused( theB, addr) ((theB->top <= (ptr(long)) addr) \
                               && ((ptr(long)) addr < theB->limit) )
 
@@ -47,11 +46,14 @@ long inArea( theBlock, theObj )
   ref(Block)  theBlock;
   ref(Object) theObj;
 {
-  while( theBlock != 0 ){
-    if( inBlock( theBlock, theObj) ) return TRUE;
-    theBlock = theBlock->next;
-  }
-  return FALSE;
+    while( theBlock != 0 ){
+        
+        if( inBlock( theBlock, theObj) ) {
+            return TRUE;
+        }
+        theBlock = theBlock->next;
+    }
+    return FALSE;
 }
 
 #ifdef USEMMAP

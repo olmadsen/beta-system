@@ -42,7 +42,7 @@ void CQua(struct Object *dstQuaOrigin,
   src = *theCell;
 
 #ifdef RTDEBUG
-  if ((src) && !(inIOA(src) || inAOA(src) || inLVRA(src) || isLazyRef(src))) {
+  if ((src) && !(inIOA(src) || inAOA(src) || isLazyRef(src))) {
     char buf[512];
     sprintf (buf, "Qua: *theCell not in heap: *theCell=0x%x, theCell=0x%x\n", 
 	     (int) src, (int) theCell);

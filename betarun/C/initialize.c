@@ -342,7 +342,6 @@ IOASliceSize = ObjectAlignDown(IOASliceSize);
   
   INFO( fprintf( output, "#(Heap info: IOA=2*%dKb", (int)IOASize/Kb) );
   INFO( fprintf( output, ", AOABlock=%dKb", (int)AOABlockSize/Kb) );
-  INFO( fprintf( output, ", LVRABlock=%dKb", (int)LVRABlockSize/Kb) );
   INFO( fprintf( output, ", CBFABlock=%dKb\n", (int)CBFABlockSize/Kb) );
 
   /* Adjust CBFA block size to fit an integral number of CallbackEntries */

@@ -66,7 +66,7 @@ extern long              ltS() __asm__("ltS");
 #ifdef MAC
 static void 
 #else
-static __inline__ void 
+static void 
 #endif
 AssignReference(long *theCell, ref(Item) newObject)
 {

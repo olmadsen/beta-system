@@ -33,20 +33,8 @@ void ExtVR1(struct Object *theObj,
     copyRange = (ByteRepBodySize((add < 0) ? newRange : oldRange))>>2;
     size = ByteRepSize(newRange);
       
-    if (newRange > LARGE_REP_SIZE){
+    if (newRange > LARGE_REP_SIZE || size>IOAMAXSIZE){
       newRep = LVRAXAlloc(ByteRepPTValue, oldRange, newRange);
-    }
-    if (newRep) {
-      /* LVRA allocation succeeded */
-      /* Recalculate theRep, it may have been moved by LVRACompaction */
-      theRep = *(struct ValRep **)((long *) theObj + offset);
-      DEBUG_CODE(Claim(newRep->Proto==theRep->Proto &&
-		       newRep->HighBorder==newRange &&
-		       newRep->LowBorder==1, 
-		       "ExtVR1: lvra structure ok"));
-	
-      /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-      newRep->GCAttr = (long) ((long *) theObj + offset);
       *(struct ValRep **)((long *) theObj + offset) = newRep;
 	
       /* Copy old rep */
@@ -54,21 +42,12 @@ void ExtVR1(struct Object *theObj,
 	newRep->Body[i] = theRep->Body[i];
       }
       return;
-    } /* LVRA */
-      
-    /* NOT REACHED if LVRAXAlloc successfully called */
+    }
 
     /* Allocate new repetition */
     push(theObj);
-    if (size>IOAMAXSIZE){
-      DEBUG_AOA(fprintf(output, "ExtVR1 allocates in AOA\n"));
-      newRep = (struct ValRep *)AOAcalloc(size, SP);
-      DEBUG_AOA(if (!newRep) fprintf(output, "AOAcalloc failed\n"));
-    } 
-    if (!newRep){
-      newRep = (struct ValRep *)IOAalloc(size, SP);
-      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
-    }
+    newRep = (struct ValRep *)IOAalloc(size, SP);
+    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     pop(theObj);
 
     /* Reload theRep - may have been moved in IOAGc */
@@ -118,20 +97,8 @@ void ExtVR2(struct Object *theObj,
     copyRange = (ShortRepBodySize((add < 0) ? newRange : oldRange))>>2;
     size = ShortRepSize(newRange);
       
-    if (newRange > LARGE_REP_SIZE){
+    if (newRange > LARGE_REP_SIZE || size>IOAMAXSIZE){
       newRep = LVRAXAlloc(ShortRepPTValue, oldRange, newRange);
-    }
-    if (newRep) {
-      /* LVRA allocation succeeded */
-      /* Recalculate theRep, it may have been moved by LVRACompaction */
-      theRep = *(struct ValRep **)((long *) theObj + offset);
-      DEBUG_CODE(Claim(newRep->Proto==theRep->Proto &&
-		       newRep->HighBorder==newRange &&
-		       newRep->LowBorder==1, 
-		       "ExtVR2: lvra structure ok"));
-	
-      /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-      newRep->GCAttr = (long) ((long *) theObj + offset);
       *(struct ValRep **)((long *) theObj + offset) = newRep;
 	
       /* Copy old rep */
@@ -139,21 +106,12 @@ void ExtVR2(struct Object *theObj,
 	newRep->Body[i] = theRep->Body[i];
       }
       return;
-    } /* LVRA */
-      
-    /* NOT REACHED if LVRAXAlloc successfully called */
+    }
 
     /* Allocate new repetition */
     push(theObj);
-    if (size>IOAMAXSIZE){
-      DEBUG_AOA(fprintf(output, "ExtVR2 allocates in AOA\n"));
-      newRep = (struct ValRep *)AOAcalloc(size, SP);
-      DEBUG_AOA(if (!newRep) fprintf(output, "AOAcalloc failed\n"));
-    } 
-    if (!newRep){
-      newRep = (struct ValRep *)IOAalloc(size, SP);
-      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
-    }
+    newRep = (struct ValRep *)IOAalloc(size, SP);
+    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     pop(theObj);
 
     /* Reload theRep - may have been moved in IOAGc */
@@ -203,20 +161,8 @@ void ExtVR4(struct Object *theObj,
     copyRange = LongRepBodySize((add < 0) ? newRange : oldRange) >>2;
     size = LongRepSize(newRange);
       
-    if (newRange > LARGE_REP_SIZE){
+    if (newRange > LARGE_REP_SIZE || size>IOAMAXSIZE){
       newRep = LVRAXAlloc(LongRepPTValue, oldRange, newRange);
-    }
-    if (newRep) {
-      /* LVRA allocation succeeded */
-      /* Recalculate theRep, it may have been moved by LVRACompaction */
-      theRep = *(struct ValRep **)((long *) theObj + offset);
-      DEBUG_CODE(Claim(newRep->Proto==theRep->Proto &&
-		       newRep->HighBorder==newRange &&
-		       newRep->LowBorder==1, 
-		       "ExtVR4: lvra structure ok"));
-	
-      /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-      newRep->GCAttr = (long) ((long *) theObj + offset);
       *(struct ValRep **)((long *) theObj + offset) = newRep;
 	
       /* Copy old rep */
@@ -224,21 +170,12 @@ void ExtVR4(struct Object *theObj,
 	newRep->Body[i] = theRep->Body[i];
       }
       return;
-    } /* LVRA */
+    }
       
-    /* NOT REACHED if LVRAXAlloc successfully called */
-
     /* Allocate new repetition */
     push(theObj);
-    if (size>IOAMAXSIZE){
-      DEBUG_AOA(fprintf(output, "ExtVR4 allocates in AOA\n"));
-      newRep = (struct ValRep *)AOAcalloc(size, SP);
-      DEBUG_AOA(if (!newRep) fprintf(output, "AOAcalloc failed\n"));
-    } 
-    if (!newRep){
-      newRep = (struct ValRep *)IOAalloc(size, SP);
-      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
-    }
+    newRep = (struct ValRep *)IOAalloc(size, SP);
+    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     pop(theObj);
 
     /* Reload theRep - may have been moved in IOAGc */
@@ -288,20 +225,8 @@ void ExtVR8(struct Object *theObj,
     copyRange = (DoubleRepBodySize((add < 0) ? newRange : oldRange))>>2;
     size = DoubleRepSize(newRange);
       
-    if (newRange > LARGE_REP_SIZE){
+    if (newRange > LARGE_REP_SIZE || size>IOAMAXSIZE){
       newRep = LVRAXAlloc(DoubleRepPTValue, oldRange, newRange);
-    }
-    if (newRep) {
-      /* LVRA allocation succeeded */
-      /* Recalculate theRep, it may have been moved by LVRACompaction */
-      theRep = *(struct ValRep **)((long *) theObj + offset);
-      DEBUG_CODE(Claim(newRep->Proto==theRep->Proto &&
-		       newRep->HighBorder==newRange &&
-		       newRep->LowBorder==1, 
-		       "ExtVR8: lvra structure ok"));
-	
-      /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-      newRep->GCAttr = (long) ((long *) theObj + offset);
       *(struct ValRep **)((long *) theObj + offset) = newRep;
 	
       /* Copy old rep */
@@ -309,21 +234,12 @@ void ExtVR8(struct Object *theObj,
 	newRep->Body[i] = theRep->Body[i];
       }
       return;
-    } /* LVRA */
+    }
       
-    /* NOT REACHED if LVRAXAlloc successfully called */
-
     /* Allocate new repetition */
     push(theObj);
-    if (size>IOAMAXSIZE){
-      DEBUG_AOA(fprintf(output, "ExtVR8 allocates in AOA\n"));
-      newRep = (struct ValRep *)AOAcalloc(size, SP);
-      DEBUG_AOA(if (!newRep) fprintf(output, "AOAcalloc failed\n"));
-    } 
-    if (!newRep){
-      newRep = (struct ValRep *)IOAalloc(size, SP);
-      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
-    }
+    newRep = (struct ValRep *)IOAalloc(size, SP);
+    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     pop(theObj);
 
     /* Reload theRep - may have been moved in IOAGc */

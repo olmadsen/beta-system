@@ -117,7 +117,7 @@ typedef struct Structure{
     long	    Body[1];   /* Dummy. Makes headsize work. */
 } Structure;
 
-/* Block is memory unit for AOArea and LVRArea. */
+/* Block is memory unit for AOArea. */
 typedef struct Block{
     ref(Block)      next;      /* Reference to the next Block     */
     union { 
@@ -129,15 +129,6 @@ typedef struct Block{
     ptr(long)       mmaplimit;    /* max limit of block */
     ptr(long)       mmapmaxlimit; /* max mmaplimit of block */
 } Block;
-
-typedef struct LVRABlock{
-    ref(LVRABlock)  next;
-    long            state;
-    ptr(long)       top;
-    ptr(long)       limit;
-    ptr(long)       mmaplimit;    /* max limit of block */
-    ptr(long)       mmapmaxlimit; /* max mmaplimit of block */
-} LVRABlock;
 
 typedef struct CallBackFrame {
     ref(CallBackFrame)  next;
@@ -247,7 +238,7 @@ typedef struct group_header
   struct group_header **ptr; /* pointer back to beta_data file */
 } group_header;
 
-#ifdef NEWRUN
+#if !defined(KEEP_STACKOBJ_IN_IOA)
 typedef void (*CellProcessFunc)(struct Object **theCell,struct Object *theObj);
 #endif
 

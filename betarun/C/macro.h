@@ -110,13 +110,16 @@ do {                               \
 #define inIOA(x)     (((long)IOA <= (long)(x)) && ((long)(x) < (long)IOATop))
 #endif /* sparc || newrun */
 
-#define inHeap(x)    (inIOA(x) || inLVRA(x))
+#define inHeap(x)    inIOA(x)
 #define inToSpace(x) (((long)ToSpace <= (long)(x)) && ((long)(x) < (long)ToSpaceTop)) 
 #define inAOA(x)     inArea(AOABaseBlock, (struct Object *)(x))
 #define inAOAUnused(x) inAreaUnused(AOABaseBlock, (struct Object *)(x))
 
 #define isSpecialProtoType(x) (((long)(MinPTValue) <= (long)(x)) && \
                                ((long)(x) <= (long)(MaxPTValue)))
+
+#define isNotSpecialProtoType(x) (((long)(MinPTValue) > (long)(x)) || \
+                                  ((long)(x) > (long)(MaxPTValue)))
 
 #define isNegativeRef(x) ((long)(x) < 0)
 #define isPositiveRef(x) ((long)(x) > 0)
@@ -151,14 +154,9 @@ do {                               \
 
 /*** Object sizes in BYTES ****/
 
-#if defined(sparc) || defined(hppa) || defined(NEWRUN)
 /* Objects must be multiples of 8 bytes because of reals */
 #define ObjectAlign(numbytes)     (unsigned long)(((numbytes)+7) & ~7)
 #define ObjectAlignDown(numbytes) (unsigned long)(((numbytes))   & ~7)
-#else
-#define ObjectAlign(numbytes)     (unsigned long)(numbytes)
-#define ObjectAlignDown(numbytes) (unsigned long)(numbytes)
-#endif
 
 #define ByteRepBodySize(range)   ((((range)+4)/4)*4)
 #define ShortRepBodySize(range)  (((2*(range)+3)/4)*4)
@@ -225,7 +223,6 @@ do {                               \
 #define areaSize( from, to) ( ( ( (long) to ) - ( (long) from) ) )
 
 #define BlockStart( theB) ((ptr(long)) Offset( theB, sizeof(struct Block)))
-#define LVRABlockStart( theB) ((ptr(long)) Offset( theB, sizeof(struct LVRABlock)))
 
 /* MACRO_CopyBlock copy from address src to address dst a block
  * of length = len bytes. (Used to be longs!!)

@@ -46,9 +46,7 @@ ParamRepObjOffLowHigh(CopySVR1)
 
     size = ByteRepSize(range);
 
-    /* LVRA missing */
-    
-    Protect2(theRep,theObj,newRep = cast(ValRep) IOAalloc(size));
+    Protect2(theRep,theObj,newRep= cast(ValRep) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */
     newRep->Proto = ByteRepPTValue;
@@ -66,7 +64,7 @@ ParamRepObjOffLowHigh(CopySVR1)
       /* Null termination: */
       *(unsigned char *)((unsigned)newBody+range) = 0 ;
     }
-        
+
     AssignReference((long *)theObj + offset, cast(Item) newRep);
 
     Ck(newRep); Ck(theRep); Ck(theObj);
@@ -99,8 +97,6 @@ ParamRepObjOffLowHigh(CopySVR2)
 
     size = ShortRepSize(range);
 
-    /* LVRA missing */
-    
     Protect2(theRep,theObj,newRep = cast(ValRep) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */
@@ -150,8 +146,6 @@ ParamRepObjOffLowHigh(CopySVR4)
 
     size = LongRepSize(range);
 
-    /* LVRA missing */
-    
     Protect2(theRep,theObj,newRep = cast(ValRep) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */
@@ -197,8 +191,6 @@ ParamRepObjOffLowHigh(CopySVR8)
 
     size = DoubleRepSize(range);
 
-    /* LVRA missing */
-    
     Protect2(theRep,theObj,newRep = cast(ValRep) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */

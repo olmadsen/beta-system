@@ -39,13 +39,11 @@ static void BooleanProperty(char *name)
    ENTRY("info",     Info0 = TRUE); 
    ENTRY("infoioa",  InfoIOA = TRUE);
    ENTRY("infoaoa",  InfoAOA = TRUE);
-   ENTRY("infolvra", InfoLVRA = TRUE);
    ENTRY("infocbfa", InfoCBFA = TRUE);
-   ENTRY("infolvraalloc", InfoLVRAAlloc = TRUE);
    ENTRY("infodot", InfoDOT = TRUE);
    ENTRY("infoall", 
 	 Info0 = TRUE; InfoIOA = TRUE; InfoAOA = TRUE; 
-	 InfoLVRA = TRUE; InfoCBFA = TRUE; InfoLVRAAlloc = TRUE;
+	 InfoCBFA = TRUE; 
 	 InfoHeapUsage = TRUE;
 	 );
    ENTRY("infoheapusage", InfoHeapUsage = TRUE);
@@ -67,8 +65,6 @@ static void BooleanProperty(char *name)
   ENTRY("dumpaoa",   DumpAOA = TRUE);
   ENTRY("debugaoa",   DebugAOA = TRUE);
   ENTRY("debugaoatoioa",   DebugAOAtoIOA = TRUE);
-  ENTRY("debugaoatolvra",   DebugAOAtoLVRA = TRUE);
-  ENTRY("debuglvra",  DebugLVRA = TRUE);
   ENTRY("debuglin",  DebugLIN = TRUE);
   ENTRY("debugstack", DebugStack = TRUE);
   ENTRY("debugstackobj", DebugStackObj = TRUE);
@@ -86,8 +82,6 @@ static void BooleanProperty(char *name)
 	DebugIOA = TRUE; 
 	DebugAOA = TRUE;
 	DebugAOAtoIOA = TRUE;
-	DebugAOAtoLVRA = TRUE;
-	DebugLVRA = TRUE;
 	DebugStack=TRUE;
 	DebugLazy = TRUE;
 	DebugCBFA=TRUE);
@@ -96,8 +90,6 @@ static void BooleanProperty(char *name)
 	DebugIOA = TRUE; 
 	DebugAOA = TRUE;
 	DebugAOAtoIOA = TRUE;
-	DebugAOAtoLVRA = TRUE;
-	DebugLVRA = TRUE;
         DebugLIN = TRUE; 
 	DebugStack=TRUE; 
 	DebugLazy = TRUE;
@@ -163,16 +155,6 @@ static void ValueProperty(char *name, char *value)
 	}
 	if (AOAMinFree>AOABlockSize) AOAMinFree=AOABlockSize;
 	);
-  ENTRY("lvra", 
-	LVRABlockSize = 1024 * intScan(name, value);
-	if(LVRABlockSize < 1024){
-	  sprintf(buf, "LVRA block size (%dKb) is too low, adjusted to 1Kb.",
-		  (int)LVRABlockSize/1024);
-	  Notify(buf);
-	  LVRABlockSize = 1024;
-	}
-	if (LVRAMinFree>LVRABlockSize) LVRAMinFree=LVRABlockSize;
-	);
   ENTRY("cbfa", 
 	CBFABlockSize = 1024 * intScan(name, value);
 	if(CBFABlockSize < 1024){
@@ -216,23 +198,6 @@ static void ValueProperty(char *name, char *value)
 	  AOAPercentage = 97;
 	});
 
-  ENTRY("lvraminfree",
-	LVRAMinFree = 1024 * intScan(name, value); LVRAPercentage = 0;);
-  ENTRY("lvrapercentage",
-	LVRAPercentage = intScan(name, value);
-	LVRAMinFree = 0;
-        if( LVRAPercentage < 3 ){
-	  sprintf(buf, "LVRAPercentage (%d) is too low, adjusted to 3.",
-		  (int)LVRAPercentage);
-	  Notify(buf);
-	  LVRAPercentage = 3;
-	}
-	if( LVRAPercentage > 97 ){
-	  sprintf(buf, "LVRAPercentage (%d) is too high, adjusted to 97.",
-		  (int)LVRAPercentage);
-	  Notify(buf);
-	  LVRAPercentage = 97;
-	});
 
 #ifdef MAC
 #define MacCode(code) code
@@ -305,7 +270,7 @@ void SetupProperties(char *betart)
   while( !finish ){
     if( start < pos ){
       /* The item is betart[start..pos-1]. 
-       * Items can have two forms  "Info0" or "LVRA#1400" or "LVRA=1400".
+       * Items can have two forms  "Info0" or "IOA#1400" or "IOA=1400".
        */
       i = start;
       while( (betart[i] != '#') && (betart[i] != '=') && (i < pos) ) i++;

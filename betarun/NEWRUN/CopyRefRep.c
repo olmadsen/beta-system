@@ -32,9 +32,7 @@ void CopyRR(struct RefRep *theRep,
       newRep = (struct RefRep *)AOAalloc(size, SP);
       DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
     }
-    if (newRep) {
-      newRep->GCAttr = 0; /* In AOA */
-    } else {
+    if (!newRep) {
       newRep = (struct RefRep *)IOAalloc(size, SP);
       if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
     }

@@ -4,9 +4,6 @@
  * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, Jacob Seligmann and S|ren Brandt
  *
  * Traverse an stack parts and process all references.
- * Don't process references from the stack to LVRA. The ValReps in
- * in LVRA are not moved by CopyObject, but if ProcessReference
- * is called with such a reference, the LVRA cycle is broken!
  */
 
 #include "beta.h"
@@ -812,12 +809,8 @@ void ProcessRefStack(size, bottom)
     theObj = *theCell;
     if(theObj && (theObj!=(struct Object *)ExternalMarker) && 
        inBetaHeap(theObj) && isObject(theObj)) {
-      if(inLVRA( theObj)){
-	DEBUG_IOA( fprintf( output, "(STACK(%x) is pointer into LVRA)", (int)theCell));
-      } else {
 	ProcessReference(theCell);
 	CompleteScavenging();
-      }
     }
 #ifdef RTLAZY
     else if (isLazyRef(theObj)) {
@@ -832,16 +825,10 @@ void ProcessRefStack(size, bottom)
 	  && !isCode(theObj)  /* e.g. at INNER a ref. reg contains code address */
           && (theObj!=(struct Object *)ExternalMarker)
 	  ) {
-	if (inLVRA(theObj)){
-	  fprintf(output, "[ProcessRefStack: pointer into LVRA: 0x%x: 0x%x]\n", 
-		  (int)theCell,
-		  (int)theObj);
-	} else {
 	  fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", 
 		  (int)theCell, 
 		  (int)theObj);
 	  Illegal();
-	}
       }
     }
 #endif
@@ -895,34 +882,23 @@ struct RegWin *BottomAR=0, *lastAR=0;
 GLOBAL(long PC) = 0;
 void PrintAR(struct RegWin *ar, struct RegWin *theEnd);
 void PrintCAR(struct RegWin *cAR);
-static void CheckForLVRA(int reg, char *desc);
 #endif
 
-static __inline__ void ProcessReg(long *addr, char *desc)
+static __inline__ void ProcessReg(long *addr, char *desc, CellProcessFunc func)
 {
-  if (inBetaHeap(cast(Object)(*addr)) 
-      && isObject(cast(Object)(*addr)) 
-      && !inLVRA(cast(Object)(*addr))) {
-    if (isProto((cast(Object)(*addr))->Proto)) 
-      ProcessReference(casthandle(Object)(addr)); } 
-#ifdef RTLAZY
-  else if (isLazyRef(*addr)) {
-    DEBUG_LAZY(fprintf (output, "Lazy ref in %s: %d\n", desc, (int)(*addr)));
-    ProcessReference(casthandle(Object)(addr));
-  }
-#endif
+  func((struct Object **)addr, *(struct Object **)addr);
+  DEBUG_LAZY({
+    if (isLazyRef(*addr)) {
+      fprintf (output, "Lazy ref in %s: %d\n", desc, (int)(*addr));
+    }
+  });
 }
 
 /* Traverse an activation record (AR) [ar, theEnd[
    Notice theEnd is *not* included
    */
 
-/* Don't process references from the stack to LVRA. The ValReps in
- * in LVRA are not moved by CopyObject, but if PrecessReference
- * is called with such a reference, the LVRA cycle is broken!
- */
-
-void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
+void ProcessAR(struct RegWin *ar, struct RegWin *theEnd, CellProcessFunc func)
 {
     struct Object **theCell = (struct Object **) &ar[1];
     
@@ -934,19 +910,11 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
     });
         
     /* Process GC registers of the activation record. */
-    DEBUG_CODE({
-      CheckForLVRA(ar->i0, "ar->i0");
-      CheckForLVRA(ar->i1, "ar->i1");
-      CheckForLVRA(ar->i2, "ar->i2");
-      CheckForLVRA(ar->i3, "ar->i3");
-      CheckForLVRA(ar->i4, "ar->i4");
-    });
-
-    ProcessReg(&ar->i0, "i0");
-    ProcessReg(&ar->i1, "i1");
-    ProcessReg(&ar->i2, "i2");
-    ProcessReg(&ar->i3, "i3");
-    ProcessReg(&ar->i4, "i4");
+    ProcessReg(&ar->i0, "i0", func);
+    ProcessReg(&ar->i1, "i1", func);
+    ProcessReg(&ar->i2, "i2", func);
+    ProcessReg(&ar->i3, "i3", func);
+    ProcessReg(&ar->i4, "i4", func);
     CompleteScavenging();
 
     /* Process the stack part */
@@ -987,26 +955,8 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
 
     for (; theCell != (struct Object **) theEnd; theCell+=2) {
       /* +2 because the compiler uses "dec %sp,8,%sp" before pushing */
-      if (inBetaHeap(*theCell) && isObject(*theCell)) {
-	if (inLVRA(*theCell)) {
-	  DEBUG_IOA( fprintf(output, "STACK(%d) (0x%x) is pointer into LVRA", 
-			     (int)((long)theCell-(long)&ar[1]), (int)(*theCell)));
-	} else {
-	  if (isProto((cast(Object)*theCell)->Proto)) {
-	    ProcessReference(theCell);
-	    CompleteScavenging();
-	  }
-	}
-      } else {
-#ifdef RTLAZY
-	if (isLazyRef(*theCell)) {
-	  /* Assumes that the only negative values 
-	   * on sparcstack are danglers. 
-	   */
-	  ProcessReference(theCell);
-	}
-#endif
-      }
+      func(theCell, *theCell);
+      CompleteScavenging();
     }
 }
 
@@ -1087,12 +1037,14 @@ void ProcessStack()
 	  skipCparams = TRUE;
 	}
       }
-      ProcessAR(theAR, (struct RegWin *) theAR->fp);
+      ProcessAR(theAR, (struct RegWin *) theAR->fp, DoIOACell);
       skipCparams=FALSE;
       DEBUG_CODE(lastAR = theAR);
     }
-    DEBUG_CODE(if (BottomAR) Claim(lastAR==BottomAR, "lastAR==BottomAR");
-	       else BottomAR=lastAR;
+    DEBUG_CODE(if (BottomAR)
+               Claim(lastAR==BottomAR, "lastAR==BottomAR");
+               else
+               BottomAR=lastAR;
 	       );
     DEBUG_STACK(fprintf(output, " *****  End of trace  *****\n"));
 }
@@ -1101,7 +1053,7 @@ void ProcessStack()
 GLOBAL(long lastPC)=0;
 #endif
 
-void ProcessStackObj(struct StackObject *theStack)
+void ProcessStackObj(struct StackObject *theStack, CellProcessFunc func)
 {
     struct RegWin *theAR;
 #ifdef RTDEBUG
@@ -1135,7 +1087,7 @@ void ProcessStackObj(struct StackObject *theStack)
 	Claim(&theStack->Body[1] <= (long *) theAR
 	      && (long *) theAR <= &theStack->Body[theStack->StackSize],
 	      "ProcessStackObj: theAR in StackObject");
-	ProcessAR(theAR, (struct RegWin *) (theAR->fp + delta));
+	ProcessAR(theAR, (struct RegWin *) (theAR->fp + delta), func);
       }
 
     DEBUG_STACKOBJ(fprintf(output, " *-*-* End StackObject *-*-*\n");
@@ -1172,16 +1124,12 @@ void ProcessStackPart(long *low, long *high)
     if(inBetaHeap( (ref(Object))*current)){
       theCell = (handle(Object)) current;
       theObj  = *theCell;
-      if( isObject( theObj) ){
-	if(inLVRA(theObj)){
-	  DEBUG_STACK(fprintf( output, "(STACK(%d) is pointer into LVRA)", current-low));
-	} else {
+      if (isObject(theObj)) {
 	  DEBUG_STACK({ fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
 			PrintRef(*(Object**)current);
 		      });
 	  ProcessReference( (handle(Object))current);
 	  CompleteScavenging();
-	}
       } else {
 	DEBUG_CODE({
 	  if (!isValRep(theObj)){
@@ -1292,38 +1240,32 @@ void ProcessStack()
     DEBUG_STACK(fprintf(output, " *****  End of trace  *****\n"));
 }
 
-void ProcessStackObj(theStack)
-     struct StackObject *theStack;
-{ ptr(long)        stackptr; 
-  handle(Object)   theCell; 
-  ptr(long)        theEnd;
+void ProcessStackObj(StackObject *theStack, CellProcessFunc func)
+{ 
+  long    *stackptr; 
+  Object **theCell; 
+  long    *theEnd;
 	    
   DEBUG_IOA( Claim(theStack->StackSize <= theStack->BodySize,
 		   "ProcessReference: StackObjectType: Stack > Object") );
 	    
   theEnd = &theStack->Body[0] + theStack->StackSize;
 	    
-  for( stackptr = &theStack->Body[0]; stackptr < theEnd; stackptr++){
-    if( inBetaHeap( (ref(Object))*stackptr)){
-      theCell = (handle(Object)) stackptr;
-      if( isObject( *theCell ) )
-	ProcessReference( (handle(Object))stackptr);
-    }else{
-      switch( *stackptr ){
-      case -8: stackptr++;
-      case -7: stackptr++;
-      case -6: stackptr++;
-      case -5: stackptr++;
-	break;
-#ifdef RTLAZY
-      default:
+  for (stackptr = &theStack->Body[0]; stackptr < theEnd; stackptr++) {
+    switch (*stackptr) {
+    case -8: stackptr++;
+    case -7: stackptr++;
+    case -6: stackptr++;
+    case -5: stackptr++;
+      break;
+    default:
+      DEBUG_LAZY({
 	if (isLazyRef (*stackptr)){
-	  /* Dangling reference. */
-	  DEBUG_LAZY(fprintf(output, "dangler on stack: %d\n", (int)*stackptr));
-	  ProcessReference ((handle(Object))stackptr);
+	  fprintf(output, "dangler on stack: %d\n", (int)*stackptr);
 	}
-#endif
-      }
+      });
+      theCell = (Object**) stackptr;
+      func(theCell, *theCell);
     }
   }
 }
@@ -1349,8 +1291,6 @@ void PrintRef(ref(Object) ref)
 	  fprintf(output, " (is in IOA)");
 	if (inAOA(ref)) 
 	  fprintf(output, " (in in AOA)");
-	if (inLVRA(ref)) 
-	  fprintf(output, " (is in LVRA)");
 	if (ToSpace<=(long*)ref && (long*)ref<ToSpaceLimit)
 	  fprintf(output, " (is in ToSpace!)");
       }
@@ -1376,12 +1316,8 @@ void PrintStackPart(long *low, long *high)
       theCell = (handle(Object)) current;
       theObj  = *theCell;
       if( isObject( theObj) ){
-	if(inLVRA(theObj)){
-	  fprintf(output, "(STACK(%d) is pointer into LVRA)", current-low);
-	} else {
 	  fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
 	  PrintRef(*(Object**)current);
-	}
       } else {
 	if (!isValRep(theObj)){
 	  fprintf(output, "*** SUSPICIOUS REFERENCE ON STACK: 0x%08x: 0x%08x", 
@@ -1524,8 +1460,6 @@ void PrintRef(ref(Object) ref)
 	    fprintf(output, " (is in IOA)");
 	  if (inAOA(ref)) 
 	    fprintf(output, " (in in AOA)");
-	  if (inLVRA(ref)) 
-	    fprintf(output, " (is in LVRA)");
 	  if (ToSpace<=(long*)ref && (long*)ref<ToSpaceLimit)
 	    fprintf(output, " (is in ToSpace!)");
 	} else {
@@ -1666,13 +1600,6 @@ void PrintStack()
    
   fprintf(output, " *****  PrintStack: End of trace  *****\n");
   
-}
-
-void CheckForLVRA(int reg, char *desc)
-{
-  DEBUG_IOA(if (inBetaHeap(cast(Object)(reg)) 
-		&& inLVRA(cast(Object)(reg)))
-	    fprintf(output, "ProcessAR: %s (0x%x) is pointer into LVRA\n",desc,reg));
 }
 
 #endif /* sparc */

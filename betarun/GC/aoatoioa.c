@@ -43,7 +43,7 @@ static void AOAtoIOAReAlloc(void)
 
   /* Save the old table. */
   ref(Block) oldBlock      = AOAtoIOAtable;
-  long        oldBlockSize  = AOAtoIOAtableSize;
+  long       oldBlockSize  = AOAtoIOAtableSize;
   
   /* Exit if we can't find a new entry in prims. */
   if (primes[++prim_index] == 0) 
@@ -134,8 +134,6 @@ void AOAtoIOAInsert(handle( Object) theCell)
 	  fprintf(output, " (is in IOA)");
 	if (inAOA(theCell)) 
 	  fprintf(output, " (in in AOA)");
-	if (inLVRA((Object*)theCell)) 
-	  fprintf(output, " (is in LVRA)");
 	if (ToSpace<=(long*)theCell && (long*)theCell<ToSpaceLimit)
 	  fprintf(output, " (is in ToSpace!)");
       }
@@ -143,11 +141,19 @@ void AOAtoIOAInsert(handle( Object) theCell)
       Illegal(); /* useful to break in */
     });
 
+#ifdef RTDEBUG    
+    if (*(long*)theCell & 7) {
+      fprintf(output, "\n*theCell is not 8-aligned. Proto=0x%08X\n",
+	      (int)((*(Object**)theCell)->Proto));
+      Illegal(); /* useful to break in */
+    }
+#endif
+            
 #ifdef RTLAZY
     if ( isNegativeRef(*theCell)) {
-      /* This could happen if called from extobjinterface.assignRef. */
-      negAOArefsINSERT ((long) theCell);
-      return;
+        /* This could happen if called from extobjinterface.assignRef. */
+        negAOArefsINSERT ((long) theCell);
+        return;
     }
 #endif
 
@@ -249,11 +255,12 @@ void AOAtoIOACheck(void)
 { 
     long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
     
-    /* fprintf(output, "#AOAtoIOACheck: AOAtoIOAtableSize: %d\n", AOAtoIOAtableSize); */ 
+    /* fprintf(output, "#AOAtoIOACheck: AOAtoIOAtableSize: %d\n", (int)AOAtoIOAtableSize); */
     for(i=0; i<AOAtoIOAtableSize; i++){
 	if (pointer[i]){
-	    /* fprintf( output, "0x%x\n", pointer[i]); */
-	    Claim( inAOA( pointer[i]),"AOAtoIOACheck: *pointer in AOA" );
+	  /* fprintf( output, "0x%x\n", (int)pointer[i]); */
+	  Claim( inAOA( pointer[i]),"AOAtoIOACheck: *pointer in AOA" );
+	  Claim((((*(long*)(pointer[i])) & 7)==0), "AOAToIOACheck: **pointer 8 aligned");
 	}
     }
 }
