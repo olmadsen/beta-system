@@ -3,6 +3,7 @@ INCLUDE '~beta/basiclib/textUtils';
 INCLUDE '~beta/basiclib/file';
 INCLUDE '~beta/sysutils/pathhandler';
 INCLUDE '~beta/process/streamgenerator';
+INCLUDE '~beta/sysutils/objinterface';
 INCLUDE 'IMAPparser';
 INCLUDE 'mimeDecoders';
 (******************************************************************
@@ -252,21 +253,55 @@ IMAP: system
           for);
           '\nDone: fetching headers' -> ilog.putline;
           (if lastNonDeleted > 0 then
-              (lastNonDeleted,false) -> selectHeader;
-              (lastNonDeleted,true) -> xsendFetch -> F[];
-              loop:
-                (#
-                do sender[] -> receiver.waitResponse -> C[];
-                   (if true
-                    // C.isCompleted then
-                    // C.isMsg then
-                       C[] -> msg[];                       
-                       msg.message -> setMessageBody;
-                       restart loop
-                if)#)
+              (if true then
+                  lastNonDeleted -> sendShowMessage
+               else
+                  (lastNonDeleted,false) -> selectHeader;
+                  (lastNonDeleted,true) -> xsendFetch -> F[];
+                  loop:
+                    (#
+                    do sender[] -> receiver.waitResponse -> C[];
+                       (if true
+                        // C.isCompleted then
+                        // C.isMsg then
+                           C[] -> msg[];                       
+                           msg.message -> setMessageBody;
+                           restart loop
+                    if)#)
+              if);
           if);
           'EXIST: done SHOW lastNonDeleted'->  ilog.putline;
        #);
+     showMessage: xcommand
+       (# msgNo: @integer;
+          F: ^| FETCH;
+          C: ^response;
+          msg: ^messageResponse
+       enter msgNo
+       do (msgNo,true) -> xsendFetch -> F[];
+          loop:
+            (#
+            do this(showMessage)[] 
+                 -> objectToComponent 
+                 -> receiver.waitResponse -> C[];
+               (if true
+                // C.isCompleted then
+                // C.isMsg then
+                   C[] -> msg[];
+                   msg.message -> setMessageBody;
+                   restart loop
+               if)
+            #)
+       #);
+     sendShowMessage:
+       (# msgNo: @integer;
+          S: ^| showMessage
+       enter msgNo
+       do &|showMessage[] -> S[];
+          msgNo -> S.msgNo;
+          S[] -> fork
+       #);
+     
      selectAndFetchMailBox: xcommand
        (# mbox: ^text;
           C: ^| xcommand
