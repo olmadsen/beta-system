@@ -70,7 +70,7 @@
  * Called from BETA to generate callback code, i.e. the code
  * called from C before re-entering BETA world.
  */
-void *CopyCPP(struct Structure *theStruct) 
+void *CopyCPP(Structure *theStruct) 
 {
   unsigned long entry;     /* Beta code stub, e.g. _foo */
   unsigned long strucaddr; /* Address of struc */
@@ -92,7 +92,7 @@ void *CopyCPP(struct Structure *theStruct)
   }
 
 
-  CBFATop->theStruct = theStruct;
+  CBFATop->theStruct= theStruct;
 
   entry     = (unsigned long)theStruct->iProto->CBR;
   strucaddr = (unsigned long)&CBFATop->theStruct;
@@ -111,7 +111,7 @@ void *CopyCPP(struct Structure *theStruct)
  * Called from BETA to generate callback code, i.e. the code
  * called from Pascal before re-entering BETA world.
  */
-void *CopyPPP(struct Structure *theStruct, 
+void *CopyPPP(Structure *theStruct, 
 	      long size, 
 	      long univProcInfo
 	      )
@@ -135,7 +135,7 @@ void *CopyPPP(struct Structure *theStruct,
     CBFArelloc();
   }
 
-  CBFATop->theStruct = theStruct;
+  CBFATop->theStruct= theStruct;
 
   entry     = (unsigned long)theStruct->iProto->CBR;
   strucaddr = (unsigned long)&CBFATop->theStruct;
@@ -163,17 +163,17 @@ void *CopyPPP(struct Structure *theStruct,
  * Called from BETA callback stub to allocate item and setup
  * stack to make GC handle callback frames on stack.
  */
-struct Item *AlloSICB(struct Structure **struchandle, long *SP)
+Item *AlloSICB(Structure **struchandle, long *SP)
 {
   /* Put ActiveCallBackFrame on stack */
 
   /* inlined AlloSI */
-  struct Item *ss;
-  struct Structure *struc = *struchandle;
+  Item *ss;
+  Structure *struc = *struchandle;
   DEBUG_CODE(NumAlloSICB++);
   Ck(struc);
   Ck(struc->iOrigin);
-  ss = AlloI((struct Object *)struc->iOrigin, struc->iProto, SP);
+  ss = AlloI((Object *)struc->iOrigin, struc->iProto, SP);
   Ck(ss);
 
 #ifdef RTVALHALLA

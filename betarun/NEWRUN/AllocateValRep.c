@@ -8,10 +8,10 @@
 
 void AlloVR1(unsigned offset /* in bytes */, 
 	     int range, 
-	     struct Object* theObj, 
+	     Object* theObj, 
 	     long *SP)
 {
-    struct ValRep *theRep=0;
+    ValRep *theRep=0;
     register unsigned size;
 
     DEBUG_CODE(NumAlloVR1++);
@@ -22,15 +22,15 @@ void AlloVR1(unsigned offset /* in bytes */,
     size = ByteRepSize(range);
 
     if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
-	theRep = (struct ValRep *)LVRACAlloc(ByteRepPTValue, range);
+	theRep = (ValRep *)LVRACAlloc(ByteRepPTValue, range);
 	if (theRep) {
-	    *(struct ValRep **)((char *)theObj + offset) = theRep;
+	    *(ValRep **)((char *)theObj + offset) = theRep;
 	    return;
 	}
     }
 
     push(theObj);
-    theRep = (struct ValRep *)IOAalloc(size, SP);
+    theRep = (ValRep *)IOAalloc(size, SP);
     if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
     pop(theObj);
   
@@ -39,7 +39,7 @@ void AlloVR1(unsigned offset /* in bytes */,
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
     
-    AssignReference((long *)((char *)theObj + offset), (struct Item *)theRep);
+    AssignReference((long *)((char *)theObj + offset), (Item *)theRep);
 
     Ck(theObj);
 
@@ -47,10 +47,10 @@ void AlloVR1(unsigned offset /* in bytes */,
 
 void AlloVR2(unsigned offset /* in bytes */, 
 	     int range, 
-	     struct Object* theObj, 
+	     Object* theObj, 
 	     long *SP)
 {
-    struct ValRep *theRep=0;
+    ValRep *theRep=0;
     register unsigned size;
 
     DEBUG_CODE(NumAlloVR2++);
@@ -61,15 +61,15 @@ void AlloVR2(unsigned offset /* in bytes */,
     size = ShortRepSize(range);
 
     if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
-	theRep = (struct ValRep *)LVRACAlloc(ShortRepPTValue, range);
+	theRep = (ValRep *)LVRACAlloc(ShortRepPTValue, range);
 	if (theRep) {
-	    *(struct ValRep **)((char *)theObj + offset) = theRep;	   
+	    *(ValRep **)((char *)theObj + offset) = theRep;	   
 	    return;
 	}
     }
 
     push(theObj);
-    theRep = (struct ValRep *)IOAalloc(size, SP);
+    theRep = (ValRep *)IOAalloc(size, SP);
     if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
     pop(theObj);
 
@@ -78,17 +78,17 @@ void AlloVR2(unsigned offset /* in bytes */,
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
     
-    AssignReference((long *)((char *)theObj + offset), (struct Item *)theRep);
+    AssignReference((long *)((char *)theObj + offset), (Item *)theRep);
 
     Ck(theObj);
 }
 
 void AlloVR4(unsigned offset /* in bytes */, 
 	     int range, 
-	     struct Object* theObj, 
+	     Object* theObj, 
 	     long *SP)
 {
-    struct ValRep *theRep=0;
+    ValRep *theRep=0;
     register unsigned size;
 
     DEBUG_CODE(NumAlloVR4++);
@@ -99,15 +99,15 @@ void AlloVR4(unsigned offset /* in bytes */,
     size = LongRepSize(range);
 
     if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
-	theRep = (struct ValRep *)LVRACAlloc(LongRepPTValue, range);
+	theRep = (ValRep *)LVRACAlloc(LongRepPTValue, range);
 	if (theRep) {
-	    *(struct ValRep **)((char *)theObj + offset) = theRep;
+	    *(ValRep **)((char *)theObj + offset) = theRep;
 	    return;
 	}
     }
 
     push(theObj);
-    theRep = (struct ValRep *)IOAalloc(size, SP);
+    theRep = (ValRep *)IOAalloc(size, SP);
     if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
     pop(theObj);
     
@@ -116,7 +116,7 @@ void AlloVR4(unsigned offset /* in bytes */,
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
 
-    AssignReference((long *)((char *)theObj + offset), (struct Item *)theRep);
+    AssignReference((long *)((char *)theObj + offset), (Item *)theRep);
 
     Ck(theObj);
 }
@@ -124,10 +124,10 @@ void AlloVR4(unsigned offset /* in bytes */,
 
 void AlloVR8(unsigned offset /* in bytes */, 
 	     int range, 
-	     struct Object* theObj, 
+	     Object* theObj, 
 	     long *SP)
 {
-    struct ValRep *theRep=0;
+    ValRep *theRep=0;
     register unsigned size;
 
     DEBUG_CODE(NumAlloVR8++);
@@ -138,15 +138,15 @@ void AlloVR8(unsigned offset /* in bytes */,
     size = DoubleRepSize(range);
 
     if (range > LARGE_REP_SIZE) {
-	theRep = (struct ValRep *)LVRACAlloc(DoubleRepPTValue, range);
+	theRep = (ValRep *)LVRACAlloc(DoubleRepPTValue, range);
 	if (theRep) {
-	   *(struct ValRep **)((char *)theObj + offset) = theRep;
+	   *(ValRep **)((char *)theObj + offset) = theRep;
 	    return;
 	}
     }
 
     push(theObj);
-    theRep = (struct ValRep *)IOAalloc(size, SP);
+    theRep = (ValRep *)IOAalloc(size, SP);
     if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
     pop(theObj);
 
@@ -155,7 +155,7 @@ void AlloVR8(unsigned offset /* in bytes */,
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
 
-    AssignReference((long *)((char *)theObj + offset), (struct Item *)theRep);
+    AssignReference((long *)((char *)theObj + offset), (Item *)theRep);
 
     Ck(theObj);
 }

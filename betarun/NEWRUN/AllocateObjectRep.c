@@ -7,18 +7,18 @@
 #include "crun.h"
 
 
-void AlloVRI(struct Object *origin,
-	     struct ProtoType *proto,
+void AlloVRI(Object *origin,
+	     ProtoType *proto,
 	     unsigned offset /* in bytes */, 
 	     int range, 
-	     struct Object* theObj, 
+	     Object* theObj, 
 	     long *SP)
 {
   /* AllocateObjectRepetitionReference: 
    * Allocate repetition of offline items
    */
-  struct ObjectRep *theRep=0;
-  struct Item *item;
+  ObjectRep *theRep=0;
+  Item *item;
   unsigned long size;
 
 #if 0
@@ -41,11 +41,11 @@ void AlloVRI(struct Object *origin,
   push(origin); 
   if (size>IOAMAXSIZE){
     DEBUG_AOA(fprintf(output, "AlloVRI allocates in AOA\n"));
-    theRep = (struct ObjectRep *)AOAcalloc(size, SP);
+    theRep = (ObjectRep *)AOAcalloc(size, SP);
     DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
   } 
   if (!theRep) {
-    theRep = (struct ObjectRep *)IOAalloc(size, SP);
+    theRep = (ObjectRep *)IOAalloc(size, SP);
     if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
   }
   pop(origin);
@@ -60,7 +60,7 @@ void AlloVRI(struct Object *origin,
   AssignReference(&theRep->iOrigin, origin);
 
   /* Assign the repetition into theObj */
-  AssignReference((long *)((char *)theObj + offset), (struct Item *)theRep);
+  AssignReference((long *)((char *)theObj + offset), (Item *)theRep);
 
   /* Allocate items and assign them into the repetition */
   while(--range>=0){
@@ -72,18 +72,18 @@ void AlloVRI(struct Object *origin,
 
 }
 
-void AlloVRC(struct Object *origin,
-	     struct ProtoType *proto,
+void AlloVRC(Object *origin,
+	     ProtoType *proto,
 	     unsigned offset /* in bytes */, 
 	     int range, 
-	     struct Object* theObj, 
+	     Object* theObj, 
 	     long *SP)
 {
   /* AllocateObjectRepetitionComponent: 
    * Allocate repetition of offline components
    */
-  struct ObjectRep *theRep=0;
-  struct Component *comp;
+  ObjectRep *theRep=0;
+  Component *comp;
   unsigned long size;
 
   DEBUG_CODE(NumAlloVRC++);
@@ -98,11 +98,11 @@ void AlloVRC(struct Object *origin,
   push(origin); 
   if (size>IOAMAXSIZE){
     DEBUG_AOA(fprintf(output, "AlloVRC allocates in AOA\n"));
-    theRep = (struct ObjectRep *)AOAcalloc(size, SP);
+    theRep = (ObjectRep *)AOAcalloc(size, SP);
     DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
   } 
   if (!theRep){
-    theRep = (struct ObjectRep *)IOAalloc(size, SP);
+    theRep = (ObjectRep *)IOAalloc(size, SP);
     if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
   }
   pop(origin);
@@ -117,13 +117,13 @@ void AlloVRC(struct Object *origin,
   AssignReference(&theRep->iOrigin, origin);
 
   /* Assign the repetition into theObj */
-  AssignReference((long *)((char *)theObj + offset), (struct Item *)theRep);
+  AssignReference((long *)((char *)theObj + offset), (Item *)theRep);
 
   /* Allocate components and assign them into the repetition */
   while(--range>=0){
     Protect(theRep, comp = AlloC(theRep->iOrigin, proto, SP));
     AssignReference((long *)((long)&theRep->Body + range*4), 
-		    (struct Item *)comp);
+		    (Item *)comp);
   }
 
   Ck(theRep);

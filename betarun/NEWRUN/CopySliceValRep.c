@@ -6,15 +6,15 @@
 #include "beta.h"
 #include "crun.h"
 
-void CCopySVR1(struct ValRep *theRep,
-	       struct Item *theItem,
+void CCopySVR1(ValRep *theRep,
+	       Item *theItem,
 	       unsigned offset, /* in longs */
 	       unsigned low,
 	       unsigned high,
 	       long *SP
 	       )
 {
-  struct ValRep *newRep=0;
+  ValRep *newRep=0;
   register long i, size, range;
   
   DEBUG_CODE(NumCopySVR1++);
@@ -35,15 +35,15 @@ void CCopySVR1(struct ValRep *theRep,
 
   if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
     /* newRep allocated in AOA */
-    newRep = (struct ValRep *)LVRAAlloc(ByteRepPTValue, range);
-    *(struct ValRep **)((long *)theItem + offset) = newRep;
+    newRep = (ValRep *)LVRAAlloc(ByteRepPTValue, range);
+    *(ValRep **)((long *)theItem + offset) = newRep;
   } else {
     /* Allocate in IOA */
     size  = ByteRepSize(range);
     
     push(theItem);
     push(theRep); 
-    newRep = (struct ValRep *)IOAalloc(size, SP);
+    newRep = (ValRep *)IOAalloc(size, SP);
     if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
     pop(theRep);
     pop(theItem);
@@ -54,7 +54,7 @@ void CCopySVR1(struct ValRep *theRep,
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
 
-    AssignReference((long *)theItem + offset, (struct Item *)newRep);
+    AssignReference((long *)theItem + offset, (Item *)newRep);
   }
   
   /* Copy the body part of the repetition. */
@@ -73,15 +73,15 @@ void CCopySVR1(struct ValRep *theRep,
 
 } /* CopySVR1 */
 
-void CCopySVR2(struct ValRep *theRep,
-	       struct Item *theItem,
+void CCopySVR2(ValRep *theRep,
+	       Item *theItem,
 	       unsigned offset, /* in longs */
 	       unsigned low,
 	       unsigned high,
 	       long *SP
 	       )
 {
-  struct ValRep *newRep=0;
+  ValRep *newRep=0;
   register long i, size, range;
   
   DEBUG_CODE(NumCopySVR2++);
@@ -101,15 +101,15 @@ void CCopySVR2(struct ValRep *theRep,
   if (range < 0) range = 0;
 
   if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
-    newRep = (struct ValRep *)LVRAAlloc(ShortRepPTValue, range);
-    *(struct ValRep **)((long *)theItem + offset) = newRep;
+    newRep = (ValRep *)LVRAAlloc(ShortRepPTValue, range);
+    *(ValRep **)((long *)theItem + offset) = newRep;
   } else {
     /* Allocate in IOA */
     size  = ShortRepSize(range);
     
     push(theItem);
     push(theRep); 
-    newRep = (struct ValRep *)IOAalloc(size, SP);
+    newRep = (ValRep *)IOAalloc(size, SP);
     if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
     pop(theRep);
     pop(theItem);
@@ -120,7 +120,7 @@ void CCopySVR2(struct ValRep *theRep,
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
 
-    AssignReference((long *)theItem + offset, (struct Item *)newRep);
+    AssignReference((long *)theItem + offset, (Item *)newRep);
   }
   
   /* Copy the body part of the repetition. */
@@ -137,15 +137,15 @@ void CCopySVR2(struct ValRep *theRep,
 } /* CopySVR2 */
 
 
-void CCopySVR4(struct ValRep *theRep,
-	       struct Item *theItem,
+void CCopySVR4(ValRep *theRep,
+	       Item *theItem,
 	       unsigned offset, /* in longs */
 	       unsigned low,
 	       unsigned high,
 	       long *SP
 	       )
 {
-  struct ValRep *newRep=0;
+  ValRep *newRep=0;
   register long i, size, range;
   
   DEBUG_CODE(NumCopySVR4++);
@@ -165,15 +165,15 @@ void CCopySVR4(struct ValRep *theRep,
   if (range < 0) range = 0;
 
   if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
-    newRep = (struct ValRep *)LVRAAlloc(LongRepPTValue, range);
-    *(struct ValRep **)((long *)theItem + offset) = newRep;
+    newRep = (ValRep *)LVRAAlloc(LongRepPTValue, range);
+    *(ValRep **)((long *)theItem + offset) = newRep;
   } else {
     /* Allocate in IOA */
     size  = LongRepSize(range);
     
     push(theItem);
     push(theRep);
-    newRep = (struct ValRep *)IOAalloc(size, SP);
+    newRep = (ValRep *)IOAalloc(size, SP);
     if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
     pop(theRep);
     pop(theItem);
@@ -184,7 +184,7 @@ void CCopySVR4(struct ValRep *theRep,
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
   
-    AssignReference((long *)theItem + offset, (struct Item *)newRep);
+    AssignReference((long *)theItem + offset, (Item *)newRep);
   }
   
   /* Copy the body part of the repetition. */
@@ -197,15 +197,15 @@ void CCopySVR4(struct ValRep *theRep,
 } /* CopySVR4 */
 
 
-void CCopySVR8(struct ValRep *theRep,
-	       struct Item *theItem,
+void CCopySVR8(ValRep *theRep,
+	       Item *theItem,
 	       unsigned offset, /* in longs */
 	       unsigned low,
 	       unsigned high,
 	       long *SP
 	       )
 {
-  struct ValRep *newRep=0;
+  ValRep *newRep=0;
   register long i, size, range;
   
   DEBUG_CODE(NumCopySVR8++);
@@ -225,15 +225,15 @@ void CCopySVR8(struct ValRep *theRep,
   if (range < 0) range = 0;
 
   if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
-    newRep = (struct ValRep *)LVRAAlloc(DoubleRepPTValue, range);
-    *(struct ValRep **)((long *)theItem + offset) = newRep;
+    newRep = (ValRep *)LVRAAlloc(DoubleRepPTValue, range);
+    *(ValRep **)((long *)theItem + offset) = newRep;
   } else{
     /* Allocate in IOA */
     size  = DoubleRepSize(range);
     
     push(theItem);
     push(theRep);
-    newRep = (struct ValRep *)IOAalloc(size, SP);
+    newRep = (ValRep *)IOAalloc(size, SP);
     if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
     pop(theRep);
     pop(theItem);
@@ -244,7 +244,7 @@ void CCopySVR8(struct ValRep *theRep,
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
   
-    AssignReference((long *)theItem + offset, (struct Item *)newRep);
+    AssignReference((long *)theItem + offset, (Item *)newRep);
   }
   
   /* Copy the body part of the repetition. */
@@ -262,15 +262,15 @@ void CCopySVR8(struct ValRep *theRep,
 
 
 
-void CCopySVRI(struct ObjectRep *theRep,
-	       struct Item *theItem,
+void CCopySVRI(ObjectRep *theRep,
+	       Item *theItem,
 	       unsigned offset, /* in longs */
 	       unsigned low,
 	       unsigned high,
 	       long *SP
 	       )
 {
-  struct ObjectRep *newRep=0;
+  ObjectRep *newRep=0;
   register long i, size, range;
   
   DEBUG_CODE(NumCopySVRI++);
@@ -294,11 +294,11 @@ void CCopySVRI(struct ObjectRep *theRep,
   push(theItem);
   if (size>IOAMAXSIZE){
     DEBUG_AOA(fprintf(output, "CopySVRI allocates in AOA\n"));
-    newRep = (struct ObjectRep *)AOAalloc(size, SP);
+    newRep = (ObjectRep *)AOAalloc(size, SP);
     DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
   } 
   if (!newRep){
-    newRep = (struct ObjectRep *)IOAalloc(size, SP);
+    newRep = (ObjectRep *)IOAalloc(size, SP);
     if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
   }
   pop(theItem);
@@ -316,22 +316,22 @@ void CCopySVRI(struct ObjectRep *theRep,
     AssignReference(&newRep->Body[i], theRep->Body[i+low-theRep->LowBorder]);
   }
   
-  AssignReference((long *)theItem + offset, (struct Item *)newRep);
+  AssignReference((long *)theItem + offset, (Item *)newRep);
 
   Ck(theRep); Ck(theItem); Ck(newRep);
 
 } /* CopySVRI */
 
 
-void CCopySVRC(struct ObjectRep *theRep,
-	       struct Item *theItem,
+void CCopySVRC(ObjectRep *theRep,
+	       Item *theItem,
 	       unsigned offset, /* in longs */
 	       unsigned low,
 	       unsigned high,
 	       long *SP
 	       )
 {
-  struct ObjectRep *newRep=0;
+  ObjectRep *newRep=0;
   register long i, size, range;
   
   DEBUG_CODE(NumCopySVRC++);
@@ -355,11 +355,11 @@ void CCopySVRC(struct ObjectRep *theRep,
   push(theItem);
   if (size>IOAMAXSIZE){
     DEBUG_AOA(fprintf(output, "CopySVRC allocates in AOA\n"));
-    newRep = (struct ObjectRep *)AOAalloc(size, SP);
+    newRep = (ObjectRep *)AOAalloc(size, SP);
     DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
   } 
   if (!newRep){
-    newRep = (struct ObjectRep *)IOAalloc(size, SP);
+    newRep = (ObjectRep *)IOAalloc(size, SP);
     if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
   }
   pop(theItem);
@@ -377,7 +377,7 @@ void CCopySVRC(struct ObjectRep *theRep,
     AssignReference(&newRep->Body[i], theRep->Body[i+low-theRep->LowBorder]);
   }
   
-  AssignReference((long *)theItem + offset, (struct Item *)newRep);
+  AssignReference((long *)theItem + offset, (Item *)newRep);
 
   Ck(theRep); Ck(theItem); Ck(newRep);
 

@@ -15,7 +15,7 @@ void DoGC(long *SP) /* The one called directly from betaenv */
 }
 #endif
 
-void doGC(long *SP, struct Object *this, unsigned long NumLongs) /* The one called from IOA(c)alloc */
+void doGC(long *SP, Object *this, unsigned long NumLongs) /* The one called from IOA(c)alloc */
 {
   ReqObjectSize = NumLongs;
   CurrentObject = this;

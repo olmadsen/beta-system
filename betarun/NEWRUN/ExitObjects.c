@@ -7,9 +7,9 @@
 #include "crun.h"
   
 long *ExO(long *jumpAdr, 
-	  struct Object *exitObj, 
+	  Object *exitObj, 
 	  long *PC, 
-	  struct Object* this, 
+	  Object* this, 
 	  long *SP) 
 {
   long *CSP = CompSP;
@@ -60,22 +60,22 @@ long *ExO(long *jumpAdr,
       }
       /* Continue down the stack */
       PC = (long*)GetPC(SP);
-      this = *((struct Object **)SP-DYN_OFF);       
+      this = *((Object **)SP-DYN_OFF);       
       TRACE_EXO();
       continue;
     }
     
     /* Check for passing of a DoPart object */
     if ((long)this->Proto == (long)DopartObjectPTValue) {
-      this = ((struct DopartObject *)this)->Origin;
+      this = ((DopartObject *)this)->Origin;
       TRACE_EXO();
       continue;
     }
     
     /* Check for passing of a component */
     if ((long)this->Proto == (long)ComponentPTValue) {
-      struct Component *comp = (struct Component *)this;
-      struct Component *callerComp = comp->CallerComp;
+      Component *comp = (Component *)this;
+      Component *callerComp = comp->CallerComp;
       DEBUG_CODE(fprintf(output, "ExO: passing comp 0x%x\n", (int)comp); fflush(output));
       SP     = (long*) *--CSP; CSP--; /* count down one before reading and one after */
 #ifdef ppcmac
@@ -112,7 +112,7 @@ long *ExO(long *jumpAdr,
 #endif
       /* SP now points to end of previous frame, i.e. bottom of top frame */
       /* normal dyn from the start of this frame gives current object */
-      this = *((struct Object **)SP-DYN_OFF); 
+      this = *((Object **)SP-DYN_OFF); 
       /* RTS from the start of this frame gives PC */
       PC = (long*)GetPC(SP);
       TRACE_EXO();

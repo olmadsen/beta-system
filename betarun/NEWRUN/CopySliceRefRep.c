@@ -8,15 +8,15 @@
 
 /* Copy a slice of a Reference Repetition.*/
 
-void CCopySRR(struct RefRep *theRep,
-	      struct Item *theItem,
+void CCopySRR(RefRep *theRep,
+	      Item *theItem,
 	      unsigned offset, /* i ints */
 	      unsigned low,
 	      unsigned high,
 	      long *SP
 	      )
 {
-    struct RefRep *newRep=0;
+    RefRep *newRep=0;
     register long range;
     register long i;
     unsigned long size;
@@ -42,11 +42,11 @@ void CCopySRR(struct RefRep *theRep,
     size = RefRepSize(range);
     if (size>IOAMAXSIZE){
       DEBUG_AOA(fprintf(output, "CopySRR allocates in AOA\n"));
-      newRep = (struct RefRep *)AOAalloc(size, SP);
+      newRep = (RefRep *)AOAalloc(size, SP);
       DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
     }
     if (!newRep) {
-      newRep = (struct RefRep *)IOAalloc(size, SP);
+      newRep = (RefRep *)IOAalloc(size, SP);
       if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
     }
     pop(theRep);
@@ -65,7 +65,7 @@ void CCopySRR(struct RefRep *theRep,
       AssignReference(&newRep->Body[i], theRep->Body[i+low-theRep->LowBorder]);
     }
     
-    AssignReference((long *)theItem + offset, (struct Item *)newRep);
+    AssignReference((long *)theItem + offset, (Item *)newRep);
 
     Ck(theRep); Ck(theItem); Ck(newRep); 
 }

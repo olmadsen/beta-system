@@ -12,76 +12,76 @@
  */
 
 /* Routines that may cause GC */
-extern struct Component *   AlloC(struct Object *origin, struct ProtoType *proto, long *SP);
-extern struct DopartObject *AlloDO(unsigned size, struct Object *this, long *SP);
-extern struct Item *	    AlloI(struct Object *origin, struct ProtoType *proto, long *SP);
-extern struct Item *	    AlloH(struct ProtoType *proto, long *SP);
-extern void            	    AlloRR (unsigned offset /* in bytes */, int range, struct Object* theObj, long *SP);
-extern void            	    AlloVR1(unsigned offset /* in bytes */, int range, struct Object* theObj, long *SP);
-extern void 		    AlloVR2(unsigned offset /* in bytes */, int range, struct Object* theObj, long *SP);
-extern void		    AlloVR4(unsigned offset /* in bytes */, int range, struct Object* theObj, long *SP);
-extern void		    AlloVR8(unsigned offset /* in bytes */, int range, struct Object* theObj, long *SP);
-extern void                 AlloVRI(struct Object *origin, struct ProtoType *proto, unsigned offset /* in bytes */, int range, struct Object* theObj, long *SP);
-extern void                 AlloVRC(struct Object *origin, struct ProtoType *proto, unsigned offset /* in bytes */, int range, struct Object* theObj, long *SP);
-extern struct ValRep *	    CopyCT(unsigned char *textPtr, long *SP);
-extern void 		    CopyRR(struct RefRep *theRep, struct Object* theObj, unsigned offset, long *SP);
-extern void 		    CopySRR(struct RefRep *theRep, struct Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
-extern void                 CopySVR1(struct ValRep *theRep, struct Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
-extern void                 CopySVR2(struct ValRep *theRep, struct Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
-extern void                 CopySVR4(struct ValRep *theRep, struct Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
-extern void                 CopySVR8(struct ValRep *theRep, struct Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
-extern void                 CopySVRI(struct ObjectRep *theRep, struct Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
-extern void                 CopySVRC(struct ObjectRep *theRep, struct Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
+extern Component *   AlloC(Object *origin, ProtoType *proto, long *SP);
+extern DopartObject *AlloDO(unsigned size, Object *this, long *SP);
+extern Item *	    AlloI(Object *origin, ProtoType *proto, long *SP);
+extern Item *	    AlloH(ProtoType *proto, long *SP);
+extern void            	    AlloRR (unsigned offset /* in bytes */, int range, Object* theObj, long *SP);
+extern void            	    AlloVR1(unsigned offset /* in bytes */, int range, Object* theObj, long *SP);
+extern void 		    AlloVR2(unsigned offset /* in bytes */, int range, Object* theObj, long *SP);
+extern void		    AlloVR4(unsigned offset /* in bytes */, int range, Object* theObj, long *SP);
+extern void		    AlloVR8(unsigned offset /* in bytes */, int range, Object* theObj, long *SP);
+extern void                 AlloVRI(Object *origin, ProtoType *proto, unsigned offset /* in bytes */, int range, Object* theObj, long *SP);
+extern void                 AlloVRC(Object *origin, ProtoType *proto, unsigned offset /* in bytes */, int range, Object* theObj, long *SP);
+extern ValRep *	    CopyCT(unsigned char *textPtr, long *SP);
+extern void 		    CopyRR(RefRep *theRep, Object* theObj, unsigned offset, long *SP);
+extern void 		    CopySRR(RefRep *theRep, Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
+extern void                 CopySVR1(ValRep *theRep, Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
+extern void                 CopySVR2(ValRep *theRep, Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
+extern void                 CopySVR4(ValRep *theRep, Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
+extern void                 CopySVR8(ValRep *theRep, Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
+extern void                 CopySVRI(ObjectRep *theRep, Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
+extern void                 CopySVRC(ObjectRep *theRep, Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
 
-extern void 		    CopySVR(struct ValRep *theRep, struct Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
-extern struct Item *	    CopyT(char *asciz, struct Item *theItem, unsigned offset, long *SP);
-extern void 		    CopyVR(struct ValRep *theRep, struct Object *theObj, unsigned offset, long *SP);
-extern void		    ExtRR(struct Object *theObj, unsigned offset, long add, long *SP);
-extern void		    ExtVR(struct Object *theObj, unsigned offset, long add, long *SP);
-extern void 		    MkTO(char *cText, struct Item *theItem, unsigned offset, long *SP);
-extern void		    NewRR(struct Object *theObj, long offset, long range, long *SP);
-extern void		    NewVR1(struct Object *theObj, long offset, long range, long *SP);
-extern void		    NewVR2(struct Object *theObj, long offset, long range, long *SP);
-extern void		    NewVR4(struct Object *theObj, long offset, long range, long *SP);
-extern void		    NewVR8(struct Object *theObj, long offset, long range, long *SP);
-extern void		    NewVRI(struct Object *theObj, long offset, long range, long *SP);
-extern void		    NewVRC(struct Object *theObj, long offset, long range, long *SP);
-extern struct Structure *   AlloS(struct Object *origin, struct ProtoType *proto, long *SP);
-extern struct Structure *   ThisS(struct Object *this, long *SP);
-extern struct Structure *   ObjS(struct Object *theObj, long *SP);
-extern struct Item *        AlloSICB(struct Structure **struchandle, long *SP);
-extern struct Item *	    AlloSI(long dummy, struct Structure *struc, long *SP);
-extern struct Component *   AlloSC(struct Structure *struc, long *SP);
-extern struct StackObject * AlloSO(unsigned size, long *SP);
-extern void                 Susp(struct Object *this, long prevSP, long RA, long SPz); /* calls AlloSO */
-extern long 		    leS(struct Structure *arg1, struct Structure *arg2, long *SP);
-extern long 		    geS(struct Structure *arg1, struct Structure *arg2, long *SP);
-extern long 		    gtS(struct Structure *arg1, struct Structure *arg2, long *SP);
-extern long 		    ltS(struct Structure *arg1, struct Structure *arg2, long *SP);
+extern void 		    CopySVR(ValRep *theRep, Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
+extern Item *	    CopyT(char *asciz, Item *theItem, unsigned offset, long *SP);
+extern void 		    CopyVR(ValRep *theRep, Object *theObj, unsigned offset, long *SP);
+extern void		    ExtRR(Object *theObj, unsigned offset, long add, long *SP);
+extern void		    ExtVR(Object *theObj, unsigned offset, long add, long *SP);
+extern void 		    MkTO(char *cText, Item *theItem, unsigned offset, long *SP);
+extern void		    NewRR(Object *theObj, long offset, long range, long *SP);
+extern void		    NewVR1(Object *theObj, long offset, long range, long *SP);
+extern void		    NewVR2(Object *theObj, long offset, long range, long *SP);
+extern void		    NewVR4(Object *theObj, long offset, long range, long *SP);
+extern void		    NewVR8(Object *theObj, long offset, long range, long *SP);
+extern void		    NewVRI(Object *theObj, long offset, long range, long *SP);
+extern void		    NewVRC(Object *theObj, long offset, long range, long *SP);
+extern Structure *   AlloS(Object *origin, ProtoType *proto, long *SP);
+extern Structure *   ThisS(Object *this, long *SP);
+extern Structure *   ObjS(Object *theObj, long *SP);
+extern Item *        AlloSICB(Structure **struchandle, long *SP);
+extern Item *	    AlloSI(long dummy, Structure *struc, long *SP);
+extern Component *   AlloSC(Structure *struc, long *SP);
+extern StackObject * AlloSO(unsigned size, long *SP);
+extern void                 Susp(Object *this, long prevSP, long RA, long SPz); /* calls AlloSO */
+extern long 		    leS(Structure *arg1, Structure *arg2, long *SP);
+extern long 		    geS(Structure *arg1, Structure *arg2, long *SP);
+extern long 		    gtS(Structure *arg1, Structure *arg2, long *SP);
+extern long 		    ltS(Structure *arg1, Structure *arg2, long *SP);
 
 /* Routines that do not cause GC */
-extern long 		    eqS(struct Structure *arg1, struct Structure *arg2);
-extern long 		    neS(struct Structure *arg1, struct Structure *arg2);
-extern void 		    Qua(struct Object *dstQuaOrigin, struct ProtoType *dstQuaProto, struct Object **theCell, long *SP);
+extern long 		    eqS(Structure *arg1, Structure *arg2);
+extern long 		    neS(Structure *arg1, Structure *arg2);
+extern void 		    Qua(Object *dstQuaOrigin, ProtoType *dstQuaProto, Object **theCell, long *SP);
 extern void		    Return(void);
 extern void		    SetArgValues(long argc, char *argv[]);
 extern void		    FailureExit();
-extern void		    HandleIndexErr(long *SP, struct Object *this);
-extern void *               CopyCPP(struct Structure *theStruct);
+extern void		    HandleIndexErr(long *SP, Object *this);
+extern void *               CopyCPP(Structure *theStruct);
 extern void 		    CinitT(void);
-extern char *		    CpkVT(struct ValRep *theRep, long *SP);
-extern char *		    CpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP);
+extern char *		    CpkVT(ValRep *theRep, long *SP);
+extern char *		    CpkSVT(ValRep *theRep, unsigned low, long high, long *SP);
 #ifdef MAC
-extern char *		    PpkVT(struct ValRep *theRep, long *SP);
+extern char *		    PpkVT(ValRep *theRep, long *SP);
 extern char *		    PpkCT(char *, long *SP);
-extern char *		    PpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP);
+extern char *		    PpkSVT(ValRep *theRep, unsigned low, long high, long *SP);
 #endif
-extern void 		    ChkRA(struct Object **theObjHandle);
-extern void                 Att(struct Object *this, struct Component *comp, long RA, long SPx);
-extern void                 SetProtos(struct ProtoType *basic, struct ProtoType *text);
+extern void 		    ChkRA(Object **theObjHandle);
+extern void                 Att(Object *this, Component *comp, long RA, long SPx);
+extern void                 SetProtos(ProtoType *basic, ProtoType *text);
 
 /* Garbage collector interface */
-extern void                 doGC(long *SP, struct Object *this, unsigned long NumLongs); /* The one called from IOA(c)alloc */
+extern void                 doGC(long *SP, Object *this, unsigned long NumLongs); /* The one called from IOA(c)alloc */
 
 #ifdef __GNUC__
 /* GCC supports inline functions.

@@ -8,10 +8,10 @@
 
 void AlloRR(unsigned offset /* in bytes */, 
 	    int range, 
-	    struct Object* theObj, 
+	    Object* theObj, 
 	    long *SP)
 {
-    struct RefRep *theRep=0;
+    RefRep *theRep=0;
     unsigned long size;
 
     DEBUG_CODE(NumAlloRR++);
@@ -23,11 +23,11 @@ void AlloRR(unsigned offset /* in bytes */,
     size = RefRepSize(range);
     if (size>IOAMAXSIZE){
       DEBUG_AOA(fprintf(output, "AlloRR allocates in AOA\n"));
-      theRep = (struct RefRep *)AOAcalloc(size, SP);
+      theRep = (RefRep *)AOAcalloc(size, SP);
       DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
     }
     if (!theRep) {
-      theRep = (struct RefRep *)IOAalloc(size, SP);
+      theRep = (RefRep *)IOAalloc(size, SP);
       if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
     }
     pop(theObj);
@@ -37,7 +37,7 @@ void AlloRR(unsigned offset /* in bytes */,
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
 
-    AssignReference((long *)((char *)theObj + offset), (struct Item *)theRep);
+    AssignReference((long *)((char *)theObj + offset), (Item *)theRep);
 
     Ck(theObj);
     Ck(theRep);

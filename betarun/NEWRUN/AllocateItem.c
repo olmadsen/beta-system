@@ -5,11 +5,11 @@
 
 #include "beta.h"
 #include "crun.h"
-extern void doGC(long *SP, struct Object *this, unsigned long NumLongs);
+extern void doGC(long *SP, Object *this, unsigned long NumLongs);
 
-struct Item *AlloI(struct Object *origin, struct ProtoType *proto, long *SP)
+Item *AlloI(Object *origin, ProtoType *proto, long *SP)
 {
-  struct Item *item=0;
+  Item *item=0;
   unsigned long size;
 
   DEBUG_CODE(int num = ++NumAlloI);
@@ -28,7 +28,7 @@ struct Item *AlloI(struct Object *origin, struct ProtoType *proto, long *SP)
   size = ItemSize(proto);
   if (size>IOAMAXSIZE){
     DEBUG_AOA(fprintf(output, "AlloI allocates in AOA\n"));
-    item = (struct Item *)AOAcalloc(size, SP);
+    item = (Item *)AOAcalloc(size, SP);
     DEBUG_AOA(if (!item) fprintf(output, "AOAcalloc failed\n"));
   }
   if (!item) {
@@ -41,7 +41,7 @@ struct Item *AlloI(struct Object *origin, struct ProtoType *proto, long *SP)
     while ((char *) IOATop+size > (char *)IOALimit) {
       doGC(SP, GetThis(SP), size / 4);
     }
-    item = (struct Item *)IOATop;
+    item = (Item *)IOATop;
     IOATopOff += size;
     DEBUG_CODE(zero_check(item->Body, size-headsize(Item)));
   }
@@ -66,19 +66,19 @@ struct Item *AlloI(struct Object *origin, struct ProtoType *proto, long *SP)
  * call G-entry ("AllocateHeap") 
  */
 
-struct Item *AlloH(struct ProtoType *proto, long *SP)
+Item *AlloH(ProtoType *proto, long *SP)
 {
-  struct Item *item=0;
+  Item *item=0;
   unsigned long size;
 
   size= ItemSize(proto);
   if (size>IOAMAXSIZE){
     DEBUG_AOA(fprintf(output, "AlloH allocates in AOA\n"));
-    item = (struct Item *) AOAcalloc(size, SP);
+    item = (Item *) AOAcalloc(size, SP);
     DEBUG_AOA(if (!item) fprintf(output, "AOAcalloc failed\n"));
   }
   if (!item){
-    item = (struct Item *) IOAalloc(size, SP);
+    item = (Item *) IOAalloc(size, SP);
   }
   
   /* The new Object is now allocated, but not initialized yet! */

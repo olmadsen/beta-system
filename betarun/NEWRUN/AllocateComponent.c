@@ -6,9 +6,9 @@
 #include "beta.h"
 #include "crun.h"
 
-struct Component *AlloC(struct Object *origin, struct ProtoType *proto, long *SP)
+Component *AlloC(Object *origin, ProtoType *proto, long *SP)
 {
-  struct Component *comp=0;
+  Component *comp=0;
   unsigned long size;
 
   DEBUG_CODE(NumAlloC++);
@@ -21,11 +21,11 @@ struct Component *AlloC(struct Object *origin, struct ProtoType *proto, long *SP
   size = ComponentSize(proto);
   if (size>IOAMAXSIZE){
     DEBUG_AOA(fprintf(output, "AlloC allocates in AOA\n"));
-    comp = (struct Component *)AOAcalloc(size, SP);
+    comp = (Component *)AOAcalloc(size, SP);
     DEBUG_AOA(if (!comp) fprintf(output, "AOAcalloc failed\n"));
   }
   if (!comp) {
-    comp = (struct Component *)IOAalloc(size, SP);
+    comp = (Component *)IOAalloc(size, SP);
     if (IOAMinAge!=0) comp->GCAttr = IOAMinAge;
   }
   pop(origin);
@@ -36,9 +36,9 @@ struct Component *AlloC(struct Object *origin, struct ProtoType *proto, long *SP
   comp->Proto = ComponentPTValue;
   /* comp->GCAttr set above if in IOA */
   
-  setup_item((struct Item *)&comp->Body, proto, origin);
+  setup_item((Item *)&comp->Body, proto, origin);
   
-  ((struct Item *)&comp->Body)->GCAttr = -((headsize(Component))/4);
+  ((Item *)&comp->Body)->GCAttr = -((headsize(Component))/4);
   
   if (proto->GenPart){
     Protect(comp, CallGPart((long)proto->GenPart, &comp->Body, SP));

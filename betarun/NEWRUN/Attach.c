@@ -24,8 +24,8 @@
 
 static void TerminateActiveComponent(void)
 { 
-  struct Component *comp = ActiveComponent;
-  struct Object *callerObj;
+  Component *comp = ActiveComponent;
+  Object *callerObj;
   long RA;
   long SPx;
   
@@ -57,12 +57,12 @@ static void TerminateActiveComponent(void)
 
 /*************************** Solution using doAtt *********************/
 
-void Att(struct Object *this, struct Component *comp, long RA, long SPx)
+void Att(Object *this, Component *comp, long RA, long SPx)
 {
   long SPy;
   int isFirst = (comp->CallerLSC == 0);
-  struct StackObject *sObj = comp->StackObj;
-  struct Object *topObject;
+  StackObject *sObj = comp->StackObj;
+  Object *topObject;
   long entry;
 
   DEBUG_CODE(NumAtt++);
@@ -139,9 +139,9 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
       * 1st call starts at M111FOO; arg0=comp, arg1=ca.
       * Subsequent attachments: arg0=SPz, arg1=ca;
       */
-     CallB((struct Object *)comp, 
-           (struct Object *)comp->Body, 
-	   ((struct Object *)comp->Body)->Proto->TopMpart, 
+     CallB((Object *)comp, 
+           (Object *)comp->Body, 
+	   ((Object *)comp->Body)->Proto->TopMpart, 
 	   0);    
   } else {
     long spSize = sObj->BodySize;
@@ -202,10 +202,10 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
 /************************ Solution NOT using doAtt *******************/
 
 
-void Att(struct Object *this, struct Component *comp, long RA, long SPx)
+void Att(Object *this, Component *comp, long RA, long SPx)
 {
-  struct Object *compObj;
-  struct StackObject *sObj=0;
+  Object *compObj;
+  StackObject *sObj=0;
   long address, arg0, arg1;
   long SPy,SPz;
   int isFirst,i;
@@ -259,7 +259,7 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
    
   isFirst = (comp->CallerLSC == 0);
   if (isFirst) { 
-    compObj = (struct Object *)comp->Body;
+    compObj = (Object *)comp->Body;
     address = (long)compObj->Proto->TopMpart;
     arg0    = (long)comp;
     arg1    = (long)compObj;
@@ -326,7 +326,7 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
     ValhallaOnProcessStop ((long*)address,0,0,0,RTS_ATTACH);
 #endif
   if (isFirst){
-    CallB((struct Object *)arg0, (struct Object *)arg1, address, 0);
+    CallB((Object *)arg0, (Object *)arg1, address, 0);
   } else {
     CallBetaEntry(address, arg0, arg1);
   }

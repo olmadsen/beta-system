@@ -6,9 +6,9 @@
 #include "beta.h"
 #include "crun.h"
 
-struct DopartObject *AlloDO(unsigned size, struct Object *this, long *SP)
+DopartObject *AlloDO(unsigned size, Object *this, long *SP)
 {
-    struct DopartObject *theObj;
+    DopartObject *theObj;
 
     DEBUG_CODE(NumAlloDO++);
     
@@ -18,7 +18,7 @@ struct DopartObject *AlloDO(unsigned size, struct Object *this, long *SP)
 
     /* No need to check for IOAMAXSIZE */
     Protect(this, 
-	    theObj = (struct DopartObject *)IOAalloc(DopartObjectSize(size), SP));
+	    theObj = (DopartObject *)IOAalloc(DopartObjectSize(size), SP));
 
     theObj->Proto  = DopartObjectPTValue;
     if (IOAMinAge!=0) theObj->GCAttr = IOAMinAge;

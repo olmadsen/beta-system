@@ -5,7 +5,7 @@
 
 #include "beta.h"
 #include "crun.h"
-void ChkRA(struct Object **theObjHandle)
+void ChkRA(Object **theObjHandle)
 {
   /* The Assignment *theObjHandle = theObj has just been
    * done. We know the theObjHandle is in AOA, now check if

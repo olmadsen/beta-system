@@ -51,7 +51,7 @@
 /* CheckReferences:
  *  Used for updating stackobject allocated directly in AOA.
  */
-static void CheckReferences(struct Object **theCell, struct Object *theObj)
+static void CheckReferences(Object **theCell, Object *theObj)
 {
   /* theCell is known to be in AOA (part of stack object in AOA) */
   if (inIOA(theObj)) AOAtoIOAInsert(theCell);
@@ -69,11 +69,11 @@ static void CheckReferences(struct Object **theCell, struct Object *theObj)
 #define TRACE_SO(code)
 #endif
 
-void Susp(struct Object *this, long prevSP, long RA, long SPz)
+void Susp(Object *this, long prevSP, long RA, long SPz)
 {
-   struct StackObject *sObj; 
-   struct Component *returnComp;
-   struct Object *returnObj;
+   StackObject *sObj; 
+   Component *returnComp;
+   Object *returnObj;
    long SPx, SPy, i;
 
    DEBUG_CODE(NumSusp++);
@@ -170,7 +170,7 @@ void Susp(struct Object *this, long prevSP, long RA, long SPz)
    }
 
    /* Save sObj in ActiveComponent */
-   AssignReference((long *)&ActiveComponent->StackObj, (struct Item *)sObj);   
+   AssignReference((long *)&ActiveComponent->StackObj, (Item *)sObj);   
 
    /* Switch ActiveComponent */
    ActiveComponent = ActiveComponent->CallerComp; 

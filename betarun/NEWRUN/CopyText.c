@@ -8,13 +8,13 @@
 
 /* Allocate a ValueRepetition and initialize it with some text.    */
   
-struct Item *CopyT(char *asciz,
-		   struct Item *theItem,
+Item *CopyT(char *asciz,
+		   Item *theItem,
 		   unsigned offset /* in longs */, 
 		   long *SP
 		   )
 {
-  struct ValRep * theRep=0;
+  ValRep * theRep=0;
   register unsigned range, size, i;
   
   DEBUG_CODE(NumCopyT++);
@@ -25,12 +25,12 @@ struct Item *CopyT(char *asciz,
   
   if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
     DEBUG_AOA(fprintf(output, "CopyT allocates in AOA\n"));
-    theRep = (struct ValRep *)LVRAAlloc(ByteRepPTValue, range);
-    *(struct ValRep **)((long *)theItem + offset) = theRep;
+    theRep = (ValRep *)LVRAAlloc(ByteRepPTValue, range);
+    *(ValRep **)((long *)theItem + offset) = theRep;
   } else {
     /* Allocate in IOA */
     push(theItem);
-    theRep = (struct ValRep *)IOAalloc(size, SP);
+    theRep = (ValRep *)IOAalloc(size, SP);
     if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge; /* In IOA */
     pop(theItem);
   
@@ -39,7 +39,7 @@ struct Item *CopyT(char *asciz,
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
 
-    AssignReference((long *)theItem + offset, (struct Item *)theRep);
+    AssignReference((long *)theItem + offset, (Item *)theRep);
   }
   
   /* Assign the text to the body part of the repetition. */

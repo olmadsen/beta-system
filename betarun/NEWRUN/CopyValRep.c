@@ -7,13 +7,13 @@
 #include "beta.h"
 #include "crun.h"
 
-void CopyVR1(struct ValRep *theRep,
-	     struct Object *theObj,
+void CopyVR1(ValRep *theRep,
+	     Object *theObj,
 	     unsigned offset /* in longs */,
 	     long *SP
 	     )
 {
-    struct ValRep * newRep=0;
+    ValRep * newRep=0;
     register unsigned long range, i, size;
    
     DEBUG_CODE(NumCopyVR1++);
@@ -30,7 +30,7 @@ void CopyVR1(struct ValRep *theRep,
       /* Allocate newRep in IOA */
       push(theObj);
       push(theRep);
-      newRep = (struct ValRep *)IOAalloc(size, SP);
+      newRep = (ValRep *)IOAalloc(size, SP);
       if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
       pop(theRep);
       pop(theObj);
@@ -48,19 +48,19 @@ void CopyVR1(struct ValRep *theRep,
       newRep->Body[i] = theRep->Body[i];
     }
 
-    AssignReference((long *)theObj + offset, (struct Item *)newRep);
+    AssignReference((long *)theObj + offset, (Item *)newRep);
     
     Ck(theObj); Ck(theRep); Ck(newRep);
 
 } /* CopyVR1 */
 
-void CopyVR2(struct ValRep *theRep,
-	     struct Object *theObj,
+void CopyVR2(ValRep *theRep,
+	     Object *theObj,
 	     unsigned offset /* in longs */,
 	     long *SP
 	     )
 {
-    struct ValRep * newRep=0;
+    ValRep * newRep=0;
     register unsigned long range, i, size;
    
     DEBUG_CODE(NumCopyVR2++);
@@ -77,7 +77,7 @@ void CopyVR2(struct ValRep *theRep,
       /* Allocate newRep in IOA */
       push(theObj);
       push(theRep);
-      newRep = (struct ValRep *)IOAalloc(size, SP);
+      newRep = (ValRep *)IOAalloc(size, SP);
       if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
       pop(theRep);
       pop(theObj);
@@ -95,19 +95,19 @@ void CopyVR2(struct ValRep *theRep,
       newRep->Body[i] = theRep->Body[i];
     }
 
-    AssignReference((long *)theObj + offset, (struct Item *)newRep);
+    AssignReference((long *)theObj + offset, (Item *)newRep);
     
     Ck(theObj); Ck(theRep); Ck(newRep);
 
 } /* CopyVR2 */
 
-void CopyVR4(struct ValRep *theRep,
-	     struct Object *theObj,
+void CopyVR4(ValRep *theRep,
+	     Object *theObj,
 	     unsigned offset /* in longs */,
 	     long *SP
 	     )
 {
-    struct ValRep * newRep=0;
+    ValRep * newRep=0;
     register unsigned long range, i, size;
    
     DEBUG_CODE(NumCopyVR2++);
@@ -124,7 +124,7 @@ void CopyVR4(struct ValRep *theRep,
       /* Allocate newRep in IOA */
       push(theObj);
       push(theRep);
-      newRep = (struct ValRep *)IOAalloc(size, SP);
+      newRep = (ValRep *)IOAalloc(size, SP);
       if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
       pop(theRep);
       pop(theObj);
@@ -142,19 +142,19 @@ void CopyVR4(struct ValRep *theRep,
       newRep->Body[i] = theRep->Body[i];
     }
 
-    AssignReference((long *)theObj + offset, (struct Item *)newRep);
+    AssignReference((long *)theObj + offset, (Item *)newRep);
     
     Ck(theObj); Ck(theRep); Ck(newRep);
 
 } /* CopyVR4 */
 
-void CopyVR8(struct ValRep *theRep,
-	     struct Object *theObj,
+void CopyVR8(ValRep *theRep,
+	     Object *theObj,
 	     unsigned offset /* in longs */,
 	     long *SP
 	     )
 {
-    struct ValRep * newRep=0;
+    ValRep * newRep=0;
     register unsigned long range, i, size;
    
     DEBUG_CODE(NumCopyVR8++);
@@ -171,7 +171,7 @@ void CopyVR8(struct ValRep *theRep,
       /* Allocate newRep in IOA */
       push(theObj);
       push(theRep);
-      newRep = (struct ValRep *)IOAalloc(size, SP);
+      newRep = (ValRep *)IOAalloc(size, SP);
       if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
       pop(theRep);
       pop(theObj);
@@ -189,7 +189,7 @@ void CopyVR8(struct ValRep *theRep,
       newRep->Body[i] = theRep->Body[i];
     }
 
-    AssignReference((long *)theObj + offset, (struct Item *)newRep);
+    AssignReference((long *)theObj + offset, (Item *)newRep);
     
     Ck(theObj); Ck(theRep); Ck(newRep);
 
@@ -197,13 +197,13 @@ void CopyVR8(struct ValRep *theRep,
 
 
 
-void CopyVRI(struct ObjectRep *theRep,
-	     struct Object *theObj,
+void CopyVRI(ObjectRep *theRep,
+	     Object *theObj,
 	     unsigned offset /* in longs */,
 	     long *SP
 	     )
 {
-    struct ObjectRep * newRep=0;
+    ObjectRep * newRep=0;
     register unsigned long range, i, size;
    
     DEBUG_CODE(NumCopyVRI++);
@@ -218,10 +218,10 @@ void CopyVRI(struct ObjectRep *theRep,
     push(theRep); 
     if (size>IOAMAXSIZE){
       DEBUG_AOA(fprintf(output, "CopyVRI allocates in AOA\n"));
-      newRep = (struct ObjectRep *)AOAalloc(size, SP);
+      newRep = (ObjectRep *)AOAalloc(size, SP);
       DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
     } else {
-      newRep = (struct ObjectRep *)IOAalloc(size, SP);
+      newRep = (ObjectRep *)IOAalloc(size, SP);
       if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
     }
     pop(theRep);
@@ -241,20 +241,20 @@ void CopyVRI(struct ObjectRep *theRep,
       AssignReference(&newRep->Body[i], theRep->Body[i]);
     }
         
-    AssignReference((long *)theObj + offset, (struct Item *)newRep);
+    AssignReference((long *)theObj + offset, (Item *)newRep);
 
     Ck(theObj); Ck(theRep); Ck(newRep);
 
 } /* CopyVRI */
 
 
-void CopyVRC(struct ObjectRep *theRep,
-	     struct Object *theObj,
+void CopyVRC(ObjectRep *theRep,
+	     Object *theObj,
 	     unsigned offset /* in longs */,
 	     long *SP
 	     )
 {
-    struct ObjectRep * newRep=0;
+    ObjectRep * newRep=0;
     register unsigned long range, i, size;
    
     DEBUG_CODE(NumCopyVRC++);
@@ -269,10 +269,10 @@ void CopyVRC(struct ObjectRep *theRep,
     push(theRep); 
     if (size>IOAMAXSIZE){
       DEBUG_AOA(fprintf(output, "CopyVRC allocates in AOA\n"));
-      newRep = (struct ObjectRep *)AOAalloc(size, SP);
+      newRep = (ObjectRep *)AOAalloc(size, SP);
       DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
     } else {
-      newRep = (struct ObjectRep *)IOAalloc(size, SP);
+      newRep = (ObjectRep *)IOAalloc(size, SP);
       if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
     }
     pop(theRep);
@@ -292,7 +292,7 @@ void CopyVRC(struct ObjectRep *theRep,
       AssignReference(&newRep->Body[i], theRep->Body[i]);
     }
         
-    AssignReference((long *)theObj + offset, (struct Item *)newRep);
+    AssignReference((long *)theObj + offset, (Item *)newRep);
 
     Ck(theObj); Ck(theRep); Ck(newRep);
 

@@ -6,7 +6,7 @@
 #include "beta.h"
 #include "crun.h"
 
-void NewRR(struct Object *theObj,
+void NewRR(Object *theObj,
 	   long offset, /* in longs */
 	   long range,
 	   long *SP)

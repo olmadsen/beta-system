@@ -11,9 +11,9 @@
 #include "beta.h"
 #include "crun.h"
 
-struct ValRep *CopyCT(unsigned char *textPtr, long *SP)
+ValRep *CopyCT(unsigned char *textPtr, long *SP)
 {
-    struct ValRep *theRep;
+    ValRep *theRep;
     register unsigned range, size;
 
     DEBUG_CODE(NumCopyCT++);
@@ -31,7 +31,7 @@ struct ValRep *CopyCT(unsigned char *textPtr, long *SP)
      */
 #endif
 
-    theRep = (struct ValRep *)IOAalloc(size, SP);
+    theRep = (ValRep *)IOAalloc(size, SP);
 
     theRep->Proto = ByteRepPTValue;
     if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;

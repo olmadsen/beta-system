@@ -6,7 +6,7 @@
 #include "beta.h"
 #include "crun.h"
 
-void SetProtos(struct ProtoType *basic, struct ProtoType *text) {
+void SetProtos(ProtoType *basic, ProtoType *text) {
    BasicProto = basic; 
    TextProto = text; 
 }
@@ -18,7 +18,7 @@ void main(long argc, char *argv[])
   BETA_main(); /* Calls SetProtos from betaenv */
 
   ActiveComponent = AlloC(0, BasicProto, 0); /* Assumption: NO GC here! */
-  BasicItem = (struct Item *)&ActiveComponent->Body;
+  BasicItem = (Item *)&ActiveComponent->Body;
 
   push(0); /* NULL terminate internal ReferenceStack */
 
@@ -27,7 +27,7 @@ void main(long argc, char *argv[])
 
   /* M1BETAENV(0,BasicItem) */
   CallB( GENMARK /*dyn*/, 
-	 (struct Object *)BasicItem, /* object */
+	 (Object *)BasicItem, /* object */
 	 (long)(BasicItem->Proto->TopMpart), /* entrypoint */
 	 0); /* SP */
 

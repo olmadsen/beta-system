@@ -22,15 +22,15 @@
  * Called from stub Qua in betaenv.o.
  */
 
-void CQua(struct Object *dstQuaOrigin,
-	  struct ProtoType *dstQuaProto,
-	  struct Object **theCell,
+void CQua(Object *dstQuaOrigin,
+	  ProtoType *dstQuaProto,
+	  Object **theCell,
 	  long *SP
 	  )
 {
-  struct Object *src;
+  Object *src;
   /* the source can be found in theCell since the assignment *has* been done */
-  struct ProtoType *srcProto;
+  ProtoType *srcProto;
 
   DEBUG_CODE(NumQua++);
 
@@ -62,7 +62,7 @@ void CQua(struct Object *dstQuaOrigin,
       if (! inIOA(theCell)) 
 	/* in AOA area. */
 	negAOArefsINSERT((long)theCell);
-      srcProto = (struct ProtoType *)findDanglingProto((int)src);
+      srcProto = (ProtoType *)findDanglingProto((int)src);
     } else 
 #endif
       if (! inIOA(theCell) && inIOA(src))
@@ -78,11 +78,11 @@ void CQua(struct Object *dstQuaOrigin,
       switch(SwitchProto(src->Proto)){
       case SwitchProto(StructurePTValue):
 	/* It was a pattern variable assignment: src is a struc-object */
-	srcProto  = ((struct Structure *)src)->iProto;
+	srcProto  = ((Structure *)src)->iProto;
 	break;
       case SwitchProto(ComponentPTValue):
 	/* It was a componentreference assignment: src points to a component */
-	src       = (struct Object *)((struct Component *)src)->Body;
+	src       = (Object *)((Component *)src)->Body;
 	srcProto  = src->Proto;
 	break;
       default:
@@ -102,7 +102,7 @@ void CQua(struct Object *dstQuaOrigin,
 	/* Inlined version of ltS without struc objects,
 	 * and not checking origins 
 	 */
-	struct ProtoType *proto1 = srcProto;
+	ProtoType *proto1 = srcProto;
 	
 	if (dstQuaProto->Prefix == dstQuaProto){
 	  /* dstQuaProto is Object## */

@@ -6,13 +6,13 @@
 #include "beta.h"
 #include "crun.h"
 
-void CopyRR(struct RefRep *theRep,
-	    struct Object *theObj,
+void CopyRR(RefRep *theRep,
+	    Object *theObj,
 	    unsigned offset /* in longs */,
 	    long *SP
 	    )
 {
-    struct RefRep * newRep=0;
+    RefRep * newRep=0;
     register unsigned range, i;
     unsigned long size;
     
@@ -29,11 +29,11 @@ void CopyRR(struct RefRep *theRep,
     size = RefRepSize(range);
     if (size>IOAMAXSIZE){
       DEBUG_AOA(fprintf(output, "CopyRR allocates in AOA\n"));
-      newRep = (struct RefRep *)AOAalloc(size, SP);
+      newRep = (RefRep *)AOAalloc(size, SP);
       DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
     }
     if (!newRep) {
-      newRep = (struct RefRep *)IOAalloc(size, SP);
+      newRep = (RefRep *)IOAalloc(size, SP);
       if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
     }
     pop(theRep);
@@ -49,7 +49,7 @@ void CopyRR(struct RefRep *theRep,
       AssignReference(&newRep->Body[i], theRep->Body[i]);
     }
     
-    AssignReference((long *)theObj + offset, (struct Item *)newRep);
+    AssignReference((long *)theObj + offset, (Item *)newRep);
     Ck(theRep); Ck(theObj); Ck(newRep);
 }
 

@@ -6,9 +6,9 @@
 #include "beta.h"
 #include "crun.h"
 
-struct Structure *AlloS(struct Object *origin, struct ProtoType *proto, long *SP)
+Structure *AlloS(Object *origin, ProtoType *proto, long *SP)
 {
-  register struct Structure *newStruct;
+  register Structure *newStruct;
 
   DEBUG_CODE(NumAlloS++);
 
@@ -16,7 +16,7 @@ struct Structure *AlloS(struct Object *origin, struct ProtoType *proto, long *SP
     
   /* No need to check for IOAMAXSIZE */
   Ck(origin);
-  Protect(origin, newStruct = (struct Structure *)IOAalloc(StructureSize, SP));
+  Protect(origin, newStruct = (Structure *)IOAalloc(StructureSize, SP));
   
   newStruct->Proto = StructurePTValue;
   if (IOAMinAge!=0) newStruct->GCAttr = IOAMinAge;
@@ -27,31 +27,31 @@ struct Structure *AlloS(struct Object *origin, struct ProtoType *proto, long *SP
   return newStruct;
 }
 
-struct Item *AlloSI(long dummy, struct Structure *struc, long *SP)
+Item *AlloSI(long dummy, Structure *struc, long *SP)
 {
-  struct Item *ss;
+  Item *ss;
   DEBUG_CODE(NumAlloSI++);
 
   Ck(struc);
   Ck(struc->iOrigin);
-  ss = AlloI((struct Object *)struc->iOrigin, struc->iProto, SP);
+  ss = AlloI((Object *)struc->iOrigin, struc->iProto, SP);
   Ck(ss);
   return ss;
 }
 
-struct Component *AlloSC(struct Structure *struc, long *SP)
+Component *AlloSC(Structure *struc, long *SP)
 {
-  struct Component *ss;
+  Component *ss;
   DEBUG_CODE(NumAlloSC++);
 
   Ck(struc);
   Ck(struc->iOrigin);
-  ss = AlloC((struct Object *)struc->iOrigin, struc->iProto, SP);
+  ss = AlloC((Object *)struc->iOrigin, struc->iProto, SP);
   Ck(ss);
   return ss;
 }    
 
-struct Structure *ObjS(struct Object *theObj, long *SP)
+Structure *ObjS(Object *theObj, long *SP)
 {
   /* Allocate a structObject for theObj. 
    * Used in this way:
@@ -60,7 +60,7 @@ struct Structure *ObjS(struct Object *theObj, long *SP)
    * R##
    */
   
-  register struct Structure *newStruct;
+  register Structure *newStruct;
   
   DEBUG_CODE(NumObjS++);
 
@@ -68,20 +68,20 @@ struct Structure *ObjS(struct Object *theObj, long *SP)
   
   /* No need to check for IOAMAXSIZE */
   Ck(theObj);
-  Protect(theObj, newStruct = (struct Structure *)IOAalloc(StructureSize, SP));
+  Protect(theObj, newStruct= (Structure *)IOAalloc(StructureSize, SP));
   
   newStruct->Proto = StructurePTValue;
   if (IOAMinAge!=0) newStruct->GCAttr = IOAMinAge;
   
   newStruct->iProto = theObj->Proto;
-  AssignReference(&newStruct->iOrigin, ((struct Object **)theObj)[theObj->Proto->OriginOff]);
+  AssignReference(&newStruct->iOrigin, ((Object **)theObj)[theObj->Proto->OriginOff]);
 
   Ck(theObj); Ck(newStruct);
   
   return newStruct;
 }
 
-long eqS(struct Structure *arg1, struct Structure *arg2)
+long eqS(Structure *arg1, Structure *arg2)
 {
   DEBUG_CODE(NumeqS++);
 
@@ -100,14 +100,14 @@ long eqS(struct Structure *arg1, struct Structure *arg2)
   return 1;
 }
 
-long neS(struct Structure *arg1, struct Structure *arg2)
+long neS(Structure *arg1, Structure *arg2)
 {
   DEBUG_CODE(NumneS++);
   Ck(arg1); Ck(arg2);
   return !eqS(arg1, arg2);
 }
 
-long leS(struct Structure *arg1, struct Structure *arg2, long *SP)
+long leS(Structure *arg1, Structure *arg2, long *SP)
 { 
   DEBUG_CODE(NumleS++);
   Ck(arg1); Ck(arg2);
@@ -115,25 +115,25 @@ long leS(struct Structure *arg1, struct Structure *arg2, long *SP)
 }
 
 
-long geS(struct Structure *arg1, struct Structure *arg2, long *SP)
+long geS(Structure *arg1, Structure *arg2, long *SP)
 { 
   DEBUG_CODE(NumgeS++);
   Ck(arg1); Ck(arg2);
   return (eqS(arg1, arg2) || gtS(arg1, arg2, SP));
 }
 
-long gtS(struct Structure *arg1, struct Structure *arg2, long *SP)
+long gtS(Structure *arg1, Structure *arg2, long *SP)
 {
   DEBUG_CODE(NumgtS++);
   Ck(arg1); Ck(arg2);
   return ltS(arg2, arg1, SP);
 }
 
-long ltS(struct Structure *arg1, struct Structure *arg2, long *SP)
+long ltS(Structure *arg1, Structure *arg2, long *SP)
 {
-  struct ProtoType *proto1;
-  struct ProtoType *proto2;
-  struct Item * newObject;
+  ProtoType *proto1;
+  ProtoType *proto2;
+  Item * newObject;
 
   DEBUG_CODE(NumltS++);
   Ck(arg1); Ck(arg2);
@@ -182,7 +182,7 @@ long ltS(struct Structure *arg1, struct Structure *arg2, long *SP)
 	   
 	   Protect(arg2, newObject = AlloSI(0,arg1, SP));
 	   Ck(arg2);
-	   return (struct Object *)((long*)newObject)[proto2->OriginOff] == (arg2->iOrigin);
+	   return (Object *)((long*)newObject)[proto2->OriginOff] == (arg2->iOrigin);
 	 }
        }
 

@@ -6,17 +6,17 @@
 #include "beta.h"
 #include "crun.h"
 
-struct Object *GetThis(long *SP)
+Object *GetThis(long *SP)
 { 
   /* Find current object in stack frame starting in SP-1.
    * (SP points to top of previous frame).
    * By now it is always the last reference pushed.
    */
-  struct Object **FP; 
-  struct Object *top; 
-  struct Object *next;
+  Object **FP; 
+  Object *top; 
+  Object *next;
 
-  FP = (struct Object **)SP-DYN_OFF;
+  FP = (Object **)SP-DYN_OFF;
   top  = *FP--; /* dyn */
   next = *FP--; /* 1'st ref */
   while(next){

@@ -12,7 +12,7 @@ void CinitT(void)
   CTextPoolEnd = (char *)CTextPool;
 }
 
-char *CCpkVT(struct ValRep * theRep, long *SP)
+char *CCpkVT(ValRep * theRep, long *SP)
 {
   long bodysize = ByteRepBodySize(theRep->HighBorder);
   long i;
@@ -36,7 +36,7 @@ char *CCpkVT(struct ValRep * theRep, long *SP)
 }
 
 /* CCpkSVT: Copy Slice of variable text (byte rep) to C */
-char *CCpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP)
+char *CCpkSVT(ValRep *theRep, unsigned low, long high, long *SP)
 {
   long bodysize;
   long i;
@@ -122,7 +122,7 @@ char * CPpkVT(ref(ValRep) theRep, long *SP)
   return res;
 }
 
-char * CPpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP)
+char * CPpkSVT(ValRep *theRep, unsigned low, long high, long *SP)
 {
   long bodysize;
   long i;

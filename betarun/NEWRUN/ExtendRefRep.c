@@ -5,21 +5,21 @@
 #include "beta.h"
 #include "crun.h"
 
-void ExtRR(struct Object *theObj,
+void ExtRR(Object *theObj,
 	   unsigned offset, /* in longs */
 	   long add,
 	   long *SP
 	   )
 {
-    struct RefRep * theRep;
-    struct RefRep * newRep=0;
+    RefRep * theRep;
+    RefRep * newRep=0;
     long newRange, copyRange, i;
     unsigned long size;
     
     DEBUG_CODE(NumExtRR++);
     
     Ck(theObj);
-    theRep = *(struct RefRep **)((long *) theObj + offset);
+    theRep = *(RefRep **)((long *) theObj + offset);
     Ck(theRep);
     newRange = theRep->HighBorder + add;
     copyRange = (add < 0) ? newRange : theRep->HighBorder;
@@ -31,11 +31,11 @@ void ExtRR(struct Object *theObj,
     size = RefRepSize(newRange);
     if (size>IOAMAXSIZE){
       DEBUG_AOA(fprintf(output, "ExtRR allocates in AOA\n"));
-      newRep = (struct RefRep *)AOAcalloc(size, SP);
+      newRep = (RefRep *)AOAcalloc(size, SP);
       DEBUG_AOA(if (!newRep) fprintf(output, "AOAcalloc failed\n"));
     }
     if (!newRep) {
-      newRep = (struct RefRep *)IOAalloc(size, SP);
+      newRep = (RefRep *)IOAalloc(size, SP);
       if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     }
     pop(theRep);
@@ -50,7 +50,7 @@ void ExtRR(struct Object *theObj,
       AssignReference(&newRep->Body[i], theRep->Body[i]);
     }
     
-    AssignReference((long *)theObj + offset, (struct Item *)newRep);
+    AssignReference((long *)theObj + offset, (Item *)newRep);
 
     Ck(theObj); Ck(theRep); Ck(newRep);
 }
