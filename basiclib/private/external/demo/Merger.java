@@ -13,7 +13,7 @@ class Adder extends Coroutine {
     }
     void compute(int V){
 	res = V+V;
-        suspend();
+        A: suspend();
 	if (V < max) compute(V+1);
     }
     public void Do() {
@@ -30,7 +30,7 @@ class Multiplier extends Coroutine {
     }
     void compute(int V){
 	res = V*V;
-        suspend();
+        M: suspend();
 	if (V < max) compute(V+1);
     }
     public void Do() {
@@ -40,10 +40,10 @@ class Multiplier extends Coroutine {
     }
 }
 
-class Merger {
+class Merger extends Coroutine {
     Adder A = new Adder(3,6);
     Multiplier M = new Multiplier(2,5);
-    void merge() {
+    public void Do() {
 	int i;
         A.call();
         M.call();
@@ -60,7 +60,7 @@ class Merger {
     }      
     public static void main(String args[]) {
 	Merger merger = new Merger();
-	merger.merge();
+	merger.call();
     }
 }
 
