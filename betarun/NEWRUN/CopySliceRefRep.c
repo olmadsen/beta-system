@@ -54,8 +54,6 @@ void CopySRR(struct RefRep *theRep,
     pop(theRep);
     pop(theItem);
     
-    Ck(theRep); Ck(theItem);
-
     /* The new Object is now allocated, but not assigned yet! */
     
     /* Initialize the structual part of the repetition. */
@@ -70,6 +68,8 @@ void CopySRR(struct RefRep *theRep,
     }
     
     AssignReference((long *)theItem + offset, (struct Item *)newRep);
+
+    Ck(theRep); Ck(theItem); Ck(newRep); 
 }
 
 

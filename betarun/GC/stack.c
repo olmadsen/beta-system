@@ -22,6 +22,21 @@
 #ifdef NEWRUN
 /************************* Begin NEWRUN ****************************/
 
+#define DumpProto(theObj)                                        \
+{                                                                \
+  if ((theObj)&&((theObj)!=CALLBACKMARK)&&((theObj)!=GENMARK)){  \
+     if (isObject(theObj)){                                      \
+       fprintf(output, " (proto: 0x%x)", (theObj)->Proto);       \
+       fprintf(output, " (%s)", ProtoTypeName((theObj)->Proto)); \
+     } else {                                                    \
+       fprintf(output, " (ILLEGAL OBJECT!)");                    \
+     }                                                           \
+  }                                                              \
+}
+
+#define FrameSeparator() \
+fprintf(output, "============================================================================\n")
+
 #if 0
 /* Trace search for prefix in ObjectDescription */
 #define TRACE_CODEENTRY(code) code; fflush(output)
@@ -100,19 +115,22 @@ void ProcessRefStack(struct Object **topOfStack, long dynOnly, CellProcessFunc f
 
   if (dynOnly) {
     DEBUG_STACK(fprintf(output, 
-			"ProcessRefStack(dyn): 0x%08x: 0x%08x", 
+			"RefStack(dyn): 0x%08x: 0x%08x", 
 			(int)theCell,
 			(int)*theCell));
+    DEBUG_STACK(DumpProto(theObj));
     func(theCell, theObj);
+    DEBUG_STACK(fprintf(output, " done\n"));
     return;
   }
 
   while(theObj) {
     DEBUG_STACK(fprintf(output, 
-			"ProcessRefStack(%d): 0x%08x: 0x%08x", 
+			"RefStack(%d): 0x%08x: 0x%08x", 
 			((long)topOfStack - (long)theCell)/4,
 			(int)theCell,
 			(int)*theCell));
+    DEBUG_STACK(DumpProto(theObj));
     func(theCell, theObj);
     DEBUG_STACK(fprintf(output, " done\n"));
     /* Take next reference from stack */
@@ -121,15 +139,28 @@ void ProcessRefStack(struct Object **topOfStack, long dynOnly, CellProcessFunc f
   } 
 }
 
-#define TRACE_STACK() \
+#if 0
+#define TRACE_NEW_FRAME() \
 DEBUG_STACK(fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__)); \
-DEBUG_STACK(fprintf(output, "New SP:     0x%x\n", SP));                \
-DEBUG_STACK(fprintf(output, "New PC:     0x%x\n", PC));                \
-DEBUG_STACK(fprintf(output, "New object: 0x%x", theObj));              \
-DEBUG_STACK(if (theObj&&(theObj!=CALLBACKMARK)&&(theObj!=GENMARK)){    \
-              fprintf(output, " (proto: 0x%x)", theObj->Proto);        \
-              fprintf(output, " (%s)\n", ProtoTypeName(theObj->Proto));\
-	    })
+DEBUG_STACK(fprintf(output, "Own SP:        0x%x\n", SP));              \
+DEBUG_STACK(fprintf(output, "Caller PC:     0x%x\n", PC));              \
+DEBUG_STACK(fprintf(output, "Caller object: 0x%x", theObj));            \
+DEBUG_STACK(DumpProto(theObj));                                         \
+DEBUG_STACK(fprintf(output, "\n"));
+#else
+#define TRACE_NEW_FRAME() 
+#endif
+
+#define TRACE_STACK(SP,PC,theObj) \
+DEBUG_STACK(fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__));       \
+DEBUG_STACK(fprintf(output, "---------------------\n", SP));                  \
+DEBUG_STACK(fprintf(output, "SP:        0x%08x\n", SP));                      \
+DEBUG_STACK(fprintf(output, "PC:        0x%08x\n", PC));                      \
+DEBUG_STACK(fprintf(output, "object:    0x%08x", theObj));                    \
+DEBUG_STACK(DumpProto(theObj));                                               \
+DEBUG_STACK(fprintf(output, "\n"));                                           \
+DEBUG_STACK(fprintf(output, "---------------------\n", SP))
+
 
 #ifdef ppcmac
 static long StackObjEnd; /* extra "parameter" for ProcessStackFrames */
@@ -158,7 +189,7 @@ void ProcessStackFrames(long SP,
    *            |            |   
    *            |            |   
    *            | frames     |   
-   *            | to proces  |   
+   *            | to process |   
    *            |            |   
    *            |            |   
    *            |            |   
@@ -174,22 +205,25 @@ void ProcessStackFrames(long SP,
    *            |   IOAGC    |
    */
   struct Object *theObj;
-  struct Object *this;
   long *CSP = CompSP;
   long SPoff, PC;
 #ifdef macppc
   long SPz = StackObjEnd; /* Used for stackobjects */
 #endif
+#ifdef RTDEBUG
+  struct Object *current;
+  long currentSP, currentPC;
+  int unknown=-1;
+#endif
   
-
   DEBUG_STACK(fprintf(output, "ProcessStackFrames(SP=0x%x, StackStart=0x%x)\n",
 		      SP, StackStart));
   DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
 
- /* Process the top frame */
-  DEBUG_STACK(fprintf(output, "Top: Frame for object 0x%x, prevSP=0x%x\n",
-		      GetThis((long *)SP),
-		      SP));
+  /* Process the top frame */
+  DEBUG_STACK(FrameSeparator());
+  DEBUG_STACK(fprintf(output, "Processing top frame:\n"));
+  TRACE_STACK(SP,unknown,GetThis((long *)SP));
   ProcessRefStack((struct Object **)SP-DYNOFF, dynOnly, func);
   PC = GetPC(SP);
   theObj = *((struct Object **)SP-DYNOFF);
@@ -198,12 +232,9 @@ void ProcessStackFrames(long SP,
     /* Only top frame to process - can happen for stack objects */
     return;
   }
-  TRACE_STACK();
+  TRACE_NEW_FRAME();
 
   do {
-
-    DEBUG_STACK(fprintf(output, "-----------------------------\n"));
-
     /* Handle special cases */
 
     /* Check for passing of a callback/Gpart.
@@ -237,28 +268,37 @@ void ProcessStackFrames(long SP,
      * 
      */
     if ((theObj == CALLBACKMARK)||(theObj == GENMARK)) {
+#ifdef RTDEBUG
+      int isGen;
+#endif
       DEBUG_CODE(long oldSP);
       DEBUG_STACK(if (theObj==CALLBACKMARK){
+	isGen=0;
 	fprintf(output, "Passing callback at SP=0x%x.", SP);
       } else {
+	isGen=1;
 	fprintf(output, "Passing allocation/main at SP=0x%x.", SP);
       })
       DEBUG_CODE(oldSP=SP);
       SP = GetSPbeta(SP);
       if (SP==0){
-	DEBUG_STACK(fprintf(output, " stopping at main\n"));
+	DEBUG_STACK(fprintf(output, " stopping at main.\n"));
 	/*SP=StackStart;*/
 	break;
       }
       DEBUG_CODE(Claim(oldSP<SP, "SP greater before callback/allocation"));
-      DEBUG_STACK(fprintf(output, " Skipping to SP=0x%x\n", SP));
+      DEBUG_STACK(fprintf(output, " Skipping to prevSP=0x%x\n", SP));
       /* Treat this frame as a top frame */
       DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
-      DEBUG_STACK(fprintf(output, "CB: Frame for object 0x%x\n", GetThis((long*)SP)));
+      DEBUG_STACK(FrameSeparator());
+      DEBUG_STACK(fprintf(output, 
+			  "Processing top frame before %s:\n",
+			  (isGen) ? "allocation" : "callback"));
+      TRACE_STACK(unknown,unknown,GetThis((long*)SP));
       ProcessRefStack((struct Object **)SP-DYNOFF, dynOnly, func);
       PC = GetPC(SP);
       theObj = *((struct Object **)SP-DYNOFF); 
-      TRACE_STACK();
+      TRACE_NEW_FRAME();
       if (SP<StackStart) {
 	continue; /* Restart do-loop */
       } else {
@@ -328,7 +368,7 @@ void ProcessStackFrames(long SP,
       PC     = (long)callerComp->CallerLSC;
 #endif
       theObj = comp->CallerObj;
-      TRACE_STACK();
+      TRACE_NEW_FRAME();
       if (SP<StackStart) {
 	continue; /* Restart do-loop */
       } else {
@@ -342,7 +382,10 @@ void ProcessStackFrames(long SP,
      *    PC is address in the code for theObj.
      */
 
-    DEBUG_CODE(this = theObj); /* remember object for current frame */
+    /* remember object etc for current frame in order to display the right one */
+    DEBUG_CODE(current = theObj); 
+    DEBUG_CODE(currentPC = PC); 
+    DEBUG_CODE(currentSP = SP); 
 
     /* Normal case: Find stack frame size, normal dyn and new PC */
     {  
@@ -372,18 +415,21 @@ void ProcessStackFrames(long SP,
       {
          long SPoff /* size allocated on stack when theObj became active */;
 	 GetSPoff(SPoff, CodeEntry(theObj->Proto, PC)); 
-         DEBUG_STACK(fprintf(output, "SP:          0x%x\n", SP));
+#if 0
+         DEBUG_STACK(fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__));
+         DEBUG_STACK(fprintf(output, "New SP:      0x%x\n", SP));
          DEBUG_STACK(fprintf(output, "CodeEntry:   0x%x\n", CodeEntry(theObj->Proto, PC)));
          DEBUG_STACK(fprintf(output, "SPoff:       0x%x\n", SPoff));
+#endif
          SP = (long)SP+SPoff;
       }
 #endif
-      /* SP now points to end of previous frame, i.e. bottom of top frame */
+      /* SP now points to end of *previous* frame, i.e. bottom of top frame */
       /* normal dyn from the start of this frame gives current object */
       theObj = *((struct Object **)SP-DYNOFF); 
       /* RTS from the start of this frame gives PC */
       PC = GetPC(SP);
-      TRACE_STACK();
+      TRACE_NEW_FRAME();
     }
 
     /* INVARIANT:
@@ -394,14 +440,22 @@ void ProcessStackFrames(long SP,
      */
 
     DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
-    DEBUG_STACK(fprintf(output, "Frame for object 0x%x\n", this));
+    DEBUG_STACK(FrameSeparator());
+    DEBUG_STACK(fprintf(output, "Processing normal frame:\n"));
+    TRACE_STACK(currentSP,currentPC,current);
     ProcessRefStack((struct Object **)SP-DYNOFF, dynOnly, func);
+
   } while (SP<StackStart);
+#if 0
   /* The following claim does not hold anymore because of the 
    * CallB frame after main and Att.
    */
-  /*DEBUG_CODE(Claim(SP==(long)StackStart, "SP==StackStart"));*/
-}
+  DEBUG_CODE(Claim(SP==(long)StackStart, "SP==StackStart"));
+#endif
+
+  DEBUG_STACK(FrameSeparator());
+
+} /* ProcessStackFrames */
 
 void ProcessStack()
 {
@@ -412,9 +466,12 @@ void ProcessStack()
    *    sections.
    */
 
-  DEBUG_STACK(fprintf(output, "\nProcessReferenceStack.\n"));
+  DEBUG_STACK(fprintf(output, "\n"));
+  DEBUG_STACK(FrameSeparator());
+  DEBUG_STACK(fprintf(output, "Processing internal ReferenceStack used by RTS.\n"));
   ProcessRefStack(RefSP-1, FALSE, DoIOACell); /* RefSP points to first free */
-  DEBUG_STACK(fprintf(output, "ProcessMachineStack.\n"));
+  DEBUG_STACK(FrameSeparator());
+  DEBUG_STACK(fprintf(output, "Processing MachineStack.\n"));
   ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, FALSE, DoIOACell);
 }
 

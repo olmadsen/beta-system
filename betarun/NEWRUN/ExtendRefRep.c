@@ -41,8 +41,6 @@ void ExtRR(struct Object *theObj,
     pop(theRep);
     pop(theObj);
 
-    Ck(theObj); Ck(theRep);
-
     newRep->Proto = RefRepPTValue;
     /* newRep->GCAttr set above if in IOA */
     newRep->LowBorder = 1;
@@ -53,5 +51,7 @@ void ExtRR(struct Object *theObj,
     }
     
     AssignReference((long *)theObj + offset, (struct Item *)newRep);
+
+    Ck(theObj); Ck(theRep); Ck(newRep);
 }
 

@@ -28,7 +28,6 @@ void AlloRR(struct Object* theObj, unsigned offset, int range, long *SP)
       theRep->GCAttr = 1;
     }
     pop(theObj);
-    Ck(theObj);
 
     theRep->Proto = RefRepPTValue;
     /* theRep->GCAttr set above if in IOA */
@@ -36,4 +35,8 @@ void AlloRR(struct Object* theObj, unsigned offset, int range, long *SP)
     theRep->HighBorder = range;
 
     AssignReference((long *)((char *)theObj + offset), (struct Item *)theRep);
+
+    Ck(theObj);
+    Ck(theRep);
+
 }

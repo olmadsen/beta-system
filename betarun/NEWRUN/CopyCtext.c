@@ -24,6 +24,7 @@ struct ValRep *CopyCT(unsigned char *textPtr, long *SP)
     size = ByteRepSize(range);
 
     /* LVRA missing */
+
 #ifdef RTDEBUG
     if (range > LARGE_REP_SIZE) {
       fprintf(output, "CopyCT: should allocate in LVRA (range=%d)\n", range);

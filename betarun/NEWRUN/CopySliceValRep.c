@@ -90,7 +90,6 @@ void CopySVR(struct ValRep *theRep,
 	}
 	pop(theRep);
 	pop(theItem);
-	Ck(theRep); Ck(theItem);
 	
 	/* Initialize the structual part of the repetition. */
 	newRep->Proto = theRep->Proto;
@@ -117,8 +116,6 @@ void CopySVR(struct ValRep *theRep,
       pop(theItem);
       pop(theRep);
 
-
-      Ck(theRep); Ck(theItem); Ck(newRep);
       newRep->Proto = theRep->Proto;
       /* newRep->GCAttr set above if in IOA */
       newRep->LowBorder = 1;
@@ -173,6 +170,9 @@ void CopySVR(struct ValRep *theRep,
     }
         
     AssignReference((long *)theItem + offset, (struct Item *)newRep);
+
+    Ck(theRep); Ck(theItem); Ck(newRep);
+
 }
 
 

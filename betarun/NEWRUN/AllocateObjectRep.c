@@ -44,8 +44,6 @@ void AlloORR(struct Object *origin,
   pop(origin);
   pop(theObj);
 
-  Ck(theObj); Ck(origin); Ck(theRep);
-
   /* Set up the header */
   theRep->Proto = DynItemRepPTValue;
   /* theRep->GCAttr set above if in IOA */
@@ -62,6 +60,9 @@ void AlloORR(struct Object *origin,
     Protect(theRep, item = AlloI(theRep->iOrigin, proto, SP));
     AssignReference((long *)((long)&theRep->Body[0]+range*4), item);
   }
+
+  Ck(theObj); Ck(origin); Ck(theRep);
+
 }
 
 void AlloORRC(struct Object *origin,
@@ -80,6 +81,7 @@ void AlloORRC(struct Object *origin,
   unsigned long size;
 
   DEBUG_CODE(NumAlloORRC++);
+  Ck(theObj); Ck(origin);
 
   /* Allocate the object repetition. Here we need to use the functions,
    * that return the cleared object, since a GC may occur before all
@@ -100,8 +102,6 @@ void AlloORRC(struct Object *origin,
   pop(origin);
   pop(theObj);
 
-  Ck(theObj); Ck(origin); Ck(theRep);
-
   /* Set up the header */
   theRep->Proto = DynCompRepPTValue;
   /* theRep->GCAttr set above if in IOA */
@@ -119,4 +119,6 @@ void AlloORRC(struct Object *origin,
     AssignReference((long *)((long)&theRep->Body + range*4), 
 		    (struct Item *)comp);
   }
+
+  Ck(theObj); Ck(origin); Ck(theRep);
 }

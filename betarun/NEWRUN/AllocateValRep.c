@@ -44,7 +44,6 @@ void AlloVR1(struct Object* theObj,
       theRep->GCAttr = 1;
     }
     pop(theObj);
-    Ck(theObj);
   
     theRep->Proto = ByteRepPTValue;
     /* theRep->GCAttr set above if in IOA */
@@ -52,6 +51,9 @@ void AlloVR1(struct Object* theObj,
     theRep->HighBorder = range;
     
     AssignReference((long *)((char *)theObj + offset), (struct Item *)theRep);
+
+    Ck(theObj);
+
 }
 
 void AlloVR2(struct Object* theObj, 
@@ -63,6 +65,7 @@ void AlloVR2(struct Object* theObj,
     register unsigned size;
 
     DEBUG_CODE(NumAlloVR2++);
+    Ck(theObj);
 
     if (range < 0) range = 0;
 
@@ -91,7 +94,6 @@ void AlloVR2(struct Object* theObj,
       theRep->GCAttr = 1;
     }
     pop(theObj);
-    Ck(theObj);
 
     theRep->Proto = WordRepPTValue;
     /* theRep->GCAttr set above if in IOA */
@@ -99,6 +101,8 @@ void AlloVR2(struct Object* theObj,
     theRep->HighBorder = range;
     
     AssignReference((long *)((char *)theObj + offset), (struct Item *)theRep);
+
+    Ck(theObj);
 }
 
 void AlloVR4(struct Object* theObj,
@@ -110,6 +114,7 @@ void AlloVR4(struct Object* theObj,
     register unsigned size;
 
     DEBUG_CODE(NumAlloVR4++);
+    Ck(theObj);
 
     if (range < 0) range = 0;
 
@@ -138,7 +143,6 @@ void AlloVR4(struct Object* theObj,
       theRep->GCAttr = 1;
     }
     pop(theObj);
-    Ck(theObj);
     
     theRep->Proto = ValRepPTValue;
     /* theRep->GCAttr set above if in IOA */
@@ -146,6 +150,8 @@ void AlloVR4(struct Object* theObj,
     theRep->HighBorder = range;
 
     AssignReference((long *)((char *)theObj + offset), (struct Item *)theRep);
+
+    Ck(theObj);
 }
 
 
@@ -158,6 +164,7 @@ void AlloVR8(struct Object* theObj,
     register unsigned size;
 
     DEBUG_CODE(NumAlloVR8++);
+    Ck(theObj);
 
     if (range < 0) range = 0;
 
@@ -186,7 +193,6 @@ void AlloVR8(struct Object* theObj,
       theRep->GCAttr = 1;
     }
     pop(theObj);
-    Ck(theObj);
 
     theRep->Proto = DoubleRepPTValue;
     /* theRep->GCAttr set above if in IOA */
@@ -194,4 +200,6 @@ void AlloVR8(struct Object* theObj,
     theRep->HighBorder = range;
 
     AssignReference((long *)((char *)theObj + offset), (struct Item *)theRep);
+
+    Ck(theObj);
 }

@@ -39,6 +39,8 @@ void IOAGc()
   DEBUG_CODE(memset(ToSpace, 0, IOASize));
   
   NumIOAGc++;
+
+  DEBUG_CODE(if (NumIOAGc==DebugStackAtGcNum) DebugStack=1);
   
   IOAActive = TRUE;
   
@@ -364,7 +366,7 @@ Program terminated.\n", (int)(4*ReqObjectSize));
  */
 void DoIOACell(struct Object **theCell,struct Object *theObj)
 {
-  Ck(theObj);
+  DEBUG_CODE(if (!CheckHeap) Ck(theObj));
   if (!theObj) return;
   if(inBetaHeap(theObj)){
     if(inLVRA(theObj)){
@@ -983,6 +985,7 @@ void CompleteScavenging()
       long        theObjectSize;
       
       theObj = (ref(Object)) IOA;
+      lastObj=0;
       while ((long *) theObj < IOATop) {
 #if 0
 	long i;

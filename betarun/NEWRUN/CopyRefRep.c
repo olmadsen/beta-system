@@ -19,6 +19,7 @@ void CopyRR(struct RefRep *theRep,
     DEBUG_CODE(NumCopyRR++);
 
     Ck(theRep); Ck(theObj);
+
     newRep = NULL;
     
     range = theRep->HighBorder;
@@ -40,8 +41,6 @@ void CopyRR(struct RefRep *theRep,
     pop(theRep);
     pop(theObj);
 
-    Ck(theRep); Ck(theObj);
-
     newRep->Proto = theRep->Proto;
     /* newRep->GCAttr set above */
     newRep->LowBorder = 1;
@@ -53,5 +52,6 @@ void CopyRR(struct RefRep *theRep,
     }
     
     AssignReference((long *)theObj + offset, (struct Item *)newRep);
+    Ck(theRep); Ck(theObj); Ck(newRep);
 }
 

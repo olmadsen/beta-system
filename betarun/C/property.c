@@ -55,6 +55,7 @@ static void BooleanProperty(char *name)
 #ifdef RTDEBUG
   ENTRY("debugioa",   DebugIOA = TRUE);
   ENTRY("checkheap",   CheckHeap = TRUE);
+  ENTRY("stopatillegal",   StopAtIllegal = TRUE);
   ENTRY("debugalloi",   DebugAlloI = TRUE);
   ENTRY("debugcbfa",  DebugCBFA = TRUE);
   ENTRY("debugaoa",   DebugAOA = TRUE);
@@ -86,6 +87,9 @@ static void ValueProperty(char *name, char *value)
   ENTRY("valhallaid", valhallaID = strdup (value));
 #endif /* RTVALHALLA */
 
+#ifdef RTDEBUG
+  ENTRY("debugstackatgcnum", DebugStackAtGcNum = intScan(name, value));
+#endif
   ENTRY("ioa", IOASize = 1024 * intScan(name, value));
   ENTRY("aoa",  
 	AOABlockSize  = 1024 * intScan(name, value);

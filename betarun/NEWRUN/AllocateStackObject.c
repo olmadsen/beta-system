@@ -32,7 +32,7 @@ struct StackObject *AlloSO(unsigned size, long *SP)
 
     /*fprintf(output, "AlloSO: theObj: 0x%x, size=0x%x\n", sObj, size);*/
 
-    Ck(sObj);
+    /* Ck(sObj); No good - the stack part is not yet initialized */
 
     return sObj;
 }

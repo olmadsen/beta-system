@@ -479,7 +479,7 @@ static void FollowItem(ref(Item) theObj)
  */
 static void PushAOACell(struct Object **theCell,struct Object *theObj)
 {
-  Ck(theObj);
+  DEBUG_CODE(if (!CheckHeap) Ck(theObj));
   if(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell)) {
     if (isObject(*theCell))
       RAFPush(theCell);
@@ -488,7 +488,7 @@ static void PushAOACell(struct Object **theCell,struct Object *theObj)
 #ifdef RTDEBUG
 static void CheckAOACell(struct Object **theCell,struct Object *theObj)
 {
-  Ck(theObj);
+  DEBUG_CODE(if (!CheckHeap) Ck(theObj));
   AOACheckReference(theCell);
 }
 #endif
@@ -1092,6 +1092,8 @@ static void Phase3()
 }
 
 #ifdef RTDEBUG
+ref(Object) lastAOAObj=0;
+
 /* AOACheck: Consistency check on entire AOA area */
 void AOACheck()
 {
@@ -1099,8 +1101,14 @@ void AOACheck()
   ref(Object) theObj;
   long        theObjectSize;
   
-  /* if (theBlock != 0)
-     fprintf(output, "AOACheck: AOABaseBlock: 0x%x, top: 0x%x\n", (int)AOABaseBlock, (int)(AOABaseBlock->top)); */
+#if 0
+  if (theBlock != 0){
+     fprintf(output, 
+	     "AOACheck: AOABaseBlock: 0x%x, top: 0x%x\n", 
+	     (int)AOABaseBlock, (int)(AOABaseBlock->top));
+  }
+#endif
+  lastAOAObj=0;
   while( theBlock ){
     theObj = (ref(Object)) BlockStart(theBlock);
     while( (long *) theObj < theBlock->top ){
@@ -1108,11 +1116,16 @@ void AOACheck()
       /* fprintf(output,"AOACheck: ObjectSize=0x%x, ", (int)theObjectSize); */
       Claim(ObjectSize(theObj) > 0, "#AOACheck: ObjectSize(theObj) > 0");
       AOACheckObject( theObj);
+      lastAOAObj=theObj;
       theObj = (ref(Object)) Offset( theObj, theObjectSize);
     }
     theBlock = theBlock->next;
-    /* if (theBlock != 0)
-      fprintf(output, "AOACheck: block: 0x%x, top: 0x%x\n", (int)theBlock, (int)(theBlock->top)); */
+#if 0
+    if (theBlock != 0){
+      fprintf(output, "AOACheck: block: 0x%x, top: 0x%x\n", 
+	      (int)theBlock, (int)(theBlock->top)); 
+    }
+#endif
   }
 } 
 

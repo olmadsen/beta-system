@@ -120,6 +120,9 @@ void Qua(struct Object *dstQuaOrigin,
       BetaError(QuaErr, GetThis(SP), SP, 0);
     }
   }
+
+  Ck(src);
+
 }
 
 

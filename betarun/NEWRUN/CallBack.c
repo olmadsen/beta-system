@@ -77,9 +77,10 @@ void *CopyCPP(struct Structure *theStruct)
 
   DEBUG_CODE(NumCopyCPP++);
 
-	/*DebugStr("\pCopyCPP called");*/
+  /*DebugStr("\pCopyCPP called");*/
 
   if (!theStruct) return (void *)0 /* NULL function pointer given to C */;
+  Ck(theStruct); Ck(theStruct->iOrigin);
  
   /* Take the next free entry in the Call Back Functions Area.	*/
   /* This area is defined by 
@@ -90,7 +91,6 @@ void *CopyCPP(struct Structure *theStruct)
     CBFArelloc();
   }
 
-  Ck(theStruct);Ck(theStruct->iOrigin);
 
   CBFATop->theStruct = theStruct;
 
@@ -102,6 +102,7 @@ void *CopyCPP(struct Structure *theStruct)
   /* DEBUG_CBFA(fprintf(output, "CopyCPP: allocated callback stub 0x%x\n", CBFATop)); */
 
   ++CBFATop;
+  Ck(theStruct); Ck(theStruct->iOrigin);
   return (void *)&(CBFATop-1)->code[0];
 }
 

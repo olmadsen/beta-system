@@ -74,8 +74,6 @@ void CopyVR(struct ValRep *theRep,
 	pop(theRep);
 	pop(theObj);
 	
-	Ck(theObj); Ck(theRep);
-
 	newRep->Proto = theRep->Proto;
 	/* newRep->GCAttr set above */
 	newRep->LowBorder = 1;
@@ -109,7 +107,6 @@ void CopyVR(struct ValRep *theRep,
       pop(theRep);
       pop(theObj);
       
-      Ck(theObj);
       newRep->Proto = theRep->Proto;
       /* newRep->GCAttr set above */
       newRep->LowBorder = 1;
@@ -126,5 +123,8 @@ void CopyVR(struct ValRep *theRep,
     }
         
     AssignReference((long *)theObj + offset, (struct Item *)newRep);
+
+    Ck(theObj); Ck(theRep); Ck(newRep);
+
 }
 

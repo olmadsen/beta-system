@@ -19,12 +19,13 @@ struct DopartObject *AlloDO(unsigned size, struct Object *this, long *SP)
     /* No need to check for IOAMAXSIZE */
     Protect(this, 
 	    theObj = (struct DopartObject *)IOAalloc(DopartObjectSize(size), SP));
-    Ck(this);
 
     theObj->Proto  = DopartObjectPTValue;
     theObj->GCAttr = 1;
     theObj->Origin = this;
     theObj->Size   = size;
+
+    Ck(this);
 
 #if 0
     { int i;

@@ -39,32 +39,57 @@ void assignRef(long *theCell, ref(Item) newObject)
 
 #ifdef RTDEBUG
 
+static void DoNothing(struct Object **theCell,struct Object *theObj)
+{
+}
+
 int ContinueFromClaim=0;
 
 void Illegal()
 { 
-  /* used to break in! */
-#if defined(linux)
-  fprintf(output, "Illegal: hardcoded break!\n");
-  asm("int3");
+#if defined(sgi)
+  static unsigned break_inst;
+  int (*f)(void);
 #endif
 
-#if (defined(sun4s))
-  int (*f)();
-  /* force seg fault */
-  fprintf(output, "Illegal: forcing bus error to ensure break!\n");
-  f = (int(*)())1;
-  f();
-#endif
-#ifdef MAC
-  /* call MacsBug */
-  fprintf(output, "Illegal: calling debugger.\n");
-  DebugStr("\pIllegal Called. Type 'g' to return to shell");
-#endif
-#if defined(SGI) || defined(sgi)
-  /* avoid optimizing the function away */
+  /* used to break in! */
   fprintf(output, "Illegal() called\n");
+
+#ifdef NEWRUN
+  if (IOAActive){
+    /* An IOAGc is going on. Thus StackEnd should be well defined */
+  fprintf(output, "Attempting to do a stack dump\n");
+  DebugStack=1;
+  ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, FALSE, DoNothing);
+  }
 #endif
+  
+  if (StopAtIllegal){
+    fprintf(output, "Illegal: hardcoded break!\n");
+
+#ifdef linux
+    asm("int3");
+#endif
+
+#ifdef sparc
+    asm("illtrap 0");
+#endif
+
+#ifdef sgi
+    break_inst = 0x00000a0d; /* break 80 */
+    f = (int(*)())&break_inst;
+    f();
+#endif
+
+#ifdef hppa
+    asm("break 0,0");
+#endif
+
+#ifdef MAC
+    /* call MacsBug */
+    DebugStr("\pIllegal Called. Type 'g' to return to shell");
+#endif
+  }
 }
 #endif
 
@@ -152,7 +177,10 @@ void Claim( expr, message)
 static char __CkString[100];
 void CCk(void *r, char *fname, int lineno, char *ref)
 {
-  register struct Object* rr = (struct Object *)r;  
+  register struct Object* rr = (struct Object *)r; 
+
+  CHECK_HEAP(IOACheck(); LVRACheck(); AOACheck());
+ 
   if(r) 
     {
       sprintf(__CkString, 
@@ -160,14 +188,14 @@ void CCk(void *r, char *fname, int lineno, char *ref)
 #ifdef NEWRUN
       if (r==CALLBACKMARK){
 	DEBUG_STACK(fprintf(output, 
-			    "Ck ignoring CALLBACKMARK at %s:%d\n", 
+			    " [Ck: ignoring CALLBACKMARK at %s:%d]", 
 			    fname, 
 			    lineno));
 	return;
       }
       if (r==GENMARK){
 	DEBUG_STACK(fprintf(output, 
-			    "Ck ignoring GENMARK at %s:%d\n", 
+			    " [Ck: ignoring GENMARK at %s:%d]", 
 			    fname, 
 			    lineno));
 	return;

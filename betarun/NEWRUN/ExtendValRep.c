@@ -87,8 +87,6 @@ void ExtVR(struct Object *theObj,
     /* Reload theRep - may have been moved in IOAGc */
     theRep = *(struct ValRep **)((long *) theObj + offset);
 
-    Ck(theObj); Ck(theRep);
-    
     /* Assign structural part of new repetition */
     newRep->Proto = theRep->Proto;
     /* newRep->GCAttr set above if in IOA */
@@ -138,5 +136,8 @@ void ExtVR(struct Object *theObj,
 	}
       }
     }
+        
+    Ck(theObj); Ck(theRep); Ck(newRep);
+    
   }
 

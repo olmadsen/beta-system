@@ -18,12 +18,12 @@ char *CpkVT(struct ValRep * theRep, long *SP)
     long i;
 
     DEBUG_CODE(NumCpkVT++);
+    Ck(theRep);
     /* Check range overflow on CTextPool.
      * nextText is used as a tmp. register only.
      * Size_left_in_CTextPool = (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd.
      */
 
-    Ck(theRep);
     if (bodysize > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
       BetaError(CTextPoolErr, GetThis(SP), SP, 0);
     
@@ -31,6 +31,7 @@ char *CpkVT(struct ValRep * theRep, long *SP)
     for (i = 0; i < bodysize/4; ++i, CTextPoolEnd += 4)
       *((long *)CTextPoolEnd) = theRep->Body[i];
 
+    Ck(theRep);
     return CTextPoolEnd - bodysize;
 }
 
@@ -42,9 +43,9 @@ char *CpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP)
     unsigned char *oldBody;
 
     DEBUG_CODE(NumCpkSVT++);
+    Ck(theRep);
 
     /* printf("CpkSVT: theRep=0x%x, low=0x%x, high=0x%x, SP=0x%x\n", theRep, low, high, SP); */
-    Ck(theRep);
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
       BetaError(RepLowRangeErr, GetThis(SP), SP, 0);
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
@@ -74,6 +75,7 @@ char *CpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP)
      * This is now ensured in data.gen.
      */
 
+    Ck(theRep);
     return CTextPoolEnd - bodysize; 
 }
 
@@ -87,12 +89,12 @@ char * PpkVT(ref(ValRep) theRep, long *SP)
     char *oldBody,*res;
 
     DEBUG_CODE(NumPpkVT++);
+    Ck(theRep);
     /* Check range overflow on CTextPool.
      * nextText is used as a tmp. register only.
      * Size_left_in_CTextPool = (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd.
      */
 
-    Ck(theRep);
     if (bodysize+1 > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
       BetaError(CTextPoolErr, GetThis(SP), SP, 0);
     
@@ -116,6 +118,7 @@ char * PpkVT(ref(ValRep) theRep, long *SP)
 	fflush(output);
 #endif
 
+    Ck(theRep);
     return res;
 }
 
@@ -127,6 +130,7 @@ char * PpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP)
 
     /* printf("PpkSVT: theRep=0x%x, low=0x%x, high=0x%x, SP=0x%x\n", theRep, low, high, SP); */
     Ck(theRep);
+
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
       BetaError(RepLowRangeErr, GetThis(SP), SP, 0);
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
@@ -163,6 +167,7 @@ char * PpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP)
 	fflush(output);
 #endif
 
+    Ck(theRep);
     return res;
 }
 

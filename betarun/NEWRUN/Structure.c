@@ -17,14 +17,13 @@ struct Structure *AlloS(struct Object *origin, struct ProtoType *proto, long *SP
   /* No need to check for IOAMAXSIZE */
   Ck(origin);
   Protect(origin, newStruct = (struct Structure *)IOAalloc(StructureSize, SP));
-  Ck(origin);
   
   newStruct->Proto = StructurePTValue;
   newStruct->GCAttr = 1;
   AssignReference(&newStruct->iOrigin, origin);
   newStruct->iProto = proto;
 
-  Ck(newStruct);
+  Ck(origin); Ck(newStruct);
   return newStruct;
 }
 
@@ -76,7 +75,6 @@ struct Structure *ThisS(struct Object *this, long *SP)
   /* No need to check for IOAMAXSIZE */
   Ck(this);
   Protect(this, newStruct = (struct Structure *)IOAalloc(StructureSize, SP));
-  Ck(this);
   
   newStruct->Proto = StructurePTValue;
   newStruct->GCAttr = 1;
@@ -87,7 +85,7 @@ struct Structure *ThisS(struct Object *this, long *SP)
   newStruct->iProto = origin->Proto;
   AssignReference(&newStruct->iOrigin, ((struct Object **)origin)[origin->Proto->OriginOff]);
   
-  Ck(newStruct);
+  Ck(this); Ck(newStruct);
 
   return newStruct;
 }
@@ -113,7 +111,6 @@ struct Structure *ObjS(struct Object *theObj, long *SP)
   /* No need to check for IOAMAXSIZE */
   Ck(theObj);
   Protect(theObj, newStruct = (struct Structure *)IOAalloc(StructureSize, SP));
-  Ck(theObj);
   
   newStruct->Proto = StructurePTValue;
   newStruct->GCAttr = 1;
@@ -121,7 +118,7 @@ struct Structure *ObjS(struct Object *theObj, long *SP)
   newStruct->iProto = theObj->Proto;
   AssignReference(&newStruct->iOrigin, ((struct Object **)theObj)[theObj->Proto->OriginOff]);
 
-  Ck(newStruct);
+  Ck(theObj); Ck(newStruct);
   
   return newStruct;
 }
@@ -226,10 +223,12 @@ long ltS(struct Structure *arg1, struct Structure *arg2, long *SP)
 	    */
 	   
 	   Protect(arg2, newObject = AlloSI(0,arg1, SP));
+	   Ck(arg1); Ck(arg2);
 	   return (struct Object *)((long*)newObject)[proto2->OriginOff] == (arg2->iOrigin);
 	 }
        }
 
+  Ck(arg1); Ck(arg2);
   return 0; 
 }
 

@@ -50,7 +50,6 @@ struct Item *CopyT(char *asciz,
       theRep->GCAttr = 1; /* In IOA */
     }
     pop(theItem);
-    Ck(theItem);
   
     theRep->Proto = ByteRepPTValue;
     /* theRep->GCAttr set above */
@@ -66,5 +65,6 @@ struct Item *CopyT(char *asciz,
   AssignReference((long *)theItem + offset, (struct Item *)theRep);
 
   /* return the (possibly moved) item */
+  Ck(theItem);
   return theItem;
 }
