@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CopyRefRep.c,v 1.6 1992-09-03 12:55:50 beta Exp $
+ * Mod: $Id: CopyRefRep.c,v 1.7 1993-02-19 09:39:46 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -19,6 +19,9 @@ void CopyRR(ref(ValRep) theRep,
     
     GCable_Entry();
     
+#ifdef sparc
+    ClearCParams(); /* OK here: is not called from RT */
+#endif
     
     Ck(theRep);Ck(theObj);
     newRep = NULL;

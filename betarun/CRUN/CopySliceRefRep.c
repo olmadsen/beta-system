@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CopySliceRefRep.c,v 1.21 1992-11-06 16:55:10 beta Exp $
+ * Mod: $Id: CopySliceRefRep.c,v 1.22 1993-02-19 09:40:02 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -36,6 +36,10 @@ void CCopySRR(ref(RefRep) theRep,
     register long i;
     
     GCable_Entry();
+
+#ifdef sparc
+    ClearCParams(); /* OK here: is not called from RT */
+#endif
 
 #ifdef hppa
     low = (unsigned) getR2Reg();

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: MakeTextObj.c,v 1.13 1993-02-16 14:59:14 datpete Exp $
+ * Mod: $Id: MakeTextObj.c,v 1.14 1993-02-19 09:40:57 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -53,6 +53,7 @@ void MkTO(char *cText,
     */
 
 #ifdef sparc
+    ClearCParams(); /* OK here: is not called from RT */
     Protect(theItem, theText = CAlloI((struct Object *)BasicItem, 0, 
 				      TextProto, 0, 0));
 #else
@@ -63,8 +64,13 @@ void MkTO(char *cText,
     
     /* Prepare for copying of the asciz into the repetition of the text object */
     
+#ifdef sparc
+    /* Avoid ClearCParams in CopyT */ 
+    Protect(theText, CCopyT(theText, REP_OFF, cText)); 
+#else
     Protect(theText, CopyT(cText, theText, REP_OFF)); 
-    
+#endif
+
     /* store range in lgth.
      * store range in pos.
      */
