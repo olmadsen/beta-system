@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: AllocateValRep.c,v 1.15 1992-09-25 21:59:40 beta Exp $
+ * Mod: $Id: AllocateValRep.c,v 1.16 1992-10-02 14:44:44 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
