@@ -280,6 +280,8 @@ void RestoreSGIRegisters(SIGNAL_CONTEXT scp,
 }
 #endif /* sgi */
 
+#endif /* RTVALHALLA */
+
 void set_BetaStackTop(long *SP)
 {
 #if defined(sparc) || defined(intel)
@@ -292,8 +294,6 @@ void set_BetaStackTop(long *SP)
 #endif /* NEWRUN */
 #endif /* sparc || intel */
 }
-
-#endif /* RTVALHALLA */
 
 /***************************************************************************/
 /******************** Handlers for various platforms  **********************/
