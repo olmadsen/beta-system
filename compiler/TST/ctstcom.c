@@ -95,8 +95,6 @@ struct xCOMclass * GetXobj()
  *   C declarations for using COM object implemented in BETA
  **************************************************************/
 
-char startCh  = 'g';
-
 /* Interface definition for bCOMclass COM class */
 struct bCOMclass; /* forward declaration */
  
@@ -104,9 +102,11 @@ struct bCOMclass; /* forward declaration */
  * The vtblX has entries in the form of function pointers
  */
 struct vtblX
-{ void (*g1)(struct bCOMclass *this, char ch);
+{ void (*g0)(struct bCOMclass *this);
+  void (*g1)(struct bCOMclass *this, char ch);
   long (*g2)(struct bCOMclass *this, long a, long b, long c);
   long (*g3)(struct bCOMclass *this, char * s);
+  char(*ch)(struct bCOMclass *this);
 };
 
 /* bCOMclass is the class */
@@ -117,9 +117,16 @@ struct bCOMclass
 
 /* Called from BETA with COM bCOMclass object */
 void PutBobj(struct bCOMclass * R)
-{ if (test) printf("\n   Enter C PutBobj: %c\n", startCh);
-  R->proto->g1(R,'g');;
+{ char * S;
+  if (test) printf("\n   Enter C PutBobj\n");
+  R->proto->g0(R);
+  R->proto->g1(R,R->proto->ch(R));
   R->proto->g2(R,100,10,1);
-  R->proto->g3(R,"ij");
+  S = (char *) malloc(3);
+  S[0] = R->proto->ch(R);
+  S[1] = R->proto->ch(R);
+  S[2] = 0;
+  if (test) printf("\n   s: %s\n",S);
+  R->proto->g3(R,S);
   if (test) printf("\n   Leaving C PutbCOMclass\n");
 }
