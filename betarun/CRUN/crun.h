@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-08-22 02:08:59 $, SID: $Revision: 1.10 $
+ * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-08-27 15:54:51 $, SID: $Revision: 1.11 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -8,8 +8,8 @@
 #ifndef _CRUN_H_
 #define _CRUN_H_
 
-extern void	      * CAlloC();
-extern void	      * CAlloI();
+extern struct Component* CAlloC();
+extern struct Item    * CAlloI();
 extern ref(ValRep) 	AlloVR();
 extern char 	      * LVRAAlloc();
 extern char 	      * LVRAByteAlloc();
@@ -132,7 +132,7 @@ setup_item(ref(Item) theItem,
 /* Consistency checks - Checks for valid references */
 #define Ck(r) \
   (r && Claim(inIOA(r) || inAOA(r) || inLVRA(r), \
-	      #r ": none or inside IOA, AOA, or LVRA"))
+	      __FILE__":" #r ": none or inside IOA, AOA, or LVRA"))
 
 #else
 #define Ck(r)
