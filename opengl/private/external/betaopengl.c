@@ -3,7 +3,6 @@
    */
 
 #include <stdio.h>
-
 #if 0
 #ifndef nti
 extern long glwMDrawingAreaWidgetClass;
