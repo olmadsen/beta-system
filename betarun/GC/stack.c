@@ -805,7 +805,6 @@ void ProcessRefStack(unsigned size, struct Object **bottom, CellProcessFunc func
     DEBUG_IOA(fprintf(output, "ProcessRefStack: 0x%08x: 0x%08x\n", 
 		      (int)theCell, (int)(*theCell)));
     func(theCell, *theCell);
-    CompleteScavenging();
     DEBUG_LAZY({
       if (isLazyRef(*theCell)) {
 	fprintf(output, "ProcessRefStack: Lazy ref: %d\n",
@@ -909,7 +908,6 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd, CellProcessFunc func)
     ProcessReg(&ar->i2, "i2", func);
     ProcessReg(&ar->i3, "i3", func);
     ProcessReg(&ar->i4, "i4", func);
-    CompleteScavenging();
 
     /* Process the stack part */
     if (skipCparams){
@@ -950,7 +948,6 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd, CellProcessFunc func)
     for (; theCell != (struct Object **) theEnd; theCell+=2) {
       /* +2 because the compiler uses "dec %sp,8,%sp" before pushing */
       func(theCell, *theCell);
-      CompleteScavenging();
     }
 }
 
@@ -1032,6 +1029,7 @@ void ProcessStack()
 	}
       }
       ProcessAR(theAR, (struct RegWin *) theAR->fp, DoIOACell);
+      CompleteScavenging();
       skipCparams=FALSE;
       DEBUG_CODE(lastAR = theAR);
     }

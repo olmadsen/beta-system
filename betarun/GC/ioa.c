@@ -83,9 +83,7 @@ void IOAGc()
     NumIOAGc++;
 
     DEBUG_CODE(if (NumIOAGc==DebugStackAtGcNum) DebugStack=1);
-  
-    IOAActive = TRUE;
-  
+    
     INFO_IOA(fprintf(output, "#(IOA-%d, %d bytes requested,", 
                      (int)NumIOAGc, (int)ReqObjectSize*4));
     InfoS_LabA();
@@ -99,7 +97,9 @@ void IOAGc()
     DEBUG_IOA(IOACheck());
     DEBUG_AOAtoIOA(AOAtoIOACheck()); 
     DEBUG_AOA(AOACheck());
-    
+  
+    IOAActive = TRUE;
+  
 #ifdef KEEP_STACKOBJ_IN_IOA
     IOAStackObjectSum = IOAStackObjectNum = 0;
 #endif
@@ -640,6 +640,7 @@ void ProcessObject(theObj)
 #else
               ProcessStackObj((struct StackObject *)theObj);
 #endif
+	      CompleteScavenging();
               return;
       
           case SwitchProto(StructurePTValue):
@@ -826,6 +827,7 @@ static void ProcessAOAObject(ref(Object) theObj)
            /* Machine dependant traversal of stackobj */
            ProcessStackObj((struct StackObject *)theObj, DoAOACell);
 #endif /* KEEP_STACKOBJ_IN_IOA */
+	   CompleteScavenging();
            return;
        case SwitchProto(StructurePTValue):
            ProcessAOAReference( &(toStructure(theObj))->iOrigin );
@@ -886,6 +888,12 @@ void CompleteScavenging()
   ref(Object) theObj;
   DEBUG_CODE(static int NumCompleteScavenging=0; NumCompleteScavenging++);
   
+  /* CompleteScavenging should NOT be called by functions, that
+   * just *check* heaps. One way to ensure this is that
+   * IOAActive is true.
+   * (This is debug code only)
+   */
+  Claim(IOAActive, "CompleteScavenging: IOAActive");
   while( HandledInToSpace < ToSpaceTop){
     theObj = (ref(Object)) HandledInToSpace;
     HandledInToSpace = (ptr(long)) (((long) HandledInToSpace)
