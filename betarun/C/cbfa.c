@@ -11,6 +11,15 @@ GLOBAL(static ref(CallBackArea) lastCBFA = 0);
 
 void CBFAalloc()
 {
+  DEBUG_CBFA(fprintf(output, "sizeof(CallBackEntry)==%d\n", sizeof(CallBackEntry)));
+#if 0
+#ifdef linux
+  Claim(sizeof(CallBackEntry)==10, "sizeof(CallBackEntry)==10");
+#endif /* linux */
+#ifdef nti
+  Claim(sizeof(CallBackEntry)==12, "sizeof(CallBackEntry)==12");
+#endif /* nti */
+#endif /* 0 */
   /* Allocate the Call Back Functions Area. */
   if ( CBFABlockSize < 0 ) {
     char buf[100];

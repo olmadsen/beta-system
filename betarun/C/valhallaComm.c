@@ -421,10 +421,29 @@ INLINE void *valhalla_CopyCPP(Structure *struc, long *SP, Object *curobj)
   cb = CCopyCPP(struc, curobj);
 #endif /* sparc */
 #ifdef intel
-  fprintf(output, "valhallaCopy_CPP: NYI for intel\n");
-  /* Probably need to re-write CopyCPP in C - the normal one is
-   * in RUN and cannot be called from C.
+  /* C implementation of CopyCPP for intel, as implemented
+   * in RUN/linuxadditions.run and RUN/ntiadditions.run
    */
+  extern void HandleCB(void);
+  DEBUG_CODE(NumCopyCPP++);
+  if (!struc) return (void *)0 /* NULL function pointer given to C */;
+  /* Take the next free entry in the Call Back Functions Area.	*/
+  /* This area is defined by 
+   * [ lastCBFABlock->entries <= CBFATop < CBFALimit ].
+   */
+  if (CBFATop+1 > CBFALimit){
+    CBFArelloc();
+  }
+  CBFATop->theStruct = struc;
+  /* Write call opcode */
+  CBFATop->code[0] = 0xe8;
+  /* Write call argument: relative offset to HandleCB */
+  *(long*)(&CBFATop->code[1]) = (signed long)&HandleCB-(signed long)&CBFATop->code[5];
+  /* Write ret opcode */
+  CBFATop->code[5] = 0xc3;
+  ++CBFATop;
+  /* __asm__("invd"); Flush cache -- i486 only */
+  return (void *)&(CBFATop-1)->code[0];
 #endif /* intel */
 #ifdef NEWRUN
   extern void *CopyCPP(struct Structure *theStruct);
@@ -742,7 +761,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
 
   if (invops) {
     fprintf (output,"FATAL: ValhallaOnProcessStop re-entered\n");
-    exit (99);
+    exit(99);
   } else {
     invops=TRUE;
   }

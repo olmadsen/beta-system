@@ -161,11 +161,9 @@ typedef struct CallBackEntry {
 #endif
 #ifdef intel
     ref(Structure)      theStruct;
-    char                call;
-    long                address;
-    char                rts;
+    unsigned char       code[6];
 #ifdef nti
-    short               disp; /* Only used for pascal and std call */
+    unsigned char       disp[2]; /* Only used for pascal and std call */
 #endif /* nti */
 #endif /* intel */
 #ifdef sgi

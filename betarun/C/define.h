@@ -62,7 +62,7 @@
 
 /********** Machine specific definitions **********/
 #ifdef linux
-#define intel
+#define intel 1
 #define UNIX 1
 #endif
 
