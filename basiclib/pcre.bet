@@ -45,11 +45,16 @@ INCLUDE 'private/pcrelib';
     * Likewise for /x
     *
     * ($wordone, $wordtwo, $rest) = split(/:/, $sample, 3);
-    *             ':' -> pre;
-    *             sample[] -> pre.matchAll
+    *             sample[] -> (':' -> Pcre).matchAll
     *             (#
-    *                split:
+    *                post:: (# do sp1 -> wordone[];
+    *                             sp2 -> wordtwo[];
+    *                             rest3 -> rest[];
+    *                       #)
     *             #)
+    * or (doesn't work yet)
+    *             sample[] -> (':' -> Pcre).matchAll
+    *             (# do split3 -> (wordone[], wordtwo[], rest[]) #);
     *)
 
 
@@ -80,9 +85,16 @@ Pcre:
 
   (* Only in BETA library version *)
   (* Use non-localised English char classes *)
+  (* You have to set this when compiling the regexp, not when matching *)
   pcre_C_LOCALE:       (# exit 65536 #);
   (* Study the regular expression after compiling it *)
+  (* You have to set this when compiling the regexp, not when matching *)
   pcre_C_STUDY:        (# exit 131072 #);
+  (* Give none instead of zero length strings for cases where there is no
+   * match.  This is more correct, but you have to program more carefully
+   * to avoid runtime errors.
+   *)
+  pcre_RETURN_NONE:        (# exit 262144 #);
 
   (* For internal use *)
   pcre_INFO_OPTIONS:      (# exit  0 #);
@@ -104,36 +116,34 @@ Pcre:
   (* Private internal state *)
   compiled_regexp: @Integer;
   extra: @Integer;
-  subPatterns: @Integer;
   oVector: [1] @Integer;
 
+  (* Read-only for users of pcre.  Tells you how many subpatterns your
+   * pattern has.  Only useful if you are reading regular expressions from
+   * a config file or from the user, since otherwise you should know this
+   * figure already :-]
+   *)
+  subPatterns: @Integer;
 
-  init:
+  (* Specialise this in order to give options when compiling the
+   * regular expression and default options when matching.
+   *)
+  options:<
   (#
-     exp: ^Text;
-     enter exp[]
-     do
-        (exp[], 0) -> initOption;
+     o: @Integer;
+  do 0 -> o;
+     INNER;
+  exit o
   #);
 
-  initOption:
+  init:
   (#
      error: ^CString;
      exp: ^Text;
      opt: @Integer;
      errtext: @Integer;
      erroffset: @Integer;
-     (* Specialise this in order to give options when compiling the
-      * regular expression.
-      *)
-     options:<
-     (#
-        o: @Integer;
-     do 0 -> o;
-        INNER;
-     exit o
-     #);
-  enter (exp[], opt)
+  enter exp[]
   do
      options -> opt;
      (if opt %Band pcre_C_LOCALE <> 0 then
@@ -225,7 +235,8 @@ Pcre:
      (* Get (as an integer pair) the position of the nth submatch in the
       * original text.  You get (0,0) if the nth subpattern didn't match.
       * (It is possible that the nth subpattern didn't match, even if
-      * the pattern as a whole matched)
+      * the pattern as a whole matched.  This is different from the
+      * subpattern matching an empty string.)
       *)
      subMatchPos:
      (#
@@ -243,7 +254,8 @@ Pcre:
      (* Get (as an integer pair) the position of the next submatch in the
       * original text.  You get (0,0) if the next subpattern didn't match.
       * (It is possible that the nth subpattern didn't match, even if
-      * the pattern as a whole matched)
+      * the pattern as a whole matched.  This is different from the
+      * subpattern matching an empty string.)
       *)
      nextSubMatchPos:
      (#
@@ -251,9 +263,11 @@ Pcre:
      #);
 
      (* Get (as a text reference) the position of the nth submatch in the
-      * original text.  You get NONE if the nth subpattern didn't match.
+      * original text.  You get NONE if the nth subpattern didn't match and
+      * you set the option.
       * (It is possible that the nth subpattern didn't match, even if
-      * the pattern as a whole matched)
+      * the pattern as a whole matched.  This is different from the
+      * subpattern matching an empty string.)
       *)
      subMatchText:
      (#
@@ -266,7 +280,11 @@ Pcre:
         oVector[index * 2 + 1] + 1 -> start;
 	oVector[index * 2 + 2] -> end;
 	(if start = 0 then
-	   NONE -> result[];
+	   (if opt %Band pcre_RETURN_NONE then
+	       NONE -> result[];
+	   else
+	       '' -> result[];
+	   if);
         else
 	   (start, end) -> subject.sub -> result[];
         if);
@@ -274,13 +292,41 @@ Pcre:
      #);
 
      (* Get (as a text reference) the position of the next submatch in the
-      * original text.  Get NONE if the next subpattern didn't match.
+      * original text.  You get NONE if the next subpattern didn't match
+      * and you set the option.
       * (It is possible that the nth subpattern didn't match, even if
-      * the pattern as a whole matched)
+      * the pattern as a whole matched.  This is different from the
+      * subpattern matching an empty string.)
       *)
      nextSubMatchText:
      (#
      exit nextSubMatchIndex -> subMatchText
+     #);
+
+     (*
+      * Shorthand methods to get a given matched subpattern 
+      * You get NONE if the given subpattern didn't match and you set the
+      * option.
+      * (It is possible that the subpattern didn't match, even if
+      * the pattern as a whole matched.  This is different from the
+      * subpattern matching an empty string.)
+      *)
+     sub1: (# exit 1 -> subMatchText #);
+     sub2: (# exit 2 -> subMatchText #);
+     sub3: (# exit 3 -> subMatchText #);
+     sub4: (# exit 4 -> subMatchText #);
+     sub5: (# exit 5 -> subMatchText #);
+     sub6: (# exit 6 -> subMatchText #);
+     sub7: (# exit 7 -> subMatchText #);
+     sub8: (# exit 8 -> subMatchText #);
+     sub9: (# exit 9 -> subMatchText #);
+
+     (* Gets called if there is no match at all.  I'm sure you can think
+      * of something useful to put here.
+      *)
+     noMatch:<
+     (#
+     do INNER;
      #);
 
      (* Specialise this in order to start at a position other than the
@@ -296,14 +342,24 @@ Pcre:
 
      (* Specialise this in order to give options when executing the
       * regular expression.  Doesn't work for options used to compile
-      * the regular expression, you had to give them earlier.
+      * the regular expression, you had to give them earlier.  If you
+      * don't specialise this then you get the global options for this
+      * pcre object.
       *)
      options:<
      (#
         o: @Integer;
-     do 0 -> o;
+     do THIS(pcre).options -> o;
         INNER;
      exit o
+     #);
+
+     (* Called before the first match is attempted
+      *)
+     pre:<
+     (#
+     do 
+        INNER;
      #);
 
   (* match
@@ -313,16 +369,20 @@ Pcre:
    *)
      subject: ^Text;
      matched: @Boolean;
-     endOfPreviousMatch: @Integer;
+     opt: @Integer;
   enter subject[]
-  do
-     0 -> endOfPreviousMatch;
+  do options -> opt;
+     0 -> subMatchCounter;
+     pre;
+     oVector.range -> oVector.new;
      (compiled_regexp, extra, @@subject.T[1], subject.lgth,
-           position - 1, options %Band pcre_NONBETAOPTIONS, 
+           position - 1, opt %Band pcre_NONBETAOPTIONS, 
 	   @@oVector[1], oVector.range) -> pcre_exec -> result;
      (result <> pcre_ERROR_NOMATCH) -> matched;
      (if matched then
         INNER;
+     else
+        noMatch;
      if);
   exit (matched)
   #);
@@ -335,6 +395,22 @@ Pcre:
    *)
   matchAll: match
   (#
+     endOfPreviousMatch: @Integer;
+     splitPositions: [20] @Integer;
+
+     (* The number og matches we have so far.  This can be queried in split
+      * or match.  Or after matching is complete.
+      *)
+     matches: @Integer;
+
+     pre::<
+     (#
+     do 0 -> endOfPreviousMatch;
+        0 -> matches;
+	splitPositions.range -> splitPositions.new;
+	INNER;
+     #);
+
      (* Get (as a text reference) the text after the previous match (if any)
       * but before the text that matched the regular expression this time
       * around.
@@ -363,25 +439,98 @@ Pcre:
 
      (* Gets called once for each split and once at the end.  You can call
       * splitText and splitPos from here to do something with the split
-      * strings.  Note that it doesn't get called at all if the regexp
-      * doesn't match even once.
+      * strings.  Gets called only once if the pattern doesn't match at all.
       *)
      split:<
      (#
-     do INNER;
+     do (if matches * 2 > splitPositions.range then
+            splitPositions.range + 2 -> splitPositions.extend;
+	if);
+        splitPos ->
+          (splitPositions[matches * 2 - 1], splitPositions[matches * 2]);
+        INNER;
+     #);
+
+     (* Make sure split and post get called at least once even if there
+      * is no match at all.  You can add code here if you want to do
+      * something whenever there is no match at all.
+      *)
+     noMatch::<
+     (#
+	(* Fix up oVector so you can call splitText and splitPos one
+	 * last time.
+	 *)
+     do subject.lgth -> oVector[1];
+	subject.lgth -> oVector[2];
+        split;
+        post;
+	INNER;
      #);
 
      (* Gets called once at the end.  You can call
       * splitText and splitPos from here to do something with the rest
-      * Note that it doesn't get called at all if the regexp
-      * doesn't match even once.
+      * You can also call spn, sp1, sp2, etc to get the first,
+      * second etc. split text.  Restn, rest1, rest2 are similar, but they
+      * get the rest of the string from the start of the nth split text to
+      * the end.
       *)
      post:<
      (#
+        spn:<
+	(#
+	   num: @Integer;
+	   result: ^Text;
+	enter num
+	do (if num > matches + 1 then
+	       (if not (opt %Band pcre_RETURN_NONE) then
+	           '' -> result[];
+	       if);
+	   else
+	       (splitPositions[num * 2 - 1], splitPositions[num * 2]) ->
+	          subject.sub ->  result[];
+	   if);
+	   INNER;
+	exit result[]
+	#);
+	sp1: (# exit 1-> spn #);
+	sp2: (# exit 2-> spn #);
+	sp3: (# exit 3-> spn #);
+	sp4: (# exit 4-> spn #);
+	sp5: (# exit 5-> spn #);
+	sp6: (# exit 6-> spn #);
+	sp7: (# exit 7-> spn #);
+	sp8: (# exit 8-> spn #);
+	sp9: (# exit 9-> spn #);
+        restn:<
+	(#
+	   num: @Integer;
+	   result: ^Text;
+	enter num
+	do (if num > matches + 1 then
+	       (if not (opt %Band pcre_RETURN_NONE) then
+	           '' -> result[];
+	       if);
+	   else
+	       (splitPositions[num * 2 - 1], subject.lgth) ->
+	          subject.sub ->  result[];
+	   if);
+	   INNER;
+	exit result[]
+	#);
+	rest1: (# exit 1-> restn #);
+	rest2: (# exit 2-> restn #);
+	rest3: (# exit 3-> restn #);
+	rest4: (# exit 4-> restn #);
+	rest5: (# exit 5-> restn #);
+	rest6: (# exit 6-> restn #);
+	rest7: (# exit 7-> restn #);
+	rest8: (# exit 8-> restn #);
+	rest9: (# exit 9-> restn #);
      do INNER;
      #);
 
-  do INNER matchAll;
+  do matches + 1 -> matches;
+     INNER matchAll;
      loop:
      (#
      do split;
@@ -390,10 +539,11 @@ Pcre:
 	   leave loop;  (* Got to end of string *)
 	if);
 	(compiled_regexp, extra, @@subject.T[1], subject.lgth,
-         oVector[2], options %Band pcre_NONBETAOPTIONS,
+         oVector[2], opt %Band pcre_NONBETAOPTIONS,
          @@oVector[1], oVector.range) -> pcre_exec -> result;
 	 (result <> pcre_ERROR_NOMATCH) -> matched;
 	 (if matched then
+	    matches + 1 -> matches;
 	    INNER matchAll;
 	 else
 	    (* Fix up oVector so you can call splitText and splitPos one
@@ -481,6 +631,7 @@ Pcre:
   do
      (if new[] = NONE then
         splitText -> new[];
+	subject.lgth -> new.extend;
      else
         splitText -> new.append;
      if);
