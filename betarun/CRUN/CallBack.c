@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-08-24 02:31:04 $, SID: $Revision: 1.16 $
+ * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-08-25 19:41:02 $, SID: $Revision: 1.17 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -87,6 +87,6 @@ int HandleCB(int a1, int a2, int a3, int a4, int a5, int a6)
     /* Fool gcc into believing that the address of a6 is taken, thus
        making it save it on stack. */
     
-    asm(""::"r" (&a6));
+    asm(""::"r" (&a6), "r" (next), "r" (betaTop), "r" (tmp)) ;
     return retval;
 }

@@ -1,13 +1,13 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Suspend.c,v $, rel: %R%, date: $Date: 1992-08-19 15:45:22 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: Suspend.c,v $, rel: %R%, date: $Date: 1992-08-25 19:41:04 $, SID: $Revision: 1.8 $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"
 #include "crun.h"
 
-ref(Component) Susp(ref(Object) theObj)
+ParamThis(Susp)
 {
   ref(RegWin) rw; 	/* Pointer to the saved reg.window of last frame */
   ref(Component) caller;
@@ -21,8 +21,8 @@ ref(Component) Susp(ref(Object) theObj)
    * Suspending a component involving callBacks _must_ result
    * in an error.
    */
-  Ck(theObj);
-  if (ActiveCallBackFrame) BetaError(-13, theObj);
+  Ck(this);
+  if (ActiveCallBackFrame) BetaError(-13, this);
   
   /* This situation is this:
      sp -> Suspend..RegWin
@@ -69,7 +69,7 @@ ref(Component) Susp(ref(Object) theObj)
   lastCompBlock = cast(ComponentBlock) rw->l6;	/* See AttachBasic...*/
   FramePointer = (long *) rw->fp;
   
-  theObj = ActiveComponent->CallerObj;
+  this = ActiveComponent->CallerObj;
   ActiveComponent->CallerObj =  cast(Object) 0;
   ActiveComponent->CallerComp = cast(Component) 0;
   getret(ActiveComponent->CallerLSC);
