@@ -140,6 +140,7 @@ struct errorEntry {
   CompCallBackErr,   "Suspending component involving call backs",
   LeaveBasicCompErr, "Attempt to leave basic component",
   QuaErr,            "Qualification error in reference assignment",
+  QuaOrigErr,        "Qualification error in reference assignment; origins differ",
   EmulatorTrapErr,   "Emulator trap",
   IllegalInstErr,    "Illegal instruction",
   BusErr,            "Bus error",
