@@ -16,6 +16,14 @@ extern long a3;
 extern long a4;
 #endif 
 
+void DoGC() /* The one called directly from betaenv */
+     /* MUST be before doGC() to prevent GCC from inlining it! */
+{ 
+  /* This wrapper adds an activation record around doGC, which skips two AR's */
+  ReqObjectSize = 0;
+  doGC();
+}
+
 void doGC() /* The one called from IOA(c)alloc */
 {
 #ifdef crts
@@ -47,13 +55,6 @@ void doGC() /* The one called from IOA(c)alloc */
     PopGCRegs();
 #endif
     asmemptylabel(EndGC);
-}
-
-void DoGC() /* The one called directly from betaenv */
-{ 
-  /* This wrapper adds an activation record around doGC, which skips two AR's */
-  ReqObjectSize = 0;
-  doGC();
 }
 
 #ifdef RTDEBUG
