@@ -29,7 +29,7 @@ ParamOriginProto(Item *,AlloI)
     }
 #endif
 
-    DEBUG_CODE( Claim(proto->Size > 0, "AlloI: proto->Size > 0") );
+    Claim((long)proto->Size>0, "proto->Size>0");
 
     Protect(origin, item = (Item *) IOAalloc(ItemSize(proto)));
 

@@ -4,17 +4,17 @@
    thus one can use the headsize macro
    */
 
-typedef struct _ProtoType{
-  short              GCTabOff;  /* 0:  Byte offset to the GC Table                */
-  short              OriginOff; /* 2:  Where should the origin be                 */
-  long *             GenPart;   /* 4:  Reference to the generation code (or NULL) */
-  struct _ProtoType *Prefix;    /* 8:  Reference to the prefix prototype          */
-  short              Size;      /* 12: Object size in longs                       */
-  short              MpartOff;  /* 14: Byte offset to M entry prototype (or NULL) */
-  short              FormInx;   /* 16: FragmentForm index of this object-desc     */
-  short              AstRef;    /* 18: AST index of this object-desc.             */
-  long               (*CBR)();  /* 20: Callback routine (or NULL)                 */
-  long               TopMpart;  /* 24: M entry for top prefix                     */
+typedef struct _ProtoType {     /* Number indicates long offset */
+  unsigned short     GCTabOff;  /*  0:  Byte offset to the GC Table                */
+  unsigned short     OriginOff; /*  2:  Where should the origin be                 */
+  long              *GenPart;   /*  4:  Reference to the generation code (or NULL) */
+  struct _ProtoType *Prefix;    /*  8:  Reference to the prefix prototype          */
+  unsigned short     Size;      /* 12: Object size in longs                        */
+  unsigned short     MpartOff;  /* 14: Byte offset to M entry prototype (or NULL)  */
+  unsigned short     FormInx;   /* 16: FragmentForm index of this object-desc      */
+  unsigned short     AstRef;    /* 18: AST index of this object-desc.              */
+  unsigned long      (*CBR)();  /* 20: Callback routine (or NULL)                  */
+  unsigned long      TopMpart;  /* 24: M entry for top prefix                      */
 } ProtoType;
 
 typedef struct _Item{

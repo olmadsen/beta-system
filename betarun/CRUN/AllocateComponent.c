@@ -22,7 +22,7 @@ ParamOriginProto(Component *,AlloC)
     DEBUG_CODE(NumAlloC++);
     Ck(origin);
 
-    DEBUG_CODE( Claim(proto->Size > 0, "AlloC: proto->Size > 0") );
+    Claim((long)proto->Size>0, "proto->Size > 0");
 
     Protect(origin, 
 	    comp = (Component *) IOAalloc(ComponentSize(proto)));    

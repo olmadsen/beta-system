@@ -20,7 +20,7 @@ ParamOriginSize(DopartObject *, AlloDO)
 
     Ck(origin);
 
-    DEBUG_CODE( Claim(size > 0, "AlloDO: size > 0") );
+    Claim((long)size>0, "size>0");
 
     Protect(origin, 
 	    theObj = (DopartObject *) IOAalloc(DopartObjectSize(size)));

@@ -34,8 +34,7 @@ ParamThisOffRange(AlloVR1)
     if (range > LARGE_REP_SIZE) {
         theRep = (ValRep *) LVRACAlloc(ByteRepPTValue, range);
         if (theRep) {
-            DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
-                             "AlloVR1: lvra structure ok"));
+            Claim(theRep->HighBorder==range&&theRep->LowBorder==1, "LVRA structure ok");
             *(ValRep **)((char *)theObj + offset) = theRep;
             return;
         }
@@ -71,8 +70,7 @@ ParamThisOffRange(AlloVR2)
   if (range > LARGE_REP_SIZE) {
     theRep = (ValRep *) LVRACAlloc(ShortRepPTValue, range);
     if (theRep) {
-      DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
-		       "AlloVR2: lvra structure ok"));
+      Claim(theRep->HighBorder==range&&theRep->LowBorder==1, "LVRA structure ok");
       *(ValRep **)((char *)theObj + offset) = theRep;
       return;
     }
@@ -108,8 +106,7 @@ ParamThisOffRange(AlloVR4)
   if (range > LARGE_REP_SIZE) {
     theRep = (ValRep *) LVRACAlloc(LongRepPTValue, range);
     if (theRep) {
-      DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
-		       "AlloVR4: lvra structure ok"));
+      Claim(theRep->HighBorder==range&&theRep->LowBorder==1, "LVRA structure ok");
       *(ValRep **)((char *)theObj + offset) = theRep;
       return;
     }
@@ -145,8 +142,7 @@ ParamThisOffRange(AlloVR8)
   if (range > LARGE_REP_SIZE) {
     theRep = (ValRep *) LVRACAlloc(DoubleRepPTValue, range);
     if (theRep) {
-      DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
-		       "AlloVR8: lvra structure ok"));
+      Claim(theRep->HighBorder==range&&theRep->LowBorder==1, "LVRA structure ok");
       *(ValRep **)((char *)theObj + offset) = theRep;
       return;
     }
