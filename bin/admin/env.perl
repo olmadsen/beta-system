@@ -155,7 +155,7 @@ sub setup_sun4_5_23 {
 
 sub setup_sun4_5_4 {
     if (!defined $ENV{'MOTIFHOME'}) {
-	$ENV{'MOTIFHOME'} = '/opt/dt';
+	$ENV{'MOTIFHOME'} = '/usr/dt';
     }
     if (!defined $ENV{'MOTIFINC'}) {
 	$ENV{'MOTIFINC'} = "$ENV{'MOTIFHOME'}/include";
@@ -177,7 +177,7 @@ sub setup_sun4_5_4 {
 
 sub setup_sun4_5_5 {
     if (!defined $ENV{'MOTIFHOME'}) {
-	$ENV{'MOTIFHOME'} = '/opt/dt';
+	$ENV{'MOTIFHOME'} = '/usr/dt';
     }
     if (!defined $ENV{'MOTIFINC'}) {
 	$ENV{'MOTIFINC'} = "$ENV{'MOTIFHOME'}/include";

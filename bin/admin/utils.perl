@@ -9,6 +9,7 @@ sub PrintDate {
 sub GetDirsRecursively {
     my (@todo,$curdir,@result,$file);
     @todo = @_;
+    push @result, @todo;
     while ($curdir = shift @todo) {
 	$curdir = &path($curdir);
 	print "Scanning $curdir\n" if (defined $debug);
@@ -33,8 +34,12 @@ sub GetFilesInDirs {
     opendir(DIR, $dir) || die "Failed to open $dir: $!";
     foreach $file (readdir DIR) {
 	$file = "$dir/$file";
+	print "$file " if (defined $debug);
 	if (-f $file) {
+	    print "is a regular file\n" if (defined $debug);
 	    push @result, $file;
+	} else { 
+	    print "is not a regular file\n" if (defined $debug);
 	}
     }
     closedir DIR;
