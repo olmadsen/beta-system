@@ -4,31 +4,63 @@ INCLUDE '~beta/process/processmanager';
 --- program:descriptor ---
 systemEnv
 (# 
-   execRead:
+   execReadWriteInit:
      (# name, args: ^text;
-        output: ^stream;
         child: @process;
-        channel: @pipe;
+        openRedirection:< Object;
+        closeRedirection:< Object;
+        
      enter (name[], args[])
      do
         (* initialize (an object to manage) the child process *)
         name[] -> child.init;
-        args[] -> child.argument.append; 
-
-        (* setup communication channel to retrieve output from child *)
-        channel.init;
-        channel.writeEnd[] -> child.redirectToChannel;
-        channel.readEnd[] -> output[];
+        (if args[]<> none then args[] -> child.argument.append if);
+        &openRedirection;
         (* run the child process *)
         child.start;
         INNER;
-        (* Close channel *)
-        channel.readEnd.close;
+        &closeRedirection;
         (* Await exit of child.
          * Otherwise it will turn into a zombie
          *)
         child.awaitStopped;
      #);
+   
+   execRead: execReadWriteInit
+     (# output: ^stream;
+        outchannel: @pipe;
+        openRedirection::<
+          (# 
+          do (* setup communication channel to retrieve output from child *)
+             outchannel.init;
+             outchannel.writeEnd[] -> child.redirectToChannel;
+             outchannel.readEnd[] -> output[];
+             INNER;
+          #);
+        closeRedirection::<
+          (# 
+          do (* Close channel *)
+             INNER;
+             outchannel.readEnd.close;
+          #);
+     do INNER;
+     #);
+   
+   
+   execReadWrite: execRead
+     (# input: ^stream;
+        inchannel: @pipe;
+        openRedirection::<
+          (# 
+          do (* setup communication channel to give input to child *)
+             inchannel.init;
+             inchannel.readEnd[] -> child.redirectFromChannel;
+             inchannel.writeEnd[] -> input[];
+             INNER;
+          #);
+     do INNER;
+     #);
+   
    cnt:@integer;
    execReadText:ExecRead
      (# T: ^Text;
@@ -37,7 +69,24 @@ systemEnv
           (# 
           do 
              (if not output.eos then
-                 output.getline -> T.putline;
+                 output.getline -> T.putLine;
+                 restart loop
+             if)
+          #);
+     exit T[]
+     #);
+   
+   execReadWriteText:ExecReadWrite
+     (# T: ^Text;
+     enter T[]
+     do T[]->input.putText;
+        inchannel.writeEnd.close;
+        &Text[]->T[];
+        loop:
+          (# 
+          do 
+             (if not output.eos then
+                 output.getline -> T.putLine;
                  restart loop
              if)
           #);
@@ -50,15 +99,52 @@ do 'output of "/bin/ls -l":'->screen.putLine;
    ('/bin/ls','-l') -> execReadText -> first[];
    first[]->screen.putText;
    
-   'Repeating command 1000 times...' ->screen.putLine;
-   (for manytimes:1000 repeat
-        manytimes->screen.putInt; ','->screen.put;
+   'Repeating command 100 times...' ->screen.putLine;
+   (for manytimes:100 repeat
+        manytimes->screen.putInt; 
         ('/bin/ls','-l') -> execReadText -> other[];
         (if (first.length<>other.length) or (not (other[]->first.equal)) then
             screen.newLine;
             'first and other are different during run '->screen.putText;
             manytimes->screen.putInt;'.  Other:'->screen.putLine;
             other[]->screen.putLine;
-        if)
-   for)     
+        if);
+        ascii.CR->screen.put;
+   for);
+   
+   
+   'Writing this output to wc, reading the output:'->screen.putLine;
+   ('/bin/wc','-l', first[])->execReadWriteText->screen.putLine;
+   'done.'->screen.putLine;
+   
+   
+   
+   ('/bin/cat', NONE)-> ExecReadWrite
+   (# T: ^Text;
+   do 'test text'->input.putLine;
+      &Text[]->T[];
+      loop:
+        (# 
+        do 
+           (if not output.eos then
+               output.getline -> T.putText;
+               restart loop
+           if)
+        #);
+      '"'->screen.put; T[]->screen.putText;'"'->screen.put;
+      
+      'Foo bar'->input.putLine;
+      &Text[]->T[];
+      loop:
+        (# 
+        do 
+           (if not output.eos then
+               output.getline -> T.putText;
+               restart loop
+           if)
+        #);
+      '"'->screen.put; T[]->screen.putText;'"'->screen.put;
+      
+      inchannel.writeEnd.close;
+   #)
 #)
