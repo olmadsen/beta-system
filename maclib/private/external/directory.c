@@ -54,11 +54,11 @@ char *PathNameFromDirID(long DirID, short vRefNum, char	*s)
 	  return "";
 	}
 	ParID = block.dirInfo.ioDrParID;
-    /* Append a Macintosh style colon (':') to directoryname */
-    pStrcat((unsigned char*)directoryName,"\001:");
+	/* Append a Macintosh style colon (':') to directoryname */
+	/* pStrcat((unsigned char*)directoryName,"\001:"); */
 	/* s = directoryname + s */
-    pStrcat((unsigned char*)directoryName,(unsigned char*)s);
-    pStrcpy((unsigned char*)s,(unsigned char*)directoryName); 
+	/* pStrcat((unsigned char*)directoryName,(unsigned char*)s); */
+	//pStrcpy((unsigned char*)s,(unsigned char*)directoryName); 
 	//p2cstr(directoryName); fprintf(stderr, "PathNameFromDirID:directoryname is %s\n", directoryName); fflush(stderr);
   } while (block.dirInfo.ioDrDirID != fsRtDirID /*2*/);
 
@@ -82,11 +82,11 @@ char *PathNameFromWD(long vRefNum,char *s)
   /* and DirID. The real vRefnum is returned in ioVRefnum, and the real */
   /* DirID is returned in ioWDDirID. */
 
-  err = PBGetWDInfo(&myBlock,false);
+  //err = PBGetWDInfo(&myBlock,false);
 
   return(PathNameFromDirID(myBlock.ioWDDirID,myBlock.ioWDVRefNum,s));
 };
-
+#ifndef macosx
 char *getwd(char *s)
 {
   short	vRefNum,err;
@@ -96,3 +96,4 @@ char *getwd(char *s)
   PathNameFromWD(vRefNum,s);
   return (s);
 }
+#endif

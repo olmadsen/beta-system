@@ -1,6 +1,12 @@
+
 #include <betapng.h>
+
+#ifdef macosx
+#include <Carbon/Carbon.h>
+#else
 #include <QuickDraw.h>
 #include <QDOffscreen.h>
+#endif
 
 static void BetaSwapBig(BetaImage *image)
 {
