@@ -102,84 +102,26 @@ D. Known preliminary issues
 E. Using the CLR debugger(s)
 ===========================
 
-1. Along with the free .NET framework comes a stand alone source level
-   debugger named DbgCLR.exe. It typically resides in 
-   "C:\Program Files\Microsoft.Net\FrameworkSDK\GuiDebug\DbgCLR.exe"
+1. For a description of debugging using DbgCLR, see
+   doc/Debugging.html#dbgclr
 
-2. Open DbgCLR.exe by double clicking its icon in the Windows Explorer.
+2. For a description of debugging using CorDbg, see
+   doc/Debugging.html#cordbg
 
-3. Given that foo.bet has been compiled to foo.exe, you may now
-   specify foo.exe in menu item [Debug->Program to debug].
-
-4. Now set a breakpoint at the beginning of the program:
-   From menu item [Debug->New Breakpoint (Ctrl-B)] specify
-   breakpoint in Function "program.do".
-
-5. Now start the program using menu item [Debug->Start (F5)].
-   The program will now stop at the do-part of the PROGRAM fragment.
-   You can now single step, inspect variables etc. at BETA source
-   level.
-
-6. Possibly we will later generate a foo.dln file for DbgCLR.exe
-
-7. If you want to debug at IL level instead of BETA source level, you
-   can compile with:
-     > nbeta -d foo
-   or (forcing total recompile):
-     > nbeta -s 12 -d foo
-
-8. There is also a command line debugger included in the .NET
-   Framework.
-   It is named cordbg.exe and is normally automatically accessible
-   from your shell (as the .NET Framework Installer will have included
-   the path to it in your search path).
-   If you compiled with nbeta -d cordbg is very useful for debugging
-   IL code. It automatically breaks a the main entry point when run as
-     > cordbg foo.exe
-   The syntax for breaking in the do method of calls program is
-     (cordbg) b program::do
-   You may also use cordbg for source level debug, and specify, e.g.,
-     (cordbg) b foo.bet:16
-   to make it break in line 16 of foo.bet. In this case foo should be
-   compiled without the -d option. To get more help on using cordbg
-   type this:
-     (cordbg) help
+3. Possibly we will later generate a foo.dln file for DbgCLR.exe
 
 
 F. Using Visual Studio .NET
 ===========================
 
-1. If you have Visual Studio .NET you can also debug and browse your
-   program via VS.NET. The way to open the files are slightly
-   different than in DbgCLR, though (see above).
+1. For a description of debugging using Visual Studio .NET, see
+   doc/Debugging.html#vsnet
 
-2. To debug foo.exe produced from foo.bet, you first choose menu item
-   [File->Open Solution...].
-   
-3. In the dialog that appears, you choose 
-   "Files of types: All project files" and navigate to foo.exe.
-   Double click foo.exe.
+2. Possibly we will later generate a foo.sln file for Visual Studio.NET
 
-4. Now set a breakpoint at the beginning of the program:
-   From menu item [Debug->New Breakpoint (Ctrl-B)] specify
-   breakpoint in Function "program.do".
-
-5. Now start the program using menu item [Debug->Start (F5)].
-   The program will now stop at the do-part of the PROGRAM fragment.
-   You can now single step, inspect variables etc. at BETA source
-   level.
-
-6. Possibly we will later generate a foo.sln file for Visual Studio.NET
-
-7. We intend to investigate the many possibilities that Visual Studio
+3. We intend to investigate the many possibilities that Visual Studio
    offers, by letting it "know" the BETA language, e.g. having syntax
    coloring, allowing it to call the compiler as part of a build etc.
-
-8. If you want to debug at IL level instead of BETA source level, you
-   can compile with:
-     > nbeta -d foo
-   or (forcing total recompile):
-     > nbeta -s 12 -d foo
 
 
 G. Cross language support
@@ -193,7 +135,7 @@ G. Cross language support
    statements are:
 
      nbeta -x Bclass.bet
-     csc /r:System.dll /r:dotnet/tstenv.dll /r:dotnet/Bclass.dll BclassUser.cs      nbeta -x Bclass.bet
+     csc /r:System.dll /r:dotnet/tstenv.dll /r:dotnet/Bclass.dll BclassUser.cs
 
    NOTICE: The DLLs generated for BETA files currently reside in the
    'dotnet' dub directory (to avoid cluttering the source directory).
