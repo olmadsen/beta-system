@@ -4,8 +4,21 @@
  * executable file.
  *
  * Sets up a fd to nm output and reads the nametable from this descriptor.
+ * 
+ * This file is used by both the debugger and the dynamic linker.
+ * The debugger needs only the text (code) labels, whereas the dynamic
+ * linker needs most symbols.
+ * The preprocessor symbol TEXT_ONLY is defined by default, but can be 
+ * #undef'ed if all symbols are required.
+ * The preprocessor symbol DYN is used with the dynamic linker. This implies
+ * #undef of TEXT_ONLY.
  *
  */
+
+#define TEXT_ONLY 1  /* Default is only to process text-section symbols */
+#ifdef DYN           /* Dynamic linker needs all symbols */
+#undef TEXT_ONLY
+#endif
 
 #include <stdio.h>
 #include <string.h>
@@ -15,30 +28,24 @@
 
 FILE *fd;       /* The file descriptor from which the nameTable is read */
 int NextAddress;     /* The last address read from the fd. */
-char NextLabel[100]; /* The last label read from the fd. */
+char NextLabel[200]; /* The last label read from the fd. */
 
 #ifdef sgi
 #define nmcommand "/bin/nm -Bhnd %s"
 #define Decimal
 #endif
+
 #ifdef sun4s
 #define nmcommand "/usr/ccs/bin/nm -hvp %s"
 #define Decimal
 #endif
-#ifdef sun4
-#define nmcommand "nm -gn %s"
-#define Hexadecimal
-#endif
+
 #ifdef hpux9pa
+#ifdef TEXT_ONLY
 #define nmcommand "/bin/nm -hp %s | grep ' T ' | sort"
-#define Decimal
-#endif
-#ifdef hpux9mc
-#define nmcommand "/bin/nm -dn %s | grep ' T ' "
-#define Decimal
-#endif
-#ifdef linux
-#define nmcommand "nm -Bv -td %s | grep -v ' U '"
+#else /* TEXT_ONLY */
+#define nmcommand "/bin/nm -hp %s | sort"
+#endif /* TEXT_ONLY */
 #define Decimal
 #endif
 
@@ -91,10 +98,12 @@ void findNextLabel () {
 
     type = ch;
 
+#ifdef TEXT_ONLY
     if ((type != 'N') && (type != 'T')) {
       while (fgetc (fd) != '\n') continue;
       continue;
     }
+#endif /* TEXT_ONLY */
 
     fgetc (fd);
 
@@ -357,6 +366,12 @@ void DumpFile(LPSTR filename) {
   CloseHandle(hFile);
 }
 
+#ifdef TEXT_ONLY
+#define SECTION_CONDITION pSymbolTable->SectionNumber == textSectionNumber
+#else /* TEXT_ONLY */
+#define SECTION_CONDITION 1
+#endif /* TEXT_ONLY */
+
 void DumpSymbolTable(PIMAGE_SYMBOL pSymbolTable, unsigned cSymbols) {
   unsigned i;
   PSTR stringTable;
@@ -366,11 +381,11 @@ void DumpSymbolTable(PIMAGE_SYMBOL pSymbolTable, unsigned cSymbols) {
   stringTable = (PSTR)&pSymbolTable[cSymbols]; 
   
   for ( i=0; i < cSymbols; i++ ) {
-    if (pSymbolTable->SectionNumber == textSectionNumber) {
+    if (SECTION_CONDITION) {
       if (SzStorageClass1[2]==GetSZStorageClass(pSymbolTable->StorageClass)) {
 	
 	/* this symbol passed */
-	sprintf(sectionName,"N");
+	sprintf(sectionName,"N"); /* Identification really don't matter for BETA */
 	if (pSymbolTable) {
 	  fprintf(fd,"%08X", pSymbolTable->Value);
 	} else 
