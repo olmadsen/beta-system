@@ -32,6 +32,7 @@ export PACKYMER
 export PACKXT
 export PACKBIFROST
 export PACKFREJA
+export PACKMJOLNERTOOL
 export PACKLIDSKJALV
 export PACKOODB
 export PACKGDMO
@@ -87,6 +88,10 @@ fi
 
 if [ "$PACKFREJA" = "yes" ]; then
    ${BETALIB}/export/misc/freja.sh
+fi
+
+if [ "$PACKMJOLNERTOOL" = "yes" ]; then
+   ${BETALIB}/export/misc/mjolnertool.sh
 fi
 
 if [ "$PACKYMER" = "yes" ]; then

@@ -2,6 +2,13 @@
 
 # === STANDARD SYSTEM ===
 
+echo ""
+echo Currently not allowed !!
+echo Not up-to-date.  Build a PE system instead.
+echo ""
+exit 1
+
+
 # if not specified above: default to "no"
 
 PACKSYSTEM=${PACKSYSTEM-"no"}
@@ -32,10 +39,18 @@ export PACKYMER
 export PACKXT
 export PACKBIFROST
 export PACKFREJA
+export PACKMJOLNERTOOL
 export PACKLIDSKJALV
 export PACKOODB
 export PACKGDMO
 export PACKCONTRIB
+
+DST=${BETALIB}/export/tarfiles
+if [ ! -d $DST ]; then mkdir $DST; fi
+
+DST=${DST}/${TARGET}
+if [ ! -d $DST ]; then mkdir $DST; fi
+export DST
 
 echo Removing existing tar/lst files:
 ls $DST/*
@@ -81,6 +96,10 @@ fi
 
 if [ "$PACKFREJA" = "yes" ]; then
    ${BETALIB}/export/misc/freja.sh
+fi
+
+if [ "$PACKMJOLNERTOOL" = "yes" ]; then
+   ${BETALIB}/export/misc/mjolnertool.sh
 fi
 
 if [ "$PACKYMER" = "yes" ]; then
