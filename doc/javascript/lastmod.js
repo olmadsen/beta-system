@@ -7,6 +7,8 @@ var day_names   = new Array("Sunday","Monday","Tuesday","Wednesday","Thursday","
 var sup_date;
 var century;
 var lastmod = new Date(document.lastModified);
+var hours;
+var minutes;
 
 var sup       = new Array();
 sup[1]        = "1<SUP>st</SUP>";
@@ -16,6 +18,17 @@ sup[21]       = "21<SUP>st</SUP>";
 sup[22]       = "22<SUP>nd</SUP>";
 sup[23]       = "23<SUP>rd</SUP>";
 sup[31]       = "31<SUP>st</SUP>";
+
+if (lastmod.getMinutes()<10) 
+   minutes = "0" + lastmod.getMinutes();
+else
+   minutes = lastmod.getMinutes();
+
+if (lastmod.getHours()<10) 
+   hours = "0" + lastmod.getHours();
+else
+   hours = lastmod.getHours();
+
 
 if ((lastmod.getDate()==1)  || (lastmod.getDate()==2)  || (lastmod.getDate()==3) ||
     (lastmod.getDate()==21) || (lastmod.getDate()==22) || (lastmod.getDate()==23) ||
@@ -32,5 +45,5 @@ else
 document.writeln("[Last modified: " + day_names[lastmod.getDay()] + " " 
 		 + month_names[lastmod.getMonth()] + " " + sup_date
 		 + " " + century + lastmod.getYear() 
-		 + " at " + lastmod.getHours() + ":" + lastmod.getMinutes()
+		 + " at " + hours + ":" + minutes
 		 + "]");
