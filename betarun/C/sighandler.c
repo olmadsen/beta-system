@@ -1,9 +1,13 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: sighandler.c,v $, rel: %R%, date: $Date: 1991-01-30 10:55:30 $, SID: $Revision: 1.1 $
+ * Mod: $RCSfile: sighandler.c,v $, rel: %R%, date: $Date: 1991-01-30 11:27:47 $, SID: $Revision: 1.2 $
  * by Lars Bak
  */
 #include "beta.h"
+
+#ifdef UNIX
+#include <signal.h>
+#endif
 
 void SignalHandler(sig, code, scp, addr)
   int sig, code;
