@@ -1,6 +1,6 @@
 /**********************************************************
  * 
- *   This is a C program that uese a COM account object
+ *   This is a C program that use a COM account object
  *   implemented in BETA
  *   The object has operations:
  *   init, deposit and withdraw
@@ -25,7 +25,7 @@ struct Account
 };
 
 
-/* Called form BETA with COM account object */
+/* Called from BETA with COM account object */
 void PutAccount(struct Account * R)
 { printf("Enter C PutAccount\n");
   /* not meaningfull printf("Balance%i\n",R->balance); */

@@ -7,7 +7,7 @@
 # define CALL
 #endif
 
-#define test 1
+#define test 0
 
 struct xCOMclass; /* forward */
 
@@ -89,4 +89,37 @@ struct xCOMclass * GetXobj()
   R->val = 0;
   R->balance = 0;
   return R; 
+}
+
+/*************************************************************
+ *   C declarations for using COM object implemented in BETA
+ **************************************************************/
+
+char startCh  = 'g';
+
+/* Interface definition for bCOMclass COM class */
+struct bCOMclass; /* forward declaration */
+ 
+/* vtblX is the virtual dispatch table for bCOMclass objects 
+ * The vtblX has entries in the form of function pointers
+ */
+struct vtblX
+{ void (*g1)(struct bCOMclass *this, char ch);
+  long (*g2)(struct bCOMclass *this, long a, long b, long c);
+  long (*g3)(struct bCOMclass *this, char * s);
+};
+
+/* bCOMclass is the class */
+struct bCOMclass
+{ struct vtblX * proto; /* pointer to virtual dispatch table */
+};
+
+
+/* Called from BETA with COM bCOMclass object */
+void PutBobj(struct bCOMclass * R)
+{ if (test) printf("\n   Enter C PutBobj: %c\n", startCh);
+  R->proto->g1(R,'g');;
+  R->proto->g2(R,100,10,1);
+  R->proto->g3(R,"ij");
+  if (test) printf("\n   Leaving C PutbCOMclass\n");
 }
