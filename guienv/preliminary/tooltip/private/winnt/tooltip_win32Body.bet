@@ -1,0 +1,354 @@
+ORIGIN '../tooltipBody';
+INCLUDE 
+'~beta/guienv/v1.6/private/winnt/guienv_ntiprivate'
+'~beta/win32lib/v1.6/commctrl'
+'~beta/containers/v1.6/list'
+'~beta/sysutils/v1.6/cstring';
+
+(* BUILD default '$$/toolTipMisc.obj' 
+              'external/toolTipMisc.c' 
+ 'betacc $0 $1';  *)
+
+-- lib: attributes --
+
+printLPTOOLTIPTEXT: external
+  (# lParam: @integer;
+  enter lParam
+  do callC
+  #);
+
+GetToolTipClass: external
+  (# theText: @integer; (* LPCSTR *)
+  do callC;
+  exit theText
+  #);
+
+memset: external
+  (# dest,c,count: @integer;
+     result: @integer;
+  enter (dest,c,count)
+  do callC;
+  exit result
+  #);
+
+lstrcpy: External
+  (# charptr1, charptr2: @integer;
+     result_ptr: @integer;
+  enter (charptr1, charptr2)
+  do 'lstrcpyA' -> callStd;
+  exit result_ptr
+  #);
+
+lstrcpyn: external
+  (# lpString1: @integer;  (* address of target buffer *)
+     lpString2: @integer;  (* address of source string *)
+     iMaxLength: @integer; (* number of bytes to copy *)
+     result_ptr: @integer;
+  enter (lpString1, lpString2, iMaxLength)
+  do 'lstrcpynA' -> callStd;
+  exit result_ptr
+  #);
+
+(* addToolTip: external
+ *   (# hwndToolTip,flags,hwnd,uid: @integer;
+ *      tip: [1]@char;
+ *   enter (hwndToolTip, flags,hwnd,uid,tip)
+ *   do callC
+ *   #);
+ *)
+
+
+LPSTR_TEXTCALLBACK: (# exit 0xffffffff #);
+
+TTS_ALWAYSTIP: (# exit           0x01 #);
+TTS_NOPREFIX: (# exit            0x02 #);
+
+TTF_IDISHWND: (# exit             0x01 #);
+TTF_CENTERTIP: (# exit            0x02 #);
+TTF_RTLREADING: (# exit           0x04 #);
+TTF_SUBCLASS: (# exit             0x10 #);
+
+TTM_SETDELAYTIME: (# exit (WM_USER + 3) #);
+TTM_ADDTOOL: (# exit (WM_USER + 4) #);
+TTM_DELTOOL: (# exit (WM_USER + 5) #);
+
+TOOLINFO_ext: ExternalRecord
+  (# 
+     cbSize: @long (# pos::< (# do 0 -> value #); #);
+     uFlags: @long (# pos::< (# do 4 -> value #); #);
+     hwnd: @long (# pos::< (# do 8 -> value #); #);
+     uId: @long (# pos::< (# do 12 -> value #); #);
+     rect: @
+       (# left: @long (# pos::< (# do 16 -> value #); #);
+          top: @long (# pos::< (# do 20 -> value #); #);
+          right: @long (# pos::< (# do 24 -> value #); #);
+          bottom: @long (# pos::< (# do 28 -> value #); #);
+       enter (left,top,right,bottom)
+       exit (left,top,right,bottom)
+       #);
+     hinst: @long (# pos::< (# do 32 -> value #); #);
+     lpszText: @long (# pos::< (# do 36 -> value #); #);
+  #);
+
+sizeOfTOOLINFO: (* external *)
+  (# size: @integer;
+  do (* callC; *)
+     40 -> size
+  exit size
+  #);
+
+
+-- GUIENVtooltipLib: attributes --
+
+-- GUIENVtooltipSetDelayTime: doPart --
+do (tooltipPriv.toolTipId, TTM_SETDELAYTIME, durationType, delay) 
+     -> SendMessage
+
+-- GUIENVtoolTipControlAdd: doPart --
+do theTool[] -> tooltipPriv.theTools.insert;
+   
+-- GUIENVtoolTipControlDelete: doPart --
+do theTool[] -> tooltipPriv.theTools.remove;
+   
+   
+-- GUIENVtooltipOpen: doPart --
+do    
+   InitCommonControls;
+   
+   tooltipPriv.notimgr.open;
+   
+   (0,'tooltips_class32','',WS_POPUP %Bor TTS_ALWAYSTIP,0,0,10,10,tooltipPriv.notimgr.interfaceObjectId,0,uienvHInstance,0) 
+     -> CreateWindowEx
+     -> tooltipPriv.toolTipId;
+   
+   inner open;
+   
+-- GUIENVtooltipClose: doPart --
+do inner close;
+   
+   tooltipPriv.notimgr.close;
+   tooltipPriv.theTools.clear;
+   tooltipPriv.toolTipId -> DestroyWindow;
+   0 -> tooltipPriv.toolTipId;
+   
+-- tooltipPrivAttr: descriptor --
+(# toolTipId: @integer;
+   toolElm: 
+     (# uid: @integer;
+        theTool: ^tool;
+     #);
+   theTools: @list
+     (# element:: toolElm; 
+        insert:
+          (# theTool: ^tool;
+             theRectTool: ^rectTool;
+             theToolElm: ^toolElm;
+             proceed: @boolean;
+             theToolInfo: @TOOLINFO_ext;
+             flags: @integer;
+             
+             tempText: @cString; freeTempText: @boolean;
+             
+          enter theTool[] 
+          do true -> proceed;
+             l: scan
+               (# 
+               do (if current.theTool[]=theTool[] then
+                      false -> proceed;
+                      leave l
+                  if);
+               #);
+             (if proceed then
+                 
+                 &toolElm[] -> theToolElm[];
+                 theTool[] -> theToolElm.theTool[];
+                 
+                 (* Add the tool to the control. *)
+                 sizeOfTOOLINFO -> malloc -> theToolInfo.ptr;
+                 
+                 (if theToolInfo.ptr<>0 then
+                     
+                     (theToolInfo.ptr,0,sizeOfTOOLINFO)->memset;
+                     
+                     sizeOfTOOLINFO -> theToolInfo.cbSize;
+                     LPSTR_TEXTCALLBACK -> theToolInfo.lpszText;
+                     0 -> theToolInfo.hinst;
+                     
+                     (if true
+                      //(theTool##=Tool##) then
+                         (if theTool.theWindowItem.interfaceObjectID<>0 then
+                             
+                             TTF_SUBCLASS %Bor TTF_IDISHWND -> theToolInfo.uFlags;
+                             theTool.theWindowItem.interfaceObjectID
+                               -> theToolElm.uid
+                               -> theToolInfo.uId;
+                             notimgr.interfaceObjectId -> theToolInfo.hwnd;
+                          else
+                             
+                         if);
+                         
+                      //(theTool##<=rectTool##) then
+                         theTool[] -> theRectTool[];
+                         (if theTool.theWindowItem.interfaceObjectID<>0 then
+                             
+                             TTF_SUBCLASS -> theToolInfo.uFlags;
+                             uniqueID 
+                               -> theToolElm.uid 
+                               -> theToolInfo.uId;
+                             theTool.theWindowItem.interfaceObjectID 
+                               -> theToolInfo.hwnd;
+                             
+                             (theRectTool.theRect.left,
+                             theRectTool.theRect.top,
+                             theRectTool.theRect.right,
+                             theRectTool.theRect.bottom)
+                               -> theToolInfo.rect;
+                             
+                             true -> freeTempText;
+                             (if theTool.theTip[]<>NONE then
+                                 theTool.theTip[] -> tempText.set; 
+                              else
+                                 '' -> tempText.set; 
+                             if);
+                             tempText -> theToolInfo.lpszText;
+                                
+                          else
+                             
+                         if);
+                     if);
+                     
+                     (if ((toolTipId, TTM_ADDTOOL, 0, theToolInfo.ptr) -> SendMessage)=0
+                         then
+                         'Adding tool failed.' -> screen.putLine;
+                      else
+                         (* Add the tool to the tools list. *)
+                         theToolElm[] -> append;
+                     if);
+                     
+                     (if freeTempText then
+                         tempText.free;
+                         false -> freeTempText;
+                     if);
+                     theToolInfo.ptr -> free;
+                  else
+                     'Failed to allocate TOOLINFO.' -> screen.putLine;
+                 if);
+             if);
+          #);
+        remove:
+          (# theTool: ^Tool;
+             theToolElm: ^toolElm;
+             theToolInfo: @TOOLINFO_ext;
+          enter theTool[] 
+          do l: scan
+               (# 
+               do (if current.theTool[]=theTool[] then
+                      current[] -> theToolElm[];
+                      leave l
+                  if);
+               #);
+             (if theToolElm[]<>NONE then
+                 
+                 sizeOfTOOLINFO -> malloc -> theToolInfo.ptr;
+                 
+                 (if theToolInfo.ptr<>0 then
+                     
+                     (theToolInfo.ptr,0,sizeOfTOOLINFO)->memset;
+                     
+                     sizeOfTOOLINFO -> theToolInfo.cbSize;
+                     (if true
+                      //(theTool##=tool##) then
+                         notimgr.interfaceObjectId -> theToolInfo.hwnd;
+                         
+                      //(theTool##<=rectTool##) then
+                         theToolElm.theTool.theWindowItem.interfaceObjectID 
+                           -> theToolInfo.hwnd;
+                     if);
+                     theToolElm.uId -> theToolInfo.uId;
+                     (toolTipId, TTM_DELTOOL, 0, theToolInfo.ptr) -> SendMessage;
+                     theToolInfo.ptr -> free;
+                     theToolElm[] -> at -> delete;
+                  else
+                     'Failed to allocate TOOLINFO.' -> screen.putLine;
+                 if);
+             if);
+          #);
+        
+        getInfoFromId:
+          (# uid: @integer;
+             theTool: ^tool;
+          enter uid
+          do l: scan
+               (# 
+               do (if current.uid=uid then
+                      current.theTool[] -> theTool[];
+                      leave l
+                  if);
+               #);
+          exit theTool[]
+          #);
+     #);
+   
+   notimgr: @windowItem
+     (# notiMgrMethods: windowItemMethods
+          (#      
+             dispatchMessage::
+               (# didSomething: @boolean;
+                  processNotify:
+                    (# hwndFrom, idCtrl, code1: @integer;
+                       flags, strAddr: @integer;
+                       theTool: ^tool;
+                       tempText: ^cString;
+                       bytesToCopy: @integer;
+                    do info.lParam -> TOS'%adrGetLong' -> hwndFrom;
+                       info.lParam+4 -> TOS'%adrGetLong' -> idCtrl;
+                       info.lParam+8 -> TOS'%adrGetLong' -> code1;
+                       
+                       (if code1=TTN_NEEDTEXT then
+                           %getLongAt (info.lParam+100) -> flags; 
+                           
+                           %getLongAt (info.lParam + 12) -> strAddr;
+                           
+                           idCtrl -> tooltipPriv.theTools.getInfoFromId -> theTool[];  
+                           
+                           (if theTool[]<>NONE then
+                               (if theTool.theTip[]<>NONE then
+                                   (if theTool.theTip.empty then
+                                       &cString[] -> tempText[];
+                                       theTool.theTip[] -> tempText.set; 
+                                       (strAddr, tempText) -> lstrcpy; 
+                                       tempText.free;
+                                    else
+                                       theTool.theTip.length+1 -> bytesToCopy;
+                                       (strAddr, @@theTool.theTip.T[1],bytesToCopy) 
+                                         -> lstrcpyn
+                                   if);
+                                else
+                                   'theTool.theTip[]=NONE' -> screen.putLine;
+                               if);
+                            else
+                               'theTool[]=NONE' -> screen.putLine;
+                           if);
+                           true -> didSomething;
+                        else
+                           false -> didSomething;
+                       if);
+                    #);
+               do false -> didSomething;
+                  (if info.message=WM_NOTIFY then processNotify; if);
+                  
+                  didSomething or info.handled -> info.handled;
+               #);
+          #);
+        
+        open::
+          (# create::
+               (# 
+               do &notiMgrMethods[] -> theMethods; 
+               #);
+          do hide
+          #);
+        
+     #);
+   
+#)
