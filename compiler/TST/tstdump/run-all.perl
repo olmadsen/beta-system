@@ -90,6 +90,7 @@ foreach $f (@files) {
 	    open(OUT, ">$f.app") || die "Unable to write app dump: $!";
 	    while(<IN>) {
 		next if (/\{/);
+		s/set\+ BETART\=SimpleDump/setenv BETART SimpleDump/gi;
 		print OUT;
 	    }
 	    close IN;
