@@ -1,8 +1,6 @@
-JAVAC = javac -sourcepath sources -d classes -classpath classes 
-
-JavaConverter.class: 
-	mkdir -p classes/beta/converter
-	$(JAVAC) sources/beta/converter/JavaConverter.java
+JavaConverter
+	@echo Javaconverter has been moved to javalib.
+	@echo Build it by 'mbs_compiletools java2beta'
 
 clean:
 	/bin/rm -f *~ *.class *.ast *.astL *.a2s \#*
