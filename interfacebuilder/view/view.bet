@@ -38,7 +38,7 @@ world: canvas
                r->clipRectangle;
                background->pen.foreGroundColor;
                r->fillRect;
-               (g[],area[])->bulletinBoard.draw;
+               (g[])->bulletinBoard.draw;
                
             #);
           
@@ -98,10 +98,10 @@ world: canvas
             (# w: ^wrapper; area: ^box; 
             do
                child[]->w[];
-               w.bounds.copy->area[];
-               w.naturalWidth->w.bounds.width;
-               w.naturalHeight->w.bounds.height;
-               w.bounds[]->area.union->area[];
+               w->makeBox->area[];
+               w.naturalWidth->width;
+               w.naturalHeight->height;
+               w[]->area.union->area[];
                area[]->THIS(world).updateArea;
                
             #);
@@ -111,11 +111,8 @@ world: canvas
                l: children.scanReverse
                  (# 
                  do
-                    (if (x,y)->current.bounds.containsPoint then
-                        (g[],x,y,current.bounds[],background[])
-                          ->current.onMouseDown;
-                        leave l;
-                        
+                    (if (x,y)->current.containsPoint then
+                        (g[],x,y,background[])->current.onMouseDown; leave l; 
                     if);
                     
                  #);
@@ -127,8 +124,8 @@ world: canvas
                children.scan
                  (# 
                  do
-                    (if current.bounds.asRectangle->g.isInClip then
-                        (g[],current.bounds[])->current.draw; 
+                    (if current.asRectangle->g.isInClip then
+                        (g[])->current.draw; 
                     if);
                     
                  #);
@@ -147,29 +144,40 @@ world: canvas
             #);
           wrapper: adorner
             (#
-               bounds: ^box;
                init:: 
                  (# 
                  enter theInterior[]
                  do
-                    (10,10,theInterior.naturalWidth,theInterior.naturalHeight)
-                      ->makeBox->bounds[];
+                    10->x;
+                    10->y;
+                    theInterior.naturalWidth->width;
+                    theInterior.naturalHeight->height;
+                    width->putInt;
+                    newLine;
+                    height->putInt;
+                    newLine;
                     THIS(wrapper)[]->theInterior.super[];
                     
                  #);
                draw:: 
                  (# 
-                 do true->override; (g[],bounds[])->theInterior.draw; 
+                 do
+                    true->override;
+                    (0,0,0)->g.pen.foreGroundColor;
+                    asRectangle->g.fillRect;
+                    THIS(box)[]->theInterior.compute;
+                    (g[])->theInterior.draw;
+                    
                  #);
                onMouseDown:: 
                  (# r: @rectangle; newBounds,area: ^box; 
                  do
-                    bounds.asRectangle->r;
+                    asRectangle->r;
                     (r,true,true,true,true)->defineRect->r;
                     (r.left,r.top,r.right-r.left,r.bottom-r.top)->makeBox
                       ->newBounds[];
-                    bounds[]->newBounds.union->area[];
-                    newBounds[]->THIS(wrapper).bounds[];
+                    THIS(box)[]->newBounds.union->area[];
+                    newBounds->THIS(box);
                     area[]->updateArea;
                     
                  #);
@@ -250,8 +258,8 @@ world: canvas
           heightStretch:< integerValue;
           ascent:< integerValue;
           draw:<
-            (# bounds: ^box; g: ^graphics; 
-            enter (g[],bounds[])
+            (# g: ^graphics; 
+            enter g[]
             do
                (if traceDraw then
                    indent;
@@ -270,7 +278,6 @@ world: canvas
           onMouseDown:<
             (#
                x,y: @integer;
-               bounds: ^box;
                g: ^graphics;
                background: ^color;
                track:
@@ -309,10 +316,10 @@ world: canvas
                            (# inside: @boolean; 
                            do
                               (curPt.h,curPt.v)
-                                ->
-                                  bounds.
-                                    containsPoint->inside;
-                              (if inside <> state then
+                                ->containsPoint
+                                ->inside;
+                              (if inside <> state
+                               then
                                   inside->state;
                                   (if state then
                                       enterView; 
@@ -330,7 +337,7 @@ world: canvas
                  #);
                handled: @boolean;
                
-            enter (g[],x,y,bounds[],background[])
+            enter (g[],x,y,background[])
             do (if doInspect then THIS(view)[]->inspect;  if); INNER ; 
             exit handled
             #);
@@ -343,6 +350,11 @@ world: canvas
                if);
                INNER ;
                
+            #);
+          compute:<
+            (# bounds: ^box; 
+            enter bounds[]
+            do bounds->THIS(view); INNER ; 
             #);
           copy:<
             (# type:< view; new: ^type; s: ##view; 
@@ -368,44 +380,50 @@ world: canvas
                if);
                
             #);
-          compute:<
-            (# bounds: ^box; theLayout: ^layout; 
-            enter bounds[]
-            do INNER ; 
-            exit theLayout[]
-            #);
-          draw:: 
-            (# theLayout: ^layout; 
+          delete:<
+            (# child: ^view; 
+            enter child[]
             do
-               bounds[]->compute->theLayout[];
-               (if theLayout[] <> none then
-                   children.scan
-                     (# b: ^box; 
-                     do inx->theLayout.get->b[]; (g[],b[])->current.draw; 
-                     #);
+               (if child.super[] = THIS(composite)[] then
+                   child[]->children.delete;
+                   none ->child.super[];
+                   changed;
+                   INNER ;
                    
                if);
+               
+            #);
+          compute::< 
+            (# theLayout: ^layout; 
+            do
+               INNER ;
+               children.scan
+                 (# inx: @integer
+                 do inx+1->inx; inx->theLayout.get->current.compute
+                 #);
+               
+            #);
+          draw:: 
+            (# 
+            do
+               THIS(view)[]->compute;
+               children.scan
+                 (#  do (g[])->current.draw;  #);
                
             #);
           onMouseDown::< 
             (# theLayout: ^layout; 
             do
-               bounds[]->compute->theLayout[];
-               (if theLayout[] <> none then
-                   l: children.scan
-                     (# b: ^box; 
-                     do
-                        inx->theLayout.get->b[];
-                        (if (x,y)->b.containsPoint then
-                            (g[],x,y,b[],background[])->current.onMouseDown
-                              ->handled;
-                            leave l;
-                            
-                        if);
+               l: children.scan
+                 (# b: ^box; 
+                 do
+                    (if (x,y)->current.containsPoint then
+                        (g[],x,y,background[])->current.onMouseDown->handled;
+                        leave l;
                         
-                     #);
-                   
-               if);
+                    if);
+                    
+                 #);
                (if not handled then INNER ;  if);
                
             #);
@@ -603,7 +621,7 @@ world: canvas
             do
                thePaint->g.pen.foregroundColor;
                theStyle[]->g.style;
-               (bounds.x,bounds.y+theStyle.ascent)->g.moveTo;
+               (x,y+theStyle.ascent)->g.moveTo;
                theString[]->g.drawText;
                
             #);
@@ -625,13 +643,10 @@ world: canvas
      stringViewEditor: adorner
        (#
           interiorType:: stringView;
-          init::<  (#  do 'Init'->putLine;  #);
+          init::<  (#  do INNER #);
           onMouseDown:: 
             (# override::  (#  do true->value #); 
-            do
-               'on mouse down'->putLine;
-               (interior,bounds[])->floatingText.attach;
-               
+            do (interior,THIS(view)[])->floatingText.attach; 
             #);
           
        #);
@@ -658,9 +673,7 @@ world: canvas
             (# 
             do
                (if theImage[] <> none then
-                   (theImage[],(0,0),(bounds.x,bounds.y),bounds.width,
-                    bounds.height)->g.drawRaster;
-                   
+                   (theImage[],(0,0),(x,y),width,height)->g.drawRaster; 
                if);
                
             #);
@@ -739,22 +752,20 @@ world: canvas
                (if not override then theInterior.ascent->value;  if);
                
             #);
+          compute::< (#  do THIS(box)[]->theInterior.compute; INNER #);
           draw::< 
             (# override: @boolean; 
             do
-               INNER ;
-               (if not override then (g[],bounds[])->theInterior.draw;  if);
-               
+               INNER ; (if not override then (g[])->theInterior.draw;  if); 
             #);
           onMouseDown::< 
             (#
                override:< booleanValue;
-               redraw: (#  do (g[],bounds[])->theInterior.draw;  #);
+               redraw: (#  do (g[])->theInterior.draw;  #);
                
             do
                (if not override then
-                   (g[],x,y,bounds[],background[])->theInterior.onMouseDown
-                     ->handled;
+                   (g[],x,y,background[])->theInterior.onMouseDown->handled;
                    (if not handled then INNER ;  if);
                    
                 else
@@ -799,14 +810,14 @@ world: canvas
             do
                true->override;
                thePaint->g.pen.foregroundColor;
-               bounds.asRectangle->g.fillRect;
-               (g[],bounds[])->theInterior.draw;
+               asRectangle->g.fillRect;
+               (g[])->theInterior.draw;
                
             #);
           onMouseDown::< 
             (# override::  (#  do true->value #); 
             do
-               (g[],x,y,bounds[],thePaint[])->theInterior.onMouseDown->handled;
+               (g[],x,y,thePaint[])->theInterior.onMouseDown->handled;
                (if not handled then INNER ;  if);
                
             #);
@@ -895,18 +906,15 @@ world: canvas
                
             do
                true->override;
-               (bounds.x,bounds.y,bounds.x+bounds.width,bounds.y+bounds.height)
-                 ->drawBorder;
-               (g[],(borderWidth,borderWidth)->bounds.inset)->theInterior.draw;
+               (x,y,x+width,y+height)->drawBorder;
+               (g[])->theInterior.draw;
                
             #);
           onMouseDown::< 
-            (# interiorBounds: ^box; override::  (#  do true->value #); 
+            (# override::  (#  do true->value #); 
             do
-               (borderWidth,borderWidth)->bounds.inset->interiorBounds[];
-               (if (x,y)->interiorBounds.containsPoint then
-                   (g[],x,y,interiorBounds[],background[])
-                     ->theInterior.onMouseDown->handled;
+               (if (x,y)->theInterior.containsPoint then
+                   (g[],x,y,background[])->theInterior.onMouseDown->handled;
                    (if not handled then INNER ;  if);
                    
                if);
@@ -941,25 +949,7 @@ world: canvas
             (# 
             do true->override; theInterior.naturalHeight+2*theSize->value; 
             #);
-          draw:: 
-            (# 
-            do
-               true->override;
-               (g[],(theSize,theSize)->bounds.inset)->theInterior.draw;
-               
-            #);
-          onMouseDown::< 
-            (# interiorBounds: ^box; override::  (#  do true->value #); 
-            do
-               (theSize,theSize)->bounds.inset->interiorBounds[];
-               (if (x,y)->interiorBounds.containsPoint then
-                   (g[],x,y,interiorBounds[],background[])
-                     ->theInterior.onMouseDown->handled;
-                   (if not handled then INNER ;  if);
-                   
-               if);
-               
-            #);
+          draw::  (#  do true->override; (g[])->theInterior.draw;  #);
           theSize: @integer;
           
        #);
@@ -967,58 +957,6 @@ world: canvas
        (#
           ascent::  (#  do true->override; naturalHeight div 2->value;  #); 
        #);
-     makeView:
-       (# type:< view; theView: ^type; 
-       do &type[]->theView[]; theView.init; INNER ; 
-       exit theView[]
-       #);
-     makeRow: makeView (# type::< row;  do INNER ;  #);
-     makeColumn: makeView (# type::< column;  do INNER ;  #);
-     makeStringView: makeView
-       (#
-          type::< stringView;
-          thePaint: ^color;
-          theStyle: ^textStyle;
-          theString: ^text;
-          
-       enter (theString[],theStyle[],thePaint[])
-       do
-          (if thePaint[] <> none then thePaint[]->theView.paint;  if);
-          theStyle[]->theView.style;
-          theString[]->theView.string;
-          INNER ;
-          
-       #);
-     makeImageView: makeView
-       (# type::< imageView; theImage: ^pixmap; 
-       enter theImage[]
-       do theImage[]->theView.image; INNER ; 
-       #);
-     makeAdorner: makeView
-       (# type::< adorner; interior: ^view; 
-       enter interior[]
-       do interior[]->theView.theInterior[]; INNER ; 
-       #);
-     makeSolidBackground: makeView
-       (# type::< solidBackground; thePaint: ^color; 
-       enter thePaint[]
-       do
-          (if thePaint[] <> none then thePaint[]->theView.paint;  if);
-          INNER ;
-          
-       #);
-     makeMotifBorder: makeView
-       (# type::< motifBorder; thePaint: ^color; 
-       enter thePaint[]
-       do
-          (if thePaint[] <> none then thePaint[]->theView.paint;  if);
-          INNER ;
-          
-       #);
-     makeCenter: makeAdorner (# type:: center;  do INNER ;  #);
-     makeMargin: makeAdorner (# type:: margin;  do INNER ;  #);
-     makeStringViewEditor: makeAdorner
-       (# type:: stringViewEditor;  do INNER ;  #);
      open::< 
        (# 
        do
@@ -1046,8 +984,7 @@ world: canvas
                  (# x,y: @integer; 
                  do
                     localPosition->(x,y);
-                    (THIS(graphics)[],x,y,none ,none )
-                      ->bulletinBoard.onMouseDown;
+                    (THIS(graphics)[],x,y,none )->bulletinBoard.onMouseDown;
                     
                  #);
                
