@@ -153,6 +153,11 @@ You may order an unconstrained version from\n",
     ActiveComponent->StackObj = 0;  /* the stack is not valid anymore. */
     ProcessReference( &ActiveComponent);
     ProcessReference( &BasicItem );
+    if (InterpretItem) {
+      INFO_IOA(fprintf(output, " (InterpretItem"); fflush(output));
+      ProcessReference( &InterpretItem );
+      INFO_IOA(fprintf(output, ")"); fflush(output));
+    }
     CompleteScavenging();
     
     ProcessStack();
