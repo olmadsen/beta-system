@@ -82,7 +82,7 @@ void SetupArgValues(int ret, int inst, int prev, char *cmd, int show)
     /* At start of argument or EOT */
     if (*p) {
       /* Make room for argument */
-      ArgVector = (char**)realloc(ArgVector, (ArgCount+1)*sizeof(char*));
+      ArgVector = (char**)REALLOC(ArgVector, (ArgCount+1)*sizeof(char*));
       ArgVector[ArgCount++] = p;
       /* Skip argument */
       while (*p && *p != ' ' && *p != '\t')
