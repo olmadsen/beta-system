@@ -106,6 +106,58 @@ void *CopyCPP(struct Structure *theStruct)
   return (void *)&(CBFATop-1)->code[0];
 }
 
+#ifdef ppcmac
+/* CopyPPP:
+ * Called from BETA to generate callback code, i.e. the code
+ * called from Pascal before re-entering BETA world.
+ */
+void *CopyPPP(struct Structure *theStruct, 
+	      long size, 
+	      long univProcInfo
+	      )
+{
+  unsigned long entry;     /* Beta code stub, e.g. _foo */
+  unsigned long strucaddr; /* Address of struc */
+  int res_size = size & 0xff;
+  int par_size = (size & 0xff00)>>8;
+  UniversalProcPtr functionPtr;             
+
+  DEBUG_CODE(NumCopyPPP++);
+
+  /*DebugStr("\pCopyPPP called");*/
+
+  if (!theStruct) return (void *)0 /* NULL function pointer given to C */;
+  Ck(theStruct); Ck(theStruct->iOrigin);
+ 
+  /* Take the next free entry in the Call Back Functions Area.	*/
+  /* This area is defined by 
+   * [ lastCBFABlock->entries <= CBFATop < CBFALimit ].
+   */
+
+  if (CBFATop+1 > CBFALimit){
+    CBFArelloc();
+  }
+
+  CBFATop->theStruct = theStruct;
+
+  entry     = (unsigned long)theStruct->iProto->CBR;
+  strucaddr = (unsigned long)&CBFATop->theStruct;
+
+  GEN_CB_STUB();  /* FIXME: Should probably be different */
+
+  /* DEBUG_CBFA(fprintf(output, "CopyPPP: allocated callback stub 0x%x\n", CBFATop)); */
+
+  ++CBFATop;
+  Ck(theStruct); Ck(theStruct->iOrigin);
+
+  /* Create a pascal function pointer */
+  univProcInfo |= kPascalStackBased | RESULT_SIZE(SIZE_CODE(res_size));
+  functionPtr = NewRoutineDescriptor((ProcPtr)&(CBFATop-1)->code[0],
+				     univProcInfo, 
+				     GetCurrentISA()); 
+  return (void *)(functionPtr);
+} /* CopyPPP */
+#endif /* ppcmac */
 
 /* AlloSICB:
  * Called from BETA callback stub to allocate item and setup

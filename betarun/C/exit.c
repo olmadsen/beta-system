@@ -96,6 +96,7 @@ void BetaExit(long number)
   fprintf(stderr, "PpkVT:    %-8d  ", (int)NumPpkVT);
   fprintf(stderr, "PpkCT:    %-8d  ", (int)NumPpkCT);
   fprintf(stderr, "PpkSVT:   %-8d\n", (int)NumPpkSVT);  
+  fprintf(stderr, "CopyPPP:  %-8d\n", (int)NumCopyPPP);  
 #endif
   fprintf(stderr, "\n");
   fprintf(stderr, "AOAAlloc: %-8d\n", (int)NumAOAAlloc);
