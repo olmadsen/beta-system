@@ -20,6 +20,11 @@ trace_n:
   (# exit false #);
 trace_comments:
   (# exit false #);
+trace_compares:
+  (# exit false #);
+trace_textop:
+  (# exit false #);
+
 use_reflection:
   (# exit false #);
 use_betarun:
@@ -504,6 +509,9 @@ do (if currentTag
          else
             ' '->out.puttext; i->out.putint;
         if);
+        (if (32<=i) and (i<=126) then
+            ' // \'%c\'' -> out.putformat(# do THIS(pushCst).i->c #);
+        if);
      #);
    Address:
      (#
@@ -735,7 +743,10 @@ do (if currentTag
      (* Compare two top elements and jump conditionally *)
      (# cond,L,lab: @integer
      enter(cond,L,lab)
-     do (if cond
+     do (if trace_compares then
+            'emitCmpJmp' -> emitcomment;
+        if);
+        (if cond
          // 1 (* =  *) then
             'beq' -> out.puttext 
          // 2 (* <> *) then
@@ -752,36 +763,42 @@ do (if currentTag
         '\tL'->out.puttext;
         lab -> out.putint
      #);
-   emitCmpBool:
-     (* Compare top with 0 and push result *)
+   emitCmpToBool:
+     (* Compare two top elements and push result *)
      (# cond: @integer
      enter cond
-     do (if cond
+     do (if trace_compares then
+            'emitCmpToBool' -> emitcomment;
+        if);
+        (if cond
          // 1 (* =  *) then
             'ceq' -> out.puttext;
          // 2 (* <> *) then
-            'ceq' -> out.putline;
-            '\tldc.i4.1' -> out.putline;
+            'ceq\n'
+            '\tldc.i4.1\n'
             '\txor' -> out.puttext;
          // 3 (* <  *) then
             'clt' -> out.puttext 
          // 4 (* <= *) then
-            'clt' -> out.puttext;
-            '\tldc.i4.1' -> out.putline;
+            'cgt\n'
+            '\tldc.i4.1\n'
             '\txor' -> out.puttext;
          // 5 (* >  *) then
             'cgt' -> out.puttext 
          // 6 (* >= *) then
-            'cgt' -> out.puttext; 
-            '\tldc.i4.1' -> out.putline;
+            'clt\n' 
+            '\tldc.i4.1\n'
             '\txor' -> out.puttext;
         if);
      #);
    emitCmpBoolJmp:
-     (* Compare top with 0 and jump condiytionally *)
+     (* Compare top with 0 and jump conditionally *)
      (# cond,L,lab: @integer
      enter (cond,L,lab)
-     do 'ldc.i4.0' -> out.putline;
+     do (if trace_compares then
+            'emitCmpBoolJmp' -> emitcomment;
+        if);
+        'ldc.i4.0\n\t' -> out.puttext;
         (cond->reversecond,L,lab) -> emitCmpJmp;
      #);
    emitLabDef:
@@ -935,8 +952,11 @@ do init;
                     'char' -> newArray  
                  // 'Text2CharArray' -> prim.equal then
                     '\t' -> out.puttext;
-                    'Text2CharArray:'->emitcomment;
-                    '\n\tcallvirt instance char[] [mscorlib]System.String::ToCharArray()' 
+                    (if trace_textop then
+                        'Text2CharArray:'->emitcomment;
+                        '\n\t' -> out.puttext;
+                    if);
+                    'callvirt instance char[] [mscorlib]System.String::ToCharArray()' 
                       -> out.puttext;
                  // 'Text2BetaText' -> prim.equal then
                     (* Note! Hardcoding of pattern 'text'
@@ -944,8 +964,11 @@ do init;
                      * more generally
                      *)
                     '\t' -> out.puttext;
-                    'Text2BetaText:'->emitcomment;
-                    '\n\tcallvirt instance char[] [mscorlib]System.String::ToCharArray()\n' 
+                    (if trace_textop then
+                        'Text2BetaText:'->emitcomment;
+                        '\n\t' -> out.puttext;
+                    if);
+                    'callvirt instance char[] [mscorlib]System.String::ToCharArray()\n' 
                       -> out.puttext;
                     'char []' -> allocLocal -> storeLocal;
                     '\tldnull\n'
@@ -958,8 +981,11 @@ do init;
                       -> out.puttext
                  // 'CharArray2String' -> prim.equal then
                     '\t' -> out.puttext;
-                    'CharArray2String:'->emitcomment;
-                    '\n\tnewobj [mscorlib]System.String(char[])' -> out.puttext
+                    (if trace_textop then
+                        'CharArray2String:'->emitcomment;
+                        '\n\t' -> out.puttext;
+                    if);
+                    'newobj [mscorlib]System.String(char[])' -> out.puttext
                  // 'Att' -> prim.equal then
                     'missing call of attach here' -> emitcomment;
                     'we pop the stack to avoid overflow' -> emitcomment;
@@ -1132,10 +1158,19 @@ do init;
                  if);
                  '\n  }'->out.puttext
               // cmpToBool then
-                 BC.get -> emitCmpBool
+                 (if trace_compares then
+                     'cmpToBool' -> emitcomment;
+                 if);
+                 BC.get -> emitCmpToBool
               // cmpAndJmp then
+                 (if trace_compares then
+                     'cmpAndJmp' -> emitcomment;
+                 if);
                  (BC.get,BC.get,BC.get) -> emitCmpJmp  
               // cmpBoolAndJmp then
+                 (if trace_compares then
+                     'cmpBoolAndJmp' -> emitcomment;
+                 if);
                  (BC.get,BC.get,BC.get) -> emitCmpBoolJmp
               // pushCst_s8 then
                  pushCst(# c: @int8 (* CAREFULL: char is unsigned! *);
