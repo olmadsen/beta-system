@@ -5,7 +5,7 @@ BetaStructure = Object (
       origin := org.
       ^self.
    )
-   class = ( ^class. )
+   theClass = ( ^theClass. )
    origin = ( ^origin. )
    create = (
       ^theClass new: origin.
@@ -17,13 +17,13 @@ BetaStructure = Object (
      
    )
    <= aBetaStructure = (
-     
+     ^ (self = aBetaStructure) || (self < aBetaStructure)
    )
    >= aBetaStructure = (
      
    )
    < aBetaStructure = (
-     
+     ^ (theClass < aBetaStructure theClass) ifTrue:[^1]ifFalse:[0].
    )
    > aBetaStructure = (
      
