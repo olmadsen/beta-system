@@ -19,7 +19,7 @@
 #define do_unconditional_gc 0
 #endif
 
-#ifdef MGsparc
+#ifdef MGsparc /* only defined by mg+void for now */
 #define LIN  /* Include support for new Persistence system (void+mg). */
 #define NONMOVEAOAGC  /* Include support for NonMoveAOAGC property */
 #endif
@@ -27,7 +27,7 @@
 #define RTINFO  /* Include support for runtime info */
 #define RTLAZY  /* Include support for lazy fetch */
 #ifdef RTDEBUG
-#if (!defined(MAC))
+#if (!defined(MAC) && !defined(hppa))
 #define RTVALHALLA
 #endif
 #endif
