@@ -444,8 +444,8 @@ void Illegal(char *file, int line)
     fprintf(output, "Attempting to do a stack dump\n");
     DebugStack=1;
     if (!isMakingDump){
-      ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, FALSE, DoNothing);
       isMakingDump=1;
+      ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, FALSE, DoNothing);
     }
   }
 #endif /* NEWRUN */
