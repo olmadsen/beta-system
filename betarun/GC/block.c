@@ -75,24 +75,38 @@ void mmapInitial(unsigned long numbytes)
   Claim(!mmapHeapTop, "mmapInitial: mmapHeapTop!=0, calling twice?\n");
   Claim(!mmapHeapLimit, "mmapInitial: mmapHeapLimit!=0, calling twice?\n");
   INFO(fprintf(output, "(#mmapInitial(%08X))", (int)numbytes));
+
+#define MMAPSTART 0x10000000
+#define MMAPINCR  0x10000000
+
 #if defined(hppa) || defined(sun4s) || defined(linux) || defined(sgi)
 #ifdef sgi
   mmapflags = MAP_AUTORESRV | MAP_PRIVATE | MAP_FIXED;
-#else
+#endif /* sgi */
+
 #ifdef linux
+  mmapflags = MAP_PRIVATE;
+#undef MMAPSTART
+#define MMAPSTART 0x10000000
+#ifndef MAP_FAILED
+#define MAP_FAILED -1
+#endif
+#endif /* linux */
+
+#ifdef hpux9pa
   mmapflags = MAP_PRIVATE | MAP_FIXED;
 #ifndef MAP_FAILED
 #define MAP_FAILED -1
 #endif
-#else
+#endif /* hpux9pa */
+
+#ifdef sun4s
   mmapflags = MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED;
-#endif
-#endif
-#define MMAPSTART 0x10000000
-#define MMAPINCR  0x10000000
+#endif /* sun4s */
+
   fd = open("/dev/zero", O_RDWR);
   startadr = MMAPSTART;
-  while (!mmapHeap && (!((startadr+numbytes) & (1<<31)))) {
+  while (!mmapHeap && (!((startadr+numbytes-1) & (1<<31)))) {
     mmapHeap = mmap((void*)startadr, numbytes, PROT_NONE, mmapflags, fd,0);
     if ((long)mmapHeap == MAP_FAILED) {
       mmapHeap = NULL;
@@ -110,7 +124,7 @@ void mmapInitial(unsigned long numbytes)
 #define MMAPSTART 0x10000000
 #define MMAPINCR  0x10000000
   startadr = MMAPSTART;
-  while (!mmapHeap && (!((startadr+numbytes) & (1<<31)))) {
+  while (!mmapHeap && (!((startadr+numbytes-1) & (1<<31)))) {
     mmapHeap = VirtualAlloc(startadr, numbytes, MEM_RESERVE, PAGE_NOACCESS);
     startadr += MMAPINCR;
   }
