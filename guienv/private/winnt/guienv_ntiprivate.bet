@@ -18,6 +18,34 @@ INCLUDE '../../guienvactions';
 
 
 -- guienvLib: attributes --
+ENUMLOGFONTA: ExternalRecord
+  (# (* bytesize::< (# do 156 -> value; #); *)
+     lfHeight: @long (# pos::< (# do 0 -> value; #); #);  
+     lfWidth: @long (# pos::< (# do 4 -> value; #); #);  
+     lfEscapement: @long (# pos::< (# do 8 -> value; #); #);  
+     lfOrientation: @long (# pos::< (# do 12 -> value; #); #);  
+     lfWeight: @long (# pos::< (# do 16 -> value; #); #);  
+     lfItalic: @byte (# pos::< (# do 20 -> value; #); #);  
+     lfUnderline: @byte (# pos::< (# do 21 -> value; #); #);  
+     lfStrikeOut: @byte (# pos::< (# do 22 -> value; #); #);  
+     lfCharSet: @byte (# pos::< (# do 23 -> value; #); #);  
+     lfOutPrecision: @byte (# pos::< (# do 24 -> value; #); #);  
+     lfClipPrecision: @byte (# pos::< (# do 25 -> value; #); #);  
+     lfQuality: @byte (# pos::< (# do 26 -> value; #); #);  
+     lfPitchAndFamily: @byte (# pos::< (# do 27 -> value; #); #);  
+     lfFaceName: @long (# pos::< (# do 28 -> value; #); #);  
+     elfFullName: @long (# pos::< (# do 60 -> value; #); #);  
+     elfStyle: @long (# pos::< (# do 124  -> value; #); #);  
+  #);
+
+RASTER_FONTTYPE: (# exit 0x0001 #);
+DEVICE_FONTTYPE: (# exit 0x002 #);
+TRUETYPE_FONTTYPE: (# exit 0x004 #);
+
+
+WS_EX_WINDOWEDGE: (# exit 0x00000100 #);
+WS_EX_TOOLWINDOW: (# exit 0x00000080 #);
+WS_EX_PALETTEWINDOW: (# exit ((WS_EX_WINDOWEDGE %Bor WS_EX_TOOLWINDOW) %Bor WS_EX_TOPMOST) #);
 
 WM_NOTIFY: (# exit 16x004E #); (* 060396 /les *)
 
@@ -70,10 +98,12 @@ processOneEvent:
      if);
   #);
 
+
 cleanUp:
   (# 
   do private.textstyles.cleanUp;
-     private.menus.cleanUp;     
+     private.menus.cleanUp;
+     private.windows.cleanUp;
   #);
 
 toData: external
@@ -378,6 +408,11 @@ uienvStandardWindowClass:
   enter private.uienvStandardWindowClass
   exit private.uienvStandardWindowClass
   #);
+uienvDialogWindowClass:
+  (#
+  enter private.uienvDialogWindowClass
+  exit private.uienvDialogWindowClass
+  #);
 uienvHInstance:
   (#
   enter private.uienvHInstance
@@ -512,6 +547,15 @@ doDebug:
 
 -- GUIENVPrivate: descriptor --
 (# doDebug: @boolean;
+   
+   menuChanged:<
+     (# theMenu: ^menu;
+     enter theMenu[]
+     do inner
+     #);
+   
+   EnumFontFamiliesProcAddress: @integer;
+   
    theScreenRectangle: @rectangle;
    hMainWindow: @integer;
    hAccelTable: @integer;
@@ -519,6 +563,7 @@ doDebug:
    lastActiveWindowID: @integer;
    lastCaptureID: @integer;
    uienvStandardWindowClass: @text;
+   uienvDialogWindowClass: @text;
    uienvHInstance: @integer;
    uienvStandardWindowProcAddress: @integer;
    isMCIWndClassReg: @boolean;
@@ -570,7 +615,6 @@ doDebug:
              anInterfaceObject.interfaceObjectID -> ID;
              ID -> fi;
           #);
-        
      #);
    
    windows: @hashTable
@@ -603,6 +647,22 @@ doDebug:
           do false -> value; 
              aWindow.interfaceObjectID -> ID;
              ID -> fi;
+          #);
+        
+        cleanUp:
+          (# 
+          do scan
+             (# 
+             do (if current.isOpen then
+                    (current.contents).scan
+                    (# 
+                    do (if current.private.hBackGroundBrush<>0 then
+                           current.private.hBackGroundBrush -> DeleteObject;
+                           0 -> current.private.hBackGroundBrush;
+                       if);
+                    #);
+                if);
+             #);
           #);
      #);
    
@@ -721,7 +781,7 @@ doDebug:
              if);
           #);
      #);
-
+     
 #)
 
 -- interfaceObjectLib: attributes --
@@ -893,6 +953,8 @@ windowExStyle:
    theWin32Menubar: ^win32Menubar;
    
    windowStyle,windowExStyle: @integer;
+   backGroundColor: @integer;
+   owner: @integer;
    
    iconId: @integer;
    visibleFlag: @boolean;
@@ -927,6 +989,9 @@ windowExStyle:
 -- windowItemLib: attributes --
 handleframeChanged:
   (# newFrame,oldFrame: @rectangle;
+     thisCanvas: ^canvas; 
+     updateBorderRect: @rectangle;
+     w,h: @integer;
   enter (oldFrame,newFrame)
   <<SLOT GUIENVwindowItemHandleFrameChanged: doPart>>
   #);
@@ -1044,27 +1109,15 @@ hiliteFlag:
   enter private.hiliteFlag
   exit private.hiliteFlag
   #);
-automaticUpdate:
-  (#
-  enter private.automaticUpdate
-  exit private.automaticUpdate
-  #);
-updateOnResize:
-  (#
-  enter private.updateOnResize
-  exit private.updateOnResize
-  #);
 windowitemCursor:
   (#
   enter private.windowItemCursor[]
   exit private.windowItemCursor[]
   #);
-updateMaybe:
-  (#
-  do (if automaticUpdate then update if);
-  #);
+
 -- GUIENVwindowItemPrivate: descriptor --
-(# windowItemHilite,borderVisible: @boolean;
+(# backGroundColor,hBackGroundBrush: @integer;
+   windowItemHilite,borderVisible: @boolean;
    borderStyle: @integer;
    borderHandledLocally: @boolean;
    windowItemClass: @text;
@@ -1074,10 +1127,9 @@ updateMaybe:
    windowItemStyle: @integer;
    windowItemClassStatus: @integer;
    windowItemFrame: @rectangle;
-   visibleFlag,enabledFlag,hiliteFlag,
-   automaticUpdate,updateOnResize: @boolean;
+   visibleFlag,enabledFlag,hiliteFlag: @boolean;
    windowItemCursor: ^cursor;
-   theNotiMethods: ^windowItemNotificationMethods; (* 060396 /les *)
+   theNotiMethods: ^windowItemNotificationMethods; 
 #)
 
 -- GUIENVcanvasPrivate: descriptor --
@@ -1111,15 +1163,6 @@ updateMaybe:
      (# element::< windowitem;
      #);
    
-   theVisibleChangedAction: @visibleChangedAction
-     (# 
-     do children.scan
-        (# 
-        do (if current.visible then
-               current.theEventHandler.onVisibleChanged;
-           if);
-        #);
-     #);
 #)
 
 -- textStyleLib: attributes --
@@ -1162,7 +1205,42 @@ dispose:
    textStyleName: @text;
 #)
 
+-- pixmapLib: attributes --
+
+assertInitialized:
+  (# 
+  do (if private.handleToPixmap = 0 then
+         exception
+         (#
+         do 'Accesing a pixmap that are not initialized' -> msg.append;
+         #);
+     if);
+  #);
+
+
 -- pixmapPrivate: descriptor --
 (#
+   handleToPixmap: @integer;
+   isIcon: @boolean;
+   width,height: @integer;
+   depth: @integer;
+   isFromResource: @boolean;
+   
+   bitMapGetWidth: external
+     (# hBitmap: @integer;
+        width: @integer;
+     enter hBitmap
+     do 'bitMapGetWidth' -> callC
+     exit width
+     #);
+
+   bitMapGetHeight: external
+     (# hBitmap: @integer;
+        height: @integer;
+     enter hBitmap
+     do 'bitMapGetHeight' -> callC
+     exit height
+     #);
+
 #)
 
