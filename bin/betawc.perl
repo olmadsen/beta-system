@@ -5,7 +5,7 @@
 
 $betalib = ($ENV{'BETALIB'} || '/usr/local/beta/bin');
 
-# FINAL: require "$betalib/configuration/r4.0/env.perl5";
+# FINAL: require "$betalib/configuration/env.perl5";
 # Experimental:
 require "/users/grouleff/Beta/env.perl5";
 
