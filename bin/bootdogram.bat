@@ -11,7 +11,15 @@ set PRETTYGEN_VERSION=v5.2
 
 rem --- don't change below ---
 
-if "%sdk%"=="" goto usage
+if "%BETALIB%"=="" goto set_betalib
+
+if "%sdk%"=="gnu" goto sdk_set 
+if "%sdk%"=="ms" goto sdk_set 
+if "%sdk%"=="bor" goto sdk_set 
+echo Environment variable SDK is not set.
+goto install_notes
+
+:sdk_set 
 if "%1"=="" goto missing
 
 rem Collect arguments and expand those expandable
@@ -69,14 +77,10 @@ set PRETTYGEN_VERSION=
 
 goto done
 
-:usage
-echo Please set the environment variable SDK to either ms or bor using:
-echo   set SDK=ms
-echo or
-echo   set SDK=bor
-goto done
+:set_betalib
+echo Environment variable BETALIB is not set.
 
-:install
+:install_notes
 echo Please read the installation notes before trying to run the BETA compiler.
 echo Thank you.
 goto done
@@ -87,7 +91,3 @@ goto done
 
 :done
 rem Done
-
-
-
-

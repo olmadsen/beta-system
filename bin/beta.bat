@@ -1,17 +1,12 @@
 @echo off
 
-if "%BETALIB%"=="" goto install
+if "%BETALIB%"=="" goto set_betalib
 
 if "%sdk%"=="gnu" goto sdk_set 
 if "%sdk%"=="ms" goto sdk_set 
 if "%sdk%"=="bor" goto sdk_set 
-
-rem Try to guess which SDK is being used
-if not exist "%BETALIB%"\compiler\nti\ms\beta.exe set sdk=bor
-if not exist "%BETALIB%"\compiler\nti\bor\beta.exe set sdk=ms
-
-rem Set SDK to either "bor" or "ms" for either Borland or Microsoft SDK.
-if "%sdk%"=="" goto usage
+echo Environment variable SDK is not set.
+goto install_notes
 
 :sdk_set
 rem Collect arguments and expand those expandable
@@ -35,14 +30,10 @@ rem Clean-up
 set _opts_=
 goto done
 
-:usage
-echo Please set the environment variable SDK to either ms or bor using:
-echo   set SDK=ms
-echo or
-echo   set SDK=bor
-goto done
+:set_betalib
+echo Environment variable BETALIB is not set.
 
-:install
+:install_notes
 echo Please read the installation notes before trying to run the BETA compiler.
 echo Thank you.
 goto done

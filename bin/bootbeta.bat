@@ -13,12 +13,15 @@ set OLD_BETARUN="e:\\beta\\r4.1.boot\\betarun\\v3.0\\nti\\%SDK%\\betarun.lib"
 
 rem --- don't change below ---
 
-if "%BETALIB%"=="" goto install
+if "%BETALIB%"=="" goto set_betalib
 
-rem Set SDK to either "bor" or "ms" for either Borland or Microsoft SDK.
-if "%sdk%"=="" goto usage
+if "%sdk%"=="gnu" goto sdk_set 
+if "%sdk%"=="ms" goto sdk_set 
+if "%sdk%"=="bor" goto sdk_set 
+echo Environment variable SDK is not set.
+goto install_notes
 
-:SDK_OK
+:sdk_set
 rem Collect arguments and expand those expandable
 set _opts_=
 :getopts
@@ -43,14 +46,10 @@ set OLD_COMPILER_VERSION=
 set OLD_BETARUN=
 goto done
 
-:usage
-echo Please set the environment variable SDK to either ms or bor using:
-echo   set SDK=ms
-echo or
-echo   set SDK=bor
-goto done
+:set_betalib
+echo Environment variable BETALIB is not set.
 
-:install
+:install_notes
 echo Please read the installation notes before trying to run the BETA compiler.
 echo Thank you.
 goto done
