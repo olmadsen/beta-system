@@ -101,7 +101,6 @@ do
    (if currentDiagramName[] <> none then
        currentDiagramName[]->diagFile.name;
        '#'->(currentDiagramName.copy).append->autosaveDiagFile.name;
-       (* '~'->(currentDiagramName.copy).append->tildeDiagFile.name;*)
        (if switch[17] then
            'Freja FrejaFileMenuQuit:'->putLine;
            diagFile.name->putLine;
@@ -143,8 +142,6 @@ do
            '.freja'->(groupName.copy).append->frejaFileName[]->frejaFile.name;
            '.freja#'->(groupName.copy).append->autosaveFrejaFileName[]
              ->autosaveFrejaFile.name;
-           (*'.freja~'->(groupName.copy).append->tildeFrejaFileName[]
-            ->tildeFrejaFile.name;*)
            (if autosaveFrejaFile.entry.exists then
                autosaveFrejaFileName
                  ->scanAstFiles
@@ -172,14 +169,6 @@ do
                        if)
                        *)
                    #);
-               (* no not anymore
-                (if tildeFrejaFile.entry.exists then
-                'mv .freja~ .freja'->putLine;
-                frejaFile.name->tildeFrejaFile.entry.rename
-                else
-                'No .freja~ file!!'->putLine
-                if);
-                *)
                (if autosaveDiagFile.entry.exists then
                    'rm .diag#'->putLine; autoSaveDiagFile.delete
                if);
@@ -202,31 +191,37 @@ do
 
 -- FrejaUndoItem: Descriptor --
 (#
-   thePage: ^OADPage;
-   theObject: ^thePage.DesignObject;
-   theNode: ^thePage.PatternDiagramNode;
+   thePage: ^Page;
+   theOADPage: ^OADPage;
+   theObject: ^theOADPage.DesignObject;
+   theNode: ^theOADPage.PatternDiagramNode;
    se: ^sifEditor
 do
    currentPage->thePage[];
    (if thePage[] <> none then
-       (if thePage.canUndo then
-           thePage.CurrentObject->theObject[];
-           (if theObject[] <> none then
-               (if theObject## <= thePage.PatternDiagramNode## then
-                   theObject[]->theNode[];
-                   theNode.theSifEditor->se[];
-                   (if se[] <> none then
-                       se.undo
-                    else
-                       'Undo: sifEditor is none??'->putline
+       (if thePage## <= OADPage## then
+           thePage[]->theOADPage[];
+           (if theOADPage.canUndo then
+               theOADPage.CurrentObject->theObject[];
+               (if theObject[] <> none then
+                   (if theObject## <= theOADPage.PatternDiagramNode## then
+                       theObject[]->theNode[];
+                       theNode.theSifEditor->se[];
+                       (if se[] <> none then
+                           se.undo
+                        else
+                           'Undo: sifEditor is none??'->putline
+                       if)
                    if)
+                else
+                   'No current object - can not undo'->putline
                if)
-            else
-               'No current object - can not undo'->putline
            if)
+        else
+           'Undo not implemented on this type of page'->alertUser
        if)
     else
-       'Undo: no currentPage!'->putline
+       'Undo: no currentPage!'->alertUser
    if)
 #)  
 
@@ -235,12 +230,14 @@ do
 
 -- FrejaCutItem: Descriptor --
 (#
-   thePage: ^OADPage;
+   thePage: ^Page;
+   theOADPage: ^OADPage;
+   theObjectPage: ^ObjectPage;
    theObject: ^thePage.DesignObject;
-   theNode: ^thePage.PatternDiagramNode;
-   theListDiagram: ^thePage.ListDiagram;
+   theNode: ^theOADPage.PatternDiagramNode;
+   theListDiagram: ^theOADPage.ListDiagram;
    thePatternNode: ^theListDiagram.PatternNode;
-   deletableConnector: ^thePage.DeletableConnector;
+   deletableConnector: ^theOADPage.DeletableConnector;
    anAST: ^MPS.AST;
    t: ^Text;
    group: [0] @Integer;
@@ -252,89 +249,169 @@ do
      (# 
      do
         currentPage->thePage[];
-        (if (count[],list[])->DSStrGetCurGroup then
-            true->isGroup;
-            (count,list)->GetIntList->group;
-            (for i: group.range repeat
-              group[i]->theObjectList.find->theObject[];
-              (if theObject[] <> none then
-                  (if (theObject## <= thePage.UserDataNode##) or
-                  (theObject## <= thePage.DeletableConnector##) then
-                      'Cutting groups including parts of diagrams is not allowed'
-                        ->alertUser;
-                      leave thisOp
-                  if)
-              if);
-              
-            for)
-        if);
-        (if isGroup then
-            false->thePage.private.doOADPaste;
-            menuID.EditMenu.cut->DSUIMenuExecute;
-            FrejaEditMenu.iPaste.enable
-         else
-            thePage.CurrentObject->theObject[];
-            (if theObject[] <> none then
-                doCut:
-                (if theObject## <= thePage.PatternDiagramNode## then
-                    theObject[]->theNode[];
-                    theNode.theDiagram->theListDiagram[];
-                    (if theNode## <= theListDiagram.title## then
-                        (if theListDiagram.theParentNode <> none then
-                            theListDiagram.theParentNode->thePage.currentObject;
-                            (theNode[],theListDiagram.theParentNode)
-                              ->thePage.changedFocus;
-                            theListDiagram.theParentNode->theNode[];
-                            (theListDiagram.theParentNode).theDiagram
-                              ->theListDiagram[]
-                              (* this is realy ugly and except from that
-                               cheating the compiler,
-                               but what the heck, it works! :-) *)
-                         else
-                            'Only diagrams that correspond to patterns can be cut'
-                              ->alertUser;
-                            leave doCut
-                        if)
-                    if);
-                    (if theNode## <= theListDiagram.PatternNode## then
-                        theNode[]->thePatternNode[];
-                        (if thePatternNode.theAssociationNode <> none then
-                            (thePatternNode.theAssociationNode).delete
-                        if)
-                    if);
-                    theNode.getASTNode->anAST[];
-                    (if anAST[] <> none then
-                        (anAST[],1)->(theNode.theSifEditor).changeFocus
-                    if);
-                    true->thePage.private.doOADPaste;
-                    (theNode.theSifEditor).cut
+        (if thePage[] <> none then
+            (if thePage## <= OADPage## then
+                thePage[]->theOADPage[];
+                (if (count[],list[])->DSStrGetCurGroup then
+                    true->isGroup;
+                    (count,list)->GetIntList->group;
+                    (for i: group.range repeat
+                      group[i]->theObjectList.find->theObject[];
+                      (if theObject[] <> none then
+                          (if (theObject## <= theOADPage.UserDataNode##) or
+                          (theObject## <= theOADPage.DeletableConnector##) then
+                              'Cutting groups including parts of diagrams is not allowed'
+                                ->alertUser;
+                              leave thisOp
+                          if)
+                      if);
+                      
+                    for)
+                if);
+                (if isGroup then
+                    false->doOADPaste;
+                    false->doObjectPaste;
+                    false->pasteGroupWithOAD;
+                    menuID.EditMenu.cut->DSUIMenuExecute;
+                    FrejaEditMenu.iPaste.enable
                  else
-                    (if theObject## <= thePage.DeletableConnector## then
-                        'Relations cannot be cut - use clear instead'->alertUser
-                     else
-                        (if theObject## <= thePage.AssociationNode## then
-                            'Relations cannot be cut - use clear instead'
-                              ->alertUser
+                    theOADPage.CurrentObject->theObject[];
+                    (if theObject[] <> none then
+                        doCut:
+                        (if theObject## <= theOADPage.PatternDiagramNode## then
+                            theObject[]->theNode[];
+                            theNode.theDiagram->theListDiagram[];
+                            (if theNode## <= theListDiagram.title## then
+                                (if theListDiagram.theParentNode <> none then
+                                    theListDiagram.theParentNode
+                                      ->theOADPage.currentObject;
+                                    (theNode[],theListDiagram.theParentNode)
+                                      ->theOADPage.changedFocus;
+                                    theListDiagram.theParentNode->theNode[];
+                                    (theListDiagram.theParentNode).theDiagram
+                                      ->theListDiagram[]
+                                      (* this is realy ugly and except from that
+                                       cheating the compiler,
+                                       but what the heck, it works! :-) *)
+                                 else
+                                    'Only diagrams that correspond to patterns can be cut'
+                                      ->alertUser;
+                                    leave doCut
+                                if)
+                            if);
+                            (if theNode## <= theListDiagram.PatternNode## then
+                                theNode[]->thePatternNode[];
+                                (if thePatternNode.theAssociationNode <> none
+                                 then
+                                    (thePatternNode.theAssociationNode).delete
+                                if)
+                            if);
+                            theNode.getASTNode->anAST[];
+                            (if anAST[] <> none then
+                                (anAST[],1)->(theNode.theSifEditor).changeFocus
+                            if);
+                            true->doOADPaste;
+                            false->doObjectPaste;
+                            false->pasteGroupWithOAD;
+                            menuID.EditMenu.copy->DSUIMenuExecute;
+                            FrejaEditMenu.iPaste.enable;
+                            (theNode.theSifEditor).cut
                          else
-                            false->thePage.private.doOADPaste;
+                            (if theObject## <= theOADPage.DeletableConnector##
+                             then
+                                'Relations cannot be cut - use clear instead'
+                                  ->alertUser
+                             else
+                                (if theObject## <= theOADPage.AssociationNode##
+                                 then
+                                    'Relations cannot be cut - use clear instead'
+                                      ->alertUser
+                                 else
+                                    false->doOADPaste;
+                                    false->doObjectPaste;
+                                    false->pasteGroupWithOAD;
+                                    menuID.EditMenu.cut->DSUIMenuExecute;
+                                    FrejaEditMenu.iPaste.enable
+                                if)
+                            if)
+                        if)
+                     else
+                        false->doOADPaste;
+                        false->doObjectPaste;
+                        false->pasteGroupWithOAD;
+                        menuID.EditMenu.cut->DSUIMenuExecute;
+                        FrejaEditMenu.iPaste.enable
+                    if)
+                if)
+             else
+                (if thePage## <= ObjectPage## then
+                    thePage[]->theObjectPage[];
+                    (if (count[],list[])->DSStrGetCurGroup then
+                        true->isGroup;
+                        (count,list)->GetIntList->group;
+                        (for i: group.range repeat
+                          group[i]->theObjectList.find->theObject[];
+                          (if theObject[] <> none then
+                              (if
+                              (theObject## <= theObjectPage.ObjectDiagramNode##)
+                               then
+                                  'Cutting groups including parts of diagrams is not allowed'
+                                    ->alertUser;
+                                  leave thisOp
+                              if)
+                          if);
+                          
+                        for)
+                    if);
+                    (if isGroup then
+                        false->doOADPaste;
+                        false->doObjectPaste;
+                        false->pasteGroupWithOAD;
+                        menuID.EditMenu.cut->DSUIMenuExecute;
+                        FrejaEditMenu.iPaste.enable
+                     else
+                        theObjectPage.CurrentObject->theObject[];
+                        (if theObject[] <> none then
+                            (if theObject## <= theObjectPage.ObjectDiagramNode##
+                             then
+                                'Cutting nodes in object diagrams not yet implemented'
+                                  ->alertUser
+                             else
+                                false->doOADPaste;
+                                false->doObjectPaste;
+                                false->pasteGroupWithOAD;
+                                menuID.EditMenu.cut->DSUIMenuExecute;
+                                FrejaEditMenu.iPaste.enable
+                            if)
+                         else
+                            false->doOADPaste;
+                            false->doObjectPaste;
+                            false->pasteGroupWithOAD;
                             menuID.EditMenu.cut->DSUIMenuExecute;
                             FrejaEditMenu.iPaste.enable
                         if)
                     if)
+                 else
+                    false->doOADPaste;
+                    false->doObjectPaste;
+                    false->pasteGroupWithOAD;
+                    menuID.EditMenu.cut->DSUIMenuExecute;
+                    FrejaEditMenu.iPaste.enable
                 if)
-             else
-                false->thePage.private.doOADPaste;
-                menuID.EditMenu.cut->DSUIMenuExecute
             if)
+         else
+            'No current page'->alertUser
         if)
      #)
 #)  
 
 -- FrejaCopyItem: Descriptor --
 (#
-   thePage: ^OADPage;
+   thePage: ^Page;
+   theOADPage: ^OADPage;
+   theObjectPage: ^ObjectPage;
    theObject: ^thePage.DesignObject;
-   theNode: ^thePage.PatternDiagramNode;
+   theNode: ^theOADPage.PatternDiagramNode;
    anAST: ^MPS.AST;
    t: ^Text;
    group: [0] @Integer;
@@ -346,110 +423,235 @@ do
      (# 
      do
         currentPage->thePage[];
-        (if (count[],list[])->DSStrGetCurGroup then
-            true->isGroup;
-            (count,list)->GetIntList->group;
-            (for i: group.range repeat
-              group[i]->theObjectList.find->theObject[];
-              (if (theObject## <= thePage.UserDataNode##) or
-              (theObject## <= thePage.DeletableConnector##) then
-                  'Copying groups including parts of diagrams is not allowed'
-                    ->alertUser;
-                  leave thisOp
-              if);
-              
-            for)
-        if);
-        (if isGroup then
-            false->thePage.private.doOADPaste;
-            menuID.EditMenu.copy->DSUIMenuExecute;
-            FrejaEditMenu.iPaste.enable
-         else
-            thePage.CurrentObject->theObject[];
-            (if theObject[] <> none then
-                (if theObject## <= thePage.PatternDiagramNode## then
-                    theObject[]->theNode[];
-                    theNode.getASTNode->anAST[];
-                    (if anAST[] <> none then
-                        (anAST[],1)->(theNode.theSifEditor).changeFocus
-                    if);
-                    true->thePage.private.doOADPaste;
-                    (theNode.theSifEditor).copy
+        (if thePage[] <> none then
+            (if thePage## <= OADPage## then
+                thePage[]->theOADPage[];
+                (if (count[],list[])->DSStrGetCurGroup then
+                    true->isGroup;
+                    false->pasteGroupWithOAD;
+                    (count,list)->GetIntList->group;
+                    (for i: group.range repeat
+                      group[i]->theObjectList.find->theObject[];
+                      (if (theObject## <= theOADPage.UserDataNode##) or
+                      (theObject## <= theOADPage.DeletableConnector##) then
+                          true->pasteGroupWithOAD
+                      if);
+                      
+                    for)
+                if);
+                (if isGroup then
+                    false->doOADPaste;
+                    false->doObjectPaste;
+                    menuID.EditMenu.copy->DSUIMenuExecute;
+                    FrejaEditMenu.iPaste.enable
                  else
-                    false->thePage.private.doOADPaste;
+                    theOADPage.CurrentObject->theObject[];
+                    (if theObject[] <> none then
+                        (if theObject## <= theOADPage.PatternDiagramNode## then
+                            theObject[]->theNode[];
+                            theNode.getASTNode->anAST[];
+                            (if anAST[] <> none then
+                                (anAST[],1)->(theNode.theSifEditor).changeFocus
+                            if);
+                            true->doOADPaste;
+                            false->doObjectPaste;
+                            false->pasteGroupWithOAD;
+                            (theNode.theSifEditor).copy;
+                            menuID.EditMenu.copy->DSUIMenuExecute;
+                            FrejaEditMenu.iPaste.enable
+                         else
+                            false->doOADPaste;
+                            false->doObjectPaste;
+                            false->pasteGroupWithOAD;
+                            menuID.EditMenu.copy->DSUIMenuExecute;
+                            FrejaEditMenu.iPaste.enable
+                        if)
+                     else
+                        false->doOADPaste;
+                        false->doObjectPaste;
+                        false->pasteGroupWithOAD;
+                        menuID.EditMenu.copy->DSUIMenuExecute;
+                        FrejaEditMenu.iPaste.enable
+                    if)
+                if)
+             else
+                (if thePage## <= ObjectPage## then
+                    thePage[]->theObjectPage[];
+                    (if (count[],list[])->DSStrGetCurGroup then
+                        true->isGroup;
+                        false->pasteGroupWithOAD;
+                        (count,list)->GetIntList->group;
+                        (for i: group.range repeat
+                          group[i]->theObjectList.find->theObject[];
+                          (if theObject[] <> none then
+                              (if
+                              (theObject## <= theObjectPage.ObjectDiagramNode##)
+                               then
+                                  true->pasteGroupWithOAD
+                              if)
+                          if);
+                          
+                        for)
+                    if);
+                    (if isGroup then
+                        false->doOADPaste;
+                        false->doObjectPaste;
+                        menuID.EditMenu.copy->DSUIMenuExecute;
+                        FrejaEditMenu.iPaste.enable
+                     else
+                        theObjectPage.CurrentObject->theObject[];
+                        (if theObject[] <> none then
+                            (if theObject## <= theObjectPage.ObjectDiagramNode##
+                             then
+                                true->doObjectPaste;
+                                false->doOADPaste;
+                                false->pasteGroupWithOAD;
+                                menuID.EditMenu.copy->DSUIMenuExecute;
+                                FrejaEditMenu.iPaste.enable
+                             else
+                                false->doOADPaste;
+                                false->doObjectPaste;
+                                false->pasteGroupWithOAD;
+                                menuID.EditMenu.copy->DSUIMenuExecute;
+                                FrejaEditMenu.iPaste.enable
+                            if)
+                         else
+                            false->doOADPaste;
+                            false->doObjectPaste;
+                            false->pasteGroupWithOAD;
+                            menuID.EditMenu.copy->DSUIMenuExecute;
+                            FrejaEditMenu.iPaste.enable
+                        if)
+                    if)
+                 else
+                    false->doOADPaste;
+                    false->doObjectPaste;
+                    false->pasteGroupWithOAD;
                     menuID.EditMenu.copy->DSUIMenuExecute;
                     FrejaEditMenu.iPaste.enable
                 if)
-             else
-                false->thePage.private.doOADPaste;
-                menuID.EditMenu.copy->DSUIMenuExecute;
-                FrejaEditMenu.iPaste.enable
             if)
+         else
+            'No current page'->alertUser
         if)
      #)
 #)  
 
 -- FrejaPasteBeforeItem: Descriptor --
 (#
-   thePage: ^OADPage;
-   theObject: ^thePage.DesignObject;
-   theNode: ^thePage.PatternDiagramNode;
+   thePage: ^Page;
+   theOADPage: ^OADPage;
+   theObject: ^theOADPage.DesignObject;
+   theNode: ^theOADPage.PatternDiagramNode;
    anAST: ^MPS.AST;
    t: ^Text
 do
    currentPage->thePage[];
-   thePage.CurrentObject->theObject[];
-   (if thePage.private.doOADPaste then
-       (if theObject[] <> none then
-           (if theObject## <= thePage.PatternDiagramNode## then
-               (if thePage.canPaste then
-                   theObject[]->theNode[];
-                   theNode.getASTNode->anAST[];
-                   (if anAST[] <> none then
-                       (anAST[],1)->(theNode.theSifEditor).changeFocus
-                   if);
-                   (if thePage.canListInsert then
-                       (theNode.theSifEditor).before;
-                       (theNode.theSifEditor).paste
+   (if thePage[] <> none then
+       (if thePage## <= OADPage## then
+           thePage[]->theOADPage[];
+           theOADPage.CurrentObject->theObject[];
+           (if doOADPaste then
+               (if theObject[] <> none then
+                   (if theObject## <= theOADPage.PatternDiagramNode## then
+                       (if theOADPage.canPaste then
+                           theObject[]->theNode[];
+                           theNode.getASTNode->anAST[];
+                           (if anAST[] <> none then
+                               (anAST[],1)->(theNode.theSifEditor).changeFocus
+                           if);
+                           (if theOADPage.canListInsert then
+                               (theNode.theSifEditor).before;
+                               (theNode.theSifEditor).paste
+                           if)
+                       if)
                    if)
+                else
+                   'No current object!'->putline
                if)
+            else
+               menuID.EditMenu.paste->DSUIMenuExecute
            if)
         else
-           'No current object!'->putline
+           'Paste Before not implemented on this type of page'->alertUser
        if)
     else
-       menuID.EditMenu.paste->DSUIMenuExecute
+       'No current page'->alertUser
    if)
 #)  
 
 -- FrejaPasteItem: Descriptor --
 (#
-   thePage: ^OADPage;
+   thePage: ^Page;
+   theOADPage: ^OADPage;
    theObject,theRegionObject: ^thePage.DesignObject;
-   thePatternDiagramNode: ^thePage.PatternDiagramNode;
+   thePatternDiagramNode: ^theOADPage.PatternDiagramNode;
    anAST: ^MPS.AST;
-   group: [0] @Integer;
+   group,connectorsInGroup,connectorsInRegion: [0] @Integer;
    regions: [0] @Integer;
    theRegions: @ObjectList;
-   count: @ShortRef;
-   list: @IntegerRef;
+   count,connectorCount,regionConnectorCount: @ShortRef;
+   list,connectorList,regionConnectorList: @IntegerRef;
    isGroup: @Boolean;
    ID: @integer;
    theIDObject: ^IDObject;
+   theRegionIDMap: ^regionIDMap;
+   regionIDMap: (* Same as UserDataIDMap - should be generalized! *)
+     (#
+        impl: [0] @Integer;
+        putID:
+          (# oldID,newID: @integer
+          enter (oldID,newID)
+          do
+             (if oldID <> 0 then
+                 (if oldID > impl.range then
+                     oldID+impl.range->impl.extend
+                 if);
+                 newID->impl[oldID]
+             if)
+          #);
+        getID: (# oldID: @integer enter oldID exit impl[oldID] #)
+     #);
    visualizeObject:
      (#
         theObject: ^thePage.DesignObject;
-        theNode: ^thePage.Node;
+        theNode,node1,node2: ^thePage.Node;
         theRndRectNode: ^thePage.RndRectNode;
         theWedgeNode: ^thePage.WedgeNode;
         thePolygonNode: ^thePage.PolygonNode;
         theRegPolyNode: ^thePage.RegPolyNode;
         theLabel: ^thePage.LabelNode;
+        theConn: ^thePage.connector;
         t: @Text;
         x,y,w,h,selectable,lineThickness,lineType,fillType,borderVisible,wRound,
-          hRound,start,end: @integer;
+          hRound,start,end,orient,HeadHeight,HeadWidth,shape,textBoxW,textBoxH,
+          curvature: @integer;
         font,size,style,just: @shortInt;
+        nd1,nd2: @IntegerRef;
         points: [0] @Integer;
+        getConnVisuals:
+          (# 
+          do
+             theConn.orient->orient;
+             theConn.Points->Points;
+             theConn.HeadWidth->HeadWidth;
+             theConn.HeadHeight->HeadHeight;
+             theConn.shape->shape;
+             theConn.TextBox->(textBoxW,textBoxH);
+             theConn.Curvature->curvature
+          #);
+        setConnVisuals:
+          (# 
+          do
+             orient->theConn.orient;
+             (for i: points.range repeat points[i]+5->points[i] for);
+             points->theConn.Points;
+             HeadWidth->theConn.HeadWidth;
+             HeadHeight->theConn.HeadHeight;
+             shape->theConn.shape;
+             (textBoxW,textBoxH)->theConn.TextBox;
+             curvature->theConn.Curvature
+          #);
         getVisuals:
           (# 
           do
@@ -565,196 +767,326 @@ do
             setVisuals;
             setText
          else
-            'Trying to paste unknown type of node'->alertUser
+            (if theObject## <= thePage.Connector## then
+                theObject[]->theConn[];
+                getConnVisuals;
+                getVisuals;
+                getText;
+                true->theConn.getEnds->(node1[],node2[]);
+                node1.ID->theRegionIDMap.getID->theObjectList.find->node1[];
+                node2.ID->theRegionIDMap.getID->theObjectList.find->node2[];
+                (node1[],node2[])->theConn.new;
+                setConnVisuals;
+                setVisuals;
+                setText
+             else
+                'Trying to paste unknown type of node'->alertUser
+            if)
+        if)
+     #);
+   makeRegions:
+     (#
+        ID: @integer;
+        count: @ShortRef;
+        list: @IntegerRef;
+        regions: [0] @Integer;
+        theObject,theDesignObject,returnObject: ^thePage.DesignObject;
+        theRegions: @ObjectList
+     enter ID
+     do
+        (if (ID,count[],list[])->DSStrGetObjectRegionList then
+            (if count > 0 then
+                (count,list)->GetIntList->regions;
+                (for i: regions.range repeat
+                  regions[i]->makeRegions->returnObject[];
+                  returnObject[]->theRegions.insert;
+                  
+                for);
+                
+            if)
+        if);
+        ID->thePage.PageCallBack.MakeDesignObject->theObject[]->visualizeObject;
+        (ID,theObject.ID)->theRegionIDMap.putID;
+        theRegions.scan
+          (# 
+          do
+             current[]->theDesignObject[];
+             theObject[]->theDesignObject.createRegion
+          #)
+     exit theObject[]
+     #);
+   designPaste:
+     (# 
+     do
+        DSStrGetCutOrCopiedObject->ID;
+        (ID,count[],list[])->DSStrGetNodeList;
+        &RegionIDMap[]->theRegionIDMap[];
+        (if count > 0 then
+            (count,list)->GetIntList->group;
+            (@@ group[1],count,connectorList[],connectorCount[])
+              ->DSStrGetInternalConnList;
+            (connectorCount,connectorList)->GetIntList->connectorsInGroup;
+            (for i: group.range repeat
+              (@@ group[i],1,regionConnectorList[],regionConnectorCount[])
+                ->DSStrGetInternalConnList;
+              (regionConnectorCount,regionConnectorList)->GetIntList
+                ->connectorsInRegion;
+              group[i]->makeRegions->theObject[];
+              theObject.ID->group[i];
+              (theObject.ID,theObject.ID)->theRegionIDMap.putID;
+              (for i: connectorsInRegion.range repeat
+                connectorsInRegion[i]->thePage.PageCallBack.MakeDesignObject
+                  ->visualizeObject
+              for)
+            for);
+            (for i: connectorsInGroup.range repeat
+              connectorsInGroup[i]->thePage.PageCallBack.MakeDesignObject
+                ->visualizeObject
+            for);
+            group.range->count;
+            (count,@@ group[1])->DSStrSetCurGroup;
+            
+         else
+            (if ID <> 0 then
+                (@@ ID,1,regionConnectorList[],regionConnectorCount[])
+                  ->DSStrGetInternalConnList;
+                (regionConnectorCount,regionConnectorList)->GetIntList
+                  ->connectorsInRegion;
+                ID->makeRegions->theObject[];
+                (theObject.ID,theObject.ID)->theRegionIDMap.putID;
+                (for i: connectorsInRegion.range repeat
+                  connectorsInRegion[i]->thePage.PageCallBack.MakeDesignObject
+                    ->visualizeObject
+                for)
+             else
+                FrejaEditMenu.iPaste.disable
+            if);
+            (* theObject[]->thePage.currentObject *)
+            
         if)
      #)
 do
    currentPage->thePage[];
-   (if thePage.private.doOADPaste then
-       thePage.CurrentObject->theObject[];
-       (if theObject[] <> none then
-           (if theObject## <= thePage.PatternDiagramNode## then
-               (if thePage.canPaste then
-                   theObject[]->thePatternDiagramNode[];
-                   thePatternDiagramNode.getASTNode->anAST[];
-                   (if anAST[] <> none then
-                       (anAST[],1)
-                         ->(thePatternDiagramNode.theSifEditor).changeFocus
-                   if);
-                   (thePatternDiagramNode.theSifEditor).paste
+   (if thePage[] <> none then
+       (if thePage## <= OADPage## then
+           thePage[]->theOADPage[];
+           (if doOADPaste then
+               theOADPage.CurrentObject->theObject[];
+               (if theObject[] <> none then
+                   (if theObject## <= theOADPage.PatternDiagramNode## then
+                       (if theOADPage.canPaste then
+                           theObject[]->thePatternDiagramNode[];
+                           thePatternDiagramNode.getASTNode->anAST[];
+                           (if anAST[] <> none then
+                               (anAST[],1)
+                                 ->
+                                   (thePatternDiagramNode.theSifEditor).
+                                   changeFocus
+                           if);
+                           (thePatternDiagramNode.theSifEditor).paste
+                       if)
+                   if)
+                else
+                   'No current object!'->alertUser
                if)
-           if)
-        else
-           'No current object!'->putline
-       if)
-    else
-   (* menuID.EditMenu.paste->DSUIMenuExecute *)
-       DSStrGetCutOrCopiedObject->ID;
-       (ID,count[],list[])->DSStrGetNodeList;
-       (if count > 0 then
-           (count,list)->GetIntList->group;
-           (for i: group.range repeat
-             group[i]->thePage.PageCallBack.MakeDesignObject->theObject[];
-             (if (theObject.ID,count[],list[])->DSStrGetObjectRegionList
-              // true then
-                 (if count > 0
-                  // true then
-                     (count,list)->GetIntList->regions;
-                     (for i: regions.range repeat
-                       regions[i]->thePage.PageCallBack.MakeDesignObject
-                         ->theRegionObject[]->visualizeObject;
-                       theRegionObject[]->theRegions.insert;
-                       
-                     for);
-                     
-                 if)
-             if);
-             theObject[]->visualizeObject;
-             theObject.ID->group[i];
-             theRegions.scan
-               (# theDesignObject: ^thePage.DesignObject
-               do
-                  current[]->theDesignObject[];
-                  theObject[]->theDesignObject.createRegion
-               #)
-           for);
-           group.range->count;
-           (count,@@ group[1])->DSStrSetCurGroup;
-           
-        else
-           (if ID <> 0 then
-               (if (ID,count[],list[])->DSStrGetObjectRegionList
-                // true then
-                   (if count > 0
-                    // true then
-                       (count,list)->GetIntList->regions;
-                       (for i: regions.range repeat
-                         regions[i]->thePage.PageCallBack.MakeDesignObject
-                           ->theObject[]->visualizeObject;
-                         theObject[]->theRegions.insert;
-                         
-                       for);
-                       
+            else
+           (* menuID.EditMenu.paste->DSUIMenuExecute *)
+               (if doObjectPaste then
+                   'Clipboard contains object from object diagram - can not paste on Work Sheet'
+                     ->alertUser
+                else
+                   (if not pasteGroupWithOAD then
+                       designPaste
+                    else
+                       'Clipboard contains group with parts of diagram - can only paste on graphics page'
+                         ->alertUser
                    if)
                if);
-               ID->thePage.PageCallBack.MakeDesignObject->theObject[]
-                 ->visualizeObject;
-               theRegions.scan
-                 (# theDesignObject: ^thePage.DesignObject
-                 do
-                    current[]->theDesignObject[];
-                    theObject[]->theDesignObject.createRegion
-                 #)
+               
+           if)
+        else
+           (if thePage## <= ObjectPage## then
+               (if doObjectPaste then
+                   'Clipboard contains object from object diagram - only paste on graphics page currently implemented'
+                     ->alertUser
+                else
+                   (if doOADPaste then
+                       'Clipboard contains part of pattern diagram - can not paste on Object Page'
+                         ->alertUser
+                    else
+                       (if not pasteGroupWithOAD then
+                           designPaste
+                        else
+                           'Clipboard contains group with parts of diagram - can only paste on graphics page'
+                             ->alertUser
+                       if)
+                   if)
+               if)
             else
-               FrejaEditMenu.iPaste.disable
-           if);
-           (* theObject[]->thePage.currentObject *)
-           
-       if);
-       
+               designPaste
+           if)
+       if)
+    else
+       'No current page'->alertUser
    if)
 #)  
 
 -- FrejaPasteAfterItem: Descriptor --
 (#
-   thePage: ^OADPage;
-   theObject: ^thePage.DesignObject;
-   theNode: ^thePage.PatternDiagramNode;
+   thePage: ^Page;
+   theOADPage: ^OADPage;
+   theObject: ^theOADPage.DesignObject;
+   theNode: ^theOADPage.PatternDiagramNode;
    anAST: ^MPS.AST;
    t: ^Text
 do
    currentPage->thePage[];
-   thePage.CurrentObject->theObject[];
-   (if thePage.private.doOADPaste then
-       (if theObject[] <> none then
-           (if theObject## <= thePage.PatternDiagramNode## then
-               (if thePage.canPaste then
-                   theObject[]->theNode[];
-                   theNode.getASTNode->anAST[];
-                   (if anAST[] <> none then
-                       (anAST[],1)->(theNode.theSifEditor).changeFocus
-                   if);
-                   (if thePage.canListInsert then
-                       (theNode.theSifEditor).after;
-                       (theNode.theSifEditor).paste
+   (if thePage[] <> none then
+       (if thePage## <= OADPage## then
+           thePage[]->theOADPage[];
+           theOADPage.CurrentObject->theObject[];
+           (if doOADPaste then
+               (if theObject[] <> none then
+                   (if theObject## <= theOADPage.PatternDiagramNode## then
+                       (if theOADPage.canPaste then
+                           theObject[]->theNode[];
+                           theNode.getASTNode->anAST[];
+                           (if anAST[] <> none then
+                               (anAST[],1)->(theNode.theSifEditor).changeFocus
+                           if);
+                           (if theOADPage.canListInsert then
+                               (theNode.theSifEditor).after;
+                               (theNode.theSifEditor).paste
+                           if)
+                       if)
                    if)
+                else
+                   'No current object!'->putline
                if)
+            else
+               menuID.EditMenu.paste->DSUIMenuExecute
            if)
         else
-           'No current object!'->putline
+           'Paste After not implemented on this type of page'->alertUser
        if)
     else
-       menuID.EditMenu.paste->DSUIMenuExecute
+       'No current page'->alertUser
    if)
 #)  
 
 -- FrejaClearItem: Descriptor --
 (#
-   thePage: ^OADPage;
+   thePage: ^Page;
+   theOADPage: ^OADPage;
+   theObjectPage: ^ObjectPage;
    theObject: ^thePage.DesignObject;
-   theNode,thePatternNode: ^thePage.PatternDiagramNode;
-   theAssociationNode: ^thePage.AssociationNode;
-   deletableConnector: ^thePage.DeletableConnector;
+   theNode,thePatternNode: ^theOADPage.PatternDiagramNode;
+   theAssociationNode: ^theOADPage.AssociationNode;
+   deletableConnector: ^theOADPage.DeletableConnector;
    regionList: ^ObjectList;
    anAST: ^MPS.AST;
    t: ^Text
 do
    currentPage->thePage[];
-   thePage.CurrentObject->theObject[];
-   (if theObject[] <> none then
-       (if theObject## <= thePage.PatternDiagramNode## then
-           'Nodes in pattern diagrams can currently not be cleared, only cut'
-             ->alertUser
-        else
-           (if theObject## <= thePage.DeletableConnector## then
-               theObject[]->deletableConnector[]; deletableConnector.onDelete
-           if);
-           (if theObject## <= thePage.AssociationNode## then
-               theObject[]->theAssociationNode[];
-               (if theAssociationNode.thePatternNode <> none then
-                   theAssociationNode.thePatternNode->thePatternNode[]
-               if);
-               theObject.delete;
-               (if thePatternNode[] <> none then
-                   thePatternNode[]->thePage.currentObject;
-                   thePatternNode.getASTNode->anAST[];
-                   (if anAST[] <> none then
-                       true->thePage.private.doOADPaste;
-                       (anAST[],1)->(thePatternNode.theSifEditor).changeFocus;
-                       (thePatternNode.theSifEditor).cut
+   (if thePage[] <> none then
+       (if thePage## <= OADPage## then
+           thePage[]->theOADPage[];
+           theOADPage.CurrentObject->theObject[];
+           (if theObject[] <> none then
+               (if theObject## <= theOADPage.PatternDiagramNode## then
+                   'Nodes in pattern diagrams can currently not be cleared, only cut'
+                     ->alertUser
+                else
+                   (if theObject## <= theOADPage.DeletableConnector## then
+                       theObject[]->deletableConnector[];
+                       deletableConnector.onDelete
+                   if);
+                   (if theObject## <= theOADPage.AssociationNode## then
+                       theObject[]->theAssociationNode[];
+                       (if theAssociationNode.thePatternNode <> none then
+                           theAssociationNode.thePatternNode->thePatternNode[]
+                       if);
+                       theObject.delete;
+                       (if thePatternNode[] <> none then
+                           thePatternNode[]->theOADPage.currentObject;
+                           thePatternNode.getASTNode->anAST[];
+                           (if anAST[] <> none then
+                               true->doOADPaste;
+                               (anAST[],1)
+                                 ->(thePatternNode.theSifEditor).changeFocus;
+                               (thePatternNode.theSifEditor).cut
+                           if)
+                       if)
+                    else
+                       theObject.delete
                    if)
                if)
             else
-               theObject.delete
+               menuID.EditMenu.clear->DSUIMenuExecute
+           if)
+        else
+           'Clear not implemented on this type of page'->alertUser;
+           (if thePage## <= ObjectPage## then
+               thePage[]->theObjectPage[];
+               theObjectPage.currentObject->theObject[];
+               (if theObject[] <> none then
+                   (if theObject## <= theObjectPage.ObjectDiagramNode## then
+                       'Clear on objects in object diagrams not implemented yet'
+                         ->alertUser
+                    else
+                       theObject.delete
+                   if)
+                else
+                   'No current object'->alertUser
+               if)
+            else
+               thePage.currentObject->theObject[];
+               (if theObject[] <> none then
+                   theObject.delete
+                else
+                   'No current object'->alertUser
+               if)
            if)
        if)
     else
-       menuID.EditMenu.clear->DSUIMenuExecute
+       'No current page'->alertUser
    if)
 #)  
 
 -- InsertBeforeHit: Descriptor --
 (#
-   thePage: ^OADPage;
-   theObject: ^thePage.PatternDiagramNode;
-   theDesObj: ^thePage.DesignObject;
+   thePage: ^Page;
+   theOADPage: ^OADPage;
+   theObject: ^theOADPage.PatternDiagramNode;
+   theDesObj: ^theOADPage.DesignObject;
    t: ^text;
    anAST: ^MPS.AST
 do
    (if switch[1] then 'InsertBefore'->putline if);
    currentPage->thePage[];
-   thePage.CurrentObject->theDesObj[];
-   (if theDesObj[] <> none then
-       (if theDesObj## <= thePage.PatternDiagramNode## then
-           theDesObj[]->theObject[];
-           theObject.getASTNode->anAST[];
-           (if anAST[] <> none then
-               (anAST[],1)->(theObject.theSifEditor).changeFocus
-           if);
-           (if thePage.canListInsert then (theObject.theSifEditor).before if)
+   (if thePage[] <> none then
+       (if thePage## <= OADPage## then
+           thePage[]->theOADPage[];
+           theOADPage.CurrentObject->theDesObj[];
+           (if theDesObj[] <> none then
+               (if theDesObj## <= theOADPage.PatternDiagramNode## then
+                   theDesObj[]->theObject[];
+                   theObject.getASTNode->anAST[];
+                   (if anAST[] <> none then
+                       (anAST[],1)->(theObject.theSifEditor).changeFocus
+                   if);
+                   (if theOADPage.canListInsert then
+                       (theObject.theSifEditor).before
+                   if)
+                else
+                   'Current focus is not a pattern diagram node!'->putline
+               if)
+           if)
         else
-           'Current focus is not a pattern diagram node!'->putline
+           'Insert Before not implemented on this type of page'->alertUser
        if)
+    else
+       'No current page'->alertUser
    if);
    
 #)  
@@ -787,14 +1119,14 @@ do (* design gets internal error for items above status+3! Why? *)
    (UserMenu2+17,'Show Optionals           Alt-l')->iShowOptionals.init;
    iClear.enable;
    (UserMenu2+18,'-')->sep5.init;
-   (UserMenu2+19,'Search                   Alt-s')->iSearch.init;
-   (UserMenu2+20,'Check')->iCheck.init;
+   (UserMenu2+19,'Check')->iCheck.init;
    
 #)  
 
 -- FrejaEditMenuIEditName: DoPart --
 do
      (#
+        thePage: ^Page;
         p: ^OADPage;
         thePatternDiagramNode: ^p.PatternDiagramNode;
         theDiagram: ^p.Diagram;
@@ -810,124 +1142,146 @@ do
         errorPos: @integer;
         parseErrorText: ^Text
      do
-        CurrentPage->p[];
-        (if p[] <> theGroupPage[] then
-            p.CurrentObject->c[];
-            (if c[] <> none then
-                (if c## <= p.PatternDiagramNode## then
-                    c[]->thePatternDiagramNode[];
-                    thePatternDiagramNode.theDiagram->theDiagram[];
-                    (if thePatternDiagramNode## <= theDiagram.title## then
-                        (if (theDiagram## < p.PatternAttDiagram##) or
-                        (theDiagram.theParentNode = none ) then
-                            'Textediting fragmentform name is currently disabled'
-                              ->alertUser;
-                            true->doNotEdit
-                         else
-                            thePatternDiagramNode[]->theTitle[]
-                        if)
-                    if)
-                if);
-                (if (thePatternDiagramNode[] <> none ) and (not doNotEdit) then
-                    (if thePatternDiagramNode.theSifEditor <> none then
-                        (if (thePatternDiagramNode.theSifEditor).fe[] <> none
-                         then
-                            thePatternDiagramNode.getASTNode->anAST[];
-                            (if theTitle[] <> none then
-                                anAST.father->anExp[];
-                                (if anExp.symbol = betaGram.StaticItem then
-                                    anExp.father->anExp[]
-                                if);
-                                anExp.getSon1->anExp[];
-                                anExp.getSon1->theNameDcl[]
-                             else
-                                (if anAST[] <> none then
-                                    anAST[]->anExp[];
-                                    anExp.getSon1->anExp[];
-                                    anExp.getSon1->theNameDcl[]
+        CurrentPage->thePage[];
+        (if thePage[] <> none then
+            (if thePage## <= OADPage## then
+                thePage[]->p[];
+                (if p[] <> theGroupPage[] then
+                    p.CurrentObject->c[];
+                    (if c[] <> none then
+                        (if c## <= p.PatternDiagramNode## then
+                            c[]->thePatternDiagramNode[];
+                            thePatternDiagramNode.theDiagram->theDiagram[];
+                            (if thePatternDiagramNode## <= theDiagram.title##
+                             then
+                                (if (theDiagram## < p.PatternAttDiagram##) or
+                                (theDiagram.theParentNode = none ) then
+                                    'Textediting fragmentform name is currently disabled'
+                                      ->alertUser;
+                                    true->doNotEdit
                                  else
-                                    'IEditName: Should not happen - getASTNode returned none'
+                                    thePatternDiagramNode[]->theTitle[]
+                                if)
+                            if)
+                        if);
+                        (if (thePatternDiagramNode[] <> none ) and
+                        (not doNotEdit) then
+                            (if thePatternDiagramNode.theSifEditor <> none then
+                                (if (thePatternDiagramNode.theSifEditor).fe[] <>
+                                none then
+                                    thePatternDiagramNode.getASTNode->anAST[];
+                                    (if theTitle[] <> none then
+                                        anAST.father->anExp[];
+                                        (if anExp.symbol = betaGram.StaticItem
+                                         then
+                                            anExp.father->anExp[]
+                                        if);
+                                        anExp.getSon1->anExp[];
+                                        anExp.getSon1->theNameDcl[]
+                                     else
+                                        (if anAST[] <> none then
+                                            anAST[]->anExp[];
+                                            anExp.getSon1->anExp[];
+                                            anExp.getSon1->theNameDcl[]
+                                         else
+                                            'IEditName: Should not happen - getASTNode returned none'
+                                              ->putline
+                                        if)
+                                    if);
+                                    (if theNameDcl[] <> none then
+                                        theNameDcl.getNameDecl->anAST[];
+                                        (if anAST.kind = mps.kinds.unExpanded
+                                         then
+                                            '<<NameDecl>>'->t[]
+                                         else
+                                            theNameDcl.getText->t[]
+                                        if);
+                                        'Edit Name: '->message[];
+                                        doPrompt:
+                                          (# 
+                                          do
+                                             (message[],t[])
+                                               ->FrejaPromptForText
+                                                 (#
+                                                    confirm::< 
+                                                      (# 
+                                                      do
+                                                         (if theText[] <> none
+                                                          then
+                                                             (if theText.length
+                                                             > 0 then
+                                                                 theText[]->t[];
+                                                                 (theNameDcl[],
+                                                                  theText)
+                                                                   ->
+                                                                     (
+                                                                     thePatternDiagramNode
+                                                                     .
+                                                                       theSifEditor
+                                                                     ).parse
+                                                                   ->
+                                                                     (ok,
+                                                                      errorPos,
+                                                                      parseErrorText[])
+                                                             if)
+                                                         if)
+                                                      #);
+                                                    cancel::< 
+                                                      (# 
+                                                      do true->didCancel
+                                                      #)
+                                                 #);
+                                             (if didCancel then
+                                                 leave doPrompt
+                                              else
+                                                 (if not ok then
+                                                     'Edit Name: '->message[];
+                                                     parseErrorText[]
+                                                       ->message.append;
+                                                     restart doPrompt
+                                                 if)
+                                             if)
+                                          #)
+                                    if)
+                                 else
+                                    'iTextEdit: No codeeditor for theSifEditor!'
                                       ->putline
                                 if)
-                            if);
-                            (if theNameDcl[] <> none then
-                                theNameDcl.getNameDecl->anAST[];
-                                (if anAST.kind = mps.kinds.unExpanded then
-                                    '<<NameDecl>>'->t[]
-                                 else
-                                    theNameDcl.getText->t[]
-                                if);
-                                'Edit Name: '->message[];
-                                doPrompt:
-                                  (# 
-                                  do
-                                     (message[],t[])
-                                       ->FrejaPromptForText
-                                         (#
-                                            confirm::< 
-                                              (# 
-                                              do
-                                                 (if theText[] <> none then
-                                                     (if theText.length > 0 then
-                                                         theText[]->t[];
-                                                         (theNameDcl[],theText)
-                                                           ->
-                                                             (
-                                                             thePatternDiagramNode
-                                                             .theSifEditor).
-                                                             parse
-                                                           ->
-                                                             (ok,errorPos,
-                                                              parseErrorText[])
-                                                     if)
-                                                 if)
-                                              #);
-                                            cancel::< 
-                                              (#  do true->didCancel #)
-                                         #);
-                                     (if didCancel then
-                                         leave doPrompt
-                                      else
-                                         (if not ok then
-                                             'Edit Name: '->message[];
-                                             parseErrorText[]->message.append;
-                                             restart doPrompt
-                                         if)
-                                     if)
-                                  #)
+                             else
+                                'iTextEdit: theSifEditor is none'->putline
                             if)
-                         else
-                            'iTextEdit: No codeeditor for theSifEditor!'
-                              ->putline
-                        if)
-                     else
-                        'iTextEdit: theSifEditor is none'->putline
+                            (*(if TextModeOn then
+                             c.theText.modeOff; 
+                             else
+                             c.theText.modeOn; 
+                             if);
+                             (if not p.parseErrorOccurred then
+                             not TextModeOn->TextModeOn; TextModeOn->Check
+                             else
+                             [* c.theText.modeOn *]
+                             not TextModeOn->TextModeOn;
+                             TextModeOn->Check;
+                             false->p.parseErrorOccurred;
+                             hit
+                             if);*)
+                        if);
+                        
                     if)
-                    (*(if TextModeOn then
-                     c.theText.modeOff; 
-                     else
-                     c.theText.modeOn; 
-                     if);
-                     (if not p.parseErrorOccurred then
-                     not TextModeOn->TextModeOn; TextModeOn->Check
-                     else
-                     [* c.theText.modeOn *]
-                     not TextModeOn->TextModeOn;
-                     TextModeOn->Check;
-                     false->p.parseErrorOccurred;
-                     hit
-                     if);*)
-                if);
-                
+                 else
+                    'Textediting on Group Page is currently disabled'->alertUser
+                if)
+             else
+                'Edit Name not implemented on this type of page'->alertUser
             if)
          else
-            'Textediting on Group Page is currently disabled'->alertUser
+            'No current page'->alertUser
         if);
         
      #)  
 
 -- FrejaEditMenuITextEdit: Descriptor --
 (#
+   thePage: ^Page;
    p: ^OADPage;
    thePatternDiagramNode: ^p.PatternDiagramNode;
    theDiagram: ^p.Diagram;
@@ -937,63 +1291,73 @@ do
    anAST: ^mps.ast;
    anExp: ^mps.expanded
 do
-   CurrentPage->p[];
-   (if p[] <> theGroupPage[] then
-       p.CurrentObject->c[];
-       (if c[] <> none then
-           (if c## <= p.PatternDiagramNode## then
-               c[]->thePatternDiagramNode[];
-               thePatternDiagramNode.theDiagram->theDiagram[];
-               (if thePatternDiagramNode## <= theDiagram.title## then
-                   (if (theDiagram## < p.PatternAttDiagram##) or
-                   (theDiagram.theParentNode = none ) then
-                       'Textediting fragmentform name is currently disabled'
-                         ->alertUser;
-                       true->doNotEdit
-                    else
-                       thePatternDiagramNode[]->theTitle[]
-                   if)
+   CurrentPage->thePage[];
+   (if thePage[] <> none then
+       (if thePage## <= OADPage## then
+           thePage[]->p[];
+           (if p[] <> theGroupPage[] then
+               p.CurrentObject->c[];
+               (if c[] <> none then
+                   (if c## <= p.PatternDiagramNode## then
+                       c[]->thePatternDiagramNode[];
+                       thePatternDiagramNode.theDiagram->theDiagram[];
+                       (if thePatternDiagramNode## <= theDiagram.title## then
+                           (if (theDiagram## < p.PatternAttDiagram##) or
+                           (theDiagram.theParentNode = none ) then
+                               'Textediting fragmentform name is currently disabled'
+                                 ->alertUser;
+                               true->doNotEdit
+                            else
+                               thePatternDiagramNode[]->theTitle[]
+                           if)
+                       if)
+                   if);
+                   (if (thePatternDiagramNode[] <> none ) and (not doNotEdit)
+                    then
+                       (if thePatternDiagramNode.theSifEditor <> none then
+                           (if (thePatternDiagramNode.theSifEditor).fe[] <> none
+                           then
+                               thePatternDiagramNode.getASTNode->anAST[];
+                               (if anAST[] <> none then
+                                   (anAST[],1)
+                                     ->
+                                       (thePatternDiagramNode.theSifEditor).
+                                       changeFocus
+                               if);
+                               (thePatternDiagramNode.theSifEditor).fe.
+                                 openSubeditor
+                            else
+                               'iTextEdit: No codeeditor for theSifEditor!'
+                                 ->putline
+                           if)
+                        else
+                           'iTextEdit: theSifEditor is none'->putline
+                       if)
+                       (*(if TextModeOn then
+                        c.theText.modeOff; 
+                        else
+                        c.theText.modeOn; 
+                        if);
+                        (if not p.parseErrorOccurred then
+                        not TextModeOn->TextModeOn; TextModeOn->Check
+                        else
+                        [* c.theText.modeOn *]
+                        not TextModeOn->TextModeOn;
+                        TextModeOn->Check;
+                        false->p.parseErrorOccurred;
+                        hit
+                        if);*)
+                   if);
+                   
                if)
-           if);
-           (if (thePatternDiagramNode[] <> none ) and (not doNotEdit) then
-               (if thePatternDiagramNode.theSifEditor <> none then
-                   (if (thePatternDiagramNode.theSifEditor).fe[] <> none then
-                       thePatternDiagramNode.getASTNode->anAST[];
-                       (if theTitle[] <> none then
-                           anAST.father->anExp[];
-                           anExp.getSon1->anExp[];
-                           anExp.getSon1->anAST[]
-                       if);
-                       (if anAST[] <> none then
-                           (anAST[],1)
-                             ->(thePatternDiagramNode.theSifEditor).changeFocus
-                       if);
-                       (thePatternDiagramNode.theSifEditor).fe.openSubeditor
-                    else
-                       'iTextEdit: No codeeditor for theSifEditor!'->putline
-                   if)
-                else
-                   'iTextEdit: theSifEditor is none'->putline
-               if)
-               (*(if TextModeOn then
-                c.theText.modeOff; 
-                else
-                c.theText.modeOn; 
-                if);
-                (if not p.parseErrorOccurred then
-                not TextModeOn->TextModeOn; TextModeOn->Check
-                else
-                [* c.theText.modeOn *]
-                not TextModeOn->TextModeOn;
-                TextModeOn->Check;
-                false->p.parseErrorOccurred;
-                hit
-                if);*)
-           if);
-           
+            else
+               'Textediting on Group Page is currently disabled'->alertUser
+           if)
+        else
+           'Open Subeditor not implemented on this type of page'->alertUser
        if)
     else
-       'Textediting on Group Page is currently disabled'->alertUser
+       'No current page'->alertUser
    if);
    
 #)  
@@ -1087,129 +1451,152 @@ do
 
 -- InsertAfterHit: Descriptor --
 (#
-   thePage: ^OADPage;
-   theObject: ^thePage.PatternDiagramNode;
-   theDesObj: ^thePage.DesignObject;
+   thePage: ^Page;
+   theOADPage: ^OADPage;
+   theObject: ^theOADPage.PatternDiagramNode;
+   theDesObj: ^theOADPage.DesignObject;
    t: ^text;
    anAST: ^MPS.AST
 do
    (if switch[1] then 'insertAfter'->putline if);
    currentPage->thePage[];
-   thePage.CurrentObject->theDesObj[];
-   (if theDesObj[] <> none then
-       (if theDesObj## <= thePage.PatternDiagramNode## then
-           theDesObj[]->theObject[];
-           theObject.getASTNode->anAST[];
-           (if anAST[] <> none then
-               (anAST[],1)->(theObject.theSifEditor).changeFocus
-           if);
-           (if thePage.canListInsert then (theObject.theSifEditor).after if)
+   (if thePage[] <> none then
+       (if thePage## <= OADPage## then
+           thePage[]->theOADPage[];
+           theOADPage.CurrentObject->theDesObj[];
+           (if theDesObj[] <> none then
+               (if theDesObj## <= theOADPage.PatternDiagramNode## then
+                   theDesObj[]->theObject[];
+                   theObject.getASTNode->anAST[];
+                   (if anAST[] <> none then
+                       (anAST[],1)->(theObject.theSifEditor).changeFocus
+                   if);
+                   (if theOADPage.canListInsert then
+                       (theObject.theSifEditor).after
+                   if)
+                else
+                   'Current focus is not a pattern diagram node!'->putline
+               if)
+           if)
         else
-           'Current focus is not a pattern diagram node!'->putline
+           'Insert After not implemented on this type of page'->alertUser
        if)
+    else
+       'No current page'->alertUser
    if);
    
 #)  
 
 -- FrejaRemoveOptionalsItem: Descriptor --
 (#
-   thePage: ^OADPage;
-   theObject: ^thePage.PatternDiagramNode;
-   theDesObj: ^thePage.DesignObject;
+   thePage: ^Page;
+   theOADPage: ^OADPage;
+   theObject: ^theOADPage.PatternDiagramNode;
+   theDesObj: ^theOADPage.DesignObject;
    t: ^text;
    anAST: ^MPS.AST
 do
    (if switch[1] then 'removeOptionals'->putline if);
    currentPage->thePage[];
-   thePage.CurrentObject->theDesObj[];
-   (if theDesObj[] <> none then
-       (if theDesObj## <= thePage.PatternDiagramNode## then
-           theDesObj[]->theObject[];
-           theObject.getASTNode->anAST[];
-           (if anAST[] <> none then
-               (anAST[],1)->(theObject.theSifEditor).changeFocus
-           if);
-           (theObject.theSifEditor).removeOptionals
+   (if thePage[] <> none then
+       (if thePage## <= OADPage## then
+           thePage[]->theOADPage[];
+           theOADPage.CurrentObject->theDesObj[];
+           (if theDesObj[] <> none then
+               (if theDesObj## <= theOADPage.PatternDiagramNode## then
+                   theDesObj[]->theObject[];
+                   theObject.getASTNode->anAST[];
+                   (if anAST[] <> none then
+                       (anAST[],1)->(theObject.theSifEditor).changeFocus
+                   if);
+                   (theObject.theSifEditor).removeOptionals
+                else
+                   'Current focus is not a pattern diagram node!'->putline
+               if)
+           if)
         else
-           'Current focus is not a pattern diagram node!'->putline
+           'Remove Optionals not implemented on this type of page'->alertUser
        if)
+    else
+       'No current page'->alertUser
    if);
    
 #)  
 
 -- FrejaShowOptionalsItem: Descriptor --
 (#
-   thePage: ^OADPage;
-   theObject: ^thePage.PatternDiagramNode;
-   theDesObj: ^thePage.DesignObject;
+   thePage: ^Page;
+   theOADPage: ^OADPage;
+   theObject: ^theOADPage.PatternDiagramNode;
+   theDesObj: ^theOADPage.DesignObject;
    t: ^text;
    anAST: ^MPS.AST
 do
    (if switch[1] then 'insertOptionals'->putline if);
    currentPage->thePage[];
-   thePage.CurrentObject->theDesObj[];
-   (if theDesObj[] <> none then
-       (if theDesObj## <= thePage.PatternDiagramNode## then
-           theDesObj[]->theObject[];
-           theObject.getASTNode->anAST[];
-           (if anAST[] <> none then
-               (anAST[],1)->(theObject.theSifEditor).changeFocus
-           if);
-           (theObject.theSifEditor).insertOptionals
+   (if thePage[] <> none then
+       (if thePage## <= OADPage## then
+           thePage[]->theOADPage[];
+           theOADPage.CurrentObject->theDesObj[];
+           (if theDesObj[] <> none then
+               (if theDesObj## <= theOADPage.PatternDiagramNode## then
+                   theDesObj[]->theObject[];
+                   theObject.getASTNode->anAST[];
+                   (if anAST[] <> none then
+                       (anAST[],1)->(theObject.theSifEditor).changeFocus
+                   if);
+                   (theObject.theSifEditor).insertOptionals
+                else
+                   'Current focus is not a pattern diagram node!'->putline
+               if)
+           if)
         else
-           'Current focus is not a pattern diagram node!'->putline
+           'Show Optionals not implemented on this type of page'->alertUser
        if)
+    else
+       'No current page'->alertUser
    if);
    
 #)  
 
--- FrejaSearchItem: DoPart --
-do
-   (if switch[1] then 'search'->putline if);
-   currentPage->thePage[];
-   thePage.CurrentObject->theDesObj[];
-   (if theDesObj[] <> none then
-       (if theDesObj## <= thePage.PatternDiagramNode## then
-           theDesObj[]->theObject[];
-           (if theObject.theSifEditor <> none then
-               (theObject.theSifEditor).search
-            else
-               'Please select title or attribute in a fragmentform'->alertUser
-           if)
-        else
-           'Current focus is not a pattern diagram node!'->putline
-       if)
-   if);
-     
-
 -- FrejaCheckItem: Descriptor --
 (#
-   thePage: ^OADPage;
-   theObject: ^thePage.PatternDiagramNode;
-   theDesObj: ^thePage.DesignObject;
+   thePage: ^Page;
+   theOADPage: ^OADPage;
+   theObject: ^theOADPage.PatternDiagramNode;
+   theDesObj: ^theOADPage.DesignObject;
    anAST: ^MPS.AST;
    fg: ^mps.fragmentGroup;
-   theListDiagram: ^thePage.ListDiagram;
+   theListDiagram: ^theOADPage.ListDiagram;
    theNonTerminalNode: ^theListDiagram.NonTerminalNode
 do
    (if switch[1] then 'check'->putline if);
    currentPage->thePage[];
-   thePage.CurrentObject->theDesObj[];
-   (if theDesObj[] <> none then
-       (if theDesObj## <= thePage.PatternDiagramNode## then
-           theDesObj[]->theObject[];
-           theObject.getASTNode->anAST[];
-           (if anAST[] <> none then
-               anAST.frag.father->fg[]
-            else
-               theObject.theDiagram->theListDiagram[];
-               theObject[]->theNonTerminalNode[];
-               (theNonTerminalNode.unexp).frag.father->fg[]
-           if);
-           fg[]->theController.globalSifCommands.check
+   (if thePage[] <> none then
+       (if thePage## <= OADPage## then
+           thePage[]->theOADPage[];
+           theOADPage.CurrentObject->theDesObj[];
+           (if theDesObj[] <> none then
+               (if theDesObj## <= theOADPage.PatternDiagramNode## then
+                   theDesObj[]->theObject[];
+                   theObject.getASTNode->anAST[];
+                   (if anAST[] <> none then
+                       anAST.frag.father->fg[]
+                    else
+                       theObject.theDiagram->theListDiagram[];
+                       theObject[]->theNonTerminalNode[];
+                       (theNonTerminalNode.unexp).frag.father->fg[]
+                   if);
+                   fg[]->theController.globalSifCommands.check
+                else
+                   'Current focus is not a pattern diagram node!'->putline
+               if)
+           if)
         else
-           'Current focus is not a pattern diagram node!'->putline
+           'Check can not be invoked from this type of page'->alertUser
        if)
+    else
+       'No current page'->alertUser
    if);
    
 #)  
@@ -1592,89 +1979,78 @@ do
 do
    currentpage->p[];
    (if p[] <> none then
-       (if p## <= Palette## then
-           'CurrentPage is a Palette'->putline; 
-        else
-           (if p## <= ObjectPage## then
-               'CurrentPage is an ObjectPage'->putline
+       (if p## <= OADPage## then
+           p[]->op[];
+           (if op.currentObject <> none then
+               op.currentObject->theDesignObject[];
+               (if theDesignObject## <= op.PatternDiagramNode## then
+                   op.currentFocus[]->op.oldFocus[];
+                   theDesignObject[]->op.currentFocus[]
+               if)
             else
-               p[]->op[];
-               (if op.currentObject <> none then
-                   op.currentObject->theDesignObject[];
-                   (if theDesignObject## <= op.PatternDiagramNode## then
-                       op.currentFocus[]->op.oldFocus[];
-                       theDesignObject[]->op.currentFocus[]
-                   if)
-                else
-                   'No current object'->alertUser
-               if);
-               (if op.currentFocus[] <> none then
-                   (if op.currentFocus.theDiagram <> none then
-                       op.currentFocus.theDiagram->theListDiagram[];
-                       getTopMostDiagram:
-                         (# b1,b2: @Boolean
-                         do
-                            (theListDiagram## <= op.PatternAttDiagram##)->b1;
-                            theListDiagram[]->theListDiagram.isDescriptorDiagram
-                              ->b2;
-                            (if b1 or b2 then
-                                (if theListDiagram.LocalNodes.empty then
-                                    op.currentFocus.getASTNode->anAST[];
-                                    (if anAST[] <> none then
-                                        (anAST[],1)
-                                          ->
-                                            (op.currentFocus.theSifEditor).
-                                            changeFocus
-                                    if);
-                                    (op.currentFocus.theSifEditor).
-                                    insertOptionals;
-                                    true->optionalInserted
-                                if);
-                                op.currentFocus[]->op.oldFocus[];
-                                (theListDiagram.LocalNodes.last).elm[]
-                                  ->op.currentFocus[]->op.currentObject;
+               'No current object'->alertUser
+           if);
+           (if op.currentFocus[] <> none then
+               (if op.currentFocus.theDiagram <> none then
+                   op.currentFocus.theDiagram->theListDiagram[];
+                   getTopMostDiagram:
+                     (# b1,b2: @Boolean
+                     do
+                        (theListDiagram## <= op.PatternAttDiagram##)->b1;
+                        theListDiagram[]->theListDiagram.isDescriptorDiagram
+                          ->b2;
+                        (if b1 or b2 then
+                            (if theListDiagram.LocalNodes.empty then
                                 op.currentFocus.getASTNode->anAST[];
                                 (if anAST[] <> none then
                                     (anAST[],1)
                                       ->
                                         (op.currentFocus.theSifEditor).
                                         changeFocus
-                                 else
-                                    op.currentFocus.theDiagram
-                                      ->theListDiagram[];
-                                    op.currentFocus[]->theNonTerminalNode[];
-                                    (theNonTerminalNode.unExp,1)
-                                      ->
-                                        (op.currentFocus.theSifEditor).
-                                        changeFocus
                                 if);
-                                (if op.canListInsert then
-                                    (if not optionalInserted then
-                                        (op.currentFocus.theSifEditor).after
-                                    if);
-                                    betaGram.PatternDecl
-                                      ->
-                                        (op.currentFocus.theSifEditor).
-                                        expandNormal;
-                                    op.currentFocus.detail
-                                if)
+                                (op.currentFocus.theSifEditor).insertOptionals;
+                                true->optionalInserted
+                            if);
+                            op.currentFocus[]->op.oldFocus[];
+                            (theListDiagram.LocalNodes.last).elm[]
+                              ->op.currentFocus[]->op.currentObject;
+                            op.currentFocus.getASTNode->anAST[];
+                            (if anAST[] <> none then
+                                (anAST[],1)
+                                  ->(op.currentFocus.theSifEditor).changeFocus
                              else
-                                theListDiagram.theParentNode->theParentNode[];
-                                (if theParentNode[] <> none then
-                                    theParentNode.theDiagram->theListDiagram[];
-                                    restart getTopMostDiagram
-                                if)
+                                op.currentFocus.theDiagram->theListDiagram[];
+                                op.currentFocus[]->theNonTerminalNode[];
+                                (theNonTerminalNode.unExp,1)
+                                  ->(op.currentFocus.theSifEditor).changeFocus
+                            if);
+                            (if op.canListInsert then
+                                (if not optionalInserted then
+                                    (op.currentFocus.theSifEditor).after
+                                if);
+                                betaGram.PatternDecl
+                                  ->(op.currentFocus.theSifEditor).expandNormal;
+                                op.currentFocus.detail
                             if)
-                         #)
-                    else
-                       'NewPatternHit: theDiagram is NONE'->putline
-                   if)
+                         else
+                            theListDiagram.theParentNode->theParentNode[];
+                            (if theParentNode[] <> none then
+                                theParentNode.theDiagram->theListDiagram[];
+                                restart getTopMostDiagram
+                            if)
+                        if)
+                     #)
                 else
-                   'NewPatternHit: CurrentFocus is NONE'->putline
+                   'NewPatternHit: theDiagram is NONE'->putline
                if)
-           if);
-           
+            else
+               'No current object'->alertUser
+           if)
+        else
+           'New Pattern not possible on this type of page'->alertUser
        if)
+    else
+       'No current page'->alertUser
    if)
 #)  
 
@@ -1691,65 +2067,61 @@ do
 do
    currentpage->p[];
    (if p[] <> none then
-       (if p## <= Palette## then
-           'CurrentPage is a Palette'->putline; 
-        else
-           (if p## <= ObjectPage## then
-               'CurrentPage is an ObjectPage'->putline
+       (if p## <= OADPage## then
+           p[]->op[];
+           (if op.currentObject <> none then
+               op.currentObject->theDesignObject[];
+               (if theDesignObject## <= op.PatternDiagramNode## then
+                   op.currentFocus[]->op.oldFocus[];
+                   theDesignObject[]->op.currentFocus[]
+               if)
             else
-               p[]->op[];
-               (if op.currentObject <> none then
-                   op.currentObject->theDesignObject[];
-                   (if theDesignObject## <= op.PatternDiagramNode## then
-                       op.currentFocus[]->op.oldFocus[];
-                       theDesignObject[]->op.currentFocus[]
-                   if)
-                else
-                   'No current object'->alertUser
-               if);
-               (if op.currentFocus[] <> none then
-                   (if op.currentFocus.theDiagram <> none then
-                       op.currentFocus.theDiagram->theListDiagram[];
-                       (if theListDiagram.LocalNodes.empty then
-                           op.currentFocus.getASTNode->anAST[];
-                           (if anAST[] <> none then
-                               (anAST[],1)
-                                 ->(op.currentFocus.theSifEditor).changeFocus
-                           if);
-                           (op.currentFocus.theSifEditor).insertOptionals;
-                           true->optionalInserted
-                       if);
-                       op.currentFocus[]->op.oldFocus[];
-                       (theListDiagram.LocalNodes.last).elm[]->op.currentFocus[]
-                         ->op.currentObject;
+               'No current object'->alertUser
+           if);
+           (if op.currentFocus[] <> none then
+               (if op.currentFocus.theDiagram <> none then
+                   op.currentFocus.theDiagram->theListDiagram[];
+                   (if theListDiagram.LocalNodes.empty then
                        op.currentFocus.getASTNode->anAST[];
                        (if anAST[] <> none then
                            (anAST[],1)
                              ->(op.currentFocus.theSifEditor).changeFocus
-                        else
-                           op.currentFocus.theDiagram->theListDiagram[];
-                           op.currentFocus[]->theNonTerminalNode[];
-                           (theNonTerminalNode.unExp,1)
-                             ->(op.currentFocus.theSifEditor).changeFocus
                        if);
-                       (if op.canListInsert then
-                           (if not optionalInserted then
-                               (op.currentFocus.theSifEditor).after
-                           if);
-                           betaGram.SimpleDecl
-                             ->(op.currentFocus.theSifEditor).expandNormal;
-                           betaGram.StaticItem
-                             ->(op.currentFocus.theSifEditor).expandNormal
-                       if)
+                       (op.currentFocus.theSifEditor).insertOptionals;
+                       true->optionalInserted
+                   if);
+                   op.currentFocus[]->op.oldFocus[];
+                   (theListDiagram.LocalNodes.last).elm[]->op.currentFocus[]
+                     ->op.currentObject;
+                   op.currentFocus.getASTNode->anAST[];
+                   (if anAST[] <> none then
+                       (anAST[],1)->(op.currentFocus.theSifEditor).changeFocus
                     else
-                       'theDiagram is NONE'->putline
+                       op.currentFocus.theDiagram->theListDiagram[];
+                       op.currentFocus[]->theNonTerminalNode[];
+                       (theNonTerminalNode.unExp,1)
+                         ->(op.currentFocus.theSifEditor).changeFocus
+                   if);
+                   (if op.canListInsert then
+                       (if not optionalInserted then
+                           (op.currentFocus.theSifEditor).after
+                       if);
+                       betaGram.SimpleDecl
+                         ->(op.currentFocus.theSifEditor).expandNormal;
+                       betaGram.StaticItem
+                         ->(op.currentFocus.theSifEditor).expandNormal
                    if)
                 else
-                   'CurrentFocus is NONE'->putline
+                   'theDiagram is NONE'->putline
                if)
-           if);
-           
+            else
+               'No current object'->alertUser
+           if)
+        else
+           'Part Object not possible on this type of page'->alertUser
        if)
+    else
+       'No current page'->alertUser
    if)
 #)  
 
@@ -1766,65 +2138,61 @@ do
 do
    currentpage->p[];
    (if p[] <> none then
-       (if p## <= Palette## then
-           'CurrentPage is a Palette'->putline; 
-        else
-           (if p## <= ObjectPage## then
-               'CurrentPage is an ObjectPage'->putline
+       (if p## <= OADPage## then
+           p[]->op[];
+           (if op.currentObject <> none then
+               op.currentObject->theDesignObject[];
+               (if theDesignObject## <= op.PatternDiagramNode## then
+                   op.currentFocus[]->op.oldFocus[];
+                   theDesignObject[]->op.currentFocus[]
+               if)
             else
-               p[]->op[];
-               (if op.currentObject <> none then
-                   op.currentObject->theDesignObject[];
-                   (if theDesignObject## <= op.PatternDiagramNode## then
-                       op.currentFocus[]->op.oldFocus[];
-                       theDesignObject[]->op.currentFocus[]
-                   if)
-                else
-                   'No current object'->alertUser
-               if);
-               (if op.currentFocus[] <> none then
-                   (if op.currentFocus.theDiagram <> none then
-                       op.currentFocus.theDiagram->theListDiagram[];
-                       (if theListDiagram.LocalNodes.empty then
-                           op.currentFocus.getASTNode->anAST[];
-                           (if anAST[] <> none then
-                               (anAST[],1)
-                                 ->(op.currentFocus.theSifEditor).changeFocus
-                           if);
-                           (op.currentFocus.theSifEditor).insertOptionals;
-                           true->optionalInserted
-                       if);
-                       op.currentFocus[]->op.oldFocus[];
-                       (theListDiagram.LocalNodes.last).elm[]->op.currentFocus[]
-                         ->op.currentObject;
+               'No current object'->alertUser
+           if);
+           (if op.currentFocus[] <> none then
+               (if op.currentFocus.theDiagram <> none then
+                   op.currentFocus.theDiagram->theListDiagram[];
+                   (if theListDiagram.LocalNodes.empty then
                        op.currentFocus.getASTNode->anAST[];
                        (if anAST[] <> none then
                            (anAST[],1)
                              ->(op.currentFocus.theSifEditor).changeFocus
-                        else
-                           op.currentFocus.theDiagram->theListDiagram[];
-                           op.currentFocus[]->theNonTerminalNode[];
-                           (theNonTerminalNode.unExp,1)
-                             ->(op.currentFocus.theSifEditor).changeFocus
                        if);
-                       (if op.canListInsert then
-                           (if not optionalInserted then
-                               (op.currentFocus.theSifEditor).after
-                           if);
-                           betaGram.SimpleDecl
-                             ->(op.currentFocus.theSifEditor).expandNormal;
-                           betaGram.DynamicItem
-                             ->(op.currentFocus.theSifEditor).expandNormal
-                       if)
+                       (op.currentFocus.theSifEditor).insertOptionals;
+                       true->optionalInserted
+                   if);
+                   op.currentFocus[]->op.oldFocus[];
+                   (theListDiagram.LocalNodes.last).elm[]->op.currentFocus[]
+                     ->op.currentObject;
+                   op.currentFocus.getASTNode->anAST[];
+                   (if anAST[] <> none then
+                       (anAST[],1)->(op.currentFocus.theSifEditor).changeFocus
                     else
-                       'theDiagram is NONE'->putline
+                       op.currentFocus.theDiagram->theListDiagram[];
+                       op.currentFocus[]->theNonTerminalNode[];
+                       (theNonTerminalNode.unExp,1)
+                         ->(op.currentFocus.theSifEditor).changeFocus
+                   if);
+                   (if op.canListInsert then
+                       (if not optionalInserted then
+                           (op.currentFocus.theSifEditor).after
+                       if);
+                       betaGram.SimpleDecl
+                         ->(op.currentFocus.theSifEditor).expandNormal;
+                       betaGram.DynamicItem
+                         ->(op.currentFocus.theSifEditor).expandNormal
                    if)
                 else
-                   'CurrentFocus is NONE'->putline
+                   'theDiagram is NONE'->putline
                if)
-           if);
-           
+            else
+               'No current object'->alertUser
+           if)
+        else
+           'Dynamic Reference not possible on this type of page'->alertUser
        if)
+    else
+       'No current page'->alertUser
    if)
 #)  
 
@@ -1841,64 +2209,60 @@ do
 do
    currentpage->p[];
    (if p[] <> none then
-       (if p## <= Palette## then
-           'CurrentPage is a Palette'->putline; 
-        else
-           (if p## <= ObjectPage## then
-               'CurrentPage is an ObjectPage'->putline
+       (if p## <= OADPage## then
+           p[]->op[];
+           (if op.currentObject <> none then
+               op.currentObject->theDesignObject[];
+               (if theDesignObject## <= op.PatternDiagramNode## then
+                   op.currentFocus[]->op.oldFocus[];
+                   theDesignObject[]->op.currentFocus[]
+               if)
             else
-               p[]->op[];
-               (if op.currentObject <> none then
-                   op.currentObject->theDesignObject[];
-                   (if theDesignObject## <= op.PatternDiagramNode## then
-                       op.currentFocus[]->op.oldFocus[];
-                       theDesignObject[]->op.currentFocus[]
-                   if)
-                else
-                   'No current object'->alertUser
-               if);
-               (if op.currentFocus[] <> none then
-                   (if op.currentFocus.theDiagram <> none then
-                       op.currentFocus.theDiagram->theListDiagram[];
-                       (if theListDiagram.LocalNodes.empty then
-                           op.currentFocus.getASTNode->anAST[];
-                           (if anAST[] <> none then
-                               (anAST[],1)
-                                 ->(op.currentFocus.theSifEditor).changeFocus
-                           if);
-                           (op.currentFocus.theSifEditor).insertOptionals;
-                           true->optionalInserted
-                       if);
-                       op.currentFocus[]->op.oldFocus[];
-                       (theListDiagram.LocalNodes.last).elm[]->op.currentFocus[]
-                         ->op.currentObject;
+               'No current object'->alertUser
+           if);
+           (if op.currentFocus[] <> none then
+               (if op.currentFocus.theDiagram <> none then
+                   op.currentFocus.theDiagram->theListDiagram[];
+                   (if theListDiagram.LocalNodes.empty then
                        op.currentFocus.getASTNode->anAST[];
                        (if anAST[] <> none then
                            (anAST[],1)
                              ->(op.currentFocus.theSifEditor).changeFocus
-                        else
-                           op.currentFocus.theDiagram->theListDiagram[];
-                           op.currentFocus[]->theNonTerminalNode[];
-                           (theNonTerminalNode.unExp,1)
-                             ->(op.currentFocus.theSifEditor).changeFocus
                        if);
-                       (if op.canListInsert then
-                           (if not optionalInserted then
-                               (op.currentFocus.theSifEditor).after
-                           if);
-                           betaGram.PatternDecl
-                             ->(op.currentFocus.theSifEditor).expandNormal;
-                           op.currentFocus.detail
-                       if)
+                       (op.currentFocus.theSifEditor).insertOptionals;
+                       true->optionalInserted
+                   if);
+                   op.currentFocus[]->op.oldFocus[];
+                   (theListDiagram.LocalNodes.last).elm[]->op.currentFocus[]
+                     ->op.currentObject;
+                   op.currentFocus.getASTNode->anAST[];
+                   (if anAST[] <> none then
+                       (anAST[],1)->(op.currentFocus.theSifEditor).changeFocus
                     else
-                       'theDiagram is NONE'->putline
+                       op.currentFocus.theDiagram->theListDiagram[];
+                       op.currentFocus[]->theNonTerminalNode[];
+                       (theNonTerminalNode.unExp,1)
+                         ->(op.currentFocus.theSifEditor).changeFocus
+                   if);
+                   (if op.canListInsert then
+                       (if not optionalInserted then
+                           (op.currentFocus.theSifEditor).after
+                       if);
+                       betaGram.PatternDecl
+                         ->(op.currentFocus.theSifEditor).expandNormal;
+                       op.currentFocus.detail
                    if)
                 else
-                   'CurrentFocus is NONE'->putline
+                   'theDiagram is NONE'->putline
                if)
-           if);
-           
+            else
+               'No current object'->alertUser
+           if)
+        else
+           'Local Pattern not possible on this type of page'->alertUser
        if)
+    else
+       'No current page'->alertUser
    if)
 #)  
 
@@ -1915,63 +2279,59 @@ do
 do
    currentpage->p[];
    (if p[] <> none then
-       (if p## <= Palette## then
-           'CurrentPage is a Palette'->putline; 
-        else
-           (if p## <= ObjectPage## then
-               'CurrentPage is an ObjectPage'->putline
+       (if p## <= OADPage## then
+           p[]->op[];
+           (if op.currentObject <> none then
+               op.currentObject->theDesignObject[];
+               (if theDesignObject## <= op.PatternDiagramNode## then
+                   op.currentFocus[]->op.oldFocus[];
+                   theDesignObject[]->op.currentFocus[]
+               if)
             else
-               p[]->op[];
-               (if op.currentObject <> none then
-                   op.currentObject->theDesignObject[];
-                   (if theDesignObject## <= op.PatternDiagramNode## then
-                       op.currentFocus[]->op.oldFocus[];
-                       theDesignObject[]->op.currentFocus[]
-                   if)
-                else
-                   'No current object'->alertUser
-               if);
-               (if op.currentFocus[] <> none then
-                   (if op.currentFocus.theDiagram <> none then
-                       op.currentFocus.theDiagram->theListDiagram[];
-                       (if theListDiagram.LocalNodes.empty then
-                           op.currentFocus.getASTNode->anAST[];
-                           (if anAST[] <> none then
-                               (anAST[],1)
-                                 ->(op.currentFocus.theSifEditor).changeFocus
-                           if);
-                           (op.currentFocus.theSifEditor).insertOptionals;
-                           true->optionalInserted
-                       if);
-                       op.currentFocus[]->op.oldFocus[];
-                       (theListDiagram.LocalNodes.last).elm[]->op.currentFocus[]
-                         ->op.currentObject;
+               'No current object'->alertUser
+           if);
+           (if op.currentFocus[] <> none then
+               (if op.currentFocus.theDiagram <> none then
+                   op.currentFocus.theDiagram->theListDiagram[];
+                   (if theListDiagram.LocalNodes.empty then
                        op.currentFocus.getASTNode->anAST[];
                        (if anAST[] <> none then
                            (anAST[],1)
                              ->(op.currentFocus.theSifEditor).changeFocus
-                        else
-                           op.currentFocus.theDiagram->theListDiagram[];
-                           op.currentFocus[]->theNonTerminalNode[];
-                           (theNonTerminalNode.unExp,1)
-                             ->(op.currentFocus.theSifEditor).changeFocus
                        if);
-                       (if op.canListInsert then
-                           (if not optionalInserted then
-                               (op.currentFocus.theSifEditor).after
-                           if);
-                           betaGram.VirtualDecl
-                             ->(op.currentFocus.theSifEditor).expandNormal
-                       if)
+                       (op.currentFocus.theSifEditor).insertOptionals;
+                       true->optionalInserted
+                   if);
+                   op.currentFocus[]->op.oldFocus[];
+                   (theListDiagram.LocalNodes.last).elm[]->op.currentFocus[]
+                     ->op.currentObject;
+                   op.currentFocus.getASTNode->anAST[];
+                   (if anAST[] <> none then
+                       (anAST[],1)->(op.currentFocus.theSifEditor).changeFocus
                     else
-                       'theDiagram is NONE'->putline
+                       op.currentFocus.theDiagram->theListDiagram[];
+                       op.currentFocus[]->theNonTerminalNode[];
+                       (theNonTerminalNode.unExp,1)
+                         ->(op.currentFocus.theSifEditor).changeFocus
+                   if);
+                   (if op.canListInsert then
+                       (if not optionalInserted then
+                           (op.currentFocus.theSifEditor).after
+                       if);
+                       betaGram.VirtualDecl
+                         ->(op.currentFocus.theSifEditor).expandNormal
                    if)
                 else
-                   'CurrentFocus is NONE'->putline
+                   'theDiagram is NONE'->putline
                if)
-           if);
-           
+            else
+               'No current object'->alertUser
+           if)
+        else
+           'Virtual Pattern not possible on this type of page'->alertUser
        if)
+    else
+       'No current page'->alertUser
    if)
 #)  
 
@@ -1988,63 +2348,60 @@ do
 do
    currentpage->p[];
    (if p[] <> none then
-       (if p## <= Palette## then
-           'CurrentPage is a Palette'->putline; 
-        else
-           (if p## <= ObjectPage## then
-               'CurrentPage is an ObjectPage'->putline
+       (if p## <= OADPage## then
+           p[]->op[];
+           (if op.currentObject <> none then
+               op.currentObject->theDesignObject[];
+               (if theDesignObject## <= op.PatternDiagramNode## then
+                   op.currentFocus[]->op.oldFocus[];
+                   theDesignObject[]->op.currentFocus[]
+               if)
             else
-               p[]->op[];
-               (if op.currentObject <> none then
-                   op.currentObject->theDesignObject[];
-                   (if theDesignObject## <= op.PatternDiagramNode## then
-                       op.currentFocus[]->op.oldFocus[];
-                       theDesignObject[]->op.currentFocus[]
-                   if)
-                else
-                   'No current object'->alertUser
-               if);
-               (if op.currentFocus[] <> none then
-                   (if op.currentFocus.theDiagram <> none then
-                       op.currentFocus.theDiagram->theListDiagram[];
-                       (if theListDiagram.LocalNodes.empty then
-                           op.currentFocus.getASTNode->anAST[];
-                           (if anAST[] <> none then
-                               (anAST[],1)
-                                 ->(op.currentFocus.theSifEditor).changeFocus
-                           if);
-                           (op.currentFocus.theSifEditor).insertOptionals;
-                           true->optionalInserted
-                       if);
-                       op.currentFocus[]->op.oldFocus[];
-                       (theListDiagram.LocalNodes.last).elm[]->op.currentFocus[]
-                         ->op.currentObject;
+               'No current object'->alertUser
+           if);
+           (if op.currentFocus[] <> none then
+               (if op.currentFocus.theDiagram <> none then
+                   op.currentFocus.theDiagram->theListDiagram[];
+                   (if theListDiagram.LocalNodes.empty then
                        op.currentFocus.getASTNode->anAST[];
                        (if anAST[] <> none then
                            (anAST[],1)
                              ->(op.currentFocus.theSifEditor).changeFocus
-                        else
-                           op.currentFocus.theDiagram->theListDiagram[];
-                           op.currentFocus[]->theNonTerminalNode[];
-                           (theNonTerminalNode.unExp,1)
-                             ->(op.currentFocus.theSifEditor).changeFocus
                        if);
-                       (if op.canListInsert then
-                           (if not optionalInserted then
-                               (op.currentFocus.theSifEditor).after
-                           if);
-                           betaGram.BindingDecl
-                             ->(op.currentFocus.theSifEditor).expandNormal
-                       if)
+                       (op.currentFocus.theSifEditor).insertOptionals;
+                       true->optionalInserted
+                   if);
+                   op.currentFocus[]->op.oldFocus[];
+                   (theListDiagram.LocalNodes.last).elm[]->op.currentFocus[]
+                     ->op.currentObject;
+                   op.currentFocus.getASTNode->anAST[];
+                   (if anAST[] <> none then
+                       (anAST[],1)->(op.currentFocus.theSifEditor).changeFocus
                     else
-                       'theDiagram is NONE'->putline
+                       op.currentFocus.theDiagram->theListDiagram[];
+                       op.currentFocus[]->theNonTerminalNode[];
+                       (theNonTerminalNode.unExp,1)
+                         ->(op.currentFocus.theSifEditor).changeFocus
+                   if);
+                   (if op.canListInsert then
+                       (if not optionalInserted then
+                           (op.currentFocus.theSifEditor).after
+                       if);
+                       betaGram.BindingDecl
+                         ->(op.currentFocus.theSifEditor).expandNormal
                    if)
                 else
-                   'CurrentFocus is NONE'->putline
+                   'theDiagram is NONE'->putline
                if)
-           if);
-           
+            else
+               'No current object'->alertUser
+           if)
+        else
+           'Binding of Virtual Pattern not possible on this type of page'
+             ->alertUser
        if)
+    else
+       'No current page'->alertUser
    if)
 #)  
 
@@ -2061,63 +2418,60 @@ do
 do
    currentpage->p[];
    (if p[] <> none then
-       (if p## <= Palette## then
-           'CurrentPage is a Palette'->putline; 
-        else
-           (if p## <= ObjectPage## then
-               'CurrentPage is an ObjectPage'->putline
+       (if p## <= OADPage## then
+           p[]->op[];
+           (if op.currentObject <> none then
+               op.currentObject->theDesignObject[];
+               (if theDesignObject## <= op.PatternDiagramNode## then
+                   op.currentFocus[]->op.oldFocus[];
+                   theDesignObject[]->op.currentFocus[]
+               if)
             else
-               p[]->op[];
-               (if op.currentObject <> none then
-                   op.currentObject->theDesignObject[];
-                   (if theDesignObject## <= op.PatternDiagramNode## then
-                       op.currentFocus[]->op.oldFocus[];
-                       theDesignObject[]->op.currentFocus[]
-                   if)
-                else
-                   'No current object'->alertUser
-               if);
-               (if op.currentFocus[] <> none then
-                   (if op.currentFocus.theDiagram <> none then
-                       op.currentFocus.theDiagram->theListDiagram[];
-                       (if theListDiagram.LocalNodes.empty then
-                           op.currentFocus.getASTNode->anAST[];
-                           (if anAST[] <> none then
-                               (anAST[],1)
-                                 ->(op.currentFocus.theSifEditor).changeFocus
-                           if);
-                           (op.currentFocus.theSifEditor).insertOptionals;
-                           true->optionalInserted
-                       if);
-                       op.currentFocus[]->op.oldFocus[];
-                       (theListDiagram.LocalNodes.last).elm[]->op.currentFocus[]
-                         ->op.currentObject;
+               'No current object'->alertUser
+           if);
+           (if op.currentFocus[] <> none then
+               (if op.currentFocus.theDiagram <> none then
+                   op.currentFocus.theDiagram->theListDiagram[];
+                   (if theListDiagram.LocalNodes.empty then
                        op.currentFocus.getASTNode->anAST[];
                        (if anAST[] <> none then
                            (anAST[],1)
                              ->(op.currentFocus.theSifEditor).changeFocus
-                        else
-                           op.currentFocus.theDiagram->theListDiagram[];
-                           op.currentFocus[]->theNonTerminalNode[];
-                           (theNonTerminalNode.unExp,1)
-                             ->(op.currentFocus.theSifEditor).changeFocus
                        if);
-                       (if op.canListInsert then
-                           (if not optionalInserted then
-                               (op.currentFocus.theSifEditor).after
-                           if);
-                           betaGram.FinalDecl
-                             ->(op.currentFocus.theSifEditor).expandNormal
-                       if)
+                       (op.currentFocus.theSifEditor).insertOptionals;
+                       true->optionalInserted
+                   if);
+                   op.currentFocus[]->op.oldFocus[];
+                   (theListDiagram.LocalNodes.last).elm[]->op.currentFocus[]
+                     ->op.currentObject;
+                   op.currentFocus.getASTNode->anAST[];
+                   (if anAST[] <> none then
+                       (anAST[],1)->(op.currentFocus.theSifEditor).changeFocus
                     else
-                       'theDiagram is NONE'->putline
+                       op.currentFocus.theDiagram->theListDiagram[];
+                       op.currentFocus[]->theNonTerminalNode[];
+                       (theNonTerminalNode.unExp,1)
+                         ->(op.currentFocus.theSifEditor).changeFocus
+                   if);
+                   (if op.canListInsert then
+                       (if not optionalInserted then
+                           (op.currentFocus.theSifEditor).after
+                       if);
+                       betaGram.FinalDecl
+                         ->(op.currentFocus.theSifEditor).expandNormal
                    if)
                 else
-                   'CurrentFocus is NONE'->putline
+                   'theDiagram is NONE'->putline
                if)
-           if);
-           
+            else
+               'No current object'->alertUser
+           if)
+        else
+           'Final Binding of Virtual Pattern not possible on this type of page'
+             ->alertUser
        if)
+    else
+       'No current page'->alertUser
    if)
 #)  
 
@@ -2126,19 +2480,15 @@ do
 do
    currentpage->p[];
    (if p[] <> none then
-       (if p## <= Palette## then
-           'CurrentPage is a Palette'->putline; 
+       (if p## <= OADPage## then
+           p[]->op[];
+           &op.DynamicItemConnector[]->theConnector[];
+           theConnector.InteractiveNew
         else
-           (if p## <= ObjectPage## then
-               'CurrentPage is an ObjectPage'->putline
-            else
-               p[]->op[];
-               &op.DynamicItemConnector[]->theConnector[];
-               theConnector.InteractiveNew;
-               
-           if);
-           
+           'Dynamic Item not possible on this type of page'->alertUser
        if)
+    else
+       'No current page'->alertUser
    if)
 #)  
 
@@ -2147,19 +2497,15 @@ do
 do
    currentpage->p[];
    (if p[] <> none then
-       (if p## <= Palette## then
-           'CurrentPage is a Palette'->putline; 
+       (if p## <= OADPage## then
+           p[]->op[];
+           &op.DynamicComponentConnector[]->theConnector[];
+           theConnector.InteractiveNew
         else
-           (if p## <= ObjectPage## then
-               'CurrentPage is an ObjectPage'->putline
-            else
-               p[]->op[];
-               &op.DynamicComponentConnector[]->theConnector[];
-               theConnector.InteractiveNew;
-               
-           if);
-           
+           'Dynamic Component not possible on this type of page'->alertUser
        if)
+    else
+       'No current page'->alertUser
    if)
 #)  
 
@@ -2168,19 +2514,15 @@ do
 do
    currentpage->p[];
    (if p[] <> none then
-       (if p## <= Palette## then
-           'CurrentPage is a Palette'->putline; 
+       (if p## <= OADPage## then
+           p[]->op[];
+           &op.StaticItemConnector[]->theConnector[];
+           theConnector.InteractiveNew
         else
-           (if p## <= ObjectPage## then
-               'CurrentPage is an ObjectPage'->putline
-            else
-               p[]->op[];
-               &op.StaticItemConnector[]->theConnector[];
-               theConnector.InteractiveNew;
-               
-           if);
-           
+           'Static Item not possible on this type of page'->alertUser
        if)
+    else
+       'No current page'->alertUser
    if)
 #)  
 
@@ -2189,19 +2531,15 @@ do
 do
    currentpage->p[];
    (if p[] <> none then
-       (if p## <= Palette## then
-           'CurrentPage is a Palette'->putline; 
+       (if p## <= OADPage## then
+           p[]->op[];
+           &op.StaticComponentConnector[]->theConnector[];
+           theConnector.InteractiveNew
         else
-           (if p## <= ObjectPage## then
-               'CurrentPage is an ObjectPage'->putline
-            else
-               p[]->op[];
-               &op.StaticComponentConnector[]->theConnector[];
-               theConnector.InteractiveNew;
-               
-           if);
-           
+           'Static Component not possible on this type of page'->alertUser
        if)
+    else
+       'No current page'->alertUser
    if)
 #)  
 
@@ -2210,19 +2548,15 @@ do
 do
    currentpage->p[];
    (if p[] <> none then
-       (if p## <= Palette## then
-           'CurrentPage is a Palette'->putline; 
+       (if p## <= OADPage## then
+           p[]->op[];
+           &op.SpecializationConnector[]->theConnector[];
+           theConnector.InteractiveNew
         else
-           (if p## <= ObjectPage## then
-               'CurrentPage is an ObjectPage'->putline
-            else
-               p[]->op[];
-               &op.SpecializationConnector[]->theConnector[];
-               theConnector.InteractiveNew;
-               
-           if);
-           
+           'Specialization not possible on this type of page'->alertUser
        if)
+    else
+       'No current page'->alertUser
    if)
 #)  
 
@@ -2231,19 +2565,15 @@ do
 do
    currentpage->p[];
    (if p[] <> none then
-       (if p## <= Palette## then
-           'CurrentPage is a Palette'->putline; 
+       (if p## <= OADPage## then
+           p[]->op[];
+           &op.BindingConnector[]->theConnector[];
+           theConnector.InteractiveNew
         else
-           (if p## <= ObjectPage## then
-               'CurrentPage is an ObjectPage'->putline
-            else
-               p[]->op[];
-               &op.BindingConnector[]->theConnector[];
-               theConnector.InteractiveNew;
-               
-           if);
-           
+           'Binding of Virtual not possible on this type of page'->alertUser
        if)
+    else
+       'No current page'->alertUser
    if)
 #)  
 
@@ -2252,19 +2582,16 @@ do
 do
    currentpage->p[];
    (if p[] <> none then
-       (if p## <= Palette## then
-           'CurrentPage is a Palette'->putline; 
+       (if p## <= OADPage## then
+           p[]->op[];
+           &op.FinalBindingConnector[]->theConnector[];
+           theConnector.InteractiveNew
         else
-           (if p## <= ObjectPage## then
-               'CurrentPage is an ObjectPage'->putline
-            else
-               p[]->op[];
-               &op.FinalBindingConnector[]->theConnector[];
-               theConnector.InteractiveNew;
-               
-           if);
-           
+           'Final Binding of Virtual not possible on this type of page'
+             ->alertUser
        if)
+    else
+       'No current page'->alertUser
    if)
 #)  
 
@@ -2273,19 +2600,15 @@ do
 do
    currentpage->p[];
    (if p[] <> none then
-       (if p## <= Palette## then
-           'CurrentPage is a Palette'->putline; 
+       (if p## <= OADPage## then
+           p[]->op[];
+           &op.PatternVariableConnector[]->theConnector[];
+           theConnector.InteractiveNew
         else
-           (if p## <= ObjectPage## then
-               'CurrentPage is an ObjectPage'->putline
-            else
-               p[]->op[];
-               &op.PatternVariableConnector[]->theConnector[];
-               theConnector.InteractiveNew;
-               
-           if);
-           
+           'Pattern Variable not possible on this type of page'->alertUser
        if)
+    else
+       'No current page'->alertUser
    if)
 #)  
 
@@ -2294,19 +2617,15 @@ do
 do
    currentpage->p[];
    (if p[] <> none then
-       (if p## <= Palette## then
-           'CurrentPage is a Palette'->putline; 
+       (if p## <= OADPage## then
+           p[]->op[];
+           &op.OTOAssociationRelation[]->theConnector[];
+           theConnector.InteractiveNew
         else
-           (if p## <= ObjectPage## then
-               'CurrentPage is an ObjectPage'->putline
-            else
-               p[]->op[];
-               &op.OTOAssociationRelation[]->theConnector[];
-               theConnector.InteractiveNew;
-               
-           if);
-           
+           'One-to-one association not possible on this type of page'->alertUser
        if)
+    else
+       'No current page'->alertUser
    if)
 #)  
 
@@ -2315,19 +2634,16 @@ do
 do
    currentpage->p[];
    (if p[] <> none then
-       (if p## <= Palette## then
-           'CurrentPage is a Palette'->putline; 
+       (if p## <= OADPage## then
+           p[]->op[];
+           &op.OTMAssociationRelation[]->theConnector[];
+           theConnector.InteractiveNew
         else
-           (if p## <= ObjectPage## then
-               'CurrentPage is an ObjectPage'->putline
-            else
-               p[]->op[];
-               &op.OTMAssociationRelation[]->theConnector[];
-               theConnector.InteractiveNew;
-               
-           if);
-           
+           'One-to-many association not possible on this type of page'
+             ->alertUser
        if)
+    else
+       'No current page'->alertUser
    if)
 #)  
 
@@ -2336,19 +2652,16 @@ do
 do
    currentpage->p[];
    (if p[] <> none then
-       (if p## <= Palette## then
-           'CurrentPage is a Palette'->putline; 
+       (if p## <= OADPage## then
+           p[]->op[];
+           &op.MTMAssociationRelation[]->theConnector[];
+           theConnector.InteractiveNew
         else
-           (if p## <= ObjectPage## then
-               'CurrentPage is an ObjectPage'->putline
-            else
-               p[]->op[];
-               &op.MTMAssociationRelation[]->theConnector[];
-               theConnector.InteractiveNew;
-               
-           if);
-           
+           'Many-to-many association not possible on this type of page'
+             ->alertUser
        if)
+    else
+       'No current page'->alertUser
    if)
 #)  
 
@@ -2366,64 +2679,56 @@ do
      do
         currentpage->p[];
         (if p[] <> none then
-            (if p## <= Palette## then
-                'CurrentPage is a Palette'->alertUser; ; 
-             else
-                (if p## <= ObjectPage## then
-                    'CurrentPage is an ObjectPage'->alertUser
-                 else
-                    p[]->op[];
-                    op.currentObject->theObject[];
-                    (if theObject[] <> none then
-                        (if theObject## <= op.PatternDiagramNode## then
-                            theObject[]->thePatternDiagramNode[];
-                            thePatternDiagramNode.theDiagram->theListDiagram[];
-                            (if theListDiagram## <= op.FragmentDiagram## then
-                                'Current diagram is a fragment diagram'
+            (if p## <= OADPage## then
+                p[]->op[];
+                op.currentObject->theObject[];
+                (if theObject[] <> none then
+                    (if theObject## <= op.PatternDiagramNode## then
+                        theObject[]->thePatternDiagramNode[];
+                        thePatternDiagramNode.theDiagram->theListDiagram[];
+                        (if theListDiagram## <= op.FragmentDiagram## then
+                            'Current diagram is a fragment diagram'->AlertUser
+                         else
+                            (if theListDiagram## <= op.PatternAttDiagram## then
+                                'Current diagram is an attributes form diagram'
                                   ->AlertUser
                              else
-                                (if theListDiagram## <= op.PatternAttDiagram##
-                                 then
-                                    'Current diagram is an attributes form diagram'
-                                      ->AlertUser
-                                 else
-                                    theListDiagram[]->theOADDiagram[];
-                                    theOADDiagram.theDescriptor->theDesc[];
-                                    theDesc.father->anAST[];
-                                    anAST.father->testAST[];
-                                    (if testAST[] <> none then
-                                        (if anAST.symbol <> betaGram.StaticItem
-                                         then
-                                            (if thePatternDiagramNode## <=
-                                            theListDiagram.titleNode## then
-                                                &selfAssociateWindow[]
-                                                  ->theWindow[];
-                                                theWindow.popup
-                                             else
-                                                'Please select the title of the diagram\nto perform this operation'
-                                                  ->alertUser
-                                            if)
+                                theListDiagram[]->theOADDiagram[];
+                                theOADDiagram.theDescriptor->theDesc[];
+                                theDesc.father->anAST[];
+                                anAST.father->testAST[];
+                                (if testAST[] <> none then
+                                    (if anAST.symbol <> betaGram.StaticItem then
+                                        (if thePatternDiagramNode## <=
+                                        theListDiagram.titleNode## then
+                                            &selfAssociateWindow[]->theWindow[];
+                                            theWindow.popup
                                          else
-                                            'Current diagram is singularly defined'
-                                              ->AlertUser
+                                            'Please select the title of the diagram\nto perform this operation'
+                                              ->alertUser
                                         if)
                                      else
-                                        'Current diagram is a descriptor form diagram'
+                                        'Current diagram is singularly defined'
                                           ->AlertUser
                                     if)
+                                 else
+                                    'Current diagram is a descriptor form diagram'
+                                      ->AlertUser
                                 if)
                             if)
-                         else
-                            'Current selection must be the title of a diagram'
-                              ->alertUser
                         if)
                      else
-                        'No selection'->alertUser
-                    if);
-                    
-                if);
-                
+                        'Current selection must be the title of a diagram'
+                          ->alertUser
+                    if)
+                 else
+                    'No selection'->alertUser
+                if)
+             else
+                'Associate to Self not possible on this type of page'->alertUser
             if)
+         else
+            'No current page'->alertUser
         if);
         
      #)  
@@ -2450,6 +2755,35 @@ do
    sep1.disable;
    sep2.disable
 #)  
+
+-- frejaSearchItemDesc: DoPart --
+do
+   (if switch[1] then 'search'->putline if);
+   currentPage->thePage[];
+   (if thePage[] <> none then
+       (if thePage## <= OADPage## then
+           thePage[]->theOADPage[];
+           theOADPage.CurrentObject->theDesObj[];
+           (if theDesObj[] <> none then
+               (if theDesObj## <= theOADPage.PatternDiagramNode## then
+                   theDesObj[]->theObject[];
+                   (if theObject.theSifEditor <> none then
+                       (theObject.theSifEditor).search
+                    else
+                       'Please select title or attribute in a fragmentform'
+                         ->alertUser
+                   if)
+                else
+                   'Current focus is not a pattern diagram node!'->putline
+               if)
+           if)
+        else
+           'Search not implemented on this type of page'->alertUser
+       if)
+    else
+       'No current page'->alertUser
+   if);
+     
 
 -- frejaHideShowSifItem: DoPart --
 do
