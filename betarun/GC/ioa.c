@@ -1091,9 +1091,12 @@ void IOACheck()
 	  fflush(output);
 	}
 #endif
+#ifdef MT
 	if (NumTSD==1) {
 	  Claim(FALSE, "No skip should be needed when only one thread");
 	}
+#endif
+
       }
       if (ptr == (long*)TheIOATOP) goto finished;
       theObj = (struct Object *)ptr;

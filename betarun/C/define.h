@@ -131,7 +131,11 @@
 
 /********* Debug macros *******/
 #ifdef RTDEBUG
+#ifdef MT
 #  define DEBUG_MT(code)  if( DebugMT )  { code; }
+#else
+#  define DEBUG_MT(code)
+#endif
 #  define DEBUG_IOA(code)  if( DebugIOA )  { code; }
 #  define CHECK_HEAP(code)  if( CheckHeap )  { code; }
 #  define DEBUG_ALLOI(code)  if( DebugAlloI )  { code; }
