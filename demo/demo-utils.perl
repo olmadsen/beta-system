@@ -79,7 +79,7 @@ sub print_summary
 	} elsif ($progs{$prog}==999){
 	    print "CHECK  : program not attempted run: $prog\n";
 	} elsif ($progs{$prog}==111){
-	    # OK: explicitly ignored
+	    print "ok     : program explicitly ignored: $prog\n";
 	} elsif ($progs{$prog}==0){
 	    if ($status{$prog}==1){
 		print "ok     : program tested ok: $prog\n";
@@ -137,8 +137,9 @@ sub compare_expected()
 	if (system("diff $diffoptions $prog.ref $prog.out") == 0){
 	    print "[output is correct]\n";
 	    unlink "$prog.run", "$prog.out", "$prog.ref", "$prog.diff";
-	    unlink "$prog" unless ($preserve);
-	    unlink "$prog-jdb" if ($target eq "jvm" && !$preserve);
+	    unlink &stripcounter("$prog.run"), &stripcounter("$prog.out");
+	    unlink &stripcounter("$prog") unless ($preserve);
+	    unlink &stripcounter("$prog")."-jdb" if ($target eq "jvm" && !$preserve);
 	    $status{$prog} = 1;
 	} else {
 	    # Save diff file for easy lookup
