@@ -81,6 +81,8 @@ Control:
                if);
             exit t[]
             #);
+          print: 
+            <<SLOT type_info_print: descriptor>>;
           name: ^text;
           pointer_level: @integer;
           representation: ^text;
@@ -88,18 +90,28 @@ Control:
           category: @integer;
           attributes: ^idl_attributes;
        #);
+     notfound_descriptor:
+       (# name: ^text (* name of type not found *);
+          type: ^type_info (* instantiated type *)
+       enter name[]
+       do INNER
+       exit type[]
+       #);
      type_list: list
        (# name: ^text (* identification for debug/trace purposes *);
           element::type_info;
           append: 
             (# elm: ^element;
                msg: ^text;
+               report: @boolean;
             enter elm[]
             do (* A few predefined types may NOT be redefined by typedefs.
                 * We need to treat them specially.
-                * Nope: This will prevent insertion into global_types too.
+                * Except for types defined in global types 
+                * - we really mean it there! (:-)
                 *)
-               (if false (*'BSTR' -> elm.name.equal*) then
+               (if (THIS(type_list)[]<>global_types[]) and
+                   ('BSTR' -> elm.name.equal) then
                    (if not quiet then
                        'Skipped definition of type \'' -> msg[];
                        elm.name[] -> msg.puttext;
@@ -107,6 +119,31 @@ Control:
                        msg[] -> warning;
                    if)
                 else
+                   (THIS(type_list)[]<>global_types[]) and (verbose) 
+                     -> report;
+                   (if debug then
+                       'Appending type for ' -> screen.puttext;
+                       THIS(type_list).name[] -> screen.putline;
+                       elm.print;
+                   if);
+                   (if report then
+                       '    [type ' -> screen.puttext;
+                       elm.name[] -> screen.puttext;
+                       ': '-> screen.puttext;
+                       (for elm.pointer_level repeat '*' -> screen.put for);
+                       elm.representation[] -> screen.puttext;
+                   if);
+                   (* Check if it is already there - if so: delete it *)
+                   find
+                   (# predicate::(# do (current.name[]->elm.name.equal)->value #);
+                   do current[] -> at -> delete;
+                      (if report then
+                          '; redefinition' -> screen.puttext;
+                      if);
+                   #);
+                   (if report then
+                       ']' -> screen.putline;
+                   if);
                    elm[] -> THIS(list).append;
                if);
             #);
@@ -115,7 +152,17 @@ Control:
             (# name: ^text;
                found: @boolean;
                current: ^element;
-            enter name[]
+               notfound_object: ^notfound_descriptor;
+               notfound:
+                 (# 
+                 do (if notfound_object[]<>NONE then
+                        name[] -> notfound_object -> current[];
+                        NONE -> notfound_object[];
+                     else
+                        <<SLOT FindTypeNotFound: descriptor>>
+                    if);
+                 #);
+            enter (name[],notfound_object[])
             <<SLOT type_list_findtype: dopart>>
             #);
           add_basic_type:

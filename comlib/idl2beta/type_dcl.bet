@@ -126,7 +126,7 @@ do (if s.symbol
          #)
    if);
    (* The type should be in global_types *)
-   name[] -> global_types.findtype(# do current[] -> dcl_info.type[] #);
+   (name[],NONE) -> global_types.findtype(# do current[] -> dcl_info.type[] #);
 #)
 
 --type_dcl_lib: attributes--
@@ -182,8 +182,8 @@ do_type_spec:
      if);
      (if name[]<>NONE then
          (* Find info about the basic type in types *)
-         name[]-> types.findtype
-         (# 
+         (name[],NONE)-> types.findtype
+         (#
          do (if info.name[]=NONE then
                 (* If info.name is not NONE,
                  * then a typedef may be going
@@ -192,6 +192,13 @@ do_type_spec:
                  * new name!
                  *)
                 current.name.copy->info.name[];
+            if);
+            (if current.representation[]=NONE then
+                (# msg: ^text
+                do 'Type representation is NONE for type '-> msg[];
+                   current.name[] -> msg.puttext;
+                   msg[] -> error;
+                #)
             if);
             current.representation.copy
               ->info.representation[];
@@ -222,9 +229,16 @@ do_type_spec:
               * Let's find the representation of the aliased name.
               *)
              (if is_definition then
-                 name[]-> types.findtype
+                 (name[],NONE)-> types.findtype
                  (# 
-                 do current.representation.copy
+                 do (if current.representation[]=NONE then
+                        (# msg: ^text
+                        do 'Type representation is NONE for type '-> msg[];
+                           current.name[] -> msg.puttext;
+                           msg[] -> error;
+                        #)
+                    if);
+                    current.representation.copy
                       ->info.representation[];
                     current.pointer_level+info.pointer_level
                       ->info.pointer_level;
@@ -235,7 +249,7 @@ do_type_spec:
                  (* It's an *application of a type name, e.g. in a 
                   * struct member. The type better be defined already!
                   *)
-                 name[]-> types.findtype
+                 (name[],NONE)-> types.findtype
                  (# 
                  do current.representation.copy
                       ->info.representation[];
@@ -276,6 +290,7 @@ do_type_declarator:
      dcl_info: ^declarator_info;
      d: ^idl.declarators;
      types: ^type_list;
+     
   enter (types[], att[], t[])
   do (if t.symbol
       // idl.fnc_ptr_type_declarator then
@@ -299,17 +314,6 @@ do_type_declarator:
             info[] -> types.append;
          #);
      if);
-     (if debug then
-         output.indent;
-         output.CommentBegin;
-         'typedef: ' -> output.puttext;
-         info.name[] -> output.puttext;
-         ': '-> output.puttext;
-         (for info.pointer_level repeat '*' -> output.put for);
-         info.representation[] -> output.puttext;
-         output.CommentEnd;
-         output.newline;
-     if)
   #);
 
 do_extern:
@@ -418,57 +422,80 @@ do_struct_type:
        #);
      info: ^type_info;
      struct_tag: ^text;
+     add_tagged_struct_type:
+       (# tag: ^text;
+          name, representation: ^text;
+          type: ^type_info;
+       enter tag[]
+       do 'struct-' -> (tag.copy).prepend -> name[];
+          'struct_' -> (tag.copy).prepend -> representation[];
+          (name[], representation[]) 
+            -> local_types.add_struct_type 
+            -> type[];
+          representation[] -> holders.add;
+       exit type[]
+       #);
      make_struct_alias:
-       (# 
+       (# notfound: @notfound_descriptor
+            (* default is to use int32 for unknown types, but
+             *    typedef struct XXX YYY
+             * is allowed *before* 'struct XXX' is defined.
+             *)
+            (# 
+            do (name[], name[])
+                 -> local_types.add_struct_type
+                 -> type[]
+            #);
        do (if struct_tag[]=NONE then
-             'struct alias: tag is none' -> error;
+             'make_struct_alias: tag is none' -> error;
            else
               (* Let's find the representation of the aliased type *)
-             'struct-' -> (struct_tag.copy).prepend -> local_types.findtype
-             (# 
-             do current.representation.copy -> info.representation[];
-                current.category -> info.category;
-             #);
+              ('struct-' -> (struct_tag.copy).prepend, notfound[]) -> 
+              local_types.findtype
+              (# 
+              do current.representation.copy -> info.representation[];
+                 current.category -> info.category;
+              #);
           if);
        #);
   enter (info[], t[])
-  do (if info[]=NONE then
-         'do_struct_type: no info!' -> error;
-         &type_info[] -> info[];
-     if);
-     (if info.name[]=NONE then
-         'do_struct_type: no name!' -> error;
-         'struct' -> info.name[];
-     if);
-     (if t.gettag -> optionalPresent then
+  do (if t.gettag -> optionalPresent then
          t.gettag -> IdentifierToText -> struct_tag[];
      if);
-     (if info.pointer_level > 0 then
+     (if (info[]<>NONE) and (info.pointer_level > 0) then
+         (* typedef struct XXX {...} *YYY *)
          make_struct_alias;
          leave do_struct_type;
      if);
      (if not (t.getstruct_body_opt -> optionalPresent) then
+         (* typedef struct XXX YYY *)
          make_struct_alias;
          leave do_struct_type;
       else
+         (* There is a struct body *)
          t.getstruct_body_opt -> b[];
          output.indent;
-         info.name[] -> output.puttext;
+         (if struct_tag[]<>NONE then
+             (* struct XXX { ... } *)
+             struct_tag[] -> add_tagged_struct_type;
+             'struct_' -> output.puttext;
+             struct_tag[] -> output.puttext;
+             'struct_' -> (struct_tag.copy).prepend  -> info.representation[];
+          else
+             (if info[]=NONE then
+                 (* struct { ... } *)
+                 'do_struct_type: no name and no tag!' -> error;
+              else
+                 info.name[] -> output.puttext;
+                 info.name.copy -> info.representation[];
+             if);
+         if);
+         type_cat_struct -> info.category;
          ': DATA' -> output.putline;
          2 -> output.indent.inc;
          output.indent;
-         (if struct_tag[]<>NONE then
-             (if not compact then 
-                 output.CommentBegin;
-                 'struct' -> output.puttext;
-                 ' ' -> output.put;
-                 struct_tag[] -> output.puttext;
-                 output.CommentEnd;
-                 output.newline;
-                 output.indent;
-             if);
-             'struct-' -> struct_tag.prepend;
-             (struct_tag[], info.name[]) -> local_types.add_struct_type;
+         (if info[]<>NONE then
+             
          if);
          output.PatternBegin;
          output.newline;
@@ -479,9 +506,6 @@ do_struct_type:
          output.PatternEnd;
          2 -> output.indent.dec;
          ';' -> output.putline;
-         info.name.copy -> info.representation[];
-         type_cat_struct -> info.category;
-         info.name.copy -> holders.add;
      if);
   #);
 
@@ -496,7 +520,8 @@ do_union_type:
               'union alias: tag is none' -> error;
            else
               (* Let's find the representation of the aliased type *)
-              'union-' -> (union_tag.copy).prepend -> local_types.findtype
+              ('union-' -> (union_tag.copy).prepend, NONE) -> 
+              local_types.findtype
               (# 
               do current.representation.copy -> info.representation[];
                  current.category -> info.category;
@@ -523,32 +548,34 @@ do_union_type:
          make_union_alias;
          leave do_union_type;
       else
-         info.name.copy -> msg[];
-         ':\n        union types are not translated. You must do it by hand, sorry!'
-           -> msg.puttext;
-         msg[] -> error;
-         output.indent;
-         (* 'Unimplemented_' -> output.puttext;*)
-         info.name[] -> output.puttext;
-         ': ' -> output.puttext;
-         2 -> output.indent.inc;
-         output.newline; output.indent;
-         output.patternbegin;
-         3 -> output.indent.inc;
-         output.newline; output.indent;
-         output.commentbegin;
-         output.newline; output.indent; ' * ' -> output.puttext; 
-         'union types are not translated.' -> output.puttext;
-         output.newline; output.indent; ' * ' -> output.puttext; 
-         'You must do it by hand, sorry!' -> output.puttext;
-         output.newline; output.indent; 
-         output.commentend;
-         3 -> output.indent.dec;
-         output.newline; output.indent;
-         output.patternend;
-         ';' -> output.putline;
-         (if not compact then output.newline; if);
-         2 -> output.indent.dec;
+         (if not nocode then
+             info.name.copy -> msg[];
+             ':\n        union types are not translated. You must do it by hand, sorry!'
+               -> msg.puttext;
+             msg[] -> error;
+             output.indent;
+             (* 'Unimplemented_' -> output.puttext;*)
+             info.name[] -> output.puttext;
+             ': ' -> output.puttext;
+             2 -> output.indent.inc;
+             output.newline; output.indent;
+             output.patternbegin;
+             3 -> output.indent.inc;
+             output.newline; output.indent;
+             output.commentbegin;
+             output.newline; output.indent; ' * ' -> output.puttext; 
+             'union types are not translated.' -> output.puttext;
+             output.newline; output.indent; ' * ' -> output.puttext; 
+             'You must do it by hand, sorry!' -> output.puttext;
+             output.newline; output.indent; 
+             output.commentend;
+             3 -> output.indent.dec;
+             output.newline; output.indent;
+             output.patternend;
+             ';' -> output.putline;
+             (if not compact then output.newline; if);
+             2 -> output.indent.dec;
+         if);
          info.name.copy -> info.representation[];
          type_cat_union -> info.category;
          info.name.copy -> holders.add;
@@ -566,26 +593,25 @@ do_enum_type:
   enter (info[], t[])
   do (if t.getenum_body_opt -> optionalPresent then
          t.getenum_body_opt -> eb[];
-         (if info[]=NONE then
-             'do_enum_type: no info!' -> error;
-             &type_info[] -> info[];
-         if);
-         (if info.name[]=NONE then
-             'enum' -> info.name[];
-         if);
-         output.indent;
-         info.name[] -> output.puttext;
-         ': IntegerObject(\# ' -> output.puttext;
-         (if not compact then 
-             (if t.gettag -> optionalPresent then
-                 output.CommentBegin;
-                 'enum ' -> output.puttext;
-                 t.gettag -> IdentifierToText -> output.puttext;
-                 output.CommentEnd;
-                 ' '->output.put;
+         (if info[]<>NONE then
+             (* Define the enum-"type" *)
+             output.indent;
+             info.name[] -> output.puttext;
+             ': IntegerObject(\# ' -> output.puttext;
+             (if not compact then 
+                 (if t.gettag -> optionalPresent then
+                     output.CommentBegin;
+                     'enum ' -> output.puttext;
+                     t.gettag -> IdentifierToText -> output.puttext;
+                     output.CommentEnd;
+                     ' '->output.put;
+                 if);
              if);
+             output.PatternEnd;
+             'int32' -> info.representation[];
+             type_cat_enum -> info.category;
+             (* No need for holder: Never pointer to enum *)
          if);
-         output.PatternEnd;
          (* Process each enumerator *) 
          eb.getenumerators -> es[];
          0->val;
@@ -596,14 +622,21 @@ do_enum_type:
          (# v: ^idl.value;
             help: ^text;
             att: @idl_attributes;
-         do ';' -> output.putline;
+            first_done: @boolean;
+         do (if first_done then
+                ';' -> output.putline;
+             else
+                true->first_done
+            if);
             output.indent;
             id[] -> previous_id[];
             (att[], current.getattributes_specs) -> do_attributes_specs;
             att.typelib.helpstring[] -> help[];
             current.getidentifier -> IdentifierToText -> id[] ->output.puttext;
             ': ' -> output.puttext;
-            info.name[] -> output.comment; 
+            (if (info[]<>NONE) and (info.name[]<>NONE) then
+                info.name[] -> output.comment; 
+            if);
             (if help[]<>NONE then
                 help[] -> output.comment;
             if);
@@ -631,9 +664,6 @@ do_enum_type:
          ';' -> output.putline;
          (if not compact then output.newline; if);
      if);
-     'int32' -> info.representation[];
-     type_cat_enum -> info.category;
-     (* No need for holder: Never pointer to enum *)
   #);
 
 do_constr_enum_type:
