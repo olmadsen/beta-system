@@ -1,6 +1,7 @@
 #include <windows.h>
 #include <Winuser.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <math.h>                    // for trigonometry functions
 
 extern "C" 
@@ -119,23 +120,23 @@ extern "C"
 	      }
 	    else if ((0 < angle) && (angle < 90))
 	      {
-		x = x + abs(deltaX);
-		y = y + abs(deltaY);
+		x = x + abs((int)deltaX);
+		y = y + abs((int)deltaY);
 	      }
 	    else if ((90 < angle) && (angle < 180))
 	      {
-		x = x + abs(deltaX);
-		y = y - abs(deltaY);
+		x = x + abs((int)deltaX);
+		y = y - abs((int)deltaY);
 	      }
 	    else if ((180 < angle) && (angle < 270))
 	      {
-		x = x - abs(deltaX);
-		y = y - abs(deltaY);
+		x = x - abs((int)deltaX);
+		y = y - abs((int)deltaY);
 	      }
 	    else if ((270 < angle) && (angle < 360))
 	      {
-		x = x - abs(deltaX);
-		y = y + abs(deltaY);
+		x = x - abs((int)deltaX);
+		y = y + abs((int)deltaY);
 	      }
           
 	    MoveToEx(hdc,x,y,NULL);
