@@ -92,12 +92,11 @@ sub compare_output
 
 sub setup_demo_run
 {
+
+    &setup_variables();
+
     undef %progs;
     &findprogs('.');
-    
-    $SIG{'INT'}  = 'IntHandler';
-
-    $|=1;
     
     open(SAVEOUT, ">&STDOUT");
     open(SAVEERR, ">&STDERR");
@@ -111,8 +110,6 @@ sub setup_demo_run
     select(STDERR); $| = 1;       # make unbuffered
     select(STDOUT); $| = 1;       # make unbuffered
     
-    &setup_variables();
-
     print(SAVEOUT "Running demos with output to file run.out\n");
     print SAVEOUT "BETALIB: $betalib\n";
     print SAVEOUT "Platform: $objdir\n";
@@ -120,20 +117,14 @@ sub setup_demo_run
 
 sub setup_graphics_demo_run
 {
+    &setup_variables();
+    
     undef %progs;
     &findprogs('.');
-    
-    $SIG{'INT'}  = 'IntHandler';
-
-    $|=1;
     
     open(STDERR, ">&STDOUT") || die "Can't dup stdout";
     select(STDERR); $| = 1;       # make unbuffered
     select(STDOUT); $| = 1;       # make unbuffered
-
-    # Add . to your path, since a lot of stuff doesn't otherwise work
-    $ENV{"PATH"} = ".:" . $ENV{"PATH"};
-    $betalib = $ENV{'BETALIB'};
 
     print(SAVEOUT "Running demos with output to file run.out\n");
 }
@@ -280,6 +271,10 @@ sub run_all_demos
 sub setup_variables
 # Cut-down version of BETALIB/bin/admin/env.perl
 {
+    $SIG{'INT'}  = 'IntHandler';
+
+    $|=1;
+    
     # Add . to your path, since a lot of stuff doesn't otherwise work
     $ENV{"PATH"} = ".:" . $ENV{"PATH"};
     $betalib = $ENV{'BETALIB'};
