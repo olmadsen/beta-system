@@ -13,7 +13,7 @@ struct ProtoType{
     short int       FormOff;   /* Reference to the FormID string    */
     short           AstRef;    /* AST reference of this object-desc.*/
     short	    pad;
-    void	    (*CallBackRoutine)();
+    int		    (*CallBackRoutine)();
 };
 
 struct Object{ 
