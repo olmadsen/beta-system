@@ -14,7 +14,6 @@
 #  OPTIONS  Extra options for $MAKEHTML 
 #  QUIET    Be quiet
 
-if [ "$BETALIB"  = "" ]; then echo "$0: no BETALIB directory specified"; exit 1; fi
 if [ "$SRC"      = "" ]; then echo "$0: no SRC directory specified"; exit 1; fi
 if [ "$FILES"    = "" ]; then echo "$0: no FILES list specified"; exit 1; fi
 if [ "$MAKEINT"  = "" ]; then echo "$0: no MAKEINT script specified"; exit 1; fi
@@ -28,6 +27,10 @@ if [ "$QUIET" != "1" ]; then
 fi
 for srcdir in $SRC
 do
+    if [ ! -d $srcdir ]; then 
+	echo "Source directory \"$srcdir\" (SRC variable) is not a directory!"
+	exit 1
+    fi
     for file in $FILES
     do
 	if [ ! -f $srcdir/$file ]; then continue; fi
