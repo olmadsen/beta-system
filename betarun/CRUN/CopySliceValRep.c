@@ -108,7 +108,7 @@ void CCopySVR(ref(ValRep) theRep,
     switch ( (long) theRep->Proto){
       case (long) ByteRepPTValue:
 	{ /* Since the slice may start on any byte we copy it byte by byte */
-	    unsigned char *newBody= (unsigned char *)NEWREP->Body;
+	    unsigned char *newBody= (unsigned char *)newRep->Body;
 	    unsigned char *oldBody= (unsigned char *)((unsigned)theRep->Body+(low-theRep->LowBorder));
 	    for (i = 0;  i < range; ++i)
 	      *(unsigned char *)((unsigned)newBody+i) = *(unsigned char *)((unsigned)oldBody+i);
@@ -118,7 +118,7 @@ void CCopySVR(ref(ValRep) theRep,
 	break;
       case (long) WordRepPTValue:
 	{ /* Since the slice may start on any word we copy it word by word */
-	    short *newBody= (short *)NEWREP->Body;
+	    short *newBody= (short *)newRep->Body;
 	    short *oldBody= (short *)((unsigned)theRep->Body+2*(low-theRep->LowBorder));
 	    for (i = 0;  i < range; ++i)
 	      *(short *)((unsigned)newBody+2*i) = *(short *)((unsigned)oldBody+2*i);
@@ -126,11 +126,11 @@ void CCopySVR(ref(ValRep) theRep,
 	break;
       case (long) ValRepPTValue:
 	for (i = 0; i < range; ++i){
-	  NEWREP->Body[i] = theRep->Body[i+low-theRep->LowBorder];
+	  newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder];
 	}
 	break;
       case (long) DoubleRepPTValue:
-	{   double *newBody= (double *)NEWREP->Body;
+	{   double *newBody= (double *)newRep->Body;
 	    double *oldBody= (double *)((unsigned)theRep->Body+8*(low-theRep->LowBorder));
 	    for (i = 0;  i < range; ++i)
 	      *(double *)((unsigned)newBody+8*i) = *(double *)((unsigned)oldBody+8*i);
@@ -139,19 +139,19 @@ void CCopySVR(ref(ValRep) theRep,
       case (long) DynItemRepPTValue:
       case (long) DynCompRepPTValue:
 	for (i = 0; i < range; ++i)
-	  NEWREP->Body[i] = theRep->Body[i+low-theRep->LowBorder] /* AssignReference? */;
+	  NEWREP->Body[i] = REP->Body[i+low-theRep->LowBorder] /* AssignReference? */;
 	break;
       case (long) StatItemRepPTValue:
 	/* copy as longs */
 	for (i = 0; i < range*ItemSize(REP->iProto)/4; ++i)
 	  NEWREP->Body[i] 
-	    = theRep->Body[i+(low-theRep->LowBorder)*ItemSize(REP->iProto)/4];
+	    = REP->Body[i+(low-theRep->LowBorder)*ItemSize(REP->iProto)/4];
 	break;
       case (long) StatCompRepPTValue:
 	/* copy as longs */
 	for (i = 0; i < range*ComponentSize(REP->iProto)/4; ++i)
 	  NEWREP->Body[i] 
-	    = theRep->Body[i+(low-theRep->LowBorder)*ComponentSize(REP->iProto)/4];
+	    = REP->Body[i+(low-theRep->LowBorder)*ComponentSize(REP->iProto)/4];
 	break;
 
       default:

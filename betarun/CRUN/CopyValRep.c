@@ -111,7 +111,7 @@ void CCopyVR(ref(ValRep) theRep,
 
       /* Copy theRep to newRep. Copy the whole body as longs */
       for (i = 0; i < size/4; ++i)
-	NEWREP->Body[i] = theRep->Body[i];
+	NEWREP->Body[i] = REP->Body[i];
     }
         
     AssignReference((long *)theObj + offset, cast(Item) newRep);

@@ -123,7 +123,7 @@ void ExtVR(ref(Object) theObj,
 
       /* Copy contents of old rep to new rep */
       for (i = 0; i < copyRange; ++i)
-	NEWREP->Body[i] = theRep->Body[i];
+	NEWREP->Body[i] = REP->Body[i];
 
       NEWREP->iProto = REP->iProto;
       NEWREP->iOrigin = REP->iOrigin;
@@ -145,9 +145,9 @@ void ExtVR(ref(Object) theObj,
 #endif
 #ifdef crts
 	    Protect(theRep, 
-		    item = AlloI(cast(Object) REP->iOrigin, theRep->iProto));
+		    item = AlloI(cast(Object) REP->iOrigin, REP->iProto));
 #endif
-	    AssignReference((long *)((long)&theRep->Body + (range+add)*4), item);
+	    AssignReference((long *)((long)&NEWREP->Body + (range+add)*4), item);
 	  }
 	  break;
 	case (long) DynCompRepPTValue:
@@ -165,7 +165,7 @@ void ExtVR(ref(Object) theObj,
 	    Protect(theRep, 
 		    comp = AlloC(cast(Object) REP->iOrigin, theRep->iProto));
 #endif
-	    AssignReference((long *)((long)&theRep->Body + (range+add)*4), 
+	    AssignReference((long *)((long)&NEWREP->Body + (range+add)*4), 
 			    (struct Item *)comp);
 	  }
 	  break;
