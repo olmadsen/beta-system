@@ -41,10 +41,6 @@ extern int doshutdown(int fd, int how);
 static void *self=0;
 #endif /* UNIX */
 
-#ifdef CRUN
-#include "../CRUN/crun.h"
-#endif /* CRUN */
-
 
 /* TRUE iff ValhallaOnProcessStop is active. Used to check
  * for reentrance of ValhallaOnProcessStop. This could happen
@@ -946,7 +942,7 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       origin = DOThandleLookup(origin_handle);
       curObj = DOThandleLookup(curObj_handle);
       /* struc->iOrigin is NOT set up by VAlloS */
-      AssignReference((long*)&struc->iOrigin, (Item*)origin);
+      assignRef((long*)&struc->iOrigin, (Item*)origin);
       /* Dispose the DOT handles */
       DOThandleDelete(origin_handle);
       DOThandleDelete(curObj_handle);
