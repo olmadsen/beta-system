@@ -7,9 +7,11 @@
 #define RefRepPTValue          ((struct ProtoType *) -4)
 #define StructurePTValue       ((struct ProtoType *) -5)
 #define ByteRepPTValue         ((struct ProtoType *) -6)
+#define WordRepPTValue         ((struct ProtoType *) -7)
+#define DoubleRepPTValue       ((struct ProtoType *) -8)
 
 #define MaxPTValue             -1
-#define MinPTValue             -6
+#define MinPTValue             -8
 
 
 #define ItemType                1
@@ -19,6 +21,8 @@
 #define RefRepType              5
 #define StructureType           6
 #define ByteRepType             7
+#define WordRepType             8
+#define DoubleRepType           9
 
 #define IOAMaxAge             128
 
