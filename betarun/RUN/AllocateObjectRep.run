@@ -13,7 +13,7 @@
 AlloORR: public
   (#
      { AllocateObjectRepetitionReference: Allocate repetition of offline items.
-       Destroys: RegArg (output), DataReg1, DataReg2, AddrReg1, AddrReg2.
+       Destroys: RegArg, DataReg1, DataReg2, AddrReg1, AddrReg2.
        May cause GC.
      }
      
@@ -38,6 +38,7 @@ AlloORR: public
        <Intel: Offset>
        <Intel: AddrReg1>
        <Intel: AddrReg2>
+       <Mac:   AddrReg2>
        ... 
      }
      
@@ -45,6 +46,7 @@ AlloORR: public
      
      again:
      
+     (if MacOS then push AddrReg2 if);
      (if intel then 
          push AddrReg2, AddrReg1, Offset;
          pReg1 -> DataReg1
@@ -99,6 +101,7 @@ AlloORR: public
          call ChkRA { No need to remove parameter. }
      if);
      pop Proto;   { restore Proto before next AlloI in loop }
+     0 -> theCell; { clear AddrReg1 before next AlloI in loop }
      (if intel then
          ;
       else 
@@ -118,6 +121,7 @@ AlloORR: public
      
      { Finished }
      (if intel then pop AddrReg1, AddrReg2 if);
+     (if MacOS then pop AddrReg2 if);
      return;
      
      GC:
@@ -125,13 +129,136 @@ AlloORR: public
      6 -> ReqObjectSize;     { Set the requested Object Size.            }
      Range -> ReqObjectSize+;
      (if intel then pop AddrReg1, AddrReg2 if);
-     push Origin; 
-     call doGC;              { Call the Garbage Collector.               }
+     (if MacOS then pop AddrReg2 if);
+     push Origin;   { Reference in DataReg needs to be updated during GC }
+     call doGC;     { Call the Garbage Collector.               }
      pop Origin;
-     goto again              { Go back to the beginning of this routine. }
+     goto again     { Go back to the beginning of this routine. }
   #);
 
 AlloORRC: public
   (#
-  do 
+     { AllocateObjectRepetitionReferenceComponent: 
+       Allocate repetition of offline components.
+       Destroys: RegArg (output), DataReg1, DataReg2, AddrReg1, AddrReg2.
+       May cause GC.
+     }
+     
+     { Input variable.  }
+     theObj: Item      = RegObj;   { The object, which refer the objrep }
+     Offset: Long      = DataRegA; { Offset in the theObj.              
+                                     Same phys reg as DataReg1 on intel.
+                                   }
+     Range:  Long      = DataRegB; { The range of the refRep.           }
+     Proto:  ProtoType = RegArg;   { The Prototype for the elements     }
+     Origin: Item      = DataReg1; { The Origin for the elements.
+                                     pReg1 in Intel version
+                                   }
+     { Used variables. }
+     newTop: DataArea   = AddrReg1;
+     theCell: DataArea  = AddrReg1;
+     theRep: ObjectRepetition = AddrReg2;
+
+  do
+     { 
+       General stack layout:
+       <Intel: Offset>
+       <Intel: AddrReg1>
+       <Intel: AddrReg2>
+       <Mac:   AddrReg2>
+       ... 
+     }
+     
+     (if debug then call Ck if);
+     
+     again:
+     
+     (if MacOS then push AddrReg2 if);
+     (if intel then 
+         push AddrReg2, AddrReg1, Offset;
+         pReg1 -> DataReg1
+     if);
+          
+     (if Range < 0 then 0 -> Range if); { OBS: low>high confuses chk2 }
+     IOATop -> theRep;
+     
+     theRep[24+Range*4][] -> newTop;
+     (if newTop > IOALimit then goto GC if);
+     newTop -> IOATop;
+          
+     { The new Object is now allocated, but not initialized yet!}
+     
+     { Initialize the structual part of the repetition. }
+     -11    -> theRep.ProtoType; { DynCompRepPTValue }
+     1      -> theRep.Age;
+     1      -> theRep.LowBorder;
+     Range  -> theRep.HighBorder;
+     Proto  -> theRep.iProto;
+     Origin -> theRep.iOrigin;
+     
+     { Initialize the body part of the repetition. }
+     1 -> Range-;
+     loop:
+     (if intel then
+         push Proto;  { save RegArg across AlloI call }
+         push Range;  { save DataRegB/DataReg2 across AlloI call } 
+         push -6;     { tag }
+         { no need to save _preg1 during AlloI }
+      else
+         push Origin; { save DataReg1 across AlloI call }
+         push Proto;  { save RegArg across AlloI call }
+         push -5;     { tag }
+     if);
+     push theRep; { save AddrReg2 across AlloI call }
+     { Allocate item }
+     { Origin and Proto are already in the right registers for AlloI }
+     call AlloC; { Destroys: RegArg (output), DataReg1, DataReg2, AddrReg1, AddrReg2. 
+                   On intel DataReg1 is DataRegA, and DataReg2 is DataRegB.
+                 }
+     { AlloI returns item in RegArg }
+     
+     { AssignReference }
+     pop theRep; { restore AddrReg2 }
+     4 -> SP+; { pop tag };
+     (if intel then pop Range if);
+     theRep[24+Range*4][] -> theCell;
+     RegArg -> theCell[0];
+     (if theCell outside IOA then  { The theCell resides in AOA and the item in IOA  }
+         push theCell;
+         call ChkRA { No need to remove parameter. }
+     if);
+     pop Proto;   { restore Proto before next AlloI in loop }
+     0 -> theCell; { clear AddrReg1 before next AlloI in loop }
+     (if intel then
+         ;
+      else 
+         pop Origin;
+     if);
+     1 -> Range-;
+     (if FLAGS >= 0 then goto loop if);
+     
+     { AssignReference }
+     (if intel then pop Offset if);
+     theObj[Offset][] -> theCell;
+     theRep -> theCell[0];
+     (if theCell outside IOA then  { The theCell resides in AOA and theRep in IOA }
+         push theCell;
+         call ChkRA { No need to remove parameter. }
+     if);
+     
+     { Finished }
+     (if intel then pop AddrReg1, AddrReg2 if);
+     (if MacOS then pop AddrReg2 if);
+     return;
+     
+     GC:
+     { The IOA heap is full, so we need a garbage collection.            }
+     6 -> ReqObjectSize;     { Set the requested Object Size.            }
+     Range -> ReqObjectSize+;
+     (if intel then pop AddrReg1, AddrReg2 if);
+     (if MacOS then pop AddrReg2 if);
+     push Origin;   { Reference in DataReg needs to be updated during GC }
+     call doGC;     { Call the Garbage Collector.               }
+     pop Origin;
+     goto again     { Go back to the beginning of this routine. }
   #)
