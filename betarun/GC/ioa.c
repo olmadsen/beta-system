@@ -1,7 +1,7 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1990-93 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1990-94 Mjolner Informatics Aps.
  * ioa.c (was: scavenging.c)
- * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
+ * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, and Jacob Seligmann
  */
 
 #include "beta.h"
@@ -142,7 +142,7 @@ You may order an unconstrained version from\n",
 	if ( *pointer ){
 #endif
 	  AOAtoIOACount++;
-	  ProcessAOAReference( *pointer);
+	  ProcessAOAReference( (handle(Object))*pointer);
 	}
 	pointer++;
       }
@@ -156,22 +156,22 @@ You may order an unconstrained version from\n",
       exit(1);
     }
     ActiveComponent->StackObj = 0;  /* the stack is not valid anymore. */
-    ProcessReference( &ActiveComponent);
-    ProcessReference( &BasicItem );
+    ProcessReference( (handle(Object))&ActiveComponent);
+    ProcessReference( (handle(Object))&BasicItem );
     if (InterpretItem[0]) {
       INFO_IOA(fprintf(output, " (InterpretItem[0]"); fflush(output));
-      ProcessReference( &InterpretItem[0] );
+      ProcessReference( (handle(Object))(&InterpretItem[0]) );
       INFO_IOA(fprintf(output, ")"); fflush(output));
     }
     if (InterpretItem[1]) {
       INFO_IOA(fprintf(output, " (InterpretItem[1]"); fflush(output));
-      ProcessReference( &InterpretItem[1] );
+      ProcessReference( (handle(Object))(&InterpretItem[1]) );
       INFO_IOA(fprintf(output, ")"); fflush(output));
     }
 #ifdef RTLAZY
     if (LazyItem) {
       INFO_IOA(fprintf(output, " (LazyItem"); fflush(output));
-      ProcessReference( &LazyItem );
+      ProcessReference( (handle(Object))(&LazyItem) );
       INFO_IOA(fprintf(output, ")"); fflush(output));
     }
 #endif
@@ -201,7 +201,7 @@ You may order an unconstrained version from\n",
 	    limit = (long)cbfa->entries + CBFABlockSize;
 	  }
 	  if (current->theStruct){
-	    ProcessReference(&current->theStruct);
+	    ProcessReference((handle(Object))(&current->theStruct));
 	  }
 	}
 	CompleteScavenging();
@@ -371,7 +371,8 @@ You may order an unconstrained version from\n",
       if( isForward(GCAttribute) ){ 
 	/* theObj has a forward pointer. */
 	*theCell = (ref(Object)) GCAttribute;
-	DEBUG_LVRA( Claim( !inLVRA(GCAttribute), "ProcessReference: Forward ValRep"));
+	DEBUG_LVRA( Claim( !inLVRA((ref(Object))GCAttribute), 
+			  "ProcessReference: Forward ValRep"));
 	/* If the forward pointer refers an AOA object, insert
 	 * theCell in AOAroots table.
 	 */
@@ -462,7 +463,7 @@ You may order an unconstrained version from\n",
 	  pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
 	  
 	  for(index=0; index<size; index++) 
-	    if( *pointer != 0 ) ProcessReference( pointer++ );
+	    if( *pointer != 0 ) ProcessReference( (handle(Object))(pointer++) );
 	    else pointer++;
 	}
 	
@@ -472,10 +473,10 @@ You may order an unconstrained version from\n",
 	{ ref(Component) theComponent;
 	  
 	  theComponent = Coerce( theObj, Component);
-	  ProcessReference( &theComponent->StackObj);
-	  ProcessReference( &theComponent->CallerComp);
+	  ProcessReference( (handle(Object))(&theComponent->StackObj));
+	  ProcessReference( (handle(Object))(&theComponent->CallerComp));
 	  ProcessReference( &theComponent->CallerObj);
-	  ProcessObject( ComponentItem( theComponent));
+	  ProcessObject( (ref(Object))ComponentItem( theComponent));
 	}
 	return;
 	
@@ -510,7 +511,7 @@ You may order an unconstrained version from\n",
        */
       for (;tab->StaticOff; ++tab)
 	if (tab->StaticOff == -tab->OrigOff)
-	  ProcessObject((long *)theObj + tab->StaticOff);
+	  ProcessObject((ref(Object))((long *)theObj + tab->StaticOff));
       
       /* Handle all the references in the Object. */
       for (refs_ofs = (short *)&tab->StaticOff + 1; *refs_ofs; ++refs_ofs) {
@@ -546,7 +547,7 @@ You may order an unconstrained version from\n",
       GCAttribute = theObj->GCAttr;
       if( GCAttribute > 2048 ){ /* theObj has a forward pointer. */
 	*theCell = (ref(Object)) GCAttribute;
-	DEBUG_LVRA( Claim( !inLVRA(GCAttribute),
+	DEBUG_LVRA( Claim( !inLVRA((ref(Object))GCAttribute),
 			  "ProcessAOAReference: Forward ValRep"));
       }else{
 	if( GCAttribute >= 0 ){ /* theObj is an autonomous object. */
@@ -622,17 +623,18 @@ You may order an unconstrained version from\n",
 	  size = toRefRep(theObj)->HighBorder;
 	  pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
 	  for(index=0; index<size; index++) 
-	    if( *pointer != 0 ) ProcessAOAReference( pointer++ );
+	    if( *pointer != 0 ) 
+	      ProcessAOAReference( (handle(Object))(pointer++) );
 	    else pointer++;
 	}
 	return;
       case (long) ComponentPTValue:
 	{ ref(Component) theComponent;
 	  theComponent = Coerce( theObj, Component);
-	  ProcessAOAReference( &theComponent->StackObj);
-	  ProcessAOAReference( &theComponent->CallerComp);
-	  ProcessAOAReference( &theComponent->CallerObj);
-	  ProcessAOAObject( ComponentItem( theComponent));
+	  ProcessAOAReference( (handle(Object))(&theComponent->StackObj));
+	  ProcessAOAReference( (handle(Object))(&theComponent->CallerComp));
+	  ProcessAOAReference( (handle(Object))(&theComponent->CallerObj));
+	  ProcessAOAObject( (ref(Object))(ComponentItem( theComponent)));
 	}
 	return;
       case (long) StackObjectPTValue:
@@ -668,7 +670,7 @@ You may order an unconstrained version from\n",
       
       while( *Tab != 0 ){
 	if( *Tab == -Tab[1] ) 
-	  ProcessAOAObject( Offset( theObj, *Tab * 4));
+	  ProcessAOAObject( (ref(Object))(Offset( theObj, *Tab * 4)));
 	Tab += 4;
       }
       Tab++;
@@ -680,7 +682,7 @@ You may order an unconstrained version from\n",
 	 * dynamic offset table masked out. As offsets in this table are
 	 * always multiples of 4, these bits may be used to distinguish
 	 * different reference types. */ 
-	if( *theCell != 0 ) ProcessAOAReference( theCell );
+	if( *theCell != 0 ) ProcessAOAReference( (handle(Object))theCell );
       }
     }
   }
@@ -739,7 +741,7 @@ You may order an unconstrained version from\n",
       
       theObj = (ref(Object)) IOA;
       while ((long *) theObj < IOATop) {
-	Claim(theObj->Proto, "IOACheck: theObj->Proto");
+	Claim((long)(theObj->Proto), "IOACheck: theObj->Proto");
 	theObjectSize = 4*ObjectSize(theObj);
 	Claim(ObjectSize(theObj) > 0, "ObjectSize(theObj) > 0");
 	IOACheckObject (theObj);
@@ -756,7 +758,8 @@ You may order an unconstrained version from\n",
     theProto = theObj->Proto;
     
     /* DEBUG_IOA(printf("IOACheckObject: theObj = %x\n", theObj)); */
-    Claim( !inBetaHeap(theProto),"#IOACheckObject: !inBetaHeap(theProto)");
+    Claim( !inBetaHeap((ref(Object))theProto),
+	  "#IOACheckObject: !inBetaHeap(theProto)");
     
     if( isNegativeProto(theProto) ){  
       switch( (long) theProto ){
@@ -777,9 +780,11 @@ You may order an unconstrained version from\n",
 	  
 	  for(index=0; index<size; index++) 
 #ifdef RTLAZY
-	    if( *pointer > 0) IOACheckReference( pointer++ );
+	    if( *pointer > 0) 
+	      IOACheckReference( (handle(Object))(pointer++) );
 #else
-	  if( *pointer != 0) IOACheckReference( pointer++ );
+	  if( *pointer != 0) 
+	    IOACheckReference( (handle(Object))(pointer++) );
 #endif
 	  else pointer++;
 	}
@@ -793,11 +798,11 @@ You may order an unconstrained version from\n",
 	  if (theComponent->StackObj == (ref(StackObject))-1) {
 	    /*  printf("\nIOACheckObject: theComponent->StackObj=-1, skipped!\n"); */
 	  } else {
-	    IOACheckReference( &theComponent->StackObj);
+	    IOACheckReference( (handle(Object))(&theComponent->StackObj));
 	  }
-	  IOACheckReference( &theComponent->CallerComp);
+	  IOACheckReference( (handle(Object))(&theComponent->CallerComp));
 	  IOACheckReference( &theComponent->CallerObj);
-	  IOACheckObject( ComponentItem( theComponent));
+	  IOACheckObject( (ref(Object))ComponentItem( theComponent));
 	}
 	return;
 	
@@ -814,7 +819,8 @@ You may order an unconstrained version from\n",
 	  for( stackptr = &theStackObject->Body[0]; stackptr < theEnd; stackptr++){
 	    if( inIOA( *stackptr)){
 	      theCell = (handle(Object)) stackptr;
-	      if( isObject( *theCell ) ) IOACheckReference( stackptr);
+	      if( isObject( *theCell ) ) 
+		IOACheckReference( (handle(Object))stackptr);
 	    }else{
 	      switch( *stackptr ){
 	      case -8: stackptr++;
@@ -858,7 +864,7 @@ You may order an unconstrained version from\n",
       
       while( *Tab != 0 ){
 	if( *Tab == -Tab[1] ) 
-	  IOACheckObject( Offset( theObj, *Tab * 4));
+	  IOACheckObject( (ref(Object))(Offset( theObj, *Tab * 4)));
 	Tab += 4;
       }
       Tab++;
@@ -871,9 +877,9 @@ You may order an unconstrained version from\n",
 	 * always multiples of 4, these bits may be used to distinguish
 	 * different reference types. */ 
 #ifdef RTLAZY
-	if (*theCell > 0) IOACheckReference(theCell);
+	if (*theCell > 0) IOACheckReference((handle(Object))theCell);
 #else
-	if (*theCell != 0) IOACheckReference(theCell);
+	if (*theCell != 0) IOACheckReference((handle(Object))theCell);
 #endif
       }
     }

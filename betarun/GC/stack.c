@@ -1,7 +1,7 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1990-93 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1990-94 Mjolner Informatics Aps.
  * stack.c
- * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
+ * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, and Jacob Seligmann
  */
 
 #include "beta.h"
@@ -337,14 +337,14 @@ void ProcessStackPart(low, high)
   Claim( high <= (long *)StackStart, "ProcessStackPart: high<=StackStart" );
   
   while( current <= high ){
-    if( inBetaHeap( *current)){
+    if( inBetaHeap( (ref(Object))*current)){
       theCell = (handle(Object)) current;
       theObj  = *theCell;
       if( isObject( theObj) ){
 	if( /*inLVRA( theObj) ||*/ isValRep(theObj) ){
 	  DEBUG_IOA( fprintf( output, "(STACK(%d) is *ValRep)", current-low));
 	}else{
-	  ProcessReference( current);
+	  ProcessReference( (handle(Object))current);
 	  CompleteScavenging();
 	}
       } else {
@@ -364,7 +364,7 @@ void ProcessStackPart(low, high)
       default:
 	if (isLazyRef (*current)){
 	  /* (*current) is a dangling reference */
-	  ProcessReference (current);
+	  ProcessReference ((handle(Object))current);
 	}
 	break;
 #endif
@@ -427,10 +427,10 @@ void ProcessStackObj(theStack)
   theEnd = &theStack->Body[0] + theStack->StackSize;
 	    
   for( stackptr = &theStack->Body[0]; stackptr < theEnd; stackptr++){
-    if( inBetaHeap( *stackptr)){
+    if( inBetaHeap( (ref(Object))*stackptr)){
       theCell = (handle(Object)) stackptr;
       if( isObject( *theCell ) )
-	ProcessReference( stackptr);
+	ProcessReference( (handle(Object))stackptr);
     }else{
       switch( *stackptr ){
       case -8: stackptr++;
@@ -442,7 +442,7 @@ void ProcessStackObj(theStack)
       default:
 	if (isLazyRef (*stackptr))
 	  /* Dangling reference. */
-	  ProcessReference (stackptr);
+	  ProcessReference ((handle(Object))stackptr);
 #endif
       }
     }

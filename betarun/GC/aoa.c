@@ -1,7 +1,7 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1990-93 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1990-94 Mjolner Informatics Aps.
  * aoa.c
- * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
+ * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, and Jacob Seligmann
  */
 #include "beta.h"
 
@@ -710,12 +710,12 @@ static void Phase3()
 	  /* update the AOAtoIOAtable. */
 	  while ((start<stop) && (table[start] < (long)nextObj)) {
 	    if (inToSpace( *(ptr(long)) (table[start]-diff)))
-	      AOAtoIOAInsert( table[start]-diff);
+	      AOAtoIOAInsert( (handle(Object))(table[start]-diff));
 	      
 	    start++;
 	  }
 	  while( (start1<stop1) && (AOAtoLVRAtable[start1] < (long)nextObj) ){
-	    DEBUG_AOA( Claim( inLVRA( *(ptr(long))(AOAtoLVRAtable[start1]-diff)),
+	    DEBUG_AOA( Claim( inLVRA( (ref(Object))(*(ptr(long))(AOAtoLVRAtable[start1]-diff))),
 			     "Phase3: Pointer is in LVRA"));
 	    (*((handle(ValRep)) (AOAtoLVRAtable[start1]-diff)))->GCAttr =
 	      AOAtoLVRAtable[start1]-diff;
@@ -735,7 +735,7 @@ static void Phase3()
 	  while ((start<stop) && (table[start] < (long)nextObj)) start++;
 	  
 	  while( (start1<stop1) && (AOAtoLVRAtable[start1] < (long)nextObj) ){
-	    DEBUG_AOA( Claim( inLVRA( *(ptr(long))(AOAtoLVRAtable[start1])),
+	    DEBUG_AOA( Claim( inLVRA( (ref(Object))(*(ptr(long))(AOAtoLVRAtable[start1]))),
 			     "Phase3: Pointer is in LVRA"));
 	    LVRAkill(*(struct ValRep **) AOAtoLVRAtable[start1]);
 	    start1++;
@@ -781,7 +781,8 @@ void AOACheckObject( theObj)
   
   theProto = theObj->Proto;
   
-  Claim( !inBetaHeap(theProto),"#AOACheckObject: !inBetaHeap(theProto)");
+  Claim( !inBetaHeap((ref(Object))theProto),
+	"#AOACheckObject: !inBetaHeap(theProto)");
   
   if( isNegativeProto(theProto) ){  
     switch( (long)  theProto ){
@@ -800,9 +801,9 @@ void AOACheckObject( theObj)
 	
 	for(index=0; index<size; index++) 
 #ifdef RTLAZY
-	  if( *pointer > 0) AOACheckReference( pointer++ );
+	  if( *pointer > 0) AOACheckReference( (handle(Object))(pointer++) );
 #else
-	  if( *pointer != 0) AOACheckReference( pointer++ );
+	  if( *pointer != 0) AOACheckReference( (handle(Object))(pointer++) );
 #endif
 	  else pointer++;
       }
@@ -816,11 +817,11 @@ void AOACheckObject( theObj)
 	if (theComponent->StackObj == (ref(StackObject))-1) {
 	  /* printf("\nAOACheckObject: theComponent->StackObj=-1, skipped!\n"); */
 	} else {
-	  AOACheckReference( &theComponent->StackObj);
+	  AOACheckReference( (handle(Object))(&theComponent->StackObj));
 	}
-	AOACheckReference( &theComponent->CallerComp);
-	AOACheckReference( &theComponent->CallerObj);
-	AOACheckObject( ComponentItem( theComponent));
+	AOACheckReference( (handle(Object))(&theComponent->CallerComp));
+	AOACheckReference( (handle(Object))(&theComponent->CallerObj));
+	AOACheckObject( (ref(Object))(ComponentItem( theComponent)));
       }
       return;   
     case (long) StackObjectPTValue:
@@ -858,7 +859,7 @@ void AOACheckObject( theObj)
       Claim( *(ptr(long)) Offset( theObj, *Tab * 4 + 4) == (long) Tab[1],
 	    "AOACheckObject: EnclosingObject match GCTab entry.");
       if( *Tab == -Tab[1] ) 
-	AOACheckObject( Offset( theObj, *Tab * 4));
+	AOACheckObject( (ref(Object))(Offset( theObj, *Tab * 4)));
       Tab += 4;
     }
     Tab++;
@@ -871,9 +872,9 @@ void AOACheckObject( theObj)
        * always multiples of 4, these bits may be used to distinguish
        * different reference types. */ 
 #ifdef RTLAZY
-      if( *theCell > 0 ) AOACheckReference( theCell );
+      if( *theCell > 0 ) AOACheckReference( (handle(Object))theCell );
 #else
-      if( *theCell != 0 ) AOACheckReference( theCell );
+      if( *theCell != 0 ) AOACheckReference( (handle(Object))theCell );
 #endif
     }
   }
@@ -912,7 +913,8 @@ void AOACheckObjectSpecial( theObj)
   
   theProto = theObj->Proto;
   
-  Claim( !inBetaHeap(theProto),"#AOACheckObjectSpecial: !inBetaHeap(theProto)");
+  Claim( !inBetaHeap((ref(Object))theProto),
+	"#AOACheckObjectSpecial: !inBetaHeap(theProto)");
   
   if( isNegativeProto(theProto) ){  
     switch( (long) theProto ){
@@ -922,7 +924,7 @@ void AOACheckObjectSpecial( theObj)
     case (long) ValRepPTValue: return;
     case (long) RefRepPTValue: return;
     case (long) ComponentPTValue:
-      AOACheckObjectSpecial( ComponentItem( theObj));
+      AOACheckObjectSpecial( (ref(Object))(ComponentItem( theObj)));
       return;
     case (long) StackObjectPTValue:
       Claim( FALSE, "AOACheckObjectSpecial: theObj must not be StackObject.");
@@ -957,7 +959,7 @@ void AOACheckObjectSpecial( theObj)
     
     while( *Tab != 0 ){
       if( *Tab == -Tab[1] ) 
-	AOACheckObjectSpecial( Offset( theObj, *Tab * 4));
+	AOACheckObjectSpecial( (ref(Object))(Offset( theObj, *Tab * 4)));
       Tab += 4;
     }
     Tab++;
