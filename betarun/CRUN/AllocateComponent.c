@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-08-20 17:46:33 $, SID: $Revision: 1.11 $
+ * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-08-21 04:22:15 $, SID: $Revision: 1.12 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -11,7 +11,7 @@
 
 asmlabel(AlloC, "
 	mov	%i1,%o0
-	call	CAlloC
+	call	_CAlloC
 	mov	%i2,%o1
 ");
 
