@@ -27,6 +27,7 @@ void scanPartObjects(Object *obj, void (*)(Object *));
 
 /* LOCAL VARIABLES */
 static long totalFree = 0;
+static long totalFreeAtLast = 0;
 static long lastAOAGCAt = -1000;  /* NumIOAGc of last AOAGC */
 
 /* tempAOArootsAlloc:
@@ -198,6 +199,7 @@ static long AllocateBaseBlock(void)
     AOATopBlock  = AOABaseBlock;
     AOABlocks++;
     totalFree += AOABlockSize;
+    totalFreeAtLast = AOABlockSize;	
     totalAOASize += AOABlockSize;
         
     /* Insert the new block in the freelist */
@@ -226,22 +228,7 @@ Object *AOAallocate(long numbytes)
   if (newObj) {
     newObj->GCAttr = DEADOBJECT;
     totalFree -= numbytes;
-    if (totalFree > AOAMinFree) {
-      return newObj;
-    } else {
-      if (lastAOAGCAt+5 > NumIOAGc) {
-	/* If there is already a need for another AOAGC within
-	 * 5 IOAGCs, then we need more memory.
-	 * CAVETAT: One reason for this could be lots
-	 * of allocations of large repetitions. In that case, maybe
-	 * some of them have died, and we really should GC anyway...
-	 */
-	AOANewBlock(AOABlockSize);
-      } else {
-	AOANeedCompaction = TRUE;
-      }
-      return newObj;
-    }    
+    return newObj;
   }
 
   if (AOABaseBlock == 0) {
@@ -556,15 +543,10 @@ void AOAGc()
 
   AOARefStackUnHack();
   
-  /* If less than AOAPercentage of the heap was freed, allocate
-   * a new block now.
-   * -Unless there was already AOAPercentage free before the GC.
-   * (This can happen if a AOAallocate failed)
-   */
-  if ((long)freed/(totalAOASize/100) < AOAPercentage 
-      && !((long)totalFree/(totalAOASize/100) > 2*AOAPercentage)) {
+  if (totalFree < AOAMinFree) {
     AOANewBlock(AOABlockSize);
   }
+  totalFreeAtLast = totalFree;
 
   STAT_AOA(AOADisplayFreeList());
 
@@ -1438,5 +1420,12 @@ void scanOrigins(Object *theObj, void (*originAction)(Object **theCell))
 	return;
       }
     }
+  }
+}
+
+void SetAOANeedCompaction(void)
+{
+  if (totalFree < totalFreeAtLast/2) {
+    AOANeedCompaction = TRUE;
   }
 }

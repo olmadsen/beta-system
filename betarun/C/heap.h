@@ -63,6 +63,6 @@ typedef struct Heap {
 #endif
 
 #ifndef AOAINCREMENT
-#define AOAINCREMENT  25
+#define AOAINCREMENT  10
 #endif
 

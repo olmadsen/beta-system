@@ -124,6 +124,8 @@ static void HandlePostponedIODs(void)
   OIDCacheSize = 0;
 }
 
+extern void SetAOANeedCompaction(void);
+
 /*
  * IOAGc:
  *  Called from doGC in Misc.c / PerformGC.run.
@@ -156,7 +158,9 @@ void IOAGc()
   NumIOAGc++;
   
   TIME_IOA(starttime = getmilisectimestamp());
-  
+
+  SetAOANeedCompaction();
+
   INFO_IOA({
     starttime = getmilisectimestamp();
     fprintf(output, "#(IOA-%d, %d bytes requested,", 
