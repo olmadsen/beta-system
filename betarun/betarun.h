@@ -1,11 +1,11 @@
 /*
- * crst.h: interface from BETA compiler generated C-files 
+ * betarun.h: interface from BETA compiler generated C-files 
  * to BETA Runtime system.
  *
  * Copyright (C) 1992-94 Mjolner Informatics Aps.
  * Written by Ole Lehrmann Madsen, Jacob Seligmann, and Peter Andersen.
  *
- * $Id: betarun.h,v 1.1 1994-04-11 16:12:41 beta Exp $
+ * $Id: betarun.h,v 1.2 1994-05-05 12:13:20 beta Exp $
  *
  */
 
@@ -83,13 +83,20 @@ struct PartObject {
   long 			OrigOff;
 };
 
-extern long *a0,*a1,*a2,*a3,*a4,*a7;
+extern long *IOA;
+
+extern char *a0,*a1,*a2,*a3,*a4,*a7;
 extern long leave;
+extern void *CRTSjbp;
 
 extern void pushAdr();
 extern long *popAdr();
 extern long CallBackPar(long off);
 extern void Trap();
+
+#include <setjmp.h>
+jmp_buf *UseJmpBuf(int,int);
+jmp_buf *GetJmpBuf(int,int);
 
 extern char 		GetByte(unsigned long a, int byteNo /* 0-3 */);
 extern unsigned short 	GetShort(unsigned long a,int shortNo /* 0-1 */);
@@ -97,7 +104,7 @@ extern void 		PutBits(unsigned long a, unsigned long *b, int pos, int len);
 extern unsigned long 	GetBits(unsigned long a, int pos, int len);
 extern signed long 	GetSignedBits(unsigned long a, int pos, int len);
 extern signed long 	SignExtByte(signed char a);
-extern signed long 	SignExtWord(signed char a);
+extern signed long 	SignExtWord(signed short a);
 
 extern struct Component *	AlloC(struct Object *origin, struct ProtoType *proto);
 extern struct DopartObject * 	AlloDO(unsigned size, struct Object *origin);
@@ -132,18 +139,18 @@ extern void			FailureExit(void);
 extern void			NewRR(struct Object *theObj, long offset, long range);
 extern void			NewVR(struct Object *theObj, long offset, long range);
 extern void 			DoGC(void);
-extern void 			Qua(struct ProtoType *dstQuaProto, struct Object **theCell, struct Object *dstQuaOrigin, struct Object *this)
+extern void 			Qua(struct ProtoType *dstQuaProto, struct Object **theCell, struct Object *dstQuaOrigin, struct Object *this);
 extern struct Structure *	AlloS(struct Object *origin, struct ProtoType *proto);
 extern struct Structure * 	ThisS(struct Object *this);
 extern struct Structure * 	ObjS(struct Object *theObj);
 extern struct Item *		AlloSI(struct Structure *struc);
 extern struct Component *	AlloSC(struct Structure *struc);
-extern long 			EqS(struct Structure *arg1, struct Structure *arg2);
-extern long 			NeS(struct Structure *arg1, struct Structure *arg2);
-extern long 			LeS(struct Structure *arg1, struct Structure *arg2);
-extern long 			GeS(struct Structure *arg1, struct Structure *arg2);
-extern long 			GtS(struct Structure *arg1, struct Structure *arg2);
-extern long 			LtS(struct Structure *arg1, struct Structure *arg2);
+extern long 			eqS(struct Structure *arg1, struct Structure *arg2);
+extern long 			neS(struct Structure *arg1, struct Structure *arg2);
+extern long 			leS(struct Structure *arg1, struct Structure *arg2);
+extern long 			geS(struct Structure *arg1, struct Structure *arg2);
+extern long 			gtS(struct Structure *arg1, struct Structure *arg2);
+extern long 			ltS(struct Structure *arg1, struct Structure *arg2);
 extern struct Component * 	Susp(struct Object *this);
 
 #endif
