@@ -84,3 +84,19 @@
     (tags-query-replace "</TITLE>" "</TITLE>
 <LINK REL=stylesheet HREF=../style/miadoc.css TYPE=text/css>" nil))
 )
+
+;; Not needed in webmaker 3.
+;; And wml file in webmaker 2.3 can be modified to produce the BORDER=0 and
+;; Alt=... too (use literal HTML).
+;; (defun miadoc-replace8 ()
+;;   (interactive)
+;;   (set-variable 'tags-file-name nil)
+;;   ;;(message "Building tags table of HTML files in local directory ...")
+;;   ;;(grep "/usr/local/bin/etags *.html")
+;;   ;;(visit-tags-table "./TAGS" nil)
+;; 
+;;   (let ((case-replace t))
+;;     (message "Removing borders from buttons")
+;;     (tags-query-replace "<IMG\\s-+ALIGN\\s-*=\\s-*BOTTOM\\s-+SRC\\s-*=\\s-*\"\\.\\./images/\\(\\w+\\)\\.gif\">;; " "<IMG ALIGN=\"BOTTOM\" ALT=\"\\1\" BORDER=0 SRC=\"\\.\\./images/\\1.gif\">
+;; " nil))
+;; )
