@@ -38,15 +38,14 @@ static IOALooksFullCount = 0; /* consecutive unsuccessful IOAGc's */
   if (NumIOAGc==20) {
     
 #ifdef macintosh
-    Prompt(
-	   "\p\
-This program was compiled using the demo version of \
+CPrompt(
+"This program was compiled using the demo version of \
 the Mj\277lner BETA System. The demo version is limited \
-in the number of garbage collections allowed. This ",
-	   "\p\
-limit will soon be reached; if you want to save your \
+in the number of garbage collections allowed. ", 
+"This limit will soon be reached; if you want to save your \
 work, please do it now, and quit your program.",
-	   "", "");
+"", 
+"");
     
 #else macintosh
     fprintf(output, "\
@@ -64,22 +63,19 @@ work, please do it now, and quit your program.",
     if (NumIOAGc==30) {
       
 #ifdef macintosh
-      Prompt(
-	     "\p\
-This program was compiled using the demo version of \
+CPrompt(
+"This program was compiled using the demo version of \
 the Mj\277lner BETA System. The demo version is limited \
-in the number of garbage collections allowed. This ",
-	     "\p\
-limit has now been reached and your program will be \
+in the number of garbage collections allowed.", 
+"This limit has now been reached and your program will be \
 terminated - sorry!\n\
 You may order an unconstrained version from\n",
-	     "\p\n\
-    Mj\277lner Informatics, Gustav Wiedsvej 10,\n\
-    Science Park Aarhus, DK-8000 Aarhus C, Denmark,\n",
-	     "\p\
-    Phone: +45 86 20 20 00,  Fax: +45 86 20 12 22\n\
-    e-mail: support@mjolner.dk"
-	     );
+"\n\
+Mj\277lner Informatics, Science Park Aarhus,\n\
+Gustav Wieds Vej 10, DK-8000 Aarhus C, Denmark.\n",
+"Phone: +45 86 20 20 00,  Fax: +45 86 20 12 22\n\
+e-mail: support@mjolner.dk"
+);
       
 #else macintosh
       fprintf(output, "\
