@@ -110,7 +110,7 @@ register volatile void *GCreg4 __asm__("%o4");
 #ifdef MT
 #define GetProto(s_obj) findProto((unsigned long *)((s_obj)->iProto))
 #else
-#define GetProto(s_obj) struc_obj->iProto
+#define GetProto(s_obj) s_obj->iProto
 #endif
 
 #ifdef MT
