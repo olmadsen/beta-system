@@ -52,10 +52,10 @@ void CExtVR(ref(Object) theObj,
     if (newRep) {
       /* Recalculate theRep, it may have been moved by LVRACompaction */
       theRep = *casthandle(ValRep) ((long *) theObj + offset);
-      Claim(newRep->Proto==theRep->Proto &&
-	    newRep->HighBorder==newRange &&
-	    newRep->LowBorder==1, 
-	    "ExtendValRep: lvra structure ok");
+      DEBUG_CODE(Claim(newRep->Proto==theRep->Proto &&
+		       newRep->HighBorder==newRange &&
+		       newRep->LowBorder==1, 
+		       "ExtendValRep: lvra structure ok"));
       
       /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
       newRep->GCAttr = (long) ((long *) theObj + offset);
