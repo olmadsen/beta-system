@@ -1,10 +1,9 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1992-06-01 14:04:24 $, SID: $Revision: 1.13 $
+ * Mod: aoa.c, rel: 1, date: 11/14/91, SID: 1.9
  * by Lars Bak
  */
 #include "beta.h"
-#include "aoa.h"
 
 /* EXPORTING:
  *
@@ -22,11 +21,6 @@
 
 long AOACreateNewBlock = FALSE;
 
-/* Some primes to determine the size of the AOAtoIOAtable. */
-/* primes(n+1) ~~ primes(n) * 1.5                          */
-static int primes[] = {   503,   757,  1151,  1733,  2609,  3917,
-                         5879,  8821, 13241, 19867, 29803, 44711, 0 };
-
 /* AOAAllocate allocate 'size' number of bytes in the Adult object area.
  * If the allocation succeeds the function returns a reference to the allocated
  * object, 0 otherwise.
@@ -39,24 +33,19 @@ static ref(Object) AOAAllocate( size)
   long size;
 { ref(Block) newBlock(); /* Extern routine in block.c */
   ptr(long)  oldTop;
+  ref(Block) theBlock;
 
   if( AOABaseBlock == 0){
     if( MallocExhausted || (AOABlockSize == 0) ) return 0;
     /* Check if the AOAtoIOAtable is allocated. If not the allocate it. */
-    if( AOAtoIOAtable == 0 ){
-        if( AOAtoIOAtable = newBlock(primes[7] * 4) ){
-          AOAtoIOAtableSize = primes[7];
-          AOAtoIOAtable->top = AOAtoIOAtable->limit;
-	  AOAtoIOAClear();
-	  INFO_AOA( fprintf( output, "#(AOA: AOAtoIOAtable allocated %d longs.)\n",
-			    AOAtoIOAtableSize));
-	}else{
-	  MallocExhausted = TRUE;
-	  INFO_AOA( fprintf( output,"#(AOA: AOAtoIOAtable allocation %d failed!.)\n",
-			    AOAtoIOAtableSize));
-	  return 0;
-	}
-    }
+    if( AOAtoIOAtable == 0 ) 
+      if( AOAtoIOAAlloc() == 0 ){
+	MallocExhausted = TRUE;
+	INFO_AOA( fprintf(output,
+			  "#(AOA: AOAtoIOAtable allocation %d failed!.)\n",
+			  AOAtoIOAtableSize));
+	return 0;
+      }
     /* Try to allocate a new AOA block. */
     if( AOABaseBlock = newBlock(AOABlockSize) ){
       INFO_AOA( fprintf( output, "#(AOA: new block allocated %dKb.)\n",
@@ -144,8 +133,6 @@ ref(Object) CopyObjectToAOA( theObj)
 }
 
 
-static void Phase1(), Phase2(), Phase3();
-
 void AOAGc()
 {
   /* Remember that AOAGc is called before ToSpace <-> IOA, so
@@ -182,8 +169,6 @@ void AOAGc()
   INFO_AOA( fprintf( output, "%dKb in %d blocks, %d%% free)\n", 
 		    toKb(size), blocks, 100 - (100 * used)/size));
 }
-
-static void FollowObject();
 
 /* ReverseAndFollow is used during Phase1 of the Mark-Sweep GC. 
  * It reverse the pointer and calls FollowObject iff the refered
@@ -239,29 +224,33 @@ static FollowItem( theObj)
 
     ptr(short)     Tab;
     ptr(long)      theCell;
+    ref(ProtoType) statProto;
+    ptr(short)     statTab;
+    ref(Object)    statObj;
 
     /* Calculate a pointer to the GCTabel inside the ProtoType. */
     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
-
-    while( *Tab != 0 ){
-      if( *Tab == -Tab[1] ) 
-	FollowObject( Offset( theObj, *Tab * 4));
-      Tab += 4;
-    }
-    Tab++;
 
     /* Handle all the references in the Object. */
     while( *Tab != 0 ){
       theCell = (ptr(long)) Offset( theObj, *Tab++ );
       if( *theCell != 0 ) ReverseAndFollow( theCell );
     }
+    Tab++;
+
+    while( *Tab != 0 ){
+      if( *Tab == -Tab[3] ) 
+	FollowObject( Offset( theObj, *Tab * 4));
+      Tab += 4;
+    }
+
 }
 
 /* FollowObject is used during Phase1 of the Mark-Sweep GC. 
  * For each referernce inside theObj it calls ReverseAndFollow.
  */
 
-static void FollowObject( theObj)
+static FollowObject( theObj)
   ref(Object) theObj;
 { 
   ref(ProtoType) theProto;
@@ -299,7 +288,7 @@ static void FollowObject( theObj)
       return;
 
     case StackObjectPTValue:
-      fprintf( output,"FollowObject: OOPS a StackObject in AOA.\n");
+      fprintf( stderr,"FollowObject: OOPS a StackObject in AOA.\n");
       return;
 
     case StructurePTValue:
@@ -313,7 +302,7 @@ static void FollowObject( theObj)
  * all cells in root(AOA),
  * all cells in AOA, where cells point into AOA
  */
-static void Phase1()
+static Phase1()
 { /* Call FollowReference for each root to AOA. */
   ptr(long) pointer = ToSpaceLimit;
 
@@ -349,11 +338,13 @@ static handleAliveStatic( theObj, freeObj )
     /* Calculate a pointer to the GCTabel inside the ProtoType. */
     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
 
+    while( *Tab++ != 0 );
+
     while( *Tab != 0 ){
-      if( *Tab == -Tab[1] ){ 
+      if( *Tab == -Tab[3] ){ 
 	handleAliveStatic( Offset( theObj, *Tab * 4), Offset( freeObj, *Tab * 4) );
         DEBUG_AOA( Claim( *(ptr(long)) Offset( theObj, *Tab * 4 + 4)
-			 == (long) Tab[1],
+			 == (long) Tab[3],
 			 "AOACheckObject: EnclosingObject match GCTab entry."));
       }
       Tab += 4;
@@ -388,11 +379,13 @@ static handleAliveObject( theObj, freeObj)
     /* Calculate a pointer to the GCTabel inside the ProtoType. */
     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
 
+    while( *Tab++ != 0 );
+
     while( *Tab != 0 ){
-      if( *Tab == -Tab[1] ){
+      if( *Tab == -Tab[3] ){
 	handleAliveStatic( Offset( theObj, *Tab * 4), Offset( freeObj, *Tab * 4) );
         DEBUG_AOA( Claim( *(ptr(long)) Offset( theObj, *Tab * 4 + 4)
-			 == (long) Tab[1],
+			 == (long) Tab[3],
 			 "AOACheckObject: EnclosingObject match GCTab entry."));
       }
       Tab += 4;
@@ -406,7 +399,7 @@ static handleAliveObject( theObj, freeObj)
 
 
 
-static void Phase2( numAddr, sizeAddr, usedAddr)
+static Phase2( numAddr, sizeAddr, usedAddr)
   ptr(long) numAddr;
   ptr(long) sizeAddr;
   ptr(long) usedAddr;
@@ -496,10 +489,9 @@ BubbleSort( table, size)
 /* Remember to update AOAtoIOATable. 
  * So sort the Table in area[ToSpaceLimit..ToSpaceTop].
  */
-static void Phase3()
+static Phase3()
 {
   ptr(long)   table;
-
 
   /* Calculate the size of table. */
   AOAtoIOACount = 0;
@@ -509,11 +501,11 @@ static void Phase3()
   }
 
   if( ((long) IOALimit - (long) IOA) > (AOAtoIOACount * 8) )
-    /* Only use half og IOA area. */
+    /* Only use half of IOA area. */
     table = IOA;
   else{
     if( !(table = (ptr(long)) malloc( AOAtoIOACount * 4))){
-      fprintf( output,"#Phase3: malloc failed %d longs\n", AOAtoIOACount);
+      fprintf( stderr,"#Phase3: malloc failed %d longs\n", AOAtoIOACount);
       exit(-1);
     }
     INFO_AOA( fprintf( output, "#(AOA: new block for table %d longs)\n",
@@ -609,7 +601,7 @@ static void Phase3()
 }
 
 #ifdef RTDEBUG
-void AOACheck()
+AOACheck()
 {
   ref(Block)  theBlock  = AOABaseBlock;
   ref(Object) theObj;
@@ -626,7 +618,7 @@ void AOACheck()
   }
 } 
 
-void AOACheckObject( theObj)
+AOACheckObject( theObj)
   ref(Object) theObj;
 { ref(ProtoType) theProto;
 
@@ -679,11 +671,19 @@ void AOACheckObject( theObj)
     /* Calculate a pointer to the GCTabel inside the ProtoType. */
     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
 
+    /* Handle all the references in the Object. */
+    while( *Tab != 0 ){
+      theCell = (ptr(long)) Offset( theObj, *Tab++ );
+      if( *theCell != 0 ) AOACheckReference( theCell );
+    }
+    Tab++;
+
+
     /* Handle all the static objects. 
      * The static table have the following structure:
      * { .word Offset
-     *   .word Distance_To_Inclosing_Object
      *   .long T_entry_point
+     *   .word Distance_To_Inclosing_Object
      * }*
      * This table contains all static objects on all levels.
      * Here vi only need to perform ProcessObject on static objects
@@ -694,23 +694,16 @@ void AOACheckObject( theObj)
      */
 
     while( *Tab != 0 ){
-      Claim( *(ptr(long)) Offset( theObj, *Tab * 4 + 4) == (long) Tab[1],
+      Claim( *(ptr(long)) Offset( theObj, *Tab * 4 + 4) == (long) Tab[3],
 	    "AOACheckObject: EnclosingObject match GCTab entry.");
-      if( *Tab == -Tab[1] ) 
+      if( *Tab == -Tab[3] ) 
 	AOACheckObject( Offset( theObj, *Tab * 4));
       Tab += 4;
-    }
-    Tab++;
-
-    /* Handle all the references in the Object. */
-    while( *Tab != 0 ){
-      theCell = (ptr(long)) Offset( theObj, *Tab++ );
-      if( *theCell != 0 ) AOACheckReference( theCell );
     }
   }
 }
 
-void AOACheckReference( theCell)
+AOACheckReference( theCell)
   handle(Object) theCell;
 {
   int i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
@@ -734,7 +727,7 @@ void AOACheckReference( theCell)
 }
 
 
-void AOACheckObjectSpecial( theObj)
+AOACheckObjectSpecial( theObj)
   ref(Object) theObj;
 { ref(ProtoType) theProto;
 
@@ -764,11 +757,18 @@ void AOACheckObjectSpecial( theObj)
     /* Calculate a pointer to the GCTabel inside the ProtoType. */
     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
 
+    /* Handle all the references in the Object. */
+    while( *Tab != 0 ){
+      theCell = (ptr(long)) Offset( theObj, *Tab++ );
+    }
+    Tab++;
+
+
     /* Handle all the static objects. 
      * The static table have the following structure:
      * { .word Offset
-     *   .word Distance_To_Inclosing_Object
      *   .long T_entry_point
+     *   .word Distance_To_Inclosing_Object
      * }*
      * This table contains all static objects on all levels.
      * Here vi only need to perform ProcessObject on static objects
@@ -779,15 +779,9 @@ void AOACheckObjectSpecial( theObj)
      */
 
     while( *Tab != 0 ){
-      if( *Tab == -Tab[1] ) 
+      if( *Tab == -Tab[3] ) 
 	AOACheckObjectSpecial( Offset( theObj, *Tab * 4));
       Tab += 4;
-    }
-    Tab++;
-
-    /* Handle all the references in the Object. */
-    while( *Tab != 0 ){
-      theCell = (ptr(long)) Offset( theObj, *Tab++ );
     }
   }
 }
