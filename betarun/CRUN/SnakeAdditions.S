@@ -1,6 +1,11 @@
 /* SnakeAdditions.S */
 
+#define USE_EXTERNAL_MARKER
+
 #include "betaerror.h"
+#ifdef USE_EXTERNAL_MARKER
+#include "constant.h"
+#endif
 
 #define REFSTACK
 
@@ -55,7 +60,16 @@ HandleCB:
         .ENTRY
         stw %r2,-20(SP)   /* Save return - normal procedure entry */
 	ldo 128(SP),SP  /* Allocate stack frame for 32 words */
-	stw %r3,-128(SP)  /* Save the 15 words that may be destroyed by beta */
+#ifdef USE_EXTERNAL_MARKER
+	/* Push ExternalMarker for beta.dump */
+    	ldil	LR'RefSP,%r1
+	ldw	RR'RefSP(%r1),%r14
+	ldi	ExternalMarker,%r2 /* r2 has just been saved */
+	stws,ma	%r2,4(0,%r14)
+	stw 	%r14,RR'RefSP(0,%r1)
+#endif
+	/* Save the 15 words that may be destroyed by beta */
+	stw %r3,-128(SP) 
 	stw %r4,-124(SP)
 	stw %r5,-120(SP)
 	stw %r6,-116(SP)
@@ -88,7 +102,14 @@ HandleCB:
 	ldw -120(SP),%r5
 	ldw -124(SP),%r4
 	ldw -128(SP),%r3
-	ldw -20-128(SP),%r2  /* Restore return */
+#ifdef USE_EXTERNAL_MARKER
+	/* Pop External Marker - no need to load from RefSP (r14 saved) */
+	addi 	-4,%r14,%r14
+	ldil	LR'RefSP,%r1
+	stw 	%r14,RR'RefSP(0,%r1)
+#endif
+	/* Restore return */
+	ldw -20-128(SP),%r2  
 	ldsid (0,%r2),%r1      
 	mtsp %r1,%sr0          
 	be 0(%sr0,%r2)         /* Return */
