@@ -119,13 +119,6 @@ static void DumpProto(Object *theObj)
 #define FrameSeparator() \
 fprintf(output, "============================================================================\n")
 
-#if 0
-/* Trace search for prefix in ObjectDescription */
-#define TRACE_CODEENTRY(code) code; fflush(output)
-#else
-#define TRACE_CODEENTRY(code)
-#endif
-
 /* Return the M or G part obtained from theProto, that PC is in */
 unsigned long CodeEntry(ProtoType *theProto, long PC)
 {

@@ -153,12 +153,7 @@ char *ProtoTypeName(ProtoType *theProto)
   return (char *) dyn;
 }
 
-/* c_on_top is used by beta.dump (only) to determine if things on top
- * of the stack are outside beta-code, i.e. a program has failed in 
- * external code.
- * Error-pc is used to remember original PC when the error happened.
- */
-GLOBAL(static signed   long c_on_top=0);
+/* Error-pc is used to remember original PC when the error happened */
 GLOBAL(static unsigned long error_pc);
 
 /*************************** ObjectDescription: **********************/
@@ -245,26 +240,6 @@ static void ObjectDescription(Object *obj,
   }
 
   proto = obj->Proto;
-
-  if (c_on_top>0){
-    /* c_on_top identifies that there is one or more C-frame(s)*/
-    if (c_on_top == 1){
-      c_on_top++; /* Print only the first time */
-      TRACE_DUMP(fprintf(output, "  top: "));
-      fprintf(output, 
-	      "  [ EXTERNAL ACTIVATION PART (address 0x%x",
-	      (int)error_pc
-	      );
-      DEBUG_CODE(PrintCodeAddress((long)error_pc));
-      fprintf(output, ") ]\n");
-#ifdef sgi
-      fprintf(output, "\n");
-      fprintf(output, "  (Unable to find start of BETA stack - sorry)\n");
-      BetaExit(1);
-#endif
-    } 
-    return;
-  }
 
   if (groupname==NULL){
     /* GroupName failed */
@@ -476,8 +451,11 @@ void DisplayObject(FILE   *output, /* Where to dump object */
 }
 
 
+/*************************** Begin NEWRUN ***************************/
 #ifdef NEWRUN
-
+/*
+ * This is the NEWRUN specifics of DisplayBetaStack
+ */
 static void DumpCell(Object **theCell,Object *theObj)
 { 
   register long PC=-1;
@@ -487,9 +465,12 @@ static void DumpCell(Object **theCell,Object *theObj)
    * previous frame. 
    */
 
-  TRACE_DUMP(fprintf(output, ">>>TraceDump: theCell=0x%x, theObj=0x%x",
-		     (int)theCell, (int)theObj));
-  
+  TRACE_DUMP({
+    fprintf(output, 
+	    ">>>TraceDump: theCell=0x%x, theObj=0x%x",
+	    (int)theCell, 
+	    (int)theObj);
+  });
 
   /* First check if theObj is CALLBACKMARK */
   if ((theObj==CALLBACKMARK)||(theObj==GENMARK)){
@@ -542,7 +523,45 @@ static void DumpCell(Object **theCell,Object *theObj)
   DisplayObject(output, theObj, PC);
 }
 
+void DisplayNEWRUNStack(long *PC)
+{ 
+
+  /* First check for errors occured outside BETA and adjust StackEnd to
+   * BETA part of stack, if possible.
+   */
+  if (!IsBetaCodeAddrOfProcess((long)PC)){
+    long *betatop = BetaStackTop[0];
+    fprintf(output, 
+	    "  [ EXTERNAL ACTIVATION PART (address 0x%x", 
+	    (int)PC);
+    DEBUG_CODE(PrintCodeAddress((long)error_pc));
+    fprintf(output, ") ]\n");
+    
+#ifdef ppcmac
+    /* FIXME: could wind down through frame pointers */
+#endif /* ppcmac */
+#ifdef sgi
+    if ((StackEnd<betatop) && (betatop<StackStart)){
+      /* BetaStackTop is in the active stack. Try continuing from there.
+       * This will work if BETA called a C routine, but not if the error
+       * occurred in a runtime routine - BetaStackTop is not set, when
+       * runtime routines are called.
+       */
+      TRACE_DUMP(fprintf(output, "  Adjusting StackEnd to BetaStackTop\n"));
+      StackEnd = betatop;
+    } else {
+      fprintf(output, "\n");
+      fprintf(output, "  (Unable to find start of BETA stack - sorry)\n");
+      BetaExit(1);
+    }
+#endif /* sgi */
+  }
+  /* Dump the stack */
+  ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, TRUE, DumpCell);
+}
+
 #endif /* NEWRUN */
+/*************************** End NEWRUN ***************************/
 
 #ifdef intel
 
@@ -751,7 +770,6 @@ void DisplaySPARCStack(BetaErr errorNumber,
       }
     }
     TRACE_DUMP(fprintf(output, "  Winding through frames on top done."));
-    c_on_top=0; /* No more C frames on top */
   }
 
   for (;
@@ -824,6 +842,46 @@ void DisplaySPARCStack(BetaErr errorNumber,
 
 #endif /* sparc */
 /*************************** End SPARC ******************************/
+
+/********************** DisplayCurrentObject ************/
+
+void DisplayCurrentObject(Object *theObj, long *thePC)
+{
+  TRACE_DUMP(fprintf(output, ">>>TraceDump: Current object 0x%x\n", (int)theObj));
+  if( theObj != 0 ){
+    if( isObject(theObj)){
+      if (theObj==(Object *)ActiveComponent->Body){
+	DisplayObject(output, (Object *)ActiveComponent, (long)thePC);
+      } else {
+	DisplayObject(output, theObj, (long)thePC);
+      }
+    } else {
+      fprintf(output,
+	      "  Current object (0x%x) is damaged",
+	      (int)theObj
+	      );
+      DEBUG_CODE(PrintWhichHeap(theObj));
+      fprintf(output, "\n");
+      fflush(output);
+#if 1
+      DEBUG_CODE({
+	extern int isObjectState;
+	if (inBetaHeap(theObj)){
+	  fprintf(output, "    proto: 0x%x\n", (int)theObj->Proto);
+	  fflush(output);
+	  fprintf(output, "    gc:    0x%x\n", (int)theObj->GCAttr);
+	  fflush(output);
+	}
+	fprintf(output, "  isObjectState: %d\n", isObjectState);
+	fflush(output);
+      });
+#endif
+      
+    }
+  } else {
+    fprintf(output,"Current object is zero!\n");
+  }
+}
 
 /********************** OpenDumpFile ********************/
 
@@ -1068,7 +1126,7 @@ int DisplayBetaStack(BetaErr errorNumber,
 #endif
 
 #ifndef MT
-#if (defined(RTVALHALLA) && !defined(nti_bor))
+#ifdef RTVALHALLA
   if (valhallaID){
 #ifdef UseRefStack
     printf("DisplayBetaStack: calling Valhalla\n");
@@ -1118,8 +1176,6 @@ int DisplayBetaStack(BetaErr errorNumber,
   }
 #endif /* BETAENV_RUNTIME_HANDLER */
 
-
-
   if (isMakingDump){
     /* Something went wrong during the dump. Stop here! */
     fprintf(output, "\n# Error during dump: ");
@@ -1132,10 +1188,6 @@ int DisplayBetaStack(BetaErr errorNumber,
     BetaExit(1);
   } else {
     isMakingDump=1;
-  }
-
-  if (thePC && !IsBetaCodeAddrOfProcess((long)thePC)){
-    c_on_top = 1;
   }
 
   error_pc = (unsigned long)thePC;
@@ -1170,48 +1222,16 @@ int DisplayBetaStack(BetaErr errorNumber,
    * On the sparc, it resides in the top register window, and 
    * nothing should be done.
    */
-  TRACE_DUMP(fprintf(output, ">>>TraceDump: Current object 0x%x\n", (int)theObj));
-  if( theObj != 0 ){
-    if( isObject(theObj)){
-      if (theObj==(Object *)ActiveComponent->Body){
-	DisplayObject(output, (Object *)ActiveComponent, (long)thePC);
-      } else {
-	DisplayObject(output, theObj, (long)thePC);
-      }
-    } else {
-      fprintf(output,
-	      "  Current object (0x%x) is damaged",
-	      (int)theObj
-	      );
-      DEBUG_CODE(PrintWhichHeap(theObj));
-      fprintf(output, "\n");
-      fflush(output);
-#if 1
-      DEBUG_CODE({
-	extern int isObjectState;
-	if (inBetaHeap(theObj)){
-	  fprintf(output, "    proto: 0x%x\n", (int)theObj->Proto);
-	  fflush(output);
-	  fprintf(output, "    gc:    0x%x\n", (int)theObj->GCAttr);
-	  fflush(output);
-	}
-	fprintf(output, "  isObjectState: %d\n", isObjectState);
-	fflush(output);
-      });
-#endif
-      
-    }
-  } else {
-    fprintf(output,"Current object is zero!\n");
-  }
+  DisplayCurrentObject(theObj, thePC);
 #endif /* sparc */
   
 
 #ifdef MT
-  fprintf(output, "DisplayBetaStack: NYI for MT\n"); fflush(output);
+  fprintf(output, "DisplayBetaStack: NYI for MT\n"); 
+  fflush(output);
+  return
 #endif
 
-#ifndef MT
   if (StackStart == 0){
     fprintf(output,"\n  [initialization of basic component]\n");
     return 0;
@@ -1264,27 +1284,18 @@ int DisplayBetaStack(BetaErr errorNumber,
 #endif
 /************************* End HPPA ****************************/
 
-/************************* Begin NEWRUN ****************************/
 
 #ifdef NEWRUN
-  /*
-   * This is the NEWRUN specifics of DisplayBetaStack
-   */
-  { 
-    ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, TRUE, DumpCell);
-  }
+  DisplayNEWRUNStack(thePC);
 #endif
-/*************************** End NEWRUN ***************************/
-
-
 #ifdef sparc
   DisplaySPARCStack(errorNumber, theObj, thePC, theSignal);
 #endif
 
-/****************************** Begin INTEL ********************************/
+/************************* Begin INTEL ****************************/
 
-#ifdef RUN
-  { /* RUN based DisplayBetaStack() - i.e. MOTOROLA like stack */
+#ifdef intel
+  { 
     long                *lowAddr;
     long                *highAddr;
     
@@ -1407,45 +1418,42 @@ int DisplayBetaStack(BetaErr errorNumber,
 #endif /* RUN */
 /***************************** End INTEL **********************************/
 
-
-#endif /* MT */
-
 #undef P
-#define P(text) fprintf(output, "%s\n", text);
-P("")
-P("Legend:")
-P("")
-P("The above dump shows the dynamic call stack of invoked objects.")
-P("The dump starts at the object that was the current object when")
-P("the error occurred and continues down towards the basic component.")
-P("The descriptions have the following meaning:")
-P("1. Items are shown in two lines, like this:")
-P("      item <name#>pname1#pname2#pname3 in ifile")
-P("        -- sname#spname1#spname2 in sfile")
-P("   meaning that the item is an instance of the descriptor \"name\" which has")
-P("   prefix \"pname1\" which has prefix \"pname2\", etc. This item is defined in the")
-P("   file \"ifile\". The part of the prefix chain enclosed in \"<\" and \">\" indicates")
-P("   where in the action sequence the error occurred. The line beginning with")
-P("   \"--\" shows the textually surrounding descriptor using the same notation.")
-P("2. The descriptor names used in the above description will normally have one or")
-P("   more \"meta characters\" appended. The meaning of these is:")
-P("      #  The descriptor belongs to a pattern, e.g. P: (# ... #)")
-P("      ~  Singular named descriptor, e.g. X: @(# ... #)")
-P("      *  Singular unnamed descriptor, e.g. ... ; (# ... #) ; ...")
-P("      -  Descriptor SLOT.")
-P("3. Components are shown using a notation similar to that of items, like this:")
-P("      comp <name#>pname1#pname2#pname3 in cfile")
-P("4. The bottommost component corresponding to the basic environment is shown")
-P("   like an ordinary component, but indicated with \"basic component\".")
-P("5. In case the error occurred in some external code called from BETA, the top")
-P("   of the call stack is shown as")
-P("      [ EXTERNAL ACTIVATION PART ]")
-P("6. In case the BETA code has called some external code which has in turn called")
-P("   back into the BETA code, and the callback is still active at the point of")
-P("   the error, the intermediate call stack part is also shown as")
-P("      [ EXTERNAL ACTIVATION PART ]")  
+#define P(text) fprintf(output, "%s\n", text)
+  P("");
+  P("Legend:");
+  P("");
+  P("The above dump shows the dynamic call stack of invoked objects.");
+  P("The dump starts at the object that was the current object when");
+  P("the error occurred and continues down towards the basic component.");
+  P("The descriptions have the following meaning:");
+  P("1. Items are shown in two lines, like this:");
+  P("      item <name#>pname1#pname2#pname3 in ifile");
+  P("        -- sname#spname1#spname2 in sfile");
+  P("   meaning that the item is an instance of the descriptor \"name\" which has");
+  P("   prefix \"pname1\" which has prefix \"pname2\", etc. This item is defined in the");
+  P("   file \"ifile\". The part of the prefix chain enclosed in \"<\" and \">\" indicates");
+  P("   where in the action sequence the error occurred. The line beginning with");
+  P("   \"--\" shows the textually surrounding descriptor using the same notation.");
+  P("2. The descriptor names used in the above description will normally have one or");
+  P("   more \"meta characters\" appended. The meaning of these is:");
+  P("      #  The descriptor belongs to a pattern, e.g. P: (# ... #)");
+  P("      ~  Singular named descriptor, e.g. X: @(# ... #)");
+  P("      *  Singular unnamed descriptor, e.g. ... ; (# ... #) ; ...");
+  P("      -  Descriptor SLOT.");
+  P("3. Components are shown using a notation similar to that of items, like this:");
+  P("      comp <name#>pname1#pname2#pname3 in cfile");
+  P("4. The bottommost component corresponding to the basic environment is shown");
+  P("   like an ordinary component, but indicated with \"basic component\".");
+  P("5. In case the error occurred in some external code called from BETA, the top");
+  P("   of the call stack is shown as");
+  P("      [ EXTERNAL ACTIVATION PART ]");
+  P("6. In case the BETA code has called some external code which has in turn called");
+  P("   back into the BETA code, and the callback is still active at the point of");
+  P("   the error, the intermediate call stack part is also shown as");
+  P("      [ EXTERNAL ACTIVATION PART ]");
 #undef P
- 
+  
   fflush(output);
   if (old_output) output = old_output; 
 
