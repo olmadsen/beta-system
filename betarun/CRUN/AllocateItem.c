@@ -12,7 +12,9 @@
 ParamOriginProto(Item *,AlloI)
 /* = Item * AlloI(Object *origin, ProtoType *proto) */
 {
+#ifdef PROTO_STATISTICS
     int proto_i, proto_found;
+#endif
 
     DeclReference1(Item *, item); /*= Item * item; */
     MCHECK();
