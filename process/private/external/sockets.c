@@ -52,7 +52,7 @@
 #    include <sys/stropts.h>	/* to see S_INPUT,S_ERROR */
 #  endif
 #else
-#  ifdef A_HP
+#  if (defined(A_HP) || defined(A_SGI))
 #    include <sys/ioctl.h>	/* to see FIONREAD & SIOCSPGRP */
 #  else
 #    if defined(A_LINUX)
@@ -66,7 +66,7 @@
 
 /* Architecture dependant types/values */
 
-#if defined(A_SUN)
+#if (defined(A_SUN) || defined(A_SGI))
 #  define HPFD_cast
 #else
 #  if defined(A_HP)
@@ -83,7 +83,7 @@
 #if defined(A_SUN34)
 #  define SIGNALPARM void
 #else
-#  if defined(A_HP) || defined(A_SUN4S)
+#  if defined(A_HP) || defined(A_SUN4S) || defined(A_SGI)
 #    define SIGNALPARM int ignore
 #  else
 #    if defined(A_LINUX)
@@ -97,7 +97,7 @@
 #if defined(A_SUN34) || defined(A_HP)
 #  define SOCKADDR_type sockaddr_in
 #else
-#  ifdef A_SUN4S
+#  if defined(A_SUN4S) || defined(A_SGI)
 #    define SOCKADDR_type sockaddr
 #  else
 #    if defined (A_LINUX)
@@ -830,7 +830,7 @@ int sockStreamEos(int fd, FILE* fp)
        *
        * Rationale: "if data in buffer: return false (not eof)"
        */
-#      if defined(A_SUN)
+#      if defined(A_SUN) || defined(A_SGI)
          return (0 >= fp->_cnt);
 #      else
 #        if defined(A_HP)

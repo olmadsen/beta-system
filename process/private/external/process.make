@@ -1,18 +1,12 @@
-BASEDIR	   = $(BETALIB)/process/v1.5/private
-SRCDIR	   = $(BASEDIR)/external
-OBJDIR	   = $(BASEDIR)/$(MACHINETYPE)
-OBJS	   = $(OBJDIR)/getHostAddr.o $(OBJDIR)/nonblock.o 
-CFLAGS	   = -O -g
+CFLAGS	   = 
+OBJS	   = ../$(MACHINETYPE)/getHostAddr.o ../$(MACHINETYPE)/nonblock.o 
 
 make: $(OBJS)
 
-$(OBJDIR)/getHostAddr.o: $(SRCDIR)/getHostAddr.c
-	gcc $(CFLAGS) -D$(MACHINETYPE) -c $(SRCDIR)/getHostAddr.c \
-	-o $(OBJDIR)/getHostAddr.o
+../$(MACHINETYPE)/getHostAddr.o: getHostAddr.c
+	sh -c 'if [ ! -d ../$(MACHINETYPE) ]; then mkdir ../$(MACHINETYPE); fi'
+	$(CC) $(CFLAGS) -D$(MACHINETYPE) -c -o ../$(MACHINETYPE)/getHostAddr.o getHostAddr.c
 
-$(OBJDIR)/nonblock.o: $(SRCDIR)/nonblock.c
-	gcc $(CFLAGS) -D$(MACHINETYPE) -c $(SRCDIR)/nonblock.c \
-	-o $(OBJDIR)/nonblock.o
-
-$(SRCDIR):
-	mkdir $(BASEDIR)/$(MACHINETYPE)
+../$(MACHINETYPE)/nonblock.o: nonblock.c
+	sh -c 'if [ ! -d ../$(MACHINETYPE) ]; then mkdir ../$(MACHINETYPE); fi'
+	$(CC) $(CFLAGS) -D$(MACHINETYPE) -c -o ../$(MACHINETYPE)/nonblock.o nonblock.c

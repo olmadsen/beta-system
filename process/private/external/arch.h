@@ -7,6 +7,18 @@
 
 /* Ensure that exactly one architecture symbol is defined */
  
+#if defined(sgi)
+#  define A_SGI
+#  undef  A_SUN3
+#  undef  A_SUN4
+#  undef  A_SUN4S
+#  undef  A_OLDHP
+#  undef  A_HPUX8
+#  undef  A_SNAKE
+#  undef  A_LINUX
+#  undef  A_NT
+#endif /* sun3 */
+
 #if defined(sun3)
 #  define A_SUN3
 #  undef  A_SUN4
@@ -16,6 +28,7 @@
 #  undef  A_SNAKE
 #  undef  A_LINUX
 #  undef  A_NT
+#  undef  A_SGI
 #endif /* sun3 */
 
 #if defined(sun4)
@@ -27,6 +40,7 @@
 #  undef  A_SNAKE
 #  undef  A_LINUX
 #  undef  A_NT
+#  undef  A_SGI
 #endif /* sun4 */
 
 #if defined(sun4s)
@@ -38,6 +52,7 @@
 #  undef  A_SNAKE
 #  undef  A_LINUX
 #  undef  A_NT
+#  undef  A_SGI
 #endif /* sun4s */
 
 #if defined(hp)
@@ -49,6 +64,7 @@
 #  undef  A_SNAKE
 #  undef  A_LINUX
 #  undef  A_NT
+#  undef  A_SGI
 #endif /* hp */
 
 #if defined(hpux8)
@@ -60,6 +76,7 @@
 #  undef  A_SNAKE
 #  undef  A_LINUX
 #  undef  A_NT
+#  undef  A_SGI
 #endif /* hpux8 */
 
 #if defined(hpux9mc)
@@ -71,6 +88,7 @@
 #  undef  A_SNAKE
 #  undef  A_LINUX
 #  undef  A_NT
+#  undef  A_SGI
 #endif /* hpux8 */
 
 #if defined(snake)
@@ -82,6 +100,7 @@
 #  define A_SNAKE
 #  undef  A_LINUX
 #  undef  A_NT
+#  undef  A_SGI
 #endif /* snake */
 
 #if defined(hpux9pa) /* datpete 22/8/94 */
@@ -93,6 +112,7 @@
 #  define A_SNAKE
 #  undef  A_LINUX
 #  undef  A_NT
+#  undef  A_SGI
 #endif /* hpux9pa */
 
 
@@ -105,6 +125,7 @@
 #  undef  A_SNAKE
 #  define A_LINUX
 #  undef  A_NT
+#  undef  A_SGI
 #endif /* linux */
 
 #if defined(nt) /* !!! new architecture - this might be wrong */
@@ -116,6 +137,7 @@
 #  undef  A_SNAKE
 #  undef  A_LINUX
 #  define A_NT
+#  undef  A_SGI
 #endif /* nt */
 
 #if defined(A_SUN3) || defined(A_SUN4)
@@ -130,7 +152,7 @@
 #  define A_HP
 #endif
 
-#if defined(A_SUN) || defined(A_HP)
+#if defined(A_SUN) || defined(A_HP) || defined(A_SGI)
 #  define A_BIGEND
 #endif
 
