@@ -1,30 +1,11 @@
 ORIGIN 'betaenvbody';
 INCLUDE '~beta/javalib/java/lang/String';
+INCLUDE '~beta/javalib/java/io/PrintStream';
 INCLUDE '~beta/javalib/java/io/PushbackInputStream';
 INCLUDE '~beta/javalib/betahelpers';
 
 --LIB: attributes--
 
-writeI: External   
-  (# ch: @char
-  enter ch
-  do 'java/io/PrintStream/print(I)V' -> callC 
-  #);
-writeC: External   
-  (# ch: @char
-  enter ch
-  do 'java/io/PrintStream/print(C)V' -> callC 
-  #); 
-writeS: External   
-  (# s: ^String
-  enter s[]
-  do 'java/io/PrintStream/print(Ljava/lang/String;)V' -> callC 
-  #); 
-readC: External   
-  (# ch: @integer
-  do 'java/io/InputStream/read()I' -> callC 
-  exit ch
-  #);
 
 NYI:
   (# feature: ^text
@@ -38,40 +19,46 @@ SetArgValues: (*proc - not recognized as special prefix here! *)
   (# program_name: ^String;
      args: [0]^String;
      trace: (# exit false #);
+     out: ^PrintStream
+       (* Cannot use putline in here as betaenv is not yet initialized *);
   enter (program_name[],args)
   do (if trace then
-         'Trace(betaenv_jvmbody): SetArgValues called: ' -> writeS;
-         'No of arguments: ' -> writeS;
-         args.range -> writeI;
-         '\n' -> writeC;
+         BetaHelper.get_System_out -> out[];
+         'Trace(betaenv_jvmbody): SetArgValues called: ' -> out.print_String;
+         'No of arguments: ' -> out.print_String;
+         args.range -> out.print_I;
+         '\n' -> out.print_I;
      if);
      args.range+1 -> ArgVector.new (* +1 to add program name *);
      program_name[] -> ArgVector[1][] (* Automatic conversion String->Text *);
      (for i:args.range repeat
           (if trace then
-              'Trace(betaenv_jvmbody): SetArgValues: ' -> writeS;
-              args[i][] -> writeS;
-              '\n' -> writeC;
+              'Trace(betaenv_jvmbody): SetArgValues: ' -> out.print_String;
+              args[i][] -> out.print_String;
+              '\n' -> out.print_I;
           if);
           args[i][] -> ArgVector[i+1][]; (* Automatic conversion String->Text *)
      for)
   #);
 
 JavaConsole: Stream
-  (# Eos::< 
+  (# out: ^PrintStream;
+     init:
+       (#
+       do BetaHelper.get_System_out -> out[];
+       exit THIS(JavaConsole)[]
+       #);
+     Eos::< 
        (# do true->value #); 
      OtherError::< 
        (# do 'Screen error'->msg.puttext #);
      Get::< 
        (# do 'Warning: attempt to Get from the Screen' -> screen.putline; #);
      Put::< 
-       (# do ch -> writeC; #);
+       (# do ch -> out.write_I; #);
      PutText::< 
        (# 
-       do (* FIXME *)
-          (for i: txt.lgth repeat
-               txt.T[i] -> put
-          for)
+       do txt[] -> out.print_String;
        #);
   #);
 JavaKeyBoard: Stream
@@ -81,28 +68,38 @@ JavaKeyBoard: Stream
        do (* Create a PushbackInputStream using constructor with InputStream argument *)
           BetaHelper.get_System_in -> in[];
           (*in[] -> PushbackInputStream._init_InputStream -> pb[] *);
-          (*in[] -> &PushbackInputStream[] -> pb[];*)
+          in[] -> &PushbackInputStream[] -> pb[];
        exit THIS(JavaKeyBoard)[]
        #);
      Eos::<
-       (# do false -> value; 'betaenv:JavaKeyBoard.Eos'  -> NYI #);
+       (# i: @integer;
+       do (if pb.available>0 then
+              pb.read -> i -> pb.unread_I;
+              i=ascii.eot -> value
+           else
+              false -> value;
+          if);
+       #);
      OtherError::< 
        (# do 'Keyboard error'->msg.puttext #);
      Put::< 
        (# do 'Warning: attempt to Put to the Keyboard' -> screen.putline; #);
      Get::<
-       (# do  readC -> ch #);
+       (# 
+       do pb.read->ch;
+       #);
      GetAtom::<
        (# 
-       do 'betaenv:GetAtom'  -> NYI
+       do 'betaenv:JavaKeyBoard.GetAtom' -> NYI
        #);
      GetLine::<
        (# 
        do 'betaenv:JavaKeyBoard.GetLine'  -> NYI
        #);
      Peek::<
-       (# 
-       do 'betaenv:JavaKeyBoard.Peek'  -> NYI 
+       (# i: @integer;
+       do pb.read -> i -> ch;
+          i -> pb.unread_I;
        #);
   #);
 
@@ -171,7 +168,7 @@ do
 (# 
 do ascii.init;
    ascii.nl-> ascii.newline;
-   &JavaConsole[]->screen[]; 
+   (&JavaConsole[]).init->screen[]; 
    (&JavaKeyboard[]).init->keyboard[];
    &rawargumenthandler[] -> argumenthandler[];
 #)
