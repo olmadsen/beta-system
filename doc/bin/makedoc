@@ -1003,8 +1003,8 @@ sub read_book_file
 sub warning
 {
     local ($file, $char_pos, $msg) = @_;
-    print STDERR "$file:char-pos $char_pos:\n";
-    print STDERR "***Warning: $msg\n";
+    print STDERR "==>$file:char-pos $char_pos:\n";
+    print STDERR "   Warning: $msg\n";
     if ($errorwarnings){
 	print STDERR "Treating warnings as errors.\n";
 	exit(1) unless $ignoreerrors;
@@ -1013,8 +1013,8 @@ sub warning
 sub error
 {
     local ($file, $char_pos, $msg) = @_;
-    print STDERR "$file:char-pos $char_pos:\n";
-    print STDERR "***ERROR: $msg\n";
+    print STDERR "==>$file:char-pos $char_pos:\n";
+    print STDERR "   ERROR: $msg\n";
     exit(1) unless $ignoreerrors;
 }
 
@@ -1133,13 +1133,14 @@ sub parse_special_tags
 	    $done .= $match;
 	    local ($h, $heading, $anchor, $headanchors, $headinx, $attributes);
 	    $h = $1;
-	    #print STDERR "Heading start H$h, headinglevel=$headinglevel\n";
+	    print STDERR "Heading start H$h, headinglevel=$headinglevel\n" if ($debug);
 	    if ($remaining =~ m%^[^>]*\>%si){
 		# Matched <Hn xxx>
 		$attributes = $1; # xxx - currently not used for anything
-		$done .= $&;
+		$done .= $&; # start tag
 		$remaining = $';
 	    }
+	    local ($heading_char_pos) = $full_length-length($remaining);
 	    if ($h<$headinglevel){
 		# Going from sub section to section/chapter
 		for (; $headinglevel>$h; $headinglevel--){
@@ -1150,7 +1151,7 @@ sub parse_special_tags
 		if (($h<4) && ($h>$headinglevel+1)){
 		    # First 3 heading levels must be contigous to produce
 		    # a correct navigation panel (with 3 levels) in PDF
-		    &src_warning($full_length-length($remaining), "Non-contigous increment in heading level? (H$headinglevel->H$h).\n   Corrupt PDF navigation pane may result.");
+		    &src_warning($heading_char_pos, "Non-contigous increment in heading level? (H$headinglevel->H$h).\n   Corrupt PDF navigation pane may result.");
 		}
 		$headinglevel++;
 		for (; $headinglevel<$h; $headinglevel++){
@@ -1171,6 +1172,14 @@ sub parse_special_tags
 		$heading = $`;
 		$remaining = $';
 		$heading =~ s/^\s*//; # remove leading whitespace
+		# Check for heading closings inside heading (typically wrong close tag)
+		if ($heading =~ m%</H[1-6]>%i){
+		    &src_warning($full_length-length($remaining)-length($') - length("</H$h>"), "Closing $& inside <H$h> at char-pos $heading_char_pos");
+		}
+		# Check for heading starts inside heading
+		if ($heading =~ m%<H[1-6]>%i){
+		    &src_warning($full_length-length($remaining)-length($') - length("</H$h>"), "Nested $& inside <H$h> at char-pos $heading_char_pos");
+		}
 		# Check for index entries in heading. Move them outside
 		while ($heading =~ m%<INX>([^<]*)</INX>%si){
 		    $remaining = "<INX HIDDEN>$1</INX>" . $remaining;
@@ -1183,7 +1192,7 @@ sub parse_special_tags
 		    $heading = $` . $2 . $';
 		}
 		$heading = "$number $heading";
-		$done .= $heading . "</A>$headanchors</H$h>";
+		$done .= $heading . "</A>$headanchors</H$h>"; # end tag
 	    } else {
 		&src_warning($full_length-length($remaining), "Unterminated heading? (<H$h>)");
 	    }
@@ -1257,7 +1266,7 @@ sub parse_special_tags
 		if ($listcap eq ""){
 		    if ($caption eq ""){
 			&src_warning($full_length-length($remaining), 
-			       "<BETA> tag with LIST attribute and no caption found.Using \"Program " . $num_beta . "\" for caption.");
+			       "<BETA> tag with LIST attribute and no caption found.\n   Using \"Program " . $num_beta . "\" for caption.");
 			$listcap = $caption = "Program " . $num_beta;
 		    } else {
 			$listcap = $caption;
@@ -1425,7 +1434,7 @@ sub parse_special_tags
 	    if ($listcap eq ""){
 		if ($caption eq ""){
 		    if ($list){
-			&src_warning($full_length-length($remaining), "<FIG> tag with LIST attribute and no caption found.\nUsing \"Figure " . $num_fig . "\" for caption.");
+			&src_warning($full_length-length($remaining), "<FIG> tag with LIST attribute and no caption found.\n   Using \"Figure " . $num_fig . "\" for caption.");
 			#$caption = "Figure $num_fig";
 		    }
 		} else {
@@ -2039,7 +2048,7 @@ EOT
 		$msg = "'##)' is not considered a pattern end. Please check this!";
 		$intfile = &strip_extension(&strip_path($intfile)) . ".int";
 		if (!open (INT, ">$intfile")){
-		    print STDERR "$msg\n(cannot write $intfile)\n";
+		    print STDERR "$msg\n   (cannot write $intfile)\n";
 		} else {
 		    print INT $intline;
 		    close INT;
