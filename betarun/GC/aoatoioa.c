@@ -125,6 +125,22 @@ void AOAtoIOAClear()
 }
 
 #ifdef RTDEBUG
+
+void CheckAOAtoIOAtableSize(long *theCell)
+{
+  if (AOAtoIOAtableSize==0){
+    fprintf(output, "Error: AOAtoIOAtableSize is zero in ChkRA.\n");
+    fprintf(output, "ChkRA failed for the cell 0x%x", (int)theCell);
+    if (inToSpace(*theCell)) 
+      fprintf(output, " (is in ToSpace!).\n");
+    else
+      fprintf(output, ".\n");
+    fflush(output);
+    Illegal();
+    exit(1);
+  }
+}
+
 void AOAtoIOACheck()
 { 
     long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
