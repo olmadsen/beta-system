@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-06-06 04:06:48 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-07-20 11:49:29 $, SID: $Revision: 1.4 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -11,34 +11,34 @@
 #define asmlabel(label, code) \
   asm(".text;.align 4;.global " #label ";" #label ":" code)
 
-extern ref(Item) 	AllocateItem() asm ("AllocateItem");
-extern ref(Component) 	AllocateComponent() asm ("AllocateComponent");
-extern ref(ValRep) 	AllocateValRep();
+extern ref(Item) 	AlloI() asm ("AlloI");
+extern ref(Component) 	AlloC() asm ("AlloC");
+extern ref(ValRep) 	AlloVR();
 extern char 	      * LVRAAlloc();
-extern ref(RefRep)	AllocateRefRep();
-extern ref(StackObject) AllocateStackObject() asm ("AllocateStackObject");
-extern ref(ValRep)	CopyText() asm ("CopyText");
-extern ref(ValRep)	CopyCtext() asm ("CopyCtext");
-extern ref(RefRep)	CopySliceRefRep() asm ("CopySliceRefRep");
-extern ref(ValRep)	CopySliceValRep() asm ("CopySliceValRep");
-extern ref(Structure)	AllocateStruc() asm("AllocateStruc");
-extern ref(Structure)	ThisStruc() asm("ThisStruc");
-extern ref(Item)	AllocateStrucItem() asm("AllocateStrucItem");
-extern ref(Component)	AllocateStrucComponent() asm("AllocateStrucComponent");
-extern int eqStruc() 	asm("eqStruc");
-extern int neStruc() 	asm("neStruc");
-extern int ltStruc() 	asm("ltStruc");
-extern int gtStruc() 	asm("gtStruc");
-extern int leStruc() 	asm("leStruc");
-extern int geStruc() 	asm("geStruc");
-extern void Return() 	asm ("Return");
-extern void PerformGC();
-extern void ReferenceIsNone() asm("ReferenceIsNone");
-extern void AttachBasicComponent() asm("AttachBasicComponent");
-extern void CopyValRep() asm("CopyValRep");
-extern void BetaError();
-extern void CheckReferenceAssignment() asm("CheckReferenceAssignment");
-extern void Suspend() asm("Suspend");
+extern char 	      * LVRAByteAlloc();
+extern ref(RefRep)	AlloRR();
+extern ref(StackObject) AlloSO() asm ("AlloSO");
+extern ref(ValRep)	CopyT() asm ("CopyT");
+extern ref(RefRep)	CopySRR() asm ("CopySRR");
+extern ref(ValRep)	CopySVR() asm ("CopySVR");
+extern ref(Structure)	AlloS() asm("AlloS");
+extern ref(Structure)	ThisS() asm("ThisS");
+extern ref(Item)	AlloSI() asm("AlloSI");
+extern ref(Component)	AlloSC() asm("AlloSC");
+extern int 		StrucEq() asm("StrucEq");
+extern int              StrucNe() asm("StrucNe");
+extern int              StrucLt() asm("StrucLt");
+extern int              StrucGt() asm("StrucGt");
+extern int              StrucLe() asm("StrucLe");
+extern int              StrucGe() asm("StrucGe");
+extern void             Return() asm ("Return");
+extern void             DoGC();
+extern void             RefNone() asm("RefNone");
+extern void             AttBC() asm("AttBC");
+extern void             CopyVR() asm("CopyVR");
+extern void             BetaError();
+extern void             ChkRA() asm("ChkRA");
+extern void             Susp() asm("Susp");
 
 static inline void
 int_clear(char *p, unsigned size)
@@ -71,7 +71,7 @@ IOAcalloc(unsigned size)
   register char *p;
 
   while ((char *) IOATop+size > (char *)IOALimit) {
-    PerformGC(size);
+    DoGC(size);
   }
 
   p = (char *)IOATop;

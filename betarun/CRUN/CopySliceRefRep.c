@@ -1,19 +1,19 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopySliceRefRep.c,v $, rel: %R%, date: $Date: 1992-06-09 15:19:18 $, SID: $Revision: 1.5 $
+ * Mod: $RCSfile: CopySliceRefRep.c,v $, rel: %R%, date: $Date: 1992-07-20 11:48:22 $, SID: $Revision: 1.6 $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"
 #include "crun.h"
 
-asmlabel(CopySliceRefRep, "
+asmlabel(CopySRR, "
 	mov	%l7, %o3
-	ba	_CCopySliceRefRep
+	ba	_CCopySRR
 	mov	%l6, %o4
 ");
 
-void CCopySliceRefRep(ref(RefRep) theRep,
+void CCopySRR(ref(RefRep) theRep,
 		      ref(Item) theItem,
 		      unsigned offset, /* i ints */
 		      unsigned low,
@@ -63,8 +63,7 @@ void CCopySliceRefRep(ref(RefRep) theRep,
      */
     
     (casthandle(RefRep)theItem)[offset] = newRep;
-    if (!inIOA(theItem))
-      CheckReferenceAssignment((int *)theItem + offset);
+    if (!inIOA(theItem)) ChkRA((int *)theItem + offset);
 }
 
 

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateRefRep.c,v $, rel: %R%, date: $Date: 1992-06-09 15:19:02 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: AllocateRefRep.c,v $, rel: %R%, date: $Date: 1992-07-20 11:45:40 $, SID: $Revision: 1.4 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -11,14 +11,14 @@
 
 /* ?? Parameters */
 
-asmlabel(AllocateRefRep, "
+asmlabel(AlloRR, "
 	mov %i0, %o0
         mov %l0, %o1
-        ba _CAllocateRefRep
+        ba _CAlloRR
         mov %l1, %o2
 ");
 
-ref(RefRep) CAllocateRefRep(ref(Object) theObj,
+ref(RefRep) CAlloRR(ref(Object) theObj,
 			   unsigned offset, /* i bytes */
 			   unsigned range
 			   )

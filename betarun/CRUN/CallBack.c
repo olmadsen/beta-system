@@ -1,27 +1,27 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-06-29 15:01:04 $, SID: $Revision: 1.9 $
+ * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-07-20 11:46:58 $, SID: $Revision: 1.10 $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"
 #include "crun.h"
 
-int HandleCallBack();
+int HandleCB();
 
-asmlabel(CopyCProcPar, "
-	ba	_CCopyCProcPar
+asmlabel(CopyCPP, "
+	ba	_CCopyCPP
 	mov	%i0, %o1
 ");
 
-void *CCopyCProcPar(ref(Structure) theStruct, ref(Object) theObj)
+void *CCopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 {
     /* Find a free entry in the Call Back Functions Area.		*/
     /* This area is defined by [ CBFA <= CBFATop <= CBFALimit ].	*/
 
     if (CBFATop+1 > CBFALimit){
       CBFArelloc();
-      return CCopyCProcPar(theStruct, theObj);
+      return CCopyCPP(theStruct, theObj);
     }
 
     CBFATop->theStruct = theStruct;
@@ -32,14 +32,14 @@ void *CCopyCProcPar(ref(Structure) theStruct, ref(Object) theObj)
     return (void *)&(CBFATop-1)->mov_o7_g1;
 }
 
-extern int HandleCallBack() asm("HandleCallBack");
+extern int HandleCB() asm("HandleCB");
 
 /* HandleCallBack is called from a CallBackEntry, setup like
    above. This means that the real return address is in %g1
    and our %i7 pointes to the call instruction in the
    CallBackEntry. */
 
-int HandleCallBack(int a1, int a2, int a3, int a4, int a5, int a6)
+int HandleCB(int a1, int a2, int a3, int a4, int a5, int a6)
 {
     register long		 g1	       asm("%g1");
     register ref(CallBackFrame)  callBackFrame asm("%l5");
@@ -61,7 +61,7 @@ int HandleCallBack(int a1, int a2, int a3, int a4, int a5, int a6)
 
     /* Push CallBackFrame. See StackLayout.doc */
 
-    /* This is properbly wrong ?? */
+    /* Level is not yet used */
     level         = 0;
     nextCompBlock = (long *) lastCompBlock;
     callBackFrame = ActiveCallBack;
@@ -69,7 +69,7 @@ int HandleCallBack(int a1, int a2, int a3, int a4, int a5, int a6)
     lastCompBlock = cast(ComponentBlock) StackPointer;
     ActiveCallBackFrame = StackPointer;
 
-    theObj = AllocateItem(cb->theStruct->iProto, cb->theStruct->iOrigin);
+    theObj = AlloI(cb->theStruct->iProto, cb->theStruct->iOrigin);
 
     /* Call the CallBack stub, with out first four args in %i1..%i4, and
        the rest on stack from %i5 and onwards */

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Attach.c,v $, rel: %R%, date: $Date: 1992-06-08 23:55:40 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: Attach.c,v $, rel: %R%, date: $Date: 1992-07-20 11:44:53 $, SID: $Revision: 1.4 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -14,9 +14,9 @@
 #include "beta.h"
 #include "crun.h"
 
-asmlabel(Attach, "ba _CAttach; mov %i0, %o1");
+asmlabel(Att, "ba _CAtt; mov %i0, %o1");
 
-void CAttach(ref(Component) theComp, ref(Object) theObj)
+void CAtt(ref(Component) theComp, ref(Object) theObj)
 {
     register ref(CallBackFrame)  callBackFrame asm("%l5");
     register long              * nextCompBlock asm("%l6");
@@ -29,8 +29,8 @@ void CAttach(ref(Component) theComp, ref(Object) theObj)
     theComp->CallerComp = ActiveComponent;
     theComp->CallerObj = theObj;
     if (!inIOA(theComp)) {
-	CheckReferenceAssignment((int *)&theComp->CallerComp);
-	CheckReferenceAssignment((int *)&theComp->CallerObj);
+	ChkRA((int *)&theComp->CallerComp);
+	ChkRA((int *)&theComp->CallerObj);
     }
 
     /* -1 tells that ActiveComponent is active (what else??) */

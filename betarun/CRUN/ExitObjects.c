@@ -1,18 +1,18 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: ExitObjects.c,v $, rel: %R%, date: $Date: 1992-06-06 03:57:30 $, SID: $Revision: 1.2 $
+ * Mod: $RCSfile: ExitObjects.c,v $, rel: %R%, date: $Date: 1992-07-20 11:49:06 $, SID: $Revision: 1.3 $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"
 #include "crun.h"
 
-asmlabel(ExitObjects, "
-	ba	_CExitObjects
+asmlabel(ExitO, "
+	ba	_CExitO
 	mov	%i0, %o2
 ");
 
-void CExitObjects(ref(Object) exitObj, long exitAddr, ref(Object) theObj)
+void CExitO(ref(Object) exitObj, long exitAddr, ref(Object) theObj)
 {
     ref(Component) theComp;
     ref(RegWin) rw; /* Callers Register Window */

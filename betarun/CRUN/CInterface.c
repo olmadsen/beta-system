@@ -1,23 +1,26 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CInterface.c,v $, rel: %R%, date: $Date: 1992-06-09 15:19:07 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: CInterface.c,v $, rel: %R%, date: $Date: 1992-07-20 11:46:23 $, SID: $Revision: 1.4 $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"
 #include "crun.h"
 
-/* PackConstTextToC does nothing ?? */
-extern void InitCprocText() asm("InitCprocText");
+/* PackConstTextToC does nothing: it just hands over the asciz address */
+char *CpkCT(char *asciz)
+{ 
+  return asciz;
+}
 
-void InitCprocText(void)
+extern void CinitT() asm("CinitT");
+void CinitT(void)
 {
     CTextPoolEnd = CTextPool;
 }
 
-extern char *PackVarTextToC() asm("PackVarTextToC");
-
-char *PackVarTextToC(ref(Object) theObj, handle(ValRep) theRepHandle)
+extern char *CpkVT() asm("CpkVT");
+char *CpkVT(ref(Object) theObj, handle(ValRep) theRepHandle)
 {
     ref(ValRep) theRep = *theRepHandle;
     int i;
@@ -38,9 +41,9 @@ char *PackVarTextToC(ref(Object) theObj, handle(ValRep) theRepHandle)
     return CTextPoolEnd - (theRep->HighBorder+1);
 }
 
-asmlabel(UnPackCText, "
+/*asmlabel(UnPackCText, "
 	mov %i0, %o0
 	call _BetaError
 	mov -101, %o1
-");
+");*/
 

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AttachBasicComponent.c,v $, rel: %R%, date: $Date: 1992-06-11 17:14:50 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: AttachBasicComponent.c,v $, rel: %R%, date: $Date: 1992-07-20 11:45:03 $, SID: $Revision: 1.4 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -9,7 +9,7 @@
 
 static TerminateBasicComponent() { BetaExit(0); }
 
-void AttachBasicComponent(ref(Component) theComp)
+void AttBC(ref(Component) theComp)
 {
     register void (*entrypoint)();
 
