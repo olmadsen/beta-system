@@ -1,0 +1,277 @@
+ORIGIN '../preferences';
+MDBODY default 'X11/preferences_X11body'
+       nti     'winnt/preferences_ntibody'
+       mac     'macintosh/preferences_macbody';
+INCLUDE '~beta/datastructures/v0.1/set';
+INCLUDE '../../utils/catchallfile';
+
+-- sectionLib: attributes --
+
+init:
+  (# 
+  enter name[]
+  do private.options.init;
+     this(section)[] -> insertSection;
+  #);
+
+-- preferencesLib: attributes --
+
+option:
+  (# key, value: ^text;
+  #);
+
+insertSection:
+  (# theSection: ^section;
+  enter theSection[]
+  do theSection[] -> private.sections.insert;
+  #);
+
+parse:
+  (# syntaxError:<
+       (# why: ^text;
+       enter why[]
+       do inner;
+       #);
+     input: ^stream;
+     key, value: ^text;
+     next:
+       (# 
+       do (if input.eos then
+              EOS -> ch;
+           else
+              input.get -> ch;
+          if);
+       #);
+     ch: @char;
+     EOS: (# exit 0 #);
+     
+     skipBlanks:
+       (# 
+       do l: (if ch 
+              //ascii.ht (* Tab *)
+              //ascii.sp (* Space *) then
+                 next;
+                 restart l;
+             if);
+       #);
+     
+     currentSection: ^section;
+     sectionName: ^text;
+  enter input[]
+  do next;
+     skipEmptyLines:
+       (# 
+       do skipBlanks;
+          (if true
+           //ch = EOS then 
+              leave skipEmptyLines;
+           //ch = ascii.newLine then
+              next;
+              restart skipEmptyLines;
+           //ch = '[' then
+              next;
+              skipBlanks;
+              &text[] -> sectionName[];
+              sectionName.clear;
+              readSectionName:
+                (if true
+                 //ch = EOS
+                 //ch = ascii.newLine then
+                    'unexpected newline'  -> syntaxError;
+                 //ch = ascii.sp
+                 //ch = ascii.ht then
+                    next;
+                    restart readSectionName;
+                 //ch = ']' then
+                    (if sectionName.empty then
+                        'section name is empty' -> syntaxError;
+                     else
+                        &section[] -> currentSection[];
+                        sectionName[] -> currentSection.init;
+                        next;
+                        restart skipEmptyLines;
+                    if);
+                 else
+                    ch -> sectionName.put;
+                    next;
+                    restart readSectionName;
+                if);
+           //ch -> ascii.isLetter
+           //ch -> ascii.isDigit then
+              (if currentSection[] = none then
+                  'section header missing' -> syntaxError;
+               else
+                  &text[] -> key[];
+                  key.clear;
+                  readKey:
+                    (if true
+                     //ch -> ascii.isLetter
+                     //ch -> ascii.isDigit
+                     //ch = '-'
+                     //ch = '_' then
+                        ch -> key.put;
+                        next;
+                        restart readKey;
+                     //ch = ascii.sp
+                     //ch = ascii.ht then
+                        next;
+                        skipBlanks;
+                        &text[] -> value[];
+                        value.clear;
+                        readValue:
+                          (if true
+                           //ch = ascii.newLine then
+                              (key[], value[]) -> currentSection.setOption;
+                              next;
+                              restart skipEmptyLines;
+                           //ch = EOS then
+                              (key[], value[]) -> currentSection.setOption;
+                           else
+                              ch -> value.put;
+                              next;
+                              restart readValue;
+                          if);
+                     else
+                        'illegal character in key' -> syntaxError;
+                    if);
+              if);
+           else
+              'illegal character in file' -> syntaxError;
+          if);
+       #);
+  #);
+
+prettyPrint:
+  (# output: ^stream;
+  enter output[]
+  do private.sections.scan
+     (# 
+     do '[ ' -> outPut.putText;
+        current.name[] -> outPut.putText;
+        ' ]' -> outPut.putLine;
+        outPut.newLine;
+        current.private.options.scan
+        (# 
+        do '   ' -> outPut.putText;
+           current.key[] -> output.putText;
+           ' ' -> output.putText;
+           current.value[] -> output.putLine;
+        #);
+        outPut.newLine;
+     #);
+  #);
+
+-- preferencesInit: doPart --
+do reading:
+     (# theFile: @catchAllFile
+          (# failure::
+               (# 
+               do msg[] -> this(init).failure;
+                  leave reading;
+               #);
+          #);
+     do 
+        fileName.copy -> private.fileName[];
+        fileName[] -> theFile.name;
+        (if theFile.entry.exists then
+            theFile.openRead;
+            theFile[] -> parse
+            (# syntaxError::
+               (# t: ^text;
+               do 'syntax error: ' -> t[];
+                  why[] -> t.append;
+                  t[] -> failure;
+               #);
+            #);
+            theFile.close;
+        if);
+     #)
+-- preferencesSave: doPart --
+do saving:
+     (# theFile: @catchAllFile
+          (# failure::
+               (# 
+               do msg[] -> this(save).failure;
+                  leave saving;
+               #);
+          #);
+     do private.fileName[] -> theFile.name;
+        theFile.openWrite;
+        theFile[] -> prettyPrint;
+        theFile.close;
+     #);
+
+-- preferencesSectionSetOption: doPart --
+do (# theOption: ^option;
+   do key[] -> private.options.find -> theOption[];
+      (if theOption[] = none then
+          &option[] -> theOption[];
+          key[] -> theOption.key[];
+          theOption[] -> private.options.insert;
+      if);
+      value[] -> theOption.value[];
+   #);
+
+-- preferencesSectionGetOption: doPart --
+do (# theOption: ^option;
+   do key[] -> private.options.find -> theOption[];
+      (if theOption[] = none then
+          default;
+       else
+          theOption.value[] -> value[];
+      if);
+   #);
+   
+-- preferencesGetSection: doPart --
+do name[] -> private.sections.find -> theSection[];
+   (if theSection[] = none then
+       &section[] -> theSection[];
+       name[] -> theSection.init;
+   if);
+
+   
+-- preferencesSetSection: doPart --
+do 
+   
+-- sectionPrivate: descriptor --
+(# 
+  options: @set
+     (# element:: option;
+        find:
+          (# theOption: ^option;
+             key: ^text;
+          enter key[]
+          do search: scan
+             (# 
+             do (if current.key[] -> key.equalNCS then
+                    current[] -> theOption[];
+                    leave search;
+                if);
+             #);
+          exit theOption[]
+          #);
+     #); 
+#)
+
+-- preferencesPrivate: descriptor --
+(# fileName: ^text;
+   sections: @set
+     (# element:: section;
+        find:
+          (# theSection: ^section;
+             name: ^text;
+          enter name[]
+          do search: scan
+             (# 
+             do (if current.name[] -> name.equalNCS then
+                    current[] -> theSection[];
+                    leave search;
+                if);
+             #);
+          exit theSection[]
+          #);
+     #); 
+#)
+
+-- preferencesSectionSave: doPart --
+do this(preferences).save;
