@@ -69,6 +69,37 @@ ParamThisComp(void, AttBC)
     ActiveCallBackFrame = 0;
     ActiveComponent = comp;
 
+#ifdef crts
+ {
+    extern void M1ENV();
+    extern long T1ENV;
+    /*extern long V3[2];*/
+   /* fprintf(output, "AttBC: BasicItem: 0x%x\n", BasicItem);
+    fprintf(output, "AttBC: M1ENV: 0x%x\n", M1ENV);
+    fprintf(output, "AttBC: &T1ENV: 0x%x\n", &T1ENV);
+    fprintf(output, "AttBC: Calling *((long *)&T1ENV-1): 0x%x\n", *((long *)&T1ENV-1));    
+
+    /*fprintf(output, "AttBC: V3[0]: 0x%x\n", V3[0]);
+    fprintf(output, "AttBC: V3[1]: 0x%x\n", V3[1]);
+    fprintf(output, "AttBC: BasicItem->Proto: 0x%x\n", BasicItem->Proto);
+    fprintf(output, "AttBC: &BasicItem->Proto: 0x%x\n", &BasicItem->Proto);
+    fprintf(output, "AttBC: &V3[0]: 0x%x\n", &V3[0]);
+    fprintf(output, "AttBC: Calling *((long *)BasicItem->Proto-1): 0x%x\n", *((long *)BasicItem->Proto-1));    
+    fprintf(output, "AttBC: Calling *((long *)BasicItem->Proto-2): 0x%x\n", *((long *)BasicItem->Proto-2));
+    fprintf(output, "AttBC: Calling *((long *)BasicItem->Proto-3): 0x%x\n", *((long *)BasicItem->Proto-3));
+    
+    fprintf(output, "AttBC: BasicItem->Proto->GCTabOff: 0x%x\n", BasicItem->Proto->GCTabOff);
+    fprintf(output, "AttBC: BasicItem->Proto->OriginOff: 0x%x\n", BasicItem->Proto->OriginOff);
+    fprintf(output, "AttBC: BasicItem->Proto->GenPart: 0x%x\n", BasicItem->Proto->GenPart);
+    fprintf(output, "AttBC: BasicItem->Proto->Prefix: 0x%x\n", BasicItem->Proto->Prefix);
+    fprintf(output, "AttBC: BasicItem->Proto->Size: 0x%x\n", BasicItem->Proto->Size);
+    fprintf(output, "AttBC: BasicItem->Proto->FormOff: 0x%x\n", BasicItem->Proto->FormOff);
+    fprintf(output, "AttBC: BasicItem->Proto->FormInx: 0x%x\n", BasicItem->Proto->FormInx);
+    fprintf(output, "AttBC: BasicItem->Proto->AstRef: 0x%x\n", BasicItem->Proto->AstRef);
+    fflush(output);*/
+   }
+#endif
+
     /* ?? should set comp = 0 as done in Att.BasicComp.run */
     CallBetaEntry( *((long *)BasicItem->Proto-1), &comp->Body);
 
