@@ -117,6 +117,66 @@ void destroy_TSD(void)
   mutex_unlock(&cond_pause_lock);
 }
 
+void ProcessStackObj(struct StackObject *sObj)
+{
+  struct Object **handle = (struct Object **)&sObj->Body;
+  struct Object **last   = (struct Object **)((long)&sObj->Proto + sObj->refTopOff);
+  DEBUG_MT(fprintf(output, "ProcessStackObj: 0x%x\n",(int)sObj));
+  while (handle<=last) {
+    if (inBetaHeap(*handle) 
+	&& isObject(*handle) 
+	&& !inLVRA(*handle)){
+      DEBUG_MT(fprintf(output, 
+		       "ProcessStackObj: processing cell 0x%x (%s) in stackobject 0x%x\n",
+		       (int)handle, ProtoTypeName((*handle)->Proto),
+		       (int)sObj));
+      ProcessReference(handle);
+    } else {
+      DEBUG_MT(fprintf(output, "ProcessStackObj: SKIPPED cell 0x%x in stackobject 0x%x\n",
+		       (int)handle,
+		       (int)sObj));
+      DEBUG_MT(if(inLVRA(*handle)) fprintf(output, "ProcessStackObj: (in LVRA)\n"));
+    }
+    handle++;
+  }
+}
+#ifdef RTDEBUG
+void PrintStackObj(struct StackObject *sObj)
+{
+  struct Object **handle;
+  struct Object **last;
+
+  fprintf(output, "StackObj: 0x%x\n",(int)sObj);
+  fprintf(output, "  BodySize:   0x%x\n",(int)sObj->BodySize);
+  fprintf(output, "  refTopOff:  0x%x\n",(int)sObj->refTopOff);
+  fprintf(output, "  dataTopOff: 0x%x\n",(int)sObj->dataTopOff);
+
+  fprintf(output, "  References\n");
+  handle = (struct Object **)&sObj->Body;
+  last = (struct Object **)((long)sObj + sObj->refTopOff);
+  while (handle<=last) {
+    fprintf(output, 
+	    "    0x%x: 0x%x (%s)\n",
+	    (int)handle, 
+	    (int)*handle, 
+	    ProtoTypeName((*handle)->Proto));
+    handle++;
+  }
+
+  fprintf(output, "  Data\n");
+  handle = (struct Object **)((long)&sObj->Body + sObj->dataTopOff);
+  last = (struct Object **)((long)sObj+headsize(StackObject)+sObj->BodySize);
+  while (handle<=last) {
+    fprintf(output, 
+	    "    0x%x: 0x%x\n",
+	    (int)handle, 
+	    (int)*handle);
+    handle++;
+  }
+}
+
+#endif /*RTDEBUG*/
+
 static struct Object *AllocObjectAndSlice(unsigned int numbytes, unsigned int reqsize)
 {
   /* ASSUMPTION: that max(numbytes,IOASliceSize) will fit into [gIOATop..gIOALimit[ */

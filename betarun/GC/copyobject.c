@@ -89,6 +89,18 @@ static ref(Object) CopyObject(ref(Object) theObj)
 ref(Object) NewCopyObject(ref(Object) theObj, handle(Object) theCell)
 {
   
+#if 0
+  /* FIXME:
+   * In general copy of object to LVRA should be avoided: 
+   * If the cell refering a
+   * large repetition is in a stackobject, the cycle-cell in the
+   * repetition created in LVRA will point back to the *stackobject*
+   * after CopyObjectToLVRA. This is certainly not the intension.
+   * By skipping this, we risk copying potentionally large objects
+   * around in the IOA heaps, but they are rare, since it is
+   * only the CopyCT and CopySXX routines that are missing test for 
+   * whether they should allocate directly in LVRA.
+   */
 #ifdef CHECK_LVRA_IN_IOA
   if (isValRep(theObj)) {
     if( ((ref(ValRep)) theObj)->HighBorder > LARGE_REP_SIZE){
@@ -99,8 +111,16 @@ ref(Object) NewCopyObject(ref(Object) theObj, handle(Object) theCell)
 	 * otherwise. And NewCopyObject is called from e.g. 
 	 * ProcessAOAObject with theCell==0.
 	 */
-	ref(Object) newObj; 
-	if ((newObj = CopyObjectToLVRA((ref(ValRep))theObj))) {
+	struct Object *newObj;
+	struct ValRep* theRep = (struct ValRep *)theObj;
+	DEBUG_LVRA({
+	  fprintf(output, 
+		  "#CopyObjectToLVRA(theCell=0x%x, proto=%d, range=%d)\n",
+		  (int)(theCell),
+		  (int)(theRep->Proto),
+		  (int)(theRep->HighBorder-theRep->LowBorder+1));
+		  });
+	if ((newObj = CopyObjectToLVRA(theRep))) {
 	  newObj->GCAttr = (long) theCell; /* Preserve the LVRA-Cycle */
 	  DEBUG_LVRA( Claim( isValRep(cast(ValRep)*theCell),
 			    "NewCopyObject: isValRep(cast(ValRep)*theCell)" ));
@@ -110,6 +130,17 @@ ref(Object) NewCopyObject(ref(Object) theObj, handle(Object) theCell)
     }
   }
 #endif /* CHECK_LVRA_IN_IOA */
+#else
+  /* Lets make a debug test for the situation */
+  DEBUG_LVRA({
+    if (isValRep(theObj) && 
+	(((struct ValRep*)theObj)->HighBorder > LARGE_REP_SIZE)){
+      fprintf(output, 
+	      "\nNewCopyObject: Detected repetition with range %d in IOA. NOT copied to LVRA\n",
+	      (int)((ref(ValRep)) theObj)->HighBorder);
+    }
+  });
+#endif
     
   if( theObj->GCAttr >= IOAtoAOAtreshold ){
     /* theObj is old enough to go into AOA */

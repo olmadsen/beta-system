@@ -109,6 +109,7 @@
 #undef CHECK_LVRA_IN_IOA
 #else
 #define CHECK_LVRA_IN_IOA
+/* See however comment in copyobject.c: We now do NOT use this flag! */
 #endif
 
 #ifdef NEWRUN

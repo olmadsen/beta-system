@@ -3,12 +3,13 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
-/* #ifndef MT */
 
 #define GCable_Module
 
 #include "beta.h"
 #include "crun.h"
+
+#ifndef MT
 
 ParamOriginProto(struct Item *,AlloI)
 /* = struct Item * AlloI(struct Object *origin, struct ProtoType *proto) */
@@ -90,4 +91,4 @@ ParamOriginProto(struct Item *,AlloH)
 }
 
 
-/* #endif */ /* MT */
+#endif /* MT */

@@ -99,16 +99,6 @@ register volatile void *GCreg4 __asm__("%o4");
 #define RestoreVar(var) pop(var)
 
 #ifdef MT
-#define CallWithSave(name)                              \
-           "mov %o7,%l7; "                              \
-           "st %i0,[%g4+32]; " /* TSD->_CurrentObject */\
-           "call "CPREF#name"; "                        \
-           "st %o0,[%g4+36]; " /* TSD->_Origin */\
-           "mov %l7,%o7; "                              \
-           "ld [%g4+32],%i0; "                          \
-           "ld [%g4+36],%o0; "                          \
-           "retl; "                                     \
-           "st %g0,[%g4+32];  "
 #define CallWithFullSave(name)                          \
            "mov %o7,%l7; "                              \
            "st %i0,[%g4+32]; " /* TSD->_CurrentObject */\
@@ -141,16 +131,7 @@ register volatile void *GCreg4 __asm__("%o4");
                int i4)
 
 #else /* MT */
-
-/* AlloC */
-#define ParamOriginProto(type, name)			\
-  asmlabel(name,					\
-	   "mov %i1,%o1; "  /* proto */			\
-           CallWithSave(name)                           \
-	   );			                        \
-  type C##name(struct Object *origin,                   \
-               struct ProtoType *proto)
-
+/* AlloC, AlloI, AlloH, AlloS done in beta */
 #endif /* MT */
 
 
@@ -174,7 +155,7 @@ register volatile void *GCreg4 __asm__("%o4");
   asmlabel(name,                                        \
 	   "mov %i0,%o0; "				\
 	   "mov %i1,%o1; "				\
-	   CallWithSave(name)                           \
+	   CallWithFullSave(name)                       \
 	   );                                           \
  type C##name(struct Object *this, struct Component *comp)
 

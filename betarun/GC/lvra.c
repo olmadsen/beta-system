@@ -514,14 +514,10 @@ ref(Object) CopyObjectToLVRA(ref(ValRep) theRep)
 {
   ref(ValRep) newRep;
   
-  DEBUG_LVRA(fprintf(output, "#CopyObjectToLVRA(%d, %d)\n",
-		     (int)(theRep->Proto),
-		     (int)(theRep->HighBorder-theRep->LowBorder+1)
-		     ));
   if ((newRep = LVRAAlloc(theRep->Proto,
 			 theRep->HighBorder-theRep->LowBorder+1))) {
       RepCopy(newRep, theRep);
-      newRep->GCAttr = LVRARepInFreeList;
+      /* newRep->GCAttr is set after this in NewCopyObject */
       /* Install forward reference to newObj in theObj */
       theRep->GCAttr = (long) newRep;
   }
