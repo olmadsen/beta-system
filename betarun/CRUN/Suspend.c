@@ -3,6 +3,7 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
+#ifndef MT
 #define GCable_Module
 
 #include "beta.h"
@@ -241,3 +242,4 @@ ParamThis(struct Component *, Susp)
   return called; /* maintain %o0 across 'call Att' */
 }
 #endif /* sparc */
+#endif /* MT */

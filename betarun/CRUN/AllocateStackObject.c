@@ -3,6 +3,7 @@
  * by Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 
+#ifndef MT
 #define GCable_Module
 
 #include "beta.h"
@@ -45,3 +46,4 @@ AlloSO(unsigned size)
 }
 
 
+#endif /* MT */

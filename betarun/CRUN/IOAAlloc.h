@@ -3,8 +3,11 @@
 /* GC/PerformGC.c: Not declared in function.h, doGC should only be 
  * called from IOA(c)lloc or DoGC.
  */
+#ifdef MT
+extern struct Object *doGC(unsigned);
+#else
 extern void doGC();
-
+#endif
 
  
 #ifdef __GNUC__
@@ -24,11 +27,17 @@ char *IOAalloc(unsigned size)
   DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "IOAalloc: (IOATop&7)==0"));
 #endif
   
+#ifdef MT
+  if ((char *)IOATop+size > (char *)IOALimit){
+    return (char *)doGC(size);
+  }
+#else /* MT */
   while ((char *)IOATop+size > (char *)IOALimit) {
     ReqObjectSize = size / 4;
     doGC();
-  }
-  
+  } 
+#endif /* MT */
+ 
   p = (char *)IOATop;
 #ifdef hppa
   /* setIOATopoffReg(getIOATopoffReg() + size); */
@@ -40,7 +49,6 @@ char *IOAalloc(unsigned size)
 #ifdef crts
   IOATop = (long*)((long)IOATop+size);
 #endif
-  
   return p;
 }
 
@@ -62,10 +70,16 @@ char *IOAcalloc(unsigned size)
   DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "IOAcalloc: (IOATop&7)==0"));
 #endif
   
-  while ((char *) IOATop+size > (char *)IOALimit) {
+#ifdef MT
+  if ((char *)IOATop+size > (char *)IOALimit){
+    return (char *)doGC(size);
+  }
+#else /* MT */
+  while ((char *)IOATop+size > (char *)IOALimit) {
     ReqObjectSize = size / 4;
     doGC();
-  }
+  } 
+#endif /* MT */
   
   p = (char *)IOATop;
 #ifdef hppa
@@ -79,12 +93,15 @@ char *IOAcalloc(unsigned size)
   IOATop = (long*)((long)IOATop+size);
 #endif
   
+#ifndef MT
   /* Not needed anymore since IOA is cleared after IOAGc.
    * YES still needed. The memset solution turned out to
    * be slower or at best marginally faster than using 
    * long_clear.
    */
   long_clear(p, size);
+#endif
+
 #ifdef RTDEBUG
   zero_check(p, size);
 #endif

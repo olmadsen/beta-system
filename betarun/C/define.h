@@ -13,9 +13,7 @@
 #endif
 
 
-#define BETARUN_ID "2.9"
-
-#define NEW_NEXTGROUP_IMPL 1
+#define BETARUN_ID "3.0"
 
 /******* Define specific machine types *********/
 #ifdef sun
@@ -148,6 +146,7 @@
 
 /********* Debug macros *******/
 #ifdef RTDEBUG
+#  define DEBUG_MT(code)  if( DebugMT )  { code; }
 #  define DEBUG_IOA(code)  if( DebugIOA )  { code; }
 #  define CHECK_HEAP(code)  if( CheckHeap )  { code; }
 #  define DEBUG_ALLOI(code)  if( DebugAlloI )  { code; }
@@ -159,6 +158,7 @@
 #  define DEBUG_VALHALLA(code) if( DebugValhalla ) { code; }
 #else
 #  define DEBUG_IOA(code)
+#  define DEBUG_MT(code)
 #  define CHECK_HEAP(code)
 #  define DEBUG_ALLOI(code)
 #  define DEBUG_CBFA(code)

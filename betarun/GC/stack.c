@@ -4,6 +4,8 @@
  * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, Jacob Seligmann and S|ren Brandt
  */
 
+#ifndef MT
+
 #include "beta.h"
 
 /* #define DEBUG_LABELS */
@@ -1527,3 +1529,5 @@ void PrintStack()
 #endif /* sparc */
 
 #endif /* RTDEBUG */
+
+#endif /* MT */

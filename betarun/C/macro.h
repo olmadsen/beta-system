@@ -43,21 +43,6 @@ extern long mcheck_line;
 #define MCHECK()
 #endif
 
-#ifdef sparc
-/* IOA in global registers */
-register long    *IOA       asm("%g6");
-register unsigned IOATopOff asm("%g7");
-#define           IOATop    ((long *) ((long)IOA+IOATopOff))
-#endif
-
-#ifdef NEWRUN
-#define IOA           _IOA.start
-#define IOALimit      _IOA.limit
-#define IOASize       _IOA.size
-#define IOATopOff     _IOA.topoff
-#define IOATop        ((long *) ((long)IOA+IOATopOff))
-#endif /* NEWRUN */
-
 #ifdef RTLAZY
 #define isLazyRef(ref) ((lastDangler <= ((int)(ref))) && (((int)(ref)) < -101))
 #else
@@ -146,12 +131,18 @@ register unsigned IOATopOff asm("%g7");
 # define ByteRepSize(range)     ((ByteRepBodySize(range) + headsize(ValRep)+7) & ~7)
 # define WordRepSize(range)     ((WordRepBodySize(range) + headsize(ValRep)+7) & ~7)
 # define DoubleRepSize(range)   ((DoubleRepBodySize(range) + headsize(ValRep)+7) & ~7)
+
+#ifdef MT
+# define StackObjectSize(size)  (((size) + headsize(StackObject) +7) & ~7)
+#else
 #ifdef NEWRUN
 /* See Suspend.c: it is number of BYTES */
 # define StackObjectSize(size)  (((size) + headsize(StackObject) +7) & ~7)
 #else
 # define StackObjectSize(size)  ((4*(size) + headsize(StackObject) +7) & ~7)
 #endif
+#endif
+
 # define DopartObjectSize(size) (((size) + headsize(DopartObject) +7) & ~7)
 #else
 # define StructureSize          headsize(Structure)
@@ -246,12 +237,7 @@ register unsigned IOATopOff asm("%g7");
  *  return the groupName corresponding to the group_header
  *  given as parameter. 
  */
-#if NEW_NEXTGROUP_IMPL
 #define NameOfGroupMacro(groupheader) (groupheader)->group_name
-#else
-#define NameOfGroupMacro(groupheader)\
-  ((char *) &((groupheader)->protoTable[((groupheader)->protoTable[0]) + 1]))
-#endif
 
 #define EnclosingComponent(item) \
  ((struct Component *)((long)(item)-headsize(Component)))
@@ -299,21 +285,13 @@ register unsigned IOATopOff asm("%g7");
                       (int)(cell))); }                     \
     *--AOArootsPtr = (long) (cell);                        \
   }
-#ifdef NEW_NEXTGROUP_IMPL
-#define BETA_DATA1_ADDR &BETA_DATA
-#else
-#define BETA_DATA1_ADDR &BETA_data1
-#endif
 
-#ifdef NEW_NEXTGROUP_IMPL
+#define BETA_DATA1_ADDR &BETA_DATA
+
 /* cannot say anything about data segments order in general.
  * on unix, probably _edata and _end could be used.
  */
 #define isData(addr) 1 
-#else
-#define isData(addr) (((long)BETA_DATA1_ADDR <= (long)(addr)) && \
-		      ((long)(addr) < (long)&BETA_end) )
-#endif
 
 #if (defined(sparc) || defined(hppa) || defined(crts))
 #define isProto(addr) (isSpecialProtoType(addr) || \

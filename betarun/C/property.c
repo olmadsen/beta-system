@@ -61,15 +61,26 @@ static void BooleanProperty(char *name)
   ENTRY("debugaoa",   DebugAOA = TRUE);
   ENTRY("debuglvra",  DebugLVRA = TRUE);
   ENTRY("debugstack", DebugStack = TRUE);
+  ENTRY("debugmt", DebugMT = TRUE);
 #ifdef RTVALHALLA
   ENTRY("debugvalhalla", DebugValhalla = TRUE);
 #endif
+#ifdef MT
+  ENTRY("debugall", 
+	DebugMT = TRUE;
+	DebugIOA = TRUE; 
+	DebugAOA = TRUE;
+	DebugLVRA = TRUE; 
+	DebugStack=TRUE; 
+	DebugCBFA=TRUE);
+#else
   ENTRY("debugall",   
 	DebugIOA = TRUE; 
 	DebugAOA = TRUE;
 	DebugLVRA = TRUE; 
 	DebugStack=TRUE; 
 	DebugCBFA=TRUE);
+#endif
 #endif
 
   ENTRY("infos", isStatRecordOn = TRUE);

@@ -1368,8 +1368,12 @@ void DescribeObject(theObject)
     
 #ifdef sparc
     if (DebugStack){
+#ifdef MT
+      fprintf(output, "%s", (char *)dyn);
+#else
       extern char *getLabel (long addr);
       fprintf(output, "%s: \"%s\"", getLabel((long)theProto), (char *)dyn);
+#endif
     } else {
       fprintf(output, "%s", (char *)dyn);
     }

@@ -10,12 +10,7 @@
 
 #include "define.h"
 
-#ifdef NEW_NEXTGROUP_IMPL
 extern struct group_header *BETA_DATA; /* Defined in BETA */
-#else
-extern long *BETA_data1; /* Defined in BETA */
-extern long *BETA_end; /* C-variable */
-#endif /* NEWRUN */
 
 #if defined (MAC)
 # include <Resources.h>
@@ -49,6 +44,7 @@ extern long *BETA_end; /* C-variable */
 #include "macro.h"
 #include "function.h"
 #include "data.h"
+#include "registers.h"
 
 #ifdef crts
 #include "crtsdep.h"

@@ -16,16 +16,11 @@
  * Corresponding changes for the C runtime system are made in Misc.c, Qua.c
  * and CheckReferenceAssignment.c. */
 
-#if defined(nti) || defined(MAC)
 #include "beta.h"
 #include "data.h"
-#else
-#include <C/beta.h>
-#include <C/data.h>
-#endif
 
 #ifdef sparc
-#include <CRUN/crun.h>
+#include "../CRUN/crun.h"
 #endif
 
 #define LAZYDEBUG 0
@@ -350,8 +345,10 @@ static volatile int returnSP;
 #define instructionOk(instruction) ((instruction & KnownMask) == (KnownMask))
 #define sourceReg(instruction) (instruction & 0x0000001F)
 
+#ifndef sun4s
 /* Temporary neccessary for trapHandler: */
 static volatile int smask;
+#endif
 
 #ifdef sun4s
 void trapHandler (long sig, siginfo_t *info, ucontext_t *ucon)

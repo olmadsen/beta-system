@@ -160,7 +160,38 @@ struct Object *AOAalloc(long numbytes, long *SP)
 struct Object *AOAcalloc(long numbytes, long *SP)
 {
   struct Object *theObj = AOAalloc(numbytes, SP);
-  if (theObj) long_clear(theObj, numbytes);
+  if (theObj) memset(theObj, 0, numbytes);
+  return theObj;
+}
+#endif
+
+#ifdef MT
+
+struct Object *AOAalloc(long numbytes)
+{
+  struct Object *theObj = AOAallocate(numbytes);
+  DEBUG_CODE(NumAOAAlloc++);
+  if (!theObj){
+    /* AOAallocate failed. This means that AOANeedCompaction will be
+     * true now. Force an IOAGc.
+     */
+    DEBUG_AOA(fprintf(output, "AOAalloc: forcing IOAGc and AOAGc\n"));
+    ReqObjectSize = numbytes/4;
+    IOAGc();
+    /* Try again */
+    theObj = AOAallocate(numbytes);
+  }
+  if (!theObj){
+    /* Arrgh. FIXME */
+    fprintf(output, "AOAalloc: cannot allocate 0x%x bytes\n", (int)numbytes);
+    BetaExit(1);
+  }
+  return theObj;
+}
+struct Object *AOAcalloc(long numbytes)
+{
+  struct Object *theObj = AOAalloc(numbytes);
+  if (theObj) memset(theObj, 0, numbytes);
   return theObj;
 }
 #endif
@@ -1345,6 +1376,7 @@ void AOACheckReference( theCell)
 #ifdef RTLAZY
   if (isLazyRef(*theCell)){
     fprintf(output, "Lazy in AOA: 0x%x: %d\n", (int)theCell, (int)*theCell);
+    /* FIXME: Check that it is in negAOArefs */
     return;
   }
 #endif

@@ -46,6 +46,16 @@ typedef struct DopartObject{
     long            Body[1];   /* The body part              */ 
 } DopartObject;
 
+#ifdef MT
+typedef struct StackObject{
+    ref(ProtoType)  Proto;     /* Reference to the Prototype  */
+    long            GCAttr;    /* The GC attribute            */
+    long            BodySize;  /* The size of the body part   */
+    long            refTopOff; /* byte offset to refstack top */
+    long            dataTopOff;/* byte offset to datastack top*/
+    long            Body[1];   /* The body part               */ 
+} StackObject;
+#else
 typedef struct StackObject{
     ref(ProtoType)  Proto;     /* Reference to the Prototype  */
     long            GCAttr;    /* The GC attribute            */
@@ -55,6 +65,7 @@ typedef struct StackObject{
 				*/
     long            Body[1];   /* The body part               */ 
 } StackObject;
+#endif
 
 typedef struct Component{
     ref(ProtoType)  Proto;     /* Reference to the Prototype  */
@@ -243,6 +254,7 @@ typedef struct group_header
   } unique_group_id;
   struct group_header **ptr; /* pointer back to beta_data file */
 } group_header;
+
 
 #if defined(linux) || defined(nti)
 /* Header files do not declare this! */

@@ -10,6 +10,18 @@ typedef struct Heap {
   unsigned long size;
 } Heap;
 
+#ifdef NEWRUN
+#define IOA           _IOA.start
+#define IOALimit      _IOA.limit
+#define IOASize       _IOA.size
+#define IOATopOff     _IOA.topoff
+#define IOATop        ((long *) ((long)IOA+IOATopOff))
+#endif /* NEWRUN */
+
+#ifdef sparc
+#define IOATop        ((long *) ((long)IOA+IOATopOff))
+#endif
+
 #ifdef mac68k
 
 #ifndef DEFAULT_IOASIZE

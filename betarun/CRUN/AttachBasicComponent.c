@@ -3,6 +3,7 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
+#ifndef MT
 #define GCable_Module
 
 #include "beta.h"
@@ -85,3 +86,4 @@ ParamThisComp(void, AttBC)
 #endif
 }
 
+#endif /* MT */

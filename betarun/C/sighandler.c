@@ -17,6 +17,73 @@ void BetaSignalHandler (long sig)
 
 /****** BEGIN sun4s *****/
 
+#ifdef MT
+
+#include <errno.h>
+
+struct S_PreemptionLevel {
+  unsigned lock;
+  unsigned value;
+  unsigned inGC;
+};
+
+struct S_PreemptionLevel PreemptionLevel;
+
+void SetupVirtualTimer(unsigned usec);
+int AlarmOccured = 0;
+void AlarmHandler(int sig, siginfo_t *sip, void *uap)
+{
+  AlarmOccured++;
+  
+  /* FIXME: should be a tryLock. */
+  if (!PreemptionLevel.lock && !PreemptionLevel.value) { 
+    if (!PreemptionLevel.inGC) { /* We cannot reset IOALimit while GC'ing */
+      IOALimit = 0;
+      IOALimitReg = 0;
+      DEBUG_MT(fprintf(output,
+		       "IOALimit=0x%x, IOALimitReg=0x%x\n",
+		       (int)IOALimit,
+		       (int)IOALimitReg));
+    }
+  }
+}
+
+void SetupVirtualTimerHandler(unsigned usec)
+{
+  struct sigaction act;
+
+  PreemptionLevel.lock = 0;
+  PreemptionLevel.value = 1;
+  act.sa_handler = NULL;            /* Unused */
+  act.sa_sigaction = &AlarmHandler; /* the handler */
+  act.sa_flags = SA_SIGINFO;        /* Use sa_sigaction, not sa_handler */ 
+  sigemptyset(&act.sa_mask);        /* Block no other signals in handler */
+
+  if (sigaction(SIGVTALRM, &act, NULL)) {
+    printf("sigaction failed. Errno=%d (%s)\n", errno, strerror(errno));
+    BetaExit(1);
+  }
+  SetupVirtualTimer(usec);
+}
+
+void SetupVirtualTimer(unsigned usec)
+{
+  struct itimerval interval;
+
+  /* setup timer tu trigger each usec microseconds */
+  interval.it_value.tv_sec = 0;
+  interval.it_value.tv_usec = usec;
+  interval.it_interval.tv_sec = 0;
+  interval.it_interval.tv_usec = usec;
+
+  if (setitimer(ITIMER_VIRTUAL, &interval, NULL)) {
+    printf("setitimer failed. Errno=%d (%s)\n", errno, strerror(errno));
+    BetaExit(1);
+  }  
+}
+
+#endif /* MT */
+
 void ExitHandler(int sig)
 {
   DEBUG_CODE(fprintf(stderr, 

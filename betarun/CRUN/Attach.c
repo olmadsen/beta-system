@@ -3,6 +3,7 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
+#ifndef MT
 
 #define GCable_Module
 
@@ -448,3 +449,4 @@ ParamThisComp(struct Component *, Att)
   }
 }
 #endif /* sparc */
+#endif /* MT */

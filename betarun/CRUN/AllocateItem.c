@@ -3,6 +3,8 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
+/* #ifndef MT */
+
 #define GCable_Module
 
 #include "beta.h"
@@ -91,3 +93,4 @@ ParamOriginProto(struct Item *,AlloH)
 }
 
 
+/* #endif */ /* MT */

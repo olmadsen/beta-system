@@ -490,6 +490,9 @@ void Initialize()
 #ifdef RTDEBUG
     sigaction( SIGINT,  &sa, 0);
 #endif
+#ifdef MT
+    SetupVirtualTimerHandler(100000); /* interrupt every 0.1 second */
+#endif
   }
 #endif /* sun4s */
 

@@ -24,11 +24,7 @@
  * It must be non-static.
  */
 
-#ifdef NEW_NEXTGROUP_IMPL
-
-/********** NEW NEXTGROUP IMPLEMENTATION ***********/
-
-/* NextGroup: (new)
+/* NextGroup: 
  *  return the next group after the group_header given as parameter
  */
 group_header* NextGroup (group_header* current)
@@ -64,56 +60,6 @@ group_header* NextGroup (group_header* current)
 #define GroupCodeStart(group) ((long)((group)->code_start))
 #define GroupCodeEnd(group)   ((long)((group)->code_end))
 #endif
-
-#else 
-/********** OLD NEXTGROUP IMPLEMENTATION ***********/
-
-/* NextGroup: (old)
- *  return the next group after the group_header given as parameter
- */
-group_header* NextGroup (group_header* current)
-     /* Return group in executable following current. 
-      * If current is NULL, first group is returned. */
-{ 
-  long *limit;
-
-  TRACE_GROUP(fprintf (output, "NextGroup. current = 0x%x\n", current));
-  
-  if (current) {
-    /* Get next data segment if any. Padding by linker 
-     * may have moved it some longs down */
-    current=current->data_end;
-
-    limit = (long *) current + 10;
-    if (limit > (long *) &BETA_end) limit = (long *) &BETA_end;
-
-    for (; (long*)current<limit; current=(group_header*)((long*)current+1)) {
-      if (current->data_start == current) {
-	TRACE_GROUP(fprintf (output, "NextGroup returns 0x%x\n", current));
-	return current;
-      }
-      TRACE_GROUP(fprintf (output, "NextGroup pad\n"));
-    }
-    /* No next group. */
-    TRACE_GROUP(fprintf (output, "NextGroup returns 0\n"));
-    return 0;
-  } else {
-    TRACE_GROUP(fprintf (output, "NextGroup returns 0x%x\n", BETA_DATA1_ADDR));
-    return (struct group_header *)BETA_DATA1_ADDR;
-  }
-}
-
-#ifdef mac68k
-#define GroupCodeStart(group) (*(long*)((group)->code_start))
-#define GroupCodeEnd(group)   (*(long*)((group)->code_end))
-#else
-#define GroupCodeStart(group) ((long)((group)->code_start))
-#define GroupCodeEnd(group)   ((long)((group)->code_end))
-#endif
-
-/********** END NEXTGROUP ***********/
-
-#endif /* NEW_NEXTGROUP_IMPL */
 
 /* IsBetaPrototype (generic):
  * Run through the prototype table of a file and
@@ -224,8 +170,8 @@ char *NameOfGroup(struct group_header *group)
 }
 
 
-
-#if (defined(RTDEBUG) && (!defined(NEW_NEXTGROUP_IMPL)))
+#if 0
+#ifdef RTDEBUG
 static long BETA_code_start=-1, BETA_code_end=-1;
 
 long GetBetaCodeStart()
@@ -249,6 +195,4 @@ long GetBetaCodeEnd()
   return BETA_code_end;
 }
 #endif
-
-
-
+#endif

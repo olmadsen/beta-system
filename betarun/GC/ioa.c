@@ -15,7 +15,22 @@
 
 #define REP ((struct ObjectRep *)theObj)
 
+#ifdef MT
+void ProcessStackObj(struct StackObject *sObj)
+{
+  struct Object **handle = (struct Object **)&sObj->Body;
+  struct Object **last   = (struct Object **)((long)&sObj->Proto + sObj->refTopOff);
+  while (handle<=last) {
+    DEBUG_MT(fprintf(output, 
+		     "ProcessStackObj: processing cell 0x%x (%s) in stackobject 0x%x\n",
+		     (int)handle, ProtoTypeName((*handle)->Proto),
+		     (int)sObj));
+    ProcessReference(handle++);
+  }
+}
+#else
 static IOALooksFullCount = 0; /* consecutive unsuccessful IOAGc's */
+#endif
 
 /*
  * IOAGc:
@@ -101,7 +116,10 @@ void IOAGc()
     }
 #ifndef NEWRUN
     /* NEWRUN: stackObj is already 0 (cleared at Attach) */
+#ifndef MT
+    /* MT: active component's stack should be preserved */
     ActiveComponent->StackObj = 0;  /* the stack is not valid anymore. */
+#endif
 #endif
     ProcessReference( (handle(Object))&ActiveComponent);
     ProcessReference( (handle(Object))&BasicItem );
@@ -125,7 +143,25 @@ void IOAGc()
     
     CompleteScavenging();
     
+#ifdef MT
+    {
+      extern struct Object *This;
+      extern struct Object *Origin;
+      extern struct Object *ActiveStack;
+      INFO_IOA(fprintf(output, " #(IOA: This"); fflush(output));
+      ProcessReference((handle(Object))(&This));
+      INFO_IOA(fprintf(output, ")"); fflush(output));
+      INFO_IOA(fprintf(output, " #(IOA: Origin"); fflush(output));
+      ProcessReference((handle(Object))(&Origin));
+      INFO_IOA(fprintf(output, ")"); fflush(output));
+      INFO_IOA(fprintf(output, " #(IOA: ActiveStack"); fflush(output));
+      ProcessReference((handle(Object))(&ActiveStack));
+      INFO_IOA(fprintf(output, ")"); fflush(output));
+      CompleteScavenging();
+    }
+#else
     ProcessStack();
+#endif
     
     /* Follow all struct pointers in the Call Back Functions area. */
     if (CBFABlockSize){
@@ -241,9 +277,9 @@ void IOAGc()
     
     /* Swap IOA and ToSpace */
     {
-      ptr(long) Tmp; ptr(long) TmpTop; ptr(long) TmpLimit;
+      ptr(long) Tmp; ptr(long) TmpTop; 
       
-      Tmp = IOA; TmpTop = IOATop; TmpLimit = IOALimit; 
+      Tmp = IOA; TmpTop = IOATop; 
       
 #if defined(NEWRUN) || defined(sparc)
       IOA       = ToSpace;                          
@@ -269,7 +305,9 @@ void IOAGc()
 #endif
       IOALimit     = ToSpaceLimit;
       
-      ToSpace = Tmp; ToSpaceTop = TmpTop; ToSpaceLimit = TmpLimit;
+      ToSpace = Tmp; 
+      ToSpaceTop = TmpTop; 
+      ToSpaceLimit = (long*)((long)ToSpace+IOASize);
     }
     
     IOAActive = FALSE;
@@ -310,14 +348,14 @@ void IOAGc()
 
     /* Clear all of the unused part of IOA, so that RT routines does
      * not need to clear cells.
-     * This turned out to be slower or at best marginally faster than
-     * using long_clear. I have disabled it to avoid having to
-     * reimplement the RUN routines. /Peter
      */
-    /*memset(IOATop, 0, IOASize - ((long)IOATop-(long)IOA) );*/
+    memset(IOATop, 0, IOASize - ((long)IOATop-(long)IOA) );
 
     InfoS_LabB();
     
+#ifdef MT
+    /* doGC checks for this */
+#else
     if ((long)IOATop+4*(long)ReqObjectSize > (long)IOALimit) {
       /* Not enough freed by this GC */
       if (IOALooksFullCount > 2) {
@@ -344,6 +382,7 @@ Program terminated.\n", (int)(4*ReqObjectSize));
     } else {
       IOALooksFullCount = 0;
     }
+#endif /* MT */
     
     DEBUG_IOA(
 	      fprintf(output,

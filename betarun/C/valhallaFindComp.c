@@ -321,7 +321,18 @@ int scanComponentStack (struct Component* comp,
 
 #ifdef sparc
 
-# define objIsValRep(theObj) inLVRA(theObj)
+#ifdef MT
+int scanComponentStack (struct Component* comp,
+			struct Object *curObj,
+			int PC,
+			forEachCallType forEach)
+{ 
+  fprintf(output, "scanComponentStack: NYI for MT\n");
+  return 0;
+}
+
+#else /* MT */
+#define objIsValRep(theObj) inLVRA(theObj)
 
 
 struct ComponentStack{
@@ -540,6 +551,6 @@ int scanComponentStack (struct Component* comp,
   }
   return compStack.stacktype;
 }
-
+#endif /* MT */
 #endif /* sparc */
 #endif /* RTVALHALLA */

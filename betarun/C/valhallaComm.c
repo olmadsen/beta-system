@@ -65,7 +65,7 @@ void valhalla_create_buffers ()
 
 void valhalla_init_sockets (int valhallaport)
 {
-  fprintf(stdout,"debuggee: valhallaport=%d\n", valhallaport);
+  DEBUG_VALHALLA(fprintf(stdout,"debuggee: valhallaport=%d\n", valhallaport));
 
   sock = valhalla_openActiveSocket (valhalla_inetAddrOfThisHost(),valhallaport);
   if (sock==-1) {

@@ -203,7 +203,6 @@ scanIOAliveObjects(int printVisited,
 		   void (*cb)(ref(Object)))
 {
   ref(Object) theObj = (ref(Object))IOA;
-  ref(ProtoType) theProto;
   long objSize;
   long SavedNumIOAGc = NumIOAGc;
 

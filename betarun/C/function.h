@@ -76,6 +76,10 @@ extern void CBFACheck(void);
 
 /* C/sighandler.c */
 #ifdef sun4s
+#ifdef MT
+extern void SetupVirtualTimerHandler(unsigned usec);
+extern void SetupVirtualTimer(unsigned usec);
+#endif /* MT */
 extern void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon);
 #else
 #ifdef crts
@@ -118,6 +122,10 @@ extern void tempAOArootsFree(void);
 #ifdef NEWRUN
 extern struct Object *AOAalloc(long numbytes, long *SP);
 extern struct Object *AOAcalloc(long numbytes, long *SP);
+#endif
+#ifdef MT
+extern struct Object *AOAalloc(long numbytes);
+extern struct Object *AOAcalloc(long numbytes);
 #endif
 extern ref(Object) CopyObjectToAOA(ref(Object));
 extern void AOAGc(void);
