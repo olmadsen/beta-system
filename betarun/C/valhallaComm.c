@@ -1236,7 +1236,7 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
            currentBlock;
            currentBlock = currentBlock -> next) {
         for (current = (Object*)BlockStart(currentBlock);
-             current < (Object*)currentBlock->limit;
+             current < (Object*)currentBlock->top;
              current = (Object*)((long)current + size)) {
           if (!AOAISFREE(current)) {
             size = 4*ObjectSize(current);
