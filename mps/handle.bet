@@ -1,0 +1,348 @@
+ORIGIN 'astlevel';
+BODY 'private/handleBody';
+(* This fragment implements a signalling system to be used by different
+ * software components, each manipulating fragments through the same
+ * mps instance.
+ *
+ * The system consists of the concept of a 'handle', which the software
+ * component can use to both signal, that it has made some changes to
+ * a fragment, and to subscribe to information on what other software
+ * components are doing to the fragments.
+ *
+ * A handle therefore has a dual set of operations:
+ *    'signal's and 'event's
+ * A 'signal' operation is named 'signalXXX', and the corresponding
+ * event is called 'onXXX', where 'XXX' is the name of the change
+ * being reported.
+ *
+ * It is the responsability of the software component making the change
+ * to signal this change.  This is done by invoking the corresponding
+ * 'signalXXX' operation.  If a software component want to monitor
+ * particular changes, it must obtain a handle with proper further
+ * binding of the corresonding 'eventXXX' (more on this later).
+ *
+ * A few of these signals are automatically invoked by 'mps'.
+ * In these cases, this is explicitly specified in the operation below.
+ *
+ * A software component obtains a handle by:
+ *
+ *    mps.getHandle
+ *      (# handleType::
+ *           (# onGroupOpen::
+ *                (# do fg.fullname->puttext; ' opened'->putline #);
+ *              onGroupClose
+ *                (# do fg.fullname->puttext; ' closed'->putline #);
+ *              ...etc...
+ *           #)
+ *      #);
+ *
+ * This handle monitors opening and closing of all fragment groups.
+ *
+ * If you want a handle, that only monitors a particular fragment
+ * group, you can do this by:
+ *
+ *    mps.getHandle
+ *      (# handleType::
+ *           (# ignore:: (# (fg[]<>myFG[])->value #);
+ *              ... som ovenfor ...
+ *          #)
+ *      #);
+ *
+ * You can get hold of this newly created handle by:
+ *
+ *    mps.getHandle(# ...som ovenfor... #)->h[];
+ *
+ * in which case it becomes possible later to decide to cancel this
+ * handle by:
+ *
+ *    h[]->mps.ignoreHandle;
+ *
+ * If you later want to reactivate this handle, you can always do:
+ *
+ *    h[]->mps.activateHandle;
+ *
+ * If you have made changes to a fragment group, e.g. replaced an ast,
+ * you can signal this to the other components by:
+ *
+ *    (fg[], ff[], oldAst[], newAst[])->mps.signalAstReplaced
+ *
+ * If you wish to control which handlers, signals are send to, you can
+ * use the 'where' clause of 'signal'.  E.g. if you with to send a
+ * signal to all handlers, except 'h[]', you can do this by:
+ *
+ *    (fg[], ff[], oldAst[], newAst[])->mps.signalAstReplaced
+ *      (# where:: (# do (current[]<>h[])->value #) #)
+ *)
+
+--- astinterfacelib: attributes ---
+
+getHandle:
+  (* called to get a new handle on this MPS *)
+  (# handleType:< handle;
+     h: ^handleType
+  <<SLOT handleGetHandle: dopart>>
+  exit h[]
+  #);
+
+ignoreHandle:
+  (* called to return a handle (i.e. now wanting to be monitoring
+   * this MPS through this handle 'h' any longer
+   *)
+  (# h: ^handle
+  enter h[]
+  <<SLOT handleIgnoreHandle: dopart>>
+  #);
+
+activateHandle:
+  (* called to activate a handle (i.e. now wanting to be monitoring
+   * this MPS through this handle 'h' again
+   *)
+  (# h: ^handle
+  enter h[]
+  <<SLOT handleActivateHandle: dopart>>
+  #);
+
+astList: containerList(# element:: ast #);
+
+handle: (* this defines the events of a handle *)
+  (# ignore:< booleanValue
+       (* if this returns TRUE, this(handle) will be ignored *)
+       (# fg: ^astInterface.fragmentGroup; ff: ^astInterface.fragmentForm;
+	  node: ^astInterface.ast
+       enter (fg[], ff[], node[])
+       do INNER
+       #);
+
+     event: (* abstract superpattern *)
+       (# do INNER #);
+     fragmentGroupEvent: event (* abstract superpattern *)
+       (# fg: ^astInterface.fragmentGroup;
+       enter fg[]
+       do INNER;
+       #);
+     fragmentFormEvent: fragmentGroupEvent (* abstract superpattern *)
+       (# ff: ^astInterface.fragmentForm;
+       enter ff[]
+       do INNER;
+       #);
+     astEvent: fragmentFormEvent (* abstract superpattern *)
+       (# node: ^astInterface.ast
+       enter node[]
+       do INNER
+       #);
+
+     onGroupOpen:< fragmentGroupEvent
+       (* invoked by MPS when fg[] have been opened by someone *)
+       (# do INNER #);
+     onGroupChecked:< fragmentGroupEvent
+       (* invoked when fg[] have been checked by the checker *)
+       (# semanticErrors: @boolean
+       enter semanticErrors
+       do INNER
+       #);
+     onAstReplaced:< fragmentFormEvent
+       (* invoked when an ast have been replaced in ff[] *)
+       (# oldAst, newAst: ^astInterface.ast;
+       enter (oldAst[], newAst[])
+       do inner;
+       #);
+     onAstReplacedSequence:< astEvent
+       (* invoked when an ast have been replaced in ff[] *)
+       (# do INNER #);
+     onListElementInserted:< astEvent
+       (* invoked when a new list element have been inserted in node[] *)
+       (# position: @integer;
+       enter position
+       do INNER;
+       #);
+     onListElementsDeleted:< astEvent
+       (* invoked when a list of elements have been deleted from node[] *)
+       (# oldElements: ^astInterface.astList;
+	  position, length: @integer
+       enter (position, length, oldElements[])
+       do inner;
+       #);
+     onListElementsReplaced:< astEvent
+       (* invoked when a list of elements have been replaced in node[] *)
+       (# oldElements: ^astInterface.astList;
+	  position, length, newLength: @integer
+       enter (position, length, oldElements[], newLength)
+       do inner;
+       #);
+     onNameChanged:< fragmentFormEvent
+       (* invoked if ff[] have been given a new name *)
+       (# oldName, newName: ^text;
+       enter (oldName[], newName[])
+       do INNER;
+       #);
+     onFragInserted:< fragmentFormEvent
+       (* invoked when ff[] is inserted in fg[] *)
+       (# do INNER #);
+     onFragDeleted:< fragmentFormEvent
+       (* invoked when ff[] is deleted from fg[] *)
+       (# do INNER #);
+     onPropertyChanged:< fragmentGroupEvent
+       (* invoked when the properties of fg[] have changed *)
+       (# oldProp, newProp: ^propertyList;
+       enter (oldProp[],newProp[])
+       do INNER
+       #);
+     onFocusChanged:< astEvent (* Sif specific ?? *)
+       (# length: @integer
+       enter length
+       do INNER
+       #);
+     onGroupLock:< fragmentGroupEvent
+       (* invoked by MPS when fg[] is locked *)
+       (# do INNER #);
+     onGroupUnlock:< fragmentGroupEvent
+       (* invoked by MPS when fg[] is unlocked *)
+       (# do INNER #);
+     onGroupPack:< fragmentGroupEvent
+       (* invoked by MPS when fg[] is saved to disk *)
+       (# do INNER #);
+     onGroupUnpack:< fragmentGroupEvent
+       (* invoked by MPS when fg[] is unpacked from disk *)
+       (# do INNER #);
+     onBeforeGroupClose:< fragmentGroupEvent
+       (* invoked by MPS before fg[] is closed
+	*    okToClose=false   => fg will not be closed.
+	*)
+       (# okToClose: @boolean
+       do true->okToClose; INNER
+       exit okToClose
+       #);
+     onGroupClose:< fragmentGroupEvent
+       (* invoked by MPS when fg[] have been closed *)
+       (# do INNER #);
+     onTrace:< event
+       (* invoked by MPS if tracing is activated *)
+       (# msg: ^text enter msg[] do INNER #)
+  #);
+
+(* The following operations defines the signal's of MPS.
+ *
+ * Please note, that the names of these operations are the same as the
+ * corresponding events (except the names start with 'signal' instead
+ * of 'on'. and that the enter/exit parameters of these operation are
+ * the same as the corresponding events.
+ *)
+
+signal:
+  (# where:< booleanValue(# do true->value; INNER #);
+     start:< object (* executed before the signal is posted to all handlers *);
+     current: ^handle;
+     fg: ^astInterface.fragmentGroup;
+     ff: ^astInterface.fragmentForm;
+     node: ^astInterface.ast;
+  <<SLOT handleSignal: dopart>>
+  #);
+fragmentGroupSignal: signal (* abstract superpattern *)
+  (#
+  enter fg[]
+  do INNER
+  #);
+fragmentFormSignal: signal (* abstract superpattern *)
+  (#
+  enter ff[]
+  do INNER
+  #);
+astSignal: signal (* abstract superpattern *)
+  (#
+  enter node[]
+  do INNER
+  #);
+
+signalGroupOpen: fragmentGroupSignal
+  (# do fg[]->current.onGroupOpen #);
+signalGroupChecked: fragmentGroupSignal
+  (# semanticErrors: @boolean
+  enter semanticErrors
+  do (fg[],semanticErrors)->current.onGroupChecked
+  #);
+signalAstReplaced: fragmentFormSignal
+  (# oldAst, newAst: ^astInterface.ast;
+  enter (oldAst[], newAst[])
+  do (fg[],ff[],oldAst[], newAst[])->current.onAstReplaced
+  #);
+signalAstReplacedSequence: astSignal
+  (# do (fg[],ff[],node[])->current.onAstReplacedSequence #);
+signalListElementInserted: astSignal
+  (# position: @integer
+  enter position
+  do (fg[],ff[],node[],position)->current.onListElementInserted
+  #);
+signalListElementsDeleted: astSignal
+  (# oldElements: ^astInterface.astList;
+     position, length: @integer
+  enter (position, length, oldElements[])
+  do (fg[],ff[],node[],position, length, oldElements[])
+       ->current.onListElementsDeleted
+  #);
+signalListElementsReplaced: astSignal
+  (# oldElements: ^astInterface.astList;
+     position, length, newLength: @integer
+  enter (position, length, oldElements[], newLength)
+  do (fg[],ff[],node[],position, length, oldElements[], newLength)
+       ->current.onListElementsReplaced
+  #);
+signalNameChanged: fragmentFormSignal
+  (# oldName, newName: ^text;
+  enter (oldName[], newName[])
+  do (fg[],ff[],oldName[], newName[])->current.onNameChanged
+  #);
+signalFragInserted: fragmentFormSignal
+  (# do (fg[],ff[])->current.onFragInserted #);
+signalFragDeleted: fragmentFormSignal
+  (# do (fg[],ff[])->current.onFragDeleted #);
+signalPropertyChanged: fragmentGroupSignal
+  (# oldProp, newProp: ^propertyList;
+  enter (oldProp[],newProp[])
+  do (fg[],oldProp[],newProp[])->current.onPropertyChanged
+  #);
+signalFocusChanged: astSignal (* Sif specific ?? *)
+  (# length: @integer
+  enter length
+  do (fg[],ff[],node[],length)->current.onFocusChanged
+  #);
+signalGroupLock: fragmentGroupSignal
+  (# do fg[]->current.onGroupLock #);
+signalGroupUnlock: fragmentGroupSignal
+  (# do fg[]->current.onGroupUnlock #);
+signalGroupPack: fragmentGroupSignal
+  (# do fg[]->current.onGroupPack #);
+signalGroupUnpack: fragmentGroupSignal
+  (# do fg[]->current.onGroupUnpack #);
+signalBeforeGroupClose: fragmentGroupSignal
+  (# okToClose: @boolean;
+     start::< (# do true->okToClose; INNER #);
+  do (okToClose and (fg[]->current.onBeforeGroupClose))->okToClose
+  exit okToClose
+  #);
+signalGroupClose: fragmentGroupSignal
+  (# do fg[]->current.onGroupClose #);
+signalTrace: signal
+  (# traceNo: @integer; msg: ^text;
+     start::<
+       (#
+       do 'Trace: '->msg[];
+	  traceNo->msg.putInt;
+	  ' '->msg.put;
+	  INNER
+       #)
+  enter traceNo
+  do msg[]->current.onTrace
+  #);
+
+
+(* to exemplify how e.g. fg.close will be implemented:
+
+close:
+  (#
+  do (if signalBeforeGroupClose then
+	 {* ... do the close as before, and then: *}
+	 this(fragmentGroup)[]->signalCloseGroup;
+     if)
+  #)
+
+ tilsvarende for diverse andre MPS operationer *)

@@ -1,6 +1,7 @@
 ORIGIN '../findgrammar';
 INCLUDE '../grammarinit'
-        '../metagrammarcfl';
+	'../metagrammarcfl'
+	'../handle';
 (*
  * COPYRIGHT
  *       Copyright (C) Mjolner Informatics, 1986-93
@@ -13,13 +14,13 @@ INCLUDE '../grammarinit'
      enter f.name
      exit f.entry.readable
        (#
-          error:: 
-            (# 
-            do true->continue; (errorNumbers.otherFileError,msg[])->theCatcher
-            #)
+	  error::
+	    (#
+	    do true->continue; (errorNumbers.otherFileError,msg[])->theCatcher
+	    #)
        #)
      #)
-#)  
+#)
 
 -- findGrammarGrammarsPATHBody: DoPart --
 do
@@ -29,83 +30,108 @@ do
    '$(BETALIB)/MBSgrammars'->grammars.putline;
    '~beta/configuration/MBSgrammars_STD'->grammars.putline;
    '~beta/configuration/MBSgrammars_DEMO'->grammars.putline;
-   INNER grammarsPATH  
+   INNER grammarsPATH
 
 -- findGrammarMetaGrammarFileBody: DoPart --
-do
-   '~beta/grammars/metagram/v4.5/metagrammar'->metaGrammar[];
+do '~beta/grammars/metagram/v4.5/metagrammar'->metaGrammar[];
    INNER metagrammarFile  
 
 -- findGrammarRegisterGrammarsBody: Descriptor --
 (# gfNames,gfName: ^text
-do
-   grammarsPATH->gfNames[];
+do grammarsPATH->gfNames[];
    0->gfNames.pos;
    loop
-     (#
-        while::  (#  do not gfNames.EOS->value #);
-        t: ^text;
-        alternativeGrammarDefsGroup: ^fragmentGroup
-     do
-        gfNames.getline->t[];
-        t[]->expandToFullPath->gfName[];
-        trace.grammars
-          ->tracer
-            (# 
-            do
-               'registering  grammars from: "'->dmp.putText;
-               gfName[]->dmp.putText;
-               '"'->dmp.put
-            #);
-        (if ('.text'->(gfName.copy).append)->private.fileReadable then
-            (gfName[],error[])->top.open->alternativeGrammarDefsGroup[]
-        if);
-        (if alternativeGrammarDefsGroup[] <> none then
-            (if grammarDefsGroup[] = none then
-                newFragmentGroup->grammarDefsGroup[]
-            if);
-            alternativeGrammarDefsGroup.fragmentList.iterate
-              (# 
-              do
-                 l:
-                   (#
-                      cell:
-                        ^alternativeGrammarDefsGroup.fragmentList.theCellType
-                   do
-                      current[]->cell[];
-                      grammarDefsGroup.fragmentList.scan
-                        (# 
-                        do
-                           (if (cell.elm.name[]->current.name.equalNCS) then
-                               leave l
-                           if)
-                        #);
-                      trace.grammars
-                        ->tracer
-                          (# 
-                          do
-                             'registering new grammar: "'->dmp.putText;
-                             current.elm.name[]->dmp.putText;
-                             '"'->dmp.put
-                          #);
-                      (current.elm[],none )
-                        ->grammarDefsGroup.fragmentList.insertBefore
-                   #)
-              #)
-        if)
-     #);
-   
-#)  
+     (# while::  (#  do not gfNames.EOS->value #);
+	t: ^text; inx: @integer;
+	alternativeGrammarDefsGroup: ^fragmentGroup
+     do NONE->alternativeGrammarDefsGroup[];
+	gfNames.getline->t[];
+	t[]->expandToFullPath->gfName[];
+	(if trace.active and trace.d[trace.grammars] then
+	    trace.grammars->signalTrace
+	      (# start::
+		   (#
+		   do 'registering  grammars from: "'->msg.putText;
+		      gfName[]->msg.putText;
+		      '"'->msg.put
+		   #)
+	      #);
+	if);
+	(if ('.text'->(gfName.copy).append)->private.fileReadable then
+	    (gfName[],error[])->top.open->alternativeGrammarDefsGroup[]
+	if);
+	(if alternativeGrammarDefsGroup[] <> none then
+	    alternativeGrammarDefsGroup.prop.scanProp
+	      (# doProp::<
+		   (# pos: @integer;
+		   do (if 'GRAMMAR'->prop.equalNCS then
+			  scanParameters
+			    (# doName::<
+				 (#
+				 do (if ((pos+1) mod 3)->pos
+				     // 1 then (* grammar name *)
+					grammarTable.noOfKnownGrammars+1
+					  ->grammarTable.noOfKnownGrammars->inx;
+					(if grammarTable.noOfKnownGrammars>grammarTable.table.range then
+					    10->grammarTable.table.extend
+					if);
+					n.copy->grammarTable.table[inx].name[];
+				     else(&LoadingError[]).nameError
+				    if)
+				 #);
+			       doString::<
+				 (#
+				 do (if ((pos+1) mod 3)->pos
+				     // 2 then (* grammar extension *)
+					s.copy
+					  ->grammarTable.table[inx].extension[]
+				     // 0 then (* Grammar path *)
+					s.copy
+					  ->grammarTable.table[inx].path[]
+				     else
+					(&LoadingError[]).extensionPathError
+				    if);
+				 #);
+			       doConst::<
+				 (# do (&LoadingError[]).constError #);
+			    #);
+			  (if pos<>0 then
+			      grammarTable.noOfKnownGrammars-1->grammarTable.noOfKnownGrammars->inx;
+			      (&LoadingError[]).formatError
+			   else (* new grammar found *)
+			      (if trace.active and trace.d[trace.grammars] then
+				  trace.grammars->signalTrace
+				    (# start::
+					 (#
+					 do 'Registered new grammar: '->msg.puttext;
+					    grammarTable.table[inx].name[]->msg.putText;
+					    '\t'->msg.put;
+					    grammarTable.table[inx].extension[]->msg.putText;
+					    '\t'->msg.put;
+					    grammarTable.table[inx].path[]->msg.putLine;
+					 #)
+				    #);
+			      if);
+			  if);
+		      if);
+		   #)
+	      #);
+	if);
+	(if alternativeGrammarDefsGroup[]<>NONE then
+	    alternativeGrammarDefsGroup.close;
+	if)
+     #)
+#)
 
 -- findGrammarRegisteredGrammarsBody: DoPart --
-do grammarDefsGroup[]->grammarsGroup[]; INNER registeredGrammars  
+do INNER registeredGrammars
 
 -- findGrammarDoBody: Descriptor --
 (#
    gfName: ^text;
    fl: ^fragmentLink;
    mg: ^FragmentGroup;
-   grammarLocation: ^text
+   grammarLocation: ^text;
 do l:
    (if grammar[] = none then
        '<NONE>'->grammar[];
@@ -113,135 +139,137 @@ do l:
        leave l
     else
        (if grammarTable.meta[] = none then
-           &metagrammar[]->grammarTable.insertMetagrammar;
-           grammarTable.meta.init;
-           (metaGrammarFile->expandToFullPath,error[])->top.open->mg[];
-           ('meta',error[])->mg.open->mg[];
-           ('metagrammar',error[])->mg.open->grammarTable.meta.grammarAst[];
-           
+	   (&metagrammar[],metaGrammarFile)->grammarTable.insertMetagrammar;
+	   grammarTable.meta.init;
+	   (metaGrammarFile->expandToFullPath,error[])->top.open->mg[];
+	   (if not mg.isRealOpen then mg.realOpen if);
+	   ('meta',error[])->mg.open->mg[];
+	   (if not mg.isRealOpen then mg.realOpen if);
+	   ('metagrammar',error[])->mg.open->grammarTable.meta.grammarAst[];
        if);
        &treelevel[]->newGrammar[];
        grammar.copy->expandToFullPath->gfName[];
-       trace.grammars
-         ->tracer
-           (# 
-           do
-              'trying grammar: "'->dmp.putText;
-              grammar[]->dmp.putText;
-              '" in current directory: "'->dmp.puttext;
-              gfName[]->dmp.putText;
-              '"'->dmp.putLine
-           #);
+       (if trace.active and trace.d[trace.grammars] then
+	   trace.grammars->signalTrace
+	     (# start::
+		  (#
+		  do 'trying grammar: "'->msg.putText;
+		     grammar[]->msg.putText;
+		     '" in current directory: "'->msg.puttext;
+		     gfName[]->msg.putText;
+		     '"'->msg.putLine
+		  #)
+	     #);
+       if);
        '-meta'->gfName.append;
        astFileExtension->gfName.append;
        (if gfName[]->private.fileReadable then
-           trace.grammars
-             ->tracer
-               (# 
-               do
-                  'SUCCEEDED: Trying to find grammar: "'->dmp.putText;
-                  grammar[]->dmp.putText;
-                  '" in current directory: "'->dmp.puttext;
-                  gfName[]->putText;
-                  '"'->dmp.putLine
-               #);
-           (grammar[],error[])->top.open->grammarGroup[];
-           grammarGroup.fullName->grammarWithPath[];
-           grammarWithPath.copy->grammarWithPath[]
-        else
+	   (if trace.active and trace.d[trace.grammars] then
+	       trace.grammars->signalTrace
+		 (# start::
+		      (#
+		      do 'SUCCEEDED: Trying to find grammar: "'->msg.putText;
+			 grammar[]->msg.putText;
+			 '" in current directory: "'->msg.puttext;
+			 gfName[]->putText;
+			 '"'->msg.putLine
+		      #)
+		 #);
+	   if);
+	   (grammar[],error[])->top.open->grammarGroup[];
+	   grammarGroup.fullName->grammarWithPath[];
+	   grammarWithPath.copy->grammarWithPath[]
+	else
        (* try to find the grammar using grammarsPATH *)
-           (if grammarDefsGroup[] = none then
-               trace.grammars
-                 ->tracer
-                   (# 
-                   do
-                      'No grammars previously registered. '->dmp.putText;
-                      'Trying to registerGrammars'->dmp.puttext
-                   #);
-               registerGrammars
-           if);
-           (if grammarDefsGroup[] = none then noRegisteredGrammars if);
-           scanner: GrammarDefsGroup.fragmentList.scan
-             (# 
-             do
-                (if current.type = linkType then
-                    trace.grammars
-                      ->tracer
-                        (# 
-                        do
-                           'trying registered grammar: "'->dmp.putText;
-                           current.localName[]->dmp.putText;
-                           '"'->dmp.put
-                        #);
-                    (if (current.localName[]->grammar.equalNCS) then
-                        error[]->current.open;
-                        current.f[]->fl[];
-                        error[]->fl.unPack;
-                        (if fl.f[] = none then
-                            (errorNumbers.grammarNotFound,'Error during unpack')
-                              ->theCatcher;
-                            leave scanner
-                        if);
-                        (if fl.f.type = groupType then
-                            fl.f[]->grammarGroup[];
-                            grammarGroup.fullName->grammarWithPath[];
-                            grammarWithPath.copy->grammarWithPath[];
-                            leave scanner
-                         else
-                            (errorNumbers.grammarNotFound,
-                             'Illegal form type in grammar')->theCatcher;
-                            leave scanner
-                        if)
-                    if)
-                if)
-             #)
+	   (if grammarTable.noOfKnownGrammars=0 then
+	       (if trace.active and trace.d[trace.grammars] then
+		   trace.grammars->signalTrace
+		     (# start::
+			  (#
+			  do 'No grammars previously registered. '->msg.putText;
+			     'Trying to registerGrammars'->msg.puttext
+			  #)
+		     #);
+	       if);
+	       registerGrammars
+	   if);
+	   (if grammarTable.noOfKnownGrammars=0 then noRegisteredGrammars if);
+	   scanner: grammarTable.scan
+	     (#
+	     do (if trace.active and trace.d[trace.grammars] then
+		    trace.grammars->signalTrace
+		      (# start::
+			   (#
+			   do 'trying registered grammar: "'->msg.putText;
+			      currentName[]->msg.putText;
+			      '"'->msg.put
+			   #)
+		      #);
+		if);
+		(if (currentName[]->grammar.equalNCS) then
+		    (currentPath[],error[])->top.open->grammarGroup[];
+		    (if grammarGroup.type = groupType then
+			grammarGroup.fullName->grammarWithPath[];
+			grammarWithPath.copy->grammarWithPath[];
+			leave scanner
+		     else
+			(errorNumbers.grammarNotFound,
+			   'Illegal form type in grammar')->theCatcher;
+			leave scanner
+		    if)
+		if)
+	     #)
        if)
    if);
    INNER findGrammar;
    l:
-   (if grammarGroup[] = none then
-       trace.grammars
-         ->tracer
-           (# 
-           do
-              'FAILURE: Trying to find grammar: "'->dmp.putText;
-              grammar[]->dmp.putText;
-              '" among the registered grammars (grammarGroup[]=NONE)'
-                ->dmp.putText
-           #);
+     (if grammarGroup[] = none then
+	 (if trace.active and trace.d[trace.grammars] then
+	     trace.grammars->signalTrace
+	       (# start::
+		    (#
+		    do 'FAILURE: Trying to find grammar: "'->msg.putText;
+		       grammar[]->msg.putText;
+		       '" among the registered grammars (grammarGroup[]=NONE)'
+			 ->msg.putText
+		    #)
+	       #);
+	 if);
        (errorNumbers.grammarNotFound,'No registered grammars')->theCatcher;
        leave l
     else
        grammarGroup.fullName->grammarLocation[];
        ('meta',error[])->grammarGroup.open->grammarGroup[];
        (if grammarGroup[] = none then
-           trace.grammars
-             ->tracer
-               (# 
-               do
-                  'FAILURE: Trying to find grammar: "'->dmp.putText;
-                  grammar[]->dmp.putText;
-                  '" among the registered grammars(<grammar>-meta not found)'
-                    ->dmp.putText
-               #);
-           (errorNumbers.grammarNotFound,'Not among registered grammars')
-             ->theCatcher;
-           leave l
-        else
-           trace.grammars
-             ->tracer
-               (# 
-               do
-                  'SUCCEEDED: Trying to find grammar: "'->dmp.putText;
-                  grammar[]->dmp.putText;
-                  '" among the registered grammars'->dmp.putText
-               #);
-           (grammarLocation[],none ,error[])
-             ->newgrammar.grammarinit;
-           true->installed;
-           
+	   (if trace.active and trace.d[trace.grammars] then
+	       trace.grammars->signalTrace
+		 (# start::
+		      (#
+		      do 'FAILURE: Trying to find grammar: "'->msg.putText;
+			 grammar[]->msg.putText;
+			 '" among the registered grammars(<grammar>-meta not found)'
+			   ->msg.putText
+		      #)
+		 #);
+	   if);
+	   (errorNumbers.grammarNotFound,'Not among registered grammars')
+	     ->theCatcher;
+	   leave l
+	else
+	   (if trace.active and trace.d[trace.grammars] then
+	       trace.grammars->signalTrace
+		 (# start::
+		      (#
+		      do 'SUCCEEDED: Trying to find grammar: "'->msg.putText;
+			 grammar[]->msg.putText;
+			 '" among the registered grammars'->msg.putText
+		      #)
+		 #);
+	   if);
+	   (grammarLocation[],none ,error[])
+	     ->newgrammar.grammarinit;
+	   true->installed;
        if)
    if);
-   
-#)  
 
+#)
