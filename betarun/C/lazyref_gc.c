@@ -42,17 +42,17 @@ static int negIOAmax = 0;
 #define DEFAULTNEGTABLESIZE 25
 
 void NegAOArefsRESET (void) { negAOAsize = 0; }
-void negIOArefsFREE (void) { free (negIOArefs); negIOArefs = 0; }
+void negIOArefsFREE (void) { FREE (negIOArefs); negIOArefs = 0; }
    
 void NegAOArefsINSERT(long fieldAdr)  
 {     
   if (negAOAsize == negAOAmax)
     if (negAOAmax == 0) {
       negAOAmax = DEFAULTNEGTABLESIZE;
-      negAOArefs = (long *) malloc (negAOAmax*sizeof(long));
+      negAOArefs = (long *) MALLOC (negAOAmax*sizeof(long));
     } else {
       negAOAmax = 2*negAOAmax;
-      negAOArefs = (long *) realloc (negAOArefs, negAOAmax*sizeof(long));
+      negAOArefs = (long *) REALLOC (negAOArefs, negAOAmax*sizeof(long));
     }
 
   /* fprintf (stderr, "NegAOArefsINSERT(%d)\n", *((int *) fieldAdr)); */
@@ -65,7 +65,7 @@ void NegIOArefsINSERT(long fieldAdr)
 {
   if (negIOAsize == negIOAmax) {
     negIOAmax = 2*negIOAmax;
-    negIOArefs = (long *) realloc (negIOArefs, negIOAmax*sizeof(int));
+    negIOArefs = (long *) REALLOC (negIOArefs, negIOAmax*sizeof(int));
   }
 
   /* fprintf (stderr, "NegIOArefsINSERT(%d)\n", *((int *) fieldAdr)); */
@@ -79,7 +79,7 @@ void preLazyGC ()
   /* fprintf (stderr, "preLazyGC\n"); */
   negIOAsize = 0; 
   negIOAmax = DEFAULTNEGTABLESIZE;
-  negIOArefs = (long *) malloc (negIOAmax*sizeof(int));
+  negIOArefs = (long *) MALLOC (negIOAmax*sizeof(int));
   /* fprintf (stderr, "preLazyGC done\n"); */
 }
 
@@ -205,7 +205,7 @@ void addDanglingProto (int dangler, int proto)
   
   inx = (-dangler)%ROOTSIZE;
 
-  new = (protoPtr) malloc (sizeof(protoElm));
+  new = (protoPtr) MALLOC (sizeof(protoElm));
   new->proto = proto;
   new->dangler = dangler;
   
@@ -236,7 +236,7 @@ void removeDanglingProto (int dangler)
       if (this->prev) this->prev->next = this->next;
       else roots[inx] = this->next;
       
-      free (this);
+      FREE (this);
     }
     this = this->next;
   }
