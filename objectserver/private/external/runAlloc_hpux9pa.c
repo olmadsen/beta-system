@@ -9,7 +9,7 @@
 #include <beta.h>
 
 
-void DoAlloVR1 (struct Object *obj, int offset, int range)
+void DoAlloVR1 (Object *obj, int offset, int range)
 {
   pushReference(getThisReg());
   setThisReg(obj);
@@ -17,7 +17,7 @@ void DoAlloVR1 (struct Object *obj, int offset, int range)
   setThisReg(popReference());
 }
 
-void DoAlloVR2 (struct Object *obj, int offset, int range)
+void DoAlloVR2 (Object *obj, int offset, int range)
 {
   pushReference(getThisReg());
   setThisReg(obj);
@@ -25,7 +25,7 @@ void DoAlloVR2 (struct Object *obj, int offset, int range)
   setThisReg(popReference());
 }
 
-void DoAlloVR4 (struct Object *obj, int offset, int range)
+void DoAlloVR4 (Object *obj, int offset, int range)
 {
   pushReference(getThisReg());
   setThisReg(obj);
@@ -33,7 +33,7 @@ void DoAlloVR4 (struct Object *obj, int offset, int range)
   setThisReg(popReference());
 }
 
-void DoAlloVR8 (struct Object *obj, int offset, int range)
+void DoAlloVR8 (Object *obj, int offset, int range)
 {
   pushReference(getThisReg());
   setThisReg(obj);
@@ -41,7 +41,7 @@ void DoAlloVR8 (struct Object *obj, int offset, int range)
   setThisReg(popReference());
 }
 
-void DoAlloRR (struct Object *obj, int offset, int range)
+void DoAlloRR (Object *obj, int offset, int range)
 {
   pushReference(getThisReg());
   setThisReg(obj);
@@ -49,26 +49,26 @@ void DoAlloRR (struct Object *obj, int offset, int range)
   setThisReg(popReference());
 }
 
-struct Structure *DoAlloS (struct Object *origin, struct ProtoType *proto)
+Structure *DoAlloS (Object *origin, ProtoType *proto)
 {
-  struct Structure *struc;
-  extern struct Item *AlloS();
+  Structure *struc;
+  extern Item *AlloS();
 
   pushReference(getCallReg());
   setCallReg(proto);
-  struc = (struct Structure *)AlloS(origin, proto);
+  struc = (Structure *)AlloS(origin, proto);
   setCallReg(popReference());
   return struc;
 }
 
-struct Item *DoAlloH(struct Object *origin, struct ProtoType *proto)
+Item *DoAlloH(Object *origin, ProtoType *proto)
 {
-  struct Item *item;
-  extern struct Item *AlloH();
+  Item *item;
+  extern Item *AlloH();
 
   pushReference(getCallReg());
   setCallReg(proto);
-  item = (struct Item *)AlloH(origin, proto);
+  item = (Item *)AlloH(origin, proto);
   setCallReg(popReference());
   return item;
 }
