@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: outpattern.c,v 1.30 1992-10-28 14:39:42 beta Exp $
+ * Mod: $Id: outpattern.c,v 1.31 1992-10-30 12:34:27 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 
@@ -226,7 +226,7 @@ DisplayBetaStack( errorNumber, theObj)
   ptr(FILE) output;
   ref(Component)      currentComponent;
 
-  fprintf(stderr,"# Beta execution aborted: ");
+  fprintf(stderr,"\n# Beta execution aborted: ");
   ErrorMessage(stderr, errorNumber);
 
   if( (output = fopen("beta.dump","w")) == NULL){
