@@ -9,6 +9,9 @@
 #define inBlock( theB, addr) (((BlockStart( theB)) <= (ptr(long)) addr) \
                               && ((ptr(long)) addr < theB->top) )
 
+#define inBlockUnused( theB, addr) ((theB->top <= (ptr(long)) addr) \
+                              && ((ptr(long)) addr < theB->limit) )
+
 ref(Block) newBlock( size )
   long size;
 {
@@ -42,4 +45,17 @@ long inArea( theBlock, theObj )
   }
   return FALSE;
 }
+
+#ifdef RTDEBUG
+long inUnusedArea( theBlock, theObj )
+  ref(Block)  theBlock;
+  ref(Object) theObj;
+{
+  while( theBlock != 0 ){
+    if( inBlockUnused( theBlock, theObj) ) return TRUE;
+    theBlock = theBlock->next;
+  }
+  return FALSE;
+}
+#endif
 
