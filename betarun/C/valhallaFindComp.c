@@ -10,6 +10,20 @@
 #define TRACE_SCAN(code)
 #endif
 
+int isBETAcode(int PC)
+{ 
+  group_header *current = 0;
+  
+  DEBUG_VALHALLA(fprintf(output,"PC = %d\n",(int)PC));
+  while ((current = NextGroup (current))) {
+    DEBUG_VALHALLA(fprintf(output,"code_start = %d, code_end = %d\n",(int)current->code_start,(int)current->code_end));
+    if ((current->code_start <= PC) && (PC<current->code_end)) {
+      DEBUG_VALHALLA(fprintf(output,"PC found\n"));
+      return TRUE;
+    }
+  }
+  return FALSE;
+}
 
 #if (defined(linux) || defined(nti) || defined(mc68020)) 
 
@@ -483,14 +497,15 @@ int scanComponentStack (struct Component* comp,
       int lastReturnAdr = compStack.returnAdr;
 
       DEBUG_VALHALLA(fprintf(output,"BetaStackTop = %d\n",(int)BetaStackTop));
-      if (nextCBF)
-      /* Skip external code on top of stack: */
-      while ((unsigned int) theAR < (unsigned int) BetaStackTop) {
-	DEBUG_VALHALLA(fprintf(output,"External return address: "));
-	forEach (lastReturnAdr,0);
-	lastReturnAdr = theAR->i7+8;
-	theAR = (struct RegWin *) theAR->fp;
-      }	
+
+      if (!isBETAcode(PC))
+	/* Skip external code on top of stack: */
+	while ((unsigned int) theAR < (unsigned int) BetaStackTop) {
+	  DEBUG_VALHALLA(fprintf(output,"External return address: "));
+	  forEach (lastReturnAdr,0);
+	  lastReturnAdr = theAR->i7+8;
+	  theAR = (struct RegWin *) theAR->fp;
+	}
       
       for (;theAR != compStack.info.if_onstack.firstAR;
 	   theAR = (struct RegWin *) theAR->fp)
