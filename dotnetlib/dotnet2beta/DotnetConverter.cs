@@ -398,6 +398,22 @@ namespace beta.converter
 	internal virtual bool isRelevant(MethodBase m)
 	  {
 	    if (! (m.IsPublic || m.IsFamily)) return false;
+	    if (m.IsSpecialName) {
+	      // In the Common Language Specification
+	      //   http://www.ecma-international.org/publications/standards/ECMA-335.HTM
+	      // the general rule for overloading is that types must differ in parameter 
+	      // number and/or parameter types.
+	      // A special exception is defined though (Ecma 335, section 10.3.3), 
+	      // which permits two operator-conversion functions
+	      // "op_explicit" and "op_Implicit" to be overloaded on return type only.
+	      // BETA cannot handle these, since we mangle overloaded names on input-
+	      // parameters only, so we disregard these special functions.
+	      switch (m.Name){
+	      case "op_Implicit":
+	      case "op_Explicit":
+		return false;
+	      }
+	    }
 	    /* Ignore unsafe methods */
 	    if (!isCLScompliant(m)){
 	      if ((trace&TraceFlags.Type)!=0) {
@@ -415,6 +431,7 @@ namespace beta.converter
 	    String result = "";
 	    bool needComma=false;
 	    if (m is MethodInfo){
+	      // it is a method, not a constructor
 	      result += ((MethodInfo)m).ReturnType.ToString() + " ";
 	    }
 	    result += m.DeclaringType.Name + "." + m.Name+ "(";
@@ -528,7 +545,12 @@ namespace beta.converter
 
 	    /* Test for array types */
 	    if (type.IsArray){
-	      return "[0]" + _mapType(userClass, type.GetElementType(), doIncludes);
+	      Type elmType = type.GetElementType();
+	      if (elmType.IsArray){
+		if (!nowarn) Console.Error.Write("*** Warning: Cannot handle array-of-array parameters in " + name + "\n");
+		while (elmType.IsArray) elmType = elmType.GetElementType();
+	      }
+	      return "[0]" + _mapType(userClass, elmType, doIncludes);
 	    }
 	    /* Test for reference types FIXME */
 	    if (type.IsByRef){

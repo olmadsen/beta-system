@@ -193,7 +193,9 @@ namespace beta.converter
 	    }
 			
 	    // Compare against other patterns that may confuse 
-	    switch (word.ToLower()){
+	    switch (word){
+	      // FIXME: read from an XML file
+	    case "Stream":
 	    case "File":
 	    case "Hashtable":
 	    case "Class":
@@ -240,12 +242,16 @@ namespace beta.converter
 	  {
 	    bool use_wrapper_super = false;
 	    switch (className){
+	      // FIXME: read from an XML file
 	    case "TypeCode":
 	    case "Type":
 	    case "MenuItem":
 	    case "ContextMenu":
 	    case "Form":
 	    case "ScrollableControl":
+	    case "Image":
+	    case "Bitmap":
+	    case "MainMenu":
 	      // Special cases which causes circularity in INCLUDE */
 	      use_wrapper_super = true;
 	      break;
