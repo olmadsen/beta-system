@@ -2834,24 +2834,98 @@ do private.theCursor[] -> theCur[];
 
 -- GUIENVwindowItemTrackMouse: doPart --
 do
-   (# info: ^mouseInfo;
-      theWindow: @integer;
-   do (if widgetID <> 0 then
-          widgetID -> XtWindow -> theWindow;
-          theWindow -> mouse.getMouseInfo -> info[];
-          info.local -> curPt -> prevPt;
-          mousePress;
-          l: (if info.button<>0 then
-                 info.local -> curPt;
-                 (if (not (curPt -> prevPt.isEqual)) then
-                     (curPt.h - prevPt.h,curPt.v - prevPt.v) -> mouseMove;
-                     curPt -> prevPt;
-                 if);
-                 theWindow -> mouse.getMouseInfo -> info[];
-                 restart l;
-             if);
-          mouseRelease;
-      if);
+   (# typeOffset: (# exit 0 #);
+      serialOffset: (# exit 4 #);
+      send_eventOffset: (# exit 8 #);
+      displayOffset: (# exit 12 #);
+      windowOffset: (# exit 16 #);
+
+      rootOffset: (# exit 20 #);
+      sub_windowOffset: (# exit 24 #);
+      timeOffset: (# exit 28 #);
+      xOffset: (# exit 32 #);
+      yOffset: (# exit 36 #);
+      x_rootOffset: (# exit 40 #);
+      y_rootOffset: (# exit 44 #);
+      stateOffset: (# exit 48 #);
+
+      detailOffset: (# exit 52 #);
+      key_codeOffset: (# exit 52 #);
+      buttonOffset: (# exit 52 #);
+      dpy: @integer;
+      ID: @integer;
+      originX, originY: @integer;
+      eventAddress: @integer;
+      type: @integer;
+      dh, dv, x, y: @integer;
+      move: @mouseMove;
+      
+      uShort2Short:
+        (# value: @integer;
+        enter value
+        do  (if value > 32768 then
+                value - 65536 -> value;
+            if);
+        exit value
+        #);
+
+      initialize:
+        (# x_root, y_root: @shortRef;
+           mask: @integer;
+           status: @integer;
+        do displayID -> dpy;
+           widgetID -> ID;
+           100 -> malloc -> eventAddress;
+           (ID, 0, 0, x_root[], y_root[]) -> XtTranslateCoords;
+           x_root -> uShort2Short -> originX;
+           y_root -> uShort2Short -> originY;
+           this(guienv).private.x_root - originX -> curPt.h;
+           this(guienv).private.y_root - originY -> curPt.v;
+           curPt -> prevPt;
+           (if true then
+               XButtonReleaseMask + XButtonPressMask + XPointerMotionMask -> mask;
+               (ID,
+               1,
+               mask,
+               grabModeASync,
+               grabModeAsync,
+               0,
+               0,
+               currentTime) -> XtGrabPointer -> status;
+               
+           if);
+        #);
+      finalize:
+        (# 
+        do eventAddress -> free;
+           (if true then
+               (ID,currentTime) -> XtUnGrabPointer;
+           if);
+        #);
+      
+   do initialize;
+      mousePress;
+      l: (# 
+         do (dpy, eventAddress) -> XNextEvent;
+            eventAddress + typeOffset -> TOS'%adrGetLong' -> type;
+            (if type
+             //XMotionNotify then
+                eventAddress + x_rootOffset  -> TOS'%adrGetLong' -> x;
+                eventAddress + y_rootOffset  -> TOS'%adrGetLong' -> y;
+                x - originX -> x;
+                y - originY -> y;
+                x - curPt.h -> dh;
+                y - curPt.v -> dv;
+                curPt -> prevPt;
+                (x, y) -> curPt;
+                (dh, dv) -> move;
+             //XButtonrelease then
+                leave l;
+            if);
+            restart l;
+         #);
+      mouseRelease;
+      finalize;
    #)
 
 -- GUIENVwindowitemDrag: doPart --
