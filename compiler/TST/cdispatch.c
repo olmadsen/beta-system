@@ -10,10 +10,15 @@
 
 #define test 0
 
-struct VARIANT { long argType, argVal;} VARIANT;
+typedef struct tagVARIANT { 
+  short vt;
+  short wr1,wr2,wr3;
+  long  lVal;
+  long  lVal2;
+} VARIANT;
 
 struct struct_tagDISPPARAMS
-{ struct VARIANT *rgvarg;
+{ VARIANT *rgvarg;
   struct VARIANT *rgdispidNamedArgs;
   long cArgs, cNamedArgs;
 } struct_tagDISPPARAMS;
@@ -23,7 +28,7 @@ struct struct_tagDISPPARAMS *InitDispatch(long cArgs)
   if (test) printf("InitDispatch:%i\n",cArgs);
   S = (struct struct_tagDISPPARAMS*)malloc(sizeof(struct_tagDISPPARAMS));
   S->cArgs = 0;
-  S->rgvarg = (struct VARIANT*)malloc(cArgs*sizeof(VARIANT));
+  S->rgvarg = (VARIANT*)malloc(cArgs*sizeof(VARIANT));
   return S;
 }
 
@@ -46,37 +51,50 @@ void copyText(char *name, char *dest, long len)
 }
 
 struct struct_tagDISPPARAMS *AddDispatchInt32(struct struct_tagDISPPARAMS *S,long arg, long argType) 
-{ long next;
+{ long next; 
   next = S->cArgs;
   if (test) 
      printf("AddDispatchInt32, next=%i, arg=%i, type=%i\n",next,arg,argType);
 
-  S->rgvarg[next].argType = argType;
-  S->rgvarg[next].argVal = arg;
+  S->rgvarg[next].vt = argType;
+  S->rgvarg[next].lVal = arg;
   next = next + 1;
   S->cArgs = next;
   return S;
 }
 
 
-int getType(struct VARIANT *S,long N) 
+typedef struct COM { long dummy; }COM ;
+
+int getType(VARIANT *S,long N) 
 { if (test) 
-     printf("getType: N=%i type=%i arg=%i\n",N,S[N-1].argType,S[N-1].argVal);
-  return S[N-1].argType;
+     printf("getType: N=%i type=%i arg=%i\n",N,S[N-1].vt,S[N-1].lVal);
+  return S[N-1].vt;
 }
 
-int getArg(struct VARIANT *S,long N) 
+int getArg(VARIANT *S,long N) 
 { if (test)  
-     printf("getArg: N=%i type=%i arg=%i\n",N,S[N-1].argType,S[N-1].argVal);
-  return S[N-1].argVal;
+     printf("getArg: N=%i type=%i arg=%i\n",N,S[N-1].vt,S[N-1].lVal);
+  return S[N-1].lVal;
 }
 
-char *getTextArg(struct VARIANT *S,long N) 
+long * getRefArg(VARIANT *S, long N)
 { if (test)  
-     printf("getArg: N=%i type=%i arg=%S\n",N,S[N-1].argType,S[N-1].argVal);
-  return (char *)S[N-1].argVal;
+     printf("getArg: N=%i type=%i arg=%i\n",N,S[N-1].vt,S[N-1].lVal);
+  return (long *)S[N-1].lVal;
 }
 
+char *getTextArg(VARIANT *S,long N) 
+{ if (test)  
+     printf("getArg: N=%i type=%i arg=%S\n",N,S[N-1].vt,(char *)S[N-1].lVal);
+  return (char* )S[N-1].lVal;
+}
+
+struct COM *getCOMrefArg(VARIANT *S,long N) 
+{ if (test)  
+     printf("geCOMreftArg: N=%i type=%i arg=%i\n",N,S[N-1].vt,S[N-1].lVal);
+  return (COM* )S[N-1].lVal;
+}
 long *MkResList()
 { if (test) printf("MkResList\n");
   return (long *)malloc(8);
@@ -179,6 +197,16 @@ long BETA_Invoke(struct idispatch *pdisp
 	if (test) printf("%s\n",arg);    
 	argList = AddDispatchInt32(argList,arg,type);
 	break;
+      case 12: // COM ref
+        arg = (long) va_arg(ap,long *);
+	if (test) printf("%i\n",arg);    
+        argList = AddDispatchInt32(argList,arg,type);
+        break;
+      case 14: // holder
+        arg = (long) va_arg(ap,long *);
+	if (test) printf("%i\n",arg);    
+        argList = AddDispatchInt32(argList,arg,type);
+        break;
       default:
 	printf("MkArgList: unknown argument type: %i\n",types[i]);
       };
