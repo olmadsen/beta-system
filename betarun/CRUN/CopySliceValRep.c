@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CopySliceValRep.c,v 1.16 1992-09-08 09:52:16 poe Exp $
+ * Mod: $Id: CopySliceValRep.c,v 1.17 1992-09-25 22:01:33 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -70,7 +70,7 @@ void CCopySVR(ref(ValRep) theRep,
 	{ /* Since the slice may start on any byte we copy it byte by byte */
 	    unsigned char *newBody= (unsigned char *)newRep->Body;
 	    unsigned char *oldBody= (unsigned char *)((unsigned)theRep->Body+(low-theRep->LowBorder));
-	    for (i = 0;  i < high; i+=1)
+	    for (i = 0;  i < high; ++(unsigned char *)i)
 	      *(unsigned char *)((unsigned)newBody+i) = *(unsigned char *)((unsigned)oldBody+i);
 	    break;
 	}
@@ -78,12 +78,12 @@ void CCopySVR(ref(ValRep) theRep,
 	{ /* Since the slice may start on any word we copy it word by word */
 	    short *newBody= (short *)newRep->Body;
 	    short *oldBody= (short *)((unsigned)theRep->Body+(low-theRep->LowBorder));
-	    for (i = 0;  i < high; i+=1)
+	    for (i = 0;  i < high; ++(short *)i)
 	      *(short *)((unsigned)newBody+i) = *(short *)((unsigned)oldBody+i);
 	    break;
 	}
       case (int) ValRepPTValue:
-	for (i = 0; i < high; i++)
+	for (i = 0; i < high; ++(long *)i)
 	  newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder];
 	break;
       case (int) DoubleRepPTValue:
