@@ -1,7 +1,11 @@
-char betarun_version[] = "BETARUN VERSION 5.3(30)";
+char betarun_version[] = "BETARUN VERSION 5.3(31)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.30  2001/08/03 10:45:43  datpete
+ * Fixed groupname in beta.dump to be that of the prototype, not the mPart.
+ * Betarun version number: 30
+ *
  * Revision 1.29  2001/08/02 07:19:52  datpete
  * Small fixes for nti_ms build
  * Betarun version number: 29
