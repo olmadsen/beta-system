@@ -94,6 +94,15 @@ struct xCOMclass * GetXobj()
  *   C declarations for using COM object implemented in BETA
  **************************************************************/
 
+/* argumnet type of g5 below  */
+typedef struct tag {
+  int x;
+  short y;
+  short z;
+  long v;
+  char w;
+} foo;
+
 /* Interface definition for bCOMclass COM class */
 struct bCOMclass; /* forward declaration */
  
@@ -108,6 +117,8 @@ struct vtblX
   long (STDCALL *g4)(struct bCOMclass *this, 
 		     long a, long b, long c, long d, long e,
 		     long f, long g, long h);
+  long (STDCALL *g5)(struct bCOMclass *this, foo V);
+  long (STDCALL *g6)(struct bCOMclass *this, struct bCOMclass *S, char ch);
   char (STDCALL *ch)(struct bCOMclass *this);
 };
 
@@ -117,9 +128,11 @@ struct bCOMclass
 };
 
 
+
 /* Called from BETA with COM bCOMclass object */
 void PutBobj(struct bCOMclass * R)
 { char * S;
+  foo q = {999,77,-88,1010,'*'}; // if 88 is -88 then it don't work
   if (test) printf("\n   Enter C PutBobj\n");
   R->proto->g0(R);
   R->proto->g1(R,R->proto->ch(R));
@@ -131,5 +144,9 @@ void PutBobj(struct bCOMclass * R)
   if (test) printf("\n   s: %s\n",S);
   R->proto->g3(R,S);
   R->proto->g4(R,111,112,113,114,115,116,117,118);
+  R->proto->g5(R,q);
+  R->proto->g6(R,R,'%');
   if (test) printf("\n   Leaving C PutbCOMclass\n");
 }
+
+
