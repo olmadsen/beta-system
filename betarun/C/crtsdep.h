@@ -2,7 +2,7 @@
  * BETA RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * crtsdep.h
  * by Ole Lehrmann Madsen, Peter Andersen and Peter Ryberg Jensen
- * $Id: crtsdep.h,v 1.11 1995-08-30 10:46:27 beta Exp $
+ * $Id: crtsdep.h,v 1.12 1995-09-19 08:39:02 beta Exp $
  */
 
 #define JUMPSTACK 1
@@ -17,7 +17,7 @@
 	 int range				         \
 	 )
 #define ParamObjOriginProtoOffRange(type, name)			\
- type C##name(struct Object *origin,			\
+ type name(struct Object *origin,			\
 	      struct Object *theObj,	                \
 	      unsigned offset, /* in bytes */		\
 	      struct ProtoType *proto,			\
