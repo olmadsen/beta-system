@@ -1,0 +1,724 @@
+ORIGIN '../astlevel';
+INCLUDE '~beta/bobs/bobs';
+INCLUDE '~beta/bobs/private/lex';
+
+-- astLib: attributes --
+
+scan:
+  (# current: ^AST;
+  do son[] -> current[];
+     loop:
+       (if current[] <> NONE then
+           INNER;
+           current.next[] -> current[];
+           restart loop;
+       if);
+  #);
+
+
+-- TreeLevelLib: attributes --
+
+
+
+isEos: (# exit true #);
+docParser: (# exit false #);
+dashInNames: (# exit false #);
+newlineIsCommentEnd: (# exit false #);
+caseSensitive: (# exit false #);
+splitString: (# exit true #);
+
+
+trace_lineno: (# exit false #);
+
+
+Rule:
+  (# terminal: @boolean;
+     label: ^Text;
+     skip: @integer;
+     indent: @integer;
+     next: ^Rule;
+  #);
+
+
+
+-- TreeLevelInit: doPart --
+do tableFileName[] -> parser.init;
+   INNER;
+
+-- TreeLevelSymbolToAst: doPart --
+do &genRefArray[symbol][] -> theAst[];
+   symbol -> theAst.symbol;
+   kindArray[symbol] -> theAst.kind;
+   (* THIS(TreeLevel)[] -> theAst.gram[]; *)
+   
+-- TreeLevelSymbolToName: doPart --
+do parser.private.labelArray[symbol][] -> name[];
+
+-- TreeLevelNewUnexpanded: doPart --
+do &UnExpanded[] -> theAst[];
+   symbol -> theAst.symbol;
+   kinds.unExpanded -> theAst.kind;
+   (* THIS(TreeLevel)[] -> theAst.gram[];*)
+
+
+-- TreeLevelPretty: doPart --
+do (# 
+      printNode:
+        (# node: ^AST;
+        enter node[]
+        do (if node.kind
+            //kinds.interior then
+               (if nodeClassArray[node.symbol]
+                //kinds.list then
+                   node[] -> printList;
+                //kinds.cons then
+                   node[] -> printCons;
+               if);
+            //kinds.nameAppl//kinds.nameDecl//kinds.const then
+               node[] -> printValue;
+            //kinds.string then
+               node[] -> printString;
+           if);
+        #);
+      outputNode:
+        (# node: ^AST;
+           theRule: ^Rule;
+        enter (node[], theRule[])
+        do (if node.kind <> kinds.optional then
+               (for theRule.skip repeat
+                    ' ' -> output.put;
+               for);
+               node[] -> printNode;
+           if);
+        #);
+      outputTerminal:
+        (# str: ^Text;
+           theRule: ^Rule;
+        enter (str[], theRule[])
+        do (for theRule.skip repeat
+                ' ' -> output.put;
+           for);
+           str[] -> puttext;
+        #);
+      printList:
+        (# node: ^List;
+           current: ^AST;
+           firstRule, currentRule: ^Rule;
+           com: ^Comment;
+           position: @integer;
+        enter node[]
+        do parser.private.rules[node.symbol][] -> firstRule[];
+           node.son[] -> current[];
+           node.com[] -> com[];
+           (if current[] <> NONE then
+               (current[], firstRule[]) -> outputNode;
+               firstRule.next[] -> firstRule[];
+               current.next[] -> current[];
+               1 -> position;
+               loop1:
+                 (if current[] <> NONE then
+                     firstRule[] -> currentRule[];
+                     loop2:
+                       (if currentRule[] <> NONE then
+                           loop3:
+                             (if com[] <> NONE then
+                                 (if position = com.position then
+                                     (for com.breaks repeat
+                                          output.newline;
+                                     for);
+                                     (if com.lgth <> 0 then
+                                         '(*' -> output.puttext;
+                                           com.getText -> output.puttext;
+                                           '*)' -> output.puttext;
+                                     if);
+                                     com.next[] -> com[];
+                                     restart loop3;
+                                 if);
+                             if);
+                           (if currentRule.terminal then
+                               (currentRule.label[], currentRule[]) -> outputTerminal;
+                            else
+                               (current[], currentRule[]) -> outputNode;
+                           if);
+                           currentRule.next[] -> currentRule[];
+                           position + 1 -> position;
+                           restart loop2;
+                       if);
+                     current.next[] -> current[];
+                     restart loop1;
+                 if);
+           if);
+        #);
+      printCons:
+        (# node: ^Cons;
+           current: ^AST;
+           currentRule: ^Rule;
+           com: ^Comment;
+           position: @integer;
+           
+        enter node[]
+        do parser.private.rules[node.symbol][] -> currentRule[];
+           node.son[] -> current[];
+           node.com[] -> com[];
+           0 -> position;
+           loop:
+             (if currentRule[] <> NONE then
+                 loop2:
+                   (if com[] <> NONE then
+                       (if position = com.position then
+                           (for com.breaks repeat
+                                output.newline;
+                           for);
+                           (if com.lgth <> 0 then
+                               '(*' -> output.puttext;
+                                 com.getText -> output.puttext;
+                                 '*)' -> output.puttext;
+                           if);
+                           com.next[] -> com[];
+                           restart loop2;
+                       if);
+                   if);
+                 (if currentRule.terminal then
+                     (currentRule.label[], currentRule[]) -> outputTerminal;
+                  else
+                     (current[], currentRule[]) -> outputNode;
+                     current.next[] -> current[];
+                 if);
+                 currentRule.next[] -> currentRule[];
+                 position + 1 -> position;
+                 restart loop;
+             if);
+        #);
+      printValue:
+        (# node: ^LexemText;
+        enter node[]
+        do node.getText -> output.puttext;
+        #);
+      printString:
+        (# node: ^LexemText;
+        enter node[]
+        do '\'' -> output.put;
+           node.getText -> output.puttext;
+           '\'' -> output.put;
+        #);
+   do node[] -> printNode;
+   #)
+
+
+-- parserInit: doPart --
+do (TableFileName[],True,isEos,docParser,dashInNames,
+   newlineIsCommentEnd,caseSensitive,splitString) -> private.B.init;
+   ('objectdescriptor','descriptor') -> private.b.defineNonTAlias;
+   ('attributedecl','attributes') -> private.b.defineNonTAlias;
+   
+   (* private.printProductions; *)
+   private.makeArrays;
+   (* private.printRules; *)
+   
+-- parserParse: doPart --
+do (goal, input[]) -> private.TreeParser -> root[];
+
+-- parserPrivate: descriptor --
+(# B: @BOBS;
+
+   actionArray: [0] @int8;
+   labelArray: [0] ^Text;
+   rules: [0] ^Rule;
+   
+   
+   TreeParser:
+     (# Poss: [100] @ integer; legalss: [100] ^Text; Etop: @integer;
+        stack: [500] ^AST;
+        
+        
+        lexstream: @stream
+          (# nextch: ^stream.get;
+             iseos: ^stream.eos;
+             get::
+               (#
+               do (if ch = ascii.newline then
+                      lexlineno + 1 -> lexlineno;
+                  if);
+                  nextch -> ch;
+               #);
+             eos::
+               (#
+               do iseos -> value;
+               #);
+          #);
+        count: @integer;
+        comcount: @integer;
+        lexemcount: @integer;
+        charcount: @integer;
+        
+        stacktop: @integer;
+        positions: [500] @integer;
+        
+        lineno: @integer;
+        lexlineno: @integer;
+        
+        commentStack: [500] ^Comment;
+        commentStackTop: @integer;
+        currentComment: ^Comment;
+        
+        currentLexem: ^Text;
+        
+        newAstForParser: @symbolToAst;
+        newUnExpandedForParser: @newUnExpanded;
+        
+        appendComment: @
+          (# lst1: ^Comment;
+             lst2: ^Comment;
+             dst: ^Comment;
+          enter (lst1[], lst2[])
+          do (if lst1[] <> NONE then
+                 (if lst2[] <> NONE then
+                     lst2[] -> lst1.son.next[];
+                     lst2.son[] -> lst1.son[];
+                     NONE -> lst2.son[];
+                 if);
+              else
+                 lst2[] -> lst1[];
+             if);
+          exit lst1[]
+          #);
+        
+        
+        
+        addComment: @
+          (# value: ^text;
+             new: ^Comment;
+             lineCount: @integer;
+          enter value[]
+          do &Comment[] -> new[];
+             (if value[] <> NONE then
+                 value -> new.value;
+                 value.lgth -> new.lgth;
+             if);
+             new[] -> new.son[];
+             0 -> lineCount;
+             
+             (if value[] <> NONE then
+                 comcount + 1 -> comcount;
+                 charcount + value.lgth -> charcount;
+                 (for inx: value.lgth repeat
+                      (if value.T[inx] = ascii.newLine then
+                          lineCount + 1 -> lineCount;
+                      if);
+                 for);
+             if);
+             lexlineno - lineno - lineCount -> new.breaks;
+             lexlineno -> lineno;
+             (currentComment[], new[]) -> appendComment -> currentComment[];
+          #);
+        pushComment: @
+          (#
+          do (if currentComment[] <> NONE then
+                 stacktop -> currentComment.position;
+                 commentStackTop + 1 -> commentStackTop;
+                 currentComment[] -> commentStack[commentStackTop][];
+                 NONE -> currentComment[];
+             if);
+          #);
+        
+        
+        fetchComments: @
+          (# father: ^AST;
+             oldTop, newTop: @integer;
+             adjust: @integer;
+             current: ^Comment;
+             com: ^Comment;
+             position: @integer;
+             
+          enter (father[], oldTop, newTop, adjust)
+          do	NONE -> com[];
+             loop1:
+               (if commentStackTop > 0 then
+                   (if (newTop < commentStack[commentStackTop].position) then
+                       commentStack[commentStackTop][] -> current[];
+                       current.position - newTop + adjust -> position;
+                       loop2:
+                         (if current[] <> NONE then
+                             position -> current.position;
+                             current.next[] -> current[];
+                             restart loop2;
+                         if);
+                       (commentStack[commentStackTop][], com[]) -> appendComment -> com[];
+                       NONE -> commentStack[commentStackTop][];
+                       commentStackTop - 1 -> commentStackTop;
+                       restart loop1;
+                   if);
+               if);
+             (father.com[], com[]) -> appendComment -> father.com[];
+          #);
+        goal: @integer;
+        input: ^Stream;
+        bobsparse: @B.parse
+          (# shift::
+               (# handleNonTerminal: @
+                    (# value: ^Text;
+                       node: ^UnExpanded;
+                       symbol: @integer;
+                    do &Text[] -> value[];
+                       scan
+                       (#
+                       do ch -> value.put;
+                       #);
+                       symb -> b.prodSyWithNonZeroLabelNo -> symbol;
+                       symbol -> newUnExpandedForParser -> node[];
+                       (* value[] -> node.value[]; *)
+                       node[] -> stack[stacktop][];
+                    #);
+               do stacktop + 1 -> stacktop;
+                  (if trace_lineno then
+                      lexlineno -> putint;
+                      ': ' -> puttext;
+                  if);
+                  (if trace then 
+                      'shift:  '->puttext;
+                      stacktop -> putInt;
+                      ' ' -> put;
+                      scan(#do ch->put #); newline 
+                  if);
+                  
+                  (if lexlineno <> lineno then
+                      NONE -> addComment;
+                  if);
+                  
+                  pushComment;
+                  
+                  (if isTerminal then
+                      (if symb
+                       //nameVal//stringVal//constVal then
+                          (if currentLexem[] <> NONE then
+                              'ERROR: current lexem has not been reduced!' -> putline;
+                          if);
+                          &text[] -> currentLexem[];
+                          scan
+                          (#
+                          do ch -> currentLexem.put;
+                          #);
+                      if);
+                   else
+                      handleNonTerminal;
+                  if);
+               #);
+             reduce::
+               (# action: @integer;
+                  consReduce: @
+                    (# father: ^AST;
+                       current: ^AST;
+                       previous: ^AST;
+                       count: @integer;
+                    do symbol -> newAstForParser -> father[];
+                       NONE -> previous[];
+                       0 -> count;
+                       (for inx: (oldtop - newtop) + 1 repeat
+                            stack[newtop + inx - 1][] -> current[];
+                            (if current[] <> NONE then
+                                NONE -> stack[newtop + inx - 1][];
+                                0 -> positions[newtop + inx - 1];
+                                (if previous[] = NONE then
+                                    current[] -> father.son[];
+                                 else
+                                    current[] -> previous.next[];
+                                if);
+                                current[] -> previous[];
+                            if);
+                       for);
+                       father[] -> stack[newtop][];
+                       (if previous[] <> NONE then
+                           NONE -> previous.next[];
+                       if);
+                       (father[], oldTop, newTop, 0) -> fetchComments;
+                       newTop -> stackTop;
+                    #);
+                  listReduce: @ 
+                    (# father: ^AST;
+                       son: ^AST;
+                       lastBrother: ^AST;
+                       adjust: @integer;
+                    do stack[newtop][] -> father[];
+                       stack[oldtop][] -> son[];
+                       (if father.next[] = NONE then
+                           father.son[] -> lastBrother[];
+                           0 -> positions[newTop];
+                        else
+                           father.next[] -> lastBrother[];
+                       if);
+                       son[] -> lastBrother.next[];
+                       son[] -> father.next[];
+                       NONE -> stack[oldtop][];
+                       0 -> positions[oldtop];
+                       (father[], oldTop, newTop, positions[newTop]) -> fetchComments;
+                       positions[newTop] + (oldTop - newTop) -> positions[newTop];
+                       newTop -> stackTop;
+                    #);
+                  lexemTextReduce:
+                    (# Type:< LexemText;
+                       node: ^Type;
+                    do lexemcount + 1 -> lexemcount;
+                       &Type[] -> node[];
+                       charcount + currentLexem.lgth -> charcount;
+                       INNER;
+                       currentLexem -> node.value;
+                       currentLexem.lgth -> node.lgth;
+                       NONE -> currentLexem[];
+                       node[] -> stack[newTop][];
+                       newTop -> stackTop;
+                    #);
+                  nameApplReduce: @ lexemTextReduce
+                    (# Type:: NameAppl; 
+                    do kinds.nameAppl -> node.kind;
+                    #);
+                  nameDeclReduce: @ lexemTextReduce
+                    (# Type:: NameDecl; 
+                    do kinds.nameDecl -> node.kind;
+                    #);
+                  stringReduce: @ lexemTextReduce
+                    (# Type:: String;  
+                    do kinds.string -> node.kind;
+                    #);
+                  constReduce: @ lexemTextReduce
+                    (# Type:: Const;  
+                    do kinds.const -> node.kind;
+                    #);
+                  emptyReduce: @
+                    (#
+                    do symbol -> newAstForParser -> stack[newtop][];
+                       newTop -> stacktop;
+                       pushComment;
+                    #);
+                  symbol: @integer;
+               do (if trace then
+                      'reduce: '->puttext;
+                      oldTop -> putint;
+                      ' ' -> put;
+                      newTop -> putInt;
+                      ' ' -> put;
+                      prodNo->B.printProd;
+                      newline;
+                  if);
+                  
+                  (if true then
+                      actionArray[prodNo] -> action;
+                      prodNo -> B.labelNo -> symbol;
+                      (if action
+                       //actions.consReduce then consReduce;
+                       //actions.listReduce then listReduce;
+                       //actions.nameApplReduce then nameApplReduce;
+                       //actions.nameDeclReduce then nameDeclReduce;
+                       //actions.stringReduce then stringReduce;
+                       //actions.constReduce then constReduce;
+                       //actions.emptyReduce then emptyReduce;
+                       //actions.ignore then newTop -> stacktop;
+                      if);
+                      (if action <> actions.ignore then
+                          count + 1 -> count;
+                      if);
+                  if);
+               #);
+             comment::
+               (# value: ^text;
+               do (if trace then
+                      'comment:'->puttext; scan(#do ch->put #); newline
+                  if);
+                  &text[] -> value[];
+                  scan
+                  (#
+                  do ch -> value.put;
+                  #);
+                  value[] -> addComment;
+               #);
+             markError::
+               (# B: @boolean
+               do (if trace then
+                      'bobs are marking errors' -> putline;
+                  if);
+                  (if ((Etop+1->Etop) > Poss.range)  then 
+                      100 -> Poss.extend;
+                      100 -> legalss.extend;
+                  if);
+                  pos->Poss[Etop];
+                  &text[]->legalss[Etop][];
+                  LegalSymbs.scan
+                  (#
+                  do thisSymbText->legalss[Etop].putText;
+                     ' ' ->legalss[Etop].put
+                  #)
+               #);
+             fatalError::< (# do 'Bobs parse error!'->msg.putLine; msg[] -> putline; #);
+          #);
+        ok: @boolean;
+        root: ^AST;
+     enter (goal, input[])
+     do 1 -> stacktop;
+        1 -> lexlineno;
+        &input.get[] -> lexstream.nextch[];
+        &input.eos[] -> lexstream.iseos[];
+        (goal -> B.LabLhs, lexstream[]) -> bobsparse -> ok;
+        (if trace then
+            'bobs are done' -> putline;
+        if);
+        (if ok then
+            (if trace then
+                'bobs says "ok"' -> putline;
+            if);
+            l: (for inx: stacktop repeat
+                    (if stack[inx][] <> NONE then
+                        NONE -> stack[inx].next[];
+                        stack[inx][] -> root[];
+                        leave l;
+                    if);
+               for);
+         else
+            (if trace then
+                'bobs says "not ok"' -> putline;
+            if);
+        if);
+     exit root[]
+     #);
+   
+   actions: @
+     (# listReduce: (# exit 1 #);
+        consReduce: (# exit 2 #);
+        nameApplReduce: (# exit 3 #);
+        nameDeclReduce: (# exit 4 #);
+        stringReduce: (# exit 5 #);
+        constReduce: (# exit 6 #);
+        emptyReduce: (# exit 7 #);
+        ignore: (# exit 8 #);
+     #);
+   
+   printProductions:
+     (#
+     do (for prod: B.btab.prodMax repeat
+             prod -> putint;
+             ', ' -> puttext;
+             prod -> B.labelNO -> putInt;
+             ' <' -> puttext;
+             prod -> B.scanLabel
+             (#
+             do ch -> put;
+             #);
+             '>: ' -> puttext;
+             prod -> B.printProd;
+             newLine;
+        for);
+     #);
+   
+   printRules:
+     (# printRule:
+          (# symbol: @integer;
+             current: ^Rule;
+          enter symbol
+          do '<' -> put;
+             symbol -> symbolToName -> puttext;
+             '>' -> put;
+             ' -> ' -> puttext;
+             rules[symbol][] -> current[];
+             loop:
+               (if current[] <> NONE then
+                   ' ' -> put;
+                   current.label[] -> puttext;
+                   current.next[] -> current[];
+                   restart loop;
+               if);
+          #);
+     do (for symbol: rules.range repeat
+             (if rules[symbol][] <> NONE then
+                 symbol -> printRule;
+                 newline;
+             if);
+        for);
+     #);
+   
+   getBobsLabel:
+     (# sy: @integer;
+        label: ^Text;
+     enter sy
+     do &Text[] -> label[];
+        sy -> b.scanSymb
+        (#
+        do ch -> label.put;
+        #);
+     exit label[]
+     #);
+   makeRule:
+     (# prodno, symbol: @integer;
+        first, last: ^Rule;
+     enter (prodno, symbol)
+     do prodNo -> b.scanProd
+        (# new: ^Rule
+        do &Rule[] -> new[];
+           sy.terminal -> new.terminal;
+           sy ->getBobsLabel -> new.label[];
+           3 -> new.indent;
+           (if last[] = NONE then
+               new[] -> first[] -> last[];
+            else
+               1 -> new.skip;
+               new[] -> last.next[];
+               new[] -> last[];
+           if);	
+        #);
+        first[] -> rules[symbol][];
+     #);
+   
+   makeArrays:
+     (# leading: @char;
+        symbol: @integer;
+        label: ^text;
+     do B.btab.prodMax -> actionArray.new;
+        B.btab.symbMax -> labelArray.new;
+        B.btab.symbMax -> kindArray.new;
+        B.btab.symbMax -> nodeClassArray.new;
+        B.btab.symbMax -> genRefArray.new;
+        B.btab.symbMax -> roomArray.new;
+        B.btab.symbMax -> sonArray.new;
+        B.btab.symbMax -> rules.new;
+        
+        (for prod: B.btab.prodMax repeat
+             &text[] -> label[];
+             prod -> B.scanLabel
+             (#
+             do ch -> label.put;
+             #);
+             1 -> label.inxget -> leading;
+             prod -> B.labelNo -> symbol;
+             
+             (if leading
+              //'?' then
+                 actions.ignore -> actionArray[prod];
+                 (if symbol > 0 then
+                     kinds.unExpanded -> kindArray[symbol];
+                     UnExpanded## -> genRefArray[symbol]##;
+                 if);
+              //'*'//'+' then 
+                 actions.listReduce -> actionArray[prod];
+                 kinds.interior -> kindArray[symbol];
+                 kinds.list -> nodeClassArray[symbol];
+                 List## -> genRefArray[symbol]##;
+                 (prod, symbol) -> makeRule;
+              //'^' then actions.nameApplReduce -> actionArray[prod];
+              //':' then actions.nameDeclReduce -> actionArray[prod];
+              //'%' then actions.constReduce -> actionArray[prod];
+              //'\'' then actions.stringReduce -> actionArray[prod];
+              //'_' then
+                 actions.emptyReduce -> actionArray[prod];
+                 (if symbol > 0 then
+                     kinds.optional -> kindArray[symbol];
+                     kinds.optional -> nodeClassArray[symbol];
+                     Optional## -> genRefArray[symbol]##;
+                 if);
+              else
+                 actions.consReduce -> actionArray[prod];
+                 label[] -> labelArray[symbol][];
+                 kinds.interior -> kindArray[symbol];
+                 kinds.cons -> nodeClassArray[symbol];
+                 Cons## -> genRefArray[symbol]##;
+                 (prod, symbol) -> makeRule;
+             if);
+        for);
+     #);
+#)

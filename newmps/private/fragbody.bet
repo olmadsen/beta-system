@@ -1,0 +1,278 @@
+ORIGIN '../astlevel';
+INCLUDE '../propertyparser';
+INCLUDE '~beta/basiclib/file';
+INCLUDE '../bytestream';
+
+
+-- AstInterfaceLib: attributes --
+groupMagicNumber1: (# exit 0x79657321 #);
+groupMagicNumber2: (# exit 0x6173742E #);
+groupVersion: (# exit 1 #);
+
+-- FragmentFormCategory: doPart --
+do 
+
+-- FragmentGroupScan: doPart --
+do fragmentlist.scan
+   (#
+   do current[] -> this(scan).current[];
+      INNER scan;
+   #);
+
+-- FragmentGroupSetupOrigin: doPart --
+do
+   FindOrigin: THIS(fragment).prop.ScanProp
+     (#
+        doProp::
+          (#
+          do
+             prop.makelc;
+             (if 'origin'->prop.equal then
+                 ScanParameters
+                 (#
+                    doString::
+                      (# t: ^Text;
+                      do
+                         THIS(fragment).fullName->stripPathName->t[];
+                         (if t[] = none then
+                             ((S.copy,currentDirectory)
+                               ->thePathHandler.convertFilePath,error[])
+                               ->top.open->THIS(fragmentgroup).origin
+                          else
+                             ((S.copy,t[])->thePathHandler.convertFilePath,
+                             error[])->top.open->THIS(fragmentgroup).origin
+                         if);
+                         leave FindOrigin;
+                         
+                      #)
+                 #)
+             if)
+          #)
+     #)
+
+-- FragmentGroupScanIncludes: doPart --
+do (if includes.empty then
+       loadIncludes;
+   if);
+   includes.scan
+   (#
+   do current[] -> THIS(ScanIncludes).current[];
+      inner scanIncludes;
+   #);
+
+-- FragmentGroupIncludeFullName: doPart --
+do (# t: ^Text;
+   do THIS(fragment).fullName->stripPathName->t[];
+      (if t[] = NONE then
+          (linkname[], currentDirectory) 
+            -> thePathHandler.convertFilePath 
+            -> theFullName[];
+       else
+          (linkname[], t[]) 
+            -> thePathHandler.convertFilePath 
+            -> theFullName[];
+      if);
+   #);
+
+-- FragmentGroupLoadIncludes: doPart --
+do includes.clear;
+   prop.scanProp
+   (# doProp::
+        (#
+        do (if 'include'->prop.equalNCS then
+               scanParameters
+               (# doString::
+                    (# l: ^Include;
+                    do &Include[]->l[];
+                       s.copy->l.linkName[];
+                       l[] -> includes.append;
+                    #)
+               #);
+           if);
+        #);
+   #)
+
+-- FragmentGroupSaveFailure: doPart --
+do 
+
+-- FragmentGroupSave: doPart --
+do saving:
+		(# output: @File
+				(# binary:: (# do true -> value #);
+				#);
+		do filename[] -> output.name;
+			output.openWrite;
+			output[] -> pack;
+			output.close;
+		#);
+
+-- FragmentGroupLoadFailure: doPart --
+do 
+
+-- FragmentGroupLoad: doPart --
+do loading:
+		(# input: @File
+				(# binary:: (# do true -> value #);
+				#);
+		do filename[] -> input.name;
+			input.openRead;
+			input[] -> unpack;
+			input.close;
+		#);
+
+
+-- FragmentGroupPack: doPart --
+do groupMagicNumber1 -> output.putInt32u;
+	groupMagicNumber2 -> output.putInt32u;
+	groupVersion -> output.putInt32u;
+	fragmentlist.size -> output.putint32u;
+	fragmentlist.scan
+		(#
+		do current.nameT[] -> output.putBinText;
+		#);
+
+-- FragmentGroupUnpack: doPart --
+do unpacking:
+		(# magic1, magic2: @int32u;
+			version: @int32u;
+			no: @integer;
+			frag: ^fragmentForm;
+		do input.getInt32u -> magic1;
+			(if magic1 <> groupMagicNumber1 then
+				'wrong magic' -> putline;
+				leave unpacking;
+			if);
+			input.getInt32u -> magic2;
+			(if magic2 <> groupMagicNumber2 then
+				'wrong magic' -> putline;
+				leave unpacking;
+			if);
+			input.getInt32u -> version;
+			(if version > groupVersion then
+				'wrong version' -> putline;
+				leave unpacking;
+			if);
+			input.getInt32u -> no;
+			(for no repeat
+				grammartable.beta[] -> newFragmentForm -> frag[];
+				input.getBinText -> frag.nameT[];
+				frag[] -> fragmentList.append;
+			for);
+			'success' -> putline;
+		#);
+	
+-- AstInterfaceTopOpen: doPart --
+do opengroup:
+     (# input: @File;
+        parse: @PropertyParser
+          (# syntaxerror::
+               (#
+               do msg.newline;
+                  'while parsing: "' -> msg.putline;
+                  fullname[] -> msg.puttext;
+                  '"' -> msg.puttext;
+               #);
+          #);
+        beta: ^TreeLevel;
+        frag: ^FragmentForm;
+        fragname, cat: ^text;
+        fullname: ^text;
+        betFileName: ^text;
+        killImps:
+          (# exp: ^expanded;
+          enter exp[]
+          do 31 -> exp.suffixWalkForProd
+             (#
+             do NONE -> current.son[];
+             #);
+          #);
+        compact: (# exit true #);
+		  dummy: @fragmentgroup;
+
+        stripExtension:
+          (# path: ^text;
+             stripped: ^text;
+             dotPos: @integer;
+             slashPos: @integer;
+             
+          enter path[]
+          do (if path[] <> NONE then
+                 (if path.length > 0 then
+                     directoryChar -> path.findAll
+                     (#
+                     do inx -> slashPos;
+                     #);
+                     '.' -> path.findAll
+                     (#
+                     do inx -> dotPos;
+                     #);
+                     (if dotPos > slashPos then
+                         (1, dotpos -1) -> path.sub -> stripped[];
+                      else
+                         path.copy -> stripped[]
+                     if);
+                         
+                 if);
+             if);
+          exit stripped[]
+          #);
+     do name[] -> expandToFullPath -> fullname[];
+        fullname[] -> stripExtension -> fullname[];
+        fullname[] -> dummy.fullname;
+        dummy[]->grouptable.hashfunction
+			  ->grouptable.findIndexed
+				 (# predicate::  (#  do fullname[]->(current.fullname).equalNCS->value #);
+				 do current[] -> group[];
+				 #);
+		  (if group[] <> NONE then
+		     leave openGroup;
+		  if);
+        
+        newFragmentGroup -> group[];
+        fullname.copy -> group.name;
+        fullname.copy -> group.fullname;
+        
+        group[] -> grouptable.insert;
+        
+        grammarTable.beta[] -> beta[];
+        '.bet' -> (fullname.copy).append -> input.name;
+        input.openRead;
+        input[] -> parse.init;
+        parse.parsePropertyList -> group.prop[];
+        false -> beta.parser.trace;
+        parse.advance;
+        loop:
+          (if parse.token = parse.tokens.name then
+              parse.lex.gettext -> fragname[];
+              parse.advance;
+              (if parse.token = parse.tokens.colon then
+                  parse.advance;
+                  (if parse.token = parse.tokens.name then
+                      parse.lex.gettext -> cat[];
+                      parse.advance;
+                      (if parse.token = parse.tokens.dash then
+                          beta[] -> newFragmentForm -> frag[];
+                          fragname[] -> frag.name;
+                          fragname.copy -> fragname[];
+                          '-' -> fragname.prepend;
+                          fullname[] -> fragname.prepend;
+                          fragname[] -> frag.fullname;
+                          (if 'dopart' -> cat.equalNCS then
+                              (31, input[]) -> beta.parser.parse -> frag.root[];
+                           else
+                              (1, input[]) -> beta.parser.parse -> frag.root[];
+                          if);
+                          (if frag.root[] <> NONE then
+                              (if compact then
+                                  frag.root[] -> killImps;
+                              if);
+                              frag[] -> group.fragmentList.append;
+                              parse.advance;
+                              restart loop;
+                          if);
+                      if);
+                  if);
+              if);
+          if);
+        input.close;
+     #);

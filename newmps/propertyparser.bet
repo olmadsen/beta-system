@@ -1,0 +1,245 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE 'propertylist';
+
+-- lib: attributes --
+
+PropertyParser:
+  (# token: @integer;
+     syntaxError:< exception
+       (# what: ^text;
+       enter what[]
+       do what[] -> msg.append;
+          msg.newline;
+          'looking at: "' -> msg.puttext;
+          lex.ch -> msg.put;
+          '"' -> msg.put;
+          INNER;
+       #);
+     
+     lexer:
+       (# inputget: ^stream.get;
+          inputeos: ^stream.eos;
+          ch: @char;
+          
+          buffer: [256] @char;
+          buffertop: @integer;
+          put: @
+            (#
+            do buffertop + 1 -> buffertop;
+               (if buffertop = buffer.range then
+                   buffertop -> buffer.extend;
+               if);
+               ch -> buffer[buffertop];
+            #);
+          scan:
+            (# ch: @char;
+            do (for inx: buffertop repeat
+                    buffer[inx] -> ch;
+                    inner;
+               for);
+            #);
+          getText: 
+            (# value: ^text;
+            do &Text[] -> value[];
+               scan
+               (#
+               do ch -> value.put;
+               #);
+            exit value[]
+            #);
+          
+          nextch: @
+            (#
+            do (if inputeos then
+                   ascii.fs -> ch;
+                else
+                   inputget -> ch;
+               if);
+            #);
+          init:
+            (# input: ^stream;
+            enter input[]
+            do &input.get[] -> inputget[];
+               &input.eos[] -> inputeos[];
+               nextch;
+            #);
+          token: @integer;
+       do 0 -> buffertop;
+          
+          getToken:
+            (#
+            do  skip:
+                 (if ch -> ascii.isSpace then
+                     nextch;
+                     restart skip;
+                 if);
+               
+               (if ch
+                //'(' then
+                   nextch;
+                   (if ch = '*' then
+                       (* Read comment *)
+                       readComment:
+                         (if ch = '*' then
+                             nextch;
+                             (if ch = ')' then
+                                 nextch;
+                                 restart getToken;
+                              else
+                                 restart readComment;
+                             if);
+                          else
+                             nextch;
+                             restart readComment;
+                         if);
+                    else
+                       'illegal character' -> syntaxError;
+                   if);
+                   
+                //'\'' then
+                   (* read string *)
+                   nextch;
+                   readString:
+                     (if ch
+                      //'\'' then
+                         nextch;
+                         leave readstring;
+                      //ascii.fs then
+                         'end-of-stream while reading string' -> syntaxError;
+                      else
+                         put;
+                         nextch;
+                         restart readstring;
+                     if);
+                   tokens.string -> token;
+                //'-' then
+                   (* read dashes *)
+                   readDashes:
+                     (if ch = '-' then
+                         nextch;
+                         restart readDashes;
+                     if);
+                   tokens.dash -> token;
+                //';' then
+                   nextch;
+                   tokens.semicolon -> token;
+                //':' then
+                   nextch;
+                   tokens.colon -> token;
+                //ascii.fs then
+                   tokens.EOS -> token;
+                else
+                   (if ch -> ascii.isLetter then
+                       (* read  name *)
+                       put;
+                       nextch;
+                       readName:
+                         (if (ch -> ascii.isLetter) or (ch -> ascii.isDigit) or (ch = '_') then
+                             put;
+                             nextch;
+                             restart readName;
+                         if);
+                       tokens.name -> token;
+                    else
+                       (if ch -> ascii.isdigit then
+                           (* read const *)
+                           put;
+                           nextch;
+                           readConst:
+                             (if (ch -> ascii.isDigit) then
+                                 put;
+                                 nextch;
+                                 restart readConst;
+                             if);
+                           tokens.const -> token;
+                        else
+                           'illegal character' -> syntaxerror;
+                       if);
+                   if);
+               if);
+            #);
+       exit token
+       #);
+     tokens: @
+       (# name: (# exit 1 #);
+          string: (# exit 2 #);
+          const: (# exit 3 #);
+          dash: (# exit 4 #);
+          semicolon: (# exit 5 #);
+          EOS: (# exit 6 #);
+          colon: (# exit 7 #);
+       #);
+     
+     lex: @lexer;
+     advance: @
+       (#
+       do lex -> token;
+       #);
+     Parser:
+       (# 
+          
+          
+          init:
+            (# input: ^Stream;
+            enter input[]
+            do input[] -> lex.init;
+               advance;
+            #);
+          
+          ParseProperty:
+            (# prop: ^Property;
+               name: ^text;
+            do &Property[] -> prop[];
+               lex.getText -> prop.name[];
+               advance;
+               loop:
+                 (if token
+                  //tokens.name then
+                     lex.getText -> prop.addName;
+                     advance;
+                     restart loop;
+                  //tokens.string then
+                     lex.getText -> prop.addString;
+                     advance;
+                     restart loop;
+                  //tokens.const then
+                     lex.getText -> prop.addConst;
+                     advance;
+                     restart loop;
+                  //tokens.semicolon then
+                     advance;
+                     leave loop;
+                  //tokens.dash then
+                     leave loop;
+                 if);
+            exit prop[]
+            #);
+          ParsePropertyList:
+            (# prop: ^PropertyList;
+            do &PropertyList[] -> prop[];
+               loop:
+                 (if token
+                  //tokens.name then
+                     ParseProperty -> prop.properties.append;
+                     restart loop;
+                  //tokens.dash then
+                     leave loop;
+                  //tokens.EOS then
+                     leave loop;
+                 if);
+            exit prop[]
+            #);
+       #);
+     parse: @parser;
+     input: ^Stream;
+     init:
+       (#
+       enter input[]
+       do input[] -> parse.init;
+       #);
+     ParsePropertyList:
+       (# prop: ^PropertyList;
+       do parse.parsePropertyList -> prop[];
+       exit prop[]
+       #);
+  #);
