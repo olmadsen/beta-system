@@ -264,7 +264,106 @@ genPtnVarMethod:
         desc[] -> theGen.mkSignature -> mch.checkCast
      #);
         
-  #)
+  #);
+checkVirtualSignature:
+  (# VD: ^ASTindex; (* bindDecl or finalDecl *)
+     VDn,superVD,son,desc,superDesc: @ASTindex;
+     sig, superSIg: @signature;
+     name: ^text;
+     exitId: @integer;
+     loadSuperEnter:
+       (# noOfArgs: @integer;
+          A: @mch.RegAdr; off: @integer;
+          ar: @mch.adrRegOperand; 
+          dr: @mch.dataRegOperand;
+          sig: ^signature
+       enter sig[]
+       do 8 -> off;
+          sig.scanEnter
+          (# 
+          do off + 4 -> off -> A.off;
+             common.enterMethod -> A.fieldName[];
+             current.asText -> A.fieldType[];
+             (if isRef -> A.isRef then
+                 (A[],ar[]) -> mch.ldVal
+              else
+                 (A[],dr[]) -> mch.ldVal
+             if);
+             (if current.elmType 
+              // 6 (* double *) // 8 (* long *) then
+                 (if isJava then
+                     off + 4 -> off -> A.off;
+                 if);
+             if);      
+             noOfArgs+1 -> noOfArgs
+          #)
+       exit noOfArgs
+       #);
+     noOfArgs: @integer;
+     EH: @evalHandler;
+     originDesc: ^ASTindex
+  enter VD[]
+  do 301 -> trace(#
+               do 'checkVirtualSignature: ' -> xT; VD[] -> xA
+               #);
+     VD.son -> son; son.brother -> desc;
+     son -> sematt.singleName -> VDn;
+     VDn.virtDcl -> superVD;
+     superVD.sort -> son;
+     son.son-> son; son.brother -> superDesc;
+     (if (superDesc.label=gram.objectDescriptor)
+         and (desc.label=gram.objectDescriptor) then
+         VDn.getText -> name[] -> sig.addMethod;
+         (desc[],thisSuperChain,false) -> sig.setMethodDesc;
+         sig.addEnter;
+         sig.addExit;
+         VDn.getText -> name[] -> superSig.addMethod;
+         (superDesc[],thisSuperChain,false) -> superSig.setMethodDesc;
+         superSig.addEnter; 
+         superSig.addExit;
+         L:
+         (if not (sig.asText -> (superSig.asText).equal) then
+             1->trace(#
+                     do 'Binding/final extends signature: ' -> xT;
+                        VD[] -> xA; xN;
+                        supersig.astext -> xT; ' ' -> put;
+                        sig.asText -> xT
+                     #);
+             (if sig.noOfEnterArgs = superSig.noOfEnterArgs then
+                 1->trace(#
+                         do 'OBS! Signatures only differ on return value: '
+                            'this is currently NOT handled'-> xT
+                         #);
+                 leave L
+             if);
+             (name[],superSig.asText,sig.noOfEnterArgs,1) 
+               -> mch.methodDef;
+             pushThis;
+             superSig[] -> loadSuperEnter -> noOfArgs;
+             sig.scanEnter
+             (# n: @integer
+             do (if (n+1->n) > noOfArgs then
+                    (if isRef then
+                        mch.ldNone
+                     else
+                        (0->mch.newCstOp,mch.dataTop[]) -> mch.ldCst
+                    if)
+                if)
+             #);
+             thisDesc[] -> sematt.descOrigin -> originDesc[];
+             ((originDesc[],true) -> EH.descName,originDesc[]) 
+               -> sig.addReceiver;
+
+             (sig.asText->mch.newTextOp,'M',false(*?*),false,false) 
+               -> mch.gJsr;
+             (false,exitId) -> mch.return;
+             mch.endMethod
+         if)
+      else
+         
+     if)
+     
+  #);
 ------handleExternals:descriptor---
 (# EH: @evalHandler
 do (if switch182 then
@@ -518,12 +617,7 @@ do (# sig: @Signature;
                                           * handled
                                           *)
       (if not inLine then
-          (if true then
-              (patternName[],sig.asText,sig.noOfEnterArgs,1) -> mch.methodDef
-           else
-              (doP.nodeId,patternName[],true,sig.asText,sig.noOfEnterArgs) 
-                -> mch.initDo;       
-          if)
+             (patternName[],sig.asText,sig.noOfEnterArgs,1) -> mch.methodDef;
       if);
       desc[] -> markPos;
       (* Consider
@@ -1908,6 +2002,10 @@ do (# findBetaenv:
                           // gram.virtualDecl
                           // gram.bindingDecl
                           // gram.finalDecl then
+                             (if N.label
+                              // gram.bindingDecl // gram.finalDecl then
+                                 N[] -> checkVirtualSignature
+                             if);                             
                              D -> thisDesc -> theDesc;
                              (name[],N[]) -> genVirtualStrucMethod
                          if)
@@ -1921,6 +2019,10 @@ do (# findBetaenv:
                       // gram.virtualDecl
                       // gram.bindingDecl
                       // gram.finalDecl then
+                         (if N.label
+                          // gram.bindingDecl // gram.finalDecl then
+                             N[] -> checkVirtualSignature
+                         if);
                          (current[],false) -> EH.descName -> name[];
                          (name[]
                          ,current[],false,false,theDesc[],none,false,true,true)
