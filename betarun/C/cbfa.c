@@ -98,9 +98,16 @@ void freeCBF(external_entry)
      unsigned long external_entry; /* Address of cell just after the ref(Structure) */
 {
   /* For now we just clear the struct of the entry  */
-  struct CallBackEntry *theCBE 
-    = (struct CallBackEntry *)(external_entry - sizeof(struct Structure *));
+  struct CallBackEntry *theCBE;
+
+  if (!external_entry){
+    DEBUG_CODE(fprintf(output, "freeCBF: external_entry is NULL\n");
+	       fflush(output));
+    return;
+  }
   
+  theCBE 
+    = (struct CallBackEntry *)(external_entry - sizeof(struct Structure *));
 #ifdef RTDEBUG
   Claim(inBetaHeap((ref(Object))(theCBE->theStruct)), 
 	"inBetaHeap(theCBE->theStruct)");
