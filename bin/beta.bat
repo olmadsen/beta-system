@@ -29,7 +29,7 @@ goto getopts
 
 :compile
 rem Start the compiler
-"%BETALIB%"\compiler\nti\%sdk%\beta %BETAOPTS% %_opts_%
+%BETALIB%\compiler\nti\%sdk%\beta.exe %BETAOPTS% %_opts_%
 
 rem Clean-up
 set _opts_=
