@@ -44,6 +44,9 @@ all:	bdraw/bdraw
 tags:
 	etags *.bet private/Impl/*.bet private/Predefined/*.bet private/Rubber/*.bet private/X11/*.bet bdraw/*.bet demo/*.bet tutorial/*.bet
 
+gtags:
+	csh -c 'etags --output=GUIENV_TAGS /users/beta/guienv/v1.2/{*.bet,*/*.bet,*/*/*.bet}'
+
 dopartlist:
 	grep -h 'dopart --' *.bet private/Impl/*.bet private/Predefined/*.bet private/Rubber/*.bet private/X11/*.bet private/Xt/*.bet bdraw/*.bet demo/*.bet tutorial/*.bet | sort
 allways: ;
