@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: MakeTextObj.c,v 1.12 1993-02-12 13:57:26 datpete Exp $
+ * Mod: $Id: MakeTextObj.c,v 1.13 1993-02-16 14:59:14 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -52,7 +52,12 @@ void MkTO(char *cText,
      * fflush(output);
     */
 
+#ifdef sparc
+    Protect(theItem, theText = CAlloI((struct Object *)BasicItem, 0, 
+				      TextProto, 0, 0));
+#else
     Protect(theItem, theText = CAlloI((struct Object *)BasicItem, TextProto));
+#endif
 
     AssignReference((long *)theItem + offset, theText);
     
