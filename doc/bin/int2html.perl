@@ -25,7 +25,9 @@ sub usage
 #  (* idx- *)
 #     decrements $scope by 1
 #
-# Super- and sub pattern indices are also added in the following fashion:
+# If $index_super_subs is 1, super- and sub pattern indices are also added 
+# in the following fashion (NYI for HTML):
+#
 #    X: (#
 #          Y: Z(# ... #)
 #       #)
@@ -62,10 +64,14 @@ sub usage
 
 # Style sheet:
 $css = "../../style/miadoc.css";
+
 # File names:
 $topfile = "../index.html";
 $indexfile = "inx.html";
 $contentsfile = "index.html";
+
+# Flags
+$index_super_subs=0;
 
 sub print_button
 {
@@ -251,6 +257,10 @@ sub print_index
 	# save target file name
 	$htmlfile = $2;
 	$_ = $index[$i];
+
+	# In betaenv: exit T[1:lgth] is taken to be
+	# an identifer with name 1. Prevent this.
+	next if (!&legal_identifier($_));
 	
 	s/(\s*\w+)\.\d+/$1/g;
 	s/\(\d+\)//g;
@@ -359,6 +369,13 @@ sub strip_path
     return $string;
 }
 
+sub legal_identifier
+
+{
+    local ($id) = @_[0];
+    return ($id =~ m/[a-zA-Z_]\w*/);
+}
+
 sub process_file
 {
     local ($file) = @_[0];
@@ -419,11 +436,12 @@ sub process_file
 
     $indexid=0;
 
-    # Index text for subpatterns.
-    $subpatterns="_subpatterns";
-
-    # Index text for superpatterns.
-    $superpattern="__superpattern";
+    if ($index_super_subs){
+	# Index text for subpatterns.
+	$subpatterns="_subpatterns";
+	# Index text for superpatterns.
+	$superpattern="__superpattern";
+    }
 
     # Run through $_, matching for pattern-begin and pattern-end, while
     # keeping track of scope level.
@@ -562,11 +580,18 @@ sub process_file
 		    $id =~ m/(\w+)/; # MUST succeed
 		    $anchor += 1;
 		    $idxid = "$1.$level($anchor)"; # $id without whitespace.
-		    $bid = "<B>$id</B>"; # anchored identifier
+		    # In betaenv: exit T[1:lgth] is taken to be
+		    # an identifer with name 1. Prevent this.
+		    if (&legal_identifier($id)){
+			$bid = "<B>$id</B>"; # boldface anchored identifier
+		    } else {
+			$bid = $id;
+		    }
 		    if ( "$patterns" eq "" ){
-			if ( $prefix eq "" ){
+			if ( ($prefix eq "") || (!$index_super_subs) ){
 			    $before .= "$bid<A name=\"$idxid\"></A>";
-			} else { # prefix is present
+			} else { 
+			    # prefix is present
 			    # Insert super- and sub pattern information
 			    $super{$prefix} .= "$idxid-";
 			    $l = $level; $l1 = $level+1; $l2 = $level+2;
@@ -576,14 +601,16 @@ sub process_file
 			    $index[$indexid] = "$prefix.$l:$subpatterns.$l1:$id.$l2\@$outfile";
 			    $indexid += 1;
 			}
-		    } else { # inner scope
-			if ( $prefix eq "" ){
+		    } else { 
+			# inner scope
+			if ( ($prefix eq "") || (!$index_super_subs) ){
 			    $before .= "$bid<A name=\"$patterns$idxid\"></A><A name=\"$idxid\"></A>";
 			    $index[$indexid] = "$idxid\@$outfile";
 			    $indexid += 1;
 			    $index[$indexid] = "$patterns$idxid\@$outfile";
 			    $indexid += 1;
-			} else { # prefix is present
+			} else { 
+			    # prefix is present
 			    # Insert super- and sub pattern information
 			    $super{$prefix} .= "$patterns$idxid-";
 			    $l = $level; $l1 = $level+1; $l2 = $level+2;
@@ -613,40 +640,42 @@ sub process_file
 
     $_ = $line."\n";
 
-    # Now insert the superpatterns collected in %super at the right places:
-    $external = "___Externally defined";
-
-    printf STDERR "Generating tables for superpatterns...\n" if $verbose==1;
-
-    foreach $superid ( keys %super ) {
-	printf STDERR "  %s\n", $superid if $trace==1;
-	@subs = split( /-/, $super{$superid});
-	foreach $sub (@subs){
-	    printf STDERR "    %s\n", $sub if $trace==1;
-	    $sub =~ m/((\w+\.\d+\:)*)(\w+)\.(\d+)$/;
-	    $subprefix = $1; $subid = $3; $sublevel = $4;
-	    $superprefix = $subprefix; $superlevel = $sublevel;
-	    if ( "$superprefix" eq "" )
-	    { $l = $sublevel; $l1 = $l+1; $l2 = $l+2;
-	      s/(<A name=\")$subid\.$sublevel\s*\">/$&<A name=\"$sub:$superpattern.$l1:$superid.$l2\"> <\/a>/;
-	      s/(<A name=\")$superid.\d+:($subpatterns.\d+:$subid)/$1$superid.$l:$2/;
-	  } else
-	  { loop: { if ( "$superprefix" ne "" )
-		    { if ( m/\{\\v\s*$superprefix$superid.$superlevel\s*\}\}\}/ )
+    if ($index_super_subs){
+	# Now insert the superpatterns collected in %super at the right places:
+	$external = "___Externally defined";
+	
+	printf STDERR "Generating tables for superpatterns...\n" if $verbose==1;
+	
+	foreach $superid ( keys %super ) {
+	    printf STDERR "  %s\n", $superid if $trace==1;
+	    @subs = split( /-/, $super{$superid});
+	    foreach $sub (@subs){
+		printf STDERR "    %s\n", $sub if $trace==1;
+		$sub =~ m/((\w+\.\d+\:)*)(\w+)\.(\d+)$/;
+		$subprefix = $1; $subid = $3; $sublevel = $4;
+		$superprefix = $subprefix; $superlevel = $sublevel;
+		if ( "$superprefix" eq "" )
+		{ $l = $sublevel; $l1 = $l+1; $l2 = $l+2;
+		  s/(<A name=\")$subid\.$sublevel\s*\">/$&<A name=\"$sub:$superpattern.$l1:$superid.$l2\"> <\/a>/;
+		  s/(<A name=\")$superid.\d+:($subpatterns.\d+:$subid)/$1$superid.$l:$2/;
+	      } else
+	      { loop: { if ( "$superprefix" ne "" )
+			{ if ( m/\{\\v\s*$superprefix$superid.$superlevel\s*\}\}\}/ )
+			  { $l = $sublevel; $l1 = $l+1; $l2 = $l+2;
+			    s/(<A name=\")$superprefix$superid.$superlevel\s*\">/$&<A name=\"$sub:$superpattern.$l1:$superid.$l2\"> <\/a>/;
+			    s/(<A name=\")$subprefix$superid.\d+:($subpatterns.\d+:$subid)/$1$superprefix$superid.$l:$2/;
+			} elsif ( $superprefix =~ m/\w+\.(\d+)\:$/ )
+			{ $superprefix = $`; $superlevel= $1;
+			  redo loop;
+		      } else { $superprefix = ""; $superlevel = 1; }
+		      } else
 		      { $l = $sublevel; $l1 = $l+1; $l2 = $l+2;
-			s/(<A name=\")$superprefix$superid.$superlevel\s*\">/$&<A name=\"$sub:$superpattern.$l1:$superid.$l2\"> <\/a>/;
-			s/(<A name=\")$subprefix$superid.\d+:($subpatterns.\d+:$subid)/$1$superprefix$superid.$l:$2/;
-		    } elsif ( $superprefix =~ m/\w+\.(\d+)\:$/ )
-		    { $superprefix = $`; $superlevel= $1;
-		      redo loop;
-		  } else { $superprefix = ""; $superlevel = 1; }
-		  } else
-		  { $l = $sublevel; $l1 = $l+1; $l2 = $l+2;
-		    s/$/$&<A name=\"$sub:$superpattern.$l1:$superid.$l2\"> <\/a>\n/;
-		    s/(<A name=\")$subprefix$superid.\d+:$subpatterns.\d+:$subid.\d+/$1$external.1:$superid.2:$subpatterns.3:$subid.4/;
-		}
-		}
-	}
+			s/$/$&<A name=\"$sub:$superpattern.$l1:$superid.$l2\"> <\/a>\n/;
+			s/(<A name=\")$subprefix$superid.\d+:$subpatterns.\d+:$subid.\d+/$1$external.1:$superid.2:$subpatterns.3:$subid.4/;
+		    }
+		    }
+	    }
+	    }
 	}
     }
 
