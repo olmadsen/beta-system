@@ -14,8 +14,11 @@ void doGC() /* The one called from IOA(c)alloc */
 {
 #ifdef sparc
     GCable_Entry();
+    MCHECK();
     StackEnd = (long *)((struct RegWin *) StackPointer);
+    MCHECK();
     IOAGc();
+    MCHECK();
 #endif
 #ifdef hppa
 #ifndef UseRefStack

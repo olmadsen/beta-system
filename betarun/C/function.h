@@ -83,7 +83,8 @@ extern void CBFACheck(void);
 #endif
 
 /* C/dot.c */
-extern void ProcessDOT(void);
+/* See dot.h */
+
 
 /* C/sighandler.c */
 extern void SetupBetaSignalHandlers(void);
@@ -103,6 +104,7 @@ extern thread_t attToProcessor(struct Component *comp);
 extern void SetupVirtualTimerHandler(void);
 extern void SetupVirtualTimer(unsigned usec);
 extern void* MT_malloc(int size);
+extern void CalculateSliceSize(void);
 #endif /* MT */
 
 /* C/valhallaComm.c */

@@ -9,6 +9,8 @@
 #endif
 
 #include "beta.h"
+#include "dot.h"
+
 #ifdef sparc
 #include "../CRUN/crun.h"
 #endif
@@ -275,6 +277,15 @@ void IOAGc()
      */
     if (NumTSD==1) IOATop = GLOBAL_IOATop; 
   });
+
+  /* Make sure there is enough slices in IOA for all threads.
+   * As the amount fo free heap has changed, recalculate slicesize.
+   * Forthcoming threads will use the smaller slice size, 
+   * whereas running threads will
+   * use the previous (larger) slice size) until they are forced to
+   * take a new slice (after a GC).
+   */
+  CalculateSliceSize();
 #endif
 
   DEBUG_MT( TSDCheck() );

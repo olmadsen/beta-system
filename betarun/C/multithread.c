@@ -27,6 +27,16 @@ struct S_PreemptionLevel {
   unsigned long inGC;
 };
 
+#ifdef RTDEBUG
+static void AssertLock(mutex_t* lock)
+{
+  if (mutex_trylock(lock) != EBUSY) {
+    fprintf(output, "Does not have required lock!\n");
+    Illegal();
+  }
+}
+#endif
+
 void initSynchVariables(void)
 {
   mutex_init(&tsd_lock, USYNC_THREAD, NULL);
@@ -54,9 +64,8 @@ TSD *create_TSD(void)
   TSD *tsd;
   int inx;
 
-  DEBUG_MT(TSDCheck());
-
   mutex_lock(&tsd_lock);
+  DEBUG_MT(TSDCheck());
   tsd = (TSD*)MALLOC(sizeof(TSD));
   tsd->_nums = MALLOC(sizeof(nums));
 
@@ -70,7 +79,7 @@ TSD *create_TSD(void)
 		     (int)TSDlist, (int)TSDlistlen));
 
     TSDlist = REALLOC(TSDlist, (TSDlistlen + expand)*sizeof(TSD*));
-    memset(TSDlist + (TSDlistlen * sizeof(TSD*)), 0, expand * sizeof(TSD*));  
+    memset(TSDlist + TSDlistlen, 0, expand * sizeof(TSD*));  
     TSDlistlen += expand;
 
     DEBUG_MT(fprintf(output,
@@ -80,36 +89,15 @@ TSD *create_TSD(void)
   }
   NumTSD++;
   
-  /* Make sure there is enough slices in IOA for all threads.
-   * Add to NumIOASlices until there are more than TSDs.
-   * Forthcoming threads (including the one being created)
-   * will use the smaller slice size, whereas running threads will
-   * use the previous (larger) slice size) until they are forced to
-   * take a new slice (after a GC).
-   */
-  while (NumIOASlices < NumTSD) {
-    DEBUG_MT(fprintf(output, "create_TSD: Changing slices:\n"));
-    DEBUG_MT(fprintf(output,
-		     "  NumIOASlices from: %d, IOASliceSize from: %d\n", 
-		     (int)NumIOASlices, (int)IOASliceSize));
-
-    NumIOASlices += numProcessors(TRUE);
-    IOASliceSize = ObjectAlignDown(IOASize / NumIOASlices);
-
-    DEBUG_MT(fprintf(output,
-		     "  NumIOASlices to:   %d, IOASliceSize to:   %d\n", 
-		     (int)NumIOASlices, (int)IOASliceSize));
-  }
-
   /* Find free entry in TSDlist */
   for (inx = 0; TSDlist[inx]; inx++)
     ;
   tsd->_TSDinx = inx;
   TSDlist[inx] = tsd;
   
-  mutex_unlock(&tsd_lock);
-
   DEBUG_MT(TSDCheck());
+
+  mutex_unlock(&tsd_lock);
 
   /* Signal that the number of threads has changed */
   mutex_lock(&cond_pause_lock);
@@ -119,22 +107,47 @@ TSD *create_TSD(void)
   return tsd;
 }
 
+void CalculateSliceSize(void)
+{
+  DEBUG_MT(AssertLock(&tsd_lock));
+  /* If more than one thread, make sure there are always spare slices.
+   * Obtaining a new slice is cheap compared to the cost of 
+   * syncronizing for GC.
+   * When running only one thread, there is no need for slices.
+   */
+  NumIOASlices = (NumTSD > 1) ? 2 * NumTSD : 1;
+  
+  IOASliceSize = 
+    ObjectAlignDown(((long)gIOALimit-(long)gIOATop) / NumIOASlices);
+
+  /* However, we will not allow too small slice sizes (0 would be
+   * foolish!).
+   */
+  if (IOASliceSize<2048){
+    IOASliceSize=2048;
+    /* NumIOASlices = (((long)gIOALimit-(long)gIOATop) / IOASliceSize); */
+  }
+  
+  DEBUG_MT(fprintf(output, "CalculateSliceSize: Changed "
+		   "NumIOASlices to: %d, IOASliceSize to: %d\n", 
+		   (int)NumIOASlices, (int)IOASliceSize);
+	   fflush(output));
+}
+  
 void destroy_TSD(void)
 {
   long inx = TSDinx;
 
-  DEBUG_MT(TSDCheck());
-
   mutex_lock(&tsd_lock);
+  DEBUG_MT(TSDCheck());
   free(Nums);
   free(TSDReg);
   TSDlist[inx] = NULL;
   TSDReg = NULL;
   NumTSD--;
-  
+  DEBUG_MT(TSDCheck());
   mutex_unlock(&tsd_lock);
 
-  DEBUG_MT(TSDCheck());
 
   /* Some other thread may be initiating a GC.  
    * If we are the last to "join in", that thread wouldwait forever
@@ -215,11 +228,13 @@ static void TSDCheckReference(int i, struct Object *ref)
 void TSDCheck(void)
 {  
   int i;
+
+  DEBUG_MT(AssertLock(&tsd_lock));
   for (i = 0; i < TSDlistlen; i++) {
     if (TSDlist[i]) {
 
       /* Check TSDinx */
-      if ( TSDlist[i]->_TSDinx < 0 || TSDlist[i]->_TSDinx > NumTSD ){
+      if (TSDlist[i]->_TSDinx != i){
 	fprintf(output, 
 		"Illegal TSDinx %d in TSD[%d]. NumTSD is %d.\n", 
 		(int)TSDlist[i]->_TSDinx,
@@ -257,14 +272,16 @@ void TSDCheck(void)
        * threads may have been created and later destroyed by now,
        * in which case the thread id may be quite large 
        */
-      if (TSDlist[i]->_thread_id > 1000){
+      if (TSDlist[i]->_thread_id > 100){
 	fprintf(output, 
 		"Suspicious thread id %d in TSD[%d]\n", 
 		(int)TSDlist[i]->_thread_id,
 		i);
+	Illegal();
       }
 
       /* Check local IOA top and limit */
+#if 0
       if (TSDlist[i]->_IOATop > TSDlist[i]->_IOALimit){
 	fprintf(output, 
 		"IOATop (0x%x) is above IOALimit (0x%x) in TSD[%d]\n", 
@@ -289,7 +306,7 @@ void TSDCheck(void)
 		i);
 	Illegal();
       }
-
+#endif
 
       /* Check references */
       TSDCheckReference(i, (ref(Object))(TSDlist[i]->_CurrentObject));
@@ -423,13 +440,12 @@ struct Object *doGC(unsigned long numbytes)
   DEBUG_MT(fprintf(output,"t@%d: Got cond_pause_lock.\n", (int)ThreadId);
 	   fflush(output);
 	   );
-  if (reqsize < IOASliceSize)
-    reqsize = IOASliceSize;
+  if (reqsize < IOASliceSize) reqsize = IOASliceSize;
   
   if (!IOATop) {
     /* IOATop is zero => this thread has not had a slice yet. */
     IOATop = gIOATop;
-    DEBUG_MT(fprintf(output,"t@%d: Got initial slice.\n", (int)ThreadId);
+    DEBUG_MT(fprintf(output,"t@%d: Requesting initial slice.\n", (int)ThreadId);
 	     fflush(output);
 	     );
   } 
@@ -457,7 +473,8 @@ struct Object *doGC(unsigned long numbytes)
        *    Also force all threads to run out of heap at next allocation, so
        *    that they will not use the rest of their slice.
        * 4) Then wait for the last of the other threads to signal start_gc.
-       * 5) Try IOAGc'ing at most three times.
+       * 5) Try IOAGc'ing at most three times, freeing room for slices
+       *    for all threads.
        * 6) Allocate object and slice for this thread.
        * 7) signal gc_done to all other threads.
        */
@@ -493,22 +510,35 @@ struct Object *doGC(unsigned long numbytes)
 	numReadyToGC = 0;
 	mutex_lock(&tsd_lock);
 	for (i = 0; i < TSDlistlen; i++) {
-	  if (TSDlist[i] &&
-	      (TSDlist[i]->_TSDFlags & (Flag_Semablocked | Flag_GCblocked | Flag_DoingGC))){
-	    numReadyToGC++;
-	    DEBUG_MT(fprintf(output,
-			     "t@%d: Detected t@%d ready for GC (%d ready, expecting %d)\n", 
-			     (int)ThreadId,
-			     TSDlist[i]->_thread_id,
-			     (int)numReadyToGC,
-			     (int)NumTSD
-			     );
-		     fflush(output);
-	   );
-
+	  if (TSDlist[i]) {
+	    if (TSDlist[i]->_TSDFlags &
+		(Flag_Semablocked | Flag_GCblocked | Flag_DoingGC)) {
+	      numReadyToGC++;
+	      DEBUG_MT({
+		fprintf(output,
+			"t@%d: Detected t@%d ready for GC (%d ready, expecting %d)\n", 
+			(int)ThreadId,
+			TSDlist[i]->_thread_id,
+			(int)numReadyToGC,
+			(int)NumTSD
+			);
+		fflush(output);
+	      } );
+	    } else {
+	      DEBUG_MT({
+		fprintf(output,
+			"t@%d: Detected t@%d NOT ready for GC (%d ready, expecting %d)\n", 
+			(int)ThreadId,
+			TSDlist[i]->_thread_id,
+			(int)numReadyToGC,
+			(int)NumTSD
+			);
+		fflush(output);
+	      });
+	    }
 	  }
 	}
-	
+
 	if (numReadyToGC == NumTSD) {
 	  mutex_unlock(&tsd_lock);
 	  break;  /* all threads are blocked, go GC! */
@@ -518,19 +548,23 @@ struct Object *doGC(unsigned long numbytes)
 	}
       }
 
+      /* Now all other threads are sleeping */      
+      /* (5) */
       DEBUG_MT(fprintf(output,"t@%d: Starting doGC.\n", (int)ThreadId);
 	       fflush(output);
 	       );
-      /* Now all other threads are sleeping */      
-      /* (5) */
       ReqObjectSize = numbytes/4;
+      mutex_lock(&tsd_lock); /* To allow CalculateSliceSize & TSDCheck */
 
       /* Try up to 3 IOAGcs to mature enough object to go into AOA */
       for (i=0; i<2; i++){
 	__asm__("stbar"); 
 	INFO_IOA(fprintf(output, "[%d]\n", i));
 	IOAGc();
-	if ((long*)((long)gIOATop + reqsize) <= gIOALimit) {
+	reqsize = numbytes;
+	if (reqsize < IOASliceSize) reqsize = IOASliceSize;
+
+	if ((long*)((long)gIOATop + (reqsize + (NumTSD-1) * IOASliceSize)) <= gIOALimit) {
 	  /* (6.0) */
 	  IOATop = gIOATop; 
 	  gIOATop = (long*)((long)gIOATop + reqsize); /* size of slice */
@@ -562,13 +596,6 @@ struct Object *doGC(unsigned long numbytes)
 	  /* Have now tried everything to get enough space in IOA */
 	  /* Aber dann haben wir anderen metoden! */
 	  /* (6.2) */
-#ifdef IOAMinAgeNoneZero
-	  /* FIXME: */
-	  fprintf(output, 
-		  "\n***WARNING: allocation in AOA. V-entry sets GCAttr to 1.\n");
-	  fprintf(output, 
-		  "***This will probably cause AOA releated problems.\n\n");
-#endif
 	  newObj = AOAcalloc(numbytes);
 	  savedIOALimit = IOALimit = IOATop = gIOATop;
 	  break;
@@ -581,7 +608,6 @@ struct Object *doGC(unsigned long numbytes)
 	       fflush(output);
 	       );
       /* (7) */
-      mutex_lock(&tsd_lock);
       for (i = 0; i < TSDlistlen; i++) {
 	if (TSDlist[i])
 	  TSDlist[i]->_TSDFlags &= ~(Flag_GCblocked | Flag_DoingGC);
@@ -607,9 +633,14 @@ struct Object *doGC(unsigned long numbytes)
 	       fflush(output);
 	       );
       
+      reqsize = numbytes; /* IOASliceSize may have changed; recalc */
+      if (reqsize < IOASliceSize) reqsize = IOASliceSize;
+
       if (gIOALimit < (long*)((long)gIOATop + reqsize)) {
 	/* Not enough room in IOA. Allocate object in AOA, and return empty slice */
-	DEBUG_MT(fprintf(output,"t@%d: Alloced in AOA\n", (int)ThreadId);
+	DEBUG_MT(fprintf(output,"t@%d: Allocated %d bytes in AOA, "
+			 "as %d bytes would not fit in IOA\n", 
+			 (int)ThreadId, (int)numbytes, (int)reqsize);
 		 fflush(output);
 		 );
 	newObj = AOAcalloc(numbytes);
@@ -631,7 +662,12 @@ struct Object *doGC(unsigned long numbytes)
      * max(numbytes,IOASliceSize) will fit into [gIOATop..gIOALimit[ 
      */
     newObj = AllocObjectAndSlice(numbytes, reqsize);
-    DEBUG_MT(fprintf(output,"t@%d: UNLock cond_pause_lock\n", (int)ThreadId);
+    DEBUG_MT(fprintf(output,"t@%d: Got slice of at least %d\n", 
+		     (int)ThreadId, (int)reqsize);
+	     fflush(output);
+	     );
+    DEBUG_MT(fprintf(output,"t@%d: UNLock cond_pause_lock\n", 
+		     (int)ThreadId);
 	     fflush(output);
 	     );
     mutex_unlock(&cond_pause_lock);
@@ -678,7 +714,6 @@ thread_t attToThread(struct Component *comp)
 		   (int)tsd->_thread_id, 
 		   (int)comp);
 	   fflush(output););
-  DEBUG_MT(TSDCheck());
   return tsd->_thread_id;
 }
 
@@ -706,13 +741,14 @@ void BETA_MT_unlock(void)
   __asm__("stbar"); 
   mutex_unlock(&cond_pause_lock); 
 }
+
+
 void BETA_MT_csuspend(void)
 {
   DEBUG_MT(fprintf(output,"t@%d: BETA_MT_suspend\n", (int)ThreadId);
 	   fflush(output);
 	   );  
-  DEBUG_MT(if (mutex_trylock(&cond_pause_lock) != EBUSY) 
-    fprintf(output, "t@%d: BETA_MT_suspend DOES NOT HAVE pause_lock!\n", (int)ThreadId));
+  DEBUG_MT(AssertLock(&cond_pause_lock));
 
   TSDFlags |= Flag_Semablocked; /* No need to lock; this is my own TSD */
   __asm__("stbar"); 
@@ -729,8 +765,7 @@ void BETA_MT_continue(int i)
   DEBUG_MT(fprintf(output,"t@%d: BETA_MT_continue\n", (int)ThreadId);
 	   fflush(output);
 	   );
-  DEBUG_MT(if (mutex_trylock(&cond_pause_lock) != EBUSY) 
-    fprintf(output, "t@%d: BETA_MT_continue DOES NOT HAVE pause_lock!\n", (int)ThreadId));
+  DEBUG_MT(AssertLock(&cond_pause_lock));
 
   __asm__("stbar"); 
   mutex_lock(&tsd_lock); /* Someone elses TSD; lock TSDlist first */
@@ -883,7 +918,7 @@ void SetupRealTimeTimer(unsigned firstsec,
 
 void* MT_malloc(int size) 
 { 
-  void* p = memalign(64, (size));
+  void* p = memalign(8, (size));
   DEBUG_MT(fprintf(output,"[malloc at 0x%0x]\n", (int)p));
   memset(p, 0, (size));
   return p;

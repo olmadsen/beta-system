@@ -1,9 +1,9 @@
 /* macroes */
 
 /* define DMALLOC to 1 to use dmalloc library - requires manual link
- * with /users/beta/GNU/dmalloc-3.1.3/lib/libdmalloc.a before -lc
+ * with /users/beta/GNU/dmalloc-3.2.1/libdmalloc.a before -lc
  */
-#undef DMALLOC 
+#undef DMALLOC
 
 #if defined(MAC)
 #  define MALLOC(size) NewPtr(size)
@@ -18,7 +18,7 @@
 #      ifdef MT
 #        define MALLOC(size) MT_malloc(size)
 #      else
-#        define MALLOC(size) memset((void *)memalign(64, (size)), 0, (size))
+#        define MALLOC(size) memset((void *)memalign(8, (size)), 0, (size))
 #      endif
 #    else
 #      define MALLOC(size) calloc(size,1)
@@ -26,7 +26,7 @@
 #  else
 #    ifdef sparc
        /* 64 bit alignment because of the reals */
-#      define MALLOC(size) memalign(64, (size))
+#      define MALLOC(size) memalign(8, (size))
 #    else
 #      define MALLOC(size) malloc(size)
 #    endif
@@ -40,8 +40,9 @@
 #endif
 
 #ifdef DMALLOC
-#include "/users/beta/GNU/dmalloc-3.1.3/include/dmalloc.h"
+/* #include "/users/beta/GNU/dmalloc-3.2.1/include/dmalloc.h" */
 extern long mcheck_line;
+extern int dmalloc_verify(int);
 #define MCHECK() mcheck_line=__LINE__; dmalloc_verify(0); mcheck_line=0
 #else
 #define MCHECK()

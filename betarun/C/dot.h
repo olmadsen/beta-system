@@ -115,5 +115,11 @@ extern void DOThandleDelete (int handle);
 
 extern long DOThandleLookup (int handle);
 
+/* ProcessDOT
+ * ==========
+ *
+ * Process References in DOT.
+ * Used by IOAGc().
+ */
 
-
+extern void ProcessDOT(void);

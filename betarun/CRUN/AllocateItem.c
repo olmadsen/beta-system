@@ -16,6 +16,7 @@ ParamOriginProto(struct Item *,AlloI)
 {
     DeclReference1(struct Item *, item); /*= struct Item * item; */
     GCable_Entry();
+    MCHECK();
     FetchOriginProto();
 
     DEBUG_CODE(NumAlloI++);
@@ -45,6 +46,8 @@ ParamOriginProto(struct Item *,AlloI)
     }
 
     Ck(origin); Ck(item);
+
+    MCHECK();
 
     GCable_Exit(1);    
 #ifdef sparc
