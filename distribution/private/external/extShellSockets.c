@@ -189,7 +189,7 @@ int nbReadn (int sock, char* ptr, int nbytes)
     if (nread < 0) {
       /* printf ("nbReadn errno: %d\n",errno); */
       switch (errno) {
-#if !(defined(sun4s) || defined(linux) || defined(SGI))
+#if !(defined(sun4s) || defined(linux) || defined(sgi))
       case EWOULDBLOCK: /* EWOULDBLOCK = EAGAIN on sun4s, linux, sgi */
 #endif
       case ENOTCONN:
@@ -215,7 +215,7 @@ int nbWriten (int sock, char* ptr, int nbytes)
     if (nwritten < 0) {
       /* printf ("nbWriten errno: %d\n",errno); */
       switch (errno) {
-#if !(defined(sun4s) || defined(linux) || defined(SGI))
+#if !(defined(sun4s) || defined(linux) || defined(sgi))
       case EWOULDBLOCK:
 #endif
       case ENOTCONN:
