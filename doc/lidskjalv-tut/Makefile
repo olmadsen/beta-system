@@ -1,4 +1,20 @@
-generated: pdf
+doc: always
+	@echo Generating documentation without PDF
+	@perl -s ../bin/makedoc -v -p lidskjalv-tut.book
 
-pdf:
-	@../bin/html2pdf.perl
+dist: always
+	@echo Generating documentation with PDF
+	@perl -s ../bin/makedoc lidskjalv-tut.book
+
+tags:
+	etags src/*.html
+
+clean:
+	-/bin/rm -f *~ src/*~
+
+distclean: clean
+	-/bin/rm -f *.html *.pdf
+	if [ -d interface ]; then /bin/rm -rf interface; fi
+
+always:
+	@echo ""

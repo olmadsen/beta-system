@@ -1,0 +1,460 @@
+<H2>Holder classes</H2>
+</A>
+
+Based on the idea used in the IDL to Java mapping
+<A HREF="references.html#idl2java">[IDL2JAVA]</A>, we are generating so-called 
+<EM>holder classes</EM>, that the compiler treats specially.
+See 
+<A HREF="http://www.daimi.au.dk/~olm/DOC/COM.html#holder_objects">
+Compiler Support for Holder objects
+</A>
+for details.
+<P>
+
+<A NAME="mapping">
+<P>
+<H2>IDL to BETA Type Mapping</H2>
+</A>
+
+The following sections describe the mappings of various IDL types to BETA.
+<P>
+
+<A NAME="aliases">
+<H3>Typedef aliases</H3>
+</A>
+
+Simple alias-typedefs are handled by adding the resolved
+names to the internal tables of bidl. Usages of the aliased names 
+are then determined from this table.
+<P>
+If the alias does not introduce pointer levels, i.e.
+<PRE>
+  typedef XXX YYY;
+</PRE>
+as opposed to
+<PRE>
+  typedef XXX *YYY;
+</PRE>
+where XXX is a struct or union, an alias pattern
+<PRE>
+  YYY: XXX(# #);
+</PRE>
+is also generated.
+
+<A NAME="enums">
+<H3>Enums</H3>
+</A>
+enums are mapped to corresponding BETA constants:
+<P>
+<TABLE BORDER CLASS=opaque>
+<TR> <TH>Enum Type</TH> 
+     <TH>BETA Type</TH>
+     <TH>Pointer to...</TH>
+     <TH>Pointer to pointer to...</TH>
+</TR>
+
+<TR VALIGN=top> 
+<TD>
+<PRE>
+typedef enum tagfoo {
+  foo1,
+  foo2,
+  ...
+} foo;
+</PRE>
+</TD>
+
+<TD>
+<PRE>
+foo: (* enum tagfoo *)IntegerObject;
+foo1: (* foo *)(# exit 0 #);
+foo2: (* foo *)(# exit 1 #);
+...
+</PRE>
+</TD>
+
+<TD><CODE>^int32Holder</CODE></TD>
+<TD><EM>Error</EM></TD>
+</TR>
+
+</TABLE>
+<P>
+As can be seen, I would have liked to map the enum type to an actual
+BETA type, but currently only maps to constants. This is because
+IntegerObjects cannot be used as formal parameters for COM virtual calls.
+<P>
+In case initializers are used, these values are mapped into the BETA
+constants, and in case <EM>some</EM> initializers are used, but some
+enums members are without initializers, the expressions are
+<EM>not</EM> calculated by <CODE>bidl</CODE>, but left the the
+BETA compiler to handle:
+
+<P>
+<TABLE BORDER CLASS=opaque>
+<TR> <TH>Enum Type</TH> 
+     <TH>BETA Type</TH>
+     <TH>Pointer to...</TH>
+     <TH>Pointer to pointer to...</TH>
+</TR>
+
+<TR VALIGN=top> 
+<TD>
+<PRE>
+typedef enum tagbar {
+  bar1 = 20,
+  bar2,
+  bar3 = foo3,
+  bar4,
+  bar5,
+  ...
+} bar;
+</PRE>
+</TD>
+
+<TD>
+<PRE>
+bar: (* enum tagbar *)IntegerObject;
+bar1: (* bar *)(# exit 20 #);
+bar2: (* bar *)(# exit 20+1 #);
+bar3: (* bar *)(# exit foo3 #);
+bar4: (* bar *)(# exit bar3+1 #);
+bar5: (* bar *)(# exit bar4+1 #);
+...
+</PRE>
+</TD>
+<TD><CODE>^int32Holder</CODE></TD>
+<TD><EM>Error</EM></TD>
+</TR>
+
+</TABLE>
+
+<P>
+<A NAME="structs">
+<H3>Structs</H3>
+</A>
+
+Structs are mapped to specializations of Pattern <CODE>DATA</CODE>,
+where each member is mapped according to the general 
+<A HREF="#type_map">Mapping of Types</A>:
+
+<P>
+<TABLE BORDER CLASS=opaque>
+<TR> <TH>IDL Type</TH> 
+      <TH>BETA Type</TH>
+      <TH>Pointer to...</TH>
+      <TH>Pointer to pointer to...</TH>
+</TR>
+
+<TR VALIGN=TOP>
+ 
+<TD>
+<PRE>
+typedef struct tagfoo {
+  int x;
+  double y;
+  char z;
+} foo;
+</PRE>
+</TD>
+ 
+<TD>
+<PRE>
+  foo: struct_tagfoo(# #);
+  struct_tagfoo: DATA
+    (# x: @int32 (* int *);
+       y: @real (* double *);
+       z: @char (* char *);
+    #);
+</PRE>
+</TD> 
+
+<TD>
+^foo
+</TD> 
+
+<TD>
+^fooHolder
+</TD> 
+</TR>
+</TABLE>
+<P>
+You will notice that <EM>two</EM> patterns are generated for this
+struct definition. This is because in IDL <CODE>struct tagfoo</CODE>
+and <CODE>foo</CODE> are synonomous after the above typedef, e.g.
+another place there may be
+<PRE>
+typedef struct tagfoo foo_alias;
+</PRE>
+which is then in BETA mapped to
+<PRE>
+foo_alias: struct_tagfoo(# #);
+</PRE>
+
+There are a number of special cases in struct uses.
+
+<H4><A NAME="struct_notag">Structs typedefs with no tag</A></H4>
+
+In case a struct id defined without a tag, the type name alone will be
+used to identify the struct, i.e. the <CODE>struct_XXX</CODE>
+type/pattern will be left out:
+<TABLE BORDER CLASS=opaque>
+<TR> <TH>IDL Type</TH> 
+      <TH>BETA Type</TH>
+      <TH>Pointer to...</TH>
+      <TH>Pointer to pointer to...</TH>
+</TR>
+
+<TR VALIGN=TOP>
+ 
+<TD>
+<PRE>
+typedef struct {
+  int x;
+  double y;
+  char z;
+} foo;
+</PRE>
+</TD>
+ 
+<TD>
+<PRE>
+  foo: DATA
+    (# x: @int32 (* int *);
+       y: @real (* double *);
+       z: @char (* char *);
+    #);
+</PRE>
+</TD> 
+
+<TD>
+^foo
+</TD> 
+
+<TD>
+^fooHolder
+</TD> 
+</TR>
+</TABLE>
+
+<P>
+
+<H4><A NAME="struct_forward">Forward typedefs with structs</A></H4>
+
+It is allowed to do a forward declaration of a struct type without
+actually specifying it, as in
+
+<PRE>
+typedef struct tagfoo foo;
+</PRE>
+
+provided that there is later a definition of <CODE>struct
+tagfoo</CODE> (which is normally a 
+<A HREF="#struct_noname">struct typedefs with no name</A>).
+This is handled by bidl by making <CODE>struct_tagfoo</CODE>
+a legal, but yet undefined, type. When the type is later
+defined, the pattern for it will be generated (and the type
+will be reported as a <CODE>redefinition</CODE>, when using
+<CODE>--verbose</CODE>.
+
+<H4><A NAME="struct_noname">Struct typedefs with no name</A></H4>
+
+A struct typedef with no name is normally provided after a
+corresponding <A HREF="#struct_forward">struct forward typedef</A>.
+<P>
+An example could be
+<PRE>
+struct tagfoo {
+  int x;
+  double y;
+  char z;
+};
+</PRE>
+This will give rise to the generation of the
+<CODE>struct_tagfoo</CODE>
+pattern as in the <A HREF="structs">normal case</A>.
+
+<H4><A NAME="struct_inline">Struct typedefs with no body and no
+name</A></H4>
+
+A struct with no tag and no name can occur when the struct is used as
+part of another struct or union, as in
+
+<PRE>
+typedef struct tagfoo {
+  struct {
+    int x;
+    int y;
+  } x_y;
+  int z;
+} foo;
+</PRE>
+
+In this case there will be generated an anonymous inlined object,
+prefixed with <CODE>DATA</CODE>:
+
+<PRE>
+foo: struct_tagfoo(# #);
+struct_tagfoo: DATA
+  x_y: @DATA
+    (# x: @int32 (* int *);
+       y: @int32 (* int *);
+    #);
+  z: @int32 (* int *);
+#);
+</PRE>
+
+<A NAME="unions">
+<H3>Unions</H3>
+</A>
+
+Unions cannot be uniquely mapped to corresponding BETA types.
+If a union is met, an empty pattern (prefixed with <CODE>holder</CODE>)
+is generated, and a warning is issued to the screen.
+<P>
+But the union name is introduced into the internal <CODE>bidl</CODE>
+type tables, so parameters qualified with the union types are treated
+correctly.
+<P>
+The user needs to fill in the union pattern herself. For a inspiration
+the <CODE>VARIANT</CODE> pattern in
+<CODE>~beta/comlib/comtypes.bet</CODE> can be consulted. This is one
+possible implementation of a union in BETA.
+<P>
+Except for the missing body, union types are treated exactly like
+struct types by <CODE>bidl</CODE>.
+
+<A NAME="basictypes">
+<H3>Basic Types</H3>
+</A>
+
+<TABLE BORDER CLASS=opaque>
+ <TR> <TH>IDL Type</TH> 
+      <TH>BETA Type</TH>
+      <TH>Pointer to...&nbsp;<A HREF="#fn6"><FONT size="-1">[6]</FONT></A></CODE></TH>
+      <TH>Pointer to pointer to...</TH>
+ </TR>
+ <TR VALIGN=top> <TD>int</TD> <TD>int32</TD> <TD>^int32Holder / @int32<CODE></TD> <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>long</TD> <TD>int32</TD> <TD>^int32Holder / @int32</TD> <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>short</TD> <TD>int16</TD> <TD>^int16Holder / @int32</TD> <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>small</TD> <TD>int8</TD> <TD>^int8Holder / @int32</TD> <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>hyper</TD> 
+                 <TD>int32<CODE>&nbsp;<A HREF="#fn1"><FONT size="-1">[1]</FONT></A></CODE></TD> 
+                 <TD>^int32Holder / @int32</TD> 
+                 <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>signed</TD> <TD>int32</TD> <TD>^int32Holder / @int32</TD> <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>unsigned</TD> <TD>int32u</TD> <TD>^int32uHolder / @int32</TD> <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>signed int</TD> <TD>int32</TD> <TD>^int32Holder / @int32</TD> <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>unsigned int</TD> <TD>int32u</TD> <TD>^int32uHolder / @int32</TD> <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>signed long</TD> <TD>int32</TD> <TD>^int32Holder / @int32</TD> <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>unsigned long</TD> <TD>int32u</TD> <TD>^int32uHolder / @int32</TD> <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>signed long int</TD> <TD>int32</TD> <TD>^int32Holder / @int32</TD> <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>unsigned long int</TD> <TD>int32u</TD> <TD>^int32uHolder / @int32</TD> <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>signed short</TD> <TD>int16</TD> <TD>^int16Holder / @int32</TD> <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>unsigned short</TD> <TD>int16u</TD> <TD>^int16uHolder / @int32</TD> <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>signed short int</TD> <TD>int16</TD> <TD>^int16Holder / @int32</TD> <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>unsigned short int</TD> <TD>int16u</TD> <TD>^int16uHolder / @int32</TD> <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>char</TD> <TD>char</TD> <TD>^charHolder / @int32</TD> <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>wchar</TD> <TD>wchar</TD> <TD>^wcharHolder / @int32</TD> <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>float</TD> 
+                 <TD>real<CODE>&nbsp;<A HREF="#fn2"><FONT size="-1">[2]</FONT></A></CODE></TD> 
+                 <TD>^realHolder / @int32</TD> 
+                 <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>double</TD> <TD>real</TD> <TD>^realHolder / @int32</TD> <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>boolean</TD> <TD>boolean</TD> <TD>^booleanHolder / @int32</TD> <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>sequence</TD> 
+		 <TD>int32<CODE>&nbsp;<A HREF="#fn3"><FONT size="-1">[3]</FONT></A></CODE></TD> 
+		 <TD>^int32Holder / @int32</TD> 
+		 <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>octet</TD> 
+		 <TD>int8u<CODE>&nbsp;<A HREF="#fn4"><FONT size="-1">[4]</FONT></A></CODE></TD> 
+		 <TD>^int8uHolder / @int32</TD> 
+		 <TD><EM>Error</EM></TD> </TR>
+ <TR VALIGN=top> <TD>any</TD> 
+		 <TD>int32<CODE>&nbsp;<A HREF="#fn5"><FONT size="-1">[5]</FONT></A></CODE></TD> 
+		 <TD>^int32Holder / @int32</TD> 
+		 <TD><EM>Error</EM></TD> </TR>
+</TABLE>
+<FONT size="-1"><A NAME="fn1">&nbsp;&nbsp;[1]
+<CODE>hyper</CODE> is a 56 bit IDL type, which is mapped to 32 bit in
+BETA, i.e. a potential lossy mapping.
+</A></FONT><BR>
+<FONT size="-1"><A NAME="fn2">&nbsp;&nbsp;[2]
+<CODE>float</CODE> is a 32 bit IDL floating point type, which is
+mapped to 64 bit floating real in BETA, i.e. a potential lossy mapping.
+</A></FONT><BR>
+<FONT size="-1"><A NAME="fn3">&nbsp;&nbsp;[3]
+<CODE>sequence</CODE> is an OMG CORBA IDL type defining a bounded
+one-dimensional array. It is not used in Microsoft IDL. See
+<A HREF="references.html#corba_spec">[CORBA_SPEC]</A> section 15.2.7
+(page 386) for a mapping between CORBA sequences and MIDL.
+</A></FONT><BR>
+<FONT size="-1"><A NAME="fn4">&nbsp;&nbsp;[4]
+The <CODE>octet</CODE> type is an 8-bit OMG CORBA IDL quantity that is guaranteed not to undergo
+any conversion when transmitted by the communication system. It does not seem to be used by MIDL.
+</A></FONT><BR>
+<FONT size="-1"><A NAME="fn5">&nbsp;&nbsp;[5]
+The <CODE>any</CODE> type permits the specification of values that can
+express any OMG CORBA IDL type. It does not seem to be used by MIDL.
+</A></FONT><BR>
+<FONT size="-1"><A NAME="fn6">&nbsp;&nbsp;[6]
+If a pointer to a basic type is an <CODE>[out]</CODE> parameter,
+it will be translated to a Holder to the appropriate type, otherwise
+to an <CODE>int32</CODE>.
+</A></FONT><BR>
+
+<A NAME="stringtypes">
+<H3>String Types</H3>
+</A>
+
+In the following, the notation <CODE>[string] char*</CODE> means a
+<CODE>char*</CODE> type, which is <CODE>[string]</CODE> attributed
+in the IDL attributes.
+<P>
+<TABLE BORDER CLASS=opaque>
+ <TR> <TH>IDL Type</TH> 
+      <TH>BETA Type</TH>
+      <TH>Pointer to...</TH>
+      <TH>Pointer to pointer to...</TH>
+ </TR>
+ <TR VALIGN=top> <TD>[string] char*</TD> 
+                     <TD>[0]@char</TD> 
+                     <TD>[0]@char<CODE>&nbsp;<A HREF="#fn7"><FONT size="-1">[7]</FONT></A></CODE></TD> 
+                     <TD>^textHolder</TD> </TR>
+ <TR VALIGN=top> <TD>[string] wchar*</TD> <TD>wtext</TD> <TD>^wtext</TD> <TD>^wtextHolder</TD> </TR>
+ <TR VALIGN=top> <TD>BSTR</TD> <TD>BSTR</TD> <TD>^BSTR</TD> <TD>^BSTRHolder</TD> </TR>
+</TABLE>
+<FONT size="-1"><A NAME="fn7">&nbsp;&nbsp;[7]
+It would be more natural to use <CODE>^text</CODE> here, but the
+compiler currently does not support this as parameter type to 
+COM virtuals.
+</A></FONT><BR>
+
+<A NAME="interfaces">
+<H3>COM Interfaces</H3>
+</A>
+
+These are handled gracefully by the compiler - notice that
+pointer-to-pointer-to-interface is using a <CODE>refHolder</CODE>
+instead of a simple <CODE>holder</CODE>.
+<P>
+<TABLE BORDER CLASS=opaque>
+ <TR> <TH>IDL Type</TH> 
+      <TH>BETA Type</TH>
+      <TH>Pointer to...</TH>
+      <TH>Pointer to pointer to...</TH>
+ </TR>
+ <TR VALIGN=top> <TD>Ifoo</TD> <TD>Ifoo</TD> <TD>^Ifoo</TD> <TD>^IfooRefHolder</TD> </TR>
+ <TR VALIGN=top> <TD>void</TD> <TD>IUnknown</TD> <TD>^IUnknown</TD> <TD>^IUnknownHolder</TD> </TR>
+</TABLE>
+<P>
+
+Notice the usage of <CODE>^IUnknown</CODE> for <CODE>void*</CODE> and
+<CODE>^IUnknownHolder</CODE> for <CODE>void**</CODE>
+types - this is currently done because
+e.g. <CODE>QueryInterface</CODE> has an out parameter qualified
+with <CODE>void**</CODE> in IDL, but which is surely at least an
+IUnknown pointer. To allow for typecheck in BETA, this mapping
+of void pointers is thus introduced.
+
+<!--++++++++++++++++++++++++++++++-->
+
