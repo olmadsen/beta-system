@@ -42,7 +42,7 @@ bifrost:
 all:	bdraw/bdraw
 
 tags:
-	etags *.bet private/Impl/*.bet private/Predefined/*.bet private/Rubber/*.bet private/X11/*.bet bdraw/*.bet demo/*.bet tutorial/*.bet design/*.bet
+	etags *.bet private/Impl/*.bet private/PS/*.bet private/Predefined/*.bet private/Rubber/*.bet private/X11/*.bet bdraw/*.bet demo/*.bet tutorial/*.bet design/*.bet
 
 gtags:
 	csh -c 'etags --output=GUIENV_TAGS /users/beta/guienv/v1.2/{*.bet,*/*.bet,*/*/*.bet}'
