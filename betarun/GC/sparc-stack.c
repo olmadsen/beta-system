@@ -1,0 +1,418 @@
+/*
+ * BETA RUNTIME SYSTEM, Copyright (C) 1990-94 Mjolner Informatics Aps.
+ * stack.c
+ * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, Jacob Seligmann and S|ren Brandt
+ *
+ * Traverse an stack parts and process all references.
+ */
+
+#include "beta.h"
+
+#ifndef MT
+
+extern void (*StackRefAction)(REFERENCEACTIONARGSTYPE);
+
+#include "../CRUN/crun.h"
+#define MAXDATAREGSONSTACK 64 /* FIXME: Is this sufficient? --mg */
+
+#ifdef RTDEBUG
+static RegWin *BottomAR=0 /* Currently never set up - use StackStart? */;
+static RegWin *lastAR=0;
+long frame_PC = 0;
+static void PrintAR(RegWin *ar, RegWin *theEnd);
+static void PrintCAR(RegWin *cAR);
+#endif
+
+/* ProcessStackCell:
+ * Called for each GC register in the register window.
+ */
+static __inline__ void ProcessStackCell(long *addr, char *desc, CellProcessFunc func)
+{
+  /* On the sparc, the register windows for CAlloI and CAlloC 
+   * may be used as roots for GC, since these routines may have called
+   * G-parts, that have triggered the GC.
+   * Although the C routines are written so that gcc should avoid putting
+   * strange things into the GC-registers of the register window, this 
+   * will probably happen anyway. Thus we need a slightly stronger check
+   * for whether *(Object**)addr really looks like it is an object
+   * (the isObject macro used in "func" is defined to always return 1 
+   * for non-debug systems). 
+   * It is probably OK with a relatively expensive test a la the debug-version
+   * of isObject, since there are not that many stack- and stackobject roots.
+   *
+   * Notice that adding a stronger test around the call of func, will probably
+   * mean that e.g. inBetaHeap(*addr) is done twice (it is also done in "func")
+   * but this is probably a price we have to pay for the generality of the
+   * function-parameterized routines.
+   */
+  if (IsBetaCodeAddrOfProcess((long)addr)) {
+    return;
+  } else if (strongIsObject(*(Object **)addr)) {
+    func((Object **)addr, *(Object **)addr);
+  }
+}
+
+/* ProcessAR:
+ * Traverse an activation record (AR) [ar, theEnd[
+ * Notice theEnd is *not* included.
+ * Used to process register windows+stackpart on machine stack and in 
+ * stack objects.
+ */
+
+static void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
+{
+  long *theCell = (long *) &ar[1] /* first cell after regwin */;
+  
+  /* Claim(ar->fp == theEnd)? 
+   * No: sometimes fp is zero (for frame of _start, e.g.)
+   */
+  
+  DEBUG_STACK(PrintAR(ar, theEnd));
+  
+  Claim((long)ar < (long)theEnd,  "ProcessAR: ar is less than theEnd");
+  Claim(((long) theEnd) % 4 == 0, "ProcessAR: theEnd is 4 byte aligned");
+  
+  /* Process GC registers of the activation record. */
+  ProcessStackCell(&ar->i0, "i0", func);
+  ProcessStackCell(&ar->i1, "i1", func);
+  ProcessStackCell(&ar->i2, "i2", func);
+  ProcessStackCell(&ar->i3, "i3", func);
+  ProcessStackCell(&ar->i4, "i4", func);
+  
+  /* Process the stack part */
+
+  for (; theCell != (long*)theEnd; theCell+=2) {
+    /* +2 because the compiler uses "dec %sp,8,%sp" before pushing */
+
+    /* Test for tagged data regs on stack. The compiler may push
+     * floating point and busy %o-registers. If so it has
+     * pushed a tag constructed as tag = -(n*2+4), where n is the number of
+     * 8-byte stack-cells to skip. 
+     * So n*2+2 longs should be skipped by GC (skipping the tag too).
+     * Since for-loop skips 2 after continue, skip n*2 = -tag-4 longs.
+     */
+    int tag = (int)*theCell /* potential tag */;
+    if (tag <= -4
+#if MMAPANYADDR
+	&& -MAXDATAREGSONSTACK-4 <= tag
+#endif
+	) {
+      if ((int)(theCell+(-tag-2)) > (int)(ar->fp)) {
+	/* Skip would be out of frame */
+	DEBUG_CODE({
+	  fprintf(output, "Attempt to skip out of frame!\n");
+	  ILLEGAL;
+	});
+      } else {
+	/* Do the skip */
+	theCell += -tag-4;
+	continue;
+      }
+    }
+
+    /* (Maybe build a more descriptive description using sprintf) */
+    ProcessStackCell(theCell, "stackpart", func);
+  }
+
+  if (func==DoStackCell){
+    CompleteScavenging();
+  }
+}
+
+/* ProcessSPARCStack:
+ *  Precondition: 
+ *     1. Register windows must be flushed to stack - asm(ta 3)
+ *     2. StackEnd must point to top of stack part that is to be GC'ed.
+ *     3. If RTDEBUG, frame_PC must be PC corresponding to frame that
+ *        ends in StackEnd.
+ */
+
+void
+GeneralProcessStack(CellProcessFunc func)
+{
+    RegWin *theAR;
+    RegWin *nextCBF = (RegWin *) ActiveCallBackFrame;
+    RegWin *nextCompBlock = (RegWin *) lastCompBlock;
+    
+    DEBUG_STACK(fprintf(output, "\n ***** Trace of stack *****\n"));
+    DEBUG_STACK(fprintf(output,
+			"IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
+			(int)GLOBAL_IOA, (int)GLOBAL_IOATop, (int)GLOBAL_IOALimit));
+
+    for (theAR =  (RegWin *) StackEnd;
+	 theAR != (RegWin *) 0;
+#ifdef RTDEBUG
+	 frame_PC = theAR->i7 +8,
+#endif
+	   theAR = (RegWin *) theAR->fp) {
+      
+      if (theAR == nextCompBlock) {
+	/* This is the AR of attach. Continue GC, but get
+	 * new values for nextCompBlock and nextCBF. 
+	 * Please read StackLayout.doc
+	 */
+	nextCBF = (RegWin *) theAR->l5;
+	nextCompBlock = (RegWin *) theAR->l6;
+	if (nextCompBlock == 0)
+	  break; /* we reached the bottom */
+      } else {
+	if (theAR == nextCBF) {
+	  /* This is AR of HandleCB. Don't GC this, but
+	   * skip to betaTop and update nextCBF */
+	  nextCBF = (RegWin *) theAR->l5;
+	  DEBUG_STACK({ 
+	    fprintf(output, "Met frame of HandleCB at SP=0x%x.\n",(int)theAR);
+	    if (valhallaID || callRebinderC) {
+	      fprintf(output, "Cannot wind down past signal handler.\n");
+	      fprintf(output, "Skipping directly to SP=0x%x.\n", (int)theAR->l6);
+	    } else {
+	      /* Wind down the stack until betaTop is reached */
+	      RegWin *cAR;
+	      fprintf(output, "Winding down to frame with %%fp=0x%x",(int)theAR->l6);
+	      fprintf(output, " (BetaStackTop)\n");
+	      for (cAR = theAR;
+		   cAR != (RegWin *) theAR->l6;
+		   frame_PC = cAR->i7 +8, cAR = (RegWin *) cAR->fp){
+		if (!cAR) {
+		  fprintf(output, "ProcessStack: gone past _start - exiting...!\n");
+		  ILLEGAL;
+		  BetaExit(1);
+		}
+		PrintCAR(cAR);
+	      }
+	    }
+	  });
+	  
+	  theAR = (RegWin *) theAR->l6; /* Skip to betaTop */
+	}
+      }
+      ProcessAR(theAR, (RegWin *) theAR->fp, func);
+      DEBUG_CODE(lastAR = theAR);
+    }
+    DEBUG_CODE(if (BottomAR) Claim(lastAR==BottomAR, "lastAR==BottomAR"));
+    DEBUG_STACK(fprintf(output, " *****  End of trace  *****\n"));
+}
+
+#ifdef RTDEBUG
+GLOBAL(long lastPC)=0;
+#endif
+
+/* ProcessSPARCStackObj */
+void
+ProcessStackObj(StackObject *sObj, CellProcessFunc func)
+{
+    RegWin *theAR;
+    long delta;
+    DEBUG_CODE(long oldDebugStack=DebugStack);
+
+    DEBUG_STACKOBJ({
+      fprintf(output,
+	      " *-*-* StackObject: 0x%x, size: 0x%x %s *-*-*\n", 
+	      (int)sObj, 
+	      (int)(sObj->StackSize),
+	      WhichHeap((Object*)sObj));
+      fprintf(output, "func is 0x%x", (int)func);
+      PrintCodeAddress((long)func);
+      fprintf(output, "\n");
+      fprintf(output, "StackRefAction is 0x%x", (int)StackRefAction);
+      PrintCodeAddress((long)StackRefAction);
+      fprintf(output, "\n");
+      
+      lastPC=frame_PC;
+      /* The PC of the topmost AR is saved in CallerLCS of the comp 
+       * this stackobj belongs to. It is not known here. 
+       */
+      frame_PC = 0;
+    });
+    DEBUG_CODE(if (DebugStackObj){
+      DebugStack=TRUE;
+    } else {
+      DebugStack=FALSE;
+    });
+
+    if (!sObj->StackSize) {
+      if (do_unconditional_gc) {
+	/* OK - can happen in gc triggered by AlloSO */
+      } else {
+	DEBUG_CODE({
+	  fprintf(output, 
+		  "stackobject 0x%x has stacksize=0\n", (int)sObj);
+	    ILLEGAL;
+	});
+      }
+      return;
+    }
+    /* Start at sObj->Body[1], since sObj->Body[0] is saved FramePointer */
+    delta = (char *) &sObj->Body[1] - (char *) sObj->Body[0];
+    
+    for (theAR =  (RegWin *) &sObj->Body[1];
+	 theAR != (RegWin *) &sObj->Body[sObj->StackSize];
+	 theAR =  (RegWin *) (theAR->fp + delta)){
+	Claim(&sObj->Body[1] <= (long *) theAR
+	      && (long *) theAR <= &sObj->Body[sObj->StackSize],
+	      "ProcessSPARCStackObj: theAR in StackObject");
+	ProcessAR(theAR, (RegWin *) (theAR->fp + delta), func);
+	DEBUG_CODE(frame_PC = theAR->i7 +8);
+      }
+
+    DEBUG_STACKOBJ(fprintf(output, " *-*-* End StackObject 0x%x *-*-*\n", (int)sObj);
+		   frame_PC=lastPC;
+		   );
+    DEBUG_CODE(DebugStack=oldDebugStack);
+}
+
+#ifdef RTDEBUG
+void PrintCAR(RegWin *cAR)
+{
+  char *lab = getLabel(frame_PC);
+  fprintf(output, 
+	  "\n----- C AR: 0x%x, end: 0x%x, PC: 0x%x <%s+0x%x>\n",
+	  (int)cAR, 
+	  (int)cAR->fp,
+	  (int)frame_PC,
+	  lab,
+	  (int)labelOffset);
+  fprintf(output, "%%fp: 0x%x\n", (int)cAR->fp); 
+}
+
+void PrintAR(RegWin *ar, RegWin *theEnd)
+{
+  Object **theCell = (Object **) &ar[1];
+  char *lab = getLabel(frame_PC);
+
+  fprintf(output, 
+	  "\n----- AR: 0x%x, theEnd: 0x%x, PC: 0x%x <%s+0x%x>\n",
+	  (int)ar, 
+	  (int)theEnd,
+	  (int)frame_PC,
+	  lab,
+	  (int)labelOffset);
+
+  fprintf(output, "%%i0: "); PrintObject((Object *)ar->i0);
+  fprintf(output, "\n");
+  fprintf(output, "%%i1: "); PrintObject((Object *)ar->i1)
+    /* Notice that CopyT, AlloVR1-4 gets an offset in this parameter.
+     * This should be safe.
+     */;
+  fprintf(output, "\n");
+  fprintf(output, "%%i2: "); PrintObject((Object *)ar->i2);
+  fprintf(output, "\n");
+  fprintf(output, "%%i3: "); PrintObject((Object *)ar->i3);
+  fprintf(output, "\n");
+  fprintf(output, "%%i4: "); PrintObject((Object *)ar->i4);
+  fprintf(output, "\n");
+  fprintf(output, "%%fp: 0x%x\n", (int)ar->fp); 
+  fprintf(output, "%%l5: 0x%x\n", (int)ar->l5); 
+  fprintf(output, "%%l6: 0x%x\n", (int)ar->l6); 
+
+  /* Now do the stack part */
+  fprintf(output, "stackpart:\n");
+  /* Notice that in INNER some return adresses are pushed. This is no
+   * danger. These will be identified as code addresses in the debug output.
+   */
+  for (; theCell != (Object **) theEnd; theCell+=2) {
+    /* Test for floating point regs on stack. See comment in ProcessAR */
+    int tag = (int)*theCell /* potential tag */;
+    if (tag <= -4
+#if MMAPANYADDR
+	&& -MAXDATAREGSONSTACK-4 <= tag
+#endif
+	) {
+      if ((int)(theCell+(-tag-2)) > (int)(ar->fp)) {
+	/* Skip would be out of frame */
+	fprintf(output, 
+		"0x%08x: %d: NOT skipping %d 8-byte cells: skip would be out of frame! (%%fp=0x%08x).\n",
+		(int)theCell,
+		tag,
+		(-tag-4)/2,
+		(int)(ar->fp));
+	ILLEGAL;
+      } else {
+	long *ptr;
+	fprintf(output, 
+		"0x%08x: %d: Skipping tag and %d 8-byte stack cells:\n", 
+		(int)theCell,
+		tag,
+		(-tag-4)/2);
+	for (ptr = (long*)(theCell+2); 
+	     ptr < (long *)(theCell+(-tag-2));
+	     ptr++){
+	  fprintf(output, "0x%08x: %8d %8.4g", (int)ptr, *(int*)ptr, *(float*)ptr);
+	  if (((long)ptr)%8 == 0){
+	    fprintf(output, "%8.8g\n", *(double*)ptr);
+	  } else {
+	    fprintf(output, "\n");
+	  }
+	}
+	/* Do the skip  */
+      	theCell += (-tag-4);
+	continue;
+      }
+    }
+    fprintf(output, "0x%08x: ", (int)theCell);
+    PrintObject((Object *)(*theCell));
+    fprintf(output, "\n");
+  }
+  fflush(output);
+}
+
+/* PrintStack: (sparc).
+ * Should probably not be called during GC. Instead, you may set DebugStack to
+ * TRUE before calling IOAGc()
+ */
+void PrintStack(void)
+{
+  RegWin *theAR;
+  RegWin *nextCBF = (RegWin *) ActiveCallBackFrame;
+  RegWin *nextCompBlock = (RegWin *) lastCompBlock;
+  RegWin *end;
+  
+  /* Flush register windows to stack */
+  __asm__("ta 3");
+  
+  fprintf(output, "\n ***** PrintStack: Trace of stack *****\n");
+  
+  end  = (RegWin *)StackPointer;
+  /* end points to the activation record of PrintStack() */
+  frame_PC=((RegWin *) end)->i7 +8;
+  end = (RegWin *)((RegWin *) end)->fp; /* Skip AR of PrintStack() */
+
+  for (theAR =  (RegWin *) end;
+       theAR != (RegWin *) 0;
+       frame_PC = theAR->i7 +8, theAR = (RegWin *) theAR->fp) {
+    if (theAR == nextCompBlock) {
+      /* This is the AR of attach. Continue, but get
+       * new values for nextCompBlock and nextCBF. 
+       * Please read StackLayout.doc
+       */
+      nextCBF = (RegWin *) theAR->l5;
+      nextCompBlock = (RegWin *) theAR->l6;
+      if (nextCompBlock == 0)
+	break; /* we reached the bottom */
+    } else {
+      if (theAR == nextCBF) {
+	/* This is AR of HandleCB. Skip this and
+	 * skip to betaTop and update nextCBF
+	 */
+	    nextCBF = (RegWin *) theAR->l5;
+
+	    DEBUG_STACK({ /* Wind down the stack until betaTop is reached */
+			  RegWin *cAR;
+			  for (cAR = theAR;
+			       cAR != (RegWin *) theAR->l6;
+			       frame_PC = cAR->i7 +8, cAR = (RegWin *) cAR->fp)
+			    PrintCAR(cAR);
+			});
+
+	    theAR = (RegWin *) theAR->l6; /* Skip to betaTop */
+      }
+    }
+    PrintAR(theAR, (RegWin *) theAR->fp);
+  }
+   
+  fprintf(output, " *****  PrintStack: End of trace  *****\n");
+  
+}
+#endif /* RTDEBUG */
+
+#endif /* MT */

@@ -298,7 +298,7 @@ static void AOANewBlock(long newBlockSize)
     });
   } else {
     fprintf(output,"MallocExhausted\n");
-    MallocExhausted = TRUE;
+    BetaExit(1);
   }
 }
 
@@ -314,15 +314,13 @@ static void AOANewBlock(long newBlockSize)
 static long AllocateBaseBlock()
 {
   unsigned long blksize = SECTOR_SIZE;
-  if (MallocExhausted) return 0;
   /* Check if the AOAtoIOAtable is allocated. If not then allocate it. */
   if (AOAtoIOAtable == 0) 
     if (AOAtoIOAalloc() == 0) {
-      MallocExhausted = TRUE;
       fprintf(output,
 	      "#(AOA: AOAtoIOAtable allocation %d failed!.)\n",
 	      (int)AOAtoIOAtableSize);
-      return 1;
+      BetaExit(1);
     }
   /* Try to allocate a new AOA block. */
   if ((AOABaseBlock = newBlock(blksize))) {
@@ -345,10 +343,9 @@ static long AllocateBaseBlock()
         
     INFO_HEAP_USAGE(PrintHeapUsage("after new AOA block"));
   }else{
-    MallocExhausted = TRUE;
     fprintf(output, "#(AOA: baseblock allocation failed %dKb.)\n",
 	    (int)blksize/Kb);
-    return 1;
+    BetaExit(1);
   }
   return 0;
 }
