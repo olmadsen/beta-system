@@ -6,12 +6,6 @@
 #include "specialObjectsTable.h"
 #include "PStore.h"
 
-void pexport_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 #ifdef PERSIST
 
 /* LOCAL FUNCTION DECLARATIONS */

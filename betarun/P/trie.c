@@ -1,12 +1,6 @@
 #include "beta.h"
 #include "trie.h"
 
-void trie_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 #ifdef sparc
 #define OURINLINE __inline__
 #else

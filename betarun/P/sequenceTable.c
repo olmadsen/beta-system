@@ -1,12 +1,6 @@
 #include "beta.h"
 #include "sequenceTable.h"
 
-void st_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 #ifdef PERSIST
 
 /* LOCAL MACROS */

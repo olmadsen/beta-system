@@ -10,13 +10,6 @@
 #include "crossStoreReferences.h"
 
 /* */
-void unswizzle_dummy()
-{
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 #ifdef PERSIST
 #define MAXPERSISTENTBYTES 2048 * Kb
 

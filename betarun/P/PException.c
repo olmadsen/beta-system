@@ -2,14 +2,6 @@
 #include "PException.h"
 #include "unswizzle.h"
 
-void pexp_dummy() {
-  
-#ifdef sparc
-  USE();
-#endif /* sparc */
-  
-}
-
 #ifdef PERSIST
 
 #ifdef UNIX

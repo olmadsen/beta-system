@@ -5,19 +5,6 @@
  */
 #include "beta.h"
 
-/* Hej Peter!  
- *
- * Jeg bliver nød til at have denne funktion nedenunder
- * med, ellers kan jeg ikke compilere denne fil uden optimering. Jeg
- * har brug for at kompilere denne fil uden optimering.
- */
-void objsize_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
-
 /* ObjectSize returns the size of an object in number of LONGS. */
 long ObjectSize(Object * theObj)
 { 

@@ -7,12 +7,6 @@
 #include "unswizzle.h"
 #include "PStore.h"
 
-void pimport_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 #ifdef PERSIST
 
 /* LOCAL VARIABLES */

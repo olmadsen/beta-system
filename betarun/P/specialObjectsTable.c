@@ -3,12 +3,6 @@
 #include "sequenceTable.h"
 #include "trie.h"
 
-void sobjt_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 #ifdef PERSIST
 /* LOCAL TYPES */
 typedef struct SOTEntry { /* Special Object Table Entry */

@@ -3,12 +3,6 @@
 #include "sequenceTable.h"
 #include "crossStoreReferences.h"
 
-void csr_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 #ifdef PERSIST
 
 /* Import:

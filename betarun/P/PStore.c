@@ -5,12 +5,6 @@
 #include "proto.h"
 #include "crossStoreReferences.h"
 
-void pstore_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 #ifdef PERSIST
 
 /* LOCAL CONSTANTS */

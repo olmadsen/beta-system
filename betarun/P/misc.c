@@ -8,12 +8,6 @@
 #include "specialObjectsTable.h"
 #include "trie.h"
 
-void miscp_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 #ifdef PERSIST
 
 /* */

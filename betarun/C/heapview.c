@@ -6,12 +6,6 @@ void PrintHeapUsage(char *prompt)
   CallBackArea *cbfa;
   Block        *aoa;
 
-#ifdef sparc
-  if (0) {
-    USE();
-  }
-#endif /* sparc */
-  
   fprintf(output, "Heap usage %s:\n", prompt);
   fprintf(output, 
           "  IOA:            %8d Kb\n", 

@@ -5,18 +5,6 @@
  */
 #include "beta.h"
 
-/* Hej Peter!  
- *
- * Jeg bliver nød til at have denne funktion nedenunder
- * med, ellers kan jeg ikke compilere denne fil uden optimering. Jeg
- * har brug for at kompilere denne fil uden optimering.
- */
-void block_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 #if defined(hppa) || defined(sun4s) || defined(linux) || defined(sgi)
 #include <unistd.h>
 #include <sys/types.h>

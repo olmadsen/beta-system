@@ -1,11 +1,5 @@
 #include "beta.h"
 
-void psf_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 #ifdef PERSIST
 #include <sys/types.h>
 #include <sys/stat.h>

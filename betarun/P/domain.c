@@ -2,12 +2,6 @@
 #include "domain.h"
 
 /* */
-void dom_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 #ifdef PERSIST
 
 /* LOCAL TYPES */

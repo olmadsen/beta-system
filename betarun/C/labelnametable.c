@@ -20,12 +20,6 @@
 
 #include "beta.h"
 
-void label_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 #ifdef sgi
 #define FULL_NMCOMMAND  "/bin/nm -Bhvp %s"
 #define TERSE_NMCOMMAND "/bin/nm -Bhvp %s"

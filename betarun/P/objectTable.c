@@ -13,12 +13,6 @@
 #include "crossStoreReferences.h"
 #include "specialObjectsTable.h"
 
-void objt_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 #ifdef PERSIST
 /* LOCAL TYPES */
 typedef struct OTEntry {  /* Object Table Entry */

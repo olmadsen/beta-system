@@ -6,18 +6,6 @@
 
 #include "beta.h"
 
-/* Hej Peter!  
- *
- * Jeg bliver nød til at have denne funktion nedenunder
- * med, ellers kan jeg ikke compilere denne fil uden optimering. Jeg
- * har brug for at kompilere denne fil uden optimering.
- */
-void aoafree_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 #ifdef PERSIST
 #include "../P/PException.h"
 #endif /* PERSIST */

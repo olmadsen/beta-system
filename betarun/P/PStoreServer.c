@@ -9,12 +9,6 @@
 #include "PImport.h"
 #include "PException.h"
 
-void pstoreserver_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 #ifdef PERSIST
 
 #ifdef UNIX

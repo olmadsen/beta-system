@@ -6,12 +6,6 @@
 #include "PException.h"
 #include "misc.h"
 
-void tobjt_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 #ifdef PERSIST
 /* LOCAL TYPES */
 typedef struct TOTEntry { /* Object Table Entry */

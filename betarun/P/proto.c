@@ -1,12 +1,6 @@
 #include "beta.h"
 #include "trie.h"
 
-void proto_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 /* */
 #ifdef PERSIST
 #include <sys/types.h>

@@ -7,12 +7,6 @@
 #include "transitObjectTable.h"
 #include "misc.h"
 
-void reft_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 #ifdef PERSIST
 
 /* LOCAL TYPES */
