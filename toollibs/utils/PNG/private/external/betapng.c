@@ -208,7 +208,9 @@ int BetaReadPNG(char *name, BetaImage *image, int row_order)
   image->height = height;
   image->data = pixels;
   image->rowbytes = rowbytes;
-  
+  image->palette_size = 0;
+  image->palette = NULL;
+  image->pixel_size = 24;
   return 0;
   
 }

@@ -3,6 +3,36 @@
 #include "betadither.h"
 
 
+static void BetaSwap(BetaImage *image)
+{
+  unsigned char *row;
+  unsigned char *pixel;
+
+  int i, j;
+
+  unsigned char r, g, b, a;
+
+  row = image->data;
+
+  for(j = 0; j < image->height; j++) {
+    pixel = row;
+    for(i = 0; i < image->width; i++) {
+      r = pixel[0];
+      g = pixel[1];
+      b = pixel[2];
+      a = pixel[3];
+      pixel[0] = a;
+      pixel[1] = b;
+      pixel[2] = g; 
+      pixel[3] = r;
+      pixel += 4;
+    }
+    row += image->rowbytes;
+  }
+}
+
+
+
 int BetaCreateImage(BetaImage *image, 
 		    long width, 
 		    long height,
@@ -111,9 +141,9 @@ static void BetaAddRow24(long width,  Color *row, Color *error, unsigned long *s
   long index = 0;
   while (index < width) {
     
-    row[index].red = error[index].red + ((src[index] & 0x00FF0000) >> 16);
-    row[index].green = error[index].green + ((src[index] & 0x0000FF00) >> 8);
-    row[index].blue = error[index].blue + (src[index] & 0x000000FF);
+    row[index].red = error[index].red + ((src[index] & 0xFF000000) >> 24);
+    row[index].green = error[index].green + ((src[index] & 0x00FF0000) >> 16);
+    row[index].blue = error[index].blue + ((src[index] & 0x0000FF00) >> 8);
     index++;
   }
 }
@@ -247,6 +277,8 @@ void BetaDitherImage24To8 (BetaImage *image, BetaImage *image8)
   unsigned char *row;
   unsigned char *srcrow;
 
+  printf("dithering \n");
+
   /* compute somewhat non-linear floyd-steinberg error mapping table */
   for (i=j=0; i<=0x40; i++,j++) 
     { fserrmap[256+i] = j;  fserrmap[256-i] = -j; }
@@ -318,10 +350,11 @@ void BetaCopyImage(BetaImage *src, BetaImage *dst)
 
 
 
-int BetaImageToXImage(Display *display, BetaImage *image, XImage **ximage)
+
+int BetaImageToXImage8(Display *display, BetaImage *image, XImage **ximage)
 {
   BetaImage image8;
-  
+
   BetaCreateImage(&image8, image->width, image->height, 8, NULL); 
   if(image->pixel_size == 8) {
     memcpy(image8.data, image->data, image->height * image->rowbytes);
@@ -340,6 +373,39 @@ int BetaImageToXImage(Display *display, BetaImage *image, XImage **ximage)
   return 0;
 }
 
+int BetaImageToXImage24(Display *display, BetaImage *image, XImage **ximage)
+{
+
+  Visual *visual;
+  
+  visual = DefaultVisual(display, DefaultScreen(display));
+  
+  if(visual->red_mask = 0xFF) {
+    BetaSwap(image);
+  }
+  (*ximage) = XCreateImage
+    (display, 
+     DefaultVisual(display, DefaultScreen(display)), 
+     image->pixel_size, ZPixmap, 0, 
+     image->data, image->width, image->height, 32, image->rowbytes);
+}
+
+int BetaImageToXImage(Display *display, BetaImage *image, XImage **ximage)
+{
+ 
+  int displayDepth;
+
+  displayDepth = XDefaultDepth(display,DefaultScreen(display));
+
+  if (displayDepth == 8 ) {
+    printf("depth = 8 \n");
+    BetaImageToXImage8(display,image,ximage);
+  } else {
+    printf("depth = 24\n");
+    BetaImageToXImage24(display,image,ximage);
+  }
+  return 0;
+}
 
 static int levels = 50;
 
