@@ -42,6 +42,9 @@ public class Structure {
 		}
 	    }
 	}
+	if (iConstructor==null){
+	    System.out.println("AlloSI:\tNo constructor with parameter type (origin)\n\t'" + iOrigin.getClass().getName() + "' found in class '" + iProto.getName() + "'!");
+	}
 	return iConstructor.newInstance(new Object[]{iOrigin});
     }
 
