@@ -189,9 +189,9 @@ void DrawPictureInGWorld (PicHandle picture, GWorldPtr gworld, Rect *dstRect)
 
 GWorldPtr GWorldFromPictureFile (FSSpec *spec)
 {
-	PicHandle picture;
+	PicHandle picture = nil;
 	Rect bounds;
-	GWorldPtr gworld;
+	GWorldPtr gworld = nil;
 	
 	picture = ReadPictureFile(spec);
 	if (picture != nil) {
