@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(114)";
+char betarun_version[] = "BETARUN VERSION 5.3(115)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.136  2003/02/28 13:47:25  datpete
+ *     COM debug
+ * Betarun version number: 114
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.135  2003/02/19 12:15:07  datpete
  *     Comment on AssignRef need after AOA allocation
  * Betarun version number: 113

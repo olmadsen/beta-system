@@ -312,6 +312,16 @@ SectorBasedInAOAUnused(Object *o)
 static void AOANewBlock(long newBlockSize) 
 {
   Block * newblock;
+  if (newBlockSize > SECTOR_SIZE) {
+    INFO_AOA(fprintf(output, 
+		     "\n#AOANewBlock: Allocating large new block %d (0x%08x) bytes / %dMb\n",
+		     (int)newBlockSize,
+		     (int)newBlockSize,
+		     (int)newBlockSize/(1024*1024)
+		     );
+	     fflush(output);
+	     );
+  }
   if (newBlockSize < SECTOR_SIZE) {
     /* See comments in macro.h
      */
