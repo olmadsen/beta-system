@@ -51,45 +51,6 @@ struct Component *AlloSC(struct Structure *struc, long *SP)
   return ss;
 }    
 
-
-struct Structure *ThisS(struct Object *this, long *SP)
-{
-  /* Allocate a structObject for thisObject. 
-   * Used in this way:
-   *
-   * object: (# struc: (# ... do ... TOS'ThisS' ... #) do ... #)
-   * R: ^T
-   * R.struc
-   *
-   * Since ThisS is called from within the struc pattern, we must use
-   * the origin in the generated struc object.
-   */
-  
-  register struct Structure *newStruct;
-  register struct Object *origin;
-  
-  DEBUG_CODE(NumThisS++);
-
-  /* Allocate a StructObject. */
-  
-  /* No need to check for IOAMAXSIZE */
-  Ck(this);
-  Protect(this, newStruct = (struct Structure *)IOAalloc(StructureSize, SP));
-  
-  newStruct->Proto = StructurePTValue;
-  if (IOAMinAge!=0) newStruct->GCAttr = IOAMinAge;
-  
-  origin = ((struct Object **)this)[this->Proto->OriginOff];
-  /* origin is the object we really want orgin and proto of */
-  
-  newStruct->iProto = origin->Proto;
-  AssignReference(&newStruct->iOrigin, ((struct Object **)origin)[origin->Proto->OriginOff]);
-  
-  Ck(this); Ck(newStruct);
-
-  return newStruct;
-}
-
 struct Structure *ObjS(struct Object *theObj, long *SP)
 {
   /* Allocate a structObject for theObj. 
@@ -97,9 +58,6 @@ struct Structure *ObjS(struct Object *theObj, long *SP)
    *
    * R: ^T
    * R##
-   *
-   * Unlike ThisS the object and not the origin should be used in the 
-   * generated struc object.
    */
   
   register struct Structure *newStruct;
