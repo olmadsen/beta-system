@@ -20,19 +20,30 @@ descLocation:
   (# desc: ^ASTindex; location: ^text;
      N: @ASTindex;
      formId: ^text; descNo: @integer;
-     stripForm:
-       (# N: ^text; pos,dashPos: @integer
-       enter N[]
+     findSlashDash:
+       (# N: ^text; pos,slashPos,dashPos: @integer
+       enter N[] (* N= '/users/smith/.../foo-formName' *)
        do N.scanAll(#
                    do pos+1->pos;
-                      (if ch = '-' then pos -> dashPos if)
+                      (if ch = '-' then pos -> dashPos if);
+                      (if ch = '/' then pos -> slashPos if)
                    #);
-          (if dashPos > 0 then (dashPos,N.length) -> N.delete -> N[] if)
+          (* 0 <= slashPos < dashPos < N.length *)
+          inner;
        exit N[]
        #);
+     stripForm: findSlashDash
+       (# 
+       do (if dashPos > 0 then (dashPos,N.length) -> N.delete -> N[] if)
+       #);
+     stripFile: findSlashDash
+       (# 
+       do (slashPos+1,dashPos) -> N.delete -> N[]
+       #);
   enter desc[]
-  do 187->ctrace(#
-                do 'location:'->xT; desc[] -> xA
+  do 316->trace(# EH: @evalHandler
+                do 'location:'->xT; (desc[],true) -> EH.descName ->  xT;
+                   xN; desc[] -> xA
                 #);
      (if not desc.isNull then
          (if desc.label = gram.mainPart then
@@ -55,16 +66,37 @@ descLocation:
                      (* desc has do-part slot *)
                      NONE -> location[] (* is this what we want? *)
                   else
-                     (if (formId[]->formSet.isLocal) <> 0 then
+                     formId.makeUC;
+                     (if false and ((formId[]->formSet.isLocal) <> 0) then
                          '' -> location[] 
                       else 
-                         (desc.frag[]).fullName -> stripForm -> location[]
+                         (if false then
+                             (desc.frag[]).fullName -> stripForm -> location[]
+                          else
+                             (desc.frag[]).fullName -> location[];
+                             (if desc.frag.category
+                              // gram.attributesForm then
+                                 location[] -> stripForm -> location[]
+                              else
+                                 location[] -> stripFile -> location[]
+                             if)
+                         if)
                      if)
                  if)
              if)
           // gram.unExpanded then
              NONE -> location[]
-     if)if)
+     if)if);
+     316->trace(#
+               do 'is: ' -> xT;
+                  (if location[]= none then
+                      'unknown' -> xT
+                   else 
+                      (if location.length = 0 then 
+                          'local' -> xT
+                       else
+                          location[] -> xT
+                  if)if)#)
   exit location[]
   #);
 
@@ -73,6 +105,17 @@ Type:
      isList:< booleanValue;
      elmType:<  integerValue;
      
+     assembly_referred:
+       (* an external assembly was referred (dotnet).
+        * remember this and tell backend a apropriate time.
+        *)
+       (# 
+          assembly: ^text;
+       enter assembly[]
+       do 'assembly_referred: '->puttext;
+          assembly[] -> puttext;
+          '. NYI' -> putline;
+       #);
      asText:<
        (# T: ^text
        do inner;

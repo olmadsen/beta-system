@@ -348,21 +348,26 @@ newInstance:
              not (desc[] -> isBETAsubOfExternalClass) then
          '-' -> orgName[];
       else
-         true -> hasOrigin;
-         (if desc.label = gram.unExpanded then
-             (desc[]-> sematt.encDesc,true)
-               -> EH.descName 
-               -> orgName[]
+         (if true
+          // 'java/lang/Object'-> class.equal
+          // 'object' -> class.equal then
+             '-' -> orgName[];
+             '\nNewInstance: ' -> puttext; class[] -> puttext;
+             ' will probably not work' -> putline
           else
-             desc[] -> sematt.descOrigin -> orgDesc[];
-             (if orgDesc.isNull then
-                 (*'\n***OriginDesc is null (betaenv?)' -> putline;*)
-                 defaultSuperName -> orgName[]
+             true -> hasOrigin;
+             (if desc.label = gram.unExpanded then
+                 (desc[]-> sematt.encDesc,true)
+                   -> EH.descName 
+                   -> orgName[]
               else
-                 (orgDesc[],true) -> EH.descName -> orgName[]
-             if)
-         if)
-     if);
+                 desc[] -> sematt.descOrigin -> orgDesc[];
+                 (if orgDesc.isNull then
+                     (*'\n***OriginDesc is null (betaenv?)' -> putline;*)
+                     defaultSuperName -> orgName[]
+                  else
+                     (orgDesc[],true) -> EH.descName -> orgName[]
+     if)if)if)if);
      313->trace(#
                do 'newInstance:originName:' -> xT; orgName[] -> xT; xN;
                   desc[] -> xA; xN;
@@ -386,7 +391,28 @@ newThisInstance: newInstance
   (#
   do pushThis;
   #);
-
+newInstanceWithOrigin: 
+  (# desc,objSpec,originDesc: ^ASTindex;
+     nonLocal: @boolean
+  enter(desc[],objSpec[],originDesc[],nonLocal)
+  do (if not nonLocal then
+         desc[] -> newThisInstance
+      else
+         desc[] -> newInstance
+         (# OA: ^mch.address
+         do true -> inEnterDoExitMethod;
+            originDesc -> thisDesc; (* ugly: thisDesc is used 
+                                     * in genOrgAdrToOrgReg
+                                     *)
+            (gen.thisRegAdr,originDesc[],objSpec[]
+            ,originDesc->DH.newSingle)
+              -> genOrgAdrToOrgReg 
+              -> OA[];
+            desc -> thisDesc;
+            false -> inEnterDoExitMethod;
+         #)
+     if)
+  #);
 LocalDescriptors:
   (* container used to collect nested patterns, etc.during GenAlloc *)
   (# methodList,classList,ptnList: [5] ^ASTindex; 
@@ -420,24 +446,15 @@ LocalDescriptors:
         (# E: ^ASTindex; ES: @ASTindex
         enter E[]
         do E -> ES;
-           (if true (*common.switch[183]*) then
-               (if ES -> sematt.descKind
-                // sematt.procKind then
-                   ES[] -> addMethod
-                // sematt.classKind then
-                   ES[] -> addClass
-                else
-                   ES[] -> addPtn;
-                   ES[] -> addClass
-               if)
+           (if ES -> sematt.descKind
+            // sematt.procKind then
+               ES[] -> addMethod
+            // sematt.classKind then
+               ES[] -> addClass
             else
-               (if ES[] -> sematt.hasDo then
-                   (* method - we assume so far *)
-                   ES[] -> addMethod
-                else
-                   ES[] -> addClass
-
-           if)if)
+               ES[] -> addPtn;
+               ES[] -> addClass
+           if)
         #);
      scanMethods:
        (# current: ^ASTindex
@@ -711,10 +728,16 @@ callNDX:
      noNsig,noXsig: @boolean;
      EH: @evalHandler
   enter(desc[],method[],sig[],noNsig,noXsig)
-  do (desc[],true) -> EH.descName -> sig.addReceiver;
-     method[] -> sig.addMethod;
-     (noNsig, noXsig) -> sig.asText -> class[];
-     (class[]->mch.newTextOp,'M',true,false)->mch.gJsr;
+  do (if desc-> sematt.superObject.equal then
+         '\nNo call of: ' -> puttext;
+         method[] -> puttext; 
+         ' generated for "object"' -> putline
+      else
+         (desc[],true) -> EH.descName -> sig.addReceiver;
+         method[] -> sig.addMethod;
+         (noNsig, noXsig) -> sig.asText -> class[];
+         (class[]->mch.newTextOp,'M',true,false)->mch.gJsr;
+     if)
   #);
 
 isBETAsubOfExternalClass: booleanValue
@@ -744,6 +767,19 @@ isBETAsubOfExternalClass: booleanValue
      if)        
   #);
      
+methodAndInnerName:
+  (# methodName,innerName: ^text; subLevel: @integer
+  enter(methodName[],subLevel)
+  do methodName.copy -> innerName[];     
+     (if subLevel > 0 then
+         '_' -> methodName.append;
+         subLevel -> methodName.putInt
+     if);
+     '_' -> innerName.append;
+     subLevel + 1 -> innerName.putInt
+  exit(methodName[],innerName[])
+  #);
+
 genSuper:
   (* void  init(org)
    * 
@@ -860,14 +896,26 @@ genSuper:
               *)
              ''-> callInit
              (#
-             do true -> preBase.isOrigin;
+             do 311->trace(#
+                          do 'genSuper:callInit: ' -> xT; preDen[] -> xA; xN;
+                             'localDesc:' -> xT;
+                             preBase.bAdr.localDesc[] -> xA
+                          #);
+                true -> preBase.isOrigin;
                 2 -> prebase.ONlevel;
                 (preBase[],originDesc[],preDen[],chain[])
                   -> genOrgAdr
                   -> preBase[];
                  (preBase.bAdr.localDesc[],true)
                   -> EH.descName 
-                  -> orgName[]
+                  -> orgName[];
+                311->trace(#
+                          do 'genSuper:callInit:2 ' -> xT; xN;
+                             'localDesc:' -> xT;
+                             preBase.bAdr.localDesc[] -> xA; xN;
+                             'orgName: ' -> xT; orgName[] -> xT
+                          #);
+                
              #)
          if);
          storeOrigin;
@@ -905,10 +953,24 @@ do (# sig: @Signature;
       exitVal: ^ASTindex;
       EVL,EV: @ASTindex; V: ^EH.evVal;
       orgName: ^text;
-      theDesc: @ASTindex
+      theDesc,objSpec,D: @ASTindex;
+      descKind: @integer;
+      nonLocal: @boolean
    do 311->trace(#
                 do 'genPtnMethod: '->xT; patternName[] -> xT;
                 #);
+      desc -> objSpec;
+      (if desc.label 
+       // gram.objectDescriptor 
+       // gram.unExpanded then
+       else
+          true -> nonLocal;
+          (thisDesc[](*?*),desc[])
+            -> GetActualDesc 
+            -> (D,descKind);
+          &ASTindex[] -> desc[]; (* to prevent aliasing; ugly! *)
+          D -> desc;
+      if);
       desc -> theDesc;
       (if desc.isSlot then 
           (*'\n*** OBS! Slots are not handled by genPtnMethod: '->puttext;
@@ -962,7 +1024,7 @@ do (# sig: @Signature;
            *     return new foo(a,b,c).do
            *)
       (if isStatic then
-          (* 1st argument shouild be origin - FIX this *)
+          (* 1st argument should be origin - FIX this *)
           theDesc[] -> newThisInstance; (* note that this for this static
                                          * method is an explict argument
                                          * of type reference
@@ -970,7 +1032,28 @@ do (# sig: @Signature;
           false -> sig.isStatic;
           thisDesc[] -> sig.addEnter;
        else
-          theDesc[] -> newThisInstance;
+          (if true then
+              (theDesc[],objSpec[],originDesc[],nonLocal) -> newInstanceWithOrigin;
+           else
+          (if not nonLocal then
+              theDesc[] -> newThisInstance
+           else
+              theDesc[] -> newInstance
+              (# OA: ^mch.address
+              do 'ptnMethod:newInstance:' -> mch.comment;
+                 patternName -> mch.comment;
+                 true -> inEnterDoExitMethod;
+                 originDesc -> thisDesc; (* ugly: thisDesc is used 
+                                              * in genOrgAdrToOrgReg
+                                              *)
+                 (gen.thisRegAdr,originDesc[],objSpec[]
+                 ,originDesc->DH.newSingle)
+                   -> genOrgAdrToOrgReg 
+                   -> OA[];
+                 theDesc -> thisDesc;
+                 false -> inEnterDoExitMethod;
+              #)
+          if)if)
       if);
 
       (if hasNcode then
@@ -1027,14 +1110,30 @@ do (# sig: @Signature;
    #)
    
 ---genPtnClass:doPart---
-do (# sig: @Signature
-   do 311->ctrace(#
-                 do 'genPtnClass: '->xT; patternName[] -> xT
-                 #);
+do (# sig: @Signature;
+      objSpec,theDesc,D: @ASTindex;
+      nonLocal: @boolean;
+      descKind: @integer
+   do 311->trace(#
+                do 'genPtnClass: '->xT; patternName[] -> xT
+                #);
       (if desc.isSlot then
           '\n*** OBS! Slots are not handled by genPtnClass: '->puttext;
           patternName[] -> putline;          
        else
+          desc -> objSpec;
+          (if desc.label 
+           // gram.objectDescriptor 
+           // gram.unExpanded then
+           else
+              true -> nonLocal;
+              (thisDesc[](*?*),desc[])
+                -> GetActualDesc 
+                -> (D,descKind);
+              &ASTindex[] -> desc[]; (* to prevent aliasing; ugly! *)
+              D -> desc;
+          if);
+          desc -> theDesc;
           (desc[],false) -> initPtnGen;
           thisDesc[] -> sig.setDesc;
           sig.noEnter;
@@ -1042,7 +1141,8 @@ do (# sig: @Signature
           patternName[] -> sig.addMethod;
           (doP.nodeId,patternName[],true,sig.asText,sig.noOfEnterArgs) 
             -> mch.initDo;
-          thisDesc[] -> newThisInstance; 
+          (theDesc[],objSpec[],originDesc[],nonLocal)
+            -> newInstanceWithOrigin;
           (false,2) -> mch.return 
       if)
    #)
@@ -1265,7 +1365,7 @@ do (# genMain:
                  (if usPos > 0 then 
                      (usPos+1,className.length) -> className.sub -> classname[]
                  if);
-                 (className[],thisDesc[],true) -> genPtnMethod;
+                 (className[],thisDesc[],true,theDesc[]) -> genPtnMethod;
                  x[] -> exitP[];
                  d[] -> doP[];
                  n[] -> enterP[];
@@ -1284,7 +1384,8 @@ do (# genMain:
               ThisDesc[] -> genEnterMethod
           if);
           (if hasDoMethod then
-              (ThisDesc[], not hasEnterMethod, false (*not hasExitMethod*)) 
+              (ThisDesc[]
+              , not hasEnterMethod, false (*not hasExitMethod*),subLevel) 
                 -> genDoMethod
           if);
           (if hasExitMethod then
@@ -1324,18 +1425,20 @@ do (# genMain:
              if)
           #);
           locals.scanPtns
-          (#
+          (# desc: @ASTindex; descKind: @integer
           do (if not (current[] -> skipDesc) then (* skip *)
-                 (if current.label = gram.unexpanded then
+                 (if current.label 
+                  // gram.unExpanded then
                      (* '\n*** descriptor: ' -> puttext;
                       (current[],screen[],500) -> thePP;
                      *)
                      
                      (if common.switch[186] then
-                         ((current[],false)->EH.descName,current[],false) 
+                         ((current[],false)->EH.descName
+                         ,current[],false,theDesc[]) 
                            -> genPtnMethod;
                      if)
-                  else
+                  // gram.objectDescriptor then
                      (if current->sematt.descKind
                       // sematt.generalKind 
                       // sematt.classKind
@@ -1343,10 +1446,22 @@ do (# genMain:
                          (* see gdbody for patterns we ignore;
                           * do we have the right ones here ?
                           *)
-                         ((current[],false)->EH.descName,current[],false) 
+                         ((current[],false)->EH.descName
+                         ,current[],false,theDesc[]) 
                            -> genPtnMethod;
-                         ((current[],false)->EH.descName,current[]) -> genPtnClass
-             if)if)if)
+                         ((current[],false)->EH.descName
+                         ,current[],theDesc[]) 
+                           -> genPtnClass
+                     if)
+                  else
+                     (* attributeDenotation as 'A' in 'V:<A' *)
+                     ((current[],false)->EH.descName
+                     ,current[],false,theDesc[]) 
+                       -> genPtnMethod;
+                     ((current[],false)->EH.descName
+                     ,current[],theDesc[]) 
+                       -> genPtnClass
+             if)if)
           #);
           
           (if isMain then
@@ -1386,10 +1501,11 @@ do (# genMain:
              if)if)
           #);      
           thisBlockLevel - 1 -> thisBlockLevel;   
-          
-          (* should be moved up or eliminated??*)
-          (pref[],att[])->BindVirtuals;
-          (nameId[],singular)->genSymbTable;  
+          (if false then
+              (* should be moved up or eliminated??*)
+              (pref[],att[])->BindVirtuals;
+              (nameId[],singular)->genSymbTable;  
+          if)
       if)
    #)
    
@@ -1448,7 +1564,8 @@ do (# sig: @Signature;
       exitVal: ^ASTindex;
       exitId: @integer;
       EH: @EvalHandler;
-      V: ^EH.evVal
+      V: ^EH.evVal;
+      methodName,innerName: ^text
    do 311->trace(#
                 do 'GenDoMethod:'->xT; desc[]->xA
                 #);
@@ -1474,8 +1591,23 @@ do (# sig: @Signature;
            else
               sig.exitVoid
           if);
-          'do' -> sig.addMethod;
-          (doP.nodeId,'do',false,sig.asText,sig.noOfEnterArgs) -> mch.initDo;
+          311 ->trace(# 
+                     do 'genDoMethod:hasInner:sublevel:'->xT; 
+                        subLevel -> xI
+                     #);
+          ('do',subLevel) 
+            -> methodAndInnerName 
+            -> (methodName[],innerName[]);
+          (if false and (not (desc[] -> sematt.hasInner)) then
+              (* we should later optimize when no inner *)
+              'do' -> innerName[] (* se else-part *)
+              (* a hack with methodName[] -> innername[];
+               * see bytecodebackend:initDo
+               *)
+          if);
+          methodName[] -> sig.addMethod;
+          (doP.nodeId,innername[],false,sig.asText,sig.noOfEnterArgs) 
+            -> mch.initDo;
           (if (doP.label <> gram.empty) then doP -> (&GenDo[]).Scan if);
           (if simpleExit and (exitVal[] <> NONE ) then
               (gen.thisRegAdr,exitVal[],false,ThisSuperChain) 
@@ -1610,6 +1742,10 @@ do (# className,path: ^text; EH: @evalHandler;
                ,className[]
                ,(this(AstInterface)[],theGroup[])->getGroupIDProperty
                ) -> mch.init;
+               311->trace(#
+                         do 'currentFrag: '->puttext;
+                            (thisDesc.frag[]).fullName -> putline
+                         #);
                (if not isBetaEnv then
                    BCname[] -> splitPathAndNAme -> (path[],c[]);
                    className[] -> path.append;
