@@ -34,6 +34,16 @@ LL_ENTRIES:  (# exit 1 #);(*LL_INITIAL+protoCount+Tentries+Mentries+Gentries*)
 LL_DBINFO:   (# exit 2 #);(*LL_ENTRIES+astRefs+fragments*)
 LL_NODBINFO: (# exit 3 #);(*Transition to LL_DBINFO failed (no ..db file)*)
 
+(* STATUS OF DBFILES
+ * =================
+ * 
+ * These values are given as the status parameter to DBstatus virtuals. *)
+
+DBFILE_OK:       (# exit 0 #); 
+DBFILE_NOTFOUND: (# exit 1 #); (* The ..db file does not exist. *)
+DBFILE_NEWER:    (# exit 2 #); (* The ..db file exists, but is newer than the
+                                * executable. *)
+
 processInterface:
   (# 
      <<SLOT processInterfaceLib:attributes>>;
@@ -65,9 +75,7 @@ processInterface:
       * 
       * execNotFound is raised if the executable could not be found.
       * 
-      * forEachDB is called by dbManager when it is about to read the ..db
-      * file whose name is given. If found is FALSE, the ..db file was not
-      * found. *)
+      * DBstatus is called by dbManager for each ..db file it tries to read. *)
      
      init:
        (# doingExpensiveRead:< Notification;
@@ -75,10 +83,10 @@ processInterface:
           createFragInfo:< BooleanObject;
           creationFailed:< Exception;
           execNotFound:< Exception;
-          forEachDB:<
+          DBstatus:<
             (# dbName: ^Text;
-               found: @Boolean;
-            enter (dbName[],found)
+               status: @Integer; (* One of DBFILES_ *)
+            enter (dbName[],status)
             do INNER
             #);
           
@@ -343,7 +351,8 @@ processInterface:
      executable: @
        (# 
           init:
-            (# execName: ^Text;
+            (# notFound:< Exception;
+               execName: ^Text;
             enter execName[]
             <<SLOT executableInit:dopart>>
             #);
@@ -370,6 +379,10 @@ processInterface:
             <<SLOT labelAddressToName:dopart>>
             exit name[]
             #);
+          
+          modTime: @Integer; (* modTime of the executable. *)
+          
+          execPrivate: @<<SLOT executablePrivate:descriptor>>;
        #);
 
      
@@ -550,11 +563,10 @@ processInterface:
                doingCheapRead:< Object;
                createFragInfo:< BooleanObject;
                creationFailed:< Object;
-               execNotFound:< Object;
-               forEachDB:<
+               DBstatus:<
                  (# dbName: ^Text;
-                    found: @Boolean;
-                 enter (dbName[],found)
+                    status: @Integer; (* One of DBFILE_ *)
+                 enter (dbName[],status)
                  do INNER
                  #);
         
@@ -571,13 +583,20 @@ processInterface:
            * ..db file, assuming that all other information in ofi has 
            * already been initialized.
            * 
-           * If the ..db file could not be found, ofi.loadLevel is set to 
-           * LL_NODBINFO. Otherwise the information is loaded and 
-           * ofi.loadLevel is set to LL_DBINFO.
+           * If the ..db file could not be found or is newer than the 
+           * executable, ofi.loadLevel is set to LL_NODBINFO. 
+           * Otherwise the information is loaded and ofi.loadLevel is 
+           * set to LL_DBINFO. DBstatus is called in any case.
            *)
           
           readDB:
             (# ofi: ^ObjectFileInfo;
+               DBstatus:<
+                 (# dbName: ^Text;
+                    status: @Integer; (* One of DBFILE_ *)
+                 enter (dbName[],status)
+                 do INNER
+                 #);
             enter ofi[]
             <<SLOT DBManagerReadDB:dopart>>
             #);
