@@ -237,6 +237,9 @@ extern void ProcessStackObj(StackObject *, CellProcessFunc func);
 extern void GeneralProcessStack(CellProcessFunc func);
 extern void ProcessStack(void);
 extern void DoStackCell(Object **theCell, Object *theObj);
+#ifdef sparc
+extern long frame_PC;
+#endif
 #ifdef NEWRUN
 extern long WindBackSP(long SP, Object *obj, long PC);
 extern void ProcessStackFrames(long SP, long StackStart, long stopAtComp, long dynOnly, CellProcessFunc func);
