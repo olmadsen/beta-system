@@ -1,5 +1,10 @@
+generated: figures.html interface
+
 interface: always
 	cd interface; ./makeHTML
+
+figures.html: always
+	../bin/make_figure_list.perl -n bifrost-ref-3.html -p index.html -t 'Bifrost Graphics System' *-?.html *-??.html > figures.html
 
 demo: always
 	cd demo; ./copyexpand 

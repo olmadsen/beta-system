@@ -1,12 +1,41 @@
 #!/usr/local/bin/perl
 
-if ($#ARGV == -1) {
+sub usage()
+{
     print "Usage:\n";
-    print "make_figure_list <files or wildcard>\n";
+    print "make_figure_list -n next_URL -p previous_URL  -t title <files or wildcard>\n";
     exit 1;
 }
 
-print<<'EOT';
+# Parse arguments
+
+&usage() if ($#ARGV < 6);
+
+$waiting_for_next=0;
+$waiting_for_prev=0;
+$waiting_for_title=0;
+
+while ($#ARGV>=0) {
+    if ($waiting_for_next){
+	$next=$ARGV[0]; $waiting_for_next=0; shift(@ARGV);
+    } elsif ($waiting_for_prev){
+	$prev=$ARGV[0]; $waiting_for_prev=0; shift(@ARGV);
+    } elsif ($waiting_for_title){
+	$title=$ARGV[0]; $waiting_for_title=0; shift(@ARGV);
+    } elsif ($ARGV[0] eq "-n") {
+	$waiting_for_next=1; shift(@ARGV);
+    } elsif ($ARGV[0] eq "-p") {
+	$waiting_for_prev=1; shift(@ARGV);
+    } elsif ($ARGV[0] eq "-t") {
+	$waiting_for_title=1; shift(@ARGV);
+    } else {
+	last;
+    }
+}
+
+&usage() if ($waiting_for_next || $waiting_for_prev || $waiting_for_title);
+
+print<<"EOT";
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
 <HTML>
 
@@ -18,13 +47,13 @@ print<<'EOT';
 <BODY>
 
 <P>
-<A HREF=><IMG ALIGN=BOTTOM SRC="../images/next.gif" ALT=Next BORDER=0></A> 
-<A HREF=index.html><IMG ALIGN=BOTTOM SRC="../images/prev.gif" ALT=Previous BORDER=0></A> 
+<A HREF=$next><IMG ALIGN=BOTTOM SRC="../images/next.gif" ALT=Next BORDER=0></A> 
+<A HREF=$prev><IMG ALIGN=BOTTOM SRC="../images/prev.gif" ALT=Previous BORDER=0></A> 
 <A HREF=../index.html><IMG ALIGN=BOTTOM SRC=../images/top.gif ALT=Top BORDER=0></A> 
 <A HREF=index.html#_toc><IMG ALIGN=BOTTOM SRC="../images/content.gif" ALT=Contents BORDER=0></A>
 <A HREF=inx.html><IMG ALIGN=BOTTOM SRC="../images/index.gif" ALT=Index BORDER=0></A>
 <P>
-<P>(Type main title here)</P>
+<P>$title</P>
 <HR>
 <!---------------------------------------------------------->
 
@@ -46,19 +75,21 @@ foreach $file (@ARGV) {
 
 print "</DL></DL>\n";
 
-print<<'EOT';
+print<<"EOT";
 <!---------------------------------------------------------->
 <HR>
 <P>
 <TABLE cols=3 border=0 width=100%>
 <TR>
-<TD width="40%" align="left"><ADDRESS>(Type main title here)</ADDRESS></TD>
+<TD width="40%" align="left">
+<ADDRESS>$title</ADDRESS>
+</TD>
 <TD width="20%" align="center"><FONT size=-1>&COPY; <A HREF="http://www.mjolner.com">Mj&oslash;lner Informatics</A></FONT></TD>
 <TD width="40%" align="right"><SCRIPT LANGUAGE=JavaScript SRC="../javascript/lastmod.js"></SCRIPT></TD>
 </TABLE>
 <P>
-<A HREF=><IMG ALIGN=BOTTOM SRC="../images/next.gif" ALT=Next BORDER=0></A> 
-<A HREF=index.html><IMG ALIGN=BOTTOM SRC="../images/prev.gif" ALT=Previous BORDER=0></A> 
+<A HREF=$next><IMG ALIGN=BOTTOM SRC="../images/next.gif" ALT=Next BORDER=0></A> 
+<A HREF=$prev><IMG ALIGN=BOTTOM SRC="../images/prev.gif" ALT=Previous BORDER=0></A> 
 <A HREF=../index.html><IMG ALIGN=BOTTOM SRC=../images/top.gif ALT=Top BORDER=0></A> 
 <A HREF=index.html#_toc><IMG ALIGN=BOTTOM SRC="../images/content.gif" ALT=Contents BORDER=0></A>
 <A HREF=inx.html><IMG ALIGN=BOTTOM SRC="../images/index.gif" ALT=Index BORDER=0></A>
