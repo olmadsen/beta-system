@@ -1237,6 +1237,7 @@ do
         AssociationList.clear;
         InheritanceList.clear;
         AggregationList.clear;
+        '1:'->putline;
         theList.scan
           (#
              thePatternDeclDiagram: ^PatternDeclDiagram;
@@ -1254,6 +1255,11 @@ do
               else
                  (if current.e## <= PatternDeclDiagram## then
                      current.e[]->thePatternDeclDiagram[];
+                     (if thePatternDeclDiagram.theDescriptor[] = none then
+                         'theDescriptor = none for diagram = %s\n'
+                           ->putformat
+                             (#  do thePatterndecldiagram.titletext[]->s #)
+                     if);
                      (if
                      thePatternDeclDiagram.theDescriptor.frag.father->isChecked
                       then
@@ -1707,6 +1713,21 @@ do
     sets up ast references on the nodes according
     to the structure of the diagram *)
      (#
+        doUpdate: @boolean;
+        performedUpdates: @text;
+        askUpdate:
+          (# ok: @integer
+          do
+             (if doUpdate then
+                 yes->ok
+              else
+                 ('Open Diagram',
+                  'Inconsistencies between diagram and code where detected.\nAutomatically update diagram?')
+                   ->promptForBoolean->ok;
+                 (if ok = yes then true->doUpdate if)
+             if)
+          exit ok
+          #);
         consistentFFCategory:
           (#
              ff: ^mps.fragmentForm;
@@ -1765,306 +1786,616 @@ do
           (# ld: ^listDiagram; theAttributes: ^betaGram.Attributes
           enter (theAttributes[],ld[])
           do
-             theAttributes[]
-               ->ld.scanAttributeDecls
-                 (#
-                    ndtexts:
-                    (* to cope with same name
-                     declared more than once in
-                     attribute list *) @list
+             thisOp:
+               (# 
+               do
+                  theAttributes[]
+                    ->ld.scanAttributeDecls
                       (#
-                         element:: text;
-                         occurrenceNo:
-                           (# ndtext: ^text; no: @integer
-                           enter ndtext[]
-                           do
-                              ndtexts.scan
-                                (# 
-                                do
-                                   (if current[]->ndtext.equal then
-                                       no+1->no
-                                   if)
-                                #);
-                              ndtext[]->ndtexts.append;
-                              no+1->no
-                           exit no
-                           #)
-                      #);
-                    nonTerminals:
-                    (* to cope with more than
-                     one attributeDeclOpt in
-                     attribute list *) @integer;
-                    thisAttribute:: 
-                      (#
-                         signatureMatch:
+                         ndtexts:
+                         (* to cope with same name
+                          declared more than once in
+                          attribute list *) @list
                            (#
-                              updateASTRefs:
-                                (# 
+                              element:: text;
+                              occurrenceNo:
+                                (# ndtext: ^text; no: @integer
+                                enter ndtext[]
                                 do
-                                   (nd.father).father->theNode.theDeclaration[];
-                                   theNode.theDeclaration.index
-                                     ->theNode.astIndex;
-                                   newOD[]->theNode.theObjectDescriptor[];
-                                   (if sad[] <> none then
-                                       theRefSpec[]->sad.theReferenceSpec[];
-                                       theUnExpRefSpec[]->sad.theUnExpRefSpec[]
+                                   ndtexts.scan
+                                     (# 
+                                     do
+                                        (if current[]->ndtext.equal then
+                                            no+1->no
+                                        if)
+                                     #);
+                                   ndtext[]->ndtexts.append;
+                                   no+1->no
+                                exit no
+                                #)
+                           #);
+                         nonTerminals:
+                         (* to cope with more than
+                          one attributeDeclOpt in
+                          attribute list *) @integer;
+                         thisAttribute:: 
+                           (#
+                              checkCategoryAndSignature:
+                                (#
+                                   nd: ^betaGram.nameDcl;
+                                   theNode: ^ld.DiagramNode;
+                                   nodeType: ##ld.abstractNode;
+                                   ok: @integer
+                                enter (nd[],theNode[],nodeType##)
+                                do
+                                   (if theNode## = nodeType## then
+                                       18
+                                         ->trace
+                                           (# 
+                                           do
+                                              'Found node matching category!'->T
+                                           #);
+                                       (nd[],theNode[])->signatureMatch
+                                    else
+                                       askUpdate->ok;
+                                       (if ok = yes then
+                                           (theNode[],true)
+                                             ->
+                                               (theNode.theDiagram).
+                                               deleteDiagramNode;
+                                           (((nd.father).father).father,
+                                            ((nd.father).father).sonNo)
+                                             ->listElementInserted;
+                                           'Changed syntactical category of %s in %s\n'
+                                             ->performedUpdates.putformat
+                                               (# 
+                                               do
+                                                  ndtext[]->s; ld.titletext[]->s
+                                               #)
+                                        else
+                                           leave thisOp
+                                       if)
                                    if)
                                 #);
-                              checkParseAttributes:
-                                (# 
+                              signatureMatch:
+                                (#
+                                   updateASTRefs:
+                                     (# 
+                                     do
+                                        (nd.father).father
+                                          ->theNode.theDeclaration[];
+                                        theNode.theDeclaration.index
+                                          ->theNode.astIndex;
+                                        newOD[]->theNode.theObjectDescriptor[];
+                                        (if sad[] <> none then
+                                            theRefSpec[]
+                                              ->sad.theReferenceSpec[];
+                                            theUnExpRefSpec[]
+                                              ->sad.theUnExpRefSpec[]
+                                        if)
+                                     #);
+                                   checkParseAttributes:
+                                     (# 
+                                     do
+                                        (if (newOD[] <> none ) and
+                                        (theNode.currentDecomposDiagram <> none
+                                         ) then
+                                            newOD[]
+                                              ->
+                                                (theNode.currentDecomposDiagram)
+                                                  .theDescriptor[];
+                                            (theNode.currentDecomposDiagram,
+                                             newOD.index,newOD.frag.fullname)
+                                              ->
+                                                theWorkPage.patternDiagrams.
+                                                  theList.updateIndex;
+                                            newOD.getMainPart->mp[];
+                                            (mp.getAttributes,
+                                             theNode.currentDecomposDiagram)
+                                              ->parseAttributes
+                                        if)
+                                     #);
+                                   nd: ^betaGram.NameDcl;
+                                   theNode: ^ld.DiagramNode;
+                                   value: @boolean;
+                                   newOD: ^betaGram.ObjectDescriptor;
+                                   mp: ^betaGram.MainPart;
+                                   theRefSpec:
+                                     ^betaGram.ReferenceSpecification;
+                                   theUnExpRefSpec: ^mps.UnExpanded;
+                                   theObjSpec: ^mps.ast;
+                                   newName,propString: ^text;
+                                   newText,oldText: @text;
+                                   sad: ^ld.SimpleAttributeDecl;
+                                   ok: @integer
+                                enter (nd[],theNode[])
                                 do
-                                   (if (newOD[] <> none ) and
-                                   (theNode.currentDecomposDiagram <> none )
+                                   (if theNode## <= ld.SimpleAttributeDecl##
                                     then
-                                       newOD[]
+                                       theNode[]->sad[];
+                                       (nd[],(nd.father).father)->sad.ppAST
                                          ->
-                                           (theNode.currentDecomposDiagram).
-                                           theDescriptor[];
-                                       (theNode.currentDecomposDiagram,
-                                        newOD.index,newOD.frag.fullname)
+                                           (newText,newName[],newOD[],
+                                            propString[],theRefSpec[],
+                                            theUnExpRefSpec[],theObjSpec[])
+                                    else
+                                       (nd[],(nd.father).father)->theNode.ppAST
                                          ->
-                                           theWorkPage.patternDiagrams.theList.
-                                             updateIndex;
-                                       newOD.getMainPart->mp[];
-                                       (mp.getAttributes,
-                                        theNode.currentDecomposDiagram)
-                                         ->parseAttributes
+                                           (newText,newName[],newOD[],
+                                            propString[])
+                                   if);
+                                   theNode.theText.get->oldText;
+                                   (if oldText[]->newText.equal then
+                                       18
+                                         ->trace
+                                           (# 
+                                           do '...and signatures match!!'->t
+                                           #);
+                                       true->value;
+                                       updateASTRefs;
+                                       checkParseAttributes
+                                    else
+                                       18
+                                         ->trace
+                                           (# 
+                                           do
+                                              '...but signatures don''t match: new=%s old=%s\n'
+                                                ->t.putformat
+                                                  (# 
+                                                  do newText[]->s; oldText[]->s
+                                                  #)
+                                           #);
+                                       askUpdate->ok;
+                                       (if ok = yes then
+                                           newText->theNode.theText.set;
+                                           ndtext[]->theNode.theName;
+                                           updateASTRefs;
+                                           'Updated attribute signature "%s" in %s to new signature "%s"\n'
+                                             ->performedUpdates.putformat
+                                               (# 
+                                               do
+                                                  oldtext[]->s;
+                                                  ld.titletext[]->s;
+                                                  newtext[]->s
+                                               #);
+                                           checkParseAttributes
+                                        else
+                                           leave thisOp
+                                       if)
                                    if)
+                                exit value
                                 #);
-                              nd: ^betaGram.NameDcl;
+                              ndecl: ^mps.NameDecl;
+                              ndtext: ^text;
+                              anAST: ^mps.ast;
                               theNode: ^ld.DiagramNode;
-                              value: @boolean;
-                              newOD: ^betaGram.ObjectDescriptor;
-                              mp: ^betaGram.MainPart;
-                              theRefSpec: ^betaGram.ReferenceSpecification;
-                              theUnExpRefSpec: ^mps.UnExpanded;
-                              theObjSpec: ^mps.ast;
-                              newName,propString: ^text;
-                              newText,oldText: @text;
-                              sad: ^ld.SimpleAttributeDecl;
+                              help: @text;
                               ok: @integer
-                           enter (nd[],theNode[])
                            do
-                              (if theNode## <= ld.SimpleAttributeDecl## then
-                                  theNode[]->sad[];
-                                  (nd[],(nd.father).father)->sad.ppAST
-                                    ->
-                                      (newText,newName[],newOD[],propString[],
-                                       theRefSpec[],theUnExpRefSpec[],
-                                       theObjSpec[])
+                              nd.getNameDecl->anAST[];
+                              (if anAST.kind
+                               // mps.kinds.unExpanded then
+                                  '<<NameDecl>>'->ndtext[]
+                               // mps.kinds.optional then
+                                  '<<Optional>>'->ndtext[]; 
                                else
-                                  (nd[],(nd.father).father)->theNode.ppAST
-                                    ->(newText,newName[],newOD[],propString[])
+                              (* is a real name *)
+                                  anAST[]->ndecl[]; ndecl.getText->ndtext[]
                               if);
-                              theNode.theText.get->oldText;
-                              (if oldText[]->newText.equal then
-                                  18
-                                    ->trace
-                                      (# 
-                                      do '...and signatures match!!'->t
-                                      #);
-                                  true->value;
-                                  updateASTRefs;
-                                  checkParseAttributes
-                               else
+                              (if ndtext[] <> none then
+                                  (ndtext[],ndtext[]->ndtexts.occurrenceNo)
+                                    ->ld.nameToNode->theNode[];
                                   18
                                     ->trace
                                       (# 
                                       do
-                                         '...but signatures don''t match: new=%s old=%s\n'
-                                           ->t.putformat
-                                             (# 
-                                             do newText[]->s; oldText[]->s
+                                         'parseDiagram: ndtext = %s ld=%s\n'
+                                           ->T.putformat
+                                             (# dummy: @text
+                                             do
+                                                ndtext[]->s;
+                                                ld.titleNode.theText.get->dummy;
+                                                dummy[]->s
                                              #)
                                       #);
-                                  'Attribute signature "%s" in diagram\ndoes not match attribute signature "%s" in code.\nUpdate diagram?'
-                                    ->help.putformat
-                                      (#  do oldtext[]->s; newtext[]->s #);
-                                  ('Open Diagram',help[])->promptForBoolean->ok;
-                                  (if ok = yes then
-                                      newText->theNode.theText.set;
-                                      ndtext[]->theNode.theName;
-                                      updateASTRefs;
-                                      checkParseAttributes
+                                  (if theNode[] <> none then
+                                      18
+                                        ->trace
+                                          (# 
+                                          do
+                                             'parseDiagram: corresponding node = %s\n'
+                                               ->putformat
+                                                 (# 
+                                                 do theNode.theName->s
+                                                 #)
+                                          #);
+                                      (if ((nd.father).father).symbol
+                                       // betaGram.PatternDecl then
+                                          (nd[],theNode[],ld.PatternNode##)
+                                            ->checkCategoryAndSignature
+                                       // betaGram.SimpleDecl then
+                                          (nd[],theNode[],ld.SimpleNode##)
+                                            ->checkCategoryAndSignature
+                                       // betaGram.RepetitionDecl then
+                                          (nd[],theNode[],ld.RepetitionNode##)
+                                            ->checkCategoryAndSignature
+                                       // betaGram.VirtualDecl then
+                                          (nd[],theNode[],ld.VirtualNode##)
+                                            ->checkCategoryAndSignature
+                                       // betaGram.BindingDecl then
+                                          (nd[],theNode[],ld.BindingNode##)
+                                            ->checkCategoryAndSignature
+                                       // betaGram.FinalDecl then
+                                          (nd[],theNode[],ld.FinalNode##)
+                                            ->checkCategoryAndSignature
+                                      if)
+                                   else
+                                      askUpdate->ok;
+                                      (if ok = yes then
+                                          (((nd.father).father).father,
+                                           ((nd.father).father).sonNo)
+                                            ->listElementInserted;
+                                          'Attribute %s inserted in %s\n'
+                                            ->performedUpdates.putformat
+                                              (# 
+                                              do ndtext[]->s; ld.titletext[]->s
+                                              #)
+                                       else
+                                          leave thisOp
+                                      if)
                                   if)
                               if)
-                           exit value
                            #);
-                         ndecl: ^mps.NameDecl;
-                         ndtext: ^text;
-                         anAST: ^mps.ast;
-                         theNode: ^ld.DiagramNode;
-                         help: @text;
-                         ok: @integer
-                      do
-                         nd.getNameDecl->anAST[];
-                         (if anAST.kind
-                          // mps.kinds.unExpanded then
-                             '<<NameDecl>>'->ndtext[]
-                          // mps.kinds.optional then
-                             '<<Optional>>'->ndtext[]; 
-                          else
-                         (* is a real name *)
-                             anAST[]->ndecl[]; ndecl.getText->ndtext[]
-                         if);
-                         (if ndtext[] <> none then
-                             (ndtext[],ndtext[]->ndtexts.occurrenceNo)
-                               ->ld.nameToNode->theNode[];
-                             18
-                               ->trace
-                                 (# 
-                                 do
-                                    'parseDiagram: ndtext = %s ld=%s\n'
-                                      ->T.putformat
-                                        (# dummy: @text
-                                        do
-                                           ndtext[]->s;
-                                           ld.titleNode.theText.get->dummy;
-                                           dummy[]->s
-                                        #)
-                                 #);
-                             (if theNode[] <> none then
-                                 18
-                                   ->trace
-                                     (# 
-                                     do
-                                        'parseDiagram: corresponding node = %s\n'
-                                          ->putformat
-                                            (#  do theNode.theName->s #)
-                                     #);
-                                 (if ((nd.father).father).symbol
-                                  // betaGram.PatternDecl then
-                                     (if theNode## = ld.PatternNode## then
-                                         18
-                                           ->trace
-                                             (# 
-                                             do
-                                                'Found node matching category!'
-                                                  ->T
-                                             #);
-                                         (nd[],theNode[])->signatureMatch
-                                      else
-                                         'Declaration has changed category!'
-                                           ->alertUser;
-                                         (theNode[],(nd.father).father)
-                                           ->
-                                             (theNode.theDiagram).
-                                             replaceDiagramNode
-                                     if)
-                                  // betaGram.SimpleDecl then
-                                     (if theNode## <= ld.SimpleNode## then
-                                         18
-                                           ->trace
-                                             (# 
-                                             do
-                                                'Found node matching category!'
-                                                  ->T
-                                             #);
-                                         (nd[],theNode[])->signatureMatch
-                                      else
-                                         'Declaration has changed category!'
-                                           ->alertUser
-                                     if)
-                                  // betaGram.RepetitionDecl then
-                                     (if theNode## <= ld.RepetitionNode## then
-                                         18
-                                           ->trace
-                                             (# 
-                                             do
-                                                'Found node matching category!'
-                                                  ->T
-                                             #);
-                                         (nd[],theNode[])->signatureMatch
-                                      else
-                                         'Declaration has changed category!'
-                                           ->alertUser
-                                     if)
-                                  // betaGram.VirtualDecl then
-                                     (if theNode## <= ld.VirtualNode## then
-                                         18
-                                           ->trace
-                                             (# 
-                                             do
-                                                'Found node matching category!'
-                                                  ->T
-                                             #);
-                                         (nd[],theNode[])->signatureMatch
-                                      else
-                                         'Declaration has changed category!'
-                                           ->alertUser
-                                     if)
-                                  // betaGram.BindingDecl then
-                                     (if theNode## <= ld.BindingNode## then
-                                         18
-                                           ->trace
-                                             (# 
-                                             do
-                                                'Found node matching category!'
-                                                  ->T
-                                             #);
-                                         (nd[],theNode[])->signatureMatch
-                                      else
-                                         'Declaration has changed category!'
-                                           ->alertUser
-                                     if)
-                                  // betaGram.FinalDecl then
-                                     (if theNode## <= ld.FinalNode## then
-                                         18
-                                           ->trace
-                                             (# 
-                                             do
-                                                'Found node matching category!'
-                                                  ->T
-                                             #);
-                                         (nd[],theNode[])->signatureMatch
-                                      else
-                                         'Declaration has changed category!'
-                                           ->alertUser
-                                     if)
-                                 if)
-                              else
-                                 'Attribute %s not found in diagram.\nUpdate diagram?'
-                                   ->help.putformat (#  do ndtext[]->s #);
-                                 ('Open Diagram',help[])->promptForBoolean->ok;
-                                 (if ok = yes then
-                                     (((nd.father).father).father,
-                                      ((nd.father).father).sonNo)
-                                       ->listElementInserted
-                                 if)
-                             if)
-                         if)
+                         thisUnExp:: 
+                           (#
+                              theNode: ^ld.nonTerminalNode;
+                              help: @text;
+                              ok: @integer
+                           do
+                              nonTerminals+1->nonTerminals->ld.noToNonTerminal
+                                ->theNode[];
+                              (if theNode[] <> none then
+                                  unExp[]->theNode.unExp[];
+                                  unExp.index->theNode.astIndex
+                               else
+                                  askUpdate->ok;
+                                  (if ok = yes then
+                                      (unExp.father,unExp.sonNo)
+                                        ->listElementInserted;
+                                      'Nonterminal attribute, "<<AttributeDeclOpt>>" inserted in %s\n'
+                                        ->performedUpdates.putformat
+                                          (#  do ld.titletext[]->s #)
+                                   else
+                                      leave thisOp
+                                  if)
+                              if)
+                           #);
+                         thisOptional::  (#  do  #);
+                         thisSlot::  (#  do  #)
                       #);
-                    thisUnExp:: 
-                      (#
-                         theNode: ^ld.nonTerminalNode;
-                         help: @text;
-                         ok: @integer
-                      do
-                         nonTerminals+1->nonTerminals->ld.noToNonTerminal
-                           ->theNode[];
-                         (if theNode[] <> none then
-                             unExp[]->theNode.unExp[];
-                             unExp.index->theNode.astIndex
-                          else
-                             'Nonterminal attribute, "<<AttributeDeclOpt>>", found in code, not found in diagram.\nUpdate diagram?'
-                               ->help;
-                             ('Open Diagram',help[])->promptForBoolean->ok;
-                             (if ok = yes then
-                                 (unExp.father,unExp.sonNo)->listElementInserted
-                             if)
-                         if)
-                      #);
-                    thisOptional::  (#  do  #);
-                    thisSlot::  (#  do  #)
-                 #)
+                  ld.localNodes.scan
+                    (#
+                       dn: ^ld.DiagramNode;
+                       ntn: ^ld.NonTerminalNode;
+                       sn: ^ld.SlotNode;
+                       ok: @integer
+                    do
+                       (if true
+                        // current## <= ld.DiagramNode## then
+                           current[]->dn[];
+                           (if dn.theDeclaration[] = none then
+                               askUpdate->ok;
+                               (if ok = yes then
+                                   'Deleted %s in %s\n'
+                                     ->performedUpdates.putformat
+                                       (# 
+                                       do dn.theName->s; ld.titletext[]->s
+                                       #);
+                                   (dn[],true)->ld.deleteDiagramNode
+                                else
+                                   leave thisOp
+                               if)
+                           if)
+                        // current## <= ld.NonTerminalNode## then
+                           current[]->ntn[];
+                           (if ntn.unexp[] = none then
+                               askUpdate->ok;
+                               (if ok = yes then
+                                   'Deleted <<AttributeDeclOpt>> in %s\n'
+                                     ->performedUpdates.putformat
+                                       (#  do ld.titletext[]->s #);
+                                   (ntn[],true)->ld.deleteDiagramNode
+                               if)
+                            else
+                               leave thisOp
+                           if)
+                        // current## <= ld.SlotNode## then
+                           current[]->sn[];
+                           (if sn.unexp[] = none then
+                               askUpdate->ok;
+                               (if ok = yes then
+                                   'Deleted %s in %s\n'
+                                     ->performedUpdates.putformat
+                                       (# help: @text
+                                       do
+                                          sn.theText.get->help;
+                                          help[]->s;
+                                          ld.titletext[]->s
+                                       #);
+                                   (sn[],true)->ld.deleteDiagramNode
+                                else
+                                   leave thisOp
+                               if)
+                           if)
+                       if)
+                    #)
+               #)
           #);
         openFormsInSif: theList.scanFragmentDiagrams
-          (# status: @boolean
+          (#
+             updateRelations:
+               (#
+                  doUpdateRelations:
+                    (# connectors: ^ObjectList
+                    do
+                       theWorkPage.patternDiagrams.AssociationList.clear;
+                       theWorkPage.patternDiagrams.InheritanceList.clear;
+                       theWorkPage.patternDiagrams.AggregationList.clear;
+                       theWorkPage.getConnectors->connectors[];
+                       (if connectors[] <> none then
+                           connectors.scan
+                             (#
+                                updatePrefixInfo:
+                                  (#
+                                     pc: ^theWorkPage.PrefixConnector;
+                                     n2: ^theWorkPage.node;
+                                     node1,node2:
+                                       ^theWorkPage.PatternDiagramNode;
+                                     pdd1: ^theWorkPage.PatternDeclDiagram;
+                                     ld1: ^theWorkPage.ListDiagram;
+                                     dn1: ^ld1.DiagramNode;
+                                     ld2: ^theWorkPage.ListDiagram;
+                                     dn2: ^ld2.DiagramNode;
+                                     oadd2: ^theWorkPage.OADDiagram
+                                  enter pc[]
+                                  do
+                                     true->pc.getEnds->(node1[],n2[]);
+                                     n2[]->theWorkPage.boxtonode->node2[];
+                                     node1.theDiagram->pdd1[];
+                                     (pdd1.theParentNode).theDiagram->ld1[];
+                                     pdd1.theParentNode->dn1[];
+                                     node2.theDiagram->oadd2[];
+                                     oadd2.theDescriptor[]->pdd1.thePrefix[];
+                                     pdd1.thePrefix[]->dn1.thePrefix[];
+                                     (oadd2.theParentNode).theDiagram->ld2[];
+                                     oadd2.theParentNode->dn2[];
+                                     (dn1.theDeclaration[],dn2.theDeclaration[])
+                                       ->
+                                         theWorkPage.patternDiagrams.
+                                           InheritanceList.insert
+                                  #);
+                                updateAssociationInfo:
+                                  (#
+                                     ac: ^theWorkPage.AssociationConnector;
+                                     ld,leftLD,rightLD: ^ListDiagram;
+                                     dn: ^ld.DiagramNode;
+                                     leftDn: ^leftLD.DiagramNode;
+                                     rightDn: ^rightLD.DiagramNode;
+                                     anAST: ^mps.ast;
+                                     thePrefix: ^betaGram.Prefix;
+                                     nameApl: ^betaGram.NameApl;
+                                     theNames: ^betaGram.Names;
+                                     nameDcl: ^betaGram.NameDcl;
+                                     si: ^betaGram.StaticItem;
+                                     od: ^betaGram.ObjectDescriptor;
+                                     thePrefName,t,leftName,rightName: ^text;
+                                     leftMulFrom,leftMulTo,rightMulFrom,
+                                       rightMulTo: @integer
+                                  enter ac[]
+                                  do
+                                     (
+                                     (ac.leftRole->ac.lr[]).
+                                     thePatternDiagramNode).theDiagram
+                                       ->leftLD[];
+                                     (ac.leftRole->ac.lr[]).
+                                     thePatternDiagramNode->leftDn[];
+                                     (
+                                     (ac.rightRole->ac.rr[]).
+                                     thePatternDiagramNode).theDiagram
+                                       ->rightLD[];
+                                     (ac.rightRole->ac.rr[]).
+                                     thePatternDiagramNode->rightDn[];
+                                     (if ac.associationNode <> none then
+                                         (ac.associationNode).theDiagram->ld[];
+                                         ac.associationNode->dn[];
+                                         (if dn.theObjectDescriptor[] <> none
+                                          then
+                                             dn.theObjectDescriptor[]
+                                               ->astUtils.getPrefixName
+                                               ->thePrefName[];
+                                             (if thePrefName[] <> none then
+                                                 (if
+                                                 thePrefName[]
+                                                   ->utils.isAssociationName
+                                                  then
+                                                     thePrefName[]
+                                                       ->utils.getAssMul
+                                                       ->
+                                                         (leftMulFrom,leftMulTo,
+                                                          rightMulFrom,
+                                                          rightMulTo);
+                                                     (leftDn.theDeclaration[],
+                                                      rightDn.theDeclaration[],
+                                                      leftMulFrom,leftMulTo,
+                                                      rightMulFrom,rightMulTo,
+                                                      dn.theDeclaration[])
+                                                       ->
+                                                         theWorkPage.
+                                                           patternDiagrams.
+                                                           AssociationList.
+                                                           insert
+                                                 if)
+                                             if)
+                                         if)
+                                      else
+                                         leftDn.theDeclaration[]
+                                           ->astUtils.getPrefixNameOnDecl
+                                           ->leftName[];
+                                         rightDn.theDeclaration[]
+                                           ->astUtils.getPrefixNameOnDecl
+                                           ->rightName[];
+                                         (if (leftName[] <> none ) and
+                                         (rightName[] <> none ) then
+                                             (leftName[],rightName[])
+                                               ->utils.getEmbedAssMul
+                                               ->
+                                                 (leftMulFrom,leftMulTo,
+                                                  rightMulFrom,rightMulTo);
+                                             (leftDn.theDeclaration[],
+                                              rightDn.theDeclaration[],
+                                              leftMulFrom,leftMulTo,
+                                              rightMulFrom,rightMulTo,none )
+                                               ->
+                                                 theWorkPage.patternDiagrams.
+                                                   AssociationList.insert
+                                         if)
+                                     if)
+                                  #);
+                                updateAggregationInfo:
+                                  (#
+                                     agc: ^theWorkPage.AggregationConnector;
+                                     leftLD: ^theWorkPage.ListDiagram;
+                                     rightOADD: ^theWorkPage.OADDiagram;
+                                     leftDn: ^leftLD.DiagramNode;
+                                     rightDn: ^rightOADD.DiagramNode;
+                                     anAST: ^mps.ast;
+                                     si: ^betaGram.StaticItem;
+                                     os: ^betaGram.ObjectSpecification;
+                                     prefName: ^text;
+                                     theObject: ^PatternDiagramNode
+                                  enter agc[]
+                                  do
+                                     (
+                                     (agc.leftRole->agc.lr[]).
+                                     thePatternDiagramNode).theDiagram
+                                       ->leftLD[];
+                                     (agc.leftRole->agc.lr[]).
+                                     thePatternDiagramNode->leftDn[];
+                                     (
+                                     (agc.rightRole->agc.rr[]).
+                                     thePatternDiagramNode).theDiagram
+                                       ->rightOADD[];
+                                     (if
+                                     (agc.rightRole->agc.rr[]).
+                                     thePatternDiagramNode =
+                                     rightOADD.titleNode[] then
+                                         rightOADD.theParentNode->rightDn[]
+                                      else
+                                         (agc.rightRole->agc.rr[]).
+                                         thePatternDiagramNode->rightDn[]
+                                     if);
+                                     (if leftDn.theDeclaration.symbol
+                                      // betaGram.SimpleDecl then
+                                         leftDn.theDeclaration.getSon2->anAST[];
+                                         (if anAST.symbol
+                                          // betaGram.StaticItem then
+                                             anAST[]->si[];
+                                             si.getObjectSpecification->os[];
+                                             (if os.symbol
+                                              // betaGram.ObjectDescriptor then
+                                                 os[]->astUtils.getPrefixName
+                                                   ->prefName[];
+                                                 (if prefName[] <> none then
+                                                     (if
+                                                     prefName[]
+                                                       ->utils.isContainerName
+                                                      then
+                                                         (leftDn.
+                                                            theDeclaration[],
+                                                          rightDn.
+                                                            theDeclaration[],1,
+                                                          1,- 1,- 1)
+                                                           ->
+                                                             theWorkPage.
+                                                               patternDiagrams.
+                                                               AggregationList.
+                                                               insert
+                                                      else
+                                                     (* singular! NOT YET IMPL.! *)
+                                                         
+                                                     if)
+                                                  else
+                                                 (* singular! NOT YET IMPL.! *)
+                                                     
+                                                 if)
+                                              else
+                                                 (leftDn.theDeclaration[],
+                                                  rightDn.theDeclaration[],1,1,
+                                                  1,1)
+                                                   ->
+                                                     theWorkPage.patternDiagrams
+                                                     .AggregationList.insert
+                                             if)
+                                          else
+                                             (leftDn.theDeclaration[],
+                                              rightDn.theDeclaration[],1,1,1,1)
+                                               ->
+                                                 theWorkPage.patternDiagrams.
+                                                   AggregationList.insert
+                                         if)
+                                      // betaGram.RepetitionDecl then
+                                         (leftDn.theDeclaration[],
+                                          rightDn.theDeclaration[],1,1,- 1,- 1)
+                                           ->
+                                             theWorkPage.patternDiagrams.
+                                               AggregationList.insert
+                                     if)
+                                  #)
+                             do
+                                (if true
+                                 // current## = theWorkPage.PrefixConnector##
+                                 then
+                                    current[]->updatePrefixInfo
+                                 //
+                                 current##
+                                 =
+                                 theWorkPage.AssociationConnector## then
+                                    current[]->updateAssociationInfo
+                                 //
+                                 current##
+                                 =
+                                 theWorkPage.AggregationConnector## then
+                                    current[]->updateAggregationInfo
+                                if)
+                             #)
+                       if)
+                    #);
+                  ok: @integer;
+                  fg: ^mps.fragmentGroup
+               enter fg[]
+               do
+                  (if doUpdate then
+                      ('Open Diagram',
+                       'To ensure that all relations shown in the diagram are consistent with the code,\nit is necessary to (re-)build the semantic links\n\nInvoke checker now? (recommended!)')
+                        ->promptForBoolean->ok;
+                      (if ok = yes then
+                          fg[]->callChecker
+                       else
+                          doUpdateRelations
+                      if)
+                   else
+                      doUpdateRelations
+                  if)
+               #);
+             status: @boolean
           do
-             (if switch[18] then
-                 'parseDiagram.openFormsInSif scanning fgDiagram: %s\n'
-                   ->putformat (#  do thisDiagram.titleText[]->s #)
-             if);
+             18
+               ->trace
+                 (# 
+                 do
+                    'parseDiagram.openFormsInSif scanning fgDiagram: %s'
+                      ->t.putformat (#  do thisDiagram.titleText[]->s #)
+                 #);
              true->status;
              thisOperation: thisDiagram.localNodes.scan
                (#
@@ -2078,12 +2409,23 @@ do
                     do
                        'Fragment file does not exist: %s\nSelect new location of file?'
                          ->help.putformat
-                           (#  do fn.theFragment.theFragName->s #);
+                           (#  do fn.theFragment.theGroupName->s #);
                        ('Open Diagram',help[])->promptForBoolean->ok;
                        (if ok = yes then
                            fileSelectDialog->name;
                            (if not name.empty then
-                               name[]->fn.theFragment.theGroupName; true->retry
+                               name[]->fn.theFragment.theGroupName;
+                               true->retry;
+                               18
+                                 ->trace
+                                   (# 
+                                   do
+                                      'New location of file: %s'
+                                        ->t.putformat
+                                          (# 
+                                          do fn.theFragment.theGroupName->s
+                                          #)
+                                   #)
                            if)
                        if)
                     exit retry
@@ -2095,6 +2437,14 @@ do
                   ld: ^listDiagram
                do
                   current[]->fn[];
+                  18
+                    ->trace
+                      (# 
+                      do
+                         'Opening fg = %s'
+                           ->t.putformat
+                             (#  do fn.theFragment.theGroupName->s #)
+                      #);
                   fgOpen:
                   (if (fn.theFragment.theGroupName->topDotOpen->fg[]) <> none
                    then
@@ -2283,7 +2633,14 @@ do
                               (if (fn.currentDecomposDiagram->ld[]) <> none
                                then
                                   ((ff[],ld[])->getFFattributes,ld[])
-                                    ->parseAttributes
+                                    ->parseAttributes;
+                                  (if doUpdate then
+                                      'The following has been updated in the diagram:\n\n'
+                                        ->performedUpdates.prepend;
+                                      performedUpdates[]->alertUser
+                                  if);
+                                  fg[]->updateRelations;
+                                  false->doUpdate
                               if)
                            else
                               'FragmentForm has changed category!'->alertUser;
@@ -2301,207 +2658,14 @@ do
                #)
           exit status
           #);
-        updateRelations:
-          (# connectors: ^ObjectList
-          do
-             AssociationList.clear;
-             InheritanceList.clear;
-             AggregationList.clear;
-             theWorkPage.getConnectors->connectors[];
-             (if connectors[] <> none then
-                 connectors.scan
-                   (#
-                      updatePrefixInfo:
-                        (#
-                           pc: ^theWorkPage.PrefixConnector;
-                           n2: ^theWorkPage.node;
-                           node1,node2: ^theWorkPage.PatternDiagramNode;
-                           pdd1: ^theWorkPage.PatternDeclDiagram;
-                           ld1: ^theWorkPage.ListDiagram;
-                           dn1: ^ld1.DiagramNode;
-                           ld2: ^theWorkPage.ListDiagram;
-                           dn2: ^ld2.DiagramNode;
-                           oadd2: ^theWorkPage.OADDiagram
-                        enter pc[]
-                        do
-                           true->pc.getEnds->(node1[],n2[]);
-                           n2[]->theWorkPage.boxtonode->node2[];
-                           node1.theDiagram->pdd1[];
-                           (pdd1.theParentNode).theDiagram->ld1[];
-                           pdd1.theParentNode->dn1[];
-                           node2.theDiagram->oadd2[];
-                           oadd2.theDescriptor[]->pdd1.thePrefix[];
-                           pdd1.thePrefix[]->dn1.thePrefix[];
-                           (oadd2.theParentNode).theDiagram->ld2[];
-                           oadd2.theParentNode->dn2[];
-                           (dn1.theDeclaration[],dn2.theDeclaration[])
-                             ->InheritanceList.insert
-                        #);
-                      updateAssociationInfo:
-                        (#
-                           ac: ^theWorkPage.AssociationConnector;
-                           ld,leftLD,rightLD: ^ListDiagram;
-                           dn: ^ld.DiagramNode;
-                           leftDn: ^leftLD.DiagramNode;
-                           rightDn: ^rightLD.DiagramNode;
-                           anAST: ^mps.ast;
-                           thePrefix: ^betaGram.Prefix;
-                           nameApl: ^betaGram.NameApl;
-                           theNames: ^betaGram.Names;
-                           nameDcl: ^betaGram.NameDcl;
-                           si: ^betaGram.StaticItem;
-                           od: ^betaGram.ObjectDescriptor;
-                           thePrefName,t,leftName,rightName: ^text;
-                           leftMulFrom,leftMulTo,rightMulFrom,rightMulTo:
-                             @integer
-                        enter ac[]
-                        do
-                           ((ac.leftRole->ac.lr[]).thePatternDiagramNode).
-                           theDiagram->leftLD[];
-                           (ac.leftRole->ac.lr[]).thePatternDiagramNode
-                             ->leftDn[];
-                           ((ac.rightRole->ac.rr[]).thePatternDiagramNode).
-                           theDiagram->rightLD[];
-                           (ac.rightRole->ac.rr[]).thePatternDiagramNode
-                             ->rightDn[];
-                           (if ac.associationNode <> none then
-                               (ac.associationNode).theDiagram->ld[];
-                               ac.associationNode->dn[];
-                               (if dn.theObjectDescriptor[] <> none then
-                                   dn.theObjectDescriptor[]
-                                     ->astUtils.getPrefixName->thePrefName[];
-                                   (if thePrefName[] <> none then
-                                       (if
-                                       thePrefName[]->utils.isAssociationName
-                                        then
-                                           thePrefName[]->utils.getAssMul
-                                             ->
-                                               (leftMulFrom,leftMulTo,
-                                                rightMulFrom,rightMulTo);
-                                           (leftDn.theDeclaration[],
-                                            rightDn.theDeclaration[],
-                                            leftMulFrom,leftMulTo,rightMulFrom,
-                                            rightMulTo,dn.theDeclaration[])
-                                             ->AssociationList.insert
-                                       if)
-                                   if)
-                               if)
-                            else
-                               leftDn.theDeclaration[]
-                                 ->astUtils.getPrefixNameOnDecl->leftName[];
-                               rightDn.theDeclaration[]
-                                 ->astUtils.getPrefixNameOnDecl->rightName[];
-                               (if (leftName[] <> none ) and
-                               (rightName[] <> none ) then
-                                   (leftName[],rightName[])
-                                     ->utils.getEmbedAssMul
-                                     ->
-                                       (leftMulFrom,leftMulTo,rightMulFrom,
-                                        rightMulTo);
-                                   (leftDn.theDeclaration[],
-                                    rightDn.theDeclaration[],leftMulFrom,
-                                    leftMulTo,rightMulFrom,rightMulTo,none )
-                                     ->AssociationList.insert
-                               if)
-                           if)
-                        #);
-                      updateAggregationInfo:
-                        (#
-                           agc: ^theWorkPage.AggregationConnector;
-                           leftLD: ^theWorkPage.ListDiagram;
-                           rightOADD: ^theWorkPage.OADDiagram;
-                           leftDn: ^leftLD.DiagramNode;
-                           rightDn: ^rightOADD.DiagramNode;
-                           anAST: ^mps.ast;
-                           si: ^betaGram.StaticItem;
-                           os: ^betaGram.ObjectSpecification;
-                           prefName: ^text;
-                           theObject: ^PatternDiagramNode
-                        enter agc[]
-                        do
-                           ((agc.leftRole->agc.lr[]).thePatternDiagramNode).
-                           theDiagram->leftLD[];
-                           (agc.leftRole->agc.lr[]).thePatternDiagramNode
-                             ->leftDn[];
-                           ((agc.rightRole->agc.rr[]).thePatternDiagramNode).
-                           theDiagram->rightOADD[];
-                           (if (agc.rightRole->agc.rr[]).thePatternDiagramNode =
-                           rightOADD.titleNode[] then
-                               rightOADD.theParentNode->rightDn[]
-                            else
-                               (agc.rightRole->agc.rr[]).thePatternDiagramNode
-                                 ->rightDn[]
-                           if);
-                           (if leftDn.theDeclaration.symbol
-                            // betaGram.SimpleDecl then
-                               leftDn.theDeclaration.getSon2->anAST[];
-                               (if anAST.symbol
-                                // betaGram.StaticItem then
-                                   anAST[]->si[];
-                                   si.getObjectSpecification->os[];
-                                   (if os.symbol
-                                    // betaGram.ObjectDescriptor then
-                                       os[]->astUtils.getPrefixName->prefName[];
-                                       (if prefName[] <> none then
-                                           (if
-                                           prefName[]->utils.isContainerName
-                                            then
-                                               (leftDn.theDeclaration[],
-                                                rightDn.theDeclaration[],1,1,-
-                                                1,- 1)
-                                                 ->
-                                                   theWorkPage.patternDiagrams.
-                                                     AggregationList.insert
-                                            else
-                                           (* singular! NOT YET IMPL.! *)
-                                               
-                                           if)
-                                        else
-                                       (* singular! NOT YET IMPL.! *)
-                                           
-                                       if)
-                                    else
-                                       (leftDn.theDeclaration[],
-                                        rightDn.theDeclaration[],1,1,1,1)
-                                         ->
-                                           theWorkPage.patternDiagrams.
-                                             AggregationList.insert
-                                   if)
-                                else
-                                   (leftDn.theDeclaration[],
-                                    rightDn.theDeclaration[],1,1,1,1)
-                                     ->
-                                       theWorkPage.patternDiagrams.
-                                         AggregationList.insert
-                               if)
-                            // betaGram.RepetitionDecl then
-                               (leftDn.theDeclaration[],
-                                rightDn.theDeclaration[],1,1,- 1,- 1)
-                                 ->
-                                   theWorkPage.patternDiagrams.AggregationList.
-                                     insert
-                           if)
-                        #)
-                   do
-                      (if true
-                       // current## = theWorkPage.PrefixConnector## then
-                          current[]->updatePrefixInfo
-                       // current## = theWorkPage.AssociationConnector## then
-                          current[]->updateAssociationInfo
-                       // current## = theWorkPage.AggregationConnector## then
-                          current[]->updateAggregationInfo
-                      if)
-                   #)
-             if)
-          #);
         ok: @boolean
      do
-        (if switch[18] then '--------------- parseDiagram start'->putline if);
+        18->trace (#  do '--------------- parseDiagram start'->t #);
         true->gppProp.ignoreFocusChanged;
         openFormsInSif->ok;
-        (if ok then updateRelations if);
+        (if ok then 18->trace (#  do 'openFormsInSif ok=true'->t #) if);
         false->gppProp.ignoreFocusChanged;
-        (if switch[18] then '--------------- parseDiagram end'->putline if)
+        18->trace (#  do '--------------- parseDiagram end'->t #)
      #)
 #)  
 
