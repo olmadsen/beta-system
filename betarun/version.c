@@ -1,7 +1,11 @@
-char betarun_version[] = "BETARUN VERSION 5.3(67)";
+char betarun_version[] = "BETARUN VERSION 5.3(68)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.70  2002/01/23 10:26:54  corry
+ * Get rid of /./ in paths
+ * Betarun version number: 67
+ *
  * Revision 1.69  2002/01/23 10:08:35  corry
  * Fixed up log messages again
  * Betarun version number: 66+
