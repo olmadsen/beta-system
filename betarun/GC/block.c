@@ -1,7 +1,8 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1990-94 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1990-2000 Mjolner Informatics Aps.
  * block.c
- * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, and Jacob Seligmann
+ * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, Jacob Seligmann
+ * and Morten Grouleff.
  */
 #include "beta.h"
 
@@ -13,6 +14,11 @@
 #include <sys/mman.h>
 #include <errno.h>
 #endif
+
+#define ANYADDR 1 /* If set to 1, allow mmap at any address. Otherwise,
+		   * mmap is only allowed to return in the positive
+		   * region of the address space
+		   */
 
 #define inBlock( theB, addr) (((BlockStart( theB)) <= (long *) addr) \
                               && ((long *) addr < theB->limit) )
@@ -111,7 +117,11 @@ void mmapInitial(unsigned long numbytes)
 #endif /* hpux9pa */
 
 #ifdef sun4s
+#if ANYADDR
+  mmapflags = MAP_NORESERVE | MAP_PRIVATE;
+#else
   mmapflags = MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED;
+#endif
 #endif /* sun4s */
 
 #ifndef hpux9pa
@@ -126,17 +136,25 @@ void mmapInitial(unsigned long numbytes)
 	      (int)startadr, (int)numbytes, PROT_NONE, (int)mmapflags, fd,0);
     });
 #endif
+#if ANYADDR
+    mmapHeap = mmap(NULL, numbytes, PROT_NONE, mmapflags, fd,0);
+#else
     mmapHeap = mmap((void*)startadr, numbytes, PROT_NONE, mmapflags, fd,0);
+#endif
 #if 0
     DEBUG_CODE(fprintf(output, "mmap returned 0x%08x\n", mmapHeap));
 #endif
     if ((long)mmapHeap == (long)MAP_FAILED) {
       mmapHeap = NULL;
+#if ANYADDR
+      numbytes /= 2;
+#else
       startadr += MMAPINCR;
       if ((startadr+numbytes-1) & (1<<31)) {
 	startadr = MMAPSTART;
 	numbytes /= 2;
       }
+#endif
     }
   }
 #ifndef hpux9pa
@@ -152,6 +170,19 @@ void mmapInitial(unsigned long numbytes)
 #ifdef nti
 #define MMAPSTART 0x10000000
 #define MMAPINCR  0x10000000
+#if ANYADDR
+  while (!mmapHeap) {
+    mmapHeap = VirtualAlloc(NULL, numbytes, 
+			    MEM_RESERVE, PAGE_NOACCESS);
+    if (!mmapHeap) {
+      DEBUG_CODE({
+	fprintf(output, "mmapInitial failed with GetLastError %d, "
+		"trying half size %d\n", GetLastError(), numbytes);
+      });
+      numbytes /= 2;
+    }
+  }
+#else
   startadr = MMAPSTART;
   while (!mmapHeap && (!((startadr+numbytes-1) & (1<<31)))) {
     mmapHeap = VirtualAlloc((void*)startadr, numbytes, 
@@ -168,6 +199,7 @@ void mmapInitial(unsigned long numbytes)
     fprintf(output, "mmapInitial failed with GetLastError %d, "
 	    "trying half size %d\n", GetLastError(), numbytes);
   }
+#endif
   if (!mmapHeap) {
     fprintf(output, "mmapInitial failed with GetLastError %d\n", 
 	    GetLastError());
