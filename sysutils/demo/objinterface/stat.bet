@@ -1,0 +1,128 @@
+ORIGIN '~beta/basiclib/v1.5/betaenv';
+INCLUDE '~beta/sysutils/v1.5/objinterface';
+INCLUDE '~beta/basiclib/v1.5/formatio';
+
+(* This program computes the total size of prototype reference tables 
+ * in the current program. *)
+
+---lib:attributes---
+
+printPTstats:
+  (# 
+     ptcount: @Integer;      (* Number of prototypes in program *)
+     refTableSize: @Integer; (* Total bytesize of reference table in prototypes *)
+     
+     codeSize, dataSize: @Integer;
+     
+     inlineCount: @Integer;
+     offlineCount: @Integer;
+     
+     pt: @ProtoType;
+     current: ^group_header;
+     
+     thisPTcount, ptListAdr: @Integer;
+     tmp1,tmp2: ^group_header;
+     
+  do 
+     loop:
+       (if (current[]->NextGroup->current[])<>NONE then
+           
+           current.protoTableAdr->tos'%adrGetLong'->thisPTcount;
+           current.protoTableAdr+4->ptListAdr;
+           
+           ptcount+thisPTcount->ptcount;
+           
+           codeSize+current.code_end-current.code_start->codeSize;
+           current.data_start[]->tmp1[]; current.data_end[]->tmp2[];
+           dataSize+(@@tmp2->tos'%adrGetLong')-(@@tmp1->tos'%adrGetLong')->dataSize;
+           
+           (for i:thisPTcount repeat
+                ptListAdr+(4*(i-1))->tos'%adrGetLong'->pt;
+                
+                (* GCtab field not counted. Needed for the "endian" table anyway. *)
+                refTableSize+2->refTableSize; (* Static refs zero terminator *)
+                refTableSize+2->refTableSize; (* Dynamic refs zero terminator *)
+                
+                pt.scanRefs
+                (# nextInline: @Integer; (* Minimal offset of next inline 
+                                          * to consider. We only count first 
+                                          * level of inlining and skips 
+                                          * parts of parts, because these
+                                          * will be counted anyway for 
+                                          * prototypes for the
+                                          * inlined objects. *)
+                   tmppt: @Prototype;
+                do (if isStatic then
+                       refTableSize+8->refTableSize; (* Static entry *)
+                       (if thisOffset>=nextInline then
+                           inlineCount+1->inlineCount;
+                           (if thisProto>0 then
+                               thisProto->tmppt;
+                               thisOffset+4*(tmppt.size)->nextInline;
+                            else
+                               pt.labId->putline;
+                               'Weird thisProto: %d\n'->putformat(# do thisProto->d #);
+                           if);
+                       if);
+                    else
+                       refTableSize+2->refTableSize; (* Dynamic entry *)
+                       (if refType//REFTYPE_OFFLINE then
+                           offlineCount+1->offlineCount;
+                       if);
+                   if);
+                #);
+                
+                (if pt.prefix//0//pt then else
+                    (* Subtract statif refs inherited from super to ensure
+                     * they are only counted once. *)
+                    pt.prefix->pt;
+                    pt.scanRefs
+                    (# nextInline: @Integer;
+                       tmppt: @Prototype;
+                    do (if isStatic then
+                           
+                           (if thisOffset>=nextInline then
+                               inlineCount-1->inlineCount;
+                               (if thisProto>0 then
+                                   thisProto->tmppt;
+                                   thisOffset+4*(tmppt.size)->nextInline;
+                               if);
+                           if);
+                
+                        else
+                
+                           (if refType//REFTYPE_OFFLINE then
+                               offlineCount-1->offlineCount;
+                           if);
+                
+                       if);
+                    #);
+                if);
+                
+           for);
+           restart loop;
+       if);
+     
+     'Number of prototypes: %d\n'->putformat(# do ptcount->d #);
+     'Total size of prototype reference tables; %d bytes\n'->putformat(# do refTableSize->d #);
+     'Average size per prototype: %d bytes\n'->putformat(# do (refTableSize/ptcount)->d #);
+     'BETA code segment size: %d bytes, BETA data segment size: %d bytes \n'
+       ->putformat(# do codeSize->d; dataSize->d; #);
+     'Total BETA code size: %d bytes\n'->putformat(# do codeSize+dataSize->d #);
+     
+     'Without inlining and new object layout:\n'->puttext;
+     
+     'Prototype reference table size (2 bytes per prototype): %d bytes\n'->putformat(# do 2*ptcount->d #);
+     
+     'Saved: %d bytes = %d%%\n'->putformat
+     (#
+     do refTableSize-(2*ptcount)->d;
+        ((100*(refTableSize-(2*ptcount)))/(codeSize+dataSize))->d
+     #);
+     
+     'Number of inlined static object refs: %d\n'->putformat(# do inlineCount->d #);
+     'Number of offlined static object refs: %d\n'->putformat(# do offlineCount->d #);
+     'Inlined static parts: %d%%\n'->putformat(# do ((100*inlineCount)/(offlineCount+inlineCount))->d; #);
+  
+     stop;
+  #)
