@@ -831,7 +831,11 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
   
 #ifdef RTVALHALLA
   if (valhallaID)
+#ifdef UseRefStack
+    switch (ValhallaOnProcessStop (thePC,RefSP,theObj,theSignal,errorNumber)){
+#else
     switch (ValhallaOnProcessStop (thePC,StackEnd,theObj,theSignal,errorNumber)){
+#endif
     case CONTINUE: return 1;
     case TERMINATE: break;
     }
