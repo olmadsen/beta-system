@@ -297,12 +297,11 @@ void Initialize()
   InterpretItem[1] = 0;
   
 #ifdef RTDEBUG
-#if defined(macintosh) ||defined(MAC)
-  Notify2("RTS: Version %s\nRTS: Garbage collector may perform consistency checks on heaps (use BETART).",BETARUN_ID);
-#else
-  Notify2("RTS: Version %s",BETARUN_ID);
-  Notify("RTS: Garbage collector may perform consistency checks on heaps (use BETART).");
-#endif
+  { 
+    char buf[200];
+    sprintf(buf, "RTS: Version %s\nRTS: Garbage collector may perform consistency checks on heaps (use BETART).",BETARUN_ID);
+    Notify(buf);
+  }
 #endif
   
   INFO( fprintf( output, "#(Heap info: IOA=2*%dKb", (int)IOASize/Kb) );
