@@ -56,7 +56,7 @@ genSpecialClass:
        -> mch.initGen;
      path[] -> splitPathAndName -> (spath[],c[]);
      301->trace(# do '\npath: ' -> puttext; spath[] -> putline; #);
-     (if isJava then common.BetaPackage -> spath.append if);
+     (if isJava and false  then common.BetaPackage -> spath.append if);
      ClassName[] -> spath.append;
      301->trace(# do spath[] -> putline; #);
      (*(spath[],asmlink.byteCodeKind,true,false) -> AsmLink.TX.insert;*)
@@ -262,14 +262,17 @@ genPtnVarMethod:
 do (*GS.externals.display*)
    GS.externals.scan
    (# className,methodName: ^text
-   do 1->trace(#
+   do (current[],false) -> EH.descName -> methodName[];
+      'beta/C$' -> className[];
+      methodName[] -> className.append;
+      1->trace(#
               do 'External: ' -> xT;
                  current[] -> xAF; xN;
                  'path: ' -> xT; BCname[] -> xT; xN;
+                 'class: ' -> xT; className[] -> xT; xN;
+                 'method: ' -> xT; methodName[] ->xT 
               #);
-      (current[],false) -> EH.descName -> methodName[];
-      'C$' -> className[];
-      methodName[] -> className.append;
+      
       (BCname[],className[],true) -> genSpecialClass
       (#
       do (spath[],asmlink.ByteCodeKind,true,false) 
@@ -879,6 +882,26 @@ do VN.sort -> sort;
    
    (* The actual qualification? See use in genlib_alloc *)
    sig.thisMethodDesc[] -> theGen.mkSignature -> sigT[]
+   
+---byteCode_callExternal:doPart---
+do (# sig: @theGen.signature;
+      XN: ^text
+   do (externalName[],Desc[],extKind,EV.son)->CP;
+      INNER callExternal;
+      false -> sig.isStatic;
+      (EV[],thisSuperChain,true) -> sig.setMethodDesc;
+      desc[] -> sig.addEnter;
+      sig.addExit;
+      (desc[],false) -> EH.descName -> XN[];
+      XN[] -> sig.addMethod;
+      ('beta/C$' -> (XN.copy).prepend,desc[]) -> sig.addreceiver;
+      1->trace(#
+              do 'call: ' -> xT; sig.asText -> xT
+              #);
+      (sig.asText->mch.newTextOp,'M',false,true)
+        -> mch.gJsr;   
+      (0,false,false,false)->EH.mkComputedEvVal->V[]
+   #)
    
 ---genlib_bytecode_genFields:doPart---
 do (# spec,desc,AD: @ASTindex; descKind: @integer; sig: ^text;
@@ -2351,6 +2374,7 @@ do (# sig: @Signature;
       superDesc: ^ASTindex;
       subLevel: @integer;
       aR: ^mch.regAdr;
+      isExternal: @boolean
    do 311-> trace(#
                  do 'genMethod: ' -> xT; methodName[] -> xT; xN;
                     desc[] -> xA 
@@ -2376,7 +2400,8 @@ do (# sig: @Signature;
            *)
           (if (desc -> sematt.descKind) = sematt.externalKind then
               0 -> subLevel;
-              sig.markRealStatic
+              sig.markRealStatic;
+              true -> isExternal
           if);
           methodName.copy -> innerName[];
           (if subLevel > 0 then          
@@ -2433,12 +2458,17 @@ do (# sig: @Signature;
           #)if);
 
           (if exitVal[] <> NONE  then 
-              gen.thisRegAdr->aR[];
-              'exit_'->aR.fieldName[];
-              (aR[],exitVal[],false,ThisSuperChain) 
-                -> EH.ExpEval -> V[];
-              V.loadVal2
-              (* else call of foo/do leaves return value on stack *)
+              (if isExternal then
+                  (* fix this *)
+                  (0->mch.newCstOp,mch.dataTop[]) -> mch.ldCst
+               else
+                  gen.thisRegAdr->aR[];
+                  'exit_'->aR.fieldName[];
+                  (aR[],exitVal[],false,ThisSuperChain) 
+                    -> EH.ExpEval -> V[];
+                  V.loadVal2
+                  (* else call of foo/do leaves return value on stack *)
+              if)
           if);
           (false,exitId) -> mch.return; 
           mch.endMethod
