@@ -27,7 +27,7 @@ int programHandle;
 extern PStoreHeader *currentPStore;
 
 /* LOCAL FUNCTION DECLARATIONS */
-static Object *loadObject(unsigned long store, u_long offset, unsigned long inx);
+static Object *loadObject(unsigned long store, unsigned long offset, unsigned long inx);
 static Object *storeNotOpen(unsigned long store, 
 			    unsigned long offset, 
 			    unsigned long inx);

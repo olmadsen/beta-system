@@ -137,7 +137,16 @@ long isDir(char *name)
     return 0;
   }
 #endif
-#ifdef nti
+
+#ifdef nti_gnu
+  struct stat buf;
+  int result = _stat(name, &buf);
+  if (result != 0)
+    return 0;
+  if (buf.st_mode & S_IFDIR) 
+    return 1;
+#endif
+#ifdef nti_ms
   struct _stat buf;
   int result = _stat(name, &buf);
   if (result != 0)
