@@ -159,7 +159,6 @@ void Att(Object *this, Component *comp, pc_t RA, long SPx)
     }
     fflush(output);});
 
-#ifdef ppcmac
     {
       /* on PPC the stack contains SP pointers that links stack segments;
        * these have been made relative (i.e. offsets from SPz), 
@@ -185,7 +184,6 @@ void Att(Object *this, Component *comp, pc_t RA, long SPx)
       }
       fflush(output);});
    }
-#endif /* ppcmac */
 
    TRACE_ATT(fprintf(output, "doAtt(0x%x, 0x%x, 0x%x, 0x%x, 0x%x)\n",
                      (int)SPz, (int)topObject, spSize, (int)sObj->Body, entry));

@@ -484,7 +484,7 @@ static int cmpLabel(const void *left, const void *right);
 static int isLocalLab(char *lab)
 {
   /* Test for:
-   *    L417 (linux, nti, ppcmac)
+   *    L417 (linux, nti, ppcmac, macosx)
    *    .L417 (sun4s, sgi)
    *    L$C417 (hppa)
    */

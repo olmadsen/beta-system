@@ -115,7 +115,7 @@ extern unsigned int set_fpc_csr(unsigned int csr);
 }
 #endif /* sgi */
 
-#ifdef ppcmac
+#if defined(ppcmac)
 #include <fenv.h>
 #define FPU_ZERODIVISION  FE_DIVBYZERO
 #define FPU_INVALID       FE_INVALID

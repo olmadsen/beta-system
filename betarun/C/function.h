@@ -333,8 +333,8 @@ extern void CallB(Object *caller,
 		          long address,
 		          long SP);
 extern void BETA_main(void);
-#ifdef ppcmac
-extern void FlushCodeCash(long start, long end);
+#if defined(ppcmac) || defined(macosx)
+extern void FlushCodeCache(long *start, long *end);
 #endif
 
 extern Object * GetThis(long *SP);

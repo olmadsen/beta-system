@@ -71,8 +71,8 @@ void unlink(const char *name);
 #endif
 
 #ifdef macosx
-#define FULL_NMCOMMAND  "not yet implemented"
-#define TERSE_NMCOMMAND "not yet implemented"
+#define FULL_NMCOMMAND  "/usr/bin/nm %s | grep -v ' U '"
+#define TERSE_NMCOMMAND "/usr/bin/nm %s | grep -v ' U '"
 #define Decimal
 #endif
 

@@ -15,8 +15,8 @@ extern void (*StackRefAction)(REFERENCEACTIONARGSTYPE);
 long WindBackSP(long SP, Object *obj, pc_t PC)
 {
 
-#ifdef ppcmac
-      SP = *(long*)SP; /* Use FramePointer */
+#if defined(ppcmac)  ||  defined(macosx)
+  SP = *(long*)SP; /* Use FramePointer */
 #else
   long SPoff /* size allocated on stack when theObj became active */;
   
@@ -56,7 +56,7 @@ void PrintStackFrame(long *PrevSP, long *SP)
 		      (int)PrevSP,
 		      (int)SP));
   Claim(PrevSP>=SP, "PrevSP=>SP");
-#ifdef ppcmac
+#if defined(ppcmac) || defined(macosx)
   /* Print LR and CR too */
   fprintf(output, "   +8:  0x%08x: 0x%08x", (int)PrevSP+2, (int)*(PrevSP+2));
   fprintf(output, "(LR/RTS)");
@@ -201,7 +201,7 @@ void PrintRefStack(void)
 }
 #endif /* RTDEBUG */
 
-#ifdef ppcmac
+#if defined(ppcmac) || defined(macosx)
 GLOBAL(static long StackObjEnd); /* extra "parameter" for ProcessStackFrames */
 #endif
 
@@ -421,7 +421,7 @@ void ProcessStackFrames(long SP,
       }
       /* SP     = (long)callerComp->SPx; */
       SP     = *--CSP; CSP--; /* count down one before reading and one after */
-#ifdef ppcmac
+#if defined(ppcmac) || defined(macosx)
       PC = (pc_t)-1; /* Check everywhere */
 #else
       PC     = callerComp->CallerLSC;
@@ -468,7 +468,7 @@ void ProcessStackFrames(long SP,
       Claim(!isSpecialProtoType(GETPROTO(theObj)), 
 		       "!isSpecialProtoType(GETPROTO(theObj))");
       
-#ifdef ppcmac
+#if defined(ppcmac) || defined(macosx)
       SP = *(long*)SP; /* Use FramePointer */
       if (isStackObject){
       	SP += SPz; 
@@ -570,7 +570,7 @@ ProcessStackObj(StackObject *sObj, CellProcessFunc func)
     DebugStack=FALSE;
   });
   
-#ifdef ppcmac
+#if defined(ppcmac) || defined(macosx)
   StackObjEnd = (long)sObj->Body;
 #endif
   ProcessStackFrames((long)sObj->Body+(long)sObj->StackSize, /* top frame off */
@@ -675,7 +675,7 @@ void DisplayNEWRUNStack(pc_t pc, Object *theObj, int signal)
     /* 
      * Adjust StackEnd to BETA part of stack, if possible.
      */
-#ifdef ppcmac
+#if defined(ppcmac) || defined(macosx)
     /* FIXME: could wind down through frame pointers */
 #endif /* ppcmac */
 #ifdef sgi

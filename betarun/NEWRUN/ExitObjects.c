@@ -6,11 +6,7 @@
 #include "beta.h"
 #include "crun.h"
 
-#ifdef ppcmac
-#define WIND_BACK_SP                                          \
-      SP = *(long**)SP /* Use FramePointer */
-#else
-#ifdef macosx
+#if defined(ppcmac) || defined(macosx)
 #define WIND_BACK_SP                                          \
       SP = *(long**)SP /* Use FramePointer */
 #else
@@ -21,7 +17,6 @@
         GetSPoff(SPoff, CodeEntry(GETPROTO(this), PC));       \
         SP = (long *)((long)SP+SPoff);                        \
       }
-#endif
 #endif
 
   
@@ -114,13 +109,12 @@ long *ExO(pc_t jumpAdr,
     /* Check for passing of a component */
     if ((long)GETPROTO(this) == (long)ComponentPTValue) {
       Component *comp = (Component *)this;
-      Component *callerComp = comp->CallerComp;
       DEBUG_STACK(fprintf(output, "ExO: passing comp 0x%x\n", (int)comp); fflush(output));
       SP     = (long*) *--CSP; CSP--; /* count down one before reading and one after */
-#ifdef ppcmac
+#if defined(ppcmac) || defined(macosx)
       PC = (pc_t)-1; /* Check everywhere */
 #else
-      PC     = callerComp->CallerLSC;
+      PC     = comp->CallerComp->CallerLSC;
 #endif
 
       /* TerminateComponent: (see Attach.c) */
@@ -257,13 +251,12 @@ long *ExOx(pc_t jumpAdr,
     /* Check for passing of a component */
     if ((long)GETPROTO(this) == (long)ComponentPTValue) {
       Component *comp = (Component *)this;
-      Component *callerComp = comp->CallerComp;
       DEBUG_CODE(fprintf(output, "ExO: passing comp 0x%x\n", (int)comp); fflush(output));
       SP     = (long*) *--CSP; CSP--; /* count down one before reading and one after */
-#ifdef ppcmac
+#if defined(ppcmac) || defined(macosx)
       PC = (pc_t)-1; /* Check everywhere */
 #else
-      PC     = callerComp->CallerLSC;
+      PC     = (comp->CallerComp)->CallerLSC;
 #endif
 
       /* TerminateComponent: (see Attach.c) */
