@@ -15,6 +15,7 @@ INCLUDE '~beta/interfacebuilder/v1.1/guienvstuff/killtranslations';
 INCLUDE '~beta/interfacebuilder/v1.1/mpsstuff/mpsutils';
 INCLUDE '~beta/interfacebuilder/v1.1/dialogs/spacingdialog';
 INCLUDE '../classinfo';
+INCLUDE '~beta/interfacebuilder/v1.1/dragmanager/dragmanager';
 
 MDBODY default 'X11/graphicaleditor_X11body';
 
@@ -36,7 +37,24 @@ getSpacingValues: objectPool.get
   #);
 
 
+-- windowItemLib: attributes --
 
+delay:
+  (# startPt: @point;
+  enter startPt
+  do l: track
+     (# 
+        mouseMove::
+          (# dh, dv: @integer;
+          do curPt.h - startPt.h -> dh;
+             curPt.v - startPt.v -> dv;
+             (if (dh*2 > 4) or (dv*dv > 4) then
+                 inner delay;
+                 leave l;
+             if);
+          #);
+     #);
+  #);
 
 -- windowitemEditornew: doPart --
 do (# theAttributeDecl: ^astInterface.beta.attributeDecl;
@@ -98,6 +116,7 @@ delete:
   #);
 
 
+
 isPrivateToWindow: booleanValue
   (# 
   do not (astControl.node.frag[] = this(graphicalEditor).astControl.node.frag[]) -> value;
@@ -110,6 +129,22 @@ isPrivateToOwner: booleanValue
       else
          not (astControl.node.frag[] = owner.astControl.node.frag[]) -> value;
      if);
+  #);
+
+(* 
+ * Code
+ *)
+
+generateOpenImp:
+  (# name: ^text;
+     theImp: ^astInterface.beta.imp;
+     frag: ^astInterface.fragmentForm;
+  enter frag[]
+  do astControl.node[] -> betaGram.getName -> name[];
+     (frag[], name[], isPrivateToOwner) 
+       -> betaGram.newOpenStatement -> theImp[];
+     astControl.node.guiInfo -> theImp.guiInfo;
+  exit theImp[]
   #);
 
 appendAttribute:
@@ -342,7 +377,11 @@ changeOwner:
      theAttributes: ^astInterface.beta.attributes;
      theFather: ^astInterface.beta.attributes;
      currentOwner: ^canvasEditor;
-  enter newOwner[]
+     newFrame: ^rectangle;
+     oldDoPart: ^astInterface.beta.doPart;
+     newDoPart: ^astInterface.beta.doPart;
+     
+  enter (newOwner[], newFrame[])
   do 
      astControl.node[] -> theAttribute[];
      theAttribute.father -> theFather[];
@@ -360,9 +399,23 @@ changeOwner:
      None -> theWindowItem[];
      this(windowItemEditor)[] -> currentOwner.children.at -> currentOwner.children.delete;
      this(windowItemEditor)[] -> newOwner.children.append;
+     newFrame.topLeft -> data.position;
+     newFrame.size -> data.size;
      createTheWindowItem;
-     newOwner.generateOpen;
-     currentOwner.generateOpen;
+     
+     (* newOwner.generateOpen;
+      * currentOwner.generateOpen;
+      *)
+     true -> newOwner.findOpenDoPart -> newDoPart[];
+     true -> currentOwner.findOpenDoPart -> oldDoPart[];
+     
+     (if oldDoPart[] <> none then
+         (oldDoPart[], data.id) -> currentOwner.deleteOpenImp; 
+     if);
+     (if newDoPart[] <> none then
+         (newDoPart[], newDoPart.frag[] -> generateOpenImp) -> newOwner.appendOpenImp;
+     if);
+     
      newOwner.astControl.prepareUpdate;
      newOwner.astControl.change;
      currentOwner.astControl.prepareUpdate;
@@ -393,19 +446,27 @@ restartWalkingAnts:
   #);
 stopWalkingAnts:
   (# 
-  do this(graphicalEditorEnv).private.theWalkingAnts.stop;
+  do this(graphicalEditorEnv).private.theWalkingAnts.fullStop;
   #);
 startWalkingAnts:
-  (# r: ^rectangle
-  do &rectangle[] -> r[];
-     theWindowItem.frame -> r;
-     (-1, -1) -> r.inset;
-     owner.getMainCanvas -> this(graphicalEditorEnv).private.theWalkingAnts.theCanvas[];
-     r[] -> this(graphicalEditorEnv).private.theWalkingAnts.start;
+  (# 
+  do 
+     theWindowItem[] -> this(graphicalEditorEnv).private.theWalkingAnts.attach;
   #);
 handleRefresh: theWindowItem.refreshAction
   (#
   #);
+
+interactiveChangeHierarki:
+  (# theDragger: @changeHierarkiDragger;
+     event: ^windowItem.eventHandler.mouseDown;
+  enter event[]
+  do theDragger.init;
+     theWindowItem[] -> theDragger.item[];
+     this(windowItemEditor)[] -> theDragger.theEditor[];
+     event[] -> theDragger.drag;
+  #);
+
 reConfigure:
   (# doLeft,doTop,doRight,doBottom: @boolean;
      newBounds, oldBounds: ^rectangle;
@@ -413,7 +474,7 @@ reConfigure:
      theOperation: ^changeBoundsOperation;
   enter (doLeft,doTop,doRight,doBottom)
   do (if private.selected then
-         this(graphicalEditorEnv).private.theWalkingAnts.stop;
+         this(graphicalEditorEnv).private.theWalkingAnts.fullStop;
      if);
      &rectangle[] -> newBounds[];
      &rectangle[] -> oldBounds[];
@@ -421,36 +482,15 @@ reConfigure:
      (newBounds[],  theWindowItem.father[], (contentsEditor).theWindowItem[]) 
        -> translateRect;
      (newBounds,doLeft,doTop,doRight,doBottom) -> (contentsEditor).theWindowItem.defineRect -> newBounds;
-     (if doLeft and doTop and doRight and doBottom then
-         (newBounds.topLeft, this(windowItemEditor)[]) -> (contentsEditor).findEditor 
-           -> newOwner[];
-         (if newOwner[]<>owner[] then
-             (newBounds[], (contentsEditor).theWindowItem[], newowner.getMainCanvas)
-               -> translateRect;
-             newBounds.topLeft -> data.position;
-             newBounds.size -> data.size;
-             newOwner[] -> changeOwner;
-          else
-             (newBounds.topLeft, (contentsEditor).theWindowItem[], theWindowItem.father[]) 
-               -> translate -> newBounds.topLeft;
-             (newBounds.bottomRight, (contentsEditor).theWindowItem[], theWindowItem.father[]) 
-               -> translate -> newBounds.bottomRight;
-             &changeBoundsOperation[] -> theOperation[];
-             (this(windowItemEditor)[], oldBounds[], newBounds[]) -> theOperation.init;
-         if);
-      else
-         (newBounds.topLeft, (contentsEditor).theWindowItem[], theWindowItem.father[]) 
-           -> translate -> newBounds.topLeft;
-         (newBounds.bottomRight, (contentsEditor).theWindowItem[], theWindowItem.father[]) 
-           -> translate -> newBounds.bottomRight;
-         
-         &changeBoundsOperation[] -> theOperation[];
-         (this(windowItemEditor)[], oldBounds[], newBounds[]) -> theOperation.init;
-     if);
+     (newBounds.topLeft, (contentsEditor).theWindowItem[], theWindowItem.father[]) 
+       -> translate -> newBounds.topLeft;
+     (newBounds.bottomRight, (contentsEditor).theWindowItem[], theWindowItem.father[]) 
+       -> translate -> newBounds.bottomRight;
+     
+     &changeBoundsOperation[] -> theOperation[];
+     (this(windowItemEditor)[], oldBounds[], newBounds[]) -> theOperation.init;
      (if private.selected then
-         owner.getMainCanvas -> this(graphicalEditorEnv).private.theWalkingAnts.theCanvas[];
-         (-1, -1) -> newBounds.inset;
-         newBounds[] -> this(graphicalEditorEnv).private.theWalkingAnts.start;
+         startWalkingAnts;
      if);
   #);
 resize:
@@ -543,13 +583,6 @@ do inner;
 -- textScrollListEditornew: doPart --
 do inner;
 
--- graphicalEditorSetcurrentMode: doPart --
-do mode[] -> private.currentmode[];
-   mode[] -> private.objectSpecificationList.findObjectType -> private.currentType##;
-
--- graphicalEditorGetcurrentMode: doPart --
-do private.currentmode[] -> mode[];
-
 -- graphicalEditorNewEditor: doPart --
 do this(graphicalEditor).private.editorGenerator[type] -> theEditor[];
    (this(canvasEditor)[],type) -> theEditor.new;
@@ -558,7 +591,7 @@ do this(graphicalEditor).private.editorGenerator[type] -> theEditor[];
 
 -- graphicalEditorOpen: doPart --
 do (# 
-   do 
+   do contents -> private.theDragManager.init;
       this(graphicalEditor)[] -> insert;
       hide;
       'Graphical Objects' -> title;
@@ -568,7 +601,8 @@ do (#
       (600, 500) -> size;
       private.theControlPalette.open;
       private.theViewsPalette.open;
-      
+      private.theToolPalette.open;
+      selectMode -> private.mode;
       (* 
        * (contents, width, height) -> private.windowView.open;
        *)
@@ -604,6 +638,10 @@ do
    
 -- graphicalEditorLib: attributes --
 
+
+(*
+ * Classes for supporting undo 
+ *)
 
 
 operation:
@@ -644,6 +682,51 @@ changeBoundsOperation: operation
        do oldBounds -> theWindowItemEditor.theWindowItem.frame;
        #);
   #);
+
+changeOwnerOperation: operation
+  (# newBounds, oldBounds: ^rectangle;
+     newOwner, oldOwner: ^canvasEditor;
+     theWindowItemEditor: ^windowItemEditor;
+     init::
+       (# 
+       enter (theWindowItemEditor[], newOwner[], newBounds[])
+       do &rectangle[] -> oldBounds[];
+          theWindowItemEditor.theWindowItem.frame -> oldBounds;
+          theWindowItemEditor.owner[] -> oldOwner[];
+          inner;
+       #);
+     doIt::
+       (# 
+       do (newOwner[], newBounds[]) -> theWindowItemEditor.changeOwner;
+       #);
+     unDoIt::
+       (# 
+       do (oldOwner[], oldBounds[]) -> theWindowItemEditor.changeOwner;
+       #);
+     
+  #);
+
+(* End of undo *)
+
+
+(* 
+ * drag and drop  
+ *)
+
+changeHierarkiDragger: private.theDragManager.changeHierarkiDragger
+  (# 
+  #);
+
+createDragger: private.theDragManager.createDragger
+  (# 
+  #);
+  
+
+reciever: private.theDragManager.reciever
+  (# 
+  #);
+
+(* end *)
 
 itemSelected:
   (# name: ^text;
@@ -892,9 +975,61 @@ findBody:
   #);
 
 -- graphicalEditorPrivate: descriptor --
-(# undoStack: @stack
+(#
+   (*
+    * Undo
+    *)
+   undoStack: @stack
      (# element:: operation;
      #);
+   
+   (*
+    * Drag and drop
+    *)
+
+
+   theDragManager: @dragManager
+     (# dragger::
+          (# theEditor: ^windowItemEditor;
+             
+             moveEditorTo:<
+               (# theCanvasEditor: ^canvasEditor;
+                  newFrame: ^rectangle;
+               enter (theCanvasEditor[], newFrame[])
+               do inner;
+               #);
+          #);
+        changeHierarkiDragger: dragger
+          (# moveEditorTo::
+               (# theOperation: ^changeOwnerOperation;
+               do &changeOwnerOperation[] -> theOperation[];
+                  (theEditor[], theCanvasEditor[], newFrame[]) -> theOperation.init;
+                  (* (theCanvasEditor[], newFrame[]) -> theEditor.changeOwner; *)
+               #);
+          #);
+        createDragger: dragger
+          (# type: @integer;
+             moveEditorTo::
+               (# theEditor: ^windowItemEditor;
+               do type -> theCanvasEditor.newEditor -> theEditor[];
+                  newFrame -> theEditor.theWindowItem.frame;
+               #);
+          #);
+     #);
+   
+   (* END of drag and drop *)
+   
+   (* 
+    * Mode
+    *)
+   
+   mode: @integer;
+   
+   (* End of mode *)
+   
+   (*
+    * Generators
+    *)
    
    editorGenerator: [26] ^generateEditor;
    initEditorGenerator:
@@ -957,7 +1092,6 @@ findBody:
         'menuitem' -> names[25][];
         'dynamicMenuitem' -> names[26][];
      #);
-   currentmode: ^text;
    currentId: @integer;
    currentType: ##windowItemEditor;
    lastTime: @integer;
@@ -1041,7 +1175,7 @@ findBody:
      #);
    contentsEditor: @canvasEditor
      (# 
-        mouseDown::<
+        mouseDown::
           (# 
           do (* this(graphicalEditor).currentType -> newEditor; *)
              (if theEvent.doubleClick//true then
@@ -1051,6 +1185,10 @@ findBody:
              if);
              true -> done;
           #);
+        init::
+          (# 
+          do createTheReciever;
+          #)
      #);
    
    selection: @list
@@ -1074,8 +1212,19 @@ findBody:
    theControlPalette: @controlPalette
      (# 
         mouseDownInItem::
-          (# 
-          do (name[], type) -> itemSelected;
+          (# theDragger: @createDragger;
+          do theControlPalette[] -> theDragger.item[];
+             type -> theDragger.type;
+             event[] -> theDragger.drag
+             (# 
+                frame::
+                  (# 
+                  do &rectangle[] -> value[];
+                     ((0, 0), (100, 60)) -> value;
+                  #);
+             #)
+             
+             (* (name[], type) -> itemSelected; *)
           #);
         open::
           (# 
@@ -1094,107 +1243,173 @@ findBody:
           do (10, 270) -> position;
           #);
      #);
+   theToolPalette: @toolPalette
+     (# mouseDownInItem::
+          (# 
+          do type -> this(graphicalEditor).mode;
+          #);
+        open::
+          (# 
+          do (10, 400) -> position;
+          #);
+        
+     #);
+
 #)
 
 -- canvasEditorPrivate: descriptor --
 (# locked: @boolean;
    privateAttributes: ^astInterface.beta.attributes;
-   privateControl: @astController
-     (# 
-     #);
+   privateControl: @astController;
+   theReciever: ^recieverType;
 #)
 
 -- windowitemEditorMousedown: doPart --
-do (# r: @rectangle;
-      width,height: @integer;
-      dh,dv: @integer;
-      h,v: @integer;
-      doTop,doLeft,doBottom,doRight: @boolean;
-   do inner mousedown;
-      (if theEvent.doubleClick then
-          (if theEvent.metaKey then
-              showCodeDialog;
-           else
-              showInfoDialog;
-          if);
-       else
-          (if not done then
-              (if theEvent.shiftKey then
-                  this(windowItemEditor)[] -> selection.add;
-               else
-                  15 -> theEvent.delay
+do inner mouseDown;
+   (if theEvent.doubleClick then
+       (if theEvent.metaKey then
+           showCodeDialog;
+        else
+           showInfoDialog;
+       if);
+    else
+       (if not done then
+           (# actualMode: @integer;
+           do mode -> actualMode;
+              
+              (if actualMode
+               //selectMode then
+                  (if theEvent.shiftKey then
+                      this(windowitemEditor)[] -> selection.add;
+                   else
+                      (if not private.selected then 
+                          this(windowitemEditor)[] -> selection.set;
+                      if);
+                  if);
+                  theEvent.localPosition -> theWindowItem.delay
                   (# 
-                  do (if theEvent.buttonState = 2  then
-                         theEvent.localPosition -> (h,v);
-                         theWindowItem.size -> (width,height);
-                         width div 3 -> dh;
-                         height div 3 -> dv;
+                  do (* (true, true, true, true) -> reConfigure; *)
+                     theEvent[] -> selection.drag;
+                  #);
+               //resizeMode then
+                  (# width,height: @integer;
+                     dh,dv: @integer;
+                     h,v: @integer;
+                     doTop,doLeft,doBottom,doRight: @boolean;
+                  do theEvent.localPosition -> (h,v);
+                     theWindowItem.size -> (width,height);
+                     width div 3 -> dh;
+                     height div 3 -> dv;
+                     
+                     (if (h <= dh) then 
+                         true -> doLeft 
+                     if);
+                     (if (h >= (width - dh)) then
+                         true -> doRight
+                     if);
+                     (if (v <= dv) then
+                         true -> doTop
+                     if);
+                     (if (v >= (height - dv)) then 
+                         true -> doBottom
+                     if);
+                     (if (doLeft or doBottom or doTop or doRight) then
+                         (doLeft,doTop,doRight,doBottom) -> reConfigure;
+                      else
+                         width div 2 -> dh;
+                         height div 2 -> dv;
                          
                          (if (h <= dh) then 
-                             true -> doLeft 
-                         if);
-                         (if (h >= (width - dh)) then
-                             true -> doRight
+                             true -> doLeft
+                          else
+                             true -> doRight;
                          if);
                          (if (v <= dv) then
                              true -> doTop
-                         if);
-                         (if (v >= (height - dv)) then 
-                             true -> doBottom
-                         if);
-                         (if (doLeft or doBottom or doTop or doRight) then
-                             (doLeft,doTop,doRight,doBottom) -> reConfigure;
                           else
-                             width div 2 -> dh;
-                             height div 2 -> dv;
-                             
-                             (if (h <= dh) then 
-                                 true -> doLeft
-                              else
-                                 true -> doRight;
-                             if);
-                             (if (v <= dv) then
-                                 true -> doTop
-                              else
-                                 true -> doBottom;
-                             if);
-                             (doLeft,doTop,doRight,doBottom) -> reConfigure;
+                             true -> doBottom;
                          if);
-                      else
-                         (true,true,true,true) -> reConfigure;
+                         (doLeft,doTop,doRight,doBottom) -> reConfigure;
                      if);
                   #);
-                  this(windowItemEditor)[] -> selection.set;
+               //hierarkiMode then
+                  theEvent[] -> interactiveChangeHierarki;
               if);
-             
-              (* theWindowItem.size -> (width,height);
-               *                  ((width div 5,1) -> max,10) -> min  -> dh;
-               *                  ((height div 5,1) -> max,10) -> min -> dv;
-               *                  
-               *                  theEvent.localPosition -> (h,v);
-               *                  (if (h <= dh) then 
-               *                      true -> doLeft 
-               *                  if);
-               *                  (if (h >= (width - dh)) then
-               *                      true -> doRight
-               *                  if);
-               *                  (if (v <= dv) then
-               *                      true -> doTop
-               *                  if);
-               *                  (if (v >= (height - dv)) then 
-               *                      true -> doBottom
-               *                  if);
-               *                  (if (doLeft or doBottom or doTop or doRight) then
-               *                      (doLeft,doTop,doRight,doBottom) -> reConfigure;
-               *                   else
-               *                      (true,true,true,true) -> reConfigure;
-               *                  if);
-               *                  this(windowItemEditor)[] -> owner.select;
-               *)
-          if);
-      if);
-   #);
-
+              selectMode -> mode;
+           #);
+       if);
+   if);
+   (* (# r: @rectangle;
+    *       width,height: @integer;
+    *       dh,dv: @integer;
+    *       h,v: @integer;
+    *       doTop,doLeft,doBottom,doRight: @boolean;
+    *    do inner mousedown;
+    *       (if theEvent.doubleClick then
+    *           (if theEvent.metaKey then
+    *               showCodeDialog;
+    *            else
+    *               showInfoDialog;
+    *           if);
+    *        else
+    *           (if not done then
+    *               (if theEvent.controlKey then
+    *                   theEvent[] -> interactiveChangeHierarki;
+    *                else
+    *                   (if theEvent.shiftKey then
+    *                       this(windowItemEditor)[] -> selection.add;
+    *                    else
+    *                       15 -> theEvent.delay
+    *                       (# 
+    *                       do (if theEvent.buttonState = 2  then
+    *                              theEvent.localPosition -> (h,v);
+    *                              theWindowItem.size -> (width,height);
+    *                              width div 3 -> dh;
+    *                              height div 3 -> dv;
+    *                              
+    *                              (if (h <= dh) then 
+    *                                  true -> doLeft 
+    *                              if);
+    *                              (if (h >= (width - dh)) then
+    *                                  true -> doRight
+    *                              if);
+    *                              (if (v <= dv) then
+    *                                  true -> doTop
+    *                              if);
+    *                              (if (v >= (height - dv)) then 
+    *                                  true -> doBottom
+    *                              if);
+    *                              (if (doLeft or doBottom or doTop or doRight) then
+    *                                  (doLeft,doTop,doRight,doBottom) -> reConfigure;
+    *                               else
+    *                                  width div 2 -> dh;
+    *                                  height div 2 -> dv;
+    *                                  
+    *                                  (if (h <= dh) then 
+    *                                      true -> doLeft
+    *                                   else
+    *                                      true -> doRight;
+    *                                  if);
+    *                                  (if (v <= dv) then
+    *                                      true -> doTop
+    *                                   else
+    *                                      true -> doBottom;
+    *                                  if);
+    *                                  (doLeft,doTop,doRight,doBottom) -> reConfigure;
+    *                              if);
+    *                           else
+    *                              (true,true,true,true) -> reConfigure;
+    *                          if);
+    *                       #);
+    *                       this(windowItemEditor)[] -> selection.set;
+    *                   if);  
+    *               if)
+    *           if);
+    *       if);
+    *    #);
+    *)
+  
+  
 -- canvasEditorMousedown: doPart --
 do inner mouseDown;
    (*  (if not done then
@@ -1210,10 +1425,98 @@ do inner mouseDown;
    
 -- canvasEditorLib: attributes --
 
+(* 
+ * Drag and drop support
+ *)
+
+recieverType: reciever
+  (* Should be a singular object, but a reciever can 
+   * not be reused.
+   *)
+  (# onHilite::
+       (# 
+       do borderStyles.etchedIn -> theWindowItem.border.style;
+       #);
+     onLowLite::
+       (# 
+       do borderStyles.shadowIn -> theWindowItem.border.style
+       #);
+     
+     recieve::
+       (# 
+       do (this(canvasEditor)[], frame[]) -> theDragger.moveEditorTo;
+       #);
+  #);
+
+createTheReciever:
+  (# 
+  do (if private.theReciever[] <> none then
+         private.theReciever.delete;
+     if);
+     &recieverType[] -> private.theReciever[];
+     theWindowItem[] -> private.theReciever.init;
+  #);
+(* End of drag and drop support *)
+
+(*
+ * Locking
+ *)
+
+
 locked:
   (# 
   enter private.locked
   exit private.locked
+  #);
+
+(* End of locking *)
+
+
+(*
+ * Code
+ *)
+
+
+deleteOpenImp:
+  (# theDoPart: ^astInterface.beta.doPart;
+     id: @integer;
+  enter (theDoPart[], id)
+  do (# theImperatives: ^astInterface.beta.imperatives;
+        deleteInx: @integer;
+     do theDoPart.getImperatives -> theImperatives[];
+        l: theImperatives.iterate
+        (# 
+        do (if current.guiInfo = id then
+               current.sonNo -> deleteInx;
+               leave l;
+           if);
+        #);
+        (if deleteInx <> 0 then
+            deleteInx -> theImperatives.delete;
+        if);
+     #);
+  #);
+
+appendOpenImp:
+  (# theDoPart: ^astInterface.beta.doPart;
+     imp: ^astInterface.beta.imp;
+  enter (theDoPart[], imp[])
+  do (# theImperatives: ^astInterface.beta.imperatives;
+        insertInx: @integer;
+     do theDoPart.getImperatives -> theImperatives[];
+        l: theImperatives.iterate
+        (# 
+        do (if current.hasGUIcomment then
+               current.sonNo -> insertInx;
+           if);
+        #);
+        
+        (if insertInx  = theImperatives.noOfsons then
+            imp[] -> theImperatives.append;
+         else
+            (insertInx + 1, imp[]) -> theImperatives.insert;
+        if);
+     #);
   #);
    
 generateOpen:
@@ -1272,16 +1575,13 @@ scanAttributes:
 -- windowitemEditorSelected: doPart --
 do isSelected -> private.selected;
    (if isSelected then
-       (# r: ^rectangle;
-       do owner.getMainCanvas 
-            -> this(graphicalEditorEnv).private.theWalkingAnts.theCanvas[];
-          &rectangle[] -> r[];
-          theWindowItem.frame -> r;
-          (-1, -1) -> r.inset;
-          r[] -> this(graphicalEditorEnv).private.theWalkingAnts.start;
+       (#
+       do 
+          
+          theWindowItem[] -> this(graphicalEditorEnv).private.theWalkingAnts.attach;
        #);
     else
-       this(graphicalEditorEnv).private.theWalkingAnts.stop;
+       this(graphicalEditorEnv).private.theWalkingAnts.fullStop;
    if);
    inner selected;
 
@@ -1773,7 +2073,7 @@ do (if editor[] -> member then
 -- GraphicalEditorSelectionMakeEmpty: doPart --
 do 
    (if not empty then
-      this(graphicalEditorEnv).private.theWalkingAnts.stop;
+      this(graphicalEditorEnv).private.theWalkingAnts.fullStop;
        none -> this(graphicalEditorEnv).private.theWalkingAnts.editor[];
        scan
        (# 
@@ -1867,9 +2167,47 @@ do (# theWindow: @window
 
 -- selectionLib: attributes --
 
+drag:
+  (# theEvent: ^windowItem.eventhandler.mouseDown;
+  enter theEvent[]
+  do (# oldBounds, newBounds: @rectangle;
+        dh, dv: @integer;
+        theOperation: ^changeBoundsOperation;
+     do stopAnts;
+        minInt -> oldBounds.right -> oldBounds.bottom;
+        maxInt -> oldBounds.left -> oldBounds.top;
+        scan
+        (# r: @rectangle;
+        do current.theWindowItem.frame -> r;
+           (r[], current.theWindowItem.father[], (contentsEditor).theWindowItem[])
+             -> translateRect;
+           (r.left, oldBounds.left) -> Min -> oldBounds.left;
+           (r.top, oldBounds.top) -> Min -> oldBounds.top;
+           (r.right, oldBounds.right) -> Max -> oldBounds.right;
+           (r.bottom, oldBounds.bottom) -> Max -> oldBounds.bottom;
+        #);
+        
+        (oldBounds, true, true, true, true) 
+          -> (contentsEditor).theWindowItem.defineRect -> newBounds;
+        newBounds.left - oldBounds.left -> dh;
+        newBounds.top - oldBounds.top -> dv;
+        scan
+        (# old, new: ^rectangle;
+           
+        do &rectangle[] -> old[];
+           &rectangle[] -> new[];
+           current.theWindowItem.frame -> old -> new;
+           (dh, dv) -> new.offset;
+           &changeBoundsOperation[] -> theOperation[];
+           (current[], old[], new[]) -> theOperation.init;
+        #);
+        startAnts;
+     #);
+  #);
+
 stopAnts: 
   (# 
-  do this(graphicalEditorEnv).private.theWalkingAnts.stop;
+  do this(graphicalEditorEnv).private.theWalkingAnts.fullStop;
   #);
 startAnts: scan
   (# 
@@ -2053,6 +2391,22 @@ delete:
 
 editorWalkingAnts: walkingAnts
   (# editor: ^graphicalEditor;
+     fullStop:
+       (# 
+       do stop;
+          clear;
+       #);
+     attach:
+       (# item: ^window.windowItem;
+          area: ^rectangle;
+          width, height: @integer;
+       enter item[]
+       do &rectangle[] -> area[];
+          item.size -> (width, height);
+          ((0, 0), (width - 1, height - 1)) -> area;
+          (item[], area[]) -> add;
+          start;
+       #);
   #);
 
 putPoint:
@@ -2087,7 +2441,8 @@ do &windowItemType[] -> theWindowItem[];
    
    
 -- GraphicalEditorCanvasEditorCreateTheWindowItem: doPart --
-do children.scan
+do createTheReciever;
+   children.scan
    (# 
    do current.createTheWindowItem; 
    #);
@@ -2165,3 +2520,17 @@ do (# theEditor: ^scriptEditor;
           theEditor.bringToFront;
       if);
    #);
+   
+-- graphicalEditorEnterMode: doPart --
+do value -> private.mode;
+   (if value 
+    //selectMode then
+       cursors.arrow[] -> private.contentsEditorObject.theCursor;
+    //hierarkiMode then
+       cursors.cross[] -> private.contentsEditorObject.theCursor;
+    //resizeMode then
+       cursors.plus[] -> private.contentsEditorObject.theCursor;
+   if);
+   
+-- graphicalEditorExitMode: doPart --
+do private.mode -> value;

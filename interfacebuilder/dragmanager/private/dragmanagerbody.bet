@@ -1,0 +1,337 @@
+ORIGIN '../dragmanager';
+INCLUDE '~beta/guienv/v1.3.1/utils/guienvadds';
+INCLUDE '~beta/guienv/v1.3.1/utils/graphicsadds';
+INCLUDE '~beta/guienv/v1.3.1/utils/track';
+INCLUDE '~beta/guienv/v1.3.1/graphics';
+
+MDBODY mac 'macintosh/dragmanager_macbody'
+       nti 'winnt/dragmanager_ntibody'
+       default 'X11/dragmanager_X11body';
+
+-- dragmanagerInit: doPart --
+do world[] -> private.world[];
+   inner;
+ 
+   
+-- dragManagerRecieverInit: doPart --
+do (if item[] = none then
+       noItemError;
+   if);
+   (if not ((world = item[]) or ((world, item[]) -> isAncestor)) then
+       badItemError;
+   if);
+   item[] -> private.item[];
+   private.children.init;
+   this(reciever)[] -> insert;
+   inner;
+   
+-- dragManagerRecieverDelete: doPart --
+do none -> private.item[];
+   private.children.clear;
+   
+-- recieverLib: attributes --
+
+isItemAncestor: booleanValue
+  (# other: ^reciever;
+     ancestor: ^window.windowItem;
+  enter other[]
+  do (theItem, other.theItem) -> isAncestor -> value;
+  #);
+theItem:
+  (# 
+  exit private.item[]
+  #);
+
+findReciever:
+  (# pt: @point;
+     found: ^reciever;
+     exclude: ^window.windowItem;
+  enter (pt, exclude[])
+  do(pt, exclude[]) -> private.children.findReciever -> found[];
+     (if found[] = none then
+         this(reciever)[] -> found[];
+     if);
+  exit found[]
+  #);
+
+hit: booleanValue
+  (# x, y: @integer;
+     width, height: @integer;
+  enter (x, y)
+  do (x, y) -> (theItem).fromGlobal -> (x, y);
+     (theItem).size -> (width, height);
+     ((x >= 0)and (y >= 0) and (x <= width) and (y <= height)) -> value;
+  #);
+
+-- dragManagerRecieverPrivate: descriptor --
+(# item: ^window.windowItem;
+   translation: @point;
+   children: @recieverList;
+#)
+
+-- dragManagerDraggerInit: doPart --
+do inner;
+
+-- dragManagerDraggerDrag: doPart --
+do (if event[] = none then
+       noEventError;
+   if);
+   (if item[] = none then
+       noItemError;
+   if);
+   (if not ((world, item[]) -> isAncestor) then
+       badItemError;
+   if);
+   (# r: ^rectangle;
+      theWindow: ^window;
+   do (if frame## = rectangleValue## then
+          &rectangle[] -> r[];
+          item.size -> r.size;
+       else
+          frame -> r[];
+      if);
+      item.theWindow -> theWindow[];
+      (r.topLeft,  item[], world) 
+        -> theWindow.translate -> r.topLeft;
+      (r.bottomRight, item[], world) 
+        -> theWindow.translate -> r.bottomRight;
+      (world).graphics
+      (# 
+      do (world).track
+         (#
+            drawRect: @drawRectangle;
+            originX, originY: @integer;
+            
+            currentReciever: ^reciever;
+            
+            setReciever:
+              (# newReciever: ^reciever;
+              enter newReciever[]
+              do (if newReciever[] <> currentReciever[] then
+                     (if currentReciever[] <> none then
+                         currentReciever.onLowlite;
+                     if);
+                     (if newReciever[] <> none then
+                         newReciever.onHilite;
+                     if);
+                     newReciever[] -> currentReciever[];
+                 if);
+              #);
+            
+            mousePress::
+              (# 
+              do (0, 0) -> (world).toGlobal -> (originX, originY);
+                 transferModes.xorBlend[] -> pen.mode;
+                 false -> clipChildren;
+                 r[] -> drawRect;
+              #);
+            mouseMove::
+              (# theReciever: ^reciever;
+              do r[] -> drawRect;
+                 r.top + v -> r.top;
+                 r.left + h  -> r.left;
+                 r.bottom + v -> r.bottom;
+                 r.right + h -> r.right;
+                 ((curPt.h + originX, curPt.v + originY), item[]) -> findReciever -> setReciever;
+                 r[] -> drawRect;
+              #);
+            mouseRelease::
+              (# 
+              do r[] -> drawRect;
+                 (if currentReciever[] <> none then
+                     (r.topLeft,  world, currentReciever.theItem) 
+                       -> theWindow.translate -> r.topLeft;
+                     (r.bottomRight, world, currentReciever.theItem) 
+                       -> theWindow.translate -> r.bottomRight;
+                     (this(dragger)[], r[]) -> currentReciever.recieve;
+                     none -> setReciever;
+                 if);
+                 
+              #);
+         #);
+      #);
+   #);
+   
+   
+-- dragManagerLib: attributes --
+
+world:
+  (# 
+  exit private.world[]
+  #);
+
+insert:
+  (# theReciever: ^reciever;
+  enter theReciever[]
+  do theReciever[] -> private.children.insert;
+  #);
+
+findReciever:
+  (# pt: @point;
+     theReciever: ^reciever;
+     exclude: ^window.windowItem;
+  enter (pt, exclude[])
+  do (pt, exclude[]) -> private.children.findReciever -> theReciever[];
+     (if theReciever[] <> none then
+         (if (theReciever.theItem = exclude[]) or (theReciever.theItem = exclude.father[]) then
+             none -> theReciever[];
+         if);
+     if);
+  exit theReciever[]
+  #);
+
+depth:
+  (# item: ^window.windowItem;
+     value: @integer;
+  enter item[]
+  do 1 -> value;
+     l: (if item[] <> none then
+            value + 1 -> value;
+            item.father[] -> item[];
+            restart l;
+        if);
+  exit value
+  #);
+getAncestor:
+  (# item: ^window.windowItem;
+     no: @integer;
+  enter (item[], no)
+  do (for no repeat
+          item.father[] -> item[];
+     for);
+  exit item[]
+  #);
+commonAncestor:
+  (# item1, item2: ^window.windowItem;
+     ancestor: ^window.windowItem;
+  enter (item1[], item2[]) 
+  do (# d1, d2: @integer;
+     do item1[] -> depth -> d1;
+        item2[] -> depth -> d2;
+        (if d1 < d2 then
+            (item2[], d2 - d1) -> getAncestor -> item2[];
+        if);
+        (if d2 < d1 then
+            (item1[], d1 - d2) -> getAncestor -> item1[]
+        if);
+        walk:
+          (if item1[] =  item2[] then
+              item1[] -> ancestor[];
+           else
+              (if item1[] = none then
+                  leave walk;
+              if);
+              (if item2[] = none then
+                  leave walk;
+              if);
+              item1.father[] -> item1[];
+              item2.father[] -> item2[];
+              restart walk
+          if);
+     #);
+  exit ancestor[]
+  #);
+
+(* isAncestor: booleanValue
+ *   (# ancestor, child: ^window.windowItem;
+ *   enter (ancestor[], child[])
+ *   do ((ancestor[], child[]) -> commonAncestor) = ancestor[] -> value;
+ *   #);
+ * 
+ *)
+
+isAncestor: booleanValue
+  (# ancestor, item: ^window.windowItem;
+  enter (ancestor[], item[])
+  do item.father[] -> item[];
+     l: (if ancestor[] = item[] then
+            true -> value;
+         else
+            (if item[] <> none then
+                item.father[] -> item[];
+                restart l;
+            if)
+        if);
+                
+  #);
+
+recieverList: list
+  (# element:: reciever;
+     
+     scanAndClean:
+       (# current: ^element;
+       do iterate
+          (# 
+          do (if current.elm.theItem = none then
+                 current[] -> delete;
+              else
+                 current.elm[] -> this(scanAndClean).current[];
+                 inner scanAndClean;
+             if);
+          #);
+       #);
+     findAncestor:
+       (# theReciever: ^reciever;
+          found: ^reciever;
+       enter theReciever[]
+       do search:
+            scanAndClean
+            (# 
+            do (if (theReciever[] -> current.isItemAncestor) then
+                   current[] -> found[];
+                   leave search;
+               if);
+            #);
+       exit found[]
+       #);
+     insert:
+       (# elm: ^reciever;
+          ancReciever: ^reciever;
+       enter elm[]
+       do elm[] -> findAncestor -> ancReciever[];
+          (if ancReciever[] = none then
+              elm[] -> prepend;
+           else
+              elm[] -> ancReciever.private.children.insert;
+          if);
+       #);
+     findReciever:
+       (# pt: @point;
+          elm: ^reciever;
+          exclude: ^window.windowItem;
+       enter (pt, exclude[])
+       do search: scanAndClean
+            (# 
+            do (if pt -> current.hit then
+                   (pt, exclude[]) -> current.findReciever -> elm[];
+                   leave search;
+               if);
+            #);
+       exit elm[]
+       #);
+  #);
+
+-- dragManagerPrivate: descriptor --
+(# world: ^window.windowItem;
+   children: @recieverList;
+#)
+
+-- windowItemLib: attributes --
+
+theWindow:
+  (# 
+  exit this(window)[]
+  #);
+fromGlobal:
+  (# local, global: @point;
+  enter global
+  <<SLOT windowItemFromGlobal: doPart>>
+  exit local
+  #);
+
+toGlobal: 
+  (# local, global: @point;
+  enter local
+  <<SLOT windowItemToGlobal: doPart>>
+  exit global
+  #);
