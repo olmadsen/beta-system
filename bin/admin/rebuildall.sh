@@ -1,5 +1,7 @@
 #!/usr/local/bin/tcsh
 
+# FIXME: could probably use mbs_bootrack 
+
 # Hvis er er frysning nu, saa lad vaere med at blande dig!
 # exit 0
 
