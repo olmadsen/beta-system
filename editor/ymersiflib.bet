@@ -1,7 +1,7 @@
-ORIGIN '~beta/sourcebrowser/v1.0/ymer';
+ORIGIN '~beta/sourcebrowser/v1.0.1/ymer';
 INCLUDE '~beta/guienv/v1.3.1/utils/simplemenu'
-        '~beta/sourcebrowser/v1.0/private/parseEditor'
-        '~beta/sourcebrowser/v1.0/private/semanticEditor'
+        '~beta/sourcebrowser/v1.0.1/private/parseEditor'
+        '~beta/sourcebrowser/v1.0.1/private/semanticEditor'
         'ymercall'
         'createdialog';
 BODY 'private/globalfrejacommbody'
@@ -28,10 +28,8 @@ fragmentBrowser: ymerApplication
                refreshGroup::  (#  do (cb[],fg[],none )->updateBrowser #);
                findAndSelect:: 
                  (#  do node[]->THIS(ymerBrowserWindow).findAndSelect #);
-               recoverGroup:: 
-                 (# 
-                 do fg[]->THIS(ymerBrowserWindow).recoverFragmentGroup
-                 #)
+               check:: 
+                 (#  do fg[]->THIS(ymerBrowserWindow).check->status #)
             #);
           checkOngoingTextEditing:
             (# value: @boolean
@@ -464,16 +462,6 @@ fragmentBrowser: ymerApplication
                if);
                
             #);
-          recoverFragmentGroup:
-            (# fg: ^astInterface.fragmentGroup; f: @file; groupName: ^text; 
-            enter fg[]
-            do
-               fg.fullName->groupName[];
-               '#'->fg.restoreBackup;
-               '#'->(fg.diskFileName).copyAppend->f.name;
-               (if f.entry.exists then f.delete if);
-               
-            #);
           Edit: @codeEditorEditMenu
             (#
                formEditorExists:: 
@@ -665,7 +653,43 @@ fragmentBrowser: ymerApplication
                     iSaveAll: @item
                       (#
                          onStatus::  (#  do true->value #);
-                         onSelect::  (#  do edenv.saveAll #)
+                         onSelect:: 
+                           (# 
+                           do
+                           (*edenv.saveAll; temporarily placed here to be able 
+                            to specify the fatherwindow for the dialog
+                            in order to avoid "moving" dialogs *)
+                              l: edenv.groupEditorList.scan
+                                (# help: ^text; done: @boolean
+                                do
+                                   (if (current.touched > 0) and not
+                                   current.isAfrejaEditor then
+                                       'Save changes to '->help[];
+                                       current.fg.name->help.append;
+                                       '?'->help.append;
+                                       help[]->putLine;
+                                       (THIS(ymerBrowserWindow)[],'Save group',
+                                        help[])
+                                         -> (*UI.*) promptForBoolean
+                                           (#
+                                              ok::< 
+                                                (# 
+                                                do (true,false)->current.save
+                                                #);
+                                              notOK::<  (#  do  #);
+                                              cancel::< 
+                                                (#  do true->done #);
+                                              
+                                           #)
+                                    else
+                                       (if current.needToUpdateTextFile and not
+                                       current.isAFrejaEditor then
+                                           current.fg[]->edenv.makeNewTextFile
+                                       if)
+                                   if);
+                                   (if done then leave l if)
+                                #)
+                           #)
                       #);
                     iSaveAbstract: @item
                       (#
@@ -761,8 +785,8 @@ fragmentBrowser: ymerApplication
                       (# 
                       do
                          'New...'->iNew.new;
-                         'New BETA Program'->iNewBetaProgram.new;
-                         'New BETA Library'->iNewBetaLibrary.new;
+                         'New BETA Program...'->iNewBetaProgram.new;
+                         'New BETA Library...'->iNewBetaLibrary.new;
                          newSeparator;
                          'Close'->iClose.new;
                          'Save'->iSave.new;
@@ -809,6 +833,7 @@ fragmentBrowser: ymerApplication
                            do
                               cfe.frag[]->cge.cutForm;
                               cfe.frag[]->browser.currentGroup.close;
+                              cge.fg[]->findGroup;
                               
                            #)
                       #);
@@ -842,7 +867,7 @@ fragmentBrowser: ymerApplication
                            #);
                          onSelect:: 
                            (# ff: ^astInterface.fragmentForm
-                           do cfe.frag[]->cge.pasteForm->ff[]; 
+                           do cfe.frag[]->cge.pasteForm->ff[]->findForm; 
                            #)
                       #);
                     iAppend: @item
@@ -862,39 +887,7 @@ fragmentBrowser: ymerApplication
                            #);
                          onSelect:: 
                            (# ff: ^astInterface.fragmentForm
-                           do none ->cge.pasteForm->ff[]; 
-                           #)
-                      #);
-                    iInsertDescriptorFragmentForm: @item
-                      (#
-                         onStatus:: 
-                           (# 
-                           do
-                              (if allowOnForm then
-                                  cge.askInsertPermission->value
-                               else
-                                  false->value
-                              if)
-                           #);
-                         onSelect:: 
-                           (# ff: ^astInterface.fragmentForm
-                           do (cfe.frag[],2)->cge.insertForm->ff[]; 
-                           #)
-                      #);
-                    iInsertAttributesFragmentForm: @item
-                      (#
-                         onStatus:: 
-                           (# 
-                           do
-                              (if allowOnForm then
-                                  cge.askInsertPermission->value
-                               else
-                                  false->value
-                              if)
-                           #);
-                         onSelect:: 
-                           (# ff: ^astInterface.fragmentForm
-                           do (cfe.frag[],3)->cge.insertForm->ff[]; 
+                           do none ->cge.pasteForm->ff[]->findForm; 
                            #)
                       #);
                     iInsertDoPartFragmentForm: @item
@@ -910,7 +903,39 @@ fragmentBrowser: ymerApplication
                            #);
                          onSelect:: 
                            (# ff: ^astInterface.fragmentForm
-                           do (cfe.frag[],31)->cge.insertForm->ff[]; 
+                           do (cfe.frag[],31)->cge.insertForm->ff[]->findForm; 
+                           #)
+                      #);
+                    iInsertDescriptorFragmentForm: @item
+                      (#
+                         onStatus:: 
+                           (# 
+                           do
+                              (if allowOnForm then
+                                  cge.askInsertPermission->value
+                               else
+                                  false->value
+                              if)
+                           #);
+                         onSelect:: 
+                           (# ff: ^astInterface.fragmentForm
+                           do (cfe.frag[],2)->cge.insertForm->ff[]->findForm; 
+                           #)
+                      #);
+                    iInsertAttributesFragmentForm: @item
+                      (#
+                         onStatus:: 
+                           (# 
+                           do
+                              (if allowOnForm then
+                                  cge.askInsertPermission->value
+                               else
+                                  false->value
+                              if)
+                           #);
+                         onSelect:: 
+                           (# ff: ^astInterface.fragmentForm
+                           do (cfe.frag[],3)->cge.insertForm->ff[]->findForm; 
                            #)
                       #);
                     iEditProperties: @item
@@ -978,15 +1003,15 @@ fragmentBrowser: ymerApplication
                          'Paste Before'->iPaste.new;
                          'Paste At End'->iAppend.new;
                          newSeparator;
-                         'Insert Descriptor Fragment form...'
-                           ->iInsertDescriptorFragmentForm.new;
-                         'Insert Attributes Fragment Form...'
-                           ->iInsertAttributesFragmentForm.new;
-                         'Insert DoPart Fragment Form...'
+                         'New DoPart Fragment Form...'
                            ->iInsertDoPartFragmentForm.new;
+                         'New Descriptor Fragment form...'
+                           ->iInsertDescriptorFragmentForm.new;
+                         'New Attributes Fragment Form...'
+                           ->iInsertAttributesFragmentForm.new;
                          newSeparator;
                          'Edit Properties...'->iEditProperties.new;
-                         'Edit Fragment name...'->iEditFormName.new;
+                         'Edit Name...'->iEditFormName.new;
                          newSeparator;
                          'Test'->iSearch.new
                       #)
@@ -1083,7 +1108,7 @@ fragmentBrowser: ymerApplication
                                 ->edenv.frejaInterface.openForm
                            #)
                       #);
-                    open:: 
+                    open::< 
                       (# 
                       do
                          'Check Current'->iCheck.new;
@@ -1097,7 +1122,8 @@ fragmentBrowser: ymerApplication
                          newSeparator;
                          'Semantic Errors...'->iSemanticErrors.new;
                          newSeparator;
-                         'Show Diagram'->iShowDiagram.new
+                         'Show Diagram'->iShowDiagram.new;
+                         INNER
                       #)
                  #);
                open::< 
