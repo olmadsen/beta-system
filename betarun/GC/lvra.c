@@ -30,7 +30,7 @@ ValRep *LVRAAlloc(ProtoType *proto, long range)
     SETPROTO(newRep,proto);
     newRep->LowBorder  = 1;
     newRep->HighBorder = range; /* indexes */
-}
+  }
   return newRep;
 }
 

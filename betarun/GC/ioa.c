@@ -449,13 +449,6 @@ void IOAGc()
     */
    memset(GLOBAL_IOATop, 0, (long)GLOBAL_IOALimit-(long)GLOBAL_IOATop);
   
-   INFO_IOA({
-      fprintf(output," %d%% used, ioatime=%dms)\n",
-              (int)((100*areaSize(GLOBAL_IOA,GLOBAL_IOATop))
-                    / areaSize(GLOBAL_IOA,GLOBAL_IOALimit)),
-              (int)(getmilisectimestamp() - starttime));
-   });
-
 #ifdef MT
    DEBUG_IOA({ 
       /* If there is only one thread, IOACheck will only check the range
@@ -489,9 +482,11 @@ void IOAGc()
 #ifdef MT
    /* doGC checks for this */
 #else
-   if ((long)IOATop+4*(long)ReqObjectSize > (long)IOALimit) {
-      /* Not enough freed by this GC */
-      if (IOALooksFullCount > 4) {
+   if (4*ReqObjectSize < (char*)IOALimit-(char*)IOA) {
+     /* For an object, that would fit in IOA, actually. */
+     if ((long)IOATop+4*(long)ReqObjectSize > (long)IOALimit) {
+       /* Not enough freed by this GC. */
+       if (IOALooksFullCount > 6) {
          char buf[512];
          sprintf(buf, "Sorry, IOA is full: cannot allocate %d bytes.\n\
 Program terminated.\n", (int)(4*ReqObjectSize));
@@ -501,26 +496,38 @@ Program terminated.\n", (int)(4*ReqObjectSize));
 #else
          BetaError(IOAFullErr, 0);
 #endif
-      } else {
+       } else {
          if (IOALooksFullCount > 1) {
-            /* Have now done two IOAGc's without freeing enough space.
-             * Make sure that all objects go to AOA in the next GC.
-             */
-            IOAtoAOAtreshold=IOAMinAge+1;
-            DEBUG_IOA(fprintf(output, "Forcing all to AOA in next IOAGc\n"));
+	   /* Have now done two IOAGc's without freeing enough space.
+	    * Make sure that all objects go to AOA in the next GC.
+	    */
+	   IOAtoAOAtreshold=IOAMinAge+1;
+	   DEBUG_IOA(fprintf(output, "Forcing all to AOA in next IOAGc\n"));
          }
          IOALooksFullCount++;
-      }
-      INFO_IOA(fprintf(output, "[%d]\n", IOALooksFullCount));
-   } else {
-      if (FALSE && ((long)IOATop-(long)IOA)/(((long)IOALimit-(long)IOA)/100+1) > 70) {
+       }
+       INFO_IOA(fprintf(output, "[IOALooksFullCount=%d]\n", IOALooksFullCount));
+     } else {
+       if (FALSE && ((long)IOATop-(long)IOA)/(((long)IOALimit-(long)IOA)/100+1) > 70) {
          IOALooksFullCount = 1;
-      } else {
-         IOALooksFullCount = 0;
-      }
+       } else {
+	 if (IOALooksFullCount) {
+	   INFO_IOA(fprintf(output, "[IOALooksFullCount=0, was %d]\n",
+			    IOALooksFullCount));
+	 }
+	 IOALooksFullCount = 0;
+       }
+     }
    }
 #endif /* MT */
   
+   INFO_IOA({
+      fprintf(output," %d%% used, ioatime=%dms)\n",
+              (int)((100*areaSize(GLOBAL_IOA,GLOBAL_IOATop))
+                    / areaSize(GLOBAL_IOA,GLOBAL_IOALimit)),
+              (int)(getmilisectimestamp() - starttime));
+   });
+
    DEBUG_CODE(if (!NoHeapClear) { memset(ToSpace, 0, IOASize); });
 
    DEBUG_IOA(

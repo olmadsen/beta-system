@@ -85,6 +85,7 @@ static long totalFree = 0;
 static long lastAOAGCAt = -1000;  /* NumIOAGc of last AOAGC */
 
 static int OverFullFlag = 0;
+static unsigned long OverFullSize = 0;
 static unsigned long AOASizeAtGC = 0;
 static unsigned long AOAFreeAtGC = 0;
 static unsigned long AOAMinSizeForGC = 0;
@@ -377,12 +378,15 @@ Object *AOAallocate(long numbytes)
   Object *newObj;
     
   Claim(numbytes > 0, "AOAallocate: numbytes > 0");
-   
+
   /* Try to find a chunk of memory in the freelist */
   newObj = AOAAllocateFromFreeList(numbytes);
   if (newObj) {
     newObj->GCAttr = DEADOBJECT;
     totalFree -= numbytes;
+    if (OverFullFlag == 3) {
+      OverFullFlag = 0;
+    }
     return newObj;
   }
 
@@ -417,6 +421,9 @@ Object *AOAallocate(long numbytes)
 
   if (!OverFullFlag){
     OverFullFlag = 1;
+    if (OverFullSize < numbytes) {
+      OverFullSize = numbytes;
+    }
     return NULL;  /* perform GC */
   }
 
@@ -432,6 +439,9 @@ Object *AOAallocate(long numbytes)
 #endif
 
       OverFullFlag = 2;
+      if (OverFullSize < numbytes) {
+	OverFullSize = numbytes;
+      }
       return NULL;  /* perform GC */
     }
   }
@@ -713,22 +723,21 @@ void AOAGc()
 
    AOARefStackUnHack();
   
-   if (totalAOASize > 100 
-       && (unsigned long)(freed / (totalAOASize / 100)) 
-       < (unsigned long)AOAPercentage) {
-      AOAMinSizeForGC = totalAOASize + (totalAOASize / 100) * AOAPercentage;
-      /* Still overfull. */
-   } else {
-      OverFullFlag = 0;
+   if (totalAOASize > 100) { 
+     if ((unsigned long)(freed / (totalAOASize / 100)) 
+	 < (unsigned long)AOAPercentage) {
+       /* We do not want a GC, untill AOA has grown this much: /*
+       AOAMinSizeForGC = totalAOASize + (totalAOASize / 100) * AOAPercentage;
+       /* Still overfull. */
+     } else {
+       if (OverFullFlag) {
+	 OverFullFlag = 3;
+       }
+     }
    }
+
    AOASizeAtGC = totalAOASize;
    AOAFreeAtGC = totalFree;
-
-#ifndef USEMMAP
-   if (totalFree < AOAMinFree) {
-      AOANewBlock(0);  /* alloc block of min size */
-   }
-#endif
 
    STAT_AOA(AOADisplayFreeList());
 
