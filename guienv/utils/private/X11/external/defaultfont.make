@@ -1,11 +1,9 @@
-BASEDIR = $(BETALIB)guienv/v1.3/utils/private/X11
-OBJDIR = $(BASEDIR)/$(MACHINETYPE)
-SRCDIR = $(BASEDIR)/external
+OBJDIR = ../$(MACHINETYPE)
 
 CFLAGS = -c -D$(MACHINETYPE) -I$(MOTIFINC) -O -g
 
 
 defaultfont = $(OBJDIR)/defaultfont.o
 
-$(defaultfont): $(SRCDIR)/defaultfont.c
-	gcc $(CFLAGS) $(SRCDIR)/defaultfont.c -o $(defaultfont)
+$(defaultfont): defaultfont.c
+	gcc $(CFLAGS) defaultfont.c -o $(defaultfont)
