@@ -162,11 +162,13 @@ You may order an unconstrained version from\n",
       ProcessReference( &InterpretItem );
       INFO_IOA(fprintf(output, ")"); fflush(output));
     }
+#ifdef RTLAZY
     if (LazyItem) {
       INFO_IOA(fprintf(output, " (LazyItem"); fflush(output));
       ProcessReference( &LazyItem );
       INFO_IOA(fprintf(output, ")"); fflush(output));
     }
+#endif
     CompleteScavenging();
     
     ProcessStack();
