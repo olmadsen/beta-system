@@ -2,8 +2,8 @@
   Compilation statements: 
     (make clean; jbeta -x betaenv; \rm -f javabc/String.class)
     jbeta -x Bclass.bet
-    javac -d javabc -classpath javabc BclassUser.java
-    java -classpath javabc BclassUser
+    javac -d jvm -classpath jvm BclassUser.java
+    java -classpath jvm BclassUser
 */ 
 
 class Jclass extends Bclass
@@ -27,7 +27,7 @@ class BclassUser
     public static void main(String args[])
     {
 	betaenv env = new betaenv(null);
-	env.init();
+	env.betaenvinit(); System.out.println("env.init");
 	Bclass b = new Jclass(env);
 	b.set(9);
 	System.out.println(b.get());
