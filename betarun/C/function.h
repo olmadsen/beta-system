@@ -1,6 +1,8 @@
 /* C/initialize.c */
 #ifdef macintosh
+extern void CPrompt(char *msg1, char *msg2, char *msg3, char *msg4);
 extern void Prompt(char *msg1, char *msg2, char *msg3, char *msg4);
+extern long StandAlone;
 #endif
 
 /* C/betaenv.c */
@@ -21,9 +23,9 @@ extern void DumpIOA();
 #endif
 
 /* C/outpattern.c */
-extern void DisplayObject();
-extern void ErrorMessage();
-extern void DisplayBetaStack();
+extern void  DisplayObject();
+extern char *ErrorMessage();
+extern void  DisplayBetaStack();
 #ifdef RTDEBUG
 extern char *DescribeObject();
 #endif
@@ -81,7 +83,7 @@ extern ref(Object) NewCopyObject();
 /* GC/stack.c */
 extern void ProcessStackPart();
 extern void ProcessStack();
-extern void ProcessStackObject();
+extern void ProcessStackObj();
 
 /* GC/ioa.c */
 extern void IOAGc();
