@@ -482,6 +482,9 @@ static void DisplayStackPart( output, low, high, theComp)
   handle(Object) theCell;
   long retAddr=0;
   
+#ifdef RTDEBUG
+  fprintf(output, ">>> StackPart [0x%x..0x%x]\n", (int)low, (int)high);
+#endif
   while( current <= high ){
     retAddr=0;
     if( inBetaHeap( (ref(Object))(*current))){
@@ -660,6 +663,9 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
   /* If we are able to retrieve information about the current object
    * dump it.
    */
+#ifdef RTDEBUG
+  fprintf(output, ">>> Current object 0x%x\n", (int)theObj);
+#endif
   if( theObj != 0 ){
     if( isObject(theObj)){
       if (theObj!=cast(Object)ActiveComponent->Body)
