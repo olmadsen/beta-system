@@ -458,6 +458,34 @@ signed long host2inetAddr(char *host)
   return adr;
 }
 
+/* 
+ *  Find host by number. Takes IP-address in host-byteorder. 
+ *  Returns host name as string.
+ */
+char const *inetAddr2host(signed long addr)
+{
+  struct hostent *pHostInfo;
+  char const *hostname;
+
+  if (addr == 0x7f000001) {
+    hostname = "localhost";
+  } else {
+    struct in_addr inaddr;
+    inaddr.s_addr = htonl(addr);
+    pHostInfo = gethostbyaddr((const char *)(&inaddr), sizeof(inaddr), AF_INET);
+    if (pHostInfo) {
+      hostname = pHostInfo->h_name;
+    } else {
+#ifdef nti
+      ERRNO = WSAGetLastError();
+#endif
+      DEBUG_SOCKETS(fprintf(output,"(inetAddr2host failed, errno=%d)", errno));
+      return "";
+    }
+  }
+  return hostname;
+}
+
 
 /* 
  *  Get name of this host. (cached here.)

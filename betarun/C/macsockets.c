@@ -353,6 +353,24 @@ long host2inetAddr(char *host)
 	}
 }
 
+/*
+ *  Get name of host from IPv4 address
+ *  By EC, not tested
+ */
+char const *inetAddr2host(signed int addr)
+{
+	OSStatus 				status;
+	static InetDomainName 	name;
+	DEBUG_SOCKETS(printf("inetAddr2host\n"));
+	
+	status = InitializeServices();
+	if (status == kOTNoError) {
+		status = OTInetAddressToName(gServices, addr, name);
+		return name;
+	}
+	return "";
+}
+
 /* 
  *  Get name of this host. (cached here.)
  */
