@@ -9,6 +9,9 @@
 
 #include <stdio.h>
 #include <string.h>
+#ifdef nti_gnu
+# include "winnt.h"
+#endif
 
 FILE *fd;       /* The file descriptor from which the nameTable is read */
 int NextAddress;     /* The last address read from the fd. */

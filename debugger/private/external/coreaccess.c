@@ -250,6 +250,7 @@ int SendSIGINT (pid_t pid)
 
 #if defined(nti)
 
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 

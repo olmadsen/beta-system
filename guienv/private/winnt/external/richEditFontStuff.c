@@ -1,13 +1,17 @@
 #include <stdio.h>
 #include <windows.h>
 #include <windowsx.h>
-#include <shellapi.h>
+#ifndef nti_gnu
+# include <shellapi.h>
+#endif
 #ifdef nti_ms
 # include <ole2.h>
 # include <richedit.h>
 # include <richole.h>
 #else
-# include <commctrl.h>
+# ifndef nti_gnu
+#  include <commctrl.h>
+# endif
 #endif
 
 #ifdef nti_bor

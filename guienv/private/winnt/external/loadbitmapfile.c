@@ -4,6 +4,15 @@
 #include <stdlib.h>
 #include "loadbitmapfile.h"
 
+#ifdef nti_gnu /* These are missing from the GNU include-files currently! */
+ typedef BITMAPFILEHEADER FAR *LPBITMAPFILEHEADER;
+ typedef BITMAPCOREHEADER FAR *LPBITMAPCOREHEADER;
+#endif
+
+HBITMAP BitmapFromDib (HANDLE );
+HANDLE ReadDibBitmapInfo (HFILE);
+BOOL DibInfo (HANDLE,LPBITMAPINFOHEADER);
+
 HBRUSH myCreatePatternBrush (HBITMAP hBitmap)
 {
   return CreatePatternBrush(hBitmap);
@@ -12,7 +21,7 @@ HBRUSH myCreatePatternBrush (HBITMAP hBitmap)
 HBITMAP getGray(HDC hdcLocal)
 {
   HANDLE hloc;
-  PBITMAPINFO pbmi;
+  LPBITMAPINFO pbmi;
   HBITMAP hbm;
   
   BYTE aBits[] = {   0x00, 0x00, 0x00, 0x00,    /* bottom row */
@@ -30,7 +39,7 @@ HBITMAP getGray(HDC hdcLocal)
   
   hloc = LocalAlloc(LMEM_ZEROINIT | LMEM_MOVEABLE,
 		    sizeof(BITMAPINFOHEADER) + (sizeof(RGBQUAD) * 2));
-  pbmi = (PBITMAPINFO) LocalLock(hloc);
+  pbmi = (LPBITMAPINFO) LocalLock(hloc);
   
   pbmi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
   pbmi->bmiHeader.biWidth = 8;
@@ -53,7 +62,7 @@ HBITMAP getGray(HDC hdcLocal)
 HBITMAP getLightGray(HDC hdcLocal)
 {
   HANDLE hloc;
-  PBITMAPINFO pbmi;
+  LPBITMAPINFO pbmi;
   HBITMAP hbm;
   
   BYTE aBits[] = {   0x00, 0x00, 0x00, 0x00,    /* bottom row */
@@ -71,7 +80,7 @@ HBITMAP getLightGray(HDC hdcLocal)
   
   hloc = LocalAlloc(LMEM_ZEROINIT | LMEM_MOVEABLE,
 		    sizeof(BITMAPINFOHEADER) + (sizeof(RGBQUAD) * 2));
-  pbmi = (PBITMAPINFO) LocalLock(hloc);
+  pbmi = (LPBITMAPINFO) LocalLock(hloc);
   
   pbmi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
   pbmi->bmiHeader.biWidth = 8;
@@ -96,7 +105,7 @@ HBITMAP getLightGray(HDC hdcLocal)
 HBITMAP getDarkGray(HDC hdcLocal)
 {
   HANDLE hloc;
-  PBITMAPINFO pbmi;
+  LPBITMAPINFO pbmi;
   HBITMAP hbm;
   
   BYTE aBits[] = {   0x00, 0x00, 0x00, 0x00,    /* bottom row */
@@ -114,7 +123,7 @@ HBITMAP getDarkGray(HDC hdcLocal)
   
   hloc = LocalAlloc(LMEM_ZEROINIT | LMEM_MOVEABLE,
 		    sizeof(BITMAPINFOHEADER) + (sizeof(RGBQUAD) * 2));
-  pbmi = (PBITMAPINFO) LocalLock(hloc);
+  pbmi = (LPBITMAPINFO) LocalLock(hloc);
   
   pbmi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
   pbmi->bmiHeader.biWidth = 8;
@@ -138,7 +147,7 @@ HBITMAP getDarkGray(HDC hdcLocal)
 HBITMAP getWhite(HDC hdcLocal)
 {
   HANDLE hloc;
-  PBITMAPINFO pbmi;
+  LPBITMAPINFO pbmi;
   HBITMAP hbm;
   
   BYTE aBits[] = {   0x00, 0x00, 0x00, 0x00,    /* bottom row */
@@ -156,7 +165,7 @@ HBITMAP getWhite(HDC hdcLocal)
   
   hloc = LocalAlloc(LMEM_ZEROINIT | LMEM_MOVEABLE,
 		    sizeof(BITMAPINFOHEADER) + (sizeof(RGBQUAD) * 2));
-  pbmi = (PBITMAPINFO) LocalLock(hloc);
+  pbmi = (LPBITMAPINFO) LocalLock(hloc);
   
   pbmi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
   pbmi->bmiHeader.biWidth = 8;
@@ -180,7 +189,7 @@ HBITMAP getWhite(HDC hdcLocal)
 HBITMAP getBlack(HDC hdcLocal)
 {
   HANDLE hloc;
-  PBITMAPINFO pbmi;
+  LPBITMAPINFO pbmi;
   HBITMAP hbm;
   
   BYTE aBits[] = {   0x00, 0x00, 0x00, 0x00,    /* bottom row */
@@ -198,7 +207,7 @@ HBITMAP getBlack(HDC hdcLocal)
   
   hloc = LocalAlloc(LMEM_ZEROINIT | LMEM_MOVEABLE,
 		    sizeof(BITMAPINFOHEADER) + (sizeof(RGBQUAD) * 2));
-  pbmi = (PBITMAPINFO) LocalLock(hloc);
+  pbmi = (LPBITMAPINFO) LocalLock(hloc);
   
   pbmi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
   pbmi->bmiHeader.biWidth = 8;
@@ -220,10 +229,6 @@ HBITMAP getBlack(HDC hdcLocal)
   return hbm;
   
 }
-
-HBITMAP BitmapFromDib (HANDLE );
-HANDLE ReadDibBitmapInfo (HFILE);
-BOOL DibInfo (HANDLE,LPBITMAPINFOHEADER);
 
 
 /* Usage:
@@ -253,7 +258,9 @@ BOOL DibInfo (HANDLE,LPBITMAPINFOHEADER);
  * #)
  *
  */
-VOID ReadBitMapFileHeaderandConvertToDwordAlign(HFILE fh, LPBITMAPFILEHEADER pbf, LPDWORD lpdwoff)
+void ReadBitMapFileHeaderandConvertToDwordAlign(
+						HFILE fh, 
+						LPBITMAPFILEHEADER pbf, LPDWORD lpdwoff)
 {
         DWORD off;
 

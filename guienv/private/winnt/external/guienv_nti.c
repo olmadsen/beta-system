@@ -1,6 +1,11 @@
 #include <windows.h>
 #include <stdio.h>
 
+#ifdef nti_gnu /* These are missing from the GNU include-files currently! */
+  typedef MINMAXINFO FAR *LPMINMAXINFO;
+  typedef HANDLE GLOBALHANDLE;
+#endif
+
 UINT getOsVersionId()
 {
   OSVERSIONINFO osverinf;
