@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: PerformGC.c,v $, rel: %R%, date: $Date: 1992-08-19 15:45:15 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: PerformGC.c,v $, rel: %R%, date: $Date: 1992-08-27 15:50:32 $, SID: $Revision: 1.5 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -11,7 +11,7 @@
 
 void DoGC()
 {
-    GCable_Entry
+    GCable_Entry();
 
     StackEnd = StackPointer;
     IOAGc();

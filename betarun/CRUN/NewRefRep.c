@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: NewRefRep.c,v $, rel: %R%, date: $Date: 1992-08-22 02:08:46 $, SID: $Revision: 1.5 $
+ * Mod: $RCSfile: NewRefRep.c,v $, rel: %R%, date: $Date: 1992-08-27 15:49:26 $, SID: $Revision: 1.6 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -22,7 +22,7 @@ void CNewRR(int range,
 		int offset /* in ints */
 		)
 {
-    GCable_Entry
+    GCable_Entry();
 
     Ck(theObj);
     CAlloRR(theObj, offset*4, range); /* MP MP MP MP!!! */
