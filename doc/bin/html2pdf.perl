@@ -21,7 +21,10 @@
 
 ### main #######
 
-open SEQUENCE, "sequence" || die "Cannot open \"sequence\" file: !$\n";
+$sequence_file = "sequence";
+if ($#ARGV == 0){ $sequence_file = $ARGV[0] };
+
+open SEQUENCE, $sequence_file || die "Cannot open \"$sequence_file\" file: !$\n";
 push @sequence, "title.html";
 while (<SEQUENCE>){
     chomp;
