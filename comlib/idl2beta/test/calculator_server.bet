@@ -2,6 +2,37 @@ ORIGIN 'Deep_Thought';
 INCLUDE '~beta/basiclib/numberio';
 INCLUDE '~beta/win32lib/winerror';
 --LIB: attributes--
+BetaCoCreateInstance:
+  (# theclsid: ^CLSID; 
+     outer: ^IUnknown;
+     flags: @int32;
+     hr: @HRESULT;
+     theiid: ^IID;
+     pUnknown: ^IUnknown;
+     theCalc: ^Calc;
+     ppvObject: @IUnknownHolder;
+     aguid: @GUID;
+  enter (theclsid[], outer[], flags, theiid[])
+  do (if outer[]=NONE then
+         'outer NONE, fine.'->screen.putLine;
+         Calc_CLSID -> aguid;
+         (if theclsid[] -> aguid.equal then
+             'classid matched, fine.'->screen.putLine;
+             &Calc[] ->theCalc[];
+             (theiid[], ppvObject[]) -> theCalc.QueryIF -> hr;
+             'QueryIF completed with hr='->screen.putText; 
+             hr.value->screen.putInt; screen.newLine;
+             (if hr.succeeded then
+                 'iid matched, fine.'->screen.putLine;
+                 ppvobject -> pUnknown[]
+             if)
+         if)
+      else
+         (* aggregation not handled yet? *)
+     if)
+  exit pUnknown[]
+  #);
+
 Calc: 
   (# Unknown_IID: ^IID;
      Calc_IID: ^IID;
@@ -11,11 +42,12 @@ Calc:
      ncalc2: @integer;
      nhello: @integer;
      
-     QueryIF:
-       (# result: @int32;
-          riid: ^IID; 
-          ppvObject: ^IUnknownHolder; 
-       enter (riid[], ppvObject[])
+     theCalc: ^CalcImpl;
+     theCalc2: ^Calc2Impl;
+     theHello: ^HelloImpl;
+     
+     init: (*Probably belongs in classfactory *)
+       (# 
        do (if Unknown_IID[]=NONE then
               &IID[] -> Unknown_IID[];
               IUnknown_IID -> Unknown_IID;
@@ -32,32 +64,69 @@ Calc:
               &IID[] -> Hello_IID[];
               IHello_IID -> Hello_IID;
           if);
+       #);
+          
+     QueryIF:
+       (# result: @int32;
+          riid: ^IID; 
+          ppvObject: ^IUnknownHolder; 
+       enter (riid[], ppvObject[])
+       do init;
+          'QueryIF init done'->screen.putLine;
+          Hello_IID -> screen.putLine;
+          'QueryIF iid-print done 1'->screen.putLine;
+          riid -> screen.putLine;
+          'QueryIF iid-print done 2'->screen.putLine;
+          
           (if true 
            // riid[] -> Unknown_IID.equal then
-              CCalc[] -> ppvObject;
+              (if theCalc[]=NONE then
+                  &CalcImpl[] -> theCalc[]
+              if);
+              theCalc[] -> ppvObject;
            // riid[] -> Calc_IID.equal then
-              CCalc[] -> ppvObject;
-           // riid[] -> Calc2_IID.equal then
-              CCalc2 -> ppvObject;
+              'QueryIF matches Calc_IID'->screen.putLine;
+              (if theCalc[]=NONE then
+                  &CalcImpl[] -> theCalc[]
+              if);
+              'QueryIF instantiated CalcImpl'->screen.putLine;
+              theCalc[] -> ppvObject;
+              'QueryIF assigned to holder'->screen.putLine;
            // riid[] -> Hello_IID.equal then
-              CHello -> ppvObject;
+              'QueryIF matches Hello_IID'->screen.putLine;
+              (if theHello[]=NONE then
+                  &HelloImpl[] -> theHello[];
+              if);
+              'QueryIF instantiated HelloImpl'->screen.putLine;
+              theHello[] -> ppvObject;
+              'QueryIF assigned to holder'->screen.putLine;
+           // riid[] -> Calc2_IID.equal then
+              (if theCalc2[]=NONE then
+                  &Calc2Impl[] -> theCalc2[]
+              if);
+              theCalc2[] -> ppvObject;
            else
+              'QueryIF: no Matching interface'->screen.putLine;
               NONE -> ppvObject;
               E_NOINTERFACE -> result;
-              leave QueryInterface;
+              leave QueryIF;
           if);
           S_OK -> result;
-          ppvObject.ref.AddRef;
+          'QueryIF result S_OK'->screen.putLine;
+          (# dummy: @Char; 
+          do ppvObject.ref.AddRef;
+          #);
+          'QueryIF addRef done'->screen.putLine;
        exit result
        #);
      
-     CCalc: @ICalc
+     CalcImpl: ICalc
        (# QueryInterface::
             (# 
             do (riid[], ppvObject[]) -> QueryIF -> result;
             #);
           AddRef::
-            (# 
+            (#
             do ncalc+1 -> ncalc;
                ncalc -> result;
             #);
@@ -66,6 +135,7 @@ Calc:
             do ncalc-1 -> ncalc;
                (if ncalc=0 then
                    (* Could do some deallocation here *)
+                   NONE -> theCalc[]; (* maybe? *)
                if);
                ncalc -> result;
             #);
@@ -95,7 +165,7 @@ Calc:
             #);
        #);
      
-     CCalc2: @ICalc2
+     Calc2Impl: ICalc2
        (# QueryInterface::
             (# 
             #);
@@ -110,7 +180,7 @@ Calc:
             #);
        #);
      
-     CHello: @IHello
+     HelloImpl: IHello
        (# QueryInterface::
             (# 
             #);
@@ -129,7 +199,7 @@ Calc:
 
 Conv: 
   (# 
-     CConv: @IConv
+     ConvImpl: IConv
        (# QueryInterface::
             (# 
             #);
