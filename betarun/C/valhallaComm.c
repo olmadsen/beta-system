@@ -314,6 +314,8 @@ void printOpCode (int opcode)
     fprintf (output,"VOP_LOOKUP_ADDRESS"); break;
   case VOP_MAIN_PHYSICAL:
     fprintf (output,"VOP_MAIN_PHYSICAL"); break;
+  case VOP_HEAPINFO:
+    fprintf (output,"VOP_HEAPINFO"); break;
   case VOP_EXT_HEAPINFO:
     fprintf (output,"VOP_EXT_HEAPINFO"); break;
   case VOP_SCANHEAPS:
@@ -451,6 +453,16 @@ void HandleStackCell(long returnAdr, Object *returnObj)
 /* Used by VOP_SCANSTACK */
 {
   DEBUG_VALHALLA (fprintf(output,"debuggee: forEachStackEntry \n"));  
+  if (GETPROTO(returnObj)==DopartObjectPTValue){
+    /* Fetch the real object */
+    DEBUG_VALHALLA({
+      fprintf(output,
+            "debuggee: forEachStackEntry: fetching Origin 0x%x from DoPartObject 0x%x\n",
+	      (int)((DopartObject *)returnObj)->Origin,
+	      (int)returnObj);
+    });
+    returnObj = ((DopartObject *)returnObj)->Origin;
+  }
   valhalla_writeint ((int)returnAdr);
   valhalla_writeint ((int)returnObj);
   DEBUG_VALHALLA({
@@ -1044,6 +1056,20 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       valhalla_socket_flush();
     }
     break;    
+    case VOP_HEAPINFO: {
+      int infoID;
+      int result;
+      infoID=valhalla_readint();
+      result=getHeapInfo(infoID);
+      DEBUG_VALHALLA(fprintf(output,
+			     "VOP_HEAPINFO(%d)=0x%x",
+			     infoID,
+			     result));
+
+      valhalla_writeint(result);
+      valhalla_socket_flush ();
+    }
+    break;
 
     case VOP_EXT_HEAPINFO: {
       /* FIXME: Extend this with information on IOA and CBFA */
