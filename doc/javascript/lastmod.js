@@ -27,9 +27,9 @@ if (lastmodnumber == 0) {
     // Cannot parse date header correctly
 } else {
   if (isNaN(lastmodnumber)){
-    document.writeln("<NOBR><FONT size=\"-1\">"
+    document.writeln("<FONT size=\"-1\">"
 		     + "[Modified: " + document.lastModified + "]"
-		     + "</FONT></NOBR>"
+		     + "</FONT>"
 		     );
   } else {
     if (lastmod.getMinutes()<10) 
@@ -70,7 +70,7 @@ if (lastmodnumber == 0) {
       year = "0" + year;
     }
  	      
-    document.writeln("<NOBR><FONT size=\"-1\">"
+    document.writeln("<FONT size=\"-1\">"
 		     + "[Modified: " 
 		     + day_names[lastmod.getDay()] 
 		     + " " 
@@ -82,7 +82,7 @@ if (lastmodnumber == 0) {
 		     + " at " 
 		     + hours + ":" + minutes
 		     + "]"
-		     + "</FONT></NOBR>"
+		     + "</FONT>"
 		     );
   }
 }
