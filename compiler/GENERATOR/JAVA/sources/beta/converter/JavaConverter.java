@@ -348,7 +348,7 @@ class JavaConverter
 	if (name.equals("void")){
 	    return null;
 	} else if (name.equals("byte")){
-	    return "@char";
+	    return "@int8";
 	} else if (name.startsWith("[")){
 	    return mapInternalType(name, doIncludes);
 	} else if (name.equals("short")){
