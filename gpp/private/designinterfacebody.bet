@@ -70,10 +70,15 @@ do
                 (if diagFile.entry.path.head->dirWriteable then
                     true->dirIsWriteable;
                     (if diagFile.entry.exists then
-                        'mv %s %s\n'
-                          ->putformat
+                        17
+                          ->trace
                             (# 
-                            do diagFile.name->s; tildeDiagFile.name->s
+                            do
+                               'mv %s %s\n'
+                                 ->t.putformat
+                                   (# 
+                                   do diagFile.name->s; tildeDiagFile.name->s
+                                   #)
                             #);
                         (tildeDiagFile.name,diagFile[])
                           ->myrename
@@ -126,7 +131,10 @@ do
                         currentDiagramName->prependCurrentPath->diagFile.name;
                         '#'->((diagFile.name).copy).append->f.name;
                         (if f.entry.exists then
-                            'rm '->puttext; f.name->putline; f.delete
+                            17
+                              ->trace
+                                (#  do 'rm '->puttext; f.name->putline #);
+                            f.delete
                         if);
                         (if doQuit then (normal,' ')->stop if)
                      else
@@ -212,6 +220,8 @@ do
                                  (if not didRecover then
                                      name->removeExtension->name;
                                      doOpenFragmentGroup
+                                  else
+                                     name->openDiagram
                                  if)
                               else
                                  doOpenDiagram
@@ -286,6 +296,8 @@ do
                                      (if not didRecover then
                                          name->removeExtension->name;
                                          doOpenFragmentGroup
+                                      else
+                                         name->openDiagram
                                      if)
                                   else
                                      doOpenDiagram
@@ -459,13 +471,23 @@ do
                       &theOADDocument.ObjectPage[]
                         ->theOADDocument.theObjectPage[]->thePage[]
                    else
-                      &theOADDocument.Page[]->thePage[]
+                      &theOADDocument.Page
+                        (#
+                           onInit:: 
+                             (#  do theWindow[]->sifInsertInWindowsMenu #)
+                        #)[]->thePage[]
                   if)
                else
-                  &theOADDocument.Page[]->thePage[]
+                  &theOADDocument.Page
+                    (#
+                       onInit:: 
+                         (#  do theWindow[]->sifInsertInWindowsMenu #)
+                    #)[]->thePage[]
               if);
               pages[i]->thePage.onInit;
               thePage.onReadDiagram;
+              thePage[]-> (* to force menuBar update *) theDocument.currentPage;
+              true->menuBar.update;
               
             for);
             (if (theOADDocument.theWorkPage[] <> none ) and
@@ -700,6 +722,60 @@ do
    if);
    theDocument.close
 #)  
+
+-- loadGraphicsPages: DoPart --
+do
+   (if filename[] <> none then
+       thisOp:
+         (# pages,existingPages: [0] @integer; thePage: ^theDocument.Page
+         do
+            (if theDocument[] = none then
+                &OADDocument[]->theDocument[]->theOADDocument[];
+                theDocument.new;
+                theDocument.currentPage->theOADDocument.theGroupPage[];
+                'Group Window'->theOADDocument.theGroupPage.pageTitle;
+                &theOADDocument.OADPage[]->theOADDocument.theWorkPage[];
+                theOADDocument.theWorkPage.InvisibleNew;
+                'WorkSheet'->theOADDocument.theWorkPage.PageTitle
+            if);
+            true->theOADDocument.gppProp.loadingGraphicsPages;
+            theDocument.getPageList->existingPages;
+            filename[]
+              ->FileLoadPage
+                (#
+                   error:: 
+                     (# 
+                     do
+                        true->continue;
+                        'File exception: Could not load pages'->alertUser;
+                        leave thisOp
+                     #)
+                #)->pages;
+            (for k: pages.range repeat
+              pageInit:
+                (# pageTitle: @text
+                do
+                   (for j: existingPages.range repeat
+                     (if pages[k] = existingPages[j] then leave pageInit if)
+                   for);
+                   &theDocument.Page
+                     (#
+                        onInit:: 
+                          (#  do theWindow[]->sifInsertInWindowsMenu #)
+                     #)[]->thePage[];
+                   pages[k]->thePage.onInit;
+                   thePage.PageTitle->pageTitle;
+                   ' (Graphics) '->pageTitle.append;
+                   pageTitle->thePage.pageTitle;
+                   thePage.onReadDiagram;
+                   (pages[k],10)->theDocument.deleteUserDataType;
+                   (* delete userdata to convert from possible OADPage to graphics page *)
+                   thePage[]->theDocument.currentPage
+                #)
+            for);
+            false->theOADDocument.gppProp.loadingGraphicsPages
+         #)
+   if)  
 
 -- SaveLists: Descriptor --
 (#
@@ -1468,11 +1544,9 @@ do
     // true then
        'Opening: '->mess.puttext;
        name[]->mess.puttext;
-       mess[]
-         ->putLine
-         (*
-          * mess->statusbar.set; 
-          *)
+       mess[]->putLine (*
+                        * mess->statusbar.set; 
+                        *)
    if);
    mps.astFileExtension->(name.copy).append->help[];
    help->prependCurrentPath->groupFile.name;
