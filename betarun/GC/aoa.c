@@ -209,7 +209,7 @@ void AOAGc()
        */
       while ((long *)pointer > AOArootsPtr) {
 	  pointer--;
-	  if((long)*pointer & 1) {
+	  if(!isLazyRef(*pointer) && ((long)*pointer & 1)) {
 	      (long)*pointer &= ~1; /* clear tag bit in table */
 	      **pointer |= 1;       /* set it in stackobject */
 	  }
@@ -480,7 +480,7 @@ static void Phase1()
     while (pointer > AOArootsPtr){
 #ifdef hppa
       /* See below... */
-      if(*((long *)*(pointer-1)) & 1) {
+      if(!isLazyRef(*((long *)*(pointer-1))) && (*((long *)*(pointer-1)) & 1)) {
 	*((long *)*(pointer-1)) &= ~1; /* clear tag bit */
 	*(pointer-1) |= 1;                 /* set it in table */
       }
@@ -504,7 +504,7 @@ static void Phase1()
      * the pointers in the AOAroots table. They are restored just
      * before the AOAGc finishes in AOAGc().
      */
-    if(*((long *)*pointer) & 1) {
+    if(!isLazyRef(*((long *)*pointer)) && (*((long *)*pointer) & 1)) {
       *((long *)*pointer) &= ~1; /* clear tag bit in stackobject */
       *pointer |= 1;         /* set it in table */
     }
