@@ -325,6 +325,7 @@ e-mail: support@mjolner.dk"
     
     IOAActive = FALSE;
     
+    /* Determine new tenuring threshold */
     {
       long limit = areaSize(IOA,IOALimit) / 10;long sum = 0;
       

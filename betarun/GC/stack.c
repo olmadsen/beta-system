@@ -19,6 +19,12 @@
 /* #include <sys/cache.h> */
 #endif
 
+/* Traverse an stack parts and process all references.
+ * Don't process references from the stack to LVRA. The ValReps in
+ * in LVRA are not moved by CopyObject, but if ProcessReference
+ * is called with such a reference, the LVRA cycle is broken!
+ */
+
 #ifdef hppa
 /***************************** SNAKE ****************************/
 
