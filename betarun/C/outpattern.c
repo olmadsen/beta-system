@@ -43,7 +43,11 @@ static long M_Part(ref(ProtoType) proto)
 #ifdef hppa
   extern void Return() asm("Return");
 #else
+#ifdef nti
+  extern long *Return;
+#else
   extern long *Return asm("Return");
+#endif
 #endif
 #endif
   long *m;
