@@ -36,8 +36,10 @@ static void NotifySignalDuringDump(int sig)
 
 /* FIXME: The SaveXXXRegisters and RestoreXXXRegisters functions
  * may easily be abstracted into a general set of two functions
- * SaveGCRegisters/RestoreGCRegisters using appropriate defines from
+ * SaveTrapRegisters/RestoreTrapRegisters using appropriate defines from
  * registers.h like REG_A1, REG_A1_TXT, Reg_D0, ... (not yet there)
+ * See http://www.daimi.au.dk/~beta/doc/betarun/internal/trapcallbacks.html
+ * for details.
  */
 
 #ifdef intel
