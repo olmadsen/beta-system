@@ -6,6 +6,37 @@
 
 #include "beta.h"
 
+static long M_Part(ref(ProtoType) proto)
+/* Return the address og of the M-entry for the prototype proto.
+ * Use the fact, that if the corresponding object has a do part, 
+ * then above the prototype, the INNER table can be used to find
+ * the M-entry:
+ *
+ *        long: Return
+ *        long: M-entry
+ *        long: M-entry of prefix
+ *        long: M-entry of prefix-prefix
+ *        ...
+ * proto: ...
+ *
+ * Should ONLY be called for a prototype which is known to correspond to 
+ * object with do-part.
+ */
+{
+  extern long Return asm("Return");
+  long *m;
+  long *r;
+
+  m = (long *)proto - 1;
+  r = m - 1;
+  while ( (*r != Return) && (r != 0) ){
+    /* r != 0 just to avoid segmentation fault if something is wrong */
+    m = r;
+    r = m - 1;
+  }
+  return *m;
+}
+
 static ptr(char) ProtoTypeName(theProto)
      ref(ProtoType) theProto;
 {
@@ -41,7 +72,8 @@ void DisplayObject(output,aObj,retAddress)
   ref(Item) aItem=0;
   ref(ProtoType) theProto=0;
   ref(ProtoType) activeProto=0;
-  long           activeDist;
+  long           activeDist=0;
+  long           gDist=0, mDist=0;
   ref(Object)    staticObj;
   
   if( isSpecialProtoType(aObj->Proto) ){
@@ -109,6 +141,7 @@ void DisplayObject(output,aObj,retAddress)
     } 
   }else{    
     theProto = aObj->Proto;
+#ifdef OLDMETHOD
     /* Find the active prefix level based on the retAddress.
      * Here we use the fact, that the G-entry is placed just before
      * the M-entry. Thus the prefix we are in is the one, where
@@ -128,7 +161,40 @@ void DisplayObject(output,aObj,retAddress)
 	}
       }
     }
-    fprintf(output,"  item ");
+#else
+    /* Find the active prefix level based on the retAddress.
+     * Here we use both the G-entry and the M-entry. 
+     * The prefix we are in is the one, where the distance from the 
+     * G-entry or M-entry of the corresponding prefix-level
+     * to retAddress is smallest.
+     */
+    if( retAddress ){
+      long mPart = M_Part(theProto);
+
+      activeProto = theProto;
+      gDist  = (long) retAddress - (long) theProto->GenPart; 
+      mDist  = (long) retAddress - (long) mPart;
+
+      while(theProto->Prefix && 
+	    theProto->Prefix->Prefix != theProto->Prefix){
+	theProto = theProto->Prefix;
+        if(((long) retAddress - (long) theProto->GenPart > 0) &&
+	   ((long) retAddress - (long) theProto->GenPart < activeDist)){ 
+	  activeProto = theProto;
+	  activeDist  = gDist = (long) retAddress - (long) theProto->GenPart; 
+	}
+	if(((long) retAddress - (long) mPart > 0) &&
+	   ((long) retAddress - (long) mPart < (long) activeDist)){ 
+	  activeProto = theProto;
+	  activeDist  = mDist = (long) retAddress - (long) mPart; 
+	}
+      }
+    }
+#endif
+    if (activeDist == gDist)
+      fprintf(output,"  allocating item ");
+    else
+      fprintf(output,"  item ");
     /* Print chain of prefixes */
     theProto = aObj->Proto;
     if(theProto==activeProto || /* active prefix */
