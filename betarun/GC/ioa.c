@@ -405,14 +405,13 @@ Program terminated.\n", (int)(4*ReqObjectSize));
  *  stackobjects.
  */
 void DoIOACell(Object **theCell,Object *theObj)
-{
-    DEBUG_CODE(if (!CheckHeap) Ck(theObj));
-    
+{    
     if (!theObj) {
         return;
     }
     if(inBetaHeap(theObj)){
         if (isObject(theObj)) {
+	    DEBUG_CODE(if (!CheckHeap) Ck(theObj));
             ProcessReference(theCell);
             CompleteScavenging();
         } else {
