@@ -6,16 +6,21 @@
 #include <stdio.h>
 #include <time.h>
 #include <io.h>
-#ifdef nti_bor
-#include <utime.h>
-#else
+#if defined(nti_bor) || defined(nti_gnu)
+#  include <utime.h>
+#  ifdef nti_gnu
+#    define ENOTSAM EXDEV
+#  endif
+#else /* it is nti_ms */
 #include <sys/utime.h>
 #define S_IXUSR _S_IEXEC
 #define S_IWUSR _S_IWRITE
 #define S_IRUSR _S_IREAD
 #define S_IFBLK (-1) /* ??? */
 #define ENOTSAM EXDEV
+
 #endif
+
 
 #include <malloc.h>
 #include <windows.h>
@@ -221,10 +226,12 @@ int chownNtEntry(path, owner, group)
   return -1;
 }
 
-#define F_OK (00)
-#define X_OK (01)
-#define W_OK (02)
-#define R_OK (04)
+#ifndef nti_gnu
+# define F_OK (00)
+# define X_OK (01)
+# define W_OK (02)
+# define R_OK (04)
+#endif
 
 int entryExists(path, follow)
      char *path;

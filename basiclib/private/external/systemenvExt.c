@@ -50,7 +50,12 @@ void ExtsleepUntil(double due)
 # include <fcntl.h>
 # include <errno.h>
 # include <time.h>
-# include <winsock.h>
+# ifdef nti_gnu
+#   include <windows.h>
+#   include <Windows32/Sockets.h>
+# else
+#   include <winsock.h>
+# endif
 #else
 # include <sys/types.h>
 # include <sys/time.h>
@@ -77,6 +82,9 @@ double getTimeAsDouble(void)
 
 void sleepDouble(double period)
 {
+#ifndef FALSE
+# define FALSE 0
+#endif
   SleepEx((long)(1000*period),FALSE);
 }
 # define ioctl ioctlsocket

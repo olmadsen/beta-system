@@ -37,8 +37,10 @@
 #endif
 
 #ifndef sun
+#ifndef nti_gnu
 void *malloc();
 void free();
+#endif
 #endif
 
 #define null (void *) 0
