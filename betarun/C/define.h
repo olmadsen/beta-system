@@ -20,7 +20,6 @@
 #endif
 
 #ifdef sparc
-#define LIN     /* Include support for new Persistence system (void+mg). */
 #endif
 
 #define RTINFO  /* Include support for runtime info */
@@ -113,6 +112,25 @@
 #else 
 #define INLINE 
 #endif
+
+/******* Machinedep shorthands ********/
+#ifdef MAC
+#define MAC_CODE(code) code;
+#else
+#define MAC_CODE(code)
+#endif
+#ifdef PPCMAC
+#define PPCMAC_CODE(code) code;
+#else
+#define PPCMAC_CODE(code)
+#endif
+#ifdef SUN4S
+#define SUN4S_CODE(code) code;
+#else
+#define SUN4S_CODE(code)
+#endif
+
+
 
 /* FIXME:
  * In general copy of object to LVRA should be avoided: 
@@ -222,3 +240,10 @@
 #  define InfoS_LabB() 
 #  define InfoS_End()
 #endif
+
+
+#ifdef LIN
+#define REFERENCEACTIONARGS struct Object *obj, long offset, struct Object *target
+
+typedef void ()(REFERENCEACTIONARGS) referenceActionType;
+#endif /* LIN */
