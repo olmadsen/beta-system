@@ -332,7 +332,7 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 	   * Fetch the register number from the "cmpl $0,%reg" instruction.
            * This is the register containing the lazy or NONE reference. */ 
 	  
-#ifdef nti
+#ifdef nti_bor
 	  /*   The assembler generates this, regardless of which register:
 	   *        
 	   *   0000 83F800                cmpl    $0x0,%eax
@@ -341,7 +341,7 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 	   *   000a                    L1:  
 	   */
 	  regnum = (* (unsigned char *) (RefNonePC-9)) & 7;
-#else
+#else /* nti_ms or linux */
 	  /* Binary compiler generates this, regardless of which register:
 	   * 0:      testl  reg,reg    # register is in lower 3 bits of second byte
 	   * 2:      jg     L1
