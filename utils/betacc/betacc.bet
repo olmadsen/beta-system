@@ -1,0 +1,250 @@
+ORIGIN '~beta/basiclib/systemenv';
+INCLUDE '~beta/sysutils/envstring';
+INCLUDE '~beta/process/processmanager';
+INCLUDE '~beta/basiclib/file';
+INCLUDE '~beta/containers/list';
+
+--- SDKlib:attributes ---
+sdkType: 
+  (# assemblerVersion: @Integer;
+     executer:
+       (# src, dst, c, a: ^Text; 
+       enter (src[], dst[])
+       do &Text[]->c[];
+          &Text[]->a[];
+          INNER
+       exit (c[],a[]) #);
+     cc:< executer;
+     cpp:< executer;
+     as:< executer;
+     asText:<  (# T: ^Text; do INNER; exit T[] #);
+     fixPath:< (# T: ^Text; enter T[] do INNER #);
+  #);
+
+
+Borland: sdkType
+  (# bcc32: executer
+       (# 
+       do 'bcc32'->c.putText;
+          (if not theProgram.nodebug then '-v -y ' -> a.putText if);
+          ('-D', a[]) -> theProgram.defines.output;
+          '-O2 -a4 -DWIN32 -Dnti -Dnti_bor -Iexternal -c -o' -> a.putText;
+          dst[] -> a.putText; ' ' -> a.put; src[]-> a.putText
+       #);
+     cc::< bcc32;
+     cpp::< bcc32;
+     as::<
+       (# 
+       do 'tasm32'->c.putText;
+          (if not theProgram.nodebug then '-zd ' -> a.putText if);
+          ('-d', a[]) -> theProgram.defines.output;
+          '-w-res -t -m -ml -kh32768 ' -> a.putText;
+          src[]->a.putText; ','->a.put;dst[]->a.putText;
+       #);
+     asText::< (# do 'bor' -> t #);
+     fixPath::< (# do '/' -> T.findAll(# do ('\\',inx) -> T.inxPut #) #);
+  #);
+
+Microsoft: sdkType
+  (# cl: executer
+       (# 
+       do 'cl'->c.putText;
+          (if not theProgram.nodebug then '-Zd ' -> a.putText if);
+          ('-D', a[]) -> theProgram.defines.output;
+          '-nologo -O2 -Zp4 -DWIN32 -Dnti -Dnti_ms -Iexternal -c -Fo' 
+            -> a.putText;
+          dst[] -> a.putText; ' ' -> a.put; src[]-> a.putText
+       #);
+     cc::< cl;
+     cpp::< cl;
+     as::< 
+       (# 
+       do (if assemblerVersion=6 then
+              'ml'->c.putText;
+              (if not theProgram.nodebug then '-Zi ' -> a.putText if);
+              ('-D', a[]) -> theProgram.defines.output;
+              '-w -nologo -coff -Cp -c -Fo' -> a.putText;
+              dst[] -> a.putText; ' -Ta' -> a.putText;
+              src[]-> a.putText
+           else
+              'masm386' ->c.putText;
+              (if not theProgram.nodebug then '/Zd ' -> a.putText if);
+              '/t /Ml ' -> a.putText;
+              src[]->a.putText; ','->a.put;dst[]->a.putText
+           if)
+       #);
+     asText::< (# do 'ms' -> t #);
+     fixPath::< (# do '/' -> T.findAll(# do ('\\',inx) -> T.inxPut #) #);
+  #);
+
+Gnu: sdkType
+  (# cc::< (# 
+           do 'gcc' -> c.putText;
+              (if not theProgram.nodebug then '-g ' -> a.putText if);
+              ('-D', a[]) -> theProgram.defines.output;
+              '-O6 -DWIN32 -Dnti -Dnti_gnu -o ' -> a.putText;
+              dst[] -> a.putText; ' -c ' -> a.putText; src[]-> a.putText
+           #);
+     cpp::<(# 
+           do 'g++' -> c.putText;
+              (if not theProgram.nodebug then '-g ' -> a.putText if);
+              ('-D', a[]) -> theProgram.defines.output;
+              '-O6 -DWIN32 -Dnti -Dnti_gnu -o ' -> a.putText;
+              dst[] -> a.putText; ' -c ' -> a.putText; src[]-> a.putText
+           #);
+     as::< (# do 'as' -> c.putText #);
+     asText::< (# do 'gnu' -> t #);
+     fixPath::< (# do '\\' -> T.findAll(# do ('/',inx) -> T.inxPut #) #);
+  #);
+
+--- program:descriptor ---
+systemenv
+(# <<SLOT SDKlib:attributes>>;
+   SDK: ^sdkType;
+   sdktext,asmtext,tmptext: ^Text;
+   src,dst: ^Text;
+   cmd,arg: ^Text;
+   defines: @list
+     (# element::text;
+        output:
+          (# prefix: ^text; out: ^stream;
+          enter (prefix[], out[])
+          do scan
+             (# 
+             do prefix[] -> out.putText;
+                current[] -> out.putText;
+                ' '->out.put;
+             #);
+          #);
+     #);
+   waitingfordefine,verbose,nodebug: @boolean;
+   startoffilenames: @integer;
+   run: @Process;
+   sf,df: @DiskEntry;
+   
+   usage:
+     (# 
+     do 'Usage: betacc [ -v ] [ -d ] [ -D symbol ] outputfile sourcefile'
+          -> putline;
+        '  -v          Verbose: echo commands before executing them.' -> putline;
+        '  -d          Do not produce debug info in outputfile' -> putline;
+        '  -D symbol   Pass symbol to preprocessor' -> putline;
+        (failure, 'betacc terminated.') -> stop;
+     #);        
+   
+do '$(SDK)' -> &expandEnvVar(# defaultValue::<
+                                 (# Type: ^Text;
+                                 do machine_type->Type[];
+                                    (if true
+                                     // 'nti'->Type.equal
+                                     // 'nti_ms'->Type.equal then
+                                        'ms' -> envvarvalue[] 
+                                     // 'nti_gnu'->Type.equal then
+                                        'gnu' -> envvarvalue[] 
+                                     // 'nti_bor'->Type.equal then
+                                        'bor' -> envvarvalue[] 
+                                    if)
+                                 #);
+                            #) -> sdktext[];
+   (if true
+    // 'ms' -> sdktext.equalNCS then &Microsoft[] -> SDK[];
+    // 'bor' -> sdktext.equalNCS then &Borland[] -> SDK[];
+    // 'gnu' -> sdktext.equalNCS then &Gnu[] -> SDK[];
+    else
+       (failure, 'betacc: Error: Unknown SDK.') -> stop;
+   if);       
+   
+   '$(asm_version)' -> &expandEnvVar
+   (# defaultValue::<
+        (# 
+        do (if true
+            // 'ms' -> sdktext.equalNCS then '6' -> envvarvalue[];
+            // 'bor' -> sdktext.equalNCS then '4' -> envvarvalue[];
+            // 'gnu' -> sdktext.equalNCS then '1' -> envvarvalue[];
+           if)
+        #)
+   #) -> asmtext[];
+   
+   asmtext.reset;
+   asmtext.getInt -> SDK.assemblerversion;
+   
+   (* Parse arguments *)
+   (if noOfArguments < 3 then usage if);
+   2->startoffilenames;
+   (for i:NoOfArguments repeat
+        (if i>1 then (* argument 1 is program name *)
+            i->Arguments->arg[];
+            (if true
+             // waitingfordefine then
+                arg.copy -> defines.append;
+                false->waitingfordefine;
+                startoffilenames+1 -> startoffilenames;
+             // '-d'->arg.equal then 
+                true->nodebug;
+                startoffilenames+1 -> startoffilenames;
+             // '-v' ->arg.equal then 
+                true->verbose;
+                startoffilenames+1 -> startoffilenames;
+             // '-D'->arg.equal then
+                true->waitingfordefine;
+                startoffilenames+1 -> startoffilenames;
+            if);
+        if);
+   for);
+   (if waitingfordefine then usage if);
+   (if startoffilenames+1 <> NoOfArguments then usage if);
+   startoffilenames   -> arguments -> dst[] -> &sdk.fixPath;
+   startoffilenames+1 -> arguments -> src[] -> &sdk.fixPath;
+   
+   src[] -> sf.path;
+   dst[] -> df.path;
+   
+   (if not sf.isFile then
+       (failure, 'Sourcefile does not exist') -> stop;
+   if);
+   sf.path.name.extension -> tmptext[];
+   (if tmptext[]=NONE then
+       (failure, 'No source file extension??') -> stop;
+   if);
+   (if true
+       // 'c' -> tmptext.equalNCS then 
+       (src[],dst[]) -> &SDK.cc -> (cmd[], arg[]);
+       // 'cpp' -> tmptext.equalNCS then 
+       (src[],dst[]) -> &SDK.cpp -> (cmd[], arg[]);
+       // 'asm' -> tmptext.equalNCS then 
+       (src[],dst[]) -> &SDK.as -> (cmd[], arg[]);
+    else
+       (failure, 'Unknown source file extension??') -> stop;
+   if);
+   
+   cmd[] -> run.init;
+   (if verbose then
+       cmd[] -> puttext; ' '->put; arg[] -> putline;
+   if);
+   
+   arg.reset;
+   L: (# 
+      do arg.getAtom -> tmptext[];
+         (if not tmptext.empty then 
+             tmptext[] -> run.argument.append;
+             restart L
+         if);
+      #);
+   
+   run.start;
+   run.awaitStopped;   
+   
+   (* Check if the command completed correctly by checking 
+    * that the target-file really exist now. 
+    *)
+   (if not df.exists then
+       (failure, 
+       'outputfile does not exist. (external compilation failed)')
+         -> stop;
+   if);
+   (if df.modtime <= sf.modtime then
+       (failure, 
+       'outputfile is older than sourcefile. (external compilation failed)') 
+         -> stop;
+   if);
+#)
