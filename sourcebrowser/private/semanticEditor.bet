@@ -1,7 +1,6 @@
 ORIGIN  '../ymer';
 
 INCLUDE '~beta/guienv/v1.3.1/fields';
-INCLUDE '~beta/guienv/v1.3.1/stddialogs';
 INCLUDE '~beta/guienv/v1.3.1/utils/listview';
 
 INCLUDE '~beta/guienv/v1.3.1/utils/pane';
@@ -12,24 +11,45 @@ INCLUDE '~beta/basiclib/v1.4/file';
 
 INCLUDE '~beta/objectbrowser/v2.0/UI/obguienvadds';
 INCLUDE '~beta/objectbrowser/v2.0/UI/labelled';
+(*
+ * COPYRIGHT
+ *   Copyright Mjolner Informatics, 1995-96
+ *   All rights reserved.
+ *)
 
 --- browserlib: attributes ---
 semanticBrowser: ymerLocalWindow
   (# clear: contents.clear(# #);
      fg: ^mps.AST.fragmentGroup;
      fgName: ^text;
+     isWarning: 
+       (* findes i mps/v5.0 - blot her for at
+        * kunne filtrere warnings fra allerede i
+        * v4.9.1 - skal fjernes senere
+        *)
+       (# no: @integer; boo: @boolean
+       enter no
+       do
+          (if no
+           //24//25//86//95//97//99//106//109
+           //26 (*not used *) then
+              true->boo
+          if)
+       exit boo
+       #);
+     includeWarnings: @boolean;
      noErrors: @boolean;
      aspect:< integerValue (#  do 6->value; INNER #);
      contents: @contentsType;
      contentsType:< pane
        (# clear:
-            (# do FFlist.clear; ErrorsList.clear #);
+            (# do FFlist.clear; errorsList.clear #);
           dobind:<
             (# 
             do
                TRUE->bindTop->bindLeft->bindRight->bindBottom;
                FFlist.dobind;
-               ErrorsList.dobind;
+               errorsList.dobind;
                INNER dobind
             #);
           onNewFragmentGroup:<
@@ -87,7 +107,7 @@ semanticBrowser: ymerLocalWindow
                               (if fi[]<>current[] then
                                   fi[]->current[];
                                   (ff[],name)->onNewFragmentGroup;
-                                  ff[]->ErrorsList.contents.registerSemanticErrors;
+                                  ff[]->errorsList.contents.registerSemanticErrors
                               if)
                            #);
                          
@@ -116,23 +136,43 @@ semanticBrowser: ymerLocalWindow
                                            l: exp.suffixWalk
                                              (# t: ^text
                                              do
-                                                (if current.hasSemanticError
-                                                    then
-                                                    &fgItem[]->fi[];
-                                                    fi.init;
-                                                    ff[]->fi.ff[];
-                                                    fgName.copy->t[];
-                                                    '-'->t.append;
-                                                    ff.name->t.append;
-                                                    t[]->fi.name;
-                                                    leave l
+                                                (if current.hasSemanticError then
+                                                    (if (current.semanticError->isWarning) then
+                                                        (if includeWarnings then
+                                                            &fgItem[]->fi[];
+                                                            fi.init;
+                                                            ff[]->fi.ff[];
+                                                            fgName.copy->t[];
+                                                            '-'->t.append;
+                                                            ff.name->t.append;
+                                                            t[]->fi.name;
+                                                            leave l
+                                                        if)
+                                                     else
+                                                       &fgItem[]->fi[];
+                                                       fi.init;
+                                                       ff[]->fi.ff[];
+                                                       fgName.copy->t[];
+                                                       '-'->t.append;
+                                                       ff.name->t.append;
+                                                       t[]->fi.name;
+                                                       leave l
+                                                    if)
                                                 if)
                                              #)
                                        if)
                                     #)
                                 if)
                              #);
-                             (if fi[] <> none then
+                             (if fi[] = none then
+                                 ''->errorsList.label;
+                                 true->noErrors;
+                              else
+                                 (if includeWarnings then
+                                     'Semantic Errors and Warnings'->errorsList.label
+                                  else
+                                     'Semantic Errors'->errorsList.label
+                                 if);
                                  false->noErrors;
                                  (listitems.head).elm.select
                              if)
@@ -150,7 +190,7 @@ semanticBrowser: ymerLocalWindow
                  #);
                
             #);
-          ErrorsList: @labelled
+          errorsList: @labelled
             (# clear: contents.clear(# #);
                dobind: (#  do contents.dobind #);
                contentsType:: listView
@@ -191,7 +231,6 @@ semanticBrowser: ymerLocalWindow
                     errorItem: listItem
                       (#
                          node: ^mps.AST.ast;
-                         errorText: ^text;
                          onSelect:: 
                            (# ei: ^listitems.theCellType;
                            do
@@ -208,38 +247,34 @@ semanticBrowser: ymerLocalWindow
                          exp: ^mps.AST.expanded;
                          ei: ^errorItem;
                          ff: ^mps.AST.fragmentForm;
-                         isWarning: 
-                           (* findes i mps/v5.0 - blot her for at
-                            * kunne filtrere warnings fra allerede i
-                            * v4.9.1 - skal fjernes senere
-                            *)
-                           (# no: @integer; boo: @boolean
-                           enter no
-                           do
-                              (if no
-                               //24//25//86//95//97//99//106//109
-                               //26 (*not used *) then
-                                  true->boo
-                              if)
-                           exit boo
-                           #)
-
                       enter ff[]
                       do
                          clear;
                          (if ff.root.kind = mps.AST.kinds.interior then
                              ff.root[]->exp[];
                              exp.suffixWalk
-                               (# 
+                               (# t: ^text
                                do
-                                  (if current.hasSemanticError and
-                                      not (current.semanticError->isWarning) then
-                                      &errorItem[]->ei[];
-                                      ei.init;
-                                      current[]->ei.node[];
-                                      ei.node.semanticError->semanticErrorText
-                                        ->ei.errorText[]->ei.name;
-                                      
+                                  (if current.hasSemanticError then
+                                      (if current.semanticError->isWarning then
+                                          (if includeWarnings then
+                                             &errorItem[]->ei[];
+                                             ei.init;
+                                             current[]->ei.node[];
+                                             'Warning: '->t[];
+                                             ei.node.semanticError->semanticErrorText
+                                               ->t.append;
+                                             t[]->ei.name;
+                                          if)
+                                       else
+                                          &errorItem[]->ei[];
+                                          ei.init;
+                                          current[]->ei.node[];
+                                          (if includeWarnings then 'Error: '->t[] else &text[]->t[] if);
+                                          ei.node.semanticError->semanticErrorText
+                                            ->t.append;
+                                          t[]->ei.name;
+                                     if)
                                   if)
                                #)
                          if);
@@ -249,7 +284,14 @@ semanticBrowser: ymerLocalWindow
                              (listitems.head).elm.select
                          if)
                       #);
-                    open::  (#  do 'Semantic Errors and Warnings'->label #);
+                    open::  
+                      (#
+                      do (if includeWarnings then
+                             'Semantic Errors or Warnings'->label
+                          else
+                             'Semantic Errors'->label
+                         if)
+                      #);
                     
                  #);
                open:: 
@@ -266,9 +308,9 @@ semanticBrowser: ymerLocalWindow
                  (#  do true->verticalStacking; 50->minsize; 2->panewidth #)
             do
                FFlist.open;
-               ErrorsList.open;
+               errorsList.open;
                FFlist[]->appendMember;
-               ErrorsList[]->appendMember;
+               errorsList[]->appendMember;
                INNER open;
                appendsDone;
                dobind;
@@ -289,29 +331,50 @@ semanticBrowser: ymerLocalWindow
                open:: 
                  (#  do 'File'->name; quitItem.open; quitItem[]->append #)
             #);
-          open::  (#  do fileMenu.open; fileMenu[]->append #);
+          warningsMenu: @menu
+            (# includeItem: @menuItem
+                 (# eventhandler::
+                      (# onSelect:: 
+                           (# 
+                           do not checked->checked->includeWarnings;
+                              fg[]->registerFragmentGroup
+                           #)
+                      #);
+                    open:: (# do 'i'->key; 'Include'->name #);
+                 #);
+               open:: 
+                 (# 
+                 do 'Warnings'->name; 
+                    includeItem.open; includeItem[]->append;
+                 #);
+              #);
+          open::  (#  do fileMenu.open; fileMenu[]->append; warningsMenu.open; warningsMenu[]->append #);
           
        #);
      registerFragmentGroup:
        (# enter fg[]
-       do clear; fg[]->contents.FFlist.contents.registerFragmentForms
+       do clear;
+          fg[]->contents.FFlist.contents.registerFragmentForms;
+          setTitle;
+       #);
+     setTitle:
+       (# t: ^text
+       do (if noErrors then 'No '->t[] else &text[]->t[] if);
+          'Semantic Errors'->t.append;
+          (if includeWarnings then ' or Warnings'->t.append if);
+          ' in: '->t.append;
+          fgName[]->t.append;
+          t[]->title;
+          
        #);
      open::< 
        (# w,h: @integer; 
        do
-          'Semantic Errors in: '->title;
           hide;
           INNER open;
-          fgName[]->(title).copyAppend->title;
           contents.open;
           fg[]->registerFragmentGroup;
-          (if noErrors then
-              close;
-              (none ,'No Semantic Errors','Semantic Errors Viewer')->noteUser;
-              
-           else
-              show; 
-          if);
+          show; 
           
        #)
   #);
@@ -325,23 +388,22 @@ semanticEditor: semanticBrowser
             do ff[]->ASTeditor.newFragment; name[]->ASTeditor.label; INNER
             #);
           onNewSemanticError::< 
-            (#  do node[]->ASTeditor.contents.SifViewer.setNode #);
+            (# do node[]->ASTeditor.fe.setNode #);
           ASTeditor: @labelled
             (#
                dobind: (#  do contents.dobind #);
                ge: ^edenv.groupEditor;
+               fe: ^codeEditor;
                newFragment:
                  (# ff: ^mps.AST.fragmentForm; 
                  enter ff[]
                  do
                     (ff[],ff.root[],none ,contents[],ge[])
-                      ->edenv.findOrCreateFormEditor;
-                    (*(contents.ffEncloser.getAST,contents.ffEncloser.getBETACFL,
-                     ff.root[],NONE)->contents.newFragment;*)
+                      ->edenv.findOrCreateFormEditor->fe[];
                     
                  #);
                contentsType::< codemoveableEditor
-                 (#
+                 (# isolated:: trueObject;
                     dobind:
                       (# 
                       do true->bindRight->bindBottom->bindLeft->bindTop
@@ -378,7 +440,7 @@ semanticEditor: semanticBrowser
                  do
                     THIS(semanticEditor).size->(w,h);
                     (w,(h div aspect)*4-1)->sz->size;
-                    (none ,fg[],false)->edenv.createGroupEditor->ge[];
+                    (none ,fg[],editMode)->edenv.createGroupEditor->ge[];
                     
                  #);
                
@@ -411,4 +473,3 @@ semanticViewer: semanticBrowser
      
   #);
   
-

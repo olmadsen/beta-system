@@ -1,9 +1,9 @@
 ORIGIN '../ymer';
 INCLUDE '~beta/basiclib/v1.4/formatio'
         '~beta/sysutils/v1.4/pathhandler'
-        '~beta/process/v1.4/osinterface'
         '~beta/editor/v5.0/fragmentscanner'
         '~beta/mps/v4.9.1/findgrammar'
+        'hostmachine'(*~beta/process/v1.4/osinterface*)
         'fileEditor'
         'parseEditor'
         'sourcebrowserbody'
@@ -12,6 +12,11 @@ INCLUDE '~beta/basiclib/v1.4/formatio'
         'separateCodeEditor'
         'searchActions';
 BODY 'settings';
+(*
+ * COPYRIGHT
+ *   Copyright Mjolner Informatics, 1995-96
+ *   All rights reserved.
+ *)
 -- historyMenuLib: Attributes --
 findAndSelect:
   (# node: ^astInterface.ast
@@ -87,7 +92,7 @@ forward: menuItem
   #);
 historyMenuItem: menuItem
   (#
-     theHist: ^ymerBrowser.ymerBrowserPrivate.history.element;
+     theHist: ^ymerBrowserPrivate.history.element;
      eventhandler:: 
        (#
           onSelect:: 
@@ -113,7 +118,7 @@ historyMenuItem: menuItem
   #);
 addHistoryElement:
   (#
-     theHist: ^ymerBrowser.ymerBrowserPrivate.history.element;
+     theHist: ^ymerBrowserPrivate.history.element;
      newHitem: ^historyMenuItem;
      
   enter theHist[]
@@ -129,7 +134,7 @@ addHistoryElement:
   #);
 closeHistoryElement:
   (#
-     oldElement: ^ymerBrowser.ymerBrowserPrivate.history.element;
+     oldElement: ^ymerBrowserPrivate.history.element;
      theHitem: ^historyMenuItem
   enter oldElement[]
   do
@@ -179,7 +184,7 @@ do
     // (not (theEditorRoot.frag.root[]->theEditorRoot.equal)) and separate then
        (theEditorRoot[],node[])->cfe.openSubeditor
     else
-       'Browser.selectnode: theEditorRoot[]<> theEditorRoot.frag.root[] and not separate'
+       'SHOULD NOT HAPPEN: Browser.selectnode: theEditorRoot[]<> theEditorRoot.frag.root[] and not separate'
          ->putLine
    if)  
 
@@ -193,7 +198,7 @@ do
 do
    true->continue;
      (#
-        pe: @ymerBrowser.browser.parseEditor
+        pe: @parseEditor
           (# open::  (#  do (600,800)->size; groupName[]->loadFiles #)
           #);
         
@@ -351,8 +356,29 @@ do
      
 
 -- projectInfoLib: Attributes --
+setupRootProject:
+  (# proj,root: ^project
+  enter proj[]
+  do (if (proj.name.length->proj.name.inxGet) <> '*' then
+         '*'->proj.name.append; 
+     if);
+     true->proj.isRoot;
+     proj[]->root[];
+     &browser.projects.project[]->proj[];
+     root.location->proj.location;
+     true->proj.isDomain;
+     '[domain]'->proj.name[];
+     root[]->proj.superProject[];
+     proj[]->root.subprojects.append;
+     &browser.projects.project[]->proj[];
+     root.location->proj.location;
+     true->proj.isExtent;
+     '[extent]'->proj.name[];
+     root[]->proj.superProject[];
+     proj[]->root.subprojects.append;
+  #);
 setupProject:
-  (# f: @file; ext,name: ^text; t: ^text; proj,root: ^project
+  (# f: @file; ext,name: ^text; t: ^text; proj: ^project
   enter proj[]
   do
      proj.location[]->f.name;
@@ -369,20 +395,22 @@ setupProject:
              
          if)
      if);
-     (if (proj.location.length->proj.location.inxGet) = ph.directoryChar then
+     (if (proj.location.length->proj.location.inxGet)
+         =mps.ast.thepathhandler.directoryChar then
          (proj.location.length,proj.location.length)->proj.location.delete; 
      if);
-     (proj.location[],ph.currentDirectory)->ph.convertfilepath->f.name;
+     proj.location[]->mps.AST.expandToFullPath->f.name;
      (if proj.name[] = none then f.entry.path.name->proj.name[] if);
-     (proj.location[],ph.currentDirectory)->ph.convertfilepath->f.name;
+     proj.location[]->mps.AST.expandToFullPath->f.name;
      (if proj.name[] = none then f.entry.path.name->proj.name[] if);
      (if true
       // f.entry.exists and f.entry.readable and f.entry.isDirectory then
          true->proj.isDirectory;
-         (if (proj.location.length->proj.location.inxGet) <> ph.directoryChar
+         (if (proj.location.length->proj.location.inxGet) 
+             <>mps.ast.thepathhandler.directoryChar
           then
              proj.location.length->proj.location.pos;
-             ph.directoryChar->proj.location.put
+             mps.ast.thepathhandler.directoryChar->proj.location.put
          if);
          (if (proj.name.length > 0) and
          ((proj.name.length->proj.name.inxGet) <> '/') then
@@ -418,23 +446,7 @@ setupProject:
                 (fn[]->fileReadable))->found
             exit found
             #) then
-             (if (proj.name.length->proj.name.inxGet) <> '*' then
-                 '*'->proj.name.append; 
-             if);
-             true->proj.isRoot;
-             proj[]->root[];
-             &browser.projects.project[]->proj[];
-             root.location->proj.location;
-             true->proj.isDomain;
-             '[domain]'->proj.name[];
-             root[]->proj.superProject[];
-             proj[]->root.subprojects.append;
-             &browser.projects.project[]->proj[];
-             root.location->proj.location;
-             true->proj.isExtent;
-             '[extent]'->proj.name[];
-             root[]->proj.superProject[];
-             proj[]->root.subprojects.append;
+             proj[]->setupRootProject
              
           // f.entry.exists and f.entry.readable and ('.pjt'->ext.equal) then
              true->proj.isProjectFile->proj.hasSubprojects;
@@ -467,8 +479,7 @@ do
     // isRoot then
        (if groups.size = 0 then (* this is the first time we visit this root *)
            &browser.projects.group[]->newGroup[];
-           (location[],ph.currentDirectory)->ph.convertfilepath
-             ->newGroup.location.puttext;
+           location[]->mps.AST.expandToFullPath->newGroup.location.puttext;
            newGroup.location[]->fragmentDefaultName->newGroup.name[];
            newGroup[]->groups.append;
            newGroup[]->thescan.foreach
@@ -481,12 +492,12 @@ do
        (* the extent haven't previously been calculated *)
            machineType->mps.dg.TargetMachine;
            machineType->mps.dg.TargetDirectory;
-           (location[],ph.currentDirectory)->ph.convertfilepath
+           location[]->mps.AST.expandToFullPath
              ->mps.dg.scanExtent
                (# 
                do
                   &browser.projects.group[]->newGroup[];
-                  (current.fullname,ph.currentDirectory)->ph.convertfilepath
+                  current.fullname->mps.AST.expandToFullPath
                     ->newGroup.location.puttext;
                   newGroup.location[]->dependencyRegister;
                   current.name->fragmentDefaultName->newGroup.name[];
@@ -504,12 +515,12 @@ do
        (* the domain haven't previously been calculated *)
            machineType->mps.dg.TargetMachine;
            machineType->mps.dg.TargetDirectory;
-           (location[],ph.currentDirectory)->ph.convertfilepath
+           location[]->mps.AST.expandToFullPath
              ->mps.dg.scanDomain
                (# 
                do
                   &browser.projects.group[]->newGroup[];
-                  (current.fullname,ph.currentDirectory)->ph.convertfilepath
+                  current.fullname->mps.AST.expandToFullPath
                     ->newGroup.location.puttext;
                   newGroup.location[]->dependencyRegister;
                   current.name->fragmentDefaultName->newGroup.name[];
@@ -529,9 +540,9 @@ do
              do
                 THIS(Project).groups.clear;
                 (if location.empty then
-                    ph.currentDirectory->location.puttext; 
+                    mps.ast.thepathhandler.currentDirectory->location.puttext; 
                 if);
-                (location[],ph.currentDirectory)->ph.convertfilepath->d.name;
+                location[]->mps.AST.expandToFullPath->d.name;
                 d.scanEntries
                   (# error::  (#  do true->continue #)
                   do
@@ -679,9 +690,9 @@ setupDotDot:
   (* we now have to create a new project to contain the
    * parent directory of currentDirectory
    *)
-     ((1,proj.location.length-1)->proj.location.sub,ph.currentDirectory)
-       ->ph.convertfilepath->location[];
-     ph.directoryChar->location.put;
+     (1,proj.location.length-1)->proj.location.sub
+       ->mps.AST.expandToFullPath->location[];
+     mps.ast.thepathhandler.directoryChar->location.put;
      proj.superProject[]->superProject[];
      (if superProject[] <> none then
          superProject.level->level;
@@ -766,7 +777,7 @@ unfoldSubprojects:
          (* the directory haven't previously been unfolded *)
                (# d: @directory; f: @file; level: @integer; 
                do
-                  (proj.location[],ph.currentDirectory)->ph.convertfilepath
+                  proj.location[]->mps.AST.expandToFullPath
                     ->d.name;
                   d.scanEntries
                     (# error::  (#  do true->continue #)
@@ -808,7 +819,8 @@ unfoldSubprojects:
                                      &browser.projects.project[]->newProj[];
                                      true->newProj.isDirectory;
                                      (d.name,proj.location[])
-                                       ->ph.convertfilePath->location[];
+                                       ->mps.ast.thepathhandler.convertfilePath
+                                       ->location[];
                                      location[]->f.name;
                                      &text[]->newProj.name[];
                                      proj.level+1->newProj.level;
@@ -826,8 +838,9 @@ unfoldSubprojects:
                                      (if
                                      (newProj.location.length
                                         ->newProj.location.inxGet) <>
-                                     ph.directoryChar then
-                                         ph.directoryChar->newProj.location.put
+                                     mps.ast.thepathhandler.directoryChar then
+                                         mps.ast.thepathhandler.directoryChar
+                                           ->newProj.location.put
                                      if);
                                      (if (newProj.location[]->fileExists) and
                                      (newProj.location[]->fileReadable) then
@@ -853,7 +866,7 @@ unfoldSubprojects:
                                   then
                                      &browser.projects.project[]->newProj[];
                                      (f.name,proj.location[])
-                                       ->ph.convertfilePath
+                                       ->mps.ast.thepathhandler.convertfilePath
                                        ->newProj.location.puttext;
                                      (newProj.location.length-3,
                                       newProj.location.length)
@@ -941,35 +954,34 @@ do
         selectedProj: ^browser.projects.project;
         
      do
-        (if (theprojectlist.selection.first->i) <> 0 then
-            (if theEvent.doubleClick then
-                (if theEvent.shiftKey then
-                      (# fragmentBrowser: ^ymerBrowserWindow; t: ^text; 
-                      do
-                         &ymerBrowserWindow[]->fragmentBrowser[];
-                         fragmentBrowser.open;
-                         i->projectByIndex->selectedProj[];
-                         selectedProj[]->fragmentBrowser.loadProject;
+        (if theEvent.doubleClick and
+            ((theprojectlist.selection.first->i) <> 0) then
+            (if theEvent.shiftKey then
+                (# fragmentBrowser: ^ymerBrowserWindow; t: ^text; 
+                do
+                   &ymerBrowserWindow[]->fragmentBrowser[];
+                   fragmentBrowser.open;
+                   i->projectByIndex->selectedProj[];
+                   selectedProj[]->fragmentBrowser.loadProject;
                          
-                      #)
+                #)
+             else
+                i->projectByIndex->selectedProj[];
+                (if true
+                 // selectedProj.isDotDotDirectory then
+                    selectedProj[]->setupDotDot; 
+                 // selectedProj.unfolded then
+                    false->selectedProj.unfolded;
+                    selectedProj[]->foldSubprojects;
+                    projectsChanged;
+                    selectedProj[]->setProject;
+                        
                  else
-                    i->projectByIndex->selectedProj[];
-                    (if true
-                     // selectedProj.isDotDotDirectory then
-                        selectedProj[]->setupDotDot; 
-                     // selectedProj.unfolded then
-                        false->selectedProj.unfolded;
-                        selectedProj[]->foldSubprojects;
-                        projectsChanged;
-                        selectedProj[]->setProject;
+                    true->selectedProj.unfolded;
+                    selectedProj[]->unfoldSubprojects;
+                    projectsChanged;
+                    selectedProj[]->setProject;
                         
-                     else
-                        true->selectedProj.unfolded;
-                        selectedProj[]->unfoldSubprojects;
-                        projectsChanged;
-                        selectedProj[]->setProject;
-                        
-                    if)
                 if)
             if)
         if)
@@ -1000,51 +1012,34 @@ do
         root,newProj: ^browser.projects.project;
         
      do
-        (if (thegrouplist.selection.first) <> 0 then
-            (if theEvent.doubleClick then
-            (* do what's needed to make THIS into a root *)
-                thegrouplist.selection.first->groups.getGroupByIndex
-                  ->selectedGroup[];
-                &browser.projects.project[]->newProj[];
-                selectedGroup.location->newProj.location;
-                (if newProj.name[] = none then
-                    selectedGroup.name.copy->newProj.name[]
-                if);
-                (if (newProj.name.length->newProj.name.inxGet) <> '*' then
-                    '*'->newProj.name.append; 
-                if);
-                true->newProj.isRoot;
-                newProj[]->root[];
-                &browser.projects.project[]->newProj[];
-                root.location->newProj.location;
-                true->newProj.isDomain;
-                '[domain]'->newProj.name[];
-                root[]->newProj.superProject[];
-                newProj[]->root.subprojects.append;
-                &browser.projects.project[]->newProj[];
-                root.location->newProj.location;
-                true->newProj.isExtent;
-                '[extent]'->newProj.name[];
-                root[]->newProj.superProject[];
-                newProj[]->root.subprojects.append;
-                (if theEvent.shiftKey then
-                      (# fragmentBrowser: ^ymerBrowserWindow; t: ^text; 
-                      do
-                         &ymerBrowserWindow[]->fragmentBrowser[];
-                         fragmentBrowser.open;
-                         root[]->fragmentBrowser.loadProject;
-                         (*'Browser on: '->t[];
-                          root.name[]->t.puttext;
-                          t[]->fragmentBrowser.title*)
+        (if theEvent.doubleClick and
+           ((thegrouplist.selection.first) <> 0) then
+           (* do what's needed to make THIS into a root *)
+           thegrouplist.selection.first->groups.getGroupByIndex
+             ->selectedGroup[];
+           &browser.projects.project[]->newProj[];
+           selectedGroup.location->newProj.location;
+           (if newProj.name[] = none then
+               selectedGroup.name.copy->newProj.name[]
+           if);
+           newProj[]->projects.setupRootProject;
+           (if theEvent.shiftKey then
+               (# fragmentBrowser: ^ymerBrowserWindow; t: ^text; 
+               do
+                  &ymerBrowserWindow[]->fragmentBrowser[];
+                  fragmentBrowser.open;
+                  newProj[]->fragmentBrowser.loadProject;
+                  (*'Browser on: '->t[];
+                    root.name[]->t.puttext;
+                   t[]->fragmentBrowser.title*)
                          
-                      #)
-                 else
-                    root[]->projects.theProjects.append;
-                    projectsChanged;
-                    root[]->setProject;
+               #)
+            else
+               newProj[]->projects.theProjects.append;
+               projectsChanged;
+               newProj[]->setProject;
                     
-                if)
-            if)
+           if)
         if)
      #)[]->thegrouplist.appendAction;
    &thegrouplist.searchAction
@@ -1068,15 +1063,15 @@ do
 do
    &theFragmentgroupView.action
      (#
-        eventtype:: theFragmentgroupView.theeventhandler.mouseup;
+        eventtype:: theFragmentgroupView.theeventhandler.mousedown;
         inx: @integer;
         fgs: @fragmentGroupScanner;
         
      do
-        (if (theFragmentgroupView.selection.first->inx) <> 0 then
-            (if theEvent.doubleClick then
-                (if theEvent.shiftKey then
-                    (mps.AST[],currentGroup. (*get*) fg[])->fgs;
+         (if theEvent.doubleClick and
+           ((theFragmentgroupView.selection.first->inx) <> 0) then
+                 (if theEvent.shiftKey then
+                     (mps.AST[],currentGroup. (*get*) fg[])->fgs;
                     fgs.scanPropsAndFragsForText
                     (* HACK to initialize fgs properly
                      * - error in fragmentGroupScanner implementation
@@ -1134,7 +1129,6 @@ do
                         #);
                     
                 if)
-            if)
         if)
      #)[]->theFragmentgroupView.appendAction;
    &theFragmentgroupView.searchAction
@@ -1211,8 +1205,9 @@ do
          (# newProj: ^browser.projects.project
          do
             &browser.projects.project[]->newProj[];
-            '+tmp'->newProj.name[];
-            '/tmp/'->newproj.location.puttext;
+            fgName[]->mps.AST.expandToFullPath
+               ->newProj.location.puttext;
+            fgName[]->fragmentDefaultName->newProj.name[];
             newProj[]->browser.projects.setupProject;
             newProj[]->browser.projects.theProjects.append;
             browser.projectsChanged;
@@ -1260,38 +1255,42 @@ do
 
 -- ymerOnAboutToClose: DoPart --
 do
-   INNER onAboutToClose;
-   (if okToClose then
-       (if ymerBrowserPrivate.geList.closeGroups then
-           THIS(ymerBrowserWindow)[]->browsers.at->browsers.delete;
-           (if browsers.empty and onTerminateApplication then
-               terminate
+   (if THIS(ymerBrowserWindow)[]->browsers.has then
+       INNER onAboutToClose;
+       (if okToClose then
+           (if ymerBrowserPrivate.geList.closeGroups then
+               THIS(ymerBrowserWindow)[]->browsers.at->browsers.delete;
+               (if browsers.empty and onTerminateApplication then
+                   terminate
+                else
+                   browsers.scan
+                     (# 
+                     do
+                        THIS(ymerBrowserWindow)[]
+                          ->(current.theMenubar).windowsMenu.deleteWindow
+                     #)
+               if)
             else
-               browsers.scan
-                 (# 
-                 do
-                    THIS(ymerBrowserWindow)[]
-                      ->(current.theMenubar).windowsMenu.deleteWindow
-                 #)
+               false->okToClose
            if)
-        else
-           false->okToClose
        if)
    if)  
 
 -- ymerClose: DoPart --
 do
-   THIS(ymerBrowserWindow)[]->browsers.at->browsers.delete;
-   (if browsers.empty and onTerminateApplication then
-       terminate
-    else
-       browsers.scan
-         (# 
-         do
-            THIS(ymerBrowserWindow)[]
-              ->(current.theMenubar).windowsMenu.deleteWindow
-         #)
-   if)  
+   (if THIS(ymerBrowserWindow)[]->browsers.has then
+       THIS(ymerBrowserWindow)[]->browsers.at->browsers.delete;
+       (if browsers.empty and onTerminateApplication then
+           terminate
+        else
+           browsers.scan
+             (# 
+             do
+                THIS(ymerBrowserWindow)[]
+                  ->(current.theMenubar).windowsMenu.deleteWindow
+             #)
+       if)  
+   if);
 
 -- ymerCloseGroups: DoPart --
 do ymerBrowserPrivate.geList.closeGroups->value  
@@ -1314,11 +1313,10 @@ do
        '<'->t.put;
        browserCount->t.putint;
        '>'->t.put;
-       ymerBrowser.edenv[]->edenv[]
    if);
    t[]->title;
    browser.open;
-   edenv[]->browser.edenv[];
+   ymerPrivate.edenv[]->edenv[]->browser.edenv[];
    browser.size->THIS(ymerBrowserWindow).size;
    INNER open;
    browsers.scan
@@ -1346,23 +1344,14 @@ do
         
      #);
      
-
--- ymerHelpDocument: DoPart --
-do
-   &ymerPrivate.helpDocuments.element[]->ymerPrivate.helpDocuments.append;
-   title[]->(ymerPrivate.helpDocuments.last).elm.title[];
-   path[]->(ymerPrivate.helpDocuments.last).elm.path[];
-     
-
 -- ymerInit: Descriptor --
-(# OS: @osInterface; i: @integer; 
+(# i: @integer; 
 do
-   OS.init;
-   OS.hostMachine->machinetype;
+   hostType->machinetype;
    '$(BETALIB)'
      ->expandEnvVar
-       (# defaultValue::  (#  do '/usr/local/lib/beta'->envvarvalue[] #)
-       #)->BETAlib[];
+       (# defaultValue::  (#  do '/usr/local/lib/beta'->envvarvalue[] #) #)
+     ->BETAlib[];
    mps.init;
    1->i;
    l:
@@ -1393,31 +1382,37 @@ do
    if);
    &mps.AST.findGrammar[]->mps.AST.grammarMissing[];
    browsers.init;
-   ymerBrowser.loadEditorEnv;
-   ('Ymer: Short Manual','~beta/sourcebrowser/v1.0/doc/ymer.html')
-     ->ymerBrowser.helpDocument;
+   loadEditorEnv;
+   ('Ymer: Short Manual',
+   '/sourcebrowser/v1.0/doc/ymer.html'
+     ->(betalib.copy).append)
+     ->helpDocument;
    ('Ymer: Known Bugs and Inconveniences',
-    '~beta/sourcebrowser/v1.0/doc/ymer.bugs')->ymerBrowser.helpDocument;
+   '/sourcebrowser/v1.0/doc/ymer.bugs'
+     ->(betalib.copy).append)
+     ->helpDocument;
    ymerPrivate.grammarTable.init;
    INNER init;
-   ymerBrowser.open;
-   <<SLOT ymerInitLoadSettings:Descriptor>>
 #)  
 
+-- ymerHelpDocument: DoPart --
+do
+   &ymerPrivate.helpDocuments.element[]->ymerPrivate.helpDocuments.append;
+   title[]->(ymerPrivate.helpDocuments.last).elm.title[];
+   path[]->(ymerPrivate.helpDocuments.last).elm.path[];
+     
 -- loadEditorEnv: DoPart --
 do
-     (# initHere: @boolean
-     do
-        objectPool.get
+   (# editorEnvWindow: @window; initHere: @boolean
+   do objectPool.get
           (#
-             type:: editorEnv;
+             type:: editorEnvWindow.editorEnv;
              init:: 
                (# 
                do
                   true->inithere;
                   (mps.ast[],mps.betaCFL[],THIS(ymerApplication)[])->obj.init
                #)
-          #)->edenv[];
-        (if inithere then 'ymer'->edenv.initiator[] if)
+          #)->ymerPrivate.edenv[];
      #)  
 
