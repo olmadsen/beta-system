@@ -44,23 +44,19 @@ extern long mcheck_line;
 #endif
 
 #ifdef sparc
+/* IOA in global registers */
 register long    *IOA       asm("%g6");
 register unsigned IOATopOff asm("%g7");
 #define           IOATop    ((long *) ((long)IOA+IOATopOff))
+#endif
 
-#else
-/* not sparc */
-#ifdef RUN
-/* RUN: all are declared as variables */
-#else
-/* Not sparc, not RUN */
+#ifdef NEWRUN
 #define IOA           _IOA.start
 #define IOALimit      _IOA.limit
 #define IOASize       _IOA.size
 #define IOATopOff     _IOA.topoff
 #define IOATop        ((long *) ((long)IOA+IOATopOff))
-#endif /* RUN */
-#endif /* sparc */
+#endif /* NEWRUN */
 
 #ifdef RTLAZY
 #define isLazyRef(ref) ((lastDangler <= ((int)(ref))) && (((int)(ref)) < -101))

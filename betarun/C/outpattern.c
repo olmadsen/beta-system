@@ -1010,8 +1010,10 @@ int DisplayBetaStack(enum BetaErr errorNumber,
 #endif
 	if(theObj && isObject(theObj)) {
 	  /* Check if theObj is inlined in a component */
-	  if (IsComponentitem(theObj)) {
-	    DisplayObject(output, EnclosingComponent(theObj), (long)PC);
+	  if (IsComponentItem(theObj)) {
+	    DisplayObject(output, 
+			  (struct Object *)EnclosingComponent(theObj), 
+			  (long)PC);
 	    if (theObj==(struct Object *)BasicItem) break;
 	  } else {
 	    DisplayObject(output, theObj, (long)PC);

@@ -158,8 +158,10 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   StackEnd = (long *) scp->sc_sp;
 #endif /* UseRefStack */
   /* not hppa, i.e. hpux8 */
+#ifndef hppa /* FIXME: WHY needed on hppa???? */
   PC = (long *) scp->sc_pc;
   StackEnd = (long *) scp->sc_sp;
+#endif
 #endif /* hppa */
 
 #endif /* (linux || nti) */

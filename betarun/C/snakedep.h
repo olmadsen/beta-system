@@ -79,8 +79,6 @@ register long _dummy7 asm("%r14"); /* really RefSP */
  * are "registered" on the reference stack.
  */
 
-#define UseRefStack
-
 extern void *ReferenceStack[];
 #if 0
 extern long *savedRefSP;
