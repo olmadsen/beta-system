@@ -1,5 +1,4 @@
 BASEDIR=.
-#BASEDIR=$(BETALIB)/betarun/v2.6/$(MACHINETYPE)/TST
 
 make: $(BASEDIR)/$(MACHINETYPE)/ctstcproc.o
 
