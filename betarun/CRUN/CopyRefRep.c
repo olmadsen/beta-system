@@ -8,14 +8,14 @@
 #include "beta.h"
 #include "crun.h"
 
+#ifdef sparc
 asmlabel(CopyRR, "
         clr     %o3
 	ba	"CPREF"CopyRR
         clr     %o4
 ");
-
-#ifdef hppa
-#  define CCopyRR CopyRR
+#else
+#define CCopyRR CopyRR
 #endif
 
 void CCopyRR(ref(ValRep) theRep,
