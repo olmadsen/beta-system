@@ -387,14 +387,14 @@ static inline struct Item * CAlloSI(struct Structure *s)
 #define CallBetaEntry(entry,item) \
 { /* Save savedIOA, savedIOATopoff, savedRefSP on ordinary stack */ \
   register long *r; \
-  r = (long *)savedIOA; pushReg(r); \
-  r = (long *)savedIOATopoff; pushReg(r); \
+  /*r = (long *)savedIOA; pushReg(r);*/ \
+  /*r = (long *)savedIOATopoff; pushReg(r);*/ \
   r = (long *)savedRefSP; pushReg(r); \
   (setCallReg(item), (* (void (*)()) (entry))()); BETA_CLOBBER;  \
   /* Restore savedRefSP, savedIOATopoff, savedIOA */ \
   r = popReg(); (long *)savedRefSP = r; \
-  r = popReg(); (long *)savedIOATopoff = r; \
-  r = popReg(); (long *)savedIOA = r; \
+  /*r = popReg(); (long *)savedIOATopoff = r;*/ \
+  /*r = popReg(); (long *)savedIOA = r;*/ \
 }
 #endif
 
