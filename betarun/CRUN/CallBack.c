@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CallBack.c,v 1.29 1992-10-15 10:21:55 beta Exp $
+ * Mod: $Id: CallBack.c,v 1.30 1992-11-05 14:22:47 poe Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -241,6 +241,7 @@ int CHandleCB(int a1, int a2, int a3, int a4, int FOR)
 
     setIOAReg(savedIOA);
     setIOATopoffReg(savedIOATopoff);
+    setRefSP(savedRefSP);
 
     setCallReg(theStruct->iProto);
     setOriginReg(theStruct->iOrigin);
@@ -263,6 +264,7 @@ int CHandleCB(int a1, int a2, int a3, int a4, int FOR)
 
     savedIOA       = getIOAReg();
     savedIOATopoff = getIOATopoffReg();
+    savedRefSP     = getRefSP();
 
     return retval;
 }
