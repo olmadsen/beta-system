@@ -14,7 +14,7 @@
 long isObject( theObj)
   ref(Object) theObj;
 { 
-#ifdef sparc
+#if defined(sparc) || defined(hppa)
     /* For the SPARC isObject also checkes alignment constraints */
     if ((unsigned)theObj % 8 != 0)
       return FALSE;
@@ -38,7 +38,7 @@ long isObject( theObj)
 long inBetaHeap( theObj)
   ref(Object) theObj;
 { 
-#ifdef sparc
+#if defined(sparc) || defined(hppa)
     /* For the SPARC inBetaHeap also checkes alignment constraints */
     if ((unsigned)theObj % 8 != 0)
       return FALSE;

@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1992 Mjolner Informatics Aps.
- * Mod: $Id: scavenging.c,v 1.36 1992-08-27 16:00:32 tthorn Exp $
+ * Mod: $Id: scavenging.c,v 1.37 1992-08-31 10:07:46 poe Exp $
  * by Lars Bak, Peter Andersen and Tommy Thorn.
  */
 
@@ -11,7 +11,69 @@
 #endif
 
 extern ref(Object) NewCopyObject();
+#ifdef hppa
+/***************************** for the snake ****************************/
 
+void ProcessRefStack(size, bottom)
+     unsigned size; /* number of pointers to process */
+     long **bottom;
+{
+  int i;
+  struct Object **theCell;
+  struct Object *theObj;
+
+  DEBUG_IOA(printf("RefStk: [%x .. %x]\n", ReferenceStack, (int)getRefSP()));
+  theCell = (struct Object **)bottom;
+  for(; size > 0; size--, theCell++) {
+    theObj = *theCell;
+    if(theObj && inBetaHeap(theObj) && isObject(theObj)) {
+      if( inLVRA( theObj) || isValRep(theObj)){
+        DEBUG_IOA( fprintf( output, "(STACK(%x) is *ValRep)", theCell));
+      } else {
+        ProcessReference(theCell);
+        CompleteScavenging();
+      }
+    }
+  }
+}
+
+void ProcessStack()
+{
+  struct SnakeSF *top;
+
+  ref(CallBackFrame)  frm;
+  ref(ComponentBlock) cur;
+
+  DEBUG_IOA(printf("ProcessStack()\n"));
+
+  ProcessRefStack(((unsigned)getRefSP()-(unsigned)&ReferenceStack[0]) >> 2,
+                  &ReferenceStack[1]);
+}
+
+/*
+ * A stackobject on the snake looks like this:
+ * Header
+ * Body (the runtime stack-section)
+ * RefStackLength
+ * RefStack section
+ */
+void ProcessStackObj(struct StackObject *theStackObject)
+{
+  ptr(long)        stackptr;
+  ptr(long)        theEnd;
+
+  DEBUG_IOA(printf("ProcessStackObj()\n"));
+
+  DEBUG_IOA( Claim(theStackObject->StackSize <= theStackObject->BodySize,
+                   "ProcessReference: StackObjectType: Stack > Object") );
+
+  theEnd = &theStackObject->Body[0] + theStackObject->StackSize - 1;
+
+  ProcessRefStack(*theEnd, ++theEnd);
+}
+
+#endif /* hppa */
+/************************************************************************/
 #ifdef sparc
 /* Traverse an activation record (AR) [ar, end[
    Notice end is *not* included
@@ -81,7 +143,9 @@ void ProcessStackObj(struct StackObject *theStack)
 	ProcessAR(theAR, (struct RegWin *) (theAR->fp + delta));
     }
 }
-#else
+#endif /* sparc */
+/*********************************************************************/
+#ifdef mc68020
 /* Traverse the StackArea [low..high] and Process all references within it. */
 void ProcessStackPart( low, high)
      ptr(long) low;
@@ -158,7 +222,8 @@ void ProcessStack()
 	currentBlock = currentBlock->next;
     }
 }
-#endif
+#endif /* mc68020 */
+/*********************************************************************/
 
 static int FreePercentage( bottom, top, limit)
      int bottom, top, limit;
@@ -303,11 +368,17 @@ void IOAGc()
       
 	Tmp     = IOA;     TmpTop     = IOATop;     TmpLimit     = IOALimit; 
       
-	IOA     = ToSpace;                          
-#ifndef sparc
-	IOATop    = ToSpaceTop; 
-#else
+#ifdef sparc
+	IOA       = ToSpace;                          
 	IOATopoff = (char *) ToSpaceTop - (char *) IOA;
+#endif
+#ifdef hppa
+	setIOAReg(ToSpace);
+	setIOATopoffReg((char *) ToSpaceTop - (char *) IOA);
+#endif
+#ifdef mc68020
+	IOA       = ToSpace;                          
+	IOATop    = ToSpaceTop; 
 #endif
 	IOALimit     = ToSpaceLimit;
       
@@ -489,7 +560,7 @@ void ProcessObject(theObj)
 	  return;
 	  
 	case (int) StackObjectPTValue:
-#ifndef sparc
+#ifdef mc68020
 	  { ref(StackObject) theStackObject;
 	    ptr(long)        stackptr; 
 	    handle(Object)   theCell; 
@@ -497,7 +568,7 @@ void ProcessObject(theObj)
 	    
 	    theStackObject = Coerce(theObj, StackObject);
 	    
-	    DEBUG_IOA( Claim(theStackObject->StackSize <= theStackObject->ObjectSize,
+	    DEBUG_IOA( Claim(theStackObject->StackSize <= theStackObject->BodySize,
 			     "ProcessReference: StackObjectType: Stack > Object") );
 	    
 	    theEnd = &theStackObject->Body[0] + theStackObject->StackSize;
