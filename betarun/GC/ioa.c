@@ -429,10 +429,10 @@ void IOAGc()
     INFO_IOA(fprintf(output," %d%% used)\n",
 		     (int)((100 * areaSize(GLOBAL_IOA,GLOBAL_IOATop))/areaSize(GLOBAL_IOA,GLOBAL_IOALimit))));
 	
-    /* Clear all of the unused part of IOA, so that RT routines does
-     * not need to clear cells.
+    /* Clear all of the unused part of IOA (i.e. [IOATop..IOALimit[), 
+     * so that allocation routines do not need to clear cells.
      */
-    memset(GLOBAL_IOATop, 0, IOASize-((long)GLOBAL_IOATop - (long)GLOBAL_IOA));
+    memset(GLOBAL_IOATop, 0, (long)GLOBAL_IOALimit-(long)GLOBAL_IOATop);
 
     DEBUG_MT({ 
       /* If there is only one thread, IOACheck will only check the range
@@ -472,7 +472,7 @@ Program terminated.\n", (int)(4*ReqObjectSize));
 	  /* Have now done two IOAGc's without freeing enough space.
 	   * Make sure that all objects go to AOA in the next GC.
 	   */
-	  IOAtoAOAtreshold=2;
+	  IOAtoAOAtreshold=IOAMinAge+1;
 	  DEBUG_IOA(fprintf(output, "Forcing all to AOA in next IOAGc\n"));
 	}
 	IOALooksFullCount++;
@@ -1323,7 +1323,12 @@ void IOACheckReference(theCell)
     if (!(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell))) {
       fprintf (output, "theCell = 0x%x, *theCell = 0x%x\n", 
 	       (int)theCell, (int)(*theCell));
-      Claim( inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell),
+      Claim( inIOA(*theCell) || 
+	     inAOA(*theCell) ||
+#ifdef MT
+	     (long)*theCell==16 || /* dreadfull hack (see AlloBC) */
+#endif
+	     inLVRA(*theCell),
 	    "IOACheckReference: *theCell lazy ref or inside IOA, AOA or LVRA");
     }
     if( inLVRA(*theCell) ){

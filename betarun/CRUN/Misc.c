@@ -162,3 +162,16 @@ void FailureExit()
 }
 #endif
 
+#ifdef RTDEBUG
+void zero_check(char *p, unsigned bytesize)
+{
+  register long i;
+  if (bytesize&3)
+    fprintf(output, "What! bytesize&3 != 0\n");
+  for (i = bytesize-4; i >= 0; i -= 4)
+    if (*(long *)(p+i) != 0) {
+      fprintf(output, "zero_check failed\n");	
+      Illegal();
+    }
+}
+#endif

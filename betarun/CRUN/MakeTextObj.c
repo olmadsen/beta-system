@@ -79,7 +79,7 @@ void MkTO(char *asciz,
     } else {
       isInAOA=0;
       theText=(struct TextObject*)IOAalloc(size);
-      theText->GCAttr = IOAMinAge;
+      if (IOAMinAge!=0) theText->GCAttr = IOAMinAge;
     }
     RestoreVar(theItem);
 

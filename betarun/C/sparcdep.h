@@ -101,10 +101,24 @@ register volatile void *GCreg4 __asm__("%o4");
 #ifdef MT
 #define CallWithSave(name)                              \
            "mov %o7,%l7; "                              \
-           "call "CPREF#name"; "                        \
            "st %i0,[%g4+32]; " /* TSD->_CurrentObject */\
+           "call "CPREF#name"; "                        \
+           "st %o0,[%g4+36]; " /* TSD->_Origin */\
            "mov %l7,%o7; "                              \
            "ld [%g4+32],%i0; "                          \
+           "ld [%g4+36],%o0; "                          \
+           "retl; "                                     \
+           "st %g0,[%g4+32];  "
+#define CallWithFullSave(name)                          \
+           "mov %o7,%l7; "                              \
+           "st %i0,[%g4+32]; " /* TSD->_CurrentObject */\
+           "st %o0,[%g4+36]; " /* TSD->_Origin */\
+           "call "CPREF#name"; "                        \
+           "st %i1,[%g4+40]; " /* TSD->_SavedCallO */\
+           "mov %l7,%o7; "                              \
+           "ld [%g4+32],%i0; "                          \
+           "ld [%g4+36],%o0; "                          \
+           "ld [%g4+40],%i1; "                          \
            "retl; "                                     \
            "st %g0,[%g4+32];  "
 #endif /* MT */
@@ -239,7 +253,7 @@ register volatile void *GCreg4 __asm__("%o4");
 /* ExtRR, ExtVRx */
 #define ParamObjOffRange(name)			        \
   asmlabel(name, 					\
-	   CallWithSave(name)                           \
+	   CallWithFullSave(name)                       \
            );                                           \
  void C##name(struct Object *theObj,			\
 	      unsigned offset, /* in bytes */           \
@@ -260,7 +274,7 @@ void name(struct ValRep *theRep,                        \
 /* CopyRR, CopyVR1, CopyVR2, CopyVR4, CopyVR8 */
 #define ParamRepObjOff(name)                            \
   asmlabel(name,                                        \
-	   CallWithSave(name)                           \
+	   CallWithFullSave(name)                       \
 	   );                                           \
 void C##name(struct ValRep *theRep,                     \
 	     struct Object *theObj,                     \
@@ -281,7 +295,7 @@ void name(struct ObjectRep *theRep,                     \
 /* CopySVRI, CopySVRC, CopyVRI, CopyVRC */
 #define ParamORepObjOff(name)                           \
   asmlabel(name,                                        \
-	   CallWithSave(name)                           \
+	   CallWithFullSave(name)                       \
 	   );                                           \
 void C##name(struct ObjectRep *theRep,                  \
 	     struct Object *theObj,                     \
@@ -305,7 +319,7 @@ void name(struct ValRep *theRep,                        \
 /* CopySRR, CopySVR1, CopySVR2, CopySVR4, CopySVR8 */
 #define ParamRepObjOffLowHigh(name)                     \
   asmlabel(name,                                        \
-	   CallWithSave(name)                           \
+	   CallWithFullSave(name)                       \
 	   );                                           \
 void C##name(struct ValRep *theRep,                     \
 	     struct Object *theObj,                     \
@@ -330,7 +344,7 @@ void name(struct ObjectRep *theRep,                     \
 /* CopySVRI, CopySVRC CopySRR, CopySVR1, CopySVR2, CopySVR4, CopySVR8 */
 #define ParamORepObjOffLowHigh(name)                    \
   asmlabel(name,                                        \
-	   CallWithSave(name)                           \
+	   CallWithFullSave(name)                       \
 	   );                                           \
 void C##name(struct ObjectRep *theRep,                  \
 	     struct Object *theObj,                     \

@@ -78,7 +78,7 @@ void valhalla_create_buffers ()
 void valhalla_init_sockets (int valhallaport)
 {
   DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_init_sockets\n"));  
-  fprintf(stdout,"debuggee: valhallaport=%d\n", valhallaport);
+  DEBUG_VALHALLA(fprintf(stdout,"debuggee: valhallaport=%d\n", valhallaport));
 #ifdef nti
   valhalla_initSockets();
 #endif

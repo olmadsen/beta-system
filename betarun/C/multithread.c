@@ -298,7 +298,7 @@ struct Object *doGC(unsigned long numbytes)
 	  /* Have now done two IOAGc's without freeing enough space.
 	   * Make sure that all objects go to AOA in the next GC.
 	   */
-	  IOAtoAOAtreshold=2;
+	  IOAtoAOAtreshold=IOAMinAge+1;
 	  INFO_IOA(fprintf(output, "[%d]\n", i));
 	  DEBUG_IOA(fprintf(output, "Forcing all objects in IOA to AOA\n"));
 	  IOAGc();
@@ -324,9 +324,7 @@ struct Object *doGC(unsigned long numbytes)
 		  "***This will probably cause AOA releated problems.\n\n");
 #endif
 	  newObj = AOAcalloc(numbytes);
-	  IOATop = gIOATop;
-	  gIOATop = (long*)((long)gIOATop + IOASliceSize); /* size of slice */
-	  savedIOALimit = IOALimit = gIOATop;
+	  savedIOALimit = IOALimit = IOATop = gIOATop;
 	  break;
 	}
       }

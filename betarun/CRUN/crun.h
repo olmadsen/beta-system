@@ -83,21 +83,7 @@ AssignReference(long *theCell, ref(Item) newObject)
 }
 
 #ifdef RTDEBUG
-#ifdef __GNUC__
-static __inline__ void 
-#else
-static void 
-#endif
-zero_check(char *p, unsigned bytesize)
-{
-  register long i;
-#ifdef RTDEBUG
-  if (bytesize&3)
-    fprintf(output, "What! bytesize&3 != 0\n");
-#endif
-  for (i = bytesize-4; i >= 0; i -= 4)
-    if (*(long *)(p+i) != 0) fprintf(output, "zero_check failed\n");	
-}
+extern void zero_check(char *p, unsigned bytesize);
 #endif
 
 #ifdef __GNUC__

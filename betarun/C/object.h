@@ -347,7 +347,7 @@ typedef struct TSD
   /* 32 */ struct Object      * _CurrentObject;
   /*       NB: This offset is hardcoded into CallWithSave in sparcdep.h */
   /* 36 */ struct Object      * _Origin;
-  /* 40 */ struct Object      * _SavedCallO; /* used when no stack avail */
+  /* 40 */ struct Object      * _SavedCallO;
   /* 44 */ long                 _TSDinx;
   /* 48 */ tsd_flag_t           _TSDFlags;
   /* 52 */ char               * _CTextPoolEnd;

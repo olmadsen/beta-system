@@ -50,7 +50,7 @@ struct Item *CopyT(char *asciz,
   Protect(theItem, theRep = cast(ValRep) IOAalloc(size));
   
   theRep->Proto = ByteRepPTValue;
-  theRep->GCAttr = IOAMinAge;
+  if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
   theRep->LowBorder = 1;
   theRep->HighBorder = range;
   
