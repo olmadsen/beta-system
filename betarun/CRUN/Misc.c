@@ -122,7 +122,7 @@ void CCk(ref(Object) r)
 {
   if(r) 
     Claim(inIOA(r) || inAOA(r) || inLVRA(r),
-	  "Checked reference none or inside IOA, AOA, or LVRA");
+	  "Reference none or inside IOA, AOA, or LVRA");
   }
 #endif
 #endif
