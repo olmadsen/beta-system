@@ -677,7 +677,7 @@ namespace beta.converter
 	      innerClass = stripNamespace(cls.FullName);
 	      innerName = stripNamespace(unmangle(outer, cls.FullName));
 	      if (sup != null){
-		innerSuper = stripNamespace(sup.FullName);
+		innerSuper = checkForNestedName(sup, false); // stripNamespace(sup.FullName);
 	      }
 	      beta.indent();
 	      beta.putPatternBegin(innerName, innerSuper);
