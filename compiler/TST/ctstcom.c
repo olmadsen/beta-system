@@ -159,19 +159,19 @@ char STDCALL f6(struct xCOMclass *this, struct myData S)
 struct myData STDCALL f7(struct xCOMclass *this, long a, long b, long c)
 { struct myData mD;
   if (test) printf(" xCOMclass::F7: %d, %d, %d \n",a,b,c);
-  mD.x = 1234;
+  mD.x = a+1234;
   mD.s = 321;
-  mD.c = '=';
+  mD.c = 't';
   return mD;
 }
 
 struct myBigData STDCALL f8(struct xCOMclass *this, long a, long b, long c)
 { struct myBigData mD;
   if (test) printf(" xCOMclass::F8: %d, %d, %d \n",a,b,c);
-  mD.x = 1234;
+  mD.x = a+1234;
   mD.y = 0x87654321;
   mD.s = 321;
-  mD.c = '=';
+  mD.c = 's';
   return mD;
 }
 
