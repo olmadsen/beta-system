@@ -1,8 +1,10 @@
 ORIGIN '../tableview';
-INCLUDE '~beta/guienv/v1.2/graphics';
-INCLUDE '~beta/guienv/v1.2/fields';
+INCLUDE '~beta/guienv/v1.3/graphics';
+INCLUDE '~beta/guienv/v1.3/fields';
+INCLUDE '~beta/guienv/v1.3/utils/graphicsadds';
 INCLUDE '../defaultstyle';
-
+INCLUDE '../movabletextfield';
+INCLUDE '../colors';
 
 -- GUIENVtableViewTableItemEnterName: doPart --
 do value[] -> private.name[];
@@ -40,6 +42,22 @@ do true -> selected;
 -- GUIENVtableViewTableItemDeSelect: doPart --
 do false -> selected;
    
+-- GUIENVtableViewTableItemActivateEdit: doPart --
+do (# x, y: @integer;
+   do deactivateEdit;
+      position 
+        -> this(tableView).private.computeItemPosition -> (x, y);
+      (name, style, (x, y)) 
+        -> this(tableView).private.editFld.activate;
+      this(tableItem)[] -> this(tableView).private.currentEdit[];
+   #);
+   
+-- GUIENVtableViewDeactivateEdit: doPart --
+do (if private.currentEdit[] <> none then
+       private.editFld.deactivate;
+   if);
+   
+   
 -- GUIENVtableViewDisableUpdate: doPart --
 do true -> private.updateDisabled;
    
@@ -55,6 +73,14 @@ do (if private.updateDisabled then
    icon: ^raster;
    position: @integer;
    selected: @boolean;
+   drawOne: this(tableView).private.tableGraphics
+     (# x, y: @integer;
+     do this(tableView).private.margin -> x;
+        (this(tableView).private.margin
+        + this(tableView).private.itemHeight * (position - 1))
+          -> y;
+        (this(tableItem)[], x, y) -> drawItem;
+     #);
 #)
 
 -- GUIENVtableViewEnterStyle: doPart --
@@ -82,6 +108,7 @@ do private.items.iterate
 do private.items.init;
    defaultStyle -> private.theStyle[];
    private.computeItemHeight;
+   private.editFld.init;
    inner;
 
 -- GUIENVtableViewClose: doPart --
@@ -97,7 +124,8 @@ do private.refresh;
 
 -- GUIENVtableViewOnMouseDown: doPart --
 do (# theItem: ^tableItem;
-   do localPosition -> private.findTableItem -> theItem[];
+   do deactivateEdit;
+      localPosition -> private.findTableItem -> theItem[];
       (if theItem[] <> None then
           (if not theItem.selected then
               scan
@@ -107,18 +135,37 @@ do (# theItem: ^tableItem;
               theItem.select;
           if);
           this(onMouseDown)[] -> theItem.onMouseDown;
+       else
+          scan
+          (# 
+          do current.deSelect;
+          #);
       if);
    #);
    inner;
 
 -- GUIENVtableViewOnMouseUp: doPart --
-do inner;
+do scan
+   (# 
+   do (if current.selected then 
+          this(onMouseUp)[] -> current.onMouseUp;
+          (if metaKey then
+              current.activateEdit;
+          if);
+      if);
+   #);
+   inner;
 
 -- GUIENVtableViewOnKeyDown: doPart --
-do inner;
+do ch -> private.speedSearch;
+   inner;
 
 -- GUIENVtableViewPrivate: descriptor --
-(# 
+(# theStyle: ^textStyle;
+   itemHeight: @integer;
+   iconWidth: @integer;
+   updateDisabled: @boolean;
+   
    borderSpacing: (# exit 3 #);
    iconSpacing: (# exit 4 #);
    spacing: (# exit 2 #);
@@ -132,9 +179,67 @@ do inner;
      exit value
      #);
    
-   theStyle: ^textStyle;
-   itemHeight: @integer;
-   updateDisabled: @boolean;
+   tableGraphics: graphics
+     (# drawItem:
+          (# theItem: ^tableItem;
+             x, y: @integer;
+          enter (theItem[], x, y)
+          do (# tx, ty: @integer;
+                tw: @integer;
+                ix, iy: @integer;
+                ih, iw: @integer;
+                
+                icon: ^raster;
+             do x + iconWidth + iconSpacing -> tx;
+                (y 
+                + (itemHeight - th) div 2 
+                + theStyle.ascent)
+                  -> ty;
+                
+                theItem.icon -> icon[];
+                (if icon[] <> none then
+                    icon.height -> ih;
+                    icon.width -> iw;
+                    x -> ix;
+                    y + (itemHeight - ih) div 2 -> iy;
+                    (icon[], (0, 0), (ix, iy), iw, ih) -> drawRaster;
+                if);
+                theItem.name -> theStyle.widthOfText -> tw;
+                (if theItem.selected then
+                    ((tx, y), (tx + tw, y + itemHeight)) -> fillRect;
+                    (tx, ty) -> moveTo;
+                    theBGcolor -> pen.foreGroundColor;
+                    theItem.name -> drawText;
+                    black -> pen.foreGroundColor;
+                 else
+                    theBGcolor -> pen.foreGroundColor;
+                    ((tx, y), (tx + tw, y + itemHeight)) -> fillRect;
+                    black -> pen.foreGroundColor;
+                    (tx, ty) -> moveTo;
+                    theItem.name -> drawText;
+                if);
+             #);
+          #);
+        black: (# exit (0, 0, 0) #);
+        white: (# exit (maxInt, maxInt, maxInt) #);
+        theBGcolor: ^color;
+
+        th: @integer;
+     do theStyle[] -> style;
+        theStyle.lineHeight -> th;
+        backgroundColor -> theBGcolor[];
+        (if border.visible then
+            (# width, height: @integer;
+            do size -> (width, height);
+               (if (width >= 4) and (height >= 4) then
+                   ((2, 2), (width - 2, height - 2)) -> clipRectangle;
+               if);
+            #);
+        if);
+        inner;
+     #);
+   
+   
    updateTable:
      (# 
      do (if not updateDisabled then
@@ -143,6 +248,11 @@ do inner;
      #);
    items: @list
      (# element:: tableItem;
+        assignPositions: scan
+          (# inx: @integer;
+          do inx + 1 -> inx;
+             inx -> current.private.position;
+          #);
      #);
    maxIconSize:
      (# width, height: @integer;
@@ -161,6 +271,19 @@ do inner;
      do maxIconSize -> (width, height);
         (height + 2 * spacing, theStyle.lineHeight) -> Max -> itemHeight;
      #);
+   computeItemPosition:
+     (# position: @integer;
+        x, y: @integer;
+        width, ignoreheight: @integer;
+     enter position
+     do maxIconSize -> (width, ignoreheight);
+        width + margin + iconSpacing -> x;
+        (position - 1) * itemHeight
+        + (itemHeight - theStyle.lineHeight) div 2 
+        + theStyle.ascent + margin 
+          -> y;
+     exit (x, y)
+     #);
    insert:
      (# item, before: ^tableItem;
      enter (item[], before[])
@@ -169,54 +292,27 @@ do inner;
          else
             (item[], before[] -> items.at) -> items.insertBefore;
         if);
+        items.assignPositions;
      #);
    delete:
      (# item: ^tableItem;
      enter item[]
      do item[] -> items.at -> items.delete;
+        items.assignPositions;
      #);
    
-   refresh:
-     (# width, ignoreheight: @integer;
-        textWidth: @integer;
-        icon: ^raster;
-        black: (# exit (0, 0, 0) #);
-        white: (# exit (maxInt, maxInt, maxInt) #);
-     do 
-        maxIconSize -> (width, ignoreheight);
-        size -> (textWidth, ignoreheight);
-        textWidth - 2*margin - width - iconSpacing -> textWidth;
-        graphics
-        (# tx,ty: @integer;
-           ix, iy: @integer;
-        do theStyle[] -> style;
-           margin + width + iconSpacing -> tx;
-           (itemHeight - theStyle.lineHeight) div 2 + theStyle.ascent + margin -> ty;
-           margin -> ix;
-           margin -> iy;
-           scan
-           (# ih, iw: @integer;
-           do current.icon -> icon[];
-              (if icon[] <> None then
-                  icon.height -> ih;
-                  icon.width -> iw;
-                  (icon[], (0, 0), (ix, iy + (itemHeight - ih) div 2), iw, ih) -> drawRaster;
-              if);
-              (if current.selected then
-                  ((tx, iy), (tx + textWidth, iy + itemHeight)) -> fillRect;
-                  (tx, ty) -> moveTo;
-                  white -> pen.foreGroundColor;
-                  current.name -> drawText;
-                  black -> pen.foreGroundColor;
-               else
-                  (tx, ty) -> moveTo;
-                  current.name -> drawText;
-              if);
-              ty + itemHeight -> ty;
-              iy + itemHeight -> iy;
-           #);
+   refresh: tableGraphics
+     (# x, y: @integer;
+     do maxIconSize -> (iconWidth, integerObject);
+        margin -> x;
+        margin -> y;
+        scan
+        (# 
+        do (current[], x, y) -> drawItem;
+           y + itemHeight -> y;
         #);
      #);
+
    preferredSize:
      (# width, height: @integer;
         maxTextWidth: @integer;
@@ -248,12 +344,56 @@ do inner;
           #);
      exit theItem[]
      #);
+   editFld: @movableTextField
+     (# 
+        verify::
+          (# 
+          do (if currentEdit[] <> none then
+                 (if theText -> currentEdit.verify then
+                     theText -> currentEdit.name;
+                 if);
+                 none -> currentEdit[];
+             if);
+          #);
+     #);
+   currentEdit: ^tableItem;
+   
+   simpleFind:
+     (# ch: @char;
+        found: ^tableItem;
+     enter ch
+     do l: scan
+        (# theName: ^text;
+        do current.name -> theName[];
+           (if theName.length >= 1 then
+               (if ch = (1 -> theName.inxGet) then
+                   current[] -> found[];
+                   leave l;
+               if);
+           if);
+        #);
+     exit found[]
+     #);
+   speedSearch:
+     (# ch: @char;
+        foundItem: ^tableItem;
+     enter ch
+     do ch -> simpleFind -> foundItem[];
+        (if foundItem[] <> none then
+            scan
+            (# 
+            do current.deSelect;    
+            #);
+            foundItem.select;
+        if);
+     #);
 #)
 
 -- GUIENVtableViewTableItemEnterSelected: doPart --
 do (if value <> private.selected then
        value -> private.selected;
-       true -> update;
+       (* true -> update;*)
+       private.drawOne;
        (if private.selected then
            onSelect;
        if);
