@@ -1,7 +1,12 @@
-char betarun_version[] = "10";
+char betarun_version[] = "11";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.10  2001/05/10 12:53:00  corry
+ * Make CRUN Makefile more pretty
+ * Some support for rungen.exe dependency on x86 targets
+ * Betarun version number: 10
+ *
  * Revision 1.9  2001/05/10 12:44:07  corry
  * Make output of Makefiles more beautiful
  * Betarun version number: 9
