@@ -53,8 +53,40 @@ ClrConsole: Stream
        #);
   #);
 ClrKeyBoard: Stream
+  (* The .NET Framework (v1.1) does not offer a blocking peek, 
+   * which is needed for correct semantics of the BETA keyboard.
+   * Nor does the framework offer something equivalent for the 
+   * Java PushBackInputStream.
+   * The framework does, however, offer a blocking read, which we then 
+   * used to implement a PushBack input stream.
+   *)
   (# in: ^TextReader;
      buffer: [1]@char;
+     has_peek: @boolean;
+     readBlock: charValue
+       (# nread: @int32;
+          readSucceeeded:<object;
+          readFailed:<object;
+       do (if has_peek then
+              buffer[1]->value;
+              false->has_peek;
+           else
+              (buffer[], 0, 1) -> in.ReadBlock -> nread;
+              (if nread=1 then
+                  (* NOTICE: BETA char 8 bit, IL char 16 bit *)
+                  buffer[1] %Band 0xff ->value;
+                  readSucceeeded;
+               else
+                  ascii.eot->value;
+                  readFailed;
+              if);
+          if);
+          (*'readBlock: ch='->screen.puttext; value->screen.putint; screen.newline;*)
+       #);
+     peekBlock: readBlock
+       (# readSucceeeded:<(# do true->has_peek #);
+          readFailed:<(# do false->has_peek #);
+       #);
      init:
        (# 
        do Console.get_In->in[]
@@ -62,10 +94,7 @@ ClrKeyBoard: Stream
        #);
      Eos::<
        (# 
-       do (* This is different from the default implementation of eos
-           * which is blocking. 
-           *)
-          (in.Peek = ascii.eot) -> value;
+       do (peekBlock = ascii.eot) -> value;
        #);
      OtherError::< 
        (# do 'Keyboard error'->msg.puttext #);
@@ -73,21 +102,40 @@ ClrKeyBoard: Stream
        (# do 'Warning: attempt to Put to the Keyboard' -> screen.putline; #);
      Get::<
        (# 
-       do Console.Read -> ch;
+       do readBlock -> ch;
        #);
      GetAtom::<
        (# 
        do 'betaenv:ClrKeyboard.GetAtom' -> NYI
        #);
      GetLine::<
-       (# 
-       do Console.ReadLine -> txt[];
+       (# ch: @char;
+          cr_met: @boolean;
+       do (*Console.ReadLine -> txt[];*)
+          &text[]->txt[];
+          false -> cr_met;
+          read:
+            (if readBlock->ch
+             // ascii.cr then 
+                true -> cr_met; 
+                restart read;
+             // ascii.nl then 
+                (if cr_met then
+                    (* Found cariagereturn-newline, so we are at end of line *)
+                    leave read;
+                 else
+                    (* embedded nl? *)
+                    restart read;
+                if)
+             else
+                ch->txt.put;
+                false -> cr_met;
+                restart read;
+            if);
        #);
      Peek::<
        (# 
-       do in.Peek->ch;
-          (* NOTICE: BETA char 8 bit, IL char 16 bit *)
-          ch %Band 0xff -> ch;
+       do peekBlock->ch;
        #);
   #);
 

@@ -39,14 +39,17 @@ static int my_getchar(void)
 
 
 char GetFromKeyboard(void)
-{
-  return(my_getchar());
+{ 
+  int ch = my_getchar();
+  /*fprintf(stdout, "GetFromKeyboard: ch=%d\n", (int)ch); fflush(stdout);*/
+  return(ch);
 }
 int KeyboardEOS(void)
 {
   int ch;
   ch=my_getchar();
   ungetc(ch, stdin);
+  /*fprintf(stdout, "KeyboardEOS: ch=%d\n", (int)ch); fflush(stdout);*/
   return(ch==EOF); 
 }
 int KeyboardPeek(void)
@@ -57,7 +60,8 @@ int KeyboardPeek(void)
   if (ch != EOF) {
     ungetc(ch, stdin);
   }
-  
+
+  /*fprintf(stdout, "KeyboardPeek: ch=%d\n", (int)ch); fflush(stdout);*/
   return (ch);
 }
 
