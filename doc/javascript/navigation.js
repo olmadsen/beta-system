@@ -5,11 +5,16 @@ var DrawStepTime = 30;
 var rightboundary = -20;
 var leftboundary = -100;
 
+function on_load() {
+  window.status='Type ? for Help';
+  return true;
+}
+
 function AdjustSideBar() {
   if (document.layers) { 
      document.layers.SideBar.top = window.pageYOffset+37; 
   } else if (document.all) { 
-     document.all.SideBar2.style.top=document.body.scrollTop+15; 
+     document.all.SideBar2.style.pixelTop=document.body.scrollTop+15; 
   }
   return true;
 }
@@ -20,8 +25,14 @@ function SetupSideBar() {
      rightboundary=94
      leftboundary=36
   } else if (document.all) { 
-     rightboundary=0
-     leftboundary=-77
+     if (is_mac){
+       rightboundary=-0
+       leftboundary=-87
+       document.all.SideBar2.style.pixelLeft = leftboundary;
+     } else {
+       rightboundary=0
+       leftboundary=-77
+     }
   }
   AdjustSideBar();
   setInterval("AdjustSideBar()", 200);
@@ -29,10 +40,6 @@ function SetupSideBar() {
      pull(); 
      hdraw=setTimeout("delayeddraw()",DrawDelay);
   }
-  if (document.all && is_mac){
-     document.body.style.leftMargin = "35px";
-  }
-  window.onLoad = new Function("window.status='Type ? for Help'; return true;");
 }
 
 function pull(){
