@@ -2,15 +2,21 @@ ORIGIN '~beta/guienv/v1.6/guienv';
 INCLUDE '../support/row'
         '../support/column'
         '../support/auxcontrols'
+        '../graphicaleditor/constants'
         'integerfield'
+        'textlist'
         '~beta/guienv/v1.6/controls';
 -- guienvlib: Attributes --
 propertyInspector: window
   (#
+     theConstants: ^constantTable;
      propertyChanged:<
        (# name: ^text; value: ^text enter (name[],value[]) do INNER #);
+     nameChanged:< (# name: ^text enter name[] do INNER #);
+     editScript:< (# name: ^text enter name[] do INNER #);
      open::< 
        (# 
+       enter theConstants[]
        do
           (301,500)->size;
           inspectorPane.open;
@@ -33,17 +39,36 @@ propertyInspector: window
        do (inspectorPane.propertyPane[],name[],value)->view.open
        #);
      makeIntProperty: makePropertyView
-       (# value: @integer; str: ^text; propertyViewDesc:: textPropertyView
+       (#
+          value: @integer;
+          str,const: ^text;
+          propertyViewDesc:: textPropertyView;
+          consts: ^constants
        enter value
        do
-          &text[]->str[];
-          value->str.putint;
-          (inspectorPane.propertyPane[],name[],str[])->view.open
+          (if theConstants[] <> none then
+              name[]->theConstants.lookup->consts[]
+          if);
+          (if consts[] <> none then
+              (name[],value,consts[])->makeConstantProperty
+           else
+              &text[]->str[];
+              value->str.putint;
+              (inspectorPane.propertyPane[],name[],str[])->view.open
+          if)
        #);
      makeTextProperty: makePropertyView
        (# value: ^text; propertyViewDesc:: textPropertyView
        enter value[]
        do (inspectorPane.propertyPane[],name[],value[])->view.open
+       #);
+     makeConstantProperty: makePropertyView
+       (#
+          value: @integer;
+          consts: ^constants;
+          propertyViewDesc:: constantPropertyView
+       enter (value,consts[])
+       do (inspectorPane.propertyPane[],name[],value,consts[])->view.open
        #);
      propertyView: row
        (#
@@ -87,7 +112,7 @@ propertyInspector: window
                     5->margin.right;
                     5->margin.bottom;
                     5->distance;
-                    (140,30)->size;
+                    (140,26)->size;
                     caption1.open;
                     
                  #);
@@ -112,7 +137,7 @@ propertyInspector: window
                     5->margin.right;
                     5->margin.bottom;
                     5->distance;
-                    (140,30)->size;
+                    (140,26)->size;
                     INNER ;
                     
                  #)
@@ -180,7 +205,7 @@ propertyInspector: window
                  (#
                     eventHandler:: 
                       (#
-                         onStateChanged::
+                         onStateChanged:: 
                            (#
                               asText:
                                 (# b: @boolean; str: ^text
@@ -208,23 +233,182 @@ propertyInspector: window
           open::  (# b: @boolean;  enter b do b->value;  #);
           
        #);
-     inspectorPane: @canvas
+     constantPropertyView: propertyView
        (#
+          consts: ^constants;
+          value:
+            (# val: @integer; str: ^text
+            enter val
+            do
+               (if consts[] <> none then
+                   val->consts.numToName->str[]
+                else
+                   'undefined'->str[]
+               if);
+               str[]->valueView.theCaption.label
+            #);
+          theMenu: @menu
+            (#
+               constItem: menuItem
+                 (#
+                    open::  (# str: ^text enter str[] do str[]->name #);
+                    eventHandler:: 
+                      (# onSelect::  (#  do name->constChanged #) #)
+                 #);
+               add:
+                 (# str: ^text; item: ^constItem
+                 enter str[]
+                 do &constItem[]->item[]; str[]->item.open; item[]->append
+                 #)
+            #);
+          constChanged:
+            (# str: ^text; val: @integer; asText: ^text
+            enter str[]
+            do
+               str[]->consts.nameToNum->val;
+               str[]->valueView.theCaption.label;
+               &text[]->asText[];
+               val->asText.putInt;
+               (name,asText[])->propertyChanged
+            #);
+          valueViewDesc:: 
+            (#
+               theCaption: @caption (#  #);
+               thePopup: @downArrow
+                 (#
+                    open:: 
+                      (# 
+                      do
+                         borderStyles.shadowOut->border.style;
+                         true->border.visible;
+                         (25,17)->size
+                      #)
+                 #);
+               open::  (#  do thePopup.open; theCaption.open;  #);
+               
+            #);
+          open:: 
+            (# val: @integer; 
+            enter (val,consts[])
+            do
+               val->value;
+               theMenu.open;
+               (if consts[] <> none then
+                   consts.names.scan
+                     (# 
+                     do
+                        (if not ('undefined'->current.equalNCS) then
+                            current[]->theMenu.add
+                        if)
+                     #)
+               if);
+               theMenu[]->valueView.thePopup.popupMenu;
+               
+            #);
+          
+       #);
+     inspectorPane: @column
+       (#
+          name:
+            (# theName: ^text
+            enter theName[]
+            do
+               (if theName[] <> none then
+                   namePane.nameView.show;
+                   namePane.lab.show;
+                   theName[]->namePane.nameView.textContents
+                else
+                   ''->namePane.nameView.textContents;
+                   namePane.nameView.hide;
+                   namePane.lab.hide
+               if)
+            #);
+          scripts:
+            (# theScripts: ^textList
+            enter theScripts[]
+            do
+               scriptMenu.clear;
+               (if theScripts[] <> none then
+                   theScripts.scan
+                     (#  do current[]->scriptMenu.add #);
+                   namePane.eventsLab.show;
+                   namePane.pop.show
+                else
+                   namePane.eventsLab.hide; namePane.pop.hide
+               if)
+            #);
+          scriptMenu: @menu
+            (#
+               add:
+                 (# name: ^text; item: ^scriptItem
+                 enter name[]
+                 do &scriptItem[]->item[]; name[]->item.open; item[]->append
+                 #);
+               scriptItem: menuItem
+                 (#
+                    open::  (# str: ^text enter str[] do str[]->name #);
+                    eventHandler:: 
+                      (# onSelect::  (#  do name->editScript #) #)
+                 #)
+            #);
           eventhandler:: 
             (#
-               onChildFrameChanged:: 
-                 (# 
-                 do propertyPane.size->size; size->THIS(propertyInspector).size
-                 #)
+               onFrameChanged:: 
+                 (#  do size->THIS(propertyInspector).size #)
             #);
           open::< 
             (# 
             do
                (0xDDDD,0x5555,0x5555)->backgroundColor;
+               true->vertical.theWrap;
+               true->horizontal.theWrap;
+               0->margin.theLeft;
+               0->margin.theRight;
+               0->margin.theBottom;
+               0->margin.theTop;
+               0->distance;
                (301,500)->size;
                (0,0)->position;
+               namePane.open;
                propertyPane.open;
                
+            #);
+          namePane: @row
+            (#
+               lab: @caption (# open::  (#  do 'Name:'->label #) #);
+               nameView: @dialogField
+                 (#
+                    open::  (#  do (150,22)->size #);
+                    eventHandler:: 
+                      (# onReturn::<  (#  do textContents->nameChanged #)
+                      #)
+                 #);
+               eventsLab: @caption
+                 (# open::  (#  do 'Events:'->label #) #);
+               pop: @downArrow
+                 (#
+                    open:: 
+                      (# 
+                      do
+                         (27,13)->size;
+                         scriptMenu.open;
+                         scriptMenu[]->popupMenu;
+                         true->border.visible;
+                         borderStyles.shadowOut->border.style
+                      #)
+                 #);
+               open:: 
+                 (# 
+                 do
+                    (281,20)->size;
+                    true->vertical.wrap;
+                    true->border.visible;
+                    borderStyles.shadowOut->border.style;
+                    lab.open;
+                    nameView.open;
+                    eventsLab.open;
+                    pop.open
+                 #)
             #);
           propertyPane: @column
             (#

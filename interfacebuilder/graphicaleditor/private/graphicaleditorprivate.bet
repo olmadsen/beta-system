@@ -58,6 +58,7 @@ delay:
   
 
 -- graphicalEditorLib: Attributes --
+gridSize: (#  enter private.gridSize exit private.gridSize #);
 hasPrivateAttributes:
   (# 
   enter private.hasPrivateAttributes
@@ -362,8 +363,8 @@ adjustValue:
                  
               // intType then
                  (name[],
-                  (theEvaluation[],borderStyleConsts[])->betaGram.evaluateInt)
-                   ->theData.setInt;
+                  (theEvaluation[],name[]->lookupConstants)
+                    ->betaGram.evaluateInt)->theData.setInt;
                  
              if);
              
@@ -1364,7 +1365,10 @@ drag:
      bounds->oldBounds[];
      (first).owner.theWindowItem[]->dragItem[];
      FALSE->theProxy.palette;
-     (oldBounds[],theProxy[])->dragItem.dragAndDrop;
+     (oldBounds[],theProxy[])
+       ->dragItem.dragAndDrop
+         (# gridSize::  (#  do THIS(graphicalEditor).gridSize->value #)
+         #);
      
   #);
 selectable: booleanValue
@@ -1652,6 +1656,46 @@ editName:
      theNameDialog.open;
      theNameDialog.showModal;
      
+  #);
+changeName:
+  (# oldName,newName: ^text; isIdentifier: @boolean; isEqual: @boolean
+  enter newName[]
+  do
+     node[]->betaGram.getName->oldName[];
+     newName[]->checkIdentifier->isIdentifier;
+     (if isIdentifier then
+         newName[]->oldName.equalNCS->isEqual;
+         (if not isEqual then
+               (#
+                  theNames: ^astInterface.beta.names;
+                  theNameDcl: ^astInterface.beta.nameDcl;
+                  theNameDecl: ^astInterface.nameDecl;
+                  oldNameDcl: ^astInterface.beta.nameDcl;
+                  
+               do
+                  node[]->betaGram.getNames->theNames[];
+                  (if theNames[] <> none then
+                      1->theNames.get->oldNameDcl[];
+                      (theNames.frag[],newName[])->betaGram.newNameDcl
+                        ->theNameDcl[];
+                      (1,theNameDcl[])->theNames.put;
+                      (true,theNames.frag[],oldNameDcl[],theNameDcl[])
+                        ->theFragServer.notifyAstReplaced;
+                      
+                  if);
+                  
+               #);
+             (if owner[] <> none then
+                 (if isPrivateToOwner then
+                     'private.'->oldName.prepend; 'private.'->newName.prepend; 
+                 if);
+                 (oldName[],newName[])->owner.updateOpen;
+                 
+             if);
+             
+         if);
+         
+     if)
   #);
 editScripts:
   (#
@@ -1991,10 +2035,12 @@ changeData:
      force: @boolean;
      oldValue: ^atom;
      defaultValue: ^atom;
+     x,y: @integer;
      doChangePosition,doChangeSize,doChangeColor: @boolean;
      
   enter (newData[],force)
   do
+     maxint->x->y;
      4->trace (#  do 'ChangeData FORCE = '->xT; force->xB;  #);
      newData.data.storage.scan
        (# name: ^text; 
@@ -2002,7 +2048,9 @@ changeData:
           4->trace (#  do 'current.key = '->xT; current.key[]->xT;  #);
           (if true
            // 'x'->current.key.equalNCS // 'y'->current.key.equalNCS then
-              true->doChangePosition; 
+              true->doChangePosition; 'x'->newData.getInt->x; 
+           // 'y'->current.key.equalNCS then
+              true->doChangePosition; 'y'->newData.getInt->y; 
            // 'width'->current.key.equalNCS // 'height'->current.key.equalNCS
            then
               true->doChangeSize; 
@@ -2072,7 +2120,12 @@ changeData:
           if);
           
        #);
-     (if doChangePosition then newData.position->changePosition;  if);
+     (if doChangePosition then
+         (if x = maxint then 'x'->data.getInt->x if);
+         (if y = maxint then 'y'->data.getInt->y if);
+         (x,y)->changePosition;
+         
+     if);
      (if doChangeSize then newData.size->changeSize;  if);
      (if doChangeColor then newData.backgroundColor->changeColor;  if);
      
@@ -2835,6 +2888,17 @@ recentCanvas:
           (name[],name[]->inst.copyName,none ,'Recent')->insertCustom
        #)
   #);
+registerConstants:
+  (# name: ^text; consts: ^constants
+  enter (name[],consts[])
+  do (name[],consts[])->private.theConstants.define
+  #);
+lookupConstants:
+  (# name: ^text; consts: ^constants
+  enter name[]
+  do name[]->private.theConstants.lookup->consts[]
+  exit consts[]
+  #);
 insertCustom:
   (#
      theInstantiator: ^instantiator;
@@ -3200,6 +3264,9 @@ hasInclude: booleanValue
         remove: (# elm: ^element;  enter elm[] do elm[]->at->delete #);
         
      #);
+   theConstants: @constantTable;
+   borderConsts: @borderStyleConstants;
+   alignmentConsts: @alignmentConstants;
    
 #)  
 
@@ -3253,6 +3320,7 @@ hasInclude: booleanValue
 
 -- graphicalEditorPrivateAttributes: Descriptor --
 (#
+   gridSize: @integer;
    thePropertyInspector: @propertyInspector
      (#
         data: ^parameters;
@@ -3291,7 +3359,7 @@ hasInclude: booleanValue
                do
                   l:
                   (if str[] <> none then
-                      str.asInt (# syntaxError:: (#  do leave l #) #)->int
+                      str.asInt (# syntaxError::  (#  do leave l #) #)->int
                   if)
                exit int
                #)
@@ -3312,8 +3380,22 @@ hasInclude: booleanValue
                    (#  do (current[],newData[])->makeChangeOperation #)
              if)
           #);
+        nameChanged:: 
+          (# 
+          do
+             (if selection.size = 1 then
+                 name[]->(selection.first).changeName
+             if)
+          #);
+        editScript:: 
+          (# 
+          do
+             (if selection.size = 1 then
+                 name[]->(selection.first).editVirtual
+             if)
+          #);
         update:
-          (# theEditor: ^windowItemEditor
+          (# theEditor: ^windowItemEditor; inst: ^instantiator
           do
              (if active then
                  (if not selection.empty then
@@ -3343,13 +3425,25 @@ hasInclude: booleanValue
                                        (current.value.asIntAtom).value)
                                         ->makeIntProperty
                                    else
-                                      propView[]
-                                        ->qua
-                                          (# as:: textPropertyView
-                                          do
-                                             (current.value.asIntAtom).value
-                                               ->thisObj.intValue
-                                          #)
+                                      (if true
+                                       // propView## <= textPropertyView## then
+                                          propView[]
+                                            ->qua
+                                              (# as:: textPropertyView
+                                              do
+                                                 (current.value.asIntAtom).value
+                                                   ->thisObj.intValue
+                                              #)
+                                       // propView## <= constantPropertyView##
+                                       then
+                                          propView[]
+                                            ->qua
+                                              (# as:: constantPropertyView
+                                              do
+                                                 (current.value.asIntAtom).value
+                                                   ->thisObj.value
+                                              #)
+                                      if)
                                   if)
                                // boolType then
                                   (if propView[] = none then
@@ -3382,12 +3476,26 @@ hasInclude: booleanValue
                               if)
                            #);
                          inspectorPane.propertyPane.changed
+                     if);
+                     (if selection.size = 1 then
+                         (selection.first).node[]->betaGram.getName
+                           ->inspectorPane.name;
+                         (selection.first).className[]->lookup->inst[];
+                         (if inst[] <> none then
+                             inst.scripts[]->inspectorPane.scripts
+                         if);
+                         
+                      else
+                         none ->inspectorPane.name; none ->inspectorPane.scripts
                      if)
                  if)
              if);
              
           #);
-        open::  (#  do hide #);
+        open:: 
+          (# 
+          do hide; inspectorpane.propertypane.scan (#  do current.close #)
+          #);
         eventHandler:: 
           (#
              onAboutToClose:: 
