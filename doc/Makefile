@@ -10,7 +10,7 @@ doc:
 
 link-check:
 	@echo Checking all links from index.html
-	cd admin/errors; sh -c 'for f in *.*; do >$$f; done'
+	cd admin/errors; /bin/rm -f *.*; touch linklint.html
 	perl bin/linklint_2.1/linklint -net -error -xref -doc admin/errors -quiet -orphan -htmlonly -limit 2000 -ignore /contents.html -root . -index index.html  /@ 
 	@echo See file admin/errors/linklint.html for a survey of errors.
 
