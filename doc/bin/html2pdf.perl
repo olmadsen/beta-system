@@ -24,6 +24,7 @@
 # Command line options
 $verbose = "-v" if (defined($v));
 
+$old=1;
 if ($old){
     $htmldoc = "htmldoc";
 } else {
@@ -59,7 +60,7 @@ while (<SEQUENCE>){
 $pdfexisted=1 if ( -f $pdf );
 &make_titlepage();
 $files = join (' ', @sequence);
-$cmd = "$htmldoc $verbose -t pdf -f $pdf --toclevels 4 --bodycolor #ffffff --size A4 --left 1.0in --right 0.5in --top 0.5in --bottom 0.5in --header .t. --footer h.1 --tocheader .t. --tocfooter l.i --compression=9 --fontsize 11.0 --fontspacing 1.2 --headingfont Helvetica --bodyfont Helvetica --headfootsize 11.0 --headfootfont Helvetica $files";
+$cmd = "$htmldoc $verbose -t pdf -f $pdf --toclevels 4 --bodycolor #ffffff --size A4 --left 1.0in --right 0.5in --top 0.5in --bottom 0.5in --header .t. --footer h.1 --tocheader .t. --tocfooter l.i --firstpage p1 --compression=9 --fontsize 11.0 --fontspacing 1.2 --headingfont Helvetica --bodyfont Helvetica --headfootsize 11.0 --headfootfont Helvetica $files";
 
 print "Generating $pdf\n";
 print "$cmd\n" if $verbose;
@@ -107,7 +108,7 @@ $date
 <P>
 <TABLE border=1 cellpadding=3>
 <TR><TD align=center>
-Copyright &copy; $copyright <IMG SRC="../images/trans5.5.gif" WIDTH=10 HEIGHT=5 ALT=""><A HREF="http://www.mjolner.com">Mj&oslash;lner Informatics</A>.<BR>
+Copyright &copy; $copyright <IMG SRC="../images/trans5x5.gif" WIDTH=10 HEIGHT=5 ALT=""><A HREF="http://www.mjolner.com">Mj&oslash;lner Informatics</A>.<BR>
 All rights reserved.<BR>
 No part of this document may be copied or distributed<BR>
 without the prior written permission of Mj&oslash;lner Informatics
