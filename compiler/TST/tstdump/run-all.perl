@@ -121,6 +121,7 @@ foreach $f (@files) {
 		s/MACHINE_TYPE/$objdir/g;
 		s/address 0x[0-9a-f]+/address 0xXXXXXXXX/g;
 		s/Segmentation fault/Bus error/g;
+		s/ \[ast: 0x\w+\]//g;
 		print OUT;
 	    }
 	    close IN;
@@ -133,6 +134,7 @@ foreach $f (@files) {
 		s/set\ +BETART\=SimpleDump/setenv BETART SimpleDump/;
 		s/address 0x[0-9a-f]+/address 0xXXXXXXXX/g;
 		s/Segmentation fault/Bus error/g;
+		s/ \[ast: 0x\w+\]//g;
 		print OUT;
 	    }
 	    close IN;
