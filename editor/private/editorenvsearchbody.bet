@@ -168,6 +168,124 @@ LIB_ITEM 'editorcodeeditor';
      exit (node[],wrapped)
      #);
    ;
+   initSearchCriteria:
+     (#
+        keepSearchCriteria,isSearchDialog: @boolean;
+        cnode: ^astInterface.ast;
+        lexText: ^astInterface.lexemText;
+        hasLink,semanticErrors: @boolean;
+        theDecl: ^astInterface.ast;
+        checkNeeded:
+          (#
+             mess,help: ^text;
+             theNode: ^astInterface.ast;
+             status,doCheck: @boolean;
+             theGroupEditor: ^groupEditor
+          enter (theNode[],mess[])
+          do
+             (if not ((mps[],theNode.frag.father)->getDoneCheckProperty) then
+                 mess.copy->help[];
+                 help.newline;
+                 help.newLine;
+                 'Check?'->help.putText;
+                 (if ymerCallback[] <> none then
+                     (none ,'Check?',help[])
+                       ->UI.promptForBoolean
+                         (# ok::  (#  do true->doCheck #) #);
+                     (if doCheck then
+                         (ymerCallback.theBrowserId,theNode.frag.father)
+                           ->groupEditorList.findGroupEditor->theGroupEditor[];
+                         (if (theGroupEditor[] <> none ) then
+                             (if not theGroupeditor.isReadOnly then
+                                 theNode.frag.father->ymerCallback.check->status
+                              else
+                                 'Is readonly, make copy before checking'
+                                   ->ymerCallback.infoView;
+                                 (* theNode.frag.father->ymerCallback.saveAsAndCheck
+                                  ->status;
+                                  false->stillInSameGroup*)
+                                 
+                             if)
+                         if)
+                     if)
+                 if)
+              else
+                 true->status
+             if)
+          exit status
+          #);
+        checked: @boolean;
+        help: ^text
+     enter (keepSearchCriteria,isSearchDialog)
+     do
+        ge[]->searchPrivate.ge[];
+        ce[]->searchPrivate.ce[];
+        fg[]->searchPrivate.fg[];
+        ff[]->searchPrivate.ff[];
+        fgList[]->searchPrivate.fgList[];
+        ;
+        none ->searchPrivate.fgPos[];
+        false->searchPrivate.wraparound;
+        ''->searchPrivate.foundText[];
+        'keepSearchCriteria: '->putText;
+        keepSearchCriteria->putBoolean;
+        newLine;
+        'theSearchText: '->putText;
+        searchPrivate.theSearchText[]->putLine;
+        (if not keepSearchCriteria then
+            none ->searchPrivate.theNameDcl[];
+            none ->searchPrivate.theSearchText[];
+            false->searchPrivate.onlyApplications;
+            ymerCallBack.getCurrentNode->cnode[];
+            (if isSearchDialog then
+                'Search in lexems for:'->searchPrivate.searchMessText[]
+             else
+                'Search in lexems for:'->searchPrivate.replaceMessText[]
+            if);
+            (if cnode[] <> none then
+                (if cnode.kind
+                 // mps.kinds.nameDecl // mps.kinds.nameAppl then
+                    ((cnode.frag.father).name).copy->help[];
+                    '\nmust be (re)checked in order to search semantically\n'
+                      ->help.append;
+                    (cnode[],help[])->checkNeeded->checked;
+                    (if checked then
+                        (if cnode.kind
+                         // mps.kinds.nameDecl then
+                            cnode.father->searchPrivate.theNameDcl[];
+                            cnode[]->lexText[];
+                            lexText.getText->searchPrivate.thesearchText[];
+                            (if isSearchDialog then
+                                'Search for applications of:'
+                                  ->searchPrivate.searchMessText[]
+                             else
+                                'Search for applications of:'
+                                  ->searchPrivate.replaceMessText[]
+                            if);
+                            true->searchPrivate.onlyApplications
+                         // mps.kinds.nameAppl then
+                            cnode[]->hasSemanticLink
+                              ->(hasLink,theDecl[],semanticErrors);
+                            (if hasLink then
+                                theDecl[]->searchPrivate.theNameDcl[];
+                                (if isSearchDialog then
+                                    'Search for applications of:'
+                                      ->searchPrivate.searchMessText[]
+                                 else
+                                    'Search for applications of:'
+                                      ->searchPrivate.replaceMessText[]
+                                if);
+                                true->searchPrivate.onlyApplications
+                            if);
+                            cnode[]->lexText[];
+                            lexText.getText->searchPrivate.thesearchText[]
+                        if)
+                    if)
+                if)
+            if)
+        if)
+     #);
+   ;
    searchResult: ^searchResultCallback;
    searchResultCallback:
      (#
@@ -241,7 +359,7 @@ LIB_ITEM 'editorcodeeditor';
                           ''->searchPrivate.foundText
                       if);
                       (searchPrivate.theSearchText[],searchPrivate.dir.down,
-                       ge[],ce[],fg[],ff[],fgList[])->searchText->node[];
+                       ge[],ce[],fg[],ff[],fgList[],false)->searchText->node[];
                       (if node[] <> none then
                           node[]->searchResult.found
                        else
@@ -371,29 +489,68 @@ LIB_ITEM 'editorcodeeditor';
      (#
         node: ^astInterface.ast;
         replace:: 
-          (# cfg: ^astInterface.fragmentGroup
+          (#
+             cfg: ^astInterface.fragmentGroup;
+             applicationOf,semanticErrorsOrNotChecked: @boolean
           do
-             (if node[] <> none then
-                 ymerCallBack.getCurrentFragmentGroup->cfg[];
-                 (if cfg[] <> none then
-                     (ymerCallback.theBrowserId,cfg[])
-                       ->groupEditorList.findGroupEditor->ge[];
-                     (if ge[] <> none then
-                         node.frag[]->ge.formEditorList.findEditor->ce[];
-                         (if ce[] <> none then
-                             (node[],theUserSearchText[],theUserReplaceText[])
-                               ->ce.editLexem;
-                             next
-                          else
-                             'ce is none!'->putLine
-                         if)
-                      else
-                         'ge is none!'->putLine
-                     if)
-                  else
-                     'cfg is none!'->putLine
-                 if)
-             if)
+             thisOperation:
+               (# 
+               do
+                  ymerCallBack.getCurrentNode->node[];
+                  (if node[] <> none then
+                      (if searchPrivate.onlyApplications then
+                          (node[],searchPrivate.theNameDcl[])->isApplicationOf
+                            ->(applicationOf,semanticErrorsOrNotChecked);
+                          (if semanticErrorsOrNotChecked then
+                              'replace semantic errors!'->putLine;
+                              leave thisOperation
+                           else
+                              'replace: no semantic errors!'->putLine
+                          if);
+                          (if not applicationOf then
+                              (if replaceDeclaration then
+                                  (if not
+                                  (searchPrivate.theNameDcl.getSon1->node.equal)
+                                   then
+                                      next
+                                  if)
+                               else
+                                  next
+                              if)
+                          if)
+                       else
+                          (if not
+                          ((theUserSearchText[],node[],
+                            searchPrivate.caseSensitive,searchPrivate.wholeWord)
+                             ->inLexem) then
+                              next
+                          if)
+                      if)
+                   else
+                      next
+                  if);
+                  (if node[] <> none then
+                      ymerCallBack.getCurrentFragmentGroup->cfg[];
+                      (if cfg[] <> none then
+                          (ymerCallback.theBrowserId,cfg[])
+                            ->groupEditorList.findGroupEditor->ge[];
+                          (if ge[] <> none then
+                              node.frag[]->ge.formEditorList.findEditor->ce[];
+                              (if ce[] <> none then
+                                  (node[],theUserSearchText[],
+                                   theUserReplaceText[])->ce.editLexem;
+                                  next
+                               else
+                                  'ce is none!'->putLine
+                              if)
+                           else
+                              'ge is none!'->putLine
+                          if)
+                       else
+                          'cfg is none!'->putLine
+                      if)
+                  if)
+               #)
           #);
         next:: 
           (# 
@@ -454,7 +611,8 @@ LIB_ITEM 'editorcodeeditor';
                           ''->searchPrivate.foundText
                       if);
                       (theUserSearchText[],searchPrivate.dir.down,ge[],ce[],
-                       fg[],ff[],fgList[])->searchText->node[];
+                       fg[],ff[],fgList[],replaceDeclaration)->searchText
+                        ->node[];
                       (if node[] <> none then
                           node[]->replaceResult.found
                        else
@@ -572,57 +730,6 @@ LIB_ITEM 'editorcodeeditor';
 
 -- editorenvSearchTextDialog: Descriptor --
 (#
-   initSearchCriteria:
-     (#
-        cnode: ^astInterface.ast;
-        lexText: ^astInterface.lexemText;
-        hasLink: @boolean;
-        theDecl: ^astInterface.ast
-     do
-        ge[]->searchPrivate.ge[];
-        ce[]->searchPrivate.ce[];
-        fg[]->searchPrivate.fg[];
-        ff[]->searchPrivate.ff[];
-        fgList[]->searchPrivate.fgList[];
-        &searchResult[]->searchPrivate.searchResult[];
-        ;
-        none ->searchPrivate.fgPos[];
-        false->searchPrivate.wraparound;
-        ''->searchPrivate.foundText[];
-        'keepSearchCriteria: '->putText;
-        keepSearchCriteria->putBoolean;
-        newLine;
-        'theSearchText: '->putText;
-        searchPrivate.theSearchText[]->putLine;
-        (if not keepSearchCriteria then
-            none ->searchPrivate.theNameDcl[];
-            none ->searchPrivate.theSearchText[];
-            false->searchPrivate.onlyApplications;
-            ymerCallBack.getCurrentNode->cnode[];
-            'Search in lexems for:'->searchPrivate.searchMessText[];
-            (if cnode[] <> none then
-                (if cnode.kind
-                 // mps.kinds.nameDecl then
-                    cnode.father->searchPrivate.theNameDcl[];
-                    cnode[]->lexText[];
-                    lexText.getText->searchPrivate.thesearchText[];
-                    'Search for applications of:'
-                      ->searchPrivate.searchMessText[];
-                    true->searchPrivate.onlyApplications
-                 // mps.kinds.nameAppl then
-                    cnode[]->hasSemanticLink->(hasLink,theDecl[]);
-                    (if hasLink then
-                        theDecl[]->searchPrivate.theNameDcl[];
-                        'Search for applications of:'
-                          ->searchPrivate.searchMessText[];
-                        true->searchPrivate.onlyApplications
-                    if);
-                    cnode[]->lexText[];
-                    lexText.getText->searchPrivate.thesearchText[]
-                if)
-            if)
-        if)
-     #);
    searchResult: searchPrivate.searchResultCallBack
      (#
         found::  (#  do foundNode[]->THIS(searchTextDialog).found #);
@@ -630,7 +737,8 @@ LIB_ITEM 'editorcodeeditor';
      #);
    searchTextForDialog: ^text
 do
-   initSearchCriteria;
+   &searchResult[]->searchPrivate.searchResult[];
+   (keepSearchCriteria,true)->searchPrivate.initSearchCriteria;
    (if not searchDialogOpened then
        true->searchDialogOpened;
        &searchPrivate.searchDialog[]->searchPrivate.theSearchDialog[]
@@ -656,7 +764,8 @@ do
    fgname,help: ^text;
    wrapped,foundff: @boolean;
    name: ^text;
-   fglist: ^ymerCallback.fragmentGroupList
+   fglist: ^ymerCallback.fragmentGroupList;
+   applicationOf,semanticErrorsOrNotChecked: @boolean
 do
    (if searchPrivate.wrapAround then
        (if trace[12] then 'wrap around'->putline if);
@@ -991,16 +1100,26 @@ do
                 if)
              else
                 (if node[] <> none then
-                    (if not searchPrivate.onlyApplications then
-                        (if not
-                        ((t[],node[],searchPrivate.caseSensitive,
-                          searchPrivate.wholeWord)->inLexem) then
-                            restart loop
+                    (if searchPrivate.onlyApplications then
+                        (node[],searchPrivate.theNameDcl[])->isApplicationOf
+                          ->(applicationOf,semanticErrorsOrNotChecked);
+                        (if semanticErrorsOrNotChecked then
+                            'searchText: semantic errors!'->putLine; leave loop
+                        if);
+                        (if not ApplicationOf then
+                            (if findDeclaration then
+                                (if not
+                                (searchPrivate.theNameDcl[]->node.equal) then
+                                    restart loop
+                                if)
+                             else
+                                restart loop
+                            if)
                         if)
                      else
                         (if not
-                        ((node[],searchPrivate.theNameDcl[])->isApplicationOf)
-                         then
+                        ((t[],node[],searchPrivate.caseSensitive,
+                          searchPrivate.wholeWord)->inLexem) then
                             restart loop
                         if)
                     if);
@@ -1076,7 +1195,7 @@ do
 do
      (# hasLink: @boolean; theDecl: ^astInterface.ast
      do
-        node[]->hasSemanticLink->(hasLink,theDecl[]);
+        node[]->hasSemanticLink->(hasLink,theDecl[],semanticErrorsOrNotChecked);
         (if hasLink then (theNameDcl[]->theDecl.equal)->value if)
      #)  
 
@@ -1089,7 +1208,7 @@ do
      (#
         cnode: ^astInterface.ast;
         lexText: ^astInterface.lexemText;
-        hasLink: @boolean;
+        hasLink,semanticErrors: @boolean;
         theDecl: ^astInterface.ast
      do
         ge[]->searchPrivate.ge[];
@@ -1097,7 +1216,6 @@ do
         fg[]->searchPrivate.fg[];
         ff[]->searchPrivate.ff[];
         fgList[]->searchPrivate.fgList[];
-        &replaceResult[]->searchPrivate.replaceResult[];
         ;
         none ->searchPrivate.fgPos[];
         false->searchPrivate.wraparound;
@@ -1118,7 +1236,8 @@ do
                       ->searchPrivate.replaceMessText[];
                     true->searchPrivate.onlyApplications
                  // mps.kinds.nameAppl then
-                    cnode[]->hasSemanticLink->(hasLink,theDecl[]);
+                    cnode[]->hasSemanticLink
+                      ->(hasLink,theDecl[],semanticErrors);
                     (if hasLink then
                         theDecl[]->searchPrivate.theNameDcl[];
                         'Search for applications of:'
@@ -1138,7 +1257,8 @@ do
      #);
    searchTextForDialog: ^text
 do
-   initSearchCriteria;
+   &replaceResult[]->searchPrivate.replaceResult[];
+   (keepSearchCriteria,false)->searchPrivate.initSearchCriteria;
    (if not replaceDialogOpened then
        true->replaceDialogOpened;
        &searchPrivate.replaceDialog[]->searchPrivate.theReplaceDialog[]
