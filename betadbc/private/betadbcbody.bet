@@ -315,7 +315,18 @@ findName: findDelimited
 findVar: findDelimited
   (#
      start::  (#  do ((ch = ':') or (ch = '%'))->value #);
-     end::  (#  do (ch->ascii.isWhiteSpace)->value #)
+     end:: 
+       (# 
+       do ((ch = ':') or (ch = '%') or (ch->ascii.isWhiteSpace))->value
+       #)
+  #);
+findMarker: findDelimited
+  (#
+     start::  (#  do (ch = '%')->value #);
+     end:: 
+       (# 
+       do ((ch = ':') or (ch = '%') or (ch->ascii.isWhiteSpace))->value
+       #)
   #)  
 
 -- resultSetScan: DoPart --
@@ -435,7 +446,7 @@ do
              (if rc
               // SQL_SUCCESS then
                  (if colList[] <> none then
-                     colList.head->private.current[]
+                     colList.head->current.private.elm[]
                  if);
                  (if varList[] <> none then
                      varList.scan
@@ -444,16 +455,20 @@ do
                           (if true
                            // current.var## <= declareInteger## then
                               current.var[]->i[];
-                              current.columnNo->private.getInteger->i.set
+                              current.columnNo
+                                ->THIS(scan).current.private.getInteger->i.set
                            // current.var## <= declareReal## then
                               current.var[]->r[];
-                              current.columnNo->private.getReal->r.set
+                              current.columnNo
+                                ->THIS(scan).current.private.getReal->r.set
                            // current.var## <= declareText## then
                               current.var[]->s[];
-                              current.columnNo->private.getText->s.set
+                              current.columnNo
+                                ->THIS(scan).current.private.getText->s.set
                            // current.var## <= declareBoolean## then
                               current.var[]->b[];
-                              current.columnNo->private.getBoolean->b.set
+                              current.columnNo
+                                ->THIS(scan).current.private.getBoolean->b.set
                           if)
                        #)
                  if);
@@ -544,30 +559,23 @@ do SQL_TXN_SERIALIZABLE->value
 -- DirectSQLStatementPrivate: Descriptor --
 (#
    replace:
-     (# txt: ^text; rep: ^text; varList: ^declareVarList; pos: @integer
-     enter (txt[],varList[])
+     (# txt: ^text; rep: ^text; posList: ^positionList; pos: @integer
+     enter (txt[],posList[])
      do
         &text[]->rep[];
         1->pos;
-        varList.scan
+        posList.scan
           (# 
           do
              (pos,current.firstPos-1)->txt.sub->rep.append;
              current.lastPos+1->pos;
-             (if true
-              // current.var## <= declareInteger## then
-                 (current.var[]->qua (# as:: declareInteger #)).get->rep.putint
-              // current.var## <= declareText## then
-                 (current.var[]->qua (# as:: declareText #)).get->rep.puttext
-             if)
+             rep[]->current.putIn
           #);
         (pos,txt.length)->txt.sub->rep.append
      exit rep[]
      #);
    parse:
      (#
-        t: ^text;
-        varList: ^declareVarList;
         pos: @integer;
         notDeclared:< exception
           (# name: ^text
@@ -578,41 +586,112 @@ do SQL_TXN_SERIALIZABLE->value
              ''''->puttext;
              ' not declared'->putline;
              INNER
-          #)
-     enter t[]
-     do
-        &declareVarList[]->varList[];
-        varList.init;
-        t.reset;
-        L:
+          #);
+        makeVar:
           (#
-             name: ^text;
-             start,end: @integer;
              var: ^declareVar;
-             elm: ^declareVarList.element
+             elm: ^declareVarList.element;
+             name: ^text;
+             start,end: @integer
+          enter (start,end)
           do
-             t.findVar->(start,end);
-             (if start = 0 then leave L if);
              (start+1,end)->t.sub->name[];
              (if (name[]->THIS(connection).private.declareVars.lookup->var[]) <>
              none then
                  &varList.element[]->elm[]->varList.append;
+                 elm[]->posList.append;
                  (var[],start,end)->(elm.var[],elm.firstPos,elm.lastPos)
               else
                  name[]->notDeclared
+             if)
+          #);
+        makeMark:
+          (# elm: ^markerList.element; start,end: @integer
+          enter (start,end)
+          do
+             &markList.element[]->elm[]->markList.append;
+             elm[]->posList.append;
+             start+1->t.inxGet->elm.mark;
+             (start,start+1)->(elm.firstPos,elm.lastPos)
+          #);
+        t: ^text
+     enter t[]
+     do
+        &positionList[]->posList[];
+        posList.init;
+        &declareVarList[]->varList[];
+        varList.init;
+        &markerList[]->markList[];
+        markList.init;
+        t.reset;
+        L:
+          (# start,end: @integer
+          do
+             t.findVar->(start,end);
+             (if start = 0 then leave L if);
+             (if (start->t.inxGet) = ':' then
+                 (start,end)->makeVar
+              else
+                 (start,end)->makeMark
              if);
              restart L
+          #);
+        markList.head->markerRef[]
+     #);
+   positionElm:
+     (#
+        firstPos,lastPos: @integer;
+        putIn:< (# t: ^text enter t[] do INNER #)
+     #);
+   positionList: list (# element::< positionElm #);
+   declareVarList: positionList
+     (#
+        element:: 
+          (#
+             var: ^declareVar;
+             putIn:: 
+               (# 
+               do
+                  (if true
+                   // var## <= declareInteger## then
+                      (var[]->qua (# as:: declareInteger #)).get->t.putint
+                   // var## <= declareText## then
+                      (var[]->qua (# as:: declareText #)).get->t.puttext
+                   // var## <= declareBoolean## then
+                      (if (var[]->qua (# as:: declareBoolean #)).get then
+                          'yes'->t.puttext
+                       else
+                          'no'->t.puttext
+                      if)
+                   // var## <= declareReal## then
+                      (var[]->qua (# as:: declareReal #)).get->t.putReal
+                  if)
+               #)
           #)
-     exit varList[]
      #);
-   declareVarList: list
-     (# element::  (# var: ^declareVar; firstPos,lastPos: @integer #)
+   markerList: positionList
+     (#
+        element:: 
+          (#
+             mark: @char;
+             value: @text;
+             putIn:: 
+               (# 
+               do
+                  (if mark = 's' then ''''->t.puttext if);
+                  value[]->t.puttext;
+                  (if mark = 's' then ''''->t.puttext if)
+               #)
+          #)
      #);
+   posList: ^positionList;
    varList: ^declareVarList;
+   markList: ^markerList;
+   markerRef: ^markerList.theCellType;
    execute:
      (# res: ^ResultSet; rc: @integer; cont: ^text
      do
-        (get,varList[])->replace->cont[];
+        (get,posList[])->replace->cont[];
         (THIS(SQLStatement).private.hstmt,cont.t,SQL_NTS)->SQLExecDirect->rc;
         (if rc = SQL_SUCCESS then
             &ResultSet[]->res[];
@@ -803,8 +882,9 @@ do
         if)
      #)  
 
--- resultSetScanPrivate: Descriptor --
+-- resultSetResultPrivate: Descriptor --
 (#
+   elm: ^columnNoList.theCellType;
    getByNo:
      (# i: @integer; rc: @shortint
      enter i
@@ -854,24 +934,23 @@ do
                 (SQL_HANDLE_STMT,hstmt)->resultSetException
             if)
         if)
-     #);
-   current: ^columnNoList.theCellType
+     #)
 #)  
 
 -- resultSetScanMarker: DoPart --
-do INNER ; private.current.succ[]->private.current[]  
+do INNER ; private.elm.succ[]->private.elm[]  
 
 -- resultSetScanI: DoPart --
-do private.current.elm->private.getInteger->value  
+do private.elm.elm->private.getInteger->value  
 
 -- resultSetScanR: DoPart --
-do private.current.elm->private.getReal->value  
+do private.elm.elm->private.getReal->value  
 
 -- resultSetScanS: DoPart --
-do private.current.elm->private.getText->value[]  
+do private.elm.elm->private.getText->value[]  
 
 -- resultSetScanB: DoPart --
-do private.current.elm->private.getBoolean->value  
+do private.elm.elm->private.getBoolean->value  
 
 -- ConnnectionDeclareVar: DoPart --
 do (varName[],THIS(declareVar)[])->private.declareVars.associate; INNER  
@@ -966,5 +1045,54 @@ do (varName[],THIS(declareVar)[])->private.declareVars.associate; INNER
 #)  
 
 -- DirectSQLStatementSet: DoPart --
-do t[]->THIS(SQLStatement).private.t[]->private.parse->private.varList[]  
+do t[]->THIS(SQLStatement).private.t[]->private.parse  
+
+-- DirectSQLStatementCurrentMarkerSet: DoPart --
+do
+   L: private.markList.iterate
+     (# 
+     do no-1->no; (if no = 0 then current[]->private.markerRef[]; leave L if)
+     #)  
+
+-- directSQLStatemenCurrentMarkerGet: DoPart --
+do
+   1->no;
+   L: private.markList.iterate
+     (# 
+     do (if current[] = private.markerRef[] then leave L if); no+1->no
+     #)  
+
+-- directSQLStatementMarker: DoPart --
+do
+   private.markerRef.elm.value.clear;
+   INNER ;
+   private.markerRef.succ[]->private.markerRef[]  
+
+-- directSQLStatementI: DoPart --
+do
+   value->private.markerRef.elm.value.putint;
+   'i'->private.markerRef.elm.mark;
+   INNER  
+
+-- directSQLStatementF: DoPart --
+do
+   value->private.markerRef.elm.value.putreal;
+   'f'->private.markerRef.elm.mark;
+   INNER  
+
+-- directSQLStatementS: DoPart --
+do
+   value[]->private.markerRef.elm.value.puttext; 's'->private.markerRef.elm.mark  
+
+-- directSQLStatementB: DoPart --
+do
+   (if value then
+       'yes'->private.markerRef.elm.value
+    else
+       'no'->private.markerRef.elm.value
+   if);
+   'b'->private.markerRef.elm.mark  
+
+-- directSQLStatementGetExpanded: DoPart --
+do (get,private.posList[])->private.replace->value[]  
 
