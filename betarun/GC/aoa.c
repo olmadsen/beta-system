@@ -40,7 +40,7 @@ void tempAOArootsAlloc(void)
         MCHECK();
         
         if (!(tempAOAroots = (long *) MALLOC(size))) {
-            char buf[300];
+            char buf[512];
             sprintf(buf, "Could not allocate temporary AOAroots table.");
 #ifdef MAC
             EnlargeMacHeap(buf);
@@ -72,7 +72,7 @@ void tempAOArootsAlloc(void)
         
         MCHECK();
         if (!(tempAOAroots = (long *) MALLOC(size))) {
-            char buf[300];
+            char buf[512];
             sprintf(buf, "Could not allocate temporary AOAroots table.");
 #ifdef MAC
             EnlargeMacHeap(buf);
@@ -445,7 +445,7 @@ static void extendRAFStackArea(void)
 		     "#(AOA: RAF stack area allocated: %d longs)\n", 
 		     (int)newSize/4));
   } else {
-    char buf[300];
+    char buf[512];
     sprintf(buf,
 	    "AOA GC: Failed to allocate RAF stack area: %d longs.", 
 	    (int)newSize/4);
@@ -1039,7 +1039,7 @@ static void Phase3()
     table = GLOBAL_IOA;
   else {
     if( !(table = (long *) MALLOC( AOAtoIOACount * 4))){
-      char buf[300];
+      char buf[512];
       sprintf(buf,"#Phase3: allocation of AOAtoIOA table failed: %d longs\n", (int)AOAtoIOACount);
 #ifdef MAC
       EnlargeMacHeap(buf);
@@ -1501,7 +1501,7 @@ void AOACheckReference( theCell)
 	pointer++;
       }
       if (!found){
-	char buf[100];
+	char buf[512];
 	sprintf(buf, 
 		"AOACheckReference: *theCell [*(0x%x)] in IOA but not in AOAtoIOAtable",
 		(int)theCell);
