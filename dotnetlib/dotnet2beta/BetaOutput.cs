@@ -12,6 +12,8 @@ namespace beta.converter
 		
 	internal int indentlevel = 0;
 
+	internal String thisClass;
+
 	public TextWriter output;
 		
 	internal FileInfo entry;
@@ -248,19 +250,22 @@ namespace beta.converter
 	    // Not reserved
 	    return prefix + word;
 	  }
-		
-	public virtual void  putPatternBegin(String className, String superClass)
+
+	public virtual String mapDeclaration(String className)
 	  {
 	    if (className.Equals("Object")) {
 	      // Special case: Must be *declared* with special name,
 	      // but all parameters of type Object should remain Object
 	      // (for compatibility with BETA Object)
-	      put("DotnetObject: ");
+	      return "DotnetObject";
+	    } else {
+	      return mapReserved(className);
 	    }
-	    else
-	      {
-		put(mapReserved(className) + ": ");
-	      }
+	  }
+		
+	public virtual void  putPatternBegin(String className, String superClass)
+	  {
+	    put(mapDeclaration(className) + ": ");
 	    if (superClass == null || superClass.Equals("Object") || superClass.Equals("_Object")) {
 	      put("ExternalClass");
 	    }
@@ -312,7 +317,9 @@ namespace beta.converter
 		
 	public virtual void  putHeader(String namespaceName, String className, String[] includes)
 	  {
+	    thisClass = className;
 	    putln("ORIGIN '" + "_" + className + "';");
+	    putln("ON 19 (* Disable warnings about runtime qualification tests *);");
 	    if (includes != null) {
 	      foreach (String include in includes) {
 		putln("INCLUDE '~beta/dotnetlib/" + include + "';");
@@ -333,9 +340,12 @@ namespace beta.converter
 	    putln(mapReserved(name) + ": " + mapReserved(type) + ";");
 	  }
 		
-	public virtual void  putConstant(String name, String value_Renamed)
+	public virtual void  putConstant(String name, String val)
 	  {
-	    putln(mapReserved(name) + ": (# exit " + value_Renamed + " #);");
+	    putln(mapReserved(name) + ":");
+	    indent(+2);
+	    putln("(# exit " + val + " #);");
+	    indent(-2);
 	  }
 		
 	public virtual void  putMethod(String name, 
@@ -414,9 +424,26 @@ namespace beta.converter
 	    putln("#);\n");
 	    indent(- 2);
 	  }
+
+	public virtual void putCaster()
+	  { 
+	    putln("(* Utility function to ease casting to fully specified class. *)");
+	    putln("as" + thisClass + ":");
+	    indent(+ 2);
+	    putln("(# _" + thisClass[0] + ": ^_" + thisClass + ";");
+	    indent(+ 3);
+	    putln(thisClass[0] + ": ^" + mapDeclaration(thisClass) + ";");
+	    indent(- 3);
+	    putln("enter _" + thisClass[0] + "[]");
+	    putln("do _" + thisClass[0] + "[]->" + thisClass[0] + "[]" + ";");
+	    putln("exit " + thisClass[0] + "[]");
+	    putln("#);");
+	    indent(- 2);
+	  }
 		
 	public virtual void  close()
 	  {
+	    putCaster();
 	    if (output != Console.Out) {
 	      output.Close();
 	    }

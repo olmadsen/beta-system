@@ -131,6 +131,7 @@ namespace beta.converter
 	internal virtual void  doFields(Type cls)
 	  {
 	    bool first = true;
+	    bool isEnum = cls.IsEnum;
 			
 	    FieldInfo[] fieldlist;
 	    fieldlist = cls.GetFields(BindingFlags.Instance 
@@ -140,7 +141,7 @@ namespace beta.converter
 	    foreach (FieldInfo f in fieldlist){
 	      if (isRelevant(f)){
 		bool isStatic = f.IsStatic;
-		bool isLiteral = f.IsLiteral; // FIXME: get value for constant fields
+		bool isLiteral = f.IsLiteral;
 		if (first){
 		  beta.nl();
 		  beta.commentline("Public/family CLS compliant fields");
@@ -150,7 +151,23 @@ namespace beta.converter
 		if ((trace&TraceFlags.Type)!=0){
 		  beta.commentline("Field: " + f.Name + ", type: " + f.FieldType);
 		}
-		beta.putField(plusToDot(f.Name), mapType(cls, f.FieldType, false), isStatic);
+		if (isEnum && isLiteral){
+		  // handled below
+		} else {
+		  beta.putField(plusToDot(f.Name), mapType(cls, f.FieldType, false), isStatic);
+		}
+	      }
+	    }
+	    if (isEnum){
+	      beta.nl();
+	      beta.commentline("Enum Literals");
+	      beta.nl();
+	      Type underlying = Enum.GetUnderlyingType(cls);
+	      String[] names  = Enum.GetNames(cls);
+	      int i=0;
+	      foreach (Object o in Enum.GetValues(cls)){
+		beta.putConstant(plusToDot(names[i]), (Convert.ChangeType(o, underlying)).ToString());
+		i++;
 	      }
 	    }
 	  }
