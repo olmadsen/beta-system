@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $Id: aoatoioa.c,v 1.8 1992-09-03 12:57:09 beta Exp $
+ * Mod: $Id: aoatoioa.c,v 1.9 1992-09-09 13:50:37 tthorn Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
@@ -51,12 +51,14 @@ AOAtoIOAReAlloc()
     }
     
     /* Move all entries from the old table into to new. */
-    { int i, counter = 0;  ptr(long) pointer = BlockStart( oldBlock);
+    { 
+      int i;
+      ptr(long) pointer = BlockStart( oldBlock);
       for(i=0; i < oldBlockSize; i++){
-	  if( *pointer ) AOAtoIOAInsert( *pointer );
-	  pointer++;
+	if( *pointer ) AOAtoIOAInsert( *pointer );
+	pointer++;
       }
-  }
+    }
     
     /* Deallocate the old table. */
     freeBlock( oldBlock);    
