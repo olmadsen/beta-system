@@ -5,7 +5,33 @@
 
 extern "C" 
 {
-  void drawRotatedText_ext (char *theText,int angle,
+  HFONT MyCreateFont_ext( int angle, int height,int weight,bool italic,char *faceName,
+			  HDC hdc)
+  { 
+    LOGFONT lf; 
+    HFONT hfont; 
+ 
+    
+    // Specify a font typeface name and weight and height. 
+
+    lstrcpy(lf.lfFaceName, faceName); 
+    lf.lfWeight = weight; 
+    lf.lfHeight = -1*(height);
+
+    lf.lfItalic = italic;
+    lf.lfQuality = ANTIALIASED_QUALITY;
+
+    lf.lfEscapement = angle; 
+    lf.lfOrientation = angle; 
+    lf.lfOutPrecision = OUT_TT_ONLY_PRECIS;
+    lf.lfClipPrecision = CLIP_LH_ANGLES;
+ 
+    hfont = CreateFontIndirect(&lf); 
+
+    return (hfont); 
+  } 
+
+  void drawRotatedText_ext1 (char *theText,int angle,
 			    int height,int weight,bool italic,char *faceName,
 			    HDC hdc)
   {

@@ -4,10 +4,12 @@ INCLUDE '~beta/win32lib/bitmapsupport';
 INCLUDE '~beta/win32lib/winuserconsts';
 INCLUDE '~beta/win32lib/wingdi';
 INCLUDE '~beta/win32lib/wingdiconsts';
+INCLUDE '~beta/win32lib/devicecapabilities';
 INCLUDE '~beta/win32lib/dcmanagement';
 INCLUDE '~beta/win32lib/windowsmisc';
 INCLUDE '~beta/guienv/graphics';
 INCLUDE '~beta/basiclib/math';
+INCLUDE '~beta/sysutils/cstring';
 INCLUDE '~beta/toollibs/utils/PNG/png';
 
 BUILD nti '$$/aadraw.obj' 'external/aadraw.c' 'betacc $0 $1';
@@ -25,7 +27,7 @@ write_pixels_to_png: external
   #);
 ROTATE: (# exit true #);
 
-drawRotatedText_ext: external
+drawRotatedText_ext1: external
   (# theText: [1]@char;
      angle: @integer;
      height: @integer;
@@ -241,11 +243,25 @@ do (if ANTIALIAS then
 do (if (ROTATE AND (currentStyle[] <> NONE)) then
        (# xi, yi: @integer;
           faceName: ^Text;
+          weight, height: @integer;
+          italic: @integer;
        do (0, 0) -> transform -> (xi, yi);
           (private.hdc, xi, yi, 0) -> MoveToEx;
           currentStyle.name -> faceName[];
-          (theText, currentAngle, currentStyle.size, 0, false, faceName, private.hdc)
-            -> drawRotatedText_ext;
+          (private.hdc, TRANSPARENT) -> SetBkMode;
+          
+          (currentStyle.size,(private.hdc,LOGPIXELSY)->GetDeviceCaps,72)->MulDiv
+            ->height;
+          FW_NORMAL->weight;
+          (if currentStyle.face = textFaces.bold then FW_BOLD->weight;  if);
+          (if currentStyle.face = textFaces.italic then 1->italic;  if);
+          (if currentStyle.face = textFaces.italic+textFaces.bold then
+              FW_BOLD->weight; 1->italic; 
+          if);
+          
+          
+          (theText, currentAngle*10, height, weight, italic > 0, faceName, private.hdc)
+            -> drawRotatedText_ext1;
        #);
     else
        (# xi, yi: @integer;
@@ -708,3 +724,179 @@ ntFrameRect: external
    old_pen: @integer;
    current: ^Matrix;
 #)
+
+
+-- TextItemLib: attributes --
+
+MyCreateFont_ext: external
+  (#
+     angle: @integer;
+     height,faceName: @integer;
+     weight: @integer;
+     italic: @integer;
+     hdc: @integer;
+     hFont: @integer;
+     
+  enter (angle,height,weight,italic,faceName,hdc)
+  do callC
+  exit hFont
+  #);
+
+(* In GUIEnv you cannot set the text angle
+ * therefore we have to create an extra font with the 
+ * correct angle, otherwise we cannot calculate size of the
+ * label.
+ *)
+createActualFont:
+  (# hdc,height,weight,italic: @integer; faceNameCstr: @Cstring; 
+     hActualFont: @integer;
+  do
+     
+     (if (style[] <> none ) and (angle <> 0) then
+         0->GetDC->hdc;
+         (style.size,(hdc,LOGPIXELSY)->GetDeviceCaps,72)->MulDiv
+           ->height;
+         style.name->faceNameCstr.set;
+         FW_NORMAL->weight;
+         (if style.face = textFaces.bold then FW_BOLD->weight;  if);
+         (if style.face = textFaces.italic then 1->italic;  if);
+         (if style.face = textFaces.italic+textFaces.bold then
+             FW_BOLD->weight; 1->italic; 
+         if);
+         (angle,height,weight,italic,faceNameCstr,hdc)->MyCreateFont_ext
+           ->hActualFont;
+         (0,hdc)->ReleaseDC;
+         (if faceNameCstr <> 0 then faceNameCstr.free;  if);
+         
+     if);
+  exit hActualFont 
+  #);
+disposeActualFont:
+  (# hActualFont: @integer;
+  enter hActualFont
+  do
+     (if hActualFont <> 0 then
+         hActualFont->DeleteObject; 0->hActualFont; 
+     if);
+     
+  #);
+useActualTextStyle:
+  (# dc: @integer; saved: @integer; infoPtr: @integer; 
+     hActualFont: @integer;
+  do
+     createActualFont -> hActualFont;
+     56->malloc->infoPtr;
+     0->GetDC->dc;
+     (if hActualFont <> 0 then
+         'using actual font' -> putline;
+         (dc,hActualFont)->SelectObject->saved; 
+      else
+         'using standard font' -> putline;
+         (dc,style.textStyleID)->SelectObject->saved; 
+     if);
+     (dc,infoPtr)->GetTextMetrics;
+     INNER ;
+     hActualFont -> disposeActualFont;
+     (dc,saved)->SelectObject;
+     (0,dc)->ReleaseDC;
+     infoPtr->free;
+     
+  #);
+
+getActualFontHeight: useActualTextStyle
+  (# value: @integer; 
+  do infoPtr+textmetricTmHeightOffset->tos'%adrGetLong'->value; 
+  exit value
+  #);
+getActualFontAscent: useActualTextStyle
+  (# value: @integer; 
+  do infoPtr+textmetricTmAscentOffset->tos'%adrGetLong'->value; 
+  exit value
+  #);
+getActualFontDescent: useActualTextStyle
+  (# value: @integer; 
+  do infoPtr+textmetricTmDescentOffset->tos'%adrGetLong'->value; 
+  exit value
+  #);
+getActualFontExternalLeading: useActualTextStyle
+  (# value: @integer; 
+  do infoPtr+textmetricTmExternalLeadingOffset->tos'%adrGetLong'->value; 
+  exit value
+  #);
+
+-- TextItemOutline: doPart --
+do (# pt: @point;
+      points: [4] ^point;
+      (* private *)
+      tempPoint: @Point;
+      res: @real;
+      cosAngle,sinAngle,lhcos2,lhsin2,xr,yr,vx,vy,ux,uy:
+        @real;
+      w: @integer;
+      tempText: ^Text;
+      noOfNewLines: @integer;
+      fontHeight,fontAscent,fontDescent,xFontDescent,
+      yFontDescent,externalLeading: @integer;
+      q: ^Point2d;
+   do (x, y) -> pt;
+      (if content[] <> none then
+          (for i: 4 repeat &point[]->points[i][];  for);
+          content[]->style.widthOfText->w;
+          (((- angle)*pi) / 180)->res;
+          res->cos->cosAngle;
+          (w*cosAngle)->lhcos2;
+          res->sin->sinAngle;
+          (w*sinAngle)->lhsin2;
+          pt->tempPoint;
+          tempPoint->points[1];
+          tempPoint.h+lhcos2->points[2].h;
+          tempPoint.v+lhsin2->points[2].v;
+          content[]->tempText[];
+          tempText.scanall
+          (# 
+          do (if ch = ascii.nl then noOfNewLines+1->noOfNewLines;  if); 
+          #);
+          getActualFontAscent->fontAscent;
+          cosAngle*fontAscent->xr;
+          sinAngle*fontAscent->yr;
+          points[2].h+yr->points[3].h;
+          points[2].v-xr->points[3].v;
+          points[1].h+yr->points[4].h;
+          points[1].v-xr->points[4].v;
+          getActualFontDescent->fontDescent;
+          (if ((fontDescent = 0) or (angle <> 0)) and
+              ('marlett'->(style.name).equalNCS) then
+              (* this is symbol font. Actually it should not be used but you can
+               * select it from the font dialog so we try to handle it. It is a problem
+               * because the descent is set to zero so we have to guess.
+               *)
+              getActualFontHeight->fontHeight;
+              fontHeight / 6+1->fontDescent;
+              (if fontDescent = 0 then 4->fontDescent;  if);
+              
+          if);
+          cosAngle*fontDescent->xFontDescent;
+          sinAngle*fontDescent->yFontDescent;
+          points[1].h-yFontDescent->points[1].h;
+          points[1].v+xFontDescent->points[1].v;
+          points[2].h-yFontDescent->points[2].h;
+          points[2].v+xFontDescent->points[2].v;
+          (if noOfNewLines > 0 then
+              getActualFontHeight->fontHeight;
+              getActualFontExternalLeading->externalLeading;
+              cosAngle*fontHeight+externalLeading->xr;
+              sinAngle*fontHeight+externalLeading->yr;
+              points[1].h-(yr*noOfNewLines)->points[1].h;
+              points[1].v+(xr*noOfNewLines)->points[1].v;
+              points[2].h-(yr*noOfNewLines)->points[2].h;
+              points[2].v+(xr*noOfNewLines)->points[2].v;
+              
+          if);
+          
+      if);
+      (for inx: points.range repeat
+           &Point2d[] -> q[];
+           points[inx] -> q;
+           q[] -> THIS(outline).points.append;
+      for);
+   #);
