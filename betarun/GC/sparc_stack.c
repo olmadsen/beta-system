@@ -170,15 +170,19 @@ GeneralProcessStack(CellProcessFunc func)
 	   * skip to betaTop and update nextCBF */
 	  nextCBF = (RegWin *) theAR->l5;
 	  DEBUG_STACK({ 
-	    fprintf(output, "Met frame of HandleCB at SP=0x%x.\n",(int)theAR);
-
+	    fprintf(output, 
+		    "Met frame of HandleCB at SP=0x%08x, %%l5=0x%08x, %%l6=0x%08x.\n",
+		    (int)theAR,
+		    (int)theAr->l5,
+		    (int)theAr->l6,
+		    );
 	    if (valhallaID) {
 	      fprintf(output, "Cannot wind down past signal handler.\n");
 	      fprintf(output, "Skipping directly to SP=0x%x.\n", (int)theAR->l6);
 	    } else {
 	      /* Wind down the stack until betaTop is reached */
 	      RegWin *cAR;
-	      fprintf(output, "Winding down to frame with %%fp=0x%x",(int)theAR->l6);
+	      fprintf(output, "Winding down to frame with %%fp=betatop (0x%x)",(int)theAR->l6);
 	      fprintf(output, " (BetaStackTop)\n");
 	      for (cAR = theAR;
 		   cAR != (RegWin *) theAR->l6;

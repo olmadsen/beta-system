@@ -331,7 +331,7 @@ int strongIsObject(Object *obj)
     if (!IsBetaDataAddrOfProcess((unsigned long)proto)) {
       DEBUG_CODE(fprintf(output,"strongIsObject: proto of object 0x%08x is not in data segment: 0x%08X (vtbl=0x%08x)\n", (int)obj, (int)proto, (int)obj->vtbl));
       DEBUG_CODE(fflush(output));
-      /*ILLEGAL;*/
+      ILLEGAL;
       return 0;
     }
   }
