@@ -7,14 +7,23 @@ do (* Find the xfont specified by nam, sty and siz *)
    (nam,sty,siz) -> XCheckFontLoaded -> (xf[],nam,sty,siz);
    
    (* Now obtain the width *)
+   0 -> width;
    (if xf.fixedwidth then 
-       theText.length*xf.width -> width;
+       theLines.scan
+       (# w: @integer
+       do current.length*xf.width -> w;
+          (if w>width then w->width if);
+       #);
     else
-       (xf.fi, thetext.t, thetext.t.range) -> XTextWidth -> width;
+       theLines.scan
+       (# w: @integer
+       do (xf.fi, current.t, current.t.range) -> XTextWidth -> w;
+          (if w>width then w->width if);
+       #);
    if);
    
-   siz + 1 -> height;
-   (* FIXME: Height is not always = PointSize. *)
+   (* now obtain the height *)
+   theLines.size*xf.lineheight -> height;
    
 #)
 
@@ -41,13 +50,11 @@ do (nam,sty,siz) -> XCheckFontLoaded;
    curx, cury, uppery, maxx: @Integer;
    theString: ^Text;
    xf: ^THIS(guienv).private.xfont;
-   excess: @integer;
    
    DrawInsertionMark:@
      (#
      do theCanvas.prepareInteraction;
-        ((curx,cury-1 + xf.maxdescent + excess), (curx,uppery-1))
-          -> theCanvas.immediateline;
+        ((curx,cury + xf.maxdescent), (curx,uppery)) -> theCanvas.immediateline;
         theCanvas.endInteraction;
         theCanvas[] -> thecanvas.privatepart.interactionpaint.setcanvaspaint;
      #);
@@ -66,7 +73,7 @@ do (nam,sty,siz) -> XCheckFontLoaded;
          *)
         (xdisplay, 
         theCanvas.implpart.xdrawable,
-        curx, uppery, ChWidth+1, size+excess, 0) -> XClearArea;
+        curx, uppery, ChWidth, xf.lineheight, 0) -> XClearArea;
         
         theCh -> chArray[1];
         (xdisplay, 
@@ -98,12 +105,11 @@ do (nam,sty,siz) -> XCheckFontLoaded;
      do
         (xdisplay, 
         theCanvas.implpart.xdrawable,
-        curx, uppery, prevChWidth+1, size+excess, 0) -> XClearArea;
+        curx, uppery, prevChWidth, xf.lineheight, 0) -> XClearArea;
      #);
    
 do (* TextShapeInteractiveCreateBody *)
-   (if theCanvas.privatepart.interactionpaint[]
-    // NONE then
+   (if theCanvas.privatepart.interactionpaint[]=NONE then
        (if displayWarnings then
            'TextShape: No paint specified for interaction - using solid black' 
              ->PutLine;
@@ -120,8 +126,6 @@ do (* TextShapeInteractiveCreateBody *)
    style[textprivate.theStyle].
    size[textprivate.theSize][] -> xf[];
    
-   (0, xf.upos + (xf.uthick+1) div 2 - xf.maxdescent) -> max -> excess;
-   
    (* Determine where to start *)
    (* startpoint is in GO coords *)
    
@@ -133,18 +137,19 @@ do (* TextShapeInteractiveCreateBody *)
    (* Now we work in device coords *)
    (* cury is ypos of baseline *)
    curx -> maxx;
-   cury - size + xf.maxdescent -> uppery;
+   cury - xf.maxascent (*size + xf.maxdescent*) -> uppery;
    
    (* Set linewidth (for drawInsertionMark) *)
    (xdisplay, 
    theCanvas.implpart.xgc,
    0, 0, 0, 0) -> XSetLineAttributes;
    
-   DrawInsertionMark;
-   textprivate.thestring[] -> theString[];
-   
+   (* Open the shap*)
    open;
    
+   (* Start interaction *)
+   DrawInsertionMark;
+   &text[] -> theString[];
    (* Read letters *)
    theCanvas.interactionHandler
    (# stopinteraction: @boolean;
@@ -163,6 +168,7 @@ do (* TextShapeInteractiveCreateBody *)
             // ascii.bs
             // ascii.del then
                (if (theString.length>0) then
+                   DrawInsertionMark;
                    theString.length -> theString.inxGet -> prevCh;
                    (theString.length,theString.length)
                      -> theString.delete;
@@ -182,13 +188,17 @@ do (* TextShapeInteractiveCreateBody *)
            if);
         #);
    #);
+   DrawInsertionMark;
+   (* Interaction done *)
    
    theCh -> lastCh;
    
+   theString[] -> theText;
+   
    (TextPrivate.position.x,
-   TextPrivate.position.y+size-xf.maxdescent+1,
-   maxx-startpoint.x+2,
-   size+1+excess) -> theCanvas.damaged;
+   TextPrivate.position.y+xf.maxascent,
+   maxx-startpoint.x,
+   xf.lineheight) -> theCanvas.damaged;
    theCanvas.repair;
    
 #)	
@@ -200,6 +210,11 @@ do 'TextShape: InteractiveReshape not implemented !' -> putline;
 -- TextShapeHiliteOutlineBody: descriptor --
 (# pos: @point;
    itext: @theCanvas.immediateText;
+   lineheight: @integer;
+   xf: ^THIS(guienv).private.xfont;
+   nam: @Fontname;
+   sty: @Style;
+   siz: @Integer;
 do 
    (if TM[] // NONE then
        textprivate.position -> pos;
@@ -208,11 +223,19 @@ do
    if);
    pos -> Privatepart.Go2CanvasTM.m.transformPoint
      -> theCanvas.CanvasToDevice -> pos;
-   
-   (pos, 
-   textprivate.theFontName,
+   (textprivate.theFontName,
    textprivate.theStyle,
-   textprivate.theSize,
-   underline,
-   textprivate.thestring[]) -> itext;	
+   textprivate.theSize) -> XCheckFontLoaded -> (xf[],nam,sty,siz);
+   xf.lineheight -> lineheight;
+   
+   textprivate.thestrings.scan
+   (# 
+   do (pos, 
+      textprivate.theFontName,
+      textprivate.theStyle,
+      textprivate.theSize,
+      underline,
+      current[]) -> itext;
+      pos.y+lineheight -> pos.y (* device coords *);
+   #);
 #)
