@@ -6,6 +6,7 @@ INCLUDE 'inlinNXitem';
 INCLUDE 'storeReg';
 INCLUDE 'asgtoitem';
 INCLUDE 'signature';
+INCLUDE 'genlib_bytecode'
 ---mkComputedEvVal:descriptor--
 (# CV: ^ComputedEvVal
 do &ComputedEvVal[]->CV[]->V[]; 
@@ -219,7 +220,7 @@ ComputedEvVal: EvVal
         * necessarily work in all cases, including switch[61],
         * etc.
         *)
-       (# 
+       (# tA: ^mch.address
        do (if stest then
               301->trace(#do 'computedVal:asgToRepAdr:'->xT; dr.display->xT #)
           if);
@@ -228,17 +229,65 @@ ComputedEvVal: EvVal
               rA.freeAdr;
               this(ComputedEvVal)[] -> V[]
            else
-              (if switch182 then
+              (if false (*switch182*) then
+                  mch.nop; mch.nop; mch.nop;
                   (&mch.dataRegOperand[],rA[]) -> mch.stVal
                else
                   (* val -> aRep *)
-                  (true,false,rA.size,1,rA[],true) -> asgToNewRep
+                  (*  stack = [... Val ] *)
+                  (if switch182 then
+                      sematt.integerDesc[] 
+                        -> theGen.mkSignature 
+                        -> theGen.allocAndStoreTmp 
+                        -> tA[]
+                  if);
+                  (true,false,rA.size,1,rA[],false) -> asgToNewRep
                   (#
-                  do NextElmAdr -> asgToAdr -> V[]
+                  do (if switch182 then
+                         asgToSingleElmBytecodeArray
+                         (#
+                         do AI.bAdr.localDesc[]
+                              -> theGen.mkSignature 
+                              -> AI.fieldType[];
+                            (tA[],mch.dataTop[]) -> mch.ldVal
+                         #)
+                      else
+                         NextElmAdr -> asgToAdr -> V[]
+                     if)
                   #);
               if)
           if);
        #);
+     asgVal2Rep:
+       (# rEv: ^ASTindex; rChain: ^DH.superChain; 
+          rA: ^mch.address;  noStore: @boolean;
+          tA: ^mch.address;
+          V: ^evVal
+       enter(rEV[],rChain[],rA[],noStore)
+       do (* val -> aRep *)
+          (*  stack = [... Val ] *)
+          (if switch182 then
+              sematt.integerDesc[] 
+                -> theGen.mkSignature 
+                -> theGen.allocAndStoreTmp 
+                -> tA[]
+          if);
+          (true,false,rA.size,1,rA[],noStore) -> asgToNewRep
+          (#
+          do (if switch182 then
+                 (rEV[],rChain[],rA[]) -> asgToSingleElmArray
+                 (#
+                 do AI.bAdr.localDesc[]
+                      -> theGen.mkSignature 
+                      -> AI.fieldType[];
+                    (tA[],mch.dataTop[]) -> mch.ldVal
+                 #)
+              else
+                 NextElmAdr -> asgToAdr -> V[]
+             if)
+          #);
+       exit V[]
+       #);     
      asgToRepElm::<
        (#
        do (if stest then
@@ -260,12 +309,33 @@ ComputedEvVal: EvVal
           this(ComputedEvVal)[]->nScan.AsgToNelm -> rAx[];
           nScan.reset
        #);
+     getElmDesc:
+       (# rElm: ^ASTindex;
+          rChain,chain1: ^DH.superChain;
+          rA: ^mch.address;
+          mn,isVirt: @integer;
+          desc: @ASTindex;
+          nScan: @ | scanNadr;
+       enter(rElm[],rChain[],rA[])
+       do (if rElm.label = gram.objectDescriptor then  
+              (* there should be exactly one enter element *)
+              (rElm[],rA[],0,rChain[],true) -> nScan; 
+              (nScan.thisChain[],nScan.thisEv)
+                -> DH.theDesc
+                -> (desc,MN,chain1[],isVirt);
+           else
+              '\ngetElmDesc:not descriptor'-> putline
+          if)
+       exit desc[]
+       #);
      asgToMethod::
-       (* apparently no code is needed here? *)
-       (# 
+       (* value already on stack - coercion may be needed *)
+       (# rA: ^mch.address; desc: ^ASTindex
        do 301->trace
           (#
-          do 'asgToMethod:'->display; 
+          do 'asgToMethod:' -> display; 
+             'type:' -> xT; enterTypes[next] -> xI; xN;
+             'rElm: ' -> xT; rElm[] -> xA;
           #);  
           (if enterTypes[next]
            // 6 (* real /double *) then
@@ -273,6 +343,13 @@ ComputedEvVal: EvVal
            // 7 (* real32/float *) then
               mch.int2float;
               mch.real64toReal32 (* bad:-( we need int2real32 *)
+           // 12 (* repetition *) then
+              baseAdr.copy -> rA[];
+              (rElm[],rChain[],rA[]) -> getElmDesc -> desc[];
+              301->trace(#do rElm[]->xA; xN; desc[]->xA; desc.size -> xI #);
+              desc.size -> rA.size;
+              desc[] -> rA.bAdr.localDesc[];
+              (rElm[],rChain[],rA[],true) -> asgVal2Rep
           if);
           next+1 -> next
        #);
