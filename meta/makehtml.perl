@@ -6,6 +6,101 @@
 # Requires rule specifier and '::' to be on the same line in order to
 # work.
 
+$in_rules = 0;
+
+sub print_header
+{
+    local ($file, $title) = @_;
+
+    print<<EOT;
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<HTML>
+<HEAD>
+<!-- Generated from $file by meta/makehtml.perl -->
+</HEAD>
+<BODY>
+<H1>$title</H1>
+<PRE CLASS=gram>
+EOT
+}
+
+sub print_trailer
+{
+    print<<EOT;
+</PRE>
+</BODY>
+</HTML>
+EOT
+}
+
+sub quote_html
+# replace '<', '>', '&' with their HTML equivalents
+{
+    local ($string) = @_[0];
+    $string =~ s/\&/\&amp\;/g;
+    $string =~ s/\</\&lt\;/g;
+    $string =~ s/\>/\&gt\;/g;
+    return $string;
+}
+
+sub make_anchor
+{
+    local ($name) = @_[0];
+    $name = "<FONT COLOR=red><A NAME=$name>&lt;$name&gt;<A></FONT>";
+    return $name;
+}
+
+sub make_hrefs
+{
+    local ($string) = @_[0];
+    $string =~ s/<([-\w]+)>/<A HREF="#$1">&lt;$1&gt;<\/A\>/g;
+    return $string;
+}
+
+sub make_h2
+{
+    local ($string) = @_[0];
+    return "<H2>$string</H2>";
+}
+
+sub quote_strings
+# boldface literals and quote HTML in string constants
+{
+    local ($line) = @_[0];
+    local ($processedline) = "";
+
+    while (1){
+	if ($line =~ m/\'([^\']+)\'/){
+	    $processedline .= $`;
+	    $after = $';
+	    $literal = $1;
+	    $literal = &quote_html($literal);
+	    # HTML tags are generated as <+...+> to avoid
+	    # interpreting, e.g. <B> as a rule in later
+	    # processing. The plus signs are removed by unquote_html.
+	    $literal = "<+B+>$literal<+/B+>" if ($in_rules);
+	    $literal = "\'$literal\'";
+	    $processedline .= $literal;
+	    $line = $after;
+	} else {
+	    $processedline .= $line;
+	    last;
+	}
+    }
+    return  $processedline;
+}
+
+sub unquote_html
+# replace '<+' with '<' and , '+>' with '>'
+{
+    local ($string) = @_[0];
+    $string =~ s/\<\+/\</g;
+    $string =~ s/\+\>/\>/g;
+    return $string;
+}
+
+######## MAIN #######
+
 if ($#ARGV!=0){
     print "Usage: makehtml.perl <grammar-file>\n";
     exit 1;
@@ -20,70 +115,39 @@ $title=~s%.*/%%;
 $title=~s/-meta.gram//;
 $title="\U$title" . " Grammar";
 
-print<<EOT;
-<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
-<HTML>
-<HEAD>
-<!-- Generated from $file by meta/makehtml.perl -->
-<TITLE>$title</TITLE>
-</HEAD>
-<BODY>
-<H1>$title</H1>
-<PRE>
-EOT
+&print_header($file, $title);
 
 while(<GRAM>){
     $line = $_;
+    chomp($line);
+    $line = &quote_strings($line);
     if (/^\s*Option\s*$/i){
-	# header line
-	$line="<H2>$line</H2>";
+	$line=&make_h2($line);
     } elsif (/^\s*Rule\s*$/i){
-	# header line
-	$line="<H2>$line</H2>";
+	$line=&make_h2($line);
+	$in_rules = 1;
     } elsif (/^\s*Attribute\s*$/i){
-	# header line
-	$line="<H2>$line</H2>";
-    } elsif (/^(\s*)<(\w+)>(\s*::)/) {
-	# line with rule definition
-	#   <xxx>   :: ...
-	#            ^ matched to here
-	$rest = $';
-	$line = "$1<FONT COLOR=\"red\"\><A NAME=$2>&lt;$2&gt;<A><\/FONT>$3";
-	# insert link from rightsides to leftsides:
-	$rest =~ s/<(\w+)>/<A HREF="#$1">&lt;$1&gt;<\/A\>/g;
-	# quote  '<' and '>' *in strings* on rightside:
-	$rest =~ s/\'(.*)<(.*)\'/\'$1\&lt\;$2\'/g;
-	$line .= $rest;
-    } else {
-	#line without rule definition
-	$line =~ s/<(\w+)>/<A HREF="#$1">&lt;$1&gt<\/A>/g;
-    }
-    # boldface literals and quote '<', '>' therein
-    
-    $processedline = "";
-    while (1){
-	if ($line =~ m/(\'[^\']+\')/){
-	    $processedline .= $`;
-	    $after = $';
-	    $literal = $1;
-	    $literal =~ s/\</\&lt\;/g;
-	    $literal =~ s/\>/\&gt\;/g;
-	    $literal = "<B>$literal</B>";
-	    $processedline .= $literal;
-	    $line = $after;
+	$line=&make_h2($line)
+    } elsif ($in_rules){
+	if ($line =~ m/^(\s*)<([-\w]+)>(\s*)::/) {
+	    # line with rule definition
+	    #   <name>   :: ...
+	    #             ^ matched to here
+	    $w1 = $1; $name = $2; $w2 = $3; 
+	    $rest = $';
+	    $name = &make_anchor($name);
+	    # insert link from rightsides to corresponding leftsides:
+	    $rest = &make_hrefs($rest);
+	    $line = $w1 . $name . $w2 . "::" . $rest;
 	} else {
-	    $processedline .= $line;
-	    last;
+	    #line without rule definition
+	    $line =~ s/<([-\w]+)>/<A HREF="#$1">&lt;$1&gt<\/A>/g;
 	}
     }
-    $line = $processedline;
-    print $line;
+    $line = &unquote_html($line);
+    print "$line\n";
 }
 close(GRAM);
 
-print<<EOT;
-</PRE>
-</BODY>
-</HTML>
-EOT
+&print_trailer;
 
