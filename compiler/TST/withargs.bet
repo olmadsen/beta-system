@@ -1,0 +1,246 @@
+ORIGIN 'tstenv';
+BUILD nti '$$/errormessage.obj' 'errormessage.cpp' 'betacc $0 $1';     
+
+---lib:attributes---
+(* 
+ * Beta Interface to Aggregated interfaces defined in chapter 8, Inside COM
+ *)
+
+IX: IUnknown
+  (# 
+     Fx:< (# i: @integer; enter i exit i #);
+  #);
+IY: IUnknown
+  (# 
+     Fy:< (# t: [0]@char enter t (*exit t*) #);
+  #);
+IZ: IUnknown
+  (# 
+     Fz:< (# #);
+  #);
+
+GUID:
+  (# (* The C type is:
+      * typedef struct _GUID
+      * {
+      *   unsigned long Data1;
+      *   unsigned short Data2;
+      *   unsigned short Data3;
+      *   unsigned char Data4[8];
+      * } GUID;
+      * 
+      *)
+     
+     Binary: [16]@Char;
+     hextoint: 
+       (# c: @Char;
+       enter c
+       do (if c>'Z' then c-32->c (* Upcase *) if);
+          c-'0'->c (* normalize to 0-9 *);
+          (if c>10 then c-7->c (* normalize to 10-15 *) if);
+          (if (c<0) or (c>15) then
+              'hextoint error'->putLine;
+          if);
+       exit c
+       #);
+     setFromText:
+       (* Accepts this format only; no checking!
+        * '32bb8320-b41b-11cf-a6bb-0080c7b2d682'
+        * FIXME: there are standard COM funkctions we could call!
+        *)
+       (# t: ^Text;
+          c: @Char; p: @Integer;
+       enter T[]
+       do 1->p;
+          (for i:16 repeat
+               (if T.T[p]='-' then p+1->p if);
+               ((T.T[p]->hextoint)*16)+(T.T[p+1]->hextoint)->Binary[i];
+               p+2->p;
+          for);
+          binary[1].%byteswaplong;
+          binary[5].%byteswapshort;
+          binary[7].%byteswapshort;
+          'GUID.setfromtext: Parsed'->putline;
+          T[] -> putline; 'into the following:' -> putline;
+          %getLongAt @@binary[1] -> putLonghex;
+          '-' -> put;
+          %getShortAt @@binary[5] -> putShorthex;
+          '-' -> put;
+          %getShortAt @@binary[7] -> putShorthex;
+          (for i:16-8 repeat
+               '-' -> put;
+               binary[i+8] -> putByteHex;
+          for);
+          newline;
+       #);
+     getAsText:
+       (# T: ^Text;
+       do
+       exit T[]
+       #);
+  enter setFromText
+  exit getAsText
+  #);     
+
+CLSID: GUID(# #);
+IID: GUID(# #);
+SUCCEEDED: 
+  (# Hresult: @Integer; 
+  enter Hresult
+  exit (Hresult>=0)
+  #);
+
+IUnknown: COM   
+  (# QueryInterface:< 
+       (# hres, iidref, ppv: @Integer;
+       enter (iidref, ppv)
+       exit hres
+       #);
+     AddRef:< object;
+     Release:< object;
+     
+     Query: 
+       (# theIID: ^IID;  
+          Iptr: ^IUnknown;
+          Hresult: @integer;
+       enter theIID[]
+       do (@@theIID.Binary[1], @@Iptr)->QueryInterface->Hresult;
+          (if not (Hresult->SUCCEEDED) then
+              NONE->Iptr[];
+          if);
+       exit Iptr[]
+       #);
+  #);
+
+CoInitialize: external
+  (# LPVoid,hresult: @Integer;
+  enter LPVoid
+  do CallStd;
+  exit hresult
+  #);
+CoUninitialize: external
+  (# 
+  do CallStd;
+  #);
+
+
+CoCreateInstance:
+  (# theclsid: ^CLSID; 
+     outer: ^IUnknown;
+     Flags: @Integer;
+     theiid: ^IID;
+     Iptr: ^IUnknown;
+     hr: @Integer;
+     CoCreateInstance: external
+       (# pUnkOuter: ^IUnknown;
+          rclsid, dwClsContext, riid, ppv, hr: @Integer;
+       enter (rclsid, pUnkOuter[], dwClsContext, riid, ppv)
+       do callStd
+       exit hr
+       #);
+  enter (theclsid[], outer[], Flags, theiid[])
+  do (@@theclsid.Binary[1], outer[], Flags, @@theiid.Binary[1], @@Iptr)
+       -> CoCreateInstance->hr;
+     (if not (hr->SUCCEEDED) then
+         ('cocreateinstance failed', hr) -> ComErrorMessage;
+         NONE->Iptr[];
+     if);
+  exit Iptr[]
+  #);
+          
+CLSCTX_INPROC_SERVER: (# exit 1 #);
+
+putLonghex:
+  (# i: @integer;
+     printf: external
+       (# fmt: [0]@char;
+          val: @integer;
+       enter (fmt,val)
+       #);
+  enter i
+  do ('%08x', i) -> printf;
+  #);
+putShorthex:
+  (# i: @integer;
+     printf: external
+       (# fmt: [0]@char;
+          val: @integer;
+       enter (fmt,val)
+       #);
+  enter i
+  do ('%04x', i) -> printf;
+  #);
+putBytehex:
+  (# i: @integer;
+     printf: external
+       (# fmt: [0]@char;
+          val: @integer;
+       enter (fmt,val)
+       #);
+  enter i
+  do ('%02x', i) -> printf;
+  #);
+
+ComErrorMessage: external
+  (# msg: [0]@char;
+     hr: @integer;
+  enter (msg, hr)
+  do CallC
+  #)
+
+--PROGRAM: descriptor--
+(# IID_IX, IID_IY, IID_IZ: @IID;
+   CLSID_Component1, CLSID_COMPONENT2: @CLSID;
+   pIX,pIX2: ^IX;
+   pIY: ^IY;
+   i: @integer;
+   t: @text;
+   
+do '32bb8320-b41b-11cf-a6bb-0080c7b2d682' -> IID_IX;
+   '32bb8321-b41b-11cf-a6bb-0080c7b2d682' -> IID_IY;
+   '32bb8322-b41b-11cf-a6bb-0080c7b2d682' -> IID_IZ;
+   '0c092c24-882c-11cf-a6bb-0080c7b2d682' -> CLSID_COMPONENT1;
+   '0c092c25-882c-11cf-a6bb-0080c7b2d682' -> CLSID_COMPONENT2;
+   
+   0->CoInitialize;
+   
+   'Get interface IX from Component 1'->putLine;
+   
+   (CLSID_Component1[], NONE, CLSCTX_INPROC_SERVER, IID_IX[])
+     -> CoCreateInstance->pIX[];
+
+   (if pIX[]<>NONE then
+       'Succeeded creating component.'->putLine;
+       10 -> pIX.Fx -> i;
+       'Fx returned: ' -> puttext; i -> putint; newline;
+       'Get interface IY from IX.'->putLine;
+       IID_IY[]->pIX.query->pIY[];
+       (if pIY[]<>NONE then
+           'Succeeded getting interface IY from IX.'->putLine;
+           (*'Fisk' -> pIY.Fy (*-> t*);
+           'Fy returned: nothing'-> putline; (*t[] -> putline;*)
+           'Get interface IX2 from IY.'->putLine;
+           IID_IX[] -> pIY.Query -> pIX2[];
+           (if pIX2[]<>NONE then
+               'Succeeded getting interface IX2 from IY.'->putline;
+               pIX2.Release;
+               NONE->pIX2[];
+               'Succeeded releasing interface IX2.'->putline;
+            else
+               'Error! Should have gotten interface IX.'->putline;
+           if);
+           pIY.Release;
+           NONE->pIY[];
+           'Succeeded releasing interface IY.'->putline;
+        else
+	   'Could not get interface IY.'->putline;
+       if);
+       pIX.Release;
+       'Succeeded releasing interface IX.'->putline;
+    else
+       'Could not create component'->putline;
+   if);	
+   'CoUninitialize'->putline;
+   CoUninitialize;
+   'CoUninitialize done'->putline;
+#)
