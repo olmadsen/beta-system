@@ -1,0 +1,203 @@
+<HTML>
+<HEAD>
+   <META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=iso-8859-1">
+   <META NAME="GENERATOR" CONTENT="Mozilla/4.03 [en] (X11; I; SunOS 5.5.1 sun4m) [Netscape]">
+   <TITLE>Design of BETA COM Implementation</TITLE>
+</HEAD>
+<BODY>
+
+<H1>
+Forslag til MPS.</H1>
+Betragt f.eks. f&oslash;lgende produktion fra runtime sprogets grammatik:
+<UL>
+<PRE>&lt;Transaction> ::=&nbsp; &lt;Source> '-&gt;' &lt;Destination> ;
+&lt;Source>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ::= &lt;Address> &lt;ReferenceOpt> ;
+&lt;Destination> ::= &lt;Address> &lt;OperationOpt> ;</PRE>
+</UL>
+
+<PRE>I runtimecfl.bet bliver denne til:</PRE>
+
+<UL>
+<PRE>Address: cons(# #);
+Transaction: Instruction
+&nbsp; (# getSource: getson1(##);
+&nbsp;&nbsp;&nbsp;&nbsp; putSource: putson1(##);
+&nbsp;&nbsp;&nbsp;&nbsp; getDestination: getson2(##);
+&nbsp;&nbsp;&nbsp;&nbsp; putDestination: putson2(##);
+&nbsp; exit 45
+&nbsp; #);</PRE>
+
+<PRE>Source: cons
+&nbsp; (# getAddress: getson1(##);
+&nbsp;&nbsp;&nbsp;&nbsp; putAddress: putson1(##);
+&nbsp;&nbsp;&nbsp;&nbsp; getReferenceOpt: getson2(##);
+&nbsp;&nbsp;&nbsp;&nbsp; putReferenceOpt: putson2(##);
+&nbsp; exit 46
+&nbsp; #);
+Destination: cons
+&nbsp; (# getAddress: getson1(##);
+&nbsp;&nbsp;&nbsp;&nbsp; putAddress: putson1(##);
+&nbsp;&nbsp;&nbsp;&nbsp; getOperationOpt: getson2(##);
+&nbsp;&nbsp;&nbsp;&nbsp; putOperationOpt: putson2(##);
+&nbsp; exit 47
+&nbsp; #);</PRE>
+</UL>
+I metatool'et kan dette f.eks. bruges som nedenfor, hvis man skal bruge
+Addres attributten fra en Transaction.Source:
+<PRE>&nbsp;&nbsp; trans: ^runtime.Transaction;
+&nbsp;&nbsp; src: ^runtime.Source;
+&nbsp;&nbsp; adr: ^runtime.Address;
+do ... -&gt;trans[];
+&nbsp;&nbsp; trans.getSource -&gt;src[]; (**)
+&nbsp;&nbsp; src.getAddress -&gt;adr[]; (**)
+&nbsp;&nbsp; ...
+
+Begge steder m&aelig;rket med (**) sker der vel et qua-check, da
+getson1 er lavet s&aring; kvalifikationen af det, den exitter er Ast.
+(faktisk er exitparameteren resultatet af indexToNode, hvis
+exit type er en ikke-virtuel "as: ^Ast").
+
+Hvis nu man kunne skrive getson1 etc om, s&aring; de havde en virtuel
+type, som automatisk viderebindes til den konkrete type, ville
+meget v&aelig;ret sparet:
+
+Antag, at generatoren kan generere runtimecfl.bet s&aring;ledes:</PRE>
+
+<UL>
+<PRE>Address: cons(# #);
+Transaction: Instruction
+(# getSource: getson1(# as::Source #);
+&nbsp;putSource: putson1(# as::Source #);
+&nbsp;getDestination: getson2(# as::Destination #);
+&nbsp;putDestination: putson2(# as::Destination #);
+exit 45
+#);
+Source: cons
+(# getAddress: getson1(# as::Address #);
+&nbsp;putAddress: putson1(# as::Address #);
+&nbsp;getReferenceOpt: getson2(# as::ReferenceOpt #);
+&nbsp;putReferenceOpt: putson2(# as::ReferenceOpt #);
+exit 46
+#);
+Destination: cons
+(# getAddress: getson1(# as::Address #);
+&nbsp;putAddress: putson1(# as::Address #);
+&nbsp;getOperationOpt: getson2(# as::OperationOpt #);
+&nbsp;putOperationOpt: putson2(# as::OperationOpt #);
+exit 47
+#);</PRE>
+</UL>
+
+<PRE>S&aring; vil ovenst&aring;ende manipulation kunne udtrykkes s&aring;ledes:</PRE>
+
+<UL>
+<PRE>&nbsp;&nbsp; trans: ^runtime.Transaction;
+&nbsp;&nbsp; adr: ^runtime.Address;
+do ... -&gt;trans[];
+&nbsp;&nbsp; (trans.getSource).getAddress -&gt;adr[];
+&nbsp;&nbsp; ...</PRE>
+</UL>
+Resultatet er, at man sparer allokering af een tempor&aelig;r
+<BR>variabel (src) og man sparer 2 runtime Qua-checks.
+<BR>Udover effektivitet betyder dette, at det p&aring; compile time
+<BR>kan afg&oslash;res, om man bruger MPS rigtigt, s&aring;ledes at man
+kan
+<BR>undg&aring; den ofte forekommende problematik med, at man f&aring;r
+<BR>runtime qua fejl i mps kode (typisk nybegynder fejl).
+
+<P>Jeg ved ikke om getSon1 etc kan skrives, s&aring;ledes, at der ikke
+genereres et qua check i den (Ole siger, at den foreg&aring;r ved et tabel
+opslag. Det er selvf&oslash;lgeligt sv&aelig;rt at kvalificere de enkelte
+indgange i en tabel forskelligt. Men uanset at der m&aring;ske ikke nemt
+kan laves en l&oslash;sning, der helt eliminerer qua-checket, s&aring;
+er det bedre, hvis det kan skjules i implementationen af getson1 etc. Dette
+vil stadig give de
+<BR>fordele, at bruger-koden er nemmere at skrive, at der undg&aring;s
+ekstra variable, og at kodegenereringen for bruger-koden bliver mindre
+(pga at der kun genereres qua-check i getson1 etc.).
+
+<P>Det vil klart v&aelig;re en god ide at eliminere s&aring; mange qua
+checks som muligt her. Og jeg tror man kan g&oslash;re som du foresl&aring;r.
+
+<P>Ang&aring;ende tabelopslaget:
+<BR>I runtimecfl kan jeg se genereringen af tabellen (uddrag):
+<UL>
+<PRE>&amp;referenceGenerator(# do &amp;Source[] -&gt; as[] #)[] -&gt; genRefArray[46][];</PRE>
+</UL>
+
+<PRE>Dette bruges af getson1 (indexToNode) s&aring;ledes:</PRE>
+
+<UL>
+<PRE>grammar.genRefArray[symbol]-&gt;as[]</PRE>
+</UL>
+Men hvis f.eks. getSource er erkl&aelig;ret som
+<UL>
+<PRE>getSource: getson1(# as::Source #);</PRE>
+</UL>
+(hvor "as" er virtuel Ast i getSon1), kan objektgenereringsdelen af getson1
+s&aring; ikke blot v&aelig;re
+<BR>&nbsp;
+<UL>
+<PRE>&amp;as[]</PRE>
+</UL>
+istedet for et tabelopslag til et objekt, der siger &amp;Source[]-&gt;...
+
+<P>Lyder ogs&aring; som en god ide ! Man skal lige ha check p&aring; havde
+der sker hvis man kun er p&aring; trelevel, dvs cfl level er ikke med.
+S&aring; skal der
+<BR>genereres cons,list, etc objekter. Men jeg tror ikke at det er et problem.
+<BR>&nbsp;
+<H2>
+Forslag til nyt CFL lag</H2>
+For Peters grammatik kunne jeg godt t&aelig;nke mig flg cfl-lag
+<UL>
+<PRE>&nbsp;Address: cons(# #);
+&nbsp;Transaction: Instruction
+&nbsp;(# getSource: getson1(##);
+&nbsp;&nbsp;&nbsp; putSource: putson1(##);
+&nbsp;&nbsp;&nbsp; getDestination: getson2(##);
+&nbsp;&nbsp;&nbsp; putDestination: putson2(##);
+&nbsp; enter(putSource,putDestination)
+&nbsp; exit this(Transaction)[]
+&nbsp;#);
+
+&nbsp;Source: cons
+&nbsp;(# getAddress: getson1(##);
+&nbsp;&nbsp;&nbsp; putAddress: putson1(##);
+&nbsp;&nbsp;&nbsp; getReferenceOpt: getson2(##);
+&nbsp;&nbsp;&nbsp; putReferenceOpt: putson2(##);
+&nbsp;enter(putAddress,putReferenceOpt
+&nbsp;exit this(source)[]
+&nbsp;#);
+&nbsp;Destination: cons
+&nbsp; (# getAddress: getson1(##);
+&nbsp;&nbsp;&nbsp;&nbsp; putAddress: putson1(##);
+&nbsp;&nbsp;&nbsp;&nbsp; getOperationOpt: getson2(##);
+&nbsp;&nbsp;&nbsp;&nbsp; putOperationOpt: putson2(##);
+&nbsp; enter(putAdress,putOperationOpt)
+&nbsp; exit this(Destination)[]
+&nbsp;#);</PRE>
+</UL>
+
+<PRE>Man kan s&aring; skrive udtryk af formen</PRE>
+
+<UL>
+<PRE>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; T: ^Transaction
+
+do ...
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; ((&amp;Address,&amp;ReferenceOpt)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; -&gt; &amp;Source,
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; (&amp;Address,&amp;OperationOpt)
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; -&gt; &amp;Destination
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; )
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; -&gt; &amp;Transaction
+&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; -&gt; T[]</PRE>
+</UL>
+Hvilket er en langt mere kompakt m&aring;de at konstruere AST'er end med
+det nuv&aelig;rende CFL.
+
+<P>Det gamle index kunne s&aring; v&aelig;re en attribut. Da en slig &aelig;ndring
+kr&aelig;ver en del brugs&aelig;ndringer kunne man starte med at generere
+2 cfl filer, den gamle og en ny version. Men ...:-)
+</BODY>
+</HTML>
