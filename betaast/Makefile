@@ -2,7 +2,7 @@ BETA=beta
 VERSION=v5.0
 
 all:
-	$(BETA) -q -w all.bet
+	$(BETA) -q -w -c all.bet
 
 tags:
 	etags --output=ALLTAGS \
