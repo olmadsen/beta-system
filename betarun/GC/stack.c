@@ -28,6 +28,12 @@ DoStackCell(Object **theCell,Object *theObj)
   if (!theObj) {
     return;
   }
+#ifdef NEWRUN
+  if ((theObj==CALLBACKMARK)||(theObj==GENMARK)){
+    /* OK */
+    return;
+  } 
+#endif
   if (inBetaHeap(theObj)) {
     if (isObject(theObj)){
       DEBUG_CODE(if (!CheckHeap) Ck(theObj));
@@ -52,9 +58,7 @@ DoStackCell(Object **theCell,Object *theObj)
 	/* Because of the very well-defined structure of stackframes
 	 * there should be no GC-able cells, that refer outside BETA heaps.
 	 */
-	if ((theObj!=CALLBACKMARK)&&(theObj!=GENMARK)){
-	  ILLEGAL;
-	}
+	ILLEGAL;
       });
     });
   }

@@ -288,7 +288,7 @@ void ProcessStackFrames(long SP,
      * C call, but this is currently commected out in compiler (ExternalMark).
      * This is probably because we can actually figure out the object ourselves.
      * See CALLBACKMARK stuff in function DumpCell in outpattern.c and in
-     * function DoStackCell in valhallaFindComp.c.
+     * function DoStackCell in stack.c.
      * So BetaStackTop[1] is currently unused.
      *
      * STACK LAYOUT at callback/gpart:
