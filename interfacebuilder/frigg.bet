@@ -1,6 +1,7 @@
 ORIGIN 'friggapplication';
 INCLUDE '~beta/guienv/guienvsystemenv'
         '~beta/compiler/DYN/dynlib'
+        '~beta/sysutils/time'
         'seticon';
 BODY '~beta/editor/private/compiler';
 BODY '~beta/editor/private/nouser';
@@ -8,11 +9,16 @@ BODY '~beta/editor/private/nouser';
 systemenv
   (#
      setWindowEnv::  (#  do frigg[]->theWindowEnv[] #);
-     DC: ^astInterface.dynamicCompiler;
+     DC: ^myCompiler;
+     ensureCompiler:
+       (# 
+       do (if DC[] = none then &myCompiler[]->DC[]; DC.initDyn if)
+       #);
      myCompiler: frigg.MPS.AST.dynamicCompiler
        (#
           initDyn::< 
             (# thisExecutable: ^text; 
+               clockBefore, clockAfter: @integer;
             do
                screen[]->info[];
                (if msg[] = none then &stream[]->msg[] if);
@@ -22,37 +28,128 @@ systemenv
                (* On nti, calling dynenv.exe is normal and the compiler
                 * cannot handle any extension but .bet *)
                exeFileExtension->thisExecutable.stripExtension;
+               systemTime -> clockBefore;
                (thisExecutable[],none )
                  ->ActivateCompiler
                    (#
-                      addedFragment::
-                        (#  do fullFn[]->frigg.ymerBrowser.writeInfoView #);
-                      addedTranslate::
+                      addedFragment:: 
+                        (# count: @integer;
+                        do (if (count mod 10) = 0 then
+                               fullFn[]->frigg.ymerBrowser.writeInfoView;
+                           if);
+                           count + 1 -> count;
+                        #);
+                      addedTranslate:: 
                         (#  do 'Translate: '->putText; fullFn[]->putLine #);
-                      checkedFragment::
+                      checkedFragment:: 
                         (#  do 'Checked: '->putText; fullFn[]->putLine #);
-                      codegenFragment::
+                      codegenFragment:: 
                         (# 
                         do 'Code generated: '->putText; fullFn[]->putLine
                         #)
                    #);
-               (* to initialize 
-                * dependency graph *)
-               info.newline;
+               systemTime -> clockAfter;
                
+               'Time to INIT: [' -> putText;
+               clockAfter - clockBefore -> putInt;
+               ']' -> putLine;
+               
+            #);
+          compile:
+            (# fname: ^text; OK,err: @boolean; fNameIm: ^ImagePair
+            enter fname[]
+            do
+            (* ConvertFilePath stuff added to prevent
+             * problems with /users/datpete/... and
+             * /a/home/ariel1/datpete/... being
+             * different. The pathhandler checks for
+             * aliases to the same file.
+             *)
+               (fname[],none )->frigg.MPS.AST.thePathhandler.convertFilePath
+                 ->StripBetaExtension->fname[];
+               L:
+               (fname[],none )
+                 ->ActivateCompiler
+                   (# Report:: (#  do true->err; leave l #) #)->err;
+               (if not (err) then
+                   true->OK; fname[]->LoadFiles->fNameIm[]; 
+               if)
+            exit (OK,fNameIm[])
             #)
        #);
      frigg: @friggApplication
        (#
           ymerBrowserWindow::< 
             (# open::<  (#  do setFriggIcon;  #);  #);
-          init:: 
-            (# 
-            do 'Hello, World'->putLine; &myCompiler[]->DC[]; DC.initDyn; 
+          compilePattern:: 
+            (#
+               ok: @boolean;
+               imp: ^imagePair;
+               pt: @integer;
+               fname: ^text;
+               pname: ^text;
+               
+            do
+               ensureCompiler;
+               (node.frag.father).fullname->fname[];
+               node[]->frigg.MPS.betacfl.getName->pname[];
+               fname[]->DC.compile->(ok,imp[]);
+               (if OK then
+                   (if imp[] <> none then
+                       pname[]->imp.namedOff->pt;
+                       (theOrigin[],pt)->DC.makeStruc->structure##;
+                       
+                   if);
+                   
+               if);
+               
+            #);
+          init::  
+            (#  
+            do 
+               
             #);
           
        #);
-     
-  do &expandWildcardsArgumentHandler[]->argumentHandler[]; 
+     isInteger:
+       (# str: ^text;
+          b: @boolean;
+       enter str[]
+       do true -> b;
+          l: str.scanAll
+          (#
+          do (if NOT (ch -> ascii.isDigit) then
+                 false -> b;
+                 leave l;
+             if);
+          #);
+       exit b
+       #);
+  do &expandWildcardsArgumentHandler[]->argumentHandler[];
+     (# inx: @integer;
+        arg: ^text;
+        n: @integer;
+     do 2 -> inx;
+        l: (if inx <= noOfArguments then
+               inx -> arguments -> arg[];
+               (If '-s' -> arg.equal then
+                   inx + 1 -> inx;
+                   l2: (if inx <= noOfArguments then
+                           inx -> arguments -> arg[];
+                           arg.reset;
+                           (if arg[] -> isInteger then
+                               arg.asInt -> n;
+                               (if (n > 0) and (n <= 256) then
+                                   true -> frigg.theGraphicalEditorEnv.switch[n];
+                               if);
+                               inx + 1 -> inx;
+                               restart l2;
+                           if);
+                       if);
+               if);
+               inx  + 1 -> inx;
+               restart l;
+           if);
+     #);
   #)  
 
