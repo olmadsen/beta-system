@@ -1,0 +1,302 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+                      "http://www.w3.org/TR/REC-html40/loose.dtd"
+>
+<HTML>
+<HEAD>
+<META http-equiv="Content-Type" CONTENT="text/html; CHARSET=ISO-8859-1">
+<title>Implementation of Java/.NET to BETA converters</title>
+<link rev="made" href="mailto:beta@daimi.au.dk">
+<LINK REL="stylesheet" HREF="http://www.daimi.au.dk/~beta/doc/style/miadoc.css" TYPE="text/css">
+</HEAD>
+
+<BODY>
+
+<H1>Implementation of Java/.NET to BETA converters</H1>
+
+The two converters are implemented in basically the same way: 
+
+<UL>
+<LI><CODE>java2beta</CODE> is a Java program, which use Java
+reflective libraries 
+(<CODE>java.lang.Class</CODE>, <CODE>java.lang.reflect.*</CODE>)
+to open a given class, and map this class and
+it's members to apropriate BETA declarations as specified below.
+
+<LI><CODE>dotnet2beta</CODE> is a C# program, which use .NET
+reflective libraries 
+(<CODE>System.Type</CODE>, <CODE>System.Reflection.*</CODE>)
+to open a given type/interface, and map this type/interface and
+it's members to apropriate BETA declarations as specified below.
+</UL>
+<P>
+
+The mapping can be outlined as below. The term <EM>class</EM> is used
+to denote both classes, types, interfaces below, unless otherwise
+stated.
+
+<OL>
+<LI>First a scan for all <EM>refered classes</EM> is done in
+order to collect a list of other BETA files to
+<CODE>INCLUDE</CODE>. This is decribed in more detail in 
+<A HREF="#include">Include Handling</A>.
+<LI>Then all <EM>fields</EM> of the class class is processed.
+This is described in more detail in 
+<A HREF="#fields">Fields</A>.
+<LI>Then all <EM>constructors</EM> of the class class is processed.
+This is described in more detail in 
+<A HREF="#constructors">Constructors</A>.
+<LI>Then all <EM>methods</EM> of the class class is processed.
+This is described in more detail in 
+<A HREF="#methods">Methods</A>.
+<LI>Then <EM>nested classes</EM> (java: <EM>inner classes</EM>) 
+of the class class is processed.
+This is described in more detail in 
+<A HREF="#nested">Nested Classes</A>.
+<LI>Finally the tools check to see if any of the 
+<EM>refered classes</EM> mentioned needs conversion. If so, these are
+converted in the same manner.
+</OL>
+
+For the .NET platform a special kind of mapping is needed for the
+<EM>value types</EM> and <EM>enumeration types</EM>, which does not
+have direct counterparts in Java. 
+This is described in more detail in 
+<A HREF="#valuetypes">Value Types and Enums</A>.
+
+
+<H2><A NAME="include">Include Handling</A></H2>
+...
+
+<H2><A NAME="fields">Fields</A></H2>
+...
+
+<H2><A NAME="constructors">Constructors</A></H2>
+...
+
+<H2><A NAME="methods">Methods</A></H2>
+...
+
+<H2><A NAME="nested">Nested Classes</A></H2>
+...
+
+<H2><A NAME="valuetypes">Value Types and Enums</A></H2>
+Value types (and enums) is a .NET speciality not found in Java.
+Basically value types er the equivalent of <EM>structs</EM> known
+from, e.g. C/C++. That is an untyped blob of memory which has
+copy-by-value semantics.
+<P>
+In .NET valuetypes are used for "small" objects, which need not have
+instance-identity. The primary reason for this is efficiency. All
+primitive types (e.g. all the integer types) are value types.
+All value types are directly derived from
+<CODE>System.ValueType</CODE>, which derives directly from 
+<CODE>System.Object</CODE>. A special exception to this rule is 
+<CODE>System.Enum</CODE>, which is the base class of all enumeration
+types, and which derives directly from <CODE>System.ValueType</CODE>:
+
+<PRE>
+  System.Object
+     |
+     `- System.ValueType
+            |
+            `- System.Enum
+</PRE>
+
+...
+
+<H3>ValueTypes</H3>
+
+...
+
+<P>
+
+<A HREF="http://www.ecma-international.org/publications/standards/ECMA-335.HTM">ECMA 335</A>
+defines how to call methods on value types in section 12.1.6.2.4:
+
+<BLOCKQUOTE>
+<EM>
+Static methods on value types are handled no differently from static
+methods on an ordinary class: use a call instruction with a metadata
+token specifying the value type as the class of the method. Non-static
+methods (i.e.  instance and virtual methods) are supported on value
+types, but they are given special treatment. A non-static method on a
+class (rather than a value type) expects a <B>this</B> pointer that is an
+instance of that class. This makes sense for classes, since they have
+identity and the <B>this</B> pointer represents that identity. Value types,
+however, have identity only when boxed. <U>To address this issue, the
+<B>this</B> pointer on a non-static method of a value type is a by-ref
+parameter of the value type rather than an ordinary by-value
+parameter.</U>
+<P>
+A non-static method on a value type may be called in the following ways:
+<UL>
+<LI>Given an unboxed instance of a value type, the compiler will know
+the exact type of the object statically. The <CODE>call</CODE> instruction can be
+used to invoke the function, passing as the first parameter (the <B>this</B>
+pointer) the <U>address of the instance</U>. The metadata token used with the
+call instruction shall specify the value type itself as the class of
+the method.
+
+<LI>...
+</UL>
+</EM>
+</BLOCKQUOTE>
+
+
+Problems:
+<OL>
+<LI>How to declare? Currently as an ExternalClass:
+<PRE>
+DateTime: ExternalClass
+  (#
+     
+     _init_int64: cons 
+       (# result: ^DateTime;
+          arg1: @int64;
+       enter (arg1)
+       exit result[]
+       #);
+     ...
+     CompareTo: proc
+       (# result: @int32;
+          arg1: ^Object;
+       enter (arg1[])
+       exit result
+       #);
+     ...
+     ToString: proc (* ToString *)
+       (# result: ^_String;
+       do 'ToString' -> procname;
+       exit result[]
+       #);
+     ...
+     get_Month: proc
+       (# result: @int32;
+       exit result
+       #);
+     ...
+     ToFileTime: proc
+       (# result: @int64;
+       exit result
+       #);
+     ...
+  do '<B>valuetype </B>[mscorlib]System.DateTime' -> className;
+  #);
+</PRE>
+This ValueType has a <EM>private</EM> <CODE>int64</CODE> instance
+field, which is not exposed in the ExternalClass declaration, since
+you cannot access a private field.<BR>
+<B>Suggestion</B>: valuetypes specialization of special <CODE>ExternalValueType</CODE>?
+<LI>Calling methods (like <CODE>ToFileTime)</CODE>on valuetypes must thus use <CODE>ldfld<U>a</U></CODE> /
+<CODE>ldarg<U>a</U></CODE> / <CODE>ldloc<U>a</U></CODE> instructions
+to load the address of the value before issuing the <CODE>call</CODE> instruction.
+</OL>
+
+
+<H3>Enums</H3>
+
+<A HREF="http://www.ecma-international.org/publications/standards/ECMA-335.HTM">ECMA 335</A>
+lists a number of special rules about enums in section 8.5.2:
+
+<BLOCKQUOTE>
+<EM>
+The CTS supports an enum (also known as an enumeration type), an
+alternate name for an existing type. For purposes of matching
+signatures an enum shall not be the same as the underlying
+type. Instances of an enum, however, shall be assignment compatible
+with the underlying type and vice versa. That is: no cast or coercion
+is required to convert from the enum to the underlying type, nor are
+they required from the underlying type to the enum. An enum is
+considerably more restricted than a true type:
+<UL>
+<LI>It shall have exactly one instance field, and the type of that 
+    field defines the underlying type of the enumeration.
+<LI>It shall not have any methods of its own.
+<LI>It shall not implement any interfaces of its own.
+<LI>It shall not have any properties or events of its own.
+<LI>It shall not have any static fields unless they are literal
+<LI>The underlying type shall be a built-in integer type. 
+<LI>Enums shall derive from <CODE>System.Enum</CODE>, hence they are
+    value types. Like all value types, they shall be sealed
+</UL>
+</EM>
+</BLOCKQUOTE>
+
+Problems:
+<OL>
+<LI>How to declare?
+Currently as an ExternalClass:
+<PRE>
+FileAttributes: ExternalClass
+  (#
+     ReadOnly:
+       (# exit 1 #);
+     Hidden:
+       (# exit 2 #);
+     System:
+       (# exit 4 #);
+     ...
+  do '<B>valuetype </B>[mscorlib]System.IO.FileAttributes' -> className;
+  INNER;
+  #);
+</PRE>
+
+<LI>Formal ValueType parameters: how to declare them? 
+<OL>
+<LI>As a dynamic reference?
+<PRE>
+somefunction: proc
+  (# attr: ^FileAttributes #)
+</PRE>
+<B>Problem</B>: How to call
+<CODE>FileAttributes.ReadOnly-&gt;somefunction</CODE>.
+<LI>As an integer?
+<PRE>
+someFunction: proc
+  (# attr: @int32;
+  do 'someFunction'-&gt;procname
+  #)
+</PRE>
+<B>Problem</B>: Signature for <CODE>somefunction</CODE> constructed by
+BETA compiler will be wrong, since the type of the parameter will become <CODE>[mscorlib]System.Int32</CODE>,
+whereas it should be <CODE>[mscorlib]System.IO.FileAttributes</CODE>.
+<B>Example</B>: <A
+HREF="../../../GENERATOR/BYTECODE/TEST/hellobox.bet">GENERATOR/BYTECODE/TEST/hellobox.bet</A>
+shows an example of this problem (a <CODE>MessageBox.Show</CODE> call,
+where the last two parameters are integers instead of enum types,
+and where the signature becomes wrong)
+<BR>
+<B>Possible fix:</B> Specify full signature for
+<CODE>procname</CODE>. Compiler will need a way to determine if the
+procname was full or partial. Scan for parenthesis? Special character?
+<LI>As a static reference?
+<PRE>
+somefunction: proc
+  (# attr: @FileAttributes #)
+</PRE>
+<B>Problem</B>: <CODE>FileAttributes</CODE> must be declared with
+<CODE>enter/exit</CODE> part. Probably <CODE>FileAttributes</CODE>
+must derive from some special pattern <CODE>Enum</CODE> declared in <CODE>betaenv</CODE>?
+<P>
+</OL>
+
+
+<LI>Integer binary operations must be possible on Enums.
+E.g. 
+<PRE>
+do myFile.getAttributes %Band FileAttributes.ReadOnly = FileAttributes.ReadOnly
+     -&gt; fileIsReadOnly;
+</PRE>
+<B>Possible solution 1:</B> Treating enums as static references (as suggested above) in BETA will probably handle this.<BR>
+<B>Possible solution 2:</B> Find a way to cast an enum value to
+integer. Using a special <CODE>myEnumValue.%asInt32</CODE> primitive
+(should generate no code, except loading the enum to the stack - as
+noted above in the ECMA quote, no cast/coersion is needed in the
+generated code: the enum is fully compatible with the underlying type).
+
+
+</OL>
+
+
+</BODY>
+</HTML>
