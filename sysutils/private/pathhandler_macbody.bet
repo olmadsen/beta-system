@@ -30,6 +30,7 @@ do getCurrentDir->cwd[];
    slashInx,index: @integer;
    pathlength,basislength: @integer;
    path,basis: ^Text;
+   found: @boolean;
    ch: @char;
    isMacPath: BooleanValue
      (# p: ^Text; 
@@ -63,59 +64,48 @@ do (if THIS(ConvertFilePath).path[] <> none then
        THIS(ConvertFilePath).path->path;
        path.length->pathlength;
        (if pathlength <> 0 then
-           (if (pathlength->path.inxget) // '/' then true->endedBySlash if);
-           (if (pathlength->path.inxget) // ':' then true->endedBySlash if);
+           (if (pathlength->path.inxget) = '/' then true->endedBySlash if);
+           (if (pathlength->path.inxget) = ':' then true->endedBySlash if);
            &text[]->basis[];
-           (if THIS(ConvertFilePath).basis[]
-            // none then private.CurrentDirectory->basis; 
+           (if THIS(ConvertFilePath).basis[]=none then 
+               private.CurrentDirectory->basis; 
             else
                THIS(ConvertFilePath).basis->basis; 
            if);
-           (if basis.length // 0 then private.CurrentDirectory->basis if);
+           (if basis.length = 0 then private.CurrentDirectory->basis if);
            basis.length->basislength;
            (if ((pathlength->path.inxget) <> '/') and
-               ((pathlength->path.inxget) <> ':')
-            // true then
-               (if path[]->isMacPath
-                // true then ':'->path.append; 
+               ((pathlength->path.inxget) <> ':') then
+               (if path[]->isMacPath then 
+                   ':'->path.append; 
                 else
                    '/'->path.append; 
                if);
                pathlength+1->pathlength;
-               
            if);
            (if ((basislength->basis.inxget) <> '/') and
-               ((basislength->basis.inxget) <> ':')
-            // true then
-               (if basis[]->isMacPath
-                // true then ':'->basis.append; 
+               ((basislength->basis.inxget) <> ':') then
+               (if basis[]->isMacPath then
+                   ':'->basis.append; 
                 else
                    '/'->basis.append; 
                if);
                basislength+1->basislength;
-               
            if);
-           path[]->expandEnvVar->path[];
-           (* Expand environment variables *)
-           basis[]->expandEnvVar->basis[];
-           (* Expand environment variables *)
+           path[]->expandEnvVar->path[] (* Expand environment variables *);
+           basis[]->expandEnvVar->basis[] (* Expand environment variables *);
            path.length->pathlength;
            converter:
              (#
-                T: ^text;
-                index: @integer;
-                firstCh: @char;
-                found: @boolean;
                 unknownPrefix:
                   (#
                      (* the prefix of path is unknown.
-                      8 It must be a local file
+                      * It must be a local file
                       *) 
                   do (':',1)->path.insert;
                      pathlength+1->pathlength;
                      restart converter
                   #);
-                
              do (if (1->path.inxGet)
                  // '/' then (* full path: remove first slash *)
                     (1,1)->path.delete;
@@ -147,33 +137,32 @@ do (if THIS(ConvertFilePath).path[] <> none then
                  // '~' then
                     tildeExpand;
                     leave converter;
-                 // '.' then (* this is new from unix version *)
-                    (if './'->basis.equal // true then leave converter if);
+                 // '.' then 
+                    (if './'->basis.equal then leave converter if);
                     (* path is a relative path starting with .
                      * since path is '/'-terminated, length >=2
                      *)
                     (if (2->path.inxGet)
                      // '.' then
                         (* path starts with '..'
-                         * Since path is always terminated by '/', length is >=3
+                         * Since path is always terminated by '/', 
+                         * length is >=3
                          *)
                         (if (3->path.inxGet)
                          // '/' then
                             (* path starts with '../'
-                             * delete prefix of path and last component of basis
-                             * and rerun converter
+                             * delete prefix of path and last component 
+                             * of basis and rerun converter
                              *)
                             (1,3)->path.delete;
                             pathlength-3->pathlength;
                             0->index;
-                            '/'
-                              ->basis.FindAll
+                            '/'->basis.FindAll
                             (# 
                             do (if inx
                                 // basislength then
                                    (* found the terminating slash *)
-                                   (if index <> 0
-                                    // true then
+                                   (if index <> 0 then
                                        (* found slash before the last one in basis *)
                                        (index+1,basislength)->basis.delete;
                                        basis.length->basislength;
@@ -183,23 +172,19 @@ do (if THIS(ConvertFilePath).path[] <> none then
                                            basislength->pathlength;
                                            leave converter
                                        if);
-                                       
-                                    // false then
+                                    else
                                        (* only terminating slash in basis. *)
-                                       (if inx
-                                        // 1 then (* basis = '/' *)
+                                       (if inx=1 then (* basis = '/' *)
                                            NoFather;
                                            (* in case NoFather continues: *)
                                            '../'->path.prepend;
                                            pathlength+3->pathlength;
                                            leave converter;
-                                           
                                         else
                                            '../'->path.prepend;
                                            pathlength+3->pathlength;
                                            './'->basis.prepend;
                                            basislength+2->basislength;
-                                           
                                        if)
                                    if);
                                    restart converter
@@ -208,35 +193,28 @@ do (if THIS(ConvertFilePath).path[] <> none then
                                    inx->index
                                if)
                             #);
-                            (if index
-                             // 0 then
-                                (* did not found any '/' try ':' in basis *)
-                                ':'
-                                  ->basis.FindAll
+                            (if index=0 then
+                                (* did not find any '/' try ':' in basis *)
+                                ':'->basis.FindAll
                                 (# 
-                                do (if inx
-                                    // basislength then
+                                do (if inx=basislength then
                                        (* found the terminating ':' *)
-                                       (if index <> 0
-                                        // true then
+                                       (if index <> 0 then
                                            (* found ':' before the last one in basis *)
                                            (index+1,basislength)
                                              ->basis.delete;
                                            basis.length->basislength;
-                                           (if pathlength
-                                            // 0 then
+                                           (if pathlength=0 then
                                                basis->path;
                                                basislength->pathlength;
                                                leave converter
                                            if);
-                                           
-                                        // false then
+                                        else
                                            (* only ':' last in basis
                                             * basis is a volume name
                                             *)
                                            '../'->path.prepend;
                                            pathlength+3->pathlength;
-                                           
                                        if);
                                        restart converter
                                     else
@@ -244,11 +222,10 @@ do (if THIS(ConvertFilePath).path[] <> none then
                                        inx->index
                                    if)
                                 #);
-                                
                             if);
-                            
                          else
-                            (* path starts with ..something, it must be a local file/directory
+                            (* path starts with ..something, 
+                             * it must be a local file/directory
                              * named '..something'
                              *)
                             unknownprefix; 
@@ -263,19 +240,15 @@ do (if THIS(ConvertFilePath).path[] <> none then
                         path.length->pathlength;
                         leave converter
                      else
-                        (* path starts with .something, it must be a local file/directory *)
+                        (* path starts with .something, 
+                         * it must be a local file/directory 
+                         *)
                         unknownPrefix
                     if);
-                    
                  // ':' then (* this is old mac stuff *)
                     (1,1)->path.delete;
                     '/'->basis.FindAll (# do inx->index #);
-                    (if index
-                     // 0 then ':'->basis.FindAll (# do inx->index #); 
-                    if);
-                    (* basis = 'xxx/xxx/.../xxx/xxx'
-                     *			               ^ index
-                     *)
+                    (if index=0 then ':'->basis.FindAll (# do inx->index #)if);
                     ((1,index)->basis.sub,1)->path.insert;
                     path.length->pathlength;
                     leave converter
@@ -283,48 +256,40 @@ do (if THIS(ConvertFilePath).path[] <> none then
                     false->found;
                     ':'->path.findAll (# do true->found #);
                     (* if we have a colon, we have a global name on the mac *)
-                    (if found // false then unknownPrefix if);
+                    (if not found then unknownPrefix if);
                     leave converter
                 if)
              #);
            (* Converter done *)
            (* Check that the path is ended by slash iff the original one was *)
            (if ((pathlength->path.inxget) = '/') or
-               ((pathlength->path.inxget) = ':')
-            // true then
-               (if endedBySlash
-                // false then
-                   (if pathlength
-                    // 1 then (* special case: the result was '/' *) 
+               ((pathlength->path.inxget) = ':') then
+               (if not endedBySlash then
+                   (if pathlength=1 then 
+                       (* special case: the result was '/' *) 
                     else
                        (pathlength,pathlength)->path.delete; 
                    if);
-                   
                if)
             else
-               (if endedBySlash // true then ':'->path.append; if)
+               (if endedBySlash then ':'->path.append; if)
            if);
            (* replace / with : *)
-           '/'->path.FindAll (# do (':',inx)->path.inxPut #);
+           ('/',':',path[]) -> substChars;
            (* Check that there are no '::' in the path unless first *)
            - 1->slashInx;
            ':'->path.FindAll
            (# 
-           do (if inx > slashInx
-               // true then
-                  (if inx = slashInx+1
-                   // true then
-                      (if inx > 2
-                       // true then
+           do (if inx > slashInx then
+                  (if inx = slashInx+1 then
+                      (if inx > 2  then
                           (inx,inx)->path.delete (* two consecutive ':' *)
                       if);
-                      
-                   // false then
+                   else
                       inx->slashInx; (* remember position of last ':' *) 
                   if)
               if)
            #);
-           &text[]->convertedpath[];
            (* on MAC: case in file names is not significant *)
            path.copy -> lowcasepath -> convertedpath[] ;
        if)
