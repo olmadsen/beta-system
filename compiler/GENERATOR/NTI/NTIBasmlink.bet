@@ -5,7 +5,8 @@ INCLUDE '~beta/toollibs/utils/fileExtensions';
    rspObjName: ^Text;
    rspResName: @Text;
    rspLibName: @Text;
-   rspFile: @File; (* Not Borland *)
+   rspFile: @File;
+   applRcFileName: ^text; (* nti_ms *)
    curDir: @Text; (* Holds prev. dir. changed to (i.e. current dir) *)
    changedDisk: @boolean;
 #)
@@ -49,6 +50,14 @@ smartChDir:
          path->asmState.curDir;
      if)
   #);
+quote:
+  (# T: ^text
+  enter T[]
+  do (if T.lgth=0 then '""' -> T[] if);
+     (if T.T[1]<>'"' then '"' -> T.prepend; if);
+     (if T.T[T.lgth]<>'"' then '"' -> T.append; if);
+  exit T[]
+  #);
 
 isGnu:       (# exit common.targetMachineId = common.nti_gnu #);
 isMicrosoft: (# exit common.targetMachineId = common.nti_ms  #);
@@ -75,6 +84,12 @@ do '@echo off\n'->AFF.putText;
     else
        'Unknown SDK' -> bugstream.putline;
    if);
+   
+   (* Application common resource file - now used on nti_ms *)
+   (asmState.rspFile.name).copy -> asmState.applRcFileName[];
+   '.rsp' -> asmState.applRcFileName.stripExtension;
+   '.rc'  -> asmState.applRcFileName.appendExtension;
+
 #)
 ---AsmExt: descriptor ---
 (# do '-BETA-'->ext #) 
@@ -147,14 +162,23 @@ do (if true
 (# rcpath,rcname,resname,resext: ^text;
    sepinx: @integer;
    rcentry, resentry: @diskentry;
-   compile: @boolean;
+   compile, compile_by_inclusion: @boolean;
    sep: ^text;
    pathWithSep, t: ^text;
    dir: @directory;
    resdir: @text;
-do (* FIXME: Support for multiple resource files (Sdk=ms).
-    * Do this by using #include in a tmp file.
+do (* Arguments: 
+    *    first: @boolean;
+    *    m:     @text;
     *)
+   (if m.length=0 then
+       (* Called when all resources have been included into applRcFileName *)
+       false -> compile_by_inclusion;
+       asmState.applRcFileName -> m;
+    else 
+       true -> compile_by_inclusion;
+   if);
+   
    0->sepinx; '\\'->m.findAll(# do inx->sepinx #);
    (if sepinx
     // 0 then
@@ -184,20 +208,28 @@ do (* FIXME: Support for multiple resource files (Sdk=ms).
     else
        '.'->m.copyAppend->resname[]; resext[]->resname.append;
    if);
-   (* Create directories *)
-   rcpath[]->dir.name;
-   (targetMachine).copy
-     -> t[] 
-     -> dir.createDir(# exists::(# do true->continue #)#);
    
-   (* t is 'nti' or nti_ms, etc. *)
-   '\\' -> t.prepend;
-   t[] -> (rcpath.copy).append -> dir.name;
-   '\\'->resname.prepend;
-   targetmachine->resname.prepend;
-   (* resname is now the name of the .res file relative to rcpath
-    * i.e. nti_ms\foo.res if the previous line was enabled.
-    *)
+   (if (not isMicrosoft) then
+       (* Place compiled res files in targemmachinename subdirectories.
+        * Not needed on nti_ms anymore, since we use applRcFile 
+        *)
+       
+       (* Create directories *)
+       rcpath[]->dir.name;
+       (targetMachine).copy
+         -> t[] 
+         -> dir.createDir(# exists::(# do true->continue #)#);
+
+       (* t is 'nti' or nti_gnu, etc. *)
+       '\\' -> t.prepend;
+       t[] -> (rcpath.copy).append -> dir.name;
+       '\\'->resname.prepend;
+       targetmachine->resname.prepend;
+       (* resname is now the name of the .res file relative to rcpath
+        * i.e. nti_gnu\foo.res if the previous line was enabled.
+        *)
+   if);
+   
    (* Check if rcname contains the name of a .res file. If so, do NOT
     * try to compile it. Simply add it to the .response file. sepinx
     * still contains the index of the '.' in rcname.
@@ -229,22 +261,44 @@ do (* FIXME: Support for multiple resource files (Sdk=ms).
             else
                rcname[]->pathWithSep.copyappend->rcentry.path;
                (rcentry.modtime>resentry.modtime)->compile;
-       if) if);
+           if) 
+       if);
        (if true
-       // isMicrosoft then
-           (if compile then
+        // isMicrosoft then
+           (if compile_by_inclusion then
+               (* RC file must be compiled: Include it in applRcFileName *)
+               'echo #include "' -> AFF.puttext;
+               rcpath[]->AFF.putText;
+               sep[]->AFF.putText; 
+               rcname[]->AFF.putText;
+               '" ' -> AFF.puttext;
+               (if first then
+                   '> "' -> AFF.puttext;
+                else
+                   '>> "' -> AFF.puttext;
+               if);
+               asmState.applRcFileName[] -> AFF.putText;
+               '"' -> AFF.putline;
+            else
+               (* Called when all RC files have been included into applRcFileName.
+                * Compile applRcFileName and include result in rsp file.
+                * rcname etc points to applRcFileName etc in this case.
+                *)
                'rc /dMACHINETYPE='->AFF.putText;
                targetmachine->AFF.putText;
-               ' "/i'->AFF.putText; rcpath[]->AFF.putText;
-               '" "/fo'->AFF.putText; rcpath[]->AFF.putText;
+               ' "/fo'->AFF.putText; rcpath[]->AFF.putText;
                sep[]->AFF.putText; resname[]->AFF.putText;
                '" "'->AFF.putText; rcpath[]->AFF.putText;
                sep[]->AFF.putText; rcname[]->AFF.putText; '"'->AFF.putLine;
                'if errorlevel 1 goto reserror'->AFF.putLine;
-           if);
-           rcpath[]->asmState.rspFile.putText;
-           sep[]->asmState.rspFile.putText;
-           resname[]->asmState.rspFile.putLine;
+               
+               (* Put applres file into rsp file *)
+               '"' -> asmState.rspFile.put;
+               rcpath[]->asmState.rspFile.putText;
+               sep[]->asmState.rspFile.putText;
+               resname[]->asmState.rspFile.putText;
+               '"' -> asmState.rspFile.putLine;
+           if)
         // isGnu then
            (if compile then
                (* windres --define MACHINETYPE=nti_gnu -i <inputfil> 
