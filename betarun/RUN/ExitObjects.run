@@ -125,35 +125,54 @@ ExOx: public
      
      (if theObj = exitObj then 
          { found the object to exit to }
+         theObj -> stackValue;
          goto exitLabel
      if);
      
      again:
+     pop stackValue;
+     (if stackPointer = lastComp then
+         { passing component. terminate it as in AttachComponent }
+         
+         ActiveComponent -> theComp; { Destroys lastComp }
+         
+         (if theComp.CallerComp = 0 then 
+             { attempt to leave basic component! }
+             goto LeaveBasicError;
+             
+         if);
+         
+         (if debug then 1 -> NumTermComp+ if);
+         theComp.CallerComp -> ActiveComponent; 
+         theComp.CallerObj  -> theObj;         
+         0 -> theComp.StackObj;
+         0 -> theComp.CallerComp;
+         0 -> theComp.CallerObj;
+         ActiveComponent -> theComp;
+         
+         { Pop the component block }
+         pop ActiveCallBackFrame;
+         pop lastComp;
+         4 -> SP+; { dummy: level not used }
+         lastComp -> lastCompBlock
+     if);
+     
+     (if stackValue = exitObj then 
+         { found the object to exit to }
+         goto exitLabel
+     if);
+     goto again;
+     
+     exitLabel:
+     { Found the object. We now have to go one more object back }
+     pop stackValue;
      (if stackPointer = lastComp then
          { passing component. terminate it as in AttachComponent }
          ActiveComponent -> theComp; { Destroys lastComp }
          
          (if theComp.CallerComp = 0 then 
              { attempt to leave basic component! }
-             { BetaStackTop points to where return address from ExO was stored on stack }
-             BetaStackTop -> stackPointer;
-             push OrigObj; { These are wrong: ActiveComponent, ActiveCallBackFrame, lastCompBlock }
-             push LeaveBasicCompErr; 
-             {
-               Stack: 
-               
-               +0: LeaveBasicCompErr
-               +4: theObj
-               +8: Address ExO was called from 
-               
-               This is just what BetaError expects
-             }
-             call BetaError;
-             { BetaError will only be able to display topmost component stack, since
-               all components have now been terminated. Would require a scan that does not
-               terminate components followed by a scan of components (via CallerComp) 
-               for terminating in the regular case.
-             }
+             goto LeaveBasicError;
          if);
          
          (if debug then 1 -> NumTermComp+ if);
@@ -169,20 +188,20 @@ ExOx: public
          pop lastComp;
          4 -> SP+; { dummy: level not used }
          lastComp -> lastCompBlock;
-         
-         (if theObj = exitObj then 
-             { found the object to exit to }
-             goto exitLabel
-         if);
+         goto done;
      if);
-     pop stackValue;
-     (if stackValue <> exitObj then goto again if);
      
-     exitLabel:
-     { Found the object. We now have to go one more object back }
-     pop stackValue;
+     (if stackValue=0 then
+         goto exitLabel
+     if);
      PushAll;
      push stackValue;
+     call inBetaHeap;
+     (if RegEax=0 then 
+         pop stackValue;
+         PopAll;
+         goto exitLabel
+     if);
      call strongIsObject;
      pop stackValue;
      (if RegEax=0 then 
@@ -192,6 +211,8 @@ ExOx: public
      PopAll;
      
      stackValue -> theObj;
+     
+     done:
      theObj[offset]!l -> stackPointer;
      lastCompBlock -> stackPointer+;
      pReg1 -> addr;
@@ -199,4 +220,27 @@ ExOx: public
      clear AddrReg2;
      clear DataReg2;
      goto addr; {AddrRegs ok; stack ok, too}
+     
+     
+     
+     LeaveBasicError:
+     { BetaStackTop points to where return address from ExO was stored on stack }
+     BetaStackTop -> stackPointer;
+     push OrigObj; { These are wrong: ActiveComponent, ActiveCallBackFrame, lastCompBlock }
+     push LeaveBasicCompErr; 
+     {
+       Stack: 
+       
+       +0: LeaveBasicCompErr
+       +4: theObj
+       +8: Address ExO was called from 
+       
+       This is just what BetaError expects
+     }
+     call BetaError;
+     { BetaError will only be able to display topmost component stack, since
+       all components have now been terminated. Would require a scan that does not
+       terminate components followed by a scan of components (via CallerComp) 
+       for terminating in the regular case.
+     }
   #)
