@@ -28,6 +28,8 @@ use Cwd;
 use File::Copy;
 use File::stat;
 
+$cygwin = ($ENV{'TERM'} eq 'cygwin');
+
 $minorupdate = 0;
 
 # Get options
@@ -61,15 +63,15 @@ while (1) {
 	shift @ARGV;
         last;
     } elsif ($ARGV[0] =~ /^-/) {
-        print STDERR "Usage: mbs_commit [options] [file [file ...]]\n";
-        print STDERR "   -m \"message\"\n";
-        print STDERR "   -u username_to_log\n";
-        print STDERR "   -n    # Don't actually commit (do everything else!)\n";
-        print STDERR "   -d    # Don't run diff to see changes\n";
-        print STDERR "   -k    # Keep version.c or [compilerrcm]version.bet or changes.bet (don't delete it and get\n            the newest from the server\n";
-        print STDERR "   +     # Don't increase version number, just add +\n";
-        print STDERR "   -     # Don't increase version number at all\n";
-        print STDERR "   --    # no more options\n";
+        print "Usage: mbs_commit [options] [file [file ...]]\n";
+        print "   -m \"message\"\n";
+        print "   -u username_to_log\n";
+        print "   -n    # Don't actually commit (do everything else!)\n";
+        print "   -d    # Don't run diff to see changes\n";
+        print "   -k    # Keep version.c/changes.bet (don't delete it and get\n            the newest from the server\n";
+        print "   +     # Don't increase version number, just add +\n";
+        print "   -     # Don't increase version number at all\n";
+        print "   --    # no more options\n";
         exit (2);
     } else {
 	last;
@@ -83,12 +85,12 @@ $origcwd = $cwd;
 
 $path = "";
 
-print STDERR "CWD is '$cwd'\n";
+print "CWD is '$cwd'\n" if ($verbose);
 
 # Find the top dir of betarun by looking for a dir where there is a file
 # called version.c.  Also, since there is a version.c in the C subdir, we
 # also check that there is no file called initialize.c
-while ((! ( -f "version.c" || -f "initialize.c") ) && (! ( -f "compilerrcmversion.bet" || -f "version.bet" || -f "changes.bet"))) {
+while ((! ( -f "version.c" || -f "initialize.c") ) && (! ( -f "version.bet" || -f "changes.bet"))) {
     # Remove trailing slash from dir name
     # unless the path is just /
     if ($cwd !~ /^([a-zA-Z]:)?[\\\/]$/) {
@@ -100,10 +102,10 @@ while ((! ( -f "version.c" || -f "initialize.c") ) && (! ( -f "compilerrcmversio
         $lastpart = $2;
         $separator = $1;
         $path = $lastpart . $separator . $path;
-        print STDERR "CDed up to $cwd\n";
+        print "CDed up to $cwd\n" if ($verbose);
         chdir("..");
     } else {
-        print STDERR "Couldn't find version.c/[compilerrcm]version.bet/changes.bet starting from `$origcwd'\n";
+        print "Couldn't find version.c/version.bet/changes.bet starting from `$origcwd'\n";
         exit (1);
     }
 }
@@ -114,13 +116,11 @@ if (-f "version.c") {
     $versionfile = "changes.bet";
 } elsif (-f "version.bet") {
     $versionfile = "version.bet";
-} elsif (-f "compilerrcmversion.bet") {
-    $versionfile = "compilerrcmversion.bet";
 } else {
     die "Where did the version file suddenly go";
 }
 
-if ($ENV{'TERM'} eq 'cygwin'){
+if ($cygwin){
     if ($ENV{'PERLIO'} ne 'perlio'){
 	print "mbs_commit: Environment variable PERLIO must be set to value \"perlio\"\n";
 	print "            BEFORE calling mbs_commit - otherwise newline handling is broken\n";
@@ -149,12 +149,23 @@ if (!$dontupdate && !$donothing) {
 # avoids not-up-to-date errors on version.c
 
 if (!$dontdeleteversion && !$donothing) {
+
+    open VERSION, $versionfile;
+    $line = <V>;
+    close VERSION;
+    $versionfile_has_pc_newlines = ($line =~ m%\xd\xa$%);
+    if ($versionfile_has_pc_newlines){
+	print "Existing $versionfile has PC newlines\n" if ($verbose);
+    } else {
+	print "Existing $versionfile has UNIX newlines\n" if ($verbose);
+    }
+
     move($versionfile, "old$versionfile");
 
-    print STDERR "Getting newest $versionfile with cvs\n";
+    print "Getting newest $versionfile with cvs\n";
     if (system("cvs up $versionfile")) {
-	print STDERR "Couldn't get $versionfile from CVS server\n";
-	move("old$versionfile", "$versionfile") || print STDERR "Failed to restore $versionfile!\n";
+	print "Couldn't get $versionfile from CVS server\n";
+	move("old$versionfile", "$versionfile") || print "Failed to restore $versionfile!\n";
 	exit(2);
     } else {
 	unlink("old$versionfile") || die "Couldn't delete old$versionfile\n";
@@ -162,7 +173,6 @@ if (!$dontdeleteversion && !$donothing) {
 }
 
 open(VERSION, "$versionfile") || die "Can't open the file $versionfile\n";
-binmode VERSION; # fix newline handling on PC
 
 # Increment the version number in version.c
 
@@ -199,6 +209,7 @@ if (!$dontupdate && !$donothing) {
 
 if (!$donothing) {
     open(MESSAGE, ">message.txt") || die "Couldn't open message.txt for writing\n";
+    binmode MESSAGE; # fix newline handling on PC
 }
 
 if (!$donothing) {
@@ -246,7 +257,7 @@ if (!$donothing) {
 # doesn't end up in the actual commit message.
 
 if (!defined($message) && !$nodiff && !$donothing) {
-    print STDERR "Getting differences with cvs\n";
+    print "Getting differences with cvs\n" if ($verbose);
 
     if (defined($ARGV[0])) {
         $cmd = "cvs diff -uN $versionfile " . join(" ", map {&gluename($_)} @ARGV);
@@ -310,7 +321,7 @@ if (!$donothing) {
 # on Windows too?  Perhaps.
 
 if (!defined($message) && !$donothing) {
-    if (($^O =~ /win/i) && ($^O !~ /darwin/i) && ($ENV{'TERM'} ne 'cygwin')) {
+    if (($^O =~ /win/i) && ($^O !~ /darwin/i) && (!$cygwin)) {
 	$editor = "notepad"; 
     } else {
         if (defined($ENV{"VISUAL"})) {
@@ -326,7 +337,7 @@ if (!defined($message) && !$donothing) {
     $oldsb = stat("message.txt") || die "message.txt disappeared";
     $return = system("$editor message.txt");
     if ($return) {
-        print STDERR "Editor '$editor' failed!\n";
+        print "Editor '$editor' failed!\n";
         exit (2);
     }
     $sb = stat("message.txt") || die "message.txt disappeared";
@@ -345,6 +356,7 @@ if (!$donothing) {
     # We need to remove the CVS: lines, since the cvs client doesn't do
     # this itself if we invoke it with the -F option.
     open(NEWMESSAGE, ">newmessage.txt") || die "Couldn't open newmessage.txt for writing\n";
+    binmode NEWMESSAGE; # fix newline handling on PC
     open(MESSAGE, "message.txt") || die "Couldn't open message.txt\n";
     while (defined($line =<MESSAGE>)) {
 	next if ($line =~ /^CVS:/);
@@ -372,13 +384,14 @@ if (defined($ARGV[0])) {
 }
 
 if ($donothing) {
-    print STDERR join(" ", @args, "\n");
+    print join(" ", @args, "\n");
 } else {
-    print STDERR "Committing:\n";
+    print "Committing:\n";
     if (!system @args) {
         if (-f "CHANGES.txt") {
-            unlink("CHANGES.txt") || print STDERR "Couldn't delete CHANGES.txt file\n";
-            open(CHANGES, ">CHANGES.txt") || print STDERR "Couldn't make new empty CHANGES.txt file\n";
+            unlink("CHANGES.txt") || print "Couldn't delete CHANGES.txt file\n";
+            open(CHANGES, ">CHANGES.txt") || print "Couldn't make new empty CHANGES.txt file\n";
+	    binmode CHANGES; # fix newline handling on PC
             close(CHANGES);
         }
     } else {
@@ -386,6 +399,36 @@ if ($donothing) {
     }
 }
 
+
+if ($cygwin && !$versionfile_has_pc_newlines){
+    # Check if newlines became PC newlines above
+    local $versionlines = "";
+    local $correct = 0;
+    open VERSION, $versionfile || die "Cannot reopen $versionfile\n";
+    while(<VERSION>){
+	if (!$correct){
+	    if (/\xd\xa$/){
+		# First line ends with PC newline
+		# $i=1;
+		# foreach $c (unpack ("C*", $line)){
+		#     printf "%d: <%d>\n", $i++, $c;
+		# }
+		$correct = 1;
+		print "*** $versionfile had newlines broken by cvs. Fixing it.\n";
+	    } else {
+		last;
+	    }
+	}
+	s%\xd+\xa$%\xa%g;
+	$versionlines .= $_;
+    }
+    close VERSION;
+    if ($correct){
+	open VERSION, ">$versionfile" || die "Cannot rewrite $versionfile\n";
+	print VERSION $versionlines;
+	close VERSION;
+    }
+}
 
 sub
 gluename
