@@ -2,6 +2,7 @@
 generated:
 	cd grammars; make
 	cd basiclib; make
+	cd sysutils; make
 	cd containers; make
 	cd bifrost-ref; make
 	cd distribution; make
