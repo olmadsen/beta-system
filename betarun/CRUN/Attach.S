@@ -6,6 +6,7 @@
 #define CA	%r4
 #define OR	%r5
 #define D0	%r9
+#define pReg1   %r26
 ;; referenceStackPointer, points to topmost element
 #define RSP	%r14
 #define IOA	%r17
@@ -351,7 +352,7 @@ ExitO
 	.EXPORT	ExitO
 ExO
 	.EXPORT ExO
-;; called with CA = exitObj, OR = exitAddr, TH = thisObject, D0 = offset
+;; called with CA = exitObj, pReg1 = exitAddr, TH = thisObject, D0 = offset
 	DEPI	1,31,1,TH
 	stws,mb	TH,4(RSP)		;push TH on refstk with tag
 	COPY	RSP,%r1
@@ -394,7 +395,7 @@ Lisexitobj
 	LDWX	D0 (CA),%r1	;the old sp - lastCompBlock is saved here
 	load(lastCompBlock, %r19)
 	ADD	%r19,%r1,%r30
-	BV	%r0(OR)
+	BV	%r0(pReg1)
 	COPY	CA,TH		;correct "this" reference
 	
 	.END
