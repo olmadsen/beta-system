@@ -1,0 +1,158 @@
+ORIGIN '~beta/persistentstore/v1.5/persistentstore';
+BODY 'private/psutilsbody'
+
+(* Defines a few utility functions (exists, delete, lock, unlock,
+ * locked, chmod) to be added to persistemtstore fragment in future
+ * release:
+ * 
+ * exists: returns true, iff the PS exists.
+ * 
+ * delete: to delete a persistent store.  Identical to the current
+ *    persistentStoreDelete operation.
+ * 
+ * lock: to make it possible to LOCK a persistent store (using a
+ *    file named LOCK to represent the locking)
+ * 
+ * unlock: to unlock a persistent store.
+ * 
+ * locked: returns true, if a persistent store is locked.
+ * 
+ * chmod: to change the file permissions on the files containing the
+ *    persistent store (only inplemented on UNIX)
+ *)
+
+--- persistentstorelib: attributes ---
+
+exists: booleanValue
+  (* Returns true, iff this(persistentStore) exists *)
+  (# name: ^Text;
+  enter name[]
+  do <<SLOT PersistentStoreExists: descriptor>>
+  #);
+
+delete:
+  (* Deletes THIS(persistentstore). It is not possible to delete a
+   * persistentstore that is open in this program execution. If tried
+   * anyway, the "alreadyOpen" exception is raised. In case the
+   * process does not have sufficient access priviliges to delete the
+   * store, the "accessError" exception is raised.
+   *)
+  (# alreadyOpen:< PSexception
+       (#
+       do 'persistentstore.delete: "' -> msg.putText;
+          fullName[] -> msg.putText;
+          '" is currently open' -> msg.putText;
+          INNER;
+       #);
+     accessError:< PSexception
+       (#
+       do 'persistetstore.delete: Unable to delete "' -> msg.putText;
+          fullName[] -> msg.putText; '"' -> msg.putText;
+          INNER;
+       #);
+     notFound:< PSexception
+       (#
+       do 'persistetstore.delete: "' -> msg.putText;
+          fullName[] -> msg.putText; '" not found' -> msg.putText;
+          INNER;
+       #);
+  do <<SLOT PersistentStoreDelete: descriptor>>
+  #);
+
+lock:
+  (* Implements a simple locking scheme for controlling access to
+   * THIS(persistentstore).  The scheme is based on maintaining a LOCK
+   * file along with the other persistent store files.  If it exists,
+   * this(persistentstore) is locked, otherwise not.
+   * 
+   * You can associate a message with the lock (stored in the LOCK file).
+   *)
+  (# alreadyLocked:< PSexception
+       (#
+       do 'persistentstore.lock: "' -> msg.putText;
+          fullName[] -> msg.putText;
+          '" is already locked' -> msg.putText;
+          INNER;
+       #);
+     msg: ^text;   
+  enter msg[]
+  do <<SLOT PersistentStoreLock: descriptor>>
+  #);
+
+unlock:
+  (* If a lock exists on this(persistentstore), it is removed *)
+  (# do <<SLOT PersistentStoreUnlock: descriptor>> #);
+
+locked: booleanValue
+  (* Returns true, if this(persistentstore) is locked.  If locked,
+   * INNER is executed, and msg[] contains the message associated with
+   * the lock.
+   *)
+  (# msg: ^text
+  do <<SLOT PersistentStoreLocked: descriptor>>
+  #);
+
+chmod:
+  (* An operation to manipulate the protection and mode of
+   * this(persistentstore).  This gives a more fine-grained access to
+   * the UNIX permissions for the files used by the persistent store.
+   * 
+   * Only implemented on UNIX platforms !!!
+   * 
+   * The persissions are manipulated by:
+   * 
+   * (who,mode) -> PS.chmod
+   * 
+   * where
+   * 
+   * "who" denotes a category of users: 'a' -- all, 'u' -- user
+   *    (owner), 'g' -- group, 'o' -- other.
+   * 
+   * "mode" denotes the mode of the persistent store files: 'r' --
+   *    read, 'w' -- write, 'x' -- execute.
+   *)
+  (# (* PERMISSION EXCEPTIONS *)
+     WrongUserError:< PSexception
+       (* Raised if something other than 'a', 'u', 'g', or 'o' is
+        * specified for "who".
+        *)
+       (#
+       do 'persistentstore.chmod: Unable to change permissions for "'
+            -> msg.putText;
+          fullName[] -> msg.putText; '"' -> msg.putline;
+          'Wrong user specification: "'->msg.puttext; who->msg.put; ' is not one os "a,u,g,o"'->msg.putText;
+          INNER; 
+       #);
+     WrongModeError:< PSexception
+       (* Raised if something other than 'r', 'w', or 'x' is
+        * specified for "mode".
+        *)
+       (#
+       do 'persistentstore.chmod: Unable to change permissions for "'
+            -> msg.putText;
+          fullName[] -> msg.putText; '"' -> msg.putline;
+          'Wrong mode specification: "'->msg.puttext; mode->msg.put; ' is not one os "r,w,x"'->msg.putText;
+          INNER; 
+       #);
+     ChangePermError:< PSexception
+       (* Raised if a change of permissions has failed for the
+        * persistent store.
+        *)
+       (#
+       do 'persistentstore.chmod: Unable to change permissions for "'
+            -> msg.putText;
+          fullName[] -> msg.putText; '"' -> msg.putText;
+          INNER; 
+       #);
+     OtherError:< PSexception
+       (#
+       do 'persistentstore.chmod: Other error for "'
+            -> msg.putText;
+          fullName[] -> msg.putText; '"' -> msg.putText;
+          INNER; 
+       #);
+       (* Raised if other errors occurred *);
+     who, mode: @char;
+enter (who,mode)
+do <<SLOT PersistentStoreChmod: descriptor>>
+#);
