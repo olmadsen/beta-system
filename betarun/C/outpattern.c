@@ -106,45 +106,64 @@ static void PrintLegend(void)
   P("");
   P("Legend:");
   P("");
-  P("The above dump shows the dynamic call stack of invoked objects.");
-  P("The dump starts at the object that was the current object when");
-  P("the error occurred and continues down towards the basic component.");
-  P("The descriptions have the following meaning:");
-  P("1. Items are shown in two lines, like this:");
-  P("      item <name#>pname1#pname2#pname3 in ifile");
-  P("        -- sname#spname1#spname2 in sfile");
-  P("   meaning that the item is an instance of the descriptor \"name\" which has");
-  P("   prefix \"pname1\" which has prefix \"pname2\", etc. This item is defined in the");
-  P("   file \"ifile\". The part of the prefix chain enclosed in \"<\" and \">\" indicates");
-  P("   where in the action sequence the error occurred. The line beginning with");
-  P("   \"--\" shows the textually surrounding descriptor using the same notation.");
-  P("2. The descriptor names used in the above description will normally have one or");
-  P("   more \"meta characters\" appended. The meaning of these is:");
+  if (SimpleDump){
+    P("The above dump shows the dynamic call stack of invoked objects.");
+    P("The dump starts at the object that was the current object when");
+    P("the error occurred and continues down towards the basic component.");
+    P("The descriptions have the following meaning:");
+    P("1. Items are shown like this:");
+    P("      item <name#>pname1#pname2#pname3 in ifile");
+    P("   meaning that the item is an instance of the pattern \"name\" which");
+    P("   has prefix \"pname1\" which has prefix \"pname2\", etc. ");
+    P("   This item is defined in the file \"ifile\". ");
+    P("   The part of the prefix chain enclosed in \"<\" and \">\" indicates");
+    P("   where in the action sequence the error occurred.");
+  } else {
+    /* Including low level dump */
+    P("The above dumps show the dynamic call stack of invoked objects.");
+    P("Each dump starts at the object that was the current object when");
+    P("the error occurred and continues down towards the basic component.");
+    P("The descriptions have the following meaning:");
+    P("1. Items are shown in two lines, like this:");
+    P("      item <name#>pname1#pname2#pname3 in ifile");
+    P("        -- sname#spname1#spname2 in sfile");
+    P("   meaning that the item is an instance of the pattern \"name\" which");
+    P("   has prefix \"pname1\" which has prefix \"pname2\", etc. ");
+    P("   This item is defined in the file \"ifile\". ");
+    P("   The part of the prefix chain enclosed in \"<\" and \">\" indicates");
+    P("   where in the action sequence the error occurred.");
+    P("   The line beginning with \"--\" shows the textually surrounding");
+    P("   pattern using the same notation.");
+  }
+  P("2. The descriptor names used in the above description will normally");
+  P("   have one or more \"meta characters\" appended. These mean:");
   P("      #  The descriptor belongs to a pattern, e.g. P: (# ... #)");
   P("      ~  Singular named descriptor, e.g. X: @(# ... #)");
   P("      *  Singular unnamed descriptor, e.g. ... ; (# ... #) ; ...");
   P("      -  Descriptor SLOT.");
-  P("3. Components are shown using a notation similar to that of items, like this:");
+  P("3. Components are shown using a notation similar to that of items:");
   P("      comp <name#>pname1#pname2#pname3 in cfile");
-  P("4. The bottommost component corresponding to the basic environment is shown");
-  P("   like an ordinary component, but indicated with \"basic component\".");
-  P("5. In case the error occurred in some external code called from BETA, the top");
-  P("   of the call stack is shown as");
+  P("4. The bottommost component corresponding to the basic environment is");
+  P("   shown like an ordinary component, but indicated with");
+  P("      basic component <name#>pname1#pname2#pname3 in cfile");
+  P("5. In case the error occurred in some external code called from BETA,");
+  P("   the top of the call stack is shown as");
   P("      [ EXTERNAL ACTIVATION PART ]");
-  P("6. In case the BETA code has called some external code which has in turn called");
-  P("   back into the BETA code, and the callback is still active at the point of");
-  P("   the error, the intermediate call stack part is also shown as");
+  P("6. In case the BETA code has called some external code which has in");
+  P("   turn called back into the BETA code, and the callback is still");
+  P("   active at the point of the error, the intermediate call stack part");
+  P("   is shown as");
   P("      [ EXTERNAL ACTIVATION PART ]");
   if (SimpleDump) return;
   P("7. The section labeled \"low level trace\" can be avoided by setting");
 #ifdef UNIX
-  P("     setenv BETART SimpleDump");
+  P("       setenv BETART SimpleDump");
 #endif /* UNIX */
 #ifdef nti
-  P("     set BETART=SimpleDump");
+  P("       set BETART=SimpleDump");
 #endif /* nti */
 #ifdef MAC
-  P("     set -e BETART SimpleDump");
+  P("       set -e BETART SimpleDump");
 #endif /* MAC */
   P("   before subsequent executions of the program.");
 #undef P
