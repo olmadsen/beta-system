@@ -117,6 +117,7 @@ static Object *loadObject(unsigned long store, unsigned long offset, unsigned lo
 	DEBUG_CODE(fprintf(output, "Requesting GC at next allocation\n"));
 	/* Request GC at next IOAAllocation */
 	AOANeedCompaction = TRUE;
+	forceAOACompaction = FALSE;
 #if defined(NEWRUN) || defined(sparc)
 	IOATopOff = (char *)IOALimit  - (char *) IOA;
 #else
