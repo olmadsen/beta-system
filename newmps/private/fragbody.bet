@@ -198,7 +198,6 @@ packSemanticInfo:
      fraginx: @integer;
      betagram: ^beta;
      form: ^FragmentForm;
-     
   enter (header[], info[])
   do grammartable.beta[] -> betagram[];
      (for inx: table.range repeat
@@ -245,48 +244,69 @@ packSemanticInfo:
   #);
 unPackSemanticInfo:
   (# header, info: ^Text;
-     import: [0] ^FragmentForm;
+     
      nameApl: ^beta.nameApl;
      current: ^AST;
      betagram: ^beta;
-     forminx, dclinx: @integer;
-     top: @integer;
-     fullname: ^Text;
-     name: ^Text;
-     group: ^FragmentGroup;
+     
+     import: @
+       (# array: [0] ^FragmentForm;
+	  form: ^FragmentForm;
+	  input: ^Text;
+	  pos: @integer;
+	  unPack: @
+	    (# header: ^Text;
+	       group: ^FragmentGroup;
+	       fullname: ^Text;
+	       name: ^Text;
+	    enter header[]
+	    do header.reset;
+	       header.getInt32u -> array.new;
+	       (for inx: array.range repeat
+                  header.getBinText -> fullname[];
+		  header.getBinText -> name[];
+		  (fullname[], screen[]) -> top.open -> group[];
+		  (if group[] <> NONE then
+		     search: group.scan
+		       (#
+		       do (if name[] -> (current.name).equalNCS then
+		             current[] -> array[inx][];
+		             leave search;
+		          if);
+		       #);
+		  if);
+	       for);
+	    #);
+	  getAstRef: @
+	    (# ref: ^AST;
+	       forminx: @integer;
+	       astinx: @integer;
+	    do (input.T[pos] %sll 24) %bor (input.T[pos+1] %sll 16) %bor (input.T[pos+2] %sll 8) %bor input.T[pos+3] -> forminx;
+	       pos + 4 -> pos;
+	       (input.T[pos] %sll 24) %bor (input.T[pos+1] %sll 16) %bor (input.T[pos+2] %sll 8) %bor input.T[pos+3] -> astinx;
+	       pos + 4 -> pos;
+               (if forminx = 0 then
+                   (if astinx <> 0 then
+                       form.table[astinx][] -> ref[];
+                   if);
+               else
+                   array[forminx].table[astinx][] -> ref[];
+               if);
+	    exit ref[]
+	    #);
+       #);
   enter (header[], info[])
   do grammartable.beta[] -> betagram[];
-     header.reset;
+     THIS(FragmentForm)[] -> import.form[];
      info.reset;
-     header.getInt32u -> top;
-     top -> import.new;
-     (for inx: top repeat
-          header.getBinText -> fullname[];
-          header.getBinText -> name[];
-          (fullname[], screen[]) -> THIS(astinterface).top.open -> group[];
-          (if group[] <> NONE then
-              search: group.scan
-                (#
-                do (if name[] -> (current.name).equalNCS then
-                       current[] -> import[inx][];
-                       leave search;
-                   if);
-                #);
-          if);
-     for);
+     info[] -> import.input[];
+     1 -> import.pos;
+     header[] -> import.unPack;
      (for inx: table.range repeat
           table[inx][] -> current[];
-          (if current## = betagram.nameApl## then
+          (if current.symbol = 108 then
               current[] -> nameApl[];
-              info.getInt32u -> forminx;
-              info.getInt32u -> dclinx;
-              (if forminx = 0 then
-                  (if dclinx <> 0 then
-                      table[dclinx][] -> nameApl.dclref[];
-                  if);
-               else
-                  import[forminx].table[dclinx][] -> nameApl.dclref[];
-              if);
+              import.getAstRef -> nameApl.dclref[];
           if);
      for);
   #);
@@ -308,45 +328,29 @@ do (# data: ^Text;
       groupID: ^Text;
       header: ^Text;
       info: ^Text;
-   do 'pack: ' -> puttext;
-      fullname -> putline;
-      
-      &Text[] -> data[];
+   do &Text[] -> data[];
       data[] -> packAst;
       data[] -> output.putBinText;
       &Text[] -> header[];
       &Text[] -> info[];
-      'A' -> put;
       (header[], info[]) -> packSemanticInfo;
-      'B' -> put;
       header[] -> output.putBinText;
       info[] -> output.putBinText;
-      'C' -> put;
-      newline;
    #);
    
 -- FragmentFormUnpack: doPart --
 do (# data: ^Text;
       size: @integer;
-      header, info: ^Text;
       getBytes: @input.getBytes;
-   do 'unpack: ' -> puttext;
-      '???' -> putline;
-      fullname -> putline;
-      input.getInt32u -> size;
+   do input.getInt32u -> size;
       &Text[] -> data[];
       size -> data.T.new;
       (@@data.T[1], size) -> getBytes;
       size -> data.lgth;
       data.reset;
       data[] -> unPackAst;
-      'A' -> put;
       input.getBinText -> header[];
       input.getBinText -> info[];
-      'B' -> put;
-      (header[], info[]) -> unPackSemanticInfo;
-      'C' -> put;
-      newline;
    #);
    
    
@@ -371,7 +375,8 @@ do search:
 do (if (index > 0) AND (index <= importtop) then
        import[index][] -> frag[];
    if);
-   
+-- FragmentFormBindSemanticInfo: doPart --
+do (header[], info[]) -> unPackSemanticInfo;
    
 -- FragmentGroupScan: doPart --
 do fragmentlist.scan
@@ -674,10 +679,12 @@ do opengroup:
           #);
         
         bytfile: @file (# binary:: (# do true -> value #); #);
-     do  name[] -> expandToFullPath -> fullname[];
+     do  
+        (* name[] -> expandToFullPath -> fullname[]; *)
+	name.copy -> fullname[];
         fullname[] -> stripExtension -> fullname[];
         
-        
+       
         fullname[] -> dummy.fullname;
         dummy[]->grouptable.hashfunction
           ->grouptable.findIndexed
@@ -687,9 +694,6 @@ do opengroup:
         (if group[] <> NONE then
             leave openGroup;
         if);
-        
-        
-        
         
         newFragmentGroup -> group[];
         fullname.copy -> group.name;
