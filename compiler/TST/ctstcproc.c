@@ -1,0 +1,85 @@
+
+#include <stdio.h>
+char *ident( r) char *r; { return r; }
+int  giveMe1Argument(a,b,c) int a,b,c; { return a; }
+int  giveMe2Argument(a,b,c) int a,b,c; { return b; }
+int  giveMe3Argument(a,b,c) int a,b,c; { return c; }
+int sumMany(a,b,c,d,e,f,g,h,i,j) int a,b,c,d,e,f,g,h,i,j;
+{return a+b+c+d+e+f+g+h+i+j; }
+
+int doCallBack(f)
+int (*f)();
+{int x;
+   x=f('l',"mn",'!','!','!','!','!','o');
+   return x;  
+}
+
+typedef double real;        /* The C representation of a Beta real.  */
+
+real radd(x1,x2)
+  /* Calculate x1+x2. */
+  real x1,x2;
+  {
+   return(x1+x2);
+  }
+real rcopy(x1)
+  double x1;
+  {
+   return(x1);
+  }
+
+void outr(a,b,r) int a,b; double r;{printf("int=%d,%d,real:%lf\n",a,b,r);}
+void sprint2(a,b,r) 
+char *a; 
+char * b; 
+double r;
+{ int i; 
+  printf("buffer=%s,control=%s,real=%lf\n",a,b,r);
+
+  sprintf(a,b,r);
+  printf("sprintf: %s\n",a);
+}
+
+int copystring( r) char *r; { printf(r); return 111; }
+
+int XcallNum; char *XcallName;
+
+/*void TraceXcall() {
+   printf("\nCalling %s,%i\n",XcallName,XcallNum);
+}
+*/
+
+void PP(ch) char ch;{printf("%c",ch);}
+
+struct Xdata{int w; char ch,q; int y;};
+struct Ydata{int w; char ch,q; int y; char a,b; int d;};
+
+struct Ydata *XdataToYdata(r) struct Xdata *r;
+{ struct Ydata *s;
+  /*printf ("From C: \tw:%d, ch:%c, q:%c, y:%d\n",r->w,r->ch,r->q,r->y);*/
+
+  s=(struct Ydata*)malloc(sizeof(struct Ydata));
+  if (r->w==99) {s->w=r->w-1;};
+  if (r->ch=='a') {s->ch='#';} else {s->ch='?';}
+  s->q='$';
+  s->y=r->y-1;
+  s->a='+';
+  s->b='*';
+  s->d=444;
+  return s;
+}
+char *XdataToText(r) struct Xdata *r;
+{ struct Ydata *s;
+  /*printf ("From C: \tw:%d, ch:%c, q:%c, y:%d\n",r->w,r->ch,r->q,r->y);*/
+
+  if (r->w==99) 
+    { if (r->ch=='a') 
+	{return "012";} else {return "!!!";};
+    }
+  else {return "???";}
+}
+
+int* FreeJmpBuf(a1,off)int a1; int off; {
+a1=12;
+return ((int*)a1);
+}
