@@ -22,7 +22,7 @@ ParamThisOffRange(AlloRR)
     Protect(theObj, theRep = cast(RefRep) IOAalloc(RefRepSize(range)));
 
     theRep->Proto = RefRepPTValue;
-    theRep->GCAttr = 1;
+    if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
 

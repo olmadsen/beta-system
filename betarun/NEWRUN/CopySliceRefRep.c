@@ -49,7 +49,7 @@ void CopySRR(struct RefRep *theRep,
       newRep->GCAttr = 0; /* In AOA */
     } else {
       newRep = (struct RefRep *)IOAalloc(size, SP);
-      newRep->GCAttr = 1; /* In IOA */
+      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
     }
     pop(theRep);
     pop(theItem);

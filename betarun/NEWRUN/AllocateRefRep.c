@@ -28,7 +28,7 @@ void AlloRR(unsigned offset /* in bytes */,
     }
     if (!theRep) {
       theRep = (struct RefRep *)IOAalloc(size, SP);
-      theRep->GCAttr = 1;
+      theRep->GCAttr = IOAMinAge;
     }
     pop(theObj);
 

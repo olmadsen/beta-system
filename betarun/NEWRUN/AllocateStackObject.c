@@ -22,7 +22,7 @@ struct StackObject *AlloSO(unsigned size, long *SP)
       sObj->GCAttr = 0; /* In AOA */
     } else {
       sObj = (struct StackObject *)IOAalloc(stacksize, SP);
-      sObj->GCAttr = 1; /* In IOA */
+      if (IOAMinAge!=0) sObj->GCAttr = IOAMinAge; /* In IOA */
     }
 
     sObj->Proto = StackObjectPTValue;

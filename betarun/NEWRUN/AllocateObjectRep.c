@@ -38,7 +38,7 @@ void AlloVRI(struct Object *origin,
   } 
   if (!theRep) {
     theRep = (struct ObjectRep *)IOAalloc(size, SP);
-    theRep->GCAttr = 1;
+    if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
   }
   pop(origin);
   pop(theObj);
@@ -95,7 +95,7 @@ void AlloVRC(struct Object *origin,
   } 
   if (!theRep){
     theRep = (struct ObjectRep *)IOAalloc(size, SP);
-    theRep->GCAttr = 1;
+    if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
   }
   pop(origin);
   pop(theObj);

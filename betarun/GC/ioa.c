@@ -124,9 +124,9 @@ void IOAGc()
   AOArootsLimit = AOArootsPtr = ToSpaceLimit;
 
   /* Clear IOAAgeTable */
-  { long i; for(i=0; i < IOAMaxAge;i++) IOAAgeTable[i] = 0; }
-  /* Save the state of AOA, this state is used at end of IOAGc, to proceed 
-   * not handled objects.
+  { long i; for(i=0; i < IOAMaxAge; i++) IOAAgeTable[i] = 0; }
+  /* Save the state of AOA, this state is used at end of IOAGc, 
+   * to proceed unhandled objects.
    */
   HandledAOABlock = AOATopBlock;
   if( AOATopBlock ) HandledInAOA = AOATopBlock->top;
@@ -614,7 +614,7 @@ void ProcessReference( theCell)
 	  MCHECK();
 	}
     }else{
-      if( GCAttribute >= 0 ){ 
+      if( isAutonomous(GCAttribute) ){ 
 	/* '*theCell' is an autonomous object. */
 	*theCell = NewCopyObject( *theCell, theCell);
       }else{
@@ -826,7 +826,7 @@ void ProcessAOAReference( theCell)
       DEBUG_LVRA( Claim( !inLVRA((ref(Object))GCAttribute),
 			"ProcessAOAReference: Forward ValRep"));
     }else{
-      if( GCAttribute >= 0 ){ 
+      if( isAutonomous(GCAttribute) ){ 
 	/* theObj is an autonomous object. */
 	/* Move it from IOA to AOA/LVRA */
 	*theCell = NewCopyObject( theObj, 0);

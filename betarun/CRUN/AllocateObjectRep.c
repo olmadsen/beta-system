@@ -35,7 +35,7 @@ ParamObjOriginProtoOffRange(AlloVRI)
 	  theRep = cast(ObjectRep)IOAalloc(DynObjectRepSize(range)));
 
   theRep->Proto = DynItemRepPTValue;
-  theRep->GCAttr = 1;
+  if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
   theRep->LowBorder = 1;
   theRep->HighBorder = range;
   theRep->iProto = proto;
@@ -77,7 +77,7 @@ ParamObjOriginProtoOffRange(AlloVRC)
 	  theRep = cast(ObjectRep)IOAalloc(DynObjectRepSize(range)));
 
   theRep->Proto = DynCompRepPTValue;
-  theRep->GCAttr = 1;
+  if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
   theRep->LowBorder = 1;
   theRep->HighBorder = range;
   theRep->iProto = proto;

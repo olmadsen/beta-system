@@ -116,13 +116,10 @@ do {                               \
 #define isNegativeRef(x) ((long)(x) < 0)
 #define isPositiveRef(x) ((long)(x) > 0)
 
-#ifdef MT
-#define isAutonomous(x)   ((0 <= (x)) && ((x) <= 2048 /*FIXME: IOAMaxAge?*/))
-#else
-#define isAutonomous(x)   ((1 <= (x)) && ((x) <= 2048))
-#endif
-#define isStatic(x)       (-0xFFFF <= (x)) && ((x) <= -1)
-#define isForward(x)      ((x) > 2048 )
+
+#define isAutonomous(gc)   ((IOAMinAge <= (gc)) && ((gc) <= IOAMaxAge))
+#define isStatic(gc)       (-0xFFFF <= (gc)) && ((gc) <= -1)
+#define isForward(gc)      ((gc) > IOAMaxAge )
 
 #define isValRep(x)      (((long)(DoubleRepPTValue) <= (long)((x)->Proto))\
 			  && ((long)((x)->Proto) <= (long)(LongRepPTValue)))
@@ -367,7 +364,7 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
                                                                                 \
    ((struct Item *)(theItem))->Proto = ((struct ProtoType *)(proto));           \
    if (inIOA(theItem))                                                          \
-      ((struct Item *)(theItem))->GCAttr = 1; /* Set item age to 1 */           \
+      if (IOAMinAge!=0) ((struct Item *)(theItem))->GCAttr = IOAMinAge; /* Set item age to IOAMinAge */           \
    else                                                                         \
       ((struct Item *)(theItem))->GCAttr = 0; /* Set item age to 0 */           \
                                                                                 \

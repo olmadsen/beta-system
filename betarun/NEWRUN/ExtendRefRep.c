@@ -36,7 +36,7 @@ void ExtRR(struct Object *theObj,
     }
     if (!newRep) {
       newRep = (struct RefRep *)IOAalloc(size, SP);
-      newRep->GCAttr = 1; 
+      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     }
     pop(theRep);
     pop(theObj);

@@ -43,7 +43,7 @@ AlloDO(unsigned size,ref(Object) origin)
     Protect(origin, theObj = cast(DopartObject) IOAalloc(DopartObjectSize(size)));
 
     theObj->Proto  = DopartObjectPTValue;
-    theObj->GCAttr = 1;
+    if (IOAMinAge!=0) theObj->GCAttr = IOAMinAge;
     theObj->Origin = origin;
     theObj->Size   = size;
 

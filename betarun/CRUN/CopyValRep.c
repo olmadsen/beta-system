@@ -58,7 +58,7 @@ ParamRepObjOff(CopyVR1)
       /* Allocate in IOA */
       Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
       newRep->Proto = ByteRepPTValue;
-      newRep->GCAttr = 1;
+      newRep->GCAttr = IOAMinAge;
       newRep->LowBorder = 1;
       newRep->HighBorder = range;
     }
@@ -125,7 +125,7 @@ ParamRepObjOff(CopyVR2)
       /* Allocate in IOA */
       Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
       newRep->Proto = ShortRepPTValue;
-      newRep->GCAttr = 1;
+      newRep->GCAttr = IOAMinAge;
       newRep->LowBorder = 1;
       newRep->HighBorder = range;
     }
@@ -192,7 +192,7 @@ ParamRepObjOff(CopyVR4)
       /* Allocate in IOA */
       Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
       newRep->Proto = LongRepPTValue;
-      newRep->GCAttr = 1;
+      newRep->GCAttr = IOAMinAge;
       newRep->LowBorder = 1;
       newRep->HighBorder = range;
     }
@@ -259,7 +259,7 @@ ParamRepObjOff(CopyVR8)
       /* Allocate in IOA */
       Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
       newRep->Proto = DoubleRepPTValue;
-      newRep->GCAttr = 1;
+      newRep->GCAttr = IOAMinAge;
       newRep->LowBorder = 1;
       newRep->HighBorder = range;
     }
@@ -294,7 +294,7 @@ ParamORepObjOff(CopyVRI)
     Protect2(theObj, theRep, newRep = cast(ObjectRep) IOAalloc(size));
     
     newRep->Proto = DynItemRepPTValue;
-    newRep->GCAttr = 1;
+    newRep->GCAttr = IOAMinAge;
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
     newRep->iOrigin = theRep->iOrigin;
@@ -330,7 +330,7 @@ ParamORepObjOff(CopyVRC)
     Protect2(theObj, theRep, newRep = cast(ObjectRep) IOAalloc(size));
     
     newRep->Proto = DynCompRepPTValue;
-    newRep->GCAttr = 1;
+    newRep->GCAttr = IOAMinAge;
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
     newRep->iOrigin = theRep->iOrigin;

@@ -31,7 +31,7 @@ ParamOriginProto(struct Component *,AlloC)
 
     /* Initialize the structual part; prototype, age etc. */
     comp->Proto = ComponentPTValue;
-    comp->GCAttr = 1;
+    if (IOAMinAge!=0) comp->GCAttr = IOAMinAge;
     comp->StackObj = cast(StackObject) 0;
     comp->CallerObj = cast(Object) 0;
     comp->CallerComp = cast(Component) 0;

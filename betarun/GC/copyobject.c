@@ -22,19 +22,19 @@ static ref(Object) CopyObject(ref(Object) theObj)
 #endif
     DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "#CopyObject: ObjectSize(theObj) > 0") );
     
-    /* Assume that theObj->GCAttr <= IOAMaxAge. */
+    /* Assure that theObj->GCAttr <= IOAMaxAge. */
     DEBUG_IOA( Claim( theObj->GCAttr<=IOAMaxAge,
 		     "CopyObject: Age of object<=IOAMaxAge."));
     
 #ifdef KEEP_STACKOBJ_IN_IOA
     if (!isStackObject(theObj))
-      IOAAgeTable[theObj->GCAttr-1] += size;
+      IOAAgeTable[theObj->GCAttr-IOAMinAge] += size;
     else {
 	IOAStackObjectSum += size;
 	IOAStackObjectNum++;
     }
 #else
-    IOAAgeTable[theObj->GCAttr-1] += size;
+    IOAAgeTable[theObj->GCAttr-IOAMinAge] += size;
 #endif
       
     

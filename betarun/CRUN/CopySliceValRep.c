@@ -52,7 +52,7 @@ ParamRepObjOffLowHigh(CopySVR1)
     
     /* Initialize the structual part of the repetition. */
     newRep->Proto = ByteRepPTValue;
-    newRep->GCAttr = 1;
+    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
 
@@ -105,7 +105,7 @@ ParamRepObjOffLowHigh(CopySVR2)
     
     /* Initialize the structual part of the repetition. */
     newRep->Proto = ShortRepPTValue;
-    newRep->GCAttr = 1;
+    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
 
@@ -156,7 +156,7 @@ ParamRepObjOffLowHigh(CopySVR4)
     
     /* Initialize the structual part of the repetition. */
     newRep->Proto = LongRepPTValue;
-    newRep->GCAttr = 1;
+    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
 
@@ -203,7 +203,7 @@ ParamRepObjOffLowHigh(CopySVR8)
     
     /* Initialize the structual part of the repetition. */
     newRep->Proto = DoubleRepPTValue;
-    newRep->GCAttr = 1;
+    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
 
@@ -251,7 +251,7 @@ ParamORepObjOffLowHigh(CopySVRI)
     
     /* Initialize the structual part of the repetition. */
     newRep->Proto = DynItemRepPTValue;
-    newRep->GCAttr = 1;
+    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
     newRep->iOrigin = theRep->iOrigin;
@@ -299,7 +299,7 @@ ParamORepObjOffLowHigh(CopySVRC)
     
     /* Initialize the structual part of the repetition. */
     newRep->Proto = DynCompRepPTValue;
-    newRep->GCAttr = 1;
+    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
     newRep->iOrigin = theRep->iOrigin;

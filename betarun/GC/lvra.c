@@ -5,10 +5,13 @@
  */
 #include "beta.h"
 
+/* Notice: LVRARepInFreeList must be different from IOAMinAge (constant.h) */
+#define LVRARepInFreeList ((IOAMinAge==0) ? -1 : 0)
+#define LVRABigRange 100 * 256    /* ~ValRepSize > 100 Kb. */
+#define TableMAX 16
+
 static void LVRACompaction(void);
 static void LVRAConstructFreeList(void);
-
-#define TableMAX 16
 
 /* non-static since referred from heapview.c */
 GLOBAL(struct LVRABlock *LVRABaseBlock);
@@ -23,8 +26,6 @@ GLOBAL(long LVRANumOfBlocks)       = 0;
  * LVRAConstructFreeList was executed.
  */
 GLOBAL(static long LVRALastIOAGc)         = 0;
-
-#define LVRABigRange 100 * 256    /* ~ValRepSize > 100 Kb. */
 
 GLOBAL(static struct ValRep *LVRATable[TableMAX+1]);
 
@@ -41,7 +42,7 @@ long LVRAAlive(ref(ValRep) theRep)
     return FALSE;
   }
 
-  if (!theRep->GCAttr){
+  if (theRep->GCAttr==LVRARepInFreeList){
     return FALSE;
   }
   
@@ -52,6 +53,7 @@ long LVRAAlive(ref(ValRep) theRep)
   }
   */
 
+  /* Test for lvra cycle */
   if (! ((long) theRep == *((long *) theRep->GCAttr))){
     return FALSE;
   }
@@ -60,30 +62,33 @@ long LVRAAlive(ref(ValRep) theRep)
 }
 #else
 #define LVRAAlive(rep) \
-  (isValRep(rep) && (rep)->GCAttr && (long) (rep) == *(long *) (rep)->GCAttr)
+  (isValRep(rep) && \
+  ((rep)->GCAttr != LVRARepInFreeList) && \
+  (long) (rep) == *(long *) (rep)->GCAttr)
 #endif
 
 long LVRARepSize(struct ValRep *rep)
 {
   if (LVRAAlive(rep)) {
-    /* rep->GCAttr <> 0 */
+    /* rep->GCAttr != LVRARepInFreeList */
     return DispatchValRepSize(rep->Proto, rep->HighBorder-rep->LowBorder+1);
   } else {
-    /* rep->GCAttr may be 0 */
-    if (rep->GCAttr) {
+    /* rep->GCAttr may be LVRARepInFreeList */
+    if (rep->GCAttr != LVRARepInFreeList) {
       /* 'rep' died behind our backs. Maintain LVRARep invariant:
        *  if alive then
        *    LVRARepSize = DispatchValRepSize.... (size in BYTES)
        *  else
-       *    rep->GCAttr = 0
-       *    LVRARepSize = rep->HighBorder (size in bytes previously calculated)
+       *    rep->GCAttr = LVRARepInFreeList
+       *    LVRARepSize = rep->HighBorder 
+       *    (size in bytes previously calculated)
        */
-      rep->GCAttr = 0;
+      rep->GCAttr = LVRARepInFreeList;
       rep->HighBorder =
 	DispatchValRepSize(rep->Proto, rep->HighBorder-rep->LowBorder+1);
       /* FIXME: Use LVRAKill instead !!! */
     }
-    /* rep->GCAttr == 0 */
+    /* rep->GCAttr == LVRARepInFreeList */
     DEBUG_LVRA( Claim( rep->HighBorder>= headsize(ValRep), 
 		      "LVRARepSize: rep->HighBorder>= headsize(ValRep) for dead rep"));
     return rep->HighBorder;
@@ -105,10 +110,11 @@ static void RepCopy(struct ValRep *dst, struct ValRep *src)
   /* for (i = 0; i < size; ++i) *d++ = *s++; */
 }
 
-/************************ THE LVRA FREE LIST ********************************
+/************************ THE LVRA FREE LIST ***************************
+ * LVRA invariant:
  * When a repetition 'rep' is in the free list, rep->Proto points to next
- * free element, rep->GCattr is 0 (the rep is not alive), and rep->highborder
- * is the number of BYTES in the entire repetition (invariant).
+ * free element, rep->GCattr is LVRARepInFreeList (the rep is not alive)
+ * and rep->highborder is the number of BYTES in the entire repetition 
  */
 
 
@@ -152,8 +158,9 @@ static void LVRADisplayTable(void)
 
 
 /* LVRAInsertFreeElement adds a value repetition to the Free List Table. 
- * Precondition: freeRep->GCattr==0 AND freeRep->Highborder is
- * the total size of freeRep i BYTES.
+ * Precondition: 
+ * freeRep->GCattr==LVRARepInFreeList AND freeRep->Highborder is
+ * the total size of freeRep in BYTES.
  */
 static void LVRAInsertFreeElement(ref(ValRep) freeRep)
 { long index; 
@@ -172,7 +179,8 @@ static void LVRAInsertFreeElement(ref(ValRep) freeRep)
 	      } );
   headRep = LVRATable[index];  LVRATable[index] = freeRep;
   freeRep->Proto  = (ref(ProtoType)) headRep;
-  freeRep->GCAttr = 0; /* FIXME: NOT NEEDED always done before this func is called? Change into assumption */
+  freeRep->GCAttr = LVRARepInFreeList
+    /* FIXME: NOT NEEDED always done before this func is called? Change into assumption */;
   DEBUG_CODE( if( index == TableMAX )
 	     fprintf(output, "(LVRAInsertFreeElement: size=%d (0x%x))", 
 		     (int)freeRep->HighBorder,
@@ -208,7 +216,7 @@ LVRAFindInFree(ref(ProtoType) proto, long range, unsigned long size)
       DEBUG_CODE(LVRATabNum[index]--);
       /* Initialize the returned repetition. */
       currentRep->Proto      = proto;
-      currentRep->GCAttr     = 0;
+      currentRep->GCAttr     = LVRARepInFreeList;
       currentRep->LowBorder  = 1;
       currentRep->HighBorder = range;
 
@@ -240,14 +248,14 @@ LVRAFindInFree(ref(ProtoType) proto, long range, unsigned long size)
 	rest = currentRep->HighBorder - size;
 	
         currentRep->Proto      = proto;
-	currentRep->GCAttr     = 0;
+	currentRep->GCAttr     = LVRARepInFreeList;
 	currentRep->LowBorder  = 1;
 	currentRep->HighBorder = range;
 	
         /* Use the rest to a new repetition, and insert it in the free list. */
 	restRep = (ref(ValRep)) Offset(currentRep, size);
         restRep->Proto      = 0;
-        restRep->GCAttr     = 0;
+        restRep->GCAttr     = LVRARepInFreeList;
 	restRep->LowBorder  = 1;
 	restRep->HighBorder = rest; /* size in bytes */
 	LVRAInsertFreeElement(restRep);
@@ -323,7 +331,7 @@ static ref(ValRep)LVRAAllocInBlock(ref(ProtoType) proto, long range, long size)
   if( (newTop = (ptr(long)) Offset(newRep,size))<= LVRATopBlock->limit){
     LVRATopBlock->top  = newTop;
     newRep->Proto      = proto;
-    newRep->GCAttr     = 0;
+    newRep->GCAttr     = LVRARepInFreeList;
     newRep->LowBorder  = 1;
     newRep->HighBorder = range;
     return newRep;
@@ -392,7 +400,7 @@ ref(ValRep) LVRAAlloc(ref(ProtoType) proto, long range)
     if( rest >= headsize(ValRep) ){
       newRep = (ref(ValRep)) LVRATopBlock->top;
       newRep->Proto      = 0;
-      newRep->GCAttr     = 0;
+      newRep->GCAttr     = LVRARepInFreeList;
       newRep->LowBorder  = 1;
       newRep->HighBorder = rest; /* size in bytes */
       LVRATopBlock->top =  LVRATopBlock->limit;
@@ -495,7 +503,7 @@ void LVRAkill(struct ValRep *rep)
   rep->HighBorder = DispatchValRepSize(rep->Proto,
 				       rep->HighBorder-rep->LowBorder+1);
   rep->Proto = 0;
-  rep->GCAttr = 0;
+  rep->GCAttr = LVRARepInFreeList;
   LVRAInsertFreeElement(rep); /* datpete 5 feb 1996 */
 }
 
@@ -513,7 +521,7 @@ ref(Object) CopyObjectToLVRA(ref(ValRep) theRep)
   if ((newRep = LVRAAlloc(theRep->Proto,
 			 theRep->HighBorder-theRep->LowBorder+1))) {
       RepCopy(newRep, theRep);
-      newRep->GCAttr = 0;
+      newRep->GCAttr = LVRARepInFreeList;
       /* Install forward reference to newObj in theObj */
       theRep->GCAttr = (long) newRep;
   }
@@ -606,7 +614,7 @@ void LVRACompaction(void)
 		if ( rest >= headsize(ValRep) ){
 		  dstRep = (ref(ValRep)) dstBlock->top;
 		  dstRep->Proto      = 0;
-		  dstRep->GCAttr     = 0;
+		  dstRep->GCAttr     = LVRARepInFreeList;
 		  dstRep->LowBorder  = 1;
 		  dstRep->HighBorder = rest; /* size in bytes */
 		  dstBlock->top =  (ptr(long)) Offset(dstBlock->top, rest);

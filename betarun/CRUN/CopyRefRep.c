@@ -28,7 +28,7 @@ ParamRepObjOff(CopyRR)
     
 
     newRep->Proto = theRep->Proto;
-    newRep->GCAttr = 1;
+    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
     

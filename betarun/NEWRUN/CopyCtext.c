@@ -38,7 +38,7 @@ struct ValRep *CopyCT(unsigned char *textPtr, long *SP)
     theRep = (struct ValRep *)IOAalloc(size, SP);
 
     theRep->Proto = ByteRepPTValue;
-    theRep->GCAttr = 1;
+    if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
 

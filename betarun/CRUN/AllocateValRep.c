@@ -47,7 +47,7 @@ ParamThisOffRange(AlloVR1)
   Protect(theObj, theRep = cast(ValRep) IOAalloc(Size));
 
   theRep->Proto = ByteRepPTValue;
-  theRep->GCAttr = 1;
+  if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
   theRep->LowBorder = 1;
   theRep->HighBorder = range;
   
@@ -86,7 +86,7 @@ ParamThisOffRange(AlloVR2)
   Protect(theObj, theRep = cast(ValRep) IOAalloc(Size));
 
   theRep->Proto = ShortRepPTValue;
-  theRep->GCAttr = 1;
+  if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
   theRep->LowBorder = 1;
   theRep->HighBorder = range;
   
@@ -125,7 +125,7 @@ ParamThisOffRange(AlloVR4)
   Protect(theObj, theRep = cast(ValRep) IOAalloc(Size));
   
   theRep->Proto = LongRepPTValue;
-  theRep->GCAttr = 1;
+  if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
   theRep->LowBorder = 1;
   theRep->HighBorder = range;
 
@@ -164,7 +164,7 @@ ParamThisOffRange(AlloVR8)
   Protect(theObj, theRep = cast(ValRep) IOAalloc(Size));
 
   theRep->Proto = DoubleRepPTValue;
-  theRep->GCAttr = 1;
+  if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
   theRep->LowBorder = 1;
   theRep->HighBorder = range;
 

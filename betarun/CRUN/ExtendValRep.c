@@ -71,7 +71,7 @@ ParamObjOffRange(ExtVR1)
   
   /* Assign structural part of new repetition */
   newRep->Proto = ByteRepPTValue;
-  newRep->GCAttr = 1;
+  if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
   newRep->LowBorder = theRep->LowBorder;
   newRep->HighBorder = newRange;
   
@@ -146,7 +146,7 @@ ParamObjOffRange(ExtVR2)
   
   /* Assign structural part of new repetition */
   newRep->Proto = ShortRepPTValue;
-  newRep->GCAttr = 1;
+  if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
   newRep->LowBorder = theRep->LowBorder;
   newRep->HighBorder = newRange;
   
@@ -221,7 +221,7 @@ ParamObjOffRange(ExtVR4)
   
   /* Assign structural part of new repetition */
   newRep->Proto = LongRepPTValue;
-  newRep->GCAttr = 1;
+  if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
   newRep->LowBorder = theRep->LowBorder;
   newRep->HighBorder = newRange;
   
@@ -296,7 +296,7 @@ ParamObjOffRange(ExtVR8)
   
   /* Assign structural part of new repetition */
   newRep->Proto = DoubleRepPTValue;
-  newRep->GCAttr = 1;
+  if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
   newRep->LowBorder = theRep->LowBorder;
   newRep->HighBorder = newRange;
   
@@ -353,7 +353,7 @@ ParamObjOffRange(ExtVRI)
   
   /* Assign structural part of new repetition */
   newRep->Proto = DynItemRepPTValue;
-  newRep->GCAttr = 1;
+  if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
   newRep->LowBorder = theRep->LowBorder;
   newRep->HighBorder = newRange;
   NEWREP->iProto = REP->iProto;
@@ -423,7 +423,7 @@ ParamObjOffRange(ExtVRC)
   
   /* Assign structural part of new repetition */
   newRep->Proto = DynCompRepPTValue;
-  newRep->GCAttr = 1;
+  if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
   newRep->LowBorder = theRep->LowBorder;
   newRep->HighBorder = newRange;
   NEWREP->iProto = REP->iProto;

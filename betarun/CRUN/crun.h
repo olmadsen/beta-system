@@ -113,7 +113,7 @@ setup_item(ref(Item) theItem,
     register ref(GCEntry) initTab;
   
     theItem->Proto = prototype;
-    theItem->GCAttr = 1; /* Set item age to 1 */
+    if (IOAMinAge!=0) theItem->GCAttr = IOAMinAge; /* Set item age to IOAMinAge */
 
     /* Initialize the body part of the item, according to the genTable. */
 

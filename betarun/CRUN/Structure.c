@@ -24,7 +24,7 @@ ParamOriginProto(struct Structure *, AlloS)
   Protect(origin, newStruct = cast(Structure) IOAalloc(StructureSize));
   
   newStruct->Proto = StructurePTValue;
-  newStruct->GCAttr = 1;
+  if (IOAMinAge!=0) newStruct->GCAttr = IOAMinAge;
   newStruct->iOrigin = origin;
   newStruct->iProto = proto;
 
@@ -120,8 +120,7 @@ ref(Structure) ObjS(ref(Object) theObj)
   Protect(theObj, newStruct = cast(Structure) IOAalloc(StructureSize));
   
   newStruct->Proto = StructurePTValue;
-  newStruct->GCAttr = 1;
-  
+  if (IOAMinAge!=0) newStruct->GCAttr = IOAMinAge;
   newStruct->iProto = theObj->Proto;
   newStruct->iOrigin = (casthandle(Object)theObj)[theObj->Proto->OriginOff];
 
@@ -171,7 +170,7 @@ ref(Structure) ThisS(ref(Object) this)
   Protect(this, newStruct = cast(Structure) IOAalloc(StructureSize));
   
   newStruct->Proto = StructurePTValue;
-  newStruct->GCAttr = 1;
+  if (IOAMinAge!=0) newStruct->GCAttr = IOAMinAge;
   
   origin = (casthandle(Object)this)[this->Proto->OriginOff];
   /* origin is the object we really want origin and proto of */

@@ -34,7 +34,7 @@ ref(StackObject) AlloSO(unsigned size)
     theStack = cast(StackObject) IOAalloc(StackObjectSize(size));
 
     theStack->Proto = StackObjectPTValue;
-    theStack->GCAttr = 1;
+    if (IOAMinAge!=0) theStack->GCAttr = IOAMinAge;
     theStack->BodySize = size;
     theStack->StackSize = 0;
 

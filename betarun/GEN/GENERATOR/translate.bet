@@ -7,9 +7,9 @@ INCLUDE './symboltable';
 (#
    maxfragments: (# exit 100 #);
    
-   trace: (# exit false #);
+   BobsTab: (# exit '../GEN/GRAMMAR/runtime-parser.btab' #);
    
-   BobsTab: (# exit '~beta/betarun/v3.0/GEN/GRAMMAR/runtime-parser.btab' #);
+   trace: (# exit false #);
    
    ast: @astInterface
      (* An instance of the AST interface *)
@@ -17,7 +17,7 @@ INCLUDE './symboltable';
    
    runtime : @ast.runtime;    (* The MPS interface to the BETA grammar/ASTs *)
    
-   SystemName: 
+   Conditionals: 
      @ (# 
 	  t: [1]^Text;
 	  cnt: @integer;
@@ -27,7 +27,7 @@ INCLUDE './symboltable';
 	    enter symbol[]
 	    do 
 	       cnt+1 -> cnt; 
-	       (if cnt>t.range//true then t.range -> t.extend if);
+	       (if cnt>t.range then t.range -> t.extend if);
 	       symbol[] -> t[cnt][];
 	    #);
 	  contains: 
@@ -38,7 +38,7 @@ INCLUDE './symboltable';
 	    do 
 	       false -> success;
 	       (for i:cnt repeat
-		    (if (symbol[]->t[i].equalNCS)//true then true -> success if);
+		    (if (symbol[]->t[i].equalNCS) then true -> success if);
 	       for);
 	    exit success
 	    #);
@@ -199,6 +199,38 @@ INCLUDE './symboltable';
 	#)
      #);
    
+   areOperandsBothConsts:
+     (# op1, op2:^AsmFile.Operand; 
+     enter (op1[],op2[])
+     exit (op1.type = AsmFile.ConstantType) and (op1.type = AsmFile.ConstantType)
+     #);
+   doConstCompare:
+     (# op1, op2:^AsmFile.Operand; 
+        CompOp:^runtime.CompOp;
+        conOp1, conOp2:^AsmFile.Constant; 
+        v1, v2: @integer;
+        result: @boolean;
+     enter (op1[],CompOp[],op2[])
+     do
+	(op1.type = AsmFile.ConstantType) and (op1.type = AsmFile.ConstantType)
+          -> result;
+	(if result then 
+	    op1[] -> conOp1[]; conOp1.value -> v1;
+	    op2[] -> conOp2[]; conOp2.value -> v2;
+            (if CompOp.symbol
+             // runtime.EqOp then (v1=v2) -> result;
+             // runtime.LtOp then (v1<v2) -> result;
+             // runtime.LeOp then (v1<=v2) -> result;
+             // runtime.GtOp then (v1>v2) -> result;
+             // runtime.GeOp then (v1>=v2) -> result;
+             // runtime.NeOp then (v1<>v2) -> result;
+             else
+                'DoIfExp: inside/outside not allowed for constants' -> asterror;
+            if);
+        if)
+     exit result
+     #);
+   
    isOperandZero:
      (# op:^AsmFile.Operand; conOp:^AsmFile.Constant; result: @boolean
      enter op[]
@@ -239,7 +271,7 @@ INCLUDE './symboltable';
 	       (# label:^AsmFile.Label; Defined: @boolean
 	       enter (label[], Defined)
 	       do label[] -> e.label[]; Defined -> e.Defined;
-		  (* (if defined//true then 
+		  (* (if defined then 
 		   *     name[] -> puttext; '/'->put; label.name[] -> puttext; ' defined.'->putline;
 		   * if)
 		   *)
@@ -291,7 +323,7 @@ INCLUDE './symboltable';
 		       op: ^runtime.Operation;
 		    do
 		       trans.getDestination -> d[];
-		       (if (d.getOperationOpt -> isOptionalPresent)//true then
+		       (if (d.getOperationOpt -> isOptionalPresent) then
 			   d.getOperationOpt -> op[];
 			   (if op.symbol
 			    // runtime.Plus     then 1 -> instruction
@@ -319,15 +351,15 @@ INCLUDE './symboltable';
 		    (# op:^AsmFile.Operand; conOp:^AsmFile.Constant;
 		       result, value: @integer
 		    enter op[]
-		    do (if op.Type//AsmFile.ConstantType then
+		    do (if op.Type=AsmFile.ConstantType then
 			   op[] -> conOp[]; conOp.value -> value;
-			   loop: (if (value mod 2)//0 then
+			   loop: (if (value mod 2)=0 then
 				     result + 1 -> result;
 				     
 				     value div 2 -> value;
 				     restart loop
 				  else
-				     (if (value<>1)//true then -1 -> result if)
+				     (if (value<>1) then -1 -> result if)
 				 if)
 			else
 			   -1 -> result
@@ -349,7 +381,7 @@ INCLUDE './symboltable';
 		       //op1.size then op2.size -> op1.Size
 		       //op2.size then op1.size -> op2.Size
 		      if);
-		      (if (op1.Size <> op2.Size)//true then
+		      (if (op1.Size <> op2.Size) then
 			  asmFile.newLine;
 			  'Error: operand size mismatch' -> asmFile.putLine;
 			  (*op1.Size -> op2.Size;
@@ -428,7 +460,7 @@ INCLUDE './symboltable';
 	       (# ifImp:^runtime.IfImp; exp:^runtime.IfExp; 
 		  ge:^GlobalBase.element; goImp:^runtime.GotoImp;
 		  op:^AsmFile.Operand; Comp:^runtime.Comp; CompOp:^runtime.CompOp;
-		  sn:^runtime.SystemName; op1,op2:^AsmFile.Operand;
+		  cond:^runtime.Conditional; op1,op2:^AsmFile.Operand;
 		  
 		  flagcomp:
 		    (* Return true if op1=FLAGS & op2=0 *)
@@ -438,34 +470,34 @@ INCLUDE './symboltable';
 		    do false -> result;
 		       blok:
 			 (# do
-			    (if (op2.type<>AsmFile.ConstantType)//true then leave blok if);
+			    (if (op2.type<>AsmFile.ConstantType) then leave blok if);
 			    op2[] -> constOp[];
-			    (if (constOp.Value<>0)//true then leave blok if);
-			    (if (op1.type<>AsmFile.LabelType)//true then leave blok if);
+			    (if (constOp.Value<>0) then leave blok if);
+			    (if (op1.type<>AsmFile.LabelType) then leave blok if);
 			    op1[] -> LabelOp[];
-			    (if ('FLAGS'->LabelOp.name.equal)//false then leave blok if);
+			    (if not ('FLAGS'->LabelOp.name.equal) then leave blok if);
 			    true -> result
 			 #)
 		    exit result
 		    #);
 		  ep:^runtime.ElsePart;
-		  
+		  TrivialTrue, TrivialFalse: @boolean;
 	       enter ifImp[]
 	       do 
 		  ifImp.getIfExp -> exp[];
 		  (if exp.symbol
-		   //runtime.Systemname then
-		      exp[] -> sn[]; 
-		      (if (sn.getNameAppl -> NameApplToText -> SystemName.contains)//TRUE then
+		   //runtime.Conditional then
+		      exp[] -> cond[]; 
+		      (if (cond.getNameAppl -> NameApplToText -> Conditionals.contains) then
 			  ifImp.getImperatives -> DoImperatives;
 		       else
-			  (if (ifImp.getElsePartOpt -> isOptionalPresent)//true then
+			  (if (ifImp.getElsePartOpt -> isOptionalPresent) then
 			      ifImp.getElsePartOpt -> ep[];
 			      ep.getImperatives -> DoImperatives;
 			  if)
 		      if)
 		   //runtime.Comp then
-		      (if (ifImp.getElsePartOpt -> isOptionalPresent)//true then
+		      (if (ifImp.getElsePartOpt -> isOptionalPresent) then
 			  newLine;
 			  'Warning: else part is only allowed using directives' 
 			    -> putText; newLine;
@@ -474,44 +506,68 @@ INCLUDE './symboltable';
 		      Comp.getOp1 -> AddressToOperand -> op1[];
 		      Comp.getOp2 -> AddressToOperand -> op2[];
 		      (if not ((op1[], op2[]) -> flagComp) then
-			  (if (op2[] -> isOperandZero) then
+			  (if true
+                           // (op1[],op2[]) -> areOperandsBothConsts then
+                              (if (op1[],CompOp[],op2[]) -> doConstCompare then
+                                  'If expression always true' -> asmfile.commentline;
+                                  true -> TrivialTrue;
+                               else
+                                  'If expression always false' -> asmfile.commentline;
+                                  true -> TrivialFalse;
+                              if);
+                           // (op2[] -> isOperandZero) then
 			      op1[] -> AsmFile.Test
 			   else
-			      (if CompOp.symbol//runtime.InOp//runtime.OutOp then
+			      (if CompOp.symbol
+                               //runtime.InOp
+                               //runtime.OutOp then
 				  (op1[], op2[]) -> AsmFile.CmpRange
 			       else
 				  (op1[], op2[]) -> AsmFile.Cmp
 			      if)
 			  if)
 		      if);
-		      ifImp.getImperatives -> GiveMeTheOnlyGoto -> goimp[];
-		      (if goimp[]//NONE then
-			  AsmFile.NewLocalLabel -> op[];
-			  (if CompOp.symbol
-			   //runtime.EqOp then op[] -> AsmFile.BranchNotEqual
-			   //runtime.LtOp then op[] -> AsmFile.BranchGreaterThanOrEqual
-			   //runtime.LeOp then op[] -> AsmFile.BranchGreaterThan
-			   //runtime.GtOp then op[] -> AsmFile.BranchLessThanOrEqual
-			   //runtime.GeOp then op[] -> AsmFile.BranchLessThan
-			   //runtime.NeOp then op[] -> AsmFile.BranchEqual
-			   //runtime.InOp then op[] -> AsmFile.BranchCS
-			   //runtime.OutOp then op[] -> AsmFile.BranchCC
-			  if);
-			  Ifimp.getImperatives -> DoImperatives;              
-			  op[] -> AsmFile.DefineLocalLabel
-		       else
-			  goImp.getAddress -> AddressToOperand -> op[];
-			  (if CompOp.symbol
-			   //runtime.EqOp then op[] -> AsmFile.BranchEqual
-			   //runtime.LtOp then op[] -> AsmFile.BranchLessThan
-			   //runtime.LeOp then op[] -> AsmFile.BranchLessThanOrEqual
-			   //runtime.GtOp then op[] -> AsmFile.BranchGreaterThan
-			   //runtime.GeOp then op[] -> AsmFile.BranchGreaterThanOrEqual
-			   //runtime.NeOp then op[] -> AsmFile.BranchNotEqual
-			   //runtime.InOp then op[] -> AsmFile.BranchCC
-			   //runtime.OutOp then op[] -> AsmFile.BranchCS
-			  if)
-		      if)
+                      (if true
+                          // TrivialFalse then 
+                          (* nothing to generate *)
+                          'Imperatives left out' -> asmfile.commentline;
+                          // TrivialTrue  then
+                          ifImp.getImperatives -> GiveMeTheOnlyGoto -> goimp[];
+		          (if goimp[]=NONE then
+			      Ifimp.getImperatives -> DoImperatives;
+                              'Imperatives above performed unconditionally'
+                                -> asmfile.commentline;
+		          if);
+                       else
+		          ifImp.getImperatives -> GiveMeTheOnlyGoto -> goimp[];
+		          (if goimp[]=NONE then
+			      AsmFile.NewLocalLabel -> op[];
+			      (if CompOp.symbol
+			       //runtime.EqOp then op[] -> AsmFile.BranchNotEqual
+			       //runtime.LtOp then op[] -> AsmFile.BranchGreaterThanOrEqual
+			       //runtime.LeOp then op[] -> AsmFile.BranchGreaterThan
+			       //runtime.GtOp then op[] -> AsmFile.BranchLessThanOrEqual
+			       //runtime.GeOp then op[] -> AsmFile.BranchLessThan
+			       //runtime.NeOp then op[] -> AsmFile.BranchEqual
+			       //runtime.InOp then op[] -> AsmFile.BranchCS
+			       //runtime.OutOp then op[] -> AsmFile.BranchCC
+			      if);
+			      Ifimp.getImperatives -> DoImperatives;              
+			      op[] -> AsmFile.DefineLocalLabel
+		           else
+			      goImp.getAddress -> AddressToOperand -> op[];
+			      (if CompOp.symbol
+			       //runtime.EqOp then op[] -> AsmFile.BranchEqual
+			       //runtime.LtOp then op[] -> AsmFile.BranchLessThan
+			       //runtime.LeOp then op[] -> AsmFile.BranchLessThanOrEqual
+			       //runtime.GtOp then op[] -> AsmFile.BranchGreaterThan
+			       //runtime.GeOp then op[] -> AsmFile.BranchGreaterThanOrEqual
+			       //runtime.NeOp then op[] -> AsmFile.BranchNotEqual
+			       //runtime.InOp then op[] -> AsmFile.BranchCC
+			       //runtime.OutOp then op[] -> AsmFile.BranchCS
+			      if)
+		          if)
+                      if)
 		   else
 		      (* Skip it for the moment. *)
 		  if);
@@ -541,7 +597,7 @@ INCLUDE './symboltable';
 		      AsmFile.PopAll;
 		   // runtime.return then
 		      instr[] -> ri[];
-		      (if (ri.getDispOpt -> isOptionalPresent)//true then
+		      (if (ri.getDispOpt -> isOptionalPresent) then
 			  ri.getDispOpt -> di[];
 			  di.getConst -> ConstToInteger -> AsmFile.ReturnDisp;
 		       else
@@ -663,10 +719,10 @@ INCLUDE './symboltable';
 	externalName: ^text
 	  
      enter attribute[]
-     do (if (attribute.getDescriptorOpt -> isOptionalPresent)//TRUE then
+     do (if (attribute.getDescriptorOpt -> isOptionalPresent) then
 	    
 	    AsmFile.newLine;
-	    (if (attribute.getExtNameOpt -> isOptionalPresent)//TRUE then
+	    (if (attribute.getExtNameOpt -> isOptionalPresent) then
 		attribute.getExtNameOpt -> ext[];
 		ext.getString -> str[]; str.getText -> externalName[]
 	     else
@@ -691,7 +747,7 @@ INCLUDE './symboltable';
 	    (* Check is local used labels are defined, otherwise report errors. *)
 	    LabelBase.scan
 	    (# do
-	       (if Current.Defined//FALSE then
+	       (if not Current.Defined then
 		   newLine; '# local label ' -> putText; Current.Name[] -> putText; 
 		   ' in ' -> putText; attribute.getName -> NameDeclToText -> putText;
 		   ' is used, but not defined ! ' -> putText; newLine
@@ -704,11 +760,11 @@ INCLUDE './symboltable';
 	       (* this Attribute is a declaration of a CPROC or the like. *)
 	       attribute.getType -> NameApplToText -> declType[];
 	       attribute.getName -> NameDeclToText -> declName[];
-	       (if (attribute.getExtNameOpt -> isOptionalPresent)//TRUE then
+	       (if (attribute.getExtNameOpt -> isOptionalPresent) then
 		   attribute.getExtNameOpt -> ext[];
 		   ext.getString -> str[]; str.getText -> extName[]
 		else
-		   (if ('proc'  -> declType.equalNCS)//TRUE then
+		   (if ('proc'  -> declType.equalNCS) then
 		       declName[] -> extName[];
 		    else
 		       declName[] -> asmfile.ToCName -> extName[]
@@ -859,7 +915,7 @@ INCLUDE './symboltable';
 do
    InitAstEnv;
    GlobalBase.init;
-   (if debug//true then 'debug' -> SystemName; 'With DEBUG.' -> screen.putline; if);
+   (if debug then 'debug' -> Conditionals; 'With DEBUG.' -> screen.putline; if);
    'Using parser: ' -> screen.puttext;
    BobsTab -> screen.putline;
    <<SLOT ObjectBaseInit: descriptor>>;

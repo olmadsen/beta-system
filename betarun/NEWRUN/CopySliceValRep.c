@@ -82,7 +82,7 @@ void CopySVR1(struct ValRep *theRep,
       newRep->GCAttr = 0; /* In AOA */
     } else {
       newRep = (struct ValRep *)IOAalloc(size, SP);
-      newRep->GCAttr = 1; /* In IOA */
+      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
     }
     pop(theRep);
     pop(theItem);
@@ -188,7 +188,7 @@ void CopySVR2(struct ValRep *theRep,
       newRep->GCAttr = 0; /* In AOA */
     } else {
       newRep = (struct ValRep *)IOAalloc(size, SP);
-      newRep->GCAttr = 1; /* In IOA */
+      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
     }
     pop(theRep);
     pop(theItem);
@@ -292,7 +292,7 @@ void CopySVR4(struct ValRep *theRep,
       newRep->GCAttr = 0; /* In AOA */
     } else {
       newRep = (struct ValRep *)IOAalloc(size, SP);
-      newRep->GCAttr = 1; /* In IOA */
+      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
     }
     pop(theRep);
     pop(theItem);
@@ -392,7 +392,7 @@ void CopySVR8(struct ValRep *theRep,
       newRep->GCAttr = 0; /* In AOA */
     } else {
       newRep = (struct ValRep *)IOAalloc(size, SP);
-      newRep->GCAttr = 1; /* In IOA */
+      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
     }
     pop(theRep);
     pop(theItem);
@@ -459,7 +459,7 @@ void CopySVRI(struct ObjectRep *theRep,
     newRep->GCAttr = 0; /* In AOA */
   } else {
     newRep = (struct ObjectRep *)IOAalloc(size, SP);
-    newRep->GCAttr = 1; /* In IOA */
+    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
   }
   pop(theItem);
   pop(theRep);
@@ -522,7 +522,7 @@ void CopySVRC(struct ObjectRep *theRep,
     newRep->GCAttr = 0; /* In AOA */
   } else {
     newRep = (struct ObjectRep *)IOAalloc(size, SP);
-    newRep->GCAttr = 1; /* In IOA */
+    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
   }
   pop(theItem);
   pop(theRep);

@@ -41,7 +41,7 @@ void AlloVR1(unsigned offset /* in bytes */,
     }
     if (!theRep) {
       theRep = (struct ValRep *)IOAalloc(size, SP);
-      theRep->GCAttr = 1;
+      if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
     }
     pop(theObj);
   
@@ -91,7 +91,7 @@ void AlloVR2(unsigned offset /* in bytes */,
     }
     if (!theRep) {
       theRep = (struct ValRep *)IOAalloc(size, SP);
-      theRep->GCAttr = 1;
+      if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
     }
     pop(theObj);
 
@@ -140,7 +140,7 @@ void AlloVR4(unsigned offset /* in bytes */,
     }
     if (!theRep) {
       theRep = (struct ValRep *)IOAalloc(size, SP);
-      theRep->GCAttr = 1;
+      if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
     }
     pop(theObj);
     
@@ -190,7 +190,7 @@ void AlloVR8(unsigned offset /* in bytes */,
     }
     if (!theRep) {
       theRep = (struct ValRep *)IOAalloc(size, SP);
-      theRep->GCAttr = 1;
+      if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
     }
     pop(theObj);
 

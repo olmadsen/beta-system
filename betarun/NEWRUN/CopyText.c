@@ -47,7 +47,7 @@ struct Item *CopyT(char *asciz,
       theRep->GCAttr = 0; /* In AOA */
     } else {
       theRep = (struct ValRep *)IOAalloc(size, SP);
-      theRep->GCAttr = 1; /* In IOA */
+      if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge; /* In IOA */
     }
     pop(theItem);
   

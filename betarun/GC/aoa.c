@@ -170,7 +170,6 @@ struct Object *AOAalloc(AOA_ALLOC_PARAMS)
      */
     DEBUG_AOA(fprintf(output, "AOAalloc: forcing IOAGc and AOAGc\n"));
 #ifdef MT
-    theObj = NULL;
     fprintf(output,"FIXME:AOAalloc failed, has to GC here!!\n");
     /*    ReqObjectSize = numbytes/4;
 	  IOAGc(); */

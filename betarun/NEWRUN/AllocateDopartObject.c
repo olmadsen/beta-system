@@ -21,7 +21,7 @@ struct DopartObject *AlloDO(unsigned size, struct Object *this, long *SP)
 	    theObj = (struct DopartObject *)IOAalloc(DopartObjectSize(size), SP));
 
     theObj->Proto  = DopartObjectPTValue;
-    theObj->GCAttr = 1;
+    if (IOAMinAge!=0) theObj->GCAttr = IOAMinAge;
     theObj->Origin = this;
     theObj->Size   = size;
 

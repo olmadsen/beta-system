@@ -26,7 +26,7 @@ struct Component *AlloC(struct Object *origin, struct ProtoType *proto, long *SP
   }
   if (!comp) {
     comp = (struct Component *)IOAalloc(size, SP);
-    comp->GCAttr = 1;
+    if (IOAMinAge!=0) comp->GCAttr = IOAMinAge;
   }
   pop(origin);
 

@@ -19,7 +19,7 @@ struct Structure *AlloS(struct Object *origin, struct ProtoType *proto, long *SP
   Protect(origin, newStruct = (struct Structure *)IOAalloc(StructureSize, SP));
   
   newStruct->Proto = StructurePTValue;
-  newStruct->GCAttr = 1;
+  if (IOAMinAge!=0) newStruct->GCAttr = IOAMinAge;
   AssignReference(&newStruct->iOrigin, origin);
   newStruct->iProto = proto;
 
@@ -77,7 +77,7 @@ struct Structure *ThisS(struct Object *this, long *SP)
   Protect(this, newStruct = (struct Structure *)IOAalloc(StructureSize, SP));
   
   newStruct->Proto = StructurePTValue;
-  newStruct->GCAttr = 1;
+  if (IOAMinAge!=0) newStruct->GCAttr = IOAMinAge;
   
   origin = ((struct Object **)this)[this->Proto->OriginOff];
   /* origin is the object we really want orgin and proto of */
@@ -113,7 +113,7 @@ struct Structure *ObjS(struct Object *theObj, long *SP)
   Protect(theObj, newStruct = (struct Structure *)IOAalloc(StructureSize, SP));
   
   newStruct->Proto = StructurePTValue;
-  newStruct->GCAttr = 1;
+  if (IOAMinAge!=0) newStruct->GCAttr = IOAMinAge;
   
   newStruct->iProto = theObj->Proto;
   AssignReference(&newStruct->iOrigin, ((struct Object **)theObj)[theObj->Proto->OriginOff]);

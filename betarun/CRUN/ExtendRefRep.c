@@ -37,7 +37,7 @@ ParamObjOffRange(ExtRR)
 	     newRep = cast(RefRep) IOAalloc(RefRepSize(newRange)));
    
     newRep->Proto = RefRepPTValue;
-    newRep->GCAttr = 1;
+    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     newRep->LowBorder = 1;
     newRep->HighBorder = newRange;
     

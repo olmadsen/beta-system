@@ -22,6 +22,7 @@
 #define ExternalMarker	       -10
 #endif
 
+#define IOAMinAge             0
 #define IOAMaxAge             128
 #define IOAMAXSIZE           (IOASize/8)
 

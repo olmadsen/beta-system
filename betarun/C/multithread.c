@@ -316,11 +316,13 @@ struct Object *doGC(unsigned long numbytes)
 	  /* Have now tried everything to get enough space in IOA */
 	  /* Aber dann haben wir anderen metoden! */
 	  /* (6.2) */
+#ifdef IOAMinAgeNoneZero
 	  /* FIXME: */
 	  fprintf(output, 
 		  "\n***WARNING: allocation in AOA. V-entry sets GCAttr to 1.\n");
 	  fprintf(output, 
 		  "***This will probably cause AOA releated problems.\n\n");
+#endif
 	  newObj = AOAcalloc(numbytes);
 	  IOATop = gIOATop;
 	  gIOATop = (long*)((long)gIOATop + IOASliceSize); /* size of slice */
@@ -329,7 +331,7 @@ struct Object *doGC(unsigned long numbytes)
 	}
       }
 
-      Claim(newObj!=0, "doGC: newObj allocated");
+      DEBUG_MT(Claim(newObj!=0, "doGC: newObj allocated"));
 
       DEBUG_MT(fprintf(output,"t@%d: GC completed.\n", (int)ThreadId);
 	       fflush(output);

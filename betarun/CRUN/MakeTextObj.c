@@ -79,7 +79,7 @@ void MkTO(char *asciz,
     } else {
       isInAOA=0;
       theText=(struct TextObject*)IOAalloc(size);
-      theText->GCAttr = 1;
+      theText->GCAttr = IOAMinAge;
     }
     RestoreVar(theItem);
 
@@ -97,7 +97,7 @@ void MkTO(char *asciz,
       /* An uninitialized value repetition is at the end of theText */
       theRep = (struct ValRep *)((long)theText+ItemSize(TextProto));
       theRep->Proto = ByteRepPTValue;
-      if (!isInAOA) theRep->GCAttr = 1;
+      if (!isInAOA) theRep->GCAttr = IOAMinAge;
       theRep->LowBorder = 1;
       theRep->HighBorder = range;
     }

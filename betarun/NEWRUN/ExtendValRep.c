@@ -67,7 +67,7 @@ void ExtVR1(struct Object *theObj,
     } 
     if (!newRep){
       newRep = (struct ValRep *)IOAalloc(size, SP);
-      newRep->GCAttr = 1;
+      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     }
     pop(theObj);
 
@@ -152,7 +152,7 @@ void ExtVR2(struct Object *theObj,
     } 
     if (!newRep){
       newRep = (struct ValRep *)IOAalloc(size, SP);
-      newRep->GCAttr = 1;
+      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     }
     pop(theObj);
 
@@ -237,7 +237,7 @@ void ExtVR4(struct Object *theObj,
     } 
     if (!newRep){
       newRep = (struct ValRep *)IOAalloc(size, SP);
-      newRep->GCAttr = 1;
+      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     }
     pop(theObj);
 
@@ -322,7 +322,7 @@ void ExtVR8(struct Object *theObj,
     } 
     if (!newRep){
       newRep = (struct ValRep *)IOAalloc(size, SP);
-      newRep->GCAttr = 1;
+      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
     }
     pop(theObj);
 
@@ -382,7 +382,7 @@ void ExtVRI(struct Object *theObj,
   } 
   if (!newRep){
     newRep = (struct ObjectRep *)IOAalloc(size, SP);
-    newRep->GCAttr = 1;
+    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
   }
   pop(theObj);
   
@@ -457,7 +457,7 @@ void ExtVRC(struct Object *theObj,
   } 
   if (!newRep){
     newRep = (struct ObjectRep *)IOAalloc(size, SP);
-    newRep->GCAttr = 1;
+    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
   }
   pop(theObj);
   
