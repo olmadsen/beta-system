@@ -154,7 +154,8 @@ void AOAGc()
 
 #ifdef RTLAZY
   /* Reset the table of fields in AOA containing negative references: */
-  negAOArefsRESET ();
+  if (negAOArefs)
+    negAOArefsRESET ();
 #endif
 
   INFO_AOA( fprintf( output, "\n#(AOA-%d ", NumAOAGc); fflush(output) );
@@ -289,7 +290,7 @@ static FollowItem( theObj)
     theCell = (ptr(long)) Offset( theObj, *Tab++ );
 #ifdef RTLAZY
     if( *theCell > 0 ) ReverseAndFollow( theCell );
-    else if (isLazyRef (*theCell)) negAOArefsINSERT (theCell);
+    else if (isLazyRef (*theCell)) negAOArefsINSERT ((long) theCell);
 #else
     if( *theCell != 0 ) ReverseAndFollow( theCell );
 #endif
@@ -328,7 +329,7 @@ static void FollowObject( theObj)
 	  if( *pointer > 0) ReverseAndFollow( pointer++ );
 	  else 
 	    if (isLazyRef (*pointer))
-	      negAOArefsINSERT (pointer++);
+	      negAOArefsINSERT ((long) pointer++);
 	    else
 	      pointer++;
 #else

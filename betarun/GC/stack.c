@@ -83,6 +83,8 @@ void ProcessStackObj(struct StackObject *theStackObject)
 extern struct RegWin* lazyTrapAR;
 #endif
 
+#ifdef SPARC_LD_SEGMENT_TEST
+
 #ifdef sun4s
 extern long *start asm("_start");
 #else
@@ -94,11 +96,15 @@ extern long *end;
 #define isData(addr) ( ((long*)&etext <= (long*)(addr)) && ((long*)(addr) < (long*)&end) )
 #define isProto(addr) (isSpecialProtoType(addr) || \
 		       (isData(addr) && (((int)(addr) & 3) == 0)))
+#else /* SPARC_LD_SEGMENT_TEST */
+
+#define isProto(addr) (isSpecialProtoType(addr) || ((((int)(addr) & 3) == 0)))
+
+#endif /* SPARC_LD_SEGMENT_TEST */
 
 static long skipCparams=FALSE;
 
 #ifdef RTDEBUG
-
 struct RegWin *BottomAR=0, *lastAR=0;
 long PC = 0;
 void PrintAR(struct RegWin *ar, struct RegWin *theEnd);
@@ -492,11 +498,13 @@ static void initLabels()
   /* Find number of labels */
   thePipe = popen (command, "r");
 
+#ifdef SPARC_LD_SEGMENT_TEST
   /* Skip to etext */
   for (;;){
     fscanf(thePipe, "%x %c %s", &labelAddress, &ch, theLabel);
     if (labelAddress==(long)&etext) break;
   }
+#endif /* SPARC_LD_SEGMENT_TEST */
   numLabels=0;
   for (;;){
     if (fscanf(thePipe, "%x %c %s", &labelAddress, &ch, theLabel) == EOF)
@@ -515,11 +523,13 @@ static void initLabels()
       /* Read into labels */
       pclose (thePipe);
       thePipe = popen (command, "r");
+#ifdef SPARC_LD_SEGMENT_TEST
       /* Skip to etext */
       for (;;){
 	fscanf(thePipe, "%x %c %s", &labelAddress, &ch, theLabel);
 	if (labelAddress==(long)&etext) break;
       }
+#endif /* SPARC_LD_SEGMENT_TEST */
       /* Read labels */
       for (;;lastLab++){
 	struct label *lab;
@@ -597,8 +607,10 @@ void PrintRef(ref(Object) ref)
 	fprintf(output, ", proto NOT ok: 0x%x", ref->Proto);
     } else {
       fprintf(output, ", is NOT object");
+#ifdef SPARC_LD_SEGMENT_TEST
       if (isCode(ref) && (((int)ref & 3) == 0)) fprintf(output, " (is code)");
       if (isData(ref)) fprintf(output, " (is data)");
+#endif /* SPARC_LD_SEGMENT_TEST */
     }
   }
   fprintf(output, "\n");

@@ -394,7 +394,7 @@ void ProcessReference( theCell)
 	if (negIOArefs)
 	  /* This is a dangling reference, and we are currently 
 	   * collecting as part of the trap handling */
-	  negIOArefsINSERT(theCell);
+	  negIOArefsINSERT((long) theCell);
 	return;
       }
 #endif
@@ -565,7 +565,7 @@ void ProcessAOAReference( theCell)
       AOAtoIOAInsert( theCell);
 #ifdef RTLAZY
     else if ( isLazyRef (*theCell ) )
-      negAOArefsINSERT( theCell);
+      negAOArefsINSERT((long) theCell);
 #endif
 }
 
