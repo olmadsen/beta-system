@@ -329,30 +329,17 @@ do fragmentList.scan
      #)
 
 -- fragmentGroupScanIncludes: dopart --
-do prop.scanProp
-     (# doProp::
-	  (#
-	  do (if 'include'->prop.equalNCS then
-		 scanParameters
-		   (# doString::
-			(# t: ^text
-			do s.copy->linkName[];
-                           fullName->stripPathName->t[];
-			   (if t[] = none then
-			       (linkName[],currentDirectory)
-				 ->thePathHandler.ConvertFilePath
-				 ->name[];
-			    else
-			       (linkName[],t[])
-				 ->thePathHandler.ConvertFilePath
-				 ->name[];
-			   if);
-			   INNER scanIncludes
-			#)
-		   #);
-	     if);
-	  #);
-     #)
+do (if linklist[]=NONE then
+       &linkListType[]->linklist[]; linkList.init;
+       linklist.loadIncludes;
+   if);
+   (if linklist.size>0 then
+       linklist.scan
+	 (#
+	 do current[]->this(scanIncludes).current[];
+	    INNER scanIncludes
+	 #)
+   if)
 
 -- fragmentGroupScanSlots: dopart --
 do fragmentList.scan
@@ -491,43 +478,6 @@ do (if trace.active and trace.d[trace.FragmentOpen] then
 	 #);
    if)
 
--- fragmentGroupAlreadyOpen: Descriptor --
-(# dotInx,dirInx,groupInx: @integer
-do
-   0->localPath.pos;
-   (if localPath.getNonBlank <> ascii.fs then
-       localPath[]->expandToFullPath->localPath[];
-       l:
-	 (#
-	 do scanIncludes
-	      (#
-	      do (if name[]->localPath.equal then
-		     (name[],screen[])->top.open->f[];
-		     true->value;
-		     INNER alreadyOpen;
-		     leave l
-		 if)
-	      #);
-	    fragmentList.scan
-	      (# found: @boolean
-	      do
-		 (if current.type = formType then
-		     current.name[]->localPath.equalNCS->found
-		  else
-		     current.name[]->localPath.equal->found
-		 if);
-		 (if found then
-		     screen[]->current.open;
-		     current.f[]->f[];
-		     true->value;
-		     INNER alreadyOpen;
-		     leave l
-		 if)
-	      #)
-	 #)
-   if)
-#)
-
 -- fragmentGroupClose: DoPart --
 do (if trace.active and trace.d[trace.FragmentClose] then
        trace.FragmentClose->signalTrace
@@ -578,6 +528,40 @@ do
        THIS(fragmentGroup)[]->f.father;
        (if type // linkType // groupType then error[]->f.unPack if)
    if)
+
+-- fragmentGroupLinkListFullname: dopart --
+do (if fn[]=NONE then
+       this(fragmentGroup).fullName->stripPathName->fn[];
+       (if fn[] = none then
+	   (linkName[],currentDirectory)
+	     ->thePathHandler.ConvertFilePath
+	     ->fn[];
+	else
+	   (linkName[],fn[])
+	     ->thePathHandler.ConvertFilePath
+	     ->fn[];
+       if)
+   if);
+
+-- fragmentGroupLinkListLoad: descriptor --
+(#
+do clear;
+   prop.scanProp
+     (# doProp::
+	  (#
+	  do (if 'include'->prop.equalNCS then
+		 scanParameters
+		   (# doString::
+			(# l: ^link;
+			do &link[]->l[];
+			   s.copy->l.linkName[];
+			   l[]->append;
+			#)
+		   #);
+	     if);
+	  #);
+     #)
+#)
 
 -- fragmentGroupFragmentListDescriptorDeleteLocalName: DoPart --
 do
@@ -1641,36 +1625,6 @@ do
 		(* get r from f *)
 		repS[]->fragmentList.repRestore;
 		repS[]->prop.repRestore;
-		(if linkList[]<>NONE then
-		    linkList.scan
-		      (# (* this code is to be removed, when no more ast's
-			  * exist with the old fragmentlink storage format
-			  *)
-		      do l: (#
-			    do prop.scanprop
-				 (# doProp::
-				      (#
-				      do prop.makelc;
-					 (if 'include'->prop.equal then
-					     scanParameters
-					       (# doString::
-						    (#
-						    do (if s[]->current.equal then
-							   leave l
-						       if)
-						    #)
-					       #)
-					 if)
-				      #)
-				 #);
-			       (* if here, not found in 'include' property - add it *)
-			       'include'->prop.addprop
-				 (# ifPropExist:: (# do false->delete #)
-				 do current[]->addString
-				 #);
-			    #)
-		      #)
-		if);
 		(if doRealOpen then
 		    fragmentList.scan
 		      (# ff: ^fragmentForm
@@ -2382,50 +2336,6 @@ do
        (no,msg[])->theCatcher
    if)
 
--- astLevelIsRefenced: DoPart --
-do
-   L: Top.groupTable.Scan
-     (#
-	testForm:
-	  (# ff: ^fragmentForm
-	  enter ff[]
-	  do
-	     ff.import.scan
-	       (#
-	       do (if current.g[] = fx[] then true->found; leave l if)
-	       #)
-	  #);
-	testLink:
-	  (# fl: ^fragmentLink
-	  enter fl[]
-	  do (if FL.F[] = FX[] then true->found; leave L if)
-	  #);
-	testGroup:
-	  (# fg: ^fragmentGroup
-	  enter fg[]
-	  do
-	     (if fg.origin = FX[] then True->found; leave L if);
-	     fg.scanIncludes
-	       (# do (name[],screen[])->top.open->testLink #);
-	     fg.fragmentList.Scan
-	       (#
-	       do
-		  (if (current.f[] <> none ) then
-		      (if current.type
-		       // linkType then
-			  current.f[]->testLink
-		       // formType then
-			  current.f[]->testForm
-		       // groupType then
-			  current.f[]->testGroup
-		      if)
-		  if)
-	       #)
-	  #);
-
-     do (if (current.g[] <> none ) then current.g[]->testGroup if)
-     #)
-
 -- AstInterfaceException: DoPart --
 do
    (if m[] <> none then m->msg if);
@@ -2695,15 +2605,15 @@ do (if theCatcher[] = none then
 #)
 
 -- treelevelGrammarTableCheck: descriptor --
-(# 
+(#
 do (if NoOfKnownGrammars > grammarTable.table.range then
        10->grammarTable.table.extend;
-       (for i: 10 repeat 
-            &grammarTable.element[]->grammarTable.table[NoOfKnownGrammars+i-1][]
-       for)     
+       (for i: 10 repeat
+	    &grammarTable.element[]->grammarTable.table[NoOfKnownGrammars+i-1][]
+       for)
    if);
 #)
-   
+
 -- treelevelGrammarTableInsert: Dopart --
 do (# i: @integer
    do loop:
@@ -2736,7 +2646,7 @@ do (# i: @integer
 		  #);
 	    if);
 	    NoOfKnownGrammars+1->NoOfKnownGrammars;
-            grammarTable.tableCheck;
+	    grammarTable.tableCheck;
 	    (theGrammar.grammarIdentification).copy
 	      ->grammarTable.table[NoOfKnownGrammars].name[];
 	    (theGrammar.suffix).copy
