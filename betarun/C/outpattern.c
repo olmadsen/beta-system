@@ -7,75 +7,75 @@
 #include "beta.h"
 
 static ptr(char) ProtoTypeName(theProto)
-  ref(ProtoType) theProto;
+     ref(ProtoType) theProto;
 {
   ref(GCEntry) stat = cast(GCEntry) ((long) theProto + theProto->GCTabOff);
   ptr(short) dyn;
-
+  
   while (*(short *) stat) stat++;	/* Step over static gc entries */ 
   dyn = ((short *) stat) + 1;		/* Step over the zero */
   while (*dyn++);			/* Step over dynamic gc entries */
-
+  
   return (ptr(char)) dyn;
 }
 
 static ptr(char) theItemName(theItem)
-  ref(Item) theItem;
+     ref(Item) theItem;
 {
   return ProtoTypeName(theItem->Proto);
 }
 
 static ptr(char) theFormName(theItem)
-  ref(Item) theItem;
+     ref(Item) theItem;
 {
   long  TabValue;
-
+  
   TabValue  = (long) theItem->Proto;
   TabValue += (int)  theItem->Proto->FormOff;
-
+  
   return (ptr(char)) TabValue;
 }
 
 
 DisplayObject(output,aObj,retAddress)
-  ptr(FILE)   output;
-  ref(Object) aObj;
-  ptr(long)   retAddress;
+     ptr(FILE)   output;
+     ref(Object) aObj;
+     ptr(long)   retAddress;
 { 
   ref(Item) aItem;
-
+  
   if( isSpecialProtoType(aObj->Proto) ){
     switch ((int) aObj->Proto){
-      case (int) ComponentPTValue:
-        aItem = ComponentItem(aObj);
-        fprintf(output,"  comp %s in %s\n", 
-		theItemName(aItem), theFormName(aItem));
-        break;
-      case (int) StackObjectPTValue:
-        fprintf(output,"  stackobject\n");
-        break;
-      case (int) ByteRepPTValue:
-        fprintf(output,"  ByteRep\n");
-        break;
-      case (int) WordRepPTValue:
-        fprintf(output,"  WordRep\n");
-        break;
-      case (int) DoubleRepPTValue:
-        fprintf(output,"  DoubleRep\n");
-        break;
-      case (int) ValRepPTValue:
-        fprintf(output,"  ValRep\n");
-        break;
-      case (int) RefRepPTValue:
-        fprintf(output,"  RefRep\n");
-        break;
+    case (int) ComponentPTValue:
+      aItem = ComponentItem(aObj);
+      fprintf(output,"  comp %s in %s\n", 
+	      theItemName(aItem), theFormName(aItem));
+      break;
+    case (int) StackObjectPTValue:
+      fprintf(output,"  stackobject\n");
+      break;
+    case (int) ByteRepPTValue:
+      fprintf(output,"  ByteRep\n");
+      break;
+    case (int) WordRepPTValue:
+      fprintf(output,"  WordRep\n");
+      break;
+    case (int) DoubleRepPTValue:
+      fprintf(output,"  DoubleRep\n");
+      break;
+    case (int) ValRepPTValue:
+      fprintf(output,"  ValRep\n");
+      break;
+    case (int) RefRepPTValue:
+      fprintf(output,"  RefRep\n");
+      break;
     } 
   }else{
     ref(ProtoType) theProto;
     ref(ProtoType) activeProto;
     long           activeDist;
     ref(Object)    staticObj;
-
+    
     theProto = aObj->Proto;
     if( retAddress ){
       activeProto = theProto;
@@ -83,13 +83,13 @@ DisplayObject(output,aObj,retAddress)
       while( theProto->Prefix->Prefix != theProto->Prefix){
 	theProto = theProto->Prefix;
         if(    (retAddress - theProto->GenPart > 0)
-            && (retAddress - theProto->GenPart < activeDist)){ 
+	   && (retAddress - theProto->GenPart < activeDist)){ 
 	  activeProto = theProto;
 	  activeDist  = retAddress - theProto->GenPart; 
 	}
       }
     }else activeProto = theProto;
-
+    
     fprintf(output,"  item ");
     theProto = aObj->Proto;
     if( theProto == activeProto )
@@ -104,7 +104,7 @@ DisplayObject(output,aObj,retAddress)
 	fprintf(output,"%s", ProtoTypeName(theProto));
     }
     fprintf(output, " in %s\n", theFormName(aObj));
-
+    
     /* Print Static Environment Object. */
     staticObj = *(handle(Object))((long)aObj + (4*(long)activeProto->OriginOff));
     if( staticObj )
@@ -125,39 +125,39 @@ struct errorEntry {
   int  errorNumber;
   char *errorMessage;
 } errorTable[] = {
-    RefNoneErr,        "Reference is none",
-    CompTerminatedErr, "Executing terminated component",
-    RepRangeErr,       "Repetition index out of range",
-    ArithExceptErr,    "Arithmetic exception",
-    RepSubRangeErr,    "Repetition subrange out of range",
-    RepLowRangeErr,    "Repetition subrange out of range (low)",
-    RepHighRangeErr,   "Repetition subrange out of range (high)",
-    StopCalledErr,     "Stop is called",
-    LVRAfullErr,       "LVRA is full",
-    ZeroDivErr,        "Integer division by zero",
-    CBFAfullErr,       "Call back function area (CBFA) is full",
-    PascalCallBackErr, "Call back Pascal function has wrong return size",
-    CompCallBackErr,   "Suspending component involving call backs",
-    LeaveBasicCompErr, "Attempt to leave basic component",
-    QuaErr,            "Qualification error in reference assignment",
-    EmulatorTrapErr,   "Emulator trap",
-    IllegalInstErr,    "Illegal instruction",
-    BusErr,            "Bus error",
-    SegmentationErr,   "Segmentation fault",
-    AOAtoIOAfullErr,   "AOAtoIOAtable is full",
-    AOAtoLVRAfullErr,  "AOAtoLVRAtable is full",
-    CTextPoolErr,      "Text parameter to C routine too big (max. 1000 bytes)",
-    AOAtoIOAallocErr,  "Failed to allocate AOAtoIOAtable",
-    UnknownSigErr,     "Unknown signal",
-    0, 0
-};
+  RefNoneErr,        "Reference is none",
+  CompTerminatedErr, "Executing terminated component",
+  RepRangeErr,       "Repetition index out of range",
+  ArithExceptErr,    "Arithmetic exception",
+  RepSubRangeErr,    "Repetition subrange out of range",
+  RepLowRangeErr,    "Repetition subrange out of range (low)",
+  RepHighRangeErr,   "Repetition subrange out of range (high)",
+  StopCalledErr,     "Stop is called",
+  LVRAfullErr,       "LVRA is full",
+  ZeroDivErr,        "Integer division by zero",
+  CBFAfullErr,       "Call back function area (CBFA) is full",
+  PascalCallBackErr, "Call back Pascal function has wrong return size",
+  CompCallBackErr,   "Suspending component involving call backs",
+  LeaveBasicCompErr, "Attempt to leave basic component",
+  QuaErr,            "Qualification error in reference assignment",
+  EmulatorTrapErr,   "Emulator trap",
+  IllegalInstErr,    "Illegal instruction",
+  BusErr,            "Bus error",
+  SegmentationErr,   "Segmentation fault",
+  AOAtoIOAfullErr,   "AOAtoIOAtable is full",
+  AOAtoLVRAfullErr,  "AOAtoLVRAtable is full",
+  CTextPoolErr,      "Text parameter to C routine too big (max. 1000 bytes)",
+  AOAtoIOAallocErr,  "Failed to allocate AOAtoIOAtable",
+  UnknownSigErr,     "Unknown signal",
+  0, 0
+  };
 
 ErrorMessage(output, errorNumber)
-  ptr(FILE) output;
-  int errorNumber;
+     ptr(FILE) output;
+     int errorNumber;
 {
   int  index = 0;
-
+  
   while( errorTable[index].errorNumber != 0){
     if( errorNumber == errorTable[index].errorNumber){
       fprintf(output,"%s", errorTable[index].errorMessage);
@@ -169,7 +169,7 @@ ErrorMessage(output, errorNumber)
 }
 
 NotInHeap( address)
-  int address;
+     int address;
 {
   if( inIOA(address) || inAOA(address) || inLVRA(address) ) return FALSE;
   else return TRUE;
@@ -178,14 +178,14 @@ NotInHeap( address)
 #ifndef sparc
 /* Traverse the StackArea [low..high-4] and Process all references within it. */
 static DisplayStackPart( output, low, high)
-  ptr(long) low;
-  ptr(long) high;
-  FILE *output;
+     ptr(long) low;
+     ptr(long) high;
+     FILE *output;
 {
   ptr(long) current = low;
   ref(Object) theObj;
   handle(Object) theCell;
-
+  
   while( current < high ){
     if( inBetaHeap( *current)){
       theCell = (handle(Object)) current;
@@ -210,25 +210,25 @@ static DisplayStackPart( output, low, high)
 
 #ifdef sparc
 void
-DisplayAR(FILE *output, struct RegWin *theAR, struct RegWin *nextAR)
+  DisplayAR(FILE *output, struct RegWin *theAR, struct RegWin *nextAR)
 {
-    struct Object *theObj = (struct Object *) theAR->i0;
-
-    if ((inIOA(theObj) || inAOA(theObj)) && isObject(theObj))
-      DisplayObject(output, theObj, theAR->i7);
+  struct Object *theObj = (struct Object *) theAR->i0;
+  
+  if ((inIOA(theObj) || inAOA(theObj)) && isObject(theObj))
+    DisplayObject(output, theObj, theAR->i7);
 }
 #endif
 
 DisplayBetaStack( errorNumber, theObj)
-  int errorNumber;
-  ref(Object) theObj;
+     int errorNumber;
+     ref(Object) theObj;
 {
   ptr(FILE) output;
   ref(Component)      currentComponent;
-
+  
   fprintf(stderr,"\n# Beta execution aborted: ");
   ErrorMessage(stderr, errorNumber);
-
+  
   if( (output = fopen("beta.dump","w")) == NULL){
     output = stderr;
     fprintf( output, ".\n");
@@ -238,10 +238,10 @@ DisplayBetaStack( errorNumber, theObj)
     ErrorMessage(output, errorNumber);
     fprintf( output, ".\n");
   }
-
+  
   fprintf(output,"\nCall chain:\n");
-
-
+  
+  
 #ifndef sparc
   /* If we are able to retrieve information about the current object
    * dump it.
@@ -255,145 +255,146 @@ DisplayBetaStack( errorNumber, theObj)
   }else
     fprintf(output,"Current object is 0!\n");
 #endif
-
+  
 #ifdef hppa
   /*
    * The HP-PA (Snake) specific parts of tracing the Beta stack.
    */
   {
-      struct Object **theCell = getRefSP();
-      struct Object *theObj;
-
-      while((void **)theCell > &ReferenceStack[0]) {
-	  if((unsigned)*theCell & 1) {
-	      theObj = (struct Object *)((unsigned)*theCell & ~1);
-	      if(theObj && isObject(theObj)) {
-		  DisplayObject(output, theObj, 0);
-	      } else {
-		  fprintf(output, "[Damaged object!: %x]\n", (int)theObj);
-	      }
-	  }
-	  theCell--;
+    struct Object **theCell = getRefSP();
+    struct Object *theObj;
+    
+    while((void **)theCell > &ReferenceStack[0]) {
+      if((unsigned)*theCell & 1) {
+	theObj = (struct Object *)((unsigned)*theCell & ~1);
+	if(theObj && isObject(theObj)) {
+	  DisplayObject(output, theObj, 0);
+	} else {
+	  fprintf(output, "[Damaged object!: %x]\n", (int)theObj);
+	}
       }
-
-      fflush(output);
+      theCell--;
+    }
+    
+    fflush(output);
   }
 #endif
-
+  
 #ifdef sparc
   /*
    * This is the SPARC specifics of DisplayBetaStack
    */
   {
-      struct RegWin *theAR;
-      struct RegWin *nextCBF = (struct RegWin *) ActiveCallBackFrame;
-      struct RegWin *nextCompBlock = (struct RegWin *) lastCompBlock;
+    struct RegWin *theAR;
+    struct RegWin *nextCBF = (struct RegWin *) ActiveCallBackFrame;
+    struct RegWin *nextCompBlock = (struct RegWin *) lastCompBlock;
     
-      currentComponent = ActiveComponent;
-      /* Flush register windows to stack */
-      asm("ta 3");
+    currentComponent = ActiveComponent;
+    /* Flush register windows to stack */
+    asm("ta 3");
     
-      for (theAR =  (struct RegWin *) StackEnd;
-	   theAR != (struct RegWin *) 0;
-	   theAR =  (struct RegWin *) theAR->fp) {
-	  if (theAR == nextCompBlock) {
-	      /* This is the AR of attach. Continue GC, but get
-	       * new values for nextCompBlock and nextCBF. 
-	       * Please read StackLayout.doc
-	       */
-
-	      DisplayObject(output, currentComponent, 0);
-	      /* Make an empty line after the component */
-	      fprintf(output, "\n"); fflush(output);
-
-	      nextCBF = (struct RegWin *) theAR->l5;
-	      nextCompBlock = (struct RegWin *) theAR->l6;
-	      if (nextCompBlock == 0)
-		break; /* we reached the bottom */
-	  }
-	  else if (theAR == nextCBF) {
-	      /* This is AR of HandleCB. Don't GC this, but
-	       * skip to betaTop and update nextCBF */
-
-	      fprintf( output,"  [ C ACTIVATION PART ]\n");
-
-	      nextCBF = (struct RegWin *) theAR->l5;
-	      theAR = (struct RegWin *) theAR->l6;
-	  }
-	  if (theAR->fp != (int) nextCompBlock)
-	    DisplayAR(output, theAR, (struct RegWin *) theAR->fp);
+    for (theAR =  (struct RegWin *) StackEnd;
+	 theAR != (struct RegWin *) 0;
+	 theAR =  (struct RegWin *) theAR->fp) {
+      if (theAR == nextCompBlock) {
+	/* This is the AR of attach. Continue GC, but get
+	 * new values for nextCompBlock and nextCBF. 
+	 * Please read StackLayout.doc
+	 */
+	
+	DisplayObject(output, currentComponent, 0);
+	/* Make an empty line after the component */
+	fprintf(output, "\n"); fflush(output);
+	
+	nextCBF = (struct RegWin *) theAR->l5;
+	nextCompBlock = (struct RegWin *) theAR->l6;
+	if (nextCompBlock == 0)
+	  break; /* we reached the bottom */
       }
+      else if (theAR == nextCBF) {
+	/* This is AR of HandleCB. Don't GC this, but
+	 * skip to betaTop and update nextCBF */
+	
+	fprintf( output,"  [ C ACTIVATION PART ]\n");
+	
+	nextCBF = (struct RegWin *) theAR->l5;
+	theAR = (struct RegWin *) theAR->l6;
+      }
+      if (theAR->fp != (int) nextCompBlock)
+	DisplayAR(output, theAR, (struct RegWin *) theAR->fp);
+    }
   }
 #endif
-
+  
 #ifndef hppa
 #ifndef sparc
   { 
-      ptr(long)          theTop;
-      ptr(long)          theBottom;
-  
-      ref(CallBackFrame)  theFrame;
-
-      ref(ComponentBlock) currentBlock;
-      ref(Object)         currentObject;
-      /*
-       * First handle the topmost component block
-       */
-      currentComponent = ActiveComponent;
-      theTop    = StackEnd;
-      theBottom = (ptr(long)) lastCompBlock;
-      theFrame  = ActiveCallBackFrame;
-      /* Follow the stack */
+    ptr(long)          theTop;
+    ptr(long)          theBottom;
+    
+    ref(CallBackFrame)  theFrame;
+    
+    ref(ComponentBlock) currentBlock;
+    ref(Object)         currentObject;
+    /*
+     * First handle the topmost component block
+     */
+    currentComponent = ActiveComponent;
+    theTop    = StackEnd;
+    theBottom = (ptr(long)) lastCompBlock;
+    theFrame  = ActiveCallBackFrame;
+    /* Follow the stack */
+    while( theFrame){
+      DisplayStackPart( output, theTop+1, (long *)theFrame-1);
+      fprintf( output,"  [ C ACTIVATION PART ]\n");
+      theTop   = theFrame->betaTop;
+      theFrame = theFrame->next;
+      if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
+      theTop += 2;
+    }
+    DisplayStackPart(output, theTop, theBottom-1);
+    
+    DisplayObject( output, (ref(Object)) currentComponent, 0);
+    /* Make an empty line after the component */
+    fprintf( output, "\n");
+    
+    fflush( output);
+    
+    /*
+     * Then handle the remaining component blocks.
+     */
+    currentBlock = lastCompBlock;
+    currentObject    = currentComponent->CallerObj;
+    currentComponent = currentComponent->CallerComp;
+    
+    while( currentBlock->next ){
+      theTop    = (long *) ((long) currentBlock +
+			    sizeof(struct ComponentBlock) );
+      theBottom = (ptr(long)) currentBlock->next;
+      theFrame  = currentBlock->callBackFrame;
+      
+      DisplayObject(output, currentObject, 0);
       while( theFrame){
-	 DisplayStackPart( output, theTop+1, theFrame-1);
-	 fprintf( output,"  [ C ACTIVATION PART ]\n");
-	 theTop   = theFrame->betaTop;
-	 theFrame = theFrame->next;
-	 if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
-	 theTop += 2;
-     }
-      DisplayStackPart(output, theTop, theBottom - 4);
-     
+	DisplayStackPart( output, theTop+1, (long *)theFrame-1);
+	fprintf( output,"  [ C ACTIVATION PART ]\n");
+	theTop   = theFrame->betaTop;
+	theFrame = theFrame->next;
+	if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
+	theTop += 2;
+      }
+      DisplayStackPart( output, theTop, theBottom-1); 
+      
       DisplayObject( output, (ref(Object)) currentComponent, 0);
       /* Make an empty line after the component */
       fprintf( output, "\n");
-     
-      fflush( output);
-     
-      /*
-       * Then handle the remaining component blocks.
-       */
-      currentBlock = lastCompBlock;
+      
+      currentBlock = currentBlock->next;
       currentObject    = currentComponent->CallerObj;
       currentComponent = currentComponent->CallerComp;
-     
-      while( currentBlock->next ){
-	  theTop    = (ptr(long)) ((long) currentBlock + 12);
-	  theBottom = (ptr(long)) currentBlock->next;
-	  theFrame  = currentBlock->callBackFrame;
-	 
-	  DisplayObject(output, currentObject, 0);
-	  while( theFrame){
-	     DisplayStackPart( output, theTop+1, theFrame-1);
-	     fprintf( output,"  [ C ACTIVATION PART ]\n");
-	     theTop   = theFrame->betaTop;
-	     theFrame = theFrame->next;
-	     if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
-	     theTop += 2;
-	 }
-	  DisplayStackPart( output, theTop, theBottom-4); 
-	 
-	  DisplayObject( output, (ref(Object)) currentComponent, 0);
-	  /* Make an empty line after the component */
-	  fprintf( output, "\n");
-	 
-	  currentBlock = currentBlock->next;
-	  currentObject    = currentComponent->CallerObj;
-	  currentComponent = currentComponent->CallerComp;
-      }
+    }
   }
 #endif
 #endif
-
+  
   fclose(output);
 }
