@@ -521,7 +521,7 @@ do (if currentTag
    allocLocal:
      (# type: ^text;
      enter type[]
-     do '.locals init ([%d] %s)\n'
+     do '.locals init ([%d] %s)\n\t'
           -> out.putformat(# num: @integer;
                           do BCstate.fields.numLocals 
                              - BCstate.fields.numArguments -> num;
@@ -539,6 +539,29 @@ do (if currentTag
          * A subsequent allocLocal could then reuse this local if it's the same type.
          *)
      #);
+   MappedLocals: [1]@integer;
+   lastMappedLocal: @integer;
+   allocMappedLocal:
+     (# num: @integer;
+        type: ^text;
+        off: @integer;
+     enter (num, type[])
+     do -num -> num;
+        (if num>MappedLocals.range then
+            (MappedLocals.range, num-MappedLocals.range)
+              -> max
+              -> MappedLocals.extend;
+        if);
+        (if MappedLocals[num]=0 then
+            type[] -> allocLocal -> off -> MappedLocals[num];
+            num -> lastMappedLocal;
+         else
+            MappedLocals[num] -> off;
+            num -> lastMappedLocal; (* needed? *)
+        if);
+        (off+BCstate.fields.numArguments)*4 + 12  -> off
+     exit off
+     #);
    opLocal:
      (# num: @integer;
         delta: @integer;
@@ -547,6 +570,10 @@ do (if currentTag
         INNER;
         'loc' -> out.puttext;
         (if true
+         // num<0 then
+            'Negative opLocal' -> screen.putline;
+            'Negative opLocal' -> emitcomment;
+            (*(dumpstack, 'Negative opLocal') -> stop*)
          // num <= 3 
             then '.' -> out.put
          // num <= 255 
@@ -752,7 +779,8 @@ do (if currentTag
      do (* currently we assume that local variables have
          * addresses: 0,12,16,20,... that are mapped to 0,1,2,3,...
          * 0 is this.
-         * Hmmm, this means that this and local[0] is the same???
+         * Hmmm, this means that this and local[0] is the same?
+         * No: local number 0 has address 12+BCstate.fields.numArguments*4.
          *)
         varNo -> origVarNo;
         (if trace_mem then
@@ -788,7 +816,7 @@ do (if currentTag
             tmp[] -> screen.putline;
             noOfArguments->('noOfArguments:'->tmp[]).putint -> emitcomment;
             tmp[] -> screen.putline;
-            (dumpstack, 'Negative memory offset') -> stop;
+            'Negative memory offset' -> putline;
         if);
         (if 'ld'->op.equal then
             (* ldarg/ldloc *)
@@ -840,8 +868,11 @@ do (if currentTag
              (if (BC.get -> hasFieldName) = 1 then
                     BC.gettext -> fieldName[]
              if);
-             BC.get->off; 
-             (if (off<12) and (off<>0) then
+             (# c: @int8 (* CAREFULL: char is unsigned! *);
+             do BC.get->c;
+                c -> off(* sign extend *);
+             #);
+             (if (off>0) and (off<12) then
                  '\n*** Address.get: strange offset: '->screen.puttext;
                  off -> screen.putint; 
                  (if hasFieldName=1 then
@@ -1016,6 +1047,9 @@ do (if currentTag
                          'stelem.ref' -> out.puttext;
                          -3 -> stack_delta;
                       else 
+                         (if off<0 then
+                             (off, sig[]) -> allocMappedLocal -> off;
+                         if);
                          ('st',off) -> emitMemOp;  
                      if);
                  if);
@@ -1040,7 +1074,10 @@ do (if currentTag
                      (if isField = 2 then
                          'ldelem.ref' -> out.puttext;
                          1 -> stack_delta;
-                      else 
+                      else
+                         (if off<0 then
+                             (off, sig[]) -> allocMappedLocal -> off;
+                         if);
                          ('ld',off) -> emitMemOp;  
                      if);
                  if);
@@ -1174,7 +1211,7 @@ do init;
      (if opCode <> end then
          BC.get->opCode; 
          (if trace_opcodes then
-             '/* %d */\n' -> out.putformat(# do opCode -> d #);
+             '/* %d: %s */\n' -> out.putformat(# do opCode -> d; opCode->asText->s #);
          if);
          (if opCode
           // classDef then
@@ -1597,9 +1634,12 @@ do init;
                  'pop' -> out.puttext;
                  -1 -> stack_delta;
               // allocAndStoreLocal then
+                 'BCdotnetBody: bytecode AllocAndStoreLocal should not be used anymore' 
+                   -> screen.putline;
                  BC.getText -> allocLocal -> storeLocal;
               // _loadLocal then
-                 numLocals -> loadLocal;
+                 (* 'BCdotnetBody: bytecode LoadLocal' -> screen.putline;*)
+                 MappedLocals[lastMappedLocal] -> loadLocal;
               // loadRange then 
                  'ldlen' -> out.puttext;
                  0 -> stack_delta;
