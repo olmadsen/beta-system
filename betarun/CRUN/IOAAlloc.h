@@ -16,7 +16,7 @@ char *IOAalloc(unsigned size)
   
 #ifdef MT
   /* Manipulate thread specific IOA */
-  if (do_unconditional_gc || ((char *)IOATop+size > (char *)IOALimit)){
+  if ((do_unconditional_gc && (DoUGC)) || ((char *)IOATop+size > (char *)IOALimit)){
     return (char *)doGC(size);
   }
   p = (char *)IOATop;
@@ -25,7 +25,7 @@ char *IOAalloc(unsigned size)
   return p;
 #else /* MT */
 
-  if (do_unconditional_gc && ActiveComponent /* don't do this before AttBC */){
+  if (do_unconditional_gc && (DoUGC) && ActiveComponent /* don't do this before AttBC */){
     ReqObjectSize = size / 4;
     doGC();
   }
@@ -61,7 +61,7 @@ char *IOAallocToSP(unsigned size, long *SP, long PC)
   
 #ifdef MT
   /* Manipulate thread specific IOA */
-  if (do_unconditional_gc || ((char *)IOATop+size > (char *)IOALimit)){
+  if ((do_unconditional_gc && (DoUGC)) || ((char *)IOATop+size > (char *)IOALimit)){
     return (char *)doGCtoSP(size, SP, PC);
   }
   p = (char *)IOATop;
@@ -70,7 +70,7 @@ char *IOAallocToSP(unsigned size, long *SP, long PC)
   return p;
 #else /* MT */
 
-  if (do_unconditional_gc && ActiveComponent /* don't do this before AttBC */){
+  if (do_unconditional_gc && (DoUGC) && ActiveComponent /* don't do this before AttBC */){
     ReqObjectSize = size / 4;
     doGCtoSP(SP, PC);
   }
@@ -104,7 +104,7 @@ char *IOATryAlloc(unsigned size)
   DEBUG_CODE(Claim( ((long)size&7)==0 , "IOATryAlloc: (size&7)==0"));
   DEBUG_CODE(Claim( ((long)GLOBAL_IOATop&7)==0 , "IOATryAlloc: (GLOBAL_IOATop&7)==0"));
   
-  if (do_unconditional_gc && ActiveComponent /* don't do this before AttBC */){
+  if (do_unconditional_gc && (DoUGC) && ActiveComponent /* don't do this before AttBC */){
     ReqObjectSize = size / 4;
     doGC();
   }

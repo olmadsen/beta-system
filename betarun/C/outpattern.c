@@ -199,7 +199,7 @@ int IsMakingDump(void)
 {
   /*fprintf(stderr, "IsMakingDump: returning %d\n", isMakingDump); fflush(stderr);*/
   return isMakingDump;
-};
+}
 
 #ifdef nti
 void NotifyFunc(char *s1){

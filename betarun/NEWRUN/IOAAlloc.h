@@ -11,7 +11,7 @@ INLINE void *IOAalloc(unsigned size, long *SP)
   DEBUG_CODE(Claim( ((long)size&7)==0 , "IOAalloc: (size&7)==0"));
   DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "IOAalloc: (IOATop&7)==0"));
   
-  if (do_unconditional_gc && ActiveComponent /* don't do this before AttBC */){
+  if (do_unconditional_gc && (DoUGC) && ActiveComponent /* don't do this before AttBC */){
     doGC(SP, GetThis(SP), size / 4);
   }
   while ((char *) IOATop+size > (char *)IOALimit) {
@@ -37,7 +37,7 @@ INLINE void *IOATryAlloc(unsigned size, long *SP)
   DEBUG_CODE(Claim( ((long)size&7)==0 , "IOAalloc: (size&7)==0"));
   DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "IOAalloc: (IOATop&7)==0"));
   
-  if (do_unconditional_gc && ActiveComponent /* don't do this before AttBC */){
+  if (do_unconditional_gc && (DoUGC) && ActiveComponent /* don't do this before AttBC */){
     doGC(SP, GetThis(SP), size / 4);
   }
   if ((char *) IOATop+size > (char *)IOALimit) {

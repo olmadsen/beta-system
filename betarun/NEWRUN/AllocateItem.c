@@ -43,7 +43,7 @@ Item *AlloI(Object *origin, ProtoType *proto, long *SP)
       DEBUG_CODE(Claim(size>0, "AlloI: size>0"));
       DEBUG_CODE(Claim( ((long)size&7)==0 , "AlloI: (size&7)==0"));
       DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "AlloI: (IOATop&7)==0"));
-      if (do_unconditional_gc && ActiveComponent /* don't do this before AttBC */){
+      if (do_unconditional_gc && (DoUGC) && ActiveComponent /* don't do this before AttBC */){
 	doGC(SP, GetThis(SP), size / 4);
       }
       if ((char *) IOATop+size > (char *)IOALimit) {

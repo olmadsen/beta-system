@@ -169,7 +169,7 @@ long *ExOx(long *jumpAdr,
 
   DEBUG_CODE(NumExO++);
 
-#if 0
+#if 1
   fprintf(output, "\nExOx: ");
   fprintf(output, "\n  jumpAdr:"); PrintCodeAddress((long)jumpAdr);
   fprintf(output, "\n  exitObj:"); PrintObject(exitObj);
@@ -195,6 +195,7 @@ long *ExOx(long *jumpAdr,
 	DEBUG_CODE(fprintf(output, "ExOx: One more\n"));
 	one_more_done = 1;
       } else {
+	DEBUG_CODE(fprintf(output, "ExOx: done\n"));
 	break;
       }
     }
@@ -242,6 +243,7 @@ long *ExOx(long *jumpAdr,
     
     /* Check for passing of a DoPart object */
     if ((long)GETPROTO(this) == (long)DopartObjectPTValue) {
+      DEBUG_CODE(fprintf(output, "ExO: passing DopartObject\n"); fflush(output));
       this = ((DopartObject *)this)->Origin;
       TRACE_EXOX();
       continue;
@@ -278,6 +280,8 @@ long *ExOx(long *jumpAdr,
     /* Normal case: find stack frame size and continue */
     {  
     
+      DEBUG_CODE(fprintf(output, "ExO: normal case\n"); fflush(output));
+
       WIND_BACK_SP;
 
       /* SP now points to end of previous frame, i.e. bottom of top frame */
