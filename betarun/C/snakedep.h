@@ -76,7 +76,7 @@ register int _dummy7 asm("%r14"); /* really RefSP */
 #define REFSTACK
 
 extern void *ReferenceStack[];
-/* extern void *lastRefBlock; */
+extern long *savedRefSP;
 
 static inline void setRefSP(void *p)
 {
