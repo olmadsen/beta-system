@@ -43,7 +43,11 @@ typedef struct Heap {
 #endif
 
 #ifndef DEFAULT_AOAMINFREE
+#ifdef PERSIST
+#define DEFAULT_AOAMINFREE     4096 * Kb
+#else
 #define DEFAULT_AOAMINFREE     512 * Kb
+#endif /* PERSIST */
 #endif
 
 #ifndef DEFAULT_CBFASIZE
