@@ -2,26 +2,22 @@
 #ifndef nti
 
 #include <sys/types.h>
-#ifndef nti
 #include <sys/file.h>
-#endif
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <errno.h>
 #include <stdio.h>
 #include <time.h>
-#ifndef nti
 #include <sys/param.h>
 #include <unistd.h>
 #include <sys/time.h>
+
+#ifdef sparc
+extern int utimes(char *file, struct timeval *tvp);
 #endif
 
-#if defined(linux) || defined(nti_bor)
+#if defined(linux)
 #include <utime.h>
-#else 
-#if defined(nti_ms)
-#include <sys/utime.h>
-#endif
 #endif
 
 #ifdef apollo
@@ -70,68 +66,69 @@ int entryStatus(path,status,permission,follow)
         an error in the stat call, whereas a return of 1 means succes.
         */
      int follow; /* follow links ? */
-{ int entryType;
+{
+  int entryType;
   
-if (follow){
-  if (stat(path,&statBuffer)<0 ) 
-    return -1;    
-} else {
-  if (lstat(path,&statBuffer)<0 ) 
-    return -1;
-}
+  if (follow){
+    if (stat(path,&statBuffer)<0 ) 
+      return -1;    
+  } else {
+    if (lstat(path,&statBuffer)<0 ) 
+      return -1;
+  }
   
-/* fill in the status buffer */
-status[0]=(int) statBuffer.st_dev;
-status[1]=(int) statBuffer.st_ino;
+  /* fill in the status buffer */
+  status[0]=(int) statBuffer.st_dev;
+  status[1]=(int) statBuffer.st_ino;
   
-/* The type of the entry */
-entryType=statBuffer.st_mode & S_IFMT;
-status[2]=( S_IFDIR  == entryType ) ? 1 : 0;
-status[3]=( S_IFCHR  == entryType ) ? 1 : 0;
-status[4]=( S_IFBLK  == entryType ) ? 1 : 0;
-status[5]=( S_IFREG  == entryType ) ? 1 : 0;
-status[6]=( S_IFLNK  == entryType ) ? 1 : 0;
-status[7]=( S_IFSOCK == entryType ) ? 1 : 0;
-/* status[8]=0; /* currently not used */
-/* status[9]=0; /* currently not used */
-status[10]=(int) statBuffer.st_nlink;
-status[11]=(int) statBuffer.st_uid;
-status[12]=(int) statBuffer.st_gid;
-status[13]=(int) statBuffer.st_rdev;
-status[14]=(int) statBuffer.st_size;
-status[15]=(int) statBuffer.st_atime;
-status[16]=(int) statBuffer.st_mtime;
-status[17]=(int) statBuffer.st_ctime;
-status[18]=(int) statBuffer.st_blksize;
-status[19]=(int) statBuffer.st_blocks;
+  /* The type of the entry */
+  entryType=statBuffer.st_mode & S_IFMT;
+  status[2]=( S_IFDIR  == entryType ) ? 1 : 0;
+  status[3]=( S_IFCHR  == entryType ) ? 1 : 0;
+  status[4]=( S_IFBLK  == entryType ) ? 1 : 0;
+  status[5]=( S_IFREG  == entryType ) ? 1 : 0;
+  status[6]=( S_IFLNK  == entryType ) ? 1 : 0;
+  status[7]=( S_IFSOCK == entryType ) ? 1 : 0;
+  /* status[8]=0; /* currently not used */
+  /* status[9]=0; /* currently not used */
+  status[10]=(int) statBuffer.st_nlink;
+  status[11]=(int) statBuffer.st_uid;
+  status[12]=(int) statBuffer.st_gid;
+  status[13]=(int) statBuffer.st_rdev;
+  status[14]=(int) statBuffer.st_size;
+  status[15]=(int) statBuffer.st_atime;
+  status[16]=(int) statBuffer.st_mtime;
+  status[17]=(int) statBuffer.st_ctime;
+  status[18]=(int) statBuffer.st_blksize;
+  status[19]=(int) statBuffer.st_blocks;
   
-/* The mode of the entry denoted by the full path name, path, is 
-   is changed according to the supplied permission buffer.
-   The buffer is an array of 9 integers (each 1 or 0). The first 3 are 
-   related to the mode for the "other" category, the next 3 give the mode
-   for "group" and the last 3 denote the mode of "owner". The integers 
-   should be inetrpreted as follows :
+  /* The mode of the entry denoted by the full path name, path, is 
+     is changed according to the supplied permission buffer.
+     The buffer is an array of 9 integers (each 1 or 0). The first 3 are 
+     related to the mode for the "other" category, the next 3 give the mode
+     for "group" and the last 3 denote the mode of "owner". The integers 
+     should be inetrpreted as follows :
      
-   |other                |group                |owner
-   -----------------------------------------------------------------
-   protection :exec | write | read  | exec | write | read | exec | write | read
-   -----------------------------------------------------------------
+     |other                |group                |owner
+     -----------------------------------------------------------------
+     protection :exec | write | read  | exec | write | read | exec | write | read
+     -----------------------------------------------------------------
      
-   If for example the (other,exec) integer is 1, the "other" category are
-   given execute permission to the entry.
-   */
+     If for example the (other,exec) integer is 1, the "other" category are
+     given execute permission to the entry.
+     */
   
-/* fill in the permission buffer */
-permission[0]=( S_IXOTH & statBuffer.st_mode ) ? 1 : 0;
-permission[1]=( S_IWOTH & statBuffer.st_mode ) ? 1 : 0;
-permission[2]=( S_IROTH & statBuffer.st_mode ) ? 1 : 0;
-permission[3]=( S_IXGRP & statBuffer.st_mode ) ? 1 : 0;
-permission[4]=( S_IWGRP & statBuffer.st_mode ) ? 1 : 0;
-permission[5]=( S_IRGRP & statBuffer.st_mode ) ? 1 : 0;
-permission[6]=( S_IXUSR & statBuffer.st_mode ) ? 1 : 0;
-permission[7]=( S_IWUSR & statBuffer.st_mode ) ? 1 : 0;
-permission[8]=( S_IRUSR & statBuffer.st_mode ) ? 1 : 0;
-return 1;
+  /* fill in the permission buffer */
+  permission[0]=( S_IXOTH & statBuffer.st_mode ) ? 1 : 0;
+  permission[1]=( S_IWOTH & statBuffer.st_mode ) ? 1 : 0;
+  permission[2]=( S_IROTH & statBuffer.st_mode ) ? 1 : 0;
+  permission[3]=( S_IXGRP & statBuffer.st_mode ) ? 1 : 0;
+  permission[4]=( S_IWGRP & statBuffer.st_mode ) ? 1 : 0;
+  permission[5]=( S_IRGRP & statBuffer.st_mode ) ? 1 : 0;
+  permission[6]=( S_IXUSR & statBuffer.st_mode ) ? 1 : 0;
+  permission[7]=( S_IWUSR & statBuffer.st_mode ) ? 1 : 0;
+  permission[8]=( S_IRUSR & statBuffer.st_mode ) ? 1 : 0;
+  return 1;
 } 
 
 /* Constants giving the mode in which files are opened */ 
@@ -376,7 +373,7 @@ int changeProtection(path,protection)
         given execute permission to the entry.
         */
 { register i,mask=0;
-  
+
 for(i=0;i<9;i++)
   if(protection[i]) 
     mask = mask | ( 1 << i);
@@ -464,14 +461,14 @@ int entryStatus(path,status,permission,follow)
         */
      int follow; /* follow links ? Ignored by Windows NT*/
 { int entryType;
-  
+
 if (stat(path,&statBuffer)<0 ) 
   return -1;
-  
+
 /* fill in the status buffer */
 status[0]=(int) statBuffer.st_dev;
 status[1]=(int) statBuffer.st_ino;
-  
+
 /* The type of the entry */
 entryType=statBuffer.st_mode & S_IFMT;
 status[2]=( S_IFDIR  == entryType ) ? 1 : 0;
@@ -492,23 +489,23 @@ status[16]=(int) statBuffer.st_mtime;
 status[17]=(int) statBuffer.st_ctime;
 /* status[18]= /* currently not used */
 /* status[19]= /* currently not used */
-  
+
 /* The mode of the entry denoted by the full path name, path, is 
    is changed according to the supplied permission buffer.
    The buffer is an array of 9 integers (each 1 or 0). The first 3 are 
    related to the mode for the "other" category, the next 3 give the mode
    for "group" and the last 3 denote the mode of "owner". The integers 
    should be inetrpreted as follows :
-     
+   
    |other                |group                |owner
    -----------------------------------------------------------------
    protection :exec | write | read  | exec | write | read | exec | write | read
    -----------------------------------------------------------------
-     
+   
    If for example the (other,exec) integer is 1, the "other" category are
    given execute permission to the entry.
    */
-  
+
 /* fill in the permission buffer */
 /* permission[0] * currently not used */
 /* permission[1] * currently not used */
@@ -528,31 +525,31 @@ int readMode(int binary)
 {
   return O_RDONLY | (binary ? O_BINARY : O_TEXT);
 }
-     
+
 int readWriteCreateMode(int binary)
 {
   return O_RDWR | O_CREAT | (binary ? O_BINARY : O_TEXT);
 }
-     
+
 int writeCreateMode(int binary)
 {
   return O_WRONLY | O_CREAT | O_TRUNC | (binary ? O_BINARY : O_TEXT);
 }
-     
+
 int appendCreateMode(int binary)
 {
   return O_WRONLY | O_CREAT | O_APPEND | (binary ? O_BINARY : O_TEXT);
 }
-     
+
 int readAppendCreateMode(int binary)
 {
   return O_WRONLY | O_CREAT | O_APPEND | (binary ? O_BINARY : O_TEXT);
 }
-     
+
 /* Constants giving the permission attached files that are created
  * in an open call.
  */
-     
+
 /* This constant gives write/read permission to owner and
  * read permission to group and others.
  */
@@ -703,7 +700,7 @@ int changeProtection(path,protection)
         given execute permission to the entry.
         */
 { register i,mask=0;
-  
+
 for(i=6;i<9;i++)
   if(protection[i]) 
     mask = mask | ( 1 << i);
@@ -741,9 +738,8 @@ int makeSymLink(src, dst)
 /***** Return variable errno *************/
 
 int getErrno()
-     
-{
-  return errno;}
+
+{return errno;}
 
 /* Return information about constants that are defined in the
    header files. Such constants may have different values on
@@ -752,27 +748,22 @@ int getErrno()
 
 /* Constants giving the mode in which files are opened */ 
 
-int readMode(){
-  return O_RDONLY;}
-     
-int readWriteCreateMode(){
-  return O_RDWR | O_CREAT;}
-     
-int writeCreateMode(){
-  return O_WRONLY | O_CREAT | O_TRUNC;}
-     
-int appendCreateMode(){
-  return O_WRONLY | O_CREAT | O_APPEND;}
-     
-int readAppendCreateMode(){
-  return O_WRONLY | O_CREAT | O_APPEND;} 
-     
-     
+int readMode(){return O_RDONLY;}
+
+int readWriteCreateMode(){return O_RDWR | O_CREAT;}
+
+int writeCreateMode(){return O_WRONLY | O_CREAT | O_TRUNC;}
+
+int appendCreateMode(){return O_WRONLY | O_CREAT | O_APPEND;}
+
+int readAppendCreateMode(){return O_WRONLY | O_CREAT | O_APPEND;} 
+
+
 int EOFpeek(str)
      FILE *str;
-     
+
 {
-  
+
   /* A dirty and possibly highly machine dependent way of testing for
      EOF. The problem is that the end of a Beta stream is encountered
      when the NEXT char is EOF. It is then necessary to peek into
@@ -785,7 +776,7 @@ int EOFpeek(str)
      _cnt denotes the number of chars left in the buffer and _ptr
      is a pointer into the buffer.
      */
-  
+
   if(getc(str)==EOF)
     return 1;
   else
@@ -796,23 +787,21 @@ int EOFpeek(str)
     }
 }
 
-int EOFvalue() {
-  return EOF; }
-     
-int EOFfunction(FILE *F) {
-  return feof(F); }
-     
-     
+int EOFvalue() { return EOF; }
+
+int EOFfunction(FILE *F) { return feof(F); }
+
+
 /* ----------------- Functions supporting Stream.GetText -------------------- */
-     
+
 static char *OutOfMemError="Out of memory during StreamGetText\n";
-     
+
 #define INITBUFFERSIZE  500   /* Initial size of Buffer. */
-     
+
 static char *Buffer;          /* Nuffer space allocate here. */
 static int  BufferSize=0;     /* Current size of Buffer. */
-     
-     
+
+
 void InitBuffer()
 {
   BufferSize=INITBUFFERSIZE;
@@ -850,62 +839,62 @@ int StreamError()
 
 char *GetTextFromStream(F,toEOL)
      /* Read a string from the file. If toEOL is true then read to end of line,
-        else read to first space. Skip the character (eol or space) that causes
-        reading to stop.
-        Call StreamError afterwards to see if operation succeeded.
-        */
+	else read to first space. Skip the character (eol or space) that causes
+	reading to stop.
+	Call StreamError afterwards to see if operation succeeded.
+	*/
      FILE *F;
      int  toEOL;
 {
-  register FILE *F1;            /* We use a lot of registers for efficiency. */
+  register FILE *F1;        /* We use a lot of registers for efficiency. */
   register char *Buffer1;
   register int  i,ch;
   int           oldSize;
-  
-  if(!BufferSize)               /* The first time, initialize Buffer. */
+
+  if(!BufferSize)            /* The first time, initialize Buffer. */
     InitBuffer();
   F1=F;
-  oldSize=0;                    /* This much of Buffer currently used. */
-  if(!toEOL)                    /* Skip to first non-blank. */
+  oldSize=0;                 /* This much of Buffer currently used. */
+  if(!toEOL)                 /* Skip to first non-blank. */
     {
       while((ch=getc(F1))<=' ' && ch!=EOF) 
         /* SKIP */ ;
       if(ch==EOF || ungetc(ch,F1)==EOF)
         {
-          streamStatus=ch;
-          return("");
+	  streamStatus=ch;
+	  return("");
         }
     }
   while(1)
     {
-      Buffer1=Buffer+oldSize;   /* Insert from this place in Buffer. */
+      Buffer1=Buffer+oldSize; /* Insert from this place in Buffer. */
       i=BufferSize-oldSize;
-      if(toEOL)                 /* We have two almost identical copies of the
-                                   inner loop, one reading to eol the other to
-                                   a blank.
-                                   */
+      if(toEOL)               /* We have two almost identical copies of the
+                                 inner loop, one reading to eol the other to
+                                 a blank.
+				 */
         {
-          while(i--)            /* While more room in Buffer. */
-            {
-              if((*Buffer1++=ch=getc(F1))=='\n' || ch==EOF)
-                {
-                  streamStatus=ch;
-                  Buffer1[-1]=0; /* Skip the stop char. */
-                  return(Buffer);
-                }
-            }
+	  while(i--)           /* While more room in Buffer. */
+	    {
+	      if((*Buffer1++=ch=getc(F1))=='\n' || ch==EOF)
+		{
+		  streamStatus=ch;
+		  Buffer1[-1]=0; /* Skip the stop char. */
+		  return(Buffer);
+		}
+	    }
         }
       else
         {
-          while(i--)            /* While more room in Buffer. */
-            {
-              if((*Buffer1++=ch=getc(F1))<=' ' || ch==EOF)
-                {
-                  streamStatus=ch;
-                  Buffer1[-1]=0; /* Skip the stop char. */
-                  return(Buffer);
-                }
-            }
+	  while(i--)           /* While more room in Buffer. */
+	    {
+	      if((*Buffer1++=ch=getc(F1))<=' ' || ch==EOF)
+		{
+		  streamStatus=ch;
+		  Buffer1[-1]=0; /* Skip the stop char. */
+		  return(Buffer);
+		}
+	    }
         }
       oldSize=BufferSize;
       EnlargeBuffer();
@@ -914,197 +903,449 @@ char *GetTextFromStream(F,toEOL)
 
 #define longint long
 
-/**************** pStrcat / pStrCpy *************************************
- *
- *     A couple of utility routines. C is thoughtless enough to not really 
- *     support P-strings. In order to perform string copies and concatenations,
- *     these routines are provided.
- *
- ************************************************************************/
+extern char *pStrcat(unsigned char *s, unsigned char *t);
+extern char *pStrcpy(unsigned char *s, unsigned char *t);
 
-char *pStrcat(s,t)
-     unsigned char *s, *t;
-{
-  BlockMove(t + 1, s + *s + 1, (longint) *t);
-  *s += *t;
-  return (s);
-}
-
-char *pStrcpy(s,t)
-     unsigned char *s, *t;
-{
-  BlockMove(t, s, (longint) *t + 1); 
-  return (s);
-}
-
-short GetEntryInfo(char *name, CInfoPBPtr block)
-{
-  short vRefNum;
-  Str255 volName;
-  WDPBRec       myBlock;
-  
-  if (getvol(&volName , &vRefNum) != noErr) return -1;
-  myBlock.ioNamePtr = nil;
-  myBlock.ioVRefNum = vRefNum;
-  myBlock.ioWDIndex = 0;
-  myBlock.ioWDProcID = 0;
-  PBGetWDInfo(&myBlock,false);
-  
-  c2pstr(name);
-  block->dirInfo.ioNamePtr = name;
-  block->dirInfo.ioDrDirID = myBlock.ioWDDirID;
-  block->dirInfo.ioVRefNum = myBlock.ioWDVRefNum;
-  block->dirInfo.ioFDirIndex = 0;
-  
-  return PBGetCatInfo(block,false);
-}
-long isDir(char *name)
+short FSpIsDir(FSSpec *fs)
 {
   short err; 
-  CInfoPBRec    block;
-  err = GetEntryInfo(name,&block);
-  if (err == noErr) {
+  CInfoPBRec      block;
+  memset(&block,0,sizeof(CInfoPBRec));
+  block.hFileInfo.ioNamePtr = fs->name;
+  block.hFileInfo.ioVRefNum = fs->vRefNum;
+  block.hFileInfo.ioDirID   = fs->parID;
+  err = PBGetCatInfo(&block,false);
+  if (err == noErr) 
     if (block.dirInfo.ioFlAttrib & 16) return 1; else return 0;
-  } else {
-    return err;
-  }
+  else return err;
 }
 
-long isLocked(char *name)
+long FSpGetDirID(FSSpec *fs)
 {
   short err;
-  CInfoPBRec    block;
-  err = GetEntryInfo(name,&block);
+  CInfoPBRec      block;
+  memset(&block,0,sizeof(CInfoPBRec));
+  block.hFileInfo.ioNamePtr = fs->name;
+  block.hFileInfo.ioVRefNum = fs->vRefNum;
+  block.hFileInfo.ioDirID   = fs->parID;
+  err = PBGetCatInfo(&block,false);
   if (err == noErr) {
-    if (block.dirInfo.ioFlAttrib & 1) return 1; else return 0;
+    return block.dirInfo.ioDrDirID;
   } else {
     return err;
   }
 }
 
-long entryExists(char *name)
+short FSpIsLocked(FSSpec *fs)
 {
   short err;
-  CInfoPBRec    block;
-  err = GetEntryInfo(name,&block);
+  CInfoPBRec      block;
+  memset(&block,0,sizeof(CInfoPBRec));
+  block.hFileInfo.ioNamePtr   = fs->name;
+  block.hFileInfo.ioVRefNum   = fs->vRefNum;
+  block.hFileInfo.ioDirID     = fs->parID;
+  err = PBGetCatInfo(&block,false);
+  if (err == noErr) {
+    if (block.hFileInfo.ioFlAttrib & 1) return 0; else return 1;
+  } else {
+    return err;
+  }
+}
+
+long FSpEntryExists(FSSpec *fs)
+{
+  short err;
+  CInfoPBRec      block;
+  memset(&block,0,sizeof(CInfoPBRec));
+  block.hFileInfo.ioNamePtr   = fs->name;
+  block.hFileInfo.ioVRefNum   = fs->vRefNum;
+  block.hFileInfo.ioDirID     = fs->parID;
+  /* printf("name: %s, vol: %d, parID: %d\n",p2cstr(fs->name), fs->vRefNum, fs->parID); */
+  err = PBGetCatInfo(&block,false);
   switch (err) {
   case noErr:    return 1;
-  case fnfErr:
+  case fnfErr:   return 0;
   case dirNFErr: return 0;
   default:       return err;
   }
 }
 
-long getmodtime(char *name)
+long FSpGetModTime(FSSpec *fs)
 {
   short err;
-  CInfoPBRec    block;
   unsigned long time;
-  err = GetEntryInfo(name,&block);
+  CInfoPBRec      block;
+  memset(&block,0,sizeof(CInfoPBRec));
+  block.hFileInfo.ioNamePtr   = fs->name;
+  block.hFileInfo.ioVRefNum   = fs->vRefNum;
+  block.hFileInfo.ioDirID     = fs->parID;
+  err = PBGetCatInfo(&block,false);
   if (err==noErr) {
     if (block.dirInfo.ioFlAttrib & 16) {
       /* it's a directory */
-      time= block.dirInfo.ioDrMdDat;
+      time = block.dirInfo.ioDrMdDat;
     } else {
-      /* it's a file  */
-      time= block.hFileInfo.ioFlMdDat;
+      /* it's a file */
+      time = block.hFileInfo.ioFlMdDat;
     }
     return time & ~(1<<31);
   } else {
-    errno=err;
+    errno = err;
     return -1;
   }
 }
 
-void getdatestring(long time, Str255 pstr)
-{   
-  Str255 secsStr;
-  time=time | (1<<31);  /* to make a time from modtime correct */
-  IUDateString(time,1,pstr);  /* 1 is long format  */
-  IUTimeString(time,true,secsStr); /* get hours, minutes, and seconds */
-  pStrcat(pstr,"\p ");
-  pStrcat(pstr,secsStr);
-}
-
-int setEntryModtime(char *name, unsigned long secs)
+OSErr FSpEntryTouch(FSSpec *fs)
 {
-  short err;
-  CInfoPBRec block;
-  short vRefNum;
-  Str255 volName;
-  WDPBRec myBlock;
-        
-  if (getvol(&volName , &vRefNum) != noErr) return -1;
-  myBlock.ioNamePtr = nil;
-  myBlock.ioVRefNum = vRefNum;
-  myBlock.ioWDIndex = 0;
-  myBlock.ioWDProcID = 0;
-  PBGetWDInfo(&myBlock,false);
-  c2pstr(name);
-  block.dirInfo.ioNamePtr = name;
-  block.dirInfo.ioDrDirID = myBlock.ioWDDirID;
-  block.dirInfo.ioVRefNum = myBlock.ioWDVRefNum;
-  block.dirInfo.ioFDirIndex = 0;
-        
-  err= PBGetCatInfo(&block,false);
-  if (err==noErr) {
+  short           err;
+  CInfoPBRec      block;
+  unsigned        long secs;
+
+  memset(&block,0,sizeof(CInfoPBRec));
+  block.hFileInfo.ioNamePtr = fs->name;
+  block.hFileInfo.ioVRefNum = fs->vRefNum;
+  block.hFileInfo.ioDirID   = fs->parID;
+
+  err = PBGetCatInfo(&block,false);
+  if (err == noErr) {
+    GetDateTime(&secs);
     if (block.dirInfo.ioFlAttrib & 16) {
-      /* it's a directory */
-      block.dirInfo.ioDrMdDat=secs;
+      block.dirInfo.ioDrMdDat = secs;
     } else {
-      /* it's a file */
-      block.hFileInfo.ioFlMdDat=secs;
+      block.hFileInfo.ioFlMdDat = secs;
     }
-    block.dirInfo.ioDrDirID = 0; /* we got the path in ioNamePtr */
-    block.dirInfo.ioVRefNum = 0;
-    block.dirInfo.ioFDirIndex = 0;
-    err=PBSetCatInfo(&block,false);
-    if (err!=noErr) {
-      errno=err;
-      return 0; 
-    } else 
-      return 1;
-  } else {
-    errno=err;
-    return 0;
-  }
+    err = PBSetCatInfo(&block,false);
+  };
+  return err;
 }
 
-long entryTouch(char *name)
-{       
-  unsigned long secs;
-  GetDateTime(&secs);
-  return setEntryModtime(name, secs);
-}
-
-long entryRename(char *name, char *newname)
+OSErr FSpEntryRename(FSSpec *fs,char *newname)
 {
-  short err;
-  HParamBlockRec block;
-  short vRefNum;
-  Str255 volName;
-  WDPBRec myBlock;
-        
-  if (getvol(&volName , &vRefNum) != noErr) return -1;
-  myBlock.ioNamePtr = nil;
-  myBlock.ioVRefNum = vRefNum;
-  myBlock.ioWDIndex = 0;
-  myBlock.ioWDProcID = 0;
-  PBGetWDInfo(&myBlock,false);
-  c2pstr(name);
-  block.ioParam.ioNamePtr = name;
-  block.fileParam.ioDirID = myBlock.ioWDDirID;
-  block.ioParam.ioVRefNum = myBlock.ioWDVRefNum;
+  OSErr             err;
+  CInfoPBRec block;
+
+  memset(&block,0,sizeof(CInfoPBRec));
   c2pstr(newname);
-  block.ioParam.ioMisc = newname;
-  err= PBHRename(&block,false);
-  if (err=noErr) {
-    return 1;
-  } else {
-    errno=err;
-    printf("rename failed: %d\n",err);
-    return -11;
+  err = HRename(fs->vRefNum,fs->parID,fs->name,newname);
+  if (err == noErr) {
+    memset(&fs->name,0,64);
+    block.dirInfo.ioVRefNum   = fs->vRefNum;
+    block.dirInfo.ioDrDirID   = fs->parID;
+    block.dirInfo.ioFDirIndex = -1;
+    err = PBGetCatInfo(&block,false);
+    if (err == noErr){
+      block.dirInfo.ioNamePtr = newname;
+      block.dirInfo.ioFDirIndex = 0;
+      err = PBGetCatInfo(&block,false);       
+      if (err == noErr){
+	if (block.dirInfo.ioFlAttrib & 16) {
+	  block.dirInfo.ioFDirIndex = -1;
+	  err = PBGetCatInfo(&block,false);
+	  if (err == noErr){
+	    strncpy(&fs->name,block.dirInfo.
+		    ioNamePtr,64);
+	  }                                       
+	  
+	} else {
+	  Str255 filename;
+	  short    i = 0;
+	  short    last = 0;
+
+	  while (i <= newname[0]) {
+	    i++;
+	    if (newname[i] == ':') {
+	      last = i;
+	    }
+	  }
+	  i = 1;
+	  while (last+i <= newname[0]) {
+	    filename[i] = newname[last+i];
+	    i++;
+	  }
+	  memset(&filename,0,256);
+	  filename[0] = newname[0]-last;
+	  block.hFileInfo.ioVRefNum   = fs->vRefNu
+	    m;
+	  block.hFileInfo.ioDirID     = fs->parID;
+	  block.hFileInfo.ioNamePtr   = newname;
+	  block.hFileInfo.ioFDirIndex = 0;
+	  err = PBGetCatInfo(&block,false);
+	  if (err == noErr){
+	    strncpy(&fs->name,block.hFileInfo.ioNamePtr,64);
+	  }                                       
+	  
+	}
+      }
+    }
   }
+  return err;     
 }
 
-#endif 
+long CountEntries (long dirID,short vRefNum)
+{
+  OSErr err;
+  short index  = 1;
+  long    result = 0;
+  CInfoPBRec      block;
+
+  do 
+    {
+      memset(&block,0,sizeof(CInfoPBRec));
+      block.hFileInfo.ioFDirIndex = index;
+      block.hFileInfo.ioDirID     = dirID;     
+      block.hFileInfo.ioVRefNum   = vRefNum;     
+      err = PBGetCatInfo(&block,false);
+      if (err == noErr) {
+	result++;
+	index++;
+      }
+    } while (err == noErr);
+  return result;
+} 
+
+StringPtr GetIndEntryName (long Target,short vRefNum,long inx)
+{
+  OSErr           err;
+  CInfoPBRec      block;
+  Str255          name;
+  long result = 0;
+
+  memset(&block,0,sizeof(CInfoPBRec));
+  memset(&name,0,256);
+  block.hFileInfo.ioFDirIndex = inx;
+  block.hFileInfo.ioDirID     = Target;     
+  block.hFileInfo.ioVRefNum   = vRefNum; 
+  block.hFileInfo.ioNamePtr   = name;
+  err = PBGetCatInfo(&block,false);
+  if (err == noErr) {
+    return block.hFileInfo.ioNamePtr;
+  }
+} 
+
+OSErr HMakeFSSpec(short vRefNum,long dirID,char *name,FSSpec *fs)
+{ 
+  OSErr           err;
+  CInfoPBRec      block;
+  short                   nofound = 1;
+  short                   i = 1;
+
+  memset(&block,0,sizeof(CInfoPBRec));
+  c2pstr(name);
+
+  while (i <= name[0] && nofound) {
+    if (name[i] == ':' && nofound) {
+      nofound = 0;
+    }
+    i++;    
+  }
+
+  if (!nofound && i>2) {          
+    /* it's a full path */
+    HParamBlockRec  vInfo;
+    Str255                  namecopy;       /* changed by PBHGetVInf
+					       o */
+    memset(&vInfo,0,sizeof(HParamBlockRec));
+    strncpy(&namecopy,name,256);
+    vInfo.volumeParam.ioNamePtr  = namecopy;
+    vInfo.volumeParam.ioVolIndex = -1;
+    err = PBHGetVInfo(&vInfo,false);
+    if (err == noErr) {
+      block.dirInfo.ioNamePtr = name;
+      block.dirInfo.ioVRefNum = vInfo.volumeParam.ioVRefNum;
+    } else {
+      return err;
+    }                       
+    err = PBGetCatInfo(&block,false);
+    if (err == noErr){ 
+      block.dirInfo.ioFDirIndex = -1;
+      err = PBGetCatInfo(&block,false);
+      if (err == noErr){ 
+	fs->vRefNum = block.dirInfo.ioVRefNum;
+	fs->parID   = block.dirInfo.ioDrParID;
+	strncpy(&fs->name,block.dirInfo.ioNamePtr,64);
+      } else {
+	Str255  filename;
+	short           i = 1;
+	short           last = 0;
+	while (i <= name[0]) {
+	  if (name[i] == ':') {
+	    last = i;
+	  }
+	  i++;
+	}
+	memset(&filename,0,256);
+	i = 1;
+	while (last+i <= name[0]) {
+	  filename[i] = name[last+i];
+	  i++;
+	}
+	filename[0] = name[0]-last;
+	block.hFileInfo.ioVRefNum   = block.dirInfo.ioVR
+	  efNum;
+	block.hFileInfo.ioNamePtr   = name;
+	block.hFileInfo.ioFDirIndex = 0;
+	err = PBGetCatInfo(&block,false);
+	if (err == noErr){
+	  fs->vRefNum = block.hFileInfo.ioVRefNum;
+	  fs->parID   = block.hFileInfo.ioFlParID;
+	  strncpy(&fs->name,&filename,64);
+	} else {
+	  return err;
+	}
+      }
+    } else {
+      OSErr           localerr;
+      Str255  parname,entryname;
+      short           i = 1;
+      short           last = name[0];
+      
+      while (i <= name[0]) {
+	if (name[i] == ':') {
+	  last = i;
+	}
+	i++;
+      }
+      memset(&parname,0,256);
+      memset(&entryname,0,256);
+      if (last<name[0]) {
+	strncpy(&parname,name,last+1);
+	parname[0] = last;
+	BlockMove(name+last+1,&entryname,name[0]-last);
+      } else {
+	BlockMove(name+1,&entryname,name[0]);
+      }
+      c2pstr(&entryname);
+      block.dirInfo.ioNamePtr = &parname;
+      localerr = PBGetCatInfo(&block,false);
+      if (localerr == noErr){
+	fs->vRefNum = block.dirInfo.ioVRefNum;
+	fs->parID   = block.dirInfo.ioDrDirID;
+	strncpy(&fs->name,&entryname,64);
+      } else {
+	return localerr;
+      }               
+    }
+  } else {                
+    /* it's a partial path */
+    if (vRefNum && dirID) {
+      block.dirInfo.ioVRefNum = vRefNum;
+      block.dirInfo.ioDrDirID = dirID;
+    } else {
+      WDPBRec wdInfo;
+      memset(&wdInfo,0,sizeof(WDPBRec));
+      err = PBHGetVol(&wdInfo,false);
+      if (err == noErr){
+	wdInfo.ioVRefNum = wdInfo.ioWDVRefNum;
+	dirID = wdInfo.ioWDDirID;
+	err = PBGetWDInfo(&wdInfo,false);
+	if (err == noErr){
+	  block.dirInfo.ioVRefNum   = wdInfo.ioVRe
+	    fNum;
+	  block.dirInfo.ioDrDirID   = dirID;
+	} else {
+	  return err;
+	}
+      } else {
+	return err;
+      }
+    }
+    block.dirInfo.ioFDirIndex = -1;
+    err = PBGetCatInfo(&block,false);
+    if (err == noErr){
+      block.dirInfo.ioNamePtr = name;
+      block.dirInfo.ioFDirIndex = 0;
+      err = PBGetCatInfo(&block,false);
+      if (err == noErr){
+	if (block.dirInfo.ioFlAttrib & 16) {
+	  block.dirInfo.ioFDirIndex = -1;
+	  err = PBGetCatInfo(&block,false);
+	  if (err == noErr){
+	    fs->vRefNum = block.dirInfo.ioVR
+	      efNum;
+	    fs->parID   = block.dirInfo.ioDr
+	      ParID;
+	    strncpy(&fs->name,block.dirInfo.
+		    ioNamePtr,64);
+	  }                                       
+	  
+	} else {
+	  Str255  filename;
+	  short           i = 1;
+	  short           last = 0;
+	  while (i <= name[0]) {
+	    i++;
+	    if (name[i] == ':') {
+	      last = i;
+	    }
+	  }
+	  memset(&filename,0,256);
+	  i = 1;
+	  while (last+i <= name[0]) {
+	    filename[i] = name[last+i];
+	    i++;
+	  }
+	  filename[0] = name[0]-last;
+	  block.hFileInfo.ioVRefNum   = block.dirI
+	    nfo.ioVRefNum;
+	  block.hFileInfo.ioDirID     = dirID;
+	  block.hFileInfo.ioNamePtr   = name;
+	  block.hFileInfo.ioFDirIndex = 0;
+	  err = PBGetCatInfo(&block,false);
+	  if (err == noErr){
+	    fs->vRefNum = block.hFileInfo.io
+	      VRefNum;
+	    fs->parID   = block.hFileInfo.io
+	      FlParID;
+	    strncpy(&fs->name,&filename,64);
+	  }                                       
+	  
+	}
+      } else {
+	OSErr           localerr;
+	Str255  parname,entryname;
+	short           i = 1;
+	short           last = name[0];
+	
+	while (i <= name[0]) {
+	  if (name[i] == ':') {
+	    last = i;
+	  }
+	  i++;
+	}
+	memset(&parname,0,256);
+	memset(&entryname,0,256);
+	if (last<name[0]) {
+	  strncpy(&parname,name,last+1);
+	  parname[0] = last;
+	  BlockMove(name+last+1,&entryname,name[0]
+		    -last);
+	} else {
+	  BlockMove(name+1,&entryname,name[0]);
+	}
+	c2pstr(&entryname);
+	block.dirInfo.ioNamePtr = &parname;
+	localerr = PBGetCatInfo(&block,false);
+	if (localerr == noErr){
+	  fs->vRefNum = block.dirInfo.ioVRefNum;
+	  fs->parID   = block.dirInfo.ioDrDirID;
+	  strncpy(&fs->name,&entryname,64);
+	} else {
+	  block.dirInfo.ioFDirIndex = -1;
+	  localerr = PBGetCatInfo(&block,false);
+	  if (localerr == noErr){
+	    fs->vRefNum = block.dirInfo.ioVR
+	      efNum;
+	    fs->parID   = block.dirInfo.ioDr
+	      DirID;
+	    strncpy(&fs->name,&entryname,64)
+	      ;
+	  };
+	}               
+      }
+    }
+  }
+  return err;
+}
+
+
+#endif /* MAC */
