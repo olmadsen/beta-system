@@ -7,7 +7,9 @@
 
 #if defined(MAC)
 #  define MALLOC(size) NewPtr(size)
-#  define REALLOC(src,size) 0
+#  define REALLOC(src,size) \
+     fprintf(output, "Error: REALLOC called\n!")); \
+     fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__)
 #  define FREE(ptr) DisposPtr((Ptr)ptr)
 #else
    /* UNIX or Windows */

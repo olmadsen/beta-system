@@ -23,8 +23,8 @@
  */
 
 #include <stdio.h>
-#include "dot.h"
 #include "beta.h"  /* Declarations of DOT variables in data.h. */
+#include "dot.h"
 
 #define DOTinitialSize 50  /* Initial size of DOT. */
 #define DOTcompactLimit 25 /* Free space in DOT required to do a compaction. */
@@ -76,7 +76,7 @@ void DOTscan (DOTforEach foreach)
 { int i;
   for (i=0;i<nextHandle;i++)
     if (handleTable[i]>=0) 
-      foreach (i,DOT[handleTable[i]],onDeleteTable[i]);
+      foreach (i,(Object*)DOT[handleTable[i]],onDeleteTable[i]);
 }
 
 
@@ -88,16 +88,22 @@ void DOTscan (DOTforEach foreach)
 static void privDOThandleDelete (int handle)
 {
   /* Inform user that the handle is being deleted: */
-  onDeleteTable[handle] (handle);
-  onDeleteTable[handle] = 0;
+#if 0
+  if (onDeleteTable[(int)handle]){
+    onDeleteTable[(int)handle] (handle);
+  }
+#else
+  onDeleteTable[(int)handle] (handle);
+#endif
+  onDeleteTable[(int)handle] = 0;
 
-  handleTable[handle] = firstFreeHandle;
-  firstFreeHandle = -2-handle;
+  handleTable[(int)handle] = firstFreeHandle;
+  firstFreeHandle = -2-(int)handle;
 }
 
 void DOThandleDelete (int handle)
 {
-  DOT[handleTable[handle]] = 0;
+  DOT[handleTable[(int)handle]] = 0;
   privDOThandleDelete (handle);
 }
 
@@ -118,7 +124,7 @@ static int getHandle (int DOTindex)
 }
 
 void DOThandlePerformCompaction (DOTonDelete onDelete)
-{ int *newIndices = (int *) malloc (DOTlength*sizeof(int));
+{ int *newIndices = (int *) MALLOC (DOTlength*sizeof(int));
   int i;
 
   { int limit = DOTlength;
@@ -166,7 +172,7 @@ void DOThandlePerformCompaction (DOTonDelete onDelete)
       if (handleTable[i] == -1) privDOThandleDelete (i);
     }
 
-  free (newIndices);
+  FREE (newIndices);
 }
 
 
@@ -185,7 +191,7 @@ void DOThandlePerformCompaction (DOTonDelete onDelete)
  * If DOTlimit has been reached and compaction would do no good, 
  * DOT is extended without further notice. */
 
-static int DOTinsert (long objRef, int allowCompaction)
+static int DOTinsert (Object *objRef, int allowCompaction)
 { int inx;
 
   if (DOTTop == DOTLimit) {
@@ -195,7 +201,7 @@ static int DOTinsert (long objRef, int allowCompaction)
       /* Extend DOT */
       int oldSize = (DOTLimit - DOT);
       int newSize = oldSize*2;
-      DOT = (long *) realloc (DOT, newSize*sizeof(long));
+      DOT = (long *) REALLOC (DOT, newSize*sizeof(long));
       DOTTop = DOT + oldSize;
       DOTLimit = DOT + newSize;
     }
@@ -205,7 +211,7 @@ static int DOTinsert (long objRef, int allowCompaction)
 
   DOTTop++; DOTSize++;
 
-  DOT[inx] = objRef;
+  DOT[inx] = (long)objRef;
   
   return inx;
 }
@@ -222,7 +228,7 @@ void DOTinit ()
   if (!DOT) {
 
     /* Initialize DOT */
-    DOT = (long *) malloc (DOTinitialSize*sizeof(long));
+    DOT = (long *) MALLOC (DOTinitialSize*sizeof(long));
     DOTTop = DOT;
     
     DOTSize = 0;
@@ -232,8 +238,8 @@ void DOTinit ()
     firstFreeHandle = -1; nextHandle = 0;
 
     handleTableLimit = DOTinitialSize;
-    handleTable = (int*) malloc (DOTinitialSize*sizeof(int));
-    onDeleteTable = (DOTonDelete*) malloc (DOTinitialSize*sizeof(DOTonDelete));
+    handleTable = (int*) MALLOC (DOTinitialSize*sizeof(int));
+    onDeleteTable = (DOTonDelete*) MALLOC (DOTinitialSize*sizeof(DOTonDelete));
   }
 }
 
@@ -251,7 +257,7 @@ void DOTinit ()
  * If -1 is returned, DOThandlePerformCompaction should be called before
  * calling DOThandleInsert again. */
    
-int DOThandleInsert (long ObjRef, DOTonDelete onDelete, int allowCompaction)
+int DOThandleInsert (Object *ObjRef, DOTonDelete onDelete, int allowCompaction)
 { int handle, DOTinx;
   
   if ((DOTinx = DOTinsert (ObjRef,allowCompaction)) == -1)
@@ -262,9 +268,9 @@ int DOThandleInsert (long ObjRef, DOTonDelete onDelete, int allowCompaction)
     /* Nothing in freeList. */
     
     if (nextHandle >= handleTableLimit) {
-      handleTable = (int*) realloc (handleTable, 2*handleTableLimit*sizeof(int));
+      handleTable = (int*) REALLOC (handleTable, 2*handleTableLimit*sizeof(int));
       onDeleteTable = (DOTonDelete*) 
-	realloc (onDeleteTable,2*handleTableLimit*sizeof(DOTonDelete));
+	REALLOC (onDeleteTable,2*handleTableLimit*sizeof(DOTonDelete));
       handleTableLimit = 2*handleTableLimit;
     }
     
@@ -293,10 +299,10 @@ int DOThandleInsert (long ObjRef, DOTonDelete onDelete, int allowCompaction)
  * DOThandleInsert. If NONE is returned, the object no longer exists, and 
  * the corresponding onDelete function has been called. */
 
-long DOThandleLookup (int handle)
-{ long objAdr;
+Object *DOThandleLookup (int handle)
+{ Object *objAdr;
   
-  objAdr = DOT[handleTable[handle]];
+  objAdr = (Object *)DOT[handleTable[(int)handle]];
   if (objAdr == 0)
     privDOThandleDelete (handle);
 

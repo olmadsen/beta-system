@@ -14,7 +14,11 @@
 #endif
 
 #ifdef RTDEBUG
-#define do_unconditional_gc 0 /*1*/ /* MT: Should match define i BetaRun.bet! */
+/* Trigger unconditional GC at every allocation.
+ * MT: Should match define i BetaRun.bet!
+ * RUN: Should match define in Declaration.run
+ */
+#define do_unconditional_gc 0 /*1*/ 
 #else
 #define do_unconditional_gc 0
 #endif
@@ -35,6 +39,9 @@
 #define RTVALHALLA
 #endif
 #endif
+
+/* No need for interpretItem - only used for Jawahar's interpreter */
+#undef INTERPRETER
 
 /******* Define specific machine types *********/
 #ifdef sun

@@ -26,9 +26,9 @@
  *       The only limit is your imagination (and the runtime system :-). 
  * 
  * DOT is a two-level table. The lower level is the actual DOT table as seen 
- * by the garbage collector. The upper level hands out handles to the users 
- * of the DOT table to achieve that compaction of the DOT can be performed 
- * transparently to the users.
+ * by the garbage collector. The upper level hands out handles (indices) 
+ * to the users of the DOT table to achieve that compaction of the DOT can
+ * be performed transparently to the users.
  * 
  * This header file defines an interface to the upper level DOT table. */
 
@@ -76,8 +76,8 @@ extern void DOThandlePerformCompaction (DOTonDelete onDelete);
  * Scans over all elements in dot, calling a function for each element giving
  * the handle, the object address and the onDelete function for that object. */
 
-typedef void (*DOTforEach) (int,int,DOTonDelete);
-     /* handle,address,onDelete */
+typedef void (*DOTforEach) (int, Object *, DOTonDelete);
+     /* handle, address, onDelete */
      
 extern void DOTscan (DOTforEach foreach);
 
@@ -95,7 +95,8 @@ extern void DOTscan (DOTforEach foreach);
  * calling DOThandleInsert again. This can be prevented by setting 
  * allowCompaction to FALSE. */
    
-extern int DOThandleInsert (long ObjRef, DOTonDelete onDelete, 
+extern int DOThandleInsert (Object *ObjRef, 
+			    DOTonDelete onDelete, 
 			    int allowCompaction);
 
 /* DOThandleDelete
@@ -113,7 +114,7 @@ extern void DOThandleDelete (int handle);
  * DOThandleInsert. If NONE is returned, the object no longer exists, and 
  * the corresponding onDelete function has been called. */
 
-extern long DOThandleLookup (int handle);
+extern Object *DOThandleLookup (int handle);
 
 /* ProcessDOT
  * ==========

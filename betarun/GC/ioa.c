@@ -122,8 +122,8 @@ void IOAGc()
 #ifndef MT
   /* MT: active component's stack should be preserved */
   ActiveComponent->StackObj = 0;  /* the stack is not valid anymore. */
-#endif
-#endif
+#endif /* MT */
+#endif /* NEWRUN */
   DEBUG_IOA(fprintf(output, " #(IOA: ActiveComponent"); fflush(output));
   ProcessReference( (handle(Object))&ActiveComponent);
   DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
@@ -132,6 +132,8 @@ void IOAGc()
   ProcessReference( (handle(Object))&BasicItem );
   DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
 
+#ifdef INTERPRETER
+  /* Only used by Jawahar's interpreter */
   if (InterpretItem[0]) {
     INFO_IOA(fprintf(output, " #(IOA: InterpretItem[0]"); fflush(output));
     ProcessReference( (handle(Object))(&InterpretItem[0]) );
@@ -142,6 +144,7 @@ void IOAGc()
     ProcessReference( (handle(Object))(&InterpretItem[1]) );
     INFO_IOA(fprintf(output, ")\n"); fflush(output));
   }
+#endif /* INTERPRETER */
 
 #ifdef RTLAZY
   if (LazyItem) {
@@ -187,7 +190,9 @@ void IOAGc()
     DEBUG_AOA( AOAtoIOACheck());
   }
   
+  INFO_IOA(fprintf(output, " #(IOA: DOT"); fflush(output));
   ProcessDOT();
+  INFO_IOA(fprintf(output, ")\n"); fflush(output)); 
   
   DEBUG_CODE(dump_aoa=(AOANeedCompaction && DumpAOA));
 

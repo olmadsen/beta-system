@@ -239,7 +239,7 @@ int valhalla_readint ()
  * each time the process stops to keep valhalla up to date with its part
  * of the DOT contents. */
 
-static void DOTgarbageOnDelete (int index)
+static void DOTgarbageOnDelete (int handle)
 { 
 }
 
@@ -599,14 +599,15 @@ static int valhallaCommunicate (int PC, int SP, struct Object* curObj)
     }
     break;
     case VOP_DOTINSERT: { 
-      int address, index;
+      Object *address;
+      int handle;
       
-      address = valhalla_readint ();
-      index = DOThandleInsert (address, DOTgarbageOnDelete, FALSE);
+      address = (Object*)valhalla_readint ();
+      handle = DOThandleInsert (address, DOTgarbageOnDelete, FALSE);
       
       valhalla_writeint (opcode);
-      valhalla_writeint (index);
-      valhalla_writeint (ObjectSize((ref(Object)) address));
+      valhalla_writeint (handle);
+      valhalla_writeint (ObjectSize(address));
       valhalla_socket_flush ();
     }
     break;
@@ -688,6 +689,7 @@ static int valhallaCommunicate (int PC, int SP, struct Object* curObj)
       struct Structure * struc;
       long   old_valhallaIsStepping;
       void (*cb)(void);
+      int origin_handle, curObj_handle;
 
       DEBUG_STACK(fprintf(output, "VOP_EXECUTEOBJECT: SP=0x%x\n", (int)SP));
       DEBUG_STACK(fprintf(output, "VOP_EXECUTEOBJECT: PC=0x%x\n", (int)PC));
@@ -733,19 +735,15 @@ static int valhallaCommunicate (int PC, int SP, struct Object* curObj)
       }
 #endif /* NEWRUN */
 
-      /* Save origin and curObj in InterpretItem 
-       * in case of a GC during AlloS.
-       * InterpretItem constitues 2 memory celles that
-       * are used as roots for GC and updated.
-       */
-      InterpretItem[0] = (struct Item *)origin;
-      InterpretItem[1] = (struct Item *)curObj;
+      /* Save origin and curObj in DOT in case of a GC during AlloS */
+      origin_handle = DOThandleInsert(origin, DOTgarbageOnDelete, FALSE);
+      curObj_handle = DOThandleInsert(curObj, DOTgarbageOnDelete, FALSE);
       /* valhalla_AlloS may cause GC */
       struc = valhalla_AlloS(origin, proto, (long*)SP, curObj);
-      origin = (struct Object *)InterpretItem[0];
-      curObj = (struct Object *)InterpretItem[1];
-      InterpretItem[0]=0;
-      InterpretItem[1]=0;
+      origin = DOThandleLookup(origin_handle);
+      curObj = DOThandleLookup(curObj_handle);
+      DOThandleDelete(origin_handle);
+      DOThandleDelete(curObj_handle);
       DEBUG_VALHALLA(fprintf(output, "Struc Object:\n"));
       DEBUG_VALHALLA(DescribeObject((Object *)struc));
       DEBUG_VALHALLA(fprintf(output, "\n"));
@@ -861,12 +859,17 @@ static int valhallaCommunicate (int PC, int SP, struct Object* curObj)
  *
  * Callback function used by ValhallaOnProcessStop during DOTscan. */
 
-void forEachAlive (int handle, int address, DOTonDelete onDelete)
+void forEachAlive (int handle, Object *address, DOTonDelete onDelete)
 {
-  DEBUG_VALHALLA(fprintf (output,"debuggee: forEachAlive: handle=%d, address=%d \n", handle, address));
+  DEBUG_VALHALLA({
+    fprintf (output,
+	     "debuggee: forEachAlive: handle=%d, address=%d \n", 
+	     (int)handle, 
+	     (int)address);
+  });
   if (onDelete==DOTgarbageOnDelete) {
-    valhalla_writeint (handle);
-    valhalla_writeint (address);
+    valhalla_writeint ((int)handle);
+    valhalla_writeint ((int)address);
   }
 }
 
