@@ -290,7 +290,7 @@ void IOAGc()
       Prompt(
 "\p\
 This program was compiled using the demo version of \
-the Mjølner BETA System. The demo version is limited \
+the Mj\277lner BETA System. The demo version is limited \
 in the number of garbage collections allowed. This ",
 "\p\
 limit will soon be reached; if you want to save your \
@@ -316,14 +316,14 @@ work, please do it now, and quit your program.",
       Prompt(
 "\p\
 This program was compiled using the demo version of \
-the Mjølner BETA System. The demo version is limited \
+the Mj\277lner BETA System. The demo version is limited \
 in the number of garbage collections allowed. This ",
 "\p\
 limit has now been reached and your program will be \
 terminated - sorry!\n\
 You may order an unconstrained version from\n",
 "\p\n\
-    Mjølner Informatics, Gustav Wiedsvej 10,\n\
+    Mj\277lner Informatics, Gustav Wiedsvej 10,\n\
     Science Park Aarhus, DK-8000 Aarhus C, Denmark,\n",
 "\p\
     Phone: +45 86 20 20 00,  Fax: +45 86 20 12 22\n\
