@@ -1,20 +1,216 @@
 
 \section{Coroutines, concurrency and synchronization}
-BETA has semi-coroutines in the style of Simula. BETA coroutines may be
-executed in the usual non-premptive way as known form Simula but
+BETA has semi-coroutines in the style of Simula. BETA coroutines may
+be executed in the usual non-premptive way as known from Simula but
 also in concurrency with preemptive scheduling.  For synchronization
 of concurrent coroutines, a {\tt Semaphore} pattern is avaliable to
-express synchronization at the basic level. The BETA mechanism for
+express synchronization at the basic level. The BETA mechanisms for
 coroutines, concurrency and synchronization are at a much more
-primitive level than in CJ. However, the powerful abstraction
-mechanisms of BETA makes it easy to build higher-level concurrency
-mechanisms such as monitors and Ada-like rendezvous and the BETA
-libraries include a number of such concurrency abstractions.
+primitive level than in CJ. However, the abstraction mechanisms of
+BETA makes it easy to build higher-level concurrency mechanisms such
+as monitor and Ada-like rendezvous. The BETA libraries include a
+number of such concurrency abstractions.
   
-The basic coroutines can be implemented in CJ using Threads, but this
-requires considerable overhead -- basically a coroutine shift is much
-simpler than a thread shift. The coroutine implementation in CLR/JVM
-is probably the part of BETA that does not map very well. Space does
-not allow to give the details of the coroutine implementation, which
-is heavily inspired by \cite{helsgaun}.
+Since CJ does not support Simula-style coroutines, there is no direct
+way of mapping BETA coroutines to CJ. Instead BETA coroutines are
+implemented in CJ by means of threads. This results in a considerable
+overhead -- basically a coroutine shift is much simpler than a thread
+shift. The coroutine implementation in CLR/JVM is probably the part of
+BETA that does not map very well.
 
+In the following a brief introduction to Simula-like semi-coroutines
+is given followed by a description of the implementation in CJ.  The
+implementation is heavily inspired by \cite{helsgaun}.
+
+\subsection{Semi-coroutines}
+In this section the notion of a semi-coroutine is
+described as an extension ot CJ:
+
+\begin{itemize}
+  
+\item The basic functionality of a coroutine is defined in a class
+  {\tt Coroutine} -- similar to class {\tt Thread} for implementing
+  threads.
+  
+\item A {\tt Coroutine} has a special method {\tt Do} which defines
+  the main action-part of the coroutine -- similar to the run-method
+  for {\tt Thread}.
+  
+\item A concrete coroutine is defined as a subclass of {\tt Coroutine}
+  including a redefinition of the {\tt Do}-method.
+  
+\item If {\tt S} is a reference to a {\tt Coroutine}, then {\tt
+    call(S)} will invove the {\tt Do}-method of {\tt S}.
+  
+\item Execution of a {\tt suspend} in the {\tt S.Do()} (or methods
+  invoked from {\tt S.do()}) will return to the point of {\tt S.call()}
+    and resume execution after {\tt S.call()}.
+
+\end{itemize}
+
+A semi-coroutine is a simple form of thread. Each coroutine is a
+thread of method activitations, but at most one coroutine is executing
+at a given point in time.
+
+If more than one thread is executing concurrenly, each thread may
+contain coroutines. 
+
+\note{Clarify this; perhaps assume only one thread and say that in a
+  multi-thread situation there are a number of alternatives for
+  defining the behavior of coroutines}
+
+Class {\tt Coroutine} has the following structure:
+{\tt\small\begin{verbatim}
+   class Coroutine {
+     ...
+     void call() { ... }
+     void suspend() { ... }
+     void Do(); // abstract
+   }
+\end{verbatim}
+}
+The following is an example of a program in CJ using coroutines:
+
+{\tt\small\begin{verbatim}
+   class Co1 extends Coroutine {
+   
+      void Do() { ... }
+      void foo1() { ... }
+   }
+
+   class Co2 extends Coroutine {
+   
+      void Do() { ... }
+      void foo2() { ... }
+   }
+
+   class Co extends Coroutine {
+
+      static void main(String args[]) {
+         Co C = new Co();
+         C.call();
+         ...
+      }
+   }
+
+\end{verbatim}
+}
+
+\note{Elaborate -- meaningful example is needed}
+
+\note{Graphic example showing coroutine shifts. X.1: attach; X.2: suspend}
+
+\subsection{Implementation of class {\tt Coroutine}}
+
+BETA coroutines are implemented by means of a class {\tt Component}
+which also can be used to implement class {\tt Coroutine} above.
+
+
+{\tt\small\begin{verbatim}
+   class Coroutine {
+     private Component thisC = new Component(this);
+
+     void call() { thisC.swap(); }
+     void suspend() { thisC.swap(); }
+     void Do(); // abstract
+   }
+\end{verbatim}
+}
+
+As can be seen, the implementation of {\tt call} and {\tt suspend} is
+identical and the magic is in the {\tt swap}-method.
+
+A coroutine shift (call or suspend) is basically just a {\it swap} of
+two references. 
+
+Consider figure X.1 illustrating a call. As can be seen the active reference and the caller reference of S are swapped.
+
+Consider figure X.2 illustrating a suspend. As can be seen the active reference and the caller reference of S are swapped.
+
+In both cases the there is a swap of two references.
+
+The notion of semi-coroutine originates from Simula, which also
+includes the original Conway-style of symmetric coroutine
+\cite{conway}. The coroutine model based on swap originates from Dahl
+\&\ and Wang \cite{dw}. BETA has adapted the semi-coroutine model as
+described in \cite{betabook}, chapter xx where it is also described
+how to implement symmetric coroutines using semi-coroutines.
+
+
+\subsection{Class {\tt Component}}
+Class Component is as mentioned implemented using threads.
+
+Class Runner is ...
+
+{\tt\small\begin{verbatim}
+   class Component {
+      static Component current;     // The current executing Component
+      private Component caller;     // The calling Component
+      
+      private Runner myRunner;      // the associated Runner
+      private Coroutine body;       // The actual cocortine
+      private boolean isTerminated; // True if terminated
+      
+      public Component(Coroutine b) {
+         body = b;
+         myRunner = new Runner();
+      }
+
+
+      public void swap() {
+         Component  old_current = current;
+         current = caller;
+         caller = old_current;
+
+         synchronized(old_current.myRunner) {
+            current.myRunner.go();
+            if (old_current.isTerminated) {
+               return;
+            } else {
+              try{ old_current.myRunner.wait(); }
+              catch (InterruptedException e) {}
+            }
+         }         
+      }
+   }
+\end{verbatim}
+}
+
+Below is shown the implementation of class Runner.
+
+
+{\tt\small\begin{verbatim}
+   class Runner extends Thread {
+      Component myComponent;
+
+      Runner(Component C) { myComponent = C; }
+
+      public void run() {
+         while (true) {
+            myComponent.body.Do();
+            myComponent.isTerminated = true;
+            myComponent.swap();
+
+            synchronized (this) {
+               try{ wait(); } catch (InterruptedException e){}
+            }
+         }
+      }   
+      public void go() {
+        if !isAlive() { start(); }
+        else {
+           synchronized(this) {notify();};
+        }
+      }
+   }
+\end{verbatim}
+}
+
+\subsection{Details to remember}
+BETA: BetaObject 
+
+Thread pool to improve efficiency
+
+Garbage collection: nullifying references
+
+Thread termination: SetDaemon(true) for Java, \CS ?.
