@@ -353,6 +353,7 @@ You may order an unconstrained version from\n",
     DEBUG_CBFA( CBFACheck() );
     DEBUG_AOA( AOACheck() );
     DEBUG_LVRA( LVRACheck() );
+
     InfoS_LabB();
     
     if (IOATop+4*ReqObjectSize > IOALimit)
