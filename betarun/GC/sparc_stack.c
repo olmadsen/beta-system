@@ -113,10 +113,6 @@ static void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
     /* (Maybe build a more descriptive description using sprintf) */
     ProcessStackCell(theCell, "stackpart", func);
   }
-
-  if (func==DoStackCell){
-    CompleteScavenging();
-  }
 }
 
 /* ProcessSPARCStack:

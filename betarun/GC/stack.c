@@ -15,7 +15,7 @@ extern void (*StackRefAction)(REFERENCEACTIONARGSTYPE);
 /* DoStackCell:
  *  Used by the routines that traverse the stack.
  */
-void
+static void
 DoStackCell(Object **theCell,Object *theObj)
 {    
 #ifdef intel
@@ -112,6 +112,7 @@ long *CollectStackRoots(long *SP)
 void ProcessStack(void)
 {
     GeneralProcessStack(DoStackCell);
+    CompleteScavenging();
 }
 
 
