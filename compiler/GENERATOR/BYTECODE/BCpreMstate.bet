@@ -223,6 +223,17 @@ splitClassSignature: SplitSignature
              sym[] -> emitsymbol;
              newline;
           #);
+        emitPushFromComponent:
+          (# comp,sym: ^text
+          enter(comp[],sym[])
+          do '\tpush.global '->puttext;
+             comp[] -> emitsymbol;
+             newline;
+             '\tpush.constant '->puttext;
+             sym[] -> emitsymbol;
+             newline;
+             'global:' -> emitSend
+          #);
         emitToFile:
           (# F: @file; fn: ^text;
              emitMetaInfo:
@@ -234,10 +245,31 @@ splitClassSignature: SplitSignature
                   '#"' -> F.puttext;
                   key[] -> F.puttext;
                   '"' -> F.puttext;
+                  (* HACK: currently hasExt=true implies that key='.requires'
+                  (if hasExt then
+                      ' #"comp_' -> F.puttext
+                   else
+                      ' #"' -> F.puttext
+                   if);*)
                   ' #"' -> F.puttext;
-                  value[] -> F.puttext;
-                  (if hasExt then '.prc' -> F.puttext if);
+                  value[] -> F.puttext;                  
+                  (*(if hasExt then 
+                      ':' -> F.put;
+                      value[] -> F.puttext;
+                      '.prc' -> F.puttext 
+                  if);*)
                   '"' -> F.putline;
+                  (*(if hasExt then
+
+                      '.metainfo ' -> F.puttext;
+                      '#"import"' -> F.puttext;
+                      ' #"' -> F.puttext;
+                      value[] -> F.puttext;
+                      '.prc' -> F.puttext ;
+                      ':' -> F.put;
+                      value[] -> F.puttext;
+                      '"' -> F.putline;
+                  if);*)
                #);
              
           do (if notClosed then
@@ -247,11 +279,36 @@ splitClassSignature: SplitSignature
                  thisFileName[] -> (thisFullPath.copy).append -> fn[];
                  '.pra' -> (fn.copy).AppendExtension -> F.name;
                  F.openWrite; 
+                 '.metainfo #"import" #"BetaStructure.prc:BetaStructure"'
+                 -> F.putline;
+                 '.metainfo #"import" #"BetaComponent.prc:BetaComponent"'
+                 -> F.putline;
 	         imports.scan
-                 (# e: @diskEntry
+                 (# e: @diskEntry;
+                    S: @text
                  do current[] -> e.path;  
                     (if not (e.path.name -> classes.has) then
-                        ('requires', e.path.name,true) -> emitMetaInfo;
+                        'comp_' -> S;
+                        e.path.name -> S.append;
+                        ':' -> S.put;
+                        e.path.name -> S.append;
+                        '.prc'-> S.append;
+                        ('requires', S[],true) -> emitMetaInfo;
+                    if)
+                 #);
+                 imports.scanCC
+                 (# e: @diskEntry;
+                    S: ^text
+                 do (*'\nScanCC: ' -> screen.puttext;
+                    currentComp[]-> screen.putline;*)
+                    currentComp[] -> e.path; 
+                    (*e.path.name->  screen.putline;*)
+                    (if not (e.path.name -> classes.has) then
+                        e.path.name -> S[];
+                        '.prc' -> S.append;
+                        ':'->S.put;
+                        currentClass[] -> S.append;
+                        ('import', S[],true) -> emitMetaInfo
                     if)
                  #);
                  ('service.main_class', thisFirstClass[],false) -> emitMetaInfo;
@@ -457,8 +514,15 @@ splitClassSignature: SplitSignature
      #);
 
    imports: @
+     (* As of now, there is some redundancy;
+      * originally we just imported modules/components;
+      * now we import classes FROM components;
+      * this should be unified and a more efficient
+      * representation should be made
+      *)
      (# L: [100] ^text; top: @integer;
-        clear: (#do 0 -> top #);
+        classes,comps: [100] ^text; ctop: @integer;
+        clear: (#do 0 -> top -> cTop #);
         has: booleanValue
           (# id: ^text
           enter id[]
@@ -475,6 +539,44 @@ splitClassSignature: SplitSignature
                  (if (top+1->top) > L.range then L.range -> L.extend if);
                  id[] -> L[top][];
              if)
+          #);
+        hasCC: booleanValue
+          (# class,comp: ^text
+          enter(class[],comp[])
+          do(* '\nhasCC: ' -> puttext; class[] -> puttext; ' '->put;
+             comp[] -> puttext;*)
+             (for i: ctop repeat
+                  (if class[] -> classes[i].equalNCS then 
+                      (if comp[] -> comps[i].equalNCS then
+                          true -> value;
+                          leave hasCC
+                  if)if)
+             for)
+          #);
+        addClassFromComponent:
+          (# class,comp: ^text
+          enter(class[],comp[])
+          do comp[] -> add;
+             (*'\naddCC: ' -> puttext; class[] -> puttext; ' '->put;
+             comp[] -> puttext;*)
+             (if not ((class[],comp[])->hasCC) then(* ' add'->putline;*)
+                 (if (ctop+1->ctop) > comps.range then 
+                     comps.range -> comps.extend;
+                     classes.range -> classes.extend
+                 if);
+                 class[] -> classes[ctop][];
+                 comp[] -> comps[ctop][]
+              (*else
+                 ' no add '->putline*)
+             if)
+          #);
+        scanCC:
+          (# currentClass, currentComp: ^text
+          do (for i: ctop repeat
+                  classes[i][] -> currentClass[];
+                  comps[i][] -> currentComp[];
+                  inner
+             for)
           #);
         scan:
           (# current: ^text
@@ -1232,6 +1334,10 @@ splitClassSignature: SplitSignature
          // '%primitive:get'->prim.equal then
 	    '\tpush.global #"system"\n' -> preF.puttext;
             'getChar' ->preF.emitsend;   
+         // '%sem:signal' -> prim.equal then
+            '\t; signal\n' -> pref.puttext
+         // '%sem:wait' -> prim.equal then
+            '\t; wait\n' -> pref.puttext
          else
             'callExternal' -> jvmFIXME;
         if)
