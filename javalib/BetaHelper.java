@@ -14,5 +14,8 @@ public class BetaHelper
     public static InputStream get_System_in(){
 	return System.in;
     }
+    public static PrintStream get_System_out(){
+	return System.out;
+    }
 
 }
