@@ -55,14 +55,14 @@
  */
  
 #ifdef MAC
-#ifdef __powerc
+#ifdef powerc
 
 #define macppc
 #define ppcmac /* alias */
 //#ifdef RTVALHALLA
 //#undef RTVALHALLA
 //#endif
-#endif /* __powerc */
+#endif /* powerc */
 #endif /* MAC */
 
 /********** Machine specific definitions **********/
