@@ -383,3 +383,23 @@ IOASliceSize = ObjectAlignDown(IOASliceSize);
 #endif /* nti_bor */
  
 }
+
+
+#ifdef sparc
+int _init(void)
+{
+  return 0;
+}
+
+int _info(void)
+{
+  return 0;
+}
+
+int _fini(void)
+{
+  return 0;
+}
+
+
+#endif /* sparc */

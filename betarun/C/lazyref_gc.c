@@ -56,7 +56,7 @@ void negIOArefsFREE (void) { FREE (negIOArefs); negIOArefs = 0; }
    
 void NegAOArefsINSERT(long fieldAdr)  
 {     
-  if (negAOAsize == negAOAmax)
+  if (negAOAsize == negAOAmax) {
     if (negAOAmax == 0) {
       negAOAmax = DEFAULTNEGTABLESIZE;
       negAOArefs = (long *) MALLOC (negAOAmax*sizeof(long));
@@ -64,6 +64,7 @@ void NegAOArefsINSERT(long fieldAdr)
       negAOAmax = 2*negAOAmax;
       negAOArefs = (long *) REALLOC (negAOArefs, negAOAmax*sizeof(long));
     }
+  }
 
   DEBUG_LAZY(fprintf(output, "NegAOArefsINSERT(0x%x: %d) at index %d at address 0x%x\n", (int)fieldAdr, *((int *) fieldAdr), (int)negAOAsize, (int)&negAOArefs[negAOAsize] ));
 
@@ -339,8 +340,8 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
 #endif
 
 #ifdef sun4s  
-  if (info->_data._fault._trapno-0x80 == 17  /* solaris 2.3, 2.4, 2.5 */ || 
-      info->_data._fault._trapno-0x100 == 17 /* solaris 2.5.1 */
+  if (info->si_trapno-0x80 == 17  /* solaris 2.3, 2.4, 2.5 */ || 
+      info->si_trapno-0x100 == 17 /* solaris 2.5.1, 2.6? */
       ) {
 #else
   if (code == ILL_TRAP_FAULT(17)) {
