@@ -19,13 +19,13 @@ asmlabel(ExO,
 
 void CExitO(long exitAddr, Object * exitObj, Object * theObj)
 {
-  Component * theComp;
-  RegWin * rw;		/* Callers Register Window */
+  RegWin *rw;		    /* Callers Register Window */
 
   /* Save global vars in case of error */
-  Component *OrigActiveComponent          = ActiveComponent;
-  CallBackFrame *OrigActiveCallBackFrame  = ActiveCallBackFrame;
-  ComponentBlock *OrigLastCompBlock       = lastCompBlock;
+  Component *theComp        = ActiveComponent;
+  RegWin    *nextCBF        = (RegWin*)ActiveCallBackFrame;
+  RegWin    *nextCompBlock  = (RegWin*)lastCompBlock;
+  Component *nextComp;
 
   DEBUG_CODE(NumExO++);
 
@@ -45,7 +45,7 @@ void CExitO(long exitAddr, Object * exitObj, Object * theObj)
 #define TRACE_EXO() \
  fprintf(output, "File %s; Line %d", __FILE__, __LINE__);       \
  fprintf(output, "\nNew RegWin: 0x%08x", (int)rw);              \
- fprintf(output, "\nNew object:"); PrintObject(theObj);            \
+ fprintf(output, "\nNew object:"); PrintObject(theObj);         \
  fprintf(output, "\n");                                         \
  fflush(output)
  
@@ -59,58 +59,60 @@ void CExitO(long exitAddr, Object * exitObj, Object * theObj)
   /* Start from framepointer (skip frame of CExitO) */
   rw = (RegWin *) FramePointer;
 
-  if (theObj == exitObj)
-    return;			/* to exitAddr */
+  if (theObj == exitObj) return; /* to exitAddr */
     
   while ((theObj = (Object *) rw->i0) != exitObj) {
 #ifdef LEAVE_ACROSS_CALLBACK
-    if ((CallBackFrame *)rw == ActiveCallBackFrame){
-      DEBUG_CODE(fprintf(output, "ExO: Passing callback\n"));;
-      DEBUG_CODE(fflush(output));
-      /* This is AR of HandleCB. Update ActiveCallBackFrame.   */
-      ActiveCallBackFrame = (CallBackFrame *)  rw->l5;
+    if (rw == nextCBF){
+      DEBUG_STACK({
+	fprintf(output, "ExO: Passing callback\n");
+	fflush(output);
+      });
+      /* This is AR of HandleCB. Update nextCBF.   */
+      nextCBF = (CallBackFrame *)  rw->l5;
       rw = (RegWin *)rw->l6 /* skip to betaTop */;
-    } else {
+      TRACE_EXO();
+      continue;
+    } 
 #endif
-      /* Ordinary BETA activation record */
-      if ((Object *) ActiveComponent->Body == theObj) {
-	/* Passing a component. As in AttachComponent: */
-	/* Terminate theComp. */
-	DEBUG_CODE(NumTermComp++);
-	theComp = ActiveComponent;
-	DEBUG_CODE(fprintf(output, "ExO: passing comp 0x%x\n", (int)theComp));
-	DEBUG_CODE(fflush(output));
-	if (theComp->CallerComp == 0){
-	  /* Attempt to leave basic component! */
-	  /* Restore global variables to ensure correct dump.
-	   * FramePointer and StackPointer are still unchanged 
-	   * at this point.
-	   */
-	  ActiveComponent     = OrigActiveComponent;
-	  ActiveCallBackFrame = OrigActiveCallBackFrame;
-	  lastCompBlock       = OrigLastCompBlock;
-	  BetaError(LeaveBasicCompErr,theObj);
-	}
-	ActiveComponent = theComp->CallerComp; theComp->CallerComp = 0;
-	theObj          = theComp->CallerObj;  theComp->CallerObj  = 0;
-	theComp->StackObj = 0;
-	
-	/* Pop the Component Block */
-	rw = (RegWin *) rw->fp;	/* RegWin of CAttach */
-	ActiveCallBackFrame = (CallBackFrame *)  rw->l5;
-	lastCompBlock       = (ComponentBlock *) rw->l6;
-      } 
-      /* go one step back */
-      rw = (RegWin *) rw->fp;
-#ifdef LEAVE_ACROSS_CALLBACK
-    }
-#endif
+    /* Ordinary BETA activation record */
+    if (rw == nextCompBlock) {
+      /* Passing a component, this is the RegWin of CAttach */
+      /* Terminate theComp as in AttachComponent: */
+      DEBUG_STACK({
+	fprintf(output, "ExO: passing comp 0x%x\n", (int)theComp);
+	fflush(output);
+      });
+      if (theComp->CallerComp == 0){
+	/* Attempt to leave basic component! */
+	BetaError(LeaveBasicCompErr,theObj);
+      }
+      DEBUG_CODE(NumTermComp++);
+      theObj = theComp->CallerObj;  
+      theComp->CallerObj  = 0;
+      theComp->StackObj = 0;
+      nextComp = theComp->CallerComp; 
+      theComp->CallerComp = 0;
+      theComp = nextComp;
+
+      /* Pop the Component Block */
+      nextCBF       = (RegWin *) rw->l5;
+      nextCompBlock = (RegWin *) rw->l6;
+      rw = (RegWin *) rw->fp; 
+      TRACE_EXO();
+      continue;
+    } 
+    
+    /* go one step back */
+    rw = (RegWin *) rw->fp;
     TRACE_EXO();
+    continue;
   }
 
-  /* ActiveCallbackFrame, lastCompBlock, ActiveComponent have all
-   * been incrementally updated above.
-   */
+  /* Update global variables */
+  lastCompBlock       = (ComponentBlock*)nextCompBlock;
+  ActiveCallBackFrame = (CallBackFrame*)nextCBF;
+  ActiveComponent     = theComp;
 
   /* We return to exitAddr (the -8 is the SPARC convention) */
   setret(exitAddr-8);

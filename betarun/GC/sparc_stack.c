@@ -142,15 +142,28 @@ GeneralProcessStack(CellProcessFunc func)
 #endif
 	   theAR = (RegWin *) theAR->fp) {
       
+      DEBUG_STACK({
+	fprintf(output, 
+		"\n *** theAR=0x%08x, nextCompBlock=0x%08x, lastCompBlock=0x%08x) ***\n",
+		(int)theAR,
+		(int)nextCompBlock,
+		(int)lastCompBlock);});
       if (theAR == nextCompBlock) {
 	/* This is the AR of attach. Continue GC, but get
 	 * new values for nextCompBlock and nextCBF. 
 	 * Please read StackLayout.doc
 	 */
+	DEBUG_STACK(fprintf(output, " *** Passing Attach ***\n"));
 	nextCBF = (RegWin *) theAR->l5;
 	nextCompBlock = (RegWin *) theAR->l6;
-	if (nextCompBlock == 0)
+	if (nextCompBlock == 0){
+	  DEBUG_STACK({
+	    fprintf(output, 
+		    " *** reached the bottom (theAR=0x%08x, theAR->l6=0x%08x) ***\n",
+		    (int)theAR,
+		    (int)theAR->l6);});
 	  break; /* we reached the bottom */
+	}
       } else {
 	if (theAR == nextCBF) {
 	  /* This is AR of HandleCB. Don't GC this, but
@@ -178,7 +191,7 @@ GeneralProcessStack(CellProcessFunc func)
 	      }
 	    }
 	  });
-	  
+	  DEBUG_STACK(fprintf(output, "Skip to betaTop=0x%08x\n", (int)theAR->l6));
 	  theAR = (RegWin *) theAR->l6; /* Skip to betaTop */
 	}
       }
@@ -277,7 +290,7 @@ void PrintAR(RegWin *ar, RegWin *theEnd)
   char *lab = getLabel(frame_PC);
 
   fprintf(output, 
-	  "\n----- AR: 0x%x, theEnd: 0x%x, PC: 0x%x <%s+0x%x>\n",
+	  "\n----- AR(%%sp): 0x%x, theEnd(%%fp): 0x%x, PC: 0x%x <%s+0x%x>\n",
 	  (int)ar, 
 	  (int)theEnd,
 	  (int)frame_PC,
@@ -390,17 +403,17 @@ void PrintStack(void)
 	/* This is AR of HandleCB. Skip this and
 	 * skip to betaTop and update nextCBF
 	 */
-	    nextCBF = (RegWin *) theAR->l5;
-
-	    DEBUG_STACK({ /* Wind down the stack until betaTop is reached */
-			  RegWin *cAR;
-			  for (cAR = theAR;
-			       cAR != (RegWin *) theAR->l6;
-			       frame_PC = cAR->i7 +8, cAR = (RegWin *) cAR->fp)
-			    PrintCAR(cAR);
-			});
-
-	    theAR = (RegWin *) theAR->l6; /* Skip to betaTop */
+	nextCBF = (RegWin *) theAR->l5;
+	
+	DEBUG_STACK({ /* Wind down the stack until betaTop is reached */
+	  RegWin *cAR;
+	  for (cAR = theAR;
+	       cAR != (RegWin *) theAR->l6;
+	       frame_PC = cAR->i7 +8, cAR = (RegWin *) cAR->fp)
+	    PrintCAR(cAR);
+	});
+	
+	theAR = (RegWin *) theAR->l6; /* Skip to betaTop */
       }
     }
     PrintAR(theAR, (RegWin *) theAR->fp);
