@@ -1,6 +1,6 @@
 doc: always
 	@echo Generating documentation without PDF
-	@perl -s ../bin/makedoc -v -p sysutils.book
+	@perl -s ../bin/makedoc -v -p -d sysutils.book
 
 dist: always
 	@echo Generating documentation with PDF
