@@ -71,6 +71,7 @@ do (# IsSpecialVirtual: (* ...
             (if superOrgOff <> ThisDescOrgOff then 
                 (# prebase: ^mch.address;
                    originDesc: ^ASTindex;
+                   PK: @integer
                 do (* origin for prefix must be added one *)
                    Gen.ThisRegAdr->preBase[];
                    
@@ -99,14 +100,18 @@ do (# IsSpecialVirtual: (* ...
                               thisDesc[] -> xA; xN;
                               'origin: ' ->xT;
                               originDesc[] -> xA; xN;
-                           #);
-                   (if ((prefDesc -> sematt.descKind) = sematt.comKind)
-                       or
-                       ((originDesc[] <> none)
-                        and
-                       ((originDesc->sematt.descKind) = sematt.comkind))
+                             #);
+                   (* COM GC FIX *)
+                   (if ((prefDesc -> sematt.descKind->PK) = sematt.comKind)
+                        or (PK = sematt.holderkind)
+                        or
+                          ((originDesc[] <> none)
+                           and
+                          ((originDesc->sematt.descKind) = sematt.comkind))
                        then
-                       (* COM Objects are allocated directly in AOA - origin(s) may be in IOA *)
+                       (* COM- and holder-Oojects are allocated directly 
+                        * in AOA - origin(s) may be in IOA 
+                        *)
                        (prebase[],false,none,none)
                          -> (prefDesc.originOff->Gen.ThisRegAdr).asgRefAdr 
                          -> dest[] 
@@ -255,7 +260,38 @@ do (# GetAndSaveDescriptor:
                     N.off+refTag->GS.thisPT.Dyn.add
                 if)
              #);
-           descKind: @integer;
+           isDirect: booleanValue
+             (# D: ^ASTindex; Dkind: @integer
+             enter(D[],Dkind)
+             do (* D is descriptor of part-object in thisDesc*)
+                (if (D[]->sematt.descAccess) = common.direct then
+                    (* direct objects can potentially be allocated inline *)
+
+                    (if thisDesc -> sematt.descKind 
+                     // sematt.comKind 
+                     // sematt.holderKind then
+                        (* thisDesc - enclosing object -
+                         * is COM or holder
+                         *)
+                        (if Dkind = sematt.holderKind then
+                            (* the part object is a holder
+                             * holder-objects are inline *)
+                            true -> value
+                         else
+                            (* part object is not holder;
+                             * such objects are off line 
+                             * in COM- and holder objects
+                             *)
+                            false -> value                            
+                        if)
+                     else
+                        (* non-COM or holder-objects are inline *)
+                        true -> value
+                    if)
+                    (* else return false *)
+                if)
+             #);
+           descKind,K: @integer;
         enter (N,dataSpec,first) (* no allocation for dynIns *)
         do dataSpec.son->es;
            (es,first,N)-> GetAndSaveDescriptor -> desc;
@@ -289,7 +325,7 @@ do (# GetAndSaveDescriptor:
                if);
                (if desc.label
                 // gram.objectDescriptor then
-                   (if desc->sematt.DescKind
+                   (if desc->sematt.DescKind -> K
                     // sematt.standardKind then 
                        (if desc.size
                         // 4 then
@@ -314,17 +350,8 @@ do (# GetAndSaveDescriptor:
                     // sematt.generalKind 
                     // sematt.classKind
                     // sematt.holderKind (* OBS GC problem*) then
-                       (if ((desc[]->sematt.descAccess) = common.direct)
-                           and
-                           ((thisDesc->sematt.descKind) <> sematt.comKind)
-                           (* Part objects in COM-objects are always 
-                            * allocated offline, since the COM-object
-                            * is allocated in AOA and the part object
-                            * may be alloacted in IOA and we thus need
-                            * to assure that ChkRA is used for possible
-                            * superpatterns of the part-object
-                            *)
-                           then
+                       (* COM GC FIX *)
+                       (if (desc[],K) -> isDirect then
                            SaveReturn;
                            &Gen.ThisRegAdr->A[];
                            N.off->Noff->A.addOff->A[];
