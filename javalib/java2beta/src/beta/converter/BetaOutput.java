@@ -20,6 +20,7 @@ public class BetaOutput
 		      String cls, 
 		      String supPkg, 
 		      String sup, 
+		      boolean isInterface,
 		      int overwrite,
 		      boolean local,
 		      PrintStream outstream)
@@ -27,7 +28,7 @@ public class BetaOutput
     {
         this.local = local;
 	openStream(betalib, pkg, "_" + cls, overwrite, local, outstream);
-	if (out!=null) putWrapper(pkg, cls, supPkg, sup);
+	if (out!=null) putWrapper(pkg, cls, isInterface, supPkg, sup);
 	openStream(betalib, pkg, cls, overwrite, local, outstream);
     }
 
@@ -294,7 +295,11 @@ public class BetaOutput
 	indent(+3);
     }
 
-    public void putWrapper(String packageName, String className, String superPkg, String superClass)
+    public void putWrapper(String packageName, 
+			   String className, 
+			   boolean isInterface, 
+			   String superPkg, 
+			   String superClass)
     {
 	putln("ORIGIN '~beta/basiclib/betaenv';");
 	if ((superClass!=null) && !superClass.equals("Object")){
@@ -316,10 +321,10 @@ public class BetaOutput
 	putln(" *)");
 	putPatternBegin("_" + className, superClass);
 	nl();
-	putTrailer(packageName, className);
+	putTrailer(packageName, className, isInterface);
     }
 
-    public void putHeader(String packageName, String className, Object[] includes)
+    public void putHeader(String packageName, String className, boolean isInterface, Object[] includes)
     {
 	packageName = fixPackagePath(packageName);
 	putln("ORIGIN '" + "_" + className + "';");
@@ -336,7 +341,7 @@ public class BetaOutput
 	    };
 	};
 	putln("--LIB: attributes--\n");
-	putln("(* Java " + className + " class members.");
+	putln("(* Java " + className + " " + ((isInterface)?"interface":"class") + " members.");
 	putln(" * See " + "_" + className + ".bet for class declaration.");
 	if (packageName.startsWith("java/")){
 	    putln(" * See http://java.sun.com/j2se/" 
@@ -420,10 +425,11 @@ public class BetaOutput
 	indent(-2);
     }
 
-    public void putTrailer(String packageName, String className)
+    public void putTrailer(String packageName, String className, boolean isInterface)
     {
 	indent(-3);
 	packageName = fixPackagePath(packageName);
+	if (isInterface) packageName = '|' + packageName;
 	putln("do '" + packageName + className + "' -> className;");
 	indent(+3);
 	putln("INNER;");

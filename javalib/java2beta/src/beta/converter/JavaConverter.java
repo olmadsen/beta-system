@@ -520,12 +520,13 @@ class JavaConverter
 			       + ((cls==null)?"null":cls.getName() )
 			       + ")");
 	}
+	boolean isInterface = thisClass.isInterface();
 	String innerClass=null;
 	String innerName=null;
 	String innerSuper=null;
 	Class sup;
 	if (outer==null) {
-	    beta.putHeader(packageName, className, doIncludes(cls));
+	    beta.putHeader(packageName, className, isInterface, doIncludes(cls));
 	} else {
 	    innerClass = stripPackage(cls.getName());
 	    innerName  = stripPackage(unmangle(outer, cls.getName()));
@@ -541,10 +542,10 @@ class JavaConverter
 	doMethods(cls);
 	doClasses(cls);
 	if (outer==null) {
-	    beta.putTrailer(packageName, className);
+	    beta.putTrailer(packageName, className, isInterface);
 	    beta.close();
 	} else {
-	    beta.putTrailer(packageName, innerClass); // assuming same package!
+	    beta.putTrailer(packageName, innerClass, isInterface); // assuming same package!
 	}
     }
 
@@ -603,7 +604,15 @@ class JavaConverter
 		if (pkg!=null) superPkg = dotToSlash(pkg.getName());
 		superClass = stripPackage(sup.getName());
 	    }
-	    beta = new BetaOutput(betalib, packageName, className, superPkg, superClass, overwrite, local, out);
+	    beta = new BetaOutput(betalib, 
+				  packageName, 
+				  className, 
+				  superPkg, 
+				  superClass, 
+				  thisClass.isInterface(),
+				  overwrite, 
+				  local, 
+				  out);
 	    if (beta.out == null) return null;
 	} catch (Throwable e) {
 	    e.printStackTrace();
