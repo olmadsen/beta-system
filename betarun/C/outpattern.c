@@ -68,7 +68,7 @@ typedef struct group_header
 
 static int c_on_top;
 
-static char *GroupName(long address, int isCode)
+char *GroupName(long address, int isCode)
 {
 #ifdef macintosh
 #error Function GroupName not yet implemented for Macintosh / datpete
