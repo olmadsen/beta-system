@@ -1,10 +1,9 @@
 /*
   Compilation statement 
-  csc /t:module /out:ECtest.dll /r:System.dll ECtest.cs
-  BETA compile without -s 184 
+  csc /t:library /out:EC.dll /r:System.dll EC.cs
 */ 
 
-class ECtest: System.Object
+public class EC: System.Object
 { 
     int N =0;
 
@@ -19,7 +18,7 @@ class ECtest: System.Object
       N = a+b;
     }
 
-    public int foo3(ECtest S)
+    public int foo3(EC S)
     { 
       System.Console.WriteLine("foo3");
       S.foo1();
