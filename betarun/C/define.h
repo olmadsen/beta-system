@@ -52,21 +52,6 @@
 #endif /* __powerc */
 #endif /* MAC */
 
-/********* Definition of RUN, CRUN, NEWRUN *********/
-
-#ifdef intel
-#define RUN 1
-#endif
-
-#if defined(sparc) || defined(hppa)
-#define CRUN 1
-#endif
-
-#if defined(sgi) || defined(macppc)
-#undef RUN
-#define NEWRUN 1
-#endif
-
 /********** Machine specific definitions **********/
 #ifdef linux
 #define intel
@@ -90,6 +75,21 @@
 
 #ifdef nti 
 #define intel 1
+#endif
+
+/********* Definition of RUN, CRUN, NEWRUN *********/
+
+#ifdef intel
+#define RUN 1
+#endif
+
+#if defined(sparc) || defined(hppa)
+#define CRUN 1
+#endif
+
+#if defined(sgi) || defined(macppc)
+#undef RUN
+#define NEWRUN 1
 #endif
 
 /******** Misc. *******/

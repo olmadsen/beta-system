@@ -5,42 +5,28 @@ AlloC: public
      
      { Input variable.  }
      protoType: ProtoType  = RegCall;
-     origin:    Object     = DataReg1; {pReg1 in Intel version}
+     { origin in pReg1 }
      
      { Output variable. }
-     Argument:  DataArea   = RegCall;
+     Argument:      DataArea   = RegCall;
      
      { Used variable.   }
-     Size:      Word       = DataReg2;
-     SavedDR2:  Long       = DataReg2; { needed to save and restore DR2 as long }
-     Tmp:       Word       = DataReg1; 
-     initTab:   CodeArea   = AddrReg1; { index in GC table of prototype }
-     genTab:    CodeArea   = RegCall;
-     Entry:     CodeArea   = AddrReg1;
-     Index:     Word       = DataReg3; { saved and restored }
-     SavedDR3:  Long       = DataReg3; { needed to save and restore DR3 as long }
-     newTop:    DataArea   = AddrReg1;
-     theComp:   Component  = AddrReg2;
+     Size:          Word       = DataReg2;
+     DataReg2Long:  Long       = DataReg2; 
+     Tmp:           Word       = DataReg1; 
+     initTab:       CodeArea   = AddrReg1; { index in GC table of prototype }
+     genTab:        CodeArea   = RegCall;
+     Entry:         CodeArea   = AddrReg1;
+     Index:         Word       = DataReg3; { saved and restored }
+     DataReg3Long:  Long       = DataReg3; { saved and restored }
+     newTop:        DataArea   = AddrReg1;
+     theComp:       Component  = AddrReg2;
      
-     stack:     StackArea = SP;
   do
      (if debug then 1 -> NumAlloC+ if); 
      (if debug then call Ck if);
      
-     { 
-       General stack layout:
-       <Intel: DataReg2>   Intel: +0
-       <Intel: AddrReg2>   Intel: +4
-       <Intel: AddrReg1>   Intel: +8
-       <origin>            Intel: +12   Mac: +0   Default: +0
-       <Mac: AddrReg2>                  Mac: +4
-       ... 
-     }
-     
-     pReg1 -> DataReg1;
-     
-     push origin; { save (and force GC update of) origin }
-     push AddrReg1, AddrReg2, SavedDR2;
+     push AddrReg1, AddrReg2, DataReg2Long;
      
      again:
      
@@ -69,28 +55,28 @@ AlloC: public
      protoType.GCTabel -> initTab!w+;
      protoType -> initTab+;
      
-     { initTab is now pointing to the static GCTable. }
-     { This table has zero or more elements terminated with a zero word. }
-     { Each element looks like: }
-     { WORD Offset in the generated object, where this static object begins }
-     { WORD Signed distance to inclosing object }
-     { LONG Prototype of this static object }
+     { initTab is now pointing to the static GCTable. 
+       This table has zero or more elements terminated with a zero word. 
+       Each element looks like: 
+       
+       WORD Offset in the generated object, where this static object begins 
+       WORD Signed distance to inclosing object 
+       LONG Prototype of this static object
+     }
      
-     push SavedDR3;
+     push DataReg3Long;
      
      2 -> Index; { index in object }
      loop:
      (if Index < Size then
          (if Index = initTab[0]!w then
-             2 -> initTab+;
              { Insert the offset to the autonomous object. }
-             initTab[0]!w -> Tmp;
+             initTab[2]!w -> Tmp;
              extend Tmp;
              Tmp!l -> theComp[28+Index*4];
-             2 -> initTab+;
              { Insert the protoType from the initTab. }
-             initTab[0]!l -> Tmp!l; Tmp!l -> theComp[24+Index*4]!l;
-             4 -> initTab+;
+             initTab[4]!l -> Tmp!l; Tmp!l -> theComp[24+Index*4]!l;
+             8 -> initTab+;
              2 -> Index+;     
              goto loop
          if);
@@ -99,10 +85,11 @@ AlloC: public
      if);
      
      protoType.OrigOff -> Index;
-     stack[16{12+4}] -> origin;
-     origin -> theComp[24+Index*4];
+     pReg1 -> Tmp!l;
+     Tmp!l -> theComp[24+Index*4];
      
-     pop SavedDR3;
+     pop DataReg3Long;
+     
      protoType.GenPart -> Entry;
      (if Entry=0 then 
          theComp->Argument; 
@@ -113,12 +100,11 @@ AlloC: public
      clear AddrReg2; {Invalidate GC register}
      push Protect1Tag; {Protect DataReg2}
      call Entry;
-     4 -> stack+; {Discard GC protection}
+     4 -> SP+; {Discard GC protection}
      Argument[-24][] -> Argument; { make argument point to the comp part }
      
      CleanUp:
-     pop SavedDR2, AddrReg2, AddrReg1;
-     4 -> stack+; {Discard origin}
+     pop DataReg2Long, AddrReg2, AddrReg1;
      (if debug then call Ck if);
      return;
      
@@ -126,8 +112,10 @@ AlloC: public
      { The IOA heap is full, so we need a garbage collection. }
      Size!l -> ReqObjectSize; { Set the requested Object Size.}
      6      -> ReqObjectSize+;
-     pop SavedDR2, AddrReg2, AddrReg1;
-     call doGC;    { Call the Garbage Collector. }
-     push AddrReg1, AddrReg2, SavedDR2;
+     pop DataReg2Long, AddrReg2, AddrReg1;
+     push pReg1; { update origin }
+     call doGC;  { Call the Garbage Collector. }
+     pop pReg1;
+     push AddrReg1, AddrReg2, DataReg2Long;
      goto again;
   #)
