@@ -211,8 +211,10 @@ static void saveCurrentBlock(void)
 
 static unsigned long ensureBlock(unsigned long blockNo)
 {
+  static unsigned long currentBlockSize = 0;
   unsigned long delta, blockStart, blockEnd;
-  
+  unsigned long size;
+
   Claim(blockNo < currentPStore -> maxNumBlocks, "ensureBlock: blockNo oub");
   
   delta = 0;
@@ -226,14 +228,22 @@ static unsigned long ensureBlock(unsigned long blockNo)
   blockEnd = blockNo;
   
   if (!((blockStart == currentBlockStart) && (blockEnd == currentBlockEnd))) {
+    size = (delta + 1) * currentPStore->blockSize;
     if (currentBlock) {
       saveCurrentBlock();
-      free(currentBlock);
-      currentBlock = NULL;
+      if (currentBlockSize < size) {
+	free(currentBlock);
+	currentBlock = NULL;
+      }
     }
-    currentBlock = (char *)calloc(sizeof(char)*((delta + 1) * currentPStore -> blockSize), 1);
-    windTo(currentFd, currentPStore -> headerSize + blockStart * currentPStore -> blockSize);
-    readSome(currentFd, currentBlock, ((delta + 1) * currentPStore -> blockSize));
+    if (!currentBlock) {
+      currentBlock = (char *)malloc(size);
+      memset(currentBlock, 0, size);
+      currentBlockSize = size;
+    }
+    windTo(currentFd, currentPStore->headerSize + 
+	   blockStart * currentPStore->blockSize);
+    readSome(currentFd, currentBlock, (delta + 1) * currentPStore->blockSize);
     currentBlockStart = blockStart;
     currentBlockEnd = blockEnd;
     touched = 0;
@@ -536,6 +546,10 @@ int setStoreObject(unsigned long storeID,
 				     (unsigned long)blockOffset(offset) +
 				     delta * (currentPStore -> blockSize));
 	  
+	  Claim((long)blockOffset(offset)+ObjectSize(theObj)*4
+		< currentPStore->blockSize, 
+		"Object is too large, it spans into the next block");
+
 	  memcpy(ObjectInStore, 
 		 theObj, 
 		 ObjectSize(theObj)*4);

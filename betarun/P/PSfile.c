@@ -159,20 +159,22 @@ long isDir(char *name)
 
 unsigned long preferredBufferSize(int fd)
 {
+  unsigned long res;
 #ifdef nti
-  return 32*1024;
+  res = 8192;
 #else /* nti */
   struct stat st;
   
   if (fstat (fd, &st) == 0) {
-    return st.st_blksize;
+    res = st.st_blksize;
   } else {
-    perror("preferredBufferSize");
-    DEBUG_CODE(Illegal());
-    BetaExit(1);
+    res = 8192;
   }
-  return 0;
+  if (res<8192) {
+    res = 8192;
+  }
 #endif /* nti */
+  return res;
 }
 
 #endif /* PERSIST */
