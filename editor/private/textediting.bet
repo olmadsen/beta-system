@@ -55,7 +55,9 @@ INCLUDE '~beta/basiclib/numberio'
         oldLength: @integer;
         textBefore: @text;
         textAfter: ^text;
-        hadParseErrors: @boolean
+        hadParseErrors: @boolean;
+        parseError: @boolean;
+        parseErrorText: @text
      #);
    IS: (* initial selection *) @
      (#
@@ -557,26 +559,45 @@ INCLUDE '~beta/basiclib/numberio'
                  if)
              if)
           #);
-        ifExternalEditor:
-          (# 
-          do
-             (if useExternalTextEditor then
+        (if useExternalTextEditor then
+            startExternalEditor:
+              (# 
+              do
                  false->useExternalTextEditor;
+                 'External textediting'->edenv.ymerCallback.infoView;
                  TEinfo.textBefore[]->externalTextEdit->TEinfo.TextAfter[];
                  (if TEinfo.textBefore[]->TEinfo.textAfter.equal then
-                     false->textEditMode; 'No changes'->putLine
+                     'No changes'->putLine;
+                     'External textediting: No changes'
+                       ->edenv.ymerCallback.infoView;
+                     removeMarkers:
+                       (# 
+                       do
+                          (teInfo.posStartBefore,teInfo.posStartBefore+
+                           markerLength)->theSifTextEditor.contents.selection;
+                          theSifTextEditor.contents.delete;
+                          (teInfo.posEndBefore,teInfo.posEndBefore+markerLength)
+                            ->theSifTextEditor.contents.selection;
+                          theSifTextEditor.contents.delete;
+                          
+                       #);
+                     false->textEditMode
                   else
-                     (teInfo.posStartBefore,teInfo.posEndBefore)
-                       ->theSifTextEditor.contents.selection;
+                     (teInfo.posStartBefore+markerLength,teInfo.posEndBefore+
+                      markerLength)->theSifTextEditor.contents.selection;
                      theSifTextEditor.contents.delete;
-                     (teInfo.posStartBefore,teInfo.posStartBefore)
-                       ->theSifTextEditor.contents.selection;
+                     (teInfo.posStartBefore+markerLength,teInfo.posStartBefore+
+                      markerLength)->theSifTextEditor.contents.selection;
                      TEinfo.textAfter[]->theSifTextEditor.contents.insert;
                      false->textEditMode;
-                     (TEexit.parseMode,(none ,1,0,0))->TE.exitEditAndParseMode
+                     (TEexit.parseMode,(none ,1,0,0))->TE.exitEditAndParseMode;
+                     (if TEinfo.parseError then
+                         TEinfo.parseErrorText[]->edenv.ymerCallBack.infoView
+                     if);
+                     
                  if)
-             if)
-          #);
+              #)
+        if);
         
      #);
    exitEditAndParseMode:
@@ -615,14 +636,19 @@ INCLUDE '~beta/basiclib/numberio'
                          legalSymbols.terminals[i][]->alertText.putText;
                          ' '->alertText.put
                        for);
+                       theSifTexteditor.contents[]->target;
                        ascii.bel->put;
                        alertText[]->edenv.ymerCallBack.infoView;
-                       theSifTexteditor.contents[]->target;
+                       alertText[]->putLine;
+                       true->TEinfo.parseError;
+                       alertText->TEinfo.parseErrorText;
                        leave parsing
                     #)
                #);
              
           do
+             false->TEinfo.parseError;
+             ''->TEinfo.parseErrorText;
              updatePPshadowAst:
                (# 
                do
@@ -714,6 +740,7 @@ INCLUDE '~beta/basiclib/numberio'
                                      newCS->setFocus
                                  if);
                                  parsingOK;
+                                 ''->edenv.ymerCallback.infoView;
                                  (if teInfo.hadParseErrors or teInfo.isList then
                                      doReprettyprint
                                  if)
@@ -970,7 +997,6 @@ do
 -- doParseText: DoPart --
 do
    false->textEditMode;
-   ''->edenv.ymerCallback.infoView;
    (if editingMode
     // editAndParseMode then
        (TEexit.parseMode,(none ,0,0,0))->TE.exitEditAndParseMode; 
