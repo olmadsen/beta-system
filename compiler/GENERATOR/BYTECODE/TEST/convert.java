@@ -1,15 +1,19 @@
 public class convert
-{
-    int Int64ToInt32(long x){
-	return (int)x;
+  {
+    public int Int64ToInt32(long x){
+      System.out.println("Int64ToInt32(" + x + ")");
+      return (int)x;
     }
-    long Int32ToInt64(int x){
-	return (long)x;
+    public long Int32ToInt64(int x){
+      System.out.println("Int32ToInt32(" + x + ")");
+      return (long)x;
     }
-    static int staticInt64ToInt32(long x){
-	return (int)x;
+    public static int staticInt64ToInt32(long x){
+      System.out.println("staticInt64ToInt32(" + x + ")");
+      return (int)x;
     }
-    static long staticInt32ToInt64(int x){
-	return (long)x;
+    public static long staticInt32ToInt64(int x){
+      System.out.println("staticInt32ToInt32(" + x + ")");
+      return (long)x;
     }
 }
