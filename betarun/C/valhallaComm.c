@@ -760,6 +760,8 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
 
   if (PC==0) { /* Process about to stop. */
     valhalla_socket_flush ();
+    doshutdown(sock,2);
+    closeSocket(sock);
     invops=FALSE;
     return TERMINATE;
   };

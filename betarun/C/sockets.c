@@ -148,6 +148,13 @@ static size_t max_fd;
 
 #endif /* SUPPORT_TIMESTAMPING */
 
+#ifdef nti /* errno is function on nti and long on unix */
+  unsigned long nti_ErrNo=0;
+# define ERRNO nti_ErrNo
+#else
+# define ERRNO errno
+#endif
+
 unsigned long getTimeStamp(long fd)
 {
   return GET_TIMESTAMP(fd);
@@ -268,9 +275,9 @@ long selectReadable(int fd)
 			   &timeout))
     {
 #ifdef nti
-    errno = WSAGetLastError();
+    ERRNO = WSAGetLastError();
 #endif
-      if (EINTR == errno)
+      if (EINTR == ERRNO)
 	continue;		/* interrupted ssytem call: restart */
       else
 	return -1;		/* probably bad file descriptor */
@@ -339,9 +346,9 @@ long doBlock(long fd, long rd, long wr, long timeoutValue)
 			   ptm))) 
     {
 #ifdef nti
-    errno = WSAGetLastError();
+    ERRNO = WSAGetLastError();
 #endif
-      if (EINTR == errno)
+      if (EINTR == ERRNO)
 	continue;		/* interrupted ssytem call: restart */
       else
 	return -1;		/* probably bad file descriptor */
@@ -367,21 +374,21 @@ long doBlock(long fd, long rd, long wr, long timeoutValue)
  ********************************************************************/
 
 
-/* function 'Errno' simply returns the value of the variable 'errno'
+/* function 'ERRNO' simply returns the value of the variable 'ERRNO'
  * used by C-stdlib to report the most recent error.
  *
- * On NT, make sure to set errno to WSAGetLastError in the C-func that 
+ * On NT, make sure to set ERRNO to WSAGetLastError in the C-func that 
  * failed, if that is the kind of error, the BETAcode expects.
  *
  * args
  *   none
  *
  * return value
- *   errno, promoted to a long, to please BETA
+ *   ERRNO, promoted to a long, to please BETA
  */
-long Errno(void)
+long socket_errno(void)
 {
-  return errno;
+  return ERRNO;
 }
 
 
@@ -417,7 +424,7 @@ signed long host2inetAddr(char *host)
     } else {
       INFO_SOCKETS("host2inetAddr failed");
 #ifdef nti
-      errno = WSAGetLastError();
+      ERRNO = WSAGetLastError();
 #endif
       return -1;
     }
@@ -441,8 +448,8 @@ char const *nameOfThisHost(long *pErrorCode)
     if (0 > gethostname(nameOfThisHostCache,MAXHOSTNAMELEN)) {
 #endif
 #ifdef nti
-      errno = WSAGetLastError();
-      switch (errno) {
+      ERRNO = WSAGetLastError();
+      switch (ERRNO) {
       case WSAEFAULT:
 	INFO_SOCKETS("gethostname (WSAEFAULT)\n");
 	break;
@@ -456,7 +463,7 @@ char const *nameOfThisHost(long *pErrorCode)
 	INFO_SOCKETS("gethostname (WSAENETDOWN)\n");
 	break;
       default:
-	DEBUG_SOCKETS(fprintf(output,"gethostname (%d ?)\n",errno));
+	DEBUG_SOCKETS(fprintf(output,"gethostname (%d ?)\n",ERRNO));
 	break;
       }
 #endif
@@ -489,14 +496,14 @@ signed long inetAddrOfThisHost(void)
     if (!pHostInfo) {
       INFO_SOCKETS("inetAddrOfThisHost");
 #ifdef nti
-      errno = WSAGetLastError();
+      ERRNO = WSAGetLastError();
 #endif
       return -1;
     }
     if (0 > errorCode) {
       /* no INFO_SOCKETS here: has already been reported */
 #ifdef nti
-      errno = WSAGetLastError();
+      ERRNO = WSAGetLastError();
 #endif
       return -1;
     }
@@ -532,7 +539,7 @@ int createActiveSocket(unsigned long inetAddr, long port, int nonblock)
 
   if((sock = socket(AF_INET,SOCK_STREAM,0)) == SOCKET_ERROR) {
     INFO_SOCKETS("createActiveSocket,1");
-    errno = WSAGetLastError();
+    ERRNO = WSAGetLastError();
     return -1;
   }
   DEBUG_SOCKETS(fprintf(output, "%d\n", sock));
@@ -547,28 +554,28 @@ int createActiveSocket(unsigned long inetAddr, long port, int nonblock)
 
   if(connect(sock,(struct SOCKADDR_type*)&addr,sizeof(addr))) {
     INFO_SOCKETS("createActiveSocket,2");
-    errno = WSAGetLastError();
+    ERRNO = WSAGetLastError();
     return -1;
   }
 
   if (nonblock) {
     if (ioctlsocket(sock, FIONBIO, (unsigned long*)&nonblock)) {
       INFO_SOCKETS("createActiveSocket,3");
-      errno = WSAGetLastError();
+      ERRNO = WSAGetLastError();
       return -1;
     }
   }
 
   if (setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (char*)&on, sizeof(on))) {
     INFO_SOCKETS("createActiveSocket,4");
-    errno = WSAGetLastError();
+    ERRNO = WSAGetLastError();
     return -1;
   }
 
   if (setsockopt(sock, SOL_SOCKET, SO_LINGER,
 		 (char*)&li, sizeof(struct linger))) {
     INFO_SOCKETS("createActiveSocket,4.1");
-    errno = WSAGetLastError();
+    ERRNO = WSAGetLastError();
     return -1;
   }
 
@@ -651,7 +658,7 @@ int createPassiveSocket(long *port, int nonblock)
 #ifdef nti
   if ((listenSock = socket(AF_INET,SOCK_STREAM,0)) == INVALID_SOCKET) {
     INFO_SOCKETS("createPassiveSocket,1");
-    errno = WSAGetLastError();
+    ERRNO = WSAGetLastError();
     return -1;
   }
 
@@ -660,7 +667,7 @@ int createPassiveSocket(long *port, int nonblock)
   if (nonblock) {
     if (ioctlsocket(listenSock, FIONBIO, (unsigned long*)&nonblock)) {
       INFO_SOCKETS("createPassiveSocket,2");
-      errno = WSAGetLastError();
+      ERRNO = WSAGetLastError();
       return -1;
     }
   }
@@ -668,14 +675,14 @@ int createPassiveSocket(long *port, int nonblock)
   if (setsockopt(listenSock, SOL_SOCKET, SO_REUSEADDR, 
 		 (char*)&on, sizeof(on))) {
     INFO_SOCKETS("createPassiveSocket,2a");
-    errno = WSAGetLastError();
+    ERRNO = WSAGetLastError();
     return -1;
   }
 
   if (setsockopt(listenSock, SOL_SOCKET, SO_LINGER,
 		 (char*)&li, sizeof(struct linger))) {
     INFO_SOCKETS("createPassiveSocket,2b");
-    errno = WSAGetLastError();
+    ERRNO = WSAGetLastError();
     return -1;
   }
 #else
@@ -714,7 +721,7 @@ int createPassiveSocket(long *port, int nonblock)
 #ifdef nti
   if(bind(listenSock,(struct SOCKADDR_type*)&sockaddr,sizeof(sockaddr))) {
     INFO_SOCKETS("createPassiveSocket,3");
-    errno = WSAGetLastError();
+    ERRNO = WSAGetLastError();
     return -1;
   }
 #else
@@ -730,7 +737,7 @@ int createPassiveSocket(long *port, int nonblock)
     if (0 > getsockname(listenSock,(struct SOCKADDR_type*)&sockaddr,&size)) {
       INFO_SOCKETS("createPassiveSocket,4");
 #ifdef nti
-      errno = WSAGetLastError();
+      ERRNO = WSAGetLastError();
 #endif
       return -1;
     }
@@ -742,7 +749,7 @@ int createPassiveSocket(long *port, int nonblock)
   if (listen(listenSock,5)<0) {
     INFO_SOCKETS("createPassiveSocket,5");
 #ifdef nti
-    errno = WSAGetLastError();
+    ERRNO = WSAGetLastError();
 #endif
     return -1;
   }
@@ -800,14 +807,14 @@ int acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr)
 	
       default:
 	printf("acceptConn failed, WSAGetLastError=%d\n", WSAGetLastError());
-	errno = WSAGetLastError();
+	ERRNO = WSAGetLastError();
 	return -1;
       }
     }
 #else
     if (newSock < 0)
     {
-      switch (errno) 
+      switch (ERRNO) 
       {
       case EINTR:		/* Interrupt during system call .. */
 	continue;		/* .. simply restart it */
@@ -817,7 +824,7 @@ int acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr)
 	return 0;
 	
       default:
-	printf("acceptConn failed, errno=%d\n", errno);
+	printf("acceptConn failed, ERRNO=%d\n", ERRNO);
 	return -1;
       }
     }
@@ -833,7 +840,7 @@ int acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr)
     {
       INFO_SOCKETS("acceptConn,2");
 #ifdef nti
-      errno = WSAGetLastError();
+      ERRNO = WSAGetLastError();
 #endif
       return -1;
     }
@@ -845,20 +852,20 @@ int acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr)
 #ifdef nti
   if (ioctlsocket(newSock, FIONBIO, (unsigned long*)&on)) {
     INFO_SOCKETS("acceptConn,3");
-    errno = WSAGetLastError();
+    ERRNO = WSAGetLastError();
     return -1;
   }
   
   if (setsockopt(newSock, SOL_SOCKET, SO_KEEPALIVE, (char*)&on, sizeof(on))) {
     INFO_SOCKETS("acceptConn,4");
-    errno = WSAGetLastError();
+    ERRNO = WSAGetLastError();
     return -1;
   }
 
   if (setsockopt(newSock, SOL_SOCKET, SO_LINGER,
 		 (char*)&li, sizeof(struct linger))) {
     INFO_SOCKETS("acceptConn,4.1");
-    errno = WSAGetLastError();
+    ERRNO = WSAGetLastError();
     return -1;
   }
 #else
@@ -898,7 +905,7 @@ int acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr)
  *
  * return value
  *   normally: the number of bytes available from socket, a value >= 0
- *   in case of error: -1, check 'errno'.
+ *   in case of error: -1, check 'ERRNO'.
  */
 int sockToRead(int fd)
 {
@@ -914,7 +921,7 @@ int sockToRead(int fd)
   {
     INFO_SOCKETS("sockToRead");
 #ifdef nti
-    errno = WSAGetLastError();
+    ERRNO = WSAGetLastError();
 #endif
     return -1;
   }
@@ -956,7 +963,7 @@ int closeSocket(int fd)
 #ifdef RTDEBUG
     printf("Closesocket failed with WSAGetLastError=%d\n", WSAGetLastError());
 #endif
-    errno = WSAGetLastError();
+    ERRNO = WSAGetLastError();
     return -1;
   }
 #else
@@ -1022,14 +1029,14 @@ int readDataMax(int fd, char *destbuffer, int buflen)
       
       default:
 	INFO_SOCKETS("readDataMax,1");
-	errno = WSAGetLastError();
-	return -1;
+	ERRNO = WSAGetLastError();
+	printf("3 Error no is: %d\n",ERRNO);
       }
     
     case 0:
       /* No data available and not WOULDBLOCK: comm.partner closed down */
       INFO_SOCKETS("other party closed down; readDataMax,2");
-      errno = WSAENOTCONN;
+      ERRNO = WSAENOTCONN;
       return -1;
     
     default:
@@ -1039,7 +1046,7 @@ int readDataMax(int fd, char *destbuffer, int buflen)
     switch (received)
     {
     case -1:			/* ERROR */
-      switch (errno)
+      switch (ERRNO)
       {
       case ERR_WOULDBLOCK: /* No data available */
 	return 0;
@@ -1056,7 +1063,7 @@ int readDataMax(int fd, char *destbuffer, int buflen)
     case 0:
       /* No data available and not WOULDBLOCK: comm.partner closed down */
       INFO_SOCKETS("other party closed down; readDataMax,2");
-      errno = ENOTCONN;
+      ERRNO = ENOTCONN;
       return -1;
     
     default:
@@ -1113,7 +1120,7 @@ int writeDataMax(int fd, char *srcbuffer, int length)
       
       default:
 	INFO_SOCKETS("writeDataMax");
-	errno = WSAGetLastError();   /* betacode uses this */
+	ERRNO = WSAGetLastError();   /* betacode uses this */
 	return -1;
       }
     }
@@ -1123,7 +1130,7 @@ int writeDataMax(int fd, char *srcbuffer, int length)
 #else
     if (sent < 0)
     {
-      switch (errno) 
+      switch (ERRNO) 
       {
       case ERR_WOULDBLOCK:	/* Buffer full */
 	return 0;
