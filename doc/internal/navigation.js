@@ -11,29 +11,26 @@ foldersTree = gFld("<B>Contents</B>", "");
        aux1 = insFld(foldersTree, gFld("Status", ""));
 	      insDoc(aux1, gLnk(2, "MBS Status Matrix", "www.mjolner.dk/Quality/mbs_status.html"));
 
-       aux1 = insFld(foldersTree, gFld("Plan", ""));
-	      insDoc(aux1, gLnk(2, "Mj&oslash;lner r4.2 Plan", "www.mjolner.dk/Quality/r4.2-plan.html"));
-	      insDoc(aux1, gLnk(2, "Mj&oslash;lner r5.0 Plan", "www.mjolner.dk/Quality/r5.0-plan.html"));
+       aux1 = insFld(foldersTree, gFld("Plans", "plans.html"));
+	      insDoc(aux1, gLnk(0, "Mj&oslash;lner r5.1 Plan", "r5.1-plan.html"));
+	      aux2 = insDoc(aux1, gLnk(0, "Prioritized", "short_list.html"));
+	      aux2 = insFld(aux1, gFld("Wishes/Ideas", "wishes.html"));
+		   aux3 = insFld(aux2, gFld("Mjolner", "../mjolner/internal/TODO"));
+			insDoc(aux3, gLnk(0, "Freja", "../freja/internal/TODO"));
+			insDoc(aux3, gLnk(0, "Valhalla", "../valhalla/internal/TODO"));
+			insDoc(aux3, gLnk(0, "Sif", "../sif/internal/TODO"));
+		   aux3 = insDoc(aux2, gLnk(0, "Betarun", "../betarun/internal/TODO"));
+		   aux3 = insDoc(aux2, gLnk(0, "Compiler", "../compiler/internal/todo.html"));
+		   aux3 = insDoc(aux2, gLnk(0, "X Windows", "../xwindows/internal/todo.html"));
+		   aux3 = insDoc(aux2, gLnk(0, "Bifrost", "../bifrost-ref/internal/TODO"));
+		   aux3 = insFld(aux2, gFld("COM", "../comlib/internal/todo.html"));
+			insDoc(aux3, gLnk(0, "Bidl", "../bidl/internal/todo.html"));
+		   aux3 = insDoc(aux2, gLnk(0, "Documentation, general", "../admin/todo.html"));
+		   aux3 = insFld(aux2, gFld("Manual Errors, reported", "http://www.mjolner.com/ErrorReports/Manuals/"));
+			insDoc(aux3, gLnk(0, "r4.1", "http://www.mjolner.com/ErrorReports/Manuals/r4.1"));
+			insDoc(aux3, gLnk(0, "r5.0", "http://www.mjolner.com/ErrorReports/Manuals/r5.0"));
 
-       aux1 = insFld(foldersTree, gFld("Quality", ""));
-	      insDoc(aux1, gLnk(2, "Mj&oslash;lner Quality Pages", "www.mjolner.dk/Quality/"));
-
-       aux1 = insFld(foldersTree, gFld("TODO", ""));
-              insDoc(aux1, gLnk(0, "Mjolner", "../mjolner/internal/TODO"));
-              insDoc(aux1, gLnk(0, "CASE Tool", "../freja/internal/TODO"));
-              insDoc(aux1, gLnk(0, "Debugger", "../valhalla/internal/TODO"));
-              insDoc(aux1, gLnk(0, "Editor", "../sif/internal/TODO"));
-              insDoc(aux1, gLnk(0, "Sourcebrowser", "../ymer/internal/TODO"));
-              insDoc(aux1, gLnk(0, "Interfacebuilder", "../frigg/internal/TODO"));
-              insDoc(aux1, gLnk(0, "Guienv", "../lidskjalv-ref/internal/TODO"));
-              insDoc(aux1, gLnk(0, "Bifrost", "../bifrost-ref/internal/TODO"));
-              aux2 = insFld(aux1, gFld("COM", "../comlib/internal/todo.html"));
-		   insDoc(aux2, gLnk(0, "Bidl", "../bidl/internal/todo.html"));
-              insDoc(aux1, gLnk(0, "MPS", "../yggdrasil/internal/TODO"));
-              insDoc(aux1, gLnk(0, "Documentation, general", "../admin/todo.html"));
-              aux2 = insFld(aux1, gFld("Manual Errors, reported", "http://www.mjolner.com/ErrorReports/Manuals/"));
-		   insDoc(aux2, gLnk(0, "r4.1", "http://www.mjolner.com/ErrorReports/Manuals/r4.1"));
-		   insDoc(aux2, gLnk(0, "r5.0", "http://www.mjolner.com/ErrorReports/Manuals/r5.0"));
+       aux2 = insDoc(foldersTree, gLnk(2, "Mj&oslash;lner Quality Pages", "www.mjolner.dk/Quality/"));
 
        aux1 = insFld(foldersTree, gFld("CHANGES", ""));
               insDoc(aux1, gLnk(0, "CASE Tool", "../freja/internal/CHANGES"));
