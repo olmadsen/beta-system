@@ -22,12 +22,6 @@
 GLOBAL(long mcheck_line);
 #endif /* DMALLOC */
 
-#ifdef PERSIST
-extern void initLoadedObjects(void);
-extern void initReferenceTable(void);
-extern void SMinit(void);
-#endif /* PERSIST */
-
 #ifdef RTVALHALLA
 #include "valhallaComm.h"
 #endif /* RTVALHALLA */
@@ -374,12 +368,6 @@ void Initialize()
   if (valhallaID) valhallaInit (0);
 #endif /* RTVALHALLA */
 #endif /* nti_bor */
-
-#ifdef PERSIST
-  SMinit();
-  initLoadedObjects();
-  initReferenceTable();
-#endif /* PERSIST */
 }
 
 #if (defined(__linux__) && defined(__i386__)) || defined(nti)

@@ -38,6 +38,9 @@ int betaenvHandle;
 int programHandle;
 u_long speciallookup;
 
+/* Externals, used to initialize persistence handling */
+extern void SMinit(void);
+
 /* LOCAL FUNCTION DECLARATIONS */
 Object *USloadObject(CAStorage *store,
                      unsigned long offset, 
@@ -195,8 +198,23 @@ Object *handleSpecialReference(unsigned long specRef)
    return target;
 }
 
+static u_long initialized = 0;
+
 void registerRebinderFunc(Object *(*rebinderFunc)(unsigned long tag))
 {
+   if (initialized == 0) 
+   {
+      /* This method is called from PS.init. This means that we can
+       * initialize the persistent handling from here, thus avoiding
+       * allocating memory for persistence handling if it is not
+       * needed. Of cource there should be a seperate function for
+       * initializing the persistence handling, but this is left for
+       * later. */
+      SMinit();
+      initLoadedObjects();
+      initReferenceTable();
+      initialized = 1;
+   }
    callRebinderC = rebinderFunc;
 }
 
