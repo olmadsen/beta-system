@@ -13,236 +13,228 @@
 #include "liniarize.h"
 
 /* LOCAL FUNCTIONS */
-/* Main functionality */
-static void collectList(ptr(Object) root);
-static void scanList(ref (Object) root, void (foreach)(ref (Object) current));
-static void repairObjects(void);
-static void copyObjects(struct liniarization *l,
-                        void (redirect)(struct Object *obj, struct Object **theCell));
-static void copyObjectsAbsolute(struct liniarization *l);
-static void copyObjectsIndirect(struct liniarization *l);
+static void appendToList(struct Object *theObj, struct Object **theCell);
 
-/* Assisting functions */
-static long copyObjectToLiniarization(struct liniarization *l, struct Object *theObj);
-static void insertInInfoTable(ref (Object) current);
-static void assignIds(ref (Object) root);
-static struct liniarization *createLiniarization();
-static long getNextId(struct liniarization *l);
-static void insertInfoTableEntry(struct liniarization *l,
-                                 long id,
-                                 long oldGC,
-                                 long *original);
+static void appendToListNoIOA(struct Object *theObj, struct Object **theCell);
+static void initialCollectList(ptr(Object) root,
+                               void (referenceAction)(struct Object *obj,
+                                                      struct Object **theCell));
+static void extendCollectList(ptr(Object) root,
+                              void (referenceAction)(struct Object *obj,
+                                                     struct Object **theCell));
+static void collectLiveObjectsInAOA(void);
+static void scanList(ref (Object) root, void (foreach)(ref (Object) current));
+static struct liniarization *createLiniarization(void);
 static void freeLiniarization(struct liniarization *l);
+static long copyObjectToLiniarization(struct liniarization *l, struct Object *theObj);
 static void scanObject(struct Object *obj,
                        void (referenceAction)(struct Object *obj,
                                               struct Object **theCell),
                        int doPartObjects);
-static void redirectAbsolute(ref (Object) obj,
-                             handle (Object) theCell);
-static void redirectIndirect(ref (Object) obj,
-                             handle (Object) theCell);
-static void scanOrigins(void);
-static void checkLinearization(void);
+static void copyLeaveOffset(ref (Object) current);
+static void leaveForward(ref (Object) current);
+static void redirectPointers(struct Object *obj,
+                             struct Object **theCell);
+static void redirectPointersToLinearization(ref (Object) current);
+static long fileExists(char *name); 
+static long fileOpen(char *name); 
 static void dumpToDisk(struct liniarization *l);
-static struct liniarization *loadFromDisk(void);
+static void loadFromDisk(struct liniarization *l);
+static long getRoot(struct liniarization *l) ;
 
 /* GLOBAL FUNCTIONS */
-long linearizeAbsolute(struct Object *root);
-long linearizeIndirect(struct Object *root);
-void assignIndirRef(struct Object **theCell, long id);
+long linearizeAbsoluteMove(struct Object *root);
+void redirectPointersInAOA(void);
+void assignRefNoGC(struct Object **theCell, long id);
 void dumpLiniarizationToDisk(void);
+long linOpenRead(char *name);
+long linClose(void);
+long linOpenWrite(char *name);
+long linCreate(char *name);
 long loadLiniarizationFromDisk(void);
 
 /* LOCAL MACROS */
 
-#define LIN_IDTOOBJECT(l, id) ((ptr(Object))(l -> liniarization + l -> infoTable[id].byteOffset))
+#define FILEACCESSERROR -1
+#define FILENOTFOUND -2
+#define FILEALREADYOPEN -3
+#define FILEOK -4
+#define FILEEXISTS -5
 
 /* Copied in proxyRef.c, make sure to update if you change below */
 #define MAPTOINDIRECT(id) ((id * -1) - 1)
-
 #define INITIALLINLENGTH 4
 
 /* GLOBAL VARIABLES */
 struct liniarization *l = NULL;
+long doRedirectPointersInAOA = FALSE;
 
-/* MG: */
+/* MG: initialCollectList */
 
-static long minIndirRef = -200000;  /* minimum indirectref. */
-
-/* Build a linked list of all objects reachable from root
- * in the GCfield of the objects.
- * This often conflicts with the GC'er, so be careful...
- * The refernces are negated when written to GCAttr so that they can
- * be distinguished from forward pointers left by the GC.
+/* Build a linked list of all objects reachable from root in the
+ * GCfield of the objects.  This often conflicts with the GC'er, so be
+ * careful...  The refernces are negated when written to GCAttr so
+ * that they can be distinguished from forward pointers left by the
+ * GC.  THIS COMMENT IS NO LONGER VALID
+ *
+ * Instead it is now checked whether an object has been visited in the
+ * same way as in IOAGc, namly by checking if the value of the
+ * GCAttribute is larger that IOAMaxAge, in which case it is a forward
+ * pointer or a link pointer meaning that it has been moved.
  */
 
-static ptr(Object) tail;
+static ptr(Object) head;   /* Head of list build by collectList */
+static ptr(Object) tail;   /* Tail of list build by collectList */
 
-void appendToList(struct Object *theObj, struct Object **theCell)
+/* How to append objects to the list regardless where they are */
+
+static void appendToList(struct Object *theObj, struct Object **theCell)
 {
     ptr(Object) obj = (struct Object *)(*theCell);
-    
-    if ((tail != obj) && obj->GCAttr > minIndirRef) {
+
+    if ((tail != obj) && obj->GCAttr < IOAMaxAge) {
         /* Not in the list yet: Append it. */
-        tail->GCAttr = -(long)obj;
+        tail->GCAttr = (long)obj;
         tail=obj;
     }
 }
 
-static void collectList(ptr(Object) root)
+static void appendToListNoIOA(struct Object *theObj, struct Object **theCell)
+{
+    ptr(Object) obj = (struct Object *)(*theCell);
+
+    if (!inIOA(theObj)) {
+        if ((tail != obj) && obj->GCAttr < IOAMaxAge) {
+            /* Not in the list yet: Append it. */
+            tail->GCAttr = (long)obj;
+            tail=obj;
+        }
+    }
+}
+
+static void initialCollectList(ptr(Object) root,
+                               void (referenceAction)(struct Object *obj,
+                                                      struct Object **theCell))
 {
     ptr(Object) theObj;
 
-    set_start_time("collectList");
+    set_start_time("initialCollectList");
     
     /* point to self to end list.
      * Cannot be zero-term, as that would make it look unmarked
      * for the scanner.
      */
-    root->GCAttr = -(long)root; 
+    root->GCAttr = (long)root; 
     
-    /* Tail is where new objects are appended to the list. */
+    /* Tail is where new objects are appended to the list.
+     * Objects after tail in the list have not been processed yet.
+     */
     tail = root;
+
+    /* Head is the first object in the list. All objects in the
+     * list may be reached through head.
+     */
+    head = root;
     
-    for (theObj = root; theObj; theObj=(struct Object*)(-theObj->GCAttr)) {
-        scanObject(theObj, appendToList, TRUE);
+    for (theObj = root; theObj; theObj=(struct Object*)(theObj->GCAttr)) {
+        scanObject(theObj, referenceAction, TRUE);
     }
     /* NULL ternimate list: */
     tail->GCAttr=0;
 
-    set_end_time("collectList");
+    set_end_time("initialCollectList");
+}
+
+static void extendCollectList(ptr(Object) root,
+                              void (referenceAction)(struct Object *obj,
+                                                     struct Object **theCell))
+{
+    ptr(Object) theObj;
+
+    set_start_time("extendCollectList");
+    
+    DEBUG_CODE(Claim((int)tail, "extendCollectList without initialCollectList"));
+
+    /* Check that root is not already marked as being in the list */
+    if ((tail != root) && root->GCAttr < IOAMaxAge) {
+
+        /* point to self to end list.
+         * Cannot be zero-term, as that would make it look unmarked
+         * for the scanner.
+         */
+        root->GCAttr = (long)root; 
+        
+        /* Append root to list */
+        tail->GCAttr = (long)root;
+        tail = root;
+        
+        for (theObj = root; theObj; theObj=(struct Object*)(theObj->GCAttr)) {
+            scanObject(theObj, referenceAction, TRUE);
+        }
+        /* NULL terminate list: */
+        tail->GCAttr=0;
+    }
+    set_end_time("extendCollectList");
+}
+
+/* collectLiveObjectsInAOA:
+ */
+
+static void collectLiveObjectsInAOA(void) 
+{
+    /* All live objects in AOA are linked together in their GCattr */
+    
+    ptr(long) pointer = AOArootsLimit;
+    
+    pointer--;
+    
+    initialCollectList((ref (Object))*pointer, appendToListNoIOA);
+    
+    while( pointer > AOArootsPtr) {
+        pointer--;
+        /* Now *pointer is a root reference */
+        extendCollectList((ref (Object))*pointer, appendToListNoIOA);
+    }
+    
+    /* *AOArootsLimit now points to the head in the list of all live
+       objects in AOA */
 }
 
 /* scanList:
  */
 
-void scanList(ref (Object) root, void (foreach)(ref (Object) current))
+static void scanList(ref (Object) root, void (foreach)(ref (Object) current))
 {
     ref (Object) current;
     
-    for (current = root; current; current = (ref (Object)) (current -> GCAttr * -1)) {
+    for (current = root; current; current = (ref (Object)) (current -> GCAttr)) {
         foreach(current);
     }
 }
 
-/* assignIds:
- */
-
-void insertInInfoTable(ref (Object) current)
-{
-    long id;
-    long *original;
-
-    id = getNextId(l);
-    original = (long *)current;
-
-    insertInfoTableEntry(l, id, 0, original);
-}
-    
-void assignIds(ref (Object) root)
-{
-    set_start_time("assignIds");
-    scanList(root, insertInInfoTable);
-    set_end_time("assignIds");
-}
-
-/* repairObjects:
- */
-
-void repairObjects(void)
-{
-    long i;
-
-    set_start_time("repairObjects");
-    for (i = 0; i < l -> infoTableLength; i++) {
-        if (l -> infoTable[i].original) {
-            ((ref (Object)) (l -> infoTable[i].original)) -> GCAttr =
-                l -> infoTable[i].oldGC;
-        }
-    }
-    set_end_time("repairObjects");
-}
- 
 /* : Methods on liniarizations.
  */
 
 static struct liniarization *createLiniarization()
 {
     struct liniarization *l = (struct liniarization *)calloc(1, sizeof(struct liniarization));
+
+    l -> fd = -1;
+    l -> name = NULL;
     
     /* id counts from 0 and upwards */
-    l -> nextId = 0;
-    
-    l -> infoTableLength = 0;
-    l -> infoTable = NULL;
-    
     l -> liniarizationTop = INITIALLINLENGTH;
     l -> liniarizationLength = INITIALLINLENGTH;
     l -> liniarization = (char *)memalign(4, INITIALLINLENGTH);
     
     l -> noObjects = 0;
     
-    l -> originTableTop = 0;
-    l -> originTableLength = 0;
-    l -> originTable = NULL;
-        
     return l;
 }
 
-/* getNextId: */
-static long getNextId(struct liniarization *l) {
-
-    /* id counts from 0 and upwards */
-    return (l -> nextId++);
-}
-
-/* insertInfoTableEntry: */ 
-static void insertInfoTableEntry(struct liniarization *l,
-                                  long id,
-                                  long oldGC,
-                                  long *original) {
-    int i;
-    
-    /* Extend infoTable if nessecary */
-#if 0
-    fprintf(stderr, "insertInfoTableEntry: original = 0x%X\n", (int) original);
-#endif
-    while (id >= l -> infoTableLength) {
-        long newLength = l -> infoTableLength * 2 + 1;
-        struct infoTableEntry *new =
-            (struct infoTableEntry *)malloc(sizeof(struct infoTableEntry)*newLength);
-        
-        /* copy old table to new table */
-        memcpy(new, l -> infoTable, sizeof(struct infoTableEntry) * l -> infoTableLength);
-        
-        /* clear the remaining entries */
-        for(i = l -> infoTableLength; i < newLength; i++) {
-            new[i].original = 0;
-            new[i].byteOffset = -1;
-            new[i].oldGC = 0;
-        }
-        
-        if (l -> infoTable) {
-            free(l -> infoTable);
-            l -> infoTable = NULL;
-        }
-        l -> infoTable = new;
-        l -> infoTableLength = newLength;
-    }
-    
-    /* insert in table */
-    (l -> infoTable)[id].byteOffset = -1;
-    (l -> infoTable)[id].oldGC = oldGC;
-    (l -> infoTable)[id].original = original;
-}
-
-
-static void freeLiniarization(struct liniarization *l) {
+static void freeLiniarization(struct liniarization *l)
+{
     if (l) {
-        if (l -> infoTable) {
-            free(l -> infoTable);
-            l -> infoTable = NULL;
-        }
         if (l -> liniarization) {
             free(l -> liniarization);
             l -> liniarization = NULL;
@@ -255,7 +247,8 @@ static void freeLiniarization(struct liniarization *l) {
     }
 }
 
-static long copyObjectToLiniarization(struct liniarization *l, struct Object *theObj) {
+static long copyObjectToLiniarization(struct liniarization *l, struct Object *theObj)
+{
     long        size;
     long        offset;
     
@@ -403,57 +396,45 @@ static void scanObject(struct Object *obj,
     }
 }
 
-static void copyObjects(struct liniarization *l,
-                        void (redirect)(struct Object *obj, struct Object **theCell)) {
-    long i;
-    long id;
-    long absAddr;
-    
-    /* Copy objects to linearization and leave forward pointer */
-    for (i = 0; i < l -> infoTableLength; i++) {
-        if (l -> infoTable[i].original) {
-            l -> infoTable[i].byteOffset =
-                copyObjectToLiniarization(l, (ref (Object)) (l -> infoTable[i].original));
-            ((ref (Object)) (l -> infoTable[i].original)) -> GCAttr = i;
-        }
-    }
-    
-    /* scan and redirect all pointers */
-    for (i=0; i < l -> infoTableLength; i++) {
-        if (l -> infoTable[i].original) {
-            id = ((ref (Object)) (l -> infoTable[i].original)) -> GCAttr;
-            absAddr = (long) LIN_IDTOOBJECT(l, id);
-            scanObject((ref (Object))absAddr, redirect, TRUE);
-        }
+static void copyLeaveOffset(ref (Object) current) 
+{
+    current -> Proto = (ref(ProtoType))
+        copyObjectToLiniarization(l, current);
+}
+
+static void leaveForward(ref (Object) current) 
+{
+    current -> GCAttr = (long)
+        (l -> liniarization + (long) current -> Proto);
+}
+
+static void redirectPointers(struct Object *obj,
+                             struct Object **theCell)
+{
+    if (inLIN((*theCell) -> GCAttr)) {
+        *theCell = (ref (Object))((*theCell) -> GCAttr);
     }
 }
 
-static void redirectAbsolute(ref (Object) obj,
-                             handle (Object) theCell) {
-    *theCell = LIN_IDTOOBJECT(l, ((*theCell) -> GCAttr));
+static void redirectPointersToLinearization(ref (Object) current) 
+{
+    scanObject(current, redirectPointers, TRUE);
+    current -> GCAttr = 0;
 }
 
-
-static void redirectIndirect(ref (Object) obj,
-                             handle (Object) theCell) {
-    *theCell = (ref (Object)) MAPTOINDIRECT((*theCell) -> GCAttr);
+void redirectPointersInAOA(void) 
+{
+    /* step 5 */
+    collectLiveObjectsInAOA();
+    
+    /* step 6 */
+    scanList((ref (Object))*AOArootsLimit, redirectPointersToLinearization);
 }
 
-
-static void copyObjectsAbsolute(struct liniarization *l) {
-    copyObjects(l, redirectAbsolute);
-}
-
-static void copyObjectsIndirect(struct liniarization *l) {
-    set_start_time("copyObjectsIndirect");
-    copyObjects(l, redirectIndirect);
-    set_end_time("copyObjectsIndirect");
-}
-
-/* linearizeAbsolute: Wrapper for use from beta */
-long linearizeAbsolute(struct Object *root) {
+long linearizeAbsoluteMove(struct Object *root)
+{
     long newRoot;
-
+    
     /* Clean up previous data, if any */
     if (l) {
         freeLiniarization(l);
@@ -463,124 +444,182 @@ long linearizeAbsolute(struct Object *root) {
     /* l will point to the liniarization into
      * wich the objects are moved
      */
-    collectList(root);
+
+    /* This function copies the transitive closure of 'root' into the
+       linearization and redirects all pointers to these objects in
+       all heaps (not entirely correct since LVRA, amongst other
+       areas, are not supported) to their copy in the
+       linearization. Thus the transitive closure is in fact 'moved'
+       to the linearization, and the original copies are no longer
+       accessible to anyone ever again. This is done in the following
+       steps,
+
+       1) The transitive closure is linked together in the
+       GCattributes of the objects
+
+       2) This list is scanned and all objects copied to the
+       linearization, leaving the offset of (the copy of the object in
+       the linearization) in the prototype pointer of the object. The
+       absolute address cannot be left at this point since the
+       linearization may extend itself several times.
+       
+       3) After 2) where all the objects has been copied to the
+       linearization, the size of the linearization is fixed, and
+       objects within it will not move anymore. Thus a second scan of
+       the transitive closure is made and an absolute forward pointer
+       is left in the GCAttr of the objects.
+       
+       4) An ioaGC is executed. This will automaticly redirect all
+       references from IOA to objects now residing in the
+       linearization. Also IOAGc builds a list of AOAroots.
+       
+       5) Based on the list of AOARoots all live objects in AOA are
+       linked together in their GCAttribute.
+       
+       6) All live objects in AOA are scanned and any references to
+       objects now residing in the linearization are redirected. At
+       the same time the GCAttribute is cleared.
+       
+    */
     
-    l = createLiniarization();
-    assignIds(root);
-    copyObjectsAbsolute(l);
-    repairObjects();
+    /* step 1 */
+    initialCollectList(root, appendToList);
     
-    newRoot = (long) LIN_IDTOOBJECT(l, 0);
+    /* step 2 */
+    scanList(root, copyLeaveOffset);
+    
+    /* step 3 */
+    scanList(root, leaveForward);
+
+    /* step 4 */
+    doRedirectPointersInAOA = TRUE;
+    IOAGc();
+
+    /* step 5 */
+
+    /* step 6 */
+    
+    /* step 5 and 6 are both execute by IOAGc which calls
+     * 'redirectPointersInAOA' above
+     */
+    
     return newRoot;
 }
 
-/* linearizeIndirect: Wrapper for use from beta */
-long linearizeIndirect(struct Object *root) {
-
-    /* Clean up previous data, if any */
-    if (l) {
-        freeLiniarization(l);
-        l = NULL;
-    }
-    
-    /* l will point to the liniarization into
-     * wich the objects are moved
-     */
-    collectList(root);
-    
-    l = createLiniarization();
-    assignIds(root);
-    copyObjectsIndirect(l);
-    repairObjects();
-    
-    return (long) -1;
-}
-
-void assignIndirRef(struct Object **theCell, long id) {
+void assignRefNoGC(struct Object **theCell, long id)
+{
     *(long *)theCell = (long)id;
 }
 
-static void scanOrigins(void) {
-    /* scan each object in the liniarization and print the origin
-       reference */
-    int i;
-    long absAddr, byteOffset, originOffset, indirOriginRef;
-    ref (Object) theObj;
-    long *origin;
-    
-    for (i = 0; i < l -> infoTableLength; i++) {
-        if (l -> infoTable[i].original) {
-            byteOffset = l -> infoTable[i].byteOffset;
-
-            /* get a pointer to the object in the liniarization */
-            absAddr = (long) (l -> liniarization + byteOffset);
-            theObj = (struct Object *)absAddr;
-            
-            /* get a pointer to the cell holding the origin */
-            if (!isSpecialProtoType(theObj -> Proto))
-            {
-                originOffset = theObj -> Proto -> OriginOff;
-                origin = (long *)((char *)theObj + originOffset*4);
-                
-                /* get the origin reference */
-                indirOriginRef = *origin;
-                
-                if (indirOriginRef) {
-                    printf("id = %lu, contents = %lu, offset = %lu, referredObj = 0x%X\n",
-                           (long) i,
-                           MAPTOINDIRECT(indirOriginRef),
-                           (long) originOffset,
-                           (int) LIN_IDTOOBJECT(l, i));
-                }
-            }
-        }
-    }
-}
-
-void checkIndirReference(struct Object *obj, struct Object **theCell) {
-
-    if ((int) *theCell > 0) {
-        fprintf(stderr, "checkIndirReference: ref at offset %lu in object 0x%X should be indirect (%lu)\n",
-                (long) theCell - (long) obj, (int) obj, (long) *theCell);
-#if 0
-    } else {
-        fprintf(stderr, "checkIndirReference: ref at offset %lu in object 0x%X is OK (%lu)\n",
-                (long) theCell - (long) obj, (int) obj, (long) *theCell);
-#endif
-    }
-}
-
-static void checkLinearization(void) {
-    long i;
-    
-    for (i = 0; i < l -> infoTableLength; i++) {
-        if (l -> infoTable[i].original) {
-            scanObject(LIN_IDTOOBJECT(l, i), checkIndirReference, TRUE);
-        }
-    }
-}
-
-void dumpLiniarizationToDisk(void) {
+void dumpLiniarizationToDisk(void)
+{
     set_start_time("dumpLiniarizationToDisk");
     dumpToDisk(l);
     set_end_time("dumpLiniarizationToDisk");
 }
 
-static void dumpToDisk(struct liniarization *l) {
+static long fileExists(char *name) 
+{
     int fd;
     
-    fd = open("psstore", O_WRONLY | O_CREAT);
+    fd = open(name, O_RDONLY);
+    if (fd < 0) {
+        return 0;
+    } 
+    close(fd);
+    return 1;
+}
+
+static long fileOpen(char *name) 
+{
+    if (l -> name) {
+        if (strcmp(l -> name, name) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+long linOpenRead(char *name)
+{
+    if (fileOpen(name)) {
+        return FILEALREADYOPEN;
+    }
+
+    if (!fileExists(name)) {
+        return FILENOTFOUND;
+    }
+
+    freeLiniarization(l);
+    l = createLiniarization();
+    
+    if ((l -> fd = open(name, O_RDONLY)) < 0) {
+        return FILEACCESSERROR;
+    }
+
+    l -> name = strdup(name);
+    return FILEOK;
+}
+
+long linOpenWrite(char *name)
+{
+    if (fileOpen(name)) {
+        return FILEALREADYOPEN;
+    }
+    
+    if (!fileExists(name)) {
+        return FILENOTFOUND;
+    }
+
+    freeLiniarization(l);
+    l = createLiniarization();
+    
+    if ((l -> fd = open(name, O_RDWR)) < 0) {
+        return FILEACCESSERROR;
+    }
+    
+    l -> name = strdup(name);
+    return FILEOK;
+}
+
+long linClose(void) 
+{
+    if (l) {
+        close(l -> fd);
+    }
+    freeLiniarization(l);
+    return FILEOK;
+}
+
+long linCreate(char *name)
+{
+
+    if (fileOpen(name)) {
+        return FILEALREADYOPEN;
+    }
+    
+    if (fileExists(name)) {
+        return FILEEXISTS;
+    }
+
+    freeLiniarization(l);
+    l = createLiniarization();
+    
+    if ((l -> fd = open(name, O_RDWR | O_CREAT)) < 0) {
+        return FILEACCESSERROR;
+    }
+    
+    l -> name = strdup(name);
+    return FILEOK;
+}
+    
+static void dumpToDisk(struct liniarization *l)
+{
+    int fd;
+    
+    fd = l -> fd;
     
     if (fd != -1) {
-        /* write the 'nextId' to the file */
-        write(fd, (void *)&(l -> nextId), sizeof(long));
-        
-        /* write the 'infoTableLength' to the file */
-        write(fd, (void *)&(l -> infoTableLength), sizeof(long));
-        
-        /* write the info table to the file */
-        write(fd, (void *)(l -> infoTable), sizeof(infoTableEntry) * l -> infoTableLength);
-
         /* write the 'liniarizationTop' to the file */
         write(fd, (void *)&(l -> liniarizationTop), sizeof(long));
         
@@ -593,47 +632,21 @@ static void dumpToDisk(struct liniarization *l) {
         /* write the 'noObjects' to the file */
         write(fd, (void *)&(l -> noObjects), sizeof(long));
         
-        close(fd);
     } else {
-        fprintf(output, "could not open file for write\n");
+        fprintf(output, "file not open\n");
     }
 }
 
-long loadLiniarizationFromDisk(void) {
-    set_start_time("loadLiniarizationFromDisk");
-    if (l) {
-        freeLiniarization(l);
-        l = NULL;
-    }
-    l = loadFromDisk();
-    set_end_time("loadLiniarizationFromDisk");
-    
-    /* The root always has id = -1 */
-    return -1;
-}
-
-static struct liniarization *loadFromDisk(void) {
+static void loadFromDisk(struct liniarization *l)
+{
     int fd;
-    struct liniarization *l;
     
-    fd = open("psstore", O_RDONLY);
-    l = (struct liniarization *)calloc(1, sizeof(struct liniarization));
+    fd = l -> fd;
     
     if (fd != -1) {
         /* go to beginning of file */
         lseek(fd, 0, SEEK_SET);
         
-        /* read the 'nextId' from the file */
-        read(fd, (void *)&(l -> nextId), sizeof(long));
-        
-        /* read the 'infoTableLength' from the file */
-        read(fd, (void *)&(l -> infoTableLength), sizeof(long));
-        
-        /* read the infoection table from the file */
-        l -> infoTable = (struct infoTableEntry *)malloc(sizeof(struct infoTableEntry)*
-                                                           (l -> infoTableLength));
-        read(fd, (void *)(l -> infoTable), sizeof(infoTableEntry) * l -> infoTableLength);
-
         /* read the 'liniarizationTop' from the file */
         read(fd, (void *)&(l -> liniarizationTop), sizeof(long));
         
@@ -643,15 +656,30 @@ static struct liniarization *loadFromDisk(void) {
         /* read the liniarization from the file */
         l -> liniarization = (char *)memalign(4, l -> liniarizationLength);
         read(fd, (void *)(l -> liniarization), l -> liniarizationLength);
-
+        
         /* read the 'noObjects' from the file */
         read(fd, (void *)&(l -> noObjects), sizeof(long));
         
-        close(fd);
     } else {
         fprintf(output, "could not open file for read\n");
     }
-    return l;
 }
+
+static long getRoot(struct liniarization *l) 
+{
+    return (long) (l -> liniarization + 4);
+}
+
+long loadLiniarizationFromDisk(void)
+{
+    set_start_time("loadLiniarizationFromDisk");
+    loadFromDisk(l);
+    set_end_time("loadLiniarizationFromDisk");
+    
+    /* The root always has id = -1 */
+    return getRoot(l);
+}
+
         
 #endif /* LIN */
+

@@ -24,18 +24,16 @@ typedef struct originRefIndicator {
 } originRefIndicator;
 
 typedef struct liniarization {
-    long nextId;                 /* next available local id                    */
+    long fd;                    /* file descriptor associated with this
+                                   liniarization */
+    char *name;                 /* the name of the store in which this
+                                   linearization is stored */
+    long liniarizationTop;      /* first unused byte in liniarization         */
+    long liniarizationLength;   /* number of bytes available in liniarization 
+                                   (used and unused)                          */
+    char *liniarization;        /* the liniarization itself                   */
+    long noObjects;             /* number of objects moved to this liniarization */
     
-    long infoTableLength;       /* number of entries (used
-                                    and unsused)                               */
-    infoTableEntry *infoTable;  /* */
-    
-    long liniarizationTop;       /* first unused byte in liniarization         */
-    long liniarizationLength;    /* number of bytes available in liniarization 
-                                    (used and unused)                          */
-    char *liniarization;         /* the liniarization itself                   */
-    long noObjects;              /* number of objects moved to this liniarization */
-
     /* */
     long originTableTop;
     long originTableLength;
@@ -45,7 +43,10 @@ typedef struct liniarization {
 /* GLOBAL VARIABLES */
 
 extern struct liniarization *l;
-extern struct statistics stats;
+extern long doRedirectPointersInAOA;
+
+/* GLOBAL FUNCTIONS */
+void redirectPointersInAOA(void);
 
 #endif /* LIN */
 #endif /* _LINIARIZE_H_ */
