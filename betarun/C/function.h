@@ -78,9 +78,12 @@ extern void CheckStack();
 /* GC/copyobject.c */
 extern ref(Object) NewCopyObject();
 
-/* GC/scavenging.c */
+/* GC/stack.c */
 extern void ProcessStackPart();
 extern void ProcessStack();
+extern void ProcessStackObject();
+
+/* GC/ioa.c */
 extern void IOAGc();
 extern void ProcessReference();
 extern void ProcessObject();
