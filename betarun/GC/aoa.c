@@ -352,6 +352,49 @@ long sizeOfAOA(void)
   return numbytes;
 }
 
+static void AOARefStackHack(void)
+{
+  /*
+   * Dreadful hack. We have to remove the tag bits from those references
+   * in stackobjects that have them, so the Follow*() can handle them,
+   * but we have to save them somewhere. They are saved in the LSB of
+   * the pointers in the AOAroots table. They are restored just
+   * before the AOAGc finishes.
+   */
+#ifdef UseRefStack
+  long *pointer, *cellptr;
+
+  pointer = (long*)AOArootsPtr;
+  while (pointer < (long*)AOArootsLimit) {
+    cellptr = (long*)*pointer;
+    if (!isLazyRef(*cellptr) && (*cellptr & 1)) {
+      *cellptr &= ~1;
+      *pointer |= 1;
+    }
+    pointer++;
+  }
+#endif
+}
+
+static void AOARefStackUnHack(void)
+{
+#ifdef UseRefStack
+  long *pointer, *cellptr;
+
+  pointer = (long*)AOArootsPtr;
+  while (pointer < (long*)AOArootsLimit) {
+    if (!isLazyRef(*pointer) && (*pointer & 1)) {
+      /* clear tag bit in table */
+      *pointer &= ~1; 
+      cellptr = (long*)*pointer;
+      *cellptr |= 1;
+    }
+    pointer++;
+  }
+#endif
+
+}
+
 /*
  *  AOAGc: perform a mark/sweep garbagecollection on the AOA heap.
  *  Should be called after IOAGc when AOANeedCompaction == TRUE;
@@ -375,10 +418,11 @@ void AOAGc()
 
   MAC_CODE(RotateTheCursorBack());
 
+  AOARefStackHack();
+
   AOAFreeListAnalyze1();
   STAT_AOA(AOADisplayFreeList());
     
-
   /* Based on the AOARoots all objects reachable from those roots
    * are collected in a linked list. After that AOA is scanned and
    * objects not in the list are considered dead and inserted in the
@@ -465,6 +509,8 @@ void AOAGc()
   }
   
   STAT_AOA(fprintf(output,"]\n"));
+
+  AOARefStackUnHack();
 
   /* Make sure there is sufficient free memory */
   AOAMaybeNewBlock(0);
