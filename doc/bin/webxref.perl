@@ -858,6 +858,7 @@ else  { print "Unknown method \"$method\": $link\n"; }
 # If http check if it's a local reference after all (-islocal parameter!)
 if ($method eq 'http') {
   if (! $IsLocal) {
+      #print "HTTP: $link\n";
     return unless &AddedToList(*HTTPList, $link, $referer);
   }
   else {
@@ -1036,7 +1037,7 @@ print "Checking: ",&PrintFile($filename),"\n" if (!$Silent);
 &PrintDot('+') if ($Dots);
 
 local(@newlist) = GetLinks($filename);
-#print "done getlinks from ",&PrintFile($filename),":\n", join("\n",@newlist),"\n";
+print "done getlinks from ",&PrintFile($filename),":\n", join("\n",@newlist),"\n";
 
 # Now see if the anchor we were after was found
 if ($anchor) { 
@@ -1056,7 +1057,7 @@ if ($anchor) {
 
 # Walk the list and check everything is there
 foreach $file (@newlist) {
-
+  print "foreach: $file\n";
   ($method,$rest) = SplitURL($file);
   if ($method eq 'file') { 
     if ($file =~ m#^/#) {  # root reference
@@ -1082,6 +1083,7 @@ foreach $file (@newlist) {
   next if (&AlreadyChecked($Notlocal_file,$Notlocal_ref_filename));
 
 
+  print "foreach: GetReferences($Notlocal_file, $Notlocal_ref_filename)\n";
   &GetReferences($Notlocal_file, $Notlocal_ref_filename);
 } # foreach
 
@@ -1108,7 +1110,7 @@ unless (open(HTML, $filename)) {
 }
 
 # Read the file into a big string and remove crud in between tags.
-#print "opening $filename\n";
+print "opening $filename\n";
 open(HTML, $filename) || die "Could not open $filename\n";
 @Tags = <HTML>;
 close(HTML);
@@ -1136,7 +1138,7 @@ foreach (@Tags) {
     # -- a href
     if (m#href\s*=\s*"?([^"\s]*)"?#i) {
       $Link = $1;
-      #print "  href: -$Link-\n";
+      # print "  href: -$Link-\n";
   
       # Link to name anchor within current document? (<a href=#anchor>)
       if ($Link =~ m/^#/) {
@@ -1154,7 +1156,8 @@ foreach (@Tags) {
       # Link to another document?  a href=file.html#anchor
       elsif ($Link =~ m/#/) {
         $Link =~ m/(.+)#(.+)/;
-        #print "LINK: $Link  $1 $file - equal?\n";
+	#print "LINK: $Link\n";
+	#print "$1 $file - equal?\n";
         if ($1 eq $file) {  # Current file after all
           $LocalAnchorsWanted{("$filename" . '#' . "$2")} = 1;
         } 
@@ -1162,7 +1165,8 @@ foreach (@Tags) {
           $Newlist{$Link} = 1;
         }
       }
-      else {  # Just a file ref
+      else {  
+	# print "Just a file ref\n";
         $Newlist{$Link} = 1;
       }
     }
@@ -1228,7 +1232,6 @@ foreach (@Tags) {
 
 }  # foreach
 
-
 #print "LocalAnchorsFound: \n",join("\n",keys(%LocalAnchorsFound)),"\n";
 #print "\nLocalAnchorsWanted: \n",join("\n",keys(%LocalAnchorsWanted)),"\n";
 
@@ -1256,7 +1259,7 @@ foreach $Anchor (keys(%LocalAnchorsWanted)) {
 foreach (keys(%Newlist)) {
   if ($Newlist{$_}) { push(@Newlist, $_); }
 }
-#print "\nnewlist: \n",join("\n",@Newlist),"\n";
+#print "\nnewlist2: \n",join("\n",@Newlist),"\n";
 
 return @Newlist;
 
