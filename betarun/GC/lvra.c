@@ -238,11 +238,26 @@ ref(ValRep)LVRAAllocInBlock( range)
   return 0;
 }
 
-/* LVRAAlloc allocate a Byte repetition in the LVRArea. */
+/* LVRAByteAlloc allocate a Byte repetition in the LVRArea. */
 ref(ValRep) LVRAByteAlloc( range)
      long range;
 {
   printf("Allocation of large byte repetitions not yet implemented, sorry.\n");
+  exit (1);
+}
+
+/* LVRAWordAlloc allocate a Word repetition in the LVRArea. */
+ref(ValRep) LVRAWordAlloc( range)
+     long range;
+{
+  printf("Allocation of large word repetitions not yet implemented, sorry.\n");
+  exit (1);
+}
+/* LVRADoubleAlloc allocate a Double repetition in the LVRArea. */
+ref(ValRep) LVRADoubleAlloc( range)
+     long range;
+{
+  printf("Allocation of large Double repetitions not yet implemented, sorry.\n");
   exit (1);
 }
 
