@@ -257,7 +257,7 @@ sifapplication: (*GRAM ymerApplication *)
                editUserInterface:: 
                  (# 
                  do
-                    (frag[], node[])
+                    (frag[],node[])
                       ->ymerBrowserInt.friggExternalInterface.editUserInterface
                  #);
                OKtoTextedit:: 
@@ -518,16 +518,85 @@ sifapplication: (*GRAM ymerApplication *)
                         if)
                     if)
                  #);
+               check:: 
+                 (# OK: @boolean; newName: ^text
+                 do
+                    true->OK;
+                    loop:
+                    (if ymerBrowserInt.cge.isReadOnly then
+                        'Is readonly, make copy before checking'->writeInfoView;
+                        ymerBrowserInt.cge.saveAs->newName[];
+                        (if newName[] <> none then
+                            ymerBrowserInt.currentGroup.close;
+                            newName[]->ymerbrowserInt.selectFragmentGroup
+                         else
+                            false->OK
+                        if)
+                    if);
+                    (if OK and (ymerBrowserInt.cge[] <> none ) then
+                        ymerBrowserInt.cge.fg[]->lastCheckedFg[];
+                        ymerBrowserInt.cge.fgTitle->lastCheckedName[];
+                        ymerBrowserInt.cge.fg[]->THIS(sifBrowserWindowExt).check
+                    if)
+                 #);
                compile:: 
+                 (# OK: @boolean; newName: ^text
+                 do
+                    (if false (* new gram code *) then
+                        fg[]->THIS(sifBrowserWindowExt).compile->value;
+                        fg[]->lastCompiledFg[];
+                        fg.name->lastCompiledName[];
+                        (if fg[]->isProgram then
+                            'Linking...'->writeInfoView; waitOnJobFile
+                         else
+                            'Compilation finished'->writeInfoView
+                        if);
+                        
+                    if);
+                    true->OK;
+                    loop:
+                    (if ymerBrowserInt.cge.isReadOnly then
+                        'Is readonly, make copy before compiling'
+                          ->writeInfoView;
+                        ymerBrowserInt.cge.saveAs->newName[];
+                        (if newName[] <> none then
+                            ymerBrowserInt.currentGroup.close;
+                            newName[]->ymerbrowserInt.selectFragmentGroup
+                         else
+                            false->OK
+                        if)
+                    if);
+                    (if OK and (ymerBrowserInt.cge[] <> none ) then
+                        ymerBrowserInt.cge.fg[]->lastCompiledFg[];
+                        (ymerBrowserInt.cge.fgTitle).copy->lastCompiledName[];
+                        (if ymerBrowserInt.cge.fg[]->isRunning then
+                            ymerBrowserInt.cge.fg[]->kill
+                        if);
+                        (if
+                        ymerBrowserInt.cge.fg[]
+                          ->THIS(sifBrowserWindowExt).compile->value then
+                            (if ymerBrowserInt.cge.fg[]->isProgram then
+                                'Linking...'->writeInfoView;
+                                1000->jobFileTimer.start;
+                                'Linking finished'->writeInfoView
+                             else
+                                'Compilation finished'->writeInfoView
+                            if)
+                        if)
+                    if)
+                 #);
+               isExecutable:: 
+                 (# 
+                 do fg[]->THIS(sifbrowserWindowExt).executableExists->value
+                 #);
+               execute:: 
                  (# 
                  do
-                    fg[]->THIS(sifBrowserWindowExt).compile->value;
-                    fg[]->lastCompiledFg[];
-                    fg.name->lastCompiledName[];
-                    (if fg[]->isProgram then
-                        'Linking...'->writeInfoView; waitOnJobFile
-                     else
-                        'Compilation finished'->writeInfoView
+                    (if fg[]->executableExists then
+                        (if fg[]->isRunning then fg[]->kill if);
+                        fg[]->THIS(sifbrowserWindowExt).execute;
+                        fg[]->lastExecutedFg[];
+                        ymerBrowserInt.cge.fgTitle->lastExecutedName[]
                     if)
                  #);
                getEditorForForm:: 
@@ -549,7 +618,10 @@ sifapplication: (*GRAM ymerApplication *)
                  (# 
                  <<SLOT externalInterfaceCheckAutoSaveFile:DoPart>>
                  #);
-               check::  (#  <<SLOT externalInterfaceCheck:DoPart>> #);
+               simplecheck:: 
+                 (# fg: ^astinterface.fragmentGroup
+                 <<SLOT externalInterfaceCheck:DoPart>>
+                 #);
                toggleDebug:: 
                  (# 
                  <<SLOT externalInterfaceToggleDebug:DoPart>>
@@ -1551,27 +1623,32 @@ sifapplication: (*GRAM ymerApplication *)
             enter fg[]
             <<SLOT performMenuExecutableExists:DoPart>>
             #);
+          execute: executableExists
+            (# msg: ^text <<SLOT performMenuExecute:DoPart>> #);
+          isRunning: executableExists
+            (# 
+            <<SLOT performMenuIsRunning:DoPart>>
+            #);
+          kill: isRunning (#  <<SLOT performMenuKill:DoPart>> #);
           isProgram: booleanValue
             (# fg: ^astInterface.fragmentGroup
             enter fg[]
             <<SLOT performMenuIsProgram:DoPart>>
             #);
           jobFileTimer: @gui.timer
-            (#
-               action:: 
-                 (# 
-                 <<SLOT performMenuAction:DoPart>>
-                 #)
-            #);
+            (# action::  (#  <<SLOT performMenuAction:DoPart>> #) #);
           debug: (* debuggerExists  *)
-            (# msg: ^text; fg: ^astInterface.fragmentGroup
+            (#
+               msg: ^text;
+               fg: ^astInterface.fragmentGroup
             enter fg[]
             do
                fg[]
                  ->executableExists
                    (# 
                    do
-                      'Starting debugger on '->msg[];
+                      'Starting debugger on '
+                        ->msg[];
                       executable[]->msg.append;
                       msg[]->writeInfoView;
                       (* (fg[],executable[])->debugProgram; *)
@@ -2553,36 +2630,30 @@ sifapplication: (*GRAM ymerApplication *)
                     onSelect:: 
                       (#  <<SLOT performMenuRecompileOnSelect:DoPart>> #)
                  #);
-               execute:
-                executableExists
-                 (# msg: ^text <<SLOT performMenuExecute:DoPart>> #);
-               isRunning: executableExists
-                 (# 
-                 <<SLOT performMenuIsRunning:DoPart>>
-                 #);
-               kill: isRunning (#  <<SLOT performMenuKill:DoPart>> #);
                iExecute: @item
                  (#
                     newName: ^text;
                     onStatus:: 
-                      (#  <<SLOT performMenuExecuteOnStatus:DoPart>> #);
-                    onSelect:: 
                       (# 
-                      <<SLOT performMenuExecuteOnSelect:DoPart>>
-                      #)
+                      <<SLOT performMenuExecuteOnStatus:DoPart>>
+                      #);
+                    onSelect:: 
+                      (#  <<SLOT performMenuExecuteOnSelect:DoPart>> #)
                  #);
                iReExecute: @item
                  (#
                     newName: ^text;
                     onStatus:: 
-                      (#  <<SLOT performMenuReExecuteOnStatus:DoPart>> #);
+                      (# 
+                      <<SLOT performMenuReExecuteOnStatus:DoPart>>
+                      #);
                     onSelect:: 
-                      (#
-                         msg: ^text
+                      (# msg: ^text
                       <<SLOT performMenuReExecuteOnSelect:DoPart>>
                       #)
                  #);
-               iCompileAndExecute: @item
+               iCompileAndExecute:
+                 @item
                  (#
                     newName: ^text;
                     onStatus:: 
@@ -2755,9 +2826,9 @@ sifapplication: (*GRAM ymerApplication *)
      askEditUserinterface:< booleanValue
        (# node: ^astInterface.ast enter node[] do true->value; INNER #);
      editUserinterface:<
-       (# frag: ^astInterface.fragmentForm;
-          node: ^astInterface.ast 
-       enter (frag[], node[]) do INNER 
+       (# frag: ^astInterface.fragmentForm; node: ^astInterface.ast
+       enter (frag[],node[])
+       do INNER
        #);
      OKtoTextedit:< booleanValue (* ask interface builder *)
        (# node: ^astInterface.ast enter node[] do true->value; INNER #);
