@@ -809,7 +809,7 @@ local($Dot) = @_;
 local($Save) = $|;  # Save autoflush
 
 $| = 1;
-print $Dot;
+print STDERR $Dot;
 $| = $Save;
 
 $DotCount++;

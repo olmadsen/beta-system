@@ -20,7 +20,8 @@ generated:
 
 link-check:
 	@echo Checking all links from index.html
-	perl bin/webxref.perl -depth 1 -htmlonly -errors -nohttp index.html
+	perl bin/webxref.perl -xref -html -depth 1 -htmlonly -nohttp index.html >errors.html
+	@echo See file errors.html for a survey of errors.
 
 up: update
 
