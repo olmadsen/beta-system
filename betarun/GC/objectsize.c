@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: objectsize.c,v $, rel: %R%, date: $Date: 1992-07-20 16:31:51 $, SID: $Revision: 1.9 $
+ * Mod: $RCSfile: objectsize.c,v $, rel: %R%, date: $Date: 1992-07-21 17:19:47 $, SID: $Revision: 1.10 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -14,16 +14,13 @@ long ObjectSize(theObj)
   if( (long) theProto < 0 ){
     switch((int) theProto){
     case (int) WordRepPTValue:
-      /* BodySize= ((Range+3)/4): multiple of 4 */
-      return (headsize(ValRep) + (toValRep(theObj)->HighBorder+3)) >> 2;
+      return WordRepSize(toValRep(theObj)->HighBorder) >> 2;
     case (int) ByteRepPTValue:
-      /* BodySize= ((Range+1+3)/4): One byte extra for \0 in strings and multiple of 4 */
-      return (headsize(ValRep) + (toValRep(theObj)->HighBorder+4)) >> 2;
+      return ByteRepSize(toValRep(theObj)->HighBorder) >> 2;
     case (int) DoubleRepPTValue:
-      /* BodySize= ((2*Range+3)/4): two bytes for each and multiple of 4 */
-      return (headsize(ValRep) + (2*toValRep(theObj)->HighBorder+3)) >> 2;
+      return DoubleRepSize(toValRep(theObj)->HighBorder) >> 2;
     case (int) ValRepPTValue:
-      return (headsize(ValRep)>>2) + toValRep(theObj)->HighBorder;
+      return ValRepSize(toValRep(theObj)->HighBorder) >> 2;
     case (int) RefRepPTValue:
       return (headsize(RefRep)>>2) + toRefRep(theObj)->HighBorder;
     case (int) ComponentPTValue:
