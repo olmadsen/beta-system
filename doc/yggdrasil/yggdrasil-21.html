@@ -6,7 +6,7 @@
 
 
 
-<TITLE> 6.1.6 An Example Grammar</TITLE>
+<TITLE> Appendix C: Expression Grammar Example</TITLE>
 <LINK REL=stylesheet HREF=../style/miadoc.css TYPE=text/css>
 
 </HEAD>
@@ -16,48 +16,349 @@
 <A NAME=HEADING21></A>
 
 
-<P><A HREF=yggdrasil-22.html><IMG ALIGN=BOTTOM SRC="../images/next.gif" ALT=Next BORDER=0></A>
+<P><A HREF=interface/index.html><IMG ALIGN=BOTTOM SRC="../images/next.gif" ALT=Next BORDER=0></A>
 <A HREF=yggdrasil-20.html><IMG ALIGN=BOTTOM SRC="../images/prev.gif" ALT=Previous BORDER=0></A>
-<A HREF=yggdrasil-15.html><IMG ALIGN=BOTTOM SRC="../images/up.gif" ALT=Up BORDER=0></A>
-<A HREF=../index.html><IMG ALIGN=BOTTOM SRC="../images/top.gif" ALT=Top BORDER=0></A>
-<A HREF=index.html#_toc><IMG ALIGN=BOTTOM SRC="../images/content.gif" ALT=Contents BORDER=0></A>
+
+<A HREF="../index.html"><IMG ALIGN=BOTTOM SRC="../images/top.gif" ALT=Top BORDER=0></A>
+<A HREF="index.html#_toc"><IMG ALIGN=BOTTOM SRC="../images/content.gif" ALT=Contents BORDER=0></A>
 <A HREF=inx.html><IMG ALIGN=BOTTOM SRC="../images/index.gif" ALT=Index BORDER=0></A></P>
-<P> 6.1 Constructing a Grammar</P>
+<P>Metaprogramming System</P>
 
 
 <A NAME=HEADING21-0></A>
-<H1> <A NAME="LINK-yggdrasil-_Toc364700514"><A NAME=MARKER-9-132></A>6.1.6 An Example Grammar</A></H1>
-<P> The following grammar will be used in the following to illustrate the various tools:</P>
+<H1> <A NAME="LINK-yggdrasil-_Toc364700537"><A NAME=MARKER-9-198></A>Appendix C: Expression Grammar Example<A NAME=MARKER-2-200></A></A></H1>
+<P> This appendix contains an example of use of the metaprogramming system for generating an expression calculator, enabling the user to enter expressions from the keyboard, which are then parser and the resulting AST is then evaluated by an interpreter (actually a recursive traversal of the AST, eveluating sunexpressions), and the calculated result is then printed on the screen. To give an impression of the application, the following is an example of an execution of the calculator (the underlined text is entered by the user &Ntilde; expreval is the name of the calculator):</P>
+<PRE CLASS=beta>
+expreval
+Eval? 3+4
+7
+Eval? (3+4)*(20+2)/4
+38
+Eval? (3+4
+PARSE-ERRORS
+#   1 (3+4
+# ****** ^
+#  Expected symbols:  / mod ) * +
+Eval? 22 mod 5
+2
+Eval? .
+</PRE>
+<P> This application consists of five files: </P>
+<UL>
+<LI> expr-meta.gram: Contains the grammar specification for the valid expressions.
+<LI> expr-pretty.pgram: Contains the pretty-printer specification.
+<LI> exprcfl.bet: Contains the generated context-free level interface.
+<LI> exprsematt.bet: Contains the additional semantic level interface. Primerily the eval routine.
+<LI> expreval.bet: Contains the initialization, and keyboard and screen handling code.
+</UL>
+<P> We will in the following present the five files along with a few comments on the important aspects of the particular file.</P>
+<A NAME=HEADING21-23></A>
+<H1> <A NAME="LINK-yggdrasil-_Toc364700538"><A NAME=MARKER-9-201></A>The Expression Grammar</A></H1>
+<P> This file contains the grammar that are used to check the syntax of the expressions of the calculator. The grammar is a fairly ordinary expression grammar, except that assignment statements are part of the legal syntax of the calculator, making the use of variables valid in the calculator. Please note the declaration of the substanceSlot and the attribute part.</P>
 <P> </P>
-<P> -- mylang: aGrammar: metagrammar --</P>
-<P> grammar mylang:</P>
-<P> rule</P>
-<P> &lt;module&gt;        ::= 'module' &lt;module:id&gt; ';' &lt;importOpt&gt;</P>
-<P>                     'begin' &lt;statement&gt; 'end';</P>
-<P> &lt;id&gt;            ::= &lt;nameDecl&gt;;</P>
-<P> &lt;importOpt&gt;     ::? &lt;import&gt;;</P>
-<P> &lt;import&gt;        ::= 'import' &lt;nameList&gt; ';';</P>
-<P> &lt;nameList&gt;      ::+ &lt;nameDecl&gt; ',';</P>
-<P> &lt;statement&gt;     ::| &lt;if&gt; | &lt;while&gt; | &lt;procCall&gt;;</P>
-<P> &lt;if&gt;            ::= 'if' &lt;condition:exp&gt;</P>
-<P>                     'then' &lt;thenPart:statement&gt;</P>
-<P>                     'else' &lt;elsePart:statement&gt; 'endif';</P>
-<P> &lt;while&gt;         ::= 'while' &lt;condition:exp&gt;</P>
-<P>                     'do' &lt;statementList&gt; 'end';</P>
-<P> &lt;statementList&gt; ::* &lt;statement&gt; ';';</P>
-<P> &lt;exp&gt;           ::| &lt;expProcCall&gt; | &lt;text&gt; | &lt;number&gt;;</P>
-<P> &lt;text&gt;          ::= &lt;string&gt;;</P>
-<P> &lt;number&gt;        ::= &lt;const&gt;;</P>
-<P> &lt;expProcCall&gt;   ::= &lt;procCall&gt;;</P>
-<P> &lt;procCall&gt;      ::= &lt;nameAppl&gt; '(' ')'</P>
+<PRE CLASS=beta>
+--- expr: AGrammar: metagrammar ---
+Grammar expr:
+option 
+    string = unused
+    substanceSlot = dcAtt
+Rule
+  &lt;stat&gt; ::| &lt;assignment&gt; | &lt;evalStatement&gt; | &lt;quit&gt;;
+  &lt;assignment&gt; ::= &lt;name : nameDecl&gt; '=' &lt;expression&gt;;
+  &lt;evalStatement&gt; ::= &lt;expression&gt;;
+  &lt;quit&gt; ::= '.';
+  &lt;expression&gt; ::| &lt;Term&gt; | &lt;addExpression&gt;;
+  &lt;term&gt; ::| &lt;factor&gt; | &lt;multExpression&gt;;
+  &lt;factor&gt; ::| &lt;number&gt; | &lt;bracketExpression&gt; | &lt;variable&gt;;
+  &lt;bracketExpression&gt; ::= '(' &lt;expression&gt; ')';
+  &lt;MultExpression&gt; ::= &lt;Operand1 : Term&gt; &lt;MultOperator&gt; &lt;Operand2 : Factor&gt;;
+  &lt;AddExpression&gt; ::= &lt;Operand1 : Expression&gt; &lt;AddOperator&gt; &lt;Operand2 : Term&gt;;
+  &lt;MultOperator&gt; ::| &lt;TimesOp&gt; | &lt;DivOp&gt; | &lt;ModOp&gt;;
+  &lt;AddOperator&gt; ::| &lt;PlusOp&gt; | &lt;MinusOp&gt;;
+  &lt;Number&gt; ::= &lt;Const&gt;;
+  &lt;Variable&gt; ::= &lt;NameAppl&gt;;
+  &lt;TimesOp&gt; ::= '*';
+  &lt;DivOp&gt; ::= '/';
+  &lt;ModOp&gt; ::= 'mod';
+  &lt;plusOp&gt; ::= '+';
+  &lt;minusOp&gt; ::= '-'
+attribute
+  (* the following definitions will trigger the generator to make
+   *  semantic attribute slots for the generated context free level
+   *)
+  &lt;expression&gt; : 0
+</PRE>
+<A NAME=HEADING21-56></A>
+<H1> <A NAME="LINK-yggdrasil-_Toc364700539"><A NAME=MARKER-9-203></A>The Expression Pretty-Print Grammar</A></H1>
+<P> This file contains the pretty-pring grammar, used by the calculator. Strictly speaking this pretty-print grammar is not used by the calculator.</P>
+<P> </P>
+<PRE CLASS=beta>
+--- expr : prettyprint : prettyprint --- 
+PrettyPrintScheme exprSpec
+for expr:
+stat	=  N:1 ;
+assignment	= [c  N:1 $1,0 T:1 $1,0 * $1,2 N:2];
+evalStatement	=  N:1;
+quit	=  T:1 $1,0 *;
+expression	=  N:1 ;
+term	=  N:1 ;
+factor	=  N:1 ;
+bracketExpression	= [c  T:1 $1,0 * $1,2 N:1 $1,0 T:2];
+MultExpression	= [c  N:1 $1,2 N:2 $1,2 N:3];
+AddExpression	= [c  N:1 $1,2 N:2 $1,2 N:3];
+MultOperator	=  N:1 ;
+AddOperator	=  N:1 ;
+Number	=  N:1;
+Variable	=  N:1;
+TimesOp	=  T:1 $1,0 *;
+DivOp	=  T:1 $1,0 *;
+ModOp	=  T:1 $1,0 *;
+plusOp	=  T:1 $1,0 *;
+minusOp	=  T:1 $1,0 *
+</PRE>
+<A NAME=HEADING21-81></A>
+<H1> <A NAME="LINK-yggdrasil-_Toc364700540"><A NAME=MARKER-9-205></A>The Expression Context-Free Level Interface</A></H1>
+<P> This file contains the generated context-free level interface. Please note the effects of the substanceSlot and attribute part specifications in the grammar. The init routine only contains initializations that can be ignored.</P>
+<P> </P>
+<PRE CLASS=beta>
+ORIGIN '~beta/mps/astlevel'
+--- astInterfaceLib: attributes---
+expr: TreeLevel
+  (# stat: cons
+       (# &lt;&lt;SLOT statAttributes: attributes&gt;&gt; #);
+     expression: cons
+       (# &lt;&lt;SLOT expressionAttributes: attributes&gt;&gt; #);
+     term: expression
+       (# #);
+     factor: term
+       (# #);
+     MultOperator: cons
+       (# #);
+     AddOperator: cons
+       (# #);
+     assignment: stat
+       (# getname: getson1(# #);
+          putname: putson1(# #);
+          getexpression: getson2(# #);
+          putexpression: putson2(# #);
+       exit 2
+       #);
+     evalStatement: stat
+       (# getexpression: getson1(# #);
+          putexpression: putson1(# #);
+       exit 3
+       #);
+     quit: stat
+       (# exit 4 #);
+     bracketExpression: factor
+       (# getexpression: getson1(# #);
+          putexpression: putson1(# #);
+       exit 8
+       #);
+     MultExpression: term
+       (# getOperand1: getson1(# #);
+          putOperand1: putson1(# #);
+          getMultOperator: getson2(# #);
+          putMultOperator: putson2(# #);
+          getOperand2: getson3(# #);
+          putOperand2: putson3(# #);
+       exit 9
+       #);
+     AddExpression: expression
+       (# getOperand1: getson1(# #);
+          putOperand1: putson1(# #);
+          getAddOperator: getson2(# #);
+          putAddOperator: putson2(# #);
+          getOperand2: getson3(# #);
+          putOperand2: putson3(# #);
+       exit 10
+       #);
+     Number: factor
+       (# getConst: getson1(# #);
+          putConst: putson1(# #);
+       exit 13
+       #);
+     Variable: factor
+       (# getNameAppl: getson1(# #);
+          putNameAppl: putson1(# #);
+       exit 14
+       #);
+     TimesOp: MultOperator
+       (# exit 15 #);
+     DivOp: MultOperator
+       (# exit 16 #);
+     ModOp: MultOperator
+       (# exit 17 #);
+     plusOp: AddOperator
+       (# exit 18 #);
+     minusOp: AddOperator
+       (# exit 19 #);
+     grammarIdentification::&lt;
+       (# do 'expr'-&gt;theGrammarName #);
+     version::&lt; 
+       (# do -1-&gt;value #);
+     suffix::&lt;
+       (# do '.text'-&gt;theSuffix #);
+     maxproductions::&lt;
+       (# do 19-&gt;value #);
+     dcAtt: @
+       &lt;&lt;SLOT dcAtt: descriptor&gt;&gt;;
+     init::&lt; 
+       (# ... #);
+  #)
+</PRE>
+<A NAME=HEADING21-169></A>
+<H1> <A NAME="LINK-yggdrasil-_Toc364700541"><A NAME=MARKER-9-207></A>The Expression Semantic Level Interface</A></H1>
+<P> This file contains the semantic level interface, written for the calculator. Please note the utilization of the SLOTs, generated as the result of the substanceSlot and attribute part of the grammar.</P>
+<P> </P>
+<PRE CLASS=beta>
+ORIGIN 'exprcfl';
+INCLUDE '~beta/containers/hashTable'
+--- expressionAttributes: attributes ---
+eval: 
+  (# value: @integer ;
+     n: ^number;
+     cnst: ^const;
+     m: ^multExpression;
+     a: ^addExpression;
+     anAst: ^ast;
+     be: ^bracketExpression;
+     e1,e2: ^expression;
+     var: ^variable;
+     na: ^nameAppl;
+  do (if symbol
+      //bracketExpression then 
+         this(expression)[] -&gt; be[]; be.getExpression -&gt; e1[]; e1.eval -&gt; value
+      //multexpression then 
+         this(expression)[] -&gt; m[];
+         m.getOperand1 -&gt; e1[]; m.getoperand2 -&gt; e2[];
+         m.getMultOperator -&gt; anAst[];
+         (if anAst.symbol
+          //timesop then e1.eval * e2.eval -&gt; value
+          //divop then e1.eval div e2.eval -&gt; value
+          //modOp then e1.eval mod e2.eval -&gt; value
+         if);
+      //addexpression then
+         this(expression)[] -&gt; a[];
+         a.getOperand1 -&gt; e1[]; a.getOperand2 -&gt; e2[];
+         a.getAddOperator -&gt; anAst[];
+         (if anAst.symbol
+          //plusOp then e1.eval + e2.eval -&gt; value
+          //minusOp then e1.eval - e2.eval -&gt; value
+         if)
+      //number then this(expression)[]-&gt;n[];
+                    n.getConst-&gt;cnst[]; cnst.getValue -&gt; value
+      //variable then this(expression)[] -&gt; var[];
+         var.getnameAppl -&gt; na[];
+         (# e: ^dcAtt.symbolTable.element
+         do na[] -&gt; dcAtt.symbolTable.findKey -&gt; e[];
+            (if e[]//none then
+                na.getText -&gt; screen.putText;
+                ' is not declared ' -&gt; screen.putLine;
+             else e.e.eval -&gt; value
+            if);
+         #);
+     if)  
+  exit value
+  #)
 
+--- dcAtt: descriptor ---
+(# symbolTable: @hashTable
+     (# element::&lt; (# id: ^lexemText; e: ^expression #);
+        hashFunction::&lt; 
+          (# t: ^text 
+          do e.id.getText -&gt; t[];
+             t.scan(# do (ch-&gt;ascii.lowCase)+133*value -&gt; value #);
+          #);
+        equal::&lt; 
+          (# equalText:
+               (# t1,t2: ^text enter (t1[],t2[]) exit t1[] -&gt; t2.equalNCS #)
+          do (left.id.getText,right.id.getText) -&gt; equalText -&gt; value
+          #);
+        findKey: 
+          (# e: @element; found: ^element
+          enter e.id[]
+          do scan(# where::&lt; (# do (e[],current[]) -&gt; equal -&gt; value #)
+                 do current[] -&gt; found[] #)
+          exit found[]
+          #);
+     #);
+   init: (# do symbolTable.init #);
+#)
 
+------ statAttributes: attributes ------
+run: 
+  (# expr: ^expression;
+     eval: ^evalStatement;
+     let: ^assignment;
+     elm: ^dcAtt.symbolTable.element
+  do (if symbol
+      //assignment then 
+         this(stat)[] -&gt; let[];
+         &amp;dcAtt.symbolTable.element[] -&gt; elm[];
+         let.getName -&gt; elm.id[];
+         let.getExpression -&gt; elm.e[];
+         elm[] -&gt; dcAtt.symbolTable.insert;
+      //evalStatement then
+         this(stat)[] -&gt; eval[];
+         eval.getExpression -&gt; expr[];
+         expr.eval -&gt; screen.putInt;
+         screen.newLine 
+      //quit then (normal,'') -&gt; stop
+     if);
+</PRE>
+<A NAME=HEADING21-266></A>
+<H1> <A NAME="LINK-yggdrasil-_Toc364700542"><A NAME=MARKER-9-209></A>The Expression Evaluator Program</A></H1>
+<P> This file contains the initialization of the metaprogramming system and the handling of the keybroard and screen. Please note the use of the parser, the handling of parse errors, and the evaluation of the ASTs, resulting from successful parsing of the input. </P>
+<P> </P>
+<PRE CLASS=beta>
+ORIGIN 'exprcfl';
+INCLUDE 'exprsematt'
+--- program: descriptor ---
+(# (* This is a small demo-program of how to use the MetaProgrammingSystem.
+    * The program implements a small desc-calculator a la dc in unix.  The
+    * grammar for expressions is on the file expr-meta.gram.  The generated
+    * context free level is on exprCfl.  Exprsematt contains semantic
+    * attributes for expr.
+    *)
+   ast: @astinterface;
+   expr: @ast.expr; (* the cfl of the grammar *)
+   exprFragment: ^ast.fragmentForm;
+   evalString: ^text;
+   stat: ^expr.stat;
+   ok: @boolean;
+   btabFile: ^text;
+do ast.astLevelInit; (* initialize astlevel *)
+   expr.init;        (* and the context free level of the generated grammar *)
+   'expr-parser' -&gt; btabFile[];
+   ast.parserFileExtension-&gt;btabFile.puttext;
+   btabFile[] -&gt; expr.parser.initialize; (* and the parser *)
+   expr[] -&gt; ast.newFragmentForm -&gt; exprFragment[]
+   (* create a fragmentform which can contain the asts *);
+   cycle
+   (# do
+      'Eval? ' -&gt; screen.putText;
+      keyBoard.getLine -&gt; evalString[]; (* read a string from keyboard *)
+      evalString.newLine; (* add a newline to the string *)
+      0 -&gt; evalString.setPos;  (* reset evalString to start *)
+      (1,evalString[],screen[],exprFragment[]) -&gt; expr.parser -&gt; ok;
+      (* 1: goalSymbol,
+       * evalString: input,
+       * exprFragment: the fragmentform to contains the asts 
+       *)
+      (if ok 
+       //false then 
+          'PARSE-ERRORS' -&gt; screen.putLine;
+          0 -&gt; evalString.setPos; (* reset evalString to start *)
+          (evalString[],screen[]) -&gt; expr.parser.ErrorReport;
+       else  (* there was no parse-errors *)
+          exprFragment.root[] -&gt; stat[];
+          (* the parser returns the root of the parsed ast in fragment.root *)
+          stat.run; 
+      if);
+   #)
+</PRE>
 
-
-
-
-
-<!-- TOC -->
 
 
 
@@ -72,11 +373,11 @@
 <TD width="33%" align="right"><FONT size=-1><SCRIPT LANGUAGE=JavaScript SRC="../javascript/lastmod.js"></SCRIPT></FONT></TD>
 </TABLE>
 <P>
-<P><A HREF=yggdrasil-22.html><IMG ALIGN=BOTTOM SRC="../images/next.gif" ALT=Next BORDER=0></A>
+<P><A HREF=interface/index.html><IMG ALIGN=BOTTOM SRC="../images/next.gif" ALT=Next BORDER=0></A>
 <A HREF=yggdrasil-20.html><IMG ALIGN=BOTTOM SRC="../images/prev.gif" ALT=Previous BORDER=0></A>
-<A HREF=yggdrasil-15.html><IMG ALIGN=BOTTOM SRC="../images/up.gif" ALT=Up BORDER=0></A>
-<A HREF=../index.html><IMG ALIGN=BOTTOM SRC="../images/top.gif" ALT=Top BORDER=0></A>
-<A HREF=index.html#_toc><IMG ALIGN=BOTTOM SRC="../images/content.gif" ALT=Contents BORDER=0></A>
+
+<A HREF="../index.html"><IMG ALIGN=BOTTOM SRC="../images/top.gif" ALT=Top BORDER=0></A>
+<A HREF="index.html#_toc"><IMG ALIGN=BOTTOM SRC="../images/content.gif" ALT=Contents BORDER=0></A>
 <A HREF=inx.html><IMG ALIGN=BOTTOM SRC="../images/index.gif" ALT=Index BORDER=0></A></P>
 
 
