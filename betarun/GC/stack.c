@@ -1050,6 +1050,7 @@ GLOBAL(long lastPC)=0;
 void ProcessStackObj(struct StackObject *theStack, CellProcessFunc func)
 {
     struct RegWin *theAR;
+    long delta;
 #ifdef RTDEBUG
     long oldDebugStack=DebugStack;
 #endif
@@ -1058,7 +1059,7 @@ void ProcessStackObj(struct StackObject *theStack, CellProcessFunc func)
       return;
     }
     /* Start at theStack->Body[1], since theStack->Body[0] is saved FramePointer */
-    long delta = (char *) &theStack->Body[1] - (char *) theStack->Body[0];
+    delta = (char *) &theStack->Body[1] - (char *) theStack->Body[0];
     
     DEBUG_STACKOBJ(fprintf(output, " *-*-* StackObject (age %d) *-*-*\n", (int)theStack->GCAttr);
 		   lastPC=PC;
