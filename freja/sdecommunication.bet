@@ -1,0 +1,218 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv'
+
+[[
+
+---- INCLUDE '~beta/basiclib/v1.4/repstream'
+---- INCLUDE '~beta/process/v1.4/processmanager'
+---- INCLUDE '~beta/process/v1.4/private/communication_unixbody'
+
+---- LIB: attributes ----
+
+XtInputNoneMask:   (# exit 0 #);
+XtInputReadMask:   (# exit 1 #);
+XtInputWriteMask:  (# exit 2 #);
+XtInputExceptMask: (# exit 4 #);
+
+XtAddInput: external
+(# source,condition: @Integer;
+   proc: ##external;
+   clientData: @Integer;
+   inputID: @Integer;
+enter (source,condition,proc##,clientData)
+do callC;
+exit inputID
+#);
+
+XtRemoveInput: external
+(# inputID: @Integer;
+enter inputID
+do CallC
+#);
+   
+SdeCommunication:
+(#
+   debugCOM: @Boolean;
+   sifIsRunning: @Boolean;
+   theSocket: ^BinarySocket;
+   inputID: @Integer;
+   connectionClosed,XinputStopped: @Boolean;
+   
+   application: @process
+   (#
+      activate:
+      (# 
+      do start
+	 (#
+	    error::<
+	    (#
+ 	    do 'Could not start ' -> screen.puttext;
+ 	       name[] ->  screen.putline;
+ 	    #);
+	    twoCurrent::<
+	    (# 
+	    do 'Two current program executions ' -> screen.puttext;
+	       name[] -> screen.putline;
+	    #);
+	 #);
+      #);
+   #);
+   
+   externInput: external
+     (# clientData,source,id,out: @Integer;
+        t: ^text;
+     enter (clientData,source,id)
+     do cExternalEntry;
+        (if debugcom //true then 'Freja ------ got extern input' ->screen.putLine;if);
+        getLine -> t[];
+        (if t[]<>NONE//true then
+            t[] -> onInput;
+        if);
+     exit out
+     #);
+   
+   onInput:<
+     (# msg: ^Text;
+     enter msg[]
+     do INNER
+     #);
+   
+   initInSocket:
+     (# inPort: @Integer;
+        inSocket: ^passiveBinarySocket;
+        OK: @ boolean;
+     enter inPort
+     do (if sifIsRunning//true then
+	    'InSocket: Already connected' -> screen.putline;
+         else
+            &passiveBinarySocket[] -> inSocket[];
+	    inPort -> inSocket.port;
+            true->OK;
+      	    L: inSocket.bind
+	      (# error::< 
+                   (# do false->OK; 'InSocket: could not bind' -> screen.putline;
+                      leave L;
+              #)#);
+      	    
+      	    (if OK //true then
+                inSocket.awaitConnection; (* return when connection is established *)
+      	        true -> sifIsRunning;
+	        inSocket[] -> theSocket[];
+	    
+      	        (* install callback *)
+                (inSocket.private.index,XtInputReadMask,externInput##,0)
+                  ->XtAddInput->inputId;
+      	        (if debugCOM//true then
+ 	            'inputID: ' -> screen.puttext; inputID -> screen.putint; 
+	            screen.newline
+      	        if);
+             else
+                'Could not bind socket'->screen.putLine;
+            if);
+        if);
+     #);
+    
+   initOutSocket: 
+     (# no: @integer;
+        host: ^Text;
+        outPort: @Integer;
+        outSocket: ^activeBinarySocket;
+     enter (outPort,host[])
+     do false -> debugCOM;
+        &activeBinarySocket[]->outSocket[] -> theSocket[];
+        outPort -> outSocket.port;
+        host -> outSocket.host;
+        loop:
+	  (# 
+	  do doConnect: outSocket.connect
+	       (# error::< 
+	            (# do no+1->no; leave doConnect
+               #)#);  
+	     (if (no>0) //true then 
+                 'Error: '->screen.putText;' '->screen.put; 
+		 (if (no>10) //false then
+                     restart loop 
+          if)if)#);
+        (* install callback *)
+        true->sifIsRunning;
+        (outSocket.private.index,XtInputReadMask,externInput##,0)
+          ->XtAddInput->inputId;
+        (if debugCOM//true then
+            'Freja: Communication to Sif established'->screen.putline;
+        if);
+     #);
+      
+   abortCommunication:
+     (# 
+     do inputID -> XtRemoveInput;
+        (if Debugcom//true then 
+            'Freja ------ abortCommunication closing socket'->screen.putLine;
+        if);
+        theSocket.close; (* was commented out - EE/940127*)
+        true -> connectionClosed;
+     #);
+
+     stopXinputFromSocket:
+     (#
+     do inputId->XtRemoveInput;
+        true->XinputStopped;
+     #);
+   
+   closeCommunication: (* the proper way to close down sif *)
+     (#
+     do 
+        (if sifIsRunning and not connectionClosed //true then
+            (if XinputStopped //false then stopXinputFromSocket if);
+            (if Debugcom//true then 
+                'Freja ------ closeCommunication closing socket'->screen.putLine;
+            if);
+      	    theSocket.close;
+      	    (* application.stop;*)
+            true -> connectionClosed;
+        if);
+        false -> sifIsRunning;
+     #);
+   
+   putline: @
+     (# t: ^Text;
+        rep: @extendedRepStream;
+        no: @integer
+     enter t[]
+     do       
+        (if connectionClosed//false then
+            rep.clear;
+            (if Debugcom//true then 
+                'Freja ------ communicator.putline: ('->screen.putText; 
+                no+1->no->screen.putInt; ') '->screen.putLine;
+            if);
+            t[] -> rep.putText;            
+            (rep[],0) -> theSocket.putRep;
+            (if Debugcom//true then 
+                t[]->screen.putText;screen.newLine;
+            if)
+         else
+	    'Freja: putline: no connection' -> screen.putline;
+        if);
+     #);
+   
+   getline: @
+     (# t: ^Text;
+        rep: @extendedRepStream;
+        no: @integer
+      do (if connectionClosed//false then
+             (if Debugcom//true then 
+                 'Freja ------ communicator.getline: ('->screen.putText; 
+                 no+1->no->screen.putInt; ') '->screen.putLine;
+             if);
+            L: rep[] -> theSocket.getRep(# error::< (# do abortCommunication; leave L #)#);
+            rep.getText -> t[];
+             (if Debugcom//true then 
+                 t[]->screen.putText;screen.newLine;
+             if);
+         else 
+            'Freja: No connection to sif' -> screen.putline;            
+        if);
+     exit t[]
+     #);
+#);
+
+----]]

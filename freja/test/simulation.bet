@@ -1,0 +1,405 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv';
+ON 19;
+[[
+
+
+--- PROGRAM: descriptor ---
+
+(#
+
+PriorityQueue: 
+(#
+   element :< (# priority: @Integer; next: ^element #);
+   first: ^element;
+
+   Init: (# do NONE -> first[] #);
+
+   Empty: (# exit first[] = NONE #);
+
+   Insert:< (* Specialisations must specify the enter part *)
+   (#
+      s, e: ^element;
+      do
+	inner;
+	(if Empty // True 
+           then
+	     e[] -> first[];
+	     e[] -> e.next[]
+	   else
+             (if e.priority < first.priority // True
+                then
+                  first[] -> e.next[];
+                  e[] -> first[]
+                else
+                  first[] -> s[];
+		  Search: 
+                  (if (s.next.priority >= e.priority) or (s.next[] = s[])
+                     // True then
+                       leave Search   
+                     // False then
+                       s.next[] -> s[];
+                       restart Search
+                  if);
+                  (* e must be inserted after s *)
+                  (if s.next[] = s[] 
+                     // False then (* not last *)
+                       s.next[] -> e.next[];
+                       e[] -> s.next[]
+                     // True then (* last *)
+                       e[] -> e.next[];
+                       e[] -> s.next[]
+                  if)
+             if)
+        if)
+   #);
+
+   Get:< (* Assumes that the queue is non-empty *)
+         (* Specialisations must specify the exit part *)
+   (#
+      e: ^element;
+      do
+	first[] -> e[];
+        (if e[] = e.next[] 
+          // True then
+            NONE -> first[]
+          // False then
+	    e.next[] -> first[]
+        if);
+        inner
+   #)
+#);
+
+
+
+
+
+FIFOqueue: 
+(#
+   element :< (# next: ^element #);
+   first, last: ^element;
+   noOfElements: @Integer;
+
+   Init: 
+   (# 
+     do 
+       NONE -> first[];
+       0 -> noOfElements
+   #);
+
+   Empty: 
+   (# 
+     exit first[] = NONE
+   #);
+
+   Insert:< (* Specialisations must specify the enter part *)
+   (#
+      e: ^element;
+      do
+	inner;
+	noOfelements + 1 -> noOfElements;
+	NONE -> e.next[];
+	(if Empty
+	   //False then
+	      e[] -> last.next[];
+	      e[] -> last[]
+	   //True then
+	      e[] -> first[] -> last[]
+        if)
+   #);
+
+   Get:< (* Assumes that the queue is non-empty *)
+         (* Specialisations must specify the exit part *)
+   (#
+      e: ^element;
+      do
+	first[] -> e[];
+	first.next[] -> first[];
+	noOfelements - 1 -> noOfElements;
+        inner
+   #);
+
+   Length:
+   (#
+     exit noOfElements
+   #)
+
+#);
+
+
+
+
+Simulation:
+(#
+  Dispatch: @PriorityQueue
+  (#
+    element::< (# theProcess: ^|Process #);
+
+    Insert::< 
+    (#
+      At: @Integer;
+      p: ^|Process
+      enter (At, p[])
+      do
+	&element[] -> e[];
+        p[] -> e.theProcess[];
+        At -> e.priority
+    #);
+
+    Get::<
+    (# exit (e.priority, e.theProcess[]) #)
+  #);
+
+  ResourceQueue: FIFOqueue
+  (#
+    element::< (# theProcess: ^|Process #);
+
+    Insert::<
+    (#
+      p: ^|Process
+      enter p[]
+      do
+       &element[] -> e[];
+       p[] -> e.theProcess[]
+    #);
+
+    Get::<
+    (# 
+      exit e.theProcess[]
+    #)
+  #);
+
+  Now: @Integer;
+
+  Active: ^|Process;
+
+  Process:
+  (#
+    self: ^|Process;
+
+    SetSelf: (# enter self[] #);
+
+    Wait:
+    (#
+      q: ^ResourceQueue
+      enter q[]
+      do
+        self[] -> q.Insert;
+	suspend
+    #);
+
+    Hold:
+    (#
+      duration: @Integer
+      enter duration
+      do
+	(Now + duration, self[]) -> Dispatch.Insert;
+        suspend
+    #);
+
+    Activate:
+    (#
+      do
+	(Now, self[]) -> Dispatch.Insert
+    #);
+
+    ActivateAt:
+    (#
+      At: @Integer
+      enter At
+      do
+	(At, self[]) -> Dispatch.Insert
+    #)
+
+    do
+     inner
+  #); (* Process *)
+
+
+  Simulate:
+  (#
+    JudgmentDay: @Integer;
+
+    Terminator: @|Process
+    (# 
+      do
+       Dispatch.Init
+    #);
+
+    enter JudgmentDay
+
+    do
+      Dispatch.Init;
+      Terminator[] -> Terminator.SetSelf;
+      (JudgmentDay, Terminator[]) -> Dispatch.Insert;
+
+      inner; (* Declares processes and inserts them in 'Dispatch' *)
+
+      run:
+      (if Dispatch.Empty // False
+         then
+	   Dispatch.Get -> (Now, Active[]);
+	   Active; (* attach 'Active' *)
+           restart run
+         else
+	   leave run
+      if)
+  #);
+
+  do (* Simulation *)
+    0 -> Now;
+    inner
+#);
+
+
+
+MGSimulation: Simulation
+(#
+  MachineGroup:
+  (#
+    idle: @Integer;
+
+    queue: @ResourceQueue;
+
+    Use:
+    (#
+      duration: @Integer;
+      next: ^|Process
+      enter duration
+      do
+        (if idle // 0 then
+          queue[] -> Active.Wait
+        if);
+        (* {idle > 0} *)
+        idle - 1 -> idle;
+        duration -> Active.Hold;      (* Use the machinegroup *)
+        idle + 1 -> idle;
+        (if queue.Empty // False then (* Activate next waiting process *)
+          queue.Get -> next[];
+          next.Activate
+        if)
+    #);
+
+    Init:
+    (#
+      enter idle
+      do
+	queue.Init
+    #);
+
+    Status:
+    (#
+      do
+	(if idle > 0 // True
+          then
+	    idle -> PutInt;
+	    ' ledige maskiner.' -> PutText
+	  else
+	    queue.Length -> PutInt;
+	    ' ordrer venter.' -> PutText
+        if);
+	NewLine
+    #)
+  #); (* MachineGroup *)
+
+  Task: Process
+  (# do inner #);
+
+  Surveyor: Process
+  (#
+    period: (# exit 5 #)
+    do
+      loop: (# do
+          	 'Klokken er ' -> PutText;
+		 Now -> PutInt;
+		 NewLine;
+		 inner Surveyor;
+		 '-----------------------' -> PutText;
+		 NewLine;
+		 period -> Hold;
+		 restart loop
+	    #)
+  #)
+
+  do
+    inner
+
+#); (* MGSimulation *)
+
+
+
+
+
+
+  Test: MGSimulation
+  (#
+    MG (*1, MG2, MG3, MG4*): @Machinegroup;
+
+    Task1: @|Task
+    (#
+      do
+	23  -> MG.Use;
+	(*10  -> MG3.Use;
+	11  -> MG2.Use;*)
+	 3  -> MG.Use
+    #);
+
+    Task2: @|Task
+    (#
+      do
+       23 -> MG.Use;
+	(*4 -> MG3.Use;
+	9 -> MG4.Use;
+	0 -> MG3.Use*)
+    #);
+
+    Task3: @|Task
+    (#
+      do
+	23 -> MG.Use;
+	(*34 -> MG3.Use;
+	31 -> MG3.Use;*)
+	11 -> MG.Use
+    #);
+
+    MGSurveyor: @|Surveyor
+    (#
+      do
+        'MG: ' -> PutText; MG.Status;
+       (* 'MG2: ' -> PutText; MG2.Status;
+        'MG3: ' -> PutText; MG3.Status;
+        'MG4: ' -> PutText; MG4.Status*)
+    #)
+
+    do (* Test *)
+      50 -> Simulate  (* Finish at 50 o'clock *)
+      (#
+	do
+	  2 -> MG.Init;
+	 (* 1 -> MG2.Init;
+	  1 -> MG3.Init;
+	  3 -> MG4.Init;*)
+
+          MGSurveyor[] -> MGSurveyor.SetSelf;
+	  MGSurveyor.Activate;
+
+	  Task1[] -> Task1.SetSelf;
+	  Task1.Activate;
+
+	  Task2[] -> Task2.SetSelf;
+	  Task2.Activate;
+
+	  Task3[] -> Task3.SetSelf;
+	  2 -> Task3.ActivateAt
+      #)
+   #) (* Test *)
+
+   do  (* Main program *)
+     Test
+#)
+
+---]]
+
+
+
+
+
