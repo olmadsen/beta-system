@@ -1,7 +1,23 @@
 ORIGIN 'diagramattributes';
 INCLUDE '../treeprettyprint';
 -- BoxToNode: DoPart --
-do (if theNode## <= SurroundBox## then theNode.getParent->theNode[];  if)  
+do
+   (if theNode## <= SurroundBox## then
+         (# idObj: ^IDObject
+         do
+            theNode.getParent->idObj[];
+            (if idObj[] <> none then
+                (if idObj## <= DesignObject## then
+                    idObj[]->theNode[]
+                 else
+                    'BoxToNode: Surroundbox parent is not a DesignObject?!'
+                      ->stdErr.putline
+                if)
+             else
+                'BoxToNode: Surroundbox has no parent?!'->stdErr.putline
+            if)
+         #)
+   if)  
 
 -- ASTToNode: Descriptor --
 (# 
@@ -54,14 +70,16 @@ do
                   #)
             if);
             theGroupPage.patternDiagrams.theList.scan
-              (# theListDiagram: ^theGroupPage.ListDiagram
+              (# theFragmentDiagram: ^theGroupPage.FragmentDiagram
               do
-                 (if current.e## <= theGroupPage.ListDiagram## then
-                     current.e[]->theListDiagram[];
-                     theListDiagram.localNodes.scan
+                 (if current.e## <= theGroupPage.FragmentDiagram## then
+                     current.e[]->theFragmentDiagram[];
+                     theFragmentDiagram.localNodes.scan
                        (# 
                        do
-                          (if current.astIndex = anAST.index then
+                          (if (current.astIndex = anAST.index) and
+                          ((anAST.frag.father).fullname
+                             ->(theFragmentDiagram.fullname).equal) then
                               current[]->theNode[]; leave search
                           if);
                           (* 
@@ -582,6 +600,10 @@ do (* true->OKtoChange;*)
 -- ASTtoNearestNode: DoPart --
 do
    (if anAST[] <> none then
+       (if switch[60] or switch[12] then
+           'ASTtoNearestNode: anAST=%i\n'
+             ->putformat (#  do anAST.index->i #)
+       if);
        anAST[]->ASTtoNode->node[];
        (if node[] = none then
            L:
@@ -594,9 +616,17 @@ do
                if)
            if);
            
+       if);
+       (if switch[60] or switch[12] then
+           'ASTtoNearestNode: node=%i\n'
+             ->putformat
+               (#  do (if node[] <> none then node.id->i else 0->i if) #)
        if)
     else
-       'ASTtoNearestNode: anAST is NONE!?'->stdErr.putline
+       'ASTtoNearestNode: anAST is NONE!?'->stdErr.putline;
+       (if switch[60] or switch[12] then
+           'ASTtoNearestNode: anAST is none'->putline
+       if)
    if)  
 
 -- sifNotificationNewFragment: DoPart --
@@ -918,18 +948,14 @@ do
 (#
    theObject: ^PatternDiagramNode;
    newAst,firstBorn: ^mps.ast;
-   pos,i,noOfSons: @integer
+   pos,i,noOfSons: @integer;
+   theListDiagram: ^ListDiagram;
+   theFragmentNode: ^theListDiagram.FragmentNode
 do
-   (if switch[60]
-    // true then
-       'Gpp ------- listElementInserted  '->puttext;
-       'fatherIndex: '->putText;
-       father.index->putInt;
-       '  '->puttext;
-       'position: '->putText;
-       position->putInt;
-       newLine;
-       
+   (if switch[60] then
+       'Gpp ------- listElementInserted\nfatherIndex: %i position: %i\nfather frag: %s\n'
+         ->putformat
+           (#  do father.index->i; position->i; father.frag.fullname->s #)
    if);
    (if position = 1 then
        father.getSon2->firstBorn[]
@@ -963,14 +989,30 @@ do
             leave scanner
         if)
      #);
-   firstBorn[]->ASTtoNearestNode->theObject[];
+   (if firstBorn[] <> none then
+       firstBorn[]->ASTtoNearestNode->theObject[]
+    else
+       father[]->ASTtoNearestNode->theObject[]
+   if);
    (if theObject[] <> none then
-       (pos-1,newAST[])->(theObject.theDiagram).insertDiagramNode;
+       theObject.theDiagram->theListDiagram[];
+       (if theObject## <= theListDiagram.FragmentNode## then
+           theObject[]->theFragmentNode[];
+           (if theFragmentNode.currentDecomposDiagram = none then
+               theFragmentNode.detail
+            else
+               (pos-1,newAST[])
+                 ->(theFragmentNode.currentDecomposDiagram).insertDiagramNode
+           if)
+        else
+           (pos-1,newAST[])->(theObject.theDiagram).insertDiagramNode
+       if);
        Redraw;
        autosave
     else
        'listElementInserted: theObject is none'->stdErr.putline
-   if)
+   if);
+   (if switch[60] then 'Gpp ------- listElementInserted END'->putline if)
 #)  
 
 -- listElementsDeleted: Descriptor --
@@ -1109,7 +1151,8 @@ do
    newline;
    '********MaxWidth********'->putline;
    MaxWidth->putint;
-   newline  
+   newline;
+   INNER dump  
 
 -- SurroundBoxOnInit: DoPart --
 do UDPrivate.UDSurroundBox->UserDataInit; false->selectable; false->sizeable  
@@ -1901,6 +1944,7 @@ do
    true->ok;
    INNER generateCode;
    (if not doneInInner then
+       thisOp:
          (#
             theParentNode: ^PatternDiagramNode;
             theListDiagram,theOtherListDiagram,theParentDiagram: ^ListDiagram;
@@ -1912,7 +1956,7 @@ do
             theDesc,theOtherDesc: ^betaGram.ObjectDescriptor;
             t,theLeftName,theRightName,leftQualName,rightQualName,dummyQual,
               leftCode,rightCode: ^Text;
-            optionalsInserted,optionalsInsertedOther: @Boolean;
+            optionalsInserted,optionalsInsertedOther,parseOK: @Boolean;
             makeName:
               (#
                  anExp: ^mps.expanded;
@@ -2033,16 +2077,34 @@ do
                                           ->(t[],leftCode[],rightCode[]);
                                         (if not embed then
                                             (theParentDiagram[],t[])
-                                              ->private.parseAfter;
+                                              ->private.parseAfter->parseOK;
+                                            (if not parseOK then
+                                                false->ok;
+                                                'Internal parse error occured - should not happen!'
+                                                  ->alertUser;
+                                                leave thisOp
+                                            if);
                                             currentFocus[]->associationNode
                                         if);
                                         (theListDiagram[],leftCode[])
-                                          ->private.parseAfter;
+                                          ->private.parseAfter->parseOK;
+                                        (if not parseOK then
+                                            false->ok;
+                                            'Internal parse error occured - should not happen!'
+                                              ->alertUser;
+                                            leave thisOp
+                                        if);
                                         currentFocus[]->left[]->aSimpleNode[];
                                         THIS(AssociationConnector)[]
                                           ->aSimpleNode.theAssociationConnector;
                                         (theOtherListDiagram[],rightCode[])
-                                          ->private.parseAfter;
+                                          ->private.parseAfter->parseOK;
+                                        (if not parseOK then
+                                            false->ok;
+                                            'Internal parse error occured - should not happen!'
+                                              ->alertUser;
+                                            leave thisOp
+                                        if);
                                         currentFocus[]->right[]
                                           ->anotherSimpleNode[];
                                         THIS(AssociationConnector)[]
@@ -2164,7 +2226,7 @@ do
                  if)
               #)
          do
-            ((leftRole).thePatternDiagramNode).getAstNode->anAST[];
+            ((leftrole->lr[]).thePatternDiagramNode).getAstNode->anAST[];
             (if anAST.symbol = betaGram.SimpleDecl then
                 anAST[]->leftDecl[];
                 leftDecl.getNames->theNames[];
@@ -2174,7 +2236,7 @@ do
                     theNameDcl.getText->rightRoleName[]
                 if)
             if);
-            ((rightRole).thePatternDiagramNode).getAstNode->anAST[];
+            ((rightrole->rr[]).thePatternDiagramNode).getAstNode->anAST[];
             (if anAST.symbol = betaGram.SimpleDecl then
                 anAST[]->rightDecl[];
                 rightDecl.getNames->theNames[];
@@ -2243,18 +2305,22 @@ do
    embed->private.embed;
    description[]->private.description[];
    (if not (THIS(AssociationConnector)## <= AggregationConnector##) then
+       thisOp:
          (#
             oldLeft,oldRight,oldAssociationPattern: ^mps.ast;
             theParentNode: ^PatternDiagramNode;
             t,theLeftName,theRightName,dummyQual,leftQualName,rightQualName,
               leftCode,rightCode: ^text;
             index,lx,ly,rx,ry: @integer;
-            l: ^UserDataLabelNode
+            l: ^UserDataLabelNode;
+            parseOK: @boolean;
+            errorPos: @integer;
+            parseErrorText: ^Text
          do
             (if (name[] <> none ) and (not ('<<NameDecl>>'->name.equal)) then
                 (if THIS(AssociationConnector).name = none then
-                    (leftRole).center->(lx,ly);
-                    (rightRole).center->(rx,ry);
+                    (leftrole->lr[]).center->(lx,ly);
+                    (rightrole->rr[]).center->(rx,ry);
                     &UserDataLabelNode[]->l[];
                     (lx+((rx-lx) div 2),ly+((ry-ly) div 2),10,10,name)->l.new;
                     textStyle.italic->l.theText.style;
@@ -2286,14 +2352,14 @@ do
                     theLeftName.copy->t[]; theRightName[]->t.puttext
                 if)
             if);
-            ((leftRole).thePatternDiagramNode).getASTNode->oldLeft[]
+            ((leftrole->lr[]).thePatternDiagramNode).getASTNode->oldLeft[]
               ->patternDiagrams.astUtils.getEnclosingDecl->private.makeQualName
               ->leftQualName[];
-            ((rightRole).thePatternDiagramNode).getASTNode->oldRight[]
+            ((rightrole->rr[]).thePatternDiagramNode).getASTNode->oldRight[]
               ->patternDiagrams.astUtils.getEnclosingDecl->private.makeQualName
               ->rightQualName[];
-            (((rightRole).thePatternDiagramNode).getAstNode,
-             ((leftRole).thePatternDiagramNode).getAstNode
+            (((rightrole->rr[]).thePatternDiagramNode).getAstNode,
+             ((leftrole->lr[]).thePatternDiagramNode).getAstNode
                ->patternDiagrams.astUtils.getEnclosingDecl)
               ->getQualificationWithPath->dummyQual[];
             (leftRoleName[],rightRoleName[],theLeftName[],theRightName[],
@@ -2301,35 +2367,72 @@ do
               ->(t[],leftCode[],rightCode[]);
             (if not embed then
                 (if associationNode = none then
-                    (((leftRole).thePatternDiagramNode).theDiagram).
+                    (((leftrole->lr[]).thePatternDiagramNode).theDiagram).
                     theParentNode->theParentNode[];
-                    (theParentNode.theDiagram,t[])->private.parseAfter;
+                    (theParentNode.theDiagram,t[])->private.parseAfter->parseOK;
+                    (if not parseOK then
+                        'Internal parse error occured - should not happen!'
+                          ->alertUser;
+                        leave thisOp
+                    if);
                     currentFocus[]->associationNode
                  else
                     (associationNode).getAstNode->oldAssociationPattern[];
                     ((associationNode).getAstNode,t)
                       ->((associationNode).theSifEditor).parse
+                      ->(parseOK,errorPos,parseErrorText[]);
+                    (if not parseOK then
+                        'Internal parse error - should not happen(!):'
+                          ->stdErr.putline;
+                        'trying to parse: '->stdErr.putline;
+                        t[]->stdErr.putline;
+                        'Error:'->stdErr.putline;
+                        parseErrorText[]->stdErr.putline;
+                        'Internal parse error occured - should not happen!'
+                          ->alertUser;
+                        leave thisOp
+                    if)
                 if)
              else
                 (if associationNode <> none then
                     (associationNode).getAstNode->oldAssociationPattern[]
                 if)
             if);
-            (((leftRole).thePatternDiagramNode).getAstNode,leftCode)
-              ->(((leftRole).thePatternDiagramNode).theSifEditor).parse;
-            (((rightRole).thePatternDiagramNode).getAstNode,rightCode)
-              ->(((rightRole).thePatternDiagramNode).theSifEditor).parse;
+            (((leftrole->lr[]).thePatternDiagramNode).getAstNode,leftCode)
+              ->(((leftrole->lr[]).thePatternDiagramNode).theSifEditor).parse
+              ->(parseOK,errorPos,parseErrorText[]);
+            (if not parseOK then
+                'Internal parse error - should not happen(!):'->stdErr.putline;
+                'trying to parse: '->stdErr.putline;
+                leftCode[]->stdErr.putline;
+                'Error:'->stdErr.putline;
+                parseErrorText[]->stdErr.putline;
+                'Internal parse error occured - should not happen!'->alertUser;
+                leave thisOp
+            if);
+            (((rightrole->rr[]).thePatternDiagramNode).getAstNode,rightCode)
+              ->(((rightrole->rr[]).thePatternDiagramNode).theSifEditor).parse
+              ->(parseOK,errorPos,parseErrorText[]);
+            (if not parseOK then
+                'Internal parse error - should not happen(!):'->stdErr.putline;
+                'trying to parse: '->stdErr.putline;
+                rightCode[]->stdErr.putline;
+                'Error:'->stdErr.putline;
+                parseErrorText[]->stdErr.putline;
+                'Internal parse error occured - should not happen!'->alertUser;
+                leave thisOp
+            if);
             (if not embed then
                 (oldLeft[],oldRight[],oldAssociationPattern[],
-                 ((leftRole).thePatternDiagramNode).getAstNode,
-                 ((rightRole).thePatternDiagramNode).getAstNode,
+                 ((leftrole->lr[]).thePatternDiagramNode).getAstNode,
+                 ((rightrole->rr[]).thePatternDiagramNode).getAstNode,
                  (associationNode).getAstNode,leftMulFrom,leftMulTo,
                  rightMulFrom,rightMulTo)
                   ->patternDiagrams.AssociationList.updateElement
              else
                 (oldLeft[],oldRight[],oldAssociationPattern[],
-                 ((leftRole).thePatternDiagramNode).getAstNode,
-                 ((rightRole).thePatternDiagramNode).getAstNode,none ,
+                 ((leftrole->lr[]).thePatternDiagramNode).getAstNode,
+                 ((rightrole->rr[]).thePatternDiagramNode).getAstNode,none ,
                  leftMulFrom,leftMulTo,rightMulFrom,rightMulTo)
                   ->patternDiagrams.AssociationList.updateElement;
                 (if oldAssociationPattern[] <> none then
@@ -2342,60 +2445,72 @@ do
          #)
    if);
    INNER redisplay;
-   (leftRoleName[],leftMulFrom,leftMulTo)->(leftRole).redisplay;
-   (rightRoleName[],rightMulFrom,rightMulTo)->(rightRole).redisplay;
-   gppProp.noGlobalInteractiveMode->gppProp.globalInteractiveMode  
+   (leftRoleName[],leftMulFrom,leftMulTo)->(leftrole->lr[]).redisplay;
+   (rightRoleName[],rightMulFrom,rightMulTo)->(rightrole->rr[]).redisplay;
+   gppProp.noGlobalInteractiveMode->gppProp.globalInteractiveMode;
+   autosave  
 
 -- AssociationConnectorVisibleSet: DoPart --
 do
    (if name <> none then v->(name).visible if);
-   v->(leftRole).visible;
-   v->(rightRole).visible;
+   v->(leftrole->lr[]).visible;
+   v->(rightrole->rr[]).visible;
    INNER set  
 
 -- AssociationConnectorAttributesVisible: DoPart --
 do
    INNER attributesVisible;
    (if v then
-       ((leftRole).thePatternDiagramNode).center->(px,py);
-       (leftRole).center->(x,y);
-       (x,py)->(leftRole).center;
-       ((rightRole).thePatternDiagramNode).center->(px,py);
-       (rightRole).center->(x,y);
-       (x,py)->(rightRole).center
+       ((leftrole->lr[]).thePatternDiagramNode).center->(px,py);
+       (leftrole->lr[]).center->(x,y);
+       (x,py)->(leftrole->lr[]).center;
+       ((rightrole->rr[]).thePatternDiagramNode).center->(px,py);
+       (rightrole->rr[]).center->(x,y);
+       (x,py)->(rightrole->rr[]).center
     else
-       (((leftRole).thePatternDiagramNode).theDiagram).titleNode.center
+       (((leftrole->lr[]).thePatternDiagramNode).theDiagram).titleNode.center
          ->(px,py);
-       (leftRole).center->(x,y);
-       (x,py)->(leftRole).center;
-       (((rightRole).thePatternDiagramNode).theDiagram).titleNode.center
+       (leftrole->lr[]).center->(x,y);
+       (x,py)->(leftrole->lr[]).center;
+       (((rightrole->rr[]).thePatternDiagramNode).theDiagram).titleNode.center
          ->(px,py);
-       (rightRole).center->(x,y);
-       (x,py)->(rightRole).center
+       (rightrole->rr[]).center->(x,y);
+       (x,py)->(rightrole->rr[]).center
    if)  
 
 -- AssociationConnectorOnDelete: DoPart --
 do
-   ((leftRole).thePatternDiagramNode).getAstNode->anAST[];
-   (if anAST[] <> none then
-       (anAST[],1)
-         ->(((leftRole).thePatternDiagramNode).theSifEditor).changeFocus;
-       (((leftRole).thePatternDiagramNode).theSifEditor).cut
-   if);
-   (if not (THIS(AssociationConnector)## <= AggregationConnector##) then
-       ((rightRole).thePatternDiagramNode).getAstNode->anAST[];
+   (if (leftRole <> none ) and (rightRole <> none ) then
+       ((leftrole->lr[]).thePatternDiagramNode).getAstNode->anAST[];
        (if anAST[] <> none then
            (anAST[],1)
-             ->(((rightRole).thePatternDiagramNode).theSifEditor).changeFocus;
-           (((rightRole).thePatternDiagramNode).theSifEditor).cut
+             ->
+               (((leftrole->lr[]).thePatternDiagramNode).theSifEditor).
+               changeFocus;
+           (((leftrole->lr[]).thePatternDiagramNode).theSifEditor).cut
        if);
-       (if associationNode <> none then
-           (associationNode).getAstNode->anAST[];
+       (if not (THIS(AssociationConnector)## <= AggregationConnector##) then
+           ((rightrole->rr[]).thePatternDiagramNode).getAstNode->anAST[];
            (if anAST[] <> none then
-               (anAST[],1)->((associationNode).theSifEditor).changeFocus;
-               ((associationNode).theSifEditor).cut
+               (anAST[],1)
+                 ->
+                   (((rightrole->rr[]).thePatternDiagramNode).theSifEditor).
+                   changeFocus;
+               (((rightrole->rr[]).thePatternDiagramNode).theSifEditor).cut
+           if);
+           (if associationNode <> none then
+               (associationNode).getAstNode->anAST[];
+               (if anAST[] <> none then
+                   (anAST[],1)->((associationNode).theSifEditor).changeFocus;
+                   ((associationNode).theSifEditor).cut
+               if)
            if)
        if)
+    else
+       'Connector is internally incomplete (due to recover?!)\ndelete connector by abstract/detail of involved classes'
+         ->alertUser;
+       'AssociationConnectorOnDelete: leftRole/RightRole is none?!'
+         ->stdErr.putline
    if);
    INNER onDelete  
 
@@ -2418,12 +2533,14 @@ do
             predicate:: 
               (# anAST: ^mps.ast
               do
-                 ((rightRole).thePatternDiagramNode).getASTNode->anAST[];
+                 ((rightrole->rr[]).thePatternDiagramNode).getASTNode->anAST[];
                  (current.left =
-                  (((leftRole).thePatternDiagramNode).getASTNode).index) and
-                 ((((leftRole).thePatternDiagramNode).getASTNode).frag.fullname
-                    ->current.leftFrag.equal) and (current.right = anAST.index)
-                 and (anAST.frag.fullname->current.rightFrag.equal)->value;
+                  (((leftrole->lr[]).thePatternDiagramNode).getASTNode).index)
+                 and
+                 ((((leftrole->lr[]).thePatternDiagramNode).getASTNode).frag.
+                    fullname->current.leftFrag.equal) and
+                 (current.right = anAST.index) and
+                 (anAST.frag.fullname->current.rightFrag.equal)->value;
                  (if associationNode <> none then
                      (current.associationPattern =
                       ((associationNode).getAstNode).index) and
@@ -2498,7 +2615,8 @@ do
                    ->promptForBoolean->ok;
                  (if ok
                   // yes then
-                     ((leftRole).thePatternDiagramNode).getAstNode->anAST[];
+                     ((leftrole->lr[]).thePatternDiagramNode).getAstNode
+                       ->anAST[];
                      (if anAST[] <> none then
                          anAST.frag.father->callChecker
                      if)
@@ -2535,6 +2653,7 @@ do
 -- AssociationConnectorOnInit: DoPart --
 do
      (#
+        object1,object2: ^DesignObject;
         node1,node2: ^node;
         succeded: @boolean;
         theRole: ^Role;
@@ -2553,20 +2672,28 @@ do
         0->Orient;
         INNER onInit;
         (if not InitialisingSaved then
-            true->getEnds->(node1[],node2[]);
-            (if (node1[] <> none ) and (node2[] <> none ) then
-                (if ((node1[]->BoxToNode->node1[]) <> none ) and
-                ((node2[]->BoxToNode->node2[]) <> none ) then
-                    (if (node1## <= PatternDiagramNode##) and
-                    (node2## <= PatternDiagramNode##) then
-                        (node1[],node2[],private.name.copy,
-                         private.implementation,private.leftRoleName[],
-                         private.rightRoleName[],private.leftMulFrom,
-                         private.leftMulTo,private.rightMulFrom,
-                         private.rightMulTo,private.embed->embed)->generateCode
-                          ->(succeded,left[],right[]);
-                        (if not succeded then delete if);
-                        
+            true->getEnds->(object1[],object2[]);
+            (if (object1[] <> none ) and (object2[] <> none ) then
+                (if (object1## <= node##) and (object2## <= node##) then
+                    object1[]->node1[];
+                    object2[]->node2[];
+                    (if ((node1[]->BoxToNode->node1[]) <> none ) and
+                    ((node2[]->BoxToNode->node2[]) <> none ) then
+                        (if (node1## <= PatternDiagramNode##) and
+                        (node2## <= PatternDiagramNode##) then
+                            (node1[],node2[],private.name.copy,
+                             private.implementation,private.leftRoleName[],
+                             private.rightRoleName[],private.leftMulFrom,
+                             private.leftMulTo,private.rightMulFrom,
+                             private.rightMulTo,private.embed->embed)
+                              ->generateCode->(succeded,left[],right[]);
+                            (if not succeded then delete if);
+                            
+                         else
+                            Delete;
+                            'Source or destination is not part of a pattern diagram'
+                              ->AlertUser
+                        if)
                      else
                         Delete;
                         'Source or destination is not part of a pattern diagram'
@@ -2589,14 +2716,14 @@ do
                 (private.rightRoleName[],private.rightMulFrom,
                  private.rightMulTo,right[])->theRole.display;
                 theRole[]->rightRole;
-                ((leftRole).getTopParent,leftRole,(rightRole).getTopParent,
-                 rightRole)->setEnds;
+                ((leftrole->lr[]).getTopParent,leftRole,
+                 (rightrole->rr[]).getTopParent,rightrole->rr[])->setEnds;
                 (if not
                 (THIS(AssociationConnector)## <= AggregationConnector##) then
                     (if (private.name[] <> none ) and
                     (not ('<<NameDecl>>'->private.name.equal)) then
-                        (leftRole).center->(lx,ly);
-                        (rightRole).center->(rx,ry);
+                        (leftrole->lr[]).center->(lx,ly);
+                        (rightrole->rr[]).center->(rx,ry);
                         &UserDataLabelNode[]->l[];
                         (lx+((rx-lx) div 2),ly+((ry-ly) div 2),10,10,
                          private.name)->l.new;
@@ -2618,7 +2745,8 @@ do
                 if)
             if);
             gppProp.noGlobalInteractiveMode->gppProp.globalInteractiveMode;
-            statusbar.reset
+            statusbar.reset;
+            autosave
         if)
      #)  
 
@@ -2637,9 +2765,17 @@ do
        (associationNode).id->putint; newline
    if);
    '****leftRole****'->putline;
-   (if leftRole <> none then (leftRole).dump else ' is NONE!'->putline if);
+   (if leftRole <> none then
+       (leftrole->lr[]).dump
+    else
+       ' is NONE!'->putline
+   if);
    '****rightRole****'->putline;
-   (if rightRole <> none then (rightRole).dump else ' is NONE!'->putline if);
+   (if rightRole <> none then
+       (rightrole->rr[]).dump
+    else
+       ' is NONE!'->putline
+   if);
    INNER dump  
 
 -- AssociationConnectorPrivate: Descriptor --
@@ -2686,7 +2822,10 @@ do
         theListDiagram: ^ListDiagram;
         parseText: ^text;
         theNonTerminalNode: ^theListDiagram.NonTerminalNode;
-        anAST: ^mps.ast
+        anAST: ^mps.ast;
+        ok: @boolean;
+        errorPos: @integer;
+        parseErrorText: ^Text
      enter (theListDiagram[],parseText[])
      do
         currentFocus[]->oldFocus[];
@@ -2703,6 +2842,15 @@ do
         currentFocus[]->theNonTerminalNode[];
         (theNonTerminalNode.unExp,parseText)
           ->(theNonTerminalNode.theSifEditor).parse
+          ->(ok,errorPos,parseErrorText[]);
+        (if not ok then
+            'Internal parse error - should not happen(!):'->stdErr.putline;
+            'trying to parse: '->stdErr.putline;
+            parseText[]->stdErr.putline;
+            'Error:'->stdErr.putline;
+            parseErrorText[]->stdErr.putline
+        if)
+     exit ok
      #);
    getLastAST:
      (#
@@ -2851,7 +2999,7 @@ do
         predicate:: 
           (# anAST: ^mps.ast
           do
-             ((rightRole).thePatternDiagramNode).getASTNode->anAST[];
+             ((rightrole->rr[]).thePatternDiagramNode).getASTNode->anAST[];
              (if not
              (anAST## <= betaGram.AttributeDecl##)
              (* in case it was a titlenode *) then
@@ -2863,16 +3011,17 @@ do
                      (# 
                      do
                         current.left->i;
-                        (((leftRole).thePatternDiagramNode).getASTNode).index
-                          ->i;
+                        (((leftrole->lr[]).thePatternDiagramNode).getASTNode).
+                        index->i;
                         current.right->i;
                         anAST.index->i
                      #)
              if);
              (current.left =
-              (((leftRole).thePatternDiagramNode).getASTNode).index) and
-             ((((leftRole).thePatternDiagramNode).getASTNode).frag.fullname
-                ->current.leftFrag.equal) and (current.right = anAST.index) and
+              (((leftrole->lr[]).thePatternDiagramNode).getASTNode).index) and
+             ((((leftrole->lr[]).thePatternDiagramNode).getASTNode).frag.
+                fullname->current.leftFrag.equal) and
+             (current.right = anAST.index) and
              (anAST.frag.fullname->current.rightFrag.equal)->value
           #);
         notFound:: 
@@ -2884,7 +3033,7 @@ do
              (if answer
               // yes then
                  false->ok;
-                 ((leftRole).thePatternDiagramNode).getAstNode->anAST[];
+                 ((leftrole->lr[]).thePatternDiagramNode).getAstNode->anAST[];
                  (if anAST[] <> none then anAST.frag.father->callChecker if)
               // no then
                  getValuesFromCode
@@ -2894,9 +3043,9 @@ do
                  (if whichEnd then
                      theNew[]->BoxToNode->theNew[];
                      (if theNew## <= PatternDiagramNode## then
-                         ((leftRole).thePatternDiagramNode,theNew[],theName[],
-                          implementation,none ,none ,1,1,1,1,true,kind)
-                           ->generateCode->(succeded,left[],right[]);
+                         ((leftrole->lr[]).thePatternDiagramNode,theNew[],
+                          theName[],implementation,none ,none ,1,1,1,1,true,
+                          kind)->generateCode->(succeded,left[],right[]);
                          (if succeded then
                              whichEndUpdateRoles
                           else
@@ -2919,19 +3068,19 @@ do
         whichEndUpdateRoles:
           (# 
           do
-             (rightRole).unMakeRegion;
-             right[]->(rightRole).thePatternDiagramNode;
+             (rightrole->rr[]).unMakeRegion;
+             right[]->(rightrole->rr[]).thePatternDiagramNode;
              (none ,current.leftMulFrom,current.leftMulTo)
-               ->(leftRole).redisplay;
+               ->(leftrole->lr[]).redisplay;
              (none ,current.rightMulFrom,current.rightMulTo)
-               ->(rightRole).redisplay;
-             ((leftRole).getTopParent,leftRole,(rightRole).getTopParent,
-              rightRole)->setEnds;
+               ->(rightrole->rr[]).redisplay;
+             ((leftrole->lr[]).getTopParent,leftRole,
+              (rightrole->rr[]).getTopParent,rightrole->rr[])->setEnds;
              false->ok;
              right.geometry->(x,y,w,h);
              x-w div 2->x;
-             (x,y)->(rightRole).move;
-             right[]->(rightRole).createRegion
+             (x,y)->(rightrole->rr[]).move;
+             right[]->(rightrole->rr[]).createRegion
           #)
      do
         getValuesFromCode
@@ -2941,8 +3090,8 @@ do
         (if whichEnd then
             theNew[]->BoxToNode->theNew[];
             (if theNew## <= PatternDiagramNode## then
-                (if (rightRole).thePatternDiagramNode <> theNew[] then
-                    ((leftRole).thePatternDiagramNode,theNew[],theName[],
+                (if (rightrole->rr[]).thePatternDiagramNode <> theNew[] then
+                    ((leftrole->lr[]).thePatternDiagramNode,theNew[],theName[],
                      implementation,none ,none ,current.leftMulFrom,
                      current.leftMulTo,current.rightMulFrom,current.rightMulTo,
                      true,kind)->generateCode->(succeded,left[],right[]);
@@ -2969,7 +3118,7 @@ do
         predicate:: 
           (# anAST: ^mps.ast
           do
-             ((rightRole).thePatternDiagramNode).getASTNode->anAST[];
+             ((rightrole->rr[]).thePatternDiagramNode).getASTNode->anAST[];
              (if not
              (anAST## <= betaGram.AttributeDecl##)
              (* in case it was a titlenode *) then
@@ -2981,16 +3130,17 @@ do
                      (# 
                      do
                         current.left->i;
-                        (((leftRole).thePatternDiagramNode).getASTNode).index
-                          ->i;
+                        (((leftrole->lr[]).thePatternDiagramNode).getASTNode).
+                        index->i;
                         current.right->i;
                         anAST.index->i
                      #)
              if);
              (current.left =
-              (((leftRole).thePatternDiagramNode).getASTNode).index) and
-             ((((leftRole).thePatternDiagramNode).getASTNode).frag.fullname
-                ->current.leftFrag.equal) and (current.right = anAST.index) and
+              (((leftrole->lr[]).thePatternDiagramNode).getASTNode).index) and
+             ((((leftrole->lr[]).thePatternDiagramNode).getASTNode).frag.
+                fullname->current.leftFrag.equal) and
+             (current.right = anAST.index) and
              (anAST.frag.fullname->current.rightFrag.equal)->value
           #);
         notFound:: 
@@ -3001,7 +3151,7 @@ do
                ->promptForBoolean->ok;
              (if ok
               // yes then
-                 ((leftRole).thePatternDiagramNode).getAstNode->anAST[];
+                 ((leftrole->lr[]).thePatternDiagramNode).getAstNode->anAST[];
                  (if anAST[] <> none then anAST.frag.father->callChecker if)
               // no then
                  getValuesFromCode
@@ -3029,6 +3179,7 @@ do kind->private.kind; INNER InteractiveNew
 
 -- AggregationConnectorGenerateCode: DoPart --
 do
+   thisOp:
      (#
         theNode,dummyNode: ^node;
         t,qualification,includeString: ^text;
@@ -3048,7 +3199,10 @@ do
         theCon: ^Connector;
         theAggrCon: ^AggregationConnector;
         x,y,w,h: @integer;
-        optionalsInserted: @boolean
+        optionalsInserted: @boolean;
+        parseOK: @boolean;
+        errorPos: @integer;
+        parseErrorText: ^Text
      do
         true->doneInInner;
         (if (aPatternDiagramNode.theSifEditor).isReadOnly then
@@ -3244,7 +3398,20 @@ do
                  theOtherListDiagram.titleNode[])->setEnds;
                 (if aNonTerminalNode[] <> none then
                     (aNonTerminalNode.unExp,t)
-                      ->(aNonTerminalNode.theSifEditor).parse;
+                      ->(aNonTerminalNode.theSifEditor).parse
+                      ->(parseOK,errorPos,parseErrorText[]);
+                    (if not parseOK then
+                        false->ok;
+                        'Internal parse error - should not happen(!):'
+                          ->stdErr.putline;
+                        'trying to parse: '->stdErr.putline;
+                        t[]->stdErr.putline;
+                        'Error:'->stdErr.putline;
+                        parseErrorText[]->stdErr.putline;
+                        'Internal parse error occured - should not happen!'
+                          ->alertUser;
+                        leave thisOp
+                    if);
                     currentObject->aSimpleNode[];
                     (if optionalsInserted then
                         (if anAST[] <> none then
@@ -3266,7 +3433,20 @@ do
                         theNode.delete;
                         dummyNode.delete
                     if);
-                    (anExp[],t)->(aSimpleNode.theSifEditor).parse;
+                    (anExp[],t)->(aSimpleNode.theSifEditor).parse
+                      ->(parseOK,errorPos,parseErrorText[]);
+                    (if not parseOK then
+                        false->ok;
+                        'Internal parse error - should not happen(!):'
+                          ->stdErr.putline;
+                        'trying to parse: '->stdErr.putline;
+                        t[]->stdErr.putline;
+                        'Error:'->stdErr.putline;
+                        parseErrorText[]->stdErr.putline;
+                        'Internal parse error occured - should not happen!'
+                          ->alertUser;
+                        leave thisOp
+                    if);
                     (* if simpleNode is replaced by repetitionNode
                      or vice-versa aSimpleNode has to be set *)
                     currentObject->aSimpleNode[]
@@ -3320,10 +3500,11 @@ do
      do
         true->doneInInner;
         true->embed;
-        ((leftRole).thePatternDiagramNode).theDiagram->theListDiagram[];
-        (if ((leftRole).thePatternDiagramNode).struc <=
+        ((leftrole->lr[]).thePatternDiagramNode).theDiagram->theListDiagram[];
+        (if ((leftrole->lr[]).thePatternDiagramNode).struc <=
         theListDiagram.SimpleAttributeDecl## then
-            ((leftRole).thePatternDiagramNode).getASTNode->theAttributeDecl[];
+            ((leftrole->lr[]).thePatternDiagramNode).getASTNode
+              ->theAttributeDecl[];
             theAttributeDecl.getSon1->theNames[];
             theNames.getSon1->theNameDcl[];
             theNameDcl.getNameDecl->anAST[];
@@ -3432,17 +3613,21 @@ do
 
 -- AggregationConnectorRedisplay: DoPart --
 do
+   thisOp:
      (#
         t,qualification,includeString: ^text;
         anExp: ^mps.expanded;
         anAST,newLeft: ^mps.ast;
         thePatternDiagramNode: ^PatternDiagramNode;
         theListDiagram: ^ListDiagram;
-        theSimpleNode: ^theListDiagram.SimpleAttributeDecl
+        theSimpleNode: ^theListDiagram.SimpleAttributeDecl;
+        parseOK: @boolean;
+        errorPos: @integer;
+        parseErrorText: ^Text
      do
         kind->private.kind;
-        ((leftRole).thePatternDiagramNode).getASTNode->anExp[];
-        ((rightRole).thePatternDiagramNode).getASTNode->anAST[];
+        ((leftrole->lr[]).thePatternDiagramNode).getASTNode->anExp[];
+        ((rightrole->rr[]).thePatternDiagramNode).getASTNode->anAST[];
         (if not (anAST## <= betaGram.AttributeDecl##) (* it is a title *) then
             anAST[]->patternDiagrams.astUtils.getEnclosingDecl->anAST[]
         if);
@@ -3450,7 +3635,7 @@ do
         (if qualification[] <> none then
             name[]->t[];
             ':'->t.puttext;
-            (leftRole).thePatternDiagramNode->thePatternDiagramNode[];
+            (leftrole->lr[]).thePatternDiagramNode->thePatternDiagramNode[];
             thePatternDiagramNode.theDiagram->theListDiagram[];
             (if implementation
              // gppProp.noImplementation then
@@ -3468,7 +3653,7 @@ do
                  then
                 (* To prevent role from being deleted when RepetitionNode
                  is replaced by SimpleNode *)
-                    (leftRole).unmakeRegion
+                    (leftrole->lr[]).unmakeRegion
                  else
                     none ->thePatternDiagramNode[]
                 if);
@@ -3495,7 +3680,7 @@ do
                 (if thePatternDiagramNode## <= theListDiagram.SimpleNode## then
                 (* To prevent role from being deleted when SimpleNode
                  is replaced by RepetitionNode *)
-                    (leftRole).unmakeRegion
+                    (leftrole->lr[]).unmakeRegion
                  else
                     none ->thePatternDiagramNode[]
                 if)
@@ -3537,21 +3722,32 @@ do
                  then
                 (* To prevent role from being deleted when RepetitionNode
                  is replaced by SimpleNode *)
-                    (leftRole).unmakeRegion
+                    (leftrole->lr[]).unmakeRegion
                  else
                     none ->thePatternDiagramNode[]
                 if)
             if);
             (anExp[],t)
-              ->(((leftRole).thePatternDiagramNode).theSifEditor).parse;
+              ->(((leftrole->lr[]).thePatternDiagramNode).theSifEditor).parse
+              ->(parseOK,errorPos,parseErrorText[]);
+            (if not parseOK then
+                'Internal parse error - should not happen(!):'->stdErr.putline;
+                'trying to parse: '->stdErr.putline;
+                t[]->stdErr.putline;
+                'Error:'->stdErr.putline;
+                parseErrorText[]->stdErr.putline;
+                'Internal parse error occured - should not happen!'->alertUser;
+                leave thisOp
+            if);
             (if thePatternDiagramNode[] <> none then
-                currentObject->(leftRole).thePatternDiagramNode;
-                (leftRole).thePatternDiagramNode->(leftRole).createRegion;
-                (leftRole).thePatternDiagramNode->theSimpleNode[];
+                currentObject->(leftrole->lr[]).thePatternDiagramNode;
+                (leftrole->lr[]).thePatternDiagramNode
+                  ->(leftrole->lr[]).createRegion;
+                (leftrole->lr[]).thePatternDiagramNode->theSimpleNode[];
                 THIS(AggregationConnector)[]
                   ->theSimpleNode.theAggregationConnector
             if);
-            ((leftRole).thePatternDiagramNode).getASTNode->newLeft[];
+            ((leftrole->lr[]).thePatternDiagramNode).getASTNode->newLeft[];
             (if includeString[] <> none then
                 (newLeft.frag.father,'INCLUDE',includeString[])->sifAddProp
             if);
