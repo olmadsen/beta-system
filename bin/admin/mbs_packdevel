@@ -5,7 +5,9 @@ require "dirlist";
 
 sub help {
     print "Usage: $0 [-bscnuv] machinetype+\n\n";
-    print "-b   Pack bootpackage only.\n";
+    print "-b   Pack bootpackage only.(betarun,bin,configuration,grammars)\n";
+    print "-e   Pack easy-update only. (betarun,bin,compiler,grammars)\n";
+    print "-f   Pack full system.  Rather large.\n";
     print "-s   Pack separate package for each machinetype.\n";
     print "\n";
     print "Give a number of machinetypes as argument.\n";
@@ -19,6 +21,16 @@ sub ConstructExtraDirs {
     }
 }
 
+sub ExcludeByDirectory {
+    if ($curdir =~ /grammar/i) {
+	$exludepat = "\\.(lst|dump|asm|bat|job|gz)\$";
+    } elsif ($curdir =~ /betarun/) {
+	$exludepat = "\\.(ast[lL]?|db|lst|dump|asm|bat|job|gz)\$";
+    } else {
+	$exludepat = "\\.(o|obj|db|ast[lL]?|lst|dump|asm|bat|job|gz)\$";
+    }
+};
+
 @ExcludeDirs = ('demo', 'export', 'doc', 'oodb');
 
 sub packit {
@@ -29,9 +41,9 @@ sub packit {
     $totalsize = 0;
     Chdir($betalib);
 DIR:
-    foreach $dir (@ExtraDirs, @Dirs) {
+    foreach $dir (sort (@ExtraDirs, @PackDirs)) {
 	foreach $ex (@ExcludeDirs) {
-	    next DIR if ($dir eq $ex);
+	    next DIR if ($dir =~ /^$ex/);
 	}
 	print "\r                                          ";
 	print "\rScanning $dir...";
@@ -47,7 +59,8 @@ DIR:
 	}
 	$packeddirs{$dir} = 1;
 	$basedir = "$betalib/$dir";
-	foreach $curdir (&GetDirsRecursively($basedir)) {
+	&ExcludeByDirectory;
+	foreach $curdir (sort &GetDirsRecursively($basedir)) {
 	    $include = 0;
 	    foreach $target (@targetlist) {
 		if ($curdir =~ m/$target/) {		
@@ -63,21 +76,17 @@ DIR:
 		}
 	    }
 	    if ($include) {
-		if ($curdir =~ /grammar/i) {
-		    $exludepat = '\.(lst|dump|asm|bat|job|gz)$';
-                } elsif ($curdir =~ /betarun/) {
-		    $exludepat = '\.(ast[lL]?|db|lst|dump|asm|bat|job|gz)$';
-		} else {
-		    $exludepat = '\.(o|obj|db|ast[lL]?|lst|dump|asm|bat|job|gz)$';
-	        }
 		if ($dir eq 'bin' or $dir =~ /^lib/) {
 		    $maxsize = 1024*1024*1024;
 		} else {
 		    $maxsize = 1024*1024;
-		}
+	        }
 	        @files = &GetFilesInDirs($curdir);
 	        foreach $file (@files) {
-                    next if ($file =~ /(.Ragn.wst)|(^\.\#)|(\~$)/);
+                    next if ($file =~ /(.Ragn.wst)/i);
+		    next if ($file =~ /\/\.\#/);
+		    next if ($file =~ /\~$/);
+		    $file =~ s/\\/\//g;	     
 		    if ($file =~ /^$betalib\/(.*)$/) {
 			$file ="./" . $1;
 			next if ($file =~ /$exludepat/);
@@ -114,6 +123,7 @@ DIR:
 	    }
 	}
     }
+    
     print "\nNumber of files found: $#filelist.  Total ";
     print int(($totalsize+(1024*1024)-1)/(1024*1024));
     print "MB.  Packing, please be patient...\n";
@@ -122,18 +132,21 @@ DIR:
         return;
     }
     
-    if ($packboot) {
-        $outputfile = "bootsystem-";
-    } else {
-        $outputfile = "devsystem-";
-    }
+    $outputfile = $outputfilebase;
     foreach $target (@ARGV) {
 	$outputfile .= $target . "-";
     }
     chop $outputfile;
     
     $donesize = 0;
-    open (TAR, "|gtar -czf $outputfile.tar.gz -T -");
+    if ($OS eq 'WIN') {
+	open (TAR, "|zip -q -@ $outputfile.zip");
+    } else {
+	open (TAR, "|gtar -czf $outputfile.tar.gz -T -");
+    }
+    select(TAR); $| = 1;       # make unbuffered
+    select(STDOUT); 
+    @filelist = sort @filelist;
     for ($i = 0; $i < $#filelist; $i++) {
 	$file  = $filelist[$i];
 	if (-f $file) {
@@ -142,15 +155,19 @@ DIR:
 	print  "\r", int(100*$donesize/$totalsize), "%";
 	print TAR "$file\n";
     }
-    print "\r100%\nPackage ready at $betalib/$outputfile.tar.gz\n";
+    print "\r100%.  Closing tar/zip. This may take a while...";
+    close TAR;
+    print "\nPackage ready at $betalib/$outputfile.tar.gz\n";
 }
 
 
 # --- PROGRAM:DESCRIPTOR ---
 $packboot = 1 if (defined $b);
+$packeasy = 1 if (defined $e);
+$packfull = 1 if (defined $f);
 $separate = 1 if (defined $s);
 
-if ($#ARGV == -1) {
+if ($packboot+$packeasy+$packfull != 1 || $#ARGV == -1) {
     &help;
     exit 1;
 }
@@ -165,9 +182,16 @@ foreach $target (@ARGV) {
 
 if ($packboot) {
     print "Packing bootpack only\n";
-    @Dirs = ('bin', 'configuration', 'grammars', 'betarun');
+    @PackDirs = ('bin', 'configuration', 'grammars', 'betarun');
+    $outputfilebase = 'bootsystem-';
+} elsif ($packeasy) {
+    print "Packing easy-update only\n";
+    @PackDirs = ('bin', 'compiler', 'betarun', 'grammars');
+    $outputfilebase = 'updatesystem-';
 } else {
     print "Packing complete development pack\n";
+    @PackDirs = @Dirs;
+    $outputfilebase = 'completesystem-';
 }
 
 if ($separate) {
@@ -179,4 +203,5 @@ if ($separate) {
 }
 
 1;
+
 
