@@ -139,7 +139,7 @@ if ($nocopyright){
     $copyright = "";
 } else {
     $copyright = <<EOT;
-<FONT size=-1>&#169; <A HREF="http://www.mjolner.com" TARGET="_top">Mj&oslash;lner Informatics</A></FONT>
+<FONT size="-1">&#169; <A HREF="http://www.mjolner.com" TARGET="_top">Mj&oslash;lner Informatics</A></FONT>
 EOT
 }
 
