@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-07-23 15:09:52 $, SID: $Revision: 1.12 $
+ * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-07-23 17:14:07 $, SID: $Revision: 1.13 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -65,12 +65,14 @@ Initialize()
   /* Allocate the Callback Function Area */
   CBFAAlloc();
 
+#ifdef DOT
   /* Allocate the Debug Object Table. */
   if( DOTSize > 0 )
     if( !AllocateHeap( &DOT,     &DOTTop,     &DOTLimit,  DOTSize ) ){
       fprintf(output,"#Beta: Couldn't allocate DOT (%d)\n", DOTSize);
       exit(1);
     }
+#endif
 
 #ifdef UNIX
    { /* Setup signal handles for the Beta system */

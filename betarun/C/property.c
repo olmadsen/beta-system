@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: property.c,v $, rel: %R%, date: $Date: 1992-06-12 14:50:52 $, SID: $Revision: 1.11 $
+ * Mod: $RCSfile: property.c,v $, rel: %R%, date: $Date: 1992-07-23 17:14:44 $, SID: $Revision: 1.12 $
  * by Lars Bak
  */
 
@@ -51,7 +51,9 @@ static ValueProperty( name, value)
   ENTRY("AOA",  AOABlockSize  = 1024 * intScan(name, value));
   ENTRY("LVRA", LVRABlockSize = 1024 * intScan(name, value));
   ENTRY("CBFA", CBFABlockSize = 1024 * intScan(name, value));
+#ifdef DOT
   ENTRY("DOT",  DOTSize       =    4 * intScan(name, value));
+#endif
 
   ENTRY("IOAPercentage",
         IOAPercentage = intScan(name, value);
