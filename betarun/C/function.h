@@ -15,9 +15,14 @@ void SetupFPU(void);
 
 /* C/betaenv.c */
 extern void GetBetaEnv(void);
+#ifdef nti
 extern int isWinNT();
 extern int isWin95();
 extern int isWin32s();
+#endif
+#ifdef hppa
+extern void *memalign(size_t, size_t);
+#endif
 
 /* C/property.c */
 extern void SetupProperties(char *);

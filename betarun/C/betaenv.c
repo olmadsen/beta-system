@@ -11,6 +11,12 @@
 #define DEFAULT_PROPERTY_NAME "BETART"
 #endif
 
+#ifdef hppa
+void *memalign(size_t align, size_t size) { 
+  return ((void*)(((long)malloc(size+align-1)+(align-1))&~(align-1)));
+}
+#endif
+
 void GetBetaEnv()
 {
   char *betaEnv;
