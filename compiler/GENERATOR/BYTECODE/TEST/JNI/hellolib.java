@@ -1,4 +1,4 @@
-//package beta;
+package beta;
 
 public class hellolib
 {

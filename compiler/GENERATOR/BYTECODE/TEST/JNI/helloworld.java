@@ -1,3 +1,4 @@
+import beta.hellolib;
 
 public class helloworld
 {
