@@ -17,16 +17,8 @@ asmlabel(AlloDO,
 	 "mov  %i0,%o0;"
 	 "clr  %o1;"
 	 "clr  %o3;" 
-	 "clr  %o4;"           /* Everything now set up for new frame */
-	 "save %sp,-64,%sp;"   /* New frame due to C call below */
-	 "mov  %i0,%o0;"
-	 "mov  %i2,%o2;"
-	 "clr  %o1;"
-	 "clr  %o3;"         
-	 "call "CPREF"AlloDO;"
-	 "clr  %o4;"           /* Everything now set up for C frame */
-	 "ret;"
-	 "restore %o0,0,%i0;"  /* Ole wants result in %i0: necessitates call above */
+	 "ba   "CPREF"AlloDO;"
+	 "clr  %o4;"
 	 );
 ref(DopartObject)
 CAlloDO(ref(Object) origin, int i1, unsigned size)
@@ -46,5 +38,10 @@ AlloDO(unsigned size)
     theObj->Origin = origin;
     theObj->Size   = size;
 
-    return theObj;
+#ifdef sparc
+    /* hack hack. Olm wants the result in %i0 */
+    __asm__("ret;restore %0, 0, %%i0"::"r" (theObj));
+#endif
+
+    return theObj; /* Keeps gcc happy */
 }
