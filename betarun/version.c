@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(117)";
+char betarun_version[] = "BETARUN VERSION 5.3(118)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.139  2003/06/02 06:53:51  datpete
+ *     DisableFPUExceptions
+ * Betarun version number: 117
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.138  2003/05/21 09:09:39  datpete
  *     removed DEBUG_PERSISTENCE in unswizzle.c
  * Betarun version number: 116
