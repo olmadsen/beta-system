@@ -1,11 +1,13 @@
 ;; BETA code editing commands for GNU Emacs.
-;;
+
 ;; By putting the following lines of Emacs-Lisp code into your .emacs
 ;; file, you can make Emacs automagically recognize your BETA source code
 ;; file if they have the suffix .bet (textual BETA files).
-
+;; 
 ;; (setq betalib (getenv "BETALIB"))
 ;; (if (not betalib) (setq betalib "/usr/local/lib/beta"))
+;; ;;or if you are on a PC: 
+;; ;;(if (not betalib) (setq betalib "c:\\beta"))
 ;; 
 ;; (setq load-path (append load-path 
 ;; 			(list (format "%s/emacs" betalib))))
@@ -17,11 +19,50 @@
 ;; When in beta-mode, you can get to know more about beta-mode by using
 ;; M-x describe-mode.
 
+;; Adding the BETA menu:
+;; The BETA menu in Emacs 19 or later can be added using the
+;; beta-mode-hook:
+;; 
+;; (defun mybeta ()
+;;    "Adds BETA menu"  
+;;    (interactive)
+;;    (load "beta-menu19" t t)
+;;    )
+;; 
+;; (setq beta-mode-hook 'mybeta)
+
+;; Other useful thing to hook in:
+;; 
+;; You may do more things using the beta-mode-hook.
+;; Here is a larger example:
+;; 
+;; (defun mybeta ()
+;;    "Make the following local bindings in beta-mode:
+;; C-xC-rj   calls beta-comment-justify
+;; C-xC-rC-r calls beta-comment-justify-region
+;; C-xC-rC-c calls beta-convert-region-to-comment
+;; C-xC-ru   calls beta-remove-comment
+;; C-xC-ri   calls indent-buffer.
+;; 
+;; Also adds BETA menu and beta-hilit19.
+;; "  
+;;    (interactive)
+;;    (local-set-key "\C-x\C-rj"    'beta-comment-justify)
+;;    (local-set-key "\C-x\C-r\C-r" 'beta-comment-justify-region)
+;;    (local-set-key "\C-x\C-r\C-c" 'beta-convert-region-to-comment)
+;;    (local-set-key "\C-x\C-ru"    'beta-remove-comment)
+;;    (local-set-key "\C-x\C-ri"    'indent-buffer)
+;;    (load "beta-menu19" t t)
+;;    (load "beta-hilit19" t t)
+;;    )
+;; 
+;; (setq beta-mode-hook 'mybeta)
+
 ;; This mode was programmed by Peter Ørbæk (poe@daimi.aau.dk).
 ;; Peter Andersen (pa@mjolner.dk), Kim Jensen M|ller (kjm@mjolner.dk)
 ;; Tommy Thorn (tthorn@daimi.au.dk) all contributed with additions, 
 ;; suggestions and bugfixes.
-;; J|rgen Lindskov (jlk@mjolner.dk) provided the comment-justify etc. 
+;; Jorgen Lindskov (jlk@mjolner.dk) provided the comment-justify etc. 
 ;; functions.
 ;; Suggestions, bugs etc. may be reported to support@mjolner.dk.
 
