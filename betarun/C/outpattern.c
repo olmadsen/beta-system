@@ -331,7 +331,7 @@ void DisplayObject(output,theObj,retAddress)
 				*/
 { 
   ref(Object) theItem=0;
-  
+
   if( isSpecialProtoType(theObj->Proto) ){
     switch ((long) theObj->Proto){
     case (long) ComponentPTValue:
@@ -621,7 +621,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 	 */
 	DisplayObject(output, theObj, (long)thePC);
     }else{
-      fprintf(output,"Current object is damaged!\n");
+      fprintf(output,"  Current object is damaged!\n");
     }
   }else
     fprintf(output,"Current object is damaged!\n");
@@ -643,12 +643,24 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 
     while((void **)theCell > &ReferenceStack[0]) {
       if((unsigned)*theCell & 1) {
+	/* The reference is tagged: Should appear in beta.dump */
 	theObj = (struct Object *)((unsigned)*theCell & ~1);
-	/* PC = ?????? */
+	PC = 0; /* No way to tell the PC ?? */
 	if(theObj && isObject(theObj)) {
-	  DisplayObject(output, theObj, (long)PC);
+	  /* Hack: Check if theObj is inlined in a component */
+	  register struct Object *theComp;
+	  theComp = (struct Object *)((long)theObj-headsize(Component));
+	  if ((theObj->GCAttr == -(headsize(Component)/sizeof(long))) && 
+	      (theComp->Proto==ComponentPTValue)) {
+	    DisplayObject(output, theComp, (long)PC);
+	    /* Make an empty line after the component */
+	    fprintf(output, "\n");
+	    if (theObj==(struct Object *)BasicItem) break;
+	  } else {
+	    DisplayObject(output, theObj, (long)PC);
+	  }
 	} else {
-	  fprintf(output, "[Damaged object!: %x]\n", (long)theObj);
+	  fprintf(output, "  [Damaged object!: %x]\n", (long)theObj);
 	}
       }
       theCell--;
