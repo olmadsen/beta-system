@@ -95,8 +95,11 @@ static DumpObject( theObj)
 	  DumpFormat('V', theObj->GCAttr, 4*ObjectSize(theObj), 
 		     DumpValContents( theObj), "" );
 	  break;
-	case (long) ObjectRepPTValue:
-	  fprintf(output, "DumpObject: ObjectRepPTValue\n"); return;
+	case (long) StatItemRepPTValue:
+	case (long) StatCompRepPTValue:
+	case (long) DynItemRepPTValue:
+	case (long) DynCompRepPTValue:
+	  fprintf(output, "DumpObject: ObjectRep\n"); return;
         case (long) RefRepPTValue:
 	  DumpFormat('R', theObj->GCAttr, 4*ObjectSize(theObj), 0, 0);
 	  break;
