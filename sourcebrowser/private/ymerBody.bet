@@ -5,6 +5,8 @@ INCLUDE '~beta/process/v1.4/osinterface';
 
 INCLUDE '~beta/guienv/v1.3.1/utils/dynpane';
 
+INCLUDE '~beta/editor/v5.0/fragmentscanner';
+
 INCLUDE 'settings';
 INCLUDE 'fileEditor';
 INCLUDE 'parseEditor';
@@ -25,14 +27,11 @@ do true->continue;
         (# open::
              (#
              do (600,800)->size;
-                ymerBrowser.browser.currentGroup.location[]->loadFiles
+                groupName[]->loadFiles
              #)
         #);
    do pe.open
-   #);
-   (ymerBrowser.browser.currentProject[],none)
-     ->ymerBrowser.browser.setGroup
-   
+   #)   
    
 --- ymerMPSbetaparserinit: descriptor ---
 (# bobsFile: @file;
@@ -127,7 +126,11 @@ setupProject:
                ->fileReadable)
           // ('.bet'->(f.name).append->fileExists) and
              ('.bet'->(f.name).append->fileReadable) then
-             '*'->proj.name.append;
+             (if (proj.name.length->proj.name.inxGet) <> '*'
+                 then
+                 '*'->proj.name.append;
+             if);
+             
              true->proj.isRoot;
              
              proj[]->root[];
@@ -292,7 +295,28 @@ do ''->infoView.msg;
                                  count+1->count;
                                  newGroup[]->groups.append;
                                  newGroup[]->thescan.foreach
-                             if)
+                             if);
+                          // f.entry.exists and
+                             f.entry.readable then
+                             location[]->newGroup.location.prepend;
+                             (if groups.find
+                                 (# predicate::
+                                      (#
+                                      do current.location[]
+                                           ->newGroup.location.equalNCS
+                                           ->value
+                                      #)
+                                 #)=NONE then
+                                 f.entry.path.name
+                                   ->newGroup.name[];
+                                 (* activate this code to allow _all_
+                                  * files to be shown
+                                  *)
+                                 (* count+1->count;
+                                  * newGroup[]->groups.append;
+                                  * newGroup[]->thescan.foreach
+                                  *)
+                             if);
                           else
                              (* skip for ECOOP: f.name->fileAvailable *)
                          if);
@@ -587,50 +611,7 @@ projectByIndex:
        if)#)
   exit foundProj[]
   #);
-
---- onGroupListOpen: dopart --- 
-do &thegrouplist.action
-   (# eventtype:: thegrouplist.theeventhandler.mousedown;
-      selectedGroup: ^projects.group;
-      root, newProj: ^browser.projects.project;
-   do (if (thegrouplist.selection.first)<>0 then
-          (if theEvent.doubleClick then
-              (if theEvent.shiftKey then
-                  (* do what's needed to make THIS into a root *)
-                  thegrouplist.selection.first
-                    ->groups.getGroupByIndex->selectedGroup[];
-                  &browser.projects.project[]->newProj[];
-                  selectedGroup.location->newProj.location;
-                  (if newProj.name[]=NONE then
-                      selectedGroup.name.copy->newProj.name[]
-                  if);
-                  '*'->newProj.name.append;
-                  true->newProj.isRoot;
-                  
-                  newProj[]->projects.theProjects.append;
-                  newProj[]->root[];
-                  
-                  &browser.projects.project[]->newProj[];
-                  root.location->newProj.location;
-                  true->newProj.isDomain;
-                  '[domain]'->newProj.name[];
-                  root[]->newProj.superProject[];
-                  newProj[]->root.subprojects.append;
-                  
-                  &browser.projects.project[]->newProj[];
-                  root.location->newProj.location;
-                  true->newProj.isExtent;
-                  '[extent]'->newProj.name[];
-                  root[]->newProj.superProject[];
-                  newProj[]->root.subprojects.append;
-                  
-                  projectsChanged;
-                  root[]->setProject;
-              if)
-          if)
-      if)
-   #)[]->thegrouplist.appendAction;
-   
+  
 --- onProjectListOpen: dopart --- 
 do &theprojectlist.action
    (# eventtype:: theprojectlist.theeventhandler.mousedown;
@@ -656,7 +637,98 @@ do &theprojectlist.action
           if)
       if)
    #)[]->theprojectlist.appendAction;
-   
+
+--- onGroupListOpen: dopart --- 
+do &thegrouplist.action
+   (# eventtype:: thegrouplist.theeventhandler.mousedown;
+      selectedGroup: ^projects.group;
+      root, newProj: ^browser.projects.project;
+   do (if (thegrouplist.selection.first)<>0 then
+          (if theEvent.doubleClick then
+              (if theEvent.shiftKey then
+                  (* do what's needed to make THIS into a root *)
+                  thegrouplist.selection.first
+                    ->groups.getGroupByIndex->selectedGroup[];
+                  &browser.projects.project[]->newProj[];
+                  selectedGroup.location->newProj.location;
+                  (if newProj.name[]=NONE then
+                      selectedGroup.name.copy->newProj.name[]
+                  if);
+                  (if (newProj.name.length->newProj.name.inxGet) <> '*' then
+                      '*'->newProj.name.append;
+                  if);
+                  true->newProj.isRoot;
+                  
+                  newProj[]->projects.theProjects.append;
+                  newProj[]->root[];
+                  
+                  &browser.projects.project[]->newProj[];
+                  root.location->newProj.location;
+                  true->newProj.isDomain;
+                  '[domain]'->newProj.name[];
+                  root[]->newProj.superProject[];
+                  newProj[]->root.subprojects.append;
+                  
+                  &browser.projects.project[]->newProj[];
+                  root.location->newProj.location;
+                  true->newProj.isExtent;
+                  '[extent]'->newProj.name[];
+                  root[]->newProj.superProject[];
+                  newProj[]->root.subprojects.append;
+                  
+                  projectsChanged;
+                  root[]->setProject;
+              if)
+          if)
+      if)
+   #)[]->thegrouplist.appendAction;
+
+--- onFragmentgroupViewOpen: dopart --- 
+do &thefragmentgroupview.action
+   (# eventtype:: thefragmentgroupview.theeventhandler.keydown;
+      ch: @char; inx, i: @integer;
+      g: ^projects.group;
+      fg: ^astInterface.fragmentGroup;
+      lastff: ^astInterface.fragmentForm;
+      fgs: @fragmentGroupScanner;
+      prefix: @text
+   do theevent.ch->ch; 0->i;
+      (if ch
+       // ascii.ack (* ^f *) then prefix.clear; 0->inx;
+       else
+          (if ch=ascii.bel (* ^g *) then
+              inx+1->inx
+          else
+              ch->prefix.put;
+          if);
+          currentGroup[]->g[];
+          (if g[]<>NONE then
+              g.getfg->fg[];
+              (if fg[]<>NONE then
+                  l:fg.fragmentList.scan
+                    (# ff: ^mps.AST.fragmentForm; n: ^text
+                    do (if current.type
+                        // mps.AST.formType then
+                           (if (i+1->i)>=inx then
+                               (1,prefix.length)->current.name.sub->n[];
+                               (if prefix[]->n.equalNCS then
+                                   current.open->ff[]; i->inx;
+                                   (if ff[]<>lastff[] then
+                                       (browser.currentProject[]
+                                       ,browser.currentGroup[]
+                                       ,ff[]->lastff[])
+                                         ->browser.setFragmentForm;
+                                   if);
+                                   leave l;
+                               if)
+                           if)
+                       if)
+                    #)
+              if)
+          if)
+      if)
+   #)[]->thefragmentgroupview.appendAction;
+      
 --- onCurrentProjectChange: dopart ---
 do (if newProject[] <> none then
        newProject.location[]->locationView.msg;
@@ -664,8 +736,8 @@ do (if newProject[] <> none then
    
 --- onCurrentGroupChange: dopart ---
 do (if newGroup[] <> none then
-       newGroup.location[]->locationView.msg
-   if)   
+       newGroup.location[]->locationView.msg;
+   if)
    
 --- onCurrentFormChange: dopart ---
 do (if newForm[]<>NONE then
@@ -749,7 +821,7 @@ do fgName[]->selectFragmentGroup;
 --- browserOpen: dopart ---
 do (# x,y: @integer;
       sz: @point;
-   do sbprivate.initialSize->sz; (sz.h*3+4,45)->sz;
+   do (sbprivate.initialWindowWidth,45)->sz;
       (sbprivate.outerctrl[],sz)->locationView.open;
       infoView.open;
       locationView[]->sbprivate.outerctrl.appendMember;

@@ -38,7 +38,13 @@ do
 -- sourcebrowserprivate: Descriptor --
 (#
    minHorizControlWidth: (#  exit 100 #);
-   initialSize: (#  exit (200,150) #);
+   initialProjectListViewWidth: (#  exit 292 #);
+   initialGroupListViewWidth: (#  exit 292 #);
+   initialFormListViewWidth: (#  exit 425 #);
+   initialListViewHeight: (# exit 150 #);   
+   initialWindowWidth:
+     (# exit initialProjectListViewWidth+initialGroupListViewWidth+initialFormListViewWidth #);
+   
    outerctrl: @dynpane (* Vertical control containing upctrl and down. *)
      (# eventhandler::
           (# onFatherFrameChanged:: (# do father.size->size #) #);
@@ -207,13 +213,15 @@ do
           (#
              openContents:: 
                (# 
-               do (none ,initialSize)->contents.open; TRUE->doneInInner; 
+               do (none ,(initialProjectListViewWidth,initialListViewHeight))
+                    ->contents.open;
+                  TRUE->doneInInner; 
                #);
              
           do
              shownprojects.init;
              projectsLabel->label;
-             initialSize->size;
+             (initialProjectListViewWidth,initialListViewHeight)->size;
              
           #);
         
@@ -318,13 +326,15 @@ do
           (#
              openContents:: 
                (# 
-               do (none ,initialSize)->contents.open; TRUE->doneInInner; 
+               do (none ,(initialGroupListViewWidth,initialListViewHeight))
+                    ->contents.open;
+                  TRUE->doneInInner; 
                #);
              
           do
              groups.init;
              emptyProjectListLabel->label;
-             initialSize->size;
+             (initialGroupListViewWidth,initialListViewHeight)->size;
              
           #);
         
@@ -497,12 +507,12 @@ do
           (#
              openContents:: 
                (# 
-               do (none ,initialSize)->contents.open; TRUE->doneInInner; 
+               do (none ,(initialFormListViewWidth,initialListViewHeight))->contents.open; TRUE->doneInInner; 
                #);
              
           do
              emptyGroupViewLabel->label;
-             initialSize->size;
+             (initialFormListViewWidth,initialListViewHeight)->size;
           #);
         
      #);
@@ -511,10 +521,8 @@ do
         dobind:
           (#  do fragmentView.dobind #);
         open:: 
-          (# sz: @Point; 
-          do
-             initialSize->sz;
-             (sz.h*3+4, 2*sz.v)->size;
+          (#
+          do (initialWindowWidth, 2*initialListViewHeight)->size;
              (down[],size)->fragmentView.open;
           #);
         fragmentView: @labelled
@@ -628,17 +636,19 @@ do sbprivate.open(# do INNER open #)
 do
    sbprivate.projectlist.contents.scanProjects;
    none ->sbprivate.projectlist.contents.setProject;
-   none ->currentProject[]->onCurrentProjectChange;
+   none ->currentProject[];
+   none->onCurrentProjectChange;
    sbprivate.grouplist.contents.clear;
-   none ->currentGroup[]->onCurrentGroupChange;
+   none ->currentGroup[];
+   none->onCurrentGroupChange;
    sbprivate.down.fragmentView.clear;
-   none ->currentForm[]->onCurrentFormChange;
+   none ->currentForm[];
+   none->onCurrentFormChange;
      
 
 -- sourcebrowserSetProject: DoPart --
 do
    cursors.watch[]->mouse.busycursor;
-   (if p[] <> currentProject[] then p[]->onCurrentProjectChange;  if);
    p[]->sbprivate.projectlist.contents.setProject;
    (if true
     // p[] = none then
@@ -646,34 +656,68 @@ do
     // p[] <> currentProject[] then
        p[]->sbprivate.grouplist.contents.scanGroups; 
    if);
-   p[]->currentProject[];
-   (*NONE->currentGroup[];*)
-   (*NONE->currentForm[];*)
+   (if p[] <> currentProject[] then
+       p[]->currentProject[];
+       p[]->onCurrentProjectChange;
+   if);
    INNER ;
    (if not setGroupDoneInInner then
-       none ->onCurrentGroupChange;
-       none ->currentGroup[];
-       none ->sbprivate.grouplist.contents.setgroup;
-       sbprivate.fragmentGroupView.contents.clear;
-       
+       (if (currentProject[]<>none) then
+           (if groups.size=1 then (* automatically select it *)
+               (groups.head).elm.g[]
+                 ->currentProject.lastGroupSelected[]
+           if);
+           currentProject.lastGroupSelected[]
+             ->sbprivate.grouplist.contents.setgroup;
+           currentProject.lastGroupSelected[]->currentGroup[];
+           currentProject.lastGroupSelected[]->onCurrentGroupChange;
+        else
+           none ->sbprivate.grouplist.contents.setgroup;
+           sbprivate.fragmentGroupView.contents.clear;
+           none ->currentGroup[];
+           none ->onCurrentGroupChange;
+       if)
    if);
    (if not setFormDoneInInner then
-       none ->onCurrentFormChange;
-       none ->currentForm[];
-       sbprivate.down.fragmentView.clear;
-       
+       (if (currentGroup[]<>none) then
+          (if (currentGroup.lastFormSelected[]=none) then
+              (if currentGroup.fg[]<>none then
+                   l:currentGroup.fg.fragmentList.scan
+                     (# ff: ^astInterface.fragmentForm;
+                        (* find first FF to select it automatically *)
+                     do (if current.type
+                         // sbprivate.fragmentGroupView.contents.ast.formType then
+                            current.open->currentGroup.lastFormSelected[];
+                            leave l
+                        if);
+                     #)
+               if);
+           if);
+           (if (currentGroup[]<>none) and
+               (currentGroup.lastFormSelected[]<>none) then
+               currentGroup.lastFormSelected[]
+                 ->sbprivate.fragmentGroupView.contents.setfragmentForm;
+               currentGroup.lastFormSelected[]->currentForm[];
+               currentGroup.lastFormSelected[]->onCurrentFormChange;
+            else
+               none->currentForm[];
+               none->onCurrentFormChange;
+           if)   
+        else
+           sbprivate.down.fragmentView.clear;
+           none->currentForm[];
+           none->onCurrentFormChange;
+       if)
    if);
    none ->mouse.busycursor;
-     
 
 -- sourcebrowserSetGroup: DoPart --
 do
    TRUE->setGroupDoneInInner;
    (if g[] <> currentGroup[] then
-       g[]->onCurrentGroupChange;
-       g[]->currentGroup[];
        g[]->sbprivate.grouplist.contents.setgroup;
-       
+       g[]->currentGroup[];
+       g[]->onCurrentGroupChange;
    if);
    INNER ;
      
@@ -682,11 +726,9 @@ do
 do
    TRUE->setFormDoneInInner;
    (if ff[] <> currentForm[] then
-       ff[]->oncurrentFormChange;
-       (*JLK: changed from ff[]->sbprivate.down.fragmentView.newfragment;*)
        ff[]->sbprivate.fragmentGroupView.contents.setfragmentForm;
        ff[]->currentForm[];
-       
+       ff[]->oncurrentFormChange;
    if);
      
 
