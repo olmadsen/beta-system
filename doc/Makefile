@@ -18,6 +18,10 @@ generated:
 	cd compiler; make
 	cd manpages; make
 
+link-check:
+	@echo Checking all links from index.html
+	perl bin/webxref.perl -depth 1 -htmlonly -errors -nohttp index.html
+
 up: update
 
 update:
