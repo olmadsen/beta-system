@@ -21,9 +21,9 @@
  */
 /* =========================RCS info================================== */
 /* $Author: beta $ */
-/* $Revision: 1.1.1.1 $ */
+/* $Revision: 1.2 $ */
 /* $Source: /a/home/alhambra02/beta/.CVSHOME/beta_project/basiclib/private/external/cbreak/my_getch.c,v $ */
-/* $Date: 1995-09-26 10:31:47 $ */
+/* $Date: 1999-09-16 10:28:35 $ */
 /* $State: Exp $ */
 /* $Locker:  $ */
 /* =================================================================== */
@@ -80,7 +80,11 @@
 #  ifdef HAS_SGTTY		/* BSD systems, AMIGA, MINIX */
 #    include <sgtty.h>		/* general terminal interface */
 #  elif defined(HAS_TERMIOS)	/* SYSV (and some BSD) systems */
-#    include <sys/termio.h>	/* terminal interface          */
+#    ifdef linux
+#      include <termio.h>
+#    else
+#      include <sys/termio.h>	/* terminal interface          */
+#    endif
 #  else				/* generate an error           */
 #    include "PROBLEM: no termios.h nor sgtty.h file ?????"
 #  endif
