@@ -1,6 +1,7 @@
 using System;
 using System.Reflection;
 using System.IO;
+using System.Runtime.InteropServices;
 using System.Collections;
 using System.Collections.Specialized;
 
@@ -8,8 +9,9 @@ namespace beta.converter
   {
     class DotnetConverter
       {
-	internal bool trace_type = false;
-	internal bool trace_file = false;
+	internal static bool trace_type = false;
+	internal static bool trace_file = false;
+	internal static bool trace_runtime = false;
 		
 	internal IDictionary includes;
 	internal static IDictionary converted;
@@ -199,6 +201,9 @@ namespace beta.converter
 		first = false;
 		String name = m.Name;
 		bool isStatic = m.IsStatic;
+		if (trace_type){
+		  beta.commentline("Method: " + print_method(m));
+		}
 		String returnType = mapType(m.ReturnType, false);
 		ParameterInfo[] parameters = m.GetParameters();
 		String[] parameternames = new String[parameters.Length];
@@ -214,9 +219,6 @@ namespace beta.converter
 		  } else {
 		    mangledName = dollarName;
 		  }
-		}
-		if (trace_type){
-		  beta.commentline("Method: " + print_method(m));
 		}
 		beta.putMethod(name, mangledName, parameternames, returnType, isStatic);
 	      }
@@ -332,7 +334,7 @@ namespace beta.converter
 	  {
 	    try
 	      {
-		Type cls = Type.GetType(slashToDot(name));
+		Type cls = gettype(slashToDot(name));
 		return dotToSlash(cls.Namespace) + "/" + "_" + stripNamespace(name);
 	      }
 	    catch (Exception)
@@ -617,35 +619,36 @@ namespace beta.converter
 	    String innerName = null;
 	    String innerSuper = null;
 	    Type sup;
-	    String resolution = stripPath(stripExtension(cls.Assembly.CodeBase.ToString()));
-	    String innerRes = null;
+	    bool isValue = false;
+	    sup = cls.BaseType;
 
-	    if (outer == null)
-	      {
-		beta.putHeader(namespaceName, className, doIncludes(cls));
+	    String resolution = stripPath(stripExtension(codebase(cls.FullName)));
+	    // Special case: classes with immediate base type System.ValueType must have keyword valuetype in resolution
+	    if (sup != null && sup.FullName == "System.ValueType"){
+	      isValue = true;
+	    }
+
+	    if (outer == null){
+	      beta.putHeader(namespaceName, className, doIncludes(cls));
+	    } else {
+	      innerClass = stripNamespace(cls.FullName);
+	      innerName = stripNamespace(unmangle(outer, cls.FullName));
+	      if (sup != null){
+		innerSuper = stripNamespace(sup.FullName);
 	      }
-	    else
-	      {
-		innerClass = stripNamespace(cls.FullName);
-		innerName = stripNamespace(unmangle(outer, cls.FullName));
-		innerRes  = stripPath(stripExtension(Type.GetType(innerClass).Assembly.CodeBase.ToString()));
-		sup = cls.BaseType;
-		if (sup != null)
-		  {
-		    innerSuper = stripNamespace(sup.FullName);
-		  }
-		beta.indent();
-		beta.putPatternBegin(innerName, innerSuper);
-	      }
+	      beta.indent();
+	      beta.putPatternBegin(innerName, innerSuper);
+	    }
 	    doFields(cls);
 	    doConstructors(cls);
 	    doMethods(cls);
 	    doClasses(cls);
+	    
 	    if (outer == null){
-	      beta.putTrailer(resolution, slashToDot(namespaceName), className);
+	      beta.putTrailer(resolution, slashToDot(namespaceName), className, isValue);
 	      beta.close();
 	    } else {
-	      beta.putTrailer(innerRes, slashToDot(namespaceName), innerClass); // Assuming same namespace!
+	      beta.putTrailer(resolution, slashToDot(namespaceName), innerClass, isValue); // Assuming same resolution/namespace!
 	    }
 	  }
 		
@@ -696,17 +699,22 @@ namespace beta.converter
 	    thisClass = null;
 	    try
 	      {
-		thisClass = Type.GetType(className);
+		thisClass = gettype(className);
 		namespaceName = dotToSlash(thisClass.Namespace);
 		className = stripNamespace(thisClass.FullName);
 		Type sup = thisClass.BaseType;
-	        String resolution = stripPath(stripExtension(thisClass.Assembly.CodeBase.ToString()));
+		String resolution = stripPath(stripExtension(codebase(thisClass.FullName)));
+		bool isValue = false;
+		// Special case: classes with immediate base type System.ValueType must have keyword valuetype in resolution
+		if (sup != null && sup.FullName == "System.ValueType"){
+		  isValue = true;
+		}
 		if (sup != null)
 		  {
 		    superNs = dotToSlash(sup.Namespace);
 		    superClass = stripNamespace(sup.FullName);
 		  }
-		beta = new BetaOutput(betalib, resolution, namespaceName, className, superNs, superClass, overwrite, output);
+		beta = new BetaOutput(betalib, resolution, namespaceName, className, superNs, superClass, overwrite, output, isValue);
 		if (beta.output == null)
 		  return null;
 	      }
@@ -720,8 +728,10 @@ namespace beta.converter
 		
 	internal virtual int convert(String clsname, String betalib, int overwrite, TextWriter output)
 	  {
+#if CATCH
 	    try
 	      {
+#endif
 		if (thisClass == null)
 		  {
 		    thisClass = needsConversion(clsname, betalib, overwrite, output);
@@ -731,12 +741,14 @@ namespace beta.converter
 		Console.Error.Write("Converting class\n\t\"" + thisClass.FullName + "\"" + "\n");
 		beta.reportFileName();
 		processClass(null, thisClass);
+#if CATCH
 	      }
 	    catch (Exception e)
 	      {
-		WriteStackTrace(e, Console.Error);
+	    	WriteStackTrace(e, Console.Error);
 		return 1;
 	      }
+#endif
 	    converted[slashToDot(clsname)] = clsname;
 	    Console.Error.Write("Done." + "\n");
 	    return convertIncludes(betalib, ((overwrite == 2)?2:- 1), ((output == Console.Out)?output:null));
@@ -749,8 +761,69 @@ namespace beta.converter
 	    stream.Write(throwable.StackTrace);
 	    stream.Flush();
 	  }
+
+	internal static Type gettype(String cls)
+	  {
+	    Type t = Type.GetType(cls);
+	    if (t != null){
+	      return t;
+	    } else {
+	      try {
+		String dir = RuntimeEnvironment.GetRuntimeDirectory();
+		Assembly asm;
+		// First try obvious prefix as assembly
+		int dotpos = cls.LastIndexOf('.');
+		if (dotpos>0){
+		  String firsttry = cls.Substring(0,dotpos);
+		  if (trace_runtime) Console.WriteLine("[  trying " + firsttry + "]");
+		  try {
+		    asm = Assembly.LoadFile(dir + Path.DirectorySeparatorChar + firsttry + ".dll");
+		    if (asm != null){
+		      t = asm.GetType(cls);
+		      if (t != null){
+			if (trace_runtime) Console.WriteLine("   FOUND!");
+			return t;
+		      }
+		    }
+		  } catch (Exception) {
+		  }
+		}
+		// Then search all files in system runtime directory (:-(
+		String[] dlls = Directory.GetFiles(dir, "*.dll");
+		for (int i=0; i<dlls.Length; i++){
+		  if (trace_runtime) Console.WriteLine("  [searching " + dlls[i] + "]");
+		  try {
+		    asm = Assembly.LoadFile(dlls[i]);
+		    if (asm != null){
+		      t = asm.GetType(cls);
+		      if (t != null){
+			if (trace_runtime) Console.WriteLine("  FOUND!");
+			return t;
+		      }
+		    }
+		  } catch (Exception) {
+		  }
+		}
+		return null;
+	      } catch (Exception e) {
+		if (trace_runtime) Console.WriteLine(e.Message);
+		if (trace_runtime) Console.WriteLine(e.StackTrace);
+		return null;
+	      }
+	    } 
+	  }
+
+	internal static String codebase(String cls)
+	  {
+	    Type t = gettype(cls);
+	    if (t != null){
+	      return t.Assembly.CodeBase;
+	    } else {
+	      return "";
+	    } 
+	  }
       }
-	
+    
     class IntegerMap: ListDictionary
       {
 	public virtual void  increment(String key)

@@ -6,6 +6,7 @@ namespace beta.converter
     public class BetaOutput
       {
 	internal bool trace = false;
+	internal bool do_flush = true;
 		
 	internal int indentlevel = 0;
 
@@ -21,31 +22,40 @@ namespace beta.converter
 			  String supNs, 
 			  String sup, 
 			  int overwrite, 
-			  TextWriter outstream)
+			  TextWriter outstream,
+			  bool isValue)
 	  {
 			
 	    openStream(betalib, ns, "_" + cls, overwrite, outstream);
 	    if (output != null)
-	      putWrapper(resolution, ns, cls, supNs, sup);
+	      putWrapper(resolution, ns, cls, supNs, sup, isValue);
 	    openStream(betalib, ns, cls, overwrite, outstream);
 	  }
+
+	public static FileInfo needsConversion(String betalib, 
+					       String ns, 
+					       String cls, 
+					       int overwrite){
+	  FileInfo entry = new FileInfo(betalib + "/dotnetlib/" + ns + "/" + cls + ".bet");
+	  if (File.Exists(entry.FullName) || Directory.Exists(entry.FullName)) {
+	    if (overwrite == - 1) {
+	      // Ignore if already converted
+	      return null;
+	    }
+	  } 
+	  return entry;
+	}
 		
 	internal virtual void  openStream(String betalib, 
 					  String ns, String cls, 
 					  int overwrite, 
 					  TextWriter outstream)
 	  {
-	    entry = new FileInfo(betalib + "/dotnetlib/" + ns + "/" + cls + ".bet");
-	    if (File.Exists(entry.FullName) || Directory.Exists(entry.FullName)) {
-	      if (overwrite == - 1) {
-		// Ignore if already converted
-		output = null;
-		return ;
-	      }
-	      if (overwrite == 0) {
-		existing = entry;
-		entry = new FileInfo(entry.FullName + ".new");
-	      }
+	    entry = needsConversion(betalib, ns, cls, overwrite);
+	    if (entry == null) return;
+	    if (overwrite == 0) {
+	      existing = entry;
+	      entry = new FileInfo(entry.FullName + ".new");
 	    }
 	    if (trace){
 	      Console.Error.Write("Creating directory " + entry.Directory.FullName + "\n");
@@ -113,6 +123,7 @@ namespace beta.converter
 	public virtual void  put(System.String txt)
 	  {
 	    output.Write(txt);
+	    if (do_flush) output.Flush();
 	  }
 		
 		
@@ -233,7 +244,8 @@ namespace beta.converter
 					System.String namespaceName, 
 					System.String className, 
 					System.String superNs, 
-					System.String superClass)
+					System.String superClass,
+					bool isValue)
 	  {
 	    bool use_wrapper_super = false;
 	    switch (className){
@@ -264,7 +276,7 @@ namespace beta.converter
 	      putPatternBegin("_" + className, superClass);
 	    }
 	    nl();
-	    putTrailer(resolution, namespaceName, className);
+	    putTrailer(resolution, namespaceName, className, isValue);
 	  }
 		
 	public virtual void  putHeader(System.String namespaceName, System.String className, System.Object[] includes)
@@ -356,10 +368,15 @@ namespace beta.converter
 		
 	public virtual void  putTrailer(System.String resolution, 
 					System.String namespaceName, 
-					System.String className)
+					System.String className, 
+					bool isValue)
 	  {
 	    indent(- 3);
-	    putln("do '[" + resolution + ']' + namespaceName + '.' + className + "' -> className;");
+	    indent();
+	    put("do '");
+	    if (isValue) put("valuetype ");
+	    put("[" + resolution + ']' + namespaceName + '.' + className + "' -> className;");
+	    nl();
 	    putln("INNER;");
 	    putln("#);\n");
 	    indent(- 2);
