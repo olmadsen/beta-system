@@ -1,7 +1,7 @@
 include objectserver.common.make
 
-make: $(odir)runAlloc_$(MACHINETYPE).o
+make: ../$(MACHINETYPE)/runAlloc_$(MACHINETYPE).o
 
-$(odir)runAlloc_$(MACHINETYPE).o: $(extdir)runAlloc_$(MACHINETYPE).s
-	as -o $(odir)runAlloc_$(MACHINETYPE).o $(extdir)runAlloc_$(MACHINETYPE).s
+../$(MACHINETYPE)/runAlloc_$(MACHINETYPE).o: runAlloc_$(MACHINETYPE).s
+	as -o ../$(MACHINETYPE)/runAlloc_$(MACHINETYPE).o runAlloc_$(MACHINETYPE).s
 
