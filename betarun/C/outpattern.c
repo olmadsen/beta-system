@@ -248,6 +248,10 @@ GLOBAL(static unsigned long error_pc);
 
 /*************************** ObjectDescription: **********************/
 
+static void ObjectSurrounderDescription(Object *obj, 
+					long PC, 
+					char *type);
+
 static void ObjectDescription(Object *obj, 
 			      long PC, 
 			      char *type, 
@@ -337,14 +341,6 @@ static void ObjectDescription(Object *obj,
     return;
   }  
 
-  if (!SimpleDump){
-    fprintf(output, "  { PC  0x%x", (int)PC);
-    PrintCodeAddress(PC);
-    fprintf(output, ", object 0x%x, proto 0x%x ", (int)obj, (int)proto);
-    PrintProto(proto); fprintf(output, " ");
-    fprintf(output, "}\n");
-  }
-
   if (activeDist == gDist)
     fprintf(output,"  allocating %s ", type);
   else
@@ -368,84 +364,104 @@ static void ObjectDescription(Object *obj,
       fprintf(output,"%s", ProtoTypeName(proto));
   }
   fprintf(output," in %s\n", groupname);
-  if (print_origin && !SimpleDump){
-    long addr;
-    Object *    staticObj;
-    
-    /** Print Static Environment Object. **/
-
-    proto = GETPROTO(obj);
-    if (!activeProto) activeProto = proto;
-    if (!activeProto) return;
-    addr=(long)obj + (4*(long)activeProto->OriginOff);
-    if (addr) 
-      staticObj = *(Object **)addr;
-    else
-      staticObj = 0;
-    TRACE_DUMP(fprintf(output, ">>>TraceDump: staticObj=0x%x\n", (int)staticObj));
-    if( isSpecialProtoType(GETPROTO(staticObj)) ){
-      switch (SwitchProto(GETPROTO(staticObj))){
-      case SwitchProto(ComponentPTValue):
-	staticObj = (Object *) ComponentItem(obj);
-	break;
-      case SwitchProto(DopartObjectPTValue):
-	staticObj = ((DopartObject *)staticObj)->Origin;
-	break;
-
-      case SwitchProto(DynItemRepPTValue):
-      case SwitchProto(DynCompRepPTValue):
-      case SwitchProto(StackObjectPTValue):
-      case SwitchProto(ByteRepPTValue):
-      case SwitchProto(ShortRepPTValue):
-      case SwitchProto(DoubleRepPTValue):
-      case SwitchProto(LongRepPTValue):
-      case SwitchProto(RefRepPTValue):
-	/* This is an error */
-	fprintf(output,
-		"    -- Illegal surrounding object (0x%x) %s!\n",
-		(int)staticObj,
-		ProtoTypeName(GETPROTO(staticObj)));
-	return;
-      } 
+  if (!SimpleDump){
+    /* Print lowlevel info after standard info */
+    proto=GETPROTO(obj);
+    fprintf(output, "  { PC  0x%x", (int)PC);
+    PrintCodeAddress(PC);
+    fprintf(output, 
+	    ", object 0x%x, proto 0x%x ",
+	    (int)obj, 
+	    (int)proto);
+    PrintProto(proto); fprintf(output, " ");
+    fprintf(output, "}\n");
+    if (print_origin){
+      /* Print Static Environment Object. */
+      ObjectSurrounderDescription(obj, PC, type);
     }
-    if( staticObj && isObject( staticObj ) ){
-      if (!SimpleDump) {
-	fprintf(output, "    { Surrounding object 0x%x, proto 0x%x ", 
-		(int)staticObj, 
-		(int)proto);
-	PrintProto(proto); fprintf(output, " ");
-	fprintf(output, "}\n");
-      }
+  }
+}
 
-      groupname = GroupName((long)GETPROTO(staticObj),0);
-      if (groupname==NULL){
-	fprintf(output,
-		"    -- Surrounding object (0x%x) damaged!\n",
-		(int)staticObj
-		);
-	return;
-      }
-      proto = GETPROTO(staticObj);
-
-      fprintf(output,"    -- ");
+static void ObjectSurrounderDescription(Object *obj, 
+					long PC, 
+					char *type)
+{
+  long addr;
+  Object      *staticObj;
+  ProtoType   *proto=GETPROTO(obj);
+  ProtoType   *activeProto=proto;
+  char        *groupname;
+  
+  if (!activeProto) return;
+  addr=(long)obj + (4*(long)activeProto->OriginOff);
+  if (addr) 
+    staticObj = *(Object **)addr;
+  else
+    staticObj = 0;
+  TRACE_DUMP(fprintf(output, ">>>TraceDump: staticObj=0x%x\n", (int)staticObj));
+  if( isSpecialProtoType(GETPROTO(staticObj)) ){
+    switch (SwitchProto(GETPROTO(staticObj))){
+    case SwitchProto(ComponentPTValue):
+      staticObj = (Object *) ComponentItem(obj);
+      break;
+    case SwitchProto(DopartObjectPTValue):
+      staticObj = ((DopartObject *)staticObj)->Origin;
+      break;
+      
+    case SwitchProto(DynItemRepPTValue):
+    case SwitchProto(DynCompRepPTValue):
+    case SwitchProto(StackObjectPTValue):
+    case SwitchProto(ByteRepPTValue):
+    case SwitchProto(ShortRepPTValue):
+    case SwitchProto(DoubleRepPTValue):
+    case SwitchProto(LongRepPTValue):
+    case SwitchProto(RefRepPTValue):
+      /* This is an error */
+      fprintf(output,
+	      "    -- Illegal surrounding object (0x%x) %s!\n",
+	      (int)staticObj,
+	      ProtoTypeName(GETPROTO(staticObj)));
+      return;
+    } 
+  }
+  if( staticObj && isObject( staticObj ) ){
+    groupname = GroupName((long)GETPROTO(staticObj),0);
+    if (groupname==NULL){
+      fprintf(output,
+	      "    -- Surrounding object (0x%x) damaged!\n",
+	      (int)staticObj
+	      );
+      return;
+    }
+    proto = GETPROTO(staticObj);
+    
+    fprintf(output,"    -- ");
+    fprintf(output,"%s", ProtoTypeName(proto));
+    while(proto->Prefix &&
+	  proto->Prefix->Prefix != proto->Prefix){
+      proto = proto->Prefix;
       fprintf(output,"%s", ProtoTypeName(proto));
-      while(proto->Prefix &&
-	    proto->Prefix->Prefix != proto->Prefix){
-	proto = proto->Prefix;
-	fprintf(output,"%s", ProtoTypeName(proto));
-      }
-      fprintf(output, " in %s\n", groupname);
+    }
+    fprintf(output, " in %s\n", groupname);
+    if (!SimpleDump) {
+      /* Print lowlevel info after standard info */
+      proto=GETPROTO(staticObj);
+      fprintf(output, "    { Surrounding object 0x%x, proto 0x%x ", 
+	      (int)staticObj, 
+	      (int)proto);
+      PrintProto(proto); fprintf(output, " ");
+      fprintf(output, "}\n");
+    }
+  } else {
+    if (staticObj){
+      fprintf(output,
+	      "    -- Surrounding object (0x%x) damaged!\n",
+	      (int)staticObj
+	      );
     } else {
-      if (staticObj){
-	fprintf(output,
-		"    -- Surrounding object (0x%x) damaged!\n",
-		(int)staticObj
-		);
-      } else {
-	fprintf(output,
-		"    -- Surrounding object is zero!\n"
-		);
-      }
+      fprintf(output,
+	      "    -- Surrounding object is zero!\n"
+	      );
     }
   }
 }
