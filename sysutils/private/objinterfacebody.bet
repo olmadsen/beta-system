@@ -59,6 +59,8 @@ do address + 16 -> tos'%adrGetLong' -> tos'%getShort[0]' -> value
 (# l: @longWord;
    longAligned: @boolean;
 do
+   
+   
    GcTab -> thisAddr;
    false -> isStatic;
    (* Scan static part objects:
@@ -102,6 +104,153 @@ do
             restart loop 
         if)
      #)
+#)
+
+
+-- PrototypeScanSimples: descriptor --
+(* (From documentation of the prototype-layout)
+ * EndianTable:	
+ *              The endian table holds information about the location in
+ * 		the object about possible integer, short and real values
+ * 		tha ust be converted from/to big/little endian when
+ * 		the object is exchanged between big/little endian machines.
+ * 		As of writing, this table is always generated for little
+ * 		endian machines. Switch 47 will generated it for big endian
+ * 		machines as well.
+ * 
+ * 		However, the format and generation of the table is currently
+ * 		being revisited. Ths current format is:
+ * 
+ *  		a	A bit vector describing offsets holding a long 
+ * 			attributes (i.e 4 bytes). Ig e.g. bit 12 is 1,
+ * 			then byte offset 48 holds a long.
+ * 
+ * 			The length of the bit vector in bytes is:
+ * 
+ * 				((size - 1 ) div 32) + 1
+ * 
+ * 			Each byte holds information about 32 longs, one
+ * 			pr. bit.
+ * 
+ * 		b	A zero sequence of shorst (2 bytes) holding byte 
+ * 			offsets to attributes holding a short.
+ * 
+ * 		c	A zero sequence of shorst (2 bytes) holding byte 
+ * 			offsets to attributes holding a shortreal.
+ * 
+ * 		Note: the bit vector is paded with a possible byte to make
+ * 		sure that the short- and real-lists are half-word aligned.
+ * 
+ * 		A proposal for a further compaction is the following:
+ * 
+ * 			An object rarely has shorst and/or reals. In case
+ * 			of no  shorst/reals a bit coulld indicate if the lists
+ * 			are present. 
+ * 
+ * 			The first 2 bits in the long bit vector represents
+ * 			information about offset 0 (zero) and 4. Offset 0
+ * 			is the protytype pointer of the object and offset
+ * 			is the GC-field. Since this is always, the case bits
+ * 			0 and 1 can be used to represent information about 
+ * 			shorts and longs. Ths suggestion is to use bit 0 to 
+ * 			mark if a short-list is present and bit 1 is used to
+ * 			indicate if the real -lits is present.
+ * 
+ * 			This proposal will also eliminate the need for padding
+ * 			the bit vector.
+ *)
+
+(# l: @longWord;
+   i, j, b, N, (* no. of bytes to represent longs *)
+   ptr, (* points at current byte/word in endiantable. *)
+   pos: @Integer; (* thisOffset at start of the current byte *)
+   do_int16, do_real64: @Boolean;
+do
+   (* THIS VERSION READS THE COMPACT VERSION DESCRIBED ABOVE! *)
+   
+   (* Make ptr point at first byte in EndianTable *)
+   GcTab -> ptr;
+   loop: (* Skip through "Static-object-table" *)
+   (#
+   do (if %getShortAt(ptr)<>0 then 
+          ptr + 8 -> ptr; (* Skip 2 shorts and a long. *)
+          restart loop;
+      if)
+   #);
+   ptr + 2 -> ptr; (* Skip terminating zero. *)
+   
+   loop: (* Skip through "Dyn-ref-table" *)
+   (#
+   do (if %getShortAt(ptr)<>0 then 
+          ptr + 2 -> ptr; (* Skip 1 short. *)
+          restart loop;
+      if)
+   #);
+   ptr + 2 -> ptr; (* Skip terminating zero. *)
+   
+   SIMPLETYPE_INT32->simpleType;
+   
+   %getByteAt(ptr) -> b; (* First get flags from first two bits.*)
+   ptr+1->ptr; 
+   
+   ((b %Band 0x80)=0x80) -> do_int16;
+   ((b %Band 0x40)=0x40) -> do_real64;
+   
+   (if b<>0 then        (* process remaining 6 bits *)
+       8 -> thisOffset;
+       loop:
+         (#
+         do (if (b %Band 0x20) then INNER scanSimples if);
+            thisOffset+4->thisOffset;
+            b %sll 1 ->b;
+            (if b<>0 then restart loop if);
+         #);                 
+   if);
+   
+   32->pos; (* Ready for rest of bytestream *)
+   ((Size-1) div 32) -> N;
+   
+   (for i: N repeat
+        %getByteAt(ptr) -> b;
+        (if b<>0 then
+            (* process bits *)
+            pos->thisOffset;
+            loop:
+              (#
+              do (if (b %Band 0x80) then INNER scanSimples if);
+                 thisOffset+4->thisOffset;
+                 b %sll 1 ->b;
+                 (if (b %Band 0xff) then restart loop if);
+              #);                 
+        if);
+        ptr+1->ptr; pos+32->pos;
+   for);
+   
+   (if (ptr %Band 1) then ptr+1->ptr if);
+   
+   (if do_int16 then 
+       SIMPLETYPE_INT16->simpleType;
+       loop:
+         (#
+         do %getShortAt(ptr) -> thisOffset;
+            (if thisOffset=0 then leave loop if);
+            INNER scanSimples;
+            ptr + 2 -> ptr;
+            restart loop;
+         #);
+   if);
+   
+   (if do_real64 then 
+       SIMPLETYPE_REAL64->simpleType;
+       loop:
+         (#
+         do %getShortAt(ptr) -> thisOffset;
+            (if thisOffset=0 then leave loop if);
+            INNER scanSimples;
+            ptr + 2 -> ptr;
+            restart loop;
+         #);
+   if);
 #)
 
 -- PrototypeGetStrucProto: dopart --
