@@ -21,6 +21,7 @@ extern struct Item     *AlloI();
  */
 extern struct Item      *SPARC_AlloI(struct Object *origin, int i1, struct ProtoType *proto, int i3, int i4);
 extern struct Component *SPARC_AlloC(struct Object *origin, int i1, struct ProtoType *proto, int i3, int i4);
+struct Item *SPARC_AlloSI(struct Structure *s, int i1, int i2, int i3, int i4);
 /* binding of entry names */
 
 #ifndef __svr4__
