@@ -63,11 +63,11 @@ register long _dummy7 asm("%r14"); /* really RefSP */
 
 #define asmlabel(label, code) /*nothing*/
 
-#define asmemptylabel(label)
-  __asm__(#label;"	.EXPORT #label"; )
+#define asmemptylabel(label) \
+  /* asm(#label "\n	.EXPORT " #label ",CODE") */
 
 #define asmcomment(text) \
-  __asm__(";" #text ")
+  /* asm(";" #text) */
 
 /*
  * Take care of the reference stack.
@@ -172,7 +172,7 @@ static inline long *getThisReg()
   return res;
 }
 
-static inline void setThisReg(long *p)
+static inline void setThisReg(void *p)
 {     
   asm volatile ("COPY\t%0, %%r3" : /* no out */ : "r" (p)); 
 }
