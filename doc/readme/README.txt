@@ -11,16 +11,16 @@ DK-8000 Aarhus C, Denmark			   URL:  http://www.mjolner.com
 Documentation
 =============
 
-The system distribution contains a 'doc' directory.
-On the CD this is directoy available; on FTP distributions
-this directory need to be unpacked.
+The Mjolner System distribution contains a 'doc' directory.
+On the CD this is directly available; on FTP distributions
+this directory needs to be unpacked.
 
 The documentation is regularly updated. 
 The latest version can always be found on the Internet at the URL
 
 	http://www.mjolner.com/mjolner-system/documentation/index.html 
 
-Various other information about BETA and The Mjølner System can be found at
+Various other information about BETA and The Mjolner System can be found at
 
 	Mjølner Informatics Homepage: 
 	  http://www.mjolner.com/ 
