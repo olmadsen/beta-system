@@ -32,7 +32,7 @@ $(odir)startAsDeamon.o: $(dir)startAsDeamon.c
 	$(CC) $(debug) -D$(MACHINETYPE)  -c $(dir)startAsDeamon.c -o $(odir)startAsDeamon.o
 	
 $(odir)thisHost.o: $(dir)thisHost.c
-	$(CC) $(debug) -D$(MACHINETYPE) -I $(BETALIB)/process/v1.4/private/external  -c $(dir)thisHost.c -o $(odir)thisHost.o
+	$(CC) $(debug) -D$(MACHINETYPE) -I $(BETALIB)/process/v1.5/private/external  -c $(dir)thisHost.c -o $(odir)thisHost.o
 
 $(dir)$(MACHINETYPE)/startAsDeamon: $(dir)$(MACHINETYPE) $(odir)startAsDeamon.o $(odir)deamonStart.o 
 	$(CC) $(debug) -D$(MACHINETYPE) $(odir)startAsDeamon.o $(odir)deamonStart.o -o $(dir)$(MACHINETYPE)/startAsDeamon

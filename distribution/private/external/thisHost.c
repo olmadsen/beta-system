@@ -15,7 +15,7 @@
 #include <netdb.h>
 
 #else
-#  if defined(A_SUN4S)
+#  if defined(A_SUN4S) || defined(A_LINUX) || defined(A_SGI)
 #  include <sys/types.h>
 #  include <sys/socket.h>
 #  include <netdb.h>
@@ -33,20 +33,13 @@
 #      include <sys/socket.h>
 #      include <netdb.h>
 
+
 #      else
-#        if defined(A_LINUX)
-#        include <sys/types.h>
-#        include <sys/socket.h>
-#        include <netdb.h>
-#        include <netinet/in.h>
+#        if defined(A_NT)
+#        error "Not yet implemented on this platform"
 
 #        else
-#          if defined(A_NT)
-#          error "Not yet implemented on this platform"
-
-#          else
-#            error ARCH_UNKNOWN
-#          endif
+#          error ARCH_UNKNOWN
 #        endif
 #      endif
 #    endif
@@ -55,7 +48,7 @@
 
 
 int getName (int adr)
-{ return adr; };
+{ return adr; }
 
 
 struct hostent* thisHost ()
