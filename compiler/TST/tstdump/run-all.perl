@@ -37,6 +37,7 @@ print "\nRunning and diffing all (left is correct version)...\n";
 print "======================================================\n";
 
 @files = &GetFilesInDirs(".");
+@files = sort @files;
 $match = "tstdump\\d\\d";
 foreach $f (@files) {
     $f =~ s/^\.\///;
