@@ -1,5 +1,6 @@
 #! perl
 
+unlink "idl-parser.generated";
 print `generator idl`;
 rename ("idl-parser.bobs", "idl-parser.generated") or die "rename: $!";
 
@@ -24,4 +25,5 @@ while(<IN>) {
 close(IN);
 close(OUT);
 
+print "Invoking standard dogram on idl-meta.gram\n";
 print `dogram idl`;
