@@ -630,23 +630,12 @@ void proxyTrapHandler(long sig, struct sigcontext_struct scp)
 
 /******************************* SGI: ********************************/
 #ifdef sgi
-static void *getRegisterContents(unsigned long reg, ucontext_t *ucon, long returnSP) 
+static void *getRegisterContents(unsigned long reg, struct sigcontext *scp) 
 {
   if (reg == 0) {
-    return 0;
-  } else if ((reg > 0) && (reg < 0x10)) {
-    /* Get the value from the context */
-    return (void *)(ucon->uc_mcontext.gregs[reg + 3]);
-  } else if ((reg >= 10) && (reg < 0x20)) {
-    /* Get the value from the stack */
-    return (void *)(((unsigned long *) returnSP)[reg - 16]);
-  } else {
-    fprintf(output, "getRegisterContents: "
-	    "Unsupported register\n");
-    DEBUG_CODE(Illegal());
-    BetaExit(1);
-  }
-  return (void *)-1;
+    return NULL;
+  } else 
+    return (void *)-1;
 }
 
 int DecodeFormatI(unsigned long instruction)
