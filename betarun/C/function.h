@@ -102,9 +102,14 @@ extern int  NumCBFAEntries(void);
 
 /* C/sighandler.c */
 extern void SetupBetaSignalHandlers(void);
+#ifdef macosx
+#include <signal.h>
+extern void InstallSigHandler(int sig, void (*handler)(int, siginfo_t*, void*));
+#else
 extern void InstallSigHandler(int sig, void (handler)(int));
+#endif
 #ifdef RTDEBUG
-  extern void PrintSignal(int sig);
+extern void PrintSignal(int sig);
 #endif /* RTDEBUG */
 
 #ifdef MT

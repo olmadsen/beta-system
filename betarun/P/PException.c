@@ -1044,12 +1044,10 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 #ifdef UNIX
 static void InstallProxyHandler(void)
 {
-#ifdef macosx
-  extern void proxyTrapHandler(signal_context *);
-  InstallSigHandler(SIGTRAP, (void*)proxyTrapHandler);
-#endif /* macosx */
+#ifndef macosx
   InstallSigHandler(SIGBUS,  (void*)proxyTrapHandler);
   InstallSigHandler(SIGSEGV, (void*)proxyTrapHandler);
+#endif /* macosx */
 }
 
 void initProxyTrapHandler(void)

@@ -1227,20 +1227,42 @@ asm(
 static long signal_number;
 static unsigned long pc_at_signal;
 
-void BetaSignalCatcher (long sig, /*siginfo_t*/ void *info, struct sigcontext *scp)
+void BetaSignalCatcher (int sig, siginfo_t *info, /*struct sigcontext*/void *_scp)
 {
+  struct sigcontext *scp = (struct sigcontext *)_scp;
   DEBUG_CODE({
     fprintf(output, "\nBetaSignalCatcher:\n");
-    fprintf(output, "  Signal %d caught at PC=0x%x\n", (int)sig, (int)scp->sc_ir);
+    fprintf(output, "  Signal %d caught", (int)sig);
+    fprintf(output, "  (scp=0x%x)", (int)scp);
+    fprintf(output, "  at PC=0x%x\n", (int)scp->sc_ir);
+    fflush(output);
   });
 
   /* Save signal number and PC in global variables */
   signal_number = sig;
   pc_at_signal = scp->sc_ir;
 
-  DEBUG_CODE(fprintf(output, "  [returning through SignalWrapper]\n"));
+#if 0
+  DEBUG_CODE({
+    fprintf(output, "  [returning through SignalWrapper]\n");
+    fflush(output);
+  });
   scp->sc_ir = (long)&SignalWrapper; /* go to SignalWrapper upon return */
   return; /* via system signal handler to SignalWrapper */
+#else
+  {
+    /* Temporary solution not reading registers in assembler */
+    signal_context ctx;
+    fprintf(output, "\n******************************************************\n");
+    fprintf(output, "MacOSX 10.2.x: BetaSignalHandler will probably fail!!!");
+    fprintf(output, "\n******************************************************\n");
+    ctx.pc_at_signal = scp->sc_ir; /* PC */
+    ctx.GPR[1] = scp->sc_sp; /* SP - probably wrong (see <ppc/signal.h>) */
+    ctx.GPR[31] = 0; /* Current object - not known here! */
+    ctx.signal_number = sig;
+    BetaSignalHandler(&ctx);
+  }
+#endif
 }
 
 #endif /* macosx */
@@ -1586,7 +1608,11 @@ ExceptionHandler default_exceptionhandler;
 /************ InstallSigHandler: install a handler for sig **************/
 /************************************************************************/ 
 
+#ifdef macosx
+void InstallSigHandler(int sig, void (*handler)(int, siginfo_t*, void*))
+#else
 void InstallSigHandler (int sig, void (handler)(int))
+#endif
 {
 #ifndef nti
   DEBUG_CODE({
@@ -1597,14 +1623,19 @@ void InstallSigHandler (int sig, void (handler)(int))
 #if defined(linux) || defined(sgi)
     signal (sig, handler);
 #else /* linux || sgi */
-  { struct sigaction sa;
+  { 
+    struct sigaction sa;
     /* Specify that we want full info about the signal, and that
      * the handled signal should not be blocked while being handled: 
      */
+#ifdef macosx
+    sa.sa_flags = SA_SIGINFO;
+#else
     sa.sa_flags = SA_SIGINFO | SA_RESETHAND;
     /* No further signals should be blocked while handling the specified
      * signals. 
      */
+#endif
     sigemptyset(&sa.sa_mask); 
     /* Specify handler */
 #ifdef macosx
@@ -1630,13 +1661,14 @@ void SetupBetaSignalHandlers(void)
 #endif /* ppcmac */
   
 #if defined(UNIX)
-  void (*handler)(int);
 #ifdef macosx
+  void (*handler)(int, siginfo_t*, void*);
   /* All signals go through 
    *   SignalCatcher -> SignalWrapper -> proxyTrapHandler -> BetaSignalHandler
    */
-  handler = (void (*)(int))BetaSignalCatcher;
+  handler = BetaSignalCatcher;
 #else
+  void (*handler)(int);
   handler = (void (*)(int))BetaSignalHandler;
 #endif /* macosx */
 
@@ -1670,8 +1702,10 @@ void SetupBetaSignalHandlers(void)
   /* Install Proxy Trap Handler to catch RefNone correctly
    * independently of whether Persistence is enabled or not.
    */
-#ifndef macosx /* all signals already go through proxyTrapHandler on macosx */
-   initProxyTrapHandler();
+#ifdef macosx
+  /* all signals already go through proxyTrapHandler on macosx */
+#else
+  initProxyTrapHandler();
 #endif /* macosx */
 #endif /* PERSIST */
 #endif /* UNIX */

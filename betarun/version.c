@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(98)";
+char betarun_version[] = "BETARUN VERSION 5.3(99)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.120  2002/09/26 18:03:49  datpete
+ *     MacOS 10.2 signal handlers (not complete)
+ * Betarun version number: 98
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.119  2002/09/02 09:50:40  datpete
  *     Still need to copy betarun_v to old location since boot compiler use this
  * Betarun version number: 97
