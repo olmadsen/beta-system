@@ -1,0 +1,630 @@
+ORIGIN '../codeeditor';
+INCLUDE '~beta/basiclib/v1.4/numberio';
+-- texteditingPrivate: Descriptor --
+(#
+   selRow,selCol,endRow,endCol: @integer;
+   editingLexems: @boolean;
+   teInfo: @
+     (#
+        lineS1,charS1,lineS2,charS2: @integer;
+        posStartBefore,posEndBefore: @integer;
+        oldnode: ^mps.ast;
+        fatherNode: ^mps.expanded;
+        sonNo: @integer;
+        lastPosBefore: @integer;
+        synCatNo: (* editAndParse: *) @mps.nonterminalSymbol;
+        oldLength: @integer;
+        
+     #);
+   test4:
+     (# xstart,ystart,xend,yend: @integer; com,t: ^text
+     enter (com[],xstart,ystart,xend,yend)
+     do
+        &text[]->t[];
+        com[]->t.putText;
+        ': '->t.putText;
+        xstart->t.putInt;
+        ' '->t.put;
+        ystart->t.putInt;
+        ' '->t.put;
+        xend->t.putInt;
+        ' '->t.put;
+        yend->t.putInt;
+        t[]->putText;
+        
+     #);
+   test2:
+     (# x,y: @integer; com,t: ^text
+     enter (com[],x,y)
+     do
+        &text[]->t[];
+        com[]->t.putText;
+        ': '->t.putText;
+        x->t.putInt;
+        ' '->t.put;
+        y->t.putInt;
+        t[]->putText;
+        
+     #);
+   enterEditLexemMode:
+     (# 
+     do (* ch->enterTextediting;*)
+        (if switch[4] then 'enterEditLexemMode: '->putLine if);
+        editLexemMode->editingMode;
+        cs.node[]->teInfo.oldNode[];
+        cs.node.father->teInfo.fatherNode[];
+        (if (teInfo.fatherNode[] <> none ) then
+        (* else a program with a lexem in the root!! *)
+            cs.node.sonNo->teInfo.sonNo;
+            theSifTextEditor.lastPosition->teInfo.lastPosBefore;
+            cs->selectArea
+              ->(teInfo.lineS1,teInfo.charS1,teInfo.lineS2,teInfo.charS2);
+            (teInfo.lineS1,teInfo.charS1)->theSifTextEditor.LineChartoPos
+              ->teInfo.posStartBefore;
+            (teInfo.lineS2,teInfo.charS2)->theSifTextEditor.LineChartoPos
+              ->teInfo.posEndBefore;
+            
+        if)
+     #);
+   exitEditLexemMode:
+     (#
+        exitKind: @integer;
+        outLineS2,outCharS2: (* terrible names!!! *) @integer;
+        posEndAfter: @integer;
+        theLexemText,help: ^text;
+        alexemText: ^mps.lexemText;
+        newNode: ^mps.ast;
+        synCatNo: @mps.nonterminalSymbol;
+        unExp: ^mps.unexpanded;
+        newCS: @astFocus;
+        OK,OKtoParse: @boolean;
+        preceeding: @boolean;
+        
+     enter exitKind
+     do
+        (if switch[4] then
+            'exitEditLexemMode: '->putText;
+            '<'->put;
+            exitKind->putInt;
+            '>'->put;
+            newLine
+        if);
+        parsingLexems:
+          (#
+             parseConst:
+               (# theConst: ^mps.const; help: ^text; 
+               enter theconst[]
+               do
+                  'no errors'->help[];
+                  0->theLexemText.setPos;
+                  theLexemText.getnumber
+                    (#
+                       syntaxError::< 
+                         (# 
+                         do
+                            true->continue;
+                            'getNumber: Syntax error - looking at: "'->help[];
+                            peekCh->help.put;
+                            '"'->help.put;
+                            
+                         #);
+                       baseError::< 
+                         (# 
+                         do
+                            true->continue;
+                            'getNumber: Error in base - looking at: "'->help[];
+                            base->help.put;
+                            '"'->help.put
+                         #);
+                       valueError::< 
+                         (# 
+                         do
+                            true->continue;
+                            'getNumber: Illegal value type - looking at: "'
+                              ->help[];
+                            peekCh->help.put;
+                            '"'->help.put
+                         #);
+                       integerValue::<  (#  do true->OK #);
+                       basedValue::<  (#  do true->OK #);
+                       realValue::<  (#  do true->OK #);
+                       
+                    #);
+                  (if OK then
+                      theLexemText[]->theConst.putText; 
+                   else
+                      true->textEditMode;
+                      'Trying to parse: <'->screen.putText;
+                      theLexemText[]->screen.putText;
+                      '>'->screen.putLine;
+                      help[]->UI.nonModalAlert;
+                      leave parsingLexems
+                  if);
+                  
+               #);
+             
+          do (*exitTextEditing; *)
+             (if switch[4] then
+                 ('positions before',teInfo.posStartBefore,teInfo.posEndBefore)
+                   ->test2;
+                 ('last position before and after',teInfo.lastPosBefore,
+                  theSifTexteditor.lastPosition)->test2;
+                 
+             if);
+             teInfo.posEndBefore+theSifTexteditor.lastPosition-
+             teInfo.lastPosBefore
+               -> (* determine extent of edited text: *) posEndAfter;
+             (if switch[4] then
+                 ('positions after',teInfo.posStartBefore,posEndAfter)->test2; 
+             if);
+             posEndAfter->theSifTextEditor.posToLineChar->(outLineS2,outCharS2);
+             (if switch[4] then
+                 ('outCharS2, outLineS2',outCharS2,outLineS2)->test2; 
+             if);
+             (teInfo.oldNode[],outLineS2-teInfo.lineS2,outCharS2-teInfo.charS2)
+               -> (* tell the pretty printer how to update the SAST *)
+                 astView.pp.resized;
+             (if exitKind
+              // TEexit.escape then
+                 (teInfo.oldNode[],teInfo.oldNode[])->astView.pp.update;
+                 cs->astToSelection;
+                 
+              // TEexit.exitMode // TEexit.parseMode then
+              (* normal exit 
+               parse the edited text *)
+                 &text[]->theLexemText[];
+                 true->preceeding;
+                 (teInfo.posStartBefore,posEndAfter)
+                   ->theSifTextEditor.contents.scantext
+                     (# 
+                     do
+                        (if ((ch->ascii.isSpace) and preceeding) then
+                            
+                         else
+                            false->preceeding; ch->theLexemText.put; 
+                        if);
+                        
+                     #);
+                 (if switch[4] then
+                     ' ['->help[];
+                     theLexemText[]->help.putText;
+                     '] '->help.putText;
+                     (help[],teInfo.charS1,teInfo.lineS1,outCharS2,outLineS2)
+                       ->test4;
+                     
+                 if);
+                 (theLexemText.length <> 0)
+                   ->
+                   (* avoid parsing of only space symbols, just cut the corresponding AST *)
+                   OKtoParse;
+                 (if OKtoParse then
+                     false->OKtoParse;
+                     theLexemText.scanAll
+                       (# 
+                       do
+                          (if not (ch->ascii.isSpace) then
+                              true->OKtoParse
+                          if)
+                       #);
+                     
+                 if);
+                 (if OKtoParse then
+                     true->cs.undoPermit;
+                     (teInfo.fatherNode[],teInfo.sonNo,cs,1,false)
+                       ->makeUndoElem;
+                     (if cs.node.kind
+                      // mps.kinds.unexpanded then
+                         (cs.node[]->getSynCatNo,frag[])->ag.newAst->newNode[];
+                         (teInfo.sonNo,newNode[])->teInfo.fatherNode.put;
+                         cs.node[]->getSynCatNo->synCatNo;
+                         (if syncatNo.isLexem then
+                             cs.node[]->unExp[];
+                             (if unExp.nonterminalSymbol
+                              // mps.prodNo.nameDecl // mps.prodNo.nameAppl
+                              // mps.prodNo.string then
+                                 newNode[]->alexemText[];
+                                 theLexemText[]->alexemText.putText;
+                                 
+                              // mps.prodNo.const then
+                                 newNode[]->parseConst
+                              else
+                                 'unexp.nonterminalSymbol: '->putText;
+                                 unexp.nonterminalSymbol->putInt;
+                                 newLine
+                             if);
+                             
+                         if)
+                      // mps.kinds.nameDecl // mps.kinds.nameAppl
+                      // mps.kinds.string then
+                         cs.node[]->alexemText[];
+                         theLexemText[]->alexemText.putText;
+                         
+                      // mps.kinds.const then
+                         cs.node[]->parseConst; 
+                      else
+                         'cs.node.kind: '->putText;
+                         cs.node.kind->putInt;
+                         newLine
+                     if);
+                     makeAstReplacedEvent;
+                     teInfo.sonNo->teInfo.fatherNode.get->newCS.node[];
+                     1->newCS.length;
+                     newCS->setFocus;
+                     
+                  else
+                     cut; 
+                 if);
+                 
+             if);
+             structureMode->editingMode;
+             
+          #);
+        
+     #);
+   enterEditAndParseMode:
+     (#
+        oldParsingInformation,oldIncludeComments: @boolean;
+        textToParse,help: ^text;
+        node,fatherNode: ^mps.ast;
+        
+     do (*  ch->enterTextediting;*)
+        (if switch[4] then 'enterEditAndParseMode: '->putLine if);
+        editAndParseMode->editingMode;
+        astView.pp.parsingInformation
+          ->
+          (* if the selection contains normal or holo comments,
+           the the comments and ast node addresses are included
+           in the text
+           *) oldParsingInformation;
+        astView.pp.includeComments->oldIncludeComments;
+        true->astView.pp.parsingInformation->astView.pp.includeComments;
+        (if cs.length
+         // 1 then
+            (if (cs.node[]->hasComment) then
+                (cs.node[],cs.node[])->astView.pp.update;
+                (* cs->astToSelection; *)
+                
+            if);
+            
+         else
+            cs.node.father->fatherNode[];
+            (if (*(cs.node.father).hasComment*) fatherNode[]->hasComment then
+                (cs.node.father,cs.node.sonNo,cs.length,cs.length)
+                  ->astView.pp.updatelist;
+                
+            if);
+            (*  cs->astToSelection;*)
+            
+        if);
+        oldParsingInformation->astView.pp.parsingInformation;
+        oldIncludeComments->astView.pp.includeComments;
+        cs.node[]->teInfo.oldNode[];
+        cs.length->teInfo.oldLength;
+        cs.node.father->teInfo.fatherNode[];
+        (if (teInfo.fatherNode[] <> none ) then
+            cs.node.sonNo->teInfo.sonNo
+        if);
+        theSifTextEditor.lastPosition->teInfo.lastPosBefore;
+        cs->selectArea
+          ->(teInfo.lineS1,teInfo.charS1,teInfo.lineS2,teInfo.charS2);
+        (teInfo.lineS1,teInfo.charS1)->theSifTextEditor.LineChartoPos
+          ->teInfo.posStartBefore;
+        (teInfo.lineS2,teInfo.charS2)->theSifTextEditor.LineChartoPos
+          ->teInfo.posEndBefore;
+        (if switch[4] then
+            &text[]->textToParse[];
+            (teInfo.posStartBefore,teInfo.posEndBefore)
+              ->theSifTextEditor.contents.scantext
+                (#  do ch->textToParse.put #);
+            ascii.newLine->textToParse.put;
+            ' ['->help[];
+            textToParse[]->help.putText;
+            '] '->help.putText;
+            (help[],teInfo.charS1,teInfo.lineS1,teInfo.charS2,teInfo.lineS2)
+              ->test4;
+            (' positions before (1 dim)',
+             (teInfo.lineS1,teInfo.charS1)->theSifTextEditor.LineChartoPos,
+             (teInfo.lineS2,teInfo.charS2)->theSifTextEditor.LineChartoPos)
+              ->test2;
+            
+        if);
+        
+     #);
+   exitEditAndParseMode:
+     (#
+        exitKind: @integer;
+        outLineS2,outCharS2: @integer;
+        posEndAfter: @integer;
+        newCs: @astFocus;
+        textToParse,help: ^text;
+        parseOk,OKtoParse: @boolean;
+        parsingOK:< (#  do (*'parsing OK'->putLine;*) INNER #);
+        parsingNotOK:< (#  do (*'parsing not OK'->putLine;*) INNER #);
+        
+     enter exitKind
+     do
+        (if switch[4] then
+            'exitEditAndParseMode: '->putText;
+            '<'->put;
+            exitKind->putInt;
+            '>'->put;
+            newLine
+        if);
+        parsing:
+          (#
+             myerrorReporter: mps.errorReporter
+               (#
+                  beforeFirstError::<  (#  do parsingNotOK;  #);
+                  afterLastError::<  (#  do  #);
+                  forEachError::< 
+                    (# alertText: ^text
+                    do
+                    (*'streamPos,startLineNo,errorLines,errorPos{Inx},legalSymbols[]'->screen.putLine;
+                     streamPos->screen.putInt;' '->screen.put;*)
+                       (teInfo.posStartBefore+streamPos-1,teInfo.posStartBefore+
+                        streamPos-1)->theSifTextEditor.contents.selection;
+                       'Parse error'->alertText[];
+                       alertText.newLine;
+                       alertText.newLine;
+                       'Expected symbol'->alertText.putText;
+                       (if legalSymbols.terminals.range
+                        // 1 then ': '->alertText.putLine; 
+                        else
+                           's: '->alertText.putLine
+                       if);
+                       (for i: legalSymbols.terminals.range repeat
+                         legalSymbols.terminals[i][]->alertText.putText;
+                         ' '->alertText.put
+                       for);
+                       alertText[]->UI.nonModalAlert;
+                       leave parsing;
+                       
+                    #);
+                  
+               #);
+             
+          do (*exitTextEditing; *)
+             (if switch[4] then
+                 ('positions before (2 dim)',teInfo.charS1-1,teInfo.lineS1-1,
+                  teInfo.charS2-1,teInfo.lineS2-1)->test4;
+                 ('positions before (2 dim)',teInfo.charS1-1,teInfo.lineS1-1,
+                  teInfo.charS2-1,teInfo.lineS2-1)->test4;
+                 ('positions before (1 dim)',teInfo.posStartBefore,
+                  teInfo.posEndBefore)->test2;
+                 ('last position before and after',teInfo.lastPosBefore,
+                  theSifTextEditor.lastPosition)->test2;
+                 
+             if);
+             teInfo.posEndBefore+theSifTextEditor.lastPosition-
+             teInfo.lastPosBefore
+               -> (* determine extent of edited text: *) posEndAfter;
+             (if switch[4] then
+                 ('positions after',teInfo.posStartBefore,posEndAfter)->test2; 
+             if);
+             posEndAfter->theSifTextEditor.posToLineChar->(outLineS2,outCharS2);
+             (if switch[4] then
+                 ('outCharS2, outLineS2',outCharS2,outLineS2)->test2; 
+             if);
+             (if (* tell the pretty printer how to update the SAST *)
+             (teInfo.oldLength = 1) then
+                 (teInfo.oldNode[],outLineS2-teInfo.lineS2,outCharS2-
+                  teInfo.charS2)->astView.pp.resized;
+                 
+              else
+                 (if (teInfo.sonNo = teInfo.fatherNode.noOfSons) then
+                     (teInfo.fatherNode[],outLineS2-teInfo.lineS2,outCharS2-
+                      teInfo.charS2)->astView.pp.resized;
+                     
+                  else
+                     (teInfo.fatherNode[],outLineS2-teInfo.lineS2,0)
+                       ->astView.pp.resized;
+                     
+                 if);
+                 
+             if);
+             (if (* text editor exited by a key stroke or menu *) exitKind
+              // TEexit.escape then
+                 (if (teInfo.oldLength = 1) then
+                     (teInfo.oldNode[],teInfo.oldNode[])->astView.pp.update;
+                     cs->astToSelection;
+                     
+                  else
+                     (teInfo.fatherNode[],teInfo.fatherNode[])
+                       ->astView.pp.update;
+                     
+                 if);
+                 structureMode->editingMode;
+                 
+              // TEexit.exitMode // TEexit.parseMode then
+              (* normal exit 
+               parse the edited text *)
+                 &text[]->textToParse[];
+                 (teInfo.posStartBefore,posEndAfter)
+                   ->theSifTextEditor.contents.scantext
+                     (#  do ch->textToParse.put #);
+                 ascii.newLine->textToParse.put;
+                 (if (* must be a whole number of lines *) switch[4] then
+                     ' ['->help[];
+                     textToParse[]->help.putText;
+                     '] '->help.putText;
+                     help[]->screen.putLine;
+                     (help[],teInfo.charS1,teInfo.lineS1,outCharS2,outLineS2)
+                       ->test4;
+                     
+                 if);
+                 (textToParse.length <> 0)
+                   ->
+                   (* avoid parsing of only space symbols, just cut the corresponding AST *)
+                   OKtoParse;
+                 (if OKtoParse then
+                     false->OKtoParse;
+                     textToParse.scanAll
+                       (# 
+                       do
+                          (if not (ch->ascii.isSpace) then
+                              true->OKtoParse
+                          if)
+                       #);
+                     
+                 if);
+                 (if OKtoParse then
+                     0->textToParse.setPos;
+                     true->cs.undoPermit;
+                     &myErrorReporter[]->mps.theErrorReporter[];
+                     (cs,textToParse[])->parseText->(parseOK,cs);
+                     (if (* now cs is updated *) parseOk then
+                         structureMode->editingMode; selectNewCS; parsingOK; 
+                      else
+                     (* parse error *)
+                           (# posEndAfter,outCharS2,outLineS2,pos: @integer; 
+                           do
+                              true->texteditMode;
+                              textToParse.reset;
+                              (textToParse[],screen[])->ag.parser.errorReport;
+                              
+                           #);
+                         
+                     if);
+                     
+                  else
+                     cut; structureMode->editingMode; selectNewCS; parsingOK; 
+                 if);
+                 
+             if)
+          #)
+     #)
+#)  
+
+-- doTextedit: DoPart --
+do
+   (if switch[5] then 'doTextEdit'->putLine if);
+   true->textEditMode;
+   (if ch = 0 then
+         (# pos1,pos2: @integer
+         do
+            (if switch[5] then 'enter textediting, preliminary'->putLine if);
+            theSifTextEditor.contents.selection->(pos1,pos2);
+            (pos1,pos1)->theSifTextEditor.contents.selection
+         #)
+   if);
+     (# unExp: ^mps.unexpanded; synCatNo: @mps.nonterminalSymbol; 
+     do
+        (if (cs.length = 1) then
+            (if cs.node.kind
+             // mps.kinds.unexpanded then
+                cs.node[]->getSynCatNo->synCatNo;
+                (if syncatNo.isLexem then
+                    cs.node[]->unExp[];
+                    (if unExp.nonterminalSymbol
+                     // mps.prodNo.nameDecl // mps.prodNo.nameAppl
+                     // mps.prodNo.string then
+                        (if parsingPossible then
+                            TE.enterEditAndParseMode; 
+                         else
+                            TE.enterEditLexemMode
+                        if)
+                     // mps.prodNo.const then
+                        TE.enterEditLexemMode
+                     else
+                        (if parsingPossible then
+                            TE.enterEditAndParseMode
+                         else
+                            'No parser available\nText editing is only allowed on lexems'
+                              ->UI.alert;
+                            
+                        if)
+                    if)
+                 else
+                    (if parsingPossible then
+                        TE.enterEditAndParseMode
+                     else
+                        'No parser available\nText editing is only allowed on lexems'
+                          ->UI.alert;
+                        
+                    if)
+                if);
+                
+             // mps.kinds.nameDecl // mps.kinds.nameAppl // mps.kinds.string
+             then
+                (if parsingPossible then
+                    TE.enterEditAndParseMode; 
+                 else
+                    TE.enterEditLexemMode
+                if)
+             // mps.kinds.const then
+                TE.enterEditLexemMode
+             else
+                (if parsingPossible then
+                    TE.enterEditAndParseMode
+                 else
+                    'No parser available\nText editing is only allowed on lexems'
+                      ->UI.alert;
+                    
+                if);
+                
+            if);
+            
+         else
+            (if parsingPossible then
+                TE.enterEditAndParseMode
+             else
+                'No parser available\nText editing is only allowed on one lexem at a time'
+                  ->UI.alert;
+                
+            if);
+            
+        if);
+        ;
+        
+     #)  
+
+-- checkTexteditingFinished: Descriptor --
+(# posEndAfter,outCharS2,outLineS2,startPos,endPos: @integer; 
+do
+   (if switch[4] then
+       'checkTextEditingFinished'->putLine;
+       'start,end: '->putLine;
+       start->putInt;
+       ' '->put;
+       end->putInt;
+       newLine
+   if);
+   TE.teInfo.posEndBefore+theSifTextEditor.lastPosition-TE.teInfo.lastPosBefore
+     -> (* determine extent of edited text: *) posEndAfter;
+   (if
+   ((start < TE.teInfo.posStartBefore) or (end < TE.teInfo.posStartBefore) or
+    (start > posEndAfter) or (end > posEndAfter)) then
+       (if editingMode
+        // editAndParseMode then
+           false->textEditMode; TEexit.parseMode->TE.exitEditAndParseMode
+        // editLexemMode then
+           false->textEditMode; TEexit.exitMode->TE.exitEditLexemMode; 
+       if)
+   if)
+#)  
+
+-- doParseText: DoPart --
+do
+   'doParseText'->putLine;
+   false->textEditMode;
+   (if editingMode
+    // editAndParseMode then
+       TEexit.parseMode->TE.exitEditAndParseMode; 
+    // editLexemMode then
+       TEexit.exitMode->TE.exitEditLexemMode; 
+   if)  
+
+-- doRevertTextediting: DoPart --
+do
+   'doRevertTextedit'->putLine;
+   false->textEditMode;
+   (if editingMode
+    // editAndParseMode then
+       TEexit.escape->TE.exitEditAndParseMode; 
+    // editLexemMode then
+       TEexit.escape->TE.exitEditLexemMode; 
+   if)  
+
+-- doShowTexteditingCommands: DoPart --
+do 'doShowTexteditCommands'->putLine  
+
