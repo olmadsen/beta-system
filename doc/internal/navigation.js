@@ -44,10 +44,13 @@ foldersTree = gFld("<B>Contents</B>", "");
               insDoc(aux1, gLnk(0, "MPS", "../yggdrasil/internal/CHANGES"));
 
        aux1 = insFld(foldersTree, gFld("Internal Documentation", ""));
+	      aux2 = insFld(aux1, gFld("Mjolner", "../mjolner/internal/"));
+		     insDoc(aux2, gLnk(0, "Arkitektur", "../mjolner/internal/architecture"));
+		     insDoc(aux2, gLnk(0, "Mødereferater", "../mjolner/internal/minutes"));
 	      aux2 = insFld(aux1, gFld("Bifrost", "../bifrost-ref/internal/"));
 		     insDoc(aux2, gLnk(0, "README", "../bifrost-ref/internal/README"));
-		     insDoc(aux2, gLnk(0, "TODO", "../bifrost-ref/internal/README"));
-		     insDoc(aux2, gLnk(0, "CHANGES", "../bifrost-ref/internal/README"));
+		     insDoc(aux2, gLnk(0, "TODO", "../bifrost-ref/internal/TODO"));
+		     insDoc(aux2, gLnk(0, "CHANGES", "../bifrost-ref/internal/CHANGES"));
 	      aux2 = insFld(aux1, gFld("Betarun", ""));
 		     insDoc(aux2, gLnk(2, "Overview", "www.mjolner.com/Quality/betarun.html"));
 		     insDoc(aux2, gLnk(0, "Misc", "../betarun/internal/"));
