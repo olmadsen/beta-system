@@ -1,6 +1,6 @@
 ORIGIN '~beta/basiclib/v1.6/betaenv';
 (* 
- * $RCSfile: ptOffsetTable.bet,v $ $Revision: 1.10 $ $Date: 1997-08-20 16:57:47 $
+ * $RCSfile: ptOffsetTable.bet,v $ $Revision: 1.11 $ $Date: 1997-10-06 12:31:54 $
  *
  * COPYRIGHT
  *       Copyright Mjolner Informatics, 1992-94
@@ -61,15 +61,11 @@ ptOffsetTable: integerHashTable
           (* ofs[i] contains the meaning of the i'th long within 
            * objects that are instances of proto. The 1'st long is
            * the GC field as the prototype is not considered here.
-           * Possible offsetTable values: *)
-          simpleTypes, simpleOfs: [8]@Integer;
-          simplePos: @Integer; 
-          (* simpleTypes[i] contains the type of the offset at simpleofs[i].
-           * simplepos is the last used element, 0 if none. *)
+           * Possible offsetTable values: 
+           *)
           i: @Integer;
           staticPart: (# exit 10 #);
           gcInfo:     (# exit 20 #);
-          simple:     (# exit 30 #);
           
           protos: @
             (* protos.table[i] contains the prototype of the i'th 
@@ -104,13 +100,25 @@ ptOffsetTable: integerHashTable
                (# thisInx: @Integer;
                do inx + (thisOffset div 4) -> thisInx;
                   (if isStatic then 
-                      staticPart -> ofs[thisInx];
-                      thisProto -> protos.append;
-                      (thisProto, thisInx) -> fillOutOfs;
+                      (* The static table, tab[0], tab[1], 0,
+                       * contains all static objects on all levels.
+                       * Here we only need to perform fillOutOfs on static objects
+                       * on 1 level. The recursion in fillOutOfs handle other
+                       * levels. 
+                       * The way to determine the level of an static object is to 
+                       * compare the Offset (StaticOff) and the
+                       * Distance_To_Inclosing_Object (OrigOff).
+                       *)     
+                      (if (-thisOriginOff)=thisOffset then 
+                          staticPart -> ofs[thisInx];
+                          thisProto -> protos.append;
+                          (thisProto, thisInx) -> fillOutOfs;
+                      if)
                    else 
                       refType -> ofs[thisInx];
                   if);
                #);
+               <<SLOT ptOTscanSimpleTypesBody:descriptor>>;
             #);
           
           pt: @ProtoType;
@@ -129,18 +137,17 @@ ptOffsetTable: integerHashTable
           if);
           (* ofs.range >= pt.size - 1, as the proto field is ignored. *)
           
-          (for i:pt.size - 1 repeat simple -> ofs[i] for);
+          (for i:pt.size - 1 repeat SIMPLETYPE_BIN32 -> ofs[i] for);
           
           (pt,0) -> fillOutOfs;
           
-          <<SLOT ptOTscanSimpleTypesBody:descriptor>>;
-   
           (for i: pt.size - 1 repeat
                (if ofs[i] 
-                //REFTYPE_DYNAMIC//REFTYPE_ORIGIN//REFTYPE_OFFLINE then
-                   
+                //REFTYPE_DYNAMIC
+                //REFTYPE_ORIGIN
+                //REFTYPE_OFFLINE then
                    elm.dynCount+1->elm.dynCount;
-                   (if elm.dynCount > elm.dynRefs.range //true then
+                   (if elm.dynCount > elm.dynRefs.range then
                        elm.dynRefs.range -> elm.dynRefs.extend;
                        elm.refTypes.range -> elm.refTypes.extend;
                    if);
@@ -148,22 +155,13 @@ ptOffsetTable: integerHashTable
                    ofs[i] -> elm.refTypes[elm.dynCount];
                    
                 //staticPart then
-                   
                    elm.partCount+1->elm.partCount;
-                   (if elm.partCount > elm.parts.range //true then
+                   (if elm.partCount > elm.parts.range then
                        elm.parts.range -> elm.parts.extend;
                    if);
                    i*4 -> elm.parts[elm.partCount];
                    
-                //simple then
-                   elm.simpleCount+1->elm.simpleCount;
-                   (if elm.simpleCount > elm.simpleVals.range then
-                       elm.simpleVals.range -> elm.simpleVals.extend;
-                       elm.simpleTypes.range -> elm.simpleTypes.extend;
-                   if);
-                   i*4 -> elm.simpleVals[elm.simpleCount];
-                   SIMPLETYPE_BIN32 -> elm.simpleTypes[elm.simpleCount];
-                   
+                // SIMPLETYPE_BIN32
                 // SIMPLETYPE_INT32 
                 // SIMPLETYPE_REAL64
                 // SIMPLETYPE_HANDLED
