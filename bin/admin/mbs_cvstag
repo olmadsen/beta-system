@@ -1,6 +1,8 @@
 #!/usr/local/bin/perl5 -s
 #-*-Perl-*-
 
+require("env.perl");
+
 push(@INC, $ENV{'BETALIB'} . "/bin/admin");
 
 if ($h){
@@ -14,8 +16,6 @@ if ($h){
     exit 0;
 }
 
-require "dirlist";
-
 $Dirlist_IncludeAll = 1;	# Include ALL repositories on any archs.
 
 ($defaulttag = $RELEASE . "a") =~ s/\./\_/g;
@@ -26,42 +26,31 @@ $delete = 1 if ($d);
 $forcemove = 1 if ($f);
 
 if ($delete){
-    print "This script will DELETE a CVS-tag for each repository in $RELEASE.\n";
+    print "This script will DELETE a CVS-tag in $RELEASE.\n";
 } else {
-    print "This script will CVS-tag each repository in $RELEASE.\n";
+    print "This script will CVS-tag in $RELEASE.\n";
 }
 
 if ($simulate){
     print "I will only simulate this, however (-n option). Go on (no/yes)? ";
+    $nflag = "-n ";
 } else {
     print "Are you sure that you want to do this (no/yes)? ";
+    $nflag = "";
 }
 $yes = &GetAnswer();
 exit if ($yes ne 'yes');
 
 if ($delete){
-    print "Delete a common tag for all repositories (yes/no)? ";
-    $onetag = &GetAnswer();
-
-    if ($onetag ne "no"){
-	print "\nCommon tag to delete (default \"$defaulttag\"): ";
-	$read = &GetAnswer();
-	if ($read eq ""){ 
-	    $deletetag = $defaulttag;
-	} else {
-	    $deletetag = $read; 
-	}
+    print "\nTag to delete (default \"$defaulttag\"): ";
+    $read = &GetAnswer();
+    if ($read eq ""){ 
+	$deletetag = $defaulttag;
     } else {
-	print "\nPrefix to use in tags to delete (default \"$defaulttag\"): ";
-	$read = &GetAnswer();
-	if ($read eq ""){ 
-	    $tagprefix = $defaulttag;
-	} else {
-	    $tagprefix = $read; 
-	}
+	$deletetag = $read; 
     }
 } else {
-    print "Should the tags be *branch* tags (no/yes)? ";
+    print "Should the tag be a *branch* tag (no/yes)? ";
     $branch = &GetAnswer();
     if ($branch eq "yes"){
 	$branch=1;
@@ -82,134 +71,62 @@ if ($delete){
 	}
     }
     
-    print "Use a common tag for all repositories (yes/no)? ";
-    $onetag = &GetAnswer();
-        
-    if ($onetag ne "no"){
-	if ($branch) {
-	    print "\nExisting tag to branch from (default \"$defaulttag\"): ";
-	    $read = &GetAnswer();
-	    if ($read eq ""){ 
-		$branchtag = $defaulttag;
-	    } else {
-		$branchtag = $read; 
-	    }
-	    $defaulttag .= "_correction_branch";
-	} else {
-	    print "\nExisting tag to copy (default \"none\"): ";
-	    $read = &GetAnswer();
-	    if ($read ne "") { 
-		$copytag = $read; 
-	    }
-	    $defaulttag .= "_correction_branch";
-	}
-	print "\nNew tag to use (default \"$defaulttag\"): ";
+    if ($branch) {
+	print "\nExisting tag to branch from (default \"$defaulttag\"): ";
 	$read = &GetAnswer();
 	if ($read eq ""){ 
-	    $newtag = $defaulttag;
+	    $branchtag = $defaulttag;
 	} else {
-	    $newtag = $read; 
+	    $branchtag = $read; 
 	}
-	print "Updating $betalib/configuration/mbs_id...\n";
-	print "echo '$newtag'>$betalib/configuration/mbs_id\n" if ($verbose);
-	system "echo '$newtag'>$betalib/configuration/mbs_id" if (!$simulate);
-	print "Committing...\n";
-	print "chdir $betalib/configuration\n" if ($verbose);
-	chdir "$betalib/configuration" or die $!;
-	print "cvs com -m 'Tagging of $newtag' mbs_id\n" if ($verbose);
-	system "cvs com -m 'Tagging of $newtag' mbs_id" if (!$simulate);
-	print "Done\n";	
+	$defaulttag .= "_correction_branch";
     } else {
-	print "\nPrefix to use in new tags (default \"$defaulttag\"): ";
+	print "\nExisting tag to copy (default \"none\"): ";
 	$read = &GetAnswer();
-	if ($read eq ""){ 
-	    $tagprefix = $defaulttag;
-	} else {
-	    $tagprefix = $read; 
+	if ($read ne "") { 
+	    $copytag = $read; 
 	}
+	$defaulttag .= "_correction_branch";
     }
+    print "\nNew tag to use (default \"$defaulttag\"): ";
+    $read = &GetAnswer();
+    if ($read eq ""){ 
+	$newtag = $defaulttag;
+    } else {
+	$newtag = $read; 
+    }
+    print "Updating $betalib/configuration/mbs_id...\n";
+    print "echo '$newtag'>$betalib/configuration/mbs_id\n" if ($verbose);
+    system "echo '$newtag'>$betalib/configuration/mbs_id" if (!$simulate);
+    print "Committing configuration...\n";
+    print "chdir $betalib/configuration\n" if ($verbose);
+    chdir "$betalib/configuration" or die $!;
+    print "cvs com -m 'Tagging of $newtag' mbs_id\n" if ($verbose);
+    system "cvs com -m 'Tagging of $newtag' mbs_id" if (!$simulate);
+    print "Done\n";	
 }
 
 # enough talk - let's go to work ...
 
-foreach $cvsmodule (@CvsModuleList) {
-    if ($cvsmodule =~ /\//){
-	print "  [$cvsmodule is a sub-repository, skipped]\n";
-	next;
-    }
-    if ($doneflag{$cvsmodule}){
-	print "  [$cvsmodule tagged once, skipped]\n";
-	next;
-    }
-    $tag = $CvsModuleTags{$cvsmodule};
-    $dir = $CvsDefaultDir{$cvsmodule};
-    if ($onetag eq "no"){
-	# ask for individual tag
-	$defaulttag = $tagprefix;
-	if ($dir =~ /\/([v|r|\d|\.]+)\/?/) {
-	    $defaulttag .= "_$1";
-	}
-	$defaulttag =~ s/\./\_/g;
-	if ($delete){
-	    print "\nTag to delete for $cvsmodule (default \"$defaulttag\"): ";
-	    $read = &GetAnswer();
-	    if ($read eq ""){ 
-		$deletetag = $defaulttag;
-	    } else {
-		$deletetag = $read; 
-	    }
-	} else {
-	    if ($branch){
-		print "\nExisting tag to branch $cvsmodule from (default \"$defaulttag\"): ";
-		$read = &GetAnswer();
-		if ($read eq ""){ 
-		    $branchtag = $defaulttag;
-		} else {
-		    $branchtag = $read; 
-		}
-		$defaulttag .= "_correction_branch";
-	    }
-	    print "\nNew tag to use for $cvsmodule (default \"$defaulttag\"): ";
-	    $read = &GetAnswer();
-	    if ($read eq ""){ 
-		$newtag = $defaulttag;
-	    } else {
-		$newtag = $read; 
-	    }
-	}
-    }
-    # construct CVS command
-    if ($delete){
-	$cvscmd = "cvs -Q rtag -d $deletetag $cvsmodule";
+chdir($betalib) || die "Where did BETALIB go?";
+
+if ($delete){
+    $cvscmd = "cvs $nflag-Q rtag -d $deletetag beta_project";
+} else {
+    if ($branch){
+	$cvscmd = "cvs $nflag-Q rtag ${forcemove}-b -r $branchtag $newtag beta_project";
+    } elsif (defined $copytag) {
+	$cvscmd = "cvs $nflag-Q rtag ${forcemove}-r $copytag $newtag beta_project";
     } else {
-	if ($branch){
-	    $cvscmd = "cvs -Q rtag ${forcemove}-b -r $branchtag $newtag $cvsmodule";
-	} elsif (defined $copytag) {
-	    $cvscmd = "cvs -Q rtag ${forcemove}-r $copytag $newtag $cvsmodule";
-	} elsif ($tag eq "HEAD"){
-	    $cvscmd = "cvs -Q rtag ${forcemove}$newtag $cvsmodule";
-	} else {
-	    $cvscmd = "cvs -Q rtag ${forcemove}-r $tag $newtag $cvsmodule";
-	}
+	$cvscmd = "cvs $nflag-Q rtag ${forcemove}$newtag beta_project";
     }
-    print "$cvscmd\n";
-    system("$cvscmd") if (!$simulate);
-    exit(1) if ($? && (!$simulate));
-    $doneflag{$cvsmodule}=1;
 }
+print "$cvscmd\n";
+system("$cvscmd")
+exit(1) if ($?);
 
 print <<EOF;
 
 REMEMBER to update Quality/releases.html!
-REMEMBER manual tag of compiler RCM repository!
-
-This is done by the following:
-
-1) Start rcm on the relevant workspace ($betalib/compiler)
-2) Make sure the relevant version is checked out.
-3) Check using "vg" if the current version already has a name.
-   In that case, include the current name in the new name.
-4) Type "cs your_new_name" ("cs $newtag")
-5) Check using "vg" that the name looks right.
 
 EOF

@@ -118,7 +118,7 @@ if (-f "version.c") {
 
 # If we are updating version.c then open a new file for the new version.c
 
-if (!$dontupdate) {
+if (!$dontupdate && !$donothing) {
     open(NEWVERSION, ">new$versionfile") || die "Can't open the file new$versionfile for writing\n";
 }
 
@@ -126,7 +126,7 @@ if (!$dontupdate) {
 # increment by only one, even if a previous mbs_commit failed, and also
 # avoids not-up-to-date errors on version.c
 
-if (!$dontdeleteversion) {
+if (!$dontdeleteversion && !$donothing) {
     move($versionfile, "old$versionfile");
 
     print STDERR "Getting newest $versionfile with cvs\n";
@@ -157,7 +157,7 @@ while (defined($line = <VERSION>)) {
         }
 	$foundversionline = 1;
     }
-    if (!$dontupdate) {
+    if (!$dontupdate && !$donothing) {
 	print NEWVERSION $line || die "Errors with new$versionfile\n";
     }
 }
@@ -169,48 +169,52 @@ if (!$foundversionline) {
 
 close (VERSION);
 
-if (!$dontupdate) {
+if (!$dontupdate && !$donothing) {
     close (NEWVERSION) || die "Errors with new$versionfile\n";
     move("new$versionfile", "$versionfile") || die "Couldn't move new$versionfile over $versionfile\n";
 }
 
-open(MESSAGE, ">message.txt") || die "Couldn't open message.txt for writing\n";
-
-if (open(CHANGES, "CHANGES.txt")) {
-    while (defined($line = <CHANGES>)) {
-        print MESSAGE $line;
-	$readlinesfromchanges = 1;
-    }
-    close(CHANGES);
-} 
-
-if (defined($message)) {
-    print MESSAGE "$message\n";
-} elsif (!$readlinesfromchanges) {
-    print MESSAGE "\n";
+if (!$donothing) {
+    open(MESSAGE, ">message.txt") || die "Couldn't open message.txt for writing\n";
 }
 
-# If there is a CVS/Template file then use it.  Otherwise just make one
-# up that is near enough the official one
+if (!$donothing) {
+    if (open(CHANGES, "CHANGES.txt")) {
+	while (defined($line = <CHANGES>)) {
+	    print MESSAGE $line;
+	    $readlinesfromchanges = 1;
+	}
+	close(CHANGES);
+    } 
 
-if (-f "CVS/Template") {
-    open(TEMPLATE, "CVS/Template") || die "Couldn't open CVS/Template for reading\n";
-    while (defined ($line = <TEMPLATE>)) {
-        if ($line =~ /(Betarun|Compiler) version number:/) {
-            $line = "$`$& $version$'";
-        } elsif ($line =~ /Developer:/ && defined($user)) {
-            $line = "$& $user$'";
-        }
-        print MESSAGE $line;
+    if (defined($message)) {
+	print MESSAGE "$message\n";
+    } elsif (!$readlinesfromchanges) {
+	print MESSAGE "\n";
     }
-} else {
-    if (defined($user)) {
-        print MESSAGE "Developer: $user\n";
-    }
-    if ($versionfile eq "version.c") {
-	print MESSAGE "Betarun version number: $version\n";
+
+    # If there is a CVS/Template file then use it.  Otherwise just make one
+    # up that is near enough the official one
+
+    if (-f "CVS/Template") {
+	open(TEMPLATE, "CVS/Template") || die "Couldn't open CVS/Template for reading\n";
+	while (defined ($line = <TEMPLATE>)) {
+	    if ($line =~ /(Betarun|Compiler) version number:/) {
+		$line = "$`$& $version$'";
+	    } elsif ($line =~ /Developer:/ && defined($user)) {
+		$line = "$& $user$'";
+	    }
+	    print MESSAGE $line;
+	}
     } else {
-	print MESSAGE "Compiler version number: $version\n";
+	if (defined($user)) {
+	    print MESSAGE "Developer: $user\n";
+	}
+	if ($versionfile eq "version.c") {
+	    print MESSAGE "Betarun version number: $version\n";
+	} else {
+	    print MESSAGE "Compiler version number: $version\n";
+	}
     }
 }
 
@@ -218,7 +222,7 @@ if (-f "CVS/Template") {
 # can see what has changed.  This is preceeded with CVS: so that it
 # doesn't end up in the actual commit message.
 
-if (!defined($message) && !$nodiff) {
+if (!defined($message) && !$nodiff && !$donothing) {
     print STDERR "Getting differences with cvs\n";
 
     if (defined($ARGV[0])) {
@@ -236,12 +240,14 @@ if (!defined($message) && !$nodiff) {
     }
 }
 
-close(MESSAGE) || die ("Couldn't write message.txt\n");
+if (!$donothing) {
+    close(MESSAGE) || die ("Couldn't write message.txt\n");
+}
 
 # Call the user's editor.  Should we be looking at the EDITOR variable
 # on Windows too?  Perhaps.
 
-if (!defined($message)) {
+if (!defined($message) && !$donothing) {
     if (($^O =~ /win/i) && ($^O !~ /darwin/i) && ($ENV{'TERM'} ne 'cygwin')) {
 	$editor = "notepad"; 
     } else {
@@ -271,17 +277,20 @@ if (!defined($message)) {
     }
 }
 
-# We need to remove the CVS: lines, since the cvs client doesn't do
-# this itself if we invoke it with the -F option.
-open(NEWMESSAGE, ">newmessage.txt") || die "Couldn't open newmessage.txt for writing\n";
-open(MESSAGE, "message.txt") || die "Couldn't open message.txt\n";
-while (defined($line =<MESSAGE>)) {
-    print NEWMESSAGE $line if ($line !~ /^CVS:/);
+if (!$donothing) {
+
+    # We need to remove the CVS: lines, since the cvs client doesn't do
+    # this itself if we invoke it with the -F option.
+    open(NEWMESSAGE, ">newmessage.txt") || die "Couldn't open newmessage.txt for writing\n";
+    open(MESSAGE, "message.txt") || die "Couldn't open message.txt\n";
+    while (defined($line =<MESSAGE>)) {
+	print NEWMESSAGE $line if ($line !~ /^CVS:/);
+    }
+    print NEWMESSAGE "-------------------------------------------------------------------------\n";
+    close(NEWMESSAGE) || die "Error closing newmessage.txt";
+    close(MESSAGE) || die "Error closing message.txt";
+    move("newmessage.txt", "message.txt") || die "Couldn't overwrite message.txt with newmessage.txt\n";
 }
-print NEWMESSAGE "-------------------------------------------------------------------------\n";
-close(NEWMESSAGE) || die "Error closing newmessage.txt";
-close(MESSAGE) || die "Error closing message.txt";
-move("newmessage.txt", "message.txt") || die "Couldn't overwrite message.txt with newmessage.txt\n";
 
 # Actually commit
 
