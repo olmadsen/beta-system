@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(103)";
+char betarun_version[] = "BETARUN VERSION 5.3(104)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.125  2002/11/19 09:10:41  datpete
+ *     Improved GC in windows DLLs
+ * Betarun version number: 103
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.124  2002/11/13 15:22:15  datpete
  *     Fixes for DLL generation: ReturnFromBasicComponent now set in betaurn instead of in compiler generated main
  * Betarun version number: 102
