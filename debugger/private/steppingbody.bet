@@ -5,27 +5,31 @@ INCLUDE '~beta/basiclib/formatio'
 LIB_ITEM 'valhallastep';
 (*
  * COPYRIGHT
- *   Copyright Mjolner Informatics, 1995-96
+ *   Copyright Mjolner Informatics, 1995-99
  *   All rights reserved.
  *)
---lib:attributes--
-(* use this to get a lot of info on breakpoints *)
-debugStepBreak:(# exit false #)
-
---- processInterfaceLib:attributes ---
+(* Oct-Nov Flemming Gram completeted this. Several cases where missing (now?) *)
+-- processInterfaceLib: Attributes --
 printBreakpointPos:
-  (# imp:^imperativeInfo;
-     prefix:^text;
+  (# imp: ^imperativeInfo; prefix: ^text; 
   enter (prefix[],imp[])
-  do prefix[]->screen.puttext;
-     ' Breakpoint at astindex:%d, address+offset: 0x%x+0x%x=0x%x\n'->screen.putformat
-     (# do imp.cast.index->d; imp.dpi.Mentry->x; imp.dpi.impAddresses[imp.inx]->x;
-        imp.start->x
-     #)
+  do
+     prefix[]->screen.puttext;
+     ' Breakpoint at astindex:%d, address+offset: 0x%x+0x%x=0x%x\n'
+       ->screen.putformat
+         (# 
+         do
+            imp.cast.index->d;
+            imp.dpi.Mentry->x;
+            imp.dpi.impAddresses[imp.inx]->x;
+            imp.start->x
+         #)
   #);
+Debugputline:
+  (# s: ^text enter s[] do (if debugStepBreak then s[]->putline if) #);
+  
 
 -- steppingIntoListLib: Attributes --
-
 handleImperativesOpt: (* step-into *)
   (#
      a: ^MPS.AST.ast;
@@ -43,12 +47,16 @@ handleImperativesOpt: (* step-into *)
               current[]
                 ->utilities.codeAstToImperative
                   (# notfound::  (#  do leave getCurrent #) #)->limpi[];
-              (if limpi[] <> none then 
+              (if limpi[] <> none then
                   (if debugStepBreak then
-                      '30HandleIMPopt, setbreak at '->screen.puttext;
-                      limpi.cast.index->screen.putint;screen.putline
+                      ('30HandleIMPopt: ',limpi[])->printBreakpointPos
                   if);
-                  limpi[]->stepsetIMPs.append; leave getFirst
+                  (* find first imperative not placed at this point *)
+                  (if pc <> limpi.start then
+                      '53Leaving'->debugputline;
+                      limpi[]->stepsetIMPs.append;
+                      leave getFirst
+                  if)
               if);
               
            #);
@@ -59,14 +67,16 @@ handleImperativesOpt: (* step-into *)
 handleElsePartOpt: (* step-into *)
   (# a: ^MPS.AST.ast; ep: ^MPS.BETACFL.elsePart; 
   enter a[]
-  do (if debugStepBreak then
-         'handleElsePartOpt, index:%d\n'->screen.putformat(# do a.index->d #);
+  do
+     (if debugStepBreak then
+         'handleElsePartOpt, index:%d\n'
+           ->screen.putformat (#  do a.index->d #);
+         
      if);
      (if a.kind <> MPS.AST.kinds.optional then
          (a[]->ep[]).getImperatives->handleImperativesOpt
      if)
   #);
-
 handleINNER: (* step-into *)
 (* This is  hairy: Locate the objectdescriptor of the 
  * current object, and use it together with the current dopart
@@ -206,21 +216,20 @@ handleINNER: (* step-into *)
                        (# 
                        do (* Cannot find first imperative. Use Mentry. *)
                           (if debugStepBreak then
-                              '196handleINNER appending address:%d\n'->screen.putformat
-                              (# do ofi.Mentries[ptinx]->d#)
+                              '196handleINNER appending address:%d\n'
+                                ->screen.putformat
+                                  (#  do ofi.Mentries[ptinx]->d #)
                           if);
-                              
                           ofi.Mentries[ptinx]->stepsetADRs.append;
                           leave intoINNER;
                           
                        #);
                      
                   #)->dpi[];
-              dpi.dp.getImperatives->handleImperativesOpt     
+              dpi.dp.getImperatives->handleImperativesOpt
           if)
-       #)     
+       #)
   #);
-
 handleEvaluation: (* step-into *)
 (* Some kind of evaluation. All we can do now is a suffix walk
  * looking for the following situations:
@@ -249,6 +258,8 @@ handleEvaluation: (* step-into *)
  *      in the G code executing ordinary BETA code. Probably this
  *      case is pretty seldom.
  * 
+ *   5. Evallists Break at every evaluation. Not very used, but (d,d)->(putint,putint) occours. 
+ * 
  *  On step into, AttachCallback is enabled. Thus, the RTS tells the
  *  debugger when a component is attached or re-attached. If that
  *  happens, and a pending step-into is active, it should either be
@@ -259,6 +270,10 @@ handleEvaluation: (* step-into *)
   (# exp: ^MPS.AST.expanded; 
   enter exp[]
   do (* Case 2: *)
+     (if debugStepBreak then
+         'HandleEvaluation-into on ast:%d, symbol:%d\n'
+           ->putformat (#  do exp.index->d; exp.symbol->d #)
+     if);
      MPS.BETA.ObjectDescriptor
        ->exp.suffixWalkForProd
          (#
@@ -279,22 +294,29 @@ handleEvaluation: (* step-into *)
               #);
             scanCat:: MPS.BETACFL.ObjectDescriptor;
             dpi: ^dopartInfo;
+            mp: ^MPS.BETACFL.MainPart;
+            ap: ^MPS.BETACFL.ActionPart;
+            dp: ^MPS.BETACFL.DoPart;
             
          do
             getDoPart:
               (# 
               do
+                 ' 286 '->debugputline;
                  current[]
                    ->utilities.ObjectDescriptorToDopart
                      (#
-                        noDoPart::  (#  do leave getDoPart #);
-                        notfound::  (#  do leave getDoPart #);
+                        noDoPart:: 
+                          (#  do ' 290 '->debugputline; leave getDoPart #);
+                        notfound:: 
+                          (#  do ' 292 '->debugputline; leave getDoPart #);
                         onPartialMinfo:: 
                           (# 
                           do (* Cannot find first imperative. Use Mentry. *)
                              (if debugStepBreak then
-                                 '283handleeval appending address:%d\n'->screen.putformat
-                                 (# do ofi.Mentries[ptinx]->d#)
+                                 '283handleeval appending address:%d\n'
+                                   ->screen.putformat
+                                     (#  do ofi.Mentries[ptinx]->d #)
                              if);
                              ofi.Mentries[ptinx]->stepsetADRs.append;
                              leave getDoPart;
@@ -302,8 +324,21 @@ handleEvaluation: (* step-into *)
                           #);
                         
                      #)->dpi[];
-                 dpi.dp.getImperatives->handleImperativesOpt;
-                 
+                 ' 305 '->debugputline;
+                 (if dpi[] <> none then
+                     dpi.dp.getImperatives->handleImperativesOpt; 
+                  else
+                 (* no dopart found !! *)
+                 (* if inlined then there is no prototype, we can not use groupsinto or utilities *)
+                     current.getMainPart->mp[];
+                     mp.getActionPart->ap[];
+                     (if ap[] = none then leave getDopart if);
+                     ap.getDoPartOpt->dp[];
+                     (if dp[] = none then leave getDopart if);
+                     '316 Calling  handleImpOpt'->debugputline;
+                     dp.getImperatives->handleImperativesOpt;
+                     
+                 if)
               #);
             
          #);
@@ -334,6 +369,10 @@ handleEvaluation: (* step-into *)
             a: ^MPS.AST.ast;
             
          do
+            (if debugStepBreak then
+                '375 found nameapl index=%d symbol=%d\n'
+                  ->putformat (#  do current.index->d; current.symbol->d #)
+            if);
             current[]->getObjectDesc->a[];
             (* was: current.descRef->a[]; *)
             (if a[] = none then
@@ -343,7 +382,12 @@ handleEvaluation: (* step-into *)
                 if);
                 
              else
-            (* Get topmost prefix. *)
+                (if debugStepBreak then
+                    'desc sym=%d, inx=%d\n'
+                      ->putformat (#  do a.symbol->d; a.index->d #);
+                    
+                if);
+                (* Get topmost prefix. *)
                 (if a.symbol
                  // MPS.BETA.ObjectDescriptor then
                     a[]->od[]->odpref[];
@@ -361,10 +405,11 @@ handleEvaluation: (* step-into *)
                                onPartialMinfo:: 
                                  (# 
                                  do
-                                    (* Cannot find first imperative. Use Mentry. *)
+                                 (* Cannot find first imperative. Use Mentry. *)
                                     (if debugStepBreak then
-                                        '353handleEVAL appending address:%d\n'->screen.putformat
-                                        (# do ofi.Mentries[ptinx]->d#)
+                                        '353handleEVAL appending address:%d\n'
+                                          ->screen.putformat
+                                            (#  do ofi.Mentries[ptinx]->d #)
                                     if);
                                     ofi.Mentries[ptinx]->stepsetADRs.append;
                                     leave handlePref;
@@ -382,7 +427,16 @@ handleEvaluation: (* step-into *)
                  // MPS.AST.prodNo.unExpanded then
                     a[]->intoUnExp; 
                  else
-                (*'current.descRef.symbol is not recognized'->stepfailure*)
+                      (# od: ^mps.betacfl.objectdenotation
+                      do
+                      (*'current.descRef.symbol is not recognized'->stepfailure*)
+                         '407unknown kind'->putline;
+                         a.symbol->putint;
+                         (a[],- 1)->doPrettyPrint->screen.putline;
+                         exp.symbol->putint;
+                         (exp[],- 1)->doPrettyPrint->screen.putline;
+                         
+                      #);
                     
                 if);
                 
@@ -410,6 +464,10 @@ intoUnExp: (* step-into *)
      
   enter unexp[]
   do
+     (if debugStepBreak then
+         'HandleImp-intoUnExp on ast:%d, symbol:%d\n'
+           ->putformat (#  do unexp.index->d; unexp.symbol->d #)
+     if);
      intoUnExp:
        (# 
        do
@@ -429,22 +487,23 @@ intoUnExp: (* step-into *)
               leave intoUnExp;
               
           if);
-          od[]
-            ->utilities.ObjectDescriptorToDopart
-              (#
-                 nodopart::  (#  do leave intoUnExp #);
-                 notfound::  (#  do onFailure; leave intoUnExp #);
-                 onPartialMinfo:: 
-                   (# 
-                   do  (if debugStepBreak then
-                           '427intoUNEXP appending address:%d\n'->screen.putformat
-                           (# do ofi.Mentries[ptinx]->d#)
-                       if);
-                      ofi.Mentries[ptinx]->stepsetADRs.append; leave intoUnExp; 
-                   #);
-                 
-              #)->dpi[];
-          dpi.dp.getImperatives->handleImperativesOpt;
+          od[]->handleEvaluation;
+          (* od[]
+           ->utilities.ObjectDescriptorToDopart
+           (#
+           nodopart::  (#  do leave intoUnExp #);
+           notfound::  (#  do onFailure; leave intoUnExp #);
+           onPartialMinfo:: 
+           (# 
+           do  (if debugStepBreak then
+           '427intoUNEXP appending address:%d\n'->screen.putformat
+           (# do ofi.Mentries[ptinx]->d#)
+           if);
+           ofi.Mentries[ptinx]->stepsetADRs.append; leave intoUnExp; 
+           #)
+           #)->dpi[];
+           dpi.dp.getImperatives->handleImperativesOpt;
+           *)
           
        #);
      
@@ -452,32 +511,47 @@ intoUnExp: (* step-into *)
 handleImp: (* step-into *)
   (# imp: ^MPS.AST.ast; 
   enter imp[]
-  do (if debugStepBreak then
-         'HandleImp on symbol:%d\n'->screen.putformat(# do imp.symbol->d #)
+  do
+     (if debugStepBreak then
+         'HandleImp-into on ast:%d, symbol:%d\n'
+           ->putformat (#  do imp.index->d; imp.symbol->d #)
      if);
      (if imp.symbol
       // MPS.BETA.LabelledImp then
          intoLabelled:
-           (# li: ^MPS.BETACFL.labelledImp; limpi: ^imperativeInfo; 
-              iimp:^MPS.AST.ast;
+           (#
+              li: ^MPS.BETACFL.labelledImp;
+              limpi: ^imperativeInfo;
+              iimp: ^MPS.AST.ast;
+              
            do
               imp[]->li[];
               li.getImp->iimp[]
                 ->utilities.codeAstToImperative
                   (# notfound::  (#  do onFailure; leave intoLabelled #); 
                   #)->limpi[];
-              (if limpi[] <> none then 
+              (if limpi[] <> none then
                   (if debugStepBreak then
-                      ('431HandleIMP, setbreak at ',limpi[])->printBreakpointPos;
+                      ('431HandleIMP, setbreak at ',limpi[])
+                        ->printBreakpointPos;
                       (* limpi.cast.index->screen.putint;screen.putline *)
+                      
                   if);
-                  limpi[]->stepsetIMPs.append 
+                  limpi[]->stepsetIMPs.append
+               else
+                  (if debugStepBreak then
+                      '477 on ast:%d, symbol:%d\n'
+                        ->screen.putformat
+                          (#  do iimp.index->d; iimp.symbol->d #)
+                  if)
               if);
-
-              (* handle inserted items specially, must also set break at dopart to handle noninlined *)
-              (if iimp.symbol=MPS.BETA.InsertedItem then
-                  iimp[]->handleImp 
-               if)
+              (* Setbreakpoints in inner imperatives *)
+              iimp[]->handleImp;
+              (* (if iimp.symbol then
+               MPS.BETA.InsertedItem then
+               iimp[]->handleImp 
+               if)*)
+              
            #);
          
       // MPS.BETA.ForImp then
@@ -489,17 +563,26 @@ handleImp: (* step-into *)
               first: ^MPS.AST.ast;
               
            do
+              (if debugStepBreak then
+                  '493HandleIMP, on forImp '->debugputline
+              if);
               imp[]->fi[];
               getIndex:
               fi.getIndex
                 ->utilities.codeAstToImperative
                   (# notfound::  (#  do leave getIndex #) #)->limpi[];
-              (if limpi[] <> none then 
+              (if limpi[] <> none then
                   (if debugStepBreak then
                       '452HandleIMP, setbreak at '->screen.puttext;
-                      limpi.cast.index->screen.putint;screen.putline
+                      limpi.cast.index->screen.putint;
+                      screen.putline
                   if);
-                  limpi[]->stepsetIMPs.append if);
+                  limpi[]->stepsetIMPs.append
+               else
+                  (if debugStepBreak then
+                      '505HandleIMP, no index found '->screen.putline; 
+                  if)
+              if);
               fi.getImperatives->handleImperativesOpt
            #);
          
@@ -533,16 +616,16 @@ handleImp: (* step-into *)
                         limpi: ^imperativeInfo
                      do
                         current[]->csel[];
-                        none->limpi[];
+                        none ->limpi[];
                         getEval:
-                          csel.getEvaluation
+                        csel.getEvaluation
                           ->utilities.codeAstToImperative
-                        (# notfound:: (# do leave getEval #) 
-                        #) ->limpi[];
+                            (# notfound::  (#  do leave getEval #) #)->limpi[];
                         (if limpi[] <> none then
                             (if debugStepBreak then
                                 '488HandleIMP, setbreak at '->screen.puttext;
-                                limpi.cast.index->screen.putint;screen.putline
+                                limpi.cast.index->screen.putint;
+                                screen.putline
                             if);
                             limpi[]->stepsetIMPs.append
                         if);
@@ -587,7 +670,11 @@ handleImp: (* step-into *)
      
   #);
 getObjectDesc:
-  (# na: ^MPS.BETACFL.NameApl; a: ^MPS.AST.ast; exp: ^MPS.AST.expanded
+  (#
+     na: ^MPS.BETACFL.NameApl;
+     a: ^MPS.AST.ast;
+     exp: ^MPS.AST.expanded;
+     obs: ^MPS.BETACFL.ObjectSpecification
   enter na[]
   do
      loop:
@@ -595,14 +682,30 @@ getObjectDesc:
        do
           na.dclRef->a[];
           (a.father).father->exp[];
+          (if debugStepBreak then
+              'getobjdesc:'->puttext;
+              exp.symbol->putint;
+              ' '->put;
+              (exp[],- 1)->doPrettyPrint->putline
+          if);
           (if exp.symbol
            // MPS.BETA.PatternDecl then
               exp.getson2->a[]; 
            // MPS.BETA.VirtualDecl // MPS.BETA.BindingDecl
            // MPS.BETA.FinalDecl then
-              exp.getson2->a[]; 
+              exp.getson2->a[];
+              (if a.symbol
+               // MPS.BETA.NameApl then
+                  a[]->na[]; na.descRef->a[]
+               // MPS.BETA.Remote then
+                  a[]->obs[]; obs.findDescriptor->a[]
+              if)
            // MPS.BETA.SimpleDecl // MPS.BETA.RepetitionDecl then
-              exp.getson2->exp[];
+              (if exp.symbol = MPS.BETA.RepetitionDecl then
+                  exp.getson3->exp[]
+               else
+                  exp.getson2->exp[]; 
+              if);
               (* exp=referenceSpecification *)
               (if exp.symbol
                // MPS.BETA.StaticItem // MPS.BETA.StaticComponent then
@@ -636,14 +739,13 @@ getObjectDesc:
                    else
                       'MPS.BETA.Dynamic*: elsepart: '->puttext;
                       a.symbol->putint;
-                      newline;
-                      
+                      newline
                   if)
-              if);
-              
+              if)
+           else
+              'getobjectdesc,NOT found'->debugputline
           if)
-       #);
-     
+       #)
   exit a[]
   #)  
 
@@ -656,19 +758,17 @@ do
             (if impi[] <> none then
                 impi.cast[]->imp[]
              else
-                unknownCode; 
+                unknownCode->imp[]; 
             if);
             
          #);
        
    if);
    (if imp[] <> none then
-       (if debugStepBreak then
-           'Calling OverList'->screen.putline
-       if);
+       (if debugStepBreak then 'Calling OverList'->screen.putline if);
        imp[]->overlist->(stepsetIMPs.appendList,stepsetADRs.appendList);
        (if debugStepBreak then
-           'Calling HandleImp'->screen.putline
+           'Intolist.Calling HandleImp'->screen.putline
        if);
        imp[]->handleImp;
        
@@ -685,44 +785,74 @@ onFailure:
      
   #);
 getReturnAddress:
-  (# retAdr: @Integer; 
+  (#
+     retAdr: @Integer;
+     componentaddr: @integer;
+     comp,callcomp: ^remoteBetaObject;
+     callcs: ^componentstack;
+     impi: ^imperativeInfo;
+     
   do
-     (if s[] = none then
-         curComp->getStack->s[];
-         (* Find first BETA address on stack not equal to PC. *)
+     (if s[] = none then curComp->getStack->s[];  if);
+     (* Find first BETA address on stack not equal to PC. *)
+     (if s.last > 2 then (* this was the old *)
          (for i: s.last repeat
            (if s.returnObjs[i] <> 0 then
                (if (s.returnAdrs[i] <> PC) then
-                   s.returnAdrs[i]->retAdr; 
+                   s.returnAdrs[i]->retAdr;
                    (if debugStepBreak then
-                       'GetReturnAddress found: %d\n'->screen.putformat
-                       (# do retAdr->d #);
+                       'GetReturnAddress found: %d s.last=%d\n'
+                         ->screen.putformat
+                           (#  do retAdr->d; THIS(overlist).s.last->d #)
                    if);
-                   leave getReturnAddress; 
-               if);
-               
-           if);
-           
-         for);
-         (if debugStepBreak then
-             'No returnAdress found'->screen.putline
+                   leave getReturnAddress
+               if)
+           if)
+         for)
+      else
+     (* last in component stack, this is new r5.0,gram *)
+         (if s.callingComponents.range > 0 then
+             s.callingComponents[1]->componentaddr;
+             componentaddr->newRemoteObject->callcomp[];
+             (if debugStepBreak then
+                 'caller is component:%d\n'
+                   ->putformat (#  do callcomp.isComp->d #)
+             if);
+             callcomp.getaddress->getStack->callcs[];
+             callcs.returnAdrs[1]->retAdr;
+             (* actually callfrom point. ??, setbreak after this *)
+             (if debugStepBreak then
+                 'callcs.returnAdrs[1]=%d\n'->putformat (#  do retAdr->d #)
+             if);
+             retAdr->utilities.codeAddressToImperative->impi[];
+             (if impi[] <> none then
+                 impi.cast[]->overlist
+                   ->(stepsetIMPs.appendList,stepsetADRs.appendList);
+                 leave getReturnAddress;
+                 
+             if);
+             0->retAdr
+          else
+         (* last act.rec in last component *)
+             (if debugStepBreak then 'doContinue'->putline if);
+             processcomm.Continue
          if)
      if);
-     
+     (if debugStepBreak then 'No returnAdress found'->screen.putline if)
   exit retAdr
   #);
-
 handleElsePartOpt: (* step-over *)
   (# a: ^MPS.AST.ast; ep: ^MPS.BETACFL.elsePart; 
   enter a[]
-  do (if debugStepBreak then
-         'handleElsePartOpt-Over, index:%d\n'->screen.putformat(# do a.index->d #)
+  do
+     (if debugStepBreak then
+         'handleElsePartOpt-Over, index:%d\n'
+           ->screen.putformat (#  do a.index->d #)
      if);
      (if a.kind <> MPS.AST.kinds.optional then
          (a[]->ep[]).getImperatives->handleImperativesOpt
      if)
   #);
-
 handleImperativesOpt: (* step-over *)
   (#
      a: ^MPS.AST.ast;
@@ -743,9 +873,11 @@ handleImperativesOpt: (* step-over *)
               (if limpi[] <> none then
                   (if debugStepBreak then
                       '662HandleIMPopt, setbreak at '->screen.puttext;
-                      limpi.cast.index->screen.putint;screen.putline
+                      limpi.cast.index->screen.putint;
+                      screen.putline
                   if);
-                  limpi[]->stepsetIMPs.append; leave getFirst
+                  limpi[]->stepsetIMPs.append;
+                  leave getFirst
               if);
               
            #);
@@ -754,10 +886,13 @@ handleImperativesOpt: (* step-over *)
      
   #);
 handleImp: (* step-over *)
-  (# imp,brother: ^MPS.AST.ast; limpi: ^ImperativeInfo; 
-     retAdr:@integer;
+  (# imp,brother: ^MPS.AST.ast; limpi: ^ImperativeInfo; retAdr: @integer; 
   enter imp[]
   do
+     (if debugStepBreak then
+         'HandleIMP-over, ast=%d, symbol=%d\n '
+           ->putformat (#  do imp.index->d; imp.symbol->d #)
+     if);
      (if imp.symbol
       // MPS.BETA.leaveImp then
       (* If it is a labelled imp, do a step over on that imp.
@@ -777,15 +912,13 @@ handleImp: (* step-over *)
               (if a.symbol = MPS.BETA.labelledImp then
                   a[]->handleImp; 
                else
-                   (if debugStepBreak then
-                       '754handleIMP-over appending address:%d\n'->screen.putformat
-                       (# do getReturnAddress->d#)
-                   if);
-                  getReturnAddress->stepsetADRs.append; 
-              if);
-              
-           #);
-         
+                  (if debugStepBreak then
+                      '754handleIMP-over appending address:%d\n'
+                        ->screen.putformat (#  do getReturnAddress->d #)
+                  if);
+                  getReturnAddress->adr->stepsetADRs.append
+              if)
+           #)
       // MPS.BETA.restartImp then
          overRestart:
            (#
@@ -814,9 +947,11 @@ handleImp: (* step-over *)
                          notfound::  (#  do onFailure; leave overRestart #);
                          onPartialMinfo:: 
                            (# 
-                           do (if debugStepBreak then
-                                  '791handleIMP-over appending address:%d\n'->screen.putformat
-                                  (# do ofi.Mentries[ptinx]->d#)
+                           do
+                              (if debugStepBreak then
+                                  '791handleIMP-over appending address:%d\n'
+                                    ->screen.putformat
+                                      (#  do ofi.Mentries[ptinx]->d #)
                               if);
                               ofi.Mentries[ptinx]->stepsetADRs.append;
                               leave overRestart;
@@ -863,8 +998,9 @@ handleImp: (* step-over *)
                            (# 
                            do (* We are in a dopart SLOT *)
                               (if debugStepBreak then
-                                  '839handleIMP-over appending address:%d\n'->screen.putformat
-                                  (# do getReturnAddress->d#)
+                                  '839handleIMP-over appending address:%d\n'
+                                    ->screen.putformat
+                                      (#  do getReturnAddress->d #)
                               if);
                               getReturnAddress->stepsetADRs.append;
                               leave overImperatives;
@@ -881,12 +1017,13 @@ handleImp: (* step-over *)
                           getReturnAddress->retAdr;
                           (if debugStepBreak then
                               'Scanning Stack in handleimp'->screen.putline;
-                              '858handleIMP appending address:%d\n'->screen.putformat
-                              (# do retAdr->d#)
+                              '858handleIMP appending address:%d\n'
+                                ->screen.putformat (#  do retAdr->d #)
                           if);
-                          (if retAdr<>0 then
-                              retAdr->stepsetADRs.append;
+                          (if retAdr <> 0 then
+                              retAdr->stepsetADRs.append; 
                           if);
+                          
                       if);
                       
                   if);
@@ -922,9 +1059,19 @@ handleImp: (* step-over *)
               limpi: ^ImperativeInfo;
               
            do
+              (if debugStepBreak then
+                  '925 Over at astindex:%d, symbol:%d\n'
+                    ->putformat (#  do imp.index->d; imp.symbol->d #);
+                  
+              if);
               imp[]->MPS.nextbrother->a[];
               checkBrother:
               (if a[] <> none then
+                  (if debugStepBreak then
+                      '964 found brother ast=%d,symbol=%d\n'
+                        ->putformat (#  do a.index->d; a.symbol->d #);
+                      
+                  if);
                   a[]
                     ->utilities.codeAstToImperative
                       (#
@@ -934,19 +1081,31 @@ handleImp: (* step-over *)
                            #);
                          
                       #)->limpi[];
-                  (if limpi[] <> none then 
+                  (if limpi[] <> none then
                       (if debugStepBreak then
-                          ('836HandleIMP',limpi[])->printBreakpointPos;
+                          ('836HandleIMP',limpi[])->printBreakpointPos; 
                       if);
-                      limpi[]->stepsetIMPs.append 
+                      limpi[]->stepsetIMPs.append
                   if);
                   leave overGeneral
               if);
               (* No brother found. *)
               imp.father->a[];
+              (if debugStepBreak then
+                  '982Found father = astindex:%d, symbol:%d\n'
+                    ->screen.putformat (#  do a.index->d; a.symbol->d #);
+                  
+              if);
+              (* go out until no more labels, never happens!! *)
+              l:
+              (if (a.father).symbol = MPS.BETA.LabelledImp then
+                  a.father->a[]; restart l
+              if);
               (if a.symbol
-               // MPS.BETA.imperatives then
-                  a[]->handleImp; 
+               // MPS.BETA.labelledImp // MPS.BETA.imperatives then
+                  '990 calling handleimp'->debugputline; a[]->handleImp
+               // MPS.BETA.InsertedItem then
+                  a[]->handleImp
                // MPS.BETA.CaseSelection then
                     (#
                        handleSelections:
@@ -966,8 +1125,10 @@ handleImp: (* step-over *)
                                     #)->limpi[];
                                 (if limpi[] <> none then
                                     (if debugStepBreak then
-                                        '865HandleIMP, setbreak at '->screen.puttext;
-                                        limpi.cast.index->screen.putint;screen.putline
+                                        '865HandleIMP, setbreak at '
+                                          ->screen.puttext;
+                                        limpi.cast.index->screen.putint;
+                                        screen.putline
                                     if);
                                     limpi[]->stepsetIMPs.append
                                 if);
@@ -985,18 +1146,20 @@ handleImp: (* step-over *)
                         * and in all selection.eval's, this is done by handleSelection.
                         * In addition also set break after the if.
                         *)
+                       
                     do
                        a[]->cs[];
                        cs[]->MPS.nextbrother->handleSelections;
                        (cs.father).father->alt[];
-                       (alt.father).father->gi[]->overlist (* (alt.father).father is the general-if *)
+                       (alt.father).father->gi[]
+                         ->overlist (* (alt.father).father is the general-if *)
                          ->(stepsetIMPs.appendList,stepsetADRs.appendList);
                        (* also set break in opt-elsepart *)
                        gi.getElsePartOpt->handleElsePartOpt;
-                       
                        loop:
                          (# 
-                         do (if debugStepBreak then
+                         do
+                            (if debugStepBreak then
                                 '903callind handleimpopt'->screen.putline
                             if);
                             alt.getImperatives->handleImperativesOpt;
