@@ -60,25 +60,25 @@ static long M_Part(ref(ProtoType) proto)
       *
       * Should ONLY be called for a prototype which is known to correspond to 
       * object with do-part.
-	  * 
-	  * CRTS: prototype is, e.g.
-	  * long T18TSTVIRT[]={
-	        (48<<16)|(0xffff&2),
-			(long)&G18TSTVIRT,
-			(long)T15TSTVIRT,
-			(4<<16)|(0xffff&0),
-			(1<<16)|(0xffff&1090),
-			0,
-			0,
-			(long)&M15TSTVIRT, M-entry of prefix
-			0,
-			(long)&M18TSTVIRT, M-entry
-			0,
-			(long)&Return,
-			(0<<16)|(0xffff&10),
-			0,
-			(long)&V20
-		}; / *innerTableSize=3 * /
+      * 
+      * CRTS: prototype is, e.g.
+      * long T18TSTVIRT[]={
+      *   (48<<16)|(0xffff&2),
+      *   (long)&G18TSTVIRT,
+      *   (long)T15TSTVIRT,
+      *   (4<<16)|(0xffff&0),
+      *   (1<<16)|(0xffff&1090),
+      *   0,
+      *   0,
+      *   (long)&M15TSTVIRT, (* M-entry of prefix *)
+      *   0,
+      *   (long)&M18TSTVIRT, (* M-entry *)
+      *   0,
+      *   (long)&Return,
+      *   (0<<16)|(0xffff&10),
+      *   0,
+      *   (long)&V20
+      * }; 
       */
 {
   extern void Return();
