@@ -572,13 +572,13 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
       /* macintosh, dump file opened OK: running as tool under MPW */
       fprintf(stderr, "\n# Beta execution aborted: ");
       fprintf(stderr, ErrorMessage(errorNumber));
-      fprintf(stderr, ".\n# Look at '%s'.\n", dumpname);
+      fprintf(stderr, ".\n# Look at '%s'\n", dumpname);
     }
 #else
     /* UNIX, dump file opened OK */
     fprintf(stderr, "\n# Beta execution aborted: ");
     fprintf(stderr, ErrorMessage(errorNumber));
-    fprintf(stderr, ".\n# Look at '%s'.\n", dumpname);
+    fprintf(stderr, ".\n# Look at '%s'\n", dumpname);
 #endif
     /* Dump file opened OK: Write diagnostics to dump file too */
     fprintf(output, "Beta execution aborted: ");
