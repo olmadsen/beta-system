@@ -5,8 +5,6 @@
 #include <string.h>
 #include <sys/time.h>
 
-#include "liniarize.h"
-
 typedef struct statInfo {
     struct timeval start;
     struct timeval end;
@@ -103,7 +101,6 @@ void printLinStatistics() {
         printf("%30s: (usec = %10lu, sec = %4lu)\n", statistics[i].func, microDiff, microDiff/1000000);
         i++;
     }
-    printf("%30s: %10lu\n", "Objects", l -> noObjects);
 }
 
 #endif /* LIN */

@@ -17,7 +17,7 @@ void collectLiveObjectsInAOA(void);
 /* LOCAL FUNCTIONS */
 static void scanList(ref (Object) root, void (foreach)(ref (Object) current));
 static void scanObject(struct Object *obj,
-                       referenceActionType referenceAction,
+                       void referenceAction(REFERENCEACTIONARGSTYPE),
                        int doPartObjects);
 
 
@@ -63,43 +63,37 @@ static long totalsize;
 
 /* Append objects to the list regardless of where they are */
 
-void appendToList(REFERENCEACTIONARGS)
+void appendToList(REFERENCEACTIONARGSTYPE)
 {
-    ptr(Object) obj = (struct Object *)(*theCell);
-
-    if ((tail != obj) && obj->GCAttr <= IOAMaxAge) {
+    if ((tail != target) && target->GCAttr <= IOAMaxAge) {
         /* Not in the list yet.*/
-        if (!isAnchorProto(obj->Proto)) {
+        if (!isAnchorProto(target->Proto)) {
             /* Not an anchor, insert. */
-            tail->GCAttr = (long)obj;
-            tail=obj;
+            tail->GCAttr = (long)target;
+            tail=target;
         }
     }
 }
 
 /* Append objects to the list not including objects in IOA */
-void appendToListNoIOA(REFERENCEACTIONARGS)
+void appendToListNoIOA(REFERENCEACTIONARGSTYPE)
 {
-    ptr(Object) obj = (struct Object *)(*theCell);
-
-    if (!inIOA(obj)) {
-        appendToList(theObj, theCell);
+    if (!inIOA(target)) {
+        appendToList(REFERENCEACTIONARGS);
     }
 }
 
 /* Append objects to the list including only objects in AOA */
-void appendToListInAOA(struct Object *theObj, struct Object **theCell)
+void appendToListInAOA(REFERENCEACTIONARGSTYPE)
 {
-    ptr(Object) obj = (struct Object *)(*theCell);
-
-    if (inAOA(obj)) {
-        appendToList(theObj, theCell);
+    if (inAOA(target)) {
+        appendToList(REFERENCEACTIONARGS);
     } 
 }
     
 
 void initialCollectList(ptr(Object) root,
-                        referenceActionType referenceAction)
+                        void referenceAction(REFERENCEACTIONARGSTYPE))
 {
     ptr(Object) theObj;
 
@@ -142,7 +136,7 @@ void initialCollectList(ptr(Object) root,
 }
 
 void extendCollectList(ptr(Object) root,
-                        referenceActionType referenceAction)
+                       void referenceAction(REFERENCEACTIONARGSTYPE))
 {
     ptr(Object) theObj;
 
@@ -187,7 +181,7 @@ static void scanList(ref (Object) root, void (foreach)(ref (Object) current))
 
 
 static void scanObject(struct Object *obj,
-                       referenceActionType referenceAction,
+                       void referenceAction(REFERENCEACTIONARGSTYPE),
                        int doPartObjects)
 {
     ptr (ProtoType) theProto;
@@ -216,14 +210,14 @@ static void scanObject(struct Object *obj,
           case SwitchProto(RefRepPTValue):
               /* Scan the repetition and apply referenceAction */
           {
-              ptr(long) target;
+              long target;
               long offset, offsetTop;
               
               offset =  (char*)(&toRefRep(obj)->Body[0]) - (char*)obj;
               offsetTop = offset + 4 * toRefRep(obj)->HighBorder;
               
               while (offset < offsetTop) {
-                  target = *(long*)((char*)obj + offset)
+                  target = *(long*)((char*)obj + offset);
                   if (target) {
                       referenceAction(obj, offset, (struct Object *)target);
                   }
@@ -251,7 +245,6 @@ static void scanObject(struct Object *obj,
         struct GCEntry *tab =
             (struct GCEntry *) ((char *) theProto + theProto->GCTabOff);
         ptr(short) refs_ofs;
-        ptr(long)  theCell;
         
         /* Handle all the static objects. 
          *
@@ -276,15 +269,15 @@ static void scanObject(struct Object *obj,
         
         /* Handle all the references in the Object. */
         for (refs_ofs = (short *)&tab->StaticOff+1; *refs_ofs; ++refs_ofs) {
-            long refType = (*refs_ofs) & 3;
             long offset  = (*refs_ofs) & ~3;
             long target = *(long*)((char *)obj + offset);
+            /* long refType = (*refs_ofs) & 3; */
             /* sbrandt 24/1/1994: 2 least significant bits in prototype 
              * dynamic offset table masked out. As offsets in this table are
              * always multiples of 4, these bits may be used to distinguish
              * different reference types. */ 
             if (target) {
-                referenceAction(obj, offset, (struct object *)target);
+                referenceAction(obj, offset, (struct Object *)target);
             }
         }
     }

@@ -1,5 +1,11 @@
 #include "beta.h"
 
+/* Not used currently !!!!!!!!!!!!!!!!!! */
+
+#if 0
+
+
+
 #if defined(LIN)
 
 #include <stdio.h>
@@ -8,8 +14,6 @@
 #include <siginfo.h>
 #include <sys/regset.h>
 #include <sys/ucontext.h>
-
-#include "liniarize.h"
 
 /* GLOBAL FUNCTIONS */
 void initIndirTrapHandler (void);
@@ -90,9 +94,14 @@ static void indirTrap(long sig, siginfo_t *info, ucontext_t *ucon) {
 
                 /* Calculate absolute address by looking in the indirtable */
                 
+#if 0
+                /* The following os correct, but not in use currently
+                 * so infoTable does not exist...
+                 */
                 offset = l -> infoTable[MAPTOINDIRECT(indirRef)].byteOffset;
                 absAddr = (long) (l -> liniarization + offset);
-
+#endif
+                
                 /* Return to trap window. */
                 __asm__ volatile ("restore; restore ! return to trap window");
                 
@@ -140,3 +149,4 @@ void printIndirStatistics(void) {
 }
     
 #endif /* LIN */
+#endif /* 0 */

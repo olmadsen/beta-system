@@ -8,10 +8,6 @@
 #include "beta.h"
 #include "crun.h"
 
-#if defined(LIN)
-#include "liniarize.h"
-#endif /* LIN */
-
 /* Qua check.
  * The reference assignment src[]->dst[] has just been made. dst resides in 
  * theCell.
@@ -37,7 +33,7 @@ ParamProtoCellOriginThis(Qua)
   src = *theCell;
 
 #ifdef RTDEBUG
-  if ((src) && !(inIOA(src) || inLIN(src) || inAOA(src) || inLVRA(src) || isLazyRef(src) || isIndirRef(src))) {
+  if ((src) && !(inIOA(src) || inAOA(src) || inLVRA(src) || isLazyRef(src))) {
     char buf[512];
     sprintf (buf, "Qua: src check failed. src = %d, theCell = %d\n", 
 	     (int) src, (int) theCell);
@@ -45,7 +41,7 @@ ParamProtoCellOriginThis(Qua)
   }
 #endif    
   
-  if (src && !isIndirRef(src)){
+  if (src){
     /* If src is NONE or indirect, all is well */
       
 #ifdef RTLAZY

@@ -52,6 +52,7 @@ static void BooleanProperty(char *name)
    ENTRY("infoheap", InfoHeapUsage = TRUE);
    ENTRY("quacont",  QuaCont = TRUE);
    ENTRY("noaoagc",  noAOAGC = TRUE);
+   ENTRY("nonmoveaoagc",  NonMoveAOAGC = TRUE);
 
 #ifdef sparc
   ENTRY("suspcont", SuspCont = TRUE);

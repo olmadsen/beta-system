@@ -20,6 +20,12 @@ extern void DoGC(long *SP);
 extern void DoGC(void);
 #endif
 
+#ifdef NONMOVEAOAGC
+static void NonMoveInitList(void);
+static void NonMoveAddRoot(long cellptr);
+static void HandleDeadObjects(void);
+#endif
+
 /* tempAOArootsAlloc:
  *  Not enough room for the AOAroots table in ToSpace.
  *  Instead allocate offline and copy existing part of table over
@@ -339,6 +345,9 @@ void AOAGc()
    */
   long blocks, size, used;
   
+  if (!AOABaseBlock)
+      return;
+  
   NumAOAGc++;
 
 #ifdef RTLAZY
@@ -349,26 +358,22 @@ void AOAGc()
 
   INFO_AOA( fprintf(output, "\n#(AOA-%d ", (int)NumAOAGc); fflush(output) );
   /* Mark all reachable objects within AOA and reverse all pointers. */
-#if defined(MAC)
-  RotateTheCursorBack();
-#endif
+  
+  MAC_CODE(RotateTheCursorBack());
   DEBUG_AOA( fprintf( output, "Phase1\n"); fflush(output) );
+
   Phase1();  
   /* Calculate new addresses for the reachable objects and reverse pointers. */
-#if defined(MAC)
-  RotateTheCursorBack();
-#endif
+  MAC_CODE(RotateTheCursorBack());
+
   DEBUG_AOA( fprintf( output, "Phase2\n"); fflush(output) );
   Phase2( &blocks, &size, &used); 
   /* Copy all reachable objects to their new locations. */
-#if defined(MAC)
-  RotateTheCursorBack();
-#endif
+  MAC_CODE(RotateTheCursorBack());
+
   DEBUG_AOA( fprintf( output, "Phase3\n"); fflush(output) );
   Phase3();  
-#if defined(MAC)
-  RotateTheCursorBack();
-#endif
+  MAC_CODE(RotateTheCursorBack());
   AOANeedCompaction = FALSE;
 
 #if 1
@@ -773,7 +778,12 @@ static void Phase1(void)
   RAFStackBase = GLOBAL_IOA;
   RAFStackTop = GLOBAL_IOA;
   RAFStackLimit = AOAtoLVRAtable;
-  
+
+#ifdef NONMOVEAOAGC
+  if (NonMoveAOAGC)
+      NonMoveInitList();
+#endif
+
 #ifdef RTDEBUG
   { /* Make sure that there are no duplicate AOA roots! */
     long old=0;
@@ -790,7 +800,16 @@ static void Phase1(void)
 	INFO_AOA(fprintf(output, "Phase1: Duplicate AOA root: 0x%x\n", (int)old));
       } else {
 	old = *pointer;
-	RAFPush(*pointer & ~1);
+#ifdef NONMOVEAOAGC
+        if (NonMoveAOAGC) {
+            NonMoveAddRoot(*pointer & ~1);
+        }
+        else {
+            RAFPush(*pointer & ~1);
+        }
+#else
+        RAFPush(*pointer & ~1);
+#endif            
       }
     }
   }
@@ -810,9 +829,25 @@ static void Phase1(void)
       *pointer |= 1;         /* set it in table */
     }
 #endif
+#ifdef NONMOVEAOAGC
+    if (NonMoveAOAGC) {
+        NonMoveAddRoot(*pointer & ~1);
+    }
+    else {
+        RAFPush(*pointer & ~1);
+    }
+#else
     RAFPush(*pointer & ~1);
+#endif            
   }
 #endif /* RTDEBUG */
+
+#ifdef NONMOVEAOAGC
+  if (NonMoveAOAGC) {
+      return;
+  }
+#endif
+  
   ReverseAndFollow();
   freeRAFStackArea();
 }
@@ -916,6 +951,14 @@ static void Phase2(ptr(long) numAddr, ptr(long) sizeAddr, ptr(long) usedAddr)
 
   int enclDist;
   
+#ifdef NONMOVEAOAGC
+  if (NonMoveAOAGC) {
+      /* redirectPointersInAOA(); */
+      HandleDeadObjects();
+      return;
+  }
+#endif
+
   freeObj   = (ref(Object)) BlockStart( freeBlock);
   
   while( theBlock ){
@@ -1021,6 +1064,11 @@ static void Phase3()
 {
   long *   table; /* Local copy of AOAtoIOATable */
   
+#ifdef NONMOVEAOAGC
+  if (NonMoveAOAGC) {
+      return;
+  }
+#endif
   /* Calculate the size of table. */
   AOAtoIOACount = 0;
   {
@@ -1598,3 +1646,30 @@ void AOACheckObjectSpecial( theObj)
 }
 
 #endif
+
+#ifdef NONMOVEAOAGC
+static long firstRef;
+
+static void NonMoveInitList(void)
+{
+    firstRef = TRUE;
+    initialCollectList(NULL, NULL);
+}
+
+static void NonMoveAddRoot(long cellptr)
+{
+    if (firstRef) {
+        initialCollectList((ref(Object)) *(long*)cellptr, appendToListInAOA);
+        firstRef = FALSE;
+    }
+    else {
+        extendCollectList((ref(Object)) *(long*)cellptr, appendToListInAOA);
+    }
+}
+
+static void HandleDeadObjects(void)
+{
+    
+}
+#endif
+

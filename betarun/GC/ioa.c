@@ -190,8 +190,15 @@ void IOAGc()
   
   DEBUG_CODE(dump_aoa=(AOANeedCompaction && DumpAOA));
 
-  if( AOANeedCompaction) AOAGc();
-
+#if defined(NONMOVEAOAGC) && defined(LIN)
+  if (AOANeedCompaction || (NonMoveAOAGC && forceAOAGC))
+      AOAGc();
+  forceAOAGC = FALSE;
+#else  
+  if (AOANeedCompaction)
+      AOAGc();
+#endif
+  
   if (tempAOAroots) {
     /* ToSpace was not big enough to hold both objects and table.
      * Free the table that was allocated by saveAOAroot().
@@ -503,10 +510,7 @@ void ProcessReference( theCell)
       return;
     }
 #endif
-    if (isIndirRef( *theCell)) {
-        return;
-    }
-    
+
     if (inAOA( *theCell)) {
       MCHECK();
       saveAOAroot(theCell);

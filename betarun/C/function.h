@@ -256,12 +256,15 @@ extern void FlushCodeCash(long start, long end);
 extern struct Object * GetThis(long *SP);
 #endif
 
-#if defined(LIN)
 /* liniarize.c */
-extern long scanFromRoot(struct Object *root);
-extern void assignIndirRef(struct Object **theCell, long id);
-extern void initIndirTrapHandler (void);
-extern void doPrintLiniarizationStatistics();
-extern void dumpLiniarizationToDisk(void);
-extern long loadLiniarizationFromDisk(void);
+#if defined(LIN)
+extern void addAnchorProto(struct ProtoType *proto);
+extern void appendToList(REFERENCEACTIONARGSTYPE);
+extern void appendToListNoIOA(REFERENCEACTIONARGSTYPE);
+extern void appendToListInAOA(REFERENCEACTIONARGSTYPE);
+extern void initialCollectList(ptr(Object) root,
+                               void referenceAction(REFERENCEACTIONARGSTYPE));
+extern void extendCollectList(ptr(Object) root,
+                              void referenceAction(REFERENCEACTIONARGSTYPE));
+
 #endif /* LIN */

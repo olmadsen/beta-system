@@ -271,7 +271,6 @@ void scanIOAliveForRef(ref(Object) target,
 		  int printName,
 		  void (*cb)(ref(Object)))
 {
-  ref(ProtoType) targetproto = target->Proto;
   ref(Object) theObj = (ref(Object))IOA;
   long objSize;
   long SavedNumIOAGc = NumIOAGc;
