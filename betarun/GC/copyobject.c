@@ -120,6 +120,7 @@ ref(Object) NewCopyObject(ref(Object) theObj, handle(Object) theCell)
   }
 #else /* not CHECK_LVRA_IN_IOA */
   /* THIS IS NOW DEFAULT! */
+  MCHECK();
   if (isValRep(theObj)&&(((struct ValRep*)theObj)->HighBorder>LARGE_REP_SIZE)){
     DEBUG_LVRA({
       fprintf(output, 
@@ -139,12 +140,13 @@ ref(Object) NewCopyObject(ref(Object) theObj, handle(Object) theCell)
     /* theObj is old enough to go into AOA */
     ref(Object) newObj;
     
-    
+
+    MCHECK();
     if( (newObj = CopyObjectToAOA(theObj)) ){
       /* Insert theCell in AOAroots table. 
        * Used as roots in mark-sweep if an AOA GC is invoked after IOAGc.
        */
-      
+      MCHECK();
 #if 0
       if (newObj->Proto==RefRepPTValue){
 	int i;

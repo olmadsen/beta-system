@@ -30,6 +30,7 @@ void tempAOArootsAlloc(void)
     ptr(long) oldPtr;
     ptr(long) pointer = ToSpaceLimit; /* points to end of old table */
 
+    MCHECK();
     if ( ! (tempAOAroots = (long *) MALLOC(IOASize)) ){
       char buf[300];
       sprintf(buf, "Could not allocate temporary AOAroots table.");
@@ -49,8 +50,10 @@ void tempAOArootsAlloc(void)
     oldPtr = AOArootsPtr; /* start of old table */
     AOArootsPtr = AOArootsLimit; /* end of new table */
     
+    MCHECK();
     /* Copy old table backwards */
     while(pointer > oldPtr) *--AOArootsPtr = *--pointer; 
+    MCHECK();
 
 }
 
@@ -60,7 +63,9 @@ void tempAOArootsFree(void)
   long roots = (long)tempAOAroots;
   Claim(tempAOAroots!=NULL, "tempAOArootsFree: tempAOAroots allocated");
 #endif
+  MCHECK();
   FREE(tempAOAroots);
+  MCHECK();
   tempAOAroots = NULL;
   INFO_IOA(fprintf(output, "freed temporary AOAroots table\n"));
   DEBUG_IOA(fprintf(output, " [0x%x]", (int)roots));
