@@ -239,61 +239,6 @@ void FailureExit()
 
 /* New RT routines for crts */
 
-void pushAdr(a)
-     long *a;
-{
-  *RefSP++ = (long)a;
-}
-
-long *popAdr()
-{
-  return (long *) *(--RefSP);
-}  
-
-/* oldStackPtr is provited to the callback function by HandleCB which read the
-   value of the old stack pointer when called. It is then necessary that the
-   called BETA object is called with the parameters theObj, oldStackPtr, arg1,..
-*/
-int CallBackPar(long oldStackPtr, long parNo)
-{
-  register long retValue;
-  register long argPtr;
-
-  switch (parNo){
-  case 1:
-    asm("mov %%i2, %0": "=r" (retValue)); 
-    break;
-  case 2:
-    asm("mov %%i3, %0": "=r" (retValue));
-    break;
-  case 3:
-    asm("mov %%i4, %0": "=r" (retValue));
-    break;
-  case 4:
-    asm("mov %%i5, %0": "=r" (retValue));
-    break;
-  case 5:
-    /* Parameter 5 through 6 is stored on the stack. */
-    asm("mov %%i6, %0": "=r" (argPtr)); /* argPtr = frame pointer */
-    retValue = *(long *)(argPtr+23*4);
-    break;
-  case 6:
-    /* Parameter 5 through 6 is stored on the stack. i6= fp for previos stackptr */
-    asm("mov %%i6, %0": "=r" (argPtr)); /* argPtr = frame pointer */
-    retValue = *(long *)(argPtr+24*4);
-    break;
-  default:
-    /* Ok, this is a hard one: oldStackPtr points to the previosly stack frame.
-       This frame contains the parameters of the C-function calling back to BETA.
-       On SPARC 23 words are used before the the parameters past the sixth (if any)
-       are pushed on the stack. The first parameter on the stack is then the
-       seventh parameter and so one.
-     */
-    retValue = *(long *)(oldStackPtr+(23+parNo-7)*4);
-    break;
-  }
-  return retValue;
-}
 
 void Trap()
 {
@@ -347,12 +292,12 @@ signed long SignExtWord(signed short a)
 typedef struct jmpInfoElem {
   jmp_buf *jumpBuffer;
   long * refTop;
-  struct jmpInfoElem * nextElem;
 } jmpInfoElem;
 
 jmp_buf *CRTSjbp;
 jmpInfoElem *jumpList;
 jmpInfoElem *jumpListHead;
+long numInJumpBuf=maxNoInPool;
 
 void initJmpPool()
 {
@@ -360,44 +305,32 @@ void initJmpPool()
   jmp_buf *jumpBufPool;
   int i;
   
-  jumpList = (jmpInfoElem *)malloc(sizeof(jmpInfoElem)*maxNoInPool);
+  jumpList = (jmpInfoElem *)malloc(sizeof(jmpInfoElem)*numInJumpBuf);
   jumpListHead = jumpList;
-  jumpBufPool = (jmp_buf *)malloc(sizeof(jmp_buf)*maxNoInPool);
+  jumpBufPool = (jmp_buf *)malloc(sizeof(jmp_buf)*numInJumpBuf);
   tmp = jumpList;
-  for (i=0; i<(maxNoInPool-1); i++){ 
+  for (i=0; i<numInJumpBuf; i++){ 
     tmp->jumpBuffer = jumpBufPool+i;
-    tmp->nextElem = tmp+1; /* next points to next element in list */
-    tmp = tmp->nextElem;
+    tmp++;
   }
-  /* Last element needs special care */
-  tmp->jumpBuffer = jumpBufPool+i;
-  tmp->nextElem = NULL; /* Last element in list points to zero */
 }
 
 void reallocJmpList()     
 {
   int i=0;
-  jmpInfoElem *p=jumpListHead;
+  jmpInfoElem *p;
   jmp_buf * jmpBufPool;
-  while (p != NULL){
-    /* Calculate number in current chain. This may be larger than maxNoInPool. */
-    p = p->nextElem;
-    i++;
-  }
   jumpListHead = (jmpInfoElem *) realloc(jumpListHead,
-					 (i+maxNoInPool)*sizeof(jmpInfoElem));
-  jumpList = jumpListHead+i-1; /* Point to previously last element in chain */
-  jumpList->nextElem = jumpList+1;
-  jmpBufPool = (jmp_buf *)malloc(maxNoInPool*sizeof(jmp_buf));
-  p = jumpList->nextElem;
+					 2*numInJumpBuf*sizeof(jmpInfoElem));
+  jumpList = jumpListHead+numInJumpBuf; /* Points to element after last element */
+  p = jumpList;
+  jmpBufPool = (jmp_buf *)malloc(numInJumpBuf*sizeof(jmp_buf));
   /* Initialize new chain section to point to malloc'ed pool area */
-  for (i=0; i<maxNoInPool-1; i++){
+  for (i=0; i<numInJumpBuf; i++){
     p->jumpBuffer = jmpBufPool+i;
-    p->nextElem = p+1;
-    p = p->nextElem;
+    p++;
   }
-  p->jumpBuffer = jmpBufPool+i;
-  p->nextElem = NULL; /* Last element in chain has to be NULL */
+  numInJumpBuf*=2;
 }
 
 
@@ -413,23 +346,25 @@ jmp_buf *GetJmpBuf(int addr, int off)
 {
   jmp_buf *tmp;
   
-  if (jumpList->nextElem==NULL)
+  if (jumpList >= jumpListHead+numInJumpBuf){
     reallocJmpList();
+  }
   tmp = jumpList->jumpBuffer;
   jumpList->refTop = RefSP; 
   *(jmpInfoElem **)(addr+off) = jumpList;
-  jumpList=jumpList->nextElem;
+  jumpList=jumpList+1;
   return tmp;
 }
 
 void FreeJmpBuf(int addr, int off)
 {
+#if 0
   jmpInfoElem *p;
-  
   p = *(jmpInfoElem **)(addr+off);
   jumpList = jumpList-1; /* Previous element in list */
   jumpList->jumpBuffer = p->jumpBuffer;
   jumpList->nextElem = jumpList+1; /* Next element in list */
+#endif
 }
 
 /* 1. get ref. to stateinfo from a1[off]  */
