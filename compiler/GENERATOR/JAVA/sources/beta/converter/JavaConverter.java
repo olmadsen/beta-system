@@ -5,7 +5,7 @@ import java.io.*;
 import java.util.*;
 import java.lang.reflect.*;
 
-class BetaConverter
+class JavaConverter
 {
     boolean trace = true;
 
@@ -15,8 +15,8 @@ class BetaConverter
     Map includes = new HashMap(10);
 
     static void usage(){
-	System.err.println("Usage: BetaConverter <java class name>");
-	System.err.println("e.g.:  BetaConverter java.lang.String");
+	System.err.println("Usage: java JavaConverter <java class name>");
+	System.err.println("e.g.:  java JavaConverter java.lang.String");
 	System.exit(1);
     }
 
@@ -169,7 +169,7 @@ class BetaConverter
 
     String mangleType(String type){
 	if (type.startsWith("[")){
-	    return "ArrayOf_" + mangleType(type.substring(1,type.length()));
+	    return "ArrayOf" + mangleType(type.substring(1,type.length()));
 	} else if (type.startsWith("L")){
 	    return stripPackage(type.substring(1,type.length()-1));
 	} else if (type.equals("byte")){
@@ -319,7 +319,7 @@ class BetaConverter
 
     public static void main(String[] args){
 	if (args.length == 1){
-	    System.exit(new BetaConverter().convert(args[0]));
+	    System.exit(new JavaConverter().convert(args[0]));
 	} else {
 	    usage();
 	}

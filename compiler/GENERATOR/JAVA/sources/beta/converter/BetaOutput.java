@@ -87,13 +87,13 @@ public class BetaOutput
 
     public void putMethod(String name, String mangledName, String[] parameters, String returnType, boolean isStatic)
     {
-	if (isStatic) {
-	    commentline("STATIC:");
-	}
+	String proctype = (name.equals("_init")) ? "cons" : ((isStatic)? "static_proc" : "proc");
 	if (mangledName!=null){
-	    putln(mangledName + ": proc " + comment("Overloaded " + name));
+	    putln(mangledName + ": " 
+		  + proctype + " " 
+		  + comment("Overloaded " + ((name.equals("_init")) ? "constructor" : name)));
 	} else {
-	    putln(name + ": proc");
+	    putln(name + ": " + proctype);
 	}
 	
 	indent(+2);
@@ -108,6 +108,7 @@ public class BetaOutput
 	    for (int i = 0; i<parameters.length; i++){
 		putln("arg" + (++n) + ": " + parameters[i] + ";");
 	    }
+	    indent(-3);
 	    indent();
 	    put("enter (");
 	    boolean comma = false;
@@ -119,9 +120,10 @@ public class BetaOutput
 	    }
 	    put(")");
 	    nl();
+	    indent(+3);
 	}
 	indent(-3);
-	if (mangledName!=null) {
+	if (mangledName!=null && !name.equals("_init")) {
 	    indent();
 	    put("do '" + name + "' -> procname;");
 	    nl();

@@ -1,8 +1,8 @@
 JAVAC = javac -sourcepath sources -d classes -classpath classes 
 
-BetaConverter.class: 
+JavaConverter.class: 
 	mkdir -p classes/beta/converter
-	$(JAVAC) sources/beta/converter/BetaConverter.java
+	$(JAVAC) sources/beta/converter/JavaConverter.java
 
 clean:
 	/bin/rm -f *~ *.class *.ast *.astL *.a2s \#*
