@@ -1,0 +1,183 @@
+ORIGIN  '~beta/guienv/v1.3/guienv';
+
+INCLUDE '~beta/guienv/v1.3/fields';
+INCLUDE '~beta/guienv/v1.3/stddialogs';
+
+INCLUDE '~beta/basiclib/v1.4/file';
+
+INCLUDE '../dynpane';
+INCLUDE '~beta/objectbrowser/v2.0/UI/obguienvadds';
+INCLUDE '~beta/objectbrowser/v2.0/UI/labelled';
+
+--- guienvlib: attributes ---
+parseEditor: window
+  (# menubarType::
+       (# fileMenu: @menu
+            (# openItem: @menuItem
+                 (# eventHandler::
+                      (# onSelect::
+                           (# path: ^text
+                           do this(parseEditor)[]->fileSelectionDialog->path[];
+                              (if path[]<>NONE then
+                                  (* load BETA text file *)
+                                  path[]
+                                    ->contents.theTextEditor.contents.loadFile;
+                                  
+                                  (* load LST text file *)
+                                  'lst'
+                                    ->((1,path.length-3)->path.sub).append
+                                    ->contents.theLSTView.contents.loadFile;
+                              if)
+                           #)
+                      #);
+                    open:: (# do 'Open'->name #)
+                 #);
+               saveItem: @menuItem
+                 (# eventHandler::
+                      (# onSelect::
+                           (# do contents.theTextEditor.contents.saveFile #)
+                      #);
+                    open:: 
+                      (# do 'Save'->name #)
+                 #);
+               quitItem: @menuItem
+                 (# inx: @integer;
+                    eventHandler:: 
+                      (# onSelect::
+                           (#
+                           do inx+10
+                                ->inx
+                                ->contents.theTextEditor.contents.selectLine
+                           #)
+                      #);
+                    open:: 
+                      (# do 'Goto 10*n'->name #)
+                 #);
+               open::
+                 (#
+                 do 'File'->name;
+                    openItem.open; openItem[]->append;
+                    saveItem.open; saveItem[]->append;
+                    quitItem.open; quitItem[]->append
+            #)#);
+          open:: 
+            (# do fileMenu.open; fileMenu[]->append #)
+       #); (* menubarType *)
+     contents: @dynpane
+       (# dobind:
+            (# 
+            do TRUE->bindTop->bindLeft->bindRight->bindBottom;
+               thetextEditor.dobind;
+               theLSTView.dobind;
+            #);
+          fileEditor: labelled
+            (# loading: @boolean;
+               contentsType::< textEditor
+                 (# path: ^text;
+                    textFile: @file;
+                    lineStarts: [1000]@integer;
+                    loadFile:
+                      (# theText: @StyledText;
+                         pos, lineInx: @integer;
+                      enter path[]
+                      do true->loading;
+                         path[]->textFile.name;
+                         textFile.openRead;
+                         1->pos->lineInx->lineStarts[1];
+                         textFile.scan
+                         (# while:: (# do true->value #);
+                         do pos+1->pos;
+                            ch->theText.put;
+                            (if ch=ascii.newLine then
+                                lineInx+1->lineInx;
+                                (if lineInx=lineStarts.range then
+                                    1000->lineStarts.extend if);
+                                pos->lineStarts[lineInx];
+                            if)
+                         #);
+                         lineInx+1->lineInx;
+                         (if lineInx=lineStarts.range then
+                             1000->lineStarts.extend if);
+                         pos->lineStarts[lineInx];
+                         theText[]->contents.contents;
+                         textFile.close;
+                         false->loading;
+                      #);
+                    saveFile:
+                      (#
+                      do true->loading;
+                         textFile.openWrite;
+                         contents.contents->textFile.puttext;
+                         textFile.close;
+                         false->loading;
+                      #);
+                    selectLine:
+                      (# lineInx: @integer
+                      enter lineInx
+                      do (lineStarts[lineInx]-1,lineStarts[lineInx+1]-1)
+                           ->contents.selection;
+                         contents.selection.scrollIntoView;
+                      #);
+                    locateLine:
+                      (# pos, lineInx: @integer
+                      enter pos
+                      do loop:
+                           (if lineStarts[lineInx+1->lineInx]<pos then
+                               restart loop
+                           if)
+                      exit lineInx-1
+                      #);
+                    dobind:
+                      (#
+                      do TRUE->bindTop->bindLeft->bindRight->bindBottom;
+                      #);
+                 #);
+               dobind:
+                 (# do installResizeRelativeAction #);
+               open::<
+                 (# w,h: @integer
+                 do INNER;
+                    this(parseEditor).size->(w,h); (w/2-2,h)->size;
+                    contents.dobind;
+                 #)
+            #);
+          theTextEditor: @fileEditor
+            (# open:: (# do 'BETA Text File'->label #) #);
+          theLSTView: @fileEditor
+            (# contentsType::
+                 (# contentsType::
+                      (# eventhandler::
+                           (# onBeforeChange:: (# do loading->allow #);
+                              onMouseDown::
+                                (# t: ^text; lineInx: @integer;
+                                do localPosition
+                                     ->ptToPos
+                                     ->locateLine
+                                     ->lineInx
+                                     ->selectLine;
+                                   selection.contents->t[]; t.reset;
+                                   l: (if t.get='#' then
+                                          t.getInt(# syntaxError:: (# do leave l #) #)
+                                            ->theTextEditor.contents.selectLine;
+                                      if)
+                                #)
+                           #)
+                      #);
+                 #);
+               open:: 
+                 (# do 'Parse Errors'->label #)
+            #);
+          open::
+            (#
+            do theTextEditor.open; theLSTView.open;
+               theTextEditor[]->appendMember; theLSTView[]->appendMember;
+               appendsDone; dobind
+            #)
+       #);
+     open::
+       (#
+       do 'Parse Errors Editor'->title;
+          (800,400)->size;
+          contents.open
+       #)
+  #)

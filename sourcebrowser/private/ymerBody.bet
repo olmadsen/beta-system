@@ -75,6 +75,99 @@ isProject:
   exit '.prj'->(f.entry.path.name.suffix).equal
   #);
 
+--- ymerMPSparseerrors: dopart ---
+do true->continue;
+   (&Window
+     (# menubarType::
+          (# fileMenu: @menu
+               (# textFile: @file;
+                  saveItem: @menuItem
+                    (# eventHandler::
+                         (# onSelect::
+                              (# theText: @Text; tempName: ^text;
+                              do textFile.name -> tempName[];
+                                 (if tempName.length>0 then
+                                     textFile.openWrite;
+                                     theTextEditor.contents.contents
+                                       ->textFile.puttext;
+                                     textFile.close
+                                 if)
+                         #)#);
+                       open:: 
+                         (# do 'Save' -> name #)
+                    #);
+                  quitItem: @menuItem
+                    (# eventHandler:: 
+                         (# onSelect:: (# do close #) #);
+                       open:: 
+                         (# do 'Quit' -> name #)
+                    #);
+                  open::
+                    (#
+                    do 'File' -> name;
+                       saveItem.open; saveItem[] -> append;
+                       quitItem.open; quitItem[] -> append
+               #)#);
+             open:: 
+               (# textFile: @file
+               do fileMenu.open; fileMenu[] -> append;
+                  ymerBrowser.browser.currentGroup.location[]-> textFile.name;
+                  textFile.openRead;
+                  textFile.scan
+                  (# while:: (# do true->value #);
+                  do ch -> theText.put
+                  #);
+                  theText[]
+                    ->theTextEditor.contents.contents;
+                  textFile.close
+               #)
+          #); (* menubarType *)
+        thetextEditor: @textEditor
+          (# open:: 
+               (# t: ^text
+               do ymerBrowser.browser.currentGroup.name -> title;
+                  theWindow.size -> size;
+                  true -> bindBottom -> bindRight
+               #)
+          #);
+        open::
+          (#
+          do ymerBrowser.browser.currentGroup.name -> title;
+             (400,400) -> size;
+             thetextEditor.open
+          #)
+     #)[]).open
+   
+--- ymerMPSbetaparserinit: descriptor ---
+(# bobsFile: @file;
+   grammarWithPath, help: ^text;
+do (if not BETACFL.parser.haveBeenInitialized then
+       '~beta/grammars/beta/v2.4/beta'->grammarWithPath[];
+       (if BETACFL.grammarAst[]
+        // none then
+           'No grammarAst for '->screen.putText;
+           grammarWithPath[]->screen.putLine;
+        else
+           '-parser'->help[];
+           mps.ast.parserFileExtension->help.append;
+           help[]->grammarWithPath.copyAppend->mps.ast.expandToFullPath 
+             ->bobsFile.name;
+           (if bobsFile.entry.exists then
+               bobsFile.name->BETACFL.parser.initialize;
+               ('objectdescriptor','descriptor')
+                 ->BETACFL.parser.privatePart.b.defineNonTAlias;
+               ('attributedecl','attributes')
+                 ->BETACFL.parser.privatePart.b.defineNonTAlias;
+               
+            else
+               'No parser available: '->screen.putText;
+               bobsFile.name->screen.putLine;
+               
+           if);
+       if);
+   if)
+#)
+
 --- ymerAddProject: dopart ---
 do &browser.projects.theProjects.element[]->newProj[];
    name.copy->newProj.name[];
@@ -642,7 +735,7 @@ do (*fileSelectionDialog(# do 'New group'->label[] #)->t[];
 do
 
 --- menuGroupsDeleteOnselect: dopart ---
-do ymerPrivate.workspace.panes.contents.addFragmentForm;
+do
    
 --- onCurrentFormChange: dopart ---
 do (if newForm[]<>NONE then
@@ -650,10 +743,10 @@ do (if newForm[]<>NONE then
        (# predicate::
             (#
             do (if none
-                // browser.currentProject[] then 'cP=none'->putline
-                // browser.currentGroup[] then 'cG=none'->putline
-                // current.theProject.location[] then 'cPl=none'->putline
-                // current.theGroup.location[] then 'cGl=none'->putline
+                // browser.currentProject[] then
+                // browser.currentGroup[] then
+                // current.theProject.location[] then
+                // current.theGroup.location[] then
                if);
                ((current.theProject.location[]->browser.currentProject.location.equalNCS)
                and (current.theGroup.location[]->browser.currentGroup.location.equalNCS)
@@ -742,7 +835,7 @@ do OS.init;
    workspaceType: ymerLocalWindow
      (# menubarType::
           (# addMenu: @menu
-               (# iAddForm: @menuItem
+               (# iAddCurrentForm: @menuItem
                     (# eventhandler::
                          (# onStatus::
                               (# t: ^text
@@ -757,14 +850,45 @@ do OS.init;
                               #);
                             onSelect::
                               (#
-                              do panes.contents.addFragmentForm->removeMenu.addItem
+                              do browser.currentForm[]
+                                   ->panes.contents.addFragmentForm
+                                   ->removeMenu.addItem
                               #);
+                         #)
+                    #);
+                  iAddCurrentGroup: @menuItem
+                    (# eventhandler::
+                         (# onStatus::
+                              (# t: ^text
+                              do (browser.currentGroup[]<>NONE)->value;
+                                 (if value then
+                                     browser.currentGroup.name.copy->t[];
+                                     '-**all**'->t.puttext;
+                                     t[]->name
+                                  else 'no group selected'->name
+                                 if)
+                              #);
+                            onSelect::
+                              (#            
+                              do (browser.currentGroup.getfg).fragmentList.scan
+                                 (#
+                                 do (if current.type
+                                     // mps.AST.formType then
+                                        (#
+                                        do current.open
+                                             ->panes.contents.addFragmentForm
+                                             ->removeMenu.addItem;
+                                        #);
+                                    if);
+                                 #)
+                              #)
                          #)
                     #);
                   open::
                     (#
                     do 'Add'->name;
-                       iAddForm.open; iAddForm[]->append;
+                       iAddCurrentForm.open; iAddCurrentForm[]->append;
+                       iAddCurrentGroup.open; iAddCurrentGroup[]->append;
                     #)
                #);
              removeMenu: @menu
@@ -806,7 +930,7 @@ do OS.init;
                          do (if not changing then
                                 size->(w,h);
                                 panes.size->(w1,h1);
-                                (w1-40,h)->size
+                                (w1-35,h)->size
                             if);
                          #);
                        installResizeRelativeAction:
@@ -816,20 +940,27 @@ do OS.init;
                          do installResizeRelativeAction;
                             contents.dobind
                          #);
+                       getfg:<
+                         (# fg: ^mps.AST.fragmentForm
+                         do INNER
+                         exit fg[]
+                         #);
                        contentsType:: codemoveableEditor
                          (# dobind:
                               (# do true->bindRight->bindBottom->bindLeft->bindTop #);
                             selectNode:: 
                               (# do node[]->browser.selectNode #);
                             open::
-                              (# t: ^text
-                              do this(fragmentFormView).contents[]
+                              (# t: ^text;
+                                 fg: ^mps.fragmentForm
+                              do getfg->fg[];
+                                 this(fragmentFormView).contents[]
                                    ->browser.onCodeViewOpen;
                                  (ffEncloser.getAST,ffEncloser.getBETACFL,
-                                 browser.currentForm[],NONE)
+                                 fg[],NONE)
                                    ->this(fragmentFormView).contents.newFragment;
                                  browser.currentGroup.name.copy->t[];
-                                 '-'->t.put;browser.currentForm.name->t.append;
+                                 '-'->t.put;fg.name->t.append;
                                  t[]->label
                               #); 
                             charWidthType::
@@ -854,11 +985,13 @@ do OS.init;
                          #)
                     #);
                   addFragmentForm:
-                    (# ffV: @fragmentFormView; w,h: @integer;
-                       lastmember: @boolean
-                    enter lastmember
+                    (# ffV: @fragmentFormView
+                         (# getfg:: (# do this(addFragmentForm).fg[]->fg[] #) #);
+                       w,h: @integer;
+                       fg: ^mps.AST.fragmentForm
+                    enter fg[]
                     do panes.size->(w,h);
-                       (this(contentsType)[], (w-40,150))->ffV.open;
+                       (this(contentsType)[], (w-35,150))->ffV.open;
                        
                        true->changing;
                        ffV[]-> this(contentsType).appendMember;
