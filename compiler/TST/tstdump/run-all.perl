@@ -92,7 +92,7 @@ foreach $f (@files) {
 	    }
 	    close IN;
 	    close OUT;
-	    if (system("diff -i $f.ref $f.err") == 0){
+	    if (system("diff -i output/$f.err $f.ref") == 0){
 		print "[stderr is correct]\n";
 		&rm("$f.err");
 	    } else {
