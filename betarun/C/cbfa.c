@@ -70,3 +70,26 @@ void freeCBF(cb)
   /* For now we just clear the entry */
   cb->theStruct = 0; /* theStruct will no longer constitute a root for GC */
 }
+
+/* makeCBF: 
+ * If the following external is declared in BETA:
+ *   makeCBF: External
+ *     (# pat: ##Object;
+ *        cb: @integer;
+ *     enter pat##
+ *     exit cb
+ *     #);
+ *   P: (# ... CExternalEntry; ... #);
+ *   ptr: @integer;
+ * then the call 
+ *   P## -> makeCBF -> ptr;
+ * will install a callback to P through ptr.
+ * ptr may then be handled to an external, that may call back.
+ * Later ptr may be freed using freeCBF.
+ */
+ref(CallBackEntry) makeCBF(pat)
+     ref(CallBackEntry) pat;
+{
+  return pat
+    /* All casts are done by the BETA compiler, which calls CopyCPP */;
+}
