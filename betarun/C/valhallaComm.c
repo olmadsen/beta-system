@@ -58,7 +58,7 @@ static int invops = 0;
 #define VOP_SCANSTACK          12
 #define VOP_OBJADRCANONIFY     13
 #define VOP_BETARUN            14
-#define VOP_DATASTART          15
+#define VOP_DATASTART_obsolete 15
 #define VOP_MEMALLOC           16
 #define VOP_MEMFREE            17
 #define VOP_EXECUTEOBJECT      18
@@ -663,15 +663,6 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
       valhalla_socket_flush ();
     }
     break;
-    case VOP_DATASTART: {
-      long code_start;
-      code_start = (long)((struct group_header*)BETA_DATA1_ADDR)->code_start;
-
-      valhalla_writeint (opcode);
-      valhalla_writeint (code_start);
-      valhalla_socket_flush ();
-    }
-    break;
     case VOP_MEMALLOC: {
       long numbytes, addr;
       numbytes = (long) valhalla_readint ();
@@ -699,6 +690,7 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
       Object *old_vop_curobj;
       long   *old_vop_sp;
       long   old_invops;
+      long   old_valhallaIsStepping;
 
       struc = (struct Structure *) valhalla_readint ();
       /* Debuggee is currently stopped in C code.
@@ -718,6 +710,8 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
       DEBUG_VALHALLA(fprintf(output, "Installed callback at 0x%08x\n", (int)cb));
 
       DEBUG_VALHALLA(fprintf(output, "Calling callback function\n"));
+      old_valhallaIsStepping = valhallaIsStepping;
+      valhallaIsStepping = FALSE;
       old_vop_sp = vop_sp;
       vop_sp=0;
       old_vop_curobj = vop_curobj;
@@ -725,6 +719,7 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
       old_invops = invops;
       invops = 0;
       cb();
+      valhallaIsStepping = old_valhallaIsStepping;
       vop_sp = old_vop_sp;
       vop_curobj = old_vop_curobj;
       invops = old_invops;
@@ -839,13 +834,12 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
 { 
   char *txt; int res;
   DEBUG_VALHALLA(fprintf(output,"debuggee: ValhallaOnProcessStop: PC=%d, SP=0x%x, curObj=%d,sig=%d,errorNumber=%d\n",(int) PC, (int) SP, (int) curObj, (int) sig, (int) errorNumber));
-
   if (invops) {
     fprintf (output,"FATAL: ValhallaOnProcessStop re-entered\n");
     DEBUG_CODE(fprintf(output,"Entering infinite loop...\n"); while(1));
     exit(99);
   } else {
-    invops=TRUE;
+    invops = TRUE;
   }
 
   vop_curobj = curObj;
@@ -858,7 +852,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
     valhalla_socket_flush ();
     doshutdown(sock,2);
     closeSocket(sock);
-    invops=FALSE;
+    invops=0;
     return TERMINATE;
   };
 
