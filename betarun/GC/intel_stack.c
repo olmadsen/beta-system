@@ -8,9 +8,38 @@
 
 #include "beta.h"
 
+#if 0
+/* comment in if you want tracing of dump for non-debug betarun */
+#ifndef RTDEBUG
+#undef TRACE_DUMP
+#undef DEBUG_VALHALLA
+#undef DEBUG_STACK
+#define PrintCodeAddress(x) {}
+#define TRACE_DUMP(code) { code; }
+#define DEBUG_VALHALLA(code) { code; }
+#define DEBUG_STACK(code) { code; }
+#endif /* !RTDEBUG */
+#endif /* 0 */
+
 #ifndef MT
 
 extern void (*StackRefAction)(REFERENCEACTIONARGSTYPE);
+extern int isException(long *PC);
+
+/* Layout of stack frame set up by HandleCB. See RUN/Callback.run */
+typedef struct {
+  long *next;
+  long *betaTop;
+  long tmp;
+  long EDI;
+  long ESI;
+  long EBP;
+  long EBX;
+  long EDX;
+  long ECX;
+  long *stub_return;
+  long *C_return;
+} HandleCBframe;
 
 /************************* Valhalla/persist reference stack ****************/
 #ifdef RTVALHALLA
@@ -77,9 +106,9 @@ int SkipDataRegs(long *theCell)
    * Returns number of longs to skip (exluding tag)
    */
   long tag = *theCell /* potential tag */;
-  DEBUG_CODE(Object *ref = (Object *)tag);
   if ((-(MAXDATAREGSONSTACK+4)<=tag) && (tag<=-4)){
     DEBUG_STACK({
+      Object *ref = (Object *)tag;
       long *ptr;
       long *end;
       end = theCell+(-tag-4);
@@ -139,26 +168,37 @@ void ProcessStackPart(long *low,
   Object * theObj;
   Object ** theCell;
   DEBUG_STACK({
+    int size = ((int)high - (int)low)/4 + 1;
     fprintf(output, 
-	    "\n----- AR: low: 0x%08x, high: 0x%08x\n", (int)low, (int)high);
-    fprintf(output, 
-	    "ComponentBlock/CallbackFrame: [0x%08x, 0x%08x, 0x%08x]\n", 
-	    (int)(*(high+1)), 
-	    (int)(*(high+2)), 
-	    (int)(*(high+3))
-	    );
+	    "\n----- AR: low: 0x%08x, high: 0x%08x (size: %d long%s)\n", 
+	    (int)low, 
+	    (int)high,
+	    size,
+	    (size!=1) ? "s" : "");
     });
   Claim( high <= (long *)StackStart, "ProcessStackPart: high<=StackStart" );
   
   while( current <= high ){
+    DEBUG_STACK({
+      fprintf(output, 
+	      "SP[%d] 0x%08x: 0x%08x", 
+	      (int)current-(int)StackStart, 
+	      (int)current, 
+	      *(int*)current);
+    });
     if(inBetaHeap((Object *)*current)){
       theCell = (Object **) current;
       theObj  = *theCell;
       if (isObject(theObj)) {
 	if (whenObject) {
+	  DEBUG_STACK({
+	    PrintRef(theObj);
+	    fprintf(output, "\n");
+	  });
 	  whenObject(theCell, theObj);
 	}
       } else {
+	DEBUG_STACK(fprintf(output, "\n"));
 	DEBUG_CODE({
 	  if (!isValRep(theObj)){
 	    fprintf(output, "*** SUSPICIOUS REFERENCE ON STACK:\n  0x%08x: 0x%08x", 
@@ -180,37 +220,42 @@ void ProcessStackPart(long *low,
 	current += skip;
       } else {
 	if (whenNotObject){
+	  DEBUG_STACK(fprintf(output, "\n"));
 	  whenNotObject((Object**)current, *(Object**)current);
 	} else {
 	  /* Default action on non-object cells on stack */
 	  DEBUG_STACK({
-	    fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
 	    if (*current) {
 	      if (IsPrototypeOfProcess(*current)) {
 		fprintf(output, ", is proto  (");
 		PrintProto((ProtoType*)*current);
-		fprintf(output, ")\n");
 	      } else {
 		fprintf(output, " ");
 		PrintCodeAddress(*current);
-		fprintf(output, "\n");
 	      }
-	    } else {
-	      fprintf(output, "\n");
 	    }
+	    fprintf(output, "\n");
 	  });
 	}
       }
     }
     current++;
   }
+  DEBUG_STACK({
+    fprintf(output, 
+	    "----- AR DONE: low: 0x%08x, high: 0x%08x\n", 
+	    (int)low,
+	    (int)high);
+  });
 }
 
 static 
 long *ProcessCallbackFrames(CallBackFrame *cbFrame, long *low)
 {
   while (cbFrame){
-    ProcessStackPart(low, (long *)cbFrame-1, DoStackCell, 0);
+    if ((long*)low<=(long *)cbFrame-1){
+      ProcessStackPart(low, (long *)cbFrame-1, DoStackCell, 0);
+    }
     low     = cbFrame->betaTop;
     cbFrame = cbFrame->next;
   }
@@ -231,7 +276,9 @@ GeneralProcessStack(CellProcessFunc func)
      * First handle the topmost component block
      */
     if (cbFrame){ low = ProcessCallbackFrames(cbFrame, low); }
-    ProcessStackPart(low, high-1, func,0);  
+    if (low<=high-1){
+      ProcessStackPart(low, high-1, func,0);
+    }  
     
     /*
      * Then handle the remaining component blocks.
@@ -241,7 +288,9 @@ GeneralProcessStack(CellProcessFunc func)
 	high     = (long *) currentBlock->next;
 	cbFrame  = currentBlock->callBackFrame;
 	if (cbFrame){ low = ProcessCallbackFrames(cbFrame, low); }
-	ProcessStackPart(low, high-1, func,0);  
+	if (low<=high-1){
+	  ProcessStackPart(low, high-1, func, 0);  
+	};
 	currentBlock = currentBlock->next;
     }
     DEBUG_STACK(fprintf(output, " *****  End of trace  *****\n"));
@@ -352,7 +401,7 @@ static void objectMet(Object **theCell, Object *theObj)
       prevObj = (Object*)EnclosingComponent(prevObj);
       TRACE_DUMP({
 	fprintf(output, 
-		" is item of component 0x%x\n", 
+		" is item of component 0x%x", 
 		(int)prevObj);
       });
     }
@@ -398,7 +447,9 @@ void DisplayStackPart(long *low,
     TRACE_DUMP(fprintf(output, " is item of component 0x%x\n", (int)prevObj));
   }  
   displayFunc = func;
-  ProcessStackPart(low, high, objectMet, nonObjectMet);
+  if (low<=high){
+    ProcessStackPart(low, high, objectMet, nonObjectMet);
+  }
   TRACE_DUMP(fprintf(output, ">>>TraceDump: StackPart done.\n"));
 }
 
@@ -409,40 +460,71 @@ long *DisplayCallbackFrames(CallBackFrame *cbFrame,
 {
   TRACE_DUMP({
     fprintf(output, 
-	    ">>>DisplayCallbackFrames: cbFrame: 0x%x, low: 0x%x\n", 
+	    ">>>DisplayCallbackFrames(cbFrame=0x%x, low=0x%x)\n", 
 	    (int)cbFrame,
 	    (int)low);
   });
   while (cbFrame) {
+    int is_exception = isException(((HandleCBframe *)cbFrame)->C_return);
+    
+    /* Display BETA stuff from low up to before the cbFrame */
     DisplayStackPart(low, (long *)cbFrame-2, currentObject, func);
-    /* -2 because 2 longs are not shown:
-     *    1. The last of the three pushed words in the callback frame
-     *    2. The address of the call back stub.
+    /* -2 because:
+     *    1. cbFrame points to the first field of the CallBackFrame (next).
+     *    2. cbFrame-1 contains the return address of HandleCB.
      */
-    TRACE_DUMP(fprintf(output, "  cb: "));
+    TRACE_DUMP({
+      if (!is_exception){
+	long *cpc = ((HandleCBframe *)cbFrame)->C_return;
+	fprintf(output, ">>>Frame for callback from 0x%08x", (int)cpc);
+	PrintCodeAddress((int)cpc);
+	fprintf(output, "\n");
+	fprintf(output, 
+		"CallbackFrame: [next=0x%08x, top=0x%08x, tmp=0x%08x]\n", 
+		(int)cbFrame->next, 
+		(int)cbFrame->betaTop, 
+		(int)cbFrame->tmp);
+      } else {
+	int cpc = ((int*)cbFrame)[-1];
+      	fprintf(output, 
+		">>>Frame for callback from system exception handler 0x%08x", 
+		(int)cpc);
+      }
+    });
     if (isMakingDump){
       /* beta.dump */
       fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n"); 
     } else {
       /* valhalla/system exceptions */
+      TRACE_DUMP(fprintf(output, 
+			 ">>>DisplayCallbackFrames: passing callback: "
+			 "low: 0x%08x -> 0x%08x\n",
+			 (int)low,
+			 (int)cbFrame->betaTop));
     }
     low = cbFrame->betaTop;
-    if (isMakingDump) {
+    if (!is_exception) {
+      /* It is a real callback */
       low += 3;
       /* low+3 because the compiler pushes %edx, %edi, %ebp, %esi
        * before setting BetaStackTop.
        * Of these we only want to see %edx (current object).
        */
-    } else {
       TRACE_DUMP(fprintf(output, 
-			 ">>>DisplayCallbackFrames: not skipping 3 words before callback\n"));
+			 ">>>DisplayCallbackFrames: skipping 3 words "
+			 "before callback\n"));
+    } else {
+      /* It is a fake callback - not through HandleCB */
+      TRACE_DUMP(fprintf(output, 
+			 ">>>DisplayCallbackFrames: not skipping 3 words "
+			 "before system exception/evaluator\n"));
     }
     cbFrame = cbFrame->next;
-    if (isObject((Object *)(*low))) {
+    if ((*low) && isObject((Object *)(*low))) {
       Object *obj = (Object*)(*low);
       TRACE_DUMP({
 	fprintf(output, 
-		">>>DisplayCallbackFrames: low: 0x%x: 0x%x ", (int)low, (int)obj);
+		">>>DisplayCallbackFrames: 0x%x[low]: 0x%x ", (int)low, (int)obj);
 	DescribeObject(obj);
 	fprintf(output, "\n"); 
       });
@@ -527,11 +609,18 @@ void DisplayINTELStack(BetaErr errorNumber,
      */
     /* pc = *(BetaStackTop-1); */
 
-    /* Adjust low to low+3 because the compiler pushes %edx, %edi, %ebp, %esi
-     * before setting BetaStackTop.
-     * Of these we only want to see %edx (current object).
-     */
-    low += 3;
+    if (isMakingDump /*is_callback*/) {
+      low += 3;
+      /* low+3 because the compiler pushes %edx, %edi, %ebp, %esi
+       * before setting BetaStackTop.
+       * Of these we only want to see %edx (current object).
+       */
+      TRACE_DUMP(fprintf(output, 
+			 ">>>DisplayINTELStack: skipping 3 words before callback\n"));
+    } else {
+      TRACE_DUMP(fprintf(output, 
+			 ">>>DisplayINTELStack: not skipping 3 words before system exception/evaluator\n"));
+    }
 
     /* Since a new prevObj will be met by DisplayStackPart before 
      * any other PC corresponding to currentObject, the current object that
@@ -616,6 +705,10 @@ static CellDisplayFunc DoForEach;
 
 static void ShowCell(long pc, Object *theObj)
 {
+  if (!compfound){
+    DEBUG_STACK(fprintf(output, "ShowCell: component not yet found: Ignoring (pc=0x%08x, obj=0x%08x)\n", (int)pc, (int)theObj));
+    return;
+  }
   if (!theObj) return;
   if (!strongIsObject(theObj)) {
     TRACE_DUMP({
@@ -625,7 +718,8 @@ static void ShowCell(long pc, Object *theObj)
     });
     return;
   }
-  if (compfound) DoForEach(pc, theObj);
+  DoForEach(pc, theObj);
+  
 }
 
 int scanComponentStack (Component* comp,
@@ -640,7 +734,7 @@ int scanComponentStack (Component* comp,
   int stacktype;
   
   DEBUG_VALHALLA(fprintf(output, 
-			 "scanComponentStack(comp=0x%x, obj=0x%x, PC=0x%x)\n",
+			 "***scanComponentStack(comp=0x%x, obj=0x%x, PC=0x%x)\n",
 			 (int)comp, (int)curObj, pc));
 
   compfound = 0;
@@ -662,7 +756,7 @@ int scanComponentStack (Component* comp,
   }
 
   if (comp==ActiveComponent) {
-    DEBUG_VALHALLA(fprintf(output, "scanComponentStack: scanning ActiveComponent\n"));
+    DEBUG_VALHALLA(fprintf(output, "scanComponentStack: showing ActiveComponent\n"));
     compfound = TRUE;
     stacktype = CS_ACTIVECOMPONENT;
     DEBUG_VALHALLA(fprintf(output, "Pair: PC=0x%x, obj=0x%x\n", (int)pc, (int)curObj));
@@ -675,7 +769,7 @@ int scanComponentStack (Component* comp,
 
   DEBUG_VALHALLA(fprintf(output, "scanComponentStack: scanning machinestack\n"));
   /* Scan through the machine stack. This is an adaption of
-   * DisplayBetaStack from outpattern.c - see comments in the code
+   * DisplayINTELStack from above - see comments in the code
    * there, especially for the small constants added or subtracted
    * from the stack positions.
    * See also doc/RunDoc.txt for a figure of the stack layout.
@@ -711,22 +805,29 @@ int scanComponentStack (Component* comp,
 	low = BetaStackTop;
 	TRACE_DUMP({
 	  fprintf(output, 
-		  ">>>DisplayINTELStack: adjusting low to BetaStackTop: 0x%x\n",
+		  ">>>scanComponentStack: adjusting low to BetaStackTop: 0x%x\n",
 		  (int)BetaStackTop);
 	});
       }
-      low += 3;
-      /* low+3 because the compiler pushes %edx, %edi, %ebp, %esi
-       * before setting BetaStackTop.
-       * Of these we only want to see %edx (current object).
-       */
+      if (isMakingDump /* is_callback */) {
+	low += 3;
+	/* low+3 because the compiler pushes %edx, %edi, %ebp, %esi
+	 * before setting BetaStackTop.
+	 * Of these we only want to see %edx (current object).
+	 */
+	TRACE_DUMP(fprintf(output, 
+			   ">>>scanComponentStack: skipping 3 words before callback\n"));
+      } else {
+	TRACE_DUMP(fprintf(output, 
+			   ">>>scanComponentStack: not skipping 3 words before system exception/evaluator\n"));
+      }
 
       /* Since a new lastObj will be met by DisplayStackPart before 
        * any other PC corresponding to currentObject, the current object that
        * called C will not be displayed by DisplayStackPart.
        * So we display it here.
        */
-      forEach(0 /*pc*/, currentObject);
+      ShowCell(0 /*pc*/, currentObject);
     }
     
     if (cbFrame){
@@ -796,7 +897,9 @@ void PrintStackCell(Object **theCell, Object *theObj)
  */
 void PrintStackPart(long *low, long *high)
 {
-  ProcessStackPart(low, high, PrintStackCell,0);
+  if (low<=high){
+    ProcessStackPart(low, high, PrintStackCell,0);
+  }
 }
 
 /* PrintStack: (intel)

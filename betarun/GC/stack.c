@@ -223,7 +223,7 @@ Object *find_activation(ProtoType *proto, Object *startObj)
   
   TRACE_FINDACTIVATION({
     fprintf(output, 
-	    "find_activation(proto=0x%x, startObj=0x%x)\n ", 
+	    "***find_activation(proto=0x%x, startObj=0x%x)\n", 
 	    (int)proto, 
 	    (int)startObj); 
     PrintProto(proto);
@@ -247,6 +247,15 @@ Object *find_activation(ProtoType *proto, Object *startObj)
   activation_start = startObj;
   activation_start_found = 0;
   while (!activation_object && comp){
+    TRACE_FINDACTIVATION({
+      fprintf(output, 
+	      "--------------------------\n"
+	      "find_activation(0x%x, 0x%x): "
+	      "calling scanComponentStack(comp=0x%x)\n", 
+	      (int)proto, 
+	      (int)startObj,
+	      (int)comp); 
+    });
     scanComponentStack (comp, 0, 0, find_foreach);
     comp = comp->CallerComp;
   }

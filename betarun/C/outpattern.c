@@ -12,9 +12,11 @@
 
 #if 0
 /* comment in if you want tracing of dump for non-debug betarun */
+#ifndef RTDEBUG
 #undef TRACE_DUMP
 #define PrintCodeAddress(x) {}
 #define TRACE_DUMP(code) { code; }
+#endif /* !RTDEBUG */
 #endif /* 0 */
 
 #ifdef RTVALHALLA
@@ -27,6 +29,7 @@ GLOBAL(static int basic_dumped)=0;
 
 /******************************* System Exceptions *******************/
 
+static int call_systemexceptionhandler(BetaErr, Object *, long *); 
 typedef int (*SYSTEMEXCEPTIONHANDLER)(BetaErr, Object *, long *, long *);
 SYSTEMEXCEPTIONHANDLER systemexceptionhandler = NULL;
 
@@ -1074,8 +1077,8 @@ int DisplayBetaStack(BetaErr errorNumber,
        */
       set_BetaStackTop(StackEnd);
       isMakingDump = 0; /* In case the user leaves the handler */
-      isHandlingException = 1;
-      skip_dump = systemexceptionhandler(errorNumber, theObj, thePC, StackEnd);
+      isHandlingException++;
+      skip_dump = call_systemexceptionhandler(errorNumber, theObj, thePC);
       isMakingDump = old_isMakingDump;
       isHandlingException = old_isHandlingException;
       /* FIXME: Restore registers */
@@ -1173,6 +1176,27 @@ int DisplayBetaStack(BetaErr errorNumber,
   return 0;
 } /* DisplayBetaStack */
 
+/* call_systemexceptionhandler:
+ *   Made a separate function to allow easy test of caller in isException.
+ *   Placed here, to avoid inlining above.
+ */
+static int call_systemexceptionhandler(BetaErr errorNumber, 
+				       Object *theObj, 
+				       long *thePC)
+{
+  return systemexceptionhandler(errorNumber, theObj, thePC, StackEnd);
+}
+/* isException:
+ * Return true, if PC is address inside call_systemexceptionhandler().
+ * Here we assume code layout is as C source file.
+ */
+int isException(long *PC)
+{
+  return 
+    ((long*)&call_systemexceptionhandler<=PC) &&
+    (PC<(long*)&isException);
+}
+    
 static int errorDuringDumpDisplayed = 0;
 void NotifyErrorDuringDump(BetaErr errorNumber, BetaErr errorNumber2)
 {
