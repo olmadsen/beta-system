@@ -229,7 +229,7 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 	  /* Ok, so this is a genuine refNone or proxy reference. */
 	  ip = getRegisterContents(sourcereg, ucon, returnSP);
 	  
-	  if ((ip >= (void *)PIT) || (ip <= (void *)PITLimit)) {
+	  if ((ip >= (void *)PIT) && (ip <= (void *)PITLimit)) {
 	    /* Calculate absolute address by looking in appropriate tables */
 	    
 	    /* 'unswizzleReference' *might* call back into beta code to
@@ -324,7 +324,7 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
   }
   /* If we get here, it was an ordinary SIGBUS, SIGSEGV or object
      could not be loaded */
-  BetaSignalHandler (sig, info, ucon);
+  BetaSignalHandler(sig, info, ucon);
 }
 
 /******************************* SPARC end ******************************/
