@@ -239,14 +239,6 @@
   (set-variable 'tags-file-name nil)
 
   (let ((case-replace t))
-    (message "Fixing quotes")
-    (tags-query-replace "&oacute;" "'" nil)))
-
-(defun miadoc-replace23 ()
-  (interactive)
-  (set-variable 'tags-file-name nil)
-
-  (let ((case-replace t))
     (message "Removing REL LINKs")
     (tags-query-replace "<LINK REL=[A-Z]+ HREF=[^>]+.html>" "" nil)))
 
@@ -340,3 +332,53 @@
     (tags-query-replace "<P> <IMG ALIGN=TOP SRC=xwindows-[0-9]+-image-[0-9]+.gif></P>" "<BLOCKQUOTE><IMG ALIGN=TOP SRC=images//.gif></BLOCKQUOTE>" nil)))
 
 
+(defun miadoc-replace32 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Fixing quotes")
+    (tags-query-replace "&ocirc;" "'" nil)))
+
+
+(defun miadoc-replace33 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Fixing quotes")
+    (tags-query-replace "&oacute;" "'" nil)))
+
+(defun miadoc-replace34 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Fixing dash")
+    (tags-query-replace "&Ntilde;" " - " nil)))
+
+
+(defun miadoc-replace35 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Fixing footer")
+    (tags-query-replace "<TD width=\"33%\" align=\"left\">\\s-*<ADDRESS>\\(.*\\)</ADDRESS>\\s-*</TD>\\s-*<TD width=\"34%\" align=\"center\"><FONT size=-1>&COPY; <A HREF=\"http://www.mjolner.com\">Mj&oslash;lner Informatics</A></FONT></TD>\\s-*<TD width=\"33%\" align=\"right\"><FONT size=-1><SCRIPT LANGUAGE=JavaScript SRC=\"../javascript/lastmod.js\"></SCRIPT></FONT></TD>" 
+"<TD width=\"40%\" align=\"left\">
+<ADDRESS>\\1</ADDRESS>
+</TD>
+<TD width=\"20%\" align=\"center\"><FONT size=-1>&COPY; <A HREF=\"http://www.mjolner.com\">Mj&oslash;lner Informatics</A></FONT></TD>
+<TD width=\"40%\" align=\"right\"><SCRIPT LANGUAGE=JavaScript SRC=\"../javascript/lastmod.js\"></SCRIPT></TD>" nil)))
+
+(defun miadoc-replace36 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Fixing footer")
+    (tags-query-replace "<TD width=\"33%\" align=\"left\">\\s-*<ADDRESS>\\(.*\\)</ADDRESS>\\s-*</TD>\\s-*<TD width=\"34%\" align=\"center\">&nbsp;?</TD>\\s-*<TD width=\"33%\" align=\"right\"><FONT size=-1><SCRIPT LANGUAGE=JavaScript SRC=\"../javascript/lastmod.js\"></SCRIPT></FONT></TD>" 
+"<TD width=\"50%\" align=\"left\">
+<ADDRESS>\\1</ADDRESS>
+</TD>
+<TD width=\"50%\" align=\"right\"><SCRIPT LANGUAGE=JavaScript SRC=\"../javascript/lastmod.js\"></SCRIPT></TD>" nil)))
