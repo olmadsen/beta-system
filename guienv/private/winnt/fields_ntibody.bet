@@ -84,6 +84,7 @@ do inner onFrameChanged;
    performEdit: @boolean;
    info: ^messageInfo;
 do (if not (VK_CONTROL -> isVKeyDown) then
+       inner onKeyDown;
        currentMessageInfo -> info[];
        FALSE -> info.callback;
        selection -> (start,end);
@@ -115,7 +116,7 @@ do (if not (VK_CONTROL -> isVKeyDown) then
            if);
        if);
        none -> this(guienv).private.textfieldChangeText[];
-       inner onKeyDown;
+
    if);
 #)
 
@@ -127,7 +128,9 @@ do (* this(textField)[] -> target; *)
 
 -- GUIENVtextFieldonMouseUp: descriptor --
 (#
-do inner onMouseUp;
+do (if private.notification then (* 060396 /les *)
+       inner onMouseUp; 
+   if);
 #)
 
 -- GUIENVtextFieldonRefresh: descriptor --
@@ -463,8 +466,13 @@ do interfaceObjectID -> id;
 #)
 
 -- GUIENVtextFieldSetDefaultStyle: descriptor --
-(#
-do style[] -> textFieldDefaultStyle;
+(# windowID: @integer;
+do (if style[]<>NONE then
+       style.create;
+       style[] -> textFieldDefaultStyle;
+       interfaceObjectID -> windowID;
+       (windowID,WM_SETFONT,style.textStyleID,1) -> SendMessage;
+   if);
 #)
 
 -- GUIENVtextFieldGetDefaultStyle: descriptor --
@@ -541,25 +549,54 @@ do (interfaceObjectID,WM_CLEAR, 0, 0) -> sendMessage;
 #)
 
 -- GUIENVtextFieldCreate: descriptor --
-(# 
-do isSubClass -> windowItemClassStatus;
-   'EDIT' -> windowItemClass;
-   (if private.useScrollbars then
-       ES_MULTILINE + ES_LEFT + ES_AUTOHSCROLL + ES_AUTOVSCROLL
-       + WS_HSCROLL + WS_VSCROLL
-         -> windowItemStyle;
+(# libOk: @integer;
+   wStyle: @integer;
+   LoadLibraryA: external
+     (#
+        in0: [1] @char; (* LPCSTR *)
+        out: @integer; (* HINSTANCE *)
+     enter in0
+     do callStd;
+     exit out
+     #);
+   ES_DISABLENOSCROLL: (# exit 16x00002000 #); (* 110396 /les *)
+do 'RICHED32.DLL' -> LoadLibraryA -> libOk;
+   (if libOk=0 then
+       'RICHED32.DLL -> LoadLibraryA failed. Error= ' -> screen.putText;
+       GetLastError -> screen.putint; screen.newline;
     else
-       ES_MULTILINE + ES_LEFT + ES_AUTOHSCROLL + ES_AUTOVSCROLL
-         -> windowItemStyle;
+       &textFieldNotiMethods[] -> theNotiMethods; (* 060396 /les *)
+       isSubClass -> windowItemClassStatus;
+       'RichEdit' -> windowItemClass;
+       (if private.useScrollbars then
+           (ES_MULTILINE,ES_LEFT) -> tos'%or' -> wStyle;
+           (ES_AUTOHSCROLL,wStyle) -> tos'%or' -> wStyle;
+           (ES_AUTOVSCROLL,wStyle) -> tos'%or' -> wStyle;
+           (WS_HSCROLL,wStyle) -> tos'%or' -> wStyle;
+           (WS_VSCROLL,wStyle) -> tos'%or' -> wStyle;
+           (ES_DISABLENOSCROLL,wStyle) -> tos'%or' -> wStyle; (* 110396 /les *)
+           wStyle  -> windowItemStyle;
+        else
+           (ES_MULTILINE,ES_LEFT) -> tos'%or' -> wStyle;
+           (ES_AUTOHSCROLL,wStyle) -> tos'%or' -> wStyle;
+           (ES_AUTOVSCROLL,wStyle) -> tos'%or' -> wStyle;
+           wStyle  -> windowItemStyle;
+       if);
+       &textfieldMethods[] -> theMethods;
+       inner create;
    if);
-   &textfieldMethods[] -> theMethods;
-   inner create;
 #)
 
 -- GUIENVtextFieldOpen: descriptor --
 (# hdc: @integer; tmPtr: @integer; result: @integer; errorcode: @integer;
    style: ^textStyle; t: ^text;
    windowID: @integer;
+   
+   (* 060396 /les *)
+   ENM_MOUSEEVENTS: (# exit 16x00020000 #);
+   EM_SETEVENTMASK: (# exit  (WM_USER + 69) #);
+   theMask: @integer;
+   
 do interfaceObjectID -> windowID;
    defaultTextFieldTextStyle -> style[];
    (if style[]=NONE then      
@@ -599,7 +636,16 @@ do interfaceObjectID -> windowID;
    
    inner open;
    
-   setTextFieldMargins;
+   (* setTextFieldMargins; *)
+   
+   (* 060396 /les *)
+   (windowID,EM_SETEVENTMASK,0,ENM_MOUSEEVENTS) -> SendMessage -> theMask;
+   (theMask,ENM_MOUSEEVENTS) -> tos'%or' -> theMask;
+   (windowID,EM_SETEVENTMASK,0,theMask) -> SendMessage -> theMask;
+   
+   (* 110396 /les *)
+   true -> private.firstFocus;
+   private.theActivateAction[] -> AppendAction;
 #)
 
 -- GUIENVtextFieldClose: descriptor --
@@ -611,6 +657,7 @@ do inner close;
            theTextSTyle.dispose;
        if);
    if);
+   private.theActivateAction[] -> deleteAction; (* 110396 /les *)
 #)
 
 -- textFieldLib: attributes --
@@ -627,7 +674,7 @@ setTextFieldMargins:
      
      (if border.visible then
          (if border.style=borderStyles.simple then
-             (private.leftMargin + 1,private.topMargin + 1,
+             (private.leftMargin + 1,private.topMargin + 2,
              width-1,height-1,interfaceObjectID) -> setEditRect; 
           else
              (private.leftMargin + 2,private.topMargin + 2,
@@ -769,6 +816,88 @@ charHeight:
   exit private.cyChar
   #);  
 
+(* 060396 /les *)
+EN_MSGFILTER: (# exit 16x0700 #);
+
+textFieldNotiMethods: windowItemNotificationMethods
+  (# handleNotification::
+       (# processNotify:
+            (# code1: @integer;
+               message: @integer;
+               newWparam: @integer;
+               newLparam: @integer;
+               longInt: @CStruct
+                 (#	ByteSize:: (# do 4 -> Value; #);
+                    loWord: signedShort (# Pos:: (# do 0 -> Value; #); #);
+                    hiWord: signedShort (# Pos:: (# do 2 -> Value; #); #);
+                 enter R[1]
+                 exit R[1]
+                 #);
+               
+               oldInfo: ^messageInfo;
+               
+            do false -> didSomething;
+               info.lParam+8 -> TOS'%adrGetLong' -> code1;
+               (if code1
+                //EN_MSGFILTER then
+                   info.lParam+12 -> TOS'%adrGetLong' -> message;
+                   (if message
+                    //WM_LBUTTONUP  then
+                       true -> private.notification;
+                       
+                       
+                       
+                       &messageInfo[] -> oldInfo[];
+                       info.wParam -> oldInfo.wParam;
+                       info.lParam -> oldInfo.lParam;
+                       info.message -> oldInfo.message;
+                       info.where -> oldInfo.where;
+                       info.time -> oldInfo.time;
+                       
+                       info.lParam+16 -> TOS'%adrGetLong' -> newWparam;
+                       info.lParam+20 -> TOS'%adrGetLong' -> newLparam;
+                       newWparam -> longInt;
+                       longInt.hiWord -> info.wParam.hiWord;
+                       longInt.loWord -> info.wParam.loWord;
+                       newWparam -> info.wParam;
+                       newLparam -> longInt;
+                       longInt.hiWord -> info.lParam.hiWord;
+                       longInt.loWord -> info.lParam.loWord;
+                       newLparam -> info.lParam;
+                       message -> info.message;
+                       GetMessagePos -> longInt;
+                       (longInt.loWord,longInt.hiWord) -> info.where;
+                       getMessageTime -> info.time;
+                       1 -> info.button;
+                       
+                       FALSE -> info.callback;
+                       
+                       
+                       theEventHandler.onMouseUp;
+                       
+                       oldInfo.wParam -> info.wParam;
+                       oldInfo.lParam -> info.lParam;
+                       oldInfo.message -> info.message;
+                       oldInfo.where -> info.where;
+                       oldInfo.time -> info.time;
+                       false -> private.notification;
+                       
+                       true -> didSomething;
+                       (* 1 -> info.result; *)
+                   if);
+               if);
+            #);
+          
+          didSomething: @boolean;
+       do (if info.message=WM_NOTIFY then processNotify;
+           else
+              false -> didSomething;
+          if);
+          didSomething or info.handled -> info.handled;
+       #);
+  #);
+(* 060396 /les end *)
+
 textFieldMethods: windowItemMethods
   (# vertical: (# exit 0 #);
      horizontal: (# exit 1 #);
@@ -867,9 +996,6 @@ textFieldMethods: windowItemMethods
                   none -> this(guienv).private.textfieldChangeText[];
               if);
            //WM_CLEAR then
-              
-              'Got a wm_clear' -> putline;
-              
               FALSE -> info.callback;
               selection -> (start,end);
               end - start -> length;
@@ -891,7 +1017,17 @@ textFieldMethods: windowItemMethods
 
 
 -- GUIENVtextFieldPrivate: descriptor --
-(# longInt: cstruct
+(# (* 110396 /les *)
+   theActivateAction: @activateAction
+     (# 
+     do (if private.firstFocus then
+            false -> private.firstFocus;
+            setTextFieldMargins;
+        if);
+     #);
+   firstFocus: @boolean;
+   
+   longInt: cstruct
      (# byteSize:: (# do 4 -> value; #);
         loWord: short(# pos:: (# do 0 -> value; #); #);
         hiWord: short(# pos:: (# do 2 -> value; #); #);
@@ -904,6 +1040,7 @@ textFieldMethods: windowItemMethods
    textFieldScroller: ^textEditor;
    horizontalOffset: @integer;
    useScrollbars: @boolean;
+   notification: @boolean; (* 060396 /les *)
    
    translateToLocal:
      (# oldPos, newPos: @integer;

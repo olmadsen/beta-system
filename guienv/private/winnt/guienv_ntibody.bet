@@ -60,7 +60,9 @@ do GetLastError -> error;
      #);
 do windowHandle -> private.interfaceObjects.findByID -> theInterfaceObject[];
    (if message
+    //WM_SYSCOLORCHANGE
     //WM_COMMAND 
+    //WM_NOTIFY
     //WM_LBUTTONDOWN 
     //WM_MBUTTONDOWN 
     //WM_RBUTTONDOWN 
@@ -96,14 +98,24 @@ do windowHandle -> private.interfaceObjects.findByID -> theInterfaceObject[];
        true -> doProcess;
        (if message=WM_MOUSEMOVE then 
            false -> doProcess;
-           (if private.currentMouseCursor[]=NONE then
-               (if theInterfaceObject[]=none then
+           (if theInterfaceObject[]=NONE then
+               (windowHandle,message,wParam,lParam) 
+                 -> DefWindowProc -> result;
+            else
+               (if theInterfaceObject.interfaceObjectWindProc=0 then
+                   (windowHandle,message,wParam,lParam) 
+                     -> DefWindowProc -> result;
                 else
-                   (if (theInterfaceObject.interfaceObjectID -> isWindow)<>0 then
-                       (if theInterfaceObject.interfaceObjectCursorHandle<>0 then
-                           theInterfaceObject.interfaceObjectCursorHandle
-                             -> SetCursor;
-                       if);
+                   (theInterfaceObject.interfaceObjectWindProc,
+                   windowHandle,message,wParam,lParam) 
+                     -> CallWindowProc -> result;
+               if);
+           if);
+           (if private.currentMouseCursor[]=NONE then
+               (if (theInterfaceObject.interfaceObjectID -> isWindow)<>0 then
+                   (if theInterfaceObject.interfaceObjectCursorHandle<>0 then
+                       theInterfaceObject.interfaceObjectCursorHandle
+                         -> SetCursor;
                    if);
                if);
             else
@@ -290,7 +302,7 @@ do VK_MENU -> isVKeyDown -> value;
 
 -- GUIENVbasicEventMetaKey: descriptor --
 (#
-do 'GUIENVbasicEventMetaKey: Not implemented !!!' -> screen.putline;
+do 
 #)
 
 -- GUIENVbasicEventControlKey: descriptor --
@@ -338,6 +350,12 @@ do doubleClickPossible -> value;
 (# info: ^messageInfo;
 do currentMessageInfo -> info[];
    info.wParam -> theChar;
+   (if theChar
+    //VK_LEFT   then ASCII.fs -> theChar;
+    //VK_UP     then ASCII.rs -> theChar;
+    //VK_RIGHT  then ASCII.gs -> theChar;
+    //VK_DOWN   then ASCII.us -> theChar;
+   if);
 #)
 
 -- GUIENVmouseDownDelay: descriptor --
@@ -2009,6 +2027,27 @@ do (# thisCanvas: ^canvas;
             if);
         if);
      #);
+   processNotify:
+     (# theFather: ^canvas;
+        hwndFrom: @integer;
+        idCtrl: @integer;
+        code1: @integer;
+     do (if this(windowItem)## <= canvas## then
+            this(windowItem)[] -> theFather[];
+            
+            info.lParam -> TOS'%adrGetLong' -> hwndFrom;
+            info.lParam+4 -> TOS'%adrGetLong' -> idCtrl;
+            info.lParam+8 -> TOS'%adrGetLong' -> code1;
+            
+            L: theFather.private.children.scan
+              (# 
+              do (if hwndFrom=current.interfaceObjectID then
+                     current.handleNotification;
+                     leave L;
+                 if);
+              #);
+        if);
+     #);
    processMenuSelect:
     (# id: @integer;
        handled: @boolean;
@@ -2042,6 +2081,7 @@ do true -> didSomething;
    
    (if info.message
     //WM_COMMAND then processCommand;
+    //WM_NOTIFY then processNotify;
     //WM_LBUTTONDOWN then 1 -> info.button; processMouseDown;
     //WM_MBUTTONDOWN then 2 -> info.button; processMouseDown;
     //WM_RBUTTONDOWN then 3 -> info.button; processMouseDown;
@@ -2872,44 +2912,52 @@ useTextStyle:
      infoPtr -> free;
   #);
 -- GUIENVtextStyleCreate: doPart --
-do (if textStyleID=0 then
-        textStyleSize -> height;
-        0 -> width;
-        0 -> escapement;
-        0 -> orientation;
-        FW_NORMAL -> weight;
-        0 -> italic;
-        (if textStyleFace=textFaces.bold then
-            FW_BOLD -> weight;
-        if);
-        (if textStyleFace=textFaces.italic then
-            1 -> italic;
-        if);
-        (if textStyleFace=textFaces.italic + textFaces.bold then
-            FW_BOLD -> weight;
-            1 -> italic;
-        if);
-       0 -> underline;
-       0 -> strikeOut;
-       ANSI_CHARSET -> charSet;
-       OUT_DEFAULT_PRECIS -> outPrecision;
-       CLIP_DEFAULT_PRECIS -> clipPrecision;
-       PROOF_QUALITY -> quality;
-       DEFAULT_PITCH + FF_DONTCARE + 16x04 -> pitchAndFamily; (* the 16x04 is to get a true type font *)
-       textStyleName -> face;
-       (height, (GetActiveWindow -> GetDC, LOGPIXELSY) -> GetDeviceCaps, 72) -> MulDiv -> height;
-       (-height,width,escapement,orientation,weight,
-       italic,underline,strikeout,charSet,outPrecision,
-         clipPrecision,quality,pitchAndFamily,face) -> CreateFont -> textStyleID;
-         
-       (if textStyleID=0 then
-           GetLastError -> error;
-           'Failed to create font. Error: ' -> screen.putText; 
-           error -> screen.putInt; screen.newLine;
-        else 
-           this(textStyle)[] -> this(guienv).private.textStyles.append;
-       if);
-   if);
+do (# activeWndHdc: @integer; (* 110396 /les *)
+      activeHwnd: @integer;
+   do (if textStyleID=0 then
+          textStyleSize -> height;
+          0 -> width;
+          0 -> escapement;
+          0 -> orientation;
+          FW_NORMAL -> weight;
+          0 -> italic;
+          (if textStyleFace=textFaces.bold then
+              FW_BOLD -> weight;
+          if);
+          (if textStyleFace=textFaces.italic then
+              1 -> italic;
+          if);
+          (if textStyleFace=textFaces.italic + textFaces.bold then
+              FW_BOLD -> weight;
+              1 -> italic;
+          if);
+          0 -> underline;
+          0 -> strikeOut;
+          ANSI_CHARSET -> charSet;
+          OUT_DEFAULT_PRECIS -> outPrecision;
+          CLIP_DEFAULT_PRECIS -> clipPrecision;
+          PROOF_QUALITY -> quality;
+          DEFAULT_PITCH + FF_DONTCARE + 16x04 -> pitchAndFamily; (* the 16x04 is to get a true type font *)
+          textStyleName -> face;
+          
+          GetActiveWindow -> activeHwnd; (* 110396 /les *)
+          activeHwnd -> GetDC -> activeWndHdc;
+          (height, (activeWndHdc, LOGPIXELSY) -> GetDeviceCaps, 72) -> MulDiv -> height;
+          
+          (-height,width,escapement,orientation,weight,
+          italic,underline,strikeout,charSet,outPrecision,
+          clipPrecision,quality,pitchAndFamily,face) -> CreateFont -> textStyleID;
+          
+          (if textStyleID=0 then
+              GetLastError -> error;
+              'Failed to create font. Error: ' -> screen.putText; 
+              error -> screen.putInt; screen.newLine;
+           else 
+              this(textStyle)[] -> this(guienv).private.textStyles.append;
+          if);
+          (activeHwnd,activeWndHdc) -> ReleaseDC; (* 110396 /les *)
+      if);
+   #);
 
 -- GUIENVtextStyleDispose: doPart --
 do (if textStyleID<>0 then
@@ -3119,9 +3167,7 @@ do (if theCur[]<>NONE then
 
 -- GUIENVmouseTheCursorGet: descriptor --
 (#
-do &cursor[] -> theCur[];
-   GetCursor -> theCur.cursorHandle;
-   (if theCur.cursorHandle=0 then none -> theCur[]; if);
+do private.currentMouseCursor[] -> theCur[];
 #)
 
 -- GUIENVsystemScreenRectangle: descriptor --
