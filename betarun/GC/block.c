@@ -5,6 +5,12 @@
  */
 
 #include "beta.h"
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <errno.h>
 
 #define inBlock( theB, addr) (((BlockStart( theB)) <= (ptr(long)) addr) \
                               && ((ptr(long)) addr < theB->top) )
@@ -60,15 +66,15 @@ long inArea( theBlock, theObj )
 
 void mmapInitial(unsigned long numbytes)
 {
-  INFO(fprintf( output, "(#mmapInitial(%08X))", numbytes));
+  int fd;
+  INFO(fprintf(output, "(#mmapInitial(%08X))", (int)numbytes));
 #if defined(hppa) || defined(sun4s) || defined(linux) || defined(sgi)
-  int fildes;
-  fildes = open("/dev/zero", O_RDWR);
+  fd = open("/dev/zero", O_RDWR);
   mmapHeap = mmap(0, numbytes, PROT_NONE, MAP_PRIVATE | MAP_NORESERVE, fd,0);
-  close(fildes);
+  close(fd);
   if (mmapHeap == MAP_FAILED) {
     mmapHeap = 0;
-    fprintf(output, "mmapInitial failed with errno %d\n", error);
+    fprintf(output, "mmapInitial failed with errno %d\n", errno);
     BetaExit(1);
   }
 #else
@@ -95,13 +101,13 @@ void mmapInitial(unsigned long numbytes)
 
 void InsertGuardPage(void)
 {
-  (char*)mmapHeapTop += MMAPPageSize;
+  mmapHeapTop = (char*)mmapHeapTop + MMAPPageSize;
 }
 
 ref(Block) reserveBlock(long numbytes)
 {
   ref(Block) theBlock;
-  INFO(fprintf(output, "(#reserveBlock(%08X))", numbytes));
+  INFO(fprintf(output, "(#reserveBlock(%08X))", (int)numbytes));
   Claim((long)mmapHeap, "reserveBlock: mmapHeap=0");
   Claim((long)mmapHeapTop, "reserveBlock: mmapHeapTop=0");
   Claim((long)mmapHeapLimit, "reserveBlock: mmapHeapLimit=0");
@@ -111,7 +117,7 @@ ref(Block) reserveBlock(long numbytes)
 #if defined(hppa) || defined(sun4s) || defined(linux) || defined(sgi)
   if (mprotect(mmapHeapTop, MMAPPageSize, 
 	       PROT_READ|PROT_WRITE|PROT_EXEC)) {
-    fprintf(output, "reserveBlock: mprotect failed with errno %d\n", error);
+    fprintf(output, "reserveBlock: mprotect failed with errno %d\n", errno);
     return 0;
   }
 #else
@@ -153,7 +159,7 @@ int extendBlock(ref(Block) theBlock, long numbytes)
   Claim((long)mmapHeap, "extendBlock with mmapHeap=0");
   Claim((long)theBlock, "extendBlock with theBlock=0");
   Claim((long)numbytes >= 0, "extendBlock with negative numbytes");
-  INFO(fprintf(output, "(#extendBlock(%08X) ", numbytes));
+  INFO(fprintf(output, "(#extendBlock(%08X) ", (int)numbytes));
 
   newnumbytes =  (char*)theBlock->limit - (char*)theBlock;
   newnumbytes += numbytes;
@@ -162,8 +168,8 @@ int extendBlock(ref(Block) theBlock, long numbytes)
     return 1;
   }
 #if defined(hppa) || defined(sun4s) || defined(linux) || defined(sgi)
-  if (mprotect(theBlock, newnumbytes, PROT_READ|PROT_WRITE|PROT_EXEC)) {
-    fprintf(output, "extendBlock: mprotect failed with errno %d\n", error);
+  if (mprotect((void*)theBlock, newnumbytes, PROT_READ|PROT_WRITE|PROT_EXEC)) {
+    fprintf(output, "extendBlock: mprotect failed with errno %d\n", errno);
     return 1;
   }
 #else
