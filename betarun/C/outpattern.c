@@ -236,6 +236,11 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
   char *groupname;
   long mPart = M_Part(theProto);
   long gPart = (long) theProto->GenPart;
+
+  if (theObj==(struct Object *)BasicItem){
+    /* BasicItem will be shown as component */
+    return;
+  }
   
   if (retAddress) {
     /* Find the active prefix level based on the retAddress.
@@ -450,6 +455,10 @@ char *ErrorMessage(errorNumber)
 }
 
 #ifndef sparc
+#ifndef hppa
+#ifndef crts
+
+/* Support routines for motorola-like stacks */
 
 static int NotInHeap( address)
      long address;
@@ -479,11 +488,12 @@ static void DisplayStackPart( output, low, high, theComp)
       theCell = (handle(Object)) current;
       theObj  = *theCell;
       if( inIOA(theObj) || inAOA(theObj) ){
-	if( isObject( theObj) && NotInHeap(*(current+1)))
+	if( isObject( theObj) && NotInHeap(*(current+1))){
 	  if (theComp && cast(Object)theComp->Body==theObj){
 	    retAddr=*(current+1); /* pc of theComp, when it was left */
 	    break;
 	  }
+	}
 	DisplayObject(output, theObj, (long) *(current+1));
       }
     }else{
@@ -503,9 +513,14 @@ static void DisplayStackPart( output, low, high, theComp)
     fprintf( output, "\n");
   }
 }
-#endif
+
+#endif crts
+#endif hppa
+#endif sparc
 
 #ifdef sparc
+
+/* SPARC support routines */
 void
   DisplayAR(FILE *output, struct RegWin *theAR, long *PC)
 {
@@ -515,6 +530,8 @@ void
     DisplayObject(output, theObj, (long)PC);
 }
 #endif
+
+/***** DisplayBetaStack: the main routine for producing the dump file *********/
 
 /* If DisplayBetaStack returns non-zero, the debugger was invoked, and
  * the process should continue execution. */
@@ -770,7 +787,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 #ifndef hppa
 #ifndef sparc
 #ifndef crts  
-  { /* RUN based DisplayBetaStack() */
+  { /* RUN based DisplayBetaStack() - i.e. motorola like stack */
     ptr(long)           theTop;
     ptr(long)           theBottom;
     
@@ -856,7 +873,7 @@ P("at the object that was the current object when the error occurred and continu
 P("down towards the basic component. The descriptions have the following meaning:")
 P("1. Items are shown in two lines, like this:")
 P("      item <name>#pname1#pname2#pname3 in ifile")
-P("      -- sname#spname1#spname2 in sfile")
+P("        -- sname#spname1#spname2 in sfile")
 P("   meaning that the item is an instance of the descriptor \"name\" which has")
 P("   prefix \"pname1\" which has prefix \"pname2\", etc. This item is defined in the")
 P("   file \"ifile\". The part of the prefix chain enclosed in \"<\" and \">\" indicates")
