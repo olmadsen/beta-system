@@ -270,9 +270,9 @@ unsigned long indexLookupRT(unsigned long store, unsigned long offset)
   Trie *loadedObjectsOF;
   
   /* Check if store is member of 'loadedObjects' */
-  if ((loadedObjectsOF = TILookup(store, loadedObjectsST))) {
+  if ((loadedObjectsOF = (Trie *)TILookup(store, loadedObjectsST))) {
     unsigned long inx;
-    if ((inx = (unsigned long)TILookup(offset, loadedObjectsOF))) {
+    if ((inx = TILookup(offset, loadedObjectsOF))) {
       return inx - 1;
     }
   }
@@ -315,7 +315,7 @@ void referenceAlive(void *ip)
   entry -> GCAttr = ENTRYALIVE;
 }
 
-static void freeLoadedObjectsOF(void *contents)
+static void freeLoadedObjectsOF(unsigned long contents)
 {
   TIFree((Trie *)contents, NULL);
 }
