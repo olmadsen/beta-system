@@ -31,7 +31,9 @@ AlloDO(unsigned size)
 
     GCable_Entry();
 
-    theObj = cast(DopartObject) IOAalloc(DopartObjectSize(size));
+    Ck(origin);
+    Protect(origin, theObj = cast(DopartObject) IOAalloc(DopartObjectSize(size)));
+    Ck(origin);
 
     theObj->Proto  = DopartObjectPTValue;
     theObj->GCAttr = 1;
@@ -40,6 +42,7 @@ AlloDO(unsigned size)
 
 #ifdef sparc
     /* hack hack. Olm wants the result in %i0 */
+    __asm__ volatile("":: "r" (theObj));
     __asm__("ret;restore %0, 0, %%i0"::"r" (theObj));
 #endif
 
