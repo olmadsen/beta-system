@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Qua.c,v 1.5 1993-02-12 13:57:36 datpete Exp $
+ * Mod: $Id: Qua.c,v 1.6 1993-02-16 14:59:38 datpete Exp $
  * by Peter Andersen, Peter Oerbaek, and Tommy Thorn.
  */
 
@@ -208,7 +208,11 @@ void COQua(ref(Object) this,
 	     * This should be the same as the origin of the qualification of dst. 
 	     */
 	    if (src->Proto == StructurePTValue){
+#ifdef sparc
+	      Protect(dstQuaOrigin, src = cast(Object) CAlloSI(src, 0, 0, 0, 0));
+#else
 	      Protect(dstQuaOrigin, src = cast(Object) CAlloSI(src));
+#endif
 	    }
 	    less = (cast(Object)((long*)src)[dstQuaProto->OriginOff] == dstQuaOrigin);
 	    break;
