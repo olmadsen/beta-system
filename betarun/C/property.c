@@ -41,6 +41,7 @@ static BooleanProperty( name)
 
 #ifdef RTDEBUG
   ENTRY("debugioa",   DebugIOA = TRUE);
+  ENTRY("debugcbfa",  DebugCBFA = TRUE);
   ENTRY("debugaoa",   DebugAOA = TRUE);
   ENTRY("debuglvra",  DebugLVRA = TRUE);
   ENTRY("debugstack", DebugStack = TRUE);
