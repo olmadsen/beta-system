@@ -6,34 +6,37 @@
 
 #include "beta.h"
 
+#define MAXINT 2147483647
+
 static long M_Part(ref(ProtoType) proto)
-/* Return the address og of the M-entry for the prototype proto.
- * Use the fact, that if the corresponding object has a do part, 
- * then above the prototype, the INNER table can be used to find
- * the M-entry:
- *
- *        long: Return
- *        long: M-entry
- *        long: M-entry of prefix
- *        long: M-entry of prefix-prefix
- *        ...
- * proto: ...
- *
- * Should ONLY be called for a prototype which is known to correspond to 
- * object with do-part.
- */
+     /* Return the address og of the M-entry for the prototype proto.
+      * Use the fact, that if the corresponding object has a do part, 
+      * then above the prototype, the INNER table can be used to find
+      * the M-entry:
+      *
+      *        long: Return
+      *        long: M-entry
+      *        long: M-entry of prefix
+      *        long: M-entry of prefix-prefix
+      *        ...
+      * proto: ...
+      *
+      * Should ONLY be called for a prototype which is known to correspond to 
+      * object with do-part.
+      */
 {
-  extern long Return asm("Return");
+  extern long *Return asm("Return");
   long *m;
   long *r;
-
+  
   m = (long *)proto - 1;
   r = m - 1;
-  while ( (*r != Return) && (r != 0) ){
+  while ( (*r != (long)&Return) && (r != 0) ){
     /* r != 0 just to avoid segmentation fault if something is wrong */
     m = r;
     r = m - 1;
   }
+  /* fprintf(output, "*m: 0x%x\n", *m); fflush(output); */
   return *m;
 }
 
@@ -50,75 +53,169 @@ static ptr(char) ProtoTypeName(theProto)
   return (ptr(char)) dyn;
 }
 
-static ptr(char) theFormName(theItem)
-     ref(Item) theItem;
+typedef struct group_header
 {
-  long  TabValue;
+ struct group_header *self;
+ char *ascii;
+ struct group_header *next;
+} group_header;
+
+static char *GroupName(long address)
+{
+  extern long *data1 asm("BETA_data1");
+  struct group_header *group;
+  struct group_header *current;
+  long *limit;
+  int  more_segments=1;
+  long dist, distance;
+
+  current = group = (struct group_header *)&data1; /* betaenv data segment */
+  distance = MAXINT;
   
-  TabValue  = (long) theItem->Proto;
-  TabValue += (long)  theItem->Proto->FormOff;
+  while (more_segments){
+
+    /* Check if the address is closer to the start of current segment than previous segments */
+    dist = address - (long) current;
+    if (dist >= 0 && dist < distance) {
+      distance = dist;
+      group = current;
+    }
+
+    /* Get next data segment if any. Padding by linker may have moved it some longs down */
+    more_segments = 0;
+    current=current->next;
+    for (limit=(long *)current+10;
+	 (long*)current < limit;
+	 (long*)current++) /* Why does gcc complain that this is not used ? */
+      if (current->self == current) { more_segments=1; break; }
+  }
   
-  return (ptr(char)) TabValue;
+  return group->ascii;
 }
 
+static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, int print_origin)
+{
+  long           gDist=MAXINT, mDist=MAXINT, activeDist=0;
+  ref(ProtoType) theProto=theObj->Proto;
+  ref(ProtoType) activeProto=theProto;
+  char *groupname;
+  long mPart = M_Part(theProto);
+  long gPart = (long) theProto->GenPart;
 
-void DisplayObject(output,aObj,retAddress)
-     ptr(FILE)   output;       /* Where to dump object */
-     ref(Object) aObj;         /* Object to display */
-     ptr(long)   retAddress;   /* Address aObj was left from (jsr), i.e. when 
-				* it was current object.
-				*/
-{ 
-  ref(Item) aItem=0;
-  ref(ProtoType) theProto=0;
-  ref(ProtoType) activeProto=0;
-  long           activeDist=0;
-  long           gDist=0, mDist=0;
-  ref(Object)    staticObj;
+  if (retAddress) {
+    /* Find the active prefix level based on the retAddress.
+     * Here we use both the G-entry and the M-entry. 
+     * The prefix we are in is the one, where the distance from the 
+     * G-entry or M-entry of the corresponding prefix-level
+     * to retAddress is smallest.
+     */
+    
+    gDist  = retAddress - gPart; 
+    /* fprintf(output, "gDist: 0x%x\n", gDist); fflush(output); */
+    mDist  = retAddress - mPart;
+    /* fprintf(output, "mDist: 0x%x\n", mDist); fflush(output); */
+    if (gDist < 0) gDist = MAXINT;
+    if (mDist < 0) mDist = MAXINT;
+    activeDist = (gDist<mDist) ? gDist : mDist;
+    
+    while(theProto->Prefix && 
+	  theProto->Prefix->Prefix != theProto->Prefix){
+      theProto = theProto->Prefix;
+      if((retAddress - gPart > 0) &&
+	 (retAddress - gPart < activeDist)){ 
+	activeProto = theProto;
+	activeDist  = gDist = retAddress - gPart; 
+	/* fprintf(output, "gDist: 0x%x\n", gDist); fflush(output); */
+      }
+      if((retAddress - mPart > 0) &&
+	 (retAddress - mPart < (long) activeDist)){ 
+	activeProto = theProto;
+	activeDist  = mDist = retAddress - mPart; 
+	/* fprintf(output, "mDist: 0x%x\n", mDist); fflush(output); */
+      }
+    }
+    if (activeDist == MAXINT) return;
+  } /* if(retAddress) */
+
+  theProto = theObj->Proto;
+  if (activeDist == gDist){
+    fprintf(output,"  allocating %s ", type);
+    groupname = /* GroupName(gPart) */ GroupName((long)theProto);
+  } else {
+    fprintf(output,"  %s ", type);
+    groupname = /* GroupName(mPart) */ GroupName((long)theProto);
+  }
   
-  if( isSpecialProtoType(aObj->Proto) ){
-    switch ((long) aObj->Proto){
-    case (long) ComponentPTValue:
-      aItem = ComponentItem(aObj);
-      if (aItem==BasicItem) {
-	fprintf(output,"  basic component in %s\n", 
-		theFormName(aItem));
-      } else {
-	theProto = aItem->Proto;
-	if( retAddress ){
-	  /* try finding active prefix */
-	  activeProto = theProto;
-	  activeDist  = retAddress - theProto->GenPart; 
-	  while(theProto->Prefix &&
-		theProto->Prefix->Prefix != theProto->Prefix){
-	    theProto = theProto->Prefix;
-	    if((retAddress - theProto->GenPart > 0) &&
-	       (retAddress - theProto->GenPart < activeDist)){ 
-	      activeProto = theProto;
-	      activeDist  = retAddress - theProto->GenPart; 
-	    }
-	  }
-	}
-	theProto = aItem->Proto;
-	if(theProto==activeProto || /* active prefix */
-	   (!activeProto && 
-	    theProto->Prefix &&
-	    theProto->Prefix->Prefix==theProto->Prefix)) /* no prefix */
-	  fprintf(output,"  comp <%s>", ProtoTypeName(theProto));
-	else
-	  fprintf(output,"  comp %s", ProtoTypeName(theProto));
+  if(theProto==activeProto || /* active prefix */
+     (!activeProto && 
+      theProto->Prefix &&
+      theProto->Prefix->Prefix==theProto->Prefix)) /* no prefix */
+    fprintf(output,"<%s>", ProtoTypeName(theProto));
+  else
+    fprintf(output,"%s", ProtoTypeName(theProto));
+  
+  /* Print chain of prefixes */
+  while(theProto->Prefix &&
+	theProto->Prefix->Prefix != theProto->Prefix){
+    theProto = theProto->Prefix;
+    if( theProto == activeProto )
+      fprintf(output,"<%s>", ProtoTypeName(theProto));
+    else
+      fprintf(output,"%s", ProtoTypeName(theProto));
+  }
+  fprintf(output," in %s\n", groupname);
+  if (print_origin){
+    long addr;
+    ref(Object)    staticObj=0;
 
-	/* Print chain of prefixes */
+    /* Print Static Environment Object. */
+    theProto = theObj->Proto;
+    if (!activeProto) activeProto = theProto;
+    if (!activeProto) return;
+    addr=(long)theObj + (4*(long)activeProto->OriginOff);
+    if (addr) 
+      staticObj = *(handle(Object))addr;
+    else
+      staticObj = 0;
+    if( staticObj )
+      if( isObject( staticObj ) ){
+	fprintf(output,"    -- ");
+	theProto = staticObj->Proto;
+	fprintf(output,"%s", ProtoTypeName(theProto));
 	while(theProto->Prefix &&
 	      theProto->Prefix->Prefix != theProto->Prefix){
 	  theProto = theProto->Prefix;
-	  if( theProto == activeProto )
-	    fprintf(output,"<%s>", ProtoTypeName(theProto));
-	  else
-	    fprintf(output,"%s", ProtoTypeName(theProto));
+	  fprintf(output,"%s", ProtoTypeName(theProto));
 	}
-	fprintf(output," in %s\n", theFormName(aItem));
+	fprintf(output, " in %s\n", GroupName((long)theObj->Proto));
       }
+  }
+}
+
+
+void DisplayObject(output,theObj,retAddress)
+     ptr(FILE)   output;       /* Where to dump object */
+     ref(Object) theObj;         /* Object to display */
+     long        retAddress;   /* Address theObj was left from (jsr), i.e. when 
+				* it was current object.
+				*/
+{ 
+  ref(Object) theItem=0;
+  
+  if( isSpecialProtoType(theObj->Proto) ){
+    switch ((long) theObj->Proto){
+    case (long) ComponentPTValue:
+      theItem = cast(Object) ComponentItem(theObj);
+      if (theItem== cast(Object) BasicItem) {
+	fprintf(output,"  basic component in %s\n", 
+		GroupName((long)theItem->Proto));
+      } else {
+	ObjectDescription(theItem, retAddress, "comp", 0);
+      }
+      break;
+    case (long) DopartObjectPTValue:
+      theItem = (cast(DopartObject)theObj)->Origin;
+      ObjectDescription(theItem, retAddress, "item", 1);
       break;
     case (long) StackObjectPTValue:
       fprintf(output,"  stackobject\n");
@@ -140,102 +237,7 @@ void DisplayObject(output,aObj,retAddress)
       break;
     } 
   }else{    
-    theProto = aObj->Proto;
-#ifdef OLDMETHOD
-    /* Find the active prefix level based on the retAddress.
-     * Here we use the fact, that the G-entry is placed just before
-     * the M-entry. Thus the prefix we are in is the one, where
-     * the distance from the G-entry of the corresponding prefix-level
-     * to retAddress is smallest.
-     */
-    if( retAddress ){
-      activeProto = theProto;
-      activeDist  = retAddress - theProto->GenPart; 
-      while(theProto->Prefix && 
-	    theProto->Prefix->Prefix != theProto->Prefix){
-	theProto = theProto->Prefix;
-        if((retAddress - theProto->GenPart > 0) &&
-	   (retAddress - theProto->GenPart < activeDist)){ 
-	  activeProto = theProto;
-	  activeDist  = retAddress - theProto->GenPart; 
-	}
-      }
-    }
-#else
-    /* Find the active prefix level based on the retAddress.
-     * Here we use both the G-entry and the M-entry. 
-     * The prefix we are in is the one, where the distance from the 
-     * G-entry or M-entry of the corresponding prefix-level
-     * to retAddress is smallest.
-     */
-    if( retAddress ){
-      long mPart = M_Part(theProto);
-
-      activeProto = theProto;
-      gDist  = (long) retAddress - (long) theProto->GenPart; 
-      mDist  = (long) retAddress - (long) mPart;
-
-      while(theProto->Prefix && 
-	    theProto->Prefix->Prefix != theProto->Prefix){
-	theProto = theProto->Prefix;
-        if(((long) retAddress - (long) theProto->GenPart > 0) &&
-	   ((long) retAddress - (long) theProto->GenPart < activeDist)){ 
-	  activeProto = theProto;
-	  activeDist  = gDist = (long) retAddress - (long) theProto->GenPart; 
-	}
-	if(((long) retAddress - (long) mPart > 0) &&
-	   ((long) retAddress - (long) mPart < (long) activeDist)){ 
-	  activeProto = theProto;
-	  activeDist  = mDist = (long) retAddress - (long) mPart; 
-	}
-      }
-    }
-#endif
-    if (activeDist == gDist)
-      fprintf(output,"  allocating item ");
-    else
-      fprintf(output,"  item ");
-    /* Print chain of prefixes */
-    theProto = aObj->Proto;
-    if(theProto==activeProto || /* active prefix */
-       (!activeProto && 
-	theProto->Prefix &&
-	theProto->Prefix->Prefix==theProto->Prefix)) /* no prefix */
-      fprintf(output,"<%s>", ProtoTypeName(theProto));
-    else
-      fprintf(output,"%s", ProtoTypeName(theProto));
-    while(theProto->Prefix &&
-	  theProto->Prefix->Prefix != theProto->Prefix){
-      theProto = theProto->Prefix;
-      if( theProto == activeProto )
-	fprintf(output,"<%s>", ProtoTypeName(theProto));
-      else
-	fprintf(output,"%s", ProtoTypeName(theProto));
-    }
-    fprintf(output, " in %s\n", theFormName(aObj));
-    
-    /* Print Static Environment Object. */
-    { long addr;
-      if (!activeProto) activeProto = theProto;
-      if (!activeProto) return;
-      addr=(long)aObj + (4*(long)activeProto->OriginOff);
-      if (addr) 
-	staticObj = *(handle(Object))addr;
-      else
-	staticObj = 0;
-      if( staticObj )
-	if( isObject( staticObj ) ){
-	  fprintf(output,"    -- ");
-	  theProto = staticObj->Proto;
-	  fprintf(output,"%s", ProtoTypeName(theProto));
-	  while(theProto->Prefix &&
-		theProto->Prefix->Prefix != theProto->Prefix){
-	    theProto = theProto->Prefix;
-	    fprintf(output,"%s", ProtoTypeName(theProto));
-	  }
-	  fprintf(output, " in %s\n", theFormName(aObj));
-	}
-    }
+    ObjectDescription(theObj, retAddress, "item", 1);
   }
 }
 
@@ -327,7 +329,7 @@ static DisplayStackPart( output, low, high, theComp)
 	    retAddr=*(current+1); /* pc of theComp, when it was left */
 	    break;
 	  }
-	  DisplayObject(output, theObj, *(current+1));
+	DisplayObject(output, theObj, (long) *(current+1));
       }
     }else{
       switch( *current){
@@ -350,18 +352,19 @@ static DisplayStackPart( output, low, high, theComp)
 
 #ifdef sparc
 void
-  DisplayAR(FILE *output, struct RegWin *theAR, struct RegWin *nextAR)
+  DisplayAR(FILE *output, struct RegWin *theAR, long *PC)
 {
   struct Object *theObj = (struct Object *) theAR->i0;
   
   if ((inIOA(theObj) || inAOA(theObj)) && isObject(theObj))
-    DisplayObject(output, theObj, theAR->i7);
+    DisplayObject(output, theObj, PC);
 }
 #endif
 
-void DisplayBetaStack( errorNumber, theObj)
+void DisplayBetaStack( errorNumber, theObj, thePC)
      long errorNumber;
      ref(Object) theObj;
+     long *thePC;
 {
   ptr(FILE) output;
 #ifndef sparc
@@ -393,14 +396,14 @@ void DisplayBetaStack( errorNumber, theObj)
 	/* retAddress is 0 because we have no way of knowing
 	 * current address in current object (yet)
 	 */
-	DisplayObject(output, theObj, 0);
+	DisplayObject(output, theObj, thePC);
     }else{
       fprintf(output,"Current object is damaged!\n");
     }
   }else
     fprintf(output,"Current object is damaged!\n");
 #endif
-
+  
   if (StackStart == 0){
     fprintf(output,"\n  [initialization of basic component]\n");
     return;
@@ -418,7 +421,7 @@ void DisplayBetaStack( errorNumber, theObj)
       if((unsigned)*theCell & 1) {
 	theObj = (struct Object *)((unsigned)*theCell & ~1);
 	if(theObj && isObject(theObj)) {
-	  DisplayObject(output, theObj, 0);
+	  DisplayObject(output, theObj, thePC);
 	} else {
 	  fprintf(output, "[Damaged object!: %x]\n", (long)theObj);
 	}
@@ -438,29 +441,30 @@ void DisplayBetaStack( errorNumber, theObj)
     struct RegWin *theAR;
     struct RegWin *nextCBF = (struct RegWin *) ActiveCallBackFrame;
     struct RegWin *nextCompBlock = (struct RegWin *) lastCompBlock;
+    long   *PC=thePC;
     
     /* Flush register windows to stack */
     asm("ta 3");
     
     for (theAR =  (struct RegWin *) StackEnd;
 	 theAR != (struct RegWin *) 0;
-	 theAR =  (struct RegWin *) theAR->fp) {
+	 PC = (long*)theAR->i7, theAR =  (struct RegWin *) theAR->fp) {
       if (theAR == nextCompBlock) {
-	/* This is the AR of attach. Continue GC, but get
+	/* This is the AR of attach. Continue, but get
 	 * new values for nextCompBlock and nextCBF. 
 	 * Please read StackLayout.doc
 	 */
 	
 	nextCBF = (struct RegWin *) theAR->l5;
 	nextCompBlock = (struct RegWin *) theAR->l6;
-
+	
 	if (nextCompBlock == 0)
-	  {
+	  { /* We reached the bottom */
 	    DisplayObject(output, (struct Object *)theAR->i1, 0); /* AttBC */
 	    fprintf(output, "\n"); fflush(output);
-	    break; /* we reached the bottom */
+	    break;
 	  }
-
+	
 	DisplayObject(output, (struct Object *) theAR->i0, 0); /* Att */
 	/* Make an empty line after the component */
 	fprintf(output, "\n"); fflush(output);
@@ -468,16 +472,23 @@ void DisplayBetaStack( errorNumber, theObj)
 	continue;
       }
       else if (theAR == nextCBF) {
-	/* This is AR of HandleCB. Don't GC this, but
+	/* This is AR of HandleCB. Don't display objects in this, but
 	 * skip to betaTop and update nextCBF */
+	struct RegWin *cAR;
 	
 	fprintf( output,"  [ C ACTIVATION PART ]\n");
 	
+	/* Wind down the stack until betaTop is reached.
+	 * This is only done to update PC.
+	 */
+	for (cAR = theAR;
+	     cAR != (struct RegWin *) theAR->l6;
+	     PC = (long *)cAR->i7, cAR = (struct RegWin *) cAR->fp);
 	nextCBF = (struct RegWin *) theAR->l5;
 	theAR = (struct RegWin *) theAR->l6;
       }
       if (theAR->fp != (long) nextCompBlock)
-	DisplayAR(output, theAR, (struct RegWin *) theAR->fp);
+	DisplayAR(output, theAR, PC);
     }
   }
 #endif
@@ -494,7 +505,7 @@ void DisplayBetaStack( errorNumber, theObj)
     ref(ComponentBlock) currentBlock;
     ref(Object)         currentObject;
     long                retAddr=0;
-
+    
     /*
      * First handle the topmost component block
      */
@@ -511,7 +522,7 @@ void DisplayBetaStack( errorNumber, theObj)
       if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
       theTop += 2;
     }
-
+    
     DisplayStackPart(output, theTop, theBottom-1 -2, currentComponent);  
     /* -2 because:
      *  There will always be at least 2 longs, not needed above the
@@ -543,7 +554,7 @@ void DisplayBetaStack( errorNumber, theObj)
 	if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
 	theTop += 2;
       }
-
+      
       DisplayStackPart( output, theTop +1, theBottom-1 -2, currentComponent); 
       /* theTop +1 because the component to be attached is always
        * pushed before attach is called. We don't want to show
@@ -568,7 +579,7 @@ void DisplayBetaStack( errorNumber, theObj)
 #ifdef RTDEBUG
 
 char *DescribeObject(theObject)
-  struct Object *theObject;
+     struct Object *theObject;
 {
   ref(ProtoType) theProto = theObject->Proto;
   if (isSpecialProtoType(theProto)){
@@ -582,14 +593,14 @@ char *DescribeObject(theObject)
       return "StackObj";
     case (long) StructurePTValue:
       sprintf(buffer, 
-	     "Struc: origin: 0x%x, proto: 0x%x", 
-	     (cast(Structure)theObject)->iOrigin,
-	     (cast(Structure)theObject)->iProto);
+	      "Struc: origin: 0x%x, proto: 0x%x", 
+	      (cast(Structure)theObject)->iOrigin,
+	      (cast(Structure)theObject)->iProto);
       return buffer;
     case (long) DopartObjectPTValue:
       sprintf(buffer, 
-	     "Dopart: origin: 0x%x", 
-	     (cast(DopartObject)theObject)->Origin);
+	      "Dopart: origin: 0x%x", 
+	      (cast(DopartObject)theObject)->Origin);
       return buffer;
     case (long) RefRepPTValue:
       return "RefRep";	
@@ -613,7 +624,7 @@ char *DescribeObject(theObject)
   } else {
     ref(GCEntry) stat = cast(GCEntry) ((long) theProto + theProto->GCTabOff);
     ptr(short) dyn;
-  
+    
     while (*(short *) stat) stat++;	/* Step over static gc entries */ 
     dyn = ((short *) stat) + 1;		/* Step over the zero */
     while (*dyn++);			/* Step over dynamic gc entries */
