@@ -78,7 +78,7 @@ static Object * CopyObject(Object * theObj)
  *  theObj is moved to AOA.
  *  The function is used by IOAGc.
  */
-Object * NewCopyObject(Object * theObj, Object ** theCell)
+Object * NewCopyObject(Object * theObj, Object ** theCell, int forceAOAAllocation)
 {
   MCHECK();
   
@@ -98,7 +98,7 @@ Object * NewCopyObject(Object * theObj, Object ** theCell)
     GCAttribute = theObj -> GCAttr;
 #endif /* PERSIST */
 
-    if ((newObj = CopyObjectToAOA(theObj, NULL))) {
+    if ((newObj = CopyObjectToAOA(theObj, NULL, forceAOAAllocation))) {
       /* Insert theCell in AOAroots table. 
        * Used as roots in AOA GC if invoked after IOAGc.
        */
@@ -130,11 +130,10 @@ Object * NewCopyObject(Object * theObj, Object ** theCell)
 	Object *theAOAObj;
 	
 	/* This will force an allocation of a new aoablock */
-	theAOAObj = AOAallocate(8, TRUE);
-	theAOAObj = NewCopyObject(theObj, theCell);
-          
+	theAOAObj = NewCopyObject(theObj, theCell, TRUE);
+	
 	Claim(inAOA(theAOAObj), "Where is theAOAObj?");
-          
+	
 	return theAOAObj;
       } else {
 	return CopyObject(theObj);

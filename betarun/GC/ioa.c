@@ -117,7 +117,7 @@ static void HandlePostponedIODs(void)
 
   for (i=0; i < OIDCacheSize; i++) {
     if (OIDCache[i].objInAOA) {
-      CopyObjectToAOA(OIDCache[i].objInIOA, OIDCache[i].objInAOA);
+      CopyObjectToAOA(OIDCache[i].objInIOA, OIDCache[i].objInAOA, TRUE);
     }
   }
   OIDCacheSize = 0;
@@ -636,7 +636,7 @@ void ProcessReference(Object ** theCell, long refType)
       } else {
          if (isAutonomous(GCAttribute)) { 
             /* '*theCell' is an autonomous object. */
-            *theCell = NewCopyObject( *theCell, theCell);
+            *theCell = NewCopyObject( *theCell, theCell, FALSE);
 	
          } else {
             /* theObj is a part object. */
@@ -657,7 +657,7 @@ void ProcessReference(Object ** theCell, long refType)
                IOAUpdateAOARoots(theCell, AutObj->GCAttr);
 	      
             } else {
-               newObj = NewCopyObject( AutObj, theCell);
+               newObj = NewCopyObject( AutObj, theCell, FALSE);
             }
             *theCell = (Object *) Offset( newObj, -Distance);
          }
@@ -750,7 +750,7 @@ static void ProcessAOAReference(Object ** theCell, long refType)
       if (isAutonomous(GCAttribute)) { 
         /* theObj is an autonomous object. 
          * Move it from IOA to ToSpace/AOA */
-	*theCell = NewCopyObject(theObj, NULL);
+	*theCell = NewCopyObject(theObj, NULL, FALSE);
 
       } else { 
         /* theObj is a part object. */
@@ -768,7 +768,7 @@ static void ProcessAOAReference(Object ** theCell, long refType)
         if (isForward(AutObj->GCAttr)) {
 	  newObj = (Object *) AutObj->GCAttr;
         } else {
-	  newObj = NewCopyObject(AutObj, 0);
+	  newObj = NewCopyObject(AutObj, 0, FALSE);
 	}
 	*theCell = (Object *) Offset(newObj, -Distance); 
       }

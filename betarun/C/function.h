@@ -215,7 +215,7 @@ extern Object *AOAalloc(long numbytes);
 extern Object *AOAcalloc(long numbytes);
 /* Allocate block without possibility of doing IOAGc: */
 extern Object *AOAallocate(long numbytes, int forceAOAAllocation);
-extern Object *CopyObjectToAOA(Object *theObj, Object *newObj);
+extern Object *CopyObjectToAOA(Object *theObj, Object *newObj, int forceAOAAllocation);
 extern void AOAGc(void);
 
 extern ValRep * LVRAAlloc(ProtoType *, long);
@@ -230,7 +230,7 @@ extern void AOACheckObjectSpecial(Object *);
 #endif
 
 /* GC/copyobject.c */
-extern Object * NewCopyObject(Object *, Object **);
+extern Object * NewCopyObject(Object *, Object **, int);
 
 /* GC/stack.c */
 extern void DoStackCell(Object **theCell,Object *theObj);
