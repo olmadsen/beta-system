@@ -68,6 +68,97 @@ splitClassSignature: SplitSignature
 ---byteCode_mstate:descriptor---
 (# <<SLOT bytecode_mstatelib:attributes>>;
    
+   splitPathAndName:
+     (# orgPath,path,FN: ^text; slashPos,dotPos: @integer;
+        e: @diskentry
+     enter orgPath[]
+     do orgPath[] -> e.path;
+        e.path.head -> path[]; directorychar -> path.put;
+        e.path.name.prefix -> FN[];
+     exit(path[],FN[])
+     #);
+   
+   mkDepFile:
+     (# dep: @file;
+     do (* Touch the dep file *)
+        '.dep'
+          -> (thisSourceFileName[]->(thisFullSourcePath.copy).append).append 
+          -> dep.name;
+        (*'touching file ' -> screen.puttext; dep.name ->screen.putline;*)
+        dep.touch;
+     #);
+   
+   mkClassListFile:
+     (# basename: ^text;
+        F: @file;
+     do (thisSourceFileName[]->(thisFullPath.copy).append).append 
+          -> basename[];
+        '.clst'
+          -> (basename.copy).append
+          -> F.name;
+        (if false then
+            '\nClassFileName: ' -> screen.puttext; 
+            F.name -> screen.puttext; 
+            ', Path: '->screen.puttext; 
+            ThisFullPath[] -> screen.putline;
+        if);
+        F.openWrite;
+        (* 'opened for write: ' -> screen.puttext; F.name -> screen.putline; *)
+        classes.scan
+        (# 
+        do startPos -> F.putint; 
+           ' ' -> F.put;
+           endPos -> F.putint;
+           ' ' -> F.put;
+           current[] (* No extension *) 
+             -> (thisFullSourcePath.copy).append 
+             -> F.putline;
+           (* current[] -> putline *)
+        #);
+        (if false then
+            (if common.switch[189] then
+                (* .NET: All attributes forms in one file.
+                 * The library file may or may not define attributes fragments.
+                 * In both cases a legal .il file is generated.
+                 * This file must be included in assembly/link too.
+                 *)
+                basename[] -> F.putline; (* Add to class list for future job files *)
+            if);
+        if);
+        F.close;
+     #);
+
+   thisPackagePath,      (* package path *)
+   thisFullPath,         (* full path of directory for for 
+                          * current object/class file.
+                          * On JVM this include package path.
+                          *)
+   thisFullSourcePath,   (* Full path of directory of current source file *)
+   thisSourceFileName,   (* name of current source file *)
+   thisFileName,         (* name of current object file  *)
+   thisClassName: ^text; (* name of current class 
+                          * for java: currentFile = currentClass
+                          * for .NET: they may differ
+                          *)
+   thisSuperName: ^text;
+   thisInnerMethodName: ^text;
+   thisOrgName, thisSuperOrgName: ^text;
+   subLevel,thisBlockLevel: @integer;
+   class: ^text;       (* name of class being called - 
+                        * used by subsequent init - ugly
+                        *)
+   isMainMethod: @boolean;
+   thisSignature: ^text;
+   commentStream: ^stream;
+   jasmin: @file;
+   jasminIsOpen: @boolean;
+   lastLocalAllocated:
+     (* used by allocAndStoreLocal and just for testing .NET stuff 
+      * And never assigned a value here?
+      *)
+     @integer;
+   numTempLocals: @integer;
+   
    jcf: ^JavaImage;
    
    bcstate: @ <<slot new_bcstate:descriptor>>;
@@ -269,6 +360,7 @@ splitClassSignature: SplitSignature
              (if isField = 1 then
                  descName[] -> ClassName[];
               else 
+                 'emitFieldType/ONlevel=0' -> ONlevelWarning;
                  (* this part should be eliminated *)
                  ONlevel -> BCstate.blocks.class -> ClassName[];
              if);
@@ -295,11 +387,21 @@ splitClassSignature: SplitSignature
                      'OBS! missing type info (fieldType)' -> jvmFIXME;
                  if);
              if);
-             (ClassName[], TheFieldName[], TheFieldType[]) -> jcf.emitFieldRef; 
+             (ClassName[], TheFieldName[], TheFieldType[]) -> jcf.emitFieldRef
+          #);
+        ONlevelWarning:
+          (# T: ^text
+          enter T[]
+          do newline;
+             T[] -> puttext;
+             ': ONlevel > 0: ' -> puttext;
+             display;
+             (* (failureTrace,'ONlevelWarning') -> stop;*)
           #);
         load:
           (# isSimple: @boolean
           do (* local field - object/method ??*)
+             (if ONlevel > 0 then 'load'->ONlevelWarning if);
              (if fieldType[] = none then
                  '\nOBS! address:load: fieldType[]=none '->putline;
                  'I' -> fieldType[];
@@ -388,6 +490,7 @@ splitClassSignature: SplitSignature
         store:
           (# isSimple: @boolean
           do (* local field - object/method ??*)
+             (if ONlevel > 0 then 'store'->ONlevelWarning if);
              (if fieldType[] = none then
                  '\nOBS! address:store: fieldType[]=none '->putline;
                  'I' -> fieldType[];
@@ -429,7 +532,24 @@ splitClassSignature: SplitSignature
                           * than int AND for mapped locals. 
                           * See Load above 
                           *)
-                         (istore, istore_0, off) -> emitMemOp
+                         (if 1 -> fieldType.inxGet
+                          // 'I' // 'C' // 'Z' // 'S'  then
+                             (if off < 0 then
+                                 off -> allocMappedLocal -> storeLocal
+                              else
+                                 (istore, istore_0, off) -> emitMemOp
+                             if)
+                          // 'D' then
+                             (if off < 0 then
+                                 (off) -> allocMappedLocal -> dstoreLocal
+                              else
+                                 (* never tested??? *)
+                                 (dstore, dstore_0, off) -> emitMemOp
+                             if)
+                          else
+                             '\nStore: fieldType NOT handled: '->puttext;
+                             fieldType[] -> putline
+                         if)
                      if)
              if)if)
           #);
@@ -437,7 +557,8 @@ splitClassSignature: SplitSignature
           (# withQua,isOrigin,isRef: @boolean; 
              class: ^text;
           enter(withQua,isOrigin,class[])
-          do ((class.lgth >= 1) and ((class.T[1] = 'L') or (class.T[1] = '[')))
+          do (if ONlevel > 0 then 'storeRef'->ONlevelWarning if);
+             ((class.lgth >= 1) and ((class.T[1] = 'L') or (class.T[1] = '[')))
                -> isRef;
              (if withQua then
                  _checkcast  -> jcf.emit;
@@ -471,8 +592,11 @@ splitClassSignature: SplitSignature
                               // (fieldType[] <> none) 
                                  and ('D' -> fieldType.equal) 
                                  (* double/real *) then 
+                                 'storeRef:isRef=false:D' -> ONlevelWarning;
                                  (off) -> allocMappedLocal -> dstoreLocal;
                               else
+                                 'storeRef:isRef=false:simple'
+                                   -> ONlevelWarning;
                                  (off) -> allocMappedLocal -> storeLocal;
                              if);
                           else
@@ -487,6 +611,8 @@ splitClassSignature: SplitSignature
              sig,knownSig: ^text
           enter(withQua,sig[],knownSig[])
           do (*BC.gettext -> sig[];*)
+             (if ONlevel > 0 then 'loadRef'->ONlevelWarning if);
+             (* OBS! isRef is always TRUE: see test below *)
              ((sig.lgth>=1) and ((sig.T[1] = 'L') or (sig.T[1]='['))) -> isRef;
              (if ONlevel > 0 then
                  getfield  -> jcf.emit;
@@ -497,7 +623,7 @@ splitClassSignature: SplitSignature
                      emitFieldAndType(# do sig.copy -> TheFieldType[] #);
                   else
                      (if isField = 2 then
-                         aaload -> jcf.emit;
+                         aaload -> jcf.emit
                       else 
                          (if off < 0 then
                              (if false then
@@ -513,6 +639,9 @@ splitClassSignature: SplitSignature
                              (if isRef then
                                  (off) -> allocMappedLocal -> aloadLocal;
                               else
+                                 (* do we ever come here? *)
+                                 'loadRef:local:methodField:nonRef??'
+                                   -> ONlevelWarning;
                                  (off) -> allocMappedLocal -> loadLocal;
                              if);
                           else
@@ -528,7 +657,8 @@ splitClassSignature: SplitSignature
           #);
         pushAdr:
           (#
-          do (if off = 0 then
+          do (if ONlevel > 0 then 'pushAdr'->ONlevelWarning if);
+             (if off = 0 then
                  (if reg
                   // thisO then
                      aload_0 -> jcf.emit;
@@ -566,7 +696,7 @@ splitClassSignature: SplitSignature
              ' off:'-> puttext; off-> putint;
              ' size:'->puttext; size -> putint; 
              ' ONlevel:'->puttext; ONlevel -> putint;
-             ' isField:'->puttext; isField -> putint;
+             ' isField:'->puttext; isField -> putint; ' ' -> put;
              descName[] -> puttext; ' '->put;
              fieldName[] -> puttext; ' '->put;
              fieldType[] -> putline
@@ -577,7 +707,13 @@ splitClassSignature: SplitSignature
         className,fieldType: ^text;
         TheClassName, TheFieldName, TheFieldType: ^text;
      enter(ONlevel,className[],fieldType[])
-     do (if isMainMethod then
+     do (if false then
+            (*ONlevel > 0 is indeed used!*)
+            (if ONlevel > 0 then
+                '\nloadOrigin:ONlevel>0:'->puttext;
+                className[] -> puttext; ':'->puttext; fieldType[] -> putline
+        if)if);
+        (if isMainMethod then
             (* reconsider for main/program-slot;
              * in Java:main, we cannot access class fields;
              * but we may do in BETA
@@ -1302,58 +1438,6 @@ splitClassSignature: SplitSignature
         if);
      #);
    
-   splitPathAndName:
-     (# orgPath,path,FN: ^text; slashPos,dotPos: @integer;
-        e: @diskentry
-     enter orgPath[]
-     do orgPath[] -> e.path;
-        e.path.head -> path[]; directorychar -> path.put;
-        e.path.name.prefix -> FN[];
-     exit(path[],FN[])
-     #);
-   
-   BCisSplit: @boolean;
-   c: ^text; (* ugly *)
-   
-   mkDepFile:
-     (# dep: @file;
-     do (* Touch the dep file *)
-        '.dep'
-          -> (thisSourceFileName[]->(thisFullSourcePath.copy).append).append 
-          -> dep.name;
-        (*'touching file ' -> screen.puttext; dep.name ->screen.putline;*)
-        dep.touch;
-     #);
-   numTempLocals: @integer;
-   thisPackagePath,      (* package path *)
-   thisFullPath,         (* full path of directory for for 
-                          * current object/class file.
-                          * On JVM this include package path.
-                          *)
-   thisFullSourcePath,   (* Full path of directory of current source file *)
-   thisSourceFileName,   (* name of current source file *)
-   thisFileName,         (* name of current object file  *)
-   thisClassName: ^text; (* name of current class 
-                          * for java: currentFile = currentClass
-                          * for .NET: they may differ
-                          *)
-   thisSuperName: ^text;
-   thisInnerMethodName: ^text;
-   thisOrgName, thisSuperOrgName: ^text;
-   subLevel,thisBlockLevel: @integer;
-   class: ^text;       (* name of class being called - 
-                        * used by subsequent init - ugly
-                        *)
-   isMainMethod: @boolean;
-   thisSignature: ^text;
-   commentStream: ^stream;
-   jasmin: @file;
-   jasminIsOpen: @boolean;
-   lastLocalAllocated:
-     (* used by allocAndStoreLocal and just for testing .NET stuff 
-      * And never assigned a value here?
-      *)
-     @integer;
 
    classes: @
      (# L: [4] ^text; 
@@ -1382,44 +1466,6 @@ splitClassSignature: SplitSignature
                   end[i] -> endPos;
                   inner
           for)#)
-     #);
-   mkClassListFile:
-     (# basename: ^text;
-        F: @file;
-     do (thisSourceFileName[]->(thisFullPath.copy).append).append -> basename[];
-        '.clst'
-          -> (basename.copy).append
-          -> F.name;
-        (if false then
-            '\nClassFileName: ' -> screen.puttext; 
-            F.name -> screen.puttext; 
-            ', Path: '->screen.puttext; 
-            ThisFullPath[] -> screen.putline;
-        if);
-        F.openWrite;
-        (* 'opened for writing: ' -> screen.puttext; F.name -> screen.putline; *)
-        classes.scan
-        (# 
-        do startPos -> F.putint; 
-           ' ' -> F.put;
-           endPos -> F.putint;
-           ' ' -> F.put;
-           current[] (* No extension *) 
-             -> (thisFullSourcePath.copy).append 
-             -> F.putline;
-           (* current[] -> putline *)
-        #);
-        (if false then
-            (if common.switch[189] then
-                (* .NET: All attributes forms in one file.
-                 * The library file may or may not define attributes fragments.
-                 * In both cases a legal .il file is generated.
-                 * This file must be included in assembly/link too.
-                 *)
-                basename[] -> F.putline; (* Add to class list for future job files *)
-            if);
-        if);
-        F.close;
      #);
 #)
 
