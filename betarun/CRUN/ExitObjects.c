@@ -121,6 +121,130 @@ void CExitO(long exitAddr, Object * exitObj, Object * theObj)
   return; /* Will jump to exitAddr and restore SP from FramePointer */
 }
 
+
+
+
+/**************** NEW VERSION ******************/
+
+/* ExOx(exitAddr, exitObject)
+   - pop stack until *and including* exitObject stack frame
+*/
+
+asmlabel(ExOx, 
+	 "mov     %i1, %o1; "
+	 "ba       "CPREF"ExitOx; "
+	 "mov     %i0, %o2; "
+	 );
+/* Note: The offset parameter is complely ignored. It's not needed
+   on the SPARC */
+
+void CExitOx(long exitAddr, Object * exitObj, Object * theObj)
+{
+  RegWin *rw;		    /* Callers Register Window */
+
+  /* Save global vars in case of error */
+  Component *theComp        = ActiveComponent;
+  RegWin    *nextCBF        = (RegWin*)ActiveCallBackFrame;
+  RegWin    *nextCompBlock  = (RegWin*)lastCompBlock;
+  Component *nextComp;
+
+  DEBUG_CODE(NumExO++);
+
+  Ck(exitObj); 
+
+  /* FIXME: Compiler currently (v384) generates offset in theObj parameter
+   * Ck(theObj);
+   */
+
+#if 1
+  fprintf(output, "\nExO: ");
+  fprintf(output, "\n  exitAddr:"); PrintCodeAddress((long)exitAddr);
+  fprintf(output, "\n  exitObj: "); PrintObject(exitObj);
+  fprintf(output, "\n  theObj:  "); PrintObject(theObj);
+  fprintf(output, "\n");
+  fflush(output);
+#define TRACE_EXOX() \
+ fprintf(output, "File %s; Line %d", __FILE__, __LINE__);       \
+ fprintf(output, "\nNew RegWin: 0x%08x", (int)rw);              \
+ fprintf(output, "\nNew object:"); PrintObject(theObj);         \
+ fprintf(output, "\n");                                         \
+ fflush(output)
+ 
+#else
+#define TRACE_EXOX()
+#endif
+
+  /* We need to read the stack, thus this trap to flush regwins */
+  __asm__("ta 3");
+
+  /* Start from framepointer (skip frame of CExitO) */
+  rw = (RegWin *) FramePointer;
+
+  while ((theObj = (Object *) rw->i0) != exitObj) {
+#ifdef LEAVE_ACROSS_CALLBACK
+    if (rw == nextCBF){
+      DEBUG_STACK({
+	fprintf(output, "ExO: Passing callback\n");
+	fflush(output);
+      });
+      /* This is AR of HandleCB. Update nextCBF.   */
+      nextCBF = (CallBackFrame *)  rw->l5;
+      rw = (RegWin *)rw->l6 /* skip to betaTop */;
+      TRACE_EXOX();
+      continue;
+    } 
+#endif
+    /* Ordinary BETA activation record */
+    if (rw == nextCompBlock) {
+      /* Passing a component, this is the RegWin of CAttach */
+      /* Terminate theComp as in AttachComponent: */
+      DEBUG_STACK({
+	fprintf(output, "ExO: passing comp 0x%x\n", (int)theComp);
+	fflush(output);
+      });
+      if (theComp->CallerComp == 0){
+	/* Attempt to leave basic component! */
+	BetaError(LeaveBasicCompErr,theObj);
+      }
+      DEBUG_CODE(NumTermComp++);
+      theObj = theComp->CallerObj;  
+      theComp->CallerObj  = 0;
+      theComp->StackObj = 0;
+      nextComp = theComp->CallerComp; 
+      theComp->CallerComp = 0;
+      theComp = nextComp;
+
+      /* Pop the Component Block */
+      nextCBF       = (RegWin *) rw->l5;
+      nextCompBlock = (RegWin *) rw->l6;
+      rw = (RegWin *) rw->fp; 
+      TRACE_EXOX();
+      continue;
+    } 
+    
+    /* go one step back */
+    rw = (RegWin *) rw->fp;
+    theObj = (Object *) rw->i0;
+    TRACE_EXOX();
+    continue;
+  }
+
+  /* go one more step back */
+  rw = (RegWin *) rw->fp;
+  TRACE_EXOX();
+
+  /* Update global variables */
+  lastCompBlock       = (ComponentBlock*)nextCompBlock;
+  ActiveCallBackFrame = (CallBackFrame*)nextCBF;
+  ActiveComponent     = theComp;
+
+  /* We return to exitAddr (the -8 is the SPARC convention) */
+  setret(exitAddr-8);
+  /* Unwind stack */
+  FramePointer = (long *) rw;
+  return; /* Will jump to exitAddr and restore SP from FramePointer */
+}
+
 #endif /* sparc */
 
 #endif /* MT */
