@@ -1,4 +1,4 @@
-betarundir = $(BETALIB)/betarun/v2.8/$(MACHINETYPE)
+betarundir = $(BETALIB)/betarun/v2.7/$(MACHINETYPE)
 
 make: ../$(MACHINETYPE)/searchHack.o ../$(MACHINETYPE)/lazyref_gc.o 
 
