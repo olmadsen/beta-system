@@ -1,4 +1,4 @@
-BASEDIR	= $(SRCDIR)\..\..
+BASEDIR	= $(SRCDIR)\..
 
 MAKEOBJS=$(OBJDIR)\ranlib.obj
 
