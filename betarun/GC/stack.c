@@ -871,19 +871,22 @@ static void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
     /* Test for floating point regs on stack. The compiler may push
      * up to 16 floating point (double) registers (128 bytes). If so it has
      * pushed a tag constructed as tag = -(n*2+4), where n is the number of
-     * register pushed. The number of longs is n*2. These should be 
-     * skipped by GC.
+     * 8-byte register pushed. 
+     * So n*2+2 longs should be skipped by GC (skipping the tag too).
+     * Since foo-loop skips 2 after continue, skip n*2 = -tag-4 longs.
      */
     int tag = (int)*theCell;
     if ( (-(2*16+4)<=tag) && (tag<=-4) ){
-      if ( (int)(theCell+(-tag-4)) >= (int)(ar->fp) ){
+      if ( (int)(theCell+(-tag-2)) > (int)(ar->fp) ){
 	/* Skip would be out of frame */
 	DEBUG_CODE({
 	  fprintf(output, "Attempt to skip out of frame!\n");
 	  Illegal();
 	});
       } else {
+	/* Do the skip */
 	theCell += -tag-4;
+	continue;
       }
     }
 
@@ -1084,21 +1087,37 @@ void PrintAR(RegWin *ar, RegWin *theEnd)
   /* Now do the stack part */
   fprintf(output, "stackpart:\n");
   /* Notice that in INNER some return adresses are pushed. This is no
-   * danger.
+   * danger. These will be identified as code addresses in the debug output.
    */
   for (; theCell != (Object **) theEnd; theCell+=2) {
     /* Test for floating point regs on stack. See comment in ProcessAR */
     int tag = (int)*theCell;
     if ( (-(2*16+4)<=tag) && (tag<=-4) ){
-      fprintf(output, 
-	      "Skipping %d saved floating points regs.\n", 
-	      (-tag-4)/2);
-      if ( (int)(theCell+(-tag-4)) >= (int)(ar->fp) ){
+      if ( (int)(theCell+(-tag-2)) > (int)(ar->fp) ){
 	/* Skip would be out of frame */
 	fprintf(output, 
-		"NO: not skipping anyway: skip would be out of frame!.\n");
+		"0x%08x: %d: NOT skipping %d float regs: skip would be out of frame! (%%fp=0x%08x).\n",
+		(int)theCell,
+		tag,
+		(-tag-4)/2,
+		(int)(ar->fp));
+	Illegal();
       } else {
-	theCell += -tag-4;
+	double *ptr;
+	int fn;
+	fprintf(output, 
+		"0x%08x: %d: Skipping tag and %d saved floating points regs:\n", 
+		(int)theCell,
+		tag,
+		(-tag-4)/2);
+	for (fn=0, ptr = (double*)(theCell+2); 
+	     ptr < (double *)(theCell+(-tag-2));
+	     fn+=2, ptr++){
+	  fprintf(output, "0x%08x: [%%fr%d] %g\n", (int)ptr, fn, *ptr);
+	}
+	/* Do the skip  */
+      	theCell += (-tag-4);
+	continue;
       }
     }
     fprintf(output, "0x%08x: 0x%x", (int)theCell, (int)(*theCell));
