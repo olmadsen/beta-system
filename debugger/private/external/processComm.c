@@ -4,7 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-char *strdup (char *in);
+#ifdef ppmac
+  char *strdup (char *in);
+#endif 
 
 /* 
    #define EXITONEXCEPTION
