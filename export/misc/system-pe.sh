@@ -26,8 +26,8 @@ $FILES \
 echo "cd %BETALIB%\\betarun\\${BETARUN}\\${CODEDIR}"  > $DST/system-pe.cmd
 echo "ren /Q betarun.lib  betarun.lib.orig"           >> $DST/system-pe.cmd
 echo "ren /Q betarun_v.lib betarun_v.lib.orig"        >> $DST/system-pe.cmd
-echo "copy /Q betarun.pe betarun.lib"                 >> $DST/system-pe.cmd
-echo "copy /Q betarun.pe betarun_v.lib"               >> $DST/system-pe.cmd
+echo "copy /Q betarun_pe.lib betarun.lib"             >> $DST/system-pe.cmd
+echo "copy /Q betarun_pe.lib betarun_v.lib"           >> $DST/system-pe.cmd
 echo "copy /Q bin\\README.txt README.txt"             >> $DST/system-pe.cmd
 echo ""                                               >> $DST/system-pe.cmd
 cat $DST/system.cmd                                   >> $DST/system-pe.cmd
@@ -76,9 +76,9 @@ echo "newfolder {newbeta}betarun:v2.9: „ Dev:Null"         >> $DST/system.pack
 echo "newfolder {newbeta}betarun:v2.9:ppcmac: „ Dev:Null"  >> $DST/system.pack
 
 # add special betarun files
-echo "duplicate {betalib}betarun:${BETARUN}:${CODEDIR}:betarun.pe {newbeta}betarun:${BETARUN}:${CODEDIR}:betarun.obj"  \
+echo "duplicate {betalib}betarun:${BETARUN}:${CODEDIR}:betarun_pe.obj {newbeta}betarun:${BETARUN}:${CODEDIR}:betarun.obj"  \
   >> $DST/system.pack
-echo "duplicate {betalib}betarun:${BETARUN}:${CODEDIR}:betarun.pe {newbeta}betarun:${BETARUN}:${CODEDIR}:betarun_v.obj" \
+echo "duplicate {betalib}betarun:${BETARUN}:${CODEDIR}:betarun_pe.obj {newbeta}betarun:${BETARUN}:${CODEDIR}:betarun_v.obj" \
   >> $DST/system.pack
 
 # Add locking of betarun files if specified in environment.
@@ -104,21 +104,23 @@ else
 
 	if [ ! -d ${BETALIB}/test ]; then mkdir ${BETALIB}/test; fi
 	cd ${BETALIB}/test
-	echo "Adding betarun.pe as betarun.o and betarun_v.o from directory"
+	echo "Adding betarun_pe.o as betarun.o and betarun_v.o from directory"
 	pwd
 
 	/bin/rm -rf betarun
 	mkdir betarun
 	mkdir betarun/${BETARUN}
 	mkdir betarun/${BETARUN}/$TARGET
-	cp ${BETALIB}/betarun/${BETARUN}/$TARGET/betarun.pe ./betarun/${BETARUN}/$TARGET/betarun.o
-	cp ${BETALIB}/betarun/${BETARUN}/$TARGET/betarun.pe ./betarun/${BETARUN}/$TARGET/betarun_v.o
+	cp ${BETALIB}/betarun/${BETARUN}/$TARGET/betarun_pe.o ./betarun/${BETARUN}/$TARGET/betarun.o
+	cp ${BETALIB}/betarun/${BETARUN}/$TARGET/betarun_pe.o ./betarun/${BETARUN}/$TARGET/betarun_v.o
 
 	tar -rovhf $DST/system.tar \
 	  ./betarun/${BETARUN}/${CODEDIR}/betarun.o \
 	  ./betarun/${BETARUN}/${CODEDIR}/betarun_v.o  \
 	>> $DST/system.lst
 
+	/bin/rm -rf betarun
+	
 	echo "Compressing..."
 	if [ -f $DST/system.tar.${ZEXT} ]
 	then
