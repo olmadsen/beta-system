@@ -120,6 +120,14 @@ if (-e "c:\\") {
 	    $MACHINETYPE = 'SUN4S';
 	    $objdir = 'sun4s';
 	    &setup_sun4_5_7;
+	} elsif ($rev =~ /^5\.8/) {
+	    $MACHINETYPE = 'SUN4S';
+	    $objdir = 'sun4s';
+	    &setup_sun4_5_8;
+	} elsif ($rev =~ /^5\.9/) {
+	    $MACHINETYPE = 'SUN4S';
+	    $objdir = 'sun4s';
+	    &setup_sun4_5_9;
 	} else {
 	    print "Unknown/unsupported Sun4 OS\n";
 	    exit 1;
@@ -266,6 +274,14 @@ sub setup_sun4_5_6 {
 }
 
 sub setup_sun4_5_7 {
+    &setup_sun4_5_6;
+}
+
+sub setup_sun4_5_8 {
+    &setup_sun4_5_6;
+}
+
+sub setup_sun4_5_9 {
     &setup_sun4_5_6;
 }
 
