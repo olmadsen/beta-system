@@ -1,7 +1,9 @@
 #include <stdio.h>
 #include <stdlib.h>
-
-#include "mysql/mysql.h"
+#ifdef nti
+# include <windows.h>
+#endif
+#include "mysql.h"
 
 void printerror(MYSQL* m)
 {
