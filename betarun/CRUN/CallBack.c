@@ -9,8 +9,9 @@
 /*************************** crts ***************************/
 #ifdef crts
 
+#ifdef sparc
 /* HandleCallBack is called from a CallBackEntry, setup like
-   above. This means that the real return address is in %g1
+   below. This means that the real return address is in %g1
    and our %i7 pointes to the call instruction in the
    CallBackEntry. */
 
@@ -28,6 +29,7 @@ long HandleCB(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6)
   struct CallBackEntry * cb;
   long retval;
   long (*cbr)();
+  long oldStackPtr; /* Used to hold the frame pointer */
   
   /* Calculate the address of the CallBackEntry. As our return
      address points to the call in the middle of the CallBackEntry,
@@ -40,7 +42,8 @@ long HandleCB(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6)
   cb = cast(CallBackEntry)
     ((char *) retAddress - ((char *)&cb->call_HandleCallBack - (char *)cb));
   asm("mov %%g1, %0":"=r" (retAddress)); /* retAddress = g1; */ 
-  
+  asm("mov %%i6, %0":"=r" (oldStackPtr)); /* oldStackPtr = i6 (frame pointer) */
+
   if (!cb->theStruct) { freeCallbackCalled(); return 0; }
   
   /* Push CallBackFrame. */
@@ -51,12 +54,12 @@ long HandleCB(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6)
   theObj = AlloI(cb->theStruct->iOrigin, cb->theStruct->iProto);
 
   /* Call the CallBack stub, with out first four args in %i1..%i4, and
-     the rest on stack from %i5 and onwards */
+     the rest on stack from %i4 and onwards */
   
   /* As usual, skip the first instruction */
   cbr = (long (*)()) ((long*)theObj->Proto->CallBackRoutine);
   /* Current object is located in the global variable a1 */
-  retval = cbr(theObj, arg1, arg2, arg3, arg4, &arg5);
+  retval = cbr(theObj, oldStackPtr, arg1, arg2, arg3, &arg4);
   
   /* Pop CallBackFrame */
   ActiveCallBackFrame = cbf.next;
@@ -64,7 +67,7 @@ long HandleCB(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6)
  /* Fool gcc into believing that the address of a6 is taken, thus
     making it save it on stack. */
   
-  asm(""::"r" (&arg6)); 
+  asm(""::"r" (&arg5)); 
 
   return retval;
 }
@@ -98,6 +101,23 @@ void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
   ++CBFATop;
   return (void *)&(CBFATop-1)->mov_o7_g1;
 }
+
+#else /* sparc */
+
+long HandleCB(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6)
+{ 
+  fprintf(output,"HandleCB only implemented for SPARC\n");
+  exit(1);
+}
+
+void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
+{
+  fprintf(output,"CopyCPP only implemented for SPARC\n");
+  exit(1);
+}
+
+#endif /* sparc */
+
 #endif /* crts */
 
 /**************************** sparc **************************/
