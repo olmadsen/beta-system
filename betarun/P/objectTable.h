@@ -5,15 +5,16 @@
 #include "objectStore.h"
 
 u_long insertObject(char GCAttr,
-		    StoreID store,
+		    BlockID store,
 		    u_long offset,
 		    Object *theObj);
 void objectLookup(u_long inx,
 		  char *GCAttr,
-		  StoreID *store,
+		  BlockID *store,
 		  u_long *offset,
 		  Object **theObj);
-u_long indexLookupOT(StoreID store, u_long offset);
+u_long indexLookupOT(BlockID store, u_long offset);
+void OTCheck(void (*checkAction)(Object *theObj, void *generic));
 void OTStartGC(void);
 void objectAlive(Object *theObj);
 void OTEndGC(void);
@@ -22,10 +23,14 @@ void updatePersistentObjects(void);
 void removeUnusedObjects(void);
 void initObjectTable(void);
 u_long OTSize(void);
+void insertStoreOffsetOT(BlockID store, u_long offset, u_long inx);
 
 #define ENTRYDEAD         0     
 #define ENTRYALIVE        1     
 #define POTENTIALLYDEAD   3     
 #define DELAYEDENTRYALIVE 4     
+#if 0
+#define EXPORTED          5     
+#endif
 
 #endif /* _OBJECTTABLE_H_ */

@@ -1,8 +1,10 @@
 #include "beta.h"
 #include "referenceTable.h"
 #include "objectTable.h"
+#include "transitObjectTable.h"
 #include "PException.h"
 #include "PImport.h"
+#include "crossStoreTable.h"
 
 void pimport_dummy() {
 #ifdef sparc
@@ -13,38 +15,94 @@ void pimport_dummy() {
 #ifdef PERSIST
 
 /* LOCAL VARIABLES */
-static StoreID currentStore;
+static BlockID currentStore;
+static Object *theRealObj;
+static u_long currentOffset;
 
 /* LOCAL FUNCTION DECLARATIONS */
 static void storeReferenceToProcessReference(REFERENCEACTIONARGSTYPE);
+static Object *importReference(BlockID store, u_long offset, Object **theCell);
+static Object *updateReferenceTable(BlockID store, u_long offset, Object **theCell);
 
 /* FUNCTIONS */
 static void storeReferenceToProcessReference(REFERENCEACTIONARGSTYPE)
 {
-  u_long inx; 
-  
-  if ((inx = indexLookupRT(currentStore, (u_long)*theCell)) == -1) { 
-    inx = insertReference(ENTRYALIVE,
-			  currentStore,
-			  (u_long)*theCell);
-  }
-  
-  *theCell = (Object *)newPUID(inx);
-  
-  /* The referred object itself is not retreived */
-  
+  *theCell = importReference(currentStore, (u_long)*theCell, theCell);
 }
 
-void importStoreObject(Object *theObj, StoreID store)
+static Object *importReference(BlockID store, u_long offset, Object **theCell)
+{
+  StoreProxy *sp;
+  u_long inxOT;
+  char OTGCAttr;
+  BlockID OTstore;
+  u_long OToffset;
+  Object *theRealObj;
+  
+  if (!isCrossStoreReference(offset)) {
+    if ((inxOT = indexLookupOT(store, offset)) != -1) {
+      objectLookup(inxOT,
+		   &OTGCAttr,
+		   &OTstore,
+		   &OToffset,
+		   &theRealObj);
+      
+      Claim(OTGCAttr == ENTRYALIVE, "Lookup on dead object");
+      Claim(store == OTstore, "Table mismatch");
+      Claim((offset >= OToffset) && (offset < OToffset + 4*ObjectSize(theRealObj)),
+	    "Table mismatch");
+      
+      return (Object *)((u_long)theRealObj + (offset - OToffset));
+    } else {
+      /* */
+      return updateReferenceTable(store, offset, theCell);
+    }
+  } else {
+    setCurrentCrossStoreTable(currentStore);
+    sp = lookupStoreProxy(offset);
+    return importReference(sp -> store, sp -> offset, theCell);
+  }
+}
+
+static Object *updateReferenceTable(BlockID store, u_long offset, Object **theCell)
+{
+  u_long inxRT;
+  
+  if ((inxRT = indexLookupRT(store, offset)) == -1) { 
+    inxRT = insertReference(ENTRYALIVE,
+			    store,
+			    offset);
+  }
+  newAOAclient(inxRT, theCell);
+  return (Object *)newPUID(inxRT);
+} 
+
+static void updateTransitObjectTable(Object *theObj)
+{
+  u_long distanceToPart;
+  distanceToPart = (u_long)theObj - (u_long)theRealObj;
+  insertObjectInTransit(currentStore,
+			currentOffset + distanceToPart,
+			theObj);
+}
+
+void importStoreObject(Object *theObj, BlockID store, u_long offset)
 {
   void (*temp)(Object *theObj);
+  
+  Claim(theObj == getRealObject(theObj), "Unexpected part object");
 
+  theRealObj = theObj;
   /* Scan references, and turn into PUID's */
   currentStore = store;
-  temp = objectAction; objectAction = NULL;
+  currentOffset = offset;
+  temp = objectAction; 
+  objectAction = updateTransitObjectTable;
+  
   scanObject(theObj,
 	     storeReferenceToProcessReference,
 	     TRUE);
+  
   objectAction = temp;
 }
 

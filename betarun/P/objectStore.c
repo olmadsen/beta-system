@@ -3,6 +3,8 @@
 #include "PSfile.h"
 #include "PStore.h"
 #include "crossStoreTable.h"
+#include "proto.h"
+#include "profile.h"
 
 void os_dummy() {
 #ifdef sparc
@@ -18,7 +20,7 @@ typedef struct ObjectStore {
   u_long maxSize;        /* Space allocated for this store in bytes */
   u_long nextFree;       /* Offset of the next free entry in bytes */
   u_long lookupCount;    /* Number of times this block has been requested */
-  StoreID store;         /* The id of the store belonging to this
+  BlockID store;         /* The id of the store belonging to this
 			    ObjectStore */
   Object body[1];        /* The objects. */
 } ObjectStore;
@@ -30,16 +32,17 @@ static ObjectStore *currentTable = NULL;   /* The current table loaded */
 #define BLOCKSINSTORE 1
 
 /* LOCAL FUNCTION DECLARATIONS */
-static int createObjectStore(StoreID store, u_long minSize);
+static int createObjectStore(BlockID store, u_long minSize);
 
 /* IMPEMENTATION */
-static int createObjectStore(StoreID store, u_long minSize)
+static int createObjectStore(BlockID store, u_long minSize)
 {
   char *file_name;
   int fd;
   ObjectStore *newTable;
   u_long storeSize;
   
+  SETSIM(CREATEOBJECTSTORE);
   /* Object stores are the smallest unit of data that this process can
      access in the store. If an object saved in a certain object store
      A is retrieved, the entire object store is retrieved. If objects
@@ -53,7 +56,9 @@ static int createObjectStore(StoreID store, u_long minSize)
   if ((file_name = objectStoreName(store))) {
     if ((fd = open(file_name,O_RDWR | O_CREAT, S_IWRITE | S_IREAD))<0) {
       perror("createObjectStore");
-      return ILLEGALSTOREID;
+      
+      SETSIM(UNKNOWN);
+      return ILLEGALBlockID;
     } else {
       storeSize = preferredBufferSize(file_name) * BLOCKSINSTORE;
       
@@ -72,18 +77,26 @@ static int createObjectStore(StoreID store, u_long minSize)
       
       Claim(currentTable == NULL, "What is currentTable ?");
       currentTable = newTable;
+      
+      SETSIM(UNKNOWN);
       return store;
       
     }
   } else {
-    return ILLEGALSTOREID;
+    
+    SETSIM(UNKNOWN);
+    return ILLEGALBlockID;
   }
   
-  return ILLEGALSTOREID;
+  
+  SETSIM(UNKNOWN);
+  return ILLEGALBlockID;
 }
 
 int saveCurrentObjectStore()
 {
+  SETSIM(SAVECURRENTOBJECTSTORE);
+
   if (currentTable) {
     char *file_name;
     int fd;
@@ -96,30 +109,31 @@ int saveCurrentObjectStore()
       } else {
 	writeSome(fd, currentTable, currentTable -> maxSize);
 	close(fd);
-	INFO_PERSISTENCE(fprintf(output,"[saveCurrentObjectStore(%d): used %d (%d) (%d%%)]\n", 
-				 (int)(currentTable -> store),
-				 (int)(currentTable -> nextFree),
-				 (int)(currentTable -> maxSize),
-				 (int)(currentTable -> nextFree * 100 / currentTable -> maxSize)));
       }
     } else {
       DEBUG_CODE(Illegal());
       BetaExit(1);
     }
   } else {
+    
+    SETSIM(UNKNOWN);
     return 0;
   }
   
+  
+  SETSIM(UNKNOWN);
   return 1;
 }
 
-int setCurrentObjectStore(StoreID store)
+int setCurrentObjectStore(BlockID store)
 {
   char *file_name;
   int fd;
-  
+  SETSIM(SETCURRENTOBJECTSTORE);
+
   if (currentTable) {
-    if (compareStoreID(store, currentTable -> store)) {
+    if (compareBlockID(store, currentTable -> store)) {
+      SETSIM(UNKNOWN);
       return 1;
     } else {
       saveCurrentObjectStore();
@@ -131,6 +145,8 @@ int setCurrentObjectStore(StoreID store)
   if ((file_name = objectStoreName(store))) {
     if ((fd = open(file_name,O_RDWR))<0) {
       perror("setCurrentObjectStore");
+      
+      SETSIM(UNKNOWN);
       return 0;
     } else {
       u_long maxSize;
@@ -140,25 +156,37 @@ int setCurrentObjectStore(StoreID store)
       Rewind(fd);
       readSome(fd, currentTable, maxSize);
       close(fd);
-      INFO_PERSISTENCE(fprintf(output,"[setCurrentObjectStore(%d): used %d (%d) (%d%%)]\n", 
-			       (int)(currentTable -> store),
-			       (int)(currentTable -> nextFree),
-			       (int)(currentTable -> maxSize),
-			       (int)(currentTable -> nextFree * 100 / currentTable -> maxSize)));
-      
       INFO_PERSISTENCE(numSL++);
     }
   } else {
+    
+    SETSIM(UNKNOWN);
     return 0;
   }
+  
+  SETSIM(UNKNOWN);
   return 1;
 }
+
+#ifdef RTINFO
+void printObjectStoreStatistics(void)
+{
+  fprintf(output, "[ numSL: 0x%X]\n", (int)numSL);
+}
+#else
+void printObjectStoreStatistics(void)
+{
+  ;
+}
+#endif /* RTINFO */
 
 /* Allocates and inserts space for a new object in the current store */
 StoreProxy *newStoreObject(Object *theObj)
 {
   u_long size;
   
+  SETSIM(NEWSTOREOBJECT);
+    
   Claim(theObj == getRealObject(theObj), "Trying to insert part object");
   
   size = 4*ObjectSize(theObj);
@@ -169,13 +197,13 @@ StoreProxy *newStoreObject(Object *theObj)
       StoreProxy *sp = (StoreProxy *)malloc(sizeof(struct StoreProxy));
       
       Claim(theObj == getRealObject(theObj), "Unexpected part object");
-
+      
       nextObject = (Object *)((u_long)currentTable + currentTable -> nextFree);
       memcpy(nextObject, theObj, size);
       sp -> store = currentTable -> store;
       sp -> offset = currentTable -> nextFree;
       currentTable -> nextFree += size;
-      
+      SETSIM(UNKNOWN);
       return sp;
     } 
     saveCurrentObjectStore();
@@ -186,44 +214,55 @@ StoreProxy *newStoreObject(Object *theObj)
   /* There are no current store, or there is no room at the in. */
   
   {
-    StoreID store;
+    BlockID store;
     
-    store = getNextStoreId();
+    store = getNextBlockID();
     createObjectStore(store, size);
     createCrossStoreTable(store);
-    
     return newStoreObject(theObj);
   }
 }
 
-Object *lookupStoreObject(StoreID store, u_long offset)
+Object *lookupStoreObject(BlockID store, u_long offset)
 {
+  SETSIM(LOOKUPSTOREOBJECT);
   if (currentTable) {
-    if (compareStoreID(store, currentTable -> store)) {
+    if (compareBlockID(store, currentTable -> store)) {
       if (offset < currentTable -> nextFree) {
 	currentTable -> lookupCount += 1;
+	
+	SETSIM(UNKNOWN);
 	return (Object *)((u_long)currentTable + (u_long)offset);
       }
     }
   }
   
+  SETSIM(UNKNOWN);
   return NULL;
 }
 
 /* Updates the Object in the current table */
-int setStoreObject(StoreID store, u_long offset, Object *theObj)
+int setStoreObject(BlockID store, u_long offset, Object *theObj)
 {
+  SETSIM(SETSTOREOBJECT);
+    
   if (currentTable) {
     if (offset < currentTable -> nextFree) {
       Object *ObjectInStore;
-
+      
       Claim(theObj == getRealObject(theObj), "Unexpected part object");
       ObjectInStore = (Object *)((u_long)currentTable + offset);
       memcpy(ObjectInStore, theObj, ObjectSize(theObj)*4);
       
+      /* Handle prototype */
+      exportProtoTypes(ObjectInStore);
+      
+      SETSIM(UNKNOWN);
       return 1;
     }
   }
+  
+  SETSIM(UNKNOWN);
   return 0;
 }
 

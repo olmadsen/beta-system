@@ -6,5 +6,6 @@ Object *newPUID(u_long offset);
 u_long getPUID(void *ip);
 int inPIT(void *ip);
 void initProxyTrapHandler(void);
+void printProxyStatistics(void);
 
 #endif /* _PEXCEPTION_H_ */

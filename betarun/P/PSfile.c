@@ -127,4 +127,5 @@ u_long preferredBufferSize(char *path)
   }
   return 0;
 }
+
 #endif /* PERSIST */

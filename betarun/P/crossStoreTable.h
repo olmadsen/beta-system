@@ -3,13 +3,14 @@
 
 #include "objectStore.h"
 
-StoreID createCrossStoreTable(StoreID store);
-StoreID getCurrentCrossStoreTable();
+BlockID createCrossStoreTable(BlockID store);
+BlockID getCurrentCrossStoreTable();
 int saveCurrentCrossStoreTable();
-int setCurrentCrossStoreTable(StoreID store);
-u_long newStoreProxy(StoreID store,
+int setCurrentCrossStoreTable(BlockID store);
+u_long newStoreProxy(BlockID store,
 		     u_long offset);
 StoreProxy *lookupStoreProxy(u_long inx);
+void printCrossStoreStatistics(void);
 
 #define isCrossStoreReference(inx) ((inx) % 2 == 1)
 #endif /* _CROSSSTORETABLE_H_ */

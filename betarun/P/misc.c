@@ -1,8 +1,10 @@
 #include "misc.h"
 #include "beta.h"
 #include "objectTable.h"
+#include "crossStoreTable.h"
 #include "referenceTable.h"
 #include "PException.h"
+#include "unswizzle.h"
 
 void miscp_dummy() {
 #ifdef sparc
@@ -11,6 +13,8 @@ void miscp_dummy() {
 }
 
 #ifdef PERSIST
+
+/* LOCAL VARIABLES */
 
 /* LOCAL FUNCTION DECLARATIONS */
 static void markOriginAlive(Object **theCell);
@@ -66,6 +70,9 @@ void newPersistentObject(Object *theObj)
 		     theObj);
   free(sp);
   theObj -> GCAttr = PERSISTENTMARK(inx);
+  
+  INFO_PERSISTENCE(persistentBytes+= 4*ObjectSize(theObj));
+  INFO_PERSISTENCE(newObjects+=1);
 }
 
 /* Given a cell in a persistent object, all objects referred
@@ -92,10 +99,12 @@ void markReachableObjects(REFERENCEACTIONARGSTYPE)
 static void prependToListRegardless(REFERENCEACTIONARGSTYPE)
 {
   Object *realObj;
-  Claim(!inPIT((void *)*theCell), "Persistent reference in non-persistent object ?");
-  realObj = getRealObject(*theCell);
-  if (!inPIT((void *)(realObj -> GCAttr))) {
-    prependToList(*theCell);
+
+  if (!inPIT((void *)*theCell)) {
+    realObj = getRealObject(*theCell);
+    if (!inPIT((void *)(realObj -> GCAttr))) {
+      prependToList(*theCell);
+    }
   }
 }
 
@@ -116,7 +125,7 @@ static void markOriginAlive(Object **theCell)
   Object *theOrigin, *theRealOrigin;
   u_long inx;
   char GCAttr;
-  StoreID store;
+  BlockID store;
   u_long offset;
   Object *theObj;
 
@@ -157,7 +166,7 @@ void handlePersistentCell(REFERENCEACTIONARGSTYPE)
   Object *realObj, *theObj;
   u_long inx;
   char GCAttr;
-  StoreID store;
+  BlockID store;
   u_long offset;
   
   theObj = *theCell;
@@ -165,7 +174,7 @@ void handlePersistentCell(REFERENCEACTIONARGSTYPE)
   if (inPIT((void *)theObj)) {
     /* The reference is in proper format already */
     referenceAlive((void *)theObj);
-    
+    newAOAclient(getPUID((void *)theObj), theCell);
     INFO_PERSISTENCE(PtoD++);
     return;
   } else {
@@ -195,6 +204,8 @@ void handlePersistentCell(REFERENCEACTIONARGSTYPE)
 				      offset + distanceToPart);
       }
       *theCell = newPUID(newEntryInx);
+      referenceAlive((void *)*theCell);
+      newAOAclient(newEntryInx, theCell);
       INFO_PERSISTENCE(PtoD++);
     } else {
       Claim(GCAttr == ENTRYALIVE, "What is GC mark ?");
@@ -214,18 +225,74 @@ void resetStatistics(void)
 
 void showStatistics(void)
 {
-  INFO_PERSISTENCE(fprintf(output, "[Persistence statistics\n");
-		   fprintf(output, " Pers. before GC         : %d\n", numPB);
-		   fprintf(output, " Delayed entries used    : %d\n", numDE);
-		   fprintf(output, " Trans. to Pers. refs    : %d\n", TtoP);
-		   fprintf(output, " Persistent Objects      : %d\n", numP);
-		   fprintf(output, " Pers. alive to dead refs: %d\n", PtoD);
-		   fprintf(output, " Dead pers. objects      : %d\n", numD);
-		   fprintf(output, "\n");
-		   fprintf(output, " Block loads             : %d\n", numSL);
-		   fprintf(output, "\n");
-		   fprintf(output, " OT size                 : %d\n", (int)OTSize());
-		   fprintf(output, "]\n"));
+  /* INFO_PERSISTENCE(fprintf(output, "[Persistence statistics\n");
+     fprintf(output, " Pers. before GC         : %d\n", numPB);
+     fprintf(output, " Delayed entries used    : %d\n", numDE);
+     fprintf(output, " Trans. to Pers. refs    : %d\n", TtoP);
+     fprintf(output, " Persistent Objects      : %d\n", numP);
+     fprintf(output, " Pers. alive to dead refs: %d\n", PtoD);
+     fprintf(output, " Dead pers. objects      : %d\n", numD);
+     fprintf(output, "\n");
+     fprintf(output, " Block loads             : %d\n", numSL);
+     fprintf(output, "\n");
+     fprintf(output, " OT size                 : %d\n", (int)OTSize());
+     fprintf(output, "]\n"));
+  */
+
+  printObjectStoreStatistics();
+  printCrossStoreStatistics();
+  printProxyStatistics();
+}
+
+/* */
+
+void getKeyForObject(ObjectKey *ok, Object *theObj)
+{
+  u_long inx;
+  char GCAttr;
+  BlockID store;
+  u_long offset;
+  Object *theObjInTable;
+  
+  Claim(getRealObject(theObj) == theObj, "Cannot get key for part object");
+  Claim(AOAISPERSISTENT(theObj), "Cannot get key for transient object");
+  
+  if (inPIT((void *)(theObj -> GCAttr))) {
+    inx = getPUID((void *)(theObj -> GCAttr));
+    
+    
+    objectLookup(inx,
+		 &GCAttr,
+		 &store,
+		 &offset,
+		 &theObjInTable);
+  } else {
+    store = -1;
+    offset = -1;
+  }
+  
+  Claim(GCAttr != ENTRYDEAD, "theObj is dead ??");
+  Claim(theObj == theObjInTable, "Table mismatch ??");
+  
+  ok -> store = store;
+  ok -> offset = offset;
+  
+}
+
+void setTerminatingGC(void)
+{
+  forceAOAGC = TRUE;
+  terminatingGC = TRUE;
+}
+
+void setForceAOAGG(void)
+{
+  forceAOAGC = TRUE;
+}
+
+void keyToObject(ObjectKey *ok, Object **theCell)
+{
+  *theCell = lookUpReferenceEntry(ok -> store, ok -> offset);
 }
 
 #endif /* PERSIST */

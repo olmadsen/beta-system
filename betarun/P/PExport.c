@@ -17,17 +17,19 @@ void pexport_dummy() {
 static void processReferenceToStoreReference(REFERENCEACTIONARGSTYPE);
 
 /* LOCAL VARIABLES */
-static StoreID currentStore;
+static BlockID currentStore;
 static Object *currentObj;
 
 /* */
 static void processReferenceToStoreReference(REFERENCEACTIONARGSTYPE)
 {
   char GCAttr;
-  StoreID store;
+  BlockID store;
   u_long offset, distanceToPart;
   Object *theObj, *realObj;
   void *puid;  /* puid of referred object */
+  Array *IOAclients;
+  Array *AOAclients;
   
   theObj = *theCell;
   if (inPIT(theObj)) {
@@ -35,11 +37,12 @@ static void processReferenceToStoreReference(REFERENCEACTIONARGSTYPE)
     referenceLookup(getPUID(puid), 
 		    &GCAttr, 
 		    &store, 
-		    &offset);
+		    &offset,
+		    &IOAclients,
+		    &AOAclients);
     
-    Claim(compareStoreID(store, currentStore), "??");
+    distanceToPart = 0;
     
-    *theCell = (Object *)offset;
   } else {
     Object *dummy;
     
@@ -57,41 +60,52 @@ static void processReferenceToStoreReference(REFERENCEACTIONARGSTYPE)
 		 &dummy);
 
     Claim(dummy == realObj, "Table mismatch ?");
+  }
+  
+  if (compareBlockID(store, currentStore)) {
+    /* the reference is simply replaced by the offset of the referred object */
+    *theCell = (Object *)(offset + distanceToPart);
+  } else {
+    /* We create a proxy for this object */
+    setCurrentCrossStoreTable(currentStore);
     
-    if (compareStoreID(store, currentStore)) {
-      /* the reference is simply replaced by the offset of the referred object */
-      *theCell = (Object *)(offset + distanceToPart);
-    } else {
-      /* We create a proxy for this object */
-      setCurrentCrossStoreTable(currentStore);
-      
-      Claim(compareStoreID(getCurrentCrossStoreTable(), currentStore), "??");
-      
-      *theCell = (Object *)newStoreProxy(store, offset + distanceToPart);
-
+    Claim(compareBlockID(getCurrentCrossStoreTable(), currentStore), "??");
+    
+    *theCell = (Object *)newStoreProxy(store, offset + distanceToPart);
+    
 #ifdef RTDEBUG
+    if (!inPIT(theObj)) {
       INFO_PERSISTENCE(fprintf(output, "[ CrossReference: (%s, %d) -> (%s, %d, %d) ]\n",
 			       ProtoTypeName(GETPROTO(currentObj)),
 			       (int)(currentStore),
 			       ProtoTypeName(GETPROTO(theObj)),
 			       (int)(store),
 			       (int)(offset + distanceToPart)));
-#endif /* RTDEBUG */
-      Claim((u_long)*theCell != ILLEGALSTOREID, "??");
+    } else {
+      INFO_PERSISTENCE(fprintf(output, "[ CrossReference: (%s, %d) -> (%s, %d, %d) ]\n",
+			       ProtoTypeName(GETPROTO(currentObj)),
+			       (int)(currentStore),
+			       "Unknown",
+			       (int)(store),
+			       (int)(offset + distanceToPart)));
+      
     }
+#endif /* RTDEBUG */
+    Claim((u_long)*theCell != ILLEGALBlockID, "??");
   }
 }
 
+extern void checkOrigins(Object *theObj, void *generic);
+
 /* Exports the object to 'store' */
-void exportObject(Object *theObj, StoreID store)
+void exportObject(Object *theObj, BlockID store)
 {
   currentStore = store;
   currentObj = theObj;
-
+  
   scanObject(theObj,
 	     processReferenceToStoreReference,
 	     TRUE);
-
 }
 
 

@@ -1,6 +1,11 @@
 #include "referenceTable.h"
 #include "PException.h"
 #include "objectTable.h"
+#include "sequenceTable.h"
+#include "trie.h"
+#include "proto.h"
+#include "profile.h"
+#include "transitObjectTable.h"
 
 void reft_dummy() {
 #ifdef sparc
@@ -11,185 +16,354 @@ void reft_dummy() {
 #ifdef PERSIST
 
 /* LOCAL TYPES */
-typedef struct RTEntry { /* Reference Table Entry */
-  char GCAttr;                  /* The GC state of this entry. */
-  StoreID store;                /* The store in which this object is saved */
-  u_long offset;                /* The byte offset in the store of the object */  
-} RTEntry;
 
-typedef struct ReferenceTable {
-  u_long maxIndex;        /* number of indices allocated for this table */
-  u_long nextFree;        /* Index of the next free entry */
-  RTEntry body[1];
-} ReferenceTable;
+typedef struct RTEntry {          /* Reference Table Entry */
+  char GCAttr;                    /* The GC state of this entry. */
+  BlockID store;                  /* The store in which this object is saved */
+  u_long offset;                  /* The byte offset in the store of the object */  
+  Array *IOAclients, *AOAclients; /* List of cells referring this reference */
+} RTEntry;
 
 /* LOCAL DEFINITIONS */
 #define INITIALTABLELENGTH 128 /* Initial size of the ReferenceTable */
 
 /* LOCAL MACROS */
-#define TABLESIZE(length) (sizeof(struct ReferenceTable) + sizeof(struct RTEntry) * ((length) - 1))
 
 /* LOCAL VARIABLES */
-static ReferenceTable *currentTable = NULL;
+static sequenceTable *currentTable = NULL;
+static Node *loadedObjectsST;
 
 /* LOCAL FUNCTION DECLARATIONS */
-static void RTRealloc(void);
+static void insertStoreOffsetRT(BlockID store, u_long offset, u_long inx);
+
+static Array *newArray(void);
+static void Arealloc(Array *array);
+static void Aappend(Array *array, u_long theCell);
 
 /* FUNCTIONS */
-void initReferenceTable(void)
+static Array *newArray(void)
 {
-  u_long newSize;
-  
-  newSize = TABLESIZE(INITIALTABLELENGTH);
-  
-  currentTable = (ReferenceTable *)calloc(TABLESIZE(INITIALTABLELENGTH), 1);
-  currentTable -> maxIndex = INITIALTABLELENGTH;
-  currentTable -> nextFree = 0;
-  
-  initProxyTrapHandler();
+  return (Array *)calloc(1, sizeof(struct Array));
 }
 
-static void RTRealloc(void)
+static void Arealloc(Array *array)
 {
-  u_long newLength;
-  ReferenceTable *newTable;
+  u_long *new;
+  u_short newMax;
   
-  Claim(currentTable != NULL, "RTRealloc: currentTable is NULL");
-  Claim(currentTable -> maxIndex > 0, "RTRealloc: length must be non zero before realloc");
+  newMax = 2*array -> max + 1;
+  new = (u_long *)malloc(sizeof(u_long)*newMax);
+  if (array -> theCells) {
+    memcpy(new, array -> theCells, array -> max * sizeof(u_long));
+    free(array -> theCells);
+    array -> theCells = 0;
+  }
+  array -> theCells = new;
+  array -> max = newMax;
+}
+
+static void Aappend(Array *array, u_long theCell)
+{
+  if (array -> top < array -> max) {
+    array -> theCells[array -> top] = theCell;
+    array -> top = array -> top + 1;
+  } else {
+    Arealloc(array);
+    Aappend(array, theCell);
+  }
+}
+
+static int isFree(void *entry)
+{
+  Claim(entry != NULL, "isFree: entry is NULL");
+  return (((RTEntry *)entry) -> GCAttr == ENTRYDEAD);
+}
+
+static void Free(void *entry)
+{
+  RTEntry *elm;
   
-  newLength = currentTable -> maxIndex * 2;
-  newTable = (ReferenceTable *)calloc(TABLESIZE(newLength), 1);
-  memcpy(newTable, currentTable, TABLESIZE(currentTable -> maxIndex));
-  newTable -> maxIndex = newLength;
-  newTable -> nextFree = currentTable -> nextFree;
-  free(currentTable);
-  currentTable = newTable;
+  Claim(entry != NULL, "Free: entry is NULL");
+  
+  elm = (RTEntry *)entry;
+
+  if (elm -> IOAclients) {
+    if (elm -> IOAclients -> theCells) {
+      free(elm -> IOAclients -> theCells);
+      elm -> IOAclients -> theCells = 0;
+    }
+    free(elm -> IOAclients);
+    elm -> IOAclients = 0;
+  }
+
+  if (elm -> AOAclients) {
+    if (elm -> AOAclients -> theCells) {
+      free(elm -> AOAclients -> theCells);
+      elm -> AOAclients -> theCells = 0;
+    }
+    free(elm -> AOAclients);
+    elm -> AOAclients = 0;
+  }
+
+  free(elm);
+}
+
+void initReferenceTable(void)
+{
+  currentTable = STInit(INITIALTABLELENGTH, isFree, Free, sizeof(RTEntry));
+  initProxyTrapHandler();
+  loadedObjectsST = TInit();
+  initProtoHandling();
+}
+
+void newIOAclient(u_long inx, Object **theCell)
+{
+  RTEntry *entry;
+  
+  Claim(inToSpace(theCell), "Where is the client");
+  
+  entry = STLookup(currentTable, inx);
+  
+  Claim(entry -> GCAttr == ENTRYALIVE, "What is GCAttr");
+
+  if (entry -> IOAclients == NULL) {
+    entry -> IOAclients = newArray();
+  }
+  
+  Aappend(entry -> IOAclients, (u_long)theCell);
+}
+
+void newAOAclient(u_long inx, Object **theCell)
+{
+  RTEntry *entry;
+  
+  Claim(inAOA(theCell), "Where is the client");
+  
+  entry = STLookup(currentTable, inx);
+  
+  Claim(entry -> GCAttr == ENTRYALIVE, "What is GCAttr");
+  
+  if (entry -> AOAclients == NULL) {
+    entry -> AOAclients = newArray();
+  }
+  Aappend(entry -> AOAclients, (u_long)theCell);
+}
+
+void inxToObject(u_long inx)
+{
+  RTEntry *entry;
+  
+  entry = STLookup(currentTable, inx);
+}
+
+void clearAOAclients(void)
+{
+  u_long maxIndex, inx;
+  RTEntry *entry;
+
+  maxIndex = STSize(currentTable);
+  
+  for (inx = 0; inx < maxIndex; inx++) {
+    entry = STLookup(currentTable, inx);
+    if (entry -> AOAclients) {
+      if (entry -> AOAclients -> theCells) {
+	free(entry -> AOAclients -> theCells);
+	entry -> AOAclients -> theCells = NULL;
+      }
+      free(entry -> AOAclients);
+      entry -> AOAclients = NULL;
+    }
+  }
+}
+
+void clearIOAclients(void)
+{
+  u_long maxIndex, inx;
+  RTEntry *entry;
+
+  maxIndex = STSize(currentTable);
+  
+  for (inx = 0; inx < maxIndex; inx++) {
+    entry = STLookup(currentTable, inx);
+    if (entry -> IOAclients) {
+      if (entry -> IOAclients -> theCells) {
+	free(entry -> IOAclients -> theCells);
+	entry -> IOAclients -> theCells = NULL;
+      } 
+      free(entry -> IOAclients);
+      entry -> IOAclients = NULL;
+    }
+  }
 }
 
 u_long insertReference(char GCAttr,
-		       StoreID store,
+		       BlockID store,
 		       u_long offset)
 {
+  RTEntry *newEntry;
   u_long inx;
-  static u_long once = 0;
   
-  Claim(currentTable != NULL, "insertReference: currentTable is NULL");
+  newEntry = (RTEntry *)malloc(sizeof(RTEntry));
+  newEntry -> GCAttr = GCAttr;
+  newEntry -> store = store;
+  newEntry -> offset = offset;
+  newEntry -> IOAclients = newArray();
+  newEntry -> AOAclients = newArray();
   
-  while ((currentTable -> nextFree < currentTable -> maxIndex) &&
-	 (currentTable -> body[currentTable -> nextFree].GCAttr != ENTRYDEAD)) {
-    currentTable -> nextFree = currentTable -> nextFree + 1;
+  inx = STInsert(&currentTable, newEntry);
+  
+  /* Insert (store, offset) in loadedObjectsST */
+  insertStoreOffsetRT(store, offset, inx + 1);
+  
+  return inx;
+}
+
+static void insertStoreOffsetRT(BlockID store, u_long offset, u_long inx)
+{
+  Node *loadedObjectsOF;
+  
+  /* Check if store is member */
+  if ((loadedObjectsOF = TILookup(store, loadedObjectsST)) == NULL) {
+    /* insert new table for store */
+    loadedObjectsOF = TInit();
+    TInsert(store, (void *)loadedObjectsOF, loadedObjectsST, store);
   }
   
-  inx = currentTable -> nextFree;
-  if (inx < currentTable -> maxIndex) {
-    RTEntry *body;
-    body = &(currentTable -> body[0]);
-    body[inx].GCAttr = GCAttr;
-    body[inx].store = store;
-    body[inx].offset = offset;
-    return inx;
-  } else {
-    if (once) {
-      RTRealloc();
-      once = 0;
-      return insertReference(GCAttr, store, offset);
-    } else {
-      once = 1;
-      currentTable -> nextFree = 0;
-      return insertReference(GCAttr, store, offset);
-    }
-  }
+  /* insert inx in loadedObjectsOF */
+  TInsert(offset, (void *)inx, loadedObjectsOF, offset);
 }
 
 /* Looks up GCAttr, store and offset based on index into table */
 void referenceLookup(u_long inx,
 		     char *GCAttr,
-		     StoreID *store,
-		     u_long *offset)
+		     BlockID *store,
+		     u_long *offset,
+		     Array **IOAclients,
+		     Array **AOAclients)
 {
-  RTEntry *body;
+  RTEntry *entry;
   
-  Claim(inx < currentTable -> maxIndex, "referenceLookup: Illegal inx");
+  entry = STLookup(currentTable, inx);
   
-  body = &(currentTable -> body[0]);
-  
-  *GCAttr = body[inx].GCAttr;
-  *store = body[inx].store;
-  *offset = body[inx].offset;
+  *GCAttr = entry -> GCAttr;
+  *store = entry -> store;
+  *offset = entry -> offset;
+  *IOAclients = entry -> IOAclients;
+  *AOAclients = entry -> AOAclients;
 }
 
 /* Returns inx of entry containing (??, store, object). Returns -1 if
    not found. */
-u_long indexLookupRT(StoreID store, u_long offset)
+u_long indexLookupRT(BlockID store, u_long offset)
 {
-  u_long inx;
-  RTEntry *body;
+  Node *loadedObjectsOF;
   
-  body = &(currentTable -> body[0]);
-  for (inx = 0; inx < currentTable -> maxIndex; inx++) {
-    if (body[inx].store == store) {
-      if (body[inx].offset == offset) {
-	return inx;
-      }
+  /* Check if store is member of 'loadedObjects' */
+  if ((loadedObjectsOF = TILookup(store, loadedObjectsST))) {
+    u_long inx;
+    if ((inx = (u_long)TILookup(offset, loadedObjectsOF))) {
+      return inx - 1;
     }
   }
-  
   return -1;
 }
 
 /* Marks all entries as potentially dead. */
 void RTStartGC(void)
 {
-  u_long inx;
-  RTEntry *body;
+  u_long inx, maxIndex;
+  RTEntry *entry;
   
   if (currentTable == NULL) {
     initReferenceTable();
   }
   
-  body = &(currentTable -> body[0]);
-  for (inx = 0; inx < currentTable -> maxIndex; inx++) {
-    if (body[inx].GCAttr == ENTRYALIVE) {
-      body[inx].GCAttr = POTENTIALLYDEAD;
+  maxIndex = STSize(currentTable);
+  
+  for (inx = 0; inx < maxIndex; inx++) {
+    entry = STLookup(currentTable, inx);
+    if (entry -> GCAttr == ENTRYALIVE) {
+      entry -> GCAttr = POTENTIALLYDEAD;
     } else {
-      Claim(body[inx].GCAttr == ENTRYDEAD, "What is GCAttr ?");
+      Claim(entry -> GCAttr == ENTRYDEAD, "What is GCAttr ?");
     }
   }
 }
 
 void referenceAlive(void *ip)
 {
-  RTEntry *body;
+  RTEntry *entry;
   u_long inx;
   
   inx = getPUID(ip);
+  entry = STLookup(currentTable, inx);
   
-  Claim(inx < currentTable -> maxIndex, "referenceAlive: Illegal inx");
-  
-  body = &(currentTable -> body[0]);
-  
-  Claim(((body[inx].GCAttr == ENTRYALIVE) || (body[inx].GCAttr == POTENTIALLYDEAD)),
+  Claim(((entry -> GCAttr == ENTRYALIVE) || (entry -> GCAttr == POTENTIALLYDEAD)),
 	"What is GCAttr ?");
   
-  body[inx].GCAttr = ENTRYALIVE;
+  entry -> GCAttr = ENTRYALIVE;
+}
+
+static void freeLoadedObjectsOF(void *contents)
+{
+  TIFree((Node *)contents, NULL);
 }
 
 void RTEndGC(void)
 {
-  u_long inx;
-  RTEntry *body;
+  u_long inx, maxIndex;
+  RTEntry *entry;
+  sequenceTable *newTable = NULL;
   
-  body = &(currentTable -> body[0]);
-  for (inx = 0; inx < currentTable -> maxIndex; inx++) {
-    if (body[inx].GCAttr == POTENTIALLYDEAD) {
-      body[inx].GCAttr = ENTRYDEAD;
-      body[inx].store = 0;
-      body[inx].offset = 0;
+  newTable = STInit(INITIALTABLELENGTH, isFree, Free, sizeof(RTEntry));
+  
+  /* Free the current 'loadedObjectsST' */
+  TIFree(loadedObjectsST, freeLoadedObjectsOF);
+  loadedObjectsST = NULL;
+  loadedObjectsST = TInit();
+  
+  maxIndex = STSize(currentTable);
+  
+  for (inx = 0; inx < maxIndex; inx++) {
+    entry = STLookup(currentTable, inx);
+    if (entry -> GCAttr == POTENTIALLYDEAD) {
+      entry -> offset = 0;
+      entry -> store = 0;
+
+    } else if (entry -> GCAttr == ENTRYALIVE) {
+      u_long newInx;
+      RTEntry *newEntry;
+      
+      newEntry = (RTEntry *)malloc(sizeof(RTEntry));
+      newEntry -> GCAttr = ENTRYALIVE;
+      newEntry -> store = entry -> store;
+      newEntry -> offset = entry -> offset;
+      newEntry -> IOAclients = entry -> IOAclients;
+      newEntry -> AOAclients = entry -> AOAclients;
+      entry -> IOAclients = NULL;
+      entry -> AOAclients = NULL;
+      
+      newInx = STInsert(&newTable, newEntry);
+      
+      redirectCells(newEntry -> IOAclients, 
+		    (Object *)newPUID(inx), 
+		    (Object *)newPUID(newInx));
+
+      redirectCells(newEntry -> AOAclients, 
+		    (Object *)newPUID(inx), 
+		    (Object *)newPUID(newInx));
+
+      
+      insertStoreOffsetRT(newEntry -> store, newEntry -> offset, newInx + 1);
     } else {
-      Claim(((body[inx].GCAttr == ENTRYALIVE) || (body[inx].GCAttr == ENTRYDEAD)),
+      Claim((entry -> GCAttr == ENTRYDEAD),
 	    "What is GCAttr ?");
     }
   }
+
+  STFree(&currentTable);
+  currentTable = newTable;
+  
 }
 
 #endif /* PERSIST */

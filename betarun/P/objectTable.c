@@ -5,7 +5,11 @@
 #include "crossStoreTable.h"
 #include "PExport.h"
 #include "referenceTable.h"
-#include "objectSet.h"
+#include "sequenceTable.h"
+#include "trie.h"
+#include "proto.h"
+#include "profile.h"
+#include "transitObjectTable.h"
 
 void objt_dummy() {
 #ifdef sparc
@@ -14,199 +18,252 @@ void objt_dummy() {
 }
 
 #ifdef PERSIST
-
 /* LOCAL TYPES */
 typedef struct OTEntry { /* Object Table Entry */
   char GCAttr;           /* The GC state of this entry. */
-  StoreID store;         /* The store in which this object is saved */
+  BlockID store;         /* The store in which this object is saved */
   u_long offset;         /* The byte offset in the store of the object */  
   Object *theObj;        /* The object in memory */       
 } OTEntry;
 
-typedef struct ObjectTable {
-  u_long maxIndex;        /* number of indices allocated for this table */
-  u_long nextFree;        /* Index of the next free entry */
-  OTEntry body[1];
-} ObjectTable;
-
 /* LOCAL DEFINITIONS */
 #define INITIALTABLELENGTH 128 /* Initial size of the objectTable */
-
-/* LOCAL MACROS */
-#define TABLESIZE(length) (sizeof(struct ObjectTable) + sizeof(struct OTEntry) * ((length) - 1))
+#define MAXOBJECTTABLESIZE 0x1000
 
 /* LOCAL VARIABLES */
-static ObjectTable *currentTable = NULL;
+static sequenceTable *currentTable = NULL;
+static Node *loadedObjectsST;
+
+#ifdef RTINFO
+static u_long bytesExported, objectsExported;
+#endif /* RTINFO */
 
 /* LOCAL FUNCTION DECLARATIONS */
-static void OTRealloc(void);
-   
+static void updateObjectInStore(Object *theObj, BlockID store, u_long offset);
+static void freeLoadedObjectsOF(void *contents);
+
 /* FUNCTIONS */
-void initObjectTable(void)
+static int isFree(void *entry)
 {
-  u_long newSize;
-  
-  newSize = TABLESIZE(INITIALTABLELENGTH);
-  
-  currentTable = (ObjectTable *)calloc(TABLESIZE(INITIALTABLELENGTH), 1);
-  currentTable -> maxIndex = INITIALTABLELENGTH;
-  currentTable -> nextFree = 0;
+  Claim(entry != NULL, "isFree: entry is NULL");
+  return (((OTEntry *)entry) -> GCAttr == ENTRYDEAD);
 }
 
-static void OTRealloc(void)
+static void Free(void *entry)
 {
-  u_long newLength;
-  ObjectTable *newTable;
-  
-  Claim(currentTable != NULL, "OTRealloc: currentTable is NULL");
-  Claim(currentTable -> maxIndex > 0, "OTRealloc: length must be non zero before realloc");
-  
-  newLength = currentTable -> maxIndex * 2;
-  newTable = (ObjectTable *)calloc(TABLESIZE(newLength), 1);
-  memcpy(newTable, currentTable, TABLESIZE(currentTable -> maxIndex));
-  newTable -> maxIndex = newLength;
-  newTable -> nextFree = currentTable -> nextFree;
-  free(currentTable);
-  currentTable = newTable;
+  Claim(entry != NULL, "Free: entry is NULL");
+  free((OTEntry *)entry);
+}
+
+void initObjectTable(void)
+{
+  currentTable = STInit(INITIALTABLELENGTH, isFree, Free, sizeof(OTEntry));
+  loadedObjectsST = TInit();
+  initTransitObjectTable();
 }
 
 u_long OTSize(void)
 {
-  return currentTable -> maxIndex;
+  return STSize(currentTable);
+}
+
+static u_long currentStore;
+static u_long currentOffset;
+static Object *theRealObj;
+static u_long OTinx;
+
+static void registerReverse(Object *theObj)
+{
+  u_long distanceToPart;
+  distanceToPart = (u_long)theObj - (u_long)theRealObj;
+  insertStoreOffsetOT(currentStore,
+		      currentOffset + distanceToPart,
+		      OTinx);
+}
+
+static void registerObjectAndParts(BlockID store, u_long offset, Object *theObj, u_long inx)
+{  
+  OTinx = inx;
+  currentStore = store;
+  currentOffset = offset;
+  theRealObj = theObj;
+  { 
+    void (*temp)(Object *theObj);
+    temp = objectAction; 
+    objectAction = registerReverse;
+    scanObject(theObj,
+	       NULL,
+	       TRUE);
+    objectAction = temp;
+  }
 }
 
 u_long insertObject(char GCAttr,
-		    StoreID store,
+		    BlockID store,
 		    u_long offset,
 		    Object *theObj)
 {
+  OTEntry *newEntry;
   u_long inx;
-  static u_long once = 0;
+
+  Claim(theObj == getRealObject(theObj), "Unexpected part object");
   
-  Claim(currentTable != NULL, "insertObject: currentTable is NULL");
+  newEntry = (OTEntry *)malloc(sizeof(OTEntry));
+  newEntry -> GCAttr = GCAttr;
+  newEntry -> store = store;
+  newEntry -> offset = offset;
+  newEntry -> theObj = theObj;
   
-  while ((currentTable -> nextFree < currentTable -> maxIndex) &&
-	 (currentTable -> body[currentTable -> nextFree].GCAttr != ENTRYDEAD)) {
-    currentTable -> nextFree = currentTable -> nextFree + 1;
-  }
+  inx = STInsert(&currentTable, newEntry);
   
-  inx = currentTable -> nextFree;
-  if (inx < currentTable -> maxIndex) {
-    OTEntry *body;
-    body = &(currentTable -> body[0]);
-    body[inx].GCAttr = GCAttr;
-    body[inx].store = store;
-    body[inx].offset = offset;
-    body[inx].theObj = theObj;
-    return inx;
-  } else {
-    if (once) {
-      OTRealloc();
-      once = 0;
-      return insertObject(GCAttr, store, offset, theObj);
-    } else {
-      once = 1;
-      currentTable -> nextFree = 0;
-      return insertObject(GCAttr, store, offset, theObj);
-    }
-  }
+  /* register the object and the part objects to enable reverse lookup */
+  registerObjectAndParts(store, offset, theObj, inx + 1);
+  
+  return inx;
 }
 
 /* Looks up GCAttr, store, offset and object based on index into table */
 void objectLookup(u_long inx,
 		  char *GCAttr,
-		  StoreID *store,
+		  BlockID *store,
 		  u_long *offset,
 		  Object **theObj)
 {
-  OTEntry *body;
+  OTEntry *entry;
   
-  Claim(inx < currentTable -> maxIndex, "objectLookup: Illegal inx");
-  
-  body = &(currentTable -> body[0]);
-  
-  *GCAttr = body[inx].GCAttr;
-  *store = body[inx].store;
-  *offset = body[inx].offset;
-  *theObj = body[inx].theObj;
+  if ((entry = STLookup(currentTable, inx))) {
+    *GCAttr = entry -> GCAttr;
+    *store = entry -> store;
+    *offset = entry -> offset;
+    *theObj = entry -> theObj;
+  }   
 }
 
 /* Returns inx of entry containing (??, store, object, ??). Returns -1 if
    not found. */
-u_long indexLookupOT(StoreID store, u_long offset)
+u_long indexLookupOT(BlockID store, u_long offset)
 {
-  u_long inx;
-  OTEntry *body;
+  Node *loadedObjectsOF;
   
-  body = &(currentTable -> body[0]);
-  for (inx = 0; inx < currentTable -> maxIndex; inx++) {
-    if (body[inx].store == store) {
-      if (body[inx].offset <= offset) {
-	if ( offset < body[inx].offset + 4*ObjectSize(body[inx].theObj)) {
-	  return inx;
-	}
-      }
+  /* Check if store is member of 'loadedObjects' */
+  if ((loadedObjectsOF = TILookup(store, loadedObjectsST))) {
+    u_long inx;
+    if ((inx = (u_long)TILookup(offset, loadedObjectsOF))) {
+      return inx - 1;
     }
   }
-  
   return -1;
+}
+
+void OTCheck(void (*checkAction)(Object *theObj, void *generic))
+{
+  u_long inx, maxIndex;
+  OTEntry *entry;
+  
+  maxIndex = STSize(currentTable);
+  
+  for (inx = 0; inx < maxIndex; inx++) {
+    entry = STLookup(currentTable, inx);
+    if (entry -> GCAttr == POTENTIALLYDEAD) {
+      checkAction(entry -> theObj, NULL);
+    }
+  }
 }
 
 /* Marks all entries as potentially dead. */
 void OTStartGC(void)
 {
-  u_long inx;
-  OTEntry *body;
+  u_long inx, maxIndex;
+  OTEntry *entry;
   
-  body = &(currentTable -> body[0]);
-  for (inx = 0; inx < currentTable -> maxIndex; inx++) {
-    if (body[inx].GCAttr == ENTRYALIVE) {
-      body[inx].GCAttr = POTENTIALLYDEAD;
+  maxIndex = STSize(currentTable);
+
+  for (inx = 0; inx < maxIndex; inx++) {
+    entry = STLookup(currentTable, inx);
+    if (entry -> GCAttr == ENTRYALIVE) {
+      entry -> GCAttr = POTENTIALLYDEAD;
     } else {
-      Claim(body[inx].GCAttr == ENTRYDEAD, "What is GCAttr ?");
+      Claim(entry -> GCAttr == ENTRYDEAD, "What is GCAttr ?");
     }
   }
 }
 
 void objectAlive(Object *theObj)
 {
-  OTEntry *body;
+  OTEntry *entry;
   u_long inx;
   
   inx = getPUID((void *)(theObj -> GCAttr));
+  entry = STLookup(currentTable, inx);
   
-  Claim(inx < currentTable -> maxIndex, "objectAlive: Illegal inx");
-  
-  body = &(currentTable -> body[0]);
-  
-  Claim(((body[inx].GCAttr == ENTRYALIVE) || (body[inx].GCAttr == POTENTIALLYDEAD)),
+  Claim(((entry -> GCAttr == ENTRYALIVE) || (entry -> GCAttr == POTENTIALLYDEAD)),
 	"What is GCAttr ?");
   
-  body[inx].GCAttr = ENTRYALIVE;
+  entry -> GCAttr = ENTRYALIVE;
+}
+
+void insertStoreOffsetOT(BlockID store, u_long offset, u_long inx)
+{
+  Node *loadedObjectsOF;
+  
+  /* Check if store is member */
+  if ((loadedObjectsOF = TILookup(store, loadedObjectsST)) == NULL) {
+    /* insert new table for store */
+    loadedObjectsOF = TInit();
+    TInsert(store, (void *)loadedObjectsOF, loadedObjectsST, store);
+  }
+  
+  /* insert inx in loadedObjectsOF */
+  TInsert(offset, (void *)inx, loadedObjectsOF, offset);
+}
+
+static void freeLoadedObjectsOF(void *contents)
+{
+  TIFree((Node *)contents, NULL);
 }
 
 void OTEndGC(void)
 {
-  u_long inx;
-  OTEntry *body;
+  u_long inx, maxIndex;
+  OTEntry *entry;
+  sequenceTable *newTable = NULL;
   
-  body = &(currentTable -> body[0]);
-  for (inx = 0; inx < currentTable -> maxIndex; inx++) {
-    if (body[inx].GCAttr == POTENTIALLYDEAD) {
-      body[inx].theObj -> GCAttr = DEADOBJECT;
-      
-      body[inx].GCAttr = ENTRYDEAD;
-      body[inx].store = 0;
-      body[inx].offset = 0;
-      body[inx].theObj = NULL;
-      
+  newTable = STInit(INITIALTABLELENGTH, isFree, Free, sizeof(OTEntry));
+  
+  /* Free the current 'loadedObjectsST' */
+  TIFree(loadedObjectsST, freeLoadedObjectsOF);
+  loadedObjectsST = NULL;
+  loadedObjectsST = TInit();
+  
+  maxIndex = STSize(currentTable);
+  for (inx = 0; inx < maxIndex; inx++) {
+    entry = STLookup(currentTable, inx);
+    if (entry -> GCAttr == POTENTIALLYDEAD) {
+      entry -> theObj -> GCAttr = DEADOBJECT;
+      entry -> theObj = NULL;
       INFO_PERSISTENCE(numD++);
-    } else if (body[inx].GCAttr == ENTRYALIVE) {
+      
+    } else if (entry -> GCAttr == ENTRYALIVE) {
+      u_long newInx;
+      OTEntry *newEntry;
+      
+      newEntry = (OTEntry *)malloc(sizeof(OTEntry));
+      newEntry -> GCAttr = ENTRYALIVE;
+      newEntry -> store = entry -> store;
+      newEntry -> offset = entry -> offset;
+      newEntry -> theObj = entry -> theObj;
+      
+      newInx = STInsert(&newTable, newEntry);
+      entry -> theObj -> GCAttr = (long)newPUID(newInx);
+      registerObjectAndParts(entry -> store, entry -> offset, entry -> theObj, newInx + 1);
       INFO_PERSISTENCE(numP++);
+      
     } else {
-      Claim(body[inx].GCAttr == ENTRYDEAD, "What is GCAttr ?");
+      Claim(entry -> theObj == NULL, "What is the object ??");
     }
   }
+  STFree(&currentTable);
+  currentTable = newTable;
 }
 
 /* Miscellaneous functions */
@@ -214,19 +271,20 @@ void OTEndGC(void)
 void flushDelayedEntries(void)
 {
   u_long count;
-  u_long max;
+  u_long maxIndex;
+  OTEntry *entry;
   
   if (currentTable == NULL) {
     initObjectTable();
   }
-  
-  max = currentTable -> maxIndex;
-  for (count=0; count<max; count++) {
-    if (currentTable -> body[count].GCAttr == DELAYEDENTRYALIVE) {
+  maxIndex = STSize(currentTable);
+  for (count=0; count<maxIndex; count++) {
+    entry = STLookup(currentTable, count);
+    if (entry -> GCAttr == DELAYEDENTRYALIVE) {
       Object *theObj;
-      theObj = currentTable -> body[count].theObj;
-      currentTable -> body[count].GCAttr = ENTRYDEAD;
-      currentTable -> body[count].theObj = NULL;
+      theObj = entry -> theObj;
+      entry -> GCAttr = ENTRYDEAD;
+      entry -> theObj = NULL;
       newPersistentObject(theObj);
       INFO_PERSISTENCE(numDE++);
     }
@@ -238,50 +296,96 @@ void updatePersistentObjects(void)
 {
   Object *root;
   u_long count;
-  u_long max;
+  u_long maxIndex;
+  OTEntry *entry;
   
   /* All objects referred from persistent objects shall be made
      persistent as well */
-  
+  INFO_PERSISTENCE(fprintf(output, "[ updatePersistentObjects\n "));
   clearTail();
-  
-  Claim(currentTable != NULL, "updatePersistentObjects: CurrentTable is NULL");
-  
-  max = currentTable -> maxIndex;
-  for (count=0; count<max; count++) {
-    OTEntry *body;
-    body = &(currentTable -> body[0]);
-    if (body[count].GCAttr == ENTRYALIVE) {
-      Claim(inAOA(body[count].theObj), "Where is theObj?");      
-      Claim(AOAISPERSISTENT(body[count].theObj), "not persistent??");
+  maxIndex = STSize(currentTable);
+  for (count=0; count<maxIndex; count++) {
+    entry = STLookup(currentTable, count);
+    if (entry -> GCAttr == ENTRYALIVE) {
+      Claim(inAOA(entry -> theObj), "Where is theObj?");      
+      Claim(AOAISPERSISTENT(entry -> theObj), "not persistent??");
       
-      scanObject(body[count].theObj,
+      scanObject(entry -> theObj,
 		 markReachableObjects,
 		 TRUE);
       INFO_PERSISTENCE(numPB++);
     } else {
-      Claim(body[count].GCAttr == ENTRYDEAD, "What is GCAttr ?");
+      Claim(entry -> GCAttr == ENTRYDEAD, "What is GCAttr ?");
     }
   }
-  
+
+  INFO_PERSISTENCE(newObjects = 0);
+  INFO_PERSISTENCE(persistentBytes = 0);
+  INFO_PERSISTENCE(fprintf(output, " handleNewPersistentObjects "));
   /* All new persistent objects have now been linked together. */
   if ((root = getHead())) {
-    /* OSclear(); */
     scanList(root, handleNewPersistentObject);
-    /* OSscan(handleNewPersistentObject); */
   } else {
     /* No new persistent objects */
     ;
   }
+  INFO_PERSISTENCE(fprintf(output, "(0x%X new Objects, 0x%X new bytes)\n", 
+			   (int)newObjects, 
+			   (int)persistentBytes));
+  INFO_PERSISTENCE(fprintf(output, "  AOAGc\n"));
 }
 
-/* After GC all unused objects cuurently in memory should be
+static void updateObjectInStore(Object *theObj, BlockID store, u_long offset)
+{
+  Claim(inAOA(theObj), "Where is theObj?");      
+  Claim(AOAISPERSISTENT(theObj), "not persistent??");
+  Claim(theObj == getRealObject(theObj), "Unexpected part object");
+  
+  setCurrentObjectStore(store);
+  exportObject(theObj, store);
+  
+  if (setStoreObject(store, offset, theObj)) {
+    /* Object has been updated */
+    INFO_PERSISTENCE(bytesExported += 4*ObjectSize(theObj));
+    INFO_PERSISTENCE(objectsExported ++);
+  } else {
+    Claim(FALSE, "Could not update object");
+  }
+}
+
+#if 0
+
+static u_long currentStore;
+
+static void handleObjects(contentsBox *cb)
+{
+  u_long currentOffset;
+  OTEntry *entry;  
+
+  currentOffset = cb -> key;
+  
+  entry = STLookup(currentTable, (u_long)(cb -> contents));
+  if (entry -> GCAttr == POTENTIALLYDEAD) {
+    updateObjectInStore(entry ->theObj,
+			entry ->store,
+			entry ->offset);
+    entry -> GCAttr = EXPORTED;
+  }
+}
+
+static void handleStore(contentsBox *cb)
+{
+  currentStore = cb -> key;
+  TIVisit((Node *)(cb -> contents), handleObjects);
+}
+#endif 
+/* After GC all unused objects currently in memory should be
    checkpointed and removed */
 void removeUnusedObjects()
 {
-  u_long count;
-  u_long max;
-  
+  u_long count, forceTermination;
+  u_long maxIndex;
+  OTEntry *entry;  
   /* All objects in the ObjectTable that are marked as POTENTIALLYDEAD
      are no longer referred from this process and can be updated in
      the store and released. */
@@ -294,76 +398,96 @@ void removeUnusedObjects()
   /* If an object is alive and kept in memory we cannot move its
      origin, so we have to mark the origin alive as well. */
   
-  Claim(currentTable != NULL, "updatePersistentObjects: CurrentTable is NULL");
-  
-  max = currentTable -> maxIndex;
-  objectAction = markOriginsAlive;
-  for (count=0; count<max; count++) {
-    OTEntry *body;
-    body = &(currentTable -> body[0]);
-    if (body[count].GCAttr == ENTRYALIVE) {
-      Claim(inAOA(body[count].theObj), "Where is theObj?");      
-      Claim(AOAISPERSISTENT(body[count].theObj), "not persistent??");
-      /* handle origin */
-      scanObject(body[count].theObj,
-		 NULL,
-		 TRUE);
-    }       
-  }
-  objectAction = NULL;
-  
-  /* Handle references from live to dead persistent objects */
-  max = currentTable -> maxIndex;
-  for (count=0; count<max; count++) {
-    OTEntry *body;
-    body = &(currentTable -> body[0]);
-    if (body[count].GCAttr == ENTRYALIVE) {
-      Claim(inAOA(body[count].theObj), "Where is theObj?");      
-      Claim(AOAISPERSISTENT(body[count].theObj), "not persistent??");
-      /* handle live entry */
-      scanObject(body[count].theObj,
-		 handlePersistentCell,
-		 TRUE);
+  if (!terminatingGC) {
+    void (*temp)(Object *theObj);
+
+    INFO_PERSISTENCE(fprintf(output, "  markOriginsAlive\n "));
+    maxIndex = STSize(currentTable);
+    temp = objectAction;
+    objectAction = markOriginsAlive;
+    for (count=0; count<maxIndex; count++) {
+      entry = STLookup(currentTable, count);
+      if (entry -> GCAttr == ENTRYALIVE) {
+	Claim(inAOA(entry ->theObj), "Where is theObj?");      
+	Claim(AOAISPERSISTENT(entry ->theObj), "not persistent??");
+	/* handle origin */
+	scanObject(entry ->theObj,
+		   NULL,
+		   TRUE);
+      }       
     }
-  }
-  
-  /* Handles dead entries and exports dead objects */
-  max = currentTable -> maxIndex;
-  for (count=0; count<max; count++) {
-    OTEntry *body;
-    body = &(currentTable -> body[0]);
-    if (body[count].GCAttr == POTENTIALLYDEAD) {
-      Object *theObj;
-      StoreID store;
-      u_long offset;
+    objectAction = temp;
+
+    INFO_PERSISTENCE(fprintf(output, " handlePersistentCell\n"));    
+    /* Handle references from live to dead persistent objects */
+    maxIndex = STSize(currentTable);
+    for (count=0; count<maxIndex; count++) {
+      entry = STLookup(currentTable, count);
+      if (entry ->GCAttr == ENTRYALIVE) {
+	Claim(inAOA(entry ->theObj), "Where is theObj?");      
+	Claim(AOAISPERSISTENT(entry ->theObj), "not persistent??");
+	/* handle live entry */
+	scanObject(entry ->theObj,
+		   handlePersistentCell,
+		   TRUE);
+      }
+    }
+  } else {
+    /* Mark all entries DEAD regardless */
+    forceTermination = 0;
+    maxIndex = STSize(currentTable);
+    for (count=0; count<maxIndex; count++) {
+      entry = STLookup(currentTable, count);
       
-      theObj = body[count].theObj;
-      store = body[count].store;
-      offset = body[count].offset;
-      
-      Claim(inAOA(theObj), "Where is theObj?");      
-      Claim(AOAISPERSISTENT(theObj), "not persistent??");
-      Claim(theObj == getRealObject(theObj), "Unexpected part object");
-      
-      setCurrentObjectStore(store);
-      exportObject(theObj, store);
-      
-      if (setStoreObject(store, offset, theObj)) {
-	/* Object has been updated */
-	;
-      } else {
-	Claim(FALSE, "Could not update object");
+      if (entry ->GCAttr == ENTRYALIVE) {
+	forceTermination = 1;
+	entry ->GCAttr = POTENTIALLYDEAD;
       }
     }
   }
   
+  INFO_PERSISTENCE(fprintf(output, "  updateObjectInStore "));    
+  /* Handles dead entries and exports dead objects */
+#if 1
+  maxIndex = STSize(currentTable);
+  INFO_PERSISTENCE(bytesExported = 0);
+  INFO_PERSISTENCE(objectsExported = 0);
+  for (count=0; count<maxIndex; count++) {
+    entry = STLookup(currentTable, count);
+    if (entry -> GCAttr == POTENTIALLYDEAD) {
+      updateObjectInStore(entry ->theObj,
+			  entry ->store,
+			  entry ->offset);
+    }
+  }
+  INFO_PERSISTENCE(fprintf(output, "(exported 0x%X objects 0x%X bytes)\n", 
+			   (int)objectsExported,
+			   (int)bytesExported));
+#else
+  TIVisit(loadedObjectsST, handleStore);
+#endif /* */
+  
   /* mark dead objects dead and clean up tables */
+  INFO_PERSISTENCE(fprintf(output, "  OTEndGC\n"));    
   OTEndGC();
+  INFO_PERSISTENCE(fprintf(output, "  RTEndGC"));    
   RTEndGC();
   
   /* Save the cached values of the store */
   saveCurrentObjectStore();
   saveCurrentCrossStoreTable();
+  
+  INFO_PERSISTENCE(fprintf(output, "]\n"));    
+  if (terminatingGC && forceTermination) {
+    /* We cannot return to BETA code as live objects have been
+       exported. This will give problems. Therefor we exit now. */
+    STFree(&currentTable);
+    freeProtoHandling();
+#ifdef PROFILE_PERSISTENCE
+    show_vtimer();
+#endif /* PROFILE_PERSISTENCE */
+    BetaExit(42);
+  }
 }
 
 #endif /* PERSIST */

@@ -2,6 +2,7 @@
 #include "PStoreServer.h"
 #include "PSfile.h"
 #include "PStore.h"
+#include "profile.h"
 
 void cst_dummy() {
 #ifdef sparc
@@ -16,8 +17,6 @@ void cst_dummy() {
 #include <fcntl.h>
 #include <unistd.h>
 #include <errno.h>
-
-
 
 /* Cross store references are handled by introducing proxy references
    at the store level. If an object in store A refers an object in
@@ -36,7 +35,7 @@ void cst_dummy() {
 typedef struct crossStoreTable {
   u_long length;         /* Antries allocated in this table */
   u_long nextFree;       /* Index of the next free entry */
-  StoreID store;         /* The id of the store belonging to this
+  BlockID store;         /* The id of the store belonging to this
 			    StoreProxyTable */
   StoreProxy body[1];    /* The proxies */
 } crossStoreTable;
@@ -52,17 +51,19 @@ static crossStoreTable *currentTable = NULL;   /* The current table loaded */
 #define UNALIGN(inx) (2*inx + 1)
 #define REALIGN(inx) ((inx - 1)/2)
 
-#define tableSizeLength(length) (2*sizeof(u_long) + sizeof(StoreID) + length*sizeof(StoreProxy))
+#define tableSizeLength(length) (2*sizeof(u_long) + sizeof(BlockID) + length*sizeof(StoreProxy))
 #define tableSize(table) tableSizeLength(table -> length)
 
 /* FUNCTIONS */
   
-StoreID createCrossStoreTable(StoreID store)
+BlockID createCrossStoreTable(BlockID store)
 {
   char *file_name;
   int fd;
   crossStoreTable *newTable=(crossStoreTable *)calloc(sizeof(struct crossStoreTable), 1);
-  
+
+  SETSIM(CREATECROSSSTORETABLE);
+
   newTable -> length = 1;
   newTable -> nextFree = 0;
   newTable -> store = store;
@@ -70,7 +71,8 @@ StoreID createCrossStoreTable(StoreID store)
   if ((file_name = crossStoreTableName(store))) {
     if ((fd = open(file_name,O_RDWR | O_CREAT, S_IWRITE | S_IREAD))<0) {
       perror("createCrossStoreTable");
-      return ILLEGALSTOREID;
+      SETSIM(UNKNOWN);
+      return ILLEGALBlockID;
     } else {
       writeSome(fd, newTable, tableSize(newTable));
       close(fd);
@@ -80,27 +82,31 @@ StoreID createCrossStoreTable(StoreID store)
 	currentTable = NULL;
       }
       currentTable = newTable;
+      SETSIM(UNKNOWN);
       return store;
-      
     }
   } else {
-    return ILLEGALSTOREID;
+    SETSIM(UNKNOWN);
+    return ILLEGALBlockID;
   }
   
-  return ILLEGALSTOREID;
+  SETSIM(UNKNOWN);
+  return ILLEGALBlockID;
 }
 
-StoreID getCurrentCrossStoreTable()
+BlockID getCurrentCrossStoreTable()
 {
   if (currentTable) {
     return currentTable -> store;
   }
   
-  return ILLEGALSTOREID;
+  return ILLEGALBlockID;
 }
 
 int saveCurrentCrossStoreTable()
 {
+  SETSIM(SAVECURRENTCROSSSTORETABLE);
+  
   if (currentTable) {
     char *file_name;
     int fd;
@@ -108,31 +114,37 @@ int saveCurrentCrossStoreTable()
     if ((file_name = crossStoreTableName(currentTable -> store))) {
       if ((fd = open(file_name,O_RDWR))<0) {
 	perror("saveCurrentCrossStoreTable");
+	SETSIM(UNKNOWN);
 	return 0;
       } else {
 	writeSome(fd, currentTable, tableSize(currentTable));
 	close(fd);
       }
     } else {
+      SETSIM(UNKNOWN);
       return 0;
     }
   } else {
+    SETSIM(UNKNOWN);
     return 0;
   }
-  
+  SETSIM(UNKNOWN);
   return 1;
 }
 
-int setCurrentCrossStoreTable(StoreID store)
+int setCurrentCrossStoreTable(BlockID store)
 {
   char *file_name;
   int fd;
   
+  SETSIM(SETCURRENTCROSSSTORETABLE);
   if (currentTable) {
-    if (compareStoreID(store, currentTable -> store)) {
+    if (compareBlockID(store, currentTable -> store)) {
+      SETSIM(UNKNOWN);
       return 1;
     } else {
       saveCurrentCrossStoreTable();
+      SETSIM(SETCURRENTCROSSSTORETABLE);
       free(currentTable);
       currentTable = NULL;
     }
@@ -150,26 +162,43 @@ int setCurrentCrossStoreTable(StoreID store)
       Rewind(fd);
       readSome(fd, currentTable, tableSizeLength(length));
       close(fd);
+      INFO_PERSISTENCE(numCSL++);
     }
   } else {
+    SETSIM(UNKNOWN);
     return 0;
   }
+  SETSIM(UNKNOWN);
   return 1;
 }
 
+#ifdef RTINFO
+void printCrossStoreStatistics(void)
+{
+  fprintf(output, "[ numCSL: 0x%X]\n", (int)numCSL);
+}
+#else
+void printCrossStoreStatistics(void)
+{
+  ;
+}
+#endif /* RTINFO */
+
 /* Allocates and inserts space for a new cross store reference in the
    current store. It checks for duplicates. */
-u_long newStoreProxy(StoreID store,
+u_long newStoreProxy(BlockID store,
 		     u_long offset)
 {
+  SETSIM(NEWSTOREPROXY);
   if (currentTable) {
     u_long count;
     /* Check if a proxy to the same object is present allready */
     
     for (count = 0; count < currentTable -> nextFree; count++) {
       if (currentTable -> body[count].offset == offset) {
-	if (compareStoreID(store, 
+	if (compareBlockID(store, 
 			   currentTable -> body[count].store)) {
+	  SETSIM(UNKNOWN);
 	  return UNALIGN(count);
 	}
       }
@@ -184,6 +213,7 @@ u_long newStoreProxy(StoreID store,
       currentTable -> body[nextFree].offset = offset;
       currentTable -> nextFree++;
       
+      SETSIM(UNKNOWN);
       return UNALIGN(nextFree);
       
     } else {
@@ -195,22 +225,27 @@ u_long newStoreProxy(StoreID store,
       free(currentTable);
       currentTable = newTable;
       
+      SETSIM(UNKNOWN);
       return newStoreProxy(store, offset);
     }
   } else {
-    return ILLEGALSTOREID;
+    SETSIM(UNKNOWN);
+    return ILLEGALBlockID;
   }
 }
 
 /* Looks up the proxy object in the current table */
 StoreProxy *lookupStoreProxy(u_long inx) 
 {
+  SETSIM(LOOKUPSTOREPROXY);
+  
   if (currentTable) {
     if (REALIGN(inx) < currentTable -> nextFree) {
+      SETSIM(UNKNOWN);
       return &(currentTable -> body[REALIGN(inx)]);
     }
   }
-  
+  SETSIM(UNKNOWN);
   return ILLEGALSTOREPROXY;
 }
 

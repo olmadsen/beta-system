@@ -16,5 +16,6 @@ void windTo(int fd, u_long pos);
 void writeSome(int fd, void *buffer, u_long size);
 long isDir(char *name); 
 u_long preferredBufferSize(char *path);
+int ScanDir(char *dir, int *longestP, int *numP, void (*CallbackFnc)(char*));
 
 #endif /* _PSFILE_H_ */

@@ -181,6 +181,8 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
   u_long instruction;
   void *ip;
   
+  INFO_PERSISTENCE(numPF++);
+  
   /* Fetch the faulting instruction. */
   dummy = instruction = (* (long *) (ucon->uc_mcontext.gregs[REG_PC]));
   
@@ -263,6 +265,17 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 }
 
 /* GLOBAL FUNCTIONS */
+#ifdef RTINFO
+void printProxyStatistics(void)
+{
+  fprintf(output, "[ numPF: 0x%X]\n", (int)numPF);
+}
+#else
+void printProxyStatistics(void)
+{
+  ;
+}
+#endif /* RTINFO */
 
 Object *newPUID(u_long offset)
 {

@@ -8,7 +8,7 @@ void pstore_dummy() {
 
 #ifdef PERSIST
 
-int compareStoreID(StoreID a, StoreID b)
+int compareBlockID(BlockID a, BlockID b)
 {
   return a == b;
 }

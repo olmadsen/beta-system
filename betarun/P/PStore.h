@@ -3,7 +3,7 @@
 
 #include "objectStore.h"
 
-int compareStoreID(StoreID a, StoreID b);
+int compareBlockID(BlockID a, BlockID b);
 
 #endif /* _PSTORE_H_ */
 
