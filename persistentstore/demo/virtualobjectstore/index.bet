@@ -1,0 +1,291 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE 
+'~beta/basiclib/file'
+'trie.bet'
+'~beta/persistentstore/virtualobjectstore'
+'~beta/containers/list'
+'~beta/basiclib/numberio';
+
+---lib:attributes---
+gettimestampdouble: external
+  (# now:@Real;
+  exit now
+  #);
+
+-- program: Descriptor --
+(#
+   addNewFileCommand: (# exit 2 #);
+   completeCommand: (# exit 3 #);
+   quitCommand: (# exit 4 #);
+   
+   welcomeMessage: @
+     (#
+        print:
+          (# 
+          do 'Welcome to the \'BETA file indexer\'' ->screen.putLine
+          #)
+     #);
+   
+   mainMenu: @ 
+     (#
+        print: 
+          (#
+          do 'Please choose one of the following actions' -> screen.putLine;
+             
+             '  ' -> screen.putText;
+             addNewFileCommand -> screen.putInt;
+             ' - Add new file to index' -> screen.putLine;
+             
+             '  ' -> screen.putText;
+             completeCommand -> screen.putInt;
+             ' - Find words beginning with ...' -> screen.putLine;
+             
+             '  ' -> screen.putText;
+             quitCommand -> screen.putInt;
+             ' - Quit' -> screen.putLine
+             
+          #)
+     #);
+   
+   getText:
+     (# input: ^Text
+     do
+        INNER;
+        &Text[]->input[];
+        Loop: (if not keyboard.eos then
+                  (if keyboard.peek 
+                   // ascii.newline then
+                      keyboard.get;
+                      leave Loop
+                   else
+                      keyboard.get -> input.put; restart Loop;
+                  if)
+               else
+                  leave Loop
+              if);
+        0 -> input.setPos
+     exit input[]
+     #);
+
+   getFileName: getText
+     (# 
+     do 'Enter file name: '->screen.putText;
+     #);
+   
+   getPrefix: getText
+     (# 
+     do 'Enter prefix: '->screen.putText;
+     #);
+   
+   scanFile: 
+     (# inFile: @file
+          (# NoSuchFileError:: (# do 
+                                  'Could not open file '->screen.putText;
+                                  inFile.name -> screen.putLine;
+                                  0 -> state;
+                                  true -> continue
+                               #);
+             OtherError:: (# do 
+                             'Other error occured on file '->screen.putText;
+                             inFile.name -> screen.putLine;
+                             0 -> state;
+                             true -> continue
+                          #)
+          #);
+        state:@integer;
+        fileName: ^Text;
+        current: ^Text
+     enter fileName[]
+     do fileName[] -> inFile.name;
+        1 -> state;
+        inFile.OpenRead;
+        
+        (if state = 1 then
+            readAtoms:
+              (if inFile.eos then
+                  leave readAtoms
+               else 
+                  inFile.getAtom -> current[];
+                  INNER scanFile;
+                  restart readAtoms
+              if);
+            inFile.close;
+        if)
+     #);
+   
+   timeOperation:
+     (# start, end:@Real
+     do gettimestampdouble -> start;
+        INNER;
+        gettimestampdouble -> end;
+        'Timed operation: ' -> screen.putText;
+        (end - start) -> screen.putReal;
+        newLine
+     #);
+   
+   doAddNewFileCommand: ensureDictionary
+     (# newFile: ^Text;
+        textList: list(# element :: Text #);
+        aTextList: ^textList
+          
+     do getFileName -> newFile[];
+        (* read words from file *)
+        'Reading words from '->screen.putText;
+        newFile[] -> screen.putLine;
+        
+        &textList[] -> aTextList[];
+        aTextList.init;
+        timeOperation
+        (# 
+        do newFile[] -> scanFile
+           (# do 
+              current[] -> aTextList.append;
+              (if aTextList.size mod 10 = 0 then
+                  aTextList.size -> screen.putInt;
+                  ascii.cr -> screen.put
+              if)
+           #)
+        #);
+        
+        (* Append words to index *)
+        'Appending words to index '->screen.putLine;
+        
+        timeOperation
+        (# do aTextList.scan
+           (# numWords:@integer
+                
+           do index.entries -> numWords;          
+              (current[], newFile[]) -> index.insert;
+              (if index.entries > numWords then
+                  (if index.entries mod 10 = 0 then
+                      index.entries -> screen.putInt;
+                      ascii.cr -> screen.put
+                  if)
+              if)
+           #)
+        #);
+        'Index now contains ' -> screen.putText;
+        index.entries -> screen.putInt;
+        ' words' -> screen.putLine
+     #);
+   
+   doCompleteCommand: ensureDictionary
+     (# prefix: ^Text; count:@integer
+          
+     do getPrefix -> prefix[];
+        timeOperation
+        (# do
+           'Words beginning with \''->screen.putText;
+           prefix[]->screen.putText;
+           '\''->screen.putLine;
+           screen.putLine;
+           prefix[] -> index.visitFrom
+           (# visitFunc :: (# do 
+                              current.word[] -> screen.putText;
+                              ' found in file ' -> screen.putText;
+                              current.contents[] -> screen.putLine;
+                              1 + count -> count
+                           #)
+           #);
+           screen.putLine;
+           count -> screen.putInt;
+           (if count = 1 then
+               ' word ' -> screen.putText
+            else
+               ' words ' -> screen.putText
+           if);
+           'found' -> screen.putLine;
+        #);
+        mainMenu.print
+     #);
+   
+   getNextCommand:
+     (# input: ^Text; command:@integer
+        
+     do 'Your choice? ' -> screen.putText;
+        
+        &Text[]->input[];
+        get -> input.put;
+        get;
+        0 -> input.setPos;
+        
+        input.getInt
+        (# syntaxError:: (# do 0 -> command; true -> continue #) #) -> command;
+        
+        (if command
+         // (addNewFileCommand) then
+         // (completeCommand) then
+         // (quitCommand) then
+         else 
+            0 -> command
+        if)
+     exit command
+     #);
+   
+   doQuitCommand: ensureDictionary
+     (# 
+     do PS.close   
+     #);
+   
+   indexDictionary: dictionary (# contentsType :: Text #);
+   ensureDictionary:
+     (# do 
+        INNER;
+     #);
+        
+   index: ^indexDictionary;
+   PS:@persistentStore
+     (# rebindSpecialReference::
+          (# toSpecialObject::
+               (# 
+               do (if objectTag = (BETAENVOBJ) then
+                      this(program)[] -> getOrigin -> target[]
+                   else 
+                      (if objectTag = (PSOBJ) then
+                          PS[] -> target[];
+                       else 
+                          notHandled
+                      if)
+                  if)
+               #)
+          #)
+     #);
+   BETAENVOBJ:(# exit 42 #);
+   PSOBJ:(# exit 43 #);
+
+do 
+   PS.init;
+   (this(program)[] -> getOrigin, (BETAENVOBJ)) -> registerSpecialInstance;
+   (PS[], (PSOBJ)) -> registerSpecialInstance;
+   
+   'indexStore' -> PS.openWrite
+   (# notFound :: (# do 'indexStore' -> PS.create; true -> continue #) #);
+   
+   ('root', indexDictionary##) -> PS.get
+   (# notFound :: 
+        (# 
+        do &indexDictionary[] -> index[];
+           (index[], 'root') -> PS.put;
+           index[] -> theObj[];
+           true -> continue
+        #)
+   #) -> index[];
+   
+   welcomeMessage.print;
+   mainMenu.print;
+   Loop: (# 
+         do 
+            (if getNextCommand
+             // (addNewFileCommand) then
+                doAddNewFileCommand
+             // (completeCommand) then
+                doCompleteCommand
+             // (quitCommand) then
+                doQuitCommand;
+                leave Loop
+             else 
+                'Unknown command' -> screen.putLine
+            if);
+            restart Loop
+         #)
+#)

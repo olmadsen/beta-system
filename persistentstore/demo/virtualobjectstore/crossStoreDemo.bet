@@ -1,0 +1,116 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE 'carsAndPersons'
+        '~beta/containers/arrayContainer'
+        '~beta/persistentstore/virtualobjectstore';
+-- program: Descriptor --
+(#
+   addNewPerson:
+     (# persons: ^personList; aPerson: ^person; number: @integer
+     enter (persons[],number)
+     do
+        &person[]->aPerson[];
+        'John Doe '->aPerson.name;
+        number->aPerson.name.putInt;
+        (aPerson[],number)->persons.put
+     #);
+   addNewCar:
+     (# cars: ^carList; aCar: ^car; number: @integer
+     enter (cars[],number)
+     do
+        &car[]->aCar[];
+        'Porsche'->aCar.vendor;
+        1000->aCar.weight;
+        (aCar[],number)->cars.put
+     #);
+   personList: arrayContainer (# element:: person #);
+   carList: arrayContainer (# element:: car #);
+   BETAENVOBJ: (#  exit 42 #);
+   PRGOBJ: (#  exit 43 #);
+   persistentStoreWithSpecialObjectHandling: persistentStore
+     (#
+        rebindSpecialReference:: 
+          (#
+             toSpecialObject:: 
+               (# 
+               do
+                  (if objectTag = (BETAENVOBJ) then
+                      THIS(program)[]->getOrigin->target[]
+                   else
+                      (if objectTag = (PRGOBJ) then
+                          THIS(Program)[]->target[]; 
+                       else
+                          notHandled
+                      if)
+                  if)
+               #)
+          #)
+     #);
+   persons: ^personList;
+   cars: ^carList;
+   personStore,carStore: @persistentStoreWithSpecialObjectHandling;
+   size: @integer
+do
+   carStore.init;
+   personStore.init;
+   (THIS(program)[]->getOrigin,(BETAENVOBJ))->registerSpecialInstance;
+   (THIS(program)[],(PRGOBJ))->registerSpecialInstance;
+   'personStore'
+     ->personStore.openWrite
+   (#
+          notFound:: 
+            (#  do 'personStore'->personStore.create; true->continue #)
+       #);
+   'carStore'
+     ->carStore.openWrite
+   (#
+          notFound:: 
+            (#  do 'carStore'->carStore.create; true->continue #)
+       #);
+   10->size;
+   ('root',personList##)
+     ->personStore.get
+       (#
+          notFound:: 
+            (# 
+            do
+               &personList[]->persons[];
+               persons.init;
+               (persons[],'root')->personStore.put;
+               (for i: size repeat (persons[],i)->addNewPerson for);
+               persons[]->theObj[];
+               true->continue
+            #)
+       #)->persons[];
+   personStore.checkpoint;
+   ('root',carList##)
+     ->carStore.get
+       (#
+          notFound:: 
+            (# 
+            do
+               &carList[]->cars[];
+               cars.init;
+               (cars[],'root')->carStore.put;
+               (for i: size repeat (cars[],i)->addNewCar for);
+               cars[]->theObj[];
+               true->continue
+            #)
+       #)->cars[];
+   carStore.checkpoint;
+   (for i: size repeat
+       (# aPerson: ^person; aCar: ^car
+       do
+          i->persons.get->aPerson[];
+          i->cars.get->aCar[];
+          aCar[]->aPerson.myCar[]
+       #)
+   for);
+   (for i: size repeat
+       (# aPerson: ^person
+       do i->persons.get->aPerson[]; aPerson.print; screen.newLine
+       #)
+   for);
+   personStore.close;
+   carStore.close
+#)  
+
