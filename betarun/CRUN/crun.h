@@ -15,8 +15,10 @@ extern struct Component*AlloC();
 extern struct Item     *AlloI();
 #endif
 
+/*
 extern char	       *IOAalloc();
 extern char	       *IOAcalloc();
+*/
 
 #ifdef sparc
 extern struct Component*CAlloC();
@@ -65,6 +67,7 @@ AssignReference(long *theCell, ref(Item) newObject)
     AOAtoIOAInsert(casthandle(Object)theCell);
 }
 
+#if 1
 static inline void
 long_clear(char *p, unsigned bytesize)
 {
@@ -76,6 +79,10 @@ long_clear(char *p, unsigned bytesize)
   for (i = bytesize-4; i >= 0; i -= 4)
     *(long *)(p+i) = 0;	/* Ugly Hacks Work Fast */
 }
+#else
+/* This does not work - WHY??? */
+#define long_clear(p, bytesize) memset((p), 0, (bytesize))
+#endif
 
 static inline void
 setup_item(ref(Item) theItem,
@@ -156,3 +163,79 @@ extern void CCk(ref(Object) r); /* Easier to debug a function call - PA */
 #endif /* RTDEBUG */
 
 #endif
+
+/* Allocation in IOA heap */
+/* GC/PerformGC.c: Not declared in function.h, doGC should only be 
+ * called from IOA(c)lloc or DoGC.
+ */
+extern void doGC();
+
+static inline char *IOAalloc(unsigned size)
+{
+  register char *p;
+  
+  /*GCable_Entry();*/
+  
+  /*fprintf(output, "IOAalloc: IOATop=0x%x, size=0x%x\n", IOATop, size);*/
+  
+  DEBUG_CODE(Claim(size>0, "IOAalloc: size>0"));
+#if (defined(sparc) || defined(hppa) || defined(crts))
+  DEBUG_CODE(Claim( ((long)size&7)==0 , "IOAalloc: (size&7)==0"));
+  DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "IOAalloc: (IOATop&7)==0"));
+#endif
+  
+  while ((char *)IOATop+size > (char *)IOALimit) {
+    ReqObjectSize = size / 4;
+    doGC();
+  }
+  
+  p = (char *)IOATop;
+#ifdef hppa
+  /* setIOATopoffReg(getIOATopoffReg() + size); */
+  IOATop = (long*)((long)IOATop+size);
+#endif
+#ifdef sparc
+  IOATopoff += size;
+#endif
+#ifdef crts
+  IOATop = (long*)((long)IOATop+size);
+#endif
+  
+  return p;
+}
+
+static inline char *IOAcalloc(unsigned size)
+{
+  register char *p;
+  
+  /*GCable_Entry();*/
+  
+  /*fprintf(output, "IOACalloc: IOATop=0x%x, size=0x%x\n", IOATop, size);*/
+  
+  DEBUG_CODE(Claim(size>0, "IOACalloc: size>0"));
+#if (defined(sparc) || defined(hppa) || defined(crts))
+  DEBUG_CODE(Claim( ((long)size&7)==0 , "IOAcalloc: (size&7)==0"));
+  DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "IOAcalloc: (IOATop&7)==0"));
+#endif
+  
+  while ((char *) IOATop+size > (char *)IOALimit) {
+    ReqObjectSize = size / 4;
+    doGC();
+  }
+  
+  p = (char *)IOATop;
+#ifdef hppa
+  /*setIOATopoffReg(getIOATopoffReg() + size);*/
+  IOATop = (long*)((long)IOATop+size);
+#endif
+#ifdef sparc
+  IOATopoff += size;
+#endif
+#ifdef crts
+  IOATop = (long*)((long)IOATop+size);
+#endif
+  
+  long_clear(p, size);
+  
+  return p;
+}
