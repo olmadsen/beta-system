@@ -25,12 +25,6 @@ extern void		DoGC() asm("DoGC");
 extern ref(Item)	AlloSI() asm("AlloSI");
 extern ref(Component)	AlloSC() asm("AlloSC");
 /* The following not capitalized to avoid loosing the ones starting with L */
-extern long 		EqS() asm("eqS"); 
-extern long              NeS() asm("neS");
-extern long              LtS() asm("ltS");
-extern long              GtS() asm("gtS");
-extern long              LeS() asm("leS");
-extern long              GeS() asm("geS");
 extern void             Return() asm ("Return");
 extern void             RefNone() asm("RefNone");
 extern void             AttBC() asm("AttBC");
