@@ -28,10 +28,16 @@ ParamRepObjOffLowHigh(CopySRR)
      */
     
     /* Check that low and high usable. */
-    if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
+    if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
+      RangeErr = low;
+      RangeMax = theRep->HighBorder;
       BetaError(RepLowRangeErr, (Object *)theObj);
-    if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
+    }
+    if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ){
+      RangeErr = high;
+      RangeMax = theRep->HighBorder;
       BetaError(RepHighRangeErr, (Object *)theObj);
+    }
     
     /* Calculate the range of the new repetition. */
     range = high - low + 1;

@@ -36,10 +36,16 @@ void CCopySRR(RefRep *theRep,
     Ck(theItem); Ck(theRep);
     
     /* Check that low and high are usable. */
-    if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
+    if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
+      RangeErr = low;
+      RangeMax = theRep->HighBorder;
       BetaError(RepLowRangeErr, 0, SP, 0);
-    if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
+    }
+    if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
+      RangeErr = high;
+      RangeMax = theRep->HighBorder;
       BetaError(RepHighRangeErr, 0, SP, 0);
+    }
     
     /* Calculate the range of the new repetition. */
     range = high - low + 1;

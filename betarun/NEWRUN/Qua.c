@@ -140,6 +140,9 @@ void CQua(Object *dstQuaOrigin,
 	}
       } while (0);
       /* dstQuaProto is not a prefix of srcProto - call BetaError.*/
+      QuaSrc = src;
+      QuaDstOrigin = dstQuaOrigin;
+      QuaDstProto = dstQuaProto;
       BetaError(QuaErr, 0, SP, 0); /* this and PC is found in BetaError */
     }
   }

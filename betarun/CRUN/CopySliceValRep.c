@@ -31,10 +31,16 @@ ParamRepObjOffLowHigh(CopySVR1)
     /* Copy a slice of a Value Repetition. */
     
     /* Check that low and high are usable. */
-    if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
+    if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
+      RangeErr = low;
+      RangeMax = theRep->HighBorder;
       BetaError(RepLowRangeErr, (Object *)theObj);
-    if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-       BetaError(RepHighRangeErr, (Object *)theObj);
+    }
+    if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
+      RangeErr = high;
+      RangeMax = theRep->HighBorder;
+      BetaError(RepHighRangeErr, (Object *)theObj);
+    }
     
     /* Calculate the range of the new repetition. */
     range =  (high - low) + 1;
@@ -80,10 +86,16 @@ ParamRepObjOffLowHigh(CopySVR2)
     /* Copy a slice of a Value Repetition. */
     
     /* Check that low and high are usable. */
-    if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
+    if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
+      RangeErr = low;
+      RangeMax = theRep->HighBorder;
       BetaError(RepLowRangeErr, (Object *)theObj);
-    if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-       BetaError(RepHighRangeErr, (Object *)theObj);
+    }
+    if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
+      RangeErr = high;
+      RangeMax = theRep->HighBorder;
+      BetaError(RepHighRangeErr, (Object *)theObj);
+    }
     
     /* Calculate the range of the new repetition. */
     range =  (high - low) + 1;
@@ -127,10 +139,16 @@ ParamRepObjOffLowHigh(CopySVR4)
     /* Copy a slice of a Value Repetition. */
     
     /* Check that low and high are usable. */
-    if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
+    if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
+      RangeErr = low;
+      RangeMax = theRep->HighBorder;
       BetaError(RepLowRangeErr, (Object *)theObj);
-    if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-       BetaError(RepHighRangeErr, (Object *)theObj);
+    }
+    if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
+      RangeErr = high;
+      RangeMax = theRep->HighBorder;
+      BetaError(RepHighRangeErr, (Object *)theObj);
+    }
     
     /* Calculate the range of the new repetition. */
     range =  (high - low) + 1;
@@ -170,11 +188,17 @@ ParamRepObjOffLowHigh(CopySVR8)
     /* Copy a slice of a Value Repetition. */
     
     /* Check that low and high are usable. */
-    if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
+    if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
+      RangeErr = low;
+      RangeMax = theRep->HighBorder;
       BetaError(RepLowRangeErr, (Object *)theObj);
-    if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-       BetaError(RepHighRangeErr, (Object *)theObj);
-    
+    }
+    if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
+      RangeErr = high;
+      RangeMax = theRep->HighBorder;
+      BetaError(RepHighRangeErr, (Object *)theObj);
+    }
+
     /* Calculate the range of the new repetition. */
     range =  (high - low) + 1;
     if (range < 0) range = 0;
@@ -216,11 +240,17 @@ ParamORepObjOffLowHigh(CopySVRI)
     /* Copy a slice of an Object Repetition. */
     
     /* Check that low and high are usable. */
-    if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
+    if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
+      RangeErr = low;
+      RangeMax = theRep->HighBorder;
       BetaError(RepLowRangeErr, (Object *)theObj);
-    if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-       BetaError(RepHighRangeErr, (Object *)theObj);
-    
+    }
+    if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
+      RangeErr = high;
+      RangeMax = theRep->HighBorder;
+      BetaError(RepHighRangeErr, (Object *)theObj);
+    }
+  
     /* Calculate the range of the new repetition. */
     range =  (high - low) + 1;
     if (range < 0) range = 0;
@@ -262,10 +292,16 @@ ParamORepObjOffLowHigh(CopySVRC)
     /* Copy a slice of an Object Repetition. */
     
     /* Check that low and high are usable. */
-    if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
+    if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
+      RangeErr = low;
+      RangeMax = theRep->HighBorder;
       BetaError(RepLowRangeErr, (Object *)theObj);
-    if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-       BetaError(RepHighRangeErr, (Object *)theObj);
+    }
+    if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
+      RangeErr = high;
+      RangeMax = theRep->HighBorder;
+      BetaError(RepHighRangeErr, (Object *)theObj);
+    }
     
     /* Calculate the range of the new repetition. */
     range =  (high - low) + 1;

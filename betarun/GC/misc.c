@@ -233,7 +233,10 @@ int strongIsObject(Object *obj)
 
 void PrintProto(ProtoType *proto)
 {
-  fprintf(output, "\"%s\" <%s>", ProtoTypeName(proto), getLabel((long)proto));
+  fprintf(output, "%s", ProtoTypeName(proto));
+  if (!SimpleDump){
+    PrintCodeAddress((long)proto);
+  }
   fflush(output);
 }
 

@@ -86,10 +86,16 @@ char *
     DEBUG_CODE(NumCpkSVT++);
 
     Ck(currentObj); Ck(theRep);
-    if (low<theRep->LowBorder) 
+    if (low<theRep->LowBorder){
+      RangeErr = low;
+      RangeMax = theRep->HighBorder;
       BetaError(RepLowRangeErr, currentObj);
-    if (high>theRep->HighBorder) 
+    }
+    if (high>theRep->HighBorder) {
+      RangeErr = high;
+      RangeMax = theRep->HighBorder;
       BetaError(RepHighRangeErr, currentObj);
+    }
     high = high - low + 1;
     if (high<0) high=0;
 
@@ -159,8 +165,16 @@ unsigned char * PpkSVT(Object *currentObj, ValRep * theRep, unsigned low, long h
     unsigned char *oldBody,*res;
 
     Ck(currentObj); Ck(theRep);
-    if (low<theRep->LowBorder) BetaError(RepLowRangeErr, currentObj);
-    if (high>theRep->HighBorder) BetaError(RepHighRangeErr, currentObj);
+    if (low<theRep->LowBorder) {
+      RangeErr = low;
+      RangeMax = theRep->HighBorder;
+      BetaError(RepLowRangeErr, currentObj);
+    }
+    if (high>theRep->HighBorder) {
+      RangeErr = high;
+      RangeMax = theRep->HighBorder;
+      BetaError(RepHighRangeErr, currentObj);
+    }
     high = high - low + 1;
     if (high<0) high=0;
 

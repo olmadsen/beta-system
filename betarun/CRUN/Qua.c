@@ -126,6 +126,9 @@ ParamProtoCellOriginThis(Qua)
 	}
       } while (FALSE);
       /* dstQuaProto is not a prefix of srcProto */
+      QuaSrc = src;
+      QuaDstOrigin = dstQuaOrigin;
+      QuaDstProto = dstQuaProto;
       BetaError(QuaErr, this);
     }
   }

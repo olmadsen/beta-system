@@ -167,7 +167,7 @@ static void PrintLegend(void)
   P("   is shown as");
   P("      [ EXTERNAL ACTIVATION PART ]");
   if (SimpleDump) return;
-  P("7. The section labeled \"low level trace\" can be avoided by setting");
+  P("7. The section labeled \"Low level information\" can be avoided by");
 #ifdef UNIX
   P("       setenv BETART SimpleDump");
 #endif /* UNIX */
@@ -1512,6 +1512,26 @@ static void DisplayCurrentObjectAndStack(BetaErr errorNumber,
 #endif
 }
 
+static void AuxInfo(BetaErr errorNumber)
+{
+  /******** Additional info for some error types **************/
+  switch (errorNumber){
+  case QuaErr:
+    fprintf(output, "\nReference being assigned:\n");
+    DisplayObject(output, QuaSrc, 0);
+    fprintf(output, "\n");
+    fprintf(output, "Required qualification:\n  ");
+    PrintProto(QuaDstProto);
+    fprintf(output, "\n");
+    break;
+  case RepHighRangeErr:
+  case RepLowRangeErr:
+    fprintf(output, "\nIndex: %d; range: [1..%d]\n", RangeErr, RangeMax);
+    break;
+  default:
+    break;
+  }
+}
 
 /**************** DisplayBetaStack: *******************/
 
@@ -1667,15 +1687,22 @@ int DisplayBetaStack(BetaErr errorNumber,
     int UserWantsSimpleDump = SimpleDump;
 
     SimpleDump=1;
+
+    AuxInfo(errorNumber);
+    fflush(output);
     fprintf(output,"\nCall chain: (%s)\n\n", machine_type());
     fflush(output);
     DisplayCurrentObjectAndStack(errorNumber, theObj, thePC, theSignal);
+    fflush(output);
 
     if (!UserWantsSimpleDump){
       SimpleDump=0;
       basic_dumped=0;
       lastDisplayedObject=0;
-      fprintf(output,"\n\nLow level trace: (%s)\n\n", machine_type());
+      fprintf(output,"\n\nLow level information:\n");
+      AuxInfo(errorNumber);
+      fflush(output);
+      fprintf(output,"\nCall chain: (%s)\n\n", machine_type());
       fflush(output);
       DisplayCurrentObjectAndStack(errorNumber, theObj, thePC, theSignal);
     }
