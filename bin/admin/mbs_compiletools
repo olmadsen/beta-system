@@ -6,7 +6,7 @@ require "env.perl";
 # compiler version
 $betaopts="-qwl @ARGV";
 
-#---------- don't change below -------
+#---------- don't change below (except maybe after "main:") -------
 
 open(STDERR, ">&STDOUT") || die "Can't dup stdout";
 select(STDERR); $| = 1;       # make unbuffered
@@ -118,7 +118,7 @@ sub CompileAppl
     } else {
 	# Temporary name used so that this script may be run in parallel.
 	$tempname = $name;
-	$tempname = $MACHINETYPE . $name if ($name !~ /^$MACHINETYPE/);
+	$tempname = $MACHINETYPE . "_" . $name if ($name !~ /^$MACHINETYPE/);
 	print "beta $betaopts -o $tempname $fragment\n";
 	&beta("$betaopts -o $tempname $fragment");
 	exit(1) if ($?);
@@ -135,9 +135,9 @@ sub CompileAppl
 	if ("$MACHINETYPE" eq "NTI"){ 
 	    $name .= ".exe";
 	}
-	print "Moving $name to $objdir/$name\n";
+	print "Moving $tempname to $objdir/$name\n";
 	unlink "$objdir/$name" if (-e "$objdir/$name");
-	if (!rename ("$name", "$objdir/$name")){ print "cannot move $name to $objdir\n"; return; }
+	if (!rename ("$tempname", "$objdir/$name")){ print "cannot move $tempname to $objdir\n"; return; }
     }
 }
 sub CompileCompiler
@@ -163,7 +163,7 @@ sub CompileCompiler
     } else {
 	# Temporary name used so that this script may be run in parallel.
 	$tempname = $name;
-	$tempname = $MACHINETYPE . $name if ($name !~ /^$MACHINETYPE/);
+	$tempname = $MACHINETYPE . "_" . $name if ($name !~ /^$MACHINETYPE/);
 	print "bootbeta $betaopts -o $tempname $fragment\n";
 	&bootbeta("$betaopts -o $tempname $fragment");
 	exit(1) if ($?);
@@ -193,6 +193,23 @@ sub CompileFile {
     &beta("$betaopts -p --nolink $fragment");
 }
 
+sub SetWindowsBetalinkOptions {
+    if ("$MACHINETYPE" eq "NTI"){
+	# link as windows application, ie. without a console-window.
+	# NO!  You cannot see the linkermessages then...
+	if ("$SDK" eq "bor"){
+	    #$ENV{'BETALINKOPTIONS'}='-aa -c -n -Tpe';
+	} else {
+	    #$ENV{'BETALINKOPTIONS'}="/NOLOGO /MACHINE:ix86 /SUBSYSTEM:WINDOWS /ENTRY:WinMainCRTStartup /INCREMENTAL:no";
+	}
+    }
+}
+    
+sub SetNormalBetalinkOptions {
+    $ENV{'BETALINKOPTIONS'}='';
+}
+
+################# main: ###########################
 
 $rmast=0; $rmcode=0;
 print "\n***** Build a new compiler (y/n/q)? ";
@@ -237,10 +254,9 @@ if ($answer eq "y") {
     
 }
 
-
-
-&CompileAppl("bobsgen/v1.6", "tabc", "tabc", 1);
+# exbobs: MACHINETYPE prefix maintained to avoid having to change UNIX makefile
 &CompileExbobs("bobsgen/v1.6", "${MACHINETYPE}exbobs.c", "${MACHINETYPE}exbobs", 1);
+&CompileAppl("bobsgen/v1.6", "tabc", "tabc", 1);
 &CompileAppl("meta/v5.2", "gen", "gen", 1);
 &CompileAppl("prettygen/v5.2", "makepretty", "makepretty", 1);
 &CompileAppl("prettygen/v5.2", "morepretty", "morepretty", 1);
@@ -255,19 +271,16 @@ if ("$MACHINETYPE" ne "NTI"){
     &CompileAppl("editor/v5.2", "sif", "${MACHINETYPE}sif", 1);
     &CompileAppl("interfacebuilder/v1.6", "frigg", "${MACHINETYPE}frigg", 0);
 } else {
-    # link as windows application, ie. without a console-window.
-    # NO!  You cannot see the linkermessages then...
     if ("$SDK" eq "bor"){
-	#$ENV{'BETALINKOPTIONS'}='-aa -c -n -Tpe';
+	&SetWindowsBetalinkOptions;
 	&CompileAppl("editor/v5.2", "compsif", "sif", 1);
 	&CompileAppl("interfacebuilder/v1.6", "frigg", "frigg", 1);
-	#$ENV{'BETALINKOPTIONS'}="";
+	&SetNormalBetalinkOptions;
     } else {
-	#$ENV{'BETALINKOPTIONS'}="/NOLOGO /MACHINE:ix86 /SUBSYSTEM:WINDOWS /ENTRY:WinMainCRTStartup /INCREMENTAL:no";
+	&SetWindowsBetalinkOptions;
 	&CompileAppl("editor/v5.2", "bcompsif", "sif", 1);
     	&CompileAppl("interfacebuilder/v1.6", "bfrigg", "frigg", 1);
-	# normal link
-	#$ENV{'BETALINKOPTIONS'}="";
+	&SetNormalBetalinkOptions;
     }
     
 }
