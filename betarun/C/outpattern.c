@@ -136,8 +136,7 @@ static void PrintLegend(void)
   P("   the error, the intermediate call stack part is also shown as");
   P("      [ EXTERNAL ACTIVATION PART ]");
   if (SimpleDump) return;
-  P("7. The lines containing '{' and '}' are lowlevel information, which");
-  P("   can normally be ignored. By setting ");
+  P("7. The section labeled \"low level trace\" can be avoided by setting");
 #ifdef UNIX
   P("     setenv BETART SimpleDump");
 #endif /* UNIX */
@@ -147,7 +146,7 @@ static void PrintLegend(void)
 #ifdef MAC
   P("     set -e BETART SimpleDump");
 #endif /* MAC */
-  P("   these lowlevel lines in the dump can be suppressed.");
+  P("   before subsequent executions of the program.");
 #undef P
 }
 
@@ -338,7 +337,7 @@ static void ObjectDescription(Object *obj,
       fprintf(output,"%s", ProtoTypeName(proto));
   }
   fprintf(output," in %s\n", groupname);
-  if (print_origin){
+  if (print_origin && !SimpleDump){
     long addr;
     Object *    staticObj;
     
@@ -427,7 +426,7 @@ static void ObjectDescription(Object *obj,
 GLOBAL(static Object *lastDisplayedObject)=0;
 
 void DisplayObject(FILE   *output, /* Where to dump object */
-		   Object *obj, /* Object to display */
+		   Object *obj,    /* Object to display */
 		   long    PC      /* Address obj was left from (jsr), 
 				    * i.e. when it was current object.
 				    */
@@ -1470,6 +1469,46 @@ static char *OpenDumpFile(long errorNumber)
 }
 #endif /* nti */
 
+static void DisplayCurrentObjectAndStack(BetaErr errorNumber, 
+					 Object *theObj, 
+					 long *thePC, 
+					 long theSignal /* theSignal is zero if not applicable. */
+					 )
+{
+#ifndef sparc
+  /* If we are able to retrieve information about the current object
+   * dump it.
+   * On the sparc, it resides in the top register window, and 
+   * nothing should be done.
+   */
+  DisplayCurrentObject(theObj, thePC);
+#endif /* sparc */
+
+#ifdef MT
+  fprintf(output, "DisplayBetaStack: NYI for MT\n"); 
+  fflush(output);
+  return
+#endif
+
+  if (StackStart == 0){
+    fprintf(output,"\n  [initialization of basic component]\n");
+    return;
+  }
+ 
+#ifdef hppa
+  DisplayHPPAStack(thePC);
+#endif
+#ifdef NEWRUN
+  DisplayNEWRUNStack(thePC, theObj, theSignal);
+#endif
+#ifdef sparc
+  DisplaySPARCStack(errorNumber, theObj, thePC, theSignal);
+#endif
+#ifdef intel
+  DisplayINTELStack(errorNumber, theObj, (long)thePC, theSignal);
+#endif
+}
+
 
 /**************** DisplayBetaStack: *******************/
 
@@ -1588,42 +1627,22 @@ int DisplayBetaStack(BetaErr errorNumber,
 	    (int)ToSpaceLimit);
   });
 
-  fprintf(output,"\nCall chain: (%s)\n\n", machine_type());
-  fflush(output);
-  
-#ifndef sparc
-  /* If we are able to retrieve information about the current object
-   * dump it.
-   * On the sparc, it resides in the top register window, and 
-   * nothing should be done.
-   */
-  DisplayCurrentObject(theObj, thePC);
-#endif /* sparc */
-  
+  /******** And now for the actual trace of the stack: ********/
+  {
+    int UserWantsSimpleDump = SimpleDump;
 
-#ifdef MT
-  fprintf(output, "DisplayBetaStack: NYI for MT\n"); 
-  fflush(output);
-  return
-#endif
+    SimpleDump=1;
+    fprintf(output,"\nCall chain: (%s)\n\n", machine_type());
+    fflush(output);
+    DisplayCurrentObjectAndStack(errorNumber, theObj, thePC, theSignal);
 
-  if (StackStart == 0){
-    fprintf(output,"\n  [initialization of basic component]\n");
-    return 0;
+    if (!UserWantsSimpleDump){
+      SimpleDump=0;
+      fprintf(output,"\n\nLow level trace: (%s)\n", machine_type());
+      fflush(output);
+      DisplayCurrentObjectAndStack(errorNumber, theObj, thePC, theSignal);
+    }
   }
- 
-#ifdef hppa
-  DisplayHPPAStack(thePC);
-#endif
-#ifdef NEWRUN
-  DisplayNEWRUNStack(thePC, theObj, theSignal);
-#endif
-#ifdef sparc
-  DisplaySPARCStack(errorNumber, theObj, thePC, theSignal);
-#endif
-#ifdef intel
-  DisplayINTELStack(errorNumber, theObj, (long)thePC, theSignal);
-#endif
 
   PrintLegend();
   
