@@ -218,12 +218,12 @@ ParamThis(struct Component *, Susp)
   getret(ActiveComponent->CallerLSC);
 
   /*
-  printf("\nSuspend: ActiveComponent: 0x%08x\n", ActiveComponent);
-  printf("Suspend: ActiveComponent->CallerLSC: 0x%08x\n", ActiveComponent->CallerLSC);
-  printf("Suspend: caller: 0x%08x\n", caller);
-  printf("Suspend: caller->CallerLSC: 0x%08x\n", caller->CallerLSC);
-  fflush(stdout);
-  */
+   * printf("\nSuspend: ActiveComponent: 0x%08x\n", ActiveComponent);
+   * printf("Suspend: ActiveComponent->CallerLSC: 0x%08x\n", ActiveComponent->CallerLSC);
+   * printf("Suspend: caller: 0x%08x\n", caller);
+   * printf("Suspend: caller->CallerLSC: 0x%08x\n", caller->CallerLSC);
+   * fflush(stdout);
+   */
   
   /* Change active component */
   called = ActiveComponent;
