@@ -43,6 +43,10 @@ ParamThisComp(Component *, Att)
   
   if (comp->StackObj == (StackObject *) -1 || comp == ActiveComponent)
     BetaError(RecursiveAttErr, this);
+  if ((!first) && (comp->StackObj == 0)){
+    /* printf("\nAttach: comp->StackObj == 0, comp=%x", (long)comp); */
+    BetaError(CompTerminatedErr, this);
+  }
   
   /*
    * printf("\nAttach: comp: 0x%08x\n", comp);
@@ -131,11 +135,8 @@ ParamThisComp(Component *, Att)
     setret(ActiveComponent->CallerLSC);
     
     return comp;  /* maintain %o0 ?? */
-  } 
-  if (comp->StackObj == 0){
-    /* printf("\nAttach: comp->StackObj == 0, comp=%x", (long)comp); */
-    BetaError(CompTerminatedErr, this);
-  }
+  } /* End first */
+
   ActiveComponent = comp;
   /* Fool gcc into believing that %i1 is used */
   __asm__(""::"r" (tmp));
