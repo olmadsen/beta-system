@@ -13,6 +13,9 @@
 #ifdef UNIX
 #include <unistd.h>
 #endif
+#ifdef linux
+#include <fpu_control.h>
+#endif
 
 /***************************************************************************/
 /*************************** HELPER FUNCTIONS ******************************/

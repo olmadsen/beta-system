@@ -752,6 +752,45 @@ void DisplayNEWRUNStack(long *PC, Object *theObj, int signal)
 /************************* Begin INTEL ****************************/
 #ifdef intel
 
+static Object *prevObj=0;
+static CellDisplayFunc displayFunc=0;
+
+static void objectMet(Object **theCell, Object *theObj)
+{
+  if ((!inBetaHeap(*(theCell+1))) && IsBetaCodeAddrOfProcess((long)*(theCell+1))){
+    /* Found an object with a PC just below it on stack */
+    prevObj = theObj;
+    TRACE_DUMP(fprintf(output,"new prevObj: "); DescribeObject(prevObj));
+    if (!isComponent(prevObj) && IsComponentItem(prevObj)){
+      prevObj = (Object*)EnclosingComponent(prevObj);
+      TRACE_DUMP({
+	fprintf(output, 
+		" is item of component 0x%x\n", 
+		(int)prevObj);
+      });
+    }
+    TRACE_DUMP(fprintf(output, "\n"));
+  } else {
+    /* Probably a pushed register */
+    TRACE_DUMP(fprintf(output, "(object with no PC below)\n"));
+  }
+}
+
+static void nonObjectMet(Object **theCell, Object *theObj)
+{
+  if (IsBetaCodeAddrOfProcess((long)theObj)){
+    /* Found a BETA PC */
+    long PC=(long)theObj;
+    TRACE_DUMP(PrintCodeAddress(PC));
+    if (prevObj){
+      TRACE_DUMP(fprintf(output, "\n"));
+      displayFunc(PC, prevObj);
+    } else {
+      TRACE_DUMP(fprintf(output, " (no prevObj)"));
+    }
+  }
+}
+
 /* DisplayStackPart:
  * Traverse the StackArea [low..high] and Process all references within it. 
  * Stop when theComp is reached.
@@ -761,68 +800,18 @@ void DisplayStackPart(long *low,
 		      Object *currentObject,
 		      CellDisplayFunc func)
 {
-  long *current = low;
-  Object *lastObj;
-
   TRACE_DUMP(fprintf(output, ">>>TraceDump: StackPart [0x%x..0x%x]\n", (int)low, (int)high));
-
-  lastObj = currentObject;
-  TRACE_DUMP(fprintf(output, ">>>TraceDump: Initial lastObj: "); DescribeObject(lastObj); fprintf(output, "\n"));
-  if (lastObj && !isComponent(lastObj) && IsComponentItem(lastObj)){
-    lastObj = (Object*)EnclosingComponent(lastObj);
-    TRACE_DUMP({
-      fprintf(output, 
-	      " is item of component 0x%x\n", 
-	      (int)lastObj);
-    });
+  prevObj = currentObject;
+  TRACE_DUMP({
+    fprintf(output, ">>>TraceDump: Initial prevObj: "); 
+    DescribeObject(prevObj); fprintf(output, "\n");
+  });
+  if (prevObj && !isComponent(prevObj) && IsComponentItem(prevObj)){
+    prevObj = (Object*)EnclosingComponent(prevObj);
+    TRACE_DUMP(fprintf(output, " is item of component 0x%x\n", (int)prevObj));
   }  
-  while (current<=high){
-    Object *theObj = *(Object **)current;
-    TRACE_DUMP(fprintf(output, ">>>TraceDump: 0x%x: 0x%x ", (int)current, *(int*)current));
-    if (inBetaHeap(theObj)){
-      if (isObject(theObj)){
-	if ((!inBetaHeap((Object*)*(current+1))) && IsBetaCodeAddrOfProcess(*(current+1))){
-	  /* Found an object with a PC just below it on stack */
-	  lastObj = theObj;
-	  TRACE_DUMP(fprintf(output,"new lastObj: "); DescribeObject(lastObj));
-	  if (!isComponent(lastObj) && IsComponentItem(lastObj)){
-	    lastObj = (Object*)EnclosingComponent(lastObj);
-	    TRACE_DUMP({
-	      fprintf(output, 
-		      " is item of component 0x%x\n", 
-		      (int)lastObj);
-	    });
-	  }
-	  TRACE_DUMP(fprintf(output, "\n"));
-	} else {
-	  /* Probably a pushed register */
-	  TRACE_DUMP(fprintf(output, "(object with no PC below)\n"));
-	}
-      } else {
-	TRACE_DUMP(fprintf(output, "(illegal pointer inside heap)\n"));
-      }
-    } else {
-      /* Not in heap - may be protect tag or PC */
-      int skip = SkipDataRegs(current);
-      if (skip){
-	current += skip;
-      } else {
-	if (IsBetaCodeAddrOfProcess(*current)){
-	  /* Found a BETA PC */
-	  long PC=*current;
-	  TRACE_DUMP(PrintCodeAddress(PC));
-	  if (lastObj){
-	    TRACE_DUMP(fprintf(output, "\n"));
-	    func(PC, lastObj);
-	  } else {
-	    TRACE_DUMP(fprintf(output, " (no lastObj)"));
-	  }
-	}
-      }
-    }
-    current++;
-    TRACE_DUMP(fprintf(output, "\n"));
-  }
+  displayFunc = func;
+  ProcessStackPart(low, high, objectMet, nonObjectMet);
   TRACE_DUMP(fprintf(output, ">>>TraceDump: StackPart done.\n"));
 }
 
@@ -950,7 +939,7 @@ void DisplayINTELStack(BetaErr errorNumber,
      */
     low += 3;
 
-    /* Since a new lastObj will be met by DisplayStackPart before 
+    /* Since a new prevObj will be met by DisplayStackPart before 
      * any other PC corresponding to currentObject, the current object that
      * called C will not be displayed by DisplayStackPart.
      * So we display it here.
@@ -1038,7 +1027,7 @@ void DisplayINTELStack(BetaErr errorNumber,
 
 void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func)
 {
-  Object *lastObj /* used for last successfully identified object */;
+  Object *prevObj /* used for last successfully identified object */;
   long* this, *end;
 
   TRACE_DUMP({
@@ -1053,17 +1042,17 @@ void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func)
   });
 
   /* Handle current object in this frame */
-  lastObj  = (Object *) theAR->i0;
-  if (inBetaHeap(lastObj) && isObject(lastObj)){
-    if (!isComponent(lastObj) && IsComponentItem(lastObj)){
-      lastObj = (Object*)EnclosingComponent(lastObj);
+  prevObj  = (Object *) theAR->i0;
+  if (inBetaHeap(prevObj) && isObject(prevObj)){
+    if (!isComponent(prevObj) && IsComponentItem(prevObj)){
+      prevObj = (Object*)EnclosingComponent(prevObj);
       TRACE_DUMP({
 	fprintf(output, 
 		">>>TraceDump: DisplayAR: Current object is item of component 0x%x\n", 
-		(int)lastObj);
+		(int)prevObj);
       });
     } 
-    func(PC, lastObj);
+    func(PC, prevObj);
   }
 
   /* Then handle possible pushed PCs (%o7s) in the
@@ -1129,28 +1118,28 @@ void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func)
       });
       if ((this+2<end) && inBetaHeap((Object*)this[2]) && isObject((Object*)this[2])) {
 	/* There was an object, assumed to be from an INNER P */
-	lastObj = (Object*)this[2];
+	prevObj = (Object*)this[2];
 	TRACE_DUMP({
 	  fprintf(output, 
 		  ">>>TraceDump: DisplayAR: stackpart 0x%08x: 0x%08x INNER P object\n", 
 		  (int)(this+2), 
-		  (int)lastObj);
+		  (int)prevObj);
 	});
-	if (!isComponent(lastObj) && IsComponentItem(lastObj)){
-	  lastObj = (Object*)EnclosingComponent(lastObj);
+	if (!isComponent(prevObj) && IsComponentItem(prevObj)){
+	  prevObj = (Object*)EnclosingComponent(prevObj);
 	  TRACE_DUMP({
 	    fprintf(output,
 		    ">>>TraceDump: DisplayAR: object is item of component 0x%x\n",
-		    (int)lastObj);
+		    (int)prevObj);
 	  });
 	} 
-	func(PC, lastObj);
+	func(PC, prevObj);
 	this+=2; /* Skip the object */
       } else {
 	/* No Object below the code. Display with the previous
 	 * found object.
 	 */
-	func(PC, lastObj);
+	func(PC, prevObj);
       }
     }
     this+=2;

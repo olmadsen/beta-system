@@ -238,6 +238,7 @@ void PrintValhallaRefStack(void);
 #endif /* RTDEBUG */
 #endif /* RTVALHALLA && intel */
 #ifdef intel
+extern void ProcessStackPart(long *low, long *high, CellProcessFunc whenObject,CellProcessFunc whenNotObject);
 extern int SkipDataRegs(long *theCell);
 extern void PrintStack(long *StackEnd);
 #endif /* intel */

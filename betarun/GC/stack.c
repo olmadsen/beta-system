@@ -1238,8 +1238,10 @@ void ProcessIntelStackCell(Object **theCell, Object *theObj)
 }
 
 /* Traverse the StackArea [low..high] and Process all references within it. */
-static
-void ProcessStackPart(long *low, long *high, CellProcessFunc whenObject)
+void ProcessStackPart(long *low, 
+		      long *high, 
+		      CellProcessFunc whenObject, 
+		      CellProcessFunc whenNotObject)
 {
   long * current = low;
   Object * theObj;
@@ -1261,7 +1263,9 @@ void ProcessStackPart(long *low, long *high, CellProcessFunc whenObject)
       theCell = (Object **) current;
       theObj  = *theCell;
       if (isObject(theObj)) {
-	whenObject(theCell, theObj);
+	if (whenObject) {
+	  whenObject(theCell, theObj);
+	}
       } else {
 	DEBUG_CODE({
 	  if (!isValRep(theObj)){
@@ -1283,22 +1287,27 @@ void ProcessStackPart(long *low, long *high, CellProcessFunc whenObject)
       if (skip){
 	current += skip;
       } else {
-	DEBUG_STACK({
-	  fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
-	  if (*current) {
-	    if (IsPrototypeOfProcess(*current)) {
-	      fprintf(output, ", is proto  (");
-	      PrintProto((ProtoType*)*current);
-	      fprintf(output, ")\n");
+	if (whenNotObject){
+	  whenNotObject((Object**)current, *(Object**)current);
+	} else {
+	  /* Default action on non-object cells on stack */
+	  DEBUG_STACK({
+	    fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
+	    if (*current) {
+	      if (IsPrototypeOfProcess(*current)) {
+		fprintf(output, ", is proto  (");
+		PrintProto((ProtoType*)*current);
+		fprintf(output, ")\n");
+	      } else {
+		fprintf(output, " ");
+		PrintCodeAddress(*current);
+		fprintf(output, "\n");
+	      }
 	    } else {
-	      fprintf(output, " ");
-	      PrintCodeAddress(*current);
 	      fprintf(output, "\n");
 	    }
-	  } else {
-	    fprintf(output, "\n");
-	  }
-	});
+	  });
+	}
       }
     }
     current++;
@@ -1323,11 +1332,11 @@ void ProcessINTELStack(void)
     theFrame  = ActiveCallBackFrame;
     /* Follow the stack */
     while( theFrame){
-	ProcessStackPart( theTop, (long *)theFrame-1, ProcessIntelStackCell);
+	ProcessStackPart(theTop, (long *)theFrame-1, ProcessIntelStackCell, 0);
 	theTop   = theFrame->betaTop;
 	theFrame = theFrame->next;
     }
-    ProcessStackPart(theTop, theBottom-1, ProcessIntelStackCell);  
+    ProcessStackPart(theTop, theBottom-1, ProcessIntelStackCell,0);  
     
     /*
      * Then handle the remaining component blocks.
@@ -1339,11 +1348,11 @@ void ProcessINTELStack(void)
 	theBottom = (long *) currentBlock->next;
 	theFrame  = currentBlock->callBackFrame;
 	while( theFrame){
-	    ProcessStackPart( theTop, (long *)theFrame-1, ProcessIntelStackCell);
+	    ProcessStackPart( theTop, (long *)theFrame-1, ProcessIntelStackCell,0);
 	    theTop   = theFrame->betaTop;
 	    theFrame = theFrame->next;
 	}
-	ProcessStackPart(theTop, theBottom-1, ProcessIntelStackCell);  
+	ProcessStackPart(theTop, theBottom-1, ProcessIntelStackCell,0);  
 	currentBlock = currentBlock->next;
     }
     DEBUG_STACK(fprintf(output, " *****  End of trace  *****\n"));
@@ -1449,7 +1458,7 @@ void PrintStackCell(Object **theCell, Object *theObj)
  */
 void PrintStackPart(long *low, long *high)
 {
-  ProcessStackPart(low, high, PrintStackCell);
+  ProcessStackPart(low, high, PrintStackCell,0);
 }
 
 /* PrintStack: (intel)
