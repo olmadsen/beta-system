@@ -60,26 +60,23 @@ sub make_titlepage()
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
 <HTML>
 <HEAD>
-<TITLE>$title</TITLE>
+<TITLE>$mia: $title</TITLE>
 <LINK REL=stylesheet HREF=../style/miadoc.css TYPE=text/css>
 </HEAD>
 <BODY>
-<H1 align=center>$title</H1>
+<H1>Copyright Notice</H1>
 <center><B>
 Mj&oslash;lner Informatics Report<BR>
 $mia<BR>
 $date
 </B>
 <P>
-<IMG SRC="../images/trans5.5.gif" WIDTH=5 HEIGHT=700 ALT="">
 <TABLE border=1 cellpadding=3>
 <TR><TD align=center>
-<FONT size="-1">
-Copyright &copy; $copyright <A HREF="http://www.mjolner.com">Mj&oslash;lner Informatics</A>.<BR>
+Copyright &copy; $copyright <IMG SRC="../images/trans5.5.gif" WIDTH=10 HEIGHT=5 ALT=""><A HREF="http://www.mjolner.com">Mj&oslash;lner Informatics</A>.<BR>
 All rights reserved.<BR>
 No part of this document may be copied or distributed<BR>
 without the prior written permission of Mj&oslash;lner Informatics
-</FONT>
 </TD></TR>
 </TABLE>
 </center>
