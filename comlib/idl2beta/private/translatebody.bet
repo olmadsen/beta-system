@@ -19,6 +19,44 @@ system: external
   enter cmd
   #);
 
+CheckIdlFileExists: BooleanValue
+  (# IdlFileName: ^text;
+     existence_attempt: @integer;
+     idl_entry: @diskentry;
+  enter IdlFileName[]
+  do 0->existence_attempt;
+     CheckExistence:
+       (if true then
+           IdlFileName[] -> idl_entry.path;
+           (if idl_entry.exists then
+               true -> value
+            else
+               (if existence_attempt
+                // 0 then
+                   '.idl' -> IdlFileName.stripExtension;
+                   '.idl' -> IdlFileName.appendExtension;
+                   (*'Attempting '->puttext; IdlFileName[]->putline;*)
+                   existence_attempt+1 -> existence_attempt;
+                   restart CheckExistence
+                // 1 then
+                   '.idl' -> IdlFileName.stripExtension;
+                   '.Idl' -> IdlFileName.appendExtension;
+                   (*'Attempting '->puttext; IdlFileName[]->putline;*)
+                   existence_attempt+1 -> existence_attempt;
+                   restart CheckExistence
+                // 2 then
+                   '.idl' -> IdlFileName.stripExtension;
+                   '.IDL' -> IdlFileName.appendExtension;
+                   (*'Attempting '->puttext; IdlFileName[]->putline;*)
+                   existence_attempt+1 -> existence_attempt;
+                   restart CheckExistence
+                else
+                   false -> value;
+               if)
+           if);
+       if);
+  #);
+
 --PostProcess:descriptor--
 (# cmd: ^text;
    oldfilename, newfilename: ^text;
@@ -87,29 +125,27 @@ do root.suffixWalk
            '.tlb' -> imported_name.stripExtension;
            '.olb' -> imported_name.stripExtension;
            '.dll' -> imported_name.stripExtension;
-           '.idl' -> imported_name.appendExtension;
-           IdlFileName.copy -> e.path;
            
            (* First try to find imported in directory of original IDL file *)
+           '.idl' -> imported_name.appendExtension;
+           IdlFileName.copy -> e.path;
            HeadOfIdlFileName.copy -> imported[];
            imported_name[] -> imported.append;
-           imported[] -> e.path;
-           e.exists -> exists;
+           imported[] -> CheckIdlFileExists -> exists;
+           
            (if not exists then
                (* Then try in current directory *)
                './' -> imported[];
                imported_name[] -> imported.append;
                (imported[], '') -> ast.thePathhandler.convertFilePath -> imported[];
-               imported[] -> e.path;
-               e.exists -> exists;
+               imported[] -> CheckIdlFileExists -> exists;
            if);
            (if not exists then
                (* Then try in comlib *)
                '~beta/comlib/' -> imported[];
                imported_name[] -> imported.append;
                (imported[], '') -> ast.thePathhandler.convertFilePath -> imported[];
-               imported[] -> e.path;
-               e.exists -> exists;
+               imported[] -> CheckIdlFileExists -> exists;
            if);
            (if imported[]<>NONE then
                (# lib_entry: @diskentry;
@@ -162,8 +198,18 @@ do root.suffixWalk
 --DoFile: dopart--
 do DoFileLabel:
      (# 
-     do 
-        (* First check if file is/has already being/been processed *)
+     do (* Check that IDL file is there *)
+        (if not (IdlFileName[] -> CheckIdlFileExists) then
+            (if not mute then
+                '    [IDL file \'' -> screen.puttext;
+                idl_entry.path -> screen.puttext;
+                '\' does not exist; skipped]' -> screen.putline;
+            if);
+            leave DoFileLabel;
+        if);
+        IdlFileName[] -> idl_entry.path;
+        
+        (* Check if file is/has already being/been processed *)
         false -> already_processed;
         processed_files.find
         (# predicate::(# do (current[]->IdlFileName.equal)->value#);
@@ -181,17 +227,6 @@ do DoFileLabel:
          * imported files.
          *)
         IdlFileName.copy -> processed_files.append;
-        
-        (* Then check that IDL file is there *)
-        IdlFileName[] -> idl_entry.path;
-        (if not idl_entry.exists then
-            (if not mute then
-                '    [IDL file \'' -> screen.puttext;
-                idl_entry.path -> screen.puttext;
-                '\' does not exist; skipped]' -> screen.putline;
-            if);
-            leave DoFileLabel;
-        if);
         
         InitAstEnv;
         
