@@ -687,8 +687,7 @@ do getPIDparam->sendSIGINT
 
 -- processCommWait: Descriptor --
 (# 
-do
-   dowait:
+do dowait:
    (if pcPrivate.frombuf.binGetInt = VOP_STOPPED then
        pcPrivate.frombuf.binGetInt->pcPrivate.PC;
        (if pcPrivate.PC = 0 then (* process is stopping *)
@@ -712,12 +711,50 @@ do
         // RTS_CBFA // RTS_ATTACH // RTS_SUSPEND then
            steppingActions.execute; 
        if);
-       
     else
        wrongMessage; 
    if);
    waitcount+1->waitcount;
    afterWait;
+   
+#)  
+
+-- processCommWait2: Descriptor --
+(# 
+do
+   dowait:
+     (if pcPrivate.frombuf.binGetInt
+      //VOP_STOPPED then
+         pcPrivate.frombuf.binGetInt->pcPrivate.PC;
+         (if pcPrivate.PC = 0 then (* process is stopping *)
+             pcPrivate.onProcessStop; leave dowait; 
+         if);
+         pcPrivate.frombuf.binGetInt->pcPrivate.curObj;
+         pcPrivate.frombuf.binGetInt->pcPrivate.curComp;
+         pcPrivate.frombuf.binGetInt->pcPrivate.SP;
+         pcPrivate.frombuf.binGetInt->pcPrivate.signal;
+         pcPrivate.frombuf.getText->pcPrivate.sigText[];
+         pcPrivate.frombuf.binGetInt->pcPrivate.errorNumber;
+         (if pcPrivate.errorNumber < 0 then
+             pcPrivate.frombuf.getText->pcPrivate.errorText[]; 
+          else
+             'No Error'->pcPrivate.errorText[]; 
+         if);
+         dot.dotPrivate.reread;
+         VOP_STOPPED->pcPrivate.tobuf.binPutInt;
+         pcPrivate.tobuf.flush;
+         (if pcPrivate.errorNumber
+          // RTS_CBFA // RTS_ATTACH // RTS_SUSPEND then
+             steppingActions.execute; 
+         if);
+         afterWait;
+      //VOP_EXECUTEOBJECT then
+         (* DO NOTHING *)
+      else
+         wrongMessage; 
+     if);
+   waitcount+1->waitcount;
+   
    
 #)  
 
@@ -736,19 +773,29 @@ do
    if)  
 
 -- doProcessDataAddGroup: DoPart --
-do
-   VOP_ADDGROUP->pcPrivate.tobuf.binPutInt;
-   address->pcPrivate.tobuf.binPutInt;
-   pcPrivate.tobuf.flush;
-   (if pcPrivate.frombuf.binGetInt <> VOP_ADDGROUP then accessFailure;  if)  
-
+do (# bgi: @pcPrivate.frombuf.binGetInt; gt: @pcPrivate.frombuf.getText; 
+   do
+      VOP_ADDGROUP->pcPrivate.tobuf.binPutInt;
+      address->pcPrivate.tobuf.binPutInt;
+      pcPrivate.tobuf.flush;
+      (if bgi  = VOP_ADDGROUP then
+          gt -> groupName[];
+          bgi->dataStart;
+          bgi->dataEnd;
+          bgi->codeStart;
+          bgi->codeEnd;
+          bgi->groupNameHash;
+          bgi->checkTime;
+          INNER addGroup;
+       else
+          accessFailure;
+      if);
+   #);
+   
 -- doProcessDataExecuteObject: DoPart --
 do
    VOP_EXECUTEOBJECT->pcPrivate.tobuf.binPutInt;
    address->pcPrivate.tobuf.binPutInt;
    proto->pcPrivate.tobuf.binPutInt;
    pcPrivate.tobuf.flush;
-   (if pcPrivate.frombuf.binGetInt <> VOP_EXECUTEOBJECT then
-       accessFailure; 
-   if)  
-
+   

@@ -280,6 +280,8 @@ do
 
 -- procwaiter: Descriptor --
 (# tmp: @Text; impi: ^processInterface.ImperativeInfo; 
+   errorNumber: @integer;
+   errorText: ^text;
 do
    always:
      (# 
@@ -310,34 +312,38 @@ do
                #);
              (if debuggeeIsReady then
                  (if debuggee.notifyUserOnStop then
-                     (if debuggee.bml.userBreakHit
-                      // 0 // MNGR_USERSKIP then
-                         (if debuggee.bml.skipBreakHit or stopped then
-                             'Stopped'->gui.putpinfo; 
-                          else
-                             tmp.clear;
-                             'Runtime Error: %s'
-                               ->tmp.putformat
+                     debuggee.processComm.status.error -> (errorNumber, errorText[]);
+                     (if (errorNumber = RTS_UPDATE) OR (((errorNumber = -28) OR (errorNumber = -100)) AND not stopped) then
+                         debuggee.processComm.continue; restart waitloop; 
+                      else
+                         (if debuggee.bml.userBreakHit
+                          // 0 // MNGR_USERSKIP then
+                             (if debuggee.bml.skipBreakHit or stopped then
+                                 'Stopped'->gui.putpinfo; 
+                              else
+                                 tmp.clear;
+                                 'Runtime Error: %s'
+                                   ->tmp.putformat
                                  (# dummy: @Integer; 
                                  do debuggee.error->(dummy,s); 
                                  #);
+                                 tmp[]->gui.putpinfo;
+                                 
+                             if);
+                             
+                          else
+                             tmp.clear;
+                             'Stopped at breakpoint %d'
+                               ->tmp.putformat
+                             (#  do debuggee.bml.userBreakHit->d #);
                              tmp[]->gui.putpinfo;
                              
                          if);
-                         
-                      else
-                         tmp.clear;
-                         'Stopped at breakpoint %d'
-                           ->tmp.putformat
-                             (#  do debuggee.bml.userBreakHit->d #);
-                         tmp[]->gui.putpinfo;
-                         
-                     if);
-                     FALSE->stopped;
-                     debuggee.currentRemoteCode->impi[];
-                     (if impi[] <> none then
-                         impi.cast[]
-                           ->newcodemoveable
+                         FALSE->stopped;
+                         debuggee.currentRemoteCode->impi[];
+                         (if impi[] <> none then
+                             impi.cast[]
+                               ->newcodemoveable
                              (#
                                 openIfNotFound:: 
                                   (# 
@@ -352,13 +358,14 @@ do
                                   #);
                                 
                              #);
-                         
-                      else
-                         (if alwaysCurCode->gui.getOption then
-                             gui.debuggeeCurCode; 
-                         if);
-                         
-                     if)
+                             
+                          else
+                             (if alwaysCurCode->gui.getOption then
+                                 gui.debuggeeCurCode; 
+                             if);
+                             
+                         if)
+                     if);
                   else
                      debuggee.processComm.continue; restart waitloop; 
                  if);

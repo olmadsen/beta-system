@@ -28,12 +28,18 @@ extern int doshutdown(int fd, int how);
 static void *self=0;
 #endif /* UNIX */
 
-static int invops = 0; 
+
+
+
 /* TRUE iff ValhallaOnProcessStop is active. Used to check
  * for reentrance of ValhallaOnProcessStop. This could happen
  * in case of bus-errors or the like during communication with
  * valhalla. 
 */
+
+static int exelevel = 1;
+static int invops = 0;
+
 
 /* SOCKET OPERATIONS
  * ================= */
@@ -680,7 +686,6 @@ static int valhallaCommunicate (int PC, int SP, struct Object* curObj)
       struct Object    * origin;
       struct ProtoType * proto;
       struct Structure * struc;
-      long   old_invops;
       long   old_valhallaIsStepping;
       void (*cb)(void);
 
@@ -756,12 +761,11 @@ static int valhallaCommunicate (int PC, int SP, struct Object* curObj)
       DEBUG_VALHALLA(fprintf(output, "Calling callback function\n"));
       old_valhallaIsStepping = valhallaIsStepping;
       valhallaIsStepping = FALSE;
-      old_invops = invops;
-      invops = 0;
+      exelevel++;
       /* cb() may cause GC */
       cb();
+      exelevel--;
       valhallaIsStepping = old_valhallaIsStepping;
-      invops = old_invops;
       DEBUG_VALHALLA(fprintf(output, "VOP_EXECUTEOBJECT done.\n"));
       valhalla_writeint (opcode);
       valhalla_socket_flush ();
@@ -773,6 +777,13 @@ static int valhallaCommunicate (int PC, int SP, struct Object* curObj)
       DEBUG_VALHALLA(fprintf(output, "VOP_ADDGROUP(0x%x)\n",(int)gh));
       AddGroup(gh);
       valhalla_writeint (opcode);
+      valhalla_writetext (NameOfGroupMacro(gh));/* groupName */
+      valhalla_writeint ((int) gh->data_start); 
+      valhalla_writeint ((int) gh->data_end);   
+      valhalla_writeint ((int) gh->code_start); 
+      valhalla_writeint ((int) gh->code_end);   
+      valhalla_writeint ((int) gh->unique_group_id.hash);       
+      valhalla_writeint ((int) gh->unique_group_id.modtime);
       valhalla_socket_flush ();
     }
     break;
@@ -874,15 +885,14 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
 { 
   char *txt; int res;
   DEBUG_VALHALLA(fprintf(output,"debuggee: ValhallaOnProcessStop: PC=%d, SP=0x%x, curObj=%d,sig=%d,errorNumber=%d\n",(int) PC, (int) SP, (int) curObj, (int) sig, (int) errorNumber));
-  if (invops) {
+  invops++;
+  if (invops > exelevel) {
     fprintf (output,"FATAL: ValhallaOnProcessStop re-entered\n");
 #ifdef UNIX
     DEBUG_CODE(fprintf(output,"debuggee: sleeping for 10 minuttes...\n"); sleep(10*60));
     DEBUG_CODE(fprintf(output, "debuggee: 10 minuttes past - dying...\n"));
 #endif /* UNIX */
     exit(99);
-  } else {
-    invops = TRUE;
   }
 
   valhalla_writeint (VOP_STOPPED);
@@ -946,7 +956,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
   case CONTINUE: break;
   case TERMINATE: exit (99);
   }
-  invops=FALSE;
+  invops--;
 
   /* If we came here through BetaSignalHandler, signals have been redirected to
    * ExitHandler. Reinstall BetaSignalHandler: */
