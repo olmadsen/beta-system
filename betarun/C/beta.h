@@ -36,10 +36,10 @@ extern mutex_t aoatoioa_lock;
 extern mutex_t cbfa_lock;
 #endif
 
+#include "constant.h"
 #include "betaerror.h"
 #include "object.h"
 #include "heap.h"
-#include "constant.h"
 #include "macro.h"
 #include "function.h"
 #include "data.h"

@@ -55,8 +55,6 @@ void CBFAalloc()
 void CBFArelloc()
 {
   
-  MT_CODE(mutex_lock(&cbfa_lock));
-
   if ( CBFABlockSize == 0 ) {
     Notify2("Using callbacks and CBFA size of 0Kb specified",
 	    "Check your BETART environment variable");
@@ -92,8 +90,6 @@ void CBFArelloc()
   
   INFO_CBFA( fprintf(output, "#(CBFA: new block allocated %dKb.)\n", 
 		     (int)CBFABlockSize/Kb) );
-
-  MT_CODE(mutex_unlock(&cbfa_lock));
 
   return;
 }
