@@ -1,0 +1,894 @@
+ORIGIN 'richTextI_O';
+INCLUDE '~beta/win32lib/v1.2/gdistructs';
+INCLUDE '~beta/win32lib/v1.2/devicecapabilities';
+INCLUDE '~beta/win32lib/v1.2/wingdiconsts';
+INCLUDE '~beta/win32lib/v1.2/dcmanagement';
+INCLUDE 'guienv_ntiprivate';
+
+-- lib: attributes --
+PHYSICALHEIGHT: (# exit 111 #);
+PHYSICALWIDTH: (# exit 110 #);
+
+PD_RETURNDC: (# exit 16x00000100 #);
+PD_NOPAGENUMS: (# exit 0x00000008 #);
+PD_COLLATE: (# exit            0x00000010 #);
+PD_USEDEVMODECOPIES: (# exit          0x00040000 #);
+PD_USEDEVMODECOPIESANDCOLLATE: (# exit 0x00040000 #);
+PD_NOSELECTION: (# exit  0x00000004 #);
+
+PDERR_PRINTERCODES: (# exit       0x1000 #);
+PDERR_SETUPFAILURE: (# exit       0x1001 #);
+PDERR_PARSEFAILURE: (# exit       0x1002 #);
+PDERR_RETDEFFAILURE: (# exit      0x1003 #);
+PDERR_LOADDRVFAILURE: (# exit     0x1004 #);
+PDERR_GETDEVMODEFAIL: (# exit     0x1005 #);
+PDERR_INITFAILURE: (# exit        0x1006 #);
+PDERR_NODEVICES: (# exit          0x1007 #);
+PDERR_NODEFAULTPRN: (# exit       0x1008 #);
+PDERR_DNDMMISMATCH: (# exit       0x1009 #);
+PDERR_CREATEICFAILURE: (# exit    0x100A #);
+PDERR_PRINTERNOTFOUND: (# exit    0x100B #);
+PDERR_DEFAULTDIFFERENT: (# exit   0x100C #);
+
+memset: external
+  (# dest,c,count: @integer;
+     result: @integer;
+  enter (dest,c,count)
+  do callC;
+  exit result
+  #);
+
+SendMessage2: external
+  (# hwnd: @integer; 
+     uMsg: @integer; 
+     wParam: @integer; 
+     lParam: ^cStruct; 
+     out: @integer; (* LRESULT *)
+  enter (hwnd,uMsg,wParam,lParam[])
+  do 'SendMessageA' -> callStd;
+  exit out
+  #);
+
+IsDialogMessage2: external
+  (# hwnd: @integer; (* HWND *)
+     msg: @integer; (* MSG FAR* *)
+     result: @integer; (* BOOL *)
+  enter (hwnd,msg)
+  do 'IsDialogMessageA' -> callStd;
+  exit result
+  #);
+
+DispatchMessage2: external
+  (# theMsg: @integer; (* address of structure with message. const MSG FAR* *)
+     out: @integer; (* LONG *)
+  enter theMsg
+  do 'DispatchMessageA' -> callStd;
+  exit out
+  #);
+
+FORMATRANGE: cStruct
+  (# bytesize::< (# do 48 -> value; #);
+     hdc: @long (# pos::< (# do 0 -> value; #); #); 
+     hdcTarget: @long (# pos::< (# do 4 -> value; #); #); 
+     rc: @
+       (# left: @long (# pos::< (# do 8 -> value; #); #); 
+          top: @long (# pos::< (# do 12 -> value; #); #); 
+          right: @long (# pos::< (# do 16 -> value; #); #); 
+          bottom: @long (# pos::< (# do 20 -> value; #); #); 
+       #);
+     rcPage: @
+       (# left: @long (# pos::< (# do 24 -> value; #); #); 
+          top: @long (# pos::< (# do 28 -> value; #); #); 
+          right: @long (# pos::< (# do 32 -> value; #); #); 
+          bottom: @long (# pos::< (# do 36 -> value; #); #); 
+       #);
+     chrg: @
+       (# cpMin: @long (# pos::< (# do 40 -> value; #); #); 
+          cpMost: @long (# pos::< (# do 44 -> value; #); #); 
+       #);
+  #);
+
+sizeOfPrintDlg: external
+  (# size: @integer;
+  do callC;
+  exit size
+  #);
+PRINTDLG: ExternalRecord (* cstruct *)
+  (# (* bytesize::< (# do 66 -> value; #); *)
+     lStructSize: @long (# pos::< (# do 0 -> value; #); #);  
+     hwndOwner: @long (# pos::< (# do 4 -> value; #); #);  
+     hDevMode: @long (# pos::< (# do 8 -> value; #); #);   
+     hDevNames: @long (# pos::< (# do 12 -> value; #); #);  
+     hDC: @long (# pos::< (# do 16 -> value; #); #);  
+     Flags: @long (# pos::< (# do 20 -> value; #); #);  
+     nFromPage: @short (# pos::< (# do 24 -> value; #); #);  
+     nToPage: @short (# pos::< (# do 26 -> value; #); #);   
+     nMinPage: @short (# pos::< (# do 28 -> value; #); #);   
+     nMaxPage: @short (# pos::< (# do 30 -> value; #); #);   
+     nCopies: @short (# pos::< (# do 32 -> value; #); #);  
+     hInstance: @long (# pos::< (# do 34 -> value; #); #);  
+     lCustData: @long (# pos::< (# do 38 -> value; #); #);  
+     lpfnPrintHook: @long (# pos::< (# do 42 -> value; #); #);  
+     lpfnSetupHook: @long (# pos::< (# do 46 -> value; #); #);  
+     lpPrintTemplateName: @long (# pos::< (# do 50 -> value; #); #);  
+     lpSetupTemplateName: @long (# pos::< (# do 54 -> value; #); #);  
+     hPrintTemplate: @long (# pos::< (# do 58 -> value; #); #);  
+     hSetupTemplate: @long (# pos::< (# do 62 -> value; #); #);  
+  #);
+
+openPrintDlg: external
+  (# thePRINTDLG: @integer; (* ^PRINTDLG; *)
+     result: @integer;
+  enter thePRINTDLG
+  do 'PrintDlgA' -> callStd;
+  exit result
+  #);
+
+SetAbortProc: external
+  (#
+     in0: @integer; (* HDC *)
+     in1: @integer; (* ABORTPROC *)
+     out: @integer; (* int *)
+  enter (in0,in1)
+  do callStd;
+  exit out
+  #);
+
+StartDoc: external
+  (# hdc: @integer; (* HDC *)
+     ptr2DocInfo: ^DOCINFO; (* DOCINFO FAR* *)
+     result: @integer; (* int *)
+  enter (hdc,ptr2DocInfo[])
+  do 'StartDocA' -> callStd;
+  exit result
+  #);
+
+sizeOfDocInfo: external
+  (# size: @integer;
+  do callC;
+  exit size
+  #);
+DOCINFO: cstruct
+  (# bytesize::< (# do 20 -> value; #);
+     cbSize: @long (# pos::< (# do 0 -> value; #); #); 
+     lpszDocName: @long (# pos::< (# do 4 -> value; #); #); 
+     lpszOutput: @long (# pos::< (# do 8 -> value; #); #); 
+     
+     (* Windows 95 only; ignored on Windows NT *)
+     lpszDatatype: @long (# pos::< (# do 12 -> value; #); #);    
+     
+     (* Windows 95 only; ignored on Windows NT *)
+     fwType: @long (# pos::< (# do 16 -> value; #); #);          
+  #);
+
+CreateDialogParam: external
+  (#
+     hInst: @integer; (* handle to application instance *)
+     lpTemplate: [1] @char; (* identifies dialog box template name *)
+     hWndParent: @integer; (* handle to owner window *)
+     lpDialogFunc: @integer; (* pointer to dialog box procedure *)
+     dwInitParam: @integer;
+     theDlgHandle: @integer; (* if the function succeeds, the return value is 
+                              * the handle to the dialog box.
+                              * If the function fails, the return value is 0.
+                              *)
+  enter (hInst,lpTemplate,hWndParent,lpDialogFunc,dwInitParam)
+  do 'CreateDialogParamA' -> callStd;
+  exit theDlgHandle
+  #);
+
+
+GlobalFree: external
+  (# ptr: @integer;
+     result: @integer;
+  enter ptr
+  do callStd;
+  exit result
+  #);
+
+freeCBF: External
+  (# cbf: @integer;
+  enter cbf
+  #);                
+
+DID_CANCEL: (# exit 503 #);
+
+
+
+-- richEditI_Oinit: doPart --
+do (if gdwFormat=0 then SF_RTF -> gdwFormat; if);
+   '{\\rtf' -> szRTFSig.append;
+   ioPrivate.initGlobals;
+   
+-- richEditI_OopenReDoc: doPart --
+do openDocL:
+     (# 
+     do (if ((not fInsert) and (CheckSave < 0)) then
+            false -> result;
+            leave openDocL;
+        if);
+
+        (if (fInsert and gfReadOnly) then
+            false -> result;
+            leave openDocL;
+        if);
+        
+        getFilterLoadTxt -> szFilterLoad.set;
+        64 -> szTitle.init;
+        (0,ascii.nul) -> szTitle.inxPut;
+        MAX_PATH -> szT.init;
+        (0,ascii.nul) -> szT.inxPut;
+        ofn.init;
+        
+        ofn.bytesize -> ofn.lStructSize;
+        0 -> ofn.hInstance;
+        szFilterLoad -> ofn.lpstrFilter;
+        0 -> ofn.lpstrCustomFilter;
+        0 -> ofn.nMaxCustFilter;
+        0 -> ofn.nFilterIndex;
+        szTitle -> ofn.lpstrFileTitle;
+        64 -> ofn.nMaxFileTitle;
+        0 -> ofn.lpstrInitialDir;
+        0 -> ofn.lpstrTitle;
+        0 -> ofn.nFileOffset;
+        0 -> ofn.nFileExtension;
+        0 -> ofn.lpstrDefExt;
+        0 -> ofn.lCustData;
+        0 -> ofn.lpfnHook;
+        0 -> ofn.lpTemplateName;
+        this(textField).father.interfaceObjectId -> ofn.hwndOwner;
+        szT -> ofn.lpstrFile;
+        MAX_PATH -> ofn.nMaxFile;
+        OFN_FILEMUSTEXIST -> ofn.Flags;
+        
+        (* Query user for filename for input *)
+        (if ((ofn.ptr -> GetOpenFileName) = 0) then
+                        
+            (if ((CommDlgExtendedError -> dwError) <> 0) then
+                &text[] -> errMsg[];
+                'Failed to open document. Error: ' -> errMsg.append;
+                (if dwError
+                 //FNERR_FILENAMECODES then
+                    'FNERR_FILENAMECODES.' -> errMsg.append;
+                 //FNERR_SUBCLASSFAILURE then
+                    'FNERR_SUBCLASSFAILURE.' -> errMsg.append;
+                 //FNERR_INVALIDFILENAME then
+                    'FNERR_INVALIDFILENAME.' -> errMsg.append;
+                 //FNERR_BUFFERTOOSMALL then
+                    'FNERR_BUFFERTOOSMALL.' -> errMsg.append;
+                 else
+                    dwError -> errMsg.putInt;
+                if);
+                (NONE,errMsg[],NONE) -> alertUser;
+            if);
+            
+            false -> result;
+            leave openDocL;
+        if);
+        
+        (if ((ofn.Flags , OFN_READONLY)->tos'%or') <> 0 then
+            TRUE -> gfReadOnly;
+         else
+            FALSE -> gfReadOnly;
+        if);
+        
+        (szT.get, szTitle.get, fInsert) -> doOpen -> result;
+        
+     #); (* end of openDocL *)
+   
+   (if szFilterLoad.charptr<>0 then  szFilterLoad.free; if);
+   (if szT.charptr<>0 then szT.free; if);
+   ofn.free;
+   
+-- richEditI_OdoOpen: doPart --
+do
+   (szT[], szTitle[], 0, fInsert) -> ReadReDoc -> dwError;
+   (if not dwError  then
+       (NONE, 'ReadReDoc failed.',NONE) -> alertUser;
+    else
+       (if topLevelWindow[]<>NONE then
+           szTitle[] -> topLevelWindow.title;
+       if);
+       (* wsprintf(szT, szFmtTitle, szTitle);
+        * SetWindowText(predoc->hwndParent, szT);
+        *                
+        *               
+        *  EnableWindow(predoc->hwndFormatBar, !predoc->fReadOnly);
+        *  SendMessage(predoc->hwndRE, EM_SETREADONLY, (WPARAM) predoc->fReadOnly, 0);
+        * SetMenu(hwndMain, hmenuFull);
+        * SetupWordWrapMenu(predoc);
+        * DrawMenuBar(hwndMain);
+        *)
+       
+   if);
+   
+-- richEditI_OreadReDoc: doPart --
+do TRUE -> result;
+   cursors.watch[]->mouse.busyCursor;
+   this(textField).interfaceObjectID -> windowID;
+   cchRTFSig + 1 -> szType.init;
+   (if fileName[]<>NONE then
+       fileName[] -> szFile.set;
+    else
+       MAX_PATH -> szFile.init;
+   if);
+   (if fileTitle[]<>NONE then
+       fileTitle[] -> szTitle.set;
+    else
+       64 -> szTitle.init;
+   if);
+   
+   sizeof_EDITSTREAM -> malloc -> es.ptr;
+   (szFile, OF_READ) -> myOpenFile -> es.dwCookie;
+   (if (es.dwCookie = HFILE_ERROR) then
+       FALSE -> result;
+   if);
+   
+   (if not fInsert then
+       (FALSE, FALSE) -> ioPrivate.initGlobals;
+   if);
+   
+   (if (dwFormat = 0)	then (* unknown format, figure out what it is *)
+       es.dwCookie -> calFormat -> dwFormat;
+   if);
+   
+   (windowID, WM_SETREDRAW, 0, 0) -> SendMessage;
+   
+   0 -> es.dwError;
+   myRead## -> myRead2Ptr -> es.pfnCallback;
+   
+   (if fInsert then
+       (windowID, EM_STREAMIN, (dwFormat,SFF_SELECTION)->tos'%or',es.ptr) 
+         -> SendMessage -> cch;
+    else
+       (windowID, EM_STREAMIN, dwFormat,es.ptr) -> SendMessage -> cch;
+   if);
+   es.dwCookie -> CloseHandle;
+   
+   (windowID, EM_SETMODIFY, 0, 0) -> SendMessage;
+   
+   dwFormat -> gdwFormat;
+   (if fileName[]<>NONE then
+       fileName.copy -> gFileName[];
+   if);
+   (if fileTitle[]<>NONE then
+       fileTitle.copy -> gFileTitle[];
+    else
+       (szFile, szTitle, szTitle.length) -> GetFileTitle;
+   if);
+   
+   (windowID, WM_SETREDRAW, 1, 0) -> SendMessage;
+   (windowID, 0, 1) -> InvalidateRect;
+   windowID -> UpdateWindow;
+
+   szFile.free;
+   szTitle.free;
+   es.ptr -> free;
+   NONE->mouse.busyCursor;
+   
+-- richEditI_OsaveREDoc: doPart --
+do (if debug then 'SaveREDoc called' -> screen.putLine; if);
+   
+   saveL:
+     (if (gfileName[]=NONE) then
+         FALSE -> SaveREDocAs -> result;
+      else
+         (if gfileName.length=0 then
+             FALSE -> SaveREDocAs -> result;
+          else
+             sizeof_EDITSTREAM -> malloc -> es.ptr;
+             (if es.ptr<>0 then
+                 interfaceObjectID -> windowID;
+                 cursors.watch[]->mouse.busyCursor;
+                 
+                 gfileName[] -> szT.set;
+                 (szT, 0) -> myCreateFile -> es.dwCookie;
+                 (if (es.dwCookie = HFILE_ERROR) then
+                     &text[] -> errMsg[];
+                     'Failed to create file. ErrorCode= ' -> errMsg.putText;
+                     GetLastError -> errMsg.putInt;
+                     (topLevelWindow[],errMsg[],NONE) -> alertUser;
+                     FALSE -> result;
+                  else
+                     0 -> es.dwError;
+                     myWrite## -> myWrite2Ptr -> es.pfnCallback;
+                     (windowID, EM_STREAMOUT, gdwFormat, es.ptr) 
+                       -> SendMessage -> cch;
+                     
+                     (es.dwCookie) -> CloseHandle;
+                 if);
+                 
+                 es.ptr -> free;
+                 (if szT.charPtr<>0 then
+                     szT.free;
+                 if);
+                 
+                 (windowID, EM_SETMODIFY, 0, 0) -> SendMessage;
+                 (windowID, EM_SETREADONLY, 0, 0) -> SendMessage;
+                 
+                 NONE ->mouse.busyCursor;
+                 TRUE -> result;
+              else
+                 FALSE -> result;
+             if);
+         if);
+     if);
+   
+-- richEditI_OsaveReDocAs: doPart --
+do saveAsL:
+     (# 
+     do getFilterSaveTxt -> szFilterSave.set;
+        64 -> szTitle.init;
+        (0,ascii.nul) -> szTitle.inxPut;
+        MAX_PATH -> szT.init;
+        (0,ascii.nul) -> szT.inxPut;
+        ofn.init;
+        
+        ofn.bytesize -> ofn.lStructSize;
+        0 -> ofn.hInstance;
+        szFilterSave -> ofn.lpstrFilter;
+        0 -> ofn.lpstrCustomFilter;
+        0 -> ofn.nMaxCustFilter;
+        0 -> ofn.nFilterIndex;
+        szTitle -> ofn.lpstrFileTitle;
+        64 -> ofn.nMaxFileTitle;
+        0 -> ofn.lpstrInitialDir;
+        0 -> ofn.lpstrTitle;
+        0 -> ofn.nFileOffset;
+        0 -> ofn.nFileExtension;
+        0 -> ofn.lpstrDefExt;
+        0 -> ofn.lCustData;
+        0 -> ofn.lpfnHook;
+        0 -> ofn.lpTemplateName;
+        this(textField).father.interfaceObjectId -> ofn.hwndOwner;
+        szT -> ofn.lpstrFile;
+        MAX_PATH -> ofn.nMaxFile;
+        ((OFN_CREATEPROMPT,OFN_HIDEREADONLY) -> tos'%or',OFN_OVERWRITEPROMPT)
+          -> tos'%or' -> ofn.Flags;
+        
+        (* Query user for filename for input *)
+        (if ((ofn.ptr -> GetSaveFileName) = 0) then
+            (if ((CommDlgExtendedError -> dwError) <> 0) then
+                &text[] -> errMsg[];
+                'Failed to save document. Error: ' -> errMsg.append;
+                (if dwError
+                 //FNERR_FILENAMECODES then
+                    'FNERR_FILENAMECODES.' -> errMsg.append;
+                 //FNERR_SUBCLASSFAILURE then
+                    'FNERR_SUBCLASSFAILURE.' -> errMsg.append;
+                 //FNERR_INVALIDFILENAME then
+                    'FNERR_INVALIDFILENAME.' -> errMsg.append;
+                 //FNERR_BUFFERTOOSMALL then
+                    'FNERR_BUFFERTOOSMALL.' -> errMsg.append;
+                 else
+                    dwError -> errMsg.putInt;
+                if);
+                (NONE,errMsg[],NONE) -> alertUser;
+            if);
+            
+            false -> result;
+            leave saveAsL;
+        if);
+        
+        sizeof_EDITSTREAM -> malloc -> es.ptr;
+        (if es.ptr<>0 then
+            interfaceObjectID -> windowID;
+            cursors.watch[]->mouse.busyCursor;
+            
+            (szT, 0) -> myCreateFile -> es.dwCookie;
+            (if (es.dwCookie = HFILE_ERROR) then
+                &text[] -> errMsg[];
+                'Failed to create file. ErrorCode= ' -> errMsg.putText;
+                GetLastError -> errMsg.putInt;
+                (topLevelWindow[],errMsg[],NONE) -> alertUser;
+                FALSE -> result;
+             else
+                0 -> es.dwError;
+                myWrite## -> myWrite2Ptr -> es.pfnCallback;
+                (windowID, EM_STREAMOUT, gdwFormat, es.ptr) -> SendMessage -> cch;
+                (es.dwCookie) -> CloseHandle;
+            if);
+            
+            es.ptr -> free;
+            
+            ofn.nFilterIndex -> gdwFormat;
+            FALSE -> gfReadOnly;
+            
+            szT.get -> gfileName[];
+            szTitle.get -> gfileTitle[];
+            (if topLevelWindow[]<>NONE then
+                gfileTitle[] -> topLevelWindow.title;
+            if);
+            
+            (windowID, EM_SETMODIFY, 0, 0) -> SendMessage;
+            (windowID, EM_SETREADONLY, 0, 0) -> SendMessage;
+            
+            NONE ->mouse.busyCursor;
+            TRUE -> result;
+         else
+            false -> result;
+        if);
+        
+     #); (* End of saveAsL. *)
+   (if szFilterSave.charptr<>0 then  szFilterSave.free; if);
+   (if szT.charptr<>0 then szT.free; if);
+   ofn.free;
+   
+-- richEditI_OcheckSave: doPart --
+do this(textfield).interfaceObjectID -> windowID;
+   (if ((windowID,EM_GETMODIFY, 0, 0) -> SendMessage) = 0 then
+       0 -> result;
+    else
+       (* MB_ICONQUESTION+MB_YESNOCANCEL+MB_TASKMODAL-> theDialog.open;
+        *        &text[] -> theDialog.message[];
+        *        'Question' -> theDialog.title;
+        *        'Save changes to: ' -> theDialog.message.append;
+        *        gfileTitle[] -> theDialog.message.append;
+        *        (if theDialog.runDialog
+        *         //IDYES then
+        *            0 -> result;
+        *            (if not SaveReDoc then
+        *                -1 -> result;
+        *            if);
+        *         //IDCANCEL then
+        *            -1 -> result;
+        *         else
+        *            0 -> result;
+        *        if);
+        *)
+       (* This must be coordinated with some event in guienv.textField. *)
+       0 -> result;
+   if);
+   
+-- richEditI_OprintReDoc: doPart --
+do (# AbortDlgProc2Ptr: external
+        (# func: ##AbortDlgProc;
+           ptr: @integer;
+        enter func##
+        do 'copyinput'->callC
+        exit ptr
+        #);
+      
+      AbortProc2Ptr: external
+        (# func: ##AbortProc;
+           ptr: @integer;
+        enter func##
+        do 'copyinput'->callC
+        exit ptr
+        #);
+      
+      ghwndAbort, ghwndMain: @integer;
+      AbortDlgProcAddress: @integer;
+      AbortProcAddress: @integer;
+      gbAbort: @boolean;
+      ghdc: @integer;
+      
+      AbortProc: external
+        (# hdc, error, result: @integer;
+           m: @integer;
+        enter (hdc, error)
+        do StdExternalEntry;
+           28 -> malloc -> m;
+           L:
+             (if (not gbAbort) 
+                 and 
+                 (((m,0,0,0,PM_REMOVE) -> PeekMessage)<>0)
+                 then
+                 
+                 (if (ghwndAbort<>0) 
+                     or
+                     (((m,ghwndAbort) -> IsDialogMessage2) <> 0)
+                     then
+                     m -> TranslateMessage;
+                     m -> DispatchMessage2;
+                 if);
+                 restart L;
+             if);
+           m -> free;
+           (if gbAbort then 0 -> result;
+            else 1 -> result;
+           if);
+        exit result
+        #);
+      
+      AbortDlgProc: external
+        (# result: @integer;
+           hwnd, msg, wParam, lParam: @integer;
+           longInt: @CStruct
+             (# ByteSize:: (# do 4 -> Value; #);
+                loWord: signedShort (# Pos:: (# do 0 -> Value; #); #);
+                hiWord: signedShort (# Pos:: (# do 2 -> Value; #); #);
+             enter R[1]
+             exit R[1]
+             #);
+        enter (hwnd, msg, wParam, lParam)
+        do StdExternalEntry;
+           
+           (if msg
+            //WM_INITDIALOG then
+               
+               hwnd -> ghwndAbort;
+               ((hwnd, 0) -> GetSystemMenu, SC_CLOSE, MF_GRAYED)->EnableMenuItem;
+               
+            //WM_COMMAND then
+               wParam -> longInt;
+               (if longInt.loWord=DID_CANCEL then
+                   TRUE -> gbAbort;
+                   ghdc -> AbortDoc;
+                   (ghwndMain, 1) -> EnableWindow;
+                   hwnd -> DestroyWindow;
+                   0 -> ghwndAbort;
+                   1 -> result;
+               if);
+           if);
+        exit result
+        #);
+      
+      handleError:
+        (# errMsg: ^text;
+        enter errMsg[]
+        do cchText -> fr.chrg.cpMin -> fr.chrg.cpMost;
+           (* free up RichEdit's format range info *)
+           (windowID, EM_FORMATRANGE, 0, 0) -> SendMessage;
+           cur[] -> theCursor;
+           (if errMsg[]=NONE then &text[] -> errMsg[]; if);
+           'An error occurred while printing.\n' -> errMsg.prepend;
+           '\nError: ' -> errMsg.append;
+           GetLastError -> errMsg.putint;
+           (topLevelWindow[],errMsg[],NONE) -> alertUser;
+        #);
+      handleAbort:
+        (# errMsg: ^text;
+        enter errMsg[]
+        do fr.hdc -> AbortDoc;
+           errMsg[] -> handleError;
+        #);
+      
+      cchText: @integer;
+      cur: ^cursor;
+      pt: @ntPOINT;
+      di: @DOCINFO;
+      fr: @FORMATRANGE;
+      rc: @ntRECT;
+      
+      pd: @PRINTDLG;
+      
+      xPerInch, yPerInch: @integer;
+      windowID: @integer;
+      cstrDocName: @cString;
+      errMsg: ^text;
+      dwError: @integer;
+   do 
+      interfaceObjectID -> windowID;
+      (windowID, WM_GETTEXTLENGTH, 0, 0) -> SendMessage -> cchText;
+      
+      sizeOfPrintDlg -> malloc -> pd.ptr;
+      (pd.ptr,0,sizeOfPrintDlg) -> memset;
+
+      outerL:
+        (if pd.ptr=0 then
+            (topLevelWindow[],'Failed to allocate print structure.',NONE)
+              -> alertUser;
+         else
+            sizeOfPrintDlg -> pd.lStructSize;
+            windowID -> pd.hwndOwner;
+            0 -> pd.hInstance;
+            0->pd.nFromPage;
+            0->pd.nToPage;
+            0->pd.nMinPage;
+            0->pd.nMaxPage;
+            1->pd.nCopies;
+            PD_NOPAGENUMS + PD_NOSELECTION +
+            PD_USEDEVMODECOPIES + PD_COLLATE + PD_RETURNDC
+              ->pd.Flags;
+
+            
+            (if gFileTitle[]<>NONE then
+                gFileTitle[] -> cstrDocName.set;
+             else 
+                'Untitled' -> cstrDocName.set;
+            if);
+            
+            (if (pd.ptr -> openPrintDlg)=0 then
+                (if ((CommDlgExtendedError -> dwError) <> 0) then
+                    &text[] -> errMsg[];
+                    'Print dlg failed. Error: ' -> errMsg.append;
+                    (if dwError
+                     //FNERR_FILENAMECODES then
+                        'FNERR_FILENAMECODES.' -> errMsg.append;
+                     //FNERR_SUBCLASSFAILURE then
+                        'FNERR_SUBCLASSFAILURE.' -> errMsg.append;
+                     //FNERR_INVALIDFILENAME then
+                        'FNERR_INVALIDFILENAME.' -> errMsg.append;
+                     //FNERR_BUFFERTOOSMALL then
+                        'FNERR_BUFFERTOOSMALL.' -> errMsg.append;
+                     //PDERR_PRINTERCODES then
+                        'PDERR_PRINTERCODES' -> errMsg.append;
+                     //PDERR_SETUPFAILURE then
+                        'PDERR_SETUPFAILURE' -> errMsg.append;
+                     //PDERR_PARSEFAILURE then
+                        'PDERR_PARSEFAILURE' -> errMsg.append;
+                     //PDERR_RETDEFFAILURE then
+                        'PDERR_RETDEFFAILURE' -> errMsg.append;
+                     //PDERR_LOADDRVFAILURE then
+                        'PDERR_LOADDRVFAILURE' -> errMsg.append;
+                     //PDERR_GETDEVMODEFAIL then
+                        'PDERR_GETDEVMODEFAIL' -> errMsg.append;
+                     //PDERR_INITFAILURE then
+                        'PDERR_INITFAILURE' -> errMsg.append;
+                     //PDERR_NODEVICES then
+                        'PDERR_NODEVICES' -> errMsg.append;
+                     //PDERR_NODEFAULTPRN then
+                        'PDERR_NODEFAULTPRN' -> errMsg.append;
+                     //PDERR_DNDMMISMATCH then
+                        'PDERR_DNDMMISMATCH' -> errMsg.append;
+                     //PDERR_CREATEICFAILURE then
+                        'PDERR_CREATEICFAILURE' -> errMsg.append;
+                     //PDERR_PRINTERNOTFOUND then
+                        'PDERR_PRINTERNOTFOUND'  -> errMsg.append;
+                     //PDERR_DEFAULTDIFFERENT then
+                        'PDERR_DEFAULTDIFFERENT'  -> errMsg.append;
+                     else
+                        dwError -> errMsg.putInt;
+                    if);
+                    (NONE,errMsg[],NONE) -> alertUser;
+                if);
+             else
+                pd.hDC -> fr.hdc;
+                (if pd.hdc = 0 then
+                    (if pd.ptr<>0 then
+                        pd.ptr -> free;
+                        0 -> pd.ptr;
+                    if);
+                    leave outerL;
+                if);
+                
+                
+                theCursor -> cur[];
+                cursors.watch[] -> theCursor;
+                
+                (*
+                 * put up Abort & install the abort procedure
+                 *)
+                (if topLevelWindow[]<>NONE then
+                    topLevelWindow.interfaceObjectID -> ghwndMain;
+                 else
+                    windowID -> ghwndMain;
+                if);
+                pd.hDC -> gHdc;
+                AbortDlgProc## -> AbortDlgProc2Ptr -> AbortDlgProcAddress;
+                FALSE -> gbAbort;
+                (uienvHInstance, 'Abort', ghwndMain, AbortDlgProcAddress,0)
+                  -> CreateDialogParam
+                  -> ghwndAbort;
+                (ghwndMain, 0) -> EnableWindow;
+                AbortProc## -> AbortProc2Ptr -> AbortProcAddress;
+                (gHdc, AbortProcAddress) -> SetAbortProc;
+                
+                sizeOfDocInfo -> di.cbSize;
+                cstrDocName -> di.lpszDocName;
+                0 -> di.lpszOutput;
+                0 -> di.lpszOutput;
+                
+                pd.hDC -> fr.hdc;
+                0 -> fr.hdcTarget;
+                
+                (fr.hdc, PHYSICALWIDTH) -> GetDeviceCaps -> pt.x;
+                (fr.hdc, PHYSICALHEIGHT) -> GetDeviceCaps -> pt.y;
+                
+                (fr.hdc, LOGPIXELSX) -> GetDeviceCaps -> xPerInch;
+                (fr.hdc, LOGPIXELSY) -> GetDeviceCaps -> yPerInch;
+                
+                0 -> rc.left -> rc.top;
+                0 -> fr.rcPage.left -> fr.rcPage.top;
+                ((pt.x * 1440) / xPerInch) -> rc.right;
+                rc.right -> fr.rcPage.right;
+                (* leave 1.25" (1800 twips) margins if that will leave >= 1" *)
+                (if (rc.right >= 1800 + 1440 + 1800) then
+                    1800 -> rc.left;
+                    rc.right - rc.left -> rc.right;
+                if);
+                ((pt.y * 1440) / yPerInch) -> rc.bottom;
+                rc.bottom -> fr.rcPage.bottom;
+                (* leave 1" (1440 twips) margins if that will leave >= 1" *)
+                (if (rc.bottom >= 1440 + 1440 + 1440) then
+                    1440 -> rc.top;
+                    rc.bottom -rc.top -> rc.bottom;
+                if);
+                
+                printL:
+                  (if ((fr.hdc, di[]) -> StartDoc)<=0 then
+                      (* error *)
+                      'StartDoc failed.' -> handleError;
+                      leave printL;
+                   else
+	              (* tell RichEdit not to erase before rendering text *)
+	              (fr.hdc, TRANSPARENT) -> SetBkMode;
+                      
+	              0 -> fr.chrg.cpMin;
+	              cchText -> fr.chrg.cpMost;
+	              printPagesL:
+	                (# 
+                        do
+                           (if ((fr.hdc->StartPage) <= 0) then
+                               (* error *)
+                               'StartPage failed.' -> handleError;
+                               leave printL;
+                           if);
+                           rc.top -> fr.rc.top;
+                           rc.left -> fr.rc.left;
+                           rc.right -> fr.rc.right;
+                           rc.bottom -> fr.rc.bottom;
+                           
+                           (windowID, EM_FORMATRANGE,1, fr[]) -> SendMessage2 
+                             -> fr.chrg.cpMin;
+                           
+                           (if ((fr.hdc->EndPage) <= 0) then
+                               'EndPage failed.' -> handleAbort;
+                               leave printL;
+                           if);
+                           (if (fr.chrg.cpMin > 0) and (fr.chrg.cpMin < fr.chrg.cpMost) then
+                               restart printPagesL;
+                            else
+                               leave printPagesL;
+                           if);
+                        #);
+                      
+	              (if (fr.chrg.cpMin >= 0) and ((fr.hdc->EndDoc) > 0) then
+		          cchText -> fr.chrg.cpMin -> fr.chrg.cpMost;
+		          (* free up RichEdits format range info *)
+		          (windowID, EM_FORMATRANGE, 0, 0) -> SendMessage;
+		          cur[] -> theCursor;
+                      if);	    
+                      
+                      (if cstrDocName<>0 then
+                          cstrDocName.free;
+                      if);
+                  if); (* End of printL *)
+                
+                (if ( not gbAbort) then
+                    (ghwndMain, 1) -> EnableWindow;
+                    ghwndAbort -> DestroyWindow;            
+                    0 -> ghwndAbort;
+                if);
+                AbortDlgProcAddress -> freeCBF;
+                AbortProcAddress -> freeCBF;
+                (if pd.hDC<>0 then
+                    pd.hDC -> DeleteDC;
+                if);
+                
+            if); (* end of if (pd[] -> openPrintDlg)=0 then *)
+            
+            (if pd.ptr<>0 then
+                pd.ptr -> free;
+                0 -> pd.ptr;
+            if);
+        if); (* end of outerL *)
+   #);
+   
+-- ioPrivateImpl: descriptor --
+(#
+   initGlobals:
+     (# hwndRE: @integer;
+        fPrompt, fUpdateUI: @boolean;
+        res: @boolean;
+     enter (fPrompt, fUpdateUI)
+     do (if debug then 'initGlobals begin' -> putLine; if);
+        
+        interfaceObjectID -> hwndRE;
+        (if hwndRE<>0 then
+            &text[] -> gfileTitle[];
+            'Untitled' -> gfileTitle.append;
+            (if topLevelWindow[]<>NONE then
+                gfileTitle[] -> topLevelWindow.title;
+            if);
+            true -> res;
+        if);      
+        
+        (hwndRE, EM_SETMODIFY, 0, 0) -> SendMessage;
+        (hwndRE, EM_SETREADONLY, 0, 0) -> SendMessage;
+        
+        (if debug then 'newREdoc done' -> putLine; if);
+     exit res
+     #);
+#)

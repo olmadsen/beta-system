@@ -6,6 +6,28 @@
 
 #define Check(error) if(error) goto clean;
 
+int CreateBitmapFromPictureFile (unsigned char *name,BitMapHandle *bitmap,Handle *data);
+
+void BitMapGetSize (BitMapHandle bits,long *width,long *height);
+
+long BitMapGetWidth (BitMapHandle bits);
+
+long BitMapGetHeight (BitMapHandle bits);
+
+void LockPix (BitMapHandle bits,Handle data);
+
+void UnlockPix (BitMapHandle bits,Handle data);
+
+void CreatePixmapFromPictureFile (unsigned char *name,PixMapHandle *pixmap,Handle *data);
+
+void PixMapGetSize (PixMapHandle pixels,long *width,long *height);
+
+long PixMapGetWidth (PixMapHandle pixels);
+
+long PixMapGetHeight (PixMapHandle pixels);
+
+PixPatHandle CreatePixPatFromPixMap (PixMapHandle pixels, Handle data);
+
 int CreateBitmapFromPictureFile (unsigned char *name,BitMapHandle *bitmap,Handle *data)
 {
 	OSErr error = 0;

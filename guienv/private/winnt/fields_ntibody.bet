@@ -1,4 +1,5 @@
 ORIGIN '../fieldsbody';
+BODY 'richTextFieldBody';
 (*
  * COPYRIGHT
  *       Copyright (C) Mjolner Informatics, 1994-96
@@ -19,8 +20,9 @@ INCLUDE '~beta/win32lib/v1.2/memorymanagement';
 INCLUDE '~beta/win32lib/v1.2/errorhandling';
 INCLUDE '~beta/win32lib/v1.2/clipboardmanager';
 INCLUDE '~beta/sysutils/v1.5/cstring';
-(* INCLUDE '~beta/basiclib/v1.5/math'; *)
-(* INCLUDE '~beta/basiclib/v1.5/numberio'; *)
+
+INCLUDE 'richTextI_O';
+INCLUDE 'richTextConsts';
 
 -- lib: attributes --
 minMax:
@@ -123,8 +125,7 @@ do (if not (VK_CONTROL -> isVKeyDown) then
 
 -- GUIENVtextFieldonMouseDown: descriptor --
 (#
-do (* this(textField)[] -> target; *)
-   inner onMouseDown;
+do inner onMouseDown;
 #)
 
 -- GUIENVtextFieldonMouseUp: descriptor --
@@ -135,8 +136,14 @@ do (if private.notification then (* 060396 /les *)
 #)
 
 -- GUIENVtextFieldonRefresh: descriptor --
-(# 
+(# width,height: @integer;
+   info: ^messageInfo;
 do inner onReFresh;
+   currentMessageInfo -> info[];
+   FALSE -> info.callback;
+   callDefaultWindowProc;
+   size -> (width,height);
+   (this(textField)[],borderStyles.shadowIn,0,0,width,height) -> drawBorder;
 #)
 
 -- GUIENVtextFieldOnEnableTarget: descriptor --
@@ -304,7 +311,8 @@ do &text[] -> theText[];
 
 -- GUIENVtextFieldSelectionScrollIntoView: descriptor --
 (# result: @integer;
-do (interfaceObjectID,EM_SCROLLCARET,0,0) -> SendMessage -> result;
+do (* (interfaceObjectID,EM_SCROLLCARET,0,0) -> SendMessage -> result; *)
+   scrollIntoView2;
 #)
 
 -- GUIENVtextFieldSelectionSet: descriptor --
@@ -317,7 +325,7 @@ do interfaceObjectID -> id;
     else
        theStart -> private.translateToLocal -> theStart -> theEnd;
    if);
-   (id,EM_SETSEL,theStart,theEnd) -> SendMessage -> result;
+   (id,EM_SETSEL,theEnd,theStart) -> SendMessage -> result;
 #)
 
 -- GUIENVtextFieldSetDefaultStyle: descriptor --
@@ -341,13 +349,13 @@ do 'Not implemented.' -> screen.putLine;
 #)
 
 -- GUIENVtextFieldSetOneSize: descriptor --
-(#
-do 'Not implemented.' -> screen.putLine;
+(# 
+do <<SLOT GUIENVtextFieldSetOneSize2: descriptor>>
 #)
 
 -- GUIENVtextFieldSetOneFont: descriptor --
 (#
-do 'Not implemented.' -> screen.putLine;
+do <<SLOT GUIENVtextFieldSetOneFont2: descriptor>>
 #)
 
 -- GUIENVtextFieldSetOneFace: descriptor --
@@ -415,7 +423,8 @@ do (interfaceObjectID,WM_CLEAR, 0, 0) -> sendMessage;
      exit out
      #);
    ES_DISABLENOSCROLL: (# exit 16x00002000 #); (* 110396 /les *)
-do 'RICHED32.DLL' -> LoadLibraryA -> libOk;
+do true -> this(windowItem).private.borderHandledLocally;
+   'RICHED32.DLL' -> LoadLibraryA -> libOk;
    (if libOk=0 then
        'RICHED32.DLL -> LoadLibraryA failed. Error= ' -> screen.putText;
        GetLastError -> screen.putint; screen.newline;
@@ -429,7 +438,7 @@ do 'RICHED32.DLL' -> LoadLibraryA -> libOk;
            (ES_AUTOVSCROLL,wStyle) -> tos'%or' -> wStyle;
            (WS_HSCROLL,wStyle) -> tos'%or' -> wStyle;
            (WS_VSCROLL,wStyle) -> tos'%or' -> wStyle;
-           (ES_DISABLENOSCROLL,wStyle) -> tos'%or' -> wStyle; (* 110396 /les *)
+           (ES_DISABLENOSCROLL,wStyle) -> tos'%or' -> wStyle; 
            wStyle  -> windowItemStyle;
         else
            (ES_MULTILINE,ES_LEFT) -> tos'%or' -> wStyle;
@@ -450,16 +459,22 @@ do 'RICHED32.DLL' -> LoadLibraryA -> libOk;
    (* 060396 /les *)
    ENM_MOUSEEVENTS: (# exit 16x00020000 #);
    EM_SETEVENTMASK: (# exit  (WM_USER + 69) #);
+   ANSI_FIXED_FONT: (# exit 11 #);
+   
    theMask: @integer;
    textLimit: @integer;
 do interfaceObjectID -> windowID;
    defaultTextFieldTextStyle -> style[];
    (if style[]=NONE then      
        &textStyle[] -> style[];
+       
        'Arial' -> style.name;
        10 -> style.size;
+       (* textFaces.bold -> style.face; *)
        style.create;
-       style[] -> defaultTextFieldTextStyle;
+       (* ANSI_FIXED_FONT -> GetStockObject -> style.textStyleID;
+        * style[] -> defaultTextFieldTextStyle;
+        *)
    if);
    (windowID,WM_SETFONT,style.textStyleID,1) -> SendMessage;
    style[] -> textFieldDefaultStyle;
@@ -494,39 +509,98 @@ do interfaceObjectID -> windowID;
        (windowID,EM_EXLIMITTEXT,0,textLimit) -> Sendmessage; 
    if);
    
+   (4,4) -> textFieldMargin;
+   
+   private.makeRichEditI_O;
+   (NONE,SF_RTF) -> private.theRichEditI_O.init;
+   SCF_SELECTION -> private.formatFlags;
+   
    inner open;
    
-   (* setTextFieldMargins; *)
-   
-   (* 060396 /les *)
    (windowID,EM_SETEVENTMASK,0,ENM_MOUSEEVENTS) -> SendMessage -> theMask;
    (theMask,ENM_MOUSEEVENTS) -> tos'%or' -> theMask;
    (windowID,EM_SETEVENTMASK,0,theMask) -> SendMessage -> theMask;
    
-   (* 110396 /les *)
+   setTextFieldMargins;
    true -> private.firstFocus;
    private.theActivateAction[] -> AppendAction;
+   private.theAboutToCloseAction[] -> AppendAction;
+   private.theVisibleChangedAction[] -> AppendAction;
 #)
 
 -- GUIENVtextFieldClose: descriptor --
-(# theTextStyle: ^textStyle;
+(# 
 do inner close;
-   textFieldDefaultStyle -> theTextStyle[];
-   (if theTextStyle[]<>defaultTextFieldTextStyle then
-       (if theTextStyle[]<>NONE then
-           theTextSTyle.dispose;
-       if);
-   if);
    private.theActivateAction[] -> deleteAction; (* 110396 /les *)
+   private.theAboutToCloseAction[] -> deleteAction;
+   private.theVisibleChangedAction[] -> deleteAction;
+   true -> private.closeAction;
 #)
 
 -- textFieldLib: attributes --
 ES_SELECTIONBAR: (# exit 0x01000000 #);
+WS_EX_CLIENTEDGE: (# exit 0x00000200 #);
 EM_EXLIMITTEXT: (# exit (WM_USER + 53) #);
+EM_SETOLECALLBACK: (# exit (WM_USER + 70) #); 
+
+SendMessage2: external
+  (# hwnd: @integer; 
+     uMsg: @integer; 
+     wParam: @integer; 
+     lParam: ^cStruct; 
+     out: @integer; (* LRESULT *)
+  enter (hwnd,uMsg,wParam,lParam[])
+  do 'SendMessageA' -> callStd;
+  exit out
+  #);
+
+scrollIntoView2:
+  (# iStart,iend, iFirstLine, windowID: @integer;
+     EM_EXLINEFROMCHAR: (# exit WM_USER + 54 #);
+     EM_EXGETSEL: (# exit WM_USER + 52 #);
+     CHARRANGE: cstruct
+       (# bytesize::< (# do 8 -> value; #);
+          cpMin: @long (# pos::< (# do 0 -> value; #); #); 
+          cpMax: @long (# pos::< (# do 4 -> value; #); #); 
+       enter(cpMin,cpMax)
+       exit(cpMin,cpMax)
+       #);
+     theSel: @CHARRANGE;
+     theTextStyle: ^textStyle;
+     widht,height,noOfLines,halfNoOfLines,delta: @integer;
+  do this(textField).interfaceObjectID -> windowID;
+     defaultStyle -> theTextStyle[];
+     (if theTextStyle[]<>NONE then
+         this(textField).size -> (widht,height);
+         height div theTextSTyle.lineHeight -> noOfLines;
+         noOfLines div 2 -> halfNoOfLines;
+     if);
+     
+     (windowID,EM_EXGETSEL,0,theSel[]) -> SendMessage2;
+     
+     (windowID,EM_EXLINEFROMCHAR,0,theSel.cpMin) -> sendMessage -> iStart;
+     (windowID,EM_EXLINEFROMCHAR,0,theSel.cpMax) -> sendMessage -> iEnd;
+     (windowID,EM_GETFIRSTVISIBLELINE,0,0) -> sendMessage -> iFirstLine;
+     
+     (if (iStart < iFirstLine) or (iStart > (iFirstLine + noOfLines)) then
+         (if iStart=iEnd then
+             -iFirstLine -halfNoOfLines + iStart - 1 -> delta;             
+          else
+             -iFirstLine + iStart - 1 -> delta;
+         if);
+         (windowID,EM_LINESCROLL,0, delta ) ->SendMessage;
+      else
+         (if iStart=iEnd then
+             -iFirstLine -halfNoOfLines + iStart - 1 -> delta;
+             (windowID,EM_LINESCROLL,0, delta ) ->SendMessage;
+         if);
+     if);
+  #);
+
 
 setTextFieldMargins:
   (# width,height: @integer;
-     scrollbarWidth, scrollbarHeight: @integer;
+     scrollbarWidth, scrollbarHeight,delta1,delta2: @integer;
   do size -> (width,height);
      (if private.useScrollbars then
          SM_CXVSCROLL -> GetSystemMetrics -> scrollbarWidth;
@@ -535,13 +609,14 @@ setTextFieldMargins:
          height - scrollbarHeight -> height;
      if);
      
+     3 -> delta1; 4 -> delta2;
      (if border.visible then
          (if border.style=borderStyles.simple then
-             (private.leftMargin + 1,private.topMargin + 2,
-             width-1,height-1,interfaceObjectID) -> setEditRect; 
+             (private.leftMargin + delta1,private.topMargin + delta1,
+             width-delta1,height-delta1,interfaceObjectID) -> setEditRect; 
           else
-             (private.leftMargin + 2,private.topMargin + 2,
-             width-2,height-2,interfaceObjectID) -> setEditRect; 
+             (private.leftMargin + delta1,private.topMargin + delta1,
+             width-delta1,height-delta1,interfaceObjectID) -> setEditRect; 
          if);
       else
          (private.leftMargin,private.topMargin,
@@ -683,9 +758,7 @@ textFieldNotiMethods: windowItemNotificationMethods
                    (if message
                     //WM_LBUTTONUP  then
                        true -> private.notification;
-                       
-                       
-                       
+                                           
                        &messageInfo[] -> oldInfo[];
                        info.wParam -> oldInfo.wParam;
                        info.lParam -> oldInfo.lParam;
@@ -710,7 +783,6 @@ textFieldNotiMethods: windowItemNotificationMethods
                        1 -> info.button;
                        
                        FALSE -> info.callback;
-                       
                        
                        theEventHandler.onMouseUp;
                        
@@ -747,9 +819,49 @@ textFieldMethods: windowItemMethods
           clipboardLength: @integer;
           clipboardText: ^text;
           start,end: @integer; length: @integer;
+          p: @point; pos: @integer;
+          ch: @char;
           
        do true -> didSomething;
           (if info.message 
+              
+           //WM_KEYDOWN then
+              info.wParam -> ch;
+              (if ch
+               //'V' then 
+                  (if (VK_CONTROL -> isVKeyDown) then
+                      FALSE -> info.callback;
+                      true -> info.handled;
+                      (interfaceObjectID,WM_PASTE, 0, 0) -> sendMessage;
+                  if);
+               //'X' then
+                  (if (VK_CONTROL -> isVKeyDown) then
+                      FALSE -> info.callback;
+                      true -> info.handled;
+                      (interfaceObjectID,WM_CUT, 0, 0) -> sendMessage;
+                  if);
+                  (* //'Z' then
+                   *                   (if (VK_CONTROL -> isVKeyDown) then
+                   *                       FALSE -> info.callback;
+                   *                       true -> info.handled;
+                   *                   if);
+                   *)
+               else
+                  false -> didSomething;
+              if);
+              
+           //WM_LBUTTONDOWN  then
+              selection -> (start,end);
+              (if start<>end then
+                  (if (not (VK_SHIFT -> isVKeyDown)) then
+                      (if (not (VK_CONTROL -> isVKeyDown)) then
+                          (info.lParam.loWord,info.lParam.hiWord) -> p;
+                          p -> ptToPos -> pos;
+                          (interfaceobjectid,EM_SETSEL,pos,pos) -> SendMessage;
+                      if);
+                  if);
+              if);
+              
            //WM_PASTE then 
               FALSE -> info.callback;
               clipboard.textContents -> clipboardText[];
@@ -765,7 +877,7 @@ textFieldMethods: windowItemMethods
                       if);
                       (if performEdit then
                           clipboardText[] -> this(guienv).private.textfieldChangeText[];
-                          
+                           
                           (start,clipboardLength) -> theEventHandler.onBeforeChange 
                             -> performEdit;
                           (if performEdit then
@@ -783,15 +895,19 @@ textFieldMethods: windowItemMethods
               selection -> (start,end);
               end - start -> length;
               true -> performEdit;
+              
               (if (length<>0) then
                   selection.contents -> this(guienv).private.textfieldChangeText[];
+                  
                   (start,-length) -> theEventHandler.onBeforeChange -> performEdit;
+                  
                   (if performEdit then
                       callDefaultWindowProc;
                       handleTextChanged;
                   if);
                   none -> this(guienv).private.textfieldChangeText[];
               if);
+              
            //WM_CLEAR then
               FALSE -> info.callback;
               selection -> (start,end);
@@ -814,7 +930,82 @@ textFieldMethods: windowItemMethods
 
 
 -- GUIENVtextFieldPrivate: descriptor --
-(# (* 110396 /les *)
+(# OsMajorVersion: @integer;
+   
+   (* OLE2/COM stuff: begin *)
+   
+   textOnly,allowDragDrop: @boolean;
+   topLevelWindow: ^window;
+   theRichEditI_O: ^richEditI_O;
+   
+   readFromFile:
+     (# fileName: ^text;
+     enter fileName[]
+     <<SLOT richTextFieldReadFromFile: doPart>>
+     exit fileName[]
+     #);
+   
+   save:
+     (# fileName: ^text;
+     <<SLOT richTextFieldSave: doPart>>
+     exit fileName[]
+     #);
+   
+   saveAs:
+     (# fileName: ^text;
+     <<SLOT richTextFieldSaveAs: doPart>>
+     exit fileName[]
+     #);
+   
+   print:
+     (# <<SLOT richTextFieldPrint: doPart>> #);
+   
+   selectCharFormat:
+     (# theTextColor: @integer;
+     do handleFontSelection -> theTextColor; 
+     exit theTextColor
+     #);
+   
+   canCut: booleanValue
+     (# <<SLOT richTextFieldCancut: doPart>> #);
+   
+   canCopy: booleanValue
+     (# <<SLOT richTextFieldCanCopy: doPart>> #);
+   
+   canPaste: booleanValue
+     (# <<SLOT richTextFieldCanPaste: doPart>> #);
+   
+   closeAction:
+     (# okToClose: @boolean;
+     enter okToClose
+     do 
+     #);
+   formatFlags: @integer;
+   
+   makeRichEditI_O:
+     (# do &richEditI_O[] -> theRichEditI_O[]; #);
+   
+   handleFontSelection:
+     (# 
+        lf: @LOGFONT2;
+        csf: @CHOOSEFONT;
+        
+        cf: @CHARFORMAT;
+        yPerInch: @integer;
+        hdc: @integer;
+        windowID, topLevelWindowID: @integer;
+        
+        theTextColor: @integer;
+     <<SLOT handleFontSelectionImpl: doPart>>
+     exit theTextColor
+     #);
+   
+   (*************************************************
+    * *************OLE2/COM stuff: end **************
+    * ***********************************************)
+   
+   
+   (* 110396 /les *)
    theActivateAction: @activateAction
      (# 
      do (if private.firstFocus then
@@ -822,6 +1013,16 @@ textFieldMethods: windowItemMethods
             setTextFieldMargins;
         if);
      #);
+   theAboutToCloseAction: @aboutToCloseAction
+     (# 
+     do theEvent.okToClose -> closeAction;
+     #);
+   theVisibleChangedAction: @visibleChangedAction
+     (# 
+     do setTextFieldMargins;
+        true -> update;
+     #);
+   
    firstFocus: @boolean;
    
    longInt: cstruct
@@ -1077,61 +1278,7 @@ adjustScrollValues:
      (interfaceObjectID,SB_VERT,-newV,1) -> SetScrollPos;
      (contents.interfaceObjectID,0,newH,newV,0,0,SWP_NOSIZE + SWP_NOZORDER) 
        -> SetWindowPos -> result;
-     
-		
-     (* contents.position -> (h,v);  
-      *      
-      *      
-      *      'H, V(0)= ' -> puttext; (H,V) -> putPoint; newline; 
-      *      'width, height(0)= ' -> puttext; (width,height) -> putPoint; newline; 
-      *      'viewWidth, viewHeight(0)= ' -> puttext; (viewWidth,viewHeight) -> putPoint; newline; 
-      *      
-      *      (width - viewWidth,-h,0) -> MinMax -> h;
-      *      (height - viewHeight,-v,0) -> MinMax -> v;
-      *      
-      *      'H, V(1)= ' -> puttext; (H,V) -> putPoint; newline;
-      *      
-      *      (h,v) -> setScroll; 
-      *)
   #);
-
-(* setScroll:
- *   (# h,v: @integer;
- *      contH,contV: @integer;
- *   enter (h,v)
- *   do contents.position -> (contH,contV);
- *      (if ( (h<>contH) or (v<>contV) ) then
- *          (contH - h,contV -v ) -> tempScroll;
- *      if);
- *   #);
- * 
- * tempScroll:
- *   (# width,height,contentsWidth,contentsHeight,maxHScroll,maxVScroll: @integer;
- *      result: @integer;
- *      contH,contV: @integer; newH, newV, dh, dv: @integer;
- *   enter (dh,dv)
- *   do contents.position -> (contH,contV);
- *      2*contH -> newH;
- *      2*contV -> newV;
- *      
- *      {* 'contH, contV= ' -> puttext; (contH,contV) -> putPoint; newline;
- *      'dH, dV= ' -> puttext; (dH,dV) -> putPoint; newline;
- *       'newH, newV= ' -> puttext; (newH,newV) -> putPoint; newline; *}
- *      
- *      privateViewSize -> (width,height);
- *      contents.size -> (contentsWidth,contentsHeight);
- *      
- *      (if width>contentsWidth then width -> contentsWidth; if);
- *      (if height>contentsHeight then height -> contentsHeight; if);
- *      
- *      contentsHeight - height -> maxVScroll;
- *      contentsWidth - width -> maxHScroll;
- *      (-maxHScroll,newH,0) -> minMax -> newH;
- *      (-maxVScroll,newV,0) -> minMax -> newV;
- *      (interfaceObjectID,SB_HORZ,-newH,1) -> SetScrollPos;
- *      (interfaceObjectID,SB_VERT,-newV,1) -> SetScrollPos;
- *   #);
- *)
 
 scrollTo:
   (# h,v: @integer;

@@ -1,0 +1,164 @@
+ORIGIN 'fields_ntibody';
+BODY 'richTextFontHandling';
+
+INCLUDE 'richTextI_O';
+INCLUDE 'richTextConsts';
+
+-- lib: attributes --
+ES_SELECTIONBAR: (# exit 0x01000000 #);
+
+EM_EXLIMITTEXT: (# exit (WM_USER + 53) #);
+EM_SETOLECALLBACK: (# exit (WM_USER + 70) #); 
+
+-- richTextFieldReadFromFile: doPart --
+do (if fileName[]=NONE then
+       (if private.theRichEditI_O.OpenReDoc then
+           private.theRichEditI_O.gfileName.copy -> fileName[];
+        else
+           (topLevelWindow[],'Failed to read document(1).',NONE) -> alertUser;
+       if);
+    else
+       (if ((fileName[], NONE, 0, FALSE)->private.theRichEditI_O.ReadReDoc)
+           then
+           (if (topLevelWindow[]<>NONE) 
+               and (private.theRichEditI_O.gfileTitle[]<>NONE) then
+               private.theRichEditI_O.gfileTitle[]
+                 -> topLevelWindow.title;
+           if);
+        else
+           (topLevelWindow[],'Failed to read document(2).',NONE) -> alertUser;
+       if);
+   if);
+-- richTextFieldSave: doPart --
+do (if private.theRichEditI_O.saveReDoc then
+       private.theRichEditI_O.gfileName.copy -> fileName[];
+    else
+       (topLevelWindow[],'Failed to save document.',NONE) -> alertUser;
+   if);
+   
+-- richTextFieldSaveAs: doPart --
+do (if private.theRichEditI_O.saveReDocAs then
+       private.theRichEditI_O.gfileName.copy -> fileName[];
+    else
+       (topLevelWindow[],'Failed to save document.',NONE)
+         -> alertUser;       
+   if);
+   
+-- richTextFieldPrint: doPart --
+do private.theRichEditI_O.printReDoc;
+   
+   
+-- richTextFieldCancut: doPart --
+do (selection.start<>selection.end)-> value;
+   
+-- richTextFieldCanCopy: doPart --
+do (selection.start<>selection.end)-> value;
+   
+-- richTextFieldCanPaste: doPart --
+do (# windowID: @integer;
+   do interfaceObjectID -> windowID;
+      (((windowID, EM_CANPASTE, 0, 0) -> SendMessage)<>0) -> value;
+      (if value and private.textOnly then
+          clipboard.hasText -> value;
+      if);
+   #);
+   
+   (* -- GUIENVrichTextFieldPrivate: descriptor --
+    * (#    
+    *    richTextFieldMethods: windowItemMethods
+    *      (# vertical: (# exit 0 #);
+    *         horizontal: (# exit 1 #);
+    *         
+    *         dispatchMessage::<
+    *           (# didSomething: @boolean;
+    *              performEdit: @boolean;
+    *              clipboardLength: @integer;
+    *              clipboardText: ^text;
+    *              start,end: @integer; length: @integer;
+    *              windowID: @integer;
+    *           do true -> didSomething;
+    *              (if info.message 
+    *               //WM_PASTE then 
+    *                  interfaceObjectID -> windowID;
+    *                  FALSE -> info.callback;
+    *                  (if (((windowID, EM_CANPASTE, 0, 0) -> SendMessage)<>0) then
+    *                      selection -> (start,end);
+    *                      end - start -> length;
+    *                      true -> performEdit;
+    *                      none -> this(guienv).private.textfieldChangeText[];
+    *                      
+    *                      clipboard.textContents -> clipboardText[];
+    *                      (if clipboardText[]<>NONE then 
+    *                          clipboardText.length -> clipboardLength;
+    *                          
+    *                          (if (clipboardLength<>0) then
+    *                              (if (length<>0) then
+    *                                  (start,-length) -> theEventHandler.onBeforeChange -> performEdit;
+    *                              if);
+    *                              (if performEdit then
+    *                                  clipboardText[] -> this(guienv).private.textfieldChangeText[];
+    *                                  
+    *                                  (start,clipboardLength) -> theEventHandler.onBeforeChange 
+    *                                    -> performEdit;
+    *                                  (if performEdit then
+    *                                      callDefaultWindowProc;
+    *                                      handleTextChanged;
+    *                                  if);
+    *                                  none -> clipboardText[];
+    *                                  none -> this(guienv).private.textfieldChangeText[];
+    *                              if);
+    *                          if);
+    *                       else
+    *                          (if not textOnly then
+    *                              (if (length<>0) then
+    *                                  (start,-length) -> theEventHandler.onBeforeChange -> performEdit;
+    *                              if);
+    *                              (if performEdit then
+    *                                  (start,1) -> theEventHandler.onBeforeChange 
+    *                                    -> performEdit;
+    *                                  (if performEdit then
+    *                                      callDefaultWindowProc;
+    *                                      handleTextChanged;
+    *                                  if);
+    *                              if);
+    *                          if);
+    *                      if);
+    *                  if);
+    *                  
+    *               //WM_CUT then
+    *                  FALSE -> info.callback;
+    *                  selection -> (start,end);
+    *                  end - start -> length;
+    *                  true -> performEdit;
+    *                  (if (length<>0) then
+    *                      selection.contents -> this(guienv).private.textfieldChangeText[];
+    *                      (start,-length) -> theEventHandler.onBeforeChange -> performEdit;
+    *                      (if performEdit then
+    *                          callDefaultWindowProc;
+    *                          handleTextChanged;
+    *                      if);
+    *                      none -> this(guienv).private.textfieldChangeText[];
+    *                  if);
+    *               //WM_CLEAR then
+    *                  FALSE -> info.callback;
+    *                  selection -> (start,end);
+    *                  end - start -> length;
+    *                  (if (length<>0) then
+    *                      selection.contents -> this(guienv).private.textfieldChangeText[];
+    *                      (start,-length) -> theEventHandler.onBeforeChange -> performEdit;
+    *                      (if performEdit then
+    *                          callDefaultWindowProc;
+    *                          handleTextChanged;
+    *                      if);
+    *                      none -> this(guienv).private.textfieldChangeText[];
+    *                  if);
+    *               else
+    *                  false -> didSomething;
+    *              if);
+    *              didSomething or info.handled -> info.handled;
+    *           #);
+    *      #);
+    *    
+    *    
+    * #)
+    *)

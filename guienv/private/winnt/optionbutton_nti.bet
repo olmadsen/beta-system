@@ -5,8 +5,10 @@ ORIGIN '../controlsbody';
  *       All rights reserved.
  *)
 INCLUDE '../../guienvactions';
+INCLUDE '../../utils/guienvadds';
 INCLUDE 'guienv_ntiprivate';
 INCLUDE '~beta/win32lib/v1.2/winuserconsts';
+INCLUDE '~beta/win32lib/v1.2/systemmetrics';
 
 -- GUIENVcontrolOnEnabledChanged: doPart --
 do inner;
@@ -102,14 +104,255 @@ dropDownListID:
 
 -- GUIENVoptionButtonprivate: descriptor --
 (# mbLabelID,dropDownListID: @integer;
-   optionButtonPopupMenu: ^menu;
+
+   theVisibleChangedAction: @visibleChangedAction
+     (# 
+     do (if this(optionButton).visible then
+            theComboBox.bringToFront;
+        if);
+     #);
+   
+   theEnableTargetAction: @enableTargetAction
+     (# 
+     do (if theComboBox.isOpen then 
+            theComboBox[] -> target; 
+        if);
+     #);
    
    optFrameChangedAction: @frameChangedAction
-     (# 
-     do 'got framechanged for optionbutton' -> putline;
-        'oldFrame: ' -> puttext; theEvent.oldFrame -> putrectangle; newline;
-        'newFrame: ' -> puttext; theEvent.newFrame -> putrectangle; newline;
+     (# w,h,w2,h2,widthOfLabel: @integer;
+        l: ^text;
+        theTextStyle: ^textStyle;
+     do theComboBox.size -> (w,h);
+        theEvent.newFrame.size -> (w2,h2);
+        
+        this(optionButton).label -> l[];
+        this(optionButton).style -> theTextStyle[];  
+        (if (l[]<>NONE) and (theTextStyle[]<>NONE) then
+            l[] -> theTextStyle.widthOfText -> widthOfLabel;
+            (if l.length>0 then widthOfLabel+2 -> widthOfLabel; if);
+         else
+            16 -> widthOfLabel;
+        if);
+        
+        (theEvent.newFrame.left+widthOfLabel,theEvent.newFrame.top+2) 
+          -> theComboBox.position;
+        
+        (if w2 - widthOfLabel > 16 then
+            (w2-widthOfLabel-2,h) -> theComboBox.size;
+         else
+            (16,h) -> theComboBox.size;
+        if);
      #);
+   
+   theComboBoxHeight,leftMargin,maxWidthOfItem,maxHeight: @integer;
+   theComboBox: @windowItem
+     (# theComboBoxMethods: windowItemNotificationMethods
+          (# handleNotification::
+               (# processCommand:
+                    (# type: @integer;
+                       index: @integer;
+                       theMenu: ^menu;
+                       theMenuitem: ^theMenu.menuitem;
+                    do info.wParam.hiWord -> type;
+                       (if type
+                        //CBN_SELENDOK then
+                           (info.lParam,CB_GETCURSEL,0,0) -> SendMessage -> index;
+                           (if index=CB_ERR then
+                            else
+                               OptionButtonPopupMenu[] -> theMenu[];
+                               index -> findOptionButtonMenuItem 
+                                 -> theMenuitem[];
+                               (if theMenuitem[]=NONE then
+                                   'cannot find menuitem in OptionButton!!!' 
+                                     -> putline;
+                                else
+                                   theMenuitem.theEventHandler.onSelect;
+                                   this(optionButton).theEventHandler.onCurrentItemChanged;
+                               if);
+                           if);
+                           
+                        //CBN_DROPDOWN then
+                           onPopup;
+                        else
+                           false -> didSomething;
+                       if);
+                    #);
+                  didSomething: @boolean;
+               do true -> didSomething;
+                  (if info.message 
+                   //WM_COMMAND then processCommand; 
+                   else
+                      false -> didSomething;
+                  if);
+                  didSomething or info.handled -> info.handled;
+               #);
+          #);
+        eventHandler::
+          (# onMouseDown::
+               (# do this(optionButton).theEventHandler.onMouseDown; #);
+             onMouseUp::
+               (# do this(optionButton).theEventHandler.onMouseUp; #);
+             onKeyDown::
+               (# windowID: @integer;
+               do this(theComboBox).interfaceObjectID -> windowID;
+                  (if ch 
+                   //VK_UP      
+                   //VK_DOWN then
+                      (if (((windowID,CB_GETDROPPEDSTATE,0,0)->SendMessage)=0) then 
+                          (windowID,CB_SHOWDROPDOWN,1,0)->SendMessage;
+                      if);
+                   //ascii.sp then 
+                      (if (((windowID,CB_GETDROPPEDSTATE,0,0)->SendMessage)<>0) then 
+                          (*true -> theComboBoxFather.hadCBN_SELENDOK;*)
+                          (windowID,CB_SHOWDROPDOWN,0,0)->SendMessage;
+                       else
+                          (windowID,CB_SHOWDROPDOWN,1,0)->SendMessage;
+                      if);
+                   //ascii.esc then
+                      (if (((windowID,CB_GETDROPPEDSTATE,0,0)->SendMessage)<>0) then
+                          (windowID,CB_SHOWDROPDOWN,0,0)->SendMessage;
+                      if);
+                  if);
+                  this(optionButton).theEventHandler.onKeyDown; 
+               #);
+          #);
+        
+        isOpen: @boolean;
+        open::
+          (# create::
+               (# 
+               do 'COMBOBOX' -> windowItemClass;
+                  isSubClass -> windowItemClassStatus;
+                  CBS_DROPDOWNLIST -> windowItemStyle;
+                  &theComboBoxMethods[] -> theNotiMethods;
+               #);
+             x,y,w,h: @integer;
+          do interfaceObjectID -> dropDownListID;
+             (* hide; *)
+             calcTheHeight;
+             (100,theComboBoxHeight) -> size;
+             true -> isOpen;
+          #);
+        
+        close::
+          (# windowID: @integer;
+          do this(theComboBox).interfaceObjectID -> windowID;
+             (if (((windowID,CB_GETDROPPEDSTATE,0,0)->SendMessage)<>0) then 
+                 (windowID,CB_SHOWDROPDOWN,0,0)->SendMessage;
+             if);
+             false -> isOpen;
+          #);
+        
+        setTextStyle:
+          (# theTextStyle: ^textStyle;
+          enter theTextStyle[]
+          do (this(theComboBox).interfaceObjectID,
+             WM_SETFONT,theTextStyle.textStyleID,1) 
+               -> SendMessage;
+          #);
+        
+        noOfItems: integerValue
+          (# 
+          do (this(theComboBox).interfaceObjectID,CB_GETCOUNT,0,0) 
+               -> SendMessage -> value;
+             (if value=CB_ERR then
+                 'CB_GETCOUNT falied. Errorcode: ' -> screen.puttext;
+                 GetLastError -> putint; newline;
+                 0 -> value;
+             if);
+          #);
+        
+        calcTheHeight:
+          (# r: ^rectangle; h: @integer;
+          do this(theComboBox).interfaceObjectID -> getBounds -> r[];
+             (r.bottom - r.top) -> theComboBoxHeight;
+          #);
+        
+        preferredSize:
+          (# prefW, prefH: @integer;
+             theTextStyle: ^textStyle;
+             itemH, noOfItems: @integer;
+             widthOfItem: @integer;
+             scrollbarWidth: @integer;
+          do this(optionButton).style -> theTextStyle[];         
+             SM_CXVSCROLL -> GetSystemMetrics -> scrollbarWidth;
+             0 -> maxWidthOfItem;
+             
+             (if optionButtonPopupMenu[]=NONE then
+                 20 -> maxWidthOfItem;
+              else
+                 optionButtonPopupMenu.scan
+                 (# tempName: ^text;
+                 do (if theTextStyle[]<>NONE then
+                        current.name -> tempName[];
+                        tempName[] -> theTextStyle.widthOfText 
+                          -> widthOfItem;
+                     else
+                        current.name -> tempName[];
+                        tempName.length + 2 -> widthOfItem;
+                    if);
+                    (if widthOfItem>maxWidthOfItem then
+                        widthOfItem -> maxWidthOfItem;
+                    if);
+                 #);
+             if);
+             
+             maxWidthOfItem + scrollbarWidth + leftMargin + 10  -> prefW;
+             (interfaceObjectID,CB_GETITEMHEIGHT,0,0)-> SendMessage -> itemH;
+             (interfaceObjectID,CB_GETCOUNT,0,0) -> SendMessage -> noOfItems;
+             theComboBox.calcTheHeight;
+             itemH*noOfItems+itemH+theComboBoxHeight -> prefH; 
+             
+          exit (prefW,prefH)
+          #);
+        
+        update:
+          (# x,y,prefW,prefH: @integer;
+             l: ^text; 
+             heightOfLabel,widthOfLabel: @integer;
+             theTextStyle: ^textStyle;
+             widthOfItem,maxWidthOfItem: @integer;
+             itemH,noOfItems: @integer;
+             scrollbarWidth: @integer;
+          do 20 -> maxWidthOfItem;
+             this(optionButton).style -> theTextStyle[];
+             optionButtonPopupMenu.scan
+             (# tempName: ^text;
+             do (if theTextStyle[]<>NONE then
+                    current.name -> tempName[];
+                    tempName[] -> theTextStyle.widthOfText 
+                      -> widthOfItem;
+                 else
+                    current.name -> tempName[];
+                    tempName.length + 2 -> widthOfItem;
+                if);
+                (if widthOfItem>maxWidthOfItem then
+                    widthOfItem -> maxWidthOfItem;
+                if);
+             #);
+             
+             (dropDownListID,CB_GETITEMHEIGHT,0,0) -> SendMessage -> itemH;
+             (dropDownListID,CB_GETCOUNT,0,0) -> SendMessage -> noOfItems;
+             2 + noOfItems -> noOfItems; (* to get the right hight. *)
+             
+             this(optionButton).label -> l[];
+             l[] -> theTextStyle.widthOfText -> widthOfLabel;
+             (if l.length>0 then widthOfLabel+2 -> widthOfLabel; if);
+             SM_CXVSCROLL -> GetSystemMetrics -> scrollbarWidth;
+             maxWidthOfItem+scrollbarWidth+2 -> dropListWidth;
+             
+             this(optionButton).position -> (x,y);
+             (x+widthOfLabel,y+2) -> position;
+             (dropListWidth,itemH*noOfItems) -> size;
+
+          #);
+        
+     #);
+   
+   dropListWidth: @integer; 
+
+   optionButtonPopupMenu: ^menu;
    
    menuItemListInx:
      (# listBoxInx: @integer;

@@ -264,14 +264,7 @@ do doubleClickPossible -> value;
 -- GUIENVkeyEventCh: descriptor --
 (# info: ^messageInfo;
 do currentMessageInfo -> info[];
-   info.wParam -> theChar;
-   (if theChar
-    //VK_LEFT   then ASCII.fs -> theChar;
-    //VK_UP     then ASCII.rs -> theChar;
-    //VK_RIGHT  then ASCII.gs -> theChar;
-    //VK_DOWN   then ASCII.us -> theChar;
-    //VK_DELETE then ASCII.del->theChar;
-   if);
+   info.key -> theChar;
 #)
 
 -- GUIENVmouseDownDelay: descriptor --
@@ -633,11 +626,13 @@ win32Menuitem: interfaceObject
               (if theMenuItem.key<>0 then 
                   this(win32Menu).private.theWin32Menubar[] -> myWin32Menubar[];
                   (if myWin32Menubar[]=none then
-                      'myWin32Menubar is none'->screen.putline; 
-                      'theMenuItem.name: '->screen.puttext; 
-                      theMenuItem.name->screen.putline;
-                      'theMenuitem.key: '-> screen.puttext; 
-                      theMenuItem.key->screen.put; screen.newline;
+                      (if doDebug then
+                          'myWin32Menubar is none'->screen.putline; 
+                          'theMenuItem.name: '->screen.puttext; 
+                          theMenuItem.name->screen.putline;
+                          'theMenuitem.key: '-> screen.puttext; 
+                          theMenuItem.key->screen.put; screen.newline;
+                      if);
                    else
                       (myWin32Menubar.hMenubarAccelTable, this(win32MenuItem).interfaceObjectID) 
                         -> deleteAccel -> myWin32Menubar.hMenubarAccelTable;
@@ -675,12 +670,14 @@ win32Menuitem: interfaceObject
               (if theMenuItem.key=0 then else
                   this(win32Menu).private.theWin32Menubar[] -> myWin32Menubar[];
                   (if myWin32Menubar[]=none then
-                      'myWin32Menubar is none' -> screen.putline;
-                      'theMenuItem.name: '->screen.puttext; 
-                      theMenuItem.name->screen.putline;
-                      'theMenuitem.key: '->screen.puttext; 
-                      theMenuItem.key->screen.put;
-                      screen.newline;
+                      (if doDebug then
+                          'myWin32Menubar is none' -> screen.putline;
+                          'theMenuItem.name: '->screen.puttext; 
+                          theMenuItem.name->screen.putline;
+                          'theMenuitem.key: '->screen.puttext; 
+                          theMenuItem.key->screen.put;
+                          screen.newline;
+                      if);
                    else
                       (myWin32Menubar.hMenubarAccelTable,FCONTROL,theMenuItem.Key, 
                       this(win32MenuItem).interfaceObjectID) 
@@ -1408,7 +1405,7 @@ assertOpen
    theWindowItemID: @integer;
    theItem: ^interfaceObject;
    h_root,v_root: @integer; deltaH: @integer;
-do (if (popupIn[]<>NONE) and (mouse.buttonState=3) then
+do (if (popupIn[]<>NONE) then
        popupIn.interfaceObjectID -> theWindowItemID;
        (if (theWindowItemID<>0) then
            (if private.win32PopupMenu[]=NONE then
@@ -1634,48 +1631,48 @@ processFatherFrameChanged:
 do (# thisCanvas: ^canvas; 
       updateBorderRect: @rectangle;
       w,h: @integer;
-      putRectangle:
-        (# r: @rectangle;
-        enter r
-        do '( ' -> screen.putText;
-           r.topLeft -> putPoint; ' , ' -> screen.putText;
-           r.bottomRight -> putPoint; ' )' -> screen.putLine;
-        #);
-      
    do (if not (oldFrame -> newFrame.isEqual) then
           newFrame -> private.windowItemFrame;
-          (if interfaceObjectID<>0 then 
-              oldFrame.size -> (w,h);
-              (* top border *)
-              (0,0) -> updateBorderRect.topLeft;
-              (w,2) -> updateBorderRect.size;
-              updateBorderRect[] -> updateArea;
-              
-              (* left border *)
-              (0,0) -> updateBorderRect.topLeft;
-              (2,h) -> updateBorderRect.size;
-              updateBorderRect[] -> updateArea;
-              
-              (* bottom border *)
-              (0,h-2) -> updateBorderRect.topLeft;
-              (w,2) -> updateBorderRect.size;
-              updateBorderRect[] -> updateArea;
-              
-              (* right border *)
-              (w-2,0) -> updateBorderRect.topLeft;
-              (2,h) -> updateBorderRect.size; 
-              updateBorderRect[] -> updateArea;
-          if);
-          
           (oldFrame,newFrame) -> theEventHandler.onframeChanged;
           (if (father[]<>none) then
               (oldFrame,newFrame) -> father.handleChildframeChanged;
           if);
+          (if this(windowItem)## <= canvas## then
+              this(windowItem)[] -> thisCanvas[];
+              thisCanvas.private.children.scan
+              (#
+              do (oldFrame,newFrame) -> current.processFatherFrameChanged;
+              #);
+           else
+              (if interfaceObjectID<>0 then 
+                  oldFrame.size -> (w,h);
+                  (* top border *)
+                  (0,0) -> updateBorderRect.topLeft;
+                  (w,2) -> updateBorderRect.size;
+                  updateBorderRect[] -> updateArea;
+                  
+                  (* left border *)
+                  (0,0) -> updateBorderRect.topLeft;
+                  (2,h) -> updateBorderRect.size;
+                  updateBorderRect[] -> updateArea;
+                  
+                  (* bottom border *)
+                  (0,h-2) -> updateBorderRect.topLeft;
+                  (w,2) -> updateBorderRect.size;
+                  updateBorderRect[] -> updateArea;
+                  
+                  (* right border *)
+                  (w-2,0) -> updateBorderRect.topLeft;
+                  (2,h) -> updateBorderRect.size; 
+                  updateBorderRect[] -> updateArea;
+              if);
+          if);
+          
+          
           (if interfaceObjectID=0 then
               (# 
               do oldFrame[] -> father.updateArea;
                  newFrame[] -> father.updateArea;
-                 (* updateRect[] -> father.updateArea; *)
               #);
           if);
       if);
@@ -1723,19 +1720,26 @@ do (# thisCanvas: ^canvas;
         theEventHandler.onMouseDown;
      #);
    processBeforeWM_CHAR:
-     (#
-     do info.wParam.loWord -> VirtualKey;
+     (# callEventHandler: @boolean;
+     do info.wParam -> VirtualKey;
+        false -> callEventHandler;
+        
+        VirtualKey -> info.key;
         (if VirtualKey
-         //VK_HOME   
-         //VK_PRIOR  
-         //VK_NEXT  
-         //VK_END    
-         //VK_LEFT   
-         //VK_UP      
-         //VK_RIGHT    
-         //VK_DOWN
-         //VK_DELETE 
-         //VK_BACK     then
+         //VK_LEFT   then ASCII.fs -> info.key; true -> callEventHandler;
+         //VK_UP     then ASCII.rs -> info.key; true -> callEventHandler;
+         //VK_RIGHT  then ASCII.gs -> info.key; true -> callEventHandler;
+         //VK_DOWN   then ASCII.us -> info.key; true -> callEventHandler;
+         //VK_DELETE then ASCII.del-> info.key; true -> callEventHandler;
+            
+         //VK_HOME   then  true -> callEventHandler;
+         //VK_PRIOR  then  true -> callEventHandler;
+         //VK_NEXT   then  true -> callEventHandler;
+         //VK_END    then  true -> callEventHandler;
+         //VK_BACK   then  true -> callEventHandler;
+        if);
+         
+        (if callEventHandler then
             theEventHandler.onKeyDown;
          else
             false -> didSomething;
@@ -1744,6 +1748,7 @@ do (# thisCanvas: ^canvas;
    processKeyDown:
      (# defaultButton: ^windowItem;    
      do info.wParam -> key;
+        key -> info.key;
         (if key<>VK_BACK then
             windowDefaultButton -> defaultButton[];
             (if (defaultButton[]<>None) then
@@ -2006,34 +2011,38 @@ do (# thisCanvas: ^canvas;
    
    processWM_CTLCOLORBTN:
      (# bkColor,foColor: @integer; hdc: @integer;
-     do COLOR_WINDOW -> GetSysColorBrush -> info.result; 
-        info.wParam -> hdc;
-        COLOR_WINDOW -> GetSysColor -> bkColor;
-        (hdc,bkColor) -> SetBkColor;
-        (if getOsMajorVersionId
-         //3 then
-            COLOR_WINDOWTEXT -> GetSysColor -> foColor;
-            (hdc, foColor) -> SetTextColor;  
-         //4 then
-            COLOR_BTNTEXT -> GetSysColor -> foColor;
-            (hdc, foColor) -> SetTextColor;  
-        if);
+     do (* COLOR_WINDOW -> GetSysColorBrush -> info.result; 
+         *         info.wParam -> hdc;
+         *         COLOR_WINDOW -> GetSysColor -> bkColor;
+         *         (hdc,bkColor) -> SetBkColor;
+         *         (if getOsMajorVersionId
+         *          //3 then
+         *             COLOR_WINDOWTEXT -> GetSysColor -> foColor;
+         *             (hdc, foColor) -> SetTextColor;  
+         *          //4 then
+         *             COLOR_BTNTEXT -> GetSysColor -> foColor;
+         *             (hdc, foColor) -> SetTextColor;  
+         *         if);
+         *)
+        false -> didSomething;
      #);
    
    processWM_CTLCOLORSTATIC:
      (# bkColor,foColor: @integer; hdc: @integer;
-     do COLOR_WINDOW -> GetSysColorBrush -> info.result; 
-        info.wParam -> hdc;
-        COLOR_WINDOW -> GetSysColor -> bkColor;
-        (hdc,bkColor) -> SetBkColor; 
-        (if getOsMajorVersionId
-         //3 then
-            COLOR_WINDOWTEXT -> GetSysColor -> foColor;
-            (hdc, foColor) -> SetTextColor; 
-         //4 then
-            COLOR_BTNTEXT -> GetSysColor -> foColor;
-            (hdc, foColor) -> SetTextColor;  
-        if);
+     do (* COLOR_WINDOW -> GetSysColorBrush -> info.result; 
+         *         info.wParam -> hdc;
+         *         COLOR_WINDOW -> GetSysColor -> bkColor;
+         *         (hdc,bkColor) -> SetBkColor; 
+         *         (if getOsMajorVersionId
+         *          //3 then
+         *             COLOR_WINDOWTEXT -> GetSysColor -> foColor;
+         *             (hdc, foColor) -> SetTextColor; 
+         *          //4 then
+         *             COLOR_BTNTEXT -> GetSysColor -> foColor;
+         *             (hdc, foColor) -> SetTextColor;  
+         *         if);
+         *)
+        false -> didSomething;
      #);
    didSomething: @boolean;
 do true -> didSomething;
@@ -2083,9 +2092,7 @@ do true -> didSomething;
 #)
 
 -- GUIENVwindowitemOnRefresh: descriptor --
-(# 
-   (* theStyle: @integer; *)
-   width,height: @integer;
+(# width,height: @integer;
    x,y: @integer;
    info: ^messageInfo;
 do (if windowItemClassStatus=isStandardClass then
@@ -2095,7 +2102,7 @@ do (if windowItemClassStatus=isStandardClass then
    if);
    
    inner onRefresh;
-   (if border.visible then
+   (if (border.visible) and (not private.borderHandledLocally) then
        (if windowItemClassStatus=isSubClass then
            currentMessageInfo -> info[];
            FALSE -> info.callback;
@@ -2103,14 +2110,6 @@ do (if windowItemClassStatus=isStandardClass then
        if);
        
        size -> (width,height);
-       (* (if border.style
-        *         //borderStyles.simple then 1 -> theStyle;
-        *         //borderStyles.shadowIn then 2 -> theStyle;
-        *         //borderStyles.shadowOut then 3 -> theStyle;
-        *         //borderStyles.etchedIn then 4 -> theStyle;
-        *         //borderStyles.etchedOut then 5 -> theStyle;
-        *        if);
-        *)
        
        (if interfaceObjectID=0 then
            position -> (x,y);
@@ -2118,12 +2117,26 @@ do (if windowItemClassStatus=isStandardClass then
         else
            (this(windowItem)[],border.style,0,0,width,height) -> drawBorder;
        if);
-       
    if);
 #)
 
 -- GUIENVwindowitemSetFrame: descriptor --
-(# x,y,width,height: @integer;
+(# (* calcRealRectangle:
+    *      (# theNTRectPtr: @integer;
+    *         style,exStyle: @integer;
+    *         hasMenubar: @boolean;
+    *         r: ^rectangle;
+    *      enter r[]
+    *      do r[] -> makeNtRectPtr -> theNtRectPtr;
+    *         (interfaceObjectID,GWL_STYLE) -> GetWindowLong -> style;
+    *         (interfaceObjectID,GWL_EXSTYLE) -> GetWindowLong -> exStyle;
+    *         (theNTRectPtr,style,0,exStyle) -> AdjustWindowRectEx;
+    *         theNtRectPtr -> getRectFromNtRectPtr -> r;
+    *         theNtRectPtr -> free;
+    *      #);
+    *)
+   
+   x,y,width,height: @integer;
    result: @integer;
    oldFrame: @rectangle;
    errorMsg: ^text;
@@ -2709,12 +2722,12 @@ do inner onMouseUp;
 
 -- GUIENVcanvasOnFrameChanged: descriptor --
 (#
-do private.children.scan
-   (#
-   do (oldFrame,newFrame) -> current.processFatherFrameChanged;
-   #);
+do update;
    inner onFrameChanged;
 #)
+
+-- GUIENVcanvasOnVisibleChanged: doPart --
+do INNER;
 
 -- GUIENVcanvasSelectionAdd: descriptor --
 (#
@@ -2783,6 +2796,7 @@ do inner create;
 -- GUIENVcanvasOpen: descriptor --
 (#
 do false -> updateOnResize;
+   private.theVisibleChangedAction[] -> AppendAction;
    inner open;
 #)
 
@@ -2791,6 +2805,7 @@ do false -> updateOnResize;
 do inner close;
    private.children.scan
    (# do (if current.isOpen then current.close; if); #);
+   private.theVisibleChangedAction[] -> deleteAction;
 #)
 
 -- GUIENVcanvasPutLayout: doPart --
@@ -3241,7 +3256,7 @@ do (ticks * 1000) div 60 -> Sleep;
         result: @integer;
      do 'guienvWindowClass' -> uienvStandardWindowClass;
         'guienvWindowClass' -> cstr.set;
-        (* CS_HREDRAW + CS_VREDRAW + *) CS_DBLCLKS -> theClass.style;
+        CS_HREDRAW + CS_VREDRAW + CS_DBLCLKS -> theClass.style;
         StandardWindowProc## -> std16x4toint -> uienvStandardWindowProcAddress;
         uienvStandardWindowProcAddress -> theClass.lpfnWndProc;
         uienvHInstance -> theClass.hInstance;
@@ -3253,7 +3268,7 @@ do (ticks * 1000) div 60 -> Sleep;
         (result,'registerUIEnvClass.LoadIconInteger')  -> checkNullError;
         (0,IDC_ARROW) -> LoadCursorInteger -> theClass.hCursor -> result; 
         (result,'registerUIEnvClass.loadCursorInteger')  -> checkNullError;
-        COLOR_WINDOW -> GetSysColor -> CreateSolidBrush -> backgroundBrush;
+        COLOR_BTNFACE -> GetSysColor -> CreateSolidBrush -> backgroundBrush;
         (backgroundBrush,'registerUIEnvClass.createSolidBrush')  -> checkNullError;
         backgroundBrush -> theClass.hbrBackGround;
         0 -> theClass.lpszMenuName;

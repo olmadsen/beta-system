@@ -7,6 +7,55 @@
 #include <StdIO.h>
 
 
+long copyinput(long input);
+
+void SetMenubuttonMenu (ControlHandle control,MenuHandle menu,short menuID);
+
+void RemoveFromOwner (ControlHandle control);
+
+void UpdateTextEditRecord (TEHandle teHandle,Rect *view,Rect *dest);
+
+long TextEditGetLength (TEHandle teHandle);
+
+void CopyText (Handle h,Ptr buffer,Size count);
+
+long TextEditGetSelectionStart (TEHandle teHandle);
+
+long TextEditGetSelectionEnd (TEHandle teHandle);
+
+void TextEditUpdateViewRect (TEHandle teHandle,Rect *view);
+
+long MAX(long a,long b);
+
+long MIN(long a,long b);
+
+void TextEditGetScrollvalues (TEHandle teHandle,long *hMax,long *h,long *vMax,long *v);
+
+void TextEditAdjustScroll (TEHandle teHandle,long h,long v);
+
+void TextEditSetSelection (TEHandle teHandle,long start,long end);
+
+void TextEditGetSelection(TEHandle teHandle,long *start,long *end);
+
+long TextEditGetChar (TEHandle teHandle,long inx);
+
+long ScrollListGetNumberOfItems (ListHandle list);
+
+void ScrollListSetItemHeight (ListHandle list,long height);
+
+long ScrollListGetItemHeight (ListHandle list);
+
+void ScrollListSetSingle (ListHandle list,long single);
+
+long ScrollListGetSingle (ListHandle list);
+
+void ScrollListUpdate (ListHandle list);
+
+void DrawBitMapInPort(BitMapHandle bitmap,GrafPtr port,Point from,Point to,long width,long height);
+
+void EraseRectangle (short left, short top, short right, short bottom);
+
+
 long copyinput(long input)
 {
 	return input;

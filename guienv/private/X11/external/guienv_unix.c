@@ -119,3 +119,14 @@ void SetWindowDeleteAction (Widget shell, XtCallbackProc callback)
   WM_DELETE_WINDOW = XInternAtom(XtDisplay(shell), "WM_DELETE_WINDOW", False);
   XmAddWMProtocolCallback(shell, WM_DELETE_WINDOW, callback, 0);
 }
+
+void XClipRect (Display *dpy, GC gc, long x, long y, long width, long height)
+{
+  XRectangle rect;
+
+  rect.x = x;
+  rect.y = y;
+  rect.width = width;
+  rect.height = height;
+  XSetClipRectangles(dpy, gc, 0, 0, &rect, 1, Unsorted);
+}

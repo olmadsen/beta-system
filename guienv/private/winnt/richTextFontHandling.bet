@@ -1,0 +1,243 @@
+ORIGIN 'richTextFieldBody';
+INCLUDE '~beta/guienv/v1.4/private/winnt/guienv_ntiprivate';
+(* INCLUDE '~beta/guienv/v1.4/private/winnt/fields_ntibody'; *)
+INCLUDE '~beta/win32lib/v1.2/wingdiconsts';
+INCLUDE '~beta/win32lib/v1.2/devicecapabilities';
+INCLUDE '~beta/win32lib/v1.2/dcmanagement';
+INCLUDE 'richTextConsts';
+
+INCLUDE '~beta/basiclib/v1.5/formatio';
+
+-- lib: attributes --
+_tcscpy: external
+  (# str1,str2: @integer;
+     res: @integer;
+  enter (str1,str2)
+  do 'strcpy' -> callC;
+  exit res
+  #);
+
+chooseFontFunc: external
+  (# ptr2ChooseFont: @integer; (* pointer to structure with initialization 
+                                * data *)
+     res: @integer;
+  enter ptr2ChooseFont
+  do 'ChooseFontA' -> callStd;
+  exit res
+  #);
+
+-- textFieldLib: attributes --
+applyFormatting:
+  (# oldSel, tempSel: @CHARRANGE;
+     cf: @CHARFORMAT;
+     windowID: @integer;
+     theHdc: @integer;
+     startPos: @ntPOINT2;
+     clientRect: @ntRECT2;
+     lineInxStart,lineInxEnd: @integer;
+     
+     start, end: @integer;
+  enter (start, end)
+  do interfaceObjectID -> windowID;
+     windowID -> GetDC -> theHdc;
+     
+     8 -> malloc -> oldSel.ptr;
+     8 -> malloc -> tempSel.ptr;
+     sizeOfCharFormat -> malloc -> cf.ptr;
+     
+     (if (oldSel.ptr<>0) and (tempSel.ptr<>0) and (cf.ptr<>0) then
+         (windowID,WM_SETREDRAW,0,0) -> SendMessage;
+         (* Save current selection *)
+         (windowID,EM_EXGETSEL,0,oldSel.ptr) -> SendMessage;
+         (if start <> end then
+             start -> private.translateToLocal -> start;
+             end -> private.translateToLocal -> end;
+          else
+             start -> private.translateToLocal -> start -> end;
+         if);
+         start -> tempSel.cpMin;
+         end -> tempSel.cpMax;
+         (windowID,EM_EXSETSEL,0,tempSel.ptr) -> SendMessage;
+         
+         (cf.ptr,0,sizeOfCharFormat) -> memset;
+         sizeOfCharFormat ->  cf.cbSize;
+         
+         INNER;
+         
+         (windowID,EM_SETCHARFORMAT,SCF_SELECTION,cf.ptr)->SendMessage;
+         
+         (* Restore current selection *)
+         (windowID,EM_EXSETSEL,0,oldSel.ptr) -> SendMessage;
+         
+         (windowID,WM_SETREDRAW,1,0) -> SendMessage;
+         
+         8 -> malloc -> startPos.ptr; 0 -> startPos.x; 0 -> startPos.y;
+         16 -> malloc -> clientRect.ptr;
+         (if (startPos.ptr<>0) and (clientRect.ptr<>0) then
+             (interfaceObjectID,clientRect.ptr) -> GetClientRect;
+             
+             (windowID,EM_EXLINEFROMCHAR,0,start) -> SendMessage -> lineInxStart;
+             
+             (if lineInxStart>0 then
+                 (windowID,EM_LINEINDEX,lineInxStart-1,0) -> SendMessage -> start;
+                 (windowId,EM_POSFROMCHAR,startPos.ptr,start) -> SendMessage;
+                 startPos.y -> clientRect.top;
+             if);
+             
+             (windowID,clientRect.ptr,1) -> InvalidateRect;
+             windowID -> UpdateWindow;
+             clientRect.ptr -> free;
+             startPos.ptr -> free;
+          else
+             TRUE -> update;
+         if);
+         
+         (* TRUE -> update; *)
+         oldSel.ptr -> free;
+         tempSel.ptr -> free;
+         cf.ptr -> free;          
+      else
+         (NONE,'Failed to set size.',NONE) -> alertUser;
+     if);
+     
+     (windowID,theHdc) -> ReleaseDC;  
+  #);
+
+-- handleFontSelectionImpl: doPart --
+do 
+   (* CHOOSEFONT csf = {0}; *)
+   sizeOfCharFormat -> malloc -> cf.ptr;
+   sizeOfChooseFont -> malloc -> csf.ptr;
+   sizeOfLogFont -> malloc -> lf.ptr;
+   (if (cf.ptr<>0) and (csf.ptr<>0) and (lf.ptr<>0) then
+       (cf.ptr,0,sizeOfCharFormat) -> memset;
+       (csf.ptr,0,sizeOfChooseFont) -> memset;
+       (lf.ptr,0,sizeOfLogFont) -> memset;
+       
+       sizeOfCharFormat -> cf.cbSize;
+       
+       interfaceObjectID -> windowID;
+       (if topLevelWindow[]<>NONE then
+           toplevelWindow.interfaceObjectID -> topLevelWindowID;
+        else
+           father.interfaceObjectID -> topLevelWindowID;
+       if);
+       
+       topLevelWindowID -> GetDC -> hdc;
+       (hdc, LOGPIXELSY) -> GetDeviceCaps -> yPerInch;
+       (topLevelWindowID, hdc) -> ReleaseDC;
+       
+       (windowID, EM_GETCHARFORMAT, 1, cf.ptr) -> SendMessage;
+       
+       sizeOfChooseFont -> csf.lStructSize;
+       topLevelWindowID -> csf.hwndOwner;
+       0 -> csf.hDC;
+       lf.ptr -> csf.lpLogFont;
+       CF_EFFECTS + CF_SCREENFONTS + CF_INITTOLOGFONTSTRUCT + CF_LIMITSIZE
+         -> csf.Flags;
+       1 -> csf.nSizeMin;
+       yHeightCharPtsMost -> csf.nSizeMax;
+       cf.crTextColor -> csf.rgbColors;
+       0 -> csf.lpszStyle;
+       
+       REGULAR_FONTTYPE + SCREEN_FONTTYPE -> csf.nFontType;
+       ((cf.yHeight * yPerInch) / 1440) -> lf.lfHeight;
+       0 -> lf.lfWidth;
+       0 -> lf.lfEscapement;
+       0 -> lf.lfOrientation;
+       (if ((cf.dwEffects, CFE_BOLD) -> tos'%and') > 0 then
+           FW_BOLD -> lf.lfWeight;
+        else
+           FW_NORMAL -> lf.lfWeight;
+       if);
+       (if ((cf.dwEffects , CFE_ITALIC) -> tos'%and') > 0 then
+           1 -> lf.lfItalic;
+        else
+           0 -> lf.lfItalic;
+       if);
+       (if ((cf.dwEffects , CFE_UNDERLINE) -> tos'%and') > 0 then
+           1 -> lf.lfUnderline;
+        else
+           0 -> lf.lfUnderline;
+       if);
+       (if ((cf.dwEffects , CFE_STRIKEOUT) -> tos'%and') > 0 then
+           1 -> lf.lfStrikeOut;
+        else
+           0 -> lf.lfStrikeOut;
+       if);
+       OUT_DEFAULT_PRECIS -> lf.lfOutPrecision;
+       CLIP_DEFAULT_PRECIS -> lf.lfClipPrecision;
+       DRAFT_QUALITY -> lf.lfQuality;
+       cf.bCharSet -> lf.lfCharSet;
+       cf.bPitchAndFamily -> lf.lfPitchAndFamily;
+       
+       (* _tcscpy(lf.lfFaceName, cf.szFaceName); *)
+       (lf.ptr+28, cf.ptr+26) -> _tcscpy;
+       
+       (if (csf.ptr -> ChooseFontFunc)=0 then
+           
+        else
+           sizeOfCharFormat -> cf.cbSize;
+           
+           (* don't change read-only bit *)
+           CFM_SIZE + CFM_EFFECTS + CFM_COLOR + CFM_FACE + CFM_CHARSET
+             -> cf.dwMask;
+           csf.iPointSize * 2 -> cf.yHeight;
+           CFM_EFFECTS -> cf.dwEffects;
+           (if (lf.lfWeight < FW_BOLD) then
+               cf.dwEffects %Band (%Bnot CFE_BOLD) -> cf.dwEffects;
+           if);
+           (if lf.lfItalic=0 then
+               cf.dwEffects %Band (%Bnot CFE_ITALIC) -> cf.dwEffects;
+           if);
+           (if lf.lfUnderline=0 then
+               cf.dwEffects %Band (%Bnot CFE_UNDERLINE) -> cf.dwEffects;
+           if);
+           (if lf.lfStrikeOut=0 then
+               cf.dwEffects %Band (%Bnot CFE_STRIKEOUT) -> cf.dwEffects;
+           if);
+           
+           csf.rgbColors -> cf.crTextColor -> theTextColor;
+           
+           lf.lfCharSet -> cf.bCharSet;
+           lf.lfPitchAndFamily -> cf.bPitchAndFamily;
+           (* _tcscpy(cf.szFaceName, lf.lfFaceName); *)
+           (cf.ptr+26, lf.ptr+28) -> _tcscpy;
+           
+           (if ((windowID,EM_SETCHARFORMAT,formatFlags,cf.ptr)->SendMessage)=0
+               then
+               
+               (topLevelWindow[],'Error setting character format',NONE)
+                 -> alertUser;
+               0 -> theTextColor;
+           if);
+       if);
+   if);
+   (if (cf.ptr<>0) then cf.ptr -> free; if);
+   (if (csf.ptr<>0) then csf.ptr -> free; if);
+   (if (lf.ptr<>0) then lf.ptr -> free; if);
+   
+-- GUIENVtextFieldSetOneSize2: descriptor --
+(# 
+do (start,end) 
+     -> applyFormatting
+   (# 
+   do CFM_SIZE -> cf.dwMask;
+      20 * theSize -> cf.yHeight;
+   #);
+#)
+
+-- GUIENVtextFieldSetOneFont2: descriptor --
+(# theFaceName: @cString;
+do (if theFont[]<>NONE then
+       theFont[] -> theFaceName.set;
+       (start,end) 
+         -> applyFormatting
+       (# 
+       do CFM_FACE -> cf.dwMask;
+          (* _tcscpy(cf.szFaceName, lf.lfFaceName); *)
+          (cf.ptr+26, theFaceName.charPtr) -> _tcscpy;
+       #);
+       theFaceName.free;
+   if);
+#)
