@@ -31,10 +31,14 @@ ParamProtoCellOriginThis(Qua)
   DEBUG_CODE(NumQua++);
 
   src = *theCell;
-
+  
 #ifdef RTDEBUG
 #ifdef PERSIST
-  if ((src) && !(inIOA(src) || inAOA(src) || isLazyRef(src) || inProxy((long)src))) {
+  if ((src) && !(inIOA(src) || 
+		 inAOA(src) || 
+		 inPersistentAOA((long)src) || 
+		 isLazyRef(src) || 
+		 inProxy((long)src))) {
 #else
   if ((src) && !(inIOA(src) || inAOA(src) || isLazyRef(src))) {      
 #endif /* PERSIST */
