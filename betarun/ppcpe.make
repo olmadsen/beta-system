@@ -28,10 +28,13 @@ Objects¥PPC  = ¶
 		{ObjDir¥PPC}:C:cbfa.pe ¶
 		{ObjDir¥PPC}:C:dot.pe ¶
 		{ObjDir¥PPC}:C:exit.pe ¶
+		{ObjDir¥PPC}:C:floats.pe ¶
 		{ObjDir¥PPC}:C:group.pe ¶
 		{ObjDir¥PPC}:C:initialize.pe ¶
+		{ObjDir¥PPC}:C:lazyref_gc.pe ¶
 		{ObjDir¥PPC}:C:outpattern.pe ¶
 		{ObjDir¥PPC}:C:property.pe ¶
+		{ObjDir¥PPC}:C:scanobjects.pe ¶
 		{ObjDir¥PPC}:C:sighandler.pe ¶
 		{ObjDir¥PPC}:C:wordsort.pe ¶
 		{ObjDir¥PPC}:C:valhallaComm.pe ¶

@@ -29,10 +29,13 @@ Objects¥PPC  = ¶
 		{ObjDir¥PPC}:C:cbfa.debug ¶
 		{ObjDir¥PPC}:C:dot.debug ¶
 		{ObjDir¥PPC}:C:exit.debug ¶
+		{ObjDir¥PPC}:C:float.debug ¶
 		{ObjDir¥PPC}:C:group.debug ¶
 		{ObjDir¥PPC}:C:initialize.debug ¶
+		{ObjDir¥PPC}:C:lazyref_gc.debug ¶
 		{ObjDir¥PPC}:C:outpattern.debug ¶
 		{ObjDir¥PPC}:C:property.debug ¶
+		{ObjDir¥PPC}:C:scanobjects.debug ¶
 		{ObjDir¥PPC}:C:sighandler.debug ¶
 		{ObjDir¥PPC}:C:wordsort.debug ¶
 		{ObjDir¥PPC}:C:valhallaComm.debug ¶
