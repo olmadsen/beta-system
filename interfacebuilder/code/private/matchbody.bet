@@ -1,0 +1,154 @@
+ORIGIN '../match';
+INCLUDE '~beta/mps/v5.1/metagramsematt';
+
+-- matchDoPart: doPart --
+do (# expandedExp, expandedTree: ^astInterface.expanded;
+      unExp: ^astInterface.unExpanded;
+      theMetaGrammar: ^astInterface.MetaGrammar;
+      prodList: ^astInterface.MetaGrammar.productionList;
+      prod: ^astInterface.MetaGrammar.prod;
+      theGram: ^astInterface.MetaGrammar.agrammar;
+      
+      check:
+        (# keyCat: @integer;
+           cat: @integer;
+           synCatList: ^astInterface.MetaGrammar.synCatList;
+           result: @boolean;
+           alt: ^astInterface.MetaGrammar.alternation;
+           synName: ^astInterface.MetaGrammar.synName;
+           synCatNo: @integer;
+        enter (keyCat, cat)
+        do (if keyCat = cat then
+               true -> result;
+            else
+               keyCat -> prodList.get -> prod[];
+               (if prod.symbol = theMetaGrammar.alternation then
+                   prod[] -> alt[];
+                   alt.getSynCatList -> synCatList[];
+                   l: synCatList.newScan
+                   (# 
+                   do current.getSynName -> synName[];
+                      synName.dclRef -> synCatNo;
+                      (synCatNo, cat) -> check -> result;
+                      (if result then leave l if);
+                   #);
+                else
+                   false -> result;
+               if);
+           if);
+        exit result
+        #);
+      lexem1, lexem2: ^text;
+      theLexem: ^astInterface.lexemText;
+   do mps.GrammarTable.Meta[] -> theMetaGrammar[];
+      mps.GrammarTable.BETA.grammarAst.root[] -> theGram[];
+      theGram.getProductionList -> ProdList[];
+      
+      (if exp.symbol = mps.unExpanded then
+          exp[] -> unExp[];
+          (unExp.nonTerminalSymbol, tree.symbol) -> check -> result;
+       else
+          (if exp.symbol = tree.symbol then
+              (if exp.kind = mps.kinds.interior then
+                  exp[] -> expandedExp[];
+                  tree[] -> expandedTree[];
+                  (if expandedExp.noOfSons = expandedTree.noOfSons then
+                      loop:
+                        (for i: expandedExp.NoOfSons repeat
+                             (mps[], i -> expandedTree.get, i -> expandedExp.get)
+                               -> match -> result;
+                             
+                             (if not result then;
+                                 leave loop 
+                             if);
+                        for);
+                   else
+                      false -> result;
+                  if);
+               else
+                  exp[] -> tree.match -> result;
+                  (if exp.symbol
+                   //mps.nameAppl 
+                   //mps.nameDecl
+                   //mps.string then
+                      (exp[] -> theLexem[]).getText -> lexem1[];
+                      (tree[] -> theLexem[]).getText -> lexem2[];
+                      lexem1[] -> lexem2.equal -> result;
+                  if);
+                  
+                  
+              if);
+           else
+              false -> result;
+          if);
+      if);
+   #);
+
+-- listSearchDoPart: doPart --
+do search: theList.newScan
+   (# 
+   do (if (mps[], current[], exp[]) -> match then
+          current[] -> result[];
+          leave search;
+      if);
+   #);
+
+-- matchResultInxGet: doPart --
+do (# count: @integer;
+   do 0 -> count;
+      category -> tree.suffixWalkForProd
+      (# theFather: ^astInterface.expanded;
+      do count + 1 -> count;
+         (if count = inx then
+             current[] -> subTree[];
+         if);
+      #);
+   #);
+
+-- matchResultInxPut: doPart --
+do (# count: @integer;
+   do 0 -> count;
+      -1  -> tree.suffixWalkForProd
+      (# theFather: ^astInterface.expanded;
+         unExp: ^astInterface.unExpanded;
+      do current[] -> unExp[];
+         (if unExp.nonTerminalSymbol = category then
+             count + 1 -> count;
+             (if count = inx then
+                 current.father -> theFather[];
+                 (current.sonNo, subTree[]) -> theFather.put;
+             if);
+         if);
+      #);
+   #)
+
+-- parseTextDoPart: doPart --
+do (# root: ^astInterface.AST;
+      fatal: @boolean;
+      errorText: @text;
+      parseOK: @boolean;
+   do frag.root[] -> root[];
+      txt.reset;
+      (category,txt[],screen[],frag[]) -> frag.grammar.parser.doParse
+      (#
+         fatalParseError::<
+           (#
+           do
+              'Parse errors: ' -> errorText.putText;
+              msg[] -> errorText.putLine;
+              true -> fatal;
+              true -> continue;
+           #);
+      #) -> parseOK;
+      (if parseOK then
+          frag.root[] -> node[];
+       else
+          (if not fatal then
+              txt.Reset;
+              (txt[],errorText[]) -> frag.grammar.parser.errorReport;
+          if);
+          txt[] -> screen.putLine;
+      if);
+      root[] -> frag.root[];
+   #);
+

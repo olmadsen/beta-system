@@ -11,6 +11,7 @@ INCLUDE '../../dialogs/editinfo';
 INCLUDE '../../code/generate';
 INCLUDE '../../code/pattern';
 INCLUDE '../../code/followsemanticlink';
+INCLUDE '../../code/match';
 INCLUDE '../../asteditor/asteditor';
 INCLUDE '../../palettes/palette';
 INCLUDE '~beta/guienv/v1.4/utils/guienvstuff';
@@ -85,7 +86,7 @@ delay:
 -- windowitemEditornew: doPart --
 do false -> inherited;
    (if data[] = none then
-        type -> newData;
+        type -> newData -> data[];
     if);
    (if node[] = None then
        newNode;
@@ -100,8 +101,8 @@ do false -> inherited;
    
    false -> createTheWindowItem;
    (if owner[]<>None then
-       this(windowitemEditor)[] -> owner.children.append;
-       owner.createOpen;
+       this(windowitemEditor)[] -> owner.appendChild;
+       
        (* (# theDoPart: ^astInterface.beta.doPart;
         *        do owner.findOpenDoPart -> theDoPart[];
         *           (if theDoPart[] <> none then
@@ -116,6 +117,185 @@ do false -> inherited;
    
    
 -- windowItemEditorLib: attributes --
+
+deleteImperative:
+  (# name: ^text;
+     theDoPart: ^astInterface.beta.doPart;
+     proto: ^astInterface.AST;
+     gram: @grammar;
+     txt: @text;
+     imp: ^astInterface.beta.imp;
+     theImperatives: ^astInterface.beta.imperatives;
+  enter name[]
+  do findOpenDoPart -> theDoPart[];
+     (if theDoPart[] <> none then
+         theDoPart.getImperatives -> theImperatives[];
+         '<<evaluation>> -> ' -> txt.append;
+         name[] -> txt.append;
+         (theImperatives.frag[], txt[], gram.imp) -> parseText -> proto[];
+         (mps[], theImperatives[], proto[]) -> listSearch -> imp[];
+         (if imp[] <> none then
+             imp.sonNo -> theImperatives.delete;
+             (* !!! Notifications *)
+         if);
+     if);
+  #);
+
+generateEvaluation:
+  (# value: ^atom;
+     frag: ^astInterface.fragmentForm;
+     eval: ^astInterface.beta.evaluation;
+  enter (frag[], value[])
+  do (if value.type
+      //textType then
+         (frag[],(value.asTextAtom).value[])
+           -> betaGram.newTextEvaluation -> eval[];
+      //boolType then
+         (frag[],(value.asBoolAtom).value)
+           -> betaGram.newBoolEvaluation -> eval[];
+      //intType then
+         (frag[],(value.asIntAtom).value)
+           -> betaGram.newIntEvaluation -> eval[];
+     if);
+  exit eval[]
+  #);
+
+changeImperative:
+  (# name: ^text;
+     value: ^atom;
+     theDoPart: ^astInterface.beta.doPart;
+     proto: ^astInterface.AST;
+     gram: @grammar;
+     txt: @text;
+     imp: ^astInterface.beta.assignmentEvaluation;
+     theImperatives: ^astInterface.beta.imperatives;
+     theEvaluation: ^astInterface.beta.evaluation;
+     assignment: ^astInterface.beta.assignmentEvaluation;
+  enter (name[], value[])
+  do 'changing ' -> putText;
+     name[] -> putLine;
+     findOpenDoPart -> theDoPart[];
+     (if theDoPart[] <> none then
+         theDoPart.getImperatives -> theImperatives[];
+         '<<evaluation>> -> ' -> txt.append;
+         name[] -> txt.append;
+         (theImperatives.frag[], txt[], gram.imp) -> parseText -> proto[];
+        (mps[], theImperatives[], proto[]) -> listSearch -> imp[];
+         (if imp[] <> none then
+             (theDoPart.frag[], value[]) -> generateEvaluation 
+               -> imp.putEvaluation;
+          else
+             (theImperatives[], name[], value[]) -> generateImperative;
+         if);
+     if);
+  #);
+generateImperative:
+  (# theImperatives: ^astInterface.beta.imperatives;
+     name: ^text;
+     value: ^atom;
+     eval: ^astInterface.beta.evaluation;
+     imp: ^astInterface.beta.imp;
+  enter (theImperatives[], name[], value[])
+  do (theImperatives.frag[], value[]) -> generateEvaluation -> eval[];
+     (theImperatives.frag[], name[], eval[]) -> betaGram.newAssignment -> imp[];
+     (1, imp[]) -> theImperatives.insert;
+  #);
+
+changeData:
+  (# newData: ^parameters;
+     oldValue: ^atom;
+     defaultValue: ^atom;
+     doChangePosition, doChangeSize: @boolean;
+  enter newData[]
+  do newData.data.storage.scan
+     (# 
+     do (if true
+         //'x' -> current.key.equalNCS
+         //'y' -> current.key.equalNCS then
+            true -> doChangePosition;
+         //'width' -> current.key.equalNCS
+         //'height' -> current.key.equalNCS then
+            true -> doChangeSize;
+         //'borderStyle' -> current.key.equalNCS then
+         //'borderVisible' -> current.key.equalNCS then
+         //'ID' -> current.key.equalNCS then
+         //'type' -> current.key.equalNCS then
+         else
+            current.key[] -> data.data.lookup -> oldValue[];
+            (if current.value[] -> oldValue.equal then
+             else
+                current.key[] -> defaultData.data.lookup -> defaultValue[];
+                (if current.value[] -> defaultValue.equal then
+                    current.key[] -> deleteImperative;
+                 else
+                    (current.key[], current.value[]) -> changeImperative;
+                if);
+            if);
+        if);
+     #);
+     (if doChangePosition then
+         newData.position -> changePosition;
+     if);
+     (if doChangeSize then
+         newData.size -> changeSize;
+     if);
+  #);
+
+changePosition:
+  (# x, y: @integer;
+     theDoPart: ^astInterface.beta.doPart;
+     proto: ^astInterface.beta.assignmentEvaluation;
+     gram: @grammar;
+     txt: @text;
+     imp: ^astInterface.beta.assignmentEvaluation;
+     theImperatives: ^astInterface.beta.imperatives;
+     theEvaluation: ^astInterface.beta.evaluation;
+     assignment: ^astInterface.beta.assignmentEvaluation;
+  enter (x, y)
+  do findOpenDoPart -> theDoPart[];
+     (if theDoPart[] <> none then
+         theDoPart.getImperatives -> theImperatives[];
+         '<<evaluation>> -> position' -> txt.append;
+         (theImperatives.frag[], txt[], gram.imp) -> parseText -> proto[];
+        (mps[], theImperatives[], proto[]) -> listSearch -> imp[];
+         (if imp[] <> none then
+             (theDoPart.frag[], x, y) -> betaGram.newPointEvaluation 
+               -> imp.putEvaluation;
+          else
+             (theDoPart.frag[], x, y) -> betaGram.newPointEvaluation 
+               -> proto.putEvaluation;
+             (1, proto[]) -> theImperatives.insert;
+         if);
+     if);
+  #);
+changeSize:
+  (# width, height: @integer;
+     theDoPart: ^astInterface.beta.doPart;
+     proto: ^astInterface.beta.assignmentEvaluation;
+     gram: @grammar;
+     txt: @text;
+     imp: ^astInterface.beta.assignmentEvaluation;
+     theImperatives: ^astInterface.beta.imperatives;
+     theEvaluation: ^astInterface.beta.evaluation;
+     assignment: ^astInterface.beta.assignmentEvaluation;
+  enter (width, height)
+  do findOpenDoPart -> theDoPart[];
+     (if theDoPart[] <> none then
+         theDoPart.getImperatives -> theImperatives[];
+         '<<evaluation>> -> size' -> txt.append;
+         (theImperatives.frag[], txt[], gram.imp) -> parseText -> proto[];
+        (mps[], theImperatives[], proto[]) -> listSearch -> imp[];
+         (if imp[] <> none then
+             (theDoPart.frag[], width, height) -> betaGram.newPointEvaluation 
+               -> imp.putEvaluation;
+          else
+             (theDoPart.frag[], width, height) -> betaGram.newPointEvaluation 
+               -> proto.putEvaluation;
+             (1, proto[]) -> theImperatives.insert;
+         if);
+     if);
+  #);
+
 inherited:
   (#
   enter private.inherited
@@ -185,8 +365,6 @@ frame:
             else
                r -> theWindowItem.frame;
            if);
-           (* fixOpen; *)
-           (* createOpen; *)
         #)
   exit (# 
        do (if theWindowItem[] = contentsEditorObject then
@@ -928,7 +1106,7 @@ do inner;
 
 -- graphicalEditorNewEditor: doPart --
 do this(graphicalEditor).private.editorGenerator[type] -> theEditor[];
-   (this(canvasEditor)[],type) -> theEditor.new;
+   (this(canvasEditor)[],type, makeClassData) -> theEditor.new;
    selection.clear;
    theEditor.select;
 
@@ -964,7 +1142,67 @@ do
    
 -- graphicalEditorLib: attributes --
 
+
+makeImperativeList:
+  (# theImperativeList: ^imperativeList;
+  do &imperativeList[] -> theImperativeList[];
+     theImperativeList.init;
+  exit theImperativeList[]
+  #);
+makeAttributeList:
+  (# theAttributeList: ^attributeList;
+  do &attributeList[] -> theAttributeList[];
+     theAttributeList.init;
+  exit theAttributeList[]
+  #);
+makeClassData:
+  (# theClassData: ^classData;
+  do &classData[] -> theClassData[];
+     makeImperativeList -> theClassData.initImps[];
+     makeAttributeList -> theClassData.inheritedAttributes[];
+  exit theClassData[]
+  #);
+
+getClassData:
+  (# node: ^astInterface.beta.attributeDecl;
+     theClass: ^classInfo.class;
+     theClassData: ^classData;
+  enter node[]
+  do node[] -> getClass -> theClass[];
+     (if theClass[] <> none then
+         &classData[] -> theClassData[];
+         (theClass[], node[]) -> theClassData.init;
+     if);
+  exit theClassData[]
+  #);
+
+
 initData:
+  (# theDoPart: ^astInterface.beta.doPart;
+     theImperativeList: ^imperativeList;
+     theData: ^parameters;
+  enter (theData[], theImperativeList[])
+  do 
+     theImperativeList.scan
+     (# theAssignment: ^astInterface.beta.assignmentEvaluation;
+        theTransaction: ^astInterface.ast;
+        theObjectDenotation: ^astInterface.beta.objectDenotation;
+        theAttributeDenotation: ^astInterface.ast;
+        theNameApl: ^astInterface.beta.nameApl;
+     do current[] -> theAssignment[];
+        theAssignment.getTransaction -> theTransaction[];
+        (if theTransaction.symbol = betaGram.objectDenotation then
+            theTransaction[] -> theObjectDenotation[];
+            theObjectDenotation.getAttributeDenotation -> theAttributeDenotation[];
+            (if theAttributeDenotation.symbol = betaGram.nameApl then
+                theAttributeDenotation[] -> theNameApl[];
+                (theData[], theNameApl.getText, theAssignment[]) -> adjustValue;
+            if);
+        if);
+     #);
+  #);
+
+initData1:
   (# theDoPart: ^astInterface.beta.doPart;
      theImperatives: ^astInterface.beta.imperatives;
      theData: ^parameters;
@@ -1117,9 +1355,7 @@ scanPrefixChain:
   #);
 
 
-attributeList: doubleLinkedList
-  (# element:: betaGram.attributeDecl;
-  #);
+
 
 getInheritedAttributes:
   (# node: ^astInterface.beta.attributeDecl;
@@ -1154,15 +1390,49 @@ getInheritedAttributes:
               #);
           if);
        #);
+     addImperatives:
+       (# node: ^astInterface.beta.attributeDecl;
+          theNameApl: ^astInterface.beta.nameApl;
+          theDoPart: ^astInterface.beta.doPart;
+          theImperatives: ^astInterface.beta.imperatives;
+       enter node[]
+       do node[] -> realFindOpenDoPart -> theDoPart[];
+          (if theDoPart[] <> none then
+              theDoPart.getImperatives -> theImperatives[];
+              theImperatives.newScan
+              (# doMatch: @boolean;
+              do 
+                 (mps[], current[], proto1[]) -> match -> doMatch;
+                 (if not doMatch then
+                     (mps[], current[], proto2[]) -> match -> doMatch;
+                 if);
+                 (if doMatch then
+                     current[] -> theImperativeList.prepend;
+                 if);
+              #);
+          if);
+       #);
+     theImperativeList: ^imperativeList;
+     proto1, proto2: ^astInterface.AST;
+     gram: @grammar;
   enter node[]
-  do &attributeList[] -> theAttributeList[];
+  do (node.frag[], '<<evaluation>> -> <<nameApl>>', gram.imp)
+       -> parseText -> proto1[];
+     (node.frag[], '<<evaluation>> -> <<remote>>', gram.imp)
+       -> parseText -> proto2[];
+     
+     &attributeList[] -> theAttributeList[];
      theAttributeList.init;
+     &imperativeList[] -> theImperativeList[];
+     theImperativeList.init;
+     
      node[] -> scanPrefixChain
      (# 
      do current[] -> betaGram.getAttributes -> addAttributes;
         current[] -> getPrivateAttributes -> addAttributes;
+        current[] -> addImperatives;
      #);
-  exit theAttributeList[]
+  exit (theAttributeList[], theImperativeList[])
   #);
 
 getClass:
@@ -1182,6 +1452,7 @@ getClass:
              if);
          if);
      if);
+     
   exit theClass[]
   #);
 
@@ -1456,7 +1727,7 @@ resizeOperation: singleOperation
        do theEditor.frame -> oldFrame[];
           newFrame[] -> theEditor.frame;
           (* theEditor.fixOpen; *)
-          theEditor.createOpen;
+          newFrame.size -> theEditor.changeSize;
        #);
      doIt::
        (# 
@@ -1464,7 +1735,7 @@ resizeOperation: singleOperation
           selection.clear;
           theEditor.select;
           (* theEditor.fixOpen; *)
-          theEditor.createOpen;
+          newFrame.size -> theEditor.changeSize;
        #);
      unDoIt::
        (# 
@@ -1472,7 +1743,7 @@ resizeOperation: singleOperation
           selection.clear;
           theEditor.select;
           (* theEditor.fixOpen; *)
-          theEditor.createOpen;
+          oldFrame.size -> theEditor.changeSize;
        #);
      name::<
        (# 
@@ -1521,7 +1792,7 @@ moveOperation: selectionOperation
        do theSelection.scan
           (# 
           do (dh, dv) -> current.theWindowItem.move;
-             current.createOpen;
+             current.theWindowItem.position -> current.changePosition;
           #);
        #);
      unDoIt:: setSelection
@@ -1529,7 +1800,7 @@ moveOperation: selectionOperation
        do theSelection.scan
           (# 
           do (-dh, -dv) -> current.theWindowItem.move;
-             current.createOpen;
+             current.theWindowItem.position -> current.changePosition;
           #);
        #);
      name::<
@@ -1589,23 +1860,26 @@ changeBoundsOperation: selectionOperation
        (# inx: @integer;
        do 1 -> inx;
           theSelection.scan
-          (# 
-          do inx -> newBounds.get -> current.frame;
+          (# b: ^rectangle;
+          do inx -> newBounds.get -> b[] -> current.frame;
              inx + 1 -> inx;
-             current.createOpen;
+             b.topLeft -> current.changePosition;
+             b.size -> current.changeSize;
           #);
        #);
      unDoIt:: setSelection
        (# inx: @integer;
        do 1 -> inx;
           theSelection.scan
-          (# r: ^rectangle;
-          do inx -> oldBounds.get -> current.frame;
+          (# b: ^rectangle;
+          do inx -> oldBounds.get -> b[] -> current.frame;
              inx + 1 -> inx;
-             current.createOpen;
+             b.topLeft -> current.changePosition;
+             b.size -> current.changeSize;
           #);
        #);
   #);
+
 alignOperation: changeBoundsOperation
   (# name::<
        (# 
@@ -1639,7 +1913,8 @@ createOperation: operation
        do selection.clear;
           type -> owner.newEditor -> theEditor[];
           bounds[] -> theEditor.frame;
-          theEditor.createOpen;
+          bounds.topLeft -> theEditor.changePosition;
+          bounds.size -> theEditor.changeSize;
        #);
      doIt::
        (# 
@@ -1729,18 +2004,18 @@ dialogOperation: singleOperation
      doIt::
        (# 
        do selection.clear;
+          newData[] -> theEditor.changeData;
           newData[] -> theEditor.data.set;
           theEditor.applyObjectData;
           theEditor.select;
-          theEditor.createOpen;
        #);
      unDoIt::
        (# 
        do selection.clear;
+          oldData[] -> theEditor.changeData;
           oldData[] -> theEditor.data.set;
           theEditor.applyObjectData;
           theEditor.select;
-          theEditor.createOpen;
        #);
      name::<
        (# 
@@ -2714,7 +2989,7 @@ createPrivateAttributes:
           (# width, height: @integer;
           enter (width, height)
           do (width + 16, height + 32) -> windowView.size;
-             createOpen;
+             (width, height) -> changeSize;
           #);
         getSize:
           (# width, height: @integer;
@@ -2932,6 +3207,22 @@ do inner mouseDown;
    
 -- canvasEditorLib: attributes --
 
+appendChild:
+  (# editor: ^windowItemEditor;
+     
+  enter editor[]
+  do (# theDoPart: ^astInterface.beta.doPart;
+        theImperatives: ^astInterface.beta.imperatives;
+     do
+        editor[] -> children.append;
+        findOpenDoPart -> theDoPart[];
+        (if theDoPart[] <> none then
+            theDoPart.getImperatives -> theImperatives[];
+            theImperatives.frag[] -> editor.generateOpenImp -> theImperatives.append;
+        if);
+     #);
+  #);
+
 (* 
  * Drag and drop support
  *)
@@ -3064,13 +3355,14 @@ do (# data: ^parameters;
       (# theDoPart: ^astInterface.beta.doPart;
       do node[] -> realFindOpenDoPart -> theDoPart[];
          (if theDoPart[] <> none then
-             (data[], theDoPart.getImperatives) -> initData;
+             (data[], theDoPart.getImperatives) -> initData1;
          if);
       #);
       data.size ->  initialize;
       private.privateFrag[] -> private.privateFragHandler.frag[];
       private.privateFragHandler[] -> theFragServer.subscribe;
-      (none, node[], data[], canvasType, false) -> private.contentsEditor.init;
+      (none, node[], data[], canvasType, false, node[] -> getClassData) 
+        -> private.contentsEditor.init;
       show;
       inner init;
    #);
@@ -3243,16 +3535,16 @@ do (# theDoPart: ^astInterface.beta.doPart;
       theImperatives: ^astInterface.beta.imperatives;
    do inherited -> this(windowItemEditor).inherited;
       (if data[] = none then
-          type -> newData;
-          (* data.ID -> theAttribute.guiInfo; *)
-          
+          type -> newData -> defaultData[];
+          (defaultData[], theClassData.initImps[]) -> initData;
+          defaultData.copy -> data[];
       if);
       (if theAttribute[]<>none then
           theAttribute[] -> node[];
           true -> findOpenDoPart -> theDoPart[];
           (if theDoPart[] <> none then
               theDoPart.getImperatives -> theImperatives[];
-              (data[], theImperatives[]) -> initData;
+              (data[], theImperatives[]) -> initData1;
           if);
       if);
       (if theWindowItem[] = None then
@@ -3276,24 +3568,29 @@ do (# theDoPart: ^astInterface.beta.doPart;
 
 -- canvasEditorInit: doPart --
 do inner;
-   (# theAttributeList: ^attributeList;
-   do node[] -> getInheritedAttributes -> theAttributeList[];
-      theAttributeList.scan
+   (# 
+   do theClassData.inheritedAttributes.scan
       (# theEditor: ^windowItemEditor;
-         theClass: ^classInfo.class;
-      do current[] -> getClass -> theClass[];
-         (if theClass[] <> none then
-             this(graphicalEditor).private.editorGenerator[theClass.type] -> theEditor[];
-             (this(canvasEditor)[],current[], NONE, theClass.type, true) -> theEditor.init;
+         theClassData: ^classData;
+      do (if current.symbol = betaGram.simpleDecl then
+             current[] -> getClassData -> theClassData[];
+             (if theClassData[] <> none then
+                 this(graphicalEditor).private.editorGenerator[theClassData.theClass.type] -> theEditor[];
+                 (this(canvasEditor)[],current[], NONE, theClassData.theClass.type, true, theClassData[]) 
+                   -> theEditor.init;
+             if);
          if);
       #);
       scanAttributes
       (# theEditor: ^windowItemEditor;
-         theClass: ^classInfo.class;
-      do current[] -> getClass -> theClass[];
-         (if theClass[] <> none then
-             this(graphicalEditor).private.editorGenerator[theClass.type] -> theEditor[];
-             (this(canvasEditor)[],current[], NONE, theClass.type, false) -> theEditor.init;
+         theClassData: ^classData;
+      do (if current.symbol = betaGram.simpleDecl then
+             current[] -> getClassData -> theClassData[];
+             (if theClassData[] <> none then
+                 this(graphicalEditor).private.editorGenerator[theClassData.theClass.type] -> theEditor[];
+                 (this(canvasEditor)[],current[], NONE, theClassData.theClass.type, false, theClassData[]) 
+                   -> theEditor.init;
+             if);
          if);
       #);
    #);
@@ -3313,7 +3610,7 @@ do (# frag: ^astInterface.fragmentForm;
       (300, 200) -> data.size;
       (* data.id -> thePatternDecl.guiInfo; *)
       createPrivateAttributes;
-      (none, thePatternDecl[], data[], canvasType, false) -> private.contentsEditor.init;
+      (none, thePatternDecl[], data[], canvasType, false, makeClassData) -> private.contentsEditor.init;
       private.contentsEditor.generateSimpleOpen;
       show;
       (if not readOnly then
@@ -4130,7 +4427,15 @@ do
 -- windowItemEditorCreateOpen: doPart --
 do (# theDoPart: ^astInterface.beta.doPart;
       oldImps: ^astInterface.beta.imperatives;
-   do findOpenDopart -> theDoPart[];
+      openDecl: ^astInterface.beta.attributeDecl;
+      gram: @grammar;
+   do 'createopen' -> putLine;
+      findOpenDopart -> theDoPart[];
+      (if theDoPart[] = none then
+          (node.frag[],'open::< (# do #)', gram.attributeDecl) -> parseText -> openDecl[];
+          (node[], openDecl[]) -> appendAttributeToNode;
+          findOpenDopart -> theDoPart[];
+      if);
       (if theDoPart[] <> none then
           theDoPart.frag[] -> createInitImps -> newImps[];
           theDoPart.getImperatives -> oldImps[];
@@ -4149,3 +4454,7 @@ do children.scan
       if);
    #);
    inner createOpen;
+   
+-- classDataInit: doPart --
+do  node[] -> getInheritedAttributes 
+     -> (inheritedAttributes[], initImps[]);
