@@ -279,6 +279,7 @@ OSErr FSpEntrySetModTime(FSSpec *fs,unsigned long time)
   block.hFileInfo.ioVRefNum = fs->vRefNum;
   block.hFileInfo.ioDirID   = fs->parID;
 
+  time = time | (1<<31);
   err = PBGetCatInfo(&block,false);
   if (err == noErr) {
     if (block.dirInfo.ioFlAttrib & 16) {
