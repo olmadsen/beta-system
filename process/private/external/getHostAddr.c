@@ -1,9 +1,15 @@
 #include <stdio.h>
+#ifndef nti
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
 #include <sys/param.h>
+#else
+#include <winsock.h>
+#include <malloc.h>
+#define MAXHOSTNAMELEN 256
+#endif
 
 char *getHostAddr()
 { char buffer[MAXHOSTNAMELEN];

@@ -4,17 +4,34 @@
  *       All rights reserved.
  */
 
+#ifndef nti
 #include <unistd.h>
-#include <fcntl.h>
-#include <errno.h>
 #include <netinet/in.h>
-#include <stdio.h>		/* to see FILE */
-#include <values.h>		/* to see MAXINT */
-#include <sys/types.h>
 #include <sys/socket.h>         /* to see SOL_SOCKET, SO_TYPE */
-#include <signal.h>		/* to see signal() */
 #include <sys/param.h>		/* to see NOFILE */
 #include <sys/time.h>		/* to see struct timeval */
+#else
+#include <winsock.h>
+#endif
+#include <fcntl.h>
+#include <errno.h>
+#include <stdio.h>		/* to see FILE */
+#ifdef nti_ms
+#include <limits.h>
+#define MAXINT INT_MAX
+#else
+#include <values.h>		/* to see MAXINT */
+#endif
+#include <sys/types.h>
+#include <signal.h>		/* to see signal() */
+#ifdef nti_ms
+#define SIGUSR1 16
+#define SIGUSR2 17
+#define SIGUSR3 20
+#endif
+
+#define INVSOCK(sock) ((sock)<0)
+#define ERR_WOULDBLOCK EAGAIN
 
 #if defined(sun3) || defined(sun4)
 #  include <sys/filio.h>	/* to see FIONREAD */
@@ -24,9 +41,9 @@
 #  define SOCKADDR_type sockaddr_in
 #else
 #  if defined(sun4s)
-#  include <sys/filio.h>	/* to see FIONREAD */
-#  include <sys/sockio.h>	/* to see SIOCSPGRP */
-#  include <sys/stropts.h>	/* to see S_INPUT,S_ERROR */
+#    include <sys/filio.h>	/* to see FIONREAD */
+#    include <sys/sockio.h>	/* to see SIOCSPGRP */
+#    include <sys/stropts.h>	/* to see S_INPUT,S_ERROR */
 #    define HPFD_cast
 #    define SIGNALPARM int ignore
 #    define SOCKADDR_type sockaddr
@@ -43,11 +60,110 @@
 #        define HPFD_cast
 #        define SOCKADDR_type sockaddr
 #      else
-#        error "Unknown platform"
-#      endif
+#        if defined(nti)
+#          define HPFD_cast
+#          define NOFILE 0
+#          define SOCKADDR_type sockaddr
+#          define ioctl ioctlsocket
+#          define caddr_t u_long *
+#          define read(sock,buf,len) recv(sock,buf,len,0)
+#          define write(sock,buf,len) send(sock,buf,len,0)
+#          undef INVSOCK
+#          define INVSOCK(sock) ((sock)==INVALID_SOCKET)
+#          undef ERR_WOULDBLOCK
+#          define ERR_WOULDBLOCK EWOULDBLOCK
+#          define errno WSAGetLastError()
+#          define perror(str) fprintf(stderr, "%s: Error %d\n",str,errno);
+           /* The "mask" is used in the validateSocketSet. This is a real hack.
+           * Don't touch! */
+#          define sleep(x) Sleep((x)*1000)
+/* All Exxxx as equivalent WSAExxxx: */
+/*Berkeley equivalent	Windows Sockets code	Error	Interpretation */
+/*#define EINTR		WSAEINTR	        10004	As in standard C */
+/*#define EBADF		WSAEBADF	        10009	As in standard C */
+/*#define EACCES	WSEACCES	        10013	As in standard C */
+/*#define EFAULT	WSAEFAULT	        10014	As in standard C */
+/*#define EINVAL	WSAEINVAL	        10022	As in standard C */
+/*#define EMFILE	WSAEMFILE	        10024	As in standard C */
+#define EWOULDBLOCK	WSAEWOULDBLOCK	     /* 10035	As in BSD */
+#define EINPROGRESS	WSAEINPROGRESS	     /* 10036	This error is  */
+					     /* 	returned if  */
+                        		     /* 	anyWindows  */
+                        		     /* 	Sockets API  */
+                        		     /* 	function is called  */
+                        		     /* 	while a blocking  */
+                        		     /* 	function is in  */
+                        		     /* 	progress. */
+#define EALREADY	WSAEALREADY	     /* 10037	As in BSD */
+#define ENOTSOCK	WSAENOTSOCK	     /* 10038	As in BSD */
+#define EDESTADDRREQ	WSAEDESTADDRREQ	     /* 10039	As in BSD */
+#define EMSGSIZE	WSAEMSGSIZE	     /* 10040	As in BSD */
+#define EPROTOTYPE	WSAEPROTOTYPE	     /* 10041	As in BSD */
+#define ENOPROTOOPT	WSAENOPROTOOPT	     /* 10042	As in BSD */
+#define EPROTONOSUPPORT	WSAEPROTONOSUPPORT   /* 10043	As in BSD */
+#define ESOCKTNOSUPPORT	WSAESOCKTNOSUPPORT   /* 10044	As in BSD */
+
+#define EOPNOTSUPP	WSAEOPNOTSUPP	     /* 10045	As in BSD */
+#define EPFNOSUPPORT	WSAEPFNOSUPPORT	     /* 10046	As in BSD */
+#define EAFNOSUPPORT	WSAEAFNOSUPPORT	     /* 10047	As in BSD */
+#define EEADDRINUSE	WSAEADDRINUS	     /* 10048	As in BSD */
+#define EADDRNOTAVAIL	WSAEADDRNOTAVAIL     /* 10049	As in BSD */
+#define ENETDOWN	WSAENETDOWN	     /* 10050	As in BSD.  This  */
+                        		     /* 	error may be  */
+                        		     /* 	reported at any  */
+                        		     /* 	time if the  */
+                        		     /* 	Windows Sockets  */
+                        		     /* 	implementation  */
+                        		     /* 	detects an  */
+                        		     /* 	underlying failure. */
+#define ENETUNREACH	WSAENETUNREACH	     /* 10051	As in BSD */
+#define ENETRESET	WSAENETRESET	     /* 10052	As in BSD */
+#define ECONNABORTED	WSAECONNABORTED	     /* 10053	As in BSD */
+#define ECONNRESET	WSAECONNRESET	     /* 10054	As in BSD */
+#define ENOBUFS		WSAENOBUFS	     /* 10055	As in BSD */
+#define EISCONN		WSAEISCONN	     /* 10056	As in BSD */
+#define ENOTCONN	WSAENOTCONN	     /* 10057	As in BSD */
+#define ESHUTDOWN	WSAESHUTDOWN	     /* 10058	As in BSD */
+#define ETOOMANYREFS	WSAETOOMANYREFS	     /* 10059	As in BSD */
+#define ETIMEDOUT	WSAETIMEDOUT	     /* 10060	As in BSD */
+#define ECONNREFUSED	WSAECONNREFUSED	     /* 10061	As in BSD */
+#define ELOOP		WSAELOOP	     /* 10062	As in BSD */
+
+/*#define ENAMETOOLONG	WSAENAMETOOLONG	        10063	As in BSD */
+#define EHOSTDOWN	WSAEHOSTDOWN	     /* 10064	As in BSD */
+#define EHOSTUNREACH	WSAEHOSTUNREACH	     /* 10065	As in BSD */
+/*                      WSASYSNOTREADY	        10091	Returned by  */
+                        		     /* 	WSAStartup()  */
+                        		     /* 	indicating that the  */
+                        		     /* 	network  */
+                        		     /* 	subsystem is  */
+                        		     /* 	unusable. */
+/*                      WSAVERNOTSUPPORTED      10092	Returned by  */
+                        		     /* 	WSAStartup()  */
+                        		     /* 	indicating that the  */
+                        		     /* 	Windows Sockets */
+                        		     /* 	DLL cannot  */
+                        		     /* 	support this app. */
+/*                      WSANOTINITIALISED       10093	Returned by any  */
+                        		     /* 	function except  */
+                        		     /* 	WSAStartup()  */
+                        		     /* 	indicating that a  */
+                        		     /* 	successful  */
+                        		     /* 	WSAStartup()  */
+                        		     /* 	has not yet been  */
+                        		     /* 	performed. */
+#define HOST_NOT_FOUND	WSAHOST_NOT_FOUND    /* 11001	As in BSD. */
+#define TRY_AGAIN	WSATRY_AGAIN	     /* 11002	As in BSD */
+#define NO_RECOVERY	WSANO_RECOVERY	     /* 11003	As in BSD */
+#define NO_DATA		WSANO_DATA	     /* 11004	As in BSD */
+#    else
+#     error "Unknown platform"
 #    endif
+#   endif
 #  endif
+# endif
 #endif
+
 
 /* #include <assert.h>  This doesn't work: the linker can't find '__eprintf' */
 
@@ -94,7 +210,7 @@
  */
 static int validateSocket(int fd)
 {
-  int result,optval,optlen=sizeof(int);
+  int result,optval;
   struct fd_set read_mask,write_mask,error_mask;
   struct timeval timeout;
   int width;
@@ -128,7 +244,9 @@ static int validateSocket(int fd)
   if (!FD_ISSET(fd,&error_mask) &&
       FD_ISSET(fd,&read_mask) &&
       sockToRead(fd)<=0) {
-    errno=ENOTCONN;		/* C-lib doesn't set errno here */
+#   ifndef nti
+      errno=ENOTCONN;		/* C-lib doesn't set errno here */
+#   endif
     return 0;
   }
 
@@ -151,8 +269,18 @@ static void validateSocketSet(struct fd_set *mask)
 {
   int fd;
 
-  for (fd=0; fd<NFDBITS; fd++) {
-    if FD_ISSET(fd,mask) {
+#ifdef nti
+  /* WIndows NT implementation of fd_set is a bit cryptic. We need to
+   * scan the array backwards because of the implementation of FD_CLR
+   * see WINSOCK.H */
+  int i;
+  for (i = mask->fd_count - 1; i >= 0; i--) {
+    fd = mask->fd_array[i];
+#else
+  /* Unix is simpler :-) */
+  for (fd = 0; fd < NFDBITS; fd++) {
+#endif
+    if (FD_ISSET(fd,mask)) {
       if (!validateSocket(fd)) {
 #       ifdef ECHO_SPOT
 	  perror(FILE_ID ", (this is OK) spotted bad socket");
@@ -455,7 +583,11 @@ void initSignalHandlers(void)
 #else
   void cWaitForIO(long max_wait)
   {
+#ifndef nti
     sleep(1); /* don't know when to leave, had better get going soon.. */
+#else
+    Sleep(1);
+#endif
   }
 #endif
 
@@ -481,6 +613,41 @@ long Errno(void)
 }
 
 
+static int WSAIsStarted = 0;
+
+static void StopWSA(void)
+{
+#ifdef ECHO_ERROR
+  printf("atexit closing socket communication\n");
+#endif
+  WSAIsStarted = 0;
+/*  Sleep(500); */
+  WSACleanup();
+}
+
+#define StartWSA() if (!WSAIsStarted) _StartWSA()
+
+static void _StartWSA(void)
+{
+  if (!WSAIsStarted) {
+    WSADATA wsadata;
+#ifdef ECHO_ERROR
+    printf("Sockets need to be started\n");
+#endif
+    if (WSAStartup(MAKEWORD(1,1), &wsadata) == 0) {
+#ifdef ECHO_ERROR
+      printf("Sockets started :-)\n");
+#endif
+      WSAIsStarted = 1;
+      atexit(StopWSA);
+    } else {
+#ifdef ECHO_ERROR
+      printf("Sockets could not be started :-(\n");
+#endif
+    }
+  }
+}
+
 /* function 'createPassiveSocket' creates a passive socket
  * and binds it to a port. In case the port is 0, a random,
  * free port is chosen, and the port number is returned in
@@ -499,17 +666,27 @@ int createPassiveSocket(int *port)
   int listenSock;
   int size;
 
+  StartWSA();
+
   /* Create a socket */
-  if((listenSock=socket(AF_INET,SOCK_STREAM,0))<0)
+  if(INVSOCK(listenSock=socket(AF_INET,SOCK_STREAM,0))) {
+#   ifdef ECHO_ERROR
+      perror(FILE_ID ", could not create socket for listening");
+#   endif
     return -1;
+  }
 
   /* Bind the socket */
   memset((char *)&sockaddr,0,sizeof(sockaddr)); /* instead of bzero */
   sockaddr.sin_family=AF_INET;
   sockaddr.sin_port=*port;
   sockaddr.sin_addr.s_addr=INADDR_ANY;
-  if(bind(listenSock,(struct SOCKADDR_type*)&sockaddr,sizeof(sockaddr))<0)
+  if(bind(listenSock,(struct SOCKADDR_type*)&sockaddr,sizeof(sockaddr))<0) {
+#   ifdef ECHO_ERROR
+      perror(FILE_ID ", bind failed in createPassiveSocket");
+#   endif
     return -1;
+  }
 
   /* If the port number was 0, we must lookup the randomly chosen no. */
   if (!*port) {
@@ -570,6 +747,8 @@ int acceptConn(int sock)
   struct SOCKADDR_type from;
   int fromaddrlen=sizeof( struct SOCKADDR_type );
 
+  StartWSA();
+
 #ifdef USE_SIGIO_HANDLER
   struct fd_set readmask;
   FD_ZERO(&readmask);
@@ -584,17 +763,20 @@ int acceptConn(int sock)
   }
 #endif
 
-  if ((newSock=accept(sock,&(from),&(fromaddrlen)))<0) {
+  newSock=accept(sock,&(from),&(fromaddrlen));
+  if (INVSOCK(newSock)) {
     if (EINTR == errno) {
       return 0;
     }
     else {
 #     ifdef ECHO_ERROR
-        perror(FILE_ID ", acceptConn,2");
+        if (errno != EWOULDBLOCK)
+	  perror(FILE_ID ", acceptConn,2");
 #     endif
       return -1;
     }
   }
+
   return newSock;
 }
 
@@ -676,13 +858,22 @@ int sockStreamEos(int fd, FILE* fp)
          return (0 >= fp->_cnt);
 #      else
 #        if defined(hp) || defined(hpux8) || defined(snake)  || defined(hpux9pa) || defined (hpux9mc)
-	   return (0 >= fp->__cnt);
+	 return (0 >= fp->__cnt);
 #        else
 #          if defined(linux)
-	      /* This is ugly. See /usr/include/iolib.h */
-	      return (fp->_IO_read_end==fp->_IO_read_ptr); /* !!! EE/940228 */
+	   /* This is ugly. See /usr/include/iolib.h */
+	   return (fp->_IO_read_end==fp->_IO_read_ptr); /* !!! EE/940228 */
 #          else
-#	      error "Unknown platform"
+#            if defined(nti_bor)
+	       return (fp->level >= 0); 
+                      /* May not work at EndOfBuffer SPD/941004*/
+#            else
+#              if defined(nti_ms)
+	         return (0 >= fp->_cnt); /* Quick and dirty hack SPD/950310 */
+#              else
+#	         error "Unknown platform
+#              endif
+#            endif
 #          endif
 #        endif
 #      endif
@@ -733,20 +924,23 @@ int makeNonblocking(int fd)
       result=fcntl(fd,F_SETFL,FASYNC); /* Make this socket asynchronous */
 #   else
 #     if defined(sun4s)
-        /* Oct-29-93 (EE)
-	 * Compatibility manual (from Michael Glad, on Solaris-2.2)
-	 * says "use O_SYNC in place of FASYNC".
-	 */
-        result=fcntl(fd,F_SETFL,O_SYNC);
+      /* Oct-29-93 (EE)
+       * Compatibility manual (from Michael Glad, on Solaris-2.2)
+       * says "use O_SYNC in place of FASYNC".
+       */
+      result=fcntl(fd,F_SETFL,O_SYNC);
 #     else
 #       if defined(hp) || defined(hpux)
-          {
-	    int flag=1;
-            result=ioctl(fd,FIOASYNC /*FIOSSAIOSTAT*/,&flag);
-          }
+        {
+	  int flag=1;
+	  result=ioctl(fd,FIOASYNC /*FIOSSAIOSTAT*/,&flag);
+        }
+#       else
+#         error "Unknown platform"
 #       endif
 #     endif
 #   endif
+
 #   ifdef ECHO_ERROR
       if (0>result)
         perror(FILE_ID ", makeNonblocking,3");
@@ -757,14 +951,16 @@ int makeNonblocking(int fd)
         result=ioctl(fd,SIOCSPGRP,&flag); /* Give this prcs. group the signal */
 #     else
 #       if defined(sun4s)
-            /* Give me a signal in case of input or error */
-            int flag=(S_INPUT|S_ERROR);
-            result=ioctl(fd,I_SETSIG,flag);
+          /* Give me a signal in case of input or error */
+          int flag=(S_INPUT|S_ERROR);
+          result=ioctl(fd,I_SETSIG,flag);
 #       else
 #         if defined(hp) || defined(hpux)
-            /* Give this process group the signal */
-            int flag=-getpid();
-            result=ioctl(fd,SIOCSPGRP /*FIOSSAIOOWN*/,&flag);
+          /* Give this process group the signal */
+          int flag=-getpid();
+          result=ioctl(fd,SIOCSPGRP /*FIOSSAIOOWN*/,&flag);
+#         else
+#	    error "Unknown platform"
 #         endif
 #       endif
 #     endif
@@ -774,12 +970,34 @@ int makeNonblocking(int fd)
 #     endif
     }
 # else /* not defined(USE_SIGIO_HANDLER) */
-    result=fcntl(fd,F_SETFL,O_NONBLOCK);
+#   ifndef nti
+      result=fcntl(fd,F_SETFL,O_NONBLOCK);
+#   else
+    {
+      u_long nonblock = 1;
+      result=ioctl(fd,FIONBIO,&nonblock);
+    }
+#   endif
 #   ifdef ECHO_ERROR
       if (0>result)
         perror(FILE_ID ", makeNonblocking,2");
 #   endif
 # endif
+
+#ifdef nti
+  if (result==0) {
+    struct linger linger_opt;
+
+#ifdef ECHO_TRANSFER
+    printf("Activates lingering (makeNonblocking)\n");
+#endif
+    linger_opt.l_onoff = 1;
+    linger_opt.l_linger = 10;
+    /* Make socket close graciously */
+    result = setsockopt(fd,SOL_SOCKET,SO_LINGER,
+			&linger_opt,sizeof(linger_opt));
+  }
+#endif
 
   return result;
 }
@@ -818,16 +1036,18 @@ int makePassiveNonblocking(int fd)
 #   else
 #     if defined(sun4s)
         /* Oct-29-93 (EE)
-	 * Compatibility manual (from Michael Glad, on Solaris-2.2)
-	 * says "use O_SYNC in place of FASYNC".
-	 */
+         * Compatibility manual (from Michael Glad, on Solaris-2.2)
+         * says "use O_SYNC in place of FASYNC".
+         */
         result=fcntl(fd,F_SETFL,O_SYNC);
 #     else
 #       if defined(hp) || defined(hpux)
-          {
-	    int flag=1;
-            result=ioctl(fd,FIOASYNC /*FIOSSAIOSTAT*/,&flag);
-          }
+        {
+	  int flag=1;
+          result=ioctl(fd,FIOASYNC /*FIOSSAIOSTAT*/,&flag);
+        }
+#       else
+#         error "Unknown platform"
 #       endif
 #     endif
 #   endif
@@ -847,6 +1067,8 @@ int makePassiveNonblocking(int fd)
 #       if defined(hp) || defined(hpux)
           /* Give this process group the signal */
           result=ioctl(fd,SIOCSPGRP /*FIOSSAIOOWN*/,&flag);
+#       else
+#	  error "Unknown platform"
 #       endif
 #     endif
 #     ifdef ECHO_ERROR
@@ -855,12 +1077,34 @@ int makePassiveNonblocking(int fd)
 #     endif
     }
 # else
-    result=fcntl(fd,F_SETFL,O_NDELAY);
+#   ifndef nti
+      result=fcntl(fd,F_SETFL,O_NDELAY);
+#   else
+    {
+      u_long nonblock = 1;
+      result=ioctl(fd,FIONBIO,&nonblock);
+    }
+#   endif
 #   ifdef ECHO_ERROR
       if (0>result)
         perror(FILE_ID ", makePassiveNonblocking,4");
 #   endif
 # endif
+
+#ifdef nti
+  if (result==0) {
+    struct linger linger_opt;
+
+#ifdef ECHO_TRANSFER
+    printf("Activates lingering (makePassiveNonblocking)\n");
+#endif
+    linger_opt.l_onoff = 1;
+    linger_opt.l_linger = 10;
+    /* Make socket close graciously */
+    result = setsockopt(fd,SOL_SOCKET,SO_LINGER,
+			&linger_opt,sizeof(linger_opt));
+  }
+#endif
 
   return result;
 }
@@ -943,7 +1187,18 @@ int readData(int fd, char *destbuffer, int wanted)
       case EINTR:		/* OK, data arrived! */
 	break;
 
+#ifdef nti
+      case ECONNRESET:		/* End-of-file - comm.partner closed down */
+/*test/EE-941215*/ printf(">>>ECONNRESET<<<\n");
+#       ifdef ECHO_ERROR
+        if (!firstTry)
+	  fprintf(stderr,FILE_ID ", communication partner stopped unexpectedly");
+#       endif
+        return -1;
+#endif
+
       default:
+/*test/EE-941215*/ printf(">>>default<<<\n");
 #       ifdef ECHO_ERROR
 	perror(FILE_ID ", readData,2");
 #       endif
@@ -956,7 +1211,9 @@ int readData(int fd, char *destbuffer, int wanted)
       if (!firstTry)
 	fprintf(stderr,FILE_ID ", communication partner stopped unexpectedly");
 #     endif
-      errno=ENOTCONN;		/* The C-lib doesn't think this is an error */
+#     ifndef nti
+        errno=ENOTCONN;		/* The C-lib doesn't think this is an error */
+#     endif
       return -1;
 
     default:
@@ -1056,3 +1313,19 @@ int writeData(int fd, char *srcbuffer, int length)
   }
   return total;
 }
+
+
+/*test-begin/EE-941215*/
+
+long get_errno(void)
+{
+  return GetLastError();
+}
+
+void GetMeSleepPlease(long duration)
+{
+  sleep(duration);
+}
+
+/*test-end/EE-941215*/
+
