@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl5 -s
+#!/usr/local/bin/perl -s
 #-*-Perl-*-
 
 # nti usage: perl -I..\..\..\..\bin\admin run-all.perl
