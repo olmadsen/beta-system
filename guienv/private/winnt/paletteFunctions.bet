@@ -1,0 +1,285 @@
+ORIGIN '../../guienv';
+
+INCLUDE 
+'~beta/win32lib/v1.6/wingdi'
+'~beta/win32lib/v1.6/wingdiconsts'
+'~beta/win32lib/v1.6/devicecapabilities'
+'~beta/win32lib/v1.6/dcmanagement'
+'~beta/win32lib/v1.6/windowmanagement'
+'guienv_ntiprivate'
+'~beta/guienv/v1.6/utils/colorConverter';
+
+-- guienvLib: attributes --
+
+NUMCOLORS: (# exit 24 #);
+RASTERCAP: (# exit 38 #);
+RC_PALETTE: (# exit 16x0100 #);
+SIZEPALETTE: (# exit 104 #);
+NUMRESERVED: (# exit  106 #);
+
+sizeOfPaletteEntry: (# exit 4 #);
+sizeOfLogPalette: (# exit 8 #);
+
+printColor:
+  (# red,green,blue: @integer;
+  enter (red,green,blue)
+  do 'red = ' -> puttext; red -> putint; ' , ' -> puttext;
+     'green = ' -> puttext; green -> putint; ' , ' -> puttext;
+     'blue = ' -> puttext; blue -> putint; newline;
+  #);
+
+createColor:
+  (# theColor: @color; tempColor: @integer;
+     hPal: @integer;
+     noOfPalEntries, res: @integer;
+     
+     myColorTable: ^colorTable;
+  enter (hPal, theColor)
+  do (if hPal=0 then
+         this(guienv).private.ghPal -> hPal;
+     if);
+     (if hPal=0 then
+         &colorTable[] -> myColorTable[];
+         1 -> myColorTable.init;
+         theColor -> myColorTable.theColors[1];
+         myColorTable[] -> guienvCreatePalette -> hPal;
+      else
+         (hPal,0,0,0) -> GetPaletteEntries -> noOfPalEntries;
+         (if noOfPalEntries<236 then
+             (if ((hPal,noOfPalEntries+1) -> ResizePalette)<>0 then
+                 
+                 (if ((hPal,0,0,0) -> GetPaletteEntries)<>(noOfPalEntries+1) then
+                     'GetPaletteEntries failed. Error no = ' -> screen.putText;
+                     GetLastError -> screen.putint; screen.newline;
+                  else
+                     (theColor.red div 256,0) -> tempColor.%putByte;
+                     (theColor.green div 256,1) -> tempColor.%putByte;
+                     (theColor.blue div 256,2) -> tempColor.%putByte;
+                     (0,3) -> tempColor.%putByte;
+                     
+                     (hPal,noOfPalEntries,1,@@tempColor) -> SetPaletteEntries -> res;
+                     (if res=0 then
+                         'SetPaletteEntries failed. Error no, noOfPalEntries = ' -> screen.putText;
+                         GetLastError -> screen.putInt; ', ' -> screen.putText;
+                         noOfPalEntries -> putint; screen.newline;
+                     if);
+                 if);
+             if);
+         if);
+     if);
+  exit hPal
+  #);
+
+colorTable:
+  (# theColors: [0] @color;
+     init:
+       (# noOfColors: @integer;
+       enter noOfColors
+       do noOfColors -> theColors.extend;
+       #);
+  #);
+
+guienvCreateStandardPalette:
+  (#
+     i, inx, hPal, plgpl, Saturation, Satincrease: @integer;
+     screenHdc, theRasCap, SysColors, iPalEntries: @integer;
+     fPalette: @boolean;
+  do
+     
+     (* Step 1: Find out about the system *)
+     0 -> GetDC -> screenHdc;
+     (screenHdc,RASTERCAP) -> GetDeviceCaps -> theRasCap;        
+     
+     (if (theRasCap %Band RC_PALETTE) then
+         TRUE -> fPalette;
+      else
+         FALSE -> fPalette;
+     if);
+     (screenHdc, NUMCOLORS) -> GetDeviceCaps -> SysColors;
+     
+     (if fPalette then
+         (screenHdc, SIZEPALETTE) -> GetDeviceCaps -> iPalEntries;
+      else
+         SysColors -> iPalEntries;
+     if);
+     
+     (if (iPalEntries = 256) then
+         
+         210 -> iPalEntries;
+         iPalEntries * sizeOfPaletteEntry + sizeOfLogPalette 
+           -> malloc 
+           -> plgpl;
+         (if plgpl<>0 then
+             
+             (0x300) %putShortAt (plgpl); (* version *)
+             (iPalEntries) %putShortAt (plgpl+2);
+             
+
+          (* Step 3: Fill in the colors *)
+
+             (* ------------------------ Fill in red ----------------------- *)
+             3 -> Satincrease;
+             
+             0 -> Saturation;
+             
+             plgpl+4 -> inx;
+             (0) %putByteAt (inx);
+             (0) %putByteAt (inx+1);
+             (0) %putByteAt (inx+2);
+             (0x0) %putByteAt (inx+3);
+             
+             
+             (for i:140 repeat
+                  plgpl+(4*i) -> inx;
+                  (Saturation) %putByteAt (inx);
+                  
+                  (if i=70 then
+                      (-1) * Satincrease  -> Satincrease;
+                  if);
+                  Satincrease + Saturation -> Saturation;
+             for);
+
+             (* ---------------------- Fill in green ----------------------- *)
+             0 -> Saturation;
+             3 -> Satincrease;
+             70 -> i;
+             Lgreen:
+               (# 
+               do (if i<210 then
+                      plgpl+(4*i) -> inx;
+                      (Saturation) %putByteAt (inx+1);
+                      i + 1 -> i;
+                      (if i=140 then
+                          (-1) *  Satincrease -> Satincrease;
+                      if);
+                      Satincrease + Saturation -> Saturation;
+                      restart Lgreen;
+                   else
+                      leave Lgreen
+                  if);
+               #);
+             (* ----------------------- Fill in Blue ----------------------- *)
+             0 -> Saturation;
+             3 -> Satincrease;
+             140 -> i;
+             Lblue1:
+               (# 
+               do (if i<210 then
+                      plgpl+(4*i) -> inx;
+                      (Saturation) %putByteAt (inx+2);
+                      i + 1 -> i;
+                      Satincrease + Saturation -> Saturation;
+                      restart Lblue1;
+                   else
+                      leave Lblue1
+                  if);
+               #);
+             -3 -> Satincrease;
+             1 -> i;
+             Lblue2:
+               (# 
+               do (if i<70 then
+                      plgpl+(4*i) -> inx;
+                      (Saturation) %putByteAt (inx+2);
+                      i + 1 -> i;
+                      Satincrease + Saturation -> Saturation;
+                      restart Lblue2;
+                   else
+                      leave Lblue2
+                  if);
+               #);
+             
+             (* -------- The colors have no special attributes -----*)
+             (for i:210 repeat
+                  plgpl+(4*i) -> inx;
+                  (0x0) %putByteAt (inx+3);
+             for);
+             
+             (* Now we can create the palette. *)
+             plgpl -> CreatePalette -> hpal;
+             
+             
+         if);
+     if);  
+     (0,screenHdc) -> ReleaseDC;
+     (if hPal<>0 then hPal -> this(guienv).private.ghPal; if);
+  exit hPal
+  #);
+
+
+guienvCreatePalette:
+  (# fPalette: @boolean;
+     screenHdc, theRasCap: @integer;
+     hPal: @integer;
+     plgpl: @integer; (* LOGPALETTE *)
+     iPalEntries, SysColors: @integer;
+     
+     theColorTable: ^colorTable;
+     inx: @integer;
+     
+     hbmAutoRun: @integer;
+  enter theColorTable[]
+  do 
+     0 -> GetDC -> screenHdc;
+     (screenHdc,RASTERCAP) -> GetDeviceCaps -> theRasCap;        
+     
+     (if (theRasCap %Band RC_PALETTE) then
+         TRUE -> fPalette;
+      else
+         FALSE -> fPalette;
+     if);
+     
+     (screenHdc, NUMCOLORS) -> GetDeviceCaps -> SysColors;
+     (if fPalette and (sysColors < 257) then
+         (screenHdc, SIZEPALETTE) -> GetDeviceCaps -> iPalEntries;
+         
+         (if theColorTable[]<>NONE then
+             (if theColorTable.theColors.range < iPalEntries then
+                 theColorTable.theColors.range -> iPalEntries;
+             if);
+          else
+             0 -> iPalEntries;
+         if);
+         
+         iPalEntries * sizeOfPaletteEntry + sizeOfLogPalette 
+           -> malloc 
+           -> plgpl;
+         
+         (if plgpl<>0 then
+             
+             (0x300) %putShortAt (plgpl); (* version *)
+             (iPalEntries) %putShortAt (plgpl+2);
+             
+             plgpl+4 -> inx;
+             (0) %putByteAt (inx);
+             (0) %putByteAt (inx+1);
+             (0) %putByteAt (inx+2);
+             (0x0) %putByteAt (inx+3);
+             
+             (for i:iPalEntries repeat
+                  plgpl+(4*i) -> inx;
+                  (theColorTable.theColors[i].red div 256) %putByteAt (inx);
+                  (theColorTable.theColors[i].green div 256) %putByteAt (inx+1);
+                  (theColorTable.theColors[i].blue div 256) %putByteAt (inx+2);
+                  (0x0) %putByteAt (inx+3);
+             for);
+             
+             plgpl -> CreatePalette -> hpal;
+             plgpl -> free;
+          else
+             'malloc failed in guienvCreatePalette.' -> putline;
+         if);
+         
+         
+     if);
+     (0,screenHdc) -> ReleaseDC;
+     (if hPal<>0 then hPal -> this(guienv).private.ghPal; if);
+  exit hPal
+  #);
+
+destroyPalette:
+  (# hPal: @integer;
+  enter hPal
+  do hPal -> DeleteObject;
+  #);
+
