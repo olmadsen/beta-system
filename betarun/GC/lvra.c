@@ -8,7 +8,7 @@ ValRep *LVRAAlloc(ProtoType *proto, long range)
   Claim(isSpecialProtoType(proto), "isSpecialProtoType(proto)");
 
   size = DispatchRepSize(proto, range);
-  newRep = (ValRep *) AOAallocate(size);
+  newRep = (ValRep *) AOAallocate(size, FALSE);
   if (newRep){
     /* The Copy and Extend routines always copy elements as longs.
      * If the element size is less than 4 bytes, this means that up to 3 bytes

@@ -496,7 +496,7 @@ void importStoreObject(Object *theObj,
    Claim(theObj -> GCAttr == 0, "Unexpected part object?");
    
    /* Create an object info object for the object */
-   objInfo = (ObjInfo *)AOAallocate(sizeof(struct _ObjInfo));
+   objInfo = (ObjInfo *)AOAallocate(sizeof(struct _ObjInfo), TRUE);
    SETPROTO(objInfo, ObjInfoPTValue);
    
    objInfo -> flags = FLAG_INSTORE;   

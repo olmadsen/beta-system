@@ -23,7 +23,7 @@
  * memory. The key to search into this table is the (store, offset)
  * pair of the object.
  */
-static Trie *loadedObjects;
+static Trie *loadedObjects = 0;
 static int newPersistentObjectInIOA = 0;
 #if RECURSION
 static Object *head, *tail, *last;
@@ -145,7 +145,7 @@ ObjInfo *objectInfo(unsigned short flags,
 
     /* Only one object info object is created per object */
     
-    objInfo = (ObjInfo *)AOAallocate(sizeof(struct _ObjInfo));
+    objInfo = (ObjInfo *)AOAallocate(sizeof(struct _ObjInfo), TRUE);
     SETPROTO(objInfo, ObjInfoPTValue);
     
     objInfo -> flags = flags;
@@ -460,18 +460,18 @@ static void freeStores(u_long contents)
 
 void phaseOne(void)
 {
-    Trie *oldTable;
-    
-    oldTable = loadedObjects;
+  Trie *oldTable;
+  
+  if ((oldTable = loadedObjects)) {
     loadedObjects = TInit();
-    
+      
 #if RECURSION
     /* Initialize list of new persistent object */
     head = tail = last = NULL;
 #endif /* RECURSION */
-
+      
     TIVisit(oldTable, visitStoresFuncP1);
-
+      
 #if RECURSION
     if (head) {
       tail = head;
@@ -482,21 +482,22 @@ void phaseOne(void)
 		   TRUE);
 	tail = (Object *)(tail -> GCAttr);
       }
-
+	
       tail = head;
       while (tail != (Object *)NULLPOINTER) {
 	static Object *current;
 	current = tail;
-	
+	  
 	tail = (Object *)(tail -> GCAttr);
 	current -> GCAttr = 0;
-
+	  
 	markObject(current, 0);
       }
     }
 #endif /* RECURSION */
-
+      
     TIFree(oldTable, freeStores);
+  }
 }
 
 /**************************************************************************/
@@ -745,25 +746,27 @@ void phaseFive()
       as well as offline allocated objects referred from within the
       object. This is done first by the first 'TIVisit' below */
    
-   TIVisit(loadedObjects, visitStoresFuncP5_1);
-
-   /* All references from live persistent objects to dead ones are
-    * swizzled. This is done by the next 'TIVisit' below */
-
-   TIVisit(loadedObjects, visitStoresFuncP5_2);
+  if (loadedObjects) {
+    TIVisit(loadedObjects, visitStoresFuncP5_1);
     
-   /* At this point all persistent objects in AOA whos object infor
-    * object is marked as DEAD can be removed along with their object
-    * info object. The GCAttribute of the object info object for live
-    * persistent objects are reset to DEAD to prepare for the next
-    * AOAGc.
-    */
-   
-   /* mark dead objects dead and clean up tables */
-   OTEndGC();
-   RTEndGC();
-   SOEndGC();
-   SMGC();
+    /* All references from live persistent objects to dead ones are
+     * swizzled. This is done by the next 'TIVisit' below */
+    
+    TIVisit(loadedObjects, visitStoresFuncP5_2);
+    
+    /* At this point all persistent objects in AOA whos object infor
+     * object is marked as DEAD can be removed along with their object
+     * info object. The GCAttribute of the object info object for live
+     * persistent objects are reset to DEAD to prepare for the next
+     * AOAGc.
+     */
+    
+    /* mark dead objects dead and clean up tables */
+    OTEndGC();
+    RTEndGC();
+    SOEndGC();
+    SMGC();
+  }
 }
 
 /**************************************************************************/
@@ -820,11 +823,11 @@ void OTEndGC(void)
    /* Moves all object from the old table to a new one and frees the
     * old one.
     */
-   
-   oldTable = loadedObjects;
-   loadedObjects = TInit();
-    
-   TIFree(oldTable, freeStoresFunc);
+   if ((oldTable = loadedObjects)) {
+     loadedObjects = TInit();
+     
+     TIFree(oldTable, freeStoresFunc);
+   }
 }
 
 #endif /* PERSIST */

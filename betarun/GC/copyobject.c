@@ -114,11 +114,11 @@ Object * NewCopyObject(Object * theObj, Object ** theCell)
       if (GCAttribute == IOASpecial) {
 	insertSpecialObject(getTagForObject(theObj), newObj);
       } else if (GCAttribute == IOAPersist) {
-         /* The object was a persistent object that has been moved to
-          * AOA. The object info for the object has been allocated,
-          * but is no longer correct since it has been moved. The info
-          * will be updated after the IOAGc has finished */
-         ;
+	/* The object was a persistent object that has been moved to
+	 * AOA. The object info for the object has been allocated,
+	 * but is no longer correct since it has been moved. The info
+	 * will be updated after the IOAGc has finished */
+	;
       }     
 #endif /* PERSIST */
       return newObj;
@@ -126,21 +126,21 @@ Object * NewCopyObject(Object * theObj, Object ** theCell)
     } else {
       /* CopyObjectToAOA failed */
 #ifdef PERSIST
-       if ((GCAttribute == IOASpecial) || (GCAttribute  == IOAPersist)) {
-          Object *theAOAObj;
+      if ((GCAttribute == IOASpecial) || (GCAttribute  == IOAPersist)) {
+	Object *theAOAObj;
+	
+	/* This will force an allocation of a new aoablock */
+	theAOAObj = AOAallocate(8, TRUE);
+	theAOAObj = NewCopyObject(theObj, theCell);
           
-          forceAOAAllocation = TRUE;
-          theAOAObj = NewCopyObject(theObj, theCell);
-          forceAOAAllocation = FALSE;
+	Claim(inAOA(theAOAObj), "Where is theAOAObj?");
           
-          Claim(inAOA(theAOAObj), "Where is theAOAObj?");
-          
-          return theAOAObj;
-       } else {
-          return CopyObject(theObj);
-       } 
+	return theAOAObj;
+      } else {
+	return CopyObject(theObj);
+      } 
 #else 
-       return CopyObject(theObj);
+      return CopyObject(theObj);
 #endif /* PERSIST */
     }
   }

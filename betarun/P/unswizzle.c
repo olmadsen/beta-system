@@ -109,8 +109,7 @@ Object *USloadObject(CAStorage *store,
    
    theRealStoreObj = (Object *)((u_long)theStoreObj - distanceToPart);
    
-   forceAOAAllocation = TRUE; /* The following allocation must not fail*/
-   theRealObj = AOAallocate(2*size);
+   theRealObj = AOAallocate(2*size, TRUE);
    loadedBytes += 2*size;
    if (loadedBytes > MAXPERSISTENTBYTES) {
       loadedBytes = 0;

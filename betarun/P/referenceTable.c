@@ -53,7 +53,7 @@ void *referenceInfo(CAStorage *store, u_long offset)
    RefInfo *refInfo;
    void *ip;
    
-   refInfo = (RefInfo *)AOAallocate(sizeof(struct _RefInfo));
+   refInfo = (RefInfo *)AOAallocate(sizeof(struct _RefInfo), TRUE);
    SETPROTO(((Object *)refInfo), ((long)RefInfoPTValue));
    
    refInfo -> store = store;
@@ -162,9 +162,10 @@ static void freeReferenceObjects(unsigned long contents)
 void RTStartGC(void)
 {
    /* Free the current 'loadedObjectsST' */
-   
-   TIFree(loadedObjectsST, freeReferenceObjects);
-   loadedObjectsST = TInit();
+  if (loadedObjectsST) {
+    TIFree(loadedObjectsST, freeReferenceObjects);
+    loadedObjectsST = TInit();
+  }
 }
 
 void RTEndGC(void)

@@ -360,7 +360,7 @@ static void AOANewBlock(long newBlockSize)
 /* AOAallocate allocate 'size' number of bytes in the Adult object area.
  * If the allocation succeeds the function returns a reference to the allocated
  * object, 0 otherwise.  */
-Object *AOAallocate(long numbytes)
+Object *AOAallocate(long numbytes, int forceAOAAllocation)
 {
   Object *newObj;
     
@@ -404,14 +404,14 @@ Object *AOAallocate(long numbytes)
   return ExtendBaseBlock(numbytes);
 #else
   AOANewBlock(numbytes);
-  return AOAallocate(numbytes);
+  return AOAallocate(numbytes, forceAOAAllocation);
 #endif
 }
 
 Object *AOAalloc(long numbytes)
 {
   DEBUG_CODE(NumAOAAlloc++);
-  return AOAallocate(numbytes);
+  return AOAallocate(numbytes, FALSE);
 }
 
 Object *AOAcalloc(long numbytes)
@@ -444,7 +444,7 @@ Object *CopyObjectToAOA(Object *theObj, Object *newObj)
   Claim((size&7)==0, "#ToAOA: (size&7)==0 ");
 
   if (!newObj) {       
-    newObj = AOAallocate(size);
+    newObj = AOAallocate(size, FALSE);
     if (!newObj) {
       return NULL;
     }

@@ -214,7 +214,7 @@ extern long sizeOfAOA(void);
 extern Object *AOAalloc(long numbytes);
 extern Object *AOAcalloc(long numbytes);
 /* Allocate block without possibility of doing IOAGc: */
-extern Object *AOAallocate(long numbytes);
+extern Object *AOAallocate(long numbytes, int forceAOAAllocation);
 extern Object *CopyObjectToAOA(Object *theObj, Object *newObj);
 extern void AOAGc(void);
 
