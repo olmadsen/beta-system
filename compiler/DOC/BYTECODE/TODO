@@ -9,69 +9,162 @@ Prioriteter: *** Høj
 A. General
 ==========
 
-1. Gøre switch 320 default (uden at sætte den i nbeta/jbeta)
+A1. Gøre switch 320 default (uden at sætte den i nbeta/jbeta)
 
-2. Dependency analyse for .il/.dll/.class filer - er det løst generelt?
+A2. Dependency analyse for .il/.dll/.class filer - er det løst
+    generelt?
+    Nej: F.eks. genoversættes dotnettstenvbody altid.
+    Omvendt: Hvis een af filerne svarende til et SLOT slettes,
+    genoversættes tilsvarende BETA fil ikke.
+
+A3. *** [OLM] Objekt typer som external parametre.
+
+    I forbindelse med google demoen har jeg
+    prøvet at implementere en getline.
+    Hertil skal jeg bruge en *statisk* external ReadLine, som returnerer en
+    String-reference.
+    Dvs følgende:
+
+    --LIB: attributes--
+    String: ExternalClass
+      (#
+      do '[mscorlib]System.String' -> className;
+      #);
+    ReadLine: External
+      (# result: ^String;
+      do '[mscorlib]System.String [mscorlib]System.Console::ReadLine()' -> callC;
+      exit result[]
+      #);     
+    ---getline:doPart--
+    do ReadLine -> T[];
+
+    Problemet her er at External ikke ligesom ExternalClass.proc vil acceptere
+    String som parameter/retur type.
+    Vil du indføre det på et tidspunkt?
+
+A4. *** [OLM] 
+    Checker problemet (generelt problem).
+    Kan reproduceres ved at udkommentere
+       'Greatings from BETA' -> X.display;
+    i GENERATOR/BYTECODE/TEST/jstring.bet og oversætte denne med jbeta.
+
+A5. ** [OLM] 
+    Text konstant exit pattern kan ikke assignes til text reference (compiler
+    crasher).
+    Eksempel:
+	origin 'tstenv'   
+	---lib:attributes---
+	String: externalClass
+	  (#
+	  do 'java/lang/String' -> classname
+	  #);
+	jstringuser: externalclass
+	  (# display: proc
+	       (# S: ^String
+	       enter S[]
+	       #);
+	  #);
+	Greetings:
+	  (# exit 'Greetings from BETA' #);
+	---program:descriptor---
+	(# X: ^jstringuser;
+	   T: ^text; 
+	do &jstringuser[] -> X[];
+	   'To keep checker happy' -> X.display; (* checker fejlen *)
+	   Greetings -> T[]; (* compiler crasher *)
+	   T[] -> X.display;
+	#)      
+
+A6. *** [OLM]
+    Text konstant exit pattern brugt direkte i parameter liste crasher ikke
+    compileren, men der genereres forkert kode (mangler konvertering til
+    External String).
+    Eksemple:
+
+	origin 'tstenv'   
+	---lib:attributes---
+	String: externalClass
+	  (#
+	  do 'java/lang/String' -> classname
+	  #);
+	jstringuser: externalclass
+	  (# display: proc
+	       (# S: ^String
+	       enter S[]
+	       #);
+	  #);
+	Greetings:
+	  (# exit 'Greetings from BETA' #);
+	---program:descriptor---
+	(# X: ^jstringuser;
+	   T: ^text; 
+	do &jstringuser[] -> X[];
+	   Greetings -> X.display;
+	#)      
+
 
 
 B. Java specific
 ================
 
-1. * For hver .bet fil, der oversættes, bliver den *sidste* .class file,
+B1.  * [OLM]
+     For hver .bet fil, der oversættes, bliver den *sidste* .class file,
      dette giver anledning til, genereret 2 gange.
+
 
 C. .NET specific
 ================
 
-1. * [PA/OLM]
-   Problem med overskrivning af program.il/program.class for hvert
-   program.
-    -> Muligvis lave subdirectory til denne navngivet udfra exefilen
-       (ikke problem i java, da program.class er pakket ind i jar filen)
+C1. * [PA/OLM]
+    Problem med overskrivning af program.il/program.class for hvert
+    program.
+     -> Muligvis lave subdirectory til denne navngivet udfra exefilen
+        (ikke problem i java, da program.class er pakket ind i jar filen)
 
-2. * [PA/OLM]
-   Hvis man oversætter foo.bet, og siden
-   oversætter bar.bet, men bar.class/bar.il er nyere end bar.bet, så
-   bliver der ikke genereret en ny program.class/program.il, og
-   afvikling af bar vil derfor udføre foo.
+C2. * [PA/OLM]
+    Hvis man oversætter foo.bet, og siden
+    oversætter bar.bet, men bar.class/bar.il er nyere end bar.bet, så
+    bliver der ikke genereret en ny program.class/program.il, og
+    afvikling af bar vil derfor udføre foo.
 
+C3. [PA]
+    All source files constituting an executable must currently reside
+    in the same directory.
+    We intent to generate strong assemblies and config files and/or use
+    the Global Assembly Cache for solving this later.
 
-3. [PA]
-   All source files constituting an executable must currently reside
-   in the same directory.
-   We intent to generate strong assemblies and config files and/or use
-   the Global Assembly Cache for solving this later.
+C4. * [OLM]
+    Vi skal kunne specificere kompleks location (f.eks. med
+    versionsnummer) for en externalclass.
+    Senere: Compiler skal kunne læse .Net assemblies direkte, så man ikke
+    behøver at skulle erklære eksterne klasser og procedurer [PA]
 
-4. * [OLM]
-   Vi skal kunne specificere fil location for en externalclass, og
-   denne fil location skal med ind i import listen.
-   Senere: Compiler skal kunne læse .Net assemblies direkte, så man ikke
-   behøver at skulle erklære eksterne klasser og procedurer [PA]
-
-   Vi bør understøtte
-      BUILD 'myassembly.dll' 'myassembly.cs' 'csc ...';
-   samt
-      INCLUDE 'aSystemAssembly.dll'
-   som begge bør
-      1. Føre til import af assembly
-      2. (senere) føre til indlæsning af klasser i assembly og
-         opbygning af ast
-
-5.  * [OLM] Lokal location skal ikke med
-    Hvis man f.eks. oversætter
-	 ORIGIN 'tstlib';         
-	 -- program: Descriptor --
-	 (# 
-	 do 'a' -> put;
-	    'b' -> fill;
-	 #)  
-    så vil der i program.il være en del referencer til klassen
-    program, hvor der medtages location ['program'], hvilket ikke
-    er nødvendigt, da det jo er i samme fil.
-    I visse tilfæde forvirrer dette verifieren.
-
-6. Verification errors ved oversættelse af btst:
+    Vi bør understøtte
+       BUILD 'myassembly.dll' 'myassembly.cs' 'csc ...';
+    samt
+       INCLUDE 'aSystemAssembly.dll'
+    som begge bør
+       1. Føre til import af assembly
+       2. (senere) føre til indlæsning af klasser i assembly og
+          opbygning af ast
     
+ 
+C5.  * [OLM] Lokal location skal ikke med
+     Hvis man f.eks. oversætter
+     	 ORIGIN 'tstlib';         
+     	 -- program: Descriptor --
+     	 (# 
+     	 do 'a' -> put;
+     	    'b' -> fill;
+     	 #)  
+     så vil der i program.il være en del referencer til klassen
+     program, hvor der medtages location ['program'], hvilket ikke
+     er nødvendigt, da det jo er i samme fil.
+     I visse tilfæde forvirrer dette verifieren.
+
+C6. Verification errors ved oversættelse af btst:
+    (verificeret 8/8/2002)
+
      a. [tst\dotnet\tstvirt2.dll : tstvirt2$final2virtZ$Xqua::do] [offset 0x00000020] [opcode beq] 
         -> Int32 objref 'BetaObject' Non-compatible types on the stack.
 
@@ -95,34 +188,18 @@ C. .NET specific
                   beq     L2
 
      b. [tst\dotnet\tstvirt2.dll : tstvirt2$final2virtZ$Xqua::do] [offset 0x00000056] [opcode ret] 
+        -> Stack must be empty on return from a void function.
+
+     c. [tstvirt2.dll : tstvirt2$future::do] [offset 0x00000023] [opcode ldfld] [token  0x0A0001AE] 
+        -> Unable to resolve token.
+
+     d. [tst\dotnet\tstblock.dll : TstBlock$singular_1::do_1] [offset 0x0000003B] [opcode ret] 
        -> Stack must be empty on return from a void function.
- 
-     c. [tst\dotnet\tstvirt2.dll : tstvirt2$future::do] [offset 0x0000000D] [opcode ldfld] 
-       -> [found objref 'tstvirt2$future$SmallComputation'] [expected objref 'tstvirt2$future'] Unexpected type on the stack.
 
-          .method public virtual void 'do'() cil managed 
-          {
-               .maxstack 1000
-               ldarg.0
-               ldarg.0
-               ldfld   class ['tstvirt2']'tstvirt2$future$SmallComputation' class ['tstvirt2']'tstvirt2$future'::'small'
-               dup
-               callvirt instance void class ['tstvirt2']'tstvirt2$future$FutureComputation'::'do'()
-               ldfld    class ['tstvirt2']'tstvirt2$future$SmallComputation' class ['tstvirt2']'tstvirt2$future'::'small' 
-
-     d. [tst\dotnet\tstvirt2.dll : tstvirt2$future::do] [offset 0x00000017] [opcode ldfld] [token  0x0A0001AD] 
-       -> Unable to resolve token.
-
-         ldfld	class ['tstvirt2']'tstvirt2$future$FutureComputation$futureType' class ['tstvirt2']'tstvirt2$future'::'this_'
-         
-         'this_' ????
-
-     e. [tst\dotnet\tstblock.dll : TstBlock$singular_1::do_1] [offset 0x0000003B] [opcode ret] 
-       -> Stack must be empty on return from a void function.
-     f. [tst\dotnet\tstblock.dll : TstBlock$singular_1::do_1] [offset 0x0000003B] 
+     e. [tst\dotnet\tstblock.dll : TstBlock$singular_1::do_1] [offset 0x0000003B] 
        -> Stack depth differs depending on path.
 
-       Detaljer: Forsø på stakhøjde annotering:
+       Detaljer: Forsøg på stakhøjde annotering:
 
   	.method public virtual void 'do_1'() cil managed 
   	{
@@ -154,7 +231,23 @@ C. .NET specific
   		ret /* 4 (hvis man kommer fra pop ovenfor) */ /* 5 (hvis man kommer fra br L13 ovenfor) */ 
   	}     
 
-     g. [tst\dotnet\tstlib.dll : chkR::enter] [offset 0x00000009] [opcode ret] 
+
+     f. [tst\dotnet\tstlib.dll : chkR::do] [offset 0x00000057] [opcode ret] 
+        -> Stack must be empty on return from a void function.
+
+ 	 .method public virtual void 'do'() cil managed 
+ 	 {
+ 	       .maxstack 1000
+ 	       ldarg.0
+ 	       ldarg.0
+ 	       ldarg.0
+ 	       ldarg.0
+ 	       ldfld   int32 class ['tstlib']'chkR'::'i' 
+               ....
+
+       Lang - men ligner også for mange load af this, ligesom nedenfor.
+
+    g. [tst\dotnet\tstlib.dll : chkR::enter] [offset 0x00000009] [opcode ret] 
        -> Stack must be empty on return from a void function.
 
        .method public virtual void 'enter'(int32,int32,char) cil managed 
@@ -168,19 +261,15 @@ C. .NET specific
              ret
        }
 
-       Lige lovligt mange load af this Mystisk!
+       For mange load af this.
 
-     h. [tst\dotnet\tstlib.dll : chkR::do] [offset 0x00000057] [opcode ret] 
+
+     h. [tst\dotnet\tstlib.dll : eqR::do] [offset 0x0000002B] [opcode ret] 
        -> Stack must be empty on return from a void function.
 
      Lang - men ligner også for mange load af this.
 
-     i. [tst\dotnet\tstlib.dll : eqR::do] [offset 0x0000002B] [opcode ret] 
-       -> Stack must be empty on return from a void function.
-
-     Lang - men ligner også for mange load af this.
-
-     j. [tst\dotnet\tstlib.dll : eqR::enter] [offset 0x00000002] [opcode ret] 
+     i. [tst\dotnet\tstlib.dll : eqR::enter] [offset 0x00000002] [opcode ret] 
        -> Stack must be empty on return from a void function.
  
 	  .method public virtual void 'enter'(int32,int32) cil managed 
@@ -191,9 +280,9 @@ C. .NET specific
 		ret
 	  }  
 
-     Ligner 6.g problemet.
+     Ligner C6.g problemet.
 
-     k. [tst\dotnet\tstenv.dll : CStruct::.ctor] [offset 0x0000000F] [opcode newobj] 
+     j. [tst\dotnet\tstenv.dll : CStruct::.ctor] [offset 0x0000000F] [opcode newobj] 
        -> [found objref ('this' ptr) 'CStruct'] [expected objref 'tstenv'] Unexpected type on the stack.
 
  	  .method public rtspecialname specialname hidebysig instance void .ctor(class ['tstenv']'tstenv')
@@ -211,7 +300,7 @@ C. .NET specific
               
            IntegerObjects constructor forventer en tstenv origin.
 
-     l. [tst\dotnet\tstenv.dll : CStruct$Byte::exit] [offset 0x00000000] [opcode dup] 
+     k. [tst\dotnet\tstenv.dll : CStruct$Byte::exit] [offset 0x00000000] [opcode dup] 
        -> Stack underflow.
 
  	      .method public virtual int32 'exit'() cil managed 
@@ -226,7 +315,18 @@ C. .NET specific
 
 	Der mangler vist noget?
 
-     m. [tst\dotnet\tstenv.dll : CStruct$Long::exit] [offset 0x00000000] [opcode dup] 
+     l. [tst\dotnet\tstenv.dll : CStruct$Long::exit] [offset 0x00000000] [opcode dup] 
        -> Stack underflow.
 
-        Samme som 6.m.
+        Samme som C6.k.
+
+C7.  * [PA/OLM] 
+     Default location for external class.
+     Det vil være rart hvis default location for externalclass (hvis
+     der ikke skrives en eksplicit i classname) er klassenavnet.
+
+C8.  Import handling clean-up:
+     All imports should be able to handle in
+     signature.bet:descLocation, but some imports are also done in
+     signature.bet:add_dotnet_location, and in
+     genexternal:ExternalCallCall.
