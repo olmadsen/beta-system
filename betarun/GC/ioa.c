@@ -45,7 +45,7 @@ void IOAGc()
   
 #ifdef PERSIST
   repeatIOAGc = 0;
-
+  
  IOAGCstart:
 #endif /* PERSIST */
   
@@ -268,9 +268,8 @@ void IOAGc()
     if (AOANeedCompaction || forceAOAGC) {
       AOAGc();
     }
-  }
 #endif /* PERSIST */
-  
+  }
   if (tempAOAroots) {
     /* ToSpace was not big enough to hold both objects and table.
      * Free the table that was allocated by saveAOAroot().  */
@@ -423,7 +422,7 @@ Program terminated.\n", (int)(4*ReqObjectSize));
 	    fflush(output);
             );
   INFO_HEAP_USAGE(PrintHeapUsage("after IOA GC"));
-
+  
 #ifdef PERSIST
   if (repeatIOAGc) {
     StackEnd = (long *)((struct RegWin *) StackPointer);
@@ -626,7 +625,7 @@ void ProcessReference(Object ** theCell)
         negIOArefsINSERT((long) theCell);
     } else
 #endif
-#if PERSIST
+#ifdef PERSIST
     if (inPIT((void *)*theCell)) {
 	referenceAlive(((void *)*theCell));
 	INFO_PERSISTENCE(TtoP++);
