@@ -12,8 +12,13 @@ INCLUDE './idlsematt';
    
    idl: @ast.idl; (* The MPS interface to the BETA grammar/ASTs *)
    
+   (* Operations needed because exit parameters of getNameAppl,
+    * getNameDecl etc are not quilified enough to say gettext etc.
+    * on them!
+    *)
    NameApplToText: (# na: ^ast.NameAppl enter na[]  exit na.getText #);
    NameDeclToText: (# nd: ^ast.NameDecl enter nd[]  exit nd.getText #);
+   StringToText:   (# s: ^ast.String enter s[]  exit s.getText #);
    ConstToInteger: (# con: ^ast.Const   enter con[] exit con.getValue #);
    ConstToText:    (# con: ^ast.Const   enter con[] exit con.getText #);
    
@@ -63,9 +68,7 @@ INCLUDE './idlsematt';
           (# 
           do (if currentSubcomment[] <> none then
                  (if currentSubcomment.lgth<>0 then
-                     '(* '->outfile.puttext;
-                     currentSubcomment[]->outfile.putText;
-                     ' *)'->outfile.putline;
+                     currentSubcomment[]->outfile.CommentLine;
                   else
                      (* empty line comment *)
                      outfile.newline;
@@ -150,22 +153,7 @@ INCLUDE './idlsematt';
 	fg.close;
 	(for i: End repeat List[i][] -> DoFragment for);
      #);
-   
-   indent: @
-     (# textindent: @text;
-        inc: 
-          (# i: @integer;
-          enter i
-          do (for i repeat ' ' -> textindent.put for);
-          #);
-        dec:
-          (# i: @integer
-          enter i
-          do (1,i) -> textindent.delete;
-          #);
-     do textindent[] -> outfile.puttext;
-     #);
-   
+      
    do_specification:
      (* Translate the top node of the IDL *)
      (# s: ^idl.specification;
@@ -200,22 +188,22 @@ INCLUDE './idlsematt';
    do_def_type_dcl: 
      (# d: ^idl.def_type_dcl;
      enter d[]
-     do indent;
-        '(* do_def_type_dcl not yet implemented *)' -> outfile.putline;
+     do outfile.indent;
+        'do_def_type_dcl not yet implemented' -> outfile.commentline;
      #);
    
    do_const_dcl: 
      (# c: ^idl.const_dcl;
      enter c[]
-     do indent;
-        '(* do_const_dcl not yet implemented *)' -> outfile.putline;
+     do outfile.indent;
+        'do_const_dcl not yet implemented' -> outfile.commentline;
      #);
    
    do_except_dcl: 
      (# e: ^idl.except_dcl;
      enter e[]
-     do indent;
-        '(* do_except_dcl not yet implemented *)' -> outfile.putline;
+     do outfile.indent;
+        'do_except_dcl not yet implemented' -> outfile.commentline;
      #);
    
    do_interface_dcl:
@@ -293,40 +281,61 @@ INCLUDE './idlsematt';
                          #);
                        u: ^idl.uuid
                     enter u[]
-                    do indent;
-                       '(* do_uuid NYI: ' -> outfile.puttext;
+                    do outfile.indent;
+                       outfile.CommentBegin;
+                       'uuid: ' -> outfile.puttext;
                        u.getuuid_rep -> do_uuid_rep;
-                       ' *)' -> outfile.putline;
+                       outfile.CommentEnd;
                     #);
                   do_iversion:
                     (# v: ^idl.iversion
                     enter v[]
-                    do indent;
-                       '(* do_iversion NYI *)' -> outfile.putline;
+                    do outfile.indent;
+                       'do_iversion NYI' -> outfile.commentline;
                     #);
                   do_endpoint:
                     (# e: ^idl.endpoint
                     enter e[]
-                    do indent;
-                       '(* do_endpoint NYI *)' -> outfile.putline;
+                    do outfile.indent;
+                       'do_endpoint NYI' -> outfile.commentline;
                     #);
                   do_local:
                     (# l: ^idl.local
                     enter l[]
-                    do indent;
-                       '(* do_local NYI *)' -> outfile.putline;
+                    do outfile.indent;
+                       'keyword found: \'local\'' -> outfile.commentline;
                     #);
                   do_pointer_default:
-                    (# p: ^idl.pointer_default
+                    (# do_ptr_attr:
+                         (# p: ^idl.ptr_attr;
+                            i: ^idl.iid_is;
+                         enter p[]
+                         do (if p.symbol
+                             // idl.ref then
+                                'ref' -> outfile.puttext;
+                             // idl.ptr then
+                                'ptr' -> outfile.puttext;
+                             // idl.unique then
+                                'unique' -> outfile.puttext;
+                             // idl.iid_is then
+                                'iid_is: ' -> outfile.puttext;
+                                (p[]->i[]).getIdentifier 
+                                  -> IdentifierToText -> outfile.puttext;
+                            if);
+                         #);
+                       p: ^idl.pointer_default
                     enter p[]
-                    do indent;
-                       '(* do_pointer_default NYI *)' -> outfile.putline;
+                    do outfile.indent;
+                       outfile.CommentBegin;
+                       'do_pointer_default NYI: ' -> outfile.puttext;
+                       p.getptr_attr->do_ptr_attr;
+                       outfile.CommentEnd;
                     #);
                   do_object:
                     (# o: ^idl.object
                     enter o[]
-                    do indent;
-                       '(* do_object NYI *)' -> outfile.putline;
+                    do outfile.indent;
+                       'keyword found: \'object\'' -> outfile.commentline;
                     #);
                   a: ^idl.interface_attributes;
                enter a[]
@@ -345,59 +354,150 @@ INCLUDE './idlsematt';
                #);
           enter h[]
           do outfile.newline;
-             indent;
+             outfile.indent;
              h.getIdentifier -> IdentifierToText -> outfile.puttext;
              ': ' -> outfile.puttext;
              (if h.getinheritance_specOpt -> isOptionalPresent then
                  h.getinheritance_specOpt -> do_inheritance_spec;
              if);
              outfile.newline;
-             2 -> indent.inc;
-             indent;
-             '(# ' -> outfile.putline;
+             (* The following will be matched with corresponding lines
+              * in end of do_interface_body.
+              *)
+             2 -> outfile.indent.inc;
+             outfile.indent;
+             outfile.PatternBegin;
+             outfile.newline;
+             3 -> outfile.indent.inc;
              h.getinterface_attributes -> do_interface_attributes; 
              outfile.newline;
           #);
         do_interface_body:
-          (# b: ^idl.interface_body;
+          (# do_export_type_dcl:
+               (# e: ^idl.export_type_dcl;
+               enter e[]
+               do outfile.indent;
+                  'do_export_type_dcl NYI' -> outfile.commentline;
+               #);
+             do_export_const_dcl:
+               (# e: ^idl.export_const_dcl;
+               enter e[]
+               do outfile.indent;
+                  'do_export_const_dcl NYI' -> outfile.commentline;
+               #);
+             do_export_except_dcl:
+               (# e: ^idl.export_except_dcl;
+               enter e[]
+               do outfile.indent;
+                  'do_export_except_dcl NYI' -> outfile.commentline;
+               #);
+             do_export_attr_dcl:
+               (# e: ^idl.export_attr_dcl;
+               enter e[]
+               do outfile.indent;
+                  'do_export_attr_dcl NYI' -> outfile.commentline;
+               #);
+             
+             do_export_op_dcl:
+               (# e: ^idl.export_op_dcl;
+                  do_op_dcl:
+                    (# e: ^idl.op_dcl;
+                    enter e[]
+                    do outfile.indent;
+                       e.getIdentifier 
+                         -> IdentifierToText -> outfile.puttext;
+                       ':<' -> outfile.puttext;
+                       outfile.newline;
+                       2 -> outfile.indent.inc;
+                       outfile.indent;
+                       outfile.PatternBegin;
+                       outfile.newline;
+                       3 -> outfile.indent.inc;
+                       outfile.indent;
+                       'do_export_op_dcl NYI' -> outfile.commentline;
+                       3 -> outfile.indent.dec;
+                       outfile.indent;
+                       outfile.PatternEnd;
+                       2 -> outfile.indent.dec;
+                       (*outfile.newline;*)
+                    #);
+               enter e[]
+               do e.getop_dcl -> do_op_dcl;
+               #);
+             do_cpp_quote:
+               (# c: ^idl.cpp_quote;
+               enter c[]
+               do outfile.indent;
+                  c.getString -> StringToText -> outfile.commentline;
+               #);
+             do_export_error:
+               (# e: ^idl.export_error;
+               enter e[]
+               do outfile.indent;
+                  'do_export_error NYI' -> outfile.commentline;
+               #);
+             b: ^idl.interface_body;
+             e: ^idl.exports;
           enter b[]
-          do indent;
-             '(* do_interface_body NYI *)' 
-               -> outfile.putline;
-             indent;
-             '#);' -> outfile.putline;
-             2 -> indent.dec;
+          do b.getexports -> e[];
+             e.newscan
+             (# 
+             do (if current.symbol
+                 // idl.export_type_dcl then
+                    current[] -> do_export_type_dcl
+                 // idl.export_const_dcl then
+                    current[] -> do_export_const_dcl
+                 // idl.export_except_dcl then
+                    current[] -> do_export_except_dcl
+                 // idl.export_attr_dcl then
+                    current[] -> do_export_attr_dcl
+                 // idl.export_op_dcl then
+                    current[] -> do_export_op_dcl
+		 // idl.cpp_quote then
+                    current[] -> do_cpp_quote
+		 // idl.export_error then
+                    current[] -> do_export_error 
+                if);
+             #);     
+             (* The following is matched by the pattern-begin in 
+              * do_interface_header
+              *)
+             3 -> outfile.indent.dec;
+             outfile.indent;
+             outfile.PatternEnd;
+             2 -> outfile.indent.dec;
           #)
      enter i[]
-     do 2 -> indent.inc;
+     do 2 -> outfile.indent.inc;
         i.getinterface_header -> do_interface_header;
         i.getinterface_body -> do_interface_body;
-        2 -> indent.dec;
+        2 -> outfile.indent.dec;
      #);
    
    do_forward_dcl:
      (# f: ^idl.forward_dcl;
      enter f[]
-     do 2 -> indent.inc;
-        indent;
-        '(* forward_dcl ignored: ' -> outfile.puttext;
+     do 2 -> outfile.indent.inc;
+        outfile.indent;
+        outfile.CommentBegin;
+        'forward_dcl ignored: ' -> outfile.puttext;
         f.getIdentifier -> IdentifierToText -> outfile.puttext;
-        ' *)' -> outfile.putline;
-        2 -> indent.dec;
+        outfile.CommentEnd;
+        2 -> outfile.indent.dec;
      #);
    
    do_module: 
      (# m: ^idl.module;
      enter m[]
-     do indent;
-        '(* do_module NYI *)' -> outfile.putline;
+     do outfile.indent;
+        'do_module NYI' -> outfile.commentline;
      #);
    
    do_definition_error: 
      (# d: ^idl.definition_error
      enter d[]
-     do indent;
-        '(* do_definition_error NYI *)' -> outfile.putline;
+     do outfile.indent;
+        'do_definition_error NYI' -> outfile.commentline;
      #);
    
 do
