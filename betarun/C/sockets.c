@@ -126,7 +126,9 @@
 #  define MAXINT INT_MAX
 #endif
 #else
+#ifndef MAXHOSTNAMELEN
 #  define MAXHOSTNAMELEN 1024 /* Value from old Windows32/Sockets.h file */
+#endif
 #endif
 
 #ifdef sun4s
