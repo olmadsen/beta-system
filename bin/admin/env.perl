@@ -22,7 +22,7 @@
 if ($betalib =~ /(r\d+\.\d+\.?\d*)/i) {
     $RELEASE=$1;
 } else {
-    print "env.perl:Fatal: Could not find release-number in BETALIB\n";
+    print "env.perl: Fatal: Could not find release-number in BETALIB\n";
     exit(1);
 }
 
