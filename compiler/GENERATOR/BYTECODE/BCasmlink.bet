@@ -3,6 +3,8 @@ INCLUDE '~beta/basiclib/fileSetExe';
 INCLUDE '~beta/basiclib/pcre';
 INCLUDE '~beta/basiclib/formatio';
 INCLUDE '~beta/containers/list';
+INCLUDE '~beta/containers/dictionary';
+INCLUDE '~beta/basiclib/texthash';
 
 (* verboseLevels:
  * verbose: (# exit 0 #); {* more than default? *}
@@ -12,17 +14,20 @@ INCLUDE '~beta/containers/list';
  *)
 
 --lib: attributes--
-main_in_program:
-  (# exit true #);
-use_java_classpath:
-  (* Use 'java -cp ... for eecuting jar files instead of 'java -jar ...' *)
-  (# exit true #);
-
 unQuote:
   (# t: ^text;
   enter t[]
   do (if ((1 -> t.inxGet) = '"') AND ((t.length -> t.inxGet) = '"') then
          (2, t.length - 1) -> t.sub -> t[];
+     if);
+  exit t[]
+  #);
+tick:
+  (# t: ^text;
+  enter t[]
+  do (if ((1 -> t.inxGet) <> '\'') AND ((t.length -> t.inxGet) <> '\'') then
+         '\''->t.prepend;
+         '\''->t.append;
      if);
   exit t[]
   #);
@@ -66,7 +71,27 @@ AppendExe:
 
 containerlist: list(# #);
 
+textlist: list(# element:: text; #);
+
 --translateasmlinklib: attributes ---
+(* Configuration: *)
+use_java_classpath:
+  (* Use 'java -cp ... for executing jar files instead of 'java -jar ...' *)
+  (# exit true #);
+main_in_program:
+  (# exit true #);
+no_jar_compression:
+  (# exit false #);
+use_directory_map:
+  (* Change directory to jvm directory and add all needed files 
+   * from there using one jar command. 
+   * Instead of using -C <jvm dir> for each class file, which is in the order
+   * of a *factor 10* slower!
+   *)
+  (# exit true #);
+use_relative_jar_paths:
+  (# exit hostIsWindows and (not use_directory_map) #);
+
 isJava:  
   (# exit common.targetMachineId = common.jvm #);
 isIL:    
@@ -80,15 +105,15 @@ applicationbase:
      INNER
   exit path[]
   #);
-jarfilename: applicationbase
-  (# 
-  do '.jar' -> path.append;
-  #);
-no_jar_compression:
-  (# exit false #);
-use_relative_jar_paths:
-  (# exit hostIsWindows #);
-
+is_full_path: booleanValue
+  (# path: ^text
+  enter path[]
+  do (if hostIsWindows then
+         (path[]<>NONE) and (path.lgth>=2) and (path.T[2]=':') -> value
+      else
+         (path[]<>NONE) and (path.lgth>=2) and (path.T[1]='/') -> value
+     if);
+  #)
 --asmlinklib: attributes --
 break_long_line: booleanValue
   (# 
@@ -99,13 +124,75 @@ break_long_line: booleanValue
          asmstate.link_line_length>4096 -> value
      if);
   #);
-  
+jarfilename: applicationbase
+  (# 
+  do '.jar' -> path.append;
+  #);
+jarcommand:
+  (# cmd: ^text;
+     update: @boolean;
+  enter update
+  do '' -> cmd[];
+     (if update then
+         (if verboseLevel <= verboseLevel.verbose then
+             'echo jar -u ...' ->cmd.putline;
+         if);
+         'jar uf' -> cmd.puttext;           
+      else
+         (if verboseLevel <= verboseLevel.verbose then
+             'echo jar -c ...' ->cmd.putline;
+         if);
+         'jar cf' -> cmd.puttext;           
+     if);
+     (if verboseLevel <= verboseLevel.verbose then
+         'v' ->cmd.puttext;
+     if);
+     (if no_jar_compression then
+         '0' -> cmd.put;
+     if);
+     ' '-> cmd.puttext; 
+     jarfilename -> tick -> cmd.puttext; 
+     (if hostIsWindows then
+         ' ^\n\t'->cmd.puttext;
+      else
+         ' \\\n\t' -> cmd.puttext
+     if);
+  exit cmd[]
+  #);  
 
 --asmState:descriptor--
 (# link_line_length: @integer;
    verifylist: @containerlist(# element::text #);
    program_path: ^text;
    jvmregexp: @pcre;
+   
+   directoryMap: @dictionary
+     (* Maps directory (full) paths to lists of class files in that directory *)
+     (# key:: text;
+        keyEqual::
+          (# 
+          do (if hostIsWindows then
+                 right[]->left.equalNCS->value
+              else
+                 right[]->left.equal->value
+             if);
+          #);
+        element:: textlist;
+        honeyM: @honeyMan;
+        init:: (# do honeyM.init; #);
+        hashFunction::(# do k[]-> honeyM.hash -> value #);
+        insert:
+          (# dir, file: ^text;
+             files: ^textlist;
+          enter (dir[], file[])
+          do (if (dir[]->lookup->files[])=NONE then
+                 &textlist[] -> files[];
+                 (dir[], files[]) -> associate;
+             if);
+             file[] -> files.append;
+          #);
+     #);
+
 #)
 --HasSharedLibs:descriptor--
 (#do false -> value #)
@@ -233,9 +320,9 @@ do (if true
            (* change drive *)
            dir.T[1]->AFF.put; ':' -> AFF.put; AFF.newline;
        if);
-       'cd '->AFF.puttext; dir[] -> AFF.putline
+       'cd '->AFF.puttext; dir[] -> quote -> AFF.putline
     // isJava then
-       'cd '->AFF.puttext; dir[] -> AFF.putline
+       'cd '->AFF.puttext; dir[] -> tick -> AFF.putline
     else
        'ChangeDirectory'->TODO
    if);
@@ -463,22 +550,47 @@ do 'ldTmp'->TODO
             #);
         if);
      #);
+   
+   GenerateJarFromDirectories:
+     (# first_done: @boolean;
+        cwd: ^text;
+        AddJarCommand:
+          (# files: ^textlist
+          enter files[]
+          do (if first_done then
+                 true -> jarcommand -> AFF.puttext;
+              else
+                 false -> jarcommand -> AFF.puttext;
+                 true -> first_done;
+             if);
+             files.scan(# do current[] -> tick -> AFF.puttext; cont; #);
+          #);
+     do CurrentDirectory -> cwd[];
+        asmstate.directoryMap.scanAssociations
+        (# 
+        do '\n' -> AFF.puttext;
+           (if ''->k.equal then
+               cwd[] -> ChangeDirectory;
+            else
+               k[] -> ChangeDirectory;
+           if);
+           e[] -> AddJarCommand;
+        #);
+        (if first_done then
+            (* back to where we started *)
+            '\n\n' -> AFF.puttext;
+            cwd[] -> ChangeDirectory;
+        if);
+     #);
         
 do (if true
     // isJava then
-       '\n' -> AFF.puttext;
-       (if verboseLevel <= verboseLevel.verbose then
-           'echo jar -c ...' ->AFF.putline;
+       (if use_directory_map then
+           GenerateJarFromDirectories
+        else
+           '\n' -> AFF.puttext;
+           false -> jarcommand -> AFF.puttext;
        if);
-       'jar cf' -> AFF.puttext;           
-       (if verboseLevel <= verboseLevel.verbose then
-           'v' ->AFF.puttext;
-       if);
-       (if no_jar_compression then
-           '0' -> AFF.put;
-       if);
-       ' '-> AFF.puttext; 
-       jarfilename -> quote -> AFF.puttext; cont;
     // isIL then
        (* Ensure applicationbase directory existence *)
        (# applicationbasedir: @Directory;
@@ -540,37 +652,39 @@ do 'asmlinkdynamic'->TODO
             (1,end-1) -> path.sub -> jvmpath[];
             (end+1, path.length) -> path.sub -> path[]
         if);
-        (if jvmpath[]<>none then
-            (if use_relative_jar_paths then
-                thePathHandler.CurrentDirectory -> pwd[];
-                (if hostIsWindows then
-                    (* Make sure drive letter on windows is same case *)
-                    jvmpath.T[1] -> ascii.upcase -> jvmpath.T[1];
-                    pwd.T[1]     -> ascii.upcase -> pwd.T[1];
-                    jvmpath[] -> slashToBackslash;
-                if);
-                (jvmpath[], pwd[]) -> thePathhandler.localpath -> jvmpath[];
-                
-                (if hostIsWindows then
-                    jvmpath[] -> BackslashToSlash -> jvmpath[];
+        (if use_directory_map then
+            (if jvmpath[]->is_full_path then
+                (jvmpath[], path[])->asmstate.directoryMap.insert;
+             else
+                ('',        path[])->asmstate.directoryMap.insert;
+            if)
+         else
+            (if jvmpath[]<>none then
+                (if use_relative_jar_paths then
+                    thePathHandler.CurrentDirectory -> pwd[];
+                    (if hostIsWindows then
+                        (* Make sure drive letter on windows is same case *)
+                        jvmpath.T[1] -> ascii.upcase -> jvmpath.T[1];
+                        pwd.T[1]     -> ascii.upcase -> pwd.T[1];
+                        jvmpath[] -> slashToBackslash;
+                    if);
+                    (jvmpath[], pwd[]) -> thePathhandler.localpath -> jvmpath[];
+                    (if hostIsWindows then
+                        jvmpath[] -> BackslashToSlash -> jvmpath[];
+                    if);
                 if);
             if);
             ' -C ' -> ldAputtext;
-            jvmpath[] -> quote -> ldAputtext;
-        if);
-        
-        (if false then
-            (* NO - does not work with dot notation for packages here! *)
-            path[] -> slashToDot -> path[]; 
-        if);
-        ' ' -> ldA.putText;
-        (if hostIsWindows then
-            path[] -> quote -> ldAputtext;
-            ' ^\n\t' -> ldAputtext
-         else
-            path[] -> escDollar -> quote -> ldAputtext;
-            ' \\\n\t' -> ldAputtext
-        if);
+            jvmpath[] -> tick -> ldAputtext;
+            ' ' -> ldA.putText;
+            (if hostIsWindows then
+                path[] -> quote -> ldAputtext;
+                ' ^\n\t' -> ldAputtext
+             else
+                path[] -> tick -> ldAputtext;
+                ' \\\n\t' -> ldAputtext
+            if);
+        if);        
      #);
    addDllFile:
      (# lObj: ^text;
@@ -608,23 +722,7 @@ do (*'linkObj: ' -> puttext; lObj[] -> putline;*)
     // isJava then
        (if break_long_line then
            '\n\n' -> ldA.puttext;
-           (if verboseLevel <= verboseLevel.verbose then
-               'echo jar -u ...' ->ldA.putline;
-           if);
-           'jar uf' -> ldA.puttext;
-           (if no_jar_compression then
-               '0' -> ldA.put;
-           if);
-           (if verboseLevel <= verboseLevel.verbose then
-               'v' ->ldA.put;
-           if);
-           ' '-> ldA.put;
-           jarfilename -> quote -> ldA.puttext;
-           (if hostIsWindows then
-               ' ^\n\t'->ldA.puttext;
-            else
-               ' \\\n\t' -> ldA.puttext
-           if);
+           true -> jarcommand -> ldA.puttext;
            0 -> asmstate.link_line_length;
        if);
        lObj[] -> unquote -> path[];
@@ -750,8 +848,8 @@ do (if isJava then AFF.newline; if);
           -> AFF.puttext;
         DirectoryChar -> AFF.put;
         objName[] -> e.path;
-        e.path.name                               -> AFF.puttext; 
-        '.jar '                                   -> AFF.puttext;
+        e.path.name                  -> AFF.puttext; 
+        '.jar '                      -> AFF.puttext;
         (if use_java_classpath then
             (if main_in_program then
                 (if (asmstate.program_path[]<>NONE) and (asmstate.program_path.length>0) then
@@ -772,13 +870,13 @@ do (if isJava then AFF.newline; if);
                 objname[] -> AFF.puttext;
             if);
         if);
-        '>> '                                     -> AFF.puttext;
-        objName[]                                 -> AFF.puttext;
-        (if hostIsWindows then 
-            '.bat'                                -> AFF.putline;
-         else
-            '\nchmod a+x '                        -> AFF.puttext;
-            objName[] -> AFF.puttext;
+        ' >> '                       -> AFF.puttext;
+        objName[]                    -> AFF.puttext;
+        (if hostIsWindows then 	     
+            '.bat'                   -> AFF.putline;
+         else			     
+            '\nchmod a+x '           -> AFF.puttext;
+            objName[]                -> AFF.puttext;
         if);
      #);
 do (if true
