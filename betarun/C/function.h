@@ -40,11 +40,21 @@ extern char *DumpValContents(void);
 extern void DumpIOA(void);
 #endif
 
+/* C/betaerror.c */
+extern char *ErrorMessage(BetaErr);
+#ifdef NEWRUN
+extern void BetaError(BetaErr err, Object *theObj, long *SP, long *thePC);
+#else
+extern void BetaError(BetaErr, Object *);
+#endif
+#ifdef RTDEBUG
+extern void PrintBetaError(BetaErr err);
+#endif /* RTDEBUG */
+
 /* C/outpattern.c */
 extern char *ProtoTypeName(ProtoType *theProto);
 extern long M_Part(ProtoType * proto);
 extern void  DisplayObject(FILE *,Object *,long);
-extern char *ErrorMessage(BetaErr);
 extern int  DisplayBetaStack(BetaErr, Object *, long *, long);
 #ifdef RTDEBUG
 extern void DescribeObject(Object *);
@@ -67,11 +77,6 @@ extern int IsBetaCodeAddrOfProcess(long addr);
 extern void BetaExit(long);
 #ifdef MT
 extern void ThreadExit(void);
-#endif
-#ifdef NEWRUN
-extern void BetaError(BetaErr err, Object *theObj, long *SP, long *thePC);
-#else
-extern void BetaError(BetaErr, Object *);
 #endif
 
 /* C/cbfa.c */
@@ -240,7 +245,6 @@ extern long labelOffset;
 extern void PrintRef(Object *ref);
 extern void PrintProto(ProtoType *proto);
 extern void PrintCodeAddress(long addr);
-extern void PrintBetaError(BetaErr err);
 #endif /* RTDEBUG */
 extern long inBetaHeap(Object *);
 #if defined(MAC)

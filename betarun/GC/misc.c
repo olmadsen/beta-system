@@ -223,7 +223,11 @@ void PrintProto(ProtoType *proto)
 void PrintCodeAddress(long addr)
 {
   char *lab = getLabel(addr);
-  fprintf(output, " <%s+0x%x>", lab, (int)labelOffset);
+  if (labelOffset){
+    fprintf(output, " <%s+0x%x>", lab, (int)labelOffset);
+  } else {
+    fprintf(output, " <%s>", lab);
+  }    
   fflush(output);
 }
 
@@ -248,85 +252,6 @@ void PrintRef(Object *ref)
 	PrintWhichHeap(ref); /* Will most often be "(not in beta heap)" */
       }
     }
-  }
-  fflush(output);
-}
-
-void PrintBetaError(BetaErr err)
-{
-  switch(err){
-  case RefNoneErr:
-    fprintf(output, "RefNoneErr"); break; 
-  case CompTerminatedErr:
-    fprintf(output, "CompTerminatedErr"); break;
-  case RepRangeErr:
-    fprintf(output, "RepRangeErr"); break;      
-  case ArithExceptErr:
-    fprintf(output, "ArithExceptErr"); break;   
-  case RepSubRangeErr:
-    fprintf(output, "RepSubRangeErr"); break;   
-  case RepLowRangeErr:
-    fprintf(output, "RepLowRangeErr"); break;   
-  case RepHighRangeErr:
-    fprintf(output, "RepHighRangeErr"); break;  
-  case StopCalledErr:
-    fprintf(output, "StopCalledErr"); break;    
-  case LVRAfullErr:
-    fprintf(output, "LVRAfullErr"); break;      
-  case ZeroDivErr:
-    fprintf(output, "ZeroDivErr"); break;       
-  case CBFAfullErr:
-    fprintf(output, "CBFAfullErr"); break;      
-  case PascalCallBackErr:
-    fprintf(output, "PascalCallBackErr"); break;
-  case CompCallBackErr:
-    fprintf(output, "CompCallBackErr"); break;  
-  case LeaveBasicCompErr:
-    fprintf(output, "LeaveBasicCompErr"); break;
-  case QuaErr:
-    fprintf(output, "QuaErr"); break;           
-  case QuaOrigErr:
-    fprintf(output, "QuaOrigErr"); break;  
-  case RecursiveAttErr:
-    fprintf(output, "RecursiveAttErr"); break;  
-  case IOAFullErr:
-    fprintf(output, "IOAFullErr"); break;       
-  case FpZeroDivErr:
-    fprintf(output, "FpZeroDivErr"); break;     
-  case FpExceptErr:
-    fprintf(output, "FpExceptErr"); break;      
-#ifdef intel	     
-  case FpStackUflowErr:
-    fprintf(output, "FpStackUflowErr"); break;  
-  case FpStackOflowErr:
-    fprintf(output, "FpStackOflowErr"); break;  
-#endif		     
-  case InterruptErr:
-    fprintf(output, "InterruptErr"); break;     
-  case EmulatorTrapErr:
-    fprintf(output, "EmulatorTrapErr"); break;  
-  case IllegalInstErr:
-    fprintf(output, "IllegalInstErr"); break;   
-  case BusErr:
-    fprintf(output, "BusErr"); break;           
-  case SegmentationErr:
-    fprintf(output, "SegmentationErr"); break;  
-  case AOAtoIOAfullErr:
-    fprintf(output, "AOAtoIOAfullErr"); break;  
-  case AOAtoLVRAfullErr:
-    fprintf(output, "AOAtoLVRAfullErr"); break; 
-  case CTextPoolErr:
-    fprintf(output, "CTextPoolErr"); break;     
-  case AOAtoIOAallocErr:
-    fprintf(output, "AOAtoIOAallocErr"); break; 
-  case UnorderedFval:
-    fprintf(output, "UnorderedFval"); break;    
-  case StackErr:
-    fprintf(output, "StackErr"); break;         
-  case UnknownSigErr:
-    fprintf(output, "UnknownSigErr"); break;    
-  default:
-    fprintf(output, "Unknown Error!"); break;    
   }
   fflush(output);
 }

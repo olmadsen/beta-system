@@ -829,7 +829,7 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
     case VOP_MAIN_PHYSICAL: {
       DEBUG_VALHALLA(fprintf(output,
 			     "VOP_MAIN_PHYSICAL()=0x%x",
-			     getMainPhysical()));
+			     (int)getMainPhysical()));
       valhalla_writeint(opcode);
       valhalla_writeint(getMainPhysical());
       valhalla_socket_flush ();

@@ -6,10 +6,6 @@
 
 #include "beta.h"
 
-#if defined(MAC)
-#include <String.h>
-#include <Files.h>
-#endif
 
 #if 0
 #define TRACE_GROUP(code) code; fflush(output) /* Trace GroupName() */
@@ -179,56 +175,59 @@ GLOBAL(static unsigned long error_pc);
 
 /*************************** ObjectDescription: **********************/
 
-static void ObjectDescription(Object * theObj, long retAddress, char *type, int print_origin)
+static void ObjectDescription(Object *obj, 
+			      long PC, 
+			      char *type, 
+			      int print_origin)
 {
-  signed long    gDist=MAXINT, mDist, activeDist=0;
-  ProtoType * theProto=theObj->Proto;
-  ProtoType * activeProto=theProto;
-  char *groupname;
-  long mPart = M_Part(theProto);
-  long gPart = G_Part(theProto);
+  signed long  gDist=MAXINT, mDist, activeDist=0;
+  ProtoType   *proto=obj->Proto;
+  ProtoType   *activeProto=proto;
+  char        *groupname;
+  long         mPart = M_Part(proto);
+  long         gPart = G_Part(proto);
 
-  if (isMakingDump && (theObj==(Object *)BasicItem)){
+  if (isMakingDump && (obj==(Object *)BasicItem)){
     /* BasicItem will be shown as component */
     TRACE_DUMP(fprintf(output, "(BasicItem ignored - will be shown as comp)\n"));
     return;
   }
 
-  TRACE_CODEENTRY(fprintf(output, "ObjectDescription: initial: theProto=0x%x (%s), addr=0x%x\n", theProto, ProtoTypeName(theProto), retAddress)); 
+  TRACE_CODEENTRY(fprintf(output, "ObjectDescription: initial: proto=0x%x (%s), addr=0x%x\n", proto, ProtoTypeName(proto), PC)); 
 
-  if (retAddress) {
-    /* Find the active prefix level based on the retAddress.
+  if (PC) {
+    /* Find the active prefix level based on the PC.
      * Here we use both the G-entry and the M-entry. 
      * The prefix we are in is the one, where the distance from the 
      * G-entry or M-entry of the corresponding prefix-level
-     * to retAddress is smallest (and positive).
+     * to PC is smallest (and positive).
      */
     
-    gDist  = retAddress - gPart; 
+    gDist  = PC - gPart; 
     TRACE_CODEENTRY(fprintf(output, "initial gPart: 0x%x, gDist: 0x%x\n", gPart, gDist));
-    mDist  = retAddress - mPart;
+    mDist  = PC - mPart;
     TRACE_CODEENTRY(fprintf(output, "initial mPart: 0x%x, mDist: 0x%x\n", mPart, mDist));
     if (gDist < 0) gDist = MAXINT;
     if (mDist < 0) mDist = MAXINT;
     activeDist = (gDist<mDist) ? gDist : mDist;
     
-    while(theProto && (theProto->Prefix != theProto)/* stop at Object# */){
-      theProto = theProto->Prefix;
-      mPart = M_Part(theProto);
-      gPart = G_Part(theProto);
-      TRACE_CODEENTRY(fprintf(output, "ObjectDescription: theProto=0x%x (%s), mPart=0x%x, gPart=0x%x\n", theProto, ProtoTypeName(theProto), mPart, gPart)); 
-      if((retAddress - gPart > 0) &&
-	 (retAddress - gPart <= activeDist)){ 
+    while(proto && (proto->Prefix != proto)/* stop at Object# */){
+      proto = proto->Prefix;
+      mPart = M_Part(proto);
+      gPart = G_Part(proto);
+      TRACE_CODEENTRY(fprintf(output, "ObjectDescription: proto=0x%x (%s), mPart=0x%x, gPart=0x%x\n", proto, ProtoTypeName(proto), mPart, gPart)); 
+      if((PC - gPart > 0) &&
+	 (PC - gPart <= activeDist)){ 
 	/* Use <= to get the LAST level, that has the entry point */ 
-	activeProto = theProto;
-	activeDist  = gDist = retAddress - gPart; 
+	activeProto = proto;
+	activeDist  = gDist = PC - gPart; 
 	TRACE_CODEENTRY(fprintf(output, "gDist: 0x%x\n", gDist));
       }
-      if((retAddress - mPart > 0) &&
-	 (retAddress - mPart <= (long) activeDist)){ 
+      if((PC - mPart > 0) &&
+	 (PC - mPart <= (long) activeDist)){ 
 	/* Use <= to get the LAST level, that has the entry point */ 
-	activeProto = theProto;
-	activeDist  = mDist = retAddress - mPart; 
+	activeProto = proto;
+	activeDist  = mDist = PC - mPart; 
 	TRACE_CODEENTRY(fprintf(output, "mDist: 0x%x\n", mDist));
       }
     }
@@ -241,23 +240,23 @@ static void ObjectDescription(Object * theObj, long retAddress, char *type, int 
     groupname = GroupName((long)activeProto,0);
 #else
     TRACE_GROUP(fprintf(output, "Calling GroupName with return address\n"));
-    groupname = GroupName(retAddress,1);
+    groupname = GroupName(PC,1);
 #endif
   } else {
 #ifdef MAC
-    /* retAddress not known. can't determine if an address is in a given
+    /* PC not known. can't determine if an address is in a given
      * object file on MAC, so we use the prototype instead. 
      */
     TRACE_GROUP(fprintf(output, "Calling GroupName with default activeProto\n"));
     groupname = GroupName((long)activeProto,0);
 #else
-   /* retAddress not known. Use the groupname of theObj's mPart */
+   /* PC not known. Use the groupname of obj's mPart */
     TRACE_GROUP(fprintf(output, "Calling GroupName with default mPart\n"));
     groupname = GroupName(mPart,1);
 #endif
   }
 
-  theProto = theObj->Proto;
+  proto = obj->Proto;
 
   if (c_on_top>0){
     /* c_on_top identifies that there is one or more C-frame(s)*/
@@ -265,9 +264,11 @@ static void ObjectDescription(Object * theObj, long retAddress, char *type, int 
       c_on_top++; /* Print only the first time */
       TRACE_DUMP(fprintf(output, "  top: "));
       fprintf(output, 
-	      "  [ EXTERNAL ACTIVATION PART (address 0x%x) ]\n",
+	      "  [ EXTERNAL ACTIVATION PART (address 0x%x",
 	      (int)error_pc
 	      );
+      DEBUG_CODE(PrintCodeAddress((long)error_pc));
+      fprintf(output, ") ]\n");
 #ifdef sgi
       fprintf(output, "\n");
       fprintf(output, "  (Unable to find start of BETA stack - sorry)\n");
@@ -279,31 +280,39 @@ static void ObjectDescription(Object * theObj, long retAddress, char *type, int 
 
   if (groupname==NULL){
     /* GroupName failed */
-    TRACE_DUMP(fprintf(output, ">>>TraceDump: GroupName failed for object 0x%x, addr 0x%x\n", (int)theObj, (int)retAddress));
+    TRACE_DUMP(fprintf(output, ">>>TraceDump: GroupName failed for object 0x%x, addr 0x%x\n", (int)obj, (int)PC));
     return;
   }  
-  
+
+  DEBUG_CODE({
+    fprintf(output, "  [PC  0x%x", (int)PC);
+    PrintCodeAddress(PC);
+    fprintf(output, ", object 0x%x, proto 0x%x ", (int)obj, (int)proto);
+    PrintProto(proto);
+    fprintf(output, "]\n");
+  });
+
   if (activeDist == gDist)
     fprintf(output,"  allocating %s ", type);
   else
     fprintf(output,"  %s ", type);
   
-  if(theProto==activeProto || /* active prefix */
+  if(proto==activeProto || /* active prefix */
      (!activeProto && 
-      theProto->Prefix &&
-      theProto->Prefix->Prefix==theProto->Prefix)) /* no prefix */
-    fprintf(output,"<%s>", ProtoTypeName(theProto));
+      proto->Prefix &&
+      proto->Prefix->Prefix==proto->Prefix)) /* no prefix */
+    fprintf(output,"<%s>", ProtoTypeName(proto));
   else
-    fprintf(output,"%s", ProtoTypeName(theProto));
+    fprintf(output,"%s", ProtoTypeName(proto));
   
   /* Print chain of prefixes */
-  while(theProto->Prefix &&
-	theProto->Prefix->Prefix != theProto->Prefix){
-    theProto = theProto->Prefix;
-    if( theProto == activeProto )
-      fprintf(output,"<%s>", ProtoTypeName(theProto));
+  while(proto->Prefix &&
+	proto->Prefix->Prefix != proto->Prefix){
+    proto = proto->Prefix;
+    if( proto == activeProto )
+      fprintf(output,"<%s>", ProtoTypeName(proto));
     else
-      fprintf(output,"%s", ProtoTypeName(theProto));
+      fprintf(output,"%s", ProtoTypeName(proto));
   }
   fprintf(output," in %s\n", groupname);
   if (print_origin){
@@ -312,10 +321,10 @@ static void ObjectDescription(Object * theObj, long retAddress, char *type, int 
     
     /** Print Static Environment Object. **/
 
-    theProto = theObj->Proto;
-    if (!activeProto) activeProto = theProto;
+    proto = obj->Proto;
+    if (!activeProto) activeProto = proto;
     if (!activeProto) return;
-    addr=(long)theObj + (4*(long)activeProto->OriginOff);
+    addr=(long)obj + (4*(long)activeProto->OriginOff);
     if (addr) 
       staticObj = *(Object **)addr;
     else
@@ -324,7 +333,7 @@ static void ObjectDescription(Object * theObj, long retAddress, char *type, int 
     if( isSpecialProtoType(staticObj->Proto) ){
       switch (SwitchProto(staticObj->Proto)){
       case SwitchProto(ComponentPTValue):
-	staticObj = (Object *) ComponentItem(theObj);
+	staticObj = (Object *) ComponentItem(obj);
 	break;
       case SwitchProto(DopartObjectPTValue):
 	staticObj = ((DopartObject *)staticObj)->Origin;
@@ -355,13 +364,22 @@ static void ObjectDescription(Object * theObj, long retAddress, char *type, int 
 		);
 	return;
       }
+      proto = staticObj->Proto;
+
+      DEBUG_CODE({
+	fprintf(output, "    [surrounding object 0x%x, proto 0x%x ", 
+		(int)staticObj, 
+		(int)proto);
+	PrintProto(proto);
+	fprintf(output, "]\n");
+      });
+
       fprintf(output,"    -- ");
-      theProto = staticObj->Proto;
-      fprintf(output,"%s", ProtoTypeName(theProto));
-      while(theProto->Prefix &&
-	    theProto->Prefix->Prefix != theProto->Prefix){
-	theProto = theProto->Prefix;
-	fprintf(output,"%s", ProtoTypeName(theProto));
+      fprintf(output,"%s", ProtoTypeName(proto));
+      while(proto->Prefix &&
+	    proto->Prefix->Prefix != proto->Prefix){
+	proto = proto->Prefix;
+	fprintf(output,"%s", ProtoTypeName(proto));
       }
       fprintf(output, " in %s\n", groupname);
     } else {
@@ -385,12 +403,12 @@ static void ObjectDescription(Object * theObj, long retAddress, char *type, int 
 
 GLOBAL(static Object *lastDisplayedObject)=0;
 
-void DisplayObject(output,theObj,retAddress)
-     FILE *   output;       /* Where to dump object */
-     Object * theObj;       /* Object to display */
-     long        retAddress;   /* Address theObj was left from (jsr), i.e. when 
-				* it was current object.
-				*/
+void DisplayObject(FILE   *output, /* Where to dump object */
+		   Object *obj, /* Object to display */
+		   long    PC      /* Address obj was left from (jsr), 
+				    * i.e. when it was current object.
+				    */
+		   )
 { 
   Object * theItem;
 
@@ -400,15 +418,15 @@ void DisplayObject(output,theObj,retAddress)
      */
     if (lastDisplayedObject &&
 	((lastDisplayedObject->Proto)==(ComponentPTValue)) 
-	&& (lastDisplayedObject != theObj)){
+	&& (lastDisplayedObject != obj)){
       fprintf(output, "\n"); fflush(output);
     }
   }
 
-  if( isSpecialProtoType(theObj->Proto) ){
-    switch (SwitchProto(theObj->Proto)){
+  if( isSpecialProtoType(obj->Proto) ){
+    switch (SwitchProto(obj->Proto)){
     case SwitchProto(ComponentPTValue):
-      theItem = (Object *) ComponentItem(theObj);
+      theItem = (Object *) ComponentItem(obj);
       if (theItem == (Object *) BasicItem) {
 	if (!basic_dumped){
 	  fprintf(output,
@@ -420,21 +438,21 @@ void DisplayObject(output,theObj,retAddress)
 	  }
 	}
       } else {
-	ObjectDescription(theItem, retAddress, "comp", 1);
+	ObjectDescription(theItem, PC, "comp", 1);
       }
       break;
     case SwitchProto(DopartObjectPTValue):
-      theItem = ((DopartObject *)theObj)->Origin;
+      theItem = ((DopartObject *)obj)->Origin;
       /* Check whether theItem is actually an item or is the
        * body part of a component.
        */
       if (IsComponentItem(theItem)) {
 	DisplayObject(output, 
 		      (Object *)EnclosingComponent(theItem),
-		      retAddress);
+		      PC);
 	return;
       } else {
-	ObjectDescription(theItem, retAddress, "item", 1);
+	ObjectDescription(theItem, PC, "item", 1);
       }
       break;
     case SwitchProto(StructurePTValue):
@@ -463,91 +481,12 @@ void DisplayObject(output,theObj,retAddress)
       break;
     } 
   }else{    
-    ObjectDescription(theObj, retAddress, "item", 1);
+    ObjectDescription(obj, PC, "item", 1);
   }
 
-  if (isMakingDump) lastDisplayedObject=theObj;
+  if (isMakingDump) lastDisplayedObject=obj;
 }
 
-/******************** ErrorMessage ******************/
-
-static const struct errorEntry 
-{
-  BetaErr  errorNumber;
-  char    *errorMessage;
-} 
-errorTable[] = 
-{
-  { RefNoneErr,        "Reference is none" },
-  { CompTerminatedErr, "Executing terminated component" },
-  { RepRangeErr,       "Repetition index out of range" },
-  { ArithExceptErr,    "Arithmetic exception" },
-  { RepSubRangeErr,    "Repetition subrange out of range" },
-  { RepLowRangeErr,    "Repetition subrange out of range (low)" },
-  { RepHighRangeErr,   "Repetition subrange out of range (high)" },
-  { StopCalledErr,     "Stop is called" },
-  { LVRAfullErr,       "LVRA is full" },
-  { ZeroDivErr,        "Integer division by zero" },
-  { CBFAfullErr,       "Call back function area (CBFA) is full" },
-  { PascalCallBackErr, "Call back Pascal function has wrong return size" },
-  { CompCallBackErr,   "Suspending component involving call backs" },
-  { LeaveBasicCompErr, "Illegal leave/restart" },
-  { QuaErr,            "Qualification error in reference assignment" },
-  { QuaOrigErr,        "Qualification error in reference assignment; origins differ" },
-  { RecursiveAttErr,   "Attach of component that is already attached" },
-  { IOAFullErr,        "IOA heap is full" },
-  { FpZeroDivErr,      "Floating Point division by zero" },
-  { FpExceptErr,       "Floating Point exception" },
-#ifdef intel
-  { FpStackUflowErr,   "Floating Point stack underflow" },
-  { FpStackOflowErr,   "Floating Point stack overflow" },
-#endif
-#ifdef RTDEBUG
-  { InterruptErr,      "User Interrupt" },
-#endif
-  { EmulatorTrapErr,   "Emulator trap" },
-  { IllegalInstErr,    "Illegal instruction" },
-  { BusErr,            "Bus error" },
-#ifdef UNIX
-  { SegmentationErr,   "Segmentation fault" },
-#else
-  { SegmentationErr,   "Access violation" },
-#endif /* UNIX */
-  { AOAtoIOAfullErr,   "AOAtoIOAtable is full" },
-  { AOAtoLVRAfullErr,  "AOAtoLVRAtable is full" },
-  { CTextPoolErr,      "Text parameter to C routine too big (max. 1000 bytes)" },
-  { AOAtoIOAallocErr,  "Failed to allocate AOAtoIOAtable" },
-  { UnorderedFval,     "Unordered Floating Point value in comparison" },
-#ifdef MT
-  { StackErr,          "Component Stack Overflow" },
-#else
-  { StackErr,          "Stack Overflow" },
-#endif
-#ifdef UNIX
-  { UnknownSigErr,     "Unknown signal" },
-#else
-  { UnknownSigErr,     "Unknown exception" },
-#endif
-  { 0, 0 }
-  };
-
-GLOBAL(static char UnknownError[25]);
-
-char *ErrorMessage(BetaErr errorNumber)
-{
-  long  index = 0;
-  
-  while( errorTable[index].errorNumber != 0){
-    if( errorNumber == errorTable[index].errorNumber){
-      BetaErrorString = errorTable[index].errorMessage; /* For Valhalla */
-      return errorTable[index].errorMessage;
-    }
-    index++;
-  }
-  sprintf(UnknownError, "Unknown error (%d)", (int)errorNumber);
-  BetaErrorString = UnknownError;
-  return UnknownError;
-}
 
 #ifdef NEWRUN
 
@@ -1159,12 +1098,12 @@ int DisplayBetaStack(BetaErr errorNumber,
 	
 	if (nextCompBlock == 0)
 	  { /* We reached the bottom */
-	    DisplayObject(output, (Object *)theAR->i1, 0); /* AttBC */
+	    DisplayObject(output, (Object *)theAR->i1, 0 /*PC*/); /* AttBC */
 	    fprintf(output, "\n"); fflush(output);
 	    break;
 	  }
 	
-	DisplayObject(output, (Object *) theAR->i0, 0); /* Att */
+	DisplayObject(output, (Object *) theAR->i0, 0 /*PC*/); /* Att */
 	
 	continue;
       }

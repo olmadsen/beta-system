@@ -5,9 +5,12 @@
  *
  * Sets up a fd to nm output and reads the nametable from this descriptor.
  * 
- * This file is used by both the debugger and the dynamic linker.
+ * This file is used by
+ *   - debugger 
+ *   - dynamic linker.
+ *   - betarun debug labels
  * The debugger needs only the text (code) labels, whereas the dynamic
- * linker needs most symbols.
+ * linker and betarun needs most symbols.
  */
 
 #ifdef nti_gnu
