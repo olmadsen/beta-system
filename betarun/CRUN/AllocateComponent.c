@@ -44,6 +44,10 @@ ParamOriginProto(struct Component *,AlloC)
 
     GCable_Exit(1);
 
+#ifdef sparc
+    return_in_i1(comp);
+#else
     RETURN(comp);
+#endif
 }
 

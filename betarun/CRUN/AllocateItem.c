@@ -42,7 +42,11 @@ ParamOriginProto(struct Item *,AlloI)
     Ck(item);
 
     GCable_Exit(1);    
+#ifdef sparc
+    return_in_i1(item);
+#else
     RETURN(item);
+#endif
 }
 
 
@@ -76,6 +80,11 @@ ParamOriginProto(struct Item *,AlloH)
 
     Ck(item);
 
-    GCable_Exit(1);    
+    GCable_Exit(1);  
+
+#ifdef sparc
+    return_in_i1(item);
+#else
     RETURN(item);
+#endif
 }

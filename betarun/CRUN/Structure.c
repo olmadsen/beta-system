@@ -26,7 +26,11 @@ ParamOriginProto(struct Structure *, AlloS)
   newStruct->iOrigin = origin;
   newStruct->iProto = proto;
   
+#ifdef sparc
+    return_in_i1(newStruct);
+#else
   RETURN(newStruct);
+#endif
 }
 
 #ifdef sparc
@@ -131,7 +135,12 @@ ParamStruc(struct Item *, AlloSI)
   Protect(struc, 
 	  ss = AlloI(cast(Object) struc->iOrigin, struc->iProto));
 #endif
+
+#ifdef sparc
+  return_in_i1(ss);
+#else
   RETURN(ss);
+#endif
 }
 
 ParamStruc(struct Component *, AlloSC)
@@ -153,7 +162,12 @@ ParamStruc(struct Component *, AlloSC)
   Protect(struc, 
 	  ss = AlloC(cast(Object) struc->iOrigin, struc->iProto));
 #endif
+
+#ifdef sparc
+  return_in_i1(ss);
+#else
   RETURN(ss);
+#endif;
 }    
 
 long eqS(ref(Structure) arg1, ref(Structure) arg2)
