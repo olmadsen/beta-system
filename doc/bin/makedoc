@@ -366,10 +366,10 @@ sub print_header
 {
     local ($title, $prev, $prevtip, $next, $nexttip, $up1) = @_;
 
-    print_head_begin($title, 0);
+    print_head_begin($title, $up1);
     &print_rel_link("next", $next) if ($next ne "");
     &print_rel_link("prev", "$prev") if ($prev ne "");
-    &print_std_rel_links(0);
+    &print_std_rel_links($up1);
 
     print<<EOT;
 </HEAD>
@@ -679,7 +679,7 @@ sub parse_special_tags
 	    push (@headings, "$heading\@$htmlfile\#H${h}_$num_h[$h]");
 	} elsif ($match =~ m%\</H[1-6]\>%i){
 	    # Found heading end
-	    print STDERR "***Unmatched end-of-heading? ($&)\n";
+	    print STDERR "src/$htmlfile: ***Unmatched end-of-heading? ($&)\n";
 	    $done .= $match;
 	} elsif ($match =~ m%\<BETA%i){
 	    # Found BETA start
@@ -690,23 +690,10 @@ sub parse_special_tags
 	    if ($after =~ m%^([^>]*)\>%si){
 		# Matched <BETA xxx>
 		$attributes = $1; # xxx
-		#print STDERR "<BETA> attributes:'$attributes'\n";
+		#print STDERR "src/$htmlfile: <BETA> attributes:'$attributes'\n";
 		$after = $';
 	    }
 	    # Handle attributes
-	    if ($attributes =~ m%SRC\s*=\s*\"([^\"]+)\"%i){
-		$beta=&read_file(&expand($1));
-		# eat closing tag, if present
-		if ($after =~ m%^\s*\<\/BETA\>%si){
-		    $after = $';
-		}
-	    } elsif ($attributes =~ m%SRC\s*=\s*([^\s]+)%i){
-		$beta=&read_file(&expand($1));
-		# eat closing tag, if present
-		if ($after =~ m%^\s*\<\/BETA\>%si){
-		    $after = $';
-		}
-	    }
 	    if ($attributes =~ m%CAP\s*=\s*\"([^\"]+)\"%i){
 		$caption = $1;
 	    } elsif ($attributes =~ m%CAP\s*=\s*([^\s]+)%i){
@@ -723,19 +710,25 @@ sub parse_special_tags
 		$list=1;
 		$listcap = $1;
 	    }
-	    # Handle stuff between until (and including) possible end-tag
-	    if ($after =~ m%^(.*)\<\/BETA\>%si){
-		# Matched <BETA xxx>...</BETA>
-		if ($beta ne ""){
-		    print STDERR "<BETA> tag with both SRC attribute and code met.\n";
-		    print STDERR "Ignoring code between tags.\n";
-		} else {
-		    $beta = $1; # ...
+	    if ($attributes =~ m%SRC\s*=\s*\"([^\"]+)\"%i){
+		$beta=&read_file(&expand($1));
+	    } elsif ($attributes =~ m%SRC\s*=\s*([^\s]+)%i){
+		$beta=&read_file(&expand($1));
+	    }
+	    if ($beta ne ""){
+		# Found SRC
+		# eat closing tag, if present
+		if ($after =~ m%^\s*\<\/BETA\>%si){
+		    $after = $';
 		}
-		$after = $';
 	    } else {
-		if ($beta eq ""){
-		    printf STDERR "<BETA> with no end-tag met.\n";
+		# No SRC. Handle stuff until (and including) end-tag
+		if ($after =~ m%^(.*)\<\/BETA\>%si){
+		    # Matched <BETA xxx>...</BETA>
+		    $beta = $1; # ...
+		    $after = $';
+		} else {
+		    printf STDERR "src/$htmlfile: <BETA> with no SRC and no end-tag met.\n";
 		}
 	    }
 	    # Generate output into $done variable
@@ -743,12 +736,15 @@ sub parse_special_tags
 		$num_beta++;
 		if ($listcap eq ""){
 		    if ($caption eq ""){
-			print STDERR "<BETA> tag with LIST attribute and no caption found.\n";
+			print STDERR "src/$htmlfile: <BETA> tag with LIST attribute and no caption found.\n";
 			print STDERR "Using \"Program " . $num_beta . "\" for caption.\n";
 			$listcap = $caption = "Program " . $num_beta;
 		    } else {
 			$listcap = $caption;
 		    }
+		}
+		if ($caption eq ""){
+		    $caption = $listcap;
 		}
 		$listcap = "" . $num_beta . "&nbsp;" . $listcap;
 		$caption = "Program " . $num_beta . ":&nbsp;" . $caption;
@@ -770,20 +766,20 @@ sub parse_special_tags
 	    $done .= "</PRE>\n";
 	} elsif ($match =~ m%\</BETA\>%i){
 	    # Found BETA end
-	    print STDERR "***Unmatched end-of-beta? (</BETA>)\n";
+	    print STDERR "src/$htmlfile: ***Unmatched end-of-beta? (</BETA>)\n";
 	    $done .= "</PRE>\n";
 	} elsif ($match =~ m%\<INX\>%i){
 	    # Found INX start
 	    local $entry = "";
-	    #print STDERR "INX start\n";
+	    #print STDERR "src/$htmlfile: INX start\n";
 	    $num_inx++;
 	    # Start anchor to refer from index
 	    $done .= "<A NAME=\"INX_$num_inx\">";
 	    if ($after =~ m%(.*)\</INX\>%i){
 		$entry = $1;
-		#print STDERR "INX entry: $entry\n";
+		#print STDERR "src/$htmlfile: INX entry: $entry\n";
 		if ($entry eq ""){
-		    print STDERR "Empty index entry? <<INX></INX>)\n";
+		    print STDERR "src/$htmlfile: Empty index entry? <<INX></INX>)\n";
 		}
 		$done .= $entry . "</A>";
 		$after = $';
@@ -799,7 +795,7 @@ sub parse_special_tags
 	    $done .= $match;
 	} elsif ($match =~ m%\</FIG\>%i){
 	    # Found FIG end
-	    print STDERR "***Unmatched end-of-inx? (</INX>)\n";
+	    print STDERR "src/$htmlfile: ***Unmatched end-of-inx? (</INX>)\n";
 	    $done .= $match;
 	} else {
 	    # Hmmm, error? Should not happen.
