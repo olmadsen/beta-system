@@ -42,7 +42,7 @@ if (lastmod.getYear() >= 98 )
 else
     century = "20";
      
-document.writeln("[Last modified: " + day_names[lastmod.getDay()] + " " 
+document.writeln("[Modified: " + day_names[lastmod.getDay()] + " " 
 		 + month_names[lastmod.getMonth()] + " " + sup_date
 		 + " " + century + lastmod.getYear() 
 		 + " at " + hours + ":" + minutes

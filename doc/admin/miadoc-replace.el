@@ -1,20 +1,20 @@
-(defun miadoc-replace1 (firstfilename)
-  (interactive "sFirst WebMaker generated file: " )
+(defun miadoc-replace1 (basefilename)
+  (interactive "sWebMaker base filename: " )
   (set-variable 'tags-file-name nil)
 
-  (let ((case-replace t))
-    (message "Replacing first file name with index.html")
-    (tags-query-replace firstfilename "index.html" nil)
+  (let ((case-replace t) (match (concat basefilename "-[12].html")) )
+    (message "Replacing first and second file name with index.html")
+    (tags-query-replace match "index.html" nil)
 ))
 
-(defun miadoc-replace2 (secondfilename)
-  (interactive "sSecond WebMaker generated file: " )
-  (set-variable 'tags-file-name nil)
-
-  (let ((case-replace t))
-    (message "Replacing %s name with contents.html" secondfilename)
-    (tags-query-replace secondfilename "contents.html" nil)
-))
+;(defun miadoc-replace2 (secondfilename)
+;  (interactive "sSecond WebMaker generated file: " )
+;  (set-variable 'tags-file-name nil);;;
+;
+;  (let ((case-replace t))
+;    (message "Replacing %s name with contents.html" secondfilename)
+;    (tags-query-replace secondfilename "contents.html" nil)
+;))
 
 (defun miadoc-replace3 (lastfilename)
   (interactive "sLast WebMaker generated file: " )
