@@ -12,7 +12,7 @@ void glLineWidth(float width );
 void glPolygonOffset(float,float);
 void glClearAccum( float red, float green, float blue,float alpha );
 void glAccum( int op, float value );
-void glFrumstum(double left,double right,double bottom,double top,double near,double far);
+void glFrumstum(double left,double right,double bottom,double top,double near_,double far_);
 void glVertex4d(double,double,double,double); 
 void glColor4d(double,double,double,double);
 void glTexCoord1f(float);
@@ -84,9 +84,9 @@ wrapglOrthofirst(double left,double right,double bottom)
   wrapbottom=bottom;
 }
 
-wrapglOrthosecond(double top,double near,double far)
+wrapglOrthosecond(double top,double near_,double far_)
 {
-  glOrtho(wrapleft,wrapright,wrapbottom,top,near,far);
+  glOrtho(wrapleft,wrapright,wrapbottom,top,near_,far_);
 }
 
 
@@ -130,9 +130,9 @@ wrapglFrustumfirst(double left,double right,double bottom)
   wrapbottom=bottom;
 }
 
-wrapglFrustumsecond(double top,double near,double far)
+wrapglFrustumsecond(double top,double near_,double far_)
 {
-  glFrustum(wrapleft,wrapright,wrapbottom,top,near,far);
+  glFrustum(wrapleft,wrapright,wrapbottom,top,near_,far_);
 }
 
 wrapglRotatedfirst(double angle,double x)
