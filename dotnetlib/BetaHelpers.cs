@@ -16,23 +16,23 @@ public class BetaHelpers
   }
 
   // static methods
-  public static long int2long(int i){
+  public static long Int2Long(int i){
     // Needed because of missing int64 arithmetic in beta
     return (long)i;
   }
-  public static int  long2int(long j){
+  public static int  Long2Int(long j){
     // Needed because of missing int64 arithmetic in beta
     return (int)j;
   }
 
-  public static long modtimeToFileTime(int modtime){
+  public static long ModTimeToFileTime(int modtime){
     // Convert modtime (seconds since 1970/1/1) to filetime
     // Needed because of missing int64 arithmetic in beta
     long filetime = ((long)10000000*(long)modtime)+zero;
     // Console.WriteLine("modtimeToFileTime:    " + modtime + " ->\n                      " + filetime);
     return filetime;
   }
-  public static int  fileTimeToModtime(long filetime){
+  public static int  FileTimeToModtime(long filetime){
     // Convert filetime to modtime (seconds since 1970/1/1)
     // Needed because of missing int64 arithmetic in beta
     int modtime = (int)((filetime-zero)/(long)10000000);
@@ -40,12 +40,12 @@ public class BetaHelpers
     return modtime;
   }
 
-  public static bool diskentryHasAttribute(FileSystemInfo info, int att){
+  public static bool DiskEntryHasAttribute(FileSystemInfo info, int att){
     // Needed because of missing bit-operations for enumerations (implemented as references)
     return (info.Attributes & ((FileAttributes)att)) != 0;
   }
 
-  public static string formatReal(string format, double r){
+  public static string FormatReal(string format, double r){
     // Needed because boxing not implemented in beta
     CultureInfo old_culture = Thread.CurrentThread.CurrentCulture;
     Thread.CurrentThread.CurrentCulture = new CultureInfo("en-us");
@@ -79,5 +79,12 @@ public class BetaHelpers
     for (int i=0; i<range; i++){
       R[i] = (sbyte)Rx[i];
     }
+  }
+
+  public static string FormatModTime(int modtime){
+    // Needed since DateTimeFormatInfo implements multiple interfaces, which is not
+    // correctly supported by nbeta; see sysutils/private/time_clrbody.bet
+    DateTime dt = DateTime.FromFileTime(ModTimeToFileTime(modtime));
+    return dt.ToString("ddd MMM dd HH':'mm':'ss yyyy", DateTimeFormatInfo.InvariantInfo);
   }
 }
