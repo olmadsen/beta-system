@@ -327,8 +327,10 @@ static inline unsigned long bletch(unsigned long x)
 
 extern void HandleCB();
 
+#include <sys/cache.h>
+
 void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
-{   register unsigned long hcb;
+{   register unsigned long hcb /* , savedSR0 */;
 
     if (!theStruct) return (void *)0 /* NULL function pointer given to C */;
 
@@ -364,17 +366,42 @@ void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
     CBFATop->code[6] = (0xd<<26)|(28<<21)|(28<<16)
       |bletch((unsigned long)&CBFATop->theStruct & 0x7ff);
 
-    /* now flush the code from the data cache */
-    asm volatile ("fdc\t0(0,%0)" : /* no out */
-                  : "r" (&CBFATop->theStruct));
-    asm volatile ("fdc\t0(0,%0)" : /* no out */
-                  : "r" (&CBFATop->code[0]));
-    asm volatile ("fdc\t0(0,%0)" : /* no out */
-                  : "r" (&CBFATop->code[2]));
-    asm volatile ("fdc\t0(0,%0)" : /* no out */
-                  : "r" (&CBFATop->code[4]));
-    asm volatile ("fdc\t0(0,%0)\n\tsync" : /* no out */
-                  : "r" (&CBFATop->code[6]));
+    /* Now flush the code from the data cache */
+
+    /* Save SR0 */
+    /* asm volatile ("mfsp %%sr0,%0" : "=r" (savedSR0)); */
+
+    /* Extract SID from address */
+    asm volatile ("ldsid\t(0,%0),%%r1" : : "r" (&CBFATop->code[0]) );
+
+    /* SID -> SR0 */
+    asm volatile ("mtsp\t%r1,%sr0"); 
+
+    /* flush data cache and synchronize */
+    asm volatile ("fdc\t0(0,%0)" : : "r" (&CBFATop->code[0]));
+    asm volatile ("fdc\t0(0,%0)" : : "r" (&CBFATop->code[2]));
+    asm volatile ("fdc\t0(0,%0)" : : "r" (&CBFATop->code[4]));
+    asm volatile ("fdc\t0(0,%0)" : : "r" (&CBFATop->code[6]));
+    asm volatile ("sync");
+
+    /* Flush instruction cache and synchronize */
+    asm volatile ("fic\t0(%%sr0,%0)" : : "r" (&CBFATop->code[0]));
+    asm volatile ("fic\t0(%%sr0,%0)" : : "r" (&CBFATop->code[2]));
+    asm volatile ("fic\t0(%%sr0,%0)" : : "r" (&CBFATop->code[4]));
+    asm volatile ("fic\t0(%%sr0,%0)" : : "r" (&CBFATop->code[6]));
+    asm volatile ("sync");
+
+    /* Assure cache has been flushed */
+    asm volatile ("nop");
+    asm volatile ("nop");
+    asm volatile ("nop");
+    asm volatile ("nop");
+    asm volatile ("nop");
+    asm volatile ("nop");
+    asm volatile ("nop");
+
+    /* Restore SR0 */
+    /* asm volatile("mtsp\t%0,%%sr0" : : "r" (savedSR0)); */
 
     ++CBFATop;
 
@@ -397,7 +424,7 @@ long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
 
     /* Push CallBackFrame. */
     cbf.next    = ActiveCallBackFrame;
-#ifndef REFSTACK
+#ifndef UseRefStack
     cbf.betaTop = BetaStackTop;
 #endif
     /* cbf.tmp     = (long) getSPReg();  so the GC can find it */
@@ -413,6 +440,7 @@ long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
     setCallReg(theStruct->iProto);
     setOriginReg(theStruct->iOrigin);
     theObj = AlloI();
+    Ck(theObj);
 
     /* This is how the arguments will look to the callee:
      * The first 4 integer arguments are in registers 26 - 23 as always.
@@ -420,6 +448,12 @@ long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
      * (ap) = arg#4, -4(ap) = arg#5,...
      * Unfortunately this doesn't work for doubles :-(
      */
+
+#ifdef RTVALHALLA
+    if (valhallaIsStepping)
+      ValhallaOnProcessStop ((long *) theObj->Proto->CallBackRoutine,0,0,0,RTS_CBFA);
+#endif
+
     /* setThisReg(0); To prevent pushing of garbage in the CallBackRoutine.
      * No longer necessary since registers are now cleared in 
      * SnakeAdditions.S (HandleCB). SBRANDT 25/7/94 */
@@ -430,7 +464,7 @@ long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
 
     /* Pop CallBackFrame */
     ActiveCallBackFrame = cbf.next;
-#ifndef REFSTACK
+#ifndef UseRefStack
     BetaStackTop        = cbf.betaTop;
 #endif
 

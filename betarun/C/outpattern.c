@@ -179,15 +179,6 @@ return "(ppc)";
   return ""; 
 }
 
-#ifdef valhallaRT
-extern int valhallaOnError (long,ref(Object),long*,long*,long);
-/*    long errorNumber;
- *    ref(Object) theObj;
- *    long* thePC;
- *    long* theSP;
- *    long theSignal; */
-#endif
-
 static ptr(char) ProtoTypeName(theProto)
      ref(ProtoType) theProto;
 {
@@ -835,15 +826,20 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
   char *execname, *localname;
   
 #ifdef RTVALHALLA
-  if (valhallaID)
+  if (valhallaID){
+    printf("DisplayBetaStack: calling Valhalla\n");
 #ifdef UseRefStack
-    switch (ValhallaOnProcessStop (thePC,RefSP,theObj,theSignal,errorNumber)){
+    switch (ValhallaOnProcessStop (thePC,RefSP,theObj,theSignal,errorNumber))
 #else
-    switch (ValhallaOnProcessStop (thePC,StackEnd,theObj,theSignal,errorNumber)){
+    switch (ValhallaOnProcessStop (thePC,StackEnd,theObj,theSignal,errorNumber))
 #endif
-    case CONTINUE: return 1;
-    case TERMINATE: break;
-    }
+      {
+      case CONTINUE: return 1;
+      case TERMINATE: break;
+      }
+  } else {
+    printf("DisplayBetaStack: valhallaID is 0\n");
+  }
 #else
   theSignal = 0; 
   /* Just to avoid a compiler warning if RTVALHALLA is not defined. */ 
@@ -861,15 +857,6 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
     exit(1);
   }
   isMakingDump=1;
-
-#ifdef valhallaRT
-  if (valhallaTest)
-    if (valhallaOnError (errorNumber,theObj,thePC,stackEnd,theSignal))
-      return 1;
-#else
-  theSignal = 0; 
-  /* Just to avoid a compiler warning if valhallaRT is not defined. */ 
-#endif  
 
  c_on_top = 0;
 
@@ -1011,6 +998,12 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 	/* The reference is tagged: Should appear in beta.dump */
 	theObj = (struct Object *)((unsigned)*theCell & ~1);
 	PC = 0; /* No way to tell the PC ?? */
+#if 0 /* not yet */
+#ifdef RTVALHALLA
+	theCell--;
+	PC = (long *)*theCell
+#endif
+#endif
 	if(theObj && isObject(theObj)) {
 	  /* Hack: Check if theObj is inlined in a component */
 	  register struct Object *theComp;

@@ -54,6 +54,12 @@ void ProcessRefStack(size, bottom)
     } else {
       i = 0;
     }
+#ifdef RTVALHALLA
+    /* If i=1 then the cell is tagged, and the previous cell that was
+     * processed was actually a return address. This can newer be confused with
+     * a BETA object, so it does not matter except for speed.
+     */
+#endif
     DEBUG_IOA(fprintf(output, "ProcessRefStack: 0x%08x: 0x%08x\n", (int)theCell, (int)(*theCell)));
     theObj = *theCell;
     if(theObj && (theObj!=(struct Object *)ExternalMarker) && 

@@ -57,6 +57,40 @@ extern void CallLazyItem ();
 #endif
 
 
+#ifdef RTVALHALLA
+#ifdef hppa
+/* Stupid very machine dependent function needed to
+ * find the PC when BetaError has been called.
+ * FrameSizes must be checked after each code change! (:-(
+ */
+
+#define BetaErrorFrameSize 0x80
+#define RefNoneFrameSize 0x80
+#define HandleIndexErrFrameSize 0x80
+
+static inline long GetBetaPC(long errno)
+{
+  register long PC, SP;
+  asm volatile ("COPY\t%%sp, %0" : "=r" (SP)); 
+  SP = (SP-BetaErrorFrameSize); /* SP in function that called BetaError */
+  switch(errno){
+  case RepRangeErr:
+    PC = *(long *)(SP-HandleIndexErrFrameSize-0x14);
+    break;
+  case RefNoneErr:
+    PC = *(long *)(SP-RefNoneFrameSize-0x14);
+    break;
+  default:
+    printf("GetBetaPC: error not yet handled\n");
+    PC=0;
+  }
+  return PC & ~3 /* The lower bits are not always cleared in the rp register */;
+}
+#endif /* hppa */
+#endif /* RTVALHALLA */
+
+
+
 void BetaError(errorNo, theObj)
      long errorNo;
      ref(Object) theObj;
@@ -75,13 +109,15 @@ void BetaError(errorNo, theObj)
 #endif
 
 #ifdef hppa
-      thePC = 0;
-#ifdef REFSTACK
-      /* RefSP is used */
+      thePC=(long *)GetBetaPC(errorNo);
+      fprintf(output, "BetaError %d: PC is 0x%x\n", (int)errorNo, (int)thePC);
+#ifdef UseRefStack
+      /* RefSP is used - no need to do anything */
 #else
 #error Find out Stack End for hppa without Reference Stack
-#endif /* REFSTACK */
+#endif /* UseRefStack */
 #endif /* hppa */
+
 #ifdef crts
       getret(thePC);
 #endif

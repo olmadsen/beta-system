@@ -154,11 +154,11 @@ void BetaSignalHandler(sig, code, scp, addr)
 
 #ifdef hppa
   PC = 0;
-#ifdef REFSTACK
+#ifdef UseRefStack
   /* StackEnd not used */
-#else /* REFSTACK */
+#else /* UseRefStack */
   StackEnd = (long *) scp->sc_sp;
-#endif /* REFSTACK */
+#endif /* UseRefStack */
 #else /* not hppa, i.e. hpux8 */
   PC = (long *) scp->sc_pc;
   StackEnd = (long *) scp->sc_sp;
@@ -351,6 +351,10 @@ void BetaSignalHandler(sig, code, scp, addr)
       todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
     case SIGSEGV:
       todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
+#ifdef RTDEBUG
+    case SIGINT: /* Interrupt */
+      todo=DisplayBetaStack( InterruptErr, theObj, PC, sig); break;
+#endif   
     default:
       todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);
   }
