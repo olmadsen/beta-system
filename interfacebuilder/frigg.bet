@@ -2,13 +2,91 @@ ORIGIN '~beta/basiclib/v1.6/basicsystemenv';
 INCLUDE '~beta/guienv/v1.6/guienvsystemenv'
         'auxfriggapplication'
         'additional/additional'
-        'graphicaleditor/private/graphicaleditorprivate';
-BODY '~beta/editor/v5.2/private/compiler';
+        'graphicaleditor/private/graphicaleditorprivate'
+        '~beta/editor/v5.2/private/compiler'
+        'dynenv';
 BODY '~beta/editor/v5.2/private/nouser';
 -- program: Descriptor --
 systemenv
   (#
-     frigg: @auxFriggApplication;
+     dyn: @dynenv;
+     initDynenv: @|THIS(systemEnv).system
+       (# 
+       do
+          frigg.ymerBrowser.compilerPrivate.comp[]
+            ->dyn.init (# progress::  (#  do pause #) #);
+          'DONE initializing compiler'->frigg.ymerBrowser.writeInfoView;
+          ready.V
+       #);
+     ready: @semaphore;
+     frigg: @auxFriggApplication
+       (#
+          ymerBrowserWindow:: 
+            (#
+               clearSemanticErrors:
+                 (# 
+                 do
+                    (if theSemanticErrorViewer[] <> none then
+                        (if theSemanticErrorViewer.opened then
+                            none ->theSemanticErrorViewer.registerFragmentGroup
+                        if)
+                    if);
+                    ''->writeInfoView;
+                    formsWithSemanticErrors.clear
+                 #);
+               checkSemanticErrors:
+                 (# exp: ^astInterface.expanded; node: ^astInterface.ast
+                 do
+                    (if formsWithSemanticErrors.size > 0 then
+                        l: formsWithSemanticErrors.scan
+                          (# 
+                          do
+                             none ->node[];
+                             'Semantic Error(s)'->writeInfoView;
+                             (if current.root.kind = mps.ast.kinds.interior then
+                                 current.root[]->exp[];
+                                 loop: exp.suffixWalk
+                                   (# 
+                                   do
+                                      (if current.hasSemanticError then
+                                      (*current.semanticError->semanticErrorText->t[];*)
+                                          current[]->node[]; leave loop
+                                      if)
+                                   #);
+                                 (if node[] <> none then
+                                     node[]->findAndSelect
+                                 if)
+                             if);
+                             current.father->showSemanticErrors;
+                             leave l
+                          #)
+                    if);
+                    
+                 #)
+            #);
+          dynamicCompilationAvailable::
+            (#
+            do dyn.available -> value;
+            #);
+          evaluateFile:: 
+            (# 
+            do (if dyn.available then
+                   ready.P;
+                   ymerBrowser.clearSemanticErrors;
+                   (name[],theOrigin[])->dyn.evaluateFile->P##;
+                   ymerBrowser.checkSemanticErrors;
+                   ready.V;
+               if);
+               
+            #);
+          init::  
+            (#  
+            do (if dyn.available then
+                   initDynenv[]->fork;
+               if);
+            #);
+          
+       #);
      setWindowEnv::  (#  do frigg[]->theWindowEnv[] #);
      
   #)  
