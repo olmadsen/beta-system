@@ -83,10 +83,11 @@ do (if methodClassTag
        (FN[], T[]) -> jcf.emitFieldDef;
     // 'm' then
        (*'FieldsNewJasmin.m: '->screen.puttext;
-       FN[] -> screen.putline;*)
+        FN[] -> screen.putline;*)
        (if generateDebugInfo then
            (65535, 0, FN[], T[]) -> jcf.emitLocalVariableDefinition;
        if);
+       numLocals+1 -> numLocals;
    if);
 #)
 
@@ -111,7 +112,7 @@ do (if currentTag
         // 'F' -> currentType.equal (* real32/float *) then
            fconst_0 -> jcf.emit
         else
-          aconst_null -> jcf.emit;
+           aconst_null -> jcf.emit;
        if);
        putfield -> jcf.emit;
        (if currentTag = '[' then '[' -> currenttype.prepend if);       
@@ -204,19 +205,53 @@ do (# commentstream: @stream (* maybe something more useful *);
                 *)
                (varNo div 4) - 2 -> varNo;
            if);
-           
-           (if generateDebugInfo then
-               varNo -> jcf.emitLocalVariableUse;
+           (op, op0, varNo) -> MemoryOperation;
+        #);
+      MemoryOperation:
+        (# op, op0: @integer; argNo: @integer;
+        enter(op, op0, argNo (* argNo: 0, 1, 2, 3, ...*))
+        do (if generateDebugInfo then
+               argNo -> jcf.emitLocalVariableUse;
            if);
            
-           (if varNo <= 3 then 
-               op0 + varNo -> jcf.emit;
+           (if argNo <= 3 then 
+               op0 + argNo -> jcf.emit;
             else
                op -> jcf.emit;
-               varNo -> jcf.emit;
+               argNo -> jcf.emit;
            if);
-           
         #);
+      allocLocal:
+        (# name, type: ^text
+        enter (name[], type[])
+        do BCstate.fields.numLocals+1 -> BCstate.fields.numLocals;
+           (if generateDebugInfo and (name[]<>NONE) and (type[]<>NONE) then
+               (65535, 0, name[], type[]) -> jcf.emitLocalVariableDefinition;
+           if);
+        exit numLastLocal
+        #);
+      releaseLocal:
+        (# locNum: @integer
+        enter locNum
+        do 
+        #);
+      numLastLocal (* Number of last local *):
+        (# exit BCstate.fields.numLocals #);
+      opLocal:
+        (# op, op0, locNo: @integer;
+        enter locNo (* local number, NOT offset *)
+        do INNER;
+           (op, op0, locNo) -> MemoryOperation;
+        #);
+      astoreLocal: 
+        opLocal(# do astore->op; astore_0->op0 #);
+      aloadLocal: 
+        opLocal(# do aload->op; aload_0->op0 #);
+      storeLocal: 
+        opLocal(# do istore->op; istore_0->op0 #);
+      loadLocal: 
+        opLocal(# do iload->op; iload_0->op0 #);
+      
       dumpReg:
         (# 
         do 'assume register on stack: regno=' -> commentstream.puttext;
@@ -312,7 +347,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                      else
                         iaload -> jcf.emit;
                         'missing fieldType'  -> commentstream.puttext;
-                   if)
+                    if)
                  else
                     (if ONlevel > 0 then
                         getfield  -> jcf.emit;
@@ -324,15 +359,15 @@ do (# commentstream: @stream (* maybe something more useful *);
                          else
                             (* method field *)
                             (if fieldType[] <> none then
-                               (if true
-                                // 'I' -> fieldType.equal 
-                                // 'C' -> fieldType.equal then
-                                   (iload, iload_0, off) -> emitMemOp
-                                // 'D' -> fieldType.equal (* double/real *)then
-                                   (dload, dload_0, off) -> emitMemOp
-                                else 
-                                   (iload, iload_0, off) -> emitMemOp
-                               if)
+                                (if true
+                                 // 'I' -> fieldType.equal 
+                                 // 'C' -> fieldType.equal then
+                                    (iload, iload_0, off) -> emitMemOp
+                                 // 'D' -> fieldType.equal (* double/real *)then
+                                    (dload, dload_0, off) -> emitMemOp
+                                 else 
+                                    (iload, iload_0, off) -> emitMemOp
+                                if)
                              else
                                 (iload, iload_0, off) -> emitMemOp
                             if)
@@ -419,15 +454,15 @@ do (# commentstream: @stream (* maybe something more useful *);
                     getfield  -> jcf.emit;
                     emitFieldAndType(# do sig.copy -> TheFieldType[] #);
                  else 
-                     (if isField = 1 then
-                         getfield  -> jcf.emit; 
-                         emitFieldAndType(# do sig.copy -> TheFieldType[] #);
-                      else
-                         (if isField = 2 then
-                             aaload -> jcf.emit;
-                          else 
-                             (aload, aload_0, off) -> emitMemOp
-                     if)if)
+                    (if isField = 1 then
+                        getfield  -> jcf.emit; 
+                        emitFieldAndType(# do sig.copy -> TheFieldType[] #);
+                     else
+                        (if isField = 2 then
+                            aaload -> jcf.emit;
+                         else 
+                            (aload, aload_0, off) -> emitMemOp
+                    if)if)
                 if); 
                 (if withQua then
                     (*sig[] -> puttext;*)
@@ -442,7 +477,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                             '[' -> ((3,class.length-1) -> class.sub).prepend 
                               -> jcf.emitClassRef
                          else
-                        (2,class.length-1) -> class.sub -> jcf.emitClassRef
+                            (2,class.length-1) -> class.sub -> jcf.emitClassRef
                 if)if)if);
              #);
            pushAdr:
@@ -474,15 +509,15 @@ do (# commentstream: @stream (* maybe something more useful *);
                 off->commentstream.putint
              #);
            display:
-              (# 
-              do ' reg:'-> puttext; reg -> putint;
-                 ' off:'-> puttext; off-> putint;
-                 ' size:'->puttext; size -> putint; 
-                 ' ONlevel:'->puttext; ONlevel -> putint;
-                 ' isField:'->puttext; isField -> putint;
-                 (if isField = 1 then
-                     descName[] -> puttext
-                 if)
+             (# 
+             do ' reg:'-> puttext; reg -> putint;
+                ' off:'-> puttext; off-> putint;
+                ' size:'->puttext; size -> putint; 
+                ' ONlevel:'->puttext; ONlevel -> putint;
+                ' isField:'->puttext; isField -> putint;
+                (if isField = 1 then
+                    descName[] -> puttext
+                if)
              #);
         #);
       makeSignature:
@@ -498,25 +533,13 @@ do (# commentstream: @stream (* maybe something more useful *);
       emitNewArray:
         (# type: @integer
         enter type
-        do (* java arrays are 0:range-1;
-            * we add one to BETA range; 
-            * this gives an extra index 0
-            * which will not give rise to index errors
-            * must be fixed in some way
-            *)
-           newarray  -> jcf.emit; 
+        do newarray  -> jcf.emit; 
            type -> jcf.emit;
         #);
       emitAnewArray:
         (# type: ^text
         enter type[]
-        do (* java arrays are 0:range-1;
-            * we add one to BETA range; 
-            * this gives an extra index 0
-            * which will not give rise to index errors
-            * must be fixed in some way
-            *)
-           anewarray  -> jcf.emit;
+        do anewarray  -> jcf.emit;
            type[] -> jcf.emitClassRef;
         #);
       emitCheckCast:
@@ -857,16 +880,13 @@ do (# commentstream: @stream (* maybe something more useful *);
                     // 'AlloVR8' -> prim.equal 
                     // 'NewVR8' -> prim.equal then
                        T_DOUBLE-> emitNewArray  
-                    // 'NewRR' -> prim.equal then
-                       newarray  -> jcf.emit; 
-                       'java/lang/Object'->jcf.emitClassRef;
-                       
+                    // 'NewRR' -> prim.equal
                     // 'AlloRR' -> prim.equal then
                        (* arg = '[Ltype;' 
                         * extract: 'type'
                         *)
-                       (3,arg.length-1) -> arg.sub -> arg[];
-                       arg[] -> emitAnewArray;
+                       (3,arg.length-1) -> arg.sub -> emitAnewArray;
+                       
                     // 'ExtVR1' -> prim.equal then
                        invokestatic -> jcf.emit;
                        ('BetaArray', 'ExtVR1', '([CI)[C') -> jcf.emitMethodRef; 
@@ -919,21 +939,140 @@ do (# commentstream: @stream (* maybe something more useful *);
                        ('BetaArray', 'CopySVR8', '(II[D)[D') -> jcf.emitMethodRef; 
                        
                        
-                    // 'ExtRR' -> prim.equal then  
-                       'ExtRR: ' -> puttext; arg[] -> putline;
+                    // 'ExtRR' -> prim.equal then
+                       (* FIXME: possibly use local variables instead of stack, see CopySRR *)
+                       (* arg: [Ltype;  - Convert to type: *)
+                       (3,arg.length-1) -> arg.sub -> arg[];
+                       (* stack: oldrep, add *)
+                       (* int copysize = array.length;
+                        * int newsize  = copysize + add;
+                        * if (newsize<0) newsize = 0;
+                        * if (copysize>newsize) copysize = newsize;
+                        *)
+                       swap              -> jcf.emit;
+                       dup_x1            -> jcf.emit;
+                       (* stack: oldrep, add, oldrep *)
+                       arraylength       -> jcf.emit;
+                       (* stack: oldrep, add, copysize *)
+                       dup_x1            -> jcf.emit;
+                       iadd              -> jcf.emit;
+                       (* stack: oldrep, copysize, newsize *)
+                       _dup              -> jcf.emit;
+                       (* 0: *) ifge     -> jcf.emit; 5 -> jcf.emitShort;
+                       (* 3: *) _pop     -> jcf.emit;
+                       (* 4: *) iconst_0 -> jcf.emit;
+                       (* 5: *)
+                       (* stack: oldrep, copysize, newsize *)
+                       dup2              -> jcf.emit;
+                       (* stack: oldrep, copysize, newsize, copysize, newsize *)
+                       (* 0: *) if_icmple-> jcf.emit; 6 -> jcf.emitShort;    
+                       (* stack: oldrep, copysize, newsize; use copysize=newsize *)
+                       (* 3: *) swap     -> jcf.emit;
+                       (* 4: *) _pop     -> jcf.emit;
+                       (* 5: *) _dup     -> jcf.emit;
+                       (* 6: *)
+                       (* stack: oldrep, copysize, newsize *)
+                       anewarray    -> jcf.emit; arg[] -> jcf.emitClassRef;
+                       dup_x2       -> jcf.emit;
+                       swap         -> jcf.emit;
+                       (* Stack: newrep, oldrep, newrep, copysize *)
+                       iconst_0     -> jcf.emit;
+                       dup_x2       -> jcf.emit;
+                       swap         -> jcf.emit;
+                       (* Stack: newrep, oldrep, 0, newrep, 0, copysize *)
                        invokestatic -> jcf.emit;
-                       ('BetaArray', 'ExtRR', '([Ljava/lang/Object;I)[Ljava/lang/Object;') -> jcf.emitMethodRef; 
+                       ('java/lang/System', 'arraycopy',  '(Ljava/lang/Object;ILjava/lang/Object;II)V') -> jcf.emitMethodRef;
+                       (* Stack: newrep *)
+                       
                     // 'CopyRR' -> prim.equal then
-                       'CopyRR: ' -> puttext; arg[] -> putline;
-                       invokestatic -> jcf.emit;
-                       ('BetaArray', 'CopyRR', '([Ljava/lang/Object;)[Ljava/lang/Object;') -> jcf.emitMethodRef; 
+                       (* arg: [Ltype;  - Convert to type: *)
+                       (3,arg.length-1) -> arg.sub -> arg[];
+                       (# loc_oldrep, loc_size, loc_newrep: @integer;
+                       do (* int size = array.length;
+	                   * if (size<0) size = 0;
+                           *)
+                          allocLocal -> loc_oldrep;
+                          allocLocal -> loc_size;
+                          allocLocal -> loc_newrep;
+                          _dup       -> jcf.emit;
+                          loc_oldrep -> astoreLocal;
+                          arraylength-> jcf.emit;
+                          _dup       -> jcf.emit;
+                          (* 0:*) ifge      -> jcf.emit; 5 -> jcf.emitShort;
+                          (* 3:*) _pop      -> jcf.emit;
+                          (* 4:*) iconst_0  -> jcf.emit;
+                          (* 5:*) 
+                          loc_size   -> storeLocal;
+                          loc_size   -> loadLocal;
+                          anewarray  -> jcf.emit; arg[] -> jcf.emitClassRef;
+                          loc_newrep -> astoreLocal;
+                          loc_oldrep -> aloadLocal;
+                          iconst_0   -> jcf.emit;
+                          loc_newrep -> aloadLocal;
+                          iconst_0   -> jcf.emit;
+                          loc_size   -> loadLocal;
+                          (* Stack: oldrep, 0, newrep, 0, size *)
+                          invokestatic -> jcf.emit;
+                          ('java/lang/System', 'arraycopy',  '(Ljava/lang/Object;ILjava/lang/Object;II)V') -> jcf.emitMethodRef;
+                          loc_newrep -> aloadLocal; (* push result *)
+                          loc_oldrep -> releaseLocal;
+                          loc_newrep -> releaseLocal;
+                          loc_size -> releaseLocal;
+                       #);
+                       
                     // 'CopySRR' -> prim.equal then
-                       'CopySRR: ' -> puttext; arg[] -> putline;
-                       invokestatic -> jcf.emit;
-                       ('BetaArray', 'CopySRR', '(II[Ljava/lang/Object;)[Ljava/lang/Object;') -> jcf.emitMethodRef; 
-
-
-
+                       (* arg: [Ltype;  - Convert to type: *)
+                       (3,arg.length-1) -> arg.sub -> arg[];
+                       (* Stack: low, high, oldrep *)
+                       (# loc_low, loc_high, loc_oldrep, loc_newsize, loc_newrep: @integer;
+                       do allocLocal -> loc_low;
+                          allocLocal -> loc_high;
+                          allocLocal -> loc_oldrep;
+                          loc_oldrep -> astoreLocal;
+                          loc_high   -> storeLocal;
+                          loc_low    -> storeLocal;
+                          (* CkSR(low, high, oldrep.length); *)
+                          loc_low    -> loadLocal;
+                          loc_high   -> loadLocal;
+                          loc_oldrep -> aloadLocal;
+                          arraylength-> jcf.emit;
+                          invokestatic -> jcf.emit; ('BetaArray', 'CkSR', '(III)V') -> jcf.emitMethodRef;
+                          (* int newsize = high - (low-1);
+	                   * if (newsize<0) newsize = 0;
+                           *)
+                          loc_high -> loadLocal;
+                          loc_low  -> loadLocal;
+                          iconst_1 -> jcf.emit;
+                          isub     -> jcf.emit;
+                          _dup     -> jcf.emit;
+                          loc_low  -> storeLocal; (* loc_low = low-1 *)
+                          isub     -> jcf.emit;
+                          _dup     -> jcf.emit;
+                          (* 0: *) ifge     -> jcf.emit; 5 -> jcf.emitShort;
+                          (* 3: *) _pop     -> jcf.emit; 
+                          (* 4: *) iconst_0 -> jcf.emit;
+                          (* 5: *)
+                          allocLocal -> loc_newsize -> storeLocal;
+                          loc_newsize -> loadLocal;
+                          anewarray  -> jcf.emit; arg[] -> jcf.emitClassRef;
+                          allocLocal -> loc_newrep -> astoreLocal;
+                          loc_oldrep -> aloadLocal;
+                          loc_low    -> loadLocal;
+                          loc_newrep -> aloadLocal;
+                          iconst_0   -> jcf.emit;
+                          loc_newsize-> loadLocal;
+                          (* stack: oldrep, low-1, newrep, 0, newsize *)
+                          invokestatic -> jcf.emit;
+                          ('java/lang/System', 'arraycopy',  '(Ljava/lang/Object;ILjava/lang/Object;II)V') 
+                            -> jcf.emitMethodRef;
+                          loc_newrep -> aloadLocal; (* push result *)
+                          loc_newrep -> releaseLocal;
+                          loc_oldrep -> releaseLocal;
+                          loc_high   -> releaseLocal;
+                          loc_low    -> releaseLocal;
+                          loc_newsize-> releaseLocal;
+                       #);
+                       
                     // 'Text2CharArray' -> prim.equal then
                        invokevirtual -> jcf.emit;
                        ('java/lang/String', 'toCharArray', '()[C') -> jcf.emitMethodRef; 
@@ -1415,7 +1554,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                  else
                     (astore,astore_0,16) -> emitMemOp;
                 if)
-             // loadLocal then
+             // _loadLocal then (* compiler dies if this is without the underscore!! *)
                 (if 'I' -> lastLocalType.equal then
                     (iload,iload_0,16) -> emitMemOp;
                  else
