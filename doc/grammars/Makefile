@@ -1,23 +1,20 @@
-MAKEHTML = ../bin/gram2frames.perl
+doc: always
+	@echo Generating documentation without PDF
+	@perl -s ../bin/makedoc -v -p grammars.book
 
-all:	beta idl metagrammar prettyprint property
-	@echo Done.
+dist: always
+	@echo Generating documentation with PDF
+	@perl -s ../bin/makedoc grammars.book
 
-beta:
-	@echo Generating beta.html
-	@$(MAKEHTML) ${BETALIB}/grammars/beta/beta-meta.gram
-idl:
-	@echo Generating idl.html
-	@$(MAKEHTML) ${BETALIB}/grammars/idl/idl-meta.gram
-metagrammar:
-	@echo Generating metagrammar.html
-	@$(MAKEHTML) ${BETALIB}/grammars/metagram/metagrammar-meta.gram
-prettyprint:
-	@echo Generating prettyprint.html
-	@$(MAKEHTML) ${BETALIB}/grammars/pretty/prettyprint-meta.gram
-property:
-	@echo Generating property.html
-	@$(MAKEHTML) ${BETALIB}/grammars/property/property-meta.gram
 
 tags:
 	@echo There is nothing to tag here.
+
+clean:
+	-/bin/rm -f *~ 
+
+distclean: clean
+	-/bin/rm -f *.html *.pdf
+
+always:
+	@echo ""
