@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1992-03-04 10:18:08 $, SID: $Revision: 1.13 $
+ * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1992-06-02 11:28:53 $, SID: $Revision: 1.14 $
  * by Lars Bak
  */
 
@@ -141,17 +141,18 @@ struct errorEntry {
     -6, "Repetition subrange out of range",
     -7, "Repetition subrange out of range",
     -8, "Stop is called",
-    -9, "LVRA is full, please implement next step!",
+    -9, "LVRA is full",
    -10, "Integer division by zero",
-   -11, "Call back function area is full",
+   -11, "Call back function area (CBFA) is full",
    -12, "Call back Pascal function has wrong return size",
    -13, "Suspending component involving call backs",
    -30, "Illegal instruction",
    -31, "Bus error",
    -32, "Segmentation fault",
-   -33, "AOAtoIOAtable is full (temporary)",
-   -34, "AOAtoLVRAtable is full (temporary)",
-   -35, "Text param. to C routine to big (max. 1000 bytes)",
+   -33, "AOAtoIOAtable is full",
+   -34, "AOAtoLVRAtable is full",
+   -35, "Text parameter to C routine too big (max. 1000 bytes)",
+   -36, "Failed to allocate AOAtoIOAtable",
   -100, "Unknown signal",
      0, 0
 };
