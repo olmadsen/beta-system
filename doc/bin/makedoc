@@ -22,7 +22,6 @@ sub usage
 #   Fix prev/next TITLE for src-generated files (OK for intsrcfiles)
 #   Eliminate global $filenumber
 #   Continuation indications in all but first column in index 'foo, continued'.
-#   Generate links to special characters in print_index_toc etc.
 #   Handle Appendix headings specially: No numbering.
 # IDEAS:
 #   Possibly a CAP attribute for INX (to appear in index instead of indexed word)?
@@ -672,6 +671,7 @@ sub print_toc_header
 
 sub print_index_nav_toc
 {
+    # FIXME: If ever used again: update like print_index_toc
     local ($i, $ch, $n);
     print "document.write('\\<HR ALIGN=LEFT WIDTH=60\\>')\n";
     $n=0;
@@ -1495,15 +1495,7 @@ EOT
 	local ($i, $ch);
 	print "  <DT><A HREF=\"$indexfile\"><B>Index</B></A><DD>\n";
 	&open_headings_to_level(2);
-	for ($i=65; $i<=90; $i++){
-	    $ch = sprintf ("%c", $i);
-	    if ($caps{$ch}){
-		print "    <A HREF=\"$indexfile\#_$ch\">$ch</A> &nbsp; \n";
-	    } else {
-		# no indices starting with $ch
-		print "    <SPAN CLASS=disabled>$ch</SPAN> &nbsp; \n";
-	    }
-	}
+	&print_index_toc($indexfile);
     }
     &close_headings_to_level(1);
 
@@ -2046,18 +2038,24 @@ sub process_interface_files
 
 sub print_index_toc
 {
-    local ($i, $ch);
-    print "<HR>\n<DIV style=\"text-align:center\">\n";
-    for ($i=65; $i<=90; $i++){
-	$ch = sprintf ("%c", $i);
+    local ($file) = @_;
+    local ($ch);
+    #local @keys = keys(%caps);
+    #local @values = values(%caps);
+    #print STDERR "caps:\n";
+    #while ($#keys>=0){
+    #   print STDERR "  caps{", pop(@keys), "}==", pop(@values), "\n";
+    #}
+    foreach $ch (sort {lc($a) cmp lc($b)} keys(%caps)){
+	next unless defined $caps{$ch};
+	local $entry = &unquote_special(&quote_html(&quote_special($ch)));
 	if ($caps{$ch}){
-	    print "<STRONG><A HREF=\"#_$ch\">$ch</A></STRONG> &nbsp; \n";
+	    print "<STRONG><A HREF=\"$file#_$ch\">$entry</A></STRONG> &nbsp; \n";
 	} else {
 	    # no indices starting with $ch
-	    print "<STRONG CLASS=disabled>$ch</STRONG> &nbsp; \n";
-	}	    
+	    print "<STRONG CLASS=disabled>$entry</STRONG> &nbsp; \n";
+	}	
     }
-    print "<HR>\n</DIV>\n\n";
 }
 
 sub calculate_index()
@@ -2071,11 +2069,16 @@ sub calculate_index()
     local ($italic, $itaend) = ("", "");
     local (@index_lines) = ();
 
-    #print STDERR "sorted index:++++++++++++++++++++\n";
-    #print STDERR join ("\n", @index);
-    #print STDERR "++++++++++++++++++++\n";
+    #print STDERR "\nsorted index: ", "+"x20, "\n", join ("\n", @index), "\n", "+"x20, "\n";
 
     %entries = {};
+    %caps = {};
+    #print STDERR "\n";
+    for ($i=65; $i<=90; $i++){
+	local $ch = sprintf ("%c", $i);
+	#print STDERR "caps{$ch}=0\n";
+	$caps{$ch} = 0;    
+    }
     $html_index = "";
     $prev_id = "";
     $prev_no = 1;
@@ -2132,7 +2135,7 @@ sub calculate_index()
 	}
 	#print STDERR "initial_ch after: '$initial_ch'\n";
 	#printf STDERR "caps{initial_ch}=%d\n", $caps{$initial_ch};
-	if (! $caps{$initial_ch} ){
+	if (! $caps{&unquote_special($initial_ch)} ){
 	    # Emit entries for previous letter
 	    if ($index_line ne ""){
 		push @index_lines, $index_line;
@@ -2140,14 +2143,15 @@ sub calculate_index()
 	    }
 	    $html_index .= &build_index_table(@index_lines);
 	    @index_lines = ();
-	    #print STDERR "***Emit heading for " . &quote_html(&unquote_special($initial_ch)) . "\n";
-	    #$html_index .= "***Emit heading for " . &quote_html(&unquote_special($initial_ch)). "\n";
+	    #print STDERR "***Emit heading for " . &unquote_special(&quote_html($initial_ch)) . "\n";
+	    #$html_index .= "***Emit heading for " . &unquote_special(&quote_html($initial_ch)). "\n";
 	    $html_index .= "</DIV>\n";
-	    $html_index .= "<H2><A NAME=\"_$initial_ch\">";
-	    $html_index .= &quote_html(&unquote_special($initial_ch));
+	    $html_index .= "<H2><A NAME=\"_" . &unquote_special($initial_ch) . "\">";
+	    $html_index .= &unquote_special(&quote_html($initial_ch));
 	    $html_index .= "<\/A><\/H2>\n";
 	    $html_index .= "<DIV CLASS=index>\n";
-	    $caps{$initial_ch} = 1;
+	    #print STDERR "caps{", &unquote_special($initial_ch), "}=1\n";
+	    $caps{&unquote_special($initial_ch)} = 1;
 	}
 
 	# Block levels are present as such in the entries:
@@ -2294,7 +2298,9 @@ starting with the corresponding letters.
 EOT
     #print "The table is also present in the navigation bar to the left.\n";
     print "<P>\n";
-    &print_index_toc;
+    print "<HR>\n<DIV style=\"text-align:center\">\n";
+    &print_index_toc("");
+    print "<HR>\n</DIV>\n\n";
     print "<DIV CLASS=index>\n";
     print $html_index;
     print "</DIV>\n";
@@ -2796,6 +2802,7 @@ sub calculate_gram_index()
 
     # Sort index ignoring case
     @index = sort {lc($a) cmp lc($b)} @index;
+    %caps = {};
 
     local (@index_lines) = ();
         
