@@ -46,7 +46,7 @@ real rcopy(x1)
 real tau(){double x; x=3.0; return (x); }
 
 void outr(a,b,r) int a,b; double r;{printf("int=%d,%d,real:%lf\n",a,b,r);}
-void sprint2(a,b,r) char *a; const char * b; double r;{int i; 
+void sprint2(a,b,r) char *a; const char * b; double r;{ 
   printf("buffer=%s,control=%s,real=%lf\n",a,b,r);
 
   sprintf(a,b,r);
@@ -109,4 +109,31 @@ void bar(f) long (*f)();
   b = f('a',1);
   printf("%c\n",b);
 }
+
+/* tstvarargs test that it is called with a consecutive 
+ * list of reals, i.e. 1.0, 2.0, 3.0...
+ */
+#include <stdarg.h>
+long tstvarargs(long numreals, ...)
+{ double d,v;
+  va_list ap;
+  if (numreals) {
+    /* At least 1 real */
+    va_start(ap, numreals);
+    d = 1.0;
+    while (numreals--){
+      v = (double)(va_arg(ap, double));
+      if (v != d){
+	fprintf(stdout, "[%.1f<>%.1f]", v, d);
+	fflush(stdout);
+	return 0;
+      }
+      d+=1.0;
+    }
+    va_end(ap);
+  }
+  return 1; /* all matched */
+}
+
+
 
