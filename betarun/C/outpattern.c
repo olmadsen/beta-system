@@ -99,7 +99,8 @@ static char *machine_name()
   /* HP variants */
 #ifdef hpux
 #ifdef hppa
-  return "(snake)";
+  /*return "(snake)";*/
+  return "(hpux9pa)";
 #else
   return "(hpux8)";
 #endif
