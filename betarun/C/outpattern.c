@@ -312,7 +312,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
   fprintf(output," in %s\n", groupname);
   if (print_origin){
     long addr;
-    ref(Object)    staticObj=0;
+    ref(Object)    staticObj;
     
     /** Print Static Environment Object. **/
 
@@ -609,8 +609,7 @@ static void DumpCell(struct Object **theCell,struct Object *theObj)
 
 /********** Support routines for motorola-like stacks *************/
 
-static int NotInHeap( address)
-     long address;
+static int NotInHeap(long  address)
 {
   if( inIOA(address) || inAOA(address) || inLVRA((ref(Object))address) ) 
     return FALSE;
@@ -620,11 +619,10 @@ static int NotInHeap( address)
 /* Traverse the StackArea [low..high] and Process all references within it. 
  * Stop when theComp is reached.
  */
-static void DisplayStackPart( output, low, high, theComp)
-     ptr(long) low;
-     ptr(long) high;
-     FILE *output;
-     ref(Component) theComp;
+static void DisplayStackPart(FILE *output, 
+			     long *low, 
+			     long *high,
+			     struct Component *theComp)
 {
   ptr(long) current = low;
   ref(Object) theObj;
@@ -836,7 +834,7 @@ static int OpenDumpFile(long errorNumber)
 #ifdef nti
 static char *OpenDumpFile(long errorNumber)
 {
-  char dumpname[500];
+  static char dumpname[500];
   char dirCh;
   char *execname, *localname;
 

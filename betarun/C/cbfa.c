@@ -60,7 +60,7 @@ void CBFArelloc()
    * is now adjusted to be an integral number of entries in
    * initialize.c.
    */
-  DEBUG_CBFA(Claim((CBFATop==CBFALimit), "CBFATop==CBFALimit"));
+  DEBUG_CBFA(Claim((CBFATop==CBFALimit),"CBFATop==CBFALimit"));
 
   /* Allocate new CBFA block */
   if ( ! (lastCBFA->next = cast(CallBackArea) MALLOC(sizeof(struct CallBackArea))) ) {

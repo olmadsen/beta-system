@@ -373,7 +373,7 @@ extern long *etext;
 #ifdef RTDEBUG
   /* Consistency checks - Checks for valid references */
 
-#define CkReg(func, value, reg)                                              \
+#define CkReg(func,value,reg)                                              \
 { struct Object *theObj = (struct Object *)(value);                          \
   if (theObj && /* Cleared registers are ok */                               \
       !isLazyRef(theObj) &&                                                  \
@@ -392,9 +392,9 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
 
 #else /* RTDEBUG */
 
-#define CkReg(func, value, reg)
-#define Ck(r)
-#define Claim(cond, string)
+#define CkReg(func,value,reg) {/*empty*/}
+#define Ck(r) {/*empty*/}
+#define Claim(cond,string) {/*empty*/}
 
 #endif /* RTDEBUG */
 

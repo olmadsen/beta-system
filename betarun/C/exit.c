@@ -95,7 +95,7 @@ static volatile int InLazyHandler;
 #endif
 
 #if defined(mac68k) || defined(nti)
-extern void CallLazyItem ();
+extern void CallLazyItem (void);
 #endif
 
 

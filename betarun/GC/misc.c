@@ -176,8 +176,7 @@ static void RegError(long pc, char *reg, ref(Object) value)
   Illegal();
 }
 
-static long CheckCell(theCell)
-    ref(Object) theCell;
+static long CheckCell(struct Object *theCell)
 {
   if(theCell) {
     if (inBetaHeap(theCell)) {
@@ -192,7 +191,7 @@ static long CheckCell(theCell)
 #endif /* RTDEBUG */
 
 /* Only used in debug version, but declared unconditionally in Declaration.run */
-void CheckRegisters()
+void CheckRegisters(void)
 {
 #ifdef RTDEBUG
 #if (defined(linux) || defined(nti))

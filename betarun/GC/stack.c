@@ -907,9 +907,7 @@ void ProcessStackObj(struct StackObject *theStack)
 #if (defined(linux) || defined(nti))
 
 /* Traverse the StackArea [low..high] and Process all references within it. */
-void ProcessStackPart(low, high)
-     ptr(long) low;
-     ptr(long) high;
+void ProcessStackPart(long *low, long *high)
 {
   ptr(long) current = low;
   ref(Object) theObj;
@@ -1042,9 +1040,7 @@ void ProcessStackObj(theStack)
 #ifdef mc68020
 
 /* Traverse the StackArea [low..high] and Process all references within it. */
-void ProcessStackPart(low, high)
-     ptr(long) low;
-     ptr(long) high;
+void ProcessStackPart(long *low, long *high)
 {
     ptr(long) current = low;
     ref(Object) theObj;

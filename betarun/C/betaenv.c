@@ -6,7 +6,7 @@
 #include "beta.h"
 
 #ifdef nti
-#pragma extref _floatconvert
+/*#pragma extref _floatconvert*/
 #endif
 
 #ifndef DEFAULT_PROPERTY_NAME
