@@ -148,7 +148,7 @@ public class BetaOutput
     }
 
     public void fixme(String msg){
-	comment("FIXME: " + msg);
+	putln(comment("FIXME: " + msg));
     }
 
     public void put(String txt){
@@ -302,24 +302,43 @@ public class BetaOutput
 			   String superClass)
     {
 	putln("ORIGIN '~beta/basiclib/betaenv';");
+	boolean use_wrapper = false;
+	packageName = fixPackagePath(packageName);
+	// FIXME: Read conversion-rules.txt like for dotnet
+	String classFull = packageName + className;
+	if (classFull.equals("java/awt/geom/Rectangle2D")){
+	    use_wrapper=true;
+	} else if (classFull.equals("java/awt/geom/RectanglularShape")){
+	    use_wrapper=true;
+	}
+
 	if ((superClass!=null) && !superClass.equals("Object")){
 	    // Include non-wrapper version of superclass
 	    String path;
 	    superPkg    = fixPackagePath(superPkg);
-	    packageName = fixPackagePath(packageName);
 	    if (local && !superPkg.startsWith("java/")){
 		path = getUpPath(packageName);
 	    } else {
 		path = "~beta/javalib/";
 	    }
-	    putln("INCLUDE '" + path + superPkg + superClass + "';");
+	    if (use_wrapper){
+		// Include wrapper version of superclass
+		putln("INCLUDE '" + path + superPkg + "_" + superClass + "' (* Cannot use non-wrapper *);");
+	    } else {
+		// Include non-wrapper version of superclass
+		putln("INCLUDE '" + path + superPkg + superClass + "';");
+	    }
 	};
 	putln("--LIB: attributes--\n");
 	putln("(* Java " + className + " class declaration.");
 	putln(" * This wrapper is needed to prevent circular fragment INCLUDE.");
 	putln(" * See " + className + ".bet for members.");
 	putln(" *)");
-	putPatternBegin("_" + className, superClass);
+	if (use_wrapper){
+	    putPatternBegin("_" + className, "_" + superClass);
+	} else {
+	    putPatternBegin("_" + className, superClass);
+	}
 	nl();
 	putTrailer(packageName, className, isInterface);
     }

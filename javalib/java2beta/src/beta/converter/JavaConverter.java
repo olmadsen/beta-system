@@ -127,9 +127,14 @@ class JavaConverter
 			    if (isRelevant(ct.getModifiers())){
 				Class params[] = ct.getParameterTypes();
 				if (params.length==0){
-				    // Found default (parameterless) constructor)
-				    o = ct.newInstance(null);
-				    break;
+				    // Found default (parameterless) 
+				    // constructor
+				    try {
+					o = ct.newInstance(null);
+					break;
+				    } catch (Exception e){
+					o = null;
+				    }
 				}
 			    }
 			}
@@ -199,7 +204,22 @@ class JavaConverter
 			mangledName = dollarName;
 		    }
 		}
-		beta.putMethod(name, mangledName, parameters, "^" + stripPackage(cls.getName()) , isStatic);
+		// Get the return type of the constructor.
+		// Should be the class name, BUT unmangled of any 
+		// outer clases
+		String returnType = cls.getName();
+		Class outer = cls.getDeclaringClass();
+		if (outer != null){
+		    returnType = unmangle(outer, returnType);
+		}
+		returnType = stripPackage(returnType);
+
+		// Put to file
+		beta.putMethod(name, 
+			       mangledName, 
+			       parameters, 
+			       "^" + returnType,
+			       isStatic);
 	    }
 	}
     }
@@ -311,7 +331,15 @@ class JavaConverter
 		}
 	    }
 	}
+	
+	// Scan nested classes
+	Class nested[] = cls.getDeclaredClasses();
+	for (int i = 0; i < nested.length; i++) {  
+	    if (isRelevant(nested[i].getModifiers())) 
+		doIncludes(nested[i]);
+	}
 
+	// Collect results
 	if (includes.isEmpty()) return null;
 	Object inc[] = includes.keySet().toArray();
 	for (int i = 0; i<inc.length; i++){
@@ -435,11 +463,12 @@ class JavaConverter
 	// name == "[..."
 	name = name.substring(1, name.length());
 	if (name.startsWith("[")){
-	    System.err.println("Warning: mapInternalType: [" 
+	    System.err.println("*** Warning: mapInternalType: [" 
 			       + name 
 			       + ": Cannot map multidimensional arrays to BETA");
-	    beta.fixme("[" + name + ": Cannot map multidimensional arrays to BETA");
-	    return "[0]" + mapInternalType(name, doIncludes);
+	    return 
+		"(*FIXME:multidimensional:["+name+"*)" +
+		mapInternalType(name.replaceFirst("^\\[+",""), doIncludes);
 	} else if (name.equals("B")){
 	    return "[0]@int8";
 	} else if (name.equals("C")){
@@ -457,7 +486,7 @@ class JavaConverter
 	} else if (name.equals("Z")){
 	    return "[0]@boolean";
 	} else if (name.equals("V")){
-	    System.err.println("Warning: mapInternalType: [V: Array of void???"); 
+	    System.err.println("*** Warning: mapInternalType: [V: Array of void???"); 
 	    beta.fixme("[V: Array of void???");
 	    return "[0]@int32";
 	} else if (name.startsWith("L")){
@@ -465,7 +494,7 @@ class JavaConverter
 	    if (doIncludes) include(name);
 	    return "[0]" + makeBetaReference(name);
 	} else {
-	    System.err.println("Warning: mapInternalType: [" + name + ": unknown type"); 
+	    System.err.println("*** Warning: mapInternalType: [" + name + ": unknown type"); 
 	    return "[0]@int32";
 	}
     }
