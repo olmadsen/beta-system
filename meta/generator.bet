@@ -1,0 +1,203 @@
+ORIGIN '~beta/mps/v4.9/astlevel';
+BODY 'checker' 'makebobs' 'makepat'
+[[
+--- INCLUDE '~beta/mps/v4.9/metagrammarcfl' 
+--- INCLUDE '~beta/mps/v4.9/metagramsematt' 
+--- astInterfaceLib: attributes ---
+generator: 
+  (# mg: @metagrammar;
+     root: ^mg.Agrammar;
+     pl: ^mg.productionlist;
+     optList: ^mg.optionList;
+     attlist: ^mg.AttribList;
+     gn: ^mg.grammarName;
+     nd: ^nameDecl;
+     ok: @Boolean;
+     genFile,BobsFile,grammarFile: @File;
+     genFileName,BobsFileName: ^Text;
+     checker: <<SLOT checker: descriptor>>;
+     makepatterns: <<SLOT makepatterns: descriptor>>; 
+     makebobs: <<SLOT makebobs: descriptor>>; 
+     toSmall: (# n: ^text enter n[] do n.makeLC exit n[] #);
+     grammars: ^fragment;
+     frag: ^fragmentForm;
+     fullNameOfGrammar: ^text;
+     generateFragment: 
+       (# frag: ^fragmentForm
+       enter frag[]
+       do frag.root[] -> root[];
+          root.getProductionList -> pl[];
+          (# op: ^ast;
+             opPart: ^mg.optionPart;
+          do root.getOptionOp -> op[];
+             (if op.symbol//mg.optionPart then 
+                 op[] -> opPart[];
+                 opPart.getOptionList -> optList[];
+              else none -> optList[]
+             if);
+          #);
+          (# as: ^ast;
+             attributePart: ^mg.attributePart;
+          do root.getAttributeOp -> as[];
+             (if (as.symbol=mg.AttributePart)
+              // true then
+                 as[] -> attributePart[]; attributePart.getson1 -> attlist[]
+              // false then none -> attlist[];
+             if);
+          #);
+          (if frag.modificationStatus
+           // 0 then checker
+          if);
+          (if (genFileName.length=0) // false then 
+              'Now going to generate patterns ' -> putText; newLine;
+              makepatterns; 
+          if);
+          (if (BobsFileName.length=0) // false then 
+              'Now going to generate bobsinput ' -> putText; newLine;
+              bobsFile.OpenWrite;
+              makebobs;
+              BobsFile.Close;
+          if);
+          1 -> frag.modificationStatus;
+          frag.markAsChanged;
+          frag.close;
+       #);
+     checkForm: 
+       (# f: ^fragmentForm
+       enter f[]
+       do (if f.grammar[]
+           // mg[] then 
+              (if f.modificationStatus
+               // 0 then 'Generating file for fragment: ' -> screen.putText;
+                  screen.newLine;
+                  f.fullName -> screen.putText;
+                  screen.newLine;
+                  (if f.root[]//none then 'f.root is none'->putline if);
+                  f[] -> generateFragment
+               else f.fullName -> screen.putText;
+                  ' has been checked' -> screen.putText;
+                  screen.newLine;
+              if);
+              fullNameOfGrammar[] -> expandToFullPath -> fullNameOfGrammar[];
+              'cfl.bet' -> fullNameOfGrammar.copyAppend -> genFileName[] 
+                -> genFile.name;
+              '-parser.bobs' -> fullNameOfGrammar.copyAppend -> bobsFileName[]
+                -> bobsFile.name;
+          if)
+       #);
+     checkGroup: 
+       (# g: ^fragmentGroup
+       enter g[]
+       do g.fragmentList.scan
+          (# 
+          do current.open;
+             (if current.f.type
+              // groupType then current.f[] -> checkGroup
+              // formType then 
+                 'cfl.bet' -> fullNameOfGrammar.copyAppend -> genFileName[] -> genFile.name;
+                 '-parser.bobs' -> current.name.copyAppend -> bobsFileName[] -> bobsFile.name;
+                 current.f[] -> checkForm;
+             if);
+          #);
+          g.markAsChanged;
+       #);
+     g,metaGroup: ^fragmentGroup;
+     grammarWithPath,fullGrammarPath,fullMetaGrammarPath,T: ^Text;
+  do 'Generator using Yggdrasil ' -> screen.putText;
+     YggdrasilVersion -> screen.putText;
+     (* Fetch name of grammar to be processed *)
+     (if NoOfArguments>= 2 //true then
+         2 -> arguments -> fullNameOfGrammar[]
+      else
+         screen.newLine;
+         'Grammar? ' -> screen.putText;
+         keyBoard.getAtom -> fullNameOfGrammar[];
+     if);
+     (* set possible mps switches *)
+     (for i: noOfArguments-2 repeat
+          i+2->arguments->T[]; 0->T.setPos;
+          (T.getint,true)->trace.set
+     for);
+     (* initialize metagrammar *)
+     mg.init;
+     mg[] -> grammarTable.meta[];
+     '~beta/grammars/metagram/v4.4/metagrammar'
+       -> grammarWithPath[]
+       -> expandToFullPath
+       -> fullMetaGrammarPath[];
+     (* initialize parse tables for metagrammar *)
+     '-parser' -> fullMetaGrammarPath.append;
+     parserFileExtension -> fullMetaGrammarPath.append;
+     fullMetaGrammarPath[] -> mg.parser.initialize;
+     (* test if the grammar to be processed is the metagrammar *)
+     fullNameOfGrammar[]->expandToFullPath->fullGrammarPath[];
+     (if fullGrammarPath[]->fullMetaGrammarPath.equal // true then
+         '\n\nOBS! Grammar is the Mjolner BETA metagrammar!\n'->puttext;
+         'A metagrammar bootstrap will be attempted!\n'->puttext
+     if);
+     (* Open '~beta/grammars/metagram/v4.4/metagrammar-meta'.
+      * 
+      * This open implies that the file/group:
+      *  	'~beta/grammars/metagram/v4.4/metagrammar'
+      * will be opened implicitly. This will succeed if either
+      *  	'~beta/grammars/metagram/v4.4/metagrammar.text'
+      * or
+      *  	'~beta/grammars/metagram/v4.4/metagrammar.group'
+      * exists. 
+      * The metagrammar.text file should e.g. have the following contents:
+      * 	[[-- ]]
+      *)
+     ('-meta'->grammarWithPath.copyAppend->expandToFullPath,screen[])
+       ->top.open->g[];
+     (if g[]// none then
+         '\n\nCould not open: '->screen.putText;
+         '-meta'->grammarWithPath.copyAppend->screen.putLine;
+         '\nFull path:\n\t'->puttext;
+         fullMetaGrammarPath[]->putline;
+         (failure,'')->stop;
+     if);
+     (* Open form 'metagrammar' in the metagrammar.
+      * The fragment form in a metagrammar must be called 'metagrammar.
+      * I.e. a metagrammar has the following structure:
+      * --- metagrammar : Agrammar : metagrammar ---
+      * Grammar metagrammar :
+      *  ...
+      *)
+     ('metagrammar',screen[]) -> g.open -> mg.grammarAst[];
+     (if mg.grammarAst[]// none then
+         'No grammarAst for '->screen.putText;
+         grammarWithPath[]->screen.putLine;
+         (failure,'')->stop;
+     if);
+     (* Open the grammar to be processed *)
+     (fullNameOfGrammar[],screen[]) -> top.open -> g[];
+     (if g[] // none then
+         newFragmentGroup -> g[];
+         fullNameOfGrammar[] -> expandToFullPath -> g.name;
+         top[] -> g.father;
+     if);
+     ('meta',screen[]) -> g.open -> grammars[];
+     (if grammars[]
+      // none then
+         g.fullName -> screen.putText;
+         '-meta.gram does not exist' -> screen.putText;
+         (failure,'generator stops') -> &stop;
+     if);
+     screen.newLine;
+     (if grammars.type
+      // groupType then grammars[] ->checkGroup
+      // formType then 
+         grammars[] -> frag[];
+         (if frag.grammar[]
+          // mg[] then 
+             fullNameOfGrammar[] -> expandToFullPath -> fullNameOfGrammar[];
+             '-meta.pat' -> fullNameOfGrammar.copyAppend -> genFileName[]
+               -> genFile.name;
+             '-parser.bobs' -> fullNameOfGrammar.copyAppend -> bobsFileName[]
+               -> bobsFile.name;
+             frag[] -> generateFragment;
+         if);
+     if);
+     g.markAsChanged;
+  #)
+---]]

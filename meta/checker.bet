@@ -1,0 +1,358 @@
+ORIGIN 'generator'
+[[
+--- include '~beta/containers/v1.4/hashTable'
+--- checker: descriptor ---
+(# (* semantic checker checking grammars derived over the metagrammar *)
+   (* sets up also some semantic attributes:
+    *  (1) for SynName's:  Attribut 1 is number of the production
+    *  (2) for LeftSide's: Attribut 1 is the number of the super Category
+    *                      of the nonTerminal
+    *)
+   debugChecker: (# exit false #);
+   debug:
+     (#
+     do (if debugChecker
+         //true then 
+            INNER;
+            screen.newLine
+        if);
+     #);
+   Error: 
+    (# errorText:< 
+         (# errorText: ^text 
+	 do &Text[] -> errorText[];INNER 
+	 exit errorText[]
+         #)
+    #);
+   dupLsError: @error
+     (# errorText::< (# do ' appears twice on a leftside' -> errorText #) #);
+   nonLsError: @error
+     (# errorText::< (# do ' does not appear on a leftside' -> errorText #) #);
+   superError: @error
+     (# errorText::< (# do ' has more than one super' -> errorText #) #);
+   recursiveError: @error
+     (# errorText::< (# do ' are due to error in computation of super' -> errorText #) #);
+   lexemInAlternationError: @error
+     (# errorText::< (# do ' in alternations not allowed' #) #);
+   attNotALSError: @error
+     (# errorText::< (# do ' in attribute part is not a syntactic category' -> errorText #) #);
+   intInNontError: @error
+     (# errorText::< (# do ' contains numeric characters' -> errorText #) #);
+   anyErrors: @integer;
+   semanticError: 
+     (# n: ^text;
+        whichError: ^Error;
+     enter (n[],whichError[])
+     do 'Semantic error: Nonterminal ' -> putText;
+        n[] -> putText;
+        whichError.errorText -> screen.putLine;
+        1 + anyErrors -> anyErrors;
+     #);
+   stopGenerator: (# do (false,'The generator stops') -> &stop #);
+   textWithInteger: text(# i: @integer #);
+   synDeclTable: @hashTable
+     (# element::< textWithInteger;
+        hashFunction::< 
+          (# do e.scanAll(# do value *10 + (ch -> ascii.lowCase) -> value #)#);
+        equal::< (# do (left[] -> right.equalNCS) -> value #);
+        rangeInitial::< (# do 1021 -> value #);
+        find: 
+          (# t: ^Text;
+             e: @element;
+             found: ^element
+          enter t[]
+          do t->e;
+             e[]->hashFunction
+	       ->findIndexed(# predicate::< (# do (current[],e[])->equal->value #)#)
+	       ->found[];
+          exit found[]
+          #);
+        insertElement: 
+          (# t: @text; i: @integer;
+             nextE: ^element
+          enter (t,i)
+          do &element[] -> nextE[];
+             (t,i) -> (nextE,nextE.i);
+             nextE[] -> Insert;
+          #);
+     #);
+   check1: 
+     (* checks that every nonterminal appears only one time on a left side *)
+     (# n: ^text;
+     do pl.newScan
+          (# 
+          do current.getSynDeclText -> n[];
+             theScan: n.scanAll
+               (# 
+               do (if ((ch<='9') and (ch>='0'))
+                   //true then
+                      (n[],intInNontError[]) -> semanticError;
+                      leave theScan
+                  if)
+               #);
+             (if (n[] -> synDeclTable.find)
+              //NONE then (n,currentSonNo) -> synDeclTable.insertElement;
+              else (n[],dupLsError[]) -> SemanticError;
+             if);
+          #)
+     #);
+   check2: 
+     (* checks that every nonterminal on a right side appears on a leftside
+      * Sets up (1)
+      *)
+     (# ls: ^mg.leftSide;
+        index: ^synDeclTable.element;
+     do mg.SynName -> pl.SuffixWalkforProd
+        (# scanCat::< mg.synName; sn: ^mg.synName;
+        do current[] -> sn[];
+           (if (sn.getSynText -> synDeclTable.find -> index[])
+            //NONE then (sn.getSynText,nonLsError[]) -> SemanticError;
+	    else index.i -> sn.dclRef;
+           if)
+        #);
+        pl.newscan
+        (# 
+        do current.leftside -> ls[];
+	   (if current.symbol
+	    //mg.Opt//mg.alternation then 
+               1 -> ls.attributeSize; 
+	    //mg.ListOne//mg.ListZero//mg.Dummy//mg.constructor then 
+               0 -> ls.attributeSize
+	   if)
+        #);
+        (if (attlist[]=none)
+         //false then
+	    l: attlist.newscan
+	      (# NoAtt: ^mg.NoOfAttributes;
+                 c: ^Const;
+                 sc: ^mg.synCat
+	      do current.getSyncat -> sc[];
+	         (if (sc.GetSynText -> synDeclTable.find -> index[])
+	          //NONE then 
+                     (sc.GetSynText,attNotALSError[]) -> SemanticError;
+                  else
+	             index.i -> findLeftSide -> ls[];
+	             current.getNoOfAttributes -> NoAtt[];
+	             NoAtt.getConst -> c[];
+	             c.getValue -> ls.attributeSize;
+	         if);
+	      #);
+        if);
+     #);
+   findLeftSide:
+     (# inx: @integer;
+        p: ^mg.prod;
+        ls: ^mg.LeftSide;
+     enter inx 
+     do inx -> pl.get -> p[];
+        p.leftside -> ls[];
+     exit ls[]
+     #);
+   SetSuperAttribute:
+     (# ls: ^mg.LeftSide;
+        val,OldValue: @Integer;
+     enter (val,ls[])
+     do ls.superValue -> oldValue;
+        debug
+        (# 
+        do 'set super of @ ' -> screen.putText;
+           ls.index -> screen.putInt;
+           ' to ' -> screen.putText;
+           val -> screen.putInt;
+           ' oldValue is ' -> screen.putText;
+           oldValue -> screen.putInt;
+        #);
+        (if ((val=super.Cons) and (0<OldValue))
+            (* dont change value if new value is cons and old is defined *)
+         //false then
+            (if ((Oldvalue=super.undefined) or (OldValue=super.cons))
+             //true then 
+                val -> ls.superValue;
+	        debug(# do 'value set' -> screen.putText #);
+             //false then 
+                (ls.getSynDeclText,superError[]) -> semanticError;
+	        screen.newLine;
+	        'in conflict with ' -> screen.putText;
+	        oldvalue -> findLeftSide -> ls[];
+                ls.getSynDeclText -> screen.putText;
+	        screen.newLine;
+            if);
+        if);
+     #);
+   check3: 
+     (* checks only one supercategori per nonterminal
+      * Sets up (2) *)
+     (# NoOfUndefined,LastNoOfUndefined: @integer;
+        ok: @boolean;
+        ls: ^mg.Leftside;
+        SymbNo: @Integer;
+        lastDummy: ^mg.prod;
+     do debug(# do 'initializing attributes' -> screen.putText #);
+        pl.newScan
+        (# 
+        do current.leftside -> ls[];
+           super.undefined -> ls.superValue; 
+        #);
+        debug(# do 'scanning pl' -> screen.putText #);
+        (super.cons,(1 -> findLeftSide)) -> setSuperAttribute;    
+        0 -> NoOfUndefined -> lastNoOfUndefined;
+        pl.newScan
+        (# scl: ^mg.SyncatList;
+           clst: ^mg.consElemList;
+           theProd: ^mg.prod;
+        do (if current.symbol
+            //mg.listOne//mg.listZero then 
+	       (super.list,current.leftSide) -> setSuperAttribute;
+	       mg.SynName -> current.suffixWalkForProd
+	       (# scanCat::< mg.synName; sn: ^mg.synName;
+	       do current[] -> sn[];
+                  sn.dclRefProd -> theProd[];
+                  (if (theProd[]=NONE)//false then 
+	              (super.cons,theProd.leftside) -> setSuperAttribute;
+                  if);
+	       #);
+            //mg.constructor then 
+	       current.getson2 -> clst[];
+	       mg.SynName -> clst.suffixWalkForProd
+	       (# scanCat::< mg.synName; sn: ^mg.synName;
+	       do current[] -> sn[];
+                  sn.dclRefProd -> theProd[];
+                  (if (theProd[]=NONE)//false then
+                      (super.cons,theProd.leftside) -> setSuperAttribute;
+                  if);
+	       #);
+            //mg.alternation then 
+               debug(# do 'starting alternation for !' -> screen.putText;
+                       currentSonNo -> screen.putInt; screen.newLine
+                    #);
+	       current.getson2 -> scl[];   
+	       l: mg.synName -> scl.suffixWalkForProd
+	       (# scanCat::< mg.synName; sn: ^mg.synName
+	       do current[] -> sn[];
+                  sn.dclRefProd
+                  (# predefined::< 
+                       (# 
+                       do ('Lexems',LexemInAlternationError[])->SemanticError;
+                          leave l
+                       #)
+                  #) -> theProd[];
+	          (currentSonNo,theProd.leftSide) -> setSuperAttribute;
+	       #);
+               debug(# do 'finished alternation for !' -> screen.putText;
+                       currentSonNo -> screen.putInt; screen.newLine
+                    #);
+            //mg.dummy//mg.Opt then 
+	       current[] -> tryToDoDummyOrOptional -> ok; 
+	       (if ok//false then noOfUndefined + 1 -> noOfUndefined if);
+           if);
+        #);
+        debug(# do 'doing last part' -> screen.putText #);
+        testForMore:
+          (if (0<noOfUndefined)
+           //true then
+              (if (LastNoOfUndefined=NoOfUndefined)
+               //true then 
+                  (#
+                  do (lastDummy.getSynDeclText,recursiveError[]) -> SemanticError;
+	             stopGenerator
+                  #);
+              if);
+              NoOfUndefined -> LastNoOfUndefined;
+              0 -> NoOfUndefined;
+              pl.newScan
+              (#  
+              do (if current.symbol
+	          //mg.dummy//mg.Opt then 
+	             (if (current.superValue<0)
+	              //true then
+	                 current[] -> tryToDoDummyOrOptional -> ok; 
+                         (if ok
+	                  //false then 
+	                     noOfUndefined + 1 -> noOfUndefined;
+		             current[] -> lastDummy[] if);
+	             if)
+	         if);
+              #);
+              restart testForMore; 
+          if);
+     #);
+   
+   tryToDoDummyOrOptional: 
+     (# dm: ^mg.prod;
+        ok: @boolean;
+        sn: ^mg.synName;
+        sc: ^mg.synCat;
+        dmSuper: @integer;
+     enter dm[]
+     do dm.superValue -> dmSuper;
+        (if ((dmSuper<>super.Undefined) -> ok)
+         //true then 
+            dm.GetSon2 -> sc[];
+            sc.getSynName -> sn[];
+            (if (sn.dclRef<0)
+             //false then
+	        sn.dclRefProd -> dm[];
+                (dmSuper,dm.leftSide) -> setSuperAttribute;
+             else
+	        (if (0<dmSuper)
+                 //true then ('Lexems',LexemInAlternationError[]) -> SemanticError;
+	        if);
+            if);
+        if);
+     exit ok
+     #);
+do 0 -> anyErrors;
+   'Starting checking ' -> putText; 
+   synDeclTable.init;
+   ('nameappl',nameAppl) -> synDeclTable.insertElement;
+   ('namedecl',nameDecl) -> synDeclTable.insertElement;
+   ('const',const) -> synDeclTable.insertElement;
+   ('string',string) -> synDeclTable.insertElement;
+   newLine;
+   check1; 
+   newLine;
+   (if anyErrors
+    //0 then 
+       'It has been checked that every nonterminal' -> putText; newLine;
+       'appears at most once on a leftside' -> putText; newLine;
+   if);
+   check2; 
+   (if (anyErrors>=1)//true then stopGenerator if);
+   newLine;
+   'It has been checked that every rightside nonterminal' -> putText; newLine;
+   'appears on a leftside' -> putText; newLine;
+   check3;
+   (if (anyErrors>=1)//true then stopGenerator if);
+   newLine;
+   'It has been checked that all super-categories are uniquely defined' -> putText;
+   newLine; newLine;
+   (if grammars.prop[]//NONE then else
+       (# values: ^text;
+       do 'values' -> values[];
+          grammars.prop.scanProp
+          (# doProp::<
+               (# add: @grammars.prop.addProp; 
+                  didAdd: @boolean
+               do false -> didAdd;
+                  (if (prop.length>6) //true then
+                      (if ((prop.length-6,prop.length) -> prop.sub -> values.equalNCS)
+                       //false then
+                          values[] -> prop.copyAppend -> add;
+                          scanParameters
+                          (# doName::<
+                               (# e: ^synDeclTable.element;
+                               do n[] -> synDeclTable.find -> e[];
+                                  (if e[]
+                                   //NONE then 0 -> add.addConst
+                                   else e.i -> add.addConst
+                                  if);
+                                  true -> didAdd
+                               #);
+                          #);
+                          (if didAdd//false then
+                              add.propName[] -> grammars.prop.deleteProp
+                          if)
+   if)if)#)#)#)if)
+#)
+---]]
+
