@@ -36,7 +36,7 @@
 #ifdef PERSIST
 #undef RTLAZY
 #else
-/* #define RTLAZY  */ /* Include support for lazy fetch */
+#define RTLAZY /* Include support for lazy fetch */
 #endif /* PERSIST */
 #ifdef RTDEBUG
 #if (!defined(MAC) && !defined(hppa))
