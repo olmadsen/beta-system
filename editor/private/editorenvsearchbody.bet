@@ -8,6 +8,12 @@ LIB_ITEM 'editorcodeeditor';
  *)
 -- editorenvSearchPrivate: Descriptor --
 (#
+   ge: ^groupEditor;
+   ce: ^codeeditor;
+   fg: ^astInterface.fragmentGroup;
+   ff: ^astInterface.fragmentForm;
+   fgList: ^fragmentGroupList;
+   ;
    theSearchText,foundText: ^text;
    lastff: ^astInterface.fragmentform;
    lastfg: ^astInterface.fragmentgroup;
@@ -161,13 +167,15 @@ LIB_ITEM 'editorcodeeditor';
         
      exit (node[],wrapped)
      #);
-   searchd: ^object;
-   (* fix me *)
-   
-#)  
-
--- editorenvSearchTextDialog: Descriptor --
-(#
+   ;
+   searchResult: ^searchResultCallback;
+   searchResultCallback:
+     (#
+        found:<
+          (# foundNode: ^astInterface.ast enter foundNode[] do INNER #);
+        notFound:< (# searchText: ^text enter searchText[] do INNER #)
+     #);
+   searchDialogOpened: @boolean;
    searchdialog: UI.searchdialog
      (#
         node: ^astInterface.ast;
@@ -235,9 +243,9 @@ LIB_ITEM 'editorcodeeditor';
                       (userText[],searchPrivate.dir.down,ge[],ce[],fg[],ff[],
                        fgList[])->searchText->node[];
                       (if node[] <> none then
-                          node[]->found
+                          node[]->searchResult.found
                        else
-                          userText[]->notFound
+                          userText[]->searchResult.notFound
                       if)
                   if)
                #)
@@ -299,46 +307,273 @@ LIB_ITEM 'editorcodeeditor';
                  'Search in lexems for:'->resetDialog
              if)
           #);
-        
+        calculateSearchScopes:
+          (# theFgList: ^ymerCallBack.fragmentGroupList
+          do
+             ymerCallback.getCurrentProject->theFgList[];
+             (if theFgList[] <> none then
+                 (theFgList.size > 0)->enableProjectScope
+             if);
+             (ymerCallback.getCurrentFragmentGroup <> none )->enableFileScope;
+             (ymerCallback.getCurrentFragmentForm <> none )
+               ->enableFragmentFormScope;
+             'enable project, file, ff: '->putText;
+             enableProjectScope->putBoolean;
+             enableFileScope->putBoolean;
+             enableFragmentFormScope->putBoolean;
+             newLine
+          #);
+        onClose:: 
+          (#  do false->searchDialogOpened; none ->theSearchDialog[] #)
      #);
-   searchd: @searchdialog;
-   cnode: ^astInterface.ast;
-   lexText: ^astInterface.lexemText;
-   messText: ^text;
-   hasLink: @boolean;
-   theDecl: ^astInterface.ast
-do
-   none ->searchPrivate.fgPos[];
-   none ->searchPrivate.theNameDcl[];
-   none ->searchPrivate.theSearchText[];
-   false->searchd.onlyApplications->searchPrivate.onlyApplications;
-   false->searchPrivate.wraparound;
-   ymerCallBack.getCurrentNode->cnode[];
-   'Search in lexems for:'->messText[];
-   (if cnode[] <> none then
-       (if cnode.kind
-        // mps.kinds.nameDecl then
-           cnode.father->searchPrivate.theNameDcl[];
-           cnode[]->lexText[];
-           lexText.getText->searchPrivate.thesearchText[];
-           'Search for applications of:'->messText[];
-           true->searchd.onlyApplications->searchPrivate.onlyApplications
-        // mps.kinds.nameAppl then
-           cnode[]->hasSemanticLink->(hasLink,theDecl[]);
-           (if hasLink then
-               theDecl[]->searchPrivate.theNameDcl[];
-               'Search for applications of:'->messText[];
-               true->searchd.onlyApplications->searchPrivate.onlyApplications
-           if);
-           cnode[]->lexText[];
-           lexText.getText->searchPrivate.thesearchText[]
-       if)
-   if);
-   ''->searchPrivate.foundText[];
-   (* searchd.op; *)
-   (none ,'Search',messText[],searchPrivate.thesearchText[])->searchd.popup;
-   searchd.bringtofront;
+   theSearchDialog: ^searchdialog;
+   ;
+   replaceResult: ^replaceResultCallback;
+   replaceResultCallback:
+     (#
+        found:<
+          (# foundNode: ^astInterface.ast enter foundNode[] do INNER #);
+        notFound:< (# searchText: ^text enter searchText[] do INNER #)
+     #);
+   replaceDialogOpened: @boolean;
+   replacedialog: UI.replacedialog
+     (#
+        node: ^astInterface.ast;
+        replace:: 
+          (# cfg: ^astInterface.fragmentGroup
+          do
+             (if node[] <> none then
+                 ymerCallBack.getCurrentFragmentGroup->cfg[];
+                 (if cfg[] <> none then
+                     (ymerCallback.theBrowserId,cfg[])
+                       ->groupEditorList.findGroupEditor->ge[];
+                     (if ge[] <> none then
+                         node.frag[]->ge.formEditorList.findEditor->ce[];
+                         (if ce[] <> none then
+                             (node[],theSearchText[],theReplaceText[])
+                               ->ce.editLexem;
+                             next
+                          else
+                             'ce is none!'->putLine
+                         if)
+                      else
+                         'ge is none!'->putLine
+                     if)
+                  else
+                     'cfg is none!'->putLine
+                 if)
+             if)
+          #);
+        next:: 
+          (# 
+          do
+             thisOperation:
+               (# 
+               do
+                  (if trace[12] then
+                      'match case: '->putText;
+                      matchCase->putBoolean;
+                      newLine;
+                      'match word: '->putText;
+                      matchWord->putBoolean;
+                      newLine;
+                      'search area: '->putText;
+                      searchArea->putInt;
+                      newLine
+                  if);
+                  matchCase->searchPrivate.caseSensitive;
+                  matchWord->searchPrivate.wholeWord;
+                  onlyApplications->searchPrivate.onlyApplications;
+                  (if onlyApplications then
+                      (if searchPrivate.theNameDcl[] = none then
+                          'No name declaration selected'->putLine;
+                          leave thisOperation
+                      if)
+                  if);
+                  (if searchArea
+                   // searchArea_cs then
+                      false->searchPrivate.wrapCS;
+                      true->searchPrivate.wrapForm;
+                      false->searchPrivate.wrapGroup;
+                      false->searchPrivate.wrapProject;
+                      ascii.bel->put;
+                      'Search in current selection not implemented - use Browse hits'
+                        ->ymerCallback.infoView
+                   // searchArea_ff then
+                      false->searchPrivate.wrapCS;
+                      true->searchPrivate.wrapForm;
+                      false->searchPrivate.wrapGroup;
+                      false->searchPrivate.wrapProject
+                   // searchArea_fg then
+                      false->searchPrivate.wrapCS;
+                      false->searchPrivate.wrapForm;
+                      true->searchPrivate.wrapGroup;
+                      false->searchPrivate.wrapProject
+                   // searchArea_project then
+                      false->searchPrivate.wrapCS;
+                      false->searchPrivate.wrapForm;
+                      false->searchPrivate.wrapGroup;
+                      true->searchPrivate.wrapProject
+                  if);
+                  (if theSearchText.length > 0 then
+                      (if not
+                      (searchPrivate.theSearchText[]->theSearchText.equal) then
+                          theSearchText.copy->searchPrivate.theSearchText[];
+                          ''->searchPrivate.foundText
+                      if);
+                      (theSearchText[],searchPrivate.dir.down,ge[],ce[],fg[],
+                       ff[],fgList[])->searchText->node[];
+                      (if node[] <> none then
+                          node[]->replaceResult.found
+                       else
+                          theSearchText[]->replaceResult.notFound
+                      if)
+                  if)
+               #)
+          #);
+        replaceAll:: 
+          (#
+             cnode: ^astInterface.ast;
+             cff: ^astInterface.fragmentForm;
+             cfg: ^astInterface.fragmentGroup
+          do
+             thisOperation:
+             (if theSearchText.length > 0 then
+                 (if onlyApplications then
+                     (if searchPrivate.theNameDcl[] = none then
+                         'No name declaration selected'->putLine;
+                         leave thisOperation
+                     if)
+                 if);
+                 (if searchArea
+                  // searchArea_cs then
+                     ymerCallBack.getCurrentNode->cnode[];
+                     (if cnode[] <> none then
+                         (cnode.frag.father,cnode.frag[],cnode[],
+                          theSearchText[],theReplaceText[],matchCase,matchWord,
+                          replaceDeclaration,searchArea,onlyApplications,
+                          searchPrivate.theNameDcl[])->ymerCallBack.replaceAll
+                     if)
+                  // searchArea_ff then
+                     ymerCallBack.getCurrentFragmentForm->cff[];
+                     (if cff[] <> none then
+                         (cff.father,cff[],none ,theSearchText[],
+                          theReplaceText[],matchCase,matchWord,
+                          replaceDeclaration,searchArea,onlyApplications,
+                          searchPrivate.theNameDcl[])->ymerCallBack.replaceAll
+                     if)
+                  // searchArea_fg then
+                     ymerCallBack.getCurrentFragmentGroup->cfg[];
+                     (if cfg[] <> none then
+                         (cfg[],none ,none ,theSearchText[],theReplaceText[],
+                          matchCase,matchWord,replaceDeclaration,searchArea,
+                          onlyApplications,searchPrivate.theNameDcl[])
+                           ->ymerCallBack.replaceAll
+                     if)
+                  // searchArea_project then
+                     (none ,none ,none ,theSearchText[],theReplaceText[],
+                      matchCase,matchWord,replaceDeclaration,searchArea,
+                      onlyApplications,searchPrivate.theNameDcl[])
+                       ->ymerCallBack.replaceAll
+                 if)
+             if)
+          #);
+        cancel::  (#  do  #);
+        onUserTextChanged:: 
+          (# 
+          do
+             (if searchPrivate.onlyApplications then
+                 false->searchPrivate.onlyApplications;
+                 none ->searchPrivate.theNameDcl[];
+                 'Search in lexems for:'->resetDialog
+             if)
+          #);
+        calculateSearchScopes:
+          (# theFgList: ^ymerCallBack.fragmentGroupList
+          do
+             ymerCallback.getCurrentProject->theFgList[];
+             (if theFgList[] <> none then
+                 (theFgList.size > 0)->enableProjectScope
+             if);
+             (ymerCallback.getCurrentFragmentGroup <> none )->enableFileScope;
+             (ymerCallback.getCurrentFragmentForm <> none )
+               ->enableFragmentFormScope;
+             'enable project, file, ff: '->putText;
+             enableProjectScope->putBoolean;
+             enableFileScope->putBoolean;
+             enableFragmentFormScope->putBoolean;
+             newLine
+          #);
+        onClose:: 
+          (#  do false->replaceDialogOpened; none ->theReplaceDialog[] #)
+     #);
+   theReplaceDialog: ^replaceDialog;
+   (* fix me *)
    
+#)  
+
+-- editorenvSearchTextDialog: Descriptor --
+(#
+   initSearchCriteria:
+     (#
+        cnode: ^astInterface.ast;
+        lexText: ^astInterface.lexemText;
+        hasLink: @boolean;
+        theDecl: ^astInterface.ast
+     do
+        ge[]->searchPrivate.ge[];
+        ce[]->searchPrivate.ce[];
+        fg[]->searchPrivate.fg[];
+        ff[]->searchPrivate.ff[];
+        fgList[]->searchPrivate.fgList[];
+        &searchResult[]->searchPrivate.searchResult[];
+        ;
+        none ->searchPrivate.fgPos[];
+        none ->searchPrivate.theNameDcl[];
+        none ->searchPrivate.theSearchText[];
+        false->searchPrivate.onlyApplications;
+        false->searchPrivate.wraparound;
+        ymerCallBack.getCurrentNode->cnode[];
+        'Search in lexems for:'->messText[];
+        (if cnode[] <> none then
+            (if cnode.kind
+             // mps.kinds.nameDecl then
+                cnode.father->searchPrivate.theNameDcl[];
+                cnode[]->lexText[];
+                lexText.getText->searchPrivate.thesearchText[];
+                'Search for applications of:'->messText[];
+                true->searchPrivate.onlyApplications
+             // mps.kinds.nameAppl then
+                cnode[]->hasSemanticLink->(hasLink,theDecl[]);
+                (if hasLink then
+                    theDecl[]->searchPrivate.theNameDcl[];
+                    'Search for applications of:'->messText[];
+                    true->searchPrivate.onlyApplications
+                if);
+                cnode[]->lexText[];
+                lexText.getText->searchPrivate.thesearchText[]
+            if)
+        if);
+        ''->searchPrivate.foundText[]
+     #);
+   messText: ^text;
+   searchResult: searchPrivate.searchResultCallBack
+     (#
+        found::  (#  do foundNode[]->THIS(searchTextDialog).found #);
+        notFound::  (#  do searchText[]->THIS(searchTextDialog).notFound #)
+     #)
+do
+   initSearchCriteria;
+   (if not searchPrivate.searchDialogOpened then
+       true->searchPrivate.searchDialogOpened;
+       &searchPrivate.searchDialog[]->searchPrivate.theSearchDialog[]
+   if);
+   searchPrivate.onlyApplications
+     ->searchPrivate.theSearchDialog.onlyApplications;
+   searchPrivate.theSearchDialog.calculateSearchScopes;
+   (none ,'Search',messText[],searchPrivate.thesearchText[])
+     ->searchPrivate.theSearchDialog.popup;
+   searchPrivate.theSearchDialog.bringtofront
 #)  
 
 -- editorenvSearchText: Descriptor --
@@ -777,193 +1012,65 @@ do
 
 -- editorenvReplaceTextDialog: Descriptor --
 (#
-   replaced: @UI.replacedialog
+   initSearchCriteria:
      (#
-        node: ^astInterface.ast;
-        replace:: 
-          (# cfg: ^astInterface.fragmentGroup
-          do
-             (if node[] <> none then
-                 ymerCallBack.getCurrentFragmentGroup->cfg[];
-                 (if cfg[] <> none then
-                     (ymerCallback.theBrowserId,cfg[])
-                       ->groupEditorList.findGroupEditor->ge[];
-                     (if ge[] <> none then
-                         node.frag[]->ge.formEditorList.findEditor->ce[];
-                         (if ce[] <> none then
-                             (node[],theSearchText[],theReplaceText[])
-                               ->ce.editLexem;
-                             next
-                          else
-                             'ce is none!'->putLine
-                         if)
-                      else
-                         'ge is none!'->putLine
-                     if)
-                  else
-                     'cfg is none!'->putLine
-                 if)
-             if)
-          #);
-        next:: 
-          (# 
-          do
-             thisOperation:
-               (# 
-               do
-                  (if trace[12] then
-                      'match case: '->putText;
-                      matchCase->putBoolean;
-                      newLine;
-                      'match word: '->putText;
-                      matchWord->putBoolean;
-                      newLine;
-                      'search area: '->putText;
-                      searchArea->putInt;
-                      newLine
-                  if);
-                  matchCase->searchPrivate.caseSensitive;
-                  matchWord->searchPrivate.wholeWord;
-                  onlyApplications->searchPrivate.onlyApplications;
-                  (if onlyApplications then
-                      (if searchPrivate.theNameDcl[] = none then
-                          'No name declaration selected'->putLine;
-                          leave thisOperation
-                      if)
-                  if);
-                  (if searchArea
-                   // searchArea_cs then
-                      false->searchPrivate.wrapCS;
-                      true->searchPrivate.wrapForm;
-                      false->searchPrivate.wrapGroup;
-                      false->searchPrivate.wrapProject;
-                      ascii.bel->put;
-                      'Search in current selection not implemented - use Browse hits'
-                        ->ymerCallback.infoView
-                   // searchArea_ff then
-                      false->searchPrivate.wrapCS;
-                      true->searchPrivate.wrapForm;
-                      false->searchPrivate.wrapGroup;
-                      false->searchPrivate.wrapProject
-                   // searchArea_fg then
-                      false->searchPrivate.wrapCS;
-                      false->searchPrivate.wrapForm;
-                      true->searchPrivate.wrapGroup;
-                      false->searchPrivate.wrapProject
-                   // searchArea_project then
-                      false->searchPrivate.wrapCS;
-                      false->searchPrivate.wrapForm;
-                      false->searchPrivate.wrapGroup;
-                      true->searchPrivate.wrapProject
-                  if);
-                  (if theSearchText.length > 0 then
-                      (if not
-                      (searchPrivate.theSearchText[]->theSearchText.equal) then
-                          theSearchText.copy->searchPrivate.theSearchText[];
-                          ''->searchPrivate.foundText
-                      if);
-                      (theSearchText[],searchPrivate.dir.down,ge[],ce[],fg[],
-                       ff[],fgList[])->searchText->node[];
-                      (if node[] <> none then
-                          node[]->found
-                       else
-                          theSearchText[]->notFound
-                      if)
-                  if)
-               #)
-          #);
-        replaceAll:: 
-          (#
-             cnode: ^astInterface.ast;
-             cff: ^astInterface.fragmentForm;
-             cfg: ^astInterface.fragmentGroup
-          do
-             thisOperation:
-             (if theSearchText.length > 0 then
-                 (if onlyApplications then
-                     (if searchPrivate.theNameDcl[] = none then
-                         'No name declaration selected'->putLine;
-                         leave thisOperation
-                     if)
-                 if);
-                 (if searchArea
-                  // searchArea_cs then
-                     ymerCallBack.getCurrentNode->cnode[];
-                     (if cnode[] <> none then
-                         (cnode.frag.father,cnode.frag[],cnode[],
-                          theSearchText[],theReplaceText[],matchCase,matchWord,
-                          searchArea,onlyApplications,
-                          searchPrivate.theNameDcl[])->ymerCallBack.replaceAll
-                     if)
-                  // searchArea_ff then
-                     ymerCallBack.getCurrentFragmentForm->cff[];
-                     (if cff[] <> none then
-                         (cff.father,cff[],none ,theSearchText[],
-                          theReplaceText[],matchCase,matchWord,searchArea,
-                          onlyApplications,searchPrivate.theNameDcl[])
-                           ->ymerCallBack.replaceAll
-                     if)
-                  // searchArea_fg then
-                     ymerCallBack.getCurrentFragmentGroup->cfg[];
-                     (if cfg[] <> none then
-                         (cfg[],none ,none ,theSearchText[],theReplaceText[],
-                          matchCase,matchWord,searchArea,onlyApplications,
-                          searchPrivate.theNameDcl[])->ymerCallBack.replaceAll
-                     if)
-                  // searchArea_project then
-                     (none ,none ,none ,theSearchText[],theReplaceText[],
-                      matchCase,matchWord,searchArea,onlyApplications,
-                      searchPrivate.theNameDcl[])->ymerCallBack.replaceAll
-                 if)
-             if)
-          #);
-        cancel::  (#  do  #);
-        onUserTextChanged:: 
-          (# 
-          do
-             (if searchPrivate.onlyApplications then
-                 false->searchPrivate.onlyApplications;
-                 none ->searchPrivate.theNameDcl[];
-                 'Search in lexems for:'->resetDialog
-             if)
-          #);
-        
+        cnode: ^astInterface.ast;
+        lexText: ^astInterface.lexemText;
+        hasLink: @boolean;
+        theDecl: ^astInterface.ast
+     do
+        ge[]->searchPrivate.ge[];
+        ce[]->searchPrivate.ce[];
+        fg[]->searchPrivate.fg[];
+        ff[]->searchPrivate.ff[];
+        fgList[]->searchPrivate.fgList[];
+        &replaceResult[]->searchPrivate.replaceResult[];
+        ;
+        none ->searchPrivate.fgPos[];
+        none ->searchPrivate.theNameDcl[];
+        none ->searchPrivate.theSearchText[];
+        false->searchPrivate.onlyApplications;
+        false->searchPrivate.wraparound;
+        ymerCallBack.getCurrentNode->cnode[];
+        'Search in lexems for:'->messText[];
+        (if cnode[] <> none then
+            (if cnode.kind
+             // mps.kinds.nameDecl then
+                cnode.father->searchPrivate.theNameDcl[];
+                cnode[]->lexText[];
+                lexText.getText->searchPrivate.thesearchText[];
+                'Search for applications of:'->messText[];
+                true->searchPrivate.onlyApplications
+             // mps.kinds.nameAppl then
+                cnode[]->hasSemanticLink->(hasLink,theDecl[]);
+                (if hasLink then
+                    theDecl[]->searchPrivate.theNameDcl[];
+                    'Search for applications of:'->messText[];
+                    true->searchPrivate.onlyApplications
+                if);
+                cnode[]->lexText[];
+                lexText.getText->searchPrivate.thesearchText[]
+            if)
+        if);
+        ''->searchPrivate.foundText[]
      #);
-   cnode: ^astInterface.ast;
-   lexText: ^astInterface.lexemText;
    messText: ^text;
-   hasLink: @boolean;
-   theDecl: ^astInterface.ast
+   replaceResult: searchPrivate.replaceResultCallBack
+     (#
+        found::  (#  do foundNode[]->THIS(replaceTextDialog).found #);
+        notFound::  (#  do searchText[]->THIS(replaceTextDialog).notFound #)
+     #)
 do
-   none ->searchPrivate.fgPos[];
-   none ->searchPrivate.theNameDcl[];
-   none ->searchPrivate.theSearchText[];
-   false->replaced.onlyApplications->searchPrivate.onlyApplications;
-   false->searchPrivate.wraparound;
-   ymerCallBack.getCurrentNode->cnode[];
-   'Search in lexems for:'->messText[];
-   (if cnode[] <> none then
-       (if cnode.kind
-        // mps.kinds.nameDecl then
-           cnode.father->searchPrivate.theNameDcl[];
-           cnode[]->lexText[];
-           lexText.getText->searchPrivate.thesearchText[];
-           'Search for applications of:'->messText[];
-           true->replaced.onlyApplications->searchPrivate.onlyApplications
-        // mps.kinds.nameAppl then
-           cnode[]->hasSemanticLink->(hasLink,theDecl[]);
-           (if hasLink then
-               theDecl[]->searchPrivate.theNameDcl[];
-               'Search for applications of:'->messText[];
-               true->replaced.onlyApplications->searchPrivate.onlyApplications
-           if);
-           cnode[]->lexText[];
-           lexText.getText->searchPrivate.thesearchText[]
-       if)
+   initSearchCriteria;
+   (if not searchPrivate.replaceDialogOpened then
+       true->searchPrivate.replaceDialogOpened;
+       &searchPrivate.replaceDialog[]->searchPrivate.theReplaceDialog[]
    if);
-   ''->searchPrivate.foundText[];
-   replaced.open;
+   searchPrivate.onlyApplications
+     ->searchPrivate.theReplaceDialog.onlyApplications;
+   searchPrivate.theReplaceDialog.calculateSearchScopes;
    (none ,'Replace',messText[],'Replace with:',searchPrivate.thesearchText[])
-     ->replaced.popup
+     ->searchPrivate.theReplaceDialog.popup;
+   searchPrivate.theReplaceDialog.bringtofront
 #)  
 
