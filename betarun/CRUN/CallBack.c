@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-08-19 15:44:28 $, SID: $Revision: 1.13 $
+ * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-08-21 04:31:56 $, SID: $Revision: 1.14 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -70,7 +70,7 @@ int HandleCB(int a1, int a2, int a3, int a4, int a5, int a6)
     tmp     = 0;
     ActiveCallBackFrame = cast(CallBackFrame) StackPointer;
 
-    theObj = AlloI(cb->theStruct->iProto, cb->theStruct->iOrigin);
+    theObj = CAlloI(cb->theStruct->iProto, cb->theStruct->iOrigin);
 
     /* Call the CallBack stub, with out first four args in %i1..%i4, and
        the rest on stack from %i5 and onwards */

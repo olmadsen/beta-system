@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: MakeTextObj.c,v $, rel: %R%, date: $Date: 1992-08-19 15:45:03 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: MakeTextObj.c,v $, rel: %R%, date: $Date: 1992-08-21 04:32:05 $, SID: $Revision: 1.5 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -23,7 +23,7 @@ void MkTO(char *cText,
 #define theText (cast(Item) GCreg3)
 
   Ck(theItem); Ck(BasicItem);
-  theText = AlloI(TextProto, BasicItem);
+  theText = CAlloI(TextProto, BasicItem);
   
   AssignReference((long *)theItem + offset, theText);
 

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-08-20 15:56:01 $, SID: $Revision: 1.8 $
+ * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-08-21 04:32:02 $, SID: $Revision: 1.9 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -11,8 +11,6 @@
 #define asmlabel(label, code) \
   asm(".text;.align 4;.global " #label ";" #label ":" code)
 
-extern ref(Item) 	AlloI() asm ("AlloI");
-extern ref(Component) 	AlloC() asm ("AlloC");
 extern ref(ValRep) 	AlloVR();
 extern char 	      * LVRAAlloc();
 extern char 	      * LVRAByteAlloc();

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Structure.c,v $, rel: %R%, date: $Date: 1992-08-21 04:22:33 $, SID: $Revision: 1.12 $
+ * Mod: $RCSfile: Structure.c,v $, rel: %R%, date: $Date: 1992-08-21 04:31:59 $, SID: $Revision: 1.13 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -64,14 +64,14 @@ ref(Item) AlloSI(ref(Structure) theStruct)
 {
     GCable_Entry
     Ck(theStruct);
-    return AlloI(theStruct->iProto, cast(Object) theStruct->iOrigin);
+    return CAlloI(theStruct->iProto, cast(Object) theStruct->iOrigin);
 }
 
 ref(Component) AlloSC(ref(Structure) theStruct)
 {
     GCable_Entry
     Ck(theStruct);
-    return AlloC(theStruct->iProto, cast(Object) theStruct->iOrigin);
+    return CAlloC(theStruct->iProto, cast(Object) theStruct->iOrigin);
 }
 
 int EqS(ref(Structure) arg1, ref(Structure) arg2)
