@@ -351,7 +351,9 @@ do (# findBetaenv:
           '\n*** OBS! Slots are not handled by genClass: '->puttext;
           className[] -> putline;          
        else
-          formDesc.label = gram.doPart -> isDoPartForm;
+          (formDesc.label = gram.doPart)
+          and (blockLevel = 0) 
+            -> isDoPartForm;
           (* This is an indirect way of representing
            * that we are compiling a dopart-form.
            * formDesc is global and refers the original 
@@ -361,6 +363,10 @@ do (# findBetaenv:
            * since a dopart form is always compiled
            * via genByteCode, which is called for gdbody
            * where the proper initialization has been done.
+           * A REAL HACK: formDesc is only well defined when
+           * compiling the outer form; does not work for inner
+           * descriptors; we try fixing by also testing blockLevel;
+           * BUT CLEAN-UP
            *)
           (* (if isDoPartForm then '\ndopart form'->putline if);*)
           (desc[],isDoPartForm) -> initPtnGen; (* thisDesc[] = desc[]
@@ -372,6 +378,17 @@ do (# findBetaenv:
                                                 *)
 
           desc -> theDesc;
+          313->trace(#
+                    do 'desc:hasSlots: ' -> xT; desc[] -> hasSlots->xB;
+                       ' isDoPartForm:'->xT; isDoPartForm -> xB;
+                       (if isDoPartForm then
+                           xN; 'formDesc:'->xT; formDesc[] -> xA
+                       if);
+                       100->switchOn;
+                       xN;
+                       theDesc[] -> xA;
+                       100 -> switchOff
+                    #);
           (if not (desc[] -> hasSlots) or isDoPartForm then
               true -> hasClass;
               path[] -> splitPathAndNAme -> (path[],c[]);
@@ -388,7 +405,10 @@ do (# findBetaenv:
               if);
               
               (theGroup.origin=NONE) -> mch.initDataSeg;
-
+              313->trace(#
+                        do 'Super: ' -> xT; pref[] -> xA;
+                           ' pref.label: '->xT; pref.label->xI
+                        #);
               (**** G-part ****)
               (if pref.label = gram.prefix then
                   pref.son -> topSuperName;
@@ -409,13 +429,13 @@ do (# findBetaenv:
                       subLevel - 1 -> sublevel
                   if);
                   
-                  (if (thisDesc->sematt.descKind) 
+                  (if (theDesc->sematt.descKind) 
                    // sematt.classKind then
                       (if subLevel = 0 then defaultSuperName -> superName[] if);
                       313->trace(#
                                 do 'classKind:subLevel:' ->xT; subLevel->xI; 
                                    ' superName:'->xT; superName[] -> xT; xN;
-                                   thisDesc[] -> xA;
+                                   theDesc[] -> xA;
                                 #)
                    // sematt.externalClassKind then
                       (* level 0: externalClase : ( #  # )
@@ -434,10 +454,17 @@ do (# findBetaenv:
                                        superDesc[] -> xA
                                     #)                      
                       if);
+                      313->trace(#
+                                do 'externalClassKind:subLevel' -> xT;
+                                   subLevel -> xI
+                                #);
                       subLevel - 1 -> subLevel;
 
                    else
-                      313->trace(#do 'not classKind:externalClassKind' -> xT #);
+                      313->trace(#
+                                do 'theDesc:kind:' -> xT; 
+                                   theDesc->sematt.descKind -> xI; 
+                                #);
                       subLevel + 1 -> subLevel
                   if);              
                   313->trace(#
@@ -446,7 +473,7 @@ do (# findBetaenv:
                                topDesc[] -> xA
                             #)
                else
-                  thisDesc -> topDesc;
+                  theDesc -> topDesc;
                   (if true then
                       defaultSuperName -> superName[]
                    else                      
@@ -470,8 +497,8 @@ do (# findBetaenv:
                *)
               (blockLevel = 0) (*and (topDesc[] -> sematt.hasDo)*) -> isOuter;
               
-              thisDesc[] -> sematt.descOrigin -> orgDesc[];
-              (if (thisDesc->sematt.descKind) = sematt.externalClassKind then
+              theDesc[] -> sematt.descOrigin -> orgDesc[];
+              (if (theDesc->sematt.descKind) = sematt.externalClassKind then
                   '-' -> orgName[]
                else
               (if not orgDesc.isNull then
@@ -485,14 +512,15 @@ do (# findBetaenv:
               
               313->trace(#
                         do 'genClass:origin: ' -> xT; orgName[] -> xT;xN;
-                           orgDesc[] -> xA
+                           orgDesc[] -> xA; xN;
+                           'superName: ' -> xT; superName[] -> xT
                         #);
               
                            (*301 -> trace(# do 'descFather:'->xT; N[] ->xA #);*)
               (* For java: the call to initGen initiates a new BCmachine
                * for Jasmin code generation and a new file
                *)
-              ((*thisDesc.nodeId div 2, - we reuse a field - BAD *)
+              ((*theDesc.nodeId div 2, - we reuse a field - BAD *)
               blockLevel,className[],false
               ,((superDesc[],superName[])->SuperSignature).asText
               ,subLevel,orgName[])
@@ -506,7 +534,7 @@ do (# findBetaenv:
 
               
               (if not ReturnSaved then
-                  (true,thisDesc.returnOff)->mch.SaveReturn;
+                  (true,theDesc.returnOff)->mch.SaveReturn;
                   true -> ReturnSaved
               if);
               ('tstenv'->className.equalNCS)
@@ -520,13 +548,13 @@ do (# findBetaenv:
               if);
               (att,0,&RepList[],locals[])->GenByteCodeAlloc;
               
-              (false,thisDesc.returnOff)->mch.return; 
+              (false,theDesc.returnOff)->mch.return; 
           if);
           (if isOuter then (* hack *)
               (# ds: @ASTindex;
                  n,d,x: ^AStindex;
                  usPos: @integer
-              do thisDesc -> ds;
+              do theDesc -> ds;
                  enterP[] -> N[];
                  doP[] -> d[];
                  exitP[] -> x[];
@@ -538,13 +566,13 @@ do (# findBetaenv:
                  (if usPos > 0 then 
                      (usPos+1,className.length) -> className.sub -> classname[]
                  if);
-                 (className[],thisDesc[],true,theDesc[],topDesc[]
+                 (className[],theDesc[],true,theDesc[],topDesc[]
                  ,false,true,true)
                    -> genPtnMethod;
                  x[] -> exitP[];
                  d[] -> doP[];
                  n[] -> enterP[];
-                 ds -> thisDesc
+                 ds -> theDesc
               #)
           if);
           (if hasClass then
@@ -556,16 +584,16 @@ do (# findBetaenv:
               true -> inEnterDoExitMethod;
               (if hasEnterMethod then
                   (* extra isEnter arg needed *)
-                  ThisDesc[] -> genEnterMethod
+                  TheDesc[] -> genEnterMethod
               if);
               (if hasDoMethod then
-                  (ThisDesc[]
+                  (TheDesc[]
                   , false(*not hasEnterMethod*), false (*not hasExitMethod*),subLevel) 
                     -> genDoMethod
               if);
               (if hasExitMethod then
                   (* extra isExit arg needed *)
-                  ThisDesc[] -> genExitMethod
+                  TheDesc[] -> genExitMethod
               if);
               false -> inEnterDoExitMethod;
           if);
