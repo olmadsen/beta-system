@@ -12,6 +12,7 @@ INCLUDE 'remotedumper'
         'UI/enveditor'
         'UI/objectlistview'
         'UI/refdiagview'
+        'UI/heapview'
         '~beta/guienv/utils/promptForArgs'
         '~beta/toollibs/utils/options'
         '~beta/toollibs/utils/systemenvcompspawner'
@@ -38,11 +39,11 @@ DEFAULT_SIZE: (#  exit (250,250) #);
 (* This is the programdescriptor from valhalla.bet *)
 valhallaApplication: valhallaGUI
   (#
-     <<SLOT valhallalib:Attributes>>;
      (*FGC, windowEnvType:: valhallaGUI; *)
      (*FGC, setWindowEnv::  
       (#  do gui[]->theWindowEnv[] #);
       *)
+     <<SLOT valhallalib:Attributes>>;
      thespawner: @systemenvspawner;
      theProgramFF: ^mps.ast.fragmentForm;
      AplProcess: GUIprocess
@@ -53,10 +54,7 @@ valhallaApplication: valhallaGUI
             exit breakpoints[]
             #);
           loadbreakPoints:
-            (#
-               breakpoints:
-                 ^stream;
-               
+            (# breakpoints: ^stream; 
             enter breakpoints[]
             <<SLOT processInterfaceLoadBreakPoints:DoPart>>
             #);
@@ -73,15 +71,16 @@ valhallaApplication: valhallaGUI
                  #)
             <<SLOT SDTracePointHit:DoPart>>
             #);
-          showObjectOnStop::<
+          showObjectOnStop::< 
             (#  do valhallaprefs.showObjectOnStop->value #);
+          
        #);
-     debuggeeInterface::< AplProcess;
      (* The process being debugged. *)
+     debuggeeInterface::< AplProcess;
      SDObjectOwner: @objectowner;
      SDWindow: ^gui.window;
-     theEnveditor: ^enveditType;
      (* Environment editor. *)
+     theEnveditor: ^enveditType;
      enveditType: (*FGC, gui.*) gui.envEditor
        (# onClose::  (#  do none ->theEnveditor[] #) #);
      valhallaPrefs: ^valhallaPreferences;
@@ -332,7 +331,10 @@ valhallaApplication: valhallaGUI
             (#
                failure:: 
                  (# 
-                 do true->continue; (* Display warning *) 'Error during Continue!'->continueError
+                 do
+                    true->continue;
+                    (* Display warning *)
+                    'Error during Continue!'->continueError
                  #)
             #);
           'Running'-> (*FGC, gui.*) putpinfo;
@@ -347,7 +349,6 @@ valhallaApplication: valhallaGUI
           if)
        #);
      doFinish: <<SLOT valhalladoFinish:Descriptor>>;
-     stopped: @Boolean;
      (*  TRUE if doStop was called. *)
      (* procwaiter
       * ==========
@@ -358,22 +359,15 @@ valhallaApplication: valhallaGUI
       * 
       * procwaiter blocks on waitersem until it should wait for the debuggee
       * to stop. Then it blocks on a call to debuggee.processComm.wait. *)
+     stopped: @Boolean;
      waitersem: @semaphore;
      procwaiter: @|System (#  do <<SLOT procwaiter:Descriptor>> #);
-     
-     theRefDiagView: ^refDiagView;
-     refDiagView: main.refDiagView
-       (# heap: ^heapSortedByAddress;
-          target: ^debuggee.remoteBetaObject;
-          RDObjectOwner: @objectOwner
-            (#
-               onObjectIsGarbage::
-                 (#
-                 do bo[]->onSetObjectIsGarbage;
-                    (*doUpdate;*)
-                 #);
-            #);
-          
+     theHeapView: ^heapView;
+     heapView: main.heapView
+       (#
+          objHeap: ^heapHashedByProto;
+          close:: 
+            (#  do none ->theHeapView[] #);
           describe:
             (#
                txt: ^text;
@@ -436,98 +430,175 @@ valhallaApplication: valhallaGUI
                
             exit txt[]
             #);
-          
-          onShowObject::
-            (# ro: ^debuggee.remoteBetaObject;
-            do current[]->ro[];
-               ro[]->setTarget;
-            #);
-          
-          showObjectView::<
+          findObjects:
             (# 
-            do betaObj[]->newObjectMoveable;
+            do
+               debuggee.processcomm.
+                 scanHeapByProto->objHeap[];
+                 (# i: @integer; 
+                 do
+                    1->i;
+                    L:
+                      (# 
+                      do
+                         (if i >= objHeap.range then leave L;  if);
+                         i
+                           ->objHeap.scanIndexed
+                             (# bo: ^debuggee.remoteBetaObject; 
+                             do
+                                current.adr->debuggee.newRemoteObject->bo[];
+                                (bo[],bo[]->describe)->insertTreeObj;
+                                
+                             #);
+                         i+1->i;
+                         restart L;
+                         
+                      #);
+                    
+                 #);
+               updateTree;
+               
             #);
           
-          pointsto::<
-            (# ro, ro2: ^debuggee.remoteBetaObject;
-            do false->result;
+       #);
+     theRefDiagView: ^refDiagView;
+     refDiagView: main.refDiagView
+       (#
+          heap: ^heapSortedByAddress;
+          target: ^debuggee.remoteBetaObject;
+          RDObjectOwner: @objectOwner
+            (#
+               onObjectIsGarbage:: 
+                 (#  do bo[]->onSetObjectIsGarbage; (*doUpdate;*)  #);
+               
+            #);
+          describe:
+            (#
+               txt: ^text;
+               bo: ^debuggee.remotebetaobject;
+               proto: @integer;
+               ComponentPTValue: (#  exit (- 1) #);
+               StackObjectPTValue: (#  exit (- 2) #);
+               StructurePTValue: (#  exit (- 3) #);
+               RefRepPTValue: (#  exit (- 4) #);
+               LongRepPTValue: (#  exit (- 5) #);
+               ByteRepPTValue: (#  exit (- 6) #);
+               ShortRepPTValue: (#  exit (- 7) #);
+               DoubleRepPTValue: (#  exit (- 8) #);
+               DopartObjectPTValue: (#  exit (- 9) #);
+               DynItemRepPTValue: (#  exit (- 10) #);
+               DynCompRepPTValue: (#  exit (- 11) #);
+               
+            enter bo[]
+            do
+               bo.protoAdr->proto;
+               (if proto
+                // ComponentPTValue then
+                   '[Component]'->txt[]; 
+                // StackObjectPTValue then
+                   '[StackObject]'->txt[]; 
+                // StructurePTValue then
+                   '[Structure]'->txt[]; 
+                // RefRepPTValue then
+                   '[Reference_Repetition]'->txt[]; 
+                // LongRepPTValue then
+                   '[Long_Repetition]'->txt[]; 
+                // ByteRepPTValue then
+                   '[Byte_Repetition]'->txt[]; 
+                // ShortRepPTValue then
+                   '[Short_Repetition]'->txt[]; 
+                // DoubleRepPTValue then
+                   '[Double_Repetition]'->txt[]; 
+                // DopartObjectPTValue then
+                   '[DoPart]'->txt[]; 
+                // DynCompRepPTValue then
+                   '[DynItem]'->txt[]; 
+                // DynCompRepPTValue then
+                   '[DynComponent]'->txt[]; 
+                else
+                   (bo.description).copy->txt[]; 
+               if);
+               
+            exit txt[]
+            #);
+          onShowObject:: 
+            (# ro: ^debuggee.remoteBetaObject; 
+            do current[]->ro[]; ro[]->setTarget; 
+            #);
+          showObjectView::<  (#  do betaObj[]->newObjectMoveable;  #);
+          pointsto::< 
+            (# ro,ro2: ^debuggee.remoteBetaObject; 
+            do
+               false->result;
                dest[]->ro[];
                src[]->ro2[];
-               (if 'NONE'->(ro[]->describe).equal then
-                   leave pointsto;
-               if);
+               (if 'NONE'->(ro[]->describe).equal then leave pointsto;  if);
                ro.getAddress->debuggee.processcomm.getRefsToObject->heap[];
                heap.scan
-               (#
-                  bo:
-                    ^debuggee.remotebetaobject;
-                  
-               do
-                  current.adr
-                    ->debuggee.newRemoteObject
-                    ->bo[];
-                  (if bo[] = ro2[] then
-                      true->result;
-                  if);
-               #);
+                 (# bo: ^debuggee.remotebetaobject; 
+                 do
+                    current.adr->debuggee.newRemoteObject->bo[];
+                    (if bo[] = ro2[] then true->result;  if);
+                    
+                 #);
+               
             #);
-          
           present:
-            (# thisObj: ^debuggee.remoteBetaObject;
+            (#
+               thisObj: ^debuggee.remoteBetaObject;
                objects: ^GUIprocess.remoteObjectDB;
                numHeapObjs: @integer;
                found: @boolean;
                
-            do 0->numHeapObjs;
-               heap.scan (# do numHeapObjs+1->numHeapObjs; #);
+            do
+               0->numHeapObjs;
+               heap.scan
+                 (#  do numHeapObjs+1->numHeapObjs;  #);
                debuggee.getRemoteObjectDB->objects[];
                1->startNewObjectColumn;
-               (if not ((target[]->describe, target[])->putNewObject) then
+               (if not ((target[]->describe,target[])->putNewObject) then
                    target[]->setIsTarget;
                    debuggee.curObj->debuggee.newRemoteObject->thisObj[];
-                   (thisObj[], RDObjectOwner[])->objects.addObjectOwner;
+                   (thisObj[],RDObjectOwner[])->objects.addObjectOwner;
                    numHeapObjs->startNewObjectColumn;
+                   
                 else
-                   numHeapObjs->numObjs;
-               if);               
-               
+                   numHeapObjs->numObjs; 
+               if);
                false->found;
                heap.scan
-               (#
-                  bo:
-                    ^debuggee.remotebetaobject;
-               do
-                  current.adr
-                    ->debuggee.newRemoteObject
-                    ->bo[];
-                  (if not ((bo[]->describe, bo[])->putNewObject) then
-                      true->found;
-                  if);
-                  (target[], bo[])->putNewEdge;
-                  current.adr->debuggee.newRemoteObject->thisObj[];
-                  (thisObj[], RDObjectOwner[])->objects.addObjectOwner;
-               #);
+                 (# bo: ^debuggee.remotebetaobject; 
+                 do
+                    current.adr->debuggee.newRemoteObject->bo[];
+                    (if not ((bo[]->describe,bo[])->putNewObject) then
+                        true->found; 
+                    if);
+                    (target[],bo[])->putNewEdge;
+                    current.adr->debuggee.newRemoteObject->thisObj[];
+                    (thisObj[],RDObjectOwner[])->objects.addObjectOwner;
+                    
+                 #);
                initObjects;
+               (if not found then curX-100->curX;  if);
                
-               (if not found then
-                   curX-100->curX;
-               if);
             #);
-          
-          setTarget: 
+          setTarget:
             (# 
             enter target[]
-            do target.getAddress
-                 ->
-               debuggee.processcomm.
-               getRefsToObject->heap[];
-               heap.size->putint; newline;
+            do
+               target.getAddress->debuggee.processcomm.getRefsToObject->heap[];
                present
             #);
+          close:: 
+            (# objects: ^GUIprocess.remoteObjectDB; 
+            do
+               none ->theRefDiagView[];
+               debuggee.getRemoteObjectDB->objects[];
+               RDObjectOwner[]->objects.removeObjectOwner;
+               
+            #);
           
-          close:: (# do NONE->theRefDiagView[]; #);
        #);
-     
      referenceView: main.objectListView
        (#
           heap: ^heapSortedByAddress;
@@ -537,8 +608,7 @@ valhallaApplication: valhallaGUI
                element:: 
                  (#
                     heap: ^heapSortedByAddress;
-                    target:
-                      ^debuggee.remoteBetaObject;
+                    target: ^debuggee.remoteBetaObject;
                     
                  #);
                
@@ -569,10 +639,7 @@ valhallaApplication: valhallaGUI
             do
                push;
                (if inx > 0 then
-                   (inx->heap.get).adr
-                     ->debuggee.newRemoteObject
-                     ->setTarget;
-                   
+                   (inx->heap.get).adr->debuggee.newRemoteObject->setTarget; 
                if);
                contents.backBtn.enable;
                
@@ -581,8 +648,7 @@ valhallaApplication: valhallaGUI
             (# 
             do
                (if inx > 0 then
-                   (inx->heap.get).adr
-                     ->debuggee.newRemoteObject
+                   (inx->heap.get).adr->debuggee.newRemoteObject
                      ->newObjectMoveable;
                    
                if);
@@ -590,29 +656,16 @@ valhallaApplication: valhallaGUI
             #);
           onBack:: 
             (# 
-            do
-               pop;
-               (if history.empty then
-                   contents.backBtn.disable; 
-               if);
-               
+            do pop; (if history.empty then contents.backBtn.disable;  if); 
             #);
           present:
-            (#
-               data: ^main.textList;
-               txt: ^text;
-               
+            (# data: ^main.textList; txt: ^text; 
             do
                &main.textList[]->data[];
                heap.scan
-                 (#
-                    bo:
-                      ^debuggee.remotebetaobject;
-                    
+                 (# bo: ^debuggee.remotebetaobject; 
                  do
-                    current.adr
-                      ->debuggee.newRemoteObject
-                      ->bo[];
+                    current.adr->debuggee.newRemoteObject->bo[];
                     bo[]->describe->data.append;
                     
                  #);
@@ -627,28 +680,17 @@ valhallaApplication: valhallaGUI
                txt: ^text;
                bo: ^debuggee.remotebetaobject;
                proto: @integer;
-               ComponentPTValue:
-                 (#  exit (- 1) #);
-               StackObjectPTValue:
-                 (#  exit (- 2) #);
-               StructurePTValue:
-                 (#  exit (- 3) #);
-               RefRepPTValue:
-                 (#  exit (- 4) #);
-               LongRepPTValue:
-                 (#  exit (- 5) #);
-               ByteRepPTValue:
-                 (#  exit (- 6) #);
-               ShortRepPTValue:
-                 (#  exit (- 7) #);
-               DoubleRepPTValue:
-                 (#  exit (- 8) #);
-               DopartObjectPTValue:
-                 (#  exit (- 9) #);
-               DynItemRepPTValue:
-                 (#  exit (- 10) #);
-               DynCompRepPTValue:
-                 (#  exit (- 11) #);
+               ComponentPTValue: (#  exit (- 1) #);
+               StackObjectPTValue: (#  exit (- 2) #);
+               StructurePTValue: (#  exit (- 3) #);
+               RefRepPTValue: (#  exit (- 4) #);
+               LongRepPTValue: (#  exit (- 5) #);
+               ByteRepPTValue: (#  exit (- 6) #);
+               ShortRepPTValue: (#  exit (- 7) #);
+               DoubleRepPTValue: (#  exit (- 8) #);
+               DopartObjectPTValue: (#  exit (- 9) #);
+               DynItemRepPTValue: (#  exit (- 10) #);
+               DynCompRepPTValue: (#  exit (- 11) #);
                
             enter bo[]
             do
@@ -661,9 +703,7 @@ valhallaApplication: valhallaGUI
                 // StructurePTValue then
                    '[Structure]'->txt[]; 
                 // RefRepPTValue then
-                   '[Reference_Repetition]'
-                     ->txt[];
-                   
+                   '[Reference_Repetition]'->txt[]; 
                 // LongRepPTValue then
                    '[Long_Repetition]'->txt[]; 
                 // ByteRepPTValue then
@@ -688,10 +728,7 @@ valhallaApplication: valhallaGUI
             (# txt: ^text; 
             enter target[]
             do
-               target.getAddress
-                 ->
-                   debuggee.processcomm.
-                     getRefsToObject->heap[];
+               target.getAddress->debuggee.processcomm.getRefsToObject->heap[];
                present
             #)
        #);
@@ -716,16 +753,37 @@ valhallaApplication: valhallaGUI
        (#
           target: ^debuggee.remoteBetaObject;
           computeFrame:
-            (# frame: @rectangle;
-            do (13, 13)->frame.topLeft; (400,300)->frame.size;
+            (# frame: @rectangle; 
+            do (13,13)->frame.topLeft; (400,300)->frame.size; 
             exit frame
             #);
+          
        enter target[]
-       do (if theRefDiagView[] = NONE then
+       do
+          (if theRefDiagView[] = none then
               &refDiagView[]->theRefDiagView[];
-              (main.objworld[], computeFrame)->theRefDiagView.open;
+              (main.objworld[],computeFrame)->theRefDiagView.open;
+              
           if);
           target[]->theRefDiagView.setTarget;
+          
+       #);
+     newHeapView:
+       (#
+          computeFrame:
+            (# frame: @rectangle; 
+            do (13,13)->frame.topleft; (400,300)->frame.size; 
+            exit frame
+            #);
+          
+       do
+          (if theHeapView[] = none then
+              &heapView[]->theHeapView[];
+              (main.objworld[],computeFrame)->theHeapView.open;
+              
+          if);
+          theHeapView.findObjects;
+          
        #);
      mystackbrowser: (*FGC, gui.*) main.stackbrowser
        (#
@@ -960,10 +1018,10 @@ valhallaApplication: valhallaGUI
        enter comp[]
        <<SLOT newstackbrowserbody:DoPart>>
        #);
-     sockgen: @socketGenerator;
      (* FGC,     gui: @valhallaGUI
       (# *)
      (* gui eliminated *)
+     sockgen: @socketGenerator;
      dc: ^MPS.AST.valhallaDynamicCompiler;
      dynamicCodeCounter: @integer;
      initCompiler: @<<SLOT ValhallaInitCompiler:Descriptor>>;
@@ -996,10 +1054,6 @@ valhallaApplication: valhallaGUI
           currentCfe: ^main.codeeditor;
           
        <<SLOT ValhallaInitCodeEditor:DoPart>>
-       #);
-     newCodeView:: 
-       (# 
-       do cast[]->newcodemoveable
        #);
      (*     ymerBrowserWindow::< 
       (#
@@ -1065,6 +1119,7 @@ valhallaApplication: valhallaGUI
       #); *)
      (* The following final bound virtuals are declared in valhallaGUI,
       * and called by menus and buttons in the user-interface. *)
+     newCodeView::  (#  do cast[]->newcodemoveable #);
      newDebuggee:: 
        (# changedOutside,otherError: @boolean
        do
@@ -1292,14 +1347,18 @@ valhallaApplication: valhallaGUI
                     show::  (#  do comp[]->newstackview #);
                     showC::  (#  do ast[]->newcodemoveable;  #);
                     ShowR::  (#  do obj[]->newReferenceView;  #);
-                    ShowRD:: (# do obj[]->newRefDiagView; #);
+                    ShowRD::  (#  do obj[]->newRefDiagView;  #);
+                    ShowHV::  (#  do newHeapView;  #);
+                    
                  #);
                addmovItems: movo.addObjectViewactionedMenuItems
                  (#
                     show::  (#  do comp[]->newstackview #);
                     showC::  (#  do ast[]->newcodemoveable;  #);
                     ShowR::  (#  do obj[]->newReferenceView #);
-                    ShowRD:: (# do obj[]->newRefDiagView #);
+                    ShowRD::  (#  do obj[]->newRefDiagView #);
+                    ShowHV::  (#  do newHeapView;  #);
+                    
                  #);
                mov: ^main.moveable;
                movo: ^main.moveableObjectView;
@@ -1326,6 +1385,7 @@ valhallaApplication: valhallaGUI
             (# open::  (#  <<SLOT mainTypeMenubarTypeOpen:DoPart>> #) #);
           onhide::  (#  do resetdebugger #)
        #);
+     (* FGC #); *)
      init::< (* gui.init *) 
        (# (*FGC, skal dette i en pattern, saa det kan redo *) 
        do
@@ -1353,7 +1413,6 @@ valhallaApplication: valhallaGUI
           INNER ;
           
        #);
-     (* FGC #); *)
      loadSources:
        (# exec: ^text
        enter exec[]
@@ -1386,22 +1445,38 @@ valhallaApplication: valhallaGUI
             do
                (if not TCPInitialized then initTCP if);
                program[]->setSrcNameParam;
-               program[]->setExecNameParam;
                (* (if debuggeeOutDated then leave debugProgram if); *)
+               program[]->setExecNameParam;
                sources.edenv.globalWriteProtection->GlobalWriteProtectionStatus;
                true->sources.edenv.setglobalWriteProtection;
                ensureKilled;
                onTerminate;
                0->setPIDparam;
-               true->THIS(valhallaapplication).isdebugging;
-               (if sources.sifExternalInterface[] <> none then
-                   false->sources.sifExternalInterface.isEditor; 
-               if);
-               (if (FALSE->runNewDebuggee) then
-                   main.show; true->value
+               (if not (THIS(valhallaapplication).isdebugging) then
+                   true->THIS(valhallaapplication).isdebugging;
+                   (if sources.sifExternalInterface[] <> none then
+                       false->sources.sifExternalInterface.isEditor; 
+                   if);
+                   (if (FALSE->runNewDebuggee) then
+                       main.show; true->value
+                    else
+                       resetDebugger
+                   if)
                 else
-                   resetDebugger
-               if)
+                     (# msg,title: ^text; 
+                     do
+                        &text[]->msg[];
+                        &text[]->title[];
+                        'It is not possible to have more than one debugger open'
+                          ->msg.puttext;
+                        'Error'->title.puttext;
+                        (main[],msg[],title[])->gui.alertUser;
+                        true->value;
+                        
+                     #);
+                   
+               if);
+               
             #);
           debugProgramAs:: 
             (# doKill: @boolean; execName,msg: ^text; 
@@ -1465,17 +1540,19 @@ valhallaApplication: valhallaGUI
        enter name[]
        do INNER
        #);
+     (* Exceptions should call this and close debugger in mjolnertool *)
      ResetDebugger:: 
        (#
           awaitdebuggee:
             (# pid: @integer; 
-            do
-               getPidParam->pid;
-               <<SLOT awaitdebuggee:Descriptor>>
+            do getPidParam->pid; <<SLOT awaitdebuggee:Descriptor>>
             #)
        do
           none ->theProgramFF[];
-          true->sources.sifExternalInterface.isEditor;
+          true
+            ->
+              sources.sifExternalInterface.
+                isEditor;
           objectviews.newscan
             (#  do cur.encl.tryclose #);
           stackviews.newscan
@@ -1495,7 +1572,6 @@ valhallaApplication: valhallaGUI
             ->sources.edenv.setGlobalWriteProtection;
           INNER
        #);
-     (* Exceptions should call this and close debugger in mjolnertool *)
      continueError:
        (# msg: ^text; 
        enter msg[]
