@@ -434,7 +434,7 @@ AbstractNode: PatternDiagramNode
 FragmentNode: AbstractNode
   (#
      theFragment: @FragReferenceUserData (# Type::< FragmentForm #);
-     theForm: @ASTReferenceUserData (# Type::< betaGram.BetaForm #);
+     theRoot: @ASTReferenceUserData (# Type::< AST #);
      sifEditorInstance: @Integer;
      display::< 
        (# 
@@ -444,10 +444,13 @@ FragmentNode: AbstractNode
      ConcludeDisplay::< 
        (#  do INNER #);
      onDoubleClick::< 
-       (# 
+       (# doneInInner: @Boolean
        do
-          false->IndicateSelection;
-          detail
+          INNER ;
+          (if not doneInInner then
+              false->IndicateSelection;
+              detail
+          if)
        #);
      detail::<  (#  do INNER ; <<SLOT FragmentNodeDetail:Descriptor>> #);
      GetGroup::< 
@@ -483,12 +486,26 @@ FragmentNode: AbstractNode
        (# 
        do
           UDPrivate.UDFragmentNode->UserDataInit;
-          theForm.Init;
+          theRoot.Init;
           theFragment.Init;
           INNER
        #);
      dump::<  (#  do <<SLOT FragmentNodeDump:Descriptor>>;  #);
      
+  #);
+DoPartNode: FragmentNode
+  (#
+     display::< 
+       (#  do ': DoPart'->t.append;  #);
+     onDoubleClick::< 
+       (#  do true->doneInInner #);
+     onInit::< 
+       (# 
+       do
+          UDPrivate.UDDoPartNode
+            ->UserDataInit;
+          INNER
+       #)
   #);
 AttributesNode: FragmentNode
   (#
@@ -1604,6 +1621,210 @@ ReferenceConnector: CommonConnector
 (#
    oldSelection: ^PatternDiagramNode;
    theList: @DiagramList;
+   redisplayRelations:
+     (# connectorList: ^ObjectList
+     do
+        getConnectors->connectorList[];
+        (if connectorList[] <> none then
+            connectorList.scan
+              (#
+                 theConn: ^deletableConnector;
+                 n1,n2: ^myNode;
+                 node1,node2: ^PatternDiagramNode;
+                 theListDiagram: ^ListDiagram;
+                 theSimpleNode: ^theListDiagram.SimpleNode
+              do
+                 (if current## <= deletableConnector## then
+                     current[]->theConn[];
+                     true->theConn.getEnds->(n1[],n2[]);
+                     (if (n1[] <> none ) and (n2[] <> none ) then
+                         (if n1## <= AssociationNode## then
+                             n1.delete
+                          else
+                             n1[]->node1[];
+                             n2[]->node2[];
+                             node1.theDiagram->theListDiagram[];
+                             (if current## <= theListDiagram.prefixConnector##
+                              then
+                                 none ->theListDiagram.titleNode.thePrefixConn
+                             if);
+                             (if (current## <= DynamicItemConnector##) or
+                             (current## <= DynamicComponentConnector##) then
+                                 (if node1## <= theListDiagram.SimpleNode## then
+                                     node1[]->theSimpleNode[];
+                                     none ->theSimpleNode.theReferenceConnector
+                                  else
+                                     (if node2## <= theListDiagram.SimpleNode##
+                                      then
+                                         node2[]->theSimpleNode[];
+                                         none
+                                           ->theSimpleNode.theReferenceConnector
+                                     if)
+                                 if)
+                             if)
+                         if);
+                         theConn.delete
+                     if)
+                 if)
+              #)
+        if);
+        AssociationList.clear;
+        InheritanceList.clear;
+        DynReferenceList.clear;
+        theList.scan
+          (#
+             thePatternDeclDiagram: ^PatternDeclDiagram;
+             theFather: ^AST;
+             parentListDiag,theListDiagram: ^ListDiagram;
+             theDiagramNode: ^parentListDiag.DiagramNode
+          do
+             (if current.e## <= FragmentDiagram##
+              // true then 
+              else
+                 (if current.e## <= PatternDeclDiagram## then
+                     current.e[]->thePatternDeclDiagram[];
+                     (if
+                     (thePatternDeclDiagram.theDescriptor).frag.father
+                       ->isChecked then
+                         thePatternDeclDiagram.theDescriptor->getPrefix
+                           ->thePatternDeclDiagram.thePrefix;
+                         (if thePatternDeclDiagram.thePrefix <> none then
+                             (thePatternDeclDiagram.theDescriptor).father
+                               ->theFather[];
+                             (if theFather## <= betaGram.AttributeDecl## then
+                                 (theFather[],
+                                  (thePatternDeclDiagram.thePrefix).father)
+                                   ->InheritanceList.insert
+                              else
+                             (*could be a singular*)
+                                 theFather.father->theFather[];
+                                 (if theFather[] <> none then
+                                     (if theFather## <= betaGram.AttributeDecl##
+                                      then
+                                         ((
+                                          (thePatternDeclDiagram.theDescriptor).
+                                          father).father,
+                                          (thePatternDeclDiagram.thePrefix).
+                                          father)->InheritanceList.insert
+                                     if)
+                                 if)
+                             if)
+                         if)
+                      else
+                         (if thePatternDeclDiagram.theParentNode <> none then
+                             (thePatternDeclDiagram.theParentNode).theDiagram
+                               ->parentListDiag[];
+                             thePatternDeclDiagram.theParentNode
+                               ->theDiagramNode[];
+                             (if theDiagramNode.thePrefix <> none then
+                                 theDiagramNode.thePrefix
+                                   ->thePatternDeclDiagram.thePrefix
+                             if)
+                         if)
+                     if)
+                 if);
+                 current.e[]->theListDiagram[];
+                 theListDiagram.localNodes.scan
+                   (#
+                      thePatternNode: ^theListDiagram.PatternNode;
+                      theSimpleNode: ^theListDiagram.SimpleNode;
+                      theObjectSpec: ^AST;
+                      na: ^betaGram.nameApl;
+                      nd: ^betaGram.nameDcl;
+                      rem: ^betaGram.remote
+                   do
+                      (if current## <= theListDiagram.PatternNode## then
+                          current[]->thePatternNode[];
+                          thePatternNode.setupAssociation
+                       else
+                          (if current## <= theListDiagram.SimpleNode## then
+                              current[]->theSimpleNode[];
+                              (if theSimpleNode.theReferenceSpec <> none then
+                                  (theSimpleNode.theReferenceSpec).getson1
+                                    ->theObjectSpec[];
+                                  (if theObjectSpec.symbol
+                                   // betaGram.NameApl then
+                                      (if theObjectSpec.frag.father->ischecked
+                                       // true then
+                                          theObjectSpec[]->na[];
+                                          (if
+                                          ((theSimpleNode.theReferenceSpec).
+                                           symbol = betaGram.DynamicItem) or
+                                          ((theSimpleNode.theReferenceSpec).
+                                           symbol = betaGram.DynamicComponent)
+                                           then
+                                              na.dclRef->nd[];
+                                              (nd.father).father
+                                                ->
+                                                  theSimpleNode.
+                                                    theQualification;
+                                              (theSimpleNode.theDeclaration,
+                                               theSimpleNode.theQualification)
+                                                ->DynReferenceList.insert
+                                          if)
+                                      if);
+                                      
+                                   // betaGram.remote then
+                                      (if theObjectSpec.frag.father->ischecked
+                                       // true then
+                                          theObjectSpec[]->rem[];
+                                          rem.getnameApl->na[];
+                                          (if
+                                          ((theSimpleNode.theReferenceSpec).
+                                           symbol = betaGram.DynamicItem) or
+                                          ((theSimpleNode.theReferenceSpec).
+                                           symbol = betaGram.DynamicComponent)
+                                           then
+                                              na.dclRef->nd[];
+                                              (nd.father).father
+                                                ->
+                                                  theSimpleNode.
+                                                    theQualification;
+                                              (theSimpleNode.theDeclaration,
+                                               theSimpleNode.theQualification)
+                                                ->DynReferenceList.insert
+                                          if)
+                                      if);
+                                      
+                                  if)
+                              if)
+                          if)
+                      if)
+                   #)
+             if)
+          #);
+        theList.scan
+          (#
+             thePatternDeclDiagram: ^PatternDeclDiagram;
+             theListDiagram: ^ListDiagram
+          do
+             (if current.e## <= FragmentDiagram## then
+                 
+              else
+                 (if current.e## <= PatternDeclDiagram## then
+                     current.e[]->thePatternDeclDiagram[];
+                     thePatternDeclDiagram.DisplayInheritance
+                 if);
+                 current.e[]->theListDiagram[];
+                 theListDiagram.localNodes.scan
+                   (#
+                      thePatternNode: ^theListDiagram.PatternNode;
+                      theSimpleAttrDecl: ^theListDiagram.SimpleAttributeDecl
+                   do
+                      (if current## <= theListDiagram.PatternNode## then
+                          current[]->thePatternNode[];
+                          thePatternNode.DisplayAssociations
+                       else
+                          (if current## <= theListDiagram.SimpleAttributeDecl##
+                           then
+                              current[]->theSimpleAttrDecl[];
+                              theSimpleAttrDecl.DisplayReference
+                          if)
+                      if)
+                   #)
+             if)
+          #)
+     #);
    writeListTextData:
      (# attributeID: @integer; theText: ^text; ok: @boolean
      enter (attributeID,theText[])
@@ -2425,6 +2646,14 @@ do
                  true->thePatternDiagNode.initialisingSaved;
                  (if userDataVerbose then
                      'MakeLocalNodes: Created NonTerminalNode!'->putline
+                 if)
+             if);
+             (if NodeType = UDPrivate.UDDoPartNode then
+                 &theListDiagram.DoPartNode[]->thePatternDiagNode[]
+                   ->theObject[];
+                 true->thePatternDiagNode.initialisingSaved;
+                 (if userDataVerbose then
+                     'MakeLocalNodes: Created DoPartNode!'->putline
                  if)
              if);
              (if NodeType = UDPrivate.UDAttributesNode then
