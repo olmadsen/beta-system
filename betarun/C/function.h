@@ -55,6 +55,10 @@ extern char *ErrorMessage(BetaErr);
 /* C/outpattern.c */
 extern char *ProtoTypeName(ProtoType *theProto);
 extern long M_Part(ProtoType * proto);
+#ifdef nti
+extern void NotifyFunc(char *s1);
+#endif
+extern int IsmakingDump(void);
 extern void  DisplayObject(FILE *,Object *,long);
 extern int  DisplayBetaStack(BetaErr, Object *, long *, long);
 #ifdef sparc

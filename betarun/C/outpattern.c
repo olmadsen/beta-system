@@ -192,6 +192,25 @@ static void PrintLegend(void)
 #undef P
 }
 
+/********************* IsMakingDump: ********************/
+
+int IsMakingDump(void)
+/* called from guienv */
+{
+  /*fprintf(stderr, "IsMakingDump: returning %d\n", isMakingDump); fflush(stderr);*/
+  return isMakingDump;
+};
+
+#ifdef nti
+void NotifyFunc(char *s1){
+  if (NoDumpDialog) { 
+    fprintf(output, "%s\n", s1); 
+  } else { 
+    while(ShowCursor(TRUE)<=0);
+    MessageBox(GetActiveWindow(),s1,"BETA Runtime Notification",MB_OK); 
+  }
+}
+#endif /* nti */
 
 /********************** DisplayCell: ********************/
 
@@ -1639,19 +1658,23 @@ int DisplayBetaStack(BetaErr errorNumber,
   FILE *old_output=0;
 
   DEBUG_CODE({
-    fprintf(output, "\n");
-    fprintf(output, "DisplayBetaStack(errorNumber=%d", errorNumber);
-    PrintBetaError(errorNumber); fprintf(output, ",\n");
-    fprintf(output, "                 theObj=0x%x ", (int)theObj);
+    fprintf(stderr, "\n");
+    fprintf(stderr, "DisplayBetaStack(errorNumber=%d", errorNumber);
+    DEBUG_CODE(PrintBetaError(errorNumber)); 
+    fprintf(stderr, ",\n");
+    fprintf(stderr, "                 theObj=0x%x ", (int)theObj);
     DescribeObject(theObj);
-    fprintf(output, ",\n");
-    fprintf(output, "                 thePC=0x%x", (int)thePC);
-    PrintCodeAddress((int)thePC); fprintf(output, ",\n");
-    fprintf(output, "                 theSignal=%d", (int)theSignal);
-    PrintSignal((int)theSignal);
-    fprintf(output, ")\n");
-    fflush(output);
+    fprintf(stderr, ",\n");
+    fprintf(stderr, "                 thePC=0x%x", (int)thePC);
+    PrintCodeAddress((int)thePC); 
+    fprintf(stderr, ",\n");
+    fprintf(stderr, "                 theSignal=%d", (int)theSignal);
+    DEBUG_CODE(PrintSignal((int)theSignal));
+    fprintf(stderr, ")\n");
+    fprintf(stderr, "isMakingDump: %d\n", (int)isMakingDump);
+    fflush(stderr);
   });
+    
 
 #ifdef UseRefStack
 #define STACKEND RefSP
@@ -1671,7 +1694,8 @@ int DisplayBetaStack(BetaErr errorNumber,
       errorNumber = SignalErr;
     };
     NotifyErrorDuringDump((BetaErr)isMakingDump, errorNumber);
-    BetaExit(1);
+    /*BetaExit(1);*/
+    return 1;
   } else {
     isMakingDump=(int)errorNumber;
   }
@@ -1829,6 +1853,7 @@ int DisplayBetaStack(BetaErr errorNumber,
     fflush(output);
     fclose(output);
   } else {
+    /* Handling DumpStackErr */
     isMakingDump = 0;
     fflush(output);
   }
@@ -1839,25 +1864,31 @@ int DisplayBetaStack(BetaErr errorNumber,
   MakeMPWFile(dumpname);
 #endif /* MAC */
 
-  if (NotifyMessage[0]) Notify(NotifyMessage);
+  if (NotifyMessage[0]) {
+    Notify(NotifyMessage);
+  }
 
   isMakingDump = 0;
   return 0;
 } /* DisplayBetaStack */
 
+static int errorDuringDumpDisplayed = 0;
 void NotifyErrorDuringDump(BetaErr errorNumber, BetaErr errorNumber2)
 {
-  fprintf(output, "\n# Beta execution aborted: ");
-  fprintf(output, ErrorMessage(errorNumber));
-  fprintf(output, "\n# Error during dump: ");
-  fprintf(output, ErrorMessage(errorNumber2));
-  fprintf(output, ". Aborting.\n\n");
-  fflush(output);
-  fflush(stdout);
-#ifdef MT
-  isMakingDump=0; /* allow other threads to make dump */
-#endif
-  if (NotifyMessage[0]) Notify(NotifyMessage);
+  if (!errorDuringDumpDisplayed){
+    char buffer[500];
+    errorDuringDumpDisplayed = 1;
+    sprintf(buffer, 
+	    "\n# Beta execution aborted: %s\n# Error during dump: %s. Aborting.\n\n",
+	    ErrorMessage(errorNumber),
+	    ErrorMessage(errorNumber2));
+    fprintf(stderr, "%s", buffer);
+    fflush(stderr);
+    fflush(stdout);
+    fprintf(stderr, "NotifyErrorDuringDump: Showing MsgBox. isMakingDump=%d\n", (int)isMakingDump); fflush(stderr);
+    Notify(buffer);
+    fprintf(stderr, "NotifyErrorDuringDump: MsgBox done\n"); fflush(stderr);
+  }
   return;
 }
 
