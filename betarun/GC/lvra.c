@@ -1,6 +1,6 @@
 #include "beta.h"
 
-'ValRep *LVRAAlloc(ProtoType *proto, long range)
+ValRep *LVRAAlloc(ProtoType *proto, long range)
 {
   ValRep *    newRep;
   long           size;
