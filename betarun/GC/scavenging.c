@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1992 Mjolner Informatics Aps.
- * Mod: $Id: scavenging.c,v 1.40 1992-09-03 12:57:29 beta Exp $
+ * Mod: $Id: scavenging.c,v 1.41 1992-09-03 15:17:39 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 
@@ -287,6 +287,10 @@ void IOAGc()
 #endif
     
     /* Follow ActiveComponent */ 
+    if (!ActiveComponent && NumIOAGc == 1) {
+      fprintf(output, "#BETA: Could not allocate basic component\n");
+      exit(1);
+    }
     ActiveComponent->StackObj = 0;  /* the stack is not valid anymore. */
     ProcessReference( &ActiveComponent);
     ProcessReference( &BasicItem );
