@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(60)";
+char betarun_version[] = "BETARUN VERSION 5.3(61)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.60  2002/01/04 23:02:00  beta
+ * Changes for X86 sol r5.3 betarun boot
+ * Betarun version number: 60
+ * Developer: pa
+ *
  * Revision 1.59  2002/01/03 15:20:44  corry
  * Use .lib, not .o file for betarun on nti_gnu
  * Now can make new betarun on nti_gnu, and it works for simple programs (for all?)
