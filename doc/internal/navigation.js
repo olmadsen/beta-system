@@ -31,7 +31,9 @@ foldersTree = gFld("<B>Contents</B>", "");
 		   insDoc(aux2, gLnk(0, "Bidl", "../bidl/internal/todo.html"));
               insDoc(aux1, gLnk(0, "MPS", "../yggdrasil/internal/TODO"));
               insDoc(aux1, gLnk(0, "Documentation, general", "../admin/todo.html"));
-              insDoc(aux1, gLnk(0, "Manual Errors, reported", "http://www.mjolner.com/ErrorReports/Manuals/"));
+              aux2 = insFld(aux1, gFld("Manual Errors, reported", "http://www.mjolner.com/ErrorReports/Manuals/"));
+		   insDoc(aux2, gLnk(0, "r4.1", "http://www.mjolner.com/ErrorReports/Manuals/r4.1"));
+		   insDoc(aux2, gLnk(0, "r5.0", "http://www.mjolner.com/ErrorReports/Manuals/r5.0"));
 
        aux1 = insFld(foldersTree, gFld("CHANGES", ""));
               insDoc(aux1, gLnk(0, "CASE Tool", "../freja/internal/CHANGES"));
