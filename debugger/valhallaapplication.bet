@@ -22,7 +22,8 @@ INCLUDE 'remotedumper'
         '~beta/compiler/DYN/treelib'
         '~beta/pretty/astviewer'
         'debuggerinterface'
-        '~beta/mps/notifications';
+        '~beta/mps/notifications'
+        'toolbar';
 LIB_DEF 'valhalla' '../lib';
 BODY 'private/valhallabody';
 BODY 'private/breakpointMenus';
@@ -60,7 +61,6 @@ valhallaApplication: valhallaGUI
        #);
      debuggeeInterface::<
       AplProcess;
-     ;
      (* The process being debugged. *)
      theEnveditor: ^enveditType;
      (* Environment editor. *)
@@ -73,39 +73,62 @@ valhallaApplication: valhallaGUI
           f: @file;
           fault: @boolean;
           doRecompile:< BooleanValue;
+          currentFG: ^mps.ast.fragmentgroup;
           
        do
-          'outdated 432'
-            ->
-              screen.putline
-              (*
-               (*leave debuggeeoutdated;
-               getExecNameparam->f.name;
-               f.entry.modtime->debuggeemodtime;
-               mps.AST.dependencyGraph
-               (#
-               do init; xverboselevel.nothing->xverboselevel;
+          (if isStandAloneValhalla then leave debuggeeOutDated if);
+          getExecNameparam->f.name;
+          f.entry.modtime->debuggeemodtime;
+          mps.AST.dependencyGraph
+            (# 
+            do
+               init;
+               xverboselevel.nothing->xverboselevel;
                machine_type->TargetMachine[];
                machine_type->TargetDirectory[];
-               scan:getExecNameparam->scanextent
-               (# 
-               do
-               (if current.modtime>debuggeemodtime then
-               true->value;
-               leave scan;
-               if);
-               #);
-               #);
-               (if value then
-               (sources[],'SourceCode touched pleaced recompile program before debugging!',
-               'Debugging impossible!')->alertUser;
-               if);               
-               * )
-               ymerbrowser.browser.cge.fg[]
-               ->ymerbrowser.DGchangedOutside
-               (# onFragmentGroupChanged::<  <<@866:MainPart>>;  #);
-               fault->value;
-               *)
+               scan:
+               getExecNameparam
+                 ->scanextent
+                   (# 
+                   do
+                      (if current.modtime > debuggeemodtime then
+                          true->value; leave scan; 
+                      if);
+                      current[]->currentFG[];
+                      sources.edenv.groupEditorlist.scan
+                        (# 
+                        do
+                           (if current.fg[] = currentFG[] then
+                               (if current.touched > 0 then true->value if); 
+                           if);
+                           
+                        #);
+                      
+                   #)
+            #);
+          (if value then
+              (if sources.sifExternalInterface[] <> none then
+                  (sources.ymerbrowser[],'Debugging impossible!',
+                   'SourceCode touched, program must be recompiled! Compile?')
+                    ->gui.promptForBoolean
+                      (#
+                         result: @boolean;
+                         ok:: 
+                           (# 
+                           do
+                              getExecNameParam
+                                ->mps.fragmentGroupTable.getFragmentGroup
+                                ->sources.sifExternalInterface.compile->result;
+                              (if result then false->value if);
+                              
+                           #);
+                         
+                      #);
+                  
+              if);
+              
+          if);
+          
        #);
      debuggeeIsRunning: BooleanValue
        (# 
@@ -271,11 +294,13 @@ valhallaApplication: valhallaGUI
           if);
           
        #);
+     doGoUntil: <<SLOT valhalladoGoUntil:Descriptor>>;
      doContinue:
        (# 
        do
           debuggee.processComm.continue;
-          'Running'-> (*FGC, gui.*) putpinfo;
+          'Running'
+            -> (*FGC, gui.*) putpinfo;
           waitersem.V;
           
        #);
@@ -283,10 +308,12 @@ valhallaApplication: valhallaGUI
        (# 
        do
           (if debuggeeIsRunning then
-              TRUE->stopped; debuggee.processComm.stop
+              TRUE->stopped;
+              debuggee.processComm.stop
           if)
        #);
-     doFinish: <<SLOT valhalladoFinish:Descriptor>>;
+     doFinish:
+      <<SLOT valhalladoFinish:Descriptor>>;
      stopped: @Boolean;
      (*  TRUE if doStop was called. *)
      (* procwaiter
@@ -447,7 +474,13 @@ valhallaApplication: valhallaGUI
        enter bo[]
        <<SLOT newobjectmoveable:DoPart>>
        #);
-     valhallaCmdLinePrompt: (*FGC, gui.*) gui.promptForArgs
+     ShowObjectReferences:
+       (# rb: ^debuggee.remoteBetaObject; h: ^heapSortedByAddress; 
+       enter rb[]
+       <<SLOT ShowObjectReferencesDP:DoPart>>
+       #);
+     valhallaCmdLinePrompt: (*FGC, gui.*)
+      gui.promptForArgs
        (#
           okCalled: @Boolean;
           epdb: ^executableParamDB;
@@ -638,29 +671,32 @@ valhallaApplication: valhallaGUI
        #);
      stopDebugging::  (#  do main.dohide;  #);
      killStatus:: debuggeeIsReady (#  #);
-     showStopCause:
-       (* Update info field with reason debuggee is stopped *)
+     showStopCause: (* Update info field with reason debuggee is stopped *)
        (# tmp: ^text
-       do (if debuggee.bml.userBreakHit
-           // 0 
-           // MNGR_USERSKIP then
-              (if debuggee.bml.skipBreakHit or stopped 
-                  then
-                  'Stopped'-> putpinfo; 
+       do
+          (if debuggee.bml.userBreakHit
+           // 0 // MNGR_USERSKIP then
+              (if debuggee.bml.skipBreakHit or stopped then
+                  'Stopped'->putpinfo; 
                else
-                  &text[] -> tmp[];
-                  'Runtime Error: %s'->tmp.putformat
-                  (# dummy: @Integer; 
-                  do debuggee.error->(dummy,s); 
-                  #);
-                  tmp[]-> putpinfo;
+                  &text[]->tmp[];
+                  'Runtime Error: %s'
+                    ->tmp.putformat
+                      (# dummy: @Integer; 
+                      do debuggee.error->(dummy,s); 
+                      #);
+                  tmp[]->putpinfo;
+                  
               if);
+              
            else
-              &text[] -> tmp[];
-              'Stopped at breakpoint %d' ->tmp.putformat
-              (#  do debuggee.bml.userBreakHit->d #);
-              tmp[]-> putpinfo;
+              &text[]->tmp[];
+              'Stopped at breakpoint %d'
+                ->tmp.putformat (#  do debuggee.bml.userBreakHit->d #);
+              tmp[]->putpinfo;
+              
           if);
+          
        #);
      source:: 
        (# x,y: @integer
@@ -698,6 +734,9 @@ valhallaApplication: valhallaGUI
        #);
      debuggeeContinue::  (#  do (if continueStatus then doContinue if) #);
      continueStatus:: debuggeeIsReady (#  #);
+     debuggeeGoUntilMark:: 
+       (#  do (if GoUntilMarkStatus then doGoUntil if) #);
+     GoUntilMarkStatus:: debuggeeIsReady (#  #);
      debuggeeStepOver::  (#  do doStepOver #);
      stepOverStatus:: debuggeeIsStarted (#  #);
      debuggeeStepInto::  (#  do doStepInto;  #);
@@ -826,13 +865,13 @@ valhallaApplication: valhallaGUI
                  (#
                     show::  (#  do comp[]->newstackview #);
                     showC::  (#  do ast[]->newcodemoveable;  #);
-                    
+                    ShowR::  (#  do obj[]->ShowObjectReferences;  #)
                  #);
                addmovItems: movo.addObjectViewactionedMenuItems
                  (#
                     show::  (#  do comp[]->newstackview #);
                     showC::  (#  do ast[]->newcodemoveable;  #);
-                    
+                    ShowR::  (#  do obj[]->ShowObjectReferences #)
                  #);
                mov: ^main.moveable;
                movo: ^main.moveableObjectView;
@@ -899,28 +938,40 @@ valhallaApplication: valhallaGUI
      obp: @objectPreferences;
      ExternalInterface: @debuggerInterface
        (#
+          GlobalWriteProtectionStatus: @boolean;
+          myValhallaToolbar: gui.valhallatoolbar
+            (#
+               onStack::  (#  do debuggeeCurComp #);
+               onCode::  (#  do debuggeeCurCode #);
+               onObject::  (#  do debuggeeCurObj #);
+               
+            #);
           debugProgram:: 
             (# 
             do
-               'Debugging'->screen.puttext;
-               program[]->screen.putline;
-               main.show;
+               sources.edenv.globalWriteProtection->GlobalWriteProtectionStatus;
                program[]->setExecNameParam;
+               (if debuggeeOutDated then leave debugProgram if);
+               main.show;
                ensureKilled;
                onTerminate;
                0->setPIDparam;
-               true->this(valhallaapplication).isdebugging;
-               (if sources.sifExternalInterface[]<>none then
-                   false->sources.sifExternalInterface.isEditor;
+               true->THIS(valhallaapplication).isdebugging;
+               (if sources.sifExternalInterface[] <> none then
+                   false->sources.sifExternalInterface.isEditor; 
                if);
                FALSE->runNewDebuggee
             #);
-          stopDebugging::<(# do 'stopdebugging not imple'->putline #);
-          isDebugging::(# do this(valhallaApplication).isdebugging->value #);
-          onCodeViewOpen::<
+          stopDebugging::< 
+            (#  do THIS(valhallaapplication).stopdebugging #);
+          isDebugging:: 
+            (#  do THIS(valhallaApplication).isdebugging->value #);
+          onCodeViewOpen::< 
             (# theCodeViewer: ^gui.window.codemoveableeditor; 
-            do theCodeView[]->theCodeViewer[];
-               (# <<SLOT OnCodeViewOpenAppendAction:doPart >>  #);
+            do
+               theCodeView[]->theCodeViewer[];
+                 (#  <<SLOT OnCodeViewOpenAppendAction:DoPart>> #);
+               
             #)
        #);
      breakpoints: ^text;
@@ -928,7 +979,10 @@ valhallaApplication: valhallaGUI
        (#
           awaitdebuggee:
             (# pid: @integer; 
-            do getPidParam->pid; <<SLOT awaitdebuggee:Descriptor>>; 
+            do
+               getPidParam->pid;
+               <<SLOT awaitdebuggee:Descriptor>>;
+               
             #);
           
        do
@@ -938,23 +992,21 @@ valhallaApplication: valhallaGUI
           stackviews.newscan
             (#  do cur.encl.tryclose #);
           (if debuggee[] <> none then
-              debuggee.savebreakpoints
-                ->breakpoints[];
+              debuggee.savebreakpoints->breakpoints[];
               debuggee.removeAllBreakPoints;
               
           if);
-          (if debuggeeIsReady and
-          (debuggee[] <> none ) then
+          (if debuggeeIsReady and (debuggee[] <> none ) then
               debuggee.kill; awaitdebuggee; 
           if);
           false->isDebugging;
+          externalInterface.GlobalWriteProtectionStatus
+            ->sources.edenv.setGlobalWriteProtection;
           INNER
        #);
      
   do
-     objectpool.get
-       (# type::< valhallaPreferences;  #)
-       ->valhallaPrefs[];
+     objectpool.get (# type::< valhallaPreferences;  #)->valhallaPrefs[];
      valhallaPrefs[]->obp.p[];
      obp[]->objectpool.put;
      INNER ;
