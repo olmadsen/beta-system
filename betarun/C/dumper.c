@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: dumper.c,v $, rel: %R%, date: $Date: 1992-06-08 15:19:25 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: dumper.c,v $, rel: %R%, date: $Date: 1992-06-10 14:50:11 $, SID: $Revision: 1.8 $
  * by Lars Bak
  */
 #include <ctype.h>
@@ -83,23 +83,23 @@ static DumpObject( theObj)
     if( inIOA( theObj)){
       if( isSpecialProtoType( theObj->Proto )){
         switch( (int) theObj->Proto ){
-	case ComponentPTValue:
+	case (int) ComponentPTValue:
   	    DumpFormat('C', theObj->GCAttr, 4*ObjectSize(theObj),
                        DumpItemName( ComponentItem( theObj) ),
                        DumpItemFragment( ComponentItem( theObj) ) );
 	    break;
-	case StackObjectPTValue:
+	case (int) StackObjectPTValue:
 	    DumpFormat('S', theObj->GCAttr, 4*ObjectSize(theObj), 0, 0);
 	    break;
-        case ByteRepPTValue:
+        case (int) ByteRepPTValue:
 	    DumpFormat('B', theObj->GCAttr, 4*ObjectSize(theObj), 
                        DumpValContents( theObj), "" );
 	  break;
-        case ValRepPTValue:
+        case (int) ValRepPTValue:
 	    DumpFormat('V', theObj->GCAttr, 4*ObjectSize(theObj), 
                        DumpValContents( theObj), "" );
 	  break;
-        case RefRepPTValue:
+        case (int) RefRepPTValue:
 	    DumpFormat('R', theObj->GCAttr, 4*ObjectSize(theObj), 0, 0);
 	    break;
         default:

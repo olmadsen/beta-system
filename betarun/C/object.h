@@ -102,9 +102,9 @@ struct CallBackEntry {
     long		nop;
 #else
     ref(Structure)      theStruct;
-    word		jsr;
-    void 	   (*) (handleCallBackPtr);
-    word		rts;
+    short		jsr;
+    void 	        (*handleCallBackPtr)();
+    short		rts;
 #endif
 };
 

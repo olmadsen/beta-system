@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-06-10 13:40:52 $, SID: $Revision: 1.18 $
+ * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-06-10 14:51:02 $, SID: $Revision: 1.19 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -356,11 +356,11 @@ void ProcessObject(theObj)
   theProto = theObj->Proto;
 
   if( (long) theProto < 0 ){  
-    switch( (long) theProto ){
-    case ByteRepPTValue:
-    case ValRepPTValue: return; /* No references in the type of object, so do nothing*/
+    switch( (int) theProto ){
+    case (int) ByteRepPTValue:
+    case (int) ValRepPTValue: return; /* No references in the type of object, so do nothing*/
 
-    case RefRepPTValue:
+    case (int) RefRepPTValue:
       /* Scan the repetition and follow all entries */
       { ptr(long) pointer;
         register long size, index;
@@ -375,7 +375,7 @@ void ProcessObject(theObj)
       
       return;
 
-    case ComponentPTValue:
+    case (int) ComponentPTValue:
       { ref(Component) theComponent;
 
         theComponent = Coerce( theObj, Component);
@@ -386,7 +386,7 @@ void ProcessObject(theObj)
       }
       return;
 
-    case StackObjectPTValue:
+    case (int) StackObjectPTValue:
       { ref(StackObject) theStackObject;
         ptr(long)        stackptr; 
         handle(Object)   theCell; 
@@ -417,7 +417,7 @@ void ProcessObject(theObj)
       }
       return;
 
-    case StructurePTValue:
+    case (int) StructurePTValue:
       ProcessReference( &(toStructure(theObj))->iOrigin );
       return;
     }
@@ -539,11 +539,11 @@ void ProcessAOAObject(theObj)
   theProto = theObj->Proto;
 
   if( (long) theProto < 0 ){  
-    switch( (long) theProto ){
-    case ByteRepPTValue: 
-    case ValRepPTValue: 
+    switch( (int) theProto ){
+    case (int) ByteRepPTValue: 
+    case (int) ValRepPTValue: 
       return; /* No references in the type of object, so do nothing*/
-    case RefRepPTValue:
+    case (int) RefRepPTValue:
       /* Scan the repetition and follow all entries */
       { ptr(long) pointer;
         register long size, index;
@@ -555,7 +555,7 @@ void ProcessAOAObject(theObj)
           else pointer++;
       }
       return;
-    case ComponentPTValue:
+    case (int) ComponentPTValue:
       { ref(Component) theComponent;
         theComponent = Coerce( theObj, Component);
         ProcessAOAReference( &theComponent->StackObj);
@@ -564,10 +564,10 @@ void ProcessAOAObject(theObj)
         ProcessAOAObject( ComponentItem( theComponent));
       }
       return;
-    case StackObjectPTValue:
+    case (int) StackObjectPTValue:
        Claim( FALSE, "ProcessAOAObject: No StackObject in AOA");
        return;
-    case StructurePTValue:
+    case (int) StructurePTValue:
       ProcessAOAReference( &(toStructure(theObj))->iOrigin );
       return;
     }
@@ -672,13 +672,13 @@ void IOACheckObject( theObj)
   Claim( !inBetaHeap(theProto),"#IOACheckObject: !inBetaHeap(theProto)");
 
   if( (long) theProto < 0 ){  
-    switch( (long) theProto ){
-    case ByteRepPTValue:
-    case ValRepPTValue:
+    switch( (int) theProto ){
+    case (int) ByteRepPTValue:
+    case (int) ValRepPTValue:
     /* No references in the type of object, so do nothing*/
       return;
 
-    case RefRepPTValue:
+    case (int) RefRepPTValue:
       /* Scan the repetition and follow all entries */
       { ptr(long) pointer;
         register long size, index;
@@ -693,7 +693,7 @@ void IOACheckObject( theObj)
       
       return;
 
-    case ComponentPTValue:
+    case (int) ComponentPTValue:
       { ref(Component) theComponent;
 
         theComponent = Coerce( theObj, Component);
@@ -708,7 +708,7 @@ void IOACheckObject( theObj)
       }
       return;
 
-    case StackObjectPTValue:
+    case (int) StackObjectPTValue:
       { ref(StackObject) theStackObject;
         ptr(long)        stackptr; 
         handle(Object)   theCell; 
@@ -735,7 +735,7 @@ void IOACheckObject( theObj)
       }
       return;
 
-    case StructurePTValue:
+    case (int) StructurePTValue:
       IOACheckReference( &(toStructure(theObj))->iOrigin );
       return;
     }

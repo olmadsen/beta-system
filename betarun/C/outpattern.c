@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1992-06-02 15:24:46 $, SID: $Revision: 1.15 $
+ * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1992-06-10 14:50:18 $, SID: $Revision: 1.16 $
  * by Lars Bak
  */
 
@@ -62,22 +62,22 @@ DisplayObject(output,aObj,retAddress)
   ref(Item) aItem;
 
   if( isSpecialProtoType(aObj->Proto) ){
-    switch ((long) aObj->Proto){
-      case ComponentPTValue:
+    switch ((int) aObj->Proto){
+      case (int) ComponentPTValue:
         aItem = ComponentItem(aObj);
         fprintf(output,"  comp %s in %s\n", 
 		theItemName(aItem), theFormName(aItem));
         break;
-      case StackObjectPTValue:
+      case (int) StackObjectPTValue:
         fprintf(output,"  stackobject\n");
         break;
-      case ByteRepPTValue:
+      case (int) ByteRepPTValue:
         fprintf(output,"  ByteRep\n");
         break;
-      case ValRepPTValue:
+      case (int) ValRepPTValue:
         fprintf(output,"  ValRep\n");
         break;
-      case RefRepPTValue:
+      case (int) RefRepPTValue:
         fprintf(output,"  RefRep\n");
         break;
     } 

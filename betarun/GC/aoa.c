@@ -261,12 +261,12 @@ static void FollowObject( theObj)
   theProto = theObj->Proto;
 
   if( (long) theProto < 0 ){  
-    switch( (long) theProto ){
-    case ByteRepPTValue:
-    case ValRepPTValue: return;
+    switch( (int) theProto ){
+    case (int) ByteRepPTValue:
+    case (int) ValRepPTValue: return;
       /* No references in a Value Repetition, so do nothing*/
 
-    case RefRepPTValue:
+    case (int) RefRepPTValue:
       /* Scan the repetition and follow all entries */
       { ptr(long) pointer;
         register long size, index;
@@ -280,7 +280,7 @@ static void FollowObject( theObj)
       }
       return;
 
-    case ComponentPTValue:
+    case (int) ComponentPTValue:
       { ref(Component) theComponent;
 
         theComponent = Coerce( theObj, Component);
@@ -291,11 +291,11 @@ static void FollowObject( theObj)
       }
       return;
 
-    case StackObjectPTValue:
+    case (int) StackObjectPTValue:
       fprintf( output,"FollowObject: OOPS a StackObject in AOA.\n");
       return;
 
-    case StructurePTValue:
+    case (int) StructurePTValue:
       ReverseAndFollow( &(toStructure(theObj))->iOrigin );
       return;
     }
@@ -628,11 +628,11 @@ void AOACheckObject( theObj)
   Claim( !inBetaHeap(theProto),"#AOACheckObject: !inBetaHeap(theProto)");
 
   if( (long) theProto < 0 ){  
-    switch( (long) theProto ){
-    case ByteRepPTValue:
-    case ValRepPTValue: return; /* No references in the type of object, so do nothing*/
+    switch( (int)  theProto ){
+    case (int) ByteRepPTValue:
+    case (int) ValRepPTValue: return; /* No references in the type of object, so do nothing*/
 
-    case RefRepPTValue:
+    case (int) RefRepPTValue:
       /* Scan the repetition and follow all entries */
       { ptr(long) pointer;
         register long size, index;
@@ -647,7 +647,7 @@ void AOACheckObject( theObj)
       
       return;
 
-    case ComponentPTValue:
+    case (int) ComponentPTValue:
       { ref(Component) theComponent;
 
         theComponent = Coerce( theObj, Component);
@@ -662,11 +662,11 @@ void AOACheckObject( theObj)
       }
       return;
 
-    case StackObjectPTValue:
+    case (int) StackObjectPTValue:
       Claim( FALSE, "AOACheckObject: theObj should not be StackObject.");
       return;
 
-    case StructurePTValue:
+    case (int) StructurePTValue:
       AOACheckReference( &(toStructure(theObj))->iOrigin );
       return;
     }
@@ -741,17 +741,17 @@ void AOACheckObjectSpecial( theObj)
   Claim( !inBetaHeap(theProto),"#AOACheckObjectSpecial: !inBetaHeap(theProto)");
 
   if( (long) theProto < 0 ){  
-    switch( (long) theProto ){
-    case ByteRepPTValue:
-    case ValRepPTValue: return;
-    case RefRepPTValue: return;
-    case ComponentPTValue:
+    switch( (int) theProto ){
+    case (int) ByteRepPTValue:
+    case (int) ValRepPTValue: return;
+    case (int) RefRepPTValue: return;
+    case (int) ComponentPTValue:
       AOACheckObjectSpecial( ComponentItem( theObj));
       return;
-    case StackObjectPTValue:
+    case (int) StackObjectPTValue:
       Claim( FALSE, "AOACheckObjectSpecial: theObj must not be StackObject.");
       return;
-    case StructurePTValue:
+    case (int) StructurePTValue:
       return;
     default:
       Claim( FALSE, "AOACheckObjectSpecial: theObj must be KNOWN.");
