@@ -1,6 +1,6 @@
 ORIGIN '../ObjectSerializer';
 (* 
- * $RCSfile: unserializeBody.bet,v $ $Revision: 1.4 $ $Date: 1994-04-29 17:31:19 $
+ * $RCSfile: unserializeBody.bet,v $ $Revision: 1.5 $ $Date: 1994-08-22 13:57:18 $
  *
  * COPYRIGHT
  *       Copyright Mjolner Informatics, 1992-94
@@ -14,10 +14,10 @@ do ousPrivate.session (# do INNER unserialize #);
 
 --- forEachUnserRootImpl:descriptor ---
 (# ose: ^ousPrivate.OIDstateElement;
-   ote: ^objects.element;
+   ote: ^ObjectTableElement;
    ato: @addressToObject;
 do 
-   (OID, fromOID, REFTYPE_DYNAMIC)
+   (OID, fromOID, REFTYPE_DYNAMIC, objElm[], TRUE)
      -> ousPrivate.curSession.RegisterObject -> ose[];
    
    ousPrivate.curSession.traverse;
@@ -101,6 +101,7 @@ do
         
         readObject: @
           (# oideq: @equalOID;
+             getd: @getDone;
              HandleObjectRef: @
                (# byteinx: @Integer;
                   refType: @Integer;
@@ -124,7 +125,8 @@ do
                        * AssignRef for that. *)
                       ((@@o -> tos'%adrGetLong') + byteinx, 0) -> tos'%putLong';
                    else
-                      (tmpOID,thisOID,refType) -> registerObject -> refElm[];
+                      (tmpOID,thisOID,refType,NONE,FALSE) 
+                        -> registerObject -> refElm[];
                                            
                       (if refElm.ote.o[] //NONE  then
                           (* This reference will be dealt with later.
@@ -211,7 +213,7 @@ do
                        rep.get -> tmpOID.b;
                        (if (theNoneOID,tmpOID) -> oideq //false then
                            rep.pos -> remPos;
-                           (tmpOID, thisOID, REFTYPE_DYNAMIC)
+                           (tmpOID, thisOID, REFTYPE_DYNAMIC, NONE, FALSE)
                              -> registerObject -> refElm[];
 
                            remPos -> rep.pos;
@@ -263,7 +265,8 @@ do
 
                   rep.pos -> remPos;
 
-                  (tmpOID, thisOID, REFTYPE_ORIGIN) -> registerObject 
+                  (tmpOID, thisOID, REFTYPE_ORIGIN, NONE, FALSE) 
+                    -> registerObject 
                     -> refElm[];
                   
                   (if refElm.ote.o[] //NONE then
@@ -296,6 +299,8 @@ do
              gpt: @GetProtoType;
              getSer: @getSerialization;
              
+             created: @Boolean;
+             readSpecial: @Boolean;
              tmpOff: @Integer;
 
           enter thisElm[]
@@ -305,97 +310,132 @@ do
              Read -> thisElm.state;
 
              (* Get serialization of object: *)
-
-             (thisOID, thisElm.fromOID) -> getser -> (rep[], proto, group);
-             (if rep[] //NONE then thisOID -> getSerFailed if);
-
-             (if thisElm.ote.o[] -> o[] //NONE then
-
-                 (* The object has not been created yet. Create it and set
-                  * up dangling references in objects already created during
-                  * this unserialize session. *)
-
-                 (* Get prototype of the object: *)
-                 (group, proto, thisElm.ote.OID, thisElm.fromOID)
-                   -> objects.gp -> (ptAdr, group);
-
-                 (if ptAdr //-1 then
-                     (* Uh oh. Unknown prototype. *)
-                     (group, proto) -> unknownProtoType;
+             
+             (thisElm.ote.o[]<>NONE) -> created;
+             
+             (thisOID, thisElm.fromOID, thisElm.ote[]) 
+               -> getser 
+               -> (rep[], proto, group, readSpecial);
+             
+             (if readSpecial //true then
+                 (* The object was read and possibly created during getser.
+                  * Make sure it is inserted in the objects table and that
+                  * dangling references are setup. *)
+                 (if created //false then
+                     (if thisElm.mre[] //NONE then else
+                         (* Setup missing references to the object. *)
+                         (thisElm.ote.o[], thisElm.mre[]) 
+                           -> missingRefs.replace;
+                         thisElm.mre[] -> missingRefs.delete;
+                         NONE -> thisElm.mre[];
+                     if);
+                     
+                     (* ObjectTableElements cannot be inserted into the 
+                      * objects table before they have been created as the 
+                      * object reference itself must have been set up. 
+                      * Otherwise insertion into the ph table will will not 
+                      * work. So we'll do it now: *)
+                     thisElm.ote[] -> objects.ins;
                  if);
-
-                 (* Instantiate the object: *)
-                 ptAdr -> ra.allocHeap -> thisElm.ote.o[] -> o[];
-
-                 (if thisElm.mre[] //NONE then else
-                     (* Setup missing references to the object. Missing 
-                      * references to objects that are not instantiated 
-                      * will be turned into dangling references before 
-                      * return from unserializeAll. *)
-                     (o[], thisElm.mre[]) -> missingRefs.replace;
-                     thisElm.mre[] -> missingRefs.delete;
-                     NONE -> thisElm.mre[];
-                 if);
-
-                 (* ObjectTableElements cannot be inserted into the objects 
-                  * table before they have been created as the object 
-                  * reference itself must have been set up. Otherwise 
-                  * insertion into the ph table will will not work. 
-                  * So we'll do it now: *)
-                 thisElm.ote[] -> objects.ins;
-
               else
-                 thisElm.ote.o[] -> gpt -> ptAdr;
-             if);
+                 
+                 (if rep[] //NONE then thisOID -> getSerFailed if);
 
-             (* Get prototype descriptor. *)
-             ptAdr -> ptOffsets.lookup -> poff[];
+                 (if created //FALSE then
 
-             (* Skip simplecount as it is not needed here. *)
-             rep.pos + 1 -> rep.pos;
+                     (* The object has not been created yet. Create it and set
+                      * up dangling references in objects already created 
+                      * during this unserialize session. *)
 
-             (* First read simple values: *)
-             (for inx: poff.simpleCount repeat
-                  rep.get -> value;
-                  ((@@o -> tos'%adrGetLong') + poff.simpleVals[inx], value)
-                    -> tos'%putLong';
-             for);
+                     (* Get prototype of the object: *)
+                     (group, proto, thisElm.ote.OID, thisElm.fromOID)
+                       -> objects.gp -> (ptAdr, group);
 
-             (* Then read dynamic references: *)
-             (for inx: poff.dynCount repeat
-                  rep.get -> tmpOff;
-                  (if tmpOff >= 0 //true then
-                      (* An "ordinary" object reference or NONE. *)
-                      (poff.dynRefs[inx], poff.refTypes[inx]) 
-                        -> HandleObjectRef;
-                   else
-                      (if tmpOff
-                       //ValRepPTValue    then
-                          poff.dynRefs[inx] -> HandleValRep
-                       //ByteRepPTValue   then
-                          poff.dynRefs[inx] -> HandleByteRep
-                       //RefRepPTValue    then
-                          poff.dynRefs[inx] -> HandleRefRep
-                       //DoubleRepPTValue then
-                          poff.dynRefs[inx] -> HandleDoubleRep
-                       //WordRepPTValue   then
-                          poff.dynRefs[inx] -> HandleWordRep
-                       //StructurePTValue then
-                          poff.dynRefs[inx] -> HandleStructureRef
+                     (if ptAdr //-1 then
+                         (* Uh oh. Unknown prototype. *)
+                         (group, proto) -> unknownProtoType;
+                     if);
+
+                     (* Instantiate the object: *)
+                     ptAdr -> ra.allocHeap -> thisElm.ote.o[] -> o[];
+
+                     (if thisElm.mre[] //NONE then else
+                         (* Setup missing references to the object. Missing 
+                          * references to objects that are not instantiated 
+                          * will be turned into dangling references before 
+                          * return from unserializeAll. *)
+                         (o[], thisElm.mre[]) -> missingRefs.replace;
+                         thisElm.mre[] -> missingRefs.delete;
+                         NONE -> thisElm.mre[];
+                     if);
+
+                     (* ObjectTableElements cannot be inserted into the objects 
+                      * table before they have been created as the object 
+                      * reference itself must have been set up. Otherwise 
+                      * insertion into the ph table will will not work. 
+                      * So we'll do it now: *)
+                     thisElm.ote[] -> objects.ins;
+
+                  else
+                     thisElm.ote.o[] -> o[] -> gpt -> ptAdr;
+                 if);
+
+                 (* Get prototype descriptor. *)
+                 ptAdr -> ptOffsets.lookup -> poff[];
+
+                 (* Skip simplecount as it is not needed here. *)
+                 rep.pos + 1 -> rep.pos;
+
+                 (* First read simple values: *)
+                 (for inx: poff.simpleCount repeat
+                      rep.get -> value;
+                      ((@@o -> tos'%adrGetLong') + poff.simpleVals[inx], value)
+                        -> tos'%putLong';
+                 for);
+
+                 (* Then read dynamic references: *)
+                 (for inx: poff.dynCount repeat
+                      rep.get -> tmpOff;
+                      (if tmpOff >= 0 //true then
+                          (* An "ordinary" object reference or NONE. *)
+                          (poff.dynRefs[inx], poff.refTypes[inx]) 
+                            -> HandleObjectRef;
                        else
-                          'ObjectUnserializer: Unexpected prototype: '
-                            -> screen.putText;
-                          tmpOff -> screen.putInt; screen.newline;
-                          (failure, '') -> stop;
+                          (if tmpOff
+                           //ValRepPTValue    then
+                              poff.dynRefs[inx] -> HandleValRep
+                           //ByteRepPTValue   then
+                              poff.dynRefs[inx] -> HandleByteRep
+                           //RefRepPTValue    then
+                              poff.dynRefs[inx] -> HandleRefRep
+                           //DoubleRepPTValue then
+                              poff.dynRefs[inx] -> HandleDoubleRep
+                           //WordRepPTValue   then
+                              poff.dynRefs[inx] -> HandleWordRep
+                           //StructurePTValue then
+                              poff.dynRefs[inx] -> HandleStructureRef
+                           else
+                              'ObjectUnserializer: Unexpected prototype: '
+                                -> screen.putText;
+                              tmpOff -> screen.putInt; screen.newline;
+                              (failure, '') -> stop;
+                          if);
                       if);
-                  if);
-             for);
+                 for);
+             if);
+             
+             thisElm.ote[] -> getd;
+             
              (*CAT_READOBJ -> timing_after;*)
           #);
 
         registerObject: @
           (# OID, fromOID: @OIDtype;
              refType: @Integer;
+             objElm: ^ObjectTableElement; 
+             (* If not NONE, objElm is expected to correspond to OID. *)
+             isRoot: @Boolean;
+             
              oideq: @EqualOID;
              
              doGet: @doGetObject;
@@ -406,7 +446,7 @@ do
              
              found, doIt: @Boolean;
 
-          enter (OID, fromOID, refType)
+          enter (OID, fromOID, refType, objElm[], isRoot)
           do
              (if (theBetaEnvOID,OID) -> oideq //true then
                  
@@ -423,9 +463,13 @@ do
                      (* First seen from object fromOID. *)
                      (ose[], OID) -> OIDstateTable.insert 
                      (* -> (ose.inx1,ose.inx2) *);
-
-                     (* Check whether the object is already instantiated. *)
-                     OID -> objects.fobo -> ose.ote[];
+                     
+                     (if objElm[] //NONE then 
+                         (* Check if the object is already instantiated. *)
+                         OID -> objects.fobo -> ose.ote[];
+                      else
+                         objElm[] -> ose.ote[];
+                     if);
 
                      (if true
                       //(refType = REFTYPE_OFFLINE)
@@ -437,8 +481,9 @@ do
                          true -> doIt;
                       else
                          (* Ask whether we should read the object. It may 
-                          * or may not be instantiated already. *)
-                         (OID, ose.ote[], fromOID, refType) -> doGet -> doIt;
+                          * or may not have been instantiated already. *)
+                         (OID, ose.ote[], fromOID, refType, isRoot) 
+                           -> doGet -> doIt;
                      if);
 
                      (if doIt //false then
@@ -487,9 +532,6 @@ do
                   else
                      (* Object seen before during this unserialization. *)
                      (if true
-                         (* // (ose[] = NONE) then *)
-                         (* The object has been Read. NONE is returned. *)
-
                       // (refType = REFTYPE_OFFLINE) then
                          (* It is a static part object. *)
 
@@ -517,7 +559,7 @@ do
                                   * needed as origin. *)
                                  true -> doIt;
                               else
-                                 (OID, ose.ote[], fromOID, REFTYPE_ORIGIN)
+                                 (OID,ose.ote[],fromOID,REFTYPE_ORIGIN,isRoot)
                                    -> doGet -> doIt;
                              if);
 
@@ -536,7 +578,8 @@ do
                               * We know thatthe object must already be 
                               * instantiated. *)
 
-                             (OID, ose.ote[], fromOID, refType) -> doGet 
+                             (OID,ose.ote[],fromOID,refType,isRoot)
+                               -> doGet 
                                -> doIt;
 
                              (if doIt //true then
@@ -587,10 +630,7 @@ do
 
    missingRefs: @
      (# element:
-          (# OID: @OIDtype
-               (* OID of encloser to object(s) referred by dangling refs. *);
-
-             count: @Integer
+          (# count: @Integer
                (* The size of the following repetitions. *);
 
              otes: [1]^ObjectTableElement
@@ -699,11 +739,13 @@ do
                       (if o[] //NONE then
                           (if e.roffs[i] //0 then
                               (if zoffdang -> dangling //0 then
-                                  (e.ose.ote.OID,0,e.OID) -> danglers.otd
+                                  (e.ose.ote.OID,0,e.otes[i].OID) 
+                                    -> danglers.otd
                                     -> dangling -> zoffdang;
                               if);
                            else
-                              (e.ose.ote.OID,e.roffs[i],e.OID) -> danglers.otd
+                              (e.ose.ote.OID,e.roffs[i],e.otes[i].OID)
+                                -> danglers.otd
                                 -> dangling;
                           if);
                           (@@e.otes[i].o -> tos'%adrGetLong') + e.loffs[i]
@@ -721,11 +763,13 @@ do
                       (if o[] //NONE then
                           (if e.roffs[i] //0 then
                               (if zoffdang -> dangling //0 then
-                                  (e.ose.ote.OID,0,e.OID) -> danglers.otd
+                                  (e.ose.ote.OID,0,e.otes[i].OID) 
+                                    -> danglers.otd
                                     -> dangling -> zoffdang;
                               if);
                            else
-                              (e.ose.ote.OID,e.roffs[i],e.OID) -> danglers.otd
+                              (e.ose.ote.OID,e.roffs[i],e.otes[i].OID) 
+                                -> danglers.otd
                                 -> dangling;
                           if);
                           (((@@e.otes[i].o -> tos'%adrGetLong') + e.loffs[i])
@@ -742,7 +786,8 @@ do
 
                    //dInStruc then
                       (if o[] //NONE then
-                          (e.ose.ote.OID,e.roffs[i],e.OID) -> danglers.otd
+                          (e.ose.ote.OID,e.roffs[i],e.otes[i].OID) 
+                            -> danglers.otd
                             -> dangling;
                           (@@e.otes[i].o -> tos'%adrGetLong') + e.loffs[i]
                             -> fieldAdr;

@@ -1,6 +1,6 @@
 ORIGIN '~beta/basiclib/v1.4/betaenv';
 (* 
- * $RCSfile: ObjectSerializer.bet,v $ $Revision: 1.3 $ $Date: 1994-04-28 17:53:19 $
+ * $RCSfile: ObjectSerializer.bet,v $ $Revision: 1.4 $ $Date: 1994-08-22 13:56:53 $
  *
  * COPYRIGHT
  *       Copyright Mjolner Informatics, 1992-94
@@ -10,7 +10,7 @@ BODY 'private/serializeBody' 'private/unserializeBody';
 
 (* This fragment contains the interface to ObjectSerializer
  * and ObjectUnSerializer used in the implementation of 
- * persistentstore, OODB, and the packing and unpacking (marshaling)
+ * persistentstore, OODB, and the packing and unpacking (marshalling)
  * of objects sent across the network to handle distributed objects.
  * 
  * An object is saved in the following format: 
@@ -70,7 +70,7 @@ BODY 'private/serializeBody' 'private/unserializeBody';
  *        (iii) ProtoType id. (Id of prototype within the group)
  *        (iv)  Identification of origin object. (REFTYPE_ORIGIN)
  *       This means that a pattern variable is saved in as many copies as
- *       there are objects referencing it. As pattern varibles are constant
+ *       there are objects referencing it. As pattern variables are constant
  *       (once created they never change) this has no logical consequences,
  *       but if the same pattern variable is pointed out many times,
  *       it may mean some waste of memory. This is probably no serious
@@ -92,50 +92,49 @@ BODY 'private/serializeBody' 'private/unserializeBody';
 (* SERIALIZE
  * ========= 
  * 
- * Call serialize to serialize an object. When INNER serialize is called,
+ * Execute serialize to serialize an object. When INNER serialize is called,
  * call forEachRoot for each root to be serialized.
  * 
- * serialize will call putObject on each object to query whether that 
+ * serialize will call doPutObject on each object to query whether that 
  * specific object should be serialized. 
  * If putObject returns false, the object will not be serialized, and neither
  * will objects only reachable through this one.
- * Upon return, the objects table will contain all objects serialized 
- * and objects directly reachable from these. It may later be used when
- * unserializing objects to achieve update of the objects instead of
+ * 
+ * Upon return from serialize, the objects table will contain all objects 
+ * serialized and objects directly reachable from these. It may later be 
+ * used when unserializing objects to achieve update of the objects instead of
  * creating new instances.
  * 
+ * getRepetition is called just before the serialization of an object
+ * begins. The repetition object returned is used to save the object. 
+ * If needed, the user may save the object his own special way, and return 
+ * TRUE in putSpecial. In that case the object is simply assumed to have been 
+ * saved, and serialize does not save it. In that case, putDone is not called.
  * 
- * doPutObject is called before the object in e is to be serialized. 
+ * doPutObject is called to query whether the object in e is to be serialized.
  * 
- *    If FALSE is returned, the object or pattern will not be 
- *    serialized. doPutObject is not called for objects whose OID was 
- *    set to noneOID. 
+ *    doPutObject is not called for objects whose OID was set to noneOID in
+ *    objects.newOID, or objects reached through a REFTYPE_OFFLINE reference. 
  * 
- *    BEWARE that objects already serialized contains references to 
- *    this object. It might therefore, in some cases, be impossible 
- *    to unserialize these.
+ *    If TRUE is returned, the object is put into a queue for future
+ *    serialization. Before the actual serialization starts, getRepetition
+ *    is called to obtain a RepetitionObject to put the serialization into.
+ *
+ *    If FALSE is returned, the object or pattern will not be serialized.
+ *    BEWARE that objects already serialized contains references to this 
+ *    object. It might therefore, in some cases, be impossible to unserialize 
+ *    these unless this is ensured in some other way.
  * 
- *    If value is TRUE and rep is not NONE upon return, rep will be 
- *    used to put the object serialization. If value is TRUE and rep 
- *    is NONE, a new RepetitionObject is created to contain the 
- *    serialization.
+ *    If FALSE is returned, doPutObject may be called again if refType is 
+ *    REFTYPE_DYNAMIC or REFTYPE_ORIGIN, and later the opposite is found. 
+ *    In that case doPutObject is queried again to make it possible to regret 
+ *    the first decision.
  * 
- *    If refType is REFTYPE_OFFLINE, value HAS to be TRUE, and 
- *    doPutObject is only called to obtain a repetition to put the 
- *    serialization into. 
- * 
- *    If refType is not REFTYPE_OFFLINE, and FALSE is returned in 
- *    value, doPutObject may be called again under one of the 
- *    following circumstances.
- * 
- *      1. refType is REFTYPE_DYNAMIC or REFTYPE_ORIGIN, and later the opposite
- *         is found. In that case doPutObject is queried again to 
- *         make it possible to regret the first decision.
- *      2. A REFTYPE_OFFLINE is found from an object that _should_ be put.
- *         In that case doPutObject is called again to obtain a 
- *         repetition to put the serialization into. The first call 
- *         to doPutObject is ignored.
- * 
+ *    If FALSE is returned, and a REFTYPE_OFFLINE to the object is later found 
+ *    from an object that _should_ be put, this object is put into the 
+ *    serialization queue without calling doPutObject again. Immediately before
+ *    serialization, getRepetition is called to obtain a repetitionObject, as
+ *    usual. The first call to doPutObject is simply ignored.
  * 
  * putDone is called when e.o has been serialized.
  * 
@@ -149,12 +148,15 @@ BODY 'private/serializeBody' 'private/unserializeBody';
 
 serialize:
   (# 
-     doPutObject:< BooleanValue
+     doPutObject:<
        (# e: ^objects.element;
           fromOID: @OIDtype; (* OID of object first referencing e.o. *)
           refType: @Char;
-       enter (e[], fromOID, refType)
+          isRoot: @Boolean;
+          value: @Boolean;
+       enter (e[], fromOID, refType, isRoot)
        do true -> value; INNER;
+       exit value
        #);
      
      putDone:< 
@@ -178,9 +180,10 @@ serialize:
      getRepetition:<
        (# e: ^objects.element;
           rep: ^RepetitionObject;
+          putSpecial: @Boolean;
        enter e[]
-       do INNER
-       exit rep[]
+       do FALSE -> putSpecial; INNER
+       exit (rep[],putSpecial)
        #);
      
      unknownProtoType:< Exception
@@ -192,13 +195,17 @@ serialize:
       * stateTable. Furtherbind if it is more efficient with another
       * size of these tables. *)
      
-     (* In INNER serialize, call forEachRoot for each root obejct. *)
+     (* In INNER serialize, call forEachRoot for each root object. 
+      * If objElm is not NONE, it is assumed to be the ObjectTableElement 
+      * corresponding to thisRoot. *)
+     
      forEachRoot: @
        (# thisRoot: ^Object;
           fromOID: @OIDtype;
+          objElm: ^ObjectTableElement;
           OID: @OIDtype;
           offset: @Integer;
-       enter (thisRoot[],fromOID)
+       enter (thisRoot[],fromOID,objElm[])
        <<SLOT forEachRootImpl:dopart>>
        exit (OID,offset)
        #);
@@ -230,7 +237,11 @@ serialize:
  *    can be used to control whether the object state should be 
  *    updated or the object should be left untouched. 
  * 
- *    fromOID is the OID of the object containing a reference to this one.
+ *    fromOID is the OID of the object containing the reference that
+ *    triggered this call to doGetObject. The type of reference is
+ *    given by refType.
+ *
+ *    If isRoot is TRUE, the object is on eof the roots given to ForEachRoot.
  * 
  *    If FALSE is returned, neither the object, nor objects only 
  *    reachable from this one will be unserialized/updated.
@@ -260,18 +271,25 @@ serialize:
  * allowDanglingRefs decides whether doGetObject is allowed to return 
  *    FALSE on objects not found in the objects table. If FALSE, the 
  *    UnknownObject exception is raised. If TRUE the dangling 
- *    reference is set up as described in doGetObject. 
- * 
+ *    reference is set up as described in doGetObject. The setup of
+ *    dangling references is not done until all calls to ForEachRoot have 
+ *    been finished.
  * 
  * getSerialization is called to get the serialization of the object to be 
- *    unserialized. rep.pos must point out the first element of the 
- *    serialization.
+ *    unserialized. Upon return, rep.pos must point out the first element of 
+ *    the serialization.
  * 
  *    It is allowed to return the same repetitionObject several times
- *    with different positions, but do not overwrite old rep's before 
- *    unserialize returns as the data may still bet needed. 
- *    If none is returned, the getSerFailed exception is raised. 
+ *    with different positions. If none is returned, the getSerFailed 
+ *    exception is raised. 
  * 
+ *    If the object was saved specially (putSpecial in 
+ *    serialize.getSerialization), it may be necessary to read it specially.
+ *    In that case, if getSpecial is TRUE upon return, it is assumed that the
+ *    object was read, and that objElm.o now refers the object.
+ * 
+ * 
+ * getDone is called immediately after objElm.o has been read and updated.
  * 
  * unknownProtoType is Raised if (group,proto) was not found by 
  *    objects.getProto. Unserialization cannot continue after this.
@@ -284,8 +302,9 @@ unserialize:
        (# OID, fromOID: @OIDtype;
           found: ^objects.element;
           refType: @Integer;
+          isRoot: @Boolean;
           value: @Boolean;
-       enter (OID, found[], fromOID, refType)
+       enter (OID, found[], fromOID, refType, isRoot)
        do true -> value; INNER
        exit value
        #);
@@ -295,11 +314,19 @@ unserialize:
      
      getSerialization:<
        (# OID, fromOID: @OIDtype;
+          objElm: ^ObjectTableElement;
           rep: ^repetitionObject;
           proto,group: @Integer;
-       enter (OID,fromOID)
+          getSpecial: @Boolean;
+       enter (OID,fromOID,objElm[])
+       do FALSE -> getSpecial; INNER
+       exit (rep[],proto,group,getSpecial)
+       #);
+     
+     getDone:<
+       (# objElm: ^ObjectTableElement;
+       enter objElm[]
        do INNER
-       exit (rep[],proto,group)
        #);
      
      unknownProtoType:< Exception
@@ -328,16 +355,20 @@ unserialize:
      ptOffsets: ^ptOffsetTable;
      
      
-     (* When INNER serialize is called, user should call forEachRoot 
-      * for each root object to be serialized. *)
+     (* When INNER serialize is called, forEachRoot should be called
+      * for each root object to be serialized. If objElm is not NONE, it is 
+      * assumed to be the objectTableElement corresponding to OID. This may 
+      * save a findByOID call to the objects table if the objElm is known
+      * by the caller already. *)
      
      forEachRoot: @
        (# OID: @OIDtype;
           offset: @Integer;
           fromOID: @OIDtype;
+          objElm: ^ObjectTableElement;
           thisRoot: ^Object;
           doIt: @<<SLOT forEachUnserRootImpl:descriptor>>
-       enter (OID,offset,fromOID)
+       enter (OID,offset,fromOID,objElm[])
        do doIt
        exit thisRoot[]
        #);
@@ -346,4 +377,27 @@ unserialize:
      
   enter (objects[], danglers[], ptOffsets[])
   <<SLOT ousUnserializeBody:dopart>>
-  #)
+  #);
+
+(* GROUP and PROTO packing
+ * =======================
+ * 
+ * Since the group and proto values used for representing types are currently
+ * only 16 bit values, they may be packed in a single integer. This can be
+ * done using the following operations. Notice that the operations allow
+ * negative values for group and proto. *)
+
+packGroupProto:
+  (# group,proto,packed: @Integer;
+  enter (group,proto)
+  exit (group -> TOS'%ShiftLeft[16]', (proto,16x0000FFFF) -> TOS'%and') 
+       -> TOS'%or'
+  #);
+
+unpackGroupProto:
+  (# packed: @Integer;
+  enter packed
+  exit (packed->TOS'%aritShiftRight[16]',
+     packed->TOS'%ShiftLeft[16]'->TOS'%aritShiftRight[16]')
+  #);
+   

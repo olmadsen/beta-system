@@ -1,6 +1,6 @@
 ORIGIN '~beta/basiclib/v1.4/betaenv';
 (* 
- * $RCSfile: objectserver.bet,v $ $Revision: 1.4 $ $Date: 1994-04-28 17:53:34 $
+ * $RCSfile: objectserver.bet,v $ $Revision: 1.5 $ $Date: 1994-08-22 13:57:01 $
  *
  * COPYRIGHT
  *       Copyright Mjolner Informatics, 1992-94
@@ -405,7 +405,7 @@ objectServer:
      singleObjectPutClosure: PutClosure
        (# serializeImpl::< 
             (# 
-            do (theObject[],fromOID) -> forEachRoot -> (OID,offset) 
+            do (theObject[],fromOID,NONE) -> forEachRoot -> (OID,offset) 
             #);
           theObject: ^Object;
           fromOID: @OIDtype;
@@ -475,7 +475,7 @@ objectServer:
      
      singleObjectGetClosure: getClosure
        (# doUnserializeImpl::
-            (# do (OID,offset,fromOID) -> forEachRoot -> theObject[] #);
+            (# do (OID,offset,fromOID,NONE) -> forEachRoot -> theObject[] #);
           OID: @OIDtype;
           offset: @Integer;
           fromOID: @OIDtype;
@@ -491,10 +491,7 @@ objectServer:
       * References to unfetched objects will be setup as dangling. This way 
       * the object will be fetched when it is needed. Objects already in 
       * memory when encountered are not read again, as this could result in 
-      * loss of updates to these objects.
-      * Currently getPartialClosure is used by the trapHandler to fetch
-      * an object referred by a dangling reference being followed.
-      * Later this could in principle be handled by location.onDanglerHit. *)
+      * loss of updates to these objects. *)
      
      getPartialClosure:
        (# doUnserializeImpl:< unserialize
@@ -517,10 +514,11 @@ objectServer:
                  do 
                     (if found[] //NONE then
                         (* Only read objects not already in memory. *)
-                        (fetched < maxFetched) -> value 
+                         (fetched < maxFetched) -> value 
                      else
                         false -> value;
-                    if)
+                    if);
+                    INNER;
                  #);
                allowDanglingRefs::< (# do true -> value #);
                
@@ -552,7 +550,19 @@ objectServer:
      
      singleObjectGetPartialClosure: getPartialClosure
        (# doUnserializeImpl::
-            (# do (OID,offset,fromOID) -> forEachRoot -> theObject[] #);
+            (# doGetObject::<
+                 (# oideq: @equalOID;
+                 do (if (value and (OID.a <> fromOID.a)) //true then
+                        (* This seems to be a cross-location reference.
+                         * Only fetch if the object referred is root
+                         * in this call to singleObjectGetPartialClosure. *)
+                        (OID, THIS(singleObjectGetPartialClosure).OID)
+                          -> oideq -> value;
+                    if);
+                 #);
+            do (OID,offset,fromOID,NONE) -> forEachRoot -> theObject[];
+               
+            #);
           OID, fromOID: @OIDtype;
           offset: @Integer;
           theObject: ^Object
