@@ -6,7 +6,6 @@
  *       All rights reserved.
  */
 
-
 /*******************
  *                 *
  * Common includes *
@@ -68,7 +67,6 @@
  * Signal handling functions                                        *
  *                                                                  *
  ********************************************************************/
-
 
 /* function 'catchSIGUSR' installs handlers for asynchronous, 
  * process-external control of the counter returned by 
@@ -321,6 +319,5 @@ void initSockSignals(void)
     
   }
 }
-
 
 /* ------------------------- END sockSignals.c ------------------------- */
