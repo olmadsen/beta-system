@@ -1,0 +1,278 @@
+ORIGIN '../ymer';
+
+INCLUDE '~beta/basiclib/v1.4/systemenv';
+
+INCLUDE '~beta/unixlib/v1.4/iostate';
+INCLUDE '~beta/process/v1.4/processmanager';
+INCLUDE '~beta/process/v1.4/private/communication_unixbody';
+INCLUDE '~beta/process/v1.4/private/processmanager_unixbody';
+INCLUDE '~beta/process/v1.4/private/fdStreamBody';
+
+INCLUDE '~beta/debugger/v2.0/utils/buffered_io';
+
+--- fragmentBrowserLib: attributes ---
+executeWindow: ymerLocalWindow
+  (# theSystemEnv: ^systemEnv;
+     textMsg:
+       (# value: @text
+       do INNER
+       exit
+         (# msg: ^text
+         do '--- '->msg[]; value[]->msg.puttext; ' ---\n'->msg.append
+         exit msg[]
+         #)
+       #);
+     executeStartMsg:< textMsg (#  do 'Execution start'->value; INNER #);
+     executeRestartMsg:< textMsg
+       (#  do 'Execution restart'->value; INNER #);
+     executeAbortMsg:< textMsg (#  do 'Execution ABORT'->value; INNER #);
+     executeEndMsg:< textMsg
+       (#  do 'Execution terminated'->value; INNER #);
+     repeatLabel:<
+       (# value: ^text do 'Reexecute'->value[]; INNER exit value[] #);
+     onAbort:< (#  do INNER #);
+     program: ^process;
+     programTerminated: @boolean;
+     programOutputPipe: @pipe;
+     programInputPipe: @pipe;
+     programOutputBuffer: @fd_buffer;
+     programOutputProcessor: ^|outputProcessor;
+     outputProcessor: thesystemEnv.system
+       (# l: @integer; 
+       do
+          cycle:
+            (# t: @text; ch: @char; 
+            do
+               (if not programTerminated (*program.stillRunning*) then
+                   programOutputBuffer.getBufferContents
+                     (#
+                        error:: 
+                          (#  do true->programTerminated; leave cycle #);
+                        endOfFile:: 
+                          (#  do true->programTerminated; leave cycle #)
+                     #)->terminal.contents.insert;
+                   terminal.contents.length->l;
+                   (l,l)->terminal.contents.selection.set;
+                   terminal.contents.selection.scrollIntoView;
+                   restart cycle
+               if)
+            #);
+          program.private.pid->awaitNotExecuting;
+          executeEndMsg->terminal.contents.insert;
+          terminal.contents.length->l;
+          (l,l)->terminal.contents.selection.set;
+          terminal.contents.selection.scrollIntoView;
+          
+       #);
+     repeatButton: @pushButton
+       (#
+          setFrame:
+            (# x,y,w,h: @integer 
+            do
+               recalc;
+               distance->x;
+               distance->y;
+               (windowWidth-distance*3)/2->w;
+               height+distance->h;
+               ((x,y),(x+w,y+h))->frame;
+            #);
+          open::  (#  do setFrame; repeatLabel->label #);
+          eventhandler:: 
+            (#
+               onMouseUp::  (#  do doRepeat #);
+               onFatherFrameChanged::  (#  do setFrame #)
+            #)
+       #);
+     abortButton: @pushButton
+       (#
+          setFrame:
+            (#  x,y,w,h: @integer
+            do
+               recalc;
+               (windowWidth-distance*3)/2+distance*2->x;
+               distance->y;
+               (windowWidth-distance*3)/2->w;
+               height+distance->h;
+               ((x,y),(x+w,y+h))->frame;
+            #);
+          open::  (#  do setFrame; 'Abort'->label #);
+          eventhandler:: 
+            (#
+               onMouseUp:: 
+                 (# l: @integer
+                 do
+                    (if not programTerminated (*program.stillRunning*) then
+                        program.private.pid->stopUnixProcess;
+                        program.private.pid->awaitNotExecuting;
+                        (* should be: program.stop; *)
+                        
+                    if);
+                    (if programOutputProcessor.shstatus <> SE_KILLED then
+                        programOutputProcessor[]->theSystemEnv.kill
+                    if);
+                    executeAbortMsg->terminal.contents.insert;
+                    terminal.contents.length->l;
+                    (l,l)->terminal.contents.selection.set;
+                    terminal.contents.selection.scrollIntoView;
+                    onAbort
+                 #);
+               onFatherFrameChanged::  (#  do setFrame #)
+            #)
+       #);
+     terminal: @textEditor
+       (#
+          contentsType:: 
+            (#
+               eventhandler:: 
+                 (#
+                    t: @text;
+                    onKeydown:: 
+                      (# 
+                      do
+                         (if not programTerminated (*program.stillRunning*)
+                          then
+                             (if ch
+                              // ascii.bs then
+                                 (if t.length > 0 then
+                                     (t.length,t.length)->t.delete
+                                 if);
+                                 
+                              // ascii.cr then
+                                 t[]->programInputPipe.writeend.puttext;
+                                 programInputPipe.writeend.newline;
+                                 programInputPipe.private.writech.flush;
+                                 t.clear;
+                                 
+                              else
+                                 ch->t.put; 
+                             if)
+                         if)
+                      #)
+                 #)
+            #);
+          setFrame:
+            (# x,y,w,h: @integer
+            do
+               recalc;
+               distance->x;
+               height+distance*2->y;
+               windowWidth-distance*2->w;
+               windowHeight-height-distance*3->h;
+               ((x,y),(x+w,y+h))->frame;
+            #);
+          open::  (#  do setFrame; true->bindBottom->bindRight;  #);
+          eventhandler:: 
+            (# onFatherFrameChanged::  (#  do setFrame #) #)
+       #);
+     doExecute:<
+       (# l: @integer; 
+       do
+          executeStartMsg->terminal.contents.insert;
+          terminal.contents.length->l;
+          (l,l)->terminal.contents.selection.set;
+          terminal.contents.selection.scrollIntoView;
+          setupNewProcess;
+          INNER ;
+          
+       #);
+     doRepeat:<
+       (# l: @integer; 
+       do
+          executeRestartMsg->terminal.contents.insert;
+          terminal.contents.length->l;
+          (l,l)->terminal.contents.selection.set;
+          terminal.contents.selection.scrollIntoView;
+          INNER ;
+          
+       #);
+     eventhandler:: 
+       (#
+          onAboutToClose:: 
+            (# 
+            do
+               (if not programTerminated (*program.stillRunning*) then
+                   program.private.pid->stopUnixProcess;
+                   program.private.pid->awaitNotExecuting;
+                   (* should be: program.stop; *)
+                   
+               if);
+               (if programOutputProcessor.shstatus <> SE_KILLED then
+                   programOutputProcessor[]->theSystemEnv.kill
+               if);
+               
+            #)
+       #);
+     height,distance: @integer;
+     windowWidth,windowHeight: @integer;
+     BETAprogram: ^text;
+     arguments: ^text;
+     recalc: (#  do size->(windowWidth,windowHeight) #);
+     tst: @pushButton
+       (#
+          open:: 
+            (# ts: ^textStyle; buttonLabel: (#  exit 'more choises' #); 
+            do
+               buttonLabel->label;
+               style->ts[];
+               ts.lineHeight+3->height;
+               height+8->height;
+               
+            #)
+       #);
+     setupNewProcess:
+       (#
+          fds: ^fdStream;
+          setbuf: external
+            (# stdout,state: @integer enter (stdout,state) #);
+          
+       do
+          &process[]->program[];
+          BETAprogram[]->program.init;
+          programInputPipe.init;
+          programInputPipe.readEnd[]->program.redirectFromChannel;
+          programOutputPipe.init;
+          programOutputPipe.writeEnd[]->program.redirectToChannel;
+          (if arguments[] <> none then
+              arguments.reset;
+              arguments.scanwhitespace;
+              loop:
+              (if not arguments.eos then
+                  arguments.getatom->program.argument.append;
+                  arguments.scanwhitespace;
+                  restart loop
+              if);
+              
+          if);
+          false->programTerminated;
+          program.start;
+          programInputPipe.writeEnd[]->fds[];
+          (fds.private.unixStream,0)->setbuf;
+          programOutputPipe.readEnd[]->fds[];
+          (fds.private.unixStream,0)->setbuf;
+          (fds.private.index,FD_READ)->programOutputBuffer.init;
+          &| outputProcessor[]->programOutputProcessor[];
+          programOutputProcessor[]->theSystemEnv.fork;
+          
+       #);
+     open::< 
+       (# t: @text
+       do
+          getSystemEnv->theSystemEnv[];
+          tst.open;
+          (* just to get the width and height of fonts *)
+          tst.hide;
+          tst.close;
+          3->distance;
+          (600,400)->size;
+          repeatButton.open;
+          abortButton.open;
+          terminal.open;
+          INNER ;
+          BETAprogram->t;
+          ' '->t.put;
+          (if arguments[] <> none then
+              arguments[]->t.puttext; ' '->t.put
+          if);
+          t.copy->title;
+       #)
+  #);

@@ -1,0 +1,263 @@
+ORIGIN '../ymer';
+
+INCLUDE 'ymerBody';
+INCLUDE 'semanticEditor';
+INCLUDE 'workspace';
+
+--- menuFileSaveSettingsOnselect: dopart ---
+do browser.saveSettings
+   
+--- menuFileReloadSettingsOnselect: dopart ---
+do browser.reloadSettings
+   
+--- menuFileQuitOnselect: dopart ---
+do ymerBrowserWindowCount-1
+     ->ymerBrowserWindowCount;
+   l: ymerPrivate.history.scan
+     (#
+     do (if not current.theSif.closeGroup then true->cancelQuit; leave l if)
+     #);
+   (if not cancelQuit then
+       (if ymerBrowserWindowCount=0 then
+           terminate
+        else 
+           this(ymerBrowserWindow).close
+       if)   
+   if)
+   
+--- menuProjectsLoadOnselect: dopart ---
+do &fileSelectionDialog(# do 'Load Project File'->label[] #)->t[]; 
+
+   (if true
+    // t[]=NONE then (* ignore: cancel pressed *)
+    // t[]->fileAvailable then
+       &browser.projects.theProjects.element[]->newProj[];
+       t->newProj.location;
+       newProj[]->browser.projects.setupProject;
+       newProj[]->browser.projects.theProjects.append;
+       browser.projectsChanged;
+       newProj[]->browser.setProject;
+   if)
+   
+--- menuProjectsLoadStdOnselect: dopart ---
+do (if not ('.'->(('~beta/configuration/r3.0',ph.currentDirectory)->ph.localpath).equal) then
+       &browser.projects.theProjects.element[]->newProj[];
+       ('~beta/configuration/r3.0/ymer.pjt',ph.currentDirectory)
+         ->ph.convertFilePath
+         ->projectFile[];
+       (if projectFile[]->fileReadable then
+           true->newProj.isProjectFile;
+           'Std. Libraries/+'->newProj.name[];
+           projectFile->newProj.location;
+           (projectFile[],newProj[])
+             ->browser.projects.theProjects.parseProjectFile;
+           newProj[]->browser.projects.theProjects.append;
+           browser.projectsChanged;
+           newProj[]->browser.setProject
+       if)
+   if);   
+   
+--- menuProjectsRelocateOnselect: dopart ---
+do browser.currentProject[]->cp[];
+   fileSelectionDialog(# do 'Specify new location'->label[] #)->t[];
+   (if true
+    // (t[]=NONE) then (* ignore: cancel pressed *)
+    // t[]->fileAvailable then
+       t->cp.location;
+       cp[]->browser.projects.setupProject;
+       (if cp.unfolded then
+           cp[]->browser.foldSubprojects;
+           cp[]->browser.unfoldSubprojects;
+       if);
+       browser.projectsChanged;
+       cp[]->browser.setProject
+   if)
+   
+--- menuProjectsDeleteOnselect: dopart ---
+do browser.currentProject[]->cp[];
+   (if cp.unfolded then
+       cp[]->browser.foldSubprojects;
+   if);
+   cp[]
+     ->browser.projects.theProjects.at
+     ->browser.projects.theProjects.delete;
+   browser.projectsChanged
+   
+--- menuGroupsNewOnselect: dopart ---
+do (*fileSelectionDialog(# do 'New group'->label[] #)->t[];
+   &browser.projects.group[]->newGroup[];
+   newGroup[]->browser.currentProject.subprojects.append;
+   t->newGroup.location;
+   t[]->newGroup.name[];
+   browser.projectsChanged*)
+   
+--- menuGroupsAddOnselect: dopart ---
+do
+
+--- menuGroupsDeleteOnselect: dopart ---
+do 
+   
+--- menuGroupsSemanticOnstatus: dopart ---
+do false->value;
+   l: (if browser.currentGroup[]<>NONE then
+          (# exp: ^mps.AST.expanded;
+             ff: ^mps.AST.fragmentForm;
+             fg: ^mps.AST.fragmentGroup;
+          do browser.currentGroup.getfg->fg[];
+             (if fg[]<>NONE then
+                 fg.fragmentList.scan
+                 (#
+                 do (if current.type
+                     // mps.AST.formType then
+                        (#
+                        do current.open->ff[];
+                           (if ff.root.kind=mps.AST.kinds.interior then
+                               ff.root[]->exp[];
+                               exp.suffixWalk
+                               (# t: ^text
+                               do (if current.hasSemanticError then
+                                      true->value;
+                                      leave l
+                                  if)
+                               #)
+                           if)
+                        #)
+                    if)
+                 #)
+             if)
+          #)
+      if)
+   
+--- menuGroupsSemanticOnselect: dopart ---
+do (# se: @browser.semanticEditor
+        (# open::
+             (#
+             do browser.currentGroup.getfg->fg[];
+                browser.currentGroup.name[]->fgName[];
+             #)
+        #)
+   do se.open
+   #)
+    
+-- historyMenuAddHistoryElement: descriptor --
+(# newHitem: ^historyMenuItem;
+   historyMenuItem: menuItem
+     (# theHist: ^ymerPrivate.history.element;
+        eventhandler::
+          (# onSelect::
+               (#
+               do theHist.theProject[]->browser.setProject;
+                  (theHist.theProject[], theHist.theGroup[])
+                    ->browser.setGroup;
+                  (theHist.theProject[],theHist.theGroup[],theHist.theForm[])
+                    ->browser.setFragmentForm;
+               #);
+          #);
+        open:: (# do (ymerPrivate.history.head).elm[]->theHist[] #);
+        setName:
+          (# t: ^text;
+          do theHist.theGroup.name.copy->t[];
+             '-'->t.append; theHist.theForm.name->t.append;
+             t[]->name;
+          #)
+     #)  
+do &historyMenuItem[]->newHitem[];
+   newHitem.open; 
+   newHitem[]->append;
+   newHitem.setName;
+#)
+   
+-- windowsMenuInsertWindow: Descriptor --
+(# wmi: ^windowMenuItem
+do &windowMenuItem[]->wmi[];
+   win[]->wmi.ww[];
+   wmi.open;
+   wmi[]->append;
+   win.title->wmi.name;
+#)  
+
+-- windowsMenuDeleteWindow: DoPart --
+do l: scan
+     (# wmi: ^windowMenuItem
+     do (if current##<=windowMenuItem## then
+            current[]->wmi[];
+            (if wmi.ww[] = win[] then wmi[]->delete; leave l if)
+        if)
+     #)
+   
+-- windowsMenuPrivate: Attributes --
+windowMenuItem: menuItem
+  (# ww: ^window;
+     eventhandler:: 
+       (# onSelect:: (# do ww.show; ww.wriggle #) #);
+  #);
+
+-- windowsMenuSeparateBrowser: dopart --
+do (# fragmentBrowser: @ymerBrowserWindow
+   do fragmentBrowser.open
+   #)
+
+-- windowsMenuSeparateCodeView: dopart --
+do (# codeViewWindow: ymerLocalWindow
+        (# ff: ^mps.AST.fragmentForm;
+           codeview: @codemoveableEditor
+	     (# selectNode:: 
+		  (# cVW: ^codeViewWindow
+                  do  node.frag[]->viewSeparate->cVW[];
+                     (node[],1,0,0)
+                       ->cVW.codeview.SifViewer.setFocus;
+		  #);
+                getEncloser:: (# do codeviewEncloser[]->theEncloser[] #);
+                open::
+                  (# do true->bindBottom->bindTop->bindRight->bindLeft #); 
+	     #); 
+	   codeviewEncloser: @ codemoveableEditorEncloser
+	     (# tryclose:: (# do this(codeViewWindow).close #);
+	        onHighLight:: (# do THIS(codeViewWindow).wriggle #);
+	        getAST:: (# do mps.AST[]->AST[] #);
+	        getBETACFL:: (# do mps.BETACFL[]->BETACFL[] #);
+	     #);
+           eventhandler::
+             (# onAboutToClose::
+                  (#
+                  do (if (browser.getFragmentFormEditor).closeGroup->okToClose then
+                         this(codeViewWindow)[]->CVlist.at->CVlist.delete
+                     if)
+                  #)
+             #);
+	   open::
+	     (# t: ^text;
+	     do (this(codeViewWindow).contents,size)->codeview.open;
+                
+	        (codeviewEncloser.getAST,codeviewEncloser.getBETACFL,
+	        ff[],NONE(*theInitiallySelectedNode[]*))
+		  ->codeview.newfragment;
+                
+                (ff.father).fullname->fragmentDefaultName->t[];
+                '-'->t.append; ff.name->t.append;
+                t[]->title;
+	     #);
+        #);
+      CVlist: @list(# element:: codeViewWindow #);
+      viewSeparate:
+        (# ff: ^mps.AST.fragmentForm;
+           cVW: ^codeViewWindow;
+        enter ff[]
+        do l: CVlist.scan
+             (#
+             do (if current.ff[]=ff[] then current[]->cVW[]; leave l if)
+             #);
+           (if cVW[]=NONE then
+               &codeViewWindow[]->cVW[]; ff[]->cVW.ff[]; cVW.open;
+               cVW[]->CVlist.append;
+            else
+               cVW.wriggle;
+           if)
+        exit cVW[]
+        #)
+   do browser.currentForm[]->viewSeparate
+   #)
+   
+--- windowsMenuWorkspace: dopart ---
+do (&ymerBrowser.workspace[]).open
+
