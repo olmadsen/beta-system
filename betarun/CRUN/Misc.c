@@ -72,7 +72,7 @@ void RefNone(Object * theObj)
 #if (defined(hppa) && defined(RTLAZY))
   /* Called with the possible dangling reference in %r31 */
   __asm__ volatile ("\tCOPY\t%%r31,%0\n" : "=r" (theObj));
-  if (isLazyRef(theObj){
+  if (isLazyRef(theObj)){
     /* save reference registers in case of dangling reference */
     PushGCRegs();
     CkReg("RefNone", *(RefSP-1), "%r7");

@@ -28,7 +28,9 @@
 #endif
 
 #ifdef UNIX
+#ifndef hppa
 #include <dlfcn.h>
+#endif /* hppa */
 #endif /* UNIX */
 
 #ifdef RTVALHALLA
@@ -49,6 +51,7 @@
 #include "heap.h"
 #include "registers.h"
 #include "macro.h"
+#include "data.h"
 
 
 #ifdef sparc
@@ -60,6 +63,5 @@
 #endif
 
 #include "function.h"
-#include "data.h"
 
 #endif /* _BETA_H_ */

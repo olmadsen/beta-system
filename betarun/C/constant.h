@@ -38,8 +38,12 @@
 
 #define LARGE_REP_SIZE	     256
 
+#ifndef MAXINT
 #define MAXINT (signed long)0x7fffffff
+#endif
+#ifndef MININT
 #define MININT (signed long)0x80000000
+#endif
 
 #ifdef NEWRUN
 /* Special "dyn" mark used after callback */

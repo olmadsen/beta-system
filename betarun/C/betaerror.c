@@ -157,8 +157,8 @@ void BetaError(BetaErr err, Object *theObj)
 #else
 #error Find out Stack End for hppa without Reference Stack
 #endif /* UseRefStack */
-      DEBUG_CODE(fprintf(output, "thePC=0x%x", thePC));
-      DEBUG_CODE(PrintCodeAddress(thePC));
+      DEBUG_CODE(fprintf(output, "thePC=0x%x", (int)thePC));
+      DEBUG_CODE(PrintCodeAddress((long)thePC));
       DEBUG_CODE(fprintf(output, ")\n"));
 #endif /* hppa */
 

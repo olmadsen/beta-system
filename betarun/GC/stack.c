@@ -76,7 +76,7 @@ void ProcessRefStack(void)
 
 
 /************************* Other common debug stuff ****************/
-#ifdef RTDEBUG
+#if defined(RTDEBUG) && (!defined(UseRefStack))
 static void PrintSkipped(long *current)
 {
   Object *ref = (Object *)*current;

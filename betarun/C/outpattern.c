@@ -1441,7 +1441,7 @@ int DisplayBetaStack(BetaErr errorNumber,
   }
  
 #ifdef hppa
-  DisplayHPPAStack();
+  DisplayHPPAStack(thePC);
 #endif
 #ifdef NEWRUN
   DisplayNEWRUNStack(thePC);
