@@ -1,7 +1,7 @@
 ORIGIN 'guienv_macprivate';
 
-BUILD default ':$$/guienv_mac.obj' ':external/guienv_mac.c' 'mrc -proto strict -o $0 $1';
-BUILD default ':$$/windowmanagement.obj' ':external/windowmanagement.c' 'mrc -proto strict -o $0 $1';
+BUILD default ':$$/guienv_mac.obj' ':external/guienv_mac.c' 'mrc -shared_lib_export on -proto strict -o $0 $1';
+BUILD default ':$$/windowmanagement.obj' ':external/windowmanagement.c' 'mrc -shared_lib_export on -proto strict -o $0 $1';
 
 RESOURCE default 'external/guienv.r';
 
@@ -159,15 +159,6 @@ processOneEvent:
 	(# gotEvent: @boolean;
 		dispatch: @dispatchEvent;
 		currentTime: @integer;
-		WaitNextEvent: External
-			(# eventMask: @ShortInt;
-				theEvent: @integer;
-				sleep,mouseRgn: @Integer;
-				result: @Boolean;
-			enter (eventMask, theEvent, sleep, mouseRgn)
-			do '$A860' -> PascalTrap;
-			exit result
-			#);
 	do	
 		(if private.globalMacMenuBar.needsUpdate then
 			private.globalMacMenuBar.update;
@@ -182,7 +173,7 @@ processOneEvent:
 		(if currentTime - private.timerQueue.lastVisit > private.timerQueue.minInterval then
 			private.timerQueue.executeElapsed;
 		if);
-		(everyEvent,private.event.address,sleep,private.cursorRegion) -> WaitNextEvent -> gotEvent;
+		(everyEvent,private.event[],sleep,private.cursorRegion) -> WaitNextEvent -> gotEvent;
 		(if gotEvent then
 			dispatch;
 		if);
@@ -214,12 +205,6 @@ processMouseDown:
 		macPt: @macPoint;
 		clickPosition,pt: @point;
 		time,dlbClickTime: @integer;
-		SystemClick: External
-			(# theEvent: @integer;
-			   theWindow: @Integer;
-			enter (theEvent,theWindow)
-			do '$A9B3' -> pascalTrap;
-			#);
 	do false -> doubleClickPossible;
 		true -> sendOnMouseUp;
 		(private.event.where,windowPointer[]) -> FindWindow -> partCode;
@@ -232,7 +217,7 @@ processMouseDown:
 				if);
 				false -> sendOnMouseUp;
 			//inSysWindow then
-				(private.event.address,windowPointer) -> SystemClick;
+				(private.event[],windowPointer) -> SystemClick;
 				false -> sendOnMouseUp;
 			//inDesk then
 				false -> sendOnMouseUp;
@@ -378,13 +363,7 @@ processMouseMoved:
 	#);
 processHighLevelEvent: 
 	(# err: @integer;
-		AEProcessAppleEvent: External
-		  (# theEventRecord: @integer; OSErr: @ShortInt; 
-		  enter theEventRecord
-		  do '{$303C,$021B,$A816}'->PascalTrap; 
-		  exit OSErr
-		  #);
-	do private.event.address -> AEProcessAppleEvent -> err; 
+	do private.event[] -> AEProcessAppleEvent -> err; 
 	#);
 
 processMenubarClick:
@@ -717,7 +696,7 @@ do (if this(window).style = plain then
 -- GUIENVwindowseparatorClose: doPart --
 do inner close;
 	0 -> private.style;
-'
+
 -- GUIENVwindowSeparatorOnRefresh: doPart --
 do graphics
 		(# width, height: @integer;
@@ -781,7 +760,7 @@ do graphics
 #)
 
 -- GUIENVwindowbackgroundcolor:doPart --
-do theColor->private.contents.backgroundcolor;
+do theColor->(contents).backgroundcolor;
 
 -- separatorLib: attributes --
 initialLayout:
@@ -1130,7 +1109,7 @@ itemSelected:
 	#);
 buildMenu:
 	(# theMenubar: ^menuBar;
-	do	(if private.handle//0 then
+	do (if private.handle = NIL then
 			(private.menuID,private.name) -> NewMenu -> private.handle;
 			private.menuItems.scan
 				(#
@@ -1146,8 +1125,7 @@ buildMenu:
 	#);
 destroyMenu:
 	(# theMenubar: ^menuBar;
-	do (if private.handle//0 then
-		else
+	do (if private.handle <> NIL then
 			owner -> theMenubar[];
 			(if theMenubar[]<>none then
 				(if theMenubar.private.theMacMenubar[]<>none then
@@ -1249,6 +1227,9 @@ do
 (# t: ^text;
 do this(Menu)[] -> getPatternName -> t[];
 	t -> private.name;
+	
+	
+	
 	(lastMenuID + 1) -> lastMenuID;
 	(lastMenuID,private.name) -> NewMenu -> private.handle;
 	lastMenuID -> private.menuID;
@@ -1258,7 +1239,6 @@ do this(Menu)[] -> getPatternName -> t[];
 
 -- GUIENVmenuClose: doPart --
 do inner close;
-	
 	this(menu)[] -> this(guienv).private.menus.remove;
 	menuID -> DeleteMenu;
 	handle -> DisposeMenu;
