@@ -91,62 +91,71 @@ void aapen(double red, double green, double blue)
 void
 setup_line(aa_vertex *v1, aa_vertex *v2)
 {
-    float dx, dy;			/* Deltas in X and Y */
-    float udx, udy;			/* Positive version of deltas */
-    float dr, dg, db, da;		/* Deltas for RGBA */
-    float one_du;			/* 1.0 / udx or udy */
-    aa_setup_line line;
-
-    dx = v1->x - v2->x;
-    dy = v1->y - v2->y;
-    if (dx < 0.0)
-	udx = -dx;
-    else
-	udx = dx;
-    if (dy < 0.0)
-	udy = -dy;
-    else
-	udy = dy;
-
-    if (udx > udy) {
-	/* X major line */
-	line.x_major = 1;
-	line.negative = (dx < 0.0);
-	line.us = FLOAT_TO_FIX_XY(v2->x);
-	line.vs = FLOAT_TO_FIX_XY(v2->y);
-	line.ue = FLOAT_TO_FIX_XY(v1->x);
-	one_du = 1.0 / udx;
-	line.dvdu = FLOAT_TO_FIX_XY(dy * one_du);
+  float dx, dy;			/* Deltas in X and Y */
+  float udx, udy;			/* Positive version of deltas */
+  float dr, dg, db, da;		/* Deltas for RGBA */
+  float one_du;			/* 1.0 / udx or udy */
+  aa_setup_line line;
+  
+  dx = v1->x - v2->x;
+  dy = v1->y - v2->y;
+  if (dx < 0.0)
+    udx = -dx;
+  else
+    udx = dx;
+  if (dy < 0.0)
+    udy = -dy;
+  else
+    udy = dy;
+  
+  
+  
+  if (udx > udy) {
+    /* X major line */
+    
+    if(udx == 0.0f) {
+      return;
     }
-    else {
-	/* Y major line */
-	line.x_major = 0;
-	line.negative = (dy < 0.0);
-	line.us = FLOAT_TO_FIX_XY(v2->y);
-	line.vs = FLOAT_TO_FIX_XY(v2->x);
-	line.ue = FLOAT_TO_FIX_XY(v1->y);
-	one_du = 1.0 / udy;
-	line.dvdu = FLOAT_TO_FIX_XY(dx * one_du);
+    line.x_major = 1;
+    line.negative = (dx < 0.0);
+    line.us = FLOAT_TO_FIX_XY(v2->x);
+    line.vs = FLOAT_TO_FIX_XY(v2->y);
+    line.ue = FLOAT_TO_FIX_XY(v1->x);
+    one_du = 1.0 / udx;
+    line.dvdu = FLOAT_TO_FIX_XY(dy * one_du);
+  }
+  else {
+    /* Y major line */
+    if(udy == 0.0f) {
+      return;
     }
-
-    /* Convert start Z and colors to fixed-point */
-    line.zs = FLOAT_TO_FIX_Z(v2->z);
-    line.rs = FLOAT_TO_FIX_RGB(v2->r);
-    line.gs = FLOAT_TO_FIX_RGB(v2->g);
-    line.bs = FLOAT_TO_FIX_RGB(v2->b);
-    line.as = FLOAT_TO_FIX_RGB(v2->a);
-
-    /* Compute delta values for Z and colors */
-    line.dzdu = FLOAT_TO_FIX_Z((v1->z - v2->z) * one_du);
-    line.drdu = FLOAT_TO_FIX_RGB((v1->r - v2->r) * one_du);
-    line.dgdu = FLOAT_TO_FIX_RGB((v1->g - v2->g) * one_du);
-    line.dbdu = FLOAT_TO_FIX_RGB((v1->b - v2->b) * one_du);
-    line.dadu = FLOAT_TO_FIX_RGB((v1->a - v2->a) * one_du);
-
-/* Now go draw it */
-
-    draw_line(&line);
-
+    line.x_major = 0;
+    line.negative = (dy < 0.0);
+    line.us = FLOAT_TO_FIX_XY(v2->y);
+    line.vs = FLOAT_TO_FIX_XY(v2->x);
+    line.ue = FLOAT_TO_FIX_XY(v1->y);
+    one_du = 1.0 / udy;
+    line.dvdu = FLOAT_TO_FIX_XY(dx * one_du);
+  }
+  
+  /* Convert start Z and colors to fixed-point */
+  line.zs = FLOAT_TO_FIX_Z(v2->z);
+  line.rs = FLOAT_TO_FIX_RGB(v2->r);
+  line.gs = FLOAT_TO_FIX_RGB(v2->g);
+  line.bs = FLOAT_TO_FIX_RGB(v2->b);
+  line.as = FLOAT_TO_FIX_RGB(v2->a);
+  
+  /* Compute delta values for Z and colors */
+  line.dzdu = FLOAT_TO_FIX_Z((v1->z - v2->z) * one_du);
+  line.drdu = FLOAT_TO_FIX_RGB((v1->r - v2->r) * one_du);
+  line.dgdu = FLOAT_TO_FIX_RGB((v1->g - v2->g) * one_du);
+  line.dbdu = FLOAT_TO_FIX_RGB((v1->b - v2->b) * one_du);
+  line.dadu = FLOAT_TO_FIX_RGB((v1->a - v2->a) * one_du);
+  
+  /* Now go draw it */
+  
+  draw_line(&line);
+  
 } /* End of setup_line */
 
 

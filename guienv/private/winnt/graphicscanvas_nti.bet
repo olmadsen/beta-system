@@ -7,10 +7,15 @@ INCLUDE '~beta/win32lib/wingdiconsts';
 INCLUDE '~beta/win32lib/devicecapabilities';
 INCLUDE '~beta/win32lib/dcmanagement';
 INCLUDE '~beta/win32lib/windowsmisc';
+INCLUDE '~beta/win32lib/mousecursorsupport';
+
 INCLUDE '~beta/guienv/graphics';
 INCLUDE '~beta/basiclib/math';
 INCLUDE '~beta/sysutils/cstring';
 INCLUDE '~beta/toollibs/utils/PNG/png';
+
+INCLUDE '~beta/basiclib/file';
+INCLUDE '~beta/basiclib/numberio';
 
 BUILD nti '$$/aadraw.obj' 'external/aadraw.c' 'betacc $0 $1';
 BUILD nti '$$/rotatetext.obj' 'external/rotatetext.cpp' 'betacc $0 $1';
@@ -21,6 +26,46 @@ BUILD nti '$$/imageprocessing.obj' 'external/imageprocessing.c' 'betacc $0 $1';
 
 
 -- lib: attributes --
+
+LogFile: File
+  (#
+  #);
+getLogFile: objectPool.get
+  (# Type:: LogFile;
+     init::
+       (#
+       do 'linelog.txt' -> obj.name;
+          obj.openWrite;
+       #);
+  #);
+
+log_line:
+  (# x1, y1, x2, y2: @real;
+  enter (x1, y1, x2, y2)
+  do (# log: ^LogFile;
+     do getLogFile -> log[];
+        'line: ' -> log.puttext;
+        x1 -> log.putreal;
+        ' ' -> log.put;
+        y2 -> log.putreal;
+        ' ' -> log.put;
+        x2 -> log.putreal;
+        ' ' -> log.put;
+        y2  -> log.putreal;
+        ' ' -> log.put;
+        
+        (if x1 = x2 then
+            ' x ' -> log.puttext;
+        if);
+        (if y1 = y2 then
+            ' y ' -> log.puttext;
+        if);
+        log.newline;
+        log.flush;
+     #);
+  #);
+
+
 POLYGON_OVALS: (# exit true #);
 
 WM_MOUSEWHEEL: (# exit                   0x020A #);
@@ -281,6 +326,12 @@ InputCanvasMethods: WindowItemMethods
                    -> THIS(GraphicsCanvas).theEventHandler.onMouseWheel;
               #)
           if);
+          (if info.message
+           //WM_LBUTTONUP//WM_MBUTTONUP//WM_RBUTTONUP then
+              (if captured then
+                  theEventHandler.onMouseUp;
+              if);
+          if);
           INNER;
        #);
   #);
@@ -465,6 +516,7 @@ do (# windowid, pixmapid: @integer;
              -> CreateSolidBrush
              -> handletobrush;
            0 -> createCompatibleDC  -> hdc;
+           
            (hdc, doublebuffer.content.private.handletopixmap) -> SelectObject;
            area.left -> theRect.left;
            area.right -> theRect.right;
@@ -491,39 +543,44 @@ do (# windowid, pixmapid: @integer;
           
       if);
       
-      (* backgroundColor -> doublebuffer.content.clear; *)
-      clearArea;
-      (* Clear only area *)
-      
-      area.left -> doublebuffer.left;
-      area.right -> doublebuffer.right;
-      area.top -> doublebuffer.top;
-      area.bottom -> doublebuffer.bottom;
-      
-      doublebuffer.begin;
-      doublebuffer.push;
-      (panx, pany) -> doublebuffer.translate;
-      children.scan
-      (#
-      do doublebuffer[] -> current.drawOn;
-      #);
-      layers.scan
-      (#
-      do (if current.visible then
-             doublebuffer[] -> current.drawOn;
-         if);
-      #);
-      doublebuffer.pop;
-      inner onRefresh;
-      THIS(GraphicsCanvas).windowItemDevice -> windowid;
-      doublebuffer.private.hdc -> pixmapid;
-      area.size -> (width, height);
-      (windowid, area.left, area.top, width, height, pixmapid, area.left, area.top, SRCCOPY) -> BitBlt;
-      doublebuffer.end;
+      (if doublebuffer.content.private.pixels <> 0 then
+          (* backgroundColor -> doublebuffer.content.clear; *)
+          clearArea;
+          (* Clear only area *)
+          
+          area.left -> doublebuffer.left;
+          area.right -> doublebuffer.right;
+          area.top -> doublebuffer.top;
+          area.bottom -> doublebuffer.bottom;
+          
+          doublebuffer.begin;
+          doublebuffer.push;
+          (panx, pany) -> doublebuffer.translate;
+          children.scan
+          (#
+          do doublebuffer[] -> current.drawOn;
+          #);
+          layers.scan
+          (#
+          do (if current.visible then
+                 doublebuffer[] -> current.drawOn;
+             if);
+          #);
+          doublebuffer.pop;
+          inner onRefresh;
+          THIS(GraphicsCanvas).windowItemDevice -> windowid;
+          doublebuffer.private.hdc -> pixmapid;
+          area.size -> (width, height);
+          
+          (windowid, area.left, area.top, width, height, pixmapid, area.left, area.top, SRCCOPY) -> BitBlt;
+          doublebuffer.end;
+      if);
    #);
    
 -- PixmapSurfaceInit: doPart --
-do (content.private.pixels, content.width, content.height) -> init_tables;
+do (if content.private.pixels <> 0 then
+       (content.private.pixels, content.width, content.height) -> init_tables;
+   if);
    (if NOT POLYGON_OVALS then
        init_ovals;
    if);
@@ -556,7 +613,13 @@ do (if (ROTATE AND (currentStyle[] <> NONE)) then
        #);
     else
        (# xi, yi: @integer;
-       do (0, 0) -> transform -> (xi, yi);
+       do (if currentStyle[] <>  NONE then
+              currentStyle.create;
+              (if currentStyle.textStyleID <> 0 then
+                  (private.hdc, currentStyle.textStyleID) -> SelectObject;
+              if);
+          if);
+          (0, 0) -> transform -> (xi, yi);
           (private.hdc, TA_BASELINE) -> SetTextAlign;
           (private.hdc, TRANSPARENT) -> SetBkMode;
           (private.hdc, xi, yi, @@theText.T[1], theText.lgth) -> TextOut;
@@ -642,9 +705,19 @@ do (#
              #);
         #);
       drawSimpleLine: 
-        (# 
-        do start -> transform -> aamoveto;
-           end -> transform -> aalineto;
+        (# x1, x2, y1, y2: @real;
+           
+           inside: @boolean;
+        do start -> transform -> (x1, y1);
+           end -> transform -> (x2, y2);
+           ((x1, y1) -> insideTest) OR ((x2, y2) -> insideTest) -> inside;
+           (if inside then
+               (if true then
+                   (x1, y1, x2, y2) -> log_line;
+               if);
+               (x1, y1) -> aamoveto;
+               (x2, y2) -> aalineto;
+           if);
         #);
       drawComplexLine2:
         (# vx, vy: @real;
@@ -931,17 +1004,47 @@ do (if useGDI  then
 -- PixmapSurfaceDrawPolygon: doPart --
 do (# flag: @boolean;
       xi, yi: @integer;
+      
+      
    do true -> flag;
-      points.scan
-      (#
-      do current -> transform -> (xi, yi);
-         (if flag then
-             (private.hdc, xi, yi, 0) -> MoveToEx;
-             false -> flag;
-          else
-             (private.hdc, xi, yi) -> LineTo;
-         if);
-      #);
+      (if false then
+          points.scan
+          (#
+          do current -> transform -> (xi, yi);
+             (if flag then
+                 (private.hdc, xi, yi, 0) -> MoveToEx;
+                 false -> flag;
+              else
+                 (private.hdc, xi, yi) -> LineTo;
+             if);
+          #);
+       else
+          drawing:
+            (#
+            do testing: 
+                 (#
+                 do points.scan
+                    (# xr, yr: @real;
+                    do current -> transform -> (xr, yr);
+                       (if ((xr, yr) -> insideTest) then
+                           leave testing;
+                       if);
+                    #);
+                    leave drawing;
+                 #);
+               
+               points.scan
+               (# xr, yr: @real;
+               do current -> transform -> (xr, yr);
+                  (if flag then
+                      (xr, yr) -> aamoveto;
+                      false -> flag;
+                   else
+                      (xr, yr) -> aalineto;
+                  if);
+               #);
+            #);
+      if);
    #);
    
 -- PixmapSurfaceFillPolygon: doPart --
@@ -1045,46 +1148,113 @@ do (# x, y: @integer;
    do 
       (0, 0) -> transform -> (x, y);
       
-      (if thePixmap.private.drawtransparent then
-          (if thePixmap.private.transparentmask[]=none then (* use TransPcolor *)
-              thePixmap.transparentColor->tc;
-              (tc.red div 256,0) -> theColor.%putByte;
-              (tc.green div 256,1) -> theColor.%putByte;
-              (tc.blue div 256,2) -> theColor.%putByte;
-              (0,3) -> theColor.%putByte;
-              
-              (private.hdc, thePixmap.private.handleToPixmap,
-              0, 0, x, y, thePixmap.width, thePixmap.height,theColor)
-                -> DrawTransparentBitmapHDC
-                ->result;
-           else 
-              (private.hdc, thePixmap.private.handleToPixmap,
-              0, 0, x, y, thePixmap.width,thePixmap.height,
-              thePixmap.private.transparentmask.private.handleToPixmap)
-                -> DrawTransparentBitmapFromMaskHDC
-                ->result;
-          if);
-       else
-          (if (NOT useGDI) AND (thePixmap.private.pixels <> 0)  then
-              thePixmap.width -> width;
-              thePixmap.height -> height;
-              (thePixmap.private.pixels, width * 4, 
-              content.private.pixels, content.width * 4,  x, 
-              y, width, height, content.width, content.height)
-                -> TransferRedPixels;
+      (if content.private.pixels <> 0 then
+          (if thePixmap.private.drawtransparent then
+              (if thePixmap.private.transparentmask[]=none then (* use TransPcolor *)
+                  thePixmap.transparentColor->tc;
+                  (tc.red div 256,0) -> theColor.%putByte;
+                  (tc.green div 256,1) -> theColor.%putByte;
+                  (tc.blue div 256,2) -> theColor.%putByte;
+                  (0,3) -> theColor.%putByte;
+                  
+                  (private.hdc, thePixmap.private.handleToPixmap,
+                  0, 0, x, y, thePixmap.width, thePixmap.height,theColor)
+                    -> DrawTransparentBitmapHDC
+                    ->result;
+               else 
+                  (private.hdc, thePixmap.private.handleToPixmap,
+                  0, 0, x, y, thePixmap.width,thePixmap.height,
+                  thePixmap.private.transparentmask.private.handleToPixmap)
+                    -> DrawTransparentBitmapFromMaskHDC
+                    ->result;
+              if);
            else
-              
-              private.hdc -> CreateCompatibleDC -> hdcmem;
-              (hdcmem, thePixmap.private.handleToPixmap) -> SelectObject -> oldbmp;
-              (private.hdc, x, y, thePixmap.width, thePixmap.height, hdcmem, 0, 0, SRCCOPY) -> BitBlt;
-              (hdcmem, oldbmp) -> SelectObject;
-              hdcmem -> DeleteDC;
+              (if (NOT useGDI) AND (thePixmap.private.pixels <> 0)  then
+                  thePixmap.width -> width;
+                  thePixmap.height -> height;
+                  (thePixmap.private.pixels, width * 4, 
+                  content.private.pixels, content.width * 4,  x, 
+                  y, width, height, content.width, content.height)
+                    -> TransferRedPixels;
+               else
+                  
+                  private.hdc -> CreateCompatibleDC -> hdcmem;
+                  (hdcmem, thePixmap.private.handleToPixmap) -> SelectObject -> oldbmp;
+                  (private.hdc, x, y, thePixmap.width, thePixmap.height, hdcmem, 0, 0, SRCCOPY) -> BitBlt;
+                  (hdcmem, oldbmp) -> SelectObject;
+                  hdcmem -> DeleteDC;
+              if);
           if);
       if);
 
    #);
    
-
+-- PixmapSurfaceDrawBorder: doPart --
+do (# (* 3D border styles *)
+      BDR_RAISEDOUTER: (# exit  16x0001 #);
+      BDR_SUNKENOUTER: (# exit  16x0002 #);
+      BDR_RAISEDINNER: (# exit  16x0004 #);
+      BDR_SUNKENINNER: (# exit  16x0008 #);
+      
+      BDR_OUTER: (# exit        16x0003 #);
+      BDR_INNER: (# exit        16x000c #);
+      BDR_RAISED: (# exit       16x0005 #);
+      BDR_SUNKEN: (# exit       16x000a #);
+      
+      EDGE_RAISED: (# exit      (BDR_RAISEDOUTER + BDR_RAISEDINNER) #);
+      EDGE_SUNKEN: (# exit      (BDR_SUNKENOUTER + BDR_SUNKENINNER) #);
+      EDGE_ETCHED: (# exit      (BDR_SUNKENOUTER + BDR_RAISEDINNER) #);
+      EDGE_BUMP: (# exit        (BDR_RAISEDOUTER + BDR_SUNKENINNER) #);
+      
+      (* Border flags *)
+      BF_LEFT: (# exit          16x0001 #);
+      BF_TOP: (# exit           16x0002 #);
+      BF_RIGHT: (# exit         16x0004 #);
+      BF_BOTTOM: (# exit        16x0008 #);
+      
+      BF_TOPLEFT: (# exit       (BF_TOP + BF_LEFT) #);
+      BF_TOPRIGHT: (# exit      (BF_TOP + BF_RIGHT) #);
+      BF_BOTTOMLEFT: (# exit    (BF_BOTTOM + BF_LEFT) #);
+      BF_BOTTOMRIGHT: (# exit   (BF_BOTTOM + BF_RIGHT) #);
+      BF_RECT: (# exit          (BF_LEFT + BF_TOP + BF_RIGHT + BF_BOTTOM) #);
+      
+      BF_FLAT: (# exit         16x4000 #); (* For flat rather than 3D borders *)
+      BF_MONO: (# exit         16x8000 #);
+      BF_ADJUST: (# exit       16x2000 #);
+      
+      BF_DIAGONAL: (# exit      16x0010 #);
+      
+      BF_MIDDLE: (# exit 0x0800 #);
+      
+      DrawEdge: external
+        (# hdc: @integer;
+           theRect: ^ntRECT;
+           edge: @integer;
+           flags: @integer;
+           result: @integer;
+        enter (hdc,theRect[],edge,flags)
+        do callStd
+        exit result
+        #);
+      
+      theRect: @ntRect;
+      xi, yi: @integer;
+   do (0, 0) -> transform -> (xi, yi);
+      xi -> theRect.left;
+      yi -> theRect.top;
+      xi + width -> theRect.right;
+      yi + height -> theRect.bottom;
+      
+      (if style
+       //BorderSimple then
+          (private.hdc, theRect[], EDGE_SUNKEN, BF_RECT + BF_FLAT + BF_MIDDLE) -> DrawEdge;
+       //BorderSunken then
+          (private.hdc, theRect[], EDGE_SUNKEN, BF_RECT + BF_MIDDLE) -> DrawEdge;
+       //BorderRaised then
+          (private.hdc, theRect[], EDGE_RAISED, BF_RECT + BF_MIDDLE) -> DrawEdge;
+      if);
+   #);
+   
 -- PixmapSurfaceStyle: doPart --
 do theStyle[] -> currentStyle[];
    
@@ -1132,6 +1302,10 @@ do private.current.next[] -> private.current[];
 do private.current.x + dx -> private.current.x;
    private.current.y + dy -> private.current.y;
    
+-- PixmapSurfaceTransform: doPart --
+do private.current.x + x -> x;
+   private.current.y + y -> y;
+   
 -- PixmapSurfaceBegin: doPart --
 do &Matrix[] -> private.current[];
    0 -> CreateCompatibleDC -> private.hdc;
@@ -1150,8 +1324,13 @@ do (private.hdc, private.old_dib) -> SelectObject;
    
 -- PixmapSurfaceLib: attributes --
 
-
-
+insideTest:
+  (# x, y: @real;
+     in: @boolean;
+  enter (x, y)
+  do (x >= left) AND (x <= right) AND (y >= top) AND (y <= bottom) -> in;
+  exit in
+  #);
 
 
 trace_plot: (# exit false #);
@@ -1928,13 +2107,6 @@ Matrix:
      x, y: @real;
   #);
 
-transform:
-  (# x, y: @real;
-  enter (x, y)
-  do private.current.x + x -> x;
-     private.current.y + y -> y;
-  exit (x, y)
-  #);
 
 ntFillRect: external
   (# hdc: @integer; (* HDC *)
@@ -2361,3 +2533,9 @@ do (# copy: ^Pixmap;
       
    #);
    
+-- GraphicsCanvasCapture: doPart --
+do interfaceObjectID -> SetCapture;
+   
+-- GraphicsCanvasRelease: doPart --
+do ReleaseCapture;
+

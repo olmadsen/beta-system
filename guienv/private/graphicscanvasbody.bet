@@ -108,10 +108,13 @@ do strokewidth -> theSurface.width;
       fill[] -> theSurface.pen;
       (width, height) -> theSurface.fillOval;
    if);
-  
+   
+-- BorderDrawOn: doPart --
+do (style, width, height) -> theSurface.drawBorder;
 
 -- PolygonDrawOn: doPart --
-do (if fill[] <> NONE then
+do strokewidth ->  theSurface.width;
+   (if fill[] <> NONE then
       fill[] -> theSurface.pen;
       points[] -> theSurface.fillPolygon;
    if);
@@ -119,6 +122,66 @@ do (if fill[] <> NONE then
       stroke[] -> theSurface.pen;
       points[] -> theSurface.drawPolygon;
    if);
+   
+-- PolygonContainsPoint: doPart --
+do (# testSegment:
+        (# start, end: ^Point2d;
+           left, right, top, bottom: @real;
+           a, b, c: @real;
+           d: @real;
+           dist: @real;
+           halfStrokeWidth: @integer;
+           on: @boolean;
+        enter (start[], end[])
+        do 
+           (if start.x < end.x then
+               start.x -> left;
+               end.x -> right;
+            else
+               start.x -> right;
+               end.x  -> left;
+           if);
+           (if start.y < end.y then
+               start.y -> top;
+               end.y -> bottom;
+            else
+               start.y -> bottom;
+               end.y  -> top;
+           if);
+           strokewidth / 2 -> halfStrokeWidth;
+           left - halfStrokeWidth - 6-> left;
+           right + halfStrokeWidth + 6-> right;
+           top - halfStrokeWidth - 6 -> top;
+           bottom + halfStrokeWidth + 6-> bottom;
+           (if (x >= left) AND (x <= right) AND (y >= top) AND (y <= bottom) then
+               
+               end.x - start.x -> b;
+               -(end.y - start.y) -> a;
+               -a * start.x - b*start.y -> c;
+               a*a + b*b -> sqrt -> d;
+               (if d > 0.0001 then
+                   (a*x + b*y + c) / d -> abs -> dist;
+                   (if dist < (halfStrokeWidth + 6) then
+                       true -> on;
+                   if);
+               if);
+           if);
+        exit on
+        #);
+      prev: ^Point2d;
+      on: @boolean;
+   do search: points.scan
+      (#
+      do (if prev[] <> NONE then
+             (prev[], current[]) -> testSegment -> on;
+             (if on then
+                 THIS(Polygon)[] -> target[];
+                 leave search;
+             if);
+         if);
+         current[] -> prev[];
+      #);
+   #);
    
 
 -- TextItemDrawOn: doPart --
@@ -157,14 +220,25 @@ do children.scan
    children.clear;
    
 -- CompositeDrawOn: doPart --
-do children.scan
-     (#
-     do theSurface[] -> current.drawOn;
-     #);
+do (if NOT exclude then
+       children.scan
+       (#
+       do theSurface[] -> current.drawOn;
+       #);
+   if);
 
 -- GraphicsCanvasOnMouseDown: doPart --
 do (# tempx, tempy: @integer;
-   do localPosition -> select -> current[];
+      capture:
+        (#
+        <<SLOT GraphicsCanvasCapture: doPart>>
+        #);
+   do capture;
+      true -> captured;
+      
+      localPosition -> select -> current[];
+      localPosition -> (tempx, tempy);
+      (buttonState, tempx, tempy) -> THIS(GraphicsCanvas).onMouseDown;
       (if current[] <> NONE then
           localPosition -> (tempx,tempy);
           tempx - panx -> tempx;
@@ -178,7 +252,14 @@ do (# tempx, tempy: @integer;
    
 -- GraphicsCanvasOnMouseUp: doPart --
 do (# tempx, tempy: @integer;
-   do (if current[] <> NONE then
+      release:
+        (#
+        <<SLOT GraphicsCanvasRelease: doPart>>
+        #);
+   do release;
+      false -> captured;
+      localPosition -> THIS(GraphicsCanvas).onMouseUp;
+      (if current[] <> NONE then
           localPosition -> (tempx,tempy);
           tempx - panx -> tempx;
           tempy - pany -> tempy;
@@ -193,6 +274,7 @@ do (# tempx, tempy: @integer;
 -- GraphicsCanvasOnMouseMove: doPart --
 do (# tempx, tempy: @integer;
    do flush;
+      localPosition -> THIS(GraphicsCanvas).onMouseMove;
       (if current[] <> NONE then
           localPosition -> (tempx,tempy);
           tempx - panx -> tempx;
@@ -396,3 +478,4 @@ do (# vx, vy: @real;
       if);
       
    #)
+   
