@@ -304,7 +304,7 @@ long host2inetAddr(char *host)
 char const *nameOfThisHost(long *pErrorCode)
 {
 	DEBUG_SOCKETS(printf("nameOfThisHost\n"));
-	return "mariner";
+	return "unknown";
 }
 
 /*
@@ -313,7 +313,7 @@ char const *nameOfThisHost(long *pErrorCode)
 long inetAddrOfThisHost(void)
 {
 	DEBUG_SOCKETS(printf("inetAddrOfThisHost\n"));
-  	return 0x82e11081;
+  	return 0;
 }
 
 void initSockets(void)
