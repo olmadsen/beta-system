@@ -25,4 +25,4 @@ clean:
 
 tar:
 	@echo Creating run-demos.tar with all run.demos scripts
-	sh -c "find . -name 'run.*' -print; echo demo-utils.perl; echo ./basiclib/systemenv/demo.txt" | xargs tar cvf run-demos.tar
+	sh -c "find . -name 'run.*' -print; echo demo-utils.perl; echo ./basiclib/systemenv/demo.txt; echo unixlib/unixfile/input" | xargs tar cvf run-demos.tar
