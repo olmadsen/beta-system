@@ -61,6 +61,7 @@ SaveArea	.word	0,0,0
 	.IMPORT	ActiveComponent,DATA
 	.IMPORT	lastCompBlock,DATA
 	.IMPORT	ActiveCallBackFrame,DATA
+	.IMPORT	savedRefSP,DATA
 	.IMPORT	AlloSO,CODE
 	.IMPORT	AOAtoIOAInsert,CODE
 	.IMPORT BetaExit,CODE
@@ -160,6 +161,7 @@ Lnoinsert2
 	ldw	RefBlock+SFoffset(0,%r30),RSP		;RSP from before Att
 	ldws,ma	-4(RSP),TH
 	ldws,ma	-4(RSP),CA
+	store(%r14, savedRefSP)		;really RSP = %r14, but CPP... sic!
 #else
 	LDW	-128-36(%r30),TH	;restore registers saved by Att
 	LDW	-128-40(%r30),CA
@@ -212,6 +214,7 @@ Lcprefstack
 #ifdef REFSTACK
 	ldws,ma	-4(RSP),TH
 	ldws,ma	-4(RSP),CA
+	store(%r14, savedRefSP)
 #else
 	LDW	-64-36(%r30),TH		;restore registers saved by Susp
 	LDW	-64-40(%r30),CA
@@ -335,6 +338,7 @@ Lhascaller
 #ifdef REFSTACK
 	ldws,ma	-4(RSP),TH		;get refs that Att saved for me
 	ldws,ma	-4(RSP),CA
+	store(%r14, savedRefSP)		;really RSP, but CPP... sic!
 #else
 	LDW	-128-36(%r23),TH	;get TH that Att saved for me
 	LDW	-128-40(%r23),CA	;get CA that Att saved for me
@@ -345,6 +349,8 @@ Lhascaller
 ;----------------------------------------------------------------------
 ExitO
 	.EXPORT	ExitO
+ExO
+	.EXPORT ExO
 ;; called with CA = exitObj, OR = exitAddr, TH = thisObject, D0 = offset
 	DEPI	1,31,1,TH
 	stws,mb	TH,4(RSP)		;push TH on refstk with tag
@@ -385,8 +391,10 @@ Lbitnotset
 		
 Lisexitobj
 	COPY	%r1,RSP
-	LDWX	D0 (CA),%r30		;the old sp is magically saved here
+	LDWX	D0 (CA),%r1	;the old sp - lastCompBlock is saved here
+	load(lastCompBlock, %r19)
+	ADD	%r19,%r1,%r30
 	BV	%r0(OR)
-	COPY	CA,TH			;correct "this" reference
+	COPY	CA,TH		;correct "this" reference
 	
 	.END
