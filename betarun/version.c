@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(88)";
+char betarun_version[] = "BETARUN VERSION 5.3(89)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.107  2002/04/03 13:36:35  datpete
+ * test of mbs_commit from cygwin
+ * Betarun version number: 88
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.106  2002/04/02 21:47:52  datpete
  * A little more macosx:
  *   enabled PERSIST

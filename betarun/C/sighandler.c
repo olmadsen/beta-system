@@ -916,7 +916,7 @@ void BetaSignalHandler (long sig, /*siginfo_t*/ void *info, struct sigcontext *s
 /***************************** BEGIN nti ********************************/
 #ifdef nti
 #ifdef PERSIST
-extern int proxyTrapHandler(CONTEXT* pContextRecord);
+extern int proxyTrapHandler(CONTEXT* pContextRecord); 
 #endif
 
 void SaveWin32Registers(SIGNAL_CONTEXT scp, 
