@@ -63,3 +63,44 @@ HRESULT BETA_Invoke(long pdisp,
 {
   return Unimplemented("BETA_Invoke");
 }
+
+BSTR SysAllocString(const char *  sz){
+  Unimplemented("SysAllocString");
+  return 0;
+}
+
+
+void SysFreeString(BSTR s)
+{
+  Unimplemented("SysFreeString");
+}
+
+long* SafeArrayCreate(short  vt,                     
+		      unsigned int  cDims,             
+		      long *  rgsabound  
+		      )
+{
+  Unimplemented("SafeArrayCreate");
+  return 0;
+}
+
+HRESULT SafeArrayAccessData( 
+       long *  psa,       
+       void **  ppvData  
+     )
+{
+  return Unimplemented("SafeArrayAccessData");
+}
+
+HRESULT SafeArrayUnaccessData(long *  psa)
+{
+  return Unimplemented("SafeArrayUnaccessData");
+
+}
+
+HRESULT SafeArrayDestroy(long *  psa)
+{
+  return Unimplemented("SafeArrayDestroy");
+
+}
+
