@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CopyValRep.c,v 1.10 1992-09-03 12:56:00 beta Exp $
+ * Mod: $Id: CopyValRep.c,v 1.11 1992-09-04 14:24:22 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -23,31 +23,15 @@ void CopyVR(ref(ValRep) theRep,
     newRep = NULL;
     
     range = theRep->HighBorder;
-    if (range > LARGE_REP_SIZE) {
-	Protect2(theRep, theObj,
-		 switch( (int) theRep->Proto){
-		   case (int) ByteRepPTValue:
-		     newRep = cast(ValRep) LVRAByteAlloc(range);
-		     break;
-		   case (int) WordRepPTValue:
-		     newRep = cast(ValRep) LVRAWordAlloc(range);
-		     break;
-		   case (int) ValRepPTValue:
-		     newRep = cast(ValRep) LVRAAlloc(range);
-		     break;
-		   case (int) DoubleRepPTValue:
-		     newRep = cast(ValRep) LVRADoubleAlloc(range);
-		     break;
-		   default:
-		     fprintf(output, "CopyValRep: wrong prototype\n");
-		     exit(1);
-		 });
-    }
+
+#ifdef LVR_Area
+    if (range > LARGE_REP_SIZE) newRep = LVRAAlloc(theRep->Proto, range);
     if (newRep) {
 	/* Make the LVRA-cycle: theCell -> newRep.Age */
 	newRep->GCAttr = (int) ((int *) theObj + offset);
     }
     else
+#endif
       {
 	  Protect2(theObj, theRep,
 		   newRep = cast(ValRep) 

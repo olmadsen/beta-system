@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: crun.h,v 1.16 1992-09-03 12:56:29 beta Exp $
+ * Mod: $Id: crun.h,v 1.17 1992-09-04 14:24:51 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -14,7 +14,6 @@ extern struct Item    * CAlloI();
 #endif
 extern ref(ValRep) 	AlloVR();
 extern char 	      * LVRAAlloc();
-extern char 	      * LVRAByteAlloc();
 extern ref(RefRep)	AlloRR();
 extern ref(StackObject) AlloSO() asm("AlloSO");
 extern void		CopyT() asm("CopyT");
