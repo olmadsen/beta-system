@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-06-03 09:57:59 $, SID: $Revision: 1.8 $
+ * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-06-03 15:10:23 $, SID: $Revision: 1.9 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -33,13 +33,6 @@ Initialize()
 #ifdef macintosh
   InitTheCursor();
 #endif
-  /* save struct sizes for efficiency */
-  ItemStructSize = headsize(Item);
-  ComponentStructSize = headsize(Component);
-  StackObjectStructSize = headsize(StackObject);
-  ValRepStructSize = headsize(ValRep);
-  RefRepStructSize = headsize(RefRep);
-  StructureStructSize = headsize(Structure);
 
   GetBetaEnv();
 
@@ -74,7 +67,7 @@ Initialize()
     exit(1);
   }
 
-  /* Allocate the Call Back Functions Area. */
+  /* Allocate the Debug Object Table. */
   if( DOTSize > 0 )
     if( !AllocateHeap( &DOT,     &DOTTop,     &DOTLimit,  DOTSize ) ){
       fprintf(output,"#Beta: Couldn't allocate DOT (%d)\n", DOTSize);
