@@ -1,5 +1,6 @@
 ORIGIN '~beta/guienv/guienvall';
 INCLUDE '~beta/guienv/private/winnt/guienv_ntiprivate'
+        '~beta/containers/sets'
         '~beta/comlib/comlib'
         '~beta/comlib/OleIdl'
         '~beta/comlib/docobj'
@@ -20,11 +21,21 @@ guienv
           'debug-locate.txt'->locateFile.name;
           locateFile.openWrite;
           'debug-interface.txt'->interfaceFile.name;
-          interfaceFile.openWrite
+          interfaceFile.openWrite;
+          'debug-calltoobjects.txt'->callToObjectFile.name;
+          callToObjectFile.openWrite;
+          locateMsg.open
        #);
      closeFiles:
-       (#  do debugFile.close; locateFile.close; interfaceFile.close #);
-     debug: (#  exit true #);
+       (# 
+       do
+          debugFile.close;
+          locateFile.close;
+          interfaceFile.close;
+          callToObjectFile.close;
+          locateMsg.close
+       #);
+     debug: (#  exit false #);
      debugFile: @file;
      debugMsg:
        (# msg: @text
@@ -39,7 +50,93 @@ guienv
      ;
      locate: (#  exit false #);
      locateFile: @file;
-     locateMsg: (#  do (if locate then INNER if) #);
+     locate2msg: (#  do (if locate then INNER if) #);
+     ;
+     locateMsg: @
+     (* skal bruges som den foerste og den sidste kommando i hver metode. *)
+       (#
+          private: @
+            (#
+               thefile: @file;
+               indentlist: @set
+                 (# element::  (# msg: ^text; indent: @integer #) #);
+               currentIndent:
+                 (# result: @integer
+                 do
+                    - 1->result;
+                    indentlist.scan
+                      (# 
+                      do
+                         (if current.indent > result then
+                             current.indent->result
+                         if)
+                      #)
+                 exit result
+                 #);
+               makeIndentString:
+                 (# indent: @integer; str: ^text
+                 enter indent
+                 do &text[]->str[]; (for indent repeat ' '->str.append for)
+                 exit str[]
+                 #)
+            #);
+          open:
+            (# 
+            do
+               'debug-locate.txt'->private.thefile.name;
+               private.thefile.openWrite
+            #);
+          close: (#  do private.thefile.close #);
+          in:
+            (#
+               msg: ^text;
+               newIndentListElm: ^private.indentlist.element;
+               oldIndent,newIndent: @integer
+            enter msg[]
+            do
+               (if (msg[] <> none ) and not msg.empty then
+                   private.currentIndent->oldIndent;
+                   oldIndent+2->newIndent;
+                   ;
+                   &private.indentlist.element[]->newIndentListElm[];
+                   msg.copy->newIndentListElm.msg[];
+                   newIndent->newIndentListElm.indent;
+                   newIndentListElm[]->private.indentlist.insert;
+                   ;
+                   '+ '->msg.prepend;
+                   newIndent->private.makeIndentString->msg.prepend;
+                   ;
+                   msg.makeUC;
+                   msg[]->private.thefile.putline;
+                   private.thefile.flush
+               if)
+            #);
+          out:
+            (# msg: ^text; theIndentListElm: ^private.indentlist.element
+            enter msg[]
+            do
+               (if (msg[] <> none ) and not msg.empty then
+                   private.indentlist.find
+                     (#
+                        predicate:: 
+                          (#  do msg[]->current.msg.equal->value #)
+                     #)->theIndentListElm[];
+                   ;
+                   '- '->msg.prepend;
+                   (if theIndentListElm[] <> none then
+                       theIndentListElm[]->private.indentlist.delete;
+                       theIndentListElm.indent->private.makeIndentString
+                         ->msg.prepend
+                    else
+                       '+++++ could not find this element in indentlist +++++ '
+                         ->msg.prepend
+                   if);
+                   ;
+                   msg[]->private.thefile.putline;
+                   private.thefile.flush
+               if)
+            #)
+       #);
      ;
      interfacedebug: (#  exit true #);
      interfaceFile: @file;
@@ -51,6 +148,20 @@ guienv
               INNER ;
               (if (msg[] <> none ) and not msg.empty then
                   msg[]->interfaceFile.putline; interfaceFile.flush
+              if)
+          if)
+       #);
+     ;
+     callToObjectDebug: (#  exit true #);
+     callToObjectFile: @file;
+     callToObjectMsg:
+     (* bruges til at udskrive foer/efter et kald til server-objektet. *)
+       (# msg: @text
+       do
+          (if callToObjectDebug then
+              INNER ;
+              (if (msg[] <> none ) and not msg.empty then
+                  msg[]->callToObjectFile.putline; callToObjectFile.flush
               if)
           if)
        #);
@@ -79,7 +190,7 @@ guienv
             (# pSite: ^CSite; pUnkOuter: (* = LPUNKNOWN *) ^IUnknown
             enter (pSite[],pUnkOuter[])
             do
-               locateMsg
+               locate2msg
                  (#  do 'IOleClientSite.constructor'->putline #);
                0->m_cRef;
                pSite[]->m_pSite[];
@@ -91,7 +202,7 @@ guienv
            {return;}
            *)
             (# 
-            do locateMsg (#  do 'IOleClientSite.destructor'->putline #)
+            do locate2msg (#  do 'IOleClientSite.destructor'->putline #)
             #);
           QueryInterface::<
           (*
@@ -100,6 +211,7 @@ guienv
            *) 
             (# 
             do
+               'OleClientSite.QueryInterface'->locateMsg.in;
                interfaceMsg
                  (#  do '++IOleClientSite.QueryInterface'->msg.append #);
                (if true then
@@ -111,7 +223,8 @@ guienv
                (if false then
                    '======> IOleClientSite.QueryInterface returns: '->puttext;
                    result->myprint
-               if)
+               if);
+               'OleClientSite.QueryInterface'->locateMsg.out
             #);
           AddRef::<
           (*
@@ -123,10 +236,12 @@ guienv
            *) 
             (# 
             do
+               'OleClientSite.AddRef'->locateMsg.in;
                interfaceMsg
                  (#  do '--IOleClientSite.AddRef'->msg.append #);
                m_cRef+1->m_cRef;
-               m_pUnkOuter.AddRef->result
+               m_pUnkOuter.AddRef->result;
+               'OleClientSite.AddRef'->locateMsg.out
             #);
           Release::<
           (*
@@ -138,10 +253,12 @@ guienv
            *) 
             (# 
             do
+               'OleClientSite.Release'->locateMsg.in;
                interfaceMsg
                  (#  do '--IOleClientSite.Release'->msg.append #);
                m_cRef-1->m_cRef;
-               m_pUnkOuter.Release->result
+               m_pUnkOuter.Release->result;
+               'OleClientSite.Release'->locateMsg.out
             #);
           ;
           SaveObject::<
@@ -153,9 +270,11 @@ guienv
            *) 
             (# 
             do
+               'OleClientSite.SaveObject'->locateMsg.in;
                interfaceMsg
                  (#  do 'IOleClientSite.SaveObject'->msg.append #);
-               NO_ERROR->result
+               NO_ERROR->result;
+               'OleClientSite.SaveObject'->locateMsg.out
             #);
           GetMoniker::<
           (*
@@ -164,9 +283,11 @@ guienv
            *) 
             (# 
             do
+               'OleClientSite.GetMoniker'->locateMsg.in;
                interfaceMsg
                  (#  do 'IOleClientSite.GetMoniker'->msg.append #);
-               E_NOTIMPL->result
+               E_NOTIMPL->result;
+               'OleClientSite.GetMoniker'->locateMsg.out
             #);
           GetContainer::<
           (*
@@ -178,10 +299,12 @@ guienv
            *) 
             (# 
             do
+               'OleClientSite.GetContainer'->locateMsg.in;
                interfaceMsg
                  (#  do 'IOleClientSite.GetContainer'->msg.append #);
                none ->ppContainer;
-               E_NOINTERFACE->result
+               E_NOINTERFACE->result;
+               'OleClientSite.GetContainer'->locateMsg.out
             #);
           ShowObject::<
           (*
@@ -190,9 +313,11 @@ guienv
            *) 
             (# 
             do
+               'OleClientSite.ShowObject'->locateMsg.in;
                interfaceMsg
                  (#  do 'IOleClientSite.ShowObject'->msg.append #);
-               NO_ERROR->result
+               NO_ERROR->result;
+               'OleClientSite.ShowObject'->locateMsg.out
             #);
           OnShowWindow::<
           (*
@@ -201,9 +326,11 @@ guienv
            *) 
             (# 
             do
+               'OleClientSite.OnShowWindow'->locateMsg.in;
                interfaceMsg
                  (#  do 'IOleClientSite.OnShowWindow'->msg.append #);
-               NO_ERROR->result
+               NO_ERROR->result;
+               'OleClientSite.OnShowWindow'->locateMsg.out
             #);
           RequestNewObjectLayout::<
           (*
@@ -212,11 +339,13 @@ guienv
            *) 
             (# 
             do
+               'OleClientSite.RequestNewObjectLayout'->locateMsg.in;
                interfaceMsg
                  (# 
                  do 'IOleClientSite.RequestNewObjectLayout'->msg.append
                  #);
-               E_NOTIMPL->result
+               E_NOTIMPL->result;
+               'OleClientSite.RequestNewObjectLayout'->locateMsg.out
             #)
        #);
      CImpAdviseSink: IAdviseSink
@@ -242,7 +371,7 @@ guienv
             (# pSite: ^CSite; pUnkOuter: (* = LPUNKNOWN *) ^IUnknown
             enter (pSite[],pUnkOuter[])
             do
-               locateMsg
+               locate2msg
                  (#  do 'IAdviseSink.constructor'->putline #);
                0->m_cRef;
                pSite[]->m_pSite[];
@@ -256,7 +385,7 @@ guienv
            }
            *)
             (# 
-            do locateMsg (#  do 'IAdviseSink.destructor'->putline #)
+            do locate2msg (#  do 'IAdviseSink.destructor'->putline #)
             #);
           QueryInterface::<
           (*
@@ -267,9 +396,11 @@ guienv
            *) 
             (# 
             do
+               'AdviseSink.QueryInterface'->locateMsg.in;
                interfaceMsg
                  (#  do '++IAdviseSink.QueryInterface'->msg.append #);
-               (riid[],ppvObject[])->m_pUnkOuter.QueryInterface->result
+               (riid[],ppvObject[])->m_pUnkOuter.QueryInterface->result;
+               'AdviseSink.QueryInterface'->locateMsg.out
             #);
           AddRef::<
           (*
@@ -281,10 +412,12 @@ guienv
            *) 
             (# 
             do
+               'AdviseSink.AddRef'->locateMsg.in;
                interfaceMsg
                  (#  do '--IAdviseSink.AddRef'->msg.append #);
                m_cRef+1->m_cRef;
-               m_pUnkOuter.AddRef->result
+               m_pUnkOuter.AddRef->result;
+               'AdviseSink.AddRef'->locateMsg.out
             #);
           Release::<
           (*
@@ -296,10 +429,12 @@ guienv
            *) 
             (# 
             do
+               'AdviseSink.Release'->locateMsg.in;
                interfaceMsg
                  (#  do '--IAdviseSink.Release'->msg.append #);
                m_cRef-1->m_cRef;
-               m_pUnkOuter.Release->result
+               m_pUnkOuter.Release->result;
+               'AdviseSink.AddRef'->locateMsg.out
             #);
           ;
           OnDataChange::<
@@ -309,7 +444,10 @@ guienv
            *) 
             (# 
             do
-               interfaceMsg (#  do 'IAdviseSink.OnDataChange'->msg.append #)
+               'AdviseSink.OnDataChange'->locateMsg.in;
+               interfaceMsg
+                 (#  do 'IAdviseSink.OnDataChange'->msg.append #);
+               'AdviseSink.OnDataChange'->locateMsg.out
             #);
           OnViewChange::<
           (*
@@ -318,7 +456,10 @@ guienv
            *) 
             (# 
             do
-               interfaceMsg (#  do 'IAdviseSink.OnViewChange'->msg.append #)
+               'AdviseSink.OnViewChange'->locateMsg.in;
+               interfaceMsg
+                 (#  do 'IAdviseSink.OnViewChange'->msg.append #);
+               'AdviseSink.OnViewChange'->locateMsg.out
             #);
           OnRename::<
           (*
@@ -326,7 +467,11 @@ guienv
            {return;}
            *) 
             (# 
-            do interfaceMsg (#  do 'IAdviseSink.OnRename'->msg.append #)
+            do
+               'AdviseSink.OnRename'->locateMsg.in;
+               interfaceMsg
+                 (#  do 'IAdviseSink.OnRename'->msg.append #);
+               'AdviseSink.OnRename'->locateMsg.out
             #);
           OnSave::<
           (*
@@ -334,7 +479,11 @@ guienv
            {return;}
            *) 
             (# 
-            do interfaceMsg (#  do 'IAdviseSink.OnSave'->msg.append #)
+            do
+               'AdviseSink.OnSave'->locateMsg.in;
+               interfaceMsg
+                 (#  do 'IAdviseSink.OnSave'->msg.append #);
+               'AdviseSink.OnSave'->locateMsg.out
             #);
           OnClose::<
           (*
@@ -373,12 +522,14 @@ guienv
            *) 
             (# hwnd: @int32holder
             do
+               'AdviseSink.OnClose'->locateMsg.in;
                interfaceMsg
                  (#  do 'IAdviseSink.OnClose'->msg.append #);
                (* m_pSite.m_pFR.Close *)
                ;
                hwnd[]->m_pSite.m_pFR.theOleInPlaceFrame.GetWindow;
-               (hwnd,WM_COMMAND,resource.IDM_FILECLOSE %bor 0,0)->PostMessage
+               (hwnd,WM_COMMAND,resource.IDM_FILECLOSE %bor 0,0)->PostMessage;
+               'AdviseSink.OnClose'->locateMsg.out
             #)
        #);
      CImpOleInPlaceSite: IOleInPlaceSite
@@ -413,7 +564,7 @@ guienv
             (# pSite: ^CSite; pUnkOuter: (* = LPUNKNOWN *) ^IUnknown
             enter (pSite[],pUnkOuter[])
             do
-               locateMsg
+               locate2msg
                  (#  do 'IOleInPlaceSite.constructor'->putline #);
                0->m_cRef;
                pSite[]->m_pSite[];
@@ -427,7 +578,7 @@ guienv
            }
            *)
             (# 
-            do locateMsg (#  do 'IOleInPlaceSite.destructor'->putline #)
+            do locate2msg (#  do 'IOleInPlaceSite.destructor'->putline #)
             #);
           QueryInterface::<
           (*
@@ -436,9 +587,11 @@ guienv
            *) 
             (# 
             do
+               'OleInPlaceSite.QueryInterface'->locateMsg.in;
                interfaceMsg
                  (#  do '++IOleInPlaceSite.QueryInterface'->msg.append #);
-               (riid[],ppvObject[])->m_pUnkOuter.QueryInterface->result
+               (riid[],ppvObject[])->m_pUnkOuter.QueryInterface->result;
+               'OleInPlaceSite.QueryInterface'->locateMsg.out
             #);
           AddRef::<
           (*
@@ -450,10 +603,12 @@ guienv
            *) 
             (# 
             do
+               'OleInPlaceSite.AddRef'->locateMsg.in;
                interfaceMsg
                  (#  do '--IOleInPlaceSite.AddRef'->msg.append #);
                m_cRef+1->m_cRef;
-               m_pUnkOuter.AddRef->result
+               m_pUnkOuter.AddRef->result;
+               'OleInPlaceSite.AddRef'->locateMsg.out
             #);
           Release::<
           (*
@@ -465,10 +620,12 @@ guienv
            *) 
             (# 
             do
+               'OleInPlaceSite.Release'->locateMsg.in;
                interfaceMsg
                  (#  do '--IOleInPlaceSite.Release'->msg.append #);
                m_cRef-1->m_cRef;
-               m_pUnkOuter.Release->result
+               m_pUnkOuter.Release->result;
+               'OleInPlaceSite.Release'->locateMsg.out
             #);
           ;
           GetWindow::<
@@ -497,10 +654,12 @@ guienv
            *) 
             (# 
             do
+               'OleInPlaceSite.GetWindow'->locateMsg.in;
                interfaceMsg
                  (#  do 'IOleInPlaceSite.GetWindow'->msg.append #);
                m_pSite.m_hWnd->phwnd;
-               NOERROR->result
+               NOERROR->result;
+               'OleInPlaceSite.GetWindow'->locateMsg.out
             #);
           ContextSensitiveHelp::<
           (*
@@ -523,11 +682,13 @@ guienv
            *) 
             (# 
             do
+               'OleInPlaceSite.ContextSensitiveHelp'->locateMsg.in;
                interfaceMsg
                  (# 
                  do 'IOleInPlaceSite.ContextSensitiveHelp'->msg.append
                  #);
-               NOERROR->result
+               NOERROR->result;
+               'OleInPlaceSite.ContextSensitiveHelp'->locateMsg.out
             #);
           CanInPlaceActivate::<
           (*
@@ -562,9 +723,16 @@ guienv
            *) 
             (# 
             do
+               'OleInPlaceSite.CanInPlaceActivate'->locateMsg.in;
                interfaceMsg
-                 (#  do 'IOleInPlaceSite.CanInPlaceActivate'->msg.append #);
-               NOERROR->result
+                 (# 
+                 do
+                    '----------------------------------------------\n'
+                      ->msg.append;
+                    'IOleInPlaceSite.CanInPlaceActivate'->msg.append
+                 #);
+               NOERROR->result;
+               'OleInPlaceSite.CanInPlaceActivate'->locateMsg.out
             #);
           OnInPlaceActivate::<
           (*
@@ -594,14 +762,28 @@ guienv
            *) 
             (# IID_IOleIPObject: @IID
             do
+               'OleInPlaceSite.OnInPlaceActivate'->locateMsg.in;
                interfaceMsg
                  (#  do 'IOleInPlaceSite.OnInPlaceActivate'->msg.append #);
                ;
                IOleInPlaceObject_IID->IID_IOleIPObject;
+               callToObjectMsg
+                 (# 
+                 do
+                    'IOleInPlaceSite.OnInPlaceActivate: kald til queryinterface'
+                      ->msg.append
+                 #);
                (m_pSite.m_pObj[],IID_IOleIPObject[])->Query
                  ->m_pSite.m_pIOleIPObject[];
+               callToObjectMsg
+                 (# 
+                 do
+                    'IOleInPlaceSite.OnInPlaceActivate: kald returneret'
+                      ->msg.append
+                 #);
                ;
-               NOERROR->result
+               NOERROR->result;
+               'OleInPlaceSite.OnInPlaceActivate'->locateMsg.out
             #);
           OnInPlaceDeactivate::<
           (*
@@ -633,6 +815,7 @@ guienv
            *) 
             (# 
             do
+               'OleInPlaceSite.OnInPlaceDeactivate'->locateMsg.in;
                interfaceMsg
                  (# 
                  do 'IOleInPlaceSite.OnInPlaceDeactivate'->msg.append
@@ -642,9 +825,24 @@ guienv
                  (# pt: ^IUnknown
                  do
                     m_pSite.m_pIOleIPObject[]->pt[];
-                    (if pt[] <> none then pt.Release if)
+                    (if pt[] <> none then
+                        callToObjectMsg
+                          (# 
+                          do
+                             'IOleInPlaceSite.OnInPlaceDeactivate: kald til Release'
+                               ->msg.append
+                          #);
+                        pt.Release;
+                        callToObjectMsg
+                          (# 
+                          do
+                             'IOleInPlaceSite.OnInPlaceDeactivate: kald returneret'
+                               ->msg.append
+                          #)
+                    if)
                  #);
-               NOERROR->result
+               NOERROR->result;
+               'OleInPlaceSite.OnInPlaceDeactivate'->locateMsg.out
             #);
           OnUIActivate::<
           (*
@@ -671,9 +869,11 @@ guienv
            *) 
             (# 
             do
+               'OleInPlaceSite.OnUIActivate'->locateMsg.in;
                interfaceMsg
                  (#  do 'IOleInPlaceSite.OnUIActivate'->msg.append #);
-               NOERROR->result
+               NOERROR->result;
+               'OleInPlaceSite.OnUIActivate'->locateMsg.out
             #);
           OnUIDeactivate::<
           (*
@@ -707,11 +907,13 @@ guienv
            *) 
             (# 
             do
+               'OleInPlaceSite.OnUIDeactivate'->locateMsg.in;
                interfaceMsg
                  (#  do 'IOleInPlaceSite.OnUIDeactivate'->msg.append #);
                'SetFocus(m_pSite->m_pFR->Window());  m_pSite.m_pFR.SetMenu'
                  ->putline;
-               NOERROR->result
+               NOERROR->result;
+               'OleInPlaceSite.OnUIDeactivate'->locateMsg.out
             #);
           DeactivateAndUndo::<
           (*
@@ -739,10 +941,24 @@ guienv
            *) 
             (# 
             do
+               'OleInPlaceSite.DeactivateAndUndo'->locateMsg.in;
                interfaceMsg
                  (#  do 'IOleInPlaceSite.DeactivateAndUndo'->msg.append #);
+               callToObjectMsg
+                 (# 
+                 do
+                    'IOleInPlaceSite.DeactivateAndUndo: kald til InPlaceDeactivate'
+                      ->msg.append
+                 #);
                m_pSite.m_pIOleIPObject.InPlaceDeactivate;
-               NOERROR->result
+               callToObjectMsg
+                 (# 
+                 do
+                    'IOleInPlaceSite.DeactivateAndUndo: kald returneret'
+                      ->msg.append
+                 #);
+               NOERROR->result;
+               'OleInPlaceSite.DeactivateAndUndo'->locateMsg.out
             #);
           DiscardUndoState::<
           (*
@@ -768,9 +984,11 @@ guienv
            *) 
             (# 
             do
+               'OleInPlaceSite.DiscardUndoState'->locateMsg.in;
                interfaceMsg
                  (#  do 'IOleInPlaceSite.DiscardUndoState'->msg.append #);
-               E_NOTIMPL->result
+               E_NOTIMPL->result;
+               'OleInPlaceSite.DiscardUndoState'->locateMsg.out
             #);
           GetWindowContext::<
           (*
@@ -832,16 +1050,14 @@ guienv
            *) 
             (# IID_IOleInPlaceFrame: @IID; anInt32Holder: @int32holder
             do
+               'OleInPlaceSite.GetWindowContext'->locateMsg.in;
                interfaceMsg
                  (#  do 'IOleInPlaceSite.GetWindowContext'->msg.append #);
                ;
                none ->ppDoc;
                ;
                IOleInPlaceFrame_IID->IID_IOleInPlaceFrame;
-               '3'->putline;
                (m_pSite.m_pFR[],IID_IOleInPlaceFrame[])->Query->ppFrame;
-               ;
-               '4'->putline;
                ;
                (if lprcPosRect[] <> none then
                    m_pSite.m_hWnd->anInt32Holder;
@@ -859,7 +1075,8 @@ guienv
                m_pSite.m_pFR.Accelerators->lpFrameInfo.haccel;
                CACCELERATORS->lpFrameInfo.cAccelEntries;
                ;
-               NOERROR->result
+               NOERROR->result;
+               'OleInPlaceSite.GetWindowContext'->locateMsg.out
             #);
           Scroll::<
           (*
@@ -887,9 +1104,11 @@ guienv
            *) 
             (# 
             do
+               'OleInPlaceSite.Scroll'->locateMsg.in;
                interfaceMsg
                  (#  do 'IOleInPlaceSite.Scroll'->msg.append #);
-               E_NOTIMPL->result
+               E_NOTIMPL->result;
+               'OleInPlaceSite.Scroll'->locateMsg.out
             #);
           OnPosRectChange::<
           (*
@@ -916,9 +1135,11 @@ guienv
            *) 
             (# 
             do
+               'OleInPlaceSite.OnPosRectChange'->locateMsg.in;
                interfaceMsg
                  (#  do 'IOleInPlaceSite.OnPosRectChange'->msg.append #);
-               E_NOTIMPL->result
+               E_NOTIMPL->result;
+               'OleInPlaceSite.OnPosRectChange'->locateMsg.out
             #)
        #);
      CImpOleDocumentSite: IOleDocumentSite
@@ -953,7 +1174,7 @@ guienv
             (# pSite: ^CSite; pUnkOuter: (* = LPUNKNOWN *) ^IUnknown
             enter (pSite[],pUnkOuter[])
             do
-               locateMsg
+               locate2msg
                  (#  do 'IOleDocumentSite.constructor'->putline #);
                0->m_cRef;
                pSite[]->m_pSite[];
@@ -967,7 +1188,7 @@ guienv
            }
            *)
             (# 
-            do locateMsg (#  do 'IOleDocumentSite.destructor'->putline #)
+            do locate2msg (#  do 'IOleDocumentSite.destructor'->putline #)
             #);
           QueryInterface::<
           (*
@@ -979,9 +1200,11 @@ guienv
            *) 
             (# 
             do
+               'OleDocumentSite.QueryInterface'->locateMsg.in;
                interfaceMsg
                  (#  do '++IOleDocumentSite.QueryInterface'->msg.append #);
-               (riid[],ppvObject[])->m_pUnkOuter.QueryInterface->result
+               (riid[],ppvObject[])->m_pUnkOuter.QueryInterface->result;
+               'OleDocumentSite.QueryInterface'->locateMsg.out
             #);
           AddRef::<
           (*
@@ -993,10 +1216,12 @@ guienv
            *) 
             (# 
             do
+               'OleDocumentSite.AddRef'->locateMsg.in;
                interfaceMsg
                  (#  do '--IOleDocumentSite.AddRef'->msg.append #);
                m_cRef+1->m_cRef;
-               m_pUnkOuter.AddRef->result
+               m_pUnkOuter.AddRef->result;
+               'OleDocumentSite.AddRef'->locateMsg.out
             #);
           Release::<
           (*
@@ -1008,10 +1233,12 @@ guienv
            *) 
             (# 
             do
+               'OleDocumentSite.Release'->locateMsg.in;
                interfaceMsg
                  (#  do '--IOleDocumentSite.Release'->msg.append #);
                m_cRef-1->m_cRef;
-               m_pUnkOuter.Release->result
+               m_pUnkOuter.Release->result;
+               'OleDocumentSite.Release'->locateMsg.out
             #);
           ;
           ActivateMe::<
@@ -1100,6 +1327,7 @@ guienv
                IID_IOleDocument: @IID;
                anIOleDocumentViewHolder: @IOleDocumentViewHolder
             do
+               'OleDocumentSite.ActivateMe'->locateMsg.in;
                interfaceMsg
                  (#  do 'IOleDocumentSite.ActivateMe'->msg.append #);
                ;
@@ -1107,36 +1335,119 @@ guienv
                (* If we're passed a NULL view pointer, then try to get one from
                 the document object (the object within us). *)
                    IOleDocument_IID->IID_IOleDocument;
+                   callToObjectMsg
+                     (# 
+                     do
+                        'IOleDocumentSite.ActivateMe: kald til QueryInterface'
+                          ->msg.append
+                     #);
                    (m_pSite.m_pObj[],IID_IOleDocument[])->Query->pDoc[];
+                   callToObjectMsg
+                     (# 
+                     do
+                        'IOleDocumentSite.ActivateMe: kald til QueryInterface returneret'
+                          ->msg.append
+                     #);
                    ;
                    pViewToActivate[]->anIOleDocumentViewHolder;
+                   callToObjectMsg
+                     (# 
+                     do
+                        'IOleDocumentSite.ActivateMe: kald til CreateView'
+                          ->msg.append
+                     #);
                    (m_pSite.m_pImpIOleIPSite[],m_pSite.m_pIStream[],0,
                     anIOleDocumentViewHolder[])->pDoc.CreateView;
+                   callToObjectMsg
+                     (# 
+                     do
+                        'IOleDocumentSite.ActivateMe: kald til CreateView returneret'
+                          ->msg.append
+                     #);
                    ;
-                   pDoc.Release
+                   callToObjectMsg
+                     (# 
+                     do
+                        'IOleDocumentSite.ActivateMe: kald til Release'
+                          ->msg.append
+                     #);
+                   pDoc.Release;
+                   callToObjectMsg
+                     (# 
+                     do
+                        'IOleDocumentSite.ActivateMe: kald til Release returneret'
+                          ->msg.append
+                     #)
                 else
+                   callToObjectMsg
+                     (# 
+                     do
+                        'IOleDocumentSite.ActivateMe: kald til SetInPlaceSite'
+                          ->msg.append
+                     #);
                    (m_pSite.m_pImpIOleIPSite[])
                      ->
                        pViewToActivate.SetInPlaceSite
                        (* make sure that the view has our client site *) ;
-                   pViewToActivate.AddRef
+                   callToObjectMsg
+                     (# 
+                     do
+                        'IOleDocumentSite.ActivateMe: kald til SetInPlaceSite returneret'
+                          ->msg.append
+                     #);
+                   callToObjectMsg
+                     (# 
+                     do
+                        'IOleDocumentSite.ActivateMe: kald til AddRef'
+                          ->msg.append
+                     #);
+                   pViewToActivate.AddRef;
+                   callToObjectMsg
+                     (# 
+                     do
+                        'IOleDocumentSite.ActivateMe: kald til AddRef returneret'
+                          ->msg.append
+                     #)
                if);
                ;
                true->m_pSite.m_fDocObj;
                pViewToActivate[]->m_pSite.m_pIOleDocView[];
                ;
+               callToObjectMsg
+                 (# 
+                 do
+                    'IOleDocumentSite.ActivateMe: kald til UIActivate'
+                      ->msg.append
+                 #);
                true
                  ->
                    pViewToActivate.UIActivate
                    (* this sets up toolbars and menus first *) ;
+               callToObjectMsg
+                 (# 
+                 do
+                    'IOleDocumentSite.ActivateMe: kald til UIActivate returneret'
+                      ->msg.append
+                 #);
                ;
                (* Set the window size sensitive to new toolbars.
                 GetClientRect(m_pSite->m_hWnd, &rc);
                 pView->SetRect(&rc); *)
                ;
+               callToObjectMsg
+                 (# 
+                 do 'IOleDocumentSite.ActivateMe: kald til Show'->msg.append
+                 #);
                true->pViewToActivate.Show;
+               callToObjectMsg
+                 (# 
+                 do
+                    'IOleDocumentSite.ActivateMe: kald til Show returneret'
+                      ->msg.append
+                 #);
                ;
-               NOERROR->result
+               NOERROR->result;
+               'OleDocumentSite.ActivateMe'->locateMsg.out
             #)
        #);
      CSite: IUnknown
@@ -1151,10 +1462,12 @@ guienv
           m_pFR: ^CFrameType;
           ;
           m_fInitialized: (* Something here? *) @boolean;
-          m_pIStorage: (* Storage for object.
-                        Originally LPSTORAGE *) ^IStorage;
-          m_pIStream: (* Info stream for object.
-                       LPSTREAM *) ^IStream;
+          m_pIStorage:
+          (* Storage for object.
+           Originally LPSTORAGE *) ^IStorage;
+          m_pIStream:
+          (* Info stream for object.
+           LPSTREAM *) ^IStream;
           ;
           m_pObj: ^IUnknown;
           m_pIOleObject: ^IOleObject;
@@ -1229,7 +1542,8 @@ guienv
                IID_IOleObject: @IID
             enter pObj[]
             do
-               locateMsg
+               'CSite.ObjectInitialize'->locateMsg.in;
+               locate2msg
                  (#  do 'CSite.ObjectInitialize'->putline #);
                return:
                (* When the C program says "return X", 
@@ -1244,10 +1558,34 @@ guienv
                       (* We need an IOleObject most of the time, so get one here *)
                       ;
                     IOleObject_IID->IID_IOleObject;
+                    callToObjectMsg
+                      (# 
+                      do
+                         'CSite.ObjectInitialize: kald til QueryInterface'
+                           ->msg.append
+                      #);
                     (pObj[],IID_IOleObject[])->Query->m_pIOleObject[];
+                    callToObjectMsg
+                      (# 
+                      do
+                         'CSite.ObjectInitialize: kald til QueryInterface returneret'
+                           ->msg.append
+                      #);
                     ;
+                    callToObjectMsg
+                      (# 
+                      do
+                         'CSite.ObjectInitialize: kald til SetClientSite'
+                           ->msg.append
+                      #);
                     m_pImpIOleClientSite[]->m_pIOleObject.SetClientSite
                       ->hr (* SetClientSite is critical for DocObjects *) ;
+                    callToObjectMsg
+                      (# 
+                      do
+                         'CSite.ObjectInitialize: kald til SetClientSite returneret'
+                           ->msg.append
+                      #);
                     debugMsg
                       (# 
                       do
@@ -1261,7 +1599,17 @@ guienv
                                ->msg.append
                          if)
                       #);
+                    callToObjectMsg
+                      (# 
+                      do 'CSite.ObjectInitialize: kald til Advise'->msg.append
+                      #);
                     (m_pImpIAdviseSink[],dw[])->m_pIOleObject.Advise->hr;
+                    callToObjectMsg
+                      (# 
+                      do
+                         'CSite.ObjectInitialize: kald til Advise returneret'
+                           ->msg.append
+                      #);
                     debugMsg
                       (# 
                       do
@@ -1287,7 +1635,8 @@ guienv
                     if);
                     true->result;
                     leave return
-                 #)
+                 #);
+               'CSite.ObjectInitialize'->locateMsg.out
             exit result
             #);
           ;
@@ -1333,7 +1682,7 @@ guienv
             (# dwID,hWnd: @integer; pFR: ^CFrameType
             enter (dwID,hWnd,pFR[])
             do
-               locateMsg
+               locate2msg
                  (#  do 'CSite.Constructor'->putline #);
                0->m_cRef;
                dwID->m_dwID;
@@ -1372,7 +1721,7 @@ guienv
            *)
             (# pt: ^IUnknown
             do
-               locateMsg
+               locate2msg
                  (#  do 'CSite.Destructor'->putline #);
                m_pImpIOleDocumentSite[]->pt[];
                none ->m_pImpIOleDocumentSite[];
@@ -1462,6 +1811,7 @@ guienv
                ;
                aGUID: @GUID
             do
+               'CSite.QueryInterface'->locateMsg.in;
                interfaceMsg
                  (#  do '++CSite.QueryInterface'->msg.append #);
                ;
@@ -1478,6 +1828,23 @@ guienv
                if);
                ;
                none ->ppvObject;
+               (if true
+                // aGUID[]->Unknown_IID.equal then
+                   interfaceMsg (#  do '       -IUnknown'->msg.append #)
+                // aGUID[]->OleClientSite_IID.equal then
+                   interfaceMsg
+                     (#  do '       -IOleClientSite'->msg.append #)
+                // aGUID[]->AdviseSink_IID.equal then
+                   interfaceMsg (#  do '       -IAdviseSink'->msg.append #)
+                // aGUID[]->OleWindow_IID.equal then
+                   interfaceMsg (#  do '       -IOleWindow'->msg.append #)
+                // aGUID[]->OleInPlaceSite_IID.equal then
+                   interfaceMsg
+                     (#  do '       -IOleInPlaceSite'->msg.append #)
+                // aGUID[]->OleDocumentSite_IID.equal then
+                   interfaceMsg
+                     (#  do '       -IOleDocumentSite'->msg.append #)
+               if);
                (if true
                 // aGUID[]->Unknown_IID.equal then
                    THIS(IUnknown)[]->ppvObject;
@@ -1514,12 +1881,15 @@ guienv
                (if ppvObject <> none then
                    ppvObject.ref.AddRef; NOERROR->result
                 else
+                   interfaceMsg
+                     (#  do '       -No such interface'->msg.append #);
                    E_NOINTERFACE->result;
                    (if doAlertUser then
                        (none ,'CSite.QueryInterface: No such interface!',none )
                          ->alertUser
                    if)
-               if)
+               if);
+               'CSite.QueryInterface'->locateMsg.out
             #);
           AddRef::<
           (*
@@ -1530,9 +1900,11 @@ guienv
            *) 
             (# 
             do
+               'CSite.AddRef'->locateMsg.in;
                interfaceMsg
                  (#  do '--CSite.AddRef'->msg.append #);
-               m_cRef+1->m_cRef->result
+               m_cRef+1->m_cRef->result;
+               'CSite.AddRef'->locateMsg.out
             #);
           Release::<
           (*
@@ -1547,9 +1919,11 @@ guienv
            *) 
             (# 
             do
+               'CSite.Release'->locateMsg.in;
                interfaceMsg
                  (#  do '--CSite.Release'->msg.append #);
-               m_cRef-1->m_cRef->result
+               m_cRef-1->m_cRef->result;
+               'CSite.Release'->locateMsg.out
             #);
           ;
           Create:
@@ -1625,7 +1999,8 @@ guienv
                awtext: @bstr
             enter (filename[],pIStorage[])
             do
-               locateMsg
+               'CSite.Create'->locateMsg.in;
+               locate2msg
                  (#  do 'CSite.Create'->putline #);
                E_FAIL->hr;
                return:
@@ -1680,7 +2055,8 @@ guienv
                     true->m_fInitialized;
                     true->result;
                     leave return
-                 #)
+                 #);
+               'CSite.Create'->locateMsg.out
             exit result
             #);
           CreateStorage:
@@ -1769,7 +2145,8 @@ guienv
                awtext: @bstr
             enter pIStorage[]
             do
-               locateMsg
+               'CSite.CreateStorage'->locateMsg.in;
+               locate2msg
                  (#  do 'CSite.CreateStorage'->putline #);
                (STGM_TRANSACTED %Bor STGM_READWRITE %Bor STGM_SHARE_EXCLUSIVE)
                  ->dwMode;
@@ -1792,8 +2169,20 @@ guienv
                     szName->szName2;
                     ;
                     m_pIStorage[]->anIStorageHolder;
+                    callToObjectMsg
+                      (# 
+                      do
+                         'CSite.CreateStorage: kald til CreateStorage'
+                           ->msg.append
+                      #);
                     (szName2,dwMode,0,0,anIStorageHolder[])
                       ->pIStorage.CreateStorage->hr;
+                    callToObjectMsg
+                      (# 
+                      do
+                         'CSite.CreateStorage: kald til CreateStorage returneret'
+                           ->msg.append
+                      #);
                     anIStorageHolder->m_pIStorage[];
                     (if hr.failed then
                         'CreateStorage failed'->putline;
@@ -1805,8 +2194,20 @@ guienv
                       ->dwMode
                       (* Create stream for the object; name is irrelevant *) ;
                     'DocObjInfo'->awtext.settext;
+                    callToObjectMsg
+                      (# 
+                      do
+                         'CSite.CreateStorage: kald til CreateStream'
+                           ->msg.append
+                      #);
                     (awtext.wcharptr,dwMode,0,0,anIStreamHolder[])
                       ->m_pIStorage.CreateStream->hr;
+                    callToObjectMsg
+                      (# 
+                      do
+                         'CSite.CreateStorage: kald til CreateStream returneret'
+                           ->msg.append
+                      #);
                     anIStreamHolder->m_pIStream[];
                     (if hr.failed then
                     (* If we failed to create a stream in the file, do it in memory *)
@@ -1838,7 +2239,8 @@ guienv
                     ;
                     true->result;
                     leave return
-                 #)
+                 #);
+               'CSite.CreateStorage'->locateMsg.out
             exit result
             #);
           Close:
@@ -1882,7 +2284,8 @@ guienv
             (# fCommit: @boolean
             enter fCommit
             do
-               locateMsg
+               'CSite.Close'->locateMsg.in;
+               locate2msg
                  (#  do 'CSite.Close'->putline #);
                (if m_pIOleIPObject[] <> none then
                    m_pIOleIPObject.InPlaceDeactivate
@@ -1893,21 +2296,63 @@ guienv
                  do
                     m_pIOleDocView[]->pt[];
                     none ->m_pIOleDocView[];
-                    (if pt[] <> none then pt.Release if)
+                    (if pt[] <> none then
+                        callToObjectMsg
+                          (# 
+                          do 'CSite.Close: kald til Release'->msg.append
+                          #);
+                        pt.Release;
+                        callToObjectMsg
+                          (# 
+                          do
+                             'CSite.Close: kald til Release returneret'
+                               ->msg.append
+                          #)
+                    if)
                  #);
                ;
                (if m_pIOleObject[] <> none then
                    (if fCommit then
-                       OLECLOSE_SAVEIFDIRTY->m_pIOleObject.close
+                       callToObjectMsg
+                         (# 
+                         do 'CSite.Close: kald til Close'->msg.append
+                         #);
+                       OLECLOSE_SAVEIFDIRTY->m_pIOleObject.close;
+                       callToObjectMsg
+                         (# 
+                         do
+                            'CSite.Close: kald til Close returneret'->msg.append
+                         #)
                     else
-                       OLECLOSE_NOSAVE->m_pIOleObject.close
+                       callToObjectMsg
+                         (# 
+                         do 'CSite.Close: kald til Close'->msg.append
+                         #);
+                       OLECLOSE_NOSAVE->m_pIOleObject.close;
+                       callToObjectMsg
+                         (# 
+                         do
+                            'CSite.Close: kald til Close returneret'->msg.append
+                         #)
                    if);
                    ReleaseInterface: (* expanded macro *)
                      (# pt: ^IUnknown
                      do
                         m_pIOleObject[]->pt[];
                         none ->m_pIOleObject[];
-                        (if pt[] <> none then pt.Release if)
+                        (if pt[] <> none then
+                            callToObjectMsg
+                              (# 
+                              do 'CSite.Close: kald til Release'->msg.append
+                              #);
+                            pt.Release;
+                            callToObjectMsg
+                              (# 
+                              do
+                                 'CSite.Close: kald til Release returneret'
+                                   ->msg.append
+                              #)
+                        if)
                      #)
                if);
                ;
@@ -1916,22 +2361,59 @@ guienv
                  do
                     m_pObj[]->pt[];
                     none ->m_pObj[];
-                    (if pt[] <> none then pt.Release if)
+                    (if pt[] <> none then
+                        callToObjectMsg
+                          (# 
+                          do 'CSite.Close: kald til Release'->msg.append
+                          #);
+                        pt.Release;
+                        callToObjectMsg
+                          (# 
+                          do
+                             'CSite.Close: kald til Release returneret'
+                               ->msg.append
+                          #)
+                    if)
                  #);
                ReleaseInterface: (* expanded macro *)
                  (# pt: ^IUnknown
                  do
                     m_pIStream[]->pt[];
                     none ->m_pIStream[];
-                    (if pt[] <> none then pt.Release if)
+                    (if pt[] <> none then
+                        callToObjectMsg
+                          (# 
+                          do 'CSite.Close: kald til Release'->msg.append
+                          #);
+                        pt.Release;
+                        callToObjectMsg
+                          (# 
+                          do
+                             'CSite.Close: kald til Release returneret'
+                               ->msg.append
+                          #)
+                    if)
                  #);
                ReleaseInterface: (* expanded macro *)
                  (# pt: ^IUnknown
                  do
                     m_pIStorage[]->pt[];
                     none ->m_pIStorage[];
-                    (if pt[] <> none then pt.Release if)
-                 #)
+                    (if pt[] <> none then
+                        callToObjectMsg
+                          (# 
+                          do 'CSite.Close: kald til Release'->msg.append
+                          #);
+                        pt.Release;
+                        callToObjectMsg
+                          (# 
+                          do
+                             'CSite.Close: kald til Release returneret'
+                               ->msg.append
+                          #)
+                    if)
+                 #);
+               'CSite.Close'->locateMsg.out
             #);
           Update:
           (*
@@ -1966,7 +2448,8 @@ guienv
            *)
             (# IID_IPersistStorage: @IID; pIPS: ^IPersistStorage
             do
-               locateMsg
+               'CSite.Update'->locateMsg.in;
+               locate2msg
                  (#  do 'CSite.Update'->putline #);
                return:
                  (# 
@@ -1974,14 +2457,37 @@ guienv
                     (if m_pIStorage[] <> none then leave return if);
                     ;
                     IPersistStorage_IID->IID_IPersistStorage;
+                    callToObjectMsg
+                      (# 
+                      do 'CSite.Update: kald til QueryInterface'->msg.append
+                      #);
                     (m_pObj[],IID_IPersistStorage[])->Query->pIPS[];
+                    callToObjectMsg
+                      (# 
+                      do
+                         'CSite.Update: kald til QueryInterface returneret'
+                           ->msg.append
+                      #);
                     (pIPS[],m_pIStorage[],true)->OleSave;
+                    callToObjectMsg
+                      (# 
+                      do
+                         'CSite.Update: kald til SaveCompleted+Release'
+                           ->msg.append
+                      #);
                     none ->pIPS.SaveCompleted;
                     pIPS.Release;
+                    callToObjectMsg
+                      (# 
+                      do
+                         'CSite.Update: kald til SaveCompleted+Release returneret'
+                           ->msg.append
+                      #);
                     ;
                     STGC_DEFAULT->m_pIStorage.Commit;
                     leave return
-                 #)
+                 #);
+               'CSite.Update'->locateMsg.out
             #);
           Destroy:
           (*
@@ -2024,7 +2530,8 @@ guienv
             (# pIStorage: ^IStorage
             enter pIStorage[]
             do
-               locateMsg
+               'CSite.Destroy'->locateMsg.in;
+               locate2msg
                  (#  do 'CSite.Destroy'->putline #);
                return:
                  (#
@@ -2041,7 +2548,8 @@ guienv
                     szName->pIStorage.DestroyElement;
                     ;
                     leave return
-                 #)
+                 #);
+               'CSite.Destroy'->locateMsg.out
             #);
           rc: @struct_tagRECT;
           Activate:
@@ -2077,7 +2585,8 @@ guienv
             (# iVerb: @int32; aint32holder: @int32Holder; hr: @HResult
             enter iVerb
             do
-               locateMsg
+               'CSite.Activate'->locateMsg.in;
+               locate2msg
                  (#  do 'CSite.Activate'->putline #);
                (* m_hWnd->aint32holder *)
                ;
@@ -2110,8 +2619,14 @@ guienv
                (if false then
                    (none ,'Calling OleObject.DoVerb... ',none )->alertUser
                if);
+               callToObjectMsg
+                 (#  do 'CSite.Activate: kald til DoVerb'->msg.append #);
                (iVerb,none ,m_pImpIOleClientSite[],0,aInt32holder[],rc[])
                  ->m_pIOleObject.DoVerb->hr;
+               callToObjectMsg
+                 (# 
+                 do 'CSite.Activate: kald til DoVerb returneret'->msg.append
+                 #);
                (if false then
                    (none ,'AFTER calling OleObject.DoVerb... ',none )->alertUser
                if);
@@ -2135,7 +2650,8 @@ guienv
                             hr.value->myprint
                         if)
                     if)
-                 #)
+                 #);
+               'CSite.Activate'->locateMsg.out
             #);
           UpdateObjectRects:
           (*
@@ -2167,7 +2683,8 @@ guienv
            *)
             (# 
             do
-               locateMsg
+               'CSite.UpdateObjectRects'->locateMsg.in;
+               locate2msg
                  (#  do 'CSite.UpdateObjectRects'->putline #);
                return:
                  (# 
@@ -2176,7 +2693,8 @@ guienv
                     ;
                     'GetClientRect(m_hWnd, &rc)'->putline;
                     'm_pIOleDocView->SetRect(&rc)'->putline
-                 #)
+                 #);
+               'CSite.UpdateObjectRects'->locateMsg.out
             #)
        #);
      ;
@@ -2318,14 +2836,18 @@ guienv
                  do 'PostMessage(hWnd, WM_CLOSE, 0, 0L)'; closeFiles; terminate
                  #);
                ;
-               onShortcut1:< (#  do '__Bitmap.bmp'->CreateObject #)
+               onShortcut1:<
+                 (# 
+                 do
+                    'c:\\beta\\r4.2dev\\comlib\\demo\\documentcontainer\\__Bitmap.bmp'
+                      ->CreateObject
+                 #)
             #);
           mainWindow: ^mainWindowType;
           m_cRef: (* =ULONG *) @integer;
           ;
-          m_hInstPrev:
-          (* WinMain parameters.
-           =HINSTANCE *) @integer;
+          m_hInstPrev: (* WinMain parameters.
+                        =HINSTANCE *) @integer;
           m_pszCmdLine: (* =LPTSTR *) @ (#  #);
           m_nCmdShow: (* =int *) @integer;
           ;
@@ -2356,11 +2878,11 @@ guienv
             exit handle
             #);
           ;
-          m_fInitialized:
-          (* OleInitialize called?.
-           =BOOL *) @boolean;
-          m_pIStorage: (* Temp file for all needs.
-                        =IStorage* *) ^IStorage;
+          m_fInitialized: (* OleInitialize called?.
+                           =BOOL *) @boolean;
+          m_pIStorage:
+          (* Temp file for all needs.
+           =IStorage* *) ^IStorage;
           m_dwIDCounter: (* For site IDs.
                           =DWORD *) @integer;
           ;
@@ -2370,28 +2892,26 @@ guienv
                        =HMENU *) @integer;
           m_hMenuHelp: (* Special Help menu.
                         =HMENU *) @integer;
-          m_fUsingOurHelp:
-          (* Help menu in use?
-           =BOOL *) @boolean;
-          m_fInObjectHelp:
-          (* Object's menu found?
-           =BOOL *) @boolean;
-          m_fOurMenuShowing:
-          (* Our menu up?
-           =BOOL *) @boolean;
+          m_fUsingOurHelp: (* Help menu in use?
+                            =BOOL *) @boolean;
+          m_fInObjectHelp: (* Object's menu found?
+                            =BOOL *) @boolean;
+          m_fOurMenuShowing: (* Our menu up?
+                              =BOOL *) @boolean;
           ;
-          m_fHaveObject: (* For menu enabling.
-                          =BOOL *) @boolean;
+          m_fHaveObject:
+          (* For menu enabling.
+           =BOOL *) @boolean;
           m_hWndObj: (* UI Active object.
                       =HWND *) @integer;
           ;
           m_pSite: (* Site holding object.
                     =class CSite * *) ^CSite;
-          m_bwIP: (* In/place tool allocations.
-                   =BORDERWIDTHS *) @integer;
-          m_fInContextHelp:
-          (* In context help mode?
-           =BOOL *) @boolean;
+          m_bwIP:
+          (* In/place tool allocations.
+           =BORDERWIDTHS *) @integer;
+          m_fInContextHelp: (* In context help mode?
+                             =BOOL *) @boolean;
           ;
           m_pIOleIPActiveObject: (* =IOleInPlaceActiveObject* *)
             ^IOleInPlaceActiveObject;
@@ -2449,10 +2969,12 @@ guienv
            *)
             (# result: @boolean
             do
-               locateMsg
+               'CFrame.RegisterAllClasses'->locateMsg.in;
+               locate2msg
                  (# 
                  do 'CFrame.RegisterAllClasses (not implemented)'->putline
-                 #)
+                 #);
+               'CFrame.RegisterAllClasses'->locateMsg.out
             exit result
             #);
           CreateObject:
@@ -2502,7 +3024,8 @@ guienv
             (# filename: ^text; result: @boolean
             enter filename[]
             do
-               locateMsg
+               'CFrame.CreateObject'->locateMsg.in;
+               locate2msg
                  (# 
                  do
                     'CFrame.CreateObject (filename='->puttext;
@@ -2533,7 +3056,8 @@ guienv
                     m_hWndClient->UpdateWindow;
                     true->result;
                     leave return
-                 #)
+                 #);
+               'CFrame.CreateObject'->locateMsg.out
             exit result
             #);
           ResizeClientWindow:
@@ -2565,7 +3089,11 @@ guienv
            }
            *)
             (# 
-            do locateMsg (#  do 'CFrame.ResizeClientWindow'->putline #)
+            do
+               'CFrame.ResizeClientWindow'->locateMsg.in;
+               locate2msg
+                 (#  do 'CFrame.ResizeClientWindow'->putline #);
+               'CFrame.ResizeClientWindow'->locateMsg.out
             #);
           ;
           ;
@@ -2688,7 +3216,8 @@ guienv
                anIStorageHolder: @IStorageHolder;
                docFileMode: @integer
             do
-               locateMsg
+               'CFrame.Init'->locateMsg.in;
+               locate2msg
                  (#  do 'CFrame.Init'->putline #);
                return:
                  (# abc: (#  #); hMenu: @integer
@@ -2748,7 +3277,8 @@ guienv
                     true->result;
                     leave return
                  #);
-               &COleInPlaceFrame[]->theOleInPlaceFrame[]
+               &COleInPlaceFrame[]->theOleInPlaceFrame[];
+               'CFrame.Init'->locateMsg.out
             exit result
             #);
           Close:
@@ -2797,7 +3327,8 @@ guienv
            *)
             (# pSite: ^CSite
             do
-               locateMsg
+               'CFrame.Close'->locateMsg.in;
+               locate2msg
                  (#  do 'CFrame.Close'->putline #);
                (if m_pSite[] <> none then
                    m_pSite[]->pSite[] (* Prevents reentry *) ;
@@ -2810,7 +3341,8 @@ guienv
                ;
                false->m_fHaveObject;
                ;
-               mainWindow.update
+               mainWindow.update;
+               'CFrame.Close'->locateMsg.out
             #);
           ;
           ;
@@ -2870,7 +3402,7 @@ guienv
             enter (hInst,hInstPrev,pszCmdLine[],nCmdShow)
             do (* hInst->m_hInst;
                 0->m_hWnd;*)
-               locateMsg
+               locate2msg
                  (#  do 'CFrame.Constructor'->putline #);
                hInstPrev->m_hInstPrev;
                nCmdShow->m_nCmdShow;
@@ -2926,7 +3458,7 @@ guienv
            *)
             (# 
             do
-               locateMsg
+               locate2msg
                  (#  do 'CFrame.Destructor'->putline #);
                ;
                (* (if m_hWndClient[] <> none then
@@ -3030,14 +3562,32 @@ guienv
                none ->ppvObject;
                (if true
                 // aGUID[]->Unknown_IID.equal then
-                   THIS(IUnknown)[]->ppvObject;
-                   (if doAlertUser then
-                       (none ,'CSite.QueryInterface IUnknown',none )->alertUser
-                   if)
+                   interfaceMsg (#  do '        -IUnknown'->msg.append #)
+                // aGUID[]->OleInPlaceUIWindow_IID.equal then
+                   interfaceMsg
+                     (#  do '        -IOleInPlaceUIWindow'->msg.append #)
+                // aGUID[]->OleWindow_IID.equal then
+                   interfaceMsg (#  do '        -IOleWindow'->msg.append #)
+                // aGUID[]->OleInPlaceFrame_IID.equal then
+                   interfaceMsg
+                     (#  do '        -IOleInPlaceFrame'->msg.append #)
+                // aGUID[]->OleCommandTarget_IID.equal then
+                   interfaceMsg
+                     (#  do '        -IOleCommandTarget'->msg.append #)
+               if);
+               (if true
                 // aGUID[]->Unknown_IID.equal
                 // aGUID[]->OleInPlaceUIWindow_IID.equal
                 // aGUID[]->OleWindow_IID.equal
                 // aGUID[]->OleInPlaceFrame_IID.equal then
+                   (if false then
+                       interfaceMsg
+                         (# 
+                         do
+                            '        -IUnknown / IOleInPlaceUIWindow / IOleWindow / IOleInPlaceFrame'
+                              ->msg.append
+                         #)
+                   if);
                    theOleInPlaceFrame[]->ppvObject;
                    (if doAlertUser then
                        (none ,
@@ -3045,6 +3595,10 @@ guienv
                         none )->alertUser
                    if)
                 // aGUID[]->OleCommandTarget_IID.equal then
+                   (if false then
+                       interfaceMsg
+                         (#  do '        -IOleCommandTarget'->msg.append #)
+                   if);
                    theOleCommandTarget[]->ppvObject;
                    (if doAlertUser then
                        (none ,'CFrame.QueryInterface IOleCommandTarget',none )
@@ -3055,6 +3609,8 @@ guienv
                (if ppvObject <> none then
                    ppvObject.ref.AddRef; NOERROR->result
                 else
+                   interfaceMsg
+                     (#  do '        -No such interface'->msg.append #);
                    E_NOINTERFACE->result;
                    (if doAlertUser then
                        (none ,'CFrame.QueryInterface: No such interface!',none )
@@ -3072,8 +3628,13 @@ guienv
             (# 
             do
                interfaceMsg
-                 (#  do '--CFrame.AddRef'->msg.append #);
-               '(must be further binding)'->putline
+                 (# 
+                 do
+                    '--CFrame.AddRef ('->msg.append;
+                    m_cRef+1->msg.putint;
+                    ')'->msg.append
+                 #);
+               m_cRef+1->m_cRef->result
             #);
           Release::<
           (*
@@ -3086,8 +3647,13 @@ guienv
             (# 
             do
                interfaceMsg
-                 (#  do '--CFrame.Release'->msg.append #);
-               '(must be further binding)'->putline
+                 (# 
+                 do
+                    '--CFrame.Release ('->msg.append;
+                    m_cRef-1->msg.putint;
+                    ')'->msg.append
+                 #);
+               m_cRef-1->m_cRef->result
             #);
           ;
           theOleInPlaceFrame: ^COleInPlaceFrame;
@@ -3388,12 +3954,36 @@ guienv
                       (* NULLs m_pIOleIPActiveObject if pActiveObj is NULL *) ;
                     ;
                     (if m_pIOleIPActiveObject[] <> none then
-                        m_pIOleIPActiveObject.AddRef
+                        callToObjectMsg
+                          (# 
+                          do
+                             'CFrame.SetActivateObject: kald til AddRef'
+                               ->msg.append
+                          #);
+                        m_pIOleIPActiveObject.AddRef;
+                        callToObjectMsg
+                          (# 
+                          do
+                             'CFrame.SetActivateObject: kald til AddRef returneret'
+                               ->msg.append
+                          #)
                     if);
                     ;
                     &int32holder[]->anInt32Holder[];
                     m_hWndObj->anInt32Holder;
+                    callToObjectMsg
+                      (# 
+                      do
+                         'CFrame.SetActivateObject: kald til GetWindow'
+                           ->msg.append
+                      #);
                     anInt32Holder[]->m_pIOleIPActiveObject.GetWindow;
+                    callToObjectMsg
+                      (# 
+                      do
+                         'CFrame.SetActivateObject: kald til GetWindow returneret'
+                           ->msg.append
+                      #);
                     anInt32Holder->m_hWndObj;
                     NOERROR->result
                  #);
