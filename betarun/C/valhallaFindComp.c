@@ -231,13 +231,13 @@ static void ShowCell(int PC, Object *theObj)
   }
 }
 
-static void DoStackCell(Object **theCell,Object *theObj)
+static void HandleStackCell(Object **theCell,Object *theObj)
 { 
   register long PC;
   long *SP;
 
   TRACE_SCAN(fprintf(output, 
-		     ">>>DoStackCell: theCell=0x%x, theObj=0x%x",
+		     ">>>HandleStackCell: theCell=0x%x, theObj=0x%x",
 		     theCell, theObj);
 	     fflush(output);
 	     if (isObject(theObj)){
@@ -337,7 +337,7 @@ int scanComponentStack (Component* comp,
 		       (long)sObj->Body+(long)sObj->BodySize,  /* bottom */
 		       TRUE, 
 		       TRUE,
-		       DoStackCell
+		       HandleStackCell
 		       );
     return CS_STACKOBJ;
   }
@@ -347,7 +347,7 @@ int scanComponentStack (Component* comp,
     stacktype = CS_ACTIVECOMPONENT;
     forEach(PC, (int)curObj);
   }
-  ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, TRUE, DoStackCell);
+  ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, TRUE, HandleStackCell);
   if (!stacktype){
     if (CompFound){
       stacktype=CS_PROCESSORSTACK;

@@ -104,8 +104,7 @@ static void PrintSkipped(long *current)
 {                                                                \
   if ((theObj)&&((theObj)!=CALLBACKMARK)&&((theObj)!=GENMARK)){  \
      if (isObject(theObj)){                                      \
-       fprintf(output, " (proto: 0x%x)", (theObj)->Proto);       \
-       fprintf(output, " (%s)", ProtoTypeName((theObj)->Proto)); \
+       PrintProto(theObj->Proto);                                \
      } else {                                                    \
        fprintf(output, " (ILLEGAL OBJECT!)");                    \
      }                                                           \
@@ -196,9 +195,8 @@ void ProcessRefStack(Object **topOfStack, long dynOnly, CellProcessFunc func)
 			"RefStack(dyn): 0x%08x: 0x%08x", 
 			(int)theCell,
 			(int)*theCell));
-    DEBUG_STACK(DumpProto(theObj));
+    DEBUG_STACK(PrintRef(theObj));
     func(theCell, theObj);
-    DEBUG_STACK(fprintf(output, " done\n"));
     return;
   }
 
@@ -208,37 +206,62 @@ void ProcessRefStack(Object **topOfStack, long dynOnly, CellProcessFunc func)
 			((long)topOfStack - (long)theCell)/4,
 			(int)theCell,
 			(int)*theCell));
-    DEBUG_STACK(DumpProto(theObj));
+    DEBUG_STACK(PrintRef(theObj));
     func(theCell, theObj);
-    DEBUG_STACK(fprintf(output, " done\n"));
     /* Take next reference from stack */
     theCell--;
     theObj = *theCell;
   } 
 }
 
-#if 0
-#define TRACE_NEW_FRAME() \
-DEBUG_STACK(fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__)); \
-DEBUG_STACK(fprintf(output, "Own SP:        0x%x\n", SP));              \
-DEBUG_STACK(fprintf(output, "Caller PC:     0x%x\n", PC));              \
-DEBUG_STACK(fprintf(output, "Caller object: 0x%x", theObj));            \
-DEBUG_STACK(DumpProto(theObj));                                         \
-DEBUG_STACK(fprintf(output, "\n"));
+#ifdef RTDEBUG
+
+#if 1
+#define TRACE_NEW_FRAME()
 #else
-#define TRACE_NEW_FRAME() 
+static void TRACE_NEW_FRAME(void)
+{
+  if (DebugStack){
+    fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__); 
+    fprintf(output, "Own SP:        0x%x\n", SP);              
+    fprintf(output, "Caller PC:     0x%x " , PC);              
+    if (PC==-1){                                               
+      fprintf(output, "<UNKNOWN_MARK>\n");                    
+    } else {                                                   
+      PrintCodeAddress(PC);                                    
+    }                                                          
+    fprintf(output, "Caller object: 0x%x", theObj);            
+    DEBUG_STACK(PrintRef(theObj));
+  }
+}
 #endif
 
-#define TRACE_STACK(SP,PC,theObj) \
-DEBUG_STACK(fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__));       \
-DEBUG_STACK(fprintf(output, "---------------------\n", SP));                  \
-DEBUG_STACK(fprintf(output, "SP:        0x%08x\n", SP));                      \
-DEBUG_STACK(fprintf(output, "PC:        0x%08x\n", PC));                      \
-DEBUG_STACK(fprintf(output, "object:    0x%08x", theObj));                    \
-DEBUG_STACK(DumpProto(theObj));                                               \
-DEBUG_STACK(fprintf(output, "\n"));                                           \
-DEBUG_STACK(fprintf(output, "---------------------\n", SP))
+#else /* !RTDEBUG */
+#define TRACE_NEW_FRAME()
+#endif /* RTDEBUG */
 
+
+#ifdef RTDEBUG
+static void TRACE_STACK(long SP, long PC, Object *theObj) 
+{
+  if (DebugStack){
+    fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__); 
+    fprintf(output, "---------------------\n", SP);            
+    fprintf(output, "SP:        0x%08x\n", SP);                
+    fprintf(output, "PC:        0x%08x ",  PC);                
+    if (PC==-1){                                               
+      fprintf(output, "<UNKNOWN_MARK>\n");                    
+    } else {                                                   
+      PrintCodeAddress(PC);                                    
+    }                                                          
+    fprintf(output, "object:    0x%08x", theObj);              
+    DEBUG_STACK(PrintRef(theObj));
+    fprintf(output, "---------------------\n", SP);            
+  }
+}
+#else /* !RTDEBUG */
+#define TRACE_STACK(SP,PC,theObj) 
+#endif /* RTDEBUG */
 
 #ifdef ppcmac
 GLOBAL(static long StackObjEnd); /* extra "parameter" for ProcessStackFrames */
@@ -1011,12 +1034,9 @@ void ProcessStackPart(long *low, long *high)
 	    fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
 	    if (*current) {
 	      if (IsPrototypeOfProcess(*current)) {
-		fprintf(output, ", is proto: \"%s\" <%s>\n", 
-			ProtoTypeName((ProtoType*)*current), 
-			getLabel(*current));
+		PrintProto((ProtoType*)*current);
 	      } else {
-		char *lab = getLabel((long)*current);
-		fprintf(output, " <%s+0x%x>\n", lab, labelOffset);
+		PrintCodeAddress(*current);
 	      }
 	    } else {
 	      fprintf(output, "\n");
@@ -1170,8 +1190,7 @@ void PrintStackPart(long *low, long *high)
         } else {
 	  fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
 	  if (*current){
-	    char *lab = getLabel((long)*current);
-	    fprintf(output, " <%s+0x%x>\n", lab, (int)labelOffset);
+	    PrintCodeAddress((long)*current);
 	  } else {
 	    fprintf(output, "\n");
 	  }

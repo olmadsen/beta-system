@@ -239,6 +239,8 @@ extern long inBetaHeap(Object *);
 extern char *getLabel (long addr);
 extern long labelOffset;
 extern void PrintRef(Object *ref);
+extern void PrintProto(ProtoType *proto);
+extern void PrintCodeAddress(long addr);
 #if defined(MAC)
 extern void InitTheCursor(void);
 extern void RotateTheCursor(void);

@@ -43,7 +43,7 @@ Item *AlloI(Object *origin, ProtoType *proto, long *SP)
     }
     item = (Item *)IOATop;
     IOATopOff += size;
-    DEBUG_CODE(zero_check(item->Body, size-headsize(Item)));
+    DEBUG_CODE(zero_check((char*)item->Body, size-headsize(Item)));
   }
   pop(origin);
 

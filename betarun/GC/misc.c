@@ -214,6 +214,17 @@ void CkReg(char *func,long value, char *reg)
   }								             
 }
 
+void PrintProto(ProtoType *proto)
+{
+  fprintf(output, "\"%s\" <%s>\n", ProtoTypeName(proto), getLabel((long)proto));
+}
+
+void PrintCodeAddress(long addr)
+{
+  char *lab = getLabel(addr);
+  fprintf(output, " <%s+0x%x>\n", lab, labelOffset);
+}
+
 void PrintRef(Object *ref)
 {
   if (ref) {
@@ -704,7 +715,7 @@ GLOBAL(long maxLabels) = 2048;
 GLOBAL(long process_offset) = 0;
 #endif
 
-static void initLabels()
+static void initLabels(void)
 {
   char exefilename[500];
   char *theLabel;
@@ -784,6 +795,13 @@ static void initLabels()
   }
   numLabels=lastLab;
   INFO_LABELS(fprintf(output, " done]"); fflush(output));
+#ifdef sgi
+  fprintf(output, 
+	  "\n\n*** NOTICE: initLabels: if linked shared, ");
+  fprintf(output, 
+	  "most symbols will be missing!\n\n");
+#endif
+
   DEBUG_LABELS({
     fprintf(output, "Labels:\n");
     { 

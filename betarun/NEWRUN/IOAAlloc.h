@@ -21,7 +21,7 @@ INLINE void *IOAalloc(unsigned size, long *SP)
   p = (char *)IOATop;
   IOATopOff += size;
   
-  DEBUG_CODE(zero_check(p, size));
+  DEBUG_CODE(zero_check((char*)p, size));
   
   return p;
 }
