@@ -45,6 +45,9 @@ searchBrowser: Window
        exit value
        #);
      fgExcludeSet: @set (# element:: browser.mps.ast.fragmentgroup #);
+     noOfHits: @integer;
+     noOfFiles: (#  exit fgSet.size #);
+     fgSet: @set (# element:: browser.mps.ast.fragmentgroup #);
      clear: contents.clear (#  #);
      fg: ^astInterface.fragmentGroup;
      ff: ^astInterface.fragmentForm;
@@ -77,7 +80,9 @@ searchBrowser: Window
      contentsType:< pane
        (#
           clear:
-            (#  do FFlist.clear; nodesList.clear; 0->noOfHits->noOfFiles #);
+            (# 
+            do FFlist.clear; nodesList.clear; 0->noOfHits; fgSet.clear
+            #);
           dobind:<
             (# 
             do
@@ -101,13 +106,42 @@ searchBrowser: Window
             enter node[]
             do INNER onSelectNode
             #);
-          noOfHits,noOfFiles: @integer;
           FFlist: @labelled
             (#
                clear: contents.clear (#  #);
                dobind: (#  do contents.dobind #);
                contentsType:: listView
                  (#
+                    printList:
+                      (# 
+                      do
+                         newLine;
+                         'Search hits: '->putText;
+                         noOfHits->putInt;
+                         (if noOfHits = 1 then
+                             ' hit in '->putText
+                          else
+                             ' hits in '->putText
+                         if);
+                         noOfFiles->putInt;
+                         (if noOfFiles = 1 then
+                             ' file'->putLine
+                          else
+                             ' files'->putLine
+                         if);
+                         listItems.scan
+                           (# ffi: ^ffItem
+                           do
+                              current[]->ffi[];
+                              '-----------------------------------------------------------------------------------------------------'
+                                ->putLine;
+                              ffi.name->putLine;
+                              ffi.nodes.scan
+                                (# aNode: ^node
+                                do current[]->aNode[]; aNode.theText[]->putLine
+                                #)
+                           #)
+                      #);
                     clear:
                       (# 
                       do
@@ -271,6 +305,8 @@ searchBrowser: Window
                                                             '-'->t.append;
                                                             ff.name->t.append;
                                                             t[]->fi.name;
+                                                            searchFg[]
+                                                              ->fgSet.insert;
                                                             fi[]->registerNodes;
                                                             leave l
                                                         if)
@@ -391,7 +427,7 @@ searchBrowser: Window
                          theNode: ^fflist.contents.node;
                          type: @integer;
                          onSelect:: 
-                           (# currentPosition: @integer
+                           (# currentPosition: @integer; msg: ^text
                            do
                               THIS(nodeItem)[]->listitems.at->current[];
                               position->currentposition;
@@ -413,7 +449,9 @@ searchBrowser: Window
                                           l1
                                             ->
                                               browser.cfe.theSifTexteditor.
-                                                getLine->name;
+                                                getLine->msg[]->name;
+                                          msg.copy
+                                            ->THIS(nodeItem).theNode.theText[];
                                           true->itemTextUpdated
                                       if)
                                   if)
@@ -600,8 +638,18 @@ searchBrowser: Window
                                 if)
                              #);
                            'Search hits in current project - '->help[];
-                           contents.noOfHits->help.putInt;
-                           ' hits'->help.append;
+                           noOfHits->help.putInt;
+                           (if noOfHits = 1 then
+                               ' hit in '->help.putText
+                            else
+                               ' hits in '->help.putText
+                           if);
+                           noOfFiles->help.putInt;
+                           (if noOfFiles = 1 then
+                               ' file'->help.append
+                            else
+                               ' files'->help.append
+                           if);
                            help[]->title
                         else
                            'No group list'->title
@@ -613,6 +661,7 @@ searchBrowser: Window
                
             #)
        #);
+     printList: (#  do contents.ffList.contents.printList #);
      type::  (#  do (*windowTypes.palette->value*)  #);
      open::< 
        (# w,h: @integer; 
@@ -648,7 +697,9 @@ searchViewer: searchBrowser
                          #);
                        browser.cfe.doReprettyprint;
                        contents.nodesList.contents.listitems.scan
-                         (# i: ^contents.nodesList.contents.nodeItem
+                         (#
+                            i: ^contents.nodesList.contents.nodeItem;
+                            msg: ^text
                          do
                             current[]->i[];
                             (i.node.frag.root[],i.node[],false)
@@ -662,7 +713,8 @@ searchViewer: searchBrowser
                                 ((l1 = 1) and (c1 = 1) and (l2 = 1) and
                                  (c2 = 1)) then
                                     l1->browser.cfe.theSifTexteditor.getLine
-                                      ->i.name;
+                                      ->msg[]->i.name;
+                                    msg.copy->i.theNode.theText[];
                                     true->i.itemTextUpdated
                                 if)
                             if)
@@ -706,6 +758,12 @@ searchViewer: searchBrowser
                       #);
                     open::  (#  do 'r'->key; 'Reload'->name #)
                  #);
+               printItem: @menuItem
+                 (#
+                    eventHandler:: 
+                      (# onSelect::  (#  do printList #) #);
+                    open::  (#  do 'Print list in console'->name #)
+                 #);
                quitItem: @menuItem
                  (#
                     eventHandler:: 
@@ -719,6 +777,8 @@ searchViewer: searchBrowser
                     'File'->name;
                     reloadItem.open;
                     reloadItem[]->append;
+                    printItem.open;
+                    printItem[]->append;
                     quitItem.open;
                     quitItem[]->append
                  #)
@@ -763,7 +823,7 @@ mySemanticViewer: searchBrowser
                                 l1->browser.cfe.theSifTexteditor.getLine
                                   ->msg.append;
                                 msg[]->i.name;
-                                msg[]->i.theNode.theText[];
+                                msg.copy->i.theNode.theText[];
                                 true->i.itemTextUpdated
                             if)
                         if)
@@ -918,13 +978,10 @@ mySemanticViewer: searchBrowser
             #);
           
        #);
-     hasErrors: BooleanValue (#  do (contents.noOfhits > 0)->value #);
+     hasErrors: BooleanValue (#  do (noOfhits > 0)->value #);
      selectnext:
        (# 
-       do
-          (if contents.noOfHits > 0 then
-              contents.nodeslist.contents.selectnext
-          if)
+       do (if noOfHits > 0 then contents.nodeslist.contents.selectnext if)
        #);
      open::<  (#  do (410,300)->size; INNER open;  #)
   #);
