@@ -72,15 +72,28 @@ void SetupArgValues(int ret, int inst, int prev, char *cmd, int show)
       p++;
     /* At start of argument or EOT */
     if (*p) {
-      /* Make room for argument */
-      ArgVector = (char**)REALLOC(ArgVector, (ArgCount+1)*sizeof(char*));
-      ArgVector[ArgCount++] = p;
-      /* Skip argument */
-      while (*p && *p != ' ' && *p != '\t')
-        p++;
-      /* Terminate argument string */
-      if (*p)
-        *p++ = '\0';
+      if (*p == '"') { /* Quoted argument, ignore spaces */
+	p++;
+	/* Make room for argument */
+	ArgVector = (char**)REALLOC(ArgVector, (ArgCount+1)*sizeof(char*));
+	ArgVector[ArgCount++] = p;
+	/* Skip argument */
+	while (*p && *p != '"')
+	  p++;
+	/* Terminate argument string */
+	if (*p)
+	  *p++ = '\0';
+      } else {
+	/* Make room for argument */
+	ArgVector = (char**)REALLOC(ArgVector, (ArgCount+1)*sizeof(char*));
+	ArgVector[ArgCount++] = p;
+	/* Skip argument */
+	while (*p && *p != ' ' && *p != '\t')
+	  p++;
+	/* Terminate argument string */
+	if (*p)
+	  *p++ = '\0';
+      }
     }
   }
 }
