@@ -525,7 +525,7 @@ void PutDispId(long dispId, long *dispList)
 
 long textLen(short *name)
 { long i,len=0;
-  for (i=0; name[i]>0; i++) len= len +1;
+  for (i=0; name[i] != 0; i++) len= len +1;
   if (test) printf("textLen %s %i\n", name,len);
   return len;
 }
