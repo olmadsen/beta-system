@@ -25,6 +25,19 @@ typedef struct {
 #include <signal.h>
 #endif
 
+#ifdef sun4
+#include <errno.h>
+extern int sys_nerr;
+extern char *sys_errlist[];
+char *strerror(int err)
+{
+  if(err<=sys_nerr) 
+    return sys_errlist[err];
+  else
+    return "(unknown error)";
+}
+#endif
+
 #ifdef RTVALHALLA
 #include "valhallaComm.h"
 #endif /* RTVALHALLA */

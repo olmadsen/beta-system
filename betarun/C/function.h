@@ -1,5 +1,8 @@
 /* C/initialize.c */
 extern void Initialize(void);
+#ifdef sun4
+extern char *strerror(int err);
+#endif
 #if defined(MAC)
 extern void CPrompt(char *msg1, char *msg2, char *msg3, char *msg4);
 extern long StandAlone;
