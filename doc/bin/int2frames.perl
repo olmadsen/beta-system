@@ -110,33 +110,29 @@ if ($wiki){
 
 sub print_button
 {
-    local ($type, $href) = @_;
-    local ($alt) = ucfirst ($type);
+    local ($type, $href, $alt) = @_;
+    local ($name) = ucfirst ($type);
     local ($javascript) = "";
-
-    # special case for "prev":
-    $alt =~ s/Prev/Previous/g;
 
     if ($href =~ m/^javascript:/ ){
 	print<<"EOT";
-<A NAME="A$alt" HREF="$href" TARGET="_self"><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC="${imagedir}${type}g-jsr.gif" ALT="${alt} (JavaScript Required)" NAME="$alt" BORDER=0></A>
+<A NAME="A$name" HREF="$href" TARGET="_self"><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC="${imagedir}${type}g-jsr.gif" ALT="${alt} (JavaScript Required)" NAME="$name" BORDER=0></A>
 EOT
         $javascript = <<"EOT";
 if (navigator.appName.substring(0,9) == "Microsoft"){
-  document.all.APrint.outerHTML = '<A NAME="A$alt" HREF="$href" TARGET="_self"><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC="${imagedir}${type}.gif" ALT="${alt}" NAME="$alt" BORDER=0></A>';
+  document.all.APrint.outerHTML = '<A NAME="A$name" HREF="$href" TARGET="_self"><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC="${imagedir}${type}.gif" ALT="${alt}" NAME="$name" BORDER=0></A>';
 } else {
-  document.images.$alt.src = \"${imagedir}${type}.gif\";
+  document.images.$name.src = \"${imagedir}${type}.gif\";
 }
 EOT
     } elsif ("$href" eq ""){
-	print "<A><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC=\"$imagedir";
-	print $type . "g.gif\" ALT=";
-	print $alt . " NAME=\"$alt\" BORDER=0></A>\n";
+	print<<"EOT";
+<A><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC="$imagedir${type}g.gif" ALT="$alt" NAME="$name" BORDER=0></A>
+EOT
     } else {
-	print "<A HREF=\"" . $href . "\"" . ">";
-	print "<IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC=\"$imagedir";
-	print $type . ".gif\" ALT=";
-	print $alt . " NAME=\"$alt\" BORDER=0></A>\n";
+	print<<"EOT";
+<A HREF="$href"><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC="$imagedir$type.gif" ALT="$alt" NAME="$name" BORDER=0></A>
+EOT
     }
     
     return $javascript;
@@ -144,28 +140,34 @@ EOT
 
 sub print_std_buttons
 {
+    local ($next, $prev);
+
     if ($filenumber==$#files){
 	# last file
-	&print_button("next", $indexfile);
+	&print_button("next", $indexfile, "Next: Interface Descriptions Index");
     } else {
+	$next = &strip_path(&strip_extension($files[$filenumber+1]));
 	&print_button("next", 
-		      &strip_path(&strip_extension($files[$filenumber+1])) . ".html");
+		      "$next.html",
+		      "Next: " . ucfirst($next) . " Interface");
     }
     if ($filenumber==0){
 	# first file
 	if ($wiki){
-	    &print_button("prev", "");
+	    &print_button("prev", "", "No Previous Interface Description");
 	} else {
-	    &print_button("prev", $tocfile);
+	    &print_button("prev", $tocfile, "Previous: Interface Descriptions Contents");
 	};
     } else {
+	$prev = &strip_path(&strip_extension($files[$filenumber-1]));
 	&print_button("prev", 
-		      &strip_path(&strip_extension($files[$filenumber-1])) . ".html");
+		      "$prev.html",
+		      "Previous: " . ucfirst($prev) . " Interface");
     }
-    &print_button("top", $topfile) if (!$wiki);
-    &print_button("content", $tocfile);
-    &print_button("index", $indexfile);
-    return &print_button("print", "javascript:parent.${basename}Body.printframe(parent.${basename}Body);");
+    &print_button("top", $topfile, "Top: Manuals Main Entry") if (!$wiki);
+    &print_button("content", $tocfile, "Interface Descriptions Contents");
+    &print_button("index", $indexfile, "Interface Descriptions Index");
+    return &print_button("print", "javascript:parent.${basename}Body.printframe(parent.${basename}Body);", "Print \u$basename Interface Frame");
 }
 
 sub print_header
@@ -277,6 +279,7 @@ EOT
 </TABLE>
 EOT
 
+    chomp $javascript;
     print<<"EOT" if ("$javascript" ne "");
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript">
 $javascript
@@ -311,6 +314,7 @@ EOT
 sub print_index_nav_frame
 {
     local ($title, $basename) = @_;
+    local ($prev) = &strip_path(&strip_extension($files[$#files]));
 
     &print_header($title,4);
 
@@ -321,11 +325,12 @@ sub print_index_nav_frame
 <TD>
 EOT
 
-    &print_button("next", "");
+    &print_button("next", "", "No Next Interface Description");
     &print_button("prev", 
-		  &strip_path(&strip_extension($files[$#files])) . ".html");
-    &print_button("top", $topfile) if (!$wiki);
-    &print_button("content", $tocfile);
+		  "$prev.html",
+		  "Previous: " . ucfirst($prev) . " Interface");
+    &print_button("top", $topfile, "Top: Manuals Main Entry") if (!$wiki);
+    &print_button("content", $tocfile, "Interface Descriptions Contents");
 
     print<<EOT;
 </TD>
@@ -547,6 +552,7 @@ sub print_index_body_frame()
 sub print_toc_nav_frame
 {
     local ($title) = @_;
+    local ($next) = &strip_path(&strip_extension($files[0]));
 
     &print_header($title,4);
 
@@ -558,11 +564,12 @@ sub print_toc_nav_frame
 EOT
 
     &print_button("next", 
-		  &strip_path(&strip_extension($files[0])) . ".html");
-    &print_button("prev", "");
-    &print_button("up", $upfile) if (!$wiki);
-    &print_button("top", $topfile) if (!$wiki);
-    &print_button("index", $indexfile);
+		  "$next.html",
+		  "Next: " . ucfirst($next) . " Interface");
+    &print_button("prev", "", "No Previous Interface Description");
+    &print_button("up", $upfile, "Up: Manual Main Page") if (!$wiki);
+    &print_button("top", $topfile, "Top: Manuals Main Entry") if (!$wiki);
+    &print_button("index", $indexfile, "Interface Descriptions Index");
 
     print<<EOT;
 </TD>
