@@ -19,13 +19,13 @@ public class BetaHelpers
   }
   public static int[] long2Ints(long d){
       int[] ints = new int[2];
-      ints[0] = (int) ((d)      & (long)0xffffffff);
-      ints[1] = (int) ((d >>32) & (long)0xffffffff);
+      ints[0] = (int) ((d >>32) & (long)0xffffffff);
+      ints[1] = (int) ((d)      & (long)0xffffffff);
       //System.err.println("long2Ints("+d+")=("+ints[0]+","+ints[1]+")");
       return ints;
   }
   public static long ints2Long(int i0, int i1){
-      long result = ((long)i1<<32 | (long)i0);
+      long result = ((long)i0<<32 | (long)i1);
       //System.err.println("ints2Long("+i0+","+i1+")="+result);
       return result;
   }
