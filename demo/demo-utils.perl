@@ -228,8 +228,8 @@ sub run_all_demos
     #print "keys: \n" . join("\n", keys %progs) . "\n";
     #print "sort: \n" . join("\n", sort keys %progs) . "\n";
     foreach $prog (sort keys %progs){
+	next if ($progs{$prog}!=999);
 	if (!$all) {
-	    next if ($progs{$prog}!=999);
 	    while (1){
 		print "Do you want to execute $prog? (n/y/q/a/?)";
 		$answer=<STDIN>;
