@@ -132,6 +132,7 @@ int scanComponentStack (Component* comp,
     }
     DEBUG_VALHALLA(fprintf(output, "scanComponentStack: other component blocks done\n"));
   }
+#if 0
   LINUX_CODE({
     extern void Att(void);
     DEBUG_VALHALLA({
@@ -139,6 +140,7 @@ int scanComponentStack (Component* comp,
     });
     ShowCell(0, (Object*)&Att);
   })
+#endif
   DEBUG_VALHALLA(fprintf(output, "scanComponentStack: machinestack done\n"));
 
   if (!stacktype){
