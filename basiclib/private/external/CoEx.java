@@ -23,11 +23,14 @@ class Coroutine extends BetaObject {
 }
 
 class MyCo1 extends Coroutine {
+    public void foo() {
+       System.out.println("MyCo1:middle"); 
+       suspend();
+    }
     public void xdo() { 
        System.out.println("MyCo1:begin"); 
        suspend();
-       System.out.println("MyCo1:middle"); 
-       suspend();
+       foo();
        System.out.println("MyCo1:end"); 
     }
 }
