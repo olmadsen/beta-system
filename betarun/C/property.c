@@ -128,7 +128,11 @@ static void BooleanProperty(char *name)
   ENTRY("DebugStrongIsObject", DebugStrongIsObject = TRUE);
   ENTRY("FastIsObject", FastIsObject = TRUE);
   ENTRY("NoHeapClear", NoHeapClear = TRUE);
-  ENTRY("IgnoreUGC", DoUGC = 0);
+  ENTRY("IgnoreUGC", 
+	DoUGC = 0; 
+	fprintf(output, 
+		"Unconditional GC deactivated via IgnoreUGC property in BETART\n");
+	);
   ENTRY("DebugLabels", DebugLabels = TRUE);
   /* Trace GroupName() */
   ENTRY("TraceGroup", TraceGroup = TRUE); 
