@@ -64,7 +64,7 @@ printMessage(FILE *fp,
     case SwitchProto(RefRepPTValue): name = "[Reference_Repetition]"; break;
     case SwitchProto(LongRepPTValue): name = "[Integer_Repetition]"; break;
     case SwitchProto(ByteRepPTValue): name = "[Char_Repetition]"; break;
-    case SwitchProto(ShortRepPTValue): name = "[Shortint_Repetition]"; break;
+    case SwitchProto(ShortRepPTValue): name = "[Int16_Repetition]"; break;
     case SwitchProto(DoubleRepPTValue): name = "[Real_Repetition]"; break;
     default: name = "[???]"; break;
     }

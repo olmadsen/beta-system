@@ -234,7 +234,7 @@ char *ProtoTypeName(ProtoType *theProto)
 #if defined(linux) || defined(nti)
   /* Step over little endian long/short/real position information */
   { 
-    int skiplists=0; /* number of entries for shortints and reals */
+    int skiplists=0; /* number of entries for int16s and reals */
 
     if((*(char*)dyn) & 0x80) skiplists++;
     if((*(char*)dyn) & 0x40) skiplists++;
@@ -243,7 +243,7 @@ char *ProtoTypeName(ProtoType *theProto)
     dyn += (theProto->Size+15)>>4; 
  
     while (skiplists--){
-      while (*dyn++);                /* step over shortint/real info */
+      while (*dyn++);                /* step over int16/real info */
     }
   }
 #endif
