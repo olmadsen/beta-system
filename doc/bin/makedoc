@@ -4,7 +4,8 @@
 
 sub usage
 {
-    print "usage: makedoc [-v] [-d] <manual>.book | <file>.html\n";
+    print "usage: makedoc [-f] [-v] [-d] <manual>.book | <file>.html\n";
+    print "  -f   use full urls in HREFs (http://www.mjolner.com/...)\n";
     print "  -v   verbose output\n";
     print "  -d   debug makedoc script\n";
     print "  If .book file is given as argument, a full manual set is generated.\n";
@@ -20,6 +21,12 @@ sub usage
 #   JLK: Top should mean "top of page". What to call "Top manual index"?
 #   Fix titles for src-generated files (OK for interfaces)
 #   Fix prev/next TITLE for src-generated files (OK for interfaces)
+#   list of programs
+#   list of figures
+#   help file (+rel link)
+#   copyright file (+rel link)
+#   Top link (refering top of current page)
+#   complete print_lastmod and use instead of lastmod.js
 
 # Global variables
 # arrays
@@ -40,37 +47,27 @@ my $level      = 0;        # Current heading level
 my $srcline    = "";       # Used to read files from src directory into
 my $verbose    = 0;
 my $debug      = 0;
+my $insert_validhtml40 = 0;
+my $fullpath   = 0;
+my $css = "../style/miadoc.css";
+my $jsdir = "../javascript";
+my $imagedir = "../images";
+my $mainfile = "../index.html";
+my $lastmodscript = "$jsdir/lastmod.js";
+my $inttocfile = "interface/index.html";
+my $tocfile = "index.html";
+my $indexfile = "inx.html";
+my $leftmargin=25;
 
 sub set_default_variable_values
 {
-    $insert_validhtml40 = 0;
     if ($fullpath){
-	if ($extradir){
-	    print "makedoc: Both -f and -x specified: -x is ignored\n";
-	}
-	$css = "http://www.mjolner.com/mjolner-system/documentation/style/miadoc.css";
-	$jsdir = "http://www.mjolner.com/mjolner-system/documentation/javascript";
-	$imagedir = "http://www.mjolner.com/mjolner-system/documentation/images/";
-	$topfile = "http://www.mjolner.com/mjolner-system/documentation/index.html";
-    } else {
-	if ($extradir){
-	    $css = "../../style/miadoc.css";
-	    $jsdir = "../../javascript";
-	    $imagedir = "../../images/";
-	    $topfile = "../../index.html";
-	} else {
-	    $css = "../style/miadoc.css";
-	    $jsdir = "../javascript";
-	    $imagedir = "../images/";
-	    $topfile = "../index.html";
-	}
+	local $url = "http://www.mjolner.com/mjolner-system/documentation";
+	$css = "$url/style/miadoc.css";
+	$jsdir = "$url/javascript";
+	$imagedir = "$url/images";
+	$mainfile = "$url/index.html";
     }
-    $lastmodscript = "$jsdir/lastmod.js";
-    $inttocfile = "interface/index.html";
-    $tocfile = "index.html";
-    $indexfile = "inx.html";
-
-    $leftmargin=25;
 }
 
 sub read_file
@@ -164,6 +161,49 @@ sub num_chars
     return $num;
 }
 
+sub print_lastmod
+{
+    local ($filename) = @_;
+    local @month_names = ("January","February","March","April","May","June","July","August","September","October","November","December");
+    local @day_names   = ("Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday");
+    local @sup = ();
+    local ($sup_date, $lastmod, $prompt);
+    if ($filename ne ""){
+	local ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,@rest)
+	    = stat($filename);
+	$lastmod = $mtime;
+	$prompt = "Modified";
+   } else {
+	$lastmod = time;
+	$prompt = "Generated";
+    }
+    local ($sec,$min,$hour,$date,$month,$year,$day,$yday,$isdst) = localtime($lastmod);
+    $sup[1] = $sup[21] = $sup[31] = "st";
+    $sup[2] = $sup[22] = "nd";
+    $sup[3] = $sup[23] = "rd";
+    if (($date==1)  || ($date==2)  || ($date==3) ||
+	($date==21) || ($date==22) || ($date==23) ||
+	($date==31)) {
+	$sup_date = $sup[$date];
+    } else {
+	$sup_date ="th";
+    }
+    # Y2K hack
+    $year %= 100;
+    if ($year >= 98 ){
+	$year = "19" . $year;
+    } else {
+	if ($year<10){
+	    $year = "0" . $year;
+	}
+	$year = "20" . $year;
+    }
+ 
+    print "<DIV STYLE=\"font:smaller\">";
+    print "[$prompt: $day_names[$day] $month_names[$month] $date<SUP>$sup_date</SUP> $year at $hour:$min]\n";
+    print "</DIV>\n";
+}
+
 sub print_valid_html_button()
 {
     local ($up1) = @_;
@@ -180,7 +220,7 @@ sub print_valid_html_button()
 <TR>
 <TD>
 <A HREF="http://validator.w3.org/check/referer">
-<IMG BORDER=0 SRC="${imagedir1}vh401.gif" ALT="Valid HTML 4.01!" HEIGHT=31 WIDTH=88>
+<IMG BORDER=0 SRC="${imagedir1}/vh401.gif" ALT="Valid HTML 4.01!" HEIGHT=31 WIDTH=88>
 </A>
 </TD>
 </TR>
@@ -278,7 +318,7 @@ sub print_std_rel_links
 {
     local ($up1) = @_;
     if ($up1){
-	&print_rel_link("start", &one_up($topfile));
+	&print_rel_link("start", &one_up($mainfile));
 	&print_rel_link("first", &one_up($tocfile));
 	&print_rel_link("last", &one_up($indexfile));
 	&print_rel_link("contents", &one_up($tocfile));
@@ -287,7 +327,7 @@ sub print_std_rel_links
 	#&print_rel_link("help", &one_up("help.html"));
 	#&print_rel_link("search", &one_up("search.html"));
     } else {
-	&print_rel_link("start", $topfile);
+	&print_rel_link("start", $mainfile);
 	&print_rel_link("first", $tocfile);
 	&print_rel_link("last", $indexfile);
 	&print_rel_link("contents", $tocfile);
@@ -304,12 +344,12 @@ sub print_std_nav_links
 {
     local ($up1) = @_;
     if ($up1){
-	&print_nav_link("top", &one_up($topfile), "Top: Manuals Main Entry");
+	&print_nav_link("main", &one_up($mainfile), "Manuals Main Entry");
 	&print_nav_link("content", &one_up($tocfile), "Table of Contents");
 	&print_nav_link("index", &one_up($indexfile), "Alphabetic Index");
 	&print_nav_link("PDF", &one_up($pdf), "Portable Document Format version of manual");
     } else {
-	&print_nav_link("top", $topfile, "Top: Manuals Main Entry");
+	&print_nav_link("main", $mainfile, "Manuals Main Entry");
 	&print_nav_link("content", $tocfile, "Table of Contents");
 	&print_nav_link("index", $indexfile, "Alphabetic Index");
 	&print_nav_link("PDF", $pdf, "Portable Document Format version of manual");
@@ -374,7 +414,7 @@ EOT
 
 sub print_trailer
 {
-    local ($title, $up1) = @_;
+    local ($title, $up1, $sourcefile) = @_;
     local $lastmodscript1;
     if ($up1){
 	$lastmodscript1 = &one_up($lastmodscript);
@@ -392,7 +432,13 @@ sub print_trailer
 <TR>
 <TD width="40%" align="left"><ADDRESS>$title</ADDRESS></TD>
 <TD width="20%" align="center">$copyright</TD>
-<TD width="40%" align="right"><SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript1.2" SRC="$lastmodscript1"></SCRIPT></TD>
+<TD width="40%" align="right">
+EOT
+    
+    print_lastmod("$sourcefile");
+
+    print<<EOT;
+</TD>
 </TABLE>
 <P></P>
 </BODY>
@@ -557,6 +603,7 @@ sub read_command_line()
     # Command line options
     $verbose = 1 if (defined($v));
     $debug = 1 if (defined($d));
+    $fullpath = 1 if (defined($f));
     if ($#ARGV == 0){ 
 	local ($file) = $ARGV[0];
 	if ($file =~ m/\.book$/){
@@ -610,7 +657,7 @@ sub read_book_file
 
 sub parse_special_tags
 {
-    local ($done, $before, $match, $after, $number, $i);
+    local ($done, $before, $match, $after, $number, $i, $attributes);
     local ($htmlfile) = &strip_extension(&strip_path("$srcfiles[$filenumber]")) . ".html";   
 
     #$*=1;
@@ -668,13 +715,14 @@ sub parse_special_tags
 	    $done .= "<PRE CLASS=BETA>\n";
 	    if ($after =~ m%^([^>]*)\>%si){
 		# Matched <BETA xxx>
-		$params = $1; # xxx
-		# FIXME: fails for src="..." (with quotes)
-		print STDERR "params:'$params'\n";
+		$attributes = $1; # xxx
+		#$attributes .= " "; # simpler match below
+		print STDERR "attributes:'$attributes'\n";
 		$after = $';
 	    }
-	    if (($params =~ m%SRC\s*=\s*([^\s]+)%i) ||
-		($params =~ m%SRC\s*=\s*\"([^"]+)\"%i)){
+	    if (($attributes =~ m%SRC\s*=\s*([^\s]+)%i) ||
+		($attributes =~ m%SRC\s*=\s*\"([^"]+)\"%i)){
+		# FIXME: fails for src="..." (with quotes)
 		$beta=&read_file(&expand($1));
 		# eat closing tag, if present
 		if ($after =~ m%^\s*\<\/BETA\>%si){
@@ -729,7 +777,7 @@ sub generate
     &parse_special_tags();
     &print_header($title);
     print $srcline;
-    &print_trailer($title, 0);
+    &print_trailer($title, 0, $file);
 }
 
 sub process_file
@@ -839,7 +887,7 @@ EOT
 
     &print_toc;
 
-    &print_trailer($title, 0);
+    &print_trailer($title, 0, "");
     close (STDOUT);
     printf STDERR "done.\n" if $verbose==1;
 }
@@ -847,7 +895,7 @@ EOT
 sub read_and_abstract_beta
 {
     local ($was_blank);
-
+    
     open (BETA, "$betafile") || die "\nCannot open $betafile for reading: $!\n";
 
     # Read entire BETA file into $betaline, while doing single-line editing.
@@ -1160,7 +1208,7 @@ EOT
     print<<EOT;
 </PRE>
 EOT
-    print_trailer("$inttitle", 1);
+    print_trailer("$inttitle", 1, $betafile);
 
     close (STDOUT);
     printf STDERR "done.\n" if $verbose==1;
@@ -1216,7 +1264,7 @@ sub make_interface_toc_page
 EOT
     &print_interface_toc;
 
-    &print_trailer($title, 1);
+    &print_trailer($title, 1, "");
     close (STDOUT);
     printf STDERR "done.\n" if $verbose==1;
 }
@@ -1404,7 +1452,7 @@ EOT
     print "<PRE CLASS=interface>\n";
     print $html_index;
     print "</PRE>\n";
-    print_trailer("$title: Index");
+    print_trailer("$title: Index", 0, "");
     close(STDOUT);
     printf STDERR "done.\n" if $verbose==1;
 
