@@ -68,3 +68,7 @@ xwindows/*.html \
 yggdrasil/*.html 
 
 
+# Remove all generated files
+distclean:
+	@env -i PATH=$$PATH BETALIB=$$BETALIB QUIET=1 sh -c 'for d in *; do if [ -f $$d/Makefile ] ; then /usr/xpg4/bin/grep -q distclean: $$d/Makefile; status=$$?; if [ $$status -eq 0 ] ; then cd $$d; echo ""; echo "---$$d---"; make distclean; cd ..; fi; fi; done'
+
