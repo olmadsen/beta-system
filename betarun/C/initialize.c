@@ -322,7 +322,7 @@ Initialize()
   IOA = tmpIOA;
   IOATopoff = tmpIOATop - IOA;
 #else
-#ifdef hppa
+#if defined(hppa) || defined(crts)
   /*setIOAReg(tmpIOA);
   setIOATopoffReg(tmpIOATop - tmpIOA);*/
   IOA = tmpIOA;
