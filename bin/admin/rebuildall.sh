@@ -73,6 +73,7 @@ setenv BETALIB    $1
 setenv REMOVEASTS $2
 source ${BETALIB}/configuration/env.csh >& /dev/null
 
+mkdir -p ${BETALIB}/log
 setenv LOG ${BETALIB}/log/rebuildall.$MACHINETYPE
 setenv RAGNAROOT ~/.Ragnarok
 
