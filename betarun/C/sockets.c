@@ -161,6 +161,9 @@ unsigned long getTimeStamp(long fd)
 }
 
 
+#define LINGER_ONOFF 0
+#define LINGER_INTERVAL 0
+
 /********************************************************************
  *                                                                  *
  * Initialization of this module                                    *
@@ -188,11 +191,11 @@ static void StartWSA(void)
 {
   WSADATA wsadata;
 
-  INFO_SOCKETS("WSAStartup");
+  INFO_SOCKETS("(WSAStartup)");
   if (WSAStartup(MAKEWORD(1,1), &wsadata) == 0) {
     atexit(StopWSA);
   } else {
-    INFO_SOCKETS("WSAStartup failed");
+    INFO_SOCKETS("(WSAStartup failed)");
     fprintf(stderr,
 	    "TCP/IP (Windows sockets) initialization failed. Giving Up.\n");
     fprintf(stderr,
@@ -225,7 +228,7 @@ void initSockets(void)
     initSockSignals();
 #endif
     /* This will print out the message iff it is true */
-    INFO_SOCKETS("Sockets:C-layer is compiled to echo communication errors");
+    INFO_SOCKETS("Sockets:C-layer is compiled to echo communication errors\n");
   }
 }
 
@@ -319,7 +322,7 @@ long doBlock(long fd, long rd, long wr, long timeoutValue)
   struct timeval *ptm;
   long result;
 
-  INFO_SOCKETS("doBlock: This does not work with systemEnv (doing it anyway)")
+  INFO_SOCKETS("(doBlock: This does not work with systemEnv (doing it anyway))")
 
   SET_TIMESTAMP(fd);
 
@@ -422,10 +425,10 @@ signed long host2inetAddr(char *host)
       adr = *(unsigned long *)(*pHostInfo->h_addr_list);
       adr = ntohl(adr);
     } else {
-      INFO_SOCKETS("host2inetAddr failed");
 #ifdef nti
       ERRNO = WSAGetLastError();
 #endif
+      DEBUG_SOCKETS(fprintf(output,"(host2inetAddr failed, errno=%d)", errno));
       return -1;
     }
   }
@@ -463,11 +466,11 @@ char const *nameOfThisHost(long *pErrorCode)
 	INFO_SOCKETS("gethostname (WSAENETDOWN)\n");
 	break;
       default:
-	DEBUG_SOCKETS(fprintf(output,"gethostname (%d ?)\n",ERRNO));
+	DEBUG_SOCKETS(fprintf(output,"(gethostname (%d ?))",errno));
 	break;
       }
 #endif
-      INFO_SOCKETS("nameOfThisHost");
+      INFO_SOCKETS("(nameOfThisHost)");
       *pErrorCode=-1;
       return "";
     }
@@ -494,7 +497,7 @@ signed long inetAddrOfThisHost(void)
     struct hostent *pHostInfo=gethostbyname(nameOfThisHost(&errorCode));
 
     if (!pHostInfo) {
-      INFO_SOCKETS("inetAddrOfThisHost");
+      INFO_SOCKETS("(inetAddrOfThisHost)");
 #ifdef nti
       ERRNO = WSAGetLastError();
 #endif
@@ -527,22 +530,24 @@ int createActiveSocket(unsigned long inetAddr, long port, int nonblock)
   int on = 1;
   struct sockaddr_in addr;
   int sock;
+#if LINGER_ONOFF
   struct linger li;
   
-  li.l_onoff=0;
-  li.l_linger=0;
+  li.l_onoff=LINGER_ONOFF;
+  li.l_linger=LINGER_INTERVAL;
+#endif
 
   /* Create a socket */
-  DEBUG_SOCKETS(fprintf(output, "Connecting to 0x%8x port %d on sock=", 
+  DEBUG_SOCKETS(fprintf(output, "(Connecting to 0x%8x port %d on sock=", 
 			(int)inetAddr, (int)port));
 #ifdef nti
 
   if((sock = socket(AF_INET,SOCK_STREAM,0)) == SOCKET_ERROR) {
-    INFO_SOCKETS("createActiveSocket,1");
+    INFO_SOCKETS("(createActiveSocket,1)");
     ERRNO = WSAGetLastError();
     return -1;
   }
-  DEBUG_SOCKETS(fprintf(output, "%d\n", sock));
+  DEBUG_SOCKETS(fprintf(output, "%d)", sock));
 
   SET_TIMESTAMP(sock);
 
@@ -572,12 +577,14 @@ int createActiveSocket(unsigned long inetAddr, long port, int nonblock)
     return -1;
   }
 
+#if LINGER_ONOFF
   if (setsockopt(sock, SOL_SOCKET, SO_LINGER,
 		 (char*)&li, sizeof(struct linger))) {
     INFO_SOCKETS("createActiveSocket,4.1");
     ERRNO = WSAGetLastError();
     return -1;
   }
+#endif
 
 #else /* Not nti */
 
@@ -612,11 +619,14 @@ int createActiveSocket(unsigned long inetAddr, long port, int nonblock)
     return -1;
   }
 
+#if LINGER_ONOFF
   if (setsockopt(sock, SOL_SOCKET, SO_LINGER,
 		 (char*)&li, sizeof(struct linger))) {
     INFO_SOCKETS("createActiveSocket,4.1");
     return -1;
   }
+#endif
+
 #endif
 
   /* Connection is now established and the descriptor is in sock */
@@ -649,10 +659,12 @@ int createPassiveSocket(long *port, int nonblock)
   struct sockaddr_in sockaddr;
   int listenSock;
   int size;
+#if LINGER_ONOFF
   struct linger li;
   
-  li.l_onoff=0;
-  li.l_linger=0;
+  li.l_onoff=LINGER_ONOFF;
+  li.l_linger=LINGER_INTERVAL;
+#endif
 
   /* Create a socket */
 #ifdef nti
@@ -679,12 +691,15 @@ int createPassiveSocket(long *port, int nonblock)
     return -1;
   }
 
+#if LINGER_ONOFF
   if (setsockopt(listenSock, SOL_SOCKET, SO_LINGER,
 		 (char*)&li, sizeof(struct linger))) {
     INFO_SOCKETS("createPassiveSocket,2b");
     ERRNO = WSAGetLastError();
     return -1;
   }
+#endif
+
 #else
   if (0>(listenSock=socket(AF_INET,SOCK_STREAM,0))) {
     INFO_SOCKETS("createPassiveSocket,1");
@@ -705,11 +720,14 @@ int createPassiveSocket(long *port, int nonblock)
     return -1;
   }
 
+#if LINGER_ONOFF
   if (setsockopt(listenSock, SOL_SOCKET, SO_LINGER,
 		 (char*)&li, sizeof(struct linger))) {
     INFO_SOCKETS("createPassiveSocket,2b");
     return -1;
   }
+#endif
+
 #endif
 
   /* Bind the socket */
@@ -779,11 +797,12 @@ int acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr)
   struct SOCKADDR_type from;
   int fromaddrlen = sizeof( struct SOCKADDR_type );
   unsigned long on = 1;
+#if LINGER_ONOFF
   struct linger li;
   
-  li.l_onoff=0;
-  li.l_linger=0;
-
+  li.l_onoff=LINGER_ONOFF;
+  li.l_linger=LINGER_INTERVAL;
+#endif
 
   SET_TIMESTAMP(sock);
 
@@ -862,12 +881,15 @@ int acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr)
     return -1;
   }
 
+#if LINGER_ONOFF
   if (setsockopt(newSock, SOL_SOCKET, SO_LINGER,
 		 (char*)&li, sizeof(struct linger))) {
     INFO_SOCKETS("acceptConn,4.1");
     ERRNO = WSAGetLastError();
     return -1;
   }
+#endif
+
 #else
   if (0 > fcntl(newSock, F_SETFL, O_NONBLOCK)) {
     INFO_SOCKETS("acceptConn,3");
@@ -879,11 +901,14 @@ int acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr)
     return -1;
   }
 
+#if LINGER_ONOFF
   if (setsockopt(newSock, SOL_SOCKET, SO_LINGER,
 		 (char*)&li, sizeof(struct linger))) {
     INFO_SOCKETS("acceptConn,4.1");
     return -1;
   }
+#endif
+
 #endif
 
   return newSock;
@@ -954,22 +979,21 @@ int closeSocket(int fd)
 {
   SET_TIMESTAMP(fd);
 
-  DEBUG_SOCKETS(fprintf(output, "CloseSocket(%d)\n", fd));
+  DEBUG_SOCKETS(fprintf(output, "(CloseSocket(%d))", fd));
 
 #ifdef nti
   if (closesocket(fd))
   {
-    INFO_SOCKETS("closeSocket");
-#ifdef RTDEBUG
-    printf("Closesocket failed with WSAGetLastError=%d\n", WSAGetLastError());
-#endif
     ERRNO = WSAGetLastError();
+    DEBUG_SOCKETS(printf("(Closesocket failed WSAGetLastError=%d)", ERRNO));
+    if (ERRNO == WSAEWOULDBLOCK)
+      return 1;
     return -1;
   }
 #else
   if (0 > close(fd)) 
   {
-    INFO_SOCKETS("closeSocket");
+    DEBUG_SOCKETS(printf("(Closesocket failed errno=%d)", ERRNO));
     return -1;
   }
 #endif
@@ -1028,14 +1052,14 @@ int readDataMax(int fd, char *destbuffer, int buflen)
 	continue;
       
       default:
-	INFO_SOCKETS("readDataMax,1");
 	ERRNO = WSAGetLastError();
+	DEBUG_SOCKETS(fprintf(output, "(readDataMax(%d),1:%d)",fd,errno));
 	return -1;
       }
     
     case 0:
       /* No data available and not WOULDBLOCK: comm.partner closed down */
-      INFO_SOCKETS("other party closed down; readDataMax,2");
+      DEBUG_SOCKETS(fprintf(output, "(readDataMax(%d),2:recv no data)", fd));
       ERRNO = WSAENOTCONN;
       return -1;
     
@@ -1055,7 +1079,7 @@ int readDataMax(int fd, char *destbuffer, int buflen)
 	continue;
       
       default:
-	INFO_SOCKETS("readDataMax,1");
+	DEBUG_SOCKETS(fprintf(output, "(readDataMax,1:%d)",errno));
 	return -1;
       }
       break;
@@ -1119,8 +1143,8 @@ int writeDataMax(int fd, char *srcbuffer, int length)
 	continue;
       
       default:
-	INFO_SOCKETS("writeDataMax");
 	ERRNO = WSAGetLastError();   /* betacode uses this */
+	DEBUG_SOCKETS(fprintf(output, "(writeDataMax,1:%d)",errno));
 	return -1;
       }
     }
@@ -1139,7 +1163,7 @@ int writeDataMax(int fd, char *srcbuffer, int length)
 	continue;
       
       default:
-	INFO_SOCKETS("writeDataMax");
+	DEBUG_SOCKETS(fprintf(output, "(writeDataMax,1:%d)",errno));
 	return -1;
       }
     }
@@ -1154,5 +1178,6 @@ int writeDataMax(int fd, char *srcbuffer, int length)
 
 int doshutdown(int fd, int how)
 {
-  return shutdown(fd, how);
+  DEBUG_SOCKETS(fprintf(output, "(shutdown(%d,%d))",fd,how));
+  return shutdown(fd, 0);
 }
