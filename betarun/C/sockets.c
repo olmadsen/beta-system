@@ -1160,7 +1160,7 @@ int closeSocket(int fd)
   if (closesocket(fd))
   {
     ERRNO = WSAGetLastError();
-    DEBUG_SOCKETS(printf("(Closesocket failed WSAGetLastError=%d)", ERRNO));
+    DEBUG_SOCKETS(printf("(Closesocket failed WSAGetLastError=%d)", (int)ERRNO));
     if (ERRNO == WSAEWOULDBLOCK)
       return 1;
     return -1;
