@@ -1,6 +1,6 @@
 /*
   Compilation statements: 
-    nbeta -s 12 -x Bclass.bet
+    nbeta -x Bclass.bet
     csc /r:System.dll /r:dotnet/tstenv.dll /r:dotnet/Bclass.dll BclassUser.cs 
 */ 
 using System;
