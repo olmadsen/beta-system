@@ -1,7 +1,11 @@
-char betarun_version[] = "15";
+char betarun_version[] = "BETARUN VERSION 5.3(16)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.15  2001/06/19 11:41:13  datpete
+ * Added support for -O2 instead of -O6 on sgi in Makefile-vpath's
+ * Betarun version number: 15
+ *
  * Revision 1.14  2001/05/23 12:23:57  falk
  * Rettet en def i Exithandler metoden i ./C/sighandler.c
  * Betarun version number: 14
@@ -62,3 +66,52 @@ char betarun_version[] = "15";
  * Added version.c
  *
  */
+
+#include <ctype.h> /* For isdigit */
+#include <stdlib.h> /* For atoi */
+
+int
+get_betarun_major()
+{
+    char *p = betarun_version;
+    while(!isdigit(*p)) p++;
+    return atoi(p);
+}
+
+int
+get_betarun_minor()
+{
+    char *p = betarun_version;
+    while(!isdigit(*p)) p++;
+    while(isdigit(*p)) p++;
+    while(!isdigit(*p)) p++;
+    return atoi(p);
+}
+
+int
+get_betarun_release()
+{
+    char *p = betarun_version;
+    while(!isdigit(*p)) p++;
+    while(isdigit(*p)) p++;
+    while(!isdigit(*p)) p++;
+    while(isdigit(*p)) p++;
+    while(!isdigit(*p)) p++;
+    return atoi(p);
+}
+
+char *
+get_betarun_version()
+{
+    char *p = betarun_version;
+    while(!isdigit(*p)) p++;
+    return p;
+}
+
+/*
+main()
+{
+    printf("Major = %d\nMinor = %d\nRelease=%d\n", get_betarun_major(), get_betarun_minor(), get_betarun_release());
+    printf("Version = %s\n", get_betarun_version());
+}
+*/
