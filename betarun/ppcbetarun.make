@@ -88,9 +88,7 @@ ppcbetarun ÄÄ {¥MondoBuild¥} {Objects¥PPC}
 		{Sym¥PPC} ¶
 		{Objects¥PPC} ¶
 		-xm library
-	duplicate -y betarun.obj betarun_v.obj
 	Catenate {ObjDir¥PPC}:Å:Å.x > betarun.x
-	duplicate -y betarun.x betarun_v.x
 
 :C:data.o Ä :C:data.gen {¥MondoBuild¥}
 	# generating :C:data.h
