@@ -29,7 +29,7 @@ char *IOAalloc(unsigned size)
   
 #ifdef MT
   /* Manipulate thread specific IOA */
-  if ((char *)IOATop+size >= (char *)IOALimit){
+  if (do_unconditional_gc || ((char *)IOATop+size >= (char *)IOALimit)){
     return (char *)doGC(size);
   }
   p = (char *)IOATop;

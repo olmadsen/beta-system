@@ -147,7 +147,7 @@ typedef struct CallBackEntry {
 #ifdef sparc
 #ifdef MT
     ref(Structure)	theStruct;
-    long		code[8];
+    long		code[6];
 #else
     ref(Structure)	theStruct;
     long		mov_o7_g1;

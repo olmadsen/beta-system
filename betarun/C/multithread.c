@@ -27,8 +27,6 @@ struct S_PreemptionLevel {
   unsigned long inGC;
 };
 
-
-
 void initSynchVariables(void)
 {
   mutex_init(&tsd_lock, USYNC_THREAD, NULL);
@@ -253,7 +251,7 @@ struct Object *doGC(unsigned long numbytes)
 	     );
   } 
   
-  if (gIOALimit < (long*)((long)gIOATop + reqsize)) {
+  if (do_unconditional_gc || gIOALimit < (long*)((long)gIOATop + reqsize)) {
     /* GC NEEDED */
     DEBUG_MT(fprintf(output,"t@%d: GC Needed.\n", (int)ThreadId);
 	     fflush(output);

@@ -45,7 +45,6 @@ void *CCopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 
     if (CBFATop+1 > CBFALimit){
       CBFArelloc();
-      /* return CCopyCPP(theStruct, theObj); */
     }
 
     Ck(theStruct);Ck(theObj);

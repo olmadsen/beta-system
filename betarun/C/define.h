@@ -13,6 +13,12 @@
 # define MT_CODE(code)
 #endif
 
+#ifdef RTDEBUG
+#define do_unconditional_gc 0 /*1*/ /* Should match define i BetaRun.bet! */
+#else
+#define do_unconditional_gc 0
+#endif
+
 #define RTINFO  /* Include support for runtime info */
 #define RTLAZY  /* Include support for lazy fetch */
 #ifdef RTDEBUG
