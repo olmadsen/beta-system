@@ -58,6 +58,10 @@
 #define XpmRevision 3
 #define XpmIncludeVersion 30403
 
+#ifdef __SVR4
+#define SVR4
+#endif
+
 #ifndef XPM_NUMBERS
 
 #ifdef VMS
