@@ -6,81 +6,7 @@
 #include "beta.h"
 #include "crun.h"
 
-long HandleCB();
 
-#ifdef hppa
-/*
- * these are used in the process of generating HP-PA machinecode. Now aren't
- * these lovely?
- */
-static unsigned long mangle21(unsigned long x)
-{
-  unsigned long bit20, bits9_19, bits5_6, bits0_4, bits7_8;
-
-  bit20 =     (x >> 20) & 0x0001;
-  bits9_19 =  (x >> 9)  & 0x07ff;
-  bits5_6 =   (x >> 7)  & 0x0003;
-  bits0_4 =   (x >> 2)  & 0x001f;
-  bits7_8 =       x     & 0x0003;
-
-  return (bits0_4<<16)|(bits5_6<<14)|(bits7_8<<12)|(bits9_19<<1)|bit20;
-}
-
-static unsigned long bletch(unsigned long x)
-{
-  return (x << 1) & 0x03ffe;
-}
-
-void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
-{
-    theObj = cast(Object) getThisReg();
-
-    Ck(theObj);
-    if (CBFATop+1 > CBFALimit) CBFArelloc();
-
-    CBFATop->theStruct = theStruct;
-
-    /* Construct the following code in the CBF:
-     * 0 LDIL L'HandleCB, %r1
-     * 1 MFSP %sr4,%r31
-     * 2 LDO  R'HandleCB(%r1),%r1
-     * 3 MTSP %r31,%sr0
-     * 4 LDIL L'<&CBFATop->theStruct>,%r28
-     * 5 BE   0(%sr4,%r1)
-     * 6 LDO  R'<&CBFATop->theStruct>(%r28),%r28
-     */
-    CBFATop->code[0] = (8<<26)|(1<<21)
-      |mangle21(((unsigned long)HandleCB >> 11) & 0x1fffff);
-    CBFATop->code[1] = (1<<13)|(0x25<<5)|31;
-    CBFATop->code[2] = (0xd<<26)|(1<<21)|(1<<16)
-      |bletch((unsigned long)HandleCB & 0x7ff);
-    CBFATop->code[3] = (31<<16)|(0xc1<<5);
-    CBFATop->code[4] = (8<<26)|(28<<21)
-      |mangle21(((unsigned long)&CBFATop->theStruct >> 11) & 0x1fffff);
-    CBFATop->code[5] = (0x38<<26)|(1<<21)|(1<<13); /* really sr4 - sic! */
-    CBFATop->code[6] = (0xd<<26)|(28<<21)|(28<<16)
-      |bletch((unsigned long)&CBFATop->theStruct & 0x7ff);
-
-    /* now flush the code from the data cache */
-    asm volatile ("fdc\t0(0,%0)" : /* no out */
-                  : "r" (&CBFATop->theStruct));
-    asm volatile ("fdc\t0(0,%0)" : /* no out */
-                  : "r" (&CBFATop->code[0]));
-    asm volatile ("fdc\t0(0,%0)" : /* no out */
-                  : "r" (&CBFATop->code[2]));
-    asm volatile ("fdc\t0(0,%0)" : /* no out */
-                  : "r" (&CBFATop->code[4]));
-    asm volatile ("fdc\t0(0,%0)\n\tsync" : /* no out */
-                  : "r" (&CBFATop->code[6]));
-
-    ++CBFATop;
-
-    /* the following C call expects the function-pointer in arg1 - sic! */
-    asm("COPY %0, %%r26" : /*no out*/ : "r" (&(CBFATop-1)->code[0]) : "r26");
-    return((void *)&(CBFATop-1)->code[0]);
-}
-
-#endif /* hppa */
 
 /**************************** sparc **************************/
 #ifdef sparc
@@ -181,12 +107,84 @@ long HandleCB(long a1, long a2, long a3, long a4, long a5, long a6)
 /************************** snake ******************************/
 
 #ifdef hppa
+/*
+ * these are used in the process of generating HP-PA machinecode. Now aren't
+ * these lovely?
+ */
+static unsigned long mangle21(unsigned long x)
+{
+  unsigned long bit20, bits9_19, bits5_6, bits0_4, bits7_8;
+
+  bit20 =     (x >> 20) & 0x0001;
+  bits9_19 =  (x >> 9)  & 0x07ff;
+  bits5_6 =   (x >> 7)  & 0x0003;
+  bits0_4 =   (x >> 2)  & 0x001f;
+  bits7_8 =       x     & 0x0003;
+
+  return (bits0_4<<16)|(bits5_6<<14)|(bits7_8<<12)|(bits9_19<<1)|bit20;
+}
+
+static unsigned long bletch(unsigned long x)
+{
+  return (x << 1) & 0x03ffe;
+}
+
+extern long HandleCB() asm("HandleCB");
+
+void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
+{
+    theObj = cast(Object) getThisReg();
+
+    Ck(theObj);
+    if (CBFATop+1 > CBFALimit) CBFArelloc();
+
+    CBFATop->theStruct = theStruct;
+
+    /* Construct the following code in the CBF:
+     * 0 LDIL L'HandleCB, %r1
+     * 1 MFSP %sr4,%r31
+     * 2 LDO  R'HandleCB(%r1),%r1
+     * 3 MTSP %r31,%sr0
+     * 4 LDIL L'<&CBFATop->theStruct>,%r28
+     * 5 BE   0(%sr4,%r1)
+     * 6 LDO  R'<&CBFATop->theStruct>(%r28),%r28
+     */
+    CBFATop->code[0] = (8<<26)|(1<<21)
+      |mangle21(((unsigned long)HandleCB >> 11) & 0x1fffff);
+    CBFATop->code[1] = (1<<13)|(0x25<<5)|31;
+    CBFATop->code[2] = (0xd<<26)|(1<<21)|(1<<16)
+      |bletch((unsigned long)HandleCB & 0x7ff);
+    CBFATop->code[3] = (31<<16)|(0xc1<<5);
+    CBFATop->code[4] = (8<<26)|(28<<21)
+      |mangle21(((unsigned long)&CBFATop->theStruct >> 11) & 0x1fffff);
+    CBFATop->code[5] = (0x38<<26)|(1<<21)|(1<<13); /* really sr4 - sic! */
+    CBFATop->code[6] = (0xd<<26)|(28<<21)|(28<<16)
+      |bletch((unsigned long)&CBFATop->theStruct & 0x7ff);
+
+    /* now flush the code from the data cache */
+    asm volatile ("fdc\t0(0,%0)" : /* no out */
+                  : "r" (&CBFATop->theStruct));
+    asm volatile ("fdc\t0(0,%0)" : /* no out */
+                  : "r" (&CBFATop->code[0]));
+    asm volatile ("fdc\t0(0,%0)" : /* no out */
+                  : "r" (&CBFATop->code[2]));
+    asm volatile ("fdc\t0(0,%0)" : /* no out */
+                  : "r" (&CBFATop->code[4]));
+    asm volatile ("fdc\t0(0,%0)\n\tsync" : /* no out */
+                  : "r" (&CBFATop->code[6]));
+
+    ++CBFATop;
+
+    /* the following C call expects the function-pointer in arg1 - sic! */
+    asm("COPY %0, %%r26" : /*no out*/ : "r" (&(CBFATop-1)->code[0]) : "r26");
+    return((void *)&(CBFATop-1)->code[0]);
+}
 
 /* HandleCallBack is called from a CallBackEntry, setup like
    above. This means that %r28 is the address of a pointer to the struct.
  */
 
-asm("\t.EXPORT HandleCB,CODE\n"
+asm("\t.EXPORT HandleCB,ENTRY\n"
     "HandleCB:\n"
     "\tstw %r2,-20(%r30)\n"
     "\tldo 128(%r30),%r30\n"
