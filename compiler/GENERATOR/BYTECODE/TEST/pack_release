@@ -1,36 +1,25 @@
 #!/usr/local/bin/perl -s
 $BETALIB=$ENV{'BETALIB'};
 $BETALIB=~s%\\%/%g;
-require "$BETALIB/bin/admin/env.perl";
-
-sub usage()
-{
-    local($msg) = @_;
-    print "pack_dotnet: $msg\n" if ($msg ne "");
-    print<<EOT;
-usage: pack_release [-h][-v][-C][-z][-p]
-     -h  print this help
-     -v  verbose mode
-     -C  skip compilation of compilers
-     -Z  skip zipping of directory
-     -T  include testall and reference output
-     -p  "publish" new zip file on web (copy to "publish_dir", see source)
-EOT
-    exit;
+push(@INC, $ENV{'BETALIB'} . "/bin/admin");
+if (-e "c:\\" && $ENV{'MIASDK'} eq ""){
+    $ENV{'MIASDK'} = ms;
 }
+require "env.perl";
 
 # -------------- Configuration-----------------------------------------
 
-$dest        = "BETA_Net";
+$dest        = "BETA_OOLI";
 $beta        = "$BETALIB/boot/bin/$objdir/beta";
-$nbetasrc    = "$BETALIB/compiler/nbeta.bet";
-$nbeta       = "$BETALIB/bin/$objdir/nbeta.exe";
-$jbetasrc    = "$BETALIB/compiler/jbeta.bet";
-$jbeta       = "$BETALIB/bin/$objdir/jbeta.exe";
-$publish_dir = "Z:public_html/dotnet/beta_net";
+$publish_dir = "Z:public_html/ooli";
 
-@examples    = (# betaenv and implementation
-		# output from testall -d -l
+@std_libs    = ("basiclib",
+		"sysutils",
+		"containers",
+		"process",
+		);
+
+@examples    = (# output from testall -d -L
 		"Aclass.bet",
 		"Bmini0.bet",
 		"Bmini1.bet",
@@ -46,7 +35,9 @@ $publish_dir = "Z:public_html/dotnet/beta_net";
 		"Singular.bet",
 		"SuperFields.bet",
 		"array.bet",
+		"bconvert.bet",
 		"beer.bet",
+		"coerce.bet",
 		"constructor.bet",
 		"faclink.bet",
 		"go.bet",
@@ -98,28 +89,35 @@ $publish_dir = "Z:public_html/dotnet/beta_net";
 		# Misc
 		"GNUmakefile",
 		"make_clean.bat",
+		"cmd_setup.bat",
+		
 		);
 
-@cleanup = ( "*/CVS",
-	     "*/*/CVS",
-	     "configuration/mbs_id",
+@cleanup = ( "configuration/mbs_id",
 	     "configuration/ymer.pjt",
 	     "configuration/env.*",
-	     "documentation/*~",
-	     "grammars/*/CVS",
-	     "grammars/*/*.lst",
-	     "examples/googleapi/CVS",
-	     "examples/googleapi/*/CVS",
-	     "examples/googleapi/*/*/CVS",
-	     "examples/googleapi/*/*/*/CVS",
-	     "examples/googleapi/*/*/*/*/CVS",
-	     "examples/googleapi/*/*/*/*/*/CVS",
-	     "examples/googleapi/*/*/*/*/*/*/CVS",
 	     "examples/googleapi/dotnet/GoogleSearchService.dll",
 	     "examples/googleapi/dotnet/GoogleSearchService.pdb",
 	     );
 
 # -------------- Main -------------------------------------------------
+
+
+sub usage()
+{
+    local($msg) = @_;
+    print "pack_dotnet: $msg\n" if ($msg ne "");
+    print<<EOT;
+usage: pack_release [-h][-v][-C][-z][-p]
+     -h  print this help
+     -v  verbose mode
+     -C  skip compilation of compilers
+     -Z  skip zipping of directory
+     -T  include testall and reference output
+     -p  "publish" new zip file on web (copy to "$publish_dir")
+EOT
+    exit;
+}
 
 use File::Path;
 use File::Copy;
@@ -131,7 +129,9 @@ $skipcompilation = $C;
 $skipzipping = $Z;
 $publish = $p;
 
-print "Creating BETA .Net preliminary distribution in directory $dest\n";
+$|=1;
+
+print "Creating BETA OOLI preliminary distribution in directory $dest\n";
  
 if ( -d $dest ){
    print "Deleting existing $dest\n";
@@ -143,6 +143,10 @@ if ($skipcompilation){
     print "Skipping recompilation of compilers (-C option)\n";
 } else {
     print "Recompiling compilers\n";
+    $nbetasrc = "$BETALIB/compiler/nbeta.bet";
+    $nbeta    = "$BETALIB/bin/$objdir/nbeta.exe";
+    $jbetasrc = "$BETALIB/compiler/jbeta.bet";
+    $jbeta    = "$BETALIB/bin/$objdir/jbeta.exe";
     system "$beta -qwd -o $nbeta $nbetasrc > nbetaboot.out";
     system "$beta -qwd -o $jbeta $jbetasrc > jbetaboot.out";
 }
@@ -151,46 +155,72 @@ print "Creating directory $dest\n";
 &mkpath($dest, 0, 0755);
 
 print "Copying compilers\n";
-&mkpath("$dest/bin", 0, 0755);
-&copy($nbeta, "$dest/bin/nbeta.exe");
-chmod 0755, "$dest/bin/nbeta.exe";
-&copy($jbeta, "$dest/bin/jbeta.exe");
-chmod 0755, "$dest/bin/jbeta.exe";
+&my_copyexecutable("$BETALIB/bin/$objdir", "nbeta.exe", "bin");
+&my_copyexecutable("$BETALIB/bin/$objdir", "jbeta.exe", "bin");
 
 print "Copying grammars\n";
-&copydir("$BETALIB/grammars/metagram", "grammars/metagram");
-&copydir("$BETALIB/grammars/pretty", "grammars/pretty");
-&copydir("$BETALIB/grammars/beta", "grammars/beta");
+&my_copydir("$BETALIB/grammars/metagram", "grammars/metagram");
+&my_copydir("$BETALIB/grammars/pretty", "grammars/pretty");
+&my_copydir("$BETALIB/grammars/beta", "grammars/beta");
 
 print "Copying configuration\n";
-&copydir("$BETALIB/configuration", "configuration");
+&my_copydir("$BETALIB/configuration", "configuration");
 
-&copy_std_library("basiclib");
-&copy_std_library("sysutils");
+print "Copying standard libraries\n";
+foreach $lib (@std_libs){
+    &my_copy_std_library($lib);
+}
+print "     -> javalib ";
+&my_copy_beta_dir_recursively("$BETALIB/javalib",  "javalib", 1);
+print "     -> dotnetlib ";
+&my_copy_beta_dir_recursively("$BETALIB/dotnetlib",  "dotnetlib", 1);
+&my_copyfiles("$BETALIB/dotnetlib", "conversion-rules.txt", "dotnetlib");
 
-print "Copying javalib\n";
-&copy_compiled_beta_dir("$BETALIB/javalib/lang",  "javalib/lang");
-&copy_compiled_beta_dir("$BETALIB/javalib/io",    "javalib/io");
-&copy_compiled_beta_dir("$BETALIB/javalib/net",   "javalib/net");
-&copy_compiled_beta_dir("$BETALIB/javalib/util",  "javalib/util");
+print "Copying tools\n";
+&my_copyexecutable("$BETALIB/bin/$objdir", "dotnet2beta.exe", "bin");
+&my_copyexecutable("$BETALIB/bin/$objdir", "BetaOutput.dll",  "bin");
+&my_copyexecutable("$BETALIB/bin",         "java2beta.bat",   "bin");
+&my_copyexecutable("$BETALIB/bin/$objdir", "betacc.exe",      "bin");
+&my_copyfiles("$BETALIB/javalib/java2beta/classes/beta/converter", "*.class", "javalib/java2beta/classes/beta/converter");
 
 print "Copying examples\n";
 foreach $f (@examples){
-    &copyfiles(".", $f, "examples");
+    &my_copyfiles(".", $f, "examples");
 }
+open SEE_ALSO, ">$dest/examples/SEE_ALSO.txt" 
+    || die "Cannot open $dest/examples/SEE_ALSO.txt for writing: $!\n";
+print SEE_ALSO<<EOT;
+Besides the exmples in this directory (of which some are explained
+in the README file), you may find various demo programs in the following
+directories:
+
+EOT
+
+foreach $lib (@std_libs){
+    if (-d "$BETALIB/$lib/demo"){
+	print SEE_ALSO "  ../$lib/demo\n";
+    }
+}
+print SEE_ALSO<<EOT;
+
+Notice that a number of the demo programs in these directories mail still
+fail, but at least some of them should work.
+EOT
+close SEE_ALSO;
 
 print "Copying documentation\n";
-&copyfiles("$BETALIB/compiler/DOC/BYTECODE", "*.*", "documentation");
+&my_copyfiles("$BETALIB/compiler/DOC/BYTECODE", "*.*", "documentation");
+&my_copyfiles("$BETALIB/compiler/DOC/BYTECODE/converter", "*.*", "documentation/converter");
 
 print "Copying setup files\n";
-&copy("cmd_setup.bat", "$dest");
-&copy("bash_setup.sh", "$dest");
+copy("cmd_setup.bat", "$dest");
+copy("cygwin_bash_setup.sh", "$dest");
 
 if ($T){
     print "Copying testall suite (-T option)\n";
-    &copy("testall", "$dest/examples");
-    &copydir("reference", "examples/reference");
-    &copydir("$BETALIB/bin/admin", "bin/admin");
+    copy("testall", "$dest/examples");
+    &my_copydir("reference", "examples/reference");
+    &my_copydir("$BETALIB/bin/admin", "bin/admin");
 }
 
 print "Creating README.txt\n";
@@ -227,7 +257,7 @@ if ($skipzipping){
 if ($publish){
     print "Publishing $zipname (to $publish_dir)\n";
     if ( -d $publish_dir ){
-	&copy($zipname, "$publish_dir");
+	copy($zipname, "$publish_dir");
     } else {
 	print "Cannot publish: $publish_dir is not a directory\n";
     }
@@ -235,63 +265,88 @@ if ($publish){
 
 # -------------- Routines  ---------------------------------------------
 
-sub copydir($srcbase, $destbase){
+sub my_copydir($srcbase, $destbase){
     my ($srcbase, $destbase) = @_;
-    &copyfiles($srcbase, "*", $destbase);
+    &my_copyfiles($srcbase, "*", $destbase);
 }
 
-sub copyfiles ($srcbase, $filespec, $destdir){
+sub my_copyexecutable($srcbase, $file, $destdir){
+    my ($srcbase, $file, $destdir) = @_;
+    &my_copyfiles ($srcbase, $file, $destdir);
+    chmod 0755, "$dest/$destdir/$file";
+}
+
+sub my_copyfiles ($srcbase, $filespec, $destdir){
     my ($srcbase, $filespec, $destdir) = @_;
     foreach $g (glob("$srcbase/$filespec")){
 	my ($path) = "$g";
+	next if ($path =~ m%~$%); # skip tilde files
+	next if ($path =~ m%/CVS%); # skip CVS files
+	# skip various autogenerated files:
+	next if ($path =~ m%(\.lst$|\.pdb$|\.sln$|\.duo$|\.suo$|\.dln$)%); 
+	next if ($path =~ m%\.pdb$%);
+	next if ($path =~ m%\.sln$%); 
 	$path = substr $path, length($srcbase);  # remove srcbase/ prefix
 	$path =~ s%/[^/]*$%%;                    # delete file component
 	$path = "$dest/$destdir$path";
-	print "Making directory $path\n" if ($verbose);
-	&mkpath($path, 0, 0755);
+	if (! -d "$path"){
+	    print "Making directory $path\n" if ($verbose);
+	    &mkpath($path, 0, 0755);
+	}
 	print "Copy $g $path\n" if ($verbose);
-	&copy($g, "$path");
+	# system "/usr/bin/cp -p $g \"$path\""; # very slow
+	copy($g, "$path"); 
     }
 }
 
-sub copy_compiled_beta_dir($srcdir, $destdir)
+
+
+sub find_beta_files()
 {
-    my ($srcdir, $destdir) = @_;
-    &copyfiles("$srcdir", "*.bet",   "$destdir");
-    &copyfiles("$srcdir", "*.$AST",  "$destdir");
-    &copy_clr_directory("$srcdir",   "$destdir");
-    &copy_jvm_directory("$srcdir",   "$destdir");
+    $f = $File::Find::name;
+    next unless $f =~ m%(\.bet$|\.c$|\.h$|\.java$|\.cs$)%;
+    next if ($f =~ m%/test/%);
+    $f =~ s%^\./%%; # strip ./ prefix
+    push @beta_files, $f;
 }
 
-sub copy_std_library($name)
+sub my_copy_beta_dir_recursively($srcdir, $destdir, $progress)
+{
+    my ($srcdir, $destdir, $progress) = @_;
+    &pushd($srcdir);
+    undef @beta_files;
+    find(\&find_beta_files, ".");
+    &popd();
+    print "(" . scalar(@beta_files) . " files)\n" if ($progress);
+    foreach $f (@beta_files){
+	print (".") if ($progress);
+	&my_copyfiles("$srcdir", $f, "$destdir");
+    }
+    print ("\n") if ($progress);
+}
+
+sub my_copy_std_library($name)
 {
     my ($name) = @_;
-    print "Copying $name\n";
-    &copy_compiled_beta_dir("$BETALIB/$name", "$name");
-    if ( -d "$BETALIB/$name/private"){
-	&copy_compiled_beta_dir("$BETALIB/$name/private",  "$name/private");
-    };
-    if ( -d "$BETALIB/$name/demo"){
-	&copyfiles("$BETALIB/$name", "demo/*.bet",    "$name");
-	&copyfiles("$BETALIB/$name", "demo/*/*.bet",  "$name");
-    }
+    print "     -> $name ";
+    &my_copy_beta_dir_recursively("$BETALIB/$name", "$name", 1);
 };
 
-sub copy_clr_directory($srcbase, $destbase)
+sub my_copy_clr_directory($srcbase, $destbase)
 {
     my ($srcbase, $destbase) = @_;
     return if (! -d "$srcbase/clr");
-    &copyfiles($srcbase, "clr/*.il",  $destbase);
-    &copyfiles($srcbase, "clr/*.pdb",  $destbase);
-    &copyfiles($srcbase, "clr/*.clst",  $destbase);
-    &copyfiles($srcbase, "clr/*.dll",  $destbase);
+    &my_copyfiles($srcbase, "clr/*.il",  $destbase);
+    &my_copyfiles($srcbase, "clr/*.pdb",  $destbase);
+    &my_copyfiles($srcbase, "clr/*.clst",  $destbase);
+    &my_copyfiles($srcbase, "clr/*.dll",  $destbase);
 }
 
-sub copy_jvm_directory($srcbase, $destbase)
+sub my_copy_jvm_directory($srcbase, $destbase)
 {
     my ($srcbase, $destbase) = @_;
     return if (! -d "$srcbase/jvm");
-    &copyfiles($srcbase, "jvm/*.dep",  $destbase);
-    &copyfiles($srcbase, "jvm/*.clst",  $destbase);
-    &copyfiles($srcbase, "jvm/beta/*.class",  $destbase);
+    &my_copyfiles($srcbase, "jvm/*.dep",  $destbase);
+    &my_copyfiles($srcbase, "jvm/*.clst",  $destbase);
+    &my_copyfiles($srcbase, "jvm/beta/*.class",  $destbase);
 }
