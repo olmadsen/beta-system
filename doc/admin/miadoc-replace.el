@@ -222,7 +222,7 @@
   (let ((case-replace t))
     (message "Removing empty lines in PRE")
     (tags-query-replace "
-
++
 </PRE>" "
 </PRE>" nil)))
 
@@ -249,3 +249,61 @@
   (let ((case-replace t))
     (message "Removing REL LINKs")
     (tags-query-replace "<LINK REL=[A-Z]+ HREF=[^>]+.html>" "" nil)))
+
+(defun miadoc-replace24 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Removing /current")
+    (tags-query-replace "/current" "" nil)))
+
+(defun miadoc-replace25 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Removing &yen;")
+    (tags-query-replace "<LI>&yen;" "<LI>" nil)))
+ 
+(defun miadoc-replace26 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Fixing quotes")
+    (tags-query-replace "&otilde;" "'" nil)))
+
+(defun miadoc-replace27 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Removing empty PRE's")
+    (tags-query-replace "<PRE CLASS=beta>
+</PRE>" "" nil)))
+
+(defun miadoc-replace28 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Appending beta captions")
+    (tags-query-replace "<P> \\([a-zA-Z0-9_]+\\.bet\\)</P>" "<H4 CLASS=betacaption>\\1</H4>" nil)))
+
+(defun miadoc-replace29 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Fixing dots")
+    (tags-query-replace "&Eacute;" "..." nil)))
+
+(defun miadoc-replace30 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Fixing spaces")
+    (tags-query-replace "&Ecirc;" " " nil)))
+
