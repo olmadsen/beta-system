@@ -19,7 +19,7 @@ methodArgs: evVal
      evId:: (# do 'MethodArgs:'->id[] #);
      display::
        (#
-       do lEV[]-> xA 
+       do lEV[]-> xA ;
        #);
      loadVal:: 
        (#
@@ -122,7 +122,18 @@ methodArgs: evVal
        #);
      asgToMethod::
        (# V: ^evVal
-       do 301->trace(#do 'asgToMethod:'->display; #);
+       do 301->trace(#
+                    do 'asgToMethod:'->display; xN;
+                       'next: ' -> xT; next -> xI; 
+                       ' noOfArgs:' -> xT; noOfArgs->xI; xN;
+                       (for i: noofArgs repeat
+                            (if i < enterTypes.range then
+                                enterTypes[i]->xI
+                             else
+                                '# ' -> xT
+                            if)
+                       for)
+                    #);
           (if llEV[] <> none then
               (*1->trace(#
                       do 'eval:assignToList:'->xT; llEV.display; xN;
@@ -1130,9 +1141,12 @@ EnterArgs: evVal
        #);
      asgToRefAdr::
        (# sourceClassName,destClassName: ^text;
-          dDesc: @ASTindex; RC: ^DH.superChain;
+          dDesc,destEvalname: @ASTindex; RC: ^DH.superChain;
           rA,rAx: ^mch.address; destEval,dcl: @ASTindex; 
-       do '!EnterArgs:asgToRefAdr:'->mch.comment;
+       do (if stest then
+              301->trace(#
+                        do 'asgToRefAdr:' -> display; destEv[] -> xA
+          #)if);
           destEv.son -> destEval;
           (if destEv.label = gram.structureReference then
               sematt.structureDesc -> dDesc;
@@ -1147,7 +1161,8 @@ EnterArgs: evVal
             -> destClassName[];
           (rAbase.copy,destEval[],false,rChain[])->genAdr->rA[];
           sourceClassName[] -> pushNext;
-          destEval.dclref -> dcl;
+          destEval -> sematt.getName -> destEvalName;
+          destEvalName.dclref -> dcl;
           dcl.gettext -> rA.fieldName[];
           &mch.RegAdr[] -> rAx[];
           (rAx[],false,sourceClassName[],destClassName[])
@@ -1642,6 +1657,22 @@ mkByteCodeCall:
                   'invoke static ' -> mch.comment;
                   true -> isStatic;
                else
+                  (* check the case where VN is as in
+                   *     VN: @<<SLOT XXX:descriptor>>
+                   *   do ...; VN; ...
+                   *   ---XXX:descriptor---
+                   *   (# ... enter(...) do ... exit ... #)
+                   * I.e. the enter/exit-part is in the form;
+                   *)
+                  (# D: @ASTindex
+                  do VN.descRef -> D;
+                     (if D.isSlot then
+                         D.slotOrigin -> D;
+                         (if D.label = gram.attributesForm then
+                             true -> isStatic;
+                             leave testLibLevel
+                     if)if)
+                  #);
                   (* to find originN, go origin meth.N times *)
                   thisDesc -> receiverDesc;
                   (for i: method.on repeat
@@ -1851,11 +1882,10 @@ mkByteCodeCall:
                          #);
            if);
          301 -> trace(# 
-                     do 'call2:receiver:'->xH;
-                        receiverDesc[] -> xA; xN; 
+                     do 'call2:'->xH; 
+                        ' receiver: '->xT; receiverDesc[] -> xA; xN; 
                         'method: '->xT; method[] -> xA; 
-                     #);
-2         
+                     #)   
      if);
 
      (if isStatic then
@@ -1882,12 +1912,23 @@ mkByteCodeCall:
              if)
          if)
      if);
-     (* the following should be generalised? *)
-     (if method.isSlot then
-         sig.noEnter
-      else
-         method[] -> sig.addEnter
-     if);
+         (* the following should be generalised? *)
+         (*1->trace(#
+                 do 'isSlot: ' -> xT; method.isslot -> xB; xN;
+                    method[] -> xA; xN;
+                    sig.thismethoddesc[] -> xA
+                 #);*)
+
+         (if method.isSlot then
+             (if sig.thisMethodDesc.isSlot then
+                 (* probably only the second check is needed *)
+                 sig.noEnter
+              else
+                 sig.addEnter
+             if)
+          else
+             method[] -> sig.addEnter
+         if);
      
      (if method.isSlot then
          sig.setVoidXSig
