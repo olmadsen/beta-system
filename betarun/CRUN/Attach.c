@@ -16,7 +16,7 @@
 #include "beta.h"
 #include "crun.h"
 
-ParamThisComp(Att)
+ParamThisComp(struct Component *, Att)
 {
     register ref(CallBackFrame)  callBackFrame asm("%l5");
     register long              * nextCompBlock asm("%l6");
@@ -24,7 +24,7 @@ ParamThisComp(Att)
     int first = comp->CallerLSC == 0;
 /*    void (*entrypoint)();*/
     
-    GCable_Entry
+    GCable_Entry();
     FetchThisComp
 
     /* printf("\nAttach: comp = %x", comp); */
