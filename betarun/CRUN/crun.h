@@ -24,7 +24,6 @@ extern ref(Structure)	ThisS() asm("ThisS");
 extern void		DoGC() asm("DoGC");
 extern ref(Item)	AlloSI() asm("AlloSI");
 extern ref(Component)	AlloSC() asm("AlloSC");
-/* The following not capitalized to avoid loosing the ones starting with L */
 extern void             Return() asm ("Return");
 extern void             RefNone() asm("RefNone");
 extern void             AttBC() asm("AttBC");
