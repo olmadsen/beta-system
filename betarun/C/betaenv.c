@@ -43,10 +43,10 @@ void GetBetaEnv()
 }
 
 #ifdef nti
-GLOBAL(static int beta_instance);
-GLOBAL(static int beta_previnstance);
-GLOBAL(static char *beta_cmdline);
-GLOBAL(static int beta_show);
+GLOBAL(int beta_instance);
+GLOBAL(int beta_previnstance);
+GLOBAL(char *beta_cmdline);
+GLOBAL(int beta_show);
 
 /* Create ArgVector and ArgCount from a command line string */
 void SetupArgValues(int ret, int inst, int prev, char *cmd, int show)
