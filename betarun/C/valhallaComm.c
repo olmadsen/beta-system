@@ -1,5 +1,6 @@
 #include "beta.h"
 
+
 #ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
 
 #include <stdio.h>
@@ -619,6 +620,7 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
       valhalla_writeint (code_start);
       valhalla_socket_flush ();
     }
+    break;
     case VOP_MEMALLOC: {
       long numbytes, addr;
       numbytes = (long) valhalla_readint ();
@@ -656,6 +658,7 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
       valhalla_writeint (opcode);
       valhalla_socket_flush ();
     }
+    break;
     case VOP_ADDGROUP: {
       group_header *gh;
       gh = (group_header *) valhalla_readint ();

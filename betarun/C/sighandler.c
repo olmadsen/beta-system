@@ -501,9 +501,17 @@ int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
   case EXCEPTION_STACK_OVERFLOW:
     todo=DisplayBetaStack( StackErr, theObj, PC, sig); break;
   case EXCEPTION_BREAKPOINT:
-    /* commented out by void Wed Jul 23 13:22:19 MET DST 1997 */
-#ifdef RTDEBUG
-    fprintf(output, "breakpoint at PC 0x%x\n", PC); fflush(output);
+    printf("EXCEPTION_BREAKPOINT:\n"); fflush(output);
+    DEBUG_VALHALLA(fprintf(output, "sighandler: breakpoint at PC 0x%x\n", (int)PC); fflush(output));
+#ifdef nti_gnu
+    if ( ((*((char*)PC)) != (char)0xcc ) && ((*((char*)PC-1)) == (char)0xcc ) ){
+      /* int3 break */
+      PC = (long *) ((long)SavedContextRec.Eip-1);
+#if 1
+      SavedContextRec.Eip = (long)PC; /* PC points just after int3 instruction */
+#endif
+      DEBUG_VALHALLA(fprintf(output, "sighandler: adjusting PC to 0x%x 0x%x\n", (int)PC, (int)SavedContextRec.Eip); fflush(output);)
+    }
 #endif
     todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
   case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
