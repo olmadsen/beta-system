@@ -1,12 +1,11 @@
 ORIGIN 'nameTable';
-INCLUDE '~beta/basiclib/numberio'
-        '~beta/containers/hashTable'
-        '~beta/basiclib/texthash'
-        '~beta/toollibs/utils/fileExtensions';
-MDBODY nti 'private/name_to_address_ntibody'
-       default 'private/name_to_address_unixbody';
+BODY 'private/name_to_address_body';
+INCLUDE '~beta/containers/hashTable';
+INCLUDE '~beta/toollibs/utils/fileExtensions';
+INCLUDE '~beta/basiclib/texthash';
 -- lib: Attributes --
 TextToInteger:
+  (* Used for qualification of ExternalLookup below *)
   (# t: ^text; i: @integer
   enter t[]
   do INNER
@@ -18,30 +17,23 @@ name_to_address_table: hashTable
         * Use the nm or equivalent to initialize name_to_address_table;
         * Used for Valhalla.
         *);
-     H: @honeyMan;
      traceStream,infoStream: ^stream;
      logical2physical_offset: @integer
        (* Always 0 on UNIX - only used on nti 
         * FIXME: Should reside in _ntibody
         *);
+     private: @<<SLOT name_to_address_table_private: descriptor>>;
      MDPrivate: @<<SLOT name_to_address_tableMDPrivate:descriptor>>;
        
-     rangeInitial:: (#  do 5879->value #);
+     rangeInitial:: (# do 5879->value #);
      element::
-       (#
-          name: ^text;
+       (# name: ^text;
           adr: @integer;
           display:
             (# s: ^stream
             enter s[]
-            do
-               (if s[] = none then screen[]->s[] if);
-               'Label:'->s.puttext;
-               adr->s.puthex;
-               ' '->s.put;
-               name[]->s.putline;
-               
-            #)
+            <<SLOT name_to_address_table_element_display:dopart>>
+            #);
        #);
      ExternalLookup: ^TextToInteger
        (* Reference set by init if init.ExternalLookup is further bound *);
@@ -53,73 +45,37 @@ name_to_address_table: hashTable
              * for looking up symbols instead of nm.
              *);
        enter(exeName[],out_of_process)
-       <<SLOT Name_to_address_tableInit:DoPart>> 
+       <<SLOT name_to_address_tableInit:DoPart>> 
        #);
      dotsInit: init
        (# i: @integer
        enter infoStream[]
-       do
-          (if (i mod 500 = 0) and (i > 0) then
-              (if infoStream[] <> none then '.'->infoStream.put if)
-          if);
-          i+1->i
+       <<SLOT name_to_address_table_dotsinit:dopart>>
        #);
-     hashFunction:: (#  do e.name[]->H.hash->value #);
-     equal:: (#  do left.name[]->right.name.equal->value #);
+     hashFunction:: 
+       (# <<SLOT name_to_address_table_hashfunction:dopart>> #);
+     equal:: 
+       (# <<SLOT name_to_address_table_equal:dopart>> #);
      add:
        (# name: ^text; adr: @integer; e: ^element
        enter (name[],adr)
-       do &element[]->e[]; name[]->e.name[]; adr->e.adr; e[]->insert; 
+       <<SLOT name_to_address_table_add:dopart>> 
        #);
      lookup: @
-       (#
-          name: ^text;
-          E: @element;
+       (# name: ^text;
           adr: @integer;
-          LookUpNative: @<<SLOT Name_to_address_tableLookupNative:Descriptor>>;
-          hash: @hashfunction;
-          search: @findIndexed
-            (#
-               predicate::
-                 (# 
-                 do
-                    (e[],current[])
-                      ->equal->value
-                 #)
-            do (*current.display;*)
-               current.adr->adr; 
-            #);
-          
+          thelookup: @<<SLOT name_to_address_table_thelookup:descriptor>>;
        enter name[]
-       do (if tracestream[]<>NONE then
-              'Lookup: '->tracestream.puttext; 
-              name[]->tracestream.puttext; 
-          if);
-          0->adr;
-          name[]->E.name[]; 
-          E[]->hash->search;
-          (if adr=0 then
-              LookUpNative; 
-              (name[],adr)->add;
-              (if (adr=0) then
-                  'Name_to_address_table.LookupNative returned 0 for symbol ' ->screen.puttext; 
-                  name[] -> screen.putline;
-              if);
-          if);
-          (if tracestream[] <> none then
-              ' adr: '->tracestream.puttext;
-              adr->tracestream.putint;
-              tracestream.newline;
-          if);
+       do thelookup;
        exit adr
        #);
      lookupC:
-       (* Prepends an underscore on "name" on
-        * some platforms. Otherwise identical to lookup.
+       (* Prepends an underscore top copy of "name" on
+        * some platforms. 
         *)
        (# name: ^text;
        enter name[]
-       do <<SLOT Name_to_address_tableLookupCFixName: descriptor>>;
+       do <<SLOT name_to_address_tableLookupCFixName: descriptor>>;
        exit name[] -> lookup
        #)
   #)  
