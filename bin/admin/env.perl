@@ -192,7 +192,7 @@ if (-e "c:\\") {
 	$objdir = 'macosx';
 	# &setup_macosx;
     } else {
-	print "Unknown/unsupported architecture.\n";
+	print "$betalib/bin/admin/env.perl: Unknown/unsupported architecture.\n";
 	exit 1;
     }
 } else {
