@@ -1,0 +1,160 @@
+ORIGIN  '~beta/basiclib/v1.5/betaenv';
+INCLUDE '~beta/sysutils/v1.5/envstring';
+INCLUDE '~beta/process/v1.5/processmanager';
+INCLUDE '~beta/basiclib/v1.5/file';
+
+--- SDKlib:attributes ---
+sdkType: 
+  (# assemblerVersion: @Integer;
+     cc:< (# src, dst, c, a: ^Text; 
+          enter (src[], dst[])
+          do &Text[]->c[];
+             &Text[]->a[];
+             INNER
+          exit (c[],a[]) #);
+     as:< (# src, dst, c, a: ^Text; 
+          enter (src[], dst[])
+          do &Text[]->c[];
+             &Text[]->a[];
+             INNER
+          exit (c[], a[]) #);
+     asText:<  (# t: ^Text; do INNER; exit t[] #);
+  #);
+
+Borland: sdkType
+  (# cc::< 
+       (# 
+       do 'bcc32'->c.putText;
+          '-O2 -v -a4 -DWIN32 -Dnti -Dnti_bor -Iexternal -c -o' -> a.putText;
+          dst[] -> a.putText; ' ' -> a.put; src[]-> a.putText
+       #);
+     as::<
+       (# 
+       do 'tasm32'->c.putText;
+          '-w-res -t -m -ml -kh32768 -zd ' -> a.putText;
+          src[]->a.putText; ','->a.put;dst[]->a.putText;
+       #);
+     asText::< (# do 'bor' -> t #);
+  #);
+
+Microsoft: sdkType
+  (# cc::<
+       (# 
+       do 'cl'->c.putText;
+          '-nologo -O2 -Zd -Zp4 -DWIN32 -Dnti -Dnti_ms -Iexternal -c -Fo' -> a.putText;
+          dst[] -> a.putText; ' ' -> a.put; src[]-> a.putText
+       #);
+     as::< 
+       (# 
+       do (if assemblerVersion=6 then
+              'ml'->c.putText;
+              '-w -nologo -coff -Cp -c -Fo' -> a.putText;
+              dst[] -> a.putText; ' -Ta' -> a.putText;
+              src[]-> a.putText
+           else
+              'masm386' ->c.putText;
+              '/t /Ml /Zd ' -> a.putText;
+              src[]->a.putText; ','->a.put;dst[]->a.putText
+           if)
+       #);
+     asText::< (# do 'ms' -> t #);
+  #);
+
+Gnu: sdkType (* INCOMPLETE!!!! *)
+  (# cc::< (# 
+           do 'gcc' -> c.putText;
+              '-O6 -g -DWIN32 -Dnti -Dnti_gnu -o ' -> a.putText;
+              dst[] -> a.putText; ' -c ' -> a.putText; src[]-> a.putText
+           #);
+     as::< (# do 'gas' -> c.putText #);
+     asText::< (# do 'gnu' -> t #);
+  #);
+
+--- program:descriptor ---
+(# <<SLOT SDKlib:attributes>>;
+   SDK: ^sdkType;
+   sdktext,asmtext,tmptext: ^Text;
+   src,dst: ^Text;
+   cmd,arg: ^Text;
+   run: @Process;
+   sf,df: @DiskEntry;
+   
+do '$(SDK)' -> &expandEnvVar(# defaultValue::<
+                                (# do 'ms' -> envvarvalue #);
+                               #) -> sdktext[];
+   (if true
+    // 'ms' -> sdktext.equalNCS then &Microsoft[] -> SDK[];
+    // 'bor' -> sdktext.equalNCS then &Borland[] -> SDK[];
+    // 'gnu' -> sdktext.equalNCS then &Gnu[] -> SDK[];
+    else
+       (failure, 'BetaCC: Error: Unknown SDK.') -> stop;
+   if);       
+   
+   '$(asm_version)' -> &expandEnvVar(# defaultValue::<
+                                        (# do '6' -> envvarvalue #);
+                                   #) -> asmtext[];
+   (if '6' -> asmtext.equalncs then 6 -> SDK.assemblerversion if);
+   (if '4' -> asmtext.equalncs then 4 -> SDK.assemblerversion if);
+   
+   (if noOfArguments < 3 then (failure, 'needs two arguments')->stop; if);
+   
+   2 -> arguments -> dst[];
+   3 -> arguments -> src[];
+   '/' -> src.findAll(# do ('\\',inx) -> src.inxPut #);
+   '/' -> dst.findAll(# do ('\\',inx) -> dst.inxPut #);
+   
+   src[] -> sf.path;
+   dst[] -> df.path;
+   
+   (if not sf.isFile then
+       (failure, 'Sourcefile does not exist') -> stop;
+   if);
+   sf.path.name.extension -> tmptext[];
+   (if tmptext[]=NONE then
+       (failure, 'No source file type??') -> stop;
+   if);
+   (if true
+       // 'c' -> tmptext.equalNCS then 
+       (src[],dst[]) -> &SDK.cc -> (cmd[], arg[]);
+       // 'asm' -> tmptext.equalNCS then 
+       (src[],dst[]) -> &SDK.as -> (cmd[], arg[]);
+    else
+       (failure, 'Unknown source file type??') -> stop;
+   if);
+   
+   cmd[] -> run.init;
+   arg.reset;
+   (# t1,t2: ^Text;
+   do L: (# 
+         do arg.getAtom -> t1[];
+            (if t1.empty then leave L if);
+            t1[] -> run.argument.append;
+            restart L
+         #);
+      
+      (for i: noOfArguments-3 repeat
+           i+3 -> arguments -> t2[];
+           t2.reset;
+           L: (# 
+              do t2.getAtom -> t1[];
+                 (if t1.empty then leave L if);
+                 t1[] -> run.argument.append;
+                 restart L
+              #);
+      for)
+   #);
+   run.start;
+   run.awaitStopped;   
+   
+   (* Check if the command completed correctly by checking 
+    * that the target-file really exist now. 
+    *)
+   (if not df.exists then
+       (failure, 
+       'Target file does not exist. (external compilation failed)') -> stop;
+   if);
+   (if df.modtime <= sf.modtime then
+       (failure, 
+       'Target file is older than source. (external compilation failed)') -> stop;
+   if);
+#)
