@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: misc.c,v $, rel: %R%, date: $Date: 1992-06-10 14:50:54 $, SID: $Revision: 1.10 $
+ * Mod: $RCSfile: misc.c,v $, rel: %R%, date: $Date: 1992-07-20 16:36:04 $, SID: $Revision: 1.11 $
  * by Lars Bak.
  */
 
@@ -50,6 +50,8 @@ long ObjectType(aObj)
      switch( (int) aObj->Proto){
        case (int) ComponentPTValue:   return ComponentType; 
        case (int) StackObjectPTValue: return StackObjectType;
+       case (int) WordRepPTValue:     return WordRepType;    
+       case (int) DoubleRepPTValue:   return DoubleRepType;    
        case (int) ByteRepPTValue:     return ByteRepType;    
        case (int) ValRepPTValue:      return ValRepType;    
        case (int) RefRepPTValue:      return RefRepType;    
