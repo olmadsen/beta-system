@@ -553,7 +553,7 @@ int pid;
   return 0;
 }
 
-int VerifyFilenameCase(char* filename)
+char* CCorrectFilenameCase(char* filename)
 {
 #ifdef nti_bor
 # define FINDDATA struct ffblk
@@ -570,17 +570,19 @@ int VerifyFilenameCase(char* filename)
   char *s, *t;
   long hFile;
   int res = 0;
+  static char buffer[128];
+  
+  buffer[0]=0;
   if ((hFile = FINDFIRST(filename, &fileinfo)) != -1L) 
   {
-    for (s=t=filename; *s; s++)
-      if (*s == '\\') 
-	t=s+1;
-   
-    if (*t && !strcmp(t, FINDDATA_NAME))
-      res = 1;
+    /* As the filename does not contain any wildcards, the casecorrect 
+     * copy returned by find should not be longer than filename...
+     * It may be shorter, if filename contains a path
+     */
+    strcpy(buffer, FINDDATA_NAME);
   }
 
   FINDCLOSE(hFile);
-  return res;
+  return buffer;
 }
   
