@@ -324,7 +324,7 @@ sub print_nav_frame
     &print_header($title,$flag_base);
 
     print <<EOT;
-<BODY>
+<BODY onLoad="fixPrintButton()>
 <TABLE WIDTH="100%" CELLPADDING=0 CELLSPACING=2>
 <TR VALIGN=MIDDLE>
 <TD NOWRAP>
@@ -436,7 +436,7 @@ sub print_index_nav_frame
     &print_header($title,$flag_base);
 
     print <<EOT;
-<BODY>
+<BODY onLoad="fixPrintButton()>
 <TABLE WIDTH="100%" CELLPADDING=0 CELLSPACING=5>
 <TR>
 <TD VALIGN=MIDDLE>
