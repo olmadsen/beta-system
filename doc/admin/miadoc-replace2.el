@@ -56,4 +56,4 @@
 
   (let ((case-replace nil)(case-fold-search t))
     (message "Fixing STRONG -> FIG")
-    (tags-query-replace "<A NAME=figure_[0-9]+><STRONG CLASS=figure>Figure [0-9]+: \\(.*\\)</STRONG></A>" "<FIG LIST=\\"\\1\\"></FIG>" nil)))
+    (tags-query-replace "<A NAME=figure_[0-9]+><STRONG CLASS=figure>Figure [0-9]+\\(.*\\)</STRONG></A>" "<FIG LIST=\"\\1\"></FIG>" nil)))
