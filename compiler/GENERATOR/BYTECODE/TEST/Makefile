@@ -6,5 +6,6 @@ clean:
 	-rm -f googleapi/dotnet/GoogleSearchService.dll
 	-rm -f googleapi/dotnet/GoogleSearchService.pdb
 	-jbeta -qw tstenv > /dev/null
+	-jbeta -qw betaenv > /dev/null
 	@-rm -f javabc/String.class
 
