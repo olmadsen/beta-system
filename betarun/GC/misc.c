@@ -18,6 +18,44 @@
 long copyInput (long input)
 { return input; }
 
+#ifdef nti
+#include <string.h>
+#ifdef nti_bor
+#include <nonansi/alloc.h>
+#else
+#include <malloc.h>
+#endif /* nti_bor */
+
+char *convert_to_winnt(char *src, char nl)
+{
+  /* Allocate room for worst case: src is all '\n' */
+  char *dst = malloc(strlen(src)*2+1), *ret = dst;
+  if (dst) {
+    do {
+      if (*src == nl) {
+        *dst++ = '\r'; *dst++ = '\n';
+      } else
+        *dst++ = *src;
+    } while (*src++);
+  }
+  return ret;
+}
+
+char *convert_from_winnt(char *src, char nl)
+{
+  /* Allocate room for worst case: no '\n' */
+  char *dst = malloc(strlen(src)+1), *ret = dst;
+  if (dst) {
+    do {
+      if (src[0] == '\r' && src[1] == '\n') {
+        *dst++ = nl; src++;
+      } else
+        *dst++ = *src;
+    } while (*src++);
+  }
+  return ret;
+}
+#endif /* nti */
 
 /* Used by objinterface.bet and lazyref_gc.c */
 void assignRef(long *theCell, ref(Item) newObject)
