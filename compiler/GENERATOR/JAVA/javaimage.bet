@@ -17,7 +17,8 @@ JavaImage:
      init:<
        (# classfilename: ^text;
        enter classfilename[]
-       do classfilename[] -> cf.name;
+       do INNER;
+          classfilename[] -> cf.name;
           constant_pool.init;
           fields.init;
        #);
@@ -42,7 +43,15 @@ JavaImage:
      emitIntegerConstant:
        (# enter constant_pool.integers.add -> emit #);
      emitDoubleConstant:
-       (# enter constant_pool.doubles.add -> emit #);
+       (# inx: @integer;
+       enter constant_pool.doubles.add->inx
+       do (* Notice: the inx reported above includes the extra increment by 1 
+           * on constant pool size dictated by doubles. But the one that 
+           * should be used for refering the double is the un-incremented one. 
+           * Thus we need to decrement the value emitted by 1 
+           *)
+          inx-1 -> emitShort 
+       #);
      emitFieldDef:
        (# enter fields.addtext #);
      emitComment:
@@ -78,6 +87,14 @@ JavaImage:
        (# variable_index: @int16u;
        enter variable_index
        do (variable_index, currentmethod.LIP) -> currentmethod.variable_use
+       #);
+     emitExceptionHandlerDef:
+       (# 
+       enter currentmethod.exceptionhandler_def
+       #);
+     emitThrows:
+       (# 
+       enter currentmethod.throws
        #);
      
      emitToFile:
@@ -132,7 +149,11 @@ JavaImage:
             #);
           doubles: @doubleHashTable
             (# entrytype::CF_CONSTANT_Double_info;
-               addentry::(# do d->entry.double #)
+               addentry::
+                 (# 
+                 do d->entry.double; 
+                    cf.constant_pool.numdoubleslots+1->cf.constant_pool.numdoubleslots;
+                 #)
             #);
           integers: @integerHashTable
             (# entrytype::CF_CONSTANT_Integer_info;
@@ -238,6 +259,7 @@ JavaImage:
           numLocals: @int16u;
           line_numbers: ^CF_LineNumberTable_attribute;
           variables: ^CF_LocalVariableTable_attribute;
+          thrown_exceptions: ^CF_Exceptions_attribute;
           LIP: (# exit _code.code_length #);
           new: 
             (# access, maxstack, maxlocals: @integer;
@@ -366,6 +388,32 @@ JavaImage:
                    if);
                if);
             #);
+          exceptionhandler_def:
+            (# start_pc, end_pc, handler_pc: @int16u;
+               catch_type: ^text;
+               catch_index: @int16u;
+               i: ^CF_Exception_info;
+            enter (start_pc, end_pc, handler_pc, catch_type[])
+            do catch_type[] -> constant_pool.classes.addtext -> catch_index;
+               &CF_Exception_info[] -> i[] -> _code.exceptions.add;
+               (start_pc, end_pc, handler_pc, catch_index) -> i;
+            #);
+          throws:
+            (# exception_type: ^text;
+               exception_index: @int16u;
+               i: ^CF_Exception_index_info;
+            enter exception_type[]
+            do (if thrown_exceptions[]=NONE then
+                   'Exceptions' 
+                     -> constant_pool.utf8strings.add
+                     -> &CF_Exceptions_attribute
+                     -> thrown_exceptions[]
+                     -> info.attributes.add;
+               if);
+               exception_type[] -> constant_pool.classes.addtext -> exception_index;
+               &CF_Exception_index_info[] -> i[] -> thrown_exceptions.exception_index_table.add;
+               exception_index -> i;
+            #);
        enter new
        #);
      
@@ -455,7 +503,7 @@ JavaImage:
             do &entrytype[] -> entry[];
                INNER;
                entry[] -> cf.constant_pool.add;
-               cf.constant_pool.count -> index;
+               cf.constant_pool.count+cf.constant_pool.numdoubleslots -> index;
             exit index
             #);
        #);
@@ -641,6 +689,8 @@ JavaImage:
        cf.attribute_info(# trace::(# do traceClassFile->value #)#);
      CF_Exception_info: 
        cf.Exception_info(# trace::(# do traceClassFile->value #)#);
+     CF_Exception_index_info: 
+       cf.Exception_index_info(# trace::(# do traceClassFile->value #)#);
      CF_InnerClass_info: 
        cf.InnerClass_info(# trace::(# do traceClassFile->value #)#);
      CF_LineNumber_info: 

@@ -121,7 +121,7 @@ cp_info: entry
        (# t: ^text;
        do (if trace then
               '  #' -> t[];
-              i -> t.putint;
+              inx -> t.putint;
               ' ' -> t.put;
               tag -> const2text -> t.append;
               t[] -> tracePos(# do moretrace; #);
@@ -199,13 +199,11 @@ CONSTANT_Integer_info: CONSTANT_U4_info
   (# tag:: (# do CONSTANT_Integer->value #);#);
 CONSTANT_Float_info: CONSTANT_U4_info
   (* Section 4.4.4 *)
-  (# (* FIXME (not needed for BETA) *)
-     tag:: (# do CONSTANT_Float->value #);
+  (# tag:: (# do CONSTANT_Float->value #);
   #);
 CONSTANT_Long_info: cp_info
   (* Section 4.4.5 *)
-  (# (* FIXME (not needed for BETA) *)
-     tag:: (# do CONSTANT_long->value #);
+  (# tag:: (# do CONSTANT_long->value #);
      high_bytes: @int32;
      low_bytes: @int32;
      moretrace::<
@@ -328,14 +326,18 @@ CONSTANT_Utf8_info: cp_info
 
 constant_pool_table: entry_table
   (# entrytype::cp_info; 
+     numdoubleslots: @integer;
      usecount::
-       (# numdoubles: @integer;
-       do (for i:count repeat
+       (# 
+       do (* Recalculate numdoubleslots in case user has not updated it correctly *)
+          0 -> numdoubleslots;
+          (for i:count repeat
+               i+numdoubleslots -> entries[i].inx;
                (if (entries[i].tag=CONSTANT_Double) or (entries[i].tag=CONSTANT_Long) then
-                   numdoubles+1->numdoubles;
+                   numdoubleslots+1->numdoubleslots;
                if);
           for);
-          count+numdoubles+1->value
+          count+numdoubleslots+1->value
        #);
   #);
 
@@ -510,7 +512,7 @@ Code_attribute: attribute_info
   #);
 
 Exception_info: entry
-  (* Section 4.7.3 & 4.7.4 *)
+  (* Section 4.7.3 - part of code attribute (exception handler def) *)
   (# start_pc: @int16u;
      end_pc: @int16u;
      handler_pc: @int16u;
@@ -534,18 +536,35 @@ Exception_info: entry
           handler_pc -> htons -> putShort;
           catch_type -> htons -> putShort;
        #);
-  enter (start_pc, end_pc, handler_pc, handler_pc, catch_type)
+  enter (start_pc, end_pc, handler_pc, catch_type)
   #);
 
 Exception_table: entry_table
+  (* Section 4.7.3 - part of code attribute (exception handler def) *)
   (# entrytype::Exception_info;
      length: integerValue(# do count*8 -> value #);
   #);
 
+Exception_index_info: entry
+  (* Section 4.7.4 - method attribute (thrown exceptions) *)
+  (# class_index: @int16u;
+     write::
+       (# 
+       do class_index -> htons -> putShort;
+       #);
+  enter class_index
+  #);
+
+ExceptionIndexTable: entry_table
+  (* Section 4.7.4 - method attribute (thrown exceptions) *)
+  (# entrytype::Exception_index_info;
+     length: integerValue(# do count*2 -> value #);
+  #);
+
 Exceptions_attribute: attribute_info
-  (* Section 4.7.4 *)
+  (* Section 4.7.4 - method attribute (thrown exceptions)  *)
   (# attribute_length:: (# do 2+exception_index_table.length-> value #);
-     exception_index_table: @Exception_Table; 
+     exception_index_table: @ExceptionIndexTable; 
      write:: (# do exception_index_table.write #);
   #);
 
@@ -682,7 +701,8 @@ Deprecated_attribute: attribute_info
 (* Generic patterns used above *)
 entry:
   (# trace:< booleanValue;
-     write:< (# i: @integer enter i do INNER #);
+     write:< object;
+     inx: @integer;
   #);
 
 entry_table:
@@ -703,7 +723,7 @@ entry_table:
        (# 
        do usecount -> htons -> putShort;
           (for i:count repeat
-               i -> entries[i].write;
+               entries[i].write;
           for);
        #);
   #);
