@@ -1,5 +1,6 @@
 ORIGIN '~beta/guienv/v1.3/guienv';
-BODY 'CVtexteditorimpl';
+BODY 'private/siftexteditorbody'
+     'private/mydialogsbody';
 INCLUDE '~beta/guienv/v1.3/guienv'
         '~beta/guienv/v1.3/fields'
         '~beta/guienv/v1.3/guienvactions'
@@ -12,7 +13,8 @@ INCLUDE '~beta/guienv/v1.3/guienv'
         '~beta/betaast/v4.9.1.ess/gram'
         '~beta/sysutils/v1.4/envstring'
         '~beta/interfacebuilder/v1.0/guienvstuff/timer'
-        'guienvstuff/textfieldstuff';
+        'guienvstuff/textfieldstuff'
+        'editorenv';
 (*'~beta/interfacebuilder/v1.0d/guienvadds/textfieldadds'*)
 -- windowlib: Attributes --
 sifTextEditor: textEditor
@@ -65,13 +67,13 @@ sifTextEditor: textEditor
      charWidth: @charWidthType;
      codeViewerType:< codeViewer;
      initialContractionLevel:< IntegerValue;
-     (* SBRANDT *)
      SifViewer: ^codeviewerType;
      mps: ^astInterface;
      betaGrammar: (*^mps.treelevel;*) ^mps.beta;
      UI: ^guienv;
      frag: ^mps.fragmentForm;
      node: ^mps.ast;
+     theWindow: (#  exit THIS(window)[] #);
      onOpen:<
        (# 
        do
@@ -174,31 +176,24 @@ sifTextEditor: textEditor
             (#
                oldSelection: @point;
                theTimer: @timer
-                 (# action::
+                 (#
+                    action:: 
                       (# 
-                      do pause;
-                         (if sifViewer[] <>
-                             none then
-                             (if SifViewer.switch[1] then 'onIdle'->putLine;  if);
+                      do
+                         pause;
+                         (if
+                         sifViewer[] <> none then
+                             (if SifViewer.switch[1] then
+                                 'onIdle'->putLine; 
+                             if);
                              (if draggingSelection then
                                  oldSelection->onClick; false->draggingSelection
                              if)
                          if);
+                         
                       #);
+                    
                  #);
-               (* onIdle::< 
-                *                  (# 
-                *                  do
-                *                     (if sifViewer[] <>
-                *                     none then
-                *                         (if SifViewer.switch[1] then 'onIdle'->putLine;  if);
-                *                         (if draggingSelection then
-                *                             oldSelection->onClick; false->draggingSelection
-                *                         if)
-                *                     if);
-                *                     
-                *                  #);
-                *)
                onKeyDown::< 
                  (# 
                  do
@@ -219,6 +214,7 @@ sifTextEditor: textEditor
                     if);
                     
                  #);
+               onMouseDown::<  (#  <<SLOT codeViewerOnMouseDown:DoPart>> #);
                onMouseUp::< 
                  (# 
                  do
@@ -260,6 +256,7 @@ sifTextEditor: textEditor
                         
                     if);
                     theTimer.activate;
+                    
                  #);
                onBeforeChange::<  (#  do prettyprinting->allow; INNER #);
                onTextChanged::< 
@@ -302,9 +299,7 @@ sifTextEditor: textEditor
        (# line1,pos1,line2,pos2: @integer
        enter (line1,pos1,line2,pos2)
        do (* Michaels eksperiment start *)
-          false -> contents.automaticScrolling;
-          (* Michaels eksperiment slut *)
-          
+          false->contents.automaticScrolling;
           (if SifViewer.switch[2] then
               'TE.selectArea'->screen.putLine;
               line1->screen.putint;
@@ -329,9 +324,8 @@ sifTextEditor: textEditor
               screen.newLine;
               
           if);
-          (* Michaels eksperiment start *)
-          true -> contents.automaticScrolling;
-          (* Michaels eksperiment slut *)
+          true->contents.automaticScrolling;
+          
        #);
      deleteline:
        (# lineno: @integer; 
@@ -474,11 +468,14 @@ sifTextEditor: textEditor
   #);
 codeviewer:
   (#
+     edenv: ^editorEnv;
      mps: ^astInterface;
      betaGrammar: (*^mps.treelevel;*) ^mps.beta;
      (* shoul only exist in one copy *)
      betaGram: @grammar;
      mg: ^mps.metagrammar;
+     gram:< mps.treelevel;
+     ag (* applicationGrammar *) : ^gram;
      fg: ^mps.fragmentGroup;
      frag: ^mps.fragmentForm;
      node: ^mps.ast;
@@ -682,7 +679,37 @@ codeviewer:
        (#
           node: ^mps.ast;
           length,subCommentInx1,subCommentInx2: @integer;
-          isComment,isContraction,isSlot,hasSemanticLink: @boolean;
+          isComment,isContraction,isSlot,hasSemanticLink,isUnexpanded:
+            @boolean;
+          pastePermit,listInsertPermit,undoPermit: @boolean;
+          perform:
+            (# current: ^mps.ast; fatherNode: ^mps.ast; exp: ^mps.expanded
+            do
+               ui.cursors.watch[]->UI.mouse.busyCursor;
+               (if length = 1 then
+                   node[]->current[];
+                   INNER perform;
+                   (current[],current[])->astView.pp.update
+                else
+                   node.father->fatherNode[];
+                   (if fatherNode[] <> none then
+                       (if fatherNode.kind = mps.kinds.interior then
+                           fatherNode[]->exp[];
+                           (for i: length repeat
+                             node.sonNo+i-1->exp.get->current[];
+                             INNER perform;
+                             (current[],current[])->astView.pp.update
+                           for);
+                           (* (exp[],node.sonNo,length,length)
+                            ->astView.pp.updateList*)
+                           
+                       if)
+                   if);
+                   
+               if);
+               (node[],length,subCommentInx1,subCommentInx2)->astToSelection;
+               none ->UI.mouse.busyCursor
+            #);
           
        enter (node[],length,subCommentInx1,subCommentInx2)
        exit (node[],length,subCommentInx1,subCommentInx2)
@@ -690,6 +717,18 @@ codeviewer:
      cs: @astFocus;
      astView: ^mps.astViewer;
      switch: [10] @boolean;
+     doTrace,edDebug: @boolean;
+     trace:
+       (# str: ^text
+       do
+          (if doTrace
+           // true then INNER ; '/'->screen.put; str[]->screen.putText; 
+          if)
+       #);
+     test:
+       (# str: ^text; 
+       do (if edDebug // true then INNER ; str[]->screen.putText;  if)
+       #);
      selectionToAST:
        (#
           start,end,line1,char1,line2,char2: @integer;
@@ -903,6 +942,7 @@ codeviewer:
               if)
           if);
           (if doObserveAST then newCS.node[]->ASTObserver if);
+          INNER ;
           
        #);
      topDotOpen:
@@ -971,7 +1011,6 @@ codeviewer:
        do
           checkSon;
           cs->aFocusChangedEvent;
-          (* theSifTexteditor.contents.selection.scrollIntoView; *)
           theSifTexteditor.contents.scrollIntoView;
           cs->astToSelection;
           
@@ -1588,7 +1627,16 @@ codeviewer:
            else
               cs.node[]
                 ->searchSlotBinding
-                  (# bindingFound::<  (#  do ff.root[]->selectNode #)
+                  (#
+                     bindingFound::< 
+                       (# 
+                       do
+                          (if ff[] = none then
+                              'bindingFound: ff is none!! '->putLine
+                           else
+                              ff.root[]->selectNode
+                          if)
+                       #)
                   #)
           if)
        #);
@@ -1632,6 +1680,10 @@ codeviewer:
                                          ->mps.thePathHandler.convertFilePath
                                          ->help[];
                                        (help[],screen[])->mps.top.open->fg[];
+                                       (if not fg.isRealOpen then
+                                           'fg was not realopen'->putLine;
+                                           fg.realOpen
+                                       if);
                                        (if (* should test if open already *)
                                        fg[]
                                         // none then
@@ -1723,6 +1775,11 @@ codeviewer:
                                                help[]
                                                  -> (*UI.alertUser;*) putLine
                                             else
+                                               (if not fg.isRealOpen then
+                                                   'fg was not realopen'
+                                                     ->putLine;
+                                                   fg.realOpen
+                                               if);
                                                fg.fragmentList.scan
                                                  (# 
                                                  do
@@ -1772,7 +1829,20 @@ codeviewer:
           frag.father->&searchBinding->found;
           (if found // false then slotName[]->bindingNotFound if)
        #);
-     selectNode:< (# node: ^mps.ast enter node[] do INNER #);
+     selectNode:<
+       (# node: ^mps.ast
+       enter node[]
+       do
+          (if node[] = none then
+              'selectNode: node[] is none!!'->putLine
+           else
+              (if node.frag[] <> frag[] then
+                  INNER selectNode
+               else
+                  (node[],1,0,0)->setfocus
+              if)
+          if)
+       #);
      followSemanticLink:
        (#
           itemSelected: @integer;
@@ -1947,6 +2017,7 @@ codeviewer:
           if);
           
        #);
+     onMiddleButton:< (# pos: @point enter pos do INNER #);
      selectArea:
        (#
           f: @astFocus;
@@ -2117,13 +2188,14 @@ codeviewer:
           if);
           
        #);
-     setContractions:<
+     setContractions:
        (#
           node: ^mps.ast;
           symbol: @mps.nonterminalSymbol;
           expNode: ^mps.expanded
        enter node[]
        do
+          (if node[] = none then cs.node[]->node[] if);
           (if (node.struc <= mps.expanded##)
            // true then
               node[]->expNode[];
@@ -2177,6 +2249,7 @@ codeviewer:
        (# node: ^mps.ast; newComment: ^mps.comment; t: ^text
        enter node[]
        do
+          (if node[] = none then cs.node[]->node[] if);
           (if node.hasComment
            // false then
               (mps.comment,0,frag[])->betaGrammar.newlexemText->newComment[];
@@ -2255,6 +2328,7 @@ codeviewer:
        (# node: ^mps.ast; aComment: ^mps.comment; 
        enter node[]
        do
+          (if node[] = none then cs.node[]->node[] if);
           (if node.hasComment
            // true then
               (if node.typeOfComment
@@ -2272,15 +2346,38 @@ codeviewer:
           if);
           
        #);
+     openAllContractions:
+       (# node: ^mps.ast
+       enter node[]
+       do
+          (if node[] = none then cs.node[]->node[] if);
+          (node[],1000)->openContractionLevel
+       #);
      openContractionLevel:
        (#
           node: ^mps.ast;
           level: @integer;
+          aComment: ^mps.comment;
           anExp: ^mps.expanded;
           openedOne: @boolean;
           
        enter (node[],level)
        do
+          (if node.hasComment
+           // true then
+              (if node.typeOfComment
+               // astView.pp.holocomment then
+                  node.getComment->aComment[];
+                  (if (aComment.curLength > 0)
+                   // true then
+                      astView.pp.normalComment->node.typeOfComment; 
+                   // false then
+                      none ->node.addComment; 
+                  if);
+                  
+              if);
+              
+          if);
           (if node.kind
            // mps.kinds.interior then
               node[]->anExp[];
@@ -2303,6 +2400,33 @@ codeviewer:
                     (#  do (current[],level)->&openContractionLevel #)
               if)
           if)
+       #);
+     doAbstract:
+       (#  do cs.perform (#  do current[]->setContraction #) #);
+     doAbstractRecursively:
+       (#  do cs.perform (#  do current[]->setContractions #) #);
+     doOverview:
+       (# 
+       do
+          ui.cursors.watch[]->UI.mouse.busyCursor;
+          frag.root[]->setContractions;
+          (frag.root[],- 1)->astView.pp.present;
+          cs->setFocus;
+          none ->UI.mouse.busyCursor
+       #);
+     doDetail:
+       (# 
+       do cs.perform (#  do (current[],1)->openContractionLevel #)
+       #);
+     doDetailRecursively:
+       (#  do cs.perform (#  do current[]->openAllContractions #) #);
+     doReprettyprint:
+       (# 
+       do
+          ui.cursors.watch[]->UI.mouse.busyCursor;
+          (frag.root[],- 1)->astView.pp.present;
+          cs->astToSelection;
+          none ->UI.mouse.busyCursor
        #);
      automaticHolocomments:
        (# abstracted: @boolean; 
@@ -2376,6 +2500,22 @@ codeviewer:
               (node[],node[])->astView.pp.update; (node[],1,0,0)->setFocus
           if)
        #);
+     askUndoPermission:< booleanValue;
+     askPastePermission:< booleanValue;
+     askInsertPermission:< booleanValue;
+     askTexteditMode:< booleanValue;
+     doUndo:< object;
+     doCut:< object;
+     doCopy:< object;
+     doPaste:< object;
+     doTextedit:< object;
+     doParseText:< object;
+     doRevertTextedit:< object;
+     doShowTexteditCommands:< object;
+     doInsertBefore:< object;
+     doInsertAfter:< object;
+     doRemoveOptionals:< object;
+     doShowOptionals:< object;
      metaGrammarInit:
        (#
           theMetaGrammar: ^mps.treelevel;
@@ -2438,6 +2578,7 @@ codeviewer:
           &mps.astViewer[]->astView[];
           &windowOutput[]->astView.out[];
           betaGrammar.grammarAst.root[]->grammar[];
+          betaGrammar[]->ag[];
           grammar.getProductionList->prodList[];
           astView.out.init;
           frag.grammar.grammarAst.father->fg[];
@@ -2448,8 +2589,57 @@ codeviewer:
           theSifTextEditor.contents.size->theSifTextEditor.charWidth
             ->astView.pp.width;
           getPropertiesFromGrammar;
+          &editorEnv[]->edenv[]
+            ->objectPool.put
+              (# alreadyThere::<  (#  do true->continue #) #);
+          mps[]->edenv.init;
+          INNER ;
           theSifTexteditor.onOpen;
           
        #)
+  #)  
+
+-- guienvlib: Attributes --
+statusMessage:
+  (# message: ^text; 
+  enter message[]
+  <<SLOT mydialogsStatusMessage:DoPart>>
+  #);
+alert:
+  (# message: ^text; 
+  enter message[]
+  <<SLOT mydialogsAlert:DoPart>>
+  #);
+nonModalAlert:
+  (# message: ^text; 
+  enter message[]
+  <<SLOT mydialogsNonModalAlert:DoPart>>
+  #);
+promptForBoolean:
+  (#
+     message: ^text;
+     confirm:< object;
+     cancel:< object;
+     
+  enter message[]
+  <<SLOT mydialogsPromptForBoolean:DoPart>>
+  #);
+promptForTriBoolean:
+  (# message: ^text; yes:< object; no:< object; cancel:< object; 
+  enter message[]
+  <<SLOT mydialogsPromptForTriBoolean:DoPart>>
+  #);
+promptForText:
+  (#
+     message,defaultText: ^text;
+     confirm:<
+       (# theText: ^text
+       enter theText[]
+       do INNER
+       #);
+     cancel:< object;
+     
+  enter (message[],defaultText[])
+  <<SLOT mydialogsPromptForText:DoPart>>
   #)  
 
