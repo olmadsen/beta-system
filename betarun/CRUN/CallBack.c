@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CallBack.c,v 1.28 1992-10-09 17:56:02 beta Exp $
+ * Mod: $Id: CallBack.c,v 1.29 1992-10-15 10:21:55 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -106,7 +106,10 @@ void *CCopyCPP(ref(Structure) theStruct, ref(Object) theObj)
     CBFATop->mov_o7_g1 = MOV_O7_G1;
     MK_CALL(&CBFATop->call_HandleCallBack, HandleCB);
     CBFATop->nop       = NOP;
-    asm("iflush");		/* Flush the Instruction Cache */
+    /* Flush the Instruction Cache, not nessesary I think [tthorn] */
+    __asm__("iflush %0"::"r" (&CBFATop->mov_o7_g1));
+    __asm__("iflush %0"::"r" (&CBFATop->call_HandleCallBack));
+    __asm__("iflush %0"::"r" (&CBFATop->nop));
     ++CBFATop;
     return (void *)&(CBFATop-1)->mov_o7_g1;
 }
