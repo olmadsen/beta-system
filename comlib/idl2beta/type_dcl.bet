@@ -266,74 +266,97 @@ do_type_spec:
 
 do_type_declarator:
   (# t: ^idl.type_declarator;
+     sd: ^idl.simple_type_declarator;
      info: ^type_info;
      att: ^idl_attributes;
+     name: ^text;
      dcl_info: ^declarator_info;
      d: ^idl.declarators;
      types: ^type_list;
   enter (types[], att[], t[])
-  do t.getdeclarators -> d[];
-     d.newscan
-     (# d: ^idl.declarator;
-     do &type_info[] -> info[] -> types.append;
-        att[] -> info.attributes[];
-        &declarator_info[] -> dcl_info[];
-        info[] -> dcl_info.type[];
-        (* Get the name and pointer level of the type declaration *)
-        (dcl_info[], current[]) -> do_declarator;
-        dcl_info.name.copy -> info.name[];
-        dcl_info.pointer_level -> info.pointer_level;
-        (* done with dcl_info *)
-        (* Fill in the rest of the type *)
-        (info[], types[], t.gettype_spec, true) -> do_type_spec;
-        (if debug then
-            outfile.indent;
-            outfile.CommentBegin;
-            'typedef: ' -> outfile.puttext;
-            info.name[] -> outfile.puttext;
-            ': '-> outfile.puttext;
-            (for info.pointer_level repeat '*' -> outfile.put for);
-            info.representation[] -> outfile.puttext;
-            outfile.CommentEnd;
-            outfile.newline;
-        if);
-     #);
+  do (if t.symbol
+      // idl.fnc_ptr_type_declarator then
+         t[] -> do_fnc_ptr_type_declarator -> (name[], info[]);
+      // idl.simple_type_declarator then
+         t[] -> sd[];
+         sd.getdeclarators -> d[];
+         d.newscan
+         (# d: ^idl.declarator;
+         do &type_info[] -> info[] -> types.append;
+            att[] -> info.attributes[];
+            &declarator_info[] -> dcl_info[];
+            info[] -> dcl_info.type[];
+            (* Get the name and pointer level of the type declaration *)
+            (dcl_info[], current[]) -> do_declarator;
+            dcl_info.name.copy -> info.name[];
+            dcl_info.pointer_level -> info.pointer_level;
+            (* done with dcl_info *)
+            (* Fill in the rest of the type *)
+            (info[], types[], sd.gettype_spec, true) -> do_type_spec;
+         #);
+     if);
+     (if debug then
+         outfile.indent;
+         outfile.CommentBegin;
+         'typedef: ' -> outfile.puttext;
+         info.name[] -> outfile.puttext;
+         ': '-> outfile.puttext;
+         (for info.pointer_level repeat '*' -> outfile.put for);
+         info.representation[] -> outfile.puttext;
+         outfile.CommentEnd;
+         outfile.newline;
+     if)
   #);
 
 do_extern:
   (# t: ^idl.extern;
      td: ^idl.type_declarator;
+     sd: ^idl.simple_type_declarator;
      att: @idl_attributes;
   enter (t[])
-  do (att[],(t.gettype_declarator->td[]).getattributes_specs)
-       -> do_attributes_specs;
-     (if (not compact) and (att.typelib.helpstring[]<>NONE) then
-         outfile.newline;
-         outfile.indent;
-         att.typelib.helpstring[]-> outfile.commentline;
+  do t.gettype_declarator->td[];
+     (if td.symbol
+      // idl.fnc_ptr_type_declarator then
+         td[] -> do_fnc_ptr_type_declarator;
+      // idl.simple_type_declarator then
+         td[] -> sd[];
+         (att[],sd.getattributes_specs) -> do_attributes_specs;
+         (if (not compact) and (att.typelib.helpstring[]<>NONE) then
+             outfile.newline;
+             outfile.indent;
+             att.typelib.helpstring[]-> outfile.commentline;
+         if);
+         (local_types[], att[], t.gettype_declarator) -> do_type_declarator;
      if);
-     (local_types[], att[], t.gettype_declarator) -> do_type_declarator;
   #);
 
 do_typedef:
   (# t: ^idl.typedef;
      td: ^idl.type_declarator;
+     sd: ^idl.simple_type_declarator;
      att: @idl_attributes;
   enter (t[])
-  do (att[],(t.gettype_declarator->td[]).getattributes_specs)
-       -> do_attributes_specs;
-     (if (not compact) and (att.typelib.helpstring[]<>NONE) then
-         outfile.newline;
-         outfile.indent;
-         att.typelib.helpstring[]-> outfile.commentline;
+  do t.gettype_declarator->td[];
+     (if td.symbol
+      // idl.fnc_ptr_type_declarator then
+         td[] -> do_fnc_ptr_type_declarator;
+      // idl.simple_type_declarator then
+         td[] -> sd[];
+         (att[],sd.getattributes_specs) -> do_attributes_specs;
+         (if (not compact) and (att.typelib.helpstring[]<>NONE) then
+             outfile.newline;
+             outfile.indent;
+             att.typelib.helpstring[]-> outfile.commentline;
+         if);
+         (local_types[], att[], t.gettype_declarator) -> do_type_declarator;
      if);
-     (local_types[], att[], t.gettype_declarator) -> do_type_declarator;
   #);
 
 do_struct_type:
   (# t: ^idl.struct_type;
      b: ^idl.struct_body;
      td: ^idl.type_declarator;
+     sd: ^idl.simple_type_declarator; 
      l: ^idl.members;
      do_members:
        (# m: ^idl.members
@@ -342,36 +365,51 @@ do_struct_type:
           (# d: ^idl.declarators;
              mem: ^idl.member;
           do current[] -> mem[];
-             (mem.gettype_declarator->td[]).getdeclarators -> d[];
-             d.newscan
-             (# d: ^idl.declarator;
-                dcl_info: ^declarator_info;
-                info: ^type_info;
-             do outfile.indent;
-                &type_info[] -> info[];
-                &declarator_info[] -> dcl_info[];
-                (dcl_info[], current[]) -> do_declarator;
-                dcl_info.name[] -> outfile.puttext;
-                ': '->outfile.puttext;
-                (if dcl_info.pointer_level>0 then
-                    '^' -> outfile.put;
-                 else
-                    '@' -> outfile.put;
-                if);
-                (info[], local_types[], td.gettype_spec, false) 
-                  -> do_type_spec;
-                info.representation[] -> outfile.puttext;
-                info.as_text -> outfile.spacecomment;
-                (if info.pointer_level>1 then
-                    'Holder' -> outfile.puttext;
-                if);
-                (if info.attributes[]=NONE then
-                    &idl_attributes[]->info.attributes[];
-                if);
-                (info.attributes[],td.getattributes_specs)
-                  -> do_attributes_specs;
-                ';' -> outfile.putline;
-             #);
+             mem.gettype_declarator->td[];
+             (if td.symbol
+              // idl.fnc_ptr_type_declarator then
+                 (# info: ^type_info;
+                    name: ^text;
+                 do td[] -> do_fnc_ptr_type_declarator -> (name[], info[]);
+                    name[] -> outfile.puttext;
+                    ': '->outfile.puttext;
+                    info.representation[] -> outfile.puttext;
+                    info.as_text -> outfile.spacecomment;
+                    ';' -> outfile.putline;
+                 #);
+              // idl.simple_type_declarator then
+                 td[] -> sd[];
+                 sd.getdeclarators -> d[];
+                 d.newscan
+                 (# d: ^idl.declarator;
+                    dcl_info: ^declarator_info;
+                    info: ^type_info;
+                 do outfile.indent;
+                    &type_info[] -> info[];
+                    &declarator_info[] -> dcl_info[];
+                    (dcl_info[], current[]) -> do_declarator;
+                    dcl_info.name[] -> outfile.puttext;
+                    ': '->outfile.puttext;
+                    (if dcl_info.pointer_level>0 then
+                        '^' -> outfile.put;
+                     else
+                        '@' -> outfile.put;
+                    if);
+                    (info[], local_types[], sd.gettype_spec, false) 
+                      -> do_type_spec;
+                    info.representation[] -> outfile.puttext;
+                    info.as_text -> outfile.spacecomment;
+                    (if info.pointer_level>1 then
+                        'Holder' -> outfile.puttext;
+                    if);
+                    (if info.attributes[]=NONE then
+                        &idl_attributes[]->info.attributes[];
+                    if);
+                    (info.attributes[],sd.getattributes_specs)
+                      -> do_attributes_specs;
+                    ';' -> outfile.putline;
+                 #);
+             if)
           #);
        #);
      info: ^type_info;
@@ -629,8 +667,6 @@ do (if d.symbol
        (d[]) -> do_typedef;
     // idl.extern then
        (d[]) -> do_extern;
-    // idl.typedef_fnc_ptr then
-       (d[]) -> do_typedef_fnc_ptr;
     // idl.union_type then
        (NONE, d[]) -> do_union_type;
     // idl.struct_type then
