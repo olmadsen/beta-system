@@ -1,0 +1,484 @@
+ORIGIN '~beta/comlib/comlib';
+INCLUDE '~beta/comlib/dispatchhelp';
+INCLUDE '~beta/comlib/MsApplication/Excel8';
+
+--LIB: attributes--
+trace_com: (# exit false #);
+trace_vb: (# exit true #);
+
+VB:
+  (# stmt: ^text
+  enter stmt[]
+  do (if trace_vb then
+         'VB: ' -> puttext;
+         stmt[] -> putline;
+     if);
+  #);
+
+--PROGRAM: descriptor--
+(# CLSID_XL: ^CLSID;
+   clsstr: @BSTR;
+   IID_IDispatch: @IID;
+   hr: @HRESULT;
+   params: @DISPPARAMS;
+   varg, varg1, varg2: @VARIANT;
+   status: @boolean;
+   
+   pDispExcelApp, pdispWorkBooks, pdispWorkBook, pdispWorksheet, 
+   pdispRange, pdispCharts, pDispChart: ^IDispatch;
+   
+   excel_progid: (# exit 'Excel.Application' #);
+   
+   CleanUp:
+     (# 
+     do (if trace_com then
+            '\nClean up:' -> putline;
+            'Releasing interfaces' -> putline;
+        if);
+        (if pDispExcelApp[]<>NONE then 
+            pDispExcelApp.Release; 
+        if);
+        (if pdispWorkBooks[]<>NONE then 
+            pdispWorkBooks.Release; 
+        if);
+        (if pdispWorkBook[]<>NONE then 
+            pdispWorkBook.Release; 
+        if);
+        (if pdispWorksheet[]<>NONE then 
+            pdispWorksheet.Release; 
+        if);
+        (if pdispRange[]<>NONE then 
+            pdispRange.Release; 
+        if);
+        (if pdispCharts[]<>NONE then 
+            pdispCharts.Release; 
+        if);
+        (if pdispChart[]<>NONE then 
+            pdispChart.Release; 
+        if);
+        dparms.release;
+        (if trace_com then
+            'CoUninitialize'->putline;
+        if);
+        CoUninitialize;
+        (if trace_com then
+            'CoUninitialize done'->putline;
+        if);
+     #);
+   
+   putRangeReal:
+     (# name: ^text;
+        value: @real;
+        vResult: @VARIANT;
+        status: @boolean;
+        pDispRange: ^IDispatch;
+     enter (name[], value)
+     do true -> status;
+        dparms.release;
+        (NONE, name[]) -> dparms.putString;
+        (pDispWorksheet[], 'Range', dparms[], vResult[]) 
+          -> PropertyGetByName
+          -> status;
+        (if not status then
+            'putRangeReal failed' -> putline;
+            leave putRangeReal;
+        if);
+        vResult[] -> VARIANT_init(# do pDispval -> pDispRange[] #);
+        
+        dparms.release;
+        (NONE, value) -> dparms.putReal;
+        (pDispRange[], 'Value', dparms[]) 
+          -> PropertyPutByName
+          -> status;
+        (if not status then
+            'putRangeReal failed' -> putline;
+            leave putRangeReal;
+        if); 
+     exit status
+     #);
+   
+   dParms: @DispatchParams;
+   
+   Values: @TextList;
+do ControlExcel:
+     (# 
+     do 0->CoInitialize;   
+        excel_progid -> clsstr.setText;
+        clsstr[] -> CLSIDFromProgID -> CLSID_XL[];
+        IDispatch_IID -> IID_IDispatch; 
+        
+        (if trace_com then
+            'Create component and get dispinterface'->putLine;
+        if);
+        (CLSID_XL[], NONE, CLSCTX_LOCAL_SERVER, IID_IDispatch[])
+          -> CoCreateInstance->pDispExcelApp[];
+        
+        (if pDispExcelApp[]<>NONE then
+            (if trace_com then
+                'Succeeded creating component.'->putLine;
+            if);
+         else
+            'failed creating component.'->putLine;
+            leave ControlExcel;
+        if);
+
+        (if trace_com then
+            'Invoking pDispExcelApp.Visible:' -> putline;
+        if);
+        (NONE, true) -> dParms.putBoolean;
+        (pDispExcelApp[], 'Visible', dparms[]) -> PropertyPutByName -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        dparms.release;
+        
+        'set wbs = [application].Workbooks' -> VB;
+        (pDispExcelApp[], 'Workbooks', dparms[], varg1[]) 
+          -> PropertyGetByName 
+          -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        varg1[] -> VARIANT_init(# do pdispVal->pdispWorkbooks[] #);
+
+        'set wb = wbs.Add(Template := xlWorksheet)' -> VB;
+        ('Template', xlWorksheet) -> dParms.putInt16;
+        (pdispWorkbooks[], 'Add', dparms[], DISPATCH_METHOD, varg2[]) 
+          -> InvokeByName
+          -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        dparms.release;
+        varg2[] -> VARIANT_init(# do pdispVal->pdispWorkBook[] #);
+        
+        'set ws = wb.Worksheets(1)' -> VB;
+        (NONE,1) -> dParms.putInt16;
+        (pdispWorkBook[], 'Worksheets', dparms[], varg2[]) 
+          -> PropertyGetByName 
+          -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        dparms.release;
+        varg2[] -> VARIANT_init(# do pdispVal->pdispWorkSheet[] #);
+        
+        'set r = ws.Range("B1:E1")' -> VB;
+        (NONE, 'B1:E1') -> dparms.putString;
+        (pdispWorkSheet[], 'Range', dparms[], varg2[]) 
+          -> PropertyGetByName 
+          -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        dparms.release;
+        varg2[] -> VARIANT_init(# do pdispVal->pdispRange[] #);
+        
+        'r.Value = Array("Enroute", "Lost", "Failures", "Successes")' -> VB;
+        Values.init;
+        'Enroute' -> values.append;
+        'Lost' -> values.append;
+        'Failures' -> values.append;
+        'Successes' -> values.append;
+        (NONE, Values[]) -> dparms.putStringArray;
+        (pdispRange[], 'Value', dparms[]) 
+          -> PropertyPutByName 
+          -> status;
+        dparms.release;
+        (if not status then
+            leave ControlExcel;
+        if);
+        
+        'set r = ws.Range("A2:A9")' -> VB;
+        (NONE, 'A2:A9') -> dparms.putString;
+        (pdispWorkSheet[], 'Range', dparms[], varg2[]) 
+          -> PropertyGetByName 
+          -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        dparms.release;
+        varg2[] -> VARIANT_init(# do pdispVal->pdispRange[] #);
+        
+        'r.Value = Array("pack1", "pack2", "pack3", "pack4", "pack5", "pack6", "pack7", "pack8")' -> VB;
+        Values.clear;
+        'pack1' -> values.append;
+        'pack2' -> values.append;
+        'pack3' -> values.append;
+        'pack4' -> values.append;
+        'pack5' -> values.append;
+        'pack6' -> values.append;
+        'pack7' -> values.append;
+        'pack8' -> values.append;
+        (NONE, Values[]) -> dparms.putStringArray;
+        (pdispRange[], 'Value', dparms[]) 
+          -> PropertyPutByName 
+          -> status;
+        dparms.release;
+        (if not status then
+            leave ControlExcel;
+        if);
+        
+        (* Set up values for pack1 *)
+        'ws.Range("B2") = 5.2' -> VB;
+        ('B2', 5.2) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("C2") = 10.0' -> VB;
+        ('C2', 10.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("D2") = 8.0' -> VB;
+        ('D2', 8.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("E2") = 20.0' -> VB;
+        ('E2', 20.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        dparms.release;
+        
+        (* Set up values for pack2 *)
+        'ws.Range("B3") = 5.2' -> VB;
+        ('B3', 5.2) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("C3") = 10.0' -> VB;
+        ('C3', 10.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("D3") = 8.0' -> VB;
+        ('D3', 8.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("E3") = 20.0' -> VB;
+        ('E3', 20.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        dparms.release;
+        
+        (* Set up values for pack3 *)
+        'ws.Range("B4") = 5.2' -> VB;
+        ('B4', 5.2) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("C4") = 10.0' -> VB;
+        ('C4', 10.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("D4") = 8.0' -> VB;
+        ('D4', 8.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("E4") = 20.0' -> VB;
+        ('E4', 20.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        dparms.release;
+        
+        (* Set up values for pack4 *)
+        'ws.Range("B5") = 5.2' -> VB;
+        ('B5', 5.2) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("C5") = 10.0' -> VB;
+        ('C5', 10.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("D5") = 8.0' -> VB;
+        ('D5', 8.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("E5") = 20.0' -> VB;
+        ('E5', 20.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        dparms.release;
+        
+        (* Set up values for pack5 *)
+        'ws.Range("B6") = 5.2' -> VB;
+        ('B6', 5.2) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("C6") = 10.0' -> VB;
+        ('C6', 10.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("D6") = 8.0' -> VB;
+        ('D6', 8.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("E6") = 20.0' -> VB;
+        ('E6', 20.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        dparms.release;
+        
+        (* Set up values for pack6 *)
+        'ws.Range("B7") = 5.2' -> VB;
+        ('B7', 5.2) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("C7") = 10.0' -> VB;
+        ('C7', 10.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("D7") = 8.0' -> VB;
+        ('D7', 8.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("E7") = 20.0' -> VB;
+        ('E7', 20.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        dparms.release;
+        
+        (* Set up values for pack7 *)
+        'ws.Range("B8") = 5.2' -> VB;
+        ('B8', 5.2) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("C8") = 10.0' -> VB;
+        ('C8', 10.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("D8") = 8.0' -> VB;
+        ('D8', 8.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("E8") = 20.0' -> VB;
+        ('E8', 20.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        dparms.release;
+        
+        (* Set up values for pack8 *)
+        'ws.Range("B9") = 5.2' -> VB;
+        ('B9', 5.2) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("C9") = 10.0' -> VB;
+        ('C9', 10.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("D9") = 8.0' -> VB;
+        ('D9', 8.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        'ws.Range("E9") = 20.0' -> VB;
+        ('E9', 20.0) -> putRangeReal -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        dparms.release;
+        
+        'set sourceRange= ws.Range("A1:D2")' -> VB;
+        (NONE, 'A1:D2') -> dparms.putString;
+        (pdispWorkSheet[], 'Range', dparms[], varg2[]) 
+          -> PropertyGetByName 
+          -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        dparms.release;
+        varg2[] -> VARIANT_init(# do pdispVal->pdispRange[] #);
+        
+        'set crts = wb.Charts' -> VB;
+        (pdispWorkbook[], 'Charts', dparms[], varg2[]) 
+          -> PropertyGetByName 
+          -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        dparms.release;
+        varg2[] -> VARIANT_init(# do pdispVal->pdispCharts[] #);
+        
+        'set crt = crts.Add' -> VB;
+        (pdispCharts[], 'Add', dparms[], DISPATCH_METHOD, varg2[]) 
+          -> InvokeByName
+          -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        dparms.release;
+        varg2[] -> VARIANT_init(# do pdispVal->pdispChart[] #);
+        
+        (if false then
+            
+            
+            'crt.ChartWizard source := sourcerange, gallery := xl3DPie, _\n'
+        '    format := 7, plotBy := xlRows, categoryLabels := 1, _\n'
+        '    seriesLabels := 0, haslegend := 2, title := "Sales Percentages"'
+          -> VB;
+        ('title', 'Sales Percentages') -> dparms.putString;
+        (* No legend, see 
+         * http://support.microsoft.com/support/kb/articles/Q133/3/18.asp
+         *)
+        ('hasLegend', 2)         -> dParms.putInt16;
+        (* No Serieslabels are supplied *)
+        ('seriesLabels', 0)      -> dParms.putInt16;
+        (* North, south, east, west are categoryLabels (are in 1 row) *)
+        ('categoryLabels', 1)    -> dParms.putInt16;
+        ('plotBy', xlRows)       -> dParms.putInt16;
+        ('format', 7)            -> dParms.putInt16;
+        ('gallery', xl3DPie)     -> dParms.putInt16;
+        ('source', pDispRange[]) -> dParms.putDispatch;
+        (pdispChart[], 'ChartWizard', dparms[], DISPATCH_METHOD, NONE) 
+          -> InvokeByName
+          -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+            dparms.release;
+            
+        if);
+        
+        'wb.Saved = TRUE' -> VB;
+        (*  so that Excel won\'t ask whether to save doc on close *)
+        (NONE, true) -> dParms.putBoolean;
+        (pDispWorkBook[], 'Saved', dparms[]) -> PropertyPutByName -> status;
+        (if not status then
+            leave ControlExcel;
+        if);
+        dparms.release;
+        
+        
+     #);
+   
+   CleanUp;
+   
+#)
+
+
+
