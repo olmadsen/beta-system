@@ -253,8 +253,9 @@ void IOAGc()
 	sum += IOAAgeTable[IOAtoAOAtreshold++];
       } while ((sum < limit) && (IOAtoAOAtreshold < IOAMaxAge));
     
-    if (limit)
-      IOAtoAOAtreshold +=1; 
+    if (limit && (IOAtoAOAtreshold < IOAMaxAge))
+      IOAtoAOAtreshold +=1;
+    DEBUG_CODE(Claim(IOAtoAOAtreshold <= IOAMaxAge, "IOAtoAOAtreshold <= IOAMaxAge"));
   }
   DEBUG_IOA( fprintf(output, " treshold=%d", (int)IOAtoAOAtreshold));
   DEBUG_IOA( fprintf(output, " AOAroots=%d", 

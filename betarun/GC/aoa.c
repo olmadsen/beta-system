@@ -27,34 +27,74 @@ extern void DoGC(void);
 
 void tempAOArootsAlloc(void)
 {
-    ptr(long) oldPtr;
-    ptr(long) pointer = ToSpaceLimit; /* points to end of old table */
-
-    MCHECK();
-    if ( ! (tempAOAroots = (long *) MALLOC(IOASize)) ){
-      char buf[300];
-      sprintf(buf, "Could not allocate temporary AOAroots table.");
-#ifdef MAC
-      EnlargeMacHeap(buf);
-#else
-	  Notify(buf);
-#endif
-      BetaExit(1);
-    } 
-    AOArootsLimit = (long *) ((char *) tempAOAroots + IOASize);
-    INFO_IOA(fprintf(output, 
-		     "\nallocated temporary AOAroots table: %dKb, ",
-		     (int)IOASize/1024
-		     ));
-    DEBUG_IOA(fprintf(output, " [0x%x] ", (int)tempAOAroots));
-    oldPtr = AOArootsPtr; /* start of old table */
-    AOArootsPtr = AOArootsLimit; /* end of new table */
+    ptr(long) oldPtr;        /* start of old table */
+    ptr(long) oldlimitPtr;   /* points to end of old table */
+    long size;
     
-    MCHECK();
-    /* Copy old table backwards */
-    while(pointer > oldPtr) *--AOArootsPtr = *--pointer; 
-    MCHECK();
-
+    if (tempAOAroots) {
+        DEBUG_CODE(Claim(AOArootsPtr == tempAOAroots, "AOArootsPtr == tempAOAroots"));
+        oldPtr = AOArootsPtr;
+        oldlimitPtr = AOArootsLimit;
+        size = 2 * ((long)oldlimitPtr - (long)oldPtr);
+        
+        MCHECK();
+        
+        if (!(tempAOAroots = (long *) MALLOC(size))) {
+            char buf[300];
+            sprintf(buf, "Could not allocate temporary AOAroots table.");
+#ifdef MAC
+            EnlargeMacHeap(buf);
+#else
+            Notify(buf);
+#endif
+            BetaExit(1);
+        } 
+        AOArootsLimit = (long *) ((long)tempAOAroots + size);
+        AOArootsPtr = AOArootsLimit; /* end of new table */
+        INFO_IOA(fprintf(output, 
+                         "\nReallocated temporary AOAroots table: %dKb, ",
+                         (int)size/1024
+                         ));
+        DEBUG_IOA(fprintf(output, " [0x%x] ", (int)tempAOAroots));
+        
+        MCHECK();
+        /* Copy old table backwards */
+        while(oldlimitPtr > oldPtr) *--AOArootsPtr = *--oldlimitPtr; 
+        MCHECK();
+        FREE(oldPtr);
+    } else {
+        oldPtr = AOArootsPtr;
+        oldlimitPtr = ToSpaceLimit; 
+        size = 2 * ((long)oldlimitPtr - (long)oldPtr);
+        if (size < IOASize) {
+            size = IOASize;
+        }
+        
+        MCHECK();
+        if (!(tempAOAroots = (long *) MALLOC(size))) {
+            char buf[300];
+            sprintf(buf, "Could not allocate temporary AOAroots table.");
+#ifdef MAC
+            EnlargeMacHeap(buf);
+#else
+            Notify(buf);
+#endif
+            BetaExit(1);
+        } 
+        AOArootsLimit = (long *) ((long)tempAOAroots + size);
+        INFO_IOA(fprintf(output, 
+                         "\nallocated temporary AOAroots table: %dKb, ",
+                         (int)size/1024
+                         ));
+        DEBUG_IOA(fprintf(output, " [0x%x] ", (int)tempAOAroots));
+        oldPtr = AOArootsPtr; /* start of old table */
+        AOArootsPtr = AOArootsLimit; /* end of new table */
+        
+        MCHECK();
+        /* Copy old table backwards */
+        while(oldlimitPtr > oldPtr) *--AOArootsPtr = *--oldlimitPtr; 
+        MCHECK();
+    }
 }
 
 void tempAOArootsFree(void)

@@ -275,10 +275,12 @@ do {                               \
 #define TRACE_SAVE_AOA_ROOT()
 #endif
 
-#define saveAOAroot(cell)				   \
-  { if (ToSpaceTop == AOArootsPtr) tempAOArootsAlloc();    \
-    TRACE_SAVE_AOA_ROOT();                                 \
-    *--AOArootsPtr = (long) (cell);                        \
+#define saveAOAroot(cell)				              \
+  { if ((ToSpaceTop == AOArootsPtr) || (tempAOAroots==AOArootsPtr)) { \
+       tempAOArootsAlloc();                                           \
+    }                                                                 \
+    TRACE_SAVE_AOA_ROOT();                                            \
+    *--AOArootsPtr = (long) (cell);                                   \
   }
 
 #define BETA_DATA1_ADDR &BETA_DATA
