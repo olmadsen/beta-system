@@ -14,9 +14,6 @@ ParamThisComp(void, AttBC)
 {
     register long *entrypoint;
 
-#ifdef crts
-#endif
-
 #ifdef sparc
     register ref(CallBackFrame) callBackFrame asm("%l5");
     register ref(RegWin)	nextCompBlock asm("%l6");
@@ -39,11 +36,14 @@ ParamThisComp(void, AttBC)
     */
 
     Ck(comp);
+
     /* Push the bottom component block. */
     /* Terminates the list of component blocks on the stack. */
+
 #ifdef crts
-    fprintf(output, "AttachBasicComponent NYI\n");
+    fprintf(output, "CRTS: AttBC: No ComponentBlock placed on stack (NYI)\n");
 #endif
+
 #ifdef sparc
     callBackFrame = cast(CallBackFrame) 0;
     nextCompBlock = cast(RegWin) 0;
