@@ -50,6 +50,7 @@ ValRep *CopyCT_W(unsigned char *textPtr, long *SP)
 {
     ValRep *theRep;
     register unsigned range, size;
+    int i;
 
     DEBUG_CODE(NumCopyCT++);
 

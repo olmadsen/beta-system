@@ -104,8 +104,8 @@ Item *CopyT_W(char *asciz,
   
   /* Assign the text to the body part of the repetition. */
   for (i = 0; i < (size-headsize(ValRep)); i++){
-    /* printf("CopyT_W: %c\n", ascii + i); */
-    *((unsigned short*)theRep->Body[0]+i) = *(ascii + i);
+    /* printf("CopyT_W: %c\n", asciz + i); */
+    *((unsigned short*)theRep->Body[0]+i) = *(asciz + i);
   }
   
   /* return the (possibly moved) item */
