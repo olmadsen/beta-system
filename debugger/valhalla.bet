@@ -1,64 +1,79 @@
-ORIGIN '~beta/basiclib/v1.4/basicsystemenv';
-BODY '~beta/guienv/v1.2/private/X11/guienvxsystemenvbody';
+ORIGIN '~beta/guienv/v1.2/guienvsystemenv';
+BODY 'private/valhallabody';
 
-INCLUDE 'UI/valhallaGUI';
 INCLUDE 'processInterface';
 INCLUDE 'processCommCodes';
+INCLUDE 'breakpoints';
+
+INCLUDE 'UI/valhallaGUI';
 INCLUDE 'UI/GUIprocess';
 INCLUDE 'UI/stackview';
 INCLUDE 'UI/objectviewadds';
 INCLUDE 'UI/codemoveable';
 INCLUDE 'UI/grouplist';
-INCLUDE 'valhallaoptionlist';
-INCLUDE 'valhallaiconlist';
+INCLUDE 'UI/enveditor';
 
-INCLUDE '~beta/objectbrowser/v2.0/options';
-INCLUDE '~beta/objectbrowser/v2.0/optionlist';
 INCLUDE '~beta/objectbrowser/v2.0/systemenvcoroutinespawner';
-INCLUDE '~beta/objectbrowser/v2.0/UI/icons';
-INCLUDE '~beta/objectbrowser/v2.0/UI/iconlist';
 INCLUDE '~beta/objectbrowser/v2.0/UI/moveable';
 
 INCLUDE '~beta/guienv/v1.2/stddialogs';
 
-INCLUDE '~beta/sysutils/v1.4/envstring';
+BETARUN default '~beta/debugger/v2.0/betarun/$/betarunv.o';
+(*OBJFILE default '~beta/debugger/v2.0/betarun/$/C/valhallaFIFOS.o';*)
 
-(*BETARUN default '~beta/debugger/v2.0/betarun/$/betarun.debug';*)
+--- lib:attributes ---
 
-OBJFILE default '~beta/debugger/v2.0/betarun/$/C/valhallaFIFOS.o';
+DEFAULT_RECTANGLE: (# exit ((0,0),(250,250)) #);
 
 --- program:descriptor ---
 systemenv
 (# windowEnvType:: valhallaGUI;
    setWindowEnv:: (# do gui[]->theWindowEnv[] #);
    
-   DEFAULT_RECTANGLE: (# exit ((0,0),(200,100)) #);
-   
    thespawner: @systemenvspawner;
    
-   debuggee: ^gui.GUIprocess;
-   sources: ^sourcesType;
-   sourcesType: gui.directoryMenu
-     (# eventHandler::
-          (# onAboutToClose:: (# do NONE->sources[] #);
+   debuggee: ^gui.GUIprocess; (* The process being debugged. *)
+   sources: ^sourcesType;     (* source browser for debuggee. *)
+   
+   sourcesType: gui.sourceBrowser
+     (# onClose:: (# do NONE->sources[] #);
+        openCodeView:: (# do ff.root[]->newcodemoveable #);
+        codeViewExists::
+          (# 
+          do ff.root[]->newcodemoveable
+             (# openIfNotFound:: 
+                  (# 
+                  do FALSE->value->THIS(codeViewExists).value
+                  #);
+                wriggleIfFound::
+                  (# 
+                  do gui.main.bringToFront;
+                     TRUE->value->THIS(codeViewExists).value
+                  #);
+             #);
           #);
+        generalInfo:: (# do inf[]->gui.putinfo #);
+        errorInfo:: (# do (inf[],'ERROR!')->gui.alertInfo #);
+        continue:: (# do (if debuggeeIsReady then doContinue if) #);
+        processIsReady:: (# do debuggeeIsReady->value #);
      #);
    
-   debuggeeIsRunning:
-     (# value: @Boolean
+   theEnveditor: ^enveditType; (* Environment editor. *)
+   enveditType: gui.envEditor (# onClose:: (# do NONE->theEnveditor[] #)#);
+   
+   debuggeeIsRunning: BooleanValue
+     (# 
      do (if debuggee[]<>NONE then 
             (debuggee.running) and (not debuggee.terminated)->value 
          else FALSE->value
         if);
-     exit value
      #);
-   debuggeeIsReady: 
-     (# value: @Boolean
+   debuggeeIsReady: BooleanValue
+     (# 
      do (if debuggee[]<>NONE then 
             (not debuggee.running) and (not debuggee.terminated)->value 
          else FALSE->value
         if);
-     exit value
      #);
    ensureKilled:
      (# 
@@ -69,63 +84,16 @@ systemenv
         if);
      #);
    
-   globalOptions: @optionDB;
-   getOption: globalOptions.getBooleanOption
-     (# defaultValue:< BooleanValue;
-        optvalue: @Boolean;
-        found:: (# do value->optvalue #);
-        notfound: (# do defaultValue->optvalue #);
-     exit optvalue
-     #);
-   setOption: globalOptions.setBooleanOption (# #);
-   
-   icons: @gui.iconDB
-     (# movIcon, stackIcon, codeIcon: ^bitmap;
-        getIcon::
-          (# newIcon:
-               (# fileName: ^Text;
-                  icon: ^bitmap;
-               enter fileName[]
-               do
-                  &bitmap[] -> icon[];
-                  '$(BETALIB)/bitmap/'->fileName.prepend;
-                  fileName[]->expandEnvVar
-                  (# defaultvalue::
-                       (# do '/usr/local/lib/beta/'->envvarvalue[] #) 
-                  #)->icon.readFromX11File;
-               exit icon[]
-               #);
-          do (if TRUE
-              //ObjectViewIcon -> name.equalNCS then
-                 (if movIcon[]//NONE then
-                     'ObjectViewIcon.xbm'->newIcon->movIcon[];
-                 if);
-                 movIcon[]->theIcon[];
-              //StackViewIcon -> name.equalNCS then
-                 (if stackIcon[]//NONE then
-                     'StackViewIcon.xbm'->newIcon->stackIcon[];
-                 if);
-                 stackIcon[]->theIcon[];
-              //CodeViewIcon -> name.equalNCS then
-                 (if codeIcon[]//NONE then
-                     'CodeViewIcon.xbm'->newIcon->codeIcon[];
-                 if);
-                 codeIcon[]->theIcon[];
-             if);
-          #);       
-     #);
-   
+   olmDummy2: @getFrame;
    getFrame:
-     (# dodrag: @Boolean;
-        done:<
+     (# done:<
           (# result: @rectangle;
           enter result
           do INNER
           #);
-     do dragOutlineOnOpen->getOption 
-        (# defaultValue:: TrueObject #)->dodrag;
-        
-        (if dodrag then
+        olmDummy: @done
+     do 
+        (if dragOutlineOnOpen->gui.getOption then
             DEFAULT_RECTANGLE->gui.main.objworld.getOutline
             (# done:: (# do result->THIS(getFrame).done #)#)
          else
@@ -135,503 +103,351 @@ systemenv
    
    newExecName:
      (# execName: ^Text;
-     do 
-        gui.main[]->gui.fileSelectionDialog->execName[];
+     do gui.main[]->gui.fileSelectionDialog->execName[];
         (if execName[]<>NONE then
             execName[]->setEXECNAMEparam;
         if);
      exit execName[]
      #);
    
-   newDebuggee:
+   runNewDebuggee:
      (# success: @Boolean;
         rerun: @Boolean;
      enter rerun
-     do
-        TRUE->success;
-        
-        (if debuggee[]<>NONE then
-            (if not debuggee.terminated then debuggee.kill if);
-            (if not rerun then NONE->debuggee[] if);
-        if);
-        
-        (if getEXECNAMEparam=NONE then
-            (if newExecName=NONE then leave newDebuggee if);
-        if);
-        
-        rerun and (debuggee[]<>NONE) -> rerun;
-        
-        doinit:
-          (if not rerun then
-              (if sources[]<>NONE then
-                  sources.close; NONE->sources[];
-              if);
-              &gui.GUIprocess[]->debuggee[];
-        
-              debuggee.init
-              (# doingExpensiveRead:: 
-                   (# t: @Text;
-                   do 'Creating debug info cache (%s)' -> t.putFormat
-                      (# 
-                      do dbName[]->s;
-                      #);
-                      t[]->gui.putinfo;
-                   #);
-                 doingCheapRead:: 
-                   (# t: @Text;
-                   do 'Reading debug info cache (%s)' -> t.putFormat
-                      (# 
-                      do dbName[]->s;
-                      #);
-                      t[]->gui.putinfo;
-                   #);
-                 createFragInfo:: TrueObject;
-                 creationFailed::
-                   (# t: @Text;
-                   do 'Failed to create debug info cache (%s)'->t.putFormat
-                      (# 
-                      do dbName[]->s
-                      #);
-                      t[]->gui.putInfo;
-                      (t[],'Debug Info Cache Error')
-                        ->gui.alertinfo; 
-                      TRUE->continue;
-                   #);
-                 execNotFound::
-                   (# t: @Text;
-                   do 'Executable "%s" not found'->t.putFormat
-                      (# 
-                      do getEXECNAMEparam->s
-                      #);
-                      t[]->gui.putInfo;
-                      (t[],'Executable not found')
-                        ->gui.alertinfo; 
-                      FALSE->success; 
-                      NONE->debuggee[];
-                      leave doinit;
-                   #);
-                 forkFailed::
-                   (# t: @Text;
-                   do 'Could not fork "%s"'->t.putFormat
-                      (# 
-                      do getEXECNAMEparam->s
-                      #);
-                      t[]->gui.putInfo;
-                      (t[],'Fork Failure')
-                        ->gui.alertinfo;
-                      FALSE->success; 
-                      NONE->debuggee[];
-                      leave doinit;
-                   #);
-              #);
-           else
-              debuggee.rerun
-              (# execNotFound::
-                   (# t: @Text;
-                   do 'Executable "%s" not found'->t.putFormat
-                      (# 
-                      do getEXECNAMEparam->s
-                      #);
-                      t[]->gui.putInfo;
-                      (t[],'Executable not found')
-                        ->gui.alertinfo; 
-                      FALSE->success; 
-                      NONE->debuggee[];
-                      leave doinit;
-                   #);
-                 forkFailed::
-                   (# t: @Text;
-                   do 'Could not fork "%s"'->t.putFormat
-                      (# 
-                      do getEXECNAMEparam->s
-                      #);
-                      t[]->gui.putInfo;
-                      (t[],'Fork Failure')->gui.alertinfo;
-                      FALSE->success; 
-                      leave doinit;
-                   #);
-                 modtimeChanged::
-                   (# s: @|system
-                        (#  t:@Text;
-                        do 'Executable "%s" changed'
-                             ->t.putFormat (# do execName[]->s #);
-                           (t[],'Reading Debug Info')->gui.alertInfo;
-                        #);
-                   do s[]->fork; 1->sleep; FALSE->rerun; 
-                      restart doinit;
-                   #);
-              #)
-          if);
-        
-        (if not success then
-            NONE->debuggee[];
-         else
-            (# t: @Text;
-            do 'Ready to debug %s (PID=%d)'->t.putFormat
-               (# 
-               do getEXECNAMEparam->s; getPIDparam->d;
-               #);
-               t[]->gui.putinfo; 
-            #)
-        if);
+     do <<SLOT runnewdebuggee:descriptor>>
      exit success
      #);
    
-   procconn:
-     (# bo: ^remoteBetaObject;
-     do
-        debuggee.processComm.continue;
-        'Debuggee is running'->gui.putinfo;
-        debuggee.processComm.wait;
-        
-        (if debuggeeIsReady then
-            'Debuggee stopped'->gui.putinfo;
-            (debuggee.curObj,debuggee.rd[])->NewRemoteObject->bo[];
-            (if not bo.isNone then
-                (bo[],FALSE)->gui.main.OpenMoveableObjectView
-                (# getFather:: (# do gui.main.objworld[]->father[]#)#);
-             else
-                'Current Object was NONE'->gui.putinfo;
-            if);
-         else
-            'Debuggee terminated'->gui.putinfo;
+   setStepIntoBreaks:
+     (# uss: @debuggee.userSingleStepBreaker
+          (# init::<
+               (# cancelled:: (# do TRUE->continue #);
+                  unknownCode::
+                    (#
+                    do ('Missing debug info. Cannot step.','Warning')
+                         ->gui.alertInfo;
+                       TRUE->continue;
+                    #);
+               #);
+          #);
+     exit not uss.init
+     #);
+
+   setStepOverBreaks:
+     (# uss: @debuggee.userStepOverBreaker
+          (# init::<
+               (# cancelled:: (# do TRUE->continue #);
+                  unknownCode::
+                    (#
+                    do ('Missing debug info. Cannot step.','Warning')
+                         ->gui.alertInfo;
+                       TRUE->continue;
+                    #);
+               #);
+          #);
+     exit not uss.init
+     #);
+
+   doStepOver:
+     (#
+     do (if debuggeeIsReady then 
+            (if setStepOverBreaks then doContinue if)
         if);
      #);
+   doStepInto: 
+     (# 
+     do (if debuggeeIsReady then 
+            (if setStepIntoBreaks then doContinue if)
+        if);
+     #);
+   doContinue:
+     (#
+     do debuggee.processComm.continue;
+        'Running'->gui.putpinfo;
+        waitersem.V;
+     #);
+   doStop:
+     (# 
+     do (if debuggeeIsRunning then 
+            TRUE->stopped; debuggee.processComm.stop 
+        if)
+     #);
    
-   mystackview: gui.main.stackview
-     (# openNewObjectView:: gui.main.OpenMoveableObjectView
-          (# getFather:: (# do gui.main.objworld[]->father[]#)#);
-        openNewCodeView::
-          (# 
-          do cast[]->newcodemoveable;
+   stopped: @Boolean; (*  TRUE if doStop was called. *)
+   
+   (* procwaiter
+    * ==========
+    * 
+    * procwaiter is a coroutine doing the job of waiting for the debuggee
+    * to stop. Using a separate coroutine for this job allows valhalla to
+    * handle user-events while waiting.
+    * 
+    * procwaiter blocks on waitersem until it should wait for the debuggee
+    * to stop. Then it blocks on a call to debuggee.processComm.wait. *)
+   
+   waitersem: @semaphore; 
+   procwaiter: @|System (# do <<SLOT procwaiter:descriptor>> #);
+   
+   
+   mystackview: gui.main.stackviewmoveable
+     (# listEncloserType::
+          (# openNewCodeView:: (# do cast[]->newcodemoveable #);
+             openNewObjectView:: 
+               (# 
+               do (bo[],force)->gui.main.OpenMoveableObjectView
+                  (# getFather:: (# do gui.main.objworld[]->father[]#)#)
+               #);
+             alertInfo:: (# do (inf[],title[])->gui.alertInfo #);
           #);
      #);
    
+   mycodeview: gui.main.codemoveable
+     (# editorEncloserType::
+          (# continue:: (# do (if debuggeeIsReady then doContinue if) #);
+             processIsReady:: (# do debuggeeIsReady->value #);
+             newCodeView:: (# do node[]->newcodemoveable #);
+             generalInfo:: (# do inf[]->gui.putinfo #);
+             errorInfo:: (# do (inf[],'Error!')->gui.alertInfo #);
+          #);
+     #);
+   
+   lastEditor: ^gui.main.codemoveableEditor;
    newcodemoveable: 
-     (# cast: ^debuggee.AST.ast;
+     (# openIfNotFound:< BooleanValue (# do true->value; INNER #);
+        wriggleIfFound:< BooleanValue
+          (# found: ^gui.main.codemoveableEditor;
+          enter found[]
+          do true->value; INNER
+          #);
+        cast: ^astInterface.ast;
      enter cast[]
-     do 
-        findCode: gui.codeViewList.scan
-          (# end:: getFrame
-               (# done::
-                    (# 
-                    do (gui.main.objworld[],result,debuggee[],cast[])
-                         ->(&gui.main.codemoveable[]).open;
-                    #);
-               #);
-          do (if current.frag.root[]->cast.frag.root.equal then
-                 cast[]->current.select;
-                 current.wriggle;
-                 leave findCode;
-             if);
-          #); 
+     <<SLOT newcodemoveable:dopart>>
      #);
    
    newstackview:
-     (# comp: ^remoteBetaObject;
+     (# comp: ^processInterface.remoteBetaObject;
      enter comp[]
-     do findStack: gui.stackViewList.scan
-          (# end:: getFrame
-               (# done::
-                    (# 
-                    do (gui.main.objworld[],result,comp[],debuggee[])
-                         ->(&mystackview[]).open;
-                    #);
-               #);
-          do (if current.component[]->comp.equal then
-                 current.wriggle;
-                 leave findStack;
-             if);
-          #); 
+     <<SLOT newstackviewbody:dopart>>
      #);
    
    gui: @valhallaGUI
-     (# onQuit::
+     (# 
+        (* The following final bound virtuals are declared in valhallaGUI,
+         * and called by menus and buttons in the user-interface. *)
+        
+        newDebuggee::
           (# 
-          do (if debuggeeIsReady then debuggee.kill; onTerminate if);
-          #);
-        onTerminate::
-          (# 
-          do 0->setPIDparam;
-             main.moveables.scan (# do current.close #);
+          do (if newExecName<>NONE then ensureKilled FALSE->runNewDebuggee if)
           #);
         
-        onMoveablesInsert::
-          (# mov: ^main.moveableObjectView;
-             addmovItems: mov.addObjectViewMoveableMenuItems
-               (# show:: (# do comp[]->newstackview #)#);
-             addItemMenuItems: mov.addObjectViewItemMenuItems
-               (# show:: (# do comp[]->newstackview #)#);
-          do (if true
-              //(theMoveable## <= main.stackview##) then
-                 theMoveable[]->stackViewList.append;
-              //(theMoveable## <= main.moveableObjectView##) then
-                 theMoveable[]->mov[];
-                 addmovItems##->mov.movMenu.onOpen.appendAction;
-                 addItemMenuItems##
-                   ->mov.contents.list.itemMenu.onOpen.appendAction;
-              //(theMoveable## <= main.codemoveable##) then
-                 theMoveable[]->codeViewList.append;
+        debuggeeRerun::
+          (# 
+          do (if rerunStatus then ensureKilled; TRUE->runNewDebuggee if)
+          #);;
+        rerunStatus::
+          (# 
+          do (if debuggee[]<>NONE then
+                 debuggeeIsReady or debuggee.terminated ->value;
+              else
+                 TRUE->value;
+             if);
+             value and (getEXECNAMEparam<>NONE)->value;
+          #);
+        
+        killDebuggee::
+          (#
+          do (if debuggeeIsReady then ensureKilled; 'Killed'->putpinfo if)
+          #);
+        killStatus:: debuggeeIsReady;
+                       
+        source:: 
+          (#
+          do (if debuggeeIsReady then
+                 (if sources[]<>NONE then sources.wriggle;
+                  else  &sourcesType[]->sources[]; debuggee[]->sources.open;
+                 if);
+             if)
+          #);
+        sourceStatus:: debuggeeIsReady;
+        
+        
+        editenv::
+          (# 
+          do (if theEnveditor[]<>NONE then theEnveditor.wriggle;
+              else &envedittype[]->theEnveditor[]; theEnveditor.open;
+             if);
+          #);
+        editenvStatus:: TrueObject;
+        
+        quit:: 
+          (# 
+          do (if debuggeeIsReady then debuggee.kill; onTerminate if)
+          #);
+        
+        debuggeeContinue:: (# do (if continueStatus then doContinue if) #);
+        continueStatus:: debuggeeIsReady;
+        
+        debuggeeStepOver:: (# do doStepOver #);
+        stepOverStatus:: debuggeeIsReady;
+        
+        debuggeeStepInto::
+          (# 
+          do doStepInto;
+          #);
+        stepIntoStatus:: debuggeeIsReady;
+        
+        debuggeeStop:: (# do doStop #);
+        stopStatus:: debuggeeIsRunning;
+        
+        debuggeeActiveStack:: 
+          (# 
+          do (if activeStackStatus then
+                 debuggee.currentRemoteComponent->newstackview
+             if);
+          #);
+        activeStackStatus::
+          (# 
+          do (if (debuggeeIsReady->value) then
+                 (debuggee.curComp<>0)->value 
              if);
           #);
         
-        stackViewList: @list (# element:: main.stackview #);
-        codeViewList: @list (# element:: main.codemoveable #);
-        
-        onMoveablesDelete::
+        debuggeeCurObj::
           (# 
-          do (if true
-              //(theMoveable## <= main.stackview##) then
-                 theMoveable[]->stackViewList.at->stackViewList.delete;
-              //(theMoveable## <= main.codemoveable##) then
-                 theMoveable[]->codeViewList.at->codeViewList.delete;
+          do (if curObjStatus then
+                 (debuggee.currentRemoteBetaObject,FALSE)
+                   ->gui.main.OpenMoveableObjectView
+                 (# getFather:: (# do gui.main.objworld[]->father[]#)#)
              if);
           #);
+        curObjStatus::
+          (# 
+          do (if (debuggeeIsReady->value) then (debuggee.curObj<>0)->value if);
+          #);
+        
+        debuggeeCurCode:: (# do <<SLOT debuggeeCurCode:descriptor>> #);
+        curCodeStatus::< debuggeeIsReady;
+        
+        debuggeeCurComp::
+          (# 
+          do (if curCompStatus then
+                 (debuggee.currentRemoteComponent,FALSE)
+                   ->gui.main.OpenMoveableObjectView
+                 (# getFather:: (# do gui.main.objworld[]->father[]#)#)
+             if);
+          #);
+        curCompStatus::
+          (# 
+          do (if (debuggeeIsReady->value) then (debuggee.curComp<>0)->value if)
+          #);
+        
+        onTerminate:: 
+          (#
+          do 0->setPIDparam; 
+             main.objectviews.scan (# do current.encl.tryclose #);
+             main.stackviews.scan (# do current.encl.tryclose #);
+          #);
+        
+        onMoveablesInsert:: (# #);
         
         mainType::
-          (# menuBarType::
-               (# fileMenuType::
-                    (#
-                       newItem: @menuItem
-                         (# open:: (# do 'New'->name; 'N'->key #);
-                            eventHandler::
-                              (# onSelect::
-                                   (#
-                                   do (if newExecName<>NONE then
-                                          ensureKilled;
-                                          FALSE->newDebuggee;
-                                      if);
-                                   #);
-                              #);
-                         #);
-                       
-                       rerunItem: @menuItem
-                         (# open:: (# do 'Rerun'->name; 'R'->key; #);
-                            eventHandler::
-                              (# onSelect::
-                                   (#
-                                   do (if enabled then
-                                          ensureKilled;
-                                          TRUE->newDebuggee;
-                                      if);
-                                   #);
-                                 onStatus:: (# do enabled->value #);
-                                 enabled: 
-                                   (# value: @Boolean;
-                                   do (if debuggee[]<>NONE then
-                                          debuggeeIsReady or 
-                                          debuggee.terminated ->value;
-                                       else
-                                          TRUE->value;
-                                      if);
-                                      value and (getEXECNAMEparam<>NONE)
-                                        ->value;
-                                   exit value
-                                   #);
-                              #);
-                         #);
-                       
-                       killItem: @menuItem
-                         (# open:: (# do 'Kill'->name; 'K'->key; #);
-                            eventHandler::
-                              (# onSelect::
-                                   (#
-                                   do (if enabled then 
-                                          ensureKilled; 
-                                          'Debuggee killed'->putinfo;
-                                      if);
-                                   #);
-                                 onStatus:: (# do enabled->value #);
-                                 enabled: (# exit debuggeeIsReady #);
-                              #);
-                         #);
-                       
-                       sourcesItem: @menuitem
-                         (# open:: (# do 'BETA Sources...'->name #);
-                            eventHandler::
-                              (# onSelect::
-                                   (# 
-                                   do (if enabled then
-                                          (if sources[]<>NONE then
-                                              sources.wriggle;
-                                           else
-                                              &sourcesType[]->sources[];
-                                              debuggee[]->sources.open;
-                                          if);
-                                      if);
-                                   #);
-                                 onStatus:: (# do enabled->value #);
-                                 enabled: (# exit debuggeeIsReady #);
-                              #);
-                         #);
-                       
-                       continueItem: @menuItem
-                         (# open:: (# do 'Continue'->name; 'C'->key; #);
-                            eventHandler::
-                              (# onSelect::
-                                   (# 
-                                   do (if debuggeeIsReady then procconn if);
-                                   #);
-                                 onStatus:: (# do debuggeeIsReady->value #);
-                              #)
-                         #);
-                       
-                       showStackItem: @menuItem
-                         (# open:: 
-                              (# 
-                              do 'Active Stack'->name;
-                                 'A'->key;
-                              #);
-                            eventHandler::
-                              (# onSelect::
-                                   (# 
-                                   do (if enabled then
-                                          (debuggee.curComp,debuggee.rd[])
-                                            ->newRemoteObject->newstackview
-                                      if);
-                                   #);
-                                 onStatus:: 
-                                   (#
-                                   do enabled->value
-                                   #);
-                                 enabled:
-                                   (# value: @Boolean;
-                                   do (if (debuggeeIsReady->value) then
-                                          (debuggee.curComp<>0)->value;
-                                      if);
-                                   exit value
-                                   #);
-                              #)
-                         #);
-                       
-                       open::
-                         (# 
-                         do newItem.open; newItem[]->append;
-                            rerunItem.open; rerunItem[]->append;
-                            killItem.open; killItem[]->append;
-                            continueItem.open; continueItem[]->append;
-                            showStackItem.open; showStackItem[]->append;
-                            sourcesItem.open; sourcesItem[]->append;
-                         #);
+          (# stackviews: @stackviewlistlist
+               (# onInsert::
+                    (# 
                     #);
-                  optionsMenu: @Menu
-                    (# optionItem: menuItem
-                         (# optionName: ^Text;
-                            itemName: ^Text;
-                            optvalue: @Boolean;
-                            open::<
-                              (# defaultValue:< BooleanObject; 
-                              do INNER; (* Set optionName and itemName *)
-                                 itemName[]->name;
-                                 optionName[]->getOption
-                                 (# defaultValue:: 
-                                      (# 
-                                      do THIS(open).defaultValue->value;
-                                      #);
-                                 #)->optvalue->checked;
-                              #);
-                            eventHandler::
-                              (# onSelect:: 
-                                   (# 
-                                   do not optvalue->optvalue->checked;
-                                      (optionName[],optvalue)->setOption;
-                                   #);
-                              #);
-                         #);
-                       
-                       dragOnOpenItem: @optionItem
-                         (# open::
-                              (# defaultValue:: TrueObject;
-                              do 'Resize Views on Open'->itemName[];
-                                 dragOutlineOnOpen->optionName[];
-                              #)
-                         #);
-                       charRepOnAlineItem: @optionItem
-                         (# open:: 
-                              (#
-                              do 'One-line char repetitions'->itemName[];
-                                 charRepOnALine->optionName[];
-                              #);
-                         #);
-                       invisibleOriginsItem: @optionItem
-                         (# open:: 
-                              (# 
-                              do 'Invisible Origins'->itemName[];
-                                 invisibleOrigins->optionName[]
-                              #);
-                         #);
-                       shortObjectTitlesItem: @optionItem
-                         (# open::
-                              (# 
-                              do 'Short Object Types'->itemName[];
-                                 useShortObjectTitles->optionName[]
-                              #);
-                         #);
-                       shortCodeItem: @optionItem
-                         (# open::
-                              (# 
-                              do 'Short Code Descriptions'->itemName[];
-                                 useShortCodeNames->optionName[];
-                              #);
-                         #);
-                       numberObjectsItem: @optionItem
-                         (# open::
-                              (# 
-                              do 'Number Objects'->itemName[];
-                                 numberObjects->optionName[]
-                              #);
-                         #);
-                       readLabelsItem: @optionItem
-                         (# open::
-                              (# 
-                              do 'Read labels on startup'->itemName[];
-                                 readLabelsOnStartUp->optionName[];
-                              #);
-                         #);
-                       open::
-                         (# 
-                         do  'Preferences'->name;
-                            dragOnOpenItem.open;
-                            dragOnOpenItem[]->append;
-                            charRepOnALineItem.open; 
-                            charRepOnALineItem[]->append;
-                            invisibleOriginsItem.open; 
-                            invisibleOriginsItem[]->append;
-                            shortObjectTitlesItem.open; 
-                            shortObjectTitlesItem[]->append;
-                            shortCodeItem.open;
-                            shortCodeItem[]->append;
-                            numberObjectsItem.open;
-                            numberObjectsItem[]->append;
-                            readLabelsItem.open;
-                            readLabelsItem[]->append;
-                         #);
-                    #);
-                  open::<
-                    (#
-                    do optionsMenu.open; optionsMenu[]->append;
+                  onDelete::
+                    (# 
                     #);
                #);
-          #);
-        init::
-          (#
-          do stackViewList.init; codeViewList.init;
+             codeviews: @codemoveableEditorList
+               (#  onInsert::
+                    (# 
+                    #);
+                  onDelete::
+                    (# 
+                    #);
+               #);
+             objectviews: @objectviewList
+               (# onInsert::
+                    (# addItemMenuItems: 
+                         theObjectView.addObjectViewItemMenuItems
+                         (# show:: (# do comp[]->newstackview #)#); 
+                       
+                       addmovItems: 
+                         movo.addObjectViewactionedMenuItems
+                         (# show:: (# do comp[]->newstackview #)#);
+                       
+                       mov: ^moveableObjectView;
+                       movo: ^moveableObjectView;
+                    do 
+                       theObjectView.encl.getMoveable->mov[];
+                       (if mov[]<>NONE then
+                           (if mov##<=moveableObjectView## then
+                               mov[]->movo[];
+                               addmovItems##->movo.movMenu.onOpen.appendAction;
+                           if);
+                       if);
+                       addItemMenuItems##
+                         ->theObjectView.itemMenu.onOpen.appendAction;
+                    #);
+                  onDelete::
+                    (# 
+                    #);
+               #);
+             
+             menuBarType::
+               (# breakPointsMenu: @bettermenu
+                    (# breakPointItem: item
+                         (# onSelect::
+                              (# 
+                              do (if bm.impi[]<>NONE then
+                                     bm.impi.cast[]->newcodemoveable
+                                 if);
+                              #);
+                            bm: ^processInterface.breakManager;
+                            newBreak: new (# enter bm[] #);
+                         #);
+                       eventHandler::<
+                         (# onSelect::<
+                              (# bml: ^processInterface.breakManagerList;
+                              do clear;
+                                 debuggee.getBreakManagerList->bml[];
+                                 (if bml.size=0 then
+                                     'No Breakpoints'->(&item[]).new;
+                                  else
+                                     bml.scan
+                                     (# bpi: ^breakPointItem; num: @Text;
+                                     do &breakPointItem[]->bpi[];
+                                        num.clear; current.number->num.putInt;
+                                        (if current.impi[]<>NONE then
+                                            ': '->num.append;
+                                            current.impi.cast.frag.name
+                                              ->num.append;
+                                        if);
+                                        (num[],current[])->bpi.newBreak;
+                                     #);
+                                 if)
+                              #);
+                         #)
+                    #);
+                  open::
+                    (# 
+                    do 'BreakPoints'->breakpointMenu.new; 
+                       breakpointMenu[]->append;
+                    #);
+               #);
+             open::
+               (# 
+               do stackviews.init; stackviews[]->objectPool.put;
+                  codeviews.init; codeviews[]->objectPool.put;
+                  objectviews.init; objectviews[]->objectPool.put;
+               #);
           #);
      #);
-do globalOptions.init; globalOptions[]->objectPool.put;
-   thespawner.init; thespawner[]->objectPool.put;
-   
-   (charRepOnALine,TRUE) -> globalOptions.setBooleanOption;
-   (invisibleOrigins,TRUE) -> globalOptions.setBooleanOption;
-   (useShortObjectTitles,TRUE)->globalOptions.setBooleanOption;
-   (useShortCodeNames,TRUE)->globalOptions.setBooleanOption;
-   (numberObjects,TRUE)->globalOptions.setBooleanOption;
-   (readLabelsOnStartUp,FALSE)->globalOptions.setBooleanOption;
-   icons[]->objectPool.put;
-   
-   parseValhallaParams;
+do thespawner.init; thespawner[]->objectPool.put;
    gui.init;
-   
-   (if getEXECNAMEparam<>NONE then newDebuggee if);
+   parseValhallaParams;
+   procwaiter[]->fork;
+   (if getEXECNAMEparam<>NONE then FALSE->runNewDebuggee if);
 #)
 

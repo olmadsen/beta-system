@@ -1,8 +1,22 @@
 ORIGIN '~beta/guienv/v1.2/guienv';
 
+INCLUDE '~beta/guienv/v1.2/stddialogs';
+
+INCLUDE '~beta/objectbrowser/v2.0/options';
+INCLUDE '~beta/objectbrowser/v2.0/optionlist';
+
 INCLUDE '~beta/objectbrowser/v2.0/UI/objectview';
 INCLUDE '~beta/objectbrowser/v2.0/UI/moveable';
-INCLUDE '~beta/guienv/v1.2/stddialogs';
+INCLUDE '~beta/objectbrowser/v2.0/UI/obguienvadds';
+INCLUDE '~beta/objectbrowser/v2.0/UI/icons';
+INCLUDE '~beta/objectbrowser/v2.0/UI/iconlist';
+INCLUDE '~beta/objectbrowser/v2.0/UI/labelled';
+
+INCLUDE '../valhallaoptionlist';
+INCLUDE '../valhallaiconlist';
+
+INCLUDE '~beta/sysutils/v1.4/envstring';
+
 
 --- lib:attributes ---
 
@@ -11,10 +25,62 @@ initialMAINsize: (# exit (600,400) #);
 valhallaGUI: guienv
   (# <<SLOT valhallaGUIlib:attributes>>;
      
+     icons: @iconDB
+       (# movIcon, stackIcon, codeIcon: ^bitmap;
+          getIcon::
+            (# newIcon:
+                 (# fileName: ^Text;
+                    icon: ^bitmap;
+                 enter fileName[]
+                 do
+                    &bitmap[] -> icon[];
+                    '$(BETALIB)/bitmap/'->fileName.prepend;
+                    fileName[]->expandEnvVar
+                    (# defaultvalue::
+                         (# do '/usr/local/lib/beta/'->envvarvalue[] #) 
+                    #)->icon.readFromX11File;
+                 exit icon[]
+                 #);
+            do (if TRUE
+                //ObjectViewIcon -> name.equalNCS then
+                   (if movIcon[]//NONE then
+                       'ObjectViewIcon.xbm'->newIcon->movIcon[];
+                   if);
+                   movIcon[]->theIcon[];
+                //StackViewIcon -> name.equalNCS then
+                   (if stackIcon[]//NONE then
+                       'StackViewIcon.xbm'->newIcon->stackIcon[];
+                   if);
+                   stackIcon[]->theIcon[];
+                //CodeViewIcon -> name.equalNCS then
+                   (if codeIcon[]//NONE then
+                       'CodeViewIcon.xbm'->newIcon->codeIcon[];
+                   if);
+                   codeIcon[]->theIcon[];
+               if);
+            #);       
+       #);
+     
+     globalOptions: @optionDB;
+     getOption: globalOptions.getBooleanOption
+       (# optvalue: @Boolean;
+          found:: (# do value->optvalue #);
+       exit optvalue
+       #);
+     setOption: globalOptions.setBooleanOption (# #);
+     
      putinfo: 
        (# t: ^Text; 
        enter t[] 
-       do t[]->main.info.label; true->main.info.update;
+       do t[]->main.status.info.vinfo.contents.label; 
+          true->main.status.info.vinfo.contents.update;
+       #);
+     
+     putpinfo: 
+       (# t: ^Text; 
+       enter t[] 
+       do t[]->main.status.info.pinfo.contents.label; 
+          true->main.status.info.pinfo.contents.update;
        #);
      
      alertInfo:
@@ -23,9 +89,6 @@ valhallaGUI: guienv
        do 
           (main[],t[],title[])->alertUser;
        #);
-     
-     onQuit:< Object;
-     onTerminate:< Object;
      
      onMoveablesInsert:<
        (# theMoveable: ^main.moveable;
@@ -39,9 +102,59 @@ valhallaGUI: guienv
        do INNER;
        #);
      
+     onTerminate:< Object;
+     
+     newDebuggee:< Object;
+     debuggeeRerun:< Object;
+     rerunStatus:< BooleanValue;
+     killDebuggee:< Object;
+     killStatus:< BooleanValue;
+     source:< Object;
+     sourceStatus:< BooleanValue;
+     quit:< (# do INNER; Terminate #);
+     debuggeeContinue:< Object;
+     continueStatus:< BooleanValue;
+     debuggeeStepOver:< Object;
+     stepOverStatus:< BooleanValue;
+     debuggeeStepInto:< Object;
+     stepIntoStatus:< BooleanValue;
+     debuggeeStop:< Object;
+     stopStatus:< BooleanValue;
+     debuggeeActiveStack:< Object;
+     activeStackStatus:< BooleanValue;
+     debuggeeCurObj:< Object;
+     curObjStatus:< BooleanValue;
+     debuggeeCurCode:< Object;
+     curCodeStatus:< BooleanValue;
+     debuggeeCurComp:< Object;
+     curCompStatus:< BooleanValue;
+     editenv:< Object;
+     editenvStatus:< BooleanValue;
+     
      main: @mainType;
      mainType:< window
        (# <<SLOT valhallaMainLib:attributes>>;
+     
+          closeMoveables:
+            (# sml: ^selectedMoveablesList;
+            do getSelectedMoveablesList->sml[];
+               (if sml[]<>NONE then
+                   sml.scan (# do current.close #);
+                   sml.clear;
+               if);
+            #);
+          closeMoveablesStatus: BooleanValue
+            (# sml: ^selectedMoveablesList;
+            do getSelectedMoveablesList->sml[];
+               (if sml[]<>NONE then
+                   sml.size>0->value;
+                else
+                   FALSE->value
+               if);
+            #);
+          
+          refresh: (# do moveables.scan (# do current.doUpdate #); objworld.update #);
+     
           
           moveables: @moveableList
             (# onInsert:: 
@@ -55,160 +168,342 @@ valhallaGUI: guienv
                     theMoveable[]->mainMenuBar.windowMenu.deleteMoveable;
                  #);
             #);
-          
+                    
           mainMenuBar: ^menuBarType;
           menuBarType::<
             (# fileMenu: @fileMenuType;
-               fileMenuType:< menu
-                 (# quitItem: @menuitem
-                      (# open:: (# do 'Quit' -> name; 'Q' -> key #);
-                         eventHandler:: 
-                           (# onSelect:: (# do OnQuit; Terminate #)#)
-                      #);
+               fileMenuType:< bettermenu
+                 (# inew: @item (# onSelect:: (# do newDebuggee #)#);
+                    isource: @item (# onSelect:: (# do source #);
+                                      onStatus:: (# do sourceStatus->enabled #);
+                                   #);
+                    
+                    iquit: @item (# onSelect:: (# do quit #)#);
                     open::<
                       (# 
-                      do 'File' -> name;
-                         INNER;
-                         quitItem.open; quitItem[] -> append;
+                      do INNER; 
+                         ('New...')         -> inew.new;
+                         ('Source Browser...','B')  -> isource.newkey;
+                         ('Quit','Q')       -> iquit.newkey;
                       #);
                  #);
+               controlMenu: @controlMenuType;
+               controlMenuType:< bettermenu
+                 (# icontinue: @item (# onSelect:: (# do debuggeeContinue #);
+                                        onStatus:: (# do continueStatus->enabled #);
+                                     #);
+                    istepo: @item (# onSelect:: (# do debuggeeStepOver #);
+                                     onStatus:: (# do stepOverStatus->enabled #);
+                                  #);
+                    istepi: @item (# onSelect:: (# do debuggeeStepInto #);
+                                     onStatus:: (# do stepIntoStatus->enabled #);
+                                  #);
+                    istop: @item (# onSelect:: (# do debuggeeStop #);
+                                    onStatus:: (# do stopStatus->enabled #);
+                                 #);
+                    irerun: @item (# onSelect:: (# do debuggeeRerun #);
+                                     onStatus:: (# do rerunStatus->enabled #);
+                                  #);
+                    ikill: @item (# onSelect:: (# do killDebuggee #);
+                                    onStatus:: (# do killStatus->enabled #);
+                                 #);
+                    
+                    open::<
+                      (# 
+                      do ('Go','G')   -> icontinue.newkey;
+                         ('Step','S')  -> istepi.newkey;
+                         ('Step Over','O')  -> istepo.newkey;
+                         'Stop'->istop.new;
+                         newseparator;
+                         ('Rerun','R')      -> irerun.newkey;
+                         ('Kill','K')       -> ikill.newkey;
+                      #);
+                 #);
+               editMenu: @editMenuType;
+               editMenuType:< bettermenu
+                 (# ienv: @item (# onSelect:: (# do editenv #);
+                                   onStatus:: (# do editenvStatus->enabled #);
+                                #);
+                    irefresh: @item (# onSelect:: (# do refresh #)#);
+                    iclose: @item (# onSelect:: (# do closeMoveables #);
+                                     onStatus:: (# do closeMoveablesStatus->enabled #);
+                                  #);
+                    open::<
+                      (# 
+                      do 'Environment...'->ienv.new;
+                         ('Refresh')   -> irefresh.new;
+                         ('Close','W') -> iclose.newkey;
+                         INNER;
+                      #);
+                    
+                 #);
                windowMenu: @windowMenuType;
-               windowMenuType:< menu
-                 (# appendMoveable:
+               windowMenuType:< bettermenu
+                 (# icurobj: @item (# onSelect:: (# do debuggeeCurObj #);
+                                      onStatus:: (# do curObjStatus->enabled #);
+                                   #);
+                    icurcode: @item (# onSelect:: (# do debuggeeCurCode #);
+                                       onStatus:: (# do curCodeStatus->enabled #);
+                                    #);
+                    icurcomp: @item (# onSelect:: (# do debuggeeCurComp #);
+                                       onStatus:: (# do curCompStatus->enabled #);
+                                    #);
+                    iactivestack: @item (# onSelect:: (# do debuggeeActiveStack #);
+                                           onStatus:: (# do activeStackStatus->enabled#)
+                                        #);
+                    
+                    open::<
+                      (# 
+                      do ('Current Code','C')    -> icurcode.newkey;
+                         ('Current Object','O')  -> icurobj.newkey;
+                         ('Current Component')   -> icurcomp.new;
+                         ('Active Stack','A')    -> iactivestack.newkey;
+                      #);
+                    
+                    appendMoveable:
                       (# theMoveable: ^moveable;
                       enter theMoveable[]
+                      do 
                       #);
                     deleteMoveable:
                       (# theMoveable: ^moveable;
                       enter theMoveable[]
                       #);
-                    closeItem: @menuitem
-                      (# open:: (# do 'Close' -> name; 'W' -> key #);
-                         eventHandler:: 
-                           (# onSelect:: 
-                                (# 
-                                do objworld.selectedmoveables.scan
+                 #);
+               optionsMenu: @optionsMenuType;
+               optionsMenuType:< bettermenu
+                 (# optionitem: toggleitem
+                      (# option: ^Text; 
+                         defaultvalue: @Boolean;
+                         newopt: new 
+                           (#
+                           enter (option[],defaultvalue) 
+                           do option[]->getOption
+                              (# notfound:: 
                                    (#
-                                   do current.close 
-                                   #);
-                                #);
-                              onStatus:: 
-                                (#
-                                do (objworld.selectedmoveables.size<>0)->value 
-                                #);
-                           #)
-                      #);
-                    refreshItem: @menuitem
-                      (# open:: (# do 'Refresh' -> name; 'R' -> key #);
-                         eventHandler:: 
-                           (# onSelect:: 
-                                (# 
-                                do moveables.scan
-                                   (#
-                                   do current.doUpdate;
-                                   #);
-                                   objworld.update;
-                                #);
+                                   do (option[],defaultvalue->optvalue)->setOption;
+                                   #)
+                              #)->checked;
+                           #);
+                         onSelect:: (# do (option[],checked)->setOption #);
+                         onStatus:: 
+                           (# 
+                           do option[]->getOption
+                              (# notfound:: (# do defaultvalue->optvalue #)#)
+                                ->checked;
                            #);
                       #);
+                    
                     open::<
                       (# 
-                      do 'Window' -> name;
-                         closeItem.open; closeItem[]->append;
-                         refreshItem.open; refreshItem[]->append;
+                      do scanoptions
+                         (# 
+                         do (description[],current[],default)
+                              ->(&optionitem[]).newopt;
+                         #);
+                         scanvalhallaoptions
+                         (# 
+                         do (description[],current[],default)
+                              ->(&optionitem[]).newopt;
+                         #);
                          INNER;
                       #);
                  #);
                open::< 
                  (# 
-                 do fileMenu.open; fileMenu[]->append; 
-                    windowMenu.open; windowMenu[]->append;
-                    INNER 
+                 do 'File'->fileMenu.new; fileMenu[]->append;
+                    'Edit'->editMenu.new; editMenu[]->append;
+                    'Control'->controlMenu.new; controlMenu[]->append;
+                    'Windows'->windowMenu.new; windowMenu[]->append;
+                    INNER;
+                    'Preferences'->optionsMenu.new; optionsMenu[]->append;
                  #)
             #);
           
-          open::
+          open::<
             (# 
             do moveables[] -> objectPool.put;
                initialMAINsize -> size; 'valhalla' -> title;
-               contents->info.open; contents->objworld.open;
+               contents->status.open; contents->objworld.open;
+               INNER;
             #);
           
           objworld: @Canvas
             (# open::
                  (# sz: @Point; tmp: @Point;
                  do initialMAINsize->sz;
-                    info.size->tmp;
+                    status.size->tmp;
                     sz.v-tmp.v->sz.v;
                     sz->size;
                     TRUE->bindLeft->bindRight->bindBottom->bindTop;
-                    selectedMoveables.init;
-                 #);
-               eventHandler::
-                 (# onMouseDown::
-                      (# clr: @rectangle;
-                      do 
-                         (if TRUE
-                          //(buttonState=1) and not doubleClick then
-                             (if not shiftkey then
-                                 selectedMoveables.deselect;
-                             if);
-                             localPosition->SimpleDefineRect->clr;
-                             (if not clr.isEmpty then
-                                 moveables.scan
-                                 (#
-                                 do (if clr->current.inRect then 
-                                        (if not current.FrameSelected then
-                                            current[]
-                                              ->selectedMoveables.append;
-                                            current.SelectFrame;
-                                        if);
-                                    if);
-                                 #);
-                             if);
-                         if);
-                      #);
-                 #);
-               selectedMoveables: @List
-                 (# element:: moveable;
-                    deselect:
-                      (# 
-                      do scan
-                         (# 
-                         do (if not current.wasClosed then
-                                current.UnSelectFrame 
-                            if);
-                         #);
-                         clear;
-                      #);
+                    installSelectHandlers;
                  #);
             #);
           
-          info: @staticText
-            (# open::<
-                 (# sz: @Point; ts: ^TextStyle;
-                    pos: @Point;
+          status: @Canvas
+            (# setenabling:
+                 (# 
+                 do ccodeButton.setenabling; 
+                    cobjButton.setenabling;
+                    cstackButton.setenabling;
+                    goButton.setenabling;
+                    stepButton.setenabling;
+                    overButton.setenabling;
+                    stopButton.setenabling;
+                    rerunButton.setenabling;
+                 #);
+               info: @groupControl
+                 (# infoText: labelled
+                      (# contentsType::< staticText
+                           (# open::<
+                                (#
+                                do 
+                                   TRUE->bindLeft->bindRight->bindTop; FALSE->bindBottom;
+                                   ''->label;
+                                   INNER;
+                                #);
+                           #);
+                         open::<
+                           (# sz: @Point; 
+                           do 
+                              initialMAINsize->sz;
+                              2*labelHeight+3->sz.v;
+                              (sz.h-9) div 2->sz.h;
+                              sz->size;
+                              INNER;
+                           #);
+                         dobind: 
+                           (# 
+                           do installResizeRelativeAction;
+                           #);
+                      #);
+                    pinfo: @infoText
+                      (# contentsType::
+                           (# open::
+                                (# 
+                                do 'No Process'->label;
+                                #);
+                           #);
+                         open::
+                           (# 
+                           do 'Process Info'->label;
+                              (pinfo[],FALSE)->info.appendMember;
+                           #);
+                      #);
+                    vinfo: @infoText
+                      (# open::
+                           (# 
+                           do 'Valhalla Info'->label;
+                              (vinfo[],TRUE)->info.appendMember;
+                           #);
+                      #);
+                    open::
+                      (#
+                      do FALSE->verticalStacking;
+                         3->panewidth;
+                         10->minsize;
+                         pinfo.open;
+                         vinfo.open;
+                         (3,3)->position;
+                      #);
+                    dobind:
+                      (# 
+                      do pinfo.dobind; vinfo.dobind;
+                         TRUE->bindRight->bindLeft->bindTop;
+                         FALSE->bindBottom;
+                      #);
+                 #);
+               shortcutButton: pushButton
+                 (# onSelect: ##Object;
+                    enabled: ##BooleanValue;
+                    setenabling:
+                      (# 
+                      do (if enabled then enable else disable if);
+                      #);
+                    open::
+                      (# prev: ^shortcutButton;
+                         fr,pfr: @rectangle;
+                         sz: @Point;
+                         h,v: @Integer;
+                         name: ^Text;
+                         ts: ^textStyle;
+                         prevOffset:< IntegerValue;
+                      enter (prev[],name[],onSelect##,enabled##)
+                      do 
+                         father.size->sz;
+                         sz.v-3->fr.bottom;
+                         (if prev[]//NONE then
+                             3->fr.left;
+                          else
+                             prev.frame->pfr;
+                             pfr.right+3+prevOffset->fr.left;
+                         if);
+                         style->ts[];
+                         fr.left+(maxtext[]->ts.widthOfText)+6->fr.right;
+                         fr.bottom-ts.lineHeight-6->fr.top;
+                         fr->frame;
+                         name[]->label;
+                         TRUE->bindLeft->bindBottom; FALSE->bindRight->bindTop;
+                         INNER;
+                      #);
+                    eventHandler::<
+                      (# onMouseUp::
+                           (# 
+                           do (if enabled then THIS(shortcutButton).onSelect if);
+                           #);
+                      #);
+                 #);
+               maxtext: @Text;
+               ccodeButton, cobjButton, cstackButton: @shortcutButton;
+               goButton,stepButton,overButton,stopButton,rerunButton: @shortcutButton;
+               
+               open::
+                 (# pos,sz: @Point;
                  do 
-                    style->ts[]; 
+                    TRUE->bindRight->bindLeft->bindBottom; FALSE->bindTop;
+                    TRUE->border.visible;
+                    borderstyles.shadowOut->border.style;
                     
-                    InitialMAINsize->sz;
-                    ts.lineHeight+6->sz.v;
+                    info.open;
+                    
+                    'Step Over'->maxtext;
+                    
+                    (NONE,NONE,'Code',debuggeeCurCode##,curcodeStatus##)
+                      ->ccodeButton.open;
+                    (NONE,ccodeButton[],'Object',debuggeeCurObj##,curObjStatus##)
+                      ->cobjButton.open;
+                    (NONE,cobjButton[],'Stack',debuggeeActiveStack##,ActiveStackStatus##)
+                      ->cstackButton.open;
+                    (NONE,cstackButton[],'Go',debuggeeContinue##,continueStatus##)
+                      ->goButton.open (# prevOffset:: (# do 20->value #)#);
+                    
+                    (NONE,goButton[],'Step',debuggeeStepInto##,StepIntoStatus##)
+                      ->stepButton.open;
+                    (NONE,stepButton[],'Step Over',debuggeeStepOver##,stepOverStatus##)
+                      ->overButton.open;
+                    (NONE,overButton[],'Stop',debuggeeStop##,stopStatus##)
+                      ->stopButton.open;
+                    (NONE,stopButton[],'Rerun',debuggeeRerun##,rerunStatus##)
+                      ->rerunButton.open;
+                    
+                    ccodeButton.size->sz;
+                    info.size->sz.add;
+                    (0,9)->sz.add;
                     sz->size;
                     
-                    InitialMAINsize->pos;
+                    initialMAINsize->pos;
+                    size->pos.subtract;
                     0->pos.h;
-                    pos.v-sz.v->pos.v;
-                    pos -> Position;
+                    pos->position;
                     
-                    TRUE->bindLeft->bindRight->bindBottom; FALSE->bindTop;
-                    
-                    TRUE->border.visible;
-                    borderStyles.shadowIn->border.style;
+                    info.dobind;
                  #);
             #);
        #);
      init:<
        (# 
-       do main.open; INNER; main.theMenuBar->main.mainMenuBar[];
+       do globalOptions.init; globalOptions[]->objectPool.put;
+          icons[]->objectPool.put;
+          main.open; INNER; main.theMenuBar->main.mainMenuBar[];
        #);
   #);

@@ -3,6 +3,7 @@ INCLUDE '~beta/basiclib/v1.4/formatio';
 INCLUDE '../processInterface';
 INCLUDE '../remotedumper';
 INCLUDE '../objectPoolAdditions';
+INCLUDE '../breakpoints';
 INCLUDE '~beta/objectbrowser/v2.0/betagrammarinit';
 
 INCLUDE '~beta/guienv/v1.2/stddialogs';
@@ -10,24 +11,29 @@ INCLUDE '~beta/guienv/v1.2/stddialogs';
 --- valhallaGUIlib:attributes ---
 
 GUIprocess: processInterface
-  (# rd: @remoteDumper;
-     remoteObjects: @remoteObjectDB;
+  (# remoteObjects: @remoteObjectDB;
+     bml: @breakManagerList;
      running: @Boolean;
+     notifyUserOnStop: @Boolean;
+     (* Set to TRUE if the process stop should be reported to the user.
+      * Set to FALSE if process stop was due to a skipBreak or a conditional
+      * breakpoint that evaluated to FALSE. In these cases, the process should
+      * continue at once. *)
      rerun:: 
        (# 
        do remoteObjects.clear;
-          (AST[],BETACFL[],THIS(GUIprocess)[])->rd.init;
           FALSE->running;
+          (* Reset breakpoints. *)
+          bml.scan (# do current.reinstall #);
        #);
      init::
        (#
-       do
-          remoteObjects.init; remoteObjects[]->newObjectPoolPut
+       do remoteObjects.init; remoteObjects[]->newObjectPoolPut
           (# alreadyThere:: (# do true->continue #)#);
-          
-          (AST[],BETACFL[],THIS(GUIprocess)[])->rd.init; 
+          bml.init; bml[]->newObjectPoolPut
+          (# alreadyThere:: (# do true->continue #)#);
           betaGrammarInit;
-          INNER
+          INNER;
        #);
      onOpenGroup::
        (# t: @Text;
@@ -48,6 +54,24 @@ GUIprocess: processInterface
           (t[],'Debug Info Error: Recompilation required')->alertInfo;
           true->continue;
        #);
+     onNewGroup::
+       (# t: @Text;
+       do '"%s.%s" is newer than executable'->t.putFormat
+          (# 
+          do groupName[]->s; AST.astFileExtension->s;
+          #);
+          (t[],'Debug Info Error: Recompilation required')->alertInfo;
+          true->continue;
+       #);
+     onUncheckedGroup::
+       (#  t: @Text;
+       do '"%s.%s" has not been checked by compiler'->t.putFormat
+          (# 
+          do groupName[]->s; AST.astFileExtension->s;
+          #);
+          (t[],'Debug Info Error: Recompilation required')->alertInfo;
+          true->continue;
+       #);
      onGroupNotFound::
        (# t: @Text;
        do 'ERROR: "%s.%s" not found !!!' -> t.putFormat
@@ -64,10 +88,10 @@ GUIprocess: processInterface
               (* 'Reading ' -> t.append; dbName[]->t.append; *)
            //DBFILE_NOTFOUND then
               'Could not find ' -> t.append; dbName[]->t.append;
-              t[]->putinfo;
+              (t[],'Debug Info Error')->alertInfo;
            //DBFILE_NEWER then
               dbName[]->t.append; ' newer than executable'->t.append;
-              t[]->putinfo;
+              (t[],'Debug Info Error')->alertInfo;
           if);
        #);
      dbLoadFailed::
@@ -85,7 +109,11 @@ GUIprocess: processInterface
        #);
      onProcessFork::
        (# t: @Text;
-       do 'Forking %s process'->t.putFormat(# do getEXECNAMEparam->s #);
+       do 'Forking %s process'->t.putFormat
+          (#de: @diskEntry;
+          do getEXECNAMEparam->de.path;
+             de.path.name->s;
+          #);
           t[]->putinfo;
        #);
      onProcessForkDone::
@@ -162,14 +190,31 @@ GUIprocess: processInterface
        #);
         
      afterWait::
-       (# 
+       (#
        do FALSE->running;
-          rd.incTime;
+          TRUE->notifyUserOnStop;
           (if terminated then
               onTerminate;
-           else      
+           else
+              rd.incTime;
+              
+              (* Check whether the user should be notified, or the process just
+               * stopped due to a skipbreak. *)
+              
+              (if bml.skipBreakHit then
+                  (* Only notify user if a userBreak was hit at the same time
+                   * or some runtime error occurred. *)
+                  (if bml.userBreakHit=MNGR_NONUMBER then
+                      FALSE->notifyUserOnStop;
+                      leave afterWait;
+                  if);
+              if);
+              
               (* Find objects and pattern that have become garbage, 
                * and notify the owners: *)
+              
+              'Process got signal %d="%s"\n'->putformat (# do signal->(d,s) #);
+              'Runtime error was %d="%s"\n'->putformat (# do error->(d,s) #);
           
               remoteObjects.scanObjects
               (# adr: @Integer; curObj: ^remoteObjects.betaObjectType;
@@ -204,5 +249,12 @@ GUIprocess: processInterface
               main.moveables.scan (# do current.doUpdate #);
               
           if);
+       #);
+     
+     mypretty: @rd.prettyPrinter; myprettyinitialized: @Boolean;
+     doPrettyPrint::
+       (# 
+       do (if not myprettyinitialized then mypretty.init if);
+          (a[],level)->mypretty->pp[];
        #);
   #)

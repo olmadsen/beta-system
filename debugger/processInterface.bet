@@ -7,11 +7,11 @@ INCLUDE '~beta/sysutils/v1.4/pathhandler';
 INCLUDE 'valhallaparams';
 INCLUDE 'environment';
 
-BODY 'private/processInterfaceBody';
-BODY 'private/processCommBody';
-BODY 'private/executableBody';
-BODY 'private/utilitiesBody';
-BODY 'private/dbmanagerBody';
+BODY 'private/processinterfacebody';
+BODY 'private/processcommbody';
+BODY 'private/executablebody';
+BODY 'private/utilitiesbody';
+BODY 'private/dbmanagerbody';
 
 --- lib:attributes ---
 
@@ -65,10 +65,36 @@ printDBstatus:
      if)
   #);
 
+actionList: List 
+  (# element:: (# action: ##Object #);
+     newAction: 
+       (# new: ^element;
+          action: ##Object;
+       enter action##
+       do &element[]->new[];
+          action##->new.action##;
+          INNER;
+       #);
+     appendAction: newAction (# do new[]->append #);
+     prependAction: newAction (# do new[]->prepend #);
+     execute: scan (# do current.action #);
+     deleteAction:
+       (# action: ##Object;
+       enter action##
+       do find: iterate
+            (# 
+            do (if current.elm.action##//action## then
+                   current[]->delete;
+                   leave find
+               if);
+            #);
+       #);
+  #);
+
 processInterface: mpsinterface
-  (# 
+  (#      
      <<SLOT processInterfaceLib:attributes>>;
-     
+          
      (* Shortcuts: *)
      
      terminated: processComm.status.terminated (# #);
@@ -83,16 +109,33 @@ processInterface: mpsinterface
      (* Number of times the process has been stopped. Incremented each
       * time processComm.wait returns. *)
      
-     beforeContinue:< Object;
-     (* beforeContinue is executed before allowing the remote
-      * process to continue after a stop. It should be used to remove 
-      * elements from DOT that have no owners. i.e. elements that are 
-      * no longer on display. *)
+     beforeContinueActions: @actionList;
+     (* actions in beforeContinue are executed before allowing the remote
+      * process to continue after a stop.*)
+     beforeContinue:<
+       (# 
+       do INNER; beforeContinueActions.execute;
+       #);
      
-     afterWait:< Object;
-     (* afterWait is executed immediately before wait returns. It 
-      * should be used to scan all known objects (objectDB) to check 
-      * if they have become garbage *)
+     afterWaitActions: @actionList;
+     (* actions in afterWait are executed immediately before wait returns. *)
+     afterWait:<
+       (# 
+       do afterWaitActions.execute; INNER;
+       #);
+     
+     GCcallbackActions: @actionList;
+     (* actions to be executed if a GC callback caused the process to stop.
+      * If this list is empty, no GC callbacks will be made. *)
+     
+     CBFAcallbackActions: @actionList;
+     (* actions to be executed if a CBFA callback caused the process to stop.
+      * If this list is empty, no CBFA callbacks will be made. *)
+     
+     AttachCallbackActions: @actionList;
+     (* actions to be executed if an Attach callback caused the process to stop. 
+      * If this list is empty, no Attach callbacks will be made. *)
+     
      
      (* INIT
       * ====
@@ -113,11 +156,12 @@ processInterface: mpsinterface
       * creationFailed is called if it was not possible to create the cache
       * file.
       * 
-      * execNotFound is raised if the executable could not be found. It is ok to leave
-      * init on this occation.
+      * execNotFound is raised if the executable could not be found. It is 
+      * ok to leave init on this occation.
       * 
       * forkFailed is raised if it was not possible to fork the process. 
       * It is ok to leave init on this occation.
+      * mdInitFailed is raised if machine specifik initialization failed.
       * 
       * Calls INNER when all other initialization has finished. *)
      
@@ -204,6 +248,7 @@ processInterface: mpsinterface
           
           init:
             (# forkFailed:< Exception;
+               mdInitFailed:< Exception;
             <<SLOT processCommInit:dopart>>
             #);
           
@@ -236,7 +281,11 @@ processInterface: mpsinterface
            * stopped. *)
           
           status: @
-            (# curObj: StatusValue (# <<SLOT StatusCurObj:dopart>> #);
+            (# statusValue: IntegerValue 
+                 (# running:< Exception;
+                 <<SLOT StatusValue:dopart>>
+                 #);
+               curObj: StatusValue (# <<SLOT StatusCurObj:dopart>> #);
                curComp: StatusValue (# <<SLOT StatusCurComp:dopart>> #);
                PC: StatusValue (# <<SLOT StatusPC:dopart>> #);
                SP: StatusValue (# <<SLOT StatusSP:dopart>> #);
@@ -245,18 +294,33 @@ processInterface: mpsinterface
                  <<SLOT StatusSignal:dopart>>
                  exit sigtext[]
                  #);
-               statusValue: IntegerValue 
-                 (# running:< Exception 
-                 <<SLOT StatusValue:dopart>>
-                 #);
                error: StatusValue
                  (# errorText: ^Text;
                  <<SLOT StatusError:dopart>>
                  exit errorText[]
                  #);
-               terminated: BooleanValue
+               statusBooleanValue: BooleanValue
+                 (# running:< Exception;
+                 <<SLOT statusBooleanValue:dopart>>
+                 #);
+               terminated: statusBooleanValue
                  (# 
                  <<SLOT StatusTerminated:dopart>>
+                 #);
+               AttachCallback: StatusBooleanValue
+                 (* TRUE if last process stop was due to coroutine attach callback. *)
+                 (# 
+                 <<SLOT StatusAttachCallback:dopart>>
+                 #);
+               GCcallback: StatusBooleanValue
+                 (* TRUE if last process stop was due to a GC callback. *)
+                 (# 
+                 <<SLOT StatusGCcallback:dopart>>
+                 #);
+               CBFAcallback: StatusBooleanValue
+                 (* TRUE if last process stop was due to a CBFA callback. *)
+                 (# 
+                 <<SLOT StatusCBFAcallback:dopart>>
                  #);
                statusPrivate: @<<SLOT StatusPrivate:descriptor>>
             #);
@@ -402,7 +466,7 @@ processInterface: mpsinterface
           (* COMMANDS
            * ========
            * 
-           * Continue, SingleStep and Stop only initiates the corresponding
+           * Continue and Stop only initiates the corresponding
            * actions. Wait blocks the calling coroutine until the debugged 
            * process has stopped and is ready for communication.
            * failure is raised if communication with the debugged process
@@ -420,13 +484,7 @@ processInterface: mpsinterface
           Continue: UnlessTerminated
             (* Continue the process after a breakpoint or signal. *)
             (# failure:< Exception; 
-            <<SLOT ContinueBody:dopart>>
-            #);
-          
-          SingleStep: UnlessTerminated
-            (* Singlestep the process. *)
-            (# failure:< Exception;
-            <<SLOT SinglestepBody:dopart>>
+            do <<SLOT ContinueBody:descriptor>>
             #);
           
           Stop: UnlessTerminated
@@ -598,6 +656,8 @@ processInterface: mpsinterface
           execPrivate: @<<SLOT executablePrivate:descriptor>>;
        #);
      
+     modtimeOk:: (# do (modtime<executable.modtime)->value #);
+     
      
      (* GROUPSINFO
       * ==========
@@ -609,6 +669,18 @@ processInterface: mpsinterface
      groupsInfo: @groupsInfoTableType;
      
      
+     
+     (* REMOTEDUMPER
+      * ============
+      * 
+      * Specialization of objectdumper from ~objectbrowser/objectdumper.
+      * Able to initialize itself simply by being executed. This is 
+      * done from processInterface.init. *)
+     
+     rd: @<<SLOT processInterfaceRemoteDumper:descriptor>>;
+     
+     
+
      (* OBJECTFILEINFO, BASICOBJECTFILEINFO
       * ===================================
       * 
@@ -922,9 +994,9 @@ processInterface: mpsinterface
       * ========= *)
      
      Utilities: @
-       (#
-          init: (# <<SLOT utilitiesInit:dopart>> #);
+       (# <<SLOT utilitiesLib:attributes>>;
           
+          init: (# <<SLOT utilitiesInit:dopart>> #);
           
           
           (* ProtoAddressToPrototypeInfo
@@ -948,8 +1020,8 @@ processInterface: mpsinterface
           (* codeAddressToImperative
            * =======================
            * 
-           * Maps a code address (codeAdr) to information on the corresponding BETA 
-           * imperative.
+           * Maps a code address (codeAdr) to information on the corresponding
+           * BETA imperative.
            * 
            * If the code address corresponds to a G entry, the onGentry virtual
            * is called with information on the prototype whose Gentry contains
@@ -1004,15 +1076,55 @@ processInterface: mpsinterface
            * 
            * noEnclosingDopart is called if the ast entered is not enclosed
            * by a dopart locally to the enclosing fragment. This can only
-           * happen if cast is actually not an imperative. *)
+           * happen if cast is actually not an imperative. 
+           * notFound is called if no imperative info could be found on
+           * the imperative entered. *)
           
           codeAstToImperative:
             (# cast: ^AST.ast;
                impi: ^ImperativeInfo;
                noEnclosingDopart:< Exception;
+               notFound:< Exception;
             enter cast[]
             <<SLOT codeAstToImperative:dopart>>
             exit impi[]
+            #);
+          
+          (* objectDescriptorToDopart
+           * ========================
+           * 
+           * Given an objectDescriptor, returns the dopartInfo corresponding
+           * to that objectDescriptor. *)
+          
+          objectDescriptorToDopart:
+            (# noDopart:< Exception; (* od has no dopart *)
+               notFound:< Exception; (* Missing debug info. *)
+               onPartialMinfo:<
+                 (# dp: ^BETACFL.doPart; (* The dopart AST. *)
+                    ofi: ^ObjectFileInfo; (* ObjectFile containing the od. *)
+                    ptinx: @Integer; (* Index of od in ofi.Tentries *)
+                 enter (dp[],ofi[],ptinx)
+                 do INNER
+                 #);
+               od: ^BETACFL.ObjectDescriptor;
+               dpi: ^dopartInfo;
+            enter od[]
+            do <<SLOT objectDescriptorToDopartInfo:descriptor>>
+            exit dpi[]
+            #);
+          
+          (* SLOTtoFragment
+           * ==============
+           * 
+           * Converts a SLOT descriptor into the corresponding fragment, if possible. *)
+          
+          SLOTtoFragment:
+            (# theSLOT: ^AST.slotDesc;
+               ff: ^AST.fragmentForm;
+               ofi: ^ObjectFileInfo;
+            enter theSLOT[]
+            do <<SLOT SLOTtoFragment:descriptor>>
+            exit (ff[],ofi[])
             #);
           
          utprivate: @<<SLOT utilitiesPrivate:descriptor>>
@@ -1091,11 +1203,46 @@ processInterface: mpsinterface
           if);
        #);
      
+     stepfailure:< Exception
+       (* Called with a warning message if a step into or step over may not
+        * behave as expected due to missing debug information. If TRUE
+        * is returned, the step operation i performed anyway. Otherwise
+        * it is cancelled. *)
+       (# errormsg: ^Text; stepanyway: @Boolean;
+       enter errormsg[]
+       do TRUE->stepanyway;
+          INNER;
+          (if not continue then
+              errormsg[]->msg.putText
+          if);
+       exit stepanyway
+       #);
+     
+     breakfailure:< Exception
+       (* Raised from breakManager.init (breakpoints.bet) if a breakpoint set
+        * or unset failed due to an access failure. *)
+       (# set: @Boolean;
+       enter set
+       do INNER;
+       #);
+     
+     unknownImpFailure:< Exception;
+     (* Raised from setBreakPoint (breakpoints.bet) if no debugging info
+      * on the imperative entered could be found. In that case, it is
+      * not possible to set the required breakpoint. *)
+     
      DBstatus:<
        (# dbName: ^Text;
           status: @Integer; (* One of DBFILES_ *)
        enter (dbName[],status)
        do INNER
+       #);
+     
+     doPrettyPrint:< (* Called for debugging purposes *)
+       (# a: ^AST.ast; level: @Integer; pp: ^Text;
+       enter (a[],level)
+       do INNER
+       exit pp[]
        #);
      
      piPrivate: @<<SLOT processInterfacePrivate:descriptor>>;

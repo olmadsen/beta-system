@@ -1,29 +1,462 @@
 ORIGIN '../codemoveable';
+INCLUDE '../../breakpoints';
+INCLUDE '~beta/basiclib/v1.4/formatio';
+
+INCLUDE '~beta/objectbrowser/v2.0/UI/obguienvadds';
+INCLUDE '~beta/objectbrowser/v2.0/mpsutils';
+
+--- windowLib:attributes ---
+
+noComment: (# exit - 1 #);
+normalComment: (# exit 1 #);
+breakpointComment: (# exit 4 #);
+
+breakpointClearer:
+  (# node: ^astInterface.ast; pos: @Integer;
+     onBreakpointClear:
+       (# 
+       do (if node.hasComment then ('',pos,1)->node.setSubcomment if);
+          noComment->node.typeOfComment;
+          node[]->updateViews;
+       #);
+  enter (node[],pos)
+  exit onBreakPointClear##
+  #);
+
+updateViews:
+  (# node,contractionNode: ^astInterface.ast; 
+     cel: ^codemoveableEditorList;
+     inContr: @Boolean;
+  enter node[]
+  do 
+     getcodemoveableEditorList->cel[];
+     (* Update views showing the fragment containing cleared breakpoint. *)
+     cel.scan
+     (# 
+     do (if current.frag.root[]->node.frag.root.equal then
+            node[]
+              ->current.SifViewer.inContraction
+              ->(inContr,contractionNode[]);
+            (if inContr then
+                (* The node is not visible, so there is no need to update the
+                 * view. *)
+             else
+                (node[],node[])->current.SifViewer.astView.pp.update;
+                current.SifViewer.cs->current.SifViewer.setFocus;
+            if)
+        if);
+     #);
+  #);
+
+--- codemoveableEditorLib:attributes ---
+
+codeMenu: bettermenu
+  (# citem: item (# onStatus::  (# do encl.processIsReady->enabled #);
+                    onSelect::< 
+                      (# do (if encl.processIsReady then INNER if)#);
+                 #);
+     
+     igo: @citem (# onSelect:: (# do encl.continue #)#);
+     istep: @citem (# onSelect:: (# do doStepInto #)#);
+     iover: @citem (# onSelect:: (# do doStepOver #)#);
+     iuntil: @citem (# onSelect:: (# do doStepUntil #)#);
+     
+     ibreak: @citem (# onSelect:: (# do setStandardBreakpoint #)#);
+     ioneshot: @citem (# onSelect:: (# do setOneShotBreakpoint #)#);
+     
+     ibreakafter: @citem (# onSelect:: (# do TRUE->setStandardBreakpoint #)#);
+     ioneshotafter: @citem (# onSelect:: (# do TRUE->setOneShotBreakpoint #)#);
+     
+     iclear: @citem (# onSelect:: (# do clearBreakPoint #)#);
+     iclearafter: @citem (# onSelect:: (# do TRUE->clearBreakPoint #)#);
+     
+     iintobreaks: @citem 
+       (# onSelect:: 
+            (#
+            do setStepIntoBreaks 
+               (# forEachNode:: (# do node[]->encl.newCodeView #)
+               #)
+            #)
+       #);
+     ioverbreaks: @citem
+       (#  onSelect:: 
+            (#
+            do setStepOverBreaks 
+               (# forEachNode:: (# do node[]->encl.newCodeView #)
+               #)
+            #)
+       #);
+     
+     open::
+       (# 
+       do 'Go          (g)'  ->igo.new;
+          'Step        (s)'  ->istep.new;
+          'Step Over   (o)'  ->iover.new;
+          'Go Until    (u)'  ->iuntil.new;
+          newseparator;
+          'Set Break   (b)'  ->ibreak.new;
+          'Set OneShot (h)'  ->ioneshot.new;
+          newseparator;
+          'Set Break After'  ->ibreakafter.new;
+          'Set OneShot After'  ->ioneshotafter.new;
+          newseparator;
+          'Clear Break (c)' ->iclear.new;
+          'Clear Break After' ->iclearafter.new;
+          'debugValhalla'->(getOptionDB).getBooleanOption
+          (# found::
+               (# 
+               do (if value then
+                      newseparator;
+                      'Set and Show Step Breaks' ->iintobreaks.new;
+                      'Set and Show Step Over Breaks' ->ioverbreaks.new;
+                  if)
+               #)
+          #)
+       #)
+  #);
+
+popupCodeMenu:
+  (# menupos: @Point;
+  enter menupos
+  do 'popupCodeMenu'->putLine;
+     (if cmeprivate.theCodeMenu[]=NONE then
+         &codeMenu[]->cmeprivate.theCodeMenu[];
+         cmeprivate.theCodeMenu.open;
+     if);         
+     itempos->menupos.add;
+     (1,menupos,THIS(window)[])->cmeprivate.theCodeMenu.popup;
+  #);
+
+showBreak:
+  (# node: ^astInterface.ast;
+     bm: ^processInterface.breakManager;
+     pos: @Integer;
+     breaktext: @Text;
+  enter (node[],bm[])
+  do     
+     (if node.symbol //debuggee.BETA.Imperatives then
+         '<<%d<<'->breaktext.putformat (# do bm.number->d #);
+         node[]->debuggee.lastInList->node[];
+         (node[],breaktext.copy,FALSE)
+           ->SifViewer.setBreakpointAfter
+           ->pos;
+      else
+         '>>%d>>'->breaktext.putformat (# do bm.number->d #);
+         (node[],breaktext.copy,FALSE)
+           ->SifViewer.setBreakPointBefore
+           ->pos;
+     if);
+     (node[],pos)->breakpointClearer->bm.clearActions.appendAction;
+     node[]->updateViews;
+  #);
+
+Setstandardbreakpoint:
+  (# impi: ^processInterface.ImperativeInfo; 
+     bm: ^processInterface.breakManager;
+     sb: ^processInterface.standardBreak;
+     breaknode: ^astInterface.ast;
+     pos: @Integer;
+     msg: @Text;
+     ok,after: @Boolean;
+  enter after
+  do TRUE->ok;
+     
+     (if after then
+         sifViewer.cs.node[]->debuggee.nextbrother->breaknode[];
+         (if breaknode[]//NONE then
+             sifViewer.cs.node.father->breaknode[];
+             (if breaknode.symbol<>debuggee.BETA.Imperatives then
+                 'Cannot set breakpoint after'->encl.errorInfo;
+                 FALSE->ok;
+                 leave Setstandardbreakpoint;
+             if)
+         if);
+      else
+         sifViewer.cs.node[]->breaknode[];
+     if);
+     
+     getimpi: breaknode[]->debuggee.ImperativeToCodeAddress
+     (# noEnclosingDoPart:: (# do leave getimpi  #);
+     #)->impi[];
+     
+     (if impi[]<>NONE then
+         (impi.start,MNGR_NEWNUMBER)->debuggee.ensureBreakManager->bm[];
+         impi[]->bm.impi[];
+         checkPresence: bm.scan
+           (# 
+           do (if current##//debuggee.standardBreak## then
+                  current[]->sb[];
+                  leave checkPresence;
+              if);
+           #);
+         (if sb[]//NONE then
+             bm[]->(&debuggee.standardBreak[]).init;
+             'Breakpoint %d set'->msg.putformat (# do bm.number->d #);
+             msg[]->encl.generalInfo;
+             (impi.cast[],bm[])->showBreak;
+             (impi.cast[],0,0,0)->SifViewer.setFocus;
+          else
+             'Breakpoint already set'->encl.errorInfo;
+         if);
+      else
+         'Cannot set breakpoint at selected node'->encl.errorInfo;
+         FALSE->ok;
+     if);
+  exit ok
+  #);
+
+setOneShotBreakPoint:
+  (# impi: ^processInterface.ImperativeInfo; 
+     bm: ^processInterface.breakManager;
+     osb: ^processInterface.userOneShotBreak;
+     breaknode: ^astInterface.ast;
+     pos: @Integer;
+     msg: @Text;
+     ok: @Boolean;
+     after: @Boolean;
+  enter after
+  do TRUE->ok;
+     
+     (if after then
+         sifViewer.cs.node[]->debuggee.nextbrother->breaknode[];
+         (if breaknode[]//NONE then
+             sifViewer.cs.node.father->breaknode[];
+             (if breaknode.symbol<>debuggee.BETA.Imperatives then
+                 'Cannot set breakpoint after'->encl.errorInfo;
+                 FALSE->ok;
+                 leave setOneShotBreakPoint;
+             if)
+         if);
+      else
+         sifViewer.cs.node[]->breaknode[];
+     if);
+     
+     getimpi: breaknode[]->debuggee.ImperativeToCodeAddress
+     (# noEnclosingDoPart:: (# do leave getimpi #);
+     #)->impi[];
+     (if impi[]<>NONE then
+         (impi.start,MNGR_NEWNUMBER)->debuggee.ensureBreakManager->bm[];
+         impi[]->bm.impi[];
+         checkPresence: bm.scan
+           (# 
+           do (if current##//debuggee.userOneShotBreak## then
+                  current[]->osb[];
+                  leave checkPresence;
+              if);
+           #);
+         (if osb[]//NONE then
+             bm[]->(&debuggee.userOneShotBreak[]).init;
+             'One-shot breakpoint %d set'->msg.putformat (# do bm.number->d #);
+             msg[]->encl.generalInfo;
+             (impi.cast[],bm[])->showBreak;
+             (impi.cast[],0,0,0)->SifViewer.setFocus;
+          else
+             'Breakpoint already set'->encl.errorInfo;
+         if);
+      else
+         'Cannot set breakpoint at selected node'->encl.errorInfo;
+         FALSE->ok;
+     if);
+  exit ok
+  #);
+
+setStepIntoBreaks:
+  (# forEachNode:<
+       (# node: ^astInterface.ast;
+       enter node[]
+       do INNER;
+       #);
+     value: @Boolean;
+     uss: @debuggee.userSingleStepBreaker
+       (# init::<
+            (# cancelled:: (# do TRUE->continue #);
+               unknownCode::
+                 (#
+                 do 'Missing debug info. Cannot step.'->encl.errorInfo;
+                    TRUE->continue;
+                 #);
+               forEachImpNode::
+                 (# 
+                 do (impi.cast[],bm[])->showBreak; impi.cast[]->forEachNode;
+                 #);
+            #);
+       #);
+  do not uss.init ->value
+  exit value
+  #);
+
+setStepOverBreaks:
+  (# forEachNode:<
+       (# node: ^astInterface.ast;
+       enter node[]
+       do INNER;
+       #);
+     value: @Boolean;
+     uss: @debuggee.userStepOverBreaker
+       (# init::<
+            (# cancelled:: (# do TRUE->continue #);
+               unknownCode::
+                 (#
+                 do 'Missing debug info. Cannot step.'->encl.errorInfo;
+                    TRUE->continue;
+                 #);
+               forEachImpNode::
+                 (# 
+                 do (impi.cast[],bm[])->showBreak; impi.cast[]->forEachNode;
+                 #);
+            #);
+       #);
+  do not uss.init->value
+  exit value
+  #);
+
+doStepOver:
+  (#
+  do (if encl.processIsReady then
+         (if setStepOverBreaks then encl.continue if);
+     if);
+  #);
+
+doStepInto: 
+  (# 
+  do (if encl.processIsReady then
+         (if setStepIntoBreaks then encl.continue if);
+     if);
+  #);
+
+doStepUntil:
+  (# 
+  do (if encl.processIsReady then
+         (if setOneShotBreakpoint then encl.continue if);
+     if);
+  #);
+
+clearBreakPoint:
+  (# sb: ^processInterface.breakPoint;
+     breaknode: ^astInterface.ast;
+     impi: ^processInterface.ImperativeInfo;
+     bm: ^processInterface.breakManager;
+     msg: @Text;
+     after: @Boolean;
+  enter after
+  do     
+     (if after then
+         sifViewer.cs.node[]->debuggee.nextbrother->breaknode[];
+         (if breaknode[]//NONE then
+             sifViewer.cs.node.father->breaknode[];
+             (if breaknode.symbol<>debuggee.BETA.Imperatives then
+                 'No breakpoint after selected node'->encl.errorInfo;
+                 leave clearBreakpoint;
+             if)
+         if);
+      else
+         sifViewer.cs.node[]->breaknode[];
+     if);
+     
+     getimpi: breaknode[]->debuggee.ImperativeToCodeAddress
+     (# noEnclosingDoPart:: 
+          (#
+          do leave getimpi;
+          #);
+     #)->impi[];
+     (if impi[]<>NONE then
+         impi.start->debuggee.findBreakManager->bm[];
+         (if bm[]<>NONE then
+             clearAll: bm.scan 
+               (# 
+               do current[]->sb[]; sb.doclear;
+               #);
+         if);
+         (if sb[]//NONE then
+             (if after then
+                 'No breakpoint after selected node'->encl.errorInfo;
+              else
+                 'No breakpoint at selected node'->encl.errorInfo;
+             if);
+          else
+             'Breakpoint %d cleared'->msg.putformat 
+             (# do bm.number->d #);
+             msg[]->encl.generalInfo;
+         if);
+         (impi.cast[],0,0,0)->SifViewer.setFocus;
+     if);
+  #);
 
 --- codemoveableEditorOpen:descriptor ---
-(# 
-do father.size->size;
+(# cel: ^codemoveableEditorList;
+do getencloser;
+   father.size->size; 
+   INNER open;
+   getcodemoveableEditorList->cel[];
+   THIS(codemoveableEditor)[]->cel.onInsert;
+   THIS(codemoveableEditor)[]->cel.append;
 #)
-
+--- codemoveableEditorClose:descriptor---
+(# cel: ^codemoveableEditorList;
+do getcodemoveableEditorList->cel[];
+   THIS(codemoveableEditor)[]->cel.at->cel.delete;
+   THIS(codemoveableEditor)[]->cel.onDelete;
+#)
+--- codemoveableEditorPrivate:descriptor ---
+(# theCodeMenu: ^codeMenu;
+#)
+--- codemoveableEditorOnMouseDown:dopart---
+do (if not doubleClick then
+       10->delay
+       (# 
+       do TRUE->skipMouseUp; localPosition->popupCodeMenu;
+       #);
+   if);
+   
+--- codemoveableEditorOnKeyDown:dopart ---
+do 
+   (if encl.processIsReady then
+       (if ch
+        //'g' then
+           encl.continue;
+        //'s' then
+           doStepInto;
+        //'o' then
+           doStepOver;
+        //'u' then
+           doStepUntil;
+        //'b' then
+           setStandardBreakPoint;
+        //'h' then
+           setOneShotBreakPoint;
+        //'c' then
+           clearBreakPoint;
+       if);
+   if);
+   
 --- codemoveableContentsOpen:descriptor ---
 (# t: ^Text; sz: @Point;
 do 
-   (debuggee.AST[],debuggee.BETACFL[],lastcast.frag[],lastcast[])->editor.init;
-   editor.open;
+   (contents[],debuggee[])->editor.open;
    'Fragment: '->t[];
-   lastcast.frag.name->t.append;
+   initialNode.frag.name->t.append;
    t[]->THIS(codemoveable).title;
    editor.size->size;
+   (debuggee.AST[],debuggee.BETACFL[],initialNode.frag[],initialNode[])
+     ->editor.newfragment;
+   NONE->initialNode[]; NONE->debuggee[];
 #)
 
 --- codemoveableopen:descriptor ---
 (# 
-do lastcast.frag[]->frag[];
+do 
 #)
 
 --- codemoveableclose:descriptor ---
 (# 
 #)
 
---- codemoveableSelect:dopart ---
-do (lastcast[],0,0,0)->contents.editor.SifViewer.setFocus;
+--- codemoveableOpenInWindowAction:dopart---
+do
+
+--- codemoveableEditorSelect:dopart ---
+do (node[],0,0,0)->SifViewer.setFocus;
+   
+--- codemoveableEditorUpdate:dopart ---
+do (frag.root[],- 1)->sifViewer.astView.pp.present;
+   SifViewer.cs->SifViewer.setFocus;
