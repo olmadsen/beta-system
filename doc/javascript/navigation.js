@@ -2,60 +2,105 @@ var StartVisible = 0;
 var DrawDelay    = 500;
 var PullStepTime = 15;
 var DrawStepTime = 30;
-var rightboundary = -20;
-var leftboundary = -100;
+var rightboundary = 0;
+var leftboundary = 0;
+var topOffset = 0;
 var SideBar = 0;
+var SideBarWidth = 0;
+var SideBarHeight = 0
+var tid = 0;
 var hdraw = 0;
 var hpull = 0;
 var helpmsg = "Type ? for help";
+var Opera = window.opera ? true : false;
+var Mac = (navigator.userAgent.indexOf("Mac")>-1);
+var UpdateDelay = 25;
 
 function on_load() {
   window.status=helpmsg;
+  SetupSideBar();
   return true;
 }
 
-function AdjustSideBar() {
-  if (document.layers) { 
-     SideBar.top = window.pageYOffset+37; 
-  } else if (document.all) { 
-     SideBar.pixelTop=document.body.scrollTop+15; 
-  } else if (document.getElementById){
-     SideBar.top=window.pageYOffset+8 + "px"; 
+function AdjustSideBar () {
+  if (document.layers) {
+    SideBar.top = window.pageYOffset + topOffset;
   }
-  return true;
+  else if (document.all && !Opera) {
+    SideBar.style.pixelTop = // document.body.scrollTop + topOffset;
+                             // document.body.scrollTop disabled when
+			     // using DOCTYPE in IE6, see e.g.
+			     // http://www.evolt.org/article/document_body_doctype_switching_and_more/17/30655
+			     // http://www.quirksmode.org/js/doctypes.html
+			     // http://www.quirksmode.org/js/fixedmenu.html
+			     // http://forums.devshed.com/archive/t-26334
+                             document.documentElement.scrollTop + topOffset;
+  }
+  else if (document.getElementById && !Opera) {
+    if (SideBarWidth == 0)  // workaround for bug of NN6 to compute width
+      SideBarWidth = SideBar.offsetWidth;
+    SideBar.style.top = (window.pageYOffset+topOffset) + 'px';
+  }
+  else if (Opera) {
+    SideBar.style.pixelTop = window.pageYOffset + topOffset;
+  }
 }
 
 function SetupSideBar() {
-  var is_mac = (navigator.userAgent.indexOf("Mac")>-1);
-  if (document.layers) { 
-     SideBar = document.layers.SideBar;
-     rightboundary=94
-     leftboundary=36
-  } else if (document.all) { 
-     SideBar = document.all.SideBar2.style;
-     if (is_mac){
-       rightboundary=-0
-       leftboundary=-87
-       SideBar.pixelLeft = leftboundary;
-     } else {
-       rightboundary=0
-       leftboundary=-77
-     }
-  } else if (document.getElementById){
-     SideBar = document.getElementById("SideBar2").style;
-     rightboundary=2
-     leftboundary=-87
-     SideBar.left = leftboundary + "px";
-     SideBar.top  = 8 + "px";
-     PullStepTime = 5;
-     DrawStepTime = 10;
+  if (document.layers) {
+    SideBar = document['SideBarLayer'];
+    SideBarWidth = SideBar.document.width;
+    SideBarHeight = SideBar.document.height;
+    rightboundary=90
+    leftboundary=36
+    topOffset = 45;
+  }
+  else if (document.all && !Opera) {
+    SideBar = document.all['SideBar'];
+    SideBarWidth = SideBar.offsetWidth;
+    SideBarHeight = SideBar.offsetHeight;
+    if (Mac){
+      rightboundary=0
+      leftboundary=-90
+      topOffset = 15;
+    } else {
+      rightboundary=2
+      leftboundary=-87
+      topOffset = 26;
+    }
+    SideBar.style.pixelLeft = leftboundary;
+  }
+  else if (document.getElementById && !Opera) {
+    SideBar = document.getElementById('SideBar');
+    SideBarWidth = SideBar.offsetWidth;
+    SideBarHeight = SideBar.offsetHeight;
+    rightboundary=2
+    leftboundary=-87
+    topOffset = 13;
+    SideBar.style.left = leftboundary + "px";
+    SideBar.style.top  = 8 + "px";
+    PullStepTime = 5;
+    DrawStepTime = 10;
+  }
+  else if (Opera) {
+    SideBar = document.getElementById('SideBar');
+    SideBarWidth = SideBar.style.pixelWidth;
+    SideBarHeight = SideBar.style.pixelHeight;
+    rightboundary=2
+    leftboundary=-87
+    topOffset = 15;
   }
   AdjustSideBar();
-  if (document.all){
-     window.onscroll = AdjustSideBar;
-     //document.onhelp = openhelp;
+  if (document.layers) {
+    SideBar.visibility = 'show';
   } else {
-    setInterval("AdjustSideBar()", 100);
+    SideBar.style.visibility = 'visible';
+  }
+  if (document.all && !Opera) {
+    window.onscroll = AdjustSideBar;
+    //document.onhelp = openhelp;
+  } else {
+    tid = setInterval('AdjustSideBar()', UpdateDelay);
   }
   if (StartVisible) {
      pull(); 
@@ -67,7 +112,16 @@ function SetLeft(left){
   if (document.layers){
      SideBar.left = left;
   } else {
-     SideBar.left = left + "px";
+     SideBar.style.left = left + "px";
+  }
+} 
+function GetLeft(){
+  if (document.all){
+     return SideBar.style.pixelLeft;
+  } else if (document.layers){
+     return parseInt(SideBar.left);
+  } else {
+     return parseInt(SideBar.style.left);
   }
 } 
 
@@ -128,7 +182,7 @@ function delayeddraw(){
 }
 
 function pullstep(){
-  var left = parseInt(SideBar.left);
+  var left = GetLeft();
   if (left<rightboundary){
      SetLeft(left+5);     
   } else if (hpull) {
@@ -138,7 +192,7 @@ function pullstep(){
 }
 
 function drawstep(){
-  var left = parseInt(SideBar.left);
+  var left = GetLeft();
   if (left>leftboundary){
      SetLeft(left-5);
   } else if (hdraw) {
@@ -185,8 +239,8 @@ function show()
   if (document.layers){
      SideBar.visibility = "visible";
   } else {
-     SideBar.visibility = "visible";
-     SideBar.display = "block";
+     SideBar.style.visibility = "visible";
+     SideBar.style.display = "block";
   }
 }
 
@@ -195,8 +249,8 @@ function hide()
   if (document.layers){
      SideBar.visibility = "hidden";
   } else {
-     SideBar.visibility = "hidden";
-     SideBar.display = "none";
+     SideBar.style.visibility = "hidden";
+     SideBar.style.display = "none";
   }
 }
 
@@ -267,4 +321,6 @@ function onKey(e)
 if (document.layers){
    document.captureEvents(Event.KEYPRESS);
 }
+
 document.onkeypress=onKey;
+window.onload=on_load;
