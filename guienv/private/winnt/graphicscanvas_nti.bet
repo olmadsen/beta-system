@@ -1,49 +1,213 @@
 ORIGIN '../graphicscanvasbody';
+INCLUDE '~beta/guienv/private/winnt/guienv_ntiprivate';
+INCLUDE '~beta/win32lib/bitmapsupport';
+INCLUDE '~beta/win32lib/winuserconsts';
+INCLUDE '~beta/win32lib/wingdi';
+INCLUDE '~beta/win32lib/wingdiconsts';
+INCLUDE '~beta/win32lib/dcmanagement';
+INCLUDE '~beta/guienv/graphics';
 
+-- GraphicsCanvasOpen: doPart --
+do INNER;
+   &Pixmap[] -> image[];
+   size -> image.init;
+   image[] -> doublebuffer.init;
+   
 
+-- GraphicsCanvasOnRefresh: doPart --
+do (# windowid, pixmapid: @integer;
+      width, height: @integer;
+   do (0xFFFF, 0xFFFF, 0xFFFF)  -> image.clear;
+      doublebuffer.begin;
+      children.scan
+      (#
+      do doublebuffer[] -> current.drawOn;
+      #);
+      THIS(Canvas).windowItemDevice -> windowid;
+      doublebuffer.private.hdc -> pixmapid;
+      image.width -> width;
+      image.height -> height;
+      (windowid, 0, 0, width, height, pixmapid, 0, 0, SRCCOPY) -> BitBlt;
+      doublebuffer.end;
+   #);
+   
 -- PixmapSurfaceInit: doPart --
-do
+do (* Do Nothing *)
 
 -- PixmapSurfaceDrawText: doPart --
-do
+do (# xi, yi: @integer;
+   do (0, 0) -> transform -> (xi, yi);
+      (private.hdc, TA_BASELINE) -> SetTextAlign;
+      (private.hdc, TRANSPARENT) -> SetBkMode;
+      (private.hdc, xi, yi, @@theText.T[1], theText.lgth) -> TextOut;
+   #);
+   
 
 -- PixmapSurfaceDrawRect: doPart --
-do
+do (# r: @ntRect;
+   do (0, 0) -> transform -> (r.left, r.top);
+      r.left + width -> r.right;
+      r.top + height -> r.bottom;
+      (private.hdc, r[], private.brush) ->  ntFrameRect;
+   #);
 
 -- PixmapSurfaceFillRect: doPart --
-do
-
+do (# r: @ntRect;
+   do (0, 0) -> transform -> (r.left, r.top);
+      r.left + width -> r.right;
+      r.top + height -> r.bottom;
+      (private.hdc, r[], private.brush) ->  ntFillRect;
+   #);
+   
 -- PixmapSurfaceDrawOval: doPart --
-do
+do (# nullbrush: @integer;
+      prev: @integer;
+      xi, yi: @integer;
+   do NULL_BRUSH  -> GetStockObject -> nullbrush;
+      (private.hdc, nullbrush) -> SelectObject -> prev;
+      (0, 0) -> transform -> (xi, yi);
+      (private.hdc, xi, yi, xi + width, yi + height) -> Ellipse;
+      (private.hdc, prev) -> SelectObject;
+   #);
 
 -- PixmapSurfaceFillOval: doPart --
-do
+do (# nullpen: @integer;
+      prev: @integer;
+      xi, yi: @integer;
+   do NULL_PEN -> GetStockObject -> nullpen;
+      (private.hdc, nullpen) -> SelectObject -> prev;
+      (0, 0) -> transform -> (xi, yi);
+      (private.hdc, xi, yi, xi + width, yi + height) -> Ellipse;
+      (private.hdc, prev) -> SelectObject;
+   #);
 
 -- PixmapSurfaceDrawPolygon: doPart --
-do
-
+do (# flag: @boolean;
+      xi, yi: @integer;
+   do true -> flag;
+      points.scan
+      (#
+      do current -> transform -> (xi, yi);
+         (if flag then
+             (private.hdc, xi, yi, 0) -> MoveToEx;
+             false -> flag;
+          else
+             (private.hdc, xi, yi) -> LineTo;
+         if);
+      #);
+   #);
+   
 -- PixmapSurfaceFillPolygon: doPart --
-do
-
+do (# ntPoints: [0] @integer;
+      size: @integer;
+   do points.size -> size;
+      2 * size ->  ntPoints.new;
+      points.scan
+      (# xi, yi: @integer;
+         i: @integer;
+      do i + 1 -> i;
+         current -> transform -> (xi, yi);
+         xi -> ntPoints[(i*2)-1];
+         yi -> ntPoints[i*2];
+      #);
+      (private.hdc,@@ntPoints[1],size) -> Polygon;
+   #);
+   
 -- PixmapSurfaceDrawPixmap: doPart --
-do
+do 
 
 -- PixmapSurfaceStyle: doPart --
 do
 
 -- PixmapSurfacePen: doPart --
-do
+do (# red, green, blue: @int8u;
+      colorref: @int32u;
+      
+   do theColor.red %srl 8 -> red;
+      theColor.green %srl 8 -> green;
+      theColor.blue %srl 8 -> blue;
+      
+      red %bor (green %sll 8) %bor (blue %sll 16) -> colorref;
+      (private.hdc, colorref) -> SetTextColor;
+      colorref -> CreateSolidBrush -> private.brush;
+      (private.hdc, private.brush) -> SelectObject -> DeleteObject;
+      (PS_SOLID, 0, colorref) -> CreatePen -> private.pen;
+      (private.hdc, private.pen) -> SelectObject -> DeleteObject;
+      
+   #);
 
 -- PixmapSurfacePush: doPart --
-do
+do (# new: ^Matrix;
+   do &Matrix[] -> new[];
+      private.current[] -> new.next[];
+      new[] -> private.current[];
+   #);
 
 -- PixmapSurfacePop: doPart --
-do
+do private.current.next[] -> private.current[];
 
 -- PixmapSurfaceTranslate: doPart --
-do
+do private.current.x + dx -> private.current.x;
+   private.current.y + dy -> private.current.y;
+   
+-- PixmapSurfaceBegin: doPart --
+do &Matrix[] -> private.current[];
+   0 -> CreateCompatibleDC -> private.hdc;
+   (private.hdc, content.private.handleToPixmap) -> SelectObject -> private.old_dib;
+   0 -> CreateSolidBrush -> private.brush;
+   (private.hdc, private.brush) -> SelectObject -> private.old_brush;
+   (PS_SOLID, 0, 0) -> CreatePen -> private.pen;
+   (private.hdc, private.pen) -> SelectObject -> private.old_pen;
+   
+-- PixmapSurfaceEnd: doPart --
+do (private.hdc, private.old_dib) -> SelectObject;
+   (private.hdc, private.old_brush) -> SelectObject -> DeleteObject;
+   (private.hdc, private.old_pen) -> SelectObject -> DeleteObject;
+   private.hdc -> DeleteDC;
+   
+   
+-- PixmapSurfaceLib: attributes --
+
+Matrix:
+  (# next: ^Matrix;
+     x, y: @real;
+  #);
+
+transform:
+  (# x, y: @real;
+  enter (x, y)
+  do private.current.x + x -> x;
+     private.current.y + y -> y;
+  exit (x, y)
+  #);
+
+ntFillRect: external
+  (# hdc: @integer; (* HDC *)
+     theRect: ^ntRECT; (* const RECT FAR* *)
+     hbr: @integer; (* HBRUSH *)
+     result: @integer; (* int *)
+  enter (hdc,theRect[],hbr)
+  do 'FillRect' -> callStd;
+  exit result
+  #);
+ntFrameRect: external
+  (# hdc: @integer; (* HDC *)
+     theRect: ^ntRECT; (* const RECT FAR* *)
+     hbr: @integer; (* HBRUSH *)
+     result: @integer; (* int *)
+  enter (hdc,theRect[],hbr)
+  do 'FrameRect' -> callStd;
+  exit result
+  #);
+
+
 
 -- PixmapSurfacePrivate: descriptor --
-(#
-
+(# hdc: @integer;
+   brush: @integer;
+   pen: @integer;
+   old_dib: @integer;
+   old_brush: @integer;
+   old_pen: @integer;
+   current: ^Matrix;
 #)

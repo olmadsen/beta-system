@@ -114,6 +114,8 @@ void write_bmp_to_png(HDC hdc, HBITMAP hbmp, char *file_name)
   bitmap.bmWidthBytes = ((bitmap.bmWidth*3 + 3) >> 2 << 2);
 
   bytesize = bitmap.bmHeight * bitmap.bmWidthBytes;
+
+  data = bitmap.bmBits;
   
   data = (unsigned char *) malloc(bytesize);
 
@@ -218,6 +220,124 @@ int betaImage2RGB(BetaImage *src, BetaImage *dst)
   }
   return 0;
 }
+
+HBITMAP BetaCreateBitmap(HDC hdc, void **pixels, int width, int height)
+{
+  void *pBits = NULL;
+  HBITMAP hBmp;
+  {
+    BITMAPINFO bmp = { { sizeof(BITMAPINFOHEADER), width, height, 1, 32 } };
+    hBmp = CreateDIBSection(NULL, & bmp, DIB_RGB_COLORS, & pBits, NULL, 0);
+  }
+  *pixels = pBits;
+  return hBmp;
+}
+
+
+
+void write_dib_to_png(HDC hdc, HBITMAP hbmp, char *file_name)
+{
+  BITMAP bitmap;
+  int result;
+
+  FILE *fp;
+  png_structp png_ptr;
+  png_infop info_ptr;
+  unsigned char **rows;
+  unsigned char *image;
+  long k; 
+  png_color_8 sig_bit;
+  
+  unsigned char *data;
+  unsigned char *line1;
+  unsigned char *line2;
+  long bytesize;
+  
+  result = GetObject((HGDIOBJ) hbmp, sizeof(BITMAP), (void *) &bitmap);
+
+  if(!result) {
+    return;
+  }
+
+  bytesize = bitmap.bmHeight * bitmap.bmWidthBytes;
+
+  
+  data = bitmap.bmBits;
+
+  
+  if(!data) {
+    return;
+  }
+  fp = fopen(file_name, "wb");
+
+  if(!fp) {
+    return;
+  }
+
+  png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
+
+  if(!png_ptr) {
+    fclose(fp);
+    return;
+  }
+
+  info_ptr = png_create_info_struct(png_ptr);
+
+  if(!info_ptr) {
+    fclose(fp);
+    png_destroy_write_struct(&png_ptr, NULL);
+    return;
+  }
+
+  if(setjmp(png_ptr->jmpbuf)) {
+    fclose(fp);
+    png_destroy_write_struct(&png_ptr, NULL);
+    return;
+  }
+
+
+  png_init_io(png_ptr, fp);
+  png_set_IHDR(png_ptr, info_ptr, bitmap.bmWidth, bitmap.bmHeight, 8,
+               PNG_COLOR_TYPE_RGB_ALPHA, PNG_INTERLACE_NONE,
+               PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
+
+  png_write_info(png_ptr, info_ptr);
+  png_set_bgr(png_ptr);
+
+  {
+    int i;
+    int j;
+    unsigned char *row;
+    unsigned char *pixel;
+
+    row = data;
+    for(i = 0; i < bitmap.bmHeight; i++) {
+      pixel = row;
+      for(j = 0; j < bitmap.bmWidth; j++) {
+        pixel[3] = 255;
+        pixel += 4;
+      }
+      row += bitmap.bmWidthBytes;
+    }
+  }
+    
+  rows = (unsigned char **) malloc(bitmap.bmHeight * sizeof(unsigned char *));
+  image = data;
+  for(k = 0; k < bitmap.bmHeight; k++) {
+    rows[bitmap.bmHeight - k - 1] = image;
+    image += bitmap.bmWidthBytes;
+  }
+
+  png_write_image(png_ptr, rows);
+  png_write_end(png_ptr, info_ptr);
+  
+  fclose(fp);
+  free(rows);
+  png_destroy_write_struct(&png_ptr, NULL);
+  return;
+}
+
+
 
 int betaImage2Mask(BetaImage *src, BetaImage *dst)
 {
@@ -339,3 +459,93 @@ int readPNG(char *name, HBITMAP *phbmp, int *width, int *height, HBITMAP *hmask)
 }
 
 
+void TransferRedPixels(unsigned char *src,
+                       int srcrowbytes,
+                       unsigned char *dst,
+                       int dstrowbytes,
+                       int x, int y,
+                       int width, int height)
+{
+  unsigned char *srcrow;
+  unsigned char *dstrow;
+  unsigned char *srcpixel;
+  unsigned char *dstpixel;
+
+  int a;
+  
+  int i;
+  int j;
+
+
+  srcrow = src;
+  dstrow = dst + (dstrowbytes * y) + 4 * x; 
+  for(i = 0; i < height; i++) {
+    srcpixel = srcrow;
+    dstpixel = dstrow;
+    for(j = 0; j < width; j++) {
+      a = srcpixel[3];
+      dstpixel[0] = srcpixel[0] + ((255 - a) * dstpixel[0] / 0xFF);
+      dstpixel[1] = srcpixel[1] + ((255 - a) * dstpixel[1] / 0xFF);
+      dstpixel[2] = srcpixel[2] + ((255 - a) * dstpixel[2] / 0xFF);
+      srcpixel += 4;
+      dstpixel += 4;
+    }
+    srcrow += srcrowbytes;
+    dstrow += dstrowbytes;
+  }
+}
+
+void TransferRaster(HDC hDC, int x, int y, int width, int height, HBITMAP hBmp)
+{
+  HDC     hMemDC = CreateCompatibleDC(hDC);
+  HGDIOBJ hOld   = SelectObject(hMemDC, hBmp);
+  BitBlt(hDC, x, y, width, height, hMemDC, 0, 0, SRCCOPY);
+  SelectObject(hMemDC, hOld);
+  DeleteObject(hMemDC);
+}
+
+int ReadPNGalpha(char *name, HBITMAP *phbmp, void **pixels, int *width, int *height)
+{
+  int result;
+  BetaImage image;
+  
+  void *pBits = NULL;
+  unsigned char *src;
+  unsigned char *dst;
+  unsigned char  r, g, b, a;
+  int i;
+  
+  HBITMAP hBmp;
+  
+  result = BetaReadPNG(name, &image, 2);
+  if(result != 0) {
+    return result;
+  }
+  
+  *width = image.width;
+  *height = image.height;
+  
+  {
+    BITMAPINFO bmp = { { sizeof(BITMAPINFOHEADER), image.width, image.height, 1, 32 } };
+    hBmp = CreateDIBSection(NULL, & bmp, DIB_RGB_COLORS, & pBits, NULL, 0);
+
+    src = (char *) image.data;
+    dst = (char *) pBits;
+    for(i = 0; i < image.width * image.height; i++) {
+      r = src[0];
+      g = src[1];
+      b = src[2];
+      a = src[3];
+      dst[0] = b * a / 0xFF;
+      dst[1] = g * a / 0xFF;
+      dst[2] = r * a / 0xFF;
+      dst[3] = a;
+      src += 4;
+      dst += 4;
+    }
+  }
+  /* Return the bitmap */
+  *phbmp = hBmp;
+  *pixels = pBits;
+  return 0;
+}
