@@ -390,3 +390,4 @@
   (let ((case-replace t))
     (message "Fixing quotes")
     (tags-query-replace "&otilde;" "'" nil)))
+
