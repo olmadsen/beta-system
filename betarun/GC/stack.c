@@ -285,6 +285,7 @@ struct Object *ProcessStackFrames(long SP,
 
     /* Check for passing of a DoPart object */
     if ((long)theObj->Proto == (long)DopartObjectPTValue) {
+      DEBUG_STACK(fprintf(output, "Passing dopart object 0x%x\n", theObj));
       theObj = ((struct DopartObject *)theObj)->Origin;
       continue;
     }

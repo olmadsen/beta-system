@@ -203,36 +203,61 @@ register unsigned IOATopOff asm("%g7");
   while(XXd < XXe) *XXd++ = *XXs++;\
 }
 
-#define MACRO_TraverseObject( obj, reffunc, objfunc )\
-{\
-}
-
-#define MACRO_TraverseObjectFlat( obj, reffunc, objfunc )\
-{\
-}
-
-/* MACRO_ScanRepetition traverse the rep, and for each element 
- * code is called, thisCell refers the element in question.
- */
-#define MACRO_ScanRepetition( rep, code) \
-{ long *thisCell=(long *)&rep->Body[0], *XXe=((long *) rep)->HighBorder;\
-  while( thisCell < XXe){  code;  thisCell++; }\
-}
-
 /* MACRO_ScanBlock traverse the block, and for each element 
  * code is called, thisCell refers the element in question.
  */
 #define MACRO_ScanBlock( block, code) \
-{ long *thisCell=(long *)( (long) block + sizeof(struct Block)), *XXe=block->top;\
+{ long *thisCell=(long *)((long)block + sizeof(struct Block)), *XXe=block->top;\
   while( thisCell < XXe){  code;  thisCell++; }\
 }
 
-#define MACRO_DistanceToEnclosing( obj, variable)\
-{ struct Object *XXobj=(struct Object *)obj;\
-  while(XXobj->GCAttr<0)\
-    XXobj=(struct Object *) ((long)XXobj + XXobj->GCAttr*4);\
-  variable=(long)obj - (long)XXobj;\
+#define long_clear(p, bytesize)                                     \
+{                                                                   \
+  register long i;                                                  \
+  DEBUG_CODE(if ((bytesize)&3)                                      \
+	     fprintf(stderr, "long_clear: bytesize&3 != 0\n"));     \
+  for (i = (long)(bytesize)/4-1; i >= 0; i--) {                     \
+    *((long *)(p)+i) = 0;                                           \
+  }                                                                 \
 }
+
+/*
+ * GetDistanceToEnclosingObject:
+ *  Find the offset (negative) to the most inclosing object e.g.
+ *  the offset to the autonomous object in which theObj reside. 
+ */
+
+#define GetDistanceToEnclosingObject(theObj, Distance)         \
+{                                                              \
+  long           _GCAttribute;                                 \
+  struct Object *_theObj=theObj;                               \
+  Distance = 0;                                                \
+  _GCAttribute = _theObj->GCAttr*4;                            \
+  while( _GCAttribute < 0 ){                                   \
+    Distance += _GCAttribute;                                  \
+    _theObj = (struct Object *) Offset(_theObj, _GCAttribute); \
+    _GCAttribute = _theObj->GCAttr*4;                          \
+  }                                                            \
+}
+
+/* NameOfGroupMacro:
+ *  return the groupName corresponding to the group_header
+ *  given as parameter. 
+ */
+#if (defined(crts) || defined(NEWRUN))
+#define NameOfGroupMacro(groupheader) (groupheader)->group_id
+#else
+#define NameOfGroupMacro (groupheader)\
+  ((char *) &((groupheader)->protoTable[((groupheader)->protoTable[0]) + 1]))
+#endif
+
+#define EnclosingComponent(item) \
+ ((struct Component *)((long)(item)-headsize(Component)))
+
+#define IsComponentItem(item) \
+(item && \
+ (((struct Item *)(item))->GCAttr == -(headsize(Component)/sizeof(long))) && \
+ (EnclosingComponent(item)->Proto==ComponentPTValue))
 
 /* Generic ValRepSize */
 
@@ -363,51 +388,6 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
 #define Claim(cond, string)
 
 #endif /* RTDEBUG */
-
-
-#define long_clear(p, bytesize)                                     \
-{                                                                   \
-  register long i;                                                  \
-  DEBUG_CODE(if ((bytesize)&3)                                      \
-	     fprintf(stderr, "long_clear: bytesize&3 != 0\n"));     \
-  for (i = (long)(bytesize)/4-1; i >= 0; i--) {                     \
-    *((long *)(p)+i) = 0;                                           \
-  }                                                                 \
-}
-
-/*
- * GetDistanceToEnclosingObject:
- *  Find the offset (negative) to the most inclosing object e.g.
- *  the offset to the autonomous object in which theObj reside. 
- */
-
-#define GetDistanceToEnclosingObject(theObj, Distance)         \
-{                                                              \
-  long           _GCAttribute;                                 \
-  struct Object *_theObj=theObj;                               \
-  Distance = 0;                                                \
-  _GCAttribute = _theObj->GCAttr*4;                            \
-  while( _GCAttribute < 0 ){                                   \
-    Distance += _GCAttribute;                                  \
-    _theObj = (struct Object *) Offset(_theObj, _GCAttribute); \
-    _GCAttribute = _theObj->GCAttr*4;                          \
-  }                                                            \
-}
-
-/* NameOfGroupMacro:
- *  return the groupName corresponding to the group_header
- *  given as parameter. 
- */
-#if (defined(crts) || defined(NEWRUN))
-#define NameOfGroupMacro(groupheader) (groupheader)->group_id
-#else
-#define NameOfGroupMacro (groupheader)\
-  ((char *) &((groupheader)->protoTable[((groupheader)->protoTable[0]) + 1]))
-#endif
-
-
-
-
 
 #ifdef NEWRUN
 

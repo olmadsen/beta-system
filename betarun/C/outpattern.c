@@ -676,7 +676,7 @@ void DisplayObject(output,theObj,retAddress)
      */
     if (lastDisplayedObject &&
 	(lastDisplayedObject->Proto==ComponentPTValue) &&
-	(theObj->Proto != ComponentPTValue)){
+	(lastDisplayedObject != theObj)){
       fprintf(output, "\n"); fflush(output);
     }
   }
@@ -701,7 +701,17 @@ void DisplayObject(output,theObj,retAddress)
       break;
     case (long) DopartObjectPTValue:
       theItem = (cast(DopartObject)theObj)->Origin;
-      ObjectDescription(theItem, retAddress, "item", 1);
+      /* Check whether theItem is actually an item or is the
+       * body part of a component.
+       */
+      if (IsComponentItem(theItem)) {
+	DisplayObject(output, 
+		      (struct Object *)EnclosingComponent(theItem),
+		      retAddress);
+	return;
+      } else {
+	ObjectDescription(theItem, retAddress, "item", 1);
+      }
       break;
     case (long) StackObjectPTValue:
       fprintf(output,"  stackobject\n");
@@ -799,8 +809,7 @@ char *ErrorMessage(errorNumber)
 #ifdef NEWRUN
 
 static void DumpCell(struct Object **theCell,struct Object *theObj)
-{ register struct Component *theComp;
-  register long PC;
+{ register long PC=-1;
 
   TRACE_DUMP(fprintf(output, ">>>TraceDump: theCell=0x%x, theObj=0x%x",
 		     theCell, theObj));
@@ -816,41 +825,38 @@ static void DumpCell(struct Object **theCell,struct Object *theObj)
       TRACE_DUMP(fprintf(output, "  cb: "));
       fprintf(output, "  [ EXTERNAL ACTIVATION PART ]\n");
       /* Since ProcessStackFrames now skips to previous frame before
-       * BETA called C, we will not see the current object in the
-       * frame before C as a dyn-pointer in any frame (it is hidden
-       * by this CALLBACKMARK).
-       * So we have to go to this previous frame ourselves and
-       * find the current object for that frame and dump it.
-       * See figure in stack.c.
-       */
+	 * BETA called C, we will not see the current object in the
+	 * frame before C as a dyn-pointer in any frame (it is hidden
+	 * by this CALLBACKMARK).
+	 * So we have to go to this previous frame ourselves and
+	 * find the current object for that frame and dump it.
+	 * See figure in stack.c.
+	 */
       SP = (long *)theCell+2; /* Frame starts 2 longs above dyn */
       SP = *(long **)SP; /* SP-beta */
       theObj = GetThis(SP);
       PC = 0; /* not known - is somewhere in the C frames */
-    } else {
-      /* Secondly check if theObj is inlined in a component */
-      theComp = (struct Component *)((long)theObj-headsize(Component));
-      if ((theObj->GCAttr == -(headsize(Component)/sizeof(long))) && 
-	  (theComp->Proto==ComponentPTValue)) {
-	/* theObj is a component item - dump as comp */
-	TRACE_DUMP(fprintf(output, " dump as comp"));
-	theObj = (struct Object *)theComp;
-	/* PC for previous frame is found just above dyn */
-	PC = *((long *)theCell+1);
-      } else {
-	if (theObj->Proto==ComponentPTValue){
-	  theComp = (struct Component *)theObj;
-	  TRACE_DUMP(fprintf(output, " is comp - getting real dyn"));
-	  /* Passing a component frame. The real dyn is found 
-	   * as theComp->CallerObj - see stack.c for details.
-	   */
-	  theObj = theComp->CallerObj;
-	  PC = theComp->CallerComp->CallerLSC;
-	} else {
-	  /* PC for previous frame is found just above dyn */
-	  PC = *((long *)theCell+1);
-	}
-      }
+    }
+    
+    /* Check if theObj IS a component */
+    if (theObj && (theObj->Proto==ComponentPTValue)){
+      TRACE_DUMP(fprintf(output, " is comp - getting real dyn"));
+      /* Passing a component frame. The real dyn is found 
+       * as theComp->CallerObj - see stack.c for details.
+       */
+      PC = ((struct Component *)theObj)->CallerComp->CallerLSC;
+      theObj = ((struct Component *)theObj)->CallerObj;
+    } 
+    
+    /* Check if theObj is inlined in a component */
+    if (IsComponentItem(theObj)) {
+      TRACE_DUMP(fprintf(output, " dump as comp"));
+      theObj = (struct Object *)EnclosingComponent(theObj);
+    } 
+    
+    if (PC==-1){
+      /* PC for previous frame is per default found just above dyn */
+      PC = *((long *)theCell+1);
     }
 
     TRACE_DUMP(fprintf(output, ", PC=0x%x *\n", PC));
@@ -1270,12 +1276,9 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 #endif
 #endif
 	if(theObj && isObject(theObj)) {
-	  /* Hack: Check if theObj is inlined in a component */
-	  register struct Object *theComp;
-	  theComp = (struct Object *)((long)theObj-headsize(Component));
-	  if ((theObj->GCAttr == -(headsize(Component)/sizeof(long))) && 
-	      (theComp->Proto==ComponentPTValue)) {
-	    DisplayObject(output, theComp, (long)PC);
+	  /* Check if theObj is inlined in a component */
+	  if (IsComponentitem(theObj)) {
+	    DisplayObject(output, EnclosingComponent(theObj), (long)PC);
 	    if (theObj==(struct Object *)BasicItem) break;
 	  } else {
 	    DisplayObject(output, theObj, (long)PC);
