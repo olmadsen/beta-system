@@ -68,6 +68,7 @@ static void BooleanProperty(char *name)
   ENTRY("debugaoatoioa",   DebugAOAtoIOA = TRUE);
   ENTRY("debugaoatolvra",   DebugAOAtoLVRA = TRUE);
   ENTRY("debuglvra",  DebugLVRA = TRUE);
+  ENTRY("debuglin",  DebugLIN = TRUE);
   ENTRY("debugstack", DebugStack = TRUE);
   ENTRY("debugstackobj", DebugStackObj = TRUE);
   ENTRY("debugsockets", DebugSockets = TRUE);
@@ -85,7 +86,7 @@ static void BooleanProperty(char *name)
 	DebugAOA = TRUE;
 	DebugAOAtoIOA = TRUE;
 	DebugAOAtoLVRA = TRUE;
-	DebugLVRA = TRUE; 
+	DebugLVRA = TRUE;
 	DebugStack=TRUE;
 	DebugLazy = TRUE;
 	DebugCBFA=TRUE);
@@ -95,7 +96,8 @@ static void BooleanProperty(char *name)
 	DebugAOA = TRUE;
 	DebugAOAtoIOA = TRUE;
 	DebugAOAtoLVRA = TRUE;
-	DebugLVRA = TRUE; 
+	DebugLVRA = TRUE;
+        DebugLIN = TRUE; 
 	DebugStack=TRUE; 
 	DebugLazy = TRUE;
 	DebugCBFA=TRUE);
