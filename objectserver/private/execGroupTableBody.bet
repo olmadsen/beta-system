@@ -1,0 +1,84 @@
+ORIGIN '../execGroupTable';
+
+--- include '~beta/sysutils/v1.4/objinterface'
+--- include '~beta/basiclib/v1.4/external'
+--- include '../ObjectSerializerTables'
+
+--- initGroupTable:descriptor ---
+(# getGroups:
+     (# elm: ^standardEGTE;
+        current: ^group_header;
+     do 
+        loop:
+          (if current[] -> NextGroup -> current[] //NONE then else
+              &standardEGTE[] -> elm[];
+              &Text[] -> elm.groupName[];
+              
+              current[] -> NameOfGroup -> elm.address 
+                -> extGetCstring -> elm.groupName;
+              
+              nextInx -> elm.inx;
+              
+              elm[] -> nameHash.insert;
+              (elm[], elm.address) -> adrHash.insert;
+              
+              current.protoTableAdr -> tos'%adrGetLong' -> elm.len;
+              current.protoTableAdr + 4 -> elm.ptListAdr;
+              
+              restart loop;
+          if);
+     #);
+do 
+   nameHash.init; 
+   adrHash.init;
+   getGroups;
+#)
+
+
+--- execGroupTableInsert:dopart ---
+do egte[] -> nameHash.insert;
+   (egte[], address) -> adrHash.insert;
+   
+--- findGroupByAdr:dopart ---
+do (address,false) -> GroupName -> adrHash.find -> found[];
+   
+--- lib:attributes ---
+GroupName: external (* in outpattern.c *)
+  (# address: @Integer;
+     isCode: @Integer;
+     groupNameAdr: @Integer;
+  enter (address, isCode)
+  exit groupNameAdr
+  #);
+
+--- segteInxToPt:dopart ---
+do ptListAdr + 4*inx -> tos'%adrGetLong' -> ptAdr
+
+--- segtePTtoInx:dopart ---
+do
+   (if len > 0 //true then
+       0 -> low;
+       len-1 -> high;
+       
+       loop:
+         (if high//low then
+             (if (ptListAdr + 4*low -> tos'%adrGetLong') //ptAdr then
+                 low -> inx;
+              else
+                 -1 -> inx;
+             if);
+          else
+             (low+high) div 2 -> mid;
+             (if (ptListAdr + 4*mid -> tos'%adrGetLong') < ptAdr
+              //true then
+                 mid + 1 -> low;
+              else
+                 mid -> high;
+             if);
+             restart loop;
+         if);
+              
+    else
+       -1 -> inx;
+   if)
+   

@@ -1,0 +1,265 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv';
+
+--- include 'groupList'
+--- include 'execGroupTable'
+--- include 'ObjectSerializerTables'
+--- include 'betaOID'
+--- include 'RepetitionObject'
+--- include '~beta/sysutils/v1.4/objinterface'
+
+--- lib:attributes ---
+
+(* Creating subpatterns of location:
+ * =================================
+ * 
+ * This is a minimal specification of location. The only things that are
+ * fixed in this specification are the things needed by the objectserver
+ * pattern to be able to access different location subpatterns in a 
+ * generic way. Everything else is left free for the implementer of
+ * subpatterns to specify. 
+ * 
+ * To create a subpattern of location the following must be done:
+ * (Mimimum requirements.)
+ * 
+ *     1. locationGroupsImpl
+ *        'nameToInxImpl' must be specialized. If asked to find a group 
+ *         not already in the table, nameToInxImpl should assign a new index 
+ *        to the group and insert it into the table.
+ *        'inxToElmImpl' must be specialized. It should never fail. If
+ *        it does we have a serious error.
+ *        groupList attributes are not used directly, but could (should)
+ *        be used as implementation aid.
+ * 
+ *     2. locationObjects
+ *        'findSerImpl' and 'findProtoImpl' must be specialized.
+ *        'insert' must be specialized.
+ * 
+ *     3. The CrossRefs reference to an instance of crossLocRefsTable must
+ *        be initialized.
+ * 
+ *     4. locationGroups and ptCache must be initialized properly before the
+ *        location is given to the objectserver.
+ * 
+ *     5. Implement all the additions that are obviously necessary to support
+ *        the above mentioned functionality.
+ * 
+ * It should be noted that it is the responsibility of the implementer of
+ * the location to actually open, create and close locations. As a consequence
+ * these operations are not part of the generic location interface. 
+ * When doing open, create and close operations it must be remembered to 
+ * notify the locationList of the (unique) objectserver in the current 
+ * process. This includes checking that another location with the same
+ * 'creationTime' has not already been opened, as this could result in
+ * serious trouble.
+ *)
+
+
+ 
+location:
+  (# 
+     <<SLOT locationLib:attributes>>;
+     
+     (* CREATIONTIME
+      * ============
+      * System time when this location was created. Also used as the first 
+      * part of the OID of objects saved in this location.
+      * The UNIQUE IDENTIFICATION OF THIS LOCATION. *)
+     
+     creationTime: @Integer;
+     
+     
+     
+     (* NEXTOID
+      * =======
+      * Should return a new OID to identify o. 
+      * Used when generating new object ID's. *)
+
+     nextOID: @nextOIDImpl;
+     nextOIDImpl:< 
+       (# o: ^Object;
+          OID: @OIDtype;
+       enter o[]
+       do creationTime -> OID.a; INNER
+       exit OID
+       #);
+     
+     
+     (* LOCATION GROUPS
+      * ===============
+      * Mapping between full groupnames and their indices used in
+      * the serialization of objects in this location. *)
+     
+     locationGroups: @locationGroupsImpl;
+     locationGroupsImpl:< groupList
+       (# element::< (# egte: ^execGroupTableElement #);
+          
+          inxToElm: @inxToElmImpl; (* Static for efficiency. *)
+          inxToElmImpl:<
+            (* Return the element indexed by inx. 
+             * The egte attribute of elements is used for cashing
+             * by objectServer. It should not (!) be saved together
+             * with the contents of the table. *)
+            (# inx: @Integer;
+               elm: ^element;
+            enter inx
+            do INNER
+            exit elm[]
+            #);
+          
+          nameToInx: @nameToInxImpl; (* Static for efficiency. *)
+          nameToInxImpl:<
+            (* Return index used to identify groupName in this location. *)
+            (# groupName: ^Text;
+               inx: @Integer;
+            enter groupName[]
+            do INNER
+            exit inx
+            #);
+       #);
+     
+     
+     
+     (* OID to SERIALIZATION mapping
+      * ============================
+      * Mapping between object OID's and the serializations of objects.
+      * Also provides a method for identifying the type of an object
+      * without actually fetching the full serialization of objects.
+      * This is needed in QUA checks on dangling references. *)
+     
+     locationObjects: @locationObjectsImpl;
+     locationObjectsImpl:<
+       (# findSer: @findSerImpl; 
+          (* Static for efficiency. Returns the serialization of an object 
+           * together with other needed information. *)
+          
+          findSerImpl:<
+            (* findSerImpl should return (NONE, ...) in case OID was not 
+             * found. The repetition returned should be set to make the
+             * next read return the first long of the objectserialization.
+             * If there is only one serialization in the repetition, this
+             * means the repetition returned should be reset. *)
+            (# rep: ^RepetitionObject;
+               OID: @OIDtype;
+               proto, group: @Integer;
+            enter OID
+            do INNER
+            exit (rep[], proto, group)
+            #);
+          
+          
+          findProto: @findProtoImpl; 
+          (* Returns the prototype of an object. Called to get the prototype 
+           * of objects referred by dangling references without the need for 
+           * the full serialization. Should return (-1,-1) if OID was not
+           * found. *)
+          
+          findProtoImpl:<
+            (# OID: @OIDtype;
+               proto, group: @Integer; 
+            enter OID
+            do INNER
+            exit (proto, group)
+            #);
+          
+          insertSer: @insertSerImpl; (* Insert an object serialization. *)
+          insertSerImpl:<
+            (# proto, group: @Integer;
+               OID: @OIDtype;
+               rep: ^RepetitionObject;
+               firstPos, afterPos: @Integer
+                 (* Position in rep of OID serialization. *); 
+            enter (OID, proto, group, rep[], firstPos, afterPos)
+            do INNER
+            #);
+       #);
+     
+     
+     
+     (* PTCACHE
+      * =======
+      * Cache of mapping from prototype addresses to (group, proto) 
+      * pairs used in the serializations in this location. *)
+     
+     ptCache: @integerHashTable
+       (# Element::<
+            (# ptAdr: @Integer;
+               group, proto: @Integer;
+               groupName: ^Text;
+            #);
+          cache: @
+            (# pt: @ProtoType; egt: ^execGroupTable;
+               egte: ^execGroupTableElement;
+               new: ^element;
+            enter (pt,egt[])
+            do
+               pt -> egt.findGroupByAdr -> egte[];
+               &element[] -> new[];
+               (pt, pt.groupId->locationGroups.nameToInx, pt->egte.PTtoInx,
+                egte.groupName[]) 
+                 -> (new.ptAdr, new.group, new.proto, new.groupName[]);
+               (new[],pt) -> insert;
+            exit new[]
+            #);
+       #);
+     
+     
+     
+     (* Cross location references
+      * =========================
+      *
+      * Each time the objectserver encounteres a reference *from* this
+      * location to another location, the onCrossLocRef method is called.
+      * Likewise, if, during unserialization, a cross location reference
+      * is found, this location is asked to open the location, if it is
+      * not already open, using the openLoc method. If openLoc returns FALSE,
+      * this location does not know the requested one, which is a fatal 
+      * error!!
+      *)
+     
+     crossRefs: ^crossLocRefsTable;
+     
+     
+     
+     (* ONDANGLERHIT, AFTERDANGLERHIT
+      * =============================
+      * 
+      * OnDanglerHit is called when a dangling reference is hit, and 
+      * before the object is fetched. The value returned from OnDanglerHit
+      * is used as the maximum number of objects to fetch.
+      * 
+      * AfterDanglerHit is called when the dangler has been fetched. theObject
+      * is the newly fetched object.
+      *)
+     
+     OnDanglerHit:<
+       (# OID: @OIDtype;
+          offset: @Integer;
+          MaxFetched: @Integer;
+       enter (OID,offset)
+       do INNER
+       exit MaxFetched
+       #);
+     
+     AfterDanglerHit:<
+       (# theObject: ^Object;
+       enter theObject[]
+       do INNER
+       #);
+  #);
+
+crossLocRefsTable:
+  (# 
+     onCrossLocRef: @onCrossLocationReference;
+     onCrossLocationReference:<
+       (# fromOID, toOID: @OIDtype;
+       enter (fromOID, toOID)
+       do INNER
+       #);
+     
+     openLoc: @openLocation;
+     openLocation:< BooleanValue
+       (# creationTimeNeeded: @Integer;
+       enter creationTimeNeeded
+       do false -> value; INNER
+       #);
+  #);

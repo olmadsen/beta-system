@@ -1,0 +1,124 @@
+ORIGIN 'objectserver';
+
+(* File specialObjects.bet
+ * ======================= *)
+
+--- include '~beta/sysutils/v1.4/objinterface'
+--- include '~beta/containers/v1.4/list'
+--- include 'runtimeTypesTable'
+
+--- objectserverLib:attributes ---
+
+(* SPECIALOBJECTSTABLE
+ * ===================
+ * 
+ * A special objects table is used to keep track of special objects. 
+ * Special objects are objects that should never be saved during 
+ * put and never read during get. Instead these objects are application
+ * framework objects to be delivered on system startup and expected to 
+ * be present whenever a given persistentstore is used. However, persistent
+ * objects may have references to special objects.
+ * 
+ * Special objects are recognized by the OID.a being zero!!!!!!!!!!!!!
+ * 
+ * register inserts a new special object. OID.a MUST be zero as this is
+ * the way special objects are recognized. staticPart is raised if the
+ * object is a static part of another object. inconsistency is raised
+ * if the special object qualifies to a runtimeType.
+ * 
+ * beforeputget registers special objects in the objects table.
+ * Note that special objects should have OID.a = 0, and thus references
+ * to such objects will always be interpreted as cross-location
+ * references, and therefore not followed.
+ * 
+ * afterputget removes the special objects from the objects table. This
+ * is to allow different sets of special objects in different locations.
+ * 
+ * check ensures that no element in the table qualifies to a runtime
+ * type in the runtimeTypesTable entered.
+ *)
+
+specialObjectsTable: list 
+  (# element::< ObjectTableElement;
+     
+     register: 
+       (# staticPart:< Exception 
+            (# 
+            do 'attempt to register static part as special object' 
+                 -> msg.putText;
+               INNER; 
+               false -> continue;
+            #);
+          inconsistency:< Exception 
+            (# 
+            do 'special object qualifies to runtime type' 
+                 -> msg.putText;
+               INNER; 
+               false -> continue 
+            #);
+          
+          new: ^element;
+          gcf: @Integer;
+          
+          o: ^Object;
+          OID: @OIDtype;
+          rtt: ^RuntimeTypesTable;
+          
+       enter (o[],OID,rtt[]) 
+       do
+          (if OID.a //0 then else
+              (failuretrace,'OID.a of special objects MUST be zero')
+                -> stop;
+          if);
+          
+          o[] -> getGCField -> gcf;
+          
+          check:
+            (if true
+             // (gcf < 0) then
+                (if gcf //-6 then
+                    (* If the encloser is a component, it is ok. *)
+                    (# ato: @addressToObject;
+                       comp: ^Object;
+                    do
+                       (@@o -> tos'%adrGetLong') - 24 -> ato -> comp[];
+                       (if comp[] -> isComponent //true then
+                           leave check;
+                       if)
+                    #);
+                if);
+                
+                staticPart;
+                
+            if);
+          
+          (* special object should not qualify to a runtime type. *)
+          (if rtt[] //NONE then else
+              (if o[] ->  rtt.lookup //true then inconsistency if);
+          if);
+          
+          (* Registration is valid. *)
+          &element[] -> new[];
+          (o[],OID) -> (new.o[],new.OID);
+          new[] -> append;
+       #);
+     
+     beforeputget: @scan (# do current[] -> objects.insert #);
+     afterputget:  @scan (# do current[] -> objects.delete #);
+     
+     check: scan 
+       (# inconsistency:< Exception
+            (# 
+            do 'inconsistency: special object qualifies to runtime type.'
+                 -> msg.putText;
+               INNER;
+               false -> continue;
+            #);
+          rtt: ^RuntimeTypesTable;
+       enter rtt[]
+       do (if current.o[] -> rtt.lookup //true then inconsistency if);
+       #);
+  #);
+
+
+

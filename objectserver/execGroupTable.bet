@@ -1,0 +1,174 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv';
+
+BODY 'private/execGroupTableBody';
+
+--- include '~beta/containers/v1.4/hashTable'
+--- include 'ObjectSerializerTables'
+
+--- lib: attributes ---
+
+execGroupTableElement:
+  (* Each of these represents a fragment group present in this
+   * executable. execGroupTableElement is an abstract super-
+   * pattern. The standard sub-pattern describes objectfiles
+   * linked with the current executable. All of these are
+   * created and inserted into the table at initialization
+   * time. *)
+  (# groupName: ^Text;  
+     address: @Integer; (* Address of groupName string. *)
+     inx: @Integer; (* Unique id of this element within 
+                     * containing execGroupTable. *)
+     
+     inxToPT: @inxToPTimpl;
+     inxToPTimpl:<
+       (# inx: @Integer;   (* Counting from 0 *)
+          ptAdr: @Integer;
+       enter inx
+       do INNER
+       exit ptAdr
+       #);
+     
+     PTtoInx: @PTtoInxImpl;
+     PTtoInxImpl:<
+       (# ptAdr: @Integer;  
+          inx: @Integer; (* Counting from 0 *)
+       enter ptAdr
+       do INNER
+       exit inx (* -1 if not found. *)
+       #);
+  #);
+
+
+GetExecGroupTable:
+  (* At most one instance of ExecGroupTable should be present
+   * in a program execution. This is achieved by using
+   * GetExecGroupTable to fetch the single instance. *)
+  (# egt: ^ExecGroupTable;
+  do ExecGroupTable## -> objectPool.strucGet 
+     (# init::< (# do obj[] -> egt[]; egt.init; #)
+     #) -> egt[];
+  exit egt[]
+  #);
+
+
+ExecGroupTable:
+  (* Mapping from group identifiers (names or adresses) to the 
+   * corresponding execGroupTableElement. *)
+  (# nameHash: @hashTable
+       (# element::< execGroupTableElement;
+          hashfunction::< 
+            (# c,len: @Integer;
+               mmin: @min;
+            do (7, e.groupName.length -> len) -> mmin -> c;
+               (for i: c repeat
+                    e.groupName.t[len-i+1] + value -> value;
+               for);
+            #);
+       #);
+     
+     adrHash: @integerHashTable (# element::< execGroupTableElement #);
+     
+     init: (# do <<SLOT initGroupTable:descriptor>> #);
+     
+     nextInx: @IntegerValue (# do value+1 -> value #);
+     (* Use nextInx to create unique element id's within this table. *)
+     
+     findGroupByName: @
+       (# found: ^execGroupTableElement;
+          e: @nameHash.element;
+          ha: @nameHash.hashfunction;
+          fi: @nameHash.findIndexed
+            (# predicate::< 
+                 (# do current.groupName[] -> e.groupName.equal -> value #);
+               notFound::< 
+                 (# 
+                 do (if fgbnFail[] //NONE then
+                        none -> found[]
+                     else
+                        e.groupName[] -> fgbnFail -> found[]
+                    if)
+                 #);
+            do current[] -> found[];
+            #);
+       enter e.groupName[]
+       do e[] -> ha -> fi;
+       exit found[]
+       #);
+     
+     findGroupByAdr: @
+       (# address: @Integer;
+          found: ^nameHash.element;
+       enter address
+       <<SLOT findGroupByAdr:dopart>>
+       exit found[]
+       #);
+     
+     
+     (* ATTRIBUTES ALLOWING EXTENSION OF THE TABLE AFTER INITIALIZATION
+      * ===============================================================
+      * 
+      * The following attributes are added to allow e.g. interpreted
+      * objects to be saved in and fetched from a persistent store. 
+      * Normally the table when initialized contains all groups available in
+      * the current executable, but if groups are added later (interpreted
+      * or dynamically linked), it is necessary to add these to the table.
+      * This may be done using the attributes below. *)
+     
+     fgbnFail: ^findGroupByNameFailed;
+     
+     findGroupByNameFailed:
+       (* 
+        * When an object is fetched from the persistent store, the
+        * ExecGroupTableElement representing the group it belongs to
+        * is looked up by name in this table. If the lookup fails, there 
+        * is no way to fetch the object into the memory of this process. 
+        * 
+        * However, it may be possible to dynamically link in the corresponding
+        * objectfile, or, assuming the object is an instance of an interpreted
+        * pattern, the interpreter could handle the problem. This should be
+        * done by loading the group requested, insert it into the table, and 
+        * finally return it.
+        * 
+        * Extending the functionality of the table is done by making the 
+        * reference "fgbnFail" point out a method to handle the problem. 
+        * 
+        * More than one such extension could be handled by arranging the 
+        * findGroupByNameFailed methods to call each other in sequence until
+        * the last one has been called, or until someone is able to handle
+        * the problem. When assigning a method to "fgbnFail", it should thus
+        * be remembered what the previous value was, and if not NONE, call
+        * the method if the newly installed method is not able to handle the
+        * problem.
+        *)
+       (# name: ^Text;
+          found: ^execGroupTableElement;
+       enter name[]
+       do INNER
+       exit found[]
+       #);
+     
+     insert:
+       (# egte: ^execGroupTableElement;
+          address: @Integer; (* The address of the groupNameString pointed out
+                              * in the prototype of objects belonging to this 
+                              * group. *)
+       enter (egte[],address)
+       <<SLOT execGroupTableInsert:dopart>>
+       #);
+     
+  #);
+
+
+standardEGTE: execGroupTableElement
+  (* The type of elements generated from the object files 
+   * contained in the executable. *)
+  (# ptListAdr: @Integer; (* Address of prototype list.   *)
+     len: @Integer;       (* Number of prototypes in list *)
+     
+     inxToPTimpl::< (# <<SLOT segteInxToPt:dopart>> #);
+     
+     PTtoInxImpl::< 
+       (# high,low,mid: @Integer;
+       <<SLOT segtePTtoInx:dopart>>      
+       #);
+  #)

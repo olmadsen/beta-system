@@ -1,0 +1,343 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv';
+BODY 'private/serializeBody' 'private/unserializeBody';
+
+(* This fragment contains the interface to ObjectSerializer
+ * and ObjectUnSerializer to be used in the implementation of 
+ * a Persistent Store, the OODB, and the packing and unpacking 
+ * of objects sent across the network to handle distributed objects.
+ * 
+ * 
+ * An object is saved in the following format: 
+ * 
+ * Format of a saved object reference:
+ * (!!)  Object references are saved as an offset followed by an object OID.
+ *       Objects not physically inlined in other objects have their own OID.
+ *       In that case the offset is zero. Objects inlined in other objects do 
+ *       not have their own OID, and in that case the reference is saved as 
+ *       the OID of the enclosing object and a non-negative offset into that 
+ *       object.
+ *       As offsets are always 8-byte aligned, the three (actually only two)
+ *       low-order bits of the offset field is used for information about the 
+ *       type of reference. There are three different reference types as 
+ *       declared in ~beta/sysutils/v1.4/objinterface.bet:
+ * 
+ *            REFTYPE_DYNAMIC: (# exit 0 #);
+ *            REFTYPE_OFFLINE: (# exit 1 #);
+ *            REFTYPE_ORIGIN:  (# exit 2 #);
+ * 
+ *       That is: "offset bitand 7" is the reference type.
+ *                "offset bitand not 7" is the offset value..
+ *
+ *       An object reference thus takes up 3 longs in the serialization.
+ *       If the reference is NONE, noneOID is stored instead of the 
+ *       object OID.
+ * 
+ * Each object is put in the following format. (proto, group) information is
+ * not saved in the serialization, but somewhere else defined by the user of
+ * the ObjectSerializer.
+ *
+ * 0: Number of simple values in the list (1) below.
+ * 1: Simple values in order of appearance, including statically inlined
+ *    part objects. (1 long per value)
+ * 2: List of all references within the object in order of appearance. 
+ *    This includes origin references, static offline references, dynamic
+ *    references, repetition object references and structure references.
+ *    Note that references contained in statically inlined objects are also 
+ *    in the the list, as statically inlined objects are simply treated as 
+ *    part of the enclosing object (recursively).
+ *    a: Object references are saved as described above. 
+ *    b: Value repetitions have no OID and are saved as (3 longs + substance):
+ *        (i)   Prototype (ValRepPTValue, ByteRepPTValue, 
+ *                         WordRepPTValue or DoubleRepPTValue)
+ *        (ii)  LowRange
+ *        (iii) HighRange
+ *        (iv)  The longs necessary to save the contents of the repetition.
+ *    c: Reference repetitions have no OID and are saved as (3 longs + refs)
+ *        (i)   Prototype (RefRepPTValue)
+ *        (ii)  LowRange
+ *        (iii) HighRange
+ *        (iv)  Each object reference contained in the repetition is stored 
+ *              as explained under (!!). The reference type is REFTYPE_DYNAMIC.
+ *    d: Pattern variable references are saved as (6 longs)
+ *        (i)   ProtoType  (StructurePTValue)
+ *        (ii)  Group id.     (Group containing the prototype)
+ *        (iii) ProtoType id. (Id of prototype within the group)
+ *        (iv)  Identification of origin object. (REFTYPE_ORIGIN)
+ *       This means that a pattern variable is saved in as many copies as
+ *       there are objects referencing it. As pattern varibles are constant
+ *       (once created they never change) this has no logical consequences,
+ *       but if the same pattern variable is pointed out many times,
+ *       it may mean some waste of memory. This is probably no serious
+ *       problem. The alternative is that ObjectTable, ObjectSerializer and
+ *       ObjectUnserializer below would have to handle pattern references
+ *       explicitly, making them twice as complex.
+ * 
+ *)
+
+--- include '~beta/sysutils/v1.4/objinterface'
+--- include 'betaOID'
+--- include 'RepetitionObject'
+--- include 'danglingtable'
+--- include 'objecttable'
+--- include 'ptOffsetTable'
+
+--- lib: attributes ---
+
+(* SERIALIZE
+ * ========= 
+ * 
+ * Call serialize to serialize an object. When INNER serialize is called,
+ * call forEachRoot for each root to be serialized.
+ * 
+ * serialize will call putObject on each object to query whether that 
+ * specific object should be serialized. 
+ * If putObject returns false, the object will not be serialized, and neither
+ * will objects only reachable through this one.
+ * Upon return, the objects table will contain all objects serialized 
+ * and objects directly reachable from these. It may later be used when
+ * unserializing objects to achieve update of the objects instead of
+ * creating new instances.
+ * 
+ * 
+ * doPutObject is called before the object in e is to be serialized. 
+ * 
+ *    If FALSE is returned, the object or pattern will not be 
+ *    serialized. doPutObject is not called for objects whose OID was 
+ *    set to noneOID. 
+ * 
+ *    BEWARE that objects already serialized contains references to 
+ *    this object. It might therefore, in some cases, be impossible 
+ *    to unserialize these.
+ * 
+ *    If value is TRUE and rep is not NONE upon return, rep will be 
+ *    used to put the object serialization. If value is TRUE and rep 
+ *    is NONE, a new RepetitionObject is created to contain the 
+ *    serialization.
+ * 
+ *    If refType is REFTYPE_OFFLINE, value HAS to be TRUE, and 
+ *    doPutObject is only called to obtain a repetition to put the 
+ *    serialization into. 
+ * 
+ *    If refType is not REFTYPE_OFFLINE, and FALSE is returned in 
+ *    value, doPutObject may be called again under one of the 
+ *    following circumstances.
+ * 
+ *      1. refType is REFTYPE_DYNAMIC or REFTYPE_ORIGIN, and later the opposite
+ *         is found. In that case doPutObject is queried again to 
+ *         make it possible to regret the first decision.
+ *      2. A REFTYPE_OFFLINE is found from an object that _should_ be put.
+ *         In that case doPutObject is called again to obtain a 
+ *         repetition to put the serialization into. The first call 
+ *         to doPutObject is ignored.
+ * 
+ * 
+ * putDone is called when e.o has been serialized.
+ * 
+ * forEachRefSaved is called for each reference saved in an object 
+ *    serialization. 
+ * 
+ * unknownProtoType is raised if pt was not found by 
+ *    objects.getGroupAndProtoId. It is not possible to 
+ *    continue serialization after this.
+ *)
+
+serialize:
+  (# 
+     doPutObject:< BooleanValue
+       (# e: ^objects.element;
+          fromOID: @OIDtype; (* OID of object first referencing e.o. *)
+          refType: @Char;
+       enter (e[], fromOID, refType)
+       do true -> value; INNER;
+       #);
+     
+     putDone:< 
+       (# e: ^objects.element;
+          rep: ^repetitionObject; (* The serialization of e *)
+          firstPos: @Integer;     (* First position in rep of the 
+                                   * serialization of e.o. *)
+          afterPos: @Integer;     (* First position in rep after the 
+                                   * serialization of e.o. *)
+          group, proto: @Integer; (* External prototype representation. *)
+       enter (e[],rep[],firstPos,afterPos,group,proto)
+       do INNER;
+       #);
+     
+     forEachRefSaved:<
+       (# fromOID, toOID: @OIDtype;
+       enter (fromOID, toOID)
+       do INNER
+       #);
+     
+     getRepetition:<
+       (# e: ^objects.element;
+          rep: ^RepetitionObject;
+       enter e[]
+       do INNER
+       exit rep[]
+       #);
+     
+     unknownProtoType:< Exception
+       (# pt: ^ProtoType enter pt[] do INNER; false -> continue #);
+     
+     stateTableRange:< IntegerValue (# do 101 -> value; INNER #);
+     stateTableCollisionRange:< IntegerValue (# do 10 -> value; INNER #);
+     (* These are the ranges used when initializing the internal 
+      * stateTable. Furtherbind if it is more efficient with another
+      * size of these tables. *)
+     
+     (* In INNER serialize, call forEachRoot for each root obejct. *)
+     forEachRoot: @
+       (# thisRoot: ^Object;
+          fromOID: @OIDtype;
+          OID: @OIDtype;
+          offset: @Integer;
+       enter (thisRoot[],fromOID)
+       <<SLOT forEachRootImpl:dopart>>
+       exit (OID,offset)
+       #);
+          
+     objectsType:< ObjectTable;
+     objects: ^objectsType;
+     danglers: ^danglingTable;
+     ptOffsets: ^ptOffsetTable;
+     
+     osPrivate: @<<SLOT osPrivateBody:descriptor>>;
+     
+  enter (objects[], danglers[], ptOffsets[])
+  <<SLOT osSerializeBody:dopart>>
+  #);
+
+
+(* UNSERIALIZE
+ * =========== 
+ * 
+ * Calls INNER and expects forEachRoot to be called for each root object
+ * that should be unserialized. Upon return the objects table
+ * given as parameter contains all the objects unserialized.
+ * 
+ * doGetObject is called to ask whether the object with OID should 
+ *    be unserialized.
+ * 
+ *    If the object is contained in the objects table, found will 
+ *    contain the corresponding ObjectTableElement, and doGetObject 
+ *    can be used to control whether the object state should be 
+ *    updated or the object should be left untouched. 
+ * 
+ *    fromOID is the OID of the object containing a reference to this one.
+ * 
+ *    If FALSE is returned, neither the object, nor objects only 
+ *    reachable from this one will be unserialized/updated.
+ * 
+ *    An object not contained in the objects table, (found will be 
+ *    NONE) but referenced from an object being unserialized has to 
+ *    be unserialized to avoid dangling references. In that case, 
+ *    if FALSE is returned, the step taken depends on the value 
+ *    returned from allowDanglingRefs. 
+ *    If allowDanglingRefs is TRUE, danglers is consulted to get a 
+ *    value to use instead of the real reference.
+ *    If allowDanglingRefs is FALSE, the UnknownObject exception is 
+ *    raised. 
+ * 
+ *    If the object is needed as origin of another object being 
+ *    unserialized, and found[] is NONE, the object MUST be 
+ *    unserialized. In that case the origin is unserialized without 
+ *    asking, and in case doGetObject was called before it was known 
+ *    that the object was needed as origin, the answer returned then
+ *    is simply ignored.
+ * 
+ *    When unserializing/updating objects having static parts 
+ *    allocated offline, these parts are always read together with 
+ *    the enclosing object, without asking.
+ * 
+ * 
+ * allowDanglingRefs decides whether doGetObject is allowed to return 
+ *    FALSE on objects not found in the objects table. If FALSE, the 
+ *    UnknownObject exception is raised. If TRUE the dangling 
+ *    reference is set up as described in doGetObject. 
+ * 
+ * 
+ * getSerialization is called to get the serialization of the object to be 
+ *    unserialized. rep.pos must point out the first element of the 
+ *    serialization.
+ * 
+ *    It is allowed to return the same repetitionObject several times
+ *    with different positions, but do not overwrite old rep's before 
+ *    unserialize returns as the data may still bet needed. 
+ *    If none is returned, the getSerFailed exception is raised. 
+ * 
+ * 
+ * unknownProtoType is Raised if (group,proto) was not found by 
+ *    objects.getProto. Unserialization cannot continue after this.
+ * 
+ * 
+ *)
+
+unserialize:
+  (# doGetObject:<
+       (# OID, fromOID: @OIDtype;
+          found: ^objects.element;
+          refType: @Integer;
+          value: @Boolean;
+       enter (OID, found[], fromOID, refType)
+       do true -> value; INNER
+       exit value
+       #);
+     
+     allowDanglingRefs:< BooleanValue 
+       (# do false -> value; INNER #);
+     
+     getSerialization:<
+       (# OID, fromOID: @OIDtype;
+          rep: ^repetitionObject;
+          proto,group: @Integer;
+       enter (OID,fromOID)
+       do INNER
+       exit (rep[],proto,group)
+       #);
+     
+     unknownProtoType:< Exception
+       (# group, proto: @Integer 
+       enter (group, proto) 
+       do INNER; false -> continue;
+       #);
+     
+     UnknownObject:< Exception 
+       (* See allowDanglingRefs and doGetObject *)
+       (# OID: @OIDtype enter OID do INNER; false -> continue; #);
+     
+     getSerFailed:< Exception
+       (* See getSerialization. *)
+       (# OID: @OIDtype enter OID do INNER; false -> continue; #);
+     
+     stateTableRange:< IntegerValue (# do 101 -> value; INNER #);
+     stateTableCollisionRange:< IntegerValue (# do 10 -> value; INNER #);
+     (* These are the ranges used when initializing the internal 
+      * stateTable. Furtherbind if it is more efficient with another
+      * size of these tables. *)
+     
+     objectsType:< ObjectTable;
+     objects: ^objectsType;
+     danglers: ^danglingTable;
+     ptOffsets: ^ptOffsetTable;
+     
+     
+     (* When INNER serialize is called, user should call forEachRoot 
+      * for each root object to be serialized. *)
+     
+     forEachRoot: @
+       (# OID: @OIDtype;
+          offset: @Integer;
+          fromOID: @OIDtype;
+          thisRoot: ^Object;
+          doIt: @<<SLOT forEachUnserRootImpl:descriptor>>
+       enter (OID,offset,fromOID)
+       do doIt
+       exit thisRoot[]
+       #);
+
+     ousPrivate: @<<SLOT ousPrivateBody:descriptor>>;
+     
+  enter (objects[], danglers[], ptOffsets[])
+  <<SLOT ousUnserializeBody:dopart>>
+  #)

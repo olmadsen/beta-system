@@ -1,0 +1,162 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv';
+
+--- include 'ObjectSerializerTables'
+--- include '~beta/sysutils/v1.4/objinterface'
+
+--- lib:attributes ---
+
+(* PTOFFSETTABLE
+ * =============
+ * Used internally by the ObjectSerializer, but given as a parameter
+ * to serialize and unserialize as any number of ObjectSerializers
+ * can share a single ptOffsetTable. *)
+
+offsetTableElement:
+  (# ptAdr: @Integer;        (* Absolute address of the prototype     *)
+     
+     dynCount: @Integer;     (* Number of non-static references, including 
+                              * origin references and static offline       
+                              * references.                                *)
+     dynRefs: [1]@Integer;   (* Byte offsets of dynamic references.        *)
+     refTypes: [1]@Integer;  (* REFYPE_DYNAMIC, REFTYPE_OFFLINE or         
+                              * REFTYPE_ORIGIN                             *)
+     
+     simpleCount: @Integer;   (* Number of simple value fields. *)
+     simpleVals: [1]@Integer; (* Byte offsets of simple values. *)
+     
+     partCount: @Integer;  (* Number of static inlined partobjects.       *)
+     parts: [1]@Integer;   (* Byte offsets of static inlined partobjects. *)
+     protos: [1]@Integer;  (* Prototypes of static inlined partobjects.   *)
+  #);
+
+ptOffsetTable: integerHashTable
+  (# element::< offsetTableElement;
+     
+     lookup: @
+       (* Looks up pt in the table. If pt is not found, the corresponding
+        * element is calculated, inserted, and returned. *)
+       (# ptAdr: @Integer; 
+          elm: ^element;
+       enter ptAdr
+       do (if ptAdr -> find -> elm[] //NONE then 
+              (ptAdr -> makeElement -> elm[], ptAdr) -> insert
+          if)
+       exit elm[]
+       #);
+     
+     makeElement: @
+       (# ofs: [1]@Integer;
+          (* ofs[i] contains the meaning of the i'th long within 
+           * objects that are instances of proto. The 1'st long is
+           * the GC field as the prototype is not considered here.
+           * Possible offsetTable values: *)
+          
+          staticPart: (# exit 10 #);
+          gcInfo:     (# exit 20 #);
+          simple:     (# exit 30 #);
+          
+          protos: @
+            (* protos.table[i] contains the prototype of the i'th 
+             * inlined static part object. *)
+            (# table: [1]@Integer;
+               count: @Integer;
+               append: @
+                 (# proto: @Integer;
+                 enter proto
+                 do
+                    (if count//0 then
+                        1 -> count;
+                     else
+                        1 -> table.extend;
+                        count + 1 -> count;
+                    if);
+                    proto -> table[count];
+                 #);
+               
+               reset: @(# do 0 -> count; 1 -> table.new #);
+            #);
+          
+
+          fillOutOfs: 
+            (# pt: @ProtoType; inx: @Integer;
+            enter (pt, inx)
+            do
+               (*
+               'fillOutOfs: inx = ' -> screen.putText;
+               inx -> screen.putInt; 
+               ' pt = ' -> screen.putTExt;
+                pt -> screen.putInt; screen.newline;
+                *)
+               gcInfo -> ofs[inx+1]; 
+               
+               (* Fill out dynamic reference fields and call recursively
+                * on static references (inlined objects): *)
+               pt.scanRefs
+               (# thisInx: @Integer;
+               do (* 'offset = ' -> screen.putText;
+                   thisOffset -> screen.putInt; screen.newline; *)
+                  inx + (thisOffset div 4) -> thisInx;
+                  (if isStatic //true then 
+                      (thisProto, thisInx) -> fillOutOfs;
+                      staticPart -> ofs[thisInx];
+                      thisProto -> protos.append;
+                   else 
+                      refType -> ofs[thisInx];
+                  if);
+               #);
+            #);
+          
+          pt: @ProtoType;
+          elm: ^element;
+          
+       enter pt
+       do 
+          &element[] -> elm[];
+          pt -> elm.ptAdr;
+          
+          (* 'makeElement: Prototype is ' -> screen.putText;
+           pt.labid -> screen.putLine; *)
+          
+          (if ofs.range < pt.size - 1 //true then
+              (pt.size - 1 - ofs.range) -> ofs.extend;
+          if);
+          (for i:pt.size - 1 repeat simple -> ofs[i] for);
+          (* ofs.range >= pt.size - 1, as the proto field is ignored. *)
+          
+          (pt,0) -> fillOutOfs;
+          (for i: pt.size - 1 repeat
+               (if ofs[i] //simple then
+                   
+                   elm.simpleCount+1->elm.simpleCount;
+                   (if elm.simpleCount > elm.simpleVals.range //true then
+                       elm.simpleVals.range -> elm.simpleVals.extend;
+                   if);
+                   i*4 -> elm.simpleVals[elm.simpleCount];
+                   
+                //REFTYPE_DYNAMIC//REFTYPE_ORIGIN//REFTYPE_OFFLINE then
+                   
+                   elm.dynCount+1->elm.dynCount;
+                   (if elm.dynCount > elm.dynRefs.range //true then
+                       elm.dynRefs.range -> elm.dynRefs.extend;
+                       elm.refTypes.range -> elm.refTypes.extend;
+                   if);
+                   i*4 -> elm.dynRefs[elm.dynCount];
+                   ofs[i] -> elm.refTypes[elm.dynCount];
+                   
+                //staticPart then
+                   
+                   elm.partCount+1->elm.partCount;
+                   (if elm.partCount > elm.parts.range //true then
+                       elm.parts.range -> elm.parts.extend;
+                   if);
+                   i*4 -> elm.parts[elm.partCount];
+                   
+               if); 
+          for);
+          (if elm.partCount //0 then else
+              protos.table -> elm.protos;
+              protos.reset;
+          if);
+       exit elm[]
+       #);
+  #);

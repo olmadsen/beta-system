@@ -1,0 +1,568 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv';
+BODY 'private/objectserver_danglersbody';
+
+--- include '~beta/sysutils/v1.4/objinterface'
+--- include 'execGroupTable'
+--- include 'location'
+--- include 'ObjectSerializer'
+
+---lib:attributes ---
+
+objectServer:
+  (# egt: ^execGroupTable;
+     
+     (* LOCATIONLIST
+      * ============
+      * 
+      * Whenever a location is opened, created or deleted, this table
+      * should be properly notified.
+      * 
+      * delete overrides the hashTable.delete operation as it cannot be
+      * bound due to INNER being called *after* the element has
+      * been deleted. In this case it is necessary to execute the
+      * extension code before the element is deleted from the table. *)
+     
+     locationList: @HashTable
+       (# element::< location;
+          hashfunction::< (# do e.creationTime -> value #);
+          thisTable: ^HashTable;
+          
+          delete: 
+            
+            (# loc: ^location;
+               warningGiven: @Boolean;
+               danglersExists:< Object;
+               
+            enter loc[]
+            do 
+               false -> warningGiven;
+               
+               (* Forget about all objects that were fetched from the
+                * location being closed. *)
+               
+               scanDanglers: danglers.dtoo.scanAndDelete
+               (# 
+               do (current.OID.a = loc.creationtime) -> deleteThis;
+                  (if deleteThis and not warningGiven //true then
+                      danglersExists;
+                      true -> warningGiven;
+                      restart scanDanglers;
+                  if)
+               #);
+               
+               danglers.otod.scanAndDelete
+               (# 
+               do (current.OID.a = loc.creationtime) -> deleteThis;
+               #);
+               
+               objects.oh.scanAndDelete
+               (# 
+               do (current.OID.a = loc.creationtime) -> deleteThis;
+               #);
+               
+               objects.ph.scanAndDelete
+               (# 
+               do (current.OID.a = loc.creationtime) -> deleteThis;
+               #);
+               
+               (* Call the hashTable.delete operation. *)
+               loc[] -> thisTable.delete;
+            #);
+          
+          init::< (# do THIS(locationList)[] -> thisTable[] #);
+       #);
+     
+     lastLocation: ^location;
+     setLocation: (* CAN NOT be static. *)
+       (# newCreationTime, fromCreationTime: @Integer;
+       enter (newCreationTime,fromCreationTime)
+       do 
+          newCreationTime ->locationList.findIndexed
+          (# predicate:: 
+               (# do current.creationTime = newCreationTime -> value #);
+             notFound::
+               (# 
+               do (if fromCreationTime //0 then
+                      (failure, 'FATAL!! CreationTime not found (1)') -> stop;
+                   else
+                      fromCreationTime -> locationList.findIndexed
+                      (# predicate::
+                           (# 
+                           do (current.creationTime=fromCreationTime) -> value
+                           #);
+                         notFound::
+                           (# 
+                           do (failure,'FATAL!! creationTime not found (2)') 
+                                -> stop;
+                           #);
+                      do (if newCreationTime -> current.crossRefs.openLoc 
+                          //false then
+                             (failure,'crossreferenced location not found.') 
+                               -> stop;
+                          else
+                             (* Try again. *)
+                             (newCreationTime,0) -> setLocation;
+                         if)
+                      #);
+                  if)
+               #);
+          do current[] -> lastLocation[];
+          #)
+       #);
+     
+     
+     (* OBJECTS
+      * =======
+      * 
+      * Table of all persistent objects currently in the address space of
+      * this process. *)
+     
+     objects: @objectsType;
+     objectsType:< ObjectTable
+       (# protoHash::< (# range::< (# do 491 -> value; INNER #)#);
+          OIDhash::< (# range::< (# do 491 -> value; INNER #)#);
+          
+          newOID::<
+            (# 
+            do (if fromOID.a //lastLocation.creationTime then else
+                   (fromOID.a,0) -> setLocation;
+               if);
+               o[] -> lastLocation.nextOID -> value;
+            #);
+          
+          getGroupAndProtoId::<
+            (# (* groupName: ^Text; *)
+               egte: ^ExecGroupTableElement;
+               lelm: ^lastLocation.ptCache.element;
+               pt: @ProtoType;
+            do (if OID.a //lastLocation.creationTime then else
+                   (* We are putting, and therefore the OID.a
+                    * location is necessarily already open. *)
+                   (OID.a,0) -> setLocation;
+               if);
+               
+               (if ptAdr -> lastLocation.ptCache.find -> lelm[] //NONE then
+                   (* not found in lastLocation.ptCache *)
+                   (ptAdr,egt[]) -> lastLocation.ptCache.cache -> lelm[];
+               if);
+               
+               (lelm.group, lelm.proto) -> (group, proto)
+            #);
+     
+          getProto::<
+            (# ge: ^lastLocation.locationGroups.element;
+            do  
+               (if OID.a //lastLocation.creationTime then else
+                   (OID.a, fromOID.a) -> setLocation;
+               if);
+               group -> lastLocation.locationGroups.inxToElm -> ge[];
+               (if ge[] //NONE then
+                   'ObjectServer: findGroupByInx failed' -> screen.putLine;
+                   -1 -> ptAdr;
+                else
+                   (if ge.egte[] //NONE then
+                       ge.groupName[] -> egt.findGroupByName -> ge.egte[];
+                       (if ge.egte[] //NONE then
+                           'ObjectServer: Unknown Group: ' -> screen.putText;
+                           ge.groupName[] -> screen.putLine;
+                           -1 -> ptAdr;
+                        else
+                           proto -> ge.egte.inxToPT -> ptAdr;
+                       if);
+                    else
+                       proto -> ge.egte.inxToPT -> ptAdr;
+                   if);
+               if);
+            #);
+          
+          insert::<
+            (# doCheckDanglers: @<<SLOT checkDanglers:descriptor>>;
+            do (if checkDanglers//true then
+                   doCheckDanglers;
+               if);
+            #)
+       #);
+     
+     <<SLOT objectserverLib:attributes>>;
+     
+     
+     
+     (* CHECKDANGLERS
+      * =============
+      * Should be true during get operations to ensure that 
+      * dangling references to fetched objects are setup 
+      * properly. *)
+     
+     checkDanglers: @Boolean;
+     
+     
+     
+     (* DANGLERS
+      * ========
+      * Table of dangling references in this program execution. *)
+     
+     danglers: @danglingTable
+       (# dtoo: @integerHashTable (# element::< danglingData #);
+          otod: @oidHashTable (# element::< danglingData #);
+          oideq: @equalOID;
+          
+          OIDtoDangling::<
+            (# e: ^danglingData;
+               
+               new: @
+                 (# addDanglingProto: @<<SLOT addDanglingProto:descriptor>>;
+                    
+                    getNextDangler: external
+                      (# dangler: @Integer
+                      exit dangler
+                      #);
+                    
+                    proto, group: @Integer;
+                    protoAdr: @Integer;
+                    ofte: ^offsetTableElement;
+                 do
+                    (* Get hold of the prototype of the object referred
+                     * by the dangling reference. It might be needed
+                     * in a Qua check. *)
+                    (if OID.a //lastLocation.creationTime then else
+                        (OID.a, fromOID.a) -> setLocation;
+                    if);
+                    OID -> lastLocation.locationObjects.findProto
+                      -> (proto, group);
+                    
+                    (group, proto, OID, fromOID) 
+                      -> objects.gp 
+                      -> (protoAdr,group);  
+                    
+                    (if protoAdr //-1 then
+                        (failure, 'OIDtoDangling: Prototype not found')
+                          -> stop;
+                    if);
+                    
+                    findProto:
+                      (if offset //0 then
+                          (* protoAdr is correct. *)
+                       else
+                          protoAdr -> ptOffsets.lookup -> ofte[];
+                          (for i:ofte.partCount repeat
+                               (if ofte.parts[i] //offset then
+                                   ofte.protos[i] -> protoAdr;
+                                   leave findProto;
+                               if);
+                          for);
+                          (failure, 'OIDtoDangling: offset not found') -> stop;
+                      if);
+                    
+                    getNextDangler -> dangling;
+                    (offset,dangling) -> e.add;
+                    (e[], dangling) -> dtoo.insert;
+                    
+                    addDanglingProto;
+                    
+                 #)
+            do 
+               doFind:
+                 (if OID -> otod.find -> e[] //NONE then
+                     &danglingData[] -> e[];
+                     OID -> e.OID;
+                     fromOID -> e.fromOID;
+                     (e[], OID) -> otod.insert;
+                     new;
+                  else
+                     (if (e.fromOID,emptyOID) -> oideq //true then
+                         fromOID -> e.fromOID;
+                     if);
+                     (for i:e.count repeat
+                          (if e.offsets[i] //offset then
+                              e.danglers[i] -> dangling;
+                              leave doFind;
+                          if);
+                     for);
+                     new;
+                 if);
+            #);
+          
+          danglingToOID::<
+            (# e: ^danglingData;
+            do
+               doFind:
+                 (if dangling -> dtoo.find -> e[] //NONE then
+                     'FATAL ERROR: Dangling reference not in dangling table'
+                       -> screen.putText;
+                     dangling -> screen.putInt; screen.newline;
+                     (failure, '') -> stop;
+                  else
+                     e.OID -> OID;
+                     e.fromOID -> fromOID;
+                     (for i:e.count repeat
+                          (if e.danglers[i] //dangling then
+                              e.offsets[i] -> offset;
+                              (* 
+                               *   'danglingToOID Found: ' -> putText;
+                               *   e.OID.a -> putInt; ' ' -> put;
+                               *   e.OID.b -> putINt; ' ' -> put; 
+                               *   offset -> putInt; newline;
+                               *                               
+                               *)
+                              leave doFind;
+                          if);
+                     for);
+                 if);
+            #);
+          
+          delete::<
+            (# 
+            do 
+               e.OID -> otod.delete;
+               (for i:e.count repeat
+                    e.danglers[i] -> dtoo.delete;
+               for);
+            #);
+          
+          init::< 
+            (# 
+            do dtoo.init; otod.init;
+               <<SLOT HandleDanglersInstall:descriptor>> 
+            #);
+          
+          setupNew: @(# do <<SLOT danglersSetupNew:descriptor>> #);
+          dangpriv: @<<SLOT danglersPrivate:descriptor>>;
+       #);
+     
+          
+     (* PTOFFSETS
+      * =========
+      * Used internally by ObjectSerializer. *)
+     
+     ptOffsets: @ptOffsetTable;
+     
+     
+     
+     (* PUTCLOSURE
+      * ==========
+      * Use this to save the transitive closure of a set of objects specified
+      * by the binding on serializeImpl.scanRoots. lastLocation is the 
+      * location objects will be saved in unless thay are already saved in 
+      * another location. *)
+     
+     putClosure: 
+       (# serializeImpl:< serialize
+            (# putDone::<
+                 (# inx: @Integer;
+                 do 
+                    (if e.OID.a //lastLocation.creationTime then else
+                        (* The location containing e must necessarily be
+                         * open already. *)
+                        (e.OID.a,0) -> setLocation;
+                    if);
+                    (e.OID, proto, group, rep[], firstPos, afterPos) 
+                      -> lastLocation.locationObjects.insertSer;
+                 #);
+               forEachRefSaved::<
+                 (# oideq: @equalOID;
+                 do (if toOID.a//fromOID.a//0 then else
+                        (* If toOID.a is 0, it is a special object, and the
+                         * reference not a cross-location reference. 
+                         * For a description of special objects, see
+                         * persistentstore.bet. *)
+                        (if (emptyOID,fromOID) -> oideq //false then
+                            (* Cross location reference *)
+                            (if fromOID.a //lastLocation.creationTime then else
+                                (* The from location is necessarily open. *)
+                                (fromOID.a,0) -> setLocation;
+                            if);
+                            (fromOID, toOID) 
+                              -> lastlocation.crossRefs.onCrossLocRef;
+                        if);
+                    if);
+                 #);
+               doPutObject::<
+                 (# oideq: @equalOID; 
+                 do 
+                    (* Do not follow cross location references. *)
+                    (if (emptyOID,fromOID) -> oideq //false then 
+                        (* fromOID is not emptyOID *)
+                        (fromOID.a = e.OID.a) -> value;
+                     else
+                        true -> value;
+                    if);
+                    INNER;
+                 #);
+            do INNER;
+            #);
+          doIt: @serializeImpl;
+       enter lastLocation[]
+       do (objects[],danglers[],ptOffsets[]) -> doIt;
+       #);
+     
+     singleObjectPutClosure: PutClosure
+       (# serializeImpl::< 
+            (# 
+            do (theObject[],fromOID) -> forEachRoot -> (OID,offset) 
+            #);
+          theObject: ^Object;
+          fromOID: @OIDtype;
+          OID: @OIDtype;
+          offset: @Integer;
+       enter (theObject[],fromOID)
+       exit (OID,offset)
+       #);
+     
+     
+     (* GETCLOSURE
+      * ==========
+      * Use this to read the transitive closure of the objects defined 
+      * by INNER doUnserializeImpl. Everything reachable and not already 
+      * in memory is read. Objects already in memory (must be registered in 
+      * the objects table) are not reread.
+      * To allow dangling references, write your own get or use the 
+      * predefined getPartialClosure. 
+      * scanRoots should also set lastlocation to be the location from 
+      * where to fetch the current root. *)
+     
+     getClosure:
+       (# doUnserializeImpl:< unserialize
+            (# getSerialization::<
+                 (# 
+                 do (if lastlocation[] //NONE then
+                        (OID.a, fromOID.a) -> setLocation;
+                     else
+                        (if OID.a //lastLocation.creationTime then else
+                            (OID.a, fromOID.a) -> setLocation;
+                        if);
+                    if);
+                    OID -> lastLocation.locationObjects.findSer
+                      -> (rep[], proto, group);
+                    INNER;
+                 #);
+               doGetObject::< 
+                 (# 
+                 do (* Only read objects not already in memory. *)
+                    (found[] = NONE) -> value;
+                    INNER;
+                 #);
+               getSerFailed::<
+                 (# txt: ^Text;
+                 do 'Fatal Error:objectserver.getClosure:getSerFailed on OID ('
+                      -> txt[];
+                    OID.a -> txt.putInt; ',' -> txt.append;
+                    OID.b -> txt.putInt; ')\n' -> txt.append;
+                    txt[] -> msg.prepend;
+                    INNER;
+                 #);
+               unknownProtoType::<
+                 (# 
+                 do 'Fatal Error: objectserver.getClosure: Prototype not found'
+                      -> msg.prepend;
+                    INNER;
+                 #);
+            do INNER;
+            #);
+          doIt: @doUnserializeImpl;
+       do INNER;
+          true -> checkDanglers;
+          (objects[],danglers[],ptOffsets[]) -> doIt;
+          false -> checkDanglers;
+          danglers.setupNew;
+       #);
+     
+     singleObjectGetClosure: getClosure
+       (# doUnserializeImpl::
+            (# do (OID,offset,fromOID) -> forEachRoot -> theObject[] #);
+          OID: @OIDtype;
+          offset: @Integer;
+          fromOID: @OIDtype;
+          theObject: ^Object
+       enter (OID,offset,fromOID)
+       exit theObject[]
+       #);
+     
+     (* GETPARTIALCLOSURE
+      * =================
+      * This is the predefined pattern for getting a part of the
+      * transitive closure of a list of root objects.
+      * References to unfetched objects will be setup as dangling. This way 
+      * the object will be fetched when it is needed. Objects already in 
+      * memory when encountered are not read again, as this could result in 
+      * loss of updates to these objects.
+      * Currently getPartialClosure is used by the trapHandler to fetch
+      * an object referred by a dangling reference being followed.
+      * Later this could in principle be handled by location.onDanglerHit. *)
+     
+     getPartialClosure:
+       (# doUnserializeImpl:< unserialize
+            (# getSerialization::<
+                 (# inx, len: @Integer;
+                 do (if lastlocation[] //NONE then
+                        (OID.a, fromOID.a) -> setLocation;
+                     else
+                        (if OID.a //lastLocation.creationTime then else
+                            (OID.a, fromOID.a) -> setLocation;
+                        if);
+                    if);
+                    OID -> lastLocation.locationObjects.findSer
+                      -> (rep[], proto, group);
+                    fetched+1 -> fetched;
+                 #);
+               
+               doGetObject::< 
+                 (# 
+                 do 
+                    (if found[] //NONE then
+                        (* Only read objects not already in memory. *)
+                        (fetched < maxFetched) -> value 
+                     else
+                        false -> value;
+                    if)
+                 #);
+               allowDanglingRefs::< (# do true -> value #);
+               
+               getSerFailed::<
+                 (# 
+                 do 'Fatal: objectserver.getPartialClosure: getSerFailed\n' 
+                      -> msg.prepend;
+                 #);
+               
+               unknownProtoType::<
+                 (# 
+                 do 'Fatal: objectserver.getPartialClosure: Prototype not found'
+                      -> msg.prepend
+                 #);
+            do INNER;
+            #);
+          doIt: @doUnserializeImpl;
+          
+          fetched, maxFetched: @Integer;
+          
+       enter maxFetched
+       do 
+          INNER;
+          true -> checkDanglers; 0 -> fetched;
+          (objects[],danglers[],ptOffsets[]) -> doIt;
+          false -> checkDanglers;
+          danglers.setupNew;
+       #);
+     
+     singleObjectGetPartialClosure: getPartialClosure
+       (# doUnserializeImpl::
+            (# do (OID,offset,fromOID) -> forEachRoot -> theObject[] #);
+          OID, fromOID: @OIDtype;
+          offset: @Integer;
+          theObject: ^Object
+       enter (OID,offset,fromOID)
+       exit theObject[]
+       #);
+     
+     
+     (* INIT
+      * ==== *)
+     
+     init: 
+       (# 
+       do GetExecGroupTable -> egt[];
+          locationList.init; 
+          objects.init; 
+          danglers.init;
+          ptOffsets.init;
+       #);
+  #);

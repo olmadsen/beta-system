@@ -1,0 +1,246 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv';
+
+--- include 'ObjectSerializerTables'
+
+--- lib:attributes ---
+
+(* ObjectTableElement
+ * ==================
+ *
+ * Super pattern of elements in the ObjectTable. *)
+
+ObjectTableElement:
+  (# o: ^Object;
+     OID: @OIDtype;    (* The unique identifier of the object o.  *)
+  enter (o[],OID)
+  exit  (o[],OID)
+  #);
+
+(* ObjectTable
+ * ===========
+ *
+ * Table used by ObjectSerializer to store static information about
+ * objects.
+ *)
+
+ObjectTable:
+  (#
+     (* element
+      * =======
+      *
+      * The type of elements of this ObjectTable.
+      * When further binding element, You should also further bind
+      * element in OIDhash and protoHash to the same value. *)
+
+     element:< ObjectTableElement;
+
+
+     (* OIDhash (static instance oh)
+      * =======
+      *
+      * Table of elements hashed on OID values speeding up FindObjectByOID. *)
+
+     OIDhash:< OIDhashTable
+       (# element::< ObjectTableElement; (* Same as ObjectTable.element *)
+          range::< (# do 101 -> value; INNER #);
+       #);
+     oh: @OIDhash;
+
+
+     (* protoHash (static instance ph)
+      * =========
+      *
+      * Table of elements hashed on protoType address speeding up
+      * FindObjectByReference. *)
+
+     protoHash:< ObjectHashTable
+       (# element::< ObjectTableElement; (* Same as ObjectTable.element *)
+          range::< (# do 101 -> value; INNER #);
+       #);
+     ph: @protoHash;
+
+
+     (* findObjectByReference (static instance fobr)
+      * =====================
+      * 
+      * Furtherbind if you have a more efficient way of locating
+      * an object by reference in the table than through ph (protoHash),
+      * or if you want to do something special. (For example if
+      * the OID af an object is actually saved in the object.)
+      * If the corresponding object is found in INNER, set doneInInner
+      * to TRUE.
+      * 
+      * If the object really referenced was a static inlined part object,
+      * o[] is the static encloser of the object that was referenced,
+      * and refObj is a reference to the object really referenced. 
+      * In that case findObjectByReference has the opportunity to actually 
+      * use the referred object instead of the encloser by exiting the
+      * element corresponding to refObj.
+      * 
+      *   example:
+      *      aPat: (# b: @Object #);
+      *      a: ^aPat;
+      *      Assume that a reference is found to the object a.b. In that 
+      *      case findObjectByReference is called with o[] = a[] and  
+      *      refObj[] = a.b[]. 
+      *)
+     
+     findObjectByReference:<
+       (# o: ^Object; refObj: ^Object;
+          e: ^element;
+          doneInInner: @Boolean;
+       enter (o[], refObj[])
+       do NONE -> e[]; false -> doneInInner;
+          INNER;
+          (if (e[] = NONE) and (not doneInInner) //true  then 
+              o[] -> ph.find -> e[]
+          if);
+       exit e[]
+       #);
+     fobr: @findObjectByReference;
+     
+     
+     (* findObjectByOID (static instance fobo)
+      * ===============
+      * 
+      * OID will be different from emptyOID, noneOID and betaEnvOID. *)
+     
+     findObjectByOID:<
+       (# OID: @OIDtype;
+          e: ^element;
+          doneInInner: @Boolean;
+       enter OID
+       do NONE -> e[]; false -> doneInInner;
+          INNER;
+          (if (e[] = NONE) and (not doneInInner) //true then
+              OID -> oh.find -> e[] 
+          if);
+       exit e[]
+       #);
+     fobo: @findObjectByOID;
+     
+     
+     (* oideq
+      * ===== *)
+     
+     oideq: @equalOID;
+
+     
+     (* newOID (static instance noid)
+      * ======
+      * 
+      * serialize of ObjectSerializer will call newOID to obtain the OID of 
+      * objects encountered but not found in this ObjectTable.
+      *
+      * Further bind if you want control of the generation of new object
+      * identifiers. OIDs should be different from BetaEnvOID and emptyOID,
+      * and should of course be unique at least with respect to the objects
+      * and patterns in this table. Default behaviour is to set value.a to 0
+      * and value.b to the current size of this ObjectTable+1.
+      *
+      * If refType is dynamicRef, it is allowed as a special case to set
+      * value to noneOID which means that o should not be serialized and
+      * references to o should be stored as NONE references. If, however,
+      * the same object is later needed as the origin or as a static part of
+      * another object being saved, newOID will be called again.
+      * This means that some objects may be saved even though some
+      * references to them are forgotten. It is the responsibility of the
+      * user to avoid this if necessary.
+      * You may thus use newOID to ignore references to objects that should
+      * not be saved, as e.g. UI objects and thelike.
+      *
+      * fromOID contains the OID of the object first encountered that pointed
+      * to o.
+      *)
+
+     newOID:<
+       (# o: ^object;
+          fromOID: @OIDtype;
+          refType: @Char;
+          value: @OIDtype;
+          theEmptyOID: @emptyOID;
+       enter (o[], fromOID, refType)
+       do theEmptyOID -> value;
+          INNER;
+          (if (theEmptyOID,value) -> oideq //true then
+              (0,oh.size+1) -> value
+          if)
+       exit value
+       #);
+     noid: @newOID;
+
+
+     (* getGroupAndProtoId (static instance ggapid)
+      * ==================
+      *
+      * Should return the values necessary to identify the prototype
+      * given as a parameter.
+      * The value of group MUST be strictly positive. *)
+
+     getGroupAndProtoId:<
+       (# ptAdr: @Integer;
+          group, proto: @Integer;
+          OID: @OIDtype; (* OID of object with prototype pt. *)
+       enter (ptAdr, OID)
+       do INNER
+       exit (group, proto)
+       #);
+     ggapid: @getGroupAndProtoId;
+
+
+
+     (* getProto (static instance gp)
+      * ========
+      *
+      * Should return the Prototype identified by group and proto.
+      * Return -1 if the prototype could not be found.
+      * As it may be necessary to use some other group number locally,
+      * the value of group returned will be used in the objectTableElement
+      * created. *)
+
+     getProto:<
+       (# group, proto: @Integer;
+          ptAdr: @Integer;
+          OID: @OIDtype; (* OID of object with prototype (group, proto).
+                          * In case of a struct object, OID is the object
+                          * containing the structure reference. *)
+          fromOID: @OIDtype; (* OID of object referring this one. *)
+       enter (group, proto, OID, fromOID)
+       do INNER
+       exit (ptAdr,group)
+       #);
+     gp: @getProto;
+
+
+     (* insert (static instance ins)
+      * ======
+      *)
+
+     insert:<
+       (# elm: ^element;
+          doneInINNER: @Boolean;
+       enter elm[]
+       do false -> doneInINNER;
+          INNER;
+          (if doneInINNER //false then
+              (elm[], elm.OID) -> oh.insert;
+              (elm[], elm.o[]) -> ph.insert;
+          if); 
+       #);
+     ins: @insert;
+
+     delete:<
+       (# elm: ^element;
+       enter elm[]
+       do
+          elm.OID -> oh.delete;
+          elm.o[] -> ph.delete;
+          INNER;
+       #);
+     
+     
+     (* init
+      * ==== *)
+     
+     init:< (# do ph.init; oh.init; INNER; #);
+  #)

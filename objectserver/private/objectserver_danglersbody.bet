@@ -1,0 +1,252 @@
+ORIGIN '../objectserver';
+
+OBJFILE default '$/lazyref_gc.o';
+MAKE sun4 'external/objectserverSUN4.make'
+     sun4s 'external/objectserverSUN4.make'
+     default 'external/objectserver.make';
+
+--- include '~beta/sysutils/v1.4/objinterface'
+
+--- objectserverlib:attributes ---
+getDangler: external
+  (# dangler: @Integer;
+  exit dangler
+  #);
+clearDangler: external (# #);
+
+
+--- HandleDanglersInstall:descriptor ---
+(# initLazyTrapHandler: external
+     (# lazyItem: @Integer;
+     enter lazyItem
+     #);
+do @@dangPriv.onDanglerHit -> initLazyTrapHandler;
+#)
+
+
+--- checkDanglers:descriptor ---
+(# removeDanglingProto: external
+     (# dangling: @Integer;
+     enter dangling
+     #);
+   
+   dd: ^danglingData;
+do 
+   (if elm.o[] //NONE then
+       (failuretrace, 'checkDanglers called with NONE element')
+         -> stop;
+   if);
+   
+   (if elm.OID -> danglers.otod.delete -> dd[] //NONE then else
+       (* Dangling references to this new object exists. Remember
+        * that it should be setup. *)
+       (dd[],elm.o[]) -> danglers.dangpriv.add;
+       
+       
+       (* As the new object is now created, we will not need the 
+        * corresponding danglingData anymore. They have already
+        * been deleted from danglers.otod *)
+       
+       (for i:dd.count repeat
+            dd.danglers[i] -> danglers.dtoo.delete;
+            dd.danglers[i] -> removeDanglingProto;
+       for);
+   if);
+#)
+
+--- danglersSetupNew:descriptor ---
+(# do dangpriv.setup; #)
+
+--- danglersPrivate:descriptor ---
+(# danglerList: [10]@Integer;
+   newobjects: [10]^Object;
+   count: @Integer;
+   
+   onDanglerHit: @
+     (# maxFetched: @Integer;
+        loc: ^location;
+        theObject: ^Object;
+        OID,fromOID: @OIDtype;
+        offset: @Integer;
+     do getDangler -> danglers.dto -> (OID,offset,fromOID);
+        (OID.a,fromOID.a) -> setLocation;
+        lastLocation[] -> loc[];
+        (OID,offset) -> loc.OnDanglerHit -> maxFetched;
+        (maxFetched,OID,offset,fromOID) 
+          -> singleObjectGetPartialClosure 
+          -> theObject[];
+        clearDangler;
+        theObject[] -> loc.AfterDanglerHit;
+        NONE -> theObject[];
+        NONE -> loc[];
+     #);
+
+   sort: @
+     (# 
+        i,j,k: @Integer;
+        tmpobj: ^Object;
+        tmpdang: @Integer;
+     do
+        (if count > 1 //true then
+            count div 2 -> i;
+            repeatloop:
+              (if 1//1 then
+                  i -> j;
+                  loop:
+                    (if 1//1 then
+                        j * 2 -> k;
+                        
+                        (if k > count //true then
+                            leave loop
+                        if);
+                        
+                        (if (k < count) //true then
+                            (if (danglerList[k] < danglerList[k+1]) //true then
+                                k + 1 -> k;
+                            if);
+                        if);
+                        
+                        (if danglerList[j] < danglerList[k] //true then
+                            (* Swap(j,k) *)
+                            danglerList[j] -> tmpdang;
+                            danglerList[k] -> danglerList[j];
+                            tmpdang -> danglerList[k];
+                            
+                            newobjects[j][] -> tmpobj[];
+                            newobjects[k][] -> newobjects[j][];
+                            tmpobj[] -> newobjects[k][];
+                         else
+                            leave loop;
+                        if);
+                        k -> j;
+                        restart loop;
+                    if);
+                  
+                  i-1 -> i;
+                  
+                  (if i //0 then else restart repeatloop if);
+              if);
+            
+            count -> i;
+            repeatloop:
+              (if 1//1 then
+                  1 -> j;
+                  
+                  (* Swap(j,i); *)
+                  danglerList[j] -> tmpdang;
+                  danglerList[i] -> danglerList[j];
+                  tmpdang -> danglerList[i];
+                  
+                  newobjects[j][] -> tmpobj[];
+                  newobjects[i][] -> newobjects[j][];
+                  tmpobj[] -> newobjects[i][];
+                  
+                  i-1 -> i;
+                  loop:
+                    (if 1//1 then
+                        j * 2 -> k;
+                        (if k > i //true THEN leave loop if);
+                        (if ( k < i ) //true then
+                            (if danglerList[k] < danglerList[k+1] //true then 
+                                k+1->k 
+                            if);
+                        if);
+                        
+                        (* Swap(j,k) *)
+                        danglerList[j] -> tmpdang;
+                        danglerList[k] -> danglerList[j];
+                        tmpdang -> danglerList[k];
+                        
+                        newobjects[j][] -> tmpobj[];
+                        newobjects[k][] -> newobjects[j][];
+                        tmpobj[] -> newobjects[k][];
+                        
+                        k -> j;
+                        restart loop;
+                    if);
+                  loop:
+                    (if 1//1 then
+                        j div 2 -> k;
+                        (if (k > 0) //true then
+                            (if danglerList[k] < danglerList[j] //true then
+                                (* Swap(j,k) *)
+                                danglerList[j] -> tmpdang;
+                                danglerList[k] -> danglerList[j];
+                                tmpdang -> danglerList[k];
+                        
+                                newobjects[j][] -> tmpobj[];
+                                newobjects[k][] -> newobjects[j][];
+                                tmpobj[] -> newobjects[k][];
+                                
+                                k -> j;
+                             else
+                                leave loop;
+                            if);
+                         else
+                            leave loop
+                        if);
+                        restart loop;
+                    if);
+                  (if i=0 //true then else restart repeatloop if)
+              if)
+        if)
+     #); (* End sort. *)
+   
+   add: @
+     (# theMax: @max; 
+        ato: @addressToObject;
+        ext: @Integer;
+        dd: ^danglingData;
+        o: ^Object;
+     enter (dd[], o[])
+     do
+        (if (count+dd.count) > danglerList.range //true then
+            (danglerList.range, dd.count) -> theMax
+              -> ext -> danglerList.extend;
+            ext -> newobjects.extend;
+        if);
+        
+        (* Remember all danglerLists and new objects. *)
+        (for i: dd.count repeat
+             dd.danglers[i] -> danglerList[i+count];
+             dd.offsets[i] + (@@o -> tos'%adrGetLong')
+               -> ato -> newobjects[i+count][];
+        for);
+        count+dd.count -> count;
+     #);
+   
+   setup: @
+     (# preLazyGC: external (# #);
+        setupDanglers: external
+          (# danglerList, objectList, count: @Integer;
+          enter (danglerList, objectList, count)
+          #);
+     do
+        (if count //0 then else
+            (* Sort the list of dangling references to allow binary search
+             * for checking whether a dangling reference in one of the tables
+             * negIOArefs and negAOArefs can be setup. *)
+            sort;
+              
+            (* Now do the ioa collection locating dangling 
+             * references not in AOA area. *)
+            preLazyGC; doGC;
+            
+            (* Setup all dangling references to newly created objects. *)
+            (@@danglerList[1], @@newobjects[1], count) 
+              -> setupDanglers;
+            
+            10 -> newobjects.new;
+            10 -> danglerList.new;
+            0 -> count;
+        if);
+     #);
+#)
+
+--- addDanglingProto:descriptor ---
+(# addDanglingProto: external
+     (# dangling, protoAdr: @Integer 
+     enter (dangling, protoAdr)
+     #);
+do (dangling, protoAdr) -> addDanglingProto;
+#)

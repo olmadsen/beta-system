@@ -1,0 +1,589 @@
+ORIGIN '../ObjectSerializer';
+
+--- include '../runAlloc'
+--- include '../ObjectSerializerTables'
+
+--- osPrivateBody:descriptor ---
+(# 
+   theBetaEnvOID: @betaEnvOID;
+   theNoneOID: @noneOID;
+   theEmptyOID: @emptyOID;
+   oideq: @equalOID;
+   
+   notFirst: @Boolean;
+   
+   theBetaEnv: ^Object;
+   betaEnvElm: @OIDstateElement
+     (# init: 
+          (# 
+          do &ObjectTableElement[] -> ote[];
+             theBetaEnvOID -> ote.OID;
+             ascii[] -> getOrigin -> theBetaEnv[] -> ote.o[]
+          #);
+     #);
+   
+   OIDstateTable: @OIDHashTable 
+     (# range::< (# do stateTableRange -> value #);
+        collisionRange::< (# do stateTableCollisionRange -> value #);
+        element::< OIDstateElement 
+     #);
+   
+   OIDstateElement:
+     (# ote: ^ObjectTableElement;
+        state: @Char;
+        inx1, inx2: @Integer;
+     #);
+   
+   (* Possible state values: *)
+   DynRefIgnored: (# exit 'd' #);
+   (* The object was supposed to be ignored when seen through a dynamic ref. *)
+   OriRefIgnored: (# exit 'o' #); 
+   (* The object was supposed to be ignored when seen through an origin ref. *)
+   Ignored: (# exit 'i' #);  
+   (* The object was supposed to be ignored when seen through both origin and 
+    * dynamic references. *)
+   Accepted: (# exit 'a' #); 
+   (* The object is in AcceptedQueue, but is not saved yet. *)
+   Serialized:   (# exit 's' #);
+   (* The object has been saved. *)
+   
+   AcceptedQueue: @myQueue
+     (* Objects referenced from objects being serialized are
+      * appended to this queue when seen the first time. serialize takes
+      * elements from the start of the queue for serialization thus resulting
+      * in a breadth first traversal of the object graph. *)
+     (# element::< OIDstateElement #);
+   
+   componentError: Exception
+     (# obj: ^Object;
+        pt: @ProtoType;
+     enter obj[]
+     do obj[] -> getProtoType -> pt;
+        'ERROR!! Component instance of ' -> screen.putText;
+        pt.labId -> screen.putText;
+        ' from group ' -> screen.putText;
+        pt.groupId -> screen.putText;
+        ' encountered.' -> screen.putLine;
+        (failureTrace, 'ObjectSerializer: Components not handled')
+          -> stop;
+     #);
+   
+   session:
+     (# registerObject: @
+          (* If necessary inserts obj into the objects table, OIDstateTable 
+           * and AcceptedQueue and returns the OID and offset of obj *)
+          (# objElm: ^ObjectTableElement;
+             refObj: ^Object;
+             
+             ose: ^OIDstateElement;
+             found: @Boolean;
+             
+             OID: @OIDtype;    (* OID of object found. *)
+             offset: @Integer; (* obj's offset into encl. *)
+             
+             doPut: @doPutObject;
+             
+             OIDstateInsert: @
+               (# ose: ^OIDstateElement;
+               do
+                  (* Object seen for the first time during serialize session. *)
+                  &OIDstateElement[] -> ose[];
+                  objElm[] -> ose.ote[];
+                  
+                  (ose[],OID) -> OIDstateTable.insert -> (ose.inx1,ose.inx2);
+                  (if (objElm[],fromOID,refType) -> doPut //true then
+                      Accepted -> ose.state;
+                      ose[] -> AcceptedQueue.insert;
+                   else
+                      (if refType 
+                       //REFTYPE_ORIGIN then
+                          OriRefIgnored -> ose.state;
+                       //REFTYPE_DYNAMIC then
+                          DynRefIgnored -> ose.state;
+                       //REFTYPE_OFFLINE then
+                          (failuretrace, 'Serialize: REFTYPE_OFFLINE ignored')
+                            -> stop;
+                      if);
+                  if);
+               #);
+             
+             obj: ^Object;
+             fromOID: @OIDType; (* The OID of the object pointing to obj[] *)
+             refType: @Char;  (* Type reference followed from fromOID to obj.*)
+             
+          enter (obj[], fromOID, refType)
+          do
+             (*CAT_REGISTEROBJ -> timing_before;*)
+             
+             obj[] -> refObj[];
+             obj[] -> getEncloser -> (obj[], offset);
+             (if obj[] //refObj[] then (* obj is autonomous. *) 
+                 NONE -> refObj[]
+             if);
+             
+             (if obj[] //theBetaEnv[] then
+                 theBetaEnvOID -> OID;
+              else
+                 (if (obj[],refObj[]) -> objects.fobr -> objElm[] //NONE then
+                     
+                     (* Object not found in objects table. Assign OID. *)
+                     (obj[],fromOID,refType) -> objects.noid -> OID;
+                     
+                     (if (theNoneOID,OID) -> oideq //true then
+                         (* noneOID was specified. Just forget this object 
+                          * was ever seen. *)
+                      else
+                         &objects.element[] -> objElm[];
+                         OID -> objElm.OID; obj[] -> objElm.o[];
+                         
+                         (* Insert new object element in objects table: *)
+                         objElm[] -> objects.ins;
+                         
+                         OIDstateInsert;
+                     if)
+                     
+                  else
+                     (if objElm.o[]//refObj[] then 0 -> offset if);
+                     NONE -> refObj[];
+                     
+                     objElm.OID -> OID -> OIDstateTable.find2 -> (ose[],found);
+                     
+                     (if found //false then
+                         OIDstateInsert;
+                      else
+                         (if ose[] //NONE then
+                             (* The object has been finished. *)
+                          else
+                             (if refType
+                              //REFTYPE_ORIGIN then
+                                 (if ose.state //DynRefIgnored then
+                                     (* Give him another chance *)
+                                     (if (objElm[], fromOID, REFTYPE_ORIGIN) 
+                                           -> doPut 
+                                      //true then
+                                         Accepted -> ose.state;
+                                         ose[] -> AcceptedQueue.insert;
+                                      else
+                                         Ignored -> ose.state;
+                                     if);
+                                 if);
+                                 
+                              //REFTYPE_DYNAMIC then
+                                 (if ose.state //OriRefIgnored then
+                                     (* Give him another chance *)
+                                     (if (objElm[], fromOID, REFTYPE_DYNAMIC) 
+                                           -> doPut 
+                                      //true then
+                                         Accepted -> ose.state;
+                                         ose[] -> AcceptedQueue.insert;
+                                      else
+                                         Ignored -> ose.state;
+                                     if);
+                                 if);
+                                 
+                              //REFTYPE_OFFLINE then
+                                 (* There can be only one static reference to
+                                  * any object. *)
+                                 (if ose.state
+                                  //DynRefIgnored//OriRefIgnored//Ignored then
+                                     (* It is not allowed to ignore static part 
+                                      * objects. This can only happen if a dynamic 
+                                      * reference referred a static part object not 
+                                      * inlined in the enclosing object. *)
+                                     (objElm[], fromOID, REFTYPE_OFFLINE) 
+                                       -> doPut;
+                                     Accepted -> ose.state;
+                                     ose[] -> AcceptedQueue.insert;
+                                 if);
+                             if);
+                         if)
+                     if)
+                 if);
+             if);
+             
+             
+             (*CAT_REGISTEROBJ -> timing_after;*)
+             
+          exit (OID, offset)
+          #);
+        
+        serializeObject: @
+          (# ato: @AddressToObject;
+             fers: @forEachRefSaved;
+             getRep: @getRepetition;
+             putd: @putDone;
+             
+             sr: ^saveRepetition;
+             saveRepetition:
+               (# low, high: @Integer;
+                  bsize: @Integer; (* Size in bytes *)
+                  lsize: @Integer; (* Size in longs *)
+                  cur: @Integer;
+                  byteinx: @Integer;
+                  refType: @Integer;
+                  fromOID: @OIDtype;
+                  ose: ^OIDstateElement;
+                  
+               enter (byteinx, refType)
+               do
+                  (byteinx -> getInxLong) + 8 -> tos'%adrGetLong' -> low;
+                  (byteinx -> getInxLong) + 12 -> tos'%adrGetLong' -> high;
+                  
+                  (if refType //RefRepPTValue then
+                      (* 'RefRep' -> screen.putLine; *)
+                      3 + 3*high -> rep.makeSpace;
+                      
+                      refType -> rep.cheapPut; (* ProtoType value. *)
+                      low -> rep.cheapPut;
+                      high -> rep.cheapPut;
+                      (for cur: high repeat
+                           (byteinx -> getInxLong) + 12 + 4*cur 
+                             -> tos'%adrGetLong' 
+                             -> tmpAdr;
+                           (if true
+                            //(tmpAdr=0) then
+                               (0, theNoneOID) -> (tmpOff, tmpOID);
+                            //(tmpAdr<0) then
+                               (* Dangling reference. These can't be NONE.*)
+                               tmpAdr -> danglers.dto 
+                                 -> (tmpOID, tmpOff, fromOID);
+                               (objElm.OID, tmpOID) -> fers;
+                            else
+                               (tmpAdr -> ato, objElm.OID, REFTYPE_DYNAMIC) 
+                                 -> RegisterObject 
+                                 -> (tmpOID, tmpOff);
+                               
+                               (* tmpOID is not NONE, and we cannot have references
+                                * to betaenv in a repetition as long as we are 
+                                * talking well-behaved BETA programs. *)
+                               (objElm.OID, tmpOID) -> fers;
+                               
+                           if);
+                           tmpOff + REFTYPE_DYNAMIC -> rep.cheapPut;
+                           tmpOID.a -> rep.cheapPut;
+                           tmpOID.b -> rep.cheapPut;
+                           
+                           (* 
+                            *  'RefRepRef: ' -> screen.putLine;
+                            *  tmpOff -> screen.putInt;  ' ' -> screen.put;
+                            *  tmpOID.a -> screen.putInt;  ' ' -> screen.put;
+                            *  tmpOID.b -> screen.putInt; screen.newline;
+                            *)
+                      for);
+                   else
+                      (if refType
+                       //ValRepPTValue then
+                          (* 'ValRep' -> screen.putLine;  *)
+                          high*4 -> bsize;
+                       //ByteRepPTValue then
+                          (* 'ByteRep' -> screen.putLine;  *)
+                          high -> bsize;
+                       //WordRepPTValue then
+                          (* 'WordRep' -> screen.putLine; *)
+                          high*2 -> bsize;
+                       //DoubleRepPTValue then
+                          (* 'DoubleRep' -> screen.putLine; *)
+                          high*8 -> bsize;
+                      if);
+                      (bsize + 3) div 4 -> lsize;
+                      lsize + 3 -> rep.makeSpace;
+                      refType -> rep.cheapPut; (* ProtoType value. *)
+                      low -> rep.cheapPut;
+                      high -> rep.cheapPut;
+                      (@@rep.r[rep.pos], (byteinx -> getInxLong) + 16, bsize) 
+                        -> memcpy;
+                      lsize + rep.pos -> rep.pos;
+                  if);
+               #);
+             
+             isComponent: @
+               (# o: ^Object; objAdr: @Integer;
+                  value: @Boolean;
+               enter o[]
+               do
+                  false -> value;
+                  (if (@@o -> tos'%adrGetLong' -> objAdr) + 4 -> tos'%adrGetLong'
+                   //-6 then
+                      ((objAdr - 24 -> tos'%adrGetLong') = ComponentPTValue)
+                        -> value;
+                  if);
+               exit value
+               #);
+             
+             objElm: ^ObjectTableElement;
+             ose: ^OIDstateElement;
+             
+             rep: ^RepetitionObject;
+             
+             poff: ^ptOffsets.element;
+             
+             obj: ^Object;
+             
+             ptAdr: @Integer;
+             
+             tmpOID: @OIDtype;
+             tmpOff: @Integer;
+             tmpAdr: @Integer;
+             
+             fromOID: @OIDtype;
+             
+             getInxLong: @
+               (# byteinx: @Integer;
+               enter byteinx
+               exit byteinx + (@@obj -> tos'%adrGetLong') -> tos'%adrGetLong'
+               #);
+             
+             refType: @Integer;
+             group, proto: @Integer;
+             state: @Integer;
+             
+             tmpgroup, tmpproto: @Integer;
+             firstPos: @Integer;
+             
+             gpt: @GetProtoType;
+             
+          enter ose[]
+          do
+             (*CAT_SERIALIZEOBJ -> timing_before;*)
+             
+             ose.ote[] -> objElm[];
+             
+             (*9 -> timing_before;*)
+             (if objElm.o[] -> obj[] -> isComponent //true then
+                 obj[] -> componentError;
+             if);
+             (*9 -> timing_after;*)
+             
+             (if objElm[] -> getRep -> rep[] //NONE then
+                 &RepetitionObject[] -> rep[];
+                 rep.init;
+             if);
+             
+             rep.pos -> firstPos;
+             Serialized -> ose.state;
+             
+             (obj[] -> gpt -> ptAdr, objElm.OID) 
+               -> objects.ggapid 
+               -> (group, proto);
+             
+             (if group //-1 then (if proto //-1 then UnknownProtoType if)if);
+             
+             (* Get prototype descriptor: *)
+             (* CAT_POFLOOKUP -> timing_before; *)
+             ptAdr -> ptOffsets.lookup -> poff[];
+             (* CAT_POFLOOKUP -> timing_after; *)
+             
+             (* First save number of simple values contained 
+              * in the serialization followed by the simple values
+              * themselves: *)
+             
+             poff.simpleCount + 1 -> rep.makeSpace;
+             poff.simpleCount -> rep.cheapPut;
+             (for inx: poff.simpleCount repeat
+                  poff.simpleVals[inx] -> getInxLong -> rep.cheapPut;
+             for);
+             
+             (* Then save dynamic references within the object. *)
+             (for inx: poff.dynCount repeat
+                  poff.dynRefs[inx] -> getInxLong -> tmpAdr;
+                  
+                  (if true
+                   //(tmpAdr > 0) then
+                      
+                      tmpAdr -> tos'%adrGetLong' -> refType;
+                      
+                      (if (refType > 0) //true then
+                          
+                          (poff.dynRefs[inx]->getInxLong->ato,objElm.OID,
+                          poff.refTypes[inx]) -> RegisterObject 
+                            -> (tmpOID, tmpOff);
+                          
+                          (* Tag reference with reference type: *)
+                          3 -> rep.makeSpace;
+                          tmpOff + poff.refTypes[inx] -> rep.cheapPut;
+                          tmpOID.a -> rep.cheapPut;
+                          tmpOID.b -> rep.cheapPut;
+                          
+                          (* This is an ordinary reference, and so it should 
+                           * not be a reference to betaenv, although it might 
+                           * be NONE if it was cut. *)
+                          (if (tmpOID,theNoneOID) -> oideq //false then
+                              (objElm.OID, tmpOID) -> fers;
+                          if);
+                          
+                          (* 
+                           *  'Reference: ' -> screen.putLine; 
+                           *  tmpOff -> screen.putInt;  ' ' -> screen.put;
+                           *  tmpOID.a -> screen.putInt;  ' ' -> screen.put;
+                           *  tmpOID.b -> screen.putInt; screen.newline;
+                           *)
+                          
+                       else
+                          (if refType 
+                           //ValRepPTValue
+                           //ByteRepPTValue//WordRepPTValue
+                           //DoubleRepPTValue//RefRepPTValue then
+                              (if sr[] //NONE then
+                                  &saveRepetition[] -> sr[]
+                              if);
+                              (poff.dynRefs[inx], refType) -> sr;
+                          
+                           //StructurePTValue then
+                              (* The origin in a structure cannot be NONE or 
+                               * dangling, but it can be a reference to 
+                               * betaenv. *)
+                              ((poff.dynRefs[inx] -> getInxLong) + 8 
+                                -> tos'%adrGetLong' -> ato, objElm.OID,
+                              REFTYPE_ORIGIN) 
+                                -> RegisterObject -> (tmpOID, tmpOff);
+                          
+                              (poff.dynRefs[inx] -> getInxLong) + 12 
+                                -> tos'%adrGetLong' -> ptAdr;
+                              (ptAdr, theEmptyOID) -> objects.ggapid 
+                                -> (tmpgroup, tmpproto);
+                              
+                              6 -> rep.makeSpace;
+                              StructurePTValue -> rep.cheapPut;
+                              tmpgroup -> rep.cheapPut;
+                              tmpproto -> rep.cheapPut;
+                              tmpOff + REFTYPE_ORIGIN -> rep.cheapPut;
+                              tmpOID.a -> rep.cheapPut;
+                              tmpOID.b -> rep.cheapPut;
+                          
+                              (if (tmpOID,theBetaEnvOID) -> oideq //false then
+                                  (objElm.OID, tmpOID) -> fers;
+                              if);                 
+                          
+                           //StackObjectPTValue then 
+                              (failure, 'ObjectSerializer: Stacks not handled') 
+                                -> stop;
+                          if)
+                      if);
+                    
+                   //(tmpAdr=0) then
+                      (* 'NoneRef' -> screen.putLine; *)
+                      3 -> rep.makeSpace;
+                      poff.refTypes[inx] -> rep.cheapPut;
+                      theNoneOID -> tmpOID;
+                      tmpOID.a -> rep.cheapPut; 
+                      tmpOID.b -> rep.cheapPut; 
+                      
+                   //(tmpAdr<0) then
+                      (* Dangling references are always ordinary dynamic object
+                       * references. They cannot be NONE or reference betaenv. *)
+                      tmpAdr -> danglers.dto -> (tmpOID, tmpOff, fromOID);
+                      3 -> rep.makeSpace;
+                      tmpOff + poff.refTypes[inx] -> rep.cheapPut;
+                      tmpOID.a -> rep.cheapPut;
+                      tmpOID.b -> rep.cheapPut;
+                      
+                      (objElm.OID, tmpOID) -> fers;
+                        
+                  if)
+             for);
+             rep.checkSize; (* Ensure that size field in rep is updated. *)
+             
+             (objElm[],rep[],firstPos,rep.pos,group,proto) -> putd;
+             
+             (* "deallocate" to save memory. *)
+             (NONE,ose.inx1,ose.inx2) -> OIDstateTable.overridePosElement;
+             
+             (*CAT_SERIALIZEOBJ -> timing_after;*)
+          #);  
+        
+        getEncloser: @
+          (* Returns the object enclosing obj, and the offset of obj in the 
+           * encloser. If obj is not inlined, encl[] = obj[] and offset = 0 *)
+          (# obj, encl: ^Object;
+             enclAdr: @Integer;
+             offset: @Integer;
+             gcf: @Integer; (* GC field. Negative if inlined object. *)
+             ato: @AddressToObject;
+          enter obj[]
+          do        
+             0 -> offset;
+             
+             (if obj[] //theBetaEnv[] then
+                 obj[] -> encl[];
+              else
+                 @@obj -> tos'%AdrGetLong' -> enclAdr;
+                 
+                 loop:
+                   (if (enclAdr + 4 -> tos'%AdrGetLong' -> gcf) < 0 
+                    //true then
+                       -gcf*4 + offset -> offset;
+                       enclAdr + gcf*4 -> enclAdr;
+                       restart loop;
+                   if);
+                 
+                 (if (enclAdr -> tos'%AdrGetLong') //ComponentPTvalue then
+                     (* The encloser is a component. Use the item part of the 
+                      * component. If it is an error it will be caught by 
+                      * serializeObject. *)
+                     enclAdr + 24 -> ato -> encl[];
+                     (if offset//0 then else 
+                         (* if offset is 0, obj was a component itself. *)
+                         offset - 24 -> offset 
+                     if);
+                  else
+                     (if offset //0 then
+                         obj[] -> encl[]
+                      else
+                         enclAdr -> ato -> encl[];
+                     if);
+                 if);
+             if);
+             
+          exit (encl[], offset)
+          #);
+
+        traverse: @
+          (* Serializes objects in an breadth-first manner as guided
+           * by AcceptedQueue in which objects are inserted in the
+           * order they are met.
+           * doPutObject is queried whether the object should actually 
+           * be serialized.
+           * New objects (objects not seen before), are appended to the 
+           * AcceptedQueue and inserted into OIDstateTable.
+           * Returns when AcceptedQueue is empty. *)
+          (# 
+          do 
+             breadth:
+               (if AcceptedQueue.last[] //NONE then else
+                   AcceptedQueue.remove -> serializeObject;
+                   restart breadth;
+               if);
+          #);
+        
+     do
+        (if notFirst //false then 
+            betaEnvElm.init;
+            OIDstateTable.init;
+            AcceptedQueue.init;
+            true -> notFirst;
+         else
+            OIDstateTable.reinit;
+            AcceptedQueue.init;
+        if);
+        
+        THIS(session)[] -> curSession[];
+        
+        INNER; (* Calls forEachRoot *)
+        
+        NONE -> curSession[];
+     #);
+   
+   curSession: ^session;
+   
+#)
+
+--- forEachRootImpl:dopart ---
+do 
+   (thisRoot[], fromOID, REFTYPE_DYNAMIC)
+     -> osPrivate.curSession.RegisterObject 
+     -> (OID, offset);
+   osPrivate.curSession.traverse;
+   
+   
+--- osSerializeBody:dopart ---
+do osPrivate.session (# do INNER serialize #)
