@@ -1,7 +1,7 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1990-93 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1990-94 Mjolner Informatics Aps.
  * cbfa.c
- * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
+ * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, and Jacob Seligmann
  */
 #include "beta.h"
 
@@ -71,7 +71,8 @@ void freeCBF(external_entry)
     = (struct CallBackEntry *)(external_entry - sizeof(struct Structure *));
 
 #ifdef RTDEBUG
-  Claim(inBetaHeap(theCBE->theStruct), "inBetaHeap(theCBE->theStruct)");
+  Claim(inBetaHeap((ref(Object))(theCBE->theStruct)), 
+	"inBetaHeap(theCBE->theStruct)");
 #ifdef sparc
   Claim(theCBE->mov_o7_g1 == MOV_O7_G1, 
 	"theCBE->mov_o7_g1 is \"mov o7,i7\"");
@@ -169,7 +170,7 @@ void CBFACheck()
 	  limit = (long)cbfa->entries + CBFABlockSize;
 	}
 	if (current->theStruct) {
-	  Claim(inBetaHeap(current->theStruct), 
+	  Claim(inBetaHeap((ref(Object))(current->theStruct)), 
 		"inBetaHeap(current->theStruct)");
 	  Claim(inBetaHeap(current->theStruct->iOrigin), 
 		"inBetaHeap(current->theStruct->iOrigin)");
