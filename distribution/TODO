@@ -1,3 +1,130 @@
+
+> Hej Søren!
+>
+> Jeg har fundet et par problemer.  For det første et lille problem i 
+> 
+>   /users/beta/basiclib/v1.{4,5}/private/external/systemenvExt.c
+> 
+> hvor selectSockets har flg. 
+> 
+> ----------------------------------------------------------------------
+>   /* Insert exceptCandidates in exceptFDSET */
+>   i = 0;
+>   while (writeCandidates[i] != -1) {
+>     /* printf ("Setting %d in writers\n",writeCandidates[i]); */
+>     FD_SET (exceptCandidates[i], &exceptFDSET);
+>     if (exceptCandidates[i] > max)
+>       max = exceptCandidates[i];
+>     i++;
+>   }
+> ----------------------------------------------------------------------
+> 
+> hvilket bør ændres (kun i v1.5, vel) med 
+> 
+> ----------------------------------------------------------------------
+>   while (writeCandidates[i] != -1) {
+> --> 
+>   while (exceptCandidates[i] != -1) {
+> ----------------------------------------------------------------------
+> 
+> Ellers kan der fx. ske det, at man selecter for read+except på en
+> socket, og writeCandidates er en tom liste, så den ventende kun bliver
+> registreret med read.  Så kommer der en fejl (fx. connection reset),
+> og det bliver ignoreret.  Brug fx.
+> 
+>   /users/eernst/public/systemenvExt.c 
+> 
+> som også har et par kosmetiske ændringer (vedr. debugging output).
+> 
+> 
+
+Loesningen paa foelgende problem er formentlig at iomask.timeout skal
+huske at kalde piodelete. Se "bettertimeout" i ~sbrandt/beta/ddist/v1.0/private/iostateadditions.bet.
+
+> 
+> Dernæst et underligt fix.  Følgende lille program vil ikke terminere: 
+> 
+> ----------------------------------------------------------------------
+> ORIGIN '~beta/basiclib/v1.4/systemenv';
+> INCLUDE '~beta/process/v1.5/commgenerator';
+> 
+> --- program:descriptor ---
+> systemenv
+> (# sockGen: @socketGenerator;
+>    newClient: ^binarySocket;
+> do 5000->sockGen.port;
+>    sockGen.bind;
+>    L: (# 
+>       do 1->sockGen.getBinaryConnection
+>          (# error::(# do abort(# do leave L #) #);
+>          #) -> newClient[];
+>       #);
+>    sockgen.close;
+> #)
+> ----------------------------------------------------------------------
+> 
+> Det skyldes (kan jeg se v.hj.a. valhalla) at der er en asymmetri
+> mellem (systemenv.private.mdpriv.)pioinsert og piodelete .. når
+> programmet efter min mening skulle terminere, findes der stadig en
+> iomask i piotable, og den giver anledning til et kald af selectSockets
+> uden noget at selecte på (altså med readers, writers og excepters
+> tomme).  Det resulterende kald af selectSockets er selvfølgelig en
+> "sleep(forever)".  Jeg opfatter det sådan, at der "mangler" et kald
+> til piodelete, og jeg kan ikke lige finde den rigtige/pæne måde at få
+> dette kald udført.  Jeg kan ikke bruge iomask.continue, da den
+> tydeligvis er beregnet til at gøre andet/mere, og jeg ikke har nogen
+> fornuftig værdi til enter-parameteren "cause".  Og "continue" er jo 
+> også explicit markeret som privat.  Det skulle bare "ske af sig selv"
+> ikke?  Måske skulle man explicit fange det tilfælde, hvor
+> selectSockets bliver kaldt med tre tomme lister at selecte på?
+> 
+> Den mærkelige kur (som gør process/private afhængig af
+> implementationen af iostate mv, hvilket vel er noget rigtig
+> skidt), ser således ud: 
+> 
+> -----------------------------------------------------------------------
+> /users/beta/process/v1.5/private/commgeneratorbody.bet, linie 47, tilføj:
+> 
+>      cleanup::<
+>        (#
+>        do private.ios.iosPrivate.iom[] -> this(systemenv).private.mdpriv.piodelete;
+>           INNER cleanup;
+>        #);
+> 
+> ----------------------------------------------------------------------
+> 
+> Virkningen er, at en socketGenerator (og tilsvarende med andre
+> varianter af sockets med tilsvarende ændringer i commstreambody.bet og
+> commbinarybody.bet) under fejlhåndtering lige før bruger-programmøren
+> kan udføre et leave fjerner den iomask fra piotable, som ligger i
+> iosPrivate i den iostate, som ligger i socketGenerator.private. 
+> 
+> 
+> Disse forklaringer er korte og måske utilstrækkelige (ulæselige), men
+> det er fordi jeg forventer at vi alligevel skal snakke lidt nærmere om
+> det.
+> 
+> 
+>   mvh.
+> 
+> --
+> Erik Ernst                            eernst@daimi.aau.dk
+> Computer Science Department of Aarhus University, Denmark
+
+
+
+
+shellBody.bet:
+   element typen er erklaeret lidt tidligere i samme fil som foelger:
+ 
+           localObjects: @ObjectTable
+             (# element:< remoteInfo;
+                ...
+             #);
+
+   Hvilket burde have vaeret 'element::< remoteInfo' 
+   (faktisk 'element:: remoteInfo', men det kunne man ikke dengang :-).
+
 Manglende fejlmeddelelse fra ensemble hvis det ikke kan aabne sin passive
 socket. 
 

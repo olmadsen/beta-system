@@ -1,14 +1,11 @@
-dir = $(BETALIB)/distribution/v1.0x/private/external/
-odir = $(BETALIB)/distribution/v1.0x/private/$(MACHINETYPE)/
+dir = $(BETALIB)/distribution/v1.01/private/external/
+odir = $(BETALIB)/distribution/v1.01/private/$(MACHINETYPE)/
 debug =
 
 make: $(odir)extShellSockets.o $(odir)getUser.o \
-      $(odir)dot.o $(odir)remoteStart.o $(odir)outputRedirection.o \
+      $(odir)remoteStart.o $(odir)outputRedirection.o \
       $(odir)timing.o $(odir)thisHost.o $(dir)$(MACHINETYPE)/startAsDeamon \
       $(dir)$(MACHINETYPE)
-
-$(odir)dot.o: $(dir)dot.c $(dir)dot.h
-	gcc $(dir)dot.c -o $(odir)dot.o -c $(debug) -D$(MACHINETYPE) -O -I$(BETALIB)/betarun/v2.6/$(MACHINETYPE)/C/
 
 $(odir)getUser.o: $(dir)getUser.c
 	gcc $(debug) -D$(MACHINETYPE) -c $(dir)getUser.c -o $(odir)getUser.o
