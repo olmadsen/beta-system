@@ -82,23 +82,14 @@ systemEnv
                              (if true
                               // 'HTTP' -> prot.equalNCS then 
                                  80 -> port; (* Should parse host for ':' *)
-                                 'GET ' -> out.putText;
-                                 doc.length -> i;
-                                 Find: 
-                                   (# 
-                                   do ' ' -> doc.findAll
-                                      (# 
-                                      do inx-1 -> i;
-                                         leave Find 
-                                      #)
-                                   #);
-                                 (1, i) -> doc.sub -> out.putText;
-                                 ' ' -> out.putText;
-                                 13 -> out.put; out.newLine;
+                                 line[]->out.putText;
+                                 32->out.put;13 -> out.put; out.newLine;
                               else 
                                  'Uknown protocol: ' -> line.prepend;
                                  (FailureTrace, line[]) -> Stop
                              if)
+                          // 'If-Modified-Since:' -> a.equalNCS then 
+                             (* ditch this header... *)
                           // 'Proxy-Connection:' -> a.equalNCS then
                              (* ditch this header... *)
                              (* true -> keepOpen; *)
@@ -117,12 +108,12 @@ systemEnv
           (# s: @StreamSocket(# timeoutValue::<(# do 10 ->value #)#);
              req, host: ^Text;
              port: @Integer;
-             answer: ^Text;
+             answer: ^Stream;
              OK: @Boolean;
              sEOS: @s.eos;
              sGet: @s.get;
              
-          enter (req[], host[], port)
+          enter (req[], host[], port, answer[])
           do s.init;
              true -> OK;
              (10, host[], port) -> s.connect
@@ -138,18 +129,15 @@ systemEnv
              (if OK then
                  req[] -> s.putLine;
                  s.flush;
-                 &Text[] -> answer[];               
-                 16384 -> answer.extend;
                  L: (# ch: @Char;
                     do (if not sEOS then 
-                           sGet -> answer.put;
+                           sGet -> answer.put; 
                            restart L
                        if)
                     #);
                  s.close;
              if);
-             
-          exit answer[]
+          exit OK
           #);
         
         aReq, host, aAnswer: ^Text;
@@ -160,32 +148,38 @@ systemEnv
         getRequest -> aReq[];
         aReq[]->screen.putLine;
         aReq[] -> parseRequest -> (aReq[], host[], port, keepOpen);
-        (aReq[], host[], port) -> &sendRequest -> aAnswer[];
-        
-        (if aAnswer[]=NONE then
+        (if not ((aReq[], host[], port,clientSock[]) -> &sendRequest) then
             &Text[]->aAnswer[];
             '<HTML><HEAD><TITLE>Unable to connect</TITLE></HEAD>' 
               -> aAnswer.putLine;
             '<BODY>Proxy:  could not connect to  ' -> aAnswer.putText;
             host[] -> aAnswer.putLine;
             '</BODY></HTML>' -> aAnswer.putLine;
+            aAnswer[] -> clientSock.putText; 
         if);
         
-        aAnswer[] -> clientSock.putText;
+        10->clientSock.put;
         clientSock.close;
         'Handler done'->screen.putLine;
+        ConnectionSem.V;
      #);   
    
+   ConnectionSem: @Semaphore;
    
    Listener: System
      (# theHandler: ^|Handler;
         streamGen: @SocketGenerator;
-     do 
-        7899 -> streamGen.bind; (* My well-known proxy-port  ;) *)
+        
+     do 7899 -> streamGen.bind; (* My well-known proxy-port  ;) *)
+        ConnectionSem.V;
+        ConnectionSem.V;
+        ConnectionSem.V;
+        ConnectionSem.V;
         
         cycle
         (# 
-        do &|Handler[] ->theHandler[];
+        do ConnectionSem.P;
+           &|Handler[] ->theHandler[];
            waitForever -> streamGen.getStreamConnection 
            (# sockType::mySockType;
               mySockType: StreamSocket
