@@ -849,15 +849,23 @@ GLOBAL(long maxLabels) = 2048;
 GLOBAL(long process_offset) = 0;
 #endif
 
+char *getLabelExact(long addr);
+
 static void addLabel(long adr, char *id);
 static void addLabel(long adr, char *id)
 {
   label *lab;
-  int len = strlen(id);
+  int len;
   int lastslash = 0;
   int i;
   char* buf;
 
+  if (getLabelExact(adr)) {
+    /* There is already a symbol on that addr.  Ignore new one */
+    return;
+  }
+
+  len  = strlen(id);
   for (i = 0; i < len; i++) {
     if (id[i] == '/') {
       lastslash = i+1;
@@ -873,7 +881,7 @@ static void addLabel(long adr, char *id)
     labels = 0;
     return;
   }
-  INFO_ALLOC(sizeof(label));
+  INFO_ALLOC(sizeof(label)+len+1-lastslash);
 
   lab = (label *) buf;
   lab->id = buf+sizeof(label);
@@ -890,13 +898,11 @@ static void addLabel(long adr, char *id)
   numLabels++;
 }
 
-#ifdef sgi
 static int cmpLabel(const void *left, const void *right);
 static int cmpLabel(const void *left, const void *right)
 {
   label **l = (label**)left, **r = (label**)right;
 
-  fprintf(output, "%d ? %d\n", (*l)->address, (*r)->address);
   return ((*l)->address - (*r)->address);
 }
 
@@ -904,7 +910,6 @@ static void addLabelsFromGroupTable(void);
 static void addLabelsFromGroupTable(void)
 {
   group_header *gh;
-  label *lab;
   char theLabel[256];
   long mPart;
   long gPart;
@@ -943,7 +948,6 @@ static void addLabelsFromGroupTable(void)
   qsort(labels, numLabels, sizeof(label**), cmpLabel);
   fprintf(output, "done\n");
 }
-#endif
 
 
 #ifdef UNIX
@@ -1008,9 +1012,7 @@ static void initLabels(void)
     addLabel(labelAddress, theLabel);
   }
 
-#ifdef sgi
   addLabelsFromGroupTable();
-#endif  
 
   INFO_LABELS(fprintf(output, " done]"); fflush(output));
 #ifdef sgi
@@ -1019,20 +1021,39 @@ static void initLabels(void)
 	  "most symbols will be missing!] ");
 #endif
 
-#if 0 
-  /* datpete: what is lastLab? */
   DEBUG_LABELS({
     fprintf(output, "Labels:\n");
     { 
       long n;
-      for (n=0; n<lastLab; n++){
+      for (n=0; n<numLabels; n++){
 	fprintf(output, "0x%x\t%s\n", (unsigned)labels[n]->address, labels[n]->id);
       }
     }
     fflush(output);
   });
-#endif
 
+}
+
+char *getLabelExact(long addr)
+{
+  long n;
+  if (!labels) initLabels();
+  if (!addr) {
+    return NULL;
+  }
+#ifdef nti
+  addr -= process_offset;
+#endif
+  if (labels) {
+    for (n=numLabels-1; n>=0; n--) {
+      if (labels[n]->address == addr) {
+	return labels[n]->id;
+      } else if (labels[n]->address > addr){
+	return NULL;
+      }
+    }
+  }
+  return NULL;
 }
 
 char *getLabel (long addr)
