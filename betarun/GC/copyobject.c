@@ -34,7 +34,7 @@ void tempToSpaceToAOAalloc()
 
 void tempToSpaceToAOAfree()
 {
-    free(tempToSpaceToAOA);
+    FREE(tempToSpaceToAOA);
     tempToSpaceToAOA = NULL;
     INFO_IOA(fprintf(output, "#IOA: freed temporary ToSpaceToAOA table\n"));
 }

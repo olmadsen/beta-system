@@ -677,7 +677,7 @@ static void Phase3()
   
   /* if table was allocated with malloc, please free it. */
   if( table != IOA ){
-    free( table);
+    FREE( table);
     INFO_AOA( fprintf( output, "#(AOA: block for table freed %d longs)\n",
 		      AOAtoIOACount));
   }

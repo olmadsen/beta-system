@@ -27,7 +27,7 @@ ref(Block) newBlock( size )
 void freeBlock(theBlock)
      ref(Block) theBlock;
 {
-  free(theBlock);
+  FREE(theBlock);
 }
 
 long inArea( theBlock, theObj )

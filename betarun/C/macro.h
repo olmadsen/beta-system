@@ -80,7 +80,9 @@
 
 #ifdef Macintosh
 #  define MALLOC(size) NewPtr(size)
+#  define FREE(ptr) DisposPtr((Ptr)ptr)
 #else
+#  define FREE(ptr) free(ptr)
 #  ifdef RTDEBUG
 #    ifdef sparc
        /* 64 bit alignment because of the reals */
