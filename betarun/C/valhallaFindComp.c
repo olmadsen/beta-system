@@ -587,14 +587,14 @@ static void find_foreach(long PC, Object *theObj)
   }
 }
 
-#ifdef sparc
+#if defined(sparc) || defined(linux)
 /* Usage:
  *  throw:
  *    INCLUDE '~beta/sysutils/objinterface';
  *    (# proto: @integer;
  *       theTry: ^try;
  *     do try## -> getProtoTypeForStruc -> proto;
- *        (proto, @@THIS(throw), 0) -> find_activation -> obj;
+ *        proto -> find_activation -> obj;
  * 	  (if obj<>0 then
  *            obj -> addressToObject -> theTry[];
  *        if);
