@@ -299,7 +299,17 @@ do inner close;
                        flags, strAddr: @integer;
                        theTool: ^tool;
                        tempText: ^cString;
+                       tempText2: ^text;
                        bytesToCopy: @integer;
+                       maxNoOfChars: 
+                         (* 
+                          * To put more than 80 chars in a tool tip you have
+                          * to assign a pointer to NMTTDISPINFO.lpszText. You 
+                          * can not do that with BETA strings because of 
+                          * garbage collection. So we copy no more than 80 
+                          * chars to NMTTDISPINFO.szText.
+                          *)
+                         (# exit 80 #);
                     do info.lParam -> TOS'%adrGetLong' -> hwndFrom;
                        info.lParam+4 -> TOS'%adrGetLong' -> idCtrl;
                        info.lParam+8 -> TOS'%adrGetLong' -> code1;
@@ -307,7 +317,8 @@ do inner close;
                        (if code1=TTN_NEEDTEXT then
                            %getLongAt (info.lParam+100) -> flags; 
                            
-                           %getLongAt (info.lParam + 12) -> strAddr;
+                           info.lParam + 16 -> strAddr; (* NMTTDISPINFO.szText *)
+                           
                            
                            idCtrl -> tooltipPriv.theTools.getInfoFromId -> theTool[];  
                            
@@ -319,9 +330,26 @@ do inner close;
                                        (strAddr, tempText) -> lstrcpy; 
                                        tempText.free;
                                     else
-                                       theTool.theTip.length+1 -> bytesToCopy;
-                                       (strAddr, @@theTool.theTip.T[1],bytesToCopy) 
-                                         -> lstrcpyn
+                                       (if theTool.theTip.length>maxNoOfChars then
+                                           maxNoOfChars -> bytesToCopy;
+                                           (0,maxNoOfChars-4) 
+                                             -> theTool.theTip.sub
+                                             -> tempText2[];
+                                           '...' -> tempText2.append;
+                                           (if tempText2.T.range<tempText2.length + 1 then
+                                               1 -> tempText2.T.extend;
+                                           if);
+                                           (strAddr, @@tempText2.T[1],bytesToCopy) 
+                                             -> lstrcpyn;
+                                        else
+                                           (if theTool.theTip.T.range<theTool.theTip.length + 1 then
+                                               1 -> theTool.theTip.T.extend;
+                                           if);
+                                           theTool.theTip.length + 1 
+                                             -> bytesToCopy;
+                                           (strAddr, @@theTool.theTip.T[1],bytesToCopy) 
+                                             -> lstrcpyn;
+                                       if);
                                    if);
                                 else
                                    'theTool.theTip[]=NONE' -> screen.putLine;
