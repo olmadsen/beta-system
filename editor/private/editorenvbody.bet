@@ -46,6 +46,7 @@ INCLUDE '~beta/mps/v4.9.1/propertyparser'
      (#
         theFile,fragmentName,language: ^text;
         synCatNo: @integer;
+        theBrowser: ^object;
         isAFrejaEditor: @boolean;
         fg: ^astInterface.fragmentGroup;
         ff: ^astInterface.fragmentForm;
@@ -55,7 +56,8 @@ INCLUDE '~beta/mps/v4.9.1/propertyparser'
         propText: ^text;
         status: @boolean;
         
-     enter (theFile[],fragmentName[],language[],synCatNo,isAFrejaEditor)
+     enter
+     (theFile[],fragmentName[],language[],synCatNo,theBrowser[],isAFrejaEditor)
      do
         thisOperation:
           (# 
@@ -173,7 +175,8 @@ INCLUDE '~beta/mps/v4.9.1/propertyparser'
                          ff.grammar[]->fg.defaultGrammar[];
                          
                      if);
-                     fg[]->groupEditorList.findOrCreateGroupEditor->ge[];
+                     (theBrowser[],fg[])
+                       ->groupEditorList.findOrCreateGroupEditor->ge[];
                      (if ge[] <> none then true->ge.needToUpdateTextFile if);
                      
                  if);
@@ -454,9 +457,13 @@ INCLUDE '~beta/mps/v4.9.1/propertyparser'
                                  (if
                                  (autoSaveFile.entry.modTime >
                                   groupFile.entry.modTime) then
-                                     g[]->groupEditorList.findGroupEditor->ge[];
+                                     (ymerCallBack.theBrowser[],g[])
+                                       ->groupEditorList.findGroupEditor->ge[];
                                      (if ge[] <> none then
                                          true->ge.autoSaveFileExists
+                                      else
+                                         'checkAutoSaveFile: the group editor was not found'
+                                           ->putLine
                                      if);
                                      'Auto save file is newer'->help[];
                                      help.newLine;
@@ -558,6 +565,7 @@ INCLUDE '~beta/mps/v4.9.1/propertyparser'
                 (if not S.empty then
                     S.pop->fg.fragmentList.deleteLocalName; restart loop
                 if);
+                true->status;
                 l:
                 (propText[],screen[])
                   ->fg.parseProperty
@@ -565,7 +573,9 @@ INCLUDE '~beta/mps/v4.9.1/propertyparser'
                        parseErrors::< (* exception called if parse-errors *) 
                          (# 
                          do
-                            'parse errors in the property list'->screen.putLine;
+                            'Temporary parse errors in the property list, please ignore'
+                              ->screen.putLine;
+                            false->status;
                             leave l;
                             
                          #);
@@ -576,6 +586,7 @@ INCLUDE '~beta/mps/v4.9.1/propertyparser'
                          do
                             ' this one is never called!!! double form declaration'
                               ->screen.putLine;
+                            false->status;
                             leave l
                          #);
                        
@@ -623,6 +634,7 @@ INCLUDE '~beta/mps/v4.9.1/propertyparser'
                 if)
             if)
         if)
+     exit status
      #);
    propsToAst:
      (#
@@ -648,10 +660,13 @@ INCLUDE '~beta/mps/v4.9.1/propertyparser'
         mps.top.topgroup[]->propfg.father;
         propertyGrammar[]->mps.newFragmentForm->ff[];
         propText.reset;
-        (1 (*root*) ,propText[],screen[],ff[])->propertyGrammar.parser.doParse;
-        'property'->ff.name;
-        ff[]->propfg.fragmentList.addFragment;
-        
+        (if
+        (1 (*root*) ,propText[],screen[],ff[])->propertyGrammar.parser.doParse
+         then
+            'property'->ff.name; ff[]->propfg.fragmentList.addFragment
+         else
+            'Parse errors in property list'->putLine; proptext[]->putLine; 
+        if)
      exit propfg[]
      #)
 #)  
@@ -700,7 +715,8 @@ do
                         'program'->name[];
                         'beta'->language[];
                         (f.name,name[],language[],betaGram.descriptorForm,
-                         isAFrejaEditor)->editorenvPrivate.doNewGroup->ge[];
+                         theBrowser[],isAFrejaEditor)
+                          ->editorenvPrivate.doNewGroup->ge[];
                         (if ge[]
                          // none then
                             name[]->putText; ' editor not opened'->putLine; 
@@ -714,8 +730,8 @@ do
          else
             'program'->name[];
             'beta'->language[];
-            (f.name,name[],language[],betaGram.descriptorForm,isAFrejaEditor)
-              ->editorenvPrivate.doNewGroup->ge[];
+            (f.name,name[],language[],betaGram.descriptorForm,theBrowser[],
+             isAFrejaEditor)->editorenvPrivate.doNewGroup->ge[];
             (if ge[]
              // none then name[]->putText; ' editor not opened'->putLine; 
              else
@@ -767,7 +783,8 @@ do
                         'lib'->name[];
                         'beta'->language[];
                         (f.name,name[],language[],betaGram.descriptorForm,
-                         isAFrejaEditor)->editorenvPrivate.doNewGroup->ge[];
+                         theBrowser[],isAFrejaEditor)
+                          ->editorenvPrivate.doNewGroup->ge[];
                         (if ge[]
                          // none then
                             name[]->putText; ' editor not opened'->putLine; 
@@ -781,8 +798,8 @@ do
          else
             'lib'->name[];
             'beta'->language[];
-            (f.name,name[],language[],betaGram.attributesForm,isAFrejaEditor)
-              ->editorenvPrivate.doNewGroup->ge[];
+            (f.name,name[],language[],betaGram.attributesForm,theBrowser[],
+             isAFrejaEditor)->editorenvPrivate.doNewGroup->ge[];
             (if ge[]
              // none then name[]->putText; ' editor not opened'->putLine; 
              else
@@ -985,9 +1002,12 @@ do
 do
      (# textfile: @file
      do
-        (if trace[2] then 'creating groupEditor'->putLine;  if);
+        (if trace[2] then
+            'creating groupEditor: '->putText; fg.name->putLine; 
+        if);
         &groupEditor[]->ge[];
         fg[]->ge.fg[];
+        theBrowser[]->ge.theBrowser[];
         fg[]->editorenvPrivate.checkWriteAccess->ge.writeAccess;
         (if trace[2] then
             'writeAccess: '->putText;
@@ -1011,24 +1031,30 @@ do
 do
      (# textfile: @file
      do
-        fg[]->findGroupEditor->ge[];
-        (if ge[] = none then fg[]->createGroupEditor->ge[] if)
+        (theBrowser[],fg[])->findGroupEditor->ge[];
+        (if ge[] = none then (theBrowser[],fg[])->createGroupEditor->ge[] if)
      #)  
 
 -- editorenvCreateFormEditor: Descriptor --
 (# help: ^text; 
 do
    (if ge[] <> none then
-       ff[]->ge.formeditorList.findEditor->fe[];
-       (if trace[2] then 'creating formeditor'->putLine;  if);
+       theEditorRoot.frag[]->ge.formeditorList.findEditor->fe[];
+       (if trace[2] then
+           'creating formeditor: '->putText;
+           (theEditorRoot.frag.father).name->putText;
+           '-'->put;
+           theEditorRoot.frag.name->putLine;
+           
+       if);
        (if theSifTextEditor[] <> none then
            &theSifTextEditor.codeviewerType[]->fe[];
            fe[]->theSifTexteditor.SifViewer[];
            theSifTextEditor[]->fe.theSifTextEditor[];
-           ff[]->theSifTexteditor.frag[];
-           ff.root[]->theSifTexteditor.editorRoot[];
-           (mps[],ff.grammar[],UI[],theSifTextEditor[],ff.root[],none )
-             ->fe.init;
+           theEditorRoot.frag[]->theSifTexteditor.frag[];
+           theEditorRoot[]->theSifTexteditor.editorRoot[];
+           (mps[],theEditorRoot.frag.grammar[],UI[],theSifTextEditor[],
+            theEditorRoot[],initialSelection[])->fe.init;
            fe[]->ge.formeditorList.append;
            ge[]->fe.thisGroupEditor[];
            not ge.writeAccess->fe.theSifTextEditor.isReadOnly;
@@ -1055,13 +1081,16 @@ do
 (# help: ^text; 
 do
    (if ge[] <> none then
-       ff[]->ge.formeditorList.findEditor->fe[];
+       theEditorRoot.frag[]->ge.formeditorList.findEditor->fe[];
        (if fe[] <> none then
+           fe[]->theSifTexteditor.SifViewer[];
+           fe.editorRoot.frag[]->theSifTextEditor.frag[];
+           fe.editorRoot[]->theSifTexteditor.editorRoot[];
            fe.doReprettyprint;
-           fe.cs->fe.setFocus;
-           fe[]->theSifTexteditor.SifViewer[]
+           fe.cs->fe.setFocus
         else
-           (ff[],theSifTexteditor[],ge[])->createFormEditor->fe[]
+           (theEditorRoot[],initialSelection[],theSifTexteditor[],ge[])
+             ->createFormEditor->fe[]
        if)
     else
        'findOrCreateFormEditor: ge is none!'->putLine
@@ -1096,13 +1125,21 @@ do
  #);*)
    search: scan
      (# 
-     do (if fg[] = current.fg[] then current[]->ge[]; leave search if)
+     do
+        (if theBrowser[] <> none then
+            (if (fg[] = current.fg[]) and (theBrowser[] = current.theBrowser[])
+             then
+                current[]->ge[]; leave search
+            if)
+         else
+            'FindGroupEditor: theBrowser is none'->putLine
+        if)
      #)  
 
 -- findEditorForFormBody: Descriptor --
 (# ge: ^groupEditor; help: ^text; 
 do
-   ff.father->groupeditorList.findOrCreateGroupEditor->ge[];
+   (none ,ff.father)->groupeditorList.findOrCreateGroupEditor->ge[];
    (if ge[] <> none then
        ff[]->ge.formeditorList.findEditor->fe[];
        (if fe[] <> none then
@@ -1179,40 +1216,33 @@ do
             'scanGEs: ge.g[] is none!'->putLine; 
          else
             ge.fg.fragmentlist.scan
-              (# help: ^text; unExp: ^astInterface.unexpanded; 
+              (# help: ^text; 
               do
-                 (if current.type
-                  // mps.formType then
+                 (if current.type = mps.formType then
                      (if current.f[] = none then screen[]->current.open if);
-                     (if ge.touched > 0 then
-                     (* 'Recomputing slot chain for: '->putText;
-                      ge.g.name->putText;
-                      '-'->put;
-                      current.f.name->putLine;*)
-                         '.'->put;
-                         current.f[]->ff[];
-                         ff.recomputeSlotChain;
-                         true->didRecompute
-                     if);
+                     (* (if ge.touched > 0 then *)
+                     (* this should not be the editors job!! *)
+                     (* '.'->put; *)
+                     current.f[]->ff[];
+                     ff.recomputeSlotChain;
+                     (* false->didRecompute;
+                      if);*)
                      current.f[]->nonterminalsExistInForm
                        ->(unexpandedExist,unExp[]);
-                     (if unexpandedExist
-                      // true then
-                         leave (*unExp[]->groupEditorList.findAndSelect;*)
-                         thisOperation
-                     if)
+                     (if unexpandedExist then leave thisOperation if)
                  if);
                  
               #);
-            (if didRecompute then
-                ' Recomputed slot chain for: '->putText;
-                ge.fg.name->putLine;
-                false->didRecompute
-            if);
+            (* (if didRecompute then
+             ' Recomputed slot chain for: '->putText;
+             ge.fg.name->putLine;
+             false->didRecompute
+             if);*)
             
         if);
         
-     #)
+     #);
+   
 #)  
 
 -- editorEnvInit: DoPart --

@@ -20,7 +20,7 @@ fragmentBrowser: ymerApplication
           ^astInterface.fragmentform;
           ymerCallback: @ymerCall
             (#
-               refreshGroup::  (#  do (fg[],none )->updateBrowser #);
+               refreshGroup::  (#  do (cb[],fg[],none )->updateBrowser #);
                findAndSelect::  (#  do node[]->findAndSelect #)
             #);
           ongoingTextediting: @boolean;
@@ -66,29 +66,6 @@ fragmentBrowser: ymerApplication
                if)
             exit exists
             #);
-          oldgroupEditorExists:
-            (# exists: @boolean
-            do
-               (if browser[] <> none then
-                   browser.currentgroup[]->cbg[];
-                   browser.currentForm[]->cff[];
-                   (if cbg[] <> none then
-                       (if edenv[] <> none then
-                           (if edenv.groupEditorList[] <> none then
-                               cbg.fg[]
-                                 ->edenv.groupEditorList.findOrCreateGroupEditor
-                                 ->cge[];
-                               (if cge[] <> none then
-                                   (if not checkOngoingTextediting then
-                                       true->exists; INNER oldgroupEditorExists
-                                   if)
-                               if)
-                           if)
-                       if)
-                   if)
-               if)
-            exit exists
-            #);
           groupEditorExists:
             (# exists: @boolean
             do
@@ -99,17 +76,24 @@ fragmentBrowser: ymerApplication
             #);
           updateBrowser:
             (#
-               cbg: (* current browser group *) ^browser.projects.group;
                fg: ^astInterface.fragmentGroup;
-               ff: ^astInterface.fragmentForm
-            enter (fg[],ff[])
+               ff: ^astInterface.fragmentForm;
+               cb: ^object;
+               browser: ^sourceBrowser;
+               cbg: (* current browser group *) ^browser.projects.group
+            enter (cb[],fg[],ff[])
             do
-               browser.currentgroup[]->cbg[];
-               (browser.currentProject[],none )->browser.setGroup;
-               (browser.currentProject[],cbg[])->browser.setGroup;
-               (if ff[] <> none then
-                   (browser.currentProject[],cbg[],ff[])
-                     ->browser.setFragmentForm
+               (if cb[] <> none then
+                   cb[]->browser[];
+                   browser.currentgroup[]->cbg[];
+                   (if (cbg[] <> none ) and (cbg.fg[] = fg[]) then
+                       (browser.currentProject[],none )->browser.setGroup;
+                       (browser.currentProject[],cbg[])->browser.setGroup;
+                       (if ff[] <> none then
+                           (browser.currentProject[],cbg[],ff[])
+                             ->browser.setFragmentForm
+                       if)
+                   if)
                if)
             #);
           oldFindAndSelect:
@@ -244,6 +228,12 @@ fragmentBrowser: ymerApplication
                     expanded;
                node: ^astInterface.ast
             do
+               (if theSemanticErrorViewer[] <> none then
+                   (if theSemanticErrorViewer.opened then
+                       theSemanticErrorViewer.close
+                   if);
+                   none ->theSemanticErrorViewer[]
+               if);
                ''->writeInfoView;
                formsWithSemanticErrors.clear;
                'Calling BETA compiler'->putLine;
@@ -292,7 +282,8 @@ fragmentBrowser: ymerApplication
                    nont[]->findAndSelect;
                    (none ,
                     'This fragment group cannot be checked\nbefore all nonterminals have been removed',
-                    'Compiler message')->alertUser
+                    'Compiler message')->alertUser;
+                   
                 else
                    callCompiler
                      (#  do (fg.name,false,false)->activateCompiler;  #);
@@ -342,38 +333,49 @@ fragmentBrowser: ymerApplication
             enter fn[]
             do pe.open
             #);
-          openSemanticErrorEditor:
+          theSemanticErrorViewer: ^browser.semanticViewer;
+          semanticErrorViewer: browser.semanticViewer
             (#
-               theGroup: ^astInterface.fragmentGroup;
-               sv: @browser.semanticViewer
-                 (#
-                    open:: 
-                      (#  do theGroup[]->fg[]; theGroup.name->fgName[];  #)
+               open:: 
+                 (# 
+                 do
+                    theGroupWithSemanticErrors[]->fg[];
+                    theGroupWithSemanticErrors.name->fgName[];
+                    
                  #)
-            enter theGroup[]
-            do sv.open
+            #);
+          theGroupWithSemanticErrors: ^astInterface.fragmentGroup;
+          openSemanticErrorEditor:
+            (# 
+            enter theGroupWithSemanticErrors[]
+            do
+               &semanticErrorViewer[]->theSemanticErrorViewer[];
+               theSemanticErrorViewer.open
             #);
           recoverGroup:
-            (# g: ^astInterface.fragmentGroup; ge: ^editorEnv.groupEditor; 
+            (#
+               ge: ^editorEnv.groupEditor;
+               g: ^astInterface.fragmentGroup;
+               groupName: ^text;
+               
             enter ge[]
             do
-               ge.fg[]->g[];
                (if ge[]
                 // none then 'no groupEditor, should not happen'->putLine; 
                 else
+                   ge.fg[]->g[];
+                   g.fullName->groupName[];
                    '#'->g.restoreBackup;
                    ge.groupTouched;
-                   (true,true)->ge.save;
+                   (false,true)->ge.save;
                    ge.resetGroupTouch;
-                   ge.closeGroup;
                    browser.currentGroup.close;
                    true->edenv.onGoingRecovery;
-                   g[]->findGroup;
-                   g[]->edenv.groupEditorList.findOrCreateGroupEditor->ge[];
-                   (if ge[] = none then
+                   groupName[]->browser.selectFragmentGroup;
+                   (if cge[] = none then
                        'no groupEditor, should not happen'->putLine
                     else
-                       ge.groupTouched
+                       cge.groupTouched
                    if);
                    false->edenv.onGoingRecovery;
                    
@@ -385,26 +387,20 @@ fragmentBrowser: ymerApplication
                g: ^astInterface.fragmentGroup;
                ge: ^editorEnv.groupEditor;
                f: @file;
+               groupName: ^text;
                
             enter ge[]
             do
-               ge.fg[]->g[];
                (if ge[]
                 // none then 'no groupEditor, should not happen'->putLine; 
                 else
-                   '~'->g.restoreBackup;
+                   ge.fg[]->g[];
+                   g.fullName->groupName[];
                    '#'->(g.diskFileName).copyAppend->f.name;
                    (if f.entry.exists then f.delete if);
-                   ge.groupTouched;
-                   (true,true)->ge.save;
                    ge.resetGroupTouch;
-                   ge.closeGroup;
                    browser.currentGroup.close;
-                   g[]->findGroup;
-                   g[]->edenv.groupEditorList.findOrCreateGroupEditor->ge[];
-                   (if ge[] = none then
-                       'no groupEditor, should not happen'->putLine
-                   if);
+                   groupName[]->browser.selectFragmentGroup;
                    
                if);
                
@@ -455,7 +451,8 @@ fragmentBrowser: ymerApplication
                               ff: ^astInterface.fragmentForm;
                               ge: ^editorEnv.groupEditor
                            do
-                              edenv.newBetaProgram->ge[];
+                              (browser[],none ,false)->edenv.newBetaProgram
+                                ->ge[];
                               (if ge[] <> none then
                                   ge.fg.fullName->addproject
                               if)
@@ -470,7 +467,8 @@ fragmentBrowser: ymerApplication
                               ff: ^astInterface.fragmentForm;
                               ge: ^editorEnv.groupEditor
                            do
-                              edenv.newBetaLibrary->ge[];
+                              (browser[],none ,false)->edenv.newBetaLibrary
+                                ->ge[];
                               (if ge[] <> none then
                                   ge.fg.fullName->addproject
                               if)
@@ -480,11 +478,11 @@ fragmentBrowser: ymerApplication
                       (#
                          onStatus::  (#  do groupEditorExists->value;  #);
                          onSelect:: 
-                           (# 
+                           (# g: ^astInterface.fragmentGroup
                            do
-                              cge.closeGroup;
-                              browser.currentGroup.close;
-                              (browser.currentProject[],none )->browser.setGroup
+                              cge.fg[]->g[];
+                              (* g.close; 'NB! g.close'->putLine;*)
+                              browser.currentGroup.close
                            #)
                       #);
                     iSave: @item
@@ -500,6 +498,7 @@ fragmentBrowser: ymerApplication
                            do
                               cge.saveAs->newName[];
                               (if newName[] <> none then
+                                  browser.currentGroup.close;
                                   newName[]->browser.selectFragmentGroup
                               if)
                            #)
@@ -572,10 +571,7 @@ fragmentBrowser: ymerApplication
                                   false->value
                               if)
                            #);
-                         onSelect:: 
-                           (# 
-                           do cge.undo; 
-                           #)
+                         onSelect::  (#  do cge.undo;  #)
                       #);
                     iCut: @item
                       (#
@@ -590,8 +586,7 @@ fragmentBrowser: ymerApplication
                            #);
                          onSelect:: 
                            (# 
-                           do
-                              ymerBrowserPrivate.cfe.frag[]->cge.cutForm;
+                           do ymerBrowserPrivate.cfe.frag[]->cge.cutForm; 
                            #)
                       #);
                     iCopy: @item
@@ -631,6 +626,7 @@ fragmentBrowser: ymerApplication
                            do
                               ymerBrowserPrivate.cfe.frag[]->cge.pasteForm
                                 ->ff[];
+                              
                            #)
                       #);
                     iAppend: @item
@@ -651,8 +647,7 @@ fragmentBrowser: ymerApplication
                            #);
                          onSelect:: 
                            (# ff: ^astInterface.fragmentForm
-                           do
-                              none ->cge.pasteForm->ff[];
+                           do none ->cge.pasteForm->ff[]; 
                            #)
                       #);
                     iInsertDescriptorFragmentForm: @item
@@ -671,6 +666,7 @@ fragmentBrowser: ymerApplication
                            do
                               (ymerBrowserPrivate.cfe.frag[],2)->cge.insertForm
                                 ->ff[];
+                              
                            #)
                       #);
                     iInsertAttributesFragmentForm: @item
@@ -689,6 +685,7 @@ fragmentBrowser: ymerApplication
                            do
                               (ymerBrowserPrivate.cfe.frag[],3)->cge.insertForm
                                 ->ff[];
+                              
                            #)
                       #);
                     iInsertDoPartFragmentForm: @item
@@ -707,16 +704,13 @@ fragmentBrowser: ymerApplication
                            do
                               (ymerBrowserPrivate.cfe.frag[],31)->cge.insertForm
                                 ->ff[];
+                              
                            #)
                       #);
                     iEditProperties: @item
                       (#
                          onStatus::  (#  do groupEditorExists->value #);
-                         onSelect:: 
-                           (# 
-                           do
-                              cge.editProperties;
-                           #)
+                         onSelect::  (#  do cge.editProperties;  #)
                       #);
                     iEditFormName: @item
                       (#
@@ -904,15 +898,15 @@ fragmentBrowser: ymerApplication
                open:: 
                  (# 
                  do
-                    GroupFile.new;
-                    GroupEdit.new;
-                    'Tools'->GroupPerform.new;
+                    'Group'->GroupFile.new;
                     Edit.new;
                     Edit[]->append;
                     View.new;
                     View[]->append;
                     SLOTs.new;
-                    SLOTs[]->append
+                    SLOTs[]->append;
+                    'Fragment'->GroupEdit.new;
+                    'Tools'->GroupPerform.new
                  #)
             #)
        #);
@@ -920,6 +914,7 @@ fragmentBrowser: ymerApplication
      init:: 
        (# 
        do
+          ymerBrowser.browser[]->ymerBrowser.ymerCallBack.theBrowser[];
           ymerBrowser.ymerCallback[]->ymerBrowser.edenv.ymerCallback[];
           ymerBrowser.initCompiler
        exit (mps.ast[],mps.betaCFL[])
