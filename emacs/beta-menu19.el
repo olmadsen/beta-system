@@ -35,7 +35,7 @@
 (defun beta-new-program ()
   (interactive)
   (goto-char (point-min))
-  (insert "ORIGIN '~beta/basiclib/v1.4/betaenv';\n")
+  (insert "ORIGIN '~beta/basiclib/v1.5/betaenv';\n")
   (insert "--PROGRAM: descriptor--\n")
   (insert "(# \n")
   (insert "do \n")
@@ -47,7 +47,7 @@
 (defun beta-new-library ()
   (interactive)
   (goto-char (point-min))
-  (insert "ORIGIN '~beta/basiclib/v1.4/betaenv';\n")
+  (insert "ORIGIN '~beta/basiclib/v1.5/betaenv';\n")
   (insert "--LIB: attributes--\n")
   )
 
