@@ -1,38 +1,37 @@
 ORIGIN '../persistentstore';
-
 -- PSlib: Attributes --
 markSpecialObject: external (* defined in P/misc.c *)
   (# tag,theObj: @integer enter (tag,theObj) #);
+markPersistentObject: external (* defined in P/misc.c *)
+  (# PSstoreID: @integer; obj: @integer enter (PSstoreID,obj) #);
 putExt: external (* defined in P/PStoreServer.c *)
   (# dooverwrite: @boolean; host,path,name: [1] @Char; obj,rcode: @integer
   enter (dooverwrite,host,path,name,obj)
   exit rcode
   #);
 setForceAOAGC: external (* defined in ioa.c *) (#  #);
-forceObjectToAOA: external (* defined in P/misc.c *)
-  (# theObj: @integer;  enter theObj #);
-getNumberOfUpdates: external (* defined in P/PStore.c *)
-  (# host,path: [1] @Char; numUpdates: @integer
-  enter (host,path)
+getNumberOfUpdates: external (* defined in P/storagemanager.c *)
+  (# PSstoreID: @integer; numUpdates: @integer
+  enter PSstoreID
   exit numUpdates
   #);
-openReadExt: external (* defined in P/PStoreServer.c *)
+SBopen: external (* defined in P/PStoreServer.c *)
   (# host,path: [1] @Char; rcode: @integer
   enter (host,path)
   exit rcode
   #);
-openWriteExt: external (* defined in P/PStoreServer.c *)
+SBcreate: external (* defined in P/storageblock.c *)
   (# host,path: [1] @Char; rcode: @integer
   enter (host,path)
   exit rcode
   #);
-createExt: external (* defined in P/PStoreServer.c *)
-  (# host,path: [1] @Char; rcode: @integer
-  enter (host,path)
-  exit rcode
+SBclose: external (* defined in P/storageblock.c *)
+  (# PSstoreID: @integer enter PSstoreID #);
+USloadObject: external (* defined in P/storageblock.c *)
+  (# PSstoreID,offset,inx,follow: @integer; obj: @integer
+  enter (PSstoreID,offset,inx,follow)
+  exit obj
   #);
-closeExt: external (* defined in P/PStoreServer.c *)
-  (# host,path: [1] @Char; rcode: @integer enter (host,path) #);
 getExt: external (* defined in P/PStoreServer.c *)
   (# host,path,name: [1] @Char; theObj: @integer
   enter (host,path,name)
@@ -45,15 +44,10 @@ EXISTSERROR: (#  exit 4 #);
 CREATIONERRORERROR: (#  exit 5 #);
 registerRebinderFunc: external (* defined in P/unswizzle.c *)
   (# rebinderFunc: ##callRebinder enter rebinderFunc## #);
-registerOpenCrossStoreFunc: external (* defined in P/unswizzle.c *)
-  (# rebinderFunc: ##callOpenCrossStore enter rebinderFunc## #);
 registerBETAENVandPROGRAM: external
   (# theProgram: @integer enter theProgram #);
 callRebinder: external
-  (#
-     objectTag,typeTag: @integer;
-     target: ^Object;
-     targetAbs: @integer
+  (# objectTag,typeTag: @integer; target: ^Object; targetAbs: @integer
   enter (objectTag,typeTag)
   do
      CExternalentry;
@@ -87,12 +81,7 @@ do
    INNER  
 
 -- PSassertOpen: DoPart --
-do
-   (if host[] <> none then
-       (if path[] <> none then INNER ;  else notOpen;  if); 
-    else
-       notOpen; 
-   if)  
+do (if PSstoreID <> 0 then INNER ;  else notOpen;  if)  
 
 -- PSassertInitnotInitialized: DoPart --
 do
@@ -118,21 +107,26 @@ do
 do
    callRebinder##->registerRebinderFunc;
    &rebindSpecialReference[]->rebinderItem[];
-   callOpenCrossStore##->registerOpenCrossStoreFunc;
    &openpstore[]->openCrossStoreItem[];
    (%getLongAt (@@ theProgram))->registerBETAENVandPROGRAM;
    INNER  
 
 -- PStoreOpen: DoPart --
 do
-   (if path[] = none then
-       (if (hostName,name)->openFunc
+   (if PSstoreID = 0 then
+       (if (hostName,name)->openFunc->PSstoreID
         // (NOTFOUNDERROR) then
+           0->PSstoreID;
            name[]->notFound
         // (ACCESSERRORERROR) then
+           0->PSstoreID;
            name[]->accessError
         else
-           name[]->path[]; hostName->host[]; INNER
+       (* Load root object containing the list of roots. It is assumed that 
+        the root object is the first one created in the store and that it
+        is placed at offset 0. 
+        *)
+           (@@ PSroots,(PSstoreID,0,- 1,0)->USloadObject)->assignRef; INNER
        if)
     else
        name[]->alreadyOpen; 
@@ -141,16 +135,21 @@ do
 
 -- PStoreCreate: DoPart --
 do
-   (if path[] = none then
-       (if (hostName,name)->createExt
+   (if PSstoreID = 0 then
+       (if (hostName,name)->SBcreate->PSstoreID
         // (EXISTSERROR) then
-           name[]->exists; 
+           0->PSstoreID;
+           name[]->exists
         // (CREATIONERRORERROR) then
+           0->PSstoreID;
            name[]->creationError
         else
-           hostName->host[]; name[]->path[]; 
+           &PSrootsList[]->PSroots[];
+           PSroots.init;
+           (PSstoreID,%getLongAt (@@ PSroots))->markPersistentObject
        if)
     else
+       screen.newline;
        name[]->alreadyOpen; 
    if);
    INNER  
@@ -159,22 +158,41 @@ do
 do setForceAOAGC; doGC;   
 
 -- PStoreClose: DoPart --
-do INNER ; checkpoint; (host,path)->closeExt; none ->path[]; none ->host[];   
+do INNER ; checkpoint; PSstoreID->SBclose; 0->PSstoreID;   
 
 -- PStoreGet: DoPart --
 do
-   (@@ theObject,((host,path,name)->getExt))->assignRef;
-   (if theObject[] = none then notFound if);
-   INNER  
+   PSroots.scan
+     (# 
+     do (if current.name[]->name.equalNCS then current.obj[]->theObject[] if)
+     #);
+   (if theObject[] = none then notFound else INNER if)  
 
 -- PStorePut: DoPart --
 do
-   (%getLongAt (@@ obj))->forceObjectToAOA;
-   doGC;
-   (if ((dooverwrite,host,path,name,(%getLongAt (@@ obj)))->putExt)
-    // (ALREADYTHEREERROR) then
-       AlreadyThere; (if dooverwrite then HasOverWritten if)
-   if);
+     (# found: @boolean
+     do
+        PSroots.scan
+          (# 
+          do
+             (if current.name[]->name.equalNCS then
+                 true->found;
+                 (if dooverwrite then
+                     obj[]->current.obj[]; HasOverWritten
+                  else
+                     AlreadyThere
+                 if)
+             if)
+          #);
+        (if not found then
+              (# newRoot: ^PSroot
+              do
+                 &PSroot[]->newRoot[];
+                 (name[],obj##,obj[])->newRoot;
+                 newRoot[]->PSroots.append
+              #)
+        if)
+     #);
    INNER  
 
 -- PStoreRegisterSpecialObject: DoPart --
@@ -189,8 +207,8 @@ do
 -- PSNumberOfUpdates: DoPart --
 do
    assertOpen
-     (# notOpen:: (#  do true->continue #); 
-     do (host,path)->getNumberOfUpdates->result
+     (# notOpen::  (#  do true->continue #); 
+     do PSstoreID->getNumberOfUpdates->result
      #)  
 
 -- PSRebindSpecRefNotHandled: DoPart --
@@ -270,7 +288,7 @@ do 'persistentstore.openRead: "'->msg[];
 do 'persistentstore.openRead: No access to "'->msg[];   
 
 -- PSOpenReadOpenFunc: DoPart --
-do (host,path)->openReadExt->rcode  
+do (host,path)->SBopen->rcode  
 
 -- PSOpenWriteAlreadyOpenMessage: DoPart --
 do 'persistentstore.openWrite: "'->msg[];   
@@ -282,7 +300,7 @@ do 'persistentstore.openWrite: "'->msg[];
 do 'persistentstore.openWrite: No access to"'->msg[];   
 
 -- PSOpenWriteOpenFunc: DoPart --
-do (host,path)->openWriteExt->rcode  
+do (host,path)->SBopen->rcode  
 
 -- PSCreateAlreadyOpen: DoPart --
 do
@@ -376,7 +394,7 @@ do
    assertOpen
      (# 
      do
-        path[]->storeDir.name;
+        name[]->storeDir.name;
         storeDir.delete
           (#
              nosuch:: 
@@ -386,7 +404,7 @@ do
                     (# 
                     do
                        'delete error: '->msg.putText;
-                       path[]->msg.putText;
+                       name[]->msg.putText;
                        ' does not exist'->msg.putText;
                        true->continue;
                        
@@ -400,7 +418,7 @@ do
                     (# 
                     do
                        'delete error: '->msg.putText;
-                       path[]->msg.putText;
+                       name[]->msg.putText;
                        ' could not be deleted (unknown error)'->msg.putText;
                        true->continue;
                        
