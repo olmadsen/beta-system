@@ -982,8 +982,7 @@ static int isLocalLab(char *lab)
 static void addLabel(long adr, char *id)
 {
   label *lab;
-  int len;
-  int i;
+  int len=strlen(id);
   char* buf;
 
   if (isLocalLab(id)){
@@ -996,7 +995,7 @@ static void addLabel(long adr, char *id)
     return;
   } 
 
-  buf = MALLOC(sizeof(label)+len+1-lastslash);
+  buf = MALLOC(sizeof(label)+len+1);
 
   if (!buf) {
     INFO_LABELS(fprintf(output, "Allocation of label failed\n"));
@@ -1010,7 +1009,7 @@ static void addLabel(long adr, char *id)
   lab = (label *) buf;
   lab->id = buf+sizeof(label);
 
-  strcpy(lab->id, id+lastslash);
+  strcpy(lab->id, id);
   lab->address = adr;
 
   if (!labels) {
@@ -1047,6 +1046,7 @@ static void addGroupLabel(long adr, char *id)
   label *lab;
   char* buf;
   int len = strlen(id);
+  int i;
   int lastslash = 0;
 
   /* No need to check for locallabs, duplicates */
