@@ -122,8 +122,10 @@ void ExtVR(ref(Object) theObj,
       /* Object Rep */
 
       /* Copy contents of old rep to new rep */
-      for (i = 0; i < copyRange; ++i)
+      for (i = 0; i < copyRange; ++i){
 	NEWREP->Body[i] = REP->Body[i];
+	/* No need to use AssignReference: NEWREP is in IOA */
+      }
 
       NEWREP->iProto = REP->iProto;
       NEWREP->iOrigin = REP->iOrigin;
@@ -136,15 +138,15 @@ void ExtVR(ref(Object) theObj,
 	  while(--add>=0){
 	    struct Item *item;
 #ifdef sparc
-	    Protect(theRep, 
+	    Protect2(theRep, newRep,
 		    item = SPARC_AlloI(cast(Object) REP->iOrigin, 0, REP->iProto, 0, 0));
 #endif
 #ifdef hppa
-	    Protect(theRep, 
+	    Protect2(theRep, newRep,
 		    item = CAlloI(cast(Object) REP->iOrigin, REP->iProto));
 #endif
 #ifdef crts
-	    Protect(theRep, 
+	    Protect2(theRep, newRep,
 		    item = AlloI(cast(Object) REP->iOrigin, REP->iProto));
 #endif
 	    AssignReference((long *)((long)&NEWREP->Body + (range+add)*4), item);
@@ -154,16 +156,16 @@ void ExtVR(ref(Object) theObj,
 	  while(--add>=0){
 	    struct Component *comp;
 #ifdef sparc
-	    Protect(theRep, 
+	    Protect2(theRep, newRep,
 		    comp = SPARC_AlloC(cast(Object) REP->iOrigin, 0, REP->iProto, 0, 0));
 #endif
 #ifdef hppa
-	    Protect(theRep, 
+	    Protect2(theRep, newRep,
 		    comp = CAlloC(cast(Object) REP->iOrigin, REP->iProto));
 #endif
 #ifdef crts
-	    Protect(theRep, 
-		    comp = AlloC(cast(Object) REP->iOrigin, theRep->iProto));
+	    Protect2(theRep, newRep,
+		    comp = AlloC(cast(Object) REP->iOrigin, REP->iProto));
 #endif
 	    AssignReference((long *)((long)&NEWREP->Body + (range+add)*4), 
 			    (struct Item *)comp);
