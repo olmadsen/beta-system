@@ -13,7 +13,7 @@ clean:
 	-/bin/rm -f *~ src/*~
 
 distclean: clean
-	-/bin/rm -f *.html *.pdf
+	-/bin/rm -f *.html *.pdf *.int
 	if [ -d interfaces ]; then /bin/rm -rf interfaces; fi
 
 always:

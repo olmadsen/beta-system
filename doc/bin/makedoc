@@ -9,6 +9,7 @@ sub usage
     print STDERR "  -p   do not generate PDF\n";
     print STDERR "  -h   print this summary\n";
     print STDERR "  -s   split interface files at special comments\n";
+    print STDERR "  -e   treat warnings as errors (i.e. stop after warning)\n";
     print STDERR "  -v   verbose output\n";
     print STDERR "  -d   debug makedoc script\n";
     print STDERR "  If .book file is given as argument, a full manual set is generated.\n";
@@ -50,6 +51,7 @@ $skippdf        = 0  if (!defined($skippdf));
 $book_file_name = "" if (!defined($book_file_name));
 $verbose        = 0  if (!defined($verbose));
 $debug          = 0  if (!defined($debug));
+$errorwarnings  = 0  if (!defined($errorwarnings));
 
 # Other variables
 my $numinxcolumns = 3;     # Number of columns in alphabetic index
@@ -841,6 +843,7 @@ sub read_command_line()
     $debug = 1 if (defined($d));
     $fullpath = 1 if (defined($f));
     $skippdf = 1 if (defined($p));
+    $errorwarnings = 1 if (defined($e));
     if ($#ARGV == 0){ 
 	local ($file) = $ARGV[0];
 	if ($file =~ m/\.book$/){
@@ -962,10 +965,34 @@ sub read_book_file
     }
 }
 
+sub warning
+{
+    local ($file, $char_pos, $msg) = @_;
+    print STDERR "$file:char-pos $char_pos:\n";
+    print STDERR "***warning: $msg\n";
+    if ($errorwarnings){
+	print STDERR "Treating warnings as errors.\n";
+	exit(1);
+    }
+}
 sub error
 {
+    local ($file, $char_pos, $msg) = @_;
+    print STDERR "$file:char-pos $char_pos:\n";
+    print STDERR "***ERROR: $msg\n";
+    exit(1);
+}
+
+sub src_warning
+{
     local ($char_pos, $msg) = @_;
-    print STDERR "$srcfiles[$filenumber]:char $char_pos: ***$msg\n";
+    &warning("$srcfiles[$filenumber]", $char_pos, $msg);
+}
+sub src_error
+{
+    local ($char_pos, $msg) = @_;
+    &error("$srcfiles[$filenumber]", $char_pos, $msg);
+    exit(1);
 }
 
 sub parse_special_tags
@@ -1036,12 +1063,12 @@ sub parse_special_tags
 		$heading = "$number $heading";
 		$done .= $heading . "</A>$headanchors</H$h>";
 	    } else {
-		&error($full_length-length($remaining), "Unterminated heading? (<H$h>)");
+		&src_warning($full_length-length($remaining), "Unterminated heading? (<H$h>)");
 	    }
 	    push (@headings, "$heading\@$htmlfile\#$anchor");
 	} elsif ($match =~ m%\</H[1-6]\>%i){
 	    # Found heading end
-	    &error($full_length-length($remaining), "Unmatched end-of-heading? ($&)");
+	    &src_warning($full_length-length($remaining), "Unmatched end-of-heading? ($&)");
 	    $done .= $match;
 	} elsif ($match =~ m%\<BETA%i){
 	    ##################### Found BETA start ########################
@@ -1099,7 +1126,7 @@ sub parse_special_tags
 		    #print STDERR "beta='$beta'\n" if ($debug);
 		    $remaining = $';
 		} else {
-		    &error($full_length-length($remaining), "<BETA> with no SRC and no end-tag met.");
+		    &src_warning($full_length-length($remaining), "<BETA> with no SRC and no end-tag met.");
 		}
 	    }
 	    # Generate output into $done variable
@@ -1107,7 +1134,7 @@ sub parse_special_tags
 		$num_beta++;
 		if ($listcap eq ""){
 		    if ($caption eq ""){
-			&error($full_length-length($remaining), 
+			&src_warning($full_length-length($remaining), 
 			       "<BETA> tag with LIST attribute and no caption found.Using \"Program " . $num_beta . "\" for caption.");
 			$listcap = $caption = "Program " . $num_beta;
 		    } else {
@@ -1142,7 +1169,7 @@ sub parse_special_tags
 	    $done .= "</PRE>\n";
 	} elsif ($match =~ m%\</BETA\>%i){
 	    # Found BETA end
-	    &error($full_length-length($remaining), "Unmatched end-of-beta? (</BETA>)");
+	    &src_warning($full_length-length($remaining), "Unmatched end-of-beta? (</BETA>)");
 	    $done .= "</PRE>\n";
 	} elsif ($match =~ m%\<INX%i){
 	    ################# Found INX start #########################
@@ -1173,12 +1200,12 @@ sub parse_special_tags
 		$entry =~ s%\s+$%%;
 		#print STDERR "$htmlfile: INX entry: $entry\n";
 		if ($entry eq ""){
-		    &error($full_length-length($remaining), "Empty index entry? <<INX></INX>)");
+		    &src_warning($full_length-length($remaining), "Empty index entry? <<INX></INX>)");
 		}
 		$done .= $entry unless $hidden;
 		$done .= "</SPAN></A>";
 	    } else {
-		&error($full_length-length($remaining), "Unterminated index entry? (<INX>)");
+		&src_warning($full_length-length($remaining), "Unterminated index entry? (<INX>)");
 	    }
 	    # We unquote HTML when pushing to index to get alphabetic
 	    # sorting of index right. However, colons must be encoded
@@ -1186,7 +1213,7 @@ sub parse_special_tags
 	    push (@index, &quote_special(&unquote_html(&untag($entry))) . ".0\@$htmlfile\#$anchor");
 	} elsif ($match =~ m%\</INX\>%i){
 	    # Found INX end
-	    &error($full_length-length($remaining), "Unmatched end-of-index-entry? (</INX>)");
+	    &src_warning($full_length-length($remaining), "Unmatched end-of-index-entry? (</INX>)");
 	    $done .= $match;
 	} elsif ($match =~ m%\<FOOTNOTE>%si){
 	    ################# Found FOOTNOTE start #########################
@@ -1206,7 +1233,7 @@ sub parse_special_tags
 		# delete trailing whitespace
 		$footnote =~ s%\s+$%%;
 		if ($footnote eq ""){
-		    &error($full_length-length($remaining), "Empty footnote? <<FOOTNOTE></FOOTNOTE>)");
+		    &src_warning($full_length-length($remaining), "Empty footnote? <<FOOTNOTE></FOOTNOTE>)");
 		}
 		# Put foot note at end of $remaining: This will ensure
 		# handling of e.g. INX in the foot note.
@@ -1218,11 +1245,11 @@ sub parse_special_tags
 		}
 		$remaining .= "<A NAME=\"$anchor\">[$num_foot] $footnote</A>\n";
 	    } else {
-		&error($full_length-length($remaining), "Unterminated fotnote? (<FOOTNOTE>)");
+		&src_warning($full_length-length($remaining), "Unterminated fotnote? (<FOOTNOTE>)");
 	    }
 	} elsif ($match =~ m%\</FOOTNOTE\>%i){
 	    # Found FOOTNOTE end
-	    &error($full_length-length($remaining), "Unmatched end-of-footnote? (</FOOTNOTE>)");
+	    &src_warning($full_length-length($remaining), "Unmatched end-of-footnote? (</FOOTNOTE>)");
 	    $done .= $match;
 	} elsif ($match =~ m%\<FIG%i){
 	    ######################## Found FIG start ####################
@@ -1269,10 +1296,10 @@ sub parse_special_tags
 		$remaining = $';
 		#print STDERR "$htmlfile: figure: $figure\n";
 		if ($figure =~ m%^\s*$%s){
-		    &error($full_length-length($remaining), "Empty figure? (<FIG></FIG>)");
+		    &src_warning($full_length-length($remaining), "Empty figure? (<FIG></FIG>)");
 		}
 	    } else {
-		&error($full_length-length($remaining), "Unterminated figure tag? (<FIG>)");
+		&src_warning($full_length-length($remaining), "Unterminated figure tag? (<FIG>)");
 	    }
 	    $listcap =~ s%^\s+%%s;
 	    $listcap =~ s%\s+$%%s;
@@ -1281,7 +1308,7 @@ sub parse_special_tags
 	    if ($listcap eq ""){
 		if ($caption eq ""){
 		    if ($list){
-			&error($full_length-length($remaining), "<FIG> tag with LIST attribute and no caption found.\nUsing \"Figure " . $num_fig . "\" for caption.");
+			&src_warning($full_length-length($remaining), "<FIG> tag with LIST attribute and no caption found.\nUsing \"Figure " . $num_fig . "\" for caption.");
 			#$caption = "Figure $num_fig";
 		    }
 		} else {
@@ -1320,7 +1347,7 @@ sub parse_special_tags
 	    }
 	} elsif ($match =~ m%\</FIG\>%i){
 	    # Found FIG end
-	    &error($full_length-length($remaining), "Unmatched end-of-figure? (</FIG>)");
+	    &src_warning($full_length-length($remaining), "Unmatched end-of-figure? (</FIG>)");
 	    $done .= $match;
 	} elsif ($match =~ m%\<GIF%i){
 	    ######################## Found GIF start ####################
@@ -1377,7 +1404,7 @@ sub parse_special_tags
 	    }
 
 	    if ($source eq ""){
-		&error($full_length-length($remaining), "GIF tag with no SRC");
+		&src_warning($full_length-length($remaining), "GIF tag with no SRC");
 	    }
 	    ($iw, $ih) = &read_gif_dim($dstdirs[$filenumber] . $source);
 	    if ($width eq "" || $height eq ""){
@@ -1403,7 +1430,7 @@ sub parse_special_tags
 	    $done .= ">";
 	} elsif ($match =~ m%\</GIF\>%i){
 	    # Found GIF end
-	    &error($full_length-length($remaining), "GIF tags have no end-tag (</GIF>)");
+	    &src_warning($full_length-length($remaining), "GIF tags have no end-tag (</GIF>)");
 	    
 	} else {
 	    # Hmmm, error? Should not happen.
@@ -1668,9 +1695,10 @@ sub generate_int_title
 sub generate_interface_file
 {
     local ($betafile, $htmlfile) = @_;
+
     local ($inttitle) = &generate_int_title($betafile);
 
-    printf STDERR "\nMaking $htmlfile\n  from $betafile ... \n" if $verbose==1;
+    printf STDERR "\nGenerating $htmlfile\n      from $betafile ... \n" if $verbose==1;
     &read_and_abstract_beta($betafile, $htmlfile);
 
     open (STDOUT, ">$htmlfile") || die "\nCannot open $htmlfile for writing: $!\n";
@@ -1681,6 +1709,9 @@ sub generate_interface_file
 <H1>$inttitle</H1>
 <PRE CLASS=interface>
 EOT
+
+    local ($intline)     = $betaline;
+    local ($full_length) = length($intline);
 
     $_ = $betaline;		
 
@@ -1782,10 +1813,17 @@ EOT
 		# i.e. a pattern variable at end of a parenthesed
 		# evaluation.
 		# This is NOT a pattern end!
-		printf STDERR "\n******* NOTICE: In the text ending like this:\n";
-		printf STDERR substr($betaline.$before.$match, -100, 100);
-		printf STDERR "\n******* the '##)' is not considered a pattern end.";
-		printf STDERR "\n******* Please check if this is correct.\n\n";	
+		local ($intfile) = $intsrcfiles[$filenumber];
+		local ($msg);
+		$msg = "'##)' is not considered a pattern end. Please check this!";
+		$intfile = &strip_extension(&strip_path($intfile)) . ".int";
+		if (!open (INT, ">$intfile")){
+		    print STDERR "$msg\n(cannot write $intfile)\n";
+		} else {
+		    print INT $intline;
+		    close INT;
+		    &warning("./$intfile", $full_length-length($remaining), $msg);
+		}
 		# Just precede.
 	    } else {
 		# This is really a pattern end
