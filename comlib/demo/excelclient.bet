@@ -16,6 +16,7 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
    wstr, error: @wstring;
    rgszNames: @ExternalRepetition(# elementSize::(# do 4->value #)#);
    params: @DISPPARAMS;
+   dispNoParams: @DISPPARAMS;
    varg, varg1, varg2: @VARIANT;
    pexcept: @EXCEPINFO;
    
@@ -23,6 +24,10 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
      ^IDispatch;
    
    excel_progid: (# exit 'Excel.Application' #);
+   
+   use_dual: (# exit false #);
+   dual: ^Workbooks;
+   RHS: @int32holder;
    
    GetDispId:
      (# Name: ^text;
@@ -49,6 +54,16 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
      #);
    
 do 0->CoInitialize;
+   
+   0 -> dispNoParams.cArgs;
+   0 -> dispNoParams.cNamedArgs;
+   empty[]-> VARIANT_init
+   (# 
+   do VT_EMPTY -> vt;
+      0 -> vd.long3;
+      0 -> vd.long4;
+   #);
+   @@empty -> dispNoParams.rgvarg;
    
    excel_progid -> clsstr.setText;
    clsstr[] -> CLSIDFromProgID -> CLSID_XL[];
@@ -110,46 +125,81 @@ do 0->CoInitialize;
            ('PropertyGet("Workbooks")', hr.value) -> ComErrorMessage;
        if);
        
-       (* Could also use DUAL interface Workbooks from excel06.bet *)
-       
-       
        'Invoking pDispExcelApp.WorkBooks.Add: Getting DispId' -> putline;
        varg1[] -> VARIANT_init(# do pdispVal->pdispWorkbooks[] #);
        
        ('Add', pdispWorkbooks[]) -> GetDispId;
        
-       'Invoking pDispExcelApp.Workbooks.Add: Calling Invoke' -> putline;
+       'Invoking pDispExcelApp.Workbooks.Add: ' -> putline;
        
        (* Set up parameters for Invoke *)
        wstr.init;
        'Template' -> wstr.set;
        1 -> rgszNames.new;
        (wstr,0) -> rgszNames.inxPut;
+       0 -> varg.long3;
        varg[]->VARIANT_init
        (# 
        do VT_I2 -> vt;
           xlWorksheet -> iVal;
        #);
-       @@varg -> params.rgvarg; (* Now we're getting insecure! *)
-       rgszNames->params.rgdispidNamedArgs;
+       'vt:' -> puttext; varg.vt -> putint; newline;
+       'long3:' -> puttext; varg.long3 -> putint; newline;
+       varg2[]-> VARIANT_init
+       (# 
+       do VT_EMPTY -> vt;
+          0 -> vd.long3;
+          0 -> vd.long4;
+       #);
+       0->params.rgdispidNamedArgs;
        1->params.cArgs;
-       1->params.cNamedArgs;
-       (dispid.value, IID_NULL, LOCALE_USER_DEFAULT, DISPATCH_METHOD, params[], varg2[], pexcept[], NONE)
-         -> pdispWorkbooks.Invoke
-         -> hr;
-       (if hr.succeeded then
-           'pdispExcelApp.Workbooks.Add(template:=xlWorksheet) succeeded' -> putline;
-           varg2[] -> VARIANT_init(# do pdispVal->pdispWorkBook[] #);
+       0->params.cNamedArgs;
+       @@varg -> params.rgvarg; (* Now we're getting insecure! *)
+       
+       (if use_dual then 
+           'Calling Add using vtable' -> putline;
+           pdispWorkbooks[] -> dual[]; (* should be a QIF *)
+           (# dummy: @char;
+           do (varg, LOCALE_SYSTEM_DEFAULT, RHS[]) -> dual.add -> hr;
+           #);
+           (if hr.succeeded then
+               'pdispWorkbooks.Add(template:=xlWorksheet) succeeded' -> putline;
+            else
+               ('pdispWorkbooks.Add(template:=xlWorksheet) failed', hr.value) -> ComErrorMessage;
+           if);
         else
-           ('pdispExcelApp.Workbooks.Add(template:=xlWorksheet) failed', hr.value) -> ComErrorMessage;
-           'wCode: '->puttext;
-           pexcept.wcode -> putint; newline;
-           (if pexcept.bstrDescription<>0 then
-               'Description: ' -> puttext;
-               pexcept.bstrDescription->error;
-               error.get -> putline;
+           'Calling Add using Invoke' -> putline;
+           (# dummy:@char;
+           do (dispid.value, IID_NULL, LOCALE_USER_DEFAULT, DISPATCH_METHOD, params[], varg2[], none(*pexcept[]*), NONE)
+                -> pdispWorkbooks.Invoke
+                -> hr;
+           #);
+           (if hr.succeeded then
+               'pdispExcelApp.Workbooks.Add(template:=xlWorksheet) succeeded' -> putline;
+               varg2[] -> VARIANT_init(# do pdispVal->pdispWorkBook[] #);
+            else
+               ('pdispExcelApp.Workbooks.Add(template:=xlWorksheet) failed', hr.value) -> ComErrorMessage;
+               'wCode: '->puttext;
+               pexcept.wcode -> putint; newline;
+               'bstrSource: '->puttext;
+               pexcept.bstrSource -> putint; newline;
+               'bstrDescription: '->puttext;
+               pexcept.bstrDescription -> putint; newline;
+               'dwHelpContext: '->puttext;
+               pexcept.dwHelpContext -> putint; newline;
+               'pfnDeferredFillIn: '->puttext;
+               pexcept.pfnDeferredFillIn -> putint; newline;
+               'sCode: '->puttext;
+               pexcept.scode -> putint; newline;
+               
+               (if pexcept.bstrDescription<>0 then
+                   'Description: ' -> puttext;
+                   pexcept.bstrDescription->error;
+                   error.get -> putline;
+               if);
            if);
        if);
+       
        rgszNames.free;
        wstr.free;
        
