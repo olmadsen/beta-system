@@ -1,0 +1,169 @@
+ORIGIN 'tstenv';
+INCLUDE 'tstsystemenv'
+--program:descriptor---
+systemenv
+(# N: (#exit 10 #);     
+   RowType: 
+     (# N:< integerValue;
+        R: [N] @ integer
+     #);
+   matrix:
+     (# N:< integerValue;
+        V: [N] ^RowType;
+        elm:
+          (# i,j: @integer
+          enter(i,j)
+          exit V[i].R[j]
+          #);
+        row:
+          (# r: @integer; theRow: ^RowType
+          enter(r,theRow[])
+          do theRow[] -> V[r][];
+          #);
+        init :
+          (# kind: @integer
+          enter kind
+          do (for r: N repeat
+                  &RowType(# N::(#do 10->value #)#)[] -> V[r][];
+                  (for c: N repeat
+                       (if kind
+                        // 1 then 1 -> V[r].R[c]
+                        // 2 then r + c -> V[r].R[c]
+                        // 3 then r - c -> V[r].R[c]
+                       if)
+                  for);
+             for)
+          #);
+        print:
+          (# 
+          do IO.entry
+             (#
+             do newline;
+                (for i: N repeat
+                     (for j: N repeat
+                          (i,j) -> elm -> putint; ' '->put;     
+                     for);
+                     newline
+                for);
+                newline
+             #)
+          #);
+        dotProduct:
+          (# A: ^matrix; row,col,sum: @integer
+          enter(row,col, A[])
+          do (for i: N repeat
+                  ((row,i) -> A.elm) * ((i,col) -> elm) + sum -> sum
+             for)
+          exit sum
+          #);
+        computeRow:
+          (# row: @integer; A: ^matrix; 
+             R: @RowType(# N::(#do 10->value #)#)
+          enter(row,A[])
+          do (for col: N repeat
+                  (row,col,A[]) -> dotProduct -> R.R[col];
+             for)
+          exit R[]
+          #);    
+        mult:
+          (# A,Result: ^Matrix
+          enter A[]
+          do (# Slave: Syshead
+                  (# lb,ub: @integer;
+                  enter(lb,ub)
+                  do (lb,ub) -> forTo
+                     (# 
+                     do (inx,(inx-lb+1,A[]) -> ComputeRow) -> Result.row
+                     #);
+                     mutex.dcr;
+                     '+++\n'-> IO.putT
+                  #);
+                Start:
+                  (# lb,ub: @integer; 
+                     attToProcessor: external
+                       (# comp: @integer;
+                          tid: @integer;
+                       enter comp
+                       exit tid
+                       #);
+                     S: @ | Slave
+                  enter(lb,ub)
+                  do lb->S.lb; ub->S.ub;
+                     @@S -> attToProcessor;
+                     (*S[] -> fork;*)
+                     mutex.inc;
+                     '===\n'->IO.putT
+                  #);
+                mutex: @
+                  (# M,done: @semaphore;
+                     n: @integer;
+                     init: (#do M.V #);
+                     inc:
+                       (#
+                       do M.P;
+                          n + 1 -> n; 
+                          IO.entry(#do '+'->put;  n->putint; newline;#);
+                          INNER;
+                          M.V;
+                       #);
+                     dcr:
+                       (#
+                       do M.P;
+                          n - 1 -> n; 
+                          IO.entry(#do '-'->put;  n->putint; newline; #);
+                          (if n = 0 then '!'->IO.putC; done.V; if);
+                          M.V;
+                       #)
+                  #);      
+                nslaves: (#exit 2 #);
+                lb,ub: @integer;
+             do &Matrix(# N::(#do 10 -> value #)#)[] -> Result[];
+                mutex.init;
+                mutex.inc;
+                1 -> lb;
+                (0,nslaves-1) -> ForTo
+                (#
+                do lb + (N - lb +1) / (nslaves - inx) - 1 -> ub;
+                   (lb,ub) -> start;
+                   ub + 1 -> lb
+                #) ;
+                '---\n'->IO.putT;
+                mutex.dcr;
+                '$$$\n'->IO.putT;
+                mutex.done.P;
+                '%%%\n'->IO.putT
+             #)
+          exit Result[]
+          #)
+     #);
+   forTo:
+     (# first,last,inx: @integer
+     enter(first,last)
+     do first -> inx;
+        L:
+          (if inx <= last then
+              INNER;
+              inx + 1 -> inx;
+              restart L
+          if)
+     #);
+   A,B: @matrix(# N::(#do 10 -> value #)#);
+   Result: ^Matrix;
+   main::
+     (#
+     do 1 -> A.init;
+        A.print; 
+        1 -> B.init;
+        B.print; 
+        A[] -> B.mult -> Result[];
+        '####\n'->IO.putT;
+        Result.print;
+        
+        2 -> A.init;
+        A.print; 
+        3 -> B.init;
+        B.print; 
+        A[] -> B.mult -> Result[];
+        Result.print
+     #)
+#)

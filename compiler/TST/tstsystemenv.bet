@@ -1,0 +1,218 @@
+origin 'tstenv'  
+---lib:attributes---
+systemenv:
+  (# csys:
+       (* 24+O:  item-proto
+        * 24+4:  gc-felt
+        * 24+8:  origin
+        * 24+12: returnLink
+        * 24+16: returnAdr
+        * 24+20: savedOrigin
+        * 24+24: savedReturn1
+        * 24+28: savedReturn2
+        * 24+32: savedSize
+        * 24+36: TentryPoint
+        *)
+       (# savedOrigin: ^object;
+          savedReturn1,savedReturn2: @integer;   
+          savedSize,TentryPoint: @integer;
+          id: @integer;
+       do INNER
+       #);
+     
+     SH_RUNNING: (# exit 1 #);
+     SH_READY:   (# exit 2 #);
+     SH_WAITING: (# exit 3 #);
+     SH_DONE:    (# exit 4 #);
+     
+     trace: (#exit true #);
+     
+     sysHead: csys
+       (# status: @Integer;
+       do INNER;
+          SH_DONE->status;
+          (if trace then '[Process terminated]'->putText if);
+       #);
+     attToProcessor: external
+       (# comp: @integer;
+          tid: @integer;
+       enter comp
+       exit tid
+       #);
+     SetupVirtualTimer: external
+       (# n: @integer
+       enter n
+       #);
+     semaphore:
+       (# private: @<<SLOT SemaphorePrivate:descriptor>>;
+          P: (# do private.P #);
+          V: (# do private.V #);
+       #);
+     
+     CyclicQueue:
+       (# elmType:< object;
+          Q: [1] ^| elmtype;
+          mask: @Integer;
+          putpos, getpos: @ integer;
+          m: @ (* spinlock protecting all data *)
+            (# l: @Integer; 
+               P:(# do l.%disablePreemption; l.%lock #);
+               V:(# do l.%unlock; l.%enablePreemption #);
+            #);
+          extendBuffer: @
+            (# 
+            do (if mask=0 then (* Init if first use. *)
+                   15 -> mask; mask+1->Q.new;
+                else (* DOES NOT WORK YET! You have to move some elms! *)
+                   'FATAL: extendBuffer called' -> putLine;
+                   mask*2+1->mask;   
+                   mask+1-Q.range->Q.extend;
+               if)
+            #);
+          isEmpty: @(# 
+                    (*do 'isEmpty: getpos='->puttext; getpos->putint; 
+                       ', putpos='->puttext; putpos->putint; newline;*)
+                    exit (getpos=putpos) 
+                    #);
+          append: @
+            (# S: ^| elmType
+            enter S[]
+            do m.P;
+               (if ((putpos+1) %Band mask)=getpos then extendBuffer if);
+               S[] -> Q[putpos+1][];
+               (*'\nputpos='->puttext; putpos->putint; 
+               '\nmask='->puttext; mask->putint;*) 
+               (putpos+1) %Band mask -> putpos;
+               (*'\n(putpos+1) %Band mask -> putpos'->puttext;
+               '\nputpos='->puttext; putpos->putint; newline;*)
+               m.V;
+            #);
+          getFirst: @
+            (# S: ^| elmType
+            do m.P;
+               (if (putpos=getpos) then 
+                   NONE->S[];
+                else
+                   Q[getpos+1][]->S[]; NONE->Q[getpos+1][];
+                   (getpos+1) %Band mask -> getpos
+               if);
+               m.V
+            exit S[]
+            #);
+       #);
+     
+     SQS: @CyclicQueue(# elmType::<sysHead #);
+     fork: (# S: ^| sysHead enter S[] do S[] -> SQS.append #);
+     EnablePreemption: (# l: @Integer do l.%enablePreemption #);
+     scheduler: @ |
+       (# active: ^| sysHead;
+          completed: @Boolean;
+          eat:
+            (# n: @integer
+            enter n
+            do (if N > 0 then n-1 -> eat if)
+            #)
+       do L: (# 
+             do SQS.getFirst -> active[];
+                (if active[]<>NONE then
+                    SH_RUNNING -> active.status;
+                    (* Causes suspend of scheduler, which in turn causes 
+                     * an illegal instruction: *)
+                    (* 1000 -> eat; *)
+                    active;
+                    (if (active.status)=SH_RUNNING then
+                        (if trace then '!'->IO.putI; if);
+                        SH_READY -> active.status;
+                        active[]->SQS.append;
+                    if);
+                    restart L
+                if)
+             #);
+          (if trace then 'Scheduler completed.\n' -> Io.putT; if);
+          true -> completed;
+       #);
+     
+     IO: @ 
+       (# m: @semaphore;
+          entry: (# do m.P; INNER; m.V #);
+          init: (#do m.V #);
+          putC: entry
+            (# ch: @char
+            enter ch
+            do ch -> put
+            #);
+          putT: entry
+            (# S: ^text
+            enter S[]
+            do S[] -> puttext2
+            #);
+          putI: entry
+            (# i: @integer
+            enter i
+            do i -> putint
+            #);
+       #);
+            
+     main:< sysHead;
+  do IO.init;
+     EnablePreemption;
+     1000 -> SetUpVirtualTimer;
+     &|main[] -> fork;
+     L: (# 
+        do scheduler; 
+           (if not scheduler.completed then
+               '-Scheduler was suspended-' -> IO.putT;
+               restart L
+           if)
+        #);
+     (if trace then '---systemenv COMPLETED---\n'-> IO.putT if);
+  #)
+
+-- SemaphorePrivate:descriptor --
+(# strace: (#exit true #);
+   mutex: @Integer;
+   cnt: @Integer;
+   Q: @cyclicQueue(# elmType::<sysHead #); (* Should not need init! *)
+   P:(# self: ^| sysHead;
+     do mutex.%disablePreemption;
+        mutex.%lock;
+        (if (cnt < 1) then
+            (if strace then 'P'->put if);
+            cnt-1->cnt;
+            
+            (* Should be someway to get "this|(sysHead)[]" *)
+            scheduler.active[] -> self[] -> Q.append;
+            
+            (if self[] = NONE then
+                '\n*** none returned from: scheduler.active[]\n'->putline
+            if);
+            SH_WAITING -> self.status;
+            mutex.%unlock;
+            mutex.%enablePreemption;
+            SUSPEND (* To scheduler level *)
+         else
+            (if strace then 'p'->put if);
+            cnt-1->cnt;
+            mutex.%unlock;
+            mutex.%enablePreemption
+        if)
+     #);
+   V:(# next: ^| sysHead;
+     do mutex.%disablePreemption;
+        mutex.%lock;
+        (if (cnt < 0) then
+            (if strace then 'V'->put if);
+            cnt+1->cnt;
+            Q.getFirst -> next[];
+            mutex.%unlock;
+            mutex.%enablePreemption;
+            SH_READY -> next.status;
+            next[] -> SQS.append
+         else
+            (if strace then 'v'->put if);
+            cnt+1->cnt;
+            mutex.%unlock;
+            mutex.%enablePreemption
+        if)
+     #);
+#)

@@ -1,0 +1,98 @@
+ORIGIN 'tstenv';
+INCLUDE 'tstsystemenv';
+INCLUDE 'random'
+---program:descriptor---
+(#
+do
+   systemenv
+   (# key: [30] @integer; (* if larger range, "FATAL: extendBuffer called"
+                           * may appear; ref is none may appear, etc 
+                           *)
+      init:
+        (# R: @random;
+        do 1 -> R.Seed; 500 -> R.MaxValue;           
+           (for i: key.range repeat R -> key[i] for)
+        #);
+      print:
+        (#
+        do (for i: key.range repeat
+                key[i] -> putint; ' ' ->put
+           for);
+           newline
+        #);
+      sort: SysHead
+        (# low,high,l,h: @integer;
+           Swap:
+             (# k: @integer
+             do key[l] -> k;
+                key[h] -> key[l];
+                k -> key[h];
+             #);
+        enter(low,high)
+        do (if low < high then
+               low ->l; high -> h;
+               L1:
+                 (if l < h then 
+                     (if key[l] > key[h] then 
+                         Swap;
+                         l + 1 -> l
+                      else
+                         h - 1 -> h;
+                         restart L1
+                     if);
+                     L2:
+                       (if l < h then
+                           (if key[l] > key[h] then 
+                               Swap;
+                               h - 1 ->  h;
+                               restart L1
+                            else
+                               l + 1 -> l;
+                               restart L2
+                           if);
+                 if)if);
+               (low,l-1) -> Start;
+               (l+1,high) -> Start;
+           if);
+           mutex.dcr
+        #);
+      start:
+        (# low,high: @integer; S: ^| Sort
+        enter(low,high)
+        do &|Sort[] -> S[];
+           low -> S.low;
+           high -> S.high;
+           S[] -> fork;  
+           mutex.inc
+           (#
+           do 'Start: '->puttext; low -> putint; ':'->put; 
+              high->putint; newline;           
+           #);
+        #);
+      mutex: @
+        (# M: @semaphore;
+           n: @integer;
+           inc:
+             (#
+             do M.P;
+                n + 1 -> n;
+                INNER;
+                M.V;
+             #);
+           dcr:
+             (#
+             do M.P;
+                n - 1 -> n;
+                M.V;
+                (if n = 0 then print if);
+             #)
+        #);      
+      Main::
+        (# 
+        do init; mutex.M.V;
+           print;
+           
+           (1,key.range) -> start;           
+        #)
+   #)
+#)
