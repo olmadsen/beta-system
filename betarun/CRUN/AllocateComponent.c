@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-06-09 15:18:57 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-06-11 17:13:20 $, SID: $Revision: 1.5 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -13,9 +13,8 @@ ref(Component) AllocateComponent(ref(ProtoType) prototype,
 {
     register ref(Component) theComp;
 
-    theComp = cast(Component) IOAcalloc(prototype->Size*4
-					+ headsize(Component)
-					- sizeof(void *));
+    theComp = cast(Component) IOAcalloc((prototype->Size+1)*4
+					+headsize(Component));
 
     /* The new Component is now allocated, but not initialized yet! */
 

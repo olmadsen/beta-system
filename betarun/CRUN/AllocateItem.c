@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateItem.c,v $, rel: %R%, date: $Date: 1992-06-06 03:57:13 $, SID: $Revision: 1.2 $
+ * Mod: $RCSfile: AllocateItem.c,v $, rel: %R%, date: $Date: 1992-06-11 17:13:24 $, SID: $Revision: 1.3 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -14,9 +14,7 @@ AllocateItem(ref(ProtoType) prototype,
 {
     register ref(Item) theItem;
 
-    theItem = cast(Item) IOAcalloc(prototype->Size*4
-				   +headsize(Item)
-				   -sizeof(void *));
+    theItem = cast(Item) IOAcalloc((prototype->Size+1)*4);
 
     /* The new Object is now allocated, but not initialized yet! */
 
