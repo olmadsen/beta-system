@@ -178,11 +178,13 @@ void ProcessStackPart(long *low,
 	    (size!=1) ? "s" : "");
     });
 
+  Claim ((unsigned)low<=(unsigned)high, "(unsigned)low<=(unsigned)high");
+
   DEBUG_CODE({
     if (!RunningAsDLL){
       if ( !(high <= (long *)StackStart)){
 	fprintf(output, 
-		"ProcessStackPart: high: 0x%08x <=StackStart: 0x%08x",
+		"ProcessStackPart: high: 0x%08x <=StackStart: 0x%08x\n",
 		(int)high, 
 		(int)StackStart);
 	fflush(output);

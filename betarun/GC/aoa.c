@@ -1345,7 +1345,10 @@ void scanObject(Object *obj,
 #ifdef PERSIST
 #ifdef RTDEBUG
    if (!dontCheckProtoTypes) {
-      Claim(IsPrototypeOfProcess((long)theProto), "IsPrototypeOfProcess(theProto)");
+     if (!IsPrototypeOfProcess((long)theProto)){
+       fprintf(output,"scanObject: proto of object 0x%08x is not in process: 0x%08x (vtbl=0x%08x)\n", (int)obj, (int)theProto, (int)obj->vtbl);
+       ILLEGAL;
+     }
    }
 #endif /* RTDEBUG */
 #endif /* PERSIST */
