@@ -249,7 +249,7 @@ void BetaError(BetaErr err, Object *theObj)
 #ifdef NEWRUN
       DEBUG_CODE(fprintf(output, "          SP=0x%x,\n", SP));
       DEBUG_CODE(fprintf(output, "          thePC=0x%x", thePC));
-      DEBUG_CODE(PrintCodeAddress(thePC));
+      DEBUG_CODE(PrintCodeAddress((long)thePC));
       DEBUG_CODE(fprintf(output, ")\n"));
       switch(err){
       case CTextPoolErr /* called via CpkVT, CpkSVT in betaenv.o */:
