@@ -263,6 +263,10 @@ long isObject(void *theObj)
   isObjectState = 11;
   if (ObjectAlign(4*ObjectSize(obj))!=4*(unsigned)ObjectSize(obj))
     goto failure;
+
+success:
+  return 1;
+  
 failure:
   /* Hmmm, here we have a situation where the debug runtime systems
    * rejects an object reference that the non-debug version would
@@ -273,8 +277,6 @@ failure:
   fprintf(output, "RTS: DEBUG isObject(0x%x) returns FALSE.\n", (int)theObj);
   Illegal();
   return 0;
-success:
-  return 1;
 }
 
 void zero_check(char *p, long bytesize)
