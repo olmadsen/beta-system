@@ -611,11 +611,14 @@ static void Phase2( numAddr, sizeAddr, usedAddr)
   ref(Block)  freeBlock = AOABaseBlock;
   ref(Object) theObj;
   ref(Object) freeObj;
+  ref(Object) enclObj;
   long        theObjectSize;
   long        numOfBlocks = 0;
   
   long        usedSpace = 0;
   long        allSpace  = 0;
+
+  int enclDist;
   
   freeObj   = (ref(Object)) BlockStart( freeBlock);
   
@@ -662,11 +665,31 @@ static void Phase2( numAddr, sizeAddr, usedAddr)
     ptr(long) current = DOT;
     while( current < DOTTop){
       if( *current ) {
-	if (!inIOA(*current)){
-	  INFO_DOT(fprintf(output, "#DOT: updating AOA reference 0x%x\n", *current));
-	  *current = (cast(Object)(*current))->GCAttr;
-	  if (!(*current))
-	    DOTSize--; /* Element was deleted. */
+	if (!inToSpace(*current)){
+
+	  theObj = cast(Object)(*current);
+	  if (isStatic(theObj->GCAttr)) {
+	    enclObj = cast(Object) 
+	      Offset(theObj,enclDist=GetDistanceToEnclosingObject(theObj));
+	    if (enclObj->GCAttr)
+	      theObj = cast(Object) Offset(enclObj->GCAttr,-enclDist);
+	    else
+	      theObj = 0; /* Enclosing object is dead */
+	  } else {
+	    /* It it not a static part object, so either the GCAttr is a
+             * forward reference to the objects new position, or it is
+             * NONE if the object is dead. */
+	    theObj = cast(Object) theObj->GCAttr;
+	  }
+	    
+	  INFO_DOT(fprintf(output, 
+			   "#DOT: updating AOA reference 0x%x to 0x%x\n", 
+			   *current, theObj));
+	  *current = (long) theObj;
+	  if (!theObj) DOTSize--; /* Element was deleted. */
+
+	  DEBUG_AOA( Claim( (theObj == 0) || inAOA (theObj) ,"DOT element NONE or in AOA "));
+
 	}
       }
       current++;
