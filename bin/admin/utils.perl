@@ -327,4 +327,21 @@ sub touch ()
     utime $time, $time, $entry;
 }
 
+sub pushd()
+{
+    local ($dir) = @_;
+    push @dirstack, cwd;
+    chdir $dir || die "pushd: cannot chdir to $dir: $!\n";
+}
+
+sub popd()
+{
+    if (scalar @dirstack){ 
+	chdir pop @dirstack;
+    } else {
+	die "popd: directory stack empty\n";
+    }
+}
+
+
 1;
