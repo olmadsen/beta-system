@@ -1177,12 +1177,12 @@ void SetupBetaSignalHandlers(void)
 #endif /* sun4s */
 #endif /* ppcmac */
 
-#ifdef UNIX
+#if defined(UNIX) && defined(PERSIST)
   /* Install Proxy Trap Handler to catch RefNone correctly
    * independently of whether Persistence is enabled or not.
    */
    initProxyTrapHandler();
-#endif
+#endif /* UNIX && PERSIST */
 
 } /* SetupBetaSignalHandlers */
 
