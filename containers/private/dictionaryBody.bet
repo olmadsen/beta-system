@@ -1,0 +1,119 @@
+ORIGIN '../dictionary';
+INCLUDE '../hashTable';
+INCLUDE 'hashTableBody';
+(*
+ * COPYRIGHT
+ *	 Copyright (C) Mjolner Informatics, 1997
+ *	 All rights reserved.
+ *)
+--- dictionaryStorage:descriptor ---
+(# dictionaryElement: (# k: ^key; e: ^element #);
+   table: @hashTable
+     (# element:: dictionaryElement;
+        hashFunction:: (# do e.k[]->THIS(dictionary).hashFunction->value #);
+     #);
+   insert: @
+     (# k: ^key; e: ^dictionary.element; de: ^dictionaryElement
+     enter (k[],e[])
+     do table.find
+        (# predicate:: (# do (current.k[],THIS(insert).k[])->keyEqual->value #);
+           notfound::
+             (#
+             do &dictionaryElement[]->de[];
+                k[]->de.k[]; e[]->de.e[];
+                de[]->table.insert; NONE->k[]; NONE->e[]; NONE->de[]
+             #)
+        do e[]->current.e[]
+        #);
+     #);
+   delete: @
+     (# k: ^key; e: ^dictionary.element;
+     enter k[]
+     do table.find
+        (# predicate:: (# do (current.k[],THIS(delete).k[])->keyEqual->value #)
+        do current.e[]->e[]; current[]->table.delete
+        #);
+        NONE->k[]
+     exit e[]
+     #);
+   lookup: @
+     (# k: ^key; e: ^dictionary.element;
+     enter k[]
+     do table.find
+        (# predicate:: (# do (current.k[],k[])->keyEqual->value #)
+        do current.e[]->e[];
+        #);
+        NONE->k[]
+     exit e[]
+     #)
+#)
+
+--- dictionaryInit:dopart ---
+do storage.table.init; INNER init
+
+--- dictionaryAssociate:dopart ---
+do (k[],e[])->storage.insert
+
+--- dictionaryDisassociate:dopart ---
+do k[]->storage.delete->e[]; NONE->storage.delete.e[]
+
+--- dictionaryLookup:dopart ---
+do k[]->storage.lookup->e[]; NONE->storage.lookup.e[]
+
+--- dictionaryScanAssociations:dopart ---
+do start;
+   storage.table.scan
+   (#
+   do (current.k[],current.e[])->(k[],e[]);
+      (if (e[],k[])->this(scanAssociations).where then
+          INNER ScanAssociations
+      if);
+   #);
+   end
+
+--- dictionaryImplementationScannerStartOP: descriptor ---
+(# theCell: ^storage.table.theCellType
+do 1->i;
+   loop:
+     (if (i<=storage.table.storage.table.range) then
+         (if storage.table.storage.table[i][]=NONE then i+1->i; restart loop if);
+         (if storage.table.storage.table[i].next[]=NONE then i+1->i; restart loop if);
+         storage.table.storage.table[i].next[]->theCell[]->currentCell[];
+         theCell.elm.e[]->currentElm[];
+         leave loop
+      else NONE->currentElm[]->currentCell[]
+     if);
+   INNER StartOP
+#)
+
+--- dictionaryImplementationScannerNextOP: descriptor ---
+(# theCell: ^storage.table.theCellType
+do currentCell[]->theCell[]; theCell.next[]->theCell[]->currentCell[];
+   (if currentCell[]=NONE then
+       i+1->i;
+       loop:
+         (if (i<=storage.table.storage.table.range) then
+             (if storage.table.storage.table[i][]=NONE then i+1->i; restart loop if);
+             (if storage.table.storage.table[i].next[]=NONE then i+1->i; restart loop if);
+             storage.table.storage.table[i].next[]->theCell[]->currentCell[];
+             theCell.elm.e[]->currentElm[];
+             leave loop
+          else NONE->currentElm[]->currentCell[]
+         if)
+    else theCell.elm.e[]->currentElm[]
+   if);
+   INNER NextOP
+#)
+
+--- dictionaryImplementationScannerMoreOP: dopart ---
+do (currentCell[]<>NONE)->value; INNER
+
+--- dictionaryImplementationCopier: dopart ---
+do storage.table.storage.table.range->theCopy.storage.table.storage.table.new;
+   storage.table.scan
+   (#
+   do (if current.e[]->thePredicate then
+          (current.k[],current.e[])->theCopy.associate
+      if)
+   #);
+   INNER
