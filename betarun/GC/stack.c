@@ -492,14 +492,14 @@ void ProcessStackPart(low, high)
     Claim( high <= (long *)StackStart, "ProcessStackPart: high<=StackStart" );
     
     while( current <= high ){
-	if( inBetaHeap( *current)){
+	if( inBetaHeap(cast(Object)(*current))){
 	    theCell = (handle(Object)) current;
 	    theObj  = *theCell;
 	    if( isObject( theObj) ){
 		if( /*inLVRA( theObj) ||*/ isValRep(theObj) ){
 		    DEBUG_IOA( fprintf( output, "(STACK(%d) is *ValRep)", current-low));
 		}else{
-		    ProcessReference( current);
+		    ProcessReference(casthandle(Object)current);
 		    CompleteScavenging();
 		}
 	    }
@@ -515,7 +515,7 @@ void ProcessStackPart(low, high)
 	      default:
 		if (isLazyRef (*current))
 		  /* (*current) is a dangling reference */
-		  ProcessReference (current);
+		  ProcessReference (casthandle(Object)current);
 		break;
 #endif
             }
@@ -577,10 +577,10 @@ void ProcessStackObj(theStack)
   theEnd = &theStack->Body[0] + theStack->StackSize;
 	    
   for( stackptr = &theStack->Body[0]; stackptr < theEnd; stackptr++){
-    if( inBetaHeap( *stackptr)){
+    if( inBetaHeap(cast(Object)(*stackptr))){
       theCell = (handle(Object)) stackptr;
       if( isObject( *theCell ) )
-	ProcessReference( stackptr);
+	ProcessReference(casthandle(Object)stackptr);
     }else{
       switch( *stackptr ){
       case -8: stackptr++;
@@ -592,7 +592,7 @@ void ProcessStackObj(theStack)
       default:
 	if (isLazyRef (*stackptr))
 	  /* Dangling reference. */
-	  ProcessReference (stackptr);
+	  ProcessReference (casthandle(Object)stackptr);
 #endif
       }
     }
