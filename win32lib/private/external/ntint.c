@@ -134,7 +134,7 @@ int startNtProcess(
   char *args,
   HANDLE in,
   HANDLE out,
-  HANDLE stderr)
+  HANDLE err)
 
 /* This function creates a new process from the executable file with
    name as absolute path. Args is a text that contains the arguments
@@ -157,6 +157,7 @@ int startNtProcess(
   BOOL res;
   int in_must_be_reset = 0;
   int out_must_be_reset = 0;
+  int stderr_must_be_reset = 0;
   char *name;
   char *s,*d;
 
@@ -201,13 +202,13 @@ int startNtProcess(
   } else {
 	  si.hStdOutput  = GetStdHandle(STD_OUTPUT_HANDLE);
   }
-  if (stderr) {
+  if (err) {
 	  DWORD flags;
-	  si.hStdError  = stderr;
-	  GetHandleInformation(stderr, &flags);
+	  si.hStdError  = err;
+	  GetHandleInformation(err, &flags);
 	  if (!(flags & HANDLE_FLAG_INHERIT)) {
 	    stderr_must_be_reset = 1;
-	    SetHandleInformation(stderr, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+	    SetHandleInformation(err, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
 	  }
   } else {
 	  si.hStdError  = GetStdHandle(STD_ERROR_HANDLE);
