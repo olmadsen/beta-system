@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1992 Mjolner Informatics Aps.
- * Mod: $Id: scavenging.c,v 1.51 1992-10-19 13:19:49 beta Exp $
+ * Mod: $Id: scavenging.c,v 1.52 1992-10-20 14:05:18 datpete Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 
@@ -394,7 +394,7 @@ void IOAGc()
 	while( current < DOTTop){
 	    if( *current ) {
 	      if (inIOA(*current)){
-		INFO_DOT(fprintf("#DOT: updating IOA reference 0x%x\n", *current));
+		INFO_DOT(fprintf(output, "#DOT: updating IOA reference 0x%x\n", *current));
 		if( isForward( (cast(Object)(*current))->GCAttr ) ){ 
 		  /* *current has a forward pointer. */
 		  *current = (long) (ref(Object)) (cast(Object)(*current))->GCAttr;
