@@ -53,22 +53,35 @@ void BetaError(errorNo, theObj)
 
   do {
     if( errorNo < 0 ){
+
+      /* Set up StackEnd before calling DisplayBetaStack */
+
 #ifdef sparc
       asm("ta 3");
       StackEnd = (long *) ((struct RegWin *)FramePointer)->fp;
       thePC = (long *) ((struct RegWin *)FramePointer)->i7;
-#else
+#endif
+
 #ifdef hppa
-#ifndef REFSTACK
+      thePC = 0;
+#ifdef REFSTACK
+      /* RefSP is used */
+#else
+#error Find out Stack End for hppa without Reference Stack
+#endif REFSTACK
+#endif hppa
+
+#if !(defined(hppa) || defined(sparc) || defined(crts))
+      /* Ordinary Motorola-like stack */
+      thePC = 0;
       StackEnd = (ptr(long)) &theObj; StackEnd++;
       /* Current object was pushed as the first thing, when
        * the error was detected. The "thing" just below
        * is the first real part of the Beta stack
        */
 #endif
-#endif /* hppa && REFSTACK */
-      thePC = 0;
-#endif
+
+      /* Treat QUA errors specially */
       if (errorNo==QuaErr || errorNo==QuaOrigErr){
 	if (QuaCont) {
 	  fprintf(output, "\n*** OBS. ");
@@ -103,7 +116,11 @@ void BetaError(errorNo, theObj)
 #endif
 #endif
       }
+
 #ifdef RTLAZY
+      
+      /* Treat REFNONE errors specially */
+
 #if defined(macintosh)
       else if (errorNo==RefNoneErr) {
 
@@ -257,6 +274,10 @@ void BetaError(errorNo, theObj)
       }
 #endif
 #endif
+
+      /* If not QUA error with QuaCont or 
+       * REFNONE error with lazy reference, 
+       * we fall through to here */
       if (DisplayBetaStack( errorNo, theObj, thePC, 0))
 	break; /*  DisplayBetaStack <> 0 => continue execution */
     }    
