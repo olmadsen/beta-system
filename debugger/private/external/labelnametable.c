@@ -30,6 +30,14 @@ char NextLabel[100]; /* The last label read from the pipe. */
 #define nmcommand "/bin/nm -hp %s | grep ' T ' | sort"
 #define Decimal
 #endif
+#ifdef linux
+#define nmcommand "nm -Bv %s | grep -v ' U '"
+#define Decimal
+#endif
+
+#ifndef nmcommand
+#error nmcommand should be defined
+#endif
 
 void findNextLabel ()
 { char type;
