@@ -32,16 +32,6 @@ BODY 'typelib';
      exit ExpandedName[]
      #);
    
-   Preprocess:
-     (# 
-     do <<SLOT PreprocessBody:descriptor>>
-     #);
-   
-   Postprocess:
-     (# 
-     do <<SLOT Postprocess:descriptor>>
-     #);
-      
    EmitComments: FetchComments
      (# 
      do (if currentSubcomment.lgth<>0 then
@@ -122,14 +112,66 @@ BODY 'typelib';
    
    DoFile:
      (# ifile: @file;
+        last_include: ^text;
         ok: @boolean;
         ff: ^ast.fragmentForm;
         info: ^declarator_info;
-     do
+        
+        Preprocess:
+          (# 
+          do <<SLOT PreprocessBody:descriptor>>
+          #);
+        Postprocess:
+          (# 
+          do <<SLOT Postprocess:descriptor>>
+          #);
+        scanForImports:
+          (# root: ^ast.expanded;
+          enter root[]
+          do idl.import -> root.suffixWalkForProd
+             (# scancat::idl.import;
+                imported_name, lib: ^text;
+                e: @diskentry;
+                remaining: ^text;
+                exists: @boolean;
+                
+             do current.getstring -> StringToText -> imported_name[];
+                IdlFileName.copy -> e.path;
+                imported_name.copy -> lib[];
+                '.idl' -> lib.stripExtension;
+                (* add path to the predefined interfaces *)
+                (if true 
+                 // 'unknwn' -> lib.equalNCS then
+                    'INCLUDE \'~beta/comlib/unknwn\';' -> outfile.putline;
+                 else
+                    HeadOfIdlFileName.copy -> remaining[];
+                    imported_name[] -> remaining.append;
+                    remaining[] -> e.path;
+                    e.exists -> exists;
+                    (if chain then
+                        (if exists then lib.copy -> last_include[]; if);
+                     else
+                        (if not exists then outfile.commentbegin if);
+                        'INCLUDE \'' -> outfile.puttext;
+                        lib[] -> outfile.puttext;
+                        '\'' -> outfile.put;
+                        (if not exists then outfile.commentend if);
+                        ';' -> outfile.putline;
+                    if);
+                       
+                    (* Add imported library to list of files remaining,
+                     * disregarding if it exists or not. The user still needs
+                     * to get a warning if it does not exists. This is done
+                     * elsewhere.
+                     *)
+                    remaining[] -> files_remaining.add;
+                if);
+             #);
+          #);
+     do        
         (* Defines not cleared - should be used for all files *)
         holders.clear;
         refholders.clear;
-        imports.clear;
         (* global_types should not be cleared - global to all files.*)
         (* local_types, propputs, propgets not cleared either: 
          * The types from imported files should be kept.
@@ -173,6 +215,10 @@ BODY 'typelib';
             (if not quiet then '  Translating...' -> screen.putline; if);
             Outfile.OpenWrite;
             IdlFileName[] -> Outfile.Identification;
+            (chain, PreviousFile[]) -> Outfile.Origin;
+            ff.root[] -> scanForImports;
+            ff.root[] -> EmitComments;
+            outfile.Lib;
             ff.root[] -> do_specification;
             ifile.close;
             Outfile.Epilog;
@@ -197,8 +243,7 @@ BODY 'typelib';
      (* Translate the top node of the IDL *)
      (# s: ^idl.specification;
      enter s[]
-     do s[] -> EmitComments;
-        s.getDefinitions -> do_definitions;
+     do s.getDefinitions -> do_definitions;
         EmitHolders;
         EmitRefHolders;
      #);
@@ -257,13 +302,12 @@ BODY 'typelib';
    do_definitions:
      (# d: ^idl.definitions;
      enter d[]
-     do (chain, PreviousFile[]) -> Outfile.Origin;
-        outfile.Lib;
-        d.newscan
+     do d.newscan
 	(# t: ^text;
            q: ^idl.def_cpp_quote;
 	do (if current.symbol
-            // idl.import then current[] -> do_import
+            // idl.import then 
+               (* handled by scanForImports *)
             // idl.def_type_dcl then current[] -> do_def_type_dcl 
             // idl.const_dcl then current[] -> do_const_dcl;
             // idl.except_dcl then current[] -> do_except_dcl;
@@ -330,17 +374,19 @@ BODY 'typelib';
      (# c: ^idl.const_dcl;
         info: @declarator_info;
      enter c[]
-     do outfile.indent;
+     do 2 -> outfile.indent.inc;
+        outfile.indent;
         (info[], c.getdeclarator) -> do_declarator;
         (* FIXME: currently ignoring const_type and pointer declarators *)
         info.name[] -> outfile.puttext;
         ': '-> outfile.puttext;
         outfile.patternbegin;
         'exit ' -> outfile.puttext;
-        c.getconst_exp -> do_const_exp -> outfile.puttext;
+        (c.getconst_exp, true) -> do_const_exp -> outfile.puttext;
         ' '-> outfile.put;
         outfile.patternend;
         ';' -> outfile.putline;
+        2 -> outfile.indent.dec;
      #);
    
    do_except_dcl: 
@@ -376,12 +422,28 @@ BODY 'typelib';
      exit id[]
      #);
    
+   do_const_exps:
+     (# e: ^idl.const_exps;
+        exp: ^text;
+        add_ticks_to_string: @boolean
+     enter (e[], add_ticks_to_string)
+     do (* If more than one expression, only the last one counts.
+         * This is OK with semantics of comma-evaluation in IDL.
+         *)
+        e.newscan
+        (# 
+        do (current[], add_ticks_to_string) -> do_const_exp -> exp[];
+        #);
+     exit exp[]
+     #);
+   
    do_const_exp:
      (# e: ^idl.const_exp;
         exp: ^text;
         <<SLOT const_exp_lib: attributes>>;
         it: @<<SLOT const_exp_body:descriptor>>;
-     enter e[]
+        add_ticks_to_string: @boolean
+     enter (e[], add_ticks_to_string)
      do it
      exit exp[]
      #);
@@ -439,12 +501,6 @@ BODY 'typelib';
      enter m[]
      do outfile.indent;
         'do_module NYI' -> outfile.commentline;
-     #);
-   
-   do_import: 
-     (# m: ^idl.import;
-     enter m[]
-     do m.getstring -> StringToText -> imports.append;
      #);
    
    do_coclass:
