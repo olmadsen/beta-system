@@ -9,7 +9,8 @@ INCLUDE 'asgtoitem';
 INCLUDE 'nxlength';
 INCLUDE '../GENERATOR/registerContent';
 INCLUDE '~beta/basiclib/formatio';
-INCLUDE 'signature'
+INCLUDE 'signature';
+INCLUDE 'bytecodeval';
 ------evalLib:attributes-------
 getDclName:
   (# VN: ^ASTindex; N: @ASTindex; T: ^text
@@ -1720,7 +1721,7 @@ do (if stest then
            (if switch182 then
                '!EvalBody:assign:make:methodArgs'->mch.comment;
                (baseAdr.copy,EV1[],EHchain[]->chain1[],false,none) 
-                 -> EH.methodArgs 
+                 -> EH.mkMethodArgs 
                  -> V[]
             else              
                (if switch181 then
@@ -1887,7 +1888,7 @@ do (if stest then
            (if switch182 then
                '!expEval:Assign' -> mch.comment;               
                (baseAdr.copy,EV1[],EHchain[]->chain1[],true,none)
-                 -> EH.methodArgs
+                 -> EH.mkMethodArgs
                  -> V[]
             else              
                (if switch181 then
@@ -2659,8 +2660,7 @@ do (if stest then
    (*'endExpEval'->mch.comment;*)
 #)
 ---AssignValToEval:descriptor---
-(* assign the value V[] (form an exit list) to the evaluation EV *)
-(* Consider if doExit must be included!!!!!!!! *)
+(* Assign lEV[] (EvVal) to EV (ASTindex) *)
 (# EH: @EvalHandler;
    SimpleAdr:
      (# EV: ^ASTindex; xES: @ASTindex; A1: ^Mch.Address
@@ -2681,6 +2681,7 @@ do lEV[]->lEV1[];
                   do 'AsgValToEval: '->xT; xN;
                      'lEV1='->xT; lEV1.display; 
                      'assignTo: ' -> xT; EV[]->xA ; xN;
+                     'doExit: ' -> xT; doExit->xB; xN;
                      'baseAdr='->xT; baseAdr.display->xT; xN;
                      (*EHchain[]->printChain*)
    #)if);
@@ -2690,7 +2691,12 @@ do lEV[]->lEV1[];
      EV[]->sematt.evCase
    (# simple::<
         (# rA: ^mch.address;
-        do (if common.switch[213] then
+        do (if stest then
+               301->trace(#
+                         do 'AsgValToEval:simple:'->xT;
+                            EV[] -> xA
+           #)if);
+           (if common.switch[213] then
                (if ((EV[]->theGen.RegCont.inReg->V[]) <> none) then
                    (* indirect way of getting the dataReg of V: instance
                     * of computedEvVal
@@ -2701,10 +2707,26 @@ do lEV[]->lEV1[];
            (if switch181 then
                (baseAdr[],EV[],chain1[]) -> lEV1.asgToSImpleEv -> V[]
             else
-               '!assignTo:simpleAdr:1'->mch.comment;
-               EV[] -> SimpleAdr -> lEV1.asgToAdr -> V[];
-               '!assignTo:simpleAdr:4'->mch.comment;
-           if)
+               (if switch182 then
+                   (if doExit then
+                       lEV1.markMultiple;
+                   if);
+                   'assignTo:simpleAdr:1'->mch.comment;
+                   EV[] -> SimpleAdr -> rA[];
+                   'assignTo:simpleAdr:2'->mch.comment;
+                   (if false (*doExit*) then 
+                       mch.nop; 
+                       lEV1.pushVal -> lEV1[];
+                       mch.duplicate;
+                       mch.nop
+                   if);
+                   'assignTo:simpleAdr:3'->mch.comment;
+
+                   rA[] -> lEV1.asgToAdr -> V[];
+                   'assignTo:simpleAdr:4'->mch.comment;
+                else
+                   EV[] -> SimpleAdr -> lEV1.asgToAdr -> V[];
+           if)if)
         #);
       realEv::<
         (#
@@ -3098,11 +3120,27 @@ do lEV[]->lEV1[];
             *)
            (if switch182 then
                (* we only come here fra genEnterMethod through
-                * asgToNelm
+                * asgToNelm - so lEV1 is enterArgs-object
+                * and then we may recursively come from
+                * methodArgs::eval. This is a bit tricky. Conider:
+                * Call from asgToNelm:
+                *  lEV1  = enterArgs
+                *  EV    = a -> b -> c
+                *  EV1   = a -> b
+                *  doExit = false 
+                *    is transferred to methodArgs below since eval
+                *    should not make a dup for assigning to c; the
+                *    dup is in enterArgs:pushNext
+                * Call for methodArgs::eval
+                *  lEV1  = enterArgs
+                *  EV    = a -> b 
+                *  EV1   = a 
+                *  doExit = true
+                *   this time we need the dup
                 *)
-               (baseAdr.copy,EV1[],chain1[],false,lEV1[]) 
-                 -> EH.methodArgs 
-                 -> V[]
+               (baseAdr.copy,EV1[],chain1[],doExit,lEV1[]) 
+                 -> EH.mkMethodArgs 
+                 -> V[];
             else
                (if switch181 then
                    (baseAdr[],lEV1[],EV1[],doExit,chain1[])
