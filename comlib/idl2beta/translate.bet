@@ -1,5 +1,7 @@
 ORIGIN './control';
 INCLUDE './idlsematt';
+BODY 'const_exp';
+
 --Translate: Descriptor --
 (#
    BobsTab: (# exit '~beta/grammars/idl/v2.0/idl-parser.btab' #);
@@ -15,11 +17,16 @@ INCLUDE './idlsematt';
     * getNameDecl etc are not quilified enough to say gettext etc.
     * on them!
     *)
-   NameApplToText: (# na: ^ast.NameAppl enter na[]  exit na.getText #);
-   NameDeclToText: (# nd: ^ast.NameDecl enter nd[]  exit nd.getText #);
-   StringToText:   (# s: ^ast.String enter s[]  exit s.getText #);
-   ConstToInteger: (# con: ^ast.Const   enter con[] exit con.getValue #);
-   ConstToText:    (# con: ^ast.Const   enter con[] exit con.getText #);
+   NameApplToText: 
+     (# na: ^astinterface.NameAppl enter na[]  exit na.getText #);
+   NameDeclToText: 
+     (# nd: ^astinterface.NameDecl enter nd[]  exit nd.getText #);
+   StringToText:   
+     (# s: ^astinterface.String    enter s[]   exit s.getText #);
+   ConstToInteger:
+     (# con: ^astinterface.Const   enter con[] exit con.getValue #);
+   ConstToText:
+     (# con: ^astinterface.Const   enter con[] exit con.getText #);
    
    optionalPresent: 
      (# opt: ^ast.ast; 
@@ -203,6 +210,13 @@ INCLUDE './idlsematt';
      enter e[]
      do outfile.indent;
         'do_except_dcl not yet implemented' -> outfile.commentline;
+     #);
+   
+   do_const_exp:
+     (# e: ^idl.const_exp;
+        <<SLOT const_exp_lib: attributes>>
+     enter e[]
+     <<SLOT const_exp_body:dopart>>
      #);
    
    do_scoped_name:
@@ -445,6 +459,9 @@ INCLUDE './idlsematt';
                                       st: ^idl.switch_type;
                                       si: ^idl.switch_is;
                                       ac: ^idl.att_case;
+                                      zi: ^idl.size_is;
+                                      li: ^idl.length_is;
+                                      p, pp: @boolean;
                                    enter y[]
                                    do (if y.symbol
                                        // idl.att_unique then
@@ -474,11 +491,19 @@ INCLUDE './idlsematt';
                                           ')'->outfile.put;
 		                       // idl.size_is then
                                           'size_is('->outfile.puttext;
-                                          'NYI' -> outfile.puttext;
+                                          (y[]->zi[]).getconst_exp
+                                            ->do_const_exp;
                                           ')'->outfile.put;
 		                       // idl.length_is then
                                           'length_is('->outfile.puttext;
-                                          'NYI' -> outfile.puttext;
+                                          (* Save booleans *)
+                                          arg_is_pointer -> p;
+                                          arg_is_pointer_pointer -> pp;
+                                          (outfile[], 
+                                          (y[]->li[]).getdeclarator)
+                                            -> do_declarator;
+                                          p -> arg_is_pointer;
+                                          pp -> arg_is_pointer_pointer;
                                           ')'->outfile.put;
 		                       // idl.v1_enum then
                                           'v1_enum'->outfile.puttext;
@@ -548,6 +573,7 @@ INCLUDE './idlsematt';
                                   // idl.param_attribute_list then
                                      a[] -> do_param_attribute_list;
                                  if);
+                                 
                               #);
                             do_const:
                               (# c: ^idl.const_key;
@@ -561,7 +587,8 @@ INCLUDE './idlsematt';
                                  a: ^idl.array_declarator;
                                  pa: ^idl.pointer_to_array_declarator;
                                  pp: ^idl.pointer_to_pointer_declarator;
-                              enter d[]
+                                 out: ^stream;
+                              enter (out[],d[])
                               do (* Find the NAME and POINTER STATUS
                                   * of the parameter.
                                   *)
@@ -569,28 +596,28 @@ INCLUDE './idlsematt';
                                   // idl.simple_declarator then
                                      (d[]->s[]).getidentifier 
                                        -> IdentifierToText
-                                       -> arg[];
+                                       -> out.puttext;
                                   // idl.array_declarator then
                                      (d[]->a[]).getidentifier
                                        -> IdentifierToText
-                                       -> arg[];
+                                       -> out.puttext;
                                      true -> arg_is_pointer;
 		                  // idl.pointer_declarator then
                                      (d[]->p[]).getidentifier 
                                        -> IdentifierToText
-                                       -> arg[];
+                                       -> out.puttext;
                                      true -> arg_is_pointer;
 		                  // idl.pointer_to_pointer_declarator 
                                      then
                                      (d[]->pp[]).getidentifier 
                                        -> IdentifierToText
-                                       -> arg[];
+                                       -> out.puttext;
                                      true -> arg_is_pointer_pointer;
 		                  // idl.pointer_to_array_declarator then
                                      (d[]->pa[]).getarray_declarator->a[];
                                      a.getidentifier
                                        -> IdentifierToText
-                                       -> arg[];
+                                       -> out.puttext;
                                      true -> arg_is_pointer_pointer;
                                  if)
                               #);
@@ -605,12 +632,13 @@ INCLUDE './idlsematt';
                                      enter_parameters.range
                                        -> enter_parameters.extend;
                                  if);
-                                 arg[]->
-                                 enter_parameters[num_enter_parameters][]
+                                 arg.copy->
+                                 enter_parameters[num_enter_parameters][];
+                                 arg.reset;
                               #);
                             generate_param_name:
                               (# 
-                              do 'arg' -> arg[];
+                              do 'arg' -> arg.puttext;
                                  num_enter_parameters->arg.putint;
                               #);
                             do_param_type_spec:
@@ -629,6 +657,7 @@ INCLUDE './idlsematt';
                                   // idl.param_scoped_name then
                                      put_arg;
                                      '@' -> outfile.put;
+                                     put_arg_pointer_status;
                                      (t[]->s[]).getscoped_name
                                        -> do_scoped_name;
 			          // idl.param_void then
@@ -662,11 +691,20 @@ INCLUDE './idlsematt';
                                      if)
                                  if);
                               #);
-                            arg: ^text;
+                            put_arg_pointer_status:
+                              (# 
+                              do (if arg_is_pointer then
+                                     '(*^*)' -> outfile.puttext;
+                                 if);
+                                 (if arg_is_pointer_pointer then
+                                     '(*^^*)' -> outfile.puttext;
+                                 if);
+                              #);
+                            arg: @text;
                             arg_is_pointer: @boolean;
                             arg_is_pointer_pointer: @boolean;
                          enter d[]
-                         do NONE -> arg[];
+                         do arg.reset;
                             false -> arg_is_pointer;
                             false -> arg_is_pointer_pointer;
                             outfile.indent;
@@ -674,7 +712,7 @@ INCLUDE './idlsematt';
                                 d.getconst2->do_const;
                             if);
                             (if d.getdeclarator->optionalPresent then
-                                d.getdeclarator->do_declarator
+                                (arg[], d.getdeclarator)->do_declarator
                              else
                                 generate_param_name;
                             if);

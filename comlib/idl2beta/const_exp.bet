@@ -1,0 +1,197 @@
+ORIGIN 'translate'
+
+--const_exp_lib: attributes--
+do_or_expr:
+  (# o: ^idl.or_expr;
+  enter o[]
+  do o.newscan
+     (# first_done: @boolean;
+     do (if first_done then
+            ' %Bor ' -> outfile.puttext;
+         else
+            true->first_done
+        if);
+        current[] -> do_xor_expr;
+     #)
+  #);
+do_xor_expr:
+  (# o: ^idl.xor_expr;
+  enter o[]
+  do o.newscan
+     (# first_done: @boolean;
+     do (if first_done then
+            ' %Bxor ' -> outfile.puttext;
+         else
+            true->first_done
+        if);
+        current[] -> do_and_expr;
+     #)
+  #);
+do_and_expr:
+  (# a: ^idl.and_expr;
+  enter a[]
+  do a.newscan
+     (# first_done: @boolean;
+     do (if first_done then
+            ' %Band ' -> outfile.puttext;
+         else
+            true->first_done
+        if);
+        current[] -> do_shift_expr;
+     #)
+  #);
+do_shift_expr:
+  (# s: ^idl.shift_expr;
+  enter s[]
+  do s.newscan
+     (# 
+     do current[] -> do_add_exprA;
+     #)
+  #);
+do_add_exprA:
+  (# a: ^idl.add_exprA;
+     sl: ^idl.shiftleft;
+     sr: ^idl.shiftright;
+  enter a[]
+  do (if a.symbol
+     // idl.shiftleft then
+         (a[]->sl[]).getshift_expr -> do_shift_expr;
+         ' %sll ' -> outfile.puttext;
+      // idl.shiftright then
+         (a[]->sr[]).getshift_expr -> do_shift_expr;
+         ' %srl ' -> outfile.puttext;
+      else
+         a[] -> do_add_expr;
+     if);
+  #);
+do_add_expr:
+  (# a: ^idl.add_expr
+  enter a[]
+  do (if a.symbol
+      // idl.add then
+         a[] -> do_add;
+      // idl.sub then
+         a[] -> do_sub;
+      else
+         a[] -> do_mult_expr;
+     if);
+  #);
+do_add:
+  (# a: ^idl.add
+  enter a[]
+  do a.getadd_expr -> do_add_expr;
+     ' + ' -> outfile.puttext;
+     a.getmult_expr -> do_mult_expr;
+  #);
+do_sub:
+  (# a: ^idl.sub
+  enter a[]
+  do a.getadd_expr -> do_add_expr;
+     ' - ' -> outfile.puttext;
+     a.getmult_expr -> do_mult_expr;
+  #);
+do_mult_expr:
+  (# m: ^idl.mult_expr
+  enter m[]
+  do (if m.symbol
+      // idl.mult then
+         m[] -> do_mult;
+      // idl.idiv then
+         m[] -> do_idiv;
+      // idl.imod then
+         m[] -> do_imod;
+      else
+         m[] -> do_unary_expr;
+     if);
+  #);
+do_mult:
+  (# m: ^idl.mult
+  enter m[]
+  do m.getmult_expr -> do_mult_expr;
+     ' * ' -> outfile.puttext;
+     m.getunary_expr -> do_unary_expr;
+  #);
+do_idiv:
+  (# d: ^idl.idiv
+  enter d[]
+  do d.getmult_expr -> do_mult_expr;
+     ' div ' -> outfile.puttext;
+     d.getunary_expr -> do_unary_expr;
+  #);
+do_imod:
+  (# m: ^idl.imod
+  enter m[]
+  do m.getmult_expr -> do_mult_expr;
+     ' mod ' -> outfile.puttext;
+     m.getunary_expr -> do_unary_expr;
+  #);
+do_unary_expr:
+  (# u: ^idl.unary_expr;
+  enter u[]
+  do (if u.symbol
+      // idl.unary then
+         u[] -> do_unary;
+      else
+         u[] -> do_primary_expr;
+     if);
+  #);
+do_unary:
+  (# u: ^idl.unary;
+  enter u[]
+  do u.getunary_operator -> do_unary_operator;
+     u.getprimary_expr -> do_primary_expr;
+  #);
+do_unary_operator:
+  (# o: ^idl.unary_operator
+  enter o[]
+  do (if o.symbol
+      // idl.unaryMinus then '-' -> outfile.put;
+      // idl.unaryPlus then '+' -> outfile.put;
+      // idl.unaryMinus then ' %Bnot ' -> outfile.puttext;
+     if)
+  #);
+do_primary_expr:
+  (# p: ^idl.primary_expr;
+     n: ^idl.number_literal;
+     s: ^idl.string_literal;
+  enter p[]
+  do (if p.symbol
+      // idl.scoped_nameA then
+         p[] -> do_scoped_nameA;
+      // idl.number_literal then
+         (p[]->n[]).getconst -> ConstToInteger -> outfile.putint;
+      // idl.string_literal then
+         (p[]->s[]).getstring -> StringToText -> outfile.puttext;
+      // idl.true then
+         'TRUE' -> outfile.puttext;
+      // idl.false then
+         'FALSE' -> outfile.puttext;
+      // idl.bracketed_expr then
+         p[] -> do_bracketed_expr
+      // idl.simple_function then
+         p[] -> do_simple_function;
+     if);
+  #);
+do_scoped_nameA:
+  (# a: ^idl.scoped_nameA;
+  enter a[]
+  do a.getscoped_name -> do_scoped_name;
+  #);
+do_bracketed_expr:
+  (# b: ^idl.bracketed_expr;
+  enter b[]
+  do '(' -> outfile.put;
+     b.getconst_exp -> do_const_exp;
+     ')' -> outfile.put;
+  #);
+do_simple_function:
+  (# f: ^idl.simple_function
+  enter f[]
+  do '((' -> outfile.puttext;
+     f.getconst_exp -> do_const_exp;
+     ')->' -> outfile.puttext;
+     f.getidentifier -> IdentifierToText -> outfile.puttext;
+     ')' -> outfile.put;
+  #);
+--const_exp_body:dopart--
+do e.getor_expr -> do_or_expr;
