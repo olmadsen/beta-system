@@ -150,7 +150,7 @@ void BetaSignalHandler(sig, code, scp, addr)
 #else /* REFSTACK */
   StackEnd = (long *) scp->sc_sp;
 #endif /* REFSTACK */
-#else /* not hppa */
+#else /* not hppa, i.e. hpux8 */
   PC = (long *) scp->sc_pc;
   StackEnd = (long *) scp->sc_sp;
 #endif /* hppa */
