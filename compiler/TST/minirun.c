@@ -347,7 +347,7 @@ long AlloI(int origin, long *proto,long SP) {
                     }
 	    )
 	/* Gentry(SP,start); */
-	CallB(0,start,Gentry,SP);
+	if (Gentry != 0) CallB(0,start,Gentry,SP);
     };
    TRACE(printf("After Gentry\n");)
    /* dumpHeap();*/
