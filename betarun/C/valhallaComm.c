@@ -714,7 +714,7 @@ void evaluatorSaveInt(int val)
 
 static int valhallaCommunicate (int PC, int SP, Object* curObj)
 { 
-  int opcode;
+  int opcode=0;
   DEBUG_VALHALLA (fprintf(output,"debuggee: valhallaCommunicate\n"));  
   while (TRUE) {
     opcode = valhalla_readint ();
@@ -1118,13 +1118,14 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       group_header *gh = NextGroup(0);
       char *group_name = "";
       int done = 0;
+
       while (!done && gh){
 	long* protoptr=&gh->protoTable[1];
 	int i, NoOfPrototypes;
 	
 	NoOfPrototypes = gh->protoTable[0];
 	for (i=0; i<NoOfPrototypes; i++){
-	  ProtoType *proto = (ProtoType*)protoptr;
+	  ProtoType *proto = *(ProtoType**)protoptr;
 	  if (strcmp(ProtoTypeName(proto), "PROGRAM-~") == 0){
 	    /* Found the group containing M1PROGRAM */
 	    group_name = gh->group_name;
