@@ -20,7 +20,8 @@ do Match:
 #)
 ---- BobsLex: descriptor----
 (* BOBS lexical analysis *)
-(# Nextch: @
+(# trace_sgml: (# exit false #);
+   Nextch: @
      (# c: @char
      do ch -> oldCh;
         (if inputEos then ascii.fs -> c
@@ -104,7 +105,7 @@ do Match:
 	       do L: (if nameCh[ch] then ch->push; nextch->ch; restart L if)
 	       #);
           do firstCh->ch; (* ugly *)
-             (*(if ch=0 then 'warning: firstCh is 0' -> screen.putline; if);*)
+                  (*(if ch=0 then 'warning: firstCh is 0' -> screen.putline; if);*)
              Digits;
              (if ch
               // '.' then 
@@ -165,7 +166,7 @@ do Match:
      do 1 -> ChBufInx;
         pos -> first -> last; (* posistion of first char in comment/nonterminal;
                                * Note: first is position after (* or <<
-                               *)
+                                                                *)
         (if length=0 then
             skip:
               (if ch 
@@ -296,7 +297,10 @@ do Match:
       * they are eliminated.
       *)
      (# eD: ^errorDescriptor
-     do (* the first char of the SGML-string has been read already by lex
+     do (if trace_sgml then
+            'ReadSGMLstring'-> screen.putline;
+        if);
+        (* the first char of the SGML-string has been read already by lex
          * and is in chBuf
          *)
         skip:
@@ -319,6 +323,149 @@ do Match:
           #);
         stringVal -> newSymb
      #);
+   ReadSGML_PCDATA: @
+     (* Read an SGML Parsed Character Data. 
+      * This is any sequence of characters between
+      *    > and <
+      * I.e. in
+      * 
+      *    <P> ....... </P>
+      *       ^       ^
+      * characters from ^ to ^ constitute the PCDATA.
+      * Other occurrences of '<', '>' and tags in general in the string is 
+      * to be handled as usual (i.e. parsed recursively).
+      *       
+      * This is like <PRE>...</PRE> in HTML, where you can e.g. have a link
+      * within the otherwise preformatted text.
+      * 
+      * See section 5.2.2, page 114 in SGML - An Authors Guide to the Standard
+      * Generalized Markup Language, by Martin Bryan, Addison Wesley 1998,
+      * ISBN 0-201-17535-5.
+      *)
+     (# (* NYI *) #);
+   ReadSGML_CDATA: @
+     (* Read an SGML Character Data. 
+      * This is any sequence of characters between a specific tag and
+      * it's end-tag, e.g.
+      * 
+      *    <XXX> ....... </XXX>
+      *         ^       ^
+      * or
+      * 
+      *    <XXX att=yyy> ....... </XXX>
+      *                 ^       ^
+      * characters from ^ to ^ constitute the CDATA.
+      * 
+      * There is a CDATA named <PLAINTEXT>...</PAINTEXT> in HTML,
+      * but no browsers I know of handle it correctly - they all
+      * parse the rest of the file as being the CDATA (i.e. they do
+      * not recognize the end-tag).
+      * 
+      * See section 5.2.2, page 114 in SGML - An Authors Guide to the Standard
+      * Generalized Markup Language, by Martin Bryan, Addison Wesley 1998,
+      * ISBN 0-201-17535-5.
+      *)
+     (# eD: ^errorDescriptor;
+        inputpos: @integer;
+     do (if trace_sgml then
+            'ReadSGML_CDATA: start tag: '
+              -> screen.puttext;
+            (# T: @text do startTagBuf -> T; T[] -> screen.putline; #);
+        if);
+        (if not (
+            (startTagBuf.range>1) 
+            and (startTagBuf[1]='<') 
+            and (startTagBuf[2]<>'/') 
+            and (startTagBuf[startTagBuf.range]='>')) then
+            (if trace_sgml then
+                'ReadSGML_CDATA: can only match end-tag for genuine start-tag' 
+                  -> screen.putline;
+                'Start tag: ' -> screen.puttext;
+                (# T: @text do startTagBuf -> T; T[] -> screen.putline; #);
+            if);
+            leave ReadSGML_CDATA;
+        if);
+        startTagBuf.range+1 -> endTagBuf.new;
+        '<' -> endTagBuf[1];
+        '/' -> endTagBuf[2];
+        (for i:startTagBuf.range-1 repeat
+             startTagBuf[i+1]->endTagBuf[i+2];
+        for);
+        (if trace_sgml then
+            'ReadSGML_CDATA: end tag: '
+              -> screen.puttext;
+            (# T: @text do endTagBuf -> T; T[] -> screen.putline; #);
+        if);
+        
+        (* the first char of the SGML-string has been read already by lex
+         * and is in chBuf (and ch)
+         *)
+        skip:
+          (# 
+          do (if ch
+              // '<' then 
+                 input.position -> inputpos;
+                 (* Peek ahead for matching end-tag *)
+                 (for i:endTagBuf.range-1 repeat
+                      (if (nextCh -> ch)=ascii.fs then
+                          &errorDescriptor[]->eD[]; 9->eD.fatalErr;
+                          leave skip 
+                      if);
+                      (if ch<>endTagBuf[i+1] then
+                          (* It was not the end tag. Push the characters
+                           * peeked so far
+                           *)
+                          (if trace_sgml then
+                              'ReadSGML_CDATA: found nonmatching \'<\' in CDATA'
+                                -> screen.putline;
+                              'Pushing: ' -> screen.puttext;
+                          if);
+                          (for j:i repeat
+                               endTagBuf[j] -> push;
+                               (if trace_sgml then
+                                   endTagBuf[j] -> screen.put;
+                               if);
+                          for);
+                          (if trace_sgml then
+                              screen.newline;
+                          if);
+                          restart skip;
+                      if);
+                 for);
+                 (* All letters in endTagBuf matched. We are there.
+                  * All the pushed characters constitute the CDATA.
+                  * Reposition input. The following works even if input 
+                  * is a File: Although File.setpos has a second parameter, 
+                  * the default (FromBeginning) is 0, corresponding to a 
+                  * call qualified as Stream.setpos. Also reset ch ans pos
+                  * since they have been updated by the NextCh->ch calls above.
+                  *)
+                 inputpos -> pos -> input.position;
+                 '<' -> ch;
+                 leave skip;
+              // stringCh then 
+                 nextCh->ch; ReadString; ch->push; restart skip
+              else
+                 ch -> push; 
+                 (if (nextCh -> ch)=ascii.fs then
+                     &errorDescriptor[]->eD[]; 9->eD.fatalErr;
+                     (first+1,eD[])->markError;                          
+                     leave skip 
+                 if);
+                 restart skip
+             if);
+          #);
+        (if trace_sgml then
+            'ReadSGML_CDATA: Read string: "'
+              -> screen.puttext;
+            (for i:chBufInx-1 repeat
+                 chBuf[i] -> screen.put;
+            for);
+            '"' -> screen.putline;
+        if);
+        stringVal -> newSymb;
+     #);
+   
    firstNameCh,nameCh,digitCh,skipCh: [256] @ boolean;
    lowCase: [256] @ integer;
    
@@ -370,95 +517,113 @@ do Match:
 do 
    (*'BOBS: parsing \''->screen.puttext; input[] -> screen.puttext; '\'\n'->screen.putline;*)
    lexicalLoop:
-     (#do
-         skip: (if skipCh[ch] then nextch -> ch; restart skip if);
-         
-         1 -> chBufInx; pos -> first; ch -> firstCh;
-         
-         (if ch=ascii.fs then
-             (if newSymb=0 then (* third *) 2->FatalError
-              else
-                 (if newSymb=1 then (* second *) 0 -> newSymb
-                  else (* first *) 1 -> newSymb
-             if)if)
-          else
-             (if lastWasTag and (ch <> '<') then
-                 (*'!'->put; newline; datpete: removed 13/04/99 *)
-                 ReadSGMLString;
-                 false ->  lastWasTag;
-                 leave lexicalLoop
-             if);
-             (if digitCh[ch] then (* konst *) 
-	         ch->GetNumber->ch; 
-                 (*(if ch=0 then 'warning: GetNumber set ch=0' -> screen.putline; if);*)
-                 (*
-                  ch -> push; nextch -> ch;
-                  readKonst:
-                  (if digitTailCh[ch] then
-                  ch -> push; nextch -> ch;
-                  restart readKonst
-                  if);
-                  *)
-                 constVal -> newsymb;
-              else 
-                 ch -> push;
-                 (* Note: In the standard use of BOBS, all letters are treated
-                  * as lower case. Terminals in the grammar are all
-                  * assumed to be defined in lower case. Reseved words
-                  * are therefore NOT case sensitive, i.e. IF, If andf if
-                  * are all considered the same string.
-                  * If, however, the switch caseSensitive is true, the
-                  * reserved words are case sensitive. I.e. they must be
-                  * written as defined in the grammar.
-                  *)
-                 lowCase[ch]-> chInx -> oldI; lxHP -> newI;
-                 nextCh -> ch; 
-                 loop:
-                   (if (newI<>0) then
-                       (if (lxCH)=lowCase[ch] then
-                           ch -> push;
-                           newI -> oldI;
-                           lxHP -> newI;
-                           nextCh -> ch; 
-                           restart loop
-                        else lxNP -> newI; restart loop
-                   if)if);
-                 (if (firstNameCh[firstCh] and nameCh[ch]) then
-                     (*(nameCh[oldCh] and nameCh[ch]) then*)
-                     ch -> push;
-                     nextCh -> ch;
-		     loop:
-                       (if nameCh[ch] then 
-                           ch -> push;
-                           nextCh -> ch;
-	                   restart loop
-		       if);
-                     (if false (*lastWasTag*) then
-                         ReadSGMLString
-                      else nameVal -> newSymb;
-                     if);
-                  else 
-                     lxTV -> newSymb; 
-                     (if (0 < newSymb) then
-                         (if newSymb
-                          // stringEscape then
-                             1 -> chBufInx ;
-                             readString 
-                          // comBegin then
-                             skipComment;
-                             restart lexicalLoop
-                          // nonTval then readNonT -> newSymb
-                          // eosLexem then readEos
-                         if);
-                         (if documentParser then 
-                             oldCh = '>' -> lastWasTag
-                             (*SGML[newsymb] -> lastWasTag*)
-                         if)
-                      else
-                         (if false (*lastWasTag*) then
-                              ReadSGMLString;
-                           else
-                              (if nameCh[oldCh] then nameVal -> newSymb
-			      else -1->newSymb (* illegal terminal symbol*) if);
+     (#
+     do skip: (if skipCh[ch] then nextch -> ch; restart skip if);
+        
+        1 -> chBufInx; pos -> first; ch -> firstCh;
+        
+        (if ch=ascii.fs then
+            (if newSymb=0 then (* third *) 2->FatalError
+             else
+                (if newSymb=1 then (* second *) 0 -> newSymb
+                 else (* first *) 1 -> newSymb
+            if)if)
+         else
+            (if documentParser then
+                (if lastWasCDATA then
+                    ReadSGML_CDATA;
+                    false -> lastWasTag -> lastWasCDATA;
+                    leave lexicalLoop
+                 else
+                    (if lastWasTag and (ch<>'<') then
+                        ReadSGMLString;
+                        false -> lastWasTag -> lastWasCDATA;
+                        leave lexicalLoop
+                    if);
+                if);
+            if);
+            (if digitCh[ch] then (* konst *) 
+                ch->GetNumber->ch; 
+                (*(if ch=0 then 'warning: GetNumber set ch=0' -> screen.putline; if);*)
+                (*
+                 ch -> push; nextch -> ch;
+                 readKonst:
+                 (if digitTailCh[ch] then
+                 ch -> push; nextch -> ch;
+                 restart readKonst
+                 if);
+                 *)
+                constVal -> newsymb;
+             else 
+                ch -> push;
+                (* Note: In the standard use of BOBS, all letters are treated
+                 * as lower case. Terminals in the grammar are all
+                 * assumed to be defined in lower case. Reseved words
+                 * are therefore NOT case sensitive, i.e. IF, If andf if
+                 * are all considered the same string.
+                 * If, however, the switch caseSensitive is true, the
+                 * reserved words are case sensitive. I.e. they must be
+                 * written as defined in the grammar.
+                 *)
+                lowCase[ch]-> chInx -> oldI; lxHP -> newI;
+                nextCh -> ch; 
+                loop:
+                  (if (newI<>0) then
+                      (if (lxCH)=lowCase[ch] then
+                          ch -> push;
+                          newI -> oldI;
+                          lxHP -> newI;
+                          nextCh -> ch; 
+                          restart loop
+                       else lxNP -> newI; restart loop
+                  if)if);
+                (if (firstNameCh[firstCh] and nameCh[ch]) then
+                    (*(nameCh[oldCh] and nameCh[ch]) then*)
+                    ch -> push;
+                    nextCh -> ch;
+                    loop:
+                      (if nameCh[ch] then 
+                          ch -> push;
+                          nextCh -> ch;
+                          restart loop
+                      if);
+                    (if false (*lastWasTag*) then
+                        ReadSGMLString
+                     else nameVal -> newSymb;
+                    if);
+                 else 
+                    lxTV -> newSymb; 
+                    (if (0 < newSymb) then
+                        (if newSymb
+                         // stringEscape then
+                            1 -> chBufInx ;
+                            readString 
+                         // comBegin then
+                            skipComment;
+                            restart lexicalLoop
+                         // nonTval then readNonT -> newSymb
+                         // eosLexem then readEos
+                        if);
+                        (if documentParser then 
+                            oldCh = '>' -> lastWasTag;
+                            (*SGML[newsymb] -> lastWasTag*)
+                            (if lastWasTag then (* datpete: 11/5/99 *)
+                                (if (newSymb>0) and (newSymb<=SGML.range) then
+                                    SGML[newsymb] -> lastWasCDATA;
+                                    (if lastWasCDATA then
+                                        (* Copy last token *)
+                                        0 -> startTagBuf.new;
+                                        chbuf[1:chBufInx-1] -> startTagBuf;
+                                    if);
+                                if);
+                                
+                            if);
+                        if)
+                     else
+                        (if false (*lastWasTag*) then
+                            ReadSGMLString;
+                         else
+                            (if nameCh[oldCh] then nameVal -> newSymb
+                             else -1->newSymb (* illegal terminal symbol*) if);
      if)if)if)if)if)#)
 #)
