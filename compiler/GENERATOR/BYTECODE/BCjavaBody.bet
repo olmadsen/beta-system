@@ -575,6 +575,22 @@ do (# commentstream: @stream (* maybe something more useful *);
            if);
            lab -> jcf.labs.off -> jcf.emitShort;
         #);
+      emitCmpToBool:
+        (* 0:      if_xxx L1
+         * 3:      bipush 0
+         * 5:      goto L2
+         * 8:  L1: bipush 1
+         * 10: L2:
+         *)          
+        (# L1,L2: @integer;
+        do 8-0 -> L1;
+           10-5 -> L2;
+           (*L1 -> jcf.emitShort; (* L1 *)
+           bipush -> jcf.emit; 0 -> jcf.emit;
+           goto -> jcf.emit;           
+           L2 -> jcf.emitShort; (* L2 *)
+           bipush -> jcf.emit; 1 -> jcf.emit;           
+        #);
       emitCmpBoolJmp:
         (# cond,L,lab: @integer
         enter(cond,L,lab)
@@ -594,6 +610,25 @@ do (# commentstream: @stream (* maybe something more useful *);
            if);
            lab -> jcf.labs.off -> jcf.emitShort;
         #);
+      negCond:
+        (# cond: @integer
+        enter cond
+        do (if cond
+            // 1 (* =  *) then
+               2 -> cond
+            // 2 (* <> *) then
+               1 -> cond
+            // 3 (* <  *) then
+               6 -> cond
+            // 4 (* <= *) then
+               5 -> cond
+            // 5 (* >  *) then
+               4 -> cond
+            // 6 (* >= *) then
+               3 -> cond
+           if);
+        exit cond
+        #);
       opCode,arg1: @integer; 
       A: @Address;
       lastLocalType, (* used by allocAndStoreLocal;
@@ -607,8 +642,8 @@ do (# commentstream: @stream (* maybe something more useful *);
       read:
         (if opCode <> end then
             BC.get->opCode; 
-            (*newline; opCode -> putint; ' '->put;*)
-            (* opCode:'->puttext; opCode -> putint; ' ' -> put;*)
+            (* newline; opCode -> putint; ' '->put;*)
+            (* 'opCode:'->puttext; opCode -> putint; ' ' -> put; *)
             (if opCode
              // classDef then
                 false -> isMainMethod;
@@ -1238,6 +1273,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                 goto -> jcf.emit;
                 10-5 -> jcf.emitShort; (* L2 *)
                 bipush -> jcf.emit; 1 -> jcf.emit;
+
              // cmpToBoolRef then
                 'cmpToBoolRef' -> commentstream.puttext;
                 (* 0:      if_xxx L1
@@ -1276,6 +1312,18 @@ do (# commentstream: @stream (* maybe something more useful *);
                 (BC.get,BC.get,BC.getShort) -> emitCmpBoolJmp
              // cmp then
                 cmp -> jcf.emit;
+             // cmpAndJmpFloat then
+                dcmpg -> jcf.emit;
+                (BC.get,BC.get,BC.getShort) -> emitCmpBoolJmp
+             // cmpToBoolFloat then
+                dcmpg -> jcf.emit;
+                ifne -> jcf.emit; 
+                8-0 -> jcf.emitShort; (* L1 *)
+                bipush -> jcf.emit; 0 -> jcf.emit;
+                goto -> jcf.emit;
+                10-5 -> jcf.emitShort; (* L2 *)
+                bipush -> jcf.emit; 1 -> jcf.emit;
+                
              // pushReg then
                 dumpReg
              // pushNone then
@@ -1379,7 +1427,12 @@ do (# commentstream: @stream (* maybe something more useful *);
              // r64mul then
                 dmul -> jcf.emit
              // r64div then
-                ddiv -> jcf.emit                
+                ddiv -> jcf.emit 
+             // r64neg then
+                dneg -> jcf.emit
+             // int2double then
+                i2d -> jcf.emit
+
              // func then
                 (# func: @integer;
                 do BC.get->func;
