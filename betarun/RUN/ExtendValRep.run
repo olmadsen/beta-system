@@ -11,19 +11,21 @@ ExtVR: public
                                     {pReg1 in Intel version}
      
      { Used variables. }
-     stack:  StackArea  = SP;
-     newRep: Repetition = AddrReg2;
+     stack:       StackArea        = SP;
+     newRep:      Repetition       = AddrReg2;
+     newObjRep:   ObjectRepetition = AddrReg2;
      
-     newTop: DataArea   = AddrReg1;
-     theRep: Repetition = AddrReg1;
-     theCell: DataArea  = AddrReg1;
+     newTop:      DataArea         = AddrReg1;
+     theRep:      Repetition       = AddrReg1;
+     theObjRep:   ObjectRepetition = AddrReg1;
+     theCell:     DataArea         = AddrReg1;
      
-     newRange: Long     = DataReg2;
-     BodySize: Long     = DataReg4; { Saved and restored. }
-     offset:   Long     = DataReg2;
+     newRange:    Long             = DataReg2;
+     BodySize:    Long             = DataReg4; { Saved and restored. }
+     offset:      Long             = DataReg2;
      
-     oldBodySize: Long  = DataReg1;
-     value:    Long     = DataReg3  { Saved and restored. }
+     oldBodySize: Long             = DataReg1;
+     value:       Long             = DataReg3  { Saved and restored. }
   do
      (if debug then call Ck if);
      
@@ -64,42 +66,68 @@ ExtVR: public
      addSize  -> newRange+;
      
      (if newRange < 0 then 0 -> newRange if); { OBS: low>high confuses chk2 }
-
+     
+     { STACK:
+       <General stack layout>
+     }
+     
+     (if theRep.ProtoType <= -10 then { ObjectRepetition }
+         push DataReg4;
+         
+         { STACK:
+           <DataReg4>
+           <General stack layout>
+         }
+         
+         newRange -> BodySize; { destroys bodysize }
+         IOATop -> newRep;
+         4 -> BodySize*;
+         theRep[24+BodySize][] -> newTop;
+         goto CheckGC;
+     if);
+     
+     LVRAcheck:
      (if newRange > 256 then
+         
+         { STACK:
+           <General stack layout>
+         }
+         
          (if intel then
-             push RegArg, RegObj;
+             push RegArg, RegObj; { 8 }
           else
-             push RegArg, RegObj, DataRegA, DataRegB;
+             push RegArg, RegObj, DataRegA, DataRegB; { 16 }
          if);
          push addSize; {Save addSize}
          push theRep; {Save theRep}
          push newRange;  { Parameter to LVRAAlloc. }
          push theRep.ProtoType;  { Parameter to LVRAAlloc. }
+         { 4 push: 16 }
          call LVRAAlloc;
          DataRegA -> newRep;
          
          (if newRep <> 0 then
              { Make the LVRA-cycle: theCell -> newRep.Age }
              (if intel then
-                 stack[40{16+(4+2)*4}] -> DataRegA; {offset}
+                 stack[40 {16+8+16}] -> DataRegA; {offset}
                  4 -> DataRegA*;
-                 stack[44{20+(4+2)*4}] -> DataRegA+; {item}
+                 stack[44 {20+8+16}] -> DataRegA+; {item}
               else
                  (if MacOS then
-                     stack[40{8+(4+4)*4}] -> DataRegA; {offset}
+                     stack[40 {8+16+16}] -> DataRegA; {offset}
                      4 -> DataRegA*;
-                     stack[44{12+(4+4)*4}] -> DataRegA+; {item}
+                     stack[44 {12+16+16}] -> DataRegA+; {item}
                   else
-                     stack[36{4+(4+4)*4}] -> DataRegA; {offset}
+                     stack[36 {4+16+16}] -> DataRegA; {offset}
                      4 -> DataRegA*;
-                     stack[40{8+(4+4)*4}] -> DataRegA+; {item}
+                     stack[40 {8+16+16}] -> DataRegA+; {item}
                  if);
              if);
              DataRegA -> newRep.Age
          if);
          
          4 -> SP+; {Discard prototype parameter}
-         pop  newRange; {Restore newRange}
+         pop newRange; {Restore newRange}
          pop theRep; {Restore theRep}
          pop addSize; {Restore addSize}
          (if intel then
@@ -107,19 +135,29 @@ ExtVR: public
           else
              pop  DataRegB, DataRegA, RegObj, RegArg;
          if);
+         
+         { STACK:
+           <General stack layout>
+         }
+         
          (if newRep <> 0 then
+             { recalculate theRep, it may have been moved by LVRACompaction }
              push newRange; { save newRange }
+             { STACK:
+               <newRange>
+               <General stack layout>
+             }
              { recalculate theRep, it may have been moved by LVRACompaction }
              (if intel then
-                 stack[24{20+4}] -> theRep;
-                 stack[20{16+4}]  -> offset; { invalidates newRange }              
+                 stack[24] -> theRep;
+                 stack[20]  -> offset; { invalidates newRange }              
               else
                  (if MacOS then
-                     stack[16{12+4}] -> theRep;
-                     stack[12{8+4}]  -> offset; { invalidates newRange }              
+                     stack[16] -> theRep;
+                     stack[12]  -> offset; { invalidates newRange }              
                   else
-                     stack[12{8+4}] -> theRep;
-                     stack[8{4+4}] -> offset; { invalidates newRange }
+                     stack[12] -> theRep;
+                     stack[8] -> offset; { invalidates newRange }
                  if);
              if);
              theRep[offset*4] -> theRep;
@@ -127,6 +165,11 @@ ExtVR: public
              
              { Calculate BodySize of new repetition }
              push DataReg4; { save DataReg4 }
+             
+             { STACK:
+               <DataReg4>
+               <General stack layout>
+             }
              
              newRange -> BodySize; { invalidates DataReg4 }
              (if theRep.ProtoType = -8 then { double rep }
@@ -149,9 +192,15 @@ ExtVR: public
              goto copyBody 
          if)
      if);
+     { end LVRAcheck }
      
      { Calculate BodySize of new repetition }
      push DataReg4; { save DataReg4 }
+     
+     { STACK:
+       <DataReg4>
+       <General stack layout>
+     }
      
      newRange -> BodySize; { invalidates DataReg4 }
      (if theRep.ProtoType = -8 then { double rep }
@@ -175,27 +224,44 @@ ExtVR: public
      4 -> BodySize*;
      IOATop -> newRep;
      newRep[16+BodySize][] -> newTop;
+     
+     CheckGC:
      (if newTop > IOALimit then goto GC if);
      newTop -> IOATop;
-     
+          
      { The new Object is now allocated, but not assigned yet!}
      
+     { STACK:
+       <DataReg4>
+       <General stack layout>
+     } 
+     
      { recalculate theRep, it has been invalidated above }
-     push newRange;
+     push newRange; { save newRange }
+     { STACK:
+       <newRange>
+       <DataReg4>
+       <General stack layout>
+     } 
      (if intel then
-         stack[28{20+2*4}] -> theRep;
-         stack[24{16+2*4}] -> offset; { invalidates newRange }
+         stack[28] -> theRep;
+         stack[24]  -> offset; { invalidates newRange }              
       else
          (if MacOS then
-             stack[20{12+2*4}] -> theRep;
-             stack[16{8+2*4}] -> offset; { invalidates newRange }
+             stack[20] -> theRep;
+             stack[16]  -> offset; { invalidates newRange }              
           else
-             stack[16{8+2*4}] -> theRep;
-             stack[12{4+2*4}] -> offset; { invalidates newRange }
+             stack[16] -> theRep;
+             stack[12] -> offset; { invalidates newRange }
          if);
      if);
      theRep[offset*4] -> theRep;
-     pop newRange;
+     pop newRange; { restore Newrange }
+     
+     { STACK:
+       <DataReg4>
+       <General stack layout>
+     }
      
      { Initialize the structual part of the repetition. }
      theRep.ProtoType -> newRep.ProtoType;
@@ -203,17 +269,27 @@ ExtVR: public
      1                -> newRep.LowBorder;
      newRange         -> newRep.HighBorder;
      
+     (if stack[0] <= -10 then { ObjectRepetition }
+         { set up iProto and iOrigin }
+         theObjRep.iProto -> newObjRep.iProto;
+         theObjRep.iOrigin -> newObjRep.iOrigin;
+     if);
+     
      copyBody: { Copy the body part of theRep to newRep. }
      
      { calculate bodysize of old repetition }
      (if addSize > 0 then			
          theRep.HighBorder -> oldBodySize; { invalidates addSize }
-         
 	 goto calcBody				
      if);							
      newRange -> oldBodySize; 
      calcBody:						
      (if oldBodySize > 0 then
+         (if theRep.ProtoType = -6 then { byte rep }
+             4 -> oldBodySize+;
+             4 -> oldBodySize/; 
+             goto oldBodyOK
+         if);
          (if theRep.ProtoType = -8 then { double rep }
              2 -> oldBodySize*;
              goto oldBodyOK
@@ -224,30 +300,76 @@ ExtVR: public
              4 -> oldBodySize/; 
              goto oldBodyOK
          if);
-         (if theRep.ProtoType = -6 then { byte rep }
-             4 -> oldBodySize+;
-             4 -> oldBodySize/; 
-             {goto oldBodyOK} {No need, save a jump}
-         if);
-         oldBodyOK:
+         { Fall through: LongReps, ItemReps, CompReps }
+       oldBodyOK:
          4->oldBodySize*
      if);
      
      push DataReg3; { save DataReg3 }
      
+     { STACK:
+       <DataReg3>
+       <DataReg4>
+       <General stack layout>
+     }
+     
      (if oldBodySize > 0 then
          push oldBodySize;
          4 -> oldBodySize-;
+         (if theRep.ProtoType <= -10 then { Object Rep }
+             2 -> theRep+;
+             2 -> newRep+;
+         if);
          loop1:
          theRep[16+oldBodySize] -> value; { invalidates DataReg3 }
          value -> newRep[16+oldBodySize];
          4 -> oldBodySize-;
          (if FLAGS >= 0 then goto loop1 if);
-         pop oldBodySize
+         
+         { Copying of old elements DONE }
+         
+         pop oldBodySize;
+         (if theRep.ProtoType <= -10 then { Object Rep }
+             2 -> theRep-;
+             2 -> newRep-;
+             goto initBody;
+         if);
      if);
-          
-     { Clear the extension part of newRep, pointed out by theRep. }
-     { first clear the bytes from newRep[theRep.highborder+1..oldBodySize]
+     
+     AssignReference: { Not reached for object repetitions }
+     
+     { STACK:
+       <DataReg3>
+       <DataReg4>
+       <General stack layout>
+     }
+
+     { calculate the cell to store new rep in }
+     (if intel then
+         stack[28] -> theCell;
+         stack[24]  -> offset;
+      else
+         (if MacOS then 
+             stack[20] -> theCell;
+             stack[16]  -> offset;
+          else
+             stack[16] -> theCell;
+             stack[12] -> offset;
+         if);
+     if);
+     theCell[offset*4][] -> theCell;
+     newRep -> theCell[0];
+     
+     (if theCell outside IOA then  { The theCell resides in AOA. }
+         push theCell;
+         call ChkRA { No need to remove parameter. }
+     if);
+     
+     clearBody: { Not reached for object repetitions }
+     
+     { Clear the extension part of newRep }
+     
+     { first clear the BYTES from newRep[theRep.highborder+1..oldBodySize]
        if it is a valrep.
      }
      (if theRep.ProtoType = -6 then
@@ -270,32 +392,42 @@ ExtVR: public
      
      { calculate difference in actual size }
      oldBodySize -> BodySize-; { invalidates BodySize }
+     { Calculate the address of the extension part into newRep. }
+     newRep[16+oldBodySize][] -> newRep;
      
-     { Calculate the address of the extension part into theRep. }
-     newRep[16+oldBodySize][] -> theRep;
-     
+     { Clear extension as LONGS }
      (if BodySize > 0 then
          4 -> BodySize-;
          loop2:
-         0 -> theRep[BodySize];
+         0 -> newRep[BodySize];
          4 -> BodySize-;
          (if FLAGS >= 0 then goto loop2 if)
      if);
      
-     pop DataReg3; { restore DataReg3 }
-     pop DataReg4; { restore DataReg4 }
+     goto Finished;
      
+     initBody: { not reached for ordinary repetitions }
+     { Initialize the extension part of newRep, pointed out by theRep. }
+     
+     { AssignObjReference: not reached for ordinary repetitions }
+     
+     { STACK:
+       <DataReg3>
+       <DataReg4>
+       <General stack layout>
+     }
+
      { calculate the cell to store new rep in }
      (if intel then
-         stack[20] -> theCell;
-         stack[16]  -> offset;
+         stack[28] -> theCell;
+         stack[24]  -> offset;
       else
          (if MacOS then 
-             stack[12] -> theCell;
-             stack[8]  -> offset;
+             stack[20] -> theCell;
+             stack[16]  -> offset;
           else
-             stack[8] -> theCell;
-             stack[4] -> offset;
+             stack[16] -> theCell;
+             stack[12] -> offset;
          if);
      if);
      theCell[offset*4][] -> theCell;
@@ -306,6 +438,93 @@ ExtVR: public
          call ChkRA { No need to remove parameter. }
      if);
      
+     { calculate difference in actual size }
+     oldBodySize -> BodySize-; { invalidates BodySize }
+     { Calculate the address of the extension part into newRep. }
+     newRep[24+oldBodySize][] -> newRep;
+     
+     { STACK:
+       <DataReg3>
+       <DataReg4>
+       <General stack layout>
+     }
+     
+     (if BodySize > 0 then
+         4 -> BodySize-;
+         initloop:
+         
+         { STACK:
+           <DataReg3>
+           <DataReg4>
+           <General stack layout>
+         }
+         
+         { setup parameters for AlloI/AlloC }
+         
+         (if intel then
+             newObjRep.iProto  -> RegArg;
+             newObjRep.iOrigin -> pReg1;
+          else
+             newObjRep.iProto  -> RegArg;
+             newObjRep.iOrigin -> DataReg1; { destroys oldBodySize, addSize }
+         if);
+         
+         { Allocate item/component }
+         
+         (if newRep.ProtoType=-10 then
+             call AlloI; { Destroys: RegArg(output), DataReg1, DataReg2, AddrReg1, AddrReg2. 
+                           On intel DataReg1 is DataRegA, and DataReg2 is DataRegB.
+                         }
+             goto ExtAssignReference;
+         if);
+         (if newRep.ProtoType=-11 then
+             call AlloC; { Destroys: RegArg(output), DataReg1, DataReg2, AddrReg1, AddrReg2. 
+                           On intel DataReg1 is DataRegA, and DataReg2 is DataRegB.
+                         }
+         if);
+         { AlloI/C returns item in RegArg }
+         
+         ExtAssignReference: 
+         { recalculate newObjRep - may have moved in GC }
+         { STACK:
+           <DataReg3>
+           <DataReg4>
+           <General stack layout>
+         } 
+         (if intel then
+             stack[32] -> newObjRep;
+             stack[28]  -> offset; { invalidates newRange }              
+          else
+             (if MacOS then
+                 stack[24] -> newObjRep;
+                 stack[20]  -> offset; { invalidates newRange }              
+              else
+                 stack[20] -> newObjRep;
+                 stack[16] -> offset; { invalidates newRange }
+             if);
+         if);
+         newObjRep[offset*4] -> newObjRep;
+
+         newObjRep[BodySize][] -> theCell;
+         RegArg { new item/comp } -> theCell[0];
+         (if theCell outside IOA then  { The theCell resides in AOA and the item in IOA  }
+             push theCell;
+             call ChkRA { No need to remove parameter. }
+         if);
+         0 -> theCell; { clear AddrReg1 before next AlloI in loop }
+         4 -> BodySize-;
+         (if FLAGS >= 0 then goto initloop if);
+     if);
+     
+     Finished:
+     
+     pop DataReg3; { restore DataReg3 }
+     pop DataReg4; { restore DataReg4 }
+     
+     { STACK:
+       <General stack layout>
+     }
+          
      (if intel then pop DataReg2, AddrReg2, AddrReg1 if);
      (if MacOS then pop AddrReg2 if);
      return 8;
