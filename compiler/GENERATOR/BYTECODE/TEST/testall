@@ -59,16 +59,14 @@ $javaoptions   = "-qw -s 188 23";
      "nstring",
      );
 
-# Programs that need to be tested manually
-%manually =
+# Graphics programs - only executed with testall -g
+%javagraphics =
     (
+     "helloapplet" => "appletviewer helloapplet.html",
      );
-%javamanually =
+%dotnetgraphics =
     (
-     "helloapplet" => "Test by opening helloapplet.html in browser",
-     );
-%dotnetmanually =
-    (
+     "hellographics" => "hellographics.exe",
      );
 
 %known_failures =
@@ -95,6 +93,7 @@ usage: testall [-h][-v][-r][-c][-C][-x][-d][-k][-j]
      -C  skip compilation of compiler
      -x  use diff with context when reporting errors
      -k  keep programs after execution
+     -g  execute graphics programs too
      -d  compile for target dotnet
      -j  compile for target javabc
          If no target options given, script will try to guess target
@@ -123,6 +122,7 @@ $runonly = $r;
 $context = "-c" if (defined($x));
 $skipoutput = $O;
 $keepprograms = $k;
+$graphics = $g;
 
 if ($runonly && $compileonly){
     print "*** Both -c (compile only) and -r (run only) specified.\n";
@@ -151,16 +151,16 @@ if ($target eq "dotnet"){
     foreach $key (keys %dotnet_with_input){
 	$programs_with_input{"$key"} = $dotnet_with_input{"$key"};
     }
-    foreach $key (keys %dotnetmanually){
-	$manually{"$key"} = $dotnetmanually{"$key"};
+    foreach $key (keys %dotnetgraphics){
+	$graphics{"$key"} = $dotnetgraphics{"$key"};
     }
 }
 if ($target eq "javabc"){
     foreach $key (keys %java_with_input){
 	$programs_with_input{"$key"} = $java_with_input{"$key"};
     }
-    foreach $key (keys %javamanually){
-	$manually{"$key"} = $javamanually{"$key"};
+    foreach $key (keys %javagraphics){
+	$graphics{"$key"} = $javagraphics{"$key"};
     }
 }
 
@@ -176,36 +176,21 @@ system "rm *.ast *.astL >/dev/null 2>&1";
 print "*** Compiling with command ***\n\t$compilecmd\n\n" unless ($runonly);
 
 $f="tstenv";
-print "-"x20 . "Compiling $f" . "-"x20  . "\n"; # if ($verbose);
+print "-"x10 . "Compiling $f" . "-"x10  . "\n"; # if ($verbose);
 system "$compilecmd $f > $f.out" if (! $verbose);
 system "$compilecmd $f" if ($verbose);
 
 foreach $f (@programs){
-    if ($host eq "windows"){
-	if ($target eq "javabc"){
-	    $exec = "$f.bat";
-	} else {
-	    $exec = "$f.exe";
-	}
-    } else {
-	$exec = "$f";
-    }
-    unless ($runonly){
-	# Recompile
-	print "-"x20 . "Removing $exec" . "-"x20  . "\n" if ($verbose);
-	unlink ("$exec");
-	unlink ("program.dll") if (-e "program.dll");
-	print "-"x20 . "Compiling $f" . "-"x20  . "\n"; # if ($verbose);
-	system "$compilecmd $f > $f.out" if (! $verbose);
-	system "$compilecmd $f" if ($verbose);
-    }
+    
+    $exec = &compile_program($f);
+
     unless ($compileonly){
 	# Execute
 	if (defined($programs_with_input{$f})){
-	    print "-"x20 . "Executing $exec with input \"" . $programs_with_input{$f} . "\" " . "-"x20  . "\n"; # if ($verbose);
+	    print "-"x10 . "Executing $exec with input \"" . $programs_with_input{$f} . "\" " . "-"x10  . "\n"; # if ($verbose);
 	    system "echo " . $programs_with_input{$f} . "|./$exec > $f.run";
 	} else {
-	    print "-"x20 . "Executing $exec" . "-"x20  . "\n"; # if ($verbose);
+	    print "-"x10 . "Executing $exec" . "-"x10  . "\n"; # if ($verbose);
 	    system "./$exec > $f.run";
 	};
 	unless ($keepprograms) {
@@ -284,11 +269,26 @@ if ($target eq "javabc"){
     }
 }
 
-if (scalar %manually){
-    print "  The following must be tested manually:\n";
-    print "  ========================================================\n";
-    foreach $key (keys(%manually)){
-        print "    $key:\n\t" . $manually{$key};
+if (scalar %graphics){
+    if ($graphics){
+	print "Starting test of graphics programs (testall -g)\n";
+	print "========================================================\n";
+    } else {
+	print "  Graphics programs are not tested unless testall is invoked with -g:\n";
+	print "  ========================================================\n";
+    }
+    foreach $key (keys(%graphics)){
+	$command = $graphics{$key};
+	if ($graphics){
+	    $exec = &compile_program($key);
+	    print "-"x10 . "Testing $exec by command $command" . "-"x10  . "\n"; # if ($verbose);
+	    system "$exec";
+	    unless ($keepprograms) {
+		unlink "./$exec";
+	    }
+	} else {
+	    print "    $key:\n\tcommand: $command";
+	};
         print "\n";
     }
     print "\n";
@@ -306,6 +306,30 @@ if (scalar %known_failures){
 sub CleanUp()
 {
 
+}
+
+sub compile_program()
+{
+    local ($f) = @_;
+    local $exec;
+    if ($host eq "windows"){
+	if ($target eq "javabc"){
+	    $exec = "$f.bat";
+	} else {
+	    $exec = "$f.exe";
+	}
+    } else {
+	$exec = "$f";
+    }
+    unless ($runonly){
+	print "-"x10 . "Removing $exec" . "-"x10  . "\n" if ($verbose);
+	unlink ("$exec");
+	unlink ("program.dll") if (-e "program.dll");
+	print "-"x10 . "Compiling $f" . "-"x10  . "\n"; # if ($verbose);
+	system "$compilecmd $f > $f.out" if (! $verbose);
+	system "$compilecmd $f" if ($verbose);
+    }
+    return $exec;
 }
 
 sub IntHandler 
