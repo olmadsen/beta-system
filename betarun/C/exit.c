@@ -60,7 +60,7 @@ static void PrintNumVars(void)
   fprintf(output, "CopyVRI:  %-8d\n", (int)NumCopyVRI);
   fprintf(output, "CopyVRC:  %-8d  ", (int)NumCopyVRC);
   fprintf(output, "CopyCPP:  %-8d  ", (int)NumCopyCPP);
-  fprintf(output, "NewRR:    %-8d\n  ", (int)NumNewRR);
+  fprintf(output, "NewRR:    %-8d\n", (int)NumNewRR);
   fprintf(output, "NewVR1:   %-8d  ", (int)NumNewVR1);
   fprintf(output, "NewVR2:   %-8d  ", (int)NumNewVR2);
   fprintf(output, "NewVR4:   %-8d\n", (int)NumNewVR4);
