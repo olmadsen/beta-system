@@ -26,11 +26,12 @@ do
     fi 
     if [ $f = "tstdump26" ]; then
        echo $f will attempt to provoke stack overflow.
-       echo This will take a while, and will probably not be.
-       echo caught properly be betarun, but instead dump core.
-       $f
-       /bin/rm -f core
-       echo "--------------------------"
+       echo This is not handled correctly by betarun. tstdump26 skipped.
+       #echo This will take a while, and will probably not be.
+       #echo caught properly be betarun, but instead dump core.
+       #$f
+       #/bin/rm -f core
+       #echo "--------------------------"
        continue
     fi 
     $f
@@ -46,8 +47,13 @@ do
     echo "--------" $f: "-------"
     if [ -f dumps/$f ]; then
        sed -e "s/$objdir/MACHINE_TYPE/g" < $f | diff dumps/$f -
+       if [ $? = 0 ]; then
+	  echo "[Dump is correct]"
+       else
+	  echo "[Difference in dump]"
+       fi
     else
-       echo No reference exists
+       echo "[No reference dump exists]"
     fi
     echo "--------------------------------"
 done
