@@ -1,7 +1,15 @@
 #!/bin/sh
 
 BETALIB=${BETALIB-/usr/local/lib/beta}
-. $BETALIB/configuration/r3.0/env.sh
+. $BETALIB/configuration/r4.0/env.sh
+
+LOCATION=$BETALIB/utils/betawc/v1.1/$objdir/
+
+if [ "$MACHINETYPE" = "SGI" ]
+then
+  LD_LIBRARY_PATH=$LOCATION:${LD_LIBRARY_PATH}
+  export LD_LIBRARY_PATH
+fi
 
 usage(){
   if [ "$1" != "" ]
@@ -129,7 +137,7 @@ fi
 echo
 echo "Analysis of fragment:" $file 
 
-${BETALIB}/betawc/v1.1/betawc $file /tmp/1.$$ /tmp/0.$$
+$LOCATION/betawc $file /tmp/1.$$ /tmp/0.$$
 
 if [ ! $doConflict -eq 0 ]
 then
