@@ -1,0 +1,616 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+                      "http://www.w3.org/TR/REC-html40/loose.dtd">
+
+<HTML>
+
+<HEAD>
+<LINK REV=MADE HREF="mailto:mg@mjolner.dk">
+<TITLE>Implementation of persistense in BETA</TITLE>
+</HEAD>
+
+<H1>Implementation of persistense in BETA</H1>
+This text is an attempt to document the persistense implemenation in the
+runtime system for BETA.
+
+<H2>Design</H2>
+The primary goals of the current PS are orthogonality and efficiency. It
+should be possible to save any beta object to disk and it should be as
+efficient as possible.
+
+<P> One way to think of the PS is as a kind of swap-space for objects
+that are currently not being used, but may be used later. Exactly like
+the virtual memory system of the operating system.
+
+<P> Objects are included in the store through reachablility.
+PS.CheckPoint therefore has to check all references in all reachable
+objects from the persistent roots. Keeping the number of persistent
+objects in memory low helps keep the time consumed by this low. Also
+this sweep should not use any bounded datastructure, such as the stack,
+in order to scale to large graphs of persistent objects. The Garbage
+Collector is actively involved in these scans. A checkpoint operation
+included a GC for this reason. In principle, it should be sufficient
+with a (possibly double) IOAGC, but currently an AOAGC is also performed
+to reclaim space occupied by persistent objects that have been written
+to disk and are not "sufficiently" live to stay in memory as well.
+
+<P> Efficieny is achieved mainly through efficient datastructures. Most
+lookups are direct through pointers and the rest are through trie trees.
+
+<H2>Other sources of information</H2>
+If you need information on betarun in general, please refer to
+$BETALIB/doc/betarun/internal. Some of that information is in danish,
+though.
+There is also quite a bit of information in $BETALIB/compiler/DOC some
+of which is relevant to the runtime system.
+
+<H2>Glossary</H2>
+<UL>
+
+<LI>Object: an object is any beta runtime-object, such as an instance of
+IntegerObject, but also the special runtime objects such as "a
+repetition of integers".</LI>
+
+<LI>Reference: A pointer to another object. </LI>
+
+<LI>Cell: A cell is 4 bytes of memory, that may be used to store a
+reference or an integer. Objects consist mostly of cells.</LI>
+
+<LI>Prototype: The prototype of an object is either a "logical"
+prototype, such as "IntegerRepetition" or a "real" prototype for a
+"real" object. Real prototypes are datastructures, created by the
+compiler along with the binary code, that describe the layout of objects
+of this particular type.</LI>
+
+<LI>Objectheader: All objects have the following header:
+
+<TABLE BORDER=1>
+<TR><TH>byte offset</TH><TH>interpretation</TH></TR>
+<TR><TD>0</TD><TD>prototype-pointer or prototype-special-tag</TD></TR>
+<TR><TD>4</TD><TD>GCAttribute</TD></TR>
+</TABLE>
+
+Repetitionobjects use the next two cells for low and high border. low
+border always holds the value "1" currently, while the high border holds
+the size of the repetition. For "real" objects, the cell at offset 8
+holds the origin, and the rest of the cells are optional and described
+in the prototype.</LI>
+
+<LI>Partobject: An object that is statically inlined in another object.
+"T:@Text;" inside another object results in T being a partobject of the
+current object. Repetitionobjects, such as the carrep inside Text are
+always off-line, as they can be resized dynamically.</LI>
+<LI>Object layout: There is more to object layout than described here.
+FIXME: I remember reading a more thorough description somehwere?
+Look at "betarun/C/object.h" for details...
+
+<LI>Persistent object: An object that is part of a persistent store.
+Either directly by being root (inserted through "PS.put") or indirectly
+by being referred by another persistent object.</LI>
+
+<LI>Transient object: Any object that is not part of a persistent
+store.</LI>
+
+<LI>Proxy reference: A special value in a reference cell. The value
+refers to another object, but not directly. Currently points into a
+protected area, so that dereferencing the reference causes segmentation
+fault.</LI>
+
+<LI>Reachable: An object is reachable from some other object or
+reference, if there exists a path through references to the target.
+ORIGIN and part-object implicit references included.</LI>
+
+<LI>IOA, AOA: The two generation in the generational garbage collector.
+Objects in IOA are moved to AOA when they live long. Objects in AOA keep
+the same address until they die. All Persistent objects must reside in
+AOA during AOAGC, but may be in IOA otherwise.</LI>
+
+<LI>PIT: "proxy indirection table". This is a bit tricky... "PIT" is the
+protected area, that the proxies refer to. But proxies also refer to
+information about the object they really mean to point at. This
+information is in the "proxy indirection table", which is addressed
+using the offset in the PIT of the proxy. See "P/pit.c".</LI>
+
+<LI>ObjInfo: Allocated in AOA just as real objects, hast he same layout
+as other objects, but is really a "c struct", where the protype is set
+to ObjInfoPTValue. Persistent objects in memory have a (tagged) pointer
+in their GCAttribute pointing to their ObjInfo object. There is also a
+trie mapping from (store, offset) to ObjInfo for loaded objects. See
+objectTable.c</LI>
+
+<H2>Important datastructure instances</H2>
+<UL>
+<LI>loadedObjects: This trie holds a mapping from store to a trie
+mapping from offset to an objInfo object. In total a mapping from
+(store, offset) to objInfo. Used just before loading an object to 
+determine if it is already in memory.</LI>
+<LI>documentclass: This trie holds a mapping from store to a trie
+mapping from offset to a PIT pointer. Used before loading an object to 
+determine if there already exists a proxy reference for it.</LI>
+<LI>map (static in pit.c) This sequenceTable maps from an "index", which
+is an offsets in PIT, to refInfo. The refInfo has information about the
+object referred and the proxy reference used to refer to it.</LI>
+<LI>currentcsb (static in cache.c) This struct holds two tries, "fromCache"
+and "toCache". They both hold diskblocks.</LI>
+<LI>currentcsb (global in proto.c) holds the mapping from groupnames to
+group-indexes. These are only used once for each prototype in the store
+as the results are cached in "PtoICache" and "ItoPCache" in proto.c.</LI>
+<LI>SOTags: This trie maps from objects to tags. Used when saving
+objects to the store to get the tag to save in when a reference to a
+special object is encountered.</LI>
+<LI>GCAttribute in every object. Used in cooperation with the garbage
+collector. Used as a pointer into PIT, in effect pointing at an ObjInfo
+structure. Used to get the GC to reclaim the memory for an eported
+object. Used to get an object moved from IOA to AOA. Used to store a
+linked list of persistent objects. Used to store special tags. And
+probably more...</LI>
+</UL>
+
+
+
+</UL>
+
+<H1>Comments copied from the source code</H1>
+<PRE>
+/* Phases:
+ *
+ * The set of all persistent objects currently in memory is registered
+ * in the set 'loadedObjects'. A reference to the object info of all
+ * persistent objects is inserted in the GC attribute. At each AOAGc
+ * the following phases are completed in order to keep this set
+ * updated:
+ *
+ * - IOAGc #1,
+ *
+ *   The first IOAGc will copy all new persistent object in IOA to
+ *   AOA. This is used to handle new objects created by user code.
+ *
+ * - Update peristent objects graph
+ *
+ *   The set of persistent objects is scanned and all object info for
+ *   new persistent objects that have become reachable is inserted in
+ *   the set as well. Only objects in AOA can point to their object
+ *   info through their GC attribute. This is because IOAGc uses the
+ *   GC attribute when the object is in IOA. For this reason all new
+ *   persistent objects in IOA are forced to AOA. If they are in IOA
+ *   they are marked so that the ensuing IOAGc will force them to AOA.
+ *
+ *   The object will look alive to AOAGc since its GCattribute is a
+ *   pointer. The object info object looks DEAD.
+ *
+ * - IOAGc #2
+ *
+ *   This IOAGc will move all new persistent objects in IOA to
+ *   AOA. Still all persistent object look alive and their object info
+ *   objects look DEAD.
+ *
+ *  - AOAGc start
+ *
+ *   Apart from doing normal AOAGc this GC will also mark all
+ *   persistent objects that are referred by transient objects. This
+ *   is done by marking the object info object alive. Such objects
+ *   will be retained in memory.
+ *
+ *  - Retain additional objects.
+ *
+ *    The set of persistent objects is scanned and some additional
+ *    persistent object may be marked alive even though they are not
+ *    referrred from any transient objects. To be explained, only
+ *    relevant for BETA.
+ *
+ *  - Swizzle references.
+ *
+ *    The set of persistent objects is scanned and all references to
+ *    dead persistent objects are swizzled.
+ *
+ *  - Remove dead objects
+ *
+ *    Handled at the final sweep of AOAGc. All persistent objects whos
+ *    info object is marked alive is retained in memory and the info
+ *    object is marked DEAD.
+ *
+ *    Persistent objects who's info object is marked as DEAD are
+ *    updated to the store and both the object itself and its info
+ *    object is reclaimed.
+ */
+</PRE>
+
+
+<H1>Areas outside "P" directory that are affected by persistense</H1>
+<UL>
+<LI>ioa.c
+<UL>
+<LI>IOAGc. IOAGc has been extended to call a number os PS related
+functions. IOAGC is the driving force in PS. "PS.checkpoint" calls
+IOAGC, which in turn does all the work in cooperation with AOAGC. IOAGC
+may run twice trough the flag "repeatIOAGc". This is done to ensure that
+all persistent objects are migrated to AOA before AOAGC.</LI>
+
+<LI>ProcessReference is used to inspect reference cells
+<STRONG>inside</STRONG> IOA. It has been extended to note "mark" proxy
+references, so that it is known which proxy-references are present in
+transient objects.</LI>
+
+<LI>ProcessAOAReferenceis used to inspect reference cells
+<STRONG>outside</STRONG> IOA, otherwise like ProcessReference.</LI> 
+</UL></LI>
+<!-- ioa.c --!>
+
+<LI>GC/aoa.c
+<UL>
+
+<LI>AOAallocate. When "forceAOAAllocation" is set, AOAallocate must
+allocate the requested object even when there isn't room for it in the
+heap. It does so by extending the heap.</LI>
+
+<LI>AOAGc. A normal AOAGc finds all objects reachable trough
+"AOArootsPtr". It does so be linking the object in the GCAttribute.
+With PS, the same is done, but only for transient objects. The persistent
+objects are just marked with the information that some transient object
+is referring to them. "phaseFive" is called at this point.</LI>
+
+<LI>prependToListInAOA. Proxy references must be handled differently
+when collecting the list.</LI>
+</UL>
+</LI>
+<!-- aoa.c --!>
+
+<LI>GC/aoafreelist.c
+<UL>
+<LI>AOAScanMemoryArea, which is the sweep part of the mark-sweep GC for
+AOA, skips persistent objects. When persistent objects have been written
+to disk and are "dead" in the sense that there are no direct references
+to them, AOAScanMemoryArea helps clean up the PIT through PITfree.</LI>
+</UL>
+</LI>
+<!-- aoafreelist.c --!>
+
+
+<LI>GC/copyobject.c
+<UL>
+<LI>NewCopyObject migrates objects from ioa to aoa. For persistense it
+has been modified to make sure that persistent object always get moved
+from ioa to aoa. Non-persistent objects may be letf behind in IOA when
+aoa does not have adequate room.</LI>
+</UL>
+</LI>
+<!-- copyobject.c --!>
+
+<LI>GC/objectsize.c
+<UL>
+<LI>ObjectSize has been extended to answer the correct size of objects
+of special types "ObjInfoPTValue" and "RefInfoPTValue".</LI>
+</UL>
+</LI>
+<!-- objectsize.c --!>
+
+<LI>C/sighandler.c
+<UL>
+<LI>BetaSignalHandler has been modified to forward segmentation faults
+and other protection related faults to "proxyTrapHandler". That is used
+to magically transfrom proxy references into real references when they
+are used by the user program.</LI>
+</UL>
+</LI>
+<!-- sighandler.c --!>
+
+</UL>
+
+<H2>PException.c: Signal handling</H2>
+<H2>trie.c: trie datastructure</H2>
+<H2>unswizzle.c: USloadObject: Load an object</H2>
+<H2>PImport.c: Endian handling,...</H2>
+<H3>importStoreObject</H3>
+Import an object in store format. This means that all references within
+the object to objects in the same store as the object are implemented as
+offsets. References to objects in other stores can be identified as such
+and are implemented as offsets to a proxy object. The task is to
+translate all references in the object to in-memory format.
+
+<H3>importScanObject</H3>
+importScanObject is a variant of scanObject, that handles all references
+exactly the same way scanObject would, but also handles all integers,
+16-bit integers as well as floats. These are always stored in big-endian
+format, which must be "byte-swapped" when loading on little-endian.
+
+<H3>updateTransitObjectTable</H3>
+We are importing an object and must insert a notification in the
+transit objects table that this particular object has been
+imported. This goes for the object itself as well as for any
+static part objects of the object. This function is called by
+'scanObject' for the object itself and all its static parts.
+
+<H3>refhandler</H3>
+Called for all reference cells in the object by importScanObject.
+Depending on the kind of reference in the cell, the cell may be set to a
+proxy value, or to a real reference if the referred object is loaded as
+well. This may happen if the cell refers to a off-line partobject or a
+repetition. 
+
+<H2>cache.c: Caches blocks of the file in memory</H2>
+
+<H2>des.c: dynamic extendable storage</H2>
+Implements a very simple filesystem within a file. "DEScreate" creates
+the storagefile. "DESReadAreaTable" reads the directory from disk.
+"DESarea" creates a new file within the storage. Files are named by
+index. "DESallocate" allocates space for a given file. "DESload" and
+"DESsave" loads and saves data to/from memory to the storage file.
+"DESsize" returns the current size of a file.
+<P>
+The current implementation is inflexible and inefficient in terms of
+space. In my opinion it should be replaced with an implementation that
+does not waste space. Also the index-naming should be replaced with a
+more robust naming, for instance 32-bit keys given by the rest of the
+system. 
+
+<H2>domain.c</H2>
+<STRONG>Currently unused?</STRONG> Looks like a rough draft of a
+datastructure to help partition an object graph into two or more persistent
+stores, based on the types of the objects. 
+
+<H2>objectTable.c: Maintain in-memory table of loaded objects</H2>
+The flag <STRONG>RECURSION</STRONG> is slightly weird When it is
+defined, an algorith <STRONG>not</STRONG using recursion is used, and
+otherwise a recursive one is used. When not using recursion, the objects
+are remembered through a linked list in the GCAttribute, just as during
+AOAGC. (CHECK: Where is the previous content of the GCAttr saved and
+restored then?)
+
+<H3>insertStoreOffset</H3>
+Insert a mapping from offset-in-store to object in the trie for the
+store. There is a separate trie for each open store.
+
+<H3>insertObjectAndParts and objhandler</H3>
+insertObjectAndParts uses scanObject to call objhandler on all
+partobjects. objhandler inserts the partobjects in the trie mapping from
+storeoffsets to objects. Note that the object itself is also inserted,
+as scanobject also calls objhandler on the object itself.
+
+<H3>objectInfo</H3>
+Allocates and initializes a new ObjInfo structure for an object.
+
+<H3>lookupObjectInfo</H3>
+Lookup an object given (store,offset). NULL if the object is not in
+memory.
+
+<H3>objectAlive</H3>
+Mark both the object and the ObjInfo so that the GC considers them alive
+and tus does not reclaim them.
+
+<H3>objectIsDead</H3>
+Is the ObjInfo for the object dead? This is the case for ObjInfo's
+representing a persistent object that is not directly referred by a
+transient object.
+
+<H3>allocateStorage</H3> Make an object part of the store, it must not
+be part of the sotre already. Used by markObject.
+
+<H3>phaseOne: markObject, markReachableObjects, collectPersistentObject,
+visitOffsetsFuncP1</H3>
+Make sure all objects reachable from the current object are marked as
+persistent.  markObject determines in which state (Already persistent or
+not) and in which heap (IOA or AOA) the object is and acts accordingly.
+
+<H3>phaseThree: visitStoresFuncP3, visitOffsetsFuncP3</H3>
+Update "loadedObjects" datastructure with the new positions of
+persistent objects moved from IOA to AOA during the current GC.
+
+
+<H3>phaseFive: remove unreferrenced persistent objects</H3>
+<PRE>
+   /* All objects in the ObjectTable who's object info object is DEAD
+      are no longer referred from this process and can be updated in
+      the store and released. */
+  
+   /* References from live persistent objects to DEAD persistent
+    * objects must be unswizzled.
+    */
+  
+   /* BETA issue: If an object is alive and kept in memory we cannot
+      move its origin or any references from within the object to
+      offline allocated objects, so we have to mark the origin alive
+      as well as offline allocated objects referred from within the
+      object. This is done first by the first 'TIVisit' below */
+</PRE>
+
+markOfflineAndOriginObjectsAlive called by visitOffsetsFuncP5_1 called
+by visitStoresFuncP5_1 makes sure tha alla offline part objects and
+origins of objects that are to stay in memory, also stay in memory.
+<P>
+visitOffsetsFuncP5_2 calls handlePersistentCell on every reference cell
+in every object that is to stay in memory. handlePersistentCell checks
+if the reference point at an object that will be removed from memory
+shortly. If this is the case, the reference is replaced with a proxy
+reference. 
+
+<P>
+visitOffsetsFuncP5_2 calls updateObjectInStore to make sure that
+every persistent object is saved to disk. updateObjectInStore sues the
+flags in the ObjInfo to check if there is a copy of the object in
+memory, right after the object. Thsi is the case for objects loaded from
+the store. If there is, then the object is compared to this copy and only
+saved if they differ.
+
+<H3>Close: visitOffsetsFuncPC, closeStore, etc.</H3>
+Marks all objects loaded from the store being closed as being dead. This
+is suppose to turn them back into ordinary objects, that AOAGC will
+either keep or kill during next AOAGC depending on if anyone refers them
+currently. CHECKME! Does this work? How about proxy references within
+these objects?
+
+<H1>proto.c: Handling of prototype encoding in the store</H1>
+Prototype pointers need to be turned into a representation that it is
+possible to load into a different program at a later point time. This is
+done by mapping prototype pointers into (group, protoNo). "group" is the
+name of the ".o" file in which the pattern is defined. "protoNo" is the
+index into the prototypetable in this file. Thus this mapping is only
+valid if the file has not been changed. Currently the compiler will
+generate an identical list if the file is recompiled, but not modified.
+<P>
+
+The mappings between (group, protoNo) and prototype pointers are cached
+in two tries. The actual translation is done by exportProtoType and
+importProtoType. They both operate directly on the prototype-field in
+the object. Both group and protoNo are encoded as 16-bit integers, that
+share the 32-bit prototype field when in store-format. "group" is an
+index into a table of groupnames, tha names of the .o-files. This table
+is stored in the store on disk using "SBGN*" functions in
+storageblock.c.
+
+
+<H1>referenceTable.c</H1>
+<PRE>
+/* 'referenceInfo' is used to create new reference info objects. It is
+ * called when ever the need for a new indirect reference arises. This
+ * happens in two cases. The first case is when an object is
+ * imported. All persistent objects referred from the imported object
+ * are referred through proxies. The second case is when a persistent
+ * object is removed, then all references to the removed object are
+ * turned into indirect references.
+</PRE>
+
+<H1>sequenceTable.c</H1>
+Implements a resizeable array, indexed by integer index. STInsert
+operation is a bit special in that it finds the next free index by
+itself, and that it copies the element. Used by pit.c and
+specialObjectTable.c
+
+<H1>specialObjectTable.c</H1>
+Maintains a mapping between pattern objects and integers. This is used
+by PS.registerSpecialInstance and PS.rebindSpecialReference. The idea is
+that for instance references to e.g. betaEnv should be saved without
+saving betaEnv, by restoring them upon load using the registered
+integers as placeholders. 
+
+<H1>storageblock.c</H1>
+<PRE>
+A storage block is one 32bit addressable collection of persistent
+objects. If a persistent store cannot be contained in a single
+storage block, it is possible to use as many storage blocks as
+necessary.
+
+A storage block consists of several dynamically extendable areas,
+
+- SBINReferences. All references from other storage blocks into this
+  one goes via a table of incomming references. This way the
+  storage block can relocate externally referred objects.
+
+- SBOUTReferences. All references to other storage blocks goes via a
+  table of outgoing references. This way an unlimited number of
+  storage blocks can be referred.
+
+- SBGroupNames. A prototype can be identified by a the name of the
+  group to which it belongs and the offset of the prototype in that
+  group (for further details, see elsewhere). When a prototype is
+  exported to storage the name of the group to which it belongs
+  must be saved in order to enable rebinding of the prototype at a
+  later load. This area saves all group names. The position of a
+  groupname within this area is a unique idetification of the
+  groupname. This ID can be saved as part of the exported
+  prototype.
+
+- SBObjects. Holds the persistent objects in this storage block.
+
+Storage blocks are implemented by using a cached dynamical
+extendable storage area as implemented by the modules 'des.c' and
+'cache.c'.
+</PRE>
+
+<H1>storagemanager.c</H1>
+SMGC throws away the oldest half of the cached blocks and renames the
+youngest half to be oldest. This is a very crude way of doing LRU: It
+may very well be that the last block used happens to be in the oldest
+set. Should be changed into a proper LRU cache. Most of this scheme is
+in cache.c.
+
+<H1>transitObjectTable.c</H1> Every object loaded from the store is
+inserted in this table. The idea is that all cells that hold proxy
+references should be registrered, and when an object is loaded all proxy
+references to that object is turned into real references. To support
+this, CheckReferenceAssignment call new AOACell when it discovers a cell
+holding a proxy. IOAGc and AOAGC call "referenceCheck", that uses
+redirectAOACells to turn all proxies for loaded objects into real
+references. This means that after a IOAGC references equality should be
+valid. (CHECKME: How about AOA? Do we catch *all* references in AOA?)
+
+<H1>trie.c</H1>
+trie.c implements two versions of a trie datastructure, one with integer
+keys and one for string keys.
+
+<H1>unswizzle.c</H1>
+
+<H3>unswizzleReference</H3> is called with a proxy reference. It loads
+ the object (if needed) and returns a reference to the loaded object.
+
+<H3>USloadObject</H3> loads an object into memory given the location in
+the store. It creates the copy of the object used to check for changes
+in the object and does all endian conversions. It has the logic
+concerning limiting the amount of memory used for loaded persistent
+objects. This is needed to keep the size of AOA from growing when e.g. 
+scanning a linked list of persistent objects.
+
+<H3>handleSpecialReference</H3>
+Maps from the tags registrered for special objects to their real
+addresses. If the tag is user-specified, a callback to BETA is needed.
+<PRE>
+Below we reenter BETA code while we are in the midst of loading
+an object. While in BETA code additional object loads might be
+issued, and GCs, both IOAGC amd AOAGC, might occur. While it
+should be possible to support all these events only an IOAGC is
+legal at this point in time.
+</PRE>
+
+
+
+<H1>Possible errors, checkme and fixme's</H1>
+<H2>PS.registerSpecialInstance and PS.rebindSpecialReference appears to
+be implemented for sparc only.</H2>
+Either this feature has to be redesigned or implemented on all other
+systems. The problem seems to arrise from GVC during the callback to
+BETA. Hasn't that been solved in general somehwere?
+
+<H2>Endianness of saved objects?</H2>
+At first glance, there does not appear to be any endian conversion of
+saved objects in "SBOBJcreate", which is used by "allocateStorage" from
+collectPersistentObjects to save objects that have just become
+persistent. "exportObject" does the endian-conversion. Called by
+"updateObjectInStore". Called by visitOffsetsFuncP5_2, calld by
+trie-visitor visitStoresFuncP5_2, called by phaseFive. So in order for
+the endian-conversion to work properly, the first save by SBOBJcreate
+must be overwritten later by exportObject. Does this happen always?
+
+<H1>Minor fixes and improvements TODO</H1>
+<H2>Alignent</H2>
+<PRE>
+if (alignedsize & ((1 << TAGBITS) - 1)) {
+    alignedsize = ((alignedsize >> TAGBITS) << TAGBITS) + (1 << TAGBITS);
+}
+</PRE>
+Alignments done like that are error-prone and hard to read. Replace with
+a macro, says "ROUNDUPTO(alignedsize, 1 << TAGBITS);" everywhere. There
+probably already is a suitable macro somewhere in betarun!
+
+<H2>Faster phase 3</H2>
+Phase three visits all loaded objects, but only does something to
+objects that were in IOA before this GC. How about only scanning those
+that were actually in IOA?
+
+<H2>Copy appears to be wrong</H2>
+USloadObject creates the copy of stored objects. It does so after
+calling importStoreObject, which makes real references of the proxies,
+etc. in the object. The "memcmp" in updateObjectInStore on the other
+hand compares the object after it has been turned into store-format. It
+appers that updateObjectInStore got it wrong; It makes more sense to
+keep the copy in in-memory format for efficiency.
+
+<H2> Check sequenceTable.c:STInsert</H2>
+Check the use of "once". Does this make sense when there are multiple
+sequenceTables in the system?
+
+<H2>Is trie the best datastructure for all the things its used for?</H2>
+For instance it is used to keep the list of objects to be stored. It
+used to make it scan them in least significant bit first order, which
+trashed the cache. I think every use of trie should be evaluated.
+
+<H2>XXX marked code needs inspection</H2>
+</BODY>
+</HTML>
