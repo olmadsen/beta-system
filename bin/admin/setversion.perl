@@ -4,6 +4,11 @@
 # Somewhat testet, but I recommend keeping a backup of the files in any case.
 # Run without arguments for usage-istructions.
 
+print "\n\nWARNING!!  WARNING!!  WARNING!!  WARNING!!  WARNING!!\n";
+print "This is a seriously hacked version, that may destroy your files.\n";
+print "Press Ctrl-C NOW if you are not absolutely sure you know what this\n";
+print "hacked version of the tool does!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n";
+
 sub ExitUsage {
     print "Usage: perl setversion.perl [option]* [<libraryname> <version-string>]*\n";
     print "\n";    
@@ -58,6 +63,10 @@ sub ProcessCurrentDirectory {
 		    if ($rest !~ /\;/) {
 			$LastLineContinue = 1;
 		    }
+		} elsif (!$LastLineContinue 
+			 && $line =~ /^(ORIGIN|INCLUDE|BODY|MDBODY)\s*$/) {
+		    chop $line;
+		    $LastLineContinue = 1;
 		} elsif ($LastLineContinue && $line =~ /^\s*\'(\~beta\/)?([^\/]+)\/(v\d+\.\d+[^\/]*)\/(.*)$/) { 
 		    $type = ' ' x length($type);
 		    ($beta, $lib, $ver, $rest) = ($1, $2, $3, $4);
@@ -75,18 +84,20 @@ sub ProcessCurrentDirectory {
 			$LastLineContinue = 1;
 		    }
 		    foreach $library (@libraries) {
-			if ($lib eq $library) {
+			if (1 || $lib eq $library) {
 			    $version = $versions{$lib};
-			    $new = "$type '~beta/$lib/$version/$rest\n";
+			    # $new = "$type '~beta/$lib/$version/$rest\n";
+			    # REMOVE version!
+			    $new = "$type '~beta/$lib/$rest\n";
 			    last;
 			}
 		    }
 		    if ($new ne $line) {
-			print "$cwd/$file, $type $lib: $ver -> $version\n";
+			print "$cwd/$file, $type $lib: $line -> $new\n";
 			$changed = 1;
 		    }		
 		    $out .= $new;
-		} elsif ($line =~ /^---.+---/) {
+		} elsif ($line =~ /^--[^-]+--/) {
 		    $out.= $line;
 		    $FoundSlot = 1;
 		} else {
