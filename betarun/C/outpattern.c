@@ -473,8 +473,8 @@ void DisplayObject(output,theObj,retAddress)
 
 static const struct errorEntry 
 {
-  enum BetaErr errorNumber;
-  char *       errorMessage;
+  BetaErr  errorNumber;
+  char    *errorMessage;
 } 
 errorTable[] = 
 {
@@ -533,7 +533,7 @@ errorTable[] =
 
 GLOBAL(static char UnknownError[25]);
 
-char *ErrorMessage(enum BetaErr errorNumber)
+char *ErrorMessage(BetaErr errorNumber)
 {
   long  index = 0;
   
@@ -900,7 +900,7 @@ static char *OpenDumpFile(long errorNumber)
 /* If DisplayBetaStack returns non-zero, the debugger was invoked, and
  * the process should continue execution. */
 
-int DisplayBetaStack(enum BetaErr errorNumber, 
+int DisplayBetaStack(BetaErr errorNumber, 
 		     Object *theObj, 
 		     long *thePC, 
 		     long theSignal /* theSignal is zero if not applicable. */
@@ -972,7 +972,7 @@ int DisplayBetaStack(enum BetaErr errorNumber,
       int skip_dump;
       DEBUG_CODE(fprintf(output, 
 			 "RTS: calling errorhandler (first callback)\n"));
-      skip_dump = ((int (*)(enum BetaErr, Object *, long *, long *))
+      skip_dump = ((int (*)(BetaErr, Object *, long *, long *))
 		   ((&CBFA->entries[0].theStruct)+1))(errorNumber, 
 						      theObj, 
 						      thePC, 

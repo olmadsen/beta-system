@@ -223,17 +223,23 @@ static __inline__ long GetBetaPC(long errno)
 /* BetaError: */
 
 #ifdef NEWRUN
-void BetaError(enum BetaErr err, Object *theObj, long *SP, long *thePC)
+void BetaError(BetaErr err, Object *theObj, long *SP, long *thePC)
 #else
-void BetaError(enum BetaErr err, Object *theObj)
+void BetaError(BetaErr err, Object *theObj)
 #endif
 {
 #ifndef NEWRUN
   long *thePC;
-#else
-  DEBUG_CODE(fprintf(output, "BetaError(err=%d, theObj=0x%x, SP=0x%x, thePC=0x%x)\n", err, theObj, SP, thePC));
-  DEBUG_CODE(fflush(output));
 #endif
+
+  DEBUG_CODE({
+    fprintf(output, "BetaError(err=%d <", err);
+    PrintBetaError(err);
+    fprintf(output, ">,\n");
+    fprintf(output, "          theObj=0x%x ", (int)theObj);
+    DescribeObject(theObj);
+    fprintf(output, ",\n");
+  });
 
   do {
     if( err < 0 ){
@@ -241,6 +247,10 @@ void BetaError(enum BetaErr err, Object *theObj)
       /* Set up StackEnd before calling DisplayBetaStack */
 
 #ifdef NEWRUN
+      DEBUG_CODE(fprintf(output, "          SP=0x%x,\n", SP));
+      DEBUG_CODE(fprintf(output, "          thePC=0x%x", thePC));
+      DEBUG_CODE(PrintCodeAddress(thePC));
+      DEBUG_CODE(fprintf(output, ")\n"));
       switch(err){
       case CTextPoolErr /* called via CpkVT, CpkSVT in betaenv.o */:
       case RepLowRangeErr /* called via CpkSVT, CopySVR*, CopySRR in betaenv.o */:
@@ -286,6 +296,10 @@ void BetaError(enum BetaErr err, Object *theObj)
       StackEnd = (long *) ((struct RegWin *)FramePointer)->fp;
 #endif /* MT */
       thePC = (long *) ((struct RegWin *)FramePointer)->i7;
+      DEBUG_CODE(fprintf(output, "          StackEnd=0x%x,\n", (int)StackEnd));
+      DEBUG_CODE(fprintf(output, "          thePC=0x%x", (int)thePC));
+      DEBUG_CODE(PrintCodeAddress((long)thePC));
+      DEBUG_CODE(fprintf(output, ")\n"));
 #endif /* sparc */
 
 
@@ -294,7 +308,6 @@ void BetaError(enum BetaErr err, Object *theObj)
 #ifdef RTVALHALLA
 #if 0
       thePC=(long *)GetBetaPC(err);
-      fprintf(output, "BetaError %d: PC is 0x%x\n", (int)err, (int)thePC);
 #endif
 #endif /* RTVALHALLA */
 #ifdef UseRefStack
@@ -302,6 +315,9 @@ void BetaError(enum BetaErr err, Object *theObj)
 #else
 #error Find out Stack End for hppa without Reference Stack
 #endif /* UseRefStack */
+      DEBUG_CODE(fprintf(output, "thePC=0x%x", thePC));
+      DEBUG_CODE(PrintCodeAddress(thePC));
+      DEBUG_CODE(fprintf(output, ")\n"));
 #endif /* hppa */
 
 #ifdef intel
@@ -351,6 +367,10 @@ void BetaError(enum BetaErr err, Object *theObj)
 	StackEnd = (long *) &theObj; StackEnd++;
 	break;
       }
+      DEBUG_CODE(fprintf(output, "          StackEnd=0x%x,\n", StackEnd));
+      DEBUG_CODE(fprintf(output, "          thePC=0x%x", thePC));
+      DEBUG_CODE(PrintCodeAddress(thePC));
+      DEBUG_CODE(fprintf(output, ")\n"));
 #endif /* intel */
 
       /* Treat QUA errors specially */

@@ -44,8 +44,8 @@ extern void DumpIOA(void);
 extern char *ProtoTypeName(ProtoType *theProto);
 extern long M_Part(ProtoType * proto);
 extern void  DisplayObject(FILE *,Object *,long);
-extern char *ErrorMessage(enum BetaErr);
-extern int  DisplayBetaStack(enum BetaErr, Object *, long *, long);
+extern char *ErrorMessage(BetaErr);
+extern int  DisplayBetaStack(BetaErr, Object *, long *, long);
 #ifdef RTDEBUG
 extern void DescribeObject(Object *);
 extern void DescribeProto(ProtoType * theProto);
@@ -69,9 +69,9 @@ extern void BetaExit(long);
 extern void ThreadExit(void);
 #endif
 #ifdef NEWRUN
-extern void BetaError(enum BetaErr err, Object *theObj, long *SP, long *thePC);
+extern void BetaError(BetaErr err, Object *theObj, long *SP, long *thePC);
 #else
-extern void BetaError(enum BetaErr, Object *);
+extern void BetaError(BetaErr, Object *);
 #endif
 
 /* C/cbfa.c */
@@ -234,13 +234,14 @@ extern void assignRef(long *theCell, Item * newObject);
 #ifdef RTDEBUG
 void PrintWhichHeap(Object *ref);
 extern void Illegal(void);
-#endif
-extern long inBetaHeap(Object *);
 extern char *getLabel (long addr);
 extern long labelOffset;
 extern void PrintRef(Object *ref);
 extern void PrintProto(ProtoType *proto);
 extern void PrintCodeAddress(long addr);
+extern void PrintBetaError(BetaErr err);
+#endif /* RTDEBUG */
+extern long inBetaHeap(Object *);
 #if defined(MAC)
 extern void InitTheCursor(void);
 extern void RotateTheCursor(void);

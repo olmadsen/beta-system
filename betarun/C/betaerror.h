@@ -2,7 +2,7 @@
  * check usages in RUN/ *.run and CRUN/SnakeAdditions.S
  */
 
-enum BetaErr {
+typedef enum _BetaErr {
   RefNoneErr =         -1 /* Reference is none */,
   CompTerminatedErr =  -2 /* Executing terminated component */,
   RepRangeErr =        -3 /* Repetition index out of range */,
@@ -42,4 +42,4 @@ enum BetaErr {
   UnorderedFval =     -37 /* Unordered Floating Point Value */,
   StackErr =          -38 /* Stack Overflow */,
   UnknownSigErr =    -100 /* Unknown signal */
-};
+} BetaErr;

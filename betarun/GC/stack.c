@@ -100,16 +100,21 @@ static void PrintSkipped(long *current)
 #ifdef NEWRUN
 /************************* Begin NEWRUN ****************************/
 
-#define DumpProto(theObj)                                        \
-{                                                                \
-  if ((theObj)&&((theObj)!=CALLBACKMARK)&&((theObj)!=GENMARK)){  \
-     if (isObject(theObj)){                                      \
-       PrintProto(theObj->Proto);                                \
-     } else {                                                    \
-       fprintf(output, " (ILLEGAL OBJECT!)");                    \
-     }                                                           \
-  }                                                              \
+#ifdef RTDEBUG
+static void DumpProto(Object *theObj)
+{                                                                
+  if ((theObj)&&((theObj)!=CALLBACKMARK)&&((theObj)!=GENMARK)){  
+     if (isObject(theObj)){                                      
+       PrintProto(theObj->Proto);   
+       fprintf(output, "\n");
+     } else {                                                    
+       fprintf(output, " (ILLEGAL OBJECT!)");                    
+     }                                                           
+  }                                                              
 }
+#else /* !RTDEBUG */
+#define DumpProto(theObj) 
+#endif /* RTDEBUG */
 
 #define FrameSeparator() \
 fprintf(output, "============================================================================\n")
@@ -195,7 +200,7 @@ void ProcessRefStack(Object **topOfStack, long dynOnly, CellProcessFunc func)
 			"RefStack(dyn): 0x%08x: 0x%08x", 
 			(int)theCell,
 			(int)*theCell));
-    DEBUG_STACK(PrintRef(theObj));
+    DEBUG_STACK(PrintRef(theObj); fprintf(output, "\n"));
     func(theCell, theObj);
     return;
   }
@@ -206,7 +211,7 @@ void ProcessRefStack(Object **topOfStack, long dynOnly, CellProcessFunc func)
 			((long)topOfStack - (long)theCell)/4,
 			(int)theCell,
 			(int)*theCell));
-    DEBUG_STACK(PrintRef(theObj));
+    DEBUG_STACK(PrintRef(theObj); fprintf(output, "\n"));
     func(theCell, theObj);
     /* Take next reference from stack */
     theCell--;
@@ -229,9 +234,10 @@ static void TRACE_NEW_FRAME(void)
       fprintf(output, "<UNKNOWN_MARK>\n");                    
     } else {                                                   
       PrintCodeAddress(PC);                                    
+      fprintf(output, "\n");
     }                                                          
     fprintf(output, "Caller object: 0x%x", theObj);            
-    DEBUG_STACK(PrintRef(theObj));
+    DEBUG_STACK(PrintRef(theObj); fprintf(output, "\n"));
   }
 }
 #endif
@@ -253,9 +259,10 @@ static void TRACE_STACK(long SP, long PC, Object *theObj)
       fprintf(output, "<UNKNOWN_MARK>\n");                    
     } else {                                                   
       PrintCodeAddress(PC);                                    
+      fprintf(output, "\n");
     }                                                          
     fprintf(output, "object:    0x%08x", theObj);              
-    DEBUG_STACK(PrintRef(theObj));
+    DEBUG_STACK(PrintRef(theObj); fprintf(output, "\n"));
     fprintf(output, "---------------------\n", SP);            
   }
 }
@@ -1035,8 +1042,10 @@ void ProcessStackPart(long *low, long *high)
 	    if (*current) {
 	      if (IsPrototypeOfProcess(*current)) {
 		PrintProto((ProtoType*)*current);
+		fprintf(output, "\n");
 	      } else {
 		PrintCodeAddress(*current);
+		fprintf(output, "\n");
 	      }
 	    } else {
 	      fprintf(output, "\n");
@@ -1192,6 +1201,7 @@ void PrintStackPart(long *low, long *high)
 	  fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
 	  if (*current){
 	    PrintCodeAddress((long)*current);
+	    fprintf(output, "\n");
 	  } else {
 	    fprintf(output, "\n");
 	  }
