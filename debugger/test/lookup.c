@@ -1,3 +1,9 @@
+/* compile with:
+ * gcc -o lookup lookup.c -ldl
+ * (on linux):
+ * gcc -o lookup lookup.c -export-dynamic -ldl
+ */
+
 #include <stdio.h>
 #include <dlfcn.h>
 
