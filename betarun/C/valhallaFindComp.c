@@ -325,6 +325,7 @@ int scanComponentStack (Component* comp,
     stacktype = CS_ACTIVECOMPONENT;
     forEach(PC, curObj);
   }
+  /* FIXME: What about PC outside BETA, compare code in outpattern.c */
   ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, TRUE, HandleStackCell);
   if (!stacktype){
     if (CompFound){

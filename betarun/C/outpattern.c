@@ -715,11 +715,20 @@ void DisplayNEWRUNStack(long *PC, Object *theObj, int signal)
        */
       TRACE_DUMP(fprintf(output, "  Adjusting StackEnd to BetaStackTop\n"));
       StackEnd = betatop;
+      /* Unfortunately the BetaStackTop points to the next-to-top-entry on 
+       * the stack (for other reasons). The topmost BETA object can be found
+       * as the saved THIS in the frame just above SP but we cannot figure
+       * out the PC, at this is saved somewhere in the C frames.
+       */
+      DisplayObject(output, GetThis(StackEnd), 0);
     } else {
        /* In low level dump StackEnd will be equal to betatop since the
 	* above code has just been performed for the simple dump.
 	*/ 
-      if (StackEnd!=betatop){
+      if (StackEnd==betatop){
+	/* Low level dump - dump topmost object here too */
+	DisplayObject(output, GetThis(StackEnd), 0);
+      } else {
 	fprintf(output, "\n");
 	fprintf(output, "  (Unable to find start of BETA stack - sorry)\n");
 	BetaExit(1);
