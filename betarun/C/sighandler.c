@@ -277,7 +277,13 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   case SIGINT: /* Interrupt */
     todo=DisplayBetaStack( InterruptErr, theObj, PC, sig); break;
 #ifndef nti
-  case SIGTRAP: /* int3 break */
+  case SIGTRAP: 
+    if ( (*((char*)PC-1)) == (char)0xcc ){
+      /* int3 break */
+      scp.eip -= 1; /* PC points just after int3 instruction */
+      PC = (long *) scp.eip;
+      DEBUG_VALHALLA(fprintf(output, "sighandler: adjusting PC to 0x%x\n", (int)PC));
+    }
     todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
 #endif
 #endif

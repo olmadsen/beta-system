@@ -215,7 +215,7 @@ void printOpCode (int opcode)
   case VOP_SCANSTACK:
     fprintf (output,"VOP_SCANSTACK"); break;
   case VOP_BETARUN:
-    fprintf (output,"VOP_SCANSTACK"); break;
+    fprintf (output,"VOP_BETARUN"); break;
   default:
     fprintf (output,"UNKNOWN OPCODE"); break;
   }

@@ -27,8 +27,6 @@ int isBETAcode(int PC)
 
 #if (defined(linux) || defined(nti) || defined(mc68020)) 
 
-/* Warning: The following has NOT been tested */
-
 static void ShowStackPart(long *low, long *high, forEachCallType DoForEach)
 {
   long          *ptr = low;
@@ -72,6 +70,10 @@ int scanComponentStack (struct Component* comp,
    * calling "forEach" for each (code-address, object) pair on the stack.
    */
   int stacktype, compfound;
+
+  DEBUG_VALHALLA(fprintf(output, 
+			 "scanComponentStack(comp=0x%x, obj=0x%x, PC=0x%x\n)",
+			 (int)comp, (int)curObj, PC));
 
   if (comp->StackObj){
     struct StackObject *sObj = comp->StackObj;
