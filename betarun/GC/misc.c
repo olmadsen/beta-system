@@ -180,6 +180,24 @@ int strongIsObject(Object *obj)
   return 1;
 }
 
+void PrintProto(ProtoType *proto)
+{
+  fprintf(output, "\"%s\" <%s>", ProtoTypeName(proto), getLabel((long)proto));
+  fflush(output);
+}
+
+void PrintCodeAddress(long addr)
+{
+  char *lab = getLabel(addr);
+  if (labelOffset){
+    fprintf(output, " <%s+0x%x>", lab, (int)labelOffset);
+  } else {
+    fprintf(output, " <%s>", lab);
+  }    
+  fflush(output);
+}
+
+
 #ifdef RTDEBUG
 
 #ifdef NEWRUN
@@ -313,23 +331,6 @@ void CkReg(char *func,long value, char *reg)
 	    func, reg, (int)theObj); 
     Illegal();								     
   }								             
-}
-
-void PrintProto(ProtoType *proto)
-{
-  fprintf(output, "\"%s\" <%s>", ProtoTypeName(proto), getLabel((long)proto));
-  fflush(output);
-}
-
-void PrintCodeAddress(long addr)
-{
-  char *lab = getLabel(addr);
-  if (labelOffset){
-    fprintf(output, " <%s+0x%x>", lab, (int)labelOffset);
-  } else {
-    fprintf(output, " <%s>", lab);
-  }    
-  fflush(output);
 }
 
 void PrintRef(Object *ref)
@@ -833,8 +834,7 @@ void CheckRegisters(void)
 #endif /* RTDEBUG */
 }
 
-/*************************** Label Debug ****************************/
-#ifdef RTDEBUG
+/*************************** Label lookup by address ****************************/
 
 typedef struct _label {
   long address;
@@ -849,6 +849,103 @@ GLOBAL(long maxLabels) = 2048;
 GLOBAL(long process_offset) = 0;
 #endif
 
+static void addLabel(long adr, char *id);
+static void addLabel(long adr, char *id)
+{
+  label *lab;
+  int len = strlen(id);
+  int lastslash = 0;
+  int i;
+  char* buf;
+
+  for (i = 0; i < len; i++) {
+    if (id[i] == '/') {
+      lastslash = i+1;
+    }
+  }  
+
+  buf = MALLOC(sizeof(label)+len+1-lastslash);
+
+  if (!buf) {
+    INFO_LABELS(fprintf(output, "Allocation of label failed\n"));
+    /* free previously allocated labels */
+    FREE(labels);
+    labels = 0;
+    return;
+  }
+  INFO_ALLOC(sizeof(label));
+
+  lab = (label *) buf;
+  lab->id = buf+sizeof(label);
+
+  strcpy(lab->id, id+lastslash);
+  lab->address = adr;
+
+  if (numLabels>=maxLabels){
+    maxLabels *= 2;
+    INFO_LABELS(fprintf(output, "*"); fflush(output));
+    labels=REALLOC(labels, maxLabels * sizeof(label*));
+  }
+  labels[numLabels] = lab;
+  numLabels++;
+}
+
+#ifdef sgi
+static int cmpLabel(const void *left, const void *right);
+static int cmpLabel(const void *left, const void *right)
+{
+  label **l = (label**)left, **r = (label**)right;
+
+  fprintf(output, "%d ? %d\n", (*l)->address, (*r)->address);
+  return ((*l)->address - (*r)->address);
+}
+
+static void addLabelsFromGroupTable(void);
+static void addLabelsFromGroupTable(void)
+{
+  group_header *gh;
+  label *lab;
+  char theLabel[256];
+  long mPart;
+  long gPart;
+
+  gh = NextGroup(0);
+  while (gh) {
+    long* proto = &(gh->protoTable[1]);
+    int i, NoOfPrototypes;
+    
+    NoOfPrototypes = gh->protoTable[0];
+    TRACE_GROUP(fprintf(output, 
+			">>>addLabelsFromGroupTable(group=0x%x, addr=0x%x)\n",
+			(int)gh,
+			(int)data_addr));
+    for (i=0; i<NoOfPrototypes; i++) {
+      TRACE_GROUP(fprintf(output,">>>addLabelsFromGroupTable: Try 0x%x\n", (int)*proto));
+      sprintf(theLabel, "%s:T%d", NameOfGroupMacro(gh), i+1);
+      addLabel((long)(*proto), theLabel);
+
+      gPart=  G_Part(((ProtoType*)(*proto)));
+      sprintf(theLabel, "%s:G%d", NameOfGroupMacro(gh), i+1);
+      addLabel(gPart, theLabel);
+      
+      mPart =  M_Part(((ProtoType*)(*proto)));
+      if (mPart != MAXINT) {
+	sprintf(theLabel, "%s:M%d", NameOfGroupMacro(gh), i+1);
+	addLabel(mPart, theLabel);
+      }
+
+      proto++;
+    }
+    gh = NextGroup(gh);
+  }
+
+  fprintf(output, "qsort(labels)...");
+  qsort(labels, numLabels, sizeof(label**), cmpLabel);
+  fprintf(output, "done\n");
+}
+#endif
+
+
 #ifdef UNIX
 #ifndef hppa
 /* static void *dl_self=0; */
@@ -860,7 +957,6 @@ static void initLabels(void)
   char exefilename[500];
   char *theLabel;
   labeltable *table;
-  long lastLab=0;
   long labelAddress;
 
 #ifdef ppcmac
@@ -898,17 +994,7 @@ static void initLabels(void)
   }
   INFO_ALLOC(maxLabels * sizeof(label *));
   /* Read labels */
-  for (;;lastLab++){
-    label *lab;
-    lab = (label *) MALLOC(sizeof(label));
-    if (!lab){
-      INFO_LABELS(fprintf(output, "Allocation of label failed\n"));
-      /* free previously allocated labels */
-      FREE(labels);
-      labels = 0;
-      break;
-    }
-    INFO_ALLOC(sizeof(label));
+  for (;;) {
     labelAddress = nextAddress(table);
     if (labelAddress==-1){
       /* Termination condition reached */
@@ -919,25 +1005,13 @@ static void initLabels(void)
       fprintf(output, "0x%08x %s\n",  (unsigned)labelAddress, theLabel);
       fflush(output);
     });
-    lab->id = (char *)MALLOC(strlen(theLabel)+1);
-    if (!lab) {
-      INFO_LABELS(fprintf(output, "Allocation of label id failed\n"));
-      /* free previously allocated labels */
-      FREE(labels);
-      labels = 0;
-      break;
-    }
-    INFO_ALLOC(strlen(theLabel)+1);
-    lab->address = labelAddress;
-    strcpy(lab->id, theLabel);
-    if (lastLab>=maxLabels){
-      maxLabels *= 2;
-      INFO_LABELS(fprintf(output, "*"); fflush(output));
-      labels=REALLOC(labels, maxLabels * sizeof(label*));
-    }
-    labels[lastLab] = lab;
+    addLabel(labelAddress, theLabel);
   }
-  numLabels=lastLab;
+
+#ifdef sgi
+  addLabelsFromGroupTable();
+#endif  
+
   INFO_LABELS(fprintf(output, " done]"); fflush(output));
 #ifdef sgi
   fprintf(output, 
@@ -1004,10 +1078,11 @@ char *getLabel (long addr)
   return "<unknown>";
 }
 
-/************************* End Label Debug *************************/
+/************************* End Label lookup *************************/
 
 
 /************************* DescribeObject: *************************/
+#ifdef RTDEBUG
 
 void DescribeObject(Object *theObj)
 {

@@ -24,7 +24,7 @@ GLOBAL(static int basic_dumped)=0;
 /******************************* M_Part: *****************************/
 
 long M_Part(ProtoType * proto)
-     /* Return the address og of the M-entry for the prototype proto.
+     /* Return the address of the M-entry for the prototype proto.
       *
       * If the pattern has NO do-part and NO explicit prefix,
       * the routine returns MAXINT.
@@ -309,9 +309,9 @@ static void ObjectDescription(Object *obj,
 
   if (!SimpleDump){
     fprintf(output, "  { PC  0x%x", (int)PC);
-    DEBUG_CODE(PrintCodeAddress(PC));
+    PrintCodeAddress(PC);
     fprintf(output, ", object 0x%x, proto 0x%x ", (int)obj, (int)proto);
-    DEBUG_CODE(PrintProto(proto); fprintf(output, " "));
+    PrintProto(proto); fprintf(output, " ");
     fprintf(output, "}\n");
   }
 
@@ -383,7 +383,7 @@ static void ObjectDescription(Object *obj,
 	fprintf(output, "    { Surrounding object 0x%x, proto 0x%x ", 
 		(int)staticObj, 
 		(int)proto);
-	DEBUG_CODE(PrintProto(proto); fprintf(output, " "));
+	PrintProto(proto); fprintf(output, " ");
 	fprintf(output, "}\n");
       }
 
@@ -647,7 +647,7 @@ void DisplayNEWRUNStack(long *PC, Object *theObj, int signal)
     fprintf(output, 
 	    "  [ EXTERNAL ACTIVATION PART (address 0x%x", 
 	    (int)PC);
-    DEBUG_CODE(PrintCodeAddress((long)error_pc));
+    PrintCodeAddress((long)error_pc);
     fprintf(output, ") ]\n");
     
 #ifdef ppcmac
@@ -898,7 +898,7 @@ void DisplayINTELStack(BetaErr errorNumber,
 	    "  [ EXTERNAL ACTIVATION PART (address 0x%x",
 	    (int)error_pc
 	    );
-    DEBUG_CODE(PrintCodeAddress((long)PC));
+    PrintCodeAddress((long)PC);
     fprintf(output, ") ]\n");
   }
 
@@ -1107,7 +1107,7 @@ void DisplaySPARCStack(BetaErr errorNumber,
     fprintf(output, 
 	    "  [ EXTERNAL ACTIVATION PART (address 0x%x", 
 	    (int)PC);
-    DEBUG_CODE(PrintCodeAddress((long)error_pc));
+    PrintCodeAddress((long)error_pc);
     fprintf(output, ") ]\n");
 
     TRACE_DUMP(fprintf(output, "  Winding back through C frames on top\n"));
@@ -1116,7 +1116,7 @@ void DisplaySPARCStack(BetaErr errorNumber,
 	 PC = (long *)theAR->i7, theAR = (RegWin *) theAR->fp){
       if (!SimpleDump) {
 	fprintf(output, "  { PC  0x%x", (int)PC);
-	DEBUG_CODE(PrintCodeAddress((int)PC));
+	PrintCodeAddress((int)PC);
 	fprintf(output, " }\n");
       }
       if ((theAR->fp==0) || (theAR->fp==StackStart) || (PC = 0)){
@@ -1160,7 +1160,7 @@ void DisplaySPARCStack(BetaErr errorNumber,
 	   PC = (long *)cAR->i7, cAR = (RegWin *) cAR->fp){
 	if (!SimpleDump) {
 	  fprintf(output, "  { PC  0x%x", (int)PC);
-	  DEBUG_CODE(PrintCodeAddress((int)PC));
+	  PrintCodeAddress((int)PC);
 	  fprintf(output, " }\n");
 	}
       }

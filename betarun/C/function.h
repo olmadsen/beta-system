@@ -251,15 +251,15 @@ extern long milisecsincelast(void);
 extern int EqualNCS(char *s1, char *s2);
 extern void assignRef(long *theCell, Item * newObject);
 extern int strongIsObject(Object *obj);
+extern void PrintProto(ProtoType *proto);
+extern void PrintCodeAddress(long addr);
+extern char *getLabel (long addr);
+extern long labelOffset;
 #ifdef RTDEBUG
 extern const char *WhichHeap(Object *ref);
 extern void PrintWhichHeap(Object *ref);
 extern void Illegal(void);
-extern char *getLabel (long addr);
-extern long labelOffset;
 extern void PrintRef(Object *ref);
-extern void PrintProto(ProtoType *proto);
-extern void PrintCodeAddress(long addr);
 extern void DescribeObject(Object *);
 #endif /* RTDEBUG */
 extern long inBetaHeap(Object *);
