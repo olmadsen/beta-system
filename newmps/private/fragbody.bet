@@ -10,8 +10,17 @@ groupMagicNumber2: (# exit 0x6173742E #);
 groupVersion: (# exit 1 #);
 
 -- FragmentFormCategory: doPart --
-do 'FragmentFormCategory: doPart' -> putline;
+do root.symbol -> sy;
 
+-- FragmentFormScanSlots: doPart --
+do firstSlot[] -> current[];
+   loop:
+     (if current[] <> NONE then
+	    INNER;
+		current.nextSlot[] -> current[];
+		restart loop; 
+     if);
+	 
 -- FragmentGroupScan: doPart --
 do fragmentlist.scan
    (#
@@ -59,6 +68,46 @@ do (if includes.empty then
    do current[] -> THIS(ScanIncludes).current[];
       inner scanIncludes;
    #);
+   
+-- FragmentGroupBindToOrigin: doPart --
+do 
+   (if origin = NONE then
+      setupOrigin;
+   if);
+   (if origin <> NONE then
+      f[] -> (origin).bind -> op[];
+	  (if op[] = NONE then
+	     f[] -> (origin).bindToOrigin -> op[];
+	  if);
+   if);
+-- FragmentGroupBind: doPart --
+do search: scanSlots
+     (#
+	 do  
+	     (if current.name -> (f.name).equalNCS then
+	       current[] -> op[] -> f.binding[];
+		   leave search;
+		if);
+	 #);
+   (if OP[] = NONE then
+      (if origin = NONE then
+	     setupOrigin;
+	  if);
+	  (if origin <> NONE then
+	     f[] -> (origin).bind -> op[];
+	  if);
+   if);
+
+-- FragmentGroupScanSlots: doPart --
+do scan
+     (# frag: ^FragmentForm;
+	 do current[] -> frag[];
+	    frag.scanSlots
+		  (#
+		  do current[] -> THIS(ScanSlots).current[];
+		     inner ScanSlots;
+		  #);
+	 #);
 
 -- FragmentGroupIncludeFullName: doPart --
 do (# t: ^Text;
@@ -157,6 +206,7 @@ do unpacking:
 				grammartable.beta[] -> newFragmentForm -> frag[];
 				input.getBinText -> frag.nameT[];
 				frag[] -> fragmentList.append;
+				THIS(FragmentGroup)[] -> frag.father;
 			for);
 			'success' -> putline;
 		#);
@@ -219,11 +269,7 @@ do opengroup:
      do name[] -> expandToFullPath -> fullname[];
         fullname[] -> stripExtension -> fullname[];
 		
-		
-		'--top open: ' -> puttext;
-		fullname[] -> putline;
-		
-		
+		  
         fullname[] -> dummy.fullname;
         dummy[]->grouptable.hashfunction
 			  ->grouptable.findIndexed
@@ -233,7 +279,7 @@ do opengroup:
 		  (if group[] <> NONE then
 		     leave openGroup;
 		  if);
-        
+		
         newFragmentGroup -> group[];
         fullname.copy -> group.name;
         fullname.copy -> group.fullname;
@@ -263,16 +309,21 @@ do opengroup:
                           '-' -> fragname.prepend;
                           fullname[] -> fragname.prepend;
                           fragname[] -> frag.fullname;
-                          (if 'dopart' -> cat.equalNCS then
-                              (31, input[]) -> beta.parser.parse -> frag.root[];
-                           else
-                              (1, input[]) -> beta.parser.parse -> frag.root[];
+                          (if true
+						     //'dopart' -> cat.equalNCS then
+                              (31, input[], frag[]) -> beta.parser.parse -> frag.root[];
+							 //'mainpart' -> cat.equalNCS then
+                              (5, input[], frag[]) -> beta.parser.parse -> frag.root[];
+                           else  
+                              (1, input[], frag[]) -> beta.parser.parse -> frag.root[];
                           if);
                           (if frag.root[] <> NONE then
                               (if compact then
                                   frag.root[] -> killImps;
                               if);
                               frag[] -> group.fragmentList.append;
+							  group[] -> frag.father;
+							  beta.parser.lastCH -> parse.lex.ch;
                               parse.advance;
                               restart loop;
                           if);
@@ -282,3 +333,46 @@ do opengroup:
           if);
         input.close;
      #);
+-- AstInterfacePrivate: descriptor --
+(#
+   errMsg: @
+     (# msg: [10] ^text;
+        isWarn: [10] @ boolean;
+        top: @integer;
+        clear: 
+          (# 
+          do 0 -> top;
+             (for i: isWarn.range repeat false -> isWarn[i] for)
+          #);
+        addMsg:
+          (# m: ^text
+          enter m[]
+          do (if (top+1 -> top) > msg.range then
+                 msg.range -> msg.extend;
+                 isWarn.range -> isWarn.extend;
+             if);
+             m[] -> msg[top][];
+             inner addMsg
+          exit  top
+          #);
+        addErrorMsg:  addMsg(##);
+        addWarning: addMsg(# do true -> isWarn[top] #);
+        getMsg:
+          (# no: @integer; m: ^text
+          enter no
+          do (if (0<no) and (no <= top) then
+	             msg[no][] -> m[]
+	        if)
+          exit m[]
+          #);
+        isWarning: booleanValue
+          (# no: @integer
+          enter no
+          do 
+             (if (0<no) and (no<=top) then
+                 isWarn[no] -> value
+             if)
+          #);
+     #)
+#)
+

@@ -4,6 +4,7 @@ INCLUDE '~beta/containers/hashTable';
 INCLUDE '~beta/basiclib/texthash';
 INCLUDE 'propertylist';
 INCLUDE '~beta/sysutils/pathhandler';
+INCLUDE '~beta/sysutils/objinterface';
 
 BODY 'private/treelevelbody';
 BODY 'private/astbody';
@@ -33,6 +34,7 @@ AstInterface:
           status: @int8u;
           symbol: @int16;
 		  b: @boolean;
+		  error: @int16;
           com: ^Comment;
           son: ^AST;
           brother: ^AST;
@@ -62,6 +64,13 @@ AstInterface:
 			enter other[]
 			exit (other[] = THIS(AST)[])
 			#);
+		  isSlot: booleanValue
+		    (# <<SLOT ASTIsSlot: doPart>> #);
+		  theSlot:
+		    (# slot: ^SlotDesc;
+			<<SLOT ASTtheSlot: doPart>>
+			exit slot[]
+			#);
 		  index:
 		    (#
 			exit -1
@@ -72,16 +81,8 @@ AstInterface:
 			exit b
 			#);
 		  semanticError:
-		    (# error: @integer;
-			enter error
-			do (if error <> 0 then
-			      'setting error: ' -> puttext;
-			      error -> putint;
-			      ' of ' -> puttext;
-			      symbol -> grammartable.beta.symbolToName -> putline;
-				  
-				  exception (# #);
-			    if);
+		    (# 
+			enter (# enter  error do (if error > 0 then true -> hasSemanticError; else false -> hasSemanticError if); #)
 			exit error
 			#);
           dump:<
@@ -92,8 +93,16 @@ AstInterface:
             <<SLOT ASTDump: doPart>>
             #);
        #);
+	   
+	 UnExpanded: AST
+	   (# <<SLOT UnExpandedLib: attributes>>;
+	      dump::<
+		    (#
+			<<SLOT UnExpandedDump: doPart>>
+			#);
+	   #);
      
-     Expanded: AST
+     Expanded: UnExpanded
        (# noOfsons:
             (# sons: @integer;
             <<SLOT ExpandedNoOfSons: doPart>>
@@ -171,22 +180,6 @@ AstInterface:
             (# <<SLOT ListDump: doPart>> #);
        #);
      
-     UnExpanded: AST
-       (# (* value: ^text; *)
-	      <<SLOT UnExpandedLib: attributes>>;
-	      theSlot:
-		    (#  aSlot: ^SlotDesc;
-			enter aSlot[]
-			exit aSlot[]
-			#);
-		  isSlot:
-		    (# b: @boolean;
-			enter b
-			exit b
-			#);
-          dump::<
-            (# <<SLOT UnExpandedDump: doPart>> #);
-       #);
      Optional: AST
        (# dump::<
             (# <<SLOT OptionalDump: doPart>> #);
@@ -195,6 +188,9 @@ AstInterface:
        (# <<SLOT SlotDescLib: attributes>>;
 	      value: [0] @char;
 		  lgth: @integer;
+		  nextSlot: ^SlotDesc;
+		  origin: ^AST;
+		  nextLib: ^AST;
 	      name:
 		    (# t: ^Text;
 			do &Text[] -> t[];
@@ -290,12 +286,12 @@ AstInterface:
        (# name:
             (#
             enter nameT[]
-            exit nameT[]
+            exit nameT.copy
             #);
           fullname:
             (#
             enter fullnameT[]
-            exit fullnameT[]
+            exit fullnameT.copy
             #);
           father:
             (#
@@ -303,20 +299,18 @@ AstInterface:
             exit fatherR[]
             #);
           type:
-            (#
-            exit fragType
-            #);
+            (# exit fragType #);
 	      category:
             (# sy: @integer;
 			do '-- fragment.category' -> putline;
             exit sy
             #);
 		  reset:< (# do INNER #);
-		  bindToOrigin:
+		  bindToOrigin:<
 		    (# f: ^FragmentForm;
 			   op: ^SlotDesc;
 			enter f[]
-			do '-- bindToOrigin' -> putline;
+			do INNER;
 			exit op[]
 			#);
           init:<
@@ -338,6 +332,7 @@ AstInterface:
           prop: ^PropertyList;
           nameT, fullnameT: ^text;
           fatherR: ^FragmentGroup;
+		  originR: ^FragmentGroup;
           fragType: @integer;
        do INNER;
        #);
@@ -351,6 +346,7 @@ AstInterface:
        (# <<SLOT FragmentFormLib: attributes>>;
 	      root: ^AST;
 		  binding: ^slotDesc;
+		  firstSlot: ^SlotDesc;
 		  open:
 		    (#
 			exit THIS(FragmentForm)[]
@@ -360,11 +356,16 @@ AstInterface:
             <<SLOT FragmentFormCategory: doPart>>
             exit sy
             #);
+		  scanSlots:
+		    (# current: ^SlotDesc;
+			<<SLOT FragmentFormScanSlots: doPart>>
+			#);
 		  fragNode:
 		    (* This is a strange operation used by the compiler *)
 		    (#
 			exit (0, this(FragmentForm)[])
 			#);
+	      init::< (# do FormType -> fragtype; INNER #);
           grammar: ^treeLevel
        #);
      newFragmentGroup:
@@ -390,21 +391,19 @@ AstInterface:
             (# current: ^Include;
             <<SLOT FragmentGroupScanIncludes: doPart>>
             #);
-		 
+		  bindToOrigin::
+		    (# <<SLOT FragmentGroupBindToOrigin: doPart>> #);
 		  bind:
 		    (# f: ^FragmentForm;
 			   op: ^SlotDesc;
 			enter f[]
-			do '-- bind' -> putline;
+			<<SLOT FragmentGroupBind: doPart>>
 			exit op[]
 			#);
 		  scanSlots:
 	        (# current: ^slotDesc;
-			do '-- scanSlots' -> putline;
-			   (if false then
-			      INNER;
-			   if);
-	        #);
+			<<SLOT FragmentGroupScanSlots: doPart>>
+			#);
 		  markAsChanged: protect
 		    (# #);
 		  realOpen: protect
@@ -440,6 +439,8 @@ AstInterface:
 			enter filename[]
 			<<SLOT FragmentGroupLoad: doPart>>
 			#);
+	     init::<
+		   (# do GroupType -> fragType; INNER #);
 		 pack::
 		   (# <<SLOT FragmentGroupPack: doPart>> #);
 		 unPack::
@@ -450,7 +451,6 @@ AstInterface:
           fragmentList: @ContainerList
             (# element:: FragmentForm;
             #);
-          originR: ^FragmentGroup;
           controller: @
             (# status: @integer;
             #);
@@ -588,11 +588,13 @@ AstInterface:
                  (# goal: @integer;
                     input: ^Stream;
                     root: ^AST;
-                 enter (goal, input[])
+					frag: ^FragmentForm;
+                 enter (goal, input[], frag[])
                  <<SLOT parserParse: doPart>>
                  exit root[]
                  #);
                trace: @boolean;
+			   lastCH: @char;
                private: @<<SLOT parserPrivate: descriptor>>;
             #);
           kindArray: [0] @int8u;
@@ -663,6 +665,7 @@ AstInterface:
 			#);
 		  switch: [100] @boolean;
 	   #);
+	 private: @<<SLOT AstInterfacePrivate: descriptor>>;
   do AstLevelInit;
      INNER;
   #);

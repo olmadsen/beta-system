@@ -2,7 +2,9 @@ ORIGIN '../dependency';
 INCLUDE '../arch';
 INCLUDE '~beta/containers/list';
 INCLUDE 'xmisk';
-
+INCLUDE '../betacfl';
+INCLUDE '../gram';
+INCLUDE 'findstring';
 
 -- astInterfaceLib: attributes --
 
@@ -17,10 +19,51 @@ getmodtime:
 
 -- DependencyGraphLib: attributes --
 
+PreMatch: booleanvalue
+     (* Attempt to match 
+      * build selector:     e.g. 'nti'
+      * with targetMachine: e.g. 'nti_ms'
+      * 
+      * Note! This version has been written
+      * to match 'nti' with 
+      * either 'nti_ms' or 'nti_gnu'
+      *)
+     (# selector: ^text; 
+     enter selector[]
+     do (if switch[20] then
+            '\nMatch targetMachine: "'->puttext;
+            targetMachine[] -> puttext;
+            '" with build selector: "' -> puttext;
+            selector[] -> puttext;
+        if);
+        L:
+          (# pos: @integer;
+             T: ^text
+          do targetmachine.scanAll
+             (#
+             do pos+1 -> pos;
+                (if ch = '_' then 
+                    (1,pos-1) 
+                      -> targetmachine.sub 
+                      -> T[];
+                    T[] 
+                      -> selector.equalNCS 
+                      -> value;
+                    leave L
+             if)#)
+          #);
+        (if switch[20] then
+            (if value then '" MATCH FOUND!'->putline
+             else '" no match!' -> putline
+        if)if)
+     #);
+	 
 PrintFN:
   (# fg: ^FragmentGroup;
   enter fg[]
-  do fg.fullname -> putline;
+  do '\'' -> put;
+     fg.fullname -> puttext;
+	  '\'' -> put;
   #);
   
 Groups: ContainerList
@@ -45,6 +88,8 @@ FunnyGroups: ContainerList
   #);
 FunnyElement:
    (# g: ^FragmentGroup;
+	enter g[]
+	exit THIS(FunnyElement)[]
 	#);
 
 -- scanNonCompiledLib: attributes --
@@ -106,7 +151,39 @@ CreateObjFileName:
 
 
 -- scannerLib: attributes --
-
+TellDescriptorsAboutForms:
+  (** Stupid hack **)
+  (# fg: ^FragmentGroup;
+     gram: @grammar;
+  enter fg[]
+  do fg.scan
+       (# frag: ^FragmentForm;
+		    root: ^Expanded;
+			 descform: ^beta.DescriptorForm;
+			 dopart: ^beta.DoPart;
+			 mainpart: ^beta.MainPart;
+			 betagram: ^beta;
+		 do grammartable.beta[] -> betagram[];
+		    current[] -> frag[];
+			 frag.root[] -> root[];
+			 (if root.symbol = gram.DescriptorForm then
+			    root[] -> descform[];
+				 frag[] -> descform.form[];
+		    if);
+			 (if root.symbol = gram.DoPart then
+			    root[] -> dopart[];
+				 frag[] -> dopart.form[];
+		    if);
+			 (if root.symbol = gram.MainPart then
+			    root[] -> mainpart[];
+				 frag[] -> mainpart.form[];
+			 if);
+		    gram.objectDescriptor -> root.suffixWalkForProd
+			   (# scanCat:: betagram.ObjectDescriptor;
+				do frag[] -> current.form[];
+				#);
+		 #);
+  #);
 CloseGroup:
   (# g: ^fragmentGroup
   do INNER;
@@ -127,6 +204,7 @@ ProcessGroup:
   (# fg: ^FragmentGroup;
   enter fg[]
   do (if fg.controller.status < ProcessMark then
+        fg[] -> &FunnyElement -> DGP.grouplist.append;
         fg[] -> beforeGroup;
         ExamineMark -> fg.controller.status;
         (if fg.origin = NONE then
@@ -140,21 +218,37 @@ ProcessGroup:
 		    do current.fullname -> ProcessGroupByName;
 			 #);
 		  ProcessMark -> fg.controller.status;
+		  fg[] -> ProcessProperties;
 		  (if (fg[] -> afterGroup) then
+		    (** Stupid hack:
+			  ** Tell all objectDescriptors in the group what form they belongs to-
+			  **)
+			 fg[] -> TellDescriptorsAboutForms;
 		    fg[] -> addTranslate;
 		  if);
-		  fg[] -> ProcessProperties;
-		  
+		  fg.scan
+		    (#
+			 do (if 'program' -> (current.name).equalNCS then
+			       true -> DGP.hasProgramSlot;
+				 if);
+			 #);
      if);
   #);
 ProcessProperties:
   (# fg: ^FragmentGroup;
+     PropError:
+     (# p,t: ^text; n: @integer; warning: @boolean;
+     enter(p[],t[], n)
+     do (fg[],p[],t[],n,CloseGroup(#do fg[] -> g[]#))
+	         -> PropertyException
+     #);
   enter fg[]
   do fg.prop.scanProp
 			(#
 				doProp::
 				  (# t: ^text;
 					  on: @boolean;
+					  done: @boolean;
 				  do prop.makelc;
 					  (if true
 						//'body' -> prop.equal then
@@ -186,6 +280,265 @@ ProcessProperties:
 								  (#
 								  do (if on then
 											(s[], t[]) -> thePathHandler.convertFilePath -> ProcessBodyByName;
+									  if);
+								  #)
+							#);
+					   //'build' -> prop.equal then
+						   (# buildArgs: @ containerList 
+		    (# element ::
+			 (# machineId: ^text;
+			    mArgs: [3] ^text; top: @integer
+			 #);
+		       add: @
+			 (# machineId: ^text;
+			    e: ^element
+			 enter machineId[]
+			 do &element[] -> e[];
+			    machineId[] -> e.machineId[];
+			    e[] -> append;
+			    e[] -> current[]
+			 #);
+		       current: ^element;
+		       addMarg: @
+			 (# ma: ^text
+			 enter ma[]
+			 do (if (current.top + 1 -> current.top)
+				> current.mArgs.range
+				then
+				current.mArgs.range -> current.mArgs.extend
+			    if);
+			    ma.copy -> current.mArgs[current.top][]
+			 #);
+		       findThisTarget:
+			 (# default,pre,thiss: [3] ^element;
+			    dTop,pTop,tTop: @integer;
+			    current: ^ element;
+			 do scan
+			    (#
+			    do (if true
+				// targetMachine[] -> current.machineId.equal
+				   then
+				   (if (tTop+1->tTop) > thiss.range then
+				       thiss.range -> thiss.extend
+				   if);
+				   current[] -> thiss[tTop][] (* exact match *)
+				// defaultId[] -> current.machineId.equal then
+				   (if (dTop+1->dTop) > default.range then
+				       default.range -> default.extend
+				   if);
+				   current[] -> default[dTop][]
+				// current.machineId[] -> preMatch then
+				   (if (pTop+1->pTop) > pre.range then
+				       pre.range ->pre.extend
+				   if);
+				   current[] -> pre[pTop][]
+			    if)#);
+			    (if tTop > 0 then
+				(for i: tTop repeat
+				     thiss[i][]-> current[];
+				     INNER
+				for)
+			     else (* no exact match *)
+				(if pTop > 0  then
+				    (for i: pTop repeat
+					 pre[i][] -> current[];
+					 INNER
+				    for);
+				 else
+				    (if dTop > 0 then
+					(for i: dTop repeat
+					     default[i][] -> current[];
+					     INNER
+					for);
+				     else
+					(prop[],targetMachine[],6)->PropError
+			    if)if)if)
+			 #);
+		       display:
+			 (#
+			 do #);
+		       check:
+			 (# e: ^element; arg: @text; T: ^text;
+			    m,m2: @integer; exeCommand: @boolean
+			 enter e[]
+			 do (if (e.top = 0) or (e.top = 2) then
+				(prop[],targetMachine[],7) -> PropError
+			     else
+				(* we MUST save objfile before replacing '/' by ':'
+				 * on Mac's below, since the pathhandler otherwise will
+				 * NOT expand objfile to a full path! Yak:-(
+				 *)
+				e.mArgs[1].copy
+
+				  -> expandMacro2
+				  -> objFile[]
+				  -> EgetModTime -> (m,T[]);
+
+				(if m = -1 then
+				    true -> exeCommand
+				 else
+				    (for i: e.top - 2 repeat
+					 e.mArgs[1 + i][]
+					   -> expandmacro2
+					   -> EgetModTime
+					   -> (m2,T[]);
+					 T[] -> isFile;
+					 (if (m < m2) or (m2 = -1) then
+					     (* if m2 = -1 then T is NOT
+					      * existing, i.e. the command
+					      * cannot be executed; the command
+					      * is, however, marked for execution
+					      * anyway, since it may be created
+					      * later, and a possible job-file
+					      * may then be ok
+					      *)
+					     true -> exeCommand
+					 if)
+				    for)
+				if)
+			    if);
+			 exit exeCommand
+			 #);
+		       EgetModTime:
+			 (# t: ^text; m: @integer
+			 enter t[]
+			 do (t[],fg.nameT[] -> stripPathName)
+			      -> thePathHandler.convertFilePath
+			      -> t[];
+			    t[] -> getModTime -> m;
+			 exit(m,t[])
+			 #);
+		       expandCommand:
+			 (# e: ^element; arg: @text; T: ^text;
+			    lastSlash,argNo: @integer
+			 enter e[]
+			 do e.mArgs[e.top][] -> t[]; (* the command *)
+
+			    (* First we expand args $0,$1, $2, ...;
+			     * args must be expanded before $$, since args
+			     * may contain $$.
+			     * Expansion is made backwards
+			     *    ..., $2, $1, $0
+			     * since the algoritm belwo may othwervise
+			     * replace e.g. $1 in $11
+			     *)
+			    (for ix: e.top - 1 repeat
+				 arg.clear;
+				 '$'->arg.put;
+				 e.top - ix - 1 -> argNo -> arg.putint;
+				 findArg:
+				   arg[] -> T.findString
+				 (#
+				 do (inx,inx+(argNo div 10 + 1)) -> T.delete;
+				    (e.mArgs[argNo + 1][],inx) -> T.insert;
+				    restart findArg (* same arguent may appear
+						     * several times
+						     *)
+				 #);
+			    for);
+
+			    (* replace double $$ by targetDirectory *)
+			    T[] -> ExpandMacro2 -> T[];
+                            (* Replace '/' by native directory char.  Has
+                             * no effect on unix, where native directory
+                             * char is '/'.
+                             * MUST wait until all expandmacro2 calls have been done,
+                             * since '.../$$/...' will become '...\$$\...' on nti, which will
+                             * result in NO expansion of $$.
+                             *)
+                            '/' -> t.findall(#do (thePathHandler.directoryChar,inx) -> t.inxPut #);
+			    (fg.nameT[],thePathHandler.currentDirectory)
+			      -> thePathHandler.convertFilePath
+			      -> directory[];
+			    thePathHandler.directoryChar
+			      ->directory.findAll(#do inx -> lastSlash #);
+			    (if lastSlash > 0 then
+				(1,lastSlash) -> directory.sub -> directory[]
+			    if);
+			    T[] -> command[];
+			 #);
+		    #);
+		  textList: containerList(# element:: text #);
+		  defaultId: @ text;
+		  target: ^buildArgs.element;
+		  objFile,directory,command: ^text;
+	       do 'default'->defaultId;
+		  buildArgs.clear;
+		  scanParameters
+		  (# doName:: (# do n[] -> buildArgs.add #);
+		     dostring::
+		       (#
+		       do (if buildArgs.current[] = NONE then
+			      (prop[],targetMachine[],8) -> PropError;
+			      defaultId[] -> buildArgs.add
+			  if);
+			  s[] -> buildArgs.addMarg
+		       #)
+		  #);
+		  (if switch[20] then buildArgs.display if);
+		  buildArgs.findThisTarget
+		  (#
+		  do (if current[] -> buildArgs.check then
+			 current[] -> buildArgs.expandCommand
+		      else
+			 current[] -> buildArgs.expandCommand;
+			 (* expandCommand is executed to make the
+			  * dependent files and 'directory' available
+			  * for tools like betatar, even when no
+			  * build is necessary
+			  *)
+			 NONE->command[]
+			   (* NONE indicates to the compiler
+			    * that no build is necessary *)
+		     if);
+                     (if switch[20] then
+                         (if objfile[] = none then 
+                             'objfile none'->putline
+                          else
+                             objFile[] -> putline
+                         if);
+                         (if fg[] = none then
+                             'fg NONE' -> putline
+                          else
+                             fg.nameT[] -> putline
+                         if)
+                     if);
+		     ((objFile[],fg.nameT[]->stripPathName)
+		       -> thePathHandler.convertFilePath
+			,directory[]
+			,current.mArgs[2:current.top-1]
+			,command[])
+		       -> BuildProperty;
+		     NONE -> command[]; (* there may be several entries
+					 * pr platform so old value of
+					 * command should be deleted
+					 *)
+		  #)
+	       #)
+						
+						//'linkopt' -> prop.equal then
+						   false -> on;
+							false -> done;
+							scanParameters
+							(# doName::
+								  (#
+								  do (if 'default' -> n.equal then
+								         true -> on;
+									  else
+								        (if TargetMachine[] -> n.equal then
+											   true -> on;
+										   else
+											   false -> on;
+									     if);
+									  if);
+								  #);
+								doString::
+								  (#
+								  do (if not done then
+								       (if on then
+											  (linkOptProperty, s[]) -> currentProperty;
+											  true -> done;
+									    if);
 									  if);
 								  #)
 							#);

@@ -1,6 +1,7 @@
 ORIGIN '../astlevel';
 INCLUDE '~beta/bobs/bobs';
 INCLUDE '~beta/bobs/private/lex';
+INCLUDE '../semanticerrortext';
 
 -- astLib: attributes --
 
@@ -49,11 +50,20 @@ do tableFileName[] -> parser.init;
 do &genRefArray[symbol][] -> theAst[];
    symbol -> theAst.symbol;
    kindArray[symbol] -> theAst.astkind;
-   (* THIS(TreeLevel)[] -> theAst.gram[]; *)
    
 -- TreeLevelSymbolToName: doPart --
-do parser.private.labelArray[symbol][] -> name[];
-
+do (if symbol < 1 then
+      (if symbol
+	     //prodno.unExpanded then
+		    'UnExpanded' -> name[];
+	  else
+	     &Text[] -> name[];
+		 symbol -> name.putint;
+	  if);
+   else
+      parser.private.labelArray[symbol][] -> name[];
+   if);
+   
 -- TreeLevelKindOfSymbol: doPart --
 do 'TreeLevelKindOfSymbol: doPart' -> putline;
 
@@ -63,27 +73,56 @@ do &UnExpanded[] -> theAst[];
    kinds.unExpanded -> theAst.astkind;
 
 -- TreeLevelNewAst: doPart --
-do 'TreeLevelNewAst: doPart' -> putline;
+do (if symbol
+      //prodNo.nameAppl then
+	     &NameAppl[] -> new[];
+		 prodno.nameAppl -> new.symbol;
+		 kinds.nameAppl -> new.astKind;
+   else
+       symbol -> symbolToAst -> new[];
+   if);
 
 -- TreeLevelPretty: doPart --
-do (# 
+do (# level: @integer;
+
       printNode:
         (# node: ^AST;
         enter node[]
-        do 
-		   (if node.astkind
-			//kinds.interior then
-			   (if nodeClassArray[node.symbol]
-				//kinds.list then
-				   node[] -> printList;
-				//kinds.cons then
-				   node[] -> printCons;
+        do level - 1 -> level;
+		   (if level > 0 then
+			   (if node.hasSemanticError then
+				   output.newline;
+				   node.semanticError -> semanticErrorText -> output.putline;
 			   if);
-			//kinds.nameAppl//kinds.nameDecl//kinds.const then
-			   node[] -> printValue;
-			//kinds.string then
-			   node[] -> printString;
-		   if);
+			   (if node.astkind
+				//kinds.interior then
+				   (if nodeClassArray[node.symbol]
+					//kinds.list then
+					   node[] -> printList;
+					//kinds.cons then
+					   node[] -> printCons;
+				   if);
+				//kinds.nameAppl//kinds.nameDecl//kinds.const then
+				   node[] -> printValue;
+				//kinds.string then
+				   node[] -> printString;
+				//kinds.unExpanded then
+				   (if node.isSlot then
+				      '<<SLOT ' -> output.puttext;
+					  (node.theSlot).name -> output.puttext;
+					  ':' -> output.put;
+					  (node.theSlot).category -> symbolToName -> output.puttext;
+					  '>>' -> output.puttext;
+				   if);
+			   if);
+		  else
+		     (if node.symbol > 0 then
+			    '<<' -> output.puttext;
+				node.symbol -> symbolToName -> output.puttext;
+				'>>' -> output.puttext;
+	         if);
+		  if);
+		  level + 1 -> level;
         #);
       outputNode:
         (# node: ^AST;
@@ -212,7 +251,8 @@ do (#
         #);
       depth: @integer;
 	  
-   do node[] -> printNode;
+   do  5 -> level;
+      node[] -> printNode;
    #)
 
 
@@ -227,7 +267,7 @@ do (TableFileName[],True,isEos,docParser,dashInNames,
    (* private.printRules; *)
    
 -- parserParse: doPart --
-do (goal, input[]) -> private.TreeParser -> root[];
+do (goal, input[], frag[]) -> private.TreeParser -> root[];
 
 -- parserPrivate: descriptor --
 (# B: @BOBS;
@@ -368,16 +408,78 @@ do (goal, input[]) -> private.TreeParser -> root[];
           (# shift::
                (# handleNonTerminal: @
                     (# value: ^Text;
-                       node: ^UnExpanded;
+                       node: ^AST;
                        symbol: @integer;
+
+					   
+					   END: (# exit 0 #);
+					   token: @char;
+					   low: @char;
+					   next: @
+					     (#
+						 do (if value.eos then
+						       END -> token;
+							else
+							   value.get -> token;
+							if);
+						 #);
+					   slotName: ^text;
+					   slot: ^SlotDesc;
                     do &Text[] -> value[];
                        scan
                        (#
                        do ch -> value.put;
                        #);
-                       symb -> b.prodSyWithNonZeroLabelNo -> symbol;
-                       symbol -> newUnExpandedForParser -> node[];
-                       (* value[] -> node.value[]; *)
+					   
+					   value.reset;
+					   NONE -> slotname[];
+					   next;
+					   (if token//'S'//'s' then
+					      next;
+						  (if token//'L'//'l' then
+						     next;
+							 (if token//'O'//'o' then
+							    next;
+								(if token//'T'//'t' then
+								   next;
+								   skip:
+								     (if token -> ascii.isWhiteSpace then
+									    next;
+										restart skip;
+									 if);
+								   &Text[] -> slotName[];
+								   readname:
+								     (if (token -> ascii.isLetter) OR (token -> ascii.isDigit) OR (token = '_') then
+									     token -> slotName.put;
+										 next;
+										 restart readname;
+								     if);
+								    (if slotName.length = 0 then
+								       NONE -> slotname[];
+								    if);
+							     if);
+						     if);
+					      if);
+					   if);
+					   symb -> b.prodSyWithNonZeroLabelNo -> symbol;
+                       symbol -> newAstForParser -> node[];
+					   kinds.unExpanded -> node.astKind;
+					   prodNo.unExpanded -> node.symbol;
+					   
+					   (if slotname[] <> NONE then
+						  &SlotDesc[] -> slot[];
+						  symbol -> slot.category;
+						  kinds.slotDesc -> slot.astKind;
+						  frag.firstSlot[] -> slot.nextSlot[];
+						  slot[] -> frag.firstSlot[];
+						  slotName -> slot.value;
+						  slotName.lgth -> slot.lgth;
+						  
+						  slot[] -> node.son[];
+						  node[] -> slot.brother[];
+						  1 -> slot.status;
+					   if);
+
                        node[] -> stack[stacktop][];
                     #);
                do stacktop + 1 -> stacktop;
@@ -568,12 +670,14 @@ do (goal, input[]) -> private.TreeParser -> root[];
           #);
         ok: @boolean;
         root: ^AST;
-     enter (goal, input[])
+		frag: ^FragmentForm;
+     enter (goal, input[], frag[])
      do 1 -> stacktop;
         1 -> lexlineno;
         &input.get[] -> lexstream.nextch[];
         &input.eos[] -> lexstream.iseos[];
         (goal -> B.LabLhs, lexstream[]) -> bobsparse -> ok;
+		B.lastCH -> lastCH;
         (if trace then
             'bobs are done' -> putline;
         if);
@@ -742,3 +846,4 @@ do (goal, input[]) -> private.TreeParser -> root[];
         for);
      #);
 #)
+
