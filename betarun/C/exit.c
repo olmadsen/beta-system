@@ -115,12 +115,16 @@ void BetaError(errorNo, theObj)
 	  fprintf(output, "(continuing)\n");
 	  fflush(output);
 	  break; /* Don't BetaExit() */
-	} 
+	}
+	/* Normal Qua error: Display BETA stack.
+	 * Adjust StackEnd before calling DisplayBetaStack.
+	 */
 #ifndef sparc
 #if defined(linux) || defined(nti)
-	(long *)StackEnd += 9;
+	(long *)StackEnd += 10;
 	/* We have performed 'pushad', and also we have a return
 	 * address from call Qua to ignore.; see Qua.run.
+	 * Also the compiler has pushed %edi during the qua-check.
 	 */
 #else
 #ifdef mc68020
@@ -203,6 +207,13 @@ void BetaError(errorNo, theObj)
 	    return;
 	  }
 	}
+	/* Normal RefNone error: Display BETA stack.
+	 * Adjust StackEnd before calling DisplayBetaStack.
+	 */
+	StackEnd += 21
+	  /* Ignore 4 adr regs, and 8 dataregs+tags (see RefNone
+	   * in Misc.run), and return address fron "jsr RefNone".
+	   */;
       }
 #endif /* mac */
 #if defined(linux) || defined(nti)
@@ -268,29 +279,32 @@ void BetaError(errorNo, theObj)
 	     * to RefNone immediately after calling BETA. */
 
 #ifdef linux
-
 	    asm volatile ("pushl %ebp # Save base pointer for C");
 	    asm volatile ("movl _LazyItem,%edi # Call lazy handler");
 	    asm volatile ("movl (%edi),%edx");
 	    asm volatile ("movl -4(%edx),%edx");
 	    asm volatile ("call *%edx");
 	    asm volatile ("popl %ebp #restore base pointer");
-
 #else
-
-	    /* Borland C is not good at inline assembler */
+	    /* NTI: Borland C is not good at inline assembler */
 	    CallLazyItem();
-
-#endif
+#endif /* linux */
 
 	    InLazyHandler = 0;
 		  
 	    return;
 	  }
 	}
+	/* Normal RefNone error: Display BETA stack.
+	 * Adjust StackEnd before calling DisplayBetaStack.
+	 */
+	StackEnd += 13
+	  /* Ignore 12 pushed registers/tags (see RefNone in Misc.run)
+	   * and return address for "call RefNone"
+	   */;
       }
-#endif
-#endif
+#endif /* linux || nti */
+#endif /* RTLAZY */
 
       /* If not QUA error with QuaCont or 
        * REFNONE error with lazy reference, 
