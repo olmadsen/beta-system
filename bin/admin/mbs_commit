@@ -1,22 +1,203 @@
 #!/usr/local/bin/perl
 
+# (c) Copyright 2002 Mjølner Informatics
+# Written by Erik Corry
+
+# Utility for committing in betarun.
+# You don't have to use this script if you don't want to.
+# It has the function of:
+#   Incrementing the version number in version.c
+#   Ensuring that version.c is committed together with other files
+#   Ensuring that there is a line that says:
+#        Betarun version number: 123
+#      in the commit message.
+#   If you are trying to commit as beta or root or administrator
+#      then you also need a line that says:
+#        Developer: beeblebrox
+#      or whoever you are (use the -u option for this)
+# If you have the CVS/Template file (you have this for new developments)
+#    then you can just update the most minor version number in version.c
+#    and then commit from the top level of betarun instead.
+# See also the usage message (-help)
+
+
 use Cwd;
+use File::Copy;
 
 $minorupdate = 0;
-if ($ARGV[0] eq "+") {
-    $minorupdate = 1;
-    shift @ARGV;
+
+while (1) {
+    print "ARGV0 = '$ARGV[0]'\n";
+    if ($ARGV[0] eq "+") {
+	$minorupdate = 1;
+	shift @ARGV;
+    } elsif ($ARGV[0] eq "-") {
+	$dontupdate = 1;
+	shift @ARGV;
+    } elsif ($ARGV[0] eq "-k") {
+	$dontdeleteversion = 1;
+	shift @ARGV;
+    } elsif ($ARGV[0] eq "-m") {
+	$message = $ARGV[1];
+	shift @ARGV;
+	shift @ARGV;
+    } elsif ($ARGV[0] eq "-u") {
+	$user = $ARGV[1];
+	shift @ARGV;
+	shift @ARGV;
+    } elsif ($ARGV[0] eq "-n") {
+	$donothing = 1;
+	shift @ARGV;
+    } elsif ($ARGV[0] eq "--") {
+	shift @ARGV;
+        last;
+    } elsif ($ARGV[0] =~ /^-/) {
+        print STDERR "Usage: mbs_commit [options] [file [file ...]]\n";
+        print STDERR "   -m \"message\"\n";
+        print STDERR "   -u username_to_log\n";
+        print STDERR "   -n    # Don't actually commit (do everything else!)\n";
+        print STDERR "   -k    # Keep version.c (don't delete it and get the newest from the server\n";
+        print STDERR "   +     # Don't increase version number, just add +\n";
+        print STDERR "   -     # Don't increase version number at all\n";
+        print STDERR "   --    # no more options\n";
+        exit (2);
+    } else {
+	last;
+    }
 }
 
-if ($ARGV[0] eq "-m") {
-    $message = $ARGV[1];
-    shift @ARGV;
-    shift @ARGV;
+if (!defined($ARGV[0])) {
+    $ARGV[0] = ".";
 }
 
 $cwd = cwd;
+$origcwd = $cwd;
+
+$path = "";
 
 print "CWD is '$cwd'\n";
 
-#while (! -f "version.c") {
-    
+# Find the top dir of betarun by looking for a dir where there is a file
+# called version.c.  Also, since there is a version.c in the C subdir, we
+# also check that there is no file called initialize.c
+while (! -f "version.c" || -f "initialize.c") {
+    # Remove trailing slash from dir name
+    # Unless the path is just /
+    if ($cwd !~ /^([a-zA-Z]:)?[\\\/]$/) {
+        $cwd =~ s/[\\\/]$//;
+    }
+    # Get last part of directory name
+    if ($cwd =~ /([\\\/])([^\\\/]+)$/ox) {
+        $cwd = $`;
+        $lastpart = $2;
+        $separator = $1;
+        $path = $lastpart . $separator . $path;
+        print "CDed up to $cwd\n";
+        chdir("..");
+    } else {
+        print STDERR "Couldn't find version.c starting from `$origcwd'\n";
+        exit (1);
+    }
+}
+
+if (!$dontupdate) {
+    open(NEWVERSION, ">", "newversion.c") || die "Can't open the file newversion.c for writing\n";
+}
+
+if (!$dontdeleteversion) {
+    move("version.c", "oldversion.c");
+
+    if (system("cvs up version.c")) {
+	print STDERR "Couldn't get version.c from CVS server\n";
+	move("oldversion.c", "version.c") || print STDERR "Failed to restore version.c!\n";
+	exit(2);
+    } else {
+	unlink("oldversion.c") || die "Couldn't delete oldversion.c\n";
+    }
+}
+
+open(VERSION, "<", "version.c") || die "Can't open the file version.c\n";
+
+while (defined($line = <VERSION>)) {
+    if ($line =~ /(BETARUN VERSION \d+.\d+\()(\d+)(\+?)\)/) {
+        if ($minorupdate) {
+	    $line = "$`$1$2+)$'";
+            $version = "$2+";
+        } elsif (!$dontupdate) {
+	    $line = "$`$1" . ($2 + 1) . ")$'";
+            $version = $2 + 1;
+        } else {
+	    $version = $2;
+        }
+    }
+    if (!$dontupdate) {
+	print NEWVERSION $line || die "Errors with newversion.c\n";
+    }
+}
+
+close (VERSION);
+
+if (!$dontupdate) {
+    close (NEWVERSION) || die "Errors with newversion.c\n";
+    move("newversion.c", "version.c") || die "Couldn't move newversion.c over version.c\n";
+}
+
+open(MESSAGE, ">", "message.txt") || die "Couldn't open message.txt for writing\n";
+if (defined($message)) {
+    print MESSAGE "$message\n";
+} else {
+    print MESSAGE "\n";
+}
+
+if (-f "CVS/Template") {
+    open(TEMPLATE, "<", "CVS/Template") || die "Couldn't open CVS/Template for reading\n";
+    while (defined ($line = <TEMPLATE>)) {
+        if ($line =~ /Betarun version number:/) {
+            $line = "$`$& $version$'";
+        } elsif ($line =~ /Developer:/ && defined($user)) {
+            $line = "$& $user$'";
+        }
+        print MESSAGE $line;
+    }
+} else {
+    if (defined($user)) {
+        print MESSAGE "Developer: $user\n";
+    }
+    print MESSAGE "Betarun version number: $version\n";
+}
+
+if (!defined($message)) {
+    if (open(DIFFS, "cvs diff -u version.c " . join(" ", map {$path . $_} @ARGV) . "|")) {
+        while (defined($line = <DIFFS>)) {
+            print MESSAGE "CVS: $line";
+        }
+        close(DIFFS);
+    }
+}
+
+close(MESSAGE) || die ("Couldn't write message.txt\n");
+
+if (!defined($message)) {
+    if ($^O =~ /win/i) {
+        $return = system("notepad", "message.txt");
+    } else {
+        if (defined($ENV{"VISUAL"})) {
+            $return = system($ENV{"VISUAL"}, "message.txt");
+        } elsif (defined($ENV{"EDITOR"})) {
+            $return = system($ENV{"EDITOR"}, "message.txt");
+        } else {
+            $return = system("vi", "message.txt");
+        }
+    }
+    if ($return) {
+        print STDERR "Editor failed!\n";
+        exit (2);
+    }
+}
+
+if ($donothing) {
+    print join(" ", "cvs", "-f", "message.txt", "commit", "-F", "version.c", map {$path . $_} @ARGV, "\n");
+} else {
+    print "!!!\n";
+    #exec("cvs", "-f", "message.txt", "commit", "-F", "version.c", map {$path . $_} @ARGV);
+}
