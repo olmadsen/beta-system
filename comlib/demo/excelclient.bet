@@ -23,8 +23,6 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
    
    excel_progid: (# exit 'Excel.Application' #);
    
-   use_abstraction: (# exit true #);
-   
    use_dual: (# exit false (* does NOT work?? *)#);
    dual: ^Workbooks;
    RHS: @int32holder;
@@ -49,7 +47,15 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
         cArgs, cNamedArgs, maxArgs, maxNamedArgs: @integer;
         
         release:
-          (# 
+          (# wstr: @wstring;
+          do (0,0,0,0,0,0) -> varg;
+             rgvarg.free;
+             (for i:cNamedArgs repeat
+                  (i-1) -> alpszArgNames.inxget -> wstr; wstr.free;
+             for);
+             alpszArgNames.free;
+             rgdispidNamedArgs.free;
+             0 -> cArgs -> cNamedArgs -> maxArgs -> maxNamedArgs;
           #);
         
         check: 
@@ -61,9 +67,14 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
                  maxArgs - rgvarg.range -> add;
                  add -> rgvarg.extend;
              if);
+             (if alpszArgNames.range=0 then
+                 (* Make room for member name *)
+                 1 -> alpszArgNames.new;
+                 1 -> rgdispidNamedArgs.new;
+             if);
              (if (name[]<>NONE) and (cNamedArgs+1>maxNamedArgs) then
                  ((2*alpszArgNames.range, cNamedArgs+1) -> max) -> maxNamedArgs;
-                 maxNamedArgs - alpszArgNames.range -> add;
+                 maxNamedArgs+1 - alpszArgNames.range -> add;
                  add -> alpszArgNames.extend;
                  add -> rgdispidNamedArgs.extend;
              if);
@@ -156,51 +167,22 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
         if);
         
         (* Now fill in the DISPPARAMS structure *)
-        (# dummy: @char do 
-           
-           params.rgdispidNamedArgs + 4 -> dparms.rgdispidNamedArgs;
+        params.rgdispidNamedArgs + 4 -> dparms.rgdispidNamedArgs;
         params.rgvarg -> dparms.rgvarg;
         params.cArgs -> dparms.cArgs;
-           cNamedArgs -> dparms.cNamedArgs;
-           '@@dparms: ' -> puttext; @@dparms -> putint; newline;
-           'params.cArgs: ' ->puttext; params.cArgs -> putint; newline;
-           'dparms.cArgs: ' ->puttext; dparms.cArgs -> putint; newline;
-        #);
+        cNamedArgs -> dparms.cNamedArgs;
+        
         (* Finally call invoke *)
-        (# dummy: @char do (dispidMember, IID_NULL, lcid, wAction, dParms[], vReturn[], NONE, NONE)
-         -> pDisp.Invoke
-             -> hr;#);
+        (# dummy: @char do 
+           (dispidMember, IID_NULL, lcid, wAction, dParms[], vReturn[], NONE, NONE)
+             -> pDisp.Invoke
+             -> hr;
+        #);
         (if hr.succeeded then
             'Invoke succeeded' -> putline;
-            'Awaiting key-press: ' -> puttext;
-            getline;
          else
             ('Invoke Failed', hr.value) -> ComErrorMessage;
         if);
-     #);
-   
-   GetDispId:
-     (# Name: ^text;
-        pDisp: ^IDispatch
-     enter (name[], pDisp[])
-     do wstr.init;
-        Name[] -> wstr.set;
-        1 -> rgszNames.new;
-        (wstr,0) -> rgszNames.inxPut;
-        (*(IID_NULL, rgszNames, 1, LOCALE_SYSTEM_DEFAULT, dispid[])
-          -> pDisp.GetIdsOfNames
-          -> hr;*)
-        (if hr.succeeded then
-            'Got Id for \'' -> puttext;
-            Name[]->puttext;
-            '\': ' -> puttext;
-            dispid.value -> putint;
-            newline;
-         else
-            ('GetIdsOfNames Failed', hr.value) -> ComErrorMessage;
-        if);
-        wstr.free;
-        rgszNames.free;
      #);
    
    dParms: @DispatchParams;
@@ -223,106 +205,35 @@ do 0->CoInitialize;
        'Succeeded creating component.'->putLine;
        
        'Invoking pDispExcelApp.Visible:' -> putline;
-       (if use_abstraction then
-           (NONE, true) -> dParms.putBoolean;
-           (pDispExcelApp[], 'Visible', dparms[], DISPATCH_PROPERTYPUT, NONE) 
-             -> CallInvoke;
-        else
-            'Invoking pDispExcelApp.Visible: Getting DispId' -> putline;
-           ('Visible', pDispExcelApp[]) -> GetDispId;
-           'Invoking pDispExcelApp.Visible: Calling Invoke' -> putline;
-           (* Set up parameters for Invoke *)
-           1 -> rgszNames.new;
-           (DISPID_PROPERTYPUT,0) -> rgszNames.inxPut;
-           varg[]->VARIANT_init
-           (# 
-           do VT_BOOL -> vt;
-              VARIANT_TRUE -> bool;
-           #);
-           @@varg -> params.rgvarg; (* Now we're getting insecure! *)
-           rgszNames->params.rgdispidNamedArgs;
-           1->params.cArgs;
-           1->params.cNamedArgs;
-           (dispid.value, IID_NULL, lcid, DISPATCH_PROPERTYPUT, params[], NONE, NONE, NONE)
-             -> pDispExcelApp.Invoke
-             -> hr;
-           (if hr.succeeded then
-               'Invoke succeeded' -> putline;
-            else
-               ('Invoke Failed', hr.value) -> ComErrorMessage;
-           if);
-           rgszNames.free;
-       if);
+       (NONE, true) -> dParms.putBoolean;
+       (pDispExcelApp[], 'Visible', dparms[], DISPATCH_PROPERTYPUT, NONE) 
+         -> CallInvoke;
+       dparms.release;
        
        'Adding a sheet to the workbook' -> putline;
+       (pDispExcelApp[], 'Workbooks', dparms[], DISPATCH_PROPERTYGET, varg1[]) 
+         -> CallInvoke;
        
-       (* Set up parameters for Invoke *)
-       'Getting DispId' -> putline;
-       ('Workbooks', pDispExcelApp[]) -> GetDispId;
-       
-       'Calling Invoke' -> putline;
-       
-       (* Set up parameters for Invoke *)
-       0->params.cArgs;
-       0->params.cNamedArgs;
-       (dispid.value, IID_NULL, lcid, DISPATCH_PROPERTYGET, params[], varg1[], NONE, NONE)
-         -> pDispExcelApp.Invoke
-         -> hr;
-       (if hr.succeeded then
-           'PropertyGet("Workbooks") succeeded' -> putline;
-        else
-           ('PropertyGet("Workbooks")', hr.value) -> ComErrorMessage;
-       if);
-       
-       'Invoking pDispExcelApp.WorkBooks.Add: Getting DispId' -> putline;
+       'Invoking pDispExcelApp.WorkBooks.Add:' -> putline;
+           
        varg1[] -> VARIANT_init(# do pdispVal->pdispWorkbooks[] #);
-       
-       ('Add', pdispWorkbooks[]) -> GetDispId;
-       
-       'Invoking pDispExcelApp.Workbooks.Add: ' -> putline;
-       
-       (* Set up parameters for Invoke *)
-       wstr.init;
-       'Template' -> wstr.set;
-       1 -> rgszNames.new;
-       ((*wstr*)0 (* dispid of "Template" *),0) -> rgszNames.inxPut;
-       varg[]->VARIANT_init
-       (# 
-       do VT_I2 -> vt;
-          xlWorksheet -> iVal;
-       #);
-       rgszNames->params.rgdispidNamedArgs;
-       1->params.cArgs;
-       1->params.cNamedArgs;
-       @@varg -> params.rgvarg; (* Now we're getting insecure! *)
        
        (if use_dual then 
            'Calling Add using vtable' -> putline;
-           pdispWorkbooks[] -> dual[]; (* should be a QIF *)
+           pdispWorkbooks[] -> dual[]; (* should be a QIF? *)
            (*(# dummy:@char do (varg, lcid, RHS[]) -> dual.add -> hr;#);*)
            (if hr.succeeded then
                'pdispWorkbooks.Add(template:=xlWorksheet) succeeded' -> putline;
             else
-               ('pdispWorkbooks.Add(template:=xlWorksheet) failed', hr.value) -> ComErrorMessage;
+               ('pdispWorkbooks.Add(template:=xlWorksheet) failed',hr.value) -> ComErrorMessage;
            if);
         else
-           'Calling Add using Invoke' -> putline;
-           (dispid.value, IID_NULL, lcid, DISPATCH_METHOD, params[], varg2[], NONE, NONE)
-             -> pdispWorkbooks.Invoke
-             -> hr;
-           (if hr.succeeded then
-               'pdispExcelApp.Workbooks.Add(template:=xlWorksheet) succeeded' -> putline;
-               varg2[] -> VARIANT_init(# do pdispVal->pdispWorkBook[] #);
-            else
-               ('pdispExcelApp.Workbooks.Add(template:=xlWorksheet) failed', hr.value) -> ComErrorMessage;
-           if);
+           ('Template', xlWorksheet) -> dParms.putInt16;
+           (pdispWorkbooks[], 'Add', dparms[], DISPATCH_METHOD, varg2[]) 
+             -> CallInvoke;
+           dparms.release;
+           varg2[] -> VARIANT_init(# do pdispVal->pdispWorkBook[] #);
        if);
-       
-       rgszNames.free;
-       wstr.free;
-       
-       
-       
        
        
        'Awaiting key-press before releasing interface: ' -> puttext;
