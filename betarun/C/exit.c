@@ -214,7 +214,7 @@ void BetaError(errorNo, theObj)
 	  /* Ignore 4 adr regs, and 8 dataregs+tags (see RefNone
 	   * in Misc.run)
 	   */;
-	thePC=RefNonePC;
+	thePC=(long *)RefNonePC;
       }
 #endif /* mac */
 #if defined(linux) || defined(nti)
@@ -302,7 +302,7 @@ void BetaError(errorNo, theObj)
 	StackEnd += 12
 	  /* Ignore 12 pushed registers/tags (see RefNone in Misc.run)
 	   */;
-	thePC=RefNonePC;
+	thePC=(long *)RefNonePC;
       }
 #endif /* linux || nti */
 #endif /* RTLAZY */
