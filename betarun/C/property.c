@@ -41,7 +41,9 @@ static BooleanProperty( name)
   ENTRY("DebugAOA",   DebugAOA = TRUE);
   ENTRY("DebugLVRA",  DebugLVRA = TRUE);
   ENTRY("DebugStack", DebugStack = TRUE);
-  ENTRY("DebugAll",   DebugIOA = TRUE; DebugAOA = TRUE; DebugLVRA = TRUE; DebugStack=TRUE);
+  ENTRY("DebugLabels",DebugLabels = TRUE);
+  ENTRY("DebugAll",   DebugIOA = TRUE; DebugAOA = TRUE;
+	DebugLVRA = TRUE; DebugStack=TRUE; DebugLabels=TRUE);
 #endif
 
   ENTRY("InfoS", isStatRecordOn = TRUE);
