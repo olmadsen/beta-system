@@ -13,17 +13,17 @@ methodArgs: evVal
        do lEV[]-> xA 
        #);
      loadVal:: 
-       (#do ((isMultiple,false,false,false,'')->eval).loadVal -> V[] #);
+       (#do ((isMultiple,false,true,false,'',none)->eval).loadVal -> V[] #);
      loadVal2:: 
-       (#do ((isMultiple,false,false,false,'')->eval).loadVal -> V[] #);
+       (#do ((isMultiple,false,true,false,'',none)->eval).loadVal -> V[] #);
      pushVal::
        (#
        do '!methodArgs:pushVal:' -> mch.comment;
-          ((isMultiple,false,false,false,'')->eval).pushVal -> V[];
+          ((isMultiple,false,true,false,'',none)->eval).pushVal -> V[];
        #);
      mkReal::
        (#
-       do ((isMultiple,false,false,false,'')->eval).mkReal -> V[];
+       do ((isMultiple,false,true,false,'',none)->eval).mkReal -> V[];
        #);
      asgToAdr::
        (# EH: @evalHandler; isRepAdr: @boolean
@@ -34,7 +34,7 @@ methodArgs: evVal
           (if isMultiple then
               'index'-> rA.fieldName.equal -> isRepAdr 
           if);
-          (isMultiple,true,true,isRepAdr,'') -> eval -> V[];
+          (isMultiple,true,true,isRepAdr,'',none) -> eval -> V[];
           313->trace(#do 'methodArgs:asgToAdrX: '->xT; V.display#);
           '!methodArgs:asgToAdr:before:V.pushVal'->mch.comment;
           '!methodArgs:asgToAdr:after:V.pushVal'->mch.comment;
@@ -64,8 +64,11 @@ methodArgs: evVal
           '!methodArgs:asgToRefAdr2:'
             -> (rA.fieldType.copy).prepend -> T[];
             T -> mch.comment;
-
-          (isMultiple,true,false,false,rA.fieldType[]) -> eval -> V[];
+          (if destEv.label=gram.structureReference then
+              'Structure'-> theGen.text2signature -> rA.fieldType[]
+          if);
+          (isMultiple,true,false,false,rA.fieldType[],rA.bAdr.localDesc[]) 
+            -> eval -> V[];
           '!methodArgs:asgToRefAdr3'->mch.comment;
           (*V.pushVal -> V[];*)
           '!methodArgs:asgToRefAdr4'->mch.comment;
@@ -79,14 +82,16 @@ methodArgs: evVal
        do 301 -> trace(#
                       do 'asgToRealAdr:'->display
                       #);
-          rA[] -> ((isMultiple,true,false,false,'') -> eval).asgToRealAdr -> V[];
+          rA[] 
+            -> ((isMultiple,true,true,false,'',none) -> eval).asgToRealAdr
+            -> V[];
           (if isMultiple and not isjava then mch.loadLocal if);
        #);
      asgToRepAdr::
        (#
        do 313->trace(#do 'asgToRepAdr:'->display; #);
           'methodArgs:asgToRepAdr1'->mch.comment;
-          (isMultiple,false,false,false,'')->eval -> V[];
+          (isMultiple,false,false,false,'',none)->eval -> V[];
           'methodArgs:asgToRepAdr2'->mch.comment;
           (* V.pushVal -> V[];*)
           (rA[],rEV[],rChain[]) -> V.asgToRepAdr -> V[];
@@ -197,15 +202,17 @@ methodArgs: evVal
                                 * the address of R[e] is on the stack
                                 *)
           V: ^evVal;
-          type: ^text;
+          rType: ^text;
+          rDesc: ^ASTindex;
           isExternalString: @boolean
-       enter(dup,pushVal,isSimpleVal,isRepAdr,type[])
+       enter(dup,pushVal,isSimpleVal,isRepAdr,rType[],rDesc[])
        do 301->trace(#
                     do 'eval:'->display; 
                        'dup: ' -> xT; dup->xB;
                        'pushVal:'->xT; pushVal->xB;
                        'isSimpleVal:' ->xT; isSimpleVal -> xB;
-                       'isRepAdr:'->xT; isRepAdr -> xB
+                       'isRepAdr:'->xT; isRepAdr -> xB;
+                       'rType:'->xT; rType[] -> xT
                     #);
           'methodArgs:eval:1'->mch.comment;
           (if inEnter then
@@ -218,14 +225,14 @@ methodArgs: evVal
           (if V[] = none then '\nMethodArgs:eval:V is none ' -> putline if);
           301->trace(#do 'eval2:'->display; dup->xB; xN; V.display #);
           (if pushval then
-              (* we need the type here for text/const literals;
+              (* we need the rType here for text/const literals;
                * this is tricky and should be reconsidered;
                * also since dup_x1 does not exist on .NET
                *)
               (* reconsider structure of pushVal here and in txtcstval *)
-              (type[]<>none) 
-              and ((isJava and ('java/lang/String' -> type.equal)) 
-                   or ('class [mscorlib]System.String'->type.equal))
+              (rType[]<>none) 
+              and ((isJava and ('java/lang/String' -> rType.equal)) 
+                   or ('class [mscorlib]System.String'->rType.equal))
                 -> isExternalString;
               (if isExternalString then
                   (* to avoid conversion to BETA text - clumsy *)
@@ -254,6 +261,22 @@ methodArgs: evVal
                   (0,false) -> mch.duplicate;
                   V.type -> theGen.mkSignature ->  mch.allocAndStoreLocal
               if)
+          if);
+          (* FIXME: the followimng is very messsy *)
+          (if not isSimpleVal
+              and (rType[]<>none) 
+              and (rType.length > 0) (* from asgToRep *)
+              and (V.evType<>4 (* strucref->Structure *))
+              and (rDesc[] <> none) and not (sematt.textDesc->rDesc.equal)
+              (* In X.get -> T[]
+               * get may return externalString
+               * and T may be a text;
+               * here we avoid a text-cast
+               * instead a coersion is made
+               * in textVarVal; but ugly
+               *)
+              and not (V.type -> theGen.mkSignature -> rType.equal) then
+              rType[] -> mch.checkCast
           if);
           (if inEnter then
               true -> inEnterDoExitMethod
@@ -679,35 +702,7 @@ newInstanceWithOrigin:
 virtualTopDesc:
   (# VD,topDesc: ^ASTindex; VN: @ASTindex; descKind: @integer
   enter VD[]
-  do (if VD.label // gram.bindingDecl // gram.finalDecl then
-         VD.son -> sematt.singleName -> VN;
-         L: (#
-            do VN.virtDcl -> VN;
-               VN.sort -> VD;
-               313->trace(#
-                         do 'genPtnClass:binding: ' -> xT;
-                            VN[] -> xA;
-                            VD[] -> xA
-                         #);                        
-               (if not (VD.label = gram.virtualDecl) then
-                   restart L
-               if)
-            #);
-         313->trace(#do VN[] -> xA #);
-         VN.father -> VN;
-         &ASTindex[] -> topDesc[];
-         VN.brother -> topDesc;
-         313->trace(#do topDesc[] -> xA #);
-         (if not (topDesc.label = gram.objectDescriptor) then
-             (thisDesc[](*?*),topDesc[])
-               -> GetActualDesc 
-               -> (topDesc,descKind)
-         if);
-         313->trace(#
-                   do 'genPtnClass:topDesc: ' -> xT;
-                      topDesc[] -> xA;
-                   #);              
-     if);          
+  <<SLOT genlib_virtualTopDesc:doPart>>
   exit topDesc[]
   #);
 CallClassPtnMethod:
@@ -715,20 +710,7 @@ CallClassPtnMethod:
      EH: @evalHandler;
      sigT: ^text; sort: @ASTindex
   enter(VN[],OA[],ES[])
-  do (ES[],thisSuperChain(*?*),true(*?*)) -> sig.setMethodDesc;
-     ((OA.bAdr.localDesc[],true) -> EH.descName,OA.bAdr.localDesc[])
-       -> sig.addReceiver;
-     VN.gettext -> sig.addMethod;
-     sig.markAsPtnClassMethod;
-     sig.noEnter;
-     VN.sort -> sort;
-     (if (sort[] -> virtualTopDesc -> topDesc[]) <> none then
-         topDesc[] -> sig.exitRef
-      else
-         sig.exitRef
-     if);
-     (sig.asText->mch.newTextOp,'M',false(*?*),false) -> mch.gJsr;
-     sig.thisMethodDesc[] -> theGen.mkSignature -> sigT[]
+  <<SLOT genlib_CallClassPtnMethod:doPart>>
   exit sigT[]
   #);
 LocalDescriptors:
