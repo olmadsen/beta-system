@@ -86,6 +86,11 @@
 #define PC_OFF 2
 #endif
 
+#ifdef macosx
+#define DYN_OFF 1 /* FIXME: (Copied from macoppc) should be -1 and ADDED when used!!! */
+#define PC_OFF 2
+#endif
+
 #endif /* NEWRUN */
 
 /* Offset to TopMpart field in prototypes */

@@ -2,27 +2,38 @@ char betarun_version[] = "BETARUN VERSION 5.3(73++)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.79  2002/03/05 22:44:43  corry
+ * Stupid syntax error in CRUN/Makefile-vpath
+ * Betarun version number: 73++
+ *
  * Revision 1.78  2002/03/05 21:48:02  corry
  * Change C++ style comments to C style to avoid warning
  * Betarun version number: 73+
  *
  * Revision 1.77  2002/03/05 15:27:50  corry
  * Get rid of dependence on rungen executable in betarun building - was causing a lot
+
  * of recompiles, and I can't imagine it is actually any use.
+
  * Betarun version number: 73
  *
  * Revision 1.76  2002/03/01 12:25:17  corry
  * Get rid of nonbreak spaces in make output - didn't work on Windows - not necessary with
+
  * new gnumake/shell combo
+
  * Betarun version number: 72
  *
  * Revision 1.75  2002/03/01 12:10:55  corry
  * Make it work on nti_ms
+
  * Use -j2 to make in parallel
+
  * Betarun version number: 71
  *
  * Revision 1.74  2002/02/28 17:44:01  corry
  * Lots of stuff for nti_ms
+
  * Betarun version number: 70
  *
  * Revision 1.73  2002/01/23 14:01:49  corry

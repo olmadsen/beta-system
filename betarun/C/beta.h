@@ -20,7 +20,6 @@
 # endif
 #else
 # include <string.h>
-# include <malloc.h>
 # include <memory.h>
 # include <stdlib.h>
 #endif

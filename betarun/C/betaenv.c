@@ -53,6 +53,12 @@ void *memalign(size_t align, size_t size) {
 }
 #endif
 
+#ifdef macosx
+void *memalign(size_t align, size_t size) { 
+  return (void *) malloc(size);
+}
+#endif
+
 void GetBetaEnv()
 {
   char *betart;

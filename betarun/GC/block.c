@@ -6,7 +6,7 @@
  */
 #include "beta.h"
 
-#if defined(hppa) || defined(sun4s) || defined(linux) || defined(sgi) || defined(x86sol)
+#if defined(hppa) || defined(sun4s) || defined(linux) || defined(sgi) || defined(x86sol) || defined(macosx)
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -111,7 +111,27 @@ void *newProtectedArea(unsigned long size)
 #ifdef ppcmac
 	void *theArea = (void *) 0x80000000;
 #else
+#ifdef macosx
+    /* Allocate one page of slop */
+  unsigned long slopsize = RoundToPage(rsize+1);
+
+  /* The actual allocation */
+  void *theArea = (Block *)MALLOC(slopsize);
+
+  /* If we failed! */
+  if (!theArea)
+      return theArea;
+
+  /* Round up to next page boundary.  This is why we can't free again! */
+  theArea = (void *)RoundToPage((unsigned long)theArea);
+
+  if (mprotect(theArea, rsize, PROT_NONE)) {
+    fprintf(output, "newProtectedArea: mprotect failed with errno %d\n", errno);
+    return 0;
+  }
+#else
 #error Unknown architecture for mmap
+#endif
 #endif /* ppcmac/other */
 #endif /* nti  */
 #endif /* unix */

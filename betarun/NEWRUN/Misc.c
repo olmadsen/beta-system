@@ -47,6 +47,15 @@ void SetArgValues(long argc, char *argv[])
   ArgVector = argv;
 }
 
+
+#ifdef macosx
+double i2f(long n) 
+{ 
+  return (double)n;
+}
+#endif
+
+
 #ifdef macppc
 double i2f(long n) 
 { 

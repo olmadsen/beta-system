@@ -70,6 +70,11 @@ void unlink(const char *name);
 #define Decimal
 #endif
 
+#ifdef macosx
+#define FULL_NMCOMMAND  "not yet implemented"
+#define TERSE_NMCOMMAND "not yet implemented"
+#define Decimal
+#endif
 
 
 #ifndef nti

@@ -53,7 +53,7 @@ static void TerminateActiveComponent(void)
   CallBetaEntry(RA, SPx, callerObj);
 }
 
-#ifdef ppcmac_
+#if defined(ppcmac) || defined(macosx)
 
 /*************************** Solution using doAtt *********************/
 

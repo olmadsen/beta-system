@@ -21,6 +21,13 @@
 #include <time.h>
 #endif /* UNIX */
 
+#ifdef macosx
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#include <time.h>
+#endif /* UNIX */
+
 void doUGC(int doit)
 {
   DEBUG_CODE({

@@ -10,6 +10,10 @@
 #define WIND_BACK_SP                                          \
       SP = *(long**)SP /* Use FramePointer */
 #else
+#ifdef macosx
+#define WIND_BACK_SP                                          \
+      SP = *(long**)SP /* Use FramePointer */
+#else
 #define WIND_BACK_SP                                          \
       {                                                       \
         long SPoff;                                           \
@@ -17,6 +21,7 @@
         GetSPoff(SPoff, CodeEntry(GETPROTO(this), PC));       \
         SP = (long *)((long)SP+SPoff);                        \
       }
+#endif
 #endif
 
   

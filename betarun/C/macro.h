@@ -577,6 +577,33 @@ typedef union FormatI
 }
 #endif /* macppc */
 
+
+#ifdef macosx
+
+#define GetPC(SP)     (*((long*)(SP)+PC_OFF))
+#define GetDyn(SP) (*((long*)(SP)-DYN_OFF))
+#define GetSPbeta(SP) (*((long *)(SP)+6))
+
+typedef union FormatI
+{
+  unsigned long raw;
+  struct inst { 
+    unsigned long opc: 6;
+    unsigned long s: 5;
+    unsigned long a: 5;
+    signed   long d: 16;
+  } instr;
+} FormatI;
+
+#define GetSPoff(SPoff, codeAddr)                              \
+{ FormatI stwu;                                                \
+  stwu.raw = *((long *)codeAddr+2);                            \
+  /* Get the stack size allocated for this frame */            \
+  SPoff = -stwu.instr.d;                                       \
+}
+#endif /* macosx */
+
+
 #define comppush(v) *CompSP++ = (long) v
 #define comppop(v)  v = *--CompSP
 
@@ -594,7 +621,7 @@ typedef union FormatI
 
 
 /* check for break instr. - compare debugger/private/external/coreaccess.h*/
-#if defined(sparc) || defined(hppa) || defined(ppcmac)
+#if defined(sparc) || defined(hppa) || defined(ppcmac) || defined(macosx)
 #define IS_BREAK_INST(x) (x==0x00000000)
 #endif
 

@@ -65,6 +65,28 @@
  
 #endif /* macppc */
 
+#ifdef macosx
+#define GEN_CB_STUB()                                                         \
+                                                                              \
+ /*  0: lis   r12,     entry >> 16                                            \
+  *  1: lis   r24,     strucaddr >> 16                                        \
+  *  2: ori   r12,r12, entry & 0xffff                                         \
+  *  3: ori   r24,r24, strucaddr & 0xffff                                     \
+  *  4: mtctr r12                                                              \
+  *  5: bctr                                                                  \
+  */                                                                          \
+                                                                              \
+  CBFATop->code[0] = 0x3c000000 | (12<<21) | (entry >> 16);                   \
+  CBFATop->code[1] = 0x3c000000 | (11<<21) | (strucaddr >> 16);               \
+  CBFATop->code[2] = 0x60000000 | (12<<21) | (12<<16) | (entry & 0xffff);     \
+  CBFATop->code[3] = 0x60000000 | (11<<21) | (11<<16) | (strucaddr & 0xffff); \
+  CBFATop->code[4] = 0x7c0903a6 | (12<<21);                                   \
+  CBFATop->code[5] = 0x4e800420;                                              \
+  FlushCodeCache(&CBFATop->code[0], &CBFATop->code[5])
+ 
+#endif /* macosx */
+
+
 
 /* CopyCPP:
  * Called from BETA to generate callback code, i.e. the code

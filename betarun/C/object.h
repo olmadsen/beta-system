@@ -208,6 +208,10 @@ typedef struct _CallBackEntry {
   Structure    *theStruct;
   unsigned long code[10];
 #endif
+#ifdef macosx
+  Structure    *theStruct;
+  unsigned long code[6];
+#endif
 } CallBackEntry;
 
 #ifdef linux

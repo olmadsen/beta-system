@@ -1,6 +1,8 @@
 
 #include "beta.h"
 
+#ifndef macosx
+
 #define INFO_SOCKETS(string) DEBUG_SOCKETS(fprintf(output, string))
 
 #include <string.h>
@@ -1362,3 +1364,6 @@ int doshutdown(int fd, int how)
   DEBUG_SOCKETS(fprintf(output, "(shutdown(%d,%d))",fd,how));
   return shutdown(fd, how);
 }
+
+#endif
+

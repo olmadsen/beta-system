@@ -124,7 +124,7 @@ typedef unsigned short u_short;
 #define CRUN 1
 #endif
 
-#if defined(sgi) || defined(macppc)
+#if defined(sgi) || defined(macppc) || defined(macosx)
 #undef RUN
 #define NEWRUN 1
 #endif

@@ -94,6 +94,11 @@ char *machine_type(void)
 #define MACHINE_TYPE "ppcmac"
 #endif
 
+  /* MacOS X */
+#ifdef macosx
+#define MACHINE_TYPE "macosx"
+#endif
+
   /* Linux */
 #ifdef linux
 #define MACHINE_TYPE "linux"
@@ -675,6 +680,48 @@ static int OpenDumpFile(long errorNumber)
   return 1;
 }
 #endif /* UNIX */
+
+#ifdef macosx
+static int OpenDumpFile(long errorNumber)
+{
+  char dumpname[500];
+  char dirCh;
+  char *execname, *localname;
+
+  dirCh = '/';
+  execname = ArgVector[0];
+  if ( (localname=strrchr(execname, dirCh)) ) 
+    localname = &localname[1];
+  else
+    localname = execname;
+  strcpy(dumpname, localname);
+  strcat(dumpname, ".dump");
+  if( (output = fopen(dumpname,"w")) == NULL){
+    /* beta.dump cannot be opened - use stderr */
+    output = stderr;
+    fprintf(output, "\n# Beta execution aborted: ");
+    fprintf(output, ErrorMessage(errorNumber));
+    fprintf(output, ".\n");
+    fprintf(output, "# Generating dump.  This may take a little while - please be patient\n");
+    fflush(output);
+  } else {
+    /* beta.dump opened successfully */
+    fprintf(stderr, "\n# Beta execution aborted: ");
+    fprintf(stderr, ErrorMessage(errorNumber));
+    fprintf(stderr, ".\n# Look at '%s'\n", dumpname);
+    fprintf(stderr, "# Generating dump file.  This may take a little while - please be patient\n");
+    fflush(stderr);
+    /* Write diagnostics to dump file too */
+    fprintf(output, "Beta execution aborted: ");
+    fprintf(output, ErrorMessage(errorNumber));
+    fprintf(output, ".\n");
+    fflush(output);
+  }
+  return 1;
+}
+#endif /* macosx */
+
+
 
 #if defined(MAC)
 GLOBAL(static char dumpname[33]); /* max filename length is 32 */
