@@ -153,6 +153,9 @@ void mmapInitial(unsigned long numbytes)
       if ((startadr+numbytes-1) & (1<<31)) {
 	startadr = MMAPSTART;
 	numbytes /= 2;
+	if (!numbytes) {
+	  exit(1);
+	}
       }
 #endif
     }
@@ -201,6 +204,9 @@ void mmapInitial(unsigned long numbytes)
     numbytes /= 2;
     fprintf(output, "mmapInitial failed with GetLastError %d, "
 	    "trying half size %d\n", GetLastError(), numbytes);
+    if (!numbytes) {
+      exit(1);
+    }
   }
 #endif
   if (!mmapHeap) {

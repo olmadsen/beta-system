@@ -1240,7 +1240,7 @@ int SkipDataRegs(long *theCell)
     return (-tag-4);
   } else {
     DEBUG_CODE({
-      if (tag<0) {
+      if (tag < 0 && -4 < tag) {
 	fprintf(output, 
 		"*** 0x%08x: %d: Negative non-tag stack cell!\n", 
 		(int)theCell,
