@@ -1,0 +1,139 @@
+------- CheckReferenceAssignment: System ----
+{ CheckReferenceAssignment is called with an argument on the stack, }
+{ which is the address of a cell (the target of the assignment).     }
+{ For the current being this address is allways inserted in a hash-  }
+{ table. This table is used during IOAGc, because it points out the  }
+{ roots in AOA, which refer objects in IOA.                          }
+AOAtoIOAtableSize: cvar;
+AOAtoIOAtable:     cvar;
+negAOArefsINSERT:  cproc;
+
+ChkRA: public
+  (#
+     stack:   StackArea = SP;
+     { stack on entry [return(0), address(4), ...] }
+     
+     address: Long = DataReg1; { d7 }
+     value:   Long = DataReg2; { d6 }
+     tmp:     DataArea = AddrReg1;
+     table:   DataArea = AddrReg1;
+     index:   Long     = DataRegA { Saved and restored. }
+  do 
+     stack[4] -> tmp; tmp -> address; 
+     tmp[0] -> tmp;
+     
+     (if tmp outside IOA then 
+         (if tmp < 0 then 
+             { Save registers before entering c-world }
+             (code '      movm.l  %a0-%a4,-(%sp)' code);
+             (code '      movm.l  %d0-%d7,-(%sp)' code);
+             push address;
+             call negAOArefsINSERT;
+             pop address;
+             (code '      movm.l  (%sp)+,%d0-%d7' code);
+             (code '      movm.l  (%sp)+,%a0-%a4' code);
+         if);
+         return 4 
+     if);
+     
+     { Compute hash1.                                  }
+     { hash1(address) = address MOD AOAtoIOAtableSize. }
+     (if hp then
+         (code '	divul.l	_AOAtoIOAtableSize,%d6:%d7' code)
+     if);
+     (if MacOS then
+         (code '	tdivu.l	((AOAtoIOAtableSize).L,a5),d6:d7' code)
+     if);
+     (if sun3os4 then
+         (code '	divull	_AOAtoIOAtableSize,d6:d7' code)
+     if);
+     (if apollo then
+         (code '	divul.l	AOAtoIOAtableSize,d6:d7' code)
+     if);
+     
+     { If the table entry is free insert it!.    }
+     AOAtoIOAtable -> table;
+     (if table[16+value*4] = 0 then goto insert if);
+     
+     { So the hash1 entry is occupied, check if the entry  }
+     { match the address. In case of match the address is  }
+     { allready inserted, leave the function.             }
+     stack[4] -> address;
+     (if address = table[16+value*4] then return 4 if);
+     
+     { Compute hash2.                                      }
+     { hash2(address) = (address*4) MOD AOAtoIOAtableSize. }
+     (if hp then
+         (code '	asl.l	&4,%d7                  ' code);
+         (code '	divul.l	_AOAtoIOAtableSize,%d6:%d7' code)
+     if);
+     (if MacOS then
+         (code '	asl.l	#4,d7                  ' code);
+         (code '	tdivu.l	((AOAtoIOAtableSize).L,a5),d6:d7' code)
+     if);
+     (if sun3os4 then
+         (code '	asll	#4,d7                  ' code);
+         (code '	divull	_AOAtoIOAtableSize,d6:d7' code)
+     if);
+     (if apollo then
+         (code '	asl.l	#4,d7                  ' code);
+         (code '	divul.l	AOAtoIOAtableSize,d6:d7' code)
+     if);
+     
+     { If the table entry is free insert it!.    }
+     (if table[16+value*4] = 0 then goto insert if);
+     
+     { So the hash2 entry is occupied, check if the entry  }
+     { match the address. In case of match the address is  }
+     { allready inserted, leave the function.              }
+     stack[4] -> address;
+     (if address = table[16+value*4] then return 4 if);
+     
+     { Both the hash1(address) and hash2(address) entries are }
+     { occupied with others addresses.                        }
+     
+     { Try to find an entry after hash2(address). }
+     push index;
+     0 -> index;
+     loop:
+     (if index < 100 then
+         1 -> index+; index -> address+;
+         { value MOD AOAtoIOAtableSize -> value. }
+         (if hp then
+             (code '	divul.l	_AOAtoIOAtableSize,%d6:%d7' code)
+         if);
+         (if MacOS then
+             (code '	tdivu.l	((AOAtoIOAtableSize).L,a5),d6:d7' code)
+         if);
+         (if sun3os4 then
+             (code '	divull	_AOAtoIOAtableSize,d6:d7' code)
+         if);
+         (if apollo then
+             (code '	divul.l	AOAtoIOAtableSize,d6:d7' code)
+         if);
+         (if table[16+value*4] = 0 then
+             pop index;
+             goto insert
+         if);
+         stack[8] -> address; { remember that index is pushed. }
+         (if address = table[16+value*4] then
+             pop index;
+             return 4
+         if);
+         goto loop
+     if);
+     pop index;
+     
+     { Since the hash table is pretty full let's extend the table size       }
+     { and rehash the entries.                                               }
+     push RegObj, RegArg, DataRegA; { Save registers before entering c-world }
+     call AOAtoIOAReAlloc;
+     pop  DataRegA, RegArg, RegObj;
+     goto ChkRA;
+     
+     insert:
+     stack[4] -> address;
+     address -> table[16+value*4];
+     
+     return 4
+  #)

@@ -1,0 +1,313 @@
+------- Qua: System ----
+{ Qua check.
+  The reference assignment src[]->dst[] has just been made. dst resides in theCell.
+  Perform.
+  1. CheckReferenceAssigment
+  2. Qua Check: Check if the actual qualification of src is less than or equal than
+  qualification of dst, as given by dstQuaProto and dstQuaOrigin.
+}
+findDanglingProto: cproc;
+
+{ Qua: Gentle qua check, don't worry about origins }
+Qua: public
+  (#
+     { input variables }
+     dstQuaProto:  ProtoType = RegArg;
+     theCell:      Long      = DataReg1;
+     
+     { used variables }
+     src:          Object    = AddrReg1;
+     srcStruc:     Structure = AddrReg1;
+     srcComp:      Component = AddrReg1;
+     srcProto:     ProtoType = AddrReg2;
+     
+     proto1:       ProtoType = AddrReg1;
+     argument:     Structure = RegArg;
+     newObject:    Object    = RegArg     
+  do
+     theCell -> src;
+     src[0] -> src;
+     (if src = 0 then return if);
+     
+     { 1. Check reference assignment }
+     (if theCell outside IOA then
+         push RegArg, AddrReg1;
+         push theCell;
+         call ChkRA;
+         pop  AddrReg1, RegArg
+     if);
+     
+     (if MacOS then push AddrReg2 if);
+     
+     (if src < -20 then
+         { Dangling reference. Get prototype of referred object.}
+         (if hp then
+             (code '      movm.l  %a0-%a4,-(%sp)' code);
+             (code '      movm.l  %d0-%d7,-(%sp)' code);
+             
+             push src;
+             call findDanglingProto;
+             DataRegA -> srcProto;
+             pop src;
+             
+             (code '      movm.l  (%sp)+,%d0-%d7' code);
+             (code '      movm.l  (%sp)+,%a0-%a4' code)
+         if);
+         goto doCheck;
+     if);
+     
+     { 2. Qua Check }
+     src.ProtoType -> srcProto;
+     
+     doCheck:
+     (if srcProto = -3 then
+         { It was a pattern variable assignment: src is a struc-object }
+         srcStruc.iProto  -> srcProto;
+         goto eqCheck
+     if);
+     (if srcProto = -1 then
+         { It was a component-reference assignment; src points to a component }
+         srcComp.Item[] -> src;
+         src.ProtoType -> srcProto;
+         goto eqCheck
+     if);
+     { It was a normal reference assignment: src is normal object }
+     
+     eqCheck: { Check for eqS }
+     (if srcProto = dstQuaProto then
+         { Structures are identical. All is OK }
+         goto success
+     if);
+     
+     { Inlined version of ltS without struc objects }
+     
+     (if dstQuaProto = dstQuaProto.Prefix then
+         { dstQuaProto is Object## }
+         goto success
+     if);
+     
+     { Prefix of srcProto is the first try }
+     srcProto -> proto1;
+     proto1.Prefix -> proto1;
+     loop:
+     (if proto1 = proto1.Prefix then { proto1 = Object## }
+         goto failure 
+     if); 
+     (if proto1 = dstQuaProto then
+         { dstQuaProto is a prefix of srcProto; all is OK }
+         goto success
+     if);
+     proto1.Prefix -> proto1;
+     goto loop;
+     
+     success:
+     (if MacOS then pop AddrReg2 if);
+     return;
+     
+     failure:
+     (if MacOS then pop AddrReg2 if);
+     { save registers in case of QuaCont }
+     (if hp then
+         (code '      movm.l  %a0-%a4,-(%sp)' code);
+         (code '      movm.l  %d0-%d7,-(%sp)' code)
+     if);
+     (if MacOS then
+         (code '	movem.l	a0-a4,-(sp)' code);
+         (code '	movem.l	d0-d7,-(sp)' code)
+     if);
+     (if sun3os4 then
+         (code '	moveml	#0x00f8,sp@-' code);
+         (code '	moveml	#0xff00,sp@-' code)
+     if);
+     (if apollo then
+         (code '	movem.l	a0-a4,-(sp)' code);
+         (code '	movem.l	d0-d7,-(sp)' code)
+     if);
+     
+     push RegObj;
+     push -15;
+     call BetaError;
+     8 -> SP+;
+     
+     (if hp then
+         (code '      movm.l  (%sp)+,%d0-%d7' code);
+         (code '      movm.l  (%sp)+,%a0-%a4' code)
+     if);
+     (if MacOS then
+         (code '	movem.l	(sp)+,d0-d7' code);
+         (code '	movem.l	(sp)+,a0-a4' code)
+     if);    
+     (if sun3os4 then
+         (code '	moveml	sp@+,#0x00ff' code);
+         (code '	moveml	sp@+,#0x1f00' code)
+     if);
+     (if apollo then
+         (code '	movem.l	(sp)+,d0-d7' code);
+         (code '	movem.l	(sp)+,a0-a4' code)
+     if);
+     
+     return
+  #);
+
+{ OQua: Strict qua check, take origins into account }
+OQua: public
+  (#
+     { input variables }
+     dstQuaProto:  ProtoType = RegArg;
+     dstQuaOrigin: Object    = RegAdr;
+     theCell:      Long      = DataReg1;
+     
+     { used variables }
+     src:          Object    = AddrReg1;
+     srcStruc:     Structure = AddrReg1;
+     srcComp:      Component = AddrReg1;
+     srcProto:     ProtoType = AddrReg2;
+     srcOrigin:    Long      = DataReg1;
+     offset:       Word      = DataReg2;
+     errorNo:      Long      = DataReg2;
+     
+     proto1:       ProtoType = AddrReg1;
+     argument:     Structure = RegArg;
+     newObject:    Object    = RegArg     
+  do
+     theCell -> src;
+     src[0] -> src;
+     (if src = 0 then return if);
+     
+     { 1. Check reference assignment }
+     (if theCell outside IOA then
+         push RegArg, RegAdr, AddrReg1;
+         push theCell;
+         call ChkRA;
+         pop  AddrReg1, RegAdr, RegArg
+     if);
+     
+     (if MacOS then push AddrReg2 if);
+     
+     { 2. Qua Check }
+     src.ProtoType -> srcProto;
+     (if srcProto = -3 then
+         { It was a pattern variable assignment: src is a struc-object }
+         srcStruc.iProto  -> srcProto;
+         srcStruc.iOrigin -> srcOrigin; { invalidates theCell }
+         goto eqCheck
+     if);
+     (if srcProto = -1 then
+         { It was a component-reference assignment; src points to a component }
+         srcComp.Item[] -> src;
+         src.ProtoType -> srcProto;
+         srcProto.OrigOff -> offset;
+         src[offset*4] -> srcOrigin; { invalidates theCell }
+         goto eqCheck
+     if);
+     { It was a normal reference assignment: src is normal object }
+     srcProto.OrigOff -> offset;
+     src[offset*4] -> srcOrigin; { invalidates theCell }
+     
+     eqCheck: { Check for eqS }
+     (if srcProto = dstQuaProto then
+         (if srcOrigin = dstQuaOrigin then
+             { Structures are identical. All is OK }
+             goto success
+         if)
+     if);
+     
+     { Inlined version of ltS without struc objects }
+     
+     (if dstQuaProto = dstQuaProto.Prefix then
+         { dstQuaProto is Object## }
+         goto success
+     if);
+     
+     { Prefix of srcProto is the first try }
+     push src;
+     srcProto -> proto1;
+     proto1.Prefix -> proto1;
+     loop:
+     (if proto1 = proto1.Prefix then { proto1 = Object## }
+         4->SP+ { pop src };
+         -15 -> errorNo;
+         goto failure 
+     if); 
+     (if proto1 = dstQuaProto then
+         { Now there is some hope, now we need to check if origins are equal. }
+         pop src; { proto 1 is no longer used }
+         0 -> offset;
+         dstQuaProto.OrigOff -> offset;
+         (if offset = srcProto.OrigOff then
+             { The prototypes have same origin offset, so   }
+             { the result is (srcOrigin = dstQuaOrigin).    }
+             (if srcOrigin = dstQuaOrigin then goto success if);
+             -16 -> errorNo;
+             goto failure
+         if);
+         
+         { Src may have several origins (one per prefixlevel).
+           We find the origin at the offset determined *by the prefix* (dstQuaProto)
+           This should be the same as the origin of the qualification of dst.
+         }
+         dstQuaProto.OrigOff -> offset;
+         
+         (if src.ProtoType = -3 then
+             push dstQuaOrigin; { save in case of GC }
+             src -> argument; { invalidates dstQuaProto }
+             call AlloSI;
+             pop dstQuaOrigin
+         if);
+         
+         newObject[offset*4] -> srcOrigin;
+         (if dstQuaOrigin = srcOrigin then goto success if); 
+         -16 -> errorNo;
+         goto failure
+     if);
+     proto1.Prefix -> proto1;
+     goto loop;
+     
+     success:
+     (if MacOS then pop AddrReg2 if);
+     return;
+     
+     failure:
+     (if MacOS then pop AddrReg2 if);
+     { save registers in case of QuaCont }
+     (if hp then
+         (code '      movm.l  %a0-%a4,-(%sp)' code);
+         (code '      movm.l  %d0-%d7,-(%sp)' code)
+     if);
+     (if MacOS then
+         (code '	movem.l	a0-a4,-(sp)' code);
+         (code '	movem.l	d0-d7,-(sp)' code)
+     if);
+     (if sun3os4 then
+         (code '	moveml	#0x00f8,sp@-' code);
+         (code '	moveml	#0xff00,sp@-' code)
+     if);
+     (if apollo then
+         (code '	movem.l	a0-a4,-(sp)' code);
+         (code '	movem.l	d0-d7,-(sp)' code)
+     if);
+     
+     push RegObj;
+     push errorNo;
+     call BetaError;
+     8 -> SP+;
+     
+     (if hp then
+         (code '      movm.l  (%sp)+,%d0-%d7' code);
+         (code '      movm.l  (%sp)+,%a0-%a4' code)
+     if);
+     (if MacOS then
+         (code '	movem.l	(sp)+,d0-d7' code);
+         (code '	movem.l	(sp)+,a0-a4' code)
+     if);    
+     (if sun3os4 then
+         (code '	moveml	sp@+,#0x00ff' code);
+         (code '	moveml	sp@+,#0x1f00' code)
+     if);
+     (if apollo then
+         (code '	movem.l	(sp)+,d0-d7' code);
+         (code '	movem.l	(sp)+,a0-a4' code)
+     if);
+     
+     return
+  #)
