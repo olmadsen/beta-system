@@ -315,6 +315,7 @@ namespace beta.converter
 	    switch (slashToDot(name)){
 	    case "[mscorlib]System.Object":
 	    case "System.Object":
+	    case "Object":
 	    case "object":
 	      // No need to include Object
 	      return;
@@ -540,7 +541,8 @@ namespace beta.converter
 	      name = "^" + stripNamespace(dollarToUnderscore(name));
 	    } else {
 	      switch (name){
-	      case "[mscorlib]Object":
+	      case "[mscorlib]System.Object":
+	      case "System.Object":
 	      case "Object":
 	      case "object":
 		name = "^" + stripNamespace(dollarToUnderscore(name));
