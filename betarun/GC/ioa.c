@@ -474,7 +474,7 @@ void DoIOACell(struct Object **theCell,struct Object *theObj)
       } else {
 #ifdef RTLAZY
 	if (isLazyRef(theObj)) {
-	  DEBUG_IOA(fprintf(output, 
+	  DEBUG_LAZY(fprintf(output, 
 			    "DoIOACell: Lazy ref: %d\n", (int)theObj));
 	  ProcessReference(theCell);
 	} else {
