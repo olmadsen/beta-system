@@ -241,7 +241,8 @@ Void: Type
 Reference: Type 
   (# class: ^text;
      isRef:: TrueValue;
-     elmType:: (# do (if isExternalText then 13 -> value else 11 -> value if) #);
+     elmType:: 
+       (# do (if isExternalText then 13 -> value else 11 -> value if) #);
      isExternalText: @boolean;
      
      asText::
@@ -261,9 +262,20 @@ Reference: Type
                         #)
           if);
          
-       #)
-  enter class[]
-  do (if true
+       #);
+     desc: ^ASTindex; EH: @evalHandler
+  enter desc[] (*class[]*)
+  do (if (desc -> sematt.descKind) = sematt.externalClassKind then
+         desc[] -> getExternalClassName -> class[];
+         true -> isExternalText (* we should check that desc
+                                 * is in fact an external text/string
+                                 * like java/lang/String
+                                 *)
+      else
+         (desc[],true) -> EH.descName -> class[]
+     if);
+     desc[] -> descLocation -> location[];
+     (if true
       // 'object' -> class.equalNCS 
       // 'Object' -> class.equalNCS then
          (if true
@@ -274,9 +286,9 @@ Reference: Type
           else
              'Unknown_platform.Object' -> class[]
          if);
-      // 'java/lang/String' -> class.equal then
+     (* // 'java/lang/String' -> class.equal then*)
          (* we should generalize this in a better way *)
-         true -> isExternalText
+
      if);
   #);
 Array: Type
@@ -389,13 +401,17 @@ mkSignature:
   enter desc[]
   do (if (desc -> sematt.descKind) = sematt.standardKind then
          (desc[] -> valueSignature -> sig[]).astext -> tsig[]
-      else         
+      else  
+         (if true then
+             desc[] -> reference -> sig[]
+          else(*
           (if (desc -> sematt.descKind) = sematt.externalClassKind then
               desc[] -> getExternalClassName -> Reference -> sig[]
            else    
               (desc[],true) -> EH.descName -> Reference -> sig[];
           if);
-         desc[] -> descLocation -> sig.location[];
+             desc[] -> descLocation -> sig.location[];*)
+         if);
          sig.asText -> tsig[];
      if);
      (if false and isJava then
@@ -414,7 +430,11 @@ mkArraySig:
   do (if (desc -> sematt.descKind) = sematt.standardKind then
          desc[] -> valueSignature ->array ->  sig[]
       else
-          (desc[],true) -> EH.descName -> Reference -> array -> sig[]
+         (if true then
+             desc[] -> Reference -> array -> sig[]
+          else(*
+             (desc[],true) -> EH.descName -> Reference -> array -> sig[]*)
+         if)
      if)
   exit sig[]
   #);
@@ -426,7 +446,8 @@ mkArraySignature:
   do (if (desc -> sematt.descKind) = sematt.standardKind then
          (desc[] -> valueSignature ->array).astext -> tsig[]
       else
-         ((desc[],true) -> EH.descName -> Reference->array).asText -> tsig[]
+         (desc[] -> reference -> array).asText -> tSig[];
+         (*((desc[],true) -> EH.descName -> Reference->array).asText -> tsig[]*)
      if)
   exit tsig[]
   #);
@@ -663,10 +684,12 @@ Signature: ISignature
               (# org: ^ASTindex
               do thisMethodDesc[] -> sematt.descOrigin -> org[];
                  (if org.isNull then
-                     'object' -> reference -> sig[]
+                     sematt.superObject[]  -> reference -> sig[]
+                     (*'object' -> reference -> sig[]*)
                   else
-                     (org[] ,true)
-                       -> EH.descName 
+                     (*(org[] ,true)
+                      -> EH.descName*)
+                     org[]
                        -> reference 
                        -> sig[]
                  if);
@@ -712,7 +735,8 @@ Signature: ISignature
        enter desc[]
        do setVoidXsig;
           (if desc[] = none then thisMethodDesc[] -> desc[] if);
-          (desc[],true) -> EH.descName -> Reference -> XXsig[];
+          desc[] -> Reference -> XXsig[];
+          (*(desc[],true) -> EH.descName -> Reference -> XXsig[];*)
           desc[] -> descLocation -> XXsig.location[];
        #);
      setExit: (# enter XXsig[] #);
@@ -929,6 +953,8 @@ getAttSig:
                 -> DH.theDesc
                 -> (desc,MN,EVchain[],isVirtual);
               (if desc.label = gram.objectDescriptor then
+                  desc[] -> reference -> sig[];
+                  (*
                   (if (desc->sematt.descKind) = sematt.externalClassKind then
                       desc[] -> getExternalClassName -> Reference -> sig[]   
                    else
@@ -937,13 +963,13 @@ getAttSig:
                         -> Reference 
                         -> sig[];  
                   if);
-                  desc[] -> descLocation -> sig.location[];
+                  desc[] -> descLocation -> sig.location[];*)
                else 
                   ' ***??? not descriptor ' -> putline;
-                  '?notDescriptor?'->Reference -> sig[];
+                  sematt.dataDesc[]->Reference -> sig[];
               if)
            else
-              '?notDynamicOrStaticItem?'->Reference -> sig[];
+              sematt.dataDesc[] ->Reference -> sig[];
           if);
        exit sig[]
        #);
@@ -960,7 +986,6 @@ getAttSig:
       // gram.insertedItem  then
          (# den,desc: @ASTindex; mn,isVirt: @integer
          do EV.son -> den;
-            '\ngetAttSig:InsertedItem' ->putline;
             (if den.label = gram.objectDescriptor then 
                 (* just to get the corretc chain[] *)
                 (chain[],den)->DH.theDesc->(desc,MN,chain[],isVirt);
@@ -971,7 +996,7 @@ getAttSig:
                 if);
                 313->trace(#do 'getAttSig:inserted:'->xT;  xSig.asText->xT#)
              else
-                'unknownInsertedItem;'-> Reference -> xSig[]                
+                sematt.dataDesc[] -> Reference -> xSig[]                
             if)
          #)
          (* // gram.objectDenotation then
@@ -982,8 +1007,10 @@ getAttSig:
       // gram.thisObject then
          (# AD: @ASTindex
          do EV.son -> AD;
-            AD.dclRef -> AD;
-            AD.getText -> Reference -> xSig[]
+            AD.descRef -> AD;
+            AD[] -> Reference -> xSig[]
+            (* AD.dclRef -> AD;
+             * AD.getText -> Reference -> xSig[]*)
          #)
       // gram.assignmentEvaluation then
          (* preliminary *)
@@ -1009,15 +1036,15 @@ getAttSig:
             lSig[] -> xSig[]
          #)
       // gram.textConst then
-         '\ntextconst' -> putline;
          (* we should make a pattern for the following code and also
           * use it in e.g. referenceSignature
           *)
-         (sematt.textDesc[] ,true)
+         sematt.textDesc[] -> reference -> xSig[];
+         (*(sematt.textDesc[] ,true)
            -> EH.descName
            -> Reference 
            -> xSig[];  
-         sematt.textDesc[] -> descLocation -> xSig.location[];
+         sematt.textDesc[] -> descLocation -> xSig.location[];*)
       else
          (if (EV.label -> sematt.evalClass) = sematt.evalClass.binOp then
              int32Value -> xSig[]
@@ -1063,17 +1090,19 @@ getAttSig:
                        -> DH.theDesc
                        -> (desc,MN,EVchain[],isVirtual);
                      (if desc.label = gram.objectDescriptor then
+                         desc[] -> reference -> xsig[]
+                         (*
                          (desc[],true)
                            -> EH.descName
                            -> Reference 
                            -> xsig[];
-                         desc[] -> descLocation -> xsig.location[]
+                         desc[] -> descLocation -> xsig.location[]*)
                       else 
                          ' ***??? not descriptor ' -> putline;
-                         '?notDescriptor?'->Reference -> xSig[];
+                         sematt.dataDesc[] ->Reference -> xSig[];
                      if)
                   else
-                     '?notDynamicItem?'->Reference -> xSig[];
+                     sematt.dataDesc[] ->Reference -> xSig[];
                  if);
      if)if)if);
      313->trace(#do 'signature:addExit:'->xT; xSig.asText -> xT #)
