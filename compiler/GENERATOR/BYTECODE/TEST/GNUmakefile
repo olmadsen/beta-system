@@ -6,9 +6,9 @@ clean:
 	-rm -f googleapi/dotnet/GoogleSearchService.dll
 	-rm -f googleapi/dotnet/GoogleSearchService.pdb
 	-rm -rf amazon/dotnet
-	-jbeta -w tstenv > /dev/null
-	-jbeta -w betaenv > /dev/null
-	-nbeta -w tstenv > /dev/null
-	-nbeta -w betaenv > /dev/null
-	@-rm -f jvm/String.class
+#	-jbeta -w tstenv > /dev/null
+#	-jbeta -w betaenv > /dev/null
+#	-nbeta -w tstenv > /dev/null
+#	-nbeta -w betaenv > /dev/null
+#	@-rm -f jvm/String.class
 

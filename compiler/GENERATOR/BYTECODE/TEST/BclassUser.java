@@ -1,10 +1,11 @@
 /*
   Compilation statements: 
-    (make clean; jbeta -x betaenv; \rm -f javabc/String.class)
     jbeta -x Bclass.bet
     javac -d jvm -classpath jvm BclassUser.java
     java -classpath jvm BclassUser
 */ 
+
+import beta.*;
 
 class Jclass extends Bclass
 {
