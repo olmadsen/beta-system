@@ -50,6 +50,9 @@ ifeq ($(ARCH), nti_ms)
   DOTO=obj
   DEBUGOPT=/Yd
   OPTIMISEOPT=/O2
+  RUNSRC=linux
+  RUNASM=gas
+  RUNDEFINES="-define underscore"
 else
   DOTO=o
   DEBUGOPT=-g
@@ -65,7 +68,18 @@ else
     MAJORARCH=$(ARCH)
     MINORARCH=$(ARCH)
   endif
+  RUNASM=gas
+  RUNSRC=linux
 endif
+
+ifeq ($(CDEBUG), yes)
+ifeq ($(RUNASM), ml)
+ASMDEBUGFLAG = /Zi
+else
+ASMDEBUGFLAG = -g
+endif
+endif
+
 
 ################################ RUN ###########################3
 ifeq ($(RUNTYPE), run)
@@ -120,18 +134,6 @@ ifeq ($(ALLOC_TRACE), yes)
 ALLOC_TRACEFLAG = -alloc-trace
 endif
 
-ifeq ($(CDEBUG), yes)
-ifeq ($(ARCH), linux)
-CDEBUGFLAG = -g
-else
-ifeq ($(ARCH), x86sol)
-CDEBUGFLAG = -g
-else
-CDEBUGFLAG = /Zi
-endif
-endif
-endif
-
 ifeq ($(ARCH), linux)
 MAINFILE=linux
 BETARUNFILE=betarun.o
@@ -174,25 +176,25 @@ endif
 $(RUNFILE): run.asm Makefile-vpath
 	$(CP) run.asm run.c
 ifeq ($(ARCH), linux)
-	gcc $(CDEBUGFLAG) -E run.c > run.s
+	gcc $(ASMDEBUGFLAG) -E run.c -o run.s
 	as -o $(RUNFILE) run.s
 else
-ifeq ($(ARCH), x86sol)
-	gcc $(CDEBUGFLAG) -E run.c > run.s
-	gas -o $(RUNFILE) run.s
+ifeq ($(RUNASM), gas)
+	gcc $(ASMDEBUGFLAG) -E run.c -o run.s
+	gcc -o $(RUNFILE) -c run.s
 else
-	ml $(CDEBUGFLAG) /c /coff /Cp /nologo /w /Fo$(RUNFILE) /Tarun.asm
+	ml $(ASMDEBUGFLAG) /c /coff /Cp /nologo /w /Fo$(RUNFILE) /Tarun.asm
 endif
 endif
 #	$(RM) run.c run.s
 
 
 run.asm: RUN/$(MAINFILE).run $(RUNDEPS) Makefile-vpath #$(BETALIB)/bin/$(ARCH)/rungen$(EXE)
-	rungen $(DEBUGFLAG) $(ALLOC_TRACEFLAG) $(UGCFLAG) -o run.asm $(BETARUN)/RUN/$(MAINFILE)
+	rungen -define $(MAJORARCH) -define $(RUNASM) $(RUNDEFINES) $(DEBUGFLAG) $(ALLOC_TRACEFLAG) $(UGCFLAG) -o run.asm $(BETARUN)/RUN/$(MAINFILE)
 
 $(BETALIB)/bin/$(ARCH)/rungen$(EXE): $(BETARUN)/GEN/GRAMMAR/runtime.astL $(BETARUN)/GEN/GRAMMAR/runtime-parser.btabL
-	( cd $(BETARUN)/GEN/$(MAJORARCH); beta -o gen.$(ARCH)$(EXE) gen )
-	$(MV) $(BETARUN)/GEN/$(MAJORARCH)/gen.$(ARCH)$(EXE) $(BETALIB)/bin/$(ARCH)/rungen$(EXE)
+	( cd $(BETARUN)/GEN/$(RUNSRC); beta -o gen.$(ARCH)$(EXE) gen )
+	$(MV) $(BETARUN)/GEN/$(RUNSRC)/gen.$(ARCH)$(EXE) $(BETALIB)/bin/$(ARCH)/rungen$(EXE)
 
 $(BETARUN)/GEN/GRAMMAR/runtime.astL:
 	#(cd $(BETARUN); $(BETALIB)/boot/bin/$(ARCH)/generator -metagram $(BETALIB)/boot/grammars/metagrammar/metagrammar runtime )
