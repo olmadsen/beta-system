@@ -158,16 +158,21 @@ chmod 0755, "$dest/bin/nbeta.exe";
 chmod 0755, "$dest/bin/jbeta.exe";
 
 print "Copying grammars\n";
-&copydir("$BETALIB/grammars/metagram", "$dest/grammars");
-&copydir("$BETALIB/grammars/pretty", "$dest/grammars");
-&copydir("$BETALIB/grammars/beta", "$dest/grammars");
+&copydir("$BETALIB/grammars/metagram", "grammars/metagram");
+&copydir("$BETALIB/grammars/pretty", "grammars/pretty");
+&copydir("$BETALIB/grammars/beta", "grammars/beta");
 
 print "Copying configuration\n";
-&copydir("$BETALIB/configuration", "$dest");
+&copydir("$BETALIB/configuration", "configuration");
 
-&pack_std_library("basiclib");
-&pack_std_library("sysutils");
-&pack_std_library("javalib");
+&copy_std_library("basiclib");
+&copy_std_library("sysutils");
+
+print "Copying javalib\n";
+&copy_compiled_beta_dir("$BETALIB/javalib/lang",  "javalib/lang");
+&copy_compiled_beta_dir("$BETALIB/javalib/io",    "javalib/io");
+&copy_compiled_beta_dir("$BETALIB/javalib/net",   "javalib/net");
+&copy_compiled_beta_dir("$BETALIB/javalib/util",  "javalib/util");
 
 print "Copying examples\n";
 foreach $f (@examples){
@@ -184,8 +189,8 @@ print "Copying setup files\n";
 if ($T){
     print "Copying testall suite (-T option)\n";
     &copy("testall", "$dest/examples");
-    &copydir("reference", "$dest/examples");
-    &copydir("$BETALIB/bin/admin", "$dest/bin");
+    &copydir("reference", "examples/reference");
+    &copydir("$BETALIB/bin/admin", "bin/admin");
 }
 
 print "Creating README.txt\n";
@@ -230,25 +235,9 @@ if ($publish){
 
 # -------------- Routines  ---------------------------------------------
 
-sub copydir($srcdir, $destdir){
-    my ($srcdir, $destdir) = @_;
-    &mkpath("$destdir", 0, 0755);
-    if (1){
-	system "cp -rp $srcdir $destdir";
-    } else {
-	# Recursive copy not part of std perl (;-(
-	# Found in groups.google.com, not tested:
-	my $length = length $srcdir;
-	find  sub {
-	    my $dest = $File::Find::name; # full source path
-	    substr($dest, 0, $length) = $destdir;
-	    if(-d) {
-		mkdir $dest, 0777;
-	    } elsif(-f _) {
-		copy $_, $dest;
-	    }
-	}, $srcdir;
-    }
+sub copydir($srcbase, $destbase){
+    my ($srcbase, $destbase) = @_;
+    &copyfiles($srcbase, "*", $destbase);
 }
 
 sub copyfiles ($srcbase, $filespec, $destdir){
@@ -265,14 +254,44 @@ sub copyfiles ($srcbase, $filespec, $destdir){
     }
 }
 
-sub pack_std_library($name)
+sub copy_compiled_beta_dir($srcdir, $destdir)
+{
+    my ($srcdir, $destdir) = @_;
+    &copyfiles("$srcdir", "*.bet",   "$destdir");
+    &copyfiles("$srcdir", "*.$AST",  "$destdir");
+    &copy_clr_directory("$srcdir",   "$destdir");
+    &copy_jvm_directory("$srcdir",   "$destdir");
+}
+
+sub copy_std_library($name)
 {
     my ($name) = @_;
     print "Copying $name\n";
-    &copyfiles("$BETALIB/$name", "*.bet",          $name);
-    &copyfiles("$BETALIB/$name", "*.$AST",         $name);
-    &copyfiles("$BETALIB/$name", "private/*.bet",  $name) if ( -d "$BETALIB/$name/private");
-    &copyfiles("$BETALIB/$name", "private/*.$AST", $name) if ( -d "$BETALIB/$name/private");
-    &copyfiles("$BETALIB/$name", "demo/*.bet",     $name) if ( -d "$BETALIB/$name/demo");
-    &copyfiles("$BETALIB/$name", "demo/*/*.bet",   $name) if ( -d "$BETALIB/$name/demo");
+    &copy_compiled_beta_dir("$BETALIB/$name", "$name");
+    if ( -d "$BETALIB/$name/private"){
+	&copy_compiled_beta_dir("$BETALIB/$name/private",  "$name/private");
+    };
+    if ( -d "$BETALIB/$name/demo"){
+	&copyfiles("$BETALIB/$name", "demo/*.bet",    "$name");
+	&copyfiles("$BETALIB/$name", "demo/*/*.bet",  "$name");
+    }
 };
+
+sub copy_clr_directory($srcbase, $destbase)
+{
+    my ($srcbase, $destbase) = @_;
+    return if (! -d "$srcbase/clr");
+    &copyfiles($srcbase, "clr/*.il",  $destbase);
+    &copyfiles($srcbase, "clr/*.pdb",  $destbase);
+    &copyfiles($srcbase, "clr/*.clst",  $destbase);
+    &copyfiles($srcbase, "clr/*.dll",  $destbase);
+}
+
+sub copy_jvm_directory($srcbase, $destbase)
+{
+    my ($srcbase, $destbase) = @_;
+    return if (! -d "$srcbase/jvm");
+    &copyfiles($srcbase, "jvm/*.dep",  $destbase);
+    &copyfiles($srcbase, "jvm/*.clst",  $destbase);
+    &copyfiles($srcbase, "jvm/beta/*.class",  $destbase);
+}
