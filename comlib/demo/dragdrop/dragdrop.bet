@@ -5,7 +5,9 @@ INCLUDE '~beta/comlib/comtypes'
         '~beta/guienv/private/winnt/guienv_ntiprivate'
         '~beta/win32lib/winerror'
         'additionslib'
-        '~beta/guienv/controls';
+        '~beta/guienv/controls'
+        '~beta/sysutils/cstring';
+BUILD default '$$/dragdrop_nti.obj' 'external/dragdrop_nti.c' 'betacc $0 $1';
 -- program: Descriptor --
 guienv
   (#
@@ -13,57 +15,229 @@ guienv
        (#
           ;
           SKAL_LIGGE_I_WINDOWLIB: (#  #);
-          CCmdTarget: (#  #);
-          COleDropTarget: CCmdTarget
+          COleDropTarget:
             (#
                private: @
-                 (# refCount: @integer;
-                    outerAddRef: (#
-                                 do refCount+1->refCount
-                                 exit refCount
-                                 #);
-                    outerRelease: (#
-                                 do refCount-1->refCount
-                                 exit refCount
-                                 #);
-                    pDropTarget: ^IDropTargetType;
+                 (#
+                    theHandle:
+                      (#
+                         handle: @integer;
+                         theInterfaceObject: ^InterfaceObject
+                      enter theInterfaceObject[]
+                      do
+                         (if theInterfaceObject[] <> none then
+                             theInterfaceObject.InterfaceObjectID->handle
+                          else
+                             'theHandle: theCanvas[]=none'->putline
+                         if)
+                      exit handle
+                      #);
                     IDropTargetType: IDropTarget
                       (#
+                         tempFormatETC: @struct_tagFORMATETC;
+                         tempSTGMedium: @STGMEDIUM;
+                         tempIEnumFORMATETC: ^IEnumFORMATETC;
+                         tempIEnumFORMATETCHolder: @IEnumFORMATETCHolder;
+                         refCount: @integer;
+                         ;
+                         supportedTypes:
+                         (* The types (e.g., CF_TEXT) that are supported by the drag-data *)
+                         [0] @integer;
+                         modifiers:
+                         (* OR of some of MK_SHIFT, MK_CONTROL, MK_LBUTTON, ... *)
+                         @integer;
+                         preferredType: (* e.g., CF_TEXT *) @integer;
+                         action: (* move/copy/none/... *) @int32;
+                         ;
                          QueryInterface::< 
-                           (# 
-                           do 'DropTarget: QueryInterface called'->putline
-                           #);
+                           (#  do 'DropTarget: QueryInterface'->putline #);
                          AddRef::< 
-                           (#  do 'DropTarget: AddRef called'->putline;
-                              outerAddRef->result
+                           (# 
+                           do
+                              'DropTarget: AddRef'->putline;
+                              refCount+1->refCount->result
                            #);
                          Release::< 
-                           (#  do 'DropTarget: Release called'->putline;
-                              outerRelease->result
+                           (# 
+                           do
+                              'DropTarget: Release'->putline;
+                              refCount-1->refCount->result
                            #);
                          ;
                          DragEnter::< 
-                           (# 
-                           do 'DropTarget: DragEnter called'->putline
+                           (# hr: @Hresult
+                           do
+                              get_supportedTypes:
+                              (* Asks the dataobject what types it support. Answer is in supportedTypes. *)
+                                (# 
+                                do
+                                   0->supportedTypes.new;
+                                   (DATADIR_GET,tempIEnumFORMATETCHolder[])
+                                     ->pDataObj.EnumFormatEtc->hr;
+                                   ;
+                                   (if hr.value = S_OK then
+                                       tempIEnumFORMATETCHolder
+                                         ->tempIEnumFORMATETC[];
+                                       tempIEnumFORMATETC.reset;
+                                       enum_loop:
+                                         (# 
+                                         do
+                                            (1,tempFORMATETC[],none )
+                                              ->tempIEnumFORMATETC.next->hr;
+                                            (if hr.value = S_OK then
+                                                1->supportedTypes.extend;
+                                                tempFORMATETC.cfFormat
+                                                  ->supportedTypes
+                                                  [supportedTypes.range];
+                                                restart enum_loop
+                                             else
+                                                leave enum_loop
+                                            if)
+                                         #);
+                                       tempIEnumFORMATETC.Release
+                                    else
+                                       'pDataObj.EnumFormatEtc: IKKE OK'
+                                         ->putline;
+                                       handle_error:
+                                         (# 
+                                         do
+                                            (if hr.value
+                                             // E_INVALIDARG then
+                                                'E_INVALIDARG'->putline
+                                             // E_OUTOFMEMORY then
+                                                'E_OUTOFMEMORY'->putline
+                                             // E_NOTIMPL then
+                                                'E_NOTIMPL'->putline
+                                             // OLE_S_USEREG then
+                                                'OLE_S_USEREG'->putline
+                                             else
+                                                'EnumFormatEtc: hr er underlig: '
+                                                  ->puttext;
+                                                hr.value->putint;
+                                                newline
+                                            if)
+                                         #)
+                                   if)
+                                #);
+                              grfKeyState->modifiers;
+                              (supportedTypes,grfKeyState,pdwEffect)->media
+                                ->(preferredType,action);
+                              S_OK->result
                            #);
                          DragOver::< 
-                           (#  do 'DropTarget: DragOver called'->putline #);
-                         DragLeave::< 
                            (# 
-                           do 'DropTarget: DragLeave called'->putline
+                           do
+                              (if grfKeyState <> modifiers then
+                              (* modifiers changed since last time - ask user for action again *)
+                                  grfKeyState->modifiers;
+                                  (supportedTypes,grfKeyState,pdwEffect)->media
+                                    ->(preferredType,action)
+                              if);
+                              ;
+                              (if preferredType <> 0 then
+                              (* We can accept the drag-data *)
+                                  DROPEFFECT_COPY->pdwEffect (* default *) ;
+                                  (if action
+                                   // DROPEFFECT_COPY then
+                                      DROPEFFECT_COPY->pdwEffect
+                                   // DROPEFFECT_MOVE then
+                                      DROPEFFECT_MOVE->pdwEffect
+                                  if)
+                               else
+                              (* none of the types can be accepted *)
+                                  DROPEFFECT_NONE->pdwEffect
+                              if);
+                              S_OK->result
                            #);
+                         DragLeave::<  (#  do S_OK->result #);
                          Drop::< 
-                           (#  do 'DropTarget: DragDrop called'->putline #)
+                           (#
+                              hr: @Hresult;
+                              GlobalMemoryPointer: @int32;
+                              str: @cstring;
+                              printf: external
+                                (# format: [0] @char; ptr: @integer
+                                enter (format,ptr)
+                                do callc
+                                #);
+                              (*  _HandToPtr: external
+                               (# mhandle: @int32; ptr: @int32
+                               enter mhandle
+                               do callc
+                               exit ptr
+                               #) *)
+                              Handle2Pointer: external
+                                (# hglobal: @int32; cptr: @int32
+                                enter hglobal
+                                do callc
+                                exit cptr
+                                #)
+                           do
+                              preferredType->tempFormatETC.cfFormat;
+                              none ->tempFormatETC.ptd[];
+                              DVASPECT_CONTENT->tempFormatETC.dwAspect;
+                              - 1->tempFormatETC.lindex;
+                              TYMED_HGLOBAL->tempFormatETC.tymed;
+                              (tempFormatETC[],tempSTGMedium[])
+                                ->pDataObj.GetData->hr;
+                              ;
+                              (if hr.value = S_OK then
+                                  tempSTGMedium.hglobal->Handle2Pointer
+                                    ->GlobalMemoryPointer;
+                                  GlobalMemoryPointer->str.charptr;
+                                  str.get->putline;
+                                  action->pdwEffect;
+                                  (* ('%s\n',GlobalMemoryPointer)->printf *)
+                                  S_OK->result
+                               else
+                                  write_debug:
+                                    (# 
+                                    do
+                                       ' (GetData: '->puttext;
+                                       (if hr.value
+                                        // S_OK then
+                                           'S_OK'->puttext
+                                        // DV_E_LINDEX then
+                                           'DV_E_LINDEX'->puttext
+                                        // DV_E_FORMATETC then
+                                           'DV_E_FORMATETC'->puttext
+                                        // DV_E_TYMED then
+                                           'DV_E_TYMED'->puttext
+                                        // DV_E_DVASPECT then
+                                           'DV_E_DVASPECT'->puttext
+                                        // OLE_E_NOTRUNNING then
+                                           'OLE_E_NOTRUNNING'->puttext
+                                        // STG_E_MEDIUMFULL then
+                                           'STG_E_MEDIUMFULL'->puttext
+                                        // S_FALSE then
+                                           'S_FALSE'->puttext
+                                        else
+                                           'hr er underlig: '->puttext;
+                                           hr.value->putint
+                                       if);
+                                       ').'->putline
+                                    #);
+                                  S_OK->result
+                              if);
+                              
+                           #)
+                      #);
+                    pDropTarget: ^IDropTargetType;
+                    initialised: @boolean;
+                    init:
+                      (# 
+                      do
+                         (if not initialised then
+                             true->initialised;
+                             &private.IDropTargetType[]->private.pDropTarget[]
+                          else
+                             'COleDropTarget.private.init: already initialised!'
+                               ->putline
+                         if)
                       #)
                  #);
-               init:
-                 (# 
-                 do
-                    'COleDropTarget.init'->putline;
-                    &private.IDropTargetType[]->private.pDropTarget[]
-                 #);
                ;
-               register:
+               register:<
                  (#
                     onError:< exception
                       (# 
@@ -71,30 +245,16 @@ guienv
                          'COleDropTarget error: unable to register window.'
                            ->msg.append
                       #);
-                    theInterfaceObject: ^InterfaceObject;
                     ;
-                    theHandle:
-                      (# handle: @integer
-                      do
-                         (if theInterfaceObject[] <> none then
-                             theInterfaceObject.InterfaceObjectID->handle;
-                             (if false then
-                                 2949810->handle;
-                                 'theHandle: handle='->puttext;
-                                 handle->putint;
-                                 newline
-                             if)
-                          else
-                             'theHandle: theCanvas[]=none'->putline
-                         if)
-                      exit handle
-                      #);
+                    theInterfaceObject: ^InterfaceObject;
                     hr: @HRESULT
-                 enter theInterfaceObject[]
                  do
-                    'Register called'->putline;
-                    (theHandle,private.pDropTarget[])->MyRegisterDragDrop
-                      ->hr;
+                    (if not private.initialised then private.init if);
+                    THIS(InterfaceObject)[]->theInterfaceObject[];
+                    DETTE_SKAL_SLETTES:
+                      (#  do target_btn[]->theInterfaceObject[] #);
+                    (theInterfaceObject[]->private.theHandle,
+                     private.pDropTarget[])->MyRegisterDragDrop->hr;
                     (if hr.succeeded then
                         'RegisterDragDrop succeeded'->putline
                      else
@@ -112,230 +272,151 @@ guienv
                         onError
                     if)
                  #);
-               revoke: (#  #)
-            #);
-          SOURCE_COleDropTarget: CCmdTarget
-            (#
-               private: @
-                 (#
-                    pDropSource: ^IDropSourceType;
-                    IDropSourceType: IDropSource
-                      (#
-                         QueryInterface::< 
-                           (# 
-                           do 'DropSource: QueryInterface called'->putline
-                           #);
-                         AddRef::< 
-                           (#  do 'DropSource: AddRef called'->putline #);
-                         Release::< 
-                           (#  do 'DropSource: Release called'->putline #);
-                         ;
-                         QueryContinueDrag::< 
-                           (# 
-                           do 'DropSource: QueryContinueDrag'->putline
-                           #);
-                         GiveFeedback::< 
-                           (#  do 'DropSource: GiveFeedback'->putline #)
-                      #)
-                 #);
-               init:
-                 (# 
-                 do
-                    'SOURCE_COleDropTarget.init'->putline;
-                    &private.IDropSourceType[]->private.pDropSource[]
-                 #);
-               ;
-               register:
+               revoke:<
                  (#
                     onError:< exception
                       (# 
                       do
-                         'SOURCE_COleDropTarget error: unable to register window.'
+                         'COleDropTarget error: unable to revoke window registering.'
                            ->msg.append
                       #);
-                    theInterfaceObject: ^InterfaceObject;
                     ;
-                    theHandle:
-                      (# handle: @integer
-                      do
-                         (if theInterfaceObject[] <> none then
-                             theInterfaceObject.InterfaceObjectID->handle;
-                             (if false then
-                                 2949810->handle;
-                                 'theHandle: handle='->puttext;
-                                 handle->putint;
-                                 newline
-                             if)
-                          else
-                             'theHandle: theCanvas[]=none'->putline
-                         if)
-                      exit handle
-                      #);
+                    theInterfaceObject: ^InterfaceObject;
                     hr: @HRESULT
-                 enter theInterfaceObject[]
                  do
-                    'SOURCE_Register called'->putline;
-                    (theHandle,private.pDropSource[])->SOURCE_RegisterDragDrop
+                    (if not private.initialised then private.init if);
+                    THIS(InterfaceObject)[]->theInterfaceObject[];
+                    DETTE_SKAL_SLETTES:
+                      (#  do target_btn[]->theInterfaceObject[] #);
+                    (theInterfaceObject[]->private.theHandle)->RevokeDragDrop
                       ->hr;
                     (if hr.succeeded then
-                        'RegisterDragDrop succeeded'->putline
+                        'RevokeDragDrop succeeded'->putline
                      else
-                        'RegisterDragDrop failed!'->putline;
+                        'RevokeDragDrop failed!'->putline;
                         (if hr.value
                          // S_OK then
                             'S_OK'->putline
                          // DRAGDROP_E_INVALIDHWND then
                             'DRAGDROP_E_INVALIDHWND'->putline
-                         // DRAGDROP_E_ALREADYREGISTERED then
-                            'DRAGDROP_E_ALREADYREGISTERED'->putline
+                         // DRAGDROP_E_NOTREGISTERED then
+                            'DRAGDROP_E_NOTREGISTERED'->putline
                          else
                             'hr er underlig'->putline
                         if);
                         onError
                     if)
                  #);
-               revoke: (#  #)
+               media:<
+                 (#
+                    types: [0] @integer;
+                    modifiers: @integer;
+                    actions: @integer;
+                    preferredType: @integer;
+                    action: @integer;
+                    ;
+                    typeIsSupported:
+                      (# type: @integer; answer: @boolean
+                      enter type
+                      do
+                         loop:
+                         (for i: types.range repeat
+                           (if type = types[i] then
+                               true->answer; leave loop
+                           if)
+                         for)
+                      exit answer
+                      #);
+                    actionIsSupported:
+                      (# action: @integer; answer: @boolean
+                      enter action
+                      do
+                         (if (action %band actions) <> 0 then true->answer if)
+                      exit answer
+                      #);
+                    modifierIsPressed:
+                      (# modifier: @integer; answer: @boolean
+                      enter modifier
+                      do
+                         (if (modifier %band modifiers) <> 0 then
+                             true->answer
+                         if)
+                      exit answer
+                      #)
+                 enter (types,modifiers,actions)
+                 do
+                    (if (MK_SHIFT->modifierIsPressed) and
+                    (DROPEFFECT_MOVE->actionIsSupported) then
+                        DROPEFFECT_MOVE->action
+                    if);
+                    (if (MK_CONTROL->modifierIsPressed) and
+                    (DROPEFFECT_COPY->actionIsSupported) then
+                        DROPEFFECT_COPY->action
+                    if);
+                    INNER media
+                 exit (preferredType,action)
+                 #);
+               drop:<
+                 (#
+                    asText:
+                      (# t: ^text
+                      do 'asText implementation'->t[]
+                      exit t[]
+                      #);
+                    ;
+                    type: @integer;
+                    action: @integer;
+                    objectHandle: @int32
+                 enter (type,action,objectHandle)
+                 do INNER
+                 #)
             #);
           ;
           ;
           TING_SOM_HOERER_TIL_NETOP_DETTE_VINDUE: (#  #);
-          open::< 
+          DropTarget: @COleDropTarget
+            (#
+               media:: 
+                 (# 
+                 do
+                    (if CF_TEXT->typeIsSupported then
+                        CF_TEXT->preferredType
+                    if)
+                 #)
+            #);
+          open::<
             (# 
             do
-               (470,315)->size;
-               clientCanvas.open;
-               luk_btn.open;
-               source_btn.open;
+               (265,140)->size;
+               (500,140)->position;
                target_btn.open;
-               'Drag\'n\'drop demo'->title
+               'Drag\'n\'drop demo'->title;
+               DropTarget.register
             #);
-          eventHandler::<  (# onAboutToClose::<  (#  do onExit #) #);
-          menubarType:: 
-            (#
-               fileMenu: @menu
-                 (#
-                    openItem: @menuItem
-                      (#
-                         eventHandler:: 
-                           (# onSelect::  (#  do onOpen;  #);  #);
-                         open::  (#  do '&Open'->name; 'o'->key #)
-                      #);
-                    closeItem: @menuItem
-                      (#
-                         eventHandler:: 
-                           (# onSelect::  (#  do onClose #);  #);
-                         open::  (#  do '&Close'->name; 'c'->key #)
-                      #);
-                    exitItem: @menuItem
-                      (#
-                         eventHandler:: 
-                           (# onSelect::  (#  do onExit #);  #);
-                         open::  (#  do 'E&xit'->name; 'x'->key;  #)
-                      #);
-                    sep1: @separator;
-                    open:: 
-                      (# 
-                      do
-                         '&File'->name;
-                         openItem.open;
-                         openItem[]->append;
-                         closeItem.open;
-                         closeItem[]->append;
-                         sep1.open;
-                         sep1[]->append;
-                         exitItem.open;
-                         exitItem[]->append
-                      #)
-                 #);
-               shortcutsMenu: @menu
-                 (#
-                    shortcut1Item: @menuItem
-                      (#
-                         eventHandler:: 
-                           (# onSelect::  (#  do onShortcut1 #);  #);
-                         open::  (#  do 'Shortcut &1'->name; '1'->key #)
-                      #);
-                    open:: 
-                      (# 
-                      do
-                         'Shortcuts'->name;
-                         Shortcut1Item.open;
-                         Shortcut1Item[]->append
-                      #)
-                 #);
-               open::< 
-                 (# 
-                 do
-                    fileMenu.open;
-                    fileMenu[]->append;
-                    ShortcutsMenu.open;
-                    ShortcutsMenu[]->append;
-                    INNER
-                 #)
-            #);
-          clientCanvas: @canvas
-            (#
-               open::< 
-                 (# 
-                 do
-                    4->border.style;
-                    true->border.visible;
-                    (450,130)->size;
-                    (15,30)->position;
-                    
-                 #)
-            #);
-          luk_btn: @pushbutton
-            (#
-               open::< 
-                 (# 
-                 do 'Luk'->label; (60,20)->size; (400,280)->position; INNER
-                 #);
-               eventHandler::<  (# onMouseUp::<  (#  do terminate #) #)
-            #);
-          source_btn: @pushbutton
-            (#
-               open::< 
-                 (# 
-                 do
-                    'Source'->label; (60,20)->size; (400,185)->position; INNER
-                 #)
+          eventHandler::<
+            (# onAboutToClose::<  (#  do DropTarget.revoke; terminate #)
             #);
           target_btn: @pushbutton
             (#
                open::< 
                  (# 
                  do
-                    'Target'->label; (60,20)->size; (400,220)->position; INNER
+                    'Drop Target'->label;
+                    (225,100)->size;
+                    (20,20)->position;
+                    INNER
+                 #);
+               eventHandler::< 
+                 (# onMouseUp::<  (#  do DropTarget.revoke; terminate #)
                  #)
-            #);
-          ;
-          onOpen:< (#  #);
-          onClose:< (#  #);
-          onExit:< (#  do terminate #);
-          onShortcut1:< (#  #);
-          ;
-          SourceDT: @SOURCE_COleDropTarget (#  #);
-          TargetDT: @COleDropTarget (#  #);
-          registerDragDrop:
-            (# 
-            do
-               newline;
-               SourceDT.init;
-               source_btn[]->SourceDT.register;
-               newline;
-               TargetDT.init;
-               target_btn[]->TargetDT.register;
-               newline
             #)
        #);
-     ;
      InitOLE:
        (# hr: @HRESULT
        do
           0->OleInitialize->hr;
           (if hr.failed then 'OleInitialize failed!'->putline if)
        #)
-  do InitOLE; mainWindow.open; mainWindow.registerDragDrop
+  do InitOLE; mainWindow.open
   #)  
 
