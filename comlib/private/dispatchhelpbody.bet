@@ -3,21 +3,21 @@ ORIGIN '../dispatchhelp';
 --LIB: attributes--
 debug: (# exit false #);
 
+memcpy: external
+  (# s1, s2, nbytes: @int32;
+  enter (s1, s2, nbytes)
+  exit s1
+  #);
 --DispatchParamsPrivate: Descriptor--
 (# varg: @VARIANT;
    rgvarg: @ExternalRepetition
-     (# elementSize::(# do 16->value (* sizeof(VARIANT) *) #);
-        
+     (# elementSize::
+          (# do 16->value (* sizeof(VARIANT) *) #);
         inxCopy:
           (# inx: @int32;
-             memcpy: external
-               (# s1, s2, nbytes: @int32;
-               enter (s1, s2, nbytes)
-               exit s1
-               #);
           enter (inx)
           do (if debug then
-                 'memcpy 16 bytes to ' -> puttext; ptr+inx*4->putint; newline;
+                 'memcpy 16 bytes to ' -> puttext; ptr+inx*16->putint; newline;
              if);
              (ptr+inx*16, @@varg, 16) -> memcpy
           #);
@@ -142,8 +142,19 @@ do putString:
    
 --DispatchParamsPutSafeArrayPrivate: descriptor--
 (# psa: ^SAFEARRAY;
-   saBound: @SAFEARRAYBOUND;
-   saBound2: @SAFEARRAYBOUND;
+   sab: @SAFEARRAYBOUND;
+   saBound: @ExternalRepetition
+     (# elementSize::(# do 8 -> value #);
+        inxCopy:
+          (# inx: @int32;
+          enter (inx)
+          do (if debug then
+                 'memcpy 8 bytes to ' -> puttext; ptr+inx*8->putint; newline;
+             if);
+             (ptr+inx*8, @@sab, 8) -> memcpy
+          #);
+
+     #);
    hr: @HRESULT;
    pVargBase: ^VARIANT;
    pVarg: @VariantRefHolder;
@@ -155,19 +166,15 @@ do putSafeArrayLabel:
      (# cDims:@integer;
      do Dimensions.range -> cDims;
         
-        1 -> private.saBound.lLbound;
-        Dimensions[1] -> private.saBound.cElements;
+        cDims -> private.saBound.new;
         
-        (if cDims > 1 then
-            1 -> private.saBound2.lLbound;
-            Dimensions[2] -> private.saBound2.cElements;
-        if);
+        (for i:cDims repeat
+             1 -> private.sab.lLbound;
+             Dimensions[i] -> private.sab.cElements;
+             i-1 -> private.saBound.inxCopy;
+        for);
         
-        (if cDims > 2 then
-            'cannot handle more than two dimentions yet' -> putline;
-        if);
-        
-        (VT_VARIANT, cDims, private.saBound[]) -> SafeArrayCreate -> private.psa[];
+        (VT_VARIANT, cDims, private.saBound) -> SafeArrayCreate -> private.psa[];
         (if debug then
             'psa: ' -> puttext;
             %getLongAt(@@private.psa) -> theinteger;
@@ -178,6 +185,8 @@ do putSafeArrayLabel:
             'DispatchParams.putSafeArray: SafeArrayCreate failed' -> putline;
             leave putSafeArrayLabel;
         if);
+        
+        private.saBound.free;
         
         (* Lock the SAFEARRAY while accessing the data *)
         (private.psa[], private.pvarg[]) -> SafeArrayAccessData -> private.hr;
