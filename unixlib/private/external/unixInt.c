@@ -17,6 +17,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <malloc.h>
+#include <sys/fcntl.h>
 
 #define MAX_NO_OF_ARGS 100
 
@@ -58,6 +59,9 @@ int openPipe(struct unixPipe *aUnixPipe)
     return -1;
   aUnixPipe->readIndex=ref[0];
   aUnixPipe->writeIndex=ref[1];
+  /* fprintf(stdout,"fcntl1=%d\n",fcntl(ref[1],F_SETFL,O_NONBLOCK)); */
+  /* fprintf(stdout,"fcntl2=%d\n",fcntl(ref[0],F_SETFL,O_NONBLOCK)); */
+  fflush(stdout);
   return 1;
 }
 
@@ -133,6 +137,7 @@ int startUnixProcess(char *name, char *args, int in, int out)
   default : 
     /* Parent: */
     {
+      /* close(out); */
       return pid;
     }
   }
