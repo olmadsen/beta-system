@@ -3,188 +3,456 @@ LIB_ITEM 'processsysfdstream';
 
 (*
  * COPYRIGHT
- *       Copyright (C) Mjolner Informatics, 1993-97
+ *       Copyright (C) Mjolner Informatics, 1993-2000
  *       All rights reserved.
  *)
 INCLUDE '~beta/win32lib/ntinterface';
+INCLUDE '~beta/win32lib/winerror';
 INCLUDE 'socketsint';
 INCLUDE '~beta/basiclib/private/betaenvbody';
 INCLUDE '~beta/basiclib/private/filebody';
 
 --- fdStreamPrivate:descriptor ---
 (#
-   (* The NT filedescriptor index on top of which buffered
+   (* The NT file handle (not unix-style fd) index through which 
     * I/O is provided.
     *)
    index: @integer;
-
-   ntStream: @integer; (* NT FILE (cf. stdio.h)  pointer for file. *)
    NtErrNo: @integer; (* may contain NT variable 'errno'*)
    outputFile: @boolean; (* True iff this file is opened for writing. *)
-
-   ProcessError:
-     (# msg: @text
-     enter msg
-     do (if (getErrno->NtErrNo)
-         // EPERM// EACCESS then msg->AccessError
-         // ENOSPC then msg->NoSpaceError
-         else inner
-        if);
-     #);
-
-   SetUpNtStream:
-     (# type: @text;
-     enter type
-     do	(index,type) -> fdopen -> private.ntStream;
-        (if private.ntStream//0 then
-            private.processError(# do 'Cannot open file'->OtherError #);
-        if);
-     #);
+   peeked: @char; (* char we peeked but haven't read yet *)
+   peekp: @boolean;
+   handleWriteError:
+   (#
+      result: @integer;
+      wrongnumberofbytes: @boolean;
+      enter (result, wrongnumberofbytes)
+      do
+         (if (result = 0) or wrongnumberofbytes then
+            (* 'Write Exception being raised' -> screen.putline; *)
+            (if (GetLastError -> private.NtErrNo)
+               // ERROR_ACCESS_DENIED then
+                  AccessError;
+               // ERROR_PIPE_NOT_CONNECTED
+	       // ERROR_BROKEN_PIPE (*this is where the subprocess has exited*)
+               // ERROR_HANDLE_EOF then
+                  EOSError;
+               else
+                  WriteError;
+            if);
+         if);
+   #);
+   handleReadError:
+   (#
+      handleEOSError:<
+      (#
+         callStreamException: @boolean;
+      do true -> callStreamException;
+         INNER;
+         (if callStreamException then
+            EOSError;
+         if);
+      #);
+      result: @integer;
+      wrongnumberofbytes: @boolean;
+      enter (result, wrongnumberofbytes)
+      do
+         (if (result = 0) or wrongnumberofbytes then
+            (* 'Read Exception being raised' -> screen.putline; *)
+            (if (GetLastError -> private.NtErrNo)
+               // ERROR_ACCESS_DENIED then
+                  AccessError;
+               // ERROR_PIPE_NOT_CONNECTED
+	       // ERROR_BROKEN_PIPE (*this is where the subprocess has exited*)
+               // ERROR_HANDLE_EOF then
+                  handleEOSError;
+               else
+                  ReadError;
+            if);
+         if);
+   #);
 #)
 
 --- fdStreamPut:descriptor ---
 (#
+   numberOfBytesWritten: @integer;
+   result: @integer;
 do INNER put;
-   (if ((ch,private.ntStream)->fputc)//EOFvalue then WriteError if);
+   (* 'fdStreamPut' -> screen.putline; *)
+   (private.index, @@ch, 1, @@numberOfBytesWritten, 0) -> WriteFile -> result;
+   (result, (numberOfBytesWritten <> 1)) -> private.handleWriteError;
 #)
 
 --- fdStreamGet:descriptor ---
 (#
+   numberOfBytesRead: @integer;
+   result: @integer;
 do INNER get;
-   private.ntStream -> fgetc -> ch;
-   (if ch//EOFvalue then   (* Either a read error or simply end of file. *)
-       (if true//(private.ntStream -> EOFfunction) then
-           EOSError;
-        else
-           ReadError;
-       if);
+   (* 'fdStreamGet' -> screen.putline; *)
+   (if private.peekp then 
+      private.peeked -> ch; 
+      false -> private.peekp;
+   else
+      (private.index, @@ch, 1, @@numberOfBytesRead, 0) -> ReadFile -> result;
+      (result, (numberOfBytesRead <> 1)) -> private.handleReadError;
    if);
 #)
 
 --- fdStreamPeek:descriptor ---
 (#
+   numberOfBytesRead: @integer;
+   numberOfBytesAvailable: @integer;
+   result: @integer;
 do INNER peek;
-   private.ntStream -> fgetc -> ch;
-   (if ((ch,private.ntStream) -> ungetc)//EOFvalue
-       then   (* Either a read error or simply end of file. *)
-       (if true//(private.ntStream -> EOFfunction) then
-           EOSError;
-        else
-           ReadError;
-       if);
+   (* 'fdStreamPeek' -> screen.putline; *)
+   (if (not private.peekp) then
+      (private.index, @@private.peeked, 1, @@numberOfBytesRead, 0, 0) ->
+                                                   PeekNamedPipe -> result;
+      (result, (numberOfBytesRead <> 1)) -> private.handleReadError;
+      true -> private.peekp;
    if);
+   private.peeked -> ch;
 #)
 
 --- fdStreamEos:descriptor ---
 (#
+   numberOfBytesRead: @integer;
+   numberOfBytesAvailable: @integer;
+   result: @integer;
+   ch: @char;
 do INNER eos;
-   (* private.ntStream kan vaere forkert, fx i runjobfile !!!!
-    * ret det engang!
-    *)
-   (if private.ntStream<>0 then
-       private.ntStream->EOFfunction-> value
-    else
-       true->value
-   if)
+   (* 'fdStreamEos' -> screen.putline; *)
+   (if private.peekp then
+      false -> value;
+   else
+      (* 'test eos on handle=' -> screen.puttext; 
+      private.index -> screen.putint;
+      screen.putline; *)
+      (private.index, @@private.peeked, 1, @@numberOfBytesRead, 0) ->
+                                                   ReadFile -> result;
+      (if (result = 0) or (numberOfBytesRead <> 1) then
+	 (* GetLastError -> private.NtErrNo; *)
+	 (* 'Error = ' -> screen.puttext; private.NtErrNo -> screen.putint; screen.putline;
+	 'bytesread = ' -> screen.puttext; numberOfBytesRead -> screen.putint; screen.putline; *)
+         (if (GetLastError -> private.NtErrNo)
+            // ERROR_ACCESS_DENIED then
+               AccessError;
+            // ERROR_PIPE_NOT_CONNECTED
+	    // ERROR_BROKEN_PIPE (*this is where the subprocess has exited*)
+            // ERROR_HANDLE_EOF then
+               true -> value;
+            else
+               ReadError;
+         if);
+      else
+         false -> value;
+	 true -> private.peekp;
+      if);
+   if);
 #)
 
 --- fdStreamPutText:descriptor ---
-(# fputs: external (# t,s,e: @integer; enter (t,s) exit e #);
-   printf: external(# t: @integer enter t #);
-do 
-   INNER putText;
-   (if txt.lgth>0 //true then
-       (if txt.lgth < txt.T.range // true then 0 -> txt.T[txt.lgth+1] if);
-       (if ((@@txt.T[1],private.ntStream)->fputs)
-        //EOFvalue then WriteError
-   if)if);
+(#
+   numberOfBytesWritten: @integer;
+   result: @integer;
+do INNER PutText;
+   (* 'putText' -> screen.putline; *)
+   (private.index, @@txt.T[1], txt.length, @@numberOfBytesWritten, 0) ->
+                                                       WriteFile -> result;
+   (result, (numberOfBytesWritten <> txt.length)) -> private.handleWriteError;
 #)
+
+(*
+ * Read a line from Windows pipe handle.  In order not to do too many
+ * system calls and external calls and other expensive stuff, we peek
+ * 256 bytes ahead and then read the buffer up to the next newline.
+ * When we find the newline we do a real read which removes the correct
+ * number of characters from the input queue.
+ *)
 
 --- fdStreamGetLine:descriptor ---
 (#
+   tmp: @text;
+   result: @integer;
+   bytesRead: @integer;
+   bytesAvail: @integer;
+   i: @integer;
+   pos: @integer;
+   exitBlock: @boolean;
+   softHandleReadError: private.handleReadError
+      (#
+         handleEOSError::<
+         (#
+         do false -> callStreamException;
+            missing_newline;
+            true -> exitBlock;
+         #);
+      #);
 do
+   (* 'getLine' -> screen.putline; *)
    INNER GetLine;
-   (private.ntStream,true) -> GetStringFromFile -> Txt;
-   (if EofInGetStringFromFile then missing_newline if);
+   txt.clear;
+   tmp.clear;
+   256 -> tmp.extend;
+   L:
+   (#
+   do (if private.peekp then
+         false -> private.peekp;
+         (if private.peeked = '\n' then
+	    leave L;
+	 if);
+	 private.peeked -> txt.put;
+      if);
+      (private.index, @@tmp.T[1], 256, @@bytesRead, @@bytesAvail, 0)
+   	   -> PeekNamedPipe -> result;
+      (result, false) -> softHandleReadError;
+      (if exitBlock then leave L; if);
+      (* 'result = ' -> screen.puttext;
+      result -> screen.putint;
+      ' bytesread = ' -> screen.puttext;
+      bytesRead -> screen.putint;
+      ', bytesAvail = ' -> screen.puttext;
+      bytesAvail -> screen.putint;
+      screen.putline; *)
+      (if bytesRead = 0 then
+         (* FIXME: We block.  We should schedule to another component if
+	  * possible like we do on Unix.
+          *)
+         (private.index, @@tmp.T[1], 1, @@bytesRead, 0) -> ReadFile -> result;
+	 (* 'result of block = ' -> screen.puttext;
+	 result -> screen.putint;
+	 ' bytesread = ' -> screen.puttext;
+	 bytesRead -> screen.putint;
+	 screen.putline; *)
+         (result, (bytesRead <> 1)) -> softHandleReadError;
+         (if exitBlock then leave L; if);
+         (* 'Got a ' -> screen.puttext;
+	 tmp.T[1] -> screen.putint;
+	 screen.putline; *)
+         (if tmp.T[1] = '\n' then
+            leave L;
+         if);
+         tmp.T[1] -> txt.put;
+      else
+         (* 'Got ' -> screen.puttext;
+	 bytesRead -> screen.putint;
+	 ' bytes - first is ' -> screen.puttext;
+         tmp.T[1] -> screen.putint;
+	 screen.putline; *)
+         L2: (# do (for i:bytesRead repeat
+	    (if tmp.T[i] = '\n' then
+	       (* 'Swallowing ' -> screen.puttext;
+	       i -> screen.putint;
+	       ' bytes' -> screen.putline; *)
+               (private.index, @@tmp.T[1], i, @@bytesRead, 0)
+   	          -> ReadFile -> result;
+	       (result, (bytesRead <> i)) -> softHandleReadError;
+	       leave L;
+	    if);
+	    tmp.T[i] -> txt.put;
+	 for) #);
+         (private.index, @@tmp.T[1], i, @@bytesRead, 0)
+   	    -> ReadFile -> result;
+	 (result, (bytesRead <> i)) -> softHandleReadError;
+         (if exitBlock then leave L; if);
+      if);
+      restart L;
+   #);
+   txt.length -> pos;
+   (if pos > 0 then
+      (* truncate carriage return off string *)
+      (if txt.T[pos] = '\r' then
+	  pos-1 -> txt.pos -> txt.lgth;
+      if);
+   if);
+   (* 'We found "' -> screen.puttext; txt[] -> screen.putText; '"' -> screen.putline;
+   'length = ' -> screen.puttext;
+   txt.length -> screen.putint;
+   (if txt.length > 0 then
+      ' txt.T[' -> screen.puttext;
+      txt.length -> screen.putint;
+      '] = ' -> screen.puttext;
+      txt.T[txt.length] -> screen.putint;
+   if);
+   screen.putline; *)
 #)
 
+(*
+ * Read a word from Windows pipe handle.  In order not to do too many
+ * system calls and external calls and other expensive stuff, we peek
+ * 256 bytes ahead and then read the buffer up to the next space/newline.
+ * When we find the space/newline we do a real read which removes the
+ * correct number of characters from the input queue.
+ *)
 --- fdStreamGetAtom:descriptor ---
 (#
+   tmp: @text;
+   result: @integer;
+   bytesRead: @integer;
+   bytesAvail: @integer;
+   i: @integer;
+   pos: @integer;
+   terminatedOnNewline: @boolean;
+   exitBlock: @boolean;
+   softHandleReadError: private.handleReadError
+      (#
+         handleEOSError::<
+         (#
+         do (* 'handling EOS error' -> screen.putline; *)
+	    false -> callStreamException;
+            true -> exitBlock;
+         #);
+      #);
 do
    INNER GetAtom;
-   (private.ntStream,false) -> GetStringFromFile -> Txt;
+   (* 'getAtom' -> screen.putline; *)
+   txt.clear;
+   tmp.clear;
+   256 -> tmp.extend;
+   L:
+   (#
+   do (if private.peekp then
+         false -> private.peekp;
+         (if (private.peeked = '\n') or (private.peeked = ' ') then
+	    (if private.peeked = '\n' then true -> terminatedOnNewline; if);
+	    leave L;
+	 if);
+	 private.peeked -> txt.put;
+      if);
+      (private.index, @@tmp.T[1], 256, @@bytesRead, @@bytesAvail, 0)
+   	   -> PeekNamedPipe -> result;
+      (result, false) -> softHandleReadError;
+      (if exitBlock then leave L; if);
+      (if bytesAvail = 0 then
+         (* FIXME: We block.  We should schedule to another component if
+	  * possible like we do on Unix.
+          *)
+         (private.index, @@tmp.T[1], 1, @@bytesRead, 0) -> ReadFile -> result;
+         (result, (bytesRead <> 1)) -> softHandleReadError;
+         (if exitBlock then leave L; if);
+	 (if (tmp.T[i] = '\n') or (tmp.T[i] = ' ') then
+	    (if tmp.T[i] = '\n' then true -> terminatedOnNewline; if);
+            leave L;
+         if);
+         tmp.T[1] -> txt.put;
+      else
+         L2: (#
+	 do (for i:bytesRead repeat
+	       (if (tmp.T[i] = '\n') or (tmp.T[i] = ' ') then
+	          (if tmp.T[i] = '\n' then true -> terminatedOnNewline; if);
+                  (private.index, @@tmp.T[1], i, @@bytesRead, 0)
+   	             -> ReadFile -> result;
+	          (result, (bytesRead <> i)) -> softHandleReadError;
+	          leave L;
+	       if);
+	       tmp.T[i] -> txt.put;
+	   for);
+	   (private.index, @@tmp.T[1], i, @@bytesRead, 0)
+	      -> ReadFile -> result;
+	   (result, (bytesRead <> i)) -> softHandleReadError;
+           (if exitBlock then leave L; if);
+	   restart L;
+	 #);
+      if);
+      restart L;
+   #);
+   (if terminatedOnNewline then
+      txt.length -> pos;
+      (if pos > 0 then
+         (* truncate carriage return off string *)
+         (if txt.T[pos] = '\r' then
+	     pos-1 -> txt.pos -> txt.lgth;
+         if);
+      if);
+   if);
+   (* exit txt[] *)
 #)
+
+(*
+ * Woah!  I don't think you are allowed to do a GC in this function.
+ * At least you can't refer to repAdr after you do a GC.  --Corry
+ *)
 
 --- fdStreamGetRep:descriptor ---
 (#
+   numberOfBytesRead: @integer;
+   result: @integer;
 do INNER getRep;
-   (repAdr,1,length*4,private.ntStream) -> fread -> length;
+   length * 4 -> length;
+   (if (length <> 0) and (private.peekp) then
+      length - 1 -> length;
+      private.peeked %putByteAt repAdr;
+      repAdr + 1 -> repAdr;
+      false -> private.peekp;
+   if);
+      
+   (private.index, repAdr, length, @@numberOfBytesRead, 0) -> ReadFile
+                                                                   -> result;
+   0 -> repAdr;  (* In case we get a GC here *)
+   (result, (numberOfBytesRead <> length)) -> private.handleReadError;
 #)
 
 --- fdStreamPutRep:descriptor ---
 (#
+   numberOfBytesToWrite: @integer;
+   result: @integer;
 do INNER putRep;
-   (repAdr,1,length*4,private.ntStream) -> fwrite -> length;
+   length * 4 -> numberOfBytesToWrite;
+   (private.index, repAdr, numberOfBytesToWrite, @@length, 0) ->
+                                                       WriteFile -> result;
+   (result, (numberOfBytesToWrite <> length)) -> private.handleWriteError;
 #)
 
 --- fdStreamOpenRead:descriptor ---
-(# z: [1]@char;
+(#
 do
    INNER OpenRead;
-   'r' -> z[1];
-   (* z -> private.SetUpNtStream;*)
 #)
 
 --- fdStreamOpenWrite:descriptor ---
-(# z: [1]@char;
+(#
 do
-   INNER OpenWrite;
    true -> private.outputFile;
-   'w' -> z[1];
-   (* z -> private.SetUpNtStream; *)
+   INNER OpenWrite;
 #)
 
 --- fdStreamOpenReadWrite:descriptor ---
 (#
 do
-   INNER OpenReadWrite;
    true -> private.outputFile;
-   (*'r+' -> private.SetUpNtStream; *)
+   INNER OpenReadWrite;
 #)
 
 --- fdStreamOpenExeWrite:descriptor ---
-(# z: [1]@char;
+(#
 do
-   INNER OpenExeWrite;
    true -> private.outputFile;
-   'w' -> z[1];
-   (* z -> private.SetUpNtStream; *)
+   INNER OpenExeWrite;
 #)
 
 --- fdStreamFlush:descriptor ---
 (#
 do
    INNER flush;
-   (if true//private.OutputFile then
-       (if (private.ntStream->fflush)//EOFvalue then WriteError; if);
-   if);
+   (* TODO:  Do we need to do anything here? *)
 #)
 
 --- fdStreamClose:descriptor ---
 (#
 do
    INNER close;
-   (if private.ntStream<>0 then
-       (if (private.ntStream->fclose)//EOFvalue then OtherError; if);
-       (* Note that the fclose call closes both the ntStream and the
-        filedescriptor (index). *)
-   if)
+   (* 'Closing handle ' -> screen.puttext;
+   private.index -> screen.putint;
+   screen.putline; *)
+   (if private.index <> 0 then 
+      private.index -> CloseHandle;
+   if);
+   0 -> private.index;
 #)
 
 --- fdStreamException:descriptor ---
 (#
 do
-   'fdStream exception: ' -> msg.puttext;
-   message[] -> msg.puttext;
+   INNER fdStreamException;
 #)
 

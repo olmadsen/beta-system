@@ -1,0 +1,170 @@
+ORIGIN '~beta/basiclib/systemenv';
+INCLUDE '../commpipe';
+INCLUDE '../processmanager';
+--- program:descriptor ---
+systemEnv
+(# 
+   execReadWriteInit:
+     (# name, args: ^text;
+        child: @process;
+        openRedirection:< Object;
+        closeRedirection:< Object;
+        
+     enter (name[], args[])
+     do
+        (* initialize (an object to manage) the child process *)
+        name[] -> child.init;
+        (if args[]<> none then args[] -> child.argument.append if);
+        &openRedirection;
+        (* run the child process *)
+        child.start;
+        INNER;
+        &closeRedirection;
+        (* Await exit of child.
+         * Otherwise it will turn into a zombie.
+         *)
+        child.awaitStopped;
+     #);
+   
+   execRead: execReadWriteInit
+     (#
+	output: ^stream;
+        outchannel: @pipe;
+        openRedirection::<
+          (# 
+          do (* setup communication channel to retrieve output from child *)
+             outchannel.init;
+             outchannel.writeEnd[] -> child.redirectToChannel;
+             outchannel.readEnd[] -> output[];
+             INNER;
+          #);
+        closeRedirection::<
+          (# 
+          do (* Close channel *)
+             INNER;
+             outchannel.readEnd.close;
+          #);
+     do INNER;
+     #);
+   
+   
+   execReadWrite: execRead
+     (# input: ^stream;
+        inchannel: @pipe;
+        openRedirection::<
+          (# 
+          do (* setup communication channel to give input to child *)
+             inchannel.init;
+             inchannel.readEnd[] -> child.redirectFromChannel;
+             inchannel.writeEnd[] -> input[];
+             INNER;
+          #);
+        closeRedirection::<
+          (# 
+          do (* Close channel *)
+             INNER;
+             inchannel.writeEnd.close;
+          #);
+
+     do INNER;
+     #);
+   execWrite: execReadWriteInit
+     (# input: ^stream;
+        inchannel: @pipe;
+        openRedirection::<
+          (# 
+          do (* setup communication channel to give input to child *)
+             inchannel.init;
+             inchannel.readEnd[] -> child.redirectFromChannel;
+             inchannel.writeEnd[] -> input[];
+             INNER;
+          #);
+        closeRedirection::<
+          (# 
+          do (* Close channel *)
+             INNER;
+             inchannel.close;
+          #);
+
+     do INNER;
+     #);
+   
+   execReadText:execRead
+     (# T: ^Text;
+	Temp: ^Text;
+     do &Text[]->T[];
+        loop:
+          (# 
+          do 
+	     (* 'Checking for eos' -> putline; *)
+             (if not output.eos then
+                 output.getline -> Temp[];
+		 Temp[] -> T.putLine;
+                 restart loop;
+             if);
+	     (* 'Got eos' -> putline; *)
+          #);
+     exit T[]
+     #);
+   
+   execReadWriteText:ExecReadWrite
+     (# T: ^Text;
+     enter T[]
+     do T[]->input.putText;
+	'Closing write end' -> screen.putLine;
+        inchannel.writeEnd.close;
+        &Text[]->T[];
+        loop:
+          (# 
+          do (if not output.eos then
+                 output.getline -> T.putLine;
+                 restart loop
+             if)
+          #);
+     exit T[]
+     #);
+   
+   first, other: ^Text;
+
+   (*
+    * The examples here fail rather inelegantly if the programs called
+    * don't exist
+    *)
+   
+do 'This will not work if you do not have . in your path!' -> screen.putline;
+   'output of "slowwriter":'->screen.putLine;
+   ('slowwriter', '-') -> execReadText -> first[];
+   'heres the output' -> putline;
+   first[]->screen.putText;
+   'there it was' -> putline;
+
+   'output of "slowwriter -s":'->screen.putLine;
+   ('slowwriter', '-s') -> execReadText -> first[];
+   'heres the output' -> putline;
+   first[]->screen.putText;
+   'there it was' -> putline;
+   
+   'output of "slowwriter -n":'->screen.putLine;
+   ('slowwriter', '-n') -> execReadText -> first[];
+   'heres the output' -> putline;
+   first[]->screen.putText;
+   'there it was' -> putline;
+   
+   'Writing this output to reader, NOT reading the output:'->screen.putLine;
+   ('reader', '-') -> execWrite
+   (# 
+   do first[]->input.putText;
+   #);
+
+   'Writing this output to reader -w, NOT reading the output:'->screen.putLine;
+   ('reader', '-w') -> execWrite
+   (# 
+   do first[]->input.putText;
+   #);
+
+   'Writing this output to reader, reading the output:'->screen.putLine;
+   ('reader', '-', first[]) -> execReadWriteText -> screen.putLine;
+   'done.'->screen.putLine;
+   
+   screen.newLine;
+#)
