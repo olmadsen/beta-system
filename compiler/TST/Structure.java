@@ -1,13 +1,40 @@
+
 public class Structure {
 
-  public BetaObject iOrigin;
+  public Object iOrigin;
   public Class iProto;
   
-  Structure(BetaObject o, Class p){
+  Structure(Object o, Class p){
     iOrigin = o;
     iProto = p;
   }
-  
+
+  public static Structure AlloS(Object o, Class p) {
+    return new Structure(o, p);
+  }
+
+  public static Structure ObjS(Object o)
+    throws Exception
+  {
+    Class proto = o.getClass();
+    java.lang.reflect.Field origin_field;
+    Object origin;
+    origin_field = proto.getDeclaredField("origin");
+    origin = origin_field.get(o);
+    return new Structure(origin, proto);
+  }
+
+  public Object AlloSI() throws Exception
+  {
+    Object item;
+    java.lang.reflect.Field origin_field;
+    Object origin;
+    item = iProto.newInstance();
+    origin_field = iProto.getDeclaredField("origin");
+    origin_field.set(item, iOrigin);
+    return item;
+  }
+
   public static boolean eqS(Structure arg1, Structure arg2)
   {
     if (arg1==null) {
@@ -48,7 +75,7 @@ public class Structure {
   {
     Class proto1;
     Class proto2;
-    BetaObject newObject;
+    Object newObject;
 
     if (arg1==null) return false;
     if (arg2==null) return false;
