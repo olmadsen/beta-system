@@ -642,9 +642,11 @@ void CheckRegisters(void)
   if (!CheckCell(edx)) RegError(pc1, pc2, "edx", edx);
   if (!CheckCell(edi)) RegError(pc1, pc2, "edi", edi);
 #endif /* (defined(linux) || defined(nti)) */
+#endif /* RTDEBUG */
 }
 
 /*************************** Label Debug ****************************/
+#ifdef RTDEBUG
 
 #undef DEBUG_LABELS 
 
