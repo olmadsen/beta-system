@@ -12,7 +12,7 @@ public class BetaOutput
     String superPackage;
     int    indentlevel = 0;
 
-    PrintStream out;
+    public PrintStream out;
 
     public BetaOutput(String betalib, 
 		      String pkg, 
@@ -20,7 +20,7 @@ public class BetaOutput
 		      String superPkg, 
 		      String superCls, 
 		      boolean overwrite,
-		      boolean stdout)
+		      PrintStream outstream)
 	throws Throwable
     {
 	className    = cls;
@@ -34,8 +34,8 @@ public class BetaOutput
 	    entry = new File(entry.getAbsolutePath() + ".new");
 	}
 	entry.getParentFile().mkdirs();
-	if (stdout){
-	    out = System.out;
+	if (outstream != null){
+	    out = outstream;
 	} else {
 	    out = new PrintStream(new FileOutputStream(entry));
 	    System.err.println("Output file:\n\t\"" + entry.getAbsolutePath() + "\"");
@@ -81,6 +81,110 @@ public class BetaOutput
 	out.println("");
     }
 
+    public String mapReserved(String word){
+	// Map declarations and dynamic references
+	String prefix = "";
+	// Extract declarator prefix
+	if (word.startsWith("^")){
+	    prefix = "^";
+	    word = word.substring(1,word.length());
+	} else if (word.startsWith("[0]^")){
+	    prefix = word.substring(0,4);
+	    word = word.substring(4,word.length());
+	} else if (word.startsWith("@")){
+	    return word;
+	} else if (word.startsWith("[0]@")){
+	    return word;
+	} 
+
+	// compare word against grammatically reserved BETA words
+	if (word.equalsIgnoreCase("enter")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("exit")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("do")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("for")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("repeat")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("if")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("restart")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("inner")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("suspend")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("code")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("then")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("else")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("tos")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("this")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("or")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("xor")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("div")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("mod")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("and")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("not")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("none")){
+	    return prefix + "Java" + word;
+	}
+		   
+	// Compare word against basic patterns
+	if (word.equalsIgnoreCase("integer")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("shortInt")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("char")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("boolean")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("false")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("true")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("real")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("int8")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("int8u")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("int16")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("int16u")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("int32")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("int32u")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("int64")){
+	    return prefix + "Java" + word;
+	} else if (word.equalsIgnoreCase("int64u")){
+	    return prefix + "Java" + word;
+	}
+	    
+	// Compare against other patterns that may confuse 
+	if (word.equals("File")){
+	    return prefix + "Java" + word;
+	} 
+
+	// Not reserved
+	return prefix + word;
+	
+    }
+
     public void putHeader(Object[] includes)
     {
 	putln("ORIGIN '~beta/basiclib/betaenv';");
@@ -94,7 +198,7 @@ public class BetaOutput
 	putln(" * See http://java.sun.com/j2se/1.4.1/docs/api/" 
 			   + packageName + '/' + className + ".html");
 	putln(" *)");
-	put(className + ": ");
+	put(mapReserved(className) + ": ");
 	if (superClass==null || superClass.equals("Object")){
 	    put("ExternalClass");
 	} else {
@@ -111,7 +215,7 @@ public class BetaOutput
 	if (isStatic) {
 	    commentline("STATIC:");
 	}
-	putln(name + ": " + type + ";");
+	putln(mapReserved(name) + ": " + mapReserved(type) + ";");
     }
 
     public void putMethod(String name, String mangledName, String[] parameters, String returnType, boolean isStatic)
@@ -122,20 +226,20 @@ public class BetaOutput
 		  + proctype + " " 
 		  + comment("Overloaded " + ((name.equals("_init")) ? "constructor" : name)));
 	} else {
-	    putln(name + ": " + proctype);
+	    putln(mapReserved(name) + ": " + proctype);
 	}
 	
 	indent(+2);
 	indent(); put("(# ");
 	if (returnType!=null){
-	    put("result: " + returnType + ";");
+	    put("result: " + mapReserved(returnType) + ";");
 	}
 	nl();
 	indent(+3);
 	if (parameters.length>0){
 	    int n = 0;
 	    for (int i = 0; i<parameters.length; i++){
-		putln("arg" + (++n) + ": " + parameters[i] + ";");
+		putln("arg" + (++n) + ": " + mapReserved(parameters[i]) + ";");
 	    }
 	    indent(-3);
 	    indent();

@@ -9,7 +9,7 @@ class JavaConverter
 {
     boolean trace = true;
 
-    BetaOutput out;
+    BetaOutput beta;
     Class thisClass;
 
     Map includes = new HashMap(10);
@@ -35,7 +35,7 @@ class JavaConverter
 
     public static void main(String[] args){
 	boolean overwrite = false;
-	boolean stdout = false;
+	PrintStream out = null;
 	if (args.length >= 2){
 	    for (int i=0; i<args.length; i++){
 		if (args[i].startsWith("-")){
@@ -44,13 +44,13 @@ class JavaConverter
 		    } else if (args[i].equals("-F")){
 			overwrite=true;
 		    } else if (args[i].equals("-")){
-			stdout=true;
+			out=System.out;
 		    } else {
 			usage("Illegal option: " + args[i]);
 		    }
 		} else {
 		    if (args.length-i == 2){
-			System.exit(new JavaConverter().convert(args[i], args[i+1], overwrite, stdout));
+			System.exit(new JavaConverter().convert(args[i], args[i+1], overwrite, out));
 		    } else {
 			usage("Wrong number of arguments after the " + i + " option" + ((i<=1)?"":"s"));
 		    }
@@ -63,21 +63,25 @@ class JavaConverter
 
     void doFields(Class cls) throws Throwable
     {
+	boolean first = true;
+	
 	Field fieldlist[] = cls.getDeclaredFields();
 	if (fieldlist.length==0) return;
-
-	out.nl();
-	out.commentline("Public/protected fields");
-	out.nl();
 
 	for (int i = 0; i < fieldlist.length; i++) {
 	    Field f = fieldlist[i];
 	    if ((f.getModifiers() & Modifier.PRIVATE)==0){
+		if (first){
+		    beta.nl();
+		    beta.commentline("Public/protected fields");
+		    beta.nl();
+		}
+		first = false;
 		boolean isStatic = (f.getModifiers() & Modifier.STATIC)!=0;
-		out.putField(f.getName(), mapType(f.getType(),false), isStatic);
+		beta.putField(f.getName(), mapType(f.getType(),false), isStatic);
 	    }
 	}
-	out.nl();
+	beta.nl();
     }
 
     void doConstructors(Class cls) throws Throwable
@@ -87,9 +91,9 @@ class JavaConverter
 	Constructor ctorlist[] = cls.getDeclaredConstructors();
 	if (ctorlist.length==0) return;
 
-	out.nl();
-	out.commentline("Public/protected constructors");
-	out.nl();
+	beta.nl();
+	beta.commentline("Public/protected constructors");
+	beta.nl();
 
 	for (int i = 0; i < ctorlist.length; i++) {
 	    Constructor ct = ctorlist[i];
@@ -106,10 +110,10 @@ class JavaConverter
 		} else {
 		    mangledName = null;
 		}
-		out.putMethod(name, mangledName, parameters, null, isStatic);
+		beta.putMethod(name, mangledName, parameters, null, isStatic);
 	    }
 	}
-	out.nl();
+	beta.nl();
     }
 
     void doMethods(Class cls) throws Throwable
@@ -120,9 +124,9 @@ class JavaConverter
 	Method methlist[] = cls.getDeclaredMethods();
 	if (methlist.length==0) return;
 
-	out.nl();
-	out.commentline("Public/protected methods");
-	out.nl();	
+	beta.nl();
+	beta.commentline("Public/protected methods");
+	beta.nl();	
 	
 	// Record all methods in order to reveal overloaded methods 
 	methodcount = new IntegerMap(methlist.length);
@@ -138,6 +142,7 @@ class JavaConverter
 	    Method m = methlist[i];
 	    if ((m.getModifiers() & Modifier.PRIVATE)==0){
 		String name = m.getName();
+		//System.err.println("Method " + name + ": modiciers: " + m.getModifiers());
 		boolean isStatic = (m.getModifiers() & Modifier.STATIC)!=0;
 		String returnType = mapType(m.getReturnType(), false);
 		Class params[] = m.getParameterTypes();
@@ -150,16 +155,35 @@ class JavaConverter
 		} else {
 		    mangledName = null;
 		}
-		out.putMethod(name, mangledName, parameters, returnType, isStatic);
+		beta.putMethod(name, mangledName, parameters, returnType, isStatic);
 	    }
 	}
-	out.nl();
+	beta.nl();
     }
 
-    Object[] doIncludes(Class cls){
+    void doClasses(Class cls) throws Throwable
+    {
+	Class classlist[] = cls.getDeclaredClasses();
+	if (classlist.length==0) return;
+
+	beta.nl();
+	beta.commentline("Inner classes");
+	beta.nl();
+
+	for (int i = 0; i < classlist.length; i++) {
+	    String inner = classlist[i].getName();
+	    System.err.println("Warning: Inner class " + inner + " NYI");
+	    //new JavaConverter().convert(inner, null, false, beta.out);
+	}
+    }
+
+    Object[] doIncludes(Class cls, Class sup){
 	// Scan all parameters of all methods to determine if other types
 	// are used as formal parameters, thus causing a need for a BETA INCLUDE.
 	
+	// Super class
+	mapType(sup, true);
+
 	// scan fields 
 	Field fieldlist[] = cls.getDeclaredFields();
 	for (int i = 0; i < fieldlist.length; i++) {
@@ -281,7 +305,7 @@ class JavaConverter
 	    System.err.println("Warning: mapInternalType: [" 
 			       + name 
 			       + ": Cannot map multidimensional arrays to BETA");
-	    out.fixme("[" + name + ": Cannot map multidimensional arrays to BETA");
+	    beta.fixme("[" + name + ": Cannot map multidimensional arrays to BETA");
 	    return "[0]" + mapInternalType(name, doIncludes);
 	} else if (name.equals("B")){
 	    return "[0]@char";
@@ -301,7 +325,7 @@ class JavaConverter
 	    return "[0]@boolean";
 	} else if (name.equals("V")){
 	    System.err.println("Warning: mapInternalType: [V: Array of void???"); 
-	    out.fixme("[V: Array of void???");
+	    beta.fixme("[V: Array of void???");
 	    return "[0]@int32";
 	} else if (name.startsWith("L")){
 	    name = name.substring(1,name.length()-1);
@@ -327,7 +351,8 @@ class JavaConverter
 	return (i >= 0) ? name.substring(i+1, name.length()) : name;
     }
 
-    int convert(String classname, String betalib, boolean overwrite, boolean stdout){
+    int convert(String classname, String betalib, boolean overwrite, PrintStream out){
+	classname = slashToDot(classname);
 	System.err.println("Converting class\n\t\"" + classname + "\"");
 	try {
 	    Class cls = Class.forName(classname);
@@ -345,12 +370,13 @@ class JavaConverter
 		superName = stripPackage(superName);
 		superPkg  = dotToSlash(superPkg);
 	    }
-	    out = new BetaOutput(betalib, pkg, name, superPkg, superName, overwrite, stdout);
-	    out.putHeader(doIncludes(cls));
+	    beta = new BetaOutput(betalib, pkg, name, superPkg, superName, overwrite, out);
+	    beta.putHeader(doIncludes(cls, sup));
 	    doFields(cls);
 	    doConstructors(cls);
 	    doMethods(cls);
-	    out.putTrailer();
+	    doClasses(cls);
+	    beta.putTrailer();
 	} catch (Throwable e) {
 	    e.printStackTrace();
 	    return 1;
