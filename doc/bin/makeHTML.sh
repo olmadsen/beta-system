@@ -11,19 +11,27 @@
 # Can be set:
 #  INTPOST  Postprocessor applied after $MAKEINT, before $MAKEHTML
 #  OPTIONS  Extra options for $MAKEHTML 
+#  QUIET    Be quiet
 
 /bin/rm -f *.int
-echo Making interface descriptions for \"$SRC\" ...
-echo ""
+
+if [ "$QUIET" != "1" ]; then
+    echo Making interface descriptions for \"$SRC\" ...
+    echo ""
+fi
 for srcdir in $SRC
 do
     for file in $FILES
     do
 	if [ ! -f $srcdir/$file ]; then continue; fi
 	INT=`basename $srcdir/$file .bet`.int
-	echo Making $INT from $srcdir/$file ...
+	if [ "$QUIET" != "1" ]; then
+	    echo Making $INT from $srcdir/$file ...
+	fi
 	if [ -n "$INTPOST" ]; then
-	   echo Performing $INTPOST before $MAKEHTML
+	   if [ "$QUIET" != "1" ]; then
+		echo Performing $INTPOST before $MAKEHTML
+	   fi
 	   expand $srcdir/$file | $MAKEINT | $INTPOST > $INT
 	else
 	   expand $srcdir/$file | $MAKEINT > $INT
@@ -32,8 +40,12 @@ do
     done
 done
 
-echo Creating HTML:
-$MAKEHTML -v $OPTIONS $INTFILES
+if [ "$QUIET" != "1" ]; then
+    echo Creating HTML:
+    OPTIONS="$OPTIONS -v"
+fi
+$MAKEHTML $OPTIONS $INTFILES
 /bin/rm -f *.int
-echo done.
-
+if [ "$QUIET" != "1" ]; then
+    echo done.
+fi

@@ -2,9 +2,10 @@
 
 sub usage
 {
-    print "Usage: int2html.perl [-c] [-v] [-t] [-f] [-x] <interfacefiles>\n";
+    print "Usage: int2html.perl [-c] [-v] [-w] [-t] [-f] [-x] <interfacefiles>\n";
     print "  -c: leave out Mjolner Informatics Copyright\n";
     print "  -v: print progress to STDERR\n";
+    print "  -w: special Wiki server variant\n";
     print "  -t: print trace to STDERR\n";
     print "  -f: use full paths to style sheets, images, javascripts\n";
     print "  -x: reference images, javascripts, stylesheets three directory levels up.\n";
@@ -17,6 +18,7 @@ $trace=$t;
 $extradir=$x;
 $fullpath=$f;
 $nocopyright=$c;
+$wiki=$w;
 
 # Insert World Wide Web tags for declarations (HTML format).
 # Outermost declaration is indexed by its own name, inner declarations are 
@@ -53,6 +55,10 @@ $nocopyright=$c;
 
 ##### Configuration #####
 
+if ($wiki){
+    $fullpath=1;
+    $nocopyright=1;
+}
 
 if ($nocopyright){
     $copyright = "";
@@ -82,7 +88,11 @@ if ($fullpath){
 
 # Other file names:
 $indexfile = "inx.html";
-$contentsfile = "index.html";
+if ($wiki){
+    $contentsfile = $ENV{'TOCURL'};
+} else {
+    $contentsfile = "index.html";
+}
 
 sub print_button
 {
@@ -113,12 +123,16 @@ sub print_std_buttons
     }
     if ($filenumber==0){
 	# first file
-	&print_button("prev", $contentsfile);
+	if ($wiki){
+	    &print_button("prev", "");
+	} else {
+	    &print_button("prev", $contentsfile);
+	};
     } else {
 	&print_button("prev", 
 		      &strip_path(&strip_extension($files[$filenumber-1])) . ".html");
     }
-    &print_button("top", $topfile);
+    &print_button("top", $topfile) if (!$wiki);
     &print_button("content", $contentsfile);
     &print_button("index", $indexfile);
 }
@@ -193,7 +207,7 @@ EOT
     &print_button("next", "");
     &print_button("prev", 
 		  &strip_path(&strip_extension($files[$#files])) . ".html");
-    &print_button("top", $topfile);
+    &print_button("top", $topfile) if (!$wiki);
     &print_button("content", $contentsfile);
 
     print<<EOT;
@@ -226,7 +240,7 @@ EOT
     &print_button("next", "");
     &print_button("prev", 
 		  &strip_path(&strip_extension($files[$#files])) . ".html");
-    &print_button("top", $topfile);
+    &print_button("top", $topfile) if (!$wiki);
     &print_button("content", $contentsfile);
 
     print<<EOT;
@@ -405,7 +419,7 @@ EOT
     &print_button("next", 
 		  &strip_path(&strip_extension($files[0])) . ".html");
     &print_button("prev", "");
-    &print_button("top", $topfile);
+    &print_button("top", $topfile) if (!$wiki);
     &print_button("index", $indexfile);
 
     print<<EOT;
@@ -436,7 +450,7 @@ EOT
     &print_button("next", 
 		  &strip_path(&strip_extension($files[0])) . ".html");
     &print_button("prev", "");
-    &print_button("top", $topfile);
+    &print_button("top", $topfile) if (!$wiki);
     &print_button("index", $indexfile);
 
     print<<EOT;
@@ -463,6 +477,12 @@ sub print_toc
 sub strip_extension
 {
     local ($string) = @_;
+    if ($wiki) {
+	# hack for wiki server
+	$string =~ s/\.int$/.bet/;
+	return $string;
+    };
+
     if ( $string =~ m/([^\.]+)\..*/ ) {
 	$string = $1;
     }
@@ -789,8 +809,10 @@ open (STDOUT, ">$indexfile") || die "\nCannot open $indexfile for writing: $!\n"
 close (STDOUT);
 printf STDERR "done.\n" if $verbose==1;
 
-printf STDERR "\nWriting table of contents to $contentsfile ... " if $verbose==1;
-open (STDOUT, ">$contentsfile") || die "\nCannot open $contentsfile for writing: $!\n";
-&print_toc();
-close (STDOUT);
+if (!$wiki){
+    printf STDERR "\nWriting table of contents to $contentsfile ... " if $verbose==1;
+    open (STDOUT, ">$contentsfile") || die "\nCannot open $contentsfile for writing: $!\n";
+    &print_toc();
+    close (STDOUT);
+}
 printf STDERR "done.\n" if $verbose==1;
