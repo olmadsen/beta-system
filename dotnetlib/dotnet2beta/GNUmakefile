@@ -7,6 +7,6 @@ DotnetConverter.exe: DotnetConverter.cs BetaOutput.dll
 	csc -nologo -t:library $<
 
 clean:
-	rm -f *~ *.dll *.exe 
+	rm -f *~ *.dll *.exe *.pdb *.suo
 	rm -rf obj
 
