@@ -5,10 +5,12 @@
 undef %progs;
 undef @dirs;
 
-if (defined($c)){
-    # run.demos -c
-    &compile_all_demos();
-}
+sub read_command_options()
+{
+    $target       = "clr" if (defined($d));
+    $target       = "jvm" if (defined($j));
+    $skip_compile = 1     if (defined($c));
+};
 
 sub findprogs
 # find all .bet files in dir and
@@ -48,11 +50,13 @@ sub checkprogs
     print "====================\n";
     foreach $prog (sort keys %progs){
 	if (!defined $progs{$prog}){
-	    print "CHECK: Not a program file (or not compiled): $prog.bet\n";
+	    print "CHECK  : Not a program file (or not compiled): $prog.bet\n";
+	} elsif ($progs{$prog}==111){
+	    print "SKIPPED: program skipped in bytecode mode: $prog\n";
 	} elsif ($progs{$prog}==999){
-	    print "CHECK: program not attempted run: $prog\n";
+	    print "CHECK  : program not attempted run: $prog\n";
 	} elsif ($progs{$prog}==0){
-	    print "ok   : program tested ok: $prog\n";
+	    print "ok     : program tested ok: $prog\n";
 	} else {
 	    if (-f "$prog"){
 		print "ERROR: Program run with error: $prog (exit $progs{$prog})\n";
@@ -101,16 +105,22 @@ sub compare_output
     }
 }
 
-sub setup_demo_run
+sub find_local_progs()
 {
-
     undef %progs;
     &findprogs('.');
     if (scalar(keys %progs) == 0){
 	print "Warning: no .bet files found!\n";
     }
+}
 
+sub setup_demo_run
+{
+
+    &read_command_options();
+    &find_local_progs();
     &setup_variables();
+    &compile_all_demos();
 
     unlink "run.def";
 
@@ -128,19 +138,16 @@ sub setup_demo_run
     
     print(SAVEOUT "Running demos with output to file run.out\n");
     print SAVEOUT "BETALIB: $betalib\n";
-    print SAVEOUT "Platform: $objdir\n";
+    print SAVEOUT "Platform: $target\n";
 }
 
 sub setup_graphics_demo_run
 {
-    undef %progs;
-    &findprogs('.');
-    if (scalar(keys %progs) == 0){
-	print "Warning: no .bet files found!\n";
-    }
-    
+    &read_command_options();
+    &find_local_progs();
     &setup_variables();
-    
+    &compile_all_demos();
+
     unlink "run.def";
 
     open(STDERR, ">&STDOUT") || die "Can't dup stdout";
@@ -194,7 +201,13 @@ sub countdirs
 
 sub run_demo
 {
-    my ($dir, $prog, $args) = @_;
+    my ($dir, $prog, $args, $skip_bytecode) = @_;
+
+    if (defined($skip_bytecode) && isByteCode){
+	print "*** Skipping $prog in bytecode mode ***\n";
+	$progs{$prog} = 111;
+	return;
+    }
 
     $dir = '.' if ($dir eq "");
     if (!-d $dir){
@@ -242,16 +255,12 @@ sub compile_all_demos
 # find all .bet files in current directory and
 # attempt to compile them
 {
-    undef %progs;
-    &findprogs('.');
-    #print "keys: \n" . join("\n", keys %progs) . "\n";
-    #print "sort: \n" . join("\n", sort keys %progs) . "\n";
-    print "############# Compiling all .bet files recursively\n";
-    if (scalar(keys %progs) == 0){
-	print "Warning: no .bet files found!\n";
-    }
-    system "beta -qw " . join(' ', sort keys %progs);
-    undef %progs;
+    return if ($skip_compile);
+    $beta = "beta";
+    $beta = "jbeta -s 188" if ($target eq "jvm");
+    $beta = "nbeta" if ($target eq "clr");
+    print "############# Compiling all .bet files recursively using \"$beta -qw\"\n";
+    system "$beta -qw " . join(' ', sort keys %progs);
 }
 
 sub run_all_demos
@@ -382,6 +391,8 @@ sub setup_variables
     }
     $ENV{'objdir'} = $objdir;
     $ENV{'OS'}     = $OS;
+    $target     = $objdir unless defined($target);
+    $isByteCode = ($target eq "clr" || $target eq "jvm");
 }
 
 sub unlink_recursive()
