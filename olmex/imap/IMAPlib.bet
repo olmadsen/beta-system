@@ -4,6 +4,7 @@ INCLUDE '~beta/basiclib/file';
 INCLUDE '~beta/sysutils/pathhandler';
 INCLUDE '~beta/process/streamgenerator';
 INCLUDE 'IMAPparser';
+INCLUDE 'mimeDecoders';
 (******************************************************************
  * A very simple IMAP client 
  *)
@@ -29,7 +30,245 @@ IMAP: system
        do inner
        #);
      listCompleted:< object;
+     setMailHeader:<
+       (# msgNo: @integer; header: ^text
+       enter(msgNo,header[])
+       do INNER
+       #);
+     selectHeader:< 
+       (# msgNo: @integer; B: @boolean enter(msgNo,B) do inner #);
+     setMessageBody:<
+       (# message: ^text
+       enter message[]
+       do inner
+       #);
+     
      outSocket: @StreamSocket;
+     
+     do_coded2iso:
+       (# T,S: ^text
+       enter T[]
+       do 'match: ' -> ilog.puttext; T[] -> ilog.putline;
+          T[] -> coded2iso -> S[];
+          S.reset;
+          '\nDONE: ' -> ilog.puttext; S[] -> ilog.puttext; ilog.newline;
+       exit S[] 
+       #);
+     
+     active: @ 
+       (# L: [3] ^| xcommand;
+          top: @integer;
+          activate:
+            (# C: ^|xcommand;
+               free: @integer
+            enter C[]
+            do (if top = 0 then L.range -> top if);               
+               loop:
+                 (#
+                 do (for i: top repeat
+                         (if L[i][] = none then
+                             i -> free;
+                             leave loop
+                    if)for);
+                    top -> L.extend;
+                    top + 1 -> free;
+                    top + top -> top;
+                 #);
+               C[] -> L[free][];
+               C.init;
+               C[] -> fork;
+               'Forked: ' -> ilog.puttext; C.myId[] -> ilog.putline
+            exit C[]
+            #);
+          completed:
+            (# id: ^text
+            enter id[]
+            do 'Active:Completed: ' -> ilog.puttext;
+               id[] -> ilog.puttext; 
+               Find:
+                 (#
+                 do (for i: top repeat
+                         (if L[i][] <> none then
+                             (if id[] -> L[i].myId.equal then
+                                 ' done!'->ilog.putline;
+                                 L[i].complete;
+                                 none -> L[i][];
+                                 leave Find
+                    if)if)for);
+                    ' not found'->ilog.putline
+            #)#)
+       #);
+          
+     
+     xcommand: system
+       (# myId: ^text;
+          completed: @boolean;
+          init:<
+            (#
+            do newId -> myId[] -> currentID[];
+               INNER
+            #);
+          complete: 
+            (# 
+            do 'Mark as completed: ' -> ilog.puttext;
+               myID[] -> ilog.putline;
+               true -> completed 
+            #);
+          isCompleted: 
+            (# 
+            do 'IsCompleted: ' -> ilog.puttext;
+               myId[] -> ilog.puttext;
+               (if completed then ' YES!' -> ilog.putline
+                else ' NO'->ilog.putline
+               if)
+            exit completed #);
+          wait:
+            (# 
+            do 0.4->sleep;
+               'wait:'->ilog.puttext; myId[] ->ilog.puttext;
+               (if not isCompleted then restart wait
+            if)#)
+
+       do myId[] -> outsocket.puttext;
+          inner
+       #);
+
+     NOOP: xcommand
+       (#
+       do 'NOOP:'->ilog.putline;
+          'NOOP\n' -> outsocket.puttext
+       #);
+     xsendNOOP: (# exit &|NOOP[] -> active.activate #);
+     LOGIN : xcommand
+       (#
+       do 'LOGIN:'->ilog.putline;
+          'LOGIN olm mor,Efi.\n' -> outsocket.puttext
+       #);
+     xsendLOGIN: (# exit &|LOGIN[] -> active.activate #);
+     LIST: xcommand
+       (# (*done:: (# do listCompleted #);*)
+          mbox,w: ^text;
+          msg: @text
+       enter(mbox[],w[])
+       do 'LIST:'->ilog.putline;
+          'LIST ' -> msg;
+          mbox[] -> msg.puttext;
+          ' '-> msg.puttext;
+          w[] -> msg.puttext;
+          '\n' -> msg.puttext;
+          msg[] -> ilog.putline;
+          msg[] -> outSocket.puttext
+       #);
+     xSENDlist: 
+       (# L: ^|LIST;
+          mbox,w: ^text;
+          msg: @text
+       enter(mbox[],w[])
+       do &|LIST[] -> L[];
+          mbox[] -> L.mbox[];
+          w[] -> L.w[];
+       exit L[] -> active.activate 
+       #);
+     SELECT: xcommand
+       (# folder: ^text
+       enter folder[]
+       do 'SELECT:'->ilog.putline;
+          'SELECT ' -> outSocket.puttext;
+          folder[] -> outSocket.puttext;
+          outSocket.newline
+       #);
+     xsendSelect:
+       (# C: ^| SELECT;
+          folder: ^text
+       enter folder[]
+       do &|SELECT[] -> C[];
+          folder[] -> C.folder[];
+          C[] -> active.activate -> C[];
+       exit C[]
+       #);
+     FETCH: xcommand
+       (# msgNo: @integer; withText: @boolean
+       enter(msgNo,withText)
+       do 'FETCH:'->ilog.puttext; msgNo -> ilog.putint; ilog.newline;
+          'FETCH ' -> outSocket.puttext;
+          msgNo -> outSocket.putint;
+          ' (FLAGS INTERNALDATE RFC822.size ENVELOPE BODY'
+            -> outSocket.puttext;
+          (if withText then
+              ' RFC822.TEXT'-> outSocket.puttext;
+          if);
+          ')\n'-> outSocket.puttext;
+          INNER
+       #);
+     xsendFETCH:
+       (# F: ^| FETCH;
+          msgNo: @integer; withText: @boolean
+       enter(msgNo,withText)
+       do &|FETCH[] -> F[];
+          msgNo -> F.msgNo;
+          withText -> F.withText;
+          F[] -> active.activate -> F[];
+          INNER
+       exit F[]
+       #);
+            
+     FETCHmailbox:
+       (# R: ^SelectExists;
+          F: ^| FETCH;
+          C: ^Response;
+          msg: ^messageResponse;
+          header: ^text;
+          mno,lastNonDeleted: @integer;
+          IP: @parseImap;
+          sender: ^| system
+       enter(R[],sender[])
+       do 'FETCH mailbox: ' -> ilog.puttext; 
+          R.value -> ilog.putint; ilog.newline;
+          IP.init;
+          (for i: R.value repeat
+                (i,false) -> xsendFetch -> F[];
+               '\nWait after xsendFETCH'->ilog.putline;
+               loop:
+                 (#
+                 do sender[] -> receiver.waitResponse -> C[];
+                    (if true                        
+                     // C.isCompleted then
+                     // C.isMsg then
+                        C[] -> msg[];
+                        (if not msg.isDeleted then
+                            i -> lastNonDeleted
+                        if);
+                        msg.M.PP -> ilog.puttext; ilog.newline;
+                        msg.subject -> do_coded2iso -> header[];
+                        '   ' -> header.append;
+                        msg.sender  -> do_coded2iso -> header.append;
+                        '   ' -> header.append;
+                        msg.date -> header.append;
+                        (mno+1->mno,header[]) -> setMailHeader;
+                        (*none -> currentID[];*)
+                        restart loop
+                    if)
+                 #)
+          for);
+          '\nDone: fetching headers' -> ilog.putline;
+          (if lastNonDeleted > 0 then
+              (lastNonDeleted,false) -> selectHeader;
+              (lastNonDeleted,true) -> xsendFetch -> F[];
+              loop:
+                (#
+                do sender[] -> receiver.waitResponse -> C[];
+                   (if true
+                    // C.isCompleted then
+                    // C.isMsg then
+                       C[] -> msg[];                       
+                       msg.message -> setMessageBody;
+                       restart loop
+                if)#)
+          if);
+          'EXIST: done SHOW lastNonDeleted'->  ilog.putline;
+       #);
+     existsResponse: ^selectExists;
+     
      aText: ^Text;
      no: @Integer;
      getResponse:
@@ -118,17 +357,31 @@ IMAP: system
           msg[] -> outSocket.puttext
        #);
      sender: @ | system
-       (#
-       do 
-          sendNOOP;        
+       (# C: ^| xcommand
+       do (if true then
+              xsendNOOP -> C[];
+              C.wait;
+              xsendLOGIN -> C[]; 
+              C.wait;
+              ('"/users/olm/IMAP/"','%') -> xsendLIST -> C[];
+              C.wait;
+              listCompleted;
+              'INBOX' -> xsendSELECT -> C[];
+              C.wait;
+              (if existsResponse[] <> none then
+                  'Select exists not none '->ilog.putline;
+                  (existsResponse[],sender[]) -> FETCHmailbox
+              if);
+           else
+              sendNOOP;        
+              sendLOGIN;
+              ('"/users/olm/IMAP/"','%') -> sendLIST;
+              (* ('"/users/olm/IMAP"','%') -> sendLIST;*)
+              (*('alexandra','"*"') -> sendLIST;*)              
+              'INBOX' -> sendSELECT;
+          if);
 
-          sendLOGIN;
-          
-          ('"/users/olm/IMAP/"','%') -> sendLIST;
-          (* ('"/users/olm/IMAP"','%') -> sendLIST;*)
-          (*('alexandra','"*"') -> sendLIST;*)
-          'INBOX' -> sendSELECT;
-         (* (3,true) -> sendFETCH;          *)
+
        #);
      isOK: booleanValue
        (# R,A: ^text
@@ -150,7 +403,7 @@ IMAP: system
                      false -> gotResponse;
                   else
                      'waitResponse: ' -> ilog.putline;
-                     pause;
+                     0.1 -> sleep;
                      restart wait
                  if)
             exit resp[]
@@ -180,37 +433,44 @@ IMAP: system
                outSocket[] -> IP -> resp[];
                (if (resp[]<>none) then
                    (if handler[] <> none then
+                       (if resp.isCompleted then
+                           (# CR: ^completedResponse
+                           do resp[] -> CR[];
+                              CR.tag[] -> active.completed
+                           #)
+                       if);
                        sendResponse
                     else
+                       resp.display -> ilog.puttext;
                        (if true
                         // resp.isCompleted then
                            (# CR: ^completedResponse
                            do resp[] -> CR[];
-                              (* 'Completed?'->puttext;
-                               CR.tag[] -> puttext; '?'->put;
-                               currentid[] ->puttext; '?'->put; newline;*)
                               (if CR.tag[] -> currentID.equal then
                                   'Completed:'->ilog.puttext;
                                   CR.tag[]->ilog.putline;
                                   none -> currentID[]
-                           if)#)
+                              if);
+                              CR.tag[] -> active.completed
+                           #)
                         // resp.isMsg then
                            (# msg: @text; MR: ^messageResponse
                            do resp[] -> MR[];
                               'MSG:'->putline;
                               MR.scan
                               (#
-                              do current[] -> puttext;
-                                 ':' -> put;
-                                 newline;
+                              do current[] -> ilog.puttext;
+                                 ':' -> ilog.put;
+                                 ilog.newline;
                               #); 
-                              MR[] -> message
+                              (*MR[] -> message*)
                            #);
                         // resp.isList then
                            resp[] -> listResp
                         // resp.isSelectExists then
                            'selectExists:'->ilog.putline;
-                           resp[] -> exists;
+                           resp[] -> existsResponse[];
+                          (* resp[] -> exists;*)
                        if)
                    if)
                if)
