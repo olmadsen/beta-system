@@ -83,7 +83,7 @@ void ProcessStackObj(struct StackObject *theStackObject)
 extern struct RegWin* lazyTrapAR;
 #endif
 
-extern long *start asm("start");
+extern long *start asm("_start");
 extern long *etext;
 extern long *end;
 #define isCode(addr) ( ((long*)&start <= (long*)(addr)) && ((long*)(addr) < (long*)&etext) )
@@ -628,7 +628,7 @@ void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
     /* Notice that CopyT, AlloVR1-4 gets an offset in this parameter.
      * This should be safe.
      */;
-  fprintf(output, "%%i2: 0x%x", ar->i2); PrintRef(cast(Object)ar->i2)
+  fprintf(output, "%%i2: 0x%x", ar->i2); PrintRef(cast(Object)ar->i2);
   fprintf(output, "%%i3: 0x%x", ar->i3); PrintRef(cast(Object)ar->i3);
   fprintf(output, "%%i4: 0x%x", ar->i4); PrintRef(cast(Object)ar->i4);
 
