@@ -156,3 +156,56 @@ long tstvarargs(long numreals, ...)
   }
   return 1; /* all matched */
 }
+
+long tstreal1(long n1, double d1)
+{ return n1+d1;
+}
+
+long tstreal2(long n1, double d1, double d2)
+{ return n1+d1+d2;
+}
+
+long tstreal3(long n1, double d1, double d2, double d3)
+{ return n1+d1+d2+d3;
+}
+
+long tstreal4(long n1, long n2 , double d1, double d2)
+{ return n1+n2+d1+d2;
+}
+
+long tstreal5(long n1, long n2 , long n3, double d1)
+{ return n1+n2+n3+d1;
+}
+
+long tstreal6(double d1, long n1)
+{ return d1 + n1;
+}
+
+long tstreal7(double d1, double d2, long n1)
+{ return d1 + d2 + n1;
+}
+
+long tstreal8(double d1, long n1, long n2)
+{ return d1 + n1 + n2;
+}
+
+long tstreal9(double d1, long n1, long n2, long n3)
+{ return d1 + n1 + n2 + n3;
+}
+
+long tstreal10(double d1, long n1, double d2)
+{ return d1 + n1 + d2;
+}
+
+long tstreal11(long n1, double d1, double d2, double d3, double d4)
+{ return n1+d1+d2+d3+d4;
+}
+
+long tstrealX()
+{ long x,y,z,w,v;
+ x = tstreal1(11,11.1);
+ y = tstreal2(22,12.2,13.3);
+ z = tstreal3(33,14.4,15.5,16.6);
+ v = tstreal4(44,55,17.7,18.8);
+ w = tstreal5(66,77,88,20.2);
+}
