@@ -739,7 +739,7 @@ void ProcessStackPart(long *low, long *high)
 
 #ifdef sparc
 
-static long skipCparams=FALSE;
+static long skipCparams;
 
 #ifdef RTDEBUG
 struct RegWin *BottomAR=0, *lastAR=0;
@@ -879,6 +879,8 @@ void ProcessStack()
     /* Flush register windows to stack */
     __asm__("ta 3");
 
+    skipCparams=FALSE;
+
     DEBUG_STACK(fprintf(output, "\n ***** Trace of stack *****\n"));
     DEBUG_STACK(fprintf(output,
 			"IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
@@ -896,15 +898,13 @@ void ProcessStack()
       /* Skip AR of IOA(c)alloc / DoGC() / lazyFetchIOAGc() */;
 #endif
 
+    for (theAR =  (struct RegWin *) StackEnd;
+	 theAR != (struct RegWin *) 0;
 #ifdef RTDEBUG
-    for (theAR =  (struct RegWin *) StackEnd;
-	 theAR != (struct RegWin *) 0;
-	 PC = theAR->i7 +8, theAR = (struct RegWin *) theAR->fp) {
-#else    
-    for (theAR =  (struct RegWin *) StackEnd;
-	 theAR != (struct RegWin *) 0;
-	 theAR =  (struct RegWin *) theAR->fp) {
+	 PC = theAR->i7 +8,
 #endif
+	   theAR = (struct RegWin *) theAR->fp) {
+      
 	if (theAR == nextCompBlock) {
 	    /* This is the AR of attach. Continue GC, but get
 	     * new values for nextCompBlock and nextCBF. 

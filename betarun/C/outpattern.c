@@ -984,7 +984,8 @@ int DisplayBetaStack(enum BetaErr errorNumber,
 
 
 
-#define BETAENV_RUNTIME_HANDLER 1
+#define BETAENV_RUNTIME_HANDLER 0
+  /* FIXME: does not work with MT */
 #if BETAENV_RUNTIME_HANDLER
 
   /* see TST/tstprogram.bet */

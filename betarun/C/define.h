@@ -161,6 +161,7 @@
 #  define DEBUG_LVRA(code) if( DebugLVRA ) { code; }
 #  define DEBUG_CODE(code)  code;
 #  define DEBUG_STACK(code) if( DebugStack ) { code; }
+#  define DEBUG_STACKOBJ(code) if( DebugStackObj ) { code; }
 #  define DEBUG_VALHALLA(code) if( DebugValhalla ) { code; }
 #else
 #  define DEBUG_IOA(code)
@@ -172,6 +173,7 @@
 #  define DEBUG_LVRA(code)
 #  define DEBUG_CODE(code)
 #  define DEBUG_STACK(code)
+#  define DEBUG_STACKOBJ(code)
 #  define DEBUG_VALHALLA(code)
 #endif
 
