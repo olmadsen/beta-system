@@ -1,0 +1,25 @@
+#include "pcre/pcre.h"
+
+#define PCRE_C_LOCALE 65536 /* Keep in sync with definition in perlregexp.bet */
+
+static const char *precalc_tables = 0;
+
+pcre *
+locale_pcre_compile(
+    const char *pattern,
+    int options,
+    const char **errptr,
+    int *erroffset)
+{
+    const char *tables;
+    if (!precalc_tables)
+        precalc_tables = pcre_maketables();
+    if (options & PCRE_C_LOCALE) {
+        options -= PCRE_C_LOCALE;
+	tables = 0;
+    }
+    else
+        tables = precalc_tables;
+    
+    return pcre_compile(pattern, options, errptr, erroffset, tables);
+}

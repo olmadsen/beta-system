@@ -1,0 +1,500 @@
+ORIGIN 'betaenv';
+LIB_DEF 'pcre' '../lib';
+INCLUDE 'private/pcrelib';
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 2000
+ *       All rights reserved.
+ *       Written by Erik Corry
+ *)
+--- lib: attributes ---
+
+  (*
+   * Perl compatible regular expressions, based on Philip Hazel's PCRE
+   * library.   See his documentation and perl documentation for details.
+   * To activate the /i /x /m or /s options you can use the inline notation
+   * (?x) notation either at the top level of the regular expression or
+   * in a subexpression.  You can disable the options again with (?-x). You
+   * can also use the comments below.
+   *)
+
+   (* How to do some typical perl things:
+    * Assume
+    * pre: @Pcre;
+    * ok: @boolean;
+    *
+    * if $sample =~ /trigger/ ...
+    *             'trigger' -> pre;
+    *             (if sample[] -> pre.match then ... if)
+    * or
+    *             (if sample[] -> ('trigger' -> Pcre).match then ... if)
+    *
+    *
+    * $sample =~ s/gun/pistol/;
+    *             'gun' -> pre;
+    *             (sample[], 'pistol') -> pre.replace -> (ok, sample[]);
+    *
+    * For /g use replaceAll instead of replace
+    * For /e use rep, see HTMLise in pcreDemo in ~beta/basiclib/demo/pcre
+    *
+    * if $sample =~ /trigger/i ...
+    *             '(?i)trigger' -> pre;
+    *             (if sample[] -> pre.match then ... if);
+    * or
+    *             'trigger' -> pre (# options:: (# do pcre_CASELESS -> o #) #);
+    *             (if sample[] -> pre.match then ... if);
+    * Likewise for /x
+    *
+    * ($wordone, $wordtwo, $rest) = split(/:/, $sample, 3);
+    *             ':' -> pre;
+    *             sample[] -> pre.matchAll
+    *             (#
+    *                split:
+    *             #)
+    *)
+
+
+
+Pcre:
+(#
+  compilation_error:< Exception
+  (#
+     errortext: ^Text;
+  enter errortext[]
+  do INNER;
+  #);
+
+  (* Options:  See pcre.h and doc *)
+  pcre_CASELESS:       (# exit   1 #);
+  pcre_MULTILINE:      (# exit   2 #);
+  pcre_DOTALL:         (# exit   4 #);
+  pcre_EXTENDED:       (# exit   8 #);
+  pcre_ANCHORED:       (# exit  16 #);
+  pcre_DOLLAR_ENDONLY: (# exit  32 #);
+  pcre_EXTRA:          (# exit  64 #);
+  pcre_NOTBOL:         (# exit 128 #);
+  pcre_NOTEOL:         (# exit 256 #);
+  pcre_UNGREEDY:       (# exit 512 #);
+  pcre_NOTEMPTY:       (# exit 1024 #);
+
+  pcre_NONBETAOPTIONS: (# exit 65535 #);
+
+  (* Only in BETA library version *)
+  (* Use non-localised English char classes *)
+  pcre_C_LOCALE:       (# exit 65536 #);
+  (* Study the regular expression after compiling it *)
+  pcre_C_STUDY:        (# exit 131072 #);
+
+  (* For internal use *)
+  pcre_INFO_OPTIONS:      (# exit  0 #);
+  pcre_INFO_SIZE:         (# exit  1 #);
+  pcre_INFO_CAPTURECOUNT: (# exit  2 #);
+  pcre_INFO_BACKREFMAX:   (# exit  3 #);
+  pcre_INFO_FIRSTCHAR:    (# exit  4 #);
+  pcre_INFO_FIRSTTABLE:   (# exit  5 #);
+  pcre_INFO_LASTLITERAL:  (# exit  6 #);
+
+  pcre_ERROR_NOMATCH:     (# exit  -1 #);
+  pcre_ERROR_NULL:        (# exit  -2 #);
+  pcre_ERROR_BADOPTION:   (# exit  -3 #);
+  pcre_ERROR_BADMAGIC:    (# exit  -4 #);
+  pcre_ERROR_UNKNOWN_NODE:(# exit  -5 #);
+  pcre_ERROR_NOMEMORY:    (# exit  -6 #);
+  pcre_ERROR_NOSUBSTRING: (# exit  -7 #);
+
+  (* Private internal state *)
+  compiled_regexp: @Integer;
+  extra: @Integer;
+  subPatterns: @Integer;
+  oVector: [1] @Integer;
+
+
+  init:
+  (#
+     exp: ^Text;
+     enter exp[]
+     do
+        (exp[], 0) -> initOption;
+  #);
+
+  initOption:
+  (#
+     error: ^CString;
+     exp: ^Text;
+     opt: @Integer;
+     errtext: @Integer;
+     erroffset: @Integer;
+     (* Specialise this in order to give options when compiling the
+      * regular expression.
+      *)
+     options:<
+     (#
+        o: @Integer;
+     do 0 -> o;
+        INNER;
+     exit o
+     #);
+  enter (exp[], opt)
+  do
+     options -> opt;
+     (if opt %Band pcre_C_LOCALE <> 0 then
+	(@@exp.T[1],
+	 opt %Band pcre_NONBETAOPTIONS,
+	 @@errtext,
+	 @@erroffset, 0) -> pcre_compile -> compiled_regexp;
+     else
+	(@@exp.T[1],
+	 opt %Band pcre_NONBETAOPTIONS,
+	 @@errtext,
+	 @@erroffset) -> locale_pcre_compile -> compiled_regexp;
+     if);
+     (if compiled_regexp = 0 then
+	 &CString[] -> error[];
+	 errtext -> error;
+	 error.get -> compilation_error;
+     else
+         (if opt %Band pcre_C_STUDY <> 0 then
+	    (compiled_regexp, opt %Band pcre_NONBETAOPTIONS, @@errtext) ->
+	       pcre_study -> extra;
+	    (if errtext <> 0 then
+	       &CString[] -> error[];
+	       errtext -> error;
+	       error.get -> compilation_error;
+	    if);
+	 if);
+	 (compiled_regexp, extra, pcre_INFO_CAPTURECOUNT, @@subpatterns) ->
+	    pcre_fullinfo;
+	 (subpatterns + 1 * 3) -> oVector.extend;
+     if);
+  #);
+
+  match:
+  (#
+     result: @Integer;
+     subMatchCounter: @Integer;
+     nextSubMatchIndex:
+     (#
+     do subMatchCounter = subMatchCounter + 1;
+     exit subMatchCounter
+     #);
+
+     (* Get (as an integer pair) the position of the text that matched
+      * the regular expression in the original text.
+      *)
+     matchPos:
+     (#
+	start: @Integer;
+	end: @Integer;
+     do oVector[1] + 1 -> start;
+	oVector[2] -> end;
+     exit (start, end)
+     #);
+
+     (* Get (as a text reference) the text that matched the regular
+      * expression.
+      *)
+     matchText:
+     (#
+	result: ^Text;
+     do
+	(oVector[1] + 1, oVector[2]) -> subject.sub -> result[];
+     exit result[]
+     #);
+
+     (* Get (as a text reference) the text before the text that matched
+      * the regular expression.
+      *)
+     preMatchText:
+     (#
+	result: ^Text;
+     do
+	(1, oVector[1]) -> subject.sub -> result[];
+     exit result[]
+     #);
+
+     (* Get (as a text reference) the text after the text that matched
+      * the regular expression.
+      *)
+     postMatchText:
+     (#
+	result: ^Text;
+     do
+	(oVector[2] + 1, subject.lgth) -> subject.sub -> result[];
+     exit result[]
+     #);
+
+     (* Get (as an integer pair) the position of the nth submatch in the
+      * original text.  You get (0,0) if the nth subpattern didn't match.
+      * (It is possible that the nth subpattern didn't match, even if
+      * the pattern as a whole matched)
+      *)
+     subMatchPos:
+     (#
+        index: @Integer;
+	start: @Integer;
+	end: @Integer;
+     enter index
+     do (if index <= subPatterns then
+           oVector[index * 2 + 1] + 1 -> start;
+	   oVector[index * 2 + 2] -> end;
+        if);
+     exit (start, end)
+     #);
+
+     (* Get (as an integer pair) the position of the next submatch in the
+      * original text.  You get (0,0) if the next subpattern didn't match.
+      * (It is possible that the nth subpattern didn't match, even if
+      * the pattern as a whole matched)
+      *)
+     nextSubMatchPos:
+     (#
+     exit nextSubMatchIndex -> subMatchPos
+     #);
+
+     (* Get (as a text reference) the position of the nth submatch in the
+      * original text.  You get NONE if the nth subpattern didn't match.
+      * (It is possible that the nth subpattern didn't match, even if
+      * the pattern as a whole matched)
+      *)
+     subMatchText:
+     (#
+        index: @Integer;
+	start: @Integer;
+	end: @Integer;
+	result: ^Text;
+     enter index
+     do
+        oVector[index * 2 + 1] + 1 -> start;
+	oVector[index * 2 + 2] -> end;
+	(if start = 0 then
+	   NONE -> result[];
+        else
+	   (start, end) -> subject.sub -> result[];
+        if);
+     exit result[]
+     #);
+
+     (* Get (as a text reference) the position of the next submatch in the
+      * original text.  Get NONE if the next subpattern didn't match.
+      * (It is possible that the nth subpattern didn't match, even if
+      * the pattern as a whole matched)
+      *)
+     nextSubMatchText:
+     (#
+     exit nextSubMatchIndex -> subMatchText
+     #);
+
+     (* Specialise this in order to start at a position other than the
+      * start of the string
+      *)
+     position:<
+     (#
+        p: @Integer;
+     do 1 -> p;
+        INNER;
+     exit p
+     #);
+
+     (* Specialise this in order to give options when executing the
+      * regular expression.  Doesn't work for options used to compile
+      * the regular expression, you had to give them earlier.
+      *)
+     options:<
+     (#
+        o: @Integer;
+     do 0 -> o;
+        INNER;
+     exit o
+     #);
+
+  (* match
+   * Enter a text reference into the regular expression.  Returns true or
+   * false according to whether the text matched the expression.  Executes
+   * INNER if there is a match.
+   *)
+     subject: ^Text;
+     matched: @Boolean;
+     endOfPreviousMatch: @Integer;
+  enter subject[]
+  do
+     0 -> endOfPreviousMatch;
+     (compiled_regexp, extra, @@subject.T[1], subject.lgth,
+           position - 1, options %Band pcre_NONBETAOPTIONS, 
+	   @@oVector[1], oVector.range) -> pcre_exec -> result;
+     (result <> pcre_ERROR_NOMATCH) -> matched;
+     (if matched then
+        INNER;
+     if);
+  exit (matched)
+  #);
+
+  (*
+   * matchAll: match
+   * Keeps matching as many times as possible until there are no more matches
+   * or the end of the string is reached.  Returns true if at least one match
+   * occurs.  Calls INNER for each match.
+   *)
+  matchAll: match
+  (#
+     (* Get (as a text reference) the text after the previous match (if any)
+      * but before the text that matched the regular expression this time
+      * around.
+      *)
+     splitText:
+     (#
+	result: ^Text;
+     do
+	(endOfPreviousMatch + 1, oVector[1]) -> subject.sub -> result[];
+     exit result[]
+     #);
+
+     (* Get (as an integer pair) the position of the text after the previous
+      * match (if any) but before the text that matched the regular
+      * expression this time around.
+      *)
+     splitPos:
+     (#
+	start: @Integer;
+	end: @Integer;
+     do
+	endOfPreviousMatch + 1 -> start;
+	oVector[1] -> end;
+     exit (start, end)
+     #);
+
+     (* Gets called once for each split and once at the end.  You can call
+      * splitText and splitPos from here to do something with the split
+      * strings.  Note that it doesn't get called at all if the regexp
+      * doesn't match even once.
+      *)
+     split:<
+     (#
+     do INNER;
+     #);
+
+     (* Gets called once at the end.  You can call
+      * splitText and splitPos from here to do something with the rest
+      * Note that it doesn't get called at all if the regexp
+      * doesn't match even once.
+      *)
+     post:<
+     (#
+     do INNER;
+     #);
+
+  do INNER matchAll;
+     loop:
+     (#
+     do split;
+	oVector[2] -> endOfPreviousMatch;
+	(if oVector[2] >= subject.lgth then
+	   leave loop;  (* Got to end of string *)
+	if);
+	(compiled_regexp, extra, @@subject.T[1], subject.lgth,
+         oVector[2], options %Band pcre_NONBETAOPTIONS,
+         @@oVector[1], oVector.range) -> pcre_exec -> result;
+	 (result <> pcre_ERROR_NOMATCH) -> matched;
+	 (if matched then
+	    INNER matchAll;
+	 else
+	    (* Fix up oVector so you can call splitText and splitPos one
+	     * last time.
+	     *)
+	    subject.lgth -> oVector[1];
+	    subject.lgth -> oVector[2];
+	    split;
+	    post;
+	    true -> matched; (* At least one match occurred *)
+	    leave loop;
+	 if);
+	 restart loop;
+     #);
+  #);
+
+  (*
+   * Replace: match
+   * Enter a reference to a text and a replacement string.  Exits a sucess
+   * boolean and a text reference to the new string.  If there is no match
+   * then false, plus a reference to the original string is exited (not a
+   * copy).
+   *)
+  replace: match
+  (#
+     (* By overriding this you can put a different value in replacement,
+      * so that the replacement text can be calculated dynamically (based
+      * on eg. the contents or position of the matched or submatched texts).
+      * (You can call matchText to get the text that matched)
+      *)
+     rep:<
+     (#
+        r: ^Text;
+     enter r[]
+     do INNER;
+     exit r[]
+     #);
+     replacement: ^Text;
+     new: ^Text;
+  enter replacement[]
+  do
+     (1, oVector[1]) -> subject.sub -> new[];
+     replacement[] -> rep -> new.append;
+     (oVector[2] + 1, subject.lgth) -> subject.sub -> new.append;
+     INNER;
+  exit
+     (#
+     do
+	(if new[] = NONE then subject[] -> new[] if);
+     exit new[]
+     #)
+  #);
+
+  (*
+   * ReplaceAll: matchAll
+   * Enter a reference to a text and a replacement string.  Exits a sucess
+   * boolean and a text reference to the new string.  If there is no match
+   * then false, plus a reference to the original string is exited (not a
+   * copy).
+   *)
+  replaceAll: matchAll
+  (#
+     (* By overriding this you can put a different value in replacement,
+      * so that the replacement text can be calculated dynamically (based
+      * on eg. the contents or position of the matched or submatched texts).
+      * (You can call matchText to get the text that matched)
+      *)
+     rep:<
+     (#
+        r: ^Text;
+     enter r[]
+     do INNER;
+     exit r[]
+     #);
+
+     post::<
+     (#
+     do splitText -> new.append;
+        INNER;
+     #);
+
+     replacement: ^Text;
+     new: ^Text;
+  enter replacement[]
+  do
+     (if new[] = NONE then
+        splitText -> new[];
+     else
+        splitText -> new.append;
+     if);
+     replacement[] -> rep -> new.append;
+     INNER;
+  exit
+     (#
+     do
+	(if new[] = NONE then subject[] -> new[] if);
+     exit new[]
+     #)
+  #);
+
+enter init
+exit this(Pcre)[]
+#)
