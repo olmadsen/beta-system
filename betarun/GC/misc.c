@@ -180,67 +180,25 @@ void Illegal()
 }
 #endif
 
-#ifdef RTDEBUG
-GLOBAL(long isObjectState);
-#endif
-
 long isObject(Object *theObj)
 { 
-#if defined(sparc) || defined(hppa)
-  /* For the SPARC isObject also checks alignment constraints */
-  /* FIXME: is now required on all platforms? */
-  if (((unsigned)theObj & 7) != 0)
+  if (ObjectAlign((unsigned)theObj) != (unsigned)theObj)
     return FALSE;
-#endif /* defined(sparc) || defined(hppa) */
-  /* Check that theObj is non-negative */
-  DEBUG_CODE(isObjectState=0);
-  if (!isPositiveRef(theObj)) return FALSE;
-
-  DEBUG_CODE(isObjectState=1);
-  /* check that the GCAttr of the object is valid. */
-  if( inBetaHeap((Object *)(theObj->Proto)) ) return FALSE;
-
-  DEBUG_CODE(isObjectState=2);
-  if( theObj->Proto == 0 ) return FALSE;
-
-  DEBUG_CODE(isObjectState=3);
-  if( inAOA(theObj) && ((isStatic(theObj->GCAttr)) || (theObj->GCAttr == 0)) ) 
-    return TRUE;
-
-  DEBUG_CODE(isObjectState=4);
-  if( (isStatic(theObj->GCAttr)) || isAutonomous(theObj->GCAttr) ){
-    DEBUG_CODE(isObjectState=5);
-    return TRUE;
-  } else {
-    DEBUG_CODE(isObjectState=6);
-    if( inToSpace(theObj->GCAttr) || inAOA(theObj->GCAttr) ){
-      DEBUG_CODE(isObjectState=7);
-      return TRUE;
-    } else {
-      DEBUG_CODE(isObjectState=8);
-      return FALSE;
-    }
-  }
+  
+  return TRUE;
 }
 
-long inBetaHeap( theObj)
-  Object * theObj;
+long inBetaHeap(Object *theObj)
 { 
-#if defined(sparc) || defined(hppa) 
-    /* For the SPARC inBetaHeap also checkes alignment constraints */
-    if (((unsigned)theObj & 7) != 0)
-      return FALSE;
-#endif /* defined(sparc) || defined(hppa) */
   if (!isPositiveRef(theObj)) return FALSE;
-  if (inIOA( theObj)) return TRUE;
-  if (inAOA( theObj)) return TRUE;
+  if (inIOA(theObj)) return TRUE;
+  if (inToSpace(theObj)) return TRUE;
+  if (inAOA(theObj)) return TRUE;
   return FALSE;
 }
 
 #ifdef RTDEBUG
-void Claim( expr, message)
-  long  expr;
-  char * message;
+void Claim(long expr, char *message)
 {
   if( expr == 0 ){
     fprintf(output, "\n\nAssumption failed: %s\n\n", message);
@@ -554,16 +512,12 @@ static void RegError(long pc1, long pc2, char *reg, Object * value)
 
 static long CheckCell(Object *theCell)
 {
-  if(theCell) {
-    if (inBetaHeap(theCell)) {
-      if (isObject(theCell) ||
-	  isValRep(theCell) 
-	  ) 
-	return TRUE;
-      return FALSE;
-    }
+  if (theCell &&
+      inBetaHeap(theCell) &&
+      isObject(theCell)) {
+    return TRUE;
   }
-  return TRUE;
+  return FALSE;
 }
 #endif /* intel */
 #endif /* RTDEBUG */

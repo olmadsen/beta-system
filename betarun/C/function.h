@@ -219,9 +219,8 @@ extern void IOAGc(void);
 extern void ProcessReference(Object **);
 extern void ProcessObject(Object *);
 extern void CompleteScavenging(void);
-#if !defined(KEEP_STACKOBJ_IN_IOA)
+extern void DoStackCell(Object **theCell,Object *theObj);
 extern void DoIOACell(Object **theCell,Object *theObj);
-#endif
 #ifdef RTDEBUG
 extern void IOACheck(void);
 extern void IOACheckObject(Object *);

@@ -36,7 +36,7 @@
 #define REFSTACKSIZE         1000
 #endif
 
-#define LARGE_REP_SIZE	     256000
+#define LARGE_REP_SIZE	     256
 
 #define MAXINT (signed long)0x7fffffff
 #define MININT (signed long)0x80000000

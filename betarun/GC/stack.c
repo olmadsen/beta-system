@@ -739,10 +739,10 @@ void ProcessStack()
   DEBUG_STACK(fprintf(output, "\n"));
   DEBUG_STACK(FrameSeparator());
   DEBUG_STACK(fprintf(output, "Processing internal ReferenceStack used by RTS.\n"));
-  ProcessRefStack(RefSP-1, FALSE, DoIOACell); /* RefSP points to first free */
+  ProcessRefStack(RefSP-1, FALSE, DoStackCell); /* RefSP points to first free */
   DEBUG_STACK(FrameSeparator());
   DEBUG_STACK(fprintf(output, "Processing MachineStack.\n"));
-  ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, FALSE, DoIOACell);
+  ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, FALSE, DoStackCell);
 }
 
 void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
@@ -833,7 +833,7 @@ void ProcessStack()
 
   ProcessRefStack(((unsigned)RefSP-(unsigned)&ReferenceStack[0]) >> 2,
                   (Object **)ReferenceStack, 
-		  DoIOACell);
+		  DoStackCell);
 }
 
 /*
@@ -1028,7 +1028,7 @@ void ProcessStack()
 	  skipCparams = TRUE;
 	}
       }
-      ProcessAR(theAR, (struct RegWin *) theAR->fp, DoIOACell);
+      ProcessAR(theAR, (struct RegWin *) theAR->fp, DoStackCell);
       CompleteScavenging();
       skipCparams=FALSE;
       DEBUG_CODE(lastAR = theAR);
@@ -1287,7 +1287,7 @@ void PrintRef(Object * ref)
 	  fprintf(output, " (is in IOA)");
 	if (inAOA(ref)) 
 	  fprintf(output, " (in in AOA)");
-	if (ToSpace<=(long*)ref && (long*)ref<ToSpaceLimit)
+	if (ToSpace(ref)<=(long*)ref && (long*)ref<ToSpaceLimit)
 	  fprintf(output, " (is in ToSpace!)");
       }
     }

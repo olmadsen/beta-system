@@ -602,7 +602,7 @@ void AOACheckObject(Object *theObj)
   if (!theProto) return;
 #endif
 
-  Claim( !inBetaHeap((Object *)theProto),
+  Claim(!inBetaHeap((Object *)theProto),
 	 "#AOACheckObject: !inBetaHeap(theProto)");
 
   AOA_DUMP_TEXT(":");
@@ -801,7 +801,7 @@ void AOACheckObjectSpecial(Object *theObj)
   if (!theProto) return;
 #endif
   
-  Claim( !inBetaHeap((Object *)theProto),
+  Claim(!inBetaHeap((Object *)theProto),
 	 "#AOACheckObjectSpecial: !inBetaHeap(theProto)");
   
   if( isSpecialProtoType(theProto) ){  

@@ -211,23 +211,24 @@ void IOAGc()
    * objects in ToSpace and AOA until no more objects is to procees.
    */
     if (AOABaseBlock) {
-        if (HandledInAOAHead) {
-            for (;;) {
-                Object *nextHead;
-                
-                ProcessAOAObject(HandledInAOAHead);
-                CompleteScavenging();
-
-                nextHead = (Object *)HandledInAOAHead->GCAttr;
-                HandledInAOAHead->GCAttr = DEADOBJECT;
-
-                if (HandledInAOAHead == HandledInAOATail) {
-                    break;
-                } else {
-                    HandledInAOAHead = nextHead;
-                }
-            }
-        }
+      if (HandledInAOAHead) {
+	for (;;) {
+	  Object *nextHead;
+	  
+	  ProcessAOAObject(HandledInAOAHead);
+	  CompleteScavenging();
+	  
+	  nextHead = (Object *)HandledInAOAHead->GCAttr;
+	  HandledInAOAHead->GCAttr = DEADOBJECT;
+	  
+	  if (HandledInAOAHead == HandledInAOATail) {
+	    HandledInAOAHead = NULL;
+	    break;
+	  } else {
+	    HandledInAOAHead = nextHead;
+	  }
+	}
+      }
     }
 
     DEBUG_IOA(fprintf(output, " #(IOA: Weak roots: DOT"); fflush(output));
@@ -258,10 +259,9 @@ void IOAGc()
   
     /* Swap IOA and ToSpace */
     {
-        long * Tmp; long * TmpTop; 
+        long * Tmp; 
     
         Tmp    = GLOBAL_IOA; 
-        TmpTop = GLOBAL_IOATop; 
     
         GLOBAL_IOA       = ToSpace;                          
         GLOBAL_IOALimit  = ToSpaceLimit;
@@ -277,7 +277,7 @@ void IOAGc()
 #endif
     
         ToSpace = Tmp; 
-        ToSpaceTop = TmpTop; 
+        ToSpaceTop = ToSpace; 
         ToSpaceLimit = (long*)((long)ToSpace+IOASize);
     }
   
@@ -399,47 +399,68 @@ Program terminated.\n", (int)(4*ReqObjectSize));
 
 } /* End IOAGc */
 
-#ifndef KEEP_STACKOBJ_IN_IOA
 /* DoIOACell:
- *  Used by the routines in stack.c, that traverse the stack and
- *  stackobjects.
+ * 
  */
 void DoIOACell(Object **theCell,Object *theObj)
 {    
-    if (!theObj) {
-        return;
+  if (!theObj) {
+    return;
+  }
+  if (inBetaHeap(theObj)) {
+    if (isObject(theObj)) {
+      DEBUG_CODE(if (!CheckHeap) Ck(theObj));
+      ProcessReference(theCell);
+      CompleteScavenging();
+    } else {
+      DEBUG_CODE({
+	fprintf(output, "[DoIOACell: ***Illegal: 0x%x: 0x%x]\n", 
+		(int)theCell,
+		(int)theObj);
+	Illegal();
+      });
     }
-    if(inBetaHeap(theObj)){
-        if (isObject(theObj)) {
-	    DEBUG_CODE(if (!CheckHeap) Ck(theObj));
-            ProcessReference(theCell);
-            CompleteScavenging();
-        } else {
+  } else {
 #ifdef RTLAZY
-            if (isLazyRef(theObj)) {
-                DEBUG_LAZY(fprintf(output, 
-                                   "DoIOACell: Lazy ref: %d\n", (int)theObj));
-                ProcessReference(theCell);
-            } else {
-#ifdef RTDEBUG
-                fprintf(output, "[DoIOACell: ***Illegal: 0x%x: 0x%x]\n", 
-                        (int)theCell,
-                        (int)theObj);
-                Illegal();
-#endif /* RTDEBUG */
-            }
+    if (isLazyRef(theObj)) {
+      DEBUG_LAZY(fprintf(output, 
+			 "DoIOACell: Lazy ref: %d\n", (int)theObj));
+      ProcessReference(theCell);
+    }
 #endif /* RTLAZY */
-        }
+  }
+}
+
+/* DoStackCell:
+ *  Used by the routines in stack.c, that traverse the stack.
+ */
+void DoStackCell(Object **theCell,Object *theObj)
+{    
+  if (!theObj) {
+    return;
+  }
+  if (inBetaHeap(theObj)) {
+    if (isObject(theObj)){
+      DEBUG_CODE(if (!CheckHeap) Ck(theObj));
+      ProcessReference(theCell);
+      CompleteScavenging();
+    } else {
+      DEBUG_CODE({
+	fprintf(output, "[DoStackCell: ***Illegal: 0x%x: 0x%x]\n", 
+		(int)theCell,
+		(int)theObj);
+	Illegal();
+      });
     }
-#if defined(RTDEBUG) && defined(NEWRUN)
-    else {
-        if ((theObj!=CALLBACKMARK)&&(theObj!=GENMARK)){
-            fprintf(output, 
-                    "DoIOACell: 0x%x: 0x%x is outside BETA heaps!\n", theCell, theObj);
-            Illegal();
-        }
-    }
-#endif
+  } else {
+#ifdef RTLAZY
+    if (isLazyRef(theObj)) {
+      DEBUG_LAZY(fprintf(output, 
+			 "DoStackCell: Lazy ref: %d\n", (int)theObj));
+      ProcessReference(theCell);
+    } 
+#endif /* RTLAZY */
+  }
 }
 
 /* DoAOACell:
@@ -447,14 +468,32 @@ void DoIOACell(Object **theCell,Object *theObj)
  */
 static void DoAOACell(Object **theCell,Object *theObj)
 {
-  if (theObj
-      && inBetaHeap(theObj)
-      && isObject(theObj)) {
-    ProcessAOAReference((Object **)theCell);
+  if (!theObj) {
+    return;
+  }
+  if (inBetaHeap(theObj)) {
+    if (isObject(theObj)) {
+      DEBUG_CODE(if (!CheckHeap) Ck(theObj));
+      ProcessAOAReference(theCell);
+    } else {
+      DEBUG_CODE({
+	fprintf(output, "[DoStackCell: ***Illegal: 0x%x: 0x%x]\n", 
+		(int)theCell,
+		(int)theObj);
+	Illegal();
+      });
+    }
+  } else {
+#ifdef RTLAZY
+    if (isLazyRef(theObj)) {
+      DEBUG_LAZY(fprintf(output, 
+			 "DoAOACell: Lazy ref: %d\n", (int)theObj));
+      ProcessAOAReference(theCell);
+    }
+#endif /* RTLAZY */
   }
 }
 
-#endif /* KEEP_STACKOBJ_IN_IOA */
 
 /*
  * ProcessReference:
@@ -893,14 +932,14 @@ void CompleteScavenging()
    * (This is debug code only)
    */
   Claim(IOAActive, "CompleteScavenging: IOAActive");
-  while( HandledInToSpace < ToSpaceTop){
+  while (HandledInToSpace < ToSpaceTop) {
     theObj = (Object *) HandledInToSpace;
     HandledInToSpace = (long *) (((long) HandledInToSpace)
 				    + 4*ObjectSize(theObj));
     DEBUG_CODE(Claim(ObjectSize(theObj)>0, "CompleteScavenging: ObjectSize(theObj)>0"));
-    ProcessObject( theObj);
+    ProcessObject(theObj);
   }
-  DEBUG_CODE( Claim( HandledInToSpace == ToSpaceTop,
+  DEBUG_CODE(Claim( HandledInToSpace == ToSpaceTop,
 		     "CompleteScavenging: HandledInToSpace == ToSpaceTop"));
 }
 
