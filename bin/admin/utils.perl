@@ -258,7 +258,7 @@ sub SmartMkdir {
     }
 }
 
-# Recursiveliy delete all files and dirs in $path, including $path.
+# Recursively delete all files and dirs in $path, including $path.
 sub SmartRmDir {
     my ($path) = @_;
     if ($OS eq "WIN") {
