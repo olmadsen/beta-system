@@ -1,4 +1,4 @@
-class YourComp extends Comp
+class YourComp extends Component
 { String idf;
   YourComp(String id)
     { super(); idf = id; System.out.println("Create: " + idf);}
@@ -9,7 +9,7 @@ class YourComp extends Comp
     }  
 
 }
-class MyComp extends Comp
+class MyComp extends Component
 { 
   String idf;
   MyComp(String id) 

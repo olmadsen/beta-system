@@ -212,6 +212,9 @@ do (# commentstream: @stream (* maybe something more useful *);
       class: ^text;       (* name of class being called - 
                            * used by subsequent init - ugly
                            *)
+      isComponent: @boolean; (* true if AlloC 
+                              * used by subsequent - ugly
+                              * *)
       isMainMethod: @boolean; (* true if generating code for main method *)
       
       betafile: @file(# initialized: @boolean; pc: @positionConverter #);
@@ -1037,7 +1040,8 @@ do (# commentstream: @stream (* maybe something more useful *);
                        (* class name*)
                        arg[] -> jcf.emitClassRef;
                        _dup -> jcf.emit;
-                       arg[] -> class[]; (* ugly *)                       
+                       arg[] -> class[]; (* ugly *)  
+                       false -> isComponent
                     // 'initSuper' -> prim.equal then
                        '(' -> sig[];
                        (if not ('-'->arg.equal) then
@@ -1064,21 +1068,16 @@ do (# commentstream: @stream (* maybe something more useful *);
                        if)
                        
                     // 'init' -> prim.equal  then
-                       (if true then
+                       invokespecial -> jcf.emit;
+                       (class[], '<init>', arg[]) -> jcf.emitMethodRef;
+                       (if isComponent then
+                           _nop -> jcf.emit; 
                            invokespecial -> jcf.emit;
-                           (class[], '<init>', arg[]) -> jcf.emitMethodRef;
-                        else
-                           '(' -> sig[];
-                           (if not ('-'->arg.equal) then
-                               (if arg[] = none then
-                                   (failureTrace,'makeSig-4') -> stop;
-                               if);
-                               
-                               arg[] -> makeSignature -> sig.append;
-                           if);
-                           ')V' -> sig.append;
-                           invokespecial -> jcf.emit;
-                           (class[], '<init>', sig[]) -> jcf.emitMethodRef; 
+                           (Common.CompClass, '<init>', '(LBetaObject;)V') 
+                             -> jcf.emitMethodRef;
+                           putfield -> jcf.emit;
+                           (class[],'comp$',common.CompClass->makeSignature) -> jcf.emitFieldRef; 
+                           _nop -> jcf.emit;
                        if)
                     // 'AlloS' -> prim.equal then
                        arg[] -> jcf.emitLoadString;
@@ -1391,22 +1390,47 @@ do (# commentstream: @stream (* maybe something more useful *);
                        invokestatic -> jcf.emit;
                        ('Structure' ,'geS', '(LStructure;LStructure;)Z') -> jcf.emitMethodRef;
                     // 'Att' -> prim.equal then
-                       (if true then
+                       (if false then
                            (* missing call of attach here
                             * we pop the stack to avoid overflow
                             *)
                            _pop -> jcf.emit;
                         else 
-                           invokestatic -> jcf.emit;
-                           ('Coroutine' ,'call', '(LCoroutine;)V') -> jcf.emitMethodRef;
+                           _nop -> jcf.emit;
+                           _nop -> jcf.emit;
+                           _nop -> jcf.emit;
+                           getfield  -> jcf.emit; 
+                           ('BetaObject','comp$', common.CompClass->makeSignature) 
+                             -> jcf.emitFieldRef; 
+                           
+                           invokevirtual -> jcf.emit;
+                           (Common.CompClass ,'att', '()V') -> jcf.emitMethodRef;
                        if);
                     // 'Susp' -> prim.equal then
-                       (if true then
+                       (if false then
                            'Susp' -> fixme;
                         else
-                           invokestatic -> jcf.emit;
-                           ('Coroutine' ,'detach', '()V') -> jcf.emitMethodRef;
+                           (if true then
+                               getstatic -> jcf.emit;
+                               (Common.CompClass, 'current', common.CompClass->makeSignature)
+                                 -> jcf.emitFieldRef;
+                            else
+                               aload_0 -> jcf.emit; (* not good enough *)
+                               getfield  -> jcf.emit; 
+                               ('BetaObject','comp$', common.CompClass->makeSignature) 
+                                 -> jcf.emitFieldRef; 
+                           if);
+                           invokevirtual -> jcf.emit;
+                           (Common.CompClass ,'susp', '()V') -> jcf.emitMethodRef;
                        if)
+                       
+                    // 'SuspX' -> prim.equal then
+                       getfield  -> jcf.emit; 
+                       ('BetaObject','comp$', common.CompClass->makeSignature) 
+                         -> jcf.emitFieldRef; 
+                       invokevirtual -> jcf.emit;
+                       (Common.CompClass ,'susp', '()V') -> jcf.emitMethodRef;
+                       
                     // 'AlloC' -> prim.equal then
                        'AlloC' -> FIXME;
                        (* Could be something like 'new'; <init>; new Coroutine(BetaObject) 
@@ -1414,6 +1438,29 @@ do (# commentstream: @stream (* maybe something more useful *);
                         *   BetaObject item
                         * and a constructor setting this item up, and if first call() 
                         * calls item.do().
+                        *)
+                       _nop -> jcf.emit;
+                       _nop -> jcf.emit;
+                       (****** Generate new Comp-object *****)
+                      (* aload_0 -> jcf.emit; (* push this - for later store
+                                             * in 'comp$'
+                                             *)
+                       new -> jcf.emit;
+                       Common.CompClass -> jcf.emitClassRef;
+                       _dup -> jcf.emit; (* for store in comp$ *)
+                       
+                       (**** generate instance of pattern ****)
+                       new -> jcf.emit;
+                       (* class name*)
+                       arg[] -> jcf.emitClassRef;
+                       arg[] -> class[]; (* ugly *) 
+                       true -> isComponent;
+                       dup_x2 -> jcf.emit;
+                       dup_x2 -> jcf.emit;
+                       _dup -> jcf.emit;
+                       _nop -> jcf.emit;                       
+                       (* we need to compute origin and
+                        * call <init> for class arg[] 
                         *)
                     else
                        'Primitive: '->commentstream.puttext; 

@@ -1,13 +1,13 @@
-class Comp extends Thread
-{ static Comp current;
-  Comp caller;
+class Component extends Thread
+{ static Component current;
+  Component caller;
   BetaObject body;
 
-  Comp(){};
-  Comp(BetaObject b) { body = b; }
+  Component(){};
+  Component(BetaObject b) { body = b; setDaemon(true); }
 
   synchronized void att()
-    { trace("Comp:att");
+    { trace("Component:att");
       caller = current;
       current = this;
       if (!isAlive()) start();
@@ -16,14 +16,17 @@ class Comp extends Thread
     }
     
   synchronized void susp()
-    { current = caller;
+    { trace("Component:susp");
+      current = caller;
       notify();
       try{ wait(); } catch (InterruptedException e){}
     } 
 
   public void run() 
-    { trace("Comp:run");
+    { trace("Component:run");
       body.xdo();
+      trace("Component:terminated");
+      synchronized(this) { notify();};
     }
   public void trace(String T)
     { if (false) System.out.println(T);
