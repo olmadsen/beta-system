@@ -406,6 +406,10 @@ void Illegal(char *file, int line)
     __asm__("int3");
 #endif
 
+#ifdef macosx
+    __asm__(".long 0");
+#endif
+
 #ifdef sparc
     __asm__("unimp 0");
 #endif
