@@ -131,7 +131,7 @@ The are used by beta.dump, objinterface, and persistent store / datpete
   long                code_end;
 } group_header;
 
-/* NextGroup are used by objectserver/persistent store to scan through the
+/* NextGroup is used by objectserver/persistent store to scan through the
  * data-segments, in order to implement InitFragment.
  * It must be non-static.
  */
@@ -140,20 +140,32 @@ struct group_header* NextGroup (struct group_header* current)
       * If current is NULL, first group is returned. */
 { 
   extern long *data1 asm("BETA_data1");
+  extern long *BETA_end; /* C-variable */
   long *limit;
+
+  DEBUG_CODE(fprintf (output, "NextGroup. current = 0x%x\n", current));
   
   if (current) {
     /* Get next data segment if any. Padding by linker 
      * may have moved it some longs down */
     current=current->next;
-    for (limit=((long *)current)+10; 
-	 (long*)current < limit; 
-	 ((long*)current)++)
-      if (current->self == current) return current;
+
+    limit = (long *) current + 10;
+    if (limit > (long *) &BETA_end) limit = (long *) &BETA_end;
+
+    for (; (long*) current < limit; ((long*)current)++) {
+      if (current->self == current) {
+	DEBUG_CODE(fprintf (output, "NextGroup = %s\n", current->ascii));
+	return current;
+      }
+      DEBUG_CODE(fprintf (output, "NextGroup pad\n"));
+    }
     /* No next group. */
     return 0;
-  } else
+  } else {
+    DEBUG_CODE(fprintf (output, "NextGroup = %s\n", ((struct group_header *)&data1)->ascii));
     return (struct group_header *)&data1;
+  }
 }
 
 /* GroupName is used by DisplayBetaStack (beta.dump) and objinterface.bet.
@@ -166,6 +178,8 @@ char *GroupName(long address, int isCode)
   struct group_header *last;
   long dist, distance;
   
+  DEBUG_CODE(fprintf (output, "GroupName\n"));
+
   current = last = group = NextGroup (0);  /* first (betaenv) data segment */
   if ((isCode && (address<current->code_start)) || 
       (!isCode && (address<(long)current))){  
@@ -202,6 +216,9 @@ char *GroupName(long address, int isCode)
     c_on_top=0;
   }
   
+  DEBUG_CODE(fprintf (stderr, "GroupName returning (adr) 0x%x\n",(long) group->ascii));
+  DEBUG_CODE(fprintf (stderr, "GroupName returning (string) %s\n", group->ascii));
+
   return group->ascii;
 }
 
