@@ -7,6 +7,24 @@ public class Component
   private BetaObject body;
   private System.Threading.Thread thread;
 
+  static bool nocatch = false;
+  static string betart = null;
+
+  static Component(){
+    // Parse BETART
+    betart = System.Environment.GetEnvironmentVariable("BETART");
+    if (betart.Length>0){
+      System.Console.WriteLine("Using BETART: " + betart);
+      string[] values = betart.Split(new char[]{':'}, 100);
+      foreach (string v in values){
+	// System.Console.WriteLine("  " + v);
+	if (System.String.Compare(v, "nocatch", true)==0){
+	  nocatch = true;
+	}
+      }
+    }
+  }
+
   public Component(BetaObject b) { 
     body = b; 
     thread = new System.Threading.Thread(new System.Threading.ThreadStart(run));
@@ -17,13 +35,18 @@ public class Component
 
   private void run() 
     { 
-      try
-	{
-	  body.Do();
-	} catch (System.Exception e) {
-	  //throw e;
-	  makeDumpFile(e);
-	}
+      
+      if (nocatch){
+	body.Do();
+      } else {
+	try
+	  {
+	    body.Do();
+	  } catch (System.Exception e) {
+	    //throw e;
+	    makeDumpFile(e);
+	  }
+      }
       // Terminate component
       lock(this) { 
          System.Threading.Monitor.Pulse(this);
