@@ -98,6 +98,7 @@ void findNextLabel (labeltable *table)
     while ((ch=fgetc (table->fp))!=' ') {
       if (ch==EOF) {
 	table->NextAddress = -1; /* datpete 14/3/96: changed from 0 */
+	TRACE("pclose");
 	pclose (table->fp);
 	return;
       }
@@ -181,10 +182,13 @@ labeltable *initReadNameTable (char* execFileName, int full)
 #ifndef nti 
   /* ! nti */
   if (full){
+    TRACES(FULL_NMCOMMAND, execFileName);
     sprintf (command,FULL_NMCOMMAND,execFileName);
   } else {
+    TRACES(TERSE_NMCOMMAND, execFileName);
     sprintf (command,TERSE_NMCOMMAND,execFileName);
   }
+  TRACE("popen");
   table->fp = popen(command, "r");
 #else /* nti */
 
