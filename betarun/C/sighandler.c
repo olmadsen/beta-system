@@ -22,8 +22,6 @@
 /*************************** HELPER FUNCTIONS ******************************/
 /***************************************************************************/
 
-#ifdef RTDEBUG
-
 static void NotifySignalDuringDump(int sig)
 {
   BetaErr err;
@@ -38,8 +36,33 @@ static void NotifySignalDuringDump(int sig)
   }
   NotifyErrorDuringDump((BetaErr)isMakingDump, err);
 }
-#endif /* RTDEBUG */
 
+/* This procedure is called if a nasty signal is received
+ * during execution of BetaSignalHandler.
+ * Exit nicely.
+ */
+static void ExitHandler(
+#if defined(sparc) || defined(x86sol)
+int sig
+#else
+long sig, long code, struct sigcontext *scp, char *addr
+#endif
+)
+{ 
+#ifdef UNIX
+  output = stderr;
+  DEBUG_CODE({
+    fprintf(output, "\nExitHandler: Caught signal %d", (int)sig);
+    PrintSignal((int)sig);
+    fprintf(output, " during signal handling.\n");
+    fflush(output);
+  });
+#endif
+  if (isMakingDump || isHandlingException) {
+    NotifySignalDuringDump((int)sig);
+  }
+  BetaExit(1); 
+}
 
 #ifdef UNIX
 static int HandleInterrupt(Object *theObj, long *pc, int sig)
@@ -446,32 +469,6 @@ void set_BetaStackTop(long *sp)
 #error GetPCandSP should be defined
 #endif
 
-/* This procedure is called if a nasty signal is received
- * during execution of BetaSignalHandler.
- * Please Exit nicely.
- */
-static void ExitHandler(sig, code, scp, addr)
-  long sig, code;
-  struct sigcontext *scp;
-  char *addr;
-{ 
-#ifdef UNIX
-  output = stderr;
-  DEBUG_CODE({
-    fprintf(output, "\nExitHandler: Caught signal %d", (int)sig);
-    PrintSignal((int)sig);
-    fprintf(output, " during signal handling.\n");
-    fflush(output);
-  });
-#endif
-  if (isMakingDump) {
-#if 0
-    NotifySignalDuringDump((int)sig);
-#endif 
-  }
-  BetaExit(1); 
-}
-
 #if defined(linux)
 void BetaSignalHandler(long sig, struct sigcontext_struct scp)
 #else
@@ -736,22 +733,6 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 /******************************** BEGIN sun4s/sparc **************************/
 #ifdef sun4s
 
-static void ExitHandler(int sig)
-{
-  DEBUG_CODE({
-    fprintf(output, "\nExitHandler: Caught signal %d", (int)sig);
-    PrintSignal((int)sig);
-    fprintf(output, " during signal handling.\n");
-    fflush(output);
-  });
-  if (isMakingDump) {
-#if 0
-    NotifySignalDuringDump((int)sig);
-#endif
-  }
-  BetaExit(1);
-}
-
 void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 {
   Object ** theCell;
@@ -861,22 +842,6 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 
 /******************************** BEGIN x86sol **************************/
 #ifdef x86sol
-
-static void ExitHandler(int sig)
-{
-  DEBUG_CODE({
-    fprintf(output, "\nExitHandler: Caught signal %d", (int)sig);
-    PrintSignal((int)sig);
-    fprintf(output, " during signal handling.\n");
-    fflush(output);
-  });
-  if (isMakingDump) {
-#if 0
-    NotifySignalDuringDump((int)sig);
-#endif
-  }
-  BetaExit(1);
-}
 
 void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 {

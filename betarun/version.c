@@ -1,7 +1,12 @@
-char betarun_version[] = "7";
+char betarun_version[] = "8";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.6  2001/04/16 14:58:31  corry
+ * Define and export MV, CP and RM variables in Makefile for names of common utils
+ * Add rules to build rungen (gen) the run compiler (for arches that need it)
+ * Betarun version number: 7
+ *
  * Revision 1.5  2001/04/11 11:54:43  corry
  * Fix comments (CVS test)
  * Betarun version number: 6

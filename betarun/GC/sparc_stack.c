@@ -672,9 +672,8 @@ int scanComponentStack (Component* comp,
       RegWin *nextCBF = compStack.info.if_onstack.activeCBF;
       int lastReturnAdr = compStack.returnAdr;
 
-      DEBUG_VALHALLA(fprintf(output,"BetaStackTop = %d\n",(int)BetaStackTop));
-
-      if (!IsBetaCodeAddrOfProcess(pc))
+      if (pc && !IsBetaCodeAddrOfProcess(pc)){
+	DEBUG_VALHALLA(fprintf(output,"BetaStackTop = 0x%08x\n",(int)BetaStackTop));
 	/* Skip external code on top of stack: */
 	while ((unsigned int) theAR < (unsigned int) BetaStackTop) {
 	  DEBUG_VALHALLA(fprintf(output,"External return address: "));
@@ -682,10 +681,12 @@ int scanComponentStack (Component* comp,
 	  lastReturnAdr = theAR->i7+8;
 	  theAR = (RegWin *) theAR->fp;
 	}
+      }
       
       for (;
 	   theAR != compStack.info.if_onstack.firstAR;
 	   theAR = (RegWin *) theAR->fp){
+	DEBUG_STACK(PrintAR(theAR, (RegWin*)theAR->fp));
 	if (theAR == nextCBF) {
 	  /* This is AR of HandleCB. Skip this and
 	   * skip to betaTop and update nextCBF

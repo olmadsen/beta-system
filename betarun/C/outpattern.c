@@ -1059,7 +1059,12 @@ int DisplayBetaStack(BetaErr errorNumber,
     } else {
       int skip_dump;
       int old_isMakingDump = isMakingDump;
-      DEBUG_CODE(fprintf(output, "DisplayBetaStack: calling systemexceptionhandler\n"));
+      int old_isHandlingException = isHandlingException;
+      DEBUG_CODE({
+	fprintf(output, "DisplayBetaStack: calling\nsystemexceptionhandler("
+		"errorNumber=%d, theObj=0x%08x, thePC=0x%08x, StackEnd=0x%08x)\n",
+		(int)errorNumber, (int)theObj, (int)thePC, (int)StackEnd);
+      });
       /* FIXME: Save registers etc. as described in
        * http://www.daimi.au.dk/~beta/doc/betarun/internal/trapcallbacks.html
        * Cannot use BetaCallBack (rtsignalhandler.h) since we do not
@@ -1069,8 +1074,10 @@ int DisplayBetaStack(BetaErr errorNumber,
        */
       set_BetaStackTop(StackEnd);
       isMakingDump = 0; /* In case the user leaves the handler */
+      isHandlingException = 1;
       skip_dump = systemexceptionhandler(errorNumber, theObj, thePC, StackEnd);
       isMakingDump = old_isMakingDump;
+      isHandlingException = old_isHandlingException;
       /* FIXME: Restore registers */
       if (skip_dump) {
 	isMakingDump = 0;
@@ -1172,11 +1179,19 @@ void NotifyErrorDuringDump(BetaErr errorNumber, BetaErr errorNumber2)
   if (!errorDuringDumpDisplayed){
     char buffer[500];
     errorDuringDumpDisplayed = 1;
-    sprintf(buffer, 
-	    "\n# Beta execution aborted: %s\n# Error during dump: %s. Aborting.\n\n",
-	    ErrorMessage(errorNumber),
-	    ErrorMessage(errorNumber2));
-    fprintf(stderr, "%s", buffer);
+    if (errorNumber==0 && isHandlingException>0){
+      sprintf(buffer, 
+	      "\n# Beta execution aborted:\n# Error during exception handling: %s. Aborting.\n\n",
+	      ErrorMessage(errorNumber2));
+    } else {
+      sprintf(buffer, 
+	      "\n# Beta execution aborted: %s\n# Error during dump: %s. Aborting.\n\n",
+	      ErrorMessage(errorNumber),
+	      ErrorMessage(errorNumber2));
+    }
+    if (stderr!=output){
+      fprintf(stderr, "%s", buffer);
+    }
     fflush(stderr);
     fflush(stdout);
     DEBUG_CODE({
