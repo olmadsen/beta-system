@@ -49,7 +49,7 @@ GLOBAL(static int negIOAsize) = 0;
 GLOBAL(static int negIOAmax) = 0; 
 /* Max number of integers possible to put into the negIOArefs table. */
 
-#define DEFAULTNEGTABLESIZE 25
+#define DEFAULTNEGTABLESIZE 32
 
 void NegAOArefsRESET (void) { negAOAsize = 0; }
 void negIOArefsFREE (void) { FREE (negIOArefs); negIOArefs = 0; }
@@ -551,3 +551,15 @@ void initLazyTrapHandler (ref(Item) lazyHandler)
 }
 
 #endif /* MT */
+
+/* Used by persistentstore to determine if the runtimesystem 
+ * supports lazyFetch on the current platform.
+ */
+int lazyFetchImplemented(void)
+{
+#if defined (sun4s) || defined(hpux9pa) || defined(nti) || defined(linux)
+  return 1;
+#else
+  return 0;
+#endif
+}
