@@ -215,17 +215,24 @@ do {                               \
 
 /* Generic ValRepSize */
 
+/* This is really just for value repetitions, but we are a little defensive,
+ * so just in case, we default to the size of a pointer if we don't recognise
+ * the prototype.
+ */
+
 #define DispatchValRepSize(proto, range)			                \
 (((long)(proto) == (long)(ByteRepPTValue)) ? ByteRepSize(range) :		\
  (((long)(proto) == (long)(LongRepPTValue))   ? LongRepSize(range)  :		\
   (((long)(proto) == (long)(DoubleRepPTValue)) ? DoubleRepSize(range) :    	\
-   ShortRepSize(range))))
+   (((long)(proto) == (long)(ShortRepPTValue)) ? ShortRepSize(range) :    	\
+    LongRepSize(range)))))
 
 #define DispatchValRepBodySize(proto, range)			                \
 (((long)(proto) == (long)(ByteRepPTValue)) ? ByteRepBodySize(range) :      	\
  (((long)(proto) == (long)(LongRepPTValue))   ? LongRepBodySize(range)  : 	\
   (((long)(proto) == (long)(DoubleRepPTValue)) ? DoubleRepBodySize(range) :	\
-   ShortRepBodySize(range))))
+   (((long)(proto) == (long)(ShortRepPTValue)) ? ShortRepBodySize(range) :	\
+    LongRepBodySize(range)))))
 
 /* DispatchRepSize works for both value repetitions and reference repetitions */
 #define DispatchRepSize(proto, range)			                \
