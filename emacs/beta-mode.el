@@ -11,55 +11,6 @@
 ;; When in beta-mode, you can get to know more about beta-mode by using
 ;; M-x describe-mode.
 
-
-;; Created 1-Feb-91 by poe@daimi.aau.dk
-;; Updated 3-Feb-91 by poe@daimi.aau.dk
-;; Updated 6-Feb-91 by poe@daimi.aau.dk
-;; Updated 16-Feb-91 by poe@daimi.aau.dk, added beta-if-indent-level etc.
-;; Updated 3-Apr-91 by poe@daimi.aau.dk, bugfixes added beta-block-indent-level
-;; Updated 6-Apr-92 by datpete@mjolner.dk: change of default values, same
-;; indentation of comments and new blocks, match of parens, indent-line 
-;; before newline, closing of comments with '}'.
-;; Updated 8-Apr-92 by datpete@mjolner.dk: Error warnings in mini-buffer 
-;; instead of in buffer, special for-indentation.
-;; Also added combined indentation of e.g 'for)if)' and made '}' within 
-;; a comment remove one trailing '*' (if any) before inserting '*)'.
-;; Updated 9-Apr-92 by datpete@mjolner.dk: Indentation of comments containing
-;; BETA constructs should work now. Also added indentation on outermost level.
-;; Updated 10-Apr-92 by datpete@mjolner.dk: Indentation after newline, also
-;; in the middle of a line.
-;; Updated 13-Apr-92 by datpete@mjolner.dk: Only indentation of comments and
-;; constructs after colon. Added indent-buffer.
-;; Updated 14-Apr-92 by datpete@mjolner.dk: Added beta-comment-justify 
-;; et al (written by jlk@mjolner.dk) and made some optimizations.
-;; Updated 15-Apr-92 by datpete@mjolner.dk: Added more documentation.
-;; Updated 23-Apr-92 by datpete@mjolner.dk: Included new improved versions
-;; of comment manipulating functions. Added beta-evaluation-indent-level.
-;; Updated 24-Apr-92 by datpete@mjolner.dk: Patternvariables should not
-;; confuse beta-beginning-of-construct and beta-ending-constructor-on-line any 
-;; more. Also added word boundaries to regular expressions for BETA 
-;; constructors to avoid cases like (formula, ...) -> ... being mixed up with 
-;; for-statements, etc.
-;; Updated 27-Apr-92 by datpete@mjolner.dk: Added new versions of 
-;; comment manipulating functions by jlk@mjolner.dk: Bulk undo now works.
-;; Updated 28-Apr-92 by datpete@mjolner.dk: Added beta-comment-after-star.
-;; Updated 4-May-92 by datpete@mjolner.dk: Corrected error in beta-beginning-of-construct:
-;; If the first line in the buffer started a comment, beta-beginning-of-construct would loop
-;; at EOF.
-;; Updated 24-Jul-92 by datpete@mjolner.dk: Changed name to beta-mode-el. Added beta-right-paren,
-;; added search for '--' in beta-beginning-of-construct.
-;; Updated 25-Aug-92 by jlk@mjolner.dk: Added beta-prettyprint.
-;; Updated 5-Mar-93 by datpete@mjolner.dk: Added dopart-stuff
-;; Updated 10-Mar-93 by datpete@mjolner.dk: When point is placed
-;; at the parenthesis in the beginning of the first comment,
-;; beta-within-comment used to answer t; fixed to answer nil.
-;; Updated 13-Sep-93 by datpete@mjolner.dk: fixex beta-indent-line
-;; to handle case where buffer starts with beta-beginning-construct.
-;; Updated 24-Aug-94 by jlk@mjolner.dk: added beta-check, beta-compile
-;; and beta-execute.
-;; Updated 27-Jul-95 by datpete@mjolner.dk: Made beta-close-pattern
-;; insert semicolon after construct if needed.
-
 ;; This mode was programmed by Peter |rb{k (poe@daimi.aau.dk).
 ;; Peter Andersen (datpete@mjolner.dk), Kim Jensen M|ller (kjm@mjolner.dk)
 ;; Tommy Thorn (tthorn@daimi.au.dk) all contributed with additions, 
