@@ -1,6 +1,7 @@
 ORIGIN 'graphicaleditorprivate';
 INCLUDE '~beta/guienv/v1.4/utils/guienvadds';
 INCLUDE '~beta/guienv/v1.4/utils/track';
+INCLUDE '~beta/guienv/v1.4/utils/iconname';
 INCLUDE '~beta/sysutils/v1.5/time';
 INCLUDE '~beta/sysutils/v1.5/objinterface';
 INCLUDE '~beta/betaast/v5.1/gram';
@@ -21,7 +22,6 @@ INCLUDE '../../dialogs/spacingdialog';
 INCLUDE '../classinfo';
 INCLUDE '../../dragmanager/dragmanager';
 INCLUDE '../../buildermenu';
-
 INCLUDE '~beta/guienv/v1.4/utils/prompts';
 INCLUDE '../../resourcesupport/easyinterface';
 
@@ -45,37 +45,18 @@ getSpacingValues: objectPool.get
   (# type:: spacingValues;
   #);
 
--- guienvLib: attributes --
-
-putPoint:
-  (# h, v: @integer;
-  enter (h, v)
-  do '[' -> put;
-     h -> putInt;
-     ' ' -> put;
-     v -> putInt;
-     ']' -> put;
-  #);
-putRect:
-  (# r: ^rectangle;
-  enter r[]
-  do r.topLeft -> putPoint;
-     ' ' -> put;
-     r.bottomRight -> putPoint;
-  #);
-
 -- windowItemLib: attributes --
 
 delay:
   (# startPt: @point;
   enter startPt
-  do l: track
+  do l: father.track
      (# 
         mouseMove::
           (# dh, dv: @integer;
           do curPt.h - startPt.h -> dh;
              curPt.v - startPt.v -> dv;
-             (if (dh*2 > 4) or (dv*dv > 4) then
+             (if (dh*dh > 4) or (dv*dv > 4) then
                  inner delay;
                  leave l;
              if);
@@ -100,7 +81,6 @@ do (#
           do true -> thisObj.private.locked;
           #);
       if);
-      
       false -> createTheWindowItem;
       (if owner[]<>None then
           this(windowitemEditor)[] -> owner.appendChild;
@@ -121,7 +101,11 @@ do (#
    
    
 -- windowItemEditorLib: attributes --
-
+skip:
+  (# 
+  enter private.skip
+  exit private.skip
+  #);
 codeGuard:
   (# 
   do (if inherited then
@@ -165,11 +149,19 @@ generateEvaluation:
   (# value: ^atom;
      frag: ^astInterface.fragmentForm;
      eval: ^astInterface.beta.evaluation;
+     gram: @grammar;
   enter (frag[], value[])
-  do (if value.type
+  do (if value[] = NONE then
+         (frag[], 'NONE', gram.imp) -> parseText -> eval[];
+     if);
+     (if value.type
       //textType then
-         (frag[],(value.asTextAtom).value[])
-           -> betaGram.newTextEvaluation -> eval[];
+         (if (value.asTextAtom).value[] = none then
+             (frag[], 'NONE', gram.imp) -> parseText -> eval[];
+          else
+             (frag[],(value.asTextAtom).value[])
+               -> betaGram.newTextEvaluation -> eval[];
+         if);
       //boolType then
          (frag[],(value.asBoolAtom).value)
            -> betaGram.newBoolEvaluation -> eval[];
@@ -350,12 +342,16 @@ dragOrResize:
      borderWidth: @integer;
      borderHeight: @integer;
      h, v: @integer;
+     x, y: @integer;
      doLeft, doTop, doRight, doBottom: @boolean;
   enter theEvent[]
   do theWindowItem.size -> (width, height);
+     
+     
      (((width div borderRatio), maxBorder) -> Min, minBorder) -> max -> borderWidth;
      (((height div borderRatio), maxBorder) -> Min, minBorder) -> max -> borderHeight;
      theEvent.localPosition -> (h, v);
+     
      (if (h <= borderWidth) then 
          true -> doLeft 
      if);
@@ -398,20 +394,13 @@ frame:
   (# r: ^rectangle;
   enter (# enter r[]
         do true -> dontHandleFrameChanged;
-           (if theWindowItem[] = contentsEditorObject then
-               r[] -> (contentsEditorObject).setRealFrame;
-            else
-               r -> theWindowItem.frame;
-           if);
+           'Setting the frame' -> putLine;
+           r -> theWindowItem.frame;
            false -> dontHandleFrameChanged;
         #)
   exit (# 
-       do (if theWindowItem[] = contentsEditorObject then
-              (contentsEditorObject).getRealFrame -> r[];
-           else
-              &rectangle[] -> r[];
-              theWindowItem.frame -> r;
-          if);
+       do &rectangle[] -> r[];
+          theWindowItem.frame -> r;
        exit r[]
        #)
   #);
@@ -992,20 +981,10 @@ changeOwner:
 
 handleMouseDown: theWindowItem.mouseDownAction
   (# 
-  do theEvent[] -> this(windowItemEditor).mousedown;
-  #);
-putRect:
-  (# r: ^rectangle;
-  enter r[]
-  do '[' -> put;
-     r.left -> putInt;
-     ' ' -> put;
-     r.top -> putInt;
-     ' ' -> put;
-     r.right -> putInt;
-     ' ' -> put;
-     r.bottom -> putInt;
-     ']' -> put;
+  do (if theWindowItem## <= figureItem## then
+         true -> owner.skip;
+     if);
+     theEvent[] -> this(windowItemEditor).mousedown;
   #);
 handleFrameChanged: theWindowItem.frameChangedAction
   (# r: ^rectangle;
@@ -1050,18 +1029,19 @@ reConfigure:
   enter (doLeft,doTop,doRight,doBottom)
   do 
      frame -> bounds[];
-     (bounds[],  theWindowItem.father[], (contentsEditor).theWindowItem[]) 
+     (bounds[],  theWindowItem.father[], contents) 
        -> translateRect;
-     (bounds,doLeft,doTop,doRight,doBottom) -> (contentsEditor).theWindowItem.defineRect -> bounds;
-     (bounds.topLeft, (contentsEditor).theWindowItem[], theWindowItem.father[]) 
+     (bounds,doLeft,doTop,doRight,doBottom) -> (contents).defineRect -> bounds;
+     (bounds.topLeft, contents, theWindowItem.father[]) 
        -> translate -> bounds.topLeft;
-     (bounds.bottomRight, (contentsEditor).theWindowItem[], theWindowItem.father[]) 
+     (bounds.bottomRight, contents, theWindowItem.father[]) 
        -> translate -> bounds.bottomRight;
      (this(windowItemEditor)[], bounds[]) -> makeResizeOperation;
   #);
 
 -- windowitemEditorPrivate: descriptor --
 (# selected: @boolean;
+   skip: @boolean;
    inherited: @boolean;
    pos: ^windowItemEditorList.position;
    node: ^astInterface.AST;
@@ -1174,15 +1154,27 @@ do (#
       this(graphicalEditor)[] -> delete;
    #);
 -- graphicalEditorOnMouseDown: doPart --
-do 
+do selection.clear;
    
 -- graphicalEditorLib: attributes --
+
+
+
 dontHandleFrameChanged:
   (# 
   enter private.dontHandleFrameChanged
   exit private.dontHandleFrameChanged
   #);
 
+adjustPalettes:
+  (# r: @rectangle;
+  do private.adorner.frame -> r;
+     (r.right + 10, 5) -> private.theControlPalette.position;
+     private.theControlPalette.frame -> r;
+     (r.left, r.bottom + 10) -> private.theViewsPalette.position;
+     private.theViewsPalette.frame -> r;
+     (r.right + 5, r.bottom + 5) -> size;
+  #);
 
 forInitStatements: (# exit 1 #);
 forOpenStatements: (# exit 2 #);
@@ -1231,8 +1223,10 @@ getClassData:
   enter node[]
   do node[] -> getClass -> theClass[];
      (if theClass[] <> none then
-         &classData[] -> theClassData[];
-         (theClass[], node[], defaultBodyGroup) -> theClassData.init;
+         (if theClass.supported then
+             &classData[] -> theClassData[];
+             (theClass[], node[], defaultBodyGroup) -> theClassData.init;
+         if);
      if);
   exit theClassData[]
   #);
@@ -1359,11 +1353,7 @@ adjustValue:
 
 defaultBodyGroup:
   (# group: ^mps.fragmentGroup;
-  do (if private.privateFrag[] <> none then
-         private.privateFrag.father -> group[];
-      else
-         theDocument.defaultBodyGroup -> group[];
-     if);
+  do theDocument.defaultBodyGroup -> group[];
   exit group[]
   #);
 
@@ -1956,16 +1946,16 @@ changeWindowSizeOperation: operation
      init::
        (# 
        enter (width, height)
-       do (contentsEditor).getSize -> (oldWidth, oldHeight);
+       do (contentsEditor).theWindowItem.size -> (oldWidth, oldHeight);
           doIt;
        #);
      doIt::
        (# 
-       do (width, height) -> (contentsEditor).setSize;
+       do (width, height) -> (contentsEditor).theWindowItem.size;
        #);
      unDoIt::
        (# 
-       do (oldWidth, oldHeight) -> (contentsEditor).setSize;
+       do (oldWidth, oldHeight) -> (contentsEditor).theWindowItem.size;
        #);
      name::<
        (# 
@@ -2001,26 +1991,18 @@ reciever: private.theDragManager.reciever
 
 (* end *)
 
-itemSelected:
-  (# name: ^text;
-     type: @integer;
-     firstItem: ^windowItemEditor;
-     theCanvasEditor: ^canvasEditor;
-  enter (name[], type)
-  do  type -> this(graphicalEditor).private.contentsEditor.newEditor;
-  #);
-
 
 
 initialize:
   (# width, height: @integer;
   enter (width, height)
   do 
-     (contents, width, height) -> private.windowView.open;
-     private.windowView.bringBack;
-     private.contentsEditorObject[] -> private.contentsEditor.theWindowItem[];
-     (private.viewPaletteRight + 5, 
-      (private.viewPaletteBottom + 5, private.windowViewBottom + 5) -> max) -> size;
+     (* (contents, width, height) -> private.windowView.open;
+      *      private.windowView.bringBack;
+      *      private.contentsEditorObject[] -> private.contentsEditor.theWindowItem[];
+      *      (private.viewPaletteRight + 5, 
+      *       (private.viewPaletteBottom + 5, private.windowViewBottom + 5) -> max) -> size;
+      *)
   #);
 
 generateEditor:
@@ -2032,10 +2014,6 @@ generateEditor:
 contentsEditor:
   (# 
   exit private.contentsEditor[]
-  #);
-contentsEditorObject:
-  (# 
-  exit private.contentsEditorObject[]
   #);
 
 
@@ -2054,76 +2032,7 @@ translateRect:
  * Handling of private attributes
  *)
 
-(* findPrivateSlotName:
- *   (# slotName: ^text;
- *   do (# theAst: ^astInterface.AST;
- *         theSimpleDecl: ^astInterface.beta.simpleDecl;
- *         theReferenceSpecification: ^astInterface.beta.ReferenceSpecification;
- *         theStaticItem: ^astInterface.beta.staticItem;
- *         theUnExpanded: ^astInterface.unExpanded;
- *         theSlotDesc: ^astInterface.slotDesc;
- *      do (node[], 'private') -> betaGram.findAttribute -> theAst[];
- *         (if theAst[] <> none then
- *             (if theAst.symbol = betaGram.simpleDecl then
- *                 theAst[] -> theSimpleDecl[];
- *                 theSimpleDecl.getReferenceSpecification -> theReferenceSpecification[];
- *                 (if theReferenceSpecification.symbol = betagram.staticItem then
- *                     theReferenceSpecification[] -> theStaticItem[];
- *                     theStaticItem.getObjectSpecification -> theAst[];
- *                     (if theAst.kind = MPS.kinds.unExpanded then
- *                         theAst[] -> theUnExpanded[];
- *                         (if theUnExpanded.isSlot then
- *                             theUnExpanded.theSlot -> theSlotDesc[];
- *                             theSlotDesc.name -> slotName[];
- *                          else
- *                             failure;
- *                         if);
- *                      else
- *                         failure;
- *                     if);
- *                  else
- *                     failure;
- *                 if);
- *              else
- *                 failure;
- *             if);
- *          else
- *             failure;
- *         if);
- *      #);
- *   exit slotName[]
- *   #);
- * 
- * findPrivate:
- *   (# failure:< object;
- *   do 
- *      (if theDocument.defaultBodyGroup <> none then
- *          true -> (theDocument.defaultBodyGroup).changed;
- *          (# slotName: ^text;
- *             frag: ^astInterface.fragmentForm;
- *          do findPrivateSlotName -> slotName[];
- *             (if slotName[] <> none then
- *                 slotName[] -> (theDocument.defaultBodyGroup).findFragment -> frag[];
- *                 (if frag[] <> none then 
- *                     (if frag.category = betaGram.descriptorForm then
- *                         frag[] -> private.privateFrag[];
- *                         private.privateFrag[] -> private.privateFragHandler.frag[];
- *                         private.privateFragHandler[] -> theFragServer.subscribe;
- *                      else
- *                         failure;
- *                     if);
- *                  else
- *                     failure;
- *                 if);
- *              else
- *                 failure;
- *             if);
- *          #);
- *       else
- *          failure;
- *      if);
- *   #);
- *)
+
 findBody:
   (# failure:< object;
      body: ^astInterface.fragmentGroup;
@@ -2192,8 +2101,7 @@ createPrivateAttributes:
          (privateFrag[], none) 
            -> betaGram.newDescriptorForm -> theDescriptorForm[]
            -> privateFrag.root[];
-         privateFrag[] -> private.privateFrag[];
-         private.privateFrag[] -> private.privateFragHandler.frag[];
+         privateFrag[] -> private.privateFragHandler.frag[];
          private.privateFragHandler[] -> theFragServer.subscribe;
      else
          failure;
@@ -2481,7 +2389,7 @@ createPrivateAttributes:
                     #);
                   onStatus::
                     (# 
-                    do not selection.empty -> value;
+                    do selection.size > 1 -> value;
                     #);
                #);
              open::
@@ -2497,7 +2405,7 @@ createPrivateAttributes:
                     #);
                   onStatus::
                     (# 
-                    do not selection.empty -> value;
+                    do selection.size > 1 -> value;
                     #);
                #);
              open::
@@ -2513,7 +2421,7 @@ createPrivateAttributes:
                     #);
                   onStatus::
                     (# 
-                    do not selection.empty -> value;
+                    do selection.size > 1 -> value;
                     #);
                #);
              open::
@@ -2529,7 +2437,7 @@ createPrivateAttributes:
                     #);
                   onStatus::
                     (# 
-                    do not selection.empty -> value;
+                    do selection.size > 1 -> value;
                     #);
                #);
              open::
@@ -2545,7 +2453,7 @@ createPrivateAttributes:
                     #);
                   onStatus::
                     (# 
-                    do not selection.empty -> value;
+                    do selection.size > 1 -> value;
                     #);
                #);
              open::
@@ -2561,7 +2469,7 @@ createPrivateAttributes:
                     #);
                   onStatus::
                     (# 
-                    do not selection.empty -> value;
+                    do selection.size > 1 -> value;
                     #);
                #);
              open::
@@ -2577,7 +2485,7 @@ createPrivateAttributes:
                     #);
                   onStatus::
                     (# 
-                    do not selection.empty -> value;
+                    do selection.size > 1 -> value;
                     #);
                #);
              open::
@@ -2603,7 +2511,6 @@ createPrivateAttributes:
     *)
    
    body: ^astInterface.fragmentGroup;
-   privateFrag: ^astInterface.fragmentForm;
    
    (*
     * Fragment handler
@@ -2697,7 +2604,9 @@ createPrivateAttributes:
              moveTo::
                (# theEditor: ^windowItemEditor;
                   theCreateOperation: ^createOperation;
-               do &createOperation[] -> theCreateOperation[];
+               do 
+                      
+                  &createOperation[] -> theCreateOperation[];
                   (theCanvasEditor[], type, newFrame[]) -> theCreateOperation.init;
                #);
           #);
@@ -2723,7 +2632,7 @@ createPrivateAttributes:
     * Generators
     *)
    
-   editorGenerator: [28] ^generateEditor;
+   editorGenerator: [29] ^generateEditor;
    initEditorGenerator:
      (# 
      do (* &generateEditor (# do &interfaceObjectEditor[] -> we[] #)[] -> editorGenerator[1][]; *)
@@ -2747,16 +2656,17 @@ createPrivateAttributes:
         &generateEditor (# do &textFieldEditor[] -> we[] #)[] -> editorGenerator[19][];
         &generateEditor (# do &scrollListEditor[] -> we[] #)[] -> editorGenerator[20][];
         &generateEditor (# do &textScrollListEditor[] -> we[] #)[] -> editorGenerator[21][];
-        (* &generateEditor (# do &windowEditor[] -> we[] #)[] -> editorGenerator[22][]; *)
+        &generateEditor (# do &windowEditor[] -> we[] #)[] -> editorGenerator[22][];
         (* &generateEditor (# do &menuEditor[] -> we[] #)[] -> editorGenerator[23][]; *)
         (* &generateEditor (# do &menubarEditor[] -> we[] #)[] -> editorGenerator[24][]; *)
         (* &generateEditor (# do &menuitemEditor[] -> we[] #)[] -> editorGenerator[25][]; *)
         (* &generateEditor (# do &dynamicMenuitemEditor[] -> we[] #)[] -> editorGenerator[26][];*)
         &generateEditor (# do &verScrollbarEditor[] -> we[] #)[] -> editorGenerator[27][];
         &generateEditor (# do &verSeparatorEditor[] -> we[] #)[] -> editorGenerator[28][];
+        &generateEditor (# do &rectangleEditor[] -> we[] #)[] -> editorGenerator[29][];
      #);
    
-   names: [28] ^text;
+   names: [29] ^text;
    initNames:
      (# 
      do 'interfaceObject' -> names[1][];
@@ -2787,8 +2697,9 @@ createPrivateAttributes:
         'dynamicMenuitem' -> names[26][];
         'scrollbar' -> names[27][];
         'separator' -> names[28][];
+        'rect' -> names[29][];
      #);
-   sizes: [28] ^point;
+   sizes: [29] ^point;
    initSizes:
      (# 
      do (for inx: sizes.range repeat
@@ -2814,149 +2725,74 @@ createPrivateAttributes:
         (200, 100) -> sizes[19];
         (200, 100)  -> sizes[20];
         (200, 100) -> sizes[21];
+        (300, 200) -> sizes[22];
         (16, 100) -> sizes[27];
         (4, 100) -> sizes[28];
+        (30, 40) -> sizes[29];
      #);
    
-   contentsEditorObject: @canvas
-     (# setRealFrame:
-          (# r: ^rectangle;
-             width, height: @integer;
-          enter r[]
-          do r.size -> (width, height);
-             width + 16 -> width;
-             height + 32 -> height;
-             (width, height) -> windowView.size;
-             r.topLeft -> windowView.position;
-          #);
-        getRealFrame:
-          (# r: ^rectangle;
-          do &rectangle[] -> r[];
-             windowView.position -> r.topLeft;
-             size -> r.size;
-          exit r[]
-          #);
-        open::<
-          (#
-          do true -> bindRight -> bindBottom;
-             false -> border.visible;
-          #);
-     #);
-   windowView: @canvas
-     (# 
-        titleBar: @staticText
-          (# open::
-               (# width, height: @integer;
-               enter (width, height)
-               do true -> bindRight;
-                  '' -> label;
-                  center -> alignment;
-                  ((2, 2), (width - 2, 20)) -> frame;
-               #);
-             eventHandler::
-               (# 
-                  onMouseDown::
-                    (# 
-                    do windowView.drag;
-                    #);
-               #);
-          #);
-        interior: @canvas
-          (# open::
-               (# width, height: @integer;
-               enter (width, height)
-               do borderStyles.shadowIn -> border.style;
-                  true -> border.visible;
-                  ((6, 20), (width - 6, height - 6)) -> frame;
-                  interior[] -> contentsEditorObject.open;
-                  ((2, 2), (width - 14, height - 30)) -> contentsEditorObject.frame;
-                  true -> bindRight;
-                  true -> bindBottom;
-               #);
+   (* contentsEditorObject: @canvas
+    *      (# setRealFrame:
+    *           (# r: ^rectangle;
+    *              width, height: @integer;
+    *           enter r[]
+    *           do r.size -> (width, height);
+    *              width + 16 -> width;
+    *              height + 32 -> height;
+    *              (width, height) -> windowView.size;
+    *              r.topLeft -> windowView.position;
+    *           #);
+    *         getRealFrame:
+    *           (# r: ^rectangle;
+    *           do &rectangle[] -> r[];
+    *              windowView.position -> r.topLeft;
+    *              size -> r.size;
+    *           exit r[]
+    *           #);
+    *         open::<
+    *           (#
+    *           do true -> bindRight -> bindBottom;
+    *              false -> border.visible;
+    *           #);
+    *      #);
+    *)
+   adorner: @canvas
+     (# interior: ^windowItem;
+        adjustSize:
+          (# width, height: @integer;
+          do interior.size -> (width, height);
+             (width + 8, height + 8) -> size;
+             (4, 4) -> interior.position;
           #);
         open::
-          (# width, height: @integer;
+          (# 
              windowViewRight: @integer;
              ignore: @integer;
-          enter (width, height)
-          do hide;
-             (toolPaletteRight + 10, 5) -> position;
-             (width + 16 -> width, height + 32 -> height) -> size;
+          do bringBack;
              true -> border.visible;
              borderstyles.shadowOut -> border.style;
-             (windowView[], width, height) -> titleBar.open;
-             (windowView[], width, height) -> interior.open;
-             5 + height -> windowViewBottom;
-             toolPaletteRight + 10 + width -> windowViewRight;
-             (windowViewRight + 10, 5) -> theControlPalette.position;
-             (windowViewRight + 10, controlPaletteBottom + 5) -> theViewsPalette.position;
-             theViewsPalette.frame -> ((ignore, ignore), (viewPaletteRight, viewPaletteBottom));
-             show;
+             (toolPaletteRight + 10, 5) -> position;            
           #);
         eventHandler::
-          (# 
+          (# onChildFrameChanged::
+               (# 
+               do adjustSize;
+               #);
              onMouseDown::
                (# r: @rectangle;
                   width, height: @integer;
                do (if not readOnly then
-                      (frame, false, false, true, true) -> father.defineRect -> r;
-                      r.size -> (width, height);
-                      (width - 16, height - 32) -> makeChangeWindowSizeOperation;
+                      this(onMouseDown)[] -> contentsEditor.dragOrResize;
+                      (*  (interior.frame, false, false, true, true) -> defineRect -> r;
+                       *                       r.size -> (width, height);
+                       *                       (width, height) -> makeChangeWindowSizeOperation;
+                       *)
                   if);
                #);
           #);
      #);
-   contentsEditor: @canvasEditor
-     (# setSize:
-          (# width, height: @integer;
-          enter (width, height)
-          do (width + 16, height + 32) -> windowView.size;
-             (width, height) -> changeSize;
-          #);
-        getSize:
-          (# width, height: @integer;
-          do theWindowItem.size -> (width, height);
-          exit (width, height)
-          #);
-        
-        getMainAttributes::
-          (# 
-          do getPrivateAttributes -> theAttributes[];
-          #);
-        getPrivateAttributes::
-          (# theDescriptorForm: ^astInterface.beta.descriptorForm;
-             theObjectDescriptor: ^astInterface.beta.objectDescriptor;
-             theMainPart: ^astInterface.beta.mainPart;
-          do (if privateFrag[] <> none then
-                 privateFrag.root[] -> theDescriptorForm[];
-                 theDescriptorForm.getObjectDescriptor -> theObjectDescriptor[];
-                 theObjectDescriptor.getMainPart -> theMainPart[];
-                 theMainPart.getAttributes -> theAttributes[];
-             if);
-          #);
-        createInitImps::
-          (# override:: (# do true -> value #);
-             width, height: @integer
-          do data.size -> (width, height);
-             (betaGram.imperatives, frag[]) -> betaGram.newAst -> initImps[];
-             (frag[], 'size', (frag[], width, height) -> betaGram.newPointEvaluation)
-               -> betaGram.newAssignment -> initImps.append;
-          #);
-        mouseDown::
-          (# 
-          do 
-             (if theEvent.doubleClick then
-              else
-                 selection.clear;
-             if);
-             true -> done;
-          #);
-        init::
-          (# theAttributes: ^astInterface.beta.attributes;
-          do createTheReciever;
-          #);
-     #);
    
+   contentsEditor: ^windowItemEditor;
    
    theControlPalette: @controlPalette
      (# 
@@ -3038,86 +2874,90 @@ createPrivateAttributes:
 
 
 -- windowitemEditorMousedown: doPart --
-do (if not (readOnly OR inherited) then
-       inner mouseDown;
-       (if theEvent.doubleClick then
-           (if theEvent.controlKey then
-               showCodeDialog;
-            else
-               (if this(windowItemEditor)[] <> contentsEditor then 
+do (if skip then
+       false -> private.skip
+    else
+       (if not (readOnly OR inherited) then
+           inner mouseDown;
+           (if theEvent.doubleClick then
+               (if theEvent.controlKey then
+                   showCodeDialog;
+                else
                    showInfoDialog;
+                   
                if);
-           if);
-        else
-           (if not done then
-               (# actualMode: @integer;
-                  
-               do mode -> actualMode;
-                  (if theEvent.shiftKey then
-                      (if private.selected then
-                          deSelect;
+            else
+               (if not done then
+                   (# actualMode: @integer;
+                      
+                   do mode -> actualMode;
+                      (if theEvent.shiftKey then
+                          (if private.selected then
+                              deSelect;
+                           else
+                              select;
+                          if);
                        else
-                          select;
+                          (if not private.selected then
+                              selection.clear;
+                              select;
+                          if);
                       if);
-                   else
-                      (if not private.selected then 
-                          selection.clear;
-                          select;
-                      if);
-                  if);
-                  (if private.selected then
-                      (if actualMode
-                       //selectMode then
-                          theEvent.localPosition -> theWindowItem.delay
-                          (# 
-                          do theEvent[] -> dragOrResize;
-                          #);
-                       //resizeMode then
-                          (# width,height: @integer;
-                             dh,dv: @integer;
-                             h,v: @integer;
-                             doTop,doLeft,doBottom,doRight: @boolean;
-                          do theEvent.localPosition -> (h,v);
-                             theWindowItem.size -> (width,height);
-                             width div 3 -> dh;
-                             height div 3 -> dv;
-                             
-                             (if (h <= dh) then 
-                                 true -> doLeft 
-                             if);
-                             (if (h >= (width - dh)) then
-                                 true -> doRight
-                             if);
-                             (if (v <= dv) then
-                                 true -> doTop
-                             if);
-                             (if (v >= (height - dv)) then 
-                                 true -> doBottom
-                             if);
-                             (if (doLeft or doBottom or doTop or doRight) then
-                                 (doLeft,doTop,doRight,doBottom) -> reConfigure;
-                              else
-                                 width div 2 -> dh;
-                                 height div 2 -> dv;
+                      (if private.selected then
+                          (if actualMode
+                           //selectMode then
+                              theEvent.localPosition -> theWindowItem.delay
+                              (# 
+                              do
+                                 theEvent[] -> dragOrResize;
+                              #);
+                           //resizeMode then
+                              (# width,height: @integer;
+                                 dh,dv: @integer;
+                                 h,v: @integer;
+                                 doTop,doLeft,doBottom,doRight: @boolean;
+                              do theEvent.localPosition -> (h,v);
+                                 theWindowItem.size -> (width,height);
+                                 width div 3 -> dh;
+                                 height div 3 -> dv;
                                  
                                  (if (h <= dh) then 
-                                     true -> doLeft
-                                  else
-                                     true -> doRight;
+                                     true -> doLeft 
+                                 if);
+                                 (if (h >= (width - dh)) then
+                                     true -> doRight
                                  if);
                                  (if (v <= dv) then
                                      true -> doTop
-                                  else
-                                     true -> doBottom;
                                  if);
-                                 (doLeft,doTop,doRight,doBottom) -> reConfigure;
-                             if);
-                          #);
-                       //hierarkiMode then
-                          theEvent[] -> selection.interactiveChangeHierarki;
+                                 (if (v >= (height - dv)) then 
+                                     true -> doBottom
+                                 if);
+                                 (if (doLeft or doBottom or doTop or doRight) then
+                                     (doLeft,doTop,doRight,doBottom) -> reConfigure;
+                                  else
+                                     width div 2 -> dh;
+                                     height div 2 -> dv;
+                                     
+                                     (if (h <= dh) then 
+                                         true -> doLeft
+                                      else
+                                         true -> doRight;
+                                     if);
+                                     (if (v <= dv) then
+                                         true -> doTop
+                                      else
+                                         true -> doBottom;
+                                     if);
+                                     (doLeft,doTop,doRight,doBottom) -> reConfigure;
+                                 if);
+                              #);
+                           //hierarkiMode then
+                              theEvent[] -> selection.interactiveChangeHierarki;
+                          if);
                       if);
-                  if);
-               #);
+                   #);
+               if);
            if);
        if);
    if);
@@ -3272,13 +3112,15 @@ appendAttribute:
 scanAttributes:
   (# current: ^astInterface.beta.attributeDecl;
      theAttributes: ^astInterface.beta.attributes;
-  do getMainAttributes -> theAttributes[];
+  do 'calling getMainAttributes' -> putLine;
+     getMainAttributes -> theAttributes[];
      (if theAttributes[] <> none then
          theAttributes.iterate
          (# 
          do current[] -> this(scanAttributes).current[];
             inner scanAttributes;
          #);
+         
      if);
   #);
 
@@ -3297,38 +3139,29 @@ do (if private.selected then
    if);
 
 -- GraphicalEditorInit: doPart --
-do true -> private.forbidcodechanges;
-   (# data: ^parameters;
-      prop: ^propertyList;
-      ID: @integer;
-      width, height: @integer;
-   do privateFrag[] -> private.privateFrag[];
-      
-      (* node.guiInfo -> ID;
-       * ID -> theDocument.theParameterStore.get -> data[];
-       *)
-      canvasType -> theDocument.theParameterStore.new -> data[];
-      true -> data.bindLeft -> data.bindTop;
-      (300, 200) -> data.size;
-      
-      (# theDoPart: ^astInterface.beta.doPart;
-      do (node[], defaultBodyGroup) -> realFindOpenDoPart -> theDoPart[];
-         (if theDoPart[] <> none then
-             (data[], theDoPart.getImperatives) -> initData1;
-         if);
-      #);
-      data.size ->  initialize;
+do (# theClassData: ^classData;
+      theEditor: ^windowItemEditor;
+   do 'private frag: ' -> putText;
       (if privateFrag[] <> none then
-          private.privateFrag[] -> private.privateFragHandler.frag[];
+          privateFrag.name -> putLine;
+          privateFrag[] -> private.privateFragHandler.frag[];
           private.privateFragHandler[] -> theFragServer.subscribe;
+       else
+          'NONE' -> putLine;
       if);
-      (none, node[], data[], canvasType, false, node[] -> getClassData) 
-        -> private.contentsEditor.init;
-      show;
+      private.adorner.open;
+      node[] -> getClassData -> theClassData[];
+      (if theClassData[] <> none then
+          this(graphicalEditor).private.editorGenerator[theClassData.theClass.type] -> theEditor[];
+          (none, node[], none, theClassData.theClass.type, false, theClassData[], privateFrag[])
+            -> theEditor.init;
+          theEditor[] -> private.contentsEditor[];
+      if);
       inner init;
+      adjustPalettes;
+      show;
    #);
-   (* false -> private.forbidcodechanges; *)
-
+   
 -- IBwindowitemEditorapplyObjectData: doPart --
 do (# r: @rectangle;
    do data.position -> r.topLeft;
@@ -3352,10 +3185,21 @@ do inner;
 
 -- IBbuttonApplyObjectData: doPart --
 do data.label -> theWindowItem.label;
+   'Setting the label' -> putLine;
    inner;
 
 -- IBiconButtonapplyObjectData: doPart --
-do inner; 
+do (# iconName: ^text;
+   do data.iconName -> iconName[];
+      (if iconName.empty then
+          
+       else
+          iconName[] -> theWindowItem.iconName; 
+      if);
+      data.showLabel -> theWindowItem.showLabel;
+      inner; 
+      
+   #);
 
 -- IBoptionButtonapplyObjectData: doPart --
 do inner;
@@ -3497,9 +3341,13 @@ do (# theDoPart: ^astInterface.beta.doPart;
       theImperatives: ^astInterface.beta.imperatives;
    do inherited -> this(windowItemEditor).inherited;
       (if data[] = none then
-          type -> newData -> defaultData[];
+          type -> makeData -> defaultData[];
+          type -> newData -> data[];
           (defaultData[], theClassData.initImps[]) -> initData;
-          defaultData.copy -> data[];
+          defaultData.data.storage.scan
+          (# 
+          do (current.key[], current.value[]) -> data.data.define;
+          #);
       if);
       (if theAttribute[]<>none then
           theAttribute[] -> node[];
@@ -3518,7 +3366,7 @@ do (# theDoPart: ^astInterface.beta.doPart;
           if);
           createTheWindowItem;
        else
-          &handleMouseDown[] -> theWindowItem.prependAction;
+          &handleMouseDown[] -> theWindowItem.appendAction;
           &handleRefresh[] -> theWindowItem.appendAction;
           &handleFrameChanged[] -> theWindowItem.appendAction;
       if);
@@ -3547,19 +3395,25 @@ do inner;
              current[] -> getClassData -> theClassData[];
              (if theClassData[] <> none then
                  this(graphicalEditor).private.editorGenerator[theClassData.theClass.type] -> theEditor[];
-                 (this(canvasEditor)[],current[], NONE, theClassData.theClass.type, true, theClassData[]) 
+                 (this(canvasEditor)[],current[], NONE, theClassData.theClass.type, true, theClassData[], none) 
                    -> theEditor.init;
              if);
          if);
       #);
+      'calling scanattributes' -> putLine;
       scanAttributes
       (# theEditor: ^windowItemEditor;
          theClassData: ^classData;
       do (if current[] -> isStaticItem then
              current[] -> getClassData -> theClassData[];
              (if theClassData[] <> none then
+                 (* newLine;
+                  * (theClassData.node[], screen[]) -> pretty.printNode;
+                  * newLine;
+                  *)
+                 
                  this(graphicalEditor).private.editorGenerator[theClassData.theClass.type] -> theEditor[];
-                 (this(canvasEditor)[],current[], NONE, theClassData.theClass.type, inherited, theClassData[]) 
+                 (this(canvasEditor)[],current[], NONE, theClassData.theClass.type, inherited, theClassData[], none) 
                    -> theEditor.init;
              if);
          if);
@@ -3572,21 +3426,27 @@ do (# frag: ^astInterface.fragmentForm;
       thePatternDecl: ^astInterface.beta.patternDecl;
       data: ^parameters;
       prop: ^propertyList;
+      theClassData: ^classData;
+      theEditor: ^windowItemEditor;
    do true -> private.newlyCreated;
-      (300, 200) -> initialize;
       true -> (node.frag.father).changed;
       node[] -> thePatternDecl[];
-      canvasType -> theDocument.theParameterStore.new -> data[];
-      true -> data.bindLeft -> data.bindTop;
-      (300, 200) -> data.size;
-      (* data.id -> thePatternDecl.guiInfo; *)
+     
       createPrivateAttributes;
-      (none, thePatternDecl[], data[], canvasType, false, node[] -> getClassData) -> private.contentsEditor.init;
+      private.adorner.open;
+      node[] -> getClassData -> theClassData[];
+      (if theClassData[] <> none then
+          this(graphicalEditor).private.editorGenerator[theClassData.theClass.type] -> theEditor[];
+          (none, node[], none, theClassData.theClass.type, false, theClassData[], none)
+            -> theEditor.init;
+          theEditor[] -> private.contentsEditor[];
+      if);
       private.contentsEditor.generateSimpleOpen;
-      show;
       (if not readOnly then
           theDocument.autoSave;
       if);
+      adjustPalettes;
+      show;
    #);
 
 -- graphicalEditorWindowItemEditorFindEditor: doPart --
@@ -3758,13 +3618,33 @@ do (# theWindow: @window
    #)
    
 -- graphicalEditorSelectionDoCopy: doPart --
-do this(selection)[] -> this(graphicalEditor).private.theClipBoard.copyToScrap;
+do (# 
+   do (if isEditMenuPossible then
+          this(selection)[] -> this(graphicalEditor).private.theClipBoard.copyToScrap;
+      if);
+   #);
    
 -- graphicalEditorSelectionDoCut: doPart --
-do this(selection)[] -> this(graphicalEditor).private.theClipBoard.copyToScrap;
-   makeCutOperation;
+do (# 
+   do (if isEditMenuPossible then
+          this(selection)[] -> this(graphicalEditor).private.theClipBoard.copyToScrap;
+          makeCutOperation;
+      if);
+   #);
 
 -- selectionLib: attributes --
+
+isEditMenuPossible: booleanValue
+  (# 
+  do true -> value;
+     scan
+     (# 
+     do (if current[] = contentsEditor then
+            false -> value;
+        if);
+     #);
+  #);
+
 isAncestor: booleanValue
   (# ancestor, child: ^windowItemEditor;
   enter (ancestor[], child[])
@@ -3907,11 +3787,11 @@ drag:
         dh, dv: @integer;
      do 
         bounds -> oldBounds[];
-        (oldBounds[], (first).theWindowItem.father[], (contentsEditor).theWindowItem[])
+        (oldBounds[], (first).theWindowItem.father[], contents)
           -> translateRect;
         &rectangle[] -> newBounds[];
         (oldBounds, true, true, true, true) 
-          -> (contentsEditor).theWindowItem.defineRect -> newBounds;
+          -> (contents).defineRect -> newBounds;
         newBounds.left - oldBounds.left -> dh;
         newBounds.top - oldBounds.top -> dv;
         (dh, dv) -> makeMoveOperation;
@@ -4274,20 +4154,16 @@ delete:
 
 
 
-putPoint:
-  (# x, y: @integer;
-  enter (x, y)
-  do '[' -> put;
-     x -> putInt;
-     ' ' -> put;
-     y -> putInt;
-     ']' -> put;
-  #);
 
 
 -- GraphicalEdioterWindowItemEditorCreateWindowItem: doPart --
 do &windowItemType[] -> theWindowItem[];
-   owner.getMainCanvas -> theWindowItem.open;
+   (if owner[] <> none then
+       owner.getMainCanvas -> theWindowItem.open;
+    else
+       this(graphicalEditor).private.adorner[] -> theWindowItem.open;
+       theWindowItem[] -> this(graphicalEditor).private.adorner.interior[];
+   if);
    theWindowItem.disableDefaultBehaviour;
    &handleMouseDown[] -> theWindowItem.prependAction;
    &handleRefresh[] -> theWindowItem.appendAction;
@@ -4464,12 +4340,30 @@ do inner;
    if);
    
 -- windowItemEditorGetPrivateAttributes: doPart --
-do inner;
+do (# theDescriptorForm: ^astInterface.beta.descriptorForm;
+      theObjectDescriptor: ^astInterface.beta.objectDescriptor;
+      theMainPart: ^astInterface.beta.mainPart;
+   do 'in getPrivate' -> putLine;
+      (if privateFrag[] <> none then
+          'there is a privatefrag' -> putLine;
+          privateFrag.root[] -> theDescriptorForm[];
+          theDescriptorForm.getObjectDescriptor -> theObjectDescriptor[];
+          theObjectDescriptor.getMainPart -> theMainPart[];
+          theMainPart.getAttributes -> theAttributes[];
+      if);
+   #);
+   inner;
    
 -- windowItemEditorGetMainAttributes: doPart --
-do inner;
+do 'in getMain' -> putLine;
+   inner;
    (if theAttributes[] = none then
-       getPublicAttributes -> theAttributes[];
+       'calling getPrivateAttributes' -> putLine;
+       getPrivateAttributes -> theAttributes[];
+       (if theAttributes[] = None then
+           'they were NONE' -> putLine;
+           getPublicAttributes -> theAttributes[];
+       if);
    if);
    
 -- scrollerEditorGetMainAttributes: doPart --
@@ -4621,3 +4515,16 @@ do (* children.scan
 -- classDataInit: doPart --
 do  (node[], group[]) -> getInheritedAttributes 
      -> (inheritedAttributes[], initImps[]);
+   
+-- rectangleEditorNewData: doPart --
+do 
+   
+-- rectangleEditorNew: doPart --
+do
+   
+-- rectangleEditorApplyObjectData: doPart --
+do 
+   
+-- windowEditorNewData: doPart --
+do 'untitled' -> data.title;
+   inner;
