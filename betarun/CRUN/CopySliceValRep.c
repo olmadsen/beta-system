@@ -26,12 +26,9 @@ ParamRepObjOffLowHigh(CopySVR1)
     register long i, size, range;
     
     GCable_Entry();
+   
+    FetchRepObjOffLowHigh();
 
-#ifdef hppa
-  low = (unsigned) getR2Reg();
-  high = (unsigned) getR1Reg();
-#endif
-    
     DEBUG_CODE(NumCopySVR1++);
     Ck(theObj); Ck(theRep);
 
@@ -83,11 +80,8 @@ ParamRepObjOffLowHigh(CopySVR2)
     
     GCable_Entry();
 
-#ifdef hppa
-  low = (unsigned) getR2Reg();
-  high = (unsigned) getR1Reg();
-#endif
-    
+    FetchRepObjOffLowHigh();
+
     DEBUG_CODE(NumCopySVR2++);
     Ck(theObj); Ck(theRep);
 
@@ -137,10 +131,7 @@ ParamRepObjOffLowHigh(CopySVR4)
     
     GCable_Entry();
 
-#ifdef hppa
-  low = (unsigned) getR2Reg();
-  high = (unsigned) getR1Reg();
-#endif
+    FetchRepObjOffLowHigh();
     
     DEBUG_CODE(NumCopySVR4++);
     Ck(theObj); Ck(theRep);
@@ -187,11 +178,8 @@ ParamRepObjOffLowHigh(CopySVR8)
     
     GCable_Entry();
 
-#ifdef hppa
-  low = (unsigned) getR2Reg();
-  high = (unsigned) getR1Reg();
-#endif
-    
+    FetchRepObjOffLowHigh();
+   
     DEBUG_CODE(NumCopySVR8++);
     Ck(theObj); Ck(theRep);
 
@@ -240,11 +228,8 @@ ParamORepObjOffLowHigh(CopySVRI)
     
     GCable_Entry();
 
-#ifdef hppa
-  low = (unsigned) getR2Reg();
-  high = (unsigned) getR1Reg();
-#endif
-    
+    FetchORepObjOffLowHigh();
+   
     DEBUG_CODE(NumCopySVRI++);
     Ck(theObj); Ck(theRep);
 
@@ -291,11 +276,8 @@ ParamORepObjOffLowHigh(CopySVRC)
     
     GCable_Entry();
 
-#ifdef hppa
-  low = (unsigned) getR2Reg();
-  high = (unsigned) getR1Reg();
-#endif
-    
+    FetchORepObjOffLowHigh();
+  
     DEBUG_CODE(NumCopySVRC++);
     Ck(theObj); Ck(theRep);
 

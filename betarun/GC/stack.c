@@ -4,9 +4,9 @@
  * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, Jacob Seligmann and S|ren Brandt
  */
 
-#ifndef MT
-
 #include "beta.h"
+
+#ifndef MT
 
 /* #define DEBUG_LABELS */
 

@@ -21,14 +21,8 @@ ParamThisOffRange(AlloVR1)
   register unsigned Size;
 
   GCable_Entry();
-
-#ifdef hppa
-  /* must be the first instr. in the proc. because D1 is not kept from GCC */
-  range = (unsigned) getD1Reg();
-  theObj = cast(Object) getThisReg();
-  offset = (unsigned) getD0Reg();
-#endif
-
+  FetchThisOffRange();
+  
   if (range < 0) range = 0;
 
   DEBUG_CODE(NumAlloVR1++);
@@ -66,12 +60,7 @@ ParamThisOffRange(AlloVR2)
   register unsigned Size;
 
   GCable_Entry();
-
-#ifdef hppa
-  range = (unsigned) getD1Reg();
-  theObj = cast(Object) getThisReg();
-  offset = (unsigned) getD0Reg();
-#endif
+  FetchThisOffRange();
 
   DEBUG_CODE(NumAlloVR2++);
   Ck(theObj);
@@ -109,12 +98,7 @@ ParamThisOffRange(AlloVR4)
   register unsigned Size;
 
   GCable_Entry();
-
-#ifdef hppa
-  range = (unsigned) getD1Reg();
-  theObj = cast(Object) getThisReg();
-  offset = (unsigned) getD0Reg();
-#endif
+  FetchThisOffRange();
 
   DEBUG_CODE(NumAlloVR4++);
   Ck(theObj);
@@ -153,12 +137,7 @@ ParamThisOffRange(AlloVR8)
   register unsigned Size;
 
   GCable_Entry();
-
-#ifdef hppa
-  range = (unsigned) getD1Reg();
-  theObj = cast(Object) getThisReg();
-  offset = (unsigned) getD0Reg();
-#endif
+  FetchThisOffRange();
 
   DEBUG_CODE(NumAlloVR8++);
   Ck(theObj);

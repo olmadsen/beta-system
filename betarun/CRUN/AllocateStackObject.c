@@ -3,12 +3,12 @@
  * by Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 
-#ifndef MT
 #define GCable_Module
 
 #include "beta.h"
 #include "crun.h"
 
+#ifndef MT
 
 #ifdef sparc
 /* Dont allow size to be in a GC register */

@@ -14,6 +14,7 @@ ParamRepObjOff(CopyRR)
     register unsigned range, i;
     
     GCable_Entry();
+    FetchRepObjOff();
     
     DEBUG_CODE(NumCopyRR++);
 

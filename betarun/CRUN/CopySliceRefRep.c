@@ -21,11 +21,8 @@ ParamRepObjOffLowHigh(CopySRR)
     
     GCable_Entry();
 
-#ifdef hppa
-    low =  (unsigned) getR2Reg(); 
-    high = (unsigned) getR1Reg();
-#endif
-    
+    FetchRepObjOffLowHigh();
+
     DEBUG_CODE(NumCopySRR++);
 
     Ck(theObj); Ck(theRep);

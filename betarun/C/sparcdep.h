@@ -84,8 +84,15 @@ register volatile void *GCreg4 __asm__("%o4");
     return value /* keep gcc happy */
 
 #define FetchOriginProto()
-#define FetchThisComp()
+#define FetchObjOriginProtoOffRange()
+#define FetchObjOffRange()
 #define FetchThis()
+#define FetchThisOffRange()
+#define FetchThisComp()
+#define FetchRepObjOff()
+#define FetchRepObjOffLowHigh()
+#define FetchORepObjOff()
+#define FetchORepObjOffLowHigh()
 #define FetchStruc()
 
 #define SaveVar(var) push(var)

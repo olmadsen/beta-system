@@ -14,7 +14,9 @@ ParamRepObjOff(CopyVR1)
     register unsigned range, i, size;
     
     GCable_Entry();
-    
+
+    FetchRepObjOff();
+
     DEBUG_CODE(NumCopyVR1++);
 
     Ck(theRep); Ck(theObj);
@@ -80,6 +82,7 @@ ParamRepObjOff(CopyVR2)
     register unsigned range, i, size;
     
     GCable_Entry();
+    FetchRepObjOff();
     
     DEBUG_CODE(NumCopyVR2++);
 
@@ -146,6 +149,7 @@ ParamRepObjOff(CopyVR4)
     register unsigned range, i, size;
     
     GCable_Entry();
+    FetchRepObjOff();
     
     DEBUG_CODE(NumCopyVR4++);
 
@@ -212,6 +216,7 @@ ParamRepObjOff(CopyVR8)
     register unsigned range, i, size;
     
     GCable_Entry();
+    FetchRepObjOff();
     
     DEBUG_CODE(NumCopyVR8++);
 
@@ -278,6 +283,7 @@ ParamORepObjOff(CopyVRI)
     register unsigned range, i, size;
     
     GCable_Entry();
+    FetchORepObjOff();
     
     DEBUG_CODE(NumCopyVRI++);
     Ck(theRep); Ck(theObj);
@@ -313,6 +319,7 @@ ParamORepObjOff(CopyVRC)
     register unsigned range, i, size;
     
     GCable_Entry();
+    FetchORepObjOff();
     
     DEBUG_CODE(NumCopyVRC++);
     Ck(theRep); Ck(theObj);

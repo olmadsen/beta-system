@@ -11,17 +11,17 @@
 ParamObjOffRange(NewVR1)
 {
   GCable_Entry();
+  FetchObjOffRange();
   
   DEBUG_CODE(NumNewVR1++);
   Ck(theObj);
   SaveVar(theObj);
   
 #ifdef hppa
-  range = (long)getR2Reg();
   pushReference(getThisReg());
   setThisReg(theObj);
-  setD0Reg(offset * 4);
-  setD1Reg(range)
+  setPrimReg1(offset * 4);
+  setPrimReg2(range)
 #endif /* hppa */
 
 #ifdef sparc
@@ -40,17 +40,17 @@ ParamObjOffRange(NewVR1)
 ParamObjOffRange(NewVR2)
 {
   GCable_Entry();
+  FetchObjOffRange();
   
   DEBUG_CODE(NumNewVR2++);
   Ck(theObj);
   SaveVar(theObj);
   
 #ifdef hppa
-  range = (long)getR2Reg();
   pushReference(getThisReg());
   setThisReg(theObj);
-  setD0Reg(offset * 4);
-  setD1Reg(range)
+  setPrimReg1(offset * 4);
+  setPrimReg2(range)
 #endif /* hppa */
 
 #ifdef sparc
@@ -69,17 +69,17 @@ ParamObjOffRange(NewVR2)
 ParamObjOffRange(NewVR4)
 {
   GCable_Entry();
+  FetchObjOffRange();
   
   DEBUG_CODE(NumNewVR4++);
   Ck(theObj);
   SaveVar(theObj);
   
 #ifdef hppa
-  range = (long)getR2Reg();
   pushReference(getThisReg());
   setThisReg(theObj);
-  setD0Reg(offset * 4);
-  setD1Reg(range)
+  setPrimReg1(offset * 4);
+  setPrimReg2(range)
 #endif /* hppa */
 
 #ifdef sparc
@@ -98,17 +98,17 @@ ParamObjOffRange(NewVR4)
 ParamObjOffRange(NewVR8)
 {
   GCable_Entry();
+  FetchObjOffRange();
   
   DEBUG_CODE(NumNewVR8++);
   Ck(theObj);
   SaveVar(theObj);
   
 #ifdef hppa
-  range = (long)getR2Reg();
   pushReference(getThisReg());
   setThisReg(theObj);
-  setD0Reg(offset * 4);
-  setD1Reg(range)
+  setPrimReg1(offset * 4);
+  setPrimReg2(range)
 #endif /* hppa */
 
 #ifdef sparc
@@ -131,11 +131,11 @@ ParamObjOffRange(NewVR8)
 
 #ifdef hppa
 #define SetObjOriginProtoOffRange() \
-  setD1Reg(range);                  \
+  setPrimReg2(range);                  \
   setOriginReg(REP->iOrigin);       \
   setCallReg(REP->iProto);          \
   setThisReg(theObj);               \
-  setD0Reg(4*offset);
+  setPrimReg1(4*offset);
 #else
 #define SetObjOriginProtoOffRange() 
 #endif
@@ -144,6 +144,7 @@ ParamObjOffRange(NewVRI)
 {
   DeclReference1(struct ValRep *, theRep);
   GCable_Entry();
+  FetchObjOffRange();
   
   DEBUG_CODE(NumNewVRI++);
   Ck(theObj);
@@ -151,11 +152,10 @@ ParamObjOffRange(NewVRI)
   SaveVar(theObj);
   
 #ifdef hppa
-  range = (long)getR2Reg();
   pushReference(getThisReg());
   setThisReg(theObj);
-  setD0Reg(offset * 4);
-  setD1Reg(range);
+  setPrimReg1(offset * 4);
+  setPrimReg2(range);
 #endif /* hppa */
 
 #ifdef sparc
@@ -177,6 +177,7 @@ ParamObjOffRange(NewVRC)
 {
   DeclReference1(struct ValRep *, theRep);
   GCable_Entry();
+  FetchObjOffRange();
   
   DEBUG_CODE(NumNewVRC++);
   Ck(theObj);
@@ -184,11 +185,10 @@ ParamObjOffRange(NewVRC)
   SaveVar(theObj);
   
 #ifdef hppa
-  range = (long)getR2Reg();
   pushReference(getThisReg());
   setThisReg(theObj);
-  setD0Reg(offset * 4);
-  setD1Reg(range);
+  setPrimReg1(offset * 4);
+  setPrimReg2(range);
 #endif /* hppa */
 
 #ifdef sparc

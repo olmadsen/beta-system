@@ -21,10 +21,7 @@ ParamObjOffRange(ExtRR)
     long newRange, copyRange, i;
     
     GCable_Entry();
-
-#ifdef hppa
-    add = (long) getR2Reg(); /* sic! */
-#endif
+    FetchObjOffRange();
 
     DEBUG_CODE(NumExtRR++);
 

@@ -8,12 +8,7 @@
 
 ParamThisComp(void, HandleIndexErr)
 {
-#ifdef hppa
-    /* struct Item *this; */
-    this = (struct Item *)getThisReg();
-#endif
-    
-    Ck(this);
-
-    BetaError(RepRangeErr, cast(Object)this);
+  FetchThisComp();
+  Ck(this);
+  BetaError(RepRangeErr, cast(Object)this);
 }

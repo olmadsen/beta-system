@@ -3,11 +3,12 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
-#ifndef MT
 #define GCable_Module
 
 #include "beta.h"
 #include "crun.h"
+
+#ifndef MT
 
 ParamThisComp(void, AttBC)
 /* = void AttBC(struct Object *this, struct Component *comp) */
@@ -19,17 +20,17 @@ ParamThisComp(void, AttBC)
 #endif
 
 #ifdef hppa
-    long		   dummy; /* don't move without changing SnakeAdditions.S */
+    long dummy; /* don't move without changing SnakeAdditions.S */
     struct ComponentBlock  cb
 	/* Used to hold value of lastCompBlock at time of Attach.
 	 * This value is used by Susp to find out which parts of
 	 * machine stack and ref-stack to pack.
 	 */
 	/* don't move without changing SnakeAdditions.S */;
-    comp = cast(Component)getCallReg();
 #endif
 
     GCable_Entry();
+    FetchThisComp();
 
     Ck(comp);
 

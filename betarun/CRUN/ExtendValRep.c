@@ -25,10 +25,7 @@ ParamObjOffRange(ExtVR1)
   long size; /* size of new repetition */
   
   GCable_Entry();
-  
-#ifdef hppa
-  add = (long) getR2Reg();
-#endif
+  FetchObjOffRange();
   
   DEBUG_CODE(NumExtVR1++);
   Ck(theObj);
@@ -103,10 +100,7 @@ ParamObjOffRange(ExtVR2)
   long size; /* size of new repetition */
   
   GCable_Entry();
-  
-#ifdef hppa
-  add = (long) getR2Reg();
-#endif
+  FetchObjOffRange();
   
   DEBUG_CODE(NumExtVR2++);
   Ck(theObj);
@@ -181,10 +175,7 @@ ParamObjOffRange(ExtVR4)
   long size; /* size of new repetition */
   
   GCable_Entry();
-  
-#ifdef hppa
-  add = (long) getR2Reg();
-#endif
+  FetchObjOffRange();
   
   DEBUG_CODE(NumExtVR4++);
   Ck(theObj);
@@ -259,10 +250,7 @@ ParamObjOffRange(ExtVR8)
   long size; /* size of new repetition */
   
   GCable_Entry();
-  
-#ifdef hppa
-  add = (long) getR2Reg();
-#endif
+  FetchObjOffRange();
   
   DEBUG_CODE(NumExtVR8++);
   Ck(theObj);
@@ -342,10 +330,7 @@ ParamObjOffRange(ExtVRI)
   long size; /* size of new repetition */
   
   GCable_Entry();
-
-#ifdef hppa
-  add = (long) getR2Reg();
-#endif
+  FetchObjOffRange();
 
   DEBUG_CODE(NumExtVRI++);
   Ck(theObj);
@@ -417,10 +402,7 @@ ParamObjOffRange(ExtVRC)
   long size; /* size of new repetition */
   
   GCable_Entry();
-
-#ifdef hppa
-  add = (long) getR2Reg();
-#endif
+  FetchObjOffRange();
 
   DEBUG_CODE(NumExtVRC++);
   Ck(theObj);

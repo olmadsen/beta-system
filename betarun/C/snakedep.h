@@ -49,8 +49,8 @@ register long _dummy33 __asm__("%r6");  /* really tmp R1 */
 register long _dummy37 __asm__("%r7");  /* really tmp R2 */
 register long _dummy4 __asm__("%r17"); /* really IOAbot */
 register long _dummy5 __asm__("%r18"); /* really IOAsize */
-register long _dummy6 __asm__("%r9");  /* really D0 */
-register long _dummy6 __asm__("%r10");  /* really D1 */
+register long _dummy6 __asm__("%r9");  /* really PrimReg1 */
+register long _dummy6 __asm__("%r10");  /* really PrimReg2 */
 register long _dummy7 __asm__("%r14"); /* really RefSP */
 #endif
 
@@ -61,10 +61,8 @@ register long _dummy7 __asm__("%r14"); /* really RefSP */
    __asm__ volatile ("" : : : /* "r3", "r4", "r5", "r6", "r7", */ "r8", "r9", \
 		 "r10",	"r11", "r12", "r13","r14","r15","r16")
 
-#define asmlabel(label, code) /*nothing*/
-
-#define asmcomment(text) \
-  /* __asm__(";" #text) */
+#define asmlabel(label, code)
+#define asmcomment(text) 
 
 /*
  * Take care of the reference stack.
@@ -168,27 +166,63 @@ static __inline__ void *setOriginReg(void *p)
   return p;
 }
 
-static __inline__ void setD0Reg(long v)
+static __inline__ void setPrimReg1(long v)
 {     
   __asm__ volatile ("COPY\t%0, %%r9" : /* no out */ : "r" (v)); 
 }
 
-static __inline__ long getD0Reg()
+static __inline__ long getPrimReg1()
 { 
   long v;
   __asm__ volatile ("COPY\t%%r9, %0" : "=r" (v)); 
   return v;
 }
 
-static __inline__ void setD1Reg(long v)
+static __inline__ void setPrimReg2(long v)
 {     
   __asm__ volatile ("COPY\t%0, %%r10" : /* no out */ : "r" (v) : "r10"); 
 }
 
-static __inline__ long getD1Reg()
+static __inline__ long getPrimReg2()
 { 
   long v;
   __asm__ volatile ("COPY\t%%r10, %0" : "=r" (v)); 
+  return v;
+}
+
+static __inline__ void setPrimReg3(long v)
+{     
+  __asm__ volatile ("COPY\t%0, %%r11" : /* no out */ : "r" (v) : "r10"); 
+}
+
+static __inline__ long getPrimReg3()
+{ 
+  long v;
+  __asm__ volatile ("COPY\t%%r11, %0" : "=r" (v)); 
+  return v;
+}
+
+static __inline__ void setPrimReg4(long v)
+{     
+  __asm__ volatile ("COPY\t%0, %%r12" : /* no out */ : "r" (v) : "r10"); 
+}
+
+static __inline__ long getPrimReg4()
+{ 
+  long v;
+  __asm__ volatile ("COPY\t%%r12, %0" : "=r" (v)); 
+  return v;
+}
+
+static __inline__ void setPrimReg5(long v)
+{     
+  __asm__ volatile ("COPY\t%0, %%r13" : /* no out */ : "r" (v) : "r10"); 
+}
+
+static __inline__ long getPrimReg5()
+{ 
+  long v;
+  __asm__ volatile ("COPY\t%%r13, %0" : "=r" (v)); 
   return v;
 }
 
@@ -233,48 +267,83 @@ static __inline__ long getRPReg()
 #ifdef GCable_Module
 
 #define GCable_Entry()
-#define GCable_Exit(n) /* modifyRefSP(-n); */
+#define GCable_Exit(n)
 
 #endif /* GCable_Module */
 
 #define DeclReference1(type, name) type name
 #define DeclReference2(type, name) type name
 
-/* old DeclReference1  type * name##Ptr = (type *)newReference(); */
+#define ParamOriginProto(type, name)		        \
+  type name(struct Object *origin,                      \
+	    struct ProtoType *proto)
+#define FetchOriginProto()				\
+  origin = (struct Object *)getOriginReg();	        \
+  proto  = (struct ProtoType *)getCallReg()
 
-#define ParamOriginProto(t,name)			\
-  t name(struct Object *origin, struct ProtoType *proto)
+#define ParamThisComp(type, name)			\
+ type name(struct Object *this, struct Component *comp)
+#define FetchThisComp()			                \
+  this = (struct Item *)getThisReg();	                \
+  comp = (struct Component *)getCallReg()
 
-#define FetchOriginProto()			\
-  origin = (struct Object *)getOriginReg();	\
-  proto  = (struct ProtoType *)getCallReg();
+#define ParamThis(type, name)                         	\
+ type name(struct Object *this)
+#define FetchThis()					\
 
-/* C procs that gets this and component */
-#define ParamThisComp(t,name)                       \
-  t name(struct Item *this, struct Component *comp)
+#define ParamStruc(type, name)				\
+ type name(struct Structure *struc)
+#define FetchStruc()                                    \
+  struc = cast(Structure) getCallReg();
 
-#define ParamThisOffRange(type, name)			\
- type name(struct Object *theObj,			\
-	      unsigned offset, /* in bytes */		\
-	      /*unsigned*/ int range			\
-	      )
+#define ParamThisOffRange(name)		        	\
+ void name(struct Object *theObj,			\
+	   unsigned offset, /* in bytes */		\
+	   /*unsigned*/ int range)
+#define FetchThisOffRange()				\
 
-/* C procs that gets object, origin, prototype, offset, range,  */
-#define ParamObjOriginProtoOffRange(name)			\
+#define ParamObjOffRange(name)			        \
+ void name(struct Object *theObj,			\
+	   /*unsigned*/ int range,                      \
+	   unsigned offset /* in bytes */)
+#define FetchObjOffRange()				\
+
+#define ParamRepObjOff(name)                            \
+void name(struct ValRep *theRep,                        \
+	  struct Object *theObj,                        \
+	  unsigned offset /* in ints */)
+#define FetchRepObjOff()				\
+
+#define ParamORepObjOff(name)                           \
+void name(struct ObjectRep *theRep,                     \
+	  struct Object *theObj,                        \
+	  unsigned offset /* in ints */)
+#define FetchORepObjOff()				\
+
+#define ParamRepObjOffLowHigh(name)                     \
+void name(struct ValRep *theRep,                        \
+	  struct Object *theObj,                        \
+	  unsigned offset, /* in ints */                \
+	  unsigned low,                                 \
+	  long high)
+#define FetchRepObjOffLowHigh()				\
+
+#define ParamORepObjOffLowHigh(name)                    \
+void name(struct ObjectRep *theRep,                     \
+	  struct Object *theObj,                        \
+	  unsigned offset, /* in ints */                \
+	  unsigned low,                                 \
+	  long high)
+#define FetchORepObjOffLowHigh()			\
+
+#define ParamObjOriginProtoOffRange(name)		\
  void name(struct Object *origin,			\
-	      struct Object *theObj,	                \
-	      unsigned offset, /* in bytes */		\
-	      struct ProtoType *proto,			\
-	      int range)
+	   struct Object *theObj,	                \
+	   unsigned offset, /* in bytes */		\
+	   int range,			                \
+	   struct ProtoType *proto)
+#define FetchObjOriginProtoOffRange()			\
 
-#define ParamStruc(t, name) \
-  t name(struct Structure *struc)
-
-#define FetchThisComp()			\
-  this = (struct Item *)getThisReg();	\
-  comp = (struct Component *)getCallReg();
-
-#define FetchStruc() struc = cast(Structure) getCallReg();
 
 extern struct Component *AlloC();
 extern struct Item *AlloI();

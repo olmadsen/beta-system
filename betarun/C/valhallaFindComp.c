@@ -1,4 +1,4 @@
-#include "define.h"
+#include "beta.h"
 
 #ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
 #include "valhallaFindComp.h"

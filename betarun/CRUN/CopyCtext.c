@@ -28,7 +28,7 @@ ref(ValRep) CopyCT(unsigned char *textPtr)
     GCable_Entry();
 
 #ifdef hppa
-    textPtr = (unsigned char *) getD0Reg();
+    textPtr = (unsigned char *) getPrimReg1();
 #endif
 
     DEBUG_CODE(NumCopyCT++);

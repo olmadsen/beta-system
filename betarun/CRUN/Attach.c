@@ -3,12 +3,12 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
-#ifndef MT
-
 #define GCable_Module
 
 #include "beta.h"
 #include "crun.h"
+
+#ifndef MT
 
 #ifdef RTVALHALLA
 #include "valhallaComm.h"
@@ -28,7 +28,6 @@ extern void UnPackAndAllocateJmpBuf(long, long);
 extern long GetJumpStackSize(void);
 
 struct Component * Att(struct Object *this, struct Component *comp)
-/* ParamThisComp(struct Component *, Att) */
 {  
   long first =  comp->CallerLSC == 0;
   long attachStackSize;

@@ -26,13 +26,7 @@ ParamObjOriginProtoOffRange(AlloVRI)
   DeclReference1(struct ObjectRep *, theRep);
   struct Item *item;
   GCable_Entry();
-#ifdef hppa
-  range  = getD1Reg();
-  origin = (struct Object *)getOriginReg();
-  proto  = (struct ProtoType *)getCallReg();
-  theObj = (struct Object *)getThisReg();
-  offset = getD0Reg();
-#endif
+  FetchObjOriginProtoOffRange();
 
   DEBUG_CODE(NumAlloVRI++);
   Ck(theObj);
@@ -78,13 +72,7 @@ ParamObjOriginProtoOffRange(AlloVRC)
   DeclReference1(struct ObjectRep *, theRep);
   struct Component *comp;
   GCable_Entry();
-#ifdef hppa
-  range  = getD1Reg();
-  origin = (struct Object *)getOriginReg();
-  proto  = (struct ProtoType *)getCallReg();
-  theObj = (struct Object *)getThisReg();
-  offset = getD0Reg();
-#endif
+  FetchObjOriginProtoOffRange();
 
   DEBUG_CODE(NumAlloVRC++);
   Ck(theObj);

@@ -12,11 +12,7 @@ ParamThisOffRange(AlloRR)
 {
     DeclReference1(struct RefRep *, theRep);
     GCable_Entry();
-#ifdef hppa
-    range  = (unsigned) getD1Reg();
-    theObj = cast(Object) getThisReg();
-    offset = (unsigned) getD0Reg();
-#endif
+    FetchThisOffRange();
 
     DEBUG_CODE(NumAlloRR++);
 

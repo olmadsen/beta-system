@@ -11,24 +11,22 @@
 ParamObjOffRange(NewRR)
 {
     GCable_Entry();
-
-#ifdef hppa
-    range = (long)getR2Reg();
-
-    if (range<0) range=0;
-    pushReference(theObj);
-    pushReference(getThisReg());
-    setThisReg(theObj);
-    setD0Reg(offset * 4);
-    setD1Reg(range);
-    AlloRR(theObj, offset, range);
-    setThisReg(popReference());
-    theObj = popReference();
-#endif
+    FetchObjOffRange();
 
     DEBUG_CODE(NumNewRR++);
     Ck(theObj);
 
+#ifdef hppa
+    if (range<0) range=0;
+    pushReference(theObj);
+    pushReference(getThisReg());
+    setThisReg(theObj);
+    setPrimReg1(offset * 4);
+    setPrimReg2(range);
+    AlloRR(theObj, offset, range);
+    setThisReg(popReference());
+    theObj = popReference();
+#endif
 #ifdef sparc
     Protect(theObj,if (range<0) range=0; CAlloRR(theObj, 0, offset*4, 0, 0, range));
 #endif
