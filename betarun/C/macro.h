@@ -70,7 +70,7 @@
 #else
 # define StructureSize          headsize(Structure)
 # define RefRepSize(range)      ((range)*4 + headsize(RefRep))
-# define DynObjectRepSize(range)(((range)*4 + headsize(ObjectRep))
+# define DynObjectRepSize(range)((range)*4 + headsize(ObjectRep))
 # define ValRepSize(range)      (ValRepBodySize(range) + headsize(ValRep))
 # define ByteRepSize(range)     (ByteRepBodySize(range) + headsize(ValRep))
 # define WordRepSize(range)     (WordRepBodySize(range) + headsize(ValRep))
