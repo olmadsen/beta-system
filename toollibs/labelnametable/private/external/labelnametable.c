@@ -31,6 +31,8 @@ typedef struct _labeltable {
 #ifdef nti
   int process_offset;  /* Offset for mapped process */
   DWORD textSectionNumber;
+  PIMAGE_SYMBOL PCOFFSymbolTable;
+  DWORD COFFSymbolCount;
 #endif /* nti */
 } labeltable;
 
@@ -96,20 +98,6 @@ void freeNameTable(labeltable *handle)
 #define NMOUTFILE "temp.nmoutfile"
 #define NMSORTOUTFILE "temp.nmsortoutfile"
 #define pclose(fd) fclose(fd); unlink(NMSORTOUTFILE) /* ; fprintf(stderr,"Close & deleting %s\n",NMSORTOUTFILE)*/
-static PSTR GetSZStorageClass(BYTE storageClass);
-static void DumpSymbolTable(labeltable *table,
-			    PIMAGE_SYMBOL pSymbolTable, 
-			    unsigned cSymbols);
-static void DumpExeFile(labeltable *table, 
-			PIMAGE_DOS_HEADER dosHeader);
-static void DumpFile(labeltable *table, LPSTR filename);
-static void GetSectionName(WORD section,
-			   PSTR buffer, 
-			   unsigned cbBuffer);
-static void DumpSectionTable(labeltable *table,
-			     PIMAGE_SECTION_HEADER section,
-			     unsigned cSections,
-			     BOOL IsEXE);
 static void DumpFile(labeltable *table, LPSTR filename);
 #endif /* nti */
 
@@ -185,6 +173,10 @@ labeltable *initReadNameTable (char* execFileName, int full)
 #else /* nti */
   table->full = full;
   table->process_offset=0;
+  table->textSectionNumber=0;
+  table->PCOFFSymbolTable=0;
+  table->COFFSymbolCount=0;
+
   /*fprintf(stderr,"Opening %s\n",NMOUTFILE);*/
   if ((table->fd = fopen(NMOUTFILE,"w+"))==NULL) {
     fprintf(stderr,"couldn't open file %s\n",NMOUTFILE); 
@@ -237,7 +229,17 @@ char* nextLabel(labeltable *table)
 
 #ifdef nti
 /* Implements 'nm' like behaviour for nti */
-
+static PSTR GetSZStorageClass(BYTE storageClass);
+static void DumpSymbolTable(labeltable *table,
+			    PIMAGE_SYMBOL pSymbolTable, 
+			    unsigned cSymbols);
+static void GetSectionName(WORD section,
+			   PSTR buffer, 
+			   unsigned cbBuffer);
+static void DumpSectionTable(labeltable *table,
+			     PIMAGE_SECTION_HEADER section,
+			     unsigned cSections,
+			     BOOL IsEXE);
 
 typedef struct
 {
@@ -250,7 +252,6 @@ typedef struct
 
 #define IMAGE_DBG_SIGNATURE     0x00004944
 #define MakePtr( cast, ptr, addValue ) (cast)( (DWORD)(ptr) + (DWORD)(addValue))
-#define NUMBER_SECTION_CHARACTERISTICS (sizeof(SectionCharacteristics) / sizeof(DWORD_FLAG_DESCRIPTIONS))
 
 /* The names of the first group of possible symbol table storage classes */
 static char * SzStorageClass1[] = {
@@ -264,30 +265,6 @@ static char * SzStorageClass1[] = {
 static char * SzStorageClass2[] = {
   "BLOCK","FUNCTION","END_OF_STRUCT","FILE","SECTION","WEAK_EXTERNAL"
 };
-
-/* Bitfield values and names for the IMAGE_SECTION_HEADER flags */
-
-static DWORD_FLAG_DESCRIPTIONS SectionCharacteristics[] = 
-{
-  { IMAGE_SCN_CNT_CODE, "CODE" },
-  { IMAGE_SCN_CNT_INITIALIZED_DATA, "INITIALIZED_DATA" },
-  { IMAGE_SCN_CNT_UNINITIALIZED_DATA, "UNINITIALIZED_DATA" },
-  { IMAGE_SCN_LNK_INFO, "LNK_INFO" },
-  /* { IMAGE_SCN_LNK_OVERLAY, "LNK_OVERLAY" }, */
-  { IMAGE_SCN_LNK_REMOVE, "LNK_REMOVE" },
-  { IMAGE_SCN_LNK_COMDAT, "LNK_COMDAT" },
-  { IMAGE_SCN_MEM_DISCARDABLE, "MEM_DISCARDABLE" },
-  { IMAGE_SCN_MEM_NOT_CACHED, "MEM_NOT_CACHED" },
-  { IMAGE_SCN_MEM_NOT_PAGED, "MEM_NOT_PAGED" },
-  { IMAGE_SCN_MEM_SHARED, "MEM_SHARED" },
-  { IMAGE_SCN_MEM_EXECUTE, "MEM_EXECUTE" },
-  { IMAGE_SCN_MEM_READ, "MEM_READ" },
-  { IMAGE_SCN_MEM_WRITE, "MEM_WRITE" },
-};
-
-static PIMAGE_SYMBOL PCOFFSymbolTable = 0;
-static DWORD COFFSymbolCount = 0;
-static PIMAGE_COFF_SYMBOLS_HEADER PCOFFDebugInfo = 0;
 
 static void DumpSectionTable(labeltable *table,
 			     PIMAGE_SECTION_HEADER section,
@@ -350,13 +327,13 @@ static void DumpExeFile(labeltable *table, PIMAGE_DOS_HEADER dosHeader) {
    * Initialize these vars here since we'll need them in DumpLineNumbers
    */
   
-  PCOFFSymbolTable = MakePtr(PIMAGE_SYMBOL, base,
-			     pNTHeader->FileHeader.PointerToSymbolTable);
-  COFFSymbolCount = pNTHeader->FileHeader.NumberOfSymbols;
+  table->PCOFFSymbolTable = 
+    MakePtr(PIMAGE_SYMBOL, base, pNTHeader->FileHeader.PointerToSymbolTable);
+  table->COFFSymbolCount = pNTHeader->FileHeader.NumberOfSymbols;
   
   if ( pNTHeader->FileHeader.NumberOfSymbols 
        && pNTHeader->FileHeader.PointerToSymbolTable) {
-    DumpSymbolTable(table,PCOFFSymbolTable, COFFSymbolCount);
+    DumpSymbolTable(table,table->PCOFFSymbolTable, table->COFFSymbolCount);
     fprintf(table->fd,"\n");
   }
 }
@@ -393,22 +370,10 @@ static void DumpFile(labeltable *table, LPSTR filename) {
   dosHeader = (PIMAGE_DOS_HEADER)lpFileBase;
   if ( dosHeader->e_magic == IMAGE_DOS_SIGNATURE ) {
     DumpExeFile(table, dosHeader );
+  } else {
+    fprintf(stderr,"lDumpFile: can only dump EXE files\n");
   }
-  else if ( (dosHeader->e_magic == IMAGE_DBG_SIGNATURE) && 
-	    (dosHeader->e_cblp == 0) ) {
-    fprintf(stderr,"DumpFile: DumpDbgFile not implemented\n");
-  } else if ( (dosHeader->e_magic == 0x014C)    /*  Does it look like a i386 */
-              && (dosHeader->e_sp == 0) ) {      /*  COFF OBJ file??? */
-    /*  The two tests above aren't what they look like.  They're */
-    /*  really checking for IMAGE_FILE_HEADER.Machine == i386 (0x14C) */
-    /*  and IMAGE_FILE_HEADER.SizeOfOptionalHeader == 0; */
-    fprintf(stderr,"DumpFile: DumpObjFile not implemented\n");
-  } else if ( 0 == strncmp(lpFileBase, IMAGE_ARCHIVE_START,
-			   IMAGE_ARCHIVE_START_SIZE ) ) {
-    fprintf(stderr,"DumpFile: DumpLibFile not implemented\n");
-  } else
-    fprintf(stderr,"unrecognized file format\n");
-  
+
   UnmapViewOfFile(lpFileBase);
   CloseHandle(hFileMapping);
   CloseHandle(hFile);
