@@ -9,7 +9,7 @@ rem location and duplicate the beta script.
 
 rem --- configuration---
 set OLD_BETALIB=d:\beta\r4.2.boot
-set OLD_BETARUN=d:\beta\r4.2.boot\betarun\nti\%MIASDK%\betarun.lib
+set OLD_BETARUN=d:\beta\r4.2.boot\betarun\nti_%MIASDK%\betarun.lib
 
 rem --- don't change below ---
 
@@ -32,7 +32,7 @@ goto getopts
 
 :compile
 rem Start the compiler
-%OLD_BETALIB%\compiler\nti\%MIASDK%\beta.exe --betarun %OLD_BETARUN% %BETAOPTS% %_opts_%
+%OLD_BETALIB%\bin\nti_%MIASDK%\beta.exe --betarun %OLD_BETARUN% %BETAOPTS% %_opts_%
 
 rem Clean-up
 set _opts_=
