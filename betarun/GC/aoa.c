@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1991-03-21 10:26:05 $, SID: $Revision: 1.8 $
+ * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1991-11-14 10:14:09 $, SID: $Revision: 1.9 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -52,7 +52,7 @@ static ref(Object) AOAAllocate( size)
 			    AOAtoIOAtableSize));
 	}else{
 	  MallocExhausted = TRUE;
-	  INFO_AOA( fprintf( output,"#(AOA: AOAtoIOAtable allocated %d failed!.)\n",
+	  INFO_AOA( fprintf( output,"#(AOA: AOAtoIOAtable allocation %d failed!.)\n",
 			    AOAtoIOAtableSize));
 	  return 0;
 	}
@@ -64,7 +64,7 @@ static ref(Object) AOAAllocate( size)
       AOATopBlock  = AOABaseBlock;
     }else{
       MallocExhausted = TRUE;
-      INFO_AOA( fprintf( output, "#(AOA: block allocated failed %dKb.)\n",
+      INFO_AOA( fprintf( output, "#(AOA: block allocation failed %dKb.)\n",
 			AOABlockSize/Kb));
       return 0;
     }
@@ -102,7 +102,7 @@ static ref(Object) AOAAllocate( size)
       }
     }else{
        MallocExhausted = TRUE;
-       INFO_AOA( fprintf( output, "#(AOA: block allocated failed %dKb.)\n",
+       INFO_AOA( fprintf( output, "#(AOA: block allocation failed %dKb.)\n",
 			AOABlockSize/Kb));
        AOANeedCompaction = TRUE;
        return 0;
