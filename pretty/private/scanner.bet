@@ -1,0 +1,409 @@
+ORIGIN '../astviewer';
+INCLUDE 'printer';
+(* COPYRIGHT
+ *      Copyright (C) Mjolner Informatics, 1986-94
+ *       All rights reserved.
+ *)
+-- scanner: DescriptorForm --
+(* Build over algorithm from Derek Oppen, "Pretty Printing". *)
+(* Modified to attend incrementality, by inspiration of OLM  *)
+(* Per Fack S|rensen, DAIMI, 24. aug. 1987 *)
+(* PFS, 30/11: UNEXP.length: 4 chars added *)
+(* PFS, 2/12: converted to new syntax *)
+(* ESS, 22/1/88: inserted test whether including parsing information or not *)
+(* ESS, 28/1/88: addedd new token: COMMENTMARK *)
+  (#
+     initialStreamSize: (#  exit 800 #);
+     StreamSize: @integer;
+     Stream: [initialStreamSize] @integer;
+     XStream: @TE.token;
+     (* VERY UGLY, TO BE CHANGED *)
+     Size: [initialStreamSize] @integer;
+     help: ^text;
+     left,right,lefttotal, (* length of all that has been printed *) righttotal:
+       @integer;
+     (* length of all than has come from the unparser *)
+     theStack: @stack;
+     (********************************************************************)
+     (*                       lefttotal        righttotal                *)
+     (*                        <-v               <-v                     *)
+     (*  size,stream: [___________XXXXXXXXXXXXXXXXXX______________]      *)
+     (*                           ^                ^                     *)
+     (*                         left             right                   *)
+     (********************************************************************)
+     Initialize: @
+       (# 
+       do
+          initialStreamSize->StreamSize;
+          1->left->right->lefttotal->righttotal;
+          theStack.initialize;
+          (if ppTrace
+           // true then
+              'Scannner.fixedSize   = '->putText;
+              initialStreamSize->putInt;
+              newLine
+          if);
+          
+       #);
+     Advanceright: @
+       (# 
+       do
+          (right mod streamSize)+1->right;
+          (if left
+           // right then
+              (failure,
+               'PP: scanner: adv.right: stream is full!\nContact Mjolner Informatics: support@mjolner.dk')
+                ->&stop;
+              (* no this is not enough because the stream is cyclic 
+               * 2*streamSize->streamSize;
+               streamSize-size.range->size.extend;
+               streamSize-stream.range->stream.extend;
+               
+               (if ppTrace//true then 
+               screen.newline;
+               '=======> Scanner.streamSize = ' -> screen.puttext;
+               streamSize-> screen.putint;
+               screen.newline;
+               if);
+               *)
+              
+          if);
+          - 1->size[right];
+          
+       #);
+     Advanceleft: @
+       (# 
+       do
+          restartAdvanceLeft:
+          (if (size[left] >= 0)
+           // true then
+              (stream[left],size[left])->thePrinter;
+              stream[left]->Xstream;
+              (if Xstream.kind
+               // BREAK // FULLCOMMENT // STRING // IDENTIFIER // TERM // NONT
+               // CONSTANT // UNEXP // HOLOCOMMENTBEGIN // HOLOCOMMENTNODE
+               // HOLOCOMMENTEND // SPECIALCOMMENT // SPECIALLEXEM
+               // COMMENTPROP then
+                  stream[left]->Xstream; lefttotal+Xstream.length->lefttotal; 
+              if);
+              (if (left <> right)
+               // true then
+                  (left mod streamSize)+1->left;
+                  restart restartAdvanceLeft;
+                  (* elimination of tail-recursion, CN. Tak Claus, PFS *)
+                  
+              if);
+              
+          if);
+          
+       #);
+     checkStack: @
+       (# blockLevel: @integer; topIndex: @integer; 
+       enter blockLevel
+       do
+          restartCheckStack:
+          (if theStack.empty
+           // false then
+              theStack.top->topIndex;
+              stream[topIndex]->Xstream;
+              (if Xstream.kind
+               // CONSISTENTBLOCK // INCONSISTENTBLOCK then
+                  (if (0 < blockLevel)
+                   // true then
+                      righttotal+size[topIndex]->size[topIndex];
+                      theStack.pop;
+                      blockLevel-1->blockLevel;
+                      restart restartCheckStack;
+                      
+                  if);
+                  
+               // ENDBLOCK then
+                  1->size[topIndex];
+                  theStack.pop;
+                  blockLevel+1->blockLevel;
+                  restart restartCheckStack;
+                  
+               else
+                  righttotal+size[topIndex]->size[topIndex];
+                  theStack.pop;
+                  (if (0 < blockLevel)
+                   // true then restart restartCheckStack
+                  if);
+                  
+              if);
+              
+          if);
+          
+       #);
+     checkStream: @
+       (# 
+       do
+          check:
+          (if (thePrinter.FreeSpace < (righttotal-lefttotal))
+           // true then
+           (*  Hvis det, som ikke er udskrevet fylder
+            mere end resten af linien, saa giv stak-
+            bundens 'size' en vaerdi, og fjern den
+            fra stakken. *)
+              (if theStack.empty
+               // false then
+                  (if left
+                   // theStack.bottom then
+                      99999->size[theStack.popBottom]; (* BIIIG value *) 
+                  if)
+              if);
+              Advanceleft;
+              (if (left = right) // false then restart check if);
+              
+          if);
+          
+       #);
+     finish: @
+       (# 
+       do
+          (if theStack.empty // false then 0->checkStack; Advanceleft;  if);
+          
+       #);
+     ProcessToken: @
+       (# 
+       do
+          (if theStack.empty
+           // true then (x,x.length)->thePrinter; 
+           else
+              Advanceright;
+              x->stream[right];
+              x.length->size[right];
+              righttotal+x.length->righttotal;
+              checkStream;
+              
+          if);
+          (* theStack.empty *)
+          
+       #);
+     type: @integer;
+     ulref: @LE.list;
+     x: @TE.token;
+     PSy: @PST.Symbol;
+     PStr: @PST.String;
+     pProd: @PST.Production;
+     aSlot: ^slotDesc;
+     str,str2: ^text;
+     unexped: ^unexpanded;
+     anAST: ^ast;
+     lex: ^LexemText;
+     dummy: @integer;
+     c,length: @integer;
+     com: ^text;
+     
+  enter (type,ulref,PSy,com[])
+  do
+  (* Excluded, to improve performance. ---------
+   20 -> DEBUG
+   
+   (#  s: @PST.String;
+   do  newLine; 'Token to theScanner: ' -> putText;
+   (if type
+   //BEGINPROD  then 'begin prod' -> putTExt; 
+   //ENDPROD    then 'end prod' -> putTExt; 
+   //CONSISTENTBLOCK then 'begin block (cons)' -> putTExt;
+   //INCONSISTENTBLOCK then 'begin block (incons)' -> putTExt;
+   //ENDBLOCK   then 'end block' -> putTExt;
+   //BREAK      then 'break: ' -> putTExt;
+   (PSy.size)->putInt;','->put;(PSy.offset)->putInt
+   //IDENTIFIER then 'identifier, ast:' -> putTExt; (PSy) -> putInt;
+   //STRING     then 'string, ast:' -> putTExt; (PSy) -> putInt;
+   //CONSTANT   then 'constant: ' -> putTExt; (PSy) -> putInt;
+   //TERM       then 'terminal: '->putTExt;PSy.StringRef->s;s.read->putTExt;
+   //NONT       then 'nonterminal: '->putTExt;PSy.StringRef->s;s.read->putTExt;
+   //UNEXP      then 'unexpanded' -> putTExt; 
+   //FULLCOMMENT    then 'comment' -> putText;
+   //COMMENTMARK    then 'commentMark' -> putText;
+   //COMMENTLINK then 'commentLink' -> putText;
+   //HOLOCOMMENTBEGIN then 'h-comment begin' -> putText;
+   //HOLOCOMMENTNODE then 'h-comment node' -> putText;
+   //HOLOCOMMENTEND then 'h-comment end' -> putText;
+   //COMPANYON  then 'company on' -> putText;
+   //COMPANYOFF then 'company off' -> putText;
+   //SLOTTOKEN  then 'slottoken'   -> putText;
+   //SPECIALLEXEM then 'speciallexem, ast:' -> putText; (PSy) -> putInt;
+   //SPECIALCOMMENT then 'specialcomment' -> putText;
+   else 'Token no. ' -> putText; 
+   (type) -> putInt;
+   (failureTrace,'what?') -> &stop;
+   if);
+   '(' -> put;
+   ulref.scan(# do (thisList.value) -> putInt;','->put; #);
+   ')' -> put;
+   #);
+   --------------------------------------------------*)
+     x.new;
+     (type,ulref,PSy,com[])->(x.kind,x.ULRef,x.Symbol,x.com);
+     (if type
+      // BEGINPROD // ENDPROD // SEMANTICERROR // COMPANYON // COMPANYOFF
+      // BEGINCOM // ENDCOM then
+         0->x.length; ProcessToken; 
+      // OPTIONAL then
+         0->x.length; ProcessToken; 
+      // CONSISTENTBLOCK // INCONSISTENTBLOCK then
+         (if theStack.empty
+          // true then 1->left->right->lefttotal->righttotal; 
+          else
+             Advanceright; 
+         if);
+         x->stream[right];
+         - righttotal->size[right];
+         right->theStack.push;
+         
+      // ENDBLOCK then
+         (if theStack.empty
+          // true then (x,0)->thePrinter; 
+          else
+             Advanceright;
+             x->stream[right];
+             - 1->size[right];
+             right->theStack.push;
+             
+         if);
+         
+      // BREAK then
+         (if theStack.empty
+          // true then 1->left->right->righttotal->lefttotal; 
+          else
+             Advanceright; 
+         if);
+         0->checkStack;
+         x->stream[right];
+         - righttotal->size[right];
+         right->theStack.push;
+         righttotal+(PSy.size->x.length)->righttotal;
+         
+      // TERM // NONT then
+         PSy.StringRef->PStr;
+         (if type
+          // TERM then
+             PStr.length->x.length; 
+          // NONT then
+             PStr.length+4->x.length; (* ESS: +2 -> +4 because '>' -> '>>' *) 
+         if);
+         ProcessToken;
+         
+      // UNEXP // HOLOCOMMENTEND then
+         PSy->pProd;
+         pProd.NameRef->pStr;
+         (if type
+          // UNEXP then
+             pStr.length+4->x.length
+          // HOLOCOMMENTEND then
+             0->x.length;
+             (if parsingInformation
+              // true then pStr.length+3->x.length (*   :name>>      *)
+              else
+                 (if synCatInformation
+                  // true then pStr.length+3->x.length (*   name...     *)
+                 if)
+             if);
+             
+         if);
+         ProcessToken;
+         
+      // SLOTTOKEN then
+         PSy->frag.indexToNode->unexped[];
+         (* svindel og bedrag *)
+         unexped.theSlot->aSlot[];
+         aSlot.name->str[];
+         unexped.nonterminalSymbol->pProd.open;
+         pProd.NameRef->pStr;
+         pStr.read->str2[];
+         (if true
+          // ('ObjectDescriptor'->str2.equal) then
+             'Descriptor'->str2[]; 
+          // ('AttributeDecl'->str2.equal) then
+             'Attributes'->str2[]; 
+         if);
+         7+str.length+1+str2.length+2->x.length;
+         (* <<SLOT name:category>> *)
+         ProcessToken;
+         
+      // IDENTIFIER // STRING // SPECIALLEXEM then
+         PSy->frag.indexToNode->lex[];
+         (if type
+          // IDENTIFIER then
+             lex.curLength->x.length
+          // STRING then
+             lex.curLength+2->x.length
+          // SPECIALLEXEM then
+             lex[]->out.MeasureSpecialLexem->x.length; 
+         if);
+         ProcessToken;
+         
+      // FULLCOMMENT // HOLOCOMMENTBEGIN // SPECIALCOMMENT // COMMENTPROP then
+         (if type
+          // FULLCOMMENT then
+             com.Length+comBeginLength+comEndLength->x.length
+          // HOLOCOMMENTBEGIN then
+             0->x.length;
+             (if parsingInformation // true then 2->x.length; (* << *)  if)
+          // SPECIALCOMMENT then
+             com[]->out.MeasureSpecialComment->x.length; 
+          // COMMENTPROP then
+             PSy->frag.indexToNode->anAST[];
+             anAST.getCommentProp->out.MeasureCommentProp->x.length;
+             
+         if);
+         ProcessToken;
+         
+      // COMMENTMARK then
+         3->x.length; ProcessToken; 
+      // COMMENTLINK then
+         3->x.length; ProcessToken; 
+      // COMMENTLINKANDMARK then
+         4->x.length; ProcessToken; 
+      // COMMENTBREAKPOINT then
+         com.length->x.length; ProcessToken; 
+      // COMPRESSED then
+         3->x.length; ProcessToken; 
+      // CONSTANT then
+         PSy->c;
+         (if (c < 0) // true then 2->length; - c->c;  else 1->length;  if);
+         CountDigits:
+         (if (c >= 10)
+          // true then length+1->length; c div 10->c; restart CountDigits
+         if);
+         length->x.length;
+         ProcessToken;
+         
+      // HOLOCOMMENTNODE then
+         (if parsingInformation
+          // true then (* ESS *)
+             PSy->c;
+             (if (c < 0)
+              // true then 2->length; - c->c; 
+              else
+                 1->length; 
+             if);
+             CountDigits:
+             (if (c >= 10)
+              // true then length+1->length; c div 10->c; restart CountDigits
+             if);
+             length+1->x.length;
+             
+          else
+             3->x.length; (* "..." *) 
+         if);
+         ProcessToken;
+         
+      else
+         'PP: scanner: unknown token: '->help[];
+         x.kind->help.putInt;
+         help.newLine;
+         'Psy: '->help.putText;
+         Psy->help.putInt;
+         help.newLine;
+         (if (com[] <> none ) then com[]->help.putLine;  if);
+         (failureTrace,help[])->&stop;
+         
+     if);
+     (* x.kind *)
+     
+  #)  
+

@@ -1,0 +1,481 @@
+ORIGIN '../astviewer';
+INCLUDE 'position';
+(* COPYRIGHT
+ *      Copyright (C) Mjolner Informatics, 1986-94
+ *       All rights reserved.
+ *)
+-- doUpdateList: DescriptorForm --
+(*     Ole Agesen,  6/8-1988.       *)
+(* This descriptor handles incremental update of list-nodes.
+ A list may be updated, by replacing a number of consecutive sons with
+ some new sons (again consecutive, possibly another number of). That
+ is, the new sons will have the same immediate big-brother/little-brother
+ as the deleted sons.
+ The form enters a list-node of type AST, theList, and three integers:
+ deleted:   how many sons were deleted (0, 1, ...);
+ added:     how many new sons were added (0, 1, ...);
+ sonNumber: the index of the first son, which were deleted,
+ if no sons were deleted, then this is the index of
+ the first which was added. In case sons were both
+ deleted and added, sonNumber is both the index of the
+ first deleted son and the index of the first new son
+ (since the new sons are inserted at the place of the 
+ deleted sons).
+ *)
+  (#
+     bb,lb: @integer;
+     StheList,father: @SAST.node;
+     UL,LR,pos,daUL,daLR,ULbef,LRbef,startUL: @point;
+     emptyLine: ^text;
+     linesDeleted,linesAdded: @integer;
+     SnoOfSons,newSnoOfSons: @integer;
+     astSonNumber,astDeleted,astAdded: @integer;
+     realSonNo,commentNo: @integer;
+     commentAst: ^comment;
+     hasComments: @boolean;
+     
+     printSASTnode:
+       (# S: @SAST.node; sonNo: @integer; theAST: ^ast;
+       enter (S,sonNo)
+       do
+          'sonNo = '->puttext;
+          (sonNo)->putint;
+          ':   S.UL=('->puttext;
+          (S.ULdotx)->putint;
+          ','->put;
+          (S.ULdoty)->putInt;
+          ')'->put;
+          '   S.LR=('->puttext;
+          (S.LRdotx)->putint;
+          ','->put;
+          (S.LRdoty)->putInt;
+          ') '->putText;
+          (if S.comment
+           // true then
+              S.AST->frag.IndexToNode->theAST[];
+              '(index,inx1,inx2,comment): '->screen.putText;
+              S.AST->putInt;
+              ' '->screen.put;
+              S.subcommentInx1->screen.putInt;
+              ' '->screen.put;
+              S.subcommentInx2->screen.putInt;
+              ' '->screen.put;
+              (S.subcommentInx1,S.subcommentInx2)->theAST.getSubComment
+                ->screen.putText;
+          if);
+          newline;
+       #);
+  do
+     thisOperation:
+       (#
+       do
+          (theList.realCommentInx <> 0)->hasComments;
+     (if hasComments then
+         (* disable incremental update of list with
+          * comments in this version
+          *)
+         (theList[],theList[])->Update;
+         leave thisOperation
+     if);
+     
+     (if ppDebug
+      // true then
+         (if hasComments then
+             theList.getComment->commentAst[];
+             (commentAST.getText,screen[])->printComment;
+             newLine;
+         if);
+         'doupdatelist, before init. reduction: sonNumber='->puttext;
+         (sonNumber)->putInt;
+         ', deleted='->puttext;
+         (deleted)->putInt;
+         ', added='->puttext;
+         (added)->putInt;
+         newline
+     if);
+     theList.index->NT.find->StheList;
+     (* Get corr. node i shadow-AST *)
+     StheList.scan
+       (# do sonNo->SnoOfSons #);
+     (* Now SnoOfSons is the number of list-elements
+      before the list was updated (equal to the number
+      of elements in StheList NOW).
+      *)
+     (* First reduce two special cases to more "ordinary" cases. *)
+     (if true
+      // ((deleted = 0) and (sonNumber = SnoOfSons+1)) then
+      (* This is a special case: if nothing was deleted, but
+       some list-elements was appended at the end of the list,
+       then we have to re-prettyprint the original last list-
+       element. The reason: the last list-element was not
+       "finished" by a ';'. But now, we have appended some 
+       more elements, we thus have to finish the mentioned
+       element with a ';'.
+       *)
+         sonNumber-1->sonNumber;
+         (* One element earlier!       *)
+         deleted+1->deleted;
+         (* Org. last element deleted! *)
+         added+1->added;
+         (* Org. last element added!   *)
+     if);
+     (if true
+      // ((added = 0) and (sonNumber+deleted-1 = SnoOfSons)) then
+      (* This is another, similar special case: if nothing was
+       added, but some elements, including the absolute youngest,
+       was deleted, we have to re-prettyprint the new
+       youngest. The reason: before the update, the considered
+       element was originally "finished" with a ';'. Now it
+       has become the absolute youngest, and should no longer
+       end in a ';'.
+       *)
+         sonNumber-1->sonNumber;
+         (* One element earlier!       *)
+         deleted+1->deleted;
+         (* Org. last element deleted! *)
+         added+1->added;
+         (* Org. last element added!   *)
+     if);
+     (if ppDebug
+      // true then
+         'doupdatelist, after  init. reduction: sonNumber='->puttext;
+         (sonNumber)->putInt;
+         ', deleted='->puttext;
+         (deleted)->putInt;
+         ', added='->puttext;
+         (added)->putInt;
+         newline
+     if);
+     (* The sons of the list-node are numbered (or indexed)
+      1, 2, 3, ... (1 is the "oldest" son).
+      Find numbers (son-indices) bb and lb with the following properties:
+      bb and lb refers to son numbers in the list BEFORE it was updated,
+      son number bb+1 is alone on one or more lines,
+      son number lb-1 is alone on one or more lines,
+      bb<sonNumber (i.e. bb is an older brother or 0) and
+      lb>sonNumber+deleted-1.
+      bb is not allowed to be the index of the last son in the
+      updated list, because this element is not terminated with a ';'
+      in the prettyprint.
+      bb (big brother) is the youngest son, we preserve before the sons which were deleted
+      (if any).
+      lb (little brother) is the oldest son, we preserve after the sons which were deleted
+      (if any).
+      The new sons have been inserted after bb, but before lb.
+      *)
+     (* Because comments now are represented in the shadow AST we must 
+      * take that into acount when we update it.
+      * sonNumber is the son number of the AST not in the SAST
+      * 
+      *)
+     sonNumber->astSonNumber;
+     added->astAdded;
+     deleted->astDeleted;
+     
+     (if hasComments then
+         0->realSonNo;
+         StheList.scan
+           (#
+           do
+              (if ppDebug // true then (thisSon,sonNo)->printSASTnode if);
+              (if false
+               // thisSon.Comment then
+                  realSonNo+1->realSonNo;
+                  (if true
+                   // (realSonNo = astsonNumber) then sonNo->sonNumber;
+                  if);
+                  (if true
+                   // (realSonNo = astsonNumber+astDeleted-1) then
+                      sonNo-sonNumber+1->deleted;
+                  if);
+              if)
+           #);
+         (* now sonNumber and deleted should refer to the right sast nodes *)
+         (if ppDebug
+          // true then
+             'doupdatelist, after correction for comments: sonNumber='->puttext;
+             (sonNumber)->putInt;
+             ', deleted='->puttext;
+             (deleted)->putInt;
+             ', added='->puttext;
+             (added)->putInt;
+             newline
+         if);
+     if);
+     - 1->bb->lb;
+     StheList.scan
+       (#
+       do
+          (if true
+           // thisSon.Alone then
+              (if true // (sonNo <= sonNumber) then sonNo-1->bb; if);
+              (if true
+               // ((sonNo = 1) and (deleted = 0) and (sonNumber = 1)) then
+                  1->lb;
+              if);
+              (if true
+               // ((sonNo >= sonNumber+deleted-1) and (lb = - 1)) then
+                  sonNo+1->lb;
+              if);
+          if)
+       #);
+     (if ppDebug
+      // true then
+         'bigBrother='->puttext;
+         (bb)->putInt;
+         ', littleBrother='->puttext;
+         (lb)->putInt;
+         newline;
+     if);
+     (* If it was impossible to find lb and bb,
+      or if one of the special cases ($) or ($$) failed (i.e. made sonNumber=0),
+      then call the general update.
+      *)
+     (if true
+      // ((bb = - 1) or (lb = - 1) or (sonNumber = 0)) then
+         (theList[],theList[])->Update
+      else
+     (* Find position of the list. *)
+         StheList.father->father;
+         (0,0)->pos;
+         findPos:
+         (if (father = SAST.NULL)
+          // false then
+             pos.x+father.ULdotx->pos.x;
+             pos.y+father.ULdoty->pos.y;
+             father.father->father;
+             restart findPos;
+         if);
+         pos.x+StheList.ULdotx->UL.x;
+         pos.y+StheList.ULdoty->UL.y;
+         pos.x+StheList.LRdotx->LR.x;
+         pos.y+StheList.LRdoty->LR.y;
+         (if ppDebug
+          // true then
+             'UL=('->puttext;
+             (UL.x)->putInt;
+             ','->put;
+             (UL.y)->putInt;
+             '), LR=('->puttext;
+             (LR.x)->putInt;
+             ','->put;
+             (LR.y)->putInt;
+             ')'->put;
+             newline
+         if);
+         (* Free part of SAST corresponding to nodes between bb and lb
+          and find area of text to delete.
+          Furthermore find position for the new text.
+          *)
+         Sthelist.scan
+           (#
+              eliminate:
+                (# S: @SAST.node;
+                enter S
+                do
+                   S.scan
+                     (# do thisSon->&eliminate #);
+                   (if S.comment // false then S.AST->NT.remove if);
+                   S.kill;
+                #)
+           do
+              (if ppDebug // true then (thisSon,sonNo)->printSASTnode if);
+              (if sonNo
+               // bb+1 then
+                  thisSon.ULdotx+UL.x->daUL.x; thisSon.ULdoty+UL.y->daUL.y;
+              if);
+              (if sonNo
+               // lb-1 then
+                  thisSon.LRdotx+UL.x->daLR.x; thisSon.LRdoty+UL.y->daLR.y;
+              if);
+              (if sonNo
+               // bb then
+                  thisSon.LRdotx+UL.x+1->startUL.x;
+                  thisSon.ULdoty+UL.y->startUL.y;
+              if);
+              (if true
+               // ((sonNo > bb) and (sonNo < lb)) then
+                  bb+1->StheList.deleteSon; thisSon->&eliminate;
+              if)
+           #);
+         (if ppDebug
+          // true then
+             'efter delete i SAST'->puttext;
+             newline;
+             StheList.scan
+               (# do (thisSon,sonNo)->printSASTnode; #);
+             newline;
+         if);
+         (if bb // 0 then daUL->startUL if);
+         (if ppDebug
+          // true then
+             'daUL=('->puttext;
+             (daUL.x)->putInt;
+             ','->put;
+             (daUL.y)->putInt;
+             '), daLR=('->puttext;
+             (daLR.x)->putInt;
+             ','->put;
+             (daLR.y)->putInt;
+             ')        '->puttext;
+             'startUL=('->puttext;
+             (startUL.x)->putInt;
+             ','->put;
+             (startUL.y)->putInt;
+             ')'->put;
+             newline
+         if);
+         (* Delete text corresponding to nodes between (but not including)
+          bb and lb. *)
+         (if (bb < lb-1)
+          // true then
+             daLR.x+1-daUL.x->linesDeleted;
+             (* ESS 280990  (for i:linesDeleted repeat
+              daUL.x+1    -> out.deleteLine;
+              for);
+              *)
+             (daUL.x+1,linesDeleted)->out.deleteLines;
+          else
+             0->linesDeleted;
+         if);
+         StheList.UL->ULbef;
+         StheList.LR->LRbef;
+         (if ppDebug
+          // true then
+             'linesDeleted = '->puttext;
+             (linesDeleted)->putint;
+             newline;
+             'Foer:     '->puttext;
+             'Sthelist.UL=('->puttext;
+             (StheList.ULdotx)->putint;
+             ','->put;
+             (StheList.ULdoty)->putInt;
+             ')     '->puttext;
+             'Sthelist.LR=('->puttext;
+             (StheList.LRdotx)->putint;
+             ','->put;
+             (StheList.LRdoty)->putInt;
+             ')'->put;
+             newline;
+         if);
+         (* Pretty-print new sons. *)
+         (if (added > 0)
+          // true then
+             &text[]->emptyLine[];
+             (for i: startUL.y repeat ' '->emptyLine.put for);
+             emptyLine[]->out.SputText;
+             TE.initialize;
+             LE.initialize;
+             theScanner.initialize;
+             (startUL.x,startUL.y)->thePrinter.initialize;
+             (if ppDebug
+              // true then
+                 'reprettyprinting from: '->putText;
+                 astSonNumber->putInt;
+                 ' to '->putText;
+                 astSonNumber+astAdded-1->putInt;
+                 newLIne;
+             if);
+             (theList[],astSonNumber,astSonNumber+astAdded-1,StheList,- 1)
+               ->theUnparser;
+             thePrinter.lineNO-startUL.x+1->linesAdded;
+             ''->thePrinter.Finish;
+          else
+             0->linesAdded;
+         if);
+         (if hasComments then
+             StheList.scan
+               (# do sonNo->newSnoOfSons #);
+             (* Now newSnoOfSons is the number of list-elements
+              after the list was updated (equal to the number
+              of elements in StheList NOW).
+              *)
+             newSnoOfSons+deleted-SnoOfSons->added;
+             (* now added refer to the right sast nodes *)
+             (if ppDebug
+              // true then
+                 'doupdatelist, after correction for comments (after new unparse): sonNumber='
+                   ->puttext;
+                 (sonNumber)->putInt;
+                 ', deleted='->puttext;
+                 (deleted)->putInt;
+                 ', added='->puttext;
+                 (added)->putInt;
+                 newline
+             if);
+         if);
+         (* Set theList's relative coordinates. *)
+         ULbef->StheList.UL;
+         LRbef->StheList.LR;
+         StheList.LRdotx+linesAdded-linesDeleted->StheList.LRdotx;
+         (if ppDebug
+          // true then
+             'linesAdded = '->puttext;
+             (linesAdded)->putint;
+             newline;
+             'Efter:     '->puttext;
+             'Sthelist.UL=('->puttext;
+             (StheList.ULdotx)->putint;
+             ','->put;
+             (StheList.ULdoty)->putInt;
+             ')     '->puttext;
+             'Sthelist.LR=('->puttext;
+             (StheList.LRdotx)->putint;
+             ','->put;
+             (StheList.LRdoty)->putInt;
+             ')'->put;
+             newline;
+         if);
+     if);
+     (* Update the positions of the sons of the list. *)
+     StheList.scan
+       (#
+       do
+          (if ppDebug // true then (thisSon,sonNo)->printSASTnode if);
+          (if true
+           // ((sonNo <= bb) and (added <> 0)) then
+              thisSon.ULdotx+startUL.x->thisSon.ULdotx;
+              thisSon.ULdoty+startUL.y->thisSon.ULdoty;
+              thisSon.LRdotx+startUL.x->thisSon.LRdotx;
+              thisSon.LRdoty+startUL.y->thisSon.LRdoty;
+           // ((sonNo > bb) and (added = 0)) then
+              thisSon.ULdotx+linesAdded-linesDeleted->thisSon.ULdotx;
+              thisSon.LRdotx+linesAdded-linesDeleted->thisSon.LRdotx;
+           // ((sonNo > bb+added) and (added <> 0)) then
+              thisSon.ULdotx+linesAdded-linesDeleted+startUL.x->thisSon.ULdotx;
+              thisSon.ULdoty+startUL.y->thisSon.ULdoty;
+              thisSon.LRdotx+linesAdded-linesDeleted+startUL.x->thisSon.LRdotx;
+              thisSon.LRdoty+startUL.y->thisSon.LRdoty;
+           // ((sonNo > bb) and (sonNo <= bb+added)) then
+              thisSon.ULdotx+startUL.x-UL.x->thisSon.ULdotx;
+              thisSon.ULdoty+startUL.y-UL.y->thisSon.ULdoty;
+              thisSon.LRdotx+startUL.x-UL.x->thisSon.LRdotx;
+              thisSon.LRdoty+startUL.y-UL.y->thisSon.LRdoty;
+          if);
+          (* also the comment numbers (subcommentinx1) *)
+          (if thisSon.comment
+           // true then commentNo+1->thisSon.subcommentInx1;
+           else
+              commentNo+1->commentNo;
+          if);
+          (*(if ppDebug //true then (thisSon,sonNo)->printSASTnode if);*)
+       #);
+          
+          (StheList,linesAdded-linesDeleted,0)->updatePositions;
+       #);
+     
+     (if ppDebug
+      // true then
+         (if hasComments then
+             'incremental update disabled'->putText;
+          else
+             'Slut, doupdatelist.'->puttext;
+         if);
+         newline;
+         theList.index->NT.find->StheList;
+         StheList.scan
+           (# do (thisSon,sonNo)->printSASTnode; #);
+         newline;
+     if);
+  #)  
+

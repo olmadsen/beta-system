@@ -1,0 +1,370 @@
+ORIGIN '../astviewer';
+INCLUDE 'hash'
+        'stack'
+        'pstab'
+        'token'
+        'list'
+        'shadow';
+(* COPYRIGHT
+ *      Copyright (C) Mjolner Informatics, 1986-94
+ *       All rights reserved.
+ *)
+-- printer: DescriptorForm --
+(* Build over algorithm from Derek Oppen, "Pretty Printing". *)
+(* Modified to attend incrementality, by inspiration of OLM  *)
+(* Per Fack S|rensen, DAIMI, 24. aug. 1987 *)
+(* PFS: 2/12: converted to new syntax *)
+(* ESS: 28/1/88: added marginSqm to handle multi-line comments *)
+  (#
+     startLineNo,startCharNo: @integer;
+     Initialize: @
+       (#
+       enter (lineNo,charNo)
+       do
+          lineNo->startLineNo;
+          charNo->startCharNo;
+          width-charNo->FreeSpace;
+          PrintStack.initialize;
+          breakStack.initialize;
+          lfStack.initialize;
+          BreakAccumulator.initialize;
+          false->more->last;
+          true->first->hasCompany;
+       #);
+     Finish: @
+       (# s: ^text
+       enter s[]
+       do s[]->out.SputText; lineNo+1->out.SnewLine;
+       #);
+     FreeSpace: @integer;
+     lineNO,charNO: @integer;
+     first,last,more,hasCompany: @boolean;
+     PrintStack: @stack;
+     breakStack: @stack;
+     lfStack: @stack;
+     BreakAccumulator: @
+       (#
+          Initialize: @
+            (# do false->aBlank->aBreak; 0->BlankLength->BreakOffset; #);
+          Space: @
+            (# len: @integer;
+            enter len
+            do
+               (if (BlankLength <= len)
+                // true then
+                   FreeSpace-(len-BlankLength)->FreeSpace; len->BlankLength;
+               if);
+               true->aBlank;
+            #);
+          NewLine: @
+            (# off: @integer;
+            enter off
+            do off->BreakOffset; true->aBreak;
+            #);
+          Print: @
+            (#
+            do
+               (if aBreak
+                // true then BreakOffset->IndentNewLine;
+                else
+                   (if aBlank
+                    // true then
+                       (for BlankLength repeat ' '->out.Sput for);
+                       charNo+BlankLength->charNo;
+                   if)
+               if);
+               Initialize;
+            #);
+          (* private to BreakAccumulator *)
+          aBlank,aBreak: @boolean;
+          BlankLength,BreakOffset: @integer;
+          IndentNewLine: @
+            (# n: @integer;
+            enter n
+            do
+               lineNO+1->lineNO;
+               n->charNO;
+               lineNo->out.SnewLine;
+               (for n repeat ' '->out.Sput for);
+               false->more;
+               lfStack.initialize;
+            #);
+       #);
+     (* end BreakAccumulator *)
+     BeginProduction: @
+       (# S: @LE.list; node: @SAST.node;
+       enter S
+       do
+          S.value->node;
+          (lineNo,charNo)->node.UL;
+          true->first;
+          node->lfStack.push;
+       #);
+     printSASTnode:
+       (# S: @SAST.node; sonNo: @integer; theAST: ^ast;
+       enter (S,sonNo)
+       do
+          'sonNo = '->puttext;
+          (sonNo)->putint;
+          ':   S.UL=('->puttext;
+          (S.ULdotx)->putint;
+          ','->put;
+          (S.ULdoty)->putInt;
+          ')'->put;
+          '   S.LR=('->puttext;
+          (S.LRdotx)->putint;
+          ','->put;
+          (S.LRdoty)->putInt;
+          ') '->putText;
+          (if S.comment
+           // true then
+              S.AST->frag.IndexToNode->theAST[];
+              '(index,inx1,inx2,comment): '->screen.putText;
+              S.AST->putInt;
+              ' '->screen.put;
+              S.subcommentInx1->screen.putInt;
+              ' '->screen.put;
+              S.subcommentInx2->screen.putInt;
+              ' '->screen.put;
+              (S.subcommentInx1,S.subcommentInx2)->theAST.getSubComment
+                ->screen.putText;
+          if);
+          newline;
+       #);
+     EndProduction: @
+       (# S: @LE.list; node: @SAST.node; oldMaxX: @integer; anAst: ^ast;
+       enter S
+       do
+          S.value->node;
+          (if specialLexemTreatment
+           // false then (lineNo,charNo)->node.LR;
+           else
+              node.AST->frag.indexToNode->anAst[];
+              (if anAST.kind
+               // kinds.nameDecl // kinds.nameAppl // kinds.string then
+               (* was set by in special lexem in token *)
+               (*'[[[[[ ast.index: '->screen.putText;
+                anAst.index->screen.putInt;screen.newLine;
+                
+                (if (node.LRdotx=0) and (node.LRdoty=0) //true then 
+                'was set by in special lexem in token' ->screen.putLine;
+                else 
+                'node.LRdotx,node.LRdoty: '->screen.putText;
+                node.LRdotx->screen.putInt; ' '->screen.put;
+                node.LRdoty->screen.putInt; screen.newLine;
+                if);
+                ']]]]]'->screen.putLine;
+                *)
+               else
+                  (lineNo,charNo)->node.LR;
+              if);
+          if);
+          true->last;
+          node->lfStack.push;
+          node.scan
+            (#
+            do
+            (* (if ppdebug
+             // true then
+             (thisSon,sonNo)->printSASTnode;
+             if);*)
+               thisSon.ULdotx-node.ULdotx->thisSon.ULdotx;
+               thisSon.ULdoty-node.ULdoty->thisSon.ULdoty;
+               thisSon.LRdotx-node.ULdotx->thisSon.LRdotx;
+               thisSon.LRdoty-node.ULdoty->thisSon.LRdoty;
+              (* (if ppdebug
+                // true then (thisSon,sonNo)->printSASTnode;
+               if);*)
+            #);
+       #);
+     BeginComment: @
+       (# S: @LE.list; node: @SAST.node;
+       enter S
+       do
+          S.value->node;
+          (lineNo,charNo)->node.UL;
+          true->first;
+          node->lfStack.push;
+       #);
+     EndComment: @
+       (# S: @LE.list; node: @SAST.node; oldMaxX: @integer;
+       enter S
+       do
+          S.value->node;
+          (lineNo,charNo)->node.LR;
+          true->last;
+          node->lfStack.push;
+          node.scan
+            (#
+            do
+               thisSon.ULdotx-node.ULdotx->thisSon.ULdotx;
+               thisSon.ULdoty-node.ULdoty->thisSon.ULdoty;
+               thisSon.LRdotx-node.ULdotx->thisSon.LRdotx;
+               thisSon.LRdoty-node.ULdoty->thisSon.LRdoty;
+            #);
+       #);
+     UpdateAST: @
+       (# ULRef: @LE.list; S: @SAST.node;
+       enter ULRef
+       do
+          ULRef.scan
+            (# R: @SAST.node;
+            do thisList.value->R; (lineNo,charNo)->R.UL;
+            #);
+          (if hasCompany
+           // true then
+              (if (more and (first or last))
+               // true then
+                  scanLfStack:
+                  (if lfStack.empty
+                   // false then
+                      lfStack.pop->S; false->S.alone; restart scanLfStack;
+                  if);
+              if);
+              lfStack.initialize;
+              false->first->last;
+              true->more;
+          if);
+       #);
+     x: @TE.token;
+     size: @integer;
+     PSy: @PST.Symbol;
+     theAst: ^ast;
+     theSast: @SAST.node;
+     ULREF: @LE.List;
+     noOfLines,lengthOfLastLine: @integer;
+  enter (x,size)
+  do
+  (*(if ppDebug //true then
+   screen.newLine; 'Printer: ' -> screen.putText;
+   (if x.kind
+   //BEGINPROD  then 'begin prod' -> screen.putText;
+   //ENDPROD    then 'end prod' -> screen.putText;
+   //CONSISTENTBLOCK then 'begin block (cons)' -> screen.putText;
+   //INCONSISTENTBLOCK then 'begin block (incons)' -> screen.putText;
+   //ENDBLOCK   then 'end block' -> screen.putText;
+   //BREAK      then 'break' -> screen.putText;
+   //IDENTIFIER then 'identifier' -> screen.putText;
+   //STRING     then 'string' -> screen.putText;
+   //FULLCOMMENT    then 'comment' -> screen.putText;
+   //COMMENTMARK    then 'commentMark' -> screen.putText;
+   //COMMENTLINK    then 'commentLink' -> screen.putText;
+   //HOLOCOMMENTBEGIN then 'h-comment begin' -> screen.putText;
+   //HOLOCOMMENTNODE then 'h-comment node' -> screen.putText;
+   //HOLOCOMMENTEND then 'h-comment end' -> screen.putText;
+   //CONSTANT   then 'constant' -> screen.putText;
+   //TERM       then 'terminal' -> screen.putText;
+   //NONT       then 'nonterminal' -> screen.putText;
+   //UNEXP      then 'unexpanded' -> screen.putText;
+   //COMPANYON  then 'company on' -> screen.putText;
+   //COMPANYOFF then 'company off' -> screen.putText;
+   //SLOTTOKEN then 'slot' -> screen.putText;
+   //SPECIALCOMMENT then 'specialcomment' -> screen.putText;
+   //SPECIALLEXEM   then 'speciallexem'   -> screen.putText;
+   else 'token no. ' -> puttext;
+   (x.kind) -> putint;
+   '    what?' -> screen.putText;
+   if);
+   ' size: ' -> screen.putText;
+   (size) -> screen.putInt;
+   ' charNo:' -> screen.putText; (charNo) -> screen.putInt;
+   ' lineNo:' -> screen.putText; (lineNo) -> screen.putInt;
+   if);
+   * *)
+     (if x.kind
+      // CONSISTENTBLOCK // INCONSISTENTBLOCK then
+         (if (FreeSpace < size)
+          // true then FreeSpace->PrintStack.push; x.kind->breakStack.push;
+          else
+             0->PrintStack.push; FITTINGBLOCK->breakStack.push;
+         if);
+      // BEGINPROD then
+         (if editorMode // true then x.ULRef->BeginProduction if);
+      // BEGINCOM then
+         (if editorMode // true then x.ULRef->BeginComment if)
+      // ENDBLOCK then
+         PrintStack.pop; breakStack.pop;
+      // ENDPROD then
+         (if editorMode
+          // true then
+             x.ULRef->EndProduction;
+             (* SEMANTICERROR is used instead
+              * x.UlRef->UlRef;
+              ULRef.value->theSAST;
+              theSAST.AST->frag.IndexToNode->theAst[];
+              (if theAst.hasSemanticError // true then x.output; if)
+              *)
+         if)
+      // SEMANTICERROR then
+         x.output
+      // ENDCOM then
+         (if editorMode // true then x.ULRef->EndComment; if)
+      // BREAK then
+         (if ((charNo > startCharNo) or (lineNo > startLineNo))
+          // true then
+             x.Symbol->PSy;
+             (if breakStack.top
+              // FITTINGBLOCK then
+                 x.length->BreakAccumulator.Space;
+              // CONSISTENTBLOCK then
+                 PrintStack.top-PSy.offset->FreeSpace;
+                 width-FreeSpace->BreakAccumulator.NewLine;
+              // INCONSISTENTBLOCK then
+                 (if (FreeSpace < size)
+                  // true then
+                     PrintStack.top-PSy.offset->FreeSpace;
+                     width-FreeSpace->BreakAccumulator.NewLine;
+                  else
+                     x.length->BreakAccumulator.Space;
+                 if);
+              else
+                 (failureTrace,'PP: printer: Unknown blocktype in breakstack')
+                   ->stop
+             if);
+          else
+         (* This must be fixed later, the error is that the sast is updated,
+          * eg. incrementing the line number, but the line is not printed
+          *)
+             (if ppDebug
+              // true then 'Eating preceding break'->putLine;
+             if);
+         if);
+      // COMMENTMARK // COMMENTLINK // COMMENTLINKANDMARK // COMMENTBREAKPOINT
+      // STRING // IDENTIFIER // TERM // NONT // CONSTANT // UNEXP
+      // HOLOCOMMENTBEGIN // HOLOCOMMENTNODE // HOLOCOMMENTEND // SLOTTOKEN
+      // COMPRESSED //OPTIONAL then
+         BreakAccumulator.Print;
+         (if editorMode // true then x.ULRef->UpdateAST; if);
+         (if (FreeSpace < size)
+          // true then
+          (* screen.newLine;
+           'LONG LINE' -> screen.putText; *)
+         if);
+         (lineNo,charNo)->x.output;
+         charNO+size->charNO;
+         FreeSpace-size->FreeSpace;
+      // FULLCOMMENT // SPECIALCOMMENT // SPECIALLEXEM // COMMENTPROP then
+         BreakAccumulator.Print;
+         (if editorMode // true then x.ULref->UpdateAST; if);
+         (lineNo,charNo)->x.output->(noOfLines,lengthOfLastLine);
+         (* lengthOfLastLine parameter important change *)
+         lineNo+noOfLines->lineNo;
+         charNo+lengthOfLastLine->charNo;
+         freeSpace-lengthOfLastLine->freeSpace;
+      // COMPANYON then
+         true->hasCompany;
+      // COMPANYOFF then
+         false->hasCompany;
+      // OPTIONAL then (* nothing *) (* ESS 15/8-90 *)
+         
+      else
+         screen.newLine;
+         'PP: printer:'->screen.putText;
+         (x.kind)->screen.putInt;
+         (failureTrace,'. unknown token.')->stop
+     if);
+     (* x.kind *)
+     x.kill;
+  #)
+  (* end Printer *)  
+

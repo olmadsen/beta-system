@@ -1,0 +1,354 @@
+ORIGIN 'betacfl';
+INCLUDE '~beta/mps/v4.9.1/private/astparser';
+INCLUDE '~beta/mps/v4.9.1/metagrammarcfl'
+-- attributesFormAttributes: Attributes --
+origin: (# exit 2->getNodeAttribute #);  
+
+-- descriptorFormAttributes: Attributes --
+descNo: (# exit 1->getAttribute #);
+origin: (# exit 2->getNodeAttribute #);
+originOff: (# exit 8->getNodeAttribute #);
+size: (# exit 3->getAttribute #);
+attSize: (# exit 4->getAttribute #);
+kind: (# exit 5->getAttribute #);
+dclRoot: (# exit 6->getNodeAttribute #);
+lib: (# exit 7->getNodeAttribute #);
+descId: (# exit '????' #);  
+
+-- forImpAttributes: Attributes --
+origin: (# exit 2->getAttribute->frag.indexToNode #);  
+
+-- labelledImpAttributes: Attributes --
+restartAdr: (# exit 1->getAttribute->tos '%getShort[0]' #);
+origin: (# exit 2->getAttribute->frag.indexToNode #);  
+
+-- nameAplAttributes: Attributes --
+dclRef:
+  (#
+  enter (# as: ^ast enter as[] do (as[],1)->putNodeAttribute #)
+  exit 1->getNodeAttribute
+  #);
+on: (# exit 2->getAttribute #);
+pn: (# exit 3->getAttribute #);
+descRef:
+  (#
+  enter (# as: ^ast enter as[] do (as[],4)->putNodeAttribute #)
+  exit 4->getNodeAttribute
+  #);
+getText: (# l: ^lexemText do getNameAppl->l[]; exit l.getText #);  
+
+-- nameDclAttributes: Attributes --
+access: (# exit 1->getAttribute->tos '%getByte[0]' #);
+off: (# exit 1->getAttribute->tos '%getBits[8,24]' #);
+left:
+  (# exit 2->getAttribute->tos '%getShort[0]'->tos '%shiftRight[1]' #);
+right:
+  (# exit 2->getAttribute->tos '%getShort[1]'->tos '%shiftRight[1]' #);
+virtDcl:
+  (# f: ^ast do father->f[]; f.father->f[] exit 1->f.getNodeAttribute #);
+getText: (# l: ^lexemText do getNameDecl->l[]; exit l.getText #);
+sort:
+  (# theSort: ^ast
+  do
+     father->theSort[];
+     (if theSort.symbol
+      // labelledImp then
+      else
+         theSort.father->theSort[]
+     if)
+  exit theSort[]
+  #);
+findDescriptor:
+  (# theExp: ^expanded; theDescriptor: ^AST; os: ^objectSpecification
+  do
+     sort->theExp[];
+     (if theExp.symbol
+      // simpleDecl then
+         (* variablePattern is also handled here *)
+         theExp.getson2->theExp[];
+         theExp.getson1->os[];
+         os.findDescriptor->theDescriptor[];
+      // bindingDecl // virtualDecl // finalDecl then
+         theExp.getson2->os[]; os.findDescriptor->theDescriptor[];
+      // repetitionDecl then
+         theExp.getson3->theExp[];
+         theExp.getson1->os[];
+         os.findDescriptor->theDescriptor[];
+      // patternDecl then
+         theExp.getson2->theDescriptor[];
+     if)
+  exit theDescriptor[]
+  #);  
+
+-- objectDescriptorAttributes: Attributes --
+descNo: (# exit 1->getAttribute #);
+origin: (# exit 2->getAttribute->frag.indexToNode #);
+originOff: (# exit 8->getAttribute #);
+size: (# exit 3->getAttribute #);
+attSize: (# exit 4->getAttribute #);
+kind: (# exit 5->getAttribute #);
+dclRoot: (# exit 6->getAttribute->frag.indexToNode #);
+lib: (# exit 7->getAttribute->frag.indexToNode #);
+descId: (# exit '????' #);
+scanPrefix:
+  (#
+     thisObjectDescription: ^objectDescriptor;
+     ad: ^attributeDenotation;
+     tempAst: ^ast;
+     pref: ^prefix
+  do
+     THIS(objectDescriptor)[]->thisObjectDescription[];
+     loop:
+     (if 1
+      // 1 then
+         thisObjectDescription.getPrefixOpt->tempAst[];
+         (if tempAst.kind
+          // kinds.interior then
+             tempAst[]->pref[];
+             pref.getAttributeDenotation->tempAst[];
+             (if tempAst.kind
+              // kinds.interior then
+                 tempAst[]->ad[]; ad.findDescriptor->thisObjectDescription[]
+              else
+                 NONE->thisObjectDescription[]
+             if);
+          // kinds.optional then
+          (* Empty prefix. Test if we are in a further-binding *)
+             thisObjectDescription.father->tempAst[];
+             (if tempAst.symbol
+              // bindingDecl then
+                 1->tempAst.getNodeAttribute->tempAst[];
+                 'In a binding : '->screen.putText;
+                 tempAst.symbol
+                   ->screen.putInt (# format::<  (# do 8->width #) #);
+                 tempAst.index
+                   ->screen.putInt (# format::<  (# do 8->width #) #);
+                 screen.newLine;
+              else
+                 NONE->thisObjectDescription[]
+             if)
+          else
+             NONE->thisObjectDescription[]
+         if);
+         (if (thisObjectDescription[] = NONE)
+          // false then INNER ; restart loop
+         if);
+     if);
+  #);
+scanBlocks:
+  (#
+     thisBlock:<
+       (# theBlock: ^objectDescriptor enter theBlock[] do INNER #);
+     thisLabelledImp:<
+       (# theImp: ^labelledImp enter theImp[] do INNER #);
+     thisForImp:< (# theForImp: ^forImp enter theForImp[] do INNER #);
+     anAst: ^ast;
+     aDescForm: ^descriptorForm;
+     attForm: ^attributesForm;
+     theLab: ^labelledImp;
+     theFor: ^forImp;
+     aBlock: ^objectDescriptor
+  do
+     origin->anAst[];
+     loop:
+     (if (anAst[] = NONE)
+      // false then
+         (if anAst.symbol
+          // objectDescriptor then
+             anAst[]->aBlock[]->thisBlock; aBlock.origin->anAst[]; restart loop
+          // descriptorForm then
+             anAst[]->aDescForm[]; aDescForm.origin->anAst[]; restart loop
+          // AttributesForm then
+             anAst[]->attForm[]; attForm.origin->anAst[]; restart loop
+          // forImp then
+             anAst[]->theFor[]->thisForImp; theFor.origin->anAst[]; restart loop
+          // labelledImp then
+             anAst[]->theLab[]->thisLabelledImp;
+             theLab.origin->anAst[];
+             restart loop
+          else
+             'Other type of origin : '->screen.putText;
+             anAst.symbol->screen.putInt;
+         if)
+     if)
+  #);
+getDescName:
+  (# kind: @integer; f,ff: ^expanded; nd: ^nameDcl;
+  do
+     father->f[];
+     (if f.symbol // staticItem // staticComponent then f.father->f[] if);
+     f.symbol->kind;
+     (if f.symbol
+      // descriptorForm then
+      else
+         f.father->ff[];
+         (if ff.symbol
+          // attributes then
+             loop:
+             nameDcl
+               ->f.suffixWalkForProd (# do current[]->nd[]; leave loop #)
+         if)
+     if)
+  exit (nd[],kind)
+  #);
+scanDecls:
+  (#
+     attList: ^attributes;
+     anAst: ^ast;
+     ndl: ^names;
+     unExp: ^unExpanded;
+     aMainPart: ^MainPart;
+     thisAttribute:< (# nd: ^nameDcl enter nd[] do INNER #);
+     thisSlot:< (# theSlot: ^SlotDesc enter theSlot[] do INNER #);
+  do
+     getMainPart->aMainPart[];
+     aMainPart.getAttributes->anAst[];
+     (if anAst.symbol
+      // attributes then
+         anAst[]->attList[];
+         attList.scan
+           (# att: ^attributeDecl
+           do
+              (if current.kind
+               // kinds.interior then
+                  current[]->att[];
+                  att.getSon1->anAst[];
+                  (if anAst.symbol
+                   // names then
+                      anAst[]->ndl[];
+                      ndl.scan
+                        (# do current[]->thisAttribute #)
+                  if)
+               // kinds.unExpanded then
+                  current[]->unExp[];
+                  (if unExp.isSlot // true then unExp.theSlot->thisSlot if)
+              if)
+           #)
+     if)
+  #)  
+
+-- repetitionDeclAttributes: Attributes --
+origin: (# exit 2->getNodeAttribute #);  
+
+-- ObjectSpecificationAttributes: Attributes --
+findDescriptor:
+  (#
+     na: ^nameApl;
+     attDescriptor: ^objectDescriptor;
+     rem: ^remote;
+     realyFind:
+       (# exp: ^expanded; att: ^attributeDenotation
+       enter exp[]
+       do
+          (if exp.symbol
+           // bindingDecl // virtualDecl // finalDecl then
+              exp.getson2->exp[];
+              (if exp.symbol
+               // objectDescriptor then
+               else
+                  exp[]->att[]; att.findDescriptor->attDescriptor[]
+              if)
+           else
+              exp[]->attDescriptor[]
+          if)
+       #);
+  do
+     (if symbol
+      // nameApl then
+         THIS(objectSpecification)[]->na[]; na.descRef->realyFind
+      // remote then
+         THIS(objectSpecification)[]->rem[];
+         rem.getNameApl->na[];
+         na.descRef->realyFind
+      // objectDescriptor then
+         THIS(objectSpecification)[]->attDescriptor[]
+      // indexed then
+     if)
+  exit attDescriptor[]
+  #)  
+
+-- AttributesAttributes: Attributes --
+scanDecls:
+  (#
+     attList: ^attributes;
+     anAst: ^ast;
+     ndl: ^names;
+     unExp: ^unExpanded;
+     thisAttribute:< (# nd: ^nameDcl enter nd[] do INNER #);
+     thisSlot:< (# theSlot: ^SlotDesc enter theSlot[] do INNER #);
+  do
+     scan
+       (# att: ^attributeDecl
+       do
+          (if current.kind
+           // kinds.interior then
+              current[]->att[];
+              att.getSon1->anAst[];
+              (if anAst.symbol
+               // names then
+                  anAst[]->ndl[];
+                  ndl.scan
+                    (# do current[]->thisAttribute #)
+              if)
+           // kinds.unExpanded then
+              current[]->unExp[];
+              (if unExp.isSlot // true then unExp.theSlot->thisSlot if)
+          if)
+       #)
+  #)  
+
+-- betaAttributes: Attributes --
+fullInit:
+  (#
+     mg: ^metagrammar;
+     fileMissing:
+       (# prefix,suffix: ^text
+       enter (prefix[],suffix[])
+       do
+          screen.newLine;
+          'Error. Missing file : "'->screen.putText;
+          prefix[]->screen.putText;
+          suffix[]->screen.putText;
+          '"'->screen.put;
+          screen.newLine;
+          (Failure,'')->&stop
+       #);
+     checkFileExistence:
+       (# f: @file
+       enter f.name
+       do (if f.entry.exists // false then (f.name,'')->fileMissing if)
+       #);
+     locationOfBetaGrammar,betaParseTable: ^text;
+     bg: ^fragmentGroup;
+  do
+     (if repS[]
+      // NONE then
+      (* astlevel have not been initialized. We will initialize it *)
+         astLevelInit;
+     if);
+     (if grammarTable.meta[]
+      // NONE then &metaGrammar[]->mg[]->grammarTable.meta[]; mg.init;
+     if);
+     '~beta/grammars/beta/v2.4/beta'->locationOfBetaGrammar[];
+     (locationOfBetaGrammar[],screen[])->top.open->bg[];
+     (if bg[]
+      // NONE then (locationOfbetagrammar[],'.group')->fileMissing;
+     if);
+     ('meta',screen[])->bg.open->bg[];
+     (if bg[]
+      // NONE then (locationOfbetagrammar[],'-meta.group')->fileMissing;
+     if);
+     ('beta',screen[])->bg.open->grammarAst[];
+     (if grammarAst[]
+      // NONE then (locationOfbetagrammar[],'-meta.group')->fileMissing;
+     if);
+     init;
+     '-parser.btab'->locationOfBetaGrammar.CopyAppend->expandToFullPath
+       ->betaParseTable[];
+     betaParseTable[]->checkFileExistence;
+     betaParseTable[]->parser.initialize;
+     ('objectdescriptor','descriptor')->parser.privatePart.b.defineNonTAlias;
+     ('attributedecl','attributes')->parser.privatePart.b.defineNonTAlias;
+     THIS(beta)[]->grammartable.beta[]
+  #)  
+

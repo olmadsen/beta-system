@@ -1,0 +1,580 @@
+ORIGIN '../astviewer';
+INCLUDE 'pstab'
+        'unparser'
+        'position'
+        'shadow'
+        'token'
+        'list'
+        'hash'
+        '~beta/mps/v4.9.1/metagramsematt';
+(* COPYRIGHT
+ *      Copyright (C) Mjolner Informatics, 1986-94
+ *       All rights reserved.
+ *)
+-- doInit: DescriptorForm --
+(#
+   getOptions:
+     (#
+        mg: ^metaGrammar;
+        Agrammar: ^mg.Agrammar;
+        theGrammar: ^treelevel;
+        help: @text;
+        e: @diskentry;
+        useDefaults: @boolean;
+        
+     do
+        grammarTable.meta[]->mg[];
+        grammarName[]->expandToFullPath->e.path;
+        (e.path.name,screen[])->grammarTable.find->theGrammar[];
+        (if ((theGrammar[] <> none ) and not useDefaults)
+         // true then
+            (if (theGrammar.grammarAst[] <> none )
+             // true then
+                (if (theGrammar.grammarAst.root[] <> none )
+                 // true then
+                    theGrammar.grammarAst.root[]->aGrammar[];
+                    ('comBegin','(*')->Agrammar.getOptionString->comBegin;
+                    comBegin.length->comBeginLength;
+                    ('comEnd','*)')->Agrammar.getOptionString->comEnd;
+                    comEnd.length->comEndLength;
+                    ('stringChar','''')->Agrammar.getOptionString->help;
+                    1->help.inxGet->stringChar;
+                    ('EOSchar','-')->Agrammar.getOptionString->EOSchar;
+                    
+                 else
+                    true->useDefaults;
+                    (*'theGrammar.grammarAst.root is none'->screen.putLine;*)
+                    
+                if)
+             else
+                true->useDefaults;
+                (*'theGrammar.grammarAst is none'->screen.putLine;*)
+                
+            if)
+         else
+            true->useDefaults; (*'theGrammar is none'->screen.putLine;*) 
+        if);
+        (if useDefaults
+         // true then (*e.path.name->screen.putline;*)
+            '(*'->comBegin;
+            2->comBeginLength;
+            '*)'->comEnd;
+            2->comEndLength;
+            ''''->stringChar;
+            '-'->EOSchar;
+            
+        if);
+        
+     #);
+   help: ^text
+do
+   getOptions;
+   false->parsingInformation->abstractPresentation;
+   false->includeComments->specialLexemTreatment->specialCommentTreatment
+     ->editorMode;
+   &shadowAst[]->SAST[];
+   &PSTable[]->PST[];
+   &TokenEnv[]->TE[];
+   &ListEnv[]->LE[];
+   &hashTable[]->NT[];
+   &unparser[]->theUnparser[];
+   &scanner[]->theScanner[];
+   &printer[]->thePrinter[];
+   PST.initialize;
+   PST.Create
+     (# f: @file; 
+     do
+        ppSpecification->expandToFullPath->help[];
+        '-pretty'->help.append;
+        ppFileExtension->help.append;
+        help[]->f.name;
+        (if f.entry.exists
+         // false then
+            screen.newLine;
+            'Missing pretty-printer table : '->screen.putText;
+            f.name->screen.putText;
+            (failure,'')->&stop
+        if);
+        f.name->Restore
+     #);
+   
+#)  
+
+-- doReInit: DescriptorForm --
+(# help: ^text; 
+do
+   &shadowAst[]->SAST[];
+   &PSTable[]->PST[];
+   &TokenEnv[]->TE[];
+   &ListEnv[]->LE[];
+   &hashTable[]->NT[];
+   &unparser[]->theUnparser[];
+   &scanner[]->theScanner[];
+   &printer[]->thePrinter[];
+   PST.initialize;
+   PST.Create
+     (# f: @file; 
+     do
+        ppSpecName[]->expandToFullPath->help[];
+        '-pretty'->help.append;
+        ppFileExtension->help.append;
+        help[]->f.name;
+        (if f.entry.exists
+         // false then
+            screen.newLine;
+            'Missing pretty-printer table : '->screen.putText;
+            f.name->screen.putText;
+            (failure,'')->&stop
+        if);
+        f.name->Restore
+     #);
+   
+#)  
+
+-- doPresent: DescriptorForm --
+(* Per Fack S|rensen, DAIMI, 24. aug. 1987 *)
+(* PFS: 1/12: converted to new systax *)
+  (# expNode: ^expanded; son1: ^ast; 
+  do
+     (if ppDebug // true then 'pp.present'->screen.putLine;  if);
+     theAST.frag[]->frag[];
+     (if editorMode
+      // true then SAST.initialize; SAST.root.new; NT.initialize; 
+     if);
+     out.beforePresent;
+     (* clear text *)
+     out.clear;
+     (* DO PRINT THE AST *)
+     TE.initialize;
+     LE.initialize;
+     theScanner.initialize;
+     (0,0)->thePrinter.initialize;
+     (theAST[],- 1,- 1,SAST.root,depth)->theUnparser;
+     '  '->thePrinter.Finish;
+     out.afterPresent;
+     
+  #)  
+
+-- doHit: DescriptorForm --
+(* Per Fack S|rensen, DAIMI, 24. aug. 1987 *)
+(* PFS: 2/12: converted to new syntax *)
+  (# S: @SAST.node; 
+  do
+     SAST.root->S;
+     (* traverse SAST to find the selected node *)
+     find: S.scan
+       (# UL,LR: @point; 
+       do
+          thisSon.UL->UL;
+          thisSon.LR->LR;
+          (if true
+           // (x > UL.x) and (x < LR.x) (* middle lines *)
+           // (x = UL.x) and (x < LR.x) and (y >= UL.y) (* first line *)
+           // (x > UL.x) and (x = LR.x) and (y < LR.y) (* last line *)
+           //
+           (x = UL.x)
+           and
+           (x = LR.x)
+           and
+           (y >= UL.y)
+           and
+           (y < LR.y) (* one-liner *) then
+           (* calculate coordinates relative to found son *)
+              x-thisSon.ULdotx->x;
+              y-thisSon.ULdoty->y;
+              thisSon->S;
+              restart find;
+              
+          if);
+          
+       #);
+     (* Find corresponding node in AST *)
+     S.AST->frag.IndexToNode->theAST[];
+     (if ppDebug then
+         'pp.hit: theast.index: '->screen.puttext;
+         theAST.index->screen.putInt;
+         ' '->screen.put;
+         screen.newLine
+     if);
+     (if S.comment
+      // true then
+         (if ppDebug
+          // true then
+             'hit: is a comment, (index,inx1,inx2): '->screen.putText;
+             S.AST->putInt;
+             ' '->screen.put;
+             
+         if);
+         S.subcommentInx1->subcommentInx1;
+         S.subcommentInx2->subcommentInx2;
+         (if ppDebug
+          // true then
+             subcommentInx1->screen.putInt;
+             ' '->screen.put;
+             subcommentInx2->screen.putInt;
+             newLine;
+             '====='->putLine;
+             'getSubComment: '->screen.putText;
+             (subcommentInx1,subcommentInx2)->theAST.getSubComment
+               ->screen.putLine;
+             
+         if);
+         
+     if);
+     
+  #)  
+
+-- doUpdate: DescriptorForm --
+(* Per Fack S|rensen, DAIMI, 24. aug. 1987 *)
+(* PFS: 1/12: converted to new systax *)
+(* PFS: 21/12: incremental update of lists *)
+  (#
+     oldNode,theNode,father: @SAST.node;
+     UL,LR,pos: @point;
+     theLine: ^text;
+     FirstOfLine,RestOfLine: ^text;
+     synCatNo: @nonterminalSymbol;
+     expNode: ^expanded;
+     son1: ^ast;
+     
+  do
+     (if ppDebug // true then 'pp.update'->screen.putLine;  if);
+     (* Find theNode (SAST) and theAST, which is alone on lines *)
+     (* and which is closest to the changed AST                 *)
+     oldAST.index->NT.find->oldNode;
+     (if oldNode > 0 then
+         oldNode->SAST.findAlone->theNode;
+         (if theNode
+          // oldNode then newAST[]->theAST[]; 
+          else
+             theNode.ast->frag.IndexToNode->theAST[]; 
+         if);
+         (* Find position (UL, LR) of the AST to be changed. *)
+         (* pos is the position of the father of theAST      *)
+         theNode.father->father;
+         (0,0)->pos;
+         findPos:
+         (if (father = SAST.NULL)
+          // false then
+             pos.x+father.ULdotx->pos.x;
+             pos.y+father.ULdoty->pos.y;
+             father.father->father;
+             restart findPos;
+             
+         if);
+         theNode.UL->UL;
+         theNode.LR->LR;
+         pos.x+UL.x->UL.x;
+         pos.y+UL.y->UL.y;
+         pos.x+LR.x->LR.x;
+         pos.y+LR.y->LR.y;
+         (* Free part of SAST, which is to be updated *)
+         theNode.scan
+           (#
+              eliminate:
+                (# S: @SAST.node; 
+                enter S
+                do
+                   S.scan
+                     (#  do thisSon->&eliminate #);
+                   (if S.comment // false then S.AST->NT.remove if);
+                   S.kill;
+                   
+                #);
+              
+           do thisSon->&eliminate; 
+           #);
+         SAST.NULL->theNode.son->theNode.ySon;
+         out.beforeUpdate;
+         (* Delete old text *)
+         (UL.x+1,UL.y+1,LR.x+1,LR.y)->out.deleteArea;
+         UL.x+1->out.getLine->theLine[];
+         (1,UL.y)->theLine.sub->FirstOfLine[];
+         (UL.y+1,theLine.length)->theLine.sub->RestOfLine[];
+         UL.x+1->out.deleteLine;
+         FirstOfLine[]->out.SputText;
+         (* DO THE UPDATE *)
+         TE.initialize;
+         LE.initialize;
+         theScanner.initialize;
+         (UL.x,UL.y)->thePrinter.initialize;
+         (theAST[],- 1,- 1,theNode,- 1)->theUnparser;
+         RestOfLine[]->thePrinter.Finish;
+         (* calculate theNode's relative coordinats *)
+         theNode.ULdotx-pos.x->theNode.ULdotx;
+         theNode.ULdoty-pos.y->theNode.ULdoty;
+         theNode.LRdotx-pos.x->theNode.LRdotx;
+         theNode.LRdoty-pos.y->theNode.LRdoty;
+         (theNode,theNode.LRdotx-LR.x+pos.x,theNode.LRdoty-LR.y+pos.y)
+           ->updatePositions;
+         out.afterUpdate;
+         
+     if)
+  #)  
+
+-- doResize: DescriptorForm --
+(# node: @SAST.node
+do
+   theAST.index->NT.find->node;
+   node.LRdotx+dx->node.LRdotx;
+   node.LRdoty+dy->node.LRdoty;
+   (node,dx,dy)->updatePositions
+#)  
+
+-- debugInit: DescriptorForm --
+(* Per Fack S|rensen, DAIMI, 24. aug. 1987 *)
+(* PFS: 2/12: converted to new syntax *)
+  (#
+     getYOrN:
+       (# c: @char; 
+       do
+          findYOrN: cycle
+            (# 
+            do (if (get->c) // 'y' // 'n' then leave findYOrN if); 
+            #);
+          skipToEOL: cycle
+            (# 
+            do
+               (if get
+                // ascii.nl // ascii.cr // ascii.newline then
+                   leave skipToEOL
+               if)
+            #)
+       exit c
+       #);
+     
+  do
+     (for i: 100 repeat false->DS[i] for);
+     'Debug unparser ?'->putText;
+     (getYOrN = 'y')->DS[10];
+     'Debug scanner  ?'->putText;
+     (getYOrN = 'y')->DS[20];
+     'Debug printer  ?'->putText;
+     (getYOrN = 'y')->DS[30];
+     'doupdatelist   ?'->putText;
+     (getYOrN = 'y')->DS[40];
+     
+  #)  
+
+-- doSelect: DescriptorForm --
+(* Per Fack S|rensen, DAIMI, 29. sep. 1987 *)
+(* PFS: 2/12: converted to new syntax *)
+  (#
+     Node,father: @SAST.node;
+     pos: @point;
+     found,tryAgain: @boolean;
+     fatherNode: ^expanded;
+     
+  do
+     (if ppDebug
+      // true then
+         'pp.select: theast.index, node.ast: '->screen.puttext;
+         theAST.index->screen.putInt;
+         ' '->screen.put;
+         
+     if);
+     theAST.index->NT.find->Node;
+     (if node
+      // 0 then
+         'node is null'->putLine; (0,0)->(UL.x,UL.y); (0,0)->(LR.x,LR.y); 
+      else
+         (if ppDebug
+          // true then node.ast->screen.putInt; ' '->screen.put; 
+         if);
+         (if subCommentInx1
+          // 0 then (* Find position (UL, LR) of the AST. *)
+          (* pos is the position of the father of the AST *)
+             Node.father->father;
+             (0,0)->pos;
+             findPos:
+             (if (father = SAST.NULL)
+              // false then
+                 pos.x+father.ULdotx->pos.x;
+                 pos.y+father.ULdoty->pos.y;
+                 father.father->father;
+                 restart findPos;
+                 
+             if);
+             Node.UL->UL;
+             Node.LR->LR;
+             pos.x+UL.x->UL.x;
+             pos.y+UL.y->UL.y;
+             pos.x+LR.x->LR.x;
+             pos.y+LR.y->LR.y;
+             (if ppDebug
+              // true then
+                 'pp.select: ( UL.x,UL.y,LR.x,LR.y): '->screen.putText;
+                 UL.x->screen.putInt;
+                 ','->screen.put;
+                 UL.y->screen.putInt;
+                 ' '->screen.put;
+                 LR.x->screen.putInt;
+                 ','->screen.put;
+                 LR.y->screen.putInt;
+                 ' '->screen.put;
+                 screen.newLIne;
+                 
+             if);
+             
+          else
+         (* Find the comment son *)
+             (if ppDebug
+              // true then
+                 'pp.select: node.ast,index: '->screen.puttext;
+                 node.ast->screen.putInt;
+                 ' '->screen.put;
+                 node.index->screen.putInt;
+                 ' '->screen.put;
+                 newLine;
+                 
+             if);
+             Node.scan
+               (# 
+               do
+                  (if thisSon.comment and
+                  (thisSon.subCommentInx1 = subCommentInx1) and
+                  (thisSon.subCommentInx2 = subCommentInx2)
+                   // true then
+                      thisSon->Node;
+                      (if ppDebug
+                       // true then
+                          'pp.select: thisSon.ast,index: '->screen.puttext;
+                          thisSon.ast->screen.putInt;
+                          ' '->screen.put;
+                          thisSon.index->screen.putInt;
+                          ' '->screen.put;
+                          newLine;
+                          
+                      if);
+                      
+                  if);
+                  
+               #);
+             (if ppDebug
+              // true then
+                 'pp.select: node.ast,index: '->screen.puttext;
+                 node.ast->screen.putInt;
+                 ' '->screen.put;
+                 node.index->screen.putInt;
+                 ' '->screen.put;
+                 newLine;
+                 
+             if);
+             Node.father->father;
+             (0,0)->pos;
+             findPos:
+             (if (father = SAST.NULL)
+              // false then
+                 (if ppDebug
+                  // true then
+                     'father.ast,index: '->screen.puttext;
+                     father.ast->screen.putInt;
+                     ' '->screen.put;
+                     father.index->screen.putInt;
+                     ' '->screen.put;
+                     newLine;
+                     
+                 if);
+                 pos.x+father.ULdotx->pos.x;
+                 pos.y+father.ULdoty->pos.y;
+                 father.father->father;
+                 restart findPos;
+                 
+             if);
+             Node.UL->UL;
+             Node.LR->LR;
+             pos.x+UL.x->UL.x;
+             pos.y+UL.y->UL.y;
+             pos.x+LR.x->LR.x;
+             pos.y+LR.y->LR.y;
+             (if ppDebug
+              // true then
+                 'pp.select: is a comment, ( UL.x,UL.y,LR.x,LR.y): '
+                   ->screen.putText;
+                 UL.x->screen.putInt;
+                 ','->screen.put;
+                 UL.y->screen.putInt;
+                 ' '->screen.put;
+                 LR.x->screen.putInt;
+                 ','->screen.put;
+                 LR.y->screen.putInt;
+                 ' '->screen.put;
+                 screen.newLIne;
+                 '#####'->putLine;
+                 
+             if);
+             
+         if);
+         
+     if)
+  #)  
+
+-- doCreateEmptyComment: DoPart --
+do
+     (# ppProd: @PST.Production
+     do
+        &text[]->t[];
+        (if node.kind
+         // kinds.interior then
+            node.Symbol->ppProd.open;
+            (if ppProd.type
+             // PST.Constructor then (*CommentSeparator1->t.put;*)
+                ppProd.scan
+                  (# 
+                  do
+                     (if thisSymbol.type
+                      // PST.Terminal // PST.NonTerminal then
+                         CommentSeparator1->t.put; 
+                     if)
+                  #)
+            if)
+         // kinds.nameDecl // kinds.nameAppl // kinds.string // kinds.const
+         // kinds.unExpanded // kinds.optional then
+            CommentSeparator1->t.put
+         else
+            'PP: unparser: createEmptyComment:'->putText;
+            (node.kind)->putInt;
+            newLine
+        if);
+        (if ppDebug
+         // true then
+            'CreateEmptyComment: '->putText;
+            (t[],screen[])->printComment;
+            newLine;
+            
+        if)
+     #)  
+
+-- savestate: DescriptorForm --
+(* Ole Agesen, DAIMI, 2/11-1988 *)
+  (# 
+  do
+     '.SAST'->filename.CopyAppend->SAST.SaveState;
+     '.TE'->filename.CopyAppend->TE.SaveState;
+     '.LE'->filename.CopyAppend->LE.SaveState;
+     '.NT'->filename.CopyAppend->NT.SaveState;
+     
+  #)  
+
+-- loadstate: DescriptorForm --
+(* Ole Agesen, DAIMI, 2/11-1988 *)
+  (# 
+  do
+     '.SAST'->filename.CopyAppend->SAST.LoadState;
+     '.TE'->filename.CopyAppend->TE.LoadState;
+     '.LE'->filename.CopyAppend->LE.LoadState;
+     '.NT'->filename.CopyAppend->NT.LoadState;
+     
+  #)  
+
+-- erasestate: DescriptorForm --
+(* Ole Agesen, DAIMI, 2/11-1988 *)
+  (# 
+  do
+     '.SAST'->filename.CopyAppend->SAST.EraseState;
+     '.TE'->filename.CopyAppend->TE.EraseState;
+     '.LE'->filename.CopyAppend->LE.EraseState;
+     '.NT'->filename.CopyAppend->NT.EraseState;
+     
+  #)  
+

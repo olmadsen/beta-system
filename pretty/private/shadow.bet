@@ -1,0 +1,333 @@
+origin '../astviewer';
+(* COPYRIGHT
+ *      Copyright (C) Mjolner Informatics, 1986-94
+ *       All rights reserved.
+ *)
+--shadowAst: DescriptorForm--
+(* Per Fack S|rensen, DAIMI, 24. aug. 1987 *)
+(* PFS: 2/12: heap full stops program execution (node.new) *)
+(* PFS: 2/12: converted to new syntax *)
+  (# (* SAST-node:  ( son yson brother father other-att. )   *)
+  (* son is a reference to son number one.                *)
+  (* yson is a reference to last son.                     *)
+  (* brother is a reference to fathers next son           *)
+  (* AST is a (dirty) reference to the AST                *)
+  (* UL, LR is the position of the print of the AST       *)
+  (* Storage-administration is attended by the attributes *)
+  (* new and kill. Does NOT make sure that no nodes       *)
+  (* referes to a node which is killed.                   *)
+  (* The attribute 'findAlone' finds the nearest ancestor *)
+  (* which has alone set.                                 *)
+     initialMaxNode: (# exit 400 (* was 4000 *) #);
+     NULL: (# exit 0 #);
+     Root: @node;
+     Initialize:
+       (# sum: @integer;
+       do
+          initialMaxNode->maxNode;
+          (for i: maxNode repeat true->Free[i] for);
+          1->firstFree;
+          NULL->root;
+          (if ppTrace
+           // true then
+              'Shadow.initialSize   = '->putText;
+              initialMaxNode->putInt;
+              newLine
+          if);
+       #);
+     Node:
+       (#
+          Alone: (# enter isAlone[index] exit isAlone[index] #);
+          UL:
+            (#
+            enter (ULx[index],ULy[index])
+            exit (ULx[index],ULy[index])
+            #);
+          LR:
+            (#
+            enter (LRx[index],LRy[index])
+            exit (LRx[index],LRy[index])
+            #);
+          ULdotX: (# enter ULx[index] exit ULx[index] #);
+          ULdotY: (# enter ULy[index] exit ULy[index] #);
+          LRdotX: (# enter LRx[index] exit LRx[index] #);
+          LRdotY: (# enter LRy[index] exit LRy[index] #);
+          AST: (# enter ASTref[index] exit ASTref[index] #);
+          son: (# enter sonRef[index] exit sonRef[index] #);
+          ySon: (# enter ySonRef[index] exit ySonRef[index] #);
+          Father: (# enter fatherRef[index] exit fatherRef[index] #);
+          brother: (# enter brotherRef[index] exit brotherRef[index] #);
+          twoOrMoreLines: (# exit ULx[index] < LRx[index] #);
+          comment: (# enter isComment[index] exit isComment[index] #);
+          subcommentInx1:
+            (# enter subcomInx1[index] exit subcomInx1[index] #);
+          subcommentInx2:
+            (# enter subcomInx2[index] exit subcomInx2[index] #);
+          AppendSon:
+            (# newSon,youngSon: @integer
+            enter newSon
+            do
+               (if son
+                // NULL then newSon->sonRef[index]->ySonRef[index];
+                else
+                   ySonRef[index]->youngSon;
+                   newSon->brotherRef[youngSon]->ySonRef[index]
+               if);
+               index (* self *) ->fatherRef[newSon];
+               NULL->brotherRef[newSon];
+            #);
+          InsertSon:
+          (* Insert newSon as the sonNumber'th son (count 1,2,3,...). *)
+            (# newSon,sonNumber,bb: @integer;
+            enter (sonNumber,newSon)
+            do
+               (if sonNumber
+                // 1 then
+                   son->brotherRef[newSon];
+                   newSon->sonRef[index];
+                   (if yson // NULL then newSon->yson if);
+                else
+                   son->bb;
+                   (for soncount: sonNumber-2 repeat
+                     brotherRef[bb]->bb;
+                   for);
+                   (if yson // bb then newSon->yson if);
+                   brotherRef[bb]->brotherRef[newSon];
+                   newSon->brotherRef[bb];
+               if);
+               index->fatherRef[newSon];
+            #);
+          DeleteSon:
+          (* Deletes the given son from the node "self".
+           Note that the son is not deallocated.
+           *)
+            (# sonNumber,bb: @integer;
+            enter (sonNumber)
+            do
+               (if sonNumber
+                // 1 then
+                   brotherRef[son]->son;
+                   (if son // NULL then NULL->yson if);
+                else
+                   son->bb;
+                   (for soncount: sonNumber-2 repeat
+                     brotherRef[bb]->bb;
+                   for);
+                   (if yson // brotherRef[bb] then bb->yson if);
+                   brotherRef[brotherRef[bb]]->brotherRef[bb];
+               if);
+            #);
+          Scan:
+          (* NB! It is allowed to delete thisSon (but no other!)
+           during scan.
+           *)
+            (# thisSon,brother: @node; sonNo: @integer;
+            do
+               sonRef[index]->thisSon;
+               1->sonNo;
+               scanSons :
+               (if (thisSon.index <> NULL)
+                // true then
+                   brotherRef[thisSon.index]->brother;
+                   INNER ;
+                   brother->thisSon.index;
+                   sonNo+1->sonNo;
+                   restart scanSons;
+               if);
+            #);
+          findSASTsonNumber:
+          (* skip comment nodes to find SAST node number 
+           * corresponding to the AST node number
+           *)
+            (# astSonNumber,sonNumber,realSonNo: @integer
+            enter astSonNumber
+            do
+               (if ppdebug
+                // true then
+                   astSonNumber->putInt; '->findSASTsonNumber->'->putText
+               if);
+               0->realSonNo;
+               search: scan
+                 (#
+                 do
+                    (if not thisSon.Comment then
+                        realSonNo+1->realSonNo;
+                        (if realSonNo // astsonNumber  then 
+                            sonNo->sonNumber;
+                            leave search;
+                        if);
+                    if)
+                 #);
+               (if ppdebug // true then sonNumber->putInt; newLine if);
+            exit sonNumber
+            #);
+          New:
+            (# i,n: @integer;
+            do
+               firstFree->i;
+               findFree :
+               (if (i <= maxNode)
+                // true then
+                   (if free[i]
+                    // false then i+1->i; restart findFree
+                    else
+                       false->free[i]; i->index; i+1->firstFree;
+                   if);
+                else
+                   (if (maxNode < free.range)
+                    // true then
+                       (for i: free.range-maxnode repeat
+                         true->free[maxNode+i]
+                       for);
+                       free.range->maxnode;
+                    else
+                       maxNode->n;
+                       extendRepetitions;
+                       (for i: maxNode-n repeat true->free[i+n]; for);
+                   if);
+                   restart findFree
+               if);
+               NULL->brother->son->father;
+               true->alone;
+            #);
+          Kill:
+            (#
+            do
+               true->free[index];
+               (if (index < firstFree) // true then index->firstFree if);
+            #);
+          Print:
+            (# level: @integer;
+            enter level
+            do
+               newLine;
+               (for level repeat ' '->put for);
+               '('->put;
+               (index)->putInt;
+               '{'->put;
+               (fatherRef[index])->putINt;
+               '}'->put;
+               '['->put;
+               (ULx[index])->putINt;
+               ','->put;
+               (ULy[index])->putINt;
+               '-'->put;
+               (LRx[index])->putINt;
+               ','->put;
+               (LRy[index])->putINt;
+               ']'->put;
+               (if aLone // true then 'T'->put; else 'F'->put; if);
+               Scan
+                 (# do level+2->&thisSon.print #);
+               ')'->put;
+            #);
+          (* private *)
+          index: @integer;
+       enter index
+       exit index
+       #);
+     FindAlone:
+       (# x,y: @integer; S: @node;
+       enter S
+       do
+          find : (if S.alone // false then S.father->S; restart find; if);
+       exit S
+       #);
+     SaveState: (* Saves the state of this shadowAst on file(s). *)
+       (# filename: ^text; ff: [1] @integer;
+       enter filename[]
+       do
+          firstFree->ff[1];
+          ('.ff'->filename.CopyAppend,ff)->SaveArray;
+          ('.fre'->filename.CopyAppend,free)->SaveArray;
+          ('.AST'->filename.CopyAppend,ASTref)->SaveArray;
+          ('.isA'->filename.CopyAppend,isAlone)->SaveArray;
+          ('.ULx'->filename.CopyAppend,ULx)->SaveArray;
+          ('.ULy'->filename.CopyAppend,ULy)->SaveArray;
+          ('.LRx'->filename.CopyAppend,LRx)->SaveArray;
+          ('.LRy'->filename.CopyAppend,LRy)->SaveArray;
+          ('.son'->filename.CopyAppend,sonRef)->SaveArray;
+          ('.bro'->filename.CopyAppend,brotherRef)->SaveArray;
+          ('.ySo'->filename.CopyAppend,ySonRef)->SaveArray;
+          ('.fat'->filename.CopyAppend,fatherRef)->SaveArray;
+          ('.com'->filename.CopyAppend,isComment)->SaveArray;
+          ('.ci1'->filename.CopyAppend,subcomInx1)->SaveArray;
+          ('.ci2'->filename.CopyAppend,subcomInx2)->SaveArray;
+       #);
+     LoadState: (* Saves the state of this shadowAst on file(s). *)
+       (# filename: ^text; ff: [1] @integer;
+       enter filename[]
+       do
+          '.ff'->filename.CopyAppend->LoadArray->ff;
+          ff[1]->firstFree;
+          '.fre'->filename.CopyAppend->LoadArray->free;
+          '.AST'->filename.CopyAppend->LoadArray->ASTref;
+          '.isA'->filename.CopyAppend->LoadArray->isAlone;
+          '.ULx'->filename.CopyAppend->LoadArray->ULx;
+          '.ULy'->filename.CopyAppend->LoadArray->ULy;
+          '.LRx'->filename.CopyAppend->LoadArray->LRx;
+          '.LRy'->filename.CopyAppend->LoadArray->LRy;
+          '.son'->filename.CopyAppend->LoadArray->sonRef;
+          '.bro'->filename.CopyAppend->LoadArray->brotherRef;
+          '.ySo'->filename.CopyAppend->LoadArray->ySonRef;
+          '.fat'->filename.CopyAppend->LoadArray->fatherRef;
+          '.com'->filename.CopyAppend->LoadArray->isComment;
+          '.ci1'->filename.CopyAppend->LoadArray->subcomInx1;
+          '.ci2'->filename.CopyAppend->LoadArray->subcomInx2;
+       #);
+     EraseState: (* Erases the files from a SaveSate. *)
+       (# filename: ^text; F: @File;
+       enter filename[]
+       do
+          '.ff'->filename.CopyAppend->DeleteFile;
+          '.fre'->filename.CopyAppend->DeleteFile;
+          '.AST'->filename.CopyAppend->DeleteFile;
+          '.isA'->filename.CopyAppend->DeleteFile;
+          '.ULx'->filename.CopyAppend->DeleteFile;
+          '.ULy'->filename.CopyAppend->DeleteFile;
+          '.LRx'->filename.CopyAppend->DeleteFile;
+          '.LRy'->filename.CopyAppend->DeleteFile;
+          '.son'->filename.CopyAppend->DeleteFile;
+          '.bro'->filename.CopyAppend->DeleteFile;
+          '.ySo'->filename.CopyAppend->DeleteFile;
+          '.fat'->filename.CopyAppend->DeleteFile;
+          '.com'->filename.CopyAppend->DeleteFile;
+          '.ci1'->filename.CopyAppend->DeleteFile;
+          '.ci2'->filename.CopyAppend->DeleteFile;
+       #);
+     (* private *)
+     extendRepetitions:
+       (#
+       do
+          2*maxNode->maxNode;
+          (if ppTrace
+           // true then
+              screen.newline;
+              '=======> Shadow.maxNode = '->screen.puttext;
+              maxNode->screen.putint;
+              screen.newline;
+          if);
+          maxNode-free.range->free.extend;
+          maxNode-astRef.range->astRef.extend;
+          maxNode-isAlone.range->isAlone.extend;
+          maxNode-isComment.range->isComment.extend;
+          maxNode-ULx.range->ULx.extend;
+          maxNode-ULy.range->ULy.extend;
+          maxNode-LRx.range->LRx.extend;
+          maxNode-LRy.range->LRy.extend;
+          maxNode-sonRef.range->sonRef.extend;
+          maxNode-brotherRef.range->brotherRef.extend;
+          maxNode-ySonRef.range->ySonRef.extend;
+          maxNode-fatherRef.range->fatherRef.extend;
+          maxNode-subcominx1.range->subcominx1.extend;
+          maxNode-subcominx2.range->subcominx2.extend;
+       #);
+     maxNode: @integer;
+     firstFree: @integer;
+     free: [initialMaxNode] @boolean;
+     ASTref: [initialMaxNode] @integer;
+     isAlone,isComment: [initialMaxNode] @boolean;
+     ULx,ULy,LRx,LRy,sonRef,brotherRef,ySonRef,fatherRef,subcomInx1,subcomInx2:
+       [initialMaxNode] @integer;
+  #)  
+

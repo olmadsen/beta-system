@@ -1,0 +1,423 @@
+ORIGIN '../astviewer'
+[[-----------------------------------------
+   INCLUDE 'position'
+  -----------------------------------------
+
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1986-1992
+ *       All rights reserved.
+ *)
+
+   doUpdateList : descriptor
+  -----------------------------------------
+
+  (*     Ole Agesen,  6/8-1988.       *)
+
+  (* This descriptor handles incremental update of list-nodes.
+     A list may be updated, by replacing a number of consecutive sons with
+     some new sons (again consecutive, possibly another number of). That
+     is, the new sons will have the same immediate big-brother/little-brother
+     as the deleted sons.
+     The form enters a list-node of type AST, theList, and three integers:
+        deleted:   how many sons were deleted (0, 1, ...);
+        added:     how many new sons were added (0, 1, ...);
+        sonNumber: the index of the first son, which were deleted,
+                   if no sons were deleted, then this is the index of
+                   the first which was added. In case sons were both
+                   deleted and added, sonNumber is both the index of the
+                   first deleted son and the index of the first new son
+                   (since the new sons are inserted at the place of the 
+                   deleted sons).
+  *)
+
+(#
+  bb,lb:                                   @integer;
+  StheList,father:                         @SAST.node;
+  UL,LR,pos,daUL,daLR,ULbef,LRbef,startUL: @point;
+  emptyLine:                               ^text;
+  linesDeleted,linesAdded:                 @integer;
+  SnoOfSons:                               @integer;
+
+do
+(* Excluded, to improve performance.--------------
+  40->DEBUG(# 
+              do
+                'doupdatelist, before init. reduction: sonNumber='->puttext;
+                (sonNumber)                                     ->putInt;
+                ', deleted='                                      ->puttext;
+                (deleted)                                       ->putInt;
+                ', added='                                        ->puttext;
+                (added)                                         ->putInt;
+                newline
+             #);
+--------------------------------------------------*)
+
+  theList.index->NT.find->StheList; (* Get corr. node i shadow-AST *)
+
+  StheList.scan(# do sonNo->SnoOfSons #);
+               (* Now SnoOfSons is the number of list-elements
+                  before the list was updated (equal to the number
+                  of elements in StheList NOW).
+               *)
+
+
+	
+  (* First reduce two special cases to more "ordinary" cases. *)
+
+  (if true//((deleted=0) and (sonNumber=SnoOfSons+1)) then
+               (* This is a special case: if nothing was deleted, but
+                  some list-elements was appended at the end of the list,
+                  then we have to re-prettyprint the original last list-
+                  element. The reason: the last list-element was not
+                  "finished" by a ';'. But now, we have appended some 
+                  more elements, we thus have to finish the mentioned
+                  element with a ';'.
+               *)
+      sonNumber-1->sonNumber;  (* One element earlier!       *)
+      deleted+1  ->deleted;    (* Org. last element deleted! *)
+      added+1    ->added;      (* Org. last element added!   *) 
+  if);
+
+  (if true//((added=0) and (sonNumber+deleted-1=SnoOfSons)) then
+               (* This is another, similar special case: if nothing was
+                  added, but some elements, including the absolute youngest,
+                  was deleted, we have to re-prettyprint the new
+                  youngest. The reason: before the update, the considered
+                  element was originally "finished" with a ';'. Now it
+                  has become the absolute youngest, and should no longer
+                  end in a ';'.
+               *)
+      sonNumber-1->sonNumber;  (* One element earlier!       *)
+      deleted+1  ->deleted;    (* Org. last element deleted! *)
+      added+1    ->added;      (* Org. last element added!   *) 
+  if);
+
+(* Excluded, to improve performance.--------------
+  40->DEBUG(# 
+              do
+                'doupdatelist, after  init. reduction: sonNumber='->puttext;
+                (sonNumber)                                     ->putInt;
+                ', deleted='                                      ->puttext;
+                (deleted)                                       ->putInt;
+                ', added='                                        ->puttext;
+                (added)                                         ->putInt;
+                newline
+             #);
+--------------------------------------------------*)
+
+  (* The sons of the list-node are numbered (or indexed)
+     1, 2, 3, ... (1 is the "oldest" son).
+     Find numbers (son-indices) bb and lb with the following properties:
+           bb and lb refers to son numbers in the list BEFORE it was updated,
+           son number bb+1 is alone on one or more lines,
+           son number lb-1 is alone on one or more lines,
+           bb<sonNumber (i.e. bb is an older brother or 0) and
+           lb>sonNumber+deleted-1.
+           bb is not allowed to be the index of the last son in the
+           updated list, because this element is not terminated with a ';'
+           in the prettyprint.
+     bb is the youngest son, we preserve before the sons which were deleted
+     (if any).
+     lb is the oldest son, we preserve after the sons which were deleted
+     (if any).
+     The new sons have been inserted after bb, but before lb.
+   *)
+
+  -1->bb->lb;
+  StheList.scan(#
+	        do
+	          (if true//thisSon.Alone then
+		      (if true//(sonNo<=sonNumber) then
+                          sonNo-1->bb;
+                      if);
+                      (if true//((sonNo=1) and (deleted=0) and 
+                                 (sonNumber=1)) then
+                          1      ->lb;
+                      if);
+                      (if true//((sonNo>=sonNumber+deleted-1) and (lb=-1)) then
+	      	          sonNo+1->lb;
+                      if);
+		  if)
+               #);
+
+(* Excluded, to improve performance.--------------
+  40->DEBUG(# 
+              do
+                'bb='  ->puttext;
+                (bb) ->putInt;
+                ', lb='->puttext;
+                (lb) ->putInt;
+                newline;
+             #);
+--------------------------------------------------*)
+
+  
+  (* If it was impossible to find lb and bb,
+     or if one of the special cases ($) or ($$) failed (i.e. made sonNumber=0),
+     then call the general update.
+  *)
+
+  (if true // ((bb=-1) or (lb=-1) or (sonNumber=0)) then
+     (theList[],theList[])  ->Update
+   else
+    
+     (* Find position of the list. *)
+
+     StheList.father        ->father;
+     (0,0)                  ->pos;
+     findPos:
+     (if (father=SAST.NULL) // false then
+	 pos.x+father.ULdotx  ->pos.x;
+	 pos.y+father.ULdoty  ->pos.y;
+	 father.father      ->father;
+	 restart findPos;
+     if);
+     pos.x+StheList.ULdotx    ->UL.x;
+     pos.y+StheList.ULdoty    ->UL.y;
+     pos.x+StheList.LRdotx    ->LR.x;
+     pos.y+StheList.LRdoty    ->LR.y;
+
+(* Excluded, to improve performance.--------------
+     40->DEBUG(#
+                 do
+                   'UL=('   ->puttext;
+                   (UL.x) ->putInt;
+                   ','      ->put;
+                   (UL.y) ->putInt;
+                   '), LR=('->puttext;
+                   (LR.x) ->putInt;
+                   ','      ->put;
+                   (LR.y) ->putInt;
+                   ')'      ->put;
+                   newline
+                #);
+--------------------------------------------------*)
+
+     (* Free part of SAST corresponding to nodes between bb and lb
+        and find area of text to delete.
+        Furthermore find position for the new text.
+     *)
+
+     Sthelist.scan(# eliminate:(# S:@SAST.node;
+	                          enter S
+		                  do
+	                            S.scan(# do thisSon->&eliminate #);
+		                    S.AST->NT.remove;
+		                    S.kill;
+		                #)
+		     do
+(* Excluded, to improve performance.--------------
+                       40->DEBUG(#
+                                   do
+                                     'sonNo = '        ->puttext;
+                                     (sonNo)         ->putint;
+                                     ':   thisSon.UL=('->puttext;
+                                     (thisSon.ULdotx)  ->putint; 
+                                     (thisSon.ULdoty)  ->putInt;
+                                     ')'               ->put;
+                                     '   thisSon.LR=(' ->puttext;
+                                     (thisSon.LRdotx)  ->putint; 
+                                     (thisSon.LRdoty)  ->putInt;
+                                     ')'               ->put;
+                                     newline;
+                                  #);
+--------------------------------------------------*)
+                       (if sonNo//bb+1 then
+			   thisSon.ULdotx+UL.x  ->daUL.x;
+		  	   thisSon.ULdoty+UL.y  ->daUL.y;
+                       if);
+		       (if sonNo//lb-1 then
+			   thisSon.LRdotx+UL.x  ->daLR.x;
+		  	   thisSon.LRdoty+UL.y  ->daLR.y;
+		       if);
+                       (if sonNo//bb then
+                           thisSon.LRdotx+UL.x+1->startUL.x;
+                           thisSon.ULdoty+UL.y  ->startUL.y;
+                       if);
+		       (if true
+			  // ((sonNo>bb) and (sonNo<lb)) then
+			     bb+1             ->StheList.deleteSon;
+			     thisSon          ->&eliminate;
+		       if)
+		   #);
+     (if bb//0 then daUL->startUL if);
+
+(* Excluded, to improve performance.--------------
+     40->DEBUG(#
+                 do
+                   'daUL=('      ->puttext;
+                   (daUL.x)    ->putInt;
+                   ','           ->put;
+                   (daUL.y)    ->putInt;
+                   '), daLR=('   ->puttext;
+                   (daLR.x)    ->putInt;
+                   ','           ->put;
+                   (daLR.y)    ->putInt;
+                   ')        '   ->puttext;
+                   'startUL=('   ->puttext;
+                   (startUL.x) ->putInt;
+                   ','           ->put;
+                   (startUL.y) ->putInt;
+                   ')'           ->put;
+                   newline
+                #);
+--------------------------------------------------*)
+     
+     (* Delete text corresponding to nodes between (but not including)
+	bb and lb. *)
+
+     (if (bb<lb-1) // true then
+         daLR.x+1-daUL.x -> linesDeleted;
+      (* ESS 280990  (for i:linesDeleted repeat
+             daUL.x+1    -> out.deleteLine;
+         for);
+      *)
+         (daUL.x+1,linesDeleted)  -> out.deleteLines;
+      else
+         0 -> linesDeleted;
+     if);
+
+     StheList.UL -> ULbef;
+     StheList.LR -> LRbef;
+
+(* Excluded, to improve performance.--------------
+     40 -> DEBUG(#
+                 do
+                   'linesDeleted = ' -> puttext;
+                   (linesDeleted,1)  -> putint;
+                   newline;
+                   'Foer:     '      -> puttext;
+                   'Sthelist.UL=('   -> puttext;
+                   (StheList.ULdotx,4) -> putint; 
+                   (StheList.ULdoty,4) -> putInt;
+                   ')     '          -> puttext;
+                   'Sthelist.LR=('   -> puttext;
+                   (StheList.LRdotx,4) -> putint; 
+                   (StheList.LRdoty,4) -> putInt;
+                   ')'               -> put;
+                   newline;
+                #);
+--------------------------------------------------*)
+
+
+
+     (* Pretty-print new sons. *)
+      
+     (if (added>0)//true then
+          &text[]->emptyLine[];
+         (for i:startUL.y repeat ' '->emptyLine.put for); 
+         emptyLine[]->out.SputText;
+         TE.initialize;   
+         LE.initialize;
+         theScanner.initialize;
+         (startUL.x,startUL.y)                ->thePrinter.initialize;
+         (theList[],bb+1,bb+added,StheList,-1,false)->theUnparser;
+         thePrinter.lineNO-startUL.x+1        ->linesAdded;
+         ''                                   ->thePrinter.Finish;
+      else
+         0->linesAdded;
+     if);
+
+
+     (* Set theList's relative coordinates. *)
+
+     ULbef->StheList.UL;
+     LRbef->StheList.LR;
+     StheList.LRdotx+linesAdded-linesDeleted->StheList.LRdotx;
+
+(* Excluded, to improve performance.--------------
+     40->DEBUG(#
+                 do
+                   'linesAdded = '  ->puttext;
+                   (linesAdded)   ->putint;
+                   newline;
+                   'Efter:     '    ->puttext;
+                   'Sthelist.UL=('  ->puttext;
+                   (StheList.ULdotx)->putint; 
+                   (StheList.ULdoty)->putInt;
+                   ')     '         ->puttext;
+                   'Sthelist.LR=('  ->puttext;
+                   (StheList.LRdotx)->putint; 
+                   (StheList.LRdoty)->putInt;
+                   ')'              ->put;
+                   newline;
+                #);
+--------------------------------------------------*)
+     
+     (* Update the positions of the sons of the list. *)
+     StheList.scan(#
+                    do
+(* Excluded, to improve performance.--------------
+                      40->DEBUG(#
+                                  do
+                                    'sonNo = '                ->puttext;
+                                    (sonNo)                 ->putint;
+                                    ':   thisSon.UL=('        ->puttext;
+                                    (thisSon.ULdotx)          ->putint; 
+                                    (thisSon.ULdoty)          ->putInt;
+                                    ')'                       ->put;
+                                    '   thisSon.LR=('         ->puttext;
+                                    (thisSon.LRdotx)          ->putint; 
+                                    (thisSon.LRdoty)          ->putInt;
+                                    ')'                       ->put;
+                                    newline;
+                                 #);
+--------------------------------------------------*)
+                      (if true
+                       // ((sonNo<=bb) and (added<>0))       then
+                          thisSon.ULdotx+startUL.x        ->thisSon.ULdotx;
+                          thisSon.ULdoty+startUL.y        ->thisSon.ULdoty;
+                          thisSon.LRdotx+startUL.x        ->thisSon.LRdotx;
+                          thisSon.LRdoty+startUL.y        ->thisSon.LRdoty;
+                       // ((sonNo>bb) and (added=0))         then
+                          thisSon.ULdotx+linesAdded-
+                                  linesDeleted              ->thisSon.ULdotx;
+                          thisSon.LRdotx+linesAdded-
+                                  linesDeleted              ->thisSon.LRdotx;
+                       // ((sonNo>bb+added) and (added<>0))  then 
+                          thisSon.ULdotx+linesAdded-
+                                  linesDeleted+startUL.x  ->thisSon.ULdotx;
+                          thisSon.ULdoty+startUL.y        ->thisSon.ULdoty;
+                          thisSon.LRdotx+linesAdded-
+                                  linesDeleted+startUL.x  ->thisSon.LRdotx;
+                          thisSon.LRdoty+startUL.y        ->thisSon.LRdoty;
+                       // ((sonNo>bb) and (sonNo<=bb+added)) then
+                          thisSon.ULdotx+startUL.x-UL.x ->thisSon.ULdotx;
+                          thisSon.ULdoty+startUL.y-UL.y ->thisSon.ULdoty;
+                          thisSon.LRdotx+startUL.x-UL.x ->thisSon.LRdotx;
+                          thisSon.LRdoty+startUL.y-UL.y ->thisSon.LRdoty;
+                      if);
+(* Excluded, to improve performance.--------------
+                      40->DEBUG(#
+                                  do
+                                    'sonNo = '                ->puttext;
+                                    (sonNo)                 ->putint;
+                                    ':   thisSon.UL=('        ->puttext;
+                                    (thisSon.ULdotx)          ->putint; 
+                                    (thisSon.ULdoty)          ->putInt;
+                                    ')'                       ->put;
+                                    '   thisSon.LR=('         ->puttext;
+                                    (thisSon.LRdotx)          ->putint; 
+                                    (thisSon.LRdoty)          ->putInt;
+                                    ')'                       ->put;
+                                    newline;
+                                 #);
+--------------------------------------------------*)
+                  #);
+
+     (StheList,linesAdded-linesDeleted,0)->updatePositions;
+
+  if);
+
+(* Excluded, to improve performance.--------------
+  40->DEBUG(#
+              do
+                'Slut, doupdatelist.'->puttext;
+                newline;
+             #)
+--------------------------------------------------*)
+#)
+
+--------------------------]]
+

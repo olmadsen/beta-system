@@ -1,0 +1,437 @@
+ORIGIN '../astviewer';
+INCLUDE 'pstab'
+        'list'
+        'hash'
+        'shadow';
+(* COPYRIGHT
+ *      Copyright (C) Mjolner Informatics, 1986-94
+ *       All rights reserved.
+ *)
+-- tokenEnv: DescriptorForm --
+(* Per Fack S|rensen, DAIMI, 24. aug. 1987 *)
+(* PFS, Sysware, 30/11: Token.output: UNEXP: '>' rettet til '>>' *)
+(* ESS: 28/1/88: added COMMENTMARK and marginSqm the latter to support
+ prettyprint of comments consisting of more lines     *)
+  (#
+     initialMaxToken: (#  exit 200 (* was 1000 *) #);
+     Initialize:
+       (# 
+       do
+          initialMaxToken->maxToken;
+          (for i: maxToken repeat true->Free[i] for);
+          1->firstFree;
+          (if ppTrace
+           // true then
+              'Token.initialSize    = '->putText;
+              initialMaxToken->putInt;
+              newLine
+          if);
+          
+       #);
+     Token:
+       (#
+          Kind:
+            (# 
+            enter tKind[index] (*do 'K'->put; index->putint; newLine; *)
+            exit tKind[index]
+            #);
+          Symbol:
+            (# 
+            enter tSymbol[index] (*do 'S'->put; index->putint; newLine;*)
+            exit tSymbol[index]
+            #);
+          ULref:
+            (# 
+            enter tULref[index] (*do 'U'->put; index->putint; newLine;*)
+            exit tULref[index]
+            #);
+          Length:
+            (# 
+            enter tLength[index] (*do 'L'->put; index->putint; newLine;*)
+            exit tLength[index]
+            #);
+          Com: (* to hand-over the subcomments from scannner to printer *)
+            (#  enter tComment[index][] exit tComment[index][] #);
+          New:
+            (# i: @integer; (* Use local variable, for efficiency. *) 
+            do
+               firstFree->i;
+               findFree:
+                 (# 
+                 do
+                    (if (i > free.range)
+                     // true then extendRepetitions; 
+                    if);
+                    (if free[i] // false then i+1->i; restart findFree if);
+                    
+                 #);
+               false->free[i];
+               i+1->firstFree;
+               i->index;
+               
+            #);
+          Kill:
+            (# 
+            do
+               true->free[index];
+               (if (index < firstFree) // true then index->firstFree if);
+               
+            #);
+          Output:
+            (# lineNoSqm,marginSqm,noOfLines,lengthOfLastLine: @integer; 
+            enter (lineNoSqm,marginSqm) (* ESS 18-10-88 *)
+            do
+               (if tKind[index]
+                // TERM then
+                     (# PSy: @PST.Symbol; PStr: @PST.String; 
+                     do tSymbol[index]->PSy; PSy.StringRef->PStr; PStr.Print; 
+                     #);
+                   
+                // NONT then
+                     (# PSy: @PST.Symbol; PStr: @PST.String; 
+                     do
+                        tSymbol[index]->PSy;
+                        PSy.StringRef->PStr;
+                        '<<'->out.SputText;
+                        PStr.Print;
+                        '>>'->out.SputText;
+                        
+                     #);
+                   
+                // IDENTIFIER then
+                     (# lex: ^lexemText
+                     do
+                        tSymbol[index]->frag.indexToNode->lex[];
+                        lex.getText->out.SputText;
+                        
+                     #);
+                   
+                // STRING then
+                     (# lex: ^lexemText; aString: ^text; 
+                     do
+                        tSymbol[index]->frag.indexToNode->lex[];
+                        stringChar->out.Sput;
+                        lex.getText->aString[];
+                        aString.scanAll
+                          (# 
+                          do
+                             (if ch
+                              // stringChar then
+                                 stringChar->out.Sput; stringChar->out.Sput; 
+                              else
+                                 ch->out.Sput; 
+                             if);
+                             
+                          #);
+                        stringChar->out.Sput;
+                        
+                     #)
+                // FULLCOMMENT then (* ESS 18-10-88 ... *)
+                     (#
+                        lex: ^lexemText;
+                        t: ^text;
+                        skipLeadingBlanks: @boolean;
+                        node: @SAST.node;
+                        
+                     do
+                        tComment[index][]->t[];
+                        comBegin.lgth->lengthOfLastLine;
+                        comBegin[]->out.SputText;
+                        false->skipLeadingBlanks;
+                        t.scanAll
+                          (# 
+                          do
+                             (if ch
+                              // ascii.newLine then
+                                 noOfLines+1->noOfLines;
+                                 1->lengthOfLastLine;
+                                 out.SnewLine;
+                                 (for marginSqm+1 repeat ' '->out.Sput for);
+                                 true->skipLeadingBlanks;
+                                 
+                              else
+                                 (if skipLeadingBlanks
+                                  // true then
+                                     (if (ch->ascii.isSpace)
+                                      // false then
+                                         ch->out.Sput;
+                                         lengthOfLastLine+1->lengthOfLastLine;
+                                         false->skipLeadingBlanks
+                                     if)
+                                  else
+                                     ch->out.Sput;
+                                     lengthOfLastLine+1->lengthOfLastLine;
+                                     
+                                 if);
+                                 
+                             if);
+                             
+                          #);
+                        lengthOfLastLine+comEnd.lgth->lengthOfLastLine;
+                        comEnd[]->out.SputText;
+                        (if editorMode
+                         // true then
+                         (* update LR in the SAST, now we know what it should be *)
+                            tSymbol[index]->NT.find->Node;
+                            (lineNoSqm+noOfLines,marginSqm+lengthOfLastLine)
+                              ->Node.LR
+                        if)
+                     #);
+                   
+                // COMMENTMARK then
+                   '(*)'->out.SputText; 
+                // COMMENTLINK then
+                   '(^)'->out.SputText; 
+                // COMMENTLINKANDMARK then
+                   '(*^)'->out.SputText; 
+                // COMMENTBREAKPOINT then
+                  com->out.SputText; 
+                // COMPRESSED then
+                   '%%%'->out.SputText; 
+                // UNEXP then
+                     (# PPr: @PST.Production; PStr: @PST.String; 
+                     do
+                        tSymbol[index]->PPr;
+                        PPr.NameRef->PStr;
+                        '<<'->out.SputText;
+                        PStr.Print;
+                        '>>'->out.SputText;
+                        
+                     #);
+                   
+                // CONSTANT then
+                   (tSymbol[index],1)->out.SputInt; 
+                // HOLOCOMMENTBEGIN then
+                   (if parsingInformation
+                    // true then '<<'->out.SputText
+                   if)
+                // HOLOCOMMENTNODE then
+                   (if parsingInformation
+                    // true then
+                       '@'->out.Sput; (tSymbol[index],1)->out.SputInt; 
+                    else
+                       '...'->out.SputText; 
+                   if);
+                   
+                // HOLOCOMMENTEND then
+                     (# PPr: @PST.Production; PStr: @PST.String
+                     do
+                        (if parsingInformation
+                         // true then
+                            ':'->out.Sput;
+                            tSymbol[index]->PPr;
+                            PPr.NameRef->PStr;
+                            PStr.Print;
+                            '>>'->out.SputText;
+                            
+                         else
+                            (if synCatInformation
+                             // true then
+                                tSymbol[index]->PPr;
+                                PPr.NameRef->PStr;
+                                PStr.Print;
+                                '...'->out.SputText;
+                                
+                            if)
+                        if);
+                        
+                     #);
+                   
+                // SLOTTOKEN then
+                     (#
+                        PPr: @PST.Production;
+                        PStr: @PST.String;
+                        aSlot: ^slotDesc;
+                        unexp: ^unexpanded;
+                        str: ^text;
+                        
+                     do
+                        '<<SLOT '->out.SputText;
+                        tSymbol[index]->frag.indexToNode->unexp[];
+                        unexp.theSlot->aSlot[];
+                        aSlot.name->out.SputText;
+                        ':'->out.Sput;
+                        unexp.nonterminalSymbol->PPr.open;
+                        PPr.NameRef->PStr;
+                        pStr.read->str[];
+                        (if true
+                         // ('ObjectDescriptor'->str.equal) then
+                            'Descriptor'->str[]; 
+                         // ('AttributeDecl'->str.equal) then
+                            'Attributes'->str[]; 
+                        if);
+                        (*PStr.Print;*)
+                        str[]->out.SputText;
+                        '>>'->out.SputText;
+                        
+                     #);
+                   
+                // SPECIALLEXEM then
+                     (# lex: ^lexemText; node: @SAST.node; UL,LR: @point; 
+                     do
+                        tSymbol[index]->frag.indexToNode->lex[];
+                        (lex[],lineNoSqm,marginSqm)->out.PrintSpecialLexem
+                          ->(noOfLines,lengthOfLastLine);
+                        (*'<<<<< ast.index: '->screen.putText;
+                         lex.index->screen.putInt;screen.newLine;
+                         'lineNoSqm,marginSqm: '->screen.putText;
+                         lineNoSqm->screen.putInt; ','->screen.put;
+                         marginSqm->screen.putInt; ' '->screen.put;screen.newLIne;
+                         'noOfLines,lengthOfLastLine: '->screen.putText;
+                         noOfLines->screen.putInt; ','->screen.put;
+                         lengthOfLastLine->screen.putInt; ' '->screen.put;screen.newLIne;
+                         *)
+                        (if editorMode
+                         // true then
+                         (* update LR in the SAST, now we know what it should be *)
+                            tSymbol[index]->NT.find->Node;
+                            (*Node.UL -> UL; Node.LR -> LR;
+                             'special lexem before, ( UL.x,UL.y,LR.x,LR.y): '->screen.putText; 
+                             UL.x->screen.putInt; ','->screen.put;
+                             UL.y->screen.putInt; ' '->screen.put;
+                             LR.x->screen.putInt; ','->screen.put;
+                             LR.y->screen.putInt; ' '->screen.put;screen.newLIne;
+                             'node.LRdotx,node.LRdoty: '->screen.putText;
+                             node.LRdotx->screen.putInt; ' '->screen.put;
+                             node.LRdoty->screen.putInt; screen.newLine;
+                             '>>>>>'->screen.putLine;
+                             *)
+                            (lineNoSqm+noOfLines,marginSqm+lengthOfLastLine)
+                              ->Node.LR
+                        if)
+                     #);
+                   
+                // SPECIALCOMMENT then
+                     (# node: @SAST.node; 
+                     do
+                        (com,lineNoSqm,marginSqm)->out.PrintSpecialComment
+                          ->(noOfLines,lengthOfLastLine);
+                        (if editorMode
+                         // true then
+                         (* update LR in the SAST, now we know what it should be *)
+                            tSymbol[index]->NT.find->Node;
+                            (lineNoSqm+noOfLines,marginSqm+lengthOfLastLine)
+                              ->Node.LR
+                        if)
+                     #);
+                   
+                // ENDPROD then
+                (* SEMANTICERROR is used instead
+                 * 
+                 * (# Ul: @LE.List; theSast: @SAST.node;
+                 do
+                 (if editorMode //true then 
+                 ulRef->Ul;
+                 ul.value->theSast;
+                 theSast.AST->frag.indexToNode->out.printError;
+                 if)
+                 #)
+                 *)
+                   
+                // SEMANTICERROR then
+                   tSymbol[index]->frag.indexToNode->out.printError; 
+                // COMMENTPROP then
+                     (# anAst: ^ast; node: @SAST.node; 
+                     do
+                        tSymbol[index]->frag.indexToNode->anAst[];
+                        (anAst.getCommentProp,lineNoSqm,marginSqm)
+                          ->out.PrintCommentProp->(noOfLines,lengthOfLastLine);
+                        (if editorMode
+                         // true then
+                         (* update LR in the SAST, now we know what it should be *)
+                            tSymbol[index]->NT.find->Node;
+                            (lineNoSqm+noOfLines,marginSqm+lengthOfLastLine)
+                              ->Node.LR
+                        if)
+                     #);
+                   
+                // OPTIONAL then (* nothing *)
+                   
+                else
+                   '??'->putText;
+                   (tKind[index])->putInt;
+                   (failureTrace,' PP: token: output: unknown token.')->&stop
+               if);
+               
+            exit (noOfLines,lengthOfLastLine)
+            #);
+          (* private *)
+          index: @integer;
+          
+       enter index
+       do
+       (*(if (index>=maxToken) //true  then
+        'index is: '->screen.putText; index->screen.putInt;
+        screen.newLine;
+        if)*) 
+       exit index
+       #);
+     SaveState: (* Save the state of THIS tokenEnv on file(s). *)
+       (# filename: ^text; ff: [1] @integer; 
+       enter filename[]
+       do
+          firstFree->ff[1];
+          ('.ff'->filename.CopyAppend,ff)->SaveArray;
+          ('.UL'->filename.CopyAppend,tULref)->SaveArray;
+          ('.Knd'->filename.CopyAppend,tKind)->SaveArray;
+          ('.Sym'->filename.CopyAppend,tSymbol)->SaveArray;
+          ('.Len'->filename.CopyAppend,tLength)->SaveArray;
+          ('.fre'->filename.CopyAppend,free)->SaveArray;
+          
+       #);
+     LoadState: (* Load the state of THIS tokenEnv from file(s). *)
+       (# filename: ^text; ff: [1] @integer; 
+       enter filename[]
+       do
+          '.ff'->filename.CopyAppend->LoadArray->ff;
+          ff[1]->firstFree;
+          '.UL'->filename.CopyAppend->LoadArray->tULref;
+          '.Knd'->filename.CopyAppend->LoadArray->tKind;
+          '.Sym'->filename.CopyAppend->LoadArray->tSymbol;
+          '.Len'->filename.CopyAppend->LoadArray->tLength;
+          '.fre'->filename.CopyAppend->LoadArray->free;
+          
+       #);
+     EraseState: (* Erase files from a saved state. *)
+       (# filename: ^text; F: @File; 
+       enter filename[]
+       do
+          '.ff'->filename.CopyAppend->DeleteFile;
+          '.UL'->filename.CopyAppend->DeleteFile;
+          '.Knd'->filename.CopyAppend->DeleteFile;
+          '.Sym'->filename.CopyAppend->DeleteFile;
+          '.Len'->filename.CopyAppend->DeleteFile;
+          '.fre'->filename.CopyAppend->DeleteFile;
+          
+       #);
+     (* private *)
+     extendRepetitions:
+       (# oldMaxToken: @integer; 
+       do
+          MaxToken->oldMaxToken;
+          2*MaxToken->MaxToken;
+          MaxToken-tULref.range->tULref.extend;
+          MaxToken-tKind.range->tKind.extend;
+          MaxToken-tSymbol.range->tSymbol.extend;
+          MaxToken-tLength.range->tLength.extend;
+          MaxToken-tComment.range->tComment.extend;
+          MaxToken-free.range->free.extend;
+          (for i: oldMaxToken repeat true->Free[i+oldMaxToken] for);
+          (if ppTrace
+           // true then
+              screen.newline;
+              '=======> Token.maxToken = '->screen.puttext;
+              maxToken->screen.putint;
+              screen.newline;
+              
+          if);
+          
+       #);
+     MaxToken: @integer;
+     tULref,tKind,tSymbol,tLength: [initialMaxToken] @integer;
+     tComment: [initialMaxToken] ^text;
+     free: [initialMaxToken] @boolean;
+     firstFree: @integer;
+     
+  #)  
+

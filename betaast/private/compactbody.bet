@@ -1,0 +1,246 @@
+ORIGIN '../compact';
+INCLUDE '~beta/mps/v4.9.1/private/indexPrivate' (* after jlk*)
+        '~beta/mps/v4.9.1/private/astPrivate'
+        '../gram';
+
+--- doCompact: descriptor ----
+(# 
+
+   (* 
+    <ActionPart>:: = <EnterPartOpt> <WithPartOpt> <DoPartOpt> <ExitPartOpt>;
+    <DoPartOpt>:: ? <DoPart>;
+    <DoPart>:: = 'do' <Imperatives>;
+    *)
+
+   ff, newFf: ^fragmentForm;
+   grm: @grammar;
+
+   DoBetaForm: 
+     (# 
+        slotFound: @boolean;
+        ff,newff: ^fragmentForm;
+        com: ^comment;
+        theLex,theLexCopy: ^lexemText;
+        theValue,theValueCopy: ^const;
+        theUnExp,theUnExpCopy: ^unexpanded;
+        anExp: ^expanded;
+        op: ^slotDesc;
+        anAst: ^ast;
+        beta: ^treelevel;
+
+        copyLater: 
+          (# 
+             doit:< object;
+             next: ^copyLater;
+             init:< (# 
+                    do INNER;
+                       doItLater[]->next[];
+                       this(copyLater)[]->doItLater[];
+                    #);
+          #);
+        
+        copyComment: copyLater
+          (# 
+             oldAst,newAst: ^ast;
+
+             init::< (# enter (oldAst[],newAst[]) #);
+
+             doit::< (# 
+                     do oldAst.getComment->com[];
+                        newFF[]->com.copy->newAst.addComment;
+                     #);
+          #);
+
+        copyDoPart: copyLater
+          (# 
+             oldAst,newAst: ^Expanded; (* actually beta.dopart *)
+
+             init::< (# enter (oldAst[],newAst[]) #);
+
+             doit::< (# 
+                     do 1->oldAst.get->anAst[];
+                        (1,newff[]->anAst.copy)->newAst.put 
+                     #);
+          #);
+
+        doItLater: ^copyLater;
+
+        ccp: ^copyComment;
+        cdo: ^copyDoPart;
+        t: ^text;
+
+        copyCrunch: 
+          (# theAst, theCopy: ^ast;
+             symbol: @integer;
+             handleDoPart: @boolean;
+          enter (theAst[],handleDoPart)
+          do (if (theAst.symbol->symbol)
+              //prodNo.nameDecl
+              //prodNo.nameAppl
+              //prodNo.string
+              //prodNo.comment then
+                 theAst[]->theLex[];
+                 (symbol,theLex.curLength,newff[])->beta.newLexemText->theCopy[]->theLexCopy[];
+                 theLex.getText->theLexCopy.putText
+              //prodNo.const then
+                 theAst[]->theValue[];
+                 (symbol,newff[])->beta.newAstWithOutSons->theCopy[]->theValueCopy[];
+                 theValue.getValue->theValueCopy.putValue; 
+              //prodNo.optional 
+              //prodNo.unExpanded then
+                 theAst[]->theUnExp[];
+                 (symbol,newff[])->beta.newAstWithOutSons->theCopy[]->theUnExpCopy[];
+                 (if theUnExp.isSLOT //true then
+                     theUnExp.theSLOT->op[];
+                     newff[]->op.copy->theUnExpCopy.theSLOT ;
+                 if);
+                 theUnExp.nonterminalSymbol->theUnExpCopy.nonterminalSymbol;
+              else
+                 (# theExp,theExpCopy: ^expanded; isExternal: @boolean
+                 do
+                    theAst[]->theExp[];
+                    (symbol,newff[])->beta.newAstWithOutSons->theCopy[]->theExpCopy[];
+                    (if symbol
+                     //grm.nameApl then
+                        &copyDoPart[]->cdo[];
+                        (theExp[],theExpCopy[])->cdo.init;
+                     //grm.doPart then
+                        false->slotFound;
+                        loop: unexpanded->theExp.suffixWalkForProd
+                        (# do true->slotFound; leave loop #);
+                        (if (slotFound or not handleDoPart)
+                         //true then (1,(1->theExp.get,true)->copyCrunch)->theExpCopy.put
+                         else (* do something later *)
+                            &copyDoPart[]->cdo[];
+                            (theExp[],theExpCopy[])->cdo.init;
+                        if);
+                     //grm.objectDescriptor then
+                        (* determine if we have a specialization of external *)
+                        false->isexternal;
+                        (# a: ^ast; exp1: ^expanded; na: ^nameAppl;
+                        do
+                           theexp.getson1->a[];
+                           (if a.kind
+                            //kinds.interior then
+                               a[]->exp1[]; (* prefix *)
+                               exp1.getson1->exp1[]; (* attributeDenotation *)
+                               (if exp1.symbol
+                                //grm.nameApl then
+                                   exp1.getson1->na[];
+                                   na.getText->t[];
+                                   'external'->t.equalNCS->isExternal
+                           if)if)
+                        #);
+                        (if isExternal
+                         //true then
+                            theExp.scan
+                            (# 
+                            do (currentSonNo,(current[],false)->copyCrunch)->theExpCopy.put;
+                            #);
+                         else
+                            theExp.scan
+                            (# 
+                            do (currentSonNo,(current[],true)->copyCrunch)->theExpCopy.put;
+                            #);
+                        if)
+                     else
+                        theExp.scan
+                        (# 
+                        do (currentSonNo,(current[],true)->copyCrunch)->theExpCopy.put;
+                        #);
+                    if);
+                 #)
+             if); 
+             (if theAst.hasComment
+              //true then
+                 &copyComment[]->ccp[];
+                 (theAst[],theCopy[])->ccp.init;
+             if);
+          exit theCopy[]
+          #);
+
+     enter ff[]
+     do 
+        ff.grammar[]->beta[]->newFragmentForm->newff[];
+        (ff.root[],true)->copyCrunch->newff.root[];
+        newff.curtop->newff.modificationStatus;
+        loop: (if (doitLater[]=none)
+               //false then
+                  doitLater.doit;
+                  doitLater.next[]->doitLater[];
+                  restart loop
+              if);
+     exit newff[]
+     #);
+
+do 
+   fg.fragmentList.scan
+   (# 
+   do 
+      (if current.type//formType  then 
+          current.f[]->ff[]->DoBetaForm->current.f[];
+          fg[]->current.f.father;
+          ff.name->current.f.name;
+      if)
+   #);
+#)
+
+--- doCompactOpen: descriptor ---
+(# 
+   f: @file(# accessError::< (# do fileError #);
+              binary::< trueObject #);
+   getRep: @f.getRep;
+   b: [2] @integer;
+
+   garbagefl: ^fg.fragmentListDescription;
+   garbageProp: ^propertyList;
+do
+   fg.diskFileName->f.name;
+   f.openRead;
+   (@@b[1],b.range)->getRep;
+   (if (b[2]>repS.r.range)
+    //true then b[2]-repS.r.range->repS.extend;
+   if);
+   0->repS.top;
+   (@@repS.r[1],b[2])->getRep; (* get r from f *)
+
+
+   &fg.fragmentListDescription[]->garbagefl[];
+   repS[]->garbagefl.repRestore;
+   none->garbagefl[];
+   &propertyList[]->garbageProp[];
+   repS[]->garbageProp.repRestore;
+   none->garbageprop[];
+
+   true->usemodificationStatus;
+   fg.fragmentList.scan
+   (# ff: ^fragmentForm
+   do (if current.type
+       //formType then
+          current.open;
+          current.f []->ff[];
+          repS[]->ff.repRestoreStruct
+   if) #);
+
+   false->useModificationStatus;
+
+   fg.fragmentList.scan
+   (# ff: ^fragmentForm
+   do (if current.type
+       //formType then
+          current.f []->ff[];
+          (if (ff.modificationStatus>10)//true then
+              (@@ff.a[1],ff.modificationStatus)->getRep;
+              (* position the file. 
+               Move ff.curtop-ff.modificationStatus longs forward 
+               *)
+              ((ff.curtop-ff.modificationStatus)*4,fromCurrent)->f.setPos;
+           else
+              (@@ff.a[1],ff.curtop)->getRep;
+          if);
+          ff.rootInx->ff.indexToNode->ff.root[];
+   if) #);
+
+
+   f.close;
+#)

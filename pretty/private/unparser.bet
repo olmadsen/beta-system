@@ -1,0 +1,862 @@
+ORIGIN '../astviewer';
+INCLUDE '~beta/mps/v4.9.1/private/astPrivate'
+        'scanner';
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1986-94
+ *       All rights reserved.
+ *)
+-- unparser: Descriptor --
+(* Unparses an AST, merged with a pretty-print-specification, *)
+(* to produce tokens, which feeds theScanner.                 *)
+(* Modified to attend incrementality, by inspiration of OLM.  *)
+(* Per Fack S|rensen, DAIMI, 24. aug. 1987 *)
+(* PFS: 2/12: converted to new syntax *)
+(* PFS: 3/12: main-part of unparser changed to handle update  *)
+(*	      of productions, which is not within a block     *)
+(* ESS: 28/1/88: new token type added: COMMENTMARK            *)
+(* Ole Agesen: 6/8-88: 
+ Unparser enters two integers, firstson
+ and lastson. If firstson=-1 then unparser 
+ acts as before. If firstson<>-1 then
+ only sons with numbers x s.t. 
+ firstson<=x<=lastson are unparsed. 
+ The node S in the shadowAST is then
+ assumed to be previously constructed,
+ except for the sons corresponding to
+ x above.
+ 
+ Ole Agesen: 17/4-89: 
+ Unparser enters integer, remainingDepth.
+ It determines the maximum depth to traverse
+ the AST. When the maximum depth is reached, 
+ the interior nodes are output as unexpanded
+ (nonterminals). To obtain a full pretty-print
+ of the AST, supply remainingDepth=-1 or very
+ large.
+ *)
+  (#
+     f: @file;
+     traverseAST:
+       (#
+          anAST,anAst2,father: ^ast;
+          node: @SAST.node;
+          ULref,self: @LE.list;
+          firstson,lastson: @integer;
+          synCatNo: @nonterminalsymbol;
+          ppProd: @PST.production;
+          ps: @PST.String;
+          aConstant: ^const;
+          unexped: ^unexpanded;
+          topNode: ^expanded;
+          chainDepth,dummy: @integer;
+          holoPresentation: @boolean;
+          breakSym: @PST.Symbol
+       enter (anAST[],firstson,lastson,node,ULref)
+       do
+          (if editorMode
+           // true then
+              self.new;
+              node.index->self.value;
+              (if firstson
+               // - 1 then
+                  anAST.index->node.AST;
+                  (anAST.index,node.index)->NT.insert;
+                  self->ULref.prepend;
+                  
+              if);
+              
+          if);
+          (BEGINPROD,self,PST.NULL,none )->theScanner;
+          examineASTkind:
+          (if anAST.kind
+           // kinds.interior then
+              (if (anAST.realCommentInx <> 0)
+               // true then (* has comment *)
+                  (if (anAST.commentinx >= anAST.frag.a.range)
+                   // true then
+                   (* this comment has been removed by the compressor *)
+                      
+                   else
+                      (if
+                      ((anAST.typeOfComment = HoloComment) and
+                       abstractPresentation)
+                       // true then
+                          (anAST[],ULRef)->doHoloComment->ULRef;
+                          true->holoPresentation;
+                          
+                      if);
+                      
+                  if);
+                  
+              if);
+              (if not holoPresentation
+               // true then
+                  (if remainingDepth
+                   // 0 then
+                   (* !!! This branch has not been tested 
+                    interactively with the editor. !!! *)
+                      anAst[]->topNode[];
+                      0->chainDepth;
+                      examineForChainProd:
+                        (# expNode: ^expanded; 
+                        do
+                           anAst[]->expNode[];
+                           (if (expNode.soninx > anAST.frag.a.range)
+                            // true then
+                            (* this node has been removed by the compressor *)
+                               (COMPRESSED,ULRef,0,none )->theScanner;
+                               leave examineASTkind
+                            else
+                               (if expNode.noOfSons
+                                // 1 (* chain production *) then
+                                   chainDepth+1->chainDepth;
+                                   expNode.getSon1->anAst[];
+                                   (if anAst.kind
+                                    // kinds.interior then
+                                       restart examineForChainProd
+                                    else
+                                       chainDepth->remainingDepth;
+                                       (topNode[],firstson,lastson,node,ULref)
+                                         ->&traversePPSpec->ULref;
+                                       0->remainingDepth;
+                                       leave examineASTkind
+                                   if);
+                                   
+                               if)
+                           if);
+                           
+                        #);
+                      anAST.symbol->ppProd.open;
+                      anAST.symbol->synCatNo;
+                      (if true
+                       // synCatNo.isLexem then
+                          (NONT,ULRef,ppProd,none )->theScanner; 
+                       else
+                          (UNEXP,ULRef,ppProd,none )->theScanner; 
+                      if);
+                      
+                   else
+                      remainingDepth-1->remainingDepth;
+                      (anAST[],firstson,lastson,node,ULref)->&traversePPSpec
+                        ->ULref;
+                      remainingDepth+1->remainingDepth;
+                      
+                  if);
+                  
+              if);
+              
+           // kinds.nameDecl // kinds.nameAppl then
+              (anAST[],ULref,node,- 1,1,1)->checkComment->Ulref;
+              (if specialLexemTreatment
+               // true then
+                  (SPECIALLEXEM,ULref,anAST.index,none )->theScanner; 
+               else
+                  (IDENTIFIER,ULref,anAST.index,none )->theScanner; 
+              if);
+              ULref.clear;
+              (anAST[],ULref,node,- 1,2,2)->checkComment->Ulref;
+              
+           // kinds.string then
+              (anAST[],ULref,node,- 1,1,3)->checkComment->Ulref;
+              (if specialLexemTreatment
+               // true then
+                  (SPECIALLEXEM,ULref,anAST.index,none )->theScanner; 
+               else
+                  (STRING,ULref,anAST.index,none )->theScanner; 
+              if);
+              ULref.clear;
+              (anAST[],ULref,node,- 1,2,4)->checkComment->Ulref;
+              
+           // kinds.const then
+              (anAST[],ULref,node,- 1,1,5)->checkComment->Ulref;
+              anAST[]->aConstant[];
+              (IDENTIFIER,ULref,anAST.index,none )->theScanner;
+              ULref.clear;
+              (anAST[],ULref,node,- 1,2,6)->checkComment->Ulref;
+              
+           // kinds.unExpanded then
+              (anAST[],ULref,node,- 1,1,7)->checkComment->Ulref;
+              anAST[]->unexped[];
+              unexped.nonterminalSymbol->ppProd.open;
+              (if unexped.isSlot
+               // false then (UNEXP,ULref,ppProd,none )->theScanner; 
+               else
+                  (SLOTTOKEN,ULref,anAST.index,none )->theScanner; 
+              if);
+              ULref.clear;
+              (anAST[],ULref,node,- 1,2,8)->checkComment->Ulref;
+              
+           // kinds.optional then
+           (* do nothing for optionals for the time being *)
+           (* '.'->screen.put; *)
+           (*'optional'->putLine;
+            'anAST.index: '->putText;
+            anAST.index->putInt;
+            newLine;
+            'anAST.father.index: '->putText;
+            (anAST.father).index->putInt;
+            newLine;
+            *)
+              anast.father->father[];
+              (if father## <= list## then
+                  (OPTIONAL,ULref,anAST.index,none )->theScanner
+              if);
+              (anAST[],ULref,node,- 1,1,9)->checkComment->Ulref;
+              
+           else
+              'PP: unparser: traverseAST:'->putText;
+              (anAST.kind)->putInt;
+              (failureTrace,'. unknown ast.')->&stop
+          if);
+          (ENDPROD,self,PST.NULL,none )->theScanner;
+          (if anAst.hasSemanticError
+           // true then (SEMANTICERROR,self,anAST.index,none )->theScanner; 
+          if)
+       exit ULref
+       #);
+     traversePPSpec:
+       (#
+          anAST: ^ast;
+          ppProd: @PST.Production;
+          node: @SAST.node;
+          ULref,self: @LE.list;
+          firstson,lastson: @integer;
+          Beginning,Ending,sym: @PST.Symbol;
+          aList: ^list;
+          noOfSons,commentNo,sonNumber: @integer;
+          findCommentNodeInsertPositionBefore:
+          (* check preceding comment nodes in the SAST
+           * should only be used locally to traversePPSpec 
+           *)
+            (# SASTsonNo,insertPosition: @integer; 
+            do
+               (if aList.realCommentInx <> 0 then
+                   (if ppdebug
+                    // true then
+                       'findCommentNodeinsertPositionBefore: '->putText; 
+                   if);
+                   1->node.findSASTsonNumber->sastSonNo;
+                   (if sastSonNo > 1 then
+                       sastSonNo-1->insertPosition; 
+                    else
+                       1->insertPosition
+                   if);
+                   (if ppdebug then insertPosition->putInt; newLine if);
+                   
+               if)
+            exit insertPosition
+            #);
+          findCommentNodeInsertPositionBetween:
+          (* should only be used locally to traversePPSpec *)
+            (# sonNo,SASTsonNo,insertPosition: @integer; 
+            enter sonNo
+            do
+               (if aList.realCommentInx <> 0 then
+                   (if ppdebug
+                    // true then
+                       'findCommentNodeinsertPositionBetween: '->putText;
+                       sonNo->putInt;
+                       ' '->put
+                   if);
+                   (if sonNo < aList.noOfSons then
+                   (* find the AST node to the right of AST node number 
+                    * 'sonNo'in the SAST 
+                    *)
+                       sonNo+1->node.findSASTsonNumber->sastSonNo;
+                       (if sastSonNo > sonNo+1 then
+                           sastSonNo-1->insertPosition; 
+                        else
+                           sastSonNo->insertPosition
+                       if);
+                       
+                    else
+                       - 1->insertPosition; (* append *) 
+                   if);
+                   (if ppdebug
+                    // true then insertPosition->putInt; newLine
+                   if);
+                   
+               if);
+               
+            exit insertPosition
+            #);
+          findASTNodeInsertPosition:
+          (* should only be used locally to traversePPSpec *)
+            (# sonNo,SASTsonNo,insertPosition: @integer; 
+            enter sonNo
+            do
+               (if aList.realCommentInx <> 0 then
+                   (if ppdebug
+                    // true then
+                       'findASTNodeinsertPosition: '->putText;
+                       sonNo->putInt;
+                       ' '->put
+                   if);
+                   (if sonNo < aList.noOfSons then
+                   (* find the corresponding AST node in the SAST*)
+                       sonNo->node.findSASTsonNumber->sastSonNo->insertPosition
+                    else
+                       - 1->insertPosition; (* append *) 
+                   if);
+                   (if ppdebug then insertPosition->putInt; newLine if);
+                   
+                else
+                   sonNo->insertPosition
+               if);
+               
+            exit insertPosition
+            #);
+          
+       enter (anAST[],firstson,lastson,node,ULref)
+       do
+          (if editorMode
+           // true then self.new; node.index->self.value; 
+          if);
+          anAST.Symbol->ppProd.open;
+          (if ppProd.type
+           // PST.Constructor then
+              1->commentNo;
+              (anAST[],ULref,node,- 1,commentNo,10)->checkComment->Ulref;
+              ppProd.scan
+                (# 
+                do
+                   (anAST[],node,ULref,thisSymbol)->&doPSymbol->ULref;
+                   (if ppdebug then
+                       (if thisSymbol.type
+                        // PST.Terminal then
+                           '### terminal: '->putText;
+                           anast.index->putInt;
+                           newLine;
+                           
+                        // PST.NonTerminal then
+                           '### nonterminal: '->putText;
+                           anast.index->putInt;
+                           newLine;
+                           
+                        else
+                           '### else!!: '->putText;
+                           anast.index->putInt;
+                           newLine;
+                           
+                       if);
+                       
+                   if);
+                   (if thisSymbol.type
+                    // PST.Terminal // PST.NonTerminal then
+                       commentNo+1->commentNo;
+                       (anAST[],ULref,node,- 1,commentNo,10)->checkComment
+                         ->Ulref;
+                       
+                   if)
+                #);
+              
+           // PST.ListProd then
+           (* ---------------- Beginning of list ------------------ *)
+              scanBeginning: ppProd.scan
+                (# 
+                do
+                   (if thisSymbol.type
+                    // PST.lBegin then
+                       thisSymbol->Beginning; leave scanBeginning; 
+                    else
+                       (if firstson
+                        // - 1 then
+                           (none ,node,ULref,thisSymbol)->&doPSymbol->ULref; 
+                       if);
+                       
+                   if);
+                   
+                #);
+              (if Beginning.BlockType
+               // PST.Consistent then
+                  (CONSISTENTBLOCK,self,PST.NULL,none )->theScanner; 
+               // PST.Inconsistent then
+                  (INCONSISTENTBLOCK,self,PST.NULL,none )->theScanner; 
+               else
+                  (failureTrace,'PP.unparser.traversePPSpec: unknown blocktype')
+                    ->&stop;
+                  
+              if);
+              anAST[]->aList[];
+              aList.noOfSons->noOfSons;
+              (if firstson
+               // - 1 then
+                  (anAST[],ULref,node,- 1,1,11)->checkComment->Ulref; 
+               else
+                  (if firstson
+                   // 1 then
+                      (anAST[],ULref,node,findCommentNodeinsertPositionbefore,1,
+                       11)->checkComment->ULref;
+                      
+                  if)
+              if);
+              ScanList: aList.scan
+                (# sy: @PST.symbol
+                do
+                   (if (currentSonNo <= depth)
+                    // true then
+                       (if true
+                        // ((firstson <> - 1) and (currentSonNo > lastson)) then
+                           leave ScanList
+                        //
+                        ((firstson = - 1) or
+                         ((currentSonNo >= firstson) and
+                          (currentSonNo <= lastson))) then
+                           (if firstson
+                            // - 1 then (* Special case, to gain speed. *)
+                               (current[],node,- 1,ULref,ppProd)->&doNonTerminal
+                                 ->ULref;
+                               
+                            else
+                               (if editorMode
+                                // true then
+                                (* we must first find the corresponding son number in the SAST
+                                 * due to possible comment nodes in the SASTs
+                                 *)
+                                   (current[],node,
+                                    currentSonNo->findASTnodeInsertPosition,
+                                    ULref,ppProd)->&doNonTerminal->ULref;
+                                   
+                               if)
+                           if);
+                           (if (currentSonNo < noOfSons)
+                            // true then
+                               (COMPANYOFF,0,0,none )->theScanner;
+                               Beginning.next->sy;
+                               scanSeparator:
+                               (if sy.type
+                                // PST.lEnd then
+                                   sy->Ending; leave scanSeparator; 
+                                else
+                                   (none ,node,ULRef,sy)->&doPSymbol->ULRef;
+                                   sy.next->sy;
+                                   restart scanSeparator;
+                                   
+                               if);
+                               (if firstSon
+                                // - 1 then
+                                   (anAST[],ULref,node,- 1,currentSonNo+1,11)
+                                     ->checkComment->Ulref;
+                                   
+                                else
+                                   (if editorMode
+                                    // true then
+                                       (if (currentSonNo < lastSon)
+                                        // true then
+                                           (anAST[],ULref,node,
+                                            currentSonNo
+                                              ->
+                                                findCommentNodeinsertPositionBetween,
+                                            currentSonNo+1,11)->checkComment
+                                             ->ULref;
+                                           
+                                       if);
+                                       
+                                   if);
+                                   
+                               if);
+                               (if (firstson <> - 1)
+                                // true then
+                                   (BREAK,0,PST.LongBreak,none )->theScanner
+                               if);
+                               (COMPANYON,0,0,none )->theScanner;
+                               
+                           if);
+                           
+                       if);
+                       
+                   if);
+                   
+                #);
+              (ENDBLOCK,self,PST.NULL,none )->theScanner;
+              (if firstson
+               // - 1 then
+                  (if Ending
+                   // 0 then
+                      Beginning.next->sym;
+                      findEnding:
+                      (if sym.type
+                       // PST.lEnd then sym->Ending; leave findEnding; 
+                       else
+                          sym.next->sym; restart findEnding; 
+                      if);
+                      
+                  if);
+                  Ending.next->sym;
+                  scanEnding:
+                  (if (sym.type = PST.NULL)
+                   // false then
+                      (none ,node,ULRef,sym)->&doPSymbol->ULRef;
+                      sym.next->sym;
+                      restart scanEnding;
+                      
+                  if);
+                  
+              if);
+              
+           else
+              'PP: unparser: traversePPSpec:'->putText;
+              (ppProd.type)->putInt;
+              ' '->put;
+              (anAST.Symbol)->putInt;
+              (failureTrace,'. unknown production.')->&stop
+          if);
+          
+       exit ULref
+       #);
+     doPSymbol:
+       (#
+          anAST: ^ast;
+          node: @SAST.node;
+          ULref,self: @LE.list;
+          PSy: @PST.Symbol;
+          expand: ^expanded;
+          
+       enter (anAST[],node,ULref,PSy)
+       do
+          self.new;
+          node.index->self.value;
+          (if PSy.type
+           // PST.Begin then
+              (if PSy.BlockType
+               // PST.Consistent then
+                  (CONSISTENTBLOCK,self,PST.NULL,none )->theScanner; 
+               // PST.Inconsistent then
+                  (INCONSISTENTBLOCK,self,PST.NULL,none )->theScanner; 
+               else
+                  'PP: unparser: doPSymbol:'->putText;
+                  (PSy.Blocktype)->putInt;
+                  newLine;
+                  (failureTrace,'. Unknown blocktype.')->&stop;
+                  
+              if);
+              
+           // PST.End then
+              (ENDBLOCK,self,PST.NULL,none )->theScanner; 
+           // PST.Break then
+              (BREAK,LE.NULL,PSy,none )->theScanner; 
+           // PST.NonTerminal then
+              anAST[]->expand[];
+              (if ((PSy.NontNo->expand.findindex) > anAST.frag.a.range)
+               // true then (* this node has been removed by the compressor *)
+                  (COMPRESSED,ULRef,0,none )->theScanner; 
+               else
+                  (if (PSy.NontNo->expand.findindex) > 0 then
+                      (PSy.NontNo->expand.get,node,- 1,ULref,PSy)
+                        ->&doNonTerminal->ULref
+                  if);
+                  
+              if);
+              
+           // PST.Terminal then
+              (TERM,ULRef,PSy,none )->theScanner; ULref.clear; 
+           // PST.Comment then
+           (*(anAST[], ULRef)->doComment->ULref;
+            do not use comment spec anymore ESS 930426 *)
+              
+           else
+              'PP: unparser: doPSymbol:'->putText;
+              (PSy.type)->putInt;
+              (failureTrace,'. unknown symbol.')->&stop
+          if);
+          
+       exit ULref
+       #);
+     doNonTerminal:
+       (#
+          anAST: ^ast;
+          unexped: ^unexpanded;
+          node,aNode: @SAST.node;
+          PSy: @PST.Symbol;
+          ppProduction: @PST.production;
+          ULRef,self: @LE.list;
+          sonNumber: @integer;
+          synCatNo: @nonterminalSymbol;
+          
+       enter
+       (anAST[],node,sonNumber,ULRef,PSy)
+       (* If sonNumber=-1 the new son is made the last one. *)
+       do
+          (if editorMode
+           // true then
+              aNode.new;
+              (if sonNumber
+               // - 1 then aNode->node.appendSon; 
+               else
+                  (sonNumber,aNode)->node.insertSon;
+                  (if ppDebug then
+                      'doNonTerminal insertSon, sonNumber: '->putText;
+                      sonNumber->putInt;
+                      newLine
+                  if);
+                  
+              if);
+              
+          if);
+          (if anAST.kind
+           // kinds.unExpanded then
+              (if editorMode
+               // true then
+                  anAST.index->aNode.AST;
+                  self.new;
+                  aNode.index->self.value;
+                  self->ULRef.prepend;
+                  
+              if);
+              (BEGINPROD,self,PST.NULL,none )->theScanner;
+              anAST[]->unexped[];
+              (if unexped.isSlot
+               // true then (SLOTTOKEN,ULRef,anAST.index,none )->theScanner; 
+               else
+                  unexped.nonterminalSymbol->synCatNo;
+                  (* ESS 18-10-88 *)
+                  (if synCatNo.isLexem
+                   // true then (NONT,ULRef,PSy,none )->theScanner; 
+                   else
+                      unexped.nonterminalSymbol->ppProduction.open;
+                      (UNEXP,ULRef,ppProduction,none )->theScanner;
+                      
+                  if);
+                  
+              if);
+              ULRef.clear;
+              (ENDPROD,self,PST.NULL,none )->theScanner;
+              (if editorMode
+               // true then (anAST.index,aNode.index)->NT.insert; 
+               else
+                  (if anAst.hasSemanticError
+                   // true then
+                      (SEMANTICERROR,self,anAST.index,none )->theScanner; 
+                  if)
+              if);
+              
+           else
+              (anAST[],- 1,- 1,aNode,ULRef)->&traverseAST->ULRef; 
+          if);
+          
+       exit ULRef
+       #);
+     checkComment:
+       (#
+          anAst: ^ast;
+          ULRef: @LE.list;
+          node: @SAST.node;
+          commentNo: @integer;
+          sonNumber: @integer;
+          testType: @integer;
+          currentSubcomment: ^text;
+          theCommentType: @integer;
+          n,n2,i: @integer;
+          t: ^text;
+          debug,isCommentProp: @boolean;
+          doComment:
+            (#
+               inx2: @integer;
+               aNode: @SAST.node;
+               self: @LE.list;
+               multipleLines: @boolean
+            enter inx2
+            do
+               (if editorMode
+                // true then
+                   aNode.new;
+                   (if sonNumber
+                    // - 1 then
+                       aNode->node.appendSon;
+                       (if ppDebug then
+                           'checkcomment appendSon '->putLine
+                       if);
+                       
+                    else
+                       (sonNumber+inx2-1,aNode)->node.insertSon;
+                       (if ppDebug then
+                           'checkcomment insertSon, sonNumber: '->putText;
+                           sonNumber+inx2-1->putInt;
+                           newLine
+                       if);
+                       
+                   if);
+                   anAST.index->aNode.AST;
+                   true->aNode.comment;
+                   commentNo->aNode.subCommentInx1;
+                   inx2->aNode.subCommentInx2;
+                   self.new;
+                   aNode.index->self.value;
+                   self->ULRef.prepend;
+                   
+               if);
+               (BREAK,UlRef,PST.shortBreak,none )->theScanner;
+               (BEGINCOM,self,PST.NULL,none )->theScanner;
+               (if ppDebug then
+                   '<'->put;
+                   currentSubcomment[]->putText;
+                   '>'->put;
+                   anAST.index->putint;
+                   newline;
+                   
+               if);
+               (theCommentType,UlRef,anAst.index,currentSubcomment[])
+                 ->theScanner;
+               UlRef.clear;
+               (ENDCOM,self,PST.NULL,none )->theScanner;
+               (BREAK,UlRef,PST.shortBreak,none )->theScanner;
+               
+            #);
+          
+       enter (anAst[],ULRef,node,sonNumber,commentNo,testType)
+       do
+          true->debug;
+          (if anAST.realCommentInx
+           // 0 then (* has no comment *)
+              (if (anAST.index->isAnchor)
+               // true then
+                  (COMMENTLINK,ULref,anAST.index (*not used*) ,none )
+                    ->theScanner;
+                  
+              if)
+           else
+              (if (anAST.commentinx >= anAST.frag.a.range)
+               // true then
+               (* this comment has been removed by the compressor *)
+                  
+               else
+                  (if anAST.TypeOfComment
+                   // propertyComment then
+                      (COMMENTPROP,ULref,anAST.index,none )->theScanner;
+                      true->isCommentProp;
+                      ULref.clear;
+                      
+                   // normalComment then
+                      (if includeComments
+                       // true then
+                          (if specialCommentTreatment
+                           // true then SPECIALCOMMENT->theCommentType; 
+                           else
+                              FULLCOMMENT->theCommentType; 
+                          if);
+                          
+                       else
+                          (if (anAST.index->isAnchor)
+                           // true then COMMENTLINKANDMARK->theCommentType; 
+                           else
+                              COMMENTMARK->theCommentType; 
+                          if);
+                          
+                      if);
+                      
+                   // breakPointComment then
+                      COMMENTBREAKPOINT->theCommentType
+                   else
+                      leave checkComment
+                  if)
+              if);
+              (if not isCommentProp then
+                  (if ppDebug then anAST.dump;  if);
+                  anAST.getNextComment->(currentSubcomment[],n);
+                  (if n
+                   // - 1 then
+                      
+                   // 0 then
+                      (if currentSubComment.lgth > 0 then 1->doComment if)
+                   // 1 then
+                      (if currentSubComment.lgth > 0 then 1->i->doComment if);
+                      loop:
+                      (if 1
+                       // 1 then
+                          anAst.getNextComment->(currentSubcomment[],n2);
+                          i+1->i;
+                          (if currentSubComment.lgth > 0 then
+                              i->doComment
+                          if);
+                          (if n2 // 1 then restart loop if);
+                          
+                      if);
+                      
+                   else
+                      'checkComment: n>2 should not happen!'->putLine; 
+                  if)
+              if);
+              (*        (if debug //true then '*** getNextComment: '->f.putText; 
+               (if testType
+               // 1 then 'name1'->t[]
+               // 2 then 'name2'->t[]
+               // 3 then 'string1'->t[]
+               // 4 then 'string2'->t[]
+               // 5 then 'const1'->t[]
+               // 6 then 'const2'->t[]
+               // 7 then 'unexp2'->t[]
+               // 8 then 'unexp2'->t[]
+               // 9 then 'optional'->t[]
+               // 10 then 'constructor'->t[]
+               // 11 then 'list'->t[]
+               if);
+               'index: '->f.putText; anAST.index->f.putInt;
+               ' '->f.put; 'symbol: '->f.putText; anAST.symbol->f.putInt;
+               ' '->f.put; t[]->f.putText;
+               ' '->f.put; 'commentNo: '->f.putText;commentNo->f.putInt;
+               ' '->f.put; n->f.putInt;
+               ' '->f.put; currentSubcomment[]->f.putLine; 
+               if);
+               *)
+              
+          if);
+          
+       exit ULRef
+       #);
+     doHolocomment:
+       (#
+          anAST: ^ast;
+          aHoloComment: ^comment;
+          ULRef: @LE.list;
+          pproduction: @PST.Production;
+          
+       enter (anAST[],ULRef)
+       do
+          (HOLOCOMMENTBEGIN,ULRef,0,none )->theScanner;
+          ULRef.clear;
+          (HOLOCOMMENTNODE,ULRef,anAST.index,none )->theScanner;
+          anAST.getComment->aHoloComment[];
+          (if (aHoloComment.curLength = 0)
+           // false then
+           (*(if includeComments
+            // true then
+            'unparser.doHolocomment: the whole comment is inserted:'->putLine;
+            (aHoloComment.getText,screen[])->printComment;   newLine;
+            'aHoloComment.index: '->putText; aHoloComment.index->putInt; newLine;
+            (FULLCOMMENT,ULref,aHoloComment.index,aHoloComment.getText )->theScanner;
+            else
+            (COMMENTMARK,ULref,aHoloComment.index,none )->theScanner;
+            if);
+            * *)
+              
+          if);
+          anAST.Symbol->pproduction.open;
+          (HOLOCOMMENTEND,ULRef,pproduction,none )->theScanner;
+          
+       exit ULRef
+       #);
+     A: ^ast;
+     S: @SAST.node;
+     self: @LE.list;
+     firstson,lastson: @integer;
+     remainingDepth,depth: @integer;
+     
+  enter (A[],firstson,lastson,S,remainingDepth)
+  do (*'unparser.log'->f.name;
+      f.openwrite;*)
+     (if remainingDepth
+      // - 1 then 10000->depth; 
+      else
+         remainingDepth->depth; 
+     if);
+     (if editorMode
+      // true then A.index->S.AST; self.new; S.index->self.value; 
+     if);
+     (INCONSISTENTBLOCK,self,PST.NULL,none )->theScanner;
+     (A[],firstson,lastson,S,LE.NULL)->traverseAST;
+     (ENDBLOCK,self,PST.NULL,none )->theScanner;
+     theScanner.finish;
+     
+  #)  
+

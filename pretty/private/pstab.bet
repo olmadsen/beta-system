@@ -1,0 +1,214 @@
+origin '../astviewer';
+(* COPYRIGHT
+ *      Copyright (C) Mjolner Informatics, 1986-94
+ *       All rights reserved.
+ *)
+--psTable: DescriptorForm--
+(* Per Fack S|rensen, DAIMI, 24. aug. 1987 *)
+(* Ole Agesen, 11/8-88:  pstab.bet has now been split into two!
+ This part is used to build a table
+ (once for each prettyprintspecification).
+ The other part, .../pretty/vx.y/pstab.bet
+ can load the table (for use in the pretty-
+ printer).
+ * Ole Lehrmann Madsen, 16/3-94: added code to convert from big endian
+ * 				 to little endian representation of
+ * 				 T: @filerep
+ * OLM:			20/4-94: removed the endian conversion, since
+ * 				 the pstab file now is in in either
+ * 				 big (.pstab) or little (.pstabL) endian
+ *)
+  (# (* This is a table containing the prettyprint-specification       *)
+  (* It is constructed to have fast access to the prettyprint-spec. *)
+  (* Fast access is not implemented in the ast-interface :-)        *)
+  (* PrettyPrint-Specification:				      *)
+  (* For each production-number there is an production-specification *)
+  (* The structure of a production is described in the declaration   *)
+  (* of Production.						       *)
+  (* To each production a list of symbols is attached                *)
+  (* The attribute 'scan' of Production traverses these symbols.     *)
+  (* The structure of a symbol is escribed in the declaration of     *)
+  (* symbol.                                                         *)
+  (* The attribute 'StringRef' of both production and symbol, is a   *)
+  (* reference to a String (surprised?). To get the text in a string *)
+  (* use the attribute 'read'.                                       *)
+  (* New operation on String: print (sends the string to out.put).   *)
+  (* Has been introduced for efficiency. OA: 1/5-89                  *)
+  (* NB: Production-, Symbol- and String-objects all enter/exit an   *)
+  (*     reference to the implementation of the object. That is      *)
+  (*     don't use dynamic references to these objects. Only use     *)
+  (*     static instances.                                           *)
+     MaxPSTable: (# exit 1 #);
+     MaxPretty: @integer;
+     MaxProd: (# exit 400 #);
+     NULL: (# exit - 200 #);
+     Constructor: (# exit 200 #);
+     ListProd: (# exit 201 #);
+     Terminal: (# exit 202 #);
+     NonTerminal: (# exit 203 #);
+     Break: (# exit 204 #);
+     Begin: (# exit 205 #);
+     End: (# exit 206 #);
+     lBegin: (# exit 207 #);
+     lEnd: (# exit 208 #);
+     Consistent: (# exit 209 #);
+     InConsistent: (# exit 210 #);
+     Comment: (# exit 211 #);
+     Initialize:
+       (#
+       do (* (for i:maxProd repeat NULL -> T.r[i] for); *)
+          MaxPSTable->MaxPretty;
+       #);
+     LongBreak,ShortBreak: @Symbol;
+     (* Special symbols, cf. Restore! *)
+     Production: basicSymbol
+       (# (* Constructor:	type	string	name	symbol-list *)
+       (* List Prod.:	type	string	name	symbol-list *)
+          Open: (# GPNo: @integer; enter GPNo do T.r[GPNo]->index; #);
+          Scan:
+            (# ThisSymbol: @symbol;
+            do
+               index+symListInx->ThisSymbol;
+               loop :
+               (if (ThisSymbol.Type = NULL)
+                // false then
+                   INNER ; ThisSymbol.next->ThisSymbol; restart loop;
+               if);
+            #);
+          NameRef: (# enter T.r[index+NameInx] exit T.R[index+NameInx] #);
+          (* private *)
+          nameInx: (# exit 2 #);
+          symListInx: (# exit 3 #);
+          size: (# exit 3 #);
+       #);
+     Symbol: basicSymbol
+       (# (* Terminal:	type	string		*) (* NonTerminal:	type	string	nontNo	*)
+       (* Break:		type	size	offset	*) (* Begin, lBegin:	type	c/i		*)
+       (* End, lEnd, NULL,				*) (*	Comment:	type			*) (* Type = NonTerminal *)
+          NontNo: (# enter T.R[index+nontInx] exit T.R[index+nontInx] #);
+          (* Type = Break *)
+          Size: (# enter T.R[index+sizeInx] exit T.R[index+sizeInx] #);
+          Offset:
+            (# enter T.R[index+offsetInx] exit T.R[index+offsetInx] #);
+          (* Type = Begin or lBegin *)
+          BlockType: (# enter T.R[index+ciInx] exit T.R[index+ciInx] #);
+          Next:
+            (# inx: @integer;
+            do
+               (if Type
+                // Nonterminal // Break then
+                   index+3->inx;
+                // Terminal // Begin // lBegin then
+                   index+2->inx;
+                // End // lEnd // NULL // Comment then
+                   index+1->inx;
+               if);
+            exit inx
+            #);
+          Print:
+            (# str: @String;
+            do
+               (if Type
+                // Terminal then
+                   StringRef->str; '"'->put; str.Read->PutText; '"'->put;
+                // NonTerminal then
+                   StringRef->str;
+                   '<'->put;
+                   str.Read->PutText;
+                   ':'->put;
+                   (NontNo)->putInt;
+                   '>'->put;
+                // Break then
+                   '$'->put; (Size)->putInt; ','->put; (Offset)->putInt;
+                // Begin then
+                   '['->put;
+                   (if BlockType
+                    // Consistent then
+                       'c'->put;
+                    // Inconsistent then
+                       'i'->put;
+                    // BlockType then
+                       '?'->put; (BlockType)->putInt;
+                   if);
+                // lBegin then
+                   '{'->put;
+                   (if BlockType
+                    // Consistent then
+                       'c'->put;
+                    // Inconsistent then
+                       'i'->put;
+                    // BlockType then
+                       '?'->put; (BlockType)->putInt;
+                   if);
+                // End then
+                   ']'->put;
+                // lEnd then
+                   '}'->put;
+                // Comment then
+                   '*'->put;
+               if);
+            #);
+          (* private *)
+          sizeInx: (# exit 1 #);
+          offsetInx: (# exit 2 #);
+          nontInx: (# exit 2 #);
+          ciInx: (# exit 1 #);
+       #);
+     basicSymbol:
+       (#
+          Type: (# enter T.R[index+TypeInx] exit T.R[index+TypeInx] #);
+          StringRef:
+            (# enter T.R[index+StringInx] exit T.R[index+StringInx] #);
+          (* private *)
+          index: @integer;
+          typeInx: (# exit 0 #);
+          stringInx: (# exit 1 #);
+       enter index
+       exit index
+       #);
+     String:
+       (#
+          Length:
+            (# enter T.R[maxPretty-index] exit T.R[maxPretty-index] #);
+          Put:
+            (# i: @integer; c: @char;
+            enter (i,c)
+            do c->T.R[maxPretty-index+i]
+            #);
+          Get: (# i: @integer; enter i exit T.R[maxPretty-index+i] #);
+          Read:
+            (# T: ^text; G: @Get;
+            do
+               &text[]->t[];
+               t.clear;
+               (for i: length repeat i->G->t.put; for);
+            exit t[]
+            #);
+          Print:
+            (# G: @get; do (for i: length repeat i->G->out.Sput for) #);
+          (* private *)
+          index: @integer;
+       enter index
+       exit index
+       #);
+     Create: (* creation environment *)
+       (#
+          Restore:
+            (#
+            enter t.restore
+            do t.r.range-2->maxPretty;
+               (* -1 because of LongBreak and ShortBreak! *)
+               T.R[maxPretty+1]->ShortBreak;
+               T.R[maxPretty+2]->LongBreak;
+               maxProd+1->tPoint;
+               maxPretty-tPoint->sPoint;
+            #);
+          (* private *)
+          tPoint,sPoint: @integer;
+          initialize: (# do maxProd+1->tPoint; - 1->sPoint #);
+       do Initialize; INNER
+       #);
+     (* private *)
+     T: @fileRep;
+  #)  
+
