@@ -10,6 +10,7 @@ extern long glwMDrawingAreaWidgetClass;
 #ifdef nti
 #include <windows.h>
 #include <GL/gl.h>
+#include <GL/glu.h>
 #else
 void glClearIndex( float c );
 void glClearColor(float red,float green,float blue,float alpha);
@@ -43,6 +44,14 @@ void glPassThrough(float);
 void glBlendColorEXT(float,float,float,float);
 void glPolygonOffsetEXT(float,float);
 /*void glPointParameterfEXT(int,float);*/
+/*GLU prototypes */
+void gluLookAt(double,double,double,double,double,double,double,double,double);
+void gluOrtho2D(double,double,double,double);
+void gluPerspective(double,double,double,double);
+void gluPickMatrix(double,double,double,double,int*);
+void gluCylinder(void*,double,double,double,int,int);
+void gluPartialDisk(void*,double,double,int,int,double,double);
+void gluNurbsProperty(void*,int,float);
 #endif
 
 /*----------HELPERS-------------*/
@@ -100,6 +109,7 @@ double wrapleft,wrapright,wrapbottom;
 double wrapangle,wrapx,wrapy;
 double wrapred,wrapgreen;
 double first,second,third;
+double wcx,wcy,wcz;
 
 wrapset3double(double one,double two,double three)
 {
@@ -350,3 +360,51 @@ wrapglPointParameterfEXT(int pname,double param)
   glPointParameterfEXT(pname,(float)param);
 }
 */
+
+
+/* GLU-routines */
+
+void wrapgluLookAt1(double cx,double cy,double cz)
+{
+  wcx=cx;
+  wcy=cy;
+  wcz=cz;
+}
+
+void wrapgluLookAt2(double upx,double upy,double upz)
+{
+  gluLookAt(first,second,third,wcx,wcy,wcz,upx,upy,upz);
+}
+
+void wrapgluOrtho2D(double top)
+{
+  gluOrtho2D(first,second,third,top);
+}
+
+void wrapgluPerspective(double zFar)
+{
+  gluPerspective(first,second,third,zFar);
+}
+
+void wrapgluPickMatrix(double height,int viewport)
+{
+  gluPickMatrix(first,second,third,height,(int*)viewport);
+}
+
+
+void wrapgluCylinder(int qobj,int slices,int stacks)
+{
+  gluCylinder((void*)qobj,first,second,third,slices,stacks);
+}
+
+void wrapgluPartialDisk(double sweep,int qobj,int slices,int loops)
+{
+  gluPartialDisk((void*)qobj,first,second,slices,loops,third,sweep);
+}
+
+void wrapgluNurbsProperty(int qobj,int property,double value)
+{
+  gluNurbsProperty((void*)qobj,property,(float)value);
+}
+
+
