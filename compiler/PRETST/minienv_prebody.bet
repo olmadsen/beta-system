@@ -11,6 +11,8 @@ BUILD pre
 'pre-st -o $0 $1';
 
 ---minienv_lib:attributes---
+trace: (# exit false #);
+
 InterruptHandler: class 
   (# writeText: external
        (# T: [0] @char 
@@ -34,9 +36,74 @@ setIH: external
   do '%primitive:setIH' -> callC  
   #);   
 
+---terminate:descriptor---
+(#
+do terminated -> status;
+   scheduler.disableInterrupt (* make sure we do not handle 
+                               * interrupts immediately after 
+                               * termination and before
+                               * interrup is disabled by scheduler
+                               *)
+#)
 --fork:doPart-- 
 do 
    P[] -> scheduler.SQS.insert
+---semaphore_rep:descriptor---
+(# cnt: @integer;
+   delayed: @Queue
+#)
+---semaphore_wait:dopart---
+do scheduler.disableInterrupt; 
+   (if trace then
+       'wait:'->scheduler.out.puttext;
+       scheduler.active.id[] -> scheduler.out.puttext;
+   if);
+   (if (rep.cnt-1 -> rep.cnt) < 0 then
+       waiting -> scheduler.active.status;
+       (if trace then ':delaying' -> scheduler.out.putline if);
+       scheduler.active[] -> rep.delayed.insert;
+       scheduler.active.%xsuspend; (* we suspend - 
+                                    * and interrupt is enabled by the scheduler
+                                    *)
+    else
+       (if trace then ':OK' -> scheduler.out.putline if);
+       scheduler.enableInterrupt
+   if);
+   
+
+---sempahore_signal:dopart---
+do scheduler.disableInterrupt;
+   (if scheduler.active[] <> none then
+       (if trace then 
+           'signal:'->scheduler.out.puttext;
+           scheduler.active.id[] -> scheduler.out.puttext
+       if); 
+       (if (rep.cnt+1 -> rep.cnt) < 1 then
+           (* reactivate a waiting component *)
+           (# N: ^| beta_system
+           do rep.delayed.next -> N[]; 
+              (if trace then ':activating: '->scheduler.out.puttext if);
+              (if N[] <> none then
+                  (if trace then N.id[] -> scheduler.out.putline if);
+                  running -> N.status;
+                  N[] -> fork;
+               else
+                  (if trace then 
+                      'xno waiting systems' -> scheduler.out.putline 
+              if)if)
+           #)
+        else
+           (if trace then scheduler.out.putline if);
+       if);
+    else
+       rep.cnt+1 -> rep.cnt
+   if);
+   scheduler.enableInterrupt
+   
+---exclusive:doPart---
+do scheduler.excl.wait;
+   INNER exclusive;
+   scheduler.excl.signal
    
 ---scheduler:descriptor---
 (#
@@ -69,8 +136,12 @@ do
 
    switch:
      (#
-     do (if (active[] <> none) and intOk then
-            active.%xsuspend;
+     do (if intOk then
+            (if active[] <> none then
+                active.%xsuspend;
+            if)
+         else
+            200 -> setIHI
         if)
      #);
    IH: @InterruptHandler; (* Need to assure that
@@ -79,12 +150,17 @@ do
    main: ^| main_program;
    SQS: @ Queue;
    active: ^| beta_system;
+   enableInterrupt: (# do true -> intOK #);
+   disableInterrupt: (# do false -> intOK #);
    intOK: @boolean;
+   excl: @semaphore;
+   
 do 'Start'->out.putline;
    (in[],out[],'') -> main_program;
    '\nmain ended\n' -> out.puttext;
    (if not SQS.isEmpty then
        setIH;
+       excl.signal;
        L:
          (# 
          do SQS.next -> active[];
@@ -93,7 +169,10 @@ do 'Start'->out.putline;
             true -> intOK;
             active;
             false -> intOK;
-            active[] -> SQS.insert;
+            (*active.id[] -> out.puttext;
+            (if active.status = terminated then 'T'->out.put else 'R'->out.put if);
+            out.newline;*)
+            (if active.status = running then active[] -> SQS.insert if);
             restart L
    #)if)
 #)
