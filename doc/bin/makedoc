@@ -1176,7 +1176,8 @@ sub parse_special_tags
     $_=$srcline;
     $done = $before = $match = $remaining = "";
 
-    while(m%\<\w+|\</\w+\>|[^-]->%){
+    ### find tags:
+    while(m%\<\w+|\</\w+\>|<!--|-->|<[^!a-zA-Z]|>%){
 	####### Found a tag start/end or assignment arrow #######
 	$before = $`;
 	$match  = $&; 
@@ -1754,17 +1755,49 @@ sub parse_special_tags
 	    &src_warning($full_length-length($remaining), "Unmatched end-of-notice? (</NOTICE>)");
 	    $done .= $match;
 
-	} elsif ($match =~ m%^([^-])->$%){
-	    # Found -> in text (not -->, i.e. end-of-html-comment)
-	    &src_warning($full_length-length($remaining)+1, "Found unquoted assignment arrow in text (->).\n            Emitting -&gt; instead.") if ($verbose);
-	    $done .= $1 . "-&gt;"
+	} elsif ($match =~ m%\<!--%i){
+	    # Found HTML comment begin
+	    $done .= $match;
+	    if ($remaining =~ m%^[^>]*-->%si){
+		# Matched rest of comment
+		$done .= $&; 
+		$remaining = $';
+	    }	
+	} elsif ($match =~ m%-->%i){
+	    # Found HTML comment end
+	    &src_warning($full_length-length($remaining), "Unmatched end-of-comment? (-->)");
+	    $done .= $match;
+
+	    #### ERROR CHECKING: ####
+
+	} elsif ($match =~ m%^<([^!a-zA-Z])$%){
+	    # Found unquoted <
+	    # Looks like unknown tag for browser
+	    &src_warning($full_length-length($remaining), "Found unquoted less-than (<).\n            Emitting &lt; instead.");
+	    $done .= "-&lt;" . $1
+
+	} elsif ($match =~ m%^>$%){
+	    # Found unquoted > 
+	    # Normally displayed in browser, though, hence only notified
+	    # about if verbose
+	    &src_warning($full_length-length($remaining), "Found unquoted greater-than (>).\n            Emitting &gt; instead.") if ($verbose);
+	    $done .= "&gt;"
 
 	} else {
 	    # other tag found
-	    $done .= $match;
-	    if (!&check_valid_html_tag($match)){
-		&src_warning($full_length-length($remaining), "Illegal tag met: $match");
+	    local ($tag) = $match;
+	    if ($match =~ m%^<\w+$%){
+		# start tag - eat rest of tag
+		if ($remaining =~ m%^([^>]*\>)%si){
+		    # Matched <TAG xxx>
+		    $tag .= $1; 
+		    $remaining = $';
+		}
 	    }
+	    if (!&check_valid_html_tag($match)){
+		&src_warning($full_length-length($remaining), "Illegal tag met: $tag");
+	    }
+	    $done .= $tag;
 	}
 	
 	# handle rest of input in next iteration
