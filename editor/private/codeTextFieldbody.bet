@@ -196,7 +196,14 @@ do
 
 -- get_whitespace: DoPart --
 do &text[]->result[]; (for i repeat ' '->result.append for)  
-
+-- indent_textField: doPart --
+do
+   (# pos: @integer 
+   do      
+      selection.start -> pos;
+      texteditingExtent -> indentHandler;
+      (pos,pos) -> selection
+   #)
 -- frozen_indent_line: DoPart --
 do disableUpdate; line->indent_line->updateLine  
 
@@ -275,15 +282,19 @@ do
 
 -- indentHandler: DoPart --
 do
-     (# depth,lineNumber: @integer
-     do
-        disableUpdate;
-        end.row-begin.row+1->depth;
-        begin->indent_line->lineNumber;
-        (for depth-1 repeat next_line; global->indent_line for);
-        lineNumber->updateLine
-     #)  
-
+   (# depth,lineNumber,x,y1,y2: @integer; begin, end: @rowcol
+   do
+      pos -> posToPt -> (x,y1);
+      endpos -> posToPt -> (x,y2);
+      pos -> posToRowCol -> begin;
+      endpos -> posToRowCol -> end;
+      disableUpdate;
+      end.row-begin.row+1->depth;
+      begin->indent_line->lineNumber;
+      (for depth-1 repeat next_line; global->indent_line for);
+      (y1,y2)->updateRegion
+   #)
+   
 -- keyDownTimer_action: DoPart --
 do
      (# begin,end: @integer
@@ -291,20 +302,26 @@ do
         stop;
         (if texteditMode then
             (if theKey
+             // 30 then
+                (* textfield_previous_line *)
+             // 31 then
+                (* textfield_next_line *)
              // specKeys.HOME then
                 (if controlModified then
-                    texteditingExtent->(begin,end); (begin,begin)->selection
+                    texteditingExtent->(begin,end); 
+                    (begin,begin)->selection
                  else
                     textfield_beginning_of_line
                 if)
              // specKeys.END then
                 (if controlModified then
-                    texteditingExtent->(begin,end); (end,end)->selection
+                    texteditingExtent->(begin,end); 
+                    (end,end)->selection
                  else
                     textfield_end_of_line
                 if)
              // ascii.sp then
-                (if metamodified then removeBlanks if)
+               (* (if metamodified then removeBlanks if) *)
             if)
         if)
      #)  
@@ -322,6 +339,12 @@ do
            (if controlkey then  if)
         // 29 then
            (if controlkey then  if)
+        // 30 then (* Uparrow *)
+           key -> theKey;
+           keyDownTimer.start
+        // 31 then (* DownArrow *)
+           key -> theKey;
+           keyDownTimer.start
        if);
        (if key
         // specKeys.HOME then
@@ -360,7 +383,7 @@ do
 
 -- codeTextField_onBeforeChange: DoPart --
 do
-     (# t: ^text; begin,end: @rowCol
+     (# t: ^text; begin,end: @rowCol; pos,endpos: @integer
      do
         (if texteditmode then
             (if trace then 'onBeforeChange'->putline;  if);
@@ -370,10 +393,10 @@ do
                 (if t.T[1]
                  // ascii.ht then
                     (if trace then 'Tab'->screen.putline;  if);
-                    selection.start->posToRowCol->begin;
-                    selection.end->posToRowCol->end;
+                    selection.start->pos->posToRowCol->begin;
+                    selection.end->endpos->posToRowCol->end;
                     (if (begin.row <> end.row) or (begin.col <> end.col) then
-                        (begin,end)->indentHandler; 
+                        (pos,endpos)->indentHandler; 
                      else
                         begin->frozen_indent_line; 
                     if);
@@ -382,10 +405,6 @@ do
                     (if metaModified then
                         t.T[1]->theKey; keyDownTimer.start
                     if)
-                 // 'n' then
-                    textfield_next_line; false->allow
-                 // 'p' then
-                    textfield_previous_line; false->allow
                  else
                     INNER onBeforeChange
                 if)
