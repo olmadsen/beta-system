@@ -16,8 +16,10 @@ static Str255 valhallart;
 
 #endif
 
-
+#ifdef HVEM_HAR_INDSAT_DENNE
+/* Kan ikke oversætte på sun4s med denne ubetinget her */
 char *strdup (char *in);
+#endif
 
 /* 
    #define EXITONEXCEPTION
