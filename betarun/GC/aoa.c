@@ -1275,7 +1275,7 @@ void scanObject(Object *obj,
       for (index=0; index<size; index++) {
 	if (*pointer) {
 	  if (referenceAction) {
-	    referenceAction((Object **)pointer, REFTYPE_DYNAMIC);
+	    referenceAction((Object **)pointer, REFTYPE_OFFLINE);
 	  }
 	}
 	pointer++;
