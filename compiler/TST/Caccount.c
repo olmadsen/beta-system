@@ -25,6 +25,7 @@ struct vtbl
 { HRESULT (CALL *init)(struct Account *this, char *name,long initialAmount); 
   HRESULT (CALL *deposit)(struct Account *this, long amount);
   HRESULT (CALL *withdraw)(struct Account *this,long amount);
+  HRESULT (CALL *display)(struct Account *this);
 };
 
 /* Account is the class */
@@ -58,6 +59,11 @@ HRESULT CALL withdraw(struct Account *this, long amount)
   return this->balance;
 }
 
+HRESULT CALL display(struct Account *this)
+{ printf("Display: %i\n",this->balance);
+  return this->balance;
+}
+
 /* This is a virtual dispatch table instance, 
  * that may be shared by all Account objects 
  */
@@ -70,6 +76,7 @@ struct Account * GetAccount()
   theVTBL.init = &init;
   theVTBL.deposit = &deposit;
   theVTBL.withdraw = &withdraw;
+  theVTBL.display = &display;
   /* Allocate Account object */
   R = (struct Account *)malloc(sizeof(struct Account));
   R->proto = &theVTBL;
