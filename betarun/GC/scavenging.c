@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1991-02-26 08:54:22 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1991-03-04 11:38:12 $, SID: $Revision: 1.5 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -172,11 +172,19 @@ IOAGc()
   DEBUG_LVRA( LVRACheck() );
   InfoS_LabB();
 
-  if( ReqObjectSize *4 >= ( (long) IOALimit - (long) IOATop ) ){
+  /* Based on IOAPercentage, determine if IOA space is exhausted. */
+
+  if( FreePercentage( IOA, (long) IOATop + ReqObjectSize*4, IOALimit) < IOAPercentage ){
     fprintf( stderr,"#IOA Heap space full, req.: %d.\n", ReqObjectSize);
     BetaExit(1);
   }
 } 
+
+static int FreePercentage( bottom, top, limit)
+  int bottom, top, limit;
+{
+  return (100 * areaSize(top, limit))/areaSize(bottom, limit); 
+}
 
 /*
  * ProcessReference:

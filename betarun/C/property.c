@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: property.c,v $, rel: %R%, date: $Date: 1991-02-26 08:54:49 $, SID: $Revision: 1.6 $
+ * Mod: $RCSfile: property.c,v $, rel: %R%, date: $Date: 1991-03-04 11:38:22 $, SID: $Revision: 1.7 $
  * by Lars Bak
  */
 
@@ -49,6 +49,19 @@ static ValueProperty( name, value)
   ENTRY("LVRA", LVRABlockSize = 1024 * intScan(name, value));
   ENTRY("CBFA", CBFASize      = 1024 * intScan(name, value));
   ENTRY("DOT",  DOTSize       =    4 * intScan(name, value));
+
+  ENTRY("IOAPercentage",
+        IOAPercentage = intScan(name, value);
+        if( IOAPercentage < 3 ){
+	  fprintf( output, "#IOAPercentage (%d) is to low, adjusted to 3\n",
+		   IOAPercentage);
+	  LVRAPercentage = 3;
+	}
+	if( IOAPercentage > 40 ){
+	  fprintf( output, "#IOAPercentage (%d) is to high, adjusted to 40\n",
+		   IOAPercentage);
+	  IOAPercentage = 40;
+	});
 
   ENTRY("AOAMinFree",
 	AOAMinFree = 1024 * intScan(name, value); AOAPercentage = 0;);

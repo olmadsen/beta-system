@@ -21,6 +21,11 @@
 #define DEFAULT_DOTSIZE   0
 #endif
 
+#ifndef DEFAULT_IOAPERCENTAGE
+#define DEFAULT_IOAPERCENTAGE  10
+#endif
+
+
 #ifndef DEFAULT_AOAMINFREE
 #define DEFAULT_AOAMINFREE     100 * Kb
 #endif
