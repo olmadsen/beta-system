@@ -22,9 +22,9 @@
 #include <unistd.h>
 
 struct S_PreemptionLevel {
-  unsigned lock;
-  unsigned value;
-  unsigned inGC;
+  unsigned long lock;
+  unsigned long value;
+  unsigned long inGC;
 };
 
 
@@ -68,6 +68,18 @@ int attToProcessor(struct Component *comp)
   return 0;
 }
 
+static __inline__ int TryLock(unsigned long* l)
+{ 
+  register int v;
+  __asm__ volatile ("ldstub\t[%1],%0" : "=r" (v) : "r" (l));
+  return !v; 
+}
+static __inline__ void UnLock(unsigned long* l)
+{ 
+  __asm__ volatile ("stbar\n"
+		    "stb\t%%g0,[%0]" : /* no outs */ : "r" (l));
+}
+
 struct S_PreemptionLevel PreemptionLevel;
 
 void SetupVirtualTimer(unsigned usec);
@@ -76,12 +88,14 @@ void AlarmHandler(int sig, siginfo_t *sip, void *uap)
 {
   AlarmOccured++;
   
-  /* FIXME: should be a tryLock. */
-  if (!PreemptionLevel.lock && !PreemptionLevel.value) { 
-    if (!PreemptionLevel.inGC) { /* We cannot reset IOALimit while GC'ing */
-      IOALimit = 0;
-      DEBUG_MT(fprintf(output, "IOALimit=0x%x\n", (int)IOALimit));
+  if (TryLock(&PreemptionLevel.lock)){
+    if (!PreemptionLevel.value) { 
+      if (!PreemptionLevel.inGC) { /* We cannot reset IOALimit while GC'ing */
+	IOALimit = 0;
+	DEBUG_MT(fprintf(output, "IOALimit=0x%x\n", (int)IOALimit));
+      }
     }
+    UnLock(&PreemptionLevel.lock);
   }
 }
 
