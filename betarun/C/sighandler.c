@@ -453,10 +453,13 @@ int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
   case EXCEPTION_STACK_OVERFLOW:
     todo=DisplayBetaStack( StackErr, theObj, PC, sig); break;
   case EXCEPTION_BREAKPOINT:
+    /* commented out by void Wed Jul 23 13:22:19 MET DST 1997 */
+#ifdef RTDEBUG
     fprintf(output, "breakpoint at PC 0x%x\n", PC); fflush(output);
-    todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig);
+#endif
+    todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
   case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
-    todo=DisplayBetaStack( RepRangeErr, theObj, PC, sig);
+    todo=DisplayBetaStack( RepRangeErr, theObj, PC, sig); break;
   case EXCEPTION_ILLEGAL_INSTRUCTION:
   case EXCEPTION_PRIV_INSTRUCTION:
     todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
