@@ -64,11 +64,54 @@ void CBFArelloc()
 }
 
 void freeCBF(external_entry)
-     unsigned long external_entry;
+     unsigned long external_entry; /* Address of cell just after the ref(Structure) */
 {
-  /* For now we just clear the entry */
-  (cast(CallBackEntry)(external_entry - sizeof(ref(Structure))))->theStruct = 0; 
+  /* For now we just clear the struct of the entry  */
+  struct CallBackEntry *theCBE 
+    = (struct CallBackEntry *)(external_entry - sizeof(struct Structure *));
+
+#ifdef RTDEBUG
+  Claim(inBetaHeap(theCBE->theStruct), "inBetaHeap(theCBE->theStruct)");
+#ifdef sparc
+  Claim(theCBE->mov_o7_g1 == MOV_O7_G1, 
+	"theCBE->mov_o7_g1 is \"mov o7,i7\"");
+  Claim((theCBE->call_HandleCallBack & 0xc0000000) == 0x40000000, 
+	"theCBE->call_HandleCallBack is \"call\"");
+  Claim(theCBE->nop == NOP,
+	"theCBE->nop is \"nop\"");
+#endif /* sparc */
+  Claim(CBFABlockSize != 0, "CBFABlockSize != 0");
+  Claim(CBFATop != CBFA->entries, "CBFATop != CBFA->entries");
+
+  { ref(CallBackArea) cbfa = CBFA;
+    ref(CallBackEntry) current = cbfa->entries;
+    long limit = (long) cbfa->entries + CBFABlockSize;
+    int found = 0;
+      
+    for (; current != CBFATop; current++){
+      if ( (long) current >= limit){
+	/* Go to next block */
+	cbfa = cbfa->next;        
+	/* guarentied to be non-nil since current != CBFATop */
+	  
+	current = cbfa->entries; 
+	/* guarentied to be different from CBFATop. 
+	 * If not the block would not have been allocated 
+	 */
+	limit = (long)cbfa->entries + CBFABlockSize;
+      }
+      if (theCBE->theStruct == current->theStruct ){
+	found = 1;
+	break;
+      }
+    }
+    Claim(found, "CallbackEntry is in CBFA");
+  }
+#endif /* RTDEBUG */
+
+  theCBE->theStruct = 0;
   /* theStruct will no longer constitute a root for GC */
+
 }
 
 void freeCallbackCalled()
