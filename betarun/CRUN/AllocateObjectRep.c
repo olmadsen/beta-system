@@ -14,11 +14,11 @@ ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORG)
   struct Item *item;
   GCable_Entry();
 #ifdef hppa
-  range  = getD1reg();
-  origin = getOriginReg();
-  proto  = getCallReg();
-  theObj = getThisReg();
-  offset = getD0reg();
+  range  = getD1Reg();
+  origin = (struct Object *)getOriginReg();
+  proto  = (struct ProtoType *)getCallReg();
+  theObj = (struct Object *)getThisReg();
+  offset = getD0Reg();
 #endif
 
   Ck(theObj);
@@ -56,11 +56,11 @@ ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORGC)
   struct Component *comp;
   GCable_Entry();
 #ifdef hppa
-  range  = getD1reg();
-  origin = getOriginReg();
-  proto  = getCallReg();
-  theObj = getThisReg();
-  offset = getD0reg();
+  range  = getD1Reg();
+  origin = (struct Object *)getOriginReg();
+  proto  = (struct ProtoType *)getCallReg();
+  theObj = (struct Object *)getThisReg();
+  offset = getD0Reg();
 #endif
 
   Ck(theObj);
@@ -108,11 +108,11 @@ ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORR)
   struct Item *item;
   GCable_Entry();
 #ifdef hppa
-  range  = getD1reg();
-  origin = getOriginReg();
-  proto  = getCallReg();
-  theObj = getThisReg();
-  offset = getD0reg();
+  range  = getD1Reg();
+  origin = (struct Object *)getOriginReg();
+  proto  = (struct ProtoType *)getCallReg();
+  theObj = (struct Object *)getThisReg();
+  offset = getD0Reg();
 #endif
 
   Ck(theObj);
@@ -160,11 +160,11 @@ ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORRC)
   struct Component *comp;
   GCable_Entry();
 #ifdef hppa
-  range  = getD1reg();
-  origin = getOriginReg();
-  proto  = getCallReg();
-  theObj = getThisReg();
-  offset = getD0reg();
+  range  = getD1Reg();
+  origin = (struct Object *)getOriginReg();
+  proto  = (struct ProtoType *)getCallReg();
+  theObj = (struct Object *)getThisReg();
+  offset = getD0Reg();
 #endif
 
   Ck(theObj);
