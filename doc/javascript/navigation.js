@@ -2,6 +2,8 @@ var StartVisible = 0;
 var DrawDelay    = 500;
 var PullStepTime = 15;
 var DrawStepTime = 30;
+var rightboundary = -20;
+var leftboundary = -100;
 
 function AdjustSideBar() {
   if (document.layers) { 
@@ -13,6 +15,7 @@ function AdjustSideBar() {
 }
 
 function SetupSideBar() {
+  var is_mac = (navigator.userAgent.indexOf("Mac")>-1);
   if (document.layers) { 
      rightboundary=94
      leftboundary=36
@@ -26,6 +29,10 @@ function SetupSideBar() {
      pull(); 
      hdraw=setTimeout("delayeddraw()",DrawDelay);
   }
+  if (document.all && is_mac){
+     document.body.style.leftMargin = "35px";
+  }
+  window.onLoad = new Function("window.status='Type ? for Help'; return true;");
 }
 
 function pull(){
@@ -73,85 +80,81 @@ function out(){
     clearInterval(hdraw)
 }
 
+function go_to(lnk,ttl){
+  if (lnk != ""){
+    window.location = lnk;
+  } else {
+    window.status = ttl;
+    setTimeout("window.status='Type ? for Help';", 5000);
+  }
+}
+
+function show()
+{
+  if (document.layers){
+     document.layers.SideBar.visibility = "visible";
+  }
+  if (document.all) {
+     document.all.SideBar2.style.visibility = "visible";
+     document.all.SideBar2.style.display = "block";
+  }
+}
+
+function hide()
+{
+  if (document.layers){
+     document.layers.SideBar.visibility = "hidden";
+  }
+  if (document.all){
+     document.all.SideBar2.style.visibility = "hidden";
+     document.all.SideBar2.style.display = "none";
+  }
+}
+
 function onKey(e)
 {
-   if (document.layers){
-     if (e.which==104) {
-        // 'h'
-	document.layers.SideBar.visibility = "hidden";
-     }
-     if (e.which==115) {
-        // 's'
-	document.layers.SideBar.visibility = "visible";
-     }
-     if (e.which==110) {
-        // 'n'
-	if (window.next) window.location = next;
-     }
-     if (e.which==112) {
-        // 'p'
-	if (window.prev) window.location = prev;
-     }
-     if (e.which==116) {
-        // 't'
-	window.location.hash = "_top";
-     }
-     if (e.which==99) {
-        // 'c'
-	if (window.content) window.location = content;
-     }
-     if (e.which==105) {
-        // 'i'
-	if (window.inx) window.location = inx;
-     }
-     if (e.which==109) {
-        // 'm'
-	if (manuals) window.location = manuals;
-     }
-     if (e.which==63) {
-        // '?'
-	if (window.help) window.open(help,'miadochelp','scrollbars=yes');
-     }
-   } else if (document.all){
-     if (event.keyCode==104) {
-        // 'h'
-        //document.all.SideBar2.style.visibility = "hidden";
-	document.all.SideBar2.style.display = "none";
-     }
-     if (event.keyCode==115) {
-	// 's'
-        //document.all.SideBar2.style.visibility = "visible"; // IE4: "show"?
-	document.all.SideBar2.style.display = "block";
-     }
-     if (event.keyCode==110) {
-        // 'n'
-	if (window.next) window.location = next;
-     }
-     if (event.keyCode==112) {
-        // 'p'
-	if (window.prev) window.location = prev;
-     }
-     if (event.keyCode==116) {
-        // 't'
-	window.location.hash = "_top";
-     }
-     if (event.keyCode==105) {
-        // 'i'
-	if (window.inx) window.location = inx;
-     }
-     if (event.keyCode==99) {
-        // 'c'
-	if (window.content) window.location = content;
-     }
-     if (event.keyCode==109) {
-        // 'm'
-	if (window.manuals) window.location = manuals;
-     }
-     if (event.keyCode==63) {
-        // '?'
-	if (window.help) window.open(help,'miadochelp','scrollbars=yes');
-     }
-   }
+  var ch;
+  if (document.layers)
+    ch = e.which;
+  if (document.all)
+    ch = event.keyCode;
+  
+  if (ch==104) {
+    // 'h'
+    hide();
+  }
+  if (ch==115) {
+    // 's'
+    show();
+  }
+  if (ch==110) {
+    // 'n'
+    go_to(lnk[0], ttl[0]);
+  }
+  if (ch==112) {
+    // 'p'
+    go_to(lnk[1], ttl[1]);
+  }
+  if (ch==116) {
+    // 't'
+    window.location.hash = "_top";
+  }
+  if (ch==99) {
+    // 'c'
+    go_to(lnk[3], ttl[3]);
+  }
+  if (ch==105) {
+    // 'i'
+    go_to(lnk[4], ttl[4]);
+  }
+  if (ch==63) {
+    // '?'
+    window.open(lnk[6],'miadochelp','scrollbars=yes');
+  }
+  if (ch==109) {
+    // 'm'
+    go_to(lnk[7], ttl[7]);
+  }
 }
 
 if (document.layers){
