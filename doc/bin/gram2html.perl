@@ -19,7 +19,7 @@ sub print_header
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
 <HTML>
 <HEAD>
-<!-- Generated from $file by meta/makehtml.perl -->
+<!-- Generated from $file by gram2html.perl -->
 <LINK REL="stylesheet" HREF="$css" TYPE="text/css">
 </HEAD>
 <BODY>
