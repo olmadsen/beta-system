@@ -37,20 +37,22 @@ static unsigned long r_pix[256];
 static unsigned long g_pix[256];
 static unsigned long b_pix[256];
 
-
-
 void static InitMakePixel
 (unsigned long Rmask, unsigned long Gmask, unsigned long Bmask)
 {
   int i;
+  static int initialized = 0;
 
-  for ( i=0; i<256; ++i ) {
-    r_pix[i] = i >> (8 - number_of_bits_set(Rmask));
-    r_pix[i] <<= free_bits_at_bottom(Rmask);
-    g_pix[i] = i >> (8 - number_of_bits_set(Gmask));
-    g_pix[i] <<= free_bits_at_bottom(Gmask);
-    b_pix[i] = i >> (8 - number_of_bits_set(Bmask));
-    b_pix[i] <<= free_bits_at_bottom(Bmask);
+  if(!initialized) {
+    for ( i=0; i<256; ++i ) {
+      r_pix[i] = i >> (8 - number_of_bits_set(Rmask));
+      r_pix[i] <<= free_bits_at_bottom(Rmask);
+      g_pix[i] = i >> (8 - number_of_bits_set(Gmask));
+      g_pix[i] <<= free_bits_at_bottom(Gmask);
+      b_pix[i] = i >> (8 - number_of_bits_set(Bmask));
+      b_pix[i] <<= free_bits_at_bottom(Bmask);
+    }
+    initialized = 1;
   }
 }
 
@@ -468,7 +470,6 @@ int BetaImageToXImage24(Display *display, BetaImage *image, XImage **ximage)
     (display, visual, depth, ZPixmap,0, 0,
      image->width, image->height, 32, 0);
 
-  printf("bytes per line: %d\n", im->bytes_per_line);
 
   
   im->data = (char *) malloc(image->height * im->bytes_per_line);
