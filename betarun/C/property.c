@@ -52,6 +52,13 @@ static BooleanProperty( name)
 static ValueProperty( name, value)
   char *name, *value;
 {
+
+#ifdef MADA
+  fprintf( output, "\
+# Value properties are not supported in this DEMO version of\n\
+# The Mjolner BETA System.  '%s#%s' ignored.\n\
+", name, value);
+#else
   ENTRY("IOA",  IOASize       = 1024 * intScan(name, value));
   ENTRY("AOA",  AOABlockSize  = 1024 * intScan(name, value));
   ENTRY("LVRA", LVRABlockSize = 1024 * intScan(name, value));
@@ -107,9 +114,12 @@ static ValueProperty( name, value)
       fprintf( stderr, "#InfoFile '%s' couldn't be opened, stderr is used\n", value);
       output = stderr;
     });
+
    
   /* IF NO ENTRY IS SELECTED PLEASE REPORT UNKNOWN PROPERTY */
   fprintf( output, "#Property '%s#%s' not known!\n", name, value);
+
+#endif MADA
 }
 
 /**********************************************************/
@@ -170,13 +180,11 @@ SetupProperties( betart)
          * <name>  = betart[start..sep-1] and
          * <value> = betart[sep+1..pos-1].
          */
-#ifndef MADA
         if( start < sep ){
           for(i=start; i<sep; i++)  name[i-start]  = betart[i]; name[sep-start]  = '\0';
           for(i=sep+1; i<pos; i++)  value[i-sep-1] = betart[i]; value[pos-sep-1] = '\0';
           ValueProperty( name, value);
         }
-#endif
       }else{
         /* the item has the form  "<name>", where <name>  = betart[start..pos-1]. */
         for(i=start; i<pos; i++)  name[i-start] = betart[i]; name[pos-start] = '\0';
