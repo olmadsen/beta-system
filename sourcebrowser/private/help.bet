@@ -17,7 +17,21 @@ helpViewer: ymerLocalWindow
   (# aspect:< integerValue(# do 6->value; INNER #);
      menubarType:: 
        (# fileMenu: @menu
-            (# quitItem: @menuItem
+            (# loadItem: @menuItem
+                 (# eventHandler:: 
+                      (# onSelect::
+                           (# f: @file; ext, t: ^text;
+                           do fileSelectionDialog
+                              (# do 'Load Help File'->label[] #)->t[];
+                              (if t[] <> none then
+                                  (t[], t[])->registerTheme
+                              if)
+                           #)
+                      #);
+                    open:: 
+                      (# do 'l'->key;  'Load'->name #)
+                 #);
+               quitItem: @menuItem
                  (# eventHandler:: 
                       (# onSelect::
                            (# do this(helpViewer).close #)
@@ -28,6 +42,7 @@ helpViewer: ymerLocalWindow
                open::
                  (#
                  do 'File'->name;
+                    loadItem.open; loadItem[]->append;
                     quitItem.open; quitItem[]->append
             #)#);
           themeMenu: @menu
@@ -101,22 +116,29 @@ helpViewer: ymerLocalWindow
                            #)
                       #);
                     registerHeader:
-                      (# pos: @integer; title: ^text; level: @integer;
+                      (# startPos, endPos: @integer;
+                         title: ^text; level: @integer;
                          newHeader: ^headerItem;
-                      enter (pos, title[], level)
+                      enter (startPos, endPos, title[], level)
                       do &headerItem[]->newHeader[];
                          newHeader.init;
-                         pos->newHeader.position;
+                         startPos->newHeader.startPos;
+                         endPos->newHeader.endPos; title.reset;
+                         (for i: title.length repeat
+                              (if title.get//ascii.cr//ascii.nl then
+                                  (' ',i)->title.inxput
+                              if)
+                         for);
                          (for i: level-1 repeat '  '->title.prepend for);
                          title[]->newHeader.name;
                       #);
                     headerItem: listItem
                       (# headerText: ^text;
-                         position: @integer;
+                         startPos, endPos: @integer;
                          onSelect::
                            (#
                            do this(headerItem)[]->listitems.at->current[];
-                              position->help.selectLine;
+                              (startPos, endPos)->help.selectLine;
                            #);
                       #);
                  #);
@@ -130,11 +152,11 @@ helpViewer: ymerLocalWindow
           help: @labelled
             (# dobind: (# do contents.dobind #);
                selectLine:
-                 (# pos: @integer
-                 enter pos
+                 (# startPos, endPos: @integer
+                 enter (startPos, endPos)
                  do (lgt,lgt)->contents.contents.selection;
                     contents.contents.selection.scrollIntoView;
-                    (pos,pos)->contents.contents.selection;
+                    (startPos, endPos)->contents.contents.selection;
                     contents.contents.selection.scrollIntoView;
                  #);
                lgt: @integer;
@@ -145,46 +167,177 @@ helpViewer: ymerLocalWindow
                     loadFile:
                       (# path: ^text;
                          textFile: @file;
-                         theText: @StyledText; t: ^text; txt: @text;
+                         theText: @StyledText; tag, header: @text;
+                         txt: ^text;
+                         closeTag, validTag, getHeader: @boolean;
+                         handleAttributes: @
+                           (# 
+                           do (* ignore the html tag and attributes *)
+                              ll: (if textFile.peek
+                                   // '>' then textFile.get;
+                                   else textFile.get; restart ll
+                                  if);
+                           #);
+                         handleHeader: @
+                           (# level, pos: @integer
+                           enter level
+                           do textFile.get;
+                              (if closeTag then
+                                  false->getHeader; theText.length->pos;
+                                  header[]->theText.puttext; theText[]->txt[];
+                                  (pos,theText.length,header[],level)
+                                    ->headers.contents.registerHeader
+                               else
+                                  true->getHeader; header.clear;
+                                  header[]->txt[]
+                              if)
+                           #)
                       enter path[]
                       do true->loading;
                          path[]->textFile.name;
-                         (if textFile.entry.exists
-                             and textfile.entry.readable then
-                             textFile.openRead;
-                             textFile.scan
-                             (# while:: (# do true->value #);
-                             do ch->txt.put;
-                             #);
-                             textFile.close;
-                             headers.contents.listItems.scanReverse
-                             (# do current.delete #);
-                             headers.contents.listItems.clear;
-                             txt.reset;
-                             l: '<[hH]\\([1-9]\\)>\\(.*\\)</[hH][1-9]>'
-                               ->txt.regexp_search
-                             (# posToMatchEnd:: trueObject;
-                                t: ^text; level: @integer
-                             do ((1->regs.start)+1,1->regs.end)->txt.sub->t[];
-                                t.reset; t.getInt->level;
-                                ((2->regs.start)+1,2->regs.end)->txt.sub->t[];
-                                ((2->regs.end)+1,(2->regs.end)+5)->txt.delete;
-                                ((0->regs.start)+1,(0->regs.start)+4)->txt.delete;
-                                ((0->regs.start),t[],level)
-                                  ->headers.contents.registerHeader;
-                                restart l
-                             #);
-                             txt.length->lgt;
-                             txt[]->theText.puttext;
-                             theText[]->contents.contents;
-                          else
-                             'No read permissions to the file:\n     '->t[];
-                             textFile.name->t.puttext;
-                             (this(helpViewer)[], t[],'Read Error')
-                               ->alertUser;
-                             'no help file'->theText.puttext;
-                             theText[]->contents.contents;
-                         if);
+			 (if textFile.entry.exists
+			     and textfile.entry.readable then
+			     textFile.openRead;
+			     headers.contents.listItems.scanReverse
+			       (# do current.delete #);
+			     headers.contents.listItems.clear;
+			     textFile.reset;
+			     theText[]->txt[];
+			     l: (if not textFile.eos then
+				    (if textFile.peek
+				     // '<' then
+					textFile.get;
+					(textFile.peek='/')->closeTag;
+					(if closeTag then textFile.get if);
+					tag.clear; 
+					ll: (if textFile.peek
+					     // ' '
+					     // ascii.nl
+					     // ascii.cr
+					     // '>' then
+					     else
+                                                textFile.get->tag.put;
+                                                restart ll
+					    if);
+					(if true
+					 // 'H1'->tag.equalNCS then
+                                            1->handleHeader
+					 // 'H2'->tag.equalNCS then
+                                            2->handleHeader
+					 // 'H3'->tag.equalNCS then
+                                            3->handleHeader
+					 // 'H4'->tag.equalNCS then
+                                            4->handleHeader
+					 // 'H5'->tag.equalNCS then
+                                            5->handleHeader
+					 // 'H6'->tag.equalNCS then
+                                            6->handleHeader
+					 // 'hr'->tag.equalNCS then
+					    textFile.get; (for 70 repeat '-'->txt.put for)
+					 // 'pre'->tag.equalNCS
+					 // 'ol'->tag.equalNCS
+					 // 'ul'->tag.equalNCS
+					 // 'dl'->tag.equalNCS
+					 // 'dt'->tag.equalNCS
+					 // 'dd'->tag.equalNCS
+					 // 'lh'->tag.equalNCS
+					 // 'li'->tag.equalNCS
+					 // 'p'->tag.equalNCS
+					 // 'br'->tag.equalNCS
+                      
+					 // 'em'->tag.equalNCS
+					 // 'b'->tag.equalNCS
+					 // 'i'->tag.equalNCS
+					 // 'tt'->tag.equalNCS
+					 // 'u'->tag.equalNCS
+					 // 's'->tag.equalNCS
+					 // 'big'->tag.equalNCS
+					 // 'small'->tag.equalNCS
+					 // 'sub'->tag.equalNCS
+					 // 'sup'->tag.equalNCS
+					 // 'code'->tag.equalNCS
+                      
+					 // 'html'->tag.equalNCS
+					 // 'head'->tag.equalNCS
+					 // 'body'->tag.equalNCS
+                      
+					 // 'base'->tag.equalNCS
+					 // 'isindex'->tag.equalNCS
+					 // 'link'->tag.equalNCS
+					 // 'title'->tag.equalNCS
+                      
+					 // 'a'->tag.equalNCS
+                      
+					 // 'img'->tag.equalNCS
+					 // 'fig'->tag.equalNCS
+                      
+					 // 'table'->tag.equalNCS
+					 // 'caption'->tag.equalNCS
+					 // 'tr'->tag.equalNCS
+					 // 'th'->tag.equalNCS
+					 // 'td'->tag.equalNCS
+                      
+					 // 'math'->tag.equalNCS
+					 // 'note'->tag.equalNCS
+					 // 'fn'->tag.equalNCS
+					 // 'bq'->tag.equalNCS
+					 // 'cite'->tag.equalNCS
+					 // 'blockquote'->tag.equalNCS
+					 // 'address'->tag.equalNCS
+					 // 'form'->tag.equalNCS then
+					    handleAttributes
+					 else
+					    '<'->txt.put;
+					    (if closeTag then '/'->txt.put if);
+					    tag[]->txt.puttext;
+					    textFile.get->txt.put;
+					if);
+					restart l
+				     // '&' then
+					textFile.get;
+					tag.clear; 
+					ll: (if textFile.peek=';' then 
+                                                textFile.get
+					     else
+                                                textFile.get->tag.put;
+                                                restart ll
+					    if);
+					(if true
+					 // 'oslash'->tag.equalNCS then
+                                            'o'->txt.put
+					 // 'lt'->tag.equalNCS then
+                                            '<'->txt.put
+					 // 'gt'->tag.equalNCS then 
+                                            '>'->txt.put
+					 // 'quot'->tag.equalNCS then
+                                            '"'->txt.put
+					 // 'amp'->tag.equalNCS then
+                                            '&'->txt.put
+					 // 'ouml'->tag.equalNCS then
+                                            'o'->txt.put
+					 else
+					    '&'->txt.put; tag[]->txt.puttext;
+					    ';'->txt.put;
+					if);
+					restart l
+				     else
+					(if not textFile.eos then
+					    textFile.get->txt.put;
+					    restart l
+					if)
+				    if)
+				if);
+			     textFile.close;
+			     theText[]->contents.contents; theText.length->lgt;
+			  else
+			     'No read permissions to the file:\n     '
+                               ->header.puttext;
+			     textFile.name->header.puttext;
+			     (this(helpViewer)[], header[],'Read Error')
+			       ->alertUser;
+			     'no help file'->theText.puttext;
+			     theText[]->contents.contents;
+			 if);
                          false->loading;
                          INNER
                       #);
@@ -200,7 +353,7 @@ helpViewer: ymerLocalWindow
                     (w,(h div aspect)*4)->size;
                  #)
             #);
-         open::
+	  open::
             (# setDefaults::
                  (#
                  do true->verticalStacking;
