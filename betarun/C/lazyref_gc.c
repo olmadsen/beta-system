@@ -28,6 +28,19 @@
 #include <CRUN/crun.h>
 #endif
 
+#define LAZYDEBUG 0
+
+#if LAZYDEBUG
+#define DEBUG_LAZY(code) { code; }
+#else
+#define DEBUG_LAZY(code)
+#endif
+#if LAZYDEBUG
+#define TRACE_LAZY(code) { code; }
+#else
+#define TRACE_LAZY(code)
+#endif
+
 #ifndef INLINE
 #define INLINE
 #endif
@@ -59,7 +72,7 @@ void NegAOArefsINSERT(long fieldAdr)
       negAOArefs = (long *) REALLOC (negAOArefs, negAOAmax*sizeof(long));
     }
 
-  /* fprintf (stderr, "NegAOArefsINSERT(%d)\n", *((int *) fieldAdr)); */
+  TRACE_LAZY(fprintf (stderr, "NegAOArefsINSERT(%d)\n", *((int *) fieldAdr)));
 
   negAOArefs[negAOAsize++] = fieldAdr;
 }
@@ -72,7 +85,7 @@ void NegIOArefsINSERT(long fieldAdr)
     negIOArefs = (long *) REALLOC (negIOArefs, negIOAmax*sizeof(int));
   }
 
-  /* fprintf (stderr, "NegIOArefsINSERT(%d)\n", *((int *) fieldAdr)); */
+  TRACE_LAZY(fprintf (stderr, "NegIOArefsINSERT(%d)\n", *((int *) fieldAdr)));
 
   negIOArefs[negIOAsize++] = fieldAdr;
 }
@@ -80,17 +93,17 @@ void NegIOArefsINSERT(long fieldAdr)
 
 void preLazyGC ()
 {
-  /* fprintf (stderr, "preLazyGC\n"); */
+  TRACE_LAZY(fprintf (stderr, "preLazyGC\n"));
   negIOAsize = 0; 
   negIOAmax = DEFAULTNEGTABLESIZE;
   negIOArefs = (long *) MALLOC (negIOAmax*sizeof(int));
-  /* fprintf (stderr, "preLazyGC done\n"); */
+  TRACE_LAZY(fprintf (stderr, "preLazyGC done\n"));
 }
 
 INLINE int danglerLookup (int* danglers, int low, int high, int dangler)
 { int mid;
 
-  /* fprintf (stderr, "danglerLookup(%d)\n", dangler); */
+  TRACE_LAZY(fprintf (stderr, "danglerLookup(%d)\n", dangler)); 
 
   while (low != high) {
     mid = (low+high)/2;
@@ -129,13 +142,13 @@ INLINE void AssignReference(long *theCell, ref(Item) newObject)
 void setupDanglers (int* danglers, long* objects, int count)
 { int i, dangler, inx;
 
-  /* fprintf (stderr, "setupDanglers\n"); */
+  TRACE_LAZY(fprintf (stderr, "setupDanglers\n"));
 
   for (i = 0; i < negIOAsize; i++) {
     dangler = (*((int *) negIOArefs[i]));
     if (isLazyRef(dangler))
       if ((inx = danglerLookup (danglers, 0, count - 1, dangler)) >= 0) {
-	/* fprintf (stderr, "setupDanglerIOA(%d)\n", dangler); */
+	TRACE_LAZY(fprintf (stderr, "setupDanglerIOA(%d)\n", dangler)); 
 	/*if (!inIOA(negIOArefs[i]))*/
 #ifdef UseRefStack
 	if ( ((long)&ReferenceStack[0] <= negIOArefs[i]) &&
@@ -162,7 +175,7 @@ void setupDanglers (int* danglers, long* objects, int count)
       dangler = (*((int *) negAOArefs[i]));
       if (isLazyRef(dangler)) {
 	if ((inx = danglerLookup (danglers, 0, count - 1, dangler)) >= 0) {
-	  /* fprintf (stderr, "setupDanglerAOA(%d)\n", dangler); */
+	  TRACE_LAZY(fprintf (stderr, "setupDanglerAOA(%d)\n", dangler)); 
 	  AssignReference ((long *) negAOArefs[i], cast(Item) objects[inx]);
 	  negAOAsize--;
 	  if (negAOAsize > 0) negAOArefs[i] = negAOArefs[negAOAsize];
@@ -195,7 +208,7 @@ void addDanglingProto (int dangler, int proto)
 { int inx;
   protoPtr new;
 
-  /* printf ("addDanglingProto(%d)\n", dangler); */
+  TRACE_LAZY(printf ("addDanglingProto(%d)\n", dangler));
   
   if (!roots)
     roots = (protoPtr *) calloc (ROOTSIZE,sizeof(protoPtr));
@@ -220,22 +233,36 @@ void addDanglingProto (int dangler, int proto)
 void removeDanglingProto (int dangler)
 /* dangler has been fetched. Forget its prototype. */
 { int inx;
-  protoPtr this;
+  protoPtr this, next_in_list;
+#ifdef LAZYDEBUG
+  int num = 0;
+#endif
 
-  /* printf ("removeDanglingProto(%d)\n",dangler); */
+  TRACE_LAZY(printf ("removeDanglingProto(%d)\n",dangler));
   
+  DEBUG_LAZY(Claim(isLazyRef(dangler), "isLazyRef(dangler)"));
   inx = (-dangler)%ROOTSIZE;
+  DEBUG_LAZY(Claim((0<=inx)&&(inx<ROOTSIZE), 
+		   "removeDanglingProto: inx legal index"));
   this = roots[inx];
 
   while (this) {
+    DEBUG_LAZY(Claim(++num<=ROOTSIZE, "At most ROOTSIZE protoPtr in roots"));
     if (this->dangler == dangler) {
-      if (this->next) this->next->prev = this->prev;
-      if (this->prev) this->prev->next = this->next;
-      else roots[inx] = this->next;
+      if (this->next) 
+	this->next->prev = this->prev;
+      if (this->prev) {
+	this->prev->next = this->next;
+      } else {
+	roots[inx] = this->next;
+      }
       
+      next_in_list = this->next;
       FREE (this);
+      this = next_in_list;
+    } else {
+      this = this->next;
     }
-    this = this->next;
   }
 }
 
@@ -514,7 +541,7 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
   int i, movInst;
   long newObjectAddr;
 
-  /* fprintf (stderr, "trapHandler\n"); */
+  TRACE_LAZY(fprintf (stderr, "trapHandler\n"));
   
   if (LazyDangler) 
     fprintf (stderr, "WARNING: Lazy trap handler reentered\n");
