@@ -429,6 +429,9 @@ void ProcessStackFrames(long SP,
      *          |            |
      * 
      */
+#if 0
+    DEBUG_STACK(fprintf(output, "Testing for callback/allocation\n"));
+#endif
     if ((theObj == CALLBACKMARK)||(theObj == GENMARK)) {
 #ifdef RTDEBUG
       int isGen;
@@ -469,12 +472,18 @@ void ProcessStackFrames(long SP,
     }
 
     /* Check for passing of a DoPart object */
+#if 0
+    DEBUG_STACK(fprintf(output, "Testing for Dopart Object\n"));
+#endif
     if ((long)theObj->Proto == (long)DopartObjectPTValue) {
       DEBUG_STACK(fprintf(output, "Passing dopart object 0x%x\n", theObj));
       theObj = ((struct DopartObject *)theObj)->Origin;
       continue;
     }
 
+#if 0
+    DEBUG_STACK(fprintf(output, "Testing for Component\n"));
+#endif
     /* Check for passing of a component.
      * 
      * STACK LAYOUT for component:                          ____________      
@@ -549,6 +558,9 @@ void ProcessStackFrames(long SP,
     DEBUG_CODE(currentPC = PC); 
     DEBUG_CODE(currentSP = SP); 
 
+#if 0
+    DEBUG_STACK(fprintf(output, "Normal frame\n"));
+#endif
     /* Normal case: Find stack frame size, normal dyn and new PC */
     {  
       /* STACK LAYOUT for normal stack frame:
@@ -575,15 +587,19 @@ void ProcessStackFrames(long SP,
       }
 #else
       {
-         long SPoff /* size allocated on stack when theObj became active */;
-	 GetSPoff(SPoff, CodeEntry(theObj->Proto, PC)); 
+     
+	long SPoff /* size allocated on stack when theObj became active */;
 #if 0
-         DEBUG_STACK(fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__));
-         DEBUG_STACK(fprintf(output, "New SP:      0x%x\n", SP));
-         DEBUG_STACK(fprintf(output, "CodeEntry:   0x%x\n", CodeEntry(theObj->Proto, PC)));
-         DEBUG_STACK(fprintf(output, "SPoff:       0x%x\n", SPoff));
+	DEBUG_STACK(fprintf(output, "Finding previous frame\n"));
 #endif
-         SP = (long)SP+SPoff;
+	GetSPoff(SPoff, CodeEntry(theObj->Proto, PC)); 
+#if 0
+	DEBUG_STACK(fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__));
+	DEBUG_STACK(fprintf(output, "New SP:      0x%x\n", SP));
+	DEBUG_STACK(fprintf(output, "CodeEntry:   0x%x\n", CodeEntry(theObj->Proto, PC)));
+	DEBUG_STACK(fprintf(output, "SPoff:       0x%x\n", SPoff));
+#endif
+	SP = (long)SP+SPoff;
       }
 #endif
       /* SP now points to end of *previous* frame, i.e. bottom of top frame */
