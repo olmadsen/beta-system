@@ -26,7 +26,7 @@ void MkTO(char *asciz,
       theRep = (ValRep *)LVRAAlloc(ByteRepPTValue, range);
       /* theRep is now allocated, and the header of it is initialized */
       size = ItemSize(TextProto);
-      theText=(TextObject*)AOAcalloc(size);
+      theText=(TextObject*)AOAcalloc(size, SP);
     } else {
       /* Allocate both theText and theRep in IOA */
       size=ItemSize(TextProto) + repsize;
@@ -35,9 +35,9 @@ void MkTO(char *asciz,
       SaveVar(theItem);
       if (size>IOAMAXSIZE) {
         DEBUG_AOA(fprintf(output, "MkTO allocates in AOA\n"));
-        theText=(TextObject*)AOAcalloc(size);
+        theText=(TextObject*)AOAcalloc(size, SP);
       } else {
-        theText=(TextObject*)IOAalloc(size);
+        theText=(TextObject*)IOAalloc(size, SP);
         if (IOAMinAge!=0) {
           theText->GCAttr = IOAMinAge;
         }
