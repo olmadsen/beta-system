@@ -38,13 +38,17 @@ static ptr(char) theFormName(theItem)
 
 
 DisplayObject(output,aObj,retAddress)
-     ptr(FILE)   output;
-     ref(Object) aObj;
-     ptr(long)   retAddress;
+     ptr(FILE)   output;       /* Where to dump object */
+     ref(Object) aObj;         /* Object to display */
+     ptr(long)   retAddress;   /* Address aObj was left from (jsr), i.e. when 
+				* it was current object.
+				*/
 { 
   ref(Item) aItem=0;
   ref(ProtoType) theProto=0;
   ref(ProtoType) activeProto=0;
+  long           activeDist;
+  ref(Object)    staticObj;
   
   if( isSpecialProtoType(aObj->Proto) ){
     switch ((long) aObj->Proto){
@@ -54,33 +58,30 @@ DisplayObject(output,aObj,retAddress)
 	fprintf(output,"  basic component in %s\n", 
 		theFormName(aItem));
       } else {
-	if (activeProto){
-	  if( theProto == activeProto )
-	    fprintf(output,"<%s>", ProtoTypeName(theProto));
-	  else
-	    fprintf(output,"%s", ProtoTypeName(theProto));
-	} else {
-	  fprintf(output,"  comp <%s>", theItemName(aItem));
-	}
 	theProto = aItem->Proto;
 	if( retAddress ){
+	  /* try finding active prefix */
 	  long           activeDist;
 	  ref(Object)    staticObj;
 	  activeProto = theProto;
 	  activeDist  = retAddress - theProto->GenPart; 
 	  while( theProto->Prefix->Prefix != theProto->Prefix){
 	    theProto = theProto->Prefix;
-	    if(    (retAddress - theProto->GenPart > 0)
-	       && (retAddress - theProto->GenPart < activeDist)){ 
+	    if((retAddress - theProto->GenPart > 0) &&
+	       (retAddress - theProto->GenPart < activeDist)){ 
 	      activeProto = theProto;
 	      activeDist  = retAddress - theProto->GenPart; 
 	    }
 	  }
-	} else {
-	  activeProto = theProto;
 	}
-
 	theProto = aItem->Proto;
+	if(theProto==activeProto || /* active prefix */
+	   (!activeProto && theProto->Prefix->Prefix==theProto->Prefix)) /* no prefix */
+	  fprintf(output,"  comp <%s>", ProtoTypeName(theProto));
+	else
+	  fprintf(output,"  comp %s", ProtoTypeName(theProto));
+
+	/* Print chain of prefixes */
 	while( theProto->Prefix->Prefix != theProto->Prefix){
 	  theProto = theProto->Prefix;
 	  if( theProto == activeProto )
@@ -110,28 +111,31 @@ DisplayObject(output,aObj,retAddress)
       fprintf(output,"  RefRep\n");
       break;
     } 
-  }else{
-    long           activeDist;
-    ref(Object)    staticObj;
-    
+  }else{    
     theProto = aObj->Proto;
+    /* Find the active prefix level based on the retAddress.
+     * Here we use the fact, that the G-entry is placed just before
+     * the M-entry. Thus the prefix we are in is the one, where
+     * the distance from the G-entry of the corresponding prefix-level
+     * to retAddress is smallest.
+     */
     if( retAddress ){
       activeProto = theProto;
       activeDist  = retAddress - theProto->GenPart; 
       while( theProto->Prefix->Prefix != theProto->Prefix){
 	theProto = theProto->Prefix;
-        if(    (retAddress - theProto->GenPart > 0)
-	   && (retAddress - theProto->GenPart < activeDist)){ 
+        if((retAddress - theProto->GenPart > 0) &&
+	   (retAddress - theProto->GenPart < activeDist)){ 
 	  activeProto = theProto;
 	  activeDist  = retAddress - theProto->GenPart; 
 	}
       }
-    } else {
-      activeProto = theProto;
     }
     fprintf(output,"  item ");
+    /* Print chain of prefixes */
     theProto = aObj->Proto;
-    if( theProto == activeProto )
+    if(theProto==activeProto || /* active prefix */
+       (!activeProto && theProto->Prefix->Prefix==theProto->Prefix)) /* no prefix */
       fprintf(output,"<%s>", ProtoTypeName(theProto));
     else
       fprintf(output,"%s", ProtoTypeName(theProto));
@@ -145,6 +149,7 @@ DisplayObject(output,aObj,retAddress)
     fprintf(output, " in %s\n", theFormName(aObj));
     
     /* Print Static Environment Object. */
+    if (!activeProto) activeProto = theProto;
     staticObj = *(handle(Object))((long)aObj + (4*(long)activeProto->OriginOff));
     if( staticObj )
       if( isObject( staticObj ) ){
@@ -231,12 +236,14 @@ static DisplayStackPart( output, low, high, theComp)
   long retAddr=0;
   
   while( current <= high ){
+    retAddr=0;
     if( inBetaHeap( *current)){
       theCell = (handle(Object)) current;
       theObj  = *theCell;
       if( inIOA(theObj) || inAOA(theObj) ){
 	if( isObject( theObj) && NotInHeap(*(current+1)))
 	  if (theComp && cast(Object)theComp->Body==theObj){
+	    retAddr=*(current+1); /* pc of theComp, when it was left */
 	    break;
 	  }
 	  DisplayObject(output, theObj, *(current+1));
@@ -253,7 +260,7 @@ static DisplayStackPart( output, low, high, theComp)
     current++;
   }
   if (theComp){
-    DisplayObject( output, (ref(Object)) theComp, theComp->CallerLSC);
+    DisplayObject( output, (ref(Object)) theComp, retAddr);
     /* Make an empty line after the component */
     fprintf( output, "\n");
   }
@@ -300,7 +307,11 @@ DisplayBetaStack( errorNumber, theObj)
    */
   if( theObj != 0 ){
     if( isObject(theObj)){
-      if (theObj!=cast(Object)ActiveComponent->Body) DisplayObject(output, theObj, 0);
+      if (theObj!=cast(Object)ActiveComponent->Body)
+	/* retAddress is 0 because we have no way of knowing
+	 * current address in current object (yet)
+	 */
+	DisplayObject(output, theObj, 0);
     }else{
       fprintf(output,"Current object is damaged!\n");
     }
@@ -381,13 +392,15 @@ DisplayBetaStack( errorNumber, theObj)
 #ifndef hppa
 #ifndef sparc
   { 
-    ptr(long)          theTop;
-    ptr(long)          theBottom;
+    ptr(long)           theTop;
+    ptr(long)           theBottom;
     
     ref(CallBackFrame)  theFrame;
     
     ref(ComponentBlock) currentBlock;
     ref(Object)         currentObject;
+    long                retAddr=0;
+
     /*
      * First handle the topmost component block
      */
@@ -417,8 +430,9 @@ DisplayBetaStack( errorNumber, theObj)
     /*
      * Then handle the remaining component blocks.
      */
-    currentBlock = lastCompBlock;
+    currentBlock     = lastCompBlock;
     currentObject    = currentComponent->CallerObj;
+    retAddr          = currentComponent->CallerLSC;
     currentComponent = currentComponent->CallerComp;
     
     while( currentBlock->next ){
@@ -426,7 +440,7 @@ DisplayBetaStack( errorNumber, theObj)
       theBottom = (ptr(long)) currentBlock->next;
       theFrame  = currentBlock->callBackFrame;
       
-      DisplayObject(output, currentObject, 0);
+      DisplayObject(output, currentObject, retAddr);
       while( theFrame){
 	DisplayStackPart( output, theTop+1, (long *)theFrame-1, 0);
 	fprintf( output,"  [ C ACTIVATION PART ]\n");
@@ -445,6 +459,7 @@ DisplayBetaStack( errorNumber, theObj)
       
       currentBlock = currentBlock->next;
       currentObject    = currentComponent->CallerObj;
+      retAddr          = currentComponent->CallerLSC;
       currentComponent = currentComponent->CallerComp;
     }
   }
