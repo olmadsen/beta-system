@@ -812,7 +812,9 @@ Object * getRealObject(Object * obj)
   long Distance;
   Object * AutObj;
 
+#ifdef PERSIST
   Claim(!inPIT(obj), "getRealObject: Object in PIT");
+#endif /* PERSIST */
 
   if (obj -> GCAttr < 0) {
     GetDistanceToEnclosingObject(obj, Distance);
