@@ -10,7 +10,7 @@
 #endif
 
 #ifdef sgi
-/* BREAK 80 */
+/* break   0x0,0x28   (was: BREAK 80?) */
 #define BREAK_INST 0x00000a0d /* big-endian */
 #endif
 
