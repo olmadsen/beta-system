@@ -252,6 +252,8 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
     while(theProto->Prefix && 
 	  theProto->Prefix->Prefix != theProto->Prefix){
       theProto = theProto->Prefix;
+      mPart = M_Part(theProto);
+      gPart = (long) theProto->GenPart;
       if((retAddress - gPart > 0) &&
 	 (retAddress - gPart < activeDist)){ 
 	activeProto = theProto;
@@ -330,7 +332,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
 	theProto = theProto->Prefix;
 	fprintf(output,"%s", ProtoTypeName(theProto));
       }
-      fprintf(output, " in %s\n", GroupName((long)theObj->Proto,0) );
+      fprintf(output, " in %s\n", GroupName((long)staticObj->Proto,0) );
     } else {
       if (staticObj){
 	fprintf(output,"    -- Surrounding object damaged!\n");
