@@ -35,7 +35,7 @@ char NextLabel[100]; /* The last label read from the pipe. */
 #define Decimal
 #endif
 #ifdef linux
-#define nmcommand "nm -Bv %s | grep -v ' U '"
+#define nmcommand "nm -Bv -td %s | grep -v ' U '"
 #define Decimal
 #endif
 
