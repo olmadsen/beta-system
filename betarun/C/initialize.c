@@ -33,9 +33,6 @@ typedef struct {
 #include <StdLib.h>
 #include <String.h>
 extern void _DataInit();
-#ifdef crts
-extern void initJmpPool();
-#endif
 
 #define PromptID  7129
 #define CPromptID 7130
@@ -253,13 +250,6 @@ void PatchDataLabels(void)
 }
 #endif /* macintosh */
 
-#ifdef crts
-long CIntstack[100]; /* Does not belong to here, but for now... */
-double CFloatStack[100]; /* Does not belong to here, but for now... */
-long *cIntStackPtr;
-double *cFloatStackPtr;
-#endif
-
 void Initialize()
 {
   /* This hack is to cope with the sparc, where
@@ -342,8 +332,9 @@ void Initialize()
 #endif
 #endif
 #ifdef crts
-  cIntStackPtr=(long *)&CIntstack[0];
-  cFloatStackPtr=(double *)&CFloatStack[0];
+  baseRefSP = RefSP;
+  cIntStackPtr = (long *)&CIntstack[0];
+  cFloatStackPtr = (double *)&CFloatStack[0];
 #endif
 
   if( !AllocateHeap( &ToSpace, &ToSpaceTop, &ToSpaceLimit, IOASize ) ){
