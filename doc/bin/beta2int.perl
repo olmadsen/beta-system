@@ -36,7 +36,7 @@ $_=$line;
 
 # delete RCS/CVS stuff
 s/\$\Revision:[^\$]*\$//;
-s/\$\RCSfile:[^\$]*\$//;
+s/\$\RCSfile:[^\$]*\$//; 
 s/\$\Date:[^\$]*\$//;
 s/\$\Author:[^\$]*\$//;
 

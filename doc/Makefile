@@ -15,3 +15,6 @@ generated:
 	cd yggdrasil; make
 	cd win32lib; make
 	cd comlib; make
+
+update:
+	cvs update -dP
