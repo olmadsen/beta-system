@@ -1,7 +1,11 @@
-char betarun_version[] = "BETARUN VERSION 5.3(44)";
+char betarun_version[] = "BETARUN VERSION 5.3(45)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.44  2001/11/22 12:36:19  grouleff
+ * Merged in support for allowLazyFetch from r5.2.2b
+ * Betarun version number: 44
+ *
  * Revision 1.43  2001/11/22 11:40:52  grouleff
  * Added translation of iProto field in DynItemRep and DynCompRep.
  *

@@ -105,7 +105,7 @@ void findNextLabel (labeltable *table)
     table->NextAddress=0;
     while ((ch=fgetc (table->fp))!=' ') {
       if (ch==EOF) {
-	table->NextAddress = -1; /* datpete 14/3/96: changed from 0 */
+	table->NextAddress = (pc_t)-1; /* datpete 14/3/96: changed from 0 */
 	TRACE("pclose");
 	pclose (table->fp);
 	return;
@@ -117,10 +117,10 @@ void findNextLabel (labeltable *table)
       } else {
 	val = 10+ch-'a';
       }
-      table->NextAddress = (table->NextAddress*16)+val;
+      table->NextAddress = (pc_t)(((long)(table->NextAddress)*16)+val);
 #else
       val = ch-'0';
-      table->NextAddress = (table->NextAddress*10)+val;
+      table->NextAddress = (pc_t)(((long)(table->NextAddress)*10)+val);
 #endif
     }
 
@@ -148,7 +148,7 @@ void findNextLabel (labeltable *table)
 	;
       } else if (ch == EOF)  {
 	/* Error */
-	table->NextAddress = -1; 
+	table->NextAddress = (pc_t)-1; 
 	pclose (table->fp);
 	return;
       } else {
@@ -260,7 +260,7 @@ long getMainPhysical(void)
   return (long)&main;
 }
 
-int nextAddress(labeltable *table) 
+pc_t nextAddress(labeltable *table) 
 { 
 
 #ifdef ppcmac

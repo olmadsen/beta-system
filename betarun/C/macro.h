@@ -105,6 +105,26 @@ extern int dmalloc_verify(int);
 #define MCHECK()
 #endif
 
+#ifdef intel
+#define beta_prefetch(x)     asm ("prefetch 0(%0)" :: "r" (x))
+#define beta_prefetch512(x)     asm ("prefetch 512(%0)" :: "r" (x))
+#define beta_prefetchw512(x)     asm ("prefetch 512(%0)" :: "r" (x))
+#else
+#define beta_prefetch(x)
+#define beta_prefetch512(x)
+#define beta_prefetchw512(x)
+#endif
+
+/*
+ * The type of the program counter
+ */
+
+#ifdef intel
+typedef unsigned char *pc_t;
+#else
+typedef long *pc_t;
+#endif
+
 /* macro to be used to declare global variables (including static ones)
  * outside data.gen. 
  */
@@ -193,11 +213,24 @@ do {                               \
 #endif /* USEMMAP */
 #define inAOAUnused(x) SectorBasedInAOAUnused((Object *)(x))
      
+#if 0
+    /* too slow */
 #define isSpecialProtoType(x) (((long)(MinPTValue) <= (long)(x)) && \
                                ((long)(x) <= (long)(MaxPTValue)))
+#endif
 
+#define isSpecialProtoType(x)  \
+    (((unsigned long)((long)(x) - (unsigned long)MinPTValue)) <= \
+     ((unsigned long)((unsigned long)MaxPTValue - (unsigned long)MinPTValue)))
+
+#if 0
+    /* too slow */
 #define isNotSpecialProtoType(x) (((long)(MinPTValue) > (long)(x)) || \
                                   ((long)(x) > (long)(MaxPTValue)))
+#endif
+
+#define isNotSpecialProtoType(x) (!isSpecialProtoType((x)))
+	                        
 
 #define isNegativeRef(x) ((long)(x) < 0)
 #define isPositiveRef(x) ((long)(x) > 0)
@@ -560,17 +593,17 @@ typedef union FormatI
 
 /* check for break instr. - compare debugger/private/external/coreaccess.h*/
 #if defined(sparc) || defined(hppa) || defined(ppcmac)
-#define IS_BREAK_INST(x) ((long)x==0x00000000)
+#define IS_BREAK_INST(x) (x==0x00000000)
 #endif
 
 #ifdef sgi
 /* break   0x0,0x28   (was: BREAK 80?) */
-#define IS_BREAK_INST(x) ((long)x==0x00000a0d) /* big-endian */
+#define IS_BREAK_INST(x) (x==0x00000a0d) /* big-endian */
 #endif
 
 #ifdef intel
 /* int 3 - hex 0xcc */ 
-#define IS_BREAK_INST(x) (((long)x & 0x000000ff)==0x000000cc)
+#define IS_BREAK_INST(x) (x==0xcc)
 #endif
 
 #endif /* BETARUN_C_MACRO_H */

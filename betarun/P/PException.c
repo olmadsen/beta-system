@@ -371,6 +371,10 @@ int proxyTrapHandler(CONTEXT* pContextRecord)
    INFO_PERSISTENCE({
       fprintf(output, "proxyTrapHandler:%d:0x%08lx\n", numPF, (long)PC);
    });
+
+#  ifdef BOUND_BASED_AOA_TO_IOA
+#      error Not coded for Windows yet
+#  endif
    
    switch (PC[0]) {
      case 0x62:  /* BOUND R32, M32, M32 */
@@ -520,21 +524,31 @@ void proxyTrapHandler(long sig, struct sigcontext_struct scp)
    unsigned char* PC;
    unsigned char modrm;
    int isBeta;
-   
+
+#if 0   
    DEBUG_CODE({
      fprintf(output, "(proxyTrapHandler:PC=0x%08x, sig=%d)", (int)PC, (int)sig);
      fflush(output);
    });
+#endif
+
+#  if defined(__i386__) && defined(BOUND_BASED_AOA_TO_IOA)
+       if (scp.trapno==5) {
+	  BoundSignalHandler(sig, &scp);
+	  return;
+       }
+#  endif
 
    if (scp.trapno==5 /* boundl=>index error */|| 
        scp.trapno==12 /* stack fault */) {
       BetaSignalHandler(sig, scp);
+      return;
    }
    INFO_PERSISTENCE(numPF++);
    PC = (unsigned char*) scp.eip;
    
    
-   isBeta = IsBetaCodeAddrOfProcess((unsigned long)PC);
+   isBeta = IsBetaCodeAddrOfProcess(PC);
    if (!isBeta){
       DEBUG_CODE({
          fprintf(output, "(proxyTrapHandler:PC=0x%08x, ", (int)PC);
@@ -605,7 +619,7 @@ void proxyTrapHandler(long sig, struct sigcontext_struct scp)
          /* Normal refNone:  Handle as regular refNone. */
          /* PC = (long *) scp.eip; */
          StackEnd = (long *) scp.esp_at_signal;
-         if (!DisplayBetaStack(RefNoneErr, theObj, (long*)PC, sig)) {
+         if (!DisplayBetaStack(RefNoneErr, theObj, PC, sig)) {
             BetaExit(1);
          }
          return;

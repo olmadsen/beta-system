@@ -58,13 +58,13 @@ static __inline__ long GetBetaPC(long errno)
 /* BetaError: */
 
 #ifdef NEWRUN
-void BetaError(BetaErr err, Object *theObj, long *SP, long *thePC)
+void BetaError(BetaErr err, Object *theObj, long *SP, pc_t thePC)
 #else
 void BetaError(BetaErr err, Object *theObj)
 #endif
 {
 #ifndef NEWRUN
-  long *thePC;
+  pc_t thePC;
 #endif
 
   long DoNotExit=0; /* used in DumpStackErr */
@@ -94,7 +94,7 @@ void BetaError(BetaErr err, Object *theObj)
 
 #ifdef NEWRUN
       DEBUG_CODE(fprintf(output, "          SP=0x%x,\n", SP));
-      DEBUG_CODE(fprintf(output, "          thePC=0x%x", thePC));
+      DEBUG_CODE(fprintf(output, "          thePC=0x%x", (int)thePC));
       DEBUG_CODE(PrintCodeAddress((long)thePC));
       DEBUG_CODE(fprintf(output, ")\n"));
       switch(err){
@@ -121,7 +121,7 @@ void BetaError(BetaErr err, Object *theObj)
 	 *   |           |
 	 */
 	/* Get PC of caller of (betaenv.o) Qua */
-	thePC = (long*)GetPC(SP);
+	thePC = GetPC(SP);
 	/* Get current object of caller of (betaenv.o) Qua */
 	theObj = (Object *)GetDyn(SP);
 	/* DELIBERATELY NO BREAK HERE */
@@ -181,7 +181,7 @@ void BetaError(BetaErr err, Object *theObj)
 	 */
 	StackEnd = (long *) &theObj; 
 	StackEnd++; /* One below */
-	thePC = *(long**)StackEnd;
+	thePC = (pc_t)(*(long**)StackEnd);
 	StackEnd++;  /* Two below */
 	break;
       case DumpStackErr:
@@ -195,7 +195,7 @@ void BetaError(BetaErr err, Object *theObj)
 	 * i.e. the instruction pointer can be found one up
 	 * on the stack (the call instruction puts it there).
 	 */
-	thePC = *(long**)(StackEnd-1);
+	thePC = (pc_t)(*(long**)(StackEnd-1));
 	/* edx, edi, ebp, esi were pushed before setting BetaStackTop:
 	 *   pushl  %edx
 	 *   pushl  %edi
@@ -223,7 +223,7 @@ void BetaError(BetaErr err, Object *theObj)
       }
       DEBUG_CODE(fprintf(output, "          StackEnd=0x%x,\n", (int)StackEnd));
       DEBUG_CODE(fprintf(output, "          thePC=0x%x", (int)thePC));
-      DEBUG_CODE(PrintCodeAddress((long)thePC));
+      DEBUG_CODE(PrintCodeAddress(thePC));
       DEBUG_CODE(fprintf(output, ")\n"));
 #endif /* intel */
 
@@ -235,7 +235,7 @@ void BetaError(BetaErr err, Object *theObj)
 	  if( theObj != 0 ){
 	    if( isObject(theObj)){
 	      fprintf(output, ".\nCurrent object:\n");
-	      DisplayObject(output, theObj, (long)thePC);
+	      DisplayObject(output, theObj, thePC);
 	    }else{
 	      fprintf(output,"Current object is damaged!\n");
 	    }
@@ -261,7 +261,7 @@ void BetaError(BetaErr err, Object *theObj)
 	 *    <%edi>              <-- StackEnd+9
 	 *                        <-- StackEnd+10
 	 */
-	thePC=(long*)(StackEnd[8]); /* StackEnd is long* */
+	thePC=(pc_t)(StackEnd[8]); /* StackEnd is long* */
 	StackEnd+=10; /* StackEnd is long* */
 #endif /* intel */
       }
@@ -275,7 +275,7 @@ void BetaError(BetaErr err, Object *theObj)
 	 * is displayed specially).
 	 */
 	StackEnd += 12+1;
-	thePC=(long *)RefNonePC;
+	thePC=(pc_t)RefNonePC;
       }
 #endif /* intel */
       

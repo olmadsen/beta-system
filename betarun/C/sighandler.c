@@ -16,6 +16,7 @@
 #endif
 #ifdef linux
 #include <fpu_control.h>
+#include <sys/ucontext.h>
 #endif
 
 /***************************************************************************/
@@ -67,7 +68,7 @@ int sig
 #endif
 
 #ifdef UNIX
-static int HandleInterrupt(Object *theObj, long *pc, int sig)
+static int HandleInterrupt(Object *theObj, pc_t pc, int sig)
 {
 #ifdef RTDEBUG
   return DisplayBetaStack( InterruptErr, theObj, pc, sig);
@@ -424,7 +425,7 @@ void set_BetaStackTop(long *sp)
 #if defined(UNIX) && !(defined(sun4s) || defined(x86sol))
 
 #ifdef linux 
-#define GetPCandSP() { pc = (long *) scp.eip; StackEnd = (long *) scp.esp_at_signal; }
+#define GetPCandSP(scp) { pc = (pc_t) (scp).eip; StackEnd = (long *) (scp).esp_at_signal; }
 #endif
 
 #ifdef hppa
@@ -452,14 +453,14 @@ void set_BetaStackTop(long *sp)
 #endif /* SS_WIDEREGS */
 
 #ifdef UseRefStack
-#define GetPCandSP() { \
-  pc = (long *) (scp->sc_pcoq_head & (~3)); \
+#define GetPCandSP(scp) { \
+  pc = (long *) ((scp).sc_pcoq_head & (~3)); \
   /* StackEnd not used */\
 }
 #else /* UseRefStack */
-#define GetPCandSP() { \
-  pc = (long *) (scp->sc_pcoq_head & (~3)); \
-  StackEnd = (long *) scp->sc_sp; \
+#define GetPCandSP(scp) { \
+  pc = (long *) ((scp).sc_pcoq_head & (~3)); \
+  StackEnd = (long *) (scp).sc_sp; \
 }
 #endif /* UseRefStack */
 #endif /* hppa */
@@ -472,6 +473,59 @@ void set_BetaStackTop(long *sp)
 #error GetPCandSP should be defined
 #endif
 
+#if defined(__i386__) && defined(BOUND_BASED_AOA_TO_IOA)
+
+#if defined(linux)
+void BoundSignalHandler(long sig, struct sigcontext_struct *scp)
+#else
+void BoundSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
+#endif
+{
+  pc_t pc;
+
+#if 0
+  DEBUG_CODE({
+    fprintf(output, "\nBoundSignalHandler: Caught signal %d", (int)sig);
+    PrintSignal((int)sig);
+    NON_LINUX_CODE(fprintf(output, " code %d", (int)code));
+    fprintf(output, ".\n");
+  });
+#endif
+
+  /* Setup signal handles for the Beta system */
+  DEBUG_CODE({
+    Object *theObj;
+    theObj = (Object *) scp->edx;
+    if ( ! (inIOA(theObj) && isObject (theObj)))
+	theObj  = 0;
+    if (sig != SIGSEGV) {
+        fprintf(output, "\nWrong signal caught by BoundSignalHandler");
+        DisplayBetaStack( UnknownSigErr, theObj, pc, sig);  
+        BetaExit(1);
+    }
+  });
+
+  /* Set StackEnd to the stack pointer just before trap. */
+  GetPCandSP(*scp);
+
+  Claim(*pc == 0x62, "Bound trap not caused by bound insn");
+
+  /* See Mod R/M overview at http://www.sandpile.org/ia32/opc_rm32.htm */
+  Claim((pc[1] & 0xc7) == 0x05, "Unknown boundl instruction hit");
+
+  {
+      int regnum = 7 - ((pc[1] & 0x38) >> 3);
+      /* Assume regs are in order edi, esi, ebp, esp, ebx, edx, ecx, eax */
+      Object **reg = ((Object ***)(&scp->edi))[regnum];
+      /* fprintf(stderr, "AOA addr = 0x%08x\n", (int)reg); */
+      if (inIOA(*reg))
+	  AOAtoIOAInsert(reg);
+      scp->eip += 6;
+  }
+}
+
+#endif /* defined(__i386__) && defined(BOUND_BASED_AOA_TO_IOA) */
+
 #if defined(linux)
 void BetaSignalHandler(long sig, struct sigcontext_struct scp)
 #else
@@ -482,7 +536,11 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   Object ** theCell;
 #endif
   Object *    theObj = 0;
+#ifdef __i386__
+  unsigned char *pc;
+#else
   long *pc;
+#endif
   long todo = 0;
 
   DEBUG_CODE({
@@ -502,7 +560,18 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 #endif
 
   /* Set StackEnd to the stack pointer just before trap. */
-  GetPCandSP();
+#ifdef linux
+  GetPCandSP(scp);
+#else
+  GetPCandSP(*scp);
+#endif
+
+#if defined(BOUND_BASED_AOA_TO_IOA)
+  if (*pc == 0x62 &&              /* bound insn */
+      ((pc[1] & 0xf8) == 0x28)) { /* absolute address, used by aoatoioa check */
+      BoundSignalHandler(sig, &scp);
+  }
+#endif
 
 #ifdef sgi
   { 
@@ -639,7 +708,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
     if ( (*((char*)pc-1)) == (char)0xcc ){
       /* int3 break */
       scp.eip -= 1; /* pc points just after int3 instruction */
-      pc = (long *) scp.eip;
+      pc = (pc_t)scp.eip;
       DEBUG_VALHALLA(fprintf(output, "sighandler: adjusting PC to 0x%x\n", (int)pc));
     }
     {
@@ -1248,7 +1317,7 @@ void InstallSigHandler (int sig)
 {
 #if !(defined(sun4s) || defined(x86sol))
 #ifdef UNIX
-     signal (sig, (void (*)(int))BetaSignalHandler);
+    signal (sig, (void (*)(int))BetaSignalHandler);
 #endif
 #else /* sun4s || x86sol */
   { struct sigaction sa;
@@ -1328,9 +1397,9 @@ void SetupBetaSignalHandlers(void)
     sigaction( SIGFPE,  &sa, 0);
     sigaction( SIGILL,  &sa, 0);
     sigaction( SIGBUS,  &sa, 0);
-    sigaction( SIGSEGV, &sa, 0);
     sigaction( SIGEMT,  &sa, 0);
     sigaction( SIGINT,  &sa, 0);
+    sigaction( SIGSEGV, &sa, 0);
 #ifdef x86sol
     sigaction( SIGTRAP,  &sa, 0);
 #endif /* x86sol */

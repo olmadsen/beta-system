@@ -213,11 +213,11 @@ void PrintProto(ProtoType *proto)
   fprintf(output, "%s", ProtoTypeName(proto));
   if (!SimpleDump){
     fprintf(output, " [ast: 0x%04x,0x%04x]", (short)proto->FormInx, (short)proto->AstRef);
-    PrintCodeAddress((long)proto);
+    PrintCodeAddress((pc_t)proto);
   }
   fflush(output);
 }
-void PrintCodeAddress(unsigned long addr)
+void PrintCodeAddress(pc_t addr)
 {
   char *lab = getLabel(addr);
   if (labelOffset){
@@ -254,7 +254,7 @@ void PrintRef(Object *ref)
     } else {
       fprintf(output, " is NOT object");
       if (isCode(ref)) {
-	char *lab = getLabel((unsigned long)ref);
+	char *lab = getLabel((pc_t)ref);
 	fprintf(output, " (is code: <%s+0x%x>)", lab, (int)labelOffset);
       } else {
 	PrintWhichHeap(ref); /* Will most often be "(not in beta heap)" */
@@ -451,11 +451,11 @@ failure:
 /*********************** Label lookup by address **************************/
 
 typedef struct _label {
-  unsigned long address;
+  pc_t address;
   char *id;
 } label;
 
-GLOBAL(long labelOffset) = 0;
+GLOBAL(off_t labelOffset) = 0;
 GLOBAL(label **labels) = 0;
 GLOBAL(long numLabels) = 0;
 GLOBAL(long maxLabels) = 2048;
@@ -470,8 +470,8 @@ static Trie *trie;
 
 /* Prototypes */
 static void addLabelsFromGroupTable(void);
-static char *getLabelExact(unsigned long addr);
-static void addLabel(long adr, char *id);
+static char *getLabelExact(pc_t addr);
+static void addLabel(pc_t adr, char *id);
 static int cmpLabel(const void *left, const void *right);
 
 static int isLocalLab(char *lab)
@@ -502,7 +502,7 @@ static int isLocalLab(char *lab)
   return 1;
 }
 
-static void addLabel(long adr, char *id)
+static void addLabel(pc_t adr, char *id)
 {
   label *lab;
   int len=strlen(id);
@@ -566,7 +566,7 @@ static void addLabel(long adr, char *id)
   
 }
 
-static void addGroupLabel(long adr, char *id)
+static void addGroupLabel(pc_t adr, char *id)
 {
   label *lab;
   char* buf;
@@ -668,7 +668,7 @@ static int cmpLabelApprox(const void *key, const void *candidate)
    * than the address "key"
    */
   label **c = (label**)candidate;
-  unsigned long k = (unsigned long)key;
+  pc_t k = (pc_t)key;
 
   DEBUG_LABELS(fprintf(output, "cmpLabelApprox(key=0x%x, candidate->address=0x%x ", (int)k, (int)(*c)->address));
 
@@ -706,16 +706,16 @@ static void addLabelsFromGroupTable(void)
     NoOfPrototypes = gh->protoTable[0];
     for (i=0; i<NoOfPrototypes; i++) {
       sprintf(theLabel, "%s:T%d", NameOfGroupMacro(gh), i+1);
-      addGroupLabel((long)(*proto), theLabel);
+      addGroupLabel((pc_t)(*proto), theLabel);
 
       gPart=  G_Part(((ProtoType*)(*proto)));
       sprintf(theLabel, "%s:G%d", NameOfGroupMacro(gh), i+1);
-      addGroupLabel(gPart, theLabel);
+      addGroupLabel((pc_t)gPart, theLabel);
       
       mPart =  M_Part(((ProtoType*)(*proto)));
       if (mPart != MAXINT) {
 	sprintf(theLabel, "%s:M%d", NameOfGroupMacro(gh), i+1);
-	addGroupLabel(mPart, theLabel);
+	addGroupLabel((pc_t)mPart, theLabel);
       }
 
       proto++;
@@ -737,7 +737,7 @@ static void initLabels(void)
   char exefilename[500];
   char *theLabel;
   labeltable *table;
-  long labelAddress;
+  pc_t labelAddress;
 
 #ifdef ppcmac
   addLabelsFromGroupTable();
@@ -773,7 +773,7 @@ static void initLabels(void)
   /* Read labels */
   for (;;) {
     labelAddress = nextAddress(table);
-    if (labelAddress==-1){
+    if (labelAddress == (pc_t)-1){
       /* Termination condition reached */
       break;
     }
@@ -802,7 +802,7 @@ static void initLabels(void)
 
 }
 
-static char *getLabelExact(unsigned long addr)
+static char *getLabelExact(pc_t addr)
 {
   if (!addr) return NULL;
   
@@ -812,7 +812,7 @@ static char *getLabelExact(unsigned long addr)
 
 #ifndef MAC
   if (labels) {
-    return (char *)TILookup(addr, trie);
+    return (char *)TILookup((unsigned long)addr, trie);
   }
 #endif
 
@@ -823,7 +823,7 @@ static char *getLabelExact(unsigned long addr)
 extern unsigned long etext;
 #endif
 
-char *getLabel (unsigned long addr)
+char *getLabel (pc_t addr)
 {
   int skip_nm = 0;
 
@@ -974,9 +974,13 @@ void DescribeObject(Object *theObj)
   } else {
     /* ordinary object */
     fprintf(output, "\"%s\" <%s>", 
-	    ProtoTypeName(theProto), getLabel((long)theProto));
+	    ProtoTypeName(theProto), getLabel((pc_t)theProto));
     PrintWhichHeap(theObj);
   }
+}
+
+/* Just to fool the optimiser! */
+void donothingwithsiginfo(void *s) {
 }
 
 const char *WhichHeap(Object *ref)

@@ -128,7 +128,7 @@ static Object *activation_object;
 static Object *activation_start;
 static int     activation_start_found;
 
-static void find_foreach(long PC, Object *theObj)
+static void find_foreach(pc_t PC, Object *theObj)
 {
   ProtoType *proto;
   if (activation_object) return; /* already found! */

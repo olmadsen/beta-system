@@ -37,7 +37,8 @@ static long maxprim = 0;
  */
 static long prim_index = 1;
 static long primes[] = 
-       { 2617, 3919, 5879,  8821, 13241, 19867, 29803, 44711, 67079,
+       { 101, 151, 227, 347, 521, 773, 1163, 1741,
+	 2617, 3919, 5879,  8821, 13241, 19867, 29803, 44711, 67079,
 	 99991, 149993, 224993, 337511, 506269, 759431, 1139191, 
 	 1708943, 2563441, 3845279, 5767999, 8651977, 
 	 12977971, 19466939, 29200411, 43800607, 65700907,
@@ -49,15 +50,6 @@ static long primes[] =
 static Block *alternateAOAtoIOAtable = NULL;
 #if !MAXAOATOIOAPRIM
 static long alternateAOAtoIOAtableSize = 0;
-#endif
-
-/* Local function prototypes: */
-#ifndef RTDEBUG
-static 
-#endif /* RTDEBUG */
-int AOAtoIOAInsertImpl(Object **theCell);
-#ifdef MT
-static void AOAtoIOAInsert(handle( Object) theCell);
 #endif
 
 #if MAXAOATOIOAPRIM
@@ -313,9 +305,6 @@ void reportAsgRef(Object **theCell)
 }
 #endif
 
-#ifndef RTDEBUG
-static 
-#endif /* RTDEBUG */
 int AOAtoIOAInsertImpl(Object **theCell)
 {
     unsigned long *table;
@@ -396,9 +385,6 @@ int AOAtoIOAInsertImpl(Object **theCell)
     return 1;
 }
 
-#ifdef MT
-static 
-#endif
 void AOAtoIOAInsert(Object **theCell)
 {
 #ifdef RTINFO

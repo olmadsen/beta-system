@@ -135,11 +135,11 @@ void AddGroup(group_header *new_group)
 }
 
 #ifdef macppc
-#define GroupCodeStart(group) (*(unsigned long*)((group)->code_start))
-#define GroupCodeEnd(group)   (*(unsigned long*)((group)->code_end))
+#define GroupCodeStart(group) ((pc_t)(*(unsigned long*)((group)->code_start)))
+#define GroupCodeEnd(group)   ((pc_t)(*(unsigned long*)((group)->code_end)))
 #else
-#define GroupCodeStart(group) ((unsigned long)((group)->code_start))
-#define GroupCodeEnd(group)   ((unsigned long)((group)->code_end))
+#define GroupCodeStart(group) ((group)->code_start)
+#define GroupCodeEnd(group)   ((group)->code_end)
 #endif
 
 /* IsPrototypeOfGroup:
@@ -190,7 +190,7 @@ int IsPrototypeOfProcess(long pt)
 /* IsBetaCodeAddrOfProcess:
  * Scan group to see if addr is within any BETA code segment.
  */
-int IsBetaCodeAddrOfProcess(unsigned long addr) 
+int IsBetaCodeAddrOfProcess(pc_t addr) 
 { 
 #ifdef MAC
   /* can't determine if an address is in a given object file on MAC.
@@ -243,7 +243,7 @@ int IsBetaDataAddrOfProcess(unsigned long addr)
  *  It must be non-static.
  * 
  */
-char *GroupName(long address, int isCode)
+char *GroupName(pc_t address, int isCode)
 {
   group_header *current;
 
@@ -271,15 +271,15 @@ char *GroupName(long address, int isCode)
 
   while (current){
     if (isCode){
-      if ((GroupCodeStart(current) <= (unsigned long)address) &&
-	  ((unsigned long)address <= GroupCodeEnd(current))){
+      if ((GroupCodeStart(current) <= address) &&
+	  (address <= GroupCodeEnd(current))){
 	TRACE_GROUP(fprintf (output, "GroupName: returns "));
 	TRACE_GROUP(fprintf (output, "%s\n", NameOfGroupMacro (current)));
 	return NameOfGroupMacro (current);
       }
     } else {
       /* data address; seach for Prototype */
-      if (IsPrototypeOfGroup(current,address)) {
+      if (IsPrototypeOfGroup(current,(long)address)) {
 	TRACE_GROUP(fprintf (output, "GroupName: proto: returns "));
 	TRACE_GROUP(fprintf (output, "%s\n", NameOfGroupMacro (current)));
 	return NameOfGroupMacro (current);

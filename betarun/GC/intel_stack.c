@@ -231,7 +231,7 @@ void ProcessStackPart(long *low,
 		PrintProto((ProtoType*)*current);
 	      } else {
 		fprintf(output, " ");
-		PrintCodeAddress(*current);
+		PrintCodeAddress((pc_t)(*current));
 	      }
 	    }
 	    fprintf(output, "\n");
@@ -328,7 +328,7 @@ void TraceStackObject(Object **current)
 	fprintf(output, ")\n");
       } else {
 	fprintf(output, " ");
-	PrintCodeAddress((long)*current);
+	PrintCodeAddress((pc_t)*current);
 	fprintf(output, "\n");
       }
     } else {
@@ -353,10 +353,10 @@ ProcessStackObj(StackObject *sObj, CellProcessFunc func)
 	      (int)(sObj->StackSize),
 	      WhichHeap((Object*)sObj));
       fprintf(output, "func is 0x%x", (int)func);
-      PrintCodeAddress((long)func);
+      PrintCodeAddress((pc_t)func);
       fprintf(output, "\n");
       fprintf(output, "StackRefAction is 0x%x", (int)StackRefAction);
-      PrintCodeAddress((long)StackRefAction);
+      PrintCodeAddress((pc_t)StackRefAction);
       fprintf(output, "\n");
   });
   DEBUG_CODE(if (DebugStackObj){
@@ -393,7 +393,7 @@ static void objectMet(Object **theCell, Object *theObj)
         TRACE_DUMP(fprintf(output, "(strongIsObject failed!?)\n"));
 	return;
   }
-  if ((!inBetaHeap(*(theCell+1))) && IsBetaCodeAddrOfProcess((long)*(theCell+1))){
+  if ((!inBetaHeap(*(theCell+1))) && IsBetaCodeAddrOfProcess((pc_t)*(theCell+1))){
     /* Found an object with a PC just below it on stack */
     prevObj = theObj;
     TRACE_DUMP(fprintf(output,"new prevObj: "); DescribeObject(prevObj));
@@ -414,9 +414,9 @@ static void objectMet(Object **theCell, Object *theObj)
 
 static void nonObjectMet(Object **theCell, Object *theObj)
 {
-  if (IsBetaCodeAddrOfProcess((long)theObj)){
+  if (IsBetaCodeAddrOfProcess((pc_t)theObj)){
     /* Found a BETA PC */
-    long pc=(long)theObj;
+    pc_t pc=(pc_t)theObj;
     TRACE_DUMP(PrintCodeAddress(pc));
     if (prevObj){
       TRACE_DUMP(fprintf(output, "\n"));
@@ -477,7 +477,7 @@ long *DisplayCallbackFrames(CallBackFrame *cbFrame,
       if (!is_exception){
 	long *cpc = ((HandleCBframe *)cbFrame)->C_return;
 	fprintf(output, ">>>Frame for callback from 0x%08x", (int)cpc);
-	PrintCodeAddress((int)cpc);
+	PrintCodeAddress((pc_t)cpc);
 	fprintf(output, "\n");
 	fprintf(output, 
 		"CallbackFrame: [next=0x%08x, top=0x%08x, tmp=0x%08x]\n", 
@@ -560,7 +560,7 @@ long *DisplayCallbackFrames(CallBackFrame *cbFrame,
 
 void DisplayINTELStack(BetaErr errorNumber, 
 		       Object *currentObject, 
-		       long pc, 
+		       pc_t pc, 
 		       long theSignal /* theSignal is zero if not applicable. */
 		       )
 { 
@@ -583,7 +583,7 @@ void DisplayINTELStack(BetaErr errorNumber,
 	    "  [ EXTERNAL ACTIVATION PART (address 0x%x",
 	    (int)error_pc
 	    );
-    if (!SimpleDump) PrintCodeAddress((long)pc);
+    if (!SimpleDump) PrintCodeAddress(pc);
     fprintf(output, ") ]\n");
     if ((StackEnd<BetaStackTop) && (BetaStackTop<(long*)StackStart)){
       /* BetaStackTop is in the active stack. Try continuing from there.
@@ -653,7 +653,7 @@ void DisplayINTELStack(BetaErr errorNumber,
    */
   currentBlock     = lastCompBlock;
   currentObject    = currentComponent->CallerObj;
-  pc               = currentComponent->CallerLSC;
+  pc               = (pc_t)(currentComponent->CallerLSC);
   currentComponent = currentComponent->CallerComp;
   
   while (currentBlock->next){
@@ -694,7 +694,7 @@ void DisplayINTELStack(BetaErr errorNumber,
 
     currentBlock     = currentBlock->next;
     currentObject    = currentComponent->CallerObj;
-    pc               = currentComponent->CallerLSC;
+    pc               = (pc_t)(currentComponent->CallerLSC);
     currentComponent = currentComponent->CallerComp;
   }
 }
@@ -703,7 +703,7 @@ void DisplayINTELStack(BetaErr errorNumber,
 static int compfound;
 static CellDisplayFunc DoForEach;
 
-static void ShowCell(long pc, Object *theObj)
+static void ShowCell(pc_t pc, Object *theObj)
 {
   if (!compfound){
     DEBUG_STACK(fprintf(output, "ShowCell: component not yet found: Ignoring (pc=0x%08x, obj=0x%08x)\n", (int)pc, (int)theObj));
@@ -724,7 +724,7 @@ static void ShowCell(long pc, Object *theObj)
 
 int scanComponentStack (Component* comp,
 			Object *curObj,
-			int pc,
+			pc_t pc,
 			CellDisplayFunc forEach)
 {
   /* scan through the stackpart corresponding to the comp parameter.
@@ -735,7 +735,7 @@ int scanComponentStack (Component* comp,
   
   DEBUG_VALHALLA(fprintf(output, 
 			 "***scanComponentStack(comp=0x%x, obj=0x%x, PC=0x%x)\n",
-			 (int)comp, (int)curObj, pc));
+			 (int)comp, (int)curObj, (int)pc));
 
   compfound = 0;
   DoForEach = forEach;
@@ -840,7 +840,7 @@ int scanComponentStack (Component* comp,
     DEBUG_VALHALLA(fprintf(output, "scanComponentStack: other component blocks\n"));
     currentBlock     = lastCompBlock;
     currentObject    = currentComponent->CallerObj;
-    pc               = currentComponent->CallerLSC;
+    pc               = (pc_t)(currentComponent->CallerLSC);
     currentComponent = currentComponent->CallerComp;
     
     while (currentBlock->next){
@@ -863,7 +863,7 @@ int scanComponentStack (Component* comp,
       DisplayStackPart(low, high-3, currentObject, ShowCell); 
       currentBlock     = currentBlock->next;
       currentObject    = currentComponent->CallerObj;
-      pc               = currentComponent->CallerLSC;
+      pc               = (pc_t)(currentComponent->CallerLSC);
       currentComponent = currentComponent->CallerComp;
     }
     DEBUG_VALHALLA(fprintf(output, "scanComponentStack: other component blocks done\n"));

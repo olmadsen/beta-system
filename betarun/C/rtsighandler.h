@@ -130,13 +130,16 @@ fprintf(output, \
 #if defined(UNIX) && !(defined(sun4s) || defined(x86sol))
 #ifdef linux
 void BetaSignalHandler(long sig, struct sigcontext_struct scp);
+void BoundSignalHandler(long sig, struct sigcontext_struct *scp);
 #else
 void BetaSignalHandler(long sig, long code, SIGNAL_CONTEXT scp, char *addr);
+void BoundSignalHandler(long sig, long code, SIGNAL_CONTEXT scp, char *addr);
 #endif /* */
 #endif /* UNIX, !sun4s */
 
 #if defined(sun4s) || defined(x86sol)
 void BetaSignalHandler(long sig, siginfo_t *info, SIGNAL_CONTEXT ucon);
+void BoundSignalHandler(long sig, siginfo_t *info, SIGNAL_CONTEXT ucon);
 #endif /* sun4s||x86sol */
 
 #ifdef nti
@@ -146,9 +149,13 @@ BetaSignalHandler_GNU(EXCEPTION_RECORD* pExceptionRec,
 		      void* pEstablisherFrame,
 		      SIGNAL_CONTEXT pContextRecord,
 		      void* pDispatcherContext);
+BoundSignalHandler_GNU(EXCEPTION_RECORD* pExceptionRec,
+		      void* pEstablisherFrame,
+		      SIGNAL_CONTEXT pContextRecord,
+		      void* pDispatcherContext);
 #else  /* !nti_gnu */
-int 
-BetaSignalHandler(LPEXCEPTION_POINTERS lpEP);
+int BetaSignalHandler(LPEXCEPTION_POINTERS lpEP);
+int BoundSignalHandler(LPEXCEPTION_POINTERS lpEP);
 #endif /* !nti_gnu */
 #endif /* nti */
 

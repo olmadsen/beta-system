@@ -323,7 +323,7 @@ void printOpCode (int opcode)
 }
 #endif
 
-static int valhallaCommunicate (int pc, int sp, Object *curObj);
+static int valhallaCommunicate (pc_t pc, int sp, Object *curObj);
 
 extern char *Argv (int);
 
@@ -445,7 +445,7 @@ void valhallaInit (int debug_valhalla)
  *    0: CONTINUE.
  *    1: TERMINATE. */
 
-void HandleStackCell(long returnAdr, Object *returnObj)
+void HandleStackCell(pc_t returnAdr, Object *returnObj)
 /* Used by VOP_SCANSTACK */
 {
   DEBUG_VALHALLA (fprintf(output,"debuggee: forEachStackEntry \n"));  
@@ -711,7 +711,7 @@ void evaluatorSaveInt(int val)
 
 
 
-static int valhallaCommunicate (int pc, int sp, Object* curObj)
+static int valhallaCommunicate (pc_t pc, int sp, Object* curObj)
 { 
   int opcode=0;
   
@@ -950,7 +950,7 @@ static int valhallaCommunicate (int pc, int sp, Object* curObj)
       origin_handle = DOThandleInsert(origin, DOTgarbageOnDelete, FALSE);
       curObj_handle = DOThandleInsert(curObj, DOTgarbageOnDelete, FALSE);
       /* VAlloS may cause GC - is specially constructed to handle this */
-      struc = VAlloS(proto, (long*)sp, (long)pc);
+      struc = VAlloS(proto, (long*)sp, pc);
       origin = DOThandleLookup(origin_handle);
       curObj = DOThandleLookup(curObj_handle);
       /* struc->iOrigin is NOT set up by VAlloS */
@@ -1340,7 +1340,7 @@ void forEachAlive (int handle, Object *address, DOTonDelete onDelete)
  * Calls back to valhalla to inform that this process has stopped and
  * is ready to serve requests. */
 
-int ValhallaOnProcessStop (long*  pc, long* sp, Object * curObj, 
+int ValhallaOnProcessStop (pc_t pc, long* sp, Object * curObj, 
                            long sig, long errorNumber)
 { 
   char *txt; int res;
@@ -1425,7 +1425,7 @@ int ValhallaOnProcessStop (long*  pc, long* sp, Object * curObj,
     fprintf (output, "Warning! Wrong answer from Valhalla on VOP_STOPPED\n"); 
 
   
-  switch (res=valhallaCommunicate ((int) pc, (int)sp, curObj)){
+  switch (res=valhallaCommunicate (pc, (int)sp, curObj)){
   case CONTINUE: break;
   case TERMINATE: exit (99);
   }
@@ -1455,7 +1455,7 @@ int ValhallaOnProcessStop (long*  pc, long* sp, Object * curObj,
 /* Shortcut for calling valhallaOnProcessStop from SnakeAdditions.S 
  * without having to transfer argument 5 via stack in assembler.
  */
-void ValhallaOPS(long *pc, long event)
+void ValhallaOPS(pc_t pc, long event)
 {
   ValhallaOnProcessStop(pc, 0, 0, 0, event);
 }

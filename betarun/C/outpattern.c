@@ -29,8 +29,8 @@ GLOBAL(static int basic_dumped)=0;
 
 /******************************* System Exceptions *******************/
 
-static int call_systemexceptionhandler(BetaErr, Object *, long *); 
-typedef int (*SYSTEMEXCEPTIONHANDLER)(BetaErr, Object *, long *, long *);
+static int call_systemexceptionhandler(BetaErr, Object *, pc_t); 
+typedef int (*SYSTEMEXCEPTIONHANDLER)(BetaErr, Object *, pc_t, long *);
 SYSTEMEXCEPTIONHANDLER systemexceptionhandler = NULL;
 
 /* InstallSystemExceptionHandler: To be called from beta. */
@@ -222,7 +222,7 @@ void NotifyFunc(char *s1){
 
 /********************** DisplayCell: ********************/
 
-void DisplayCell(long pc, Object *theObj)
+void DisplayCell(pc_t pc, Object *theObj)
 {
   if (!strongIsObject(theObj)) {
     TRACE_DUMP(fprintf(output, "displaycell: (strongIsObject failed!?)\n"));
@@ -292,7 +292,7 @@ static void ObjectSurrounderDescription(Object *obj,
 					ProtoType *activeProto);
 
 static void ObjectDescription(Object *obj, 
-			      long pc, 
+			      pc_t pc, 
 			      char *type, 
 			      int print_origin)
 {
@@ -319,9 +319,9 @@ static void ObjectDescription(Object *obj,
      * to PC is smallest (and positive).
      */
     
-    gDist  = pc - gPart; 
+    gDist  = (long)pc - gPart; 
     TRACE_CODEENTRY(fprintf(output, "initial gPart: 0x%x, gDist: 0x%x\n", (int)gPart, (int)gDist));
-    mDist  = pc - mPart;
+    mDist  = (long)pc - mPart;
     TRACE_CODEENTRY(fprintf(output, "initial mPart: 0x%x, mDist: 0x%x\n", (int)mPart, (int)mDist));
     if (gDist < 0) gDist = MAXINT;
     if (mDist < 0) mDist = MAXINT;
@@ -332,18 +332,18 @@ static void ObjectDescription(Object *obj,
       mPart = M_Part(proto);
       gPart = G_Part(proto);
       TRACE_CODEENTRY(fprintf(output, "ObjectDescription: proto=0x%x (%s), mPart=0x%x, gPart=0x%x\n", (int)proto, ProtoTypeName(proto), (int)mPart, (int)gPart)); 
-      if((pc - gPart > 0) &&
-	 (pc - gPart <= activeDist)){ 
+      if(((long)pc - gPart > 0) &&
+	 ((long)pc - gPart <= activeDist)){ 
 	/* Use <= to get the LAST level, that has the entry point */ 
 	activeProto = proto;
-	activeDist  = gDist = pc - gPart; 
+	activeDist  = gDist = (long)pc - gPart; 
 	TRACE_CODEENTRY(fprintf(output, "gDist: 0x%x\n", (int)gDist));
       }
-      if((pc - mPart > 0) &&
-	 (pc - mPart <= (long) activeDist)){ 
+      if(((long)pc - mPart > 0) &&
+	 ((long)pc - mPart <= (long) activeDist)){ 
 	/* Use <= to get the LAST level, that has the entry point */ 
 	activeProto = proto;
-	activeDist  = mDist = pc - mPart; 
+	activeDist  = mDist = (long)pc - mPart; 
 	TRACE_CODEENTRY(fprintf(output, "mDist: 0x%x\n", (int)mDist));
       }
     }
@@ -353,7 +353,7 @@ static void ObjectDescription(Object *obj,
      * of the mPart, because of dopart SLOTs.
      */
     TRACE_GROUP(fprintf(output, "Calling GroupName with activeProto\n"));
-    groupname = GroupName((long)activeProto,0);
+    groupname = GroupName((pc_t)activeProto,0);
   } else {
     /* PC not known */
     /* Always print the group name of the PROTOTYPE, since this is 
@@ -361,7 +361,7 @@ static void ObjectDescription(Object *obj,
      * of the mPart, because of dopart SLOTs.
      */
     TRACE_GROUP(fprintf(output, "Calling GroupName with activeProto\n"));
-    groupname = GroupName((long)activeProto,0);
+    groupname = GroupName((pc_t)activeProto,0);
   }
 
   proto = GETPROTO(obj);
@@ -455,7 +455,7 @@ static void ObjectSurrounderDescription(Object *obj,
     } 
   }
   if( staticObj && isObject( staticObj ) ){
-    groupname = GroupName((long)GETPROTO(staticObj),0);
+    groupname = GroupName((pc_t)GETPROTO(staticObj),0);
     if (groupname==NULL){
       fprintf(output,
 	      "    -- Surrounding object (0x%x) damaged!\n",
@@ -504,7 +504,7 @@ GLOBAL(static Object *lastDisplayedObject)=0;
 
 void DisplayObject(FILE   *output, /* Where to dump object */
 		   Object *obj,    /* Object to display */
-		   long    pc      /* Address obj was left from (jsr), 
+		   pc_t    pc      /* Address obj was left from (jsr), 
 				    * i.e. when it was current object.
 				    */
 		   )
@@ -535,7 +535,7 @@ void DisplayObject(FILE   *output, /* Where to dump object */
 	if (!basic_dumped){
 	  fprintf(output,
 		  "  basic component in %s\n", 
-		  GroupName((long)GETPROTO(theItem),0) );
+		  GroupName((pc_t)GETPROTO(theItem),0) );
 	  if (isMakingDump) {
 	    /* only dump basicitem once in dump file */
 	    basic_dumped=1;
@@ -595,15 +595,15 @@ void DisplayObject(FILE   *output, /* Where to dump object */
 /********************** DisplayCurrentObject ************/
 
 #ifndef sparc
-void DisplayCurrentObject(Object *theObj, long *thePC)
+void DisplayCurrentObject(Object *theObj, pc_t thePC)
 {
   TRACE_DUMP(fprintf(output, ">>>TraceDump: Current object 0x%x\n", (int)theObj));
   if( theObj != 0 ){
     if( isObject(theObj)){
       if (theObj==(Object *)ActiveComponent->Body){
-	DisplayObject(output, (Object *)ActiveComponent, (long)thePC);
+	DisplayObject(output, (Object *)ActiveComponent, thePC);
       } else {
-	DisplayObject(output, theObj, (long)thePC);
+	DisplayObject(output, theObj, thePC);
       }
     } else {
       fprintf(output,
@@ -842,7 +842,7 @@ static char *OpenDumpFile(long errorNumber)
 
 static void DisplayCurrentObjectAndStack(BetaErr errorNumber, 
 					 Object *theObj, 
-					 long *thePC, 
+					 pc_t thePC, 
 					 long theSignal /* theSignal is zero if not applicable. */
 					 )
 {
@@ -876,7 +876,7 @@ static void DisplayCurrentObjectAndStack(BetaErr errorNumber,
   DisplaySPARCStack(errorNumber, theObj, thePC, theSignal);
 #endif
 #ifdef intel
-  DisplayINTELStack(errorNumber, theObj, (long)thePC, theSignal);
+  DisplayINTELStack(errorNumber, theObj, thePC, theSignal);
 #endif
 }
 
@@ -936,7 +936,7 @@ static void AuxInfo(Object *theObj, BetaErr errorNumber)
 
 int DisplayBetaStack(BetaErr errorNumber, 
 		     Object *theObj, 
-		     long *thePC, 
+		     pc_t thePC, 
 		     long theSignal /* theSignal is zero if not applicable. */
 		     )
 {
@@ -951,7 +951,7 @@ int DisplayBetaStack(BetaErr errorNumber,
     DescribeObject(theObj);
     fprintf(stderr, ",\n");
     fprintf(stderr, "                 thePC=0x%x", (int)thePC);
-    PrintCodeAddress((int)thePC); 
+    PrintCodeAddress(thePC); 
     fprintf(stderr, ",\n");
     fprintf(stderr, "                 theSignal=%d", (int)theSignal);
     DEBUG_CODE(PrintSignal((int)theSignal));
@@ -1090,8 +1090,8 @@ int DisplayBetaStack(BetaErr errorNumber,
   NotifyMessage[0]=0;
 
   if ((errorNumber==IllegalInstErr) && 
-      IsBetaCodeAddrOfProcess((long)thePC) &&
-      IS_BREAK_INST(*(long*)thePC)){
+      IsBetaCodeAddrOfProcess(thePC) &&
+      IS_BREAK_INST(*thePC)){
     /* Hit breakpoint instruction in BETA code - must be a %break */
     errorNumber = EmulatorTrapErr;
   }
@@ -1174,7 +1174,7 @@ int DisplayBetaStack(BetaErr errorNumber,
  */
 static int call_systemexceptionhandler(BetaErr errorNumber, 
 				       Object *theObj, 
-				       long *thePC)
+				       pc_t thePC)
 {
   return systemexceptionhandler(errorNumber, theObj, thePC, StackEnd);
 }

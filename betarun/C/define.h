@@ -283,6 +283,13 @@ typedef unsigned short u_short;
 #  define TRACE_CODEENTRY(code)
 #endif
 
+#ifdef TRACE_ALLOC
+#  define TRACE_ALLOC_CODE(code) \
+     if (trace_alloc_handle) { code; }
+#else
+#  define TRACE_ALLOC_CODE(code)
+#endif
+
 #ifdef RTINFO
 #  define TIME_IOA(code)  if (timeIOA ) { code; }
 #  define TIME_AOA(code)  if (timeAOA ) { code; }

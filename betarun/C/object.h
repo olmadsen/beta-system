@@ -256,8 +256,8 @@ typedef struct _group_header
   struct _group_header  *data_start;
   long                  *protoTable;
   struct _group_header  *data_end;
-  long                   code_start;
-  long                   code_end;
+  pc_t                   code_start;
+  pc_t                   code_end;
   char                  *group_name;
   struct _{
     unsigned long        hash;
@@ -267,13 +267,13 @@ typedef struct _group_header
 } group_header;
 
 typedef void (*CellProcessFunc)(Object **theCell,Object *theObj);
-typedef void (*CellDisplayFunc)(long PC, Object *theObj);
+typedef void (*CellDisplayFunc)(pc_t PC, Object *theObj);
 
 #define MAXLABLELENGTH 200
 
 typedef struct _labeltable {
   FILE *fp;            /* The file pointer from which the nameTable is read */
-  int NextAddress;     /* The last address read from the fp. */
+  pc_t NextAddress;    /* The last address read from the fp. */
   char NextLabel[MAXLABLELENGTH]; /* The last label read from the fp. */
   int full;            /* Include all symbols? */
 #ifdef nti

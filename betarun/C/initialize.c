@@ -26,6 +26,10 @@ GLOBAL(long mcheck_line);
 #include "valhallaComm.h"
 #endif /* RTVALHALLA */
 
+#ifdef ALLOC_TRACE
+  void init_alloc_trace();
+#endif
+
 #ifdef MAC
 extern void _DataInit();
 
@@ -368,6 +372,10 @@ void Initialize()
   if (valhallaID) valhallaInit (0);
 #endif /* RTVALHALLA */
 #endif /* nti_bor */
+
+#ifdef ALLOC_TRACE
+  init_alloc_trace();
+#endif
 }
 
 #if (defined(__linux__) && defined(__i386__)) || defined(nti)
@@ -665,3 +673,30 @@ int _fini(void)
 
 
 #endif /* sparc */
+
+#ifdef ALLOC_TRACE
+
+FILE *alloc_trace_handle;
+
+/* Set environment variable ALLOC_TRACE_FILE to a filename
+ * to output trace info to that file.
+ * Set it to '| command' to send output to that command.
+ */
+
+void
+init_alloc_trace()
+{
+    char *atf = getenv("ALLOC_TRACE_FILE");
+    if (atf) {
+	if (*atf == '|') {
+	    alloc_trace_handle = popen(atf+1, "w");
+	} else {
+	    alloc_trace_handle = fopen(atf, "w");
+	}
+	if (!alloc_trace_handle) {
+	    perror("Open of ALLOC_TRACE_FILE failed\n");
+	}
+    }
+}
+
+#endif /* ALLOC_TRACE */

@@ -44,7 +44,7 @@ extern int getHeapInfo(int infoId);
 /* C/betaerror.c */
 extern char *ErrorMessage(BetaErr);
 #ifdef NEWRUN
-  extern void BetaError(BetaErr err, Object *theObj, long *SP, long *thePC);
+  extern void BetaError(BetaErr err, Object *theObj, long *SP, pc_t thePC);
 #else
   extern void BetaError(BetaErr, Object *);
 #endif
@@ -58,22 +58,22 @@ extern long M_Part(ProtoType * proto);
 #ifdef nti
 extern void NotifyFunc(char *s1);
 #endif
-extern void DisplayCell(long pc, Object *theObj);
+extern void DisplayCell(pc_t pc, Object *theObj);
 extern int IsmakingDump(void);
-extern void  DisplayObject(FILE *,Object *,long);
-extern int  DisplayBetaStack(BetaErr, Object *, long *, long);
+extern void  DisplayObject(FILE *,Object *,pc_t);
+extern int  DisplayBetaStack(BetaErr, Object *, pc_t, long);
 extern void NotifyErrorDuringDump(BetaErr errorNumber, BetaErr errorNumber2);
 #ifdef NEWRUN
-  extern unsigned long CodeEntry(ProtoType *theProto, long PC);
+  extern unsigned long CodeEntry(ProtoType *theProto, pc_t PC);
 #endif
 
 /* C/group.c */
 extern group_header* NextGroup (group_header*);
-extern char *GroupName(long, int);
+extern char *GroupName(pc_t, int);
 extern void AddGroup(group_header *new_group);
 extern int IsPrototypeOfGroup(group_header *gh, long data_addr);
 extern int IsPrototypeOfProcess(long pt);
-extern int IsBetaCodeAddrOfProcess(unsigned long addr);
+extern int IsBetaCodeAddrOfProcess(pc_t addr);
 extern int IsBetaDataAddrOfProcess(unsigned long addr);
 
 /* C/exit.c */
@@ -125,7 +125,7 @@ extern void InstallSigHandler(int sig);
 /* C/valhallaComm.c */
 extern void valhallaInit (int debug_valhalla);
 /* VAlloS is really in RUN/CRUN/NEWRUN */
-extern Structure *VAlloS(ProtoType *proto, long *SP, long PC);
+extern Structure *VAlloS(ProtoType *proto, long *SP, pc_t PC);
 
 /* C/sockets.c */
 extern signed long host2inetAddr(char *host);
@@ -144,7 +144,7 @@ extern long Errno(void);
 
 /* C/labelnametable.c */
 extern char* nextLabel(labeltable *handle);
-extern int nextAddress(labeltable *handle);
+extern pc_t nextAddress(labeltable *handle);
 extern labeltable *initReadNameTable (char* execFileName, int full);
 extern void freeNameTable(labeltable *handle);
 #ifdef nti
@@ -239,20 +239,20 @@ extern void DoStackCell(Object **theCell, Object *theObj);
 #ifdef RTVALHALLA
 extern long *CollectStackRoots(long *SP);
 #endif /* RTVALHALLA */
-extern int scanComponentStack (Component* comp, Object *curObj, int pc, CellDisplayFunc forEach);
+extern int scanComponentStack (Component* comp, Object *curObj, pc_t pc, CellDisplayFunc forEach);
 
 #ifdef sparc
 extern long frame_PC;
-extern void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func);
+extern void DisplayAR(RegWin *theAR, pc_t PC, CellDisplayFunc func);
 extern void TraverseSparcStackPart(RegWin *theAR, Object* prevObj, CellDisplayFunc func);
-extern void DisplaySPARCStack(BetaErr errorNumber, Object *theObj, long *thePC, long theSignal);
+extern void DisplaySPARCStack(BetaErr errorNumber, Object *theObj, pc_t *thePC, long theSignal);
 #endif /* sparc */
 
 #ifdef NEWRUN
-extern long WindBackSP(long SP, Object *obj, long PC);
+extern long WindBackSP(long SP, Object *obj, pc_t PC);
 extern void ProcessStackFrames(long SP, long StackStart, long stopAtComp, long dynOnly, CellProcessFunc func);
 extern void PrintStackFrame(long *PrevSP, long *SP);
-extern void DisplayNEWRUNStack(long *pc, Object *theObj, int signal);
+extern void DisplayNEWRUNStack(pc_t pc, Object *theObj, int signal);
 #ifdef RTDEBUG
 extern void PrintRefStack(void);
 #endif /* RTDEBUG */
@@ -268,13 +268,13 @@ void PrintValhallaRefStack(void);
 extern void ProcessStackPart(long *low, long *high, CellProcessFunc whenObject,CellProcessFunc whenNotObject);
 extern int SkipDataRegs(long *theCell);
 extern void PrintStack(long *StackEnd);
-extern void DisplayINTELStack(BetaErr errorNumber, Object *currentObject, long pc, long theSignal);
+extern void DisplayINTELStack(BetaErr errorNumber, Object *currentObject, pc_t pc, long theSignal);
 extern long *DisplayCallbackFrames(CallBackFrame *cbFrame, long *low, Object *currentObject, CellDisplayFunc func);
   extern void DisplayStackPart(long *low, long *high, Object *currentObject, CellDisplayFunc func);
 #endif /* intel */
 
 #ifdef hppa
-extern void DisplayHPPAStack(long *thePC);
+extern void DisplayHPPAStack(pc_t thePC);
 #endif /* hppa */
 
 /* GC/ioa.c */
@@ -291,6 +291,11 @@ extern void IOACheckObject(Object *);
 extern void IOACheckReference(REFERENCEACTIONARGSTYPE);
 #endif
 
+#ifdef ALLOC_TRACE
+extern FILE *alloc_trace_handle;
+extern void CTraceAlloc();
+#endif
+
 /* GC/misc.c */
 extern int strongIsObject(Object *obj);
 extern ProtoType *getProto(Object *ref);
@@ -298,12 +303,12 @@ extern double gettimestampdouble(void);
 extern long getmilisectimestamp(void);
 extern long milisecsincelast(void);
 extern void assignRef(long *theCell, Item * newObject);
-extern void PrintCodeAddress(unsigned long addr);
+extern void PrintCodeAddress(pc_t addr);
 extern void PrintProto(ProtoType *proto);
 extern void PrintRef(Object *ref);
 extern void PrintObject(Object *obj);
 extern void DescribeObject(Object *);
-extern char *getLabel (unsigned long addr);
+extern char *getLabel (pc_t addr);
 extern long labelOffset;
 extern const char *WhichHeap(Object *ref);
 extern void PrintWhichHeap(Object *ref);
@@ -366,6 +371,14 @@ extern long AOAFreeListIndexGetStat(long index, long *min, long *max,
 				    long *usecount, long *usesize, 
 				    long *freecount, long *freesize);
 extern void AOAfree(void);
+int AOAtoIOAInsertImpl(Object **theCell);
+#ifdef MT
+void AOAtoIOAInsert(handle( Object) theCell);
+#endif
+#ifdef linux
+void donothingwithsiginfo(void *s);
+#endif
+
 
 /* PerformGC.c */
 #ifdef CRUN
@@ -373,7 +386,7 @@ extern void AOAfree(void);
 extern Object *doGC(unsigned long);
 #else /* !MT */
 extern void doGC(void);
-extern void doGCtoSP(long *SP, long PC); 
+extern void doGCtoSP(long *SP, pc_t PC); 
 #endif /* !MT */
 #endif /* CRUN */
 #ifdef NEWRUN

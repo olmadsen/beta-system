@@ -232,7 +232,7 @@ void IOAGc()
             Claim(inAOA(*pointer), "AOAtoIOAtable has a cell outside AOA");
             ProcessAOAReference( (Object **)*pointer, REFTYPE_DYNAMIC);
             if (!((inIOA(**(long**)pointer) || inToSpace(**(long**)pointer)))) {
-               fakes++;
+               *pointer = 0;  // Null out entries we don't need any more
             }
          }
          pointer++;
@@ -429,6 +429,7 @@ void IOAGc()
 #if defined(NEWRUN) || defined(sparc)
 #ifdef MT
       gIOATop    = ToSpaceTop; 
+      ALLOC_TRACE_CODE(
 #else /* MT */
       IOATopOff = (char *) ToSpaceTop - (char *) IOA;
 #endif /* MT */
@@ -465,7 +466,14 @@ void IOAGc()
    /* Clear all of the unused part of IOA (i.e. [IOATop..IOALimit[), 
     * so that allocation routines do not need to clear cells.
     */
-   memset(GLOBAL_IOATop, 0, (long)GLOBAL_IOALimit-(long)GLOBAL_IOATop);
+   {
+       long * ioaclear = (long *)GLOBAL_IOATop;
+       long * ioatop = ioaclear + (((long)GLOBAL_IOALimit-(long)GLOBAL_IOATop) >> 2);
+       for ( ; ioaclear < ioatop; ioaclear++) {
+	   *ioaclear = 0;
+	   beta_prefetchw512(ioaclear);
+	}
+   }
   
 #ifdef MT
    DEBUG_IOA({ 

@@ -61,7 +61,7 @@ extern void valhalla_fill_buffer (void);
 extern void valhalla_readbytes (char* buf, int bytes);
 extern int  valhalla_readint(void);
 
-/* int ValhallaOnProcessStop (long*  PC, long* SP, Object * curObj, 
+/* int ValhallaOnProcessStop (pc_t PC, long* SP, Object * curObj, 
  *                            long sig, long errorNumber)
  * ====================================================================
  *
@@ -92,7 +92,7 @@ extern int  valhalla_readint(void);
  * Possible return values:
  *     CONTINUE, TERMINATE. */
 
-int ValhallaOnProcessStop (long*  pc, long* sp, Object * curObj, 
+int ValhallaOnProcessStop (pc_t pc, long* sp, Object * curObj, 
 			   long sig, long errorNumber);
 
 /* Values of errorNumber in cases 3 and 4 of calling ValhallaOnProcessStop. */

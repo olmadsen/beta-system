@@ -30,8 +30,8 @@
  * but declared unconditionally in Declaration.run.
  * Thus declared unconditionally here.
  */
-GLOBAL(long CkPC1);
-GLOBAL(long CkPC2);
+GLOBAL(pc_t CkPC1);
+GLOBAL(pc_t CkPC2);
 GLOBAL(Object * CkP1);
 GLOBAL(Object * CkP2);
 GLOBAL(Object * CkP3);
@@ -80,9 +80,9 @@ void CClaim(long expr, char *description, char *fname, int lineno)
     char *lab;
     fprintf(output, "Caused by Ck called from PC=0x%x (called from 0x%x)\n\n",
 	    (int)CkPC1, (int)CkPC2); 
-    lab = getLabel((unsigned long)CkPC1);
+    lab = getLabel(CkPC1);
     fprintf(output, "I.e., Ck called from <%s+0x%x> ", lab, (int)labelOffset);
-    lab = getLabel((unsigned long)CkPC2);
+    lab = getLabel(CkPC2);
     fprintf(output, ", called from <%s+0x%x>\n", lab, (int)labelOffset);
   }
 #endif
@@ -225,7 +225,7 @@ void PrintHeap(long * startaddr, long numlongs)
 
 
 #ifdef intel
-static void RegError(unsigned long pc1, unsigned long pc2, char *reg, Object * value)
+static void RegError(pc_t pc1, pc_t pc2, char *reg, Object * value)
 { 
   char *lab;
   fprintf(output, 
@@ -272,8 +272,8 @@ void CheckRegisters(void)
   extern Object * a2;
   extern Object * a3;
   extern Object * a4;
-  long pc1 = CkPC1 - 5; /* sizeof(call) = 1+4 bytes */
-  long pc2 = CkPC2 - 5; /* sizeof(call) = 1+4 bytes */
+  pc_t pc1 = CkPC1 - 5; /* sizeof(call) = 1+4 bytes */
+  pc_t pc2 = CkPC2 - 5; /* sizeof(call) = 1+4 bytes */
   Object * ebp = CkP1;
   Object * esi = CkP2;
   Object * edx = CkP3;
@@ -289,6 +289,7 @@ void CheckRegisters(void)
   if (!CheckCell(edx)) RegError(pc1, pc2, "edx", edx);
   if (!CheckCell(edi)) RegError(pc1, pc2, "edi", edi);
 }
+
 #endif /* intel */
 
 void PrintObjProto(Object *obj)
@@ -429,3 +430,29 @@ void Illegal(char *file, int line)
 }
 
 #endif /* RTDEBUG */
+
+#ifndef ALLOC_TRACE
+#ifdef RUN
+/* The following functions are only used in debug version, 
+ * but declared unconditionally in Declaration.run.
+ * Here we supply empty implementations to allow linking.
+ */
+void CTraceAlloc(void)
+{}
+#endif /* RUN */
+#else /* ALLOC_TRACE */
+
+void CTraceAlloc(void)
+{
+  pc_t pc1 = CkPC1 - 5; /* sizeof(call) = 1+4 bytes */
+  pc_t pc2 = CkPC2 - 5; /* sizeof(call) = 1+4 bytes */
+  Object * ebp = CkP1;
+  Object * esi = CkP2;
+  Object * edx = CkP3;
+  Object * edi = CkP4;
+
+  if (alloc_trace_handle)
+      fprintf(alloc_trace_handle, "ebp = %p, esi = %p, edx = %p, edi = %p, pc1 = %p, pc2 = %p\n", ebp, esi, edx, edi, pc1, pc2);
+}
+
+#endif /* ALLOC_TRACE */
