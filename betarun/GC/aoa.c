@@ -27,7 +27,7 @@ static void Phase3();
 long AOACreateNewBlock = FALSE;
 
 
-/* AOAAllocate allocate 'size' number of bytes in the Adult object area.
+/* AOAalloc allocate 'size' number of bytes in the Adult object area.
  * If the allocation succeeds the function returns a reference to the allocated
  * object, 0 otherwise.
  * The actual allocation depends on AOAState:
@@ -35,7 +35,7 @@ long AOACreateNewBlock = FALSE;
  *  == 1: Means try to allocate the object inside the Block AOATopBlock refers.
  *  == 2: We are out of memory, so return 0.
  */
-static ref(Object) AOAAllocate( size)
+static ref(Object) AOAalloc( size)
      long size;
 {
   ref(Block) newBlock(); /* Extern routine in block.c */
@@ -96,7 +96,7 @@ DEBUG_AOA(if (AOATopBlock)
 	AOATopBlock->top = (ptr(long)) Offset( oldTop, size);
 	return (ref(Object)) oldTop;
       }else{
-	fprintf( output, "# warning AOAAlloc: Object.Size > AOABlockSize\n"); 
+	fprintf( output, "#AOA warning: Object size is larger then AOABlockSize\n"); 
 	return 0;
       }
     }else{
@@ -123,7 +123,7 @@ ref(Object) CopyObjectToAOA( theObj)
   
   
   size = 4*ObjectSize( theObj);
-  if( (newObj = AOAAllocate( size)) == 0 ) return 0;
+  if( (newObj = AOAalloc( size)) == 0 ) return 0;
   
   theEnd = (ptr(long)) (((long) newObj) + size); 
   
