@@ -184,16 +184,17 @@ case "i?86":
 	switch("`uname -r`")
 	case "1.1*":
 		set xlib=/usr/X11R5/lib
+		if ( $?LD_LIBRARY_PATH ) then
+		  setenv LD_LIBRARY_PATH ${xlib}:${MOTIFHOME}:$LD_LIBRARY_PATH
+		else
+		  setenv LD_LIBRARY_PATH ${xlib}:${MOTIFHOME}
+		endif
 		breaksw
 	default:
+		### Not needed ####
 		set xlib=/usr/X11R6/lib
 		breaksw
 	endsw
-	if ( $?LD_LIBRARY_PATH ) then
-		setenv LD_LIBRARY_PATH ${xlib}:${MOTIFHOME}:$LD_LIBRARY_PATH
-	else
-		setenv LD_LIBRARY_PATH ${xlib}:${MOTIFHOME}
-	endif
 	breaksw
 case "IP[23][012]":
 	########### Silicon Graphics IRIX configuration #############
