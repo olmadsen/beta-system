@@ -93,14 +93,6 @@ HandleCB:
         .ENTRY
         stw %r2,-20(SP)   /* Save return - normal procedure entry */
 	ldo 128(SP),SP  /* Allocate stack frame for 32 words */
-#ifdef USE_EXTERNAL_MARKER
-	/* Push ExternalMarker for beta.dump */
-    	ldil	LR'RefSP,%r1
-	ldw	RR'RefSP(%r1),%r14
-	ldi	ExternalMarker,%r2 /* r2 has just been saved */
-	stws,ma	%r2,4(0,%r14)
-	stw 	%r14,RR'RefSP(0,%r1)
-#endif
 	/* Save the 15 words that may be destroyed by beta */
 	stw %r3,-128(SP) 
 	stw %r4,-124(SP)
@@ -118,12 +110,27 @@ HandleCB:
         stw %r16,-76(SP)
 	stw %r17,-72(SP)
 	stw %r18,-68(SP)
+#ifdef USE_EXTERNAL_MARKER
+	/* Push ExternalMarker on ReferenceStack for beta.dump */
+    	ldil	LR'RefSP,%r1
+	ldw	RR'RefSP(%r1),%r14
+	ldi	ExternalMarker,%r2 /* r2 has just been saved */
+	stws,ma	%r2,4(0,%r14)
+	stw 	%r14,RR'RefSP(0,%r1)
+#endif
         copy %r0,%r3 /* Clear BETA GC regs before entering BETA world */
         copy %r0,%r4
         copy %r0,%r5
         copy %r0,%r6
         bl CHandleCB,%r2    /* Call CHandleCB */
         copy %r0,%r7
+#ifdef USE_EXTERNAL_MARKER
+	/* Pop External Marker */
+    	ldil	LR'RefSP,%r1
+	ldw	RR'RefSP(%r1),%r14
+	addi 	-4,%r14,%r14
+	stw 	%r14,RR'RefSP(0,%r1)
+#endif
 	ldw -68(SP),%r18  /* Restore 15 words */
 	ldw -72(SP),%r17
 	ldw -76(SP),%r16
@@ -140,12 +147,6 @@ HandleCB:
 	ldw -120(SP),%r5
 	ldw -124(SP),%r4
 	ldw -128(SP),%r3
-#ifdef USE_EXTERNAL_MARKER
-	/* Pop External Marker - no need to load from RefSP (r14 saved) */
-	addi 	-4,%r14,%r14
-	ldil	LR'RefSP,%r1
-	stw 	%r14,RR'RefSP(0,%r1)
-#endif
 	/* Restore return */
 	ldw -20-128(SP),%r2  
 	ldsid (0,%r2),%r1      
