@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-06-02 15:23:23 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-06-03 09:57:59 $, SID: $Revision: 1.8 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -34,12 +34,12 @@ Initialize()
   InitTheCursor();
 #endif
   /* save struct sizes for efficiency */
-  ItemStructSize = headsize(Item)/4;
-  ComponentStructSize = headsize(Component)/4;
-  StackObjectStructSize = headsize(StackObject)/4;
-  ValRepStructSize = headsize(ValRep)/4;
-  RefRepStructSize = headsize(RefRep)/4;
-  StructureStructSize = headsize(Structure)/4;
+  ItemStructSize = headsize(Item);
+  ComponentStructSize = headsize(Component);
+  StackObjectStructSize = headsize(StackObject);
+  ValRepStructSize = headsize(ValRep);
+  RefRepStructSize = headsize(RefRep);
+  StructureStructSize = headsize(Structure);
 
   GetBetaEnv();
 

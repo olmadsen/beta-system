@@ -1,9 +1,9 @@
 
 /* MACRO_CopyBlock copy from address src to address dst a block
- * of length = len longs = len * 4 bytes. (testet)
+ * of length = len bytes. (Used to be longs!!)
  */
 #define MACRO_CopyBlock( src, dst, len) \
-{ long *XXe=((long *) dst)+len,*XXs=((long *) src),*XXd=((long *) dst);\
+{ unsigned char *XXe=((unsigned char *) dst)+len,*XXs=((unsigned char *) src),*XXd=((unsigned char *) dst);\
   while(XXd < XXe) *XXd++ = *XXs++;\
 }
 
