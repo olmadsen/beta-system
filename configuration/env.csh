@@ -62,7 +62,7 @@ case "sun4*"
 			setenv LD_RUN_PATH $MOTIFHOME/lib:/usr/dt/lib:$OPENWINHOME/lib
 		endif
 		breaksw
-	case "5.[45]":
+	case "5.[45]*":
 		######## Sun4 SPARC / Solaris configuration #######
 		setenv MACHINETYPE SUN4S
 		setenv objdir sun4s
