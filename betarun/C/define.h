@@ -257,3 +257,6 @@
 
 #define REFERENCEACTIONARGSTYPE Object **theCell
 #define REFERENCEACTIONARGS theCell
+
+#define UNKNOWNSTORE "AOA"
+#define UNKNOWNID 0

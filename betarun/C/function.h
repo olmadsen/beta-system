@@ -303,3 +303,16 @@ extern void AOAFreeListAnalyze1(void);
 extern void AOAFreeListAnalyze2(void);
 extern void AOADisplayMemoryArea(long *start, long *end);
 extern void GCInfo(void) ;
+
+/* proxy.c */
+extern long inProxy(long ip);
+extern long proxyAlive(Object **theCell);
+extern void initProxySpace(void); 
+extern void freeProxySpace(void); 
+extern long newProxy(Block *theBlock, Object *theObj);
+
+/* store.c */
+extern char *getStoreOfProcess(void);
+extern long getNextStoreId(void);
+extern long unknownStore(char *storeName);
+extern long unknownId(long id); 

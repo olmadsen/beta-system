@@ -162,6 +162,8 @@ typedef struct _Block{
   } info;
   long          *top;          /* Refers the top in this(Block)   */
   long          *limit;        /* Refers the limit of this(Block) */
+  long          id;
+  void          *dummy;
   long          *mmaplimit;    /* max limit of block */
   long          *mmapmaxlimit; /* max mmaplimit of block */
 } Block;
