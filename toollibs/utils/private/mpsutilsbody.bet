@@ -1,0 +1,304 @@
+ORIGIN '../mpsutils';
+INCLUDE '~beta/pretty/astviewer';
+INCLUDE '~beta/betaast/gram';
+INCLUDE '~beta/betaast/betacfl';
+INCLUDE '~beta/betaast/betasematt';
+INCLUDE '~beta/mps/metagrammarcfl';
+INCLUDE '~beta/mps/private/astparser';
+INCLUDE '~beta/basiclib/file';
+
+
+-- astLib: attributes --
+getCommentNode:
+  (# node: ^ast;
+     theExp: ^expanded;
+     gram: @grammar;
+  do (if symbol = gram.objectDenotation then
+         this(AST)[] -> theExp[];
+         l: gram.remote -> theExp.suffixWalkForProd
+         (# 
+         do current[] -> node[];
+            leave l;
+         #);
+         (if node[] = none then
+             this(AST)[] -> node[];
+         if);
+      else 
+         this(AST)[] -> node[];
+     if);
+  exit node[]
+  #);
+-- astInterfaceLib: attributes --
+getPretty: objectPool.get
+  (# type:: astViewer;
+     init::
+       (# 
+       do exception
+          (# 
+          do 'No instance of AstViewer found in the objectPool' -> msg.append;
+          #);
+       #);
+  #);
+
+
+
+-- MPSlistIterate: doPart --
+do scan
+   (# 
+   do (if current.kind
+       //kinds.interior then
+          (if current## <= sonCat## then
+              current[] -> this(iterate).current[];
+              inner iterate;
+          if);
+      if);
+   #);
+   
+-- MPSListSmartAppend: doPart --
+do (if noOfSons = 1 then
+       (# son1: ^AST;
+       do 1 -> get -> son1[];
+          (if son1.kind = kinds.optional then
+              (1, son[]) -> put;
+           else
+              son[] -> append;
+          if);
+       #);
+    else
+       son[] -> append;
+   if);
+   
+-- MPSlistRemoveEmptySons: doPart --
+do (# deleteList: [0] @integer;
+      top,i: @integer;
+   do noOfSons -> deleteList.new;
+      0 -> top;
+      iterate
+      (# doOptional::<
+           (# 
+           do top + 1 -> top;
+              theOptional.sonNo -> deleteList[top];
+           #);
+      #);
+      top -> i;
+      l: (if i > 0 then
+             deleteList[i] -> delete;
+             i - 1 -> i;
+             restart l;
+         if);
+   #);
+
+-- MPSlistPrepend: doPart --
+do exception (# do 'Not implemented' -> msg.append #);
+
+
+-- MPSinteractiveErrorReporterbeforeFirstError: doPart --
+do inner
+   
+-- MPSinteractiveErrorReporterafterLastError: doPart --
+do inner
+
+-- MPSinteractiveErrorReporterforEachError: doPart --
+do errorStream.newLine;
+   errorLines.reset;
+   l: (if not errorlines.eos then
+          '# ' -> errorStream.putText;
+          errorlines.getLine -> errorStream.putLine;
+          restart l;
+      if);
+   'Expected symbol' -> errorStream.putText;
+   (if legalSymbols.terminals.range = 1 then 
+       ': '->errorStream.putText;
+    else
+       's: '->errorStream.putText
+   if);
+   (for i: legalSymbols.terminals.range repeat
+        legalSymbols.terminals[i][]->errorStream.putText;
+        ' '->errorStream.put
+   for);
+   errorStream.newLine;
+   inner;
+   
+ 
+-- MPSAsthasGUIcomment: doPart --
+do (# node: ^AST;
+   do false -> value;
+      getCommentNode -> node[];
+      (if node.hasComment then
+          l: node.iterateComments
+            (# 
+            do 
+               (if current[]<>none then
+                   (if not current.empty then
+                       (if (1 -> current.inxGet) = '$' then 
+                           true -> value;
+                       if);
+                   if);
+               if);
+            #);
+      if);
+   #)
+-- MPSAstEnterGUIinfo: doPart --
+do (# 
+      comment: @text;
+      gram: @grammar;
+      position: @integer;
+      node: ^AST;
+   do '$ ' -> comment.putText;
+      value -> comment.putInt;
+      getCommentNode -> node[];
+      (if node.symbol= gram.objectEvaluation then
+          1 -> position;
+       else
+          3 -> position;
+      if);
+      (comment[], position) -> node.myInsertSubComment;
+   #);
+ 
+-- MPSASTExitGUIinfo: doPart --
+do (# node: ^AST;
+   do getCommentNode -> node[];
+      (if node.hasComment then
+          l: node.iterateComments
+            (# 
+            do (if current[] <> None then
+                   (if not current.empty then
+                       (if (1 -> current.inxGet) = '$' then 
+                           1 -> current.setPos;
+                           get: current.getInt
+                             (# 
+                                syntaxError::
+                                  (# 
+                                  do leave get;
+                                  #);
+                             #) -> value;
+                       if);
+                   if);
+               if);
+            #);
+      if);
+   #);
+   
+-- MPSAstIterateComments: doPart --
+do (if hasComment then
+       (if typeOfComment = 1 then
+           (# t: ^text;
+              theComment: ^comment;
+              ch: @char;
+              next: @
+                (# 
+                do (if not t.eos then
+                       t.get -> ch;
+                    else
+                       3 -> ch;
+                   if);
+                #);
+           do getComment -> theComment[];
+              theComment.getText -> t[];
+              t.reset;
+              next;
+              &text[] -> current[];
+              l1: (#
+                  do 
+                     (if ch 
+                      //1 then
+                         next;
+                         restart l1;
+                      //2 then
+                         inner iterateComments;
+                         next;
+                         &text[] -> current[];
+                         restart l1;
+                      //3 then
+                         leave l1;
+                      else
+                         ch -> current.put;
+                         next;
+                         restart l1;
+                     if);
+                  #);
+           #);
+       if);
+   if);
+   
+-- MPSAstInsertSubComments: doPart --
+do (# commentAST: ^comment; t: ^text;
+      pretty: ^astInterface.astViewer;
+      i, n: @integer;
+      position: @integer;
+      sub: ^text;
+   do (if not hasComment then
+          getPretty -> pretty[];
+          this(AST)[] -> pretty.pp.createEmptyComment -> t[];
+          (comment,0,frag[]) -> frag.grammar.newlexemText->commentAST[];
+          t[] -> commentAST.putText;
+          commentAST[] -> addComment;
+          1 -> typeOfComment;
+       else
+          getComment -> commentAST[];
+          commentAST.getText -> t[];
+      if);
+      (if inx = 1 then
+          1 -> position;
+       else
+          t.reset;
+          inx - 1 -> n;
+          0 -> i;
+          l: 1 -> t.findAll
+          (# 
+          do i + 1 -> i;
+             (if i = n then
+                 inx + 1 -> position;
+                 leave l;
+             if);
+          #);
+      if);
+      theComment.copy -> sub[];
+      2 -> sub.put;
+      (sub[], position) -> t.insert;
+      t[] -> commentAST.putText;
+   #)
+
+
+
+-- MPSfragmentGroupLocalPath: doPart --
+do exception (# do 'Not Implemented!' -> msg.append #);
+   
+-- MPSfragmentGroupFullPath: doPart --
+do (# anEntry: @diskEntry;
+   do name -> anEntry.path;
+      (localPath[], anEntry.path.head) -> thePathHandler.convertFilePath
+        -> expandedPath[];
+   #);
+   
+-- MPSfragmentGroupShortName: doPart --
+do (# aDiskEntry: @diskEntry;
+   do (fullName).copy -> aDiskEntry.path;
+      aDiskEntry.path.name -> name[];
+   #);
+   
+-- fragmentGroupScanBodyGroups: doPart --
+do prop.scanProp
+   (# 
+      doProp::
+        (# 
+        do prop.makeLC;
+           (if true
+            //'body' -> prop.equal then
+               scanParameters
+               (# doString::
+                    (# 
+                    do s.copy -> currentLocalPath[];
+                       currentLocalPath[] -> fullPath -> currentFullPath[];
+                       (if currentFullPath[] = none then
+                           (* Signal an exception *)
+                        else
+                           inner scanBodyGroups;
+                       if);
+                    #);
+               #);
+            //'mdbody' -> prop.equal then 
+               (* Her bør man vælge baseret på maskintype !!! *)
+           if);
+        #);
+   #);
