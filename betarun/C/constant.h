@@ -10,9 +10,10 @@
 #define WordRepPTValue         ((struct ProtoType *) -7)
 #define DoubleRepPTValue       ((struct ProtoType *) -8)
 #define DopartObjectPTValue    ((struct ProtoType *) -9)
+#define ObjectRepPTValue       ((struct ProtoType *) -10)
 
 #define MaxPTValue             -1
-#define MinPTValue             -9
+#define MinPTValue             -10
 
 #ifdef UseRefStack
 /* Used to mark external activation part on reference stack */
@@ -30,6 +31,7 @@
 #define WordRepType             8
 #define DoubleRepType           9
 #define DopartType             10
+#define ObjectRepType          11
 
 #define IOAMaxAge             128
 

@@ -72,6 +72,18 @@ typedef struct RefRep{
     long            Body[1];   /* The body part               */ 
 } RefRep;
 
+typedef struct ObjectRep{
+    ref(ProtoType)  Proto;     /* Reference to the Prototype  */
+    long            GCAttr;    /* The GC attribute            */
+    long            LowBorder; /* Lower bound of range        */
+    long            HighBorder;/* Higher bound of range       */
+    ref(ProtoType)  iProto;    /* Prototype of objects in rep */
+    ref(Object)     iOrigin;   /* Origin of objects in rep    */
+    long            isComp;    /* Is it component objects?    */
+    long            isDynamic; /* Objects allocated offline?  */
+    long            Body[1];   /* The body part               */ 
+} ObjectRep;
+
 typedef struct Structure{
     ref(ProtoType)  Proto;     /* StructurePTValue	      */
     long            GCAttr;    /* The GC attribute            */
