@@ -18,3 +18,6 @@ prettyprint:
 property:
 	@echo Generating property.html
 	@$(MAKEHTML) ${BETALIB}/grammars/property/property-meta.gram
+
+tags:
+	@echo There is nothing to tag here.

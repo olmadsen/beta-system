@@ -1,5 +1,5 @@
-generated:
+dist:
 	@./makeHTML
 
 tags:
-	etags *.html
+	@echo There is nothing to tag here.
