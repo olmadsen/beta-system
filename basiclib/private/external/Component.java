@@ -174,7 +174,23 @@ public class Component {
 		// Call myComponent.body.Do()
 		// We cannot use "do" do this directly, since "do" is
 		// a reserved Java language word.
-		myComponent.body.Do();
+		try{
+		    myComponent.body.Do();
+		} catch (Exception e){
+		    // Cannot have a catch ExOException, since
+		    // myComponent.body.Do (the BETA code) does not
+		    // declare that it throws this particular exception.
+		    // So instead we test it explicitly:
+		    if (e instanceof ExOException){
+			System.err.println("# Beta execution aborted: Cross Component leave/restart NYI.");
+			// Stop this thread and delegate exception to 
+			// myComponent.caller???
+		    } else {
+			System.err.print("# Beta execution aborted: ");
+		    }
+		    e.printStackTrace();
+		    System.exit(-1);
+		}
 		myComponent.isTerminated = true;
 		//myComponent.trace("Terminating Runner:"+myRunId);
 		myComponent.swap();
