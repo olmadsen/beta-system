@@ -102,7 +102,9 @@ void addEnv (char *name, char* value) {
 
   char tmp[TMPLENGTH];
   
-  printf("addnv %s = %s\n", name, value);
+#if 0
+  printf("addnv %s = %s\n", name, value));
+#endif
   
   if (strlen(name)+strlen(value)+2>=TMPLENGTH) 
     process_comm_exception("TMPLENGTH exceeded\n");

@@ -45,24 +45,15 @@
 
 #if defined(RTVALHALLA) && defined(intel)
 
-#ifdef SAVE_IN_DOT
-#include "dot.h"
-/* DOTdummyOnDelete
- * ==================
- * 
- * Dummy function used as parameter to DOT operations demanding a callback
- * function. 
+/*
+ * Since valhalla may now trigger
+ * GC in scripts evaluated in the context of debuggee, we have
+ * to make sure that Reference registers are updated during these
+ * GC's. So we fetch EDX, EDI, EBP and ESI from the scp and put them in
+ * DOT (which is GC'ed). We then put the (updated) values
+ * back after completing DisplayBetaStack (which calls 
+ * valhallaOnProcessStop).
  */
-static void DOTdummyOnDelete (int index)
-{ 
-  /* DEBUG_VALHALLA({
-   *   fprintf(output, 
-   *       "DOTdummyOnDelete called - object became garbage! Index: %d\n",
-   *       index);
-   *   });
-   */
-}
-#endif /* SAVE_IN_DOT */
 
 typedef struct register_handles {
   int edx;
@@ -81,43 +72,23 @@ static void SaveLinuxRegisters(struct sigcontext_struct *scp,
 	    "Sighandler: Saving registers (at PC=0x%08x) ",
 	    (int)scp->eip);
   });
-#ifdef SAVE_IN_DOT
-  DEBUG_VALHALLA(fprintf(output, "in DOT:\n"));
-#else
   DEBUG_VALHALLA(fprintf(output, "on ReferenceStack:\n"));    
-#endif /* SAVE_IN_DOT */
 
   if (scp->edx && inBetaHeap((Object*)scp->edx) && isObject((Object*)scp->edx)){
     DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->edx));
-#ifdef SAVE_IN_DOT
-    handles->edx = DOThandleInsert((Object*)scp->edx, DOTdummyOnDelete, 0);
-#else /* SAVE_IN_DOT */
     SaveVar(scp->edx); handles->edx=1;
-#endif /* SAVE_IN_DOT */
   }
   if (scp->edi && inBetaHeap((Object*)scp->edi) && isObject((Object*)scp->edi)){
     DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->edi));
-#ifdef SAVE_IN_DOT
-    handles->edi = DOThandleInsert((Object*)scp->edi, DOTdummyOnDelete, 0);
-#else /* SAVE_IN_DOT */
     SaveVar(scp->edi); handles->edi=1;
-#endif /* SAVE_IN_DOT */
   }
   if (scp->ebp && inBetaHeap((Object*)scp->ebp) && isObject((Object*)scp->ebp)){
     DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->ebp));
-#ifdef SAVE_IN_DOT
-    handles->ebp = DOThandleInsert((Object*)scp->ebp, DOTdummyOnDelete, 0);
-#else /* SAVE_IN_DOT */
     SaveVar(scp->ebp); handles->ebp=1;
-#endif /* SAVE_IN_DOT */
   }
   if (scp->esi && inBetaHeap((Object*)scp->esi) && isObject((Object*)scp->esi)){
     DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->esi));
-#ifdef SAVE_IN_DOT
-    handles->esi = DOThandleInsert((Object*)scp->esi, DOTdummyOnDelete, 0);
-#else /* SAVE_IN_DOT */
     SaveVar(scp->esi); handles->esi=1;
-#endif /* SAVE_IN_DOT */
   }
   DEBUG_VALHALLA(fprintf(output, "\n"));
 }
@@ -128,50 +99,83 @@ static void RestoreLinuxRegisters(struct sigcontext_struct *scp,
   DEBUG_VALHALLA({
     fprintf(output, "Sighandler: Restoring registers ");
   });
-#ifdef SAVE_IN_DOT
-  DEBUG_VALHALLA(fprintf(output, "from DOT:\n"));
-#else /* SAVE_IN_DOT */
   DEBUG_VALHALLA(fprintf(output, "from ReferenceStack:\n"));
-#endif /* SAVE_IN_DOT */
   if (handles->edx>=0) {
-#ifdef SAVE_IN_DOT
-    scp->edx = (unsigned long)DOThandleLookup(handles->edx);
-    DOThandleDelete (handles->edx);
-#else /* SAVE_IN_DOT */
     RestoreIntVar(scp->edx);
-#endif /* SAVE_IN_DOT */
     DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->edx));
   }
   if (handles->edi>=0) {
-#ifdef SAVE_IN_DOT
-    scp->edi = (unsigned long)DOThandleLookup(handles->edi);
-    DOThandleDelete (handles->edi);
-#else /* SAVE_IN_DOT */
     RestoreIntVar(scp->edi);
-#endif /* SAVE_IN_DOT */
     DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->edi));
   }
   if (handles->ebp>=0) {
-#ifdef SAVE_IN_DOT
-    scp->ebp = (unsigned long)DOThandleLookup(handles->ebp);
-    DOThandleDelete (handles->ebp);
-#else /* SAVE_IN_DOT */
     RestoreIntVar(scp->ebp);
-#endif /* SAVE_IN_DOT */
     DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->ebp));
   }
   if (handles->esi>=0) {
-#ifdef SAVE_IN_DOT
-    scp->esi = (unsigned long)DOThandleLookup(handles->esi);
-    DOThandleDelete (handles->esi);
-#else /* SAVE_IN_DOT */
     RestoreIntVar(scp->esi);
-#endif /* SAVE_IN_DOT */
     DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->esi));
   }
   DEBUG_VALHALLA(fprintf(output, "\n"));
 }
 #endif /* linux */
+
+#ifdef nti
+static void SaveWin32Registers(CONTEXT *scp, 
+			       register_handles *handles)
+{
+  DEBUG_VALHALLA({
+    fprintf(output, 
+	    "Sighandler: Saving registers (at PC=0x%08x) ",
+	    (int)scp->Eip);
+  });
+  DEBUG_VALHALLA(fprintf(output, "on ReferenceStack:\n"));    
+
+  if (scp->Edx && inBetaHeap((Object*)scp->Edx) && isObject((Object*)scp->Edx)){
+    DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->Edx));
+    SaveVar(scp->Edx); handles->edx=1;
+  }
+  if (scp->Edi && inBetaHeap((Object*)scp->Edi) && isObject((Object*)scp->Edi)){
+    DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->Edi));
+    SaveVar(scp->Edi); handles->edi=1;
+  }
+  if (scp->Ebp && inBetaHeap((Object*)scp->Ebp) && isObject((Object*)scp->Ebp)){
+    DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->Ebp));
+    SaveVar(scp->Ebp); handles->ebp=1;
+  }
+  if (scp->Esi && inBetaHeap((Object*)scp->Esi) && isObject((Object*)scp->Esi)){
+    DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->Esi));
+    SaveVar(scp->Esi); handles->esi=1;
+  }
+  DEBUG_VALHALLA(fprintf(output, "\n"));
+}
+
+static void RestoreWin32Registers(CONTEXT *scp, 
+				  register_handles *handles)
+{
+  DEBUG_VALHALLA({
+    fprintf(output, "Sighandler: Restoring registers ");
+  });
+  DEBUG_VALHALLA(fprintf(output, "from ReferenceStack:\n"));
+  if (handles->edx>=0) {
+    RestoreIntVar(scp->Edx);
+    DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->Edx));
+  }
+  if (handles->edi>=0) {
+    RestoreIntVar(scp->Edi);
+    DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->Edi));
+  }
+  if (handles->ebp>=0) {
+    RestoreIntVar(scp->Ebp);
+    DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->Ebp));
+  }
+  if (handles->esi>=0) {
+    RestoreIntVar(scp->Esi);
+    DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->Esi));
+  }
+  DEBUG_VALHALLA(fprintf(output, "\n"));
+}
+#endif /* nti */
 
 #endif /* RTVALHALLA && intel */
 
@@ -408,14 +412,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
     }
 #ifdef RTVALHALLA
     if (valhallaID){
-      /* We are running under valhalla. Since valhalla may now trigger
-       * GC in scripts evaluated in the context of debuggee, we have
-       * to make sure that Reference registers are updated during these
-       * GC's. So we fetch EDX, EDI, EBP and ESI from the scp and put them in
-       * DOT (which is GC'ed). We then put the (updated) values
-       * back after completing DisplayBetaStack (which calls 
-       * valhallaOnProcessStop).
-       */
+      /* We are running under valhalla */
       register_handles handles = {-1, -1, -1, -1};
       SaveLinuxRegisters(&scp, &handles);
       todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); 
@@ -612,7 +609,7 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 
   if (todo) {
     /* We have been through valhalla, and should continue execution.
-     * With the introduction of dynamic compilation into debugge, the 
+     * With the introduction of dynamic compilation into debuggee, the 
      * debuggee may have allocated in IOA and even caused GC.
      * That is, the current value (right here in the signal handler)
      * of the two global sparc registers holding IOA and IOATopOff
@@ -683,7 +680,22 @@ BetaSignalHandler(LPEXCEPTION_POINTERS lpEP)
       PC = (long *) --pContextRecord->Eip;
       DEBUG_VALHALLA(fprintf(output, "sighandler: adjusting PC to 0x%x\n", (int)PC); fflush(output));
     }
-    todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
+#ifdef RTVALHALLA
+    if (valhallaID){
+      /* We are running under valhalla. */
+      register_handles handles = {-1, -1, -1, -1};
+      SaveWin32Registers(pContextRecord, &handles);
+      todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); 
+      RestoreWin32Registers(pContextRecord, &handles);
+    } else {
+      /* Not running under valhalla */
+      todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); 
+    }
+#else /* !RTVALHALLA */
+    /* No support for valhalla */
+    todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig);
+#endif /* RTVALHALLA */
+    break;
   case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
     todo=DisplayBetaStack( RepRangeErr, theObj, PC, sig); break;
   case STATUS_ILLEGAL_INSTRUCTION /* was: EXCEPTION_ILLEGAL_INSTRUCTION */:
@@ -736,10 +748,6 @@ void beta_main(void (*AttBC)(Component *), Component *comp)
 {
   /* Set up structured exception handling for rest of execution */
 #ifdef nti_gnu
-  /* fprintf(output, "beta_main: exceptions not enabled\n"); 
-   * Annoying; ruins "run.demos | diff"
-   */
-
   __try1 (BetaSignalHandler_GNU)
       /* Start BETA execution */
       AttBC(comp);
