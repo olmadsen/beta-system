@@ -253,30 +253,121 @@ int SendSIGINT (pid_t pid)
 #include <Memory.h>
 #include <TextUtils.h>
 #include <stdio.h>
+#include <OSUtils.h>
+#include <ConditionalMacros.h>
+#include <Traps.h>
+#include <Gestalt.h>
+
+
+
+const ProcInfoType uppMemoryDispatchProcInfo = 
+          						kRegisterBased 
+                              | RESULT_SIZE (SIZE_CODE (sizeof(OSErr)))
+							  | REGISTER_RESULT_LOCATION (kRegisterD0)
+                              | REGISTER_ROUTINE_PARAMETER(1, kRegisterD0, kOneByteCode)
+                              | REGISTER_ROUTINE_PARAMETER(2, kRegisterD1, kTwoByteCode)
+                              | REGISTER_ROUTINE_PARAMETER(3, kRegisterA0, SIZE_CODE(sizeof(void*)))
+                              | REGISTER_ROUTINE_PARAMETER(4, kRegisterA1, SIZE_CODE(sizeof(long)));
+
+pascal OSErr  VMWriteProtectMemory(void *address, unsigned long count) 
+{
+
+	UniversalProcPtr  MemoryDispatch;
+	
+	MemoryDispatch = GetOSTrapAddress(_MemoryDispatch);
+	
+	printf("MemoryDispatch = %X\n", (int) MemoryDispatch);
+	
+	return CallOSTrapUniversalProc(MemoryDispatch, kRegisterBased 
+                              | RESULT_SIZE (SIZE_CODE (sizeof(OSErr)))
+							  | REGISTER_RESULT_LOCATION (kRegisterD0)
+                              | REGISTER_ROUTINE_PARAMETER(1, kRegisterD0, kOneByteCode)
+                              | REGISTER_ROUTINE_PARAMETER(2, kRegisterD1, kTwoByteCode)
+                              | REGISTER_ROUTINE_PARAMETER(3, kRegisterA0, SIZE_CODE(sizeof(void*)))
+                              | REGISTER_ROUTINE_PARAMETER(4, kRegisterA1, SIZE_CODE(sizeof(long))), 6, _MemoryDispatch, address, count);
+}
+
+pascal OSErr  VMUnWriteProtectMemory(void *address, unsigned long count) {
+
+	UniversalProcPtr  MemoryDispatch;
+	
+	MemoryDispatch = GetOSTrapAddress(_MemoryDispatch);
+	
+	printf("MemoryDispatch = %X\n", (int) MemoryDispatch);
+	
+	return CallOSTrapUniversalProc(MemoryDispatch, kRegisterBased 
+                              | RESULT_SIZE (SIZE_CODE (sizeof(OSErr)))
+							  | REGISTER_RESULT_LOCATION (kRegisterD0)
+                              | REGISTER_ROUTINE_PARAMETER(1, kRegisterD0, kOneByteCode)
+                              | REGISTER_ROUTINE_PARAMETER(2, kRegisterD1, kTwoByteCode)
+                              | REGISTER_ROUTINE_PARAMETER(3, kRegisterA0, SIZE_CODE(sizeof(void*)))
+                              | REGISTER_ROUTINE_PARAMETER(4, kRegisterA1, SIZE_CODE(sizeof(long))), 7, _MemoryDispatch, address, count);
+}
+
+
 
 int SendSIGINT(int pid) {
 	return 0;
 }
 
-int UnsetBreak(int pid, int address, int oldInstruction) {
- 
-	Str255 msg;
+int UnsetBreak(int pid, int address, int oldInstruction) { 
 	
-	sprintf((char *) msg, ";brc #%d; g", address);
-	c2pstr(msg);
-	DebugStr(msg);
-
-  return 0;
+	//long logicalPageSize;
+	//long logicalPageSizeMask;
+	OSErr err;
+	
+	
+	printf("UnsetBreak %d\n", address);
+	
+	
+	//Gestalt(gestaltLogicalPageSize, &logicalPageSize);
+	//logicalPageSizeMask = (~(logicalPageSize-1));
+	
+		
+	//err = VMUnWriteProtectMemory((void *) (address & logicalPageSizeMask), logicalPageSize);
+	//printf("VMUnWriteProtectMemory = %d\n", err);
+	
+	
+	* (UInt32 *) address = oldInstruction;
+	
+	MakeDataExecutable((UInt32 *) address, 4L);
+	
+	//err = VMWriteProtectMemory((void *) (address & logicalPageSizeMask), logicalPageSize);
+	//printf("VMUnWriteProtectMemory = %d\n", err);
+	
+	//err = DebuggerLockMemory((void *) (address & logicalPageSizeMask), logicalPageSize);
+	
+	return 0;
 }
 
 int SetBreak(int pid, int address, int* oldInstruction) { 
-
-	Str255 msg;
 	
-	sprintf((char *) msg, ";br #%d; g", address);
-	c2pstr(msg);
-	DebugStr(msg);
-
+	long logicalPageSize;
+	long logicalPageSizeMask;
+	OSErr err;
+	
+	printf("setbreak %d\n", address);
+	
+	
+	Gestalt(gestaltLogicalPageSize, &logicalPageSize);
+	logicalPageSizeMask = (~(logicalPageSize-1));
+	
+	err = DebuggerLockMemory((void *) (address & logicalPageSizeMask), logicalPageSize);
+	printf("DebuggerLockMemory = %d\n", err);
+	
+	err = VMUnWriteProtectMemory((void *) (address & logicalPageSizeMask), logicalPageSize);
+	printf("VMUnWriteProtectMemory = %d\n", err);
+	
+	
+	*oldInstruction = * (UInt32 *) address;
+	* (UInt32 *) address = BREAK_INST;
+	
+	
+	MakeDataExecutable((UInt32 *) address, 4L);
+	
+	//err = VMWriteProtectMemory((void *) (address & logicalPageSizeMask), logicalPageSize);
+	//printf("VMUnWriteProtectMemory = %d\n", err);
+	
 	return 0;
 }
 

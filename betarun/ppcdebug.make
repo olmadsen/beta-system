@@ -14,7 +14,7 @@ MAKEFILE     = ppcdebug.make
 		:C:valhallaFindComp.h ¶
 		:C:valhallaSOCKETS.h
 		
-Includes     = -i :C:
+Includes     = -i :C: -i :P:
 Sym¥PPC      = -sym full 
 ObjDir¥PPC   =
 
@@ -43,7 +43,6 @@ Objects¥PPC  = ¶
 		{ObjDir¥PPC}:C:labelnametable.debug ¶
 		{ObjDir¥PPC}:C:macsockets.debug ¶
 		{ObjDir¥PPC}:C:heapview.debug ¶
-		{ObjDir¥PPC}:C:proxy.debug ¶
 		{ObjDir¥PPC}:C:betaerror.debug ¶
 		{ObjDir¥PPC}:GC:aoa.debug ¶
 		{ObjDir¥PPC}:GC:aoafreelist.debug ¶

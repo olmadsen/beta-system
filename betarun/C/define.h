@@ -64,9 +64,9 @@
 
 #define macppc
 #define ppcmac /* alias */
-#ifdef RTVALHALLA
-#undef RTVALHALLA
-#endif
+//#ifdef RTVALHALLA
+//#undef RTVALHALLA
+//#endif
 #endif /* __powerc */
 #endif /* MAC */
 

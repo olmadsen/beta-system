@@ -666,8 +666,11 @@ static void print_protos(group_header *gh)
 static void adjust_header(group_header *gh)
 {
         long* proto=&gh->protoTable[1];
-        long min = MAXINT;
-        long max = MININT;
+        long mincode = MAXINT;
+        long maxcode = MININT;
+        long mindata = MAXINT;
+        long maxdata = MININT;
+        
         long mpart;
         long *code;
         
@@ -677,26 +680,36 @@ static void adjust_header(group_header *gh)
         NoOfPrototypes = gh->protoTable[0];
         for (i=0; i<NoOfPrototypes; i++){
                 current = (ProtoType *) *proto;
+                
+                if(*proto > maxdata) {
+                	maxdata = *proto;
+                }
+                if(*proto < mindata) { 
+                	mindata = *proto;
+                }
+                
                 if (current->MpartOff) {
                         mpart = **(long **)((long)current+current->MpartOff);
                         
-                        if (mpart < min) {
-                                min = mpart;
+                        if (mpart < mincode) {
+                                mincode = mpart;
                         }
                         code = (long *) mpart;
                         while(*code != 0)
                                 code++;
                         mpart = (long) code;
                         
-                        if (mpart > max) {
-                                max = mpart;
+                        if (mpart > maxcode) {
+                                maxcode = mpart;
                         }
                 }
         proto++;
     }
     
-    gh->code_start = min;
-    gh->code_end = max;
+    gh->code_start = mincode;
+    gh->code_end = maxcode;
+    //gh->data_start = (group_header *) mindata;
+    gh->data_end = (group_header *) (maxdata + 4);
   return;
 }
 

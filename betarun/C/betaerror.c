@@ -456,6 +456,9 @@ GLOBAL(static char UnknownError[25]);
 char *ErrorMessage(BetaErr errorNumber)
 {
   long  index = 0;
+  long  dummy;
+  
+  dummy = strlen(UnknownError);
   
   while( errorTable[index].errorNumber != 0){
     if( errorNumber == errorTable[index].errorNumber){
