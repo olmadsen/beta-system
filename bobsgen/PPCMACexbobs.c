@@ -76,6 +76,8 @@
 /*$b0*/
 /* to turn off output buffering insert  $b0  */
 
+#define MAC
+
 #ifdef MAC
 	#include ":p2c:p2c.h"
 #else

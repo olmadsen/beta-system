@@ -36,6 +36,7 @@
 #include <Script.h>
 
 #define	__COMPILINGMOREFILES
+#define SystemSevenOrLater 1
 
 #include "MoreFilesExtras.h"
 #include "FSpCompat.h"

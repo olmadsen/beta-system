@@ -5,6 +5,57 @@ double getTimeAsDouble(void);
 
 #include <Events.h>
 #include <OSUtils.h>
+#include <TextUtils.h>
+#include <Files.h>
+#include <Processes.h>
+
+
+static void convert(char *in, char *out)
+{
+	int count;
+	count = 0;
+	
+	while(in[count]) {
+		out[count+1] = in[count];
+		count++;
+	}
+	out[0] = (char) count;
+	out[count+1] = 0;
+	return;
+}
+
+
+int launchProcess(char *filename)
+{
+	FSSpec 				spec;
+	LaunchParamBlockRec params;
+	OSErr				err;
+	Str255				macname;
+	
+	
+	convert(filename, (char *)macname);
+	err = FSMakeFSSpec(0, 0, macname, &spec);
+	
+	if(err)
+		return err;
+	
+	params.launchBlockID = extendedBlock;
+	params.launchEPBLength = extendedBlockLen;
+	params.launchFileFlags = 0;
+	params.launchControlFlags = launchContinue | launchNoFileFlags;
+	params.launchAppSpec = &spec;
+	params.launchAppParameters = nil;
+	
+	err = LaunchApplication(&params);
+		
+	if (err == noErr) {
+		return 1;
+	}
+	else {
+		return -1;
+	}
+}
+
 
 int getImRead(int thefile)
 {  EventRecord theEvent;
