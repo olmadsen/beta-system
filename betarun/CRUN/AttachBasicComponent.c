@@ -11,7 +11,7 @@
 
 static TerminateBasicComponent() { BetaExit(0); }
 
-ParamThisComp(AttBC)
+ParamThisComp(void, AttBC)
 {
     register long *entrypoint;
 
@@ -21,7 +21,7 @@ ParamThisComp(AttBC)
     register long 		level 	      asm("%l7");
 #endif
 
-    GCable_Entry
+    GCable_Entry();
     FetchThisComp
 
     Ck(comp);
