@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1991-03-04 11:39:25 $, SID: $Revision: 1.6 $
+ * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1991-03-13 08:01:50 $, SID: $Revision: 1.7 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -192,15 +192,15 @@ static ReverseAndFollow( theCell)
   ref(Object) autObj;
 
   if( inAOA( theObj) ){
-    if( theObj->GCAttr > 0 ){
-      /* theObj is marked. */
-      *theCell = (ref(Object)) theObj->GCAttr; theObj->GCAttr = (long) theCell;
-      return;
-    }
     if( theObj->GCAttr == 0 ){
       /* theObj is autonomous and not marked. */
       *theCell = (ref(Object)) 1; theObj->GCAttr = (long) theCell;
       FollowObject( theObj);
+      return;
+    }
+    if( !(isStatic(theObj->GCAttr)) ){
+      /* theObj is marked. */
+      *theCell = (ref(Object)) theObj->GCAttr; theObj->GCAttr = (long) theCell;
       return;
     }
     /* theObj-GCAttr < 0, so theObj is a static Item. */
@@ -325,7 +325,7 @@ static Phase1()
 
 #define isAlive(x)  (toObject(x)->GCAttr != 0)
 #define isMarked(x) (x->GCAttr == 1)
-#define endChain(x) (((long) (x)) <= 1)
+#define endChain(x) (( -0xFFFF <= ((long) (x))) && (((long) (x)) <= 1))
 
 static handleAliveStatic( theObj, freeObj )
   ref(Object) theObj;
