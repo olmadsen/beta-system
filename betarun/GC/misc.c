@@ -222,16 +222,16 @@ int strongIsObject(Object *obj)
   if (!isSpecialProtoType(proto)) {
 #ifdef RISC
     if (((long)proto) & 3) {
-      DEBUG_CODE(fprintf(output,"strongIsObject: proto of object 0x%08x is not 4-aligned: 0x%08x\n", (int)obj, (int)proto));
+      DEBUG_CODE(fprintf(output,"strongIsObject: proto of object 0x%08x is not 4-aligned: 0x%08x (vtbl=0x%08x)\n", (int)obj, (int)proto, (int)obj->vtbl));
       DEBUG_CODE(fflush(output));
-      ILLEGAL;
+      /*ILLEGAL;*/
       return 0;
     }
 #endif
     if (!IsBetaDataAddrOfProcess((unsigned long)proto)) {
-      DEBUG_CODE(fprintf(output,"strongIsObject: proto of object 0x%08x is not in data segment: 0x%08X\n", (int)obj, (int)proto));
+      DEBUG_CODE(fprintf(output,"strongIsObject: proto of object 0x%08x is not in data segment: 0x%08X (vtbl=0x%08x)\n", (int)obj, (int)proto, (int)obj->vtbl));
       DEBUG_CODE(fflush(output));
-      ILLEGAL;
+      /*ILLEGAL;*/
       return 0;
     }
   }
@@ -755,32 +755,34 @@ static void RegError(unsigned long pc1, unsigned long pc2, char *reg, Object * v
 { 
   char *lab;
   fprintf(output, 
-	  "\nIllegal value for GC register %s at PC=0x%x (called from 0x%x): %s=0x%x\n", 
+	  "\nIllegal value for GC register %s=0x%x at PC=0x%x (called by 0x%x)\n", 
 	  reg, 
+	  (int)value,
 	  (int)pc1, 
-	  (int)pc2, 
-	  reg, 
-	  (int)value);
-  lab = getLabel(pc1);
-  fprintf(output, "I.e., PC is <%s+0x%x> ", lab, (int)labelOffset);
-  lab = getLabel(pc2);
-  fprintf(output, ", called from <%s+0x%x>\n", lab, (int)labelOffset);
-  
+	  (int)pc2);
   if (inBetaHeap(value)){
     if (inIOA(value)){
-      fprintf(output, "%s points to IOA, but not to a legal object.\n", reg);
+      fprintf(output, "%s points into IOA, but not to a legal object.\n", reg);
     }
     if (inAOA(value)){
-      fprintf(output, "%s points to AOA, but not to a legal object.\n", reg);
+      fprintf(output, "%s points into AOA, but not to a legal object.\n", reg);
     }
     if (inToSpaceArea(value)){
-      fprintf(output, "%s points in to ToSpace!\n", reg);
+      fprintf(output, "%s points into ToSpace!\n", reg);
     }
   } else {
     fprintf(output, "%s points out of BETA heaps!\n", reg);
   }
+  fprintf(output, "\t%s:\t0x%08x\n", reg, (int)value);
+  lab = getLabel(pc1);
+  fprintf(output, "\tPC:\t0x%08x <%s+0x%x>\n", (int)pc1, lab, (int)labelOffset);
+  lab = getLabel(pc2);
+  fprintf(output, "\tCaller:\t0x%08x <%s+0x%x>\n", (int)pc2, lab, (int)labelOffset);
+  
   fprintf(output, "\n");
+  fflush(output);
   ILLEGAL;
+  return;
 }
 
 static long CheckCell(Object *theCell)
