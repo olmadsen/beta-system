@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CopyValRep.c,v 1.16 1992-10-19 09:16:14 beta Exp $
+ * Mod: $Id: CopyValRep.c,v 1.17 1992-10-21 09:26:15 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -30,25 +30,16 @@ void CopyVR(ref(ValRep) theRep,
       /* newRep should go into LVRA. If LVRAAlloc causes an LVRACompaction
        * the value of theRep may be wrong after LVRAAlloc: this is the case
        * if the repetition pointed to by theRep was moved. To prevent this,
-       * we temporary set the LVRA cycle to be from tmpRep, and remember the
-       * cell that actually references the repetition. After LVRAAlloc, the
-       * original LVRACycle is restored.
+       * the cell actually referencing the repetition is remembered. This cell
+       * will be updated if the repetition is moved.
        */
-      long oldGC  = theRep->GCAttr; /* Cell that references the repetition */
-      ref(ValRep) tmpRep = theRep;  /* Local variable need to take address */
+      long cycleCell  = theRep->GCAttr; /* Cell that references the repetition */
       
-      DEBUG_LVRA(fprintf(output, "CopyValRep in LVRA\n"));
-
-      tmpRep->GCAttr = (long)&tmpRep; 
-      /* tmpRep will be updated if the repetition is moved by an 
-       * LVRACompaction 
-       */
-				
+      DEBUG_LVRA(fprintf(output, "CopyValRep allocates in LVRA\n"));
+		
       newRep = LVRAAlloc(tmpRep->Proto, range);
-      /* update theRep */
-      theRep = tmpRep;
-      /* restore original LVRA cycle of theRep */
-      theRep->GCAttr = oldGC;
+      /* update theRep, it may have been moved by LVRACompaction */
+      theRep = *cycleCell;
     }
     if (newRep) {
 	/* Make the LVRA-cycle of the new repetition */
