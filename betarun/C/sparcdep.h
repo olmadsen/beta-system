@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1992 Mjolner Informatics Aps.
- * Mod: $RCSfile: sparcdep.h,v $, rel: %R%, date: $Date: 1992-08-31 14:07:07 $, SID: $Revision: 1.9 $
+ * Mod: $RCSfile: sparcdep.h,v $, rel: %R%, date: $Date: 1992-09-01 11:31:56 $, SID: $Revision: 1.10 $
  * by Tommy Thorn
  */
 
@@ -167,9 +167,6 @@ register volatile void *GCreg3 asm("%o4");
  type C##name(struct Structure *struc)
 
 #define FetchStruc
-
-#define ForceVolatileRef(r)				\
-  __asm__("": "=r" (r))
 
 /* On the SPARC we need to skip the first instruction */
 #define CallBetaEntry(entry,item)			\

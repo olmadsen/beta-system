@@ -262,8 +262,6 @@ static inline long getRPReg()
 
 #endif /* GCable_Module */
 
-#define ForceVolatileRef(x) /* nothing on the snake */
-
 #define DeclReference1(type, name) type name
 #define DeclReference2(type, name) type name
 
