@@ -69,7 +69,7 @@
 
   (let ((case-replace t))
     (message "Fixing MIA references")
-    (tags-query-replace "\\[MIA \\(9[0-9]-[0-9]+\\)\\]" "<A HREF=\"../bibliography/index.html#mia\\1\">[MIA \\1]</A>" nil)))
+    (tags-query-replace "\\[MIA\\s-*\\(9[0-9]-[0-9]+\\)\\]" "<A HREF=\"../bibliography/index.html#mia\\1\">[MIA \\1]</A>" nil)))
 
 (defun miadoc-replace9 ()
   (interactive)
