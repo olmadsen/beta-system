@@ -61,7 +61,6 @@ void ExtsleepUntil(double due)
 # include <sys/time.h>
 # include <stdio.h>
 # include <sys/ioctl.h> 
-# include <fcntl.h>
 # include <errno.h>
 # include <unistd.h>
 # include <time.h>
@@ -200,74 +199,6 @@ void ExtsleepUntil (double due)
   double now = getTimeAsDouble();
   if (due > now) sleepDouble (due-now);
 }
-
-#if defined(sun4s) || defined(hpux9pa) || defined(linux) || defined(sgi)
-int getStandardInNonBlock()
-{
-  int fd = fileno(stdin);
-  
-  if (0 > fcntl(fd, F_SETFL, O_NONBLOCK)) {
-    return -1;
-  }
-
-  return fd;
-}
-
-/*
- * All fds that BETA reads from should be non-blocking.  Returns fd or -1 for
- * error.
- */
-
-int setFdNonBlock(int fd)
-{
-  if (0>fcntl(fd,F_SETFL, O_NONBLOCK)) {
-    return -1;
-  }
-  return fd;
-}
-
-/*
- * Nonblocking needs to be reset on fds that are passed to new process.
- * Returns fd or -1 for error.
- */
-
-int clearFdNonBlock(int fd)
-{
-  char buf[1000];
-  int result;
-  result = fcntl(fd, F_SETFL, 0);
-  if (0 > result) {
-    perror("clearFdNonBlock");
-    return -1;
-  }
-  return fd;
-}
-
-/*
- * Set the close-on-exec flag on a file descriptor.  This flag is cleared
- * when dup'ing or dup2'ing.  Useful to make sure the write end of pipes
- * is not kept open by child processes, thus messing up EOS/EOF detection.
- *
- * Returns 0 for success or -1 for failure (check errno)
- */
-
-int setFdCloExec(int fd)
-{
-  return fcntl(fd, F_SETFD, FD_CLOEXEC);
-}
-
-/*
- * Not normally necessary as dup does this for us.
- *
- * Returns 0 for success or -1 for failure (check errno)
- */
-
-int clearFdCloExec(int fd)
-{
-  return fcntl(fd, F_SETFD, 0);
-}
-
-#endif
 
 int getStandardIn ()
 { return fileno(stdin); } 
