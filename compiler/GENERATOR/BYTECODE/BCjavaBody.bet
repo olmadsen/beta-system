@@ -35,7 +35,7 @@ splitSignature:
      (* signature: (Ljava/lang/String;)Z     *)
   exit (name[], signature[], isStatic)
   #);
-SplitClassSignature: SplitSignature
+splitClassSignature: SplitSignature
   (# lastSlash: @integer;
      method: ^text;
   do (* name e.g.: java/lang/String/endsWith *)
@@ -50,6 +50,45 @@ SplitClassSignature: SplitSignature
          (1, lastSlash) -> name.delete;
      if);
   exit method[]
+  #);
+
+noArgsInSignature:
+  (# nargs: @int16;
+     T: ^text;
+  enter T[]
+  do 0 -> nargs;
+     T.reset;
+     (for i:T.lgth repeat
+          (if T.T[i]
+           // '(' then
+              (* start of parameter list *)
+           // ')' then
+              (* end of parameter list *)
+              leave noArgsInSignature;
+           // 'B' // 'C' // 'D' // 'F' // 'I' // 'J' // 'S' // 'Z' then
+              (* BaseType *)
+              nargs+1 -> nargs;
+           // 'L' then
+              (* ObjectType *)
+              i+1 -> i;
+              scanToSemiColon:
+                (if T.T[i]<>';' then i+1 -> i; restart scanToSemiColon if);
+              nargs+1 -> nargs;
+           // '[' then
+              (* ArrayType *)
+              i+1 -> i;
+              scanToNonBrace:
+                (if t.t[i]='[' then i+1 -> i; restart scanToNonBrace if);
+              nargs+1 -> nargs;
+           else
+              'noArgsInSignature: unknown character \''->screen.puttext;
+              t.t[i] -> screen.put;
+              '\' in signature \'' -> screen.puttext;
+              t[] -> screen.puttext;
+              '\'' -> screen.putline;
+          if);
+     for);
+  exit nargs
   #);
 
 jvmFIXME:  (* Bytecode compiler cannot handle patterns with the
@@ -1801,14 +1840,8 @@ do (# commentstream: @stream (* maybe something more useful *);
                    (if isInterfaceMethod then
                        invokeinterface -> jcf.emit;
                        (m[], n[], d[]) -> jcf.emitInterfaceMethodRef;
-                       1 -> nargs; (* interface pointer counts for one *)
-                       (if ((d.T[1]='(') and (d.T[2]=')')) then
-                           (* d = signature = '()...' i.e. no arguments *)
-                        else
-                           ',' -> d.findAll(# do nargs+1 -> nargs #);
-                           nargs+1 -> nargs;
-                       if);
-                       nargs -> jcf.emit;
+                       d[] -> noArgsInSignature -> nargs;
+                       nargs + 1 (* interface pointer counts for one *) -> jcf.emit;
                        0 -> jcf.emit;
                     else
                        (if isStatic then

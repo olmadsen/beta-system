@@ -21,5 +21,10 @@ public class Eclipse
 
 class IDocumentImpl implements IDocument
 {
-    public String get() { return "IDocumentImpl"; }
+    public String get() { 
+	return "IDocumentImpl";
+    }
+
+    public void replace(int x, int y, String s){ 
+    }
 }
