@@ -602,6 +602,7 @@ static void find_foreach(long PC, Object *theObj)
  */
 Object *find_activation(ProtoType *proto)
 {
+  Component *comp = ActiveComponent;
 #ifdef hppa
   fprintf(output, "find_activation: NYI\n");
   return 0;
@@ -613,18 +614,10 @@ Object *find_activation(ProtoType *proto)
 #endif /* NEWRUN */
   activation_object = 0;
   activation_proto = proto;
-  scanComponentStack (ActiveComponent, 0, 0, find_foreach);
-#if 0
-  /* FIXME:  stops at component - must continue with CallerComp in loop here */
-  /* probably this: */
-  {
-    Component *comp = ActiveComponent;
-    while (!activation_object && comp){
-      scanComponentStack (comp, 0, 0, find_foreach);
-      comp = comp->CallerComp;
-    }
+  while (!activation_object && comp){
+    scanComponentStack (comp, 0, 0, find_foreach);
+    comp = comp->CallerComp;
   }
-#endif
   return activation_object;
 }
 
