@@ -59,8 +59,8 @@ void CAdestroy(CAStorage *cas)
     TIFree(cas -> toCache, freeFunc);
     TIFree(cas -> fromCache, freeFunc);
     DESdestroy(cas -> des);
-    fprintf(stderr, "cas miss: %8d\n", (int)(cas -> miss));
-    fprintf(stderr, "cas hit : %8d\n", (int)(cas -> hit));
+    /*fprintf(stderr, "cas miss: %8d\n", (int)(cas -> miss));
+      fprintf(stderr, "cas hit : %8d\n", (int)(cas -> hit));*/
     free(cas);
 }
 
@@ -73,13 +73,16 @@ void CAflush(CAStorage *cas)
 u_long CAarea(CAStorage *cas,
               u_long minSize)
 {
-    /* Make sure that the size of the area is a multiple of the
-     * preferred buffer size.
-     */
-    minSize = (minSize >> (cas -> vl)) << (cas -> vl);
-    minSize += 1 << (cas -> vl);
-    
-    return DESarea(cas -> des, minSize);
+  /* Make sure that the size of the area is a multiple of the
+   * preferred buffer size.
+   */
+  /*fprintf(output, "CAarea: minsize before: 0x%08x\n", (int)minSize);*/
+  /*fprintf(output, "CAarea: cas -> vl: 0x%08x\n", (int)cas -> vl);*/
+  minSize = (minSize >> (cas -> vl)) << (cas -> vl);
+  minSize += 1 << (cas -> vl);
+  /*fprintf(output, "CAarea: minsize after: 0x%08x\n", (int)minSize);*/
+  
+  return DESarea(cas -> des, minSize);
 }
 
 u_long /* area offset */ CAallocate(CAStorage *cas,

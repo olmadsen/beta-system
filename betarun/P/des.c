@@ -87,6 +87,14 @@ void DESdestroy(DEStorage *des)
 
 static void DESWriteAreaTable(DEStorage *des)
 {
+  /*fprintf(output, 
+	  "DESWriteAreaTable, magic = 0x%X\n"
+	  "              storageTop = 0x%X\n"
+	  "               tableSize = 0x%X\n",
+	  (int)des -> areaTable -> magic,
+	  (int)des -> areaTable -> storageTop,
+	  (int)des -> areaTable -> tableSize);*/
+
    /* Write header information */
    Rewind(des -> fd);
    writeLong(des -> fd, &des -> areaTable -> magic);
@@ -113,6 +121,7 @@ static void DESWriteAreaTable(DEStorage *des)
 static u_long DESReadAreaTable(DEStorage *des)
 {
    readLong(des -> fd, &des -> areaTable -> magic);
+   /*fprintf(output, "read storagetop 1: 0x%0x8\n", (int)des -> areaTable -> storageTop);*/
    
    if (des -> areaTable -> magic == MAGIC) {
       readLong(des -> fd, &des -> areaTable -> storageTop);
@@ -201,6 +210,7 @@ u_long /* areaID */ DESarea(DEStorage *des,
                 /* Area unallocated */
                 current -> storageOffset = des -> areaTable -> storageTop;
                 des -> areaTable -> storageTop += minSize;
+		/*fprintf(output, "storagetop 2: 0x%0x8\n", (int)des -> areaTable -> storageTop);*/
                 current -> areaTop = 0;
                 current -> areaSize = minSize;
                 current -> allocated = 1;
@@ -381,6 +391,7 @@ static void extend(DEStorage *des,
       
             area -> storageOffset = des -> areaTable -> storageTop;
             des -> areaTable -> storageTop += minSize;
+	    /*fprintf(output, "storagetop 3: 0x%0x8\n", (int)des -> areaTable -> storageTop);*/
             area -> areaSize = minSize;
         } else {
             perror("extend: New size must be larger than old size");
@@ -429,6 +440,7 @@ static u_long create(DEStorage *des,
             des -> areaTable -> storageTop = 
                sizeof(u_long) * 3 +
                sizeof(struct areaTableEntry) * DEFAULTTABLESIZE;
+	    /*fprintf(output, "default storagetop: 0x%0x8\n", (int)des -> areaTable -> storageTop);*/
         
             DESWriteAreaTable(des);
             

@@ -120,6 +120,7 @@ void writeLong(int fd, unsigned long *n)
       DEBUG_CODE(ILLEGAL);
       BetaExit(1);
    }
+   /*fprintf(output, "writeLong: nendian: 0x%X\n", (int)nendian);*/
   
    if (nb != sizeof(unsigned long)) {
       fprintf(output, "putName: Could not write long\n");
@@ -230,8 +231,10 @@ unsigned long preferredBufferSize(int fd)
 #ifdef nti
   res = 8192;
 #else /* nti */
-  struct stat st;
   
+#if 0 
+  /* Prevents cross platform stores */
+  struct stat st;
   if (fstat (fd, &st) == 0) {
      res = st.st_blksize;
   } else {
@@ -240,6 +243,9 @@ unsigned long preferredBufferSize(int fd)
   if (res<8192) {
      res = 8192;
   }
+#else
+  res = 8192;
+#endif /* 0 */
 #endif /* nti */
 #endif /* MAC */
   return res;
