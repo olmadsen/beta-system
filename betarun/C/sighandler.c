@@ -51,12 +51,13 @@ void SignalHandler(sig, code, scp, addr)
   switch( sig){
     case SIGFPE: 
       switch(code){
+      case FPE_TRAPV_TRAP:
+	DisplayBetaStack( RefNoneErr, theObj); break;
       case FPE_CHKINST_TRAP:
 	DisplayBetaStack( RepRangeErr, theObj); break;
       case FPE_INTDIV_TRAP:
 	DisplayBetaStack( ZeroDivErr, theObj); break;
       default:
-	fprintf(stderr, "code: %d", code); fflush(stderr);
         DisplayBetaStack( ArithExceptErr, theObj);
       }
       break;
