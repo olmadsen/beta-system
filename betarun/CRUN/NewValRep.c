@@ -40,18 +40,33 @@ void CNewVR(ref(Object) theObj, long offset /* in ints */, long range)
 	    theRep = (casthandle(ValRep)theObj)[offset];
 	    
 	    switch( (long) theRep->Proto){
+#ifdef sparc
 	    case (long) ByteRepPTValue:
-	      CAlloVR1(theObj, offset*4, range); /* MP MP !! */
+	      CAlloVR1(theObj, 0, offset*4, 0, 0, range);
 	      break;
 	    case (long) WordRepPTValue:
-	      CAlloVR2(theObj, offset*4, range); /* MP MP !! */
+	      CAlloVR2(theObj, 0, offset*4, 0, 0, range); 
 	      break;
 	    case (long) ValRepPTValue:
-	      CAlloVR4(theObj, offset*4, range); /* MP MP !! */
+	      CAlloVR4(theObj, 0, offset*4, 0, 0, range);
 	      break;
 	    case (long) DoubleRepPTValue:
-	      CAlloVR8(theObj, offset*4, range); /* MP MP !! */
+	      CAlloVR8(theObj, 0, offset*4, 0, 0, range); 
 	      break;
+#else
+	    case (long) ByteRepPTValue:
+	      CAlloVR1(theObj, offset*4, range);
+	      break;
+	    case (long) WordRepPTValue:
+	      CAlloVR2(theObj, offset*4, range); 
+	      break;
+	    case (long) ValRepPTValue:
+	      CAlloVR4(theObj, offset*4, range);
+	      break;
+	    case (long) DoubleRepPTValue:
+	      CAlloVR8(theObj, offset*4, range); 
+	      break;
+#endif
 	    default:
 	      fprintf(output, "NewValRep: wrong prototype\n");
 	      exit(1);
