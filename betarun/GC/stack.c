@@ -5,8 +5,12 @@
  */
 
 #include "beta.h"
+
 #ifdef sparc
 #include "../CRUN/crun.h"
+#ifdef RTDEBUG
+/*#define LD_SEGMENT_TEST*/
+#endif
 #endif
 
 #ifdef hpux
@@ -386,8 +390,12 @@ void ProcessStack()
      */
     StackEnd = (long *)((struct RegWin *) StackEnd)->fp; /* Skip AR of doGC() */
     DEBUG_CODE( PC=((struct RegWin *) StackEnd)->i7 +8);
+
+#if 0
+    /* IOA(c)alloc now inlined! */
     StackEnd = (long *)((struct RegWin *) StackEnd)->fp
       /* Skip AR of IOA(c)alloc / DoGC() / lazyFetchIOAGc() */;
+#endif
 
 #ifdef RTDEBUG
     for (theAR =  (struct RegWin *) StackEnd;
@@ -768,14 +776,17 @@ static void initLabels()
   FILE *thePipe; 
   long labelAddress;
 
-  fprintf(output, "(initLabels ...");
+  fprintf(output, "(initLabels ... ");
   fflush(output);
 
 #ifdef sun4s
-  (void)sprintf(command,"nm -vhx %s | sort -r",ArgVector[0]);
+  (void)sprintf(command,"nm -vhxp %s | egrep -v '( s | S | b | B )'", ArgVector[0]);
 #else
-  (void) strcpy (command, "nm -grn ");
-  (void) strcat (command, ArgVector[0]);
+  (void)sprintf(command, "nm -grn %s", ArgVector[0]);
+#endif
+
+#if 0
+  fprintf(output, "\n%s:\n", command);
 #endif
 
   /* Find number of labels */
@@ -784,15 +795,19 @@ static void initLabels()
 #ifdef SPARC_LD_SEGMENT_TEST
   /* Skip to etext */
   for (;;){
-    fscanf(thePipe, "%x %c %s", &labelAddress, &ch, theLabel);
+    fscanf(thePipe, "0x%08x %c %s\n", &labelAddress, &ch, theLabel);
     if (labelAddress==(long)&etext) break;
   }
 #endif /* SPARC_LD_SEGMENT_TEST */
   numLabels=0;
   for (;;){
-    if (fscanf(thePipe, "%x %c %s", (int *)&labelAddress, &ch, theLabel) == EOF)
+    if (fscanf(thePipe, "0x%08x %c %s\n", (int *)&labelAddress, &ch, theLabel) == EOF)
       break;
     numLabels++;
+#if 0
+    fprintf(output, "0x%08x %c %s\n",  (unsigned)labelAddress, ch, theLabel);
+    fflush(output);
+#endif
   }
 
   if (! (labels=(struct label **)MALLOC(numLabels * sizeof(struct label *)))) {
@@ -809,14 +824,14 @@ static void initLabels()
 #ifdef SPARC_LD_SEGMENT_TEST
       /* Skip to etext */
       for (;;){
-	fscanf(thePipe, "%x %c %s", (int *)&labelAddress, &ch, theLabel);
+	fscanf(thePipe, "0x%08x %c %s\n", (int *)&labelAddress, &ch, theLabel);
 	if (labelAddress==(long)&etext) break;
       }
 #endif /* SPARC_LD_SEGMENT_TEST */
       /* Read labels */
       for (;;lastLab++){
 	struct label *lab;
-	if (fscanf(thePipe, "%x %c %s", (int *)&labelAddress, &ch, theLabel) == EOF)
+	if (fscanf(thePipe, "0x%08x %c %s\n", (int *)&labelAddress, &ch, theLabel) == EOF)
 	  break;
 	if (! (lab = (struct label *) MALLOC(sizeof(struct label)))){
 	  fprintf(output, "Allocation of struct label failed\n");
@@ -849,8 +864,8 @@ static void initLabels()
   fprintf(output, "Labels:\n");
   { 
     long n;
-    for (n=0; n<=numLabels; n++){
-      fprintf(output, "0x%x\t%s\n", labels[n]->address, labels[n]->id);
+    for (n=0; n<numLabels; n++){
+      fprintf(output, "0x%x\t%s\n", (unsigned)labels[n]->address, labels[n]->id);
     }
   }
   fflush(output);
