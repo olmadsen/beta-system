@@ -146,7 +146,6 @@ static struct Object *AOAallocate(long numbytes)
 
 #ifdef NEWRUN
 #define AOA_ALLOC_PARAMS long numbytes, long *SP
-extern void DoGC(void);
 #else
 #define AOA_ALLOC_PARAMS long numbytes
 #endif 
