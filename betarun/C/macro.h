@@ -105,7 +105,7 @@ extern int dmalloc_verify(int);
 #define MCHECK()
 #endif
 
-#ifdef intel
+#ifdef intel_we_cant_use_this_code_before_we_can_patch_it_away_at_runtim
 #define beta_prefetch(x)     asm ("prefetch 0(%0)" :: "r" (x))
 #define beta_prefetch512(x)     asm ("prefetch 512(%0)" :: "r" (x))
 #define beta_prefetchw512(x)     asm ("prefetch 512(%0)" :: "r" (x))

@@ -1,7 +1,17 @@
-char betarun_version[] = "BETARUN VERSION 5.3(46)";
+char betarun_version[] = "BETARUN VERSION 5.3(47)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.46  2001/11/22 13:48:50  grouleff
+ * Removed extra buffer in SBOBJlookup and USloadObject. Now loads directly
+ * into AOA. Added SBOBJload and changed SBOBJlookup, USloadObject for
+ * this.
+ *
+ * Tried to get sun4s to compile after EC's changes to the type of thePC in
+ * various places... He'll get it back now...
+ *
+ * Betarun version number: 46
+ *
  * Revision 1.45  2001/11/22 13:37:23  corry
  * * Fix building of novalhalla betarun
  * * Build alloc_tracing version of betarun
