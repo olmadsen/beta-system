@@ -73,17 +73,18 @@
 
 #ifdef sgi
 #define UNIX 1
+#define RISC 1
 #endif
 
-#ifdef hpux
-#define UNIX 1
 #ifdef hppa
+#define UNIX 1
+#define RISC 1
 #define UseRefStack 1
-#endif
 #endif
 
 #ifdef sparc
 #define UNIX 1
+#define RISC 1
 #endif
 
 #ifdef nti 

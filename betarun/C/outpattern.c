@@ -544,11 +544,7 @@ static void DumpCell(Object **theCell,Object *theObj)
 
 #endif /* NEWRUN */
 
-#ifndef sparc
-#ifndef hppa
-#ifndef NEWRUN
-
-/********** Support routines for motorola-like stacks *************/
+#ifdef intel
 
 #define NotInHeap(address) \
   (!(inIOA(address) || inAOA(address)))
@@ -600,13 +596,15 @@ static void DisplayStackPart(FILE *output,
   fflush(output);
 }
 
-#endif /* NEWRUN */
-#endif /* hppa */
-#endif /* sparc */
+#endif /* intel */
 
-/************* support routines for SPARC ***************/
-
+/*************************** Begin SPARC ******************************/
 #ifdef sparc
+
+/*
+ * This is the SPARC specifics of DisplayBetaStack
+ */
+
 void DisplayAR(FILE *output, RegWin *theAR, long PC)
 {
   Object *lastObj /* used for last successfully identified object */;
@@ -705,7 +703,127 @@ void DisplayAR(FILE *output, RegWin *theAR, long PC)
     this+=2;
   }
 }
+
+void DisplaySPARCStack(BetaErr errorNumber, 
+		       Object *theObj, 
+		       long *thePC, 
+		       long theSignal)
+{
+  RegWin *theAR;
+  RegWin *nextCBF = (RegWin *) ActiveCallBackFrame;
+  RegWin *nextCompBlock = (RegWin *) lastCompBlock;
+  long   *PC=thePC;
+  
+  /* Flush register windows to stack */
+  __asm__("ta 3");
+
+  TRACE_DUMP(fprintf(output, ">>>TraceDump: StackEnd:   0x%x\n", (int)StackEnd));
+  TRACE_DUMP(fprintf(output, ">>>TraceDump: StackStart: 0x%x\n", (int)StackStart));
+
+  theAR = (RegWin *) StackEnd;
+
+  /* First check for errors occured outside BETA and wind down
+   * to BETA part of stack, if possible.
+   */
+  if (!IsBetaCodeAddrOfProcess((long)PC)){
+    fprintf(output, 
+	    "  [ EXTERNAL ACTIVATION PART (address 0x%x", 
+	    (int)PC);
+    DEBUG_CODE(PrintCodeAddress((long)error_pc));
+    fprintf(output, ") ]\n");
+
+    TRACE_DUMP(fprintf(output, "  Winding back through C frames on top\n"));
+    for (PC = (long *)theAR->i7, theAR = (RegWin *) theAR->fp;
+	 !IsBetaCodeAddrOfProcess((long)PC);
+	 PC = (long *)theAR->i7, theAR = (RegWin *) theAR->fp){
+      DEBUG_CODE({
+	fprintf(output, "    [");
+	PrintCodeAddress((int)PC);
+	fprintf(output, " ]\n");
+      });
+      if ((theAR->fp==0) || (theAR->fp==StackStart) || (PC = 0)){
+	TRACE_DUMP({
+	  fprintf(output, 
+		  "Wierd: Did not find any BETA frames... At theAR=0x%x\n",
+		  (int)theAR);
+	});
+	return;
+      }
+    }
+    TRACE_DUMP(fprintf(output, "  Winding through frames on top done."));
+    c_on_top=0; /* No more C frames on top */
+  }
+
+  for (;
+       theAR != (RegWin *) 0;
+       PC = (long*)theAR->i7, theAR =  (RegWin *) theAR->fp) {
+    /* PC is execution point in THIS frame. The update of PC
+     * in the for-loop is not done until it is restarted.
+     */
+    TRACE_DUMP(fprintf(output, ">>>TraceDump: DisplayBetaStack: theAR->fp: 0x%x\n", (int)theAR->fp));
+    if (theAR->fp == (long)nextCBF) {
+      /* This is AR of the code stub (e.g. <foo>) called from HandleCB. 
+       * Don't display objects in this, but skip to betaTop and update 
+       * nextCBF 
+       */
+      RegWin *cAR;
+
+      TRACE_DUMP(fprintf(output, "  cb: "));
+      fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n");
+      /* Wind down the stack until betaTop is reached.
+       * This is only done to update PC in order to get the PC
+       * for the first frame before the callback.
+       */
+      TRACE_DUMP(fprintf(output, 
+			 "  Winding back to 0x%x", 
+			 (int)((RegWin *)theAR->fp)->l6
+			 ));
+      for (cAR = theAR;
+	   cAR != (RegWin *)((RegWin *)theAR->fp)->l6;
+	   PC = (long *)cAR->i7, cAR = (RegWin *) cAR->fp){
+	DEBUG_CODE({
+	  fprintf(output, "    [");
+	  PrintCodeAddress((int)PC);
+	  fprintf(output, " ]\n");
+	});
+      };
+      nextCBF = (RegWin*) ((RegWin*)(theAR->fp))->l5;
+      theAR   = (RegWin*) ((RegWin*)(theAR->fp))->l6;
+      TRACE_DUMP(fprintf(output, "  Winding done."));
+    }
+    if (theAR == nextCompBlock) {
+      /* This is the AR of attach. Continue, but get
+       * new values for nextCompBlock and nextCBF. 
+       * Please read StackLayout.doc
+       */
+      nextCBF = (RegWin *) theAR->l5;
+      nextCompBlock = (RegWin *) theAR->l6;
+      
+      if (nextCompBlock == 0){ 
+	/* We reached the bottom */
+	TRACE_DUMP({
+	  fprintf(output, 
+		  ">>>TraceDump: reached frame of AttBC at SP=0x%x\n", 
+		  (int)theAR);
+	});
+	break;
+      }
+      
+      TRACE_DUMP({
+	fprintf(output, 
+		">>>TraceDump: reached frame of Att at SP=0x%x\n", 
+		(int)theAR);
+      });
+      continue;
+    } 
+    /* Normal frame */
+    DisplayAR(output, theAR, (long)PC);
+  }
+  return;
+}
+
 #endif /* sparc */
+/*************************** End SPARC ******************************/
 
 /********************** OpenDumpFile ********************/
 
@@ -924,10 +1042,8 @@ int DisplayBetaStack(BetaErr errorNumber,
 		     )
 {
   FILE *old_output=0;
-#ifndef sparc
-#ifndef hppa
-  Component *      currentComponent;
-#endif
+#ifdef intel
+  Component *currentComponent;
 #endif
 
   DEBUG_CODE({
@@ -1023,7 +1139,7 @@ int DisplayBetaStack(BetaErr errorNumber,
   }
 
   error_pc = (unsigned long)thePC;
-#if defined(sparc) || defined(hppa) || defined(sgi)
+#ifdef RISC
   /* Correct PC in case of unalignment */
   thePC = (long *)((long)thePC & ~3);
 #endif
@@ -1051,6 +1167,8 @@ int DisplayBetaStack(BetaErr errorNumber,
 #ifndef sparc
   /* If we are able to retrieve information about the current object
    * dump it.
+   * On the sparc, it resides in the top register window, and 
+   * nothing should be done.
    */
   TRACE_DUMP(fprintf(output, ">>>TraceDump: Current object 0x%x\n", (int)theObj));
   if( theObj != 0 ){
@@ -1158,126 +1276,10 @@ int DisplayBetaStack(BetaErr errorNumber,
 #endif
 /*************************** End NEWRUN ***************************/
 
-/*************************** Begin SPARC ******************************/
 
 #ifdef sparc
-  /*
-   * This is the SPARC specifics of DisplayBetaStack
-   */
-  {
-    RegWin *theAR;
-    RegWin *nextCBF = (RegWin *) ActiveCallBackFrame;
-    RegWin *nextCompBlock = (RegWin *) lastCompBlock;
-    long   *PC=thePC;
-    
-    /* Flush register windows to stack */
-    __asm__("ta 3");
-
-    TRACE_DUMP(fprintf(output, ">>>TraceDump: StackEnd:   0x%x\n", (int)StackEnd));
-    TRACE_DUMP(fprintf(output, ">>>TraceDump: StackStart: 0x%x\n", (int)StackStart));
-
-    theAR = (RegWin *) StackEnd;
-
-    /* First check for errors occured outside BETA and wind down
-     * to BETA part of stack, if possible.
-     */
-    if (!IsBetaCodeAddrOfProcess((long)PC)){
-      fprintf(output, 
-	      "  [ EXTERNAL ACTIVATION PART (address 0x%x", 
-	      (int)PC);
-      DEBUG_CODE(PrintCodeAddress((long)error_pc));
-      fprintf(output, ") ]\n");
-
-      TRACE_DUMP(fprintf(output, "  Winding back through C frames on top\n"));
-      for (PC = (long *)theAR->i7, theAR = (RegWin *) theAR->fp;
-	   !IsBetaCodeAddrOfProcess((long)PC);
-	   PC = (long *)theAR->i7, theAR = (RegWin *) theAR->fp){
-	DEBUG_CODE({
-	  fprintf(output, "    [");
-	  PrintCodeAddress((int)PC);
-	  fprintf(output, " ]\n");
-	});
-	if ((theAR->fp==0) || (theAR->fp==StackStart) || (PC = 0)){
-	  TRACE_DUMP({
-	    fprintf(output, 
-		    "Wierd: Did not find any BETA frames... At theAR=0x%x\n",
-		    (int)theAR);
-	  });
-	  return 0;
-	}
-      }
-      TRACE_DUMP(fprintf(output, "  Winding through frames on top done."));
-      c_on_top=0; /* No more C frames on top */
-    }
-
-    for (;
-	 theAR != (RegWin *) 0;
-	 PC = (long*)theAR->i7, theAR =  (RegWin *) theAR->fp) {
-      /* PC is execution point in THIS frame. The update of PC
-       * in the for-loop is not done until it is restarted.
-       */
-      TRACE_DUMP(fprintf(output, ">>>TraceDump: DisplayBetaStack: theAR->fp: 0x%x\n", (int)theAR->fp));
-      if (theAR->fp == (long)nextCBF) {
-	/* This is AR of the code stub (e.g. <foo>) called from HandleCB. 
-	 * Don't display objects in this, but skip to betaTop and update 
-	 * nextCBF 
-	 */
-	RegWin *cAR;
-
-	TRACE_DUMP(fprintf(output, "  cb: "));
-	fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n");
-	/* Wind down the stack until betaTop is reached.
-	 * This is only done to update PC in order to get the PC
-	 * for the first frame before the callback.
-	 */
-	TRACE_DUMP(fprintf(output, 
-			   "  Winding back to 0x%x", 
-			   (int)((RegWin *)theAR->fp)->l6
-			   ));
-	for (cAR = theAR;
-	     cAR != (RegWin *)((RegWin *)theAR->fp)->l6;
-	     PC = (long *)cAR->i7, cAR = (RegWin *) cAR->fp){
-	  DEBUG_CODE({
-	    fprintf(output, "    [");
-	    PrintCodeAddress((int)PC);
-	    fprintf(output, " ]\n");
-	  });
-	};
-	nextCBF = (RegWin*) ((RegWin*)(theAR->fp))->l5;
-	theAR   = (RegWin*) ((RegWin*)(theAR->fp))->l6;
-	TRACE_DUMP(fprintf(output, "  Winding done."));
-      }
-      if (theAR == nextCompBlock) {
-	/* This is the AR of attach. Continue, but get
-	 * new values for nextCompBlock and nextCBF. 
-	 * Please read StackLayout.doc
-	 */
-	nextCBF = (RegWin *) theAR->l5;
-	nextCompBlock = (RegWin *) theAR->l6;
-	
-	if (nextCompBlock == 0){ 
-	  /* We reached the bottom */
-	  TRACE_DUMP({
-	    fprintf(output, 
-		    ">>>TraceDump: reached frame of AttBC at SP=0x%x\n", 
-		    (int)theAR);
-	  });
-	  break;
-	}
-	
-	TRACE_DUMP({
-	  fprintf(output, 
-		  ">>>TraceDump: reached frame of Att at SP=0x%x\n", 
-		  (int)theAR);
-	});
-	continue;
-      } 
-      /* Normal frame */
-      DisplayAR(output, theAR, (long)PC);
-    }
-  }
+  DisplaySPARCStack(errorNumber, theObj, thePC, theSignal);
 #endif
-/*************************** End SPARC ***************************/
 
 /****************************** Begin INTEL ********************************/
 
