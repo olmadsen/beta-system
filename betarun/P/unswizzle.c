@@ -88,15 +88,14 @@ Object *USloadObject(CAStorage *store,
                      unsigned long inx,
                      u_long forced)
 {
-   unsigned long size, distanceToPart = 0;
-   Object *theStoreObj, *theRealStoreObj, *theRealObj;
+   unsigned long size, distanceToPart;
+   unsigned long enclosing;
+   Object *theRealObj;
    
-   theStoreObj = (Object *)SBOBJlookup(store, offset, &distanceToPart, &size);
-   /* theStoreObj is now in disk format */
-   
-   Claim(theStoreObj != NULL, "Could not look up store object");
-   
-   theRealStoreObj = (Object *)((u_long)theStoreObj - distanceToPart);
+   enclosing = SBOBJlookup(store, offset, &size);
+   Claim(enclosing, "Could not look up store object");
+
+   distanceToPart = offset - enclosing;
    
    theRealObj = AOAallocate(2*size, TRUE);
    loadedBytes += 2*size;
@@ -117,8 +116,9 @@ Object *USloadObject(CAStorage *store,
       IOATop = IOALimit;
 #endif
    }
-   memcpy(theRealObj, theRealStoreObj, size);
 
+   SBOBJload(store, enclosing, theRealObj, size);
+   
    /* The real object is imported - change from disk format to in-memory/heap format */
    importStoreObject(theRealObj, store, offset, inx, forced);
    

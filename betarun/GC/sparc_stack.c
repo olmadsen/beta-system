@@ -402,14 +402,14 @@ void TraverseSparcStackPart(RegWin *theAR, Object* prevObj, CellDisplayFunc func
 
 void DisplaySPARCStack(BetaErr errorNumber, 
 		       Object *theObj, 
-		       long *thePC, 
+		       pc_t thePC, 
 		       long theSignal)
 {
   /* FIXME: Could possibly use ProcessSPARCStack with suitable CellProcessFunc */
   RegWin *theAR;
   RegWin *nextCBF = (RegWin *) ActiveCallBackFrame;
   RegWin *nextCompBlock = (RegWin *) lastCompBlock;
-  long   *pc=thePC;
+  pc_t pc=thePC;
   
   /* Flush register windows to stack */
   __asm__("ta 3");

@@ -95,7 +95,7 @@ void BetaError(BetaErr err, Object *theObj)
 #ifdef NEWRUN
       DEBUG_CODE(fprintf(output, "          SP=0x%x,\n", SP));
       DEBUG_CODE(fprintf(output, "          thePC=0x%x", (int)thePC));
-      DEBUG_CODE(PrintCodeAddress((long)thePC));
+      DEBUG_CODE(PrintCodeAddress(thePC));
       DEBUG_CODE(fprintf(output, ")\n"));
       switch(err){
       case StopCalledErr /* called via FailureExit in betaenv.o */:
@@ -143,7 +143,7 @@ void BetaError(BetaErr err, Object *theObj)
       thePC = (long *) ((RegWin *)FramePointer)->i7;
       DEBUG_CODE(fprintf(output, "          StackEnd=0x%x,\n", (int)StackEnd));
       DEBUG_CODE(fprintf(output, "          thePC=0x%x", (int)thePC));
-      DEBUG_CODE(PrintCodeAddress((long)thePC));
+      DEBUG_CODE(PrintCodeAddress(thePC));
       DEBUG_CODE(fprintf(output, ")\n"));
 #endif /* sparc */
 
@@ -161,7 +161,7 @@ void BetaError(BetaErr err, Object *theObj)
 #error Find out Stack End for hppa without Reference Stack
 #endif /* UseRefStack */
       DEBUG_CODE(fprintf(output, "thePC=0x%x", (int)thePC));
-      DEBUG_CODE(PrintCodeAddress((long)thePC));
+      DEBUG_CODE(PrintCodeAddress(thePC));
       DEBUG_CODE(fprintf(output, ")\n"));
 #endif /* hppa */
 

@@ -878,7 +878,7 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
   case SIGBUS: /* Bus error */
     todo=DisplayBetaStack( BusErr, theObj, pc, sig); break;
   case SIGSEGV: /* Segmentation fault */
-    if (IsBetaCodeAddrOfProcess((unsigned long)pc)){
+    if (IsBetaCodeAddrOfProcess(pc)){
       todo=DisplayBetaStack( RefNoneErr, theObj, pc, sig);
     } else {
       todo=DisplayBetaStack( SegmentationErr, theObj, pc, sig);

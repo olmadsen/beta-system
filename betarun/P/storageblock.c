@@ -598,11 +598,16 @@ u_long getNumberOfUpdates(CAStorage *csb)
    return csb -> updates;
 }
 
-static char *obj = NULL;
-static u_long size = 0;
+/* oid is offset in store */
+u_long SBOBJload(CAStorage *csb, u_long oid, void *obj, u_long objSize)
+{
+   Claim(csb -> open, "Store closed");
+   CAload(csb, SBObjects, (char *)obj, oid, objSize);
+   return 0;
+}
 
 /* oid is offset in store */
-char *SBOBJlookup(CAStorage *csb, u_long oid, u_long *distanceToPart, u_long *objSize)
+u_long SBOBJlookup(CAStorage *csb, u_long oid, u_long *objSize)
 {
     u_long GCAttr;
 
@@ -612,28 +617,14 @@ char *SBOBJlookup(CAStorage *csb, u_long oid, u_long *distanceToPart, u_long *ob
     CAload(csb, SBObjects, (char *)&GCAttr, oid + sizeof(u_long), sizeof(u_long));
 
     if (GCAttr == 0) {
-       /* Autonom object - read size rigth before object */
+       /* Autonomous object - read size right before object */
        CAload(csb, SBObjects, (char *)objSize, oid - sizeof(u_long), sizeof(u_long));
 #ifdef PSENDIAN
        *objSize = ntohl(*objSize);
 #endif       
-       if (*objSize <= size) {
-          /* read object */
-          CAload(csb, SBObjects, obj, oid, *objSize);
-          objects++;
-          return obj;
-       } else {
-	 /* not enough room in buffer */
-          if (obj) {
-             free(obj);
-          }
-          size = *objSize;
-          obj = (char *)malloc(sizeof(char)* (*objSize));
-          return SBOBJlookup(csb, oid, distanceToPart, objSize);
-       }
+       return oid;
     } else {
       /* part object */
-       char *enclosing;
        u_long distance;
        
 #ifdef PSENDIAN
@@ -641,11 +632,7 @@ char *SBOBJlookup(CAStorage *csb, u_long oid, u_long *distanceToPart, u_long *ob
 #else
        distance = -4 * GCAttr;
 #endif
-       *distanceToPart   = *distanceToPart + distance;
-       
-       enclosing = SBOBJlookup(csb, oid - distance, distanceToPart, objSize);
-       
-       return enclosing + distance;
+       return SBOBJlookup(csb, oid - distance, objSize);
     }
 }
 

@@ -245,7 +245,7 @@ extern int scanComponentStack (Component* comp, Object *curObj, pc_t pc, CellDis
 extern long frame_PC;
 extern void DisplayAR(RegWin *theAR, pc_t PC, CellDisplayFunc func);
 extern void TraverseSparcStackPart(RegWin *theAR, Object* prevObj, CellDisplayFunc func);
-extern void DisplaySPARCStack(BetaErr errorNumber, Object *theObj, pc_t *thePC, long theSignal);
+extern void DisplaySPARCStack(BetaErr errorNumber, Object *theObj, pc_t thePC, long theSignal);
 #endif /* sparc */
 
 #ifdef NEWRUN
