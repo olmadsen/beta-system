@@ -56,26 +56,44 @@ void CQua(ref(Object) this,
   if (src){
     /* If src is NONE, all is well */
     
+    srcProto = 0;
+
     /* 1. Check reference assignment */
-    if (! inIOA(theCell) && inIOA(src)) 
-      AOAtoIOAInsert(theCell);
-    
+    if (! inIOA(theCell))
+      if (inIOA(src))
+	AOAtoIOAInsert(theCell);
+#ifdef RTLAZY
+      else if (isLazyRef(src)) {
+	negAOArefsINSERT(theCell);
+	srcProto = findDanglingProto(src);
+      }
+#endif
+
     /* 2. Qua Check */
-    switch((long) src->Proto){
-    case (long) StructurePTValue:
-      /* It was a pattern variable assignment: src is a struc-object */
-      srcProto  = (cast(Structure)src)->iProto;
-      break;
-    case (long) ComponentPTValue:
-      /* It was a component-reference assignment: src points to a component */
-      src       = cast(Object)(cast(Component)src)->Body;
-      srcProto  = src->Proto;
-      break;
-    default:
-      /* It was a normal reference assignment: src is normal object */
-      srcProto  = src->Proto;
-      break;
+#ifdef RTLAZY
+    if (srcProto == 0) {
+      /* src was not a dangler so its prototype has not been looked up yet. */
+#endif
+      switch((long) src->Proto){
+      case (long) StructurePTValue:
+	/* It was a pattern variable assignment: src is a struc-object */
+	srcProto  = (cast(Structure)src)->iProto;
+	break;
+      case (long) ComponentPTValue:
+	/* It was a component-reference assignment: src points to a component */
+	src       = cast(Object)(cast(Component)src)->Body;
+	srcProto  = src->Proto;
+	break;
+      case 0:
+	/* 
+	  default:
+	  /* It was a normal reference assignment: src is normal object */
+	  srcProto  = src->Proto;
+	break;
+      }
+#ifdef RTLAZY
     }
+#endif
     
     /* Check for EqS */
     if (srcProto == dstQuaProto){
@@ -150,8 +168,16 @@ void COQua(ref(Object) this,
     /* If src is NONE, all is well */
     
     /* 1. Check reference assignment */
-    if (! inIOA(theCell) && inIOA(src)) 
-      AOAtoIOAInsert(theCell);
+    if (! inIOA(theCell))
+      if (inIOA(src))
+	AOAtoIOAInsert(theCell);
+#ifdef RTLAZY
+      else if (isLazyRef(src)) {
+	negAOArefsINSERT(theCell);
+	fprintf (stderr, "Aaarghh: Strict QUA check on lazy reference -- Goodbye cruel world\n");
+	exit (99);
+      }
+#endif
     
     /* 2. Qua Check */
     switch((long) src->Proto){
