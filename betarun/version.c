@@ -1,7 +1,11 @@
-char betarun_version[] = "BETARUN VERSION 5.3(56)";
+char betarun_version[] = "BETARUN VERSION 5.3(57)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.56  2001/12/28 11:39:21  datpete
+ * Added debug count of calls of Ck()
+ * Betarun version number: 56
+ *
  * Revision 1.55  2001/12/05 13:45:15  corry
  * Patches to help Windows compile with mbs_make
  * Betarun version number: 55
