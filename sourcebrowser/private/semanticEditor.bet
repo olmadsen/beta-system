@@ -15,8 +15,10 @@ INCLUDE '~beta/objectbrowser/v2.0/UI/obguienvadds';
 INCLUDE '~beta/objectbrowser/v2.0/UI/labelled';
 
 --- browserlib: attributes ---
-semanticEditor: window
-  (# ff: ^mps.AST.fragmentForm;
+semanticEditor: ymerLocalWindow
+  (# fg: ^mps.AST.fragmentGroup;
+     fgName: ^text;
+     noErrors: @boolean;
      menubarType::
        (# fileMenu: @menu
             (# saveItem: @menuItem
@@ -53,65 +55,17 @@ semanticEditor: window
                     quitItem.open; quitItem[]->append
             #)#);
           open:: 
-            (#
-            do fileMenu.open; fileMenu[]->append
-            #)
+            (# do fileMenu.open; fileMenu[]->append #);
        #); (* menubarType *)
      contents: @dynpane
        (# dobind:
             (# 
             do TRUE->bindTop->bindLeft->bindRight->bindBottom;
-               theASTeditor.dobind;
-               theLSTView.dobind;
+               FFlist.dobind;
+               ErrorsList.dobind;
+               ASTeditor.dobind;
             #);
-          theASTeditor: @labelled
-            (# loading: @boolean;
-               changing: @boolean;
-               dobind:
-                 (#
-                 do installResizeRelativeAction;
-                    contents.dobind
-                 #);
-               contentsType::< codemoveableEditor
-                 (# dobind:
-                      (# do true->bindRight->bindBottom->bindLeft->bindTop #);
-                    selectNode:: 
-                      (# do node[]->browser.selectNode #);
-                    open::
-                      (# t: ^text;
-                      do
-                      #); 
-                    charWidthType::
-                      (#
-                      do theASTeditor.private.theLabel.style
-                           ->ts[]
-                      #);
-                    getEncloser:: (# do ffEncloser[]->theEncloser[] #);
-                    ffEncloser: @codemoveableEditorEncloser
-                      (# getAST:: (# do this(ymerApplication).mps.AST[]->AST[]; (if mps[]=none then 'mps NONE ERROR'->putline if) #);
-                         getBETACFL:: (# do this(ymerApplication).mps.BETACFL[]->BETACFL[] #);
-                      #);
-                 #); 
-               open:: 
-                 (# sz: @point;
-                    openContents::
-                      (# t: ^text
-                      do (theASTeditor[],sz)->contents.open;
-                         theASTeditor.contents[]
-                           ->browser.onCodeViewOpen;
-                         (contents.ffEncloser.getAST,contents.ffEncloser.getBETACFL,
-                         ff[],NONE)
-                           ->contents.newFragment;
-                         browser.currentGroup.name.copy->t[];
-                         '-'->t.put;ff.name->t.append;
-                         t[]->label; true->doneInInner
-                      #);
-                    w,h: @integer
-                 do this(semanticEditor).size->(w,h);
-                    (w,((h*2)/3)-1)->sz->size;
-                 #);
-            #);
-          theLSTView: @labelled
+          FFlist: @labelled
             (# dobind:
                  (#
                  do installResizeRelativeAction;
@@ -136,7 +90,94 @@ semanticEditor: window
                                       if);
                                   if);
                                   (if current[]<>NONE then
-                                      current.elm.select
+                                      current.elm.select;
+                                      selection.scrollIntoView
+                                  if)
+                              if)
+                           #)
+                      #);
+                    fgItem: listItem
+                      (# ff: ^mps.AST.fragmentForm;
+                         onSelect::
+                           (#
+                           do ff[]->ASTeditor.newFragment;
+                              ff[]->ErrorsList.contents.registerSemanticErrors;
+                              name->ASTeditor.label;
+                           #);
+                      #);
+                    registerFragmentForms:
+                      (# exp: ^mps.AST.expanded;
+                         fi: ^fgItem;
+                         fg: ^mps.AST.fragmentGroup;
+                         ff: ^mps.AST.fragmentForm
+                      enter fg[]
+                      do fg.fragmentList.scan
+                         (#
+                         do (if current.type
+                             // mps.AST.formType then
+                                (#
+                                do current.open->ff[];
+                                   (if ff.root.kind=mps.AST.kinds.interior then
+                                       ff.root[]->exp[];
+                                       l: exp.suffixWalk
+                                         (# t: ^text
+                                         do (if current.hasSemanticError then
+                                                &fgItem[]->fi[];
+                                                fi.init; 
+                                                ff[]->fi.ff[];
+                                                fgName.copy->t[];
+                                                '-'->t.put;ff.name->t.append;
+                                                t[]->fi.name;
+                                                leave l
+                                            if)
+                                         #)
+                                   if)
+                                #)
+                            if)
+                         #);
+                         (if fi[]=NONE then
+                             (none,'No semantic Errors','Semantic Errors Editor')->alertUser;
+                             true->noErrors
+                          else 
+                             (listitems.head).elm.select
+                         if)
+                      #);
+                    open::
+                      (# do 'Fragment Forms'->label #);
+                 #);
+               open:: 
+                 (# w,h: @integer;
+                 do this(semanticEditor).size->(w,h);
+                    (w,(h div 6)-1)->size;
+                 #);
+            #);
+          ErrorsList: @labelled
+            (# dobind:
+                 (#
+                 do installResizeRelativeAction;
+                    contents.dobind
+                 #);
+               contentsType:: listView
+                 (# current: ^listitems.theCellType;
+                    dobind:
+                      (# do TRUE->bindTop->bindLeft->bindRight->bindBottom #);
+                    eventhandler::
+                      (# onKeyDown::
+                           (#
+                           do (if ch
+                               // ascii.cr
+                               // ascii.nl then
+                                  (if current[]=NONE then
+                                      listitems.head->current[];
+                                   else
+                                      current.succ[]->current[];
+                                      (if current[]=NONE then
+                                          listitems.head->current[]
+                                      if);
+                                  if);
+                                  (if current[]<>NONE then
+                                      current.elm.select;
+                                      selection.scrollIntoView;
                                   if)
                               if)
                            #)
@@ -146,46 +187,89 @@ semanticEditor: window
                          errorText: ^text;
                          onSelect::
                            (#
-                           do
-(if theASTeditor[]=none then 'NONE'->putline else 'OK'->putline if);
-(if theASTeditor.contents[]=none then 'NONE'->putline else 'OK'->putline if);
-(if theASTeditor.contents.SifViewer[]=none then 'NONE'->putline else 'OK'->putline if);
+                           do this(errorItem)[]->listitems.at->current[];
                               (node[],1,0,0)
-                                ->theASTeditor.contents.SifViewer.setFocus
+                                ->ASTeditor.contents.SifViewer.setFocus
                            #);
                       #);
+                    registerSemanticErrors:
+                      (# exp: ^mps.AST.expanded;
+                         ei: ^errorItem;
+                         ff: ^mps.AST.fragmentForm;
+                      enter ff[]
+                      do listitems.scanReverse(# do current.delete #);
+                         listitems.clear;
+                         (if ff.root.kind=mps.AST.kinds.interior then
+                             ff.root[]->exp[];
+                             exp.suffixWalk
+                             (# 
+                             do (if current.hasSemanticError then
+                                    &errorItem[]->ei[];
+                                    ei.init;
+                                    current[]->ei.node[];
+                                    ei.node.semanticError
+                                      ->semanticErrorText
+                                      ->ei.errorText[]->ei.name;
+                                if)
+                             #)
+                         if);
+                         (if ei[]=NONE then
+                             (none,'No semantic Errors','Semantic Errors Editor')->alertUser;
+                             true->noErrors
+                          else (listitems.head).elm.select
+                         if)
+                      #);
                     open::
-                      (# registerSemanticErrors:
-                           (# exp: ^mps.AST.expanded;
-                              ei: ^errorItem;
-                           do scan:
-                                (#
-                                do (if ff.root.kind=mps.AST.kinds.interior then
-                                       ff.root[]->exp[];
-                                       exp.suffixWalk
-                                       (# 
-                                       do (if current.hasSemanticError then
-                                              &errorItem[]->ei[];
-                                              ei.init;
-                                              current[]->ei.node[];
-                                              ei.node.semanticError
-                                                ->semanticErrorText
-                                                ->ei.errorText[]->ei.name;
-                                          if)
-                                       #)
-                                   if)
-                                #)
-                           #)
-                      do 'Semantic Errors and Warnings'->label;
-                         registerSemanticErrors;
-                      #)
+                      (# do 'Semantic Errors and Warnings'->label #);
                  #);
                open:: 
                  (# w,h: @integer;
-                 do 'Semantic Errors'->label;
-                    this(semanticEditor).size->(w,h);
-                    (w,(h/3)-1)->size;
+                 do this(semanticEditor).size->(w,h);
+                    (w,(h div 6)-1)->size;
                  #)
+            #);
+          ASTeditor: @labelled
+            (# loading: @boolean;
+               changing: @boolean;
+               dobind:
+                 (#
+                 do installResizeRelativeAction;
+                    contents.dobind
+                 #);
+               newFragment:
+                 (# ff: ^mps.AST.fragmentForm;
+                 enter ff[]
+                 do (contents.ffEncloser.getAST,contents.ffEncloser.getBETACFL,
+                    ff[],NONE)->contents.newFragment;
+                 #);
+               contentsType::< codemoveableEditor
+                 (# dobind:
+                      (# do true->bindRight->bindBottom->bindLeft->bindTop #);
+                    selectNode:: 
+                      (# do node[]->browser.selectNode #);
+                    charWidthType::
+                      (# do ASTeditor.private.theLabel.style->ts[] #);
+                    getEncloser:: (# do ffEncloser[]->theEncloser[] #);
+                    ffEncloser: @codemoveableEditorEncloser
+                      (# getAST::
+                           (# do this(ymerApplication).mps.AST[]->AST[] #);
+                         getBETACFL::
+                           (# do this(ymerApplication).mps.BETACFL[]->BETACFL[] #);
+                      #);
+                 #); 
+               open:: 
+                 (# sz: @point;
+                    openContents::
+                      (# t: ^text
+                      do (ASTeditor[],sz)->contents.open;
+                         ASTeditor.contents[]
+                           ->browser.onCodeViewOpen;
+                         'No fragments selected'->label; true->doneInInner
+                      #);
+                    w,h: @integer
+                 do this(semanticEditor).size->(w,h);
+                    (w,((h*2) div 3)-1)->sz->size;
+                 #);
             #);
           open::
             (# setDefaults::
@@ -194,17 +278,20 @@ semanticEditor: window
                     50->minsize;
                     2->panewidth
                  #)
-            do theASTeditor.open; theLSTView.open;
-               theLSTView[]->appendMember; theASTeditor[]->appendMember;
+            do FFlist.open; ErrorsList.open; ASTeditor.open;
+               FFlist[]->appendMember; ErrorsList[]->appendMember; ASTeditor[]->appendMember;
                appendsDone;
-               dobind
+               dobind;
+               fg[]->FFlist.contents.registerFragmentForms;
+
             #)
        #);
      open::<
        (# w,h: @integer;
        do 'Semantic Errors Editor'->title;
-          (400,800)->size;
+          (600,800)->size; hide;
           INNER;
-          contents.open
+          contents.open;
+          (if noErrors then close else show if);
        #)
   #)

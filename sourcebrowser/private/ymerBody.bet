@@ -11,6 +11,7 @@ INCLUDE '~beta/debugger/v2.0/utils/buffered_io';
 INCLUDE '../dynpane';
 
 INCLUDE 'settings';
+INCLUDE 'fileEditor';
 INCLUDE 'parseEditor';
 INCLUDE 'semanticEditor';
 INCLUDE 'sourcebrowserbody';
@@ -77,9 +78,16 @@ isProject:
   exit '.prj'->(f.entry.path.name.suffix).equal
   #);
 
+--- browserFileEdit: dopart ---
+do (# fe: @fileEditor
+        (# open:: (# do (600,800)->size #) #);
+   do fe.open;
+      makefile[]->fe.loadFile;
+   #)
+
 --- ymerMPSparseerrors: dopart ---
 do true->continue;
-   (# pe: @parseEditor
+   (# pe: @ymerBrowser.browser.parseEditor
         (# open:: (# do (600,800)->size #) #);
    do pe.open;
       ymerBrowser.browser.currentGroup.location[]->pe.loadFiles;
@@ -682,8 +690,43 @@ do (*fileSelectionDialog(# do 'New group'->label[] #)->t[];
 do
 
 --- menuGroupsDeleteOnselect: dopart ---
+do 
+   
+--- menuGroupsSemanticOnstatus: dopart ---
+do false->value;
+   l: (if browser.currentGroup[]<>NONE then
+          (# exp: ^mps.AST.expanded;
+             ff: ^mps.AST.fragmentForm;
+             fg: ^mps.AST.fragmentGroup;
+          do browser.currentGroup.getfg->fg[];
+             (if fg[]<>NONE then
+                 fg.fragmentList.scan
+                 (#
+                 do (if current.type
+                     // mps.AST.formType then
+                        (#
+                        do current.open->ff[];
+                           (if ff.root.kind=mps.AST.kinds.interior then
+                               ff.root[]->exp[];
+                               exp.suffixWalk
+                               (# t: ^text
+                               do (if current.hasSemanticError then
+                                      true->value;
+                                      leave l
+                                  if)
+                               #)
+                           if)
+                        #)
+                    if)
+                 #)
+             if)
+          #)
+      if)
+   
+--- menuGroupsSemanticOnselect: dopart ---
 do (# se: @browser.semanticEditor
-   do browser.currentForm[]->se.ff[];
+   do browser.currentGroup.getfg->se.fg[];
+      browser.currentGroup.name[]->se.fgName[];
       se.open
    #)
    
@@ -766,6 +809,7 @@ do OS.init;
    mps.init;
    browsers.init;
    getSystemEnv->theSystemEnv[];
+   INNER init;
    ymerBrowser.open;
 #)
 
@@ -801,8 +845,7 @@ do OS.init;
                             onSelect::
                               (#
                               do browser.currentForm[]
-                                   ->panes.contents.addFragmentForm
-                                   ->removeMenu.addItem
+                                   ->panes.contents.addFragmentForm;
                               #);
                          #)
                     #);
@@ -826,8 +869,7 @@ do OS.init;
                                      // mps.AST.formType then
                                         (#
                                         do current.open
-                                             ->panes.contents.addFragmentForm
-                                             ->removeMenu.addItem;
+                                             ->panes.contents.addFragmentForm;
                                         #);
                                     if);
                                  #)
@@ -873,8 +915,10 @@ do OS.init;
         panes: @scroller
           (# contentsType:: dynpane
                (# changing: @boolean;
+                  FFVlist: @list(# element:: fragmentFormView #);
                   fragmentFormView: labelled
-                    (# onFatherFrameResizeRelative: @action
+                    (# ff: ^mps.AST.fragmentForm;
+                       onFatherFrameResizeRelative: @action
                          (# w,w1,h,h1: @integer;
                             eventType:: theEventHandler.fatherFrameChanged;
                          do (if not changing then
@@ -890,26 +934,23 @@ do OS.init;
                          do installResizeRelativeAction;
                             contents.dobind
                          #);
-                       getfg:<
-                         (# fg: ^mps.AST.fragmentForm
-                         do INNER
-                         exit fg[]
-                         #);
                        contentsType:: codemoveableEditor
                          (# dobind:
                               (# do true->bindRight->bindBottom->bindLeft->bindTop #);
                             selectNode:: 
-                              (# do node[]->browser.selectNode #);
+                              (# ffV: ^fragmentFormView
+                              do node.frag[]->addFragmentForm->ffV[];
+                                 (node[],1,0,0)
+                                   ->FFV.contents.SifViewer.setFocus;
+                              #);
                             open::
                               (# t: ^text;
-                                 ff: ^mps.fragmentForm
-                              do getfg->ff[];
-                                 this(fragmentFormView).contents[]
+                              do this(fragmentFormView).contents[]
                                    ->browser.onCodeViewOpen;
                                  (ffEncloser.getAST,ffEncloser.getBETACFL,
                                  ff[],NONE)
                                    ->newFragment;
-                                 browser.currentGroup.name.copy->t[];
+                                 (ff.father).fullName->fragmentDefaultName->t[];
                                  '-'->t.put;ff.name->t.append;
                                  t[]->label
                               #); 
@@ -935,19 +976,35 @@ do OS.init;
                          #)
                     #);
                   addFragmentForm:
-                    (# ffV: @fragmentFormView
-                         (# getfg:: (# do this(addFragmentForm).fg[]->fg[] #) #);
-                       w,h: @integer;
-                       fg: ^mps.AST.fragmentForm
-                    enter fg[]
-                    do panes.size->(w,h);
-                       (this(contentsType)[], (w-35,150))->ffV.open;
-                       
-                       true->changing;
-                       ffV[]-> this(contentsType).appendMember;
-                       this(contentsType).appendsDone; ffV.dobind;
-                       false->changing;
-                    exit ffV[]   
+                    (# ffV: ^fragmentFormView;
+                       w,h,pw,ph: @integer;
+                       ff: ^mps.AST.fragmentForm
+                    enter ff[]
+                    do l: FFVlist.scan
+                         (#
+                         do (if ff[]=current.ff[] then
+                                current[]->ffV[]; leave l;
+                            if)
+                         #);
+                       (if ffV[]=NONE then (* not already in workspace *)
+                           panes.size->(w,h);
+                           &fragmentFormView[]->ffV[];
+                           ff[]->ffV.ff[];
+                           (this(contentsType)[], (w-35,150))->ffV.open;
+                           
+                           true->changing;
+                           ffV[]-> this(contentsType).appendMember;
+                           this(contentsType).appendsDone; ffV.dobind;
+                           ffV[]->FFVlist.append;
+                           false->changing;
+                           
+                           ffV[]->(theMenubar).removeMenu.addItem;
+                       if);
+                       ffV.position->(w,h);
+w->putint;newline;h->putint;newline;
+                       panes.contents.position->(pw,ph);
+                       (pw,-h)->panes.contents.position (* panes.scrollIntoView *);
+                    exit ffV[]
                     #);
                   dobind:
                     (# do TRUE->bindTop->bindLeft->bindRight->bindBottom #);

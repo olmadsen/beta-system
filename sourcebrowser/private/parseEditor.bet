@@ -1,4 +1,4 @@
-ORIGIN  '~beta/guienv/v1.3/guienv';
+ORIGIN '../ymer';
 
 INCLUDE '~beta/guienv/v1.3/fields';
 INCLUDE '~beta/guienv/v1.3/stddialogs';
@@ -11,8 +11,8 @@ INCLUDE '../dynpane';
 INCLUDE '~beta/objectbrowser/v2.0/UI/obguienvadds';
 INCLUDE '~beta/objectbrowser/v2.0/UI/labelled';
 
---- guienvlib: attributes ---
-parseEditor: window
+--- browserLib: attributes ---
+parseEditor: ymerLocalWindow
   (# path: ^text;
      loadFiles:
        (# 
@@ -21,12 +21,12 @@ parseEditor: window
               (* load BETA text file *)
               '.bet'
                 ->path.copyAppend
-                ->contents.theTextEditor.contents.loadFile;
+                ->contents.sourceEditor.contents.loadFile;
               
               (* load LST text file *)
               '.lst'
                 ->path.copyAppend
-                ->contents.theLSTView.contents.loadFile;
+                ->contents.errorsList.contents.loadFile;
           if)
        #);
      menubarType::
@@ -43,7 +43,12 @@ parseEditor: window
                saveItem: @menuItem
                  (# eventHandler::
                       (# onSelect::
-                           (# do contents.theTextEditor.contents.saveFile #)
+                           (#
+                           do (if contents.sourceEditor.changed then
+                                  contents.sourceEditor.contents.saveFile;
+                                  false->contents.sourceEditor.changed
+                              if)
+                           #)
                       #);
                     open:: 
                       (# do 'Save'->name #)
@@ -55,13 +60,17 @@ parseEditor: window
                            (# askuser: promptForBoolean
                                 (# ok::
                                      (#
-                                     do this(parseEditor).contents.theTextEditor.contents.saveFile;
+                                     do this(parseEditor).contents.sourceEditor.contents.saveFile;
                                         this(parseEditor).close
                                      #);
                                    notok:: (# do this(parseEditor).close #)
                                 #)
-                           do (this(parseEditor)[],'Quit','Save before close?')
-                                ->(&askUser[]).popup
+                           do (if contents.sourceEditor.changed then
+                                  (this(parseEditor)[],'Quit','Save before close?')
+                                    ->(&askUser[]).popup
+                               else
+                                  this(parseEditor).close
+                              if)
                            #)
                       #);
                     open:: 
@@ -80,12 +89,12 @@ parseEditor: window
                  (# eventHandler::
                       (# onStatus::
                            (#
-                           do (contents.theTextEditor.contents.contents.selection.start<>contents.theTextEditor.contents.contents.selection.end)->value #);
+                           do (contents.sourceEditor.contents.contents.selection.start<>contents.sourceEditor.contents.contents.selection.end)->value #);
                          onSelect::
                            (#
                            do clipboard.clear;
-                              contents.theTextEditor.contents.contents.selection.contents->clipboard.append;
-                              contents.theTextEditor.contents.contents.delete
+                              contents.sourceEditor.contents.contents.selection.contents->clipboard.append;
+                              contents.sourceEditor.contents.contents.delete
                            #)
                       #);
                     open:: (# do 'Cut'->name #)
@@ -93,11 +102,11 @@ parseEditor: window
                copyItem: @menuItem
                  (# eventHandler::
                       (# onStatus::
-                           (# do (contents.theTextEditor.contents.contents.selection.start<>contents.theTextEditor.contents.contents.selection.end)->value #);
+                           (# do (contents.sourceEditor.contents.contents.selection.start<>contents.sourceEditor.contents.contents.selection.end)->value #);
                          onSelect::
                            (#
                            do clipboard.clear;
-                              contents.theTextEditor.contents.contents.selection.contents->clipboard.append;
+                              contents.sourceEditor.contents.contents.selection.contents->clipboard.append;
                            #)
                       #);
                     open:: 
@@ -111,7 +120,7 @@ parseEditor: window
                          onSelect::
                            (#
                            do clipboard[]
-                                ->contents.theTextEditor.contents.contents.insert
+                                ->contents.sourceEditor.contents.contents.insert
                            #)
                       #);
                     open:: 
@@ -134,8 +143,8 @@ parseEditor: window
        (# dobind:
             (# 
             do TRUE->bindTop->bindLeft->bindRight->bindBottom;
-               thetextEditor.dobind;
-               theLSTView.dobind;
+               sourceEditor.dobind;
+               errorsList.dobind;
             #);
           fileEditor: labelled
             (# loading: @boolean;
@@ -144,7 +153,7 @@ parseEditor: window
                     textFile: @file;
                     lineStarts: [1000]@integer;
                     lineMax: @integer;
-                    loadFile:
+                    loadFile:<
                       (#  t: ^text;
                          theText: @StyledText;
                          pos, lineInx: @integer;
@@ -154,17 +163,18 @@ parseEditor: window
                          (if textFile.entry.exists
                              and textfile.entry.readable then
                              textFile.openRead;
-                             1->pos->lineInx->lineStarts[1];
+                             0->pos->lineStarts[1];
+                             1->lineInx;
                              textFile.scan
                              (# while:: (# do true->value #);
-                             do pos+1->pos;
-                                ch->theText.put;
+                             do ch->theText.put;
+                                pos+1->pos;
                                 (if ch=ascii.newLine then
                                     lineInx+1->lineInx;
                                     (if lineInx=lineStarts.range then
                                         1000->lineStarts.extend if);
                                     pos->lineStarts[lineInx];
-                                if)
+                                if);
                              #);
                              lineInx+1->lineInx;
                              (if lineInx=lineStarts.range then
@@ -178,12 +188,13 @@ parseEditor: window
                              textFile.name->t.puttext;
                              (this(parseEditor)[], t[],'Read Error')
                                ->alertUser;
-                             'no file'->theText.puttext;
-                             1->pos->lineInx->lineStarts[1];
-                             9->lineStarts[2];
+                             'no .lst file'->theText.puttext;
+                             0->pos->lineStarts[1]; 1->lineInx;
+                             12->lineStarts[2]; 2->lineMax;
                              theText[]->contents.contents;
                          if);
                          false->loading;
+                         INNER
                       #);
                     saveFile:
                       (# t: ^text
@@ -204,17 +215,22 @@ parseEditor: window
                     selectLine:
                       (# lineInx: @integer
                       enter lineInx
-                      do (lineStarts[lineInx]-1,lineStarts[lineInx+1]-1)
+                      do (lineStarts[lineInx],lineStarts[lineInx+1]-1)
                            ->contents.selection;
                          contents.selection.scrollIntoView;
                       #);
                     locateLine:
                       (# pos, lineInx: @integer
                       enter pos
-                      do loop:
-                           (if lineStarts[lineInx+1->lineInx]<pos then
+                      do 1->lineInx;
+                         loop:
+                           (#
+                           do lineInx+1->lineInx;
+                              (if (lineInx<=lineMax)
+                               and (lineStarts[lineInx]<=pos) then
                                restart loop
-                           if)
+                              if)
+                           #);
                       exit lineInx-1
                       #);
                     dobind:
@@ -230,79 +246,79 @@ parseEditor: window
                     contents.dobind;
                  #)
             #);
-          theTextEditor: @fileEditor
-            (# open::
-                 (# w,h: @integer
-                 do 'BETA Text File'->label;
-                    this(parseEditor).size->(w,h);
-                    (w,((h*2)/3)-1)->size;
-                 #)
-            #);
-          theLSTView: @fileEditor
+          errorsList: @fileEditor
             (# contentsType::
                  (# contentsType::
-                      (# eventhandler::
+                      (# lineInx: @integer;
+                         selectLine:
+                           (#
+                           enter lineInx
+                           do (if lineInx>=lineMax then lineMax-3->lineInx if);
+                              while:
+                                (if (lineStarts[lineInx]->getChar)='#' then
+                                    lineInx+1->lineInx; restart while
+                                if);
+                              lineInx-3->lineInx;
+                              l: (# t: @text
+                                 do (lineStarts[lineInx]+1,lineStarts[lineInx+1]-1)
+                                      ->scanText(# do ch->t.put #);
+                                    t.reset;
+                                    t.getInt(# syntaxError:: (# do leave l #) #)
+                                      ->sourceEditor.contents.selectLine;
+                                 #)
+                           #);
+                         eventhandler::
                            (# onBeforeChange:: (# do loading->allow #);
-                              lineInx: @integer;
-                              selectLine:
-                                (# lineInx: @integer;
-                                   t: @text;
-                                enter lineInx
-                                do (lineStarts[lineInx]-1,lineStarts[lineInx+1]-1)
-                                     ->scanText(# do ch->t.put #);
-                                   t.reset;
-                                   l: (if t.get='#' then
-                                          t.getInt(# syntaxError::
-                                                       (#
-                                                       do lineInx-1->lineInx;
-                                                          (if lineInx>0 then
-                                                              restart l
-                                                           else leave l
-                                                       if);
-                                               #) #)
-                                         ->theTextEditor.contents.selectLine;
-                                    else lineInx-1->lineInx;
-                                       (if lineInx>0 then restart l if);
-                                   if)
-                                #);
                               onKeyDown::
                                 (# 
                                 do (if ch
                                     // ascii.cr
                                     // ascii.nl then
-                                       (if lineInx=0 then
-                                           1->lineInx
-                                        else
-                                           lineInx+1->lineInx;
-                                           (if lineInx>lineMax then 1->lineInx if)
+                                       (if lineInx+8>=lineMax then
+                                           0->lineInx
                                        if);
-                                       (lineStarts[lineInx]-1,lineStarts[lineInx+1]-1)
+                                       lineInx+8->selectLine;
+                                       (lineStarts[lineInx],lineStarts[lineInx])
                                          ->selection;
-                                       lineInx->selectLine
+                                       selection.scrollIntoView
                                    if)
                                 #);
                               onMouseDown::
                                 (#
-                                do localPosition
-                                     ->ptToPos
+                                do localPosition->ptToPos
                                      ->locateLine
-                                     ->lineInx
                                      ->selectLine;
                                 #)
                            #)
                       #);
+                    loadFile:: (# do 1->contents.selectLine #);
                  #);
                open:: 
                  (# w,h: @integer;
                  do 'Parse Errors'->label;
                     this(parseEditor).size->(w,h);
-                    (w,(h/3)-1)->size;
+                    (w,(h div 3)-1)->size;
+                 #)
+            #);
+          sourceEditor: @fileEditor
+            (# changed: @boolean;
+               contentsType::
+                 (# contentsType::
+                      (# eventhandler::
+                           (# onTextChanged:: (# do not loading->changed #) #)
+                      #);
+                 #);
+               open::
+                 (# w,h: @integer
+                 do 'BETA Source File'->label;
+                    this(parseEditor).size->(w,h);
+                    (w,((h*2) div 3)-1)->size;
                  #)
             #);
           open::
             (# setDefaults:: (# do true->verticalStacking #)
-            do theTextEditor.open; theLSTView.open;
-               theLSTView[]->appendMember; theTextEditor[]->appendMember;
+            do errorsList.open; sourceEditor.open;
+               errorsList[]->appendMember; sourceEditor[]->appendMember;
                appendsDone; dobind
             #)
        #);
@@ -310,6 +326,6 @@ parseEditor: window
        (#
        do 'Parse Errors Editor'->title;
           INNER;
-          contents.open
+          contents.open;
        #)
   #)
