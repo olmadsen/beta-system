@@ -218,6 +218,22 @@ register volatile void *GCreg4 asm("%o4");
 	      int i4,					\
 	      /*unsigned*/ int range)
 
+/* C procs that gets object, origin, prototype, offset, range,  */
+#define ParamObjOriginProtoOffRange(type, name)			\
+  asmlabel(name, 					\
+	   "mov %i0, %o1; "				\
+           "mov %l0, %o2; "				\
+           "mov %i1, %o3; "				\
+           "clr %o4; "					\
+	   "ba "CPREF#name"; "				\
+	   "mov %l1, %o5; ");				\
+ type C##name(struct Object *origin,			\
+	      struct Object *theObj,	                \
+	      unsigned offset, /* in bytes */		\
+	      struct ProtoType *proto,			\
+	      int i4,					\
+	      int range)
+
 /* On the SPARC we need to skip the first instruction */
 #define CallBetaEntry(entry,item)			\
     (* (void (*)()) ((long*)entry+1) )(item);
@@ -244,6 +260,9 @@ register volatile void *GCreg4 asm("%o4");
 
 #define push(v) (StackPointer -= 2, StackPointer[16] = (long) v)
 #define pop(v) (((long)v) = StackPointer[16], StackPointer += 2)
+
+#define SaveVar(var) push(var)
+#define RestoreVar(var) pop(var)
 
 #define Protect(var, code)				\
   asmcomment( -- Protect-start);			\
