@@ -103,3 +103,12 @@
     (tags-query-replace "<LI>&middot;" "<LI>" nil))
 )
 
+(defun miadoc-replace12 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Removing <DIV>")
+    (tags-query-replace "</?DIV>" "" nil)))
+
+
