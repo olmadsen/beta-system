@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: ExitObjects.c,v 1.7 1992-09-03 12:56:02 beta Exp $
+ * Mod: $Id: ExitObjects.c,v 1.8 1992-10-23 15:24:02 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -41,6 +41,10 @@ void CExitO(ref(Object) exitObj, long exitAddr, ref(Object) theObj)
 	    /* Passing a component. As in AttachComponent: */
 	    /* Terminate theComp. */
 	    theComp = ActiveComponent;
+	    if (theComp->CallerComp == 0){
+	       /* attempt to leave basic component! */
+	       BetaError(LeaveBasicCompErr);
+	    }
 	    ActiveComponent = theComp->CallerComp; theComp->CallerComp = 0;
 	    theObj          = theComp->CallerObj;  theComp->CallerObj  = 0;
 	    theComp->StackObj = 0;
