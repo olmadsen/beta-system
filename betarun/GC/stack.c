@@ -123,7 +123,7 @@ DEBUG_STACK(fprintf(output, "--- %s line %d:\n", __FILE__, __LINE__)); \
 DEBUG_STACK(fprintf(output, "New SP:     0x%x\n", SP));                \
 DEBUG_STACK(fprintf(output, "New PC:     0x%x\n", PC));                \
 DEBUG_STACK(fprintf(output, "New object: 0x%x", theObj));              \
-DEBUG_STACK(if (theObj&&((long)theObj!=CALLBACKMARK)){                 \
+DEBUG_STACK(if (theObj&&(theObj!=CALLBACKMARK)){                       \
               fprintf(output, " (proto: 0x%x)", theObj->Proto);        \
               fprintf(output, " (%s)\n", ProtoTypeName(theObj->Proto));\
 	    })
@@ -132,20 +132,17 @@ DEBUG_STACK(if (theObj&&((long)theObj!=CALLBACKMARK)){                 \
  *  The main stack traversal routine.
  *  Scans through frames in stack part.
  */
-struct Object *ProcessStackFrames(long SP, 
-				  long StackStart, 
-				  long stopAtComp,
-				  long dynOnly,
-				  CellProcessFunc func
-				  )
+void ProcessStackFrames(long SP, 
+			long StackStart, 
+			long stopAtComp,
+			long dynOnly,
+			CellProcessFunc func
+			)
 {
   /* Arguments:
    *  - SP points to address just ABOVE last BETA stack frame,
    *    i.e. to the top of the next-to-last frame.
    *  - StackStart point just above the bottom frame to process.
-   * Returns:
-   *  - dynamic link of last frame processed.
-   *
    * 
    *  STACK LAYOUT at entry:
    * 
@@ -171,7 +168,6 @@ struct Object *ProcessStackFrames(long SP,
    */
   struct Object *theObj;
   struct Object *this;
-  long **GSP = GenSP;
   long *CSP = CompSP;
   long SPoff, PC;
 
@@ -179,28 +175,17 @@ struct Object *ProcessStackFrames(long SP,
 		      SP, StackStart));
   DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
 
-  DEBUG_STACK({
-    /* print out GenStack */
-    long **g;
-    fprintf(output, "GenStack:\n");
-    fprintf(output, "&GenStack[0]= 0x%x\n", &GenStack[0]);
-    fprintf(output, "GenSP       = 0x%x\n", GenSP);
-    for (g=GenSP; g>=&GenStack[0]; g--){
-      fprintf(output, "  0x%x: 0x%x\n", g, *g);
-    }
-  });
-
-  /* Process the top frame */
+ /* Process the top frame */
   DEBUG_STACK(fprintf(output, "Top: Frame for object 0x%x, prevSP=0x%x\n",
 		      GetThis((long *)SP),
 		      SP));
-  ProcessRefStack((struct Object **)SP-2, dynOnly, func); /* -2: start at dyn */
-  PC = *((long *)SP-1);
-  theObj = *((struct Object **)SP-2);
+  ProcessRefStack((struct Object **)SP-DYNOFF, dynOnly, func);
+  PC = GetPC(SP);
+  theObj = *((struct Object **)SP-DYNOFF);
 
   if (SP==StackStart){
     /* Only top frame to process - can happen for stack objects */
-    return theObj;
+    return;
   }
   TRACE_STACK();
 
@@ -210,50 +195,14 @@ struct Object *ProcessStackFrames(long SP,
 
     /* Handle special cases */
 
-    /* Check for passing of allocation routine, i.e. if the 
-     * frame just processed was a G part
-     */
-    
-    if ( GSP >= &GenStack[0] ){
-      /* Something on GenStack - see CallGPart macro */
-      if ( (long)(*GSP) == SP ){
-	/* The last thing on the GenStack was the SP value of
-	 * the allocation routine AlloXXX. Find real SP and current object 
-	 * for the frame before the allocation routine.
-	 */
-	DEBUG_STACK(fprintf(output, "Passing allocation at SP=0x%x.", SP));
-	SP = (long)(*(GSP-1)); /* SP now points to start of frame before AlloXXX */
-	GSP -=2;
-	DEBUG_STACK(fprintf(output, " Skipping to SP=0x%x\n", SP));
-
-	/* Treat this frame as a top frame.
-	 * STACK LAYOUT: see comment at start of routine for.
-	 */
-	DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
-	DEBUG_STACK(fprintf(output, "G: Frame for object 0x%x\n", GetThis((long*)SP)));
-	ProcessRefStack((struct Object **)SP-2, dynOnly, func); /* -2: start at dyn */
-	PC = *((long*)SP-1);
-	theObj = *((struct Object **)SP-2); 
-	TRACE_STACK();
-	if (SP<StackStart) {
-	  continue; /* Restart do-loop */
-	} else {
-	  break; /* Leave do-loop */
-	}
-      }
-    }
-
-    /* Check for passing of a callback.
-     * When a callback is called, the callbackentry is called
+    /* Check for passing of a callback/Gpart.
+     * When a callback/gpart is called, the callbackentry is called
      * with dyn=CALLBACKMARK.
      *  
-     * Before this the compiler pushes two things:
-     *   1. the object that was current object before the callback
-     *      (saved in BetaStackTop[0]). NOT USED.
-     *   2. the SP pointing to the *end* of the frame for this previous
-     *      object (saved in BetaStackTop[1]).
+     * Before this the compiler pushes the SP pointing to the *end* of 
+     * the frame for this previous object (saved in BetaStackTop[1]).
      *
-     * STACK LAYOUT at callback:
+     * STACK LAYOUT at callback/gpart:
      * 
      *          |____________|<-.              _
      *          |            |  |               |
@@ -262,31 +211,38 @@ struct Object *ProcessStackFrames(long SP,
      *          |____________|  |              _|
      *          |////////////|  |               |
      *          |////////////|  |               |  Frames for C and
-     *          |////////////|  |               |  callback stub
+     *          |////////////|  |               |  callback stub or AlloXXX
      *          |------------|  |              -'
-     *      SP->|___SP-beta__|--'              _  Pseudo frame
+     *      SP->|___SP-beta__|--'              _  Pseudo frame / CallB frame
      *          |   RTS      | = PC in stub     |
      *          |   dyn      | = CALLBACKMARK   |
      *          |            |                  |
      *          |            |                  |  Frame for first beta frame 
-     *          |            |                  |  after callback
-     *          |            |                  |
+     *          |            |                  |  after callback 
+     *          |            |                  |  or for first Gpart
      *          |____________|                 _|
      *          |            |
      *          |            |
      * 
      */
-    if ((long) theObj == CALLBACKMARK ) {
-      DEBUG_STACK(fprintf(output, "Passing callback at SP=0x%x.", SP));
-      DEBUG_CODE(Claim(SP<*((long *)SP), "SP greater before callback"));
-      SP = *((long *)SP); /* SP-beta */
+    if (theObj == CALLBACKMARK ) {
+      DEBUG_CODE(long oldSP);
+      DEBUG_STACK(fprintf(output, "Passing callback/allocation/main at SP=0x%x.", SP));
+      DEBUG_CODE(oldSP=SP);
+      SP = GetSPbeta(SP);
+      if (SP==0){
+	DEBUG_STACK(fprintf(output, " stopping at main\n"));
+	/*SP=StackStart;*/
+	break;
+      }
+      DEBUG_CODE(Claim(oldSP<SP, "SP greater before callback/allocation"));
       DEBUG_STACK(fprintf(output, " Skipping to SP=0x%x\n", SP));
       /* Treat this frame as a top frame */
       DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
       DEBUG_STACK(fprintf(output, "CB: Frame for object 0x%x\n", GetThis((long*)SP)));
-      ProcessRefStack((struct Object **)SP-2, dynOnly, func); /* -2: start at dyn */
-      PC = *((long*)SP-1);
-      theObj = *((struct Object **)SP-2); 
+      ProcessRefStack((struct Object **)SP-DYNOFF, dynOnly, func);
+      PC = GetPC(SP);
+      theObj = *((struct Object **)SP-DYNOFF); 
       TRACE_STACK();
       if (SP<StackStart) {
 	continue; /* Restart do-loop */
@@ -368,7 +324,7 @@ struct Object *ProcessStackFrames(long SP,
 
     DEBUG_CODE(this = theObj); /* remember object for current frame */
 
-    /* Find stack frame size, normal dyn and new PC */
+    /* Normal case: Find stack frame size, normal dyn and new PC */
     {  
       /* STACK LAYOUT for normal stack frame:
        * 
@@ -394,9 +350,9 @@ struct Object *ProcessStackFrames(long SP,
       DEBUG_STACK(fprintf(output, "SPoff:       0x%x\n", SPoff));
       /* SP now points to end of previous frame, i.e. bottom of top frame */
       /* normal dyn from the start of this frame gives current object */
-      theObj = *((struct Object **)SP-2); 
+      theObj = *((struct Object **)SP-DYNOFF); 
       /* RTS from the start of this frame gives PC */
-      PC = *((long*)SP-1);
+      PC = GetPC(SP);
       TRACE_STACK();
     }
 
@@ -409,15 +365,16 @@ struct Object *ProcessStackFrames(long SP,
 
     DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
     DEBUG_STACK(fprintf(output, "Frame for object 0x%x\n", this));
-    ProcessRefStack((struct Object **)SP-2, dynOnly, func); /* -2: start at dyn */
+    ProcessRefStack((struct Object **)SP-DYNOFF, dynOnly, func);
   } while (SP<StackStart);
-  DEBUG_CODE(Claim(SP==(long)StackStart, "SP==StackStart"));
-  return *((struct Object **)SP-2);
+  /* The following claim does not hold anymore because of the 
+   * CallB frame after main and Att.
+   */
+  /*DEBUG_CODE(Claim(SP==(long)StackStart, "SP==StackStart"));*/
 }
 
 void ProcessStack()
 {
-  struct Object *last;
   /* There are two set of GC roots:
    * 1. The ReferenceStack contains roots
    *    saved during an active AlloI etc. via the Protect macro.
@@ -428,8 +385,7 @@ void ProcessStack()
   DEBUG_STACK(fprintf(output, "\nProcessReferenceStack.\n"));
   ProcessRefStack(RefSP-1, FALSE, DoIOACell); /* RefSP points to first free */
   DEBUG_STACK(fprintf(output, "ProcessMachineStack.\n"));
-  last = ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, FALSE, DoIOACell);
-  Claim(last==(struct Object *)BasicItem, "ProcessMachineStack: last dyn==BasicItem\n");
+  ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, FALSE, DoIOACell);
 }
 
 void ProcessStackObj(struct StackObject *sObj, CellProcessFunc func)

@@ -15,11 +15,11 @@ extern void BETA_main(void);
 
 void main(long argc, char *argv[])
 {
-  SetArgValues(argc,argv);
-  Initialize();
-  BETA_main();
+  SetArgValues(argc,argv); /* Initializes ArgC and ArgV */
+  Initialize(); /* Initializes heaps etc */
+  BETA_main(); /* Calls SetProtos from betaenv */
 
-  ActiveComponent = AlloC(0, BasicProto, 0);
+  ActiveComponent = AlloC(0, BasicProto, 0); /* Assumption: NO GC here! */
   BasicItem = (struct Item *)&ActiveComponent->Body;
 
   push(0); /* NULL terminate internal ReferenceStack */
@@ -28,7 +28,10 @@ void main(long argc, char *argv[])
   DEBUG_STACK(fprintf(output, "StackStart=0x%x\n", StackStart));
 
   /* M1BETAENV(0,BasicItem) */
-  CallBetaEntry( (long)(BasicItem->Proto-TopMpart)-8, BasicItem /*dyn*/, BasicItem);
+  CallB( CALLBACKMARK /*dyn*/, 
+	 (struct Object *)BasicItem, 
+	 (long)(BasicItem->Proto->TopMpart), 
+	 0);
 
   /* TerminateBasicComponent: */
   BetaExit(0);

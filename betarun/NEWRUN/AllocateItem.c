@@ -50,8 +50,7 @@ struct Item *AlloI(struct Object *origin, struct ProtoType *proto, long *SP)
   
   setup_item(item, proto, origin); 
   if (proto->GenPart){
-    struct Object *this = GetThis(SP); 
-    Protect(item, CallGPart(proto->GenPart, this, item, SP));
+    Protect(item, CallGPart(proto->GenPart, item, SP));
   }
   Ck(item);
 

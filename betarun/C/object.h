@@ -171,6 +171,10 @@ typedef struct CallBackEntry {
     ref(Structure)      theStruct;
     unsigned long       code[5];
 #endif
+#ifdef _powerc
+    ref(Structure)      theStruct;
+    unsigned long       code[10];
+#endif
 } CallBackEntry;
 
 #ifdef linux

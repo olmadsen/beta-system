@@ -110,6 +110,22 @@ void Susp(struct Object *this, long prevSP, long RA, long SPz)
 	     *((long *)SPz+i));
 #endif
 
+#ifdef _powerc
+   {
+     /* on PPC the stack contains SP pointers that links stack segments;
+      * these must be made relative, since the stack may be unpacked
+      * at another place in memory
+      */  
+     long spLoc = SPz; 
+     long sp = ((long *)SPz)[0];
+     while (sp <= SPy) { 
+       *(long *)spLoc = sp - SPz;
+       spLoc = sp;
+       sp = *(long *)sp;
+     }
+   }
+#endif /* PPC */
+
    /* copy SPz[0],  SPz[1], ... , SPz[(SPy-SPz-4)/4] = SPy[-1] */
    for (i=0;  i < (SPy-SPz)/4; i++)
      *((long *)sObj->Body+i) = *((long *)SPz+i);

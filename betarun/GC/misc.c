@@ -121,7 +121,7 @@ void CCk(void *r, char *fname, int lineno, char *ref)
       sprintf(__CkString, 
 	      "%s:%d: Ck(%s) (%s=0x%x)", fname, lineno, ref, ref, (int)(r));
 #ifdef NEWRUN
-      if ((long)r==CALLBACKMARK){
+      if (r==CALLBACKMARK){
 	DEBUG_STACK(fprintf(output, 
 			    "Ck ignoring CALLBACKMARK at %s:%d\n", 
 			    fname, 

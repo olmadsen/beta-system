@@ -34,7 +34,35 @@
  if(_flush_cache((char*)&CBFATop->theStruct, sizeof(CallBackEntry), BCACHE))  \
    fprintf(output, "CopyCPP: _flush_cache failed (%s)\n", strerror(errno))    \
 
-#endif
+#endif /* sgi */
+
+#ifdef _powerc
+#define GEN_CB_STUB()                                                         \
+                                                                              \
+ /*  0: &CBFATop->code[3]                                                     \
+  *  1: 0     (TOC - not used)                                                \
+  *  2: lis   r12,     entry >> 16                                            \
+  *  3: lis   r24,     strucaddr >> 16                                        \
+  *  4: ori   r12,r12, entry & 0xffff                                         \
+  *  5: ori   r24,r24, strucaddr & 0xffff                                     \
+  *  6: lwz   r0, 0(r12)                                                      \
+  *  7: mtctr r0                                                              \
+  *  8: lwz   RTOC, 4(r12)                                                    \
+  *  9: bctr                                                                  \
+  */                                                                          \
+                                                                              \
+  CBFATop->code[0] = &CBFATop->code[3];                                       \
+  CBFATop->code[1] = 0;                                                       \
+  CBFATop->code[2] = 0x3c000000 | (12<<21) | (entry >> 16);                   \
+  CBFATop->code[3] = 0x3c000000 | (24<<21) | (strucaddr >> 16);               \
+  CBFATop->code[4] = 0x60000000 | (12<<21) | (12<<16) | (entry & 0xffff);     \
+  CBFATop->code[5] = 0x60000000 | (24<<21) | (24<<16) | (strucaddr & 0xffff); \
+  CBFATop->code[6] = 0x80000000 | (12<<16);                                   \
+  CBFATop->code[7] = 0x7c0903a6;                                              \
+  CBFATop->code[8] = 0x80000000 | ( 2<<21) | (12<<16) | 4;                    \
+  CBFATop->code[9] = 0x4e800420
+ 
+#endif /* _powerc */
 
 
 /* CopyCPP:

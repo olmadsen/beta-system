@@ -388,20 +388,6 @@ void Initialize()
   }
   CompSP = &CompStack[0]; /* points to first free element */
 
-  GenStack = (long **)MALLOC(REFSTACKSIZE*sizeof(struct Object *));
-  if (!GenStack){
-    char buf[300];
-    sprintf(buf,
-	    "%s: Cannot allocate the Generation Stack (%dKb)\n", 
-	    ArgVector[0],
-	    (int)REFSTACKSIZE*sizeof(struct Object *)/Kb);
-#ifdef macintosh
-    EnlargeMacHeap(buf);
-#endif
-    Notify(buf);
-    BetaExit(1);
-  }
-  GenSP = &GenStack[0]-1; /* points below first free element */
 #endif /* NEWRUN */
 
   if( !AllocateHeap( (long*)&ToSpace, (long*)&ToSpaceTop, (long*)&ToSpaceLimit, IOASize ) ){

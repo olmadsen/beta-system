@@ -443,12 +443,9 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
 #define CallBetaEntry(entry, current, item) \
   (* (void (*)(void *, void *))(entry)) ((void *)current, (void *)item)
 
-/* Call Gpart with this as first parameter, and item as second argument */
-#define CallGPart(gpart, this, item, SP)      \
-*++GenSP = (long *) SP;                       \
-*++GenSP = (long *) GetSP();                  \
-(* (void (*)(void *, void *))((long)(gpart)-8)) ((void *)this, (void *)item); \
-GenSP -= 2;                                   \
+/* Call Gpart with 4 as first parameter, and item as second argument */
+#define CallGPart(gpart, item, SP) \
+   CallB(CALLBACKMARK, (struct Object*)(item), (long)gpart, (long)SP)
 
 #ifdef RTDEBUG
 #define zero_check(p, bytesize)                         \
@@ -465,6 +462,10 @@ GenSP -= 2;                                   \
 #endif
 
 #ifdef sgi
+
+#define GetPC(SP) (*((long*)(SP)-1))
+#define GetSPbeta(SP) (*((long *)(SP)))
+
 typedef union FormatI
 {
   unsigned long raw;
@@ -478,9 +479,33 @@ typedef union FormatI
 
 #define GetSPoff(SPoff, codeAddr)                              \
 { FormatI addiu;                                               \
-  addiu.raw = *((long *)codeAddr+SP_ALLOC_OFF);                \
+  addiu.raw = *((long *)codeAddr+3);                           \
   /* Get the stack size allocated for this frame */            \
   SPoff = -addiu.instr.offset;                                 \
+}
+#endif
+
+#ifdef _powerc
+
+#define GetPC(SP)     (*((long*)(SP)+2))
+#define GetSPbeta(SP) (*((long *)(SP)+6))
+
+typedef union FormatI
+{
+  unsigned long raw;
+  struct inst { 
+    unsigned long opc: 6;
+    unsigned long s: 5;
+    unsigned long a: 5;
+    signed   long d: 16;
+  } instr;
+} FormatI;
+
+#define GetSPoff(SPoff, codeAddr)                              \
+{ FormatI stwu;                                                \
+  stwu.raw = *((long *)codeAddr+2);                            \
+  /* Get the stack size allocated for this frame */            \
+  SPoff = -stwu.instr.d;                                       \
 }
 #endif
 

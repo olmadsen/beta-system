@@ -73,7 +73,7 @@ static void DoStackCell(struct Object **theCell,struct Object *theObj)
     /* We are processing the relevant part of the stack */
     
     /* First check if theObj is CALLBACKMARK */
-    if (theObj==(struct Object *)CALLBACKMARK){
+    if (theObj==CALLBACKMARK){
       long *SP;
       TRACE_SCAN(fprintf(output, "  cb: "));
       /* Since ProcessStackFrames now skips to previous frame before

@@ -400,7 +400,7 @@ void DoIOACell(struct Object **theCell,struct Object *theObj)
   }
 #ifdef RTDEBUG
   else {
-    if ((long)theObj!=CALLBACKMARK){
+    if (theObj!=CALLBACKMARK){
       fprintf(output, 
 	      "DoIOACell: 0x%x: 0x%x is outside BETA heaps!\n", theCell, theObj);
       Illegal();

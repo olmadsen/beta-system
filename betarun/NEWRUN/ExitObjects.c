@@ -23,9 +23,13 @@ long *ExO(long *jumpAdr,
 
   while (this != exitObj) {
     /* Check for passing of a callback - see STACK LAYOUT in stack.c */
-    if ((long) this == CALLBACKMARK ) {
+    if (this == CALLBACKMARK ) {
       DEBUG_CODE(printf("ExO: passing cb\n"));
-      SP =  *((long **)SP); /* SP-beta */
+      SP = (long*)GetSPbeta(SP);
+      /* No need to check for SP=0 (can happen from main), 
+       * since leaving of basic component is detected otherwise.
+       */
+
       /* Check top frame */
       this = GetThis(SP);
       if (this==exitObj){
@@ -37,8 +41,8 @@ long *ExO(long *jumpAdr,
 	return 0;
       }
       /* Continue down the stack */
-      PC = *((long**)SP-1);
-      this = *((struct Object **)SP-2);       
+      PC = (long*)GetPC(SP);
+      this = *((struct Object **)SP-DYNOFF);       
       continue;
     }
     /* Check for passing of a DoPart object */
@@ -73,9 +77,9 @@ long *ExO(long *jumpAdr,
       SP = (long *)((long)SP+SPoff);      
       /* SP now points to end of previous frame, i.e. bottom of top frame */
       /* normal dyn from the start of this frame gives current object */
-      this = *((struct Object **)SP-2); 
+      this = *((struct Object **)SP-DYNOFF); 
       /* RTS from the start of this frame gives PC */
-      PC = *((long**)SP-1);
+      PC = (long*)GetPC(SP);
     }
   }
   return SP;

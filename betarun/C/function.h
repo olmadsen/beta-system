@@ -128,7 +128,7 @@ extern ref(Object) NewCopyObject(ref(Object), handle(Object));
 /* GC/stack.c */
 extern void ProcessStack(void);
 #ifdef NEWRUN
-struct Object *ProcessStackFrames(long SP, long StackStart, long stopAtComp, long dynOnly, CellProcessFunc func);
+extern void ProcessStackFrames(long SP, long StackStart, long stopAtComp, long dynOnly, CellProcessFunc func);
 extern void ProcessStackObj(struct StackObject *, CellProcessFunc func);
 #else
 extern void ProcessStackObj(struct StackObject *);
@@ -180,8 +180,12 @@ extern void RotateTheCursorBack(void);
 #endif
 
 #ifdef NEWRUN
-extern struct Object *        GetThis(long *SP);
-extern long *                 GetSP(void);
+extern struct Object * GetThis(long *SP);
+extern long *GetSP(void);
+extern void CallB(struct Object *caller,
+		  struct Object *callee,
+		  long address,
+		  long SP);
 #endif
 
 

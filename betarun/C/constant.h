@@ -45,10 +45,16 @@
 #define MININT (signed long)0x80000000
 
 #ifdef NEWRUN
-#define CALLBACKMARK 4
-/* no of instr. from start of entry to stack allocation instr.
- * Is zero for non-shared code.
- */
-#define SP_ALLOC_OFF 3 
+/* Special "dyn" mark */
+#define CALLBACKMARK ((struct Object *)4)
+
+/* Offset for dyn on stack frame */
+#ifdef sgi
+#define DYNOFF 2
+#endif
+#ifdef _powerc
+#define DYNOFF 1
+#endif
+
 #define IOAMAXSIZE           (IOASize/8)
 #endif

@@ -546,7 +546,7 @@ static void DumpCell(struct Object **theCell,struct Object *theObj)
   
 
   /* First check if theObj is CALLBACKMARK */
-  if (theObj==(struct Object *)CALLBACKMARK){
+  if (theObj==CALLBACKMARK){
     long *SP;
     TRACE_DUMP(fprintf(output, "  cb: "));
     fprintf(output, "  [ EXTERNAL ACTIVATION PART ]\n");
