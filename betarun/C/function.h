@@ -283,6 +283,7 @@ extern void scanList(Object * root, void (foreach)(Object * current));
 #endif /* NONMOVEAOAGC */
 
 /* aoafreelist.c */
+extern void AOAInit(void);
 extern void AOAFreeInFreeList(Object *chunk);
 extern Object *AOAAllocateFromFreeList(long numbytes);
 extern void AOAInsertFreeBlock(char *block, long numbytes); 

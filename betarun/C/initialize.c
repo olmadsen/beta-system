@@ -339,7 +339,7 @@ IOASliceSize = ObjectAlignDown(IOASliceSize);
     Notify(buf);
   }
 #endif
-  
+
   INFO( fprintf( output, "#(Heap info: IOA=2*%dKb", (int)IOASize/Kb) );
   INFO( fprintf( output, ", AOABlock=%dKb", (int)AOABlockSize/Kb) );
   INFO( fprintf( output, ", CBFABlock=%dKb\n", (int)CBFABlockSize/Kb) );
@@ -356,6 +356,9 @@ IOASliceSize = ObjectAlignDown(IOASliceSize);
     Notify2(buf, "Check your BETART environment variable.");
     BetaExit(1);
   }
+
+  AOAInit();
+  
 #ifdef USEMMAP
   mmapInitial(MMAPMaxSize);
   /* The order of allocation here determines the order of adresses. */

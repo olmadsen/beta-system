@@ -187,14 +187,6 @@ Object *AOAallocate(long numbytes)
     
   DEBUG_CODE( Claim(numbytes > 0, "AOAallocate: numbytes > 0") );
     
-  if( AOABaseBlock == 0) {
-    if (AllocateBaseBlock()) {
-      INFO_AOA(fprintf(output,"Could not allocate AOABaseBlock\n"));
-      return 0;
-    }
-    INFO_AOA(fprintf(output,"Allocated AOABaseBlock\n"));
-  }
-    
   /* Try to find a chunk of memory in the freelist */
   newObj = AOAAllocateFromFreeList(numbytes);
   if (newObj) {
@@ -208,16 +200,25 @@ Object *AOAallocate(long numbytes)
     return newObj;
         
   } else {
-    /* We add a new block and indicate that we want an AOAGC ASAP */
-    long newBlockSize;
+    if (AOABaseBlock == 0) {
+      if (AllocateBaseBlock()) {
+	INFO_AOA(fprintf(output,"Could not allocate AOABaseBlock\n"));
+	return 0;
+      }
+      INFO_AOA(fprintf(output,"Allocated AOABaseBlock\n"));
+    } else {
+      /* We add a new block and indicate that we want an AOAGC ASAP */
+      long newBlockSize;
         
-    newBlockSize = (AOABlockSize < numbytes) ? numbytes : AOABlockSize;
+      newBlockSize = (AOABlockSize < numbytes) ? numbytes : AOABlockSize;
 
-    INFO_AOA(fprintf(output,"Could not allocate %lu bytes, doing AOAGC\n",numbytes));
-    AOANewBlock(newBlockSize);
-        
-    if ((newObj = AOAallocate(numbytes))) {
+      INFO_AOA(fprintf(output,"Could not allocate %lu bytes, doing AOAGC\n",
+		       numbytes));
+      AOANewBlock(newBlockSize);
       AOANeedCompaction = TRUE;
+    }
+
+    if ((newObj = AOAallocate(numbytes))) {
       return newObj;
     }
   }
@@ -249,34 +250,36 @@ Object *AOAalloc(AOA_ALLOC_PARAMS)
   DEBUG_CODE(NumAOAAlloc++);
   INFO_AOA(fprintf(output,"AOAalloc(numbytes=%d)",(int)numbytes));
   theObj = AOAallocate(numbytes);
-  if (!theObj){
-    /* AOAallocate failed. This means that AOANeedCompaction will be
-     * true now. Force an IOAGc.
-     */
-    INFO_AOA(fprintf(output, "AOAalloc: forcing IOAGc and AOAGc\n"));
+  if (theObj) {
+    MT_CODE(mutex_unlock(&aoa_lock));
+    return theObj;
+  }
+
+  /* AOAallocate failed. This means that AOANeedCompaction will be
+   * true now. Force an IOAGc.
+   */
+  INFO_AOA(fprintf(output, "AOAalloc: forcing IOAGc and AOAGc\n"));
 #ifdef MT
-    fprintf(output,"FIXME:AOAalloc failed, has to GC here!!\n");
-    /*    ReqObjectSize = numbytes/4;
-	  IOAGc(); */
+  fprintf(output,"FIXME:AOAalloc failed, has to GC here!!\n");
+  /*    ReqObjectSize = numbytes/4;
+	IOAGc(); */
 #else
 #ifdef NEWRUN
-    DoGC(SP);
+  DoGC(SP);
 #else
-    DoGC();
+  DoGC();
 #endif
 #endif /* MT */
-    /* Try again */
-    theObj = AOAallocate(numbytes);
-  }
-  if (!theObj){
-    /* Arrgh. FIXME */
-    fprintf(output, "AOAalloc: cannot allocate 0x%x bytes\n", (int)numbytes);
-    BetaExit(1);
+  /* Try again */
+  theObj = AOAallocate(numbytes);
+  if (theObj) {
+    MT_CODE(mutex_unlock(&aoa_lock));
+    return theObj;
   }
 
-  MT_CODE(mutex_unlock(&aoa_lock));
-
-  return theObj;
+  /* Arrgh. FIXME */
+  fprintf(output, "AOAalloc: cannot allocate 0x%x bytes\n", (int)numbytes);
+  BetaExit(1);
 }
 
 Object *AOAcalloc(AOA_ALLOC_PARAMS)
@@ -299,8 +302,7 @@ Object *AOAcalloc(AOA_ALLOC_PARAMS)
  *  move an object to AOA and return the address of the new location
  *  If the allocation in AOA failed the function returns 0;
  */
-Object * CopyObjectToAOA( theObj)
-     Object * theObj;
+Object *CopyObjectToAOA(Object *theObj)
 {
   Object * newObj;
   long        size;
@@ -308,7 +310,7 @@ Object * CopyObjectToAOA( theObj)
   register long * dst;
   register long * theEnd;
   
-  size = 4*ObjectSize( theObj); 
+  size = 4*ObjectSize(theObj); 
   Claim(ObjectSize(theObj) > 0, "#ToAOA: ObjectSize(theObj) > 0");
   Claim((size&7)==0, "#ToAOA: (size&7)==0 ");
   
@@ -331,7 +333,6 @@ Object * CopyObjectToAOA( theObj)
     /* Start new list */
     HandledInAOAHead = newObj;
     HandledInAOATail = newObj;
-
   } else {
     /* append new object to list */
     HandledInAOATail -> GCAttr = (long) newObj;
@@ -339,25 +340,22 @@ Object * CopyObjectToAOA( theObj)
   }
   newObj->GCAttr = LISTEND;
     
-  /* Set one forward reference in theObj to newObj */
+  /* Set the forward reference in theObj to newObj */
   theObj->GCAttr = (long) newObj;
   
-  DEBUG_AOA( AOAcopied += size );
-  
-  DEBUG_AOA(if(isStackObject(theObj)) 
-	    fprintf(output, 
-		    "CopyObjectToAOA: moved StackObject to 0x%x\n", (int)newObj));
+  DEBUG_AOA({ 
+    AOAcopied += size;
+    
+    if (isStackObject(theObj)) {
+      fprintf(output, 
+	      "CopyObjectToAOA: moved StackObject to 0x%x\n", (int)newObj);
+    }
+  });
   
   /* Return the new object in AOA */
   return newObj;
 }
 
-#if 0
-static void markObjectAlive(Object * obj)
-{
-  obj -> GCAttr = LIVEOBJECT;
-}
-#endif
 
 long sizeOfAOA(void)
 {
@@ -408,8 +406,8 @@ void AOAGc()
     
   root = NULL;
 
-  /* Clear AOAtoIOAtable. This will be rebuild by extend- and
-     initialCollectList. */
+  /* Clear AOAtoIOAtable. It will be rebuild by 
+   * extend- and initialCollectList. */
   AOAtoIOAClear();
     
   INFO_AOA(fprintf(output,"[Marking all Live Objects in AOA]\n",NumAOAGc));
@@ -457,7 +455,8 @@ void AOAGc()
     /* Then each chunk in the block is examined */
     long freeInBlock;
 
-    freeInBlock = AOAScanMemoryArea(currentBlock -> top, currentBlock -> limit);
+    freeInBlock = AOAScanMemoryArea(currentBlock -> top, 
+				    currentBlock -> limit);
     totalFree += freeInBlock;
         
     INFO_AOA(fprintf(output,"[0x%08X/0x%08X/0x%08X] ",
@@ -474,7 +473,6 @@ void AOAGc()
     AOANewBlock(AOABlockSize);
   }
 
-      
   INFO_AOA(fprintf(output,"AOAGC finished, free space "));
   INFO_AOA(fprintf(output,"0x%X",totalFree));
   INFO_AOA(fprintf(output," bytes\n"));
@@ -503,8 +501,8 @@ static void AOANewBlock(long newBlockSize)
     AOATopBlock = newblock;
     /* Insert the new block in the freelist */
     AOAInsertFreeBlock((char *)AOATopBlock -> top, newBlockSize);
-    INFO_AOA(fprintf(output,"Allocated new block of %lu bytes\n",newBlockSize));
-        
+    INFO_AOA(fprintf(output,"Allocated new block of %lu bytes\n",
+		     newBlockSize));
   } else {
     DEBUG_CODE(fprintf(output,"MallocExhausted\n"));
     INFO_AOA(fprintf(output,"MallocExhausted\n"));
@@ -703,23 +701,24 @@ void AOACheckObject(Object *theObj)
      * compare the Offset and the Distance_To_Inclosing_Object.
      */
     
-    while( *Tab != 0 ){
+    while (*Tab != 0) {
       Claim( *(long *) Offset( theObj, *Tab * 4 + 4) == (long) Tab[1],
 	     "AOACheckObject: EnclosingObject match GCTab entry.");
-      if( *Tab == -Tab[1] ) 
+      if (*Tab == -Tab[1]) { 
 	AOACheckObject( (Object *)(Offset( theObj, *Tab * 4)));
+      }
       Tab += 4;
     }
     Tab++;
     
     /* Handle all the references in the Object. */
-    while( *Tab != 0 ){
+    while(*Tab != 0) {
       theCell = (long *) Offset( theObj, ((*Tab++) & (short) ~3) );
       /* sbrandt 24/1/1994: 2 least significant bits in prototype 
        * dynamic offset table masked out. As offsets in this table are
        * always multiples of 4, these bits may be used to distinguish
        * different reference types. */ 
-      AOACheckReference( (Object **)theCell );
+      AOACheckReference((Object **)theCell);
     }
   }
 }

@@ -83,6 +83,8 @@ static long AOAFreeListIndex(long numbytes);
 static void AOAInsertFreeElement(AOAFreeChunk *freeChunk, long numbytes);
 static AOAFreeChunk *AOAFindInFree(unsigned long numbytes);
 static long AOASmallIndex2Size(long index);
+static long AOALargeIndex2Size(long index);
+static long AOAAnyIndex2Size(long index);
 static int AOAWantsMore(long numbytes);
 
 /* LOCAL VARIABLES */
@@ -124,6 +126,25 @@ static long AOASmallIndex2Size(long index)
   return 8 * index;
 }
 
+static long AOALargeIndex2Size(long index)
+{
+  Claim(FreeListSmallMAX <= index 
+	&& index <= FreeListSmallMAX+FreeListLargeMAX, 
+	"FreeListSmallMAX <= index "
+	"&& index <= FreeListSmallMAX+FreeListLargeMAX");
+  
+  return (AOASmallIndex2Size(FreeListSmallMAX)<<(index-FreeListSmallMAX));
+}
+
+static long AOAAnyIndex2Size(long index)
+{
+  if (index <= FreeListSmallMAX) {
+    return AOASmallIndex2Size(index);
+  } else {
+    return AOALargeIndex2Size(index);
+  }
+}
+
 /* AOAWantsMore:
  *   Returns true, iff the list a block of size numbytes 
  *   would end up in, is not too crowded already.
@@ -153,10 +174,10 @@ static void AOAInsertFreeElement(AOAFreeChunk *freeChunk, long numbytes)
     BetaExit(1);
   }
 #endif
-  freeChunk -> next = AOAFreeList[index];
+  freeChunk->next = AOAFreeList[index];
   AOAFreeList[index] = freeChunk;
-  freeChunk -> GCAttr = FREECHUNK;
-  freeChunk -> size = numbytes;
+  freeChunk->GCAttr = FREECHUNK;
+  freeChunk->size = numbytes;
   AOAFreeListSize[index]++;
 }
 
@@ -194,7 +215,7 @@ static AOAFreeChunk *AOAFindInFree(unsigned long numbytes)
     /* Exact match. Perfect */
     newChunk = AOAFreeList[index];
     /* remove the chunk from the freelist */
-    AOAFreeList[index] = AOAFreeList[index] -> next;
+    AOAFreeList[index] = AOAFreeList[index]->next;
     AOAFreeListSize[index]--;
     return newChunk;
   }
@@ -214,13 +235,13 @@ static AOAFreeChunk *AOAFindInFree(unsigned long numbytes)
        * rest (if any) is inserted in the freelist.
        */
       newChunk = AOAFreeList[index];
-      sizeOfFoundChunk = newChunk -> size;
+      sizeOfFoundChunk = newChunk->size;
       
       restChunk = (AOAFreeChunk *)((char *)newChunk + numbytes);
       sizeOfRestChunk = sizeOfFoundChunk - numbytes;
       
       /* remove the chunk from the freelist */
-      AOAFreeList[index] = AOAFreeList[index] -> next;
+      AOAFreeList[index] = AOAFreeList[index]->next;
       AOAFreeListSize[index]--;
       
       /* insert the remaining chunk in the free list */
@@ -248,37 +269,37 @@ static AOAFreeChunk *AOAFindInFree(unsigned long numbytes)
       previous = &AOAFreeList[index];
       
       while (current) {
-	if (current -> size == numbytes) {
+	if (current->size == numbytes) {
 	  /* Exact match. Perfect */
 	  /* remove the chunk from the freelist */
-	  *previous = current -> next;
+	  *previous = current->next;
 	  AOAFreeListSize[index]--;
 	  return current;
 	}
-	if ((current -> size > numbytes) &&
-	    ((current -> size - numbytes >= AOAMinGap) 
-	     || AOAWantsMore(AOASmallIndex2Size(index) - numbytes)) &&
-	    (current -> size < bestFitSize)) {
+	if ((current->size > numbytes) &&
+	    (current->size < bestFitSize) &&
+	    ((current->size - numbytes >= AOAMinGap) 
+	     || AOAWantsMore(current->size - numbytes))) {
 	  bestFit = current;
-	  bestFitSize = current -> size;
+	  bestFitSize = current->size;
 	  bestFitPrevious = previous;
 	  bestFitIndex = index;
 	}
-	previous = &(current -> next);
-	current = current -> next;
+	previous = &(current->next);
+	current = current->next;
       }
       
       if (bestFit) {
 	/* A chunk large enough has been found, and it is split
 	 * into two parts as above.
 	 */
-	sizeOfFoundChunk = bestFit -> size;
+	sizeOfFoundChunk = bestFit->size;
         
 	restChunk = (AOAFreeChunk *)((char *)bestFit + numbytes);
 	sizeOfRestChunk = sizeOfFoundChunk - numbytes;
         
 	/* remove the chunk from the freelist */
-	*bestFitPrevious = bestFit -> next;
+	*bestFitPrevious = bestFit->next;
         AOAFreeListSize[bestFitIndex]--;
 
 	/* insert the remaining chunk in the free list */
@@ -289,7 +310,7 @@ static AOAFreeChunk *AOAFindInFree(unsigned long numbytes)
       }
     }
     index++;
-  } while (!bestFit && index < FreeListSmallMAX+FreeListLargeMAX);
+  } while (index < FreeListSmallMAX+FreeListLargeMAX);
   /* do-while */
   
   return NULL;
@@ -304,7 +325,7 @@ Object *AOAAllocateFromFreeList(long numbytes)
   Object *newObj = NULL;
     
   /* Only chunks of sizes that are multiples of 8 bytes may be
-   * inserted in the free list.
+   *  in the free list.
    */
 
 #ifdef RTDEBUG
@@ -319,10 +340,7 @@ Object *AOAAllocateFromFreeList(long numbytes)
     if (newObj) {
       objectsInAOA++;
       sizeOfObjectsInAOA += numbytes;
-      memset(newObj, 0, numbytes);
-    }
 
-    if (newObj) {
       if (!inAOA(newObj)) {
 	fprintf(stdout, "AOAAllocateFromFreeList: Reference (0x%X) is not in AOA!\n", (int)newObj);
 	BetaExit(1);
@@ -370,6 +388,14 @@ void AOAInsertFreeBlock(char *block, long numbytes)
   AOAInsertFreeElement((AOAFreeChunk *)block, numbytes);
 }
 
+/* AOAInit:
+ *   Initializes AOA.
+ */
+void AOAInit(void)
+{
+  AOACleanFreeList();
+}
+
 /* AOACleanFreeList:
  *   initializes the AOAFreeList 
  */
@@ -382,12 +408,7 @@ void AOACleanFreeList(void)
   }
 }
 
-
-/* AOAFreeListAnalyze1:  AOAFreeListAnalyze2:
- *   Analyses the freelists to find the minimum size of gaps to leave
- *   when splitting blocks during allocation.
- */
-void AOAFreeListAnalyze1(void)
+static long doAnalysis(void)
 {
   /* Find the largest freelist before GC.
    * Chunks of this size are not that usefull, it seems, 
@@ -396,7 +417,8 @@ void AOAFreeListAnalyze1(void)
    */
 
   unsigned long index = 0, maxindex = 0, maxlength = 0, addsize = 0;
-  
+  unsigned long mingap;
+
   for (index = 0; index < FreeListSmallMAX ; index++) {
     addsize /= 2;
     addsize += AOAFreeListSize[index];;
@@ -407,22 +429,34 @@ void AOAFreeListAnalyze1(void)
 
   if (maxindex) {
     if (maxindex+1 > FreeListSmallMAX) {
-      AOAMinGap = AOASmallIndex2Size(FreeListSmallMAX);
+      mingap = AOASmallIndex2Size(FreeListSmallMAX);
     } else {
-      AOAMinGap = AOASmallIndex2Size(maxindex+1);
+     mingap  = AOASmallIndex2Size(maxindex+1);
     }
   } else {
-    AOAMinGap = 16;
+    mingap = 16;
   }
-  INFO_AOA(fprintf(output, "[AOAMinGap=%d]\n", AOAMinGap));
+  return mingap;
+}
+
+/* AOAFreeListAnalyze1:  AOAFreeListAnalyze2:
+ *   Analyses the freelists to find the minimum size of gaps to leave
+ *   when splitting blocks during allocation.
+ */
+void AOAFreeListAnalyze1(void)
+{
+  AOAMinGap = doAnalysis();
+  INFO_AOA(fprintf(output, "[Analyze1:AOAMinGap=0x%02x]\n", AOAMinGap));
 }
 
 void AOAFreeListAnalyze2(void)
 {
-  long step1gap = AOAMinGap;
-  AOAFreeListAnalyze1();
+  unsigned long step1gap = AOAMinGap;
+  AOAMinGap = doAnalysis();
+  INFO_AOA(fprintf(output, "[Analyze2:AOAMinGap=0x%02x]\n", AOAMinGap));
   if (step1gap < AOAMinGap)
     AOAMinGap = step1gap;
+  INFO_AOA(fprintf(output, "[Final:AOAMinGap=0x%02x]\n", AOAMinGap));
 }
 
 
@@ -522,8 +556,8 @@ void AOADisplayFreeList(void)
     }
     current = AOAFreeList[index];
     while(current) {
-      freeOfSize += current -> size;
-      current = current -> next;
+      freeOfSize += current->size;
+      current = current->next;
       numEntries += 1;
     }
         
@@ -557,8 +591,8 @@ void AOADisplayFreeList(void)
     fprintf(output, "[%d: ", index);
     current = AOAFreeList[index];
     while(current) {
-      fprintf(output, " 0x%08X", current -> size);
-      current = current -> next;
+      fprintf(output, " 0x%08X", current->size);
+      current = current->next;
     }
     fprintf(output, "]\n");
   }

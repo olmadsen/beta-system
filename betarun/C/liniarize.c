@@ -32,379 +32,395 @@ void StackRefActionWrapper(Object **theCell,Object *theObj)
 
 Object * getRealObject(Object * obj)
 {
-    long Distance;
-    Object * AutObj;
-    if (obj -> GCAttr < 0) {
-        GetDistanceToEnclosingObject(obj, Distance);
-        AutObj = (Object *) Offset(obj, Distance);
-        return AutObj;
-    } else {
-        return obj;
-    }
+  long Distance;
+  Object * AutObj;
+  if (obj -> GCAttr < 0) {
+    GetDistanceToEnclosingObject(obj, Distance);
+    AutObj = (Object *) Offset(obj, Distance);
+    return AutObj;
+  } else {
+    return obj;
+  }
 }
 
 void checkNotInList(Object *target) 
 {
-    Object *current;
+  Object *current;
 
-    current = head;
+  current = head;
     
-    while ((long) current != LISTEND) {
-        if (current == target) {
-            fprintf(output, "checkNotInList: 0x%X is in list!\n", (int)(target));
-        }
-        current = (Object *)(current -> GCAttr);
+  while ((long) current != LISTEND) {
+    if (current == target) {
+      fprintf(output, "checkNotInList: 0x%X is in list!\n", (int)(target));
     }
+    current = (Object *)(current -> GCAttr);
+  }
 }
     
 /* Append objects to the list regardless of where they are */
 void appendToList(Object *target)
 {
-    long GCAttribute;
+  long GCAttribute;
     
-    /* We are about to append 'target' to the list. We will only do so
-     * if target points to an object that is not already part of the
-     * list. Whether this is the case can be inferred by looking at
-     * the GC-Attribute. The GCAttribute can be,
+  /* We are about to append 'target' to the list. We will only do so
+   * if target points to an object that is not already part of the
+   * list. Whether this is the case can be inferred by looking at
+   * the GC-Attribute. The GCAttribute can be,
 
-     (1) Before AOAGc the value of the GCAttribute of all objects that
-     is reachable should be DEADOBJECT. This goes for all autonomous
-     objects, but not staticly inlined objects. The GCAttr of staticly
-     inlined objects contains the offset to the enclosing object. This
-     offset is a negative offset allways.
+   (1) Before AOAGc the value of the GCAttribute of all objects that
+   is reachable should be DEADOBJECT. This goes for all autonomous
+   objects, but not staticly inlined objects. The GCAttr of staticly
+   inlined objects contains the offset to the enclosing object. This
+   offset is a negative offset allways.
 
-     (2) During AOAGc all live objects are linked together in their GC
-     attribute. Of course only autonomous objects may be linked
-     together. Thus if we have a reference to a staticly inlined
-     object we should not link this object into the list but link the
-     enclosing object into the list.
+   (2) During AOAGc all live objects are linked together in their GC
+   attribute. Of course only autonomous objects may be linked
+   together. Thus if we have a reference to a staticly inlined
+   object we should not link this object into the list but link the
+   enclosing object into the list.
 
+   */
+
+  /* Since this is a highly central function for the GC'er, we do
+     not check for NULL refrences in the normal case. It is the
+     responsibillity of the caller. */
+
+  GCAttribute = target -> GCAttr;
+    
+  if (GCAttribute == DEADOBJECT) {
+    /* Normal case. All objects in AOA are initially dead and
+     * not linked into the list.
      */
-
-    /* Since this is a highly central function for the GC'er, we do
-       not check for NULL refrences in the normal case. It is the
-       responsibillity of the caller. */
-
-    GCAttribute = target -> GCAttr;
-    
-    if (GCAttribute == DEADOBJECT) {
-        /* Normal case. All objects in AOA are initially dead and
-         * not linked into the list.
-         */
-        if (tail->GCAttr == LISTEND) {
-            tail->GCAttr = (long) target;
-            tail=target;
-            tail->GCAttr = LISTEND;
-            totalsize += 4 * ObjectSize(target);
-        } else {
-            fprintf(output, "appendToList: List is not proberly terminated!\n");
-            BetaExit(1);
-        }
-    } else if (GCAttribute == LISTEND) {
-        /* target is already in the list (it is the tail actually) */
-        ;
-    } else if (GCAttribute < 0) {
-        /* We have encountered a staticly inlined object or a component. */
-        appendToList(getRealObject(target));
-    } else {
-        /* 'target' has a reference in it's GCField. Thus it is allready in the list. */
-        DEBUG_AOA(
-            if ((GCAttribute == FREECHUNK) ||
-                (GCAttribute == (long) NULL)) {
-                fprintf(output,"appendToList: UNexpected GCAttribute\n");
-                BetaExit(1);
-                Illegal();
-                BetaExit(1);
-            });
-        return;
+#ifdef RTDEBUG
+    if (tail->GCAttr != LISTEND) {
+      fprintf(output, 
+	      "appendToList: List is not properly terminated!\n");
+      Illegal();
     }
+#endif
+    tail->GCAttr = (long) target;
+    tail=target;
+    tail->GCAttr = LISTEND;
+    totalsize += 4 * ObjectSize(target);
+  } else if (GCAttribute == LISTEND) {
+    /* target is already in the list (it is the tail actually) */
+    ;
+  } else if (GCAttribute < 0) {
+    /* We have encountered a staticly inlined object or a component. */
+    appendToList(getRealObject(target));
+  } else {
+    /* 'target' has a reference in it's GCField. 
+     * Thus it is allready in the list. */
+#ifdef RTDEBUG
+    if ((GCAttribute == FREECHUNK) ||
+	(GCAttribute == (long) NULL)) {
+      fprintf(output,"appendToList: UNexpected GCAttribute\n");
+      Illegal();
+    }
+#endif
+  }
 }
 
 /* Append objects to the list not including objects in IOA */
 void appendToListNoIOA(REFERENCEACTIONARGSTYPE)
 {
-    DEBUG_AOA(
-        if (!*theCell) {
-            fprintf(output,"appendToListNoIOA: Target is NULL!\n");
-            Illegal();
-        });
+#ifdef RTDEBUG
+  if (!*theCell) {
+    fprintf(output,"appendToListNoIOA: Target is NULL!\n");
+    Illegal();
+  }
+#endif
     
-    if (!inIOA(*theCell)) {
-        appendToList(*theCell);
-    }
+  if (!inIOA(*theCell)) {
+    appendToList(*theCell);
+  }
 }
 
 /* Append objects to the list including only objects in AOA. */
 void appendToListInAOA(REFERENCEACTIONARGSTYPE)
 {
-    DEBUG_AOA(
-        if (!*theCell) {
-            fprintf(output,"appendToListInAOA: Target is NULL!\n");
-            Illegal();
-        }
-        
-        if (!inAOA(theCell)) {
-            fprintf(output,"appendToListInAOA: TheCell is not in AOA!\n");
-            Illegal();
-        });
-    
-    if (inToSpace(*theCell)) {
-        /* insert theCell in AOAtoIOAtable. */
-        AOAtoIOAInsert(theCell);
-        
+#ifdef RTDEBUG
+  if (!*theCell) {
+    fprintf(output,"appendToListInAOA: Target is NULL!\n");
+    fflush(output);
+    Illegal();
+  }
+  
+  if (!inAOA(theCell)) {
+    fprintf(output,
+	    "appendToListInAOA: TheCell is not in AOA!\n");
+    fflush(output);
+    Illegal();
+  }
+#endif
+
+  if (inToSpace(*theCell)) {
+    /* insert theCell in AOAtoIOAtable. */
+    AOAtoIOAInsert(theCell);
+  } else {
+    /* The cell is assumed to be in AOA if not in IOA. */
+    if (!inIOA(*theCell)) {
+#ifdef RTDEBUG
+      if (!inAOA(*theCell)) {
+	fprintf(output,"appendToListInAOA: Target points outside ToSpace!\n");
+	fflush(output);
+	Illegal();
+      }
+#endif
+      appendToList(*theCell);
     } else {
-        /* The cell is assumed to be in AOA if not in IOA. */
-        
-        DEBUG_AOA(
-            if (!inAOA(*theCell)) {
-                fprintf(output,"appendToListInAOA: Target points into unknown space!\n");
-                Illegal();
-            });
-        appendToList(*theCell);
+#ifdef RTDEBUG
+      fprintf(output,
+	      "[appendToListInAOA: Target points into IOA!\n"
+	      " How did this happen?]\n");
+      fflush(output);
+      Illegal();
+#endif
     }
+  }
 }
 
 void initialCollectList(Object * root,
                         void referenceAction(REFERENCEACTIONARGSTYPE))
 {
-    Object * theObj;
+  Object * theObj;
 
-    /* If root is a pointer to a staticly inlined part object, then
-     * 'getRealObject' will return the enclosing object.
-     */
+  /* If root is a pointer to a staticly inlined part object, then
+   * 'getRealObject' will return the enclosing object.
+   */
 
-    root = getRealObject(root);
+  root = getRealObject(root);
     
-    /* If called with root=NULL, just initialize to empty list */
-    if (!root) {
-        totalsize = 0;
-        head = tail = (Object *)LISTEND;
-        return;
-    }
-    
-    if (!inAOA(root)) {
-        fprintf(output,"initialCollectList: root not in AOA\n");
-        DEBUG_AOA(Illegal());
-    }
-    
-    /* set_start_time("initialCollectList"); */
-    
-    /* point to self to end list.
-     * Cannot be zero-term, as that would make it look unmarked
-     * for the scanner.
-     */
-    /* This is not the case anymore, as append explicitly checks
-     * that tail is not reinserted, tail=root until root->GCAttr is set.
-     * root->GCAttr = (long)root; 
-     */
-    
-    /* Tail is where new objects are appended to the list.
-     */
-    tail = root;
-    tail -> GCAttr = LISTEND;
-    
-    /* Head is the first object in the list. All objects in the
-     * list may be reached through head.  
-     */
-    head = root;
-    
-    /* There are no objects in the list yet. */
+  /* If called with root=NULL, just initialize to empty list */
+  if (!root) {
     totalsize = 0;
+    head = tail = (Object *)LISTEND;
+    return;
+  }
+#ifdef RTDEBUG    
+  if (!inAOA(root)) {
+    fprintf(output,"initialCollectList: root not in AOA\n");
+    Illegal();
+  }
+#endif    
+  /* set_start_time("initialCollectList"); */
     
-    for (theObj = root; !isEnd((long)theObj); theObj=(Object*)(theObj->GCAttr)) {
-        scanObject(theObj, referenceAction, TRUE);
-    }
-    /* set_end_time("initialCollectList"); */
+  /* point to self to end list.
+   * Cannot be zero-term, as that would make it look unmarked
+   * for the scanner.
+   */
+  /* This is not the case anymore, as append explicitly checks
+   * that tail is not reinserted, tail=root until root->GCAttr is set.
+   * root->GCAttr = (long)root; 
+   */
+    
+  /* Tail is where new objects are appended to the list.
+   */
+  tail = root;
+  tail -> GCAttr = LISTEND;
+    
+  /* Head is the first object in the list. All objects in the
+   * list may be reached through head.  
+   */
+  head = root;
+    
+  /* There are no objects in the list yet. */
+  totalsize = 0;
+    
+  for (theObj = root; !isEnd((long)theObj); theObj=(Object*)(theObj->GCAttr)) {
+    scanObject(theObj, referenceAction, TRUE);
+  }
+  /* set_end_time("initialCollectList"); */
 }
 
 void extendCollectList(Object * root,
                        void referenceAction(REFERENCEACTIONARGSTYPE))
 {
-    Object * theObj;
+  Object * theObj;
 
-    /* set_start_time("extendCollectList"); */
+  /* set_start_time("extendCollectList"); */
     
-    DEBUG_AOA(Claim((int)tail, "extendCollectList without initialCollectList"));
+  Claim((int)tail, "extendCollectList without initialCollectList");
 
-    DEBUG_AOA(
-        if (!inAOA(root)) {
-            fprintf(output,"extendCollectList: root not in AOA\n");
-            Illegal();
-        });
+#ifdef RTDEBUG
+  if (!inAOA(root)) {
+    fprintf(output,"extendCollectList: root not in AOA\n");
+    Illegal();
+  }
+#endif    
+  appendToList(root);
     
-    appendToList(root);
+  /* root has now been appended to the list, if not already
+   * there.
+   */
     
-    /* root has now been appended to the list, if not already
-     * there.
+  for (theObj = tail; !isEnd((long)theObj); theObj=(Object*)(theObj->GCAttr)) {
+    /* if root has not been appended to the list, then we scan
+     * tail again, which must have been scanned previously. This
+     * should not matter as no new objects will be appended since
+     * they allready have been appended previously.
      */
-    
-    for (theObj = tail; !isEnd((long)theObj); theObj=(Object*)(theObj->GCAttr)) {
-        /* if root has not been appended to the list, then we scan
-         * tail again, which must have been scanned previously. This
-         * should not matter as no new objects will be appended since
-         * they allready have been appended previously.
-         */
         
-        scanObject(theObj, referenceAction, TRUE);
-    }
-    /* set_end_time("extendCollectList"); */
+    scanObject(theObj, referenceAction, TRUE);
+  }
+  /* set_end_time("extendCollectList"); */
 }
 
 void scanList(Object * root, void (foreach)(Object * current))
 {
-    Object * cur;
-    Object * next;
+  Object * cur;
+  Object * next;
     
-    cur = root;
-    while (!isEnd((long)cur)) {
-        next = (Object *)(cur->GCAttr);
-        foreach(cur);
-	cur = next;
-    }
+  cur = root;
+  while (!isEnd((long)cur)) {
+    next = (Object *)(cur->GCAttr);
+    foreach(cur);
+    cur = next;
+  }
 }
 
 void scanObject(Object *obj,
-                       void referenceAction(REFERENCEACTIONARGSTYPE),
-                       int doPartObjects)
+		void referenceAction(REFERENCEACTIONARGSTYPE),
+		int doPartObjects)
 {
-    ProtoType * theProto;
+  ProtoType * theProto;
     
-    theProto = obj->Proto;
-    if (!isSpecialProtoType(theProto)) {
-        GCEntry *tab =
-            (GCEntry *) ((char *) theProto + theProto->GCTabOff);
-        short * refs_ofs;
+  theProto = obj->Proto;
+  if (!isSpecialProtoType(theProto)) {
+    GCEntry *tab =
+      (GCEntry *) ((char *) theProto + theProto->GCTabOff);
+    short * refs_ofs;
         
-        /* Handle all the static objects. 
-         *
-         * The static table, tab[0], tab[1], ..., 0,
-         * contains all static objects on all levels.
-	 * We call recursively on every one, is we're told
-	 * to do so. When we do so, we make sure that there is no 
-	 * further recursion going on.
-         */
+    /* Handle all the static objects. 
+     *
+     * The static table, tab[0], tab[1], ..., 0,
+     * contains all static objects on all levels.
+     * We call recursively on every one, is we're told
+     * to do so. When we do so, we make sure that there is no 
+     * further recursion going on.
+     */
         
-        if (doPartObjects) {
-            for (;tab->StaticOff; ++tab) {
-                scanObject((Object *)((long *)obj + tab->StaticOff),
-                           referenceAction, FALSE);
-            }
-        }
-        else {
-            for (;tab->StaticOff; ++tab) {
-                ;
-            }
-        }
+    if (doPartObjects) {
+      for (;tab->StaticOff; ++tab) {
+	scanObject((Object *)((long *)obj + tab->StaticOff),
+		   referenceAction, FALSE);
+      }
+    }
+    else {
+      for (;tab->StaticOff; ++tab) {
+	;
+      }
+    }
         
-        /* Handle all the non-static references in the object. */
-        for (refs_ofs = (short *)&tab->StaticOff+1; *refs_ofs; refs_ofs++) {
-            long offset  = (*refs_ofs) & ~3;
-            long *pointer = (long *)((long)obj + offset);
-            /* long refType = (*refs_ofs) & 3; */
-            /* sbrandt 24/1/1994: 2 least significant bits in prototype 
-             * dynamic offset table masked out. As offsets in this table are
-             * always multiples of 4, these bits may be used to distinguish
-             * different reference types. */ 
-            if (*pointer) {
-                referenceAction((Object **)pointer);
-            }
-        }
-    } else {
-        switch (SwitchProto(theProto)) {
-          case SwitchProto(ByteRepPTValue):
-          case SwitchProto(ShortRepPTValue):
-          case SwitchProto(DoubleRepPTValue):
-          case SwitchProto(LongRepPTValue): 
-              break; /* No references in this type of object, so do nothing */
+    /* Handle all the non-static references in the object. */
+    for (refs_ofs = (short *)&tab->StaticOff+1; *refs_ofs; refs_ofs++) {
+      long offset  = (*refs_ofs) & ~3;
+      long *pointer = (long *)((long)obj + offset);
+      /* long refType = (*refs_ofs) & 3; */
+      /* sbrandt 24/1/1994: 2 least significant bits in prototype 
+       * dynamic offset table masked out. As offsets in this table are
+       * always multiples of 4, these bits may be used to distinguish
+       * different reference types. */ 
+      if (*pointer) {
+	referenceAction((Object **)pointer);
+      }
+    }
+  } else {
+    switch (SwitchProto(theProto)) {
+    case SwitchProto(ByteRepPTValue):
+    case SwitchProto(ShortRepPTValue):
+    case SwitchProto(DoubleRepPTValue):
+    case SwitchProto(LongRepPTValue): 
+      break; /* No references in this type of object, so do nothing */
               
-          case SwitchProto(DynItemRepPTValue):
-          case SwitchProto(DynCompRepPTValue): {
-              long *pointer;
-              long size, index;
+    case SwitchProto(DynItemRepPTValue):
+    case SwitchProto(DynCompRepPTValue): {
+      long *pointer;
+      long size, index;
               
-              /* Process iOrigin */
-              referenceAction(&(((ObjectRep *)obj) -> iOrigin));
+      /* Process iOrigin */
+      referenceAction(&(((ObjectRep *)obj) -> iOrigin));
               
-              /* Process rest of repetition */
-              size = ((ObjectRep *)obj)->HighBorder;
-              pointer = (long *)&((ObjectRep *)obj)->Body[0];
+      /* Process rest of repetition */
+      size = ((ObjectRep *)obj)->HighBorder;
+      pointer = (long *)&((ObjectRep *)obj)->Body[0];
               
-              for (index=0; index<size; index++) {
-                  if (*pointer) {
-                      referenceAction((Object **)pointer);
-                  }
-                  pointer++;
-              }
-              break;
-          }
+      for (index=0; index<size; index++) {
+	if (*pointer) {
+	  referenceAction((Object **)pointer);
+	}
+	pointer++;
+      }
+      break;
+    }
           
-          case SwitchProto(RefRepPTValue): 
-              /* Scan the repetition and apply referenceAction */
-          {
-              long *pointer;
-              long offset, offsetTop;
+    case SwitchProto(RefRepPTValue): 
+      /* Scan the repetition and apply referenceAction */
+      {
+	long *pointer;
+	long offset, offsetTop;
               
-              offset =  (char*)(&((RefRep*)(obj))->Body[0]) - (char*)obj;
-              offsetTop = offset + 4 * ((RefRep*)(obj))->HighBorder;
+	offset =  (char*)(&((RefRep*)(obj))->Body[0]) - (char*)obj;
+	offsetTop = offset + 4 * ((RefRep*)(obj))->HighBorder;
               
-              while (offset < offsetTop) {
-                  pointer = (long *)((long)obj + offset);
-                  if (*pointer) {
-                      referenceAction((Object **)pointer);
-                  }
-                  offset += 4;
-              }
-              break;
-          }
+	while (offset < offsetTop) {
+	  pointer = (long *)((long)obj + offset);
+	  if (*pointer) {
+	    referenceAction((Object **)pointer);
+	  }
+	  offset += 4;
+	}
+	break;
+      }
           
-          case SwitchProto(ComponentPTValue):
-          {
-              Component * theComponent;
+    case SwitchProto(ComponentPTValue):
+      {
+	Component * theComponent;
               
-              theComponent = ((Component*)obj);
+	theComponent = ((Component*)obj);
 #if (defined(CRUN) || defined(RUN) || defined(NEWRUN))
-              if ((theComponent->StackObj) &&
-                  (long)(theComponent->StackObj) != -1) {
-                  referenceAction((Object **)&(theComponent->StackObj));
-              }
+	if ((theComponent->StackObj) &&
+	    (long)(theComponent->StackObj) != -1) {
+	  referenceAction((Object **)&(theComponent->StackObj));
+	}
 #else
 #error liniarize of stack object not implemented on this platform
 #endif /* CRUN || RUN */
-              if (theComponent->CallerComp) {
-                  referenceAction((Object **)&(theComponent->CallerComp));
-              }
-              if (theComponent->CallerObj) {
-                  referenceAction(&(theComponent->CallerObj));
-              }
-              scanObject((Object *)ComponentItem( theComponent),
-                         referenceAction, TRUE);
-              break;
-          }
-          case SwitchProto(StackObjectPTValue):
+	if (theComponent->CallerComp) {
+	  referenceAction((Object **)&(theComponent->CallerComp));
+	}
+	if (theComponent->CallerObj) {
+	  referenceAction(&(theComponent->CallerObj));
+	}
+	scanObject((Object *)ComponentItem( theComponent),
+		   referenceAction, TRUE);
+	break;
+      }
+    case SwitchProto(StackObjectPTValue):
 #ifdef KEEP_STACKOBJ_IN_IOA
-	    { 
-	      static int once = 0;
-	      if (!once) {
-		fprintf(output, "(Warning:liniarize.c: StackObjectPTValue not handled)\n");
-		once = 0;
-	      }
-	    }
-	    /* Illegal(); */
+      { 
+	static int once = 0;
+	if (!once) {
+	  fprintf(output, "(Warning:liniarize.c: StackObjectPTValue not handled)\n");
+	  once = 0;
+	}
+      }
+    /* Illegal(); */
 #else
-	   StackRefAction = referenceAction;
-	   ProcessStackObj((StackObject *)obj, StackRefActionWrapper);
+    StackRefAction = referenceAction;
+    ProcessStackObj((StackObject *)obj, StackRefActionWrapper);
 #endif
-	    break;
+    break;
               
-          case SwitchProto(StructurePTValue):
-              referenceAction(&(((Structure*)(obj))->iOrigin));
-              break;
+    case SwitchProto(StructurePTValue):
+      referenceAction(&(((Structure*)(obj))->iOrigin));
+      break;
               
-          case SwitchProto(DopartObjectPTValue):
-              referenceAction(&(((DopartObject *)(obj))->Origin));
-              break;
-        }
-    } 
+    case SwitchProto(DopartObjectPTValue):
+      referenceAction(&(((DopartObject *)(obj))->Origin));
+      break;
+    }
+  } 
 }
 
 
