@@ -39,7 +39,7 @@ findCode:
   do
      (if svprivate.curItem = 0 then leave findCode if);
      findEntry:
-     (for i: lastStack.last repeat
+     (for i: lastStack.last+lastStack.callingComponents.range repeat
        (if lastStack.viewIndex[i] = svprivate.curItem then
            i->inx; leave findEntry; 
        if);
@@ -98,12 +98,13 @@ findObject:
      onGcode:< object;
      onCcode:< object;
      onAttCode:< object;
+     onCallerComp:< Object;
      
   do
      (if svprivate.curItem = 0 then leave findObject if);
      svprivate.itemmenu.clear;
      findEntry:
-     (for i: lastStack.last repeat
+     (for i: lastStack.last+lastStack.callingComponents.range repeat
        (if lastStack.viewIndex[i] = svprivate.curItem then
            i->inx; leave findEntry; 
        if);
@@ -134,6 +135,8 @@ findObject:
          onCcode
       // attCode then
          onAttCode
+      // caller then
+         onCallerComp
      if);
      INNER
   #);
@@ -157,6 +160,17 @@ popupItemMenu: findObject
        do 'Ccode'->putLine
        #);
      onAttCode::  (#  do 'attCode'->putLine #);
+     onCallerComp:: 
+       (# 
+       do
+          ('Component Stack',svprivate.callercomponents
+           [inx-svprivate.objectcount][],svprivate.itemMenu.onCallerSelect##)
+            ->svprivate.itemMenu.appendItemMenuItem;
+          ('Calling Object',svprivate.callercomponents
+           [inx-svprivate.objectcount][],
+           svprivate.itemMenu.onObjectItemSelect##)
+            ->svprivate.itemMenu.appendItemMenuItem
+       #);
      
   enter (menupos,popupin[]) (* localposition from mouse event *)
   do (1,menupos,popupin[])->svprivate.itemMenu.popup; 
@@ -197,19 +211,30 @@ getStack:
      ninx,linx: @Integer;
      lastWasC: @Boolean;
      cskipped: @Integer;
+     callerComponent,objectlast: @integer;
      
   do
      component.getAddress
        ->debuggee.getStack (# theStackType:: stackViewStack #)->s[];
-     s.last->s.codeTypes.new;
-     s.last->s.viewIndex.new;
-     s.last->s.viewText.new;
+     s.last->objectlast->svprivate.objectcount;
+     s.last+s.callingComponents.range->s.codeTypes.new;
+     s.last+s.callingComponents.range->s.viewIndex.new;
+     s.last+s.callingComponents.range->s.viewText.new;
+     (if s.callingComponents.range > 0 then
+         s.callingComponents.range->svprivate.callerComponents.new;
+         (for i: s.callingComponents.range repeat
+           s.callingComponents[i]->debuggee.newremoteobject
+             ->svprivate.callerComponents[i][];
+           caller->s.codeTypes[objectlast+i];
+           
+         for)
+     if);
+     (* Calculate the number of stack entries that will not
+      * be shown due to contraction of external parts: *)
      (if debug then
          'stackviewbody:getStack: s.last=%d\n'
            ->putformat (#  do THIS(getStack).s.last->d;  #)
      if);
-     (* Calculate the number of stack entries that will not
-      * be shown due to contraction of external parts: *)
      (for inx: s.last repeat
        (if s.returnObjs[inx] = 0 then
            (if lastWasC then
@@ -233,7 +258,7 @@ getStack:
        if);
        
      for);
-     s.last-cskipped->s.lineCount;
+     s.last-cskipped+s.callingComponents.range->s.lineCount;
      s.last+1->firstUnchanged;
      (if lastStack[] <> none then
          s.last->ninx;
@@ -369,8 +394,9 @@ showstack:
                 else
                    (if s.viewText[inx][] = none then
                        (if inx = s.last then
-                           'Attach'->s.viewText[inx][];
-                           attCode->s.codeTypes[inx];
+                           '--Component Stack:'->s.viewText[inx][];
+                           (* attCode->s.codeTypes[inx];
+                            *)
                            
                         else
                              (# tmp: @Text; 
@@ -398,7 +424,13 @@ showstack:
        if);
        
      for);
-     (for inx: s.last repeat
+     (for i: s.callingComponents.range repeat
+       (true,false)->svprivate.callerComponents[i].description
+         ->s.viewText[i+s.last][];
+       viewIndex->s.viewIndex[s.last+i];
+       viewindex+1->viewIndex
+     for);
+     (for inx: s.last+s.callingComponents.range repeat
        (if s.viewText[inx][] <> none then
            (s.viewIndex[inx],s.viewText[inx][])->setText; 
        if);
@@ -441,24 +473,13 @@ do
      do
         getEncloser;
         encl.gettarget->(debuggee[],component[]);
-        getOptionDB->odb[];
+        getObjectPrefs->prefs[];
         getObjectDB->objects[];
         INNER open;
-        'ShortObjectTitles'
-          ->odb.getBooleanOption
-            (# found::  (#  do value->shorttitle #) #);
-        'ShortCodeNames'
-          ->odb.getBooleanOption
-            (# found::  (#  do value->shortnames #) #);
-        'DebugValhalla'
-          ->odb.getBooleanOption (# found::  (#  do value->debug #) #);
-        'NumberObjects'
-          ->odb.getBooleanOption
-            (#
-               found::  (#  do value->numbernames #);
-               notfound::  (#  do FALSE->numbernames #);
-               
-            #);
+        prefs.getboolean (#  do 'ShortObjectTitles'->name[] #)->shorttitle;
+        prefs.getboolean (#  do 'ShortCodeNames'->name[] #)->shortnames;
+        prefs.getboolean (#  do 'DebugValhalla'->name[] #)->debug;
+        prefs.getboolean (#  do 'ObjectSerialNumber'->name[] #)->numbernames;
         ((shorttitle,numbernames)->component.description).copy->type[];
         (component[],svprivate.owner[])->objects.addObjectOwner;
         'Component stack: '->type.prepend;
@@ -540,6 +561,8 @@ do
         onSelectAction: (# mi: ^itemMenuItem;  enter mi[] do INNER #);
         onObjectItemSelect: onSelectAction
           (#  do (mi.bo[],FALSE)->encl.openNewObjectView #);
+        onCallerSelect: onSelectAction
+          (#  do (mi.bo[])->encl.openStackView #);
         onBetaCodeItemSelect: onSelectAction (#  do (*...*)  #);
         itemMenuItem: menuItem
           (#
@@ -561,6 +584,8 @@ do
           #);
         
      #);
+   callerComponents: [1] ^processinterface.remoteBetaObject;
+   objectcount: @integer;
    
 #)  
 
