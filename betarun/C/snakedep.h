@@ -289,7 +289,7 @@ static inline long getRPReg()
 #define ParamObjOffRange(type, name)			\
  type C##name(struct Object *theObj,			\
 	      unsigned offset, /* in bytes */		\
-	      unsigned range				\
+	      /*unsigned*/ int range			\
 	      )
 
 #define ParamStruc(t, name) \
@@ -384,4 +384,22 @@ static inline struct Item * CAlloSI(struct Structure *s)
   { code; } \
   v2 = (typeof(v2))popReference(); v1 = (typeof(v1))popReference();
 
+extern struct RefRep *		AlloRR(struct Object* theObj, 
+				       unsigned offset, 
+				       int range);
+extern struct ValRep *		AlloVR1(struct Object* theObj, 
+					unsigned offset, 
+					int range);
+extern struct ValRep *		AlloVR2(struct Object* theObj, 
+					unsigned offset, 
+					int range);
+extern struct ValRep *		AlloVR4(struct Object* theObj, 
+					unsigned offset,
+					int range);
+extern struct ValRep *		AlloVR8(struct Object* theObj, 
+					unsigned offset, 
+					int range);
+extern void 			CopyT(char *asciz, 
+				      struct Item *theItem,
+				      unsigned offset);
 #endif /* ! _SNAKEDEP_H_ */

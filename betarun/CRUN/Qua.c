@@ -48,7 +48,6 @@ void Qua(ref(ProtoType) dstQuaProto,
 
   src = *theCell;
 
-  /* Ck(src); */
 #ifdef RTDEBUG
   if ((src) && !(inIOA(src) || inAOA(src) || inLVRA(src) || isLazyRef(src))) {
     char buf[100];
@@ -56,6 +55,7 @@ void Qua(ref(ProtoType) dstQuaProto,
 	     (int) src, (int) theCell);
     Notify(buf);
   }
+  Ck(src);
 #endif    
   
   if (src){

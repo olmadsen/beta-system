@@ -18,8 +18,8 @@ ParamThisComp(void, AttBC)
 #endif
 
 #ifdef hppa
-    long			dummy;
-    struct ComponentBlock       cb; /* don't move without changing SnakeAdditions.S */
+    long		   dummy; /* don't move without changing SnakeAdditions.S */
+    struct ComponentBlock  cb; /* don't move without changing SnakeAdditions.S */
     comp = cast(Component)getCallReg();
 #endif
 

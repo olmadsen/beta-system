@@ -88,7 +88,7 @@ asmlabel(SetArgValues, "
 	st %i1, [%g1]
 ");
 #else
-SetArgValues(int argc, char *argv[])
+void SetArgValues(int argc, char *argv[])
 {
   ArgCount = argc;
   ArgVector = argv;
@@ -217,6 +217,13 @@ void CCk(ref(Object) r)
 	  "Reference none or inside IOA, AOA, or LVRA");
 }
 #endif hppa
+#endif
+
+#ifdef RTDEBUG
+void Misc_UseCk()
+{
+  Ck(0);
+}
 #endif
 
 #ifdef crts

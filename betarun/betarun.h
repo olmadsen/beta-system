@@ -5,7 +5,7 @@
  * Copyright (C) 1992-94 Mjolner Informatics Aps.
  * Written by Ole Lehrmann Madsen, Jacob Seligmann, and Peter Andersen.
  *
- * $Id: betarun.h,v 1.4 1994-08-19 13:47:45 beta Exp $
+ * $Id: betarun.h,v 1.5 1994-08-29 09:23:02 beta Exp $
  *
  */
 
@@ -113,11 +113,11 @@ extern struct Component *	AlloC(struct Object *origin, struct ProtoType *proto);
 extern struct DopartObject * 	AlloDO(unsigned size, struct Object *origin);
 extern struct Item *		AlloI(struct Object *origin, struct ProtoType *proto);
 extern struct Item *		AlloH(struct Object *origin, struct ProtoType *proto);
-extern struct RefRep *		AlloRR(struct Object* theObj, unsigned offset, unsigned range);
-extern struct RefRep *		AlloVR1(struct Object* theObj, unsigned offset, unsigned range);
-extern struct RefRep *		AlloVR2(struct Object* theObj, unsigned offset, unsigned range);
-extern struct RefRep *		AlloVR4(struct Object* theObj, unsigned offset, unsigned range);
-extern struct RefRep *		AlloVR8(struct Object* theObj, unsigned offset, unsigned range);
+extern struct RefRep *		AlloRR(struct Object* theObj, unsigned offset, int range);
+extern struct ValRep *		AlloVR1(struct Object* theObj, unsigned offset, int range);
+extern struct ValRep *		AlloVR2(struct Object* theObj, unsigned offset, int range);
+extern struct ValRep *		AlloVR4(struct Object* theObj, unsigned offset, int range);
+extern struct ValRep *		AlloVR8(struct Object* theObj, unsigned offset, int range);
 extern struct Component *	Att(struct Item *this, struct Component *comp);
 extern void			AttBC(struct Item *this, struct Component *comp);
 extern void 			CinitT(void);

@@ -12,6 +12,8 @@ ParamThisComp(void, HandleIndexErr)
     /* struct Item *this; */
     this = (struct Item *)getThisReg();
 #endif
+    
+    Ck(this);
 
     BetaError(RepRangeErr, cast(Object)this);
 }

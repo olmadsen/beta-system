@@ -15,11 +15,12 @@ extern struct Component*AlloC();
 extern struct Item     *AlloI();
 #endif
 
+extern char	       *IOAalloc();
+extern char	       *IOAcalloc();
+
 #ifdef sparc
 extern struct Component*CAlloC();
 extern struct Item     *CAlloI();
-extern char	       *IOAalloc();
-extern char	       *IOAcalloc();
 /* binding of entry names */
 extern void 		CinitT() asm("CinitT");
 extern ref(StackObject) AlloSO() asm("AlloSO");
@@ -127,7 +128,8 @@ extern void Illegal();
       !isCode(theObj) && /* e.g. at INNER a ref. reg contains code address */    \
       !(inBetaHeap(theObj) && isObject(theObj))){                                \
     fprintf(output,                                                              \
-	    "%s: ***Illegal reference register %s: 0x%x\n", func, reg, theObj);  \
+	    "%s: ***Illegal reference register %s: 0x%x\n",                      \
+	    func, reg, (int)theObj);                                             \
     Illegal();								         \
    }								                 \
 }
@@ -135,7 +137,7 @@ extern void Illegal();
 #ifdef hppa
   static char __CkString[80];
 #define Ck(r) \
-   { sprintf(__CkString, "%s: %d: Ck failed: %s (0x%x)", __FILE__, __LINE__, #r, r); \
+   { sprintf(__CkString, "%s: %d: Ck failed: %s (0x%x)", __FILE__, __LINE__, #r, (int)(r)); \
      if(r) Claim(inIOA(r) || inAOA(r) || inLVRA(cast(Object)(r)) || isLazyRef(r), __CkString); }
 #else
 /*#  define Ck(r) \

@@ -55,3 +55,10 @@ void DoGC() /* The one called directly from betaenv */
   ReqObjectSize = 0;
   doGC();
 }
+
+#ifdef RTDEBUG
+void DoGC_UseCk()
+{
+  Ck(0);
+}
+#endif

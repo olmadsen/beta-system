@@ -48,7 +48,7 @@ void NewRR(ref(Object) theObj,
     setThisReg(theObj);
     setD0Reg(offset * 4);
     setD1Reg(range);
-    AlloRR();
+    AlloRR(theObj, offset, range);
     setThisReg(popReference());
     theObj = popReference();
 #endif

@@ -544,7 +544,9 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 {
 
 #ifndef sparc
+#ifndef hppa
   ref(Component)      currentComponent;
+#endif
 #endif
   char *dumpname;
   char dirCh;
@@ -708,7 +710,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 	    DisplayObject(output, theObj, (long)PC);
 	  }
 	} else {
-	  if (theObj) fprintf(output, "  [Damaged object!: %x]\n", (long)theObj);
+	  if (theObj) fprintf(output, "  [Damaged object!: %x]\n", (int)theObj);
 	}
       }
       theCell--;

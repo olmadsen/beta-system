@@ -39,6 +39,8 @@ AlloSO(unsigned size)
 
     /*fprintf(output, "AlloSO: theObj: 0x%x\n", theStack);*/
 
+    Ck(theStack);
+
     return theStack;
 }
 

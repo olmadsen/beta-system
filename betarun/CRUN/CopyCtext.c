@@ -48,6 +48,8 @@ ref(ValRep) CopyCT(unsigned char *textPtr)
 
     strcpy((char *)theRep->Body, textPtr);
 
+    Ck(theRep);
+
 #ifdef hppa
     setOriginReg(theRep);
 #endif

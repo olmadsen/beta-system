@@ -250,7 +250,7 @@ extern long *etext;
 
 #ifdef hppa
 extern long *etext;
-#define isCode(addr) ( ((unsigned long)0 <= (unsigned long)(addr)) &&  \
+#define isCode(addr) ( /*((usigned long)0 <= (unsigned long)(addr)) &&*/  \
                        ((unsigned long)(addr) < (unsigned long)&etext) )
 #endif hppa
 

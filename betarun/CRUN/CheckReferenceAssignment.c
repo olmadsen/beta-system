@@ -30,6 +30,8 @@ void ChkRA()
    * *theObjHandle is in IOA.
    */
    
+  Ck(*theObjHandle);
+
   if (!inIOA(*theObjHandle)) {
 #ifdef RTLAZY
     /* It may be a dangling (negative) reference */
