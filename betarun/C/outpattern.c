@@ -708,9 +708,14 @@ void DisplayNEWRUNStack(long *PC, Object *theObj, int signal)
       TRACE_DUMP(fprintf(output, "  Adjusting StackEnd to BetaStackTop\n"));
       StackEnd = betatop;
     } else {
-      fprintf(output, "\n");
-      fprintf(output, "  (Unable to find start of BETA stack - sorry)\n");
-      BetaExit(1);
+       /* In low level dump StackEnd will be equal to betatop since the
+	* above code has just been performed for the simple dump.
+	*/ 
+      if (StackEnd!=betatop){
+	fprintf(output, "\n");
+	fprintf(output, "  (Unable to find start of BETA stack - sorry)\n");
+	BetaExit(1);
+      }
     }
 #endif /* sgi */
   }
