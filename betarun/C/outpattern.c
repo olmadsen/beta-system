@@ -1343,8 +1343,13 @@ void DescribeObject(theObject)
     dyn = ((short *) stat) + 1;		/* Step over the zero */
     while (*dyn++);			/* Step over dynamic gc entries */
     
-    fprintf(output, "%s", (char *)dyn);
+    if (DebugStack){
+      extern char *getLabel (long addr);
+      fprintf(output, "%s: \"%s\"", getLabel((long)theProto), (char *)dyn);
+    } else {
+      fprintf(output, "%s", (char *)dyn);
+    }
   }
 }
 
-#endif
+#endif RT_DEBUG
