@@ -1,3 +1,4 @@
+/* fisk */
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * sparcdep.h
@@ -105,12 +106,13 @@ register long   retAddress   asm("%i7");
 #ifdef GCable_Module
 register volatile void *GCreg0 asm("%o0");
 register volatile void *GCreg1 asm("%o1");
-register volatile void *GCreg2 asm("%o3");
-register volatile void *GCreg3 asm("%o4");
+register volatile void *GCreg2 asm("%o2");
+register volatile void *GCreg3 asm("%o3");
+register volatile void *GCreg4 asm("%o4");
 
 #define GCable_Entry() \
   StackPointer = FramePointer-16; /* = 64 */ \
-  GCreg0 = GCreg1 = GCreg2 = GCreg3 = 0
+  GCreg0 = GCreg1 = GCreg2 = GCreg3 = GCreg4 = 0
 
 #define GCable_Exit(n) /* nothing on the sparc */
 #endif
@@ -134,6 +136,12 @@ register volatile void *GCreg3 asm("%o4");
 #define asmcomment(text) \
   __asm__("! " #text)
 
+
+#define return_in_i1(value)                             \
+    __asm__ volatile("":: "r" (value));                 \
+    __asm__("ret; restore %0, 0, %%i1"::"r" (value));   \
+    return value /* keeps gcc happy */
+
 /* C procs that gets origin and proto, and return an Object
    That mess of code just moves i1->o1 and jumps
    to Cname
@@ -141,22 +149,13 @@ register volatile void *GCreg3 asm("%o4");
 
 #define ParamOriginProto(type, name)			\
   asmlabel(name,					\
-	   "mov %i1,%o1;"				\
-	   "clr %i1;"			        	\
-	   "save %sp,-64,%sp;"				\
-	   "mov %i0,%o0;"				\
-	   "mov %i1,%o2;"				\
 	   "clr %o1;"					\
 	   "clr %o3;"					\
-	   "clr %o4;"					\
-	   "clr %i0;"					\
-	   "clr %i1;"					\
-	   "clr %i3;"					\
-	   "call "CPREF#name";"				\
-	   "clr %i4;"					\
-	   "ret;"					\
-	   "restore %o0,0,%i1");			\
-  type C##name(struct Object *origin, int i1, \
+	   "clr %o4;"                                   \
+	   "ba "CPREF#name";"				\
+	   "mov %i1,%o2;"				\
+	   );			                        \
+  type C##name(struct Object *origin, int i1,           \
                struct ProtoType *proto, int i3, int i4)
 
 #define FetchOriginProto()
@@ -189,19 +188,12 @@ register volatile void *GCreg3 asm("%o4");
 /* C procs that gets a Structure parameter, and returns in this */
 #define ParamStruc(type, name)				\
   asmlabel(name,					\
-	   "mov %i1,%o0;"				\
-	   "save %sp,-64,%sp;"				\
 	   "clr %o1;"					\
 	   "clr %o3;"					\
 	   "clr %o4;"					\
-	   "mov %i0,%o0;"				\
-	   "clr %i0;"					\
-	   "clr %i1;"					\
-	   "clr %i3;"					\
-	   "call "CPREF#name";"				\
-	   "clr %i4;"					\
-	   "ret;"					\
-	   "restore %o0,0,%i1");			\
+	   "ba "CPREF#name";"				\
+	   "mov %i1,%o0;"				\
+	   );			                        \
  type C##name(struct Structure *struc, int i1, int i2, int i3, int i4)
 
 #define FetchStruc()
