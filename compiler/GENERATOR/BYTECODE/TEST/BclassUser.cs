@@ -1,14 +1,14 @@
 /*
   Compilation statements: 
-    $BETALIB/compiler/nti_ms/sbeta -t dotnet Bclass.bet
-    csc /r:System.dll /addmodule:Bclass.dll BclassUser.cs 
+    nbeta -x Bclass.bet
+    csc /r:System.dll /r:tstenv.dll /r:Bclass.dll BclassUser.cs 
 */ 
 using System;
 
 class Cclass: Bclass
 {
   // C# constructor must transfer origin object to BETA constructor
- public Cclass(object origin):base(origin)
+ public Cclass(tstenv origin):base(origin)
     {
     }
   public override void fisk(int arg)
@@ -22,7 +22,7 @@ class BclassUser
 {
   public static void Main() 
     {
-      Bclass b = new Cclass(null);
+      Bclass b = new Cclass(null); // Origin should actually be a tstenv instance
       b.set(9);
       Console.WriteLine(b.get());
       b.fisk(10);

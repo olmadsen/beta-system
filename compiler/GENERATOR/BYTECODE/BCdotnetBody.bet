@@ -35,15 +35,22 @@ emitcomment:
      T[] -> out.puttext;
      ' */' -> out.puttext;
   #);
-fixme: emitcomment
-  (# 
-  do 'FIXME:' -> out.puttext;
+FIXME: 
+  (# T: ^text
+  enter T[]
+  do 'FIXME: ' -> (T.copy).prepend -> T[];
+     '***** ' -> screen.puttext; T[] -> screen.putline;
+     (*T[] -> emitcomment;*)
+     '\n\tldstr "'->out.puttext; 
+     T[]->out.puttext; 
+     '"' -> out.putline;
+     '\tcall void [mscorlib]System.Console::WriteLine(string)' -> out.puttext;
   #);
 ConvertType:
   (# T: ^text
   enter T[]
   do (if trace_convert then
-         '/*ConverType('->out.puttext;
+         '/*ConvertType('->out.puttext;
          T[]->out.puttext;
          ')*/' ->out.puttext;
      if);
@@ -253,6 +260,33 @@ do (if currentTag
                                -> BCstate.fields.numLocals;
                           #);
      #);
+   
+   allocLocal:
+     (# type: ^text;
+     enter type[]
+     do '\t.locals init ([%d] %s)\n'
+          -> out.putformat(# num: @integer;
+                          do BCstate.fields.numLocals 
+                             - BCstate.fields.numArguments -> num;
+                             num -> d;
+                             type[] -> s
+                          #);
+        BCstate.fields.numLocals+1 -> BCstate.fields.numLocals;
+     exit BCstate.fields.numLocals-1
+     #);
+   storeLocal:
+     (# num: @integer
+     enter num
+     do '\tstloc.' -> out.puttext; num -> out.putint; out.newline;
+     #);
+   loadLocal:
+     (# num: @integer
+     enter num
+     do '\tldloc.' -> out.puttext; num -> out.putint; out.newline;
+     #);
+   numLocals:
+     (# exit BCstate.fields.numLocals-1 #);
+  
    emitSystemAssemblyReferences:
      (# 
      do '/* Assembly references. */\n'
@@ -677,6 +711,12 @@ do (if currentTag
      do 'L'-> out.put; labNo -> out.putint; out.newline
      #);
    
+   newArray:
+     (# type: ^text
+     enter type[]
+     do '\tnewarr ' -> out.puttext; type[] -> out.puttext
+     #);
+   
    opCode, arg1: @integer;
    A: @Address;
    T: ^text;
@@ -796,6 +836,45 @@ do init;
                         arg[] (* origin name *) -> AddClass -> emitsignature;
                     if);
                     ')' -> out.puttext;
+                 // 'AlloVR4' -> prim.equal then
+                    'int32' -> newArray
+                 // 'AlloVR1' -> prim.equal then
+                    'char' -> newArray  
+                 // 'Text2CharArray' -> prim.equal then
+                    '\t' -> out.puttext;
+                    'Text2CharArray:'->emitcomment;
+                    '\n\tcallvirt instance char[] [mscorlib]System.String::ToCharArray()' 
+                      -> out.puttext;
+                 // 'Text2BetaText' -> prim.equal then
+                    (* Note! Hardcoding of pattern 'text'
+                     * including case, etc. Should be handled
+                     * more generally
+                     *)
+                    '\t' -> out.puttext;
+                    'Text2BetaText:'->emitcomment;
+                    '\n\tcallvirt instance char[] [mscorlib]System.String::ToCharArray()\n' 
+                      -> out.puttext;
+                    'char []' -> allocLocal -> storeLocal;
+                    '\tldnull\n'
+                    '\tnewobj\tinstance void class [tstenv]text::.ctor(class [tstenv]tstenv)\n'
+                    '\tdup\n'
+                      -> out.puttext;
+                    numLocals -> loadLocal;
+                    '\tcallvirt instance void class [tstenv]text::\'enter\'(char[])\n'
+                      -> out.puttext
+                 // 'CharArray2String' -> prim.equal then
+                    '\t' -> out.puttext;
+                    'CharArray2String:'->emitcomment;
+                    '\n\tnewobj [mscorlib]System.String(char[])' -> out.puttext
+                 // 'Att' -> prim.equal then
+                    'missing call of attach here' -> emitcomment;
+                    'we pop the stack to avoid overflow' -> emitcomment;
+                    '\tpop' -> out.puttext;
+                 else
+                    '/* Primitive: '->out.puttext; 
+                    prim[] -> out.puttext; ' ' ->out.put;
+                    arg[] -> out.puttext;
+                    ' */' -> out.puttext;
                 if);
              #);
              out.newline;
@@ -971,7 +1050,7 @@ do init;
                   // 2
                      then 'ret' -> out.puttext
                   else (* error *) 
-                     'xreturn' -> out.puttext
+                     'xreturn' -> FIXME;
                  if);
                  '\n  }'->out.puttext
               // cmpToBool then
@@ -1010,8 +1089,10 @@ do init;
                  BC.get -> arg1;
                  'dup' -> out.puttext;
                  (if arg1 > 0 then 
-                     'ERROR: IL has no dup_x1/dup_x2 instructions' -> screen.putline;
-                 if)                        
+                     'IL has no dup_x1/dup_x2 instructions' -> FIXME;
+                 if)     
+              // pop then
+                 'pop' -> out.puttext;
               // loadRange then 
                  'ldlen' -> out.puttext;
               // pushReg then
