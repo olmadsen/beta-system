@@ -19,17 +19,22 @@ CopyVR: public
      stack: StackArea = SP;
      
      { Used variable.  }
-     theRep: Repetition  = AddrReg1;
-     newTop: DataArea    = AddrReg2;
-     newRep: Repetition  = AddrReg2;
-     theCell: DataArea   = AddrReg1;
-     proto: DataArea     = DataReg2;
-     cycleCell: DataArea = AddrReg2;
-     range:  Long        = DataReg1;
-     BodySize: Long      = DataReg1; { number of bytes to allocate }
-     tmp:    Long        = DataReg2;
-     value:  Long        = DataReg2;
-     offset: Long        = DataReg2;
+     theRep:    Repetition        = AddrReg1;
+     theObjRep: ObjectRepetition  = AddrReg1;
+     theCell:   DataArea          = AddrReg1;
+
+     newTop:    DataArea          = AddrReg2;
+     newRep:    Repetition        = AddrReg2;
+     newObjRep: ObjectRepetition  = AddrReg2;
+     proto:     DataArea          = DataReg2;
+     cycleCell: DataArea          = AddrReg2;
+     
+     range:     Long              = DataReg1;
+     BodySize:  Long              = DataReg1; { number of bytes to allocate }
+     
+     tmp:       Long              = DataReg2;
+     value:     Long              = DataReg2;
+     offset:    Long              = DataReg2;
   do
      (if debug then call Ck if);
      
@@ -59,6 +64,14 @@ CopyVR: public
          if)
      if);
      theRep.HighBorder -> range;
+     
+     (if theRep.ProtoType <= -10 then { ObjectRepetition }
+         IOATop -> newRep;
+         { range -> BodySize; // no need; it is the same register }
+         4 -> BodySize*;
+         newRep[24+BodySize][] -> newTop;
+         goto CheckGC;
+     if);
      
      (if range > 256 then
          (if intel then
@@ -132,25 +145,25 @@ CopyVR: public
              { range -> BodySize; // no need; it is the same register }
              (if theRep.ProtoType = -5 then { long rep }
                  4 -> BodySize*;
-                 goto copyBody
+                 goto copyBodyPush
              if);
              (if theRep.ProtoType = -7 then { word rep }
                  2 -> BodySize*;
                  3 -> BodySize+;
                  4 -> BodySize/;
                  4 -> BodySize*;
-                 goto copyBody
+                 goto copyBodyPush
              if);
              (if theRep.ProtoType = -6 then { byte rep }
                  4 -> BodySize+;
                  4 -> BodySize/;
                  4 -> BodySize*;
-                 goto copyBody
+                 goto copyBodyPush
              if);
              (if theRep.ProtoType = -8 then { double rep }
                  2 -> BodySize*;
                  4 -> BodySize*;
-                 goto copyBody
+                 goto copyBodyPush
              if)
          if)
      if);
@@ -173,11 +186,11 @@ CopyVR: public
          {goto IOAalloc} {No need, save a jump}
      if);
      
-     
      IOAalloc:
-     
      4 -> BodySize*;
      newRep[16+BodySize][] -> newTop;
+     
+     CheckGC:
      (if newTop > IOALimit then goto GC if);
      
      IOATop -> tmp;
@@ -192,18 +205,20 @@ CopyVR: public
      1                 -> newRep.LowBorder;
      theRep.HighBorder -> newRep.HighBorder;
      
-     copyBody:
-     
-     (if intel then
-         stack[28] -> theRep
-      else
-         (if MacOS then
-             stack[16] -> theRep
-          else
-             stack[12] -> theRep
-         if);
+     (if theRep.ProtoType <= -10 then { ObjectRepetition }
+         { set up iProto and iOrigin }
+         theObjRep.iProto -> newObjRep.iProto;
+         theObjRep.iOrigin -> newObjRep.iOrigin;
+         push newRep;
+         8 -> newRep+; { larger header }
+         8 -> theRep+; { larger header }
+         goto copyBody;
      if);
      
+     copyBodyPush:
+     push newRep;
+
+     copyBody:
      { Copy the body part of the repetition. }
      (if BodySize <> 0 then
          4 -> BodySize-;
@@ -213,6 +228,10 @@ CopyVR: public
          4 -> range-;
          (if FLAGS >= 0 then goto loop if)
      if);
+     
+     pop newRep;
+     
+     AssignReference:
      
      (if intel then
          stack[24] -> theCell;

@@ -21,16 +21,22 @@ CopySVR: public
      high:    Long    = DataReg2; {pReg2 in Intel version}
      
      { Used variable.  }
-     stack:  StackArea  = SP;    
-     theRep: Repetition = AddrReg1;
-     theObj: Object     = RegObj;
-     newRep: Repetition = AddrReg2;
-     newTop: DataArea   = AddrReg1;
-     BodySize: Long     = DataReg3; { saved and restored }
-     value:  Long       = DataReg1;
-     offset: Long       = DataReg1;
-     theItem: Item      = AddrReg1;
-     theCell: DataArea  = AddrReg1
+     stack:     StackArea        = SP;    
+     theRep:    Repetition       = AddrReg1;
+     theObjRep: ObjectRepetition = AddrReg1;
+     newTop:    DataArea         = AddrReg1;
+     theItem:   Item             = AddrReg1;
+     theCell:   DataArea         = AddrReg1;
+     
+     theObj:    Object           = RegObj;
+     
+     newRep:    Repetition       = AddrReg2;
+     newObjRep: ObjectRepetition = AddrReg2;
+     
+     BodySize:  Long             = DataReg3; { saved and restored }
+     
+     value:     Long             = DataReg1;
+     offset:    Long             = DataReg1;
   do
      (if debug then call Ck if);
      
@@ -107,12 +113,19 @@ CopySVR: public
          4 -> BodySize/;
          {goto IOAalloc} {No need, save a jump}
      if);
+     { fall through: LongRep, ItemRep, CompRep }
      
      IOAalloc:
      
      4 -> BodySize*;
      IOATop -> newRep;
+     (if theRep.ProtoType <= -10 then { ObjectRepetition }
+         newRep[24+BodySize][] -> newTop;
+         goto CheckGC;
+     if);
      newRep[16+BodySize][] -> newTop;
+     
+     CheckGC:
      (if newTop > IOALimit then goto GC if);
      newTop -> IOATop;
      
@@ -136,6 +149,12 @@ CopySVR: public
      1     -> newRep.Age;
      1     -> newRep.LowBorder;
      high  -> newRep.HighBorder;
+     
+     (if theRep.ProtoType <= -10 then { ObjectRepetition }
+         { set up iProto and iOrigin }
+         theObjRep.iProto -> newObjRep.iProto;
+         theObjRep.iOrigin -> newObjRep.iOrigin;
+     if);
      
      { Copy the body part of the repetition. }
      (if theRep.ProtoType = -6 then { byte rep }
@@ -165,19 +184,6 @@ CopySVR: public
              goto assign
          if)
      if);
-     (if theRep.ProtoType = -5 then { long rep }
-         (if high <> 0 then
-             1 -> low-;
-             theRep[low*4][] -> theRep; { Start at low*4. }
-             1 -> high-;
-             loop3:
-             theRep[16+high*4] -> value;
-             value -> newRep[16+high*4];
-             1 -> high-;
-             (if FLAGS >= 0 then goto loop3 if);
-             goto assign
-         if)
-     if);
      (if theRep.ProtoType = -8 then { double rep }
          (if high <> 0 then
              1 -> low-;
@@ -192,6 +198,25 @@ CopySVR: public
              (if FLAGS >= 0 then goto loop4 if);
              goto assign
          if)
+     if);
+     
+     { fall through: LongRep, ItemRep, CompRep }
+     (if high <> 0 then
+         push newRep;
+         (if theRep.ProtoType <= -10 then { ObjectRep }
+             8 -> theRep+; { larger header }
+             8 -> newRep+; { larger header }
+         if);
+         1 -> low-;
+         theRep[low*4][] -> theRep; { Start at low*4. }
+         1 -> high-;
+         loop3:
+         theRep[16+high*4] -> value;
+         value -> newRep[16+high*4];
+         1 -> high-;
+         (if FLAGS >= 0 then goto loop3 if);
+         pop newRep;
+         { goto assign no need - save a jump }
      if);
      
      assign:
