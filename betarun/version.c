@@ -1,7 +1,11 @@
-char betarun_version[] = "BETARUN VERSION 5.3(65++)";
+char betarun_version[] = "BETARUN VERSION 5.3(66)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.67  2002/01/23 10:03:40  corry
+ * Another test!
+ * Betarun version number: 65++
+ *
  * Revision 1.66  2002/01/23 10:01:37  corry
  * Testing + feature
  * Betarun version number: 65+
