@@ -122,7 +122,16 @@ do (#
    
 -- windowItemEditorLib: attributes --
 
-deleteImperative:
+codeGuard:
+  (# 
+  do (if inherited then
+         'Trying to change inherited code!' -> putLine;
+      else
+         INNER;
+     if);
+  #);
+
+deleteImperative: codeGuard
   (# name: ^text;
      theDoPart: ^astInterface.beta.doPart;
      proto: ^astInterface.AST;
@@ -171,7 +180,7 @@ generateEvaluation:
   exit eval[]
   #);
 
-changeImperative:
+changeImperative: codeGuard
   (# name: ^text;
      value: ^atom;
      theDoPart: ^astInterface.beta.doPart;
@@ -266,7 +275,7 @@ changeData:
      if);
   #);
 
-changePosition:
+changePosition: codeGuard
   (# x, y: @integer;
      theDoPart: ^astInterface.beta.doPart;
      proto: ^astInterface.beta.assignmentEvaluation;
@@ -293,7 +302,7 @@ changePosition:
          if);
      if);
   #);
-changeSize:
+changeSize: codeGuard
   (# width, height: @integer;
      theDoPart: ^astInterface.beta.doPart;
      proto: ^astInterface.beta.assignmentEvaluation;
@@ -301,7 +310,7 @@ changeSize:
      txt: @text;
      imp: ^astInterface.beta.assignmentEvaluation;
      theImperatives: ^astInterface.beta.imperatives;
-     theEvaluation: ^astInterface.beta.evaluation;
+     theEvaluation, oldEval, newEval: ^astInterface.beta.evaluation;
      assignment: ^astInterface.beta.assignmentEvaluation;
   enter (width, height)
   do forInitStatements -> findOpenDoPart -> theDoPart[];
@@ -311,12 +320,15 @@ changeSize:
          (theImperatives.frag[], txt[], gram.imp) -> parseText -> proto[];
         (mps[], theImperatives[], proto[]) -> listSearch -> imp[];
          (if imp[] <> none then
-             (theDoPart.frag[], width, height) -> betaGram.newPointEvaluation 
-               -> imp.putEvaluation;
+             imp.getEvaluation -> oldEval[];
+             (theDoPart.frag[], width, height) -> betaGram.newPointEvaluation -> newEval[];
+             newEval[] -> imp.putEvaluation;
+             (true, imp.frag[], oldEval[], newEval[]) -> theFragServer.notifyAstreplaced;
           else
              (theDoPart.frag[], width, height) -> betaGram.newPointEvaluation 
                -> proto.putEvaluation;
              (1, proto[]) -> theImperatives.insert;
+             (true, theDoPart.frag[], theImperatives[], 1) -> theFragServer.notifyListElementInserted;
          if);
      if);
   #);
@@ -385,11 +397,13 @@ closeWindowItem:
 frame:
   (# r: ^rectangle;
   enter (# enter r[]
-        do (if theWindowItem[] = contentsEditorObject then
+        do true -> dontHandleFrameChanged;
+           (if theWindowItem[] = contentsEditorObject then
                r[] -> (contentsEditorObject).setRealFrame;
             else
                r -> theWindowItem.frame;
            if);
+           false -> dontHandleFrameChanged;
         #)
   exit (# 
        do (if theWindowItem[] = contentsEditorObject then
@@ -408,6 +422,8 @@ createShadowTree:
   do &shadowTree[] -> tree[];
      node[] -> betaGram.getName -> tree.name[];
      data.copy -> tree.data[];
+     defaultData[] -> tree.defaultData[];
+     theClassData[] -> tree.theClassData[]; 
      tree.children.init;
      (if this(windowItemEditor)## <= canvasEditor## then
          this(windowItemEditor)[] -> thisCanvasEditor[];
@@ -525,7 +541,7 @@ closeCodeDialog:
  *   #);
  * 
  *)
-appendToAttributes:
+appendToAttributes: codeGuard
   (# theAttribute: ^astInterface.beta.attributeDecl;
      theAttributes: ^astInterface.beta.attributes;
      insertInx: @integer;
@@ -559,7 +575,7 @@ updateOpen1:
   #);
 
 
-prependOpenImp:
+prependOpenImp: codeGuard
   (# theDoPart: ^astInterface.beta.doPart;
      imp: ^astInterface.beta.imp;
      failure:
@@ -580,7 +596,7 @@ prependOpenImp:
      #);
   #);
 
-appendOpenImp:
+appendOpenImp: codeGuard
   (# theDoPart: ^astInterface.beta.doPart;
      imp: ^astInterface.beta.imp;
      failure:
@@ -611,7 +627,7 @@ appendOpenImp:
   #);
 
 
-deleteOpenImp:
+deleteOpenImp: codeGuard
   (# theDoPart: ^astInterface.beta.doPart;
      name: ^text;
      failure:
@@ -845,7 +861,7 @@ handleAstReplaced:
 
 
 
-createOpenDopart:
+createOpenDopart: codeGuard
   (# theDoPart: ^astInterface.beta.doPart;
      main: @boolean;
   enter main
@@ -901,7 +917,7 @@ findOpenDoPart:
          //forOpenStatements then
             getMainNode -> node[];
         if);
-        node[] -> realFindOpenDoPart -> theDoPart[];
+        (node[], defaultBodyGroup) -> realFindOpenDoPart -> theDoPart[];
      #);
   exit theDoPart[]
   #);
@@ -994,24 +1010,19 @@ putRect:
 handleFrameChanged: theWindowItem.frameChangedAction
   (# r: ^rectangle;
      x, y: @integer;
-  do (if theWindowItem[]<>none then
-         (if data[]<>none then
-             frame -> r[];
-             r.topLeft -> (x, y);
-             (* (if x > 60000 then
-              *                  x - 65536 -> x;
-              *              if);
-              *              (if y > 60000 then
-              *                  y - 65536 -> y;
-              *              if);
-              *)
-             (x, y) -> data.position;
-             r.size  -> data.size;
-             (x, y) -> changePosition;
-             r.size -> changeSize;
-             (if private.selected then
-                 (theWindowItem[], none) -> this(graphicalEditorEnv).private.theWalkingAnts.delete;
-                 startWalkingAnts;
+  do (if not dontHandleFrameChanged then
+         (if theWindowItem[]<>none then
+             (if data[]<>none then
+                 frame -> r[];
+                 r.topLeft -> (x, y);
+                 (x, y) -> data.position;
+                 r.size  -> data.size;
+                 (x, y) -> changePosition;
+                 r.size -> changeSize;
+                 (if private.selected then
+                     (theWindowItem[], none) -> this(graphicalEditorEnv).private.theWalkingAnts.delete;
+                     startWalkingAnts;
+                 if);
              if);
          if);
      if);
@@ -1139,7 +1150,7 @@ do (#
       this(graphicalEditor)[] -> insert;
       hide;
       'Graphical Objects' -> title;
-      getClassInfo -> private.theClassInfo[];
+      
       (600, 500) -> size;
       private.theClipBoard.init;
       private.theControlPalette.open;
@@ -1163,6 +1174,12 @@ do (#
 do 
    
 -- graphicalEditorLib: attributes --
+dontHandleFrameChanged:
+  (# 
+  enter private.dontHandleFrameChanged
+  exit private.dontHandleFrameChanged
+  #);
+
 
 forInitStatements: (# exit 1 #);
 forOpenStatements: (# exit 2 #);
@@ -1212,7 +1229,7 @@ getClassData:
   do node[] -> getClass -> theClass[];
      (if theClass[] <> none then
          &classData[] -> theClassData[];
-         (theClass[], node[]) -> theClassData.init;
+         (theClass[], node[], defaultBodyGroup) -> theClassData.init;
      if);
   exit theClassData[]
   #);
@@ -1299,18 +1316,26 @@ initData1:
 
 adjustValue:
   (# theAssignment: ^astInterface.beta.assignmentEvaluation;
+     theEvaluation: ^astInterface.beta.evaluation;
      name: ^text;
      value: ^atom;
      x, y, width, height: @integer;
      theData: ^parameters;
   enter (theData[], name[], theAssignment[])
-  do (if true 
+  do theAssignment.getEvaluation -> theEvaluation[];
+     (if true 
       //'position' -> name.equalNCS then
-         theAssignment[] -> betaGram.evaluatePoint -> (x, y);
+         theEvaluation[] -> betaGram.evaluatePoint -> (x, y);
          ('x', x) -> theData.setInt;
          ('y', y) -> theData.setInt;
       //'size' -> name.equalNCS then
-         theAssignment[] -> betaGram.evaluatePoint -> (width, height);
+         theEvaluation[] -> betaGram.evaluatePoint -> (width, height);
+         ('width', width) -> theData.setInt;
+         ('height', height) -> theData.setInt;
+      //'frame' -> name.equalNCS then
+         theEvaluation[] -> betaGram.evaluateRect -> (x, y, width, height);
+         ('x', x) -> theData.setInt;
+         ('y', y) -> theData.setInt;
          ('width', width) -> theData.setInt;
          ('height', height) -> theData.setInt;
       else
@@ -1318,58 +1343,16 @@ adjustValue:
          (if value[] <> none then
              (if value.type
               //textType then
-                 (name[], theAssignment[] -> betaGram.evaluateText) -> theData.setText;
+                 (name[], theEvaluation[] -> betaGram.evaluateText) -> theData.setText;
               //boolType then
-                 (name[], theAssignment[] -> betaGram.evaluateBool) -> theData.setBool;
+                 (name[], theEvaluation[] -> betaGram.evaluateBool) -> theData.setBool;
               //intType then
-                 (name[], theAssignment[] -> betaGram.evaluateInt) -> theData.setInt;
+                 (name[], theEvaluation[] -> betaGram.evaluateInt) -> theData.setInt;
              if);
-          else
-             name[] -> putText;
-             ' is not a parameter' -> putLine;
          if);
      if);
   #);
 
-realFindOpenDoPart:
-  (# theDoPart: ^astInterface.beta.doPart;
-     node: ^astInterface.beta.attributeDecl;
-  enter node[]
-  do (# 
-        openDecl: ^astInterface.beta.attributeDecl;
-        theObjectDescriptor: ^astInterface.beta.objectDescriptor;
-        theMainPart: ^astInterface.beta.mainPart;
-        theActionPart: ^astInterface.beta.actionPart;
-        theAst: ^astInterface.AST;
-        theUnExpanded: ^astInterface.unExpanded;
-        theSlot: ^astInterface.slotDesc;
-        doPartFrag: ^astInterface.fragmentForm;
-        group: ^astInterface.fragmentGroup;
-     do 
-        
-        (node[], 'open') -> betaGram.findAttribute -> openDecl[];
-        (if openDecl[] <> none then
-            openDecl[] -> betaGram.getObjectDescriptor -> theObjectDescriptor[];
-            theObjectDescriptor.getMainPart -> theMainPart[];
-            theMainPart.getActionPart -> theActionPart[];
-            theActionPart.getDoPartOpt -> theAst[];
-            (if theAst.symbol = MPS.unExpanded then
-                theAst[] -> theUnExpanded[];
-                (if theUnExpanded.isSlot then
-                    theUnExpanded.theSlot -> theSlot[];
-                    defaultBodyGroup -> group[];
-                    theSlot.name -> group.findFragment -> doPartFrag[];
-                    (if doPartFrag[] <> None then
-                        doPartFrag.root[] -> theDoPart[];
-                    if);
-                if);
-             else
-                theAst[] -> theDoPart[];
-            if);
-        if);
-     #);
-  exit theDoPart[]
-  #);
 
 defaultBodyGroup:
   (# group: ^mps.fragmentGroup;
@@ -1401,151 +1384,7 @@ defaultBodyGroup:
  * 
  *)
 
-scanPrefixChain:
-  (# node: ^astInterface.beta.attributeDecl;
-     current: ^astInterface.beta.attributeDecl;
-     prefixName: ^text;
-     theClass: ^classInfo.class;
-  enter node[]
-  do node[] -> current[];
-     l:
-       (#
-       do current[] ->  betaGram.getPrefix -> prefixName[];
-          (if prefixName[] <> none then
-              prefixName[] -> private.theClassInfo.lookup -> theClass[];
-              (if theClass[] = NONE then
-                  current[] -> getSuperPattern -> current[];
-                  (if current[] <> none then
-                      INNER scanPrefixChain;
-                      restart l;
-                  if);
-              if);
-          if);
-       #);
-  #);
 
-
-
-
-getInheritedAttributes:
-  (# node: ^astInterface.beta.attributeDecl;
-     theAttributeList: ^attributeList;
-     getPrivateAttributes:
-       (# node: ^astInterface.beta.attributeDecl;
-          theAttributes: ^astInterface.beta.attributes;
-          frag: ^astInterface.fragmentForm;
-          theDescriptorForm: ^astInterface.beta.descriptorForm;
-          theObjectDescriptor: ^astInterface.beta.objectDescriptor;
-          theMainPart: ^astInterface.beta.mainPart;
-       enter node[]
-       do node[] -> betaGram.getPrivateFragment -> frag[];
-          (if frag[] <> none then
-              (if frag.category = betaGram.descriptorForm then
-                  frag.root[] -> theDescriptorForm[];
-                  theDescriptorForm.getObjectDescriptor -> theObjectDescriptor[];
-                  theObjectDescriptor.getMainPart -> theMainPart[];
-                  theMainPart.getAttributes -> theAttributes[];
-              if);
-          if);
-       exit theAttributes[]
-       #);
-     
-     addAttributes:
-       (# theAttributes: ^astInterface.beta.attributes
-       enter theAttributes[]
-       do (if theAttributes[] <> none then
-              theAttributes.iterate
-              (# 
-              do current[] -> theAttributeList.prepend;
-              #);
-          if);
-       #);
-     addImperatives:
-       (# node: ^astInterface.beta.attributeDecl;
-          theNameApl: ^astInterface.beta.nameApl;
-          theDoPart: ^astInterface.beta.doPart;
-          theImperatives: ^astInterface.beta.imperatives;
-       enter node[]
-       do node[] -> realFindOpenDoPart -> theDoPart[];
-          (if theDoPart[] <> none then
-              theDoPart.getImperatives -> theImperatives[];
-              theImperatives.newScan
-              (# doMatch: @boolean;
-              do 
-                 (mps[], current[], proto1[]) -> match -> doMatch;
-                 (if not doMatch then
-                     (mps[], current[], proto2[]) -> match -> doMatch;
-                 if);
-                 (if doMatch then
-                     current[] -> theImperativeList.prepend;
-                 if);
-              #);
-          if);
-       #);
-     theImperativeList: ^imperativeList;
-     proto1, proto2: ^astInterface.AST;
-     gram: @grammar;
-  enter node[]
-  do (node.frag[], '<<evaluation>> -> <<nameApl>>', gram.imp)
-       -> parseText -> proto1[];
-     (node.frag[], '<<evaluation>> -> <<remote>>', gram.imp)
-       -> parseText -> proto2[];
-     
-     &attributeList[] -> theAttributeList[];
-     theAttributeList.init;
-     &imperativeList[] -> theImperativeList[];
-     theImperativeList.init;
-     
-     node[] -> scanPrefixChain
-     (# 
-     do current[] -> betaGram.getAttributes -> addAttributes;
-        current[] -> getPrivateAttributes -> addAttributes;
-        current[] -> addImperatives;
-     #);
-  exit (theAttributeList[], theImperativeList[])
-  #);
-
-getClass:
-  (# node: ^astInterface.beta.attributeDecl;
-     prefixName: ^text;
-     theClass: ^classInfo.class;
-     superNode: ^astInterface.beta.attributeDecl;
-  enter node[]
-  do node[] -> betaGram.getPrefix -> prefixName[];
-          
-     (if prefixName[] <> none then         
-         prefixName[] -> private.theClassInfo.lookup -> theClass[];
-         (if theClass[] = NONE then
-             node[] -> getSuperPattern -> superNode[];
-             (if superNode[] <> none then
-                 superNode[] -> getClass -> theClass[];
-             if);
-         if);
-     if);
-     
-  exit theClass[]
-  #);
-
-getSuperPattern:
-  (# node, superNode: ^astInterface.beta.attributeDecl;
-     theNameApl: ^astInterface.beta.nameApl;
-     theNameDcl: ^astInterface.beta.nameDcl;
-     theNames: ^astInterface.beta.names;
-     dest: ^astInterface.ast;
-  enter node[]
-  do node[] -> betaGram.getPrefixNameApl -> theNameApl[];
-     (if theNameApl[] <> none then
-         (mps[], theNameApl[]) -> followSemanticLink -> dest[];
-         (if (dest[] <> none) and (dest.symbol = betaGram.nameDcl) then
-             dest[] -> theNameDcl[];
-             theNameDcl.father -> theNames[];
-             theNames.father -> superNode[];
-         if);
-     if);
-  exit superNode[]
-  #);
-
-(* End of Class support *)
 
 undoTop:
   (# top: ^operation;
@@ -1664,10 +1503,13 @@ clipBoard:
           
           type -> theDocument.theParameterStore.new -> data[];
           tree.data[] -> data.set;
+          
           none -> node.addComment;
           (* data.id -> node.guiInfo; *)
           node[] -> editor.node[];
           data[] -> editor.data[];
+          tree.defaultData[] -> editor.defaultData[];
+          tree.theClassData[] -> editor.theClassData[];
           (* editor.updateInitImp; *)
           (if top then
               (node[], (type, data.id) -> freshName) -> betaGram.setName;
@@ -1861,7 +1703,9 @@ moveOperation: selectionOperation
        (# 
        do theSelection.scan
           (# 
-          do (dh, dv) -> current.theWindowItem.move;
+          do true -> dontHandleFrameChanged;
+             (dh, dv) -> current.theWindowItem.move;
+             false -> dontHandleFrameChanged;
              current.theWindowItem.position -> current.changePosition;
           #);
        #);
@@ -1869,7 +1713,9 @@ moveOperation: selectionOperation
        (# 
        do theSelection.scan
           (# 
-          do (-dh, -dv) -> current.theWindowItem.move;
+          do true -> dontHandleFrameChanged;
+             (-dh, -dv) -> current.theWindowItem.move;
+             false -> dontHandleFrameChanged;
              current.theWindowItem.position -> current.changePosition;
           #);
        #);
@@ -2353,6 +2199,7 @@ createPrivateAttributes:
 
 -- graphicalEditorPrivateAttributes: descriptor --
 (# newlyCreated: @boolean;
+   forbidCodeChanges, dontHandleFrameChanged: @boolean;
    lastSaveOperation: ^operation;
    theFileMenu: @graphicalEditorMenu
      (# 
@@ -3107,7 +2954,6 @@ createPrivateAttributes:
           #);
      #);
    
-   theClassInfo: ^classInfo;
    
    theControlPalette: @controlPalette
      (# 
@@ -3279,7 +3125,7 @@ do inner mouseDown;
    
 -- canvasEditorLib: attributes --
 
-updateOpen:
+updateOpen: codeGuard
   (# oldName, newName: ^text;
      
   enter (oldName[], newName[])
@@ -3314,7 +3160,7 @@ updateOpen:
   #);
 
 
-appendChild:
+appendChild: codeGuard
   (# editor: ^windowItemEditor;
      
   enter editor[]
@@ -3448,7 +3294,8 @@ do (if private.selected then
    if);
 
 -- GraphicalEditorInit: doPart --
-do (# data: ^parameters;
+do true -> private.forbidcodechanges;
+   (# data: ^parameters;
       prop: ^propertyList;
       ID: @integer;
       width, height: @integer;
@@ -3462,7 +3309,7 @@ do (# data: ^parameters;
       (300, 200) -> data.size;
       
       (# theDoPart: ^astInterface.beta.doPart;
-      do node[] -> realFindOpenDoPart -> theDoPart[];
+      do (node[], defaultBodyGroup) -> realFindOpenDoPart -> theDoPart[];
          (if theDoPart[] <> none then
              (data[], theDoPart.getImperatives) -> initData1;
          if);
@@ -3477,6 +3324,7 @@ do (# data: ^parameters;
       show;
       inner init;
    #);
+   (* false -> private.forbidcodechanges; *)
 
 -- IBwindowitemEditorapplyObjectData: doPart --
 do (# r: @rectangle;
@@ -4198,10 +4046,51 @@ do private.editors.init;
    private.theWalkingAnts.init;
    (theFragServer[], MPS[], pretty[]) -> theAstEditorEnv.init;
    private.theScrap.init;
-   
+   getClassInfo -> private.theClassInfo[];
    inner;
    
 -- graphicalEditorEnvLib: attributes --
+
+realFindOpenDoPart:
+  (# theDoPart: ^astInterface.beta.doPart;
+     node: ^astInterface.beta.attributeDecl;
+     group: ^astInterface.fragmentGroup;
+  enter (node[], group[])
+  do (# 
+        openDecl: ^astInterface.beta.attributeDecl;
+        theObjectDescriptor: ^astInterface.beta.objectDescriptor;
+        theMainPart: ^astInterface.beta.mainPart;
+        theActionPart: ^astInterface.beta.actionPart;
+        theAst: ^astInterface.AST;
+        theUnExpanded: ^astInterface.unExpanded;
+        theSlot: ^astInterface.slotDesc;
+        doPartFrag: ^astInterface.fragmentForm;
+     do 
+        
+        (node[], 'open') -> betaGram.findAttribute -> openDecl[];
+        (if openDecl[] <> none then
+            openDecl[] -> betaGram.getObjectDescriptor -> theObjectDescriptor[];
+            theObjectDescriptor.getMainPart -> theMainPart[];
+            theMainPart.getActionPart -> theActionPart[];
+            theActionPart.getDoPartOpt -> theAst[];
+            (if theAst.symbol = MPS.unExpanded then
+                theAst[] -> theUnExpanded[];
+                (if theUnExpanded.isSlot then
+                    theUnExpanded.theSlot -> theSlot[];
+                    theSlot.name -> group.findFragment -> doPartFrag[];
+                    (if doPartFrag[] <> None then
+                        doPartFrag.root[] -> theDoPart[];
+                    if);
+                if);
+             else
+                theAst[] -> theDoPart[];
+            if);
+        if);
+     #);
+  exit theDoPart[]
+  #);
+
+
 
 scriptEditor: theAstEditorEnv.astEditor
   (# eventHandler::
@@ -4216,6 +4105,152 @@ scriptEditor: theAstEditorEnv.astEditor
      
   #);
 
+scanPrefixChain:
+  (# node: ^astInterface.beta.attributeDecl;
+     current: ^astInterface.beta.attributeDecl;
+     prefixName: ^text;
+     theClass: ^classInfo.class;
+  enter node[]
+  do node[] -> current[];
+     l:
+       (#
+       do current[] ->  betaGram.getPrefix -> prefixName[];
+          (if prefixName[] <> none then
+              prefixName[] -> private.theClassInfo.lookup -> theClass[];
+              (if theClass[] = NONE then
+                  current[] -> getSuperPattern -> current[];
+                  (if current[] <> none then
+                      INNER scanPrefixChain;
+                      restart l;
+                  if);
+              if);
+          if);
+       #);
+  #);
+
+
+
+
+getInheritedAttributes:
+  (# node: ^astInterface.beta.attributeDecl;
+     theAttributeList: ^attributeList;
+     getPrivateAttributes:
+       (# node: ^astInterface.beta.attributeDecl;
+          theAttributes: ^astInterface.beta.attributes;
+          frag: ^astInterface.fragmentForm;
+          theDescriptorForm: ^astInterface.beta.descriptorForm;
+          theObjectDescriptor: ^astInterface.beta.objectDescriptor;
+          theMainPart: ^astInterface.beta.mainPart;
+       enter node[]
+       do node[] -> betaGram.getPrivateFragment -> frag[];
+          (if frag[] <> none then
+              (if frag.category = betaGram.descriptorForm then
+                  frag.root[] -> theDescriptorForm[];
+                  theDescriptorForm.getObjectDescriptor -> theObjectDescriptor[];
+                  theObjectDescriptor.getMainPart -> theMainPart[];
+                  theMainPart.getAttributes -> theAttributes[];
+              if);
+          if);
+       exit theAttributes[]
+       #);
+     
+     addAttributes:
+       (# theAttributes: ^astInterface.beta.attributes
+       enter theAttributes[]
+       do (if theAttributes[] <> none then
+              theAttributes.iterate
+              (# 
+              do current[] -> theAttributeList.prepend;
+              #);
+          if);
+       #);
+     addImperatives:
+       (# node: ^astInterface.beta.attributeDecl;
+          theNameApl: ^astInterface.beta.nameApl;
+          theDoPart: ^astInterface.beta.doPart;
+          theImperatives: ^astInterface.beta.imperatives;
+       enter node[]
+       do (node[], group[]) -> realFindOpenDoPart -> theDoPart[];
+          (if theDoPart[] <> none then
+              theDoPart.getImperatives -> theImperatives[];
+              theImperatives.newScan
+              (# doMatch: @boolean;
+              do 
+                 (mps[], current[], proto1[]) -> match -> doMatch;
+                 (if not doMatch then
+                     (mps[], current[], proto2[]) -> match -> doMatch;
+                 if);
+                 (if doMatch then
+                     current[] -> theImperativeList.prepend;
+                 if);
+              #);
+          if);
+       #);
+     theImperativeList: ^imperativeList;
+     proto1, proto2: ^astInterface.AST;
+     gram: @grammar;
+     group: ^astInterface.fragmentGroup;
+  enter (node[], group[])
+  do (node.frag[], '<<evaluation>> -> <<nameApl>>', gram.imp)
+       -> parseText -> proto1[];
+     (node.frag[], '<<evaluation>> -> <<remote>>', gram.imp)
+       -> parseText -> proto2[];
+     
+     &attributeList[] -> theAttributeList[];
+     theAttributeList.init;
+     &imperativeList[] -> theImperativeList[];
+     theImperativeList.init;
+     
+     node[] -> scanPrefixChain
+     (# 
+     do current[] -> betaGram.getAttributes -> addAttributes;
+        current[] -> getPrivateAttributes -> addAttributes;
+        current[] -> addImperatives;
+     #);
+  exit (theAttributeList[], theImperativeList[])
+  #);
+
+getClass:
+  (# node: ^astInterface.beta.attributeDecl;
+     prefixName: ^text;
+     theClass: ^classInfo.class;
+     superNode: ^astInterface.beta.attributeDecl;
+  enter node[]
+  do node[] -> betaGram.getPrefix -> prefixName[];
+          
+     (if prefixName[] <> none then         
+         prefixName[] -> private.theClassInfo.lookup -> theClass[];
+         (if theClass[] = NONE then
+             node[] -> getSuperPattern -> superNode[];
+             (if superNode[] <> none then
+                 superNode[] -> getClass -> theClass[];
+             if);
+         if);
+     if);
+     
+  exit theClass[]
+  #);
+
+getSuperPattern:
+  (# node, superNode: ^astInterface.beta.attributeDecl;
+     theNameApl: ^astInterface.beta.nameApl;
+     theNameDcl: ^astInterface.beta.nameDcl;
+     theNames: ^astInterface.beta.names;
+     dest: ^astInterface.ast;
+  enter node[]
+  do node[] -> betaGram.getPrefixNameApl -> theNameApl[];
+     (if theNameApl[] <> none then
+         (mps[], theNameApl[]) -> followSemanticLink -> dest[];
+         (if (dest[] <> none) and (dest.symbol = betaGram.nameDcl) then
+             dest[] -> theNameDcl[];
+             theNameDcl.father -> theNames[];
+             theNames.father -> superNode[];
+         if);
+     if);
+  exit superNode[]
+  #);
+
+(* End of Class support *)
 
 
 getScrap:
@@ -4581,5 +4616,5 @@ do (* children.scan
    inner createOpen;
    
 -- classDataInit: doPart --
-do  node[] -> getInheritedAttributes 
+do  (node[], group[]) -> getInheritedAttributes 
      -> (inheritedAttributes[], initImps[]);
