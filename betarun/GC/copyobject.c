@@ -11,12 +11,6 @@
 #include "../P/specialObjectsTable.h"
 #endif /* PERSIST */
 
-void copyobj_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 /*
  * CopyObject:
  *  Copy an object refered by theObj from IOASpace to ToSpace.

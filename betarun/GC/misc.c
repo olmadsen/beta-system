@@ -12,14 +12,6 @@
 #include "../P/trie.h"
 #endif /* MAC */
 
-
-void misc_dummy()
-{
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 #ifdef UNIX
 #include <unistd.h>
 #include <sys/types.h>

@@ -12,12 +12,6 @@
 #include "../P/specialObjectsTable.h"
 #endif /* PERSIST */
 
-void aoa_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 #define REP ((ObjectRep *)theObj)
 
 /* LOCAL FUNCTIONS */

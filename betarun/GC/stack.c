@@ -811,17 +811,6 @@ void ProcessHPPAStackObj(StackObject *sObj, CellProcessFunc func)
 #ifdef sparc
 #include "../CRUN/crun.h"
 
-#if 0
-void stack_dummy() {
-  USE();
-  if (0) {
-    AssignReference(0, 0);
-    setup_item(0,0,0);
-    IOAalloc(0);
-  }
-}
-#endif
-
 static long skipCparams;
 
 /* #define DEBUG_LABELS */

@@ -21,13 +21,6 @@
 
 #define USEMMAP /* HACK! used by proxy.c, but not used for aoa, etc */
 
-void blo_dummy()
-{
-#ifdef sparc
-  USE();
-#endif
-}
-
 Block * newBlock(long size)
 {
   Block * theBlock;

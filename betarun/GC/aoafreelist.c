@@ -10,12 +10,6 @@
 #include "../P/PException.h"
 #endif /* PERSIST */
 
-void aoaf_dummy() 
-{
-#ifdef sparc
-  USE();
-#endif
-}
 /************************ THE AOA FREE LIST ***************************
  * AOA freelist description:
  *   All chunks are multiples of 8 bytes.

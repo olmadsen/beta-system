@@ -63,6 +63,18 @@ extern long              geS() __asm__("geS");
 extern long              ltS() __asm__("ltS");
 #endif
 
+static void AssignReference(long *theCell, Item * newObject)
+{
+  *(Item **)theCell = newObject;
+  if (! inIOA(theCell) /* inAOA? */&& inIOA(newObject)){
+#ifdef MT
+    MT_AOAtoIOAInsert((Object **)theCell);
+#else /* MT */
+    AOAtoIOAInsert((Object **)theCell);
+#endif /* MT */
+  }
+}
+
 /* inline version of memcpy; works only for 4 byte aligned */
 #define MEMCPY(dst,src,bytesize)            \
 {  register long i;                         \
@@ -115,3 +127,12 @@ setup_item(Item * theItem,
 #else
 extern char	       *IOAalloc();
 #endif
+
+static __inline__ void CRUN_USE() {
+  USE();
+  if (0) {
+    AssignReference(0, 0);
+    setup_item(0,0,0);
+    IOAalloc(0);
+  }
+}

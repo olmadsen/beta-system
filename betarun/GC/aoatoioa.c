@@ -9,12 +9,6 @@
 /* Max number of linear probes in AOAtoIOAInsert */
 #define MAX_PROBES 30
 
-void aoatoioa_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
-}
-
 #ifdef PERSIST
 #include "../P/PException.h"
 #endif /* PERSIST */
