@@ -1,0 +1,211 @@
+#!/usr/local/bin/perl
+'di';
+'ig00';
+
+# EPSI file generator. Written by Gisle Aas, NR, 1991
+# Converts all types of EPS-files to the EPSI format where a bitmap preview
+# is included. You need GhostScript to render the bitmaps for you.
+
+# $Log: not supported by cvs2svn $
+# Revision 1.5  1992/12/02  08:35:36  aas
+# New option -i to do in-place editing of the EPS file.
+#
+# Revision 1.4  1992/09/08  17:41:27  aas
+# Some applications makes real (not integer) boundingbox coordinates, despite
+# what the DSC says.  These applications should really be fixed.  But while we
+# wait for that to happen....
+#
+# Revision 1.3  1992/08/25  14:56:05  aas
+# Hvis kommentarene i begynnelsen ikke sluttet med %%EndComments, s_ spiste
+# vi opp f_rste linje av postscript koden.
+#
+# Revision 1.2  1992/07/30  13:32:19  aas
+# Oppdatert for GhostScript versjon 2.4.  Det var ny syntaks for
+# makeimagedevice.
+#
+# Revision 1.1  1991/05/28  09:18:04  aas
+# Initial revision
+#
+
+$prog_name = substr($0,rindex($0,"/")+1);
+require 'getopts.pl';
+unless (&Getopts('iw:')) {
+  print STDOUT "Usage: $prog_name [-i] [-w <preview width>] [<file>]\n";
+  exit 1;
+}
+
+die 'To many files' if ($#ARGV > 0);
+die 'Must specify file when using in-place editing\n' if $#ARGV != 0 && $opt_i;
+$epsfile = $ARGV[0];
+
+@epsfile = <>;			# slurp
+die 'Not a PostScript file\n' unless ($epsfile[0] =~ /^%!PS-Adobe-/);
+
+# Get the dimensions of the picture
+for (@epsfile) {
+   ($llx, $lly, $urx, $ury) =
+      /^%%BoundingBox:\s*(-?[0-9\.]+)\s+(-?[0-9\.]+)\s+(-?[0-9\.]+)\s+(-?[0-9\.]+)/;
+   last if defined($llx);
+}
+die "No %%BoundingBox found in file" unless defined($llx);
+
+# Calculate 
+$preview_width = int(($opt_w || 79) / 2) * 8;
+$width  = $urx - $llx + 1;
+$height = $ury - $lly + 1;
+$scalefactor = $preview_width / $width;
+$width  = int($width * $scalefactor);
+$height = int($height * $scalefactor);
+
+# Produce GhostScript program
+$gsfile = "/tmp/gs$$.tmp";
+open(GSFILE, ">$gsfile") || die "Can't write to file $gsfile";
+print GSFILE <<"---EndGhostScriptProgram---";
+%!GhostScript
+/BITIMAGE_WIDTH $width def
+/BITIMAGE_HEIGHT $height def
+/BITIMAGE_FILE (%stdout) def
+
+%---- Setup a memory device --------
+[1 0 0 -1 0 BITIMAGE_HEIGHT]
+BITIMAGE_WIDTH BITIMAGE_HEIGHT
+%
+% [1 1 1 rgbcolor 0 0 0 rgbcolor] <-- 2.3 arguments
+% <ff 00>                         <-- 2.4 arguments from ghost@aladdin.com
+%
+<ff 00> 
+makeimagedevice
+setdevice
+
+%--- Some transformations
+/showpage {} def
+$scalefactor dup scale
+$llx neg $lly neg translate
+
+%--- The old EPS file
+@epsfile
+
+%---- Print bitmap on a file -------
+/line BITIMAGE_WIDTH 8 idiv 1 add string def
+/output BITIMAGE_FILE (w) file def
+output (---------) writestring
+output 10 write
+0  1  BITIMAGE_HEIGHT 1 sub { %for
+   output (%) writestring
+   currentdevice exch
+   line copyscanlines
+   output exch writehexstring
+   output 10 write
+} for
+output flushfile
+quit
+---EndGhostScriptProgram---
+
+close GSFILE;
+close STDIN;	# so that GhostScript can't read it.
+
+@gsoutput = `gs -q -DNODISPLAY $gsfile`;   # run GhostScript
+die "Can't run GhostScript" unless $? == 0;
+unlink $gsfile;
+
+@preview = grep(/^-----/ .. 1, @gsoutput);   # remove GhostScript garbage
+shift(preview);
+if ($#preview < 0) {
+  print STDERR "GhostScript gives no output for the specified file\n";
+  print STDERR @gsoutput;
+  exit 1;
+}
+
+if (defined $opt_i) {
+   $outputfile = "epsi.tmp$$";
+   open(EPSIFILE, ">$outputfile") || die "Can't create $outputfile";
+   select EPSIFILE;
+}
+
+print shift(epsfile);
+$_ = shift(epsfile);
+while (/^%%/) {
+  if (/^%%BoundingBox:/) {
+    print "%%BoundingBox: $llx $lly $urx $ury\n" if !defined($boundingbox);
+    $boundingbox = 1;
+  } elsif (/^%%EndComments/) {
+    last;
+  } else {
+    print;
+  }
+  $_ = shift(epsfile);
+}
+print "%%BoundingBox: $llx $lly $urx $ury\n" if !defined($boundingbox);
+print "%%EndComments
+%%BeginPreview: $width $height 1 $height\n";
+print @preview;
+print "%%EndPreview\n";
+
+print $_ unless /^%%/;
+print grep(!(/^%%BeginPreview:/ .. /^%%EndPreview/) && !/^%%BoundingBox:/,
+	   @epsfile);
+
+if (defined $opt_i) {
+   rename($epsfile, "$epsfile~") || die "Can't rename $epsfile";
+   rename($outputfile, $epsfile) || die "Can't rename $outputfile to $epsfile";
+}
+
+
+
+###########################################################################
+	# These next few lines are legal in both Perl and nroff.
+
+.00;			# finish .ig
+ 
+'di			\" finish diversion--previous line must be blank
+.nr nl 0-1		\" fake up transition to first page again
+.nr % 0			\" start at page 1
+';<<'.ex'; #__END__ #### From here on it's a standard manual page #########
+.TH EPS2EPSI 1 "May 1991"
+.SH NAME
+eps2epsi \- Filter for inclusion of a preview in an EPS file
+.SH SYNOPSIS
+.B eps2epsi
+[
+.B \-i
+] [
+.B \-w
+.I preview_width
+] [
+.I filename
+]
+.SH DESCRIPTION
+.B Eps2epsi
+puts a preview section in a PostScript file (preferably EPSF).
+The preview produced
+is in the encapsulated PostScript interchange format (EPSI)
+suitable for import by FrameMaker and other document composing
+systems.
+.B Eps2epsi
+reads the file specified (or standard input) and sends the new file
+with the preview included to standard output.
+.PP
+.B Esp2epsi
+uses
+.B GhostScript
+to render the preview bitmap, which means that
+.B GhostScript
+must be installed at your system before you can use
+.B eps2epsi.
+.SH OPTIONS
+.TP 5
+.B \-i
+Edit the file in-place. A backup file is made with the suffix ~.
+.TP 5
+.BI \-w " n"
+Set the width (in characters) of the preview section. This also specifies the
+resolution of the preview as
+.I n
+times 4 horizontally.
+.SH SEE ALSO
+.BR perl (1),
+.BR gs(1)
+.SH AUTHOR
+Gisle Aas, Norwegian Computing Center (NR), Oslo, Norway.
+<Gisle.Aas@nr.no>
+.ex

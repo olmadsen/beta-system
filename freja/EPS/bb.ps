@@ -1,0 +1,318 @@
+%! 
+% bb.ps --
+% 
+% Prints a file, but keeps track of bounding box info, and prints the box at
+% the end (around the figure.)
+% 
+
+/$BoundingBox 50 dict def
+
+$BoundingBox begin
+/bb$_llx 99999 def
+/bb$_lly 99999 def
+/bb$_urx -99999 def
+/bb$_ury -99999 def
+
+/bb$_mtx matrix defaultmatrix def
+end
+
+/bb$_xdef {
+	exch def
+} def
+
+/bb$_put {
+	exch $BoundingBox 3 1 roll put
+} def
+
+/bb$_pt+ {
+	exch
+	4 -1 roll add
+	3 1 roll add
+} def
+
+% 
+% Stubs of old functions.
+% 
+
+/-stroke /stroke load def
+/-fill /fill load def
+/-eofill /eofill load def
+/-image /image load def
+/-show /show load def
+/-awidthshow /awidthshow load def
+/-showpage /showpage load def
+/-restore /restore load def
+
+% 
+% New Functions.
+% 
+
+% make sure we remember bb around save-restores
+/restore {
+	$BoundingBox begin bb$_ury bb$_urx bb$_lly bb$_llx end
+	5 -1 roll
+	-restore
+	$BoundingBox begin
+	/bb$_llx bb$_put
+	/bb$_lly bb$_put
+	/bb$_urx bb$_put
+	/bb$_ury bb$_put
+	end
+} def
+
+/stroke {
+	gsave
+	{
+		flattenpath
+	 	strokepath	% Make sure to take line width into account.
+	} stopped {		% strokepath often hits a limitcheck.
+		grestore	% Restore the original path
+		gsave
+	} if
+	bb$_path			% Accumulate it into our box.
+	grestore
+
+	-stroke
+} def
+
+/fill {
+	gsave
+	bb$_path
+	grestore
+
+	-fill
+} def
+
+/eofill {
+	gsave
+	bb$_path
+	grestore
+
+	-eofill
+} def
+
+% 
+% Text is implemented by reducing everything to an `awidthshow'.
+% 
+
+/show {
+	0 0 0 0 0		% Extra parameters for awidthshow
+	6 -1 roll		% Bring the string back up
+	awidthshow
+} def
+
+/widthshow {
+	0 0			% Extra parameters for awidthshow
+	3 -1 roll		% Bring the string back up.
+	awidthshow
+} def
+
+/ashow {
+	0 0 0 
+	6 3 roll
+	awidthshow
+} def
+
+/awidthshow {
+	5 dict begin
+	gsave
+	currentpoint
+	2 copy /@starty bb$_xdef /@startx bb$_xdef
+	2 index stringwidth	% Get the natural length of the string
+	bb$_pt+			% Add to the start to get the end.
+
+	2 index length		% How many characters?
+
+	dup			% Add the offsets to each character
+	6 index mul
+	exch 5 index mul
+	bb$_pt+
+
+	5 index 3 index
+	bb$_chcount		% How many padding characters?
+
+	dup			% Add the offsets for each pad.
+	9 index mul
+	exch 8 index mul
+	bb$_pt+
+
+	/@endy bb$_xdef /@endx bb$_xdef
+
+	bb$_fontheight		% Get the height and depth of the current font.
+	
+	4 copy
+	@startx @starty bb$_pt+ bb$_point
+	@startx @starty bb$_pt+ bb$_point
+	@endx @endy bb$_pt+ bb$_point
+	@endx @endy bb$_pt+ bb$_point
+
+	grestore
+	end
+
+	-awidthshow
+} def
+
+% 
+% `image':
+% 
+% Assume here that the image lands in the unit square.
+% 
+
+/image {
+	0 0 bb$_point
+	1 1 bb$_point
+
+	-image
+} def
+
+% 
+% `showpage':
+% 
+% Just draw the box around the figure and print the page, and then initialize
+% the bounding box variables again.
+% 
+
+/bb$_string 10 string def
+
+/showpage {
+	$BoundingBox begin
+	initgraphics bb$_mtx setmatrix
+
+	% Convert to default coords.
+	bb$_llx bb$_lly itransform
+	bb$_urx bb$_ury itransform
+	/bb$_lly bb$_put /bb$_urx bb$_put
+	/bb$_ury bb$_put /bb$_llx bb$_put
+
+	bb$_llx bb$_lly moveto		% Make the box
+	bb$_llx bb$_ury lineto
+	bb$_urx bb$_ury lineto
+	bb$_urx bb$_lly lineto
+	closepath
+
+	bb$_bwstroke			% Draw the box.
+
+% Swap bb$_lly and bb$_ury if they are not in order. erja 12/9-89
+
+        bb$_lly bb$_ury gt{/bb$_ury bb$_lly /bb$_lly bb$_ury def def}if
+
+	0 setgray
+	/Courier findfont 10 scalefont setfont
+	bb$_llx bb$_lly 12 sub moveto
+	bb$_llx bb$_string cvs -show ( ) -show
+	bb$_lly bb$_string cvs -show ( ) -show
+	bb$_urx bb$_string cvs -show ( ) -show
+	bb$_ury bb$_string cvs -show
+
+	(%%BoundingBox: ) print
+	bb$_llx bb$_string cvs print ( ) print
+	bb$_lly bb$_string cvs print ( ) print
+	bb$_urx bb$_string cvs print ( ) print
+	bb$_ury bb$_string cvs print (\n) print
+
+	end
+	99999 /bb$_llx bb$_put
+	99999 /bb$_lly bb$_put
+	-99999 /bb$_urx bb$_put
+	-99999 /bb$_ury bb$_put
+	-showpage
+} def
+
+%/copypage {showpage} def
+
+% 
+% BoundingBox functions:
+% 
+% We accumulate the information about the bounding box into four variables.
+% The data is stored in device coordinates.
+% 
+
+% 
+% x y `bb$_point' -
+% 
+% Takes a point in user coordinates and adds it into the bounding box info.
+% 
+/bb$_point {
+	$BoundingBox begin
+	transform		% Convert to device coords.
+
+	dup bb$_lly lt {dup /bb$_lly bb$_put}if
+	dup bb$_ury gt {dup /bb$_ury bb$_put}if
+	pop
+	dup bb$_llx lt {dup /bb$_llx bb$_put}if
+	dup bb$_urx gt {dup /bb$_urx bb$_put}if
+	pop
+
+	end
+} def
+
+% 
+% - `bb$_path' -
+% 
+% Incorporates the bounding box of the path into the bounding box info.
+% 
+
+/bb$_path {
+	gsave
+	{
+		0 setlinejoin
+		flattenpath
+	} stopped {
+		grestore
+		gsave
+	} if
+	{pathbbox} stopped {}
+	{bb$_point
+	bb$_point} ifelse
+	grestore
+} def
+
+% 
+% Stuff for text.
+% 
+
+% 
+% char-code string `bb$_chcount' occurs
+% 
+% Counts the number of times a character appears in a string.
+% 
+
+/bb$_chcount {
+	0 exch
+	{
+		2 index eq {
+			1 add
+		} if
+	} forall
+	exch pop
+} def
+
+% 
+% - `bb$_fontheight' heightx heighty depthx depthy
+% 
+% Returns the offsets to the lowest point and highest point in the current
+% font.
+% 
+
+/bb$_fontheight {
+	currentfont begin
+	FontBBox
+	exch pop 0 exch
+	FontMatrix transform
+	4 2 roll
+	exch pop 0 exch
+	FontMatrix transform
+	end
+} def
+
+/bb$_bwstroke {
+	0 setlinewidth
+	1 setgray
+	[5] 0 setdash
+	gsave -stroke grestore
+	0 setgray
+	[5] 5 setdash
+	-stroke
+} def
+
+%  end of bb.ps
