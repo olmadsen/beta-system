@@ -5,6 +5,10 @@ public class Structure {
     public Object iOrigin;
     public Class iProto;
     private Constructor iConstructor;
+
+    static{
+	System.out.println("\nUSING Structure.java!\n");
+    }
   
     Structure(Object o, Class p){
 	iOrigin = o;
