@@ -13,10 +13,6 @@
 void BetaExit( number )
      long number;
 {
-#ifdef RTDEBUG
-  char buf[100];
-#endif /* RTDEBUG */
-
 #ifdef RTVALHALLA
   if (valhallaID) 
     /* Tell valhalla that we are terminating: */
@@ -24,11 +20,18 @@ void BetaExit( number )
 #endif RTVALHALLA
 
   InfoS_End();
+
 #ifdef RTDEBUG
-  sprintf(buf, "NumIOAGc: %d, NumAOAGc: %d, NumLVRAGc: %d", 
-	  (int)NumIOAGc, (int)NumAOAGc, (int)NumLVRAGc);
-  Notify(buf);
+#ifdef UNIX
+  { extern long NumAlloI;
+    fprintf(stderr, "\nNumIOAGc: %d, NumAOAGc: %d, NumLVRAGc: %d.\n", 
+	    (int)NumIOAGc, (int)NumAOAGc, (int)NumLVRAGc);
+    fprintf(stderr, "NumAlloI: %d.\n", 
+	    (int)NumAlloI);
+  }
+#endif /* UNIX */
 #endif /* RTDEBUG */
+
 #ifdef apollo
   AsmExit( number );
 #else
