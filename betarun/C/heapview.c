@@ -27,7 +27,11 @@ void PrintHeapUsage(char *prompt)
        aoa = aoa->next;
     }
   }
+#ifdef USEMMAP
+  aoasize=(long)AOABaseBlock->limit - (long)BlockStart(AOABaseBlock);
+#else
   aoasize=AOABlockSize*aoablocks;
+#endif
   fprintf(output, 
 	  "  AOA:            %8d Kb (%d blocks)\n", 
 	  (int)aoasize/1024, 

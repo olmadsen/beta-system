@@ -117,6 +117,44 @@ void tempAOArootsFree(void)
   DEBUG_IOA(fprintf(output, " [0x%x]", (int)roots));
 }
 
+int AOAAllocateBase(void)
+{
+  if (MallocExhausted || (AOABlockSize == 0))
+    return 0;
+  /* Check if the AOAtoIOAtable is allocated. If not then allocate it. */
+  if (AOAtoIOAtable == 0) 
+    if (AOAtoIOAalloc() == 0) {
+      MallocExhausted = TRUE;
+      INFO_AOA( fprintf(output,
+			"#(AOA: AOAtoIOAtable allocation %d failed!.)\n",
+			(int)AOAtoIOAtableSize));
+      return 0;
+    }
+  INFO_AOA( fprintf(output,
+		    "#(AOA: AOAtoIOAtable allocated of size %d)\n",
+		    (int)AOAtoIOAtableSize));
+  
+#ifdef USEMMAP
+
+    AOATopBlock = AOABaseBlock;
+
+#else /* USEMMAP */
+  /* Try to allocate a new AOA block. */
+  if ((AOABaseBlock = newBlock(AOABlockSize))) {
+    INFO_AOA( fprintf(output, "#(AOA: new block allocated %dKb.)\n",
+		      (int)AOABlockSize/Kb));
+    AOATopBlock = AOABaseBlock;
+    INFO_HEAP_USAGE(PrintHeapUsage("after new AOA block"));
+  } else {
+    MallocExhausted = TRUE;
+    INFO_AOA( fprintf(output, "#(AOA: block allocation failed %dKb.)\n",
+		      (int)AOABlockSize/Kb));
+    return 0;
+  }
+#endif /* USEMMAP */
+  return 1;
+}
+
 /* AOAallocate allocate 'size' number of bytes in the Adult object area.
  * If the allocation succeeds the function returns a reference to the allocated
  * object, 0 otherwise.
@@ -124,42 +162,26 @@ void tempAOArootsFree(void)
 struct Object *AOAallocate(long numbytes)
 {
   ptr(long)  oldTop;
+  long blksize;
 
+  if( AOABaseBlock == 0 || AOATopBlock == 0) {
+    if (!AOAAllocateBase())
+      return 0;
+  }
+
+  /* fprintf(output, "(#AOAallocate(%d) of free %d #)", 
+	  numbytes, areaSize(AOATopBlock->top,AOATopBlock->limit)); */
   DEBUG_CODE( Claim(numbytes > 0, "AOAallocate: numbytes > 0") );
   /*DEBUG_AOA(if (AOATopBlock) 
 	    fprintf(output, "AOATopBlock 0x%x, diff 0x%X\n",
 		    AOATopBlock, (long)AOATopBlock->limit - (long)AOATopBlock->top));*/
   
-  if( AOABaseBlock == 0){
-    if( MallocExhausted || (AOABlockSize == 0) ) return 0;
-    /* Check if the AOAtoIOAtable is allocated. If not then allocate it. */
-    if( AOAtoIOAtable == 0 ) 
-      if( AOAtoIOAalloc() == 0 ){
-	MallocExhausted = TRUE;
-	INFO_AOA( fprintf(output,
-			  "#(AOA: AOAtoIOAtable allocation %d failed!.)\n",
-			  (int)AOAtoIOAtableSize));
-	return 0;
-      }
-    /* Try to allocate a new AOA block. */
-    if( (AOABaseBlock = newBlock(AOABlockSize)) ){
-      INFO_AOA( fprintf(output, "#(AOA: new block allocated %dKb.)\n",
-			(int)AOABlockSize/Kb));
-      AOATopBlock  = AOABaseBlock;
-      INFO_HEAP_USAGE(PrintHeapUsage("after new AOA block"));
-    }else{
-      MallocExhausted = TRUE;
-      INFO_AOA( fprintf(output, "#(AOA: block allocation failed %dKb.)\n",
-			(int)AOABlockSize/Kb));
-      return 0;
-    }
-  }
   /* Try to find space between AOATopBlock->top and AOATopBlock->limit. */
   oldTop = AOATopBlock->top;
-  if( areaSize(oldTop,AOATopBlock->limit) > numbytes){
+  if (areaSize(oldTop,AOATopBlock->limit) > numbytes) {
     AOATopBlock->top = (ptr(long)) Offset( oldTop, numbytes);
     return (ref(Object)) oldTop;
-  }else{
+  } else {
     /* maybe there is a free block AOATopBlock->next. */
     if( AOATopBlock->next ){
       AOATopBlock = AOATopBlock->next;
@@ -172,7 +194,32 @@ struct Object *AOAallocate(long numbytes)
   }
   
   if (noAOAGC || AOACreateNewBlock) {
-    long blksize = AOABlockSize < numbytes ? numbytes : AOABlockSize;
+#ifdef USEMMAP
+    fprintf(output, "AOAallocate:extentBlock", numbytes);
+    blksize = AOABlockSize;
+    while (blksize<numbytes)
+      blksize *= 2;
+    if (extendBlock(AOATopBlock, blksize)) {
+      MallocExhausted = TRUE;
+      INFO_AOA( fprintf( output, "#(AOA: block extension failed %dKb.)\n",
+			 (int)AOABlockSize/Kb));
+      if (!noAOAGC)
+	AOANeedCompaction = TRUE;
+      return 0;
+    }
+    if (areaSize(oldTop,AOATopBlock->limit) > numbytes) {
+      AOATopBlock->top = (ptr(long))Offset(oldTop, numbytes);
+      return (ref(Object)) oldTop;
+    } else {
+      MallocExhausted = TRUE;
+      INFO_AOA( fprintf( output, "#(AOA: block extension failed %dKb.)\n",
+			 (int)AOABlockSize/Kb));
+      if (!noAOAGC)
+	AOANeedCompaction = TRUE;
+      return 0;
+    }
+#else
+    blksize = AOABlockSize < numbytes ? numbytes : AOABlockSize;
     if( (AOATopBlock->next = newBlock( blksize)) ){
       INFO_AOA( fprintf( output, "#(AOA: new block allocated %dKb.)\n",
 			(int)blksize/Kb) );
@@ -195,6 +242,7 @@ struct Object *AOAallocate(long numbytes)
 	AOANeedCompaction = TRUE;
       return 0;
     }
+#endif
   }else{
     AOANeedCompaction = TRUE;
     return 0;

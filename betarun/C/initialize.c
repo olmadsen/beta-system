@@ -162,8 +162,7 @@ Mjølner BETA System and may not be used for commercial\npurposes\n\
 #endif /* mac */
 #endif /* PE */
 
-static void
-AllocateHeapFailed(char *name, int numbytes)
+static void AllocateHeapFailed(char *name, int numbytes)
 {
   char buf[512];
   sprintf(buf,
@@ -179,8 +178,7 @@ AllocateHeapFailed(char *name, int numbytes)
   BetaExit(1);
 }
 
-static long 
-AllocateHeap(ptr(long) base, 
+static long  AllocateHeap(ptr(long) base, 
 	     ptr(long) top,
 	     ptr(long) limit,
 	     long numbytes,  
@@ -194,6 +192,32 @@ AllocateHeap(ptr(long) base,
     return *base;
   } else {
     AllocateHeapFailed(name, numbytes);
+    return 0;
+  }
+}
+
+static int mmapAllocateHeap(Block **BaseBlock, 
+			    long numbytes, char *name)
+{
+  long size = (numbytes+sizeof(Block)+MMAPPageSize-1) & ~(MMAPPageSize-1);
+  *BaseBlock = AllocateBlock(size);
+  if (*BaseBlock) {
+    return 1;
+  } else {
+    AllocateHeapFailed(name, size);
+    return 0;
+  }
+}
+
+static int ReserveHeap(Block **BaseBlock, 
+		       long numbytes, char *name)
+{
+  long size = (numbytes+sizeof(Block)+MMAPPageSize-1) & ~(MMAPPageSize-1);
+  *BaseBlock = reserveBlock(size);
+  if (*BaseBlock) {
+    return 1;
+  } else {
+    AllocateHeapFailed(name, size);
     return 0;
   }
 }
@@ -330,11 +354,32 @@ IOASliceSize = ObjectAlignDown(IOASliceSize);
     Notify2(buf, "Check your BETART environment variable.");
     BetaExit(1);
   }
+#ifdef USEMMAP
+  mmapInitial(MMAPMaxSize);
+  /* The order of allocation here determines the order of adresses. */
+  InsertGuardPage();
+  mmapAllocateHeap(&IOABaseBlock, IOASize, "IOA heap");
+  InsertGuardPage();
+  mmapAllocateHeap(&ToSpaceBaseBlock, IOASize, "ToSpace heap");
+  InsertGuardPage();
+  ReserveHeap(&AOABaseBlock, AOAMaxSize, "AOA heap");
+  extendBlock(AOABaseBlock, AOABlockSize);
+  InsertGuardPage();
+#endif /* USEMMAP */
+
+#ifdef USEMMAP
+  tmpIOA          = IOABaseBlock->top;
+  tmpIOATop       = IOABaseBlock->top;
+  GLOBAL_IOALimit = IOABaseBlock->limit;
+#else /* USEMMAP */
   AllocateHeap((long*)&tmpIOA,
 	       (long*)&tmpIOATop,
 	       (long*)&GLOBAL_IOALimit, 
 	       IOASize,
 	       "IOA heap");
+#endif /* USEMMAP */
+
+
 #if defined(sparc) || defined(NEWRUN)
 #ifdef MT
   gIOA = tmpIOA;
@@ -351,12 +396,18 @@ IOASliceSize = ObjectAlignDown(IOASliceSize);
   memset(GLOBAL_IOATop, 0, IOASize);
   INFO_HEAP_USAGE(PrintHeapUsage("after IOA heap allocation"));
 
+#ifdef USEMMAP
+  ToSpace      = ToSpaceBaseBlock->top;
+  ToSpaceTop   = ToSpaceBaseBlock->top;
+  ToSpaceLimit = ToSpaceBaseBlock->limit;
+#else /* USEMMAP */
   AllocateHeap((long*)&ToSpace, 
 	       (long*)&ToSpaceTop, 
 	       (long*)&ToSpaceLimit, 
 	       IOASize,
 	       "ToSpace heap");
   INFO_HEAP_USAGE(PrintHeapUsage("After ToSpace heap allocation"));
+#endif /* USEMMAP */
 
 #ifdef NEWRUN
   /* Allocate the internal Reference Stack */

@@ -13,10 +13,6 @@
 static void LVRACompaction(void);
 static void LVRAConstructFreeList(void);
 
-/* non-static since referred from heapview.c */
-GLOBAL(struct LVRABlock *LVRABaseBlock);
-GLOBAL(static struct LVRABlock *LVRATopBlock);
-
 GLOBAL(static long LVRAFreeListAvailable) = FALSE;
 GLOBAL(static long LVRACreateNewBlock)    = FALSE;
 /* non-static since referred from heapview.c */

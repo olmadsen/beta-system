@@ -24,10 +24,12 @@
 #define ExternalMarker	       -10
 #endif
 
-#define IOAMinAge             0
-#define IOAMaxAge             128
+#define IOAMinAge            0
+#define IOAMaxAge            128
 #define IOAMAXSIZE           (IOASize/8)
-
+#define MMAPPageSize         65536
+#define MMAPMaxSize          (1024*1024*1024)
+#define AOAMaxSize           (768*1024*1024)
 #define MAXCTEXTPOOL	     1000
 
 #if defined (UseRefStack) || defined(NEWRUN)

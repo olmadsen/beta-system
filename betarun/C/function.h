@@ -140,6 +140,13 @@ extern long Errno(void);
 extern ref(Block) newBlock(long);
 extern void freeBlock(ref(Block));
 extern long inArea(ref(Block), ref(Object));
+#ifdef USEMMAP
+void mmapInitial(unsigned long numbytes);
+void InsertGuardPage(void);
+ref(Block) reserveBlock(long numbytes);
+int extendBlock(ref(Block) theBlock, long numbytes);
+ref(Block) AllocateBlock(long numbytes);
+#endif
 #ifdef RTDEBUG
 extern long inAreaUnused(ref(Block), ref(Object));
 #endif

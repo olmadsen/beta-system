@@ -19,6 +19,10 @@
 #define do_unconditional_gc 0
 #endif
 
+#ifndef MAC
+#define USEMMAP /* Use mmap/VirtualAlloc rather than MALLOC for heaps */
+#endif
+
 #ifdef MGsparc /* only defined by mg+void for now */
 #define LIN  /* Include support for new Persistence system (void+mg). */
 #define NONMOVEAOAGC  /* Include support for NonMoveAOAGC property */

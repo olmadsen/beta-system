@@ -119,13 +119,15 @@ typedef struct Structure{
 
 /* Block is memory unit for AOArea and LVRArea. */
 typedef struct Block{
-    ref(Block)      next;      /* Refernece to the next Block     */
+    ref(Block)      next;      /* Reference to the next Block     */
     union { 
              ptr(long) nextTop; 
              long      state; 
           } info;
-    ptr(long)       top;       /* Refers the top in this(Block)   */
-    ptr(long)       limit;     /* Refers the limit of this(Block) */
+    ptr(long)       top;          /* Refers the top in this(Block)   */
+    ptr(long)       limit;        /* Refers the limit of this(Block) */
+    ptr(long)       mmaplimit;    /* max limit of block */
+    ptr(long)       mmapmaxlimit; /* max mmaplimit of block */
 } Block;
 
 typedef struct LVRABlock{
@@ -133,6 +135,8 @@ typedef struct LVRABlock{
     long            state;
     ptr(long)       top;
     ptr(long)       limit;
+    ptr(long)       mmaplimit;    /* max limit of block */
+    ptr(long)       mmapmaxlimit; /* max mmaplimit of block */
 } LVRABlock;
 
 typedef struct CallBackFrame {
