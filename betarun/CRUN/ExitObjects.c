@@ -7,7 +7,7 @@
 #include "crun.h"
 
 #if 0
-#define DO_TRACE_EXITOBJECT
+#define DO_TRACE_EXITOBJECT 1
 #else
 #undef  DO_TRACE_EXITOBJECT
 #endif
