@@ -5,251 +5,251 @@ INCLUDE '~beta/betaast/v5.2/donecheck';
 ---CheckSlotsBody:doPart---
 do (# gram: @grammar;
       ctrace: xtrace
-        (#
-        do (if withTrace then inner if);
-        #);
+	(#
+	do (if withTrace then inner if);
+	#);
       slots: @ hashTable
-        (* This table keeps track of slot definitions and bindings.
-         * It is used for checking that all slots that MUST be bound
-         * are actually bound by a fragment; all slots, except attributes
-         * must be bound.
-         * Some slot names may only be defined once in the extent of a program;
-         * this is the case for descriptor- and mainPart slots. It is checked
-         * that such slots are in fact unique.
-         * DoPart- and attributes-slots can have identical names as long as
-         * the are not defined within the same fragmentgroup.
-         * The elements in the table are pairs (slotName,SlotCategory).
-         * For each fragmentGroup, a property with a list of all slots
-         * and their category is kept. The lists are built in semattbody:
-         * bindSlots: ChkDub;.
-         * The lists are used to build the table by calling addSlot.
-         * Similarly by scanning all fragmentGroups, the bindings are added
-         * by calling addDef.
-         * Unfortunately, the category of a form is ONLY known if the
-         * fragmentGroup is fullOpen, which is not always the case;
-         * therefore the category is currently NOT used to construct
-         * the elements of the table, in the sense that it is used by
-         * hashFunction and equal. 
-         * The table is precise when a given slot name is only defined ONCE;
-         * if a slot name is defined more than once, only warnings are given.
-         * When the MPS has been fixed to be able to deliver the category
-         * of forms, all code marked "HACK!" should be eliminated!
-         *)
-        (# rangeInitial::(#do 117->value #);
-           element::
-             (# slot: ^text; (* name of slot *)
-                category: @integer; (* descriptor, dopart, etc *)
-                justOne: @integer; (* descriptor slots and mainpart slots
-                                    * must be unique among all fragments in
-                                    * the extent
-                                    *)
-                definingFG: ^(*AST.*)fragmentGroup; (* fragment defining the slot *)
-                bindingFF: ^(*AST.*)fragmentForm;   (* fragment binding the slot *)
-                noOfDefs,noOfBinds: @integer; (* HACK! *)
-                definingFGname:
-                  (# T: @text
-                  do (if definingFG[] <> NONE then
-                         definingFG.fullName->T.puttext
-                     if)
-                  exit
-                     T[]
-                  #);
-                definingFFname:
-                  (# T: @text
-                  do (if bindingFF[] <> NONE then
-                         bindingFF.fullName->T.puttext
-                     if)
-                  exit
-                     T[]
-                  #);
-                isMandatory: @ booleanValue
-                  (# 
-                  do (if category
-                      // gram.objectDescriptor // gram.descriptorForm 
-                      // gram.doPart // gram.mainPart then
-                         true -> value
-                     if)
-                  #);
-                categoryAsText:
-                  (# T: @ text
-                  do (if category
-                      // gram.objectDescriptor // gram.descriptorForm then
-                         ':descriptor'->T
-                      // gram.attributes // gram.attributesForm 
-                      // gram.attributeDecl then
-                         ':attributes' -> T
-                      // gram.doPart then
-                         ';doPart' -> T
-                      // gram.mainPart then
-                         ':mainPart' -> T
-                     if)
-                  exit T[]
-                  #)
-             #);
-           hashFunction:: 
-             (#
-             do e.slot.scanAll(#do (ch->ascii.lowCase)*26+value->value #);
-                (*value + e.category -> value;*)(* HACK! *)
-             #);
-           equal:: 
-             (#
-             do (left.slot[]->right.slot.equalNCS)
-                (*and (left.category = right.category)*) (* HACK! *)
-                  -> value 
-             #);
-           add:
-             (# slot: ^text; category: @integer; e: ^element;
-             enter(slot[],category)
-             do &element[] -> e[];
-                slot[] -> e.slot[]; category -> e.category; 
-                INNER
-             #);
-           addSlot: @ add
-             (# FG: ^(*AST.*)fragmentGroup
-             enter FG[]
-             do 1->e.noOfDefs; (* HACK! *)
-                e[]
-                  -> hashFunction
-                  -> findIndexed
-                (# predicate::(#do (e[],current[]) -> equal -> value #);
-                   notFound:: (# do FG[] -> e.definingFG[]; e[] -> insert #)
-                do (* was found *)
-                   (if category
-                    // gram.objectDescriptor // gram.descriptorForm
-                    // gram.mainPart then
-                       (if current.definingFG[] <> NONE then
-                           (* '\n**** The slot: "'->puttext;
-                            slot[] -> puttext; ':'->put;
-                            current.categoryAsText -> puttext;
-                            '" is defined in the following two fragments:\n\t'
-                            -> puttext;
-                            FG.fullName ->putline; '\t'->puttext;
-                            current.definingFGName -> putline
-                            *)
-                           (slot[],current.categoryAsText
-                           ,FG.fullName, current.definingFGName)
-                             -> DoubleDeclaration
-                        else
-                           FG[] -> current.definingFG[]
-                       if);
-                       (* override catagory of possible lib-slot *)
-                       category -> current.category; (* HACK! *)
-                    // gram.doPart then category -> current.category; (* HACK! *)
-                    else
-                       FG[] -> current.definingFG[]
-                   if);
-                   current.noOfDefs + 1 -> current.noOfDefs (* HACK! *)
-                #);
-                
-             #);
-           addForm: @ add
-             (# FF: ^(*AST.*)fragmentForm
-             enter FF[]
-             do 1->ctrace(#do 'AddForm: ' -> xT; slot[] -> xT;
-                             e.categoryAsText-> xT;
-                             e.category -> xI; 
-                          #);
-                1 -> e.noOfBinds; (* HACK! *)
-                e[]
-                  -> hashFunction
-                  -> findIndexed
-                (# predicate::(#do (e[],current[]) -> equal -> value #);
-                   notFound:: (# do FF[] -> e.bindingFF[]; e[] -> insert #)
-                do (* was found *)
-                   (if current.bindingFF[] <> NONE then
-                       (* slot bound in another form (is catched previously) *)
-                       (*'\n*** Slot bound in more than one fragment: '-> putline;
-                        slot[] -> putline;
-                        FF.fullName ->putline;                    
-                        current.definingFGName -> putline*)
-                    else
-                       (* has been inserted via addForm *)
-                       FF[] -> current.bindingFF[]
-                   if);
-                   current.noOfBinds + 1 -> current.noOfBinds (* HACK! *)
-                #);
-             #);
-           check:
-             (# 
-             do scan
-                (#
-                do 1->ctrace
-                   (#
-                   do current.slot[] -> xT; 
-                      current.categoryAsText -> xT;
-                      (if current.definingFG[] <> NONE then
-                          '\n\tdefining: '->xT;
-                          current.noOfDefs -> xI; (* HACK! *)
-                          current.definingFG.fullName->xT
-                      if);
-                      (if current.bindingFF[] <> NONE then
-                          '\n\tbinding: '->xT;
-                          current.noOfBinds -> xI; (* HACK! *)
-                          current.bindingFF.fullName->xT
-                      if)
-                   #);
-                   (if (current.isMandatory) and (current.bindingFF[] = NONE) then
-                       (*(if common.switch[198] or DGP.hasProgramSlot then
-                        '\n**** The slot: "'->puttext;
-                        current.slot[] -> puttext;
-                        '" defined in fragment:\n\t'->puttext;
-                        current.definingFG.fullname->putline;
-                        'is not bound by any fragment!'->putline
-                        if);
-                        *)
-                       (current.definingFG[],current.slot[]
-                       ,DGP.hasProgramSlot) 
-                         -> UnBoundSlot
-                    else
-                       (* HACK! *)
-                       (if (current.isMandatory) 
-                           and (current.noOfBinds < current.noOfDefs) then
-                           (current.slot[],current.noOfDefs,current.noOfBinds) 
-                             -> PerhapsMissingBinds;
-                           (* '\n**** Warning!\n     The slot: "'->puttext;
-                            current.slot[] -> puttext;
-                            '" is defined in '->puttext;
-                            current.noOfDefs->putint;
-                            ' fragment(s),\n     but only bound in '->puttext;
-                            current.noOfbinds->putint;
-                            ' fragment(s)!'->puttext;
-                            '\n     This may cause an "Undefined symbol"'->puttext;
-                            '\n     error message from the linker!\n'->puttext
-                            *)
-                       if)
-                   if)
-                #);
-             #)
-        #);
+	(* This table keeps track of slot definitions and bindings.
+	 * It is used for checking that all slots that MUST be bound
+	 * are actually bound by a fragment; all slots, except attributes
+	 * must be bound.
+	 * Some slot names may only be defined once in the extent of a program;
+	 * this is the case for descriptor- and mainPart slots. It is checked
+	 * that such slots are in fact unique.
+	 * DoPart- and attributes-slots can have identical names as long as
+	 * the are not defined within the same fragmentgroup.
+	 * The elements in the table are pairs (slotName,SlotCategory).
+	 * For each fragmentGroup, a property with a list of all slots
+	 * and their category is kept. The lists are built in semattbody:
+	 * bindSlots: ChkDub;.
+	 * The lists are used to build the table by calling addSlot.
+	 * Similarly by scanning all fragmentGroups, the bindings are added
+	 * by calling addDef.
+	 * Unfortunately, the category of a form is ONLY known if the
+	 * fragmentGroup is fullOpen, which is not always the case;
+	 * therefore the category is currently NOT used to construct
+	 * the elements of the table, in the sense that it is used by
+	 * hashFunction and equal.
+	 * The table is precise when a given slot name is only defined ONCE;
+	 * if a slot name is defined more than once, only warnings are given.
+	 * When the MPS has been fixed to be able to deliver the category
+	 * of forms, all code marked "HACK!" should be eliminated!
+	 *)
+	(# rangeInitial::(#do 117->value #);
+	   element::
+	     (# slot: ^text; (* name of slot *)
+		category: @integer; (* descriptor, dopart, etc *)
+		justOne: @integer; (* descriptor slots and mainpart slots
+				    * must be unique among all fragments in
+				    * the extent
+				    *)
+		definingFG: ^(*AST.*)fragmentGroup; (* fragment defining the slot *)
+		bindingFF: ^(*AST.*)fragmentForm;   (* fragment binding the slot *)
+		noOfDefs,noOfBinds: @integer; (* HACK! *)
+		definingFGname:
+		  (# T: @text
+		  do (if definingFG[] <> NONE then
+			 definingFG.fullName->T.puttext
+		     if)
+		  exit
+		     T[]
+		  #);
+		definingFFname:
+		  (# T: @text
+		  do (if bindingFF[] <> NONE then
+			 bindingFF.fullName->T.puttext
+		     if)
+		  exit
+		     T[]
+		  #);
+		isMandatory: @ booleanValue
+		  (#
+		  do (if category
+		      // gram.objectDescriptor // gram.descriptorForm
+		      // gram.doPart // gram.mainPart then
+			 true -> value
+		     if)
+		  #);
+		categoryAsText:
+		  (# T: @ text
+		  do (if category
+		      // gram.objectDescriptor // gram.descriptorForm then
+			 ':descriptor'->T
+		      // gram.attributes // gram.attributesForm
+		      // gram.attributeDecl then
+			 ':attributes' -> T
+		      // gram.doPart then
+			 ';doPart' -> T
+		      // gram.mainPart then
+			 ':mainPart' -> T
+		     if)
+		  exit T[]
+		  #)
+	     #);
+	   hashFunction::
+	     (#
+	     do e.slot.scanAll(#do (ch->ascii.lowCase)*26+value->value #);
+		(*value + e.category -> value;*)(* HACK! *)
+	     #);
+	   equal::
+	     (#
+	     do (left.slot[]->right.slot.equalNCS)
+		(*and (left.category = right.category)*) (* HACK! *)
+		  -> value
+	     #);
+	   add:
+	     (# slot: ^text; category: @integer; e: ^element;
+	     enter(slot[],category)
+	     do &element[] -> e[];
+		slot[] -> e.slot[]; category -> e.category;
+		INNER
+	     #);
+	   addSlot: @ add
+	     (# FG: ^(*AST.*)fragmentGroup
+	     enter FG[]
+	     do 1->e.noOfDefs; (* HACK! *)
+		e[]
+		  -> hashFunction
+		  -> findIndexed
+		(# predicate::(#do (e[],current[]) -> equal -> value #);
+		   notFound:: (# do FG[] -> e.definingFG[]; e[] -> insert #)
+		do (* was found *)
+		   (if category
+		    // gram.objectDescriptor // gram.descriptorForm
+		    // gram.mainPart then
+		       (if current.definingFG[] <> NONE then
+			   (* '\n**** The slot: "'->puttext;
+			    slot[] -> puttext; ':'->put;
+			    current.categoryAsText -> puttext;
+			    '" is defined in the following two fragments:\n\t'
+			    -> puttext;
+			    FG.fullName ->putline; '\t'->puttext;
+			    current.definingFGName -> putline
+			    *)
+			   (slot[],current.categoryAsText
+			   ,FG.fullName, current.definingFGName)
+			     -> DoubleDeclaration
+			else
+			   FG[] -> current.definingFG[]
+		       if);
+		       (* override catagory of possible lib-slot *)
+		       category -> current.category; (* HACK! *)
+		    // gram.doPart then category -> current.category; (* HACK! *)
+		    else
+		       FG[] -> current.definingFG[]
+		   if);
+		   current.noOfDefs + 1 -> current.noOfDefs (* HACK! *)
+		#);
+
+	     #);
+	   addForm: @ add
+	     (# FF: ^(*AST.*)fragmentForm
+	     enter FF[]
+	     do 1->ctrace(#do 'AddForm: ' -> xT; slot[] -> xT;
+			     e.categoryAsText-> xT;
+			     e.category -> xI;
+			  #);
+		1 -> e.noOfBinds; (* HACK! *)
+		e[]
+		  -> hashFunction
+		  -> findIndexed
+		(# predicate::(#do (e[],current[]) -> equal -> value #);
+		   notFound:: (# do FF[] -> e.bindingFF[]; e[] -> insert #)
+		do (* was found *)
+		   (if current.bindingFF[] <> NONE then
+		       (* slot bound in another form (is catched previously) *)
+		       (*'\n*** Slot bound in more than one fragment: '-> putline;
+			slot[] -> putline;
+			FF.fullName ->putline;
+			current.definingFGName -> putline*)
+		    else
+		       (* has been inserted via addForm *)
+		       FF[] -> current.bindingFF[]
+		   if);
+		   current.noOfBinds + 1 -> current.noOfBinds (* HACK! *)
+		#);
+	     #);
+	   check:
+	     (#
+	     do scan
+		(#
+		do 1->ctrace
+		   (#
+		   do current.slot[] -> xT;
+		      current.categoryAsText -> xT;
+		      (if current.definingFG[] <> NONE then
+			  '\n\tdefining: '->xT;
+			  current.noOfDefs -> xI; (* HACK! *)
+			  current.definingFG.fullName->xT
+		      if);
+		      (if current.bindingFF[] <> NONE then
+			  '\n\tbinding: '->xT;
+			  current.noOfBinds -> xI; (* HACK! *)
+			  current.bindingFF.fullName->xT
+		      if)
+		   #);
+		   (if (current.isMandatory) and (current.bindingFF[] = NONE) then
+		       (*(if common.switch[198] or DGP.hasProgramSlot then
+			'\n**** The slot: "'->puttext;
+			current.slot[] -> puttext;
+			'" defined in fragment:\n\t'->puttext;
+			current.definingFG.fullname->putline;
+			'is not bound by any fragment!'->putline
+			if);
+			*)
+		       (current.definingFG[],current.slot[]
+		       ,DGP.hasProgramSlot)
+			 -> UnBoundSlot
+		    else
+		       (* HACK! *)
+		       (if (current.isMandatory)
+			   and (current.noOfBinds < current.noOfDefs) then
+			   (current.slot[],current.noOfDefs,current.noOfBinds)
+			     -> PerhapsMissingBinds;
+			   (* '\n**** Warning!\n     The slot: "'->puttext;
+			    current.slot[] -> puttext;
+			    '" is defined in '->puttext;
+			    current.noOfDefs->putint;
+			    ' fragment(s),\n     but only bound in '->puttext;
+			    current.noOfbinds->putint;
+			    ' fragment(s)!'->puttext;
+			    '\n     This may cause an "Undefined symbol"'->puttext;
+			    '\n     error message from the linker!\n'->puttext
+			    *)
+		       if)
+		   if)
+		#);
+	     #)
+	#);
    do DGP.groupList.scan
       (# idx: ^text
       do (if current.g.controller.status > justOpen then
-             current.g.scan
-             (# FF: ^(*AST.*)fragmentForm
-             do (if current.fragType = (*AST.*)formType then
-                    current[] -> FF[]; (* category is only defined for forms *)
-                    1->ctrace
-                    (#
-                    do FF.name -> xT; ' Category:'->xT; 
-                       FF.category->xI; FF.fullname->xT 
-                    #);
-                    (FF.name,FF.category,FF[]) -> slots.addForm
-                if)
-             #);
-             ('slots',this(AstInterface)[],current.g[])
-               -> getProp
-             (# T: ^text
-             do 1->ctrace(#do 
-                            current.g.fullname->xT;
-                            '\nslots'->xT;
-                            txt[]->screen.putline
-                         #);
-                txt.reset;
-                L: (if not txt.eos then
-                       txt.getAtom -> T[];
-                       (T[],txt.getint,current.g[]) -> slots.addSlot;
-                       restart L
-                   if);
+	     current.g.scan
+	     (# FF: ^(*AST.*)fragmentForm
+	     do (if current.fragType = (*AST.*)formType then
+		    current[] -> FF[]; (* category is only defined for forms *)
+		    1->ctrace
+		    (#
+		    do FF.name -> xT; ' Category:'->xT;
+		       FF.category->xI; FF.fullname->xT
+		    #);
+		    (FF.name,FF.category,FF[]) -> slots.addForm
+		if)
+	     #);
+	     ('slots',this(AstInterface)[],current.g[])
+	       -> getProp
+	     (# T: ^text
+	     do 1->ctrace(#do
+			    current.g.fullname->xT;
+			    '\nslots'->xT;
+			    txt[]->screen.putline
+			 #);
+		txt.reset;
+		L: (if not txt.eos then
+		       txt.getAtom -> T[];
+		       (T[],txt.getint,current.g[]) -> slots.addSlot;
+		       restart L
+		   if);
       #)if)#);
       slots.check;
    #)
