@@ -9,15 +9,7 @@ while ( <> ) {
 $*=1;
 $_=$line;
 
-$header= "";
-$tail= "";
-
-$headerpre= "";
-
-$headerpost=" (HEADING)";
-
-s/\(\*\*+\*\)\s+\(\*+\s+([^\*]+)\s+\*+\)\s+\(\*\*+\*\)\s+/$headerpre$1$headerpost\n/g;
-#s/\(\*\*+\*\)\s+\(\*+\s+([^\*]+)\s+\*+\)\s+\(\*\*+\*\)\s+//g;
+s/\(\*\*+\*\)\s+\(\*+\s+([^\*]+)\s+\*+\)\s+\(\*\*+\*\)\s+/<P><HR><P><H2><A name=\"$1\">$1<\/A><\/H2>\n/g;
 
 # Delete copyrigth comments of the form
 # (*
