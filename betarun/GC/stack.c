@@ -23,7 +23,7 @@ void PrintRefStack()
   long size = ((long)RefSP - (long)&ReferenceStack[0])/4;
   fprintf(output, "RefStk: [%x .. %x[\n", (long)&ReferenceStack[0], (long)RefSP);
   for(; size > 0; size--, theCell++){
-    if (!isLazyRef(*theCell) && (*theCell & 1)){ 
+    if (!isLazyRef(*theCell) && ((*theCell)!=ExternalMarker) && (*theCell & 1)){ 
       /* Used in beta.dump */
       fprintf(output, "  0x%08x: 0x%08x #\n", theCell, *theCell);
     } else {
@@ -52,7 +52,9 @@ void ProcessRefStack(size, bottom)
     }
     DEBUG_IOA(fprintf(output, "ProcessRefStack: 0x%08x: 0x%08x\n", theCell, *theCell));
     theObj = *theCell;
-    if(theObj && inBetaHeap(theObj) && isObject(theObj)) {
+    if(theObj && 
+       (theObj!=(struct Object *)ExternalMarker) && 
+       inBetaHeap(theObj) && isObject(theObj)) {
       if( inLVRA( theObj)){
 	DEBUG_IOA( fprintf( output, "(STACK(%x) is *ValRep)", theCell));
       } else {
@@ -71,6 +73,7 @@ void ProcessRefStack(size, bottom)
       if (theObj 
 	  && !isProto(theObj) /* e.g. AlloI is called with prototype in ref. reg. */
 	  && !isCode(theObj)  /* e.g. at INNER a ref. reg contains code address */
+          && (theObj!=(struct Object *)ExternalMarker)
 	  ) {
 	if (isValRep(theObj)){
 	  fprintf(output, "[ProcessRefStack: ***ValRep: 0x%x: 0x%x]\n", theCell, theObj);
