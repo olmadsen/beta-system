@@ -67,7 +67,7 @@ void aoaf_dummy()
 			      *	1*8*FreeListSmallMAX - 2*8*FreeListSmallMAX, 
 			      *	2*8*FreeListSmallMAX - 4*8*FreeListSmallMAX,
 			      * etc.
-			      * Make sure there are enoudh to handle 2^31.
+			      * Make sure there are enough to handle 2^31.
 			      */
 
 /* Controls when a block is split into a freelist for the small blocks:
@@ -111,14 +111,23 @@ static long AOAFreeListIndex(long numbytes)
     return index;
   }
 
-  /* FIXME:  Possible optimization: Use binary search */
   index = FreeListSmallMAX;
   blksizemax = 2*8*FreeListSmallMAX; /* Max size of blocks at index */
+  if (numbytes < (blksizemax << 8)) {
+    while (blksizemax <= numbytes) {
+      blksizemax *= 2;
+      index++;
+    }
+    return index;
+  }
+   
+  blksizemax <<= 8;
+  index += 8;
+  
   while (blksizemax <= numbytes) {
     blksizemax *= 2;
     index++;
   }
-
   return index;
 }
 
@@ -159,8 +168,14 @@ static int AOAWantsMore(long numbytes)
   if (numbytes < 16)
     return 0;
   
-  index = AOAFreeListIndex(numbytes);
+  /* The large lists are never too crowded.  
+   * That could lead to significantly increased memuse.
+   */
+  if (8*FreeListSmallMAX <= numbytes)
+    return 1;
   
+  index = AOAFreeListIndex(numbytes);
+
   return (AOAFreeListSize[index]*numbytes < AOAFreeListPleaseMoreBytes);
 }
 
