@@ -272,6 +272,14 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
        */
       switch(code){
       case 0xd: /* int div by zero */
+	/* The current BETA compiler generates calls to .idiv
+	 * to handle integer division. Thus we need to go back
+	 * one register window.
+	 */
+	__asm__("ta 3");
+	StackEnd = (long*)          ((struct RegWin*)StackEnd)->fp;
+	theObj   = (struct Object *)((struct RegWin*)StackEnd)->i0;
+	PC       = (long*)          ((struct RegWin*)StackEnd)->o7;
 	todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
       case 0xe: /* fp div by zero */
 	todo=DisplayBetaStack( FpZeroDivErr, theObj, PC, sig); break;
