@@ -21,7 +21,7 @@ class Primitives {
     public static int ror (int i, int r)
     {
 	int mask = (1 << r) - 1;
-	return (i >> r) | ((i & mask) << (32-r));
+	return (i >>> r) | ((i & mask) << (32-r));
     }
   
     public static int rol (int i, int r)
@@ -32,22 +32,23 @@ class Primitives {
   
     static short byteswapshort(short x)
     { 
-	return (short)((x>>8) | ((x<<8) & 0xff00));
+	return (short)((x>>>8) | ((x<<8) & 0xff00));
     }
 
-    static int byteswaplong(int x)
+    static int byteswaplong(int ABCD)
     { 
-	short h = (short)(x>>16);
-	short l = (short)(x & 0xffff);
-	short nl = (short)((h>>8) | ((h<<8) & 0xff00));
-	short nh = (short)((l>>8) | ((l<<8) & 0xff00));
-	int nhl = (nh << 16) | nl;
-	return nhl;
+	// ABCD -> DCBA
+	int AB = (ABCD>>>16);
+	int CD = (int)(ABCD & 0xffff);
+	int BA = (int)((AB>>>8) | ((AB & 0xff)<<8));
+	int DC = (int)((CD>>>8) | ((CD & 0xff)<<8));
+	int DCBA = (DC << 16) | BA;
+	return DCBA;
     }
 
-    static int byteswaplonginlined(int x)
+    static int byteswaplonginlined(int ABCD)
     { 
-	return (((short)((((short)(x & 0xffff))>>8) | ((((short)(x & 0xffff))<<8) & 0xff00))) << 16) | ((short)((((short)(x>>16))>>8) | ((((short)(x>>16))<<8) & 0xff00)));
+	return (((int)((((int)(ABCD & 0xffff))>>>8) | ((((int)(ABCD & 0xffff)) & 0xff)<<8)) << 16)) | ((int)(((ABCD>>>24)) | (((ABCD>>>16) & 0xff)<<8)));
     }
 
     static int SignExtByte(byte a)
@@ -63,7 +64,7 @@ class Primitives {
     static int GetBits(int a, int pos, int len)
     {
 	if (len==0) return 0;
-	return (a<<pos) >> (32-len);
+	return (a<<pos) >>> (32-len);
     }
 
     static int GetBit7(int a)
@@ -83,18 +84,18 @@ class Primitives {
 
     static byte GetByte(int a, int byteNo /* 0-3 */)
     { 
-	return (byte)((a >> (8*(3-byteNo))) & 0xff); /* big endian */
+	return (byte)((a >>> (8*(3-byteNo))) & 0xff); /* big endian */
     }
 
     static int GetSignedBits(int a, int pos, int len)
     {
 	if (len==0) return 0;
-	return ((a<<pos)) >> (32-len);
+	return ((a<<pos)) >>> (32-len);
     }
 
     static int gGetSignedBits(int dr,  int pDr,  int lDr)
     {
-	return (dr << pDr) >> (32-lDr);
+	return (dr << pDr) >>> (32-lDr);
     }
 
     static int PutBits(int a, int b, int pos, int len)
@@ -106,7 +107,7 @@ class Primitives {
 
     static short GetShort(int a,int shortNo /* 0-1 */)
     { 
-	return (short)((a >> (16*(1-shortNo))) & 0xffff); /* big endian */
+	return (short)((a >>> (16*(1-shortNo))) & 0xffff); /* big endian */
     }
 
     static int gPutBits(int dr, int pDr, int lDr, int ar)
@@ -118,7 +119,7 @@ class Primitives {
     }
     
     public static void main(String[] args) {
-	System.out.println(byteswaplong(0x12345678)); 
+	System.out.println(byteswaplonginlined(0x87654321)); 
     }
 
 }

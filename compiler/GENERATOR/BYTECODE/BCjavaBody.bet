@@ -2313,7 +2313,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                        bipush   -> jcf.emit; 32 -> jcf.emit;
                        swap     -> jcf.emit; 
                        isub     -> jcf.emit; 
-                       ishr     -> jcf.emit; 
+                       iushr     -> jcf.emit; 
                        (* stack: (i&(1<<r)-1)>>(32-r), r, i*)
                        dup_x2   -> jcf.emit; 
                        _pop     -> jcf.emit; 
@@ -2354,14 +2354,14 @@ do (# commentstream: @stream (* maybe something more useful *);
                        dup_x2   -> jcf.emit; 
                        _pop     -> jcf.emit; 
                        (* stack: r, i, (i&(1<<r)-1)<<(32-r) *)
-                       ishr     -> jcf.emit; 
+                       iushr     -> jcf.emit; 
                        ior      -> jcf.emit; 
                        (* stack: (i>>r) | (i&(1<<r)-1)<<(32-r) *)
                     // byteswapShort then
                        (* Implemented as 
                         *   (x & 0xffff0000)
                         *   |
-                        *   (((x>>8) & 0xff) | ((x<<8) & 0xff00)) 
+                        *   (((x>>>8) & 0xff) | ((x<<8) & 0xff00)) 
                         * OBS! Is this a little-endian implementation only?
                         * For
                         *    x = 0xabcdefghi
@@ -2380,7 +2380,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                        _dup      -> jcf.emit;
                        (* stack: x, x, (x & 0xffff0000) *)
                        bipush    -> jcf.emit; 8 -> jcf.emit;
-                       ishr      -> jcf.emit;
+                       iushr      -> jcf.emit;
                        0xff -> jcf.emitLoadIntegerConstant;
                        iand      -> jcf.emit;
                        swap      -> jcf.emit;
@@ -2397,56 +2397,46 @@ do (# commentstream: @stream (* maybe something more useful *);
                        ior -> jcf.emit
                     // byteswapLong then
                        (* Implemented as
-                        *   short h = (short)(x>>16);
-	                *   short l = (short)(x & 0xffff);
-	                *   short nl = (short)((h>>8) | ((h<<8) & 0xff00));
-	                *   short nh = (short)((l>>8) | ((l<<8) & 0xff00));
-	                *   int result = (nh << 16) | nl;
+                        *   int AB = (ABCD>>>16);
+	                *   int CD = (int)(ABCD & 0xffff);
+	                *   int BA = (int)((AB>>>8) | ((AB & 0xff)<<8));
+	                *   int DC = (int)((CD>>>8) | ((CD & 0xff)<<8));
+	                *   int DCBA = (DC << 16) | BA;
+	                *   result = DCBA;
                         *)
-                       (* stack: x *)
-                       _dup    -> jcf.emit; 
-                       _dup    -> jcf.emit; 
-                       (* stack: x, x, x, ... *)
-                       0xffff -> jcf.emitLoadIntegerConstant;
-                       iand    -> jcf.emit;
-                       i2s     -> jcf.emit;
-                       bipush  -> jcf.emit; 8 -> jcf.emit;
-                       ishr    -> jcf.emit;
-                       (* stack: (l>>8), x, x, ... *)
-                       swap    -> jcf.emit; 
-                       0xffff -> jcf.emitLoadIntegerConstant;
-                       iand    -> jcf.emit;
-                       i2s     -> jcf.emit;
-                       bipush  -> jcf.emit; 8 -> jcf.emit;
-                       ishl    -> jcf.emit;
-                       0xff00 -> jcf.emitLoadIntegerConstant;
-                       iand    -> jcf.emit;
-                       ior     -> jcf.emit;
-                       i2s     -> jcf.emit;
-                       bipush  -> jcf.emit; 16 -> jcf.emit;
-                       ishl    -> jcf.emit;
-                       (* stack: (nh<<16), x, ... *)
-                       swap    -> jcf.emit; 
-                       _dup    -> jcf.emit;
-                       (* stack: x, x, (nh<<16), ... *)
-                       bipush  -> jcf.emit; 16 -> jcf.emit;
-                       ishr    -> jcf.emit;
-                       i2s     -> jcf.emit;
-                       bipush  -> jcf.emit; 8 -> jcf.emit;
-                       ishr    -> jcf.emit; 
-                       (* stack: (h<<8), x, (nh<<16), ... *)
-                       swap    -> jcf.emit; 
-                       (* stack: x, (h<<8), (nh<<16), ... *)
-                       bipush  -> jcf.emit; 16 -> jcf.emit; 
-                       ishr    -> jcf.emit; 
-                       i2s     -> jcf.emit; 
-                       bipush  -> jcf.emit; 8 -> jcf.emit; 
-                       ishl    -> jcf.emit; 
-                       0xff00 -> jcf.emitLoadIntegerConstant;
-                       iand    -> jcf.emit; 
-                       ior     -> jcf.emit; 
-                       i2s     -> jcf.emit; 
-                       ior     -> jcf.emit; 
+                       (* stack: ABCD *)
+                       (# loc_abcd: @integer;
+                       do allocLocal -> loc_abcd;
+                          loc_abcd   -> storeLocal;
+                          loc_abcd   -> loadLocal; 
+                          65535      -> jcf.emitLoadIntegerConstant;
+                          iand       -> jcf.emit;
+                          bipush     -> jcf.emit; 8 -> jcf.emit;
+                          iushr      -> jcf.emit;
+                          loc_abcd   -> loadLocal; 
+                          65535      -> jcf.emitLoadIntegerConstant;
+                          iand       -> jcf.emit;
+                          sipush     -> jcf.emit; 255 -> jcf.emitShort;
+                          iand       -> jcf.emit;
+                          bipush     -> jcf.emit; 8 -> jcf.emit;
+                          ishl       -> jcf.emit;
+                          ior        -> jcf.emit;
+                          bipush     -> jcf.emit; 16 -> jcf.emit;
+                          ishl       -> jcf.emit;
+                          loc_abcd   -> loadLocal; 
+                          bipush     -> jcf.emit; 24 -> jcf.emit;
+                          iushr      -> jcf.emit;
+                          loc_abcd   -> loadLocal; 
+                          bipush     -> jcf.emit; 16 -> jcf.emit;
+                          iushr      -> jcf.emit;
+                          sipush     -> jcf.emit; 255 ->jcf.emitShort;
+                          iand       -> jcf.emit;
+                          bipush     -> jcf.emit; 8 -> jcf.emit;
+                          ishl       -> jcf.emit;
+                          ior        -> jcf.emit;
+                          ior        -> jcf.emit;
+                          loc_abcd   -> releaseLocal;
+                       #);
                     else
                        'Unhandled bytecode func.' -> (func -> asText).prepend -> jvmFIXME;
                        'Unhandled bytecode func.' -> (func -> asText).prepend -> jcf.emitComment;
