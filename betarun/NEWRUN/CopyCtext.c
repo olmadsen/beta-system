@@ -45,3 +45,41 @@ ValRep *CopyCT(unsigned char *textPtr, long *SP)
 
     return theRep;
 }
+
+ValRep *CopyCT_W(unsigned char *textPtr, long *SP)
+{
+    ValRep *theRep;
+    register unsigned range, size;
+
+    DEBUG_CODE(NumCopyCT++);
+
+    /* Allocate a ValueRepetition and initialize it with some text.    */
+
+    range = textPtr ? strlen((char*)textPtr) : 0;
+    size = ShortRepSize(range);
+
+#ifdef RTDEBUG
+    if (range > LARGE_REP_SIZE) {
+      fprintf(output, "CopyCT_W: should allocate in AOA (range=%d)\n", range);
+    }
+    /* FIXME: Allocate in AOA
+     */
+#endif
+
+    theRep = (ValRep *)IOAalloc(size, SP);
+
+    SETPROTO(theRep, ShortRepPTValue);
+    if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
+    theRep->LowBorder = 1;
+    theRep->HighBorder = range;
+
+    /* Assign the text to the body part of the repetition. */
+    for (i = 0; i < (size-headsize(ValRep)); i++){
+      /* printf("CopyCT_W: %c\n", textPtr + i); */
+      *((unsigned short*)theRep->Body[0]+i) = *(textPtr + i);
+    }
+
+    Ck(theRep);
+
+    return theRep;
+}

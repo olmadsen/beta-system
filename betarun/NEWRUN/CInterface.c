@@ -93,6 +93,92 @@ char *CCpkSVT(ValRep *theRep, unsigned low, long high, long *SP)
   return CTextPoolEnd - bodysize; 
 }
 
+#ifdef MAC
+char *CpkVT_W(ValRep * theRep, long *SP)
+#else
+char *CCpkVT_W(ValRep * theRep, long *SP)
+#endif
+{
+  long bodysize = ShortRepBodySize(theRep->HighBorder);
+  long i;
+
+  DEBUG_CODE(NumCpkVT++);
+  Ck(theRep);
+  /* Check range overflow on CTextPool.
+   * nextText is used as a tmp. register only.
+   * Size_left_in_CTextPool = (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd.
+   */
+
+  if (bodysize > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
+    BetaError(CTextPoolErr, 0, SP, 0);
+  
+  /* Copy the contents of the repetition to the CTextPool */
+  for (i = 0; i < bodysize; i++, CTextPoolEnd+=2){
+    /* printf("CpkVT_W: %c\n", ascii + i); */
+    *((unsigned short*)CTextPoolEnd) = theRep->Body[i];
+  }
+
+  Ck(theRep);
+  return CTextPoolEnd - bodysize;
+}
+
+/* CCpkSVT_W: Copy Slice of variable text (byte rep) to C as wide text */
+#ifdef MAC
+char *CpkSVT_W(ValRep *theRep, unsigned low, long high, long *SP)
+#else
+char *CCpkSVT_W(ValRep *theRep, unsigned low, long high, long *SP)
+#endif
+{
+  long bodysize;
+  long i;
+  unsigned char *oldBody;
+
+  DEBUG_CODE(NumCpkSVT++);
+  Ck(theRep);
+
+  /* printf("CpkSVT_W: theRep=0x%x, low=0x%x, high=0x%x, SP=0x%x\n", theRep, low, high, SP); */
+  if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ){ 
+    RangeErr = low;
+    RangeMax = theRep->HighBorder;
+    BetaError(RepLowRangeErr, 0, SP, 0);
+  }
+  if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
+    RangeErr = high;
+    RangeMax = theRep->HighBorder;
+    BetaError(RepHighRangeErr, 0, SP, 0);
+  }
+  high = high - low + 1;
+  if (high<0) high=0;
+
+  bodysize = ShortRepBodySize(high);
+  /* Check range overflow on CTextPool.
+   * nextText is used as a tmp. register only.
+   * Size_left_in_CTextPool = (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd.
+   */
+  if (bodysize > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
+    BetaError(CTextPoolErr, 0, SP, 0);
+  
+  /* Copy the contents of the repetition to the CTextPool. */
+  oldBody = (unsigned char *)((unsigned)theRep->Body+(low-theRep->LowBorder));
+
+  for (i = 0;  i < high; i++, CTextPoolEnd+=2){
+    *(((unsigned short *)CTextPoolEnd)) = *(unsigned char *)((unsigned)oldBody+i);
+  }
+#if 0
+  *(((unsigned char *)CTextPoolEnd)) = 0; /* NULL termination */
+  CTextPoolEnd+=1;
+#endif
+  CTextPoolEnd = (char*)((((long)CTextPoolEnd+3)/4)*4); /* long align next text */
+
+  /* The following will only work in all cases for the first
+   * parameter if CTextPool is long aligned.
+   * This is now ensured in data.gen.
+   */
+
+  Ck(theRep);
+  return CTextPoolEnd - bodysize; 
+}
+
 
 #ifdef MAC
 
