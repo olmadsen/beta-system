@@ -319,7 +319,7 @@ sub print_std_buttons
 
 sub print_header
 {
-    local ($title, $flags) = @_;
+    local ($title, $basename, $flags) = @_;
     local ($doctype);
 
     if ($flags&$flag_frame){
@@ -346,6 +346,11 @@ EOT
 
     print <<"EOT" if ($flags&$flag_hash);
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$hashfromparent"></SCRIPT>
+<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript">
+<!--
+    CheckParent("$basename");
+//-->
+</SCRIPT>
 EOT
 
     print <<"EOT" if ($flags&$flag_print);
@@ -405,7 +410,7 @@ sub print_frameset()
 
     ($targetbase = $basename) =~ s/\./_/g;
 
-    &print_header($title,($flag_base|$flag_frame));
+    &print_header($title,"",($flag_base|$flag_frame));
 
     # FRAMESPACING and BORDER below are not valid HTML 4.0, 
     # but required by IE4 and NS4, respectively, to display this correctly
@@ -439,7 +444,7 @@ sub print_nav_frame
     local ($javascript);
     local ($file);
 
-    &print_header($title,$flag_base|$flag_print);
+    &print_header($title,"",$flag_base|$flag_print);
 
     if ($wiki){
 	($file = $title) =~ s/ Interface//;
@@ -534,9 +539,9 @@ sub print_body_frame(){
     local ($title, $basename, $contents) = @_;
     local ($header) = &H1($basename, $title);
     
-    &print_header($title,($flag_base|$flag_hash));
+    &print_header($title,$basename,($flag_base|$flag_hash));
     print<<"EOT";
-<BODY onLoad='HashFromParent("$basename")'$bodyatt>
+<BODY onLoad='HashFromParent()'$bodyatt>
 $header
 <PRE CLASS=interface>
 EOT
@@ -558,7 +563,7 @@ sub print_index_nav_frame
     local ($title, $basename) = @_;
     local ($prev) = &strip_path(&strip_extension($files[$#files]));
 
-    &print_header($title,$flag_base);
+    &print_header($title,"",$flag_base);
 
     if ($wiki){
 	print <<"EOT";
@@ -685,7 +690,7 @@ sub print_index_header()
     local ($title) = @_;
     local ($header) = &H1("Index.identifiers", "Index of Identifiers");
 
-    &print_header($title,$flag_base);
+    &print_header($title,"",$flag_base);
 
     print<<"EOT";
 <BODY$bodyatt>
@@ -858,7 +863,7 @@ sub print_toc_nav_frame
     local ($title) = @_;
     local ($next) = &strip_path(&strip_extension($files[0]));
 
-    &print_header($title,$flag_base);
+    &print_header($title,"",$flag_base);
 
     print <<EOT;
 <BODY$bodyatt>
@@ -898,7 +903,7 @@ sub print_toc_header
     local ($title) = @_;
     local ($header) = &H1("_toc", "Table of Contents");
 
-    &print_header($title,$flag_base);
+    &print_header($title,"",$flag_base);
 
     print<<EOT;
 <BODY$bodyatt>

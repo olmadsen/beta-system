@@ -226,7 +226,7 @@ EOT
 
 sub print_header
 {
-    local ($title, $flags) = @_;
+    local ($title, $basename, $flags) = @_;
     local ($doctype);
 
     if ($flags&$flag_frame){
@@ -253,6 +253,11 @@ EOT
 
     print <<"EOT" if ($flags&$flag_hash);
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$hashfromparent"></SCRIPT>
+<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript">
+<!--
+    CheckParent("$basename");
+//-->
+</SCRIPT>
 EOT
 
     print <<"EOT" if ($flags&$flag_print);
@@ -291,7 +296,7 @@ sub print_frameset()
     
     local ($title, $basename, $height) = @_;
 
-    &print_header($title,$flag_base|$flag_frame);
+    &print_header($title,"",$flag_base|$flag_frame);
 
     print<<"EOT";
 <FRAMESET BORDER=0 ROWS="$height,*">
@@ -322,7 +327,7 @@ sub print_nav_frame
     local ($title) = @_;
     local ($javascript);
 
-    &print_header($title,$flag_base|$flag_print);
+    &print_header($title,"",$flag_base|$flag_print);
 
     print <<EOT;
 <BODY onLoad='fixPrintButton("$imagedir")'>
@@ -354,10 +359,10 @@ sub print_body_frame()
 
     local ($file) = $_[0];
     
-    &print_header($title, $flag_hash);
+    &print_header($title, $basename, $flag_hash);
 
     print<<"EOT";
-<BODY onLoad='HashFromParent("$basename");'>
+<BODY onLoad='HashFromParent();'>
 <H1>$title</H1>
 <PRE CLASS=gram>
 EOT
@@ -434,7 +439,7 @@ sub print_index_nav_frame
 {
     local ($title, $basename) = @_;
 
-    &print_header($title,$flag_base|$flag_print);
+    &print_header($title,"",$flag_base|$flag_print);
 
     print <<EOT;
 <BODY onLoad="fixPrintButton()">
@@ -494,7 +499,7 @@ sub print_index_header()
 {
     local ($title) = @_;
 
-    &print_header($title,$flag_base);
+    &print_header($title,"",$flag_base);
 
     print<<"EOT";
 <BODY>
