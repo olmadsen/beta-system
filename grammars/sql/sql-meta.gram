@@ -1,0 +1,388 @@
+(* Mjolner grammar for:
+
+         SQL,   Structured Query Language
+
+   Defined according to the grammar in
+
+         SQL, Users Manual, ND-60.258.1 EN
+
+   which describes the first ND (Norsk Data) implementation of SQL.
+
+   The grammar has been typed according to the manual.
+   The grammar is meant as an example for illustrating the Mjolner 
+   facilities for constructing a syntax directed editor and associated
+   LALR(1) parser. The author does not know about SQL. Sometimes  
+   arbitrary names have been chosen  for syntactic categories.
+   An expert in SQL should go carefully through this grammar.
+
+   There seems to be some inconsistencies between the  grammar and the
+   example on page 56 of the manual. The syntax for <selectClause>
+   does not cover all parts the example. The example is included
+   on the file 'sql.ex'.
+
+   This version of the grammar may not be complete!
+ 
+   Aarhus October 23 1988, Ole Lehrmann Madsen
+*)
+
+-- sql : aGrammar : metagrammar --
+Grammar sql:
+
+Option
+   version=1
+   comBegin='--'
+   comEnd=''
+   stringChar=''' '
+   suffix='.sql'
+
+Rule
+
+(* the following rules are not included in the ND grammar*)
+
+<SQL> ::= <nameDecl> ':' <statementList>
+       ;
+<statementList> ::* <statement> ';'
+                 ;
+
+(* C6 STATEMENTS *)
+
+<statement> ::| <selectStatement>
+              | <updateStatement>
+              | <deleteStatement>
+              | <insertStatement>
+              ;
+<selectStatement> ::= <selectExpression> <orderingClauseOpt>
+                   ;
+<orderingClauseOpt> ::? <orderingClause>
+                     ;
+<orderingClause> ::= 'order' 'by' <orderItemList>
+                  ;
+<orderItemList> ::* <orderItem> ','
+                 ; 
+<orderItem> ::= <orderingColumn> <ASCorDESC>
+             ;
+<orderingColumn> ::| <columnName>
+                   | <columnInteger>
+                   ;
+<ASCorDESC> ::| <ASC> | <DESC>
+              ;
+<ASC> ::= 'asc' ;
+<DESC> ::= 'desc' ;
+
+<updateStatement> ::= 'update' <tableName> <aliasOpt>
+                      'set' <columnAssignmentList> 
+                      <whereClauseOpt>
+                   ;
+<columnAssignmentList> ::* <columnAssignment> ','
+                        ;
+<columnAssignment> ::| <nameAssignment>
+                     | <nullAssignment>
+                     ;
+<nameAssignment> ::= <columnName> '='  <scalarExpr> 
+                  ;
+<nullAssignment> ::= 'null'
+                  ;
+<deleteStatement> ::= 'delete' 'from' <tableName> <aliasOpt>
+                      <whereClauseOpt>
+                   ;
+<aliasOpt> ::? <alias>
+            ;
+<insertStatement> ::= 'insert' 'into' <tableName> <columnSpecificationOpt>
+                      'values' '(' <insertItemList> ')'
+                   ;
+<columnSpecificationOpt> ::? <columnSpecification>
+                           ;
+<columnSpecification> ::= '(' <columnNameList> ')'
+                       ;
+<columnNameList> ::* <columnName> ',' 
+                  ;
+<insertItemList> ::* <insertItem> 
+                  ;
+<insertItem> ::| <constantItem>
+               |  <nullItem>
+               ;
+
+<constantItem> ::= <constant>
+                ;
+<nullItem> ::= 'null'
+            ;
+          
+(* C5 PREDICATES *)
+
+<predicate> ::| <condition>
+              | <andCondition>
+              | <orCondition>
+              | <notCondition>
+              ;
+<condition> ::| <compareCondition>
+              | <betweenCondition>
+              | <likeCondition>
+              | <inCondition>
+              | <bracketedPredicate>
+              ;
+<andCondition> ::= <condition> 'and' <condition>
+                ;
+<orCondition> ::= <condition> 'or' <condition>
+               ;
+<notCondition> ::= 'not' <condition>
+                ;
+<compareCondition> ::| <relationalExp>
+                     | <nullCompare>
+                     | <notNullCompare>
+                     ;
+<relationalExp> ::| <compareEQ> | <compareNE> | <compareLT>
+                  | <compareLE> | <compareGT> | <compareGE>
+                  ;
+<compareEQ> ::= <scalarExpr> '=' <scalarExpr>
+             ;
+<compareNE> ::= <scalarExpr> '><' <scalarExpr>
+             ;
+<compareLT> ::= <scalarExpr> '<' <scalarExpr>
+             ;
+<compareLE> ::= <scalarExpr> '<=' <scalarExpr>
+             ;
+<compareGT> ::= <scalarExpr> '>' <scalarExpr>
+             ;
+<compareGE> ::= <scalarExpr> '>=' <scalarExpr>
+             ;
+<nullCompare> ::= 'is' 'null'
+               ;
+<notNullCompare> ::= 'is' 'not' 'null'
+                  ;
+
+(* Note: the first <scalarExpr> on the right side of <betweenCondition>
+   and <likeCondition> should be <columnName>. This will however give
+   rise to an LALR(1) conflict. Such a conflict is only a problem
+   for the parser. It is not a probleme for the syntax driven editor.
+*)
+
+<betweenCondition> ::= <scalarExpr> <notOpt> 'between'
+                       <scalarExpr> 'and' <scalarExpr>
+                    ;
+<notOpt> ::? <not>
+          ;
+<not> ::= 'not'
+       ;
+<likeCondition> ::= <scalarExpr> <notOpt>  'like' <scalarExpr>
+                 ;
+<inCondition> ::= <scalarExpr> <notOpt> 'in' '(' <setOfScalarsList> ')'
+               ;
+<setOfScalarsList> ::+ <setOfScalars> ','
+                    ;
+<setOfScalars> ::| <singletonSet> | <setRange>
+                 ; 
+<singletonSet> ::= <constant>
+                ;
+<setRange> ::= <constant> ':' <constant>
+            ;
+<bracketedPredicate> ::= '(' <predicate> ')'
+                      ;
+(************************** C4 Select Expressions **************************)
+
+<selectExpression> ::= <selectClause>
+                       <fromClause>
+                       <whereClauseOpt> 
+                       <groupingHavingClauseOpt>
+                    ;
+<selectClause> ::= 'select' <distinctOpt> <selectSpec>
+                ;
+<distinctOpt> ::? <distinct>
+               ;
+<distinct> ::= 'distinct'
+            ;
+<selectSpec> ::| <all> | <selectItems>
+               ;
+<all> ::=  '*'
+       ;
+<selectItems> ::= <selectItemList>
+               ;
+<selectItemList> ::* <selectItem> ','
+                  ;
+<selectItem> ::| <selectItemA> | <selectItemB>
+               ;
+<selectItemA> ::= <tableName> '.' '*'
+               ;
+<selectItemB> ::= <AmpScalarExprList> <specialNDsyntaxOpt>
+               ;
+<AmpScalarExprList> ::+ <AmpScalarExpr>
+                     ;
+<AmpScalarExpr> ::= '&' <scalarExpr>
+                 ;
+<specialNDsyntaxOpt> ::? <specialNDsyntax>
+                      ;
+<specialNDsyntax> ::= <convertOpt> <displayOpt> <newColumnId>
+                   ;
+<convertOpt> ::? <convert>
+             ;
+<convert> ::= 'convert' <dataType>
+           ;
+<displayOpt> ::? <display>
+              ;
+<display> ::= 'display'  <displayString> 
+           ;
+<newColumnId> ::| <columnIdname> | <columnIdString>
+                ;
+<fromClause> ::= 'from' <fromItemList>
+              ;
+<fromItemList> ::* <fromItem> ','
+                ;
+<fromItem> ::= <tableName> <aliasOpt>
+            ;
+<whereClauseOpt> ::? <whereClause>
+                  ;
+<whereClause> ::= 'where' <predicate>
+               ;
+<groupingClause> ::= 'group' 'by' <columnNameList>
+                  ;
+<havingClauseOpt> ::? <havingClause>
+                   ;
+<havingClause> ::= 'having' 'count' '(' '*' ')' <compareOperator> <constant>
+                ;
+<groupingHavingClauseOpt> ::? <groupingHavingClause>
+                           ;
+<groupingHavingClause> ::= <groupingClause> <havingClauseOpt>
+                        ;
+
+
+(**************************** SCALAR EXPRESSIONS *****************************)
+
+<scalarExpr> ::| <plusExpr>
+               | <minusExpr>
+               | <multExpr>
+               | <divExpr>
+               | <scalarTerm>
+               ;
+<plusExpr> ::= <scalarTerm> '+' <scalarExpr>
+            ;
+<minusExpr> ::= <scalarTerm> '-' <scalarExpr>
+             ;
+<multExpr> ::= <scalarTerm> '*' <scalarExpr>
+            ;
+<divExpr> ::= <scalarTerm> '/' <scalarExpr>
+           ;
+<scalarTerm> ::| <scalarValue>
+               ;
+<scalarValue> ::| <scalarName>
+                | <aggregateReference>
+                | <functionReference>
+                | <constant>
+                | <inputParameter>
+                | <bracketedExpr>
+                ;
+<aggregateReference> ::| <countReferenceA>
+                       | <countReferenceB>
+                       | <aggregateA>
+                       | <aggregateB>
+                       ;
+<countReferenceA> ::= 'count' '(' '*' ')' 
+                   ;
+<countReferenceB> ::= 'count' '(' <scalarExpr> ')'
+                   ;
+<aggregateA> ::= <aggregatename> '(' <scalarExpr> ')'
+              ;
+<aggregateB> ::= <aggregateName> '(' 'distinct' <columnName> ')'
+              ;
+<aggregateName> ::| <sum> | <avg> | <max> | <min>
+                  | <stdev> | <variance>
+                  ;
+<sum> ::= 'sum' ;
+<avg> ::= 'avg' ;
+<max> ::= 'max' ;
+<min> ::= 'min' ;
+<stdev> ::= 'stdev' ;
+<variance> ::= 'variance';
+
+<functionReference> ::| <funcOneRef>
+                      | <funcThreeRef>
+                      ;
+<funcOneRef> ::= <funcOne> '(' <scalarExpr> ')'
+              ;
+<funcThreeRef> ::= <funcThree> '(' <scalarExpr> ',' <const> ',' <const> ')'
+                ;
+<funcOne> ::| <mod> | <sqrt> | <toChar> | <toNumber> | <length> | <round>
+            | <trunc> | <abs> | <upper> | <lower> | <initcap>
+            ;
+<mod> ::= 'mod' ;
+<sqrt> ::= 'sqrt' ;
+<toChar> ::= 'tochar' ;
+<toNumber> ::= 'tonumber' ;
+<length> ::= 'length' ;
+<round> ::= 'round' ;
+<trunc> ::= 'trunc' ;
+<abs> ::= 'abs' ;
+<upper> ::= 'upper' ;
+<lower> ::= 'lower' ;
+<initCap> ::= 'initcap' ;
+
+<funcThree> ::| <substr> | <bits>
+              ;
+<substr> ::= 'substr' ;
+<bits> ::= 'bits' ;
+
+<bracketedExpr> ::= '(' <scalarExpr> ')'
+                 ;
+<scalarName> ::= <columnName>
+              ;
+
+<compareOperator> ::| <eq> | <ne> | <lt> | <le> | <gt> | <ge>
+                   ;
+<eq> ::= '=' ;
+<ne> ::= '><' ;
+<lt> ::= '<' ;
+<le> ::= '<=' ;
+<gt> ::= '>' ;
+<ge> ::= '>=' ;
+
+
+(********************************** NAMES ***********************************)
+
+(* There is the following correspondance between standard
+   symbols in Mjolner  and SQL;
+
+   Mjolner:                        SQL:
+
+   <nameDecl>                      <identifier>
+   <nameAppl>                      <identifier>
+   <const>                         <integer>
+   <string>                        ' { <ASCII-character> }'
+*)
+
+<constant> ::| <integerConstant> | <realConstant> | <stringConstant>
+             ;
+<integerConstant> ::= <const>
+                   ;
+<realConstant> ::= <const> '.' <const>
+                ;
+<stringConstant> ::= <string>
+                  ;
+<inputParameter> ::= '$' <nameAppl>
+                  ;
+<tablename> ::= <nameAppl>
+             ;
+<alias> ::= <nameAppl>
+         ;
+<columnName> ::| <explicitTableName> | <implicitTableName>
+               ;
+<explicitTableName> ::=  <tableName> '.' <nameAppl>
+                     ;
+<implicitTableName> ::= <nameAppl>
+                     ;
+<dataType> ::| <integerDouble> | <integerQuad> | <realQuad> | <realDoubleQuad>
+             | <character> | <numeric> | <bcd>
+             ;
+<integerDouble> ::= 'integer2' ;
+<integerQuad> ::= 'integer4' ; 
+<realQuad> ::= 'real4' ;
+<realDoubleQuad> ::= 'real8' ;
+<character> ::= 'character' '(' <const> ')' ;
+<numeric> ::= 'numeric' '(' <const> ')' ;
+<bcd> ::= 'bcd' '(' <const> ',' <const> ')' ;
+
+<displayString> ::= <string>
+    (* should be " <ND display string, see the SIBAS manual> " *)
+                 ;
+<columnInteger> ::= <const>
+                 ;
+<columnIdName> ::= <nameAppl>  (* may only contain letters *)
+                ;
+<columnIdString> ::= <string> (* should be " { ASCII characters } " *)

@@ -1,0 +1,678 @@
+(* java.y 1.89 96/07/02 *)
+
+(*
+ * LALR(1) Java Grammar
+ *
+ * Bill Joy, Guy Steele
+ * Sun Microsystems
+ * July, 1996
+ *
+ * This grammar is the minimum modification to the grammar in
+ * the Java Language Specification book, as follows:
+ *
+ * 1) The single nonterminal Modifiers replaces the more specific
+ *    (Class/Field/Method/Constructor)Modifiers of the book.
+ *    *Modifiers are better expositionally, but can't be discriminated
+ *    left-to-right.
+ *
+ * 2) We handle the [Opt] Symbols with lambda productions, since
+ *    this read more like the original grammar, and do it the way
+ *    the grammars chapter says (making lots of productions) only
+ *    when we get into LALR trouble.  Lambda productions are uniformly
+ *    harder, so this is safe...
+ *
+ * 3) Other changes to make LALR are marked DELTA below.
+ *
+ *)
+
+contractioncategories 
+	ClassBody
+	MethodBody
+
+--- java : aGrammar : metagrammar ---
+Grammar java :
+
+Option
+  version  = 1
+  comBegin = '/*'
+  comEnd   = '*/'
+  stringChar = '"' 
+  suffix = '.java'
+  EOSchar = '%'
+Rule
+
+(* 3.8 keywords 
+%token	ABSTRACT		FLOAT			SHORT
+%token	BOOLEAN			FOR			STATIC
+%token	BREAK			GOTO			SUPER
+%token	BYTE			IF			SWITCH
+%token	CASE			IMPLEMENTS		SYNCHRONIZED
+%token	CAST			IMPORT			THIS
+%token	CATCH			INSTANCEOF		THROW
+%token	CHAR			INT			THROWS
+%token	CLASS			INTERFACE		TRANSIENT
+%token	CONST			LONG			TRY
+%token	CONTINUE		NATIVE			VOID
+%token	DEFAULT			NEW			VOLATILE
+%token	DO			NULL_			WHILE
+%token	DOUBLE			PACKAGE
+%token	ELSE			PRIVATE
+%token	EXTENDS			PROTECTED
+%token	FINAL			PUBLIC
+%token	FINALLY			RETURN
+*)
+
+(* 3.9 identifiers 
+%token	Identifier
+*)
+
+(* 3.10 literals 
+%token	IntegerLiteral
+%token	FloatingPointLiteral
+%token	BooleanLiteral
+%token	StringLiteral
+%token	CharacterLiteral
+*(
+
+(* 3.12 operators 
+%token	ANDAND			GTGTGTEQ		OROR
+%token	ANDEQ			LTEQ			PCTEQ
+%token	DIVEQ			LTLT			PLUSEQ
+%token	EQEQ			LTLTEQ			PLUSPLUS
+%token	GTEQ			MINUSEQ			TIMESEQ
+%token	GTGT			MINUSMINUS		XOREQ
+%token	GTGTEQ			NOTEQ
+%token	GTGTGT			OREQ
+
+*)
+
+(* 2.3 *)
+<Goal>::=			<CompilationUnit> ;
+
+(* 3 *)
+<Literal> ::|		<IntegerOrFloatLiteral>
+	|		<BooleanLiteral>
+	|		<StringOrCharLiteral>
+	|		<NullLiteral>
+        ;
+
+<NullLiteral>::=		'NULL_' ;
+
+(* 4 *)
+<Type> ::|		<PrimitiveType>
+	|		<ReferenceType>
+        ;
+<PrimitiveType> ::|		<NumericType>
+	|		<BOOLEAN>
+        ;
+<BOOLEAN> ::= 'BOOLEAN' ;
+<NumericType>::|	<IntegralType>
+	|		<FloatingPointType>
+        ;
+<IntegralType>::|	<BYTE> | <SHORT> | <INT> | <LONG> | <CHAR> ;
+<BYTE> ::=  'BYTE' ;
+<SHORT>  ::= 'SHORT' ;
+<INT>  ::= 'INT' ;
+<LONG>  ::= 'LONG' ;
+<CHAR> ::= 'CHAR' ;
+<FloatingPointType> ::|	<FLOAT> | <DOUBLE>;
+<FLOAT> ::= 'FLOAT' ;
+<DOUBLE> ::= 'DOUBLE' ;
+
+<ReferenceType> ::|	<ClassOrInterfaceType>
+	|		<ArrayType>
+        ;
+<ClassOrInterfaceType> ::=	<Name> ;
+
+<ClassType> ::=		<ClassOrInterfaceType>;
+
+<InterfaceType>::=	<ClassOrInterfaceType>;
+
+<ArrayType>::|		<ArrayType1> | <ArrayType2> | <ArrayType3> ;
+
+<ArrayType1> ::= <PrimitiveType> '[' ']' ;
+<ArrayType2> ::= <Name> '[' ']' ;
+<ArrayType3> ::= <ArrayType> '[' ']' ;
+
+(* 6 *)
+<Name>::|		<SimpleName>
+	|		<QualifiedName>
+        ;
+<SimpleName>::=		<Identifier> ;
+
+<QualifiedName>::=	<Name> '.' <Identifier> ;
+
+
+(* 7 *)
+<CompilationUnit> ::=	<PackageDeclarationOpt> <ImportDeclarationsOpt> 
+			<TypeDeclarationsOpt>
+		   ;
+<ImportDeclarationsOpt>::?	<ImportDeclarations> ;
+
+<ImportDeclarations>::+	<ImportDeclaration> ;
+
+<TypeDeclarationsOpt> ::? 	<TypeDeclarations> ;
+
+<TypeDeclarations> ::+	<TypeDeclaration> ;
+
+<PackageDeclarationOpt>::? <PackageDeclaration> ;
+
+<PackageDeclaration> ::= 'PACKAGE' <Name> ';' ;
+
+<ImportDeclaration> ::|	<TypeImportDeclaration>
+		      | <TypeImportOnDemandDeclaration>
+		      ;
+<TypeImportDeclaration>::=	'IMPORT' <Name> ';' ;
+
+<TypeImportOnDemandDeclaration> ::= 'IMPORT' <Name> '.' '*' ';' ;
+
+<TypeDeclaration> ::| <ClassDeclaration>
+	            | <InterfaceDeclaration>
+	            | <TypeSep> 
+	;
+<TypeSep> ::= ';' ;
+
+(* 8 *)
+
+(* 8.1 *)
+<ClassDeclaration>::=	<ModifiersOpt> 'CLASS' <NameDecl> <SuperOpt>
+			<InterfacesOpt> <ClassBody>
+		   ;
+<SuperOpt> ::?	<Super> ;
+<Super> ::=	'EXTENDS' <ClassType> ;
+<InterfacesOpt> ::?	<Interfaces> ;
+<Interfaces>::=		'IMPLEMENTS' <InterfaceTypeList> ;
+
+<InterfaceTypeList> ::+	<InterfaceType> ',' ;
+
+<ClassBody> ::=		'{' <ClassBodyDeclarationsOpt> '}' ;
+
+<ClassBodyDeclarationsOpt>::?		<ClassBodyDeclarations> ;
+
+<ClassBodyDeclarations> ::+	<ClassBodyDeclaration> ;
+
+<ClassBodyDeclaration>::|	<ClassMemberDeclaration>
+	|		<StaticInitializer>
+	|		<ConstructorDeclaration>
+        ;
+<ClassMemberDeclaration>::|  <FieldDeclaration>
+	|		<MethodDeclaration>
+        ;
+
+(* 8.3 *)
+<FieldDeclaration>::=	<ModifiersOpt> <Type> <VariableDeclarators> ';' ;
+
+<VariableDeclarators>::+	<VariableDeclarator> ',' ; 
+
+<VariableDeclarator> ::| <VariableDeclarator1> | <VariableDeclarator2>  ;
+
+<VariableDeclarator1> ::= <VariableDeclaratorId> ;
+<VariableDeclarator2>::=  <VariableDeclaratorId> '=' <VariableInitializer> ;
+
+<VariableDeclaratorId>::| <VariableDeclaratorId1> | <VariableDeclaratorId2> ;
+
+<VariableDeclaratorId1> ::= <Identifier> ; 
+<VariableDeclaratorId2> ::= <VariableDeclaratorId> '[' ']' ;
+
+<VariableInitializer>::|	<Expression>
+	|		<ArrayInitializer>
+        ;
+(* DELTA: ResultType expanded in line.
+ *
+ * ResultType has to be expanded in MethodDeclaration to multiple
+ * method declarations, as otherwise an ambiguity is introduced
+ * because of
+ *    int foo;
+ * versus
+ *    int foo();
+ * where the first parses as
+ *    Type foo
+ * and the second as
+ *    ResultType foo
+ * but we can't see far enough ahead to decide whether to reduce.
+ *)
+
+(* 8.4 *)
+<MethodDeclaration>::=	<MethodHeader>  <MethodBody> ;
+<MethodHeader>::| <MethodHeader1> | <MethodHeader2> ;
+<MethodHeader1> ::= <ModifiersOpt> <Type> <MethodDeclarator> <ThrowsOpt> ;
+<MethodHeader2>	::= <ModifiersOpt> 'VOID' <MethodDeclarator> <ThrowsOpt> ;
+
+(* ResultType: Type | VOID *)
+<MethodDeclarator> ::|	<MethodDeclarator1> | <MethodDeclarator2> ;
+<MethodDeclarator1> ::= <Identifier> '(' <FormalParameterListOpt> ')' ;
+<MethodDeclarator2> ::= <MethodDeclarator> '[' ']' ;
+
+<FormalParameterListOpt> ::? <FormalParameterList> ;
+
+<FormalParameterList> ::+ <FormalParameter> ',' ;
+
+<FormalParameter> ::= <Type> <VariableDeclaratorId> ;
+<ThrowsOpt> ::? <Throws> ;
+
+<Throws>::= 'THROWS' <ClassTypeList> ;
+<ClassTypeList>::+  <ClassType> ',' ;
+
+<MethodBody> ::| <MethodBodySep1> | <MethodBodySep2> ;
+<MethodBodySep1> ::= <Block> ;
+<MethodBodySep2> ::= <MethodBodySep> ;
+        
+<MethodBodySep> ::= ';' ;
+
+(* 8.5 *)
+<StaticInitializer>::=	'STATIC' <Block> ;
+
+(* 8.6 *)
+<ConstructorDeclaration>::=	<ModifiersOpt> <ConstructorDeclarator> 
+				<ThrowsOpt> <ConstructorBody>
+			 ;
+<ConstructorDeclarator>::=	<SimpleName> '(' <FormalParameterListOpt> ')'
+			;
+<ConstructorBody>::| <ConstructorBody1> | <ConstructorBody2> ;
+<ConstructorBody1> ::= '{' <BlockStatementsOpt> '}' ;
+<ConstructorBody2> ::= '{' <ExplicitConstructorInvocation> 
+			<BlockStatementsOpt> '}'
+		    ;	
+<ExplicitConstructorInvocation> ::| <ExplicitConstructorInvocation1>
+				  | <ExplicitConstructorInvocation2>
+				  ;
+<ExplicitConstructorInvocation1> ::= 'THIS' '(' <ArgumentListOpt> ')' ';' ;
+<ExplicitConstructorInvocation2> ::= 'SUPER' '(' <ArgumentListOpt> ')' ';' ;
+
+(* 9 *)
+
+(* 9.1 *)
+<InterfaceDeclaration>::=	<ModifiersOpt> 'INTERFACE' <Identifier> 
+				<ExtendsInterfacesOpt> <InterfaceBody>
+			;
+<ExtendsInterfacesOpt>::? <ExtendsInterfaces> ;
+<ExtendsInterfaces> ::|	<ExtendsInterfaces1> | <ExtendsInterfaces2> ;
+<ExtendsInterfaces1> ::= 'EXTENDS' <InterfaceType> ;
+<ExtendsInterfaces2> ::= <ExtendsInterfaces> ',' <InterfaceType> ;
+
+<InterfaceBody>::=		'{' <InterfaceMemberDeclarationsOpt> '}' ;
+
+<InterfaceMemberDeclarationsOpt> ::? <InterfaceMemberDeclarations> ;
+<InterfaceMemberDeclarations>::+ <InterfaceMemberDeclaration> ;
+
+<InterfaceMemberDeclaration>::| <ConstantDeclaration>
+	|		<AbstractMethodDeclaration>
+	;
+
+(* 9.3 *)
+<ConstantDeclaration> ::=	<FieldDeclaration> ;
+
+(* 9.4 *)
+<AbstractMethodDeclaration>::= <MethodHeader> ';' ;
+
+(* 10 *)
+<ArrayInitializer>::| <ArrayInitializer1> | <ArrayInitializer2> ;
+<ArrayInitializer1> ::=	'{' <VariableInitializers> <CommaOpt> '}' ;
+<ArrayInitializer2> ::= '{' <CommaOpt> '}' ;
+<CommaOpt> ::?	<comma> ;
+<comma> ::= ',' ;
+
+<VariableInitializers>::+	<VariableInitializer> ',' ;
+
+(* 13 *)
+<Block> ::=			'{' <BlockStatementsOpt> '}' ;
+<BlockStatementsOpt>::?		<BlockStatements> ;
+<BlockStatements>::+	<BlockStatement> ;
+
+<BlockStatement>::|		<LocalVariableDeclarationStatement>
+	|		<Statement>
+	;
+<LocalVariableDeclarationStatement>::= <LocalVariableDeclaration> ';' ;
+
+<LocalVariableDeclaration>::= <Type> <VariableDeclarators> ;
+
+<Statement> ::| <StmtWithoutTrailingSubStmt>
+	      | <LabeledStatement>
+	      | <IfThenStatement>
+	      | <IfThenElseStatement>
+	      | <WhileStatement>
+	      | <ForStatement>
+	      ;
+<StatementNoShortIf>::|	<StmtWithoutTrailingSubStmt1>
+	|		<LabeledStatementNoShortIf>
+	|		<IfThenElseStatementNoShortIf>
+	|		<WhileStatementNoShortIf>
+	|		<ForStatementNoShortIf>
+	;
+<StmtWithoutTrailingSubStmt1> ::= <StmtWithoutTrailingSubStmt> ;
+<StmtWithoutTrailingSubStmt>::|	<Block>
+	|		<EmptyStatement>
+	|		<ExpressionStatement>
+	|		<SwitchStatement>
+	|		<DoStatement>
+	|		<BreakStatement>
+	|		<ContinueStatement>
+	|		<ReturnStatement>
+	|		<SynchronizedStatement>
+	|		<ThrowStatement>
+	|		<TryStatement>
+	;
+<EmptyStatement>::=		';' ;
+
+<LabeledStatement>::=	<Identifier> ':' <Statement> ;
+
+<LabeledStatementNoShortIf>::= <Identifier> ':' <StatementNoShortIf> ;
+<ExpressionStatement>::=	<StatementExpression> ';' ;
+<StatementExpression>::|	<AssignmentStatement>
+	|		<PreIncrementExpression>
+	|		<PreDecrementExpression>
+	|		<PostIncrementExpression>
+	|		<PostDecrementExpression>
+	|		<MethodInvocation>
+	|		<ClassInstanceCreationExp>
+        ;
+<AssignmentStatement> ::= <Assignment> ;
+
+<IfThenStatement>::=	'IF' '(' <Expression> ')' <Statement> ;
+<IfThenElseStatement> ::= 'IF' '(' <Expression> ')' <StatementNoShortIf> 
+			  'ELSE' <Statement>
+			;
+<IfThenElseStatementNoShortIf>::= 
+		'IF' '(' <Expression> ')' <StatementNoShortIf>
+		'ELSE' <StatementNoShortIf>
+			       ;
+<SwitchStatement>::=	'SWITCH' '(' <Expression> ')' <SwitchBlock> ;
+<SwitchBlock>::=		'{' <SwitchBlockStatementGroupsOpt> '}' ;
+<SwitchBlockStatementGroupsOpt>::?	<SwitchBlockStatementGroups> ;
+<SwitchBlockStatementGroups>::+	<SwitchBlockStatementGroup> ;
+
+<SwitchBlockStatementGroup>::=	<SwitchLabels> <BlockStatements> ;
+<SwitchLabels>::+ <SwitchLabel>; 
+
+<SwitchLabel>::|	<SwitchLabel1> | <SwitchLabel2>;
+<SwitchLabel1>	::= 'CASE' <ConstantExpression> ':' ;
+<SwitchLabel2>  ::= 'DEFAULT' ':' ;
+
+<WhileStatement>::=		'WHILE' '(' <Expression> ')' <Statement> ;
+<WhileStatementNoShortIf>::= 'WHILE' '(' <Expression> ')' <StatementNoShortIf> ;
+
+<DoStatement>::= 'DO' <Statement> 'WHILE' '(' <Expression> ')' ';' ;
+
+<ForStatement>::=	'FOR' '(' <ForInitOpt> ';' <ExpressionOpt> ';' 
+			<ForUpdateOpt> ')' <Statement> 
+		;
+<ForStatementNoShortIf>::= 'FOR' '(' <ForInitOpt> ';' <ExpressionOpt> ';'
+			    <ForUpdateOpt> ')' <StatementNoShortIf>
+			;
+<ForInitOpt>::?	<ForInit> ;
+<ForInit>::|		<forInit1> 
+	|		<LocalVariableDeclaration>
+	;
+<forInit1> ::= <StatementExpressionList> ;
+<ForUpdateOpt>::?	<ForUpdate>;
+<ForUpdate>::=	<StatementExpressionList> ;
+<StatementExpressionList> ::+ <StatementExpression> ',' ;
+
+<BreakStatement>::=		'BREAK' <IdentifierOpt> ';' ;
+<IdentifierOpt>::? <Identifier> ;
+
+<ContinueStatement>::=	'CONTINUE' <IdentifierOpt> ';' ;
+<ReturnStatement>::=	'RETURN' <ExpressionOpt> ';' ;
+<ThrowStatement>::=	'THROW' <Expression> ';' ;
+<SynchronizedStatement>::=	'SYNCHRONIZED' '(' <Expression> ')' <Block> ;
+<TryStatement>::| <TryStatement1> |  <TryStatement2> | <TryStatement3> ;
+<TryStatement1>	::=	'TRY' <Block> <Finally> ;
+<TryStatement2> ::=	'TRY' <Block> <Catches> ;
+<TryStatement3>	::=	'TRY' <Block> <Catches> <Finally> ;
+<Catches>::+		<CatchClause> ;
+
+<CatchClause>::=	'CATCH' '(' <FormalParameter> ')' <Block> ;
+<Finally>::=		'FINALLY' <Block> ;
+
+<Primary>::|		<PrimaryNoNewArray>
+	|		<ArrayCreationExpression>
+	;
+<PrimaryNoNewArray>::|	<Literal>
+	|		<THIS>
+	|		<BracketedExp>
+	|		<ClassInstanceCreationExpX>
+	|		<FieldAccess>
+	|		<MethodInvocationX>
+	|		<ArrayAccess>
+	;
+<ClassInstanceCreationExpX> ::= <ClassInstanceCreationExp> ;
+<MethodInvocationX> ::= <MethodInvocation> ;
+<THIS> ::= 'THIS'; 
+<BracketedExp> ::= '(' <Expression> ')' ;
+
+<ClassInstanceCreationExp>::= 'NEW' <ClassType> '(' <ArgumentListOpt> ')' ;
+<ArgumentListOpt>::?	<ArgumentList> ;
+<ArgumentList>::+	<Expression> ',' ;
+
+<ArrayCreationExpression>::| <ArrayCreationExpression1> 
+			   | <ArrayCreationExpression2>
+			   ;
+<ArrayCreationExpression1>::= 'NEW' <ClassOrInterfaceType> <DimExprs> <DimsOpt> ;
+<ArrayCreationExpression2>::= 'NEW' <PrimitiveType> <DimExprs> <DimsOpt> ;
+
+<DimExprs>::+		<DimExpr> ;
+
+<DimExpr>::=		'[' <Expression> ']' ;
+<DimsOpt>::?	<Dims> ;
+<Dims>::|	<Dims1> | <Dims2> ;		
+<Dims1> ::= '[' ']' ;
+<Dims2> ::= <Dims> '[' ']' ;
+
+<FieldAccess>::| <FieldAccess1> | <FieldAccess2> ;
+<FieldAccess1>	::= <Primary> '.' <Identifier> ;
+<FieldAccess2>	::= 'SUPER' '.' <Identifier> ;
+<MethodInvocation>::| <MethodInvocation1> | <MethodInvocation2> 
+		    | <MethodInvocation3>;
+<MethodInvocation1> ::= <Name> '(' <ArgumentListOpt> ')' ;
+<MethodInvocation2> ::= <Primary> '.' <Identifier> '(' <ArgumentListOpt>  ')' ;
+<MethodInvocation3> ::= 'SUPER' '.' <Identifier> '(' <ArgumentListOpt> ')' ;
+<ArrayAccess>::| <ArrayAccess1> | <ArrayAccess2> ;
+<ArrayAccess1> ::=	<Name> '[' <Expression> ']' ;
+<ArrayAccess2> ::= <PrimaryNoNewArray> '[' <Expression> ']' ;
+<PostfixExpression>::|	<Primary>
+	|		<Name>
+	|		<PostIncrementExpressionX>
+	|		<PostDecrementExpressionX>
+	;
+<PostDecrementExpressionX> ::= <PostDecrementExpression> ;
+<PostIncrementExpressionX> ::= <PostIncrementExpression>;
+<PostIncrementExpression> ::= <PostfixExpression>  '++' ;
+<PostDecrementExpression> ::= <PostfixExpression> '--' ;
+<UnaryExpression> ::| <PreIncrementExpression1>
+		    | <PreDecrementExpression2>
+		    | <unaryPlus> 
+		    | <unaryMinus> 
+		    | <UnaryExpressionNotPlusMinus>
+		    ;
+<PreIncrementExpression1> ::= <PreIncrementExpression> ;
+<PreDecrementExpression2> ::= <PreDecrementExpression> ;
+<UnaryPlus> ::= '+' <UnaryExpression> ;
+<unaryMinus> ::= '-' <UnaryExpression> ;
+
+<PreIncrementExpression> ::= '++' <UnaryExpression> ;
+<PreDecrementExpression> ::= '--' <UnaryExpression> ;
+<UnaryExpressionNotPlusMinus>::| <PostfixExpression>
+	|		<unaryNegation> 
+	|		<unaryExcl> 
+	|		<CastExpression>
+	;
+<unaryNegation> ::= '~' <UnaryExpression> ;
+<unaryExcl> ::= '!' <UnaryExpression> ;
+
+(* DELTA: The form of the cast expression is changed
+ *
+ * ...to prevent an ambiguity with parenthesized expressions.
+ * When we see
+ *	(a.b)...
+ * and have (Name with an incoming ) we don't know
+ * whether to leave the symbol as a name or reduce to (Expression).
+ *
+ * We will have to constrain the (Expression) form
+ * below when this production reduces.
+ * For example:
+ *	((T)[])null
+ * should be an error, but this grammar doesn't handle
+ * this syntactically.
+ *)
+<CastExpression>::| <CastExpression1> | <CastExpression2> 
+		  | <CastExpression3> | <CastExpression4>
+		  ;
+<CastExpression1>::=	'(' <PrimitiveType> ')' <UnaryExpression> ;
+<CastExpression2>::=	'(' <PrimitiveType> <Dims> ')' <UnaryExpression> ;
+<CastExpression3>::=	'(' <Expression> ')' <UnaryExpressionNotPlusMinus> ;
+<CastExpression4>::=	'(' <Name> <Dims> ')' <UnaryExpressionNotPlusMinus> ;
+
+<MultiplicativeExpression>::| <UnaryExpression> 
+			    | <MultOpExpression>
+		            | <DivOpExpression>
+		            | <ModOpExpression>
+		            ;
+<MultOpExpression> ::= <MultiplicativeExpression> '*' <UnaryExpression>;
+<DivOpExpression> ::= <MultiplicativeExpression> '/' <UnaryExpression> ;
+<ModOpExpression> ::= <MultiplicativeExpression> '%' <UnaryExpression> ;
+
+<AdditiveExpression> ::| <MultiplicativeExpression>
+		       | <AddOpExpression>
+		       | <MinusOpExpression>
+		       ; 
+<AddOpExpression> ::= <AdditiveExpression> '+' <MultiplicativeExpression> ;
+<MinusOpExpression> ::= <AdditiveExpression> '-' <MultiplicativeExpression> ;
+
+<ShiftExpression>::| <AdditiveExpression> 
+ 		   | <ShiftLeftExpression>
+		   | <ShiftRightExpression>
+		   | <ShiftExpression4>
+	    	   ;
+
+(* OBS! The Mjolner Structured BNF has a lexical problem with 
+ * '<<' and '>>' which are  used for enclosing nonterminals. 
+ * This should be fixed!
+ *)
+<ShiftLeftExpression>  ::= <ShiftExpression> '<<.' <AdditiveExpression> ;
+<ShiftRightExpression> ::= <ShiftExpression> '>>.' <AdditiveExpression> ;
+<ShiftExpression4> ::=	<ShiftExpression> '>>>' <AdditiveExpression> ;
+
+<RelationalExpression>::| <ShiftExpression> 
+			| <LessThanExpression>
+			| <GreaterThanExpression>
+			| <LessEqualExpression>
+			| <GreaterEqualExpression>
+			| <InstanceOfExpression>
+			;
+<LessThanExpression> 	 ::= <RelationalExpression> '<' <ShiftExpression> ;
+<GreaterThanExpression>  ::= <RelationalExpression> '>' <ShiftExpression> ;
+<LessEqualExpression>	 ::= <RelationalExpression> '<=' <ShiftExpression> ;
+<GreaterEqualExpression> ::= <RelationalExpression> '>=' <ShiftExpression> ;
+<InstanceOfExpression>   ::= <RelationalExpression> 'INSTANCEOF' <ReferenceType> ;
+
+<EqualityExpression>::|	<RelationalExpression> 
+		      |	<isEqualExpression>
+		      |	<isNotEqualExpression> 
+		      ;
+<isEqualExpression> ::= <EqualityExpression> '==' <RelationalExpression> ;
+<isNotEqualExpression> ::= <EqualityExpression> '!=' <RelationalExpression> ;
+
+<AndExpression>::| <EqualityExpression> 
+		 | <AndOpExpression>
+		 ;
+<AndOpExpression> ::= <AndExpression> '&' <EqualityExpression> ;
+
+<ExclusiveOrExpression>::| <AndExpression>
+			 | <ExclusiveOrOpExpression> 
+			 ;
+<ExclusiveOrOpExpression> ::= <ExclusiveOrExpression> '^' <AndExpression> ;
+
+<InclusiveOrExpression>::| <ExclusiveOrExpression> 
+			 | <InclusiveOrOpExpression>
+			 ;
+<InclusiveOrOpExpression> ::=
+			<InclusiveOrExpression> '|' <ExclusiveOrExpression> ;
+<ConditionalAndExpression> ::| <InclusiveOrExpression>
+			     | <ConditionalAndOpExpression> 
+			     ;
+<ConditionalAndOpExpression> ::=
+		<ConditionalAndExpression> '&&' <InclusiveOrExpression> ;
+<ConditionalOrExpression> ::| <ConditionalAndExpression> 
+			    | <ConditionalOrExpression2> 
+			    ;
+<ConditionalOrExpression2> ::=	
+		<ConditionalOrExpression> '||' <ConditionalAndExpression> ;
+
+<ConditionalExpression> ::| <ConditionalOrExpression>
+			  | <ConditionalExpression2> 
+			  ;
+<ConditionalExpression2> ::=
+	<ConditionalOrExpression> '?' <Expression> ':' <ConditionalExpression>;
+<AssignmentExpression>::| <ConditionalExpression>
+			| <Assignment>
+			;
+<Assignment> ::= <LeftHandSide> <AssignmentOperator> <AssignmentExpression> ;
+<LeftHandSide>::| <LeftName>
+		| <FieldAccessX>
+		| <ArrayAccessX>
+		;
+<LeftName> ::= <Name> ;
+<FieldAccessX> ::= <FieldAccess> ;
+<ArrayAccessX> ::= <ArrayAccess> ;
+<AssignmentOperator> ::| <EqAsg>
+		| <TIMESEQ>
+		| <DIVEQ>
+		| <PCTEQ>
+		| <PLUSEQ>
+		| <MINUSEQ>
+		| <LTLTEQ>
+		| <GTGTEQ>
+		| <GTGTGTEQ>
+		| <ANDEQ>
+		| <XOREQ>
+		| <OREQ>
+		;
+<eqAsg> ::=  '=' ;
+<TIMESEQ>	::= '*=' ;
+<DIVEQ>		::= '/*' ;
+<PCTEQ>		::= '%=' ;
+<PLUSEQ>	::= '+=' ;
+<MINUSEQ>	::= '-=' ;
+<LTLTEQ>	::= '<<=' ;
+<GTGTEQ>	::= '>>=' ;
+<GTGTGTEQ>	::= '>>>=' ;
+<ANDEQ>		::= '&=' ;
+<XOREQ>		::= '^=' ;
+<OREQ>		::= '|=' ;
+
+<ExpressionOpt>::? <Expression>;
+<Expression>::=		<AssignmentExpression> ;
+<ConstantExpression>::=	<Expression> ;
+
+(* *.* *)
+<ModifiersOpt>::?	<Modifiers> ;
+<Modifiers>::+		<Modifier> ;
+
+<Modifier>::|		<PUBLIC>
+	|		<PRIVATE>
+	|		<PROTECTED>
+	|		<STATIC>
+	|		<ABSTRACT>
+	|		<FINAL>
+	|		<NATIVE> 
+	|		<SYNCHRONIZED>
+	|		<TRANSIENT>
+	|		<VOLATILE>
+	;
+<PUBLIC> ::= 'PUBLIC' ;
+<PRIVATE>	::= 'PRIVATE' ;
+<PROTECTED>	::= 'PROTECTED' ;
+<STATIC>	::= 'STATIC' ;
+<ABSTRACT>	::= 'ABSTRACT' ;
+<FINAL>	::= 'FINAL' ;
+<NATIVE> 	::= 'NATIVE' ;
+<SYNCHRONIZED>	::= 'SYNCHRONIZED' ;
+<TRANSIENT>	::= 'TRANSIENT' ;
+<VOLATILE>	::= 'VOLATILE' ;
+
+<BooleanLiteral> ::| <TRUE> | <FALSE> ;
+<TRUE> ::= 'TRUE' ;
+<FALSE> ::= 'FALSE' ;
+<StringOrCharLiteral> ::= <STRING> ;
+<IntegerOrFloatLiteral> ::= <CONST> ;
+<Identifier> ::= <nameAppl> 
