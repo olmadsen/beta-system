@@ -285,8 +285,8 @@ void printOpCode (int opcode)
     fprintf (output,"VOP_LOOKUP_SYM_OFF"); break;
   case VOP_LOOKUP_ADDRESS:
     fprintf (output,"VOP_LOOKUP_ADDRESS"); break;
-  case VOP_PROCESS_OFFSET:
-    fprintf (output,"VOP_PROCESS_OFFSET"); break;
+  case VOP_MAIN_PHYSICAL:
+    fprintf (output,"VOP_MAIN_PHYSICAL"); break;
   default:
     fprintf (output,"UNKNOWN OPCODE: %d", opcode); break;
   }
@@ -826,14 +826,12 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       valhalla_socket_flush ();
     }
     break;
-    case VOP_PROCESS_OFFSET: {
-      unsigned long offset;
-      unsigned long initlogaddr = (unsigned long)valhalla_readint();
-      DEBUG_VALHALLA(fprintf(output,"VOP_PROCESS_OFFSET(0x%x)=", (int)initlogaddr));
-      offset = (unsigned long)&Initialize - initlogaddr;
-      DEBUG_VALHALLA(fprintf(output,"0x%x\n",(int)offset));
+    case VOP_MAIN_PHYSICAL: {
+      DEBUG_VALHALLA(fprintf(output,
+			     "VOP_MAIN_PHYSICAL()=0x%x",
+			     getMainPhysical()));
       valhalla_writeint(opcode);
-      valhalla_writeint(offset);
+      valhalla_writeint(getMainPhysical());
       valhalla_socket_flush ();
     }
     break;    

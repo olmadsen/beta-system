@@ -117,13 +117,20 @@ void findNextLabel (labeltable *table)
 
 labeltable *initReadNameTable (char* execFileName, int full)
 { 
+#ifdef RTVALHALLA
   char command[100];
   labeltable *table = (labeltable*)MALLOC(sizeof(labeltable));
+#endif /* RTVALHALLA */
 
 #ifdef ppcmac
   return 0;
 #endif
 
+#ifndef RTVALHALLA
+  fprintf(output, 
+	  "initReadNameTable: cannot read symbols for stripped executable\n");
+  return 0;
+#else /* RTVALHALLA */
   if (!table){
     fprintf(output,"couldn't malloc label table for file %s\n", execFileName); 
     return 0;
@@ -163,23 +170,31 @@ labeltable *initReadNameTable (char* execFileName, int full)
 #endif /* nti */
 
   return table;
+
+#endif /* RTVALHALLA */
 }
 
 void freeNameTable(labeltable *handle)
 {
-  FREE(handle);
+  if (handle) FREE(handle);
 }
 
 #ifdef nti
 long getProcessOffset(labeltable *table, long main_physical)
 {
-  if (table->main_logical) {
+  if (table && table->main_logical) {
     return main_physical - table->main_logical;
   } else {
     return -1;
   }
 }
-#endif
+#endif /* nti */
+
+long getMainPhysical(void)
+{
+  extern void main(void);
+  return (long)&main;
+}
 
 int nextAddress(labeltable *table) 
 { 
@@ -188,6 +203,11 @@ int nextAddress(labeltable *table)
   return -1;
 #endif
 
+#ifndef RTVALHALLA
+  fprintf(output, 
+	  "nextAddress: cannot read symbols for stripped executable\n");
+  return -1;
+#else /* RTVALHALLA */
   findNextLabel(table);
   /*fprintf(output, "nextAddress: 0x%x\n", table->NextAddress); fflush(output);*/
   return table->NextAddress;
@@ -197,9 +217,10 @@ char* nextLabel(labeltable *table)
 { 
   /*fprintf(output, "nextLabel: %s\n", table->NextLabel); fflush(output);*/
   return table->NextLabel;
+#endif /* RTVALHALLA */
 }
 
-#ifdef nti
+#if defined(nti) && defined(RTVALHALLA)
 /* Implements 'nm' like behaviour for nti */
 static PSTR GetSZStorageClass(BYTE storageClass);
 static void DumpSymbolTable(labeltable *table,
@@ -408,4 +429,4 @@ static PSTR GetSZStorageClass(BYTE storageClass) {
     return "???";
 }
 
-#endif /* nti */
+#endif /* nti && RTVALHALLA */

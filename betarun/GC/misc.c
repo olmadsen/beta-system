@@ -823,10 +823,7 @@ static void initLabels(void)
     return;
   }
 #ifdef nti
-  {
-    extern void main();
-    process_offset = getProcessOffset(table, (long)&main);
-  }
+  process_offset = getProcessOffset(table, getMainPhysical);
 #endif /* nti */
   labels=(label**)MALLOC(maxLabels * sizeof(label*));
   if (!labels) {

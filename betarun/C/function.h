@@ -135,6 +135,7 @@ extern void freeNameTable(labeltable *handle);
 #ifdef nti
 extern long getProcessOffset(labeltable *handle, long main_physical);
 #endif
+extern long getMainPhysical(void);
 
 /* GC/block.c */
 extern Block * newBlock(long);
