@@ -1,31 +1,17 @@
-
-#ifdef hp9000s400
-#  include <strings.h>
-#else
-#  include <sys/types.h>
-#endif
-
-#ifdef apollo
-#  include <sys/dir.h>
-#  define DIRENT direct
-#else
-#  ifdef nti_ms
-#    include <io.h>
-#    define DIRENT _DIR
-#  else
-#    include <dirent.h>
-#    define DIRENT dirent
-#  endif
-#endif
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/file.h>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <errno.h>
+#include <time.h>
+#include <sys/param.h>
+#include <unistd.h>
+#include <sys/time.h>
 
 #ifdef nti
-#  include <stdlib.h>
-#  include <sys/types.h>
-#  include <fcntl.h>
-#  include <sys/stat.h>
-#  include <errno.h>
-#  include <stdio.h>
-#  include <time.h>
 #  include <io.h>
 #  ifdef nti_bor
 #    include <utime.h>
@@ -35,7 +21,6 @@
 #    define S_IXUSR _S_IEXEC
 #    define S_IWUSR _S_IWRITE
 #    define S_IRUSR _S_IREAD
-#    define S_IFBLK (-1) /* ??? */
 #    define ENOTSAM EXDEV
 #  endif
 #  ifdef nti_gnu
@@ -47,9 +32,12 @@
 #  include <pwd.h>
 #endif
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#ifdef nti_ms
+#  define DIRENT _DIR
+#else
+#  include <dirent.h>
+#  define DIRENT dirent
+#endif
 
 #ifndef nti
 #  define MAX_PATH       1024
@@ -285,11 +273,11 @@ char *path;
  return 1;
 }
 
-#ifdef nti
 /* entryStatus is no longer used in file implementation.
- * For selection in a directoryscan, it is, however, usefull
- * on win32 too.
+ * For selection in a directoryscan, it is, however, usefull.
  */
+
+#ifdef nti
 
 int win32EntryStatus(path,status)
      char *path;    /* IN par. denoting the path of the entry to be statted */
@@ -309,7 +297,7 @@ int win32EntryStatus(path,status)
   entryType=statBuffer.st_mode & S_IFMT;
   status[2]=( S_IFDIR  == entryType ) ? 1 : 0;
   status[3]=( S_IFCHR  == entryType ) ? 1 : 0;
-  status[4]=( S_IFBLK  == entryType ) ? 1 : 0;
+  /*status[4]=( S_IFBLK  == entryType ) ? 1 : 0;*/
   status[5]=( S_IFREG  == entryType || !entryType) ? 1 : 0;
   /* status[6]=0; /* currently not used */
   /* status[7]=0; /* currently not used */
@@ -326,6 +314,42 @@ int win32EntryStatus(path,status)
  
   return 1;
 } 
+#else /* not nti */
+#ifndef ppcmac
+
+int entryStatus(path,status,follow)
+/* In essence an "lstat" call on the entry with absolute path, path.
+ * The status of the entry is passed on to Beta by means of the
+ * two buffers, status and permission. A return of -1 indicates
+ * an error in the stat call, whereas a return of 1 means succes.
+ */
+     char *path;       /* IN par. The path of the entry to be stat'ed */
+     int  *status;     /* OUT par. The buffer must be allocated by Beta. */
+     int follow;       /* follow links ? */
+{
+  int entryType;
+  struct stat statBuffer;
+  
+  if (follow){
+    if (stat(path,&statBuffer)<0 ) 
+      return -1;    
+  } else {
+    if (lstat(path,&statBuffer)<0 ) 
+      return -1;
+  }
+  
+  /* The type of the entry */
+  entryType=statBuffer.st_mode & S_IFMT;
+  status[0]=( S_IFDIR  == entryType ) ? 1 : 0;
+  status[1]=( S_IFCHR  == entryType ) ? 1 : 0;
+  status[2]=( S_IFBLK  == entryType ) ? 1 : 0;
+  status[3]=( S_IFREG  == entryType ) ? 1 : 0;
+  status[4]=( S_IFLNK  == entryType ) ? 1 : 0;
+  status[5]=( S_IFSOCK == entryType ) ? 1 : 0;
+  
+  return 1;
+} 
+#endif /* ppcmac */
 #endif /* nti */
 
 #ifdef test

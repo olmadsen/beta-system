@@ -35,56 +35,6 @@ extern int utimes(char *file, struct timeval *tvp);
 #define SYSV
 #endif
 
-
-int entryStatus(path,status,follow)
-/* In essence an "lstat" call on the entry with absolute path, path.
- * The status of the entry is passed on to Beta by means of the
- * two buffers, status and permission. A return of -1 indicates
- * an error in the stat call, whereas a return of 1 means succes.
- */
-     char *path;       /* IN par. The path of the entry to be stat'ed */
-     int  *status;     /* OUT par. The buffer must be allocated by Beta. */
-     int follow;       /* follow links ? */
-{
-  int entryType;
-  struct stat statBuffer;
-  
-  if (follow){
-    if (stat(path,&statBuffer)<0 ) 
-      return -1;    
-  } else {
-    if (lstat(path,&statBuffer)<0 ) 
-      return -1;
-  }
-  
-  /* fill in the status buffer */
-  status[0]=(int) statBuffer.st_dev;
-  status[1]=(int) statBuffer.st_ino;
-  
-  /* The type of the entry */
-  entryType=statBuffer.st_mode & S_IFMT;
-  status[2]=( S_IFDIR  == entryType ) ? 1 : 0;
-  status[3]=( S_IFCHR  == entryType ) ? 1 : 0;
-  status[4]=( S_IFBLK  == entryType ) ? 1 : 0;
-  status[5]=( S_IFREG  == entryType ) ? 1 : 0;
-  status[6]=( S_IFLNK  == entryType ) ? 1 : 0;
-  status[7]=( S_IFSOCK == entryType ) ? 1 : 0;
-  /* status[8]=0; /* currently not used */
-  /* status[9]=0; /* currently not used */
-  status[10]=(int) statBuffer.st_nlink;
-  status[11]=(int) statBuffer.st_uid;
-  status[12]=(int) statBuffer.st_gid;
-  status[13]=(int) statBuffer.st_rdev;
-  status[14]=(int) statBuffer.st_size;
-  status[15]=(int) statBuffer.st_atime;
-  status[16]=(int) statBuffer.st_mtime;
-  status[17]=(int) statBuffer.st_ctime;
-  status[18]=(int) statBuffer.st_blksize;
-  status[19]=(int) statBuffer.st_blocks;
-  
-  return 1;
-} 
-
 /* Constants giving the mode in which files are opened */ 
 
 int readMode()

@@ -12,6 +12,24 @@ BUILD default '$$/dirInt.o' 'external/dirInt.c' '$CC -D$$ -c -o $0 $1';
 
 -- DirectoryLib: attributes ---
 
+entryStatus: External 
+  (#
+     (* The BETA version of stat.  This version is more portable than
+      * using a BETA cStruc because this way, the definition of the C-struct
+      * stat is not hardcoded into Beta but instead translated into a suitable
+      * repetition of integers.
+      *)
+     path: [1]@char;
+     statBuffer: @integer; 
+     (* The start addr. of an int-rep of 6 integers denoting
+      * the file status of the entry with path. 
+      *)
+     follow: @boolean; (* Follow links ? *)
+     status: @integer; (* -1 => error *)
+  enter(path,statBuffer,follow)
+  exit status
+  #);
+
 ScanDir: External
   (# dir: [0] @char; 
      callBack: ##external; 
@@ -114,7 +132,15 @@ DirFullPath:
 
 
 -- DirPrivate: descriptor --
-   (# cwd: ^text #)
+(# cwd: ^text;
+   statBuf: [6] @integer;
+   dostat: @
+     (# path: [0]@char;
+        follow: @boolean;
+     enter (path, follow)
+     exit (((path,@@statBuf[1],follow) -> entryStatus) = -1) 
+     #);
+#)
 
 -- DirException: descriptor --
 (# 
@@ -219,16 +245,18 @@ do (if found[]=NONE then
 	// '.' -> entry.private.path.equal 
 	// private.cwd[] -> entry.private.path.equal then
 	   (* THIS(Directory) is current directory *)
-	   (if found.private.dostat then error if);     
+	   (if (found.private.path, found.private.follow) 
+                 -> private.dostat then 
+               error 
+           if);     
 	// entry.private.path.t[1]='/' then
 	   (* Absolute path, not CWD *)
 	   (# path: @text;
 	   do entry.private.path -> path;
 	      '/' -> path.append;
 	      found.private.path[] -> path.append;
-	      (if ((path,@@found.private.statBuf[1],
-		  found.private.follow)
-                    -> entryStatus)<0 then error;
+              (if ((path,found.private.follow) -> private.dostat) then
+                  error;
 	      if);
 	   #)
 	else
@@ -239,9 +267,8 @@ do (if found[]=NONE then
 	      entry.private.path[] -> path.append;
 	      '/' -> path.append;
 	      found.private.path[] -> path.append;
-	      (if ((path,@@found.private.statBuf[1],
-		  found.private.follow)
-                    -> entryStatus)<0 then error;
+	      (if ((path,found.private.follow)->private.dostat) then
+                  error;
 	      if);
 	   #)
        if);
@@ -252,8 +279,8 @@ do (if found[]=NONE then
 (# 
 do (if not selectedInInner then
        (if 1
-	// found.private.statBuf[6] then whenfile;
-	// found.private.statBuf[3] then whendir;
+	// private.statbuf[4] then whenfile;
+	// private.statbuf[1] then whendir;
 	else
 	   whenother;
        if)
@@ -343,16 +370,16 @@ do (if true
     // '.' -> entry.private.path.equal 
     // private.cwd[] -> entry.private.path.equal then
        (* THIS(Directory) is current directory *)
-       (if found.private.dostat then error if);     
+       (if ((found.private.path, found.private.follow) -> private.dostat) then 
+           error 
+       if);     
     // entry.private.path.t[1]='/' then
        (* Absolute path, not CWD *)
        (# path: @text;
        do entry.private.path -> path;
 	  '/' -> path.append;
 	  found.private.path[] -> path.append;
-	  (if ((path,@@found.private.statBuf[1],
-	      found.private.follow)
-                -> entryStatus)<0 then error;
+	  (if ((path,found.private.follow)-> private.dostat) then error;
 	  if);
        #)
     else
@@ -363,9 +390,7 @@ do (if true
 	  entry.private.path[] -> path.append;
 	  '/' -> path.append;
 	  found.private.path[] -> path.append;
-	  (if ((path,@@found.private.statBuf[1],
-	      found.private.follow)
-                -> entryStatus)<0 then error;
+	  (if ((path,found.private.follow)-> private.dostat) then error;
 	  if);
        #)
    if);
@@ -375,8 +400,8 @@ do (if true
 (# 
 do (if not selectedInInner then
        (if 1
-    	// found.private.statBuf[6] then whenfile;
-    	// found.private.statBuf[3] then whendir;
+    	// private.statbuf[4] then whenfile;
+    	// private.statbuf[1] then whendir;
     	else
        	   whenother;
        if)
