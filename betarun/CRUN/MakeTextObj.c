@@ -35,6 +35,10 @@ void CMkTO(ref(Item) theItem,
 
 #else
 
+#ifdef crts
+     extern long a1, a2;
+#endif
+
 void MkTO(char *cText,
 	  ref(Item) theItem,
 	  unsigned offset /* i ints */ )
@@ -62,7 +66,11 @@ void MkTO(char *cText,
     Protect(theItem, theText = CAlloI((struct Object *)BasicItem, TextProto));
 #endif
 #ifdef crts
+    pushAdr((long *) a1);
+    pushAdr((long *) a2);
     Protect(theItem, theText = (struct Item *)AlloI((struct Object *)BasicItem, TextProto));
+    a2 = (long) popAdr();
+    a1 = (long) popAdr();
 #endif
 
     AssignReference((long *)theItem + offset, theText);
