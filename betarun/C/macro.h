@@ -260,6 +260,11 @@ extern long *etext;
                        ((unsigned long)(addr) < (unsigned long)&etext) )
 #endif hppa
 
+#ifdef crts
+#define isCode(addr) ((GetBetaCodeStart()<=(long)(addr)) && \
+                     ((long)(addr)<=GetBetaCodeEnd()))
+#endif
+
 #ifndef isCode
 #define isCode(addr) 0
 #endif
