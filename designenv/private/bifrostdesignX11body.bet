@@ -1,0 +1,177 @@
+ORIGIN 'bifrostobjectbody';
+INCLUDE '~beta/sysutils/v1.6/time'
+	'printdialog';
+--- hideTextOutline:descriptor --
+(# #)
+
+-- bifrostPageKeyDown:descriptor --
+(#
+(* enter (shiftKey,controlKey,altKey,shiftLockKey,keyNr,asciiCode) *)
+do
+   (if UI.veryVerbose then
+       'onKeyDown: %d\n' -> putFormat(# do ch -> d #)
+   if);
+   (shiftKey, controlKey, metaKey, false (* shift lock *), ch, ch)
+     -> theDocument.onKeyDown
+#)
+
+--LIB: attributes--
+(* Process does not handle pipes too well, so we do it manually... *)
+fputc: external
+  (# c: @char;
+     file: @integer;
+     status: @integer;
+  enter (c,file)
+  exit status
+  #);
+popen: external
+  (# command: [1]@char;
+     type: [1]@char;
+     file: @integer;
+  enter (command,type)
+  exit file
+  #);
+pclose: external
+  (# file: @integer;
+     status: @integer;
+  enter file
+  exit status
+  #);
+SIGPIPE: (# exit 13 #);
+signal: external
+  (# sig: @integer;
+     handler: ##external;
+  enter (sig, handler##)
+  #);
+EOF: 
+  (# exit -1 #);
+pipe: Stream
+  (# command: ^text;
+     file: @integer;
+     open: 
+       (# error:< exception;
+       enter command[]
+       do (command, 'w')->popen->file;
+          (if file//0 then error if);
+       #);
+     close: 
+       (# error:< exception;
+       do (if file->pclose//-1 then error if) 
+       #);
+     putError:< exception;
+     puttext::(# putc: @put; do txt.scanAll(# do ch->putc #)#);
+     put:: (# do (if (ch,file)->fputc//EOF then putError if) #);
+  #);
+
+-- printPageExecute: DoPart --
+do
+   (if UI.menuVerbose then
+       '%d: menubody-printPageExecute called but not implemented yet!\n'
+	 -> putFormat(# do ID -> d #)
+   if);
+   (#
+      pd: @UI.theGUI.printDialog
+	(#
+	   onOK::
+	     (#
+		out: ^stream;
+		outf: @file;
+		outp: @pipe;
+		pn,pgs: @integer
+	     do
+		close;
+		(if allPages then
+		    'Print all pages' -> putText;
+		    1 -> from;
+		    pl.noOfElements -> to
+		 else
+		    'Print from page ' -> putText;
+		    from -> putInt;
+		    ' to ' -> putText;
+		    to -> putInt
+		if);
+		(if toFile then
+		    ' to file: ' -> putText;
+		    fileName[] -> putLine;
+		    outf[] -> out[];
+		    fileName[] -> outf.name;
+		    outf.openWrite; 
+		 else
+		    ' using command: ' -> putText;
+		    cmd[] -> putLine;
+		    outp[] -> out[];
+		    cmd[] -> outp.open
+		if);
+		'%!PS-Adobe-3.0' -> out.putline;
+		'%%Creator: Mjolner Freja CASE tool 4.0' -> out.putLine;
+		'%%CreationDate: ' -> out.puttext;
+		systemtime -> formattime -> out.putLine;
+		'%%For: ' -> out.putText;
+		'$(USER)' -> expandEnvVar
+		  (#
+		     defaultValue:: (# do 'unkown'->envvarvalue[] #)
+		  #) -> out.putLine;
+		'%%Title: Freja diagram' -> out.putLine;
+		(* '%%BoundingBox: (atend)' -> out.putLine; *)
+		'%%Pages: (atend)' -> out.putLine;
+		'%%EndComments' -> out.putLine;
+		'%%BeginProlog' -> out.putLine;
+		'%%BeginResource: procset Mjolner-Bifrost-StandardMacros 1.0 0'
+		  -> out.putLine;
+		out.writeMacros;
+		'%%EndResource' -> out.putLine;
+		'%%EndProlog' -> out.putLine;
+		pl.scan
+		  (# 
+		     txt: @text; dp: ^theDocument.page
+		  do
+		     pn + 1 -> pn;
+		     (if (from <= pn) and (pn <= to) then
+			 pgs + 1 -> pgs;
+			 '%%Page: (' -> out.putText;
+			 current[] -> dp[];
+			 dp.pageTitle -> txt;
+			 txt[] -> out.putText;
+			 ') ' -> out.putText;
+			 pgs -> out.putInt;
+			 out.newline;
+			 '%%BeginPageSetup' -> out.putLine;
+			 '/pgsave save def' -> out.putLine;
+			 '%%EndPageSetup' -> out.putLine;
+			 out[] -> (current.ID -> UI.getApage).print;
+			 'pgsave restore' -> out.putLine;
+			 'showpage'->out.putline
+                     if)
+                  #);
+		'%%Trailer' -> out.putLine;
+		'%%Pages: ' -> out.putText; pgs -> out.putInt; out.newline;
+		'%%EOF' -> out.putLine;
+		(if toFile then outf.close else outp.close if)
+	     #);
+	   onCancel::(# do close #)
+	#);
+      pl: ^objectList
+   do
+      theDocument.getPages -> pl[];
+      (if pl.noOfElements // 0 then
+	  (NONE, 'No pages in current document', 'Print Dialog')
+	    -> UI.theGUI.alertUser
+       else
+	  (false,true,'/usr/local/bin/lpr',
+	     '/tmp/freja-print.ps',1,pl.noOfElements) -> pd.open;
+	  'Print' -> pd.title;
+	  pd.showModal;
+      if)
+   #);
+   INNER execute
+
+-- bifrostPageLoadDrawMaybe: descriptor --
+(# 
+do
+#)
+
+-- repositionTextAdjust: descriptor --
+(#
+do
+   tc.y - 2 -> tc.y
+#)

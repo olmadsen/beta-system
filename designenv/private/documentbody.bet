@@ -1,337 +1,491 @@
 ORIGIN 'designobjectbody';
+INCLUDE '~beta/bifrost/v2.3/EPSfile'
+	'~beta/basiclib/v1.6/regexp'
+	'epsprintdialog'
+	'~beta/sysutils/v1.6/time';
 -- NewDocument: Descriptor --
-(# newPage: ^Page; 
-do (* prevent the callback from New *)
-   UI.disable.MenuEventCallBack;
-   UI.disable.PostMenuEventCallBack;
-   (UI.menuID.fileMenu,UI.menuID.fileMenu.New)->designUtils.CallOAMenu;
-   (* create a new document just by simulating New in File menu *)
-   THIS(Document)[]->theDocument[];
-   onInit->newPage[];
-   (if newPage[]
-    // none then
-       &DesignPage[]->newPage[];
-       (* new document makes a new page automatically *)
-       
+(# 
+   newPage: ^Page;
+   bifid: ^UI.IDBifrost
+do
+   (if UI.verbose then
+       'NewDocument:descriptor called!'->putLine
    if);
-   UI.DSStrGetCurPage->newPage.onInit;
-   (* init page with id *)
-   newPage[]->CurrentPage;
-   (* allow onInit to create other pages *)
-   (* allow the callback from New *)
-   UI.enable.MenuEventCallBack;
-   UI.enable.PostMenuEventCallBack;
-   
-#)  
+   (if (theDocument[] = NONE) or true
+	 (* (not theDocument.modified) or *)
+	 (* ((NONE,
+	  * 'Current document needs to be saved, do you wish to proceed?',
+	  * 'yes','no') -> UI.theGUI.yesnoDialog)
+	  *)
+	 then
+       &UI.IDBifrost[]->bifid[];
+       (NONE,NONE,1) -> bifid.init;
+       (if theDocument[] <> NONE then theDocument.close (* revisit *) if);
+       (* create a new document just by simulating New in File menu *)
+       THIS(Document)[]->theDocument[];
+       onInit->newPage[];
+       (if newPage[]
+	// none then
+	   (* new document makes a new page automatically *)
+	   &DesignPage[]->newPage[];
+       if);
+       newPage.new;
+       newPage[]->CurrentPage;
+   if)
+#)
 
 -- onKeyDown: DoPart --
-do INNER onKeyDown  
-
--- setRepair: DoPart --
-do   
+do INNER onKeyDown
 
 -- fileOpenDiagram: DoPart --
 do
-     (#
-        DSFileOpenDiagram: external
-          (# ok: @Boolean; fileNameP: @integer; 
-          enter (fileNameP)
-          do 'DSFile_OpenDiagram'->callC; 
-          exit ok
-          #);
-        
-     do (@@ name.T[1])->DSFileOpenDiagram
-     #)  
+   (if UI.verbose then
+       'fileOpenDiagram:dopart called!'->putLine;
+   if);
+   &(#
+       i: @integer; bi: ^UI.IDBifrost; td: ^object; fl: ^file;
+       oldrepair: @Boolean;
+       findPageStart:
+	 (# 
+	    res: @boolean;
+	    buf: ^text;
+	 do
+	    false -> res;
+	    (if fl.eos then leave findPageStart if);
+	    fl.getLine -> buf[];
+	    buf.reset;
+	    (if '^%%Page: ' -> buf.regexp_match then
+		(if UI.verbose then buf[] -> putLine if);
+		true -> res
+	     else
+		restart findPageStart
+            if);
+	 exit res
+         #)
+    do
+       UI.dontRepair ->  oldrepair;
+       &designDocument[] -> theDocument[] -> td[];
+       &UI.IDBifrost[]->bi[];
+       (NONE,NONE,1) -> bi.init;
+       &file[] -> fl[]; name[] -> fl.name; fl.openRead;
+
+       loop:
+	 (#
+	    pg: ^UI.bifrostPage
+	 do
+	    (if findPageStart then
+		&UI.bifrostPage[] -> pg[];
+		true -> UI.dontRepair;
+		pg.open;
+		fl[] -> pg.load;
+		oldrepair -> UI.dontRepair;
+		pg.repair;
+		restart loop
+            if)
+	 #)
+    #)
 
 -- fileSavePagesAsDiagram: DoPart --
 do
-     (#
-        count: @shortRef;
-        list: @integerRef;
-        cancelled: ^integerRef;
-        prompt: @text;
-        dummyFilter: ##external
-     do
-        (if pages.range > 0 then
-            @@ pages[1]->list;
-            pages.range->count;
-            &integerRef[]->cancelled[];
-            ' '->prompt.puttext;
-            (@@ filename.T[1],false,cancelled[],true,count,list,dummyFilter##,
-             prompt)->UI.DSFileSavePagesAsDiagram
-         else
-            'fileSavePagesAsDiagram: pages.range<=0 - Nothing saved!'->putline
-        if)
-     #)  
+   (#
+      out: ^file;
+      pg: ^UI.bifrostPage;
+      dp: ^theDocument.page;
+      txt: @text
+   do
+      (if UI.verbose then
+	  'fileSavePagesAsDiagram:dopart called! ( '->putText;
+	  (for i: pages.range repeat pages[i] -> putInt; ' ' -> put for);
+	  ')' -> putLine;
+      if);
+      &file[] -> out[];
+      fileName[] -> out.name;
+      out.openWrite;
+      '%!PS-Adobe-3.0' -> out.putline;
+      '%%Creator: Mjolner Freja CASE tool 4.0' -> out.putLine;
+      '%%CreationDate: ' -> out.puttext;
+      systemtime -> formattime -> out.putLine;
+      '%%For: ' -> out.putText;
+      '$(USER)' -> expandEnvVar
+	(#
+	   defaultValue:: (# do 'unkown'->envvarvalue[] #)
+	#) -> out.putLine;
+      '%%Title: Freja diagram' -> out.putLine;
+      '%%Pages: ' -> out.putText; pages.range -> out.putInt; out.newline;
+      '%%EndComments' -> out.putLine;
+      '%%BeginProlog' -> out.putLine;
+      '%%BeginResource: procset Mjolner-Bifrost-StandardMacros 1.0 0'
+	-> out.putLine;
+      out.writeMacros;
+      '%%EndResource' -> out.putLine;
+      '%%EndProlog' -> out.putLine;
+      (for i: pages.range repeat
+	   pages[i] -> UI.getApage -> pg[];
+	   pages[i] -> theDocument.theObjectList.find -> dp[];
+	   '%%Page: (' -> out.putText;
+	   dp.pageTitle -> txt;
+	   txt[] -> out.putText;
+	   ') ' -> out.putText;
+	   i -> out.putInt;
+	   out.newline;
+	   '%%BeginPageSetup' -> out.putLine;
+	   '/pgsave save def' -> out.putLine;
+	   '%%EndPageSetup' -> out.putLine;
+	   out[] -> pg.print;
+	   'pgsave restore' -> out.putLine;
+	   'showpage'->out.putline
+      for);
+      '%%Trailer' -> out.putLine;
+      '%%EOF' -> out.putLine;
+      (* '% ' -> out.putText; *)
+      (* out[] -> UI.bifrostObjectList.rep[1].UD.save; *)
+      out.close;
+      'Succesfully saved the diagram' -> putLine
+   #)
 
 -- fileSavePage: DoPart --
-do
-     (# cancelled: ^integerRef; name: ^text
-     do
-        &integerRef[]->cancelled[];
-        (if filename[] <> none then
-            (@@ filename.T[1],false,cancelled[])->UI.DSFileSavePage
-         else
-            'untitled'->name[];
-            (@@ name.T[1],true,cancelled[])->UI.DSFileSavePage
-        if)
-     #)  
+do 
+   (if UI.verbose then 'fileSavePage:dopart called!'->putLine if);
+   (#
+      mypd: UI.theGUI.ppageDialog
+	(# 
+	   open::
+	     (# do 'EPS file options' -> THIS(mypd).title #);
+	   onOK::
+	     (# 
+	     do
+		(if UI.verbose then
+		    'file "%s"%s%s' -> putFormat
+		      (#
+		      do
+			 filename[] -> s;
+			 (if scaled then
+			     ' scaled' -> s
+			  else
+			     '' -> s
+			 if);
+			 (if scaleToFit then
+			     ' scale to fit ' -> s;
+			     scale -> putInt;
+			  else
+			     '' -> s
+			 if);
+		      #);
+		    newLine
+                if);
+		close;
+		(fileName[],scaled,scaleToFit,scale)
+		  -> UI.currentBifrostPage.save
+	     #)
+	#);
+      pd: @mypd
+   do
+      ('unamed.eps',false,false,100)
+	-> pd.open;
+      pd.showModal
+   #);
 
 -- fileLoadPage: DoPart --
-do
-     (#
-        pageCount: ^shortRef;
-        pageList,cancelled: ^integerRef;
-        name: ^text;
-        replyName: @Text
-     do
-        &shortRef[]->pageCount[];
-        &integerRef[]->pageList[];
-        &integerRef[]->cancelled[];
-        'noname'->replyName;
-        (if filename[] <> none then
-            (@@ filename.T[1],false,pageCount[],pageList[],cancelled[],@@
-             replyName.T[1])->UI.DSFileLoadPage
-         else
-            'untitled'->name[];
-            (@@ name.T[1],true,pageCount[],pageList[],cancelled[],@@
-             replyName.T[1])->UI.DSFileLoadPage
-        if);
-        (if cancelled = 0 then (pageCount,pageList)->GetIntList->pages if)
-     #)  
-
--- fileGetCurrentDiagName: DoPart --
-do @@ name.T[1]->UI.DSFileGetCurrentDiagName  
+do 'fileLoadPage:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- abortCommand: DoPart --
-do UI.DSUIAbortCommand  
+do 'abortCommand:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- DocumentID: Descriptor --
-(#  do UI.DSStrGetDocID->i;  #)  
+(# do 1 -> i #)
 
 -- setDocModified: DoPart --
-do b->UI.DSStrSetDiagModified; INNER set  
+do 'setDocModified:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- getDocModified: DoPart --
-do UI.DSStrGetDiagModified->b; INNER get  
+do 'getDocModified:dopart called, but not implemented yet!'->putLine; INNER;
+   true -> b
+
+-- currentPagePrivate: descriptor --
+(# thePage: ^page #)
 
 -- SetPage: Descriptor --
-(# 
-do
-   (if p.ID->UI.DSStrSetCurPage
-    // true then p.ID->privatepart.currentPageID; 
-    else
-       'SetPage failed; error ID: '->putline; 
+(# t: ^text;
+do (if UI.Verbose then
+       'SetPage:descriptor called!' -> putLine
    if);
-   
-#)  
+   (if p[] // NONE then
+       'Warning: CurrentPage set to NONE!!!' -> putLine
+    else
+       p.ID -> UI.getApage -> UI.currentBifrostPage[];
+       (* UI.currentBifrostPage.updateMenuBar *)
+       (UI.currentBifrostPage.theMenuBar).checkMenuBar
+   if);
+   p[] -> private.thePage[];
+   &text[] -> t[];
+   private.thePage.pagetitle -> t;
+   t[] -> UI.theMain.theStatusBar.label;
+#)
+
 
 -- GetPage: Descriptor --
-(# 
-do (* test whether current is the same page *)
-   (if (UI.DSStrGetCurPage->pid) <> privatepart.currentPageID
-    // true then (* no find the new page *)
-       pid->theObjectList.Find->p[]; pid->privatepart.currentPageID; 
+(#
+do
+   (if UI.extremelyVerbose then
+       'GetPage:descriptor called!' -> putLine
    if);
-   (if p[] // none then 'GetPage: page is none'->putline if);
-   
-#)  
+   private.thePage[] -> p[];
+   (if p[] // NONE then 'Warning! No current page' -> putLine if)
+#)
 
 -- getPageList: DoPart --
 do
-     (# count: @ShortRef; listRef: @IntegerRef; 
-     do
-        (count[],listRef[])->UI.DSStrGetPageList;
-        (count,listRef)->GetIntList->pages
-     #)  
+   (if UI.Verbose then
+       'getPageList:dopart called!'->putLine
+   if);
+   UI.getPageList -> pages
 
 -- GetPages: Descriptor --
-(# count: @ShortRef; listRef: @IntegerRef; 
-do (* get the pages from design/oa and make a list... *)
-   (count[],listRef[])->UI.DSStrGetPageList;
-   (count,listRef)->GetIntList->theObjectList.NodeIDsToList->pagelist[];
-   
+(#
+do (if UI.Verbose then
+       'GetPages:descriptor called!'->putLine
+   if);
+   &ObjectList[] -> pageList[];
+   theObjectList.scan
+     (#
+     do (if current## <= page## then
+	    current[] -> pagelist.insert;
+	    (* (if UI.verbose then 'Hit a page' -> putLine if) *)
+	    (* else *)
+	    (* (if UI.verbose then 'Didn\'t hit a page' -> putLine if) *)
+	if)
+     #)
 #)
-(*************************** GLOBAL **********************************)  
 
 -- MaxGroupSize: Descriptor --
-(#  do UI.DSRdAttrGetMaxGroupSize->size;  #)  
+(#
+do 'MaxGroupSize:descriptor called, but not implemented yet!'->putLine;
+#)
 
 -- PolyGetSide: Descriptor --
-(# sidesRef: ^shortRef; orientRef: ^integerRef; 
-do (sidesRef[],orientRef[])->UI.DSRdAttrPolyDefaults; sidesRef->side; 
-#)  
+(#
+do 'PolyGetSide:descriptor called, but not implemented yet!'->putLine;
+#)
 
 -- PolySetSide: Descriptor --
-(# sidesRef: ^shortRef; orientRef: ^integerRef; 
-do
-   (sidesRef[],orientRef[])->UI.DSRdAttrPolyDefaults;
-   (if (side,orientRef)->UI.DSWtAttrRegularPolyInfo
-    // false then 'PolySetSide: could not set'->putline; 
-   if);
-   
-#)  
+(#
+do 'PolySetSide:descriptor called, but not implemented yet!'->putLine;
+#)
 
 -- PolyGetOrient: Descriptor --
-(# sidesRef: ^shortRef; orientRef: ^integerRef; 
-do (sidesRef[],orientRef[])->UI.DSRdAttrPolyDefaults; orientRef->orient; 
-#)  
+(#
+do 'PolyGetOrient:descriptor called, but not implemented yet!'->putLine;
+#)
 
 -- PolySetOrient: Descriptor --
-(# sidesRef: ^shortRef; orientRef: ^integerRef; 
-do
-   (sidesRef[],orientRef[])->UI.DSRdAttrPolyDefaults;
-   (if (sidesRef,orient)->UI.DSWtAttrRegularPolyInfo
-    // false then 'PolySetOrient: could not set'->putline; 
-   if);
-   
+(#
+do 'PolySetOrient:descriptor called, but not implemented yet!'->putLine;
 #)
-(*********** CURSOR HANDLING ***********)  
 
 -- SetCursor: Descriptor --
-(#  do ID->UI.DSUIChangeCursor->oldCurs;  #)  
+(#  do 'SetCursor:descriptor called, but not implemented yet!'->putLine;  #)
 
 -- RestoreCursor: Descriptor --
-(#  do oldCurs->UI.DSUIChangeCursor;  #)  
+(#
+do 'RestoreCursor:descriptor called, but not implemented yet!'->putLine;
+#)
 
 -- ResetCursor: Descriptor --
-(#  do CrossHair->set;  #)  
+(#
+do 'ResetCursor:descriptor called, but not implemented yet!'->putLine;
+#)
 
 -- SetStatusBar: Descriptor --
-(#  do msg->UI.DSUISetStatusBarMessage;  #)  
+(#
+do 
+   (if UI.verbose then
+       'SetStatusBar:descriptor called! \'%s\'\n'
+	 -> putFormat(# do msg[] -> s #)
+   if);
+   (if UI.currentBifrostPage[] <> NONE then
+       msg[] -> UI.currentBifrostPage.infoBar.label
+   if)
+#)
 
 -- ResetStatusBar: Descriptor --
-(#  do UI.DSUIRestoreStatusBar;  #)  
+(#
+do
+   (if UI.verbose then 'ResetStatusBar:descriptor called!' -> putLine if);
+   (if UI.currentBifrostPage[] <> NONE then
+       UI.currentBifrostPage.updateInfoBar
+   if)
+#)
 
 -- shapeRectangle: DoPart --
-do 1->v  
+do
+   1 -> v
 
 -- shapeEllipse: DoPart --
-do 2->v  
+do
+   2 -> v
 
 -- shapePolygon: DoPart --
-do 3->v  
+do
+   3 -> v
 
 -- shapeRndRect: DoPart --
-do 4->v  
+do
+   4 -> v
 
 -- shapeWedge: DoPart --
-do 5->v  
+do
+   5 -> v
 
 -- shapePicture: DoPart --
-do 6->v  
+do
+   6 -> v
 
 -- shapeLine: DoPart --
-do 7->v  
+do
+   7 -> v
 
 -- shapeStraightConn: DoPart --
-do 20->v  
+do
+   8 -> v
 
 -- shapeCurveTopConn: DoPart --
-do 21->v  
+do
+   9 -> v
 
 -- shapeCurveSideConn: DoPart --
-do 22->v  
+do
+   10 -> v
 
 -- fontSystemFont: DoPart --
-do 0->v  
+do 'fontSystemFont:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- fontSystem: DoPart --
-do 0->v  
+do 'fontSystem:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- fontApplFont: DoPart --
-do 1->v  
+do 'fontApplFont:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- fontNewYork: DoPart --
-do 2->v  
+do 'fontNewYork:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- fontGeneva: DoPart --
-do 3->v  
+do (if UI.Verbose then 'fontGeneva:dopart called!'->putLine if);
+   UI.theMain.helvetica -> v
 
 -- fontMonaco: DoPart --
-do 4->v  
+do 'fontMonaco:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- fontVenice: DoPart --
-do 5->v  
+do 'fontVenice:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- fontLondon: DoPart --
-do 6->v  
+do 'fontLondon:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- fontAthens: DoPart --
-do 7->v  
+do 'fontAthens:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- fontRoman: DoPart --
-do 7->v  
+do 'fontRoman:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- fontSanFran: DoPart --
-do 8->v  
+do 'fontSanFran:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- fontScript: DoPart --
-do 8->v  
+do 'fontScript:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- fontToronto: DoPart --
-do 9->v  
+do 'fontToronto:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- fontCairo: DoPart --
-do 11->v  
+do 'fontCairo:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- fontLosAngeles: DoPart --
-do 12->v  
+do 'fontLosAngeles:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- fontModern: DoPart --
-do 12->v  
+do 'fontModern:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- fontTimes: DoPart --
-do 20->v  
+do 'fontTimes:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- fontTmsRoman: DoPart --
-do 20->v  
+do 'fontTmsRoman:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- fontHelvetica: DoPart --
-do 21->v  
+do (if UI.Verbose then 'fontHelvetica:dopart called!'->putLine if);
+   UI.theMain.helvetica -> v
 
 -- fontCourier: DoPart --
-do 22->v  
+do 'fontCourier:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- fontSymbol: DoPart --
-do 23->v  
+do 'fontSymbol:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- fontTaliesin: DoPart --
-do 24->v  
+do 'fontTaliesin:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- fontTerminal: DoPart --
-do 24->v  
+do 'fontTerminal:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- textJustLeftJustification: DoPart --
-do 1->v  
+do (if UI.Verbose then
+       'textJustLeftJustification:dopart called!' -> putLine
+   if);
+   1 -> v;
 
 -- textJustCentered: DoPart --
-do 2->v  
+do (if UI.Verbose then 'textJustCentered:dopart called!'->putLine if);
+   2 -> v;
 
 -- textJustRightJustification: DoPart --
-do 0->v  
+do (if UI.Verbose then
+       'textJustRightJustification:dopart called!' -> putLine
+   if);
+   3 -> v;
 
 -- textStylePlaintext: DoPart --
-do 0->v  
+do
+   'textStylePlaintext:dopart called, but not implemented yet!'->putLine;
+   INNER;
+
 
 -- textStyleBold: DoPart --
-do 2->v  
+do (if UI.Verbose then 'textStyleBold:dopart called!'->putLine if);
+   UI.theMain.bold -> v
 
 -- textStyleItalic: DoPart --
-do 4->v  
+do
+   (if UI.verbose then 'textStyleItalic:dopart called!'->putLine if);
+   UI.theMain.italic -> v
 
 -- textStyleUnderLine: DoPart --
-do 8->v  
+do
+   'textStyleUnderLine:dopart called, but not implemented yet!'->putLine;
+   INNER;
+
 
 -- textStyleOutLine: DoPart --
-do 16->v  
+do
+   'textStyleOutLine:dopart called, but not implemented yet!'->putLine;
+   INNER;
 
 -- textStyleShadow: DoPart --
-do 32->v  
+do
+   'textStyleShadow:dopart called, but not implemented yet!'->putLine; INNER;
 
 -- textStyleCondense: DoPart --
-do 64->v  
+do
+   'textStyleCondense:dopart called, but not implemented yet!'->putLine;
+   INNER;
 
 -- textStyleExtented: DoPart --
-do 128->v  
+do
+   'textStyleExtented:dopart called, but not implemented yet!'->putLine;
+   INNER;
 
+-- fileGetCurrentDiagName: DoPart --
+do
+   'fileGetCurrentDiagName:dopart called, but not implemented yet!'->putLine;
+
+-- DocumentPrivatePart: Descriptor --
+(# #)
