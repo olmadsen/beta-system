@@ -788,10 +788,10 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
   P("Legend:");
   P("");
   P("The above dump shows the dynamic call stack of invoked objects. The dump starts ");
-  P("at the object that were the current object when the error occurred, and continues");
+  P("at the object that was the current object when the error occurred, and continues");
   P("downwards towards the basic component.");
   P("");
-  P("The description of the objects have the following meaning:");
+  P("The description of the objects has the following meaning:");
   P("");
   P("1. Items are shown with two lines, like this:");
   P("  ");
@@ -803,8 +803,8 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
   P("   This item is defined in the file \"ifile\".");
   P("   The part of the prefix chain enclosed in \"<\" and \">\" indicates where");
   P("   in the action sequence the error occurred.");
-  P("   The line beginning with \"--\" shows the textually surrounding descriptor in");
-  P("   the same notation.");
+  P("   The line beginning with \"--\" shows the textually surrounding descriptor");
+  P("   using the same notation.");
   P("");
   P("2. The descriptor names used in the above description will normally have one or");
   P("   more \"meta characters\" appended. The meaning of these are:");
