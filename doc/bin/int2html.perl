@@ -30,41 +30,52 @@ EOT
 
 sub print_index_toc
 {
-print<<EOT;
-<P>
-</PRE>
-<STRONG><A HREF="#_A">A</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_B">B</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_C">C</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_D">D</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_E">E</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_F">F</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_G">G</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_H">H</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_I">I</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_J">J</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_K">K</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_L">L</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_M">M</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_N">N</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_O">O</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_P">P</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_Q">Q</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_R">R</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_S">S</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_T">T</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_U">U</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_V">V</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_W">W</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_X">X</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_Y">Y</A></STRONG> &nbsp;	       
-<STRONG><A HREF="#_Z">Z</A></STRONG> &nbsp;
-<P>
-<HR>
-<P>
-<PRE CLASS=interface>
-EOT
+    local ($i, $ch);
+    print "<P>\n</PRE>\n";
+    for ($i=65; $i<=90; $i++){
+	$ch = sprintf ("%c", $i);
+	if ($caps{$ch}){
+	    print "<STRONG><A HREF=\"#_$ch\">$ch</A></STRONG> &nbsp; \n";
+	} else {
+	    # no indices starting with $ch
+	    print "<STRONG>$ch</STRONG> &nbsp; \n";
+	}	    
+    }
+    print "<P>\n<HR>\n<P>\n<PRE CLASS=interface>\n";
+}
 
+sub print_index
+{
+    @index = sort @index;
+    local ($html_index, $initial_ch);
+
+    $html_index = "";
+
+    print "</PRE><HR><H2><A name=\"Index.identifiers\">Index of Identifiers</H2><PRE CLASS=interface>";
+
+    for($i = 0; $i <= $#index; $i++) {
+	$_ = $index[$i];
+	s/(\s*\w+)\.\d+/$1/g;
+	s/\(\d+\)//g;
+	while ( m/[ :](\w+)\.(\d+)[:\}]/ ) {
+	    $id = $1; $level = $2;
+	    $indents = $indent x ($level-1);
+	    s/([ \:])$id\.$level([\:])/$1$indents$id$2/;
+	}
+	
+	# Generate caps heading at first occurrence of a letter.
+	$initial_ch = $index[$i];
+	$initial_ch = "\U$initial_ch";
+	$initial_ch = substr($initial_ch, 0, 1);
+	if (! $caps{$initial_ch} ){
+	    $html_index .= "</PRE><H3><A name=\"_$initial_ch\">$initial_ch<\/A><\/H3><PRE CLASS=interface>\n";
+	    $caps{$initial_ch} = 1;
+	}
+
+	$html_index .= "<A href=\"#" . $index[$i] . "\">" . $_ . "</a>\n";
+    }
+    &print_index_toc;
+    print $html_index;
 }
 
 ################ MAIN ####################
@@ -388,33 +399,7 @@ s/\004/:/g;
 
 print;
 
-@index = sort @index;
-
-
-print "</PRE><HR><H2><A name=\"Index.identifiers\">Index of Identifiers</H2><PRE CLASS=interface>";
-&print_index_toc;
-    
-for($i = 0; $i <= $#index; $i++) {
-    $_ = $index[$i];
-    s/(\s*\w+)\.\d+/$1/g;
-    s/\(\d+\)//g;
-    while ( m/[ :](\w+)\.(\d+)[:\}]/ ) {
-	$id = $1; $level = $2;
-	$indents = $indent x ($level-1);
-	s/([ \:])$id\.$level([\:])/$1$indents$id$2/;
-    }
-    
-    # Generate caps heading at first occurrence of a letter.
-    $initial_ch = $index[$i];
-    $initial_ch = "\U$initial_ch";
-    $initial_ch = substr($initial_ch, 0, 1);
-    if (! $caps{$initial_ch} ){
-	print "</PRE><H3><A name=\"_$initial_ch\">$initial_ch<\/A><\/H3><PRE CLASS=interface>\n";
-	$caps{$initial_ch} = 1;
-    }
-
-    print "<A href=\"#" . $index[$i] . "\">" . $_ . "</a>\n";
-}
+&print_index();
 
 &print_trailer();
 
