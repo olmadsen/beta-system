@@ -22,7 +22,7 @@
 #else
 #include <C/beta.h>
 #include <C/data.h>
-#end
+#endif
 
 #ifdef sparc
 #include <CRUN/crun.h>
@@ -118,7 +118,8 @@ int getNextDangler ()
    static void
 #else
    static inline void
-#end
+#endif
+
    AssignReference(long *theCell, ref(Item) newObject)
    {
      *(struct Item **)theCell = newObject;
