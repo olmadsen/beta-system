@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CopyValRep.c,v 1.17 1992-10-21 09:26:15 beta Exp $
+ * Mod: $Id: CopyValRep.c,v 1.18 1992-10-21 09:31:10 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -33,13 +33,13 @@ void CopyVR(ref(ValRep) theRep,
        * the cell actually referencing the repetition is remembered. This cell
        * will be updated if the repetition is moved.
        */
-      long cycleCell  = theRep->GCAttr; /* Cell that references the repetition */
+      long *cycleCell  = (long *) theRep->GCAttr; /* Cell that references the repetition */
       
       DEBUG_LVRA(fprintf(output, "CopyValRep allocates in LVRA\n"));
 		
-      newRep = LVRAAlloc(tmpRep->Proto, range);
+      newRep = LVRAAlloc(theRep->Proto, range);
       /* update theRep, it may have been moved by LVRACompaction */
-      theRep = *cycleCell;
+      theRep = cast(ValRep) *cycleCell;
     }
     if (newRep) {
 	/* Make the LVRA-cycle of the new repetition */
