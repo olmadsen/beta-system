@@ -20,6 +20,8 @@ searchBrowser: ymerLocalWindow
      showSourceLine:< booleanValue;
      clear: contents.clear (#  #);
      fg: ^mps.AST.fragmentGroup;
+     ff: ^astInterface.fragmentForm;
+     node: ^astInterface.ast;
      showAllHits: @boolean;
      fgName: ^text;
      (* isWarning:
@@ -111,7 +113,7 @@ searchBrowser: ymerLocalWindow
                       #);
                     ffItem: listItem
                       (#
-                         ff: ^mps.AST.fragmentForm;
+                         astRoot: ^mps.AST.ast;
                          firstTime: @boolean;
                          nodes: @list (# element:: node #);
                          onSelect:: 
@@ -122,9 +124,10 @@ searchBrowser: ymerLocalWindow
                                   fi[]->current[];
                                   THIS(ffItem)[]->nodesList.contents.setView;
                                   (if firstTime then
-                                      false->firstTime; ff[]->onNewfragmentForm
+                                      false->firstTime;
+                                      astRoot.frag[]->onNewfragmentForm
                                    else
-                                      ff[]->onSelectFragmentForm
+                                      astRoot.frag[]->onSelectFragmentForm
                                   if)
                               if)
                            #);
@@ -141,9 +144,9 @@ searchBrowser: ymerLocalWindow
                          
                       enter theffItem[]
                       do
-                         (if theffItem.ff.root.kind = mps.AST.kinds.interior
+                         (if theffItem.astRoot.kind = mps.AST.kinds.interior
                           then
-                             theffItem.ff.root[]->exp[];
+                             theffItem.astRoot[]->exp[];
                              exp.suffixWalk
                                (# 
                                do
@@ -168,26 +171,47 @@ searchBrowser: ymerLocalWindow
                       (#
                          exp: ^mps.AST.expanded;
                          fi: ^ffItem;
-                         fg: ^mps.AST.fragmentGroup;
-                         ff: ^mps.AST.fragmentForm;
+                         searchfg: ^mps.AST.fragmentGroup;
+                         ff,searchff: ^mps.AST.fragmentForm;
+                         searchNode,searchRoot: ^mps.AST.ast;
                          OK: @boolean
-                      enter fg[]
+                      enter (searchfg[],searchff[],searchNode[])
                       do
                          true->noNodes;
                          none ->nodesList.contents.current[];
-                         (if fg[] <> none then
-                             fg.fragmentList.scan
+                         (if searchfg[] <> none then
+                             searchfg.fragmentList.scan
                                (# 
                                do
                                   (if current.type
                                    // mps.AST.formType then
+                                      thisFragment:
                                         (# 
                                         do
                                            current.open->ff[];
                                            (if ff[] <> none then
-                                               (if ff.root.kind =
-                                               mps.AST.kinds.interior then
-                                                   ff.root[]->exp[];
+                                               (if searchff[] = none then
+                                                   ff.root[]->searchRoot[]
+                                                else
+                                                   (if
+                                                   searchff.name
+                                                     ->(ff.name).equal then
+                                                       (if searchNode[] = none
+                                                        then
+                                                           ff.root[]
+                                                             ->searchRoot[]
+                                                        else
+                                                           searchNode[]
+                                                             ->searchRoot[]
+                                                       if)
+                                                    else
+                                                       leave thisFragment
+                                                   if)
+                                               if);
+                                               (if
+                                               (searchRoot.kind =
+                                                mps.AST.kinds.interior) then
+                                                   searchRoot[]->exp[];
                                                    l: exp.suffixWalk
                                                      (# t,dummy: ^text
                                                      do
@@ -197,7 +221,8 @@ searchBrowser: ymerLocalWindow
                                                             &ffItem[]->fi[];
                                                             fi.init;
                                                             true->fi.firstTime;
-                                                            ff[]->fi.ff[];
+                                                            searchRoot[]
+                                                              ->fi.astRoot[];
                                                             fgName.copy->t[];
                                                             '-'->t.append;
                                                             ff.name->t.append;
@@ -390,12 +415,13 @@ searchBrowser: ymerLocalWindow
      clearBrowser: (#  do clear; contents.FFlist.clear #);
      registerFragmentGroup:
        (# fgSet: @set (# element:: mps.ast.fragmentgroup #)
-       enter fg[]
+       enter (fg[],ff[],node[])
        do
           clearBrowser;
           (if fg[] <> none then
               fg.name->fgName[];
-              fg[]->contents.FFlist.contents.registerFragmentForms;
+              (fg[],ff[],node[])
+                ->contents.FFlist.contents.registerFragmentForms;
               noNodes->setTitle
            else
               (if browser.currentProject[] <> none then
@@ -407,7 +433,7 @@ searchBrowser: ymerLocalWindow
                            (if not (fg[]->fgSet.has) then
                                fg[]->fgSet.insert;
                                fg.name->fgName[];
-                               fg[]
+                               (fg[],ff[],node[])
                                  ->
                                    contents.FFlist.contents.
                                      registerFragmentForms
@@ -424,7 +450,13 @@ searchBrowser: ymerLocalWindow
      type::  (#  do (*windowTypes.palette->value*)  #);
      open::< 
        (# w,h: @integer; 
-       do hide; INNER open; contents.open; fg[]->registerFragmentGroup; show; 
+       do
+          hide;
+          INNER open;
+          contents.open;
+          (fg[],ff[],node[])->registerFragmentGroup;
+          show;
+          
        #)
   #);
 searchViewer: searchBrowser
@@ -491,7 +523,11 @@ searchViewer: searchBrowser
                reloadItem: @menuItem
                  (#
                     eventHandler:: 
-                      (# onSelect::  (#  do fg[]->registerFragmentGroup #)
+                      (#
+                         onSelect:: 
+                           (# 
+                           do (fg[],ff[],node[])->registerFragmentGroup
+                           #)
                       #);
                     open::  (#  do 'r'->key; 'Reload'->name #)
                  #);
@@ -579,7 +615,11 @@ mySemanticViewer: searchBrowser
                reloadItem: @menuItem
                  (#
                     eventHandler:: 
-                      (# onSelect::  (#  do fg[]->registerFragmentGroup #)
+                      (#
+                         onSelect:: 
+                           (# 
+                           do (fg[],ff[],node[])->registerFragmentGroup
+                           #)
                       #);
                     open::  (#  do 'r'->key; 'Reload'->name #)
                  #);
@@ -634,7 +674,7 @@ mySemanticViewer: searchBrowser
                            (# 
                            do
                               not checked->checked->includeWarnings;
-                              fg[]->registerFragmentGroup
+                              (fg[],ff[],node[])->registerFragmentGroup
                            #)
                       #);
                     open::  (#  do 'i'->key; 'Include'->name #);
