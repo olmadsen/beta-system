@@ -1,3 +1,4 @@
+
 #include <stdio.h>
 char *ident( r) char *r; { return r; }
 int  giveMe1Argument(a,b,c) int a,b,c; { return a; }
@@ -6,17 +7,17 @@ int  giveMe3Argument(a,b,c) int a,b,c; { return c; }
 int sumMany(a,b,c,d,e,f,g,h,i,j) int a,b,c,d,e,f,g,h,i,j;
 {return a+b+c+d+e+f+g+h+i+j; }
 
+void doCallBar(f)
+     void (*f)();
+{
+  f();
+}
+
 int doCallBack(f)
 int (*f)();
 {int x;
    x=f('l',"mn",'!','!','!','!','!','o');
    return x;  
-}
-
-void doCallBar(f)
-void (*f)();
-{
-   f();
 }
 
 typedef double real;        /* The C representation of a Beta real.  */
@@ -32,13 +33,10 @@ real rcopy(x1)
   {
    return(x1);
   }
+real tau(){double x; x=3.0; return (x); }
 
 void outr(a,b,r) int a,b; double r;{printf("int=%d,%d,real:%lf\n",a,b,r);}
-void sprint2(a,b,r) 
-char *a; 
-char * b; 
-double r;
-{ int i; 
+void sprint2(a,b,r) char *a; const char * b; double r;{int i; 
   printf("buffer=%s,control=%s,real=%lf\n",a,b,r);
 
   sprintf(a,b,r);
@@ -83,3 +81,4 @@ char *XdataToText(r) struct Xdata *r;
     }
   else {return "???";}
 }
+
