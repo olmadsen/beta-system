@@ -44,6 +44,10 @@ extern long *BETA_end; /* C-variable */
 #endif
 #endif
 
+#ifdef crts
+#include "crtsdep.h"
+#endif
+
 #ifdef sparc
 #include "sparcdep.h"
 #endif
