@@ -2,6 +2,7 @@ ORIGIN 'bytecodebackend';
 include '~beta/basiclib/file';
 INCLUDE '~beta/basiclib/fileSetExe';
 INCLUDE '~beta/sysutils/pathhandler';
+INCLUDE '~beta/toollibs/utils/fileExtensions';
 
 -- machinefactorylib: Attributes --
 generateDebugInfo:  (# exit common.switch[41] #);
@@ -141,7 +142,9 @@ splitClassSignature: SplitSignature
                           *)
    thisSuperName: ^text;
    thisInnerMethodName: ^text;
-   thisOrgName, thisSuperOrgName: ^text;
+   thisOrgName, 
+   thisSuperOrgName,
+   thisModuleName: ^text;
    subLevel: @integer;
    class: ^text;       (* name of class being called - 
                         * used by subsequent init - ugly
@@ -158,7 +161,7 @@ splitClassSignature: SplitSignature
      @integer;
    numTempLocals: @integer;
    
-   preF: @file
+   preF: @ (*file*) text
      (# emitcomment:
           (# txt: ^Text
           enter txt[]
@@ -200,7 +203,24 @@ splitClassSignature: SplitSignature
              sym[] -> emitsymbol;
              newline;
           #);
+        emitToFile:
+          (# F: @file; fn: ^text
+          do thisFileName[] -> (thisFullPath.copy).append -> fn[];
+             '.pra' -> (fn.copy).AppendExtension -> F.name;
+             F.openWrite;
+	     imports.scan
+             (# e: @diskEntry
+             do current[] -> e.path;  
+                (if not (e.path.name -> classes.has) then
+                    '.requires ' -> F.puttext; e.path.name -> F.putline;
+                if)
+             #);
+             F.newline;
+             preF[] -> F.puttext;
+             F.close
+          #)
      #);
+
    
    fields: @
      (# Field,FieldName: [5] ^text; Type: [5] ^text; Tag: [5] @char;
@@ -324,6 +344,16 @@ splitClassSignature: SplitSignature
         if)
         if)*)
      #);
+
+   unTick:
+  (# t: ^text;
+  enter t[]
+  do (if ((1 -> t.inxGet) = '\'') AND ((t.length -> t.inxGet) = '\'') then
+         (2, t.length - 1) -> t.sub -> t[];
+     if);
+  exit t[]
+  #);
+
    imports: @
      (# L: [100] ^text; top: @integer;
         clear: (#do 0 -> top #);
@@ -331,14 +361,14 @@ splitClassSignature: SplitSignature
           (# id: ^text
           enter id[]
           do (for i: top repeat
-                  (if id[] -> L[i].equal then 
+                  (if id[] -> L[i].equal then                       
                       true -> value; 
                       leave has 
           if)for)#);
         add:
           (# id: ^text
           enter id[]
-          do (if not (id[] -> has) then
+          do (if not (id[] -> untick -> has) then
                  (if (top+1->top) > L.range then L.range -> L.extend if);
                  id[] -> L[top][];
              if)
@@ -349,7 +379,7 @@ splitClassSignature: SplitSignature
                   L[i][] -> current[];
                   inner;
              for)
-          #)
+          #);
      #);
 
    allocLocal:
@@ -1078,6 +1108,26 @@ splitClassSignature: SplitSignature
         start,end: [4] @integer;
         top: @integer;
         init: (# do 0 -> top #);
+        has: booleanValue
+          (* NOTE! We currently use equalNCS, since id may be use in
+           * different case. This is the case for a file
+           * Counter.bet containing lib:attributes--- Counter: (# ... #)...
+           * compiled using   pbeta counter NOTE: small 'c'
+           * import will be called with C:/.../counter
+           * This may result in .requires counter in file Counter.pra
+           * containing class Counter.
+           * Apparently not a problem for nbeta since more files
+           * are generated than for pbeta - should be investigated
+           *)      
+          (# C: ^text
+          enter C[]
+          do search:
+                 (for i: top repeat
+                   (if C[] -> L[i].equalNCS then
+                       true -> value;
+                       leave search
+                 if)for)
+          #);
         add:
           (# cn: ^text;
              startPos,endPos: @integer
