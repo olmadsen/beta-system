@@ -4,7 +4,6 @@
 #include "sequenceTable.h"
 #include "trie.h"
 #include "proto.h"
-#include "profile.h"
 #include "transitObjectTable.h"
 
 void reft_dummy() {

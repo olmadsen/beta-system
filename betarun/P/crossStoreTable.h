@@ -12,5 +12,4 @@ u_long newStoreProxy(BlockID store,
 StoreProxy *lookupStoreProxy(u_long inx);
 void printCrossStoreStatistics(void);
 
-#define isCrossStoreReference(inx) ((inx) % 2 == 1)
 #endif /* _CROSSSTORETABLE_H_ */

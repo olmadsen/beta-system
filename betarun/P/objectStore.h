@@ -11,6 +11,17 @@ typedef struct StoreProxy {
 #define ILLEGALSTOREPROXY NULL
 #define ILLEGALBlockID 0
 
+/* Different types of references in the store */
+#define NORMALTYPE       0
+#define CROSSSTORETYPE   1
+#define SPECIALTYPE      2
+#define MAXTYPE          8
+
+#define isNormalReference(inx)     ((inx) % MAXTYPE == NORMALTYPE)
+#define isCrossStoreReference(inx) ((inx) % MAXTYPE == CROSSSTORETYPE)
+#define isSpecialReference(inx)    ((inx) % MAXTYPE == SPECIALTYPE)
+#define isIllegalReference(inx)    (((inx) % MAXTYPE > SPECIALTYPE) && ((inx) % MAXTYPE < MAXTYPE))
+
 int saveCurrentObjectStore();
 int setCurrentObjectStore(BlockID store);
 StoreProxy *newStoreObject(Object *theObj);

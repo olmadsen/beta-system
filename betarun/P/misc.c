@@ -5,6 +5,7 @@
 #include "referenceTable.h"
 #include "PException.h"
 #include "unswizzle.h"
+#include "specialObjectsTable.h"
 
 void miscp_dummy() {
 #ifdef sparc
@@ -41,6 +42,20 @@ void markPersistentObject(Object *theObj)
     realObj -> GCAttr = IOAPersist;
   } else {
     newPersistentObject(realObj);
+  }
+}
+
+void markSpecialObject(u_long tag, Object *theObj)
+{
+  Object *realObj;
+  
+  realObj = getRealObject(theObj);
+  
+  if (inIOA(realObj)) {
+    realObj -> GCAttr = IOASpecial;
+    saveTagForObject(realObj, tag);
+  } else {
+    insertSpecialObject(tag, realObj);
   }
 }
 
@@ -85,8 +100,11 @@ void markReachableObjects(REFERENCEACTIONARGSTYPE)
   if (!inPIT((void *)*theCell)) {
     realObj = getRealObject(*theCell);
     if (!inPIT((void *)(realObj -> GCAttr))) {
-      /* New persistent Object */
-      collectList(realObj, prependToListRegardless);
+      /* Dont follow references to special objects */
+      if (!(realObj -> GCAttr == AOASpecial)) {
+	/* New persistent Object */
+	collectList(realObj, prependToListRegardless);
+      }
     }
   }
   

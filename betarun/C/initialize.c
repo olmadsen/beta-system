@@ -10,8 +10,6 @@ GLOBAL(long mcheck_line);
 #endif /* DMALLOC */
 
 #ifdef PERSIST
-#include "../P/profile.h"
-
 extern void initObjectTable(void);
 extern void initReferenceTable(void);
 #endif /* PERSIST */
@@ -458,9 +456,6 @@ void Initialize()
 #ifdef PERSIST
   initObjectTable();
   initReferenceTable();
-#ifdef PROFILE_PERSISTENCE
-  start_vtimer();
-#endif /* PROFILE_PERSISTENCE */
 #endif /* PERSIST */
 }
 

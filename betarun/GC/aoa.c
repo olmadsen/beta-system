@@ -9,6 +9,7 @@
 #include "../P/PException.h"
 #include "../P/objectTable.h"
 #include "../P/referenceTable.h"
+#include "../P/specialObjectsTable.h"
 #endif /* PERSIST */
 
 void aoa_dummy() {
@@ -465,12 +466,22 @@ void AOAGc()
    * extend- and initialCollectList. */
   AOAtoIOAClear();
   
+#ifdef PERSIST
+  /* Special objects in AOA are marked for the persistence to
+     recognize them. This mark is unknown to the GC'er and would cause
+     problems. Before the GC the special objects are marked DEAD as
+     normal AOA objects. After AOAGC they will be remarked as special
+     objects */
+  unmarkSpecialObjects();
+#endif /* PERSIST */
+  
   /* AOAGc clears the free list and rebuilds it during the scan of the
      live objects. Because AOA skips the scan of persistent objects,
      references from such objects into IOA are not inserted in
      AOAToIOATable. But this is not a problem, since there are no
-     references from AOA to IOA at this point. The entire transitive
-     closure of the persistent objects have been moved to AOA. */
+     references from persistent AOA objects to IOA at this point. The
+     entire transitive closure of the persistent objects have been
+     moved to AOA. */
   MAC_CODE(RotateTheCursorBack());
   
   DEBUG_AOA(fprintf(output,"[Marking all Live Objects in AOA]\n"));
@@ -508,6 +519,10 @@ void AOAGc()
      be checkpointed to the store and declared DEAD so that the
      ensuing sweep will collect them. */
   removeUnusedObjects();
+
+  /* Special objects that are dead should be removed from the special
+     objects table. */
+  GCspecialObjectsTable();
 #endif /* PERSIST */
 
   /* Scan AOA and insert dead objects in the freelist */
@@ -556,6 +571,11 @@ void AOAGc()
   
   STAT_AOA(AOADisplayFreeList());
       
+#ifdef PERSIST
+  /* Special objects should be remarked as special. */
+  remarkSpecialObjects();
+#endif /* PERSIST */
+
   /* Now all blocks have been scanned and all dead objects inserted
    * in the freelists. 
    * Analyze freelists to determine the strategy for allocation. 

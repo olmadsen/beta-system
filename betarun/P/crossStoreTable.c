@@ -2,7 +2,6 @@
 #include "PStoreServer.h"
 #include "PSfile.h"
 #include "PStore.h"
-#include "profile.h"
 
 void cst_dummy() {
 #ifdef sparc
@@ -48,8 +47,8 @@ static crossStoreTable *currentTable = NULL;   /* The current table loaded */
 /* LOCAL FUNCTIONS */
 
 /* LOCAL DEFINES */
-#define UNALIGN(inx) (2*inx + 1)
-#define REALIGN(inx) ((inx - 1)/2)
+#define MAP(inx) (MAXTYPE*inx  + CROSSSTORETYPE)     /* Turn inx into a cross store reference */
+#define UNMAP(inx) ((inx - CROSSSTORETYPE)/MAXTYPE)  /* get the original value of inx */
 
 #define tableSizeLength(length) (2*sizeof(u_long) + sizeof(BlockID) + length*sizeof(StoreProxy))
 #define tableSize(table) tableSizeLength(table -> length)
@@ -62,8 +61,6 @@ BlockID createCrossStoreTable(BlockID store)
   int fd;
   crossStoreTable *newTable=(crossStoreTable *)calloc(sizeof(struct crossStoreTable), 1);
 
-  SETSIM(CREATECROSSSTORETABLE);
-
   newTable -> length = 1;
   newTable -> nextFree = 0;
   newTable -> store = store;
@@ -71,7 +68,6 @@ BlockID createCrossStoreTable(BlockID store)
   if ((file_name = crossStoreTableName(store))) {
     if ((fd = open(file_name,O_RDWR | O_CREAT, S_IWRITE | S_IREAD))<0) {
       perror("createCrossStoreTable");
-      SETSIM(UNKNOWN);
       return ILLEGALBlockID;
     } else {
       writeSome(fd, newTable, tableSize(newTable));
@@ -82,15 +78,11 @@ BlockID createCrossStoreTable(BlockID store)
 	currentTable = NULL;
       }
       currentTable = newTable;
-      SETSIM(UNKNOWN);
       return store;
     }
   } else {
-    SETSIM(UNKNOWN);
     return ILLEGALBlockID;
   }
-  
-  SETSIM(UNKNOWN);
   return ILLEGALBlockID;
 }
 
@@ -105,8 +97,6 @@ BlockID getCurrentCrossStoreTable()
 
 int saveCurrentCrossStoreTable()
 {
-  SETSIM(SAVECURRENTCROSSSTORETABLE);
-  
   if (currentTable) {
     char *file_name;
     int fd;
@@ -114,21 +104,17 @@ int saveCurrentCrossStoreTable()
     if ((file_name = crossStoreTableName(currentTable -> store))) {
       if ((fd = open(file_name,O_RDWR))<0) {
 	perror("saveCurrentCrossStoreTable");
-	SETSIM(UNKNOWN);
 	return 0;
       } else {
 	writeSome(fd, currentTable, tableSize(currentTable));
 	close(fd);
       }
     } else {
-      SETSIM(UNKNOWN);
       return 0;
     }
   } else {
-    SETSIM(UNKNOWN);
     return 0;
   }
-  SETSIM(UNKNOWN);
   return 1;
 }
 
@@ -137,14 +123,11 @@ int setCurrentCrossStoreTable(BlockID store)
   char *file_name;
   int fd;
   
-  SETSIM(SETCURRENTCROSSSTORETABLE);
   if (currentTable) {
     if (compareBlockID(store, currentTable -> store)) {
-      SETSIM(UNKNOWN);
       return 1;
     } else {
       saveCurrentCrossStoreTable();
-      SETSIM(SETCURRENTCROSSSTORETABLE);
       free(currentTable);
       currentTable = NULL;
     }
@@ -165,10 +148,8 @@ int setCurrentCrossStoreTable(BlockID store)
       INFO_PERSISTENCE(numCSL++);
     }
   } else {
-    SETSIM(UNKNOWN);
     return 0;
   }
-  SETSIM(UNKNOWN);
   return 1;
 }
 
@@ -189,7 +170,6 @@ void printCrossStoreStatistics(void)
 u_long newStoreProxy(BlockID store,
 		     u_long offset)
 {
-  SETSIM(NEWSTOREPROXY);
   if (currentTable) {
     u_long count;
     /* Check if a proxy to the same object is present allready */
@@ -198,8 +178,10 @@ u_long newStoreProxy(BlockID store,
       if (currentTable -> body[count].offset == offset) {
 	if (compareBlockID(store, 
 			   currentTable -> body[count].store)) {
-	  SETSIM(UNKNOWN);
-	  return UNALIGN(count);
+
+	  Claim(isCrossStoreReference(MAP(count)), "newStoreProxy: Could not generate new proxy");
+
+	  return MAP(count);
 	}
       }
     }
@@ -213,8 +195,9 @@ u_long newStoreProxy(BlockID store,
       currentTable -> body[nextFree].offset = offset;
       currentTable -> nextFree++;
       
-      SETSIM(UNKNOWN);
-      return UNALIGN(nextFree);
+      Claim(isCrossStoreReference(MAP(nextFree)), "newStoreProxy: Could not generate new proxy");
+
+      return MAP(nextFree);
       
     } else {
       crossStoreTable *newTable;
@@ -225,11 +208,9 @@ u_long newStoreProxy(BlockID store,
       free(currentTable);
       currentTable = newTable;
       
-      SETSIM(UNKNOWN);
       return newStoreProxy(store, offset);
     }
   } else {
-    SETSIM(UNKNOWN);
     return ILLEGALBlockID;
   }
 }
@@ -237,15 +218,11 @@ u_long newStoreProxy(BlockID store,
 /* Looks up the proxy object in the current table */
 StoreProxy *lookupStoreProxy(u_long inx) 
 {
-  SETSIM(LOOKUPSTOREPROXY);
-  
   if (currentTable) {
-    if (REALIGN(inx) < currentTable -> nextFree) {
-      SETSIM(UNKNOWN);
-      return &(currentTable -> body[REALIGN(inx)]);
+    if (UNMAP(inx) < currentTable -> nextFree) {
+      return &(currentTable -> body[UNMAP(inx)]);
     }
   }
-  SETSIM(UNKNOWN);
   return ILLEGALSTOREPROXY;
 }
 

@@ -29,8 +29,5 @@ void insertStoreOffsetOT(BlockID store, u_long offset, u_long inx);
 #define ENTRYALIVE        1     
 #define POTENTIALLYDEAD   3     
 #define DELAYEDENTRYALIVE 4     
-#if 0
-#define EXPORTED          5     
-#endif
 
 #endif /* _OBJECTTABLE_H_ */

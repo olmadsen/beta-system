@@ -8,7 +8,6 @@
 #include "sequenceTable.h"
 #include "trie.h"
 #include "proto.h"
-#include "profile.h"
 #include "transitObjectTable.h"
 #include "PStoreServer.h"
 
@@ -29,7 +28,6 @@ typedef struct OTEntry { /* Object Table Entry */
 
 /* LOCAL DEFINITIONS */
 #define INITIALTABLELENGTH 128 /* Initial size of the objectTable */
-#define MAXOBJECTTABLESIZE 0x1000
 
 /* LOCAL VARIABLES */
 static sequenceTable *currentTable = NULL;

@@ -1203,6 +1203,9 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
 #ifdef RTLAZY
       HasRefDoRef((Object**)&LazyItem);
 #endif /* RTLAZY */
+#ifdef PERSIST
+      HasRefDoRef((Object**)&rebinderItem);
+#endif /* PERSIST */
       DEBUG_VALHALLA(fprintf(output, "0\n"));
       valhalla_writeint(0);
       DEBUG_VALHALLA(fprintf(output, "\n"));

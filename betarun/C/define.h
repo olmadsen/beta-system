@@ -292,6 +292,7 @@
 #define DEADOBJECT 1
 #define FREECHUNK 2
 #ifdef PERSIST
+#define AOASpecial 3
 #define LISTEND IOAPersist + 1
 #else
 #define LISTEND 3

@@ -23,5 +23,6 @@ void getKeyForObject(ObjectKey *ok, Object *theObj);
 void setClosingGC(void);
 void keyToObject(ObjectKey *ok, Object **theObj);
 void setForceAOAGG(void);
+void markSpecialObject(u_long tag, Object *theObj);
 
 #endif /* _P_MISC_H_ */

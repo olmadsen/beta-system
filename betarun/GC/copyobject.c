@@ -8,6 +8,7 @@
 
 #ifdef PERSIST
 #include "../P/misc.h"
+#include "../P/specialObjectsTable.h"
 #endif /* PERSIST */
 
 void copyobj_dummy() {
@@ -123,6 +124,8 @@ Object * NewCopyObject(Object * theObj, Object ** theCell)
 	   IOAGc has finished. We cannot do it now as the GCAttribute
 	   of the new object in AOA is needed by IOAGc. */
 	delayedInsert(newObj);
+      } else if (GCAttribute == IOASpecial) {
+	insertSpecialObject(getTagForObject(theObj), newObj);
       }
 #endif /* PERSIST */
       return newObj;
@@ -130,7 +133,7 @@ Object * NewCopyObject(Object * theObj, Object ** theCell)
     } else {
       /* CopyObjectToAOA failed */
 #ifdef PERSIST
-      if (theObj -> GCAttr != IOAPersist) {
+      if ((theObj -> GCAttr != IOASpecial) && (theObj -> GCAttr != IOAPersist)) {
 	return CopyObject(theObj);
       } else {
 	Object *theAOAObj;

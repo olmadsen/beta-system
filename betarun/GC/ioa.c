@@ -19,8 +19,8 @@
 #include "../P/misc.h"
 #include "../P/referenceTable.h"
 #include "../P/PException.h"
-#include "../P/profile.h"
 #include "../P/transitObjectTable.h"
+#include "../P/specialObjectsTable.h"
 #endif /* PERSIST */
 
 #define REP ((ObjectRep *)theObj)
@@ -50,10 +50,6 @@ void IOAGc()
   
  IOAGCstart:
 #endif /* PERSIST */
-  
-#ifdef PROFILE_PERSISTENCE
-  show_vtimer();
-#endif /* PROFILE_PERSISTENCE */
   
   MAC_CODE(RotateTheCursor());
   
@@ -175,6 +171,14 @@ void IOAGc()
   }
 #endif /* RTLAZY */
 
+#ifdef PERSIST
+  if (rebinderItem) {
+    DEBUG_IOA(fprintf(output, " #(IOA: Root: rebinderItem"); fflush(output));
+    ProcessReference( (Object **)(&rebinderItem) );
+    DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
+  }
+#endif /* PERSIST */
+
   CompleteScavenging();
   
 #ifdef MT
@@ -246,6 +250,9 @@ void IOAGc()
       /* before we do AOAGC we need to do an additional IOAGC */
       if (repeatIOAGc) {
 	/* We have done the extra IOAGC */
+	
+	/* There are no longer any special objects in IOA */
+	freeSOTags();
 	
 	/* To handle persistent objects moved from ioa to aoa */
 	flushDelayedEntries();

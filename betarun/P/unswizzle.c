@@ -6,7 +6,6 @@
 #include "PImport.h"
 #include "proto.h"
 #include "unswizzle.h"
-#include "profile.h"
 #include "transitObjectTable.h"
 
 /* */
@@ -59,13 +58,9 @@ Object *lookUpReferenceEntry(BlockID store, u_long offset)
 {
   Object *theObj;
   
-  SETSIM(LOOKUPREFERENCEENTRY);
-  
   if ((theObj = indexLookupTOT(store, offset)) != NULL) {
-    SETSIM(UNKNOWN);
     return theObj;
   } else {
-    SETSIM(UNKNOWN);
     return loadObject(store, offset);
   }
 }
@@ -75,11 +70,8 @@ static Object *loadObject(BlockID store, u_long offset)
   u_long size, distanceToPart;
   Object *theStoreObj, *theRealStoreObj, *theRealObj;
 
-  SETSIM(LOADOBJECT);
-  
   setCurrentObjectStore(store);
   theStoreObj = lookupStoreObject(store, offset);
-  SETSIM(LOADOBJECT);
   
   Claim(theStoreObj != NULL, "Could not look up store object");
   
@@ -90,7 +82,6 @@ static Object *loadObject(BlockID store, u_long offset)
     Object *theRealObj;
     
     theRealObj = lookUpReferenceEntry(store, offset - distanceToPart);
-    SETSIM(UNKNOWN);
     return (Object *)((u_long)theRealObj + distanceToPart);
   } else {
     size = 4*StoreObjectSize(theRealStoreObj);
@@ -114,7 +105,6 @@ static Object *loadObject(BlockID store, u_long offset)
 		 TRUE);
       objectAction = temp;
     }
-    SETSIM(UNKNOWN);
     return theRealObj;
   }
 }
@@ -137,6 +127,11 @@ static void originReferenceAction(Object **theCell)
 static void getOriginChain(Object *theObj)
 {
   scanOrigins(theObj, originReferenceAction);
+}
+
+void registerRebinder(Object *theRebinder)
+{
+  rebinderItem = (long *)theRebinder;
 }
 
 #endif /* PERSIST */
