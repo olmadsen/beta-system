@@ -52,17 +52,10 @@ void sprint2(a,b,r) char *a; const char * b; double r;{int i;
 
 int copystring( r) char *r; { printf(r); return 111; }
 
-int XcallNum; char *XcallName;
-
-/*void TraceXcall() {
-   printf("\nCalling %s,%i\n",XcallName,XcallNum);
-}
-*/
-
 void PP(ch) char ch;{printf("%c",ch);}
 
-struct Xdata{int w; char ch,q; int y;};
-struct Ydata{int w; char ch,q; int y; char a,b; int d;};
+struct Xdata{int w; char ch,q; long y;};
+struct Ydata{int w; char ch,q; long y; char a,b; int d;};
 
 struct Ydata *XdataToYdata(r) struct Xdata *r;
 { struct Ydata *s;
@@ -93,7 +86,12 @@ char *XdataToText(r) struct Xdata *r;
   else {return "???";}
 }
 
-void printSub(char *s){
+void printSub(s) char *s; {
    printf("%s",s);
    fflush(stdout);
+ }
+
+int fdd(i,s) long i; char *s; {
+   if(( i==111) && (s="qwerty")) {return 'g';}
+   else return '!';
  }
