@@ -18,9 +18,6 @@ Ptr ReAlloc(Ptr p, Size size)
 	Size oldsize;
 	
 	
-	fprintf(output, "ReAlloc called\n");
-	flush(output);
-	
 	SetPtrSize(p, size);
 	
 	if (MemError) {
@@ -35,13 +32,9 @@ Ptr ReAlloc(Ptr p, Size size)
 			}
 			DisposePtr(p);
 		}
-		fprintf(output, "ReAlloc done allocating new...\n");
-		flush(output);
 		return newp;
 	}
 	else {
-		fprintf(output, "ReAlloc done returning old...\n");
-		flush(output);
 		return p;
 	}
 	

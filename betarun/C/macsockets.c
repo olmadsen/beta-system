@@ -400,6 +400,17 @@ void initSockets(void)
 	return;
 }
 
+/* inetaddres & Portnumber in HOST byte-order. */
+
+int createActiveSocketLocalPort(unsigned long inetAddr, long port, 
+			       int nonblock, long firstport,
+			       long lastport)
+{
+   return createActiveSocket(inetAddr, port, nonblock);
+}
+
+
+				   
 int createActiveSocket(unsigned long inetAddr, long port, int nonblock)
 {
 	EndpointRef 	endpoint;

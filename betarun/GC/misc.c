@@ -5,7 +5,6 @@
  */
 
 #include "beta.h"
-#include "../P/trie.h"
 
 #ifdef PERSIST
 #include "../P/referenceTable.h"
@@ -955,12 +954,15 @@ static void addLabel(long adr, char *id)
   }
   labels[numLabels] = lab;
 
+#ifndef MAC
   /* Register label in trie */
   TInsert((unsigned long)(lab -> address), 
 	  (unsigned long)(lab -> id), 
 	  &trie, 
 	  (unsigned long)(lab -> address));
   
+#endif
+
   numLabels++;
 
   
@@ -1100,9 +1102,13 @@ char *getLabelExact(long addr)
 #ifdef nti
   addr -= process_offset;
 #endif
+
+#ifndef MAC
   if (labels) {
     return (char *)TILookup(addr, trie);
   }
+#endif
+
   return NULL;
 }
 
