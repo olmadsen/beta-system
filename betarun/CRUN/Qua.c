@@ -44,9 +44,9 @@ void CQua(ref(Object) this,
   GCable_Entry();
 
 #ifdef hppa
-  this = getThisReg();
-  dstQuaProto = getCallReg();
-  dstQuaOrigin = getOriginReg();
+  this = cast(Object)getThisReg();
+  dstQuaProto = cast(ProtoType)getCallReg();
+  dstQuaOrigin = cast(Object)getOriginReg();
 #endif
 
   src = *theCell;
@@ -136,9 +136,9 @@ void COQua(ref(Object) this,
   GCable_Entry();
 
 #ifdef hppa
-  this = getThisReg();
-  dstQuaProto = getCallReg();
-  dstQuaOrigin = getOriginReg();
+  this = cast(Object)getThisReg();
+  dstQuaProto = cast(ProtoType)getCallReg();
+  dstQuaOrigin = cast(Object)getOriginReg();
 #endif
 
   src = *theCell;
@@ -210,9 +210,9 @@ void COQua(ref(Object) this,
 	     */
 	    if (src->Proto == StructurePTValue){
 #ifdef sparc
-	      Protect(dstQuaOrigin, src = cast(Object) CAlloSI(src, 0, 0, 0, 0));
+	      Protect(dstQuaOrigin, src = cast(Object) CAlloSI(cast(Structure)src, 0, 0, 0, 0));
 #else
-	      Protect(dstQuaOrigin, src = cast(Object) CAlloSI(src));
+	      Protect(dstQuaOrigin, src = cast(Object) CAlloSI(cast(Structure)src));
 #endif
 	    }
 	    less = (cast(Object)((long*)src)[dstQuaProto->OriginOff] == dstQuaOrigin);
