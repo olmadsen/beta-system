@@ -1,0 +1,235 @@
+ORIGIN '~beta/basiclib/betaenv';
+BODY 'private/xmlbody';
+
+
+-- LIB: attributes --
+
+XML:
+  (# <<SLOT XMLLib: attributes >>;
+     
+     AbstractElement:
+       (# <<SLOT XMLAbstractElementLib: attributes >>;
+          
+          next: ^AbstractElement;
+          
+          clone:<
+            (# CloneType:< AbstractElement;
+               new: ^CloneType; 
+            do &CloneType[] -> new[];
+               (if next[] <> none then
+                   next.clone -> new.next[];
+               if);
+               INNER;
+            exit new[]
+            #);
+          
+          select:
+            (# onElement:<
+                 (# current: ^Element;
+	         enter current[]
+	         do INNER;
+	         #);
+	       onData:<
+	         (# current: ^DataElement;
+	         enter current[]
+	         do INNER;
+	         #);
+            do THIS(Select)[] -> selector;
+            #);
+          selector:<
+            (# theSelect: ^Select;
+            enter theSelect[]
+            do INNER;
+            #);
+          print:<
+            (# output: ^Stream;
+               level: @integer;
+            enter (output[], level)
+            do INNER;
+            #);
+       #);
+     DataElement: AbstractElement
+       (# <<SLOT XMLDataElementLib: attributes >>;
+          
+          data: ^Text;
+          clone::
+            (# CloneType:: DataElement;
+            do data.copy -> new.data[];
+            #);
+          selector::
+            (#
+            do THIS(DataElement)[] -> theSelect.onData;
+            #);
+          print::
+            (#
+            do data.scanAll
+               (#
+               do (if true
+                   //ch = '<' then
+                      '&lt;' -> output.puttext;
+                   //ch = '>' then
+                      '&gt;' -> output.puttext;
+                   //ch = '&' then
+                      '&amp;' -> output.puttext;
+                   else
+                      ch -> output.put;
+                  if);
+               #);
+            #);
+       #);
+     Element: AbstractElement
+       (# <<SLOT XMLElementLib: attributes >>;
+          
+          tag: ^Text;
+          attributes: ^Attribute;
+          children: ^AbstractElement;
+          
+          clone::
+            (# CloneType:: Element;
+            do tag.copy -> new.tag[];
+               (if attributes[]<> none then
+                   attributes.clone -> new.attributes[];
+               if);
+               (if children[] <> none then
+                   children.clone -> new.children[];
+               if);
+            #);
+          
+          addElement:
+            (# child: ^AbstractElement;
+            enter child[]
+            <<SLOT ElementAddElement: doPart>>
+            #);
+          addAttribute:
+            (# theAttribute: ^Attribute;
+            enter theAttribute[]
+            <<SLOT ElementAddAttribute: doPart>>
+            #);
+          
+          scan:
+            (# current: ^AbstractElement;
+            do children[] -> current[];
+               loop:
+	         (if current[] <> NONE then
+	             INNER;
+	             current.next[] -> current[];
+	             restart loop;
+	         if);
+            #);
+          scanAttributes:
+            (# current: ^Attribute;
+            do attributes[] -> current[];
+               loop:
+	         (if current[] <> NONE then
+	             INNER;
+		     current.next[] -> current[];
+		     restart loop;
+                 if);
+            #);
+          scanElements:
+            (# current: ^Element;
+            do scan
+               (#
+               do current.select
+                  (# onElement::
+                       (#
+                       do current[] -> THIS(scanElements).current[];
+                          INNER scanElements;
+                       #);
+                  #);
+               #);
+            #);
+          scanData:
+            (# current: ^DataElement;
+            do scan
+               (#
+               do current.select
+                  (# onData::
+                       (#
+                       do current[] -> THIS(scanData).current[];
+                          INNER scanData;
+                       #);
+                  #);
+               #);
+            #);
+          faultyGetData:
+            (# data: ^Text;
+            do &Text[] -> data[];
+               scanData 
+               (# 
+               do current.data[] -> data.puttext;
+               #);
+            exit data[]
+            #);
+          print::
+            (# printAttributes:
+                 (# 
+                 do scanAttributes
+                    (#
+                    do ' ' -> output.puttext;
+                       current.key[] -> output.puttext;
+                       '=' -> output.put;
+                       '"' -> output.put;
+                       current.value[] -> output.puttext;
+                       '"' -> output.put;
+                    #);
+                 #);
+            do output.newline;
+               (if children[] = NONE then
+                   '<' -> output.put;
+                   tag[] -> output.puttext;
+                   printAttributes;
+                   '/>' -> output.puttext;
+                else
+                   '<' -> output.put;
+                   tag[] -> output.puttext;
+                   printAttributes;
+                   '>' -> output.puttext;
+                   scan
+                   (#
+                   do (output[], level+1) -> current.print;
+                   #);
+                   '</' -> output.puttext;
+                   tag[] -> output.puttext;
+                   '>' -> output.put;
+               if);
+            #);
+          selector::
+            (#
+            do THIS(Element)[] -> theSelect.onElement;
+            #);
+       #);
+     
+     Attribute:
+       (# <<SLOT XMLAttributeLib: attributes >>;
+          
+          clone:
+            (# new: ^Attribute;
+            do &Attribute[] -> new[];
+               key.copy -> new.key[];
+               value.copy -> new.value[];
+               (if next[] <> none then
+                   next.clone -> new.next[];
+               if);
+            exit new[]
+            #);
+          
+          key: ^Text;
+          value: ^Text;
+          next: ^Attribute;
+       #);
+     
+     parse:
+       (# input: ^Stream;
+          output: ^Element;
+       enter input[]
+       <<SLOT XMLParse: doPart>>
+       exit output[]
+       #);
+     print:
+       (# input: ^Element;
+          output: ^Stream;
+       enter (input[], output[])
+       <<SLOT XMLPrint: doPart>>
+       #);
+  #);

@@ -1,0 +1,132 @@
+ORIGIN '../xml';
+INCLUDE '../xmlparser/xmlparser';
+
+
+-- XMLParse: doPart --
+do (# intern:
+        (# symbol: ^Text;
+	enter symbol[]
+	do 
+	exit symbol[]
+	#); 
+      reverse:
+        (# theElement: ^Element;
+	   prev: ^AbstractElement;
+	   current: ^AbstractElement;
+	   next: ^AbstractElement;
+	enter theElement[]
+	do theElement.children[] -> current[];
+	   (if current[] <> NONE then
+	      loop:
+	        (#
+		do (if current[] <> NONE then
+		      current.next[] -> next[];
+		      prev[] -> current.next[];
+		      current[] -> prev[];
+		      next[] -> current[];
+		      NONE -> next[];
+		      restart loop;
+		   else
+		      prev[] -> theElement.children[];
+		   if);
+		#);
+	   if);
+	#);
+      current: ^Element;
+      stack: [16] ^Element;
+      stacktop: @integer;
+      push:
+        (# theElement: ^Element;
+	enter theElement[]
+	do stacktop+1 -> stacktop;
+	   (if stacktop > stack.range then
+	      stack.range -> stack.extend;
+	   if);
+	   theElement[] -> stack[stacktop][];
+	#);
+      pop:
+        (# theElement: ^Element;
+	do stack[stacktop][] -> theElement[];
+	   stacktop - 1 -> stacktop;
+	exit theElement[]
+	#);
+      theParser: @XMLParser
+        (# onElementStart::
+	     (# pushAttribute:
+	          (# key, value: ^Text;
+		     new: ^THIS(XML).Attribute;
+		  enter (key[], value[])
+		  do &THIS(XML).Attribute[] -> new[];
+		     key[] -> new.key[];
+		     value[] -> new.value[];
+		     current.attributes[] -> new.next[];
+		     new[] -> current.attributes[];
+		  #);
+	     do current[] -> push;
+	        &Element[] -> current[];
+	        name[] -> intern -> current.tag[];
+		attributes.scanReverse
+		  (# 
+		  do (current.name[], current.value[]) -> pushAttribute;
+		  #);
+	     #);
+	   onElementEnd::
+	     (# new: ^Element;
+	     do current[] -> reverse;
+	        current[] -> new[];
+	        pop -> current[];
+		current.children[] -> new.next[];
+		new[] -> current.children[];
+	     #);
+	   onCharacterData::
+	     (# new: ^DataElement;
+	     do &DataElement[] -> new[];
+	        data[] -> new.data[];
+		current.children[] -> new.next[];
+		new[] -> current.children[];
+	     #);
+	#);
+   do theParser.init;
+      &Element[] -> current[];
+      input.reset;
+      input[] -> theParser;
+      current.children[] -> output[];
+   #);
+   
+-- XMLPrint: doPart --
+do (output[], 1) -> input.print;
+   
+-- ElementAddElement: doPart --
+do (if children[] = NONE then
+       child[] -> children[];
+    else
+       (# current: ^AbstractElement;
+          previous: ^AbstractElement;
+       do children[] -> current[];
+          loop:
+            (if current[] <> NONE then
+                current[] -> previous[];
+                current.next[] -> current[];
+                restart loop;
+            if);
+          child[] -> previous.next[];
+       #);
+   if);
+   
+-- ElementAddAttribute: doPart --
+do (if attributes[] = NONE then
+       theAttribute[] -> attributes[];
+    else
+       (# current: ^Attribute;
+          previous: ^Attribute;
+       do attributes[] -> current[];
+          loop:
+            (if current[] <> NONE then
+                current[] -> previous[];
+                current.next[] -> current[];
+                restart loop;
+            if);
+          theAttribute[] -> previous.next[];
+       #);
+   if);
+   
