@@ -13,7 +13,6 @@ void trie_dummy() {
 #define OURINLINE
 #endif
 
-#ifdef PERSIST
 /* */
 
 Node *TInit(void)
@@ -158,7 +157,7 @@ void TIFree(Node *current, void (*freeFunc)(void *))
 }
   
 /* TESTING */
-
+#ifdef RTDEBUG
 void visitFunc(contentsBox *cb)
 {
   printf("visitFunc: %s\n", (char *)(cb -> contents));
@@ -188,4 +187,4 @@ void testTrie(void)
   TIVisit(trie, visitFunc);
 }
 
-#endif /* PERSIST */
+#endif /* RTDEBUG */
