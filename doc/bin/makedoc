@@ -2414,13 +2414,23 @@ sub unplus_gram_html
 
 sub print_gram_file()
 {
-
-    local ($gramfile, $htmlfile) = @_;
-    local ($prev, $prevtip, $next, $nexttip, $index);
-    $index = &strip_extension($htmlfile) . "-inx.html";
-
-    &print_header($title, $prev, $prevtip, $next, $nexttip, $index, 0);
-
+    local ($fileno) = @_;
+    local ($gramfile, $title, $htmlfile, $inxfile) = &gram_names($fileno);
+    local ($prev, $prevtip, $next, $nexttip);
+    if ($fileno==0){
+	# first gram file
+	$prev = $tocfile;
+	$prevtip = "Table of Contents";
+    } else {
+	local ($prevgram, $previnx);
+	($prevgram, $prevtip, $prev, $previnx) = &gram_names($fileno-1);
+	$prev = $previnx;
+	$prevtip = $prevtip . ": Alphabetic Index of Leftsides";
+    }
+    $next = $inxfile;
+    $nexttip = $title . ": Alphabetic Index of Leftsides";
+    &print_header($title, $prev, $prevtip, $next, $nexttip, $inxfile, 0);
+    
     print<<"EOT";
 <H1>$title</H1>
 <PRE CLASS=gram>
@@ -2492,9 +2502,25 @@ sub calculate_gram_index()
 
 sub print_gram_index_file()
 {
-    local ($title) = @_;
+    local ($fileno) = @_;
+    local ($gramfile, $title, $htmlfile, $inxfile) = &gram_names($fileno);
     local ($prev, $prevtip, $next, $nexttip);
-    &print_header($title, $prev, $prevtip, $next, $nexttip, "", 0);
+    local ($prevgram, $previnx);
+
+    $prev = $htmlfile;
+    $prevtip = $title;
+    if ($fileno==$#gramfiles){
+	# last gram-inx file - we don't have a global index
+	$next = "";
+	$nexttip = "";
+    } else {
+	local ($nextgram, $nextinx);
+	($nextgram, $nexttip, $next, $nextinx) = &gram_names($fileno+1);
+    }
+
+    $title = "$title: Alphabetic Index";
+    &print_header($title, $prev, $prevtip, $next, $nexttip, $htmlfile, 0);
+
     print<<EOT;
 <H1>Index</H1>
 The entries in the alphabetic index consists of all left-sides in the grammar.
@@ -2518,36 +2544,46 @@ sub print_gram_toc_file()
     printf STDERR "done.\n" if $verbose;
 }
 
-sub process_gram_file 
+sub gram_names
 {
-    local ($file) = @_;
-
-    $title=$file;
+    local ($fileno) = @_;
+    local ($gramfile, $title, $basename, $htmlfile, $inxfile);
+    
+    $gramfile = $gramfiles[$fileno];
+    $title=$gramfile;
     $title=~s%.*/%%; # delete path
     $title=~s/-meta.gram//; # delete -meta.gram
     $basename=lc($title);
     $htmlfile=$basename . ".html";
-    $gram_inxfile=lc($title) . "-inx.html";
+    $inxfile=lc($title) . "-inx.html";
     $title=ucfirst($basename) . " Grammar";
+
+    return ($gramfile, $title, $htmlfile, $inxfile);
+}
+
+sub process_gram_file 
+{
+    local ($fileno) = @_;
+    local ($file, $title, $htmlfile, $inxfile) = &gram_names($fileno);
 
     print STDERR "Generating $htmlfile\nfrom       $file\n" if $verbose;
     open (STDOUT, ">$htmlfile") || die "\nCannot open $htmlfile for writing: $!\n";
-    &print_gram_file($file, $htmlfile);
+    &print_gram_file($fileno);
     close (STDOUT);
     printf STDERR "done.\n" if $verbose;
 
-    print STDERR "Generating $gram_inxfile\n" if $verbose;
-    open (STDOUT, ">$gram_inxfile") || die "\nCannot open $gram_inxfile for writing: $!\n";
-    &print_gram_index_file("$title: Index");
+    print STDERR "Generating $inxfile\n" if $verbose;
+    open (STDOUT, ">$inxfile") || die "\nCannot open $gram_inxfile for writing: $!\n";
+    &print_gram_index_file($fileno);
     close (STDOUT);
     printf STDERR "done.\n" if $verbose;
 
 }
 
 sub process_grammar_files
-{
-    foreach $f (@gramfiles){
-	&process_gram_file($f);
+{   local ($fileno) = 0;
+    for ($fileno=0; $fileno<=$#gramfiles; $fileno++){
+	&process_gram_file($fileno);
     }
     &print_gram_toc_file();
 }
