@@ -4,6 +4,8 @@ INCLUDE 'auxlib';
 
 use_dotnet_modules: 
   (# exit false #);
+trace_sig:
+  (# exit false #);
 
 descLocation:
   (* Return the fragmentgroup (file location) of desc
@@ -100,6 +102,68 @@ descLocation:
   exit location[]
   #);
 
+
+AddDotnetLocation:
+  (# class, location, T: ^Text;
+  enter (class[], location[])
+  do ''->T[]; 
+     (if location[]=NONE then
+         (if true 
+          // 'object' -> class.equal 
+          // '[mscorlib]System.Object' -> class.equal 
+             then
+          else
+             (* Unknown file - put assembly in file with same name as class *)
+             'class ' -> T.append;
+             (if trace_sig then
+                 '/* reference to class ' -> T.puttext; class[]->T.puttext; 
+                 ' in unknown file */' -> T.puttext;
+             if);
+             (if use_dotnet_modules then
+                 '[.module ' -> T.append;
+                 class[] -> T.append;
+                 '.netmodule]' -> T.append;
+              else
+                 '[' -> T.append;
+                 class[] -> T.append;
+                 ']' -> T.append;
+             if);
+         if);
+      else
+         (if location.length=0 then
+             (* local *)
+             'class '->T.append;
+             (if trace_sig then
+                 '/* reference to local class ' -> T.puttext; class[]->T.puttext;  '*/' -> T.puttext;
+             if);
+          else
+             (* Nonlocal, known location *)
+             'class ' -> T.append;
+             (# e: @diskentry;
+                 do location[] -> e.path;
+                    e.path.name -> location[];
+             #);
+             (if trace_sig then
+                 '/* reference to class ' -> T.puttext; class[]->T.puttext; 
+                 ' in file ' -> T.puttext;
+                 location[] -> T.puttext;
+                 '*/' -> T.puttext;
+             if);
+             (if use_dotnet_modules then
+                 '[.module ' -> T.append;
+                 location[] -> T.append;
+                 '.netmodule]' -> T.append;
+              else
+                 '[' -> T.append;
+                 location[] -> T.append;
+                 ']' -> T.append;
+             if);
+         if)
+     if);
+     class[] -> T.append;
+  exit T[]
+  #);
+
 Type: 
   (# isRef: < booleanValue;
      isList:< booleanValue;
@@ -171,53 +235,7 @@ Reference: Type
           (if isJava then
               'L' -> T[]; class[] -> T.append; ';'->T.put;
            else 
-              ''->T[]; 
-              (if location[]=NONE then
-                  (if true 
-                   // 'object' -> class.equal then
-                   else
-                      (* Unknown file - put assembly in file with same name as class *)
-                      'class ' -> T.append;
-                      '/* reference to class ' -> T.puttext; class[]->T.puttext; 
-                      ' in unknown file */' -> T.puttext;
-                      (if use_dotnet_modules then
-                          '[.module ' -> T.append;
-                          class[] -> T.append;
-                          '.netmodule]' -> T.append;
-                       else
-                          '[' -> T.append;
-                          class[] -> T.append;
-                          ']' -> T.append;
-                      if);
-                  if);
-               else
-                  (if location.length=0 then
-                      (* local *)
-                      'class '->T.append;
-                      '/* reference to local class ' -> T.puttext; class[]->T.puttext; 
-                   else
-                      (* Nonlocal, known location *)
-                      'class ' -> T.append;
-                      '/* reference to class ' -> T.puttext; class[]->T.puttext; 
-                      ' in file ' -> T.puttext;
-                      (# e: @diskentry;
-                      do location[] -> e.path;
-                         e.path.name -> location[];
-                      #);
-                      location[] -> T.puttext;
-                      '*/' -> T.puttext;
-                      (if use_dotnet_modules then
-                          '[.module ' -> T.append;
-                          location[] -> T.append;
-                          '.netmodule]' -> T.append;
-                       else
-                          '[' -> T.append;
-                          location[] -> T.append;
-                          ']' -> T.append;
-                      if);
-                  if)
-              if);
-              class[] -> T.append
+              (class[], location[]) -> AddDotnetLocation -> T[];
           if);
           (if stest then 
               187->trace(#
@@ -483,7 +501,7 @@ Signature: ISignature
               ' '->T.append;
               (if receiver[] <> none then
                   (* method call signature *)
-                  receiver[] -> T.append;
+                  (receiver[],location[]) -> AddDotnetLocation  -> T.append;
                   '::' -> T.append
               if);
               (if method[] <> none then
@@ -649,7 +667,10 @@ classSignature: ISignature
        do (if isJava then 
               className[] -> T[]
            else
-              className[] -> T[]
+              (className[],location[]) -> AddDotnetLocation -> T[];
+              (if trace_sig then
+                  '/*classsignature*/' -> T.append;
+              if);
           if)
        #)
   enter(desc[],className[])
