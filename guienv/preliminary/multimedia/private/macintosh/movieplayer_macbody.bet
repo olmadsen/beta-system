@@ -1,0 +1,185 @@
+ORIGIN '../movieplayerbody';
+
+INCLUDE '~beta/maclib/movies'
+        '~beta/maclib/imagecompression'
+		  '~beta/maclib/files'
+		  '~beta/maclib/qdoffscreen' ;
+INCLUDE '~beta/guienv/private/macintosh/guienv_macprivate';
+
+
+-- movieLib: attributes --
+
+readMovieFile:
+	(# spec: ^FSSpec;
+		error: @integer;
+		myRefNum: @shortRef;
+		myMovie: @longInt;
+		myResID: @shortRef;
+		macBox: @macRect;
+		box: @rectangle;
+		result: @integer;
+		movieWidth, movieHeight: @integer;
+	enter spec[]
+	do (spec[], myRefNum[], 1) -> OpenMovieFile -> error;
+		(if error = 0 then
+			(myMovie[], myRefNum, myResID[], NONE, newMovieActive, NONE) 
+				-> NewMovieFromFile
+				-> error;
+			(if error = 0 then
+				myMovie -> private.fMovie;
+				(private.fMovie, macBox[]) -> GetMovieBox;
+				macBox -> box;
+				box.size -> (movieWidth, movieHeight);
+				((0, 0), (movieWidth, movieHeight)) -> macBox;
+				(private.fMovie, macBox[]) -> SetMovieBox;
+				movieWidth -> private.width;
+				movieHeight -> private.height;
+			if);
+			myRefNum -> CloseMovieFile;
+		if);
+	#);
+	
+-- movieRead: doPart --
+do (# myFSSpec: @FSSpec;
+   do theFileName.copy -> private.theFileName[];
+		(0, 0, theFileName, myFSSpec[]) -> FSMakeFSSpec;
+		myFSSpec[] -> readMovieFile;
+	#);
+
+--  movieUserSelectFile: doPart --
+do (# myFSSpec: @FSSpec;
+      myTypeList: @SFTypeList;
+		myReply: @standardFileReply;
+		name: ^text;
+   do (0, -1, myTypeList[], myReply[]) -> StandardGetFilePreview;
+	   (if myReply.sfGood then
+			myReply.getSpecName -> name[];
+			(myReply.specVRefNum, myReply.specParId, name, myFSSpec[]) -> FSMakeFSSpec;
+			myFSSpec[] -> readMovieFile;
+			true -> success;
+		else
+			false -> success;
+		if);
+	#);
+
+--  movieLength: doPart --
+do 'movieLength: doPart' -> putLine;
+
+
+--  movieFilename: doPart --
+do private.theFileName.copy -> theFileName[];
+
+
+-- movieDisplaySize: doPart --
+do private.width -> width;
+	private.height -> height;
+	
+-- moviePrivate: descriptor --
+(# fMovie: @integer;
+	theFileName: ^text;
+	width, height: @integer;
+#)
+
+-- moviePlayerSetContents: doPart --
+do (# movieWidth, movieHeight: @integer;
+		macBox: @macRect;
+		box: @rectangle;
+		result: @integer;
+	do (*** DISPOSE OF OLD CONTENTS!!! ***)
+		(if theMovie[] <> NONE then
+			(if theMovie.private.fMovie <> 0 then
+				(theMovie.private.fMovie, 
+				 THIS(window).private.windowPointer, 
+				 THIS(window).private.windowPointer -> GetGWorldDevice)
+					-> SetMovieGWorld;
+				theMovie.displaySize -> (movieWidth, movieHeight);
+				((0, 0), (movieWidth, movieHeight)) -> macBox;
+				(theMovie.private.fMovie, macBox[], mcTopLeftMovie) 
+				 	-> NewMovieController 
+					-> private.fController;
+				 (if private.fController <> 0 then
+				 	(private.fController, macBox[]) -> MCGetControllerBoundsRect -> result;
+					macBox -> box;
+					box.size -> size;
+					1 -> private.theTimer.start;
+				 if);
+			if);
+		if);
+	#);
+--  movieplayerRead: doPart --
+do &movie[] -> theMovie[];
+	theFileName[] -> theMovie.read;
+	theMovie[] -> contents;
+
+--  movieplayerUserSelectFile: doPart --
+do &movie[] -> theMovie[];
+	(if theMovie.userSelectFile then
+		theMovie[] -> contents;
+	if);
+
+-- moviePlayerSetMoviePosition: doPart --
+do 'moviePlayerSetMoviePosition: doPart' -> putLine;
+
+-- moviePlayerGetMoviePosition: doPart --
+do 'moviePlayerGetMoviePosition: doPart' -> putLine;
+
+-- moviePlayerStart: doPart --
+do 'moviePlayerStart: doPart' -> putLine;
+
+-- moviePlayerStop: doPart --
+do 'moviePlayerStop: doPart' -> putLine;
+-- moviePlayerPause: doPart --
+do 'moviePlayerPause: doPart' -> putLine;
+
+-- moviePlayerOpen: doPart --
+do 
+	INNER;
+	
+
+-- moviePlayerClose: doPart --
+do INNER;
+
+-- moviePlayerOnActivate: doPart --
+do graphics 
+		(# 
+		do (this(moviePlayer).private.fController, this(window).private.windowPointer, true) -> MCActivate;
+		#);
+
+-- moviePlayerOnDeactivate: doPart --
+do graphics 
+		(# 
+		do (this(moviePlayer).private.fController, this(window).private.windowPointer, false) -> MCActivate;
+		#);
+
+-- moviePlayerOnMouseDown: doPart --
+do graphics 
+		(# where: @MacPoint;
+			GlobalToLocal: External (# p: ^macPoint enter p[] do '$A871' -> PascalTrap; #);
+		do this(guienv).private.event.where -> where;
+			where[] -> GlobalToLocal;
+			(this(moviePlayer).private.fController, this(window).private.windowPointer,
+			 where,
+			 this(guienv).private.event.when,
+			 this(guienv).private.event.modifiers) -> MCClick;
+		#);
+
+
+-- moviePlayerOnRefresh: doPart --
+do graphics 
+		(# 
+		do (this(moviePlayer).private.fController, this(window).private.windowPointer) -> MCDraw;
+		#);
+
+
+
+-- moviePlayerPrivate: descriptor --
+(# fController: @integer;
+	theTimer: @timer
+		(# action::
+				(#
+				do (if fController <> 0 then
+						graphics (# do fController -> MCIdle #);
+					if);
+				#);
+		#);
+#)
