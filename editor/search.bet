@@ -1,7 +1,9 @@
 ORIGIN '~beta/guienv/guienv';
 INCLUDE '~beta/guienv/utils/pane'
+        '~beta/betaast/semanticerrortext'
         '~beta/guienv/utils/listview'
-        '~beta/sourcebrowser/ymerInterface';
+        '~beta/sourcebrowser/ymerInterface'
+        '~beta/sourcebrowser/codemoveable';
 -- guienvlib: Attributes --
 searchBrowser: Window
   (#
@@ -605,12 +607,11 @@ searchViewer: searchBrowser
           open::<  (#  do fileMenu.open; fileMenu[]->append #);
           
        #);
-     open::<  (#  do (500,300)->size; INNER open;  #);
-     
+     open::<  (#  do (500,300)->size; INNER open;  #)
   #);
 mySemanticViewer: searchBrowser
   (#
-     aspect::  (#  do 2->value #);
+     aspect::< (#  do 2->value; INNER #);
      contentsType::< 
        (#
           onNewfragmentForm::< 
@@ -688,12 +689,27 @@ mySemanticViewer: searchBrowser
                       #);
                     open::  (#  do 'w'->key; 'Close'->name #)
                  #);
+               nextItem: @menuItem
+                 (#
+                    eventHandler:: 
+                      (#
+                         onStatus:: 
+                           (# 
+                           do THIS(mySemanticViewer).hasErrors->value
+                           #);
+                         onSelect:: 
+                           (#  do THIS(mySemanticViewer).selectnext #)
+                      #);
+                    open::  (#  do 'e'->key; 'Next Error'->name #)
+                 #);
                open:: 
                  (# 
                  do
                     'File'->name;
                     reloadItem.open;
                     reloadItem[]->append;
+                    nextItem.open;
+                    nextItem[]->append;
                     quitItem.open;
                     quitItem[]->append
                  #)
@@ -756,15 +772,102 @@ mySemanticViewer: searchBrowser
             #);
           
        #);
-     hasErrors:BooleanValue
-       (# do (contents.noOfhits>0) -> value
+     hasErrors: BooleanValue (#  do (contents.noOfhits > 0)->value #);
+     selectnext:
+       (# 
+       do
+          (if contents.noOfHits > 0 then
+              contents.nodeslist.contents.selectnext
+          if)
        #);
-     selectnext: (#  
-                 do (if contents.noOfHits>0 then 
-                        contents.nodeslist.contents.selectnext
-                    if)
+     open::<  (#  do (500,300)->size; INNER open;  #)
+  #);
+
+(* Taken from sourcebrowser/private/semanticeditor, but does not work *)
+semanticEditor: mySemanticViewer
+  (#
+     aspect::< (#  do 6->value #);
+     contentsType::< 
+       (#
+          onNewFragmentForm::<  (#  do ff[]->asteditor.newFragment #);
+          dobind::<  (#  do ASTeditor.dobind; INNER dobind #);
+          ASTeditor: @labelled
+            (#
+               dobind: (#  do contents.dobind #);
+               ge: ^guienv.window.editorenv.groupEditor;
+               fe: ^codeEditor;
+               newFragment:
+                 (# ff: ^mps.AST.fragmentForm; 
+                 enter ff[]
+                 do
+                    (ff[],ff.root[],none ,contents[],ge[])
+                      ->browser.edenv.findOrCreateFormEditor->fe[];
+                    
                  #);
-     open::<  (#  do (500,300)->size; INNER open;  #);
+               contentsType::< codemoveableEditor
+                 (#
+                    isolated:: trueObject;
+                    dobind:
+                      (# 
+                      do true->bindRight->bindBottom->bindLeft->bindTop
+                      #);
+                    selectNode:: 
+                      (# 
+                      do (theEditorRoot[],node[],separate)->browser.selectNode
+                      #);
+                    charWidthType:: 
+                      (#  do ASTeditor.private.theLabel.style->ts[] #);
+                    getEncloser::  (#  do ffEncloser[]->theEncloser[] #);
+                    ffEncloser: @codemoveableEditorEncloser
+                      (#
+                         getAST:: 
+                           (# 
+                           do (*gram*) THIS(searchBrowser).mps.AST[]->AST[]
+                           #);
+                         getBETACFL:: 
+                           (# 
+                           do (*GRAM *)
+                              THIS(searchBrowser).mps.BETACFL[]->BETACFL[]
+                           #);
+                         
+                      #);
+                    
+                 #);
+               open:: 
+                 (#
+                    sz: @point;
+                    openContents:: 
+                      (# t: ^text
+                      do
+                         (ASTeditor[],sz)->contents.open;
+                         (* ASTeditor.contents[]->browser.onCodeViewOpen; *)
+                         'No fragments selected'->label;
+                         true->doneInInner
+                      #);
+                    w,h: @integer
+                 do
+                    THIS(semanticEditor).size->(w,h);
+                    (w,(h div aspect)*4-1)->sz->size;
+                    (THIS(semanticEditor)[],fg[],false)
+                      ->browser.edenv.findOrCreateGroupEditor->ge[];
+                    
+                 #);
+               
+            #);
+          open::< 
+            (# 
+            do ASTeditor.open; ASTeditor[]->appendMember; INNER open; 
+            #);
+          
+       #);
+     insetDisplay:
+       (# p: @point; r: @rectangle
+       enter p
+       do (((0,0),p),screenRectangle)->r.intersection; (0,50)->r.inset; 
+       exit r.size
+       #);
+     open::<  (#  do (600,800)->insetDisplay->size; INNER open;  #);
      
-  #)  
+  #);
+  
 
