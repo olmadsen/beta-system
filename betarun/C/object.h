@@ -359,6 +359,7 @@ typedef struct TSD
 } TSD;
 
 #define ActiveComponent TSDReg->_ActiveComponent
+#define ActiveStack     TSDReg->_ActiveStack
 #define IOALimit        TSDReg->_IOALimit
 #define ThreadId        TSDReg->_thread_id
 #define Nums            TSDReg->_nums

@@ -156,6 +156,7 @@ struct Object *AOAalloc(AOA_ALLOC_PARAMS)
   MT_CODE(mutex_lock(&aoa_lock));
 
   DEBUG_CODE(NumAOAAlloc++);
+  DEBUG_AOA(fprintf(output,"AOAalloc(numbytes=%d)",(int)numbytes));
   theObj = AOAallocate(numbytes);
   if (!theObj){
     /* AOAallocate failed. This means that AOANeedCompaction will be
@@ -163,8 +164,10 @@ struct Object *AOAalloc(AOA_ALLOC_PARAMS)
      */
     DEBUG_AOA(fprintf(output, "AOAalloc: forcing IOAGc and AOAGc\n"));
 #ifdef MT
-    ReqObjectSize = numbytes/4;
-    IOAGc();
+    theObj = NULL;
+    fprintf(output,"FIXME:AOAalloc failed, has to GC here!!\n");
+    /*    ReqObjectSize = numbytes/4;
+	  IOAGc(); */
 #else
 #ifdef NEWRUN
     DoGC(SP);

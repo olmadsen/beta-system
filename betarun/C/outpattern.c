@@ -541,7 +541,7 @@ errorTable[] =
   { AOAtoLVRAfullErr,  "AOAtoLVRAtable is full" },
   { CTextPoolErr,      "Text parameter to C routine too big (max. 1000 bytes)" },
   { AOAtoIOAallocErr,  "Failed to allocate AOAtoIOAtable" },
-  { UnorderedFval,     "Unordered Floating Point Value" },
+  { UnorderedFval,     "Unordered Floating Point value in comparison" },
 #ifdef MT
   { StackErr,          "Component Stack Overflow" },
 #else
@@ -981,6 +981,49 @@ int DisplayBetaStack(enum BetaErr errorNumber,
   /* Just to avoid a compiler warning if RTVALHALLA is not defined. */ 
 #endif /* RTVALHALLA */
 #endif /* MT */
+
+
+
+#define BETAENV_RUNTIME_HANDLER 0
+#if BETAENV_RUNTIME_HANDLER
+
+  /* Assuming the following in tstenv/betaenv:
+   *    RuntimeException: ^LowlevelException;
+   *    RuntimeErrorHandler: external
+   *      (# error, currentObject, SP, PC: @integer;
+   *         skip_dump: @boolean;
+   *      enter (error, currentObject, PC, SP)
+   *      do cExternalEntry;
+   *         (if RuntimeException[]<>NONE then
+   *             (error, currentObject, PC, SP)
+   *               -> RuntimeException 
+   *               -> skip_dump;
+   *         if);
+   *      exit continue
+   *      #);
+   * do ...
+   *    RuntimeErrorHandler## -> makeCBF; (* first CB installed *)
+   */
+  
+  if (errorNumber==StopCalledErr){
+      DEBUG_CODE(fprintf(output, "RTS: ignoring handler for StopCalled\n"));
+  } else {
+    DEBUG_CODE(fprintf(output, "RTS: setting BetaStackTop to value before trap\n"));
+    BetaStackTop = StackEnd;
+    if (CBFA && CBFA->entries){
+      int skip_dump;
+      DEBUG_CODE(fprintf(output, 
+			 "RTS: calling errorhandler (first callback)\n"));
+      skip_dump = ((int (*)(enum BetaErr, struct Object *, long *, long *))
+		   ((&CBFA->entries[0].theStruct)+1))(errorNumber, 
+						      theObj, 
+						      thePC, 
+						      StackEnd);
+      if (skip_dump) return 0;
+    }
+  }
+#endif /* BETAENV_RUNTIME_HANDLER */
+
 
 
   if (isMakingDump){

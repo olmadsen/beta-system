@@ -443,7 +443,7 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 #ifdef MT
       case 0x80: /* Solaris 2.3, 2.4, 2.5 */
       case 0x100: /* Solaris 2.5.1 */
-	/* tle 16 trap => stack overflow */
+	/* tle 16 trap => component stack overflow */
 	todo=DisplayBetaStack( StackErr, theObj, PC, sig); break;
 #endif
       case 0x81: /* Solaris 2.3, 2.4, 2.5 */

@@ -86,6 +86,7 @@ extern void InstallSigHandler(int sig);
 
 #ifdef MT
 /* C/multithread.c */
+extern void destroy_TSD(void);
 extern void initSynchVariables(void);
 extern int numProcessors(int online);
 extern thread_t attToProcessor(struct Component *comp);

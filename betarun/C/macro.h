@@ -98,7 +98,7 @@ do {                               \
 
 #if defined(sparc) || defined(NEWRUN)
 #ifdef MT
-#define inIOA(x)     ((x) && (/*(unsigned)(gIOA) <= (unsigned)(x) &&*/ (unsigned)(x)< (unsigned)(gIOATop)))
+#define inIOA(x)     ((x) && ((unsigned)(gIOA) <= (unsigned)(x) && (unsigned)(x)< (unsigned)(gIOATop)))
 #else
 #define inIOA(x)     (((unsigned)(x) - (unsigned)(IOA)) < (unsigned)(IOATopOff))
 #endif /* MT */

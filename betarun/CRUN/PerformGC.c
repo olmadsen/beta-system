@@ -8,60 +8,7 @@
 #include "beta.h"
 #include "crun.h"
 
-#ifdef MT
-
-struct Object *doGC(unsigned numbytes)
-{ 
-  int i;
-  struct Object *newObj;
-
-  ReqObjectSize = numbytes/4;
-  /* Try up to 3 IOAGcs to mature enough object to go into AOA */
-  for (i=0; i<3; i++){
-    IOAGc();
-    /* FIXME: update tsd ioatop and others */
-    
-    if ((long)IOATop+numbytes <= (long)IOALimit) {
-      /* There is now room in IOA for the new object */
-      newObj = (struct Object *)IOATop;
-      IOATop += numbytes;
-      return newObj;
-    } else {
-      INFO_IOA(fprintf(output, "[%d]\n", i+1));
-      if (i==2){
-	/* Have now done two IOAGc's without freeing enough space.
-	 * Make sure that all objects go to AOA in the next GC.
-	 */
-	IOAtoAOAtreshold=2;
-	DEBUG_IOA(fprintf(output, "Forcing all objects in IOA to AOA\n"));
-	IOAGc();
-	/* FIXME: */
-	if ((long)IOATop+numbytes <= (long)IOALimit) {
-	  /* There is now room in IOA for the new object */
-	  newObj = (struct Object *)IOATop;
-	  IOATop += numbytes;
-	  return newObj;
-	} else {
-	  /* Have now tried everything to get enough space in IOA */
-	  /* Aber dann haben wir anderen metoden! */
-	  return AOAcalloc(numbytes);
-	}
-      }
-    }
-  }
-  /* Not reached */
-  DEBUG_CODE(Claim(TRUE, "doGC: end not reached"));
-  return 0;
-}
-
-void DoGC() /* The one called directly from betaenv */
-{
-  fprintf(output, "DoGC: NYI\n");
-  doGC(0);
-}
-
-
-#else /* Not MT */
+#ifndef MT
 
 #ifdef crts
 extern long a0;

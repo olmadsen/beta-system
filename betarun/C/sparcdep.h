@@ -98,6 +98,19 @@ register volatile void *GCreg4 __asm__("%o4");
 #define SaveVar(var) push(var)
 #define RestoreVar(var) pop(var)
 
+#ifdef MT
+#define CallWithSave(name)                              \
+           "mov %o7,%l7; "                              \
+           "call "CPREF#name"; "                        \
+           "st %i0,[%g6+24]; " /* TSD->_CurrentObject */\
+           "mov %l7,%o7; "                              \
+           "ld [%g6+24],%i0; "                          \
+           "retl; "                                     \
+           "st %g0,[%g6+24];  "
+#endif /* MT */
+
+
+#ifndef MT
 /* AlloC, AlloI, AlloH, AlloS */
 #define ParamOriginProto(type, name)			\
   asmlabel(name,					\
@@ -113,6 +126,21 @@ register volatile void *GCreg4 __asm__("%o4");
                int i3,                                  \
                int i4)
 
+#else /* MT */
+
+/* AlloC */
+#define ParamOriginProto(type, name)			\
+  asmlabel(name,					\
+	   "mov %i1,%o1; "  /* proto */			\
+           CallWithSave(name)                           \
+	   );			                        \
+  type C##name(struct Object *origin,                   \
+               struct ProtoType *proto)
+
+#endif /* MT */
+
+
+#ifndef MT
 
 /* Att, AttBC, HandleIndexErr */
 #define ParamThisComp(type, name)			\
@@ -125,6 +153,21 @@ register volatile void *GCreg4 __asm__("%o4");
  type C##name(struct Object *this, struct Component *comp,\
               int i2, int i3, int i4)
 
+#else /* MT */
+
+/* HandleIndexErr */
+#define ParamThisComp(type, name)			\
+  asmlabel(name,                                        \
+	   "mov %i0,%o0; "				\
+	   "mov %i1,%o1; "				\
+	   CallWithSave(name)                           \
+	   );                                           \
+ type C##name(struct Object *this, struct Component *comp)
+
+#endif /* MT */
+
+
+#ifndef MT
 
 /* Susp */
 #define ParamThis(type, name)	\
@@ -136,6 +179,10 @@ register volatile void *GCreg4 __asm__("%o4");
 	   "mov %i0,%o0; ");	\
  type C##name(struct Object *this, int i1, int i2, int i3, int i4)
 
+#endif /* MT */
+
+#ifndef MT
+
 /* AlloSI, AlloSC */
 #define ParamStruc(type, name)				\
   asmlabel(name,					\
@@ -146,6 +193,10 @@ register volatile void *GCreg4 __asm__("%o4");
 	   "mov %i1,%o0;"  /* struc */			\
 	   );			                        \
  type C##name(struct Structure *struc, int i1, int i2, int i3, int i4)
+
+#endif /* MT */
+
+#ifndef MT
 
 /* AlloRR, AlloVR1, AlloVR2, AlloVR4, AlloVR8 */
 #define ParamThisOffRange(name)		        	\
@@ -163,6 +214,10 @@ register volatile void *GCreg4 __asm__("%o4");
 	      int i3,					\
 	      int i4,					\
 	      /*unsigned*/ int range)
+     
+#endif /* MT */
+
+#ifndef MT
 
 /* ExtRR, ExtVRx, NewRR, NewVRx */
 #define ParamObjOffRange(name)			        \
@@ -178,6 +233,21 @@ register volatile void *GCreg4 __asm__("%o4");
 	      int i3,					\
 	      int i4,					\
 	      unsigned offset /* in bytes */)
+	      
+#else /* MT */
+
+/* ExtRR, ExtVRx */
+#define ParamObjOffRange(name)			        \
+  asmlabel(name, 					\
+	   CallWithSave(name)                           \
+           );                                           \
+ void C##name(struct Object *theObj,			\
+	      unsigned offset, /* in bytes */           \
+	      /*unsigned*/ int range)
+
+#endif /* MT */
+
+#ifndef MT
 
 /* CopyRR, CopyVR1, CopyVR2, CopyVR4, CopyVR8 */
 #define ParamRepObjOff(name)                            \
@@ -185,11 +255,42 @@ void name(struct ValRep *theRep,                        \
 	   struct Object *theObj,                       \
 	   unsigned offset /* in ints */)
 
+#else /* MT */
+
+/* CopyRR, CopyVR1, CopyVR2, CopyVR4, CopyVR8 */
+#define ParamRepObjOff(name)                            \
+  asmlabel(name,                                        \
+	   CallWithSave(name)                           \
+	   );                                           \
+void C##name(struct ValRep *theRep,                     \
+	     struct Object *theObj,                     \
+	     unsigned offset /* in ints */)
+     
+#endif /* MT */
+
+#ifndef MT
+
 /* CopySVRI, CopySVRC, CopyVRI, CopyVRC */
 #define ParamORepObjOff(name)                           \
 void name(struct ObjectRep *theRep,                     \
 	   struct Object *theObj,                       \
 	   unsigned offset /* in ints */)
+
+#else /* MT */
+
+/* CopySVRI, CopySVRC, CopyVRI, CopyVRC */
+#define ParamORepObjOff(name)                           \
+  asmlabel(name,                                        \
+	   CallWithSave(name)                           \
+	   );                                           \
+void C##name(struct ObjectRep *theRep,                  \
+	     struct Object *theObj,                     \
+	     unsigned offset /* in ints */)
+     
+#endif /* MT */
+
+
+#ifndef MT
 
 /* CopySRR, CopySVR1, CopySVR2, CopySVR4, CopySVR8 */
 #define ParamRepObjOffLowHigh(name)                     \
@@ -199,6 +300,23 @@ void name(struct ValRep *theRep,                        \
            unsigned low,                                \
 	   long high)
 
+#else /* MT */
+
+/* CopySRR, CopySVR1, CopySVR2, CopySVR4, CopySVR8 */
+#define ParamRepObjOffLowHigh(name)                     \
+  asmlabel(name,                                        \
+	   CallWithSave(name)                           \
+	   );                                           \
+void C##name(struct ValRep *theRep,                     \
+	     struct Object *theObj,                     \
+	     unsigned offset, /* in ints */             \
+	     unsigned low,                              \
+	     long high)
+     
+#endif /* MT */
+
+#ifndef MT
+
 /* CopySVRI, CopySVRC CopySRR, CopySVR1, CopySVR2, CopySVR4, CopySVR8 */
 #define ParamORepObjOffLowHigh(name)                    \
 void name(struct ObjectRep *theRep,                     \
@@ -207,7 +325,23 @@ void name(struct ObjectRep *theRep,                     \
            unsigned low,                                \
 	   long high)
 
-/* C procs that gets object, origin, prototype, offset, range,  */
+#else /* MT */
+
+/* CopySVRI, CopySVRC CopySRR, CopySVR1, CopySVR2, CopySVR4, CopySVR8 */
+#define ParamORepObjOffLowHigh(name)                    \
+  asmlabel(name,                                        \
+	   CallWithSave(name)                           \
+	   );                                           \
+void C##name(struct ObjectRep *theRep,                  \
+	     struct Object *theObj,                     \
+	     unsigned offset, /* in ints */             \
+	     unsigned low,                              \
+	     long high)
+     
+#endif /* MT */
+
+#ifndef MT
+/* AlloVRI, AlloVRC */
 #define ParamObjOriginProtoOffRange(name)		\
   asmlabel(name, 					\
            "mov %i1, %o5; " /* proto */			\
@@ -220,6 +354,7 @@ void name(struct ObjectRep *theRep,                     \
 	      int range,			        \
 	      int i4,					\
 	      struct ProtoType *proto)
+#endif /* MT */
 
 /* On the SPARC we need to skip the first instruction */
 #define CallBetaEntry(entry,item)			\
@@ -231,8 +366,23 @@ void name(struct ObjectRep *theRep,                     \
     (* (void (*)()) ((long*)entry+1) )(item);
 #endif
 
-#define push(v) (StackPointer -= 2, StackPointer[16] = (long) v)
-#define pop(v) ((v) = (__typeof__(v))StackPointer[16], StackPointer += 2)
+#ifdef MT
+# define push(v) \
+{\
+   RefTopOffReg++;\
+   if (DataTopOffReg<RefTopOffReg) __asm__("ta 16");\
+   *(long*)((long)ActiveStack + (long)RefTopOffReg) = (long)v;\
+}
+
+# define pop(v) \
+{\
+   (v) = *((__typeof__(v)*)((long)ActiveStack+(long)RefTopOffReg));\
+   RefTopOffReg--;\
+}
+#else
+# define push(v) (StackPointer -= 2, StackPointer[16] = (long) v)
+# define pop(v) ((v) = (__typeof__(v))StackPointer[16], StackPointer += 2)
+#endif
 
 #define Protect(var, code)				\
   push(var);						\

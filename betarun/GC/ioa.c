@@ -20,6 +20,7 @@ void ProcessStackObj(struct StackObject *sObj)
 {
   struct Object **handle = (struct Object **)&sObj->Body;
   struct Object **last   = (struct Object **)((long)&sObj->Proto + sObj->refTopOff);
+  DEBUG_MT(fprintf(output, "ProcessStackObj: 0x%x\n",(int)sObj));
   while (handle<=last) {
     DEBUG_MT(fprintf(output, 
 		     "ProcessStackObj: processing cell 0x%x (%s) in stackobject 0x%x\n",
@@ -106,6 +107,7 @@ void IOAGc()
   DEBUG_AOA( AOAcopied = 0; IOAcopied = 0; );
   
   /* Follow ActiveComponent */ 
+#ifndef MT
   if (!ActiveComponent && NumIOAGc == 1) {
     char buf[300];
     sprintf(buf, "Could not allocate basic component");
@@ -115,6 +117,8 @@ void IOAGc()
     Notify(buf);
     BetaExit(1);
   }
+#endif
+
 #ifndef NEWRUN
   /* NEWRUN: stackObj is already 0 (cleared at Attach) */
 #ifndef MT
@@ -147,13 +151,23 @@ void IOAGc()
 #ifdef MT
   {
     int i;
-    for (i = 0; i < NumTSD; i++) {
+    for (i = 0; i < TSDlistlen; i++) {
       if (TSDlist[i]) {
+	fprintf(output, "\nTSDlist[%d]: TID=%d:\n", i, TSDlist[i]->_thread_id);
+	fprintf(output, "\tCurrentObject=0x%0x...", (int)TSDlist[i]->_CurrentObject);
 	ProcessReference((handle(Object))(&TSDlist[i]->_CurrentObject));
+	fprintf(output, "CurrentObject=0x%0x\n", (int)TSDlist[i]->_CurrentObject);
+	fprintf(output, "\tOrigin=0x%0x...", (int)TSDlist[i]->_CurrentObject);
 	ProcessReference((handle(Object))(&TSDlist[i]->_Origin));
+	fprintf(output, "Origin=0x%0x\n", (int)TSDlist[i]->_CurrentObject);
 	ProcessReference((handle(Object))(&TSDlist[i]->_ActiveStack));
 	ProcessReference((handle(Object))(&TSDlist[i]->_ActiveComponent));
       }
+#ifdef RTDEBUG
+      else {
+	fprintf(output, "TSDlist[%d] is NULL\n", i);
+      }
+#endif
     }
     CompleteScavenging();
   }
@@ -339,6 +353,8 @@ void IOAGc()
     /* Clear all of the unused part of IOA, so that RT routines does
      * not need to clear cells.
      */
+    memset(GLOBAL_IOATop, 0, IOASize - ((long)GLOBAL_IOATop - (long)GLOBAL_IOA));
+    memset(ToSpace, 0, IOASize);
 
     InfoS_LabB();
     

@@ -4,7 +4,7 @@
  * called from IOA(c)lloc or DoGC.
  */
 #ifdef MT
-extern struct Object *getNewIOASlice(unsigned long);
+extern struct Object *doGC(unsigned long);
 #else
 extern void doGC();
 #endif
@@ -30,7 +30,7 @@ char *IOAalloc(unsigned size)
 #ifdef MT
   /* Manipulate thread specific IOA */
   if ((char *)IOATop+size > (char *)IOALimit){
-    return (char *)getNewIOASlice(size);
+    return (char *)doGC(size);
   }
   p = (char *)IOATop;
   IOATop = (long*)((long)IOATop + size);

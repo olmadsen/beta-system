@@ -86,9 +86,9 @@ void SetupFPU(void)
   /* Enable floating point exceptions */
   EnableFPUexceptions(FPU_ZERODIVISION |
 		      FPU_INVALID |
-		      FPU_DENORMALIZED |
-		      FPU_OVERFLOW |
-		      FPU_UNDERFLOW |
+		      /* FPU_DENORMALIZED | */
+		      /* FPU_OVERFLOW | */
+		      /* FPU_UNDERFLOW | */
 		      /* FPU_PRECISIONLOST */
 		      0
 		      );
