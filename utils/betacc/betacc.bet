@@ -28,6 +28,7 @@ Borland: sdkType
        do 'bcc32'->c.putText;
           (if not theProgram.nodebug then '-v -y ' -> a.putText if);
           ('-D', a[]) -> theProgram.defines.output;
+          ('-I', a[]) -> theProgram.includedirs.output;
           '-O2 -a4 -DWIN32 -Dnti -Dnti_bor -Iexternal -c -o' -> a.putText;
           dst[] -> a.putText; ' ' -> a.put; src[]-> a.putText
        #);
@@ -38,6 +39,7 @@ Borland: sdkType
        do 'tasm32'->c.putText;
           (if not theProgram.nodebug then '-zd ' -> a.putText if);
           ('-d', a[]) -> theProgram.defines.output;
+          ('-i', a[]) -> theProgram.includedirs.output;
           '-w-res -t -m -ml -kh32768 ' -> a.putText;
           src[]->a.putText; ','->a.put;dst[]->a.putText;
        #);
@@ -51,6 +53,7 @@ Microsoft: sdkType
        do 'cl'->c.putText;
           (if not theProgram.nodebug then '-Zd ' -> a.putText if);
           ('-D', a[]) -> theProgram.defines.output;
+          ('-I', a[]) -> theProgram.includedirs.output;
           '-nologo -O2 -Zp4 -DWIN32 -Dnti -Dnti_ms -Iexternal -c -Fo' 
             -> a.putText;
           dst[] -> a.putText; ' ' -> a.put; src[]-> a.putText
@@ -63,6 +66,7 @@ Microsoft: sdkType
               'ml'->c.putText;
               (if not theProgram.nodebug then '-Zi ' -> a.putText if);
               ('-D', a[]) -> theProgram.defines.output;
+              ('-I', a[]) -> theProgram.includedirs.output;
               '-w -nologo -coff -Cp -c -Fo' -> a.putText;
               dst[] -> a.putText; ' -Ta' -> a.putText;
               src[]-> a.putText
@@ -82,6 +86,7 @@ Gnu: sdkType
            do 'gcc' -> c.putText;
               (if not theProgram.nodebug then '-g ' -> a.putText if);
               ('-D', a[]) -> theProgram.defines.output;
+              ('-I', a[]) -> theProgram.includedirs.output;
               '-O6 -DWIN32 -Dnti -Dnti_gnu -o ' -> a.putText;
               dst[] -> a.putText; ' -c ' -> a.putText; src[]-> a.putText
            #);
@@ -89,6 +94,7 @@ Gnu: sdkType
            do 'g++' -> c.putText;
               (if not theProgram.nodebug then '-g ' -> a.putText if);
               ('-D', a[]) -> theProgram.defines.output;
+              ('-I', a[]) -> theProgram.includedirs.output;
               '-O6 -DWIN32 -Dnti -Dnti_gnu -o ' -> a.putText;
               dst[] -> a.putText; ' -c ' -> a.putText; src[]-> a.putText
            #);
@@ -104,7 +110,7 @@ systemenv
    sdktext,asmtext,tmptext: ^Text;
    src,dst: ^Text;
    cmd,arg: ^Text;
-   defines: @list
+   proplist: list
      (# element::text;
         output:
           (# prefix: ^text; out: ^stream;
@@ -117,18 +123,20 @@ systemenv
              #);
           #);
      #);
-   waitingfordefine,verbose,nodebug: @boolean;
+   defines, includedirs: @proplist;
+   waitingfordefine,waitingforincludedir,verbose,nodebug: @boolean;
    startoffilenames: @integer;
    run: @Process;
    sf,df: @DiskEntry;
    
    usage:
      (# 
-     do 'Usage: betacc [ -v ] [ -d ] [ -D symbol ] outputfile sourcefile'
+     do 'Usage: betacc [ -v ] [ -d ] [ -D symbol ] [ -I dir ] outputfile sourcefile'
           -> putline;
         '  -v          Verbose: echo commands before executing them.' -> putline;
         '  -d          Do not produce debug info in outputfile' -> putline;
         '  -D symbol   Pass symbol to preprocessor' -> putline;
+        '  -I dir      Pass include directory to preprocessor' -> putline;
         (failure, 'betacc terminated.') -> stop;
      #);        
    
@@ -175,7 +183,11 @@ do '$(MIASDK)' -> &expandEnvVar(# defaultValue::<
         (if i>1 then (* argument 1 is program name *)
             i->Arguments->arg[];
             (if true
-             // waitingfordefine then
+             // waitingforincludedir then
+                arg.copy -> includedirs.append;
+                false->waitingforincludedir;
+                startoffilenames+1 -> startoffilenames;
+              // waitingfordefine then
                 arg.copy -> defines.append;
                 false->waitingfordefine;
                 startoffilenames+1 -> startoffilenames;
@@ -188,10 +200,14 @@ do '$(MIASDK)' -> &expandEnvVar(# defaultValue::<
              // '-D'->arg.equal then
                 true->waitingfordefine;
                 startoffilenames+1 -> startoffilenames;
+             // '-I'->arg.equal then
+                true->waitingforincludedir;
+                startoffilenames+1 -> startoffilenames;
             if);
         if);
    for);
    (if waitingfordefine then usage if);
+   (if waitingforincludedir then usage if);
    (if startoffilenames+1 <> NoOfArguments then usage if);
    startoffilenames   -> arguments -> dst[] -> &sdk.fixPath;
    startoffilenames+1 -> arguments -> src[] -> &sdk.fixPath;
