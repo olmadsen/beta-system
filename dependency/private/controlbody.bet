@@ -24,6 +24,7 @@ INCLUDE 'findString';
 	(if true
 	 // 'origin'->n.equal // 'body'->n.equal // 'mdbody'->n.equal
 	 // 'build' -> n.equal
+         // 'lib_def' -> n.equal // 'lib_item' -> n.equal
 	 // 'objfile'->n.equal // 'libfile'->n.equal // 'linkopt'->n.equal
 	 // 'betarun'->n.equal // 'make'->n.equal // 'fswitch'->n.equal
 	 // 'on'->n.equal // 'off'->n.equal // 'nolink' ->n.equal
@@ -33,6 +34,45 @@ INCLUDE 'findString';
 	    (p[],n[],2)->PropError
 	if)
      #);
+   PreMatch: booleanvalue
+     (* Attempt to match 
+      * build selector:     e.g. 'nti'
+      * with targetMachine: e.g. 'nti_ms'
+      * 
+      * Note! This version has been written
+      * to match 'nti' with 
+      * either 'nti_ms' or 'nti_gnu'
+      *)
+     (# selector: ^text; 
+     enter selector[]
+     do (if switch[20] then
+            '\nMatch targetMachine: "'->puttext;
+            targetMachine[] -> puttext;
+            '" with build selector: "' -> puttext;
+            selector[] -> puttext;
+        if);
+        L:
+          (# pos: @integer;
+             T: ^text
+          do targetmachine.scanAll
+             (#
+             do pos+1 -> pos;
+                (if ch = '_' then 
+                    (1,pos-1) 
+                      -> targetmachine.sub 
+                      -> T[];
+                    T[] 
+                      -> selector.equalNCS 
+                      -> value;
+                    leave L
+             if)#)
+          #);
+        (if switch[20] then
+            (if value then '" MATCH FOUND!'->putline
+             else '" no match!' -> putline
+        if)if)
+     #);
+   
    originSetHere: @boolean (* code using this var. is made by ESS;
 			    * is needed to handle situations where other tools
 			    * like the debugger may already have setup origin
@@ -122,44 +162,6 @@ do false -> originSetHere;
 		       findThisTarget:
 			 (# default,pre,thiss: [3] ^element;
 			    dTop,pTop,tTop: @integer;
-			    preMatch: booleanvalue
-                              (* Attempt to match 
-                               * build selector:     e.g. 'nti'
-                               * with targetMachine: e.g. 'nti_ms'
-                               * 
-                               * Note! This version has been written
-                               * to match 'nti' with 
-                               * either 'nti_ms' or 'nti_gnu'
-                               *)
-			      (# selector: ^text; 
-			      enter selector[]
-			      do (if switch[20] then
-                                     '\nMatch targetMachine: "'->puttext;
-                                     targetMachine[] -> puttext;
-                                     '" with build selector: "' -> puttext;
-                                     selector[] -> puttext;
-                                 if);
-                                 L:
-                                   (# pos: @integer;
-                                      T: ^text
-                                   do targetmachine.scanAll
-                                      (#
-                                      do pos+1 -> pos;
-                                         (if ch = '_' then 
-                                             (1,pos-1) 
-                                               -> targetmachine.sub 
-                                               -> T[];
-                                             T[] 
-                                               -> selector.equalNCS 
-                                               -> value;
-                                             leave L
-                                      if)#)
-			           #);
-                                 (if switch[20] then
-                                     (if value then '" MATCH FOUND!'->putline
-                                      else '" no match!' -> putline
-                                 if)if)
-                              #);
 			    current: ^ element;
 			 do scan
 			    (#
@@ -412,31 +414,39 @@ do false -> originSetHere;
 		*)
 	       (# thisMachine,foundSomething,machineMatch: @boolean;
 	       do tandem:
-		    (* On first iteration look for exact matching machine
-		     * name. If not found try a second round, looking for
-		     * 'default'.
+		    (* 3 iterations are made:
+                     * 1: look for exact matching machine name
+                     * 2: test is selector is a prefix of machine name
+                     *    ( 'nti' will match 'nti_gnu', 'nti_ms')
+                     * 3: look for a 'default' selector.
 		     *)
-		    (for iteration: 2 repeat
+		    (for iteration: 3 repeat
 			 false -> thisMachine;
 			 ScanParameters
 			 (# doName::
 			      (#
-			      do (if iteration = 1 then
-				     targetMachine[]->n.equal->thisMachine;
-				  else
+			      do (if iteration 
+                                  // 1 then
+				     targetMachine[] 
+                                       -> n.equal 
+                                       -> thisMachine
+				  // 2 then
+                                     n[] -> PreMatch -> thisMachine
+                                  // 3 then
 				     n.makeLC;
-				     'default'->n.equal->thisMachine;
+				     'default' -> n.equal -> thisMachine
 				 if);
 				 machineMatch or thisMachine -> machineMatch;
-				 (prop[],n[])->CheckPropValue
+				 (prop[],n[]) -> CheckPropValue
 			      #);
 			    doString::
 			      (# t: ^Text;
 				 f: @file;
-			      do (if s.length=0 then
+			      do (if s.length = 0 then
 				     (* empty file name: '' *)
 				     (if MDBodyProp then
-					 (prop[],theGroup.fullname,4)->propError
+					 (prop[],theGroup.fullname,4)
+                                           -> propError
 				      else
 					 (* accept '' for others *)
 					 true->foundSomething;
@@ -451,13 +461,13 @@ do false -> originSetHere;
 					  // makeProp then
 					     (t[],theGroup.nameT[]
 					       -> stripPathName)
-					       -> (*AST.*)thePathHandler.convertFilePath
+					       -> thePathHandler.convertFilePath
 					       -> t[];
 					     (if switch[10] then
 						 t[] -> f.name;
 						 (if f.entry.exists  then
 						     (* make file exists *)
-						     (*AST.*)astFileExtension
+						     astFileExtension
 						       -> theGroup.nameT.CopyAppend
 						       -> f.name;
 						     (if switch[19] or f.entry.writeable  then
@@ -468,7 +478,7 @@ do false -> originSetHere;
 						     if);
 						  else
 						     (* if group file is not writeable then issue warning *)
-						     (*AST.*)astFileExtension
+						     astFileExtension
 						       -> theGroup.nameT.CopyAppend
 						       -> f.name;
 						     (if switch[19] or f.entry.writeable  then
@@ -484,14 +494,14 @@ do false -> originSetHere;
 					  // resProp then
 					     (t[],theGroup.nameT[]
 					       ->stripPathName)
-					       -> (*AST.*)thePathHandler.convertFilePath
+					       -> thePathHandler.convertFilePath
 					       -> t[]
 					       -> isFile;
 					     (resourceProperty,t[])
 					       -> currentProperty
 					  // libFileProp then
 					     (t[],theGroup.nameT[]->stripPathName)
-					       -> (*AST.*)thePathHandler.convertFilePath
+					       -> thePathHandler.convertFilePath
 					       -> t[]
 					       -> isFile;
 					     (libfileProperty,t[])
@@ -501,7 +511,7 @@ do false -> originSetHere;
 					       -> CurrentProperty
 					  // objFileProp then
 					     (t[],theGroup.nameT[]->stripPathName)
-					       -> (*AST.*)thePathHandler.convertFilePath
+					       -> thePathHandler.convertFilePath
 					       -> t[]
 					       -> isFile;
 					     (objfileProperty,t[])
@@ -520,7 +530,7 @@ do false -> originSetHere;
 			      #);
 			 #); (* scan parameters *)
 			 (if ((not foundSomething) and
-			     ((iteration=2) or machineMatch)) then
+			     ((iteration=3) or machineMatch)) then
 			     (prop[],targetMachine[],6)->PropError
 			 if);
 			 (if machineMatch then leave tandem if);
@@ -563,7 +573,7 @@ do (*(if switch[10] then
     *)
 
    1->xtrace(#do 'AstOpen: '->xT; fullname[]->xT; xN #);
-   (fullname[],messagestream[]) -> (*AST.*)top.open
+   (fullname[],messagestream[]) -> top.open
    (# astOverflow::<
 	(#
 	do cleanUpAfterException;
@@ -608,14 +618,14 @@ do (*(if switch[10] then
 	   msg[]->MPSException;
 	#);
       ParseErrors::<
-	(# G: ^(*AST.*)fragmentGroup
+	(# G: ^fragmentGroup
 	do cleanUpAfterException; (*fullName[]->(*AST.* )top.namedClose;*)
 	   fullname[]->DGP.groupList.deleteGroup;
 	   fullName[]->parseException;
 	   false->doParse;
 	#);
       FatalParseError::<
-	(# G: ^(*AST.*)fragmentGroup;
+	(# G: ^fragmentGroup;
 	do (* 5/2/96: according to JLK, this is no longer necessary; KJM has
 	    * apparently fixed mps!
 	    * (fullName[],messagestream[])->(*AST.* )top.open->G[];
@@ -709,8 +719,8 @@ do false -> DGP.hasProgramSlot;
    DGP.groupList.scan (# do current[]->DGP.groupList.TryToGC #);
    false -> DGP.lastTransWasReal -> handledUsingList;
 
-   (*AST.*)doRealOpen->ASTval;
-   false->(*AST.*)doRealOpen;
+   doRealOpen->ASTval;
+   false->doRealOpen;
 
    (if rootFragment[] = none then stop if);
    (if xverboseLevel < xverboseLevel.nothing then
@@ -725,7 +735,7 @@ do false -> DGP.hasProgramSlot;
 	       'Repeating translation...'->infostream.putline;
 	       DGP.groupList.scan
 	       (# t: @text; m: @integer;
-		  g: ^(*AST.*)fragmentGroup;
+		  g: ^fragmentGroup;
 		  name,fullname: ^Text;
 	       do (if current.g.controller.status=justOpen then
 		      current.g.nameT->t;
@@ -752,7 +762,7 @@ do false -> DGP.hasProgramSlot;
 			  g[]->buildgraph;
 		       else
 			  current.g.nameT->t;
-			  (*AST.*)astFileExtension->t.append;
+			  astFileExtension->t.append;
 			  (* checking the group file *)
 			  t[]->getmodTime->m;
 			  (if m>current.g.modTime then
@@ -797,7 +807,7 @@ do false -> DGP.hasProgramSlot;
 	   DGP.groupList.statistics(# do screen[]->print #);
        if);
    if);
-   ASTval->(*AST.*)DoRealOpen;
+   ASTval->DoRealOpen;
    rootFragment.copy->lastRootFragment[];
 
 --DependencyGraphInit: dopart--
