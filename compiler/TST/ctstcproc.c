@@ -221,3 +221,5 @@ long tstrealX()
 void flush_stdout(void){
   fflush(stdout);
 }
+
+long long a64(long long a, long long b){ return a+b;}
