@@ -526,19 +526,29 @@ int pid;
    }
 }
 
-int stillExecuting(pid)
-int pid;
-
+int stillExecuting(int pid)
 {
 #ifdef hpux
  return 1;
 #else
+#if 0
  if(kill(pid,0)<0)
    if(errno == EPERM) 
       return 1;
    else 
       return 0;
  return 1;
+#else
+ int stat = 0, res;
+ while ((res = waitpid(pid, &stat, WNOHANG | WNOWAIT)) == -1) {
+   if (errno != EINTR)
+     break;
+ }
+ if (res == 0) {
+   return 1;
+ }
+ return 0;
+#endif
 #endif
 }
 
