@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
- * by Peter Andersen and Tommy Thorn.
+ * by Peter Andersen, Tommy Thorn, and Jacob Seligmann
  */
 
 #define GCable_Module
@@ -40,7 +40,7 @@ void CExitO(long exitAddr, ref(Object) exitObj, ref(Object) theObj)
 	    theComp = ActiveComponent;
 	    if (theComp->CallerComp == 0){
 	       /* attempt to leave basic component! */
-	       BetaError(LeaveBasicCompErr);
+	       BetaError(LeaveBasicCompErr,theObj);
 	    }
 	    ActiveComponent = theComp->CallerComp; theComp->CallerComp = 0;
 	    theObj          = theComp->CallerObj;  theComp->CallerObj  = 0;
