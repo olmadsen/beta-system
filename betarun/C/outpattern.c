@@ -96,10 +96,10 @@ char *machine_type(void)
   
   /* NTI */
 #ifdef nti_bor
-#define MACHINE_TYPE "nti_bor"
+#define MACHINE_TYPE "nti"
 #endif
 #ifdef nti_ms
-#define MACHINE_TYPE "nti_ms"
+#define MACHINE_TYPE "nti"
 #endif
   
 #ifndef MACHINE_TYPE

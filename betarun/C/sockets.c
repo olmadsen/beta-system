@@ -374,7 +374,7 @@ long Errno(void)
 /* 
  *  Find host by name. Return IP-address in host-byteorder. 
  */
-unsigned long host2inetAddr(char *host)
+signed long host2inetAddr(char *host)
 {
   struct hostent *pHostInfo=gethostbyname(host);
 
@@ -437,7 +437,7 @@ char const *nameOfThisHost(long *pErrorCode)
 /*
  *  Get IP-address of this host in host-byteorder. (Cached here)
  */
-unsigned long inetAddrOfThisHost(void)
+signed long inetAddrOfThisHost(void)
 {
   static int inetAddrOfThisHostCached=0;
   static unsigned long inetAddrOfThisHostCache;

@@ -24,7 +24,7 @@
 #define FPU_OVERFLOW      _EM_OVERFLOW
 #define FPU_UNDERFLOW     _EM_UNDERFLOW
 #define FPU_PRECISIONLOST _EM_INEXACT
-#define EnableFPUexceptions(mask) _controlfp(~(mask), _MCW_EM)
+#define EnableFPUexceptions(mask) _controlfp((unsigned int)~(mask), _MCW_EM)
 #endif /* nti_ms */
 
 #ifdef nti_bor

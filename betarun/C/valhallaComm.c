@@ -111,7 +111,7 @@ void valhalla_socket_flush ()
   wheader[0] = ntohl((wnext+3)/4); /* len = number of longs of data */
   wheader[1] = ntohl(wnext); /* header = number of bytes of data. */
   DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_socket_flush: len=%d,header=%d\n",(int)htonl(wheader[0]),(int)htonl(wheader[1])));
-  if (valhalla_writeDataMax (sock,(char *) wheader, (4*htonl(wheader[0]))+8) != (4*htonl(wheader[0]))+8) {
+  if (valhalla_writeDataMax (sock,(char *) wheader, (4*htonl(wheader[0]))+8) != (int)(4*htonl(wheader[0]))+8) {
     fprintf (output, "WARNING -- valhalla_socket_flush failed. errno=%d\n",errno);
   }
   wnext=0;
@@ -224,10 +224,8 @@ int valhalla_readint ()
  * each time the process stops to keep valhalla up to date with its part
  * of the DOT contents. */
 
-static void DOTgarbageOnDelete (index)
-     int index;
+static void DOTgarbageOnDelete (int index)
 { 
-  ;
 }
 
 #ifdef RTDEBUG

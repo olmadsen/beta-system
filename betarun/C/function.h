@@ -96,8 +96,8 @@ extern void* MT_malloc(int size);
 extern void valhallaInit (int debug_valhalla);
 
 /* C/sockets.c */
-extern unsigned long host2inetAddr(char *host);
-extern unsigned long inetAddrOfThisHost(void);
+extern signed long host2inetAddr(char *host);
+extern signed long inetAddrOfThisHost(void);
 extern int createActiveSocket(unsigned long inetAddr, long port, int nonblock);
 extern int createPassiveSocket(long *port, int nonblock);
 extern int acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr);
