@@ -83,8 +83,6 @@ static struct liniarization *createLiniarization();
 static void freeLiniarization(struct liniarization *l);
 static void indirTrap(long sig, siginfo_t *info, ucontext_t *ucon);
 static void swizzleIndirOrigins(struct liniarization *l);
-static void setStartOfLiniarization(struct liniarization *l);
-static void setEndOfLiniarization(struct liniarization *l);
 static void printLiniarizationStatistics(struct liniarization *l);
 static void dumpToDisk(struct liniarization *l);
 static struct liniarization *loadFromDisk(void);
@@ -92,17 +90,38 @@ static void unSwizzleIndirOrigins(struct liniarization *l);
 static void insertInOriginTable(long byteOffset,
                                 long indirRef,
                                 struct liniarization *l);
-static long getLoadTime(struct liniarization *l);
-static long getSaveTime(struct liniarization *l);
+
+/* stat functions */
+static void setStartOfLiniarization(struct liniarization *l);
+static void setEndOfLiniarization(struct liniarization *l);
 static void setStartOfLoad(struct liniarization *l);
 static void setEndOfLoad(struct liniarization *l);
 static void setStartOfSave(struct liniarization *l);
 static void setEndOfSave(struct liniarization *l);
+static void setStartOfLastBuildLinkedList(struct liniarization *l);
+static void setEndOfLastBuildLinkedList(struct liniarization *l);
+static void setStartOfLastCopyToLiniarization(struct liniarization *l);
+static void setEndOfLastCopyToLiniarization(struct liniarization *l);
+static void setStartOfCreateIndirTable(struct liniarization *l);
+static void setEndOfCreateIndirTable(struct liniarization *l);
+static void setStartOfSwizzleToIndirect(struct liniarization *l);
+static void setEndOfSwizzleToIndirect(struct liniarization *l);
+static void setStartOfSwizzleIndirOrigins(struct liniarization *l);
+static void setEndOfSwizzleIndirOrigins(struct liniarization *l);
+static long getLiniarizationTime(struct liniarization *l);
+static long getLoadTime(struct liniarization *l);
+static long getSaveTime(struct liniarization *l);
+static long getLastBuildLinkedListTime(struct liniarization *l);
+static long getLastCopyToLiniarizationTime(struct liniarization *l);
+static long getLastCreateIndirTableTime(struct liniarization *l);
+static long getLastSwizzleToIndirectTime(struct liniarization *l);
+static long getLastSwizzleIndirOriginsTime(struct liniarization *l);
 
 /* GLOBAL VARIABLES */
 
 struct liniarization *l = NULL;
 long returnPC, returnSP, absAddr;
+struct statistics stats;
 
 /* LOCAL VARIABLES */
 #if USEREFSTACK
@@ -118,11 +137,37 @@ long scanFromRoot(struct Object *root)
 {
     long id;
 
+    indirRefsFollowed = 0;
+    
+    setStartOfLiniarization(l);
     linearizeInGC(root);
     copyToLiniarization(root);
     id = createIndirTable(root);
     SwizzleToIndirect();
-
+    
+    /* l now contains the liniarization of the transitive closure of
+       the root. All references within this liniarization has been
+       changed to indirect references. The ref-none check made by the
+       system will catch all indirect references and if a proper
+       traphandler is installed this traphandler can calculate the
+       current absolute address of the referred object. This is true
+       for all dynamic references, but not for origin references. Thus
+       origin references cannot be indirect when the liniarization is
+       in memory, but they still have to be when the liniarization is
+       on disk. Thus when a liniarization enters memory all indirect
+       origin references has to be swizzeled, and when the
+       liniarization leaves memory all absolute origin references into
+       the liniarization has to be unswizzled. IF all absolute origin
+       references into the liniarization all originates from objects
+       in the liniarization, all is well, BUT if an absolute origin
+       reference has been passed on and saved somewhere outside the
+       liniarization this reference cannot be unswzzeled! How often
+       and in which cases is an origin reference copied outside the
+       liniarization?  */
+    
+    swizzleIndirOrigins(l);
+    setEndOfLiniarization(l);
+    
     return id;
 }
 
@@ -139,7 +184,9 @@ void copyToLiniarization(ptr(Object) root)
     ptr(Object) next;
     ptr(Object) obj;
     long offset;
-    
+
+    setStartOfLastCopyToLiniarization(l);
+
     /* Clean up previous data, if any */
     if (l) {
         freeLiniarization(l);
@@ -150,7 +197,6 @@ void copyToLiniarization(ptr(Object) root)
      * wich the objects are moved
      */
     l = createLiniarization();
-    setStartOfLiniarization(l);
 
     /* While there still are unhandled objects in the list */
     for (obj = root; obj; obj = next) {
@@ -164,6 +210,9 @@ void copyToLiniarization(ptr(Object) root)
          */
         obj->GCAttr = offset;
     }
+
+    setEndOfLastCopyToLiniarization(l);
+    
 }
 
 #define LIN_OFFSETTOOBJECT(l, offset) ((ptr(Object))(l -> liniarization + offset))
@@ -174,6 +223,8 @@ long createIndirTable(ptr(Object) root)
     ptr(Object) origobj;
     ptr(Object) copyobj;
 
+    setStartOfCreateIndirTable(l);
+    
     origobj = root;
 
     while (origobj) {
@@ -197,6 +248,8 @@ long createIndirTable(ptr(Object) root)
         /* Mark the copy of the object with its own id for reverse lookup */
         copyobj->GCAttr = id;
     }
+
+    setEndOfCreateIndirTable(l);
     
     /* return id of root */
     return root->GCAttr;
@@ -209,6 +262,8 @@ void SwizzleToIndirect(void)
     ptr(Object) obj;
     ptr (ProtoType) theProto;
 
+    setStartOfSwizzleToIndirect(l);
+    
     for (id = -1; id > l->nextId; id--) {
         index = MAPTOINDEX(id);
         offset = (l -> indirTable)[index].byteOffset;
@@ -304,30 +359,9 @@ void SwizzleToIndirect(void)
             }
         }
     }
-
-    /* l now contains the liniarization of the transitive closure of
-       the root. All references within this liniarization has been
-       changed to indirect references. The ref-none check made by the
-       system will catch all indirect references and if a proper
-       traphandler is installed this traphandler can calculate the
-       current absolute address of the referred object. This is true
-       for all dynamic references, but not for origin references. Thus
-       origin references cannot be indirect when the liniarization is
-       in memory, but they still have to be when the liniarization is
-       on disk. Thus when a liniarization enters memory all indirect
-       origin references has to be swizzeled, and when the
-       liniarization leaves memory all absolute origin references into
-       the liniarization has to be unswizzled. IF all absolute origin
-       references into the liniarization all originates from objects
-       in the liniarization, all is well, BUT if an absolute origin
-       reference has been passed on and saved somwhere outside the
-       liniarization this reference cannot be unswzzeled! How often
-       and in which cases is an origin reference copied outside the
-       liniarization?  */
     
-    swizzleIndirOrigins(l);
+    setEndOfSwizzleToIndirect(l);
     
-    setEndOfLiniarization(l);
 }
 
  
@@ -588,6 +622,8 @@ void swizzleIndirOrigins(struct liniarization *l) {
     long absOriginRef;
     long *origin;
     short originOffset;
+
+    setStartOfSwizzleIndirOrigins(l);
     
     for (i = 0; i < l -> indirTableLength; i++) {
         byteOffset = l -> indirTable[i].byteOffset;
@@ -616,6 +652,9 @@ void swizzleIndirOrigins(struct liniarization *l) {
             *origin = absOriginRef;
         }
     }
+    
+    setEndOfSwizzleIndirOrigins(l);
+    
 }
 
 /* unSwizzleIndirOrigins:
@@ -805,34 +844,74 @@ static struct stackElement *allocStackElement(long id, long offset) {
 #endif
 
 static void setStartOfLiniarization(struct liniarization *l) {
-    gettimeofday(&(l -> startOfLastLiniarize), NULL);
+    gettimeofday(&(stats.startOfLastLiniarize), NULL);
 }
 
 static void setEndOfLiniarization(struct liniarization *l) {
-    gettimeofday(&(l -> endOfLastLiniarize), NULL);
+    gettimeofday(&(stats.endOfLastLiniarize), NULL);
 }
 
 static void setStartOfLoad(struct liniarization *l) {
-    gettimeofday(&(l -> startOfLastLoad), NULL);
+    gettimeofday(&(stats.startOfLastLoad), NULL);
 }
 
 static void setEndOfLoad(struct liniarization *l) {
-    gettimeofday(&(l -> endOfLastLoad), NULL);
+    gettimeofday(&(stats.endOfLastLoad), NULL);
 }
 
 static void setStartOfSave(struct liniarization *l) {
-    gettimeofday(&(l -> startOfLastSave), NULL);
+    gettimeofday(&(stats.startOfLastSave), NULL);
 }
 
 static void setEndOfSave(struct liniarization *l) {
-    gettimeofday(&(l -> endOfLastSave), NULL);
+    gettimeofday(&(stats.endOfLastSave), NULL);
+}
+
+static void setStartOfLastBuildLinkedList(struct liniarization *l) {
+    gettimeofday(&(stats.startOfLastBuildLinkedList), NULL);
+}
+
+static void setEndOfLastBuildLinkedList(struct liniarization *l) {
+    gettimeofday(&(stats.endOfLastBuildLinkedList), NULL);
+}
+
+static void setStartOfLastCopyToLiniarization(struct liniarization *l) {
+    gettimeofday(&(stats.startOfLastCopyToLiniarization), NULL);
+}
+
+static void setEndOfLastCopyToLiniarization(struct liniarization *l) {
+    gettimeofday(&(stats.endOfLastCopyToLiniarization), NULL);
+}
+
+static void setStartOfCreateIndirTable(struct liniarization *l) {
+    gettimeofday(&(stats.startOfLastCreateIndirTable), NULL);
+}
+
+static void setEndOfCreateIndirTable(struct liniarization *l) {
+    gettimeofday(&(stats.endOfLastCreateIndirTable), NULL);
+}
+
+static void setStartOfSwizzleToIndirect(struct liniarization *l) {
+    gettimeofday(&(stats.startOfLastSwizzleToIndirect), NULL);
+}
+
+static void setEndOfSwizzleToIndirect(struct liniarization *l) {
+    gettimeofday(&(stats.endOfLastSwizzleToIndirect), NULL);
+}
+
+static void setStartOfSwizzleIndirOrigins(struct liniarization *l) {
+    gettimeofday(&(stats.startOfLastSwizzleIndirOrigins), NULL);
+}
+
+static void setEndOfSwizzleIndirOrigins(struct liniarization *l) {
+    gettimeofday(&(stats.endOfLastSwizzleIndirOrigins), NULL);
 }
 
 static long getLiniarizationTime(struct liniarization *l) {
     long microStart, microEnd, microDiff;
     
-    microStart = l -> startOfLastLiniarize.tv_sec * 1000000 + l -> startOfLastLiniarize.tv_usec;
-    microEnd = l -> endOfLastLiniarize.tv_sec * 1000000 + l -> endOfLastLiniarize.tv_usec;
+    microStart = stats.startOfLastLiniarize.tv_sec * 1000000 + stats.startOfLastLiniarize.tv_usec;
+    microEnd = stats.endOfLastLiniarize.tv_sec * 1000000 + stats.endOfLastLiniarize.tv_usec;
     
     microDiff = microEnd - microStart;
     
@@ -842,8 +921,8 @@ static long getLiniarizationTime(struct liniarization *l) {
 static long getLoadTime(struct liniarization *l) {
     long microStart, microEnd, microDiff;
     
-    microStart = l -> startOfLastLoad.tv_sec * 1000000 + l -> startOfLastLoad.tv_usec;
-    microEnd = l -> endOfLastLoad.tv_sec * 1000000 + l -> endOfLastLoad.tv_usec;
+    microStart = stats.startOfLastLoad.tv_sec * 1000000 + stats.startOfLastLoad.tv_usec;
+    microEnd = stats.endOfLastLoad.tv_sec * 1000000 + stats.endOfLastLoad.tv_usec;
     
     microDiff = microEnd - microStart;
     
@@ -853,8 +932,63 @@ static long getLoadTime(struct liniarization *l) {
 static long getSaveTime(struct liniarization *l) {
     long microStart, microEnd, microDiff;
     
-    microStart = l -> startOfLastSave.tv_sec * 1000000 + l -> startOfLastSave.tv_usec;
-    microEnd = l -> endOfLastSave.tv_sec * 1000000 + l -> endOfLastSave.tv_usec;
+    microStart = stats.startOfLastSave.tv_sec * 1000000 + stats.startOfLastSave.tv_usec;
+    microEnd = stats.endOfLastSave.tv_sec * 1000000 + stats.endOfLastSave.tv_usec;
+    
+    microDiff = microEnd - microStart;
+    
+    return microDiff;
+}
+
+static long getLastBuildLinkedListTime(struct liniarization *l) {
+    long microStart, microEnd, microDiff;
+    
+    microStart = stats.startOfLastBuildLinkedList.tv_sec * 1000000 + stats.startOfLastBuildLinkedList.tv_usec;
+    microEnd = stats.endOfLastBuildLinkedList.tv_sec * 1000000 + stats.endOfLastBuildLinkedList.tv_usec;
+    
+    microDiff = microEnd - microStart;
+    
+    return microDiff;
+}
+
+static long getLastCopyToLiniarizationTime(struct liniarization *l) {
+    long microStart, microEnd, microDiff;
+    
+    microStart = stats.startOfLastCopyToLiniarization.tv_sec * 1000000 + stats.startOfLastCopyToLiniarization.tv_usec;
+    microEnd = stats.endOfLastCopyToLiniarization.tv_sec * 1000000 + stats.endOfLastCopyToLiniarization.tv_usec;
+    
+    microDiff = microEnd - microStart;
+    
+    return microDiff;
+}
+
+static long getLastCreateIndirTableTime(struct liniarization *l) {
+    long microStart, microEnd, microDiff;
+    
+    microStart = stats.startOfLastCreateIndirTable.tv_sec * 1000000 + stats.startOfLastCreateIndirTable.tv_usec;
+    microEnd = stats.endOfLastCreateIndirTable.tv_sec * 1000000 + stats.endOfLastCreateIndirTable.tv_usec;
+    
+    microDiff = microEnd - microStart;
+    
+    return microDiff;
+}
+
+static long getLastSwizzleToIndirectTime(struct liniarization *l) {
+    long microStart, microEnd, microDiff;
+    
+    microStart = stats.startOfLastSwizzleToIndirect.tv_sec * 1000000 + stats.startOfLastSwizzleToIndirect.tv_usec;
+    microEnd = stats.endOfLastSwizzleToIndirect.tv_sec * 1000000 + stats.endOfLastSwizzleToIndirect.tv_usec;
+    
+    microDiff = microEnd - microStart;
+    
+    return microDiff;
+}
+
+static long getLastSwizzleIndirOriginsTime(struct liniarization *l) {
+    long microStart, microEnd, microDiff;
+    
+    microStart = stats.startOfLastSwizzleIndirOrigins.tv_sec * 1000000 + stats.startOfLastSwizzleIndirOrigins.tv_usec;
+    microEnd = stats.endOfLastSwizzleIndirOrigins.tv_sec * 1000000 + stats.endOfLastSwizzleIndirOrigins.tv_usec;
     
     microDiff = microEnd - microStart;
     
@@ -868,12 +1002,42 @@ void doPrintLiniarizationStatistics() {
 }
 
 static void printLiniarizationStatistics(struct liniarization *l) {
-    printf("Time to liniarize (usec) = %lu\n", getLiniarizationTime(l));
-    printf("Time to liniarize (sec)  = %lu\n", getLiniarizationTime(l)/1000000);
-    printf("Time to load (usec)      = %lu\n", getLoadTime(l));
-    printf("Time to load (sec)       = %lu\n", getLoadTime(l)/1000000);
-    printf("Time to save (usec)      = %lu\n", getSaveTime(l));
-    printf("Time to save (sec)       = %lu\n", getSaveTime(l)/1000000);
+    printf("Time to build linked list (usec, sec) = (%10lu, %5lu)\n",
+           getLastBuildLinkedListTime(l),
+           getLastBuildLinkedListTime(l)/1000000);
+
+    printf("Time to copy to linearization (usec, sec) = (%10lu, %5lu)\n",
+           getLastCopyToLiniarizationTime(l),
+           getLastCopyToLiniarizationTime(l)/1000000);
+    
+    printf("Time to create indir table (usec, sec) = (%10lu, %5lu)\n",
+           getLastCreateIndirTableTime(l),
+           getLastCreateIndirTableTime(l)/1000000);
+
+    printf("Time to create indir table (usec, sec) = (%10lu, %5lu)\n",
+           getLastCreateIndirTableTime(l),
+           getLastCreateIndirTableTime(l)/1000000);
+    
+    printf("Time to swizzle to indirect (usec, sec) = (%10lu, %5lu)\n",
+           getLastSwizzleToIndirectTime(l),
+           getLastSwizzleToIndirectTime(l)/1000000);
+
+    printf("Time to swizzle indirect origins (usec, sec) = (%10lu, %5lu)\n",
+           getLastSwizzleIndirOriginsTime(l),
+           getLastSwizzleIndirOriginsTime(l)/1000000);
+    
+    printf("Time to liniarize (usec, sec) = (%10lu, %5lu)\n",
+           getLiniarizationTime(l),
+           getLiniarizationTime(l)/1000000);
+    
+    printf("Time to load (usec, sec) = (%10lu, %5lu)\n",
+           getLoadTime(l),
+           getLoadTime(l)/1000000);
+
+    printf("Time to save (usec, sec) = (%10lu, %5lu)\n",
+           getSaveTime(l),
+           getSaveTime(l)/1000000);
+    
     printf("Objects liniarized       = %lu\n", l -> noObjects);
     printf("Size of objects          = %lu\n", l -> liniarizationTop);
     printf("Size of liniarization    = %lu\n",
@@ -1023,6 +1187,8 @@ void linearizeInGC(ptr(Object) root)
     ptr(Object) theObj;
     ptr(ProtoType) theProto;
 
+    setStartOfLastBuildLinkedList(l);
+    
     /* point to self to end list.
      * Cannot be zero-term, as that would make it look unmarked
      * for the scanner.
@@ -1140,8 +1306,7 @@ void linearizeInGC(ptr(Object) root)
     }
     /* NULL ternimate list: */
     tail->GCAttr=0;
+    setEndOfLastBuildLinkedList(l);
 }
-
-   
 
 #endif /* LIN */

@@ -33,6 +33,9 @@ typedef struct liniarization {
     long originTableLength;
     struct originRefIndicator *originTable;
     
+} liniarization;
+
+typedef struct statistics {
     struct timeval startOfLastLiniarize;
     struct timeval endOfLastLiniarize;
     
@@ -42,11 +45,26 @@ typedef struct liniarization {
     struct timeval startOfLastSave;
     struct timeval endOfLastSave;
 
-} liniarization;
+    struct timeval startOfLastBuildLinkedList;
+    struct timeval endOfLastBuildLinkedList;
+    
+    struct timeval startOfLastCopyToLiniarization;
+    struct timeval endOfLastCopyToLiniarization;
+    
+    struct timeval startOfLastCreateIndirTable;
+    struct timeval endOfLastCreateIndirTable;
+    
+    struct timeval startOfLastSwizzleToIndirect;
+    struct timeval endOfLastSwizzleToIndirect;
+    
+    struct timeval startOfLastSwizzleIndirOrigins;
+    struct timeval endOfLastSwizzleIndirOrigins;
+} statistics;
 
 /* GLOBAL VARIABLES */
 
 extern struct liniarization *l;
+extern struct statistics stats;
 
 #endif /* LIN */
 #endif /* _LINIARIZE_H_ */
