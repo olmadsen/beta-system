@@ -161,7 +161,59 @@ splitClassSignature: SplitSignature
    
    jcf: ^JavaImage;
    
-   bcstate: @ <<slot new_bcstate:descriptor>>;
+    fields: @
+     (# Field,FieldName: [5] ^text; Type: [5] ^text; Tag: [5] @char;
+        top: @integer;
+        init: (# do 0 -> top #);
+        numLocals, numCells, numArguments: @integer;
+        LocalVariables: [1]@integer;
+        new:
+          (# F,FN,T: ^text; methodClassTag: @char; 
+          enter(F[],FN[],T[],methodClassTag)
+          do (if (top+1->top) > Field.range then
+                 Field.range -> Field.extend;
+                 FieldName.range -> FieldName.extend;
+                 Type.range -> Type.extend;
+                 Tag.range -> Tag.extend
+             if);
+             F[] -> Field[top][];
+             FN[] -> FieldName[top][];
+             T[] -> Type[top][];
+             methodClassTag -> Tag[top];
+             (# name_index, descriptor_index: @integer;
+             do (if methodClassTag 
+                 // 'c' 
+                 // 'p' 
+                 // '[' then
+                    (if methodClassTag = '[' then '[' -> T.prepend if);
+                    (FN[], T[]) -> mstate.jcf.emitFieldDef;
+                 // 's' then (* synthetic field, like 'comp$' *)
+                    (FN[], T[]) -> mstate.jcf.emitPublicSyntheticFieldDef
+                 // 'm' then
+                    (FN[], T[]) -> mstate.allocLocal;
+                 // 'M' // 'C' then (* ???*)
+                 else
+                    '\nField.add: ' -> puttext;
+                    FN[] -> puttext; 
+                    ' : "' -> puttext; T[] -> puttext; '"'->put;
+                    methodclassTag -> put; newline;
+                    (failureTrace,'fields.new:Unknown methodClassTag') -> stop
+                if);
+             #)
+
+          #);
+        scan:
+          (# currentField,currentFieldName,currentType: ^text;
+             currentTag: @char
+          do (for i: top repeat
+                  Field[i][] -> currentField[];
+                  FieldName[i][] -> currentFieldName[];
+                  Type[i][] -> currentType[];
+                  Tag[i] -> currentTag;
+                  INNER scan
+             for)
+          #);
+     #);
    
    noArgsInSignature:
      (# nargs: @int16;
@@ -260,7 +312,7 @@ splitClassSignature: SplitSignature
      #);
 
    allocLocal:
-     (* Meaning of values in BCstate.fields.LocalVariables:
+     (* Meaning of values in fields.LocalVariables:
       * 0: free, -1: unknown, 1: integertype, 2: referencetype, 3: double
       *)
      (# name, type: ^text;
@@ -273,19 +325,19 @@ splitClassSignature: SplitSignature
                        name[] -> xT; ' ' -> put; type[] -> xT
         #)if);
         findSlot:
-          (for i:BCstate.fields.LocalVariables.range repeat
-               (if BCstate.fields.LocalVariables[i] = 0 then
+          (for i:fields.LocalVariables.range repeat
+               (if fields.LocalVariables[i] = 0 then
                    i -> slot;
                    leave findSlot;
                if);
           for);
         (if slot=0 then
             (* Get a new slot *)
-            BCstate.fields.LocalVariables.range+1 -> slot;
-            BCstate.fields.LocalVariables.range (* at least 1 *)
-              -> BCstate.fields.LocalVariables.extend;         
+            fields.LocalVariables.range+1 -> slot;
+            fields.LocalVariables.range (* at least 1 *)
+              -> fields.LocalVariables.extend;         
         if);
-        -1 -> BCstate.fields.LocalVariables[slot];
+        -1 -> fields.LocalVariables[slot];
         (if generateDebugInfo and (name[]<>NONE) and (type[]<>NONE) then
             (65535, 0, name[], type[]) -> jcf.emitLocalVariableDefinition;
         if);
@@ -304,21 +356,21 @@ splitClassSignature: SplitSignature
      enter (name[])
      do 0 -> slot;
         find2Slots:
-          (for i:BCstate.fields.LocalVariables.range-1 repeat
-               (if (BCstate.fields.LocalVariables[i] = 0) and
-                   (BCstate.fields.LocalVariables[i+1] = 0) then
+          (for i:fields.LocalVariables.range-1 repeat
+               (if (fields.LocalVariables[i] = 0) and
+                   (fields.LocalVariables[i+1] = 0) then
                    i -> slot;
                    leave find2Slots;
                if);
           for);
         (if slot=0 then
             (* Get a new slot *)
-            BCstate.fields.LocalVariables.range+2 -> slot;
-            BCstate.fields.LocalVariables.range+1 (* at least 2 *)
-              -> BCstate.fields.LocalVariables.extend;         
+            fields.LocalVariables.range+2 -> slot;
+            fields.LocalVariables.range+1 (* at least 2 *)
+              -> fields.LocalVariables.extend;         
         if);
-        -1 -> BCstate.fields.LocalVariables[slot];
-        -1 -> BCstate.fields.LocalVariables[slot+1];
+        -1 -> fields.LocalVariables[slot];
+        -1 -> fields.LocalVariables[slot+1];
         (if generateDebugInfo and (name[]<>NONE) then
             (65535, 0, name[], 'D') -> jcf.emitLocalVariableDefinition;
         if);
@@ -335,11 +387,11 @@ splitClassSignature: SplitSignature
    releaseLocal:
      (# slot: @integer
      enter slot
-     do (if BCstate.fields.LocalVariables[slot] = 3 (* double *) then
-            0 -> BCstate.fields.LocalVariables[slot];
-            0 -> BCstate.fields.LocalVariables[slot+1]
+     do (if fields.LocalVariables[slot] = 3 (* double *) then
+            0 -> fields.LocalVariables[slot];
+            0 -> fields.LocalVariables[slot+1]
          else
-            0 -> BCstate.fields.LocalVariables[slot]
+            0 -> fields.LocalVariables[slot]
         if);
      #);
    
@@ -1037,38 +1089,38 @@ splitClassSignature: SplitSignature
      #);
    aOpLocal: opLocal
      (# msg: ^text;
-     do (if BCstate.fields.LocalVariables[locNo] 
+     do (if fields.LocalVariables[locNo] 
          // 1 (* integertype *) 
          // 3 (* double *) then
             'aOpLocal: Using local variable of integertype/double with reference instruction'->msg[];
             msg[] -> jvmFIXME;
          else
-            2 (* referencetype *) -> BCstate.fields.LocalVariables[locNo]
+            2 (* referencetype *) -> fields.LocalVariables[locNo]
         if);
         INNER;
      #);
    dOpLocal: opLocal
      (# msg: ^text;
-     do (if BCstate.fields.LocalVariables[locNo] 
+     do (if fields.LocalVariables[locNo] 
          // 1 (* integertype *) 
          // 2 (* referencetype *) then
             'dOpLocal: Using local variable of integertype/referencetype with double instruction'->msg[];
             msg[] -> jvmFIXME;
          else
-            3 (* double *) -> BCstate.fields.LocalVariables[locNo]
+            3 (* double *) -> fields.LocalVariables[locNo]
         if);
         INNER;
      #);
    iOpLocal: opLocal
      (# msg: ^text;
-     do (if BCstate.fields.LocalVariables[locNo] 
+     do (if fields.LocalVariables[locNo] 
          // 2 (* referencetype *) 
          // 3 (* double *) 
             then
             'iOpLocal: Using local variable of double/referencetype with integer instruction'->msg[];
             msg[] -> jvmFIXME;
          else
-            1 (* integertype *) -> BCstate.fields.LocalVariables[locNo]
+            1 (* integertype *) -> fields.LocalVariables[locNo]
         if);
         INNER;
      #);
@@ -1315,79 +1367,6 @@ splitClassSignature: SplitSignature
                   inner
           for)#)
      #);
-#)
-
----new_BCstate:descriptor---
-(# ObjectName:
-     (# superName: ^text
-     do (if true
-         // common.targetMachineId = common.jvm then
-            'java/lang/Object'->supername[];
-         // common.targetMachineId = common.clr then
-            'object'->supername[];
-         else
-            'Unknown_platform.Object' -> supername[];
-        if);
-     exit superName[]
-     #);
-
-   fields: @
-     (# Field,FieldName: [5] ^text; Type: [5] ^text; Tag: [5] @char;
-        top: @integer;
-        init: (# do 0 -> top #);
-        numLocals, numCells, numArguments: @integer;
-        LocalVariables: [1]@integer;
-        new:
-          (# F,FN,T: ^text; methodClassTag: @char; 
-          enter(F[],FN[],T[],methodClassTag)
-          do (if (top+1->top) > Field.range then
-                 Field.range -> Field.extend;
-                 FieldName.range -> FieldName.extend;
-                 Type.range -> Type.extend;
-                 Tag.range -> Tag.extend
-             if);
-             F[] -> Field[top][];
-             FN[] -> FieldName[top][];
-             T[] -> Type[top][];
-             methodClassTag -> Tag[top];
-             (# name_index, descriptor_index: @integer;
-             do (if methodClassTag 
-                 // 'c' 
-                 // 'p' 
-                 // '[' then
-                    (if methodClassTag = '[' then '[' -> T.prepend if);
-                    (FN[], T[]) -> mstate.jcf.emitFieldDef;
-                 // 's' then (* synthetic field, like 'comp$' *)
-                    (FN[], T[]) -> mstate.jcf.emitPublicSyntheticFieldDef
-                 // 'm' then
-                    (FN[], T[]) -> mstate.allocLocal;
-                 // 'M' // 'C' then (* ???*)
-                 else
-                    '\nField.add: ' -> puttext;
-                    FN[] -> puttext; 
-                    ' : "' -> puttext; T[] -> puttext; '"'->put;
-                    methodclassTag -> put; newline;
-                    (failureTrace,'fields.new:Unknown methodClassTag') -> stop
-                if);
-             #)
-
-          #);
-        scan:
-          (# currentField,currentFieldName,currentType: ^text;
-             currentTag: @char
-          do (for i: top repeat
-                  Field[i][] -> currentField[];
-                  FieldName[i][] -> currentFieldName[];
-                  Type[i][] -> currentType[];
-                  Tag[i] -> currentTag;
-                  INNER scan
-             for)
-          #);
-        emitInit:
-          (# 
-          #)
-     #);
-   thisClassName, thisModuleName: ^text;   
 #)
 
 

@@ -1,0 +1,1654 @@
+ORIGIN 'bytecodebackend'; 
+INCLUDE '~beta/process/activate'; 
+INCLUDE '~beta/basiclib/basicsystemenv'; 
+INCLUDE '~beta/basiclib/numberio'; 
+INCLUDE '~beta/basiclib/formatio'; 
+INCLUDE '~beta/basiclib/streamPosition'; 
+INCLUDE '~beta/toollibs/utils/fileExtensions';
+INCLUDE '~beta/basiclib/texthash';
+INCLUDE '~beta/sysutils/pathhandler';
+
+--ByteCodeMachinelib: attributes--
+trace_mem:
+  (# exit false #);
+trace_locals:
+  (# exit false #);
+trace_sig:
+  (# exit false #);
+trace_n:
+  (# exit false #);
+trace_comments:
+  (# exit common.switch[190] #);
+trace_compares:
+  (# exit false #);
+trace_textop:
+  (# exit false #);
+trace_class:
+  (# exit false #);
+trace_convert:
+  (# exit false #);
+
+allow_nop_emit:
+  (# exit false #);
+
+compute_stack_height:
+  (# exit false #);
+check_stack: (* only relevant if compute_stack_height is true *)
+  (# exit false #);
+trace_stack: (* only relevant if compute_stack_height is true *)
+  (# exit true #);
+
+use_reflection:
+  (# exit false #);
+use_modules:
+  (# exit false #);
+generateLineNumbers:
+  (# exit common.switch[41] #);
+notifyFIXME:
+  (# exit true (* not common.switch[188] *) #);
+fixme_is_comment:
+  (# exit true #);
+
+defaultversion:
+  (# exit '1:0:0:0' #);
+
+betaenv_signature:
+  (# T: @Text
+  do 'class [\'%s\']\'%s\'' -> T.putformat(# do common.betaenv.groupname->s; common.betaenv.groupname->s; #);
+  exit T.copy
+  #);
+betaenv_clrbody:
+  (# T: @Text;
+  do '%s_clrbody' -> T.putformat(# do common.betaenv.groupname->s #);
+  exit T.copy
+  #);
+
+reversecond:
+  (# cond: @integer
+  enter cond
+  do (if cond
+      // common.cond_lt then common.cond_gt -> cond
+      // common.cond_le then common.cond_ge -> cond
+      // common.cond_gt then common.cond_lt -> cond
+      // common.cond_ge then common.cond_le -> cond
+     if);
+  exit cond
+  #);
+
+emitcomment:
+  (# T: ^text
+  enter T[]
+  do '/* ' -> mstate.out.puttext;
+     INNER;
+     T[] -> mstate.out.puttext;
+     ' */' -> mstate.out.puttext;
+  #);
+_n:
+  (# n: @integer;
+  enter n
+  do (if trace_n then
+         ' /*'->mstate.out.puttext;
+         n->mstate.out.putint;
+         '*/'->mstate.out.puttext;
+     if);
+  #);
+
+trace_string:
+  (# T: ^text
+  enter t[]
+  do mstate.out.nl;
+     'ldstr "'->mstate.out.puttext; 
+     T[]->mstate.out.puttext; 
+     '"' -> mstate.out.putln;
+     'call void [mscorlib]System.Console::WriteLine(string)' -> mstate.out.putln;
+  #);
+
+escBackSlash:
+  (# T,S: ^text
+  enter T[]
+  do &text[] -> S[];
+     T.scanAll
+     (#
+     do (if ch = '\\' then
+            '\\\\' -> S.puttext
+         else
+            ch -> S.put
+        if);
+     #);
+  exit S[]
+  #);
+
+dotnetFIXME: 
+  (# T: ^text
+  enter T[]
+  do 'FIXME: ' -> (T.copy).prepend -> T[];
+     (if notifyFIXME then
+         '\n***** ' -> screen.puttext; T[] -> screen.putline;
+     if);
+     (if fixme_is_comment then
+         T[] -> emitcomment;
+      else
+         T[] -> trace_string;
+     if)
+  #);
+ConvertType:
+  (# T: ^text
+  enter T[]
+  do (if trace_convert then
+         '/*ConvertType('->mstate.out.puttext;
+         T[]->mstate.out.puttext;
+         ')*/' ->mstate.out.puttext;
+     if);
+     (* Delete valueType indicator character *)
+     removeAtChar:
+       (# 
+       do '@valuetype'->T.findTextAll(# do (inx,inx)->T.delete; restart removeAtChar #);
+       #);
+     (if true 
+      // T[]=NONE then
+         (*(DumpStack, 'ConvertType: T[] is none') -> Stop;*)
+         'ConvertType: T[] is none' -> dotnetFIXME;
+         'ConvertTypeNONE' -> T[];
+      // 'I' -> T.equal then
+         'int32' -> T[];   (if trace_convert then  ' /*I*/' -> T.append if);
+      // '[I' -> T.equal then
+         'int32[]' -> T[]; (if trace_convert then  ' /*[I*/' -> T.append if);
+      // 'C' -> T.equal then
+         'char' -> T[];    (if trace_convert then  ' /*C*/' -> T.append if);
+      // '[C' -> T.equal then
+         'char[]' -> T[];  (if trace_convert then  ' /*[C*/' -> T.append if);
+      // 'D' -> T.equal then
+         'float64' -> T[]; (if trace_convert then  ' /*D*/' -> T.append if);
+      // '[D' -> T.equal then
+         'float64[]' -> T[];  (if trace_convert then ' /*[D*/' -> T.append if);
+      // 'Z' -> T.equal then
+         'bool' -> T[]; (if trace_convert then  ' /*Z*/' -> T.append if);
+      // '[Z' -> T.equal then
+         'bool[]' -> T[];  (if trace_convert then ' /*[Z*/' -> T.append if);
+     if);
+     INNER;
+  exit T[]
+  #);
+RemoveClass:
+  (# type: ^text
+  enter type[]
+  do (if 'class ' -> ((1,6)->type.sub).equal then
+         (1,6) -> type.delete;
+     if);
+  exit type[]
+  #);
+
+AddClass: ConvertType
+  (# isStatic: @boolean;
+     location: ^text;
+     static:< object;
+     nonstatic:< object;
+     omitstatic:< booleanValue;
+  do (if 'static '  -> ((1,7)->T.sub).equal then
+         true -> isStatic;
+         (1,7)->T.delete;
+         static;
+      else
+         nonstatic;
+     if);
+     (if true 
+      // T.length=0
+      // 'bool'     -> T.equal 
+      // 'bool '    -> ((1,5)->T.sub).equal
+      // 'bool,'    -> ((1,5)->T.sub).equal
+      // 'bool[]'   -> ((1,6)->T.sub).equal
+      // 'char'     -> T.equal 
+      // 'char '    -> ((1,5)->T.sub).equal
+      // 'char,'    -> ((1,5)->T.sub).equal
+      // 'char[]'   -> ((1,6)->T.sub).equal
+      // 'float64'  -> T.equal 
+      // 'float64 ' -> ((1,8)->T.sub).equal
+      // 'float64,' -> ((1,8)->T.sub).equal
+      // 'float64[]'-> ((1,9)->T.sub).equal
+      // 'float32'  -> T.equal 
+      // 'float32 ' -> ((1,8)->T.sub).equal 
+      // 'float32,' -> ((1,8)->T.sub).equal
+      // 'float32[]'-> ((1,9)->T.sub).equal
+      // 'int8'     -> T.equal 
+      // 'int8 '    -> ((1,5)->T.sub).equal
+      // 'int8,'    -> ((1,5)->T.sub).equal
+      // 'int8[]'   -> ((1,6)->T.sub).equal
+      // 'int16'    -> T.equal 
+      // 'int16 '   -> ((1,6)->T.sub).equal
+      // 'int16,'   -> ((1,6)->T.sub).equal
+      // 'int16[]'  -> ((1,7)->T.sub).equal
+      // 'int32'    -> T.equal 
+      // 'int32 '   -> ((1,6)->T.sub).equal
+      // 'int32,'   -> ((1,6)->T.sub).equal
+      // 'int32[]'  -> ((1,7)->T.sub).equal
+      // 'int64'    -> T.equal 
+      // 'int64 '   -> ((1,6)->T.sub).equal
+      // 'int64,'   -> ((1,6)->T.sub).equal
+      // 'int64[]'  -> ((1,7)->T.sub).equal
+      // 'void '    -> ((1,5)->T.sub).equal
+      // 'valuetype '-> ((1,10)->T.sub).equal
+         then
+         (* nothing *)
+      else
+         (* Local reference. Add class keyword but no location *)
+         (if trace_class then 'AddClass' -> emitcomment if);
+         (if not ('class '  -> ((1,6)->T.sub).equal) then
+             (*T[] -> safequote -> T[];*)
+             'class ' -> T.prepend;
+         if)
+     if);
+     (if isStatic and (not omitstatic) then
+         'static ' -> T.prepend;
+     if)
+  #);
+
+parseNumberOfArguments: 
+  (# numInputs, numOutputs: @integer;
+     signature: ^text;
+     start: @integer;
+     trace: (# exit false #);
+  enter signature[]
+  do (if trace then
+         'parseNumberOfArguments: ' -> screen.puttext;
+         signature[] -> screen.puttext;
+     if);
+     (if 'void ' -> ((1,5)->signature.sub).equal then
+         0 -> numOutputs;
+      else
+         1 -> numOutputs;
+     if);
+     '(' -> signature.findall(# do inx->start #);
+     (start+1, signature.length-1) -> signature.sub -> signature[];
+     (if true 
+      // signature.length=0 then
+         (* no parameters *)
+         0 -> numInputs;
+      // 'void' -> signature.equal then
+         0 -> numInputs;
+      else
+         1 -> numInputs;
+         ',' -> signature.findall(# do numInputs+1->numInputs #);
+     if);
+     (if trace then
+         (if false then
+             '. Arguments: "'->screen.puttext;
+             signature[] -> screen.puttext;
+             '"' -> screen.put;
+         if);
+         '. NoOfInputs: '->screen.puttext;
+         numInputs -> screen.putint; 
+         '. NoOfOutputs: '->screen.puttext;
+         numOutputs -> screen.putint; 
+         screen.newline;
+     if);
+  exit (numInputs, numOutputs)
+  #);
+
+function_stack_delta:
+  (# signature: ^text;
+     in, out: @integer;
+  enter signature[]
+  do signature[] -> parseNumberOfArguments -> (in, out);
+  exit out-in
+  #);
+
+OutFile: File
+  (# indent: @
+       (# i: @integer;
+          inc: 
+            (# x:@integer 
+            enter x 
+            do (if trace then '/*indent.inc:'->puttext; x->putint; if);
+               (if x=0 then default->x if); 
+               i+x->i;
+               (if trace then '=>'->puttext; i->putint; '*/'->puttext if);
+            #);
+          dec: 
+            (# x:@integer 
+            enter x 
+            do (if trace then '/*indent.dec:'->puttext; x->putint; if);
+               (if x=0 then default->x if); 
+               (if x>i then
+                   0 -> i;
+                   (if trace then '=>'->puttext; i->putint; '!!*/'->puttext if);
+                else
+                   i-x->i;
+                   (if trace then '=>'->puttext; i->putint; '*/'->puttext if);
+               if);
+            #);
+          set:
+            (# enter i #);
+          save:
+            (# do i -> saved_i #);
+          restore:
+            (# do saved_i -> i #);
+          saved_i: @integer;
+          default: (# exit 4 #);
+          trace: @boolean;
+          p: @put;
+       do (if i>0 then (for i repeat ' '->p for); if);
+       #);
+     nl: @
+       (# n: @newline;
+       do n; indent #);
+     putln: 
+       (# p: @putline; T: ^text enter T[] do T[]->p; indent #);
+     
+  #);
+openOut:
+  (# fn: ^text;
+     e: @diskentry;
+  enter fn[]
+  do (if common.hostIsWindows then
+         (* Since package paths may now be part of the file name,
+          * the file name may now contain forward slashes.
+          * Thats not OK on windows.
+          *)
+         fn[] -> SlashToBackslash -> fn[];
+     if);
+     &OutFile[] -> mstate.out[];
+     fn[] -> mstate.out.name;
+     (if not common.switch[188] then
+         '\n'
+         ' [' -> screen.puttext;
+         fn[] -> e.path;
+         e.path.name -> screen.puttext;
+         ']' -> screen.puttext;
+     if);
+     mstate.out.openWrite;
+  #);
+
+stack_delta:
+  (# delta: @integer;
+  enter delta 
+  do (if compute_stack_height then
+         delta+mstate.stack_height->mstate.stack_height;
+         (if mstate.stack_height>mstate.max_stack_height then
+             mstate.stack_height->mstate.max_stack_height;
+         if);
+         (if trace_stack then
+             ' /* stack height: ' -> mstate.out.puttext;
+             mstate.stack_height -> mstate.out.putint;
+             ' */ ' -> mstate.out.puttext;
+         if);
+         (if (mstate.stack_height<0) and (mstate.stack_height-delta>=0) then
+             (if check_stack then
+                 mstate.thisClassName.copy -> screen.puttext;
+                 '::' -> screen.puttext;
+                 mstate.thisSignature[] -> screen.puttext;
+                 ':' -> screen.puttext;
+                 'Stack underflow' -> dotnetFIXME;
+              else
+                 'Stack Underflow!' -> emitcomment;
+             if)
+         if);
+     if)
+  #);
+check_stack_height:
+  (# predicted_height: @integer;
+     msg: ^text;
+  enter predicted_height
+  do (if compute_stack_height then
+         (if mstate.stack_height<>predicted_height then
+             (if check_stack then
+                 mstate.thisClassName.copy -> screen.puttext;
+                 ':: ' -> screen.puttext;
+                 mstate.thisSignature[] -> screen.puttext;
+                 ':' -> screen.puttext;
+             if);
+             'Unexpected stack height ' -> msg[];
+             mstate.stack_height -> msg.putint;
+             ' (' -> msg.puttext;
+             predicted_height -> msg.putint;
+             ' expected)' -> msg.puttext;
+             (if check_stack then
+                 msg[] -> dotnetFIXME;
+              else
+                 msg[] -> emitcomment;
+                 mstate.out.nl;
+             if);
+         if);
+     if)
+  #);
+
+allocLocal:
+  (# type: ^text;
+  enter type[]
+  do '.locals init ([%d] %s)'
+       -> mstate.out.putformat(# do mstate.fields.numLocals -> d; type[] -> s #);
+     mstate.out.nl;
+     mstate.fields.numLocals+1 -> mstate.fields.numLocals;
+  exit numLastLocal
+  #);
+
+releaseLocal:
+  (# locNum: @integer
+  enter locNum
+  do (* Currently not used.
+      * Could recycle locNum by remembering the index and the current type of that index.
+      * A subsequent allocLocal could then reuse this local if it's the same type.
+      *)
+  #);
+
+allocMappedLocal:
+  (# num: @integer;
+     type: ^text;
+     locnum: @integer;
+  enter (num, type[])
+  do -num -> num;
+     (if num>Mstate.MappedLocals.range then
+         (Mstate.MappedLocals.range, num-Mstate.MappedLocals.range)
+           -> max
+           -> Mstate.MappedLocals.extend;
+     if);
+     (if Mstate.MappedLocals[num]=0 then
+         (type[] -> allocLocal -> locnum) + 1 -> Mstate.MappedLocals[num];
+         (* adding 1 to distingguish local 0 from unassigned *)
+         (if trace_locals then
+             '/*Mapped and allocated local %d to %d (noOfArguments=%d)*/'
+               -> mstate.out.putformat(# do -num->d; 
+                                         Mstate.MappedLocals[num]->d; 
+                                         noOfArguments->d;
+                                      #);
+             mstate.out.nl;
+         if);
+         num -> mstate.lastMappedLocal; 
+      else
+         Mstate.MappedLocals[num]- 1 -> locnum;
+         num -> mstate.lastMappedLocal; (* needed? *)
+         (if trace_locals then
+             '/*Mapped and used local %d to %d*/'
+               -> mstate.out.putformat(# do -num->d; locnum->d; #);
+             mstate.out.nl;
+         if);
+     if);
+  exit locnum
+  #);
+
+loc2off:
+  (# locnum, off: @integer
+  enter locnum
+  do (locnum+mstate.fields.numArguments)*4 + 12 -> off;
+  exit off
+  #);
+
+opLocal:
+  (# num: @integer;
+     delta: @integer;
+     isAddressOf:< booleanValue
+  enter num (* local number, NOT offset *)
+  do (if trace_locals then
+         '/*opLocal(num=' ->mstate.out.puttext; 
+         num->mstate.out.putint; 
+         ')*/' -> mstate.out.puttext;
+     if);
+     INNER;
+     'loc' -> mstate.out.puttext;
+     (if isAddressOf then
+         'a' -> mstate.out.put;
+         (if num <= 255 
+             then '.s ' -> mstate.out.puttext
+          else
+             ' ' -> mstate.out.put 
+         if);
+      else
+         (if true
+          // num<0 then
+             'Negative opLocal' -> screen.putline;
+             'Negative opLocal' -> emitcomment;
+             (*(dumpstack, 'Negative opLocal') -> stop*)
+          // num <= 3 
+             then '.' -> mstate.out.put
+          // num <= 255 
+             then '.s ' -> mstate.out.puttext
+          else
+             ' ' -> mstate.out.put 
+         if);
+     if);
+     num -> mstate.out.putint; 
+     delta-> stack_delta; 
+     mstate.out.nl;
+  #);
+
+storeLocal: 
+  opLocal(# do 'st' -> mstate.out.puttext; -1->delta; #);
+loadLocal: 
+  opLocal(# do 'ld' -> mstate.out.puttext; 1->delta; #);
+loadLocalAddress: 
+  loadLocal(# isAddressOf::trueValue #);
+numLastLocal (* Real number of last local *):
+  (# exit mstate.fields.numLocals-1 #);
+
+emitSystemAssemblyReferences:
+  (# 
+  do '/* Assembly references. */' -> mstate.out.putline;
+     'mscorlib' -> importAssembly;
+  #);
+emitBETAAssemblyReferences:
+  (# 
+  do (if common.ComponentDotCJ then
+         'Component' -> importAssembly;
+     if);
+     mstate.imports.scan
+     (# e: @diskentry;
+        assemblyname: ^text;
+     do current[] -> e.path;
+        e.path.name -> assemblyname[];
+        (if assemblyname.copy->untick -> mstate.thisModuleName.equal then
+            (*mstate.thisModuleName[]->emitcomment; mstate.out.newline *)
+         else
+            assemblyName[] -> importAssembly;
+        if);
+     #);
+  #);
+
+importAssembly:
+  (# assemblyname: ^text;
+     is_external: booleanValue
+       (* Only call gacutil for non-beta assemblies.
+        * Ideally imports should contain a flag indicating this,
+        * but it does not currenlty.
+        * So instead we test for the Microsoft .NET famework libraries.
+        * Will fail for third-party assemblies, though 
+        * (but they are probably not in GAC anyway.
+        *)
+       (# 
+       do (if true
+           // 'mscorlib'  -> ((1,8)->assemblyname.sub).equal
+           // 'System'    -> ((1,6)->assemblyname.sub).equal
+           // 'Microsoft' -> ((1,9)->assemblyname.sub).equal
+              then
+              true -> value;
+          if);
+       #);
+  enter assemblyname[]
+  do
+     (if assemblyname[] -> mstate.imported_assemblies.add then
+         mstate.out.indent;
+         '.assembly extern%s ' 
+           -> mstate.out.putformat(# 
+                                  do (if common.switch[186] then 
+                                         ' retargetable'->s 
+                                      else 
+                                         ''->s
+                                     if)
+                                  #);
+         assemblyname[] -> safequote -> mstate.out.puttext;
+         <<SLOT ImportAssemblyVersion: descriptor>>
+     if)
+  #);
+
+lookupAssemblyVersion:
+  (# assemblyname: ^text;
+     version, publickeytoken: ^text;
+     
+     gacutil: <<SLOT GacUtil: descriptor>>;
+     was_there: @boolean;
+  enter assemblyname[]
+  do '1:0:0:0' -> version[];
+     assemblyname[] 
+       -> mstate.lookedup_assemblies.get
+       -> (was_there, version[], publickeytoken[]);
+     (if not was_there then
+         gacutil;
+         (assemblyname[], version[], publickeytoken[])
+           -> mstate.lookedup_assemblies.add;
+     if);
+  exit (version[], publickeytoken[])
+  #);
+
+emitFileReferences:
+  (# 
+  do '\n/* File references */\n'
+       -> mstate.out.puttext;
+     mstate.imports.scan
+     (#
+     do '.file ' -> mstate.out.puttext;
+        current[] -> mstate.out.puttext;
+        (if use_modules then
+            '.netmodule\n' -> mstate.out.puttext;
+         else
+            '.dll\n' -> mstate.out.puttext;
+        if);
+     #);
+  #);
+
+emitModuleReferences:
+  (# 
+  do '/* Module references */\n'
+       -> mstate.out.puttext;
+     mstate.imports.scan
+     (#
+     do (if use_modules then
+            '.module extern ' -> mstate.out.puttext;
+         else
+            mstate.out.indent;
+            '.assembly extern%s '
+              -> mstate.out.putformat(# 
+                                     do (if common.switch[186] then 
+                                            ' retargetable'->s 
+                                         else 
+                                            ''->s
+                                        if);
+                                     #);
+            
+        if);
+        current[] -> safequote -> mstate.out.puttext;
+        (if use_modules then
+            '.netmodule\n' -> mstate.out.puttext;
+         else
+            ' {}\n' -> mstate.out.puttext;
+        if);
+     #);
+  #);
+emitAssemblyHeader:
+  (# emitAssemblyInfo:
+       (# 
+       do '//********************************************\n'
+          '//*       Information about the assembly     *\n'
+          '//********************************************\n'
+          '\n'
+          '/* Assembly declaration. */' -> mstate.out.putln;
+          '.assembly%s \'%s\' {'
+            -> mstate.out.putformat(# 
+                                   do (if common.switch[186] then 
+                                          ' retargetable'->s 
+                                       else 
+                                          ''->s
+                                      if);
+                                      mstate.thisModuleName[]->s
+                                   #);
+          mstate.out.indent.inc; mstate.out.putln;
+          '.hash algorithm 32772	// selected algorithm is SHA1' -> mstate.out.putln;
+          '.ver ' -> mstate.out.puttext; defaultversion -> mstate.out.putline;
+          mstate.out.indent.dec;
+          mstate.out.indent;
+          '}' -> mstate.out.putline;
+          '.module \'%s.dll\'\n\n'
+            ->  mstate.out.putFormat(# do mstate.thisModuleName[]->s #);
+       #);
+  do 
+     emitAssemblyInfo;
+     emitSystemAssemblyReferences;
+     emitBETAAssemblyReferences;
+  #);
+emitModuleHeader:
+  (# emitModuleInfo:
+       (# 
+       do '//********************************************\n'
+          '//*       Information about this module      *\n'
+          '//********************************************\n'
+          '\n'
+          '/* Module declaration. */\n'
+          '.module %s.netmodule\n\n'
+            ->  mstate.out.putFormat(# do mstate.thisModuleName[]->s #);
+       #);
+  do emitModuleInfo;
+     emitSystemAssemblyReferences;
+     emitModuleReferences;
+     emitFileReferences;
+  #);
+emitMemOp:
+  (# op, tmp: ^text; varNo, origVarNo: @integer;
+  enter(op[],varNo)
+  do (* currently we assume that local variables have
+      * addresses: 0,12,16,20,... that are mapped to 0,1,2,3,...
+      * 0 is this.
+      * Hmmm, this means that this and local[0] is the same?
+      * No: local number 0 has address 12+mstate.fields.numArguments*4.
+      *)
+     varNo -> origVarNo;
+     (if trace_mem then
+         varNo->('mem:'->tmp[]).putint -> emitcomment;
+         noOfArguments->('noOfArguments:'->tmp[]).putint -> emitcomment;
+     if);
+     op[] -> mstate.out.puttext;
+     (if varNo>0 then
+         (varNo div 4) - 2 -> varNo;
+         (if true
+          // varNo=0 
+          // (noOfArguments<>-1) and (varNo>noOfArguments) then
+             'loc' -> mstate.out.puttext;
+             varNo - (noOfArguments+1) -> varNo;
+          else
+             'arg' -> mstate.out.puttext;
+         if);
+         (if true
+          // varNo <= 3 
+             then '.' -> mstate.out.put
+          // varNo <= 255 
+             then '.s ' -> mstate.out.puttext
+          else
+             ' ' -> mstate.out.put 
+         if);
+      else
+         'arg.' -> mstate.out.puttext;
+     if);
+     varNo -> mstate.out.putint;
+     (if varNo<0 then
+         'Negative location/argument number' -> dotnetFIXME;
+         origVarNo->('mem:'->tmp[]).putint -> emitcomment;
+         tmp[] -> screen.putline;
+         noOfArguments->('noOfArguments:'->tmp[]).putint -> emitcomment;
+         tmp[] -> screen.putline;
+         'Negative memory offset' -> putline;
+     if);
+     (if 'ld'->op.equal then
+         (* ldarg/ldloc *)
+         1 -> stack_delta;
+      else
+         (* starg/stloc *)
+         -1 -> stack_delta;
+     if);
+
+  #);
+
+pushCst:
+  (# i: @integer;
+  do 'ldc.i4'->mstate.out.puttext;
+     INNER; (* get constant into i with correct sign *)
+     (if true
+      // (i=-1) then '.m1' -> mstate.out.puttext;
+      // (0<=i) and (i<=8) then
+         '.'->mstate.out.put; i->mstate.out.putint;
+      // (-128<=i) and (i<=127) then
+         '.s '->mstate.out.puttext; i->mstate.out.putint;
+      else
+         ' '->mstate.out.puttext; i->mstate.out.putint;
+     if);
+     (if (32<=i) and (i<=126) then
+         ' // \'%c\'' -> mstate.out.putformat(# do THIS(pushCst).i->c #);
+     if);
+     1 -> stack_delta;
+  #);
+
+Address:
+  (#
+     reg,off,size,isField,ONlevel: @integer;
+     isValueTypeOrigin: @boolean;
+     receiverType,fieldName,descName,fieldType: ^text;
+     emitField:
+       (# isOrigin: @boolean
+       enter isOrigin
+       do receivertype[] -> safequote -> mstate.out.putText; 1->_n;
+          (if isOrigin then
+              '::origin ' -> mstate.out.puttext; 2->_n;
+           else
+              '::' -> mstate.out.puttext;
+              fieldName[]-> safequote -> mstate.out.puttext;
+              ' ' -> mstate.out.put;
+          if)
+       #);
+     emitType:
+       (#
+       do (if fieldType[] <> none then
+              fieldType[] -> ConvertType -> mstate.out.puttext
+           else
+              'int32' -> mstate.out.puttext;
+              'OBS! missing type info (fieldType)' -> emitcomment
+          if);
+          ' ' -> mstate.out.put;
+       #);
+     load:
+       (#
+       do (if isField
+           // 1 then
+              isValueTypeOrigin->ldfld; 2->_n;
+              emitType;
+              emitField; 
+              0 -> stack_delta (* pops object; pushes field value *);
+           // 2 then
+              (* array *)
+              (if fieldType[] <> none then
+                  (if true
+                   // 'Z' -> fieldType.equal 
+                   // 'bool' -> fieldType.equal 
+                   // 'int8' -> fieldType.equal 
+                      then
+                      'ldelem.i1' -> mstate.out.puttext
+                   // 'I' -> fieldType.equal 
+                   // 'int32' -> fieldType.equal 
+                      then
+                      'ldelem.i4' -> mstate.out.puttext
+                   // 'C' -> fieldType.equal 
+                   // 'char' -> fieldType.equal 
+                   // 'int16u' -> fieldType.equal 
+                      then
+                      'ldelem.u2' -> mstate.out.puttext
+                   // 'int16' -> fieldType.equal
+                      then
+                      'ldelem.i2' -> mstate.out.puttext
+                   // 'F' -> fieldType.equal 
+                   // 'float32' -> fieldType.equal 
+                      then
+                      'ldelem.r4' -> mstate.out.puttext
+                   // 'D' -> fieldType.equal 
+                   // 'float64' -> fieldType.equal 
+                      then
+                      'ldelem.r8' -> mstate.out.puttext
+                   else
+                      'ldelem.ref' -> mstate.out.puttext;
+                  if)
+               else
+                  'load: missing fieldType' -> dotnetFIXME;
+              if);
+              -1 -> stack_delta (* pops object, field name; pushes field value *);
+           else
+              (* method field (local variable/argument?)*)
+              ('ld',off) -> emitMemOp; 
+          if);
+       #);
+     store:
+       (# 
+       do (* local field - object/method ??*)
+          (if isField
+           // 1 then
+              'stfld  ' -> mstate.out.puttext; 3->_n;
+              emitType;
+              emitField;
+              -2 -> stack_delta (* pops object, field name; *)
+           // 2 then
+              (* array *)
+              (if fieldType[] <> none then
+                  (if true
+                   // 'Z' -> fieldType.equal 
+                   // 'bool' -> fieldType.equal 
+                   // 'int8' -> fieldType.equal 
+                      then
+                      'stelem.i1' -> mstate.out.puttext
+                   // 'I' -> fieldType.equal 
+                   // 'int32' -> fieldType.equal 
+                      then
+                      'stelem.i4' -> mstate.out.puttext
+                   // 'C' -> fieldType.equal
+                   // 'char' -> fieldType.equal
+                   // 'int16' -> fieldType.equal 
+                      then
+                      'stelem.i2' -> mstate.out.puttext (* no unsigned store *)
+                   // 'F' -> fieldType.equal
+                   // 'float32' -> fieldType.equal then
+                      'stelem.r4' -> mstate.out.puttext
+                   // 'D' -> fieldType.equal
+                   // 'float64' -> fieldType.equal then
+                      'stelem.r8' -> mstate.out.puttext
+                   else
+                      'stelem.ref' -> mstate.out.puttext;
+                  if);
+               else
+                  'store: missing fieldType' -> dotnetFIXME;
+              if);
+              -2 -> stack_delta (* pops object, field name; *)
+           else
+              ('st',off) -> emitMemOp; 
+          if);
+       #);
+     storeRef:
+       (# withQua,isOrigin: @boolean; sig: ^text
+       enter(withQua,isOrigin,sig[])
+       do (if withQua then
+              sig[] -> castClass
+          if);
+          (if isField
+           // 1 then
+              'stfld  ' -> mstate.out.puttext; 5->_n;
+              (*emittype;*) sig[]->AddClass->mstate.out.puttext; ' '->mstate.out.put;
+              isOrigin -> emitField;
+              -2 -> stack_delta (* pops object, field name; *)
+           // 2 then
+              'stelem.ref' -> mstate.out.puttext;
+              -3 -> stack_delta;
+           else 
+              (if trace_locals or trace_mem then
+                  '/*storeref: off: '-> mstate.out.puttext;
+                  off->mstate.out.putint;
+                  '*/' -> mstate.out.puttext;
+              if);
+              (if off<0 then
+                  (off, sig[]) -> allocMappedLocal -> loc2off -> off;
+              if);
+              ('st',off) -> emitMemOp;  
+          if);
+       #);
+     loadRef:
+       (# withQua: @boolean; sig, knownSig: ^text
+       enter (withQua, sig[], knownSig[])
+       do (if isField
+           // 1 then
+              isValueTypeOrigin->ldfld; 4->_n;
+              (*emittype;*)sig[]->AddClass->mstate.out.puttext;' ' -> mstate.out.put;
+              emitField;
+              0 -> stack_delta (* pops object; pushes field value *)
+           // 2 then
+              'ldelem.ref' -> mstate.out.puttext;
+              1 -> stack_delta;
+           else
+              (if trace_locals or trace_mem then
+                  '/*loadref: off: '-> mstate.out.puttext;
+                  off->mstate.out.putint;
+                  '*/' -> mstate.out.puttext;
+              if);
+              (if off<0 then
+                  (off, sig[]) -> allocMappedLocal -> loc2off -> off;
+              if);
+              ('ld',off) -> emitMemOp;  
+          if);
+          (if withQua then
+              mstate.out.nl;
+              knownSig[] -> castClass
+          if);
+       #);
+     pushAdr:
+       (#
+       do (if off = 0 then
+              (if reg
+               // thisO then
+                  'ldarg.0' -> mstate.out.puttext; 3->_n;
+                  1 -> stack_delta;
+               // callO then
+                  (* skip: register on stack *)
+               else
+                  '/* Warning: pushAdr:register not this */'->mstate.out.puttext;
+              if)
+           else
+              '/* Warning: pushAdr:registeroff<>0 */'->mstate.out.putline;
+              load
+          if)
+       #);
+     dump:
+       (# 
+       do
+          (if size = 0 then 4->mstate.out.putint else size->mstate.out.putint if);
+          '.'->mstate.out.put;
+          (if reg
+           // thisO then  
+           // callO then '%call.'->mstate.out.puttext
+           else
+              '%top.'->mstate.out.puttext
+          if);
+          off->mstate.out.putint
+       #);
+     display:
+       (# 
+       do ' reg:'-> puttext; reg -> putint;
+          ' off:'-> puttext; off-> putint;
+          ' size:'->puttext; size -> putint; 
+          ' ONlevel:'->puttext; ONlevel -> putint;
+          ' isField:'->puttext; isField -> putint; ' ' -> put;
+          receiverType[] -> puttext; ' '->put;
+          fieldName[] -> puttext; ' '->put;
+          fieldType[] -> putline
+       #);
+  #);
+allocStack:
+  (#
+  do (if not compute_stack_height then
+         '.maxstack 1000' -> mstate.out.puttext;
+     if);
+  #);
+emitCmpJmp:
+  (* Compare two top elements and jump conditionally *)
+  (# cond,L,lab,isRef: @integer (* oLM: isRef=1: reference cmp *)
+  enter(cond,L,lab,isRef)
+  do (if trace_compares then
+         'emitCmpJmp' -> emitcomment;
+     if);
+     (if cond
+      // 1 (* =  *) then
+         'beq' -> mstate.out.puttext 
+      // 2 (* <> *) then
+         'bne.un' -> mstate.out.puttext 
+      // 3 (* <  *) then
+         'blt' -> mstate.out.puttext 
+      // 4 (* <= *) then
+         'ble' -> mstate.out.puttext 
+      // 5 (* >  *) then
+         'bgt' -> mstate.out.puttext 
+      // 6 (* >= *) then
+         'bge' -> mstate.out.puttext 
+     if);
+     -2 -> stack_delta;
+     lab -> mstate.labs.use;
+  #);
+emitCmpToBool:
+  (* Compare two top elements and push result *)
+  (# cond: @integer
+  enter cond
+  do (if trace_compares then
+         'emitCmpToBool' -> emitcomment;
+     if);
+     (if cond
+      // 1 (* =  *) then
+         'ceq' -> mstate.out.puttext;
+      // 2 (* <> *) then
+         'ceq' -> mstate.out.putln;
+         'ldc.i4.1' -> mstate.out.putln;
+         'xor' -> mstate.out.puttext;
+      // 3 (* <  *) then
+         'clt' -> mstate.out.puttext 
+      // 4 (* <= *) then
+         'cgt' -> mstate.out.putln;
+         'ldc.i4.1' -> mstate.out.putln;
+         'xor' -> mstate.out.puttext;
+      // 5 (* >  *) then
+         'cgt' -> mstate.out.puttext 
+      // 6 (* >= *) then
+         'clt' -> mstate.out.putln;
+         'ldc.i4.1' -> mstate.out.putln;
+         'xor' -> mstate.out.puttext;
+     if);
+     -1 -> stack_delta;
+  #);
+emitCmpBoolJmp:
+  (* Compare top with 0 and jump conditionally *)
+  (# cond,L,lab: @integer
+  enter (cond,L,lab)
+  do (if trace_compares then
+         'emitCmpBoolJmp' -> emitcomment;
+     if);
+     'ldc.i4.0' -> mstate.out.putln;
+     1 -> stack_delta;
+     (cond->reversecond,L,lab,0) -> emitCmpJmp;
+  #);
+
+emitString:
+  (* See Partition II Metadata, section 5.2 Terminals of the CIL spec *)
+  (# T: ^text; 
+  enter T[]
+  do '"'->mstate.out.put; 
+     T.scanAll
+     (# escape:
+          (# ch: @char
+          enter ch
+          do '\\'->mstate.out.put; ch->mstate.out.put
+          #);
+     do (if ch
+         // ascii.newline then 'n' -> escape;
+         // ascii.ht      then 't' -> escape
+         // '"'           then '"' -> escape
+         // '\\'        then  '\\'-> escape
+         else 
+            (if ch < ' ' then
+                '\\'-> mstate.out.put;
+                '0' + (ch div 64) -> mstate.out.put;
+                ch mod 64 -> ch;
+                '0' + (ch div 8) -> mstate.out.put;
+                ch mod 8 -> ch;
+                '0' + ch -> mstate.out.put
+             else                  
+                (if ch > 255 then
+                    ' ' -> mstate.out.put;
+                 else
+                    ch->mstate.out.put 
+                if);
+            if)
+        if)
+     #);
+     '"'->mstate.out.put; 
+  #);   
+
+castClass:
+  (# sig, msg: ^text;
+  enter sig[]
+  do sig[] -> ConvertType -> sig[];
+     (if 'valuetype '->((1,10)->sig.sub).equal then
+         (* Casting to and from value type instances isn’t permitted.
+          * ECMA 335, section 12.1.6.2.6 
+          *)
+         'Not for value types: castclass  '->msg[];
+         sig[] -> msg.puttext;
+         msg[] -> emitcomment; 
+         mstate.out.nl;
+      else
+         'castclass  ' -> mstate.out.puttext;
+         sig[] -> mstate.out.putln;
+         (* stack neutral *)
+     if)
+  #);
+
+ldfld:
+  (# addressOf: @boolean;
+  enter addressOf
+  do 'ldfld' -> mstate.out.puttext;
+     (if addressOf then 'a' -> mstate.out.put if);
+     '  '->mstate.out.puttext;
+     true -> mstate.thisWasAddressOf;
+  #);
+
+simulate_dup_x1:
+  (* stack: ..., value2, value1
+   *                     ^top
+   *     -> ..., value1, value2, value1
+   *                             ^top
+   *)
+  (# value1, value2: @integer;
+     type1, type2: ^text
+  enter (type1[], type2[])
+  do (if (type1.length=0) or (type2.length=0) then
+         'IL has no dup_x1 instruction' -> dotnetFIXME;
+      else
+         'simulate_dup_x1' -> emitcomment; mstate.out.nl;
+         (* Allocate locals *)
+         type1[] -> allocLocal -> value1;
+         type2[] -> allocLocal -> value2;
+         (* Pop into locals *)
+         value1 -> storeLocal;
+         value2 -> storeLocal; 
+         (* Push in right order *)
+         value1 -> loadLocal;
+         value2 -> loadLocal;
+         value1 -> loadLocal;
+         (* Release locals *)
+         value1 -> releaseLocal;
+         value2 -> releaseLocal;
+     if);
+  #);
+
+simulate_dup_x2:
+  (* stack: ..., value3, value2, value1
+   *                            ^top
+   *     -> ..., value1, value3, value2, value1
+   *                                     ^top
+   *)
+  (# value1, value2, value3: @integer;
+     type1, type2, type3: ^text
+  enter (type1[], type2[], type3[])
+  do (if (type1.length=0) or (type2.length=0) or (type3.length=0) then
+         'IL has no dup_x2 instruction' -> dotnetFIXME;
+      else
+         'simulate_dup_x2' -> emitcomment; mstate.out.nl;
+         (* Allocate locals *)
+         type1[] -> allocLocal -> value1;
+         type2[] -> allocLocal -> value2;
+         type3[] -> allocLocal -> value3;
+         (* Pop into locals *)
+         value1 -> storeLocal;
+         value2 -> storeLocal; 
+         value3 -> storeLocal; 
+         (* Push in right order *)
+         value1 -> loadLocal;
+         value3 -> loadLocal;
+         value2 -> loadLocal;
+         value1 -> loadLocal;
+         (* Release locals *)
+         value1 -> releaseLocal;
+         value2 -> releaseLocal;
+         value3 -> releaseLocal;
+     if);
+  #);
+
+simulate_dup2:
+  (* stack: ..., value2, value1  
+   *                     ^top
+   *     -> ..., value2, value1, value2, value1
+   *                                     ^top
+   *)
+  (# value1, value2: @integer;
+     type1, type2: ^text
+  enter (type1[], type2[])
+  do 'simulate_dup2' -> emitcomment; mstate.out.nl;
+     (* Allocate locals *)
+     type1[] -> allocLocal -> value1;
+     type2[] -> allocLocal -> value2;
+     (* Pop into locals *)
+     value1 -> storeLocal;
+     value2 -> storeLocal; 
+     (* Push in right order *)
+     value2 -> loadLocal;
+     value1 -> loadLocal;
+     value2 -> loadLocal;
+     value1 -> loadLocal;
+     (* Release locals *)
+     value1 -> releaseLocal;
+     value2 -> releaseLocal;
+  #);
+
+simulate_dup2_x1:
+  (* stack: ..., value3, value2, value1  
+   *                             ^top
+   *     -> ..., value2, value1, value3, value2, value1
+   *                                             ^top
+   *)
+  (# value1, value2, value3: @integer;
+     type1, type2, type3: ^text
+  enter (type1[], type2[], type3[])
+  do (if (type1.length=0) or (type2.length=0) or (type3.length=0) then
+         'IL has no dup2_x1 instruction' -> dotnetFIXME;
+      else
+         'simulate_dup2_x1' -> emitcomment; mstate.out.nl;
+         (* Allocate locals *)
+         type1[] -> allocLocal -> value1;
+         type2[] -> allocLocal -> value2;
+         type3[] -> allocLocal -> value3;
+         (* Pop into locals *)
+         value1 -> storeLocal;
+         value2 -> storeLocal; 
+         value3 -> storeLocal; 
+         (* Push in right order *)
+         value2 -> loadLocal;
+         value1 -> loadLocal;
+         value3 -> loadLocal;
+         value2 -> loadLocal;
+         value1 -> loadLocal;
+         (* Release locals *)
+         value1 -> releaseLocal;
+         value2 -> releaseLocal;
+         value3 -> releaseLocal;
+     if)
+  #);
+
+simulate_dup2_x2:
+  (* stack: ..., value4, value3, value2, value1    
+   *                                     ^top
+   *     -> ..., value2, value1, value4, value3, value2, value1
+   *                                                     ^top
+   *)
+  (# value1, value2, value3, value4: @integer;
+     type1, type2, type3, type4: ^text
+  enter (type1[], type2[], type3[], type4[])
+  do (if (type1.length=0) or (type2.length=0) or (type3.length=0) or (type4.length=0) then
+         'IL has no dup2_x2 instruction' -> dotnetFIXME;
+      else
+         'simulate_dup2_x2' -> emitcomment; mstate.out.nl;
+         (* Allocate locals *)
+         type1[] -> allocLocal -> value1;
+         type2[] -> allocLocal -> value2;
+         type3[] -> allocLocal -> value3;
+         type4[] -> allocLocal -> value4;
+         (* Pop into locals *)
+         value1 -> storeLocal;
+         value2 -> storeLocal; 
+         (* Push in right order *)
+         value2 -> loadLocal;
+         value1 -> loadLocal;
+         value4 -> loadLocal;
+         value3 -> loadLocal;
+         value2 -> loadLocal;
+         value1 -> loadLocal;
+         (* Release locals *)
+         value1 -> releaseLocal;
+         value2 -> releaseLocal;
+         value3 -> releaseLocal;
+         value4 -> releaseLocal;
+     if);
+  #);
+
+---byteCode_mstate:descriptor---
+
+(# 
+   out: ^OutFile;
+   
+   (* UNCHANGED FROM JVM *)
+   thisClassName,               (* name of current class           *)
+   thisFullPath,                (* full path of directory for for 
+                                 * current object/class file.
+                                 *)
+   thisFullSourcePath,          (* Full path of directory of current source file *)
+   thisSourceFileName,          (* name of current source file *)
+   thisOrgName,                 (* name of current origin class    *)
+   thisSuperName,               (* name of current super           *)
+   thisSuperOrgName,            (* nameof origin of current super  *)
+   thisSignature,               (* signature of current method     *)
+   thisInnerMethodName,         (* name of a possible inner method;
+                                 * or the name of method 'main'
+                                 *)
+   thisModuleName: ^text;
+   thisBlockLevel,
+   subLevel: @integer; (* current subpattern level *)
+   noOfArguments: @integer;
+   class: ^text;(*  name of class being called - 
+                 * used by subsequent init - ugly
+                 *)
+   isMainMethod: @boolean; (* true if generating code for main method *)
+   hasMainMethod: @boolean; (* true if generating code for module with main method *)
+   hasFields: @boolean; (* true if generating code for a method that has any fields *)
+   previousWasJmp: @boolean;
+   
+   betafile: @file(# initialized: @boolean; pc: @positionConverter #);
+   betafilename: ^text;
+   line, column: @integer;
+   
+   stack_height: @integer;
+   max_stack_height: @integer;
+   
+   MappedLocals: [1]@integer;
+   lastMappedLocal: @integer;
+   
+   imports: @ (* UNCHANGED FROM JVM *)
+     (# L: [100] ^text; top: @integer;
+        clear: (#do 0 -> top #);
+        has: booleanValue
+          (# id: ^text
+          enter id[]
+          do (for i: top repeat
+                  (if id[] -> L[i].equal then 
+                      true -> value; 
+                      leave has 
+          if)for)#);
+        add:
+          (# id: ^text
+          enter id[]
+          do (if not (id[] -> has) then
+                 (if (top+1->top) > L.range then L.range -> L.extend if);
+                 id[] -> L[top][];
+             if)
+          #);
+        scan:
+          (# current: ^text
+          do (for i: top repeat
+                  L[i][] -> current[];
+                  inner;
+             for)
+          #)
+     #);
+   
+   labs: @
+     (#
+        stack_heights: [500] ^IntegerObject;
+        clear:
+          (# 
+          do (for i:stack_heights.range repeat
+                  NONE->stack_heights[i][]
+             for);
+          #);
+        def: @
+          (# l: @integer;
+             msg: ^text;
+          enter l
+          do (* emit code *)
+             'L'->mstate.out.puttext; l->mstate.out.putint; 
+             ': '->mstate.out.puttext;
+             (if compute_stack_height then
+                 (* stack height book-keeping *)
+                 (if l > stack_heights.range then
+                     l+stack_heights.range->stack_heights.extend;
+                 if);
+                 (if stack_heights[l][]<>NONE then
+                     (* Use stack height defined by branch to here *)
+                     stack_heights[l] -> stack_height;
+                     (if trace_stack then
+                         '/* Stack height (from previous branches to here): ' -> mstate.out.puttext;
+                         stack_height -> mstate.out.putint;
+                         ' */' -> mstate.out.puttext;
+                     if);
+                  else
+                     (if previousWasJmp then
+                         (* Cannot use current stack height, since we never
+                          * fall through to here
+                          *)
+                         (if false then
+                             'At definition of L' -> msg[];
+                             l-> msg.putint;
+                             ': Cannot determine stack height' -> msg.puttext;
+                             msg[] -> dotnetFIXME;
+                         if);
+                         (* According to OLM: stack height should be 0 here *)
+                         &IntegerObject[] -> stack_heights[l][];
+                         (if trace_stack then
+                             '/* Stack height (assumed): ' -> mstate.out.puttext;
+                             stack_height -> mstate.out.putint;
+                             ' */' -> mstate.out.puttext;
+                         if);
+                      else
+                         &IntegerObject[] -> stack_heights[l][];
+                         stack_height -> stack_heights[l];
+                         (if trace_stack then
+                             '/* Stack height (fall through from above): ' -> mstate.out.puttext;
+                             stack_height -> mstate.out.putint;
+                         if);
+                     if);
+                 if);
+             if);
+             (*mstate.out.newline;*)
+          #);
+        use: @
+          (# l: @integer;
+             msg: ^text;
+          enter l
+          do (* emit code *)
+             '  L'->mstate.out.puttext;
+             l -> mstate.out.putint;
+             (if l<=0 then
+                 (if not common.switch[188] then
+                     (# msg: ^text;
+                     do 'Use of strange label L'->msg[];
+                        l-> msg.putint;
+                        msg[] -> dotnetFIXME;
+                     #)
+                 if);
+             if);
+             (if compute_stack_height then
+                 (if l > stack_heights.range then
+                     l+stack_heights.range->stack_heights.extend;
+                 if);
+                 (if stack_heights[l][]<>NONE then
+                     (* Other branches to L. Check consistency *)
+                     (if stack_height<>stack_heights[l] then
+                         mstate.out.entry.path.name -> msg[];
+                         ': Stack inconsistency: current stack height '
+                           -> msg.puttext;
+                         stack_height -> msg.putint;
+                         ' at branch target L' -> msg.puttext;
+                         l -> msg.putint;
+                         ' differs from previous value ' -> msg.puttext;
+                         stack_heights[l] -> msg.putint;
+                         msg[] -> dotnetFIXME;
+                     if);
+                  else
+                     &IntegerObject[] -> stack_heights[l][];
+                     stack_height -> stack_heights[l];
+                 if);
+             if);
+          #);
+     #);
+   
+   fields: @
+     (# Field,FieldName: [5] ^text; Type: [5] ^text; Tag: [5] @char;
+        top: @integer;
+        init: (# do 0 -> top #);
+        numLocals, numCells, numArguments: @integer;
+        LocalVariables: [1]@integer;
+        new:
+          (# F,FN,T: ^text; methodClassTag: @char; 
+          enter(F[],FN[],T[],methodClassTag)
+          do (if (top+1->top) > Field.range then
+                 Field.range -> Field.extend;
+                 FieldName.range -> FieldName.extend;
+                 Type.range -> Type.extend;
+                 Tag.range -> Tag.extend
+             if);
+             F[] -> Field[top][];
+             FN[] -> FieldName[top][];
+             T[] -> Type[top][];
+             methodClassTag -> Tag[top];
+             <<SLOT FieldsNewClr:descriptor>>
+          #);
+        scan:
+          (# currentField,currentFieldName,currentType: ^text;
+             currentTag: @char
+          do (for i: top repeat
+                  Field[i][] -> currentField[];
+                  FieldName[i][] -> currentFieldName[];
+                  Type[i][] -> currentType[];
+                  Tag[i] -> currentTag;
+                  INNER scan
+             for)
+          #);
+     #);
+   
+   init:
+     (# PH: @pathhandler;
+        setargfile: @text;
+        trace_name: (# exit false #);
+     do ObjectPool.get(# type::assemblyinfohashtable #)
+          -> lookedup_assemblies[];
+        mstate.out.entry.path.name -> thisModuleName[];
+        (if generateLineNumbers then
+            (* Construct source file path relative to current working dir *)
+            mstate.thisFullPath.copy -> betafilename[];
+            (if (betafilename.length->betafilename.inxGet) = DirectoryChar then
+                (betafilename.length,betafilename.length) -> betafilename.delete;
+            if);
+            (if trace_name then
+                'betafilename1: '->screen.puttext;
+                betafilename[] -> screen.putline;
+            if);
+            betafilename[] -> betafile.name;
+            betafile.entry.path.head -> betafilename[] (* strip trailing /clr *);
+            (if trace_name then
+                'betafilename2: '->screen.puttext;
+                betafilename[] -> screen.putline;
+            if);
+            directorychar -> betafilename.put;
+            mstate.thisSourceFileName.copy -> betafilename.append;
+            '.bet' -> betafilename.append;
+            (if trace_name then
+                'betafilename3: '->screen.puttext;
+                betafilename[] -> screen.putline;
+            if);
+            
+            (if false then
+                (* Get relative path from current directory *)
+                (if trace_name then
+                    'currentdirectory: '->screen.puttext;
+                    currentdirectory -> screen.putline;
+                if);
+                (betafilename[]->BackslashToSlash, currentdirectory->BackslashToSlash) 
+                  -> PH.localpath 
+                  -> betafilename[];
+                (if common.hostIsWindows then
+                    betafilename[] -> SlashToBackslash -> betafilename[];
+                if);
+            if);
+            
+            (if trace_name then
+                'betafilename4: '->screen.puttext;
+                betafilename[] -> screen.putline;
+            if);
+            
+            betafilename[] -> betafile.name;
+        if);
+        ('.il' -> thisModuleName.stripExtension).copy
+          -> mstate.thisModuleName[];
+        (if use_modules then
+            emitModuleHeader;
+         else
+            emitAssemblyHeader;
+        if);
+     #);
+   
+   imported_assemblies: @texthashtable;
+   
+   lookedup_assemblies: ^assemblyinfohashtable;
+   
+   A: @Address;
+   
+   thisWasAddressOf, lastWasAddressOf: @boolean;
+   
+#)
+
+-- LIB: attributes--
+
+safequote:
+  (# T: ^text;
+  enter T[]
+  do (if T.lgth>0 then
+         (if (not (('class [')->((1,7)->T.sub).equal)) and 
+             (not (('valuetype [')->((1,11)->T.sub).equal)) and 
+             (not (T.T[1]='[')) and 
+             (not (T.T[1]='\'')) and 
+             (not (T.T[T.lgth]='\'')) then 
+             T.copy -> T[];
+             '\''->T.prepend;
+             '\''->T.append; 
+         if);
+     if)
+  exit T[]
+  #);
+strQuote:
+  (# T: ^text;
+  enter T[]
+  do (if T.lgth>0 then
+         (if (not (T.T[1]='\"')) and 
+             (not (T.T[T.lgth]='"')) then 
+             T.copy -> T[];
+             '"'->T.prepend;
+             '"'->T.append; 
+         if);
+     if)
+  exit T[]
+  #);
+unQuote:
+  (# t: ^text;
+  enter t[]
+  do (if ((1 -> t.inxGet) = '"') AND ((t.length -> t.inxGet) = '"') then
+         (2, t.length - 1) -> t.sub -> t[];
+     if);
+  exit t[]
+  #);
+
+unTick:
+  (# t: ^text;
+  enter t[]
+  do (if ((1 -> t.inxGet) = '\'') AND ((t.length -> t.inxGet) = '\'') then
+         (2, t.length - 1) -> t.sub -> t[];
+     if);
+  exit t[]
+  #);
+
+textHashTable: hashTable
+  (# element::<(# T: ^text #);
+     honeyM: @honeyMan;
+     initialized: @boolean;
+     init::< (# do honeyM.init; INNER; true -> initialized; #);
+     hashFunction::<(# do e.t[]-> honeyM.hash -> value; INNER #);
+     equal::< (# do left.t[]->right.t.equal->value; INNER #);
+     get:<
+       (# T: ^text;
+          E: ^element;
+          was_there: @boolean;
+       enter T[]
+       do T[] -> unTick -> unQuote -> unTick -> T[];
+          (if not initialized then init if);
+          &element[] -> e[];
+          T[] -> e.T[];
+          e[]->hashfunction->findIndexed
+          (# predicate:: (# do (T[]->current.t.equal)->value; #);
+          do current[]->e[];
+             true->was_there;
+          #);
+          INNER;
+       exit was_there
+       #);
+     add:<
+       (* Returns true if T was not already here *)
+       (# T: ^text;
+          E: ^element;
+          was_inserted: @boolean;
+       enter T[]
+       do T[] -> unTick -> unQuote -> unTick -> T[];
+          (if not initialized then init if);
+          &element[] -> e[];
+          T[] -> e.T[];
+          INNER;
+          e[]->hashfunction->findIndexed
+          (# predicate:: (# do (T[]->current.t.equal)->value; #);
+             notFound:: (# do e[] -> insert; true -> was_inserted #)
+          do current[]->e[] (* Only when found *)
+          #);
+       exit was_inserted
+       #);
+  #);
+
+assemblyinfohashtable: texthashtable
+  (# element::< (# version, publickeytoken: ^text; #);
+     get::< (# version, publickeytoken: ^text;
+            do E.version[] -> version[];
+               E.publickeytoken[] -> publickeytoken[];
+            exit (version[], publickeytoken[])
+            #);
+     add::< (# version, publickeytoken: ^text;
+            enter (version[], publickeytoken[])
+            do version[] -> E.version[];
+               publickeytoken[] -> E.publickeytoken[];
+            #);
+  #);
