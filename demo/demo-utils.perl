@@ -279,6 +279,9 @@ sub init()
 	&cleanup_all();
 	exit 0;
     }
+    open(STDERR, ">&STDOUT") || die "Can't dup stdout";
+    select(STDERR); $| = 1;       # make unbuffered
+    select(STDOUT); $| = 1;       # make unbuffered
 }
 
 sub rmcode(){
@@ -412,7 +415,7 @@ sub run_demo
     &pushd($dir);
     &cleanup($exec);
     print "-"x10 . "Executing " . &trim_path("$dir/$exec") . "-"x10  . "\n"; 
-    system "$exec $args > $exec.run";
+    system "./$exec $args > $exec.run 2>&1";
     &register_prog_status($dir, $exec, $?);
 
     &cat("$exec.run") unless ($skipoutput);
