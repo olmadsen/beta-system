@@ -431,7 +431,7 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
                           *)
    previousWasJmp: @boolean;
    
-   betafile: @file(# pc: @positionConverter #);
+   betafile: @file(# initialized: @boolean; pc: @positionConverter #);
    betafilename: ^text;
    line, column: @integer;
    
@@ -591,16 +591,29 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
    
    init:
      (# BCmch: ^ByteCodeMachine;
+        PH: @pathhandler;
      do ObjectPool.get(# type::assemblyinfohashtable #)
           -> lookedup_assemblies[];
         out.entry.path.name -> thisModuleName[];
         (if generateLineNumbers then
-            (mch[]->BCmch[]).mstate.thisSourceFileName.copy -> betafilename[];
-            '.bet' -> betafilename.append;
+            (* Construct source file path relative to current working dir *)
+            (mch[]->BCmch[]).mstate.thisFullPath.copy -> betafilename[];
             betafilename[] -> betafile.name;
-            betafile.openRead;
-            betafile.pc.update;
-            betafile.close;
+            betafile.entry.path.head -> betafilename[] (* strip trailing /javabc *);
+            directorychar -> betafilename.put;
+            (mch[]->BCmch[]).mstate.thisSourceFileName.copy -> betafilename.append;
+            '.bet' -> betafilename.append;
+            (betafilename[], currentdirectory) -> PH.localpath -> betafilename[];
+            (if betafile.entry.exists then
+                betafile.openRead;
+                betafile.pc.update;
+                betafile.close;
+                true -> betafile.initialized;
+             else
+                'Error: cannot open source file: '->screen.puttext;
+                betafilename[] -> screen.putline;
+                'Will not generate line number info' -> screen.putline;
+            if)
         if);
         '.il' -> thisModuleName.stripExtension;
         thisModuleName.copy -> BCstate.thisModuleName[];
@@ -1816,14 +1829,16 @@ do init;
           // position then
              BC.getShort -> line;
              (if generateLineNumbers then
-                 out.nl;
-                 '.line  ' -> out.puttext; 
-                 line -> betafile.pc.posToLineCol -> (line, column);
-                 line -> out.putint;
-                 ':' -> out.put;
-                 column+1 -> out.putint;
-                 ' ' -> out.puttext;
-                 betafilename[] -> quote -> out.puttext;
+                 (if betafile.initialized then
+                     out.nl;
+                     '.line  ' -> out.puttext; 
+                     line -> betafile.pc.posToLineCol -> (line, column);
+                     line -> out.putint;
+                     ':' -> out.put;
+                     column+1 -> out.putint;
+                     ' ' -> out.puttext;
+                     betafilename[] -> quote -> out.puttext;
+                 if);
              if);
           else
              (* Opcodes all needing a tab for indentation *)

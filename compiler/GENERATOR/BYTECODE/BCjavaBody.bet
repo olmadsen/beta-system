@@ -163,20 +163,34 @@ do (# commentstream: @stream (* maybe something more useful *);
                            *)
       isMainMethod: @boolean; (* true if generating code for main method *)
       
-      betafile: @file(# pc: @positionConverter #);
+      betafile: @file(# initialized: @boolean; pc: @positionConverter #);
       betafilename: ^text;
       line, column: @integer;
       
       init:
         (# BCmch: ^ByteCodeMachine;
-        do (mch[]->BCmch[]).mstate.thisSourceFileName.copy -> betafilename[];
+           PH: @pathhandler;
+        do (* Construct source file path relative to current working dir *)
+           (mch[]->BCmch[]).mstate.thisFullPath.copy -> betafilename[];
+           betafilename[] -> betafile.name;
+           betafile.entry.path.head -> betafilename[] (* strip trailing /javabc *);
+           directorychar -> betafilename.put;
+           (mch[]->BCmch[]).mstate.thisSourceFileName.copy -> betafilename.append;
            '.bet' -> betafilename.append;
+           (betafilename[], currentdirectory) -> PH.localpath -> betafilename[];
            (if generateDebugInfo then
                '../' -> (betafilename.copy).prepend -> jcf.SourceFile;
                betafilename[] -> betafile.name;
-               betafile.openRead;
-               betafile.pc.update;
-               betafile.close;
+               (if betafile.entry.exists then
+                   betafile.openRead;
+                   betafile.pc.update;
+                   betafile.close;
+                   true -> betafile.initialized;
+                else
+                   'Error: cannot open source file: '->screen.puttext;
+                   betafilename[] -> screen.putline;
+                   'Will not generate line number info' -> screen.putline;
+               if);
            if);
         #);
       emitImports:
@@ -896,8 +910,10 @@ do (# commentstream: @stream (* maybe something more useful *);
              // position then
                 BC.getShort -> line;
                 (if generateDebugInfo then
-                    line -> betafile.pc.posToLineCol -> (line, column);
-                    line -> jcf.emitLinenumber;
+                    (if betafile.initialized then
+                        line -> betafile.pc.posToLineCol -> (line, column);
+                        line -> jcf.emitLinenumber;
+                    if);
                 if);
              // pushVal then 
                 A.get; 
