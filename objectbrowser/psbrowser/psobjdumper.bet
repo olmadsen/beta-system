@@ -1,7 +1,9 @@
 ORIGIN '../mpsinterface';
+BODY 'private/psobjdumperbody';
 
 INCLUDE '~beta/objectserver/v2.1/betaOID';
 INCLUDE '~beta/objectserver/v2.1/RepetitionObject';
+
 INCLUDE '~beta/objectserver/v2.1/objectserver';
 INCLUDE '~beta/objectserver/v2.1/location';
 
@@ -15,12 +17,8 @@ INCLUDE 'odOffsetTable';
 
 getObjectServer: objectpool.get
   (# type::< objectserver; 
-     init::< 
-       (#
-       do (failure,'FATAL: No objectserver in objectpool')->stop;
-       #);
+     init:: (# do (failure,'FATAL: No objectserver in objectpool')->stop #);
   #);
-
 getPSObjectDB: getObjectDB (# type:: PSObjectDB #);
 
 PSObjectDB: objectDB
@@ -32,7 +30,7 @@ PSdumper: objectdumper
   (# betaObjectType:: PSbetaObject;
      betaPatternType:: PSbetaPattern;
      
-     (* BetaObject instances used to represent NONE refs: *)
+     (* BetaObject instances used to represent NONE refs and betaenv refs: *)
      NONEobject: @PSbetaObject;
      NONEpattern: @PSbetaPattern;
      betaenvObject: @PSbetaObject;
@@ -47,17 +45,7 @@ PSdumper: objectdumper
      PSObjectOwner: @objectOwner (# #);
      PSPatternOwner: @patternOwner (# #);
      
-     init::
-       (#
-       do
-          THIS(PSdumper)[]->odOffsets.init;
-          (NONE,NONEOID,0,NONE,NONE,NONE)->NONEobject.init;
-          (NONE,NONEOID,0,NONE,NONE)->NONEpattern.init;
-          (NONE,betaenvOID,0,NONE,NONE,NONE)->betaenvObject.init;
-          
-          getGroupsInfoTable->groupsInfo[];
-          getPSObjectDB->objects[];
-       #);
+     init:: (# <<SLOT psdumperinitDopart: dopart>> #);
   #);
 
 PSbetaPattern: BetaPattern
@@ -65,7 +53,7 @@ PSbetaPattern: BetaPattern
      betaObjectType:: PSbetaObject;
      objectDumperType:: PSdumper;
      
-     init:: (# enter (oriOID,oriOffset,odote[],loc[]) #);
+     init:: (# enter (oriOID,oriOffset,odote[],loc[],group,proto) #);
      
      oriOID: @OIDtype; oriOffset: @Integer; 
      (* Object ID of origin part of pattern variable. *) 
@@ -76,30 +64,21 @@ PSbetaPattern: BetaPattern
      odote: ^odOffsetTableElement;
      (* Description of the prototype corresponding to this pattern. *)
      
-     isNone:: 
-       (# 
-       do (loc[]=NONE)->value
-       #);
-     equal:: 
-       (#
-       do (other.odote[],other.oriOffset,other.oriOID)->equalPred->value;
-       #);
-     origin::
-       (#
-       do (oriOID,oriOffset,dumper[])->newPSObject->value[];
-       #); 
+     group,proto: @Integer;
+     
+     isNone:: (# <<SLOT psbetapatternisnoneDopart: dopart>> #);
+     equal:: (# <<SLOT psbetapatternequalDopart: dopart>> #);
+     origin:: (# <<SLOT pdbetapatternoriginDopart: dopart>> #);
+     setOrigin:: (# <<SLOT psbetapatternsetoriginDopart: dopart>> #);
      equalPred:
+       (* Like equal, but comparing this PSbetaPattern with an
+        * ObjectDescriptor and origin object directly. *)
        (# oodote: ^odOffsetTableElement;
           ooriOffset: @Integer;
           ooriOID: @OIDtype;
           value: @Boolean;
        enter (oodote[],ooriOffset,ooriOID)
-       do false->value;
-          (if oodote.od[]->odote.od.equal then
-              (if ooriOffset=oriOffset then
-                  (ooriOID,oriOID)->equalOID->value;
-              if);
-          if);
+       <<SLOT psbetapatternequalpredDopart: dopart>>
        exit value
        #);
   #);
@@ -111,6 +90,117 @@ PSbetaObject: betaObject
      betaObjectType:: PSbetaObject;
      objectDumperType:: PSdumper;
      
+     init:: (# enter (OID,offset,state[],odote[],loc[]) #);     
+     descriptionType:: (#<<SLOT psbetaobjectdescriptiontypeDopart: dopart>>#);
+     isComponentObject:: (# do false->value #);
+     Equal:: (# <<SLOT psbetaobjectequalDopart: dopart>> #);
+     IsNone:: (# <<SLOT psbetaobjectisnoneDopart: dopart>> #);
+     CharAttr::
+       (# tmp: @Integer <<SLOT psbetaobjectcharattrDopart: dopart>> #);
+     SetCharAttr::
+       (# tmp: @Integer <<SLOT psbetaobjectsetcharattrDopart: dopart>> #);
+     BooleanAttr::
+       (# tmp: @Integer <<SLOT psbetaobjectbooleanattrDopart: dopart>> #);
+     setBooleanAttr::
+       (# tmp: @Integer <<SLOT psbetaobjectsetbooleanattrDopart: dopart>> #);
+     ShortIntAttr:: 
+       (# tmp: @Integer <<SLOT psbetaobjectshortintattrDopart: dopart>> #);
+     setShortIntAttr:: 
+       (# tmp: @Integer <<SLOT psbetaobjectsetshortintattrDopart: dopart>> #);
+     IntegerAttr:: (# <<SLOT psbetaobjectintegerattrDopart: dopart>> #);
+     setIntegerAttr:: (# <<SLOT psbetaobjectsetintegerattrDopart: dopart>> #);
+     RealAttr:: (# <<SLOT psbetaobjectrealattrDopart: dopart>> #);
+     setRealAttr::
+       (# tmp: @Integer <<SLOT psbetaobjectsetrealattrDopart: dopart>> #);
+     ReferenceAttr::
+       (# OID: @OIDtype; poffset: @Integer;
+       <<SLOT psbetaobjectreferenceattrDopart: dopart>>
+       #);
+     setReferenceAttr:: 
+       (# <<SLOT psbetaobjectsetreferenceattrDopart: dopart>> #);
+     OriginAttr::
+       (# OID: @OIDtype; poffset: @Integer;
+       <<SLOT psbetaobjectoriginattrDopart: dopart>>
+       #);
+     setOriginAttr:: (# <<SLOT psbetaobjectsetoriginattrDopart: dopart>> #);
+     PartObject::
+       (# OID: @OIDtype; poffset: @Integer;
+       <<SLOT psbetaobjectpartobjectDopart: dopart>>
+       #);
+     SetPartObject:: (# <<SLOT psbetaobjectsetpartobjectDopart: dopart>> #);
+     Range:: (# <<SLOT psbetaobjectrangeDopart: dopart>> #);
+     SetRange::
+       (# reptype,oldlow,oldhigh: @Integer;
+          nlongs,nextpos,tmp: @Integer;
+       <<SLOT psbetaobjectsetrangeDopart: dopart>>
+       #);
+     CharRepAttr::
+       (# tmp: @Integer <<SLOT psbetaobjectcharrepattrDopart: dopart>>
+       #);
+     SetCharRepAttr::
+       (# tmp: @Integer;
+          low,high: @Integer;
+          oldnlongs,newnlongs: @Integer;
+       <<SLOT psbetaobjectsetcharrepattrDopart: dopart>>
+       #);
+     BooleanRepAttr::
+       (# tmp: @Integer <<SLOT psbetaobjectbooleanrepattrDopart: dopart>>
+       #);
+     SetBooleanRepAttr::
+       (# tmp: @Integer;
+          low,high: @Integer;
+          oldnlongs,newnlongs: @Integer;
+       <<SLOT psbetaobjectsetbooleanrepattrDopart: dopart>>
+       #);
+     ShortIntRepAttr::
+       (# tmp: @Integer <<SLOT psbetaobjectshortintrepattrDopart: dopart>>
+       #);
+     SetShortIntRepAttr::
+       (# tmp: @Integer;
+          low,high: @Integer;
+          oldnlongs,newnlongs: @Integer;
+       <<SLOT psbetaobjectsetshortintrepattrDopart: dopart>>
+       #);
+     IntegerRepAttr::
+       (# tmp: @Integer <<SLOT psbetaobjectintegerrepattrDopart: dopart>>
+       #);
+     SetIntegerRepAttr::
+       (# tmp: @Integer;
+          low,high: @Integer;
+          oldnlongs,newnlongs: @Integer;
+       <<SLOT psbetaobjectsetintegerrepattrDopart: dopart>>
+       #);
+     RealRepAttr::
+       (# tmp: @Integer <<SLOT psbetaobjectrealrepattrDopart: dopart>>
+       #);
+     SetRealRepAttr::
+       (# tmp: @Integer;
+          low,high: @Integer;
+          oldnlongs,newnlongs: @Integer;
+       <<SLOT psbetaobjectsetrealrepattrDopart: dopart>>
+       #);
+     ReferenceRepAttr::
+       (# OID: @OIDtype; poffset: @Integer; tmp: @Integer;
+       <<SLOT psbetaobjectreferencerepattrDopart: dopart>>
+       #);
+     SetReferenceRepAttr::
+       (# tmp: @Integer;
+          low,high: @Integer;
+          oldnlongs,newnlongs: @Integer;
+       <<SLOT psbetaobjectsetreferencerepattrDopart: dopart>>
+       #);
+     PatRefRepAttr:: (# <<SLOT psbetaobjectpatrefrepattrDopart: dopart>> #);
+     PatternAttr::
+       (# tmp,group,proto: @Integer; OID: @OIDtype; poffset: @Integer; 
+       <<SLOT psbetaobjectpatternattrDopart: dopart>>
+       #);
+     SetPatternAttr::
+       (# tmp: @Integer <<SLOT psbetaobjectsetpatternattrDopart: dopart>> #);
+     
+     dirty: @Boolean; (* Set to TRUE by all Set* methods, and by 
+                       * createPSobject. Should be set to FALSE if
+                       * this psBetaObject is saved in a location. *)
+     
      state: ^RepetitionObject;
      loc: ^location;
      odote: ^odOffsetTableElement;
@@ -119,33 +209,10 @@ PSbetaObject: betaObject
      
      OID: @OIDtype; offset: @Integer; (* Persistent ID of this object. *)
      
-     init:: (# enter (OID,offset,state[],odote[],loc[]) #);
-     
-     descriptionType::
-       (# 
-       do (if (betaenvOID,OID)->equalOID then
-              'BETAENV (not saved)'->shortname[]->fullname[]
-                ->shortWithNumber[]->fullWithNumber[];
-          if);
-       #);
-     
      getOD:
        (* Returns the ObjectDescriptor of this object. *)
        (# od: ^BETACFL.ObjectDescriptor;
-       do
-          doget:
-            (if offset<>0 then
-                (for i:odote.partCount repeat
-                     (if odote.parts[i]//offset then
-                         odote.ods[i][]->od[];
-                         leave doget;
-                     if);
-                for);
-                'getOD: part offset not found'->putText;
-                offset->putInt; newline;
-             else
-                odote.od[]->od[];
-            if);
+       <<SLOT psbetaobjectgetodDopart: dopart>>
        exit od[]
        #);
      
@@ -154,16 +221,20 @@ PSbetaObject: betaObject
         * PSbetaObject. *)
        (# attoffset: @Integer;
           value: @Integer;
+          doit: @<<SLOT psbetaobjectfindsimplelong:descriptor>>;
        enter attoffset
-       do ((attoffset+offset) div 4)*4 ->attoffset;
-          dofind:
-            (for i: odote.simpleCount repeat
-                 (if odote.simpleVals[i] = attoffset then
-                     state.r[state.firstPos+i]->value;
-                     leave dofind;
-                 if);
-            for);
+       do doit
        exit value
+       #);
+     
+     putSimpleLong: @
+       (* Returns the value of the long with offset attoffset inside this
+        * PSbetaObject. *)
+       (# attoffset: @Integer;
+          value: @Integer;
+          doit: @<<SLOT psbetaobjectputsimplelong:descriptor>>;
+       enter (attoffset,value)
+       do doit   
        #);
      
      findReferenceStateInx: @
@@ -172,49 +243,12 @@ PSbetaObject: betaObject
        (# attoffset: @Integer;
           value: @Integer;
           tmp,low,high: @Integer;
+          doit: @<<SLOT psbetaobjectfindreferencestateinx:descriptor>>;
        enter attoffset
-       do
-          ((attoffset+offset) div 4)*4 ->attoffset;
-          dofind:
-            (for i: odote.dynCount repeat
-                 (if odote.dynRefs[i] = attoffset then
-                     state.firstPos+state.r[state.firstPos]+1->state.pos;
-                     (for j: i-1 repeat
-                          (if (state.get->tmp) >= 0 then
-                              state.pos+2->state.pos;
-                           else
-                              (if tmp
-                               //ValRepPTValue then
-                                  state.get->low; state.get->high;
-                                  high-low+1+state.pos->state.pos;
-                               //ByteRepPTValue then 
-                                  state.get->low; state.get->high;
-                                  ((high-low+4) div 4)+state.pos->state.pos;
-                               //WordRepPTValue then
-                                  state.get->low; state.get->high;
-                                  ((high-low+2) div 2)+state.pos->state.pos;
-                               //DoubleRepPTValue then
-                                  state.get->low; state.get->high;
-                                  ((high-low+8) div 8)+state.pos->state.pos;
-                               //RefRepPTValue then
-                                  state.get->low; state.get->high;
-                                  (high-low+1)*3+state.pos->state.pos;
-                               //StructurePTValue then
-                                  state.pos+5->state.pos;
-                               else
-                                  'Unexpected offset value in serialization: '
-                                    ->putText;
-                                  tmp->putInt; 
-                                  newline;
-                              if);
-                          if);
-                     for);
-                     state.pos->value;
-                     leave dofind;
-                 if);
-            for);
+       do doit
        exit value
        #);
+     
      maskRefType: @ 
        (* Removes the tag bits from the offsets describing the kind 
         * of reference. *)
@@ -222,195 +256,38 @@ PSbetaObject: betaObject
        enter offset
        exit offset %Band 0xFFFFFFFC
        #);
-     isComponentObject:: (# do false->value #);
-     Equal:: 
-       (# 
-       do ((OID,other.OID)->equalOID) and (other.offset=offset) -> value;
-       #);
-     IsNone:: (# do (OID,noneOID)->equalOID->value #);
-     CharAttr::
-       (# tmp: @Integer;
-       do offset->findSimpleLong->tmp;
-          (offset mod 4)->tmp.%getByte->value;
-       #);
-     BooleanAttr::
-       (# tmp: @Integer;
-       do offset->findSimpleLong->tmp;
-          (offset mod 4)->tmp.%getByte->value;
-       #);
-     ShortIntAttr:: 
-       (# tmp: @Integer;
-       do offset->findSimpleLong->tmp;
-          (offset mod 4)->tmp.%getShort->value;
-       #);
-     IntegerAttr::
-       (# 
-       do offset->findSimpleLong->value;
-       #);
-     RealAttr::
-       (# 
-       do (offset->findSimpleLong) %putLongAt (@@value);
-          (offset+4->findSimpleLong) %putLongAt (@@value+4);
-       #);
-     ReferenceAttr::
-       (# OID: @OIDtype; poffset: @Integer;
-       do offset->findReferenceStateInx->state.pos;
-          state.get->maskRefType->poffset;
-          state.get->OID.a; state.get->OID.b;
-          (OID,poffset,dumper[])->newPSObject->value[];
-       #);
-     PartObject::
-       (# OID: @OIDtype; poffset: @Integer;
-       do 
-          (if offset < 0 then
-              -offset->findReferenceStateInx->state.pos;
-              state.get->maskRefType->poffset;
-              state.get->OID.a; state.get->OID.b;
-              (OID,poffset,dumper[])->newPSObject->value[];
-           else
-              (THIS(PSbetaObject).OID,THIS(PSbetaObject).offset+offset,dumper[])
-                ->newPSObject->value[];
-          if);
-       #);
-     Range::
-       (#
-       do (offset->findReferenceStateInx)+1->state.pos;
-          state.get->low; state.get->high;
-       #);
-     CharRepAttr::
-       (# tmp: @Integer;
-       do offset->findReferenceStateInx->tmp;
-          to-from+1 -> value.new;
-          (@@value[1],(@@state.r[tmp+3])+from-1,to-from+1)->memcpy;
-       #);
-     BooleanRepAttr::
-       (# tmp: @Integer;
-       do offset->findReferenceStateInx->tmp;
-          to-from+1 -> value.new;
-          (@@value[1],@@state.r[tmp+3]+from-1,to-from+1)->memcpy;
-       #);
-     ShortIntRepAttr::
-       (# tmp: @Integer;
-       do offset->findReferenceStateInx->tmp;
-          to-from+1 -> value.new;
-          (@@value[1],@@state.r[tmp+3]+2*(from-1),2*(to-from+1))->memcpy;
-       #);
-     IntegerRepAttr::
-       (# tmp: @Integer;
-       do offset->findReferenceStateInx->tmp;
-          to-from+1 -> value.new;
-          (@@value[1],@@state.r[tmp+3]+4*(from-1),4*(to-from+1))->memcpy;
-       #);
-     RealRepAttr::
-       (# tmp: @Integer;
-       do offset->findReferenceStateInx->tmp;
-          to-from+1 -> value.new;
-          (@@value[1],@@state.r[tmp+3]+8*(from-1),8*(to-from+1))->memcpy;
-       #);
-     ReferenceRepAttr::
-       (# OID: @OIDtype; poffset: @Integer; tmp: @Integer;
-       do offset->findReferenceStateInx->tmp;
-          to-from+1 -> value.new;
-          tmp+3*from->state.pos;
-          (for i:to-from+1 repeat
-               state.get->maskRefType->poffset;
-               state.get->OID.a; state.get->OID.b;
-               (OID,poffset,dumper[])->newPSObject->value[i][];
-          for);
-       #);
-     PatRefRepAttr::
-       (# 
-       do 'psBetaObject.PatRefRepAttr not implemented'->putLine;
-       #);
-     PatternAttr::
-       (# tmp,group,proto: @Integer; OID: @OIDtype; poffset: @Integer; 
-       do offset->findReferenceStateInx->state.pos;
-          state.get; state.get->group; state.get->proto;
-          state.get->maskRefType->poffset;
-          state.get->OID.a; state.get->OID.b;
-          (group,proto,OID,poffset,dumper[],loc[])->newPSPattern->value[];
-       #);
   #);
 
+createPSobject:
+  (* Creates a new PSbetaObject to be put into the location loc. *)
+  (# od: ^BETACFL.ObjectDescriptor;
+     loc: ^location;
+     pd: ^PSdumper;
+     bo: ^PSbetaObject;
+  enter (od[],loc[],pd[])
+  do <<SLOT psobjdumpercreatepsobjectBody: descriptor>> 
+  exit bo[]
+  #);
 
 newPSObject:
+  (* Returns the (already existing) PSbetaObject with id (OID,offset) *)
   (# OID: @OIDtype; offset: @Integer; pd: ^PSdumper;
      bo: ^PSbetaObject;
-     proto,group: @Integer;
-     state: ^RepetitionObject;
-     os: ^ObjectServer;
-     loc: ^location;
-     odote: ^odOffsetTableElement;
-     dummy: @Boolean;
   enter (OID,offset,pd[])
-  do 
-     lookup:
-       (if true
-        //(OID,betaenvOID)->equalOID then
-           pd.BetaEnvObject[]->bo[];
-        //(OID,noneOID)->equalOID then
-           pd.NONEobject[]->bo[];
-        else
-           (* Check if the object can be found in the objectDB: *)
-           pd.objects.scanObjects
-           (# 
-           do 
-              (if (current.bo.OID,OID)->equalOID then
-                  (if current.bo.offset=offset then
-                      current.bo[]->bo[]; leave lookup;
-                  if);
-              if);
-           #);
-       if);
-     (if bo[]=NONE then
-         getObjectServer->os[];
-         &PSbetaObject[]->bo[];
-         (OID.a,0) -> os.setLocation;
-         os.lastLocation[]->loc[];
-         OID->loc.locationObjects.findSer->(state[],proto,group);
-         
-         (proto,(group->loc.locationGroups.inxToElm).groupName[])
-           ->pd.groupsInfo.protoGroupToOD
-           ->pd.odOffsets.lookup
-           ->odote[];
-         (pd[],OID,offset,state[],odote[],loc[])->bo.init;
-         (bo[],pd.PSobjectOwner[])->pd.objects.addObjectOwner;
-     if);
-     bo.touch;
+  do <<SLOT psobjdumpernewpsobjectBody: descriptor>>  
   exit bo[]
   #);
 
 newPSPattern:
+  (* Returns a PSbetaPattern with prototype=(group,proto)
+   * and origin object (oriOID,oriOffset). *)
   (# group,proto: @Integer;
      oriOID: @OIDtype;
      oriOffset: @Integer;
      pd: ^PSdumper;
      loc: ^location;
      bp: ^PSbetaPattern;
-     odote: ^odOffsetTableElement;
   enter (group,proto,oriOID,oriOffset,pd[],loc[])
-  do 
-     (proto,(group->loc.locationGroups.inxToElm).groupName[])
-       ->pd.groupsInfo.protoGroupToOD
-       ->pd.odOffsets.lookup
-       ->odote[];
-     lookup:
-       (if not ((oriOID,noneOID)->equalOID) then
-           (* Try to find the pattern in the objectDB: *)
-           pd.objects.scanPatterns
-           (# 
-           do (if (odote[],oriOffset,oriOID)->current.bp.equalPred then
-                  current.bp[]->bp[]; leave lookup;
-              if);
-           #);
-        else
-           pd.NONEpattern[]->bp[];
-       if);
-     (if bp[]=NONE then
-         &PSbetaPattern[]->bp[];
-         (pd[],oriOID,oriOffset,odote[],loc[])->bp.init;
-         (bp[],pd.PSpatternOwner[])->pd.objects.addPatternOwner;
-     if);
-     bp.touch;
+  do <<SLOT psobjdumpernewpspatternBody: descriptor>> 
   exit bp[]
   #);
