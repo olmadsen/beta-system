@@ -6,13 +6,6 @@
 #include <Lists.h>
 #include <StdIO.h>
 
-typedef struct PopupPrivateData {
-	MenuHandle mHandle;
-	short mID;
-} PopupPrivateData;
-
-typedef PopupPrivateData *PopupPrivateDataPtr;
-typedef PopupPrivateDataPtr *PopupPrivateDataHandle;
 
 long copyinput(long input)
 {

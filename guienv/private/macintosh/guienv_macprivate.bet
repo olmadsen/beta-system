@@ -5,8 +5,16 @@ INCLUDE 'eventsstuff';
 INCLUDE 'quickdrawstuff';
 INCLUDE '~beta/containers/v1.5/list';
 INCLUDE '~beta/maclib/v3.0/memory';
+INCLUDE '~beta/maclib/v3.0/windows';
+INCLUDE '~beta/maclib/v3.0/osutils';
 
 -- guienvLib: attributes --
+
+EraseRectangle: external
+	(# left, top, right, bottom: @integer;
+	enter	 (left, top, right, bottom)
+	#);
+
 ResetPen:
 	(#
 	do	PenNormal;
@@ -17,6 +25,10 @@ ResetPen:
 plain: (# exit 1 #);
 shadows: (# exit 2 #);
 mixed: (# exit 3 #);
+
+normal: (# exit 1 #);
+dialog: (# exit 2 #);
+utility: (# exit 3 #);
 
 noneBackGround: (# exit 0 #);
 whiteBackGround: (# exit 1 #);
@@ -97,10 +109,6 @@ modeless: (# exit 1 #);
 applicationModal: (# exit 2 #);
 systemModal: (# exit 3 #);
 
-saveRestoreFocus:
-	(#
-	do <<SLOT GUIENVsaveRestoreFocus: descriptor>>;
-	#);
 makeMacRect:
 	(#	r: ^rectangle;
 		mr: ^macRect;
@@ -224,7 +232,32 @@ updateCursor:
 	#);
 doUpdateCursor: (# <<SLOT GUIENVdoUpdateCursor: doPart>> #);
 -- GUIENVPrivate: descriptor --
-(#  globalTheText: @text;
+(# gray: [12] @color;
+	black: @color;
+	white: @color;
+	initColors:
+		(#
+		do (0, 0, 0) -> black; 
+			(65535, 65535, 65535) -> white;
+			(61166, 61166, 61166) -> gray[1];
+			(56797, 56797, 56797) -> gray[2];
+			(52428, 52428, 52428) -> gray[3];
+			(48059, 48059, 48059) -> gray[4];
+			(43690, 43690, 43690) -> gray[5];
+			(39321, 39321, 39321) -> gray[6];
+			(34952, 34952, 34952) -> gray[7];
+			(30583, 30583, 30583) -> gray[8];
+			(26214, 26214, 26214) -> gray[9];
+			(21845, 21845, 21845) -> gray[10];
+			(17476, 17476, 17476) -> gray[11];
+			(8738, 8738, 8738) -> gray[12];
+			
+			gray[2][] -> backGround[];
+		#);
+		
+	globals: @globVars;
+	
+	globalTheText: @text;
 	grayPixPat, whitePat: @integer;
 	backGround: ^color;
 	done: @boolean; (* True when the eventloop should terminate *)
@@ -368,10 +401,10 @@ windowContents:
 	enter private.windowContents[]
 	exit private.windowContents[]
 	#);
-hitWindowitem:
+lastObjectClicked:
 	(#
-	enter private.hitWindowitem[]
-	exit private.hitWindowitem[]
+	enter private.lastObjectClicked[]
+	exit private.lastObjectClicked[]
 	#);
 windowDefaultButton:
 	(#
@@ -422,6 +455,8 @@ windowSize:
 	#);
 -- GUIENVwindowPrivate: descriptor --
 (# windowPointer: @integer;
+	doShow: @boolean;
+	type: @integer;
 	style: @integer;
 	theMaxSize: @point;
 	theMinSize: @point;
@@ -437,11 +472,11 @@ windowSize:
 				#);
 			open::
 				(#
-				do 
+				do true -> this(windowItem).private.eraseWhenUpdating;
 					windowSize -> size;
 				#);
 		#);
-	hitWindowitem: ^windowItem;
+	lastObjectClicked: ^windowItem;
 	windowDefaultButton: ^windowItem;
 	windowMenuBar: ^menuBar;
 #)
@@ -536,10 +571,11 @@ backGroundStyle:
 	#);
 	
 privateOrigin: (# exit (private.originX, private.originY) #);
-privateClip: (# exit private.clip #);
+
 privateWindowItemFrame:
 	(#
-	enter	private.windowItemFrame
+	enter	((private.left, private.top), (private.right, private.bottom))
+	exit ((private.left, private.top), (private.right, private.bottom))
 	#);
 privateAutomaticUpdate:
 	(#
@@ -552,112 +588,115 @@ updateMaybe:
 	do (if private.automaticUpdate then update if);
 	#);
 
-focus:
-	(# h,v: @integer;
-	<<SLOT GUIENVwindowitemFocus: doPart>>
+
+getVisibleRgn:
+	(# rgn: @integer;
+	do (if private.visibleRgn = 0 then
+			calculateVisibleRgn -> private.visibleRgn;
+		if);
+		private.visibleRgn -> rgn;
+	exit rgn
 	#);
-focusVisible:
-	(# visibleRgn: @integer;
-	<<SLOT GUIENVwindowItemFocusVisible: doPart>>
+calculateVisibleRgn:
+	(# rgn: @integer;
+	<<SLOT windowItemCalculateVisibleRgn: doPart>>
+	exit rgn
 	#);
-focusZero:
-	(# h,v: @integer;
-		windowClip: @integer; (* RgnHandle *)
-  	<<SLOT GUIENVwindowitemFocusZero: doPart>>
+forgetVisibleRgn:
+	(# tellBrothers: @boolean;
+	enter tellBrothers
+	<<SLOT windowItemForgetVisibleRgn: doPart>>
 	#);
-focusEmpty:
+brotherForgetVisibleRgn:
 	(#
-	<<SLOT GUIENVwindowItemFocusEmpty: doPart>>
+	<<SLOT windowItemBrotherForgetVisibleRgn: doPart>>
 	#);
+	
+calculateOrigin:
+	(#
+	<<SLOT windowItemCalculateOrigin: doPart>>
+	#);
+	
+getDrawingRgn:
+   (*
+	 * The clip region when drawing in the windowitem
+	 * will be copied into the "rgn" that should be
+	 * allocated before calling getDrawingRgn.
+	 *)
+	(# rgn: @integer;
+	enter rgn
+	<<SLOT windowItemGetDrawingRgn: doPart>>
+	#);
+	
+
+setupClipForDrawing: setupPortForDrawing
+	(# drawingRgn: @integer;
+	do NewRgn -> drawingRgn;
+		drawingRgn -> getDrawingRgn;
+		(drawingRgn, -private.originX, -private.originY) -> OffsetRgn;
+		drawingRgn ->SetClip;
+		drawingRgn -> DisposeRgn;
+		INNER;
+	#);
+setupPortForDrawing:
+	(#
+	do this(window).private.windowPointer -> SetPort;
+		(-private.originX, -private.originY) -> SetOrigin;
+		INNER;
+	#);
+setupPort:
+	(#
+	do this(window).private.windowPointer -> SetPort;
+		(0, 0) -> SetOrigin;
+		INNER;
+	#);
+setupPortWideClip: setupPort
+	(#
+	do this(guienv).private.wideRgn -> SetClip;
+		INNER;
+	#);
+setupPortClipEmpty: setupPort
+	(#
+	do this(guienv).private.emptyRgn -> SetClip;
+		INNER;
+	#);
+setupPortForToolBox: setupPort
+	(# visRgn: @integer;
+	do getVisibleRgn -> visRgn;
+		visRgn -> SetClip;
+		INNER;
+	#);
+	
+invalVisibleRgn:
+	(# visRgn: @integer;
+	do setupPortWideClip
+			(#
+			do getVisibleRgn -> visRgn;
+				(if false then
+					(#
+					do  ResetPen;
+						(visRgn, this(guienv).private.globals.grayAddress) -> FillRgn;
+						30 -> system.wait;
+					#);
+				if);
+				visRgn -> InvalRgn;
+			#);
+	#);
+
 	
 hit: booleanValue
 	(# pt: @point;
 	enter pt
-	do pt -> private.theMethods.hit -> value;
-	#);
-hitMethod: booleanValue
-	(#	pt: @point;
-	enter pt
-	do inner;
-	#);
-defaultHitMethod: hitMethod
-	(#
-	do <<SLOT GUIENVwindowItemDefaultHitMethod: descriptor>>;
+	<<SLOT GUIENVwindowItemHit: doPart>>
 	#);
 
 handleCursor: booleanValue
 	(#	pt: @point;
 	enter pt
-	do pt -> private.theMethods.handleCursor -> value;
-	#);
-handleCursorMethod: booleanValue
-	(#	pt: @point;
-	enter pt
-	do inner;
-	#);
-defaultHandleCursorMethod: handleCursorMethod
-	(#
-	do <<SLOT GUIENVwindowItemdefaultHandleCursorMethod: descriptor>>;
+	<<SLOT GUIENVwindowItemHandleCursor: doPart>>
 	#);
 	
-calculateFocus:
-	(# siblingsRgn: @integer;
-	enter siblingsRgn
-	do siblingsRgn -> private.theMethods.calculateFocus 
-	#);
-calculateFocusMethod:
-	(# siblingsRgn: @integer;
-	enter siblingsRgn
-	do inner;
-	#);
-defaultCalculateFocus: calculateFocusMethod
-	(# <<SLOT GUIENVwindowItemCalculateFocus: doPart>> #);
 	
-getVisibleRgn:
-	(# rgn: @integer;
-	enter	rgn
-	do rgn -> private.theMethods.getVisibleRegion;
-	#);
-findHitObject:
-	(# pt: @point;
-		hitObject: ^windowItem;
-	enter pt
-	do pt -> private.theMethods.findHitObject -> hitObject[];
-	exit hitObject[]
-	#);
-	
-methods:
-	(#	hit:< 
-			hitMethod;
-		calculateFocus:<
-			calculateFocusMethod;
-		handleCursor:< 
-			handleCursorMethod;
-		getVisibleRegion:<
-			(# rgn: @integer;
-			enter rgn
-			<<SLOT GUIENVwindowItemGetVisibleRegion: doPart>>
-			#);
-		findHitObject:<
-			(# pt: @point;
-				hitObject: ^windowItem;
-			enter pt
-			<<SLOT GUIENVwindowItemFindHitObject: doPart>>
-			exit hitObject[]
-			#);
-	#);
-defaultMethods: methods
-	(# hit::<
-			defaultHitMethod;
-		handleCursor::<
-			defaultHandleCursorMethod;
-		calculateFocus::< defaultCalculateFocus;
-	#);
-windowitemMethods:
-	(#
-	enter private.theMethods[]
-	exit private.theMethods[]
-	#);
 windowItemCursor:
 	(#
 	enter private.windowItemCursor[]
@@ -673,38 +712,48 @@ toScreenCoordinates:
 
 -- GUIENVwindowitemPrivate: descriptor --
 (# originX, originY: @integer;
-	clip: @integer; (* Region handle *)
+	visibleRgn: @integer; (* Region handle *)
 	backGroundStyle: @integer;
-	windowItemFrame: @rectangle;
+	left, top, right, bottom: @integer;
 	visibleFlag,enabledFlag,hiliteFlag,
 	automaticUpdate,updateOnResize, borderVisibleFlag: @boolean;
 	borderStyle: @integer;
-	theMethods: ^methods;
 	windowItemCursor: ^cursor;
-	debugMe: @boolean;
+	eraseWhenUpdating: @boolean;
+	debugMe: @boolean
 #)
 
 -- canvasLib: attributes --
 
-canvasMethods: methods
-	(#	hit::< defaultHitMethod;
-		calculateFocus::< defaultCalculateFocus
-			(# <<SLOT GUIENVCanvasCalculateFocus: doPart>> #);
-		handleCursor::< defaultHandleCursorMethod
-			(# <<SLOT GUIENVcanvasHandleCursor: doPart>> #);
-		getVisibleRegion::<
-			(#
-			<<SLOT GUIENVcanvasGetVisibleRgn: doPart>>
-			#);
-		findHitObject::
-			(#
-			<<SLOT GUIENVcanvasFindHitObject: doPart>>
-			#);
+getChildPosition:
+	(# child: ^windowItem;
+		pos: ^list.theCellType;
+	enter	child[]
+	do child[] -> private.children.at -> pos[]
+	exit pos[]
 	#);
-calculateFocusForChildren:
-	(# siblingsRgn: @integer;
-	<<SLOT GUIENVcanvasCalculateFocusForChildren: doPart>>
+getPrevSibling:
+	(# child: ^windowItem;
+		pos: ^list.theCellType;
+		prevSibling: ^windowItem;
+	enter child[]
+	do child[] -> getChildPosition -> pos[];
+		(if pos.pred[] <> NONE then
+			pos.pred.elm[] -> prevSibling[];
+		if);
+	exit prevSibling[]
 	#);
+
+
+findObjectClicked:
+	(# pt: @point;
+		ObjectClicked: ^windowItem;
+	enter pt
+	<<SLOT GUIENVcanvasFindObjectClicked: doPart>>
+   exit ObjectClicked[]
+	#);
+	
+
 
 -- GUIENVcanvasPrivate: descriptor --
 (# children: @list
@@ -714,14 +763,14 @@ calculateFocusForChildren:
 				enter e[]
 				do e[] -> at -> delete;
 				#);
-			findHitObject:
+			findObjectClicked:
 				(# pt: @point;
 					e: ^element;
 				enter pt
 				do l: scanReverse
 						(# where::<
 								(#
-								do (if (current.private.enabledFlag and current.private.visibleFlag)//true then
+								do (if (current.private.enabledFlag and current.private.visibleFlag) then
 										pt -> current.hit -> value;
 									else
 										false -> value;

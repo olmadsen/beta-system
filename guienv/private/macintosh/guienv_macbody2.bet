@@ -75,7 +75,7 @@ do getBounds -> r;
 -- GUIENVwindowSetSize: descriptor --
 (#
 do invalidateGrowIcon;
-	(private.windowPointer,width,height,true) -> SizeWindow;
+	(private.windowPointer,width,height,false) -> SizeWindow;
 	(width,height) -> private.windowContents.size;
 	invalidateGrowIcon;
 	updateCursor;
@@ -106,7 +106,7 @@ do (0,0) -> theRectangle.topLeft;
 
 -- GUIENVshowWindow: descriptor --
 (#
-do private.windowPointer -> ShowWindow;
+do private.windowPointer -> ShowTheWindow;
 	bringToFront;
 	true -> windowVisible;
 #)
@@ -124,9 +124,10 @@ do systemModal -> modalState;
 
 -- GUIENVhideWindow: descriptor --
 (#
-do private.windowPointer -> HideWindow;
+do private.windowPointer -> HideTheWindow;
 	modeless -> modalState;
 	false -> windowVisible;
+	false -> private.doShow;
 #)
 
 -- GUIENVwindowSetMaxSize: descriptor --
@@ -171,11 +172,37 @@ do processUpdate;
 
 -- GUIENVwindowCreate: descriptor --
 (# bounds: @macRect;
+	MovableDBoxProc: (# exit 5 #);
+	rFloatingWindowProc: (# exit 124 #);
+	macType: @integer;
 do shadows -> style;
+	(if menubarVisible then
+		normal -> private.type;
+	else
+		dialog -> private.type;
+	if);
 	inner create;
-	(if private.windowPointer//0 then
-		((40,40),(400,500)) -> bounds;
-		(0,bounds[],'Title',false,ZoomDocProc, -1, true, 0) -> NewCWindow -> private.windowPointer;
+	(if private.type
+		//normal then
+			ZoomDocProc -> macType;
+		//dialog then
+			DBoxProc -> macType;
+		//utility then
+			rFloatingWindowProc * 16 -> macType;
+	if);
+	(if private.windowPointer = 0 then
+		((40,40),(340,240)) -> bounds;
+		(0,bounds[],'Title',false,macType, -1, true, 0) -> NewCWindow -> private.windowPointer;
+		(private.windowPointer, 56797, 56797, 56797) -> SetWindowBackground;
+		
+		(if private.type
+			//normal then
+				(private.windowPointer, NormalKind) -> SetTheWindowKind;
+			//dialog then
+				(private.windowPointer, DialogKind) -> SetTheWindowKind;
+			//utility then
+				(private.windowPointer, ApplicationFloaterKind) -> SetTheWindowKind;
+		if);
 	if);
 #)
 
@@ -192,10 +219,10 @@ do (20,20) -> theMinSize;
 		none -> aMenubar[];
 	if);
 	private.windowContents.open;
-	true -> windowVisible;
+	true -> private.doShow;
 	inner open;
-	(if windowVisible then
-		private.windowPointer -> ShowWindow;
+	(if private.doShow then
+		show;
 	if);
 	updateCursor;
 #)
@@ -235,14 +262,22 @@ do windowTarget -> theTarget[];
 #)
 
 -- GUIENVwindowitemOnRefresh: descriptor --
-(#
+(# rgn: @integer;
 do (if private.visibleFlag then
-		(if backGroundStyle <> noneBackGround then
+		(if private.eraseWhenUpdating then
 			graphics
 				(# width, height: @integer;
 				do size -> (width, height);
 					(0, 0, width, height) -> EraseRectangle;
 				#);
+		if);
+		(if backGroundStyle <> noneBackGround then
+			(* graphics
+				(# width, height: @integer;
+				do size -> (width, height);
+					(0, 0, width, height) -> EraseRectangle;
+				#);
+			*)
 		if);
 		(if border.visible then
 			(((0, 0), size), border.style) -> drawBorder;
@@ -251,12 +286,60 @@ do (if private.visibleFlag then
 	if);
 #)
 
+
+-- GUIENVwindowitemSetFrame: descriptor --
+(# oldFrame: @rectangle;
+
+	isVisible:
+		(# value: @boolean;
+		do (if this(window).private.windowVisible then
+				private.visibleFlag -> value;
+			else
+				false -> value;
+			if);
+		exit value
+		#);
+do (if false then
+		this(windowItem)[] -> getPatternName -> putText;
+		'.changeFrame' -> putLine;
+	if);
+	private.left -> oldFrame.left;
+	private.top -> oldFrame.top;
+	private.right -> oldFrame.right;
+	private.bottom -> oldFrame.bottom;
+	(if not (theFrame -> oldFrame.isEqual) then
+		(if isVisible then
+			invalVisibleRgn;
+			true -> forgetVisibleRgn;
+			theFrame.left -> private.left;
+			theFrame.right -> private.right;
+			theFrame.top -> private.top;
+			theFrame.bottom -> private.bottom;
+			calculateOrigin;
+			invalVisibleRgn;
+		else
+			true -> forgetVisibleRgn;
+			theFrame -> privateWindowItemFrame;
+			calculateOrigin;
+		if);
+		(if father[]<>none then
+			(oldFrame,theFrame) -> father.theEventHandler.onChildFrameChanged;
+		if);
+		(oldFrame,theFrame) -> theEventHandler.onFrameChanged;
+	if);
+#)
+
+(*
+
 -- GUIENVwindowitemSetFrame: descriptor --
 (# oldFrame: @rectangle;
 	oldVisibleRgn: @integer;
 	newVisibleRgn: @integer;
 	onlyResize: @boolean;
-do private.windowItemFrame -> oldFrame;
+do private.left -> oldFrame.left;
+	private.top -> oldFrame.top;
+	private.right -> oldFrame.right;
+	private.bottom -> oldFrame.bottom;
    (oldFrame.top = theFrame.top)
      and 
     (oldFrame.left = theFrame.left) ->  onlyResize;
@@ -276,12 +359,7 @@ do private.windowItemFrame -> oldFrame;
 				update
 			if);
 		if);
-		theFrame -> private.windowItemFrame;
-		(if father[] <> none then
-			father.calculateFocusForChildren;
-		else
-			calculateFocus;
-		if);	
+		theFrame -> privateWindowItemFrame;
 		(if (private.automaticUpdate and visible) then
 			(if (onlyResize and (not private.updateOnResize)) then
 				NewRgn -> newVisibleRgn;
@@ -309,9 +387,15 @@ do private.windowItemFrame -> oldFrame;
 	updateCursor;
 #)
 
+*)
+
+
 -- GUIENVwindowitemGetFrame: descriptor --
 (#
-do private.windowItemFrame -> theFrame;
+do private.left -> theFrame.left;
+	private.top -> theFrame.top;
+	private.right -> theFrame.right;
+	private.bottom -> theFrame.bottom;
 #)
 
 -- GUIENVwindowitemSetPosition: descriptor --
@@ -353,11 +437,16 @@ do frame -> r;
 -- GUIENVwindowitemSetVisible: descriptor --
 (#
 do (if value<>private.visibleFlag then
+		(if private.visibleFlag then
+			updateMaybe;
+		if);
 		value -> private.visibleFlag;
-		father.calculateFocus;
-		updateMaybe;
+		true -> forgetVisibleRgn;
 		theEventHandler.onVisibleChanged;
-		(if this(windowItem)[]//target then
+		(if private.visibleFlag then
+			updateMaybe;
+		if);
+		(if this(windowItem)[] = target then
 			father[] -> target;
 		if);
 		updateCursor;
@@ -451,7 +540,7 @@ do windowItemCursor -> theCur[];
 -- GUIENVwindowItemTrackMouse: descriptor --
 (# GlobalToLocal: External (# p: ^macPoint enter p[] do '$A871' -> PascalTrap; #);
 do (if StillDown then
-		focus
+		setupClipForDrawing
 			(#
 				macPt: @macPoint;
 				dh,dv: @integer;
@@ -473,7 +562,7 @@ do (if StillDown then
 						restart loop;
 					if);
 				mouseRelease;
-				none -> hitWindowItem;
+				none -> lastObjectClicked;
 			#);
 	if);
 #)
@@ -516,16 +605,9 @@ do (* not implemented !!! *)
 
 -- GUIENVwindowitemUpdate: descriptor --
 (# 
-do 
-	focus
-		(# r: @rectangle;
-		do (if private.clip <> 0 then
-				private.clip -> InvalRgn;
-			else
-				((0, 0), size) -> r;
-				r[] -> makeMacRect -> InvalRect;
-			if);
-		#);
+do (if private.visibleFlag then
+	 	invalVisibleRgn;
+	if);
 #)
 
 -- GUIENVwindowitemCreate: descriptor --
@@ -536,9 +618,6 @@ do (if this(window).style = plain then
 		grayBackGround -> backGroundStyle;
 	if);
 	inner create;
-	(if windowItemMethods = none then
-		&defaultMethods[] ->  windowItemMethods;
-	if);
 	(if father[] = none then
 		(if this(windowitem)[] = windowContents then
 		else
@@ -564,17 +643,12 @@ do (if this(window).style = plain then
 do (if father[]<>none then
 		this(windowitem)[] -> father.private.children.append;
 	if);
-	((0, 0), (100, 30)) -> private.windowItemFrame;
-	NewRgn -> private.clip;
-	(if father[] <> none then
-		father.calculateFocusForChildren;
-	else
-		calculateFocus;
-	if);
+	((0, 0), (100, 30)) -> privateWindowItemFrame;
 	true -> private.automaticUpdate;
 	true -> private.visibleFlag;
 	true -> private.enabledFlag;
 	true -> private.updateOnResize;
+	true -> private.eraseWhenUpdating;
 	true -> bindTop;
 	true -> bindLeft;
 	(if this(window).style = plain then
@@ -582,6 +656,7 @@ do (if father[]<>none then
 	else
 		borderStyles.shadowIn -> private.borderStyle;
 	if);
+	brotherForgetVisibleRgn;
 	inner open;
 	updateCursor;
 #)
@@ -592,145 +667,55 @@ do inner close;
 	(if this(windowItem)[] = target then
 			none -> target;
 	if);
-	(if private.clip <> 0 then
-		private.clip -> DisposeRgn;
-	if);
 	this(windowitem)[] -> father.private.children.remove;
 	updateCursor;
 #)
 
--- GUIENVwindowItemCalculateFocus: doPart --
-do (if private.visibleFlag then
-		(# theClipRgn, fatherClipRgn: @integer; (* Region Handles *)
-			x, y: @integer;
-			width, height: @integer;
-			fatherOriginX, fatherOriginY: @integer;
-			left, right, top, bottom: @integer;
-			tmpRgn: @integer;
-		do private.clip -> theClipRgn;
-			(if father[] = none then
-				this(window).size -> (width, height);
-				(theClipRgn, 0, 0, width, height) -> SetRectRgn;
-				0 -> private.originX;
-				0 -> private.originY;
-			else
-				position -> (x, y);
-				father.privateOrigin -> (fatherOriginX, fatherOriginY);
-				(x + fatherOriginX, y + fatherOriginY) -> (private.originX, private.originY);
-				private.windowItemFrame -> ((left, top), (right, bottom));
-				(theClipRgn, left, top, right, bottom) -> SetRectRgn;
-			if);
-			(if siblingsRgn <> 0 then
-				NewRgn -> tmpRgn;
-				(theClipRgn, tmpRgn) -> CopyRgn;
-				(theClipRgn, siblingsRgn, theClipRgn) -> DiffRgn;
-				(siblingsRgn, tmpRgn, siblingsRgn) -> UnionRgn;
-				tmpRgn -> DisposeRgn;
-			if);
-			(if father[] <> none then
-				father.privateClip -> fatherClipRgn;
-				(fatherClipRgn, theClipRgn, theClipRgn) -> SectRgn;
-				(theClipRgn, -x, -y) -> OffsetRgn;
-			if);
-			
-		#);
-		inner;
-	else
-		private.clip -> EmptyRgn;
-	if);
-
--- GUIENVwindowitemFocus: doPart --
-do this(window).private.windowPointer -> SetPort;
-	(- private.originX, - private.originY) -> SetOrigin;
-	(if private.clip <> 0 then
-		private.clip -> SetClip;
-	else
-		this(guienv).private.wideRgn -> SetClip;
-	if);
-	(if private.backgroundStyle = whiteBackGround then
-		this(guienv).private.whitePat -> BackPat;
-	else
-		this(guienv).private.grayPixPat -> BackPixPat;
-	if);
-	inner;
-
--- GUIENVwindowItemFocusVisible: doPart --
-do this(window).private.windowPointer -> SetPort;
-	(- private.originX, - private.originY) -> SetOrigin;
-	this(window).private.windowPointer + 28 -> TOS'%adrGetLong' 
-		-> visibleRgn -> getVisibleRgn;
-	(if private.backgroundStyle = whiteBackGround then
-		this(guienv).private.whitePat -> BackPat;
-	else
-		this(guienv).private.grayPixPat -> BackPixPat;
-	if);
-	inner;
 	
--- GUIENVwindowitemFocusZero: doPart --
+-- GUIENVwindowItemHit: doPart --
+do (pt.h >= private.left) AND (pt.h < private.right) 
+		AND 
+	(pt.v >= private.top) AND (pt.v < private.bottom) -> value;
+	
 
+-- GUIENVwindowItemHandleCursor: doPart --
 do 
-	this(window).private.windowPointer -> SetPort;
-	(0,0) -> SetOrigin;
-	private.clip -> SetClip;
-	(private.originX, private.originY) -> (h,v);
-	this(window).private.windowPointer + 28 -> TOS'%adrGetLong' -> windowClip;
-	(windowClip, h, v) -> OffsetRgn;
-	(if private.backgroundStyle = whiteBackGround then
-		this(guienv).private.whitePat -> BackPat;
-	else
-		this(guienv).private.grayPixPat -> BackPixPat;
-	if);
-	inner;
-
--- GUIENVwindowItemFocusEmpty: doPart --
-do this(window).private.windowPointer -> SetPort;
-	(0, 0) -> SetOrigin;
-	this(guienv).private.emptyRgn -> SetClip;
-	inner;
-	
--- GUIENVwindowItemDefaultHitMethod: descriptor --
-(# r: @rectangle;
-do frame -> r;
-	pt -> r.containsPoint -> value;
-#)
-
-
--- GUIENVwindowItemdefaultHandleCursorMethod: descriptor --
 (# left, top: @integer;
+	visRgn: @integer;
 do 
 	(if windowItemCursor = none then
 		cursors.arrow[] -> mouse.busyCursor;
 	else
 		windowItemCursor -> mouse.busyCursor;
 	if);
-	this(guienv).private.cursorRegion -> getVisibleRgn;
-	(this(guienv).private.cursorRegion, 
-	private.originX, private.originY) -> OffsetRgn;
+	this(guienv).private.cursorRegion -> getDrawingRgn;
 	this(window).position -> (left, top);
 	(this(guienv).private.cursorRegion, left, top) -> OffsetRgn;
 #)
 
 -- windowItemLib: attributes --
 
-debugFocus:
-	(#	
-	do debug
-			(#
-			do this(windowItem)[] -> getPatternName -> putText;
-				' o: ' -> putText;
-				(private.originX, private.originY) -> putPoint;
-			#);
+setRgnToFrame:
+	(# rgn: @integer;
+		left, top, right, bottom: @integer;
+	enter	rgn
+	do private.originX -> left;
+		private.originY -> top;
+		private.originX + (private.right -  private.left) -> right;
+		private.originY + (private.bottom - private.top) -> bottom;
+		(rgn, left, top, right, bottom) -> SetRectRgn;
 	#);
+
 processFatherFrameChanged:
 	(# oldFrame,newFrame,chainRect,itsFrame: @rectangle;
      delta: @Point;
 	enter (oldFrame,newFrame)
 	do newFrame.size -> delta;
 		oldFrame.size -> delta.subTract;
-		(if (0,0) -> delta.isEqual//false then
+		(if not ((0,0) -> delta.isEqual) then
 			frame -> chainRect -> itsFrame;
 			delta -> chainRect.offset;
-			(if bindLeft//false then
+			(if not bindLeft then
 				chainRect.left -> itsFrame.left;
 			if);
 			(if bindBottom then
@@ -739,21 +724,15 @@ processFatherFrameChanged:
 			(if bindRight then
 				chainRect.right -> itsFrame.right
 			if);
-			(if bindTop//false then
+			(if not bindTop then
 				chainRect.top -> itsFrame.top
 			if);
 			itsFrame -> frame;
 		if);
 		(oldFrame,newFrame) -> theEventHandler.onFatherframeChanged;
-	#);
+	#); 
 	
 
--- GUIENVCanvasCalculateFocus: doPart --
-do calculateFocusForChildren;
-	inner;
-
--- GUIENVcanvasHandleCursor: doPart --
-do inner;
 
 -- GUIENVcanvasPutLayout: doPart --
 do
@@ -810,7 +789,7 @@ do inner onFrameChanged;
 
 -- GUIENVcanvasSelectionAdd: descriptor --
 (#
-do (if theWindowitem[] -> private.selection.has//false then
+do (if not (theWindowitem[] -> private.selection.has) then
        theWindowitem[] -> private.selection.append;
        true -> theWindowitem.hilite;
    if);
@@ -868,7 +847,6 @@ do current[] -> this(scan).current[];
 -- GUIENVcanvasCreate: descriptor --
 (#
 do inner create;
-	&canvasMethods[] -> windowItemMethods;
 #)
 
 -- GUIENVcanvasOpen: descriptor --
@@ -1064,7 +1042,7 @@ do	ZeroScrap -> ignore;
 
 -- GUIENVmouseGlobalPosition: descriptor --
 (#	event: @eventRecord;
-	ignore: @integer;
+	ignore: @boolean;
 	macPt: @macPoint;
 do	(everyEvent,event[]) -> OSEventAvail -> ignore;
 	event.where -> macPt;
@@ -1073,7 +1051,11 @@ do	(everyEvent,event[]) -> OSEventAvail -> ignore;
 
 -- GUIENVmouseButtonState: descriptor --
 (#
-do	Button -> value;
+do	(if Button then
+		1 -> value;
+	else
+		0 -> value;
+	if);
 #)
 
 -- GUIENVmouseTheCursorSet: descriptor --
@@ -1213,7 +1195,7 @@ do	(ticks,ignore[]) -> Delay;
 					append:
 						(# t: ^text;
 						enter t[]
-						do private.windowPointer -> ShowWindow;
+						do private.windowPointer -> ShowTheWindow;
 							(theTextEditor.contents.length,theTextEditor.contents.length)
 								-> theTextEditor.contents.selection;
 							t[] -> theTextEditor.contents.insert;
@@ -1273,10 +1255,35 @@ do	(ticks,ignore[]) -> Delay;
 				#);
 			init: (# do buffer.clear;consoleWindow.open; #);
 		#);
+	fileConsole: stream
+		(#	f: @file;
+			init:
+				(#
+				do 'beta-stdout' -> f.name;
+					f.openWrite;
+				#);
+			put::
+				(#
+				do ch -> f.put;
+					f.flush;
+				#);
+		    puttext::
+			 	(#
+				do txt[] -> f.putText;
+					f.flush;
+				#);
+		#);
+		
 	initConsole:
 		(# theConsole: ^consoleStream;
-		do &consoleStream[] -> theConsole[] -> screen[] -> keyBoard[];
-			theConsole.init;
+			theFileConsole: ^fileConsole;
+		do (if false then
+				&fileConsole[] -> theFileConsole[] -> screen[] -> keyBoard[];
+				theFileConsole.init;
+			else
+				&consoleStream[] -> theConsole[] -> screen[] -> keyBoard[];
+				theConsole.init;
+			if);
 		#);
 	initUtilityPort:
 		(#
@@ -1291,38 +1298,36 @@ do	(ticks,ignore[]) -> Delay;
 			4 -> cursors.watch.readCursorResource;
 		#);
 	initPatterns:
-		(#	globals: @globVars;
-		do globals.init;
+		(#	
+		do private.globals.init;
 			&raster[] -> patterns.black[];
-			globals.blackAddress -> patterns.black.copyPatternData;
+			private.globals.blackAddress -> patterns.black.copyPatternData;
 			
 			&raster[] -> patterns.white[];
-			globals.whiteAddress -> patterns.white.copyPatternData;
+			private.globals.whiteAddress -> patterns.white.copyPatternData;
 			
 			&raster[] -> patterns.dkGray[];
-			globals.dkGrayAddress -> patterns.dkGray.copyPatternData;
+			private.globals.dkGrayAddress -> patterns.dkGray.copyPatternData;
 			
 			&raster[] -> patterns.gray[];
-			globals.grayAddress -> patterns.gray.copyPatternData;
+			private.globals.grayAddress -> patterns.gray.copyPatternData;
 			
 			&raster[] -> patterns.ltGray[];
-			globals.ltGrayAddress -> patterns.ltGray.copyPatternData;
+			private.globals.ltGrayAddress -> patterns.ltGray.copyPatternData;
 			
 			128 -> GetPixPat -> private.grayPixPat;
-			globals.whiteAddress -> private.whitePat;
+			private.globals.whiteAddress -> private.whitePat;
 		#);
-do (* 70 -> makeColor -> private.background[]; *)
-	100 -> makeColor -> private.background[];
-	
-	private.event.init;
+do private.event.init;
 	initRegions;
 	initMenubar;
 	modeless -> modalState;
+	initPatterns;
 	initConsole;
 	initUtilityPort;
 	initCursors;
-	initPatterns;
 	private.timerQueue.init;
+	private.initColors;
 #)
 
 -- GUIENVDoPart: descriptor --
@@ -1359,39 +1364,9 @@ do	l: scan
 do (* Not Implemented !!! *)
 #)
 
--- GUIENVsaveRestoreFocus: descriptor --
-(#
-	currentPort: @longInt;
-	currentClip: @integer;
-	currentOrigin: @point;
-	saveState:
-		(#	grafPort: @grafPortRecord;
-			bounds: @rectangle;
-		do currentPort[] -> GetPort;
-			(if currentPort<>0 then
-				grafPort.portRectangle -> bounds;
-				bounds.topLeft -> currentOrigin;
-				NewRgn -> currentClip;
-				currentClip -> GetClip;
-			if);
-		#);
-	restoreState:
-		(#
-		do (if currentPort<>0 then
-				currentPort -> SetPort;
-				currentOrigin -> SetOrigin;
-				currentClip -> SetClip;
-				currentClip -> DisposeRgn;
-			if);
-		#);
-do saveState;
-	inner saveRestoreFocus;
-	restoreState;
-#)
-
 -- GUIENVmacMenuBarappend: descriptor --
 (#
-do (if theMenu[] -> member//false then
+do (if not (theMenu[] -> member) then
 		theMenu[] -> menus.append;
 		(theMenu.private.handle,0) -> InsertMenu;
 		true -> needsUpdate;
@@ -1527,127 +1502,89 @@ do maxInt -> minInterval;
 			restart l;
 		if);
 	currentTime -> lastVisit;
-
--- GUIENVcanvasCalculateFocusForChildren: doPart --
-do NewRgn -> siblingsRgn;
-	private.children.iterateReverse
-		(#
-		do siblingsRgn -> current.elm.calculateFocus;
-		#);
-	siblingsRgn -> DisposeRgn;
 	
 -- GUIENVwindowItemDrawBorder: doPart --
 do (#
 	   
 	   	
-	   lightColor: ^color;
-	   darkColor: ^color;
-	   black: ^color;
 	   left, top, right, bottom: @integer;
 	   
 	do 
-		(if private.backGroundStyle = whiteBackGround then
-			75 -> makeColor -> lightColor[];
-			60 -> makeColor -> darkColor[];
-		else
-			100 -> makeColor -> lightColor[];
-	   	60 -> makeColor -> darkColor[];
-		if);
-		0 -> makeColor -> black[];
 	   r.topLeft -> (left, top);
 	   r.bottomRight -> (right, bottom);
 	   graphics
 		   (# 
 		   do (if this(drawborder).style 
 		   	//borderStyles.shadowIn then
-					black -> pen.foreGroundColor;
-					((left, top), (right, bottom)) -> drawRect;
-		   		darkColor -> pen.foreGroundColor;
-			   	(* ((left, top), (left, bottom - 1)) -> drawLine; *)
-			   	(*	((left, top), (right - 1, top)) -> drawLine; *)
-			   	((left + 1, top + 1), (left + 1, bottom - 2)) -> drawLine;
-			   	((left + 1, top + 1), (right - 2, top + 1)) -> drawLine;
-			   	lightColor -> pen.foreGroundColor;
-			   	(* ((left + 1, bottom - 1), (right - 1, bottom - 1)) -> drawLine; *)
-			   	(* ((right - 1, top + 1), (right - 1, bottom - 1)) -> drawLine; *)
-			   	((left + 2, bottom - 2), (right - 2, bottom - 2)) -> drawLine;
-			   	((right - 2, top + 2), (right - 2, bottom - 2)) -> drawLine;
+					this(guienv).private.black -> pen.foreGroundColor;
+					((left+1, top+1), (right-1, bottom-1)) -> drawRect;
+					
+					this(guienv).private.gray[5] -> pen.foreGroundColor;
+					((left, top), (right - 2, top)) -> drawLine;
+					((left, top), (left, bottom - 2)) -> drawLine;
+					
+					this(guienv).private.white -> pen.foreGroundColor;
+					((right - 1, top + 1), (right - 1, bottom - 1)) -> drawLine;
+					((left + 1, bottom - 1), (right - 1, bottom - 1)) -> drawLine;
+
 			   //borderStyles.shadowOut then
-					black -> pen.foreGroundColor;
+					this(guienv).private.black -> pen.foreGroundColor;
 					((left, top), (right, bottom)) -> drawRect;
-		   		lightColor -> pen.foreGroundColor;
-			   	(* ((left, top), (left, bottom - 1)) -> drawLine; *)
-			   	(* ((left, top), (right - 1, top)) -> drawLine; *)
+					
+		   		this(guienv).private.white -> pen.foreGroundColor;
 			   	((left + 1, top + 1), (left + 1, bottom - 2)) -> drawLine;
 			   	((left + 1, top + 1), (right - 2, top + 1)) -> drawLine;
-			   	darkColor -> pen.foreGroundColor;
-			   	(* ((left + 1, bottom - 1), (right - 1, bottom - 1)) -> drawLine; *)
-			   	(* ((right - 1, top + 1), (right - 1, bottom - 1)) -> drawLine; *)
+					
+			   	this(guienv).private.gray[5] -> pen.foreGroundColor;
 			   	((left + 2, bottom - 2), (right - 2, bottom - 2)) -> drawLine;
 			   	((right - 2, top + 2), (right - 2, bottom - 2)) -> drawLine;
+					
 			   //borderStyles.etchedIn then
-			   	darkColor -> pen.foreGroundColor;
+			   	this(guienv).private.gray[7] -> pen.foreGroundColor;
 			   	((left, top), (right - 1, bottom - 1)) -> drawRect;
-			   	lightColor -> pen.foreGroundColor;
+					
+			   	this(guienv).private.white -> pen.foreGroundColor;
 			   	((left + 1, top + 1), (left + 1, bottom - 3)) -> drawLine;
 			   	((left + 1, top + 1), (right - 3, top + 1)) -> drawLine;
 			   	((left, bottom - 1), (right - 1, bottom - 1)) -> drawLine;
 			   	((right - 1, top), (right - 1, bottom - 1)) -> drawLine;
+					
 			   //borderStyles.etchedOut then
-			   	lightColor -> pen.foreGroundColor;
+			   	this(guienv).private.white -> pen.foreGroundColor;
 			   	((left, top), (right - 1, bottom - 1)) -> drawRect;
-			   	darkColor -> pen.foreGroundColor;
+					
+			   	this(guienv).private.gray[7] -> pen.foreGroundColor;
 			   	((left + 1, top + 1), (left + 1, bottom - 3)) -> drawLine;
 			   	((left + 1, top + 1), (right - 3, top + 1)) -> drawLine;
 			   	((left, bottom - 1), (right - 1, bottom - 1)) -> drawLine;
 			   	((right - 1, top), (right - 1, bottom - 1)) -> drawLine;
+					
 			   //borderStyles.simple then
 			   	r -> drawRect;
 			   if);
 		   #)
 	#)
-   
--- GUIENVwindowItemGetVisibleRegion: doPart --
-do (if private.clip <> 0 then
-		(private.clip, rgn) -> CopyRgn;
-	else
-		(this(guienv).private.emptyRgn, rgn) -> CopyRgn;
-	if);
-	inner;
 	
--- GUIENVcanvasGetVisibleRgn: doPart --
-do scan
-		(# childVisibleRgn: @integer;
-			left, right: @integer;
-		do (if current.private.visibleFlag then
-				current.private.clip -> childVisibleRgn;
-				(if childVisibleRgn <> 0 then
-					current.position -> (left, right);
-					(childVisibleRgn, left, right) -> OffsetRgn;
-					(rgn, childVisibleRgn, rgn) -> DiffRgn;
-					(childVisibleRgn, -left, -right) -> OffsetRgn;
-				if);
-			if);
-		#);
-	inner;
-	
--- GUIENVwindowItemFindHitObject: doPart --
-do inner;
-	(if hitObject[] = None then
-		this(windowItem)[] -> hitObject[];
-	if);
-	
--- GUIENVcanvasFindHitObject: doPart --
+-- GUIENVcanvasFindObjectClicked: doPart --
 do position -> pt.subtract;
 	l: private.children.scanReverse
-		(#
+		(# currentCanvas: ^canvas;
 		do (if current.visible and current.enabled then
 				(if pt -> current.hit then
-					pt -> current.findHitObject -> hitObject[];
+					(if current## <= canvas## then
+						current[] -> currentCanvas[];
+						pt -> currentCanvas.findObjectClicked -> ObjectClicked[];
+					else
+						current[] -> ObjectClicked[];
+					if);
 					leave l;
 				if);
 			if);
 		#);
+	(if ObjectClicked[] = NONE then
+		this(canvas)[] -> ObjectClicked[];
+	if);
+	
 -- GUIENVwindowItemToScreenCoordinates: doPart --
 do (# macPt: @macPoint;
        LocalToGlobal: External (# p: ^macPoint enter p[] do '$A870' -> PascalTrap; #);
@@ -1663,3 +1600,153 @@ do menus.iterate
 		(#
 		do current.elm.adjust;
 		#);
+
+
+-- windowItemCalculateVisibleRgn: doPart --
+do (# fatherVisibleRgn: @integer; (* Region Handle *)
+		siblingFrameRgn: @integer; (* Region Handle *)
+		pos: ^list.theCellType;
+	do (if false then
+			this(windowItem)[] -> getPatternName -> putText;
+			'.calculateVisibleRgn' -> putLine;
+		if);
+		NewRgn -> rgn;
+	
+		(*
+		 * Start out with the frame in global coordinates in
+		 * the window:
+		 *)
+		 
+		rgn -> setRgnToFrame;
+		
+		
+		(if father[] <> NONE then
+			(*
+			 * Intersect with the fathers visibleRgn:
+			 *)
+			 
+			father.getVisibleRgn -> fatherVisibleRgn;
+			
+				
+			(fatherVisibleRgn, rgn, rgn) -> SectRgn;
+			
+			(*
+			 * Remove the bounding box of the
+			 * overlapping siblings:
+			 *)
+			 
+			(if not (rgn -> EmptyRgn) then
+				this(windowItem)[] -> father.getChildPosition -> pos[];
+				pos.succ[] -> pos[];
+				(if pos[] <> NONE then
+					NewRgn -> siblingFrameRgn;
+					l: pos[] -> father.private.children.scanFrom
+					  (#
+					  do (if current.visible then
+					  			siblingFrameRgn -> current.setRgnToFrame;
+							  (rgn, siblingFrameRgn, rgn) -> DiffRgn;
+							  (if (rgn -> EmptyRgn) then
+									leave l;
+							  if);
+							if);
+					  #);
+					siblingFrameRgn -> DisposeRgn;
+				if);
+				
+			if);
+		if);
+		
+	#)
+	
+-- windowItemForgetVisibleRgn: doPart --
+do (# 
+	   asCanvas: ^canvas;
+	do (*
+		 * Deallocate the visible rgn
+		 *)
+		 
+		(if false then
+			this(windowItem)[] -> getPatternName -> putText;
+			'.forgetVisibleRgn' -> putLine;
+		if);
+		
+		(if private.visibleRgn <> 0 then
+			 private.visibleRgn -> DisposeRgn;
+			 0 -> private.visibleRgn;
+			 
+			 (*
+			  * Tell the other objects whose visibleRgn depends
+			  * on my visibleRgn to forget their visibleRgn.
+			  *)
+			  
+			  
+			  (if this(windowItem)## <= canvas## then
+					this(windowItem)[] -> asCanvas[];
+					asCanvas.scan
+						(#
+						do current.forgetVisibleRgn;
+						#);
+			  if);
+		 if);
+		 
+		 
+		 (if tellBrothers then
+					brotherForgetVisibleRgn;
+		 if);
+	#);
+
+-- windowItemBrotherForgetVisibleRgn: doPart --
+do (# prevSibling: ^windowItem;
+   do (if father[] <> NONE then
+			this(windowItem)[] -> father.getPrevSibling -> prevSibling[];
+			(if prevSibling[] <> NONE then
+				true -> prevSibling.forgetVisibleRgn;
+			if);
+   	if);
+	#);
+	
+-- windowItemCalculateOrigin: doPart --
+do (# x, y: @integer;
+	   asCanvas: ^canvas;
+   do (if father[] = NONE then
+			0 -> private.originX;
+			0 -> private.originY;
+		else
+			father.privateOrigin -> (x, y);
+			x + private.left -> private.originX;
+			y + private.top -> private.originY;
+			(if this(windowItem)## <= canvas## then
+				this(windowItem)[] -> asCanvas[];
+				asCanvas.scan
+					(#
+					do current.calculateOrigin;
+					#);
+			if);
+		if);
+		
+   #);
+	
+-- windowItemGetDrawingRgn: doPart --
+do (# visRgn: @integer;
+		childFrameRgn: @integer;
+		asCanvas: ^canvas;
+	do getVisibleRgn -> visRgn;
+		(visRgn, rgn) -> CopyRgn;
+		(if not (visRgn -> EmptyRgn) then
+			(if this(windowItem)## <= canvas## then
+				this(windowItem)[] -> asCanvas[];
+				NewRgn -> childFrameRgn;
+				l: asCanvas.scan
+					(#
+					do (if current.visible then
+							childFrameRgn -> current.setRgnToFrame;
+							(rgn, childFrameRgn, rgn) -> DiffRgn;
+							(if (rgn -> EmptyRgn) then
+								leave l;
+							if);
+						if);
+					#);
+				childFrameRgn -> DisposeRgn;
+			if);
+		if);
+	#);

@@ -2,6 +2,7 @@ ORIGIN '../controlsbody';
 
 
 INCLUDE 'guienv_macprivate';
+INCLUDE 'guienv_macbody';
 INCLUDE 'controlmanager';
 INCLUDE '~beta/maclib/v3.0/textedit';
 INCLUDE '~beta/maclib/v3.0/memory';
@@ -18,20 +19,23 @@ do inner create;
 
 -- GUIENVcontrolOpen: descriptor --
 (#
-do &controlMethods[] -> windowitemMethods;
+do 
 	inner open;
 #)
 
 -- GUIENVcontrolClose: descriptor --
 (#
 do inner close;
-	(if private.controlHandle<>0//true then
+	(if private.controlHandle<>0 then
 		private.controlHandle -> disposeToolBoxControl;
 		0 -> private.controlHandle;
 	if);
 #)
 
 -- controlLib: attributes --
+
+ThreeDdefProc: (# exit 2048 #);
+
 
 putPoint:
 	(# h, v: @integer;
@@ -72,7 +76,7 @@ updateToolboxControl:
 		s: @text;
 	enter (controlHandle,x,y,width,height)
 	do 
-		focusZero
+		setupClipForDrawing
 			(#
 			do HidePen;
 				controlHandle -> HideControl;
@@ -94,10 +98,10 @@ drawToolboxControl:
 		controlHandle -> controlRec.initFromHandle;
 		controlRec.contrlVis -> visible;
 		controlHandle -> HUnLock;
-	   focusZero
+	   setupClipForDrawing
 			(#
 			do (if this(control).struc <= optionButton## then
-					this(guienv).private.whitePat -> BackPat;
+					(* this(guienv).private.whitePat -> BackPat; *)
 				if);
 				(if visible//255 then
 					controlHandle -> Draw1Control;
@@ -121,7 +125,7 @@ removeToolboxControl:
 disposeToolboxControl:
 	(# controlHandle: @integer;
 	enter controlHandle
-	do focusZero
+	do setupClipForDrawing
 			(#
 			do hidePen;
 				controlHandle -> DisposeControl;
@@ -133,22 +137,13 @@ adjustBounds:
 		f: @rectangle;
 	do (if private.controlHandle<>0 then
 			((0,0),size) -> f;
-			privateOrigin -> f.offset;
+			(* privateOrigin -> f.offset; *)
 			f.size -> (width,height);
 			f.topLeft -> (h,v);
 			(private.controlHandle,h,v,width,height) -> updateToolboxControl;
 		if);
 	#);
 
-controlMethods: methods
-	(#	hit::< defaultHitMethod;
-		calculateFocus::< defaultCalculateFocus
-			(#
-			do adjustBounds;
-				inner;
-			#);
-		handleCursor::< defaultHandleCursorMethod;
-	#);
 theControlHandle:
 	(#
 	exit private.controlHandle
@@ -166,19 +161,16 @@ do adjustBounds;
 
 -- GUIENVScrollbarOnRefresh: descriptor --
 (#
-do (if private.scrollbarActive//true then
+do (if private.scrollbarActive then
 		this(control).private.controlHandle  -> drawToolboxControl;
 	else
-		focus
+		setupClipForDrawing
 			(#	r: @rectangle;
 				mr: ^macRect;
 			do	((0,0),size) -> r;
 				r[] -> makeMacRect -> mr[];
 				ResetPen;
 				mr[] -> FrameRect;
-				(*(mr[],1,1) -> InsetRect;
-				mr[] -> EraseRect;
-				*)
 			#);
 	if);
 	inner onRefresh;
@@ -190,25 +182,27 @@ do (if private.scrollbarActive//true then
 	p: @point;
 do inner onMouseDown;
 	localPosition -> p;
-	privateOrigin -> p.add;
+	(* privateOrigin -> p.add; *)
 	p -> macPt.setPoint;
 	(this(control).private.controlHandle ,macPt) -> TestControl -> originalPart;
-	focusZero
+	setupClipForDrawing
 		(#
-		do (if originalPart//inThumb then
+		do (if originalPart = inThumb then
 				value -> originalValue;
 				(this(control).private.controlHandle ,macPt,0) -> TrackControl -> returnPart;
-				(if returnPart//originalPart then
+				(if returnPart = originalPart then
 					(value - originalValue) -> theEventHandler.onThumbMoved;
 				if);
 			else
-				(this(control).private.controlHandle,
-				macPt,
-				this(control).private.controlActionProc) -> TrackControl -> returnPart;
+				(# 
+				do (this(control).private.controlHandle,
+				   macPt,
+				   this(control).private.controlActionProc) -> TrackControl -> returnPart;
+			   #)
 			if);
-			(if returnPart//originalPart then
+			(if returnPart = originalPart then
 				theEventHandler.onMouseUp;
-				none -> hitWindowItem;
+				none -> lastObjectClicked;
 			if);
 		#);
 #)
@@ -223,7 +217,7 @@ do	true -> private.scrollbarActive;
 -- GUIENVscrollbarOnDeactivate: descriptor --
 (#
 do	false -> private.scrollbarActive;
-	focusZero
+	setupClipForDrawing
 		(#
 		do	HidePen;
 			this(control).private.controlHandle -> HideControl;
@@ -261,7 +255,7 @@ do private.scrollbarPageScrollAmount -> value;
 
 -- GUIENVscrollbarSetMaxValue: descriptor --
 (# 
-do focusZero
+do setupClipForDrawing
 		(#
 		do (this(control).private.controlHandle ,value) -> SetControlMaximum;
 		#);
@@ -276,7 +270,7 @@ do this(control).private.controlHandle  -> GetControlMaximum -> value;
 -- GUIENVscrollbarSetValue: descriptor --
 (#
 do 
-	focusZero
+	setupClipForDrawing
 		(#
 		do (this(control).private.controlHandle ,pos) -> SetControlValue;
 		#);
@@ -350,6 +344,7 @@ do inner thumbMoved;
 #)
 
 -- scrollbarLib: attributes --
+
 actionProc: external
 	(# controlHandle: @integer;
 		partCode: @shortInt;
@@ -377,6 +372,8 @@ actionProc: external
 				theEventHandler.onPageDown;
 		if);
 	#);
+
+
 setScrollbarActionProc:
 	(#	theActionProc: ##actionProc;
 		toFuncPtr: external
@@ -402,8 +399,10 @@ setScrollbarActionProc:
 -- GUIENVButtonOnFrameChanged: descriptor --
 (# thisOptionButton: ^optionButton;
 do (if this(button).struc <= optionButton## then
-		this(button)[] -> thisOptionButton[];
-		thisOptionButton.adjustOptionButtonBounds;
+		(*
+			this(button)[] -> thisOptionButton[];
+			thisOptionButton.adjustOptionButtonBounds;
+		*)
    else
    	adjustBounds;
 	if);
@@ -413,10 +412,11 @@ do (if this(button).struc <= optionButton## then
 -- GUIENVButtonOnRefresh: descriptor --
 (#
 do 
-	(if this(control).private.controlHandle <>0//true then
+	(if this(control).private.controlHandle <>0 then
 		private.buttonStyle[] -> useTextStyle;
 		this(control).private.controlHandle  -> drawToolboxControl;
 	if);
+	
 	inner onRefresh;
 #)
 
@@ -424,24 +424,27 @@ do
 (#	macPt: @macPoint;
 	originalPart,returnPart,originalValue: @integer;
 	thisScrollbar: ^scrollbar;
+	thisOptionButton: ^optionButton;
 	p: @point;
 do inner onMouseDown;
-	(if this(control).private.controlHandle <>0//true then
+	(if this(control).private.controlHandle <> 0 then
 		localPosition -> p;
 		privateOrigin -> p.add;
 		p -> macPt.setPoint;
-		(this(control).private.controlHandle ,macPt) -> TestControl -> originalPart;
-		focusZero
+		
+		setupClipForDrawing
 			(# 
-			do 
-				private.buttonStyle[] -> useTextStyle;
-				(if this(control).struc <= optionButton## then
-					this(guienv).private.whitePat -> BackPat;
-				if);
+			do private.buttonStyle[] -> useTextStyle;
 				(this(control).private.controlHandle ,macPt,this(control).private.controlActionProc) -> TrackControl -> returnPart;
 			#);
-		(if returnPart//originalPart then
+		(if returnPart <> 0 then
 			theEventHandler.onMouseUp;
+			none -> lastObjectClicked;
+		if);
+	else
+		(if this(button).struc <= optionButton## then
+			this(button)[] -> thisOptionButton[];
+			this(onMouseDown)[] -> thisOptionButton.handleMouseDown;
 		if);
 	if);
 #)
@@ -449,8 +452,8 @@ do inner onMouseDown;
 -- GUIENVbuttonSetLabel: descriptor --
 (#
 do theLabel.copy -> private.buttonLabel[];
-	(if this(control).private.controlHandle <>0//true then
-		focusZero
+	(if this(control).private.controlHandle <>0 then
+		setupClipForDrawing
 			(#
 			do (this(control).private.controlHandle ,theLabel) -> SetControlTitle;
 			#);
@@ -487,14 +490,14 @@ do inner create;
 (#	style: ^textStyle;
 do this(button)[] -> getPatternName -> private.buttonLabel[];
 	&textStyle[] -> style[];
-	(if this(window).style = plain then
-		'Chicago' -> style.name;
-		12 -> style.size;
-	else
-		'Geneva' -> style.name;
-		9 -> style.size;
-		textFaces.bold -> style.face;
-	if);
+	'Chicago' -> style.name;
+    12 -> style.size;
+	
+	(* 'Geneva' -> style.name;
+	 * 10 -> style.size;
+	 * textFaces.bold -> style.face;
+	 *)
+	
 	style[] -> private.buttonStyle[];
 	inner open;
 #)
@@ -521,8 +524,8 @@ do whiteBackGround -> backgroundStyle;
 	t: ^text;
 do ((0,0),size) -> mr;
 	label -> t[];
-	(if this(window).style <> shadows then
-		(this(window).private.windowPointer,mr[],t,false,0,0,0,PushButProc + useWFont,0) 
+	(if this(window).style = shadows then
+		(this(window).private.windowPointer,mr[],t,false,0,0,0,ThreeDdefProc + PushButProc + useWFont,0) 
 			-> NewControl -> this(control).private.controlHandle;
 	if);
 	inner open;
@@ -535,6 +538,56 @@ do inner close;
 
 -- pushButtonLib: attributes --
 
+drawButton:
+	(#
+	do graphics
+			(# left, right, top, bottom: @integer;
+			do this(guienv).private.black -> pen.foreGroundColor;
+					((left + 3, top), (right - 3, top)) -> drawLine;
+					((right, top + 3), (right, bottom - 3)) -> drawLine;
+					((right - 3, bottom), (left + 3, bottom)) -> drawLine;
+					((left, bottom - 3), (left, top + 3)) -> drawLine;
+					(left + 1, top + 1) -> drawSpot;
+					(right - 1, top + 1) -> drawSpot;
+					(right - 1, bottom - 1) -> drawSpot;
+					(left + 1, bottom - 1) -> drawSpot;
+					
+					this(guienv).private.gray[12] -> pen.foreGroundColor;
+					(left + 2, top) -> drawSpot;
+					(left, top + 2) -> drawSpot;
+					(right - 2, top) -> drawSpot;
+					(right, top + 2) -> drawSpot;
+					(right - 2, bottom) -> drawSpot;
+					(right, bottom - 2) -> drawSpot;
+					(left + 2, bottom) -> drawSpot;
+					(left, bottom - 2) -> drawSpot;
+					
+					this(guienv).private.gray[4] -> pen.foreGroundColor;
+					(left + 1, top + 2) -> drawSpot;
+					(left + 2, top + 1) -> drawSpot;
+					
+					(left + 1, bottom - 2) -> drawSpot;
+					(left + 2, bottom - 1) -> drawSpot;
+					
+					(right - 2, top + 1) -> drawSpot;
+					
+					this(guienv).private.gray[5] -> pen.foreGroundColor;
+					(right - 1, top + 2) -> drawSpot;
+					((right - 2, top + 3), (right - 2, bottom - 3)) -> drawLine;
+					((right - 3, bottom - 2), (left + 3, bottom - 2)) -> drawLine;
+					(right - 3, bottom - 3) -> drawSpot;
+					
+					this(guienv).private.gray[8] -> pen.foreGroundColor;
+					((right - 1, top + 3), (right - 1, bottom - 2)) -> drawLine;
+					((right - 2, bottom - 1), (left + 3, bottom - 1)) -> drawLine;
+					(right - 2, bottom - 2) -> drawSpot;
+					
+					this(guienv).private.white -> pen.foreGroundColor;
+					((left + 2, top + 2), (right - 3, top + 2)) -> drawLine;
+					((left + 2, top + 2), (left + 2, bottom - 3)) -> drawLine;
+					(left + 3, top + 3) -> drawSpot;
+			#);
+	#);
 
 (* setHilite:
 	(# value: @boolean;
@@ -621,10 +674,14 @@ do ((0,0),size) -> mr;
 	label -> t[];
 	(if (t[] <> none) and (t.length <> 0) then
 	graphics
-		(#
+		(#(*  rgb: @RGBColor; *)
 		do 
 			this(statictext).style -> style;
-			this(guienv).private.background -> pen.backGroundColor;
+			(* this(guienv).private.background -> pen.backGroundColor; *)
+			(* 56797 -> rgb.red;
+			56797 -> rgb.green;
+			56797 -> rgb.blue;
+			rgb[] -> RGBBackColor; *)
 			(@@t.T[1],t.lgth,mr[],0) -> TETextBox;
 		#);
 	if);
@@ -637,8 +694,14 @@ do inner create;
 #)
 
 -- GUIENVstaticTextOpen: descriptor --
-(#
-do inner open;
+(# style: ^textStyle;
+do &textStyle[] -> style[];
+	'Geneva' -> style.name;
+	10 -> style.size;
+	textFaces.bold -> style.face;
+	
+	style[] -> this(button).private.buttonStyle[];
+	inner open;
 #)
 
 -- GUIENVstaticTextClose: descriptor --
@@ -653,14 +716,14 @@ do inner close;
 -- GUIENViconButtonOnRefresh: descriptor --
 (# calcImageBounds:
      (# 
-     do (if showLabel//true then
+     do (if showLabel then
             theLabel[] -> theStyle.widthOfText -> textWidth;
             theStyle.lineHeight -> textHeight;
          else
             0 -> textWidth;
             0 -> textHeight;
         if);
-        (if private.iconButtonRaster[]<>none//true then
+        (if private.iconButtonRaster[]<>none then
             private.iconButtonRaster.width -> iconWidth;
             private.iconButtonRaster.height -> iconHeight;
          else
@@ -693,13 +756,13 @@ do style -> theStyle[];
    label -> theLabel[];
    calcImageBounds;
    calcImageAnchors;
-	focus
+	setupClipForDrawing
 		(# f: @rectangle;
 			from,to: @macPoint;
 			wp: @integer;
 		do PenNormal;
 			blackColor -> ForeColor;
-			(if private.iconButtonRaster[]<>none//true then
+			(if private.iconButtonRaster[]<>none then
 				(0,0) -> from.setPoint;
 				iconAnchor -> to.setPoint;
 				windowPointer -> wp;
@@ -716,7 +779,7 @@ do style -> theStyle[];
 					f[] -> makeMacRect -> FrameRect;
 				if);
 			if);
-			(if showLabel//true then
+			(if showLabel then
 				(if (theLabel[] <> none) and (theLabel.length <> 0) then
 				(textAnchor.h,textAnchor.v) -> MoveTo;
 				theStyle[] -> useTextStyle;
@@ -780,6 +843,185 @@ do inner close;
 
 -- optionButtonLib: attributes --
 
+handleMouseDown:
+	(# theEvent: ^eventHandler.mouseDown;
+		left, top: @integer;
+		width, height: @integer;
+		theMenu: ^menu;
+		result: @longInt;
+	enter theEvent[]
+	do drawPressed;
+		popupMenu -> theMenu[];
+		(if theMenu[] <> none then
+			labelWidth + 5 -> left;
+			size -> (width, height);
+			height -> top;
+			(left, top) -> toScreenCoordinates -> (left, top);
+			theMenu.adjust;
+			(theMenu.handle, -1) -> InsertMenu;
+			(theMenu.handle,top, left,0) -> PopUpMenuSelect -> result;
+			(if result.hiWord<>0 then
+				(result.hiWord,result.loWord) -> processMenuSelect;
+				result.loWord -> currentItem;
+			if);
+			theMenu.menuID -> DeleteMenu			
+		else
+			trackMouse;
+		if);
+		drawNormal;
+	#);
+
+getCurrentItemText:
+	(# itemText: ^text;
+		theMenu: ^menu;
+		theItem: ^menu.menuItem;
+	do popupMenu -> theMenu[];
+		(if theMenu[] <> NONE then
+			(if private.currentItem <> 0 then
+				private.currentItem -> theMenu.getMenuitemByNumber -> theItem[];
+				(if theItem[] <> none then
+					theItem.name -> itemText[];
+				if);
+			if);
+		if);
+	exit itemText[]
+	#);
+	
+optionButtonGraphics: graphics
+	(# left, right, top, bottom: @integer;
+		
+		drawOuterBorder:
+			(#
+			do this(guienv).private.black -> pen.foreGroundColor;
+				((left + 3, top), (right - 3, top)) -> drawLine;
+				((right, top + 3), (right, bottom - 3)) -> drawLine;
+				((right - 3, bottom), (left + 3, bottom)) -> drawLine;
+				((left, bottom - 3), (left, top + 3)) -> drawLine;
+				(left + 1, top + 1) -> drawSpot;
+				(right - 1, top + 1) -> drawSpot;
+				(right - 1, bottom - 1) -> drawSpot;
+				(left + 1, bottom - 1) -> drawSpot;
+				
+				this(guienv).private.gray[12] -> pen.foreGroundColor;
+				(left + 2, top) -> drawSpot;
+				(left, top + 2) -> drawSpot;
+				(right - 2, top) -> drawSpot;
+				(right, top + 2) -> drawSpot;
+				(right - 2, bottom) -> drawSpot;
+				(right, bottom - 2) -> drawSpot;
+				(left + 2, bottom) -> drawSpot;
+				(left, bottom - 2) -> drawSpot;
+			#);
+		drawLabel:
+			(# mr: @macRect;
+				t: ^text;
+			do label -> t[];
+				(if t.length > 0 then
+					 (0,bottom - 5) -> moveTo;
+					 t[] -> drawText;
+				if);
+			#);
+		drawInnerText:
+			(# itemText: ^text;
+			do (left + 8, bottom - 5) -> moveTo;
+				getCurrentItemText -> itemText[];
+				(if itemText[] <> NONE then
+					itemText[] -> drawText;
+				if);
+			#);
+		drawArrow:
+			(# arrowLeft, arrowTop: @integer;
+				arrowWidth: (# exit 9 #);
+			enter (arrowLeft, arrowTop)
+			do (for inx: 5 repeat
+					((arrowLeft + (inx - 1), arrowTop + (inx - 1)), (arrowLeft + arrowWidth - inx, arrowTop + (inx - 1))) -> drawLine;
+				for);
+			#);
+	do labelWidth + 5 -> left;
+		0 -> top;
+		size -> (right, bottom);
+		right - 1 -> right;
+		bottom - 1 -> bottom;
+		(left, top, right + 1, bottom + 1) -> EraseRectangle;
+		drawLabel;
+		drawOuterBorder;
+		INNER;
+	#);
+drawNormal: optionButtonGraphics
+	(#
+	do 
+		this(guienv).private.gray[4] -> pen.foreGroundColor;
+					
+		(right - 2, top + 1) -> drawSpot;
+		(right - 21, bottom - 1) -> drawSpot;
+		
+		this(guienv).private.gray[5] -> pen.foreGroundColor;
+		(right - 1, top + 2) -> drawSpot;
+		((right - 2, top + 3), (right - 2, bottom - 3)) -> drawLine;
+		((right - 3, bottom - 2), (right - 19, bottom - 2)) -> drawLine;
+		((right - 23, bottom - 1), (left + 2, bottom - 1)) -> drawLine;
+		((right - 22, top + 2), (right - 22, bottom - 1)) -> drawLine;
+
+		
+		this(guienv).private.gray[8] -> pen.foreGroundColor;
+		((right - 1, top + 3), (right - 1, bottom - 2)) -> drawLine;
+		((right - 2, bottom - 1), (right - 20, bottom - 1)) -> drawLine;
+		(right - 2, bottom - 2) -> drawSpot;
+		
+		
+		this(guienv).private.white -> pen.foreGroundColor;
+		((left + 2, top + 1), (right - 23, top + 1)) -> drawLine;
+		((left + 1, top + 2), (left + 1, bottom - 2)) -> drawLine;
+		((right - 20, top + 2), (right - 3, top + 2)) -> drawLine;
+		((right - 20, top + 2), (right - 20, bottom - 3)) -> drawLine;
+		
+		this(guienv).private.black -> pen.foreGroundColor;
+		drawInnerText;
+		(right - 14, bottom - 11) -> drawArrow;
+	#);
+	
+drawPressed: optionButtonGraphics
+	(#
+	do this(guienv).private.gray[9] -> pen.foreGroundColor;
+		((left + 2, top + 2), (right - 22, bottom - 1)) -> fillRect;
+		
+		((right - 19, top + 3), (right - 2, bottom - 2)) -> fillRect;
+		
+		(right - 2, top + 2) -> drawSpot;
+		(right - 20, bottom - 2) -> drawSpot;
+		
+		this(guienv).private.gray[11] -> pen.foreGroundColor;
+		
+		((right - 21, top + 1), (right - 2, top + 1)) -> drawLine;
+		((right - 21, top + 1), (right - 21, top - 1)) -> drawLine;
+				
+		this(guienv).private.gray[8] -> pen.foreGroundColor;
+		(right - 1, top + 2) -> drawSpot;
+		((right - 2, top + 3), (right - 2, bottom - 3)) -> drawLine;
+		((right - 3, bottom - 2), (right - 19, bottom - 2)) -> drawLine;
+		((right - 23, bottom - 1), (left + 2, bottom - 1)) -> drawLine;
+		((right - 22, top + 2), (right - 22, bottom - 1)) -> drawLine;
+
+		
+		this(guienv).private.gray[7] -> pen.foreGroundColor;
+		((right - 1, top + 3), (right - 1, bottom - 2)) -> drawLine;
+		((right - 2, bottom - 1), (right - 20, bottom - 1)) -> drawLine;
+		(right - 2, bottom - 2) -> drawSpot;
+		
+		
+		this(guienv).private.gray[10] -> pen.foreGroundColor;
+		((left + 2, top + 1), (right - 22, top + 1)) -> drawLine;
+		((left + 1, top + 2), (left + 1, bottom - 2)) -> drawLine;
+		(left + 2, top + 2) -> drawSpot;
+		((right - 20, top + 2), (right - 3, top + 2)) -> drawLine;
+		((right - 20, top + 2), (right - 20, bottom - 3)) -> drawLine;
+		
+		
+		this(guienv).private.white -> pen.foreGroundColor;
+		drawInnerText;
+		(right - 14, bottom - 11) -> drawArrow;
+	#);
+	
 maxStringLength: integerValue
 	(# style: @textStyle;
 		theMenu: ^menu;
@@ -803,12 +1045,12 @@ labelWidth: integerValue
 		label -> s.widthOfText -> value;
 	#);
 	
+(*
 adjustOptionButtonBounds:
 	(# h,v,width,height: @integer;
 		theHandle: @integer;
 	do theControlHandle -> theHandle;
 		(if theHandle<>0 then
-			privateOrigin -> (h, v);
 			h + labelWidth + 5 -> h;
 			maxStringLength + 41 -> width;
 			19 -> height;
@@ -816,29 +1058,28 @@ adjustOptionButtonBounds:
 			(theHandle,h,v,width,height) -> updateToolboxControl;
 		if);
 	#);
+	
+*)
 
-optionButtonMethods: methods
-	(#	hit::< defaultHitMethod;
-		calculateFocus::< defaultCalculateFocus
-			(#
-			do adjustOptionButtonBounds;
-				inner;
-			#);
-		handleCursor::< defaultHandleCursorMethod;
-	#);
 	
 -- GUIENVoptionButtonSetCurItem: descriptor --
 (#
-do	focusZero
+do	itemNo -> private.currentItem;
+	updateMaybe;
+	theEventHandler.onCurrentItemChanged;
+	(* setupClipForDrawing
 		(#
 		do (this(control).private.controlHandle ,itemNo) -> SetControlValue;
 		#);
-	theEventHandler.onCurrentItemChanged;
+	theEventHandler.onCurrentItemChanged; *)
+	
+	
 #)
-
 -- GUIENVoptionButtonGetCurItem: descriptor --
 (#
-do this(control).private.controlHandle  -> GetControlValue -> itemNo;
+do private.currentItem -> itemNo;
+	(* this(control).private.controlHandle  -> GetControlValue -> itemNo; *)
+
 #)
 -- GUIENVoptionButtonSetPopupMenu: descriptor --
 (# SetMenubuttonMenu: external
@@ -846,8 +1087,9 @@ do this(control).private.controlHandle  -> GetControlValue -> itemNo;
 			menuID: @shortInt;
 		enter (control,menuHandle,menuID)
 		#);
-do	popupMenu[] -> private.menuButtonPopupMenu[];
-	focusZero
+do	(*
+   popupMenu[] -> private.menuButtonPopupMenu[];
+	setupClipForDrawing
 		(#
 		do hidePen;
 			this(control).private.controlHandle  -> HideControl;
@@ -855,6 +1097,8 @@ do	popupMenu[] -> private.menuButtonPopupMenu[];
 			(this(control).private.controlHandle ,popupMenu.handle,popupMenu.menuID) -> SetMenubuttonMenu;
 		#);
 	adjustOptionButtonBounds;
+	*)
+	popupMenu[] -> private.menuButtonPopupMenu[];
 	updateMaybe;
 	theEventHandler.onPopUpMenuChanged;
 #)
@@ -873,22 +1117,30 @@ do	grayBackground -> backgroundStyle;
 
 
 -- GUIENVoptionButtonOpen: descriptor --
+(#
+do ((0, 0), (200, 20)) -> privateWindowItemFrame;
+	INNER open;
+#)
+(*
 (# nothingMenuID: (# exit 129 #);
 	bounds: @macRect;
 	t: ^text;
-do true -> debugMe;
+do 
 	((0,0),(200,30)) -> bounds;
 	label -> t[];
 	(this(window).private.windowPointer,bounds[],t,false,0,nothingMenuID,0,popupMenuProc ,0) 
 		-> NewControl -> this(control).private.controlHandle ;
 	-1 -> this(control).private.controlActionProc;
-	&optionButtonMethods[] -> windowitemMethods;
 	inner open;
 #)
+*)
+
 
 -- GUIENVoptionButtonClose: descriptor --
 (#
 do inner close;
+	NONE -> private.menuButtonPopupMenu[];
+	0 -> private.currentItem;
 #)
 
 -- GUIENVoptionButtononstylechanged: descriptor --
@@ -898,39 +1150,113 @@ do inner onStyleChanged;
 
 -- GUIENVoptionButtononlabelchanged: descriptor --
 (#
-do adjustOptionButtonBounds;
+do (*  adjustOptionButtonBounds; *)
 	inner onLabelChanged;
 #)
 
 -- GUIENVoptionButtonOnRefresh: doPart --
-do 
+do drawNormal;
+	INNER;
+(*
 	(#	mr: @macRect;
 		t: ^text;
 	do ((0,4),(labelWidth + 4, 16)) -> mr;
 		label -> t[];
 		(if t.length > 0 then
 			graphics
-				(#
-				do 
-					this(optionButton).style -> style;
-					this(guienv).private.background -> pen.backGroundColor;
+				(# left, right, top, bottom: @integer;
+				do this(optionButton).style -> style;
 					(@@t.T[1],t.lgth,mr[],0) -> TETextBox;
+					
+					
+					labelWidth + 5 -> left;
+					0 -> top;
+					size -> (right, bottom);
+					right - 1 -> right;
+					bottom - 1 -> bottom;
+					
+					this(guienv).private.black -> pen.foreGroundColor;
+					((left + 3, top), (right - 3, top)) -> drawLine;
+					((right, top + 3), (right, bottom - 3)) -> drawLine;
+					((right - 3, bottom), (left + 3, bottom)) -> drawLine;
+					((left, bottom - 3), (left, top + 3)) -> drawLine;
+					(left + 1, top + 1) -> drawSpot;
+					(right - 1, top + 1) -> drawSpot;
+					(right - 1, bottom - 1) -> drawSpot;
+					(left + 1, bottom - 1) -> drawSpot;
+					
+					this(guienv).private.gray[12] -> pen.foreGroundColor;
+					(left + 2, top) -> drawSpot;
+					(left, top + 2) -> drawSpot;
+					(right - 2, top) -> drawSpot;
+					(right, top + 2) -> drawSpot;
+					(right - 2, bottom) -> drawSpot;
+					(right, bottom - 2) -> drawSpot;
+					(left + 2, bottom) -> drawSpot;
+					(left, bottom - 2) -> drawSpot;
+					
+					this(guienv).private.gray[4] -> pen.foreGroundColor;
+					
+					(right - 2, top + 1) -> drawSpot;
+					(right - 21, bottom - 1) -> drawSpot;
+					
+					this(guienv).private.gray[5] -> pen.foreGroundColor;
+					(right - 1, top + 2) -> drawSpot;
+					((right - 2, top + 3), (right - 2, bottom - 3)) -> drawLine;
+					((right - 3, bottom - 2), (right - 19, bottom - 2)) -> drawLine;
+					((right - 23, bottom - 1), (left + 2, bottom - 1)) -> drawLine;
+					((right - 22, top + 2), (right - 22, bottom - 1)) -> drawLine;
+
+					
+					this(guienv).private.gray[8] -> pen.foreGroundColor;
+					((right - 1, top + 3), (right - 1, bottom - 2)) -> drawLine;
+					((right - 2, bottom - 1), (right - 20, bottom - 1)) -> drawLine;
+					(right - 2, bottom - 2) -> drawSpot;
+					
+					
+					this(guienv).private.white -> pen.foreGroundColor;
+					((left + 2, top + 1), (right - 23, top + 1)) -> drawLine;
+					((left + 1, top + 2), (left + 1, bottom - 2)) -> drawLine;
+					((right - 20, top + 2), (right - 3, top + 2)) -> drawLine;
+					((right - 20, top + 2), (right - 20, bottom - 3)) -> drawLine;
+					
+					(# arrowLeft: @integer;
+						arrowTop: @integer;
+						arrowWidth: (# exit 9 #);
+					do right - 14 -> arrowLeft;
+						bottom - 11 -> arrowTop;
+						this(guienv).private.black -> pen.foreGroundColor;
+						(for inx: 5 repeat
+							((arrowLeft + (inx - 1), arrowTop + (inx - 1)), (arrowLeft + arrowWidth - inx, arrowTop + (inx - 1))) -> drawLine;
+						for);
+					#);
+					
+					(left + 8, bottom - 5) -> moveTo;
+					'Red' -> drawText;
+					
 				#);
 		if);
 		inner onRefresh;
 	#)
+*)
 
 -- GUIENVoptionButtonprivate: descriptor --
 (# menuButtonPopupMenu: ^menu;
+	currentItem: @integer;
 #)
 
 -- GUIENVtoggleButtonSetState: descriptor --
 (#
 do	theState -> private.toggleButtonState;
-	(if this(control).private.controlHandle <>0//true then
-		focusZero
-			(#
-			do (this(control).private.controlHandle ,theState) -> SetControlValue;
+	(if this(control).private.controlHandle <>0 then
+		setupClipForDrawing
+			(# v: @integer;
+			do (if theState then
+					1 -> v;
+				else
+					0 -> v;
+				if);
+				(this(control).private.controlHandle ,v) -> SetControlValue;
 			#);
 	if);
 	theEventHandler.onStateChanged;
@@ -974,7 +1300,7 @@ do inner create;
 do	((0,0),size) -> r;
 	r[] -> makeMacRect -> mr[];
 	label -> t[];
-	(this(window).private.windowPointer,mr[],t,false,0,0,1,radioButProc + useWFont,0) 
+	(this(window).private.windowPointer,mr[],t,false,0,0,1,ThreeDdefProc + radioButProc + useWFont,0) 
 		-> NewControl -> this(control).private.controlHandle ;
 	inner open;
 #)
@@ -1000,7 +1326,7 @@ do inner create;
 do	((0,0),size) -> r;
 	r[] -> makeMacRect -> mr[];
 	label -> t[];
-	(this(window).private.windowPointer,mr[],t,false,0,0,1,checkBoxProc + useWFont,0) 
+	(this(window).private.windowPointer,mr[],t,false,0,0,1,ThreeDdefProc + checkBoxProc + useWFont,0) 
 		-> NewControl -> this(control).private.controlHandle ;
 	inner open;
 #)
@@ -1081,18 +1407,18 @@ do private.editTextStyle[] -> style[];
 
 -- GUIENVeditTextonKeyDown: descriptor --
 (#
-do focusZero
+do setupClipForDrawing
 		(#	insertChar: @boolean;
 		do ResetPen;
 			true -> insertChar;
 			(if ch
 				//13 then
-					(if private.editTextSingleLine//true then
+					(if private.editTextSingleLine then
 						false -> insertChar
 					if);
 				//3 then false -> insertChar;
 			if);
-			(if insertChar//true then
+			(if insertChar then
 				(ch,private.editTextHandle) -> TEKey;
 			if);
 		#);
@@ -1102,12 +1428,12 @@ do focusZero
 -- GUIENVeditTextonMouseDown: descriptor --
 (#
 do this(editText)[] -> target;
-	focusZero
+	setupClipForDrawing
 		(#	p: @point;
 			macPt: @macPoint;
 		do ResetPen;
 			localPosition -> p;
-			privateOrigin -> p.add;
+			(* privateOrigin -> p.add; *)
 			p -> macPt.setPoint;
 			(macPt,false,private.editTextHandle) -> TEClick;
 		#);
@@ -1116,18 +1442,20 @@ do this(editText)[] -> target;
 
 -- GUIENVeditTextonRefresh: descriptor --
 (#
-do focusZero
+do setupClipForDrawing
 		(#	viewRect: ^macRect;
 		do	ResetPen;
 			calcViewRect -> makeMacRect -> viewRect[];
+			viewRect[] -> EraseRect;
 			(viewRect[],private.editTextHandle) -> TEUpdate;
 		#);
+	(((0, 0), size), borderStyles.shadowIn) -> drawBorder;
 	inner onRefresh;
 #)
 
 -- GUIENVeditTextonEnableTarget: descriptor --
 (#
-do focusZero
+do setupClipForDrawing
 		(#
 		do ResetPen;
 			private.editTextHandle -> TEActivate
@@ -1138,7 +1466,7 @@ do focusZero
 
 -- GUIENVeditTextonDisableTarget: descriptor --
 (#
-do focusZero
+do setupClipForDrawing
 		(#
 		do 
 			ResetPen;
@@ -1160,20 +1488,16 @@ do whiteBackGround -> backGroundStyle;
 (#	style: ^textStyle;
 	viewRect,destRect: ^macRect;
 do	&textStyle[] -> style[];
-	(if this(window).style = plain then
-		'Chicago' -> style.name;
-		12 -> style.size;
-	else
-		'Geneva' -> style.name;
-		9 -> style.size;
-	if);
+	'Geneva' -> style.name;
+	10 -> style.size;
+	
+	
 	style[] -> private.editTextStyle[];
 	((0,0),(100,6 + style.lineHeight + style.leading)) -> privateWindowItemFrame;
-	father.calculateFocusForChildren;
 	true -> private.editTextSingleLine;
 	calcViewRect -> makeMacRect -> viewRect[];
 	calcDestRect -> makeMacRect -> destRect[];
-	focusZero
+	setupClipForDrawing
 		(#
 		do private.editTextStyle[] -> useTextStyle;
 			(destRect[],viewRect[]) -> TENew -> private.editTextHandle;
@@ -1203,10 +1527,10 @@ calcViewRect:
 	(#	r: ^rectangle;
 		minInt: (# exit -32767 #);
 	do	&rectangle[] -> r[];
-		(if textVisible//true then
+		(if textVisible then
 			((0,0),size) -> r;
-			privateOrigin -> r.offset;
-			(3,3) -> r.inset;
+			(* privateOrigin -> r.offset; *)
+			(2,2) -> r.inset;
 		else
 			((minInt,minInt),(minInt + 1,minInt + 1)) -> r; 
 		if);
@@ -1221,11 +1545,11 @@ calcDestRect:
 		minInt: (# exit -32767 #);
 	do	&rectangle[] -> r[];
 		private.editTextStyle[] -> style[];
-		(if textVisible//true then
+		(if textVisible then
 			size -> (width,height);
-			privateOrigin -> (h,v);
+			(* privateOrigin -> (h,v); *)
 			(h+3,v+3) -> r.topLeft;
-			(if private.editTextSingleLine//true then
+			(if private.editTextSingleLine then
 				r.left + 1000 -> r.right;
 				r.top + style.lineHeight + style.leading -> r.bottom;
 			else
@@ -1264,7 +1588,7 @@ textVisible: booleanValue
 		do theTimer[] -> this(GUIenv).private.timerQueue.delete;
 		#);
 	theTimer: @timerAction
-		(# doIt:@ focusZero
+		(# doIt:@ setupClipForDrawing
 				(#
 				do editTextHandle -> TEIdle;
 				#);
@@ -1351,7 +1675,7 @@ do
 
 -- GUIENVcontrolOnEnabledChanged: doPart --
 do (if private.controlHandle <> 0 then
-		focusZero
+		setupClipForDrawing
 			(#
 			do
 				(if enabled then

@@ -1,10 +1,9 @@
 ORIGIN 'guienv_macprivate';
-OBJFILE mac 'mac/guienv_mac.o'
-        ppcmac 'ppcmac/guienv_ppcmac.o'
-		ppc 'ppc/guienv_ppcmac.o';
-RESOURCE mac 'external/guienv.r'
-         ppc 'external/guienv.r'
-		 ppcmac 'external/guienv.r';
+
+BUILD default ':$$/guienv_mac.obj' ':external/guienv_mac.c' 'mrc -proto strict -o $0 $1';
+BUILD default ':$$/windowmanagement.obj' ':external/windowmanagement.c' 'mrc -proto strict -o $0 $1';
+
+RESOURCE default 'external/guienv.r';
 
 INCLUDE 'eventsstuff';
 INCLUDE '~beta/maclib/v3.0/osutils';
@@ -30,32 +29,44 @@ INCLUDE '../../graphics';
 -- canvasLib: attributes --
 processMouseDown:
 	(# pt: @point;
-		theHitObject: ^windowitem;
+		theObjectClicked: ^windowitem;
 		theCanvas: ^canvas;
 	enter pt
-	do pt -> private.children.findHitObject -> theHitObject[];
-		(if theHitObject[]//none then
+	do pt -> private.children.findObjectClicked -> theObjectClicked[];
+		(if theObjectClicked[]//none then
 			pt -> currentLocalPosition;
-			this(canvas)[] -> hitWindowitem;
+			this(canvas)[] -> lastObjectClicked;
 			theEventHandler.onMouseDown;
 		else
-			theHitObject.position -> pt.subTract;
-			(if theHitObject.struc <= canvas## then
-				theHitObject[] -> theCanvas[];
+			theObjectClicked.position -> pt.subTract;
+			(if theObjectClicked.struc <= canvas## then
+				theObjectClicked[] -> theCanvas[];
 				pt -> theCanvas.processMouseDown
 			else
 				pt -> currentLocalPosition;
-				theHitObject[] -> hitWindowitem;
-				theHitObject.theEventHandler.onMouseDown;
+				theObjectClicked[] -> lastObjectClicked;
+				theObjectClicked.theEventHandler.onMouseDown;
 			if);
 		if);
 	#);
 	
 -- GUIENVLib: attributes --
-EraseRectangle: external
-	(# left, top, right, bottom: @integer;
-	enter	 (left, top, right, bottom)
-	#);
+
+
+(*****
+ * Interface to the routines in "windowmanagement.c"
+ *****)
+ 
+
+SetWindowBackground: external
+	 (# theWindow: @integer;
+		   red, green, blue: @shortInt;
+		enter (theWindow, red, green, blue)
+	 #);
+		
+(* END of windowmanagement *)
+
+
 makeColor:
 	(# maxValue: (# exit 65535 #);
    	percent: @integer;
@@ -157,13 +168,14 @@ processMouseDown:
 		(private.event.where,windowPointer[]) -> FindWindow -> partCode;
 		(if partCode
 			//inMenubar then
-				(if modalState//systemModal then
+				(if modalState = systemModal then
 					30 -> SysBeep;
 				else
 					processMenubarClick;
 				if);
 			//inSysWindow then
-				(private.event.address,windowPointer) -> SystemClick;
+				30 -> SysBeep;
+				(* (private.event.address,windowPointer) -> SystemClick; *)
 			//inDesk then
 		else
 			(* first determine if this can possibly be a doubleclick *)
@@ -188,11 +200,12 @@ processMouseDown:
 	#);
 processMouseUp: 
 	(# theWindow: ^window;
-	do hitWindow -> theWindow[];
-		(if theWindow[]<>none then
-			theWindow.processMouseUp;
-			none -> hitWindow;
-		if);
+	do (*  hitWindow -> theWindow[];
+		 * (if theWindow[]<>none then
+		 *	theWindow.processMouseUp;
+		 * none -> hitWindow;
+		 * if);
+		 *)
 	#);
 processKeyDown: 
 	(# key: @char;
@@ -325,7 +338,7 @@ do
 	theWindow: ^window;
 	left, top: @integer;
 	visRgn: @integer;
-	result: @integer;
+	result: @boolean;
 	handled: @boolean;
 	GlobalToLocal: External (# p: ^macPoint enter p[] do '$A871' -> PascalTrap; #);
 do false -> private.updateCursorFlag;
@@ -344,7 +357,7 @@ do false -> private.updateCursorFlag;
 		macPt[] -> GlobalToLocal;
 		theWindow.private.windowPointer + 24 -> TOS'%adrGetLong' -> visRgn;
 		(macPt, visRgn) -> PtInRgn  -> result;
-		(if result <> 0 then
+		(if result then
 			macPt.getPoint -> theWindow.handleCursor -> handled;
 			(if not handled then
 				(visRgn, cursorRgn) -> CopyRgn;
@@ -473,7 +486,7 @@ actionList: linkedList
 do (if private.beforeActions[]//none then
        &actionList[] -> private.beforeActions[];
    if);
-   (if theAction[] -> private.beforeActions.member//false then
+   (if not (theAction[] -> private.beforeActions.member) then
        theAction[] -> private.beforeActions.prepend;
    if);
 #)
@@ -483,7 +496,7 @@ do (if private.beforeActions[]//none then
 do (if private.afterActions[]//none then
        &actionList[] -> private.afterActions[];
    if);
-   (if theAction[] -> private.afterActions.member//false then
+   (if not (theAction[] -> private.afterActions.member) then
        theAction[] -> private.afterActions.append;
    if);
 #)
@@ -569,15 +582,7 @@ do graphics
 		(# width, height: @integer;
 			from, to: @point;
 			dx, dy: @integer;
-			lightColor: ^color;
-	   	darkColor: ^color;
-		do (if thIS(windowItem).private.backGroundStyle = whiteBackGround then
-				75 -> makeColor -> lightColor[];
-				60 -> makeColor -> darkColor[];
-			else
-				100 -> makeColor -> lightColor[];
-				60 -> makeColor -> darkColor[];
-			if);
+		do 
 			size -> (width, height);
 			(if vertical then
 				(width div 2, 0) -> from;
@@ -612,18 +617,18 @@ do graphics
 					(2 * dx, 2  * dy) -> to.add;
 					(from, to) -> drawLine;
 				//separatorStyles.etchedOut then
-					lightColor -> pen.foregroundColor;
+					this(guienv).private.white -> pen.foregroundColor;
 					(from, to) -> drawLine;
 					(1 * dx, 1  * dy) -> from.add;
 					(1 * dx, 1  * dy) -> to.add;
-					darkColor -> pen.foregroundColor;
+					this(guienv).private.gray[7] -> pen.foregroundColor;
 					(from, to) -> drawLine;
 				//separatorStyles.etchedIn then
-					darkColor -> pen.foregroundColor;
+					this(guienv).private.gray[7]  -> pen.foregroundColor;
 					(from, to) -> drawLine;
 					(1 * dx, 1  * dy) -> from.add;
 					(1 * dx, 1  * dy) -> to.add;
-					lightColor -> pen.foregroundColor;
+					this(guienv).private.white -> pen.foregroundColor;
 					(from, to) -> drawLine;
 			if);
 		#);
@@ -648,14 +653,13 @@ initialLayout:
 		(if vertical then
 			width div 2 -> left;
 			left + 3 -> right;
-			((left, 0), (right, height)) -> this(windowItem).private.windowItemFrame;
+			((left, 0), (right, height)) -> privateWindowItemFrame;
 			
 		else
 			height div 2 -> top;
 			top + 3 -> bottom;
-			((0, top), (width, bottom)) -> this(windowItem).private.windowItemFrame;
+			((0, top), (width, bottom)) -> privateWindowItemFrame;
 		if);
-		calculateFocus;
 	#);
 	
 
@@ -692,7 +696,7 @@ changeMacMenubar:
 
 -- GUIENVmenubarAppend: descriptor --
 (#
-do (if theMenu[] -> private.menus.has//false then
+do (if not (theMenu[] -> private.menus.has) then
 		theMenu[] -> private.menus.append;
 		this(menubar)[] -> theMenu.owner;
 		(if private.theMacMenuBar[]<>none then
@@ -1094,7 +1098,7 @@ destroyMenu:
 	#);
 -- GUIENVmenuAppend: descriptor --
 (#
-do (if theMenuitem[] -> private.menuitems.has//false then
+do (if not (theMenuitem[] -> private.menuitems.has) then
 		theMenuitem[] -> private.menuitems.append;
 		private.menuitems.size -> theMenuitem.private.number;
 		(if theMenuitem.menuitemIsSeparator then
@@ -1303,6 +1307,36 @@ do &fileMenu[] -> theFileMenu[];
 
 -- windowLib: attributes --
 
+SelectTheWindow: external
+	(# theWindow: @integer;
+		deActivatedWindow: @integer;
+	enter	theWindow
+	exit deActivatedWindow
+	#);
+DragTheWindow: external
+	(# theWindow: @integer;
+		startPt: @integer;
+		dragRect: ^macrect;
+	enter	(theWindow, startPt, dragRect[])
+	#);
+ShowTheWindow: external
+	(# theWindow: @integer;
+	enter	theWindow
+	#);
+HideTheWindow: external
+	(# theWindow: @integer;
+	enter	theWindow
+	#);
+SetTheWindowKind: external
+	(# theWindow: @integer;
+		kind: @shortInt;
+	enter	(theWindow, kind)
+	#);
+	
+DialogKind: (# exit 2 #);
+NormalKind: (# exit 8 #);
+ApplicationFloaterKind: (# exit 7 #);
+	
 processIdle:
 	(#
 	do theEventHandler.onIdle;
@@ -1328,13 +1362,13 @@ processMouseDown:
 					(if this(window)[]//activeWindow then
 						processContentClick;
 					else
-						private.windowPointer -> SelectWindow;
+						private.windowPointer -> SelectTheWindow;
 					if);
 				//inDrag then
 					GetGrayRgn -> grayRgn.init;
 					grayRgn.bounds -> ((a,b),(c,d));
 					((a,b),(c,d)) -> screenBounds;
-					(private.windowPointer,this(guienv).private.event.where,screenBounds[]) -> DragWindow;
+					(private.windowPointer, this(guienv).private.event.where, screenBounds[]) -> DragTheWindow;
 				//inGrow then
 					processResize;
 				//inGoAway then
@@ -1348,10 +1382,10 @@ processMouseDown:
 	#);
 processMouseUp:
 	(# theWindowItem: ^windowItem;
-	do hitWindowitem -> theWindowItem[];
+	do lastObjectClicked -> theWindowItem[];
 		(if theWindowitem[]<>none then
 			theWindowitem.theEventHandler.onMouseUp;
-			none -> hitWindowitem;
+			none -> lastObjectClicked;
 		if);
 	#);
 processKeyDown:
@@ -1404,7 +1438,7 @@ processUpdate:
 	#);
 erasePortRect:
 	(# 
-	do private.windowContents.focus
+	do private.windowContents.setupPortWideClip
 			(# port: @grafPortRecord;
 				mr: @macRect;
 				a,b,c,d: @integer;
@@ -1498,12 +1532,14 @@ getGrowIconBounds:
 	#);
 drawGrow:
 	(# mr: @macRect;
-	do private.windowPointer -> SetPort;
-		getGrowIconBounds -> mr;
-		mr[] -> ClipRect;
-		(0,0) -> SetOrigin;
-		this(guienv).private.grayPixPat -> BackPixPat;
-		private.windowPointer -> DrawGrowIcon;
+	do (if menubarVisible then
+			private.windowPointer -> SetPort;
+			getGrowIconBounds -> mr;
+			mr[] -> ClipRect;
+			(0,0) -> SetOrigin;
+			(* this(guienv).private.grayPixPat -> BackPixPat; *)
+			private.windowPointer -> DrawGrowIcon;
+		if);
 	#);
 drawDefaultButton:
 	(#	theButton: ^windowItem;
@@ -1539,11 +1575,11 @@ invalidateGrowIcon:
 	#);
 handleCursor: booleanValue
 	(# pt: @point;
-		hitObject: ^windowItem;
+		ObjectClicked: ^windowItem;
 		left, right: @integer;
 	enter pt
-	do pt -> private.windowContents.findHitObject -> hitObject[];
-		pt -> hitObject.handleCursor;
+	do pt -> private.windowContents.findObjectClicked -> ObjectClicked[];
+		pt -> ObjectClicked.handleCursor;
 		true -> value;
 	#);
 -- GUIENVupdateRect: doPart --
@@ -1558,7 +1594,7 @@ do (# rgnTop: (# exit 2 #);
 	do this(interfaceObject)[] -> theWindowItem[];
 		&rectangle[] -> value[];
 		
-		theWindowItem.private.clip -> visibleRgn;
+		this(GUIenv).private.wideRgn -> visibleRgn;
 		visibleRgn -> TOS'%adrGetLong' -> address;
 		address + rgnLeft -> TOS'%adrGetSignedShort' -> value.left;
 		address + rgnTop -> TOS'%adrGetSignedShort' -> value.top;

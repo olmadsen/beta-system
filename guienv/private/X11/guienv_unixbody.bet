@@ -26,9 +26,12 @@ INCLUDE 'error';
 -- GUIENVwindowLocalCoordsToGlobal: doPart --
 do (# x_root, y_root: @shortRef;
       ID: @integer;
+      x, y: @integer;
    do widgetID -> ID;
       (ID, local.h, local.v, x_root[], y_root[]) -> XtTranslateCoords;
-      (x_root, y_root) -> global;
+      x_root -> uShort2Short -> x;
+      y_root -> uShort2Short -> y;
+      (x, y) -> global;
    #);
 
 -- GUIENVwindowGlobalToLocal: doPart --
@@ -38,6 +41,14 @@ do global -> local;
 
 -- lib: attributes --
 
+uShort2Short:
+  (# value: @integer;
+  enter value
+  do  (if value > 32768 then
+           value - 65536 -> value;
+      if);
+  exit value
+  #);
 
 
 putPoint:
@@ -263,7 +274,7 @@ init:
      &deviceInfo[] -> private.theDeviceInfo[] -> objectPool.put;
      
      (if private.display=0 then
-         (failure, 'Cannot open display') -> stop;
+         (normal, 'Cannot open display') -> stop;
       else
          private.display -> private.theDeviceInfo.init;
          initGC;
@@ -901,10 +912,10 @@ do
 do  (if not private.isOpen then
         true -> private.isOpen;
         create;
-        inner open;
         (if private.widgetID<>0 then
             (destroyCallbackProcessor##, XtNdestroyCallback) -> addCallbackProcessor;
         if);
+        inner open;
      else
         openTwiceException;
     if);
@@ -1580,6 +1591,7 @@ assertOpen
 (# location::(# do 'Menu.popup'->t[] #);
    id: @integer;
    x_root,y_root: @shortRef;
+   x, y: @integer;
    theItem: ^Motifmenu.motifMenuItem;
    menuPost: ^text;
 do (if (private.motifpopupmenu[]=NONE) 
@@ -1611,16 +1623,18 @@ do (if (private.motifpopupmenu[]=NONE)
    
    (* translate to root coordinates *)
    (id,popupAt.h,popupAt.v,x_root[],y_root[]) -> XtTranslateCoords;
+   x_root -> uShort2Short -> x;
+   y_root -> uShort2Short -> y;
    
    (* Adjust for the popupWith item *)
    popupWith -> private.MotifpopupMenu.getItemByNumber -> theItem[];
    (if theItem[]<>None then
-       y_root - (XtNy -> theItem.getShortResource) -> y_root;
+       y - (XtNy -> theItem.getShortResource) -> y;
    if);
    
    (* Place menu using XmMenuPosition - ensures that menu is on screen *)
-   y_root     -> private.popupevent.y_root;
-   x_root + 2 -> private.popupevent.x_root(* + 2 to ensure that we are outside the item
+   y     -> private.popupevent.y_root;
+   x + 2 -> private.popupevent.x_root     (* + 2 to ensure that we are outside the item
                                            * - otherwise highlight does not work for this 
                                            * item before another has been selected
                                            *);
@@ -2240,8 +2254,9 @@ assertOpen
 (# location::(# do 'Window.getPosition'->t[] #);
    x,y: @shortRef;
 do (widgetID,0,0,x[],y[]) -> XtTranslateCoords;
-   x -> pt.h;
-   y -> pt.v;
+   
+   x -> uShort2Short -> pt.h;
+   y -> uShort2Short -> pt.v;
 #)
 --- GUIENVwindowSetSize: descriptor ---
 assertOpen
@@ -2451,9 +2466,13 @@ do this(window)[] -> getPatternName -> title;
    if);
    (XtNwidth,300) -> setIntegerResource;
    (XtNheight,200) -> setIntegerResource;
-   inner open;
+   INNER open;
    (if private.visible then
-       widgetID -> XtMapWidget;
+       (if THIS(interfaceobject).private.isOpen then
+           widgetID -> XtMapWidget;
+        else
+           (* closed in INNER, e.g. via a showmodal *)
+       if)
    if);
 #)
 
