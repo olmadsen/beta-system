@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Structure.c,v $, rel: %R%, date: $Date: 1992-08-24 02:31:12 $, SID: $Revision: 1.15 $
+ * Mod: $RCSfile: Structure.c,v $, rel: %R%, date: $Date: 1992-08-27 15:53:27 $, SID: $Revision: 1.16 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -9,17 +9,21 @@
 #include "beta.h"
 #include "crun.h"
 
-ParamOriginProto(AlloS)
+ParamOriginProto(struct Structure *, AlloS)
 {
     register ref(Structure) newStruct;
 
-    GCable_Entry
+    GCable_Entry();
     FetchOriginProto
 
     /* Allocate a StructObject. */
 
     Ck(origin);
     newStruct = cast(Structure) IOAalloc(StructureSize);
+
+    ForceVolatileRef(origin);
+    Ck(origin);
+
     newStruct->Proto = StructurePTValue;
     newStruct->GCAttr = 1;
     newStruct->iOrigin = origin;
@@ -35,12 +39,16 @@ ref(Structure) ThisS(ref(Object) this)
     register ref(Structure) newStruct;
     register ref(Object) origin;
 
-    GCable_Entry
+    GCable_Entry();
 
     /* Allocate a StructObject. */
 
     Ck(this);
     newStruct = cast(Structure) IOAalloc(StructureSize);
+
+    ForceVolatileRef(this);
+    Ck(this);
+
     newStruct->Proto = StructurePTValue;
     newStruct->GCAttr = 1;
 
@@ -55,24 +63,26 @@ ref(Structure) ThisS(ref(Object) this)
     return newStruct;
 }
 
-ParamStruc(AlloSI)
+ParamStruc(struct Structure *, AlloSI)
 {
-    GCable_Entry
+    GCable_Entry();
     FetchStruc
     Ck(struc);
-    return CAlloI(cast(Object) struc->iOrigin, struc->iProto);
+    return (struct Structure *)CAlloI(cast(Object) struc->iOrigin, struc->iProto);
 }
 
-ParamStruc(AlloSC)
+ParamStruc(struct Structure *, AlloSC)
 {
-    GCable_Entry
+    GCable_Entry();
     FetchStruc
     Ck(struc);
-    return CAlloC(cast(Object) struc->iOrigin, struc->iProto);
+    return (struct Structure *)CAlloC(cast(Object) struc->iOrigin, struc->iProto);
 }
 
 int EqS(ref(Structure) arg1, ref(Structure) arg2)
 {
+    GCable_Entry();
+
     Ck(arg1); Ck(arg2);
     if (!arg1) {
 	if (!arg2)
@@ -90,37 +100,45 @@ int EqS(ref(Structure) arg1, ref(Structure) arg2)
 
 int NeS(ref(Structure) arg1, ref(Structure) arg2)
 {
+    GCable_Entry();
+
     Ck(arg1); Ck(arg2);
     return !EqS(arg1, arg2);
 }
 
 int LtS(ref(Structure) arg1, ref(Structure) arg2)
 {
+    GCable_Entry();
+
     Ck(arg1); Ck(arg2);
-  return GtS(arg2, arg1);
+    return GtS(arg2, arg1);
 }
 
 
 int LeS(ref(Structure) arg1, ref(Structure) arg2)
 { 
+    GCable_Entry();
+
     Ck(arg1); Ck(arg2);
-  return (EqS(arg1, arg2) || LtS(arg1, arg2));
+    return (EqS(arg1, arg2) || LtS(arg1, arg2));
 }
 
 
 int GeS(ref(Structure) arg1, ref(Structure) arg2)
 { 
+    GCable_Entry();
+
     Ck(arg1); Ck(arg2);
-  return (EqS(arg1, arg2) || GtS(arg1, arg2));
+    return (EqS(arg1, arg2) || GtS(arg1, arg2));
 }
 
 int GtS(ref(Structure) arg1, ref(Structure) arg2)
 {
   ref(ProtoType) proto1;
   ref(ProtoType) proto2;
-  ref(Item)      newObject;
+  DeclReference1(struct Item *newObject);
 
-  GCable_Entry
+  GCable_Entry();
 
     Ck(arg1); Ck(arg2);
   if (!arg1) return 0;
