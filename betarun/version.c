@@ -1,7 +1,11 @@
-char betarun_version[] = "BETARUN VERSION 5.3(35)";
+char betarun_version[] = "BETARUN VERSION 5.3(36)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.35  2001/08/24 09:58:38  datpete
+ * Removed test prints from valhallaComm.c "sock = 3; done creating buffers"
+ * Betarun version number: 35
+ *
  * Revision 1.34  2001/08/22 12:05:25  datpete
  * Fixed error in sparc debug code when processing StackObject
  * Betarun version number: 34
