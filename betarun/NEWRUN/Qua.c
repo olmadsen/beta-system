@@ -41,7 +41,7 @@ void Qua(struct Object *dstQuaOrigin,
 
 #ifdef RTDEBUG
   if ((src) && !(inIOA(src) || inAOA(src) || inLVRA(src) || isLazyRef(src) || isIndirRef(src))) {
-    char buf[100];
+    char buf[512];
     sprintf (buf, "Qua: *theCell not in heap: *theCell=0x%x, theCell=0x%x\n", 
 	     (int) src, (int) theCell);
     fprintf(output, "%s", buf); fflush(output); return;
