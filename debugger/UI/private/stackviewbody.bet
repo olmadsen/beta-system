@@ -1,0 +1,235 @@
+ORIGIN '../stackview';
+
+--- stackviewlib:attributes ---
+     
+getType: 
+  (# objAdr: @Integer;
+     bo: ^remoteBetaObject;
+     type: ^Text;
+  enter objAdr
+  do (objAdr,debuggee.rd[])->newRemoteObject->bo[];
+     (bo[]->debuggee.rd.betaObjectObjectDescriptor,shortnames)
+       ->debuggee.rd.dumpAstPath->type[];
+  exit type[]
+  #);
+
+getLabel:
+  (# codeAdr: @Integer;
+     label: ^Text; value: @Integer;
+  enter codeAdr
+  do codeAdr->debuggee.executable.labelAddressToName->(label[],value);
+     (if label[]<>NONE then
+         label.copy->label[];
+         '+'->label.append;
+         codeAdr-value->label.putInt;
+      else
+         '??? ('->label[];
+         codeAdr->label.putInt;
+         ') dynlink?'->label.append;
+     if);
+  exit label[]
+  #);
+
+--- stackviewListLib:attributes ---
+
+updateList: (# do getStack->showStack #);
+
+getStack:
+  (# newStack: ^compStack;
+     lineCount: @Integer;   (* Total number of lines to show *)
+     firstUnchanged: @Integer; (* Index of first entry unchanged since the
+                                * last stack fetched. *)
+     ninx,linx: @Integer;
+  do  
+     component.getAddress->debuggee.processComm.scanStack
+     (# lastWasC: @Boolean; cskipped: @Integer;
+     do
+        &compstack[]->newStack[];
+        returnObjs->newStack.returnObjs;
+        returnAdrs->newStack.returnAdrs;
+        returnObjs.range->newStack.codeTypes.new;
+        returnObjs.range->newStack.viewIndex.new;
+        returnObjs.range->newStack.viewText.new;
+        last->newStack.last;
+        
+        (* Calculate the number of stack entries that will not
+         * be shown due to contraction of external parts: *)
+        (for inx:last repeat
+             (if returnObjs[inx]//0 then
+                 (if lastWasC then cskipped+1->cskipped if);
+                 true->lastWasC;
+              else
+                 false->lastWasC;
+             if);
+        for);
+        
+        last-cskipped->newStack.lineCount;
+     #);
+     
+     newStack.last+1->firstUnchanged;
+     (if lastStack[]<>NONE then
+         newStack.last->ninx;
+         lastStack.last->linx;
+         loop:
+           (if (ninx>0) and (linx>0) then
+               (if newStack.returnAdrs[ninx]=lastStack.returnAdrs[linx] then
+                   firstUnchanged-1->firstUnchanged;
+                   ninx-1->ninx;
+                   linx-1->linx;
+                   restart loop;
+               if);
+           if);
+     if);
+     
+  exit (newStack[],firstUnchanged)
+  #);
+
+showstack:
+  (# newStack: ^compstack;
+     firstUnchanged: @Integer;
+     lastoffset: @Integer; (* Difference in stack heigths *)
+     tmp: ^Text;
+     wasGentry: @Boolean;
+     impi: ^debuggee.ImperativeInfo;
+     lastwasC: @Boolean;
+     viewIndex: @Integer;
+  enter (newStack[],firstUnchanged)
+  do 
+     (if true
+      //(numberOfItems>newStack.lineCount) then
+         numberOfItems-newStack.lineCount->deleteFirst;
+      //(numberOfItems<newStack.lineCount) then
+         newStack.lineCount-numberOfItems->prepend;
+     if);
+     
+     (if lastStack[]<>NONE then
+         lastStack.last-newStack.last->lastoffset;
+     if);
+     
+     1->viewIndex;
+     (for inx:newStack.last repeat
+          (if newStack.returnObjs[inx]//0 then
+              Ccode->newStack.codeTypes[inx];
+              ViewIndex->newStack.viewIndex[inx];
+              (if not lastWasC then 
+                  (viewIndex,'<<External Stack Part>>')->setText;
+                  '<<External Stack Part>>'->newStack.viewText[inx][];
+                  viewIndex+1->viewIndex;
+              if);
+              true->lastWasC;
+           else
+              false->wasGentry;
+              (if inx>=firstUnchanged then
+                  (* Reuse codeTypes and viewText from old stack. *)
+                  lastStack.codeTypes[lastoffset+inx]
+                    ->newStack.codeTypes[inx];
+                  lastStack.viewText[lastoffset+inx][]
+                    ->newStack.viewText[inx][]
+               else
+                  newStack.returnAdrs[inx]
+                    ->debuggee.utilities.codeAddressToImperative
+                  (# onGentry::
+                       (# tmp: @Text;
+                       do 'G code for '->tmp.putText;
+                          newStack.returnObjs[inx]->getType->tmp.append;
+                          tmp.copy->newStack.viewText[inx][];
+                          Gcode->newStack.codeTypes[inx];
+                       #)
+                  #)->impi[];
+                  (if not wasGentry then
+                      (if impi[]<>NONE then
+                          ((impi.cast[],shortnames)
+                            ->debuggee.rd.dumpAstPath).copy
+                            ->newStack.viewText[inx][];
+                          betaCode->newStack.codeTypes[inx];
+                       else
+                          (if inx=newStack.last then
+                              'Attach'->newStack.viewText[inx][];
+                              attCode->newStack.codeTypes[inx];
+                           else
+                              '???'->newStack.viewText[inx][];
+                              unknownCode->newStack.codeTypes[inx];
+                          if);
+                      if);
+                  if);
+              if);
+              viewIndex->newStack.viewIndex[inx];
+              viewIndex+1->viewIndex;
+              false->lastWasC;
+          if);
+     for);
+     (for inx:newStack.last repeat
+          (if newStack.viewText[inx][]<>NONE then
+              (newStack.viewIndex[inx],newStack.viewText[inx][])->setText;
+          if);
+     for);
+     newStack[]->lastStack[];
+  #);
+
+--- stackviewopen:descriptor ---
+(# type: ^Text;
+do 
+   getOptionDB->odb[]; getObjectDB->objects[];
+   
+   INNER open; 
+   
+   'Boolean_Option_Use_Short_Object_Titles'->odb.getBooleanOption
+   (# found:: (# do value->shorttitle #)#);
+   
+   'Boolean_Option_Use_Short_Code_Names'->odb.getBooleanOption
+   (# found:: (# do value->shortnames #)#);
+   
+   (shorttitle->component.description).copy->type[];
+   (component[],svprivate.owner[])->objects.addObjectOwner;
+   
+   'Component stack: '->type.prepend;
+   type[]->title;
+#)
+
+--- stackviewdoupdate:dopart ---
+do (if iconified then
+       TRUE->updateDeferred
+    else
+       contents.list.updateList;
+   if);
+   
+--- stackviewclose:descriptor ---
+(#
+do svprivate.owner[]->objects.removeObjectOwner;
+#)
+
+--- StackViewOnDeIconify:dopart --
+do
+   (if updateDeferred then
+       contents.list.updateList;
+       FALSE->updateDeferred;
+   if)
+
+--- stackviewlistopen:dopart ---
+do updateList;
+   
+--- stackviewOnMouseDown:descriptor ---
+(# 
+do 
+#)
+
+--- stackViewPrivate:descriptor ---
+(#
+   onGarbage:
+     (# type: ^Text;
+     do contents.list.disable;
+        (shorttitle->component.description).copy->type[];
+        'GARBAGE component stack: '->type.prepend;
+        type[]->title;
+     #);
+   
+   owner: @objectOwner
+     (# onObjectIsGarbage::
+          (* Called if a betaObject is found to have become garbage in the
+           * debugged process. The owner SHOULD NOT deregister itself
+           * as a response to this call. That is done automatically!! *)
+          (# 
+          do onGarbage;
+          #);
+     #);
+#)
