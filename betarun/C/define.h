@@ -164,6 +164,7 @@
 #  define DEBUG_AOAtoIOA(code)  if( DebugAOAtoIOA )  { code; }
 #  define DEBUG_AOAtoLVRA(code)  if( DebugAOAtoLVRA )  { code; }
 #  define DEBUG_LVRA(code) if( DebugLVRA ) { code; }
+#  define DEBUG_LIN(code) if( DebugLIN ) { code; }
 #  define DEBUG_CODE(code)  code;
 #  define DEBUG_STACK(code) if( DebugStack ) { code; }
 #  define DEBUG_STACKOBJ(code) if( DebugStackObj ) { code; }
@@ -180,6 +181,7 @@
 #  define DEBUG_AOAtoIOA(code)
 #  define DEBUG_AOAtoLVRA(code)
 #  define DEBUG_LVRA(code)
+#  define DEBUG_LIN(code)
 #  define DEBUG_CODE(code)
 #  define DEBUG_STACK(code)
 #  define DEBUG_STACKOBJ(code)
