@@ -177,7 +177,7 @@ NotInHeap( address)
 }
 
 #ifndef sparc
-/* Traverse the StackArea [low..high-4] and Process all references within it. */
+/* Traverse the StackArea [low..high] and Process all references within it. */
 static DisplayStackPart( output, low, high)
      ptr(long) low;
      ptr(long) high;
@@ -187,7 +187,7 @@ static DisplayStackPart( output, low, high)
   ref(Object) theObj;
   handle(Object) theCell;
   
-  while( current < high ){
+  while( current <= high ){
     if( inBetaHeap( *current)){
       theCell = (handle(Object)) current;
       theObj  = *theCell;
@@ -353,7 +353,20 @@ DisplayBetaStack( errorNumber, theObj)
       if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
       theTop += 2;
     }
-    DisplayStackPart(output, theTop, theBottom-2);
+    DisplayStackPart(output, theTop, theBottom-1 -4);
+
+    /* theBottom-1 -4 because:
+     *    in attach, after the push of the componentblock, four
+     *    longs are pushed, that we do not want to show now:
+     *    1. the address of TerminateComponent
+     *    2. the previous current object is pushed at entry of the 
+     *       do part of the component
+     *    3-4. when the component activates another object, it it done
+     *       by rts'ing to the M-entry of that object.
+     *       This pushes the return address, and in the  M-entry,
+     *       the current object (the component) is pushed.
+     *       But we show the component separately later.
+     */
     
     DisplayObject( output, (ref(Object)) currentComponent, 0);
     /* Make an empty line after the component */
@@ -382,7 +395,14 @@ DisplayBetaStack( errorNumber, theObj)
 	if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
 	theTop += 2;
       }
-      DisplayStackPart( output, theTop, theBottom-2); 
+      DisplayStackPart( output, theTop +1, theBottom-1 -4); 
+
+      /* theTop +1 because the component to be attached is always
+       * pushed before attach is called. We don't want to show
+       * it here, since we have just shown it as separate component
+       * block.
+       */
+
       
       DisplayObject( output, (ref(Object)) currentComponent, 0);
       /* Make an empty line after the component */
