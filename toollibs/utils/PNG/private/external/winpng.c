@@ -1,6 +1,7 @@
 #include <png.h>
 #include <windows.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include "betapng.h"
 
 static void SetBit(unsigned char *data, unsigned long n)
