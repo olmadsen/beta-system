@@ -225,7 +225,11 @@ sub cvs {
       print <OUT>;
       close OUT;
   } else {
-      system "cvs @_";
+      local ($cvscmd) = "cvs ";
+      $cvscmd .= "-d $ENV{'CVSROOT'} " if defined($ENV{'CVSROOT'});
+      $cvscmd .= "@_";
+      print "$cvscmd" if ($verbose);
+      system "$cvscmd";
   }	
 }
 
