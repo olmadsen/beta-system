@@ -18,10 +18,11 @@
 #endif
 
 #include <malloc.h>
+#include <windows.h>
 
 #define BSIZE BUFSIZ
 
-struct stat statBuffer;        /* used for all calls to stat */
+
 
 /* Return NT variable errno */
 int getErrno()
@@ -114,13 +115,21 @@ int EOFpeek(str)
 
 int isEntryDir(char *path)
 { 
+#if 0
+  struct stat statBuffer; 
   int entryType;
   if (stat(path,&statBuffer)<0) return -1;
   return (int) (statBuffer.st_mode & S_IFMT) == S_IFDIR;
+#else
+  int attr = GetFileAttributes(path);
+  if (attr==-1) return -1;
+  return ((attr & FILE_ATTRIBUTE_DIRECTORY) != 0);
+#endif
 } 
 
 int isEntryFile(char *path)
 { 
+  struct stat statBuffer; 
   int entryType;
   if (stat(path,&statBuffer)<0) return -1;
   return (int) (statBuffer.st_mode & S_IFMT) == S_IFREG;
@@ -128,6 +137,7 @@ int isEntryFile(char *path)
 
 int getEntrySize(char *path)
 { 
+  struct stat statBuffer; 
   int entryType;
   if (stat(path,&statBuffer)<0) return -1;
   return (int) statBuffer.st_size;
@@ -144,6 +154,7 @@ int touchEntry(path)
 
 int getEntryModtime(char *path)
 { 
+  struct stat statBuffer; 
   int entryType;
   if (stat(path,&statBuffer)<0) return -1;
   return (int) statBuffer.st_mtime;

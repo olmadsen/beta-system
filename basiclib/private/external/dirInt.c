@@ -19,17 +19,34 @@
 #endif
 
 #ifdef nti
+#  include <stdlib.h>
+#  include <sys/types.h>
+#  include <fcntl.h>
+#  include <sys/stat.h>
+#  include <errno.h>
+#  include <stdio.h>
+#  include <time.h>
+#  include <io.h>
+#  ifdef nti_bor
+#    include <utime.h>
+#    include <dir.h>
+#  else
+#    include <sys/utime.h>
+#    define S_IXUSR _S_IEXEC
+#    define S_IWUSR _S_IWRITE
+#    define S_IRUSR _S_IREAD
+#    define S_IFBLK (-1) /* ??? */
+#    define ENOTSAM EXDEV
+#  endif
 #  ifdef nti_gnu
 #  else
 #    include <malloc.h>
-#  endif
-#  ifdef nti_bor
-#    include <dir.h>
 #  endif
 #else
 #  include <sys/param.h>
 #  include <pwd.h>
 #endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -45,8 +62,7 @@ void free();
 
 #define null (void *) 0
 
-static int strptrcmp(s1, s2)
-     char **s1, **s2;
+static int strptrcmp(const void**s1, const void **s2)
 { 
   return strcmp(*s1,*s2);
 }
@@ -273,31 +289,12 @@ char *path;
  * For selection in a directoryscan, it is, however, usefull
  * on win32 too.
  */
-#include <stdlib.h>
-#include <sys/types.h>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <errno.h>
-#include <stdio.h>
-#include <time.h>
-#include <io.h>
-#ifdef nti_bor
-#include <utime.h>
-#else
-#include <sys/utime.h>
-#define S_IXUSR _S_IEXEC
-#define S_IWUSR _S_IWRITE
-#define S_IRUSR _S_IREAD
-#define S_IFBLK (-1) /* ??? */
-#define ENOTSAM EXDEV
-#endif
 
-extern struct stat statBuffer; /* in fileInt_nt.c */
-
-int entryStatus(path,status)
+int win32EntryStatus(path,status)
      char *path;    /* IN par. denoting the path of the entry to be statted */
      int  *status;  /* OUT par. The buffer must be allocated by Beta. */
 { 
+  struct stat statBuffer; 
   int entryType;
   
   if (stat(path,&statBuffer)<0 ) 
