@@ -582,7 +582,50 @@ process_pixel(unsigned x, unsigned y, unsigned long z, unsigned long color)
 } /* End of process_pixel */
 
 
+void plotpixel(int x, int y, unsigned long color)
+{
+  frame_buffer[x + y * (WinWidth)] = color;
+}
 
+void blend_pixel(int x, int y, int alpha, unsigned long color)
+{
+  int cr, cg, cb;			/* The color components */
+  int ca;				/* The alpha values */
+  int a1;				/* 1 - alpha */
+  int or, og, ob;			/* Old RGB values */
+  int old_color;			/* The old color value */
+  int nr, ng, nb;			/* New RGB values */
+  int new_color;			/* The new color value */
+
+
+  cr = color & 0xff;
+  cg = (color >> 8) & 0xff;
+  cb = (color >> 16) & 0xff;
+  ca = alpha;
+
+  old_color = frame_buffer[x + y * (WinWidth)];
+  or = old_color & 0xff;
+  og = (old_color >> 8) & 0xff;
+  ob = (old_color >> 16) & 0xff;
+
+  a1 = alpha ^ 0xff;			/* 1's complement is close enough */
+  
+  nr = ((cr * ca) >> 8) + ((or * a1) >> 8);
+  if (nr > 0xff)
+    nr = 0xff;			/* Clamp */
+  ng = ((cg * ca) >> 8) + ((og * a1) >> 8);
+  if (ng > 0xff)
+    ng = 0xff;			/* Clamp */
+  nb = ((cb * ca) >> 8) + ((ob * a1) >> 8);
+  if (nb > 0xff)
+    nb = 0xff;			/* Clamp */
+
+  new_color = nr | (ng << 8) | (nb << 16);
+  frame_buffer[x + y * (WinWidth)] = new_color;
+  return;
+}
+
+                                           
 /*
  *---------------------------------------------------------------
  *

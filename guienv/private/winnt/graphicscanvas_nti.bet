@@ -16,7 +16,11 @@ BUILD nti '$$/aadraw.obj' 'external/aadraw.c' 'betacc $0 $1';
 BUILD nti '$$/rotatetext.obj' 'external/rotatetext.cpp' 'betacc $0 $1';
 
 
+BUILD nti '$$/ovalfill.obj' 'external/ovalfill.c' 'betacc $0 $1';
+
+
 -- lib: attributes --
+
 
 write_pixels_to_png: external
   (# pixels: @int32u;
@@ -66,6 +70,10 @@ aapen: external
   (# red, green, blue: @real;
   enter (red, green, blue)
   #);
+ovalpen: external
+  (# red, green, blue: @real;
+  enter (red, green, blue)
+  #);
 
 TransferRedPixels: external
   (# src, dst: @integer;
@@ -77,10 +85,22 @@ TransferRedPixels: external
 
 
 ANTIALIAS: (# exit true #);
+MICHAEL: (# exit true #);
+
 DRAW_MULTIPLE_OVALS: (# exit true #);
 
 
+
+init_ovals: external
+  (#
+  #);
+fill_oval: external
+  (# x, y, width, height: @integer;
+  enter (x, y, width, height)
+  #);
 -- GraphicsCanvasLib: attributes --
+
+
 
 isPointInRegion: booleanValue
   (#
@@ -138,6 +158,8 @@ InputCanvasMethods: WindowItemMethods
   #);
 
 -- SurfaceLib: attributes --
+
+
 ComputeOutline:
   (# x, y: @real;
      a, b: @real;
@@ -222,6 +244,8 @@ do (# pixels: @integer;
       do doublebuffer[] -> current.drawOn;
       #);
       doublebuffer.pop;
+      
+      
       size -> (width, height);
       doublebuffer.content.private.handleToPixmap -> pixels;
       (pixels, width, height, filename) -> write_pixels_to_png;
@@ -260,6 +284,7 @@ do (# windowid, pixmapid: @integer;
       do doublebuffer[] -> current.drawOn;
       #);
       doublebuffer.pop;
+
       THIS(Canvas).windowItemDevice -> windowid;
       doublebuffer.private.hdc -> pixmapid;
       size -> (width, height);
@@ -270,6 +295,7 @@ do (# windowid, pixmapid: @integer;
 -- PixmapSurfaceInit: doPart --
 do (if ANTIALIAS then
        (content.private.pixels, content.width, content.height) -> init_tables;
+       init_ovals;
    if);
    
 
@@ -357,6 +383,7 @@ do (# drawSimpleLine:
                p[] -> outside.append;
                
                
+              
                outside.size -> size;
                2 * size ->  ntPoints.new;
                outside.scan
@@ -385,7 +412,6 @@ do (# drawSimpleLine:
                       (xi, yi) -> aalineto;
                   if);
                #);
-              
            if);
            
         #);
@@ -413,190 +439,217 @@ do (# r: @ntRect;
    #);
    
 -- PixmapSurfaceDrawOval: doPart --
-do (if ANTIALIAS then
-       (if DRAW_MULTIPLE_OVALS then
-           (# cx, cy, a, b: @real;
-              xr, yr: @real;
-              n: @integer;
-              outline: ^PointList;
-              flag: @boolean;
-           do (if strokewidth > 1 then
-                  strokewidth -> n;
-               else
-                  1 -> n;
-              if);
-              (width/2,height/2) -> transform -> (cx, cy);
-              width / 2 - n / 2 -> a;
-              height / 2 - n / 2 -> b;
-              a - 0.5 -> a;
-              b - 0.5 -> b;
-              (for n + 1 repeat
-                   (cx, cy, a, b) -> ComputeOutline -> outline[];
-                   true -> flag;
-                   outline.scan
-                   (#
-                   do current  -> (xr, yr);
-                      (if flag then
-                          (xr, yr) -> aamoveto;
-                          false -> flag;
-                       else
-                          (xr, yr) -> aalineto;
-                      if);
-                   #);
-                   a + 1 -> a;
-                   b + 1 -> b;
-              for);
-           #);
+do (if MICHAEL then
+       (# x, y: @integer;
+          w, h: @integer;
+          x1, y1: @integer;
+       do (0, 0) -> transform -> (x1, y1);
+          width -> w;
+          height -> h;
+          (x1, y1, w, h) -> fill_oval;
+       #);
+    else
+       
+       (if ANTIALIAS then
+           (if DRAW_MULTIPLE_OVALS then
+               (# cx, cy, a, b: @real;
+                  xr, yr: @real;
+                  n: @integer;
+                  outline: ^PointList;
+                  flag: @boolean;
+               do (if strokewidth > 1 then
+                      strokewidth -> n;
+                   else
+                      1 -> n;
+                  if);
+                  (width/2,height/2) -> transform -> (cx, cy);
+                  width / 2 - n / 2 -> a;
+                  height / 2 - n / 2 -> b;
+                  a - 0.5 -> a;
+                  b - 0.5 -> b;
+                  (for n + 1 repeat
+                       (cx, cy, a, b) -> ComputeOutline -> outline[];
+                       true -> flag;
+                       outline.scan
+                       (#
+                       do current  -> (xr, yr);
+                          (if flag then
+                              (xr, yr) -> aamoveto;
+                              false -> flag;
+                           else
+                              (xr, yr) -> aalineto;
+                          if);
+                       #);
+                       a + 1 -> a;
+                       b + 1 -> b;
+                  for);
+               #);
+            else
+               (# flag: @boolean;
+                  xi, yi: @integer;
+                  xr, yr: @real;
+                  cx, cy: @integer;
+                  curve: ^PointList;
+                  outside, inside: ^PointList;
+                  
+                  delta: @real;
+               do (if strokewidth  > 1 then
+                      strokewidth / 2 -> delta;
+                      (width/2,height/2) -> transform -> (cx, cy);
+                      (cx, cy, width/2, height/2, delta) -> ComputeSplitOutline -> (inside[], outside[]);
+                      
+                      (# ntPoints: [0] @integer;
+                         size: @integer;
+                         points: ^PointList;
+                         nullpen, prev: @integer;
+                      do &PointList[] -> points[];
+                         
+                         inside.scan
+                         (#
+                         do current[] -> points.append;
+                         #);
+                         outside.scanReverse
+                         (#
+                         do current[] -> points.append;
+                         #);
+                         points.size -> size;
+                         2 * size ->  ntPoints.new;
+                         points.scan
+                         (# xi, yi: @integer;
+                            i: @integer;
+                         do i + 1 -> i;
+                            current  -> (xi, yi);
+                            xi -> ntPoints[(i*2)-1];
+                            yi -> ntPoints[i*2];
+                         #);
+                         NULL_PEN -> GetStockObject -> nullpen;
+                         (private.hdc, nullpen) -> SelectObject -> prev;
+                         (private.hdc,@@ntPoints[1],size) -> Polygon;
+                         (private.hdc, prev) -> SelectObject;
+                      #);
+                      
+                      
+                      true -> flag;
+                      inside.scan
+                      (#
+                      do current  -> (xr, yr);
+                         (if flag then
+                             (xr, yr) -> aamoveto;
+                             false -> flag;
+                          else
+                             (xr, yr) -> aalineto;
+                         if);
+                      #);
+                      
+                      true -> flag;
+                      outside.scan
+                      (#
+                      do current  -> (xr, yr);
+                         (if flag then
+                             (xr, yr) -> aamoveto;
+                             false -> flag;
+                          else
+                             (xr, yr) -> aalineto;
+                         if);
+                         
+                      #);
+                   else
+                      (width/2,height/2) -> transform -> (cx, cy);
+                      (cx, cy, width/2+0.75, height/2+0.75) -> ComputeOutline -> inside[];
+                      true -> flag;
+                      inside.scan
+                      (#
+                      do current  -> (xr, yr);
+                         (if flag then
+                             (xr, yr) -> aamoveto;
+                             false -> flag;
+                          else
+                             (xr, yr) -> aalineto;
+                         if);
+                      #);
+                      (cx, cy, width/2, height/2) -> ComputeOutline -> inside[];
+                      true -> flag;
+                      inside.scan
+                      (#
+                      do current  -> (xr, yr);
+                         (if flag then
+                             (xr, yr) -> aamoveto;
+                             false -> flag;
+                          else
+                             (xr, yr) -> aalineto;
+                         if);
+                      #); 
+                  if);
+               #);
+           if);
         else
+           (# nullbrush: @integer;
+              prev: @integer;
+              xi, yi: @integer;
+           do NULL_BRUSH  -> GetStockObject -> nullbrush;
+              (private.hdc, nullbrush) -> SelectObject -> prev;
+              (0, 0) -> transform -> (xi, yi);
+              (private.hdc, xi, yi, xi + width, yi + height) -> Ellipse;
+              (private.hdc, prev) -> SelectObject;
+           #);
+       if);
+   if);
+-- PixmapSurfaceFillOval: doPart --
+do (if MICHAEL   then
+       (# x, y: @integer;
+          w, h: @integer;
+          x1, y1: @integer;
+       do (0, 0) -> transform -> (x1, y1);
+          x1 + strokewidth -> x1;
+          y1 + strokewidth -> y1;
+          
+          (width / 2, height / 2) -> transform -> (x, y);
+          width - 2*strokewidth -> w;
+          height - 2*strokewidth -> h;
+          (x1, y1, w, h) -> fill_oval;
+       #);
+    else
+       
+       (if ANTIALIAS then
            (# flag: @boolean;
               xi, yi: @integer;
               xr, yr: @real;
-              cx, cy: @integer;
+              cx, cy: @real;
               curve: ^PointList;
-              outside, inside: ^PointList;
-              
-              delta: @real;
-           do (if strokewidth  > 1 then
-                  strokewidth / 2 -> delta;
-                  (width/2,height/2) -> transform -> (cx, cy);
-                  (cx, cy, width/2, height/2, delta) -> ComputeSplitOutline -> (inside[], outside[]);
-                  
-                  (# ntPoints: [0] @integer;
-                     size: @integer;
-                     points: ^PointList;
-                     nullpen, prev: @integer;
-                  do &PointList[] -> points[];
-                     
-                     inside.scan
-                     (#
-                     do current[] -> points.append;
-                     #);
-                     outside.scanReverse
-                     (#
-                     do current[] -> points.append;
-                     #);
-                     points.size -> size;
-                     2 * size ->  ntPoints.new;
-                     points.scan
-                     (# xi, yi: @integer;
-                        i: @integer;
-                     do i + 1 -> i;
-                        current  -> (xi, yi);
-                        xi -> ntPoints[(i*2)-1];
-                        yi -> ntPoints[i*2];
-                     #);
-                     NULL_PEN -> GetStockObject -> nullpen;
-                     (private.hdc, nullpen) -> SelectObject -> prev;
-                     (private.hdc,@@ntPoints[1],size) -> Polygon;
-                     (private.hdc, prev) -> SelectObject;
-                  #);
-                  
-                  
-                  true -> flag;
-                  inside.scan
-                  (#
-                  do current  -> (xr, yr);
-                     (if flag then
-                         (xr, yr) -> aamoveto;
-                         false -> flag;
-                      else
-                         (xr, yr) -> aalineto;
-                     if);
-                  #);
-                  
-                  true -> flag;
-                  outside.scan
-                  (#
-                  do current  -> (xr, yr);
-                     (if flag then
-                         (xr, yr) -> aamoveto;
-                         false -> flag;
-                      else
-                         (xr, yr) -> aalineto;
-                     if);
-                     
-                  #);
-               else
-                  (width/2,height/2) -> transform -> (cx, cy);
-                  (cx, cy, width/2+0.75, height/2+0.75) -> ComputeOutline -> inside[];
-                  true -> flag;
-                  inside.scan
-                  (#
-                  do current  -> (xr, yr);
-                     (if flag then
-                         (xr, yr) -> aamoveto;
-                         false -> flag;
-                      else
-                         (xr, yr) -> aalineto;
-                     if);
-                  #);
-                  (cx, cy, width/2, height/2) -> ComputeOutline -> inside[];
-                  true -> flag;
-                  inside.scan
-                  (#
-                  do current  -> (xr, yr);
-                     (if flag then
-                         (xr, yr) -> aamoveto;
-                         false -> flag;
-                      else
-                         (xr, yr) -> aalineto;
-                     if);
-                  #); 
-              if);
+              ntPoints: [0] @integer;
+              size: @integer;
+              nullpen, prev: @integer;
+           do (width/2,height/2) -> transform -> (cx, cy);
+              cx + 0.5 -> cx;
+              cy + 0.5 -> cy;
+              (cx, cy, width/2 - (strokewidth + 1) / 2 , height/2 - (strokewidth + 1)/ 2) -> ComputeOutline -> curve[];
+              curve.size -> size;
+              2 * size ->  ntPoints.new;
+              curve.scan
+              (# xi, yi: @integer;
+                 i: @integer;
+              do i + 1 -> i;
+                 current -> (xi, yi);
+                 xi -> ntPoints[(i*2)-1];
+                 yi -> ntPoints[i*2];
+              #);
+              NULL_PEN -> GetStockObject -> nullpen;
+              (private.hdc, nullpen) -> SelectObject -> prev;
+              (private.hdc,@@ntPoints[1],size) -> Polygon;
+              (private.hdc, prev) -> SelectObject;
+           #);
+        else
+           (# nullpen: @integer;
+              prev: @integer;
+              xi, yi: @integer;
+           do NULL_PEN -> GetStockObject -> nullpen;
+              (private.hdc, nullpen) -> SelectObject -> prev;
+              (0, 0) -> transform -> (xi, yi);
+              (private.hdc, xi, yi, xi + width, yi + height) -> Ellipse;
+              (private.hdc, prev) -> SelectObject;
            #);
        if);
-    else
-       (# nullbrush: @integer;
-          prev: @integer;
-          xi, yi: @integer;
-       do NULL_BRUSH  -> GetStockObject -> nullbrush;
-          (private.hdc, nullbrush) -> SelectObject -> prev;
-          (0, 0) -> transform -> (xi, yi);
-          (private.hdc, xi, yi, xi + width, yi + height) -> Ellipse;
-          (private.hdc, prev) -> SelectObject;
-       #);
    if);
--- PixmapSurfaceFillOval: doPart --
-do (if ANTIALIAS then
-       (# flag: @boolean;
-          xi, yi: @integer;
-          xr, yr: @real;
-          cx, cy: @real;
-          curve: ^PointList;
-          ntPoints: [0] @integer;
-          size: @integer;
-          nullpen, prev: @integer;
-       do (width/2,height/2) -> transform -> (cx, cy);
-          cx + 0.5 -> cx;
-          cy + 0.5 -> cy;
-          (cx, cy, width/2 - (strokewidth + 1) / 2 , height/2 - (strokewidth + 1)/ 2) -> ComputeOutline -> curve[];
-          curve.size -> size;
-          2 * size ->  ntPoints.new;
-          curve.scan
-          (# xi, yi: @integer;
-             i: @integer;
-          do i + 1 -> i;
-             current -> (xi, yi);
-             xi -> ntPoints[(i*2)-1];
-             yi -> ntPoints[i*2];
-          #);
-          NULL_PEN -> GetStockObject -> nullpen;
-          (private.hdc, nullpen) -> SelectObject -> prev;
-          (private.hdc,@@ntPoints[1],size) -> Polygon;
-          (private.hdc, prev) -> SelectObject;
-       #);
-    else
-       (# nullpen: @integer;
-          prev: @integer;
-          xi, yi: @integer;
-       do NULL_PEN -> GetStockObject -> nullpen;
-          (private.hdc, nullpen) -> SelectObject -> prev;
-          (0, 0) -> transform -> (xi, yi);
-          (private.hdc, xi, yi, xi + width, yi + height) -> Ellipse;
-          (private.hdc, prev) -> SelectObject;
-       #);
-   if);
-
 -- PixmapSurfaceDrawPolygon: doPart --
 do (# flag: @boolean;
       xi, yi: @integer;
@@ -614,7 +667,26 @@ do (# flag: @boolean;
    #);
    
 -- PixmapSurfaceFillPolygon: doPart --
-do (# ntPoints: [0] @integer;
+do (# flag: @boolean;
+      xr, yr: @real;
+      fx, fy: @real;
+   do true -> flag;
+      points.scan
+      (#
+      do current -> transform -> (xr, yr);
+         (if flag then
+             (xr, yr) -> aamoveto;
+             (xr, yr) -> (fx, fy);
+             false -> flag;
+          else
+             (xr, yr) -> aalineto;
+         if);
+      #);
+      (fx, fy) -> aalineto;
+    #);
+   
+   
+   (# ntPoints: [0] @integer;
       size: @integer;
    do points.size -> size;
       2 * size ->  ntPoints.new;
@@ -670,7 +742,9 @@ do (# red, green, blue: @int8u;
       
       (if ANTIALIAS then
           (blue / 255, green / 255, red / 255) -> aapen;
+          (blue / 255, green / 255, red / 255) -> ovalpen;
       if);
+      
       
       red %bor (green %sll 8) %bor (blue %sll 16) -> colorref;
       (private.hdc, colorref) -> SetTextColor;
@@ -714,6 +788,13 @@ do (private.hdc, private.old_dib) -> SelectObject;
    
    
 -- PixmapSurfaceLib: attributes --
+
+
+plotpixel: external
+  (# x, y, color: @integer;
+  enter (x, y, color)
+  #);
+
 
 Matrix:
   (# next: ^Matrix;
