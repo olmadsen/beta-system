@@ -41,7 +41,7 @@
   #include <windows.h>
   #ifdef nti_gnu
     #include "winntdef.h"
-  #endif //nti_gnu
+  #endif /*nti_gnu*/
 #endif
 
 #ifdef MT
