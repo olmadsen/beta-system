@@ -8,16 +8,19 @@ CopyVR: public
      stack: StackArea = SP;
      
      { Used variable.  }
-     theRep: Repetition = AddrReg1;
-     newTop: DataArea   = AddrReg2;
-     newRep: Repetition = AddrReg2;
-     theCell: DataArea  = AddrReg1;
+     theRep: Repetition  = AddrReg1;
+     newTop: DataArea    = AddrReg2;
+     newRep: Repetition  = AddrReg2;
+     theCell: DataArea   = AddrReg1;
+     proto: DataArea     = DataRegA;
+     zero: DataArea      = DataRegB;
+     cycleCell: DataArea = AddrReg2;
      
-     range:  Long       = DataReg1;
-     BodySize: Long     = DataReg1; { number of bytes to allocate }
-     tmp:    Long       = DataReg2;
-     value:  Long       = DataReg2;
-     offset: Long       = DataReg2
+     range:  Long        = DataReg1;
+     BodySize: Long      = DataReg1; { number of bytes to allocate }
+     tmp:    Long        = DataReg2;
+     value:  Long        = DataReg2;
+     offset: Long        = DataReg2
   do
      stack[12] -> theRep;
      theRep.HighBorder -> range;
@@ -25,54 +28,62 @@ CopyVR: public
      (if MacOS then push AddrReg2 if);
      
      (if range > 200 then
-         { save pointer to cell refering theRep }
-         theRep.Age -> theRep;
          push RegArg, RegObj, DataRegA, DataRegB;
-         push range;            { Parameter to LVRAAlloc. }
-         push theRep.ProtoType; { Parameter to LVRAAlloc. }
+         theRep.ProtoType -> proto;
+         0 -> zero;
+         zero -> cycleCell;
+         (if theRep outside IOA then { theRep is in LVRA }
+             theRep.Age -> cycleCell { save pointer to cell refering theRep }
+         if);
+         push cycleCell;
+         push range; { Parameter to LVRAAlloc. }
+         push proto; { Parameter to LVRAAlloc. }
          call LVRAAlloc;
+         4 -> SP+;
+         pop range;
+         pop cycleCell;
+         (if cycleCell <> 0 then
+             { restore theRep from pointer to cell. The reason for this is that 
+               theRep may have been moved by an LVRACompaction 
+             }
+             cycleCell[0] -> theRep
+         if);
          DataRegA -> newRep;
-         { restore theRep from pointer to cell. The reason for this is that 
-           theRep may have been moved by an LVRACompaction 
-         }
-         theRep[0] -> theRep;
          (if newRep <> 0 then
              { Make the LVRA-cycle: theCell -> newRep.Age }
              (if MacOS then
-                 stack[28 { =  4 + 4 + 5*4 } ] -> DataRegA; 4 -> DataRegA*;
-                 stack[32 { =  4 + 8 + 5*4 } ] -> DataRegA+
+                 stack[24 { =  4 + 4 + 4*4 } ] -> DataRegA; 4 -> DataRegA*;
+                 stack[28 { =  4 + 8 + 4*4 } ] -> DataRegA+
               else
-                 stack[24 { =  4 + 5*4 } ] -> DataRegA; 4 -> DataRegA*;
-                 stack[28 { =  8 + 5*4 } ] -> DataRegA+
+                 stack[20 { =  4 + 4*4 } ] -> DataRegA; 4 -> DataRegA*;
+                 stack[24 { =  8 + 4*4 } ] -> DataRegA+
              if);
              DataRegA -> newRep.Age
          if);
-         4 -> SP+;
-         pop  range;
          pop  DataRegB, DataRegA, RegObj, RegArg;
          (if newRep <> 0 then
              { range -> BodySize; // no need; it is the same register }
              (if theRep.ProtoType = -5 then { long rep }
                  4 -> BodySize*;
-                 goto clearBody
+                 goto copyBody
              if);
              (if theRep.ProtoType = -7 then { word rep }
                  2 -> BodySize*;
                  3 -> BodySize+;
                  4 -> BodySize/;
                  4 -> BodySize*;
-                 goto clearBody
+                 goto copyBody
              if);
              (if theRep.ProtoType = -6 then { byte rep }
                  4 -> BodySize+;
                  4 -> BodySize/;
                  4 -> BodySize*;
-                 goto clearBody
+                 goto copyBody
              if);
              (if theRep.ProtoType = -8 then { double rep }
                  2 -> BodySize*;
                  4 -> BodySize*;
-                 goto clearBody
+                 goto copyBody
              if)
          if)
      if);
@@ -111,7 +122,7 @@ CopyVR: public
      1                 -> newRep.LowBorder;
      theRep.HighBorder -> newRep.HighBorder;
      
-     clearBody:
+     copyBody:
      (if MacOS then
          { AddrReg2 in on the stack. }
          stack[16] -> theRep
