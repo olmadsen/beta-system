@@ -3,7 +3,7 @@
 
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1992 Mjolner Informatics Aps.
- * Mod: $Id: snakedep.h,v 1.10 1992-10-19 14:39:37 poe Exp $
+ * snakedep.h
  * by Peter Orbaek
  */
 

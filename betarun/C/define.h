@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: define.h,v 1.9 1992-10-19 13:15:53 beta Exp $
+ * define.h
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 

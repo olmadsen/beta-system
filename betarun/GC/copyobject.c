@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: copyobject.c,v 1.16 1992-10-08 11:01:43 beta Exp $
+ * copyobject.c
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 

@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $Id: scavenging.h,v 1.5 1992-09-18 14:05:09 tthorn Exp $
+ * scavenging.h
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 extern ref(Object) NewCopyObject();

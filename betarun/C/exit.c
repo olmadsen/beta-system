@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: exit.c,v 1.7 1992-10-30 12:34:12 beta Exp $
+ * exit.c
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 

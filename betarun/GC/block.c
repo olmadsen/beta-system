@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: block.c,v 1.5 1992-09-03 12:57:12 beta Exp $
+ * block.c
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 

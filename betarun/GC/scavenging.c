@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1992 Mjolner Informatics Aps.
- * Mod: $Id: scavenging.c,v 1.55 1992-10-28 14:40:56 beta Exp $
+ * scavenging.c
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 

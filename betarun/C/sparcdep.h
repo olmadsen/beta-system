@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1992 Mjolner Informatics Aps.
- * Mod: $Id: sparcdep.h,v 1.15 1992-09-22 17:49:11 beta Exp $
+ * sparcdep.h
  * by Tommy Thorn
  */
 

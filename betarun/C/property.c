@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: property.c,v 1.15 1992-10-30 12:34:43 beta Exp $
+ * property.c
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 

@@ -2,7 +2,7 @@
 #define _BETA_H_
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991, 1992 Mjolner Informatics Aps.
- * Mod: $Id: beta.h,v 1.7 1992-10-22 14:15:40 beta Exp $
+ * beta.h
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 
