@@ -2,9 +2,9 @@ namespace beta.converter
 {
 	using System;
 	
-	class JavaConverter
+	class DotnetConverter
 	{
-		public JavaConverter()
+		public DotnetConverter()
 		{
 			InitBlock();
 		}
@@ -23,30 +23,27 @@ namespace beta.converter
 		
 		//UPGRADE_NOTE: The initialization of  'includes' was moved to method 'InitBlock'. 'ms-help://MS.VSCC.2003/commoner/redir/redirect.htm?keyword="jlca1005"'
 		internal Map includes;
-		//UPGRADE_NOTE: The initialization of  'converted' was moved to static method 'beta.converter.JavaConverter'. 'ms-help://MS.VSCC.2003/commoner/redir/redirect.htm?keyword="jlca1005"'
+		//UPGRADE_NOTE: The initialization of  'converted' was moved to static method 'beta.converter.DotnetConverter'. 'ms-help://MS.VSCC.2003/commoner/redir/redirect.htm?keyword="jlca1005"'
 		internal static Map converted;
 		
 		internal static void  usage(System.String msg)
 		{
-			if (msg != null)
-				System.Console.Error.WriteLine("\n" + msg + "\n");
-			System.Console.Error.WriteLine("Usage:\n");
-			System.Console.Error.WriteLine("Script: java2beta [-h][-F|-] <java class name>");
-			System.Console.Error.WriteLine(" e.g.   java2beta java.lang.String\n");
-			System.Console.Error.WriteLine("Java:   java JavaConverter [-h][-F|-] <java class name> <BETALIB>");
-			System.Console.Error.WriteLine(" e.g.   java JavaConverter java.lang.String /users/beta/r5.3\n");
-			System.Console.Error.WriteLine("Output files will be placed in $BETALIB/javalib in a directory");
-			System.Console.Error.WriteLine("structure corresponding to the package of the class.");
-			System.Console.Error.WriteLine(" e.g.   $BETALIB/javalib/java/lang/String.bet\n");
-			System.Console.Error.WriteLine("Options:");
-			System.Console.Error.WriteLine("   -h  Display this help");
-			System.Console.Error.WriteLine("   -f  Force overwrite of existing output file");
-			System.Console.Error.WriteLine("   -F  Force overwrite of existing output file ");
-			System.Console.Error.WriteLine("       AND files for refered classes");
-			System.Console.Error.WriteLine("   -   Output to terminal instead of file");
-			System.Console.Error.WriteLine("");
-			System.Console.Error.WriteLine("(BETALIB argument is a workaround for the deprecated System.getenv()).");
-			System.Environment.Exit((msg == null)?0:1);
+		  if (msg != null){
+		    System.Console.Error.WriteLine("\n" + msg + "\n");
+		  }
+		  System.Console.Error.WriteLine("Usage:\n");
+		  System.Console.Error.WriteLine("dotnet2beta [-h][-f][-F][-] <dotnet class name>");
+		  System.Console.Error.WriteLine(" e.g.   dotnet2beta System.String\n");
+		  System.Console.Error.WriteLine("Output files will be placed in %BETALIB%/dotnetlib in a directory");
+		  System.Console.Error.WriteLine("structure corresponding to the namespace of the class.");
+		  System.Console.Error.WriteLine(" e.g.   $BETALIB/dotnetlib/System/String.bet\n");
+		  System.Console.Error.WriteLine("Options:");
+		  System.Console.Error.WriteLine("   -h  Display this help");
+		  System.Console.Error.WriteLine("   -f  Force overwrite of existing output file");
+		  System.Console.Error.WriteLine("   -F  Force overwrite of existing output file AND files for refered classes");
+		  System.Console.Error.WriteLine("   -   Output to terminal instead of file");
+		  System.Console.Error.WriteLine("");
+		  System.Environment.Exit((msg == null)?0:1);
 		}
 		
 		[STAThread]
@@ -86,7 +83,7 @@ namespace beta.converter
 					{
 						if (args.Length - i == 2)
 						{
-							System.Environment.Exit(new JavaConverter().convert(args[i], args[i + 1], overwrite, out_Renamed));
+							System.Environment.Exit(new DotnetConverter().convert(args[i], args[i + 1], overwrite, out_Renamed));
 						}
 						else
 						{
@@ -766,10 +763,10 @@ namespace beta.converter
 			for (int i = 0; i < inc.Length; i++)
 			{
 				System.Console.Error.WriteLine("\nRefered by " + slashToDot(packageName + "." + className) + ": " + slashToDot((System.String) inc[i]));
-				JavaConverter java2beta = new JavaConverter();
-				if (java2beta.needsConversion(slashToDot((System.String) inc[i]), betalib, overwrite, out_Renamed) != null)
+				DotnetConverter dotnet2beta = new DotnetConverter();
+				if (dotnet2beta.needsConversion(slashToDot((System.String) inc[i]), betalib, overwrite, out_Renamed) != null)
 				{
-					int status = java2beta.convert(slashToDot((System.String) inc[i]), betalib, overwrite, out_Renamed);
+					int status = dotnet2beta.convert(slashToDot((System.String) inc[i]), betalib, overwrite, out_Renamed);
 					if (status != 0)
 					{
 						// error
@@ -849,7 +846,7 @@ namespace beta.converter
 			System.Console.Error.WriteLine("Done.");
 			return convertIncludes(betalib, ((overwrite == 2)?2:- 1), ((out_Renamed == System.Console.Out)?out_Renamed:null));
 		}
-		static JavaConverter()
+		static DotnetConverter()
 		{
 			converted = new HashMap(10);
 		}
