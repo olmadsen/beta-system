@@ -361,23 +361,21 @@ static struct errorEntry {
 
 static char UnknownError[25];
 
-void ErrorMessage(output, errorNumber)
-     ptr(FILE) output;
+char *ErrorMessage(errorNumber)
      long errorNumber;
 {
   long  index = 0;
   
   while( errorTable[index].errorNumber != 0){
     if( errorNumber == errorTable[index].errorNumber){
-      fprintf(output,"%s", errorTable[index].errorMessage);
       BetaErrorString = errorTable[index].errorMessage; /* For Valhalla */
-      return;
+      return errorTable[index].errorMessage;
     }
     index++;
   }
   sprintf(UnknownError, "Unknown error (%d)", errorNumber);
   BetaErrorString = UnknownError;
-  fprintf(output, UnknownError);
+  return UnknownError;
 }
 
 #ifndef sparc
@@ -457,18 +455,49 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
 #endif
 
   c_on_top = 0;
-  
-  fprintf(stderr,"\n# Beta execution aborted: ");
-  ErrorMessage(stderr, errorNumber);
-  
+
   if( (output = fopen("beta.dump","w")) == NULL){
+    /* beta.dump cannot be opened */
+#ifdef macintosh
+    if (StandAlone){
+      int i=2;
+      char dumpname[20];
+      char lookat[30];
+      do {
+	sprintf(dumpname, "beta.dump%d", i++);
+      } while ((output = fopen(dumpname,"w")) == NULL);
+      sprintf(lookat, "\n\nLook at '%s'", dumpname);
+      CPrompt("Beta execution aborted:\n\n", ErrorMessage(errorNumber), lookat, "");
+    } else {
+      output = stderr;
+      fprintf(output, "\n# Beta execution aborted: ");
+      fprintf(output, ErrorMessage(errorNumber));
+      fprintf(output, ".\n");
+    }
+#else
     output = stderr;
-    fprintf( output, ".\n");
+    fprintf(output, "\n# Beta execution aborted: ");
+    fprintf(output, ErrorMessage(errorNumber));
+    fprintf(output, ".\n");
+#endif
   }else{
-    fprintf(stderr,", look at 'beta.dump'.\n");
-    fprintf(output,"Beta execution aborted: ");
-    ErrorMessage(output, errorNumber);
-    fprintf( output, ".\n");
+    /* beta.dump opened successfully */
+#ifdef macintosh
+    if (StandAlone){
+      CPrompt("Beta execution aborted:\n\n", ErrorMessage(errorNumber), "\n\nLook at 'beta.dump'", "");
+    } else {
+      fprintf(stderr, "\n# Beta execution aborted: ");
+      fprintf(stderr, ErrorMessage(errorNumber));
+      fprintf(stderr, ", look at 'beta.dump'.\n");
+    }
+#else
+    fprintf(stderr, "\n# Beta execution aborted: ");
+    fprintf(stderr, ErrorMessage(errorNumber));
+    fprintf(stderr, ", look at 'beta.dump'.\n");
+#endif
+    fprintf(output, "Beta execution aborted: ");
+    fprintf(output, ErrorMessage(errorNumber));
+    fprintf(output, ".\n");
   }
   
   fprintf(output,"\nCall chain:\n\n");

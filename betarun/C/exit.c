@@ -41,7 +41,7 @@ void BetaError(errorNo, theObj)
       if (errorNo==QuaErr || errorNo==QuaOrigErr){
 	if (QuaCont) {
 	  fprintf(output, "\n*** OBS. ");
-	  ErrorMessage(output, QuaErr);
+	  fprintf(output, ErrorMessage(QuaErr));
 	  fprintf(output, ".\nCurrent object:\n");
 	  if( theObj != 0 ){
 	    if( isObject(theObj)){
