@@ -1,0 +1,209 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE '~beta/basiclib/directory';
+INCLUDE '~beta/sysutils/pathhandler';
+INCLUDE '~beta/unixlib/unixfile';
+INCLUDE '~beta/containers/list';
+
+-- LIB: Attributes --
+
+DirectoryStatus: (# exit 1 #);
+ErrorStatus: (# exit 2 #);
+CreateStatus: (# exit 3 #);
+
+BundleDictionary:
+  (# Attribute:
+       (# key: ^Text;
+          value: ^Text;
+       #);
+     storage: @List
+       (# Element:: Attribute;
+       #);
+     define:
+       (# key: ^Text;
+          value: ^Text;
+       enter (key[], value[])
+       do (# theAttribute: ^Attribute;
+          do &Attribute[] -> theAttribute[];
+             key[] -> theAttribute.key[];
+             value[] -> theAttribute.value[];
+             theAttribute[] -> storage.append;
+          #);
+       #);
+     pack:
+       (# output: ^Stream;
+       enter output[]
+       do '<?xml version="1.0" encoding="UTF-8"?>' -> output.putline;
+          '<!DOCTYPE plist PUBLIC '
+          '"-//Apple Computer//DTD PLIST 1.0//EN" ' 
+          '"http://www.apple.com/DTDs/PropertyList-1.0.dtd">' 
+            -> output.putline;
+          '<plist version="1.0">' -> output.putline;  
+          '<dict>' -> output.putline;
+          
+          storage.scan
+          (#
+          do '    <key>' -> output.puttext;
+             current.key[] -> output.puttext;
+             '</key>' -> output.putline;
+             
+             '    <string>' -> output.puttext;
+             current.value[] -> output.puttext;
+             '</string>' -> output.putline;
+          #);
+          
+          
+          '</dict>' -> output.putline;
+          '</plist>' -> output.putline;
+
+       #);
+     save:
+       (# path: ^Text;
+       enter path[]
+       do (# output: @File;
+          do path[] -> output.name;
+             output.openWrite;
+             output[] -> pack;
+             output.close;
+          #);
+       #);
+  #);
+
+createDirectoryStructure:
+  (# fullpath: ^Text;
+     status: @integer;
+     
+     checkStatus:
+       (# fullpath: ^Text;
+          status: @integer;
+       enter fullpath[]
+       do (# entry: @DiskEntry;
+          do fullpath[] -> entry.path;
+             (if entry.exists then
+                 (if entry.isDirectory then
+                     DirectoryStatus -> status;
+                  else
+                     ErrorStatus -> status;
+                 if);
+              else
+                 CreateStatus -> status;
+             if);
+          #);
+       exit status
+       #);
+     
+  enter fullpath[]
+  do fullpath[] -> checkStatus -> status;
+     (if status
+      //DirectoryStatus then
+         (** everything is fine - exit **)
+      //ErrorStatus then
+         (** something is wrong - exit **)
+      //CreateStatus then
+         (# entry: @DiskEntry;
+            enclosing: @Directory;
+         do fullpath[] -> entry.path;
+            entry.path.head -> enclosing.name;
+            enclosing.name -> createDirectoryStructure -> status;
+            (if status
+             //DirectoryStatus then
+                entry.path.name -> enclosing.createDir;
+            if);
+         #);
+     if);
+  exit status
+  #);
+copyFile:
+  (# from: ^Text;
+     to: ^Text;
+  enter (from[], to[])
+  do (# input: @File;
+        output: @File;
+     do from[] -> input.name;
+        to[] -> output.name;
+        input.openread;
+        output.openwrite;
+        loop:
+          (if NOT input.eos then
+              input.get -> output.put;
+              restart loop;
+          if);
+        input.close;
+        output.close;
+     #);
+  #);
+setExePermission:
+  (# path: ^Text;
+  enter path[]
+  do (# entry: @UnixEntry;
+     do path[] -> entry.path;
+        ('a', 'x') -> entry.permission.add;
+        ('g', 'x') -> entry.permission.add;
+        ('u', 'x') -> entry.permission.add;
+     #);
+  #);
+moveExecutable:
+  (# from: ^Text;
+     to: ^Text;
+  enter (from[], to[])
+  do (from[], to[]) -> copyFile;
+     to[] -> setExePermission;
+  #);
+createPlist:
+  (# executable: ^Text;
+  enter executable[]
+  do (# entry: @DiskEntry;
+        name: ^Text;
+        plistpath: ^Text;
+        ph: @PathHandler;
+        dict: @BundleDictionary;
+     do ph.init;
+        executable[] -> entry.path;
+        entry.path.name -> name[];
+        &Text[] -> plistpath[];
+        './' -> plistpath.puttext;
+        name[] -> plistpath.puttext;
+        '.app/Contents/Info.plist' -> plistpath.puttext;
+        (plistpath[], entry.path.head) -> ph.ConvertFilePath -> plistpath[];
+        ('CFBundleExecutable', name[]) -> dict.define;
+        ('CFBundleName', name[]) -> dict.define;
+        ('CFBundlePackageType', 'APPL') -> dict.define;
+        plistpath[] -> dict.save;
+     #);
+  #);
+makeBundle:
+  (# executable: ^Text;
+  enter executable[]
+  do (# entry: @DiskEntry;
+        ph: @PathHandler;
+        bundlepath: ^Text;
+        name: ^Text;
+     do ph.init;
+        executable[] -> entry.path;
+        entry.path.name -> name[];
+        &Text[] -> bundlepath[];
+        './' -> bundlepath.puttext;
+        name[] -> bundlepath.puttext;
+        '.app/Contents/MacOS' -> bundlepath.puttext;
+        (bundlepath[], entry.path.head) -> ph.ConvertFilePath -> bundlepath[];
+        (If (bundlepath[] -> createDirectoryStructure) = DirectoryStatus then
+            '/' -> bundlepath.puttext;
+            name[] -> bundlepath.puttext;
+            (executable[], bundlepath[]) -> moveExecutable;
+            executable[] -> createPlist;
+        if);
+     #);
+  #);
+
+-- program: descriptor --
+(# path: ^Text;
+   fullpath: ^Text;
+   ph: @PathHandler;
+do ph.init;
+   (if NoOfArguments = 2 then
+       2 -> arguments -> path[];
+   if);
+   (if path[] <> NONE then
+       (path[], ph.CurrentDirectory) -> ph.ConvertFilePath -> fullpath[];
+       fullpath[] -> makeBundle;
+   if);
+#)
