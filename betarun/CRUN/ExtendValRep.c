@@ -41,7 +41,7 @@ ParamObjOffRange(ExtVR1)
   size = ByteRepSize(newRange);
   
   if (newRange > LARGE_REP_SIZE) {
-    newRep = LVRACAlloc(ByteRepPTValue, newRange);
+    newRep = LVRAXAlloc(ByteRepPTValue, oldRange, newRange);
   }
   if (newRep) {
     /* LVRA allocation succeeded */
@@ -63,7 +63,7 @@ ParamObjOffRange(ExtVR1)
     return;
   } /* End LVRA allocation */
   
-  /* NOT REACHED if LVRAcalloc successfully called */
+  /* NOT REACHED if LVRAXAlloc successfully called */
   
   /* Allocate new repetition in IOA */
   
@@ -116,7 +116,7 @@ ParamObjOffRange(ExtVR2)
   size = ShortRepSize(newRange);
   
   if (newRange > LARGE_REP_SIZE) {
-    newRep = LVRACAlloc(ShortRepPTValue, newRange);
+    newRep = LVRAXAlloc(ShortRepPTValue, oldRange, newRange);
   }
   if (newRep) {
     /* LVRA allocation succeeded */
@@ -138,7 +138,7 @@ ParamObjOffRange(ExtVR2)
     return;
   } /* End LVRA allocation */
   
-  /* NOT REACHED if LVRAcalloc successfully called */
+  /* NOT REACHED if LVRAXAlloc successfully called */
   
   /* Allocate new repetition in IOA */
   
@@ -191,7 +191,7 @@ ParamObjOffRange(ExtVR4)
   size = LongRepSize(newRange);
   
   if (newRange > LARGE_REP_SIZE) {
-    newRep = LVRACAlloc(LongRepPTValue, newRange);
+    newRep = LVRAXAlloc(LongRepPTValue, oldRange, newRange);
   }
   if (newRep) {
     /* LVRA allocation succeeded */
@@ -213,7 +213,7 @@ ParamObjOffRange(ExtVR4)
     return;
   } /* End LVRA allocation */
   
-  /* NOT REACHED if LVRAcalloc successfully called */
+  /* NOT REACHED if LVRAXAlloc successfully called */
   
   /* Allocate new repetition in IOA */
   
@@ -266,7 +266,7 @@ ParamObjOffRange(ExtVR8)
   size = DoubleRepSize(newRange);
   
   if (newRange > LARGE_REP_SIZE) {
-    newRep = LVRACAlloc(DoubleRepPTValue, newRange);
+    newRep = LVRAXAlloc(DoubleRepPTValue, oldRange, newRange);
   }
   if (newRep) {
     /* LVRA allocation succeeded */
@@ -288,7 +288,7 @@ ParamObjOffRange(ExtVR8)
     return;
   } /* End LVRA allocation */
   
-  /* NOT REACHED if LVRAcalloc successfully called */
+  /* NOT REACHED if LVRAXAlloc successfully called */
   
   /* Allocate new repetition in IOA */
   

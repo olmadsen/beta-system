@@ -34,7 +34,7 @@ void ExtVR1(struct Object *theObj,
     size = ByteRepSize(newRange);
       
     if (newRange > LARGE_REP_SIZE){
-      newRep = LVRACAlloc(ByteRepPTValue, newRange);
+      newRep = LVRAXAlloc(ByteRepPTValue, oldRange, newRange);
     }
     if (newRep) {
       /* LVRA allocation succeeded */
@@ -56,7 +56,7 @@ void ExtVR1(struct Object *theObj,
       return;
     } /* LVRA */
       
-    /* NOT REACHED if LVRAcalloc successfully called */
+    /* NOT REACHED if LVRAXAlloc successfully called */
 
     /* Allocate new repetition */
     push(theObj);
@@ -119,7 +119,7 @@ void ExtVR2(struct Object *theObj,
     size = ShortRepSize(newRange);
       
     if (newRange > LARGE_REP_SIZE){
-      newRep = LVRACAlloc(ShortRepPTValue, newRange);
+      newRep = LVRAXAlloc(ShortRepPTValue, oldRange, newRange);
     }
     if (newRep) {
       /* LVRA allocation succeeded */
@@ -141,7 +141,7 @@ void ExtVR2(struct Object *theObj,
       return;
     } /* LVRA */
       
-    /* NOT REACHED if LVRAcalloc successfully called */
+    /* NOT REACHED if LVRAXAlloc successfully called */
 
     /* Allocate new repetition */
     push(theObj);
@@ -204,7 +204,7 @@ void ExtVR4(struct Object *theObj,
     size = LongRepSize(newRange);
       
     if (newRange > LARGE_REP_SIZE){
-      newRep = LVRACAlloc(LongRepPTValue, newRange);
+      newRep = LVRAXAlloc(LongRepPTValue, oldRange, newRange);
     }
     if (newRep) {
       /* LVRA allocation succeeded */
@@ -226,7 +226,7 @@ void ExtVR4(struct Object *theObj,
       return;
     } /* LVRA */
       
-    /* NOT REACHED if LVRAcalloc successfully called */
+    /* NOT REACHED if LVRAXAlloc successfully called */
 
     /* Allocate new repetition */
     push(theObj);
@@ -289,7 +289,7 @@ void ExtVR8(struct Object *theObj,
     size = DoubleRepSize(newRange);
       
     if (newRange > LARGE_REP_SIZE){
-      newRep = LVRACAlloc(DoubleRepPTValue, newRange);
+      newRep = LVRAXAlloc(DoubleRepPTValue, oldRange, newRange);
     }
     if (newRep) {
       /* LVRA allocation succeeded */
@@ -311,7 +311,7 @@ void ExtVR8(struct Object *theObj,
       return;
     } /* LVRA */
       
-    /* NOT REACHED if LVRAcalloc successfully called */
+    /* NOT REACHED if LVRAXAlloc successfully called */
 
     /* Allocate new repetition */
     push(theObj);

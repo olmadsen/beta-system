@@ -181,6 +181,7 @@ extern void IOACheckReference(handle(Object));
 /* GC/lvra.c */
 extern ref(ValRep) LVRAAlloc(ref(ProtoType), long);
 extern ref(ValRep) LVRACAlloc(ref(ProtoType), long);
+extern ref(ValRep) LVRAXAlloc(ref(ProtoType), long, long);
 extern long inLVRA(ref(Object));
 extern void LVRAkill(struct ValRep *);
 #ifdef CHECK_LVRA_IN_IOA
