@@ -99,7 +99,7 @@ sub read_file
 
     $line="";
     while (<FILE>) {
-	$line .= $_;
+	$line .= &untabify($_);
     };
     close (FILE);
     return $line;
@@ -829,7 +829,7 @@ sub parse_special_tags
 		# No SRC. Handle stuff until (and including) end-tag
 		#print STDERR "No SRC. Handle stuff until (and including) end-tag\n" if ($debug);
 		if ($after =~ m%\<\/BETA\>%si){
-		    $beta = $`; # ...
+		    $beta = &untabify($`); # ...
 		    #print STDERR "beta='$beta'\n" if ($debug);
 		    $after = $';
 		} else {
@@ -872,7 +872,7 @@ sub parse_special_tags
 	    # Trim $beta for whitespace
 	    $beta =~ s/^\s*//;
 	    $beta =~ s/\s*$//;
-	    $done .= &quote_html(&untabify($beta)); 
+	    $done .= &quote_html($beta); 
 	    $done .= "</PRE>\n";
 	} elsif ($match =~ m%\</BETA\>%i){
 	    # Found BETA end
@@ -891,7 +891,6 @@ sub parse_special_tags
 		#print STDERR "${src}$htmlfile: <INX> attributes:'$attributes'\n";
 		$after = $';
 	    }	    
-	    #print STDERR "${src}$htmlfile: INX start\n";
 	    $num_inx++;
 	    if ($attributes =~ m%HIDDEN%i){
 		$hidden = 1;
@@ -899,8 +898,8 @@ sub parse_special_tags
 	    # Start anchor to refer from index
 	    $anchor = "INX_$num_inx";
 	    $done .= "<A NAME=\"$anchor\">";
-	    if ($after =~ m%(.*)\</INX\>%i){
-		$entry = $1;
+	    if ($after =~ m%\</INX\>%i){
+		$entry = $`;
 		#print STDERR "${src}$htmlfile: INX entry: $entry\n";
 		if ($entry eq ""){
 		    print STDERR "${src}$htmlfile: Empty index entry? <<INX></INX>)\n";
@@ -1014,7 +1013,6 @@ sub parse_special_tags
     }
 
     $srcline=$done . $_;
-    #$*=0;
 }
 
 sub make_special_header
@@ -1199,60 +1197,47 @@ sub read_and_abstract_beta
 {
     local ($betafile, $htmlfile) = @_;
     local ($was_blank);
-    
-    open (BETA, "$betafile") || die "\nCannot open $betafile for reading: $!\n";
 
-    # Read entire BETA file into $betaline, while doing single-line editing.
-    $betaline = "";
-    while (<BETA>){
-	s/<<.*\bOBJECTDESCRIPTOR\b.*>>/.../gi;
-	s/<<.*\bDESCRIPTOR\b.*>>/.../gi;
-	s/<<.*\bDOPART\b.*>>/.../gi;    
-	    
-	# Uppercase inner
-	s/\bINNER\b/INNER/gi;
-	# Remove trailing blanks
-	s/^(.*)\s*$/$1\n/;
-	
-	# Squeze multiple blank lines down into one
-	next if /\S/ ? ($was_blank=0) : $was_blank++;
-	
-	$betaline .= $_;
-    }
-    close (BETA);
+    $betaline = &read_file("$betafile");
+
+    # single-line editing.
+    $betaline =~ s/<<.*\bOBJECTDESCRIPTOR\b.*>>/.../gi;
+    $betaline =~ s/<<.*\bDESCRIPTOR\b.*>>/.../gi;
+    $betaline =~ s/<<.*\bDOPART\b.*>>/.../gi;    
+    
+    # Uppercase inner
+    $betaline =~ s/\bINNER\b/INNER/gi;
+    # Remove trailing blanks
+    $betaline =~ s/^(.*)\s*$/$1\n/;
+    
+    # Squeze multiple blank lines down into one
+    # next if /\S/ ? ($was_blank=0) : $was_blank++;
+    
 
     # Now perform multiline editing
-
     if ($special_headers){
 	$betaline = &parse_special_header($betaline, $htmlfile);
     }
 
-    $*=1; # FIXME: Use s///s instead
-    $_=$betaline;
-
     # delete RCS/CVS stuff
-    s/\$\Revision:[^\$]*\$//;
-    s/\$\RCSfile:[^\$]*\$//; 
-    s/\$\Date:[^\$]*\$//;
-    s/\$\Author:[^\$]*\$//;
+    $betaline =~ s/\$\Revision:[^\$]*\$//s;
+    $betaline =~ s/\$\RCSfile:[^\$]*\$//s; 
+    $betaline =~ s/\$\Date:[^\$]*\$//s;
+    $betaline =~ s/\$\Author:[^\$]*\$//s;
 
-    s/\bdo\s*\.\.\./do .../gi;
-    s/\bINNER(;?)\s*\.\.\./INNER$1 .../g;
-    s/do\b\s*/do /gi;
-    s/\(\#\s*do\s+INNER(;?)\s*\#\)/\(\# do INNER$1 \#\)/g;
-    s/\(\#\s*do\s+INNER(;?)\s+\.\.\.\s*\#\)/\(\# do INNER$1 ... \#\)/g;
-    s/\(\#\s*do\s+\.\.\.\s+INNER(;?)\s*\#\)/\(\# do ... INNER$1 \#\)/g;
-    s/\(\#\s*do\s+\.\.\.\s+INNER(;?)\s+\.\.\.\s*\#\)/\(\# do ... INNER$1 ... \#\)/g;
-    s/(:< *)\s*\(\#(.*)\#\);?/$1(\#$2\#);/g;
-    s/\.\.\.  /... /g;
+    $betaline =~ s/\bdo\s*\.\.\./do .../gis;
+    $betaline =~ s/\bINNER(;?)\s*\.\.\./INNER$1 .../gs;
+    #$betaline =~ s/do\b\s*/do /gis; # No contracts do' ' in comments too
+    $betaline =~ s/\(\#\s*do\s+INNER(;?)\s*\#\)/\(\# do INNER$1 \#\)/gs;
+    $betaline =~ s/\(\#\s*do\s+INNER(;?)\s+\.\.\.\s*\#\)/\(\# do INNER$1 ... \#\)/gs;
+    $betaline =~ s/\(\#\s*do\s+\.\.\.\s+INNER(;?)\s*\#\)/\(\# do ... INNER$1 \#\)/gs;
+    $betaline =~ s/\(\#\s*do\s+\.\.\.\s+INNER(;?)\s+\.\.\.\s*\#\)/\(\# do ... INNER$1 ... \#\)/gs;
+    $betaline =~ s/(:< *)\s*\(\#(.*)\#\);?/$1(\#$2\#);/gs;
+    $betaline =~ s/\.\.\.  /... /gs;
 
     # Delete other lines containing the word "private" or the word "implpart"
-    #s/.*private.*\n+//gi;
-    s/.*implpart.*\n+//gi;
-
-    $*=0;
-
-    $betaline = &untabify($_);
+    #$betaline =~ s/.*private.*\n+//gi;
+    $betaline =~ s/.*implpart.*\n+//gi;
 
 }
 
@@ -1323,7 +1308,6 @@ EOT
     # $scope levels.
     $scope  = 2;
 
-    $*=0;
     $patterns = "";
     $revpatterns = "";
     $level  = 1;
