@@ -1,12 +1,11 @@
 ORIGIN '~beta/mps/astlevel';
 LIB_DEF 'betaastindex' '../lib';
-INCLUDE 'gram';
+INCLUDE '~beta/mps/utils/getslotbinding';
 INCLUDE '~beta/mps/private/indexPrivate';
+INCLUDE 'gram';
 BODY 'private/indexImpl';
 -- astInterfaceLib: Attributes --
-(* Modified by OLM 11.5.89
- *
- * This form contains the patterns neccessary to interface the
+(* This form contains the patterns neccessary to interface the
  * ast-interface to the beta-Compiler. This is done via "index",
  * which gives an interface the ast's, which is functional equivalent
  * to the old interface used by the compiler.
@@ -17,96 +16,6 @@ BODY 'private/indexImpl';
 
  * Please do not look at the code. In the search of efficiency it is
  * some of the ugliest beta-code ever written
- *
- * Number of semantic attributes for the differect syntactic categories of
- * beta as defined in '~beta/betaast/beta-meta.gram':
- * OBS must be corrected
- *    <DescriptorForm>: 16
- *    <AttributesForm>: 16
- *    <ObjectDescriptor>: 8
- *    <ForImp>: 2
- *    <repetitionDecl>: 2
- *    <LabelledImp>: 2
- *    <nameDcl>: 2
- *    <nameApl>: 4
- *    <bindingDecl>: 2
- *
- * A SYNTACTIC CATEGORY MUST HAVE AN EVEN NUMBER OF SEMANTIC ATTRIBUTE!!!
- *
- * semantic attributes:
- *
- * syntactic category:	Name:	Location:
- *
- * attributesForm	*Xorigin      2
- *
- * descriptorForm        descNo       1
- *  	  		*Xorigin      2
- *			*sysAtt       3    hashIndex
- *			              4-10 standard descriptors
- *
- * objectDescriptor	 descNo       1
- * 			$origin       2
- * 			 size         3
- *			 attSize      4
- *			 kind         5
- *			$dclRoot      6
- *			$lib          7
- *                       returnOff    8  [bits  0-15]
- *			 originOff    8  [bits 16-31]
- *			 descId       computed
- *
- * slots                 descNo       1      (if slot is descriptor)
- *			*slotOrigin   2      (if slot is descriptor)
- *			 size         3      (if slot is descriptor)
- *			 attSize      4      (if slot is descriptor)
- *			 kind         5      (if slot is descriptor)
- *			$dclRoot      6      (if slot is descriptor)
- *		 	$lib          7      (if slot is descriptor)
- *			 originOff    8 (if descriptor slot)
- *		 	 descId    computed  (if slot is descriptor)
- *			$next         1      (if slot is attributes)
- *
- * repetitionDecl                  $origin       2
- *
- * forImp                          $origin       2
- *
- * MandatoryEnter
- * OptionalEnter
- * MandatoryExit
- * OptionalExit		 NXoff		1
- *			 NXsize		2
- * insertedObject	 insOff         2
- * objectEval 		 evalKind	1
- * 			 insOff		2 (if evalKind=insObj)
- * labelledImp                     $origin       2
- *
- * nameApl                         *dclRef       1
- *				    on           2
- *				    pn           3 bits 0-15
- *				    onForThis    3 bits 16-31
- *				   *descRef      4
- *
- * nameDcl                          accesss      1, first byte
- *				    off          1, last 3 bytes
- *				   $left         2, first 2 bytes
- *				   $right        2, last 2 bytes
- *				   $sort         computed
- *				   *virtDcl      only to be used for nameDcl
- *					      which are parts of bindingDecl.
- *					      attribute is found as attribute 1
- *					      of the bindingDecl
- *				 restartAdr   only to be used for the
- *					      namedcl-part of a labelledImp,
- *					      attribute 2, first 2 bytes
- *				 leaveAdr     only to be used for the
- *					      namedcl-part of a labelledImp,
- *					      attribute 2, last 2 bytes
- *
- * attributes marked with an * are node-references which might point to an ast
- * in another fragment.
- *
- * attributes marked with an $ are node-references which must point to an ast
- * in the same fragment
  *
  *
  * for people interested in the interiors of the ast-implementation,
@@ -147,10 +56,10 @@ BODY 'private/indexImpl';
  * can be saved
  *)
 NULL: (#  exit (0,none ) #);
-ASTindex: AST
+ASTindex: 
   (# <<SLOT ASTindexLib:attributes>>;
-     (*index: @integer;
-      frag: ^fragmentForm;*)
+     index: @integer; frag: ^fragmentForm;
+     
      asAST:
        (# theAst: ^ast
        do (if frag[] <> none then index->frag.indexToNode->theAst[] if)
@@ -162,6 +71,8 @@ ASTindex: AST
        exit asAST
        #);
      f: (#  exit frag[] #);
+     isNull: (#  exit (index = 0) #);
+     nodeId: (#  exit index #);
      equal:
        (# inx1: @integer; frag1: ^fragmentForm
        enter (inx1,frag1[])
@@ -169,18 +80,11 @@ ASTindex: AST
        #);
      brother:
        (# brotherInx: @integer;
-       do
-	  (if not (frag.a[index]->tos'%GetBits[2,1]') then
+       do (if not (frag.a[index]->tos'%GetBits[2,1]') then
 	      frag.a[index+1]->tos'%getShort[0]'->tos'%shiftLeft[1]'->brotherInx
 	  if)
        exit (brotherInx,frag[])
        #);
-     errInx:
-       (# err: @integer; theAst: ^ast;
-       enter (#  enter err do a->theAst[]; err->theAst.semanticError #)
-       exit (#  do a->theAst[] exit theAst.semanticError #)
-       #);
-     clearError: (#  do (@@ frag.a[index],false)->tos'%PutBits[1,1]' #);
      son:
        (#
        exit (frag.a[index+1]->tos'%getShort[1]'->tos'%shiftLeft[1]',frag[])
@@ -190,6 +94,30 @@ ASTindex: AST
        do son -> S
        exit S[]
        #);
+     father:
+       (# i: @integer; b: @boolean
+       do (* expansion of
+	   index->i;
+	   loop: (if true
+	    // (i=0) then
+	    // (i->frag.isLastBrother) then
+	        i->frag.nextBrother->i
+	    else i->frag.nextBrother->i; restart loop
+	   if);
+	   *)
+	  index->i;
+	  loop:
+	  (if true
+	   // (i = 0) then
+
+	   // (frag.a[i]->tos'%GetBits[2,1]'->b) then
+	      frag.a[i+1]->tos'%GetShort[0]'->tos'%shiftLeft[1]'->i
+	   else
+	      frag.a[i+1]->tos'%GetShort[0]'->tos'%shiftLeft[1]'->i;
+	      restart loop
+	  if)
+       exit (i,frag[])
+       #);
      stringLengthOld:
        (#
        exit frag.a[index->frag.getSonInx->frag.getSonInx]->tos'%getShort[1]'
@@ -198,14 +126,12 @@ ASTindex: AST
        (#
        exit frag.l[index->frag.getSonInx->frag.getSonInx]->tos'%getShort[1]'
        #);
-     isNull: (#  exit (index = 0) #);
-     nodeId: (#  exit index #);
      stringLength:
        (# l: @integer
-       do (if frag.lcurtop>1 then
-              stringLengthNew->l
+       do (if frag.lcurtop > 1 then
+              stringLengthNew -> l
            else
-              stringLengthOld->l
+              stringLengthOld -> l
           if)
        exit l
        #);
@@ -219,7 +145,6 @@ ASTindex: AST
        exit frag.a[index]->tos'%getSignedBits[4,12]'
        #);
      isSlot: (#  exit frag.a[index]->tos'%GetBits[0,1]' #);
-     theSlotDesc: (# un: ^unExpanded do a->un[] exit un.theSlot #);
      theSlotName:
        (# un: ^unExpanded; sd: ^slotDesc
        do a->un[]; un.theSlot->sd[]
@@ -245,7 +170,6 @@ ASTindex: AST
        (*exit l.getText*)
        #);
      textEq: (# t: @text enter t exit (getText->t.equalNCS) #);
-     nodeClass: (#  exit grammarTable.beta.nodeClassArray[label] #);
      getConst:
        (# i: @ASTindex
        enter
@@ -255,6 +179,10 @@ ASTindex: AST
 	 #)
        exit (# c: ^const do son->i; i.a->c[] exit c.valueInx #)
        #);
+     internal: (#  exit (label > 0) #);
+     astKind: (#  exit label->frag.grammar.kindOfSymbol #);
+     nodeClass: (#  exit grammarTable.beta.nodeClassArray[label] #);
+     
      putAttribute:
        (# val,attributeNo: @integer
        enter (val,attributeNo)
@@ -299,8 +227,7 @@ ASTindex: AST
      putNodePossibleSlot:
        (# val: @ASTindex; attributeNo: @integer; theAst: ^ast
        enter (val,attributeNo)
-       do
-	  (if label = prodNo.unExpanded then
+       do (if label = prodNo.unExpanded then
 	      a->theAst[]; (val.a,attributeNo)->theAst.putSlotNodeAttribute
 	   else
 	      val->frag.packInxToValue
@@ -308,14 +235,12 @@ ASTindex: AST
 	  if)
        #);
      getNodePossibleSlot:
-       (#
-	  attributeNo: @integer;
+       (# attributeNo: @integer;
 	  theAst,val: ^ast;
 	  inx1: @integer;
 	  f: ^fragmentForm
        enter attributeNo
-       do
-	  (if label = prodNo.unExpanded then
+       do (if label = prodNo.unExpanded then
 	      a->theAst[];
 	      attributeNo->theAst.getSlotNodeAttribute->val[];
 	      (if val[] <> none then val.index->inx1; val.frag[]->f[] if)
@@ -325,50 +250,31 @@ ASTindex: AST
 	  if)
        exit (inx1,f[])
        #);
-     astKind: (#  exit label->frag.grammar.kindOfSymbol #);
-     father:
-       (# i: @integer; b: @boolean
-       do
-       (* expansion of
-	index->i;
-	loop: (if true
-	//(i=0) then
-	//(i->frag.isLastBrother) then
-	i->frag.nextBrother->i
-	else i->frag.nextBrother->i; restart loop
-	if);
-	*)
-	  index->i;
-	  loop:
-	  (if true
-	   // (i = 0) then
-
-	   // (frag.a[i]->tos'%GetBits[2,1]'->b) then
-	      frag.a[i+1]->tos'%GetShort[0]'->tos'%shiftLeft[1]'->i
-	   else
-	      frag.a[i+1]->tos'%GetShort[0]'->tos'%shiftLeft[1]'->i;
-	      restart loop
-	  if)
-       exit (i,frag[])
-       #);
      putSysAtt:
        (# b: @ASTindex; n: @integer
        enter (n,b)
        do (b,n)->putNodeAttribute
        #);
      getSysAtt: (# n: @integer enter n exit n->getNodeAttribute #);
-     internal: (#  exit (label > 0) #);
+     
+     clearError: (#  do (@@ frag.a[index],false)->tos'%PutBits[1,1]' #);
      markError:
        (# errNo: @integer
        enter errNo
        do (if not localErr then errNo->errInx if)
+       #);
+     errInx:
+       (# err: @integer; theAst: ^ast;
+       enter (#  enter err do a->theAst[]; err->theAst.semanticError #)
+       exit (#  do a->theAst[] exit theAst.semanticError #)
        #);
      localErr:
        (# mark: @boolean; n: @ASTindex
        do
 	  (if not (inError->mark) then
 	      (if internal then
-		  son->n; (if not n.isNull then 8->&n.errmarked->mark if)
+		  son->n; 
+                  (if not n.isNull then 8->&n.errmarked->mark if)
 	      if)
 	  if)
        exit mark
@@ -376,8 +282,7 @@ ASTindex: AST
      ErrMarked:
        (# level: @integer; mark: @boolean; n: @ASTindex
        enter level
-       do
-	  (if not (inError->mark) then
+       do (if not (inError->mark) then
 	      (if (0 < level) then
 		  (if internal then
 		      son->n;
@@ -392,132 +297,6 @@ ASTindex: AST
        exit mark
        #);
      inError: (#  exit frag.a[index]->tos'%getBits[1,1]' #);
-     lispPrint:
-       (# l: @integer; theAst: ^ast;
-       enter l
-       do 'Call of lisp-print '->screen.putText; a->theAst[]; theAst.dump;
-       #);
-     GetBinding:
-     (* Get the bindings of this Slot within the group G.
-      *  All bindings are delivered.
-      *  For each binding, Found is called.
-      *  The elements of G must be fragment forms or links to such. *)
-       (#
-	  Mark: @
-	    (#
-	       Scan:
-		 (# thisGroup: ^FragmentGroup; R: ^Elm
-		 do
-		    head[]->R[];
-		    L:
-		    (if (R[] <> none ) then
-			R.F[]->ThisGroup[]; INNER ; R.succ[]->R[]; restart L
-		    if)
-		 #);
-	       elm: (# F: ^FragmentGroup; succ: ^Elm #);
-	       head: ^Elm;
-	       F: ^FragmentGroup;
-	       inserted: @boolean
-	    enter F[]
-	    do
-	       Insert:
-		 (# R: ^Elm
-		 do
-		    false->inserted;
-		    head[]->R[];
-		    L:
-		    (if (R[] <> none ) then
-			(if R.F[] = F[] then leave insert if);
-			R.succ[]->R[];
-			restart L
-		    if);
-		    &Elm[]->R[];
-		    F[]->R.F[];
-		    head[]->R.succ[];
-		    R[]->Head[];
-		    True->inserted;
-		    trace.GetBindingMark
-		      ->tracer
-			(#
-			do
-			   'marked: '->screen.putText;
-			   f.fullname->screen.putText;
-
-			#);
-
-		 #)
-	    exit inserted
-	    #);
-	  Find:
-	    (# F: ^Fragment; G: ^FragmentGroup
-	    enter F[]
-	    do
-	       (if (F[] <> none ) then
-		   (if F.FragType = groupType then
-		       (if (F[]->G[]->mark) then
-			   G.scanIncludes
-			     (# F1: ^Fragment; fn: ^text
-			     do current.fullname->fn[];
-				(if (fn[]->top.groupTable.find->F1[])=NONE then
-				    (fn[],screen[])->top.open->F1[]
-				if);
-				F1[] -> &Find
-			     #);
-			     (*(# do (name[],screen[])->top.open->&Find #);*)
-			   G.origin->&Find
-		       if)
-		   if)
-	       if)
-	    #);
-	  Found:<
-	    (# theBinding: ^FragmentForm
-	    enter theBinding[]
-	    do
-	       trace.GetBinding
-		 ->tracer
-		   (#
-		   do
-		      'binding found '->screen.putText;
-		      theBinding.fullName->screen.putText;
-
-		   #);
-	       INNER
-	    #);
-	  G: ^FragmentGroup;
-	  un: ^unExpanded;
-	  sl: ^slotDesc
-       enter G[]
-       do
-	  trace.GetBinding
-	    ->tracer
-	      (#
-	      do
-		 'GetBinding of '->screen.putText;
-		 ((index,frag[]),screen[],3,false)->prettyPrinter;
-		 ' for '->screen.putText;
-		 g.fullName->screen.putText;
-
-	      #);
-	  G[]->&Find;
-	  a->un[];
-	  un.theSlot->sl[];
-	  Mark.Scan (* scan visible groups for forms *)
-	    (#
-	    do
-	       thisGroup.Scan
-		 (# F: ^FragmentForm; B: ^SlotDesc
-		 do
-		    (if current.FragType = FormType then
-			current[]->f[];
-			f.binding[]->b[];
-			(if (b[] <> none ) then
-			    (if (b[]->sl.equal) then current[]->&found if)
-			if)
-		    if)
-		 #)
-	    #)
-       #);
-
   enter (index,frag[])
   exit (index,frag[])
   #);
@@ -636,8 +415,7 @@ scanList:
      if)
   #);
 prettyPrinter: 
-  (#
-     thePP: @<<SLOT prettyPrinterBody:Descriptor>>;
+  (# thePP: @<<SLOT prettyPrinterBody:Descriptor>>;
      st: ^stream;
      inx: @ASTindex;
      a: ^ast;
