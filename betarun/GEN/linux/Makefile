@@ -1,5 +1,5 @@
 gen: allways
 	cd ../GRAMMAR; make
-	beta -qw gen
+	bootbeta -qw gen
 
 allways:
