@@ -451,9 +451,9 @@ namespace beta.converter
 	    indent(- 2);
 	  }
 		
-	public virtual void  close()
+	public virtual void  close(bool doCaster)
 	  {
-	    putCaster();
+	    if (doCaster) putCaster();
 	    if (output != Console.Out) {
 	      output.Close();
 	    }

@@ -18,7 +18,7 @@ namespace beta.converter
 
 	internal static bool use_nonwrapper_super = false; // enabling creates too many circular dependencies
 
-	internal enum TraceFlags { Type = 1, File = 2, Runtime = 4 };
+	internal enum TraceFlags: int16 { Type = 1, File = 2, Runtime = 4 };
 
 	internal static TraceFlags trace = 0;
 		
@@ -67,7 +67,7 @@ namespace beta.converter
 	    Console.Error.WriteLine("   -   Output to terminal instead of file");
 	    Console.Error.WriteLine("   -tt Debug: type related verbose output");
 	    Console.Error.WriteLine("   -tf Debug: file related verbose output");
-	    Console.Error.WriteLine("   -tr Debug: runtime related versbose output");
+	    Console.Error.WriteLine("   -tr Debug: runtime related verbose output");
 	    Console.Error.WriteLine("");
 	    Environment.Exit((msg == null)?0:1);
 	  }
@@ -211,11 +211,13 @@ namespace beta.converter
 		ParameterInfo[] parameters = ct.GetParameters();
 		bool isStatic = ct.IsStatic;
 		String[] parameternames = new String[parameters.Length];
+		String[] mappednames    = new String[parameters.Length];
 		for (int j = 0; j < parameters.Length; j++){
-		  parameternames[j] = mapType(cls, parameters[j].ParameterType, false);
+		  parameternames[j] = mapParameterType(cls, parameters[j].ParameterType);
+		  mappednames[j]    = mapType(cls, parameters[j].ParameterType);
 		}
 		if (ctorlist.Length > 1){
-		  mangledName = plusToDot(mangle(name, parameternames));
+		  mangledName = plusToDot(mangle(name, mappednames));
 		} else {
 		  nestedName = plusToDot(name);
 		  if (nestedName.Equals(name)){
@@ -225,9 +227,9 @@ namespace beta.converter
 		  }
 		}
 		if ((trace&TraceFlags.Type)!=0){
-		  beta.commentline("Constructor: " + name + ", parameters: " + parameternames.ToString());
+		  beta.commentline("Constructor: " + name + ", parameters: " + mappednames.ToString());
 		}
-		beta.putMethod(name, mangledName, parameternames, mapType(cls, cls, false), isStatic);
+		beta.putMethod(name, mangledName, parameternames, mapType(cls, cls), isStatic);
 	      }
 	    }
 	  }
@@ -266,14 +268,16 @@ namespace beta.converter
 		if ((trace&TraceFlags.Type)!=0){
 		  beta.commentline("Method: " + print_method(m));
 		}
-		String returnType = mapType(cls, m.ReturnType, false);
+		String returnType = mapType(cls, m.ReturnType);
 		ParameterInfo[] parameters = m.GetParameters();
 		String[] parameternames = new String[parameters.Length];
+		String[] mappednames    = new String[parameters.Length];
 		for (int j = 0; j < parameters.Length; j++){
-		  parameternames[j] = mapType(cls, parameters[j].ParameterType, false);
+		  parameternames[j] = mapParameterType(cls, parameters[j].ParameterType);
+		  mappednames[j]    = mapType(cls, parameters[j].ParameterType);
 		}
 		if (methodcount.val(name) > 1){
-		  mangledName = plusToDot(mangle(name, parameternames));
+		  mangledName = plusToDot(mangle(name, mappednames));
 		} else {
 		  nestedName = plusToDot(name);
 		  if (nestedName.Equals(name)){
@@ -285,6 +289,15 @@ namespace beta.converter
 		beta.putMethod(name, mangledName, parameternames, returnType, isStatic);
 	      }
 	    }
+	  }
+
+	internal virtual String mapParameterType(Type cls, Type param)
+	  {
+	    if (param.IsEnum){
+	      // We currently map Enum literals to simple untypes values
+	      return mapType(cls, Enum.GetUnderlyingType(param));
+	    }
+	    return mapType(cls, param);
 	  }
 		
 	internal virtual void  doClasses(Type cls)
@@ -592,6 +605,11 @@ namespace beta.converter
 	    }
 	  }
 
+	internal virtual String mapType(Type userClass, Type type)
+	  {
+	    return mapType(userClass, type, false, false);
+	  }
+	
 	internal virtual String mapType(Type userClass, Type type, bool doIncludes)
 	  {
 	    return mapType(userClass, type, doIncludes, false);
@@ -831,7 +849,7 @@ namespace beta.converter
 	    
 	    if (outer == null){
 	      beta.putTrailer(resolution, namespaceName, className, isValue);
-	      beta.close();
+	      beta.close(!cls.IsValueType);
 	    } else {
 	      // Assuming same resolution/namespace:
 	      beta.putTrailer(resolution, namespaceName, stripNamespace(cls.FullName), isValue); 
