@@ -80,15 +80,20 @@ void CopyVR(struct ValRep *theRep,
       /* object-repetition */
       size = DispatchObjectRepSize(theRep->Proto, range, REP->iProto);
 
+      push(theObj);
+      push(theRep);
       if (size>IOAMAXSIZE){
 	DEBUG_AOA(fprintf(output, "CopyVR allocates in AOA\n"));
-	newRep = (struct ValRep *)AOAalloc(size);
+	newRep = (struct ValRep *)AOAalloc(size, SP);
+	if (newRep) newRep->GCAttr = 0;
 	DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
       } 
       if (!newRep){
-	Protect2(theObj, theRep, newRep = (struct ValRep *)IOAalloc(size, SP));
+	newRep = (struct ValRep *)IOAalloc(size, SP);
 	newRep->GCAttr = 1;
       }
+      pop(theRep);
+      pop(theObj);
       
       Ck(theObj);
       newRep->Proto = theRep->Proto;

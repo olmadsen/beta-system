@@ -143,7 +143,7 @@ void IOAGc()
 	     */
 	    limit = (long)cbfa->entries + CBFABlockSize;
 	  }
-	  DEBUG_CBFA(fprintf(output, "ProcessCBFA: current=0x%x\n", current));
+	  /*DEBUG_CBFA(fprintf(output, "ProcessCBFA: current=0x%x\n", current));*/
 	  if (current->theStruct){
 	    ProcessReference((handle(Object))(&current->theStruct));
 	  }
@@ -394,9 +394,11 @@ void DoIOACell(struct Object **theCell, struct Object *theObj)
   }
 #ifdef RTDEBUG
   else {
-    fprintf(output, 
-	    "DoIOACell: 0x%x: 0x%x is outside BETA heaps!\n", theCell, theObj);
-    Illegal();
+    if ((long)theObj!=CALLBACKMARK){
+      fprintf(output, 
+	      "DoIOACell: 0x%x: 0x%x is outside BETA heaps!\n", theCell, theObj);
+      Illegal();
+    }
   }
 #endif
 }
@@ -411,6 +413,14 @@ static void DoAOACell(struct Object **theCell, struct Object *theObj)
       ProcessAOAReference((handle(Object))theCell);
   }
 }
+
+#ifdef RTDEBUG
+static void CheckIOACell(struct Object **theCell, struct Object *theObj)
+{
+  if(inIOA(theObj) && isObject(theObj))
+    IOACheckReference(theCell);
+}
+#endif
 
 #endif /* NEWRUN */
 
@@ -1137,9 +1147,12 @@ void IOACheckObject (theObj)
 	      }
 	    }
 	  }
+#ifdef NEWRUN
+	  ProcessStackObject((struct StackObject *)theObj, CheckIOACell);
 #else
 	  fprintf(output, 
 		  "IOACheckObject: no check of stackobject 0x%x\n", theObj);
+#endif
 #endif
 	}
 	return;

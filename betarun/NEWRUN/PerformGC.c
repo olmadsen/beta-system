@@ -6,9 +6,9 @@
 #include "beta.h"
 #include "crun.h"
 
-void DoGC(long *SP, struct Object *this) /* The one called directly from betaenv */
+void DoGC(long *SP) /* The one called directly from betaenv */
 {
-  doGC(SP, this, 0);
+  doGC(SP, GetThis(SP), 0);
 }
 
 void doGC(long *SP, struct Object *this, unsigned long NumLongs) /* The one called from IOA(c)alloc */

@@ -23,10 +23,10 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
    SPy = (long)GetSP();
    if (ActiveComponent) {
      ActiveComponent->CallerLSC = RA;
-     comppush(SPy);
-     comppush(SPx);
+     comppush(SPy); /* fprintf(output, "comppush SPy: 0x%x\n", SPy); */
+     comppush(SPx); /* fprintf(output, "comppush SPx: 0x%x\n", SPx); */
    } else { 
-     DEBUG_CODE(printf("ActiveComponent == 0 \n"));
+     DEBUG_CODE(fprintf(output, "ActiveComponent == 0\n"); Illegal());
    };
    
    if ((long)comp->CallerLSC == -1) {
@@ -85,6 +85,7 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
    comp->StackObj   = 0;
    comp->CallerComp = 0;
    comp->CallerObj  = 0;
+   CompSP -= 2;
 
    /* we must return a proper a0 and a1, since th and SP are set after Att */
    CallBetaEntry(RA, SPx, this);

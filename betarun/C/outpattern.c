@@ -32,7 +32,6 @@
 #endif /* RTVALHALLA */
 
 static char *machine_name(void);
-static char *ProtoTypeName(struct ProtoType *theProto);
 
 long M_Part(ref(ProtoType) proto)
      /* Return the address og of the M-entry for the prototype proto.
@@ -176,7 +175,7 @@ return "(ppc)";
 
 /************************* ProtoTypeName **********************/
 
-static char *ProtoTypeName(struct ProtoType *theProto)
+char *ProtoTypeName(struct ProtoType *theProto)
 {
   ref(GCEntry) stat = cast(GCEntry) ((long) theProto + theProto->GCTabOff);
   ptr(short) dyn;

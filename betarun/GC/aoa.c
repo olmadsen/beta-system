@@ -11,6 +11,9 @@ static void FollowObject(Object * theObj);
 static void Phase1(void);
 static void Phase2(long *numAddr, long *sizeAddr, long *usedAddr);
 static void Phase3(void);
+#ifdef NEWRUN
+extern void DoGC(long *SP);
+#endif
 
 /* EXPORTING:
  *
@@ -28,19 +31,15 @@ static void Phase3(void);
 
 long AOACreateNewBlock = FALSE;
 
-/* AOAalloc allocate 'size' number of bytes in the Adult object area.
+/* AOAallocate allocate 'size' number of bytes in the Adult object area.
  * If the allocation succeeds the function returns a reference to the allocated
  * object, 0 otherwise.
- * The actual allocation depends on AOAState:
- *  == 0: Means allocate a new AOABlock and do the allocation inside that block.
- *  == 1: Means try to allocate the object inside the Block AOATopBlock refers.
- *  == 2: We are out of memory, so return 0.
  */
-struct Object *AOAalloc(long numbytes)
+static struct Object *AOAallocate(long numbytes)
 {
   ptr(long)  oldTop;
 
-  DEBUG_CODE( Claim(numbytes > 0, "AOAalloc: numbytes > 0") );
+  DEBUG_CODE( Claim(numbytes > 0, "AOAallocate: numbytes > 0") );
   /*DEBUG_AOA(if (AOATopBlock) 
 	    fprintf(output, "AOATopBlock 0x%x, diff 0x%X\n",
 		    AOATopBlock, (long)AOATopBlock->limit - (long)AOATopBlock->top));*/
@@ -113,9 +112,23 @@ struct Object *AOAalloc(long numbytes)
 }
 
 #ifdef NEWRUN
-struct Object *AOAcalloc(long numbytes)
+struct Object *AOAalloc(long numbytes, long *SP)
 {
-  struct Object *theObj = AOAalloc(numbytes);
+  struct Object *theObj = AOAallocate(numbytes);
+  if (!theObj){
+    /* AOAallocate failed. This means that AOANeedCompaction will be
+     * true now. Force an IOAGc.
+     */
+    DEBUG_AOA(fprintf(output, "AOAalloc: forcing IOAGc and AOAGc\n"));
+    DoGC(SP);
+    /* Try again */
+    theObj = AOAallocate(numbytes);
+  }
+  return theObj;
+}
+struct Object *AOAcalloc(long numbytes, long *SP)
+{
+  struct Object *theObj = AOAalloc(numbytes, SP);
   if (theObj) long_clear(theObj, numbytes);
   return theObj;
 }
@@ -134,7 +147,7 @@ ref(Object) CopyObjectToAOA( theObj)
   size = 4*ObjectSize( theObj); 
   DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "#ToAOA: ObjectSize(theObj) > 0") );
 
-  if( (newObj = AOAalloc( size)) == 0 ) return 0;
+  if( (newObj = AOAallocate( size)) == 0 ) return 0;
   
   theEnd = (ptr(long)) (((long) newObj) + size); 
   
@@ -148,9 +161,9 @@ ref(Object) CopyObjectToAOA( theObj)
   
   DEBUG_AOA( AOAcopied += size );
 
-  DEBUG_CODE(if(isStackObject(theObj)) 
-	     fprintf(output, 
-		     "CopyObjectToAOA: moved StackObject to 0x%x\n", newObj));
+  DEBUG_AOA(if(isStackObject(theObj)) 
+	    fprintf(output, 
+		    "CopyObjectToAOA: moved StackObject to 0x%x\n", newObj));
 
   /* DEBUG_AOA( fprintf(output, "#ToAOA: IOA-address: 0x%x AOA-address: 0x%x proto: 0x%x size: %d\n", 
 		     (int)theObj, (int)newObj, (int)(theObj->Proto), (int)size)); */

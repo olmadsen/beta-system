@@ -106,6 +106,13 @@ void ProcessRefStack(struct Object **topOfStack,
   }
 }
 
+#define TRACE_STACK() \
+DEBUG_STACK(fprintf(output, "New SP:     0x%x\n", SP));   \
+DEBUG_STACK(fprintf(output, "New PC:     0x%x\n", PC));   \
+DEBUG_STACK(fprintf(output, "New object: 0x%x", theObj)); \
+DEBUG_STACK(fprintf(output, " (proto: 0x%x)\n",           \
+		    (theObj&&((long)theObj!=CALLBACKMARK))?theObj->Proto:0))
+
 /* ProcessStackFrames:
  *  The main stack traversal routine.
  *  Scans through frames in stack part.
@@ -169,9 +176,7 @@ struct Object *ProcessStackFrames(long SP,
     /* Only top frame to process - can happen for stack objects */
     return theObj;
   }
-  DEBUG_STACK(fprintf(output, "New SP:     0x%x\n", SP));
-  DEBUG_STACK(fprintf(output, "New PC:     0x%x\n", PC));
-  DEBUG_STACK(fprintf(output, "New object: 0x%x (proto: 0x%x)\n", theObj, theObj?theObj->Proto:0));
+  TRACE_STACK();
 
   do {
 
@@ -199,9 +204,7 @@ struct Object *ProcessStackFrames(long SP,
 	ProcessRefStack((struct Object **)SP-2, func); /* -2: start at dyn */
 	PC = *((long*)SP-1);
 	theObj = *((struct Object **)SP-2); 
-	DEBUG_STACK(fprintf(output, "New SP:     0x%x\n", SP));
-	DEBUG_STACK(fprintf(output, "New PC:     0x%x\n", PC));
-	DEBUG_STACK(fprintf(output, "New object: 0x%x (proto: 0x%x)\n", theObj, theObj?theObj->Proto:0));
+	TRACE_STACK();
 	if (SP<StackStart) {
 	  continue; /* Restart do-loop */
 	} else {
@@ -252,14 +255,18 @@ struct Object *ProcessStackFrames(long SP,
       ProcessRefStack((struct Object **)SP-2, func); /* -2: start at dyn */
       PC = *((long*)SP-1);
       theObj = *((struct Object **)SP-2); 
-      DEBUG_STACK(fprintf(output, "New SP:     0x%x\n", SP));
-      DEBUG_STACK(fprintf(output, "New PC:     0x%x\n", PC));
-      DEBUG_STACK(fprintf(output, "New object: 0x%x (proto: 0x%x)\n", theObj, theObj?theObj->Proto:0));
+      TRACE_STACK();
       if (SP<StackStart) {
 	continue; /* Restart do-loop */
       } else {
 	break; /* Leave do-loop */
       }
+    }
+
+    /* Check for passing of a DoPart object */
+    if ((long)theObj->Proto == (long)DopartObjectPTValue) {
+      theObj = ((struct DopartObject *)theObj)->Origin;
+      continue;
     }
 
     /* Check for passing of a component.
@@ -312,9 +319,7 @@ struct Object *ProcessStackFrames(long SP,
       SP     = *--CSP; CSP--; /* count down one before reading and one after */
       PC     = (long)callerComp->CallerLSC;
       theObj = comp->CallerObj;
-      DEBUG_STACK(fprintf(output, "New SP:     0x%x\n", SP));
-      DEBUG_STACK(fprintf(output, "New PC:     0x%x\n", PC));
-      DEBUG_STACK(fprintf(output, "New object: 0x%x (proto: 0x%x)\n", theObj, theObj?theObj->Proto:0));
+      TRACE_STACK();
       if (SP<StackStart) {
 	continue; /* Restart do-loop */
       } else {
@@ -359,9 +364,7 @@ struct Object *ProcessStackFrames(long SP,
       theObj = *((struct Object **)SP-2); 
       /* RTS from the start of this frame gives PC */
       PC = *((long*)SP-1);
-      DEBUG_STACK(fprintf(output, "New SP:     0x%x\n", SP));
-      DEBUG_STACK(fprintf(output, "New PC:     0x%x\n", PC));
-      DEBUG_STACK(fprintf(output, "New object: 0x%x (proto: 0x%x)\n", theObj, theObj?theObj->Proto:0));
+      TRACE_STACK();
     }
 
     /* INVARIANT:

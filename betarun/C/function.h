@@ -36,6 +36,7 @@ extern void DumpIOA(void);
 #endif
 
 /* C/outpattern.c */
+extern char *ProtoTypeName(struct ProtoType *theProto);
 extern long M_Part(ref(ProtoType) proto);
 extern void  DisplayObject(ptr(FILE),ref(Object),long);
 extern char *ErrorMessage(long);
@@ -103,9 +104,9 @@ void AOAtoIOAReport(void);
 #endif
 
 /* GC/aoa.c */
-extern struct Object *AOAalloc(long numbytes);
 #ifdef NEWRUN
-extern struct Object *AOAcalloc(long numbytes);
+extern struct Object *AOAalloc(long numbytes, long *SP);
+extern struct Object *AOAcalloc(long numbytes, long *SP);
 #endif
 extern ref(Object) CopyObjectToAOA(ref(Object));
 extern void AOAGc(void);

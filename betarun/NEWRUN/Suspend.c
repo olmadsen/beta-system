@@ -79,8 +79,8 @@ void Susp(struct Object *this, long prevSP, long RA, long SPz)
     */
    Protect(this, sObj = AlloSO(SPy - SPz, (long *)prevSP));
 
-   comppop(SPx);
-   comppop(SPy);
+   comppop(SPx); /* fprintf(output, "comppop SPx: 0x%x\n", SPx); */
+   comppop(SPy); /* fprintf(output, "comppop SPy: 0x%x\n", SPy); */
    returnComp = ActiveComponent->CallerComp;
    returnObj  = ActiveComponent->CallerObj;
 

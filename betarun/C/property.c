@@ -54,6 +54,7 @@ static void BooleanProperty(char *name)
 
 #ifdef RTDEBUG
   ENTRY("debugioa",   DebugIOA = TRUE);
+  ENTRY("debugalloi",   DebugAlloI = TRUE);
   ENTRY("debugcbfa",  DebugCBFA = TRUE);
   ENTRY("debugaoa",   DebugAOA = TRUE);
   ENTRY("debuglvra",  DebugLVRA = TRUE);

@@ -72,15 +72,19 @@ void ExtVR(struct Object *theObj,
     /* Allocate and nullify new repetition: There is a little overhead here;
      * only extension needs to be nullified. TODO!
      */
+    push(theObj);
+    push(theRep);
     if (size>IOAMAXSIZE){
       DEBUG_AOA(fprintf(output, "ExtVR allocates in AOA\n"));
-      newRep = (struct ValRep *)AOAcalloc(size);
+      newRep = (struct ValRep *)AOAcalloc(size, SP);
       DEBUG_AOA(if (!newRep) fprintf(output, "AOAcalloc failed\n"));
     } 
     if (!newRep){
-      Protect2(theObj, theRep, newRep = (struct ValRep *)IOAcalloc(size, SP));
+      newRep = (struct ValRep *)IOAcalloc(size, SP);
       newRep->GCAttr = 1;
     }
+    pop(theRep);
+    pop(theObj);
     
     Ck(theObj); Ck(theRep);
     

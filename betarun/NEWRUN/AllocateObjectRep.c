@@ -30,15 +30,19 @@ void AlloORR(struct Object *origin,
    * the element references are allocated.
    */
   size = DynObjectRepSize(range);
+  push(theObj);
+  push(origin); 
   if (size>IOAMAXSIZE){
     DEBUG_AOA(fprintf(output, "AlloORR allocates in AOA\n"));
-    theRep = (struct ObjectRep *)AOAcalloc(size);
+    theRep = (struct ObjectRep *)AOAcalloc(size, SP);
     DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
   } 
   if (!theRep) {
-    Protect2(theObj, origin, theRep = (struct ObjectRep *)IOAcalloc(size, SP));
+    theRep = (struct ObjectRep *)IOAcalloc(size, SP);
     theRep->GCAttr = 1;
   }
+  pop(origin);
+  pop(theObj);
 
   Ck(theObj); Ck(origin); Ck(theRep);
 
@@ -82,15 +86,19 @@ void AlloORRC(struct Object *origin,
    * the element references are allocated.
    */
   size = DynObjectRepSize(range);
+  push(theObj);
+  push(origin); 
   if (size>IOAMAXSIZE){
     DEBUG_AOA(fprintf(output, "AlloORRC allocates in AOA\n"));
-    theRep = (struct ObjectRep *)AOAcalloc(size);
+    theRep = (struct ObjectRep *)AOAcalloc(size, SP);
     DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
   } 
   if (!theRep){
-    Protect2(theObj, origin, theRep = (struct ObjectRep *)IOAcalloc(size, SP));
+    theRep = (struct ObjectRep *)IOAcalloc(size, SP);
     theRep->GCAttr = 1;
   }
+  pop(origin);
+  pop(theObj);
 
   Ck(theObj); Ck(origin); Ck(theRep);
 

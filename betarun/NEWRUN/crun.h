@@ -65,7 +65,7 @@ extern void                 SetProtos(struct ProtoType *basic, struct ProtoType 
 
 /* Garbage collector interface */
 extern void                 doGC(long *SP, struct Object *this, unsigned long NumLongs); /* The one called from IOA(c)alloc */
-extern void 		    DoGC(long *SP, struct Object *this);                         /* The one called directly from betaenv */
+extern void 		    DoGC(long *SP); /* The one called directly from betaenv */
 
 #ifdef __GNUC__
 /* GCC supports inline functions.

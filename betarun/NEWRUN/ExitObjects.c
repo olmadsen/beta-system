@@ -41,6 +41,11 @@ long *ExO(long *jumpAdr,
       this = *((struct Object **)SP-2);       
       continue;
     }
+    /* Check for passing of a DoPart object */
+    if ((long)this->Proto == (long)DopartObjectPTValue) {
+      this = ((struct DopartObject *)this)->Origin;
+      continue;
+    }
     /* Check for passing of a component */
     if ((long)this->Proto == (long)ComponentPTValue) {
       struct Component *comp = (struct Component *)this;
@@ -55,6 +60,7 @@ long *ExO(long *jumpAdr,
       comp->StackObj   = 0;
       comp->CallerComp = 0;
       comp->CallerObj  = 0;
+      CompSP -= 2;
       continue;
     }
     /* Normal case: find stack frame size and continue */

@@ -87,7 +87,12 @@
 # define ByteRepSize(range)     ((ByteRepBodySize(range) + headsize(ValRep)+7) & ~7)
 # define WordRepSize(range)     ((WordRepBodySize(range) + headsize(ValRep)+7) & ~7)
 # define DoubleRepSize(range)   ((DoubleRepBodySize(range) + headsize(ValRep)+7) & ~7)
+#ifdef NEWRUN
+/* See Suspend.c: it is number of BYTES */
+# define StackObjectSize(size)  (((size) + headsize(StackObject) +7) & ~7)
+#else
 # define StackObjectSize(size)  ((4*(size) + headsize(StackObject) +7) & ~7)
+#endif
 # define DopartObjectSize(size) (((size) + headsize(DopartObject) +7) & ~7)
 #else
 # define StructureSize          headsize(Structure)
@@ -391,13 +396,16 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
   GenSP -= 2;
 
 #ifdef RTDEBUG
-#define zero_check(p, bytesize)                                        \
-{                                                                      \
-  register long i;                                                     \
-  if (bytesize&3)                                                      \
-    fprintf(output, "zero_check: bytesize&3 != 0\n");                  \
-  for (i = (long)(bytesize)/4-1; i >= 0; i--)                          \
-    if (*((long *)(p)+i) != 0) fprintf(output, "zero_check failed\n"); \
+#define zero_check(p, bytesize)                         \
+{                                                       \
+  register long i;                                      \
+  if (bytesize&3)                                       \
+    fprintf(output, "zero_check: bytesize&3 != 0\n");   \
+  for (i = (long)(bytesize)/4-1; i >= 0; i--)           \
+    if (*((long *)(p)+i) != 0) {                        \
+      fprintf(output, "zero_check failed\n");           \
+      Illegal();                                        \
+    }                                                   \
 }
 #endif
 

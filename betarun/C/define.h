@@ -86,6 +86,7 @@
 
 #ifdef RTDEBUG
 #  define DEBUG_IOA( code)  if( DebugIOA )  { code; }
+#  define DEBUG_ALLOI( code)  if( DebugAlloI )  { code; }
 #  define DEBUG_CBFA( code) if( DebugCBFA )  { code; }
 #  define DEBUG_AOA( code)  if( DebugAOA )  { code; }
 #  define DEBUG_LVRA( code) if( DebugLVRA ) { code; }
@@ -94,6 +95,7 @@
 #  define DEBUG_VALHALLA( code) if( DebugValhalla ) { code; }
 #else
 #  define DEBUG_IOA( code)
+#  define DEBUG_ALLOI( code)
 #  define DEBUG_CBFA( code)
 #  define DEBUG_AOA( code)
 #  define DEBUG_LVRA( code)
