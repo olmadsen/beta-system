@@ -7,23 +7,15 @@
 #include "beta.h"
 #include "crun.h"
 
-asmlabel(ExitO, "
-	mov	%i1, %o0
-	mov	%i2, %o1
-	ba	"CPREF"ExitO
-	mov	%i0, %o2
-");
-
 asmlabel(ExO, "
-        mov     %i1, %o0
-        mov     %i2, %o1
+        mov     %i1, %o1
         ba       "CPREF"ExitO
         mov     %i0, %o2
 ");
 /* Note: The offset parameter is complely ignored. It's not needed
    on the SPARC */
 
-void CExitO(ref(Object) exitObj, long exitAddr, ref(Object) theObj)
+void CExitO(long exitAddr, ref(Object) exitObj, ref(Object) theObj)
 {
     ref(Component) theComp;
     ref(RegWin) rw; /* Callers Register Window */
