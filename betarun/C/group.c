@@ -11,12 +11,6 @@
 #include <Files.h>
 #endif
 
-#if 0
-#define TRACE_GROUP(code) code; fflush(output) /* Trace GroupName() */
-#else
-#define TRACE_GROUP(code)
-#endif
-
 /********* Fragment group support via BETA_DATA *******/
 
 /*
@@ -59,7 +53,7 @@ extern group_header *BETA_DATA; /* Defined in BETA */
  */
 group_header* NextGroup (group_header* current)
 { group_header **ptr;
-  TRACE_GROUP(fprintf (output, "NextGroup(0x%x)\n", (long)current));
+  TRACE_GROUP(fprintf (output, "NextGroup(0x%x)\n", (int)current));
   if (current) {
     /* Get ptr from current (stored by previous NextGroup) and increment */
     ptr = current->ptr+1;
@@ -67,13 +61,13 @@ group_header* NextGroup (group_header* current)
     /* Start from betaenv */
     ptr = &BETA_DATA;
   }
-  TRACE_GROUP(fprintf (output, "NextGroup: ptr=0x%x\n", (long)ptr));
+  TRACE_GROUP(fprintf (output, "NextGroup: ptr=0x%x\n", (int)ptr));
   if (!ptr) {
     TRACE_GROUP(fprintf (output, "NextGroup returns 0\n"));
     return 0;
   }
   current = *ptr;
-  TRACE_GROUP(fprintf (output, "NextGroup: current = 0x%x\n", (long)current));
+  TRACE_GROUP(fprintf (output, "NextGroup: current = 0x%x\n", (int)current));
 
   if (!current){
     /* met 1 NULL - try next too */
@@ -155,10 +149,10 @@ int IsPrototypeOfGroup(group_header *gh, long data_addr)
   NoOfPrototypes = gh->protoTable[0];
   TRACE_GROUP(fprintf(output, 
 		      ">>>IsPrototypeOfGroup(group=0x%x, addr=0x%x)\n",
-		      gh,
-		      data_addr));
+		      (int)gh,
+		      (int)data_addr));
   for (i=0; i<NoOfPrototypes; i++){
-    TRACE_GROUP(fprintf(output,">>>IsPrototypeOfGroup: Try 0x%x\n", *proto));
+    TRACE_GROUP(fprintf(output,">>>IsPrototypeOfGroup: Try 0x%x\n", (int)*proto));
     if ((*proto)==data_addr){
       return 1;
     } else {

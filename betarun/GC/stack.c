@@ -733,10 +733,10 @@ static long skipCparams;
 /* #define SPARC_SKIP_TO_ETEXT 1*/
 
 #ifdef RTDEBUG
-struct RegWin *BottomAR=0, *lastAR=0;
+RegWin *BottomAR=0, *lastAR=0;
 GLOBAL(long PC) = 0;
-void PrintAR(struct RegWin *ar, struct RegWin *theEnd);
-void PrintCAR(struct RegWin *cAR);
+void PrintAR(RegWin *ar, RegWin *theEnd);
+void PrintCAR(RegWin *cAR);
 #endif
 
 static __inline__ void ProcessReg(long *addr, char *desc, CellProcessFunc func)
@@ -753,7 +753,7 @@ static __inline__ void ProcessReg(long *addr, char *desc, CellProcessFunc func)
    Notice theEnd is *not* included
    */
 
-void ProcessAR(struct RegWin *ar, struct RegWin *theEnd, CellProcessFunc func)
+void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
 {
     Object **theCell = (Object **) &ar[1];
     
@@ -815,9 +815,9 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd, CellProcessFunc func)
 
 void ProcessStack()
 {
-    struct RegWin *theAR;
-    struct RegWin *nextCBF = (struct RegWin *) ActiveCallBackFrame;
-    struct RegWin *nextCompBlock = (struct RegWin *) lastCompBlock;
+    RegWin *theAR;
+    RegWin *nextCBF = (RegWin *) ActiveCallBackFrame;
+    RegWin *nextCompBlock = (RegWin *) lastCompBlock;
     
     /* Flush register windows to stack */
     __asm__("ta 3");
@@ -832,36 +832,36 @@ void ProcessStack()
     /* StackEnd points to the activation record of doGC, which in turn was called
      * from either DoGC, or IOA(c)alloc.
      */
-    DEBUG_CODE( PC=((struct RegWin *) StackEnd)->i7 +8);
-    StackEnd = (long *)((struct RegWin *) StackEnd)->fp; /* Skip AR of doGC() */
+    DEBUG_CODE( PC=((RegWin *) StackEnd)->i7 +8);
+    StackEnd = (long *)((RegWin *) StackEnd)->fp; /* Skip AR of doGC() */
 
 #if 0
     /* IOA(c)alloc now inlined! */
-    StackEnd = (long *)((struct RegWin *) StackEnd)->fp
+    StackEnd = (long *)((RegWin *) StackEnd)->fp
       /* Skip AR of IOA(c)alloc / DoGC() / lazyFetchIOAGc() */;
 #endif
 
-    for (theAR =  (struct RegWin *) StackEnd;
-	 theAR != (struct RegWin *) 0;
+    for (theAR =  (RegWin *) StackEnd;
+	 theAR != (RegWin *) 0;
 #ifdef RTDEBUG
 	 PC = theAR->i7 +8,
 #endif
-	   theAR = (struct RegWin *) theAR->fp) {
+	   theAR = (RegWin *) theAR->fp) {
       
       if (theAR == nextCompBlock) {
 	/* This is the AR of attach. Continue GC, but get
 	 * new values for nextCompBlock and nextCBF. 
 	 * Please read StackLayout.doc
 	 */
-	nextCBF = (struct RegWin *) theAR->l5;
-	nextCompBlock = (struct RegWin *) theAR->l6;
+	nextCBF = (RegWin *) theAR->l5;
+	nextCompBlock = (RegWin *) theAR->l6;
 	if (nextCompBlock == 0)
 	  break; /* we reached the bottom */
       } else {
 	if (theAR == nextCBF) {
 	  /* This is AR of HandleCB. Don't GC this, but
 	   * skip to betaTop and update nextCBF */
-	  nextCBF = (struct RegWin *) theAR->l5;
+	  nextCBF = (RegWin *) theAR->l5;
 	  DEBUG_STACK({ 
 	    fprintf(output, "Met frame of HandleCB at SP=0x%x.\n",(int)theAR);
 	    if (valhallaID){
@@ -869,12 +869,12 @@ void ProcessStack()
 	      fprintf(output, "Skipping directly to SP=0x%x.\n", (int)theAR->l6);
 	    } else {
 	      /* Wind down the stack until betaTop is reached */
-	      struct RegWin *cAR;
+	      RegWin *cAR;
 	      fprintf(output, "Winding down to frame with %%fp=0x%x",(int)theAR->l6);
 	      fprintf(output, " (BetaStackTop)\n");
 	      for (cAR = theAR;
-		   cAR != (struct RegWin *) theAR->l6;
-		   PC = cAR->i7 +8, cAR = (struct RegWin *) cAR->fp){
+		   cAR != (RegWin *) theAR->l6;
+		   PC = cAR->i7 +8, cAR = (RegWin *) cAR->fp){
 		if (!cAR) {
 		  fprintf(output, "ProcessStack: gone past _start - exiting...!\n");
 		  Illegal();
@@ -885,12 +885,12 @@ void ProcessStack()
 	    }
 	  });
 	  
-	  theAR = (struct RegWin *) theAR->l6; /* Skip to betaTop */
+	  theAR = (RegWin *) theAR->l6; /* Skip to betaTop */
 	  
 	  skipCparams = TRUE;
 	}
       }
-      ProcessAR(theAR, (struct RegWin *) theAR->fp, DoStackCell);
+      ProcessAR(theAR, (RegWin *) theAR->fp, DoStackCell);
       CompleteScavenging();
       skipCparams=FALSE;
       DEBUG_CODE(lastAR = theAR);
@@ -909,7 +909,7 @@ GLOBAL(long lastPC)=0;
 
 void ProcessStackObj(StackObject *theStack, CellProcessFunc func)
 {
-    struct RegWin *theAR;
+    RegWin *theAR;
     long delta;
 #ifdef RTDEBUG
     long oldDebugStack=DebugStack;
@@ -935,17 +935,17 @@ void ProcessStackObj(StackObject *theStack, CellProcessFunc func)
       DebugStack=FALSE;
     });
 
-    for (theAR =  (struct RegWin *) &theStack->Body[1];
-	 theAR != (struct RegWin *) &theStack->Body[theStack->StackSize];
+    for (theAR =  (RegWin *) &theStack->Body[1];
+	 theAR != (RegWin *) &theStack->Body[theStack->StackSize];
 #ifdef RTDEBUG
 	 PC = theAR->i7 +8, 
 #endif
-	   theAR =  (struct RegWin *) (theAR->fp + delta))
+	   theAR =  (RegWin *) (theAR->fp + delta))
       {
 	Claim(&theStack->Body[1] <= (long *) theAR
 	      && (long *) theAR <= &theStack->Body[theStack->StackSize],
 	      "ProcessStackObj: theAR in StackObject");
-	ProcessAR(theAR, (struct RegWin *) (theAR->fp + delta), func);
+	ProcessAR(theAR, (RegWin *) (theAR->fp + delta), func);
       }
 
     DEBUG_STACKOBJ(fprintf(output, " *-*-* End StackObject *-*-*\n");
@@ -1278,7 +1278,7 @@ void PrintStack(long *StackEnd)
 
 #ifdef sparc
 
-void PrintCAR(struct RegWin *cAR)
+void PrintCAR(RegWin *cAR)
 {
   char *lab = getLabel(PC);
   fprintf(output, 
@@ -1291,7 +1291,7 @@ void PrintCAR(struct RegWin *cAR)
   fprintf(output, "%%fp: 0x%x\n", (int)cAR->fp); 
 }
 
-void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
+void PrintAR(RegWin *ar, RegWin *theEnd)
 {
   Object **theCell = (Object **) &ar[1];
   char *lab = getLabel(PC);
@@ -1366,33 +1366,33 @@ void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
  */
 void PrintStack()
 {
-  struct RegWin *theAR;
-  struct RegWin *nextCBF = (struct RegWin *) ActiveCallBackFrame;
-  struct RegWin *nextCompBlock = (struct RegWin *) lastCompBlock;
-  struct RegWin *end;
+  RegWin *theAR;
+  RegWin *nextCBF = (RegWin *) ActiveCallBackFrame;
+  RegWin *nextCompBlock = (RegWin *) lastCompBlock;
+  RegWin *end;
   
   /* Flush register windows to stack */
   __asm__("ta 3");
   
   fprintf(output, "\n ***** PrintStack: Trace of stack *****\n");
   
-  end  = (struct RegWin *)StackPointer;
+  end  = (RegWin *)StackPointer;
   /* end points to the activation record of PrintStack() */
-  PC=((struct RegWin *) end)->i7 +8;
-  end = (struct RegWin *)((struct RegWin *) end)->fp; /* Skip AR of PrintStack() */
+  PC=((RegWin *) end)->i7 +8;
+  end = (RegWin *)((RegWin *) end)->fp; /* Skip AR of PrintStack() */
 
   skipCparams = TRUE; /* Skip 12 longs allocated for the call to PrintStack() */
 
-  for (theAR =  (struct RegWin *) end;
-       theAR != (struct RegWin *) 0;
-       PC = theAR->i7 +8, theAR = (struct RegWin *) theAR->fp) {
+  for (theAR =  (RegWin *) end;
+       theAR != (RegWin *) 0;
+       PC = theAR->i7 +8, theAR = (RegWin *) theAR->fp) {
     if (theAR == nextCompBlock) {
       /* This is the AR of attach. Continue, but get
        * new values for nextCompBlock and nextCBF. 
        * Please read StackLayout.doc
        */
-      nextCBF = (struct RegWin *) theAR->l5;
-      nextCompBlock = (struct RegWin *) theAR->l6;
+      nextCBF = (RegWin *) theAR->l5;
+      nextCompBlock = (RegWin *) theAR->l6;
       if (nextCompBlock == 0)
 	break; /* we reached the bottom */
     } else {
@@ -1400,21 +1400,21 @@ void PrintStack()
 	/* This is AR of HandleCB. Skip this and
 	 * skip to betaTop and update nextCBF
 	 */
-	    nextCBF = (struct RegWin *) theAR->l5;
+	    nextCBF = (RegWin *) theAR->l5;
 
 	    DEBUG_STACK({ /* Wind down the stack until betaTop is reached */
-			  struct RegWin *cAR;
+			  RegWin *cAR;
 			  for (cAR = theAR;
-			       cAR != (struct RegWin *) theAR->l6;
-			       PC = cAR->i7 +8, cAR = (struct RegWin *) cAR->fp)
+			       cAR != (RegWin *) theAR->l6;
+			       PC = cAR->i7 +8, cAR = (RegWin *) cAR->fp)
 			    PrintCAR(cAR);
 			});
 
-	    theAR = (struct RegWin *) theAR->l6; /* Skip to betaTop */
+	    theAR = (RegWin *) theAR->l6; /* Skip to betaTop */
 	    skipCparams=TRUE;
       }
     }
-    PrintAR(theAR, (struct RegWin *) theAR->fp);
+    PrintAR(theAR, (RegWin *) theAR->fp);
     skipCparams=FALSE;
   }
    

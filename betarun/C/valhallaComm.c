@@ -24,7 +24,6 @@ extern int doshutdown(int fd, int how);
 #endif /* nti */
 
 #ifdef UNIX
-#include <dlfcn.h>
 static void *self=0;
 #endif /* UNIX */
 
@@ -795,7 +794,7 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
 #if defined(sun4s) /* || defined(linux) - only in GNU libs 2 */
       /* Not available for sgi - grrrr... */
       {
-	Dl_info info;
+	static Dl_info info;
 	if (dladdr((void*)addr, &info)){
 	  sym = info.dli_sname;
 	  off = (long)addr - (long)info.dli_saddr;

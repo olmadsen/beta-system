@@ -330,7 +330,7 @@ static void ObjectDescription(Object *obj,
       case SwitchProto(RefRepPTValue):
 	/* This is an error */
 	fprintf(output,
-		"    -- Surrounding object (0x%x) damaged %s!\n",
+		"    -- Illegal surrounding object (0x%x) %s!\n",
 		(int)staticObj,
 		ProtoTypeName(staticObj->Proto));
 	return;
@@ -600,13 +600,54 @@ static void DisplayStackPart(FILE *output,
 /************* support routines for SPARC ***************/
 
 #ifdef sparc
-void
-  DisplayAR(FILE *output, struct RegWin *theAR, long *PC)
+void DisplayAR(FILE *output, RegWin *theAR, long PC)
 {
-  Object *theObj = (Object *) theAR->i0;
-  
-  if ((inIOA(theObj) || inAOA(theObj)) && isObject(theObj))
-    DisplayObject(output, theObj, (long)PC);
+  Object *theObj /* used for attempts to find objects */; 
+  Object *lastObj /* used for last successfully identified object */;
+  long* this, *end;
+
+  /* First handle current object in this frame */
+  lastObj  = (Object *) theAR->i0;
+  if (inBetaHeap(lastObj) && isObject(lastObj)){
+    if (IsComponentItem(lastObj)){
+      lastObj = (Object*)EnclosingComponent(lastObj);
+    } 
+    DisplayObject(output, lastObj, PC);
+  }
+
+  /* Then handle possible pushed PCs (%o7s) in the
+   * stackpart (INNER call chains).
+   * In case of INNER P, the previous current object has been
+   * pushed before the code address.
+   */
+  this = (long *) (((long) theAR)+sizeof(RegWin));
+  end = (long *) (((long) theAR->fp)-4);
+  while (this<=end) {
+    PC = this[0];
+    if (isCode(PC)) {
+      /* isCode is a real macro on sparc. So now we know that
+       * a code address has been pushes in the stack part.
+       * Add 8 to get the real SPARC return address.
+       */
+      PC+=8;
+      /* See if the next on the stack is an object (in case of INNER P) */
+      theObj = (Object *) this[2];
+      if (inBetaHeap(theObj) && isObject(theObj)) {
+	/* It was an object - it was an INNER P */
+	if (IsComponentItem(theObj)){
+	  lastObj = (Object*)EnclosingComponent(theObj);
+	} 
+	DisplayObject(output, lastObj, PC);
+	this+=2; /* Skip the object */
+      } else {
+	/* No Object below the code. Display with the previous
+	 * found object.
+	 */
+	DisplayObject(output, lastObj, PC);
+      }
+    }
+    this+=2;
+  }
 }
 #endif /* sparc */
 
@@ -1067,56 +1108,77 @@ int DisplayBetaStack(BetaErr errorNumber,
    * This is the SPARC specifics of DisplayBetaStack
    */
   {
-    struct RegWin *theAR;
-    struct RegWin *nextCBF = (struct RegWin *) ActiveCallBackFrame;
-    struct RegWin *nextCompBlock = (struct RegWin *) lastCompBlock;
+    RegWin *theAR;
+    RegWin *nextCBF = (RegWin *) ActiveCallBackFrame;
+    RegWin *nextCompBlock = (RegWin *) lastCompBlock;
     long   *PC=thePC;
     
     /* Flush register windows to stack */
     __asm__("ta 3");
     
-    for (theAR =  (struct RegWin *) StackEnd;
-	 theAR != (struct RegWin *) 0;
-	 PC = (long*)theAR->i7, theAR =  (struct RegWin *) theAR->fp) {
+    for (theAR =  (RegWin *) StackEnd;
+	 theAR != (RegWin *) 0;
+	 PC = (long*)theAR->i7, theAR =  (RegWin *) theAR->fp) {
+      /* PC is execution point in THIS frame. The update of PC
+       * in the for-loop is not done until it is restarted.
+       */
+      if (theAR->fp == (long)nextCBF) {
+	/* This is AR of the code stub (e.g. <foo>) called from HandleCB. 
+	 * Don't display objects in this, but skip to betaTop and update 
+	 * nextCBF 
+	 */
+	RegWin *cAR;
+
+	TRACE_DUMP(fprintf(output, "  cb: "));
+	fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n");
+	/* Wind down the stack until betaTop is reached.
+	 * This is only done to update PC in order to get the PC
+	 * for the first frame before the callback.
+	 */
+	TRACE_DUMP(fprintf(output, 
+			   "  Winding back to 0x%x", 
+			   (int)((RegWin *)theAR->fp)->l6
+			   ));
+	for (cAR = theAR;
+	     cAR != (RegWin *)((RegWin *)theAR->fp)->l6;
+	     PC = (long *)cAR->i7, cAR = (RegWin *) cAR->fp){
+	  DEBUG_CODE({
+	    fprintf(output, "    [");
+	    PrintCodeAddress((int)PC);
+	    fprintf(output, " ]\n");
+	  });
+	};
+	nextCBF = (RegWin*) ((RegWin*)(theAR->fp))->l5;
+	theAR   = (RegWin*) ((RegWin*)(theAR->fp))->l6;
+	TRACE_DUMP(fprintf(output, "  Winding done."));
+      }
       if (theAR == nextCompBlock) {
 	/* This is the AR of attach. Continue, but get
 	 * new values for nextCompBlock and nextCBF. 
 	 * Please read StackLayout.doc
 	 */
+	nextCBF = (RegWin *) theAR->l5;
+	nextCompBlock = (RegWin *) theAR->l6;
 	
-	nextCBF = (struct RegWin *) theAR->l5;
-	nextCompBlock = (struct RegWin *) theAR->l6;
+	if (nextCompBlock == 0){ 
+	  /* We reached the bottom */
+	  TRACE_DUMP({
+	    fprintf(output, 
+		    ">>>TraceDump: reached frame of AttBC at SP=0x%x\n", 
+		    (int)theAR);
+	  });
+	  break;
+	}
 	
-	if (nextCompBlock == 0)
-	  { /* We reached the bottom */
-	    DisplayObject(output, (Object *)theAR->i1, 0 /*PC*/); /* AttBC */
-	    fprintf(output, "\n"); fflush(output);
-	    break;
-	  }
-	
-	DisplayObject(output, (Object *) theAR->i0, 0 /*PC*/); /* Att */
-	
+	TRACE_DUMP({
+	  fprintf(output, 
+		  ">>>TraceDump: reached frame of Att at SP=0x%x\n", 
+		  (int)theAR);
+	});
 	continue;
-      }
-      else if (theAR == nextCBF) {
-	/* This is AR of HandleCB. Don't display objects in this, but
-	 * skip to betaTop and update nextCBF */
-	struct RegWin *cAR;
-
-	TRACE_DUMP(fprintf(output, "  cb: "));
-	fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n");
-	
-	/* Wind down the stack until betaTop is reached.
-	 * This is only done to update PC.
-	 */
-	for (cAR = theAR;
-	     cAR != (struct RegWin *) theAR->l6;
-	     PC = (long *)cAR->i7, cAR = (struct RegWin *) cAR->fp);
-	nextCBF = (struct RegWin *) theAR->l5;
-	theAR = (struct RegWin *) theAR->l6;
-      }
-      if (theAR->fp != (long) nextCompBlock)
-	DisplayAR(output, theAR, PC);
+      } 
+      /* Normal frame */
+      DisplayAR(output, theAR, (long)PC);
     }
   }
 #endif

@@ -22,7 +22,7 @@ asmlabel(ExO,
 void CExitO(long exitAddr, Object * exitObj, Object * theObj)
 {
   Component * theComp;
-  struct RegWin * rw;		/* Callers Register Window */
+  RegWin * rw;		/* Callers Register Window */
 
   GCable_Entry();
 
@@ -38,7 +38,7 @@ void CExitO(long exitAddr, Object * exitObj, Object * theObj)
 
   /* We need to read the stack, thus this trap to flush regwins */
   __asm__("ta 3");
-  rw = (struct RegWin *) FramePointer;
+  rw = (RegWin *) FramePointer;
 
   if (theObj == exitObj)
     return;			/* to exitAddr */
@@ -48,7 +48,7 @@ void CExitO(long exitAddr, Object * exitObj, Object * theObj)
     if ((CallBackFrame *)rw == ActiveCallBackFrame){
       /* This is AR of HandleCB. Update ActiveCallBackFrame.   */
       ActiveCallBackFrame = (CallBackFrame *)  rw->l5;
-      rw = (struct RegWin *)rw->l6 /* skip to betaTop */;
+      rw = (RegWin *)rw->l6 /* skip to betaTop */;
 #ifdef RTDEBUG
       fprintf(output, "RTS: Leaving callback.\n");
 #endif
@@ -69,12 +69,12 @@ void CExitO(long exitAddr, Object * exitObj, Object * theObj)
 	theComp->StackObj = 0;
 	
 	/* Pop the Component Block */
-	rw = (struct RegWin *) rw->fp;	/* RegWin of CAttach */
+	rw = (RegWin *) rw->fp;	/* RegWin of CAttach */
 	ActiveCallBackFrame = (CallBackFrame *)  rw->l5;
 	lastCompBlock       = (ComponentBlock *) rw->l6;
       } 
       /* go one step back */
-      rw = (struct RegWin *) rw->fp;
+      rw = (RegWin *) rw->fp;
 #ifdef FISKEMAND
     }
 #endif

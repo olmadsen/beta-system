@@ -848,6 +848,16 @@ char *getLabel (long addr)
       }
     }
   }
+#ifdef sparc /* also possible on linux, libc 2 */
+  /* Fall back on dladdr (for dynamic symbols not found by nm) */
+  {
+    static Dl_info info;
+    if (dladdr((void*)addr, &info)){
+      labelOffset = (long)addr - (long)info.dli_saddr;
+      return((char*)info.dli_sname);
+    }
+  }
+#endif /* sparc */
   labelOffset=0;
   return "<unknown>";
 }

@@ -134,9 +134,9 @@ void BetaError(BetaErr err, Object *theObj)
 #ifdef sparc
       __asm__("ta 3");
 #ifndef MT
-      StackEnd = (long *) ((struct RegWin *)FramePointer)->fp;
+      StackEnd = (long *) ((RegWin *)FramePointer)->fp;
 #endif /* MT */
-      thePC = (long *) ((struct RegWin *)FramePointer)->i7;
+      thePC = (long *) ((RegWin *)FramePointer)->i7;
       DEBUG_CODE(fprintf(output, "          StackEnd=0x%x,\n", (int)StackEnd));
       DEBUG_CODE(fprintf(output, "          thePC=0x%x", (int)thePC));
       DEBUG_CODE(PrintCodeAddress((long)thePC));

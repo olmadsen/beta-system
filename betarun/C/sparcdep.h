@@ -9,10 +9,10 @@
 #ifndef _SPARC_H_
 #define _SPARC_H_ 1
 
-struct RegWin {
+typedef struct _RegWin {
     long l0, l1, l2, l3, l4, l5, l6, l7;
     long i0, i1, i2, i3, i4, i5, fp, i7;
-};
+} RegWin;
 
 #ifdef sun4s
 #define CPREF "C"

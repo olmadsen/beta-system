@@ -26,12 +26,12 @@
 ParamThisComp(Component *, Att)
 {
   long * entryAdr;
-  register CallBackFrame *  callBackFrame __asm__("%l5");
-  register long              * nextCompBlock __asm__("%l6");
-  register long                level         __asm__("%l7");
+  register CallBackFrame *callBackFrame __asm__("%l5");
+  register long          *nextCompBlock __asm__("%l6");
+  register long           level         __asm__("%l7");
   long first = comp->CallerLSC == 0;
   
-  register long              * tmp __asm__("%i1") 
+  register long          *tmp __asm__("%i1") 
     /* Needed for lastCompBlock assignment */;
   
   GCable_Entry();
@@ -155,7 +155,7 @@ ParamThisComp(Component *, Att)
     char *dest;
     StackObject * theStackObj = ActiveComponent->StackObj;
     long size = theStackObj->StackSize * 4 - 4;
-    struct RegWin * rw;
+    RegWin * rw;
     
     /* Fool gcc into believing that %i1 is used */
     __asm__(""::"r" (tmp));
@@ -166,12 +166,12 @@ ParamThisComp(Component *, Att)
     
     /* Now correct all frame pointers in the restored stackpart */
     delta = dest - (char *)theStackObj->Body[0];
-    rw = (struct RegWin *) dest;
+    rw = (RegWin *) dest;
     while ((long *)rw < FramePointer) {
       if ((rw->fp += delta) == (long)FramePointer) {
 	goto ok;
       }
-      rw = (struct RegWin *) rw->fp;
+      rw = (RegWin *) rw->fp;
     }
 #ifdef RTDEBUG
     fprintf(stderr, "Upps, stack handling gone crazy\n");

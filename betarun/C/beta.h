@@ -27,6 +27,10 @@
 # include <stdlib.h>
 #endif
 
+#ifdef UNIX
+#include <dlfcn.h>
+#endif /* UNIX */
+
 #ifdef RTVALHALLA
 #include <string.h>
 #endif

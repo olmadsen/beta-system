@@ -17,7 +17,7 @@
 #ifdef sparc
 ParamThis(Component *, Susp)
 {
-  struct RegWin * rw; 	/* Pointer to the saved reg.window of last frame */
+  RegWin * rw; 	/* Pointer to the saved reg.window of last frame */
   Component * caller;
   Component * called;
   long Size;
@@ -61,7 +61,7 @@ ParamThis(Component *, Susp)
   
   /* Add one for the 'orig start' */
   __asm__("ta 3");
-  Size = (long *) ((struct RegWin *)lastCompBlock)->fp - FramePointer + 1;
+  Size = (long *) ((RegWin *)lastCompBlock)->fp - FramePointer + 1;
 
   theStackObj = ActiveComponent->StackObj;
   if ((long)theStackObj == 0
@@ -82,7 +82,7 @@ ParamThis(Component *, Susp)
     /* Then leave the program a nice way. */
     BetaExit(0);
   
-  rw = (struct RegWin *) lastCompBlock;
+  rw = (RegWin *) lastCompBlock;
   ActiveCallBackFrame = (CallBackFrame *) rw->l5;
   lastCompBlock = (ComponentBlock *) rw->l6;	/* See AttachBasic...*/
   FramePointer = (long *) rw->fp;
