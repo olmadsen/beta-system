@@ -534,7 +534,6 @@ void PrintWhichHeap(Object *ref)
       fprintf(output, " (NONE)");
     }
   }
-  fprintf(output, "\n");
 }
 
 void PrintHeap(long * startaddr, long numlongs)
@@ -563,6 +562,7 @@ void PrintHeap(long * startaddr, long numlongs)
 	    (int)(*(startaddr+i)));
     ref=(Object *)(*(startaddr+i));
     PrintWhichHeap(ref);
+    fprintf(output, "\n");
   }
   fprintf(output, "\n");
 

@@ -14,120 +14,106 @@
 
 #ifdef RTDEBUG
 
-#if 0
-#define DEBUG_LABELS 1
-#endif
+#undef DEBUG_LABELS 
 
-#ifdef nti
-#define getLabel(ref) "<unknown>"
-#define labelOffset 0
-#endif
-
-#if defined(sparc) || defined(linux)
-
-struct label {
+typedef struct _label {
   long address;
   char *id;
-};
+} label;
 
 GLOBAL(long labelOffset) = 0;
-GLOBAL(struct label **labels) = 0;
+GLOBAL(label **labels) = 0;
 GLOBAL(long numLabels) = 0;
+GLOBAL(long maxLabels) = 1000;
+#ifdef nti
+GLOBAL(long process_offset) = 0;
+#endif
 
 static void initLabels()
 {
-  char ch;
-  char command[200];
-  char theLabel[200];
-  FILE *thePipe; 
+  char exefilename[500];
+  char *theLabel;
+  labeltable *table;
+  long lastLab=0;
   long labelAddress;
 
   fprintf(output, "[initLabels ... ");
   fflush(output);
-
-#ifdef sun4s
-  (void)sprintf(command,"nm -hxp %s | egrep -v '( f | s | S | b | B )' | sort -r", ArgVector[0]);
+  sprintf(exefilename,"%s", ArgVector[0]);
+#ifdef nti
+  if ((strlen(exefilename)<=4) || 
+      (strncasecmp(&exefilename[0]+strlen(exefilename), ".exe", 4)!=0)){
+    strcat(exefilename, ".exe");
+  }
 #endif
-#ifdef linux
-  (void)sprintf(command,"nm -Bv %s | egrep -v '( f | s | S | b | B | U )' | sort -r", ArgVector[0]);
+  table = initReadNameTable(exefilename, 1);
+  if (!table){
+    fprintf(output, "FAILED!]");
+    fflush(output);
+    return;
+  }
+#ifdef nti
+  {
+    extern void main();
+    process_offset = getProcessOffset((long)&main);
+  }
 #endif
-
+  labels=(label**)MALLOC(maxLabels * sizeof(label*));
+  if (!labels) {
+    fprintf(output, "Failed to allocate memory for labels\n");
+    labels = 0; 
+  }
+  INFO_ALLOC(maxLabels * sizeof(label *));
+  /* Read labels */
+  for (;;lastLab++){
+    label *lab;
+    lab = (label *) MALLOC(sizeof(label));
+    if (!lab){
+      fprintf(output, "Allocation of label failed\n");
+      /* free previously allocated labels */
+      FREE(labels);
+      labels = 0;
+      break;
+    }
+    INFO_ALLOC(sizeof(label));
+    labelAddress = nextAddress(table);
+    if (labelAddress==-1){
+      /* Termination condition reached */
+      break;
+    }
+    theLabel = nextLabel(table);
+#if 0
 #ifdef DEBUG_LABELS
-  fprintf(output, "\n%s:\n", command);
-#endif
-
-  /* Find number of labels */
-  thePipe = popen (command, "r");
-
-  numLabels=0;
-  for (;;){
-    if (
-#ifdef sparc
-	fscanf(thePipe, "0x%08x %c %s\n", (int *)&labelAddress, &ch, theLabel)
-#else
-	fscanf(thePipe, "%08x %c %s\n", (int*)&labelAddress, &ch, theLabel)
-#endif
-	== EOF) break;
-    numLabels++;
-#ifdef DEBUG_LABELS
-    fprintf(output, "0x%08x %c %s\n",  (unsigned)labelAddress, ch, theLabel);
+    fprintf(output, "0x%08x %s\n",  (unsigned)labelAddress, theLabel);
     fflush(output);
 #endif
-  }
-
-  if (! (labels=(struct label **)MALLOC(numLabels * sizeof(struct label *)))) {
-    fprintf(output, "Failed to allocate memory for labels\n");
-    numLabels = -1;
-    labels = 0;
-  } else {
-    long lastLab=0;
-    INFO_ALLOC(numLabels * sizeof(struct label *));
-
-      /* Read into labels */
-      pclose (thePipe);
-      thePipe = popen (command, "r");
-      /* Read labels */
-      for (;;lastLab++){
-	struct label *lab;
-	if (
-#ifdef sparc
-	    fscanf(thePipe, "0x%08x %c %s\n", (int *)&labelAddress, &ch, theLabel)
-#else
-	    fscanf(thePipe, "%08x %c %s\n", (int *)&labelAddress, &ch, theLabel)
 #endif
-	    == EOF) break;
-	if (! (lab = (struct label *) MALLOC(sizeof(struct label)))){
-	  fprintf(output, "Allocation of struct label failed\n");
-	  numLabels = -1;
-	  /* free previously allocated labels */
-	  FREE(labels);
-	  labels = 0;
-	  break;
-	}
-	INFO_ALLOC(sizeof(struct label));
-	if (! (lab->id = (char *)MALLOC(strlen(theLabel)+1))) {
-	  fprintf(output, "Allocation of label id failed\n");
-	  numLabels = -1;
-	  /* free previously allocated labels */
-	  FREE(labels);
-	  labels = 0;
-	  break;
-	}
-	INFO_ALLOC(strlen(theLabel)+1);
-	lab->address = labelAddress;
-	strcpy(lab->id, theLabel);
-	labels[lastLab] = lab;
-      }
-      pclose (thePipe);
+    lab->id = (char *)MALLOC(strlen(theLabel)+1);
+    if (!lab) {
+      fprintf(output, "Allocation of label id failed\n");
+      /* free previously allocated labels */
+      FREE(labels);
+      labels = 0;
+      break;
     }
+    INFO_ALLOC(strlen(theLabel)+1);
+    lab->address = labelAddress;
+    strcpy(lab->id, theLabel);
+    if (lastLab>=maxLabels){
+      maxLabels *= 2;
+      fprintf(output, "*"); fflush(output);
+      labels=REALLOC(labels, maxLabels * sizeof(label*));
+    }
+    labels[lastLab] = lab;
+  }
+  numLabels=lastLab;
   fprintf(output, " done]");
   fflush(output);
-
 #ifdef DEBUG_LABELS
   fprintf(output, "Labels:\n");
   { 
     long n;
-    for (n=0; n<numLabels; n++){
+    for (n=0; n<lastLab; n++){
       fprintf(output, "0x%x\t%s\n", (unsigned)labels[n]->address, labels[n]->id);
     }
   }
@@ -135,20 +121,20 @@ static void initLabels()
 #endif
 }
 
-char *getLabel (addr)
-     long addr;
+char *getLabel (long addr)
 {
   long n;
 
-  if (numLabels==0) initLabels();
-
+  if (!labels) initLabels();
   if (!addr){
     labelOffset=0;
     return "<unknown>";
   }
-
+#ifdef nti
+  addr -= process_offset;
+#endif
   if (labels){
-    for (n=0; n<numLabels; n++){
+    for (n=numLabels-1; n>=0; n--){
       if (labels[n]->address <= addr){
 	labelOffset = addr-(labels[n]->address);
 	return labels[n]->id;
@@ -158,8 +144,6 @@ char *getLabel (addr)
   labelOffset=0;
   return "<unknown>";
 }
-
-#endif /* sparc or linux */
 
 #endif /* RTDEBUG */
 /************************* End Label Debug *************************/
@@ -1165,7 +1149,7 @@ void ProcessStackPart(long *low, long *high)
 	    fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
 	    if (*current){
 	      fprintf(output, " (%s+0x%x)\n",
-		      getLabel((long*)*current),
+		      getLabel((long)*current),
 		      (int)labelOffset);
 	    } else {
 	      fprintf(output, "\n");
@@ -1340,7 +1324,7 @@ void PrintStackPart(long *low, long *high)
 	  fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
 	  if (*current){
 	    fprintf(output, " (%s+0x%x)\n",
-		    getLabel((long*)*current),
+		    getLabel((long)*current),
 		    (int)labelOffset);
 	  } else {
 	    fprintf(output, "\n");
@@ -1424,13 +1408,13 @@ void PrintRef(Object * ref)
       }
     } else {
       fprintf(output, ", is NOT object");
-      if (isCode(ref) && ((ObjectAlign((int)ref)==(int)ref) == 0)) {
+      if (isCode(ref)) {
 	fprintf(output, 
 		" (is code: %s+0x%x)",
-		getLabel((long*)ref),
+		getLabel((long)ref),
 		(int)labelOffset);
       } else {
-	PrintWhichHeap(ref);
+	PrintWhichHeap(ref); /* Will most often be (not in beta heap) */
       }
     }
   }

@@ -220,6 +220,19 @@ typedef struct _group_header
 
 typedef void (*CellProcessFunc)(Object **theCell,Object *theObj);
 
+typedef struct _labeltable {
+  FILE *fd;            /* The file descriptor from which the nameTable is read */
+  int NextAddress;     /* The last address read from the fd. */
+  char NextLabel[200]; /* The last label read from the fd. */
+  int full;            /* Include all symbols? */
+#ifdef nti
+  int main_logical;  /* Used to calculate offset for mapped process */
+  DWORD textSectionNumber;
+  PIMAGE_SYMBOL PCOFFSymbolTable;
+  DWORD COFFSymbolCount;
+#endif /* nti */
+} labeltable;
+
 typedef struct _nums
 {
   long NumAlloI;

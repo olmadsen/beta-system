@@ -1043,6 +1043,7 @@ int DisplayBetaStack(enum BetaErr errorNumber,
 	      (int)theObj
 	      );
       PrintWhichHeap(theObj);
+      fprintf(output, "\n");
       fflush(output);
 #if 1
       DEBUG_CODE({

@@ -127,6 +127,15 @@ extern long selectReadable(int fd);
 extern long doBlock(long fd, long rd, long wr, long timeoutValue);
 extern long Errno(void);
 
+/* C/labelnametable.c */
+extern char* nextLabel(labeltable *handle);
+extern int nextAddress(labeltable *handle);
+extern labeltable *initReadNameTable (char* execFileName, int full);
+extern void freeNameTable(labeltable *handle);
+#ifdef nti
+extern long getProcessOffset(labeltable *handle, long main_physical);
+#endif
+
 /* GC/block.c */
 extern Block * newBlock(long);
 extern void freeBlock(Block *);

@@ -183,7 +183,7 @@ static int AOAtoIOAInsertImpl(Object **theCell)
 	      "AOAtoIOAInsert: the cell 0x%x is not in AOA! ", 
 	      (int)theCell);
       PrintWhichHeap((Object*)theCell);
-      fprintf(output, "\n");
+      fprintf(output, "\n\n");
       Illegal(); /* useful to break in */
     });
 
