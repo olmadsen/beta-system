@@ -31,7 +31,7 @@ for ($i=1; $i<=$num_files; $i++)
     print "\n";
 }
 
-print "List of possibly failed executions in logs/{log,log13,log80}\n";
+print "List of possibly failed executions in {log,log13,log80}\n";
 
 ### Helper functions:
 
@@ -42,7 +42,7 @@ sub setup()
     select(STDERR); $| = 1;       # make unbuffered
     select(STDOUT); $| = 1;       # make unbuffered
 
-    system ("rm -f *.dump logs/log* logs/*.compile* logs/*.output* logs/*.stderr*");
+    system ("rm -f log log13 log80 *.dump logs/*");
 
 };
 
@@ -77,9 +77,9 @@ sub compare()
     local ($filename, $switch) = @_;
      
     print ".";
-    @gr = `grep "Aborting" logs/$filename.output$switch`;
+    @gr = `grep "aborting" logs/$filename.output$switch`;
     if ($#gr == -1) {
-	system("echo $filename >> logs/log$switch");
+	system("echo $filename >> log$switch");
     }
 }
 
