@@ -577,8 +577,11 @@ long AOAScanMemoryArea(long *start, long *end)
 	    collectedMem += size;
 	  });
 	}
+#ifdef PERSIST
+	current -> GCAttr = FREECHUNK;
+#endif /* PERSIST */
 	current = (AOAFreeChunk *)((char *)current + size);
-                
+	
       } while (((long *)current < end) &&
 	       !AOAISALIVE(current));
 	  

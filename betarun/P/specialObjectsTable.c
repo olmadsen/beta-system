@@ -95,9 +95,11 @@ void GCspecialObjectsTable(void)
     maxIndex = STSize(currentTable);
     for (inx = 0; inx < maxIndex; inx++) {
       entry = STLookup(currentTable, inx);
-      if (entry -> theObj -> GCAttr == DEADOBJECT) {
-	Claim(inAOA(entry -> theObj), "GCspecialObjectsTable: Where is the object?");
-	entry -> theObj = NULL;
+      if (entry -> theObj) {
+	if (entry -> theObj -> GCAttr == DEADOBJECT) {
+	  Claim(inAOA(entry -> theObj), "GCspecialObjectsTable: Where is the object?");
+	  entry -> theObj = NULL;
+	}
       }
     }
   }
@@ -112,12 +114,34 @@ void remarkSpecialObjects(void)
     maxIndex = STSize(currentTable);
     for (inx = 0; inx < maxIndex; inx++) {
       entry = STLookup(currentTable, inx);
-      if (entry -> theObj -> GCAttr == DEADOBJECT) {
+      if (entry -> theObj) {
 	Claim(inAOA(entry -> theObj), "GCspecialObjectsTable: Where is the object?");
+	
 	entry -> theObj -> GCAttr = AOASpecial;
       }
     }
   }
+}
+
+/* 'getTagForObject' and 'getTag' should be only one function. This is
+   just a stupid implementation that will be fixed. */
+
+u_long getTag(Object *theObj)
+{
+  u_long inx, maxIndex;
+  SOTEntry *entry;
+  
+  if (currentTable) {
+    maxIndex = STSize(currentTable);
+    for (inx = 0; inx < maxIndex; inx++) {
+      entry = STLookup(currentTable, inx);
+      if (entry -> theObj == theObj) {
+	Claim(inAOA(entry -> theObj), "GCspecialObjectsTable: Where is the object?");
+	return entry -> tag;
+      }
+    }
+  }
+  return -1;
 }
 
 void saveTagForObject(Object *realObj, u_long tag)
@@ -151,6 +175,7 @@ void freeSOTags(void)
 {
   if (SOTags) {
     TIFree(SOTags, freeFunc);
+    SOTags = NULL;
   }
 }
 

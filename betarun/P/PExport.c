@@ -4,6 +4,8 @@
 #include "objectTable.h"
 #include "referenceTable.h"
 #include "crossStoreTable.h"
+#include "objectStore.h"
+#include "specialObjectsTable.h"
 
 void pexport_dummy() {
 #ifdef sparc
@@ -49,19 +51,30 @@ static void processReferenceToStoreReference(REFERENCEACTIONARGSTYPE)
     realObj = getRealObject(theObj);
     distanceToPart = (u_long)theObj - (u_long)realObj;
     
-    Claim(inAOA(realObj), "Where is theObj ?");
-    Claim(AOAISPERSISTENT(realObj), "Reference from persistent to non-persistent obj?");
-    
-    puid = (void *)(realObj -> GCAttr);
-    objectLookup(getPUID(puid), 
-		 &GCAttr, 
-		 &store, 
-		 &offset,
-		 &dummy);
+    if (AOAISPERSISTENT(realObj)) {
+      Claim(inAOA(realObj), "Where is theObj ?");
 
-    Claim(dummy == realObj, "Table mismatch ?");
+      puid = (void *)(realObj -> GCAttr);
+      objectLookup(getPUID(puid), 
+		   &GCAttr, 
+		   &store, 
+		   &offset,
+		   &dummy);
+      
+      Claim(dummy == realObj, "Table mismatch ?");
+    } else {
+      u_long tag;
+      
+      tag = getTag(realObj);
+      
+      Claim(tag < 0xFF, "Tag not found or tag too big");
+      Claim(distanceToPart < 0xFFFF, "distanceToPart too big");
+      
+      *theCell = (Object *)((tag << 24 ) | (distanceToPart << 8) | SPECIALTYPE);
+      return;
+    }
   }
-  
+
   if (compareBlockID(store, currentStore)) {
     /* the reference is simply replaced by the offset of the referred object */
     *theCell = (Object *)(offset + distanceToPart);

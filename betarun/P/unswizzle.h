@@ -5,6 +5,7 @@
 
 Object *unswizzleReference(void *ip);
 Object *lookUpReferenceEntry(BlockID store, u_long offset);
-void registerRebinder(Object *theRebinder);
+Object *handleSpecialReference(u_long specRef);
+void registerRebinderFunc(Object *(*rebinderFunc)(u_long objectTag, u_long typeTag));
 
 #endif /* _UNSWIZZLE_H_ */

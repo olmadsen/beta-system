@@ -11,6 +11,7 @@ void GCspecialObjectsTable(void);
 void remarkSpecialObjects(void);
 void saveTagForObject(Object *realObj, u_long tag);
 u_long getTagForObject(Object *theObj);
+u_long getTag(Object *theObj);
 void freeSOTags(void);
 
 #endif /* _SPECIALOBJECTTABLE_H_ */

@@ -403,10 +403,15 @@ u_long isOpen(void)
   return (currentStore != NULL);
 }
 
-u_long getExt(u_long name_r, Object **theCell)
+u_long getExt(u_long name_r, Object *theObj, Object **theCell)
 {
   u_long count;
+  u_long offset;
 
+  Claim((u_long)theCell > (u_long)theObj, "getExt: theCell is before theObj");
+  
+  offset = (u_long)theCell - (u_long)theObj;
+  
   if (name_r) {
     char *name;
     
@@ -414,7 +419,11 @@ u_long getExt(u_long name_r, Object **theCell)
     
     for (count = 0; count <  MAXNAMES; count++) {
       if (strcmp(&(si.nameMap[count].name[0]), name) == 0) {
-	keyToObject(&(si.nameMap[count].ok), theCell);
+	Object *target;
+	
+	Protect(theObj, target = keyToObject(&(si.nameMap[count].ok)));
+	theCell = (Object **)((u_long)theObj + offset);
+	*theCell = target;
 	free(name);
 	return 0;
       }

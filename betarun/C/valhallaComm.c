@@ -883,7 +883,7 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
        * Before calling the callback entry the C variable
        * BetaStackTop should be set to the value of the
        * stack pointer at the point where debuggee was
-       * stopped.
+       * stopped (trapped).
        */
       origin = (Object *) valhalla_readint ();
       proto  = (ProtoType *) valhalla_readint ();
@@ -1203,9 +1203,6 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
 #ifdef RTLAZY
       HasRefDoRef((Object**)&LazyItem);
 #endif /* RTLAZY */
-#ifdef PERSIST
-      HasRefDoRef((Object**)&rebinderItem);
-#endif /* PERSIST */
       DEBUG_VALHALLA(fprintf(output, "0\n"));
       valhalla_writeint(0);
       DEBUG_VALHALLA(fprintf(output, "\n"));

@@ -171,14 +171,6 @@ void IOAGc()
   }
 #endif /* RTLAZY */
 
-#ifdef PERSIST
-  if (rebinderItem) {
-    DEBUG_IOA(fprintf(output, " #(IOA: Root: rebinderItem"); fflush(output));
-    ProcessReference( (Object **)(&rebinderItem) );
-    DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
-  }
-#endif /* PERSIST */
-
   CompleteScavenging();
   
 #ifdef MT
@@ -240,6 +232,7 @@ void IOAGc()
 #endif
 
 #ifdef PERSIST
+  if (!BETAREENTERED) {
   /* Will flush all persistent objects loaded since last IOAGc */
   TOTFlush();
 #endif /* PERSIST */
@@ -271,6 +264,9 @@ void IOAGc()
 	   'markPersistentObject' */
 	flushDelayedEntries();
 	
+	/* Mark special objects moved to AOA as special */
+	remarkSpecialObjects();
+	
 	resetStatistics();
 	
 	updatePersistentObjects();
@@ -296,6 +292,10 @@ void IOAGc()
 #endif /* PERSIST */
   }
   
+#ifdef PERSIST
+  } /* BETAREENTERED */
+#endif /* PERSIST */
+
   if (tempAOAroots) {
     /* ToSpace was not big enough to hold both objects and table.
      * Free the table that was allocated by saveAOAroot().  */

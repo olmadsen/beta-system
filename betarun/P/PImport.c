@@ -5,6 +5,7 @@
 #include "PException.h"
 #include "PImport.h"
 #include "crossStoreTable.h"
+#include "unswizzle.h"
 
 void pimport_dummy() {
 #ifdef sparc
@@ -28,6 +29,13 @@ static Object *updateReferenceTable(BlockID store, u_long offset, Object **theCe
 static void storeReferenceToProcessReference(REFERENCEACTIONARGSTYPE)
 {
   *theCell = importReference(currentStore, (u_long)*theCell, theCell);
+
+  /* theCell is in AOA. The reference returned by 'importReference'
+     may be in IOA if the rebinder is called */
+  
+  if (inIOA(*theCell)) {
+    AOAtoIOAInsert( theCell);
+  }
 }
 
 static Object *importReference(BlockID store, u_long offset, Object **theCell)
@@ -40,22 +48,26 @@ static Object *importReference(BlockID store, u_long offset, Object **theCell)
   Object *theRealObj;
   
   if (!isCrossStoreReference(offset)) {
-    if ((inxOT = indexLookupOT(store, offset)) != -1) {
-      objectLookup(inxOT,
-		   &OTGCAttr,
-		   &OTstore,
-		   &OToffset,
-		   &theRealObj);
-      
-      Claim(OTGCAttr == ENTRYALIVE, "Lookup on dead object");
-      Claim(store == OTstore, "Table mismatch");
-      Claim((offset >= OToffset) && (offset < OToffset + 4*ObjectSize(theRealObj)),
-	    "Table mismatch");
-      
-      return (Object *)((u_long)theRealObj + (offset - OToffset));
+    if (!isSpecialReference(offset)) {
+      if ((inxOT = indexLookupOT(store, offset)) != -1) {
+	objectLookup(inxOT,
+		     &OTGCAttr,
+		     &OTstore,
+		     &OToffset,
+		     &theRealObj);
+	
+	Claim(OTGCAttr == ENTRYALIVE, "Lookup on dead object");
+	Claim(store == OTstore, "Table mismatch");
+	Claim((offset >= OToffset) && (offset < OToffset + 4*ObjectSize(theRealObj)),
+	      "Table mismatch");
+	
+	return (Object *)((u_long)theRealObj + (offset - OToffset));
+      } else {
+	/* */
+	return updateReferenceTable(store, offset, theCell);
+      }
     } else {
-      /* */
-      return updateReferenceTable(store, offset, theCell);
+      return handleSpecialReference(offset);
     }
   } else {
     setCurrentCrossStoreTable(currentStore);
@@ -90,7 +102,9 @@ void importStoreObject(Object *theObj, BlockID store, u_long offset)
 {
   void (*temp)(Object *theObj);
   
+  DEBUG_CODE(fflush(output));
   Claim(theObj == getRealObject(theObj), "Unexpected part object");
+  Claim(inAOA(theObj), "Where is theObj?");
 
   theRealObj = theObj;
   /* Scan references, and turn into PUID's */

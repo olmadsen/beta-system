@@ -421,7 +421,7 @@ void Initialize()
   INFO_HEAP_USAGE(PrintHeapUsage("After ToSpace heap allocation"));
 #endif /* USEMMAP */
 
-#if defined(NEWRUN) || (defined(RTVALHALLA) && (defined(intel)||defined(sparc)))
+#if defined(NEWRUN) || (defined(RTVALHALLA) && (defined(intel)||defined(sparc))) || defined(PERSIST)
   /* Allocate the internal Reference Stack */
   ReferenceStack = (Object **)MALLOC(REFSTACKSIZE*sizeof(Object *));
   if (!ReferenceStack){

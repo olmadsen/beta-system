@@ -129,9 +129,42 @@ static void getOriginChain(Object *theObj)
   scanOrigins(theObj, originReferenceAction);
 }
 
-void registerRebinder(Object *theRebinder)
+/* If the implementation of the UNKNOWNTAG in virtualobjectstore.bet is
+   changed then the define below should be changed accordingly.  */
+#define UNKNOWNTAG 0
+
+void registerRebinderFunc(Object *(*rebinderFunc)(u_long objectTag, u_long typeTag))
 {
-  rebinderItem = (long *)theRebinder;
+  callRebinderC = rebinderFunc;
+}
+
+Object *handleSpecialReference(u_long specRef)
+{
+  u_long tag, distanceToPart;
+  Object *target;
+  void (*temp)(Object *theObj);
+  
+  Claim(isSpecialReference(specRef), "handleSpecialReference: Is not special reference");
+  
+  tag = specRef >> 24;
+  distanceToPart = (specRef & 0x00FFFF00) >> 8;
+  
+  /* Below we reenter BETA code while we are in the midst of loading
+     an object. While in BETA code additional object loads might be
+     issued, and GCs, both IOAGC amd AOAGC, might occur. While it
+     should be possible to support all these events only an IOAGC is
+     legal at this point in time. */
+
+  temp = objectAction;
+  objectAction = NULL;
+  BETAREENTERED = TRUE;
+  target = callRebinderC(tag, UNKNOWNTAG);
+  BETAREENTERED = FALSE;
+  objectAction = temp;
+  
+  target = (Object *)((u_long)getRealObject(target) + distanceToPart);
+
+  return target;
 }
 
 #endif /* PERSIST */

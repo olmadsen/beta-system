@@ -121,7 +121,15 @@ static void prependToListRegardless(REFERENCEACTIONARGSTYPE)
   if (!inPIT((void *)*theCell)) {
     realObj = getRealObject(*theCell);
     if (!inPIT((void *)(realObj -> GCAttr))) {
-      prependToList(*theCell);
+      /* Dont follow references to special objects. There is no
+         special objects in IOA at this point since we have just
+         finished an IOAGC */
+      if ((!inToSpace(realObj) /* inAOA */) && (realObj -> GCAttr == AOASpecial)) {
+	Claim(inAOA(realObj), "prependToListRegardless: Where is theObj?");
+	;
+      } else {
+	prependToList(*theCell);
+      }
     }
   }
 }
@@ -150,26 +158,30 @@ static void markOriginAlive(Object **theCell)
   if ((theOrigin = *theCell)) {
     theRealOrigin = getRealObject(theOrigin);
     
-    Claim(inAOA(theRealOrigin), "Where is the origin ?");
-    Claim(AOAISPERSISTENT(theRealOrigin), "Origin object not persistent ??");
-    
-    inx = getPUID((void *)(theRealOrigin -> GCAttr));
-    objectLookup(inx,
-		 &GCAttr,
-		 &store,
-		 &offset,
-		 &theObj);
-    
-    Claim(GCAttr != ENTRYDEAD, "Origin is dead ??");
-    Claim(theObj == theRealOrigin, "Table mismatch ?");
-
-    if (GCAttr != ENTRYALIVE) {
-      objectAlive(theRealOrigin);
-      Claim(objectAction == markOriginsAlive, "What is the object action?");
-      /* Call recursively on the origin object */
-      scanObject(theRealOrigin,
-		 NULL,
-		 TRUE);
+    if (AOAISPERSISTENT(theRealOrigin)) {
+      Claim(inAOA(theRealOrigin), "Where is the origin ?");
+      
+      inx = getPUID((void *)(theRealOrigin -> GCAttr));
+      objectLookup(inx,
+		   &GCAttr,
+		   &store,
+		   &offset,
+		   &theObj);
+      
+      Claim(GCAttr != ENTRYDEAD, "Origin is dead ??");
+      Claim(theObj == theRealOrigin, "Table mismatch ?");
+      
+      if (GCAttr != ENTRYALIVE) {
+	objectAlive(theRealOrigin);
+	Claim(objectAction == markOriginsAlive, "What is the object action?");
+	/* Call recursively on the origin object */
+	scanObject(theRealOrigin,
+		   NULL,
+		   TRUE);
+      }
+    } else {
+      /* Origin is special object and not in table */
+      ;
     }
   }
 }
@@ -208,32 +220,34 @@ void handlePersistentCell(REFERENCEACTIONARGSTYPE)
       realObj = getRealObject(theObj);
       distanceToPart = (u_long)theObj - (u_long)realObj;
       
-      Claim(inAOA(realObj), "Where is the object?");
-      Claim(AOAISPERSISTENT(realObj), 
-	    "Reference from persistent to non persistent object");
-      
-      inx = getPUID((void *)(realObj -> GCAttr));
-      objectLookup(inx,
-		   &GCAttr,
-		   &store,
-		   &offset,
-		   &theObj);
-      
-      if (GCAttr == POTENTIALLYDEAD) {
-	/* The referred object will be removed so we need to unswizzle
-	   the reference to it. */
-	if ((newEntryInx = indexLookupRT(store, offset + distanceToPart)) == -1) {
-	  /* A new entry is created */
-	  newEntryInx = insertReference(ENTRYALIVE,
-					store,
-					offset + distanceToPart);
+      if (AOAISPERSISTENT(realObj)) {
+	Claim(inAOA(realObj), "Where is the object?");
+	
+	inx = getPUID((void *)(realObj -> GCAttr));
+	objectLookup(inx,
+		     &GCAttr,
+		     &store,
+		     &offset,
+		     &theObj);
+	
+	if (GCAttr == POTENTIALLYDEAD) {
+	  /* The referred object will be removed so we need to unswizzle
+	     the reference to it. */
+	  if ((newEntryInx = indexLookupRT(store, offset + distanceToPart)) == -1) {
+	    /* A new entry is created */
+	    newEntryInx = insertReference(ENTRYALIVE,
+					  store,
+					  offset + distanceToPart);
+	  }
+	  *theCell = newPUID(newEntryInx);
+	  referenceAlive((void *)*theCell);
+	  newAOAclient(newEntryInx, theCell);
+	  INFO_PERSISTENCE(PtoD++);
+	} else {
+	  Claim(GCAttr == ENTRYALIVE, "What is GC mark ?");
 	}
-	*theCell = newPUID(newEntryInx);
-	referenceAlive((void *)*theCell);
-	newAOAclient(newEntryInx, theCell);
-	INFO_PERSISTENCE(PtoD++);
       } else {
-	Claim(GCAttr == ENTRYALIVE, "What is GC mark ?");
+	;
       }
   }
 }
@@ -315,9 +329,9 @@ void setForceAOAGG(void)
   forceAOAGC = TRUE;
 }
 
-void keyToObject(ObjectKey *ok, Object **theCell)
+Object *keyToObject(ObjectKey *ok)
 {
-  *theCell = lookUpReferenceEntry(ok -> store, ok -> offset);
+  return lookUpReferenceEntry(ok -> store, ok -> offset);
 }
 
 #endif /* PERSIST */

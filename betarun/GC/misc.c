@@ -1126,3 +1126,8 @@ long milisecsincelast(void)
   last = now;
   return diff;
 }
+
+ProtoType *getProto(Object *ref)
+{
+  return (ProtoType *)GETPROTO(ref);
+}

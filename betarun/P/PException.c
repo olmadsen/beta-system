@@ -184,9 +184,6 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
   
   INFO_PERSISTENCE(numPF++);
 
-  Claim(isOpen(), 
-	"proxyTrapHandler: Lazy reference in memory eventhough store is closed");
-  
   /* Fetch the faulting instruction. */
   dummy = instruction = (* (long *) (ucon->uc_mcontext.gregs[REG_PC]));
   
@@ -200,10 +197,40 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
     if (sourcereg != -1) {
       
       /* Ok, so this is a genuine proxy reference. */
+  
+      Claim(isOpen(), 
+	    "proxyTrapHandler: Lazy reference in memory eventhough store is closed");
+      Claim(!BETAREENTERED, "Proxy met during rebinding!");
+      
       ip = getRegisterContents(sourcereg, ucon);
       
+      /* Before calling unswizzleReference, which may call the callback entry 
+       * 'callRebinderC' the C variable  BetaStackTop should be set to the value of the
+       * stack pointer at the point where the process left BETA via the trap.
+       */
+      BetaStackTop = (long *)returnSP; /* Must be set in case og GC during callback */
+      pushSP(returnSP);
+
       /* Calculate absolute address by looking in appropriate tables */
+      
       absAddr = (long)unswizzleReference(ip);
+      
+      popSP();
+      
+      /* We have fetched the object, and should continue execution.
+       * With the introduction of dynamic compilation into debuggee, the 
+       * debuggee may have allocated in IOA and even caused GC.
+       * That is, the current value (right here in the signal handler)
+       * of the two global sparc registers holding IOA and IOATopOff
+       * MUST be written back into the ucontext to prevent the signal-
+       * handler from restoring these registers to the old values.
+       * Otherwise objects allocated during valhalla evaluators will
+       * be forgotten!.
+       * See register binding in registers.h.
+       */
+      
+      ucon->uc_mcontext.gregs[REG_IOA] = (long)IOA;
+      ucon->uc_mcontext.gregs[REG_IOATOPOFF] = (long)IOATopOff;
       
       if (absAddr) {
 	switch (sourcereg) {

@@ -245,6 +245,7 @@ extern void IOACheckReference(REFERENCEACTIONARGSTYPE);
 #endif
 
 /* GC/misc.c */
+extern ProtoType *getProto(Object *ref);
 extern double gettimestampdouble(void);
 extern long getmilisectimestamp(void);
 extern long milisecsincelast(void);
