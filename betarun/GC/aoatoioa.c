@@ -144,7 +144,7 @@ void AOAtoIOAReport()
     if( AOAtoIOAtable ){
 	MACRO_ScanBlock( AOAtoIOAtable, if( *thisCell) used++ );
 	fprintf(output, "#AOAtoIOATable size=%d filled=%d%%\n",
-		(int)AOAtoIOAtableSize, (int)(100*used)/AOAtoIOAtableSize);
+		(int)AOAtoIOAtableSize, (int)((100*used)/AOAtoIOAtableSize));
     }
 }
 
