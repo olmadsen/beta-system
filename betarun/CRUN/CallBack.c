@@ -1,38 +1,63 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-06-06 03:57:22 $, SID: $Revision: 1.2 $
+ * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-06-11 17:17:39 $, SID: $Revision: 1.3 $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"
 #include "crun.h"
 
-extern void CopyCProcPar() asm("CopyCProcPar");
+void HandleCallBack();
 
-void CopyCProcPar(ref(Object)theObj)
+asmlabel(CopyCProcPar, "
+	ba	_CCopyCProcPar
+	mov	%i0, %o1
+");
+
+void *CCopyCProcPar(ref(Structure) theStruct, ref(Object) theObj)
 {
-    /* I'm trying to see if is possible to make a struct */
-    struct CallBackStruct {
-	long savedSP;
-    };
-	
-    ref(CallBackFrame) theCBStruct = cast(CallBackFrame)CBFATop;
+    ref(CallBackEntry) theCBStruct = CBFATop;
 
     /* Find a free entry in the Call Back Functions Area.		*/
     /* This area is defined by [ CBFA <= CBFATop <= CBFALimit ].	*/
 
-    if (theCBStruct+1 > cast(CallBackFrame)CBFALimit)
+    if (theCBStruct+1 > CBFALimit)
       BetaError(-11, theObj);
 
-    (cast(CallBackFrame)CBFATop)++;
-    
-
-  
+    CBFATop++;
+    CBFATop->theStruct = theStruct;
+    CBFATop->mov_o7_g1 = MOV_O7_G1;
+    MK_CALL(&CBFATop->call_HandleCallBack, HandleCallBack);
+    CBFATop->nop       = NOP;
+    return (void *)&CBFATop->mov_o7_g1;
 }
 
 extern void HandleCallBack() asm("HandleCallBack");
 
-void HandleCallBack()
+/* HandleCallBack is called from a CallBackEntry, setup like
+   above. This means that the real return address is in %g1
+   and our %i7 pointes to the call instruction in the
+   CallBackEntry. */
+
+void HandleCallBack(int i0, int i1, int i2, int i3,
+		    int i4, int i5)
 {
-    fprintf(stderr, "HandleCallBack is still not implemented\n");
+    register long		 g1	       asm("%g1");
+    register ref(CallBackFrame)  callBackFrame asm("%l5");
+    register long              * nextCompBlock asm("%l6");
+    register long                level         asm("%l7");
+    ref(Item) 		         theObj;
+
+    ref(CallBackEntry) cb = 0;
+    cb = cast(CallBackEntry)
+      ((char *) retAddress - ((char *)&cb->call_HandleCallBack - (char *)cb));
+    retAddress = g1;
+
+    callBackFrame = 0;
+    nextCompBlock = 0;
+    level         = 0;
+
+    theObj = AllocateItem(cb->theStruct->iProto, cb->theStruct->iOrigin);
+    theObj->Proto->CallBackRoutine(theObj, i0, i1, i2, i3, i4);
+    
 }
