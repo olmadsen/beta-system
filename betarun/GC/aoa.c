@@ -261,8 +261,8 @@ Object *AOAallocate(long numbytes)
   if (IOAActive && IOALooksFullCount==0 && !noAOAGC) {    
     AOANeedCompaction = TRUE;
     return 0;
-  }
 #endif /* PERSIST */
+  }
 
   /* Only get here is caller cannot handle a NULL result.
    * We add a new block and indicate that we want an AOAGC ASAP 
