@@ -187,6 +187,38 @@ ref(CallBackEntry) makeCBF(pat)
     /* All casts are done by the BETA compiler, which calls CopyCPP */;
 }
 
+void ProcessCBFA(void)
+{
+  /* Follow all struct pointers in the Call Back Functions area. */
+  if (CBFABlockSize){
+    if( CBFATop != CBFA->entries ){
+      ref(CallBackArea) cbfa = CBFA;
+      ref(CallBackEntry) current = cbfa->entries;
+      long limit = (long) cbfa->entries + CBFABlockSize;
+      
+      for (; current != CBFATop; 
+	   current = (ref(CallBackEntry))((long)current+CallBackEntrySize)){
+	if ( (long) current >= limit){
+	  /* Go to next block */
+	  cbfa = cbfa->next;        
+	  /* guarentied to be non-nil since current != CBFATop */
+	  
+	  current = cbfa->entries; 
+	  /* guarentied to be different from CBFATop. 
+	   * If not the block would not have been allocated 
+	   */
+	  limit = (long)cbfa->entries + CBFABlockSize;
+	}
+	/*DEBUG_CBFA(fprintf(output, "ProcessCBFA: current=0x%x\n", current));*/
+	if (current->theStruct){
+	  ProcessReference((handle(Object))(&current->theStruct));
+	}
+      }
+      CompleteScavenging();
+    }
+  }
+}
+
 #ifdef RTDEBUG
 void CBFACheck()
 {

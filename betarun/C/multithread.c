@@ -54,6 +54,8 @@ TSD *create_TSD(void)
   TSD *tsd;
   int inx;
 
+  DEBUG_MT(TSDCheck());
+
   mutex_lock(&tsd_lock);
   tsd = (TSD*)MALLOC(sizeof(TSD));
   tsd->_nums = MALLOC(sizeof(nums));
@@ -61,9 +63,20 @@ TSD *create_TSD(void)
   /* insert newly created TSD into TSDlist */
   if (TSDlistlen <= NumTSD){
     int expand = numProcessors(TRUE); 
+    DEBUG_MT(TSDCheck());
+    DEBUG_MT(fprintf(output, "create_TSD: Expanding TSDlist:\n"));
+    DEBUG_MT(fprintf(output,
+		     "  TSDlist from: 0x%x, TSDlistlen from: %d\n", 
+		     (int)TSDlist, (int)TSDlistlen));
+
     TSDlist = REALLOC(TSDlist, (TSDlistlen + expand)*sizeof(TSD*));
     memset(TSDlist + (TSDlistlen * sizeof(TSD*)), 0, expand * sizeof(TSD*));  
     TSDlistlen += expand;
+
+    DEBUG_MT(fprintf(output,
+		     "  TSDlist to:   0x%x, TSDlistlen to:   %d\n", 
+		     (int)TSDlist, (int)TSDlistlen));
+    DEBUG_MT(TSDCheck());
   }
   NumTSD++;
   
@@ -75,10 +88,16 @@ TSD *create_TSD(void)
    * take a new slice (after a GC).
    */
   while (NumIOASlices < NumTSD) {
+    DEBUG_MT(fprintf(output, "create_TSD: Changing slices:\n"));
+    DEBUG_MT(fprintf(output,
+		     "  NumIOASlices from: %d, IOASliceSize from: %d\n", 
+		     (int)NumIOASlices, (int)IOASliceSize));
+
     NumIOASlices += numProcessors(TRUE);
     IOASliceSize = ObjectAlignDown(IOASize / NumIOASlices);
+
     DEBUG_MT(fprintf(output,
-		     "create_TSD: NumIOASlices changed to %d, IOASliceSize to %d\n", 
+		     "  NumIOASlices to:   %d, IOASliceSize to:   %d\n", 
 		     (int)NumIOASlices, (int)IOASliceSize));
   }
 
@@ -89,6 +108,8 @@ TSD *create_TSD(void)
   TSDlist[inx] = tsd;
   
   mutex_unlock(&tsd_lock);
+
+  DEBUG_MT(TSDCheck());
 
   /* Signal that the number of threads has changed */
   mutex_lock(&cond_pause_lock);
@@ -102,6 +123,8 @@ void destroy_TSD(void)
 {
   long inx = TSDinx;
 
+  DEBUG_MT(TSDCheck());
+
   mutex_lock(&tsd_lock);
   free(Nums);
   free(TSDReg);
@@ -111,6 +134,8 @@ void destroy_TSD(void)
   
   mutex_unlock(&tsd_lock);
 
+  DEBUG_MT(TSDCheck());
+
   /* Some other thread may be initiating a GC.  
    * If we are the last to "join in", that thread wouldwait forever
    * without this...
@@ -119,6 +144,164 @@ void destroy_TSD(void)
   cond_broadcast(&cond_pause);
   mutex_unlock(&cond_pause_lock);
 }
+
+void ProcessTSD(void)
+{
+  int i;
+  for (i = 0; i < TSDlistlen; i++) {
+    if (TSDlist[i]) {
+      DEBUG_MT(fprintf(output, 
+		       "\nTSDlist[%d]: t@%d:\n", 
+		       i, 
+		       TSDlist[i]->_thread_id));
+
+      DEBUG_MT(fprintf(output, 
+		       "\tCurrentObject=0x%0x...", 
+		       (int)TSDlist[i]->_CurrentObject));
+      ProcessReference((handle(Object))(&TSDlist[i]->_CurrentObject));
+      DEBUG_MT(fprintf(output, 
+		       "CurrentObject=0x%0x\n", 
+		       (int)TSDlist[i]->_CurrentObject));
+
+      DEBUG_MT(fprintf(output, 
+		       "\tOrigin=0x%0x...",
+		       (int)TSDlist[i]->_Origin));
+      ProcessReference((handle(Object))(&TSDlist[i]->_Origin));
+      DEBUG_MT(fprintf(output, 
+		       "Origin=0x%0x\n", (int)TSDlist[i]->_Origin));
+
+      DEBUG_MT(fprintf(output, 
+		       "\tSavedCallO=0x%0x...",
+		       (int)TSDlist[i]->_SavedCallO));
+      ProcessReference((handle(Object))(&TSDlist[i]->_SavedCallO));
+      DEBUG_MT(fprintf(output, 
+		       "SavedCallO=0x%0x\n", 
+		       (int)TSDlist[i]->_SavedCallO));
+
+      DEBUG_MT(fprintf(output, 
+		       "\tActiveStack=0x%0x...",
+		       (int)TSDlist[i]->_ActiveStack));
+      ProcessReference((handle(Object))(&TSDlist[i]->_ActiveStack));
+      DEBUG_MT(fprintf(output, 
+		       "ActiveStack=0x%0x\n", 
+		       (int)TSDlist[i]->_ActiveStack));
+
+      DEBUG_MT(fprintf(output, 
+		       "\tActiveComponent=0x%0x...",
+		       (int)TSDlist[i]->_ActiveComponent));
+      ProcessReference((handle(Object))(&TSDlist[i]->_ActiveComponent));
+      DEBUG_MT(fprintf(output, 
+		       "ActiveComponent=0x%0x\n", 
+		       (int)TSDlist[i]->_ActiveComponent));
+    }
+#ifdef RTDEBUG
+    else {
+      DEBUG_MT(fprintf(output, "TSDlist[%d] is NULL\n", i));
+    }
+#endif
+  }
+  CompleteScavenging();
+}
+
+#ifdef RTDEBUG
+static void TSDCheckReference(int i, struct Object *ref)
+{
+  if (ref && !(inBetaHeap(ref) && isObject(ref))) { 
+    fprintf(output, "Illegal reference 0x%x in TSD[%d]\n", (int)ref, i); 
+    Illegal();
+  }
+}
+
+void TSDCheck(void)
+{  
+  int i;
+  for (i = 0; i < TSDlistlen; i++) {
+    if (TSDlist[i]) {
+
+      /* Check TSDinx */
+      if ( TSDlist[i]->_TSDinx < 0 || TSDlist[i]->_TSDinx > NumTSD ){
+	fprintf(output, 
+		"Illegal TSDinx %d in TSD[%d]. NumTSD is %d.\n", 
+		(int)TSDlist[i]->_TSDinx,
+		i,
+		(int)NumTSD);
+	Illegal();
+      }
+
+      /* Check TSDFlags */
+      if ( TSDlist[i]->_TSDFlags < 0 || TSDlist[i]->_TSDFlags>Flag_MAX ){
+	fprintf(output, 
+		"Illegal TSDFlags 0x%x in TSD[%d]. Flag_MAX is %d.\n", 
+		(int)TSDlist[i]->_TSDFlags,
+		i,
+		(int)Flag_MAX);
+	Illegal();
+      }
+
+      /* Check CTextPoolEnd */
+      if ( TSDlist[i]->_CTextPoolEnd &&
+	   (TSDlist[i]->_CTextPoolEnd<(char *)&TSDlist[i]->_CTextPool ||
+	    TSDlist[i]->_CTextPoolEnd>(char *)&TSDlist[i]->_CTextPool[MAXCTEXTPOOL/4])){
+	fprintf(output, 
+		"Illegal CTextPoolEnd 0x%x in TSD[%d]. \n", 
+		(int)TSDlist[i]->_CTextPoolEnd,
+		i);
+	fprintf(output, 
+		"CTextPoolEnd lies in the interval [0x%x..0x%x[\n",
+		(int)&TSDlist[i]->_CTextPool,
+		(int)&TSDlist[i]->_CTextPool[MAXCTEXTPOOL/4]);
+	Illegal();
+      }
+
+      /* Check thread_id. Cannot check against NumTSD, since several
+       * threads may have been created and later destroyed by now,
+       * in which case the thread id may be quite large 
+       */
+      if (TSDlist[i]->_thread_id > 1000){
+	fprintf(output, 
+		"Suspicious thread id %d in TSD[%d]\n", 
+		(int)TSDlist[i]->_thread_id,
+		i);
+      }
+
+      /* Check local IOA top and limit */
+      if (TSDlist[i]->_IOATop > TSDlist[i]->_IOALimit){
+	fprintf(output, 
+		"IOATop (0x%x) is above IOALimit (0x%x) in TSD[%d]\n", 
+		(int)TSDlist[i]->_IOATop,
+		(int)TSDlist[i]->_IOALimit,
+		i);
+	Illegal();
+      }
+      if (TSDlist[i]->_IOATop > gIOATop){
+	fprintf(output, 
+		"IOATop (0x%x) is above gIOATop (0x%x) in TSD[%d]\n", 
+		(int)TSDlist[i]->_IOATop,
+		(int)gIOATop,
+		i);
+	Illegal();
+      }
+      if (TSDlist[i]->_IOALimit > gIOALimit){
+	fprintf(output, 
+		"IOALimit (0x%x) is above gIOALimit (0x%x) in TSD[%d]\n", 
+		(int)TSDlist[i]->_IOALimit,
+		(int)gIOALimit,
+		i);
+	Illegal();
+      }
+
+
+      /* Check references */
+      TSDCheckReference(i, (ref(Object))(TSDlist[i]->_CurrentObject));
+      TSDCheckReference(i, (ref(Object))(TSDlist[i]->_Origin));
+      TSDCheckReference(i, (ref(Object))(TSDlist[i]->_SavedCallO));
+      TSDCheckReference(i, (ref(Object))(TSDlist[i]->_ActiveStack));
+      TSDCheckReference(i, (ref(Object))(TSDlist[i]->_ActiveComponent));
+    }
+  }
+}
+
+#endif /* RTDEBUG */
 
 void ProcessStackObj(struct StackObject *sObj)
 {
@@ -495,6 +678,7 @@ thread_t attToThread(struct Component *comp)
 		   (int)tsd->_thread_id, 
 		   (int)comp);
 	   fflush(output););
+  DEBUG_MT(TSDCheck());
   return tsd->_thread_id;
 }
 

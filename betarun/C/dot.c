@@ -303,5 +303,56 @@ long DOThandleLookup (int handle)
   return objAdr;
 }
 
+/* ProcessDOT
+ * ==========
+ *
+ * Process References in DOT.
+ * Used by IOAGc().
+ */
 
-
+void ProcessDOT(void)
+{
+  if( DOT ){
+    /* The Debugger Object Table is in use, so traverse this table. */
+    ptr(long) current = DOT;
+    while( current < DOTTop){
+      if( *current ) {
+	if (inIOA(*current)){
+	  { 
+	    ref(Object) theObj;
+	    ref(Object) enclObj;
+	    int enclDist;
+	    
+	    theObj = cast(Object)(*current);
+	    if (isStatic(theObj->GCAttr)) {
+	      GetDistanceToEnclosingObject(theObj,enclDist);
+	      enclObj = cast(Object) Offset(theObj,enclDist);
+	      if (isForward(enclObj->GCAttr))
+		theObj = cast(Object) Offset(enclObj->GCAttr,-enclDist);
+	      else
+		theObj = 0;	/* Enclosing object is dead */
+	    } else {
+	      /* It it not a static part object, so either the GCAttr is a
+	       * forward reference to the objects new position, or it is
+	       * NONE if the object is dead. */
+	      if (isForward (theObj->GCAttr))
+		theObj =  cast(Object) theObj->GCAttr;
+	      else
+		theObj = 0;
+	    }
+	    
+	    INFO_DOT(fprintf(output, 
+			     "#DOT: updating IOA reference 0x%x to 0x%x\n", 
+			     (int)(*current), (int)theObj));
+	    *current = (long) theObj;
+	    if (!theObj) DOTSize--;
+	    
+	    DEBUG_IOA( Claim( (theObj == 0) || inToSpace (theObj) || inAOA (theObj) ,"DOT element NONE, in ToSpace, or in AOA "));
+	    
+	  }
+	}
+      }
+      current++;
+    }
+  }
+}

@@ -13,7 +13,9 @@ GLOBAL(static long primes[]) =
 	 1708943, 2563441, 3845279, 5767999, 8651977, 0 };
 GLOBAL(static long prim_index) = 0;
 
-MT_CODE(static void AOAtoIOAInsert(handle( Object) theCell));
+#ifdef MT
+static void AOAtoIOAInsert(handle( Object) theCell);
+#endif
 
 /* Allocates the initial AOAtoIOAtable. */
 long AOAtoIOAalloc()

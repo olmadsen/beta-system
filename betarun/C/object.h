@@ -330,7 +330,8 @@ typedef struct nums
 typedef enum { 
   Flag_Semablocked = (1UL<< 0), 
   Flag_GCblocked   = (1UL<< 1), 
-  Flag_DoingGC     = (1UL<< 2)
+  Flag_DoingGC     = (1UL<< 2),
+  Flag_MAX         = (1UL<< 3)-1
 } tsd_flag_t;
 
 /* Thread Specific Data */

@@ -59,10 +59,10 @@ void IOAGc()
   ToSpaceTop       = ToSpace;
   HandledInToSpace = ToSpace;
   
+  DEBUG_MT( TSDCheck() );
   DEBUG_CBFA( CBFACheck() );
   DEBUG_IOA( IOACheck() );
   DEBUG_LVRA( LVRACheck() );
-  
   DEBUG_AOA( AOAtoIOACheck() );
   DEBUG_AOA( AOACheck() );
 
@@ -150,310 +150,190 @@ void IOAGc()
   CompleteScavenging();
   
 #ifdef MT
-  {
-    int i;
-    for (i = 0; i < TSDlistlen; i++) {
-      if (TSDlist[i]) {
-	DEBUG_MT(fprintf(output, 
-			 "\nTSDlist[%d]: t@%d:\n", 
-			 i, 
-			 TSDlist[i]->_thread_id));
-
-	DEBUG_MT(fprintf(output, 
-			 "\tCurrentObject=0x%0x...", 
-			 (int)TSDlist[i]->_CurrentObject));
-	ProcessReference((handle(Object))(&TSDlist[i]->_CurrentObject));
-	DEBUG_MT(fprintf(output, 
-			 "CurrentObject=0x%0x\n", 
-			 (int)TSDlist[i]->_CurrentObject));
-
-	DEBUG_MT(fprintf(output, 
-			 "\tOrigin=0x%0x...",
-			 (int)TSDlist[i]->_Origin));
-	ProcessReference((handle(Object))(&TSDlist[i]->_Origin));
-	DEBUG_MT(fprintf(output, 
-			 "Origin=0x%0x\n", (int)TSDlist[i]->_Origin));
-
-	DEBUG_MT(fprintf(output, 
-			 "\tSavedCallO=0x%0x...",
-			 (int)TSDlist[i]->_SavedCallO));
-	ProcessReference((handle(Object))(&TSDlist[i]->_SavedCallO));
-	DEBUG_MT(fprintf(output, 
-			 "SavedCallO=0x%0x\n", 
-			 (int)TSDlist[i]->_SavedCallO));
-
-	DEBUG_MT(fprintf(output, 
-			 "\tActiveStack=0x%0x...",
-			 (int)TSDlist[i]->_ActiveStack));
-	ProcessReference((handle(Object))(&TSDlist[i]->_ActiveStack));
-	DEBUG_MT(fprintf(output, 
-			 "ActiveStack=0x%0x\n", 
-			 (int)TSDlist[i]->_ActiveStack));
-
-	DEBUG_MT(fprintf(output, 
-			 "\tActiveComponent=0x%0x...",
-			 (int)TSDlist[i]->_ActiveComponent));
-	ProcessReference((handle(Object))(&TSDlist[i]->_ActiveComponent));
-	DEBUG_MT(fprintf(output, 
-			 "ActiveComponent=0x%0x\n", 
-			 (int)TSDlist[i]->_ActiveComponent));
-      }
-#ifdef RTDEBUG
-      else {
-	DEBUG_MT(fprintf(output, "TSDlist[%d] is NULL\n", i));
-      }
-#endif
-    }
-    CompleteScavenging();
-  }
+  ProcessTSD();
 #else
   ProcessStack();
 #endif
-    
-    /* Follow all struct pointers in the Call Back Functions area. */
-    if (CBFABlockSize){
-      if( CBFATop != CBFA->entries ){
-	ref(CallBackArea) cbfa = CBFA;
-	ref(CallBackEntry) current = cbfa->entries;
-	long limit = (long) cbfa->entries + CBFABlockSize;
-	
-	for (; current != CBFATop; 
-	     current = (ref(CallBackEntry))((long)current+CallBackEntrySize)){
-	  if ( (long) current >= limit){
-	    /* Go to next block */
-	    cbfa = cbfa->next;        
-	    /* guarentied to be non-nil since current != CBFATop */
-	    
-	    current = cbfa->entries; 
-	    /* guarentied to be different from CBFATop. 
-	     * If not the block would not have been allocated 
-	     */
-	    limit = (long)cbfa->entries + CBFABlockSize;
-	  }
-	  /*DEBUG_CBFA(fprintf(output, "ProcessCBFA: current=0x%x\n", current));*/
-	  if (current->theStruct){
-	    ProcessReference((handle(Object))(&current->theStruct));
-	  }
-	}
+  
+  ProcessCBFA();
+  
+  
+  /* Objects copied til AOA until now has not been proceesed. 
+   * During proceesing these objects, new objects may be copied to
+   * ToSpace and AOA, therefore we must alternate between handeling
+   * objects in ToSpace and AOA until no more objects is to procees.
+   */
+  if( AOABaseBlock ){
+    if( !HandledAOABlock ){
+      HandledAOABlock = AOABaseBlock; HandledInAOA = BlockStart( AOABaseBlock);
+    }
+    while( HandledAOABlock ){
+      /* Process objects from AOAoldTop to blockPtr->top. */
+      while( HandledInAOA < HandledAOABlock->top ){
+	ProcessAOAObject( (ref(Object))  HandledInAOA );
+	DEBUG_CODE( Claim(ObjectSize((ref(Object)) HandledInAOA ) > 0,
+			  "ObjectSize((ref(Object)) HandledInAOA ) > 0") );
+	HandledInAOA = (ptr(long)) (((long) HandledInAOA)
+				    + 4*ObjectSize( (ref(Object)) HandledInAOA ));
 	CompleteScavenging();
       }
+      HandledAOABlock = HandledAOABlock->next;
+      if( HandledAOABlock ) HandledInAOA = BlockStart( HandledAOABlock);
     }
-    
-    /* Objects copied til AOA until now has not been proceesed. 
-     * During proceesing these objects, new objects may be copied to
-     * ToSpace and AOA, therefore we must alternate between handeling
-     * objects in ToSpace and AOA until no more objects is to procees.
+    DEBUG_AOA( AOAtoIOACheck());
+  }
+  
+  ProcessDOT();
+  
+  DEBUG_CODE(dump_aoa=(AOANeedCompaction && DumpAOA));
+
+  if( AOANeedCompaction) AOAGc();
+
+  if (tempAOAroots) {
+    /* ToSpace was not big enough to hold both objects and table.
+     * Free the table that was allocated by saveAOAroot().
      */
-    if( AOABaseBlock ){
-      if( !HandledAOABlock ){
-	HandledAOABlock = AOABaseBlock; HandledInAOA = BlockStart( AOABaseBlock);
-      }
-      while( HandledAOABlock ){
-	/* Process objects from AOAoldTop to blockPtr->top. */
-	while( HandledInAOA < HandledAOABlock->top ){
-	  ProcessAOAObject( (ref(Object))  HandledInAOA );
-	  DEBUG_CODE( Claim(ObjectSize((ref(Object)) HandledInAOA ) > 0,
-			    "ObjectSize((ref(Object)) HandledInAOA ) > 0") );
-	  HandledInAOA = (ptr(long)) (((long) HandledInAOA)
-				      + 4*ObjectSize( (ref(Object)) HandledInAOA ));
-	  CompleteScavenging();
-	}
-	HandledAOABlock = HandledAOABlock->next;
-	if( HandledAOABlock ) HandledInAOA = BlockStart( HandledAOABlock);
-      }
-      DEBUG_AOA( AOAtoIOACheck());
-    }
-    
-    if( DOT ){
-      /* The Debugger Object Table is in use, so traverse this table. */
-      ptr(long) current = DOT;
-      while( current < DOTTop){
-	if( *current ) {
-	  if (inIOA(*current)){
-	    { ref(Object) theObj;
-	      ref(Object) enclObj;
-	      int enclDist;
-
-	      theObj = cast(Object)(*current);
-	      if (isStatic(theObj->GCAttr)) {
-		GetDistanceToEnclosingObject(theObj,enclDist);
-		enclObj = cast(Object) Offset(theObj,enclDist);
-		if (isForward(enclObj->GCAttr))
-		  theObj = cast(Object) Offset(enclObj->GCAttr,-enclDist);
-		else
-		  theObj = 0;	/* Enclosing object is dead */
-	      } else {
-		/* It it not a static part object, so either the GCAttr is a
-		 * forward reference to the objects new position, or it is
-		 * NONE if the object is dead. */
-		if (isForward (theObj->GCAttr))
-		  theObj =  cast(Object) theObj->GCAttr;
-		else
-		  theObj = 0;
-	      }
-
-	      INFO_DOT(fprintf(output, 
-			       "#DOT: updating IOA reference 0x%x to 0x%x\n", 
-			       (int)(*current), (int)theObj));
-	      *current = (long) theObj;
-	      if (!theObj) DOTSize--;
-	  
-	      DEBUG_IOA( Claim( (theObj == 0) || inToSpace (theObj) || inAOA (theObj) ,"DOT element NONE, in ToSpace, or in AOA "));
-
-	    }
-	  }
-	}
-	current++;
-      }
-    }
-    
-    DEBUG_CODE(dump_aoa=(AOANeedCompaction && DumpAOA));
-    if( AOANeedCompaction) AOAGc();
-
-    if (tempAOAroots) {
-      /* ToSpace was not big enough to hold both objects and table.
-       * Free the table that was allocated by saveAOAroot().
-       */
-      tempAOArootsFree();
-    }
+    tempAOArootsFree();
+  }
 #ifdef RTDEBUG
-    else {
-      /* Clear the part of ToSpace used for AOArootstable */
-      memset(AOArootsPtr, 0, AOArootsLimit-AOArootsPtr);
-    }
+  else {
+    /* Clear the part of ToSpace used for AOArootstable */
+    memset(AOArootsPtr, 0, AOArootsLimit-AOArootsPtr);
+  }
 #endif
+  
+  /* Swap IOA and ToSpace */
+  {
+    ptr(long) Tmp; ptr(long) TmpTop; 
     
-    /* Swap IOA and ToSpace */
-    {
-      ptr(long) Tmp; ptr(long) TmpTop; 
-      
-      Tmp    = GLOBAL_IOA; 
-      TmpTop = GLOBAL_IOATop; 
-      
-      GLOBAL_IOA       = ToSpace;                          
-      GLOBAL_IOALimit  = ToSpaceLimit;
+    Tmp    = GLOBAL_IOA; 
+    TmpTop = GLOBAL_IOATop; 
+    
+    GLOBAL_IOA       = ToSpace;                          
+    GLOBAL_IOALimit  = ToSpaceLimit;
 
 #if defined(NEWRUN) || defined(sparc)
 #ifdef MT
-      gIOATop    = ToSpaceTop; 
+    gIOATop    = ToSpaceTop; 
 #else /* MT */
-      IOATopOff = (char *) ToSpaceTop - (char *) IOA;
+    IOATopOff = (char *) ToSpaceTop - (char *) IOA;
 #endif /* MT */
 #else
-      IOATop    = ToSpaceTop; 
+    IOATop    = ToSpaceTop; 
 #endif
-      
-      ToSpace = Tmp; 
-      ToSpaceTop = TmpTop; 
-      ToSpaceLimit = (long*)((long)ToSpace+IOASize);
-    }
     
-    IOAActive = FALSE;
-    
-    /* Determine new tenuring threshold */
-    {
-      long limit;
-      long sum = 0;
-      limit = areaSize(GLOBAL_IOA,GLOBAL_IOALimit) / 10;
+    ToSpace = Tmp; 
+    ToSpaceTop = TmpTop; 
+    ToSpaceLimit = (long*)((long)ToSpace+IOASize);
+  }
+  
+  IOAActive = FALSE;
+  
+  /* Determine new tenuring threshold */
+  {
+    long limit;
+    long sum = 0;
+    limit = areaSize(GLOBAL_IOA,GLOBAL_IOALimit) / 10;
 #ifdef KEEP_STACKOBJ_IN_IOA
-      limit -= IOAStackObjectSum;
-      if (limit < 0) {
-	DEBUG_IOA( fprintf(output, 
-			   "#IOA: %d StackObjects fill up more than 10%% of IOA (%d)\n", 
-			   (int)IOAStackObjectNum, 
-			   (int)IOAStackObjectSum));
-	limit = 0;
-      }
-#endif
-      IOAtoAOAtreshold = 0;
-      do
-	{
-	  sum += IOAAgeTable[IOAtoAOAtreshold++];
-	} while ((sum < limit) && (IOAtoAOAtreshold < IOAMaxAge));
-      
-      if (limit)
-	IOAtoAOAtreshold +=1; 
+    limit -= IOAStackObjectSum;
+    if (limit < 0) {
+      DEBUG_IOA( fprintf(output, 
+			 "#IOA: %d StackObjects fill up more than 10%% of IOA (%d)\n", 
+			 (int)IOAStackObjectNum, 
+			 (int)IOAStackObjectSum));
+      limit = 0;
     }
-    DEBUG_IOA( fprintf(output, " treshold=%d", (int)IOAtoAOAtreshold));
-    DEBUG_IOA( fprintf(output, " AOAroots=%d", 
-		       (int)areaSize(AOArootsPtr,AOArootsLimit)));
+#endif
+    IOAtoAOAtreshold = 0;
+    do
+      {
+	sum += IOAAgeTable[IOAtoAOAtreshold++];
+      } while ((sum < limit) && (IOAtoAOAtreshold < IOAMaxAge));
     
-    INFO_IOA(fprintf(output," %d%% used)\n",
-		     (int)((100 * areaSize(GLOBAL_IOA,GLOBAL_IOATop))/areaSize(GLOBAL_IOA,GLOBAL_IOALimit))));
-	
-    /* Clear all of the unused part of IOA (i.e. [IOATop..IOALimit[), 
-     * so that allocation routines do not need to clear cells.
+    if (limit)
+      IOAtoAOAtreshold +=1; 
+  }
+  DEBUG_IOA( fprintf(output, " treshold=%d", (int)IOAtoAOAtreshold));
+  DEBUG_IOA( fprintf(output, " AOAroots=%d", 
+		     (int)areaSize(AOArootsPtr,AOArootsLimit)));
+  
+  INFO_IOA(fprintf(output," %d%% used)\n",
+		   (int)((100 * areaSize(GLOBAL_IOA,GLOBAL_IOATop))/areaSize(GLOBAL_IOA,GLOBAL_IOALimit))));
+  
+  /* Clear all of the unused part of IOA (i.e. [IOATop..IOALimit[), 
+   * so that allocation routines do not need to clear cells.
+   */
+  memset(GLOBAL_IOATop, 0, (long)GLOBAL_IOALimit-(long)GLOBAL_IOATop);
+
+#ifdef MT
+  DEBUG_IOA({ 
+    /* If there is only one thread, IOACheck will only check the range
+     * IOA..IOATop (not gIOA..gIOATop). To make this possible at this point,
+     * we must set the thread specific IOATop already here.
+     * It will be reassigned, when the object requested is allocated in
+     * doGC, but the assignment below should cause no harm.
      */
-    memset(GLOBAL_IOATop, 0, (long)GLOBAL_IOALimit-(long)GLOBAL_IOATop);
-
-#ifdef MT
-    DEBUG_IOA({ 
-      /* If there is only one thread, IOACheck will only check the range
-       * IOA..IOATop (not gIOA..gIOATop). To make this possible at this point,
-       * we must set the thread specific IOATop already here.
-       * It will be reassigned, when the object requested is allocated in
-       * doGC, but the assignment below should cause no harm.
-       */
-      if (NumTSD==1) IOATop = GLOBAL_IOATop; 
-    });
+    if (NumTSD==1) IOATop = GLOBAL_IOATop; 
+  });
 #endif
 
-    DEBUG_IOA( IOACheck() );
-    DEBUG_CBFA( CBFACheck() );
-    DEBUG_AOA( AOACheck() );
-    DEBUG_LVRA( LVRACheck() );
-    DEBUG_CODE(if (dump_aoa) AOACheck());
+  DEBUG_MT( TSDCheck() );
+  DEBUG_IOA( IOACheck() );
+  DEBUG_CBFA( CBFACheck() );
+  DEBUG_AOA( AOACheck() );
+  DEBUG_LVRA( LVRACheck() );
+  DEBUG_CODE(if (dump_aoa) AOACheck());
 
-    InfoS_LabB();
-    
+  InfoS_LabB();
+  
 #ifdef MT
-    /* doGC checks for this */
+  /* doGC checks for this */
 #else
-    if ((long)IOATop+4*(long)ReqObjectSize > (long)IOALimit) {
-      /* Not enough freed by this GC */
-      if (IOALooksFullCount > 2) {
-	char buf[100];
-	sprintf(buf, "Sorry, IOA is full: cannot allocate %d bytes.\n\
+  if ((long)IOATop+4*(long)ReqObjectSize > (long)IOALimit) {
+    /* Not enough freed by this GC */
+    if (IOALooksFullCount > 2) {
+      char buf[100];
+      sprintf(buf, "Sorry, IOA is full: cannot allocate %d bytes.\n\
 Program terminated.\n", (int)(4*ReqObjectSize));
-	Notify(buf);
+      Notify(buf);
 #ifdef NEWRUN
-	BetaError(IOAFullErr, CurrentObject, StackEnd, 0);
+      BetaError(IOAFullErr, CurrentObject, StackEnd, 0);
 #else
-	BetaError(IOAFullErr, 0);
+      BetaError(IOAFullErr, 0);
 #endif
-      } else {
-	if (IOALooksFullCount==2) {
-	  /* Have now done two IOAGc's without freeing enough space.
-	   * Make sure that all objects go to AOA in the next GC.
-	   */
-	  IOAtoAOAtreshold=IOAMinAge+1;
-	  DEBUG_IOA(fprintf(output, "Forcing all to AOA in next IOAGc\n"));
-	}
-	IOALooksFullCount++;
-      }
-      INFO_IOA(fprintf(output, "[%d]\n", IOALooksFullCount));
     } else {
-      IOALooksFullCount = 0;
+      if (IOALooksFullCount==2) {
+	/* Have now done two IOAGc's without freeing enough space.
+	 * Make sure that all objects go to AOA in the next GC.
+	 */
+	IOAtoAOAtreshold=IOAMinAge+1;
+	DEBUG_IOA(fprintf(output, "Forcing all to AOA in next IOAGc\n"));
+      }
+      IOALooksFullCount++;
     }
+    INFO_IOA(fprintf(output, "[%d]\n", IOALooksFullCount));
+  } else {
+    IOALooksFullCount = 0;
+  }
 #endif /* MT */
-    
-    DEBUG_CODE(memset(ToSpace, 0, IOASize));
+  
+  DEBUG_CODE(memset(ToSpace, 0, IOASize));
 
-    DEBUG_IOA(
-		fprintf(output,
-			"After: IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
-			(int)GLOBAL_IOA, 
-			(int)GLOBAL_IOATop,
-			(int)GLOBAL_IOALimit);
-		fprintf(output,
-			"After: ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
-			(int)ToSpace, 
-			(int)ToSpaceTop, 
-			(int)ToSpaceLimit);
-		);
-    INFO_HEAP_USAGE(PrintHeapUsage("after IOA GC"));
+  DEBUG_IOA(
+	    fprintf(output,
+		    "After: IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
+		    (int)GLOBAL_IOA, 
+		    (int)GLOBAL_IOATop,
+		    (int)GLOBAL_IOALimit);
+	    fprintf(output,
+		    "After: ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
+		    (int)ToSpace, 
+		    (int)ToSpaceTop, 
+		    (int)ToSpaceLimit);
+	    );
+  INFO_HEAP_USAGE(PrintHeapUsage("after IOA GC"));
 
-  } /* End IOAGc */
+} /* End IOAGc */
 
 #ifndef KEEP_STACKOBJ_IN_IOA
 /* DoIOACell:
@@ -479,7 +359,7 @@ void DoIOACell(struct Object **theCell,struct Object *theObj)
 #ifdef RTLAZY
 	if (isLazyRef(theObj)) {
 	  DEBUG_LAZY(fprintf(output, 
-			    "DoIOACell: Lazy ref: %d\n", (int)theObj));
+			     "DoIOACell: Lazy ref: %d\n", (int)theObj));
 	  ProcessReference(theCell);
 	} else {
 #ifdef RTDEBUG
@@ -535,7 +415,7 @@ static void CheckIOACell(struct Object **theCell,struct Object *theObj)
  */
 
 void ProcessReference( theCell)
-  handle(Object) theCell;
+     handle(Object) theCell;
 {
   ref(Object) theObj;
   long GCAttribute;
@@ -546,10 +426,10 @@ void ProcessReference( theCell)
     /* 'theObj' is inside IOA */
 #ifdef RTDEBUG
     { char buf[100];
-      DEBUG_IOA(sprintf(buf, 
-			"ProcessReference: theObj (0x%x) is consistent.", 
-			(int)theObj); 
-		Claim(isObject(theObj),buf));
+    DEBUG_IOA(sprintf(buf, 
+		      "ProcessReference: theObj (0x%x) is consistent.", 
+		      (int)theObj); 
+	      Claim(isObject(theObj),buf));
     }
 #endif
     GCAttribute = theObj->GCAttr;
@@ -557,7 +437,7 @@ void ProcessReference( theCell)
       /* theObj has a forward pointer, i.e has already been moved */
       *theCell = (ref(Object)) GCAttribute; /* update cell to reference forward obj */
       DEBUG_LVRA( Claim( !inLVRA((ref(Object))GCAttribute), 
-			"ProcessReference: Forward ValRep"));
+			 "ProcessReference: Forward ValRep"));
       /* If the forward pointer refers an AOA object, insert
        * theCell in AOAroots table.
        */
@@ -620,7 +500,7 @@ void ProcessReference( theCell)
       /* Preserve the LVRA-cycle. */
       ((ref(ValRep)) *theCell)->GCAttr = (long) theCell;
       DEBUG_LVRA( Claim( isValRep(*theCell),
-			"ProcessObject: isValRep(*theCell)"));
+			 "ProcessObject: isValRep(*theCell)"));
       return;
     }
   }
@@ -664,46 +544,46 @@ void ProcessObject(theObj)
       case SwitchProto(DynItemRepPTValue):
       case SwitchProto(DynCompRepPTValue):
 	{ long *pointer;
-	  register long size, index;
-	  
-	  /* Scan the repetition and follow all entries */
-	  { size = REP->HighBorder;
-	    pointer = (long *)&REP->Body[0];
-	    
-	    for (index=0; index<size; index++) {
-	      ProcessReference( (handle(Object))(pointer++) );
-	    }
-	  }
+	register long size, index;
+	
+	/* Scan the repetition and follow all entries */
+	{ size = REP->HighBorder;
+	pointer = (long *)&REP->Body[0];
+	
+	for (index=0; index<size; index++) {
+	  ProcessReference( (handle(Object))(pointer++) );
 	}
-	break;
+	}
+	}
+      break;
       }
       return;
 
     case SwitchProto(RefRepPTValue):
       /* Scan the repetition and follow all entries */
       { ptr(long) pointer;
-	register long size, index;
-	
-	size = toRefRep(theObj)->HighBorder;
-	pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
-	
-	for(index=0; index<size; index++) 
-	  if( *pointer != 0 ) ProcessReference( (handle(Object))(pointer++) );
-	  else pointer++;
-      }
-      return;
+      register long size, index;
       
+      size = toRefRep(theObj)->HighBorder;
+      pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
+      
+      for(index=0; index<size; index++) 
+	if( *pointer != 0 ) ProcessReference( (handle(Object))(pointer++) );
+	else pointer++;
+      }
+    return;
+    
     case SwitchProto(ComponentPTValue):
       { ref(Component) theComponent;
-	
-	theComponent = Coerce( theObj, Component);
-	ProcessReference( (handle(Object))(&theComponent->StackObj));
-	ProcessReference( (handle(Object))(&theComponent->CallerComp));
-	ProcessReference( &theComponent->CallerObj);
-	ProcessObject( (ref(Object))ComponentItem( theComponent));
-      }
-      return;
       
+      theComponent = Coerce( theObj, Component);
+      ProcessReference( (handle(Object))(&theComponent->StackObj));
+      ProcessReference( (handle(Object))(&theComponent->CallerComp));
+      ProcessReference( &theComponent->CallerObj);
+      ProcessObject( (ref(Object))ComponentItem( theComponent));
+      }
+    return;
+    
     case SwitchProto(StackObjectPTValue):
 #ifdef NEWRUN
       ProcessStackObj((struct StackObject *)theObj, DoIOACell);
@@ -778,7 +658,7 @@ void ProcessAOAReference( theCell)
     if( isForward(GCAttribute) ){ /* theObj has a forward pointer. */
       *theCell = (ref(Object)) GCAttribute;
       DEBUG_LVRA( Claim( !inLVRA((ref(Object))GCAttribute),
-			"ProcessAOAReference: Forward ValRep"));
+			 "ProcessAOAReference: Forward ValRep"));
     }else{
       if( isAutonomous(GCAttribute) ){ 
 	/* theObj is an autonomous object. */
@@ -789,7 +669,7 @@ void ProcessAOAReference( theCell)
 	    /* Preserve the LVRA-cycle. */
 	    ((ref(ValRep)) *theCell)->GCAttr = (long) theCell;
 	    DEBUG_LVRA( Claim( isValRep(*theCell),
-			      "ProcessAOAReference: isValRep(*theCell)"));
+			       "ProcessAOAReference: isValRep(*theCell)"));
 	  }
 	}
       }else{ /* theObj is a part object. */
@@ -811,7 +691,7 @@ void ProcessAOAReference( theCell)
       /* Preserve the LVRA-cycle. */
       ((ref(ValRep)) *theCell)->GCAttr = (long) theCell;
       DEBUG_LVRA( Claim( isValRep(*theCell), 
-			"ProcessAOAReference: isValRep(*theCell)"));
+			 "ProcessAOAReference: isValRep(*theCell)"));
     }
   }
   DEBUG_AOA( Claim( !inIOA(*theCell),"ProcessAOAReference: !inIOA(*theCell)"));
@@ -843,125 +723,125 @@ void ProcessAOAReference( theCell)
 void ProcessAOAObject(theObj)
      ref(Object) theObj;
 { ref(ProtoType) theProto;
-  
-  theProto = theObj->Proto;
-  
+
+theProto = theObj->Proto;
+
 #ifdef MT
-  /* The way part objects are allocated in V-entries
-   * may leave part objects with uninitialized prototypes.
-   */
-  if (!theProto) return;
+/* The way part objects are allocated in V-entries
+ * may leave part objects with uninitialized prototypes.
+ */
+if (!theProto) return;
 #endif
 
-  if( isSpecialProtoType(theProto) ){  
-    switch( SwitchProto(theProto) ){
-    case SwitchProto(ByteRepPTValue): 
-    case SwitchProto(ShortRepPTValue): 
-    case SwitchProto(DoubleRepPTValue): 
-    case SwitchProto(LongRepPTValue): 
-      return; /* No references in the type of object, so do nothing*/
+if( isSpecialProtoType(theProto) ){  
+  switch( SwitchProto(theProto) ){
+  case SwitchProto(ByteRepPTValue): 
+  case SwitchProto(ShortRepPTValue): 
+  case SwitchProto(DoubleRepPTValue): 
+  case SwitchProto(LongRepPTValue): 
+    return; /* No references in the type of object, so do nothing*/
 
+  case SwitchProto(DynItemRepPTValue):
+  case SwitchProto(DynCompRepPTValue):
+    /* Process iOrigin */
+    ProcessAOAReference( (handle(Object))(&REP->iOrigin) );
+    /* Process rest of repetition */
+    switch(SwitchProto(theProto)){
     case SwitchProto(DynItemRepPTValue):
     case SwitchProto(DynCompRepPTValue):
-      /* Process iOrigin */
-      ProcessAOAReference( (handle(Object))(&REP->iOrigin) );
-      /* Process rest of repetition */
-      switch(SwitchProto(theProto)){
-      case SwitchProto(DynItemRepPTValue):
-      case SwitchProto(DynCompRepPTValue):
-	{ long *pointer;
-	  register long size, index;
-	  
-	  /* Scan the repetition and follow all entries */
-	  { size = REP->HighBorder;
-	    pointer = (long *)&REP->Body[0];
-	    
-	    for (index=0; index<size; index++) {
-	      ProcessAOAReference( (handle(Object))(pointer++) );
-	    }
-	  }
-	}
-	break;
-      }
-      return;
-
-    case SwitchProto(RefRepPTValue):
+      { long *pointer;
+      register long size, index;
+      
       /* Scan the repetition and follow all entries */
-      { ptr(long) pointer;
-	register long size, index;
-	
-	size = toRefRep(theObj)->HighBorder;
-	pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
-	for(index=0; index<size; index++) 
-	  if(*pointer) 
-	    ProcessAOAReference( (handle(Object))(pointer++) );
-	  else pointer++;
+      { size = REP->HighBorder;
+      pointer = (long *)&REP->Body[0];
+      
+      for (index=0; index<size; index++) {
+	ProcessAOAReference( (handle(Object))(pointer++) );
       }
-      return;
-    case SwitchProto(ComponentPTValue):
-      { ref(Component) theComponent;
-	theComponent = Coerce( theObj, Component);
-	ProcessAOAReference( (handle(Object))(&theComponent->StackObj));
-	ProcessAOAReference( (handle(Object))(&theComponent->CallerComp));
-	ProcessAOAReference( (handle(Object))(&theComponent->CallerObj));
-	ProcessAOAObject( (ref(Object))(ComponentItem( theComponent)));
       }
-      return;
-    case SwitchProto(StackObjectPTValue):
+      }
+    break;
+    }
+    return;
+
+  case SwitchProto(RefRepPTValue):
+    /* Scan the repetition and follow all entries */
+    { ptr(long) pointer;
+    register long size, index;
+    
+    size = toRefRep(theObj)->HighBorder;
+    pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
+    for(index=0; index<size; index++) 
+      if(*pointer) 
+	ProcessAOAReference( (handle(Object))(pointer++) );
+      else pointer++;
+    }
+  return;
+  case SwitchProto(ComponentPTValue):
+    { ref(Component) theComponent;
+    theComponent = Coerce( theObj, Component);
+    ProcessAOAReference( (handle(Object))(&theComponent->StackObj));
+    ProcessAOAReference( (handle(Object))(&theComponent->CallerComp));
+    ProcessAOAReference( (handle(Object))(&theComponent->CallerObj));
+    ProcessAOAObject( (ref(Object))(ComponentItem( theComponent)));
+    }
+  return;
+  case SwitchProto(StackObjectPTValue):
 #ifdef KEEP_STACKOBJ_IN_IOA
-      Claim( FALSE, "ProcessAOAObject: No StackObject in AOA");
+    Claim( FALSE, "ProcessAOAObject: No StackObject in AOA");
 #else
-      /* Machine dependant traversal of stackobj */
+    /* Machine dependant traversal of stackobj */
 #ifdef NEWRUN
-      ProcessStackObj((struct StackObject *)theObj, DoAOACell);
+    ProcessStackObj((struct StackObject *)theObj, DoAOACell);
 #endif
 #endif /* KEEP_STACKOBJ_IN_IOA */
-      return;
-    case SwitchProto(StructurePTValue):
-      ProcessAOAReference( &(toStructure(theObj))->iOrigin );
-      return;
-    case SwitchProto(DopartObjectPTValue):
-      ProcessAOAReference( &(cast(DopartObject)(theObj))->Origin );
-      return;
-    }
-  }else{
-    ptr(short)  Tab;
-    ptr(long)   theCell;
-    
-    /* Calculate a pointer to the GCTabel inside the ProtoType. */
-    Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
-    
-    /* Handle all the static objects. 
-     * The static table have the following structure:
-     * { .word Offset
-     *   .word Distance_To_Inclosing_Object
-     *   .long T_entry_point
-     * }*
-     * This table contains all static objects on all levels.
-     * Here vi only need to perform ProcessAOAObject on static objects
-     * on 1 level. The recursion in ProcessAOAObject handle other
-     * levels. 
-     * The way to determine the level of an static object is to 
-     * compare the Offset and the Distance_To_Inclosing_Object.
-     */
-    
-    while( *Tab != 0 ){
-      if( *Tab == -Tab[1] ) 
-	ProcessAOAObject( (ref(Object))(Offset( theObj, *Tab * 4)));
-      Tab += 4;
-    }
-    Tab++;
-    
-    /* Handle all the references in the Object. */
-    while( *Tab != 0 ){
-      theCell = (ptr(long)) Offset( theObj, ((*Tab++) & (short) ~3) );
-      /* sbrandt 24/1/1994: 2 least significant bits in prototype 
-       * dynamic offset table masked out. As offsets in this table are
-       * always multiples of 4, these bits may be used to distinguish
-       * different reference types. */ 
-      if(*theCell) ProcessAOAReference( (handle(Object))theCell );
-    }
+    return;
+  case SwitchProto(StructurePTValue):
+    ProcessAOAReference( &(toStructure(theObj))->iOrigin );
+    return;
+  case SwitchProto(DopartObjectPTValue):
+    ProcessAOAReference( &(cast(DopartObject)(theObj))->Origin );
+    return;
   }
+}else{
+  ptr(short)  Tab;
+  ptr(long)   theCell;
+  
+  /* Calculate a pointer to the GCTabel inside the ProtoType. */
+  Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
+  
+  /* Handle all the static objects. 
+   * The static table have the following structure:
+   * { .word Offset
+   *   .word Distance_To_Inclosing_Object
+   *   .long T_entry_point
+   * }*
+   * This table contains all static objects on all levels.
+   * Here vi only need to perform ProcessAOAObject on static objects
+   * on 1 level. The recursion in ProcessAOAObject handle other
+   * levels. 
+   * The way to determine the level of an static object is to 
+   * compare the Offset and the Distance_To_Inclosing_Object.
+   */
+  
+  while( *Tab != 0 ){
+    if( *Tab == -Tab[1] ) 
+      ProcessAOAObject( (ref(Object))(Offset( theObj, *Tab * 4)));
+    Tab += 4;
+  }
+  Tab++;
+  
+  /* Handle all the references in the Object. */
+  while( *Tab != 0 ){
+    theCell = (ptr(long)) Offset( theObj, ((*Tab++) & (short) ~3) );
+    /* sbrandt 24/1/1994: 2 least significant bits in prototype 
+     * dynamic offset table masked out. As offsets in this table are
+     * always multiples of 4, these bits may be used to distinguish
+     * different reference types. */ 
+    if(*theCell) ProcessAOAReference( (handle(Object))theCell );
+  }
+}
 }
 
 /*
@@ -1004,7 +884,7 @@ void CompleteScavenging()
 	  (int)ToSpaceTop);
 #endif
   DEBUG_CODE( Claim( HandledInToSpace == ToSpaceTop,
-		   "CompleteScavenging: HandledInToSpace == ToSpaceTop"));
+		     "CompleteScavenging: HandledInToSpace == ToSpaceTop"));
 }
 
 #ifdef RTDEBUG
@@ -1111,7 +991,7 @@ void IOACheck()
   }
   return;
 }
-  
+
 void IOACheckObject (struct Object *theObj)
 {
   ref(ProtoType) theProto;
@@ -1151,32 +1031,32 @@ void IOACheckObject (struct Object *theObj)
     case SwitchProto(LongRepPTValue):
       /* No references in the type of object, so do nothing*/
       return;
-    
+      
     case SwitchProto(DynItemRepPTValue):
     case SwitchProto(DynCompRepPTValue):
       /* Check iOrigin */
       IOACheckReference( (handle(Object))(&REP->iOrigin) );
-    /* Check rest of repetition */
-    switch(SwitchProto(theProto)){
-    case SwitchProto(DynItemRepPTValue):
-    case SwitchProto(DynCompRepPTValue):
-      { long *pointer;
-      register long size, index;
-      
-      /* Scan the repetition and follow all entries */
-      { 
-	size = REP->HighBorder;
-	pointer = (long *)&REP->Body[0];
+      /* Check rest of repetition */
+      switch(SwitchProto(theProto)){
+      case SwitchProto(DynItemRepPTValue):
+      case SwitchProto(DynCompRepPTValue):
+	{ long *pointer;
+	register long size, index;
 	
-	for (index=0; index<size; index++) {
-	  IOACheckReference( (handle(Object))(pointer++) );
+	/* Scan the repetition and follow all entries */
+	{ 
+	  size = REP->HighBorder;
+	  pointer = (long *)&REP->Body[0];
+	  
+	  for (index=0; index<size; index++) {
+	    IOACheckReference( (handle(Object))(pointer++) );
+	  }
 	}
+	}
+      break;
       }
-      }
-    break;
-    }
-    return;
-    
+      return;
+      
     case SwitchProto(RefRepPTValue):
       /* Scan the repetition and follow all entries */
       { ptr(long) pointer;
@@ -1217,7 +1097,7 @@ void IOACheckObject (struct Object *theObj)
 #endif
 #endif
       return;
-    
+      
     case SwitchProto(StructurePTValue):
       IOACheckReference( &(toStructure(theObj))->iOrigin );
       return;
@@ -1289,11 +1169,11 @@ void IOACheckReference(theCell)
 	     (long)*theCell==16 || /* dreadfull hack (see AlloBC) */
 #endif
 	     inLVRA(*theCell),
-	    "IOACheckReference: *theCell lazy ref or inside IOA, AOA or LVRA");
+	     "IOACheckReference: *theCell lazy ref or inside IOA, AOA or LVRA");
     }
     if( inLVRA(*theCell) ){
       Claim( ((ref(ValRep)) *theCell)->GCAttr == (long) theCell,
-	    "IOACheckReference:  ((ref(ValRep)) *theCell)->GCAttr == theCell");
+	     "IOACheckReference:  ((ref(ValRep)) *theCell)->GCAttr == theCell");
       DEBUG_LVRA( Claim(isValRep(*theCell),
 			"IOACheckReference: isValRep(*theCell)"));
     }

@@ -77,9 +77,13 @@ extern void CBFAalloc(void);
 extern void CBFArelloc(void);
 extern void freeCBF(unsigned long);
 extern void freeCallbackCalled(void);
+extern void ProcessCBFA(void);
 #ifdef RTDEBUG
 extern void CBFACheck(void);
 #endif
+
+/* C/dot.c */
+extern void ProcessDOT(void);
 
 /* C/sighandler.c */
 extern void SetupBetaSignalHandlers(void);
@@ -87,7 +91,12 @@ extern void InstallSigHandler(int sig);
 
 #ifdef MT
 /* C/multithread.c */
+extern TSD* create_TSD(void);
 extern void destroy_TSD(void);
+extern void ProcessTSD(void);
+#ifdef RTDEBUG
+extern void TSDCheck(void);
+#endif
 extern void initSynchVariables(void);
 extern int numProcessors(int online);
 extern thread_t attToProcessor(struct Component *comp);
