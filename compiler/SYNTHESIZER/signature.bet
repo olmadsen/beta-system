@@ -338,37 +338,44 @@ Reference: Type
           if);
          
        #);
-     desc: ^ASTindex; EH: @evalHandler
+     EH: @evalHandler;
+     desc: ^ASTindex; 
   enter desc[] (*class[]*)
-  do (if (desc -> sematt.descKind) = sematt.externalClassKind then
-         desc[] -> getExternalClassName -> class[];
-         true -> isExternalClass;
-         true -> isExternalText (* we should check that desc
-                                 * is in fact an external text/string
-                                 * like java/lang/String
-                                 *)
-      else
-         (desc[],true) -> EH.descName -> class[]
-     if);
-     (if isExternalClass then
-         NONE -> location[]; (* force default location to be same as class name *)
-      else
-         desc[] -> descLocation -> location[];
-     if);
-     (if true
-      // 'object' -> class.equalNCS 
-      // 'Object' -> class.equalNCS then
-         (if true
-          // isJava then
-             'java/lang/Object' -> class[]
-          // isDotNet then
-             'object' -> class[]
+  do (if (desc[] <> none) and (not desc.isNull) then
+         (if (desc -> sematt.descKind) = sematt.externalClassKind then
+             desc[] -> getExternalClassName -> class[];
+             true -> isExternalClass;
+             true -> isExternalText (* we should check that desc
+                                     * is in fact an external text/string
+                                     * like java/lang/String
+                                     *)
           else
-             'Unknown_platform.Object' -> class[]
+             (desc[],true) -> EH.descName -> class[]
          if);
-     (* // 'java/lang/String' -> class.equal then*)
-         (* we should generalize this in a better way *)
-
+         desc[] -> descLocation -> location[];
+         (if isExternalClass then
+             NONE -> location[]; (* force default location to be 
+                                  * same as class name *)
+          else
+             desc[] -> descLocation -> location[];
+         if);
+         (if true
+          // 'object' -> class.equalNCS 
+          // 'Object' -> class.equalNCS then
+             (if true
+              // isJava then
+                 'java/lang/Object' -> class[]
+              // isDotNet then
+                 'object' -> class[]
+              else
+                 'Unknown_platform.Object' -> class[]
+             if);
+             (* // 'java/lang/String' -> class.equal then*)
+             (* we should generalize this in a better way *)
+             
+         if);
+      else
+         platformSuperName -> class[]
      if);
   #);
 Array: Type
@@ -482,6 +489,22 @@ valueSignature:
      if)
   exit sig[]
   #);
+mkSig:
+  (# desc: ^ASTindex; 
+     sig: ^Type
+  enter desc[]
+  do (* should be made nicer *)
+     (if (desc[] <> none) and not desc.isNull then
+         (if (desc -> sematt.descKind) = sematt.standardKind then
+             desc[] -> valueSignature -> sig[]
+          else  
+             desc[] -> reference -> sig[]
+         if)
+      else
+         desc[] -> reference -> sig[];
+     if)
+  exit sig[]
+  #);
 
 mkSignature:
   (# desc: ^ASTindex; sig: ^Type; tsig: ^text; 
@@ -490,18 +513,7 @@ mkSignature:
   do (if (desc -> sematt.descKind) = sematt.standardKind then
          (desc[] -> valueSignature -> sig[]).astext -> tsig[]
       else  
-         (if true then
-             desc[] -> reference -> sig[]
-          else
-             (*
-              (if (desc -> sematt.descKind) = sematt.externalClassKind then
-              desc[] -> getExternalClassName -> Reference -> sig[]
-              else    
-              (desc[],true) -> EH.descName -> Reference -> sig[];
-              if);
-              desc[] -> descLocation -> sig.location[];
-              *)
-         if);
+         desc[] -> reference -> sig[];
          sig.asText -> tsig[];
      if);
      (if false and isJava then
@@ -849,6 +861,43 @@ classSignature: ISignature
                   if)
                #);          
   #);
+constructorSignature: ISignature
+  (* signature of class constructor *)
+  (# originDesc: ^ASTindex;
+     originName,locations: ^text;
+     sig: @ListSignature;
+     addConstructorDesc:
+       (# consDesc: ^ASTindex; cSig: @signature
+       enter consDesc[]
+       do (consDesc[],thisSuperChain,false) 
+            -> cSig.setMethodDesc;
+          consDesc[] -> cSig.addEnter;
+          cSig.NNsig[] -> sig.append
+       #);
+     asText::
+       (#
+       do (if isJava then
+              (if '-' -> originName.equal then
+                  '()V' -> T[]
+               else
+                  '(' -> T[];
+                  sig.astext -> T.append;
+                  ')V' -> T.append                  
+              if)              
+           else
+              (originName[],location[]) -> AddDotnetLocation -> T[];
+              (if trace_sig then
+                  '/*constructorsignature*/' -> T.append;
+              if);
+          if)
+       #);
+     EH: @evalHandler
+  enter(originDesc[],originName[]) (* eliminate originName[] as argument;
+                                    * however, '-' must be handled in
+                                    * some way
+                                    *)
+  <<SLOT signature_constructorSignature:doPart>>
+  #);
 superSignature: ISignature
   (* use for super class name *)
   (# desc: ^ASTindex;
@@ -866,7 +915,7 @@ superSignature: ISignature
   do (if desc[] <> none then
          (if (desc[] -> descLocation -> location[]) <> none then
              location[] -> mch.import
-         if)if)
+     if)if)     
   #);
 scanNargs:
   (# EH: @EvalHandler;
@@ -994,7 +1043,8 @@ isBETAsubOfExternalClass: booleanValue
   #);
      
 newInstance:
-  (# desc: ^ASTindex; EH: @evalHandler;
+  (# desc: ^ASTindex; 
+     consSig: ^ConstructorSignature
   enter desc[]
   <<SLOT signature_newinstance:doPart>>
   #);

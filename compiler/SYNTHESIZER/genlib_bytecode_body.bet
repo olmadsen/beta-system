@@ -93,11 +93,6 @@ do (# sig: @Signature;
 
           topDesc[]  -> sematt.hasDo -> hasDoCode
       if);
-     (* (if sig.isMultiValExit and (sig.NNsig.top = 0) then
-          common.nameManglingCh 
-            -> (patternName.copy).put 
-            -> patternName[]
-      if);*)
       patternName[] -> sig.addMethod;
       sig.exitId -> exitId;
       sig.exitVal[] -> exitVal[];
@@ -276,6 +271,271 @@ do (# jFile,c: ^text
       if)
    #)
 
+---genSuper:doPart---
+do genSuperDo:
+     (# callInit:
+          (# superOrgName: ^text; superOriginDesc: ^ASTindex
+          enter superOrgName[]
+          do 'call init/cons' -> mch.comment;
+             PushThis;
+             (if not ('-'->superOrgName.equal) then
+                 'origin for superQ1:'->mch.comment;
+                 1 -> PushArg; (* stack holds origin for this desc *)
+                 INNER callInit;
+                 (* we need to compute origin from arg1 *)
+                 
+                 (* datpete: 17/05/2002: *)
+                 301->trace
+                 (#
+                 do 'initSuper: ' -> xT; superOrgName[] -> xT; xN;
+                    superOriginDesc[] -> xA
+                 #);
+                 ((superOriginDesc[],superOrgName[])->ClassSignature).asText 
+                   -> superOrgName[];
+             if);
+             ('initSuper',superOrgName[])->mch.callAlloPrim; 
+          #);
+        storeOrigin:
+          (#
+          do 'store origin' -> mch.comment;
+             (* store origin for this;
+              * origin is the argument of init/cons *)
+             PushThis;
+             1 -> PushArg;
+             
+             (*prefDesc.originOff->*) Gen.ThisRegAdr-> A[];
+             1 -> A.ONlevel;
+             true -> A.isOrigin;
+             (thisDesc[],true) -> EH.descName -> A.descName[];
+             thisDesc[] -> mkSignature -> A.receiverType[];
+             true -> A.isField;
+             (* common.cstInd -> preBase.access;*)
+             'new storeorigin1'->mch.comment;
+             (if (originDesc[] <> none) and not originDesc.isNull then
+                 originDesc[] -> mkSignature -> orgDescName[]
+              else
+                 platFormSuperSignature -> orgDescName[]
+             if);
+             313 -> trace(#
+                         do 'storeOrigin:orgDescName:'->xT; 
+                            orgDescName[] -> xT; xN;
+                            'A.descName:'->xT; A.descName[] -> xT; xN;
+                            originDesc[] -> xA
+                         #);
+             'orgDescName:'->mch.comment;
+             orgDescname -> mch.comment;
+             'origin' -> A.fieldName[];
+             (none,false,'source',orgDescName[]) -> A.asgRefReg;
+          #);
+        genDefaultSuper:
+          (# hasOrigin: @boolean; N: ^text
+          enter hasOrigin
+          do thisDesc[] -> sematt.descOrigin -> originDesc[]; 
+             (if false then
+                 (# sig: ^ConstructorSignature; 
+                    originName: ^text
+                 do (*(if subLevel = 0 then '-'->originName[] if);
+                     * or not hasOrigin for externalClass
+                     *)
+                    (originDesc[],originName[])
+                      -> constructorSignature 
+                      -> sig[];
+                    sig.asText -> mch.constructorDef;
+                    true -> ReturnSaved;
+             #)if);
+             '-' -> callInit;
+             313->trace(#
+                       do 'genDefaultSuper:'->xT; xN;
+                          thisDesc[] -> xA; xN;
+                       #);
+             (if hasOrigin then storeOrigin if)
+          #) ;
+        IsSpecialVirtual: (* see the same pattern in genlib.bet 
+                           * we should unify the two patterns
+                           *       V::< (# ... #);  
+                           *)
+          (# preDen: ^ASTindex;
+             special,rem: @boolean;
+             preName,preX,preSort,realPre,realPreN
+             ,preDescOrg: @ASTindex;
+             thisDescOrigin: ^ASTindex;
+             chain: ^DH.SuperChain
+          enter preDen[]
+          do preDen -> sematt.getName -> preName;
+             preName.dclRef -> preSort;
+             preSort.sort -> preSort;
+             (if preSort.label
+              // gram.virtualDecl // gram.bindingDecl then
+                 (* thisDesc is V :: < (# ... #)                   
+                  * the super may then be  V :< (# ... #)
+                  *        no problems on generating origin
+                  * or                  V :< A
+                  *        special code for generating origin
+                  *        if A is not at the same level as V
+                  * or                   V:< R.A
+                  *        same as above
+                  *)
+                 preSort.son -> realPre;
+                 realPre.brother -> realPre;
+                 (if realPre.label
+                  // gram.objectDescriptor then
+                     
+                  // gram.nameApl then (* V:< A *)
+                     realPre -> sematt.getName -> realPreN;
+                     (if (realPreN.on > 0) then true -> special if)
+                  // gram.remote then
+                     true -> special
+                  else
+                     'Unknown implicit super-pattern' 
+                       -> thisTranslate.SystemException
+                 if);
+                 (if special then
+                     thisDesc[] -> semAtt.DescOrigin -> thisDescOrigin[];
+                     thisDescOrigin -> preDescOrg;
+                     ThisSuperChain -> chain[];
+                     chain[] -> DH.ENC -> chain[];
+                     (for i: preName.pn repeat
+                          preDescOrg.son -> preX;
+                          preX.son -> sematt.Descrip -> preDescOrg;
+                          chain[] -> DH.PRE -> chain[]
+                     for);                  
+                 if)
+             if)
+          exit(special,realPre[],preDescOrg[],chain[])
+          #);
+
+     do 313->trace(#
+                  do 'genSuper:'->xT;
+                     (if haspref then pref[] -> xA
+                      else 'noSuper' -> xT
+                     if); 
+                     ' level:' -> xT; subLevel -> xI;
+                  #);
+        (if false then
+            (true,thisDesc.returnOff)->mch.SaveReturn;
+            true -> ReturnSaved;
+        if);
+
+        thisDesc[] -> sematt.descOrigin -> originDesc[];
+        (if true then
+            (# sig: ^ConstructorSignature;               
+               RC: ^DH.superChain;
+            do 313->trace(#
+                         do 'Super:constructorSignature:'->xT; xN;
+                            originDesc[] -> xA
+                         #);
+               (originDesc[],none)
+                 -> constructorSignature 
+                 -> sig[];
+               (thisDesc[],thisSuperChain) 
+                 -> sematt.findConstructor 
+                 -> (constructorDesc[],RC[]);
+               (if constructorDesc[] <> none then
+                   (if true then
+                       constructorDesc[] -> sig.addConstructorDesc;
+                    else
+                       sematt.integerDesc[] -> theGen.mkSig -> sig.sig.append
+                   if)
+               if);
+               313 -> trace(#do 'consSig: '->xT; sig.asText -> xT #);
+               sig.asText -> mch.constructorDef;
+               true -> ReturnSaved;
+        #)if);
+
+        (if hasPref and (subLevel > 0) 
+            (*and ((thisDesc->sematt.descKind) <> sematt.externalClassKind)*)
+            then 
+            (* hasPref and (sublevel = 0)
+             * is a subclass of externalClass
+             *)
+            pref.son -> preDen -> SemAtt.descrip -> prefDesc;
+            (if true 
+             // prefDesc -> sematt.procDesc.equal
+             // prefDesc -> sematt.classDesc.equal then
+                true -> genDefaultSuper;
+                leave genSuperDo 
+            if);
+            Gen.ThisRegAdr -> preBase[];
+            12 -> preBase.addOff -> preBase[];
+            'origin' -> preBase.fieldName[];
+            
+            preDen[] 
+              -> isSpecialVirtual 
+              -> (isSpecial,realPre[],preDescOrg[],chain[]);
+            (if isSpecial then
+                301->trace(#
+                          do 'SpecialVirtual: realpre: '->xT; realPre[]->xA; xN;
+                             'preDescOrg: ' -> xT; preDescOrg[] -> xA
+                          #);
+                preDescOrg[] -> preBase.bAdr.LocalDesc[];
+                '' -> callInit
+                (#
+                do true -> preBase.isOrigin;
+                   2 -> prebase.ONlevel;
+                   true -> preBase.isField;
+                   (preBase[],none(*not used*),realPre[],chain[])
+                     -> genOrgAdr
+                     -> preBase[];
+                   'origin' -> preBase.fieldName[];
+                   (preBase.bAdr.localDesc[],true)
+                     -> EH.descName 
+                     -> superOrgName[];
+                   preBase.bAdr.localDesc[] 
+                   (*-> sematt.descOrigin *)
+                     -> superOriginDesc[]
+                #)
+             else
+                (* overvej *)
+                (*thisDesc[]
+                 -> sematt.descOrigin
+                 -> *) originDesc[]
+                  -> preBase.bAdr.LocalDesc[];
+                thisSuperChain->chain[];
+                chain[]->DH.ENC->chain[];
+                (* NOTE: We enter the empty string '' as superOrgName,
+                 * and redefined superOrgName in the do-part below;
+                 * we need to reconsider the abstraction
+                 *)
+                ''-> callInit
+                (#
+                do 301->trace(#
+                             do 'genSuper:callInit: ' -> xT; preDen[] -> xA; xN;
+                                'localDesc:' -> xT;
+                                preBase.bAdr.localDesc[] -> xA
+                             #);
+                   true -> preBase.isOrigin;
+                   2 -> prebase.ONlevel;
+                   true -> preBase.isField;
+                   (preBase[],originDesc[],preDen[],chain[])
+                     -> genOrgAdr
+                     -> preBase[];
+                   'origin' -> preBase.fieldName[];
+                   (preBase.bAdr.localDesc[],true)
+                     -> EH.descName 
+                     -> superOrgName[];
+                   preBase.bAdr.localDesc[] 
+                   (*-> sematt.descOrigin *)
+                     -> superOriginDesc[];
+
+                   301->trace(#
+                             do 'genSuper:callInit:2 ' -> xT; xN;
+                                'localDesc:' -> xT;
+                                preBase.bAdr.localDesc[] -> xA; xN;
+                                'superOrgName: ' -> xT; superOrgName[] -> xT
+                             #);                
+                #)
+            if);
+            storeOrigin;
+         else
+            (if (thisDesc->sematt.descKind) = sematt.externalClassKind then
+                false -> genDefaultSuper
+             else
+                true -> genDefaultSuper
+            if)
+        if);
+     exit prefDesc[]
+     #);
+   
 ---genClass:doPart---
 do (# findBetaenv:
         (# D,BO: ^ASTindex; BE: @ASTindex
@@ -336,7 +596,8 @@ do (# findBetaenv:
       locals: @LocalDescriptors;
       isMain,isBetaenv: @boolean;
       hasEnterMethod,hasDoMethod,hasExitMethod,isDoPartForm,isOuter
-      ,hasClass: @boolean
+      ,hasClass: @boolean;
+      constructorDesc: ^ASTindex; (* descriptor for possible constructor *)
    do 311->trace(#
                 do 'genClass: "' -> xT; className[] -> xT;
                    '" blockLevel ='->xT; blocklevel -> xI; 
@@ -374,16 +635,16 @@ do (# findBetaenv:
 
           desc -> theDesc;
           (*313->trace(#
-                    do 'desc:hasSlots: ' -> xT; desc[] -> hasSlots->xB;
-                       ' isDoPartForm:'->xT; isDoPartForm -> xB;
-                       (if isDoPartForm then
-                           xN; 'formDesc:'->xT; formDesc[] -> xA
-                       if);
-                       100->switchOn;
-                       xN;
-                       theDesc[] -> xA;
-                       100 -> switchOff
-                    #);*)
+           do 'desc:hasSlots: ' -> xT; desc[] -> hasSlots->xB;
+           ' isDoPartForm:'->xT; isDoPartForm -> xB;
+           (if isDoPartForm then
+           xN; 'formDesc:'->xT; formDesc[] -> xA
+           if);
+           100->switchOn;
+           xN;
+           theDesc[] -> xA;
+           100 -> switchOff
+           #);*)
           (if not (desc[] -> hasSlots) or isDoPartForm then
               true -> hasClass;
               path[] -> splitPathAndNAme -> (path[],c[]);
@@ -472,14 +733,14 @@ do (# findBetaenv:
                   (if true then
                       defaultSuperName -> superName[]
                    else                      
-                  (if true
-                   // common.targetMachineId = common.javabc then
-                      'java/lang/Object'->supername[];
-                   // common.targetMachineId = common.dotnet then
-                      '[mscorlib]System.Object'->supername[];(*'/*3*/'->supername.append;*)
-                   else
-                      'Unknown_platform.Object' -> supername[];
-                  if);
+                      (if true
+                       // common.targetMachineId = common.javabc then
+                          'java/lang/Object'->supername[];
+                       // common.targetMachineId = common.dotnet then
+                          '[mscorlib]System.Object'->supername[];(*'/*3*/'->supername.append;*)
+                       else
+                          'Unknown_platform.Object' -> supername[];
+                      if);
                   if);
                   0 -> subLevel
               if);
@@ -496,14 +757,11 @@ do (# findBetaenv:
               (if (theDesc->sematt.descKind) = sematt.externalClassKind then
                   '-' -> orgName[]
                else
-              (if not orgDesc.isNull then
-                  orgDesc[] -> mkSignature -> orgName[]
-               else
-                  (if common.switch[320] then
-                      platFormSuperSignature -> orgName[]
+                  (if not orgDesc.isNull then
+                      orgDesc[] -> mkSignature -> orgName[]
                    else
-                      sematt.superObject[] -> mkSignature -> orgName[]
-              if)if)if);
+                      platFormSuperSignature -> orgName[]
+              if)if);
               
               313->trace(#
                         do 'genClass:origin: ' -> xT; orgName[] -> xT;xN;
@@ -523,26 +781,55 @@ do (# findBetaenv:
               (* 'DefClass: ' -> puttext; className[] -> putline; *)
               
               (att[],doP[],false) -> declareFields;
-              (if true (*common.switch[185]*) then (* OBS! *)
-                  (pref[],subLevel) -> GenSuper 
-              if);
 
-              
+              (pref[],subLevel) -> GenSuper -> constructorDesc[];
               (if not ReturnSaved then
-                  (true,theDesc.returnOff)->mch.SaveReturn;
+                  (if true then 
+                      '\ngenClass:constructorSignature:calledInMain'->putline;
+                      (# sig: ^ConstructorSignature
+                      do (orgDesc[],orgName[])
+                           -> constructorSignature 
+                           -> sig[];
+                         sig.asText -> mch.constructorDef
+                      #)
+                   else
+                      (true,theDesc.returnOff)->mch.SaveReturn;
+                  if);
                   true -> ReturnSaved
               if);
               ('tstenv'->className.equalNCS)
               or ('betaenv'->className.equalNCS)
                 -> isBetaEnv;
               
-              (if false and common.switch[186] then
-                  isBetaEnv -> isMain
-               else
-                  'program'->className.equal -> isMain;
-              if);
+              'program' -> className.equal -> isMain;
+
               (att,0,&RepList[],locals[])->GenByteCodeAlloc;
-              
+              (if constructorDesc[] <> none then
+                  (# sig: @signature;
+                     A: @mch.RegAdr; off: @integer;
+                  do (constructorDesc[],thisSuperChain,false) 
+                       -> sig.setMethodDesc;
+                     ((thisDesc[],true) -> EH.descName,thisDesc[]) 
+                       -> sig.addReceiver;
+                     '_init' -> sig.addMethod;
+                     constructorDesc[] -> sig.addEnter;
+                     sig.exitVoid;
+                     pushThis;
+                     12 -> off;
+                     sig.scanEnter
+                     (# 
+                     do off + 4 -> off -> A.off;
+                        'enter' -> A.fieldName[];
+                        current.asText -> A.fieldType[];
+                        (if isRef -> A.isRef then
+                            (A[],&mch.adrRegOperand[]) -> mch.ldVal
+                         else
+                            (A[],&mch.dataRegOperand[]) -> mch.ldVal
+                        if)
+                     #);
+                     (sig.asText->mch.newTextOp,'M',true,false)->mch.gJsr;
+                  #)
+              if);
               (false,theDesc.returnOff)->mch.return; 
           if);
           (if isOuter then (* hack *)
@@ -784,8 +1071,7 @@ do (# sig: @Signature;
                 do 'GenDoMethod:'->xT; desc[]->xA
                 #);
       (if desc.isSlot then
-          '\nOBS! Slots not handled by genDoMethod'->putline
-          
+          '\nOBS! Slots not handled by genDoMethod' -> putline          
        else
           (if FormDesc.label = gram.doPart then
               (*'\ndopartform: do method'->putline*)
@@ -1055,7 +1341,7 @@ do (# sig: @Signature;
                     (desc[],xNo,OA[],ThisSuperChain)
                       -> V.asgToExitArgs  
                       -> (xNo1,xTypes[]);
-                   
+                    
                     311->trace(#do 'xNo1:' -> xT; xNo1 -> xI #);
                     (if xNo = xNo1 then
                         (* OBS we assume a simpleVal but in txtCstVal
@@ -1088,7 +1374,7 @@ do (# sig: @Signature;
                            (if true then
                                (xNo+1->xNo->(destField.copy).putint
                                ,current[] -> mkSignature,'c') 
-                               -> fields.add
+                                 -> fields.add
                             else
                                (0,xNo+1->xNo->(destField.copy).putint
                                ,current[] -> mkSignature,'c') 
