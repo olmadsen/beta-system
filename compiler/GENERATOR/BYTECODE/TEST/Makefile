@@ -7,5 +7,7 @@ clean:
 	-rm -f googleapi/dotnet/GoogleSearchService.pdb
 	-jbeta -w tstenv > /dev/null
 	-jbeta -w betaenv > /dev/null
+	-nbeta -w tstenv > /dev/null
+	-nbeta -w betaenv > /dev/null
 	@-rm -f javabc/String.class
 
