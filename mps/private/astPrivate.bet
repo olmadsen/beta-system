@@ -11,7 +11,26 @@ BODY 'astBody'
  *       Copyright (C) Mjolner Informatics, 1986-93
  *       All rights reserved.
  *)
--- astPrivateLib: Attributes --
+
+--- astInterfaceLib:Attributes---
+
+lexemHeaderSize: (# exit 1 #);
+
+lexemAllocSize:
+  (* calculating the number of words needed to containg a lexem of
+   * length 'l'.  The allocation is such, that the allocated number of
+   * words is odd. such that the total number of words allocated for a
+   * lexem is even (since one word is allocated to contain the
+   * header).  This allocation scheme is necessary to conform to the
+   * index addressing (index addresses are always even)
+   *)
+  (# l: @integer
+  enter l
+  exit 1 + ((l + 3) div 8)*2
+  #);
+
+--- astPrivateLib:attributes ---
+
 scanDown: (* Private *)
 (* must be used as a component. Scans the path from the root down
  * to this Ast. Example of usage: see the implementation of
@@ -399,20 +418,74 @@ findSubcomment:
   #);
   
 
--- lexemTextPrivate: Attributes --
-allocatedLongs: (* Private *)
-  (# 
-  enter
-    (# l,base: @integer
-    enter l
-    do lexemInx*4-4->base; (frag.a,base,l)->tos'%inxPutShort'
-    #)
-  exit frag.a[lexemInx]->tos'%getShort[0]'
-  #);
+--- lexemTextPrivate:attributes ---
+
 checkbase: (* Private *)
-  (#
-     newwidth,newWidthInLongs: @integer;
+  (# newWidth: @integer
+  enter newWidth
+  do (if frag.lcurtop>1 then
+         newWidth->checkNewLexem
+      else
+         newWidth->checkOldLexem
+     if)
+  #);
+
+checkNewLexem: (* Private *)
+  (# newwidth,newWidthInLongs,lexemSize: @integer;
      base: @integer;
+     allocatedLongs:
+       (#
+       enter
+          (# l,base: @integer
+          enter l
+          do lexemInx*4-4 -> base;
+             (frag.l,base,l) -> TOS'%inxPutShort'
+          #)
+       exit frag.l[lexemInx] -> TOS'%getShort[0]'
+       #);
+     allocNewLexem:
+       (# alloc: @integer
+       do (if (frag.lcurtop + lexemSize >= frag.l.range) then
+	      lexemSize->frag.extendL
+	  if);
+	  (if base=0 then
+	      frag.lcurtop -> lexemInx;
+	      0 -> curLength;
+	      frag.lcurtop + lexemSize -> frag.lcurtop
+	   else
+	      allocatedLongs -> alloc;
+              (if (base + alloc >= frag.lcurTop) then
+		  frag.lcurTop + newWidthInLongs - alloc -> frag.lcurTop;
+	       else
+		  (for i: alloc+1 repeat frag.l[base+i-1] -> frag.l[frag.lcurtop+i-1] for);
+		  frag.lcurtop -> lexemInx;
+		  frag.lcurtop + lexemSize -> frag.lcurtop
+	      if);
+	  if);
+	  newWidthInLongs -> allocatedLongs;
+       #);
+  enter newwidth
+  do newWidth -> lexemAllocSize -> newWidthInLongs;
+     lexemHeaderSize + newWidthInLongs -> lexemSize;
+     lexemInx -> base;
+     (if (base=0) or (allocatedLongs<newWidthInLongs) then
+	 allocNewLexem
+     if);
+  #);
+
+checkOldLexem: (* Private *)
+  (# newwidth,newWidthInLongs: @integer;
+     base: @integer;
+     allocatedLongs:
+       (#
+       enter
+          (# l,base: @integer
+          enter l
+          do lexemInx*4-4 -> base;
+	     (frag.a,base,l) -> TOS'%inxPutShort'
+          #)
+       exit frag.a[lexemInx] -> TOS'%getShort[0]'
+       #);
      allocnewbase:
        (# alloc: @integer
        do
@@ -499,7 +572,7 @@ repRestore: (* Private *)
        r[]->e.repRestore;
        l: scan
          (# 
-         do
+         do 
             (if (e.name[]->current.name.equalNCS) and (e.type <> linktype) then
                   (# t: @text
                   do
@@ -566,18 +639,65 @@ extendA: (* Private *)
 setARange: (* Private: set the range of the array a *)
   (# theRange: @integer
   enter theRange
-  do
-     (if (a.range < theRange) then
-         (if (theRange >= maximumIndex) then
-               (# msg: @text
-               do
-                  'AST overflow in fragment: '->msg;
-                  fullName->msg.putLine;
-                  (errorNumbers.arrayTooBig,msg[])->catcher
-               #)
-          else
-             theRange-a.range->a.extend
-         if)
+  do (if (a.range<theRange) then
+	 (if (theRange>=maximumIndex) then
+	     (# msg: @text
+	     do 'AST overflow in fragment: ' -> msg;
+		fullName -> msg.putLine;
+		(errorNumbers.arrayTooBig,msg[])->catcher
+	     #)
+	  else
+	     theRange-a.range -> a.extend
+	 if)
+     if)
+  #);
+
+setLRange: (* Private: set the range of the array l *)
+  (# theRange: @integer
+  enter theRange
+  do (if (l.range<theRange) then
+	 (if (theRange>=maximumIndex) then
+	     (# msg: @text
+	     do 'lexem overflow in fragment: ' -> msg;
+		fullName -> msg.putLine;
+		(errorNumbers.arrayTooBig,msg[])->catcher
+	     #)
+	  else
+	     theRange-l.range -> l.extend
+	 if)
+     if)
+  #);
+
+extendL:  (* Private *)
+  (# minExtend, maxExtend: @integer;
+     minimumAllocation: @integer;
+  enter minimumAllocation
+  do (if minimumAllocation<=0 then
+	 (# msg: ^text;
+	 do 'Should not happen.  Please report this error to support@mjolner.dk\n'->msg.putline;
+	    'ExtendL called internally in MPS with illegal minimum allocation: '->msg[];
+	    minimumAllocation -> msg.putint; msg.newline;
+	    msg[]->astInterfaceError
+	 #)
+     if);
+     (if (l.range>=maximumIndex) then
+	 (# msg: ^text
+	 do 'lexem overflow in fragment: ' -> msg[];
+	    fullName -> msg.putLine;
+	    (errorNumbers.arrayTooBig,msg[])->catcher
+	 #)
+      else
+	 l.range+minimumAllocation -> minExtend;
+	 maximumIndex-lcurTop -> maxExtend;
+	 (minExtend,maxExtend)->min->minExtend;
+	 (if (minExtend<minimumAllocation) then
+	     (# msg: ^text;
+	     do 'lexem overflow in fragment: ' -> msg[];
+		fullName -> msg.putLine;
+		(errorNumbers.arrayTooBig,msg[])->catcher
+	     #)
+	 if);
+	 minExtend -> l.extend
      if)
   #);
 getNextBrother: (* Private *)
@@ -652,21 +772,30 @@ valueToAst: (* Private *)
   exit a[]
   #);
 repSaveStruct: (* Private *)
-  (# r: ^repetitionStream; t: @text
+  (# r: ^repetitionStream; t: @text; version,gramVersion: @integer;
   enter r[]
-  do
-     curTop->r.putInt;
-     (if root[] = none then 0->r.putInt else root.index->r.putInt if);
-     (if grammar[] = none then
-         undefinedVersion->r.putInt; undefinedGrammarName->t; t[]->r.putText
+  do curTop -> r.putInt;
+     (*lcurTop -> r.putInt;*)
+     (if root[]=none then
+	 0 -> r.putInt
       else
-         grammar.version->r.putInt; grammar.grammarIdentification->r.putText
+	 root.index -> r.putInt
      if);
-     firstSlot->r.putInt;
-     modificationStatus->r.putInt;
-     r[]->prop.repSave;
-     r[]->import.repSave;
-     
+     (if grammar[]=none then
+	 undefinedVersion -> gramVersion(*r.putInt*);
+	 undefinedGrammarName -> t; t[] -> r.putText
+      else
+	 grammar.version -> gramVersion(*r.putInt*);
+	 grammar.grammarIdentification -> t.puttext; (*t[] -> r.putText*)
+     if);
+     (@@version,gramVersion) -> TOS'%putShort[0]';
+     (@@version,lcurtop->tos'%ShiftRight[1]') -> TOS'%putShort[1]';
+     version -> r.putInt;
+     t[] -> r.putText;
+     firstSlot -> r.putInt;
+     modificationStatus -> r.putInt;
+     r[] -> prop.repSave;
+     r[] -> import.repSave;
   #);
 repRestoreStruct: (* Private *)
   (#
@@ -685,99 +814,83 @@ repRestoreStruct: (* Private *)
           t.newLine;
           (errorNumber,t[])->catcher
        #);
-     
+     version: @integer;
   enter r[]
-  do
-     r.getInt->curTop;
-     r.getInt->rootInx;
+  do r.getInt -> curTop;
+     (*r.getInt -> lcurTop;*)
+     r.getInt -> rootInx;
      (* rootInx -> indexToNode -> ... *)
-     r.getInt->gramVersion;
-     r.getText->t[];
-     r.getInt->firstSlot;
-     r.getInt->modificationStatus;
+     r.getInt -> version(*gramVersion*);
+     version->tos'%getShort[0]'->gramVersion;
+     version->tos'%getShort[1]'->tos'%ShiftLeft[1]'->lcurtop;
+     r.getText -> t[];
+     r.getInt -> firstSlot;
+     r.getInt -> modificationStatus;
      (if useModificationStatus then
-         (if (modificationStatus > 10) then
-             modificationStatus->setARange;
-             (if trace.active and trace.d[trace.compactopen] then
-                 trace.compactopen
-                   ->signalTrace
-                     (#
-                        start:: 
-                          (# 
-                          do
-                             'compactopen of '->msg.putText;
-                             fullName->msg.putText;
-                             '  '->msg.putText;
-                             modificationStatus->msg.putInt;
-                             '/'->msg.put;
-                             curTop->msg.putInt;
-                             msg.newLine
-                          #)
-                     #);
-                 
-             if);
-             
-          else
-             curtop+50->setARange;
-             (if trace.active and trace.d[trace.compactopen] then
-                 trace.compactopen
-                   ->signalTrace
-                     (#
-                        start:: 
-                          (# 
-                          do
-                             'compactopen of '->msg.putText;
-                             fullName->msg.putText;
-                             curTop->msg.putInt;
-                             ' ! not saved wih compaction'->msg.putLine
-                          #)
-                     #);
-                 
-             if);
-             
-         if);
-         
+	 (if (modificationStatus>10) then
+	     modificationStatus -> setARange;
+	     (if trace.active and trace.d[trace.compactopen] then
+		 trace.compactopen->signalTrace
+		   (# start::
+			(#
+			do 'compactopen of ' -> msg.putText;
+			   fullName -> msg.putText;
+			   '  ' -> msg.putText;
+			   modificationStatus -> msg.putInt;
+			   '/' -> msg.put;
+			   curTop -> msg.putInt;
+			   '/' -> msg.put;
+			   lcurTop -> msg.putInt;
+			   msg.newLine
+			#)
+		   #);
+	     if);
+	  else
+	     curtop+50 -> setARange;
+	     lcurtop+50 -> setLRange;
+	     (if trace.active and trace.d[trace.compactopen] then
+		 trace.compactopen->signalTrace
+		   (# start::
+			(#
+			do  'compactopen of ' -> msg.putText;
+			   fullName -> msg.putText;
+			   curTop -> msg.putInt;
+			   ' ! not saved wih compaction' -> msg.putLine
+			#)
+		   #);
+	     if);
+	 if);
       else
-         curtop+50->setARange; 
+	 curtop+50 -> setARange;
+	 lcurtop+50 -> setLRange;
      if);
-     r[]->prop.repRestore;
-     r[]->import.repRestore;
-     (if grammar[] = none then
-         (t[],screen[])
-           ->grammarTable.find
-             (#
-                ifNotFound:: 
-                  (# m: ^text
-                  do
-                     'contains forms derived over the non-loaded grammar: '
-                       ->m[];
-                     t[]->m.putText;
-                     (errorNumbers.grammarNotFound,m[])
-                       ->THIS(repRestoreStruct).error
-                  #)
-             #)->grammar[]
+     r[] -> prop.repRestore;
+     r[] -> import.repRestore;
+     (if grammar[]=none then
+	 (t[],screen[]) -> grammarTable.find
+	 (# ifNotFound::
+	      (# m: ^text
+	      do 'contains forms derived over the non-loaded grammar: ' -> m[];
+		 t[] -> m.putText;
+		 (errorNumbers.grammarNotFound,m[]) -> this(repRestoreStruct).error
+	 #)#) -> grammar[];
      if);
-     (if (grammar[] <> none ) then
-         grammar.grammarIdentification->theGrammarName[];
-         (if not
-         ((thegrammarName[]->t.equal) or (undefinedGrammarName->t.equal) or
-          (undefinedGrammarName->theGrammarName.equal)) then
-             'contains an Ast derived over a wrong grammar'->msg[];
-             (errorNumbers.badFormat,msg[])->error
-         if);
-         (if not
-         ((grammar.version = gramVersion) or
-          (grammar.version = undefinedVersion)) then
-             'contains an Ast derived over a wrong version of the grammar\n'
-               ->msg[];
-             '  Expected grammar version: '->msg.puttext;
-             grammar.version->msg.putint;
-             msg.newline;
-             '  Grammar version found in file: '->msg.puttext;
-             gramVersion->msg.putint;
-             msg.newline;
-             (errorNumbers.badFormat,msg[])->error
-         if)
+     (if (grammar[]<>none) then
+	 grammar.grammarIdentification -> theGrammarName[];
+	 (if not ((thegrammarName[] -> t.equal) or
+	     (undefinedGrammarName -> t.equal) or
+	     (undefinedGrammarName -> theGrammarName.equal)) then
+	     'contains an Ast derived over a wrong grammar'->msg[];
+	     (errorNumbers.badFormat,msg[]) -> error
+	 if);
+	 (if not ((grammar.version=gramVersion) or (grammar.version=undefinedVersion)) then
+	     'contains an Ast derived over a wrong version of the grammar\n'->msg[];
+	     '  Expected grammar version: ' -> msg.puttext; grammar.version -> msg.putint;
+	     msg.newline;
+	     '  Grammar version found in file: ' -> msg.puttext; gramVersion -> msg.putint;
+	     msg.newline;
+	     (errorNumbers.badFormat,msg[]) -> error
+	 if)
      if);
      
   #);
@@ -805,63 +918,60 @@ repRestore: (* Private *)
        e[]->impL.l[i][]
      for)
   #);
+
 scan: (* Private *)
   (# thisElm: ^element
-  do (for i: inxC repeat impl.l[i][]->thisElm[]; INNER for)
+  do (for i: inxC repeat impl.l[i][] -> thisElm[]; INNER for)
   #);
-init: (* Private *) (#  do 0->inxC; &list[]->impL[] #);
-makeNull: (* Private *) (#  do init #);
-  
 
--- treeLevelLib: Attributes --
+init: (* Private *)
+  (#
+  do 0 -> inxC; &list[] -> impL[]
+  #);
+
+makeNull: (* Private *) 
+  (# do init #);
+
+--- treeLevelLib:attributes ---
+
 newLexemTextForParser:
   (#
      length: @integer;
      prod: @integer;
      frag: ^fragmentForm;
      theSize: @integer;
-     inx,newWidthInLongs,lexInx: @integer;
-     
+     inx,newWidthInLongs,lexInx,lexemSize: @integer;
   enter (prod,length,frag[])
-  do
-     (if prod
-      // prodNo.NameAppl then
-         offset.sizePerNameAppl->theSize; 
-      // prodNo.NameDecl then
-         offset.sizePerNameDecl->theSize; 
-      // prodNo.String then
-         offset.sizePerString->theSize; 
-      // prodNo.Comment then
-         offset.sizePerComment->theSize
-      // prodNo.Const then
-         offset.sizePerConst->theSize
+  do (if prod
+      //prodNo.NameAppl then offset.sizePerNameAppl -> theSize;
+      //prodNo.NameDecl then offset.sizePerNameDecl -> theSize;
+      //prodNo.String then offset.sizePerString -> theSize;
+      //prodNo.Comment then offset.sizePerComment -> theSize
+      //prodNo.Const then offset.sizePerConst -> theSize
      if);
-     (* jlk:  Thu May  9, 1996: Trying to correct:
-      *       Repetition index out of range error
-      *       Inserted the following line to avoid negative extendA
-      *)
-     (if length < 0 then 0->length if);
-     1+((length+3) div 8)*2->newWidthInLongs;
-     (if (frag.curtop+theSize+newWidthInLongs+2 >= frag.a.range) then
-         (theSize+newWidthInLongs+2)->frag.extendA
+     (if length<0 then 0->length if);
+     length -> lexemAllocSize -> newWidthInLongs;
+     lexemHeaderSize + newWidthInLongs -> lexemSize;
+     (if (frag.curtop + theSize(* + lexemSize*) >= frag.a.range) then
+	 (theSize(* + lexemSize*))->frag.extendA
      if);
-     frag.curTop->inx;
-     0->frag.a[inx]->frag.a[inx+1];
-     (inx,prod)->frag.setSymbol;
-     (if prod = prodNo.Comment then
-         0->frag.a[inx+offset.commentType];
-         (* //prodNo.Const then (inx,true) -> frag.setSonInx; *)
-         
+     frag.curTop -> inx;
+     (if (frag.lcurtop + lexemSize >= frag.l.range) then
+      	 lexemSize->frag.extendL
      if);
-     (inx,(inx+theSize->lexInx))->frag.setSonInx;
-     0->frag.a[lexInx];
-     (@@ frag.a[lexInx],newWidthInLongs)->tos'%putShort[0]';
-     (* jlk:  Thu May  9, 1996: Trying to correct:
-      *       Repetition index out of range error
-      * lexInx + newWidthInLongs + 1  -> frag.curTop;
-      *)
-     lexInx+newWidthInLongs+1->frag.curTop;
-     
+     frag.lcurtop ->lexinx; (*inx + theSize -> lexInx;*)
+     0 -> frag.a[inx] -> frag.a[inx+1];
+     (inx,prod) -> frag.setSymbol;
+     (if prod=prodNo.Comment then
+	 0 -> frag.a[inx+offset.commentType];
+     if);
+     (inx,lexInx) -> frag.setSonInx;
+     0 -> frag.l[lexInx];
+     (@@frag.l[lexInx],newWidthInLongs) -> TOS'%putShort[0]';
+     (@@frag.l[lexInx],length) -> TOS'%putShort[1]';
+     frag.curTop + theSize (*+ lexemSize*) -> frag.curTop;
+     frag.lcurTop + lexemSize -> frag.lcurTop;
+
   exit (inx,lexInx*4)
   #);
 newAstForParser: (* PRIVATE except for the parser *)
@@ -872,16 +982,18 @@ newAstForParser: (* PRIVATE except for the parser *)
      frag: ^fragmentForm;
      
   enter (prod,frag[])
-  do
-     frag.curTop->inx;
-     (if predefined then 2->extraRoom else roomArray[prod]->extraRoom;  if);
-     frag.curTop+extraroom+offset.sizePerNode->frag.curTop;
-     (if (frag.curtop >= frag.a.range) then
-         (1+extraroom+offset.sizePerNode)->frag.extendA
+  do frag.curTop -> inx;
+     (if predefined then
+	 0 -> extraRoom
+      else
+	 roomArray[prod] -> extraRoom;
      if);
-     0->frag.a[frag.curTop]->frag.a[frag.curTop+1];
-     (inx,prod)->frag.setSymbol;
-     
+     frag.curTop + extraroom + offset.sizePerNode -> frag.curTop;
+     (if (frag.curtop >= frag.a.range) then
+	 (extraroom + offset.sizePerNode)->frag.extendA
+     if);
+     0 -> frag.a[inx] -> frag.a[inx+1];
+     (inx,prod) -> frag.setSymbol;
   exit inx
   #);
   
@@ -899,24 +1011,23 @@ do
        ' '->dmp.put;
        INNER ;
        dmp.newLine;
-       
-   if)  
+   if)
 
--- astInterfacePrivate: Descriptor --
-(#
-   handles: @containerList
-   (* list containing all active handles on this MPS.  See the
-    * file 'handle.bet' for more info on the use of handles in MPS
-    *) (# element:: handle #);
-   
-#)  
+--- astInterfacePrivate: descriptor ---
+(# handles: @containerList
+     (* list containing all active handles on this MPS.  See the
+      * file 'handle.bet' for more info on the use of handles in MPS
+      *)
+     (# element:: handle #);
+#)
 
--- astInterfaceTracePrivate: Descriptor --
-(# str: (* Private *) ^stream; traceHandle: (* Private *) ^handle;  #)  
+--- astInterfaceTracePrivate: descriptor ---
+(# str: (* Private *) ^stream;
+   traceHandle: (* Private *)  ^handle;
+#)
 
--- astInterfaceTraceSet: DoPart --
-do
-   on->d[no];
+--- astInterfaceTraceSet: dopart ---
+do on->d[no];
    false->active;
    (for i: d.range repeat (active or d[i])->active for);
    (if private.traceHandle[] = none then
