@@ -207,135 +207,125 @@ static unsigned long dummy;
 static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 {
   unsigned long instruction, returnPC, returnSP, absAddr = 0;
-  void *ip;
-  int isBeta;
   
+  void *ip;
+  
+  static int reentered = 0;
+
   INFO_PERSISTENCE(numPF++);
 
-  /* Fetch the faulting instruction. */
-  dummy = instruction = (* (long *) (ucon->uc_mcontext.gregs[REG_PC]));
-  
-  /* PC to jump to when fetch has completed: */
-  returnPC = ucon->uc_mcontext.gregs[REG_PC]; 
-  /* SP to restore when fetch has completed: */
-  returnSP = ucon->uc_mcontext.gregs[REG_SP]; 
+  if (!reentered) {
+    reentered = 1;
+    /* Fetch the faulting instruction. */
+    if ((dummy = instruction = (* (long *) (ucon->uc_mcontext.gregs[REG_PC])))) {
 
-  isBeta = !((int)returnPC&3) && IsBetaCodeAddrOfProcess((unsigned long)returnPC);
-
-  if (isBeta && sourceReg(instruction, ucon, returnSP)) {
-    
-    if (sourcereg != -1) {
+      /* PC to jump to when fetch has completed: */
+      returnPC = ucon->uc_mcontext.gregs[REG_PC]; 
+      /* SP to restore when fetch has completed: */
+      returnSP = ucon->uc_mcontext.gregs[REG_SP]; 
       
-      /* Ok, so this is a genuine refNone or proxy reference. */
-      ip = getRegisterContents(sourcereg, ucon, returnSP);
-      if (!ip) {
-	/* RefNone */
-	Object ** theCell;
-	Object *    theObj = NULL;
-	/* Try to fetch the address of current Beta object from i0.*/
-	theCell = (Object **) &((RegWin*)ucon->uc_mcontext.gregs[REG_SP])->i0;
-	if( inIOA( *theCell)) if( isObject( *theCell)) theObj  = *theCell;
-	StackEnd = (long *) ucon->uc_mcontext.gregs[REG_SP];
-	if (!DisplayBetaStack(RefNoneErr, 
-			      theObj,
-			      (long*)returnPC,
-			      sig)) {
-	  BetaExit(1);
-	}
-	return;
-      }
-
-      Claim(!BETAREENTERED, "Proxy met during rebinding!");
-      
-      /* Calculate absolute address by looking in appropriate tables */
-      if (inPIT(ip)) {
-	/* 'unswizzleReference' *might* call back into beta code to
-           rebind special references. Thus the call is protected using
-           the 'BetaCallback' abstraction. */
-	BetaCallback(ucon, 
-		     returnSP, 
-		     absAddr = (long)unswizzleReference(ip));
-      } 
+      if (sourceReg(instruction, ucon, returnSP)) {
+	if (sourcereg != -1) {
+	  /* Ok, so this is a genuine refNone or proxy reference. */
+	  ip = getRegisterContents(sourcereg, ucon, returnSP);
+	  
+	  if ((ip >= (void *)PIT) || (ip <= (void *)PITLimit)) {
+	    /* Calculate absolute address by looking in appropriate tables */
+	    
+	    /* 'unswizzleReference' *might* call back into beta code to
+	       rebind special references. Thus the call is protected using
+	       the 'BetaCallback' abstraction. */
+	    BetaCallback(ucon, 
+			 returnSP, 
+			 absAddr = (long)unswizzleReference(ip));
+	  } 
 #ifdef RTLAZY
-      else if (isLazyRef(ip)) {
-	/* 'lazyTrapHandler' *will* call back into beta code to
-           rebind special references. Thus the call is protected using
-           the 'BetaCallback' abstraction. */
-	BetaCallback(ucon, 
-		     returnSP, 
-		     absAddr = lazyTrapHandler((unsigned long)ip));
-      }
+	  else if (isLazyRef(ip)) {
+	    /* 'lazyTrapHandler' *will* call back into beta code to
+	       rebind special references. Thus the call is protected using
+	       the 'BetaCallback' abstraction. */
+	    BetaCallback(ucon, 
+			 returnSP, 
+			 absAddr = lazyTrapHandler((unsigned long)ip));
+	  }
+#else
+	  else {
+	    DEBUG_CODE({fprintf(output, ", proxy not in PIT 0x%X)\n", (int)ip);};);
+	  }
 #endif /* RTLAZY */
       
-      /* The object must now be in the beta heap */
-      Claim (inBetaHeap((Object *)absAddr), 
-	     "proxyTrapHandler: Failed to unswizzle reference");
-      
-      if (absAddr) {
-	/* We have fetched the object, and should continue execution. */
-	switch (sourcereg) {
-	case 0x0: /* g0 */
-	  fprintf(output, "proxyTrapHandler: "
-		  "Code using %%g0 for proxy!!\n");
-	  DEBUG_CODE(ILLEGAL);
-	  BetaExit(1);
-	  break;
-	case 0x1: /* g1 */
-	case 0x2: /* g2 */
-	case 0x3: /* g3 */
-	case 0x4: /* g4 */
-	case 0x5: /* g5 */
-	case 0x6: /* g6 */
-	case 0x7: /* g7 */
-	case 0x8: /* o0 */
-	case 0x9: /* 01 */
-	case 0xA: /* 02 */
-	case 0xB: /* 03 */
-	case 0xC: /* 04 */
-	case 0xD: /* 05 */
-	case 0xE: /* 06 */
-	case 0xF: /* 07 */
-	  ucon->uc_mcontext.gregs[sourcereg + 3] = absAddr;
-	  break;
-	case 0x10: /* l0 -> l7, i0 -> %i7 */
-	case 0x11:
-	case 0x12:
-	case 0x13:
-	case 0x14:
-	case 0x15:
-	case 0x16:
-	case 0x17:
-	case 0x18:
-	case 0x19:
-	case 0x1A:
-	case 0x1B:
-	case 0x1C:
-	case 0x1D:
-	case 0x1E:
-	case 0x1F:
-	  ((unsigned long *) returnSP)[sourcereg - 16] = absAddr;
-	  break;
-	default:
-	  fprintf(output, "proxyTrapHandler: "
-		  "Unsupported source register\n");
-	  DEBUG_CODE(ILLEGAL);
-	  BetaExit(1);
+	  if (absAddr) {
+	    /* We have fetched the object, and should continue execution. */
+	    switch (sourcereg) {
+	    case 0x0: /* g0 */
+	      fprintf(output, "proxyTrapHandler: "
+		      "Code using %%g0 for proxy!!\n");
+	      DEBUG_CODE(ILLEGAL);
+	      BetaExit(1);
+	      break;
+	    case 0x1: /* g1 */
+	    case 0x2: /* g2 */
+	    case 0x3: /* g3 */
+	    case 0x4: /* g4 */
+	    case 0x5: /* g5 */
+	    case 0x6: /* g6 */
+	    case 0x7: /* g7 */
+	    case 0x8: /* o0 */
+	    case 0x9: /* 01 */
+	    case 0xA: /* 02 */
+	    case 0xB: /* 03 */
+	    case 0xC: /* 04 */
+	    case 0xD: /* 05 */
+	    case 0xE: /* 06 */
+	    case 0xF: /* 07 */
+	      ucon->uc_mcontext.gregs[sourcereg + 3] = absAddr;
+	      break;
+	    case 0x10: /* l0 -> l7, i0 -> %i7 */
+	    case 0x11:
+	    case 0x12:
+	    case 0x13:
+	    case 0x14:
+	    case 0x15:
+	    case 0x16:
+	    case 0x17:
+	    case 0x18:
+	    case 0x19:
+	    case 0x1A:
+	    case 0x1B:
+	    case 0x1C:
+	    case 0x1D:
+	    case 0x1E:
+	    case 0x1F:
+	      ((unsigned long *) returnSP)[sourcereg - 16] = absAddr;
+	      break;
+	    default:
+	      fprintf(output, "proxyTrapHandler: "
+		      "Unsupported source register\n");
+	      DEBUG_CODE(ILLEGAL);
+	      BetaExit(1);
+	    }
+	    return;
+	  }
+	} else {
+	  DEBUG_CODE({fprintf(output, ", could not retreive source reg)\n");};);
 	}
-	return;
       } else {
-	/* loading failed. We pass on control to the real signal handler */
-	;
+	DEBUG_CODE({fprintf(output, 
+			    ", could not decode instruction = 0x%X)\n",
+			    (int)instruction);};);
       }
+    } else {
+      DEBUG_CODE({fprintf(output, 
+			  ", instruction is NULL)\n");};);
     }
+  } else {
+    DEBUG_CODE({fprintf(output, ", reentered)\n");};);     
   }
-  
-  /* Make sure signal handler is reinstalled. */
-  InstallProxyHandler();
-  
   /* If we get here, it was an ordinary SIGBUS, SIGSEGV or object
      could not be loaded */
   BetaSignalHandler (sig, info, ucon);
 }
+
 /******************************* SPARC end ******************************/
 #endif /* sparc */
 
