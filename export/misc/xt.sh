@@ -23,7 +23,7 @@ else
 
 	FILES=`${BETALIB}/export/files/xt.files`
 
-	cd ${BETALIB}; ; 
+	cd ${BETALIB}
 
 	tar -covhf -  $FILES \
 	2> $DST/xt.lst \
