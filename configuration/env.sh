@@ -121,7 +121,7 @@ case "`uname -m`" in
 		MOTIFHOME=${MOTIFHOME-/usr/dt}
 		MOTIFINC=${MOTIFINC-/usr/dt/include}
 		;;
-	Power\ Macintosh)
+	"Power Macintosh")
 		#################### MacOS X ppc configuration ######################
 		MACHINETYPE=MACOSX
 		objdir=macosx
