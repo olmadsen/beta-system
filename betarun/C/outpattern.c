@@ -56,6 +56,39 @@ static long M_Part(ref(ProtoType) proto)
   return *m;
 }
 
+static char *machine_name()
+{
+  /* Sun variants */
+#ifdef sun
+#ifdef sparc
+#ifdef sun4s
+  return "(sun4s)";
+#else
+  return "(sun4)";
+#endif
+#else
+  return "(sun3)";
+#endif
+#endif
+
+  /* HP variants */
+#ifdef hpux
+#ifdef hppa
+  return "(snake)";
+#else
+  return "(hpux8)";
+#endif
+#endif
+
+  /* Macintosh */
+#ifdef macintosh
+  return "(mac)";
+#endif
+  
+  /* default */
+  return ""; 
+}
+
 static ptr(char) ProtoTypeName(theProto)
      ref(ProtoType) theProto;
 {
@@ -500,7 +533,7 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
     fprintf(output, ".\n");
   }
   
-  fprintf(output,"\nCall chain:\n\n");
+  fprintf(output,"\nCall chain: %s\n\n", machine_name());
   
 #ifndef sparc
   /* If we are able to retrieve information about the current object
