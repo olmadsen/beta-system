@@ -26,9 +26,9 @@
 #  include "winntdef.h"
 #endif
 
-FILE *fd;       /* The file descriptor from which the nameTable is read */
-int NextAddress;     /* The last address read from the fd. */
-char NextLabel[200]; /* The last label read from the fd. */
+static FILE *fd;    /* The file descriptor from which the nameTable is read */
+static int NextAddress;     /* The last address read from the fd. */
+static char NextLabel[200]; /* The last label read from the fd. */
 
 #ifdef sgi
 #define nmcommand "/bin/nm -Bhnd %s"
@@ -195,14 +195,14 @@ typedef struct
 
 /* globals */
 
-DWORD textSectionNumber;
-BOOL fShowRelocations = FALSE;
-BOOL fShowSymbolTable = TRUE;
-BOOL fShowLineNumbers = FALSE;
-BOOL fShowRawSectionData = FALSE;
+static DWORD textSectionNumber;
+static BOOL fShowRelocations = FALSE;
+static BOOL fShowSymbolTable = TRUE;
+static BOOL fShowLineNumbers = FALSE;
+static BOOL fShowRawSectionData = FALSE;
 
 /* The names of the first group of possible symbol table storage classes */
-char * SzStorageClass1[] = {
+static char * SzStorageClass1[] = {
   "NULL","AUTOMATIC","EXTERNAL","STATIC","REGISTER","EXTERNAL_DEF","LABEL",
   "UNDEFINED_LABEL","MEMBER_OF_STRUCT","ARGUMENT","STRUCT_TAG",
   "MEMBER_OF_UNION","UNION_TAG","TYPE_DEFINITION","UNDEFINED_STATIC",
@@ -210,13 +210,13 @@ char * SzStorageClass1[] = {
 };
 
 /* The names of the second group of possible symbol table storage classes */
-char * SzStorageClass2[] = {
+static char * SzStorageClass2[] = {
   "BLOCK","FUNCTION","END_OF_STRUCT","FILE","SECTION","WEAK_EXTERNAL"
 };
 
 /* Bitfield values and names for the IMAGE_SECTION_HEADER flags */
 
-DWORD_FLAG_DESCRIPTIONS SectionCharacteristics[] = 
+static DWORD_FLAG_DESCRIPTIONS SectionCharacteristics[] = 
 {
   { IMAGE_SCN_CNT_CODE, "CODE" },
   { IMAGE_SCN_CNT_INITIALIZED_DATA, "INITIALIZED_DATA" },
@@ -234,21 +234,21 @@ DWORD_FLAG_DESCRIPTIONS SectionCharacteristics[] =
   { IMAGE_SCN_MEM_WRITE, "MEM_WRITE" },
 };
 
-PIMAGE_SYMBOL PCOFFSymbolTable = 0;
-DWORD COFFSymbolCount = 0;
-PIMAGE_COFF_SYMBOLS_HEADER PCOFFDebugInfo = 0;
+static PIMAGE_SYMBOL PCOFFSymbolTable = 0;
+static DWORD COFFSymbolCount = 0;
+static PIMAGE_COFF_SYMBOLS_HEADER PCOFFDebugInfo = 0;
 
 /* prototypes */
 
-PSTR GetSZStorageClass(BYTE storageClass);
-void DumpSymbolTable(PIMAGE_SYMBOL pSymbolTable, unsigned cSymbols);
-void DumpExeFile( PIMAGE_DOS_HEADER dosHeader);
-void DumpFile(LPSTR filename);
-void GetSectionName(WORD section, PSTR buffer, unsigned cbBuffer);
-void DumpSectionTable(PIMAGE_SECTION_HEADER section,
+static PSTR GetSZStorageClass(BYTE storageClass);
+static void DumpSymbolTable(PIMAGE_SYMBOL pSymbolTable, unsigned cSymbols);
+static void DumpExeFile( PIMAGE_DOS_HEADER dosHeader);
+static void DumpFile(LPSTR filename);
+static void GetSectionName(WORD section, PSTR buffer, unsigned cbBuffer);
+static void DumpSectionTable(PIMAGE_SECTION_HEADER section,
                       unsigned cSections,
                       BOOL IsEXE);
-void DumpSectionTable(PIMAGE_SECTION_HEADER section,
+static void DumpSectionTable(PIMAGE_SECTION_HEADER section,
                       unsigned cSections,
                       BOOL IsEXE)
 {
@@ -268,7 +268,7 @@ void DumpSectionTable(PIMAGE_SECTION_HEADER section,
     }
 }
 
-void DumpExeFile( PIMAGE_DOS_HEADER dosHeader ) {
+static void DumpExeFile( PIMAGE_DOS_HEADER dosHeader ) {
   PIMAGE_NT_HEADERS pNTHeader;
   DWORD base = (DWORD)dosHeader;
   
@@ -318,7 +318,7 @@ void DumpExeFile( PIMAGE_DOS_HEADER dosHeader ) {
   }
 }
 
-void DumpFile(LPSTR filename) {
+static void DumpFile(LPSTR filename) {
   HANDLE hFile;
   HANDLE hFileMapping;
   LPVOID lpFileBase;
@@ -377,7 +377,7 @@ void DumpFile(LPSTR filename) {
 #define SECTION_CONDITION 1
 #endif /* TEXT_ONLY */
 
-void DumpSymbolTable(PIMAGE_SYMBOL pSymbolTable, unsigned cSymbols) {
+static void DumpSymbolTable(PIMAGE_SYMBOL pSymbolTable, unsigned cSymbols) {
   unsigned i;
   PSTR stringTable;
   char sectionName[10];
@@ -410,7 +410,7 @@ void DumpSymbolTable(PIMAGE_SYMBOL pSymbolTable, unsigned cSymbols) {
   }
 }
 
-PSTR GetSZStorageClass(BYTE storageClass) {
+static PSTR GetSZStorageClass(BYTE storageClass) {
   if ( storageClass <= IMAGE_SYM_CLASS_BIT_FIELD )
       return SzStorageClass1[storageClass];
   else if ( (storageClass >= IMAGE_SYM_CLASS_BLOCK)
@@ -420,7 +420,7 @@ PSTR GetSZStorageClass(BYTE storageClass) {
     return "???";
 }
 
-void GetSectionName(WORD section, PSTR buffer, unsigned cbBuffer) {
+static void GetSectionName(WORD section, PSTR buffer, unsigned cbBuffer) {
   char tempbuffer[10];
   
   switch ( (SHORT)section ) {
