@@ -15,6 +15,8 @@
 
 #define REP ((struct ObjectRep *)theObj)
 
+static IOALooksFullCount = 0; /* consecutive unsuccessful IOAGc's */
+
 /*
  * IOAGc:
  *  Called from doGC in Misc.c / PerformGC.run.
@@ -22,8 +24,6 @@
  */
 void IOAGc()
 {
-  static IOALooksFullCount = 0; /* consecutive unsuccessful IOAGc's */
-
 #if defined(macintosh) ||defined(MAC)
   RotateTheCursor();
 #endif
@@ -56,7 +56,9 @@ void IOAGc()
   
   DEBUG_AOA( AOAtoIOACheck() );
   DEBUG_AOA( AOACheck() );
+#ifdef KEEP_STACKOBJ_IN_IOA
   IOAStackObjectSum = IOAStackObjectNum = 0;
+#endif
   AOArootsLimit = AOArootsPtr = ToSpaceLimit;
   { long i; for(i=0; i < IOAMaxAge;i++) IOAAgeTable[i] = 0; }
   /* Save the state of AOA, this state is used at end of IOAGc, to proceed 
@@ -93,7 +95,10 @@ void IOAGc()
       Notify(buf);
       exit(1);
     }
+#ifndef NEWRUN
+    /* NEWRUN: stackObj is already 0 (cleared at Attach) */
     ActiveComponent->StackObj = 0;  /* the stack is not valid anymore. */
+#endif
     ProcessReference( (handle(Object))&ActiveComponent);
     ProcessReference( (handle(Object))&BasicItem );
     if (InterpretItem[0]) {
@@ -271,7 +276,7 @@ void IOAGc()
     /* Determine new tenuring threshold */
     {
       long limit = areaSize(IOA,IOALimit) / 10;long sum = 0;
-      
+#ifdef KEEP_STACKOBJ_IN_IOA
       limit -= IOAStackObjectSum;
       if (limit < 0) {
 	DEBUG_IOA( fprintf(output, 
@@ -280,6 +285,7 @@ void IOAGc()
 			   (int)IOAStackObjectSum));
 	limit = 0;
       }
+#endif
       IOAtoAOAtreshold = 0;
       do
 	{
@@ -311,7 +317,8 @@ void IOAGc()
 
     InfoS_LabB();
     
-    if (IOATop+4*ReqObjectSize > IOALimit)
+    if ((long)IOATop+4*(long)ReqObjectSize > (long)IOALimit) {
+      /* Not enough freed by this GC */
       if (IOALooksFullCount > 2) {
 	char buf[100];
 	sprintf(buf, "Sorry, IOA is full: cannot allocate %d bytes.\n\
@@ -322,24 +329,82 @@ Program terminated.\n", (int)(4*ReqObjectSize));
 #else
 	BetaError(IOAFullErr, 0);
 #endif
-      } else
+      } else {
+	if (IOALooksFullCount==2) {
+	  /* Have now done two IOAGc's without freeing enough space.
+	   * Make sure that all objects go to AOA in the next GC.
+	   */
+	  IOAtoAOAtreshold=2;
+	  DEBUG_IOA(fprintf(output, "Forcing all to AOA in next IOAGc\n"));
+	}
 	IOALooksFullCount++;
-    else
+      }
+      INFO_IOA(fprintf(output, "[%d]\n", IOALooksFullCount));
+    } else {
       IOALooksFullCount = 0;
+    }
     
-DEBUG_IOA(
-	  fprintf(output,
-		  "IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
-		  (int)IOA, (int)IOATop, (int)IOALimit);
-	  fprintf(output,
-		  "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
-		  (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
-	  )
-
+    DEBUG_IOA(
+	      fprintf(output,
+		      "IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
+		      (int)IOA, (int)IOATop, (int)IOALimit);
+	      fprintf(output,
+		      "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
+		      (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
+	      )
+      
 #ifdef hpux
-    /*    cachectl(CC_FLUSH, 0, 0); */
+      /*    cachectl(CC_FLUSH, 0, 0); */
 #endif
   }
+
+#ifndef KEEP_STACKOBJ_IN_IOA
+/* DoIOACell:
+ *  Used by the routines in stack.c, that traverse the stack and
+ *  stackobjects.
+ */
+void DoIOACell(struct Object **theCell, struct Object *theObj)
+{
+  Ck(theObj);
+  if(inBetaHeap(theObj)){
+    if(inLVRA(theObj)){
+      DEBUG_IOA(fprintf(output, "0x%x is *ValRep)", (int)theCell));
+    } else {
+      if (isObject(theObj)) {
+	ProcessReference(theCell);
+	CompleteScavenging();
+      } else {
+#ifdef RTLAZY
+	if (isLazyRef(theObj)) {
+	  DEBUG_IOA(fprintf(output, 
+			    "ProcessRefStack: Lazy ref: %d\n", (int)theObj));
+	  ProcessReference(casthandle(Object)(theCell));
+	} else {
+#ifdef RTDEBUG
+	  fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", 
+		  (int)theCell,
+		  (int)theObj);
+	  Illegal();
+#endif /* RTDEBUG */
+	}
+#endif /* RTLAZY */
+      }
+    }
+  }
+}
+
+/* DoAOACell:
+ *  Used to process stackobject in AOA.
+ */
+static void DoAOACell(struct Object **theCell, struct Object *theObj)
+{
+  if(inIOA(theObj) || inAOA(theObj) || inLVRA(theObj)) {
+    if (isObject(theObj))
+      ProcessAOAReference((handle(Object))theCell);
+  }
+}
+
+#endif /* NEWRUN */
 
 /*
  * ProcessReference:
@@ -541,7 +606,11 @@ void ProcessObject(theObj)
       return;
       
     case (long) StackObjectPTValue:
+#ifdef NEWRUN
+      ProcessStackObj((struct StackObject *)theObj, DoIOACell);
+#else
       ProcessStackObj((struct StackObject *)theObj);
+#endif
       return;
       
     case (long) StructurePTValue:
@@ -603,7 +672,7 @@ void ProcessAOAReference( theCell)
   /*fprintf(output, "ProcessAOAReference: 0x%x\n", *theCell);*/
   
   DEBUG_AOA( Claim( inAOA( theCell),"#ProcessAOAReference: theCell inside AOA\n"));
-  theObj = *theCell;
+  theObj = *theCell; /* the object referenced from the cell */
   
   if( inIOA(theObj)){ /* theObj is inside IOA */
     GCAttribute = theObj->GCAttr;
@@ -612,10 +681,12 @@ void ProcessAOAReference( theCell)
       DEBUG_LVRA( Claim( !inLVRA((ref(Object))GCAttribute),
 			"ProcessAOAReference: Forward ValRep"));
     }else{
-      if( GCAttribute >= 0 ){ /* theObj is an autonomous object. */
-	*theCell = NewCopyObject( theObj, 0);
-	if( !inToSpace( *theCell)){
-	  if( inLVRA( *theCell)){
+      if( GCAttribute >= 0 ){ 
+	/* theObj is an autonomous object. */
+	/* Move it from IOA to AOA/LVRA */
+	*theCell = NewCopyObject( theObj, /* 0 */ theCell);
+	if( !inToSpace( *theCell)){ /* cheap */
+	  if( inLVRA( *theCell)){   /* expensive */
 	    /* Preserve the LVRA-cycle. */
 	    ((ref(ValRep)) *theCell)->GCAttr = (long) theCell;
 	    DEBUG_LVRA( Claim( isValRep(*theCell),
@@ -763,10 +834,11 @@ void ProcessAOAObject(theObj)
       }
       return;
     case (long) StackObjectPTValue:
-#ifndef crts
+#ifdef KEEP_STACKOBJ_IN_IOA
       Claim( FALSE, "ProcessAOAObject: No StackObject in AOA");
 #else
-      /* CRTS */
+      /* Machine dependant traversal of stackobj */
+#ifdef crts
       /* Scan the StackObject for object references and follow all entries */
       { ref(StackObject) theStackObject;
         handle(Object)   theCell; 
@@ -794,7 +866,11 @@ void ProcessAOAObject(theObj)
 	  }
         }
       }
+#endif /* crts */
+#ifdef NEWRUN
+      ProcessStackObj((struct StackObject *)theObj, DoAOACell);
 #endif
+#endif /* KEEP_STACKOBJ_IN_IOA */
       return;
     case (long) StructurePTValue:
       ProcessAOAReference( &(toStructure(theObj))->iOrigin );
@@ -1031,6 +1107,7 @@ void IOACheckObject (theObj)
 	  handle(Object)   theCell; 
 	  ptr(long)        theEnd;
 	  
+#ifdef mc68020
 	  theStackObject = Coerce(theObj, StackObject);
 	  /* printf("sobj=0x%x\n", theStackObject);
 	   * printf("sobj: StackSize=0x%x\n", theStackObject->StackSize);
@@ -1052,6 +1129,10 @@ void IOACheckObject (theObj)
 	      }
 	    }
 	  }
+#else
+	  fprintf(output, 
+		  "IOACheckObject: no check of stackobject 0x%x\n", theObj);
+#endif
 	}
 	return;
 	

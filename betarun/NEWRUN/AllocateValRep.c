@@ -6,7 +6,10 @@
 #include "beta.h"
 #include "crun.h"
 
-void AlloVR1(struct Object* theObj, unsigned offset, int range, long *SP)
+void AlloVR1(struct Object* theObj, 
+	     unsigned offset /* in bytes */, 
+	     int range, 
+	     long *SP)
 {
     struct ValRep *theRep;
     register unsigned Size;
@@ -41,7 +44,10 @@ void AlloVR1(struct Object* theObj, unsigned offset, int range, long *SP)
     AssignReference((long *)((char *)theObj + offset), (struct Item *)theRep);
 }
 
-void AlloVR2(struct Object* theObj, unsigned offset, int range, long *SP)
+void AlloVR2(struct Object* theObj, 
+	     unsigned offset /* in bytes */,
+	     int range, 
+	     long *SP)
 {
     struct ValRep *theRep;
     register unsigned Size;
@@ -75,7 +81,10 @@ void AlloVR2(struct Object* theObj, unsigned offset, int range, long *SP)
     AssignReference((long *)((char *)theObj + offset), (struct Item *)theRep);
 }
 
-void AlloVR4(struct Object* theObj, unsigned offset, int range, long *SP)
+void AlloVR4(struct Object* theObj,
+	     unsigned offset /* in bytes */,
+	     int range, 
+	     long *SP)
 {
     struct ValRep *theRep;
     register unsigned Size;
@@ -110,7 +119,10 @@ void AlloVR4(struct Object* theObj, unsigned offset, int range, long *SP)
 }
 
 
-void AlloVR8(struct Object* theObj, unsigned offset, int range, long *SP)
+void AlloVR8(struct Object* theObj,
+	     unsigned offset /* in bytes */, 
+	     int range, 
+	     long *SP)
 {
     struct ValRep *theRep;
     register unsigned Size;

@@ -20,47 +20,7 @@
 #endif
 
 #ifdef NEWRUN
-
-void ProcessRefStack(struct Object **topOfStack)
-{
-  struct Object **theCell=topOfStack;
-  struct Object *theObj= *theCell;
-
-  while(theObj){
-    DEBUG_STACK(fprintf(output, 
-			"ProcessRefStack(%d): 0x%08x: 0x%08x\n", 
-			((long)topOfStack - (long)theCell)/4,
-			(int)theCell,
-			(int)*theCell));
-    Ck(theObj);
-    if(inBetaHeap(theObj) && isObject(theObj)) {
-      if( inLVRA( theObj)){
-	DEBUG_IOA( fprintf( output, "0x%x is *ValRep)", (int)theCell));
-      } else {
-	ProcessReference(theCell);
-	CompleteScavenging();
-      }
-    }
-#ifdef RTLAZY
-    else if (isLazyRef(theObj)) {
-      DEBUG_IOA(fprintf(output, "ProcessRefStack: Lazy ref: %d\n", (int)theObj));
-      ProcessReference(casthandle(Object)(theCell));
-    }
-#endif
-#ifdef RTDEBUG
-    else {
-      fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", 
-	      (int)theCell,
-	      (int)theObj);
-      Illegal();
-    }
-#endif
-    /* Take next reference from stack */
-    theCell--;
-    theObj = *theCell;
-  }
-}
-
+/************************* Begin NEWRUN ****************************/
 /* Return the M or G part obtained from theProto, that PC is in */
 unsigned long CodeEntry(struct ProtoType *theProto, long PC)
 {
@@ -123,7 +83,38 @@ unsigned long CodeEntry(struct ProtoType *theProto, long PC)
   }
 }
 
-struct Object *ProcessStackPart(long SP, long StackStart, long stopAtComp)
+/* ProcessRefStack:
+ *  Process references in a stack frame.
+ */
+static 
+void ProcessRefStack(struct Object **topOfStack, 
+		     void (*func)(struct Object **, struct Object *))
+{
+  struct Object **theCell=topOfStack;
+  struct Object *theObj= *theCell;
+
+  while(theObj){
+    DEBUG_STACK(fprintf(output, 
+			"ProcessRefStack(%d): 0x%08x: 0x%08x\n", 
+			((long)topOfStack - (long)theCell)/4,
+			(int)theCell,
+			(int)*theCell));
+    func(theCell, theObj);
+    /* Take next reference from stack */
+    theCell--;
+    theObj = *theCell;
+  }
+}
+
+/* ProcessStackPart:
+ *  The main stack traversal routine.
+ *  Scans through frames in stack part.
+ */
+static
+struct Object *ProcessStackPart(long SP, 
+				long StackStart, 
+				long stopAtComp,
+				void (*func)(struct Object **,struct Object *))
 {
   /* At entry two variables are defined:
    *  - SP points to address just above last BETA stack frame,
@@ -169,7 +160,7 @@ struct Object *ProcessStackPart(long SP, long StackStart, long stopAtComp)
   DEBUG_STACK(fprintf(output, "Top: Frame for object 0x%x, prevSP=0x%x\n",
 		      GetThis((long *)SP),
 		      SP));
-  ProcessRefStack((struct Object **)SP-2); /* -2: start at dyn */
+  ProcessRefStack((struct Object **)SP-2, func); /* -2: start at dyn */
   PC = *((long *)SP-1);
   theObj = *((struct Object **)SP-2); 
 
@@ -196,7 +187,7 @@ struct Object *ProcessStackPart(long SP, long StackStart, long stopAtComp)
 	 */
 	DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
 	DEBUG_STACK(fprintf(output, "G: Frame for object 0x%x\n", GetThis((long*)SP)));
-	ProcessRefStack((struct Object **)SP-2); /* -2: start at dyn */
+	ProcessRefStack((struct Object **)SP-2, func); /* -2: start at dyn */
 	PC = *((long*)SP-1);
 	theObj = *((struct Object **)SP-2); 
 	if (SP<StackStart) {
@@ -246,7 +237,7 @@ struct Object *ProcessStackPart(long SP, long StackStart, long stopAtComp)
       /* Treat this frame as a top frame */
       DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
       DEBUG_STACK(fprintf(output, "CB: Frame for object 0x%x\n", GetThis((long*)SP)));
-      ProcessRefStack((struct Object **)SP-2); /* -2: start at dyn */
+      ProcessRefStack((struct Object **)SP-2, func); /* -2: start at dyn */
       PC = *((long*)SP-1);
       theObj = *((struct Object **)SP-2); 
       if (SP<StackStart) {
@@ -363,7 +354,7 @@ struct Object *ProcessStackPart(long SP, long StackStart, long stopAtComp)
 
     DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
     DEBUG_STACK(fprintf(output, "Frame for object 0x%x\n", this));
-    ProcessRefStack((struct Object **)SP-2); /* -2: start at dyn */
+    ProcessRefStack((struct Object **)SP-2, func); /* -2: start at dyn */
   } while (SP<StackStart);
   DEBUG_CODE(Claim(SP==(long)StackStart, "SP==StackStart"));
   return theObj;
@@ -380,20 +371,24 @@ void ProcessStack()
    */
   
   DEBUG_STACK(fprintf(output, "\nProcessReferenceStack.\n"));
-  ProcessRefStack(RefSP-1); /* RefSP points to first free */
+  ProcessRefStack(RefSP-1, DoIOACell); /* RefSP points to first free */
   DEBUG_STACK(fprintf(output, "ProcessMachineStack.\n"));
-  last = ProcessStackPart((long)StackEnd, (long)StackStart, FALSE);
+  last = ProcessStackPart((long)StackEnd, (long)StackStart, FALSE, DoIOACell);
   Claim(last==0, "ProcessMachineStack: last dyn==0\n");
 }
 
-void ProcessStackObj(struct StackObject *sObj)
+void ProcessStackObj(struct StackObject *sObj, 
+		     void (*func)(struct Object **,struct Object *))
 {
   DEBUG_STACK(fprintf(output, "\nProcessStackObject 0x%x\n", sObj));
   ProcessStackPart((long)sObj->Body+(long)sObj->StackSize, /* top frame off */
 		   (long)sObj->Body+(long)sObj->BodySize, /* bottom */
-		   TRUE); /* Stop at component */
+		   TRUE, /* Stop at component */
+		   func); 
 }
-#endif
+
+#endif /* NEWRUN */
+/*************************** End NEWRUN ***************************/
 
 /* Traverse an stack parts and process all references.
  * Don't process references from the stack to LVRA. The ValReps in

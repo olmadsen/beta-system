@@ -40,7 +40,6 @@ char *CpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP)
     long bodysize;
     long i;
     unsigned char *oldBody;
-    unsigned char *retPtr;
 
     DEBUG_CODE(NumCpkSVT++);
 

@@ -138,6 +138,11 @@ ref(Object) CopyObjectToAOA( theObj)
   theObj->GCAttr = (long) newObj;
   
   DEBUG_AOA( AOAcopied += size );
+
+  DEBUG_CODE(if(isStackObject(theObj)) 
+	     fprintf(output, 
+		     "CopyObjectToAOA: moved StackObject to 0x%x\n", newObj));
+
   /* DEBUG_AOA( fprintf(output, "#ToAOA: IOA-address: 0x%x AOA-address: 0x%x proto: 0x%x size: %d\n", 
 		     (int)theObj, (int)newObj, (int)(theObj->Proto), (int)size)); */
   
@@ -383,6 +388,20 @@ static void FollowItem(ref(Item) theObj)
   }
 }
 
+#ifndef KEEP_STACKOBJ_IN_IOA
+/* PushAOACell:
+ *  Used to process stackobjects in AOA object.
+ */
+static void PushAOACell(struct Object **theCell, struct Object *theObj)
+{
+  Ck(theObj);
+  if(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell)) {
+    if (isObject(*theCell))
+      RAFPush(theCell);
+  }
+}
+#endif
+
 /* FollowObject is used during Phase1 of the Mark-Sweep GC. 
  * For each referernce inside theObj it calls ReverseAndFollow.
  */
@@ -519,10 +538,11 @@ static void FollowObject(ref(Object) theObj)
       return;
       
     case (long) StackObjectPTValue:
-#ifndef crts
+#ifdef KEEP_STACKOBJ_IN_IOA
       Notify("FollowObject: Error: StackObject in AOA.");
 #else
-      /* CRTS */
+      /* Machine dependant stackobj processing */
+#ifdef crts
       /* Scan the StackObject for object references and follow all entries */
       { ref(StackObject) theStackObject;
         handle(Object)   theCell; 
@@ -535,13 +555,14 @@ static void FollowObject(ref(Object) theObj)
 	size = theStackObject->BodySize-theStackObject->StackSize-1;
 	for(; size > 0; size--, stackptr++) {
           theCell = (handle(Object)) stackptr;
-	  if(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell)) {
-	     if (isObject(*theCell))
-               RAFPush((handle(Object))stackptr);
-	  }
+	  PushAOACell(theCell, *theCell);
         }
       }
-#endif
+#endif /* crts */
+#ifdef NEWRUN
+      ProcessStackObj((struct StackObject *)theObj, PushAOACell);
+#endif /* NEWRUN */
+#endif /* KEEP_STACKOBJ_IN_IOA */
       return;
       
     case (long) StructurePTValue:
@@ -1135,9 +1156,10 @@ void AOACheckObject( theObj)
       }
       return;   
     case (long) StackObjectPTValue:
-#ifndef crts
+#ifdef KEEP_STACKOBJ_IN_IOA
       Claim( FALSE, "AOACheckObject: theObj should not be StackObject.");
 #else
+#ifdef crts
       /* CRTS */
       /* Scan the StackObject for object references and follow all entries */
       { ref(StackObject) theStackObject;
@@ -1157,7 +1179,11 @@ void AOACheckObject( theObj)
 	  }
         }
       }
-#endif
+#else /* crts */
+      fprintf(output, 
+	      "AOACheckObject: no check of stackobject 0x%x\n", theObj);
+#endif /* crts */
+#endif /* KEEP_STACKOBJ_IN_IOA */
       return; 
     case (long) StructurePTValue:
       AOACheckReference( &(toStructure(theObj))->iOrigin );
@@ -1266,10 +1292,11 @@ void AOACheckObjectSpecial( theObj)
       AOACheckObjectSpecial( (ref(Object))(ComponentItem( theObj)));
       return;
     case (long) StackObjectPTValue:
-#ifndef crts
+#ifdef KEEP_STACKOBJ_IN_IOA
       Claim( FALSE, "AOACheckObjectSpecial: theObj must not be StackObject.");
 #else
-      /* do nothing? (as for RefRepPTValue) */
+      fprintf(output, 
+	      "AOACheckObjectSpecial: no check of stackobject 0x%x\n", theObj);
 #endif
       return;
     case (long) StructurePTValue:

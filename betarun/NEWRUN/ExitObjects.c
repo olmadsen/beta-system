@@ -43,7 +43,7 @@ long *ExO(long *jumpAdr,
     if ((long)this->Proto == (long)ComponentPTValue) {
       struct Component *comp = (struct Component *)this;
       struct Component *callerComp = comp->CallerComp;
-      printf("ExO: passing comp 0x%x\n", comp);
+      printf("ExO: passing comp 0x%x\n", (int)comp);
       SP   = (long *)callerComp->SPx;
       PC   = (long *)callerComp->CallerLSC;
       /* TerminateComponent: (see Attach.c) */

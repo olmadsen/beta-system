@@ -14,7 +14,6 @@
 void Att(struct Object *this, struct Component *comp, long RA, long SPx)
 {
    struct Object *compObj;
-   struct ProtoType *compProto;
    struct StackObject *sObj;
    long address, arg0, arg1;
    long SPy,SPz;

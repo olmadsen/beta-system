@@ -11,6 +11,8 @@
 #include "valhallaComm.h"
 #endif
 
+/* TODO: check for suspend involving callback */
+
 /*
  * STACK LAYOUT at suspend:
  * 
@@ -52,7 +54,7 @@ void Susp(struct Object *this, long prevSP, long RA, long SPz)
    struct Component *returnComp;
    struct Object *returnObj;
 
-   long SPx, SPy, SPoff, i;
+   long SPx, SPy, i;
 
    DEBUG_CODE(NumSusp++);
 
@@ -83,7 +85,7 @@ void Susp(struct Object *this, long prevSP, long RA, long SPz)
     */
    sObj->StackSize = (long)prevSP - (long)SPz;
    /* Save sObj in ActiveComponent */
-   ActiveComponent->StackObj = (struct StackObject *)sObj;
+   AssignReference((long *)&ActiveComponent->StackObj, (struct Item *)sObj);   
 
    /* Switch ActiveComponent */
    ActiveComponent = ActiveComponent->CallerComp; 

@@ -63,12 +63,16 @@ static ref(Object) CopyObject(ref(Object) theObj)
     DEBUG_IOA( Claim( theObj->GCAttr<=IOAMaxAge,
 		     "CopyObject: Age of object > IOAMaxAge."));
     
+#ifdef KEEP_STACKOBJ_IN_IOA
     if (!isStackObject(theObj))
       IOAAgeTable[theObj->GCAttr-1] += size;
     else {
 	IOAStackObjectSum += size;
 	IOAStackObjectNum++;
     }
+#else
+    IOAAgeTable[theObj->GCAttr-1] += size;
+#endif
       
     
     DEBUG_AOA( IOAcopied += size );
@@ -114,45 +118,43 @@ static ref(Object) CopyObject(ref(Object) theObj)
  */
 ref(Object) NewCopyObject(ref(Object) theObj, handle(Object) theCell)
 {
-    if (isValRep(theObj)) {
-	
-	/* THIS SHOULDN'T BE NECESSARY: should be handled at allocation time */
-	if( ((ref(ValRep)) theObj)->HighBorder > LARGE_REP_SIZE){
-	    /* A large val rep was detected in the IOA heap */
-	    ref(Object) newObj; 
-	    if ((newObj = CopyObjectToLVRA((ref(ValRep))theObj))) {
-		newObj->GCAttr = (long) theCell; /* Preserve the LVRA-Cycle */
-		DEBUG_LVRA( Claim( isValRep(cast(ValRep)*theCell),
-				  "NewCopyObject: isValRep(cast(ValRep)*theCell)" ));
-		return newObj;
-	    } else {
-		/* CopyObjectToLVRA failed */
-		return CopyObject( theObj);
-	    }
-	}
+  
+#ifdef CHECK_LVRA_IN_IOA
+  if (isValRep(theObj)) {
+    if( ((ref(ValRep)) theObj)->HighBorder > LARGE_REP_SIZE){
+      /* A large val rep was detected in the IOA heap */
+      ref(Object) newObj; 
+      if ((newObj = CopyObjectToLVRA((ref(ValRep))theObj))) {
+	newObj->GCAttr = (long) theCell; /* Preserve the LVRA-Cycle */
+	DEBUG_LVRA( Claim( isValRep(cast(ValRep)*theCell),
+			  "NewCopyObject: isValRep(cast(ValRep)*theCell)" ));
+	return newObj;
+      } 
     }
+#endif /* CHECK_LVRA_IN_IOA */
     
     if( theObj->GCAttr >= IOAtoAOAtreshold ){
-	/* theObj is old enough to go into AOA */
-#ifndef crts
-	if( !isStackObject(theObj) ){
+      /* theObj is old enough to go into AOA */
+      ref(Object) newObj;
+      
+#ifdef KEEP_STACKOBJ_IN_IOA
+      if( isStackObject(theObj) ) return CopyObject(theObj);
 #endif
-	    ref(Object) newObj; 
-	    if( (newObj = CopyObjectToAOA(theObj)) ){
-		/* Insert theCell in AOAroots table. 
-		 * Used as roots in mark-sweep if an AOA GC is invoked after IOAGc.
-		 */
-		if (theCell) {
-		  saveAOAroot(theCell);
-		}
-		return newObj;
-	    } else {
-		return CopyObject(theObj);
-	    }
-#ifndef crts
+      
+      if( (newObj = CopyObjectToAOA(theObj)) ){
+	/* Insert theCell in AOAroots table. 
+	 * Used as roots in mark-sweep if an AOA GC is invoked after IOAGc.
+	 */
+	if (theCell) {
+	  saveAOAroot(theCell);
 	}
-#endif
+	return newObj;
+      } else {
+	/* CopyObjectToAOA failed */
+	return CopyObject(theObj);
+      }
+    } else {
+      /* theObj is not old enough for AOA */
+      return CopyObject(theObj);
     }
-    /* theObj is not copied to LVRA, not copied to AOA, or theObj is a stack object */
-    return CopyObject(theObj);
-}
+  }

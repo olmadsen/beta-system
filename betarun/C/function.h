@@ -117,7 +117,11 @@ extern ref(Object) NewCopyObject(ref(Object), handle(Object));
 
 /* GC/stack.c */
 extern void ProcessStack(void);
+#ifdef NEWRUN
+extern void ProcessStackObj(struct StackObject *, void (*func)(struct Object **,struct Object *));
+#else
 extern void ProcessStackObj(struct StackObject *);
+#endif
 
 /* GC/ioa.c */
 extern void IOAGc(void);
@@ -129,6 +133,9 @@ extern void CompleteScavenging(void);
 extern long GetDistanceToEnclosingObject(ref(Object));
 extern void tempAOArootsAlloc(void);
 extern void tempAOArootsFree(void);
+#ifdef NEWRUN
+extern void DoIOACell(struct Object **theCell, struct Object *theObj);
+#endif
 #ifdef RTDEBUG
 extern void IOACheck(void);
 extern void IOACheckObject(ref(Object));
@@ -141,7 +148,9 @@ extern ref(ValRep) LVRACAlloc(ref(ProtoType), long);
 extern long inLVRA(ref(Object));
 extern long LVRARestInBlock(ref(LVRABlock));
 extern void LVRAkill(struct ValRep *);
+#ifdef CHECK_LVRA_IN_IOA
 extern ref(Object) CopyObjectToLVRA(ref(ValRep)); 
+#endif
 #ifdef RTDEBUG
 void LVRACheck(void);
 long LVRAAlive(ref(ValRep));

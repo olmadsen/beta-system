@@ -16,6 +16,19 @@
 #define INLINE 
 #endif
 
+#ifdef NEWRUN
+/* Only CopyCT may cause large repetitions in IOA: ignored */
+#undef CHECK_LVRA_IN_IOA
+#else
+#define CHECK_LVRA_IN_IOA
+#endif
+
+#if (defined(crts) || defined(NEWRUN))
+#undef KEEP_STACKOBJ_IN_IOA
+#else
+#define KEEP_STACKOBJ_IN_IOA
+#endif
+
 #ifdef crts
 #undef sparc
 #undef hppa

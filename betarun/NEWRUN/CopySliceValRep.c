@@ -11,13 +11,13 @@
 
 void CopySVR(struct ValRep *theRep,
 	     struct Item *theItem,
-	     unsigned offset, /* in ints */
+	     unsigned offset, /* in longs */
 	     unsigned low,
 	     unsigned high,
 	     long *SP
 	     )
 {
-    struct ValRep *newRep;
+    struct ValRep *newRep=0;
     register long i, size, range;
     
     DEBUG_CODE(NumCopySVR++);
@@ -35,42 +35,52 @@ void CopySVR(struct ValRep *theRep,
     range =  (high - low) + 1;
     if (range < 0) range = 0;
 
-    switch((long)theRep->Proto){
-    case (long) ByteRepPTValue:
-      size = ByteRepSize(range); break;
-    case (long) ValRepPTValue:
-      size = ValRepSize(range); break;
-    case (long) DoubleRepPTValue:
-      size = DoubleRepSize(range); break;
-    case (long) WordRepPTValue:
-      size = WordRepSize(range); break;
-    case (long) DynItemRepPTValue:
-    case (long) DynCompRepPTValue:
-      size = DynObjectRepSize(range); break;
-#ifdef STATIC_OBJECT_REPETITIONS
-    case (long) StatItemRepPTValue:
-      size = StatItemRepSize(range, REP->iProto); break;
-    case (long) StatCompRepPTValue:
-      size = StatCompRepSize(range, REP->iProto); break;
-#endif /* STATIC_OBJECT_REPETITIONS */
-    default:
-      fprintf(output, "CopySliceValRep: unknown repetition\n");
-      size=0;
+    if (range > LARGE_REP_SIZE) {
+      /* Allocate in LVRA */
+      long *cycleCell = 0;
+
+      if (!inIOA(theRep)) {
+	  /* theRep is in LVRA (it cannot be in AOA, cf. NewCopyObject). 
+	   * If LVRAAlloc causes an LVRACompaction
+	   * the value of theRep may be wrong after LVRAAlloc: this is the case
+	   * if the repetition pointed to by theRep was moved. To prevent this,
+	   * the cell actually referencing the repetition is remembered. This 
+	   * cell will be updated if the repetition is moved.
+	   */
+	  cycleCell = (long *)theRep->GCAttr; /* Cell that references theRep */
+	}
+
+      DEBUG_LVRA(fprintf(output, "CopySVR allocates in LVRA\n"));
+
+      newRep = (struct ValRep *)LVRAAlloc(theRep->Proto, range);
+
+      if (cycleCell) {
+	/* theRep was in LVRA. Since it may have been moved by
+	 * LVRACompaction, we update it.
+	 */
+	theRep = (struct ValRep *)*cycleCell;
+      }
     }
+    
+    if (newRep) {
+      /* newRep allocated in LVRA */
+      DEBUG_CODE(Claim(newRep->HighBorder==range&&newRep->LowBorder==1, 
+		       "CopySVR: lvra structure ok"));
+      /* Make the LVRA-cycle: theCell -> newRep.GCAttr */
+      newRep->GCAttr = (long) ((long *) theItem + offset);
+      *(struct ValRep **)((long *)theItem + offset) = newRep;
+    } else{
+      /* Allocate in IOA */
+      size  = DispatchValRepSize(theRep->Proto, range);
+      Protect2(theRep,theItem,newRep = (struct ValRep *)IOAalloc(size, SP));
+      Ck(theRep); Ck(theItem);
 
-    /* LVRA missing */
-    
-    Protect2(theRep,theItem,newRep = (struct ValRep *)IOAalloc(size, SP));
-    
-    Ck(theRep); Ck(theItem);
-
-    /* The new Object is now allocated, but not assigned yet! */
-    
-    /* Initialize the structual part of the repetition. */
-    newRep->Proto = theRep->Proto;
-    newRep->GCAttr = 1;
-    newRep->LowBorder = 1;
-    newRep->HighBorder = range;
+      /* Initialize the structual part of the repetition. */
+      newRep->Proto = theRep->Proto;
+      newRep->GCAttr = 1;
+      newRep->LowBorder = 1;
+      newRep->HighBorder = range;
+    }
 
     if (isObjectRep(theRep)){
       NEWREP->iOrigin = REP->iOrigin;
@@ -78,7 +88,7 @@ void CopySVR(struct ValRep *theRep,
     }
 
     /* Copy the body part of the repetition. */
-    switch ( (long) theRep->Proto){
+    switch((long)theRep->Proto){
       case (long) ByteRepPTValue:
 	{ /* Since the slice may start on any byte we copy it byte by byte */
 	    unsigned char *newBody= (unsigned char *)newRep->Body;
@@ -116,21 +126,6 @@ void CopySVR(struct ValRep *theRep,
 	  /* No need to use AssignReference: NEWREP is in IOA */
 	}
 	break;
-#ifdef STATIC_OBJECT_REPETITIONS
-      case (long) StatItemRepPTValue:
-	/* copy as longs */
-	for (i = 0; i < range*ItemSize(REP->iProto)/4; ++i)
-	  NEWREP->Body[i] 
-	    = REP->Body[i+(low-theRep->LowBorder)*ItemSize(REP->iProto)/4];
-	break;
-      case (long) StatCompRepPTValue:
-	/* copy as longs */
-	for (i = 0; i < range*ComponentSize(REP->iProto)/4; ++i)
-	  NEWREP->Body[i] 
-	    = REP->Body[i+(low-theRep->LowBorder)*ComponentSize(REP->iProto)/4];
-	break;
-#endif /* STATIC_OBJECT_REPETITIONS */
-
       default:
 	Notify("CopySliceValRep: wrong prototype");
 	exit(1);

@@ -3,6 +3,10 @@
  * by Peter Andersen and Tommy Thorn.
  */
 
+/* TODO: eliminate in compiler; does the same as CopyT,
+ * but the parameters are different.
+ */
+
 
 #include "beta.h"
 #include "crun.h"
@@ -20,6 +24,16 @@ struct ValRep *CopyCT(unsigned char *textPtr, long *SP)
     size = ByteRepSize(range);
 
     /* LVRA missing */
+#ifdef RTDEBUG
+    if (range > LARGE_REP_SIZE) {
+      fprintf(output, "CopyCT: should allocate in LVRA (range=%d)\n", range);
+    }
+    /* TODO: Cannot allocate in LVRA, since address referencing the
+     * repetition is not known, i.e. the LVRA cycle cannot be
+     * established.
+     */
+#endif
+
     theRep = (struct ValRep *)IOAalloc(size, SP);
 
     theRep->Proto = ByteRepPTValue;

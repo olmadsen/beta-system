@@ -476,6 +476,7 @@ void LVRAkill(struct ValRep *rep)
   /* evt s{tte ind i free-list ? */
 }
 
+#ifdef CHECK_LVRA_IN_IOA
 /* CopyObjectToLVRA: called from NewCopyObject */
 
 ref(Object) CopyObjectToLVRA(ref(ValRep) theRep)
@@ -497,6 +498,7 @@ ref(Object) CopyObjectToLVRA(ref(ValRep) theRep)
   DEBUG_LVRA(fprintf(output, "#COPYObjectToLVRA: newRep=0x%x\n", (int)newRep));
   return cast(Object)newRep;
 }
+#endif
 
 /********************** LVRA garbage collection *************************/
 
