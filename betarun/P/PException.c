@@ -14,10 +14,15 @@ void pexp_dummy() {
 #ifdef PERSIST
 
 #ifdef UNIX
-#include <siginfo.h>
-#include <sys/regset.h>
-#include <sys/ucontext.h>
-#include <signal.h>
+# include <signal.h>
+# ifdef sun4s
+#  include <siginfo.h>
+#  include <sys/regset.h>
+#  include <sys/ucontext.h>
+# endif
+# ifdef linux
+#  include <asm/sigcontext.h> 
+# endif
 #endif
 
 #ifdef nti
@@ -33,7 +38,11 @@ void pexp_dummy() {
 
 /* sighandler.c */
 #ifdef UNIX
-extern void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon);
+# ifdef linux
+   void BetaSignalHandler(long sig, struct sigcontext_struct scp);
+# else
+   extern void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon);
+# endif
 #endif
 
 /* block.c */
@@ -44,9 +53,14 @@ void mmapInitial(unsigned long numbytes);
 
 /* LOCAL VARIABLES */
 static long sourcereg;
+#ifdef sparc
 static unsigned long rd;
 static unsigned long rs1;
 static unsigned long rs2;
+#endif
+
+/* The indirection table */
+void *PIT, *PITTop, *PITLimit; 
 
 /* LOCAL FUNCTION DECLARATIONS */
 #ifdef sparc
@@ -325,33 +339,13 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
   BetaSignalHandler (sig, info, ucon);
   
 }
-
-/* initProxyTrapHandler: */
-void initProxyTrapHandler(void)
-{ 
-  struct sigaction sa;
-  
-  /* Specify that we want full info about the signal, and that
-   * the handled signal should not be blocked while being handled: */
-  sa.sa_flags = SA_SIGINFO | SA_NODEFER;
-  
-  /* No further signals should be blocked while handling the specified
-   * signals. */
-  sigemptyset(&sa.sa_mask); 
-  
-  /* Specify handler: */
-  sa.sa_handler = proxyTrapHandler;
-  
-  sigaction (SIGBUS,&sa,0);
-  sigaction (SIGSEGV,&sa,0);
-}
-
-
 /******************************* SPARC end ******************************/
 #endif /* sparc */
 
-#ifdef intel
-/******************************* INTEL: *********************************/
+
+
+#ifdef nti
+/******************************* NTI: *********************************/
 static long getRegisterContents(CONTEXT* pContextRecord, long reg)
 {
 #if 0
@@ -492,8 +486,194 @@ int proxyTrapHandler(CONTEXT* pContextRecord)
   /* Exception not handled, let sighandler decide what to do. */
   return 1;
 }
-/******************************* INTEL end ******************************/
-#endif /* intel */
+/******************************* NTI end ******************************/
+#endif /* nti */
+
+#ifdef linux
+/******************************* LINUX: *********************************/
+static long getRegisterContents(struct sigcontext_struct *scp, long reg)
+{
+#if 0
+  DEBUG_CODE({
+    fprintf(output, "Getting contents of reg=%0x\n", reg);
+  });
+#endif
+  switch (reg) {
+  case 0: return scp->eax;
+  case 1: return scp->ecx;
+  case 2: return scp->edx;
+  case 3: return scp->ebx;
+  case 4: return scp->esp;
+  case 5: return scp->ebp;
+  case 6: return scp->esi;
+  case 7: return scp->edi;
+  }
+  return 0;
+}
+
+static long setRegisterContents(struct sigcontext_struct *scp, 
+				long reg, long value)
+{
+#if 0
+  DEBUG_CODE({
+    fprintf(output, "Setting reg=%0x to val=%0x\n", reg, value);
+  });
+#endif
+  switch (reg) {
+  case 0: scp->eax = value; break;
+  case 1: scp->ecx = value; break;
+  case 2: scp->edx = value; break;
+  case 3: scp->ebx = value; break;
+  case 4: scp->esp = value; break;
+  case 5: scp->ebp = value; break;
+  case 6: scp->esi = value; break;
+  case 7: scp->edi = value; break;
+  }
+  return 0;
+}
+
+static long* decodeModRM(struct sigcontext_struct *scp,
+			 unsigned char modrm, 
+			 unsigned char* modrmPC)
+{
+  /* if modrm==05, this is abs-adr, which really shouldn't trap. */
+  sourcereg = modrm & 7;
+  if (sourcereg != 4) {
+    return (long*)getRegisterContents(scp, sourcereg);
+  } else {
+    unsigned char sib;
+    long *adr;
+
+    sib = modrmPC[2];
+    /* FIXME: Do something about sib!
+     * Needed: Check both regs to see which one is a proxy, 
+     * then modify sourcereg accordingly. (Maybe it's always base?)
+     * Assumption: Only one of them may point into the proxyspace.
+     * This is true if the smallest address of proxyspace is larger
+     * than the largest repetition.
+     */
+    sourcereg = sib & 7;
+    adr = (long*)getRegisterContents(scp, sourcereg);
+    if (inPIT(adr)) {
+      return adr;
+    } else {
+      if (sib <= 0x3f) {
+	sourcereg = sib/8;
+	return (long*)getRegisterContents(scp, sourcereg);
+      }
+    }
+  }  
+  return 0;
+}
+
+void proxyTrapHandler(long sig, struct sigcontext_struct scp)
+{
+  long *proxy, *absAddr = 0;
+  unsigned char* PC;
+  unsigned char modrm;
+
+  if (scp.trapno==5 || scp.trapno==12) {
+    BetaSignalHandler(sig, scp);
+    Illegal();
+  }
+  INFO_PERSISTENCE(numPF++);
+  PC = (unsigned char*) scp.eip;
+  
+  Claim(!IOAActive, "!IOAActive");
+
+  switch (PC[0]) {
+  case 0x62:  /* BOUND R32, M32, M32 */
+  case 0x80:  /* CMP R/M8, IMM8 */
+  case 0x88:  /* MOV R/M8, R8 */
+  case 0x89:  /* MOV R/M32, R32 */
+  case 0x8a:  /* MOV R8, R/M8 */
+  case 0x8b:  /* MOV R32, R/M32 */
+  case 0xc6:  /* MOV R/M8, IMM8 */
+  case 0xc7:  /* MOV R/M32, IMM32 */
+    modrm = PC[1]; 
+    proxy = decodeModRM(&scp, modrm, PC+1);
+    break;
+  case 0x0f: /* Two-byte instruction. */
+    switch (PC[1]) {
+    case 0xb6: /* MOVZX R32, R/M8 */
+    case 0xb7: /* MOVZX R32, R/M16 */
+    case 0xbe: /* MOVSX R32, R/M8 */
+    case 0xbf: /* MOVSX R32, R/M16 */
+      modrm = PC[2]; 
+      proxy = decodeModRM(&scp, modrm, PC+2);
+      break;
+    default:
+    DEBUG_CODE({
+      fprintf(output, "proxyTrapHandler: Unknown code at %8x: "
+	      "%02x %02x %02x %02x %02x %02x\n", 
+	      (int)PC, PC[0], PC[1], PC[2], PC[3], PC[4], PC[5]);
+    });
+    /* Exception not handled, let sighandler decide what to do. */
+    BetaSignalHandler(sig, scp);
+    }
+    break;
+  default:
+    DEBUG_CODE({
+      fprintf(output, "proxyTrapHandler: Unknown code at %8x: "
+	      "%02x %02x %02x %02x %02x %02x\n", 
+	      (int)PC, PC[0], PC[1], PC[2], PC[3], PC[4], PC[5]);
+    });
+    /* Exception not handled, let sighandler decide what to do. */
+    BetaSignalHandler(sig, scp);
+  }
+  
+  if (inPIT(proxy)) {
+    /* Calculate absolute address by looking in appropriate tables */
+    absAddr = (long*)unswizzleReference(proxy);
+
+    /* Now write the new value back into sourcereg: */
+    setRegisterContents(&scp, sourcereg, (long)absAddr);
+  } else if (!proxy) {
+    Object *    theObj = 0;
+    theObj = (Object *) scp.edx;
+    if ( ! (inIOA(theObj) && isObject (theObj)))
+      theObj  = 0;
+    /* Normal refNone:  Handle as regular refNone. */
+    if (!DisplayBetaStack(RefNoneErr, theObj, (long*)PC, sig)) {
+      BetaExit(1);
+    }
+  } else {
+    /* Exception not handled, let sighandler decide what to do. */
+    BetaSignalHandler(sig, scp);
+  }
+}
+/******************************* LINUX end ******************************/
+#endif /* linux */
+
+/******************************* UNIX: ********************************/
+#ifdef UNIX
+/* initProxyTrapHandler: */
+void initProxyTrapHandler(void)
+{ 
+#ifdef sun4s
+  struct sigaction sa;
+  
+  /* Specify that we want full info about the signal, and that
+   * the handled signal should not be blocked while being handled: */
+  sa.sa_flags = SA_SIGINFO | SA_NODEFER;
+  
+  /* No further signals should be blocked while handling the specified
+   * signals. */
+  sigemptyset(&sa.sa_mask); 
+  
+  /* Specify handler: */
+  sa.sa_handler = proxyTrapHandler;
+  
+  sigaction (SIGBUS,&sa,0);
+  sigaction (SIGSEGV,&sa,0);
+
+#else
+  signal (SIGSEGV, (void (*)(int))proxyTrapHandler);
+#endif
+}
+#endif
+
+
 
 /* GLOBAL FUNCTIONS */
 #ifdef RTINFO

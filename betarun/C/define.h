@@ -111,7 +111,7 @@
 
 /* New persistence */
 #if defined(sparc) || defined(intel)
-/* #define PERSIST */
+#define PERSIST
 #endif /* sparc || intel */
 
 #ifdef PERSIST

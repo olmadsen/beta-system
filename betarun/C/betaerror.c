@@ -16,8 +16,10 @@ GLOBAL(int *RefNoneStackEnd) = 0;
  * address after the "call RefNone" instruction during RefNone check. 
  * RefNoneStackEnd is set, also by RefNone, to point out the stackpart 
  * containing the lazy reference. */
-GLOBAL(static unsigned char regnum);
-GLOBAL(static volatile int InLazyHandler);
+#ifdef RTLAZY
+static unsigned char regnum;
+static volatile int InLazyHandler;
+#endif /* RTLAZY */
 #endif /* RUN */
 
 #ifdef nti /* NOT linux */
