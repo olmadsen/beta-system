@@ -1,5 +1,7 @@
 #include <memory.h>
 #include <Files.h>
+#include <Errors.h>
+#include <stdio.h>
 #define longint long
 
 
@@ -9,30 +11,47 @@ extern char *pStrcpy(unsigned char *s, unsigned char *t);
 unsigned char *s, *t;
 /** PathNameFromDirID *********************************************************/
 
-char *PathNameFromDirID(DirID, vRefNum, s)
-     long	DirID;
-     short	vRefNum;
-     char	*s;
+char *PathNameFromDirID(long DirID, short vRefNum, char	*s)
 {
   CInfoPBRec	block;
   Str255		directoryName;
+  long          ParID;
   short err;
+  //int i=0;
 
-  *s = 0;
+  *s = 0; /* make s be empty string to allow pStrCat below */
   block.dirInfo.ioNamePtr = directoryName;
-  block.dirInfo.ioDrParID = DirID;
+  ParID = DirID;
+
+  //fprintf(stdout, "PathNameFromDirID(%d, %d, 0x%x)\n", DirID, vRefNum, s); fflush(stdout);
 
   do {
+    //fprintf(stderr, "PathNameFromDirID-%d: %d\n", i++, ParID); fflush(stderr);
+	
     block.dirInfo.ioVRefNum = vRefNum;
-    block.dirInfo.ioFDirIndex = -1;
-    block.dirInfo.ioDrDirID = block.dirInfo.ioDrParID;
+    block.dirInfo.ioFDirIndex = -1; /* ignore ioNamePtr as input */
+    block.dirInfo.ioDrDirID = ParID;
 
     err = PBGetCatInfo(&block,false);
-    /* Append a Macintosh style colon (':') */
-    pStrcat(directoryName,"\p:");
-    pStrcat(directoryName,s);
-    pStrcpy(s,directoryName); 
-  } while (block.dirInfo.ioDrDirID != fsRtDirID);
+	if(err==fnfErr){
+	  /* File not found:
+	   * If called with a volume name only, this will happen.
+	   * Since we assume, that PathNameFromDirID is called only
+	   * with legal DirIds, lets assume that it is because it is
+	   * a volume name.
+	   * And the directorypart of a path consisting of only
+	   * a volumename is empty.
+	   */
+	  return "";
+	}
+	ParID = block.dirInfo.ioDrParID;
+    /* Append a Macintosh style colon (':') to directoryname */
+    pStrcat((unsigned char*)directoryName,"\p:");
+	/* s = directoryname + s */
+    pStrcat((unsigned char*)directoryName,(unsigned char*)s);
+    pStrcpy((unsigned char*)s,(unsigned char*)directoryName); 
+	//p2cstr(directoryName); fprintf(stderr, "PathNameFromDirID:directoryname is %s\n", directoryName); fflush(stderr);
+  } while (block.dirInfo.ioDrDirID != fsRtDirID /*2*/);
 
   return(s);
 }
@@ -40,9 +59,7 @@ char *PathNameFromDirID(DirID, vRefNum, s)
 
 /** PathNameFromWD ************************************************************/
 
-char *PathNameFromWD(vRefNum,s)
-     long	vRefNum;
-     char	*s;
+char *PathNameFromWD(long vRefNum,char *s)
 {
 
   WDPBRec	myBlock;
@@ -61,13 +78,12 @@ char *PathNameFromWD(vRefNum,s)
   return(PathNameFromDirID(myBlock.ioWDDirID,myBlock.ioWDVRefNum,s));
 };
 
-char *getwd(s)
-     char	*s;
+char *getwd(char *s)
 {
   short	vRefNum,err;
   Str255	volName;
 	
-  err = getvol(&volName , &vRefNum);
+  err = getvol((char*)&volName , &vRefNum);
   PathNameFromWD(vRefNum,s);
   return (s);
 }
