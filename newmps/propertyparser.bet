@@ -1,7 +1,8 @@
-ORIGIN '~beta/basiclib/betaenv';
+ORIGIN 'astlevel';
 INCLUDE 'propertylist';
 
--- lib: attributes --
+
+-- AstInterfaceLib: Attributes --
 
 PropertyParser:
   (* Recursive-descend parser for the grammar:
@@ -25,14 +26,95 @@ PropertyParser:
      syntaxError:< exception
        (# what: ^text;
        enter what[]
-       do what[] -> msg.append;
-          msg.newline;
-          'looking at: "' -> msg.puttext;
-          lex.ch -> msg.put;
-          '"' -> msg.put;
+       do (if what[] <> NONE then
+              what[] -> msg.append;
+              msg.newline;
+              'looking at: "' -> msg.puttext;
+              lex.ch -> msg.put;
+              '"' -> msg.put;
+          if);
           INNER;
        #);
-     inputpos: @integer;
+     inputpos, lastOKpos: @integer;
+     
+     
+     markError:
+       (# whatToBeExpected: ^Text;
+          noOfTerminals: @integer;
+       enter (whatToBeExpected[], noOfTerminals)
+       do (# N: @integer;
+             beforeText: @Text;
+             get: @input.get;
+             ch: @char;
+             print, oldPrint: @boolean;
+             startLineNo, lineNo: @integer;
+             pos, first, beforePos: @integer;
+             constructLegals:
+               (# symb: ^ParseSymbolDescriptor; 
+               do &ParseSymbolDescriptor[] -> symb[];
+                  noOfTerminals -> symb.terminals.new;
+                  whatToBeExpected.reset;
+                  (for i: NoOfTerminals repeat
+                       whatToBeExpected.getAtom -> symb.terminals[i][]; 
+                  for)
+               exit symb[]
+               #);
+          do input.reset;
+             error[] -> theErrorReporter.errorstream[];
+             &FragmentForm[] -> theErrorReporter.frag[];
+             theErrorReporter.beforeFirstError;
+             1 -> lineNo;
+             1 -> N;
+             
+              Loop: (if (N <= 1) then
+                        print -> oldPrint;
+                        (lastOkPos-100) <= pos -> print;
+                        
+                        (if print then
+                            (if oldPrint then
+                                (if (beforeText.length > 100) then
+                                    startLineNo + 1 -> startLineNo;
+                                    test: ascii.newLine -> beforeText.findAll
+                                    (# 
+                                    do inx + beforePos -> beforePos;
+                                       (1,inx) -> beforeText.delete; 
+                                       leave test 
+                                    #);
+                                if)          
+                             else
+                                beforeText.clear; 
+                                pos -> beforePos;
+                                lineNo -> startLineNo;
+                            if);
+                        if); 
+                        lineNo+1->lineNo; pos->first;
+                        readLine:
+                          (# 
+                          do (if input.eos then ch=ascii.newline; leave readLine if);
+                             pos+1->pos;
+                             get->ch;
+                             (if print then ch -> beforeText.put if);
+                             (if ch=ascii.newline then leave readLine if);
+                             restart readLine;
+                          #);
+                        
+                        (if print then
+                            mark:
+                              (if (lastokpos <= pos) then 
+                                  (lastokpos, startLineNo, beforeText,
+                                  lastokpos - beforePos, constructLegals)
+                                    -> theErrorReporter.forEachError;
+                                  N+1 -> N;
+                              if);
+                        if);
+                        restart Loop
+                    if);
+             
+             theErrorReporter.afterLastError;
+             syntaxError;
+          #);
+       #);
+       
      lexer:
        (# inputget: ^stream.get;
           inputeos: ^stream.eos;
@@ -84,7 +166,7 @@ PropertyParser:
             #);
           token: @integer;
        do 0 -> buffertop;
-          
+          tokens.UNKNOWN -> token;
           getToken:
             (#
             do  skip:
@@ -92,7 +174,7 @@ PropertyParser:
                      nextch;
                      restart skip;
                  if);
-               
+               inputpos -> lastokpos;
                (if ch
                 //'(' then
                    nextch;
@@ -111,8 +193,6 @@ PropertyParser:
                              nextch;
                              restart readComment;
                          if);
-                    else
-                       'illegal character' -> syntaxError;
                    if);
                    
                 //'\'' then
@@ -124,9 +204,9 @@ PropertyParser:
                          nextch;
                          leave readstring;
                       //ascii.newline then
-                         'End-of-line is not allowed in strings' -> syntaxError;
+                         ('End-of-line is not allowed in strings', 6) -> markError;
                       //ascii.fs then
-                         'end-of-stream while reading string' -> syntaxError;
+                         ('End-of-line is not allowed in strings', 6) -> markError;
                       else
                          put;
                          nextch;
@@ -173,8 +253,6 @@ PropertyParser:
                                  restart readConst;
                              if);
                            tokens.const -> token;
-                        else
-                           'illegal character' -> syntaxerror;
                        if);
                    if);
                if);
@@ -189,6 +267,7 @@ PropertyParser:
           semicolon: (# exit 5 #);
           EOS: (# exit 6 #);
           colon: (# exit 7 #);
+          UNKNOWN: (# exit 8 #);
        #);
      
      lex: @lexer;
@@ -221,10 +300,10 @@ PropertyParser:
                          //tokens.dash then
                             (** fine **)
                          else
-                            '; expected' -> syntaxError;
+                            (';', 1)  -> markError;
                         if);
                      else
-                        'STRING expected' -> syntaxError;
+                        ('STRING', 1) -> markError;
                     if);
                  #);
             do &Property[] -> prop[];
@@ -279,9 +358,10 @@ PropertyParser:
        #);
      parse: @parser;
      input: ^Stream;
+     error: ^Stream;
      init:
        (#
-       enter input[]
+       enter (input[], error[])
        do input[] -> parse.init;
        #);
      ParsePropertyList:
