@@ -14,14 +14,28 @@ void pro_dummy() {
 #include <sys/ucontext.h>
 #include <signal.h>
 
-#define INITIALPROXYLISTSIZE 0x100
-
 /* block.c */
 extern void mmapInitial(unsigned long numbytes);
 
 /* sighandler.c */
 extern void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon);
 
+/* LOCAL MACROS */
+#define MAXNUMPROXIES 0x160000 
+#define INITIALPROXYLISTSIZE 0x100 /* Initial size of normalized proxy
+				      lists local to an AOA block that
+				      is to be exported. */
+
+#define asLong(p) ((long) p)
+
+#define PROXYALIVE             1
+#define PROXYMOVED             2
+#define PROXYDEAD              3
+#define PROXYPOTENTIALLYDEAD   4
+
+#define ISPROXYALIVE(x) ((x == PROXYALIVE) || (x == PROXYMOVED))
+
+/* LOCAL TYPES */
 typedef struct _Proxy {
   void *dummy;               /* ? */
   long GCAttr;
@@ -35,24 +49,15 @@ typedef struct _ProxyList {
   Proxy plist[INITIALPROXYLISTSIZE];
 } ProxyList;
 
-/* LOCAL MACROS */
-#define MAXNUMPROXIES 0x160000
-#define asLong(p) ((long) p)
-
-#define PROXYALIVE             1
-#define PROXYMOVED             2
-#define PROXYDEAD              3
-#define PROXYPOTENTIALLYDEAD   4
-
-#define ISPROXYALIVE(x) ((x == PROXYALIVE) || (x == PROXYMOVED))
-
 /* LOCAL VARIABLES */
-/* Proxy space of 8192 Kb */
-static struct _Proxy proxySpace[MAXNUMPROXIES];    /* */
+
+/* Proxy space */
+static struct _Proxy *proxySpace;
+static u_long length;
 
 static void *PIT, *PITTop, *PITLimit; /* proxy indirection table */
 
-static struct _Proxy *nextFree;
+static u_long nextFree;
 static long returnPC, returnSP, absAddr, sourcereg;
 static u_long rd;
 static u_long rs1;
@@ -64,6 +69,7 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon);
 static void findNextFree(void);
 
 /* Statistics */
+
 #ifdef RTINFO
 static u_long numProxies;
 static u_long proxyHit;
@@ -77,53 +83,75 @@ void showProxyStatistics(void) {
 }
 #endif /* RTINFO */
 
+/* asProxy: Given an indirect proxy-reference into the mmapped area a
+   reference to the actual proxy object is returned. */
 static Proxy *asProxy(long ip) 
 {
   long offset;
+  
   /* ip is the Indirect Proxy. */
   
   Claim((ip >= (long) PIT) && (ip < (long) PITLimit), "asProxy: Illegal proxy!\n");
+
   offset = ip - (long) PIT;
+  
+  Claim(offset >= 0 && offset < length, "asProxy: Illegal proxy!\n");
   
   return &proxySpace[offset];
 }
 
-long addConstantToProxy(long ip, long offset)
-{
-  Proxy *p;
+/* addConstantToProxy: Given a proxy reference indirectly referring
+   some object with some offset in some block, a proxy referring the
+   an object at offset 'offset' further down in the same block is
+   returned. This is mainly used to support proxies to part
+   objects. */
+long addConstantToProxy(long ip, long offset) 
+{ 
+  Proxy *p; 
   long newIp;
-
-  p = asProxy(ip);
   
   findNextFree();
   
-  nextFree -> dummy = p -> dummy;
-  nextFree -> id = p -> id;
-  nextFree -> offset =  p -> offset + offset;
-  nextFree -> GCAttr = PROXYALIVE;
-
-  newIp = (long) PIT + (((long) nextFree - (long) &proxySpace[0]) / sizeof(struct _Proxy));
+  /* findNextFree might reallocate proxySpace, thus findNextFree
+     should come before asProxy, since asProxy returns pointer into
+     proxySpace. */
+  
+  p = asProxy(ip);
+  
+  proxySpace[nextFree].dummy = p -> dummy;
+  proxySpace[nextFree].id = p -> id;
+  proxySpace[nextFree].offset =  p -> offset + offset;
+  proxySpace[nextFree].GCAttr = PROXYALIVE;
+  
+  newIp = (long) PIT + nextFree;
   return newIp;
 }
 
+/* freeProxySpace: All proxies are marked as potentially dead. Will be
+   called before a proxy GC, which is done in connection with normal
+   AOAGC. */
 void freeProxySpace(void) 
 {
   long count;
   
   INFO_PROXY(numProxies=0);
-  for(count = 0; count < MAXNUMPROXIES; count++) {
+  for(count = 0; count < length; count++) {
     if (ISPROXYALIVE(proxySpace[count].GCAttr)) {
       proxySpace[count].GCAttr = PROXYPOTENTIALLYDEAD;
     }
   }
 }
 
-void removeProxyMovedMark(void)
-{
-  long count;
-  
+/* removeProxyMovedMark: When blocks are exported and the proxies they
+   contain are 'normalized' and exported with the block, the proxies
+   are marked as visited so all proxy references to the same proxy
+   object will be translated to the same 'normalized' proxy value. The
+   function below removes this mark so that ensuing exports will
+   work.*/
+void removeProxyMovedMark(void) { long count;
+ 
   INFO_PROXY(fprintf(output,"[Proxy GC: Removing proxy moved marks "));
-  for(count = 0; count < MAXNUMPROXIES; count++) {
+  for(count = 0; count < length; count++) {
     if (proxySpace[count].GCAttr == PROXYMOVED) {
       proxySpace[count].GCAttr = PROXYALIVE;
     }
@@ -131,12 +159,14 @@ void removeProxyMovedMark(void)
   INFO_PROXY(fprintf(output,"]\n"));
 }
 
+/* sweepAndCollectProxySpace: All proxies marked as
+   PROXYPOTENTIALLYDEAD are reclaimed. */
 void sweepAndCollectProxySpace(void) 
 {
   long count;
   
   INFO_PROXY(fprintf(output,"[Proxy GC: "));
-  for(count = 0; count < MAXNUMPROXIES; count++) {
+  for(count = 0; count < length; count++) {
     if (proxySpace[count].GCAttr == PROXYPOTENTIALLYDEAD) {
       proxySpace[count].GCAttr = PROXYDEAD;
     }
@@ -150,6 +180,7 @@ void sweepAndCollectProxySpace(void)
 		     (int)(numProxies*100/MAXNUMPROXIES)));
 }
 
+/* initProxySpace: */
 void initProxySpace(void) 
 {
   static int isInitialized = 0;
@@ -157,11 +188,14 @@ void initProxySpace(void)
     long count;
     
     isInitialized = 1;
-    
-    for(count = 0; count < MAXNUMPROXIES; count++) {
+
+    proxySpace = (struct _Proxy *)malloc(sizeof (struct _Proxy) * INITIALPROXYLISTSIZE);
+    length = INITIALPROXYLISTSIZE;
+
+    for(count = 0; count < length; count++) {
       proxySpace[count].GCAttr = PROXYDEAD;
     }
-    nextFree = &proxySpace[0];
+    nextFree = 0;
     
     /* Allocate mmapped proxy indirection table. */
     mmapInitial((unsigned long) MAXNUMPROXIES * 4);
@@ -176,6 +210,7 @@ void initProxySpace(void)
   /* Allocation is legal */
 }
 
+/* proxyAlive: Marks the proxy referred by 'theCell' as alive. */
 long proxyAlive(Object **theCell) 
 {
   Proxy *p;
@@ -191,6 +226,8 @@ long proxyAlive(Object **theCell)
   return 0;
 }
 
+/* proxyIsAlive: Returns whether the proxy referred by 'ip' is marked
+   as alive. */
 long proxyIsAlive(long ip) 
 {
   Proxy *p;
@@ -200,27 +237,66 @@ long proxyIsAlive(long ip)
   return (p -> GCAttr = PROXYALIVE);
 }
 
+/* findNextFree: Searches for the next free proxy and extends the
+   proxy space if necessary. */
 static void findNextFree(void) 
 {
   long once=0;
   
-  while (nextFree -> GCAttr != PROXYDEAD) {
-    if (nextFree < &proxySpace[MAXNUMPROXIES]) {
-      nextFree++;
-    } else {
-      if (!once) {
-	nextFree = &proxySpace[0];
-	once = 1;
-      } else {
+  while ((nextFree < length) && (proxySpace[nextFree].GCAttr != PROXYDEAD)) {
+    nextFree++;
+  }
+  
+  if (nextFree < length) {
+    return;
+  }
+
+  if (!once) {
+    nextFree = 0;
+    once = 1;
+  } else {
+    /* We should extend the proxy space */
+    u_long newLength, count;
+    struct _Proxy *newProxySpace;
+    
+    once = 0;
+
+    newLength = length * 2 + 1;
+    
+    if (newLength > MAXNUMPROXIES) {
+      newLength = MAXNUMPROXIES;
+      if (newLength == length) {
 	fprintf(output, "findNextFree: "
 		"Out of proxy space\n");
 	DEBUG_CODE(Illegal());
 	BetaExit(1);
       }
     }
+    
+    newProxySpace = (struct _Proxy *)malloc(sizeof (struct _Proxy) * newLength);
+    
+    if (length) {
+      memcpy(newProxySpace, proxySpace, sizeof (struct _Proxy) * length);
+      
+      free(proxySpace);
+      proxySpace = NULL;
+    }
+    
+    proxySpace = newProxySpace;
+    
+    for(count = length; count < newLength; count++) {
+      proxySpace[count].GCAttr = PROXYDEAD;
+    }
+    
+    nextFree = length;
+    length = newLength;
+    
+    /* Try again */
+    findNextFree();
   }
 }
 
+/* newProxy: Return a proxy reference to theObj in theBlock. */
 long newProxy(Block *theBlock, Object *theObj) 
 {
   long newIp;
@@ -233,12 +309,12 @@ long newProxy(Block *theBlock, Object *theObj)
 
 	findNextFree();
 	
-	nextFree -> dummy = (void *)theBlock -> dummy;
-	nextFree -> id = theBlock -> id;
-	nextFree -> offset = (long) theObj - (long) BlockStart(theBlock);
-	nextFree -> GCAttr = PROXYALIVE;
+	proxySpace[nextFree].dummy = (void *)theBlock -> dummy;
+	proxySpace[nextFree].id = theBlock -> id;
+	proxySpace[nextFree].offset = (long) theObj - (long) BlockStart(theBlock);
+	proxySpace[nextFree].GCAttr = PROXYALIVE;
 
-	newIp = (long) PIT + (((long) nextFree - (long) &proxySpace[0]) / sizeof(struct _Proxy));
+	newIp = (long) PIT + nextFree;
 	return newIp;
       } else {
 	fprintf(output, "createProxyObject: "
@@ -263,6 +339,7 @@ long newProxy(Block *theBlock, Object *theObj)
   return -1;
 }
 
+/* getProxyAttributes: Get the proxy attributes of the proxy 'ip'. */
 void getProxyAttributes(long ip,
 			void **dummy,
 			u_long *id,
@@ -279,6 +356,7 @@ void getProxyAttributes(long ip,
   return;
 }
 
+/* inProxy: Return whether 'ip' refers a proxy */
 long inProxy(long ip)
 {
   if ((ip >= (long) PIT) && (ip < (long) PITLimit)) {
@@ -288,6 +366,7 @@ long inProxy(long ip)
   }
 }
 
+/* initProxyTrapHandler: */
 static void initProxyTrapHandler(void)
 { 
   struct sigaction sa;
@@ -309,6 +388,11 @@ static void initProxyTrapHandler(void)
   INFO_PROXY(proxyHit = 0);
 }
 
+/* getRegisterContents: If register refers to G or O register the
+   contents can be found in the ucon. Otherwise the contents is on the
+   stack. The stack pointer is in the global variable 'returnSP'. Why
+   this separation has been made between the O/G and I/L registers is
+   unclear to me but it is imposed by the system. */
 static u_long getRegisterContents(u_long reg, ucontext_t *ucon) 
 {
   if (reg == 0) {
@@ -328,6 +412,8 @@ static u_long getRegisterContents(u_long reg, ucontext_t *ucon)
   return -1;
 }
 
+/* sourceReg: Decodes the instruction and returns the register
+   containing the proxy. */
 static long sourceReg(u_long instruction, ucontext_t *ucon) 
 {
   
@@ -414,14 +500,15 @@ static long sourceReg(u_long instruction, ucontext_t *ucon)
   return 0;
 }
 
-static int dummy;
+static u_long dummy;
 
+/* proxyTrapHandler: Will decode the faulting instruction, lookup the
+   object, and insert a reference to it in the register previously
+   containing the proxy. */
 static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 {
   u_long instruction;
   long ip;
-
-  /* Look below for info on 'ucontext_t' */
   
   /* Fetch the faulting instruction. */
   dummy = instruction = (* (long *) (ucon->uc_mcontext.gregs[REG_PC]));
@@ -441,9 +528,14 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
       /* Calculate absolute address by looking in appropriate tables */
       { 
 	Proxy *p;
+	void *dummy;
+	u_long offset, id;
 	
 	p = asProxy(ip);
-	absAddr = (long)lookUpObject(p -> dummy, p -> id, p -> offset);
+	dummy = p -> dummy;
+	offset = p -> offset;
+	id = p -> id;
+	absAddr = (long)lookUpObject(dummy, id, offset);
 	/* INFO_PROXY(fprintf(output,"[Proxy lookup: 0x%X ]\n", (int)absAddr)); */
 	Claim(inPersistentAOA(absAddr) != NULL, "Not in persistent AOA");
 
@@ -513,65 +605,8 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
   
 }
 
-/* ucon is supplied to this handler by the system. The type
-   'ucontext_t' is defined in ucontext.h,
-   
-   struct	ucontext {
-   ulong_t		uc_flags;
-   ucontext_t	*uc_link;
-   sigset_t   	uc_sigmask;
-   stack_t 	uc_stack;
-   mcontext_t 	uc_mcontext;
-   long		uc_filler[23];
-   };
-   
-   the type 'mcontext_t' is defined in regset.h,
-   
-   typedef struct {
-   gregset_t	gregs;	/ general register set /
-   gwindows_t	*gwins;	/ POSSIBLE pointer to register windows /
-   fpregset_t	fpregs;	/ floating point register set /
-   xrs_t		xrs;	/ POSSIBLE extra register state association /
-   long		filler[19];
-   } mcontext_t;
-   
-   'gregs' is an array of the hardware state at the time the trap
-   occured.
-   
-   #define	REG_PSR	(0)
-   #define	REG_PC	(1)
-   #define	REG_nPC	(2)
-   #define	REG_Y	(3)
-   #define	REG_G1	(4)
-   #define	REG_G2	(5)
-   #define	REG_G3	(6)
-   #define	REG_G4	(7)
-   #define	REG_G5	(8)
-   #define	REG_G6	(9)
-   #define	REG_G7	(10)
-   #define	REG_O0	(11)
-   #define	REG_O1	(12)
-   #define	REG_O2	(13)
-   #define	REG_O3	(14)
-   #define	REG_O4	(15)
-   #define	REG_O5	(16) 
-   #define	REG_O6	(17) 
-   #define	REG_O7	(18) 
-   
-   / the following defines are for portability /
-   #define	REG_PS	REG_PSR
-   #define	REG_SP	REG_O6
-   #define	REG_R0	REG_O0
-   #define	REG_R1	REG_O1
-*/
-
-void proxyStop(void)
-{ 
-  if (0) {
-    USE();
-  }
-}
-
+/* initProxyList: Used when exporting blocks to initialize the list
+   that holds the proxies used by the block. */
 void *initProxyList(void) 
 {
   ProxyList *pl = (ProxyList *)malloc(sizeof(struct _ProxyList));
@@ -583,6 +618,8 @@ void *initProxyList(void)
   return (void *)pl;
 }
 
+/* appendProxyToList: Used when exporting blocks to append a proxy
+   used by the block being exported. */
 u_long appendProxyToList(long ip, void **a) 
 {
   Proxy *p;
@@ -623,6 +660,8 @@ u_long appendProxyToList(long ip, void **a)
   return -1;
 }
 
+/* freeProxyList: Used when exporting blocks to clear list holding
+   proxies used in the block. */
 void freeProxyList(void *a) 
 {  
   ProxyList *pl = (ProxyList *)a;
@@ -632,6 +671,8 @@ void freeProxyList(void *a)
   free(pl);
 } 
 
+/* sizeOfProxyList: Used when exporting blocks to return the size of
+   the list holding proxies used in the block. */
 u_long sizeOfProxyList(void *a)
 {
   ProxyList *pl = (ProxyList *)a;
@@ -642,6 +683,8 @@ u_long sizeOfProxyList(void *a)
     sizeof(struct _Proxy) * pl -> top;
 }
 
+/* appendProxiesToProcess: Used when importing blocks to append the
+   proxies used by the block to the local proxy space. */
 u_long *appendProxiesToProcess(void *a)
 {
   ProxyList *pl = (ProxyList *)a;
@@ -656,13 +699,12 @@ u_long *appendProxiesToProcess(void *a)
   for (count=0; count<pl -> top; count++) {
     findNextFree();
     
-    nextFree -> dummy = pl -> plist[count].dummy;
-    nextFree -> id = pl -> plist[count].id;
-    nextFree -> offset = pl -> plist[count].offset;
-    nextFree -> GCAttr = PROXYALIVE;
+    proxySpace[nextFree].dummy = pl -> plist[count].dummy;
+    proxySpace[nextFree].id = pl -> plist[count].id;
+    proxySpace[nextFree].offset = pl -> plist[count].offset;
+    proxySpace[nextFree].GCAttr = PROXYALIVE;
     
-    proxyMap[count + 1] = (long) PIT + (((long) nextFree - 
-					 (long) &proxySpace[0]) / sizeof(struct _Proxy));
+    proxyMap[count + 1] = (long) PIT + nextFree;
   }
   
   return proxyMap;

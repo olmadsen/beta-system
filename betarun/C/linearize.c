@@ -12,10 +12,55 @@ void lin_dummy() {
 
 #ifdef PERSIST
 
-extern void unswizzleOrigins(Block *b);
-extern void (*objectAction)(Object *theObj);
+/* LOCAL FUNCTION DECLARATIONS */
+static void bringHome(Object **theCell);
+static void bringHomeAction(Object *theObj, void *generic);
+static void unmarkOriginAction(Object *theObj, void *dummy);
+static void updateTables(Object **theCell);
+static void rebuildTableObj(Object *theObj,
+			    void *generic);
+static Block *allocatePersistentBlock(long minSize);
+static Block *lookupBlockId(long id);
+#ifdef RTDEBUG
+static void CheckPersistentCell(Object **theCell);
+static void CheckPersistentCellAfterIOA(Object **theCell);
+static void checkPersistentOrigin(Object *theObj);
+static void checkPersistentObject(Object *theObj, void *generic);
+static void checkPersistentObjectInAOAAfterIOA(Object *theObj, void *generic);
+#endif /* RTDEBUG */
 
-/* LOCAL prototypes */
+/* LOCAL TYPES */
+/* Mapping the BETA roots to C */
+typedef struct charRep {
+  u_long Proto;
+  u_long GCAttr;
+  u_long LowBorder;
+  u_long HighBorder;
+  char elements[1];
+} charRep;
+
+typedef struct Text {
+  u_long Proto;
+  u_long GCAttr;
+  u_long Origin;
+  charRep *theRep;
+} Text;
+
+typedef struct root {
+  u_long Proto;
+  u_long GCAttr;
+  u_long Origin;
+  Object *theObj;
+  Text *name;
+} root;
+
+typedef struct rootRep {
+  u_long Proto;
+  u_long GCAttr;
+  u_long LowBorder;
+  u_long HighBorder;
+  long elements[1];
+} rootRep;
 
 /* LOCAL VARIABLES */
 #ifdef RTINFO
@@ -24,10 +69,11 @@ u_long numObjects;
 u_long sizeOfObjects;
 #endif /* RTINFO */
 
-static void unmarkOriginAction(Object *theObj);
-
 /* IMPLEMENTATION */
 
+/* inPersistentAOA: Returns the persistent AOA block in wich theObj is
+   located. Returns NULL if theObj is not in any persistent
+   AOABlock. */
 Block *inPersistentAOA(long theObj) 
 {
   Block *current;
@@ -46,8 +92,13 @@ Block *inPersistentAOA(long theObj)
   
 }
 
+/* bringHome: Takes a reference to a cell in persistent AOA, and
+   copies the referred object to persistent AOA if not allready there.  */
 static void bringHome(Object **theCell) 
 {
+  
+  Claim(NULL != inPersistentAOA((long)theCell),"theCell is not in persistent AOA");
+  
   if (!inProxy((long)*theCell)) {
     if (!inProxy((*theCell) -> GCAttr)) {
       /* Copy to persistent AOA, leave forward and redirect */
@@ -56,88 +107,35 @@ static void bringHome(Object **theCell)
       /* Redirect */
       *theCell = (Object *)((*theCell) -> GCAttr);
       proxyAlive(theCell);
-      
     }
   } else {
     proxyAlive(theCell);
   }
 }
 
-void bringHomeAction(Object *theObj, void *generic) 
+/* bringHomeAction: Is called for every object in persistent AOA. */
+static void bringHomeAction(Object *theObj, void *generic) 
 {
   scanObject(theObj,
 	     bringHome,
 	     TRUE);
 }
 
-Object *getOrigin(Object *theObj, long *originOffset) 
-{
-  ProtoType *theProto;
-  Object *origin = NULL;
-  
-  theProto = GETPROTO(theObj);
-  
-  Claim(IsPrototypeOfProcess((long)theProto), "IsPrototypeOfProcess(theProto)");
-  
-  if (!isSpecialProtoType(theProto)) {
-    *originOffset = 4 * (long) (theProto -> OriginOff);
-    origin = *(Object **)((long) theObj + *originOffset);
-    
-  } else {
-    switch (SwitchProto(theProto)) {
-    case SwitchProto(ByteRepPTValue):
-    case SwitchProto(ShortRepPTValue):
-    case SwitchProto(DoubleRepPTValue):
-    case SwitchProto(LongRepPTValue): 
-      /* Has no origin ?? */
-      *originOffset = -1;
-      return NULL;
-      break; 
-      
-    case SwitchProto(DynItemRepPTValue):
-    case SwitchProto(DynCompRepPTValue): 
-      origin = ((struct _ObjectRep *)theObj)->iOrigin;
-      *originOffset = (long)&(((struct _ObjectRep *)theObj)->iOrigin) - (long) theObj;
-      break; 
-      
-    case SwitchProto(RefRepPTValue): 
-      /* Has no origin ?? */
-      *originOffset = -1;
-      return NULL;
-      break; 
-      
-    case SwitchProto(ComponentPTValue):
-      /* The origin the component is the origin of the item */
-      return getOrigin((Object *)(&(((struct _Component*)theObj)->Body)), originOffset);
-      break; 
-      
-    case SwitchProto(StackObjectPTValue):
-      Claim(FALSE,"getOrigin: What is origin of ??");
-      break; 
-      
-    case SwitchProto(StructurePTValue):
-      origin = ((struct _Structure *)theObj)->iOrigin;
-      *originOffset = (long)&(((struct _Structure *)theObj)->iOrigin) - (long) theObj;
-      break;
-      
-    case SwitchProto(DopartObjectPTValue):
-      origin = ((struct _DopartObject *)theObj)->Origin;
-      *originOffset = (long)&(((struct _DopartObject *)theObj)->Origin) - (long) theObj;
-      break;
-      
-    default:
-      Claim( FALSE, "getOrigin: theObj must be KNOWN.");
-    }
-  }
-  
-  return origin;
-}
-
-static void unmarkOriginAction(Object *theObj)
+/* unmarkOriginAction: Is called for every object not in persistent
+   AOA, just after all objects that are to be moved to persistent AOA
+   have been marked. If the object has a origin reference to an object
+   that has been marked to be moved, then the origin object is
+   unmarked. Any marked object has allready been copied to persistent
+   AOA, and unmarking the original will result in references to it
+   from outside persistent AOA not being redirected. Thus such objects
+   are in effect cloned. */
+static void unmarkOriginAction(Object *theObj, void *dummy)
 {
   Object *origin;
   long GCAttribute;
   long originOffset;
+  
+  Claim(!inPersistentAOA((long)theObj), "inPersistentAOA(theObj)");
   
   if (!inProxy(theObj -> GCAttr)) {
     /* This object is not persistent. Check that origin is not
@@ -149,13 +147,16 @@ static void unmarkOriginAction(Object *theObj)
 	void *dummy;
 	u_long id;
 	u_long offset;
+	static u_long once = 1;
 	
 	getProxyAttributes(*(long *)((long) theObj + originOffset), &dummy, &id, &offset);
 	
 	origin = lookUpObject(dummy, id, offset);
 	
-	Claim(FALSE, "theObj has origin in persistent object ");
-	
+	if (once) {
+	  fprintf(output, "Warning, theObj has origin in persistent object\n");
+	  once = 0;
+	}
       } else {
 	/* check if the origin object has been marked to be moved. */
 	Object *realOriginObj;
@@ -174,7 +175,7 @@ static void unmarkOriginAction(Object *theObj)
 	      /* Origin object has been marked to be moved. Unmark
 		 origin object */
 	      realOriginObj -> GCAttr = IOAMinAge;
-	      unmarkOriginAction(realOriginObj);
+	      unmarkOriginAction(realOriginObj, NULL);
 	    } else {
 	      Claim(FALSE, "Wierd GCAttribute in IOA");
 	    }
@@ -186,40 +187,76 @@ static void unmarkOriginAction(Object *theObj)
 	    Claim(GCAttribute == DEADOBJECT, "AOA object not marked DEAD?");
 	  } else {
 	    realOriginObj -> GCAttr = DEADOBJECT;
-	    unmarkOriginAction(realOriginObj);
+	    unmarkOriginAction(realOriginObj, NULL);
 	  }
 	} else {
-	  Claim(inArea(AOABaseBlock, realOriginObj), "Object not in AOA ?");
+	  static u_long once = 1;
+	  /* We have an object !inPersistentAOA that has a direct
+             origin reference to a persistent object. */
+	  if (once) {
+	    fprintf(output,"Warning, transient object has origin in persistent object\n");
+	    once = 0;
+	  }
 	}
       }
     }
   }
 }
 
-static void noReferenceAction(Object ** theCell) 
+/* checkpoint: All objects reachabel from the persistent blocks are
+   copied into persistent blocks. All objects, except those in which
+   non-persistent objects have origins are marked, and all references
+   to marked objects will be swizzled at the next GC. */
+void _checkpoint(Object *roots)
 {
-  ;
-}
-
-static void scannerWrapper(Object *theObj, void *generic)
-{
+  rootRep *croots;
+  root *currentRoot;
+  Object *currentObj;
+  Text *currentText;
+  charRep *theRep;
+  char *name;
+  u_long i,j;
   
-  scanObject(theObj,
-	     noReferenceAction,
-	     TRUE);
+  /* 'roots' is a pointer to a BETA repetition of (object, name)
+     pairs. All these roots should be scanned and copied to persistent
+     AOA before the transitive closure is brought home. */
   
-}
-
-void _checkpoint(void)
-{
-  if (0) {
-    USE(); /* Not important */
+  croots = (rootRep *) roots;
+  for (i = croots -> LowBorder; i <= croots -> HighBorder; i++) {
+    if ((currentRoot = (root *)(croots -> elements)[i - 1])) {
+      currentObj = currentRoot -> theObj;
+      currentText = currentRoot -> name;
+      theRep = currentText -> theRep;
+      
+      {
+	name = (char *)malloc(sizeof(char)*(theRep -> HighBorder - theRep -> LowBorder + 1 + 1));
+	
+	for (j = theRep -> LowBorder; j <= theRep -> HighBorder; j++) {
+	  name[j - theRep -> LowBorder] = theRep -> elements[j - 1];
+	}
+	
+	name[j - 1] = '\0';
+	
+	/* Now we have the object, name pair to insert */
+	
+	if (inIOA(currentObj) || inAOA(currentObj)) {
+	  currentObj = CopyObjectToPersistentAOA(currentObj);
+	  putName(currentObj, name);
+	  free(name);
+	  name = NULL;
+	  
+	} else {
+	  Claim(FALSE, "checkpoint: Where is root ?");
+	}
+      }
+    }
   }
   
+  forceAOAGC = TRUE;
+
   /* The transitive closure of all objects in the persistent block are
      copied into persistent blocks, and forward references are left in
      the GCAttribute of the originals. */
-  
   foreachObjectInBlocks(AOAPersistentBaseBlock,
 			bringHomeAction,
 			NULL);
@@ -231,71 +268,30 @@ void _checkpoint(void)
      copied to persistent AOA at this point, now we just need to
      unmark the origin-objects. */
   
-  objectAction = unmarkOriginAction;
-
-  foreachObjectInIOA(scannerWrapper,
+  foreachObjectInIOA(unmarkOriginAction,
 		     NULL);
   
   foreachObjectInBlocks(AOABaseBlock,
-			scannerWrapper,
+			unmarkOriginAction,
 			NULL);
-  objectAction = NULL;
+
+  /* Return to BETA and do GC 
+     doGCFrom(BetaStackTop);
+     
+     _exportPersistentAOABlocks();
+  */
   
   return;
   
-  /* return to BETACODE and do GC. */
 }
 
-static void _updateTables(Object **theCell) 
-{
-
-  Claim((long)inPersistentAOA((long)theCell), "Not in persistent AOA");
-  
-  if (inToSpace(*theCell)) {
-#ifdef MT
-    MT_AOAtoIOAInsert( theCell);
-#else /* MT */
-    AOAtoIOAInsert( theCell);
-#endif /* MT */
-  } else if (inAOA(*theCell)) {
-    MCHECK();
-    saveAOAroot(theCell);
-    MCHECK();
-  }
-}
-
-#ifdef RTDEBUG
-static void checkOriginAction(Object *theObj) 
-{
-  Object *origin;
-  long originOffset;
-  
-  if ((origin = getOrigin(theObj, &originOffset))) {
-    /* Check that origin is not persistent */
-    if (inProxy(*(long *)((long) theObj + originOffset))) {
-      void *dummy;
-      u_long id;
-      u_long offset;
-      
-      getProxyAttributes(*(long *)((long) theObj + originOffset), &dummy, &id, &offset);
-      
-      origin = lookUpObject(dummy, id, offset);
-      
-      Claim(FALSE, "origin in persistent object ");
-    }
-  }
-}
-#endif /* RTDEBUG */
-
+/* exportPersistentAOABlocks: Dumps all persistent AOA blocks to
+   external storage. It is assumed that all references within and to
+   persistent blocks have been swizzled. */
 void _exportPersistentAOABlocks(void) 
 {
   Block *current, *next;
   current = AOAPersistentBaseBlock;
-  
-  DEBUG_PERSISTENCE(objectAction = checkOriginAction;
-		    IOACheck();
-		    AOACheck();
-		    objectAction = NULL);
   
   while(current) {
     next = current -> next;
@@ -310,17 +306,20 @@ void _exportPersistentAOABlocks(void)
   
   AOAPersistentBaseBlock = NULL;
   AOAPersistentTopBlock = NULL;
-
+  
   INFO_PERSISTENTSTORE(numPersistentBlocks=0);
   INFO_PERSISTENTSTORE(sizeOfObjects=0);
   INFO_PERSISTENTSTORE(numObjects=0);
 }
 
+/* unpersistifyAOABlocks: Not implemented yet. */
 void _unpersistifyAOABlocks(void) 
 {
   ;
 }
 
+/* get: Looks up the object based on the name in the name -> object map
+   associated with the current persistent store. */
 long _get(char *name) 
 {
   void *dummy;
@@ -338,43 +337,44 @@ long _get(char *name)
    * absolute reference to the object. */
   
   return (long)theObj;
-  
-}
-  
-void assignPersistentRef(Object *ref, Object **theCell) 
-{
-  *theCell = ref;
 }
 
-/* Called just before checkpoint */
+/* put: Registers theObj as being a root for the persistent
+   objects. */
 void _put(Object *theObj, char *name)
 {
-  void *dummy;
-  u_long id;
-  u_long offset; 
-  
-  freeProxySpace();
-  forceAOAGC = TRUE;
-  
-  if (theObj) {
-    
-    Claim(theObj == getRealObject(theObj), "Cannot but part object");
-    theObj = CopyObjectToPersistentAOA(theObj);
-    
-    getProxyAttributes((long)theObj, &dummy, &id, &offset);
-    
-    putName(name, dummy, 0, id, offset);
-  }
 
-  return;
+  theObj = CopyObjectToPersistentAOA(theObj);
+  putName(theObj, name);
   
 }
 
-void rebuildTableObj(Object *theObj,
-		     void *generic)
+/* The following three functions scans all objects in persistent AOA
+   and inserts in AOAtoIOATable whenever necessary. This should be
+   done at every AOAGC. */
+static void updateTables(Object **theCell) 
+{
+  
+  Claim((long)inPersistentAOA((long)theCell), "Not in persistent AOA");
+  
+  if (inToSpace(*theCell)) {
+#ifdef MT
+    MT_AOAtoIOAInsert( theCell);
+#else /* MT */
+    AOAtoIOAInsert( theCell);
+#endif /* MT */
+  } else if (inAOA(*theCell)) {
+    MCHECK();
+    saveAOAroot(theCell);
+    MCHECK();
+  }
+}
+
+static void rebuildTableObj(Object *theObj,
+			    void *generic)
 {
   scanObject(theObj,
-	     _updateTables,
+	     updateTables,
 	     TRUE);
 }
 
@@ -385,152 +385,8 @@ void rebuildAOAtoIOATable(void)
 			NULL);
 }
 
-#ifdef RTDEBUG
-
-static void CheckPersistentCell(Object **theCell) 
-{
-  if (*theCell) {
-    if (inProxy((long)*theCell)) {
-      if (proxyIsAlive((long)*theCell)) {
-	return;
-      } else {
-	fprintf(output, "CheckPersistentCell: proxy is not alive\n");
-	Illegal();
-	BetaExit(1);
-      }
-    } else {
-      ;
-    }
-  }
-}
-
-static void CheckPersistentCellAfterIOA(Object **theCell) 
-{
-  return;
-
-  if (*theCell) {
-    if (inProxy((long)*theCell)) {
-      if (proxyIsAlive((long)*theCell)) {
-	return;
-      } else {
-	fprintf(output, "CheckPersistentCell: proxy is not alive\n");
-	Illegal();
-	BetaExit(1);
-      }
-    } else {
-      if (inAOA(*theCell)) {
-	return;
-      } else {
-	if (IOAActive) {
-	  if (inToSpace(*theCell)) {
-	    return;
-	  } else {
-	    fprintf(output, "CheckPersistentCell: *theCell is in FromSpace\n");
-	    Illegal();
-	    BetaExit(1);
-	  }
-	} else {
-	  if (inToSpace(*theCell)) {
-	    fprintf(output, "CheckPersistentCell: *theCell is in ToSpace\n");
-	    Illegal();
-	    BetaExit(1);
-	  } else {
-	    return;
-	  }
-	}
-      }
-    }
-  }
-}
-
-static void checkPersistentOrigin(Object *theObj)
-{
-  Object **theCell;
-  Object *origin;
-  long originOffset;
-
-  if ((origin = getOrigin(theObj, &originOffset))) {
-    theCell = (Object **)((long)theObj + originOffset);
-    Claim(!inProxy((long)*theCell), "Persistent object with proxy origin\n");
-  }
-}
-
-void checkPersistentObject(Object *theObj, void *generic)
-{
-  if (inProxy(theObj -> GCAttr)) {
-    void *dummy;
-    static u_long id, offset;
-    
-    getProxyAttributes(theObj -> GCAttr, 
-		       &dummy,
-		       &id,
-		       &offset);
-    
-    if (lookUpObject(dummy, id, offset) == theObj) {
-      objectAction = checkPersistentOrigin;
-
-      scanObject(theObj,
-		 CheckPersistentCell,
-		 TRUE);
-      
-      objectAction = NULL;
-    } else {
-      fprintf(output, "checkPersistentAOA: theObj -> GCAttr is *not* a self reference\n");
-      Illegal();
-      BetaExit(1);
-    }
-  } else {
-    fprintf(output, "checkPersistentAOA: theObj -> GCAttr is *not* a proxy\n");
-    Illegal();
-    BetaExit(1);
-  }
-}
-
-void checkPersistentAOA(void) 
-{
-  foreachObjectInBlocks(AOAPersistentBaseBlock,
-			checkPersistentObject,
-			NULL);
-}
-
-void checkPersistentObjectInAOAAfterIOA(Object *theObj, void *generic) 
-{ 
-  if (inProxy(theObj -> GCAttr)) {
-    void *dummy;
-    static u_long id, offset;
-    
-    getProxyAttributes(theObj -> GCAttr, 
-		       &dummy,
-		       &id,
-		       &offset);
-    
-    if (lookUpObject(dummy, id, offset) == theObj) {
-      objectAction = checkPersistentOrigin;
-      scanObject(theObj,
-		 CheckPersistentCellAfterIOA,
-		 TRUE);
-      objectAction = NULL;
-    } else {
-      fprintf(output, "checkPersistentAOA: theObj -> GCAttr is *not* a self reference\n");
-      Illegal();
-      BetaExit(1);
-    }
-  } else {
-    fprintf(output, "checkPersistentAOA: theObj -> GCAttr is *not* a proxy\n");
-    Illegal();
-    BetaExit(1);
-  }
-}
-
-void checkPersistentAOAAfterIOA(void) 
-{
-  foreachObjectInBlocks(AOAPersistentBaseBlock,
-			checkPersistentObjectInAOAAfterIOA,
-			NULL);
-}
-
-#endif /* RTDEBUG */
-
+/* foreachObjectInBlocks: Activates a function for every object in b
+   and the successors of b. */
 void foreachObjectInBlocks(Block *b, 		
 			   void (*objectAction)(Object *, void *),
 			   void *generic)
@@ -554,6 +410,8 @@ void foreachObjectInBlocks(Block *b,
   }
 }
 
+/* allocatePersistentBlock: Allocates a new persistent AOA block, but
+   does not link it to the others. */
 static Block *allocatePersistentBlock(long minSize) 
 {
   Block *newblock;
@@ -569,15 +427,8 @@ static Block *allocatePersistentBlock(long minSize)
   return newblock;
 }
 
-#ifdef RTINFO
-void showPersistenceStatistics(void) {
-  fprintf(output, "[Persistence statistics:\n");
-  fprintf(output, "  numPersistentBlocks = 0x%X\n", (int)numPersistentBlocks);
-  fprintf(output, "  numObjects          = 0x%X\n", (int)numObjects);
-  fprintf(output, "  sizeOfObjects       = 0x%X bytes]\n", (int)sizeOfObjects);
-}
-#endif /* RTINFO */
-
+/* CopyObjectToPersistentAOA: Copies theObj to a persistent AOAblock
+   and returns a proxy reference to it. */
 Object *CopyObjectToPersistentAOA(Object *theObj)
 {  
   long size;
@@ -656,6 +507,7 @@ Object *CopyObjectToPersistentAOA(Object *theObj)
   return CopyObjectToPersistentAOA(theObj);
 }
 
+/* lookupBlockId: Returns the persistent block whoes id is 'id'. */
 static Block *lookupBlockId(long id) 
 {
   Block *current;
@@ -672,6 +524,10 @@ static Block *lookupBlockId(long id)
   return current;
 }
 
+/* lookUpObject: Given the proxy attributes of a persistent object an
+   absolute reference to its current position is returned. This might
+   result in loading an AOAblock if the block containing the object is
+   not present in memory. */
 Object *lookUpObject(void *dummy, long id, long offset) 
 {
   Block *AOABlock;
@@ -706,7 +562,6 @@ Object *lookUpObject(void *dummy, long id, long offset)
       }
     }
     
-    
     /* The block that has just been loaded needs to have its origin
        references unproxyfied. This might result in loading of any
        number of additional blocks. */
@@ -720,10 +575,166 @@ Object *lookUpObject(void *dummy, long id, long offset)
   return NULL;
 }
 
+#ifdef RTDEBUG
+
+/* The functions below are not necessarily correct, but left there
+   since some of them might be needed again. */
+static void CheckPersistentCell(Object **theCell) 
+{
+  if (*theCell) {
+    if (inProxy((long)*theCell)) {
+      if (proxyIsAlive((long)*theCell)) {
+	return;
+      } else {
+	fprintf(output, "CheckPersistentCell: proxy is not alive\n");
+	Illegal();
+	BetaExit(1);
+      }
+    } else {
+      ;
+    }
+  }
+}
+
+static void CheckPersistentCellAfterIOA(Object **theCell) 
+{
+  return;
+
+  if (*theCell) {
+    if (inProxy((long)*theCell)) {
+      if (proxyIsAlive((long)*theCell)) {
+	return;
+      } else {
+	fprintf(output, "CheckPersistentCell: proxy is not alive\n");
+	Illegal();
+	BetaExit(1);
+      }
+    } else {
+      if (inAOA(*theCell)) {
+	return;
+      } else {
+	if (IOAActive) {
+	  if (inToSpace(*theCell)) {
+	    return;
+	  } else {
+	    fprintf(output, "CheckPersistentCell: *theCell is in FromSpace\n");
+	    Illegal();
+	    BetaExit(1);
+	  }
+	} else {
+	  if (inToSpace(*theCell)) {
+	    fprintf(output, "CheckPersistentCell: *theCell is in ToSpace\n");
+	    Illegal();
+	    BetaExit(1);
+	  } else {
+	    return;
+	  }
+	}
+      }
+    }
+  }
+}
+
+static void checkPersistentOrigin(Object *theObj)
+{
+  Object **theCell;
+  Object *origin;
+  long originOffset;
+
+  if ((origin = getOrigin(theObj, &originOffset))) {
+    theCell = (Object **)((long)theObj + originOffset);
+    Claim(!inProxy((long)*theCell), "Persistent object with proxy origin\n");
+  }
+}
+
+static void checkPersistentObject(Object *theObj, void *generic)
+{
+  if (inProxy(theObj -> GCAttr)) {
+    void *dummy;
+    static u_long id, offset;
+    
+    getProxyAttributes(theObj -> GCAttr, 
+		       &dummy,
+		       &id,
+		       &offset);
+    
+    if (lookUpObject(dummy, id, offset) == theObj) {
+      objectAction = checkPersistentOrigin;
+
+      scanObject(theObj,
+		 CheckPersistentCell,
+		 TRUE);
+      
+      objectAction = NULL;
+    } else {
+      fprintf(output, "checkPersistentAOA: theObj -> GCAttr is *not* a self reference\n");
+      Illegal();
+      BetaExit(1);
+    }
+  } else {
+    fprintf(output, "checkPersistentAOA: theObj -> GCAttr is *not* a proxy\n");
+    Illegal();
+    BetaExit(1);
+  }
+}
+
+void checkPersistentAOA(void) 
+{
+  foreachObjectInBlocks(AOAPersistentBaseBlock,
+			checkPersistentObject,
+			NULL);
+}
+
+static void checkPersistentObjectInAOAAfterIOA(Object *theObj, void *generic) 
+{ 
+  if (inProxy(theObj -> GCAttr)) {
+    void *dummy;
+    static u_long id, offset;
+    
+    getProxyAttributes(theObj -> GCAttr, 
+		       &dummy,
+		       &id,
+		       &offset);
+    
+    if (lookUpObject(dummy, id, offset) == theObj) {
+      objectAction = checkPersistentOrigin;
+      scanObject(theObj,
+		 CheckPersistentCellAfterIOA,
+		 TRUE);
+      objectAction = NULL;
+    } else {
+      fprintf(output, "checkPersistentAOA: theObj -> GCAttr is *not* a self reference\n");
+      Illegal();
+      BetaExit(1);
+    }
+  } else {
+    fprintf(output, "checkPersistentAOA: theObj -> GCAttr is *not* a proxy\n");
+    Illegal();
+    BetaExit(1);
+  }
+}
+
+void checkPersistentAOAAfterIOA(void) 
+{
+  foreachObjectInBlocks(AOAPersistentBaseBlock,
+			checkPersistentObjectInAOAAfterIOA,
+			NULL);
+}
+
+#endif /* RTDEBUG */
+
+#ifdef RTINFO
+void showPersistenceStatistics(void) {
+  fprintf(output, "[Persistence statistics:\n");
+  fprintf(output, "  numPersistentBlocks = 0x%X\n", (int)numPersistentBlocks);
+  fprintf(output, "  numObjects          = 0x%X\n", (int)numObjects);
+  fprintf(output, "  sizeOfObjects       = 0x%X bytes]\n", (int)sizeOfObjects);
+}
+#endif /* RTINFO */
+
 void dumpObject(long obj) 
 {
   USE();
 }
-
 
 #endif /* PERSIST */

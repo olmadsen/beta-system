@@ -181,6 +181,7 @@ void AOAtoIOAReport(void);
 #endif
 
 /* GC/aoa.c */
+extern void (*objectAction)(Object *theObj);
 extern void tempAOArootsAlloc(void);
 extern void tempAOArootsFree(void);
 extern long sizeOfAOA(void);
@@ -192,7 +193,6 @@ extern Object *AOAcalloc(long numbytes);
 #endif
 /* Allocate block without possibility of doing IOAGc: */
 extern Object *AOAallocate(long numbytes);
-
 extern Object * CopyObjectToAOA(Object *);
 extern void AOAGc(void);
 
@@ -238,6 +238,7 @@ extern void IOACheckReference(REFERENCEACTIONARGSTYPE);
 #endif
 
 /* GC/misc.c */
+extern Object *getOrigin(Object *theObj, long *originOffset);
 extern long getmilisectimestamp(void);
 extern long milisecsincelast(void);
 extern int EqualNCS(char *s1, char *s2);
@@ -336,39 +337,44 @@ extern u_long sizeOfProxyList(void *a);
 extern u_long *appendProxiesToProcess(void *a);
 
 /* store.c */
-extern char *getStoreOfProcess(void);
-extern long getNextStoreId(void);
-extern long unknownStore(char *storeName);
-extern long unknownId(long id); 
-extern void savePersistentAOABlock(Block *b);
-extern Block *loadPersistentAOABlock(long id);
+extern void putName(Object *ip, char *name);
 extern void getName(char *name,   
 		    void **dummy,
 		    long *GCAttr,
 		    long *id,    
 		    long *offset);
-extern void putName(char *name,   
-		    void *dummy,
-		    long GCAttr,
-		    long id,    
-		    long offset);
+extern void _create(char *name);
+extern long _openRead(char *name);
+extern long _openWrite(char *name);
+extern long unknownStore(char *storeName);
+extern long unknownId(long id);
+extern long getNextStoreId(void);
+extern char *getStoreOfProcess(void);
+extern void savePersistentAOABlock(Block *b);
+extern Block *loadPersistentAOABlock(long id);
+extern void unswizzleOrigins(Block *b);
 
 /* linearize.c */
-extern Object *getOrigin(Object *theObj, long *originOffset);
+extern Block *inPersistentAOA(long theObj);
+extern void _checkpoint(Object *roots);
+extern void _exportPersistentAOABlocks(void);
+extern void _unpersistifyAOABlocks(void);
+extern long _get(char *name);
+extern void _put(Object *theObj, char *name);
+extern void rebuildAOAtoIOATable(void);
 extern void foreachObjectInBlocks(Block *b, 		
 				  void (*objectAction)(Object *, void *),
 				  void *generic);
 extern Object *CopyObjectToPersistentAOA(Object *theObj);
-extern void _checkpoint(void);
 extern Object *lookUpObject(void *dummy, long id, long offset);
-extern Block *inPersistentAOA(long theObj);
+#ifdef RTDEBUG
+extern void checkPersistentAOA(void);
 extern void checkPersistentAOAAfterIOA(void);
-extern void rebuildAOAtoIOATable(void);
+#endif /* RTDEBUG */
 #ifdef RTINFO
 extern void showPersistenceStatistics(void);
 #endif /* RTINFO */
-#ifdef RTDEBUG
-extern void checkPersistentAOA(void);
-#endif /* RTDEBUG */
-extern void _exportPersistentAOABlocks(void);
 #endif /* PERSIST */
+
+/* PerformGC.c */
+extern void doGCFrom(long *sp);
