@@ -6,6 +6,10 @@
 #include "crossStoreReferences.h"
 
 #ifdef PERSIST
+#ifdef nti
+#include <io.h>
+#include <direct.h>
+#endif
 
 /* LOCAL CONSTANTS */
 
