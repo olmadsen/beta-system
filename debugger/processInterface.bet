@@ -1,0 +1,675 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv';
+
+BODY 'private/processInterfaceBody';
+BODY 'private/processCommBody';
+BODY 'private/executableBody';
+BODY 'private/utilitiesBody';
+BODY 'private/dbmanagerBody';
+
+--- include '~beta/mps/v4.9/astlevel'
+
+--- lib:attributes ---
+
+(* Label types:
+ * ============ *)
+     
+LABELTYPE_CODE: (# exit 1 #);
+LABELTYPE_DATA: (# exit 2 #);
+
+(* ERRORCODES
+ * ========== *)
+
+PI_OK:         (# exit 1 #);
+PI_TERMINATED: (# exit 2 #);
+PI_SIGNALLED:  (# exit 3 #); 
+(* ... *)
+
+(* LOAD LEVELS
+ * =========== 
+ * 
+ * Load levels of ObjectFileInfos *)
+
+LL_INITIAL:  (# exit 0 #);(*GroupName+codeStart+codeEnd+dataStart+dataEnd*)
+LL_ENTRIES:  (# exit 1 #);(*LL_INITIAL+protoCount+Tentries+Mentries+Gentries*)
+LL_DBINFO:   (# exit 2 #);(*LL_ENTRIES+astRefs+fragments*)
+LL_NODBINFO: (# exit 3 #);(*Transition to LL_DBINFO failed (no ..db file)*)
+
+processInterface:
+  (# 
+     <<SLOT processInterfaceLib:attributes>>;
+     
+     (* AST
+      * ===
+      * 
+      * The astInterface used in this processInterface. *)
+     
+     AST: @astInterface;
+     
+     
+     (* INIT
+      * ====
+      * 
+      * Initializes this(processInterface.
+      * 
+      * doingExpensiveRead is called if dbManager is about to scan through
+      * all ..db files to get fragment information.
+      * 
+      * doingCheapRead is called if dbManager is about to read fragment 
+      * information from cached file.
+      * 
+      * createFragInfo is called to query whether fragment info should be
+      * cached for faster startup the next time.
+      * 
+      * creationFailed is called if it was not possible to create the cache
+      * file.
+      * 
+      * execNotFound is raised if the executable could not be found.
+      * 
+      * forEachDB is called by dbManager when it is about to read the ..db
+      * file whose name is given. If found is FALSE, the ..db file was not
+      * found. *)
+     
+     init:
+       (# doingExpensiveRead:< Notification;
+          doingCheapRead:< Notification;
+          createFragInfo:< BooleanObject;
+          creationFailed:< Exception;
+          execNotFound:< Exception;
+          forEachDB:<
+            (# dbName: ^Text;
+               found: @Boolean;
+            enter (dbName[],found)
+            do INNER
+            #);
+          
+          execName, execParams, valhallaParams: ^Text;
+          errorCode: @Integer;
+       enter (execName[], execParams[], valhallaParams[])
+       <<SLOT processInterfaceInit:dopart>>
+       exit errorCode
+       #);
+     
+     
+     (* KILL
+      * ====
+      * 
+      * Should be called when this processInterface is not going to be
+      * used any more. *)
+     
+     kill: 
+       (# 
+       <<SLOT processInterfaceKill:dopart>>
+       #);
+     
+     
+     (* PROCESSCOMM
+      * ===========
+      * 
+      * The process communicator communicates with the debugged process to get
+      * information about the state of the process. It implements low-level 
+      * details such as how the communication with the process is actually
+      * handled.
+      * 
+      * processData and processCode can be used to read and write the
+      * memory of the process. 
+      * 
+      * DOT describes itself.
+      * 
+      * init initializes this processCommunicator.
+      * 
+      * scanGroups scans through the objectfiles that are statically linked 
+      * into the executable.
+      * 
+      * loadProtoTable loads the prototype table of the ObjectFileInfo entered
+      * as parameter by filling out protoCount, Tentries, Mentries and Gentries
+      * of the ObjectFileInfo. *)
+
+     processComm: @
+       (# 
+          init:
+            (# executable, execParams, valhallaParams: ^Text;
+               errorCode: @Integer;
+            enter (executable[], execParams[], valhallaParams[])
+            <<SLOT processCommInit:dopart>>
+            exit errorCode
+            #);
+          
+          kill: (# <<SLOT processCommKill:dopart>> #);
+     
+          ReInit: (* Rerun the process. *)
+            (# errorCode: @Integer;
+            <<SLOT RerunBody:dopart>>
+            exit errorCode
+            #);
+          
+          scanGroups:
+            (# dataStart, dataEnd, codeStart, codeEnd: @Integer;
+               groupName: ^Text;
+            do <<SLOT processCommScanGroups:descriptor>>
+            #);
+     
+          loadProtoTable:
+            (# accessFailure:< exception;
+               ofi: ^ObjectFileInfo;
+            enter ofi[]
+            <<SLOT processCommLoadProtoTable:dopart>>
+            #);
+          
+          MachineType:
+            (# name: ^Text;
+            <<SLOT processCommMachineType:dopart>>
+            exit name[]
+            #);
+          
+          (* STATUS
+           * ======
+           * 
+           * May be used to query the state of the process if it is
+           * stopped. *)
+          
+          status: @
+            (# statusValue: IntegerValue (# running:< Exception do INNER #);
+               curObj: StatusValue (# <<SLOT StatusCurObj:dopart>> #);
+               PC: StatusValue (# <<SLOT StatusPC:dopart>> #);
+               SP: StatusValue (# <<SLOT StatusSP:dopart>> #);
+               signal: StatusValue
+                 (# sigtext: ^Text;
+                 <<SLOT StatusSignal:dopart>>
+                 exit sigtext[]
+                 #);
+               statusPrivate: @<<SLOT StatusPrivate:descriptor>>
+            #);
+          
+          (* RTSprocAdr
+           * ==========
+           * 
+           * Returns memory addresses of RTS procedures. The RTproc parameter 
+           * must be one of the constants defined in RTSprocedures.bet *)
+          
+          RTSprocAdr:
+            (# RTproc: @Integer;
+               procAddr: @Integer;
+            enter RTproc
+            <<SLOT RTSprocAdr:dopart>>
+            exit procAddr
+            #);
+          
+     
+          (* MEMORY ACCESS
+           * ============= *)
+          
+          processMemory:
+            (# acc: 
+                 (# accessFailure:< Exception;
+                    address: @Integer 
+                 enter address 
+                 do INNER 
+                 #);
+               
+               peekDouble:< acc (# value: @Real do INNER exit value     #);
+               peekLong:<   acc (# value: @Integer do INNER exit value  #);
+               peekShort:<  acc (# value: @ShortInt do INNER exit value #);
+               peekByte:<   acc (# value: @Char do INNER exit value     #);
+               peekMemoryBytes:< acc 
+                 (# length: @Integer; (* Length in bytes. *)
+                    value: [1]@Char;
+                 enter length
+                 do INNER
+                 #);
+               peekMemoryLongs:< acc 
+                 (# length: @Integer; (* Length in longs. *)
+                    value: [1]@Integer;
+                 enter length
+                 do INNER
+                 #);
+               
+               pokeDouble:< acc (# value: @Real enter value do INNER #);
+               pokeLong:< acc 
+                 (# value, oldvalue: @Integer 
+                 enter value 
+                 do INNER 
+                 exit oldvalue 
+                 #);
+               pokeShort:< acc (# value: @ShortInt enter value do INNER #);
+               pokeByte:< acc  (# value: @Char enter value do INNER     #);
+            #);
+          
+          processData: @processMemory
+            (# peekDouble:: (# <<SLOT doProcessDataPeekDouble:dopart>> #);
+               peekLong::   (# <<SLOT doProcessDataPeekLong:dopart>>   #);
+               peekShort::  (# <<SLOT doProcessDataPeekShort:dopart>>  #);
+               peekByte::   (# <<SLOT doProcessDataPeekByte:dopart>>   #);
+               peekMemoryLongs:: 
+                 (# <<SLOT doProcessDataPeekMemoryLongs:dopart>> #);
+               peekMemoryBytes:: 
+                 (# <<SLOT doProcessDataPeekMemoryBytes:dopart>> #);
+               
+               pokeDouble:: (# <<SLOT doProcessDataPokeDouble:dopart>> #);
+               pokeLong::   (# <<SLOT doProcessDataPokeLong:dopart>>   #);
+               pokeShort::  (# <<SLOT doProcessDataPokeShort:dopart>>  #);
+               pokeByte::   (# <<SLOT doProcessDataPokeByte:dopart>>   #);
+            #);
+          
+          processCode: @processMemory
+            (# peekDouble:: (# <<SLOT doProcessTextPeekDouble:dopart>> #);
+               peekLong::   (# <<SLOT doProcessTextPeekLong:dopart>>   #);
+               peekShort::  (# <<SLOT doProcessTextPeekShort:dopart>>  #);
+               peekByte::   (# <<SLOT doProcessTextPeekByte:dopart>>   #);
+               peekMemoryLongs:: 
+                 (# <<SLOT doProcessCodePeekMemoryLongs:dopart>> #);
+               peekMemoryBytes:: 
+                 (# <<SLOT doProcessCodePeekMemoryBytes:dopart>> #);
+               
+               pokeDouble:: (# <<SLOT doProcessTextPokeDouble:dopart>> #);
+               pokeLong::   (# <<SLOT doProcessTextPokeLong:dopart>>   #);
+               pokeShort::  (# <<SLOT doProcessTextPokeShort:dopart>>  #);
+               pokeByte::   (# <<SLOT doProcessTextPokeByte:dopart>>   #);
+            #);
+          
+          
+          (* COMMANDS
+           * ========
+           * 
+           * These commands block the calling coroutine until they have
+           * finished. That is, e.g.\ Continue does not return before the
+           * process has stopped again. SingleStep does not return before
+           * the step has been taken. *)
+          
+          Continue: @
+            (* Continue the process after a breakpoint or signal. *)
+            (# errorCode: @Integer;
+            <<SLOT ContinueBody:dopart>>  
+            exit errorCode
+            #);
+          
+          SingleStep: @
+            (* Singlestep the process. *)
+            (# errorCode: @Integer;
+            <<SLOT SinglestepBody:dopart>>
+            exit errorCode
+            #);
+          
+          Stop: @
+            (* Stop the process if it is running. *)
+            (# errorCode: @Integer;
+            <<SLOT processCommStop:dopart>>
+            #);
+            
+          
+          (* DOT (Debugger Object Table)
+           * ===========================
+           * 
+           * Used to keep track of objects through garbage collections.
+           * Objects traced by the debugger are inserted into the table.
+           * 
+           * Insert returns an index to be used to get the current address
+           * of the object.
+           * 
+           * inxToAddress returns the current address of the object with
+           * the DOT index given. If 0 is returned, the object has been 
+           * garbage collected, and the index deleted from the table. The index
+           * may be reused by the table, and a failed call to inxToAddress
+           * therefore never repeated. *)
+          
+          DOT: @
+            (# insert:
+                 (# objAdr: @Integer;
+                    inx: @Integer;
+                 enter objAdr
+                 <<SLOT piDOTinsert:dopart>>
+                 exit inx
+                 #);
+               
+               inxToAddress:
+                 (# inx: @Integer;
+                    objAdr: @Integer;
+                 enter inx
+                 <<SLOT piDOTinxToAddress:dopart>>
+                 exit objAdr
+                 #);
+            #);
+          
+          pcPrivate: @<<SLOT processCommPrivate:descriptor>>;
+
+       #);
+     
+     (* EXECUTABLE
+      * ==========
+      * 
+      * Implements access to information that can only be found in the
+      * executable. Currently this only includes labels, and is needed only 
+      * if we fail to locate the information otherwise. *)
+
+     executable: @
+       (# 
+          init:
+            (# execName: ^Text;
+            enter execName[]
+            <<SLOT executableInit:dopart>>
+            #);
+          
+          kill: (# <<SLOT executableKill:dopart>> #);
+          
+          (* Label handling
+           * ============== *)
+          
+          labelNameToAddress:
+            (# name: ^Text;
+               type: @Integer;
+               address: @Integer;
+            enter (name[],type)
+            <<SLOT labelNameToAddress:dopart>>
+            exit address
+            #);
+          
+          labelAddressToName:
+            (# address: @Integer;
+               type: @Integer;
+               name: ^Text;
+            enter (address, type)
+            <<SLOT labelAddressToName:dopart>>
+            exit name[]
+            #);
+       #);
+
+     
+     (* OBJECTFILEINFO, BASICOBJECTFILEINFO
+      * ===================================
+      * 
+      * Type of object containing diverse information on BETA object-files
+      * linked into the debugged process. *)
+     
+     ObjectFileInfo:< BasicObjectFileInfo;
+     BasicObjectFileInfo:
+       (# 
+          (* PARTIAL INFO
+           * ============
+           * 
+           * Upper part of BasicObjectFileInfo is initialized when connection 
+           * to the debugged process is established. The rest is loaded from 
+           * debugged process and ..db file on demand. *)
+          
+          groupName: ^Text;
+          (* Full pathname (converted using ph) of group that generated 
+           * this(BETAgroupFile). *)
+          groupNameLen: @Integer;
+          (* Length of groupName string as found in the process before it
+           * was converted to full path. *)
+          
+          codeStart, codeEnd: @Integer; 
+          (* Address of codepart of this objectfile in memory.
+           * codeEnd is the address of the first code *after* the
+           * code described by this(BETAgroupFile). *)
+          
+          dataStart, dataEnd: @Integer;
+          (* Address of datasegment of this objectfile in memory.
+           * dataStart is the address of the length field of the
+           * prototype table. dataEnd is the address of the following
+           * dataSegment. *)
+          
+          loadLevel: @Integer; 
+          
+          (* FULL INFO
+           * ========= 
+           * 
+           * Information below has been loaded if debugInfoLoaded is TRUE.
+           * Corresponding indices in repetitions contain diverse info on the
+           * same prototype. *)
+          
+          protoCount: @Integer;  (* Number of prototypes in objectfile.   *)
+          Tentries: [0]@Integer; (* Prototype addresses. Corresponding to *
+                                  * prototype table in object file and loaded
+                                  * on demand from debugged process. *)
+          Mentries: [0]@Integer; (* Loaded from debugged process. *)
+          Gentries: [0]@Integer; (* Loaded from debugged process. *)
+          
+          astRefs: [0]@ShortInt;  (* Ast indices of ObjectDescriptors.   *
+                                   * Loaded on demand from ..db file.    *)
+          doparts: [0]^dopartInfo;(* dopartInfo for prototype  is cached *
+                                   * here when it first becomes known.   *)
+          
+          fragments: [0]^FragmentInfo;
+          
+          FragmentInfo:
+            (# fragmentName: ^Text;
+          
+               (* Indices in repetitions of surrounding ObjectFileInfo of
+                * information belonging to this fragment.
+                * infoLast is the number of the first prototype *after* the
+                * ones belonging to this fragment. I.e. infoFirst-infoLast
+                * is the number of prototypes in this fragment. *)
+               infoFirst, infoLast: @Integer;
+          
+               (* doparts in fragment
+                * ===================
+                * 
+                * "doparts" contains an element for each dopart in this 
+                * fragment. There is no trivial connection to the prototypes
+                * of the fragment since dopart SLOTS mess up everything. *)
+          
+               dopartCount: @Integer;     (* Number of doparts in fragment. *)
+               doparts: [0]^dopartInfo;
+            #);
+          
+          ScanVisibleGroups:
+            (* Scans the names of the fragment groups that are visible from
+             * this one. *)
+            (# current: ^Text; 
+            <<SLOT visibleGroups:dopart>> 
+            #);
+          
+          fg: ^AST.fragmentGroup;
+          fgLoadFailed: @Boolean; (* Set to true if load of fg failed. *)
+       #);
+     
+     
+     (* SCANOBJECTFILEINFOS
+      * =================== 
+      * 
+      * Scans through all ObjectFileInfos. *)
+     
+     scanObjectFileInfos:
+       (# current: ^ObjectFileInfo;
+       <<SLOT scanObjectFileInfos:dopart>>
+       #);
+     
+     
+     
+     (* DOPARTINFO
+      * ==========
+      * 
+      * Information corresponding to a dopart. *)
+     
+     dopartInfo: 
+       (# astRef: @ShortInt;         (* Ast index of dopart.              *)
+          fragRef: @ShortInt;        (* Fragment index.                   *)
+          Mentry: @Integer;          (* Filled out when it becomes known. *)
+          impAddresses: [0]@Integer; (* Imperative memory addresses.      *
+                                      * Relative to M entry point.        *)
+          impAstRefs: [0]@ShortInt;  (* Imperative ast indices.           *)
+       #);
+     
+     
+     (* IMPERATIVEINFO
+      * ==============
+      *
+      * Information corresponding to an imperative. *)
+     
+     ImperativeInfo:
+       (# ofi: ^ObjectFileInfo; (* BETA group containing this imperative.    *)
+          dpi: ^dopartInfo;     (* Info on enclosing dopart.                 *)
+          inx: @Integer;        (* Index in dpi.impAddresses and impAstRefs. *)
+          cast: ^AST.ast;       (* For caching. May be found from ofi, dpi and
+                                 * inx. *)
+          start: (# exit dpi.impAddresses[inx] + dpi.Mentry #);
+          after: 
+            (# value: @Integer;
+            do (if (inx < dpi.impAddresses.range) //true then
+                   dpi.impAddresses[inx+1] + dpi.Mentry -> value
+                else
+                   0 -> value
+               if)
+            exit value
+            #);
+       #);
+     
+     
+     (* PROTOTYPEINFO
+      * ============= 
+      * 
+      * Information corresponding to a ProtoType/ObjectDescriptor. *)
+     
+     ProtoTypeInfo:
+       (# ofi: ^ObjectFileInfo;
+          inx: @Integer;     (* Index in ofi repetitions. *)
+          objdesc: ^AST.ast; (* For caching. May be found from ofi and inx if
+                              * ofi is fully loaded. *)
+       #);
+     
+     
+     
+     (* DBMANAGER
+      * =============
+      * 
+      * Used to manage the part of the debug information kept in the
+      * auxiliary ..db files generated by the compiler. *)
+     
+     DBManager: @
+       (#
+          (* INIT
+           * ====
+           * 
+           * Init checks whether fragment information has been generated and 
+           * saved in a ..db file prefixed with the name of the executable. 
+           * If so, and if it is up-to-date, this file is read and cached in 
+           * an internal table. If not, all ..db files are scanned to read 
+           * fragment information and save it in a new ..db file. *)
+          
+          init:
+            (# doingExpensiveRead:< Object;
+               doingCheapRead:< Object;
+               createFragInfo:< BooleanObject;
+               creationFailed:< Object;
+               execNotFound:< Object;
+               forEachDB:<
+                 (# dbName: ^Text;
+                    found: @Boolean;
+                 enter (dbName[],found)
+                 do INNER
+                 #);
+        
+               execName: ^Text;
+            enter execName[]
+            <<SLOT DBManagerInit:dopart>>
+            #);
+          
+          
+          (* READDB
+           * ======
+           * 
+           * readDB fills in ofi with the information in the corresponding 
+           * ..db file, assuming that all other information in ofi has 
+           * already been initialized.
+           * 
+           * If the ..db file could not be found, ofi.loadLevel is set to 
+           * LL_NODBINFO. Otherwise the information is loaded and 
+           * ofi.loadLevel is set to LL_DBINFO.
+           *)
+          
+          readDB:
+            (# ofi: ^ObjectFileInfo;
+            enter ofi[]
+            <<SLOT DBManagerReadDB:dopart>>
+            #);
+          
+          
+          (* slotNameToGroups
+           * ================
+           * 
+           * Given a SLOT name and a SLOT type, scans over the names of the 
+           * fragment groups containing fragments of the name and type given.
+           * 
+           * Currently slotType is either descriptorForm, attributesForm
+           * or dopart. For absolute values, see ~beta/betaast/v4.9/gram.bet.
+           *)
+          
+          slotNameToGroups:
+            (# slotName: ^Text; slotType: @Integer;
+               current: ^Text;
+            enter (slotName[],slotType)
+            <<SLOT DBManagerSlotNameToGroups:dopart>>
+            #);
+          
+          dbmprivate: @<<SLOT DBManagerprivate:descriptor>>;
+       #);
+
+
+     (* UTILITIES
+      * ========= *)
+     
+     Utilities: @
+       (#
+          (* NameToObjectFileInfo
+           * ====================
+           * 
+           * Returns information on the objectfile requested. *)
+          
+          NameToObjectFileInfo:
+            (# groupName: ^Text;
+               ofi: ^ObjectFileInfo;
+            enter groupName[]
+            <<SLOT NameToObjectFileInfo:dopart>>
+            exit ofi[]
+            #);
+     
+     
+          (* ProtoAddressToPrototypeInfo
+           * ===========================
+           * 
+           * Maps a prototype address to the corresponding ProtoTypeInfo.
+           * 
+           * Returns NONE in case the address does not correspond
+           * to a known BETA group. *)
+          
+          ProtoAddressToPrototypeInfo:
+            (# ptAdr: @Integer;
+               ofi: ^ObjectFileInfo;
+            enter ptAdr
+            <<SLOT dataAddressToFile:dopart>>
+            exit ofi[]
+            #);
+          
+          (* codeAddressToImperative
+           * =======================
+           * 
+           * Maps a code address to information on the corresponding BETA 
+           * imperative.
+           * 
+           * Returns NONE in case of failure. *)
+          
+          codeAddressToImperative:
+            (# codeAdr: @Integer;
+               imp: ^ImperativeInfo;
+            enter codeAdr
+            <<SLOT codeAddressToImperativ:dopart>>
+            exit imp[]
+            #);
+          
+          (* codeAstToImperativ
+           * =================== *)
+          
+          codeAstToImperative:
+            (# cast: ^AST.ast;
+               imp: ^ImperativeInfo;
+            enter cast[]
+            <<SLOT codeAstToImperativ:dopart>>
+            exit imp[]
+            #);
+          
+         utprivate: @<<SLOT utilitiesPrivate:descriptor>>
+       #);  
+   
+     ph: @pathHandler; 
+     
+     piPrivate: @<<SLOT processInterfacePrivate:descriptor>>;
+  #)

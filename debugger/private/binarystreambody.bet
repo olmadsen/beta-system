@@ -1,0 +1,103 @@
+ORIGIN '../binarystream';
+
+--- include '~beta/basiclib/v1.4/file'
+
+---BinaryStreamRep:descriptor--
+(# R: [1000] @integer;  top: @integer; (* byte pointer: [0,...] *)
+   inc:
+     (# N: @integer
+     enter n
+     do (if (n+top->top)>=(R.range*4) //true then R.range->R.extend if)
+     #);
+   align2:
+     (#
+     do (if top mod 2 // 1 then 1->inc if)
+     #);
+   align4:
+     (#
+     do (if top mod 4 
+         // 1 then 3->inc
+         // 2 then 2->inc
+         // 3 then 1->inc
+        if)
+     #)
+#)
+---BinaryStreamPut:dopart---
+do (rep.R,rep.top,ch) -> TOS'%inxPutByte'; 1->rep.inc; 
+---BinaryStreamPutShort:dopart--
+do rep.align2; (rep.R,rep.top,V) -> TOS'%inxPutShort'; 2->rep.inc
+---BinaryStreamPutLong:dopart--
+do rep.align4; (rep.R,rep.top,V) -> TOS'%inxPutLong'; 4->rep.inc
+---BinaryStreamPutText:dopart--
+do T.scanAll(#do ch->put #); 0->put
+---BinaryStreamGet:dopart---
+do (rep.R,rep.top) -> TOS'%inxGetByte'->ch; 1->rep.inc; 
+---BinaryStreamGetShort:dopart--
+do rep.align2; (rep.R,rep.top) -> TOS'%inxGetShort'->V; 2->rep.inc
+---BinaryStreamGetLong:dopart--
+do rep.align4; (rep.R,rep.top) -> TOS'%inxGetLong'->V; 4->rep.inc
+---BinaryStreamGetText:dopart--
+do &Text[]->T[];
+   L: (# ch: @char
+      do get->ch;
+         (if ch//0 then 
+          else 
+             ch->T.put;
+             restart L
+         if)
+      #)
+---BinaryStreamSave:descriptor---
+(# F: @file (# AccessError::< (# do true -> failure #)#); 
+   PR: @F.PutRep;
+   failure: @Boolean;
+do (if FN[]//NONE then &text[]->FN[] if);
+   
+   '\nSaving:'->screen.puttext; FN[]->screen.puttext; 
+   ' '->screen.put; rep.R.range->screen.putint; ','->screen.put; 
+   rep.top->screen.putint; screen.newline;
+   
+   FN[]->F.name;
+   F.OpenWrite; 
+   (if failure //true then openFailed if);
+   (@@rep.R[1],(rep.top+4) div 4)->PR; 
+   F.close
+#)
+---BinaryStreamRestore:descriptor---
+(# F: @file (# noSuchFileError::< (# do true -> openFailed -> continue #)#);
+   FG: @F.GetRep; size: @Integer;
+   openFailed: @Boolean;
+do (if FN[]//NONE then &text[]->FN[] if);
+   FN[]->F.name;
+   F.OpenRead;
+   (if openFailed //true then
+       notFound;
+    else
+       ((F.length-1) div 4)+1-> size;
+       (if size > rep.R.range //true then
+           size -> rep.R.new;
+       if);
+       (@@rep.R[1],size)->FG;
+       F.close;
+       0->rep.top
+   if);
+#)
+---BinaryStreamFragRestore:descriptor ---
+(# F: @file (# noSuchFileError::< (# do true -> openFailed -> continue #)#);
+   FG: @F.GetRep; size: @Integer;
+   openFailed: @Boolean;
+do (if FN[]//NONE then &text[]->FN[] if);
+   FN[]->F.name;
+   F.OpenRead;
+   (if openFailed //true then
+       notFound;
+    else
+       (@@size,1)->FG;0->rep.top;getShort;getShort -> size;
+       (if size + 8 > rep.R.range //true then
+           size -> rep.R.new;
+       if);
+       (0,FromBeginning) -> F.SetPos;
+       (@@rep.R[1],size+8)->FG;
+       F.close;
+       0->rep.top
+   if);
+#)

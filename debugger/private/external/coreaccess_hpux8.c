@@ -1,0 +1,38 @@
+#include <errno.h>
+#include <sys/ptrace.h>
+
+#include "coreaccess_hpux8.h"
+
+int Attach (pid_t pid)
+{ errno = 0; 
+  ptrace (PT_ATTACH, pid, 0, 0, 0); 
+  if (errno) return errno;
+  waitpid (pid,0,0); 
+  return errno;
+};
+
+int Detach (pid_t pid)
+{ errno = 0; 
+  ptrace (PT_DETACH, pid, 1, 0, 0); 
+  return errno;
+};
+
+int ReadImage (pid_t pid, int address, int *value)
+{ errno = 0; 
+  *value = ptrace (PT_RDUSER, pid, address, 0, 0); 
+  return errno;
+}
+
+int WriteImage (pid_t pid, int address, int value)
+{ errno = 0;
+  ptrace (PT_WIUSER, pid, address, value, 0);  
+  return errno;
+}
+
+int SetBreak (pid_t pid, int address, int oldInstruction) 
+{ return WriteImage (pid, address, 
+		     ((0x4afc0000) | (oldInstruction & 0x0000ffff)));
+  /* MC 680x0 instruction generating illegal instruction trap:
+   *   Asm syntax: ILLEGAL
+   *   Instruction format: 0100 1010 1111 1100 = 0x4afc */
+}

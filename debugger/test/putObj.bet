@@ -1,0 +1,94 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv';
+
+--- include '~beta/basiclib/v1.4/file'
+--- include '~beta/basiclib/v1.4/external'
+--- include '~beta/sysutils/v1.4/cstring'
+--- include '../fifo'
+--- include '../private/processCommCodes'
+--- include '../processInterface'
+
+--- lib:attributes ---
+
+getpid: external
+  (# pid: @Integer;
+  exit pid
+  #);
+
+groupHeader: Data
+  (# self: @Integer;
+     ascii: @Integer;
+     next: @Integer;
+     codeStart: @Integer;
+     codeEnd: @Integer;
+  #); 
+
+NextGroup: external
+  (# current: ^groupHeader
+  enter current[]
+  exit current[]
+  #);
+
+openFIFOS:
+  (# fifoFrom, fifoTo: ^fifo;
+     pid: @Integer;
+  enter pid
+  do 
+     pid -> screen.putInt; screen.newline;
+     &fifo[] -> fifoTo[]; pid -> toName -> fifoTo.name;
+     fifoTo.openRead;
+     
+     &fifo[] -> fifoFrom[]; pid -> fromName -> fifoFrom.name; 
+     fifoFrom.openWrite;
+  exit (fifoFrom[],fifoTo[])
+  #);
+   
+
+--- program:descriptor ---
+(# fifoFrom, fifoTo: ^fifo;
+   
+   current: ^groupHeader;
+   cstr: @CString;
+   
+   opcode: @Integer;
+   
+do
+   getpid -> createFIFOS;
+   getpid -> openFIFOS -> (fifoFrom[],fifoTo[]);
+   
+   loop:
+     (if fifoTo.binGetInt -> opcode
+      //VOP_SCANGROUPS then
+         
+         loop:
+           (# 
+           do current[] -> NextGroup -> current[];
+              (if current[] //NONE then
+                  fifoFrom.newLine; leave loop 
+               else
+                  current.ascii -> cstr;
+                  cstr.get -> fifoFrom.putLine;            (* groupName *)
+                  current.self -> fifoFrom.binPutInt;      (* dataStart *)
+                  current.next -> fifoFrom.binPutInt;      (* dataEnd   *)
+                  current.codeStart -> fifoFrom.binPutInt; (* codeStart *)
+                  current.codeEnd -> fifoFrom.binPutInt;   (* codeEnd   *)
+                  restart loop;
+              if);
+           #);
+         
+         fifoFrom.flush;
+         restart loop;
+         
+      //VOP_KILL then
+         
+         'Killed' -> screen.putLine;
+         fifoFrom.close; fifoTo.close; 
+         leave loop;
+         
+      else
+         
+         'Got ' -> screen.putText; opcode -> screen.putInt;
+         screen.newline;
+         restart loop;
+         
+     if);
+#)
