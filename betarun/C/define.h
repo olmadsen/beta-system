@@ -19,6 +19,10 @@
 #define do_unconditional_gc 0
 #endif
 
+#ifdef sun4s
+#define LIN     /* Include support for new Persistence system (void+mg). */
+#endif
+
 #define RTINFO  /* Include support for runtime info */
 #define RTLAZY  /* Include support for lazy fetch */
 #ifdef RTDEBUG

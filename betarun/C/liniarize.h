@@ -1,5 +1,7 @@
 #ifndef _LINIARIZE_H_
 #define _LINIARIZE_H_
+
+#ifdef LIN
 #include <sys/time.h>
 
 /* GLOBAL TYPE DEFINITIONS */
@@ -46,4 +48,5 @@ typedef struct liniarization {
 
 extern struct liniarization *l;
 
+#endif /* LIN */
 #endif /* _LINIARIZE_H_ */
