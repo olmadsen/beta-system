@@ -21,6 +21,7 @@ $nocopyright=$c;
 $wiki=$w;
 
 $leftmargin=25;
+$tocfile = "index.html";
 
 # Insert World Wide Web tags for declarations (HTML format).
 # Outermost declaration is indexed by its own name, inner declarations are 
@@ -102,6 +103,45 @@ if ($wiki){
     $contentsfile = "index.html";
 }
 
+sub print_rel_link
+{
+    local ($type, $href) = @_;
+    $type = ucfirst ($type);
+    print<<EOT;
+<LINK REL="$type" HREF="$href">
+EOT
+}
+
+sub print_std_links
+{
+    local ($next, $prev);
+
+    if ($filenumber==$#files){
+	# last file
+	&print_rel_link("next", $indexfile);
+    } else {
+	$next = &strip_path(&strip_extension($files[$filenumber+1]));
+	&print_rel_link("next", "$next.html");
+    }
+    if ($filenumber==0){
+	# first file
+	&print_rel_link("prev", $tocfile);
+    } else {
+	$prev = &strip_path(&strip_extension($files[$filenumber-1]));
+	&print_rel_link("prev", "$prev.html");
+    }
+    &print_rel_link("start", $topfile);
+    &print_rel_link("first", &strip_path(&strip_extension($files[0])) . ".html");
+    &print_rel_link("last", &strip_path(&strip_extension($files[$#files])) . ".html");
+    &print_rel_link("contents", $tocfile);
+    &print_rel_link("index", $indexfile);
+    &print_rel_link("up", "index.html");
+    &print_rel_link("author", "mailto:support\@mjolner.com");
+    #&print_rel_link("copyright", "copyright.html");
+    #&print_rel_link("help", "help.html");
+    #&print_rel_link("search", "search.html");
+}
+
 sub print_button
 {
     local ($type, $href, $title) = @_;
@@ -114,7 +154,6 @@ sub print_button
 sub print_std_buttons
 {
     local ($next, $prev);
-    local ($target);
 
     if ($filenumber==$#files){
 	# last file
@@ -190,6 +229,11 @@ sub print_header
 <META http-equiv="Content-Type" CONTENT="text/html; CHARSET=ISO-8859-1">
 <TITLE>$title</TITLE>
 <LINK REL="stylesheet" HREF="$css" TYPE="text/css">
+EOT
+
+    &print_std_links;
+
+    print<<EOT
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript1.2" SRC="$jsdir/sidebar.js">
 </SCRIPT>
 </HEAD>
