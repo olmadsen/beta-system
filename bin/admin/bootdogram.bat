@@ -55,7 +55,7 @@ rename bobslist  %_opts_%-parser.lst
 echo "End-of-BOBS"
 if not exist tables goto gramerrors
 echo Creating tables
-%OLD_BETALIB%\bin\nti_%MIASDK%\tabc tables %_opts_%-parser
+%OLD_BETALIB%\bin\nti_%MIASDK%\tabc tables %_opts_%-parser %_opts_%
 :gramerrors
 echo ERRORS IN GRAMMAR
 echo Look at %_opts_%-parser.lst
