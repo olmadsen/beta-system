@@ -13,6 +13,13 @@ extern char **environ;
 
 typedef void (*forEachEnv) (char*,char*);
 
+extern char *machine_type(void); /* in betarun */
+
+char *valhallaMachineName()
+{
+  return machine_type();
+}
+
 void process_comm_exception(char *message) {
   fprintf(stderr,"**** CException processing\n%s",message);
 #ifdef EXITONEXCEPTION
@@ -76,12 +83,6 @@ void addParam (char *name) {
 
 #include <unistd.h>
 
-extern char *machine_type(void); /* in betarun */
-
-char *valhallaMachineName()
-{
-  return machine_name();
-}
 
 int executeProcess (char *execName)
 { int pid;
@@ -111,13 +112,6 @@ int executeProcess (char *execName)
 #if defined(nti)
 
 #include <windows.h>
-
-extern char *machine_type(void); /* in betarun */
-
-char *valhallaMachineName() {
-  printf("valhallaMachineName not implemented\n");
-  exit(1);
-}
 
 HANDLE executeProcess (char *execName) { 
   STARTUPINFO si;

@@ -83,10 +83,11 @@ void coreaccess_close(pid_t pid);
 #endif /* not sun4 or sun4s or linux or sgi */
 
 #if defined(nti)
+#include <windows.h>
 
-int SetBreak (int pid, int address, int* oldInstruction); 
+int SetBreak (HANDLE pid, int address, int* oldInstruction); 
   
-int UnsetBreak (int pid, int address, int oldInstruction);
+int UnsetBreak (HANDLE pid, int address, int oldInstruction);
 
 int SendSIGINT (int pid);
 

@@ -85,7 +85,6 @@ void closefd (pid_t pid)
 
 int coreaccess_init (pid_t pid)
 { 
-  /*fprintf(stderr, "coreaccess_init(0x%x)\n", pid); fflush(stderr);*/
   return newfd (pid);
 }
 
@@ -253,7 +252,13 @@ int SendSIGINT (pid_t pid)
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <windows.h>
+
+long processOffset=0;  
+
+void setCodeStart(long code_start) {
+  /* processOffset = code_start; */
+  processOffset = 0;
+}
 
 int coreaccess_init(HANDLE pid) { 
   /* no initialization requiered */
@@ -291,33 +296,71 @@ int SendSIGINT(int pid) {
   }
 }
 
-int ReadImage(int pid, int address, int *value) {
+int ReadImage(HANDLE pid, int address, int *value) {
+  HANDLE hProcess;	        /* handle of the process */
+  LPCVOID lpBaseAddress;	/* address to start reading */
+  LPVOID lpBuffer;	        /* address of buffer to place read data */
+  DWORD nSize;     	        /* number of bytes to read */
+  DWORD lpNumberOfBytesRead;    /* address of number of bytes read */
   errno = 0; 
-  printf("ReadImage not implemented\n");
-  exit(1);
+
+  hProcess = pid;
+  lpBaseAddress = (LPCVOID)address;
+  lpBuffer = (LPVOID)value;
+  nSize = 4;
+
+  if (ReadProcessMemory(hProcess,
+			lpBaseAddress,
+			lpBuffer,
+			nSize,
+			&lpNumberOfBytesRead)) {
+    errno = 0; 
+  } else {
+    char msg[512];
+    sprintf(msg,"valhalla: ReadImage failed\n",(int)pid,address);
+    process_comm_exception(msg);
+  }
   return errno;
 }
 
-int WriteImage(int pid, int address, int value) { 
-  errno = 0;
-  printf("WriteImage not implemented\n");
-  exit(1);
+int WriteImage(HANDLE pid, int address, int value) {
+  HANDLE hProcess;	        /* handle of the process */
+  LPVOID lpBaseAddress;	        /* address to start writeing */
+  LPVOID lpBuffer;	        /* address of buffer to place write data */
+  DWORD nSize;     	        /* number of bytes to write */
+  DWORD lpNumberOfBytesWritten; /* address of number of bytes write */
+
+  hProcess = pid;
+  lpBaseAddress = (LPVOID)address;
+  lpBuffer = (LPVOID)&value;
+  nSize = 4;
+
+  if (WriteProcessMemory(hProcess,
+			lpBaseAddress,
+			lpBuffer,
+			nSize,
+			&lpNumberOfBytesWritten)) {
+    errno = 0; 
+  } else {
+    char msg[512];
+    sprintf(msg,"valhalla: Writeimage(%d,%X) failed\n",(int)pid,address);
+    process_comm_exception(msg);
+  }
   return errno;
 }
 
-int SetBreak(int pid, int address, int* oldInstruction) { 
+int SetBreak(HANDLE pid, int address, int* oldInstruction) { 
   int res;
-  errno = 0;
-  printf("SetBreak not implemented\n");
-  exit(1);
-  return errno;
+  
+  if (res=ReadImage (pid, address, oldInstruction)) {
+    fprintf (stderr,"ReadImage failed. SetBreak returning %d.\n",res);
+    return res;
+  };
+  return WriteImage (pid,address,BREAK_INST);
 }
 
-int UnsetBreak(int pid, int address, int oldInstruction) {
-  errno = 0;
-  printf("UnsetBreak not implemented\n");
-  exit(1);
-  return errno;
+int UnsetBreak(HANDLE pid, int address, int oldInstruction) {
+  return WriteImage (pid, address, oldInstruction);
 }
 
 #endif /* not nti */

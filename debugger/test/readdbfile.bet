@@ -1,172 +1,196 @@
 ORIGIN '~beta/basiclib/v1.5/betaenv';
-INCLUDE '../binarystream';
-INCLUDE '~beta/objectbrowser/v2.1/mpsinterface';
-INCLUDE '~beta/objectbrowser/v2.1/objectdumper';
-INCLUDE '~beta/objectbrowser/v2.1/groupsinfo';
+INCLUDE '../binarystream'
+        '~beta/objectbrowser/v2.1/mpsinterface'
+        '~beta/objectbrowser/v2.1/objectdumper'
+        '~beta/objectbrowser/v2.1/groupsinfo';
 (*
  * COPYRIGHT
  *   Copyright Mjolner Informatics, 1995-96
  *   All rights reserved.
  *)
-
---- program:descriptor ---
-(# FragmentCount,astRef,noOfDoparts,tmp: @Integer;
-   dbname, groupname: ^Text; plevel: @Integer;
-   bin: @binarystream;   
-   fragnames: [0]^Text;
+-- program: Descriptor --
+(#
+   FragmentCount,astRef,noOfDoparts,tmp: @Integer;
+   dbname,groupname,ext: ^Text;
+   plevel: @Integer;
+   bin: @binarystream;
+   fragnames: [0] ^Text;
    accum: @Integer;
-   
+   entry: @diskentry;
    mps: @mpsinterface;
    dumper: @ObjectDumper;
    prettyprint: @dumper.prettyPrinter;
    odesc: ^mps.BETACFL.ObjectDescriptor;
    txt: ^Text;
    fg: ^mps.AST.fragmentGroup;
-   
    groups: @mps.groupsInfoTable;
    inx: @Integer;
    od: ^mps.BETACFL.ObjectDescriptor;
    a: ^mps.Ast.ast;
-   
    nd: ^mps.BETACFL.nameDcl;
    kind: @Integer;
-   
-   puthex: 
-     (# i: @integer;
+   puthex:
+     (#
+        i: @integer;
         printf: external
-          (# fmt: [0]@char; val: @integer
-          enter (fmt,val)
-          #);
+          (# fmt: [0] @char; val: @integer enter (fmt,val) #);
+        
      enter i
-     do ('0x%x',i) -> printf;
+     do ('0x%x',i)->printf; 
      #);
-              
-do 
-   mps.init; 
+   
+do
+   mps.init;
    (mps.AST[],mps.BETACFL[])->dumper.init;
    prettyprint.init;
-   
    groups.init;
-   
-   (if NoOfArguments<>4 then
-       'Usage: ' -> puttext;
-       1 -> Arguments -> puttext;
-       ' dbfile astfile prettyprintlevel' -> putline;
-       '(use -1 for prettyprintlevel to get full detail)' -> putline;
+   (if NoOfArguments <> 4 then
+       'Usage: '->puttext;
+       1->Arguments->puttext;
+       ' dbfile astfile prettyprintlevel'->putline;
+       '(use -1 for prettyprintlevel to get full detail)'->putline;
        stop;
+       
    if);
-   
    2->arguments->dbname[];
    3->arguments->groupname[];
-   4->arguments->txt[]; txt.reset; txt.getInt->plevel;
-   
+   mps.AST.astfileextension->ext[];
+   (if groupname.length > ext.length then
+       groupname[]->entry.path;
+       (if entry.path.name.suffix->ext.equalNCS then
+           (1,groupname.length-ext.length)->groupname.sub->groupname[]; 
+       if);
+       
+   if);
+   4->arguments->txt[];
+   txt.reset;
+   txt.getInt->plevel;
    groupName[]->mps.fragmentGroupTable.getFragmentGroup->fg[];
-   
-   'Contents of '->putText; dbName[]->putLine; newline;
-   dbName[] -> bin.restore;
-   
-   bin.getShort -> FragmentCount;
-   '<FragmentCount>: ' -> putText; FragmentCount->putInt; newline;
-   '<FragmentInfoListSize>: ' -> putText;
-   bin.getLong -> putInt; newline; newline;
-   
-   '<FragmentInfoList>:' -> putLine;
-   
+   'Contents of '->putText;
+   dbName[]->putLine;
+   newline;
+   dbName[]->bin.restore;
+   bin.getShort->FragmentCount;
+   '<FragmentCount>: '->putText;
+   FragmentCount->putInt;
+   newline;
+   '<FragmentInfoListSize>: '->putText;
+   bin.getLong->putInt;
+   newline;
+   newline;
+   '<FragmentInfoList>:'->putLine;
    FragmentCount->fragnames.new;
-   (for i:FragmentCount repeat
-        '    '->putText; 
-        bin.gettext->fragnames[i][]->putText; 
-        ': ' -> putText;
-        (if bin.getShort
-         //2 then 'Descriptor'->putLine;
-         //3 then 'Attributes'->putLine;
-         //31 then 'Dopart'->putLine;
-        if);
+   (for i: FragmentCount repeat
+     '    '->putText;
+     bin.gettext->fragnames[i][]->putText;
+     ': '->putText;
+     (if bin.getShort
+      // 2 then
+         'Descriptor'->putLine; 
+      // 3 then
+         'Attributes'->putLine; 
+      // 31 then
+         'Dopart'->putLine; 
+     if);
+     
    for);
-   
-   newline; newline;
-   
-   '<DoPartsInfo>: (List of dopart info for each fragment)' 
-     -> putLine; newline;
-   
-   (for i:FragmentCount repeat
-        'Number of doparts in '->putText; fragnames[i][]->putText;
-        ' <DopartCount>: '->putText;
-        bin.getShort -> noOfDoparts -> putInt;
-        newline;
-        
-        (for k: noOfDoparts repeat
-             '      dopart <AstIndex>: '->putText; 
-             bin.getShort -> putInt; newline;
-             0->accum;
-             '             (offset,astRef)'->putline;
-             L: (#
-                do 
-                   '             '->putText;
-                   bin.getShort -> tmp;
-                   (if tmp=65535 then
-                       'Endmarker: ' -> putText; tmp->putInt; newline; newline;
-                       (* -1,NOTE: may not work on all machines*)
-                    else
-                       '('->put;
-                       tmp+accum->accum->puthex;
-                       ' '->put;
-                       '('->put;
-                       accum->putInt;
-                       ')'->put;
-                       ','->put;
-                       ' '->put;
-                       bin.getShort->astRef->putInt; ')\t'->putText;
-                       (if (plevel<>0) and (astRef<>0) then
-                           (if (astRef<>7500) and (astRef<>7492) then (* HACK *)
-                               ((fg[],i,astRef)->mps.astRefToAst,plevel)
-                                 ->prettyprint->screen.putLine;
-                           if);
-                        else
-                           newline;
-                       if);
-                       restart L 
-                   if)
-                #);
-        for)
+   newline;
+   newline;
+   '<DoPartsInfo>: (List of dopart info for each fragment)'->putLine;
+   newline;
+   (for i: FragmentCount repeat
+     'Number of doparts in '->putText;
+     fragnames[i][]->putText;
+     ' <DopartCount>: '->putText;
+     bin.getShort->noOfDoparts->putInt;
+     newline;
+     (for k: noOfDoparts repeat
+       '      dopart <AstIndex>: '->putText;
+       bin.getShort->putInt;
+       newline;
+       0->accum;
+       '             (offset,astRef)'->putline;
+       L:
+         (# 
+         do
+            '             '->putText;
+            bin.getShort->tmp;
+            (if tmp = 65535 then
+                'Endmarker: '->putText;
+                tmp->putInt;
+                newline;
+                newline;
+                (* -1,NOTE: may not work on all machines*)
+                
+             else
+                '('->put;
+                tmp+accum->accum->puthex;
+                ' '->put;
+                '('->put;
+                accum->putInt;
+                ')'->put;
+                ','->put;
+                ' '->put;
+                bin.getShort->astRef->putInt;
+                ')\t'->putText;
+                (if (plevel <> 0) and (astRef <> 0) then
+                    (if (astRef <> 7500) and (astRef <> 7492) then (* HACK *)
+                        ((fg[],i,astRef)->mps.astRefToAst,plevel)->prettyprint
+                          ->screen.putLine;
+                        
+                    if);
+                    
+                 else
+                    newline; 
+                if);
+                restart L
+            if)
+         #);
+       
+     for)
    for);
-   
-   'Descriptors:' -> putline;
+   'Descriptors:'->putline;
    0->inx;
    loop:
-     (#
-     do (if ((inx,groupName[])->groups.protoGroupToOd->od[]) <> NONE then
+     (# 
+     do
+        (if ((inx,groupName[])->groups.protoGroupToOd->od[]) <> none then
             inx+1->inx;
-            inx->screen.putInt; ':  ('->screen.putText;
+            inx->screen.putInt;
+            ':  ('->screen.putText;
             od.frag.name->screen.putText;
             ') '->screen.putText;
             od.father->a[];
-            (if a[]<>NONE then
-                (a[],plevel)->prettyprint->screen.putLine; newline;
+            (if a[] <> none then
+                (a[],plevel)->prettyprint->screen.putLine; newline; 
              else
-                (od[],plevel)->prettyprint->screen.putLine; newline;
+                (od[],plevel)->prettyprint->screen.putLine; newline; 
             if);
             restart loop;
+            
         if);
+        
      #);
-   
-   'Descriptor names:' -> putline;
+   'Descriptor names:'->putline;
    0->inx;
    loop:
-     (#
-     do (if ((inx,groupName[])->groups.protoGroupToOd->od[]) <> NONE then
+     (# 
+     do
+        (if ((inx,groupName[])->groups.protoGroupToOd->od[]) <> none then
             inx+1->inx;
-            inx->screen.putInt; ':  '->screen.putText;
+            inx->screen.putInt;
+            ':  '->screen.putText;
             od.getDescName->(nd[],kind);
-            (if nd[]<>NONE then
-                nd.getText->screen.putLine;
+            (if nd[] <> none then
+                nd.getText->screen.putLine; 
              else
-                od.frag.name->screen.putLine;
+                od.frag.name->screen.putLine; 
             if);
             restart loop;
+            
         if);
+        
      #);
    
-     
-   
-#)
+#)  
+
