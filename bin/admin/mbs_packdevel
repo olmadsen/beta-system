@@ -1,0 +1,94 @@
+#!/usr/local/bin/perl5 -s
+#-*-Perl-*-
+
+require "dirlist";
+
+$packboot = 1 if (defined $b);
+
+sub help {
+    print "Usage: $0 [-bcnuv] machinetype+\n\n";
+    print "-b   Pack bootpackage only.\n";
+    print "Give a number of machinetypes as argument.\n";
+}
+
+if ($#ARGV == -1) {
+    &help;
+    exit 1;
+}
+
+foreach $target (@ARGV) {
+    if (($target != "\L$target") or !LegalMach("\U$target")) {
+	print "$0: $target is not a valid machinetype.\n\n";
+	&help;
+	exit 1;
+    }
+}
+
+if ($packboot) {
+    print "Packing bootpack only\n";
+    @Dirs = ('bin', 'configuration', 'grammars', 'betarun');
+}
+
+foreach $dir (@Dirs) {
+    $basedir = "$betalib/$dir";
+    print "*** $basedir ***\n" if ($verbose);
+    foreach $curdir (&GetDirsRecursively($basedir)) {
+	$include = 0;
+	foreach $target (@ARGV) {
+	    if ($curdir =~ m/$target/) {		
+		$include = 1;
+	    }
+	}
+	if ($include == 0) {
+	    $include = 1;
+	    foreach $target (@ObjDirs) {
+		if ($curdir =~ /$target/) {		
+		    $include = 0;
+		}
+	    }
+	}
+	if ($include) {
+	    @files = &GetFilesInDirs($curdir);
+	    foreach $file (@files) {
+		if ($curdir =~ /grammars/) {
+		    $exludepat = '\.(lst|dump|asm|bat|job)$';
+                } else {
+		    $exludepat = '\.(ast[lL]?|lst|dump|asm|bat|job)$';
+		}
+		if ($file !~ /$exludepat/) {
+		    if ($file =~ /^$betalib\/(.*)$/) {
+			$file ="./" . $1;
+			print "$file\n" if ($verbose);
+			push (@filelist, $file);
+		    } else {
+			print "Unable to find BETALIB in $file\n";
+			exit 1;
+		    }
+		}
+	    }
+	}
+    }
+}
+print "Number of files found: $#filelist.  Packing, please be patient...\n";
+
+$outputfile = "devsystem-";
+foreach $target (@ARGV) {
+    $outputfile .= $target . "-";
+}
+chop $outputfile;
+Chdir($betalib);
+
+open (TAR, "|gtar -czf $outputfile.tar.gz -T -");
+for ($i = 0; $i < $#filelist; $i++) {
+    if (!(i & 127)) {
+	print int(100*$i/$#filelist), "%\r";
+    }
+    $file  = $filelist[$i];
+    print TAR "$file\n";
+}
+print "Package ready at $betalib/$outputfile.tar.gz\n";
+
+# system "tar -cf - @filelist | gzip > $outputfile.tar.gz";
+
+1;
+
