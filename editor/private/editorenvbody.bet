@@ -155,7 +155,7 @@ do
                       (if
                       (theGroupEditor.fg.name->mps.expandToFullPath->help.equal)
                        then
-                          (none ,'A group editor already exists','Alert')
+                          (none ,'A group editor already exists','doNewGroup')
                             ->UI.alertUser;
                           leave thisOperation
                       if)
@@ -258,7 +258,8 @@ do
                                          language[]->help.putText;
                                          ' not found'->help.putText;
                                          help[]->putLine;
-                                         (none ,help[],'Alert')->UI.alertUser;
+                                         (none ,help[],'doNewGroup')
+                                           ->UI.alertUser;
                                          leave thisOperation
                                       #);
                                     
@@ -362,9 +363,10 @@ do
                                  ' fragment group not created'->putLine;
                                  
                               else
-                                 (fg[],true)->extendedMarkAsChanged
-                                 (* this is done in order to
-                                  open the new group in ymer *)
+                                 (fg[],true)
+                                   ->extendedMarkAsChanged
+                                   (* this is done in order to
+                                    open the new group in ymer *)
                              if)
                           #)
                      #)
@@ -375,9 +377,10 @@ do
                      name[]->putText; ' fragment group not created'->putLine; 
                   else
                      (if fg.name->mps.expandToFullPath->fileWriteable then
-                         (fg[],true)->extendedMarkAsChanged
-                         (* this is done in order to
-                          open the new group in ymer *)
+                         (fg[],true)
+                           ->extendedMarkAsChanged
+                           (* this is done in order to
+                            open the new group in ymer *)
                      if)
                  if)
              if)
@@ -506,7 +509,8 @@ do
                             (if feedback then
                                 'Write access error: '->help;
                                 g.fullName->help.append;
-                                (none ,help[],'Alert')->UI.alertUser;
+                                (none ,help[],'extendedMarkAsChanged')
+                                  ->UI.alertUser;
                                 
                             if);
                             true->continue;
@@ -517,7 +521,9 @@ do
                          (# 
                          do
                             (if feedback then
-                                (none ,'Disk is full','Alert')->UI.alertUser; 
+                                (none ,'Disk is full','extendedMarkAsChanged')
+                                  ->UI.alertUser;
+                                
                             if);
                             true->continue;
                             false->status;
@@ -529,48 +535,49 @@ do
                             (if feedback then
                                 (none ,
                                  'Other error, probably disk full, please check',
-                                 'Alert')->UI.alertUser;
+                                 'extendedMarkAsChanged')->UI.alertUser;
                                 
                             if);
                             true->continue;
                             false->status;
                             
-                         #)        
+                         #)
                     #)
                #)
           #)
      exit status
      #);
+   dirWriteable: (# f: @file enter f.name exit f.entry.writeable #);
    extendedSaveBackup:
-     (# ext: ^text; g: ^astInterface.fragmentGroup; status: @boolean
+     (#
+        ext: ^text;
+        g: ^astInterface.fragmentGroup;
+        status: @boolean (* is now only used for autosaving *)
      enter (ext[],g[])
      do
-          (#
-             f: @file;
-             dirWriteable:
-               (# f: @file enter f.name exit f.entry.writeable #)
+          (# f: @file
           do
              true->status;
-             g.diskfileName->f.name;
+             ext[]->(g.diskfileName).copyAppend->f.name;
              (if (f.entry.path.head->dirWriteable)
               // true then
-                 (if f.entry.writeable
-                  // true then ext[]->g.saveBackup
+                 (if f.entry.writeable then
+                     ext[]->g.saveBackup
                   else
-                       (# t: @text
+                       (# msg: ^text
                        do
-                          'No write access to the file: "'->t;
-                          f.name->t.append;
-                          '"'->t.putline;
+                          'No write access to the file:\n'->msg[];
+                          f.name->msg.append;
+                          (none ,msg[],'Auto-save')->UI.alertUser;
                           false->status
                        #)
                  if)
               else
-                   (# t: @text
+                   (# msg: ^text
                    do
-                      'No write access to the directory: "'->t;
-                      f.entry.path.head->t.append;
-                      '"'->t.putline;
+                      'No write access to the directory:\n'->msg[];
+                      f.entry.path.head->msg.append;
+                      (none ,msg[],'Auto-save')->UI.alertUser;
                       false->status
                    #)
              if)
@@ -581,24 +588,138 @@ do
      (#
         fg: ^astInterface.fragmentGroup;
         textFile,tildeTextFile,msg: ^text;
-        f: @file
+        f,ftilde: @file;
+        OK: @boolean
      enter fg[]
      do
         fg.textFileName->textFile[]->f.name;
         textFile.copy->tildeTextFile[];
         '~'->tildeTextFile.append;
-        (if f.entry.exists
-         // true then
-            newLine;
-            'Renaming text file to: '->msg[];
-            tildeTextFile[]->msg.append;
-            doCommand
-              (# 
-              do
-                 msg[]->ymerCallBack.infoView;
-                 tildeTextFile[]->f.entry.rename;
-                 ymerCallBack.infoViewDone
-              #)
+        (if f.entry.exists then
+            tildeTextFile[]->ftilde.name;
+            (if ftilde.entry.exists then
+                (if ftilde.entry.writeable then
+                    true->OK
+                 else
+                    false->OK;
+                    'No write access to the file:\n'->msg[];
+                    tildeTextFile[]->msg.append;
+                    (none ,msg[],'Backup text file')->UI.alertUser
+                if)
+             else
+                (if f.entry.path.head->dirWriteable then
+                    true->OK
+                 else
+                    false->OK;
+                    'No write access to the directory:\n'->msg[];
+                    f.entry.path.head->msg.append;
+                    (none ,msg[],'Backup text file')->UI.alertUser
+                if)
+            if);
+            (if OK then
+                doCommand
+                  (# 
+                  do
+                     'Renaming text file to: '->msg[];
+                     tildeTextFile[]->msg.append;
+                     msg[]->ymerCallBack.infoView;
+                     tildeTextFile[]->f.entry.rename;
+                     ymerCallBack.infoViewDone
+                  #)
+            if)
+        if);
+        
+     #);
+   backupGroupFile:
+     (#
+        fg: ^astInterface.fragmentGroup;
+        groupFile,tildegroupFile,msg: ^text;
+        f,ftilde: @file;
+        OK: @boolean
+     enter fg[]
+     do
+        fg.diskFileName->groupFile[]->f.name;
+        groupFile.copy->tildegroupFile[];
+        '~'->tildegroupFile.append;
+        (if f.entry.exists then
+            tildegroupFile[]->ftilde.name;
+            (if ftilde.entry.exists then
+                (if ftilde.entry.writeable then
+                    true->OK
+                 else
+                    false->OK;
+                    'No write access to the file:\n'->msg[];
+                    tildegroupFile[]->msg.append;
+                    (none ,msg[],'Backup group file')->UI.alertUser
+                if)
+             else
+                (if f.entry.path.head->dirWriteable then
+                    true->OK
+                 else
+                    false->OK;
+                    'No write access to the directory:\n'->msg[];
+                    f.entry.path.head->msg.append;
+                    (none ,msg[],'Backup group file')->UI.alertUser
+                if)
+            if);
+            (if OK then
+                doCommand
+                  (# 
+                  do
+                     'Renaming group file to: '->msg[];
+                     tildegroupFile[]->msg.append;
+                     msg[]->ymerCallBack.infoView;
+                     tildegroupFile[]->f.entry.rename;
+                     ymerCallBack.infoViewDone
+                  #)
+            if)
+        if);
+        
+     #);
+   restoreGroupFile:
+     (#
+        fg: ^astInterface.fragmentGroup;
+        groupFile,tildegroupFile,msg: ^text;
+        f,ftilde: @file;
+        OK: @boolean
+     enter fg[]
+     do
+        fg.diskFileName->groupFile[];
+        groupFile.copy->tildegroupFile[];
+        '~'->tildegroupFile.append;
+        tildeGroupFile[]->ftilde.name;
+        (if ftilde.entry.exists then
+            groupFile[]->f.name;
+            (if f.entry.exists then
+                (if f.entry.writeable then
+                    true->OK
+                 else
+                    false->OK;
+                    'No write access to the file:\n'->msg[];
+                    groupFile[]->msg.append;
+                    (none ,msg[],'Restore group file')->UI.alertUser
+                if)
+             else
+                (if ftilde.entry.path.head->dirWriteable then
+                    true->OK
+                 else
+                    false->OK;
+                    'No write access to the directory:\n'->msg[];
+                    ftilde.entry.path.head->msg.append;
+                    (none ,msg[],'Restore group file')->UI.alertUser
+                if)
+            if);
+            (if OK then
+                doCommand
+                  (# 
+                  do
+                     'Renaming tilde group file to: '->msg[];
+                     groupFile[]->msg.append;
+                     msg[]->ymerCallBack.infoView;
+                     groupFile[]->f.entry.rename;
+                     ymerCallBack.infoViewDone
+                  #)
+            if)
         if);
         
      #);
@@ -698,9 +819,20 @@ do
         fg: ^astInterface.fragmentGroup;
         writeAccess: @boolean;
         f: @file;
-        path,name: ^text
+        path,name,msg: ^text
      enter fg[]
-     do fg.diskFileName->f.name; (f.entry.writeable)->writeAccess
+     do
+        fg.diskFileName->f.name;
+        (f.entry.writeable)->writeAccess;
+        (if writeAccess then
+            fg.textFileName->f.name;
+            (f.entry.writeable)->writeAccess;
+            (if not writeAccess then
+                'No write access to the file:\n'->msg[];
+                f.name->msg.append;
+                (none ,msg[],'Check write access')->UI.alertUser
+            if)
+        if)
      exit writeAccess
      #);
    astToProps:
@@ -866,9 +998,11 @@ do
                ' fragmentgroup not created'->putLine;
                
             else
-               (fg[],true)->editorenvPrivate.extendedMarkAsChanged
-               (* this is done in order to
-                open the new group in ymer *)
+               (fg[],true)
+                 ->
+                   editorenvPrivate.extendedMarkAsChanged
+                   (* this is done in order to
+                    open the new group in ymer *)
            if)
         else
            (none ,'Error in path','New...')->UI.alertUser
@@ -1056,31 +1190,51 @@ do
 do   
 
 -- editorenvMakeNewTextFile: Descriptor --
-(# textFile,msg: ^text; f: @file
+(# textFile,msg: ^text; f,fast: @file; OK: @boolean
 do
-   fg[]->editorenvPrivate.backupTextFile;
-   'Updating textfile: '->msg[];
-   fg.textFileName->textFile[]->msg.append;
-   '...'->msg.append;
-   msg[]->ymerCallBack.infoView;
-   setWaitCursor;
-   (if fg.fragmentList[] <> none then
-       (mps[],fg[],none ,textFile[])
-         ->prettyprintFragment
-           (# (*width::  (#  do 100->value #);*)
-              showSemanticErrors:: falseObject
-           #);
-       
+   fg.textFileName->textFile[]->f.name;
+   fg.diskFileName->fast.name;
+   (if f.entry.exists then (* this check should be in prettyprint fragment?? *)
+       (if f.entry.writeable then
+           true->OK
+        else
+           false->OK;
+           'No write access to the file:\n'->msg[];
+           textFile[]->msg.append;
+           (none ,msg[],'Make new text file')->UI.alertUser
+       if)
     else
-       (mps[],fg[],none ,textFile[])
-         ->prettyprintFragment
-           (# (*width::  (#  do 100->value #);*)
-              onlyProperties::< trueObject; showSemanticErrors::< falseObject
-           #)
+       (if f.entry.path.head->editorenvPrivate.dirWriteable then
+           true->OK
+        else
+           false->OK;
+           'No write access to the directory:\n'->msg[];
+           f.entry.path.head->msg.append;
+           (none ,msg[],'Make new text file')->UI.alertUser
+       if)
    if);
-   textfile[]->f.name;
-   (textfile,fg.modtime-120)->setEntryModtime;
-   ymerCallBack.infoViewDone
+   (if OK then
+       fg[]->editorenvPrivate.backupTextFile;
+       'Updating textfile: '->msg[];
+       fg.textFileName->textFile[]->msg.append;
+       '...'->msg.append;
+       msg[]->ymerCallBack.infoView;
+       setWaitCursor;
+       (if fg.fragmentList[] <> none then
+           (mps[],fg[],none ,textFile[])
+             ->prettyprintFragment (# showSemanticErrors:: falseObject #);
+           
+        else
+           (mps[],fg[],none ,textFile[])
+             ->prettyprintFragment
+               (#
+                  onlyProperties::< trueObject;
+                  showSemanticErrors::< falseObject
+               #)
+       if);
+       (textfile,fg.modtime-120)->setEntryModtime;
+       ymerCallBack.infoViewDone
+   if)
 #)  
 
 -- editorenvCreateGroupEditor: DoPart --

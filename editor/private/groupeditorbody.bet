@@ -86,7 +86,10 @@ do
                             (#
                                ok::< 
                                  (# 
-                                 do (true,true)->save; true->value; cleanup
+                                 do
+                                    (if (true,true)->save then
+                                        true->value; cleanup
+                                    if)
                                  #);
                                notOK::< 
                                  (# 
@@ -140,7 +143,7 @@ do
      (#
         f: @file;
         ff: ^astInterface.fragmentForm;
-        textFile,tildeTextFile,gname: ^text;
+        textFile,tildeTextFile,gname,msg: ^text;
         OKtoSave: @boolean;
         doSave:
           (# 
@@ -154,14 +157,15 @@ do
                   (* only necessary if not AST GC is performed *)
                       fg[]->editorenvprivate.recomputeSLOTchain
                   if);
-                  (if not ((fg[],true)->editorenvPrivate.extendedMarkAsChanged)
-                   then
+                  fg[]->editorenvPrivate.backupGroupFile;
+                  (fg[],true)->editorenvPrivate.extendedMarkAsChanged->OK;
+                  (if not OK then
+                      fg[]->editorenvPrivate.restoreGroupFile;
                       leave thisOperation
                   if);
                   fg[]->ymerCallBack.onGroupSaved;
                   resetGroupTouch;
                   fg[]->editorenvPrivate.deleteAutoSaveFile;
-                  ('~',fg[])->editorenvPrivate.extendedSaveBackup;
                   fg[]->editorenvPrivate.getGrammarName->gname[];
                   (if gname[] <> none then
                       (if ('beta'->gname.equal) then
@@ -219,6 +223,36 @@ do
                  #);*)
                 
             if);
+            fg.textFileName->textFile[]->f.name;
+            (if f.entry.exists then
+            (* this check should be in prettyprint fragment?? *)
+                (if f.entry.modtime > fg.modtime then
+                    'The file '->msg[];
+                    textFile[]->msg.putLine;
+                    'has been changed by another tool!\n\n'->msg.append;
+                    'Overwrite?'->msg.append;
+                    (none ,'Save',msg[])
+                      ->UI.promptForBoolean
+                        (#
+                           ok::<  (#  do true->OKtoSave #);
+                           notOK::< 
+                             (# 
+                             do
+                                false->OKtoSave;
+                                resetGroupTouch;
+                                (none ,
+                                 'Please leave the editor immediately!\nand then start it again',
+                                 'Save')->UI.alertUser
+                             #);
+                           cancel::<  (#  do false->OKtoSave #);
+                           
+                        #)
+                 else
+                    true->OKtoSave
+                if)
+             else
+                true->OKtoSave
+            if);
             (if OKtoSave then
                 doCommand
                   (# 
@@ -227,7 +261,9 @@ do
                      doSave;
                      true->groupSaved;
                      ymerCallBack.infoViewDone;
-                     (if doUpdateTextFile then fg[]->makeNewTextFile if);
+                     (if OK and doUpdateTextFile then
+                         fg[]->makeNewTextFile
+                     if);
                      
                   #)
             if);
