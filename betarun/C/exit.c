@@ -282,11 +282,14 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 	StackEnd++;  /* Two below */
 	break;
       case StopCalledErr:
-	/* Not cought by valhalla - no need to worry about thePC */
-	thePC = 0;
 	/* betaenv.stop   -> FailureExit -> BetaError */
 	/* betaenvbody.bet   Misc.{c,run}   exit.c    */
 	StackEnd = BetaStackTop;
+	/* BetaStackTop was written just before calling FailureExit,
+	 * i.e. the instruction pointer can be found one up
+	 * on the stack (the call instruction puts it there).
+	 */
+	thePC = *(long**)(StackEnd-1);
 	/* edx, edi, ebp, esi were pushed before calling FailureExit */
 	StackEnd += 4;
 	break;

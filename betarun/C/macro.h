@@ -283,6 +283,14 @@ do {                               \
 
 #define BETA_DATA1_ADDR &BETA_DATA
 
+/* FIXME: isProto could be defined to IsPrototypeOfProcess
+ * in DEBUG runtime system.
+ * This is too expensive in non-debug.
+ * But isProto is not used in non-debug situations a lot of places,
+ * apparently only in sparc stack traversal.
+ * These should be eliminated (i.e. isProto only defined in RTDEBUG).
+ */
+
 /* cannot say anything about data segments order in general.
  * on unix, probably _edata and _end could be used.
  */
