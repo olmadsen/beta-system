@@ -1,7 +1,7 @@
 ORIGIN '../valhallaapplication';
 INCLUDE '~beta/compiler/GENERATOR/disass' 
 '~beta/editor/codeeditor'
-'processinterfacebody';
+'processinterfacebody' '~beta/sysutils/errorscreen';
 LIB_ITEM 'valhalla';
 -- ValhallaInitCompiler: Descriptor --
 (# initialised,error: @boolean; exename: ^text; tmp: ^text; 
@@ -51,10 +51,34 @@ do
            
        if);
        true->initialised
-   if)
+   if);
+  
 #)  
 
+-- ValhallaInitCodeEditor:dopart --
+(* setup edit menu *)
+do (if first then 
+    else
+       &vcem[]->cem[];
+       cem.open;
+       cem[]->main.mainmenubar.append;
+       true->first
+   if)
+   
 --valhallalib:attributes--
+constructUniqueID:
+  (#
+     T: @Text;
+     timeSec,timeMiliSec: @integer;
+     timeInMiliSec: @real
+  do
+     preciseTime->(timeSec,timeMiliSec);
+     timeSec->timeInMiliSec;
+     timeInMiliSec*1000000->timeInMiliSec;
+     timeInMiliSec+timeMiliSec->timeInMiliSec;
+     timeInMiliSec->t.putReal (#  do 0->precision #)
+  exit t.copy
+  #);
 Evaluate:
   (#
      originFGname,evaluatorCode,dynamicFGname: ^text;
@@ -64,19 +88,6 @@ Evaluate:
      im: ^imagePair;
      error: @boolean;
      evalobjadr:@integer;     
-     constructUniqueID:
-       (#
-          T: @Text;
-          timeSec,timeMiliSec: @integer;
-          timeInMiliSec: @real
-       do
-          preciseTime->(timeSec,timeMiliSec);
-          timeSec->timeInMiliSec;
-          timeInMiliSec*1000000->timeInMiliSec;
-          timeInMiliSec+timeMiliSec->timeInMiliSec;
-          timeInMiliSec->t.putReal (#  do 0->precision #)
-       exit t.copy
-       #);
      aPTI: ^debuggee.prototypeInfo;
      anOD: ^MPS.BETACFL.objectDescriptor;
      anIndex: @MPS.AST.index;
@@ -542,7 +553,7 @@ Evaluate:
   #) 
    
 -- debuggeeCurObj: DoPart --
-do
+do InitCodeEditor;
    (if curObjStatus then
        (debuggee.currentRemoteBetaObject,FALSE)
          -> (*FGC, gui.*) main.OpenMoveableObjectView
@@ -563,6 +574,9 @@ do
                        * output 
                        *)
                #); 
+             onEvaluatorOpened::
+               (# do cfe[]->InitCodeEditor.currentCfe[]
+               #);
               onFindAttribute::
                (# eval:@evaluate 
                     (# ErrorDuringCompilation::(# do (owner[],'Unable to find Attribute','Error')->gui.alertUser #)
@@ -600,29 +614,72 @@ do
                       (if evalObject[]<>none then evalObject[]->newObjectMoveable if)
                   if);
                #);
+             onOpenCodeView::
+               (# edenv: ^main.editorEnv;
+                  labeltext:@text;
+               do (*FGC, gui.*)
+                  sources.edenv[]->edenv[];
+                  (cast.frag[],cast.frag.root[],cast[],scv.contents[],
+                  (father[],cast.frag.father,true)->edenv.findOrCreateGroupEditor)
+                    ->edenv.findOrCreateFormEditor;
+                  'Objectcode:'->labeltext.append;
+                  cast.frag.name->labeltext.append;
+                  labeltext[]->scv.label;
+                   cast[]->scv.contents.select 
+               #);
              contentsType::< 
                (#
                   evaluatorType::< 
                     (# 
                        open::< 
-                         (#
+                         (# stderr:@errorscreen;
                             T: @styledText;
                             track: @trackMouse;
                             cursorPos: @integer;
-                         do
-                            '(#\ndo \n#)'->T.putText;
-                            T[]->evaluator.editor.contents.contents;
-                            evaluator.editor.contents.all
-                              ->evaluator.editor.contents.scanText
+                            FG: ^MPS.AST.fragmentGroup;
+                            FF: ^MPS.ast.fragmentform;
+                            anOD: ^MPS.BETACFL.objectDescriptor;
+                            anMP: ^MPS.BETACFL.mainPart;
+                            anAP: ^MPS.BETACFL.actionpart;
+                            anIMPS: ^MPS.BETACFL.Imperatives;
+                            anDP: ^MPS.BETACFL.dopart;
+                            cast: ^astInterface.ast;
+                            exp:^astInterface.expanded;
+                            ge:^object; (* groupeditor *)
+                         do 
+                            (editor[],constructUniqueID,false)->sources.edenv.newBetaLibrary->fg[];
+                            
+                            (this(evaluatorType)[],fg[],true)->sources.edenv.findOrCreateGroupEditor->ge[];
+                            
+                            fg.scan
                             (# 
-                            do
-                               (if ch = 'd' then
-                                   start+3->cursorPos
-                               if)
+                            do current[]->ff[]
                             #);
-                            (cursorPos,cursorPos)
-                              ->evaluator.editor.contents.selection;
-                            evaluator.editor[]->main.target;
+                            
+                            ff.root[]->exp[];
+                            4->exp.suffixWalkForProd 
+                            (# do current[]->anOD[] #);
+                            
+                            (8,ff[])->mps.BetaCFL.newOptional->anOD.putPrefixOpt;
+                            
+                            anOD.getMainpart->anMP[];
+                            (*remove attributes decl opt. *)
+                            (6,ff[])->mps.betacfl.newOptional->anMp.putAttributes;
+                            
+                            anMP.getActionpart->anAP[];
+                            (* remove enter/exit and insert dopart *)
+                            (30,ff[])->mps.BetaCfl.newOptional->anAP.putEnterPartOpt;
+                            
+                            (* (31,ff[])->mps.BetaCfl.newAst->anDP[]->anAP.putDopartOpt; *)
+                            (* 
+                             * (33,ff[])->mps.BetaCfl.newAst->anIMPS[]->anDP.putImperatives;  
+                             * (42,ff[])->mps.betacfl.newAst->anImps.append; 
+                             *)
+                            (32,ff[])->mps.BetaCfl.newOptional->anAP.putExitPartOpt; 
+                             
+                            
+                            (ff[],anOD[],none,editor[],ge[])->sources.edenv.findOrCreateFormEditor
+                             
                          #)
                     #)
                #)
