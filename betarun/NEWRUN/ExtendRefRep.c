@@ -29,7 +29,7 @@ void ExtRR(Object *theObj,
     push(theObj);
     push(theRep);
     size = RefRepSize(newRange);
-    if (size>IOAMAXSIZE){
+    if (newRange>LARGE_REP_SIZE || size>IOAMAXSIZE){
       DEBUG_AOA(fprintf(output, "ExtRR allocates in AOA\n"));
       newRep = (RefRep *)AOAcalloc(size);
       DEBUG_AOA(if (!newRep) fprintf(output, "AOAcalloc failed\n"));
