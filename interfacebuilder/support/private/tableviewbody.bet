@@ -94,6 +94,8 @@ do theColumn.private.pos[] -> private.columns.scanFrom
 	NONE -> theColumn.private.pos[];
 	0 -> theColumn.private.index;
 
+
+
 -- mainColumnTypeOnDrawTitle: doPart --
 do (# box: @rectangle;
 		mainColumnIndent: (# exit 25 #);
@@ -114,21 +116,26 @@ do (# box: @rectangle;
 -- mainColumnTypeOnDrawItem: doPart --
 do (# box, iconBox: @rectangle;
 		icon: ^pixmap;
-		mainColumnIndent: (# exit 25 #);
+		expLeft, expTop: @integer;
 	do bounds -> box;
-		(if theTableItem.selected then
-			hiliteColor -> g.pen.foreGroundColor;
-			box -> g.fillRect;
+		(if theTableItem.expander then
+			box.left + 5 -> expLeft;
+			box.top + (rowHeight - 12) div 2 -> expTop;
+			(if theTableItem.private.expanded then
+				(expLeft, expTop, g.expanderEnabledDown) -> g.drawExpander;
+			else
+				(expLeft, expTop, g.expanderEnabledRight) -> g.drawExpander;
+			if);
 		if);
 		theTableItem.icon -> icon[];
 		(if icon[] <> NONE then
 			box -> iconBox;
-			iconBox.left + mainColumnIndent - 5 -> iconBox.right;
-			(icon[], iconBox, g. alignmentRight) -> g.drawCenteredIcon;
+			iconBox.left + theTableItem.iconIndent -> iconBox.left;
+			(icon[], iconBox, g. alignmentLeft) -> g.drawCenteredIcon;
 		if);
 		(if data[] <> NONE then
 			g.black -> g.pen.foreGroundColor;
-			box.left + mainColumnIndent -> box.left;
+			box.left + theTableItem.textIndent -> box.left;
 			(this(tableView).private.bodyStyle[],
 			data[], box, g.alignmentLeft) -> g.drawCenteredText;
 		if);
@@ -217,20 +224,55 @@ do value.copy -> private.data[theColumn.private.index][];
 -- tableItemGetColumnText: doPart --
 do private.data[theColumn.private.index].copy -> value[];
 
+-- tableItemSetTextIndent: doPart --
+do value -> private.theTextIndent;
+
+-- tableItemGetTextIndent: doPart --
+do private.theTextIndent -> value;
+
+-- tableItemSetIconIndent: doPart --
+do value -> private.theIconIndent;
+
+-- tableItemGetIconIndent: doPart --
+do private.theIconIndent -> value;
+
+-- tableItemSetExpander: doPart --
+do value -> private.isExpander;
+
+-- tableItemGetExpander: doPart --
+do private.isExpander -> value;
+
+
 -- tableItemSelected: doPart --
 do private.selected -> value;
 
 -- tableItemOpen: doPart --
 do this(tableView).private.columns.size -> private.data.new;
+	defaultIconIndent -> private.theIconIndent;
+	defaultTextIndent -> private.theTextIndent;
 	INNER;
 
 -- tableItemClose: doPart --
 do INNER;
 
+-- tableItemLib: attributes --
+
+toggle:
+	(#
+	do not private.expanded -> private.expanded;
+		(if private.expanded then
+			theEventHandler.onExpand;
+		else
+			theEventHandler.onColapse;
+		if);
+		updateMainView;
+	#);
 -- tableItemPrivate: descriptor --
 (# data: [1]^text;	
 	theIcon: ^pixmap;
-	selected: @boolean;
+	selected, isExpander, expanded: @boolean;
+	theIconIndent: @integer;
+	theTextIndent: @integer;
 	pos: ^tableItemList.theCellType;
 #)
 
@@ -388,6 +430,10 @@ do layout;
 	INNER;
 
 -- tableViewLib: attributes --
+titleHeight: (# exit 20 #);
+scrollbarWidth: (# exit 16 #);
+defaultTextIndent: (# exit 45 #);
+defaultIconIndent: (# exit 25 #);
 
 sortTableView:
 	(# sorter: @sequence
@@ -474,8 +520,7 @@ tableItemList: list
 	(# theCellType:: (# #);
 		element:: tableItemType;
 	#);
-titleHeight: (# exit 20 #);
-scrollbarWidth: (# exit 16 #);
+
 layout:
 	(# width, height: @integer;
 	do size -> (width, height);
@@ -492,18 +537,35 @@ layout:
 tableItemClick:
 	(# theEvent: ^windowItem.eventHandler.mouseDown;
 		theTableItem: ^tableItemType;
-	enter (theEvent[], theTableItem[])
-	do (if theTableItem.selected then
-			(if theEvent.shiftKey then
-				theTableItem[] -> selection.remove;
-			if);
+		bounds: ^rectangle;
+		getExpanderBox:
+			(# bounds: ^rectangle;
+				box: @rectangle;
+			enter	bounds[]
+			do bounds.left + 5 -> box.left;
+				bounds.top + (rowHeight - 12) div 2 -> box.top;
+				(12, 12) -> box.size;
+			exit box
+			#);
+		box: @rectangle;
+	enter (theEvent[], theTableItem[], bounds[])
+	do bounds[] -> getExpanderBox -> box;
+		(if theEvent.localPosition -> box.containsPoint then
+			theTableItem.toggle;
 		else
-			(if theEvent.shiftKey then
-				theTableItem[] -> selection.add;
+			(if theTableItem.selected then
+				(if theEvent.shiftKey then
+					theTableItem[] -> selection.remove;
+				if);
 			else
-				theTableItem[] -> selection.set;
+				(if theEvent.shiftKey then
+					theTableItem[] -> selection.add;
+				else
+					theTableItem[] -> selection.set;
+				if);
 			if);
 		if);
+
 	#);
 tableViewClick:
 	(# theEvent: ^windowItem.eventHandler.mouseDown
@@ -652,6 +714,7 @@ rowdist: (# exit 1 #);
 						(# r: @rectangle;
 							x, y: @integer;
 							item: ^tableItemType;
+							width, height: @integer;
 						do - yOffset -> r.top;
 							localPosition -> (x, y);
 							search: topItem.private.pos[] -> tableitems.scanFrom
@@ -665,7 +728,10 @@ rowdist: (# exit 1 #);
 								r.bottom + 1 -> r.top;
 							#);
 							(if item[] <> NONE then
-								(this(onMouseDown)[], item[]) -> tableItemClick;
+								size -> (width, height);
+								-xOffset ->	r.left;
+								r.left + width -> r.right;
+								(this(onMouseDown)[], item[], r[]) -> tableItemClick;
 							else
 								this(onMouseDown)[] -> tableViewClick;
 							if);
