@@ -2,7 +2,7 @@
  * BETA RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * crtsdep.h
  * by Ole Lehrmann Madsen, Peter Andersen and Peter Ryberg Jensen
- * $Id: crtsdep.h,v 1.9 1995-06-21 14:17:33 beta Exp $
+ * $Id: crtsdep.h,v 1.10 1995-06-26 13:44:02 beta Exp $
  */
 
 #define JUMPSTACK 1
@@ -102,6 +102,26 @@ extern struct ValRep *		AlloVR4(struct Object* theObj,
 extern struct ValRep *		AlloVR8(struct Object* theObj, 
 					unsigned offset, 
 					int range);
+extern struct ObjectRep *AlloORG(struct Object *iOrigin,
+				  struct Object *theObj,
+				  unsigned offset, /* in bytes */
+				  struct ProtoType *proto,
+				  int range);
+extern struct ObjectRep *AlloORGC(struct Object *iOrigin,
+				   struct Object *theObj,
+				   unsigned offset, /* in bytes */
+				   struct ProtoType *proto,
+				   int range);
+extern struct ObjectRep *AlloORR(struct Object *iOrigin,
+				  struct Object *theObj,
+				  unsigned offset, /* in bytes */
+				  struct ProtoType *proto,
+				  int range);
+extern struct ObjectRep *AlloORRC(struct Object *iOrigin,
+				   struct Object *theObj,
+				   unsigned offset, /* in bytes */
+				   struct ProtoType *proto,
+				   int range);
 extern void 			CopyT(char *asciz, 
 				      struct Item *theItem,
 				      unsigned offset);

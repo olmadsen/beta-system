@@ -409,6 +409,26 @@ extern struct ValRep *		AlloVR4(struct Object* theObj,
 extern struct ValRep *		AlloVR8(struct Object* theObj, 
 					unsigned offset, 
 					int range);
+extern struct ObjectRep *AlloORG(struct Object *iOrigin,
+				 struct Object *theObj,
+				 unsigned offset, /* in bytes */
+				 struct ProtoType *proto,
+				 int range);
+extern struct ObjectRep *AlloORGC(struct Object *iOrigin,
+				  struct Object *theObj,
+				  unsigned offset, /* in bytes */
+				  struct ProtoType *proto,
+				  int range);
+extern struct ObjectRep *AlloORR(struct Object *iOrigin,
+				 struct Object *theObj,
+				 unsigned offset, /* in bytes */
+				 struct ProtoType *proto,
+				 int range);
+extern struct ObjectRep *AlloORRC(struct Object *iOrigin,
+				  struct Object *theObj,
+				  unsigned offset, /* in bytes */
+				  struct ProtoType *proto,
+				  int range);
 extern void 			CopyT(char *asciz, 
 				      struct Item *theItem,
 				      unsigned offset);

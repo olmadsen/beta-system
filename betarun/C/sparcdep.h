@@ -303,36 +303,62 @@ static inline void USE()
   x=(int)retAddress;
 }
 
-extern ref(RefRep) CAlloRR(struct Object *theObj,
-			   int i1,
-			   unsigned offset, /* in bytes */
-			   int i3,
-			   int i4,
-			   /*unsigned*/ int range);
-extern ref(ValRep) CAlloVR1(struct Object *theObj,
-			    int i1,
-			    unsigned offset, /* in bytes */
-			    int i3,
-			    int i4,
-			    /*unsigned*/ int range);
-extern ref(ValRep) CAlloVR2(struct Object *theObj,
-			    int i1,
-			    unsigned offset, /* in bytes */
-			    int i3,
-			    int i4,
-			    /*unsigned*/ int range);
-extern ref(ValRep) CAlloVR4(struct Object *theObj,
-			    int i1,
-			    unsigned offset, /* in bytes */
-			    int i3,
-			    int i4,
-			    /*unsigned*/ int range);
-extern ref(ValRep) CAlloVR8(struct Object *theObj,
-			    int i1,
-			    unsigned offset, /* in bytes */
-			    int i3,
-			    int i4,
-			    /*unsigned*/ int range);
+extern struct RefRep *CAlloRR(struct Object *theObj,
+			      int i1,
+			      unsigned offset, /* in bytes */
+			      int i3,
+			      int i4,
+			      /*unsigned*/ int range
+			      );
+extern struct ValRep *CAlloVR1(struct Object *theObj,
+			       int i1,
+			       unsigned offset, /* in bytes */
+			       int i3,
+			       int i4,
+			       /*unsigned*/ int range);
+extern struct ValRep *CAlloVR2(struct Object *theObj,
+			       int i1,
+			       unsigned offset, /* in bytes */
+			       int i3,
+			       int i4,
+			       /*unsigned*/ int range);
+extern struct ValRep *CAlloVR4(struct Object *theObj,
+			       int i1,
+			       unsigned offset, /* in bytes */
+			       int i3,
+			       int i4,
+			       /*unsigned*/ int range);
+extern struct ValRep *CAlloVR8(struct Object *theObj,
+			       int i1,
+			       unsigned offset, /* in bytes */
+			       int i3,
+			       int i4,
+			       /*unsigned*/ int range);
+extern struct ObjectRep *CAlloORG(struct Object *iOrigin,
+				  struct Object *theObj,
+				  unsigned offset, /* in bytes */
+				  struct ProtoType *proto,
+				  int i4,
+				  int range);
+extern struct ObjectRep *CAlloORGC(struct Object *iOrigin,
+				   struct Object *theObj,
+				   unsigned offset, /* in bytes */
+				   struct ProtoType *proto,
+				   int i4,
+				   int range);
+extern struct ObjectRep *CAlloORR(struct Object *iOrigin,
+				  struct Object *theObj,
+				  unsigned offset, /* in bytes */
+				  struct ProtoType *proto,
+				  int i4,
+				  int range);
+extern struct ObjectRep *CAlloORRC(struct Object *iOrigin,
+				   struct Object *theObj,
+				   unsigned offset, /* in bytes */
+				   struct ProtoType *proto,
+				   int i4,
+				   int range);
+
 extern void CCopyT(int i0,
 		   ref(Item) theItem,
 		   unsigned offset, /* i ints */
