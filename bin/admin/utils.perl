@@ -131,23 +131,28 @@ sub which {
 	print "  Trying: $dir/$cmd - " if($verbose);
 	if (-f "$dir/$cmd"){
 	    print "yep, that's it!\n" if($verbose);
-	    return "$dir/$cmd";
+	    $cmd = "$dir/$cmd";
+	    break;
 	}
 	if ($OS eq 'WIN'){
 	    print "no.\n  Trying: $dir\\$cmd.bat - " if($verbose);
-	    if (-f "$dir\\$cmd.bat"){
+	    if (-f "$dir/$cmd.bat"){
 		print "yep, that's it!\n" if($verbose);
-		return "$dir\\$cmd.bat";
+		$cmd = "$dir/$cmd.bat";
+		break;
 	    }
-	    print "no.\n  Trying: $dir\\$cmd.exe - " if($verbose);
-	    if (-f "$dir\\$cmd.exe"){
+	    print "no.\n  Trying: $dir/$cmd.exe - " if($verbose);
+	    if (-f "$dir/$cmd.exe"){
 		print "yep, that's it!\n" if($verbose);
-		return "$dir\\$cmd.exe";
+		$cmd = "$dir/$cmd.exe";
+		break;
 	    }
+	}
+	if ($OS eq 'WIN'){
+	    $cmd =~ s#/#\\#g;
 	}
 	print "no.\n" if($verbose);
     }
-    print "Not found.\n" if($verbose);
     return "$cmd";
 }
 
@@ -158,7 +163,7 @@ sub execute_script {
     } elsif ($OS eq 'WIN'){
 	my(@cmd) = split(' ', $cmd);
 	my($comspec) = $ENV{'ComSpec'};
-	@cmd[0] = &which(@cmd[0]);
+	#@cmd[0] = &which(@cmd[0]);
 	print "$comspec /C @cmd\n";
 	system "$comspec /C @cmd";
     } else {
