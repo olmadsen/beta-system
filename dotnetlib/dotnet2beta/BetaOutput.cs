@@ -240,13 +240,13 @@ namespace beta.converter
 	    bool use_wrapper_super = false;
 	    switch (className){
 	    case "TypeCode":
+	    case "Type":
 	      // Special cases which causes circularity in INCLUDE */
 	      use_wrapper_super = true;
 	      break;
 	    }
 	    putln("ORIGIN '~beta/basiclib/betaenv';");
 	    if ((superClass != null) && !superClass.Equals("Object")) {
-	      if (superNs != null) superNs = superNs.Replace('/', '.');
 	      if (use_wrapper_super){
 		// Include wrapper version of superclass
 		putln("INCLUDE '~beta/dotnetlib/" + superNs + "/" + "_" + superClass + "' (* Cannot use non-wrapper *);");

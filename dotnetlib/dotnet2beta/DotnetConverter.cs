@@ -295,6 +295,7 @@ namespace beta.converter
 	    // Scan methods
 	    MethodInfo[] methlist;
 	    methlist = cls.GetMethods(BindingFlags.Instance
+				      | BindingFlags.Static 
 				      | BindingFlags.Public
 				      | BindingFlags.DeclaredOnly);
 	    for (int i = 0; i < methlist.Length; i++){
@@ -512,7 +513,7 @@ namespace beta.converter
 	    String name = type.FullName;
 	    String result = _mapType(name, doIncludes);
 	    if (trace_type){
-	      Console.Error.Write("maptype: " + name + " -> " + result + "\n");
+	      Console.Error.Write("maptype: " + name + " -> " + result + ((doIncludes)?", include":", no include") + "\n");
 	    }
 	    return result;
 	  }
