@@ -45,6 +45,7 @@ do
 do
      (#
         position: ^groupEditorList.theCellType;
+        OKtoClose,askSave: @boolean;
         help: ^text;
         cleanUp:
           (# 
@@ -53,7 +54,8 @@ do
              formEditorList.scan
                (#  do current.closeForm #);
              (* (if THIS(GroupEditor).fgh.groupEditors.size = 0 then fg.close if);*)
-             position[]->groupEditorList.delete
+             position[]->groupEditorList.delete;
+             fg[]->ymerCallBack.onGroupClosed
           #);
         test:
           (# 
@@ -73,36 +75,43 @@ do
                 showEditors;
                 
             if);
-            (if (touched > 0) and not isAfrejaEditor then
-                'Save changes to '->help[];
-                fg.name->help.putText;
-                '?'->help.put;
-                (*  help[]->putline;*)
-                (none ,'Close group',help[])
-                  ->UI.promptForBoolean
-                    (#
-                       ok::< 
-                         (#  do (true,true)->save; true->value; cleanup #);
-                       notOK::< 
-                         (# 
-                         do
-                            true->value;
-                            fg[]->editorenvPrivate.deleteAutoSaveFile;
-                            cleanUp
-                         #);
-                       cancel::<  (#  do false->value #);
-                       
+            fg[]->ymerCallBack.onAboutToCloseGroup->(OKtoClose,askSave); 
+            (if OKtoClose then
+                (if (touched > 0) and not isAfrejaEditor then
+                    (if askSave then
+                        'Save changes to '->help[];
+                        fg.name->help.putText;
+                        '?'->help.put;
+                        (*  help[]->putline;*)
+                        (none ,'Close group',help[])
+                          ->UI.promptForBoolean
+                        (#
+                           ok::< 
+                             (#  do (true,true)->save; true->value; cleanup #);
+                           notOK::< 
+                             (# 
+                             do
+                                true->value;
+                                fg[]->editorenvPrivate.deleteAutoSaveFile;
+                                cleanUp
+                             #);
+                           cancel::<  (#  do false->value #);
+                           
+                        #)
+                     else (true,true)->save; true->value; cleanup
+                    if)
+                 else
+                    doCommand
+                    (# 
+                    do
+                       (if needToUpdateTextFile then fg[]->makeNewTextfile if);
+                       cleanUp;
+                       true->value
                     #)
+                if);
              else
-                doCommand
-                  (# 
-                  do
-                     (if needToUpdateTextFile then fg[]->makeNewTextfile if);
-                     cleanUp;
-                     true->value
-                  #)
-            if);
-            
+                false->value
+            if)
          else
             (if trace[2] then
                 'GroupEditor.CloseGroup: already closed!!!'->putText;
@@ -145,6 +154,7 @@ do
                    then
                       leave thisOperation
                   if);
+                  fg[]->ymerCallBack.onGroupSaved;
                   resetGroupTouch;
                   fg[]->editorenvPrivate.deleteAutoSaveFile;
                   ('~',fg[])->editorenvPrivate.extendedSaveBackup;
@@ -485,7 +495,43 @@ do
                     #);
                   open::  (#  do ('Close','w')->iClose.newKey #)
                #);
-             Edit: @codeEditorEditMenu;
+             Edit: @codeEditorEditMenu
+               (#
+                  iSearch: @item
+                    (#
+                       onStatus::  (#  do allowCommand->value #);
+                       onSelect::  (#  do cfe.doSearch #)
+                    #);
+                  iReplace: @item
+                    (#
+                       onStatus:: 
+                         (# 
+                         do
+                            (if formEditorExists then
+                                not cfe.texteditMode and not cfe.isReadOnly
+                                  ->value
+                             else
+                                false->value
+                            if)
+                         #);
+                       onSelect::  (#  do cfe.doReplace #)
+                    #);
+                  iReprettyprint: @item
+                    (#
+                       onStatus::  (#  do allowCommand->value #);
+                       onSelect::  (#  do cfe.doReprettyprint;  #)
+                    #);
+                  open:: 
+                    (# 
+                    do
+                       newSeparator;
+                       ('Search...','s')->iSearch.newKey;
+                       ('Replace...','r')->iReplace.newKey;
+                       newSeparator;
+                       ('Reprettyprint','p')->iReprettyprint.newKey;
+                       
+                    #)
+               #);
              menubarType:: 
                (#
                   open:: 
