@@ -413,6 +413,10 @@ int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
   case EXCEPTION_PRIV_INSTRUCTION:
     todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
   case EXCEPTION_INT_DIVIDE_BY_ZERO:
+    /* Fix current object: It was pushed before the idiv instruction,
+     * but will be zero in this case.
+     */
+    theObj = *(struct Object **)StackEnd++;
     todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
   case EXCEPTION_FLT_DIVIDE_BY_ZERO:
     todo=DisplayBetaStack( FpZeroDivErr, theObj, PC, sig); break;
@@ -439,9 +443,13 @@ int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
     todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
   }
   
-  if (!todo) BetaExit(1);
-  
-  return EXCEPTION_CONTINUE_SEARCH;
+  if (todo) {
+    /* continue after ValhallaOnProcessStop */
+    return EXCEPTION_CONTINUE_EXECUTION;
+  } else {
+    BetaExit(1);
+    /* return EXCEPTION_CONTINUE_SEARCH; */
+  }
 }
 
 /* beta_main: called from _AttBC */
