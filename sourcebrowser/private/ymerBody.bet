@@ -538,14 +538,15 @@ do
    if);
      
 -- ymerGroupGetFg: DoPart --
-do 'Opening '->browser.infoView.settext; location[]->browser.infoView.append;
+do state.busy;
+   'Opening '->browser.infoView.settext; location[]->browser.infoView.append;
    '... '->browser.infoView.append; browser.infoView.msgPush;
    (if not location.empty then
        location[]->mps.AST.expandToFullPath
 	 ->mps.fragmentGroupTable.getFragmentGroup->fg[];
        (if fg[] <> none then fg[]->doRealOpen if)
    if);
-   browser.infoView.msgPop
+   browser.infoView.msgPop; state.normal
 
 -- projectInfoLib: Attributes --
 setupRootProject:
@@ -689,7 +690,8 @@ setupProject:
   #)  
 
 -- scanGroupsImpl: DoPart --
-do 'Opening '->browser.infoView.settext; location[]->browser.infoView.append;
+do state.busy;
+   'Opening '->browser.infoView.settext; location[]->browser.infoView.append;
    '... '->browser.infoView.append; browser.infoView.msgPush;
    (if true
     // isRoot then
@@ -703,7 +705,6 @@ do 'Opening '->browser.infoView.settext; location[]->browser.infoView.append;
 	   (* we have visited this root previously *)
 	   groups.scan (#  do current[]->thescan.foreach #)
        if);  
-       browser.infoView.msgPop
     // isExtent then
        (if groups.size = 0 then
 	   (* the extent haven't previously been calculated *)
@@ -718,6 +719,8 @@ do 'Opening '->browser.infoView.settext; location[]->browser.infoView.append;
                          true->continue
                       #);
                     DoubleFormException::
+                      (# do true->continue #);
+                    emptyFragmentException::
                       (# do true->continue #);
                     transAccessException::
                       (#
@@ -756,7 +759,6 @@ do 'Opening '->browser.infoView.settext; location[]->browser.infoView.append;
 	   (* the extent have previously been calculated *)
 	   groups.scan (#  do current[]->thescan.foreach #)
        if);  
-       browser.infoView.msgPop
     // isDomain then
        (if groups.size = 0 then
 	   (* the domain haven't previously been calculated *)
@@ -770,6 +772,8 @@ do 'Opening '->browser.infoView.settext; location[]->browser.infoView.append;
                          (NONE,warn[],'Dependency Graph Error')->alertUser;
                          true->continue
                       #);
+                    emptyFragmentException::
+                      (# do true->continue #);
                     DoubleFormException::
                       (# do true->continue #);
                     transAccessException::
@@ -809,7 +813,6 @@ do 'Opening '->browser.infoView.settext; location[]->browser.infoView.append;
 	   (* the domain have previously been calculated *)
 	   groups.scan (#  do current[]->thescan.foreach #)
        if);  
-       browser.infoView.msgPop
     // isDirectory then
        (if groups.size = 0 then
 	   (* the directory haven't previously been scanned *)
@@ -836,18 +839,29 @@ do 'Opening '->browser.infoView.settext; location[]->browser.infoView.append;
 		     (#
 			error::  (#  do true->continue #);
 			whenFile:: 
-			  (# f: ^file; ext: ^Text; 
+			  (# f: ^file; ext,fName: ^Text; 
 			  do
 			     &browser.projects.group[]->newGroup[];
 			     thefile->f[];
 			     f.entry.path.name.suffix->ext[];
 			     location[]->newGroup.location.puttext;
-			     (if true
+                             location.copy->fName[];
+                             f.entry.path.name.prefix->fName.append;
+		             (if true
 			      // f.entry.exists and f.entry.readable and
 				 (mps.AST.astfileExtension->ext.equal)
 			      // f.entry.exists and f.entry.readable and
 				   (ext[] <> none ) and (ext.length > 0) and
 				   (ext[]->ymerPrivate.grammarTable.checkExtension)
+                              // (mps.AST.astfileExtension->(fName.copy).append->fileExists)
+                                 and (mps.AST.astfileExtension->(fName.copy).append->fileReadable)
+                              // ymerPrivate.grammarTable.scanExtensions
+		                 (# fn: ^text; found: @boolean
+		                 do found or
+		                    ((current[]->(fName.copy).append->fn[]->fileExists) and
+			            (fn[]->fileReadable))->found
+		                 exit found
+		                 #)
 				 then
 			         f.entry.path.name.prefix
 			           ->newGroup.location.puttext;
@@ -873,7 +887,7 @@ do 'Opening '->browser.infoView.settext; location[]->browser.infoView.append;
 					    do current.location[]
 						 ->newGroup.location.equalNCS
 						 ->value
-					    #)
+                                            #)
 				       #) = none then
                                      true->newGroup.txtFile;
 				     f.entry.path.name
@@ -904,17 +918,16 @@ do 'Opening '->browser.infoView.settext; location[]->browser.infoView.append;
 	   (* the directory have previously been scanned *)
 	   groups.scan (#  do current[]->thescan.foreach #)
        if);  
-       browser.infoView.msgPop
     // groups.size <> 0 then
        groups.scan (#  do current[]->thescan.foreach #);  
-       browser.infoView.msgPop
     else
        (if not unfolded then
 	   'open project to find subprojects'->browser.infoView.msg
 	else
 	   'open subproject to find fragments'->browser.infoView.msg
        if)
-   if)
+   if);
+   browser.infoView.msgPop; state.normal
 
 -- browserLib: Attributes --
 setupDotDot:
@@ -1021,7 +1034,7 @@ unfoldSubprojects:
      proj: ^browser.projects.project;
      projPos: ^projects.theProjects.theCellType; t: ^text;
   enter proj[]
-  do
+  do state.busy;
      'Unfolding '->browser.infoView.settext; proj.location[]->browser.infoView.append; 
      '... '->browser.infoView.append; browser.infoView.msgPush;
      (proj[]->projects.theProjects.at).succ[]->projPos[];
@@ -1191,12 +1204,12 @@ unfoldSubprojects:
 	       #)
          if)
      if);
-     browser.infoView.msgPop;
+     browser.infoView.msgPop; state.normal
   #);
 foldSubprojects:
   (# proj: ^browser.projects.project; level: @integer; t: ^text;
   enter proj[]
-  do
+  do state.busy;
      'Folding '->browser.infoView.settext; proj.location[]->browser.infoView.append;
      '... '->browser.infoView.append; browser.infoView.msgPush;
      proj.level->level;
@@ -1233,9 +1246,10 @@ do
 	 i: @integer;
 	 selectedProj: ^browser.projects.project
       do
-	 (if theEvent.doubleClick and ((theprojectlist.selection.first->i) <> 0)
-	     then
-	     (if theEvent.shiftKey then
+	 (if theEvent.doubleClick and
+             ((theprojectlist.selection.first->i) <> 0) then
+             state.busy;
+             (if theEvent.shiftKey then
 		 (# fragmentBrowser: ^ymerBrowserWindow 
 		 do 'Opening new browser... '->browser.infoView.settext;
 		    browser.infoView.msgPush;
@@ -1264,20 +1278,22 @@ do
 		     projectsChanged;
 		     selectedProj[]->setProject
 		 if)
-	     if)
-	 if)
+	     if);
+             state.normal
+	 if);
       #)[]->theprojectlist.appendAction;
    &theprojectlist.searchAction
       (#
 	 getContext::  (#  do none ->context[] #);
 	 select:: 
 	   (# selectedProject: ^projects.project
-	   do
+	   do state.busy;
 	      inx->sbprivate.projectList.shownprojects.getProjectByIndex
 		->selectedProject[];
 	      (if selectedProject[] <> currentProject[] then
 		  (selectedProject[])->setProject 
-	      if)
+	      if);
+              state.normal
 	   #);
 	 info::  (#  do msg[]->browser.infoView.msg #)
       #)[]->theprojectlist.appendAction
@@ -1290,7 +1306,9 @@ do
 	 selectedGroup: ^projects.group;
 	 root,newProj: ^browser.projects.project
       do
-	 (if theEvent.doubleClick and ((thegrouplist.selection.first) <> 0) then
+	 (if theEvent.doubleClick and
+             ((thegrouplist.selection.first) <> 0) then
+             state.busy;
 	     thegrouplist.selection.first->groups.getGroupByIndex
 	       ->selectedGroup[];
 	     (* do what's needed to make THIS into a project *)
@@ -1332,7 +1350,8 @@ do
                      if)
                  if);
                  root[]->setProject
-             if)
+             if);
+             state.normal;
          if)
       #)[]->thegrouplist.appendAction;
    &thegrouplist.searchAction
@@ -1360,6 +1379,7 @@ do
 	 (if theEvent.doubleClick and
 	     ((theFragmentgroupView.selection.first->inx) <> 0) then
 	     (if theEvent.shiftKey then
+                 state.busy;
 		 (mps.AST[],currentGroup.fg[])->fgs;
 		 fgs.scanPropsAndFragsForText
 		 (* HACK to initialize fgs properly
@@ -1446,7 +1466,8 @@ do
 			       browser.infoView.msgPop;
 			       leave find
 			    #)
-		       #)
+		       #);
+                 state.normal
 	     if)
 	 if)
       #)[]->theFragmentgroupView.appendAction;
@@ -1459,7 +1480,7 @@ do
 	      (if g[] <> none then g.fg[]->context[] if)
 	   #);
 	 select:: 
-	   (#  do inx->sbprivate.fragmentGroupView.contents.doSelect #);
+	   (# do state.busy; inx->sbprivate.fragmentGroupView.contents.doSelect; state.normal #);
 	 info::  (#  do msg[]->browser.infoView.msg #)
       #)[]->theFragmentgroupView.appendAction
 
@@ -1489,6 +1510,7 @@ do
    (if newForm[] = none then
        browser.sbprivate.down.popdown
     else
+       state.busy;
        'Opening '->browser.infoView.settext; newForm.name->browser.infoView.append;
        '... '->browser.infoView.append; browser.infoView.msgPush;
        ymerBrowserPrivate.history.find
@@ -1520,7 +1542,7 @@ do
             current.theView[]->browser.sbprivate.down.popup;
             browser.cfe.cs->browser.cfe.asttoselection;
 	 #);
-       browser.infoView.msgPop
+       browser.infoView.msgPop; state.normal
    if)
 
 -- selectFragmentGroup: DoPart --
@@ -1636,7 +1658,7 @@ do
 	t[]->title;
 	browser.open;
 	ymerPrivate.edenv[]->edenv[]->browser.edenv[];
-	browser.size->THIS(ymerBrowserWindow).size;
+	(600,800)->THIS(ymerBrowserWindow).size;
 	INNER open;
 	browsers.scan
 	  (# 
