@@ -3,6 +3,10 @@
 # Der er frysning nu, lad vaer med at blande dig!!!
 # exit 0  Den er overstaaet nu...
 
+# configuration:
+setenv CVSUPDATE yes
+setenv RCMUPDATE yes
+
 ### Usage:
 # Put in crontab on machines where a periodical recompilation 
 # of all files and programs is desired.
@@ -64,7 +68,7 @@ source ${BETALIB}/configuration/env.csh >& /dev/null
 setenv LOG ${BETALIB}/log/rebuildall.$MACHINETYPE
 
 # Hack:  HP machines have too little space on /tmp.  Use ~beta/tmp instead.
-# Well, belfort has enough room on /tmp.  No need for now.
+# Well, lisa has enough room on /tmp.  No need for now.
 #if ( $$MACHINETYPE == "HPUX9PA" ) then
 #    setenv TMPDIR $HOME/tmp
 #endif
@@ -73,30 +77,35 @@ rm -f $LOG
 echo "rebuildall.sh: Starting on BETALIB $BETALIB." >>& $LOG
 date >>& $LOG
 if ( $REMOVEASTS == "yes" ) then
+    if ( $CVSUPDATE == "yes" ) then
+        echo "rebuildall.sh: Doing mbs_cvsupdate -u." >>& $LOG
+        mbs_cvsupdate -u >>& $LOG
+    endif
+    if ( $RCMUPDATE == "yes" ) then
+	if ( $MACHINETYPE == "SUN4S" ) then
+	    echo "rebuildall.sh: Doing rcm -do 'gettip;quit'." >>& $LOG
+	    cd $BETALIB/compiler
+	    rcm -do "gettip; quit" >>& $LOG
+	    cd $BETALIB
+	endif
+    endif
     echo "rebuildall.sh: Removing all asts files for all platforms." >>& $LOG
     mbs_rmast -u >>& $LOG
     echo "rebuildall.sh: Removing all code files for all platforms." >>& $LOG
     mbs_rmcode -u sun4s linux sgi hpux9pa nti_ms nti_gnu ms gnu bor >>& $LOG
-endif
-# Fragbody and possibly others make the compiler crash for the time being.  
-# Make sure there is a compiler by just retrying.
-echo "rebuildall.sh: Removing all code files for $objdir." >>& $LOG
-date >>& $LOG
-mbs_rmcode -u $objdir >>& $LOG
-setenv BETAOPTS --nocode
-date >>& $LOG
-mbs_compiletools compiler >>& $LOG
-unsetenv BETAOPTS
-date >>& $LOG
-mbs_compiletools compiler >>& $LOG
-date >>& $LOG
-mbs_compiletools compiler >>& $LOG
-if ( $REMOVEASTS == "yes" ) then
-    echo "rebuildall.sh: Removing all asts files for all platforms." >>& $LOG
-    mbs_rmast -u >>& $LOG
+    echo "rebuildall.sh: Checking compiler." >>& $LOG
+    setenv BETAOPTS --nocode
+    date >>& $LOG
+    mbs_compiletools compiler >>& $LOG
+    unsetenv BETAOPTS
+else
+    #Has already been taken care of by ariel...
+    #echo "rebuildall.sh: Removing all code files for $objdir." >>& $LOG
+    #date >>& $LOG
+    #mbs_rmcode -u $objdir >>& $LOG
 endif
 date >>& $LOG
-mbs_compile --nocode >> $LOG
+mbs_compiletools compiler >>& $LOG
 date >>& $LOG
 mbs_compile >> $LOG
 date >>& $LOG
