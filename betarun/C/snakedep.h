@@ -450,7 +450,7 @@ type name(unsigned size, struct Object *origin)
 /* CopyCT */
 #define ParamAscii(type, name)                          \
     type name(unsigned char *ascii)
-#define FetchAscii                                      \
+#define FetchAscii()                                    \
     ascii = (unsigned char *) getD0Reg();
 
 
