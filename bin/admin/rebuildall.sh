@@ -5,7 +5,7 @@
 
 # configuration:
 set CVSUPDATE=yes
-set RCMUPDATE=no
+set RCMUPDATE=yes
 set BUILDMACHINES=(lisa amigo)
 
 # You can touch the following files to get a one-shot effect as if the

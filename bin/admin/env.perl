@@ -33,7 +33,7 @@
 # When running the script using "perl5 -s" the following options will be set.
 # This, of course, assumes that you have not used $n,$v, etc. for other 
 # purposes when requiring env.perl.  So require env.perl as the FIRST line!
-$contiue     = 1 if (defined $c);
+$continue    = 1 if (defined $c);
 $simulate    = 1 if (defined $n);
 $UseDefaults = 1 if (defined $u);
 $verbose     = 1 if (defined $v);
