@@ -1,0 +1,246 @@
+ORIGIN '~beta/basiclib/v1.5/betaenv';
+INCLUDE 'pathhandler';
+INCLUDE '~beta/basiclib/v1.5/file';
+-----------------------------------
+LIB: ATTRIBUTES
+-----------------------------------
+GlobalOnly:     (# exit 2 #);    (* Which properties to scan. *)
+LocalOnly:      (# exit 1 #);
+GlobalAndLocal: (# exit 0 #);
+
+mjolnerrcfile: (# t: ^text do '~beta/configuration/r3.0/mjolnerrc'->t[] exit t[] #);
+
+ScanMjolnerProps:
+(* This pattern scans the file .mjolnerrc (: def. of local user-specific 
+   properties) and Mjolnerrc (: def of global properties).  The scanning is 
+   done in that order, that is all global properties are scan before the
+   local.  Each property on these files are read and inner is executed. If 
+   a format error is encountered on one of the files, the scanning of the file
+   is terminated.  The files consist of a sequence of property definitions. A 
+   property-definition has the following form:
+          <ApplName>.<PropName>: <PropVal>nl
+          <ApplName> is a sequence of chars, not containing '.'.
+          <PropName> is a sequence of chars, not containing ':'.
+          <PropVal> is a sequence of chars, not containing nl.
+   The forbidden chars can be included, by escaping them. E.g. 'a\.b' can be 
+   used as an <ApplName>.
+   Comments are allowed in .mjolnerrc and Mjolnerrc. They should be enclosed 
+   in the usual brackets.
+   Not all properties are scanned. The pattern ScanMjolnerProps enters three
+   arguments: GlobalLocal, targetApplName and targetPropName. The first
+   determines whether to scan global and/or local properties. The second
+   gives an application name that must be matched in order to execute INNER on
+   a property. Similarly the third argument must match the actual property name
+   in order to have INNER executed. TargetApplName and targetPropName can be
+   given the value '' which matches any application name or property name.
+*)
+(# 
+   (* ------------------------ Iterator variables ------------------------- *)
+   Global:   @boolean;    (* True iff actual property is a global property. *)
+   ApplName: @text;       (* Name of application, this prop. is ass. with.  *)
+   PropName: @text;       (* Name of this property.                         *)
+   PropVal:  @tokenText;  (* Value of this property.                        *)
+   (* --------------------------------------------------------------------- *)
+   PropFile: @FileWithUnget
+   (# 
+      GetOne:@ (* Read a char or NULL if at EOF. Skip comments. *)
+      (# ch:           @char;
+         commentLevel: @integer;
+      do
+         scoop:       (* Start by skipping comments (possibly nested). *)
+         (if true//true then
+             MyGet -> ch;
+             (if ch
+              //'*' then
+                 (if MyGet//')' then
+                     commentLevel-1 -> commentLevel; 
+                     (if true//(commentLevel<0) then 0 -> commentLevel; if);
+                  else
+                     unget;
+                 if);
+              //'(' then
+                 (if MyGet//'*' then 
+                     commentLevel+1 -> commentLevel;
+                  else
+                     unget;
+                 if);
+             if);
+             (if true//((commentLevel>0) and 
+                        (ch<>NULL)) then            (* No restart at EOF. *)
+                 restart scoop; 
+             if);
+         if);
+      exit ch
+      #);
+
+      GetNonblank: (* Skip until first char >' '. Exit it or NULL at EOF. *)
+      (#
+         ch: @char;
+      do
+         GetOne -> ch;
+         lykke:
+         (if true//((ch<=' ') and (ch<>NULL)) then
+             GetOne -> ch;
+             restart lykke;
+         if);
+      exit ch
+      #);
+     
+      ReadEntity: @
+      (* Skip blanks, then read up to, but not including, first occ. of a 
+         stopChar.  stopChars can be escaped, i.e. appear immediately after
+         a '\', in which case they don't count as a stopChar. Two stop-chars 
+         may be specified. Skip comments (surrounded by '(*' and '* )'
+         (almost)). Exit the read string, and the char causing the stop.  
+         Exit NULL as stopChar if EOF caused stop.
+      *)
+      (#
+         stopChar1, stopChar2: @char;
+         res,tmp:              @text;
+         ch:                   @char;
+         escaped:              @boolean;
+      enter(stopChar1, stopChar2)
+      do
+         res.Clear;
+         GetNonBlank -> ch;
+         lykke:
+         (if true//true then
+             (if true//((not escaped) and (ch='\')) then
+                 true   -> escaped;
+                 GetOne -> ch;
+             if);
+             (if true//(ch<>NULL) then
+                 (if true//(escaped or
+                            ((ch<>stopChar1) and (ch<>stopChar2))) then
+                     false  -> escaped;
+                     ch     -> res.Put;
+                     GetOne -> ch;
+                     restart lykke
+                 if);
+             if);
+         if);
+      exit(res,ch)
+      #);
+   #);
+
+   FileWithUnget: File
+   (# ungetBufNotEmpty: @boolean;
+      Unget: (# do true->ungetBufNotEmpty #);
+
+      MyGet: @
+      (# ch: @char;
+         theGet: @Get;
+      do 
+         (if true//ungetBufNotEmpty then 
+             false -> ungetBufNotEmpty;   (* Return same char as last time. *)
+          else
+             (if true//EOS then
+                 NULL -> ch;
+              else
+                 theGet -> ch;
+             if);
+         if);
+      exit ch
+      #);
+   #);
+
+   getenv: External(# var: [1]@char; val: [1]@char; enter var exit val #);
+
+   NULL: (# exit 0 #);
+
+   ch:  @char;
+   path: @pathhandler;
+   GlobalLocal: @integer;
+   targetApplName, targetPropName,T: @text;
+   allAppls, allPropper, match: @boolean;
+   trace: @Boolean;
+   
+enter(GlobalLocal,targetApplName,targetPropName)
+do (*true -> trace;*)
+   (''->targetApplName.equal) -> allAppls;
+   (''->targetPropName.equal) -> allPropper;
+   &path.init;
+   (for twopass:2 repeat
+        (twopass=1) -> Global;   (* Signal whether scanning local or global. *)
+        (if trace//true then
+            'Prop: testing global' -> screen.putline;
+        if);
+        (if true//((GlobalLocal=GlobalAndLocal) or
+                  ((GlobalLocal=GlobalOnly) and Global) or
+                  ((not Global) and (GlobalLocal=LocalOnly))) then
+            (if Global//true then
+                (mjolnerrcfile,'') -> path.convertFilePath -> PropFile.Name;
+             else
+                'HOME'->getenv->T;'/.mjolnerrc'->T.append; T[]->PropFile.Name
+            if);
+            (if trace//true then
+                'Prop: opening mjolnerrc file' -> screen.putline;
+            if);
+            (if true//PropFile.entry.Exists then
+                PropFile.OpenRead;
+                etjuler:
+                  (if true//true then
+                      ('.','.') -> PropFile.ReadEntity -> (ApplName,ch);
+                      (if true//(ch<>'.') then leave etjuler if);
+                      (':',':') -> PropFile.ReadEntity -> (PropName,ch);
+                      (if true//(ch<>':') then leave etjuler if);
+                      (ascii.newline,ascii.newline)-> PropFile.ReadEntity
+                        ->(PropVal,ch);
+                      (if trace//true then
+                          'Read prop: ' -> screen.puttext;
+                          ApplName[] -> screen.puttext; '.' -> screen.put;
+                          PropName[] -> screen.puttext; ': ' -> screen.puttext;
+                          PropVal[] -> screen.putline;
+                      if);
+                      true -> match;
+                      (if false//allAppls then
+                          (ApplName[]->targetApplName.equal) -> match;
+                      if);
+                      (if true//((match=true) and (allPropper=false)) then
+                          (PropName[]->targetPropName.equal) -> match;
+                      if);
+                      (if true//match then
+                          INNER;
+                      if);
+                      (if true//(ch=ascii.newline) then restart etjuler if);
+                  if);
+                PropFile.Close;
+            if);
+        if);
+   for);
+#);
+
+TokenText:  text
+(* Properties have values which are instanses of this pattern. *)
+(#
+   ScanTokens:         (* For each token Token (: sequence of non-blanks) 
+                          in this text do inner.
+                       *)
+   (# Token:    @text; (* This one iterates over the tokens! *)
+      ch:       @char;
+      i,len:    @integer;
+   do
+      Length -> len;
+      1      -> i;
+      sykkel:
+      (if true // (i<=len) then
+         skipb: (if true // (i<=len) then
+            (if true //  ((i->InxGet)<=' ') then
+                i+1 -> i;
+                restart skipb;
+            if)
+         if);
+         Token.clear;
+         collect:
+         (if true // (i<=len) then
+            (if true // ((i->InxGet->ch)>' ') then
+                ch  -> Token.put;
+                i+1 -> i;
+                restart collect;
+            if)
+         if);
+         (if true // (Token.Length>0) then inner if);
+         restart sykkel
+      if);
+   #);
+#);

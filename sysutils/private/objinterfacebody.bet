@@ -1,0 +1,311 @@
+ORIGIN '../objinterface';
+
+MAKE default 'external/extobjinterface.make';
+OBJFILE nti     '$/extobjinterface.obj'
+        default '$/extobjinterface.o';
+
+MDBODY linux   'objinterface_littlebody'
+       nti     'objinterface_littlebody'
+       default 'objinterface_bigbody';
+
+INCLUDE '~beta/basiclib/v1.5/external';
+
+-- LIB: attributes --
+
+longword: cStruct
+  (# byteSize: : < (# do 4 -> value #)
+  enter R[1]
+  exit R[1]
+  #);
+
+printf: external
+  (# str: [1]@char;
+     arg1: @integer;
+  enter (str, arg1)
+  #);
+
+
+-- PrototypeBeta: descriptor--
+(#  
+   getCString: @
+     (# address: @integer; 
+        t: ^text;
+     enter address
+     do 
+        &Text[] -> t[];
+        address -> extGetCstring -> t;
+     exit t[]
+     #);
+#)
+
+-- PrototypeGCtab: dopart --
+do address + (address -> tos'%adrGetShort[0]') -> value
+
+-- PrototypeOriginOff: dopart --
+do address -> tos'%adrGetShort[1]' -> value
+
+-- PrototypeGPart: dopart --
+do address + 4 -> tos'%adrGetLong' -> value
+
+-- PrototypeSize: dopart --
+do address + 12 -> tos'%adrGetLong' -> tos'%getShort[0]' -> value
+
+-- PrototypePrefix: dopart --
+do address + 8 -> tos'%adrGetLong' -> value
+
+--- PrototypeAstIndexBody:dopart ---
+do address + 16 -> tos'%adrGetLong' -> tos'%getShort[1]' -> value
+                                        
+--- PrototypeFormIndexBody:dopart ---
+do address + 16 -> tos'%adrGetLong' -> tos'%getShort[0]' -> value
+
+-- PrototypeScanRefs: descriptor --
+(# l: @longWord;
+   longAligned: @boolean;
+do
+   GcTab -> thisAddr;
+   false -> isStatic;
+   (* Scan static part objects:
+    * struct GCEntry {
+    *   unsigned short StaticOff;
+    *   short OrigOff;
+    *   ref(ProtoType) Proto;
+    * };
+    *)
+   true -> isStatic;
+   loop: 
+     (# 
+     do
+	 thisAddr -> tos'%adrGetLong' -> l;
+	 (0 -> l.getShort) * 4 -> thisOffset;
+	 (if thisOffset <> 0
+	  // true then 
+             thisAddr + 4 -> tos'%adrGetLong' -> thisProto;
+	     INNER scanrefs;
+ 	     thisAddr + 8 -> thisAddr;
+ 	     restart loop
+ 	 if)
+     #);
+   thisAddr + 2 -> thisAddr;
+   false -> isStatic;
+   false -> longAligned;
+   (* Scan dynamic references *)
+   loop: 
+     (# 
+     do
+         (if longAligned // true then
+             thisAddr -> TOS'%adrGetShort[0]' -> thisOffset;
+          else
+             thisAddr-2 -> TOS'%adrGetShort[1]' -> thisOffset;
+         if);
+         not longAligned -> longAligned;
+         (if thisOffset //0 then else
+             thisOffset mod 4 -> refType;
+             thisOffset - refType -> thisOffset;
+             INNER scanrefs;
+             thisAddr + 2 -> thisAddr; 
+             restart loop 
+         if)
+     #)
+#)
+
+-- PrototypeGetStrucProto: dopart --
+do (@@structure -> tos'%AdrGetLong') + 12 -> tos'%AdrGetLong' -> protoAdr
+
+--- isComponentBody:dopart ---
+do (obj[] -> getProtoField) = -1 -> value;
+   
+--- objectToComponentBody:descriptor ---
+(# ato: @addressToObject;
+do (if obj[]<>NONE then
+       (if obj[]->isComponent then
+           (if (obj[]->getGCField)//-6 then
+               (if ((@@obj->tos'%AdrGetLong')-24->tos'%AdrGetLong')
+                //ComponentPTvalue then
+                   (@@comp,(@@obj->tos'%AdrGetLong')-24)->assignRef
+               if)
+           if)
+       if)
+   if)
+#)
+   
+--- componentToObjectBody:descriptor ---
+(# ato: @addressToObject;
+do (if comp[]<>NONE then
+       (@@comp -> tos'%AdrGetLong') + 24 -> ato -> obj[]
+   if);
+#)
+
+--- getProtoFieldBody:dopart ---
+do
+   0 -> value; 
+   (if obj[] <> NONE //true then
+       @@obj -> tos'%AdrGetLong' -> tos'%AdrGetLong' -> value
+   if)
+
+-- GetPrototype: dopart --
+do 
+   (@@obj -> tos'%AdrGetLong') -> tos'%AdrGetLong' -> protoAdr;
+   (if protoAdr //-1 then
+       (@@obj -> tos'%AdrGetLong') + 24 -> tos'%AdrGetLong' -> protoAdr;
+   if)
+
+-- GetPatternName: descriptor --
+(# proto: @prototype;
+do obj[] -> getProtoType -> proto;
+   proto.labId -> name[];
+   (if (name.length -> name.inxGet)
+    //'#' then (1,name.length-1) -> name.sub -> name[]
+   if)
+#)
+
+--- getGCFieldBody:dopart ---
+do
+   (if obj[] <> NONE //true then
+       (@@obj -> tos'%AdrGetLong') + 4 -> tos'%AdrGetLong' -> value
+   if)
+
+-- GetOrigin: descriptor --
+(# pt: @prototype;
+   off: @integer;
+   getObject: @addressToObject;
+do obj[] -> getProtoType -> pt;
+   pt.originOff -> off;
+   (@@obj -> tos'%adrGetLong') + off*4 -> tos'%adrGetLong' -> getObject -> obj[];
+   (if (obj[] -> getPrototype) = -9 (* DopartObject *) then
+       (* Go one more out !! *)
+       (@@obj->tos'%AdrGetLong')+8->tos'%AdrGetLong' -> getObject -> obj[];
+   if);
+#)
+
+--- PrototypeGroupId: descriptor ---
+(# GroupName: external (* in betarun/../outpattern.c *)
+     (# address: @Integer;
+        isCode: @Integer;
+        name: [1]@Char;
+     enter (address,isCode)
+     exit name
+     #);
+do 
+   &Text[] -> id[]; (address,false) -> GroupName -> id;
+#)
+
+-- AddressToObject: dopart --
+do (@@obj, addr) -> assignRef
+
+-- PrintObject: descriptor --
+(# pt: @protoType;
+   addrToObject: @addresstoobject;
+do (if s[]//NONE then screen[] -> s[] if);
+   obj[] -> getPrototype -> pt;
+   (# offsetTable: [pt.size-1]@integer;
+      
+      gcField:     (# exit 2 #);
+      originField: (# exit 5 #);
+      staticPart:  (# exit 1 #);
+      dynamicRef:  (# exit 3 #);
+      simpleVal:   (# exit 4 #);
+      
+      fillOutTable : 
+     	(# pt,pt1: @protoType;
+	   inx,pref: @integer;
+	   o1: ^ object;
+     	enter (pt,inx)
+     	do gcField -> offsetTable[inx+1];
+           originField -> offsetTable[inx+pt.originOff];
+	   pt -> pt1;
+	   loop: (* find origins in all prefixes *)
+	     (if 1//1 then
+	      	 pt1.prefix -> pref;
+	      	 (if pref 
+	       	  // 0
+		  // pt1 (* Object *) then
+	       	  else 
+		     pref -> pt1;
+		     originField -> offsetTable[inx+pt1.originOff];
+		     restart loop
+	      	 if)
+	     if);
+	   pt.scanRefs
+	   (#
+	   do 
+	      (if isStatic
+	       // true then 
+	       	  (if offsetTable[inx + thisOffset div 4]
+		   //0 then
+		      inx * 4 + thisOffset + (@@obj -> tos'%adrGetLong') 
+		        -> addrToObject-> o1[];
+		      (o1[] -> getProtoType,inx + thisOffset div 4)
+ 		        -> fillOutTable;
+		      staticPart -> offsetTable[inx + thisOffset div 4];
+	       	  if);
+	       else 
+	       	  (if offsetTable[inx +  thisOffset div 4]
+		   // 0 then dynamicRef -> offsetTable[inx + thisOffset div 4];
+	       	  if);
+	      if);
+	   #);
+	   (for i: pt.size-1 repeat
+	     	(if offsetTable[inx+i]//0 then simpleVal -> offsetTable[inx+i] if)
+	   for);
+     	#);
+      
+      printFrom: 
+     	(# inx: @integer;
+	   o1,o2: ^ object;
+	   pt: @protoType;
+	   i: @integer;
+	   sp: @
+	     (# havePrintedSome: @boolean
+	     do (if havePrintedSome
+	      	 // true then ' ' -> s.put
+	      	 else true -> havePrintedSome
+	     if)#);
+     	enter (o1[],inx)
+     	do o1[] -> getProtoType -> pt;
+	   (if o1##
+	    // text## then
+	       (# t: ^text;
+	       do o1[] -> t[];
+	      	  '"' -> s.put;
+	      	  t[] -> s.putText;
+	      	  '"' -> s.put;
+	       #)
+      	    else
+	       2 -> i;
+	       '(' -> s.put;
+	       loop: 
+	     	 (if (i < pt.size)
+	      	  //true then
+	      	     (if offsetTable[inx+i]
+	       	      // gcField then i + 1 -> i; 
+	       	      // simpleVal then
+		     	 sp;
+		     	 (inx + i) * 4 + (@@obj -> tos'%adrGetLong') 
+			   -> tos'%adrGetLong' -> s.putInt;
+		     	 i + 1 -> i;
+	       	      // staticPart then
+		     	 sp;
+		     	 (inx+i) * 4 + (@@obj -> tos'%adrGetLong')
+ 			   -> addrToObject -> o2[];
+		     	 o2[] -> getPatternName -> s.putText;
+		     	 i + 1 + ((o2[],inx+i) -> printFrom) -> i;
+	       	      // dynamicRef then
+		     	 sp;
+		     	 '^' -> s.put;
+		     	 i + 1 -> i;
+	       	      // originField then i + 1 -> i;
+	      	     if); 
+	      	     restart loop;
+	     	 if);
+	       ')' -> s.put
+     	   if);
+   	exit pt.size-1
+   	#);
+   do
+      obj[] -> getPatternName -> s.putText;
+      (pt,0) -> fillOutTable;
+      (obj[],0) -> printFrom
+   #);
+   s.newLine;
+#)

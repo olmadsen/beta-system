@@ -1,0 +1,76 @@
+ORIGIN '../dpc';
+
+--- dpchandlerInit:descriptor ---
+(# do dpcPriv.doDPC[] -> fork #)
+
+--- dpchandlerDestroy:descriptor ---
+(# do dpcPriv.doDPC[] -> kill #)
+
+--- dpcPriv:descriptor ---
+(# element: (# next: ^element; p: ^procType #);
+   first, last: ^element;
+   freeList: ^element;
+   im: @invokeMax;
+   
+   sem: @semaphore;
+   
+   doDPC: @|system (* Thread executing the objects registered. *)
+     (# maxCount: @Integer; next: ^procType; tmp: ^element;
+     do 
+        sem.P;
+        im -> maxCount;
+        loop:
+          (if (maxCount<>0) and (first[] <> NONE) //true then
+              
+              (if maxCount //-1 then else maxCount-1 -> maxCount if);
+              
+              first.p[] -> next[]; none -> first.p[];
+              first.next[] -> tmp[];
+              
+              freeList[] -> first.next[];
+              first[] -> freeList[];
+              
+              tmp[] -> first[];
+              none -> tmp[];
+              
+              (if first[] //NONE then NONE -> last[] if);
+              
+              next;
+              
+              restart loop;
+           else
+              (if first[] //NONE then
+                  sem.P;
+                  im -> maxCount;
+                  restart loop;
+               else
+                  pause;
+                  im -> maxCount;
+                  restart loop;
+              if);
+          if);
+     #);
+#)
+
+--- dpcCallDeferred:dopart ---
+do
+   (if dpcPriv.first[] //NONE then
+       (if dpcPriv.freeList[] //NONE then
+           &dpcPriv.element[] -> dpcPriv.first[] -> dpcPriv.last[];
+        else
+           dpcPriv.freeList[] -> dpcPriv.first[] -> dpcPriv.last[];
+           dpcPriv.freeList.next[] -> dpcPriv.freeList[];
+           none ->  dpcPriv.last.next[];
+       if); 
+    else
+       (if dpcPriv.freeList[] //NONE then
+           &dpcPriv.element[] -> dpcPriv.last.next[] -> dpcPriv.last[];
+        else
+           dpcPriv.freeList[] -> dpcPriv.last.next[] -> dpcPriv.last[];
+           dpcPriv.freeList.next[] -> dpcPriv.freeList[];
+           none ->  dpcPriv.last.next[];
+       if);
+   if);
+   p[] -> dpcPriv.last.p[];
+   
+   (if dpcPriv.sem.count //0 then else dpcPriv.sem.V if);
