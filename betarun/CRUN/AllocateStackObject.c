@@ -10,7 +10,6 @@
 
 
 #ifdef sparc
-
 /* Dont allow size to be in a GC register */
 asmlabel(AlloSO,
 	 "mov %o0,%o2;"    \
