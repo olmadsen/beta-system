@@ -1,0 +1,218 @@
+LIB_DEF 'tstenv' 'lib';  
+MDBODY jvm 'tstenv_jvmbody'
+       clr 'tstenv_clrbody'
+       pre 'minienv_prebody'
+       default 'tstenvbody';
+------------betaenv: descriptor--------------   
+(************************************************)
+(*           Minimal BETA environment           *)
+(************************************************)
+(# safeMode: (# exit true #); (* Some of the tests in tst*.bet are not
+                               * safe in the sense that they fail; some
+                               * always fail, some fail on specific platforms
+                               * and some fail with unconditional GC. 
+                               * If safeMode returns true then all tests MUST
+                               * succeed on all platforms. 
+                               * If safeMode returns false, then some tests
+                               * may fail - this mode is often used during
+                               * compiler development
+                               *)  
+   isByteCodeMode: (# exit true #); (* For excluding code that does
+                                     * not work for Java and/or .NET
+                                     *)
+   isPRE: isPlatform 
+     (#  
+     do (MT.T[1] = 'p') and (MT.T[2] = 'r') and (MT.T[3] = 'e') -> B 
+     #);
+   
+   program: <<SLOT PROGRAM: descriptor>>;  
+  
+   <<SLOT LIB: attributes>>; 
+        
+   put: 
+     (# ch: @char;     
+     enter ch        
+     <<SLOT put:doPart>>   
+     #);     
+   ii: @integer; 
+   get: (# ch: @char
+          <<SLOT get:doPart>>
+        exit ch
+        #);
+   newline: (# <<SLOT newline:doPart>> #); 
+   putText:
+     (# T: ^text
+     enter T[]      
+     do (for i: T.T.range repeat T.T[i]-> put for);  
+     #); 
+   putText2:    
+     (# T: ^text; (*T: [1] @char*)     
+     enter T[]  
+     do (for i: (*T.range*) T.T.range repeat T.T[i]-> put for)
+     #);   
+   putLine:   
+     (# T: ^Text   
+     enter T[] do T[] -> puttext; newline 
+     #); 
+   println: external (* for testing *) 
+      (# T: [1]@char    
+      enter T 
+      #);   
+   putInt: 
+     (# n,i: @integer; W: [12]@char  
+     enter n 
+     do (if n<0 then '-'->put; -n->n if); 0->i;
+        L:    
+          (if n//0 then   
+              (if i//0 then '0'->put
+               else
+                  (for j:i repeat
+                       W[i-j+1]+'0'->put
+              for)if) 
+           else 
+              n mod 10 -> W[i+1->i];  
+              n div 10 ->n;   
+              restart L 
+          if)
+     #);
+   text: 
+     (# T: [100] @char; lgth,pos: @integer ;
+        setT: (# enter T do T.range -> lgth -> pos #);
+        clear: (# do 0 -> pos #);
+        put:
+          (# ch: @char
+          enter ch
+          do (if (pos+1->pos) <= T.range then
+                 ch -> T[pos]
+             if)
+          #)
+     enter setT 
+     exit T 
+     #); 
+    
+   charValue: (# value: @char do INNER exit value #);
+
+   
+   BOOLEAN: (#  #);  
+   FALSE: BOOLEAN(# #);
+   TRUE: BOOLEAN(# #);  
+   int8: (# #);
+   CHAR: (# #); int8u: (# #);
+   int16: (# #);
+   int16u: (# #); shortInt: (# #);
+   int32: (# #); INTEGER: (# #);
+   int32u: (# #);
+   int64: (# #); 
+   int64u: (# #);    
+   real: (# x,y: @integer enter(x,y) exit(x,y) (* realdesc *) #);
+   real32: (* single precision real for bytecode only *) (# #);   
+   External:
+     (# CallC,CallStd,CallPascal,Pascal,PascalTrap,
+  	cExternalEntry,PascalExternalEntry: @text   
+     #);       
+   Com: (# #);
+   Holder: (# adr: @ integer #);   
+   state: (# #);
+   IntegerValue: (# value: @integer do INNER exit value #);
+   IntegerObject: IntegerValue(# enter value do INNER #);
+    
+   proc: (# procname: @text #); 
+   static_proc: (# procname: @text #); 
+   cons: (# procname: @text #); 
+   static_cons: (# procname: @text #); 
+   class: (# #);
+   externalClass: (# classname: @text #);
+   
+   Structure: (# #);  
+   
+   CStruct: (* Super-pattern for describing CStruct-patterns *) 
+     (# R: [(byteSize) div 4 + 1] @integer;
+        byteSize:< IntegerObject 
+          (* R is the bytestream containing the CStruct. 
+           * Must be declared as the first attribute  
+           *);  
+        Byte: (* Used for declaring CStruct fields *) 
+          (# p: @pos; pos:< IntegerObject; val: @integer;
+             set: @
+               (# 
+               enter val 
+               do (val,p)->R.%PutByte
+               #);
+          enter set 
+          exit p -> R.%GetByte
+          #);  
+        Long: (* Used for declaring CStruct fields *)
+          (# p: @pos; pos:< IntegerObject; val: @integer;
+             set: @
+               (# 
+               enter val 
+               do (val,p) -> R.%PutLong;
+               #);
+          enter set   
+          exit p -> R.%GetLong
+          #);
+     #);   
+  
+   Data: (# #);      
+   ErrorName: (# #);       
+   Object:  
+     (# _Struc:  
+          (# (* Changed 12/8/97 by datpete: 
+              * eliminates need for runtime routine ThisS
+              *)    
+             (* R: ##Object do TOS'ThisS'->R## exit R## *)
+          exit THIS(Object)## 
+          #);   
+        _state: 
+          (# S: ##object 
+          enter S## 
+          do (# R: ^object; 
+                A,B,P: @integer
+             do (if isByteCodeMode then
+                 else 
+                    this(object)[] -> R[];
+                    (%getLongAt @@S) -> A; (* address of S *)
+                    (* copy prototype *)
+                    (%getLongAt (A+12)) -> P; (* the prototype of S*)
+                    (%getLongAt @@R) -> B; (* address of R*)
+                    (P+24) %putLongAt (B); (* with COM prototypes, point to the VDT*)
+                    (* copy origin *)
+                    (%getLongAt (A+8)) -> P;  
+                    (*(P) %putLongAt (B+8);*);
+                if)
+             #)
+          #);
+     do INNER
+     #);
+   repetition:       
+     (* pattern describing repetitions.
+      * Do NOT use as superpattern!!! 
+      *) 
+     (# range: (* exit the range of THIS(rep) *)
+          (# n: @ integer exit N #);
+        new: 
+          (* allocate a new repetition of N elements
+           * the current elements in THIS(rep) becomes inaccessible
+           *)
+          (# n: @integer enter n #);
+        extend: (* extend THIS(rep) by N elements *)
+          (# N: @integer enter N #);  
+     #);
+   isPlatform: 
+     (# MT: @ text;  
+        b: @boolean
+     do <<SLOT isPlatform:descriptor>>;
+        inner;
+     exit b
+     #);
+   
+   ArgVector: [0]^text (* arguments - currently only used by bytecode *);
+   
+do program;    
+   newline
+#)
+
+
+ 
+    
+   
