@@ -166,23 +166,65 @@ long ltS(Structure *arg1, Structure *arg2, long *SP)
 	   
 	   if (proto2->OriginOff == arg1->iProto->OriginOff){
 	     /* The original prototypes have same origin offset 
-	      * i.e. (same prefix level),
-	      * so the result is (arg1->iOrigin == arg2->iOrigin) 
+	      * (i.e. same prefix level / block scope),
+	      * so the result is (arg1->iOrigin == arg2->iOrigin)
 	      */
 	     return arg1->iOrigin == arg2->iOrigin;
 	   }
 	   
-	   /* If proto1 and proto2 has different Origin Prefix
-	    * we need to generate an object from arg1 and then
-	    * test the resulting origin from the new object.
+	   /* proto1 and proto2 has different OriginOffsets.
+	    * The iOrigin object in the Structure variable corresponds to the 
+	    * OriginOffset of the iProto prototype. If these are not the same in 
+	    * the two Structure variables being compared, we cannot compare the
+	    * two iOrigins.
+	    * 
+	    * The OriginOffset changes (and a new origin object reference is 
+	    * introduced to the object at this offset) whenever the block structure
+	    * changes in a specialization. This happens e.g. when specializing a
+	    * remote pattern, like 
+	    *   X: Y.Z(#...#)
+	    * but NOT if the specialization 
+	    * is in a specialization of the origin, like 
+	    *   P:   (# X:  (#...#) #);
+	    *   PP: P(# Y: X(#...#) #);
+	    * that is: here X and Y have same origin offsets.
+	    *
+	    * The situation we have here is, e.g.:
+	    * 
+	    * ORIGIN 'tstenv';
+	    * --PROGRAM: descriptor--
+	    * (# P: (# T: (##) #); (* proto2 *)
+	    *    X1: @P; X2: @P;
+	    *    TT: X1.T(##);     (* proto1 *)
+	    *    
+	    *    arg1: ##TT;
+	    *    arg2: ##P.T;
+	    *    b: @boolean;
+	    *    
+	    * do TT## -> arg1##;
+	    *    
+	    *    X1.T## -> arg2##;
+	    *    arg1## < arg2## -> b;
+	    *    (if b then '+' -> put else '!' -> put if);
+	    *    
+	    *    X2.T## -> arg2##;
+	    *    arg1## < arg2## -> b;
+	    *    (if b then '!' -> put else '+' -> put if);
+	    * #)          
 	    *   
-	    * We need to generate a new item, as this is currently the only
-	    * way we can get the origin.
-	    * The problem is that there are several origins 
-	    * (one per prefixlevel).
-	    * So we generate an object corresponding to arg1 and find the 
-	    * origin at the offset determined *by the prefix* (proto2). 
-	    * This should be the same as origin of arg2.
+	    * Here surely T is in the prototype prefix chain of TT, but 
+	    * T is only a true prefix of TT if the two P origins are the same
+	    * (as in the X1 case).
+	    * The iOrigin of arg2 is the P object, BUT the iOrigin of arg1 is
+	    * actuallu the PROGRAM object (since TT is declared in PROGRAM).
+	    * 
+	    * Currently there is not enough information in the prototypes to 
+	    * deduce the P origin; the only way we can do it is by generating
+	    * an object of the type described by arg1 (here TT).
+	    * Given this object, we can then inspect the object at the 
+	    * OriginOffset corresponding to the T prefix level 
+	    * (that is: the arg2->iProto a.k.a. proto2 level) and compare this
+	    * to the iOrigin of arg2 (in the example: compare the two P objects).
 	    */
 	   
 	   Protect(arg2, newObject = AlloSI(0,arg1, SP));

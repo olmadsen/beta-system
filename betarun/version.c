@@ -1,7 +1,15 @@
-char betarun_version[] = "BETARUN VERSION 5.3(104)";
+char betarun_version[] = "BETARUN VERSION 5.3(105)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.126  2002/12/09 08:32:42  beta
+ *     fixed syntax error in Claim
+ *     Developer: datpete
+ * Betarun version number: 104
+ *     Changed files:
+ *         GC/intel_stack.c
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.125  2002/11/19 09:10:41  datpete
  *     Improved GC in windows DLLs
  * Betarun version number: 103
