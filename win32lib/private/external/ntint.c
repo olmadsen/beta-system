@@ -173,27 +173,11 @@ char *GetTextFromStream(F,toEOL)
      }
   }
 
-#ifdef sun
-     extern int sys_nerr;
-     extern char *sys_errlist[];
-#endif
-
-
 char *errstr(err)
 int err;
 {
-#ifdef hpux
+  /* FIXME: should use FormatError() */
   return strerror(err);
-#else
-# ifdef sun
-   if(err<=sys_nerr) return sys_errlist[err];
-# endif sun
-  /* No string available: return the number as string */
-  { char *str=(char *)malloc(10);
-    sprintf(str, "%d", err);
-    return str;
-  }
-#endif hpux
 }
  
 static char dirBuffer[MAXPATHLEN];
