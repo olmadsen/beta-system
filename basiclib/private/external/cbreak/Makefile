@@ -10,23 +10,15 @@
 #
 #----------------------------------------------------
 # compiler flags:
-#CC    = /bin/cc -ext -g    # Convex systems  (BSD)
-#CC    = /bin/cc -Ae      # HP7XX HPUX systems (SYSV)
-#CC    = /usr/lang/acc    # SUN4 Sparc systems (BSD)
-#CC    = /bin/cc          # Apollo DomainOS SR10 systems (BSD)
-#CC    = /bin/cc          # DECstation DECRisc systems (BSD)
-#CC    = /bin/cc          # DECstation Alpha (OSF)
-CC	= gcc
+#CC	= gcc
 # targets:
 TEST =	./test
 
-#CCOBJ=	test.o my_getch.o my_gets.o mystrings.o
 CCOBJ=	my_getch.o my_gets.o mystrings.o
 
 # headers 
 HEADER=	sysdefs.h
 
-#all:	$(TEST)
 all:	$(CCOBJ)
 
 $(TEST): $(CCOBJ) test.o
