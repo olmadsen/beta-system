@@ -239,9 +239,17 @@ ref(ValRep)LVRAAllocInBlock( range)
   return 0;
 }
 
+/* LVRAAlloc allocate a Byte repetition in the LVRArea. */
+ref(ValRep) LVRAByteAlloc( range)
+     long range;
+{
+  printf("Allocation of large byte repetitions not yet implemented, sorry.\n");
+  exit (1);
+}
+
 /* LVRAAlloc allocate a Value repetition in the LVRArea. */
 ref(ValRep) LVRAAlloc( range)
-  long range;
+     long range;
 {
   ref(ValRep) newRep;
   long        size;
@@ -477,7 +485,7 @@ LVRAConstructFreeList()
 	  /* Connect [startRep..currentRep] to one object, by enlarging the 
 	   * startRep HighBorder
 	   */
-	  startRep->HighBorder += ValRepStructSize + currentValRep->HighBorder;
+	  startRep->HighBorder += headsize(ValRep)/4 + currentValRep->HighBorder;
 	}
       }else{
 	if( !alive )
@@ -527,15 +535,15 @@ ref(ValRep) CopyObjectToLVRA( theRep)
   ref(ValRep) theRep;
 {
   ref(ValRep) newRep;
-  long size, index;
+  long range, index;
   ptr(long) src;
   ptr(long) dst;
 
-  size = theRep->HighBorder;
-  if( (newRep = LVRAAlloc( size )) != 0 ){
+  range = theRep->HighBorder;
+  if( (newRep = LVRAAlloc( range)) != 0 ){
 
     src = &theRep->Body[0]; dst = &newRep->Body[0];
-    for(index=0; index<size; index++) *dst++ = *src++;
+    for(index=0; index<range; index++) *dst++ = *src++;
 
     newRep->GCAttr = 0;
     /* Set one forward reference in theObj to newObj */
