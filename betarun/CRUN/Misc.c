@@ -35,6 +35,40 @@ asmlabel(Return, "nop; retl; nop");
 #else
 asmlabel(_Return, "nop; retl; nop");
 #endif
+
+/* Functions used to call RT routines directly from C.
+ * Needed because %i1 in calling regwin is destroyed by (C)AlloSI
+ * Must be here away from the corresponding CAlloXXX functions
+ * to prevent gcc from inlining it.
+ */
+
+struct Item *SPARC_AlloSI(struct Structure *s, int i1, int i2, int i3, int i4)
+{
+  struct Item *CAlloSI(struct Structure *s, int i1, int i2, int i3, int i4);
+  GCable_Entry();
+  return CAlloSI(s, i1, i2 ,i3, i4);
+  GCable_Exit(1);
+}
+
+struct Component *SPARC_AlloC(struct Object *origin, int i1, struct ProtoType *proto, int i3, int i4)
+{
+  struct Component *CAlloC(struct Object *origin, 
+			   int i1, 
+			   struct ProtoType *proto, 
+			   int i3, 
+			   int i4);
+  GCable_Entry();
+  return CAlloC(origin, i1, proto, i3, i4);
+  GCable_Exit(1);
+}
+
+struct Item *SPARC_AlloI(struct Object *origin, int i1, struct ProtoType *proto, int i3, int i4)
+{ struct Item *CAlloI(struct Object *origin, int i1, struct ProtoType *proto, int i3, int i4);
+  GCable_Entry();
+  return CAlloI(origin, i1, proto, i3, i4);
+  GCable_Exit(1);
+}
+
 #endif
 
 void
