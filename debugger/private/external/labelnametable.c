@@ -85,7 +85,7 @@ static char NextLabel[200]; /* The last label read from the fd. */
 #define NMSORTOUTFILE "temp.nmsortoutfile"
 #define pclose(fd) fclose(fd); unlink(NMSORTOUTFILE) /* ; fprintf(stderr,"Close & deleting %s\n",NMSORTOUTFILE)*/
 void DumpFile(LPSTR filename);
-long processOffset; 
+long processOffset=0; 
 #else
 
 #ifndef nmcommand
