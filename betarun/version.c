@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(61)";
+char betarun_version[] = "BETARUN VERSION 5.3(62)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.61  2002/01/09 09:51:36  beta
+ * Default IOA now back to 1024 on all but Intel
+ * Betarun version number: 61
+ * Developer: grouleff
+ *
  * Revision 1.60  2002/01/04 23:02:00  beta
  * Changes for X86 sol r5.3 betarun boot
  * Betarun version number: 60
