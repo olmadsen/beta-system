@@ -429,17 +429,26 @@ void IOAGc()
     INFO_IOA(fprintf(output," %d%% used)\n",
 		     (int)((100 * areaSize(GLOBAL_IOA,GLOBAL_IOATop))/areaSize(GLOBAL_IOA,GLOBAL_IOALimit))));
 	
+    /* Clear all of the unused part of IOA, so that RT routines does
+     * not need to clear cells.
+     */
+    memset(GLOBAL_IOATop, 0, IOASize-((long)GLOBAL_IOATop - (long)GLOBAL_IOA));
+
+    DEBUG_MT({ 
+      /* If there is only one thread, IOACheck will only check the range
+       * IOA..IOATop (not gIOA..gIOATop). To make this possible at this point,
+       * we must set the thread specific IOATop already here.
+       * It will be reassigned, when the object requested is allocated in
+       * doGC, but the assignment below should cause no harm.
+       */
+      if (NumTSD==1) IOATop = GLOBAL_IOATop; 
+    });
+
     DEBUG_IOA( IOACheck() );
     DEBUG_CBFA( CBFACheck() );
     DEBUG_AOA( AOACheck() );
     DEBUG_LVRA( LVRACheck() );
     DEBUG_CODE(if (dump_aoa) AOACheck());
-
-    /* Clear all of the unused part of IOA, so that RT routines does
-     * not need to clear cells.
-     */
-    memset(GLOBAL_IOATop, 0, IOASize - ((long)GLOBAL_IOATop - (long)GLOBAL_IOA));
-    memset(ToSpace, 0, IOASize);
 
     InfoS_LabB();
     
@@ -880,6 +889,13 @@ void ProcessAOAObject(theObj)
   
   theProto = theObj->Proto;
   
+#ifdef MT
+  /* The way part objects are allocated in V-entries
+   * may leave part objects with uninitialized prototypes.
+   */
+  if (!theProto) return;
+#endif
+
   if( isSpecialProtoType(theProto) ){  
     switch( SwitchProto(theProto) ){
     case SwitchProto(ByteRepPTValue): 
@@ -1036,6 +1052,12 @@ void CompleteScavenging()
 
 #ifdef RTDEBUG
 
+#ifdef MT
+#define TheIOATOP ((NumTSD==1)?IOATop:GLOBAL_IOATop)
+#else
+#define TheIOATOP GLOBAL_IOATop
+#endif
+
 ref(Object) lastObj=0;
 
 void IOACheck()
@@ -1045,18 +1067,15 @@ void IOACheck()
   
   theObj = (ref(Object)) GLOBAL_IOA;
 
-#ifdef MT
-#define TheIOATOP ((NumTSD==1)?IOATop:GLOBAL_IOATop)
-#else
-#define TheIOATOP GLOBAL_IOATop
-#endif
-
   lastObj=0;
+#if 0
   fprintf(output, 
 	  "IOACheck: [0x%x..0x%x[\n", 
 	  (int)GLOBAL_IOA, 
 	  (int)TheIOATOP);
   fflush(output);
+#endif
+
   while ((long *) theObj < TheIOATOP) {
 #ifdef MT
     /* Skip blank cells in beginning of objects */
@@ -1064,12 +1083,14 @@ void IOACheck()
       long *ptr = (long *)theObj;
       while ( (ptr<(long*)TheIOATOP) && (*ptr==0) ) ptr++;
       if ((long*)theObj<ptr){
+#if 0
 	if (NumIOAGc>=IOAGC_START_TRACE) {
 	  fprintf(output, 
 		  "Skipped %d longs\n",
 		  (int)((long)ptr-(long)theObj)/4);
 	  fflush(output);
 	}
+#endif
 	if (NumTSD==1) {
 	  Claim(FALSE, "No skip should be needed when only one thread");
 	}
@@ -1081,7 +1102,7 @@ void IOACheck()
     Claim((long)(theObj->Proto), "IOACheck: theObj->Proto");
 #endif /* MT */
 
-#if 1
+#if 0
     if (NumIOAGc>=IOAGC_START_TRACE){
       fprintf(output, 
 	      "IOACheck: 0x%x (size 0x%x)\n", 
@@ -1110,7 +1131,9 @@ void IOACheck()
     theObj = (ref(Object)) Offset(theObj, theObjectSize);
   }
 finished:
+#if 0
   fprintf(output, "done\n"); fflush(output);
+#endif
   return;
 }
   
@@ -1120,6 +1143,13 @@ void IOACheckObject (struct Object *theObj)
   
   theProto = theObj->Proto;
   
+#ifdef MT
+  /* The way part objects are allocated in V-entries
+   * may leave part objects with uninitialized prototypes.
+   */
+  if (!theProto) return;
+#endif
+
 #if 0
   fprintf(output, "IOACheckObject: theObj = 0x%x\n", (int)theObj);
 #endif

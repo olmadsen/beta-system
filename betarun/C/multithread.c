@@ -169,7 +169,7 @@ struct Object *doGC(unsigned long numbytes)
    */
 
   static volatile int numReadyToGC;
-  struct Object *newObj;
+  struct Object *newObj=0;
   unsigned long reqsize = numbytes;
   int i;
   
@@ -282,23 +282,24 @@ struct Object *doGC(unsigned long numbytes)
       /* Try up to 3 IOAGcs to mature enough object to go into AOA */
       for (i=0; i<2; i++){
 	__asm__("stbar"); 
+	INFO_IOA(fprintf(output, "[%d]\n", i));
 	IOAGc();
 	if ((long*)((long)gIOATop + reqsize) <= gIOALimit) {
 	  /* (6.0) */
 	  IOATop = gIOATop; 
 	  gIOATop = (long*)((long)gIOATop + reqsize); /* size of slice */
 	  newObj = (struct Object *)IOATop;
-	  IOATop += numbytes;
+	  IOATop = (long*)((long)IOATop + numbytes);
 	  savedIOALimit = IOALimit = gIOATop;
 	  break;
 	}
 
-	INFO_IOA(fprintf(output, "[%d]\n", i+1));
 	if (i==1){
 	  /* Have now done two IOAGc's without freeing enough space.
 	   * Make sure that all objects go to AOA in the next GC.
 	   */
 	  IOAtoAOAtreshold=2;
+	  INFO_IOA(fprintf(output, "[%d]\n", i));
 	  DEBUG_IOA(fprintf(output, "Forcing all objects in IOA to AOA\n"));
 	  IOAGc();
 
@@ -307,7 +308,7 @@ struct Object *doGC(unsigned long numbytes)
 	  /* (6.1) */
 	    gIOATop = (long*)((long)gIOATop + reqsize); /* size of slice */
 	    newObj = (struct Object *)IOATop;
-	    IOATop += numbytes;
+	    IOATop = (long*)((long)IOATop + numbytes);
 	    savedIOALimit = IOALimit = gIOATop;
 	    break;
 	  }
@@ -315,16 +316,21 @@ struct Object *doGC(unsigned long numbytes)
 	  /* Have now tried everything to get enough space in IOA */
 	  /* Aber dann haben wir anderen metoden! */
 	  /* (6.2) */
+	  /* FIXME: */
+	  fprintf(output, 
+		  "\n***WARNING: allocation in AOA. V-entry sets GCAttr to 1.\n");
+	  fprintf(output, 
+		  "***This will probably cause AOA releated problems.\n\n");
 	  newObj = AOAcalloc(numbytes);
 	  IOATop = gIOATop;
 	  gIOATop = (long*)((long)gIOATop + IOASliceSize); /* size of slice */
 	  savedIOALimit = IOALimit = gIOATop;
+	  break;
 	}
-	/* Not reached */
-	DEBUG_CODE(Claim(TRUE, "doGC: end not reached"));
-	newObj = NULL;
       }
-      
+
+      Claim(newObj!=0, "doGC: newObj allocated");
+
       DEBUG_MT(fprintf(output,"t@%d: GC completed.\n", (int)ThreadId);
 	       fflush(output);
 	       );

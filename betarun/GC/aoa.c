@@ -1146,6 +1146,13 @@ void AOACheckObject( theObj)
   
   theProto = theObj->Proto;
 
+#ifdef MT
+  /* The way part objects are allocated in V-entries
+   * may leave part objects with uninitialized prototypes.
+   */
+  if (!theProto) return;
+#endif
+
   Claim( !inBetaHeap((ref(Object))theProto),
 	"#AOACheckObject: !inBetaHeap(theProto)");
 
@@ -1360,6 +1367,13 @@ void AOACheckObjectSpecial( theObj)
 { ref(ProtoType) theProto;
   
   theProto = theObj->Proto;
+
+#ifdef MT
+  /* The way part objects are allocated in V-entries
+   * may leave part objects with uninitialized prototypes.
+   */
+  if (!theProto) return;
+#endif
   
   Claim( !inBetaHeap((ref(Object))theProto),
 	"#AOACheckObjectSpecial: !inBetaHeap(theProto)");

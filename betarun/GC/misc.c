@@ -202,7 +202,9 @@ void CCk(void *r, char *fname, int lineno, char *ref)
 
   CHECK_HEAP(IOACheck(); LVRACheck(); AOACheck());
 
-  fprintf(output, "Ck: IOATop is 0x%x\n", IOATop); fflush(output);
+#if 0
+  fprintf(output, "Ck: IOATop is 0x%x\n", (int)IOATop); fflush(output);
+#endif
  
   if(r) 
     {
