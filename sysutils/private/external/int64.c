@@ -46,10 +46,10 @@ int main()
 #endif
 
 void putint64(INT64 x)
-{
+{ printf("%lli",x);
   return;
 }
 void puthexint64(INT64 x)
-{
+{ printf("%llx",x);
   return;
 }
