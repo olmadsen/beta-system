@@ -91,4 +91,12 @@
     (message "Changing <CODE>...</CODE>MARKER to <INX><CODE>...</CODE></INX>")
     (tags-query-replace "\\(<code>.*</code>\\)\\s-*<a\\s-+name=marker[-0-9]+>\\s-*</a>" "<INX>\\1</INX>" nil)))
 
+(defun miadoc-replace10 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t)(case-fold-search t))
+    (message "Changing <EM>...</EM>MARKER to <INX><EM>...</EM></INX>")
+    (tags-query-replace "\\(<em>.*</em>\\)\\s-*<a\\s-+name=marker[-0-9]+>\\s-*</a>" "<INX>\\1</INX>" nil)))
+
 

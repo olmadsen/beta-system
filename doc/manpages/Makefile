@@ -1,16 +1,16 @@
-doc: buildsrcverbose
+doc: buildverbose
 	@echo Generating documentation without PDF
 	@perl -s ../bin/makedoc -v -p manpages.book
 
-buildsrcverbose:
-	@perl -s buildsrc -v
+buildverbose:
+	@perl -s build -v
 
-dist: buildsrcquiet
+dist: buildquiet
 	@echo Generating documentation with PDF
 	@perl -s ../bin/makedoc manpages.book
 
-buildsrcquiet:
-	@perl -s buildsrc
+buildquiet:
+	@perl -s build
 
 tags:
 	@echo There is nothing to tag here.

@@ -4,15 +4,15 @@
 
 sub usage
 {
-    print "usage: makedoc [-f] [-p] [-v] [-d] <manual>.book | <file>.html\n";
-    print "  -f   use full urls in HREFs (http://www.mjolner.com/...)\n";
-    print "  -p   do not generate PDF\n";
-    print "  -h   print this summary\n";
-    print "  -s   special treatment of headings in interface files\n";
-    print "  -v   verbose output\n";
-    print "  -d   debug makedoc script\n";
-    print "  If .book file is given as argument, a full manual set is generated.\n";
-    print "  If a single HTML file is given as input, that file is preprocessed.\n";
+    print STDERR "usage: makedoc [-f] [-p] [-v] [-d] <manual>.book | <file>.html\n";
+    print STDERR "  -f   use full urls in HREFs (http://www.mjolner.com/...)\n";
+    print STDERR "  -p   do not generate PDF\n";
+    print STDERR "  -h   print this summary\n";
+    print STDERR "  -s   special treatment of headings in interface files\n";
+    print STDERR "  -v   verbose output\n";
+    print STDERR "  -d   debug makedoc script\n";
+    print STDERR "  If .book file is given as argument, a full manual set is generated.\n";
+    print STDERR "  If a single HTML file is given as input, that file is preprocessed.\n";
     exit(1);
 }
 
@@ -21,6 +21,8 @@ sub usage
 #   Fix titles for src-generated files (OK for intsrcfiles)
 #   Fix prev/next TITLE for src-generated files (OK for intsrcfiles)
 #   Eliminate global $filenumber
+#   Problem with index for ::<, :<, :: -  Kategory becomes '&'
+# Continuation indications in all but first column in index 'foo, continued'.
 # IDEAS:
 #   Possibly a <FOOTNOTE> tag. Use <HR width=100>
 #   Possibly a <GIF SRC=... ALT=...> tag. Read width/height from gif file.
@@ -42,25 +44,27 @@ my @intheadings = ();      # used to build interface descriptions part of table 
 my @index = ();            # used to build index
 my @num_h = (0,0,0,0,0,0); # array of occurrences of headings 1 to 6
 
+# Variables that may be set by ../build
+$skippdf        = 0  if (!defined($skippdf));
+$book_file_name = "" if (!defined($book_file_name));
+$verbose        = 0  if (!defined($verbose));
+$debug          = 0  if (!defined($debug));
+
 # Other variables
 my $numinxcolumns = 3;     # Number of columns in alphabetic index
 my $src = "src/";
 my $dst = "";
 my $intsrc = "";
 my $intdst = "";
-my $book_file_name = "";   # Name of BOOK file
 my $filenumber = 0;        # used to index @srcfiles and @headings
 my $num_beta   = 0;        # Number of occurences of <BETA LIST> 
 my $num_fig    = 0;        # Number of occurences of <FIG>
 my $num_inx    = 0;        # Number of occurences of <INX>
 my $headinglevel      = 0;        # Current heading level
 my $srcline    = "";       # Used to read files from src directory into
-my $verbose    = 0;
-my $debug      = 0;
 my $special_headers = 0;
 my $insert_validhtml40 = 0;
 my $fullpath   = 0;
-my $skippdf    = 0;
 my $css =                "../style/miadoc.css";
 my $jsdir =              "../javascript";
 my $imagedir =           "../images";
@@ -747,6 +751,8 @@ sub print_interface_header
 
 sub read_command_line()
 {
+    #print "book: ", $book_file_name , "\n";
+    return if ($book_file_name ne ""); # called from ../build
     # Command line options
     &usage() if (defined($h));
     $special_headers = 1 if (defined($s));
@@ -871,25 +877,31 @@ sub error
 
 sub parse_special_tags
 {
-    local ($done, $before, $match, $after, $number, $i);
+    local ($done, $before, $match, $remaining, $number, $i);
     local ($htmlfile) = $dstfiles[$filenumber];
     local ($full_length) = length($srcline);
 
     $_=$srcline;
-    $done = $before = $match = $after = "";
+    $done = $before = $match = $remaining = "";
 
-    while(m%\<H[1-6]\>|\</H[1-6]\>|\<BETA|\</BETA\>|\<FIG|\</FIG\>|\<INX|\</INX\>%i ){
+    while(m%\<H[1-6]|\</H[1-6]\>|\<BETA|\</BETA\>|\<FIG|\</FIG\>|\<INX|\</INX\>%i ){
 	$before = $`;
 	$match  = $&; 
-	$after  = $';
+	$remaining  = $';
 
 	$done .= $before;
 	# perform stuff on $match
-	if  ($match =~ m%\<H([1-6])\>%i){
+	if  ($match =~ m%\<H([1-6])%i){
 	    ################# Found heading start. #########################
 	    $done .= $match;
-	    local ($h, $heading, $anchor, $headanchors, $headinx);
+	    local ($h, $heading, $anchor, $headanchors, $headinx, $attributes);
 	    $h = $1;
+	    if ($remaining =~ m%^[^>]*\>%si){
+		# Matched <Hn xxx>
+		$attributes = $1; # xxx - currently not used for anything
+		$done .= $&;
+		$remaining = $';
+	    }
 	    if ($h<$headinglevel){
 		# Going from sub section to section/chapter
 		for (; $headinglevel>$h; $headinglevel--){
@@ -913,13 +925,13 @@ sub parse_special_tags
 	    # Start anchor to refer from TOC
 	    $anchor = "H${h}_$num_h[$h]";
 	    $done .= "<A NAME=\"$anchor\">";
-	    if ($after =~ m%\</H$h\>%si){
+	    if ($remaining =~ m%\</H$h\>%si){
 		$heading = $`;
-		$after = $';
+		$remaining = $';
 		$heading =~ s/^\s*//; # remove leading whitespace
 		# Check for index entries in heading. Move them outside
 		while ($heading =~ m%<INX>([^<]*)</INX>%si){
-		    $after = "<INX HIDDEN>$1</INX>" . $after;
+		    $remaining = "<INX HIDDEN>$1</INX>" . $remaining;
 		    $heading = $` . $1 . $';
 		}
 		# Check for anchors in heading. Move them outside
@@ -931,12 +943,12 @@ sub parse_special_tags
 		$heading = "$number $heading";
 		$done .= $heading . "</A>$headanchors</H$h>";
 	    } else {
-		&error($full_length-length($after), "Unterminated heading? (<H$h>)");
+		&error($full_length-length($remaining), "Unterminated heading? (<H$h>)");
 	    }
 	    push (@headings, "$heading\@$htmlfile\#$anchor");
 	} elsif ($match =~ m%\</H[1-6]\>%i){
 	    # Found heading end
-	    &error($full_length-length($after), "Unmatched end-of-heading? ($&)");
+	    &error($full_length-length($remaining), "Unmatched end-of-heading? ($&)");
 	    $done .= $match;
 	} elsif ($match =~ m%\<BETA%i){
 	    ##################### Found BETA start ########################
@@ -947,11 +959,11 @@ sub parse_special_tags
 	    local $attributes = "";
 	    local $id = "";
 	    local $anchor = "";
-	    if ($after =~ m%^([^>]*)\>%si){
+	    if ($remaining =~ m%^([^>]*)\>%si){
 		# Matched <BETA xxx>
 		$attributes = $1; # xxx
 		#print STDERR "$htmlfile: <BETA> attributes:'$attributes'\n" if ($debug);
-		$after = $';
+		$remaining = $';
 	    }
 	    # Handle attributes
 	    if ($attributes =~ m%ID\s*=\s*\"([^\"]+)\"%i){
@@ -983,18 +995,18 @@ sub parse_special_tags
 	    if ($beta ne ""){
 		# Found SRC
 		# eat closing tag, if present
-		if ($after =~ m%^\s*\<\/BETA\>%si){
-		    $after = $';
+		if ($remaining =~ m%^\s*\<\/BETA\>%si){
+		    $remaining = $';
 		}
 	    } else {
 		# No SRC. Handle stuff until (and including) end-tag
 		#print STDERR "No SRC. Handle stuff until (and including) end-tag\n" if ($debug);
-		if ($after =~ m%\<\/BETA\>%si){
+		if ($remaining =~ m%\<\/BETA\>%si){
 		    $beta = &untabify($`); # ...
 		    #print STDERR "beta='$beta'\n" if ($debug);
-		    $after = $';
+		    $remaining = $';
 		} else {
-		    &error($full_length-length($after), "<BETA> with no SRC and no end-tag met.");
+		    &error($full_length-length($remaining), "<BETA> with no SRC and no end-tag met.");
 		}
 	    }
 	    # Generate output into $done variable
@@ -1002,7 +1014,7 @@ sub parse_special_tags
 		$num_beta++;
 		if ($listcap eq ""){
 		    if ($caption eq ""){
-			&error($full_length-length($after), 
+			&error($full_length-length($remaining), 
 			       "<BETA> tag with LIST attribute and no caption found.Using \"Program " . $num_beta . "\" for caption.");
 			$listcap = $caption = "Program " . $num_beta;
 		    } else {
@@ -1037,7 +1049,7 @@ sub parse_special_tags
 	    $done .= "</PRE>\n";
 	} elsif ($match =~ m%\</BETA\>%i){
 	    # Found BETA end
-	    &error($full_length-length($after), "Unmatched end-of-beta? (</BETA>)");
+	    &error($full_length-length($remaining), "Unmatched end-of-beta? (</BETA>)");
 	    $done .= "</PRE>\n";
 	} elsif ($match =~ m%\<INX%i){
 	    ################# Found INX start #########################
@@ -1046,11 +1058,11 @@ sub parse_special_tags
 	    local $anchor = "";
 	    local $hidden = 0;
 	    #print STDERR "$htmlfile: INX start\n";
-	    if ($after =~ m%^([^>]*)\>%si){
+	    if ($remaining =~ m%^([^>]*)\>%si){
 		# Matched <INX xxx>
 		$attributes = $1; # xxx
 		#print STDERR "$htmlfile: <INX> attributes:'$attributes'\n";
-		$after = $';
+		$remaining = $';
 	    }	    
 	    $num_inx++;
 	    if ($attributes =~ m%HIDDEN%i){
@@ -1059,22 +1071,22 @@ sub parse_special_tags
 	    # Start anchor to refer from index
 	    $anchor = "INX_$num_inx";
 	    $done .= "<A NAME=\"$anchor\"><SPAN CLASS=INDEXED TITLE=Indexed>";
-	    if ($after =~ m%\</INX\>%i){
+	    if ($remaining =~ m%\</INX\>%i){
 		$entry = $`;
 		#print STDERR "$htmlfile: INX entry: $entry\n";
 		if ($entry eq ""){
-		    &error($full_length-length($after), "Empty index entry? <<INX></INX>)");
+		    &error($full_length-length($remaining), "Empty index entry? <<INX></INX>)");
 		}
 		$done .= $entry unless $hidden;
 		$done .= "</SPAN></A>";
-		$after = $';
+		$remaining = $';
 	    } else {
-		&error($full_length-length($after), "Unterminated index entry? (<INX>)");
+		&error($full_length-length($remaining), "Unterminated index entry? (<INX>)");
 	    }
 	    push (@index, &quote_colon(&unquote_html(&untag($entry))) . ".0\@$htmlfile\#$anchor");
 	} elsif ($match =~ m%\</INX\>%i){
 	    # Found INX end
-	    &error($full_length-length($after), "Unmatched end-of-index-entry? (</INX>)");
+	    &error($full_length-length($remaining), "Unmatched end-of-index-entry? (</INX>)");
 	    $done .= $match;
 	} elsif ($match =~ m%\<FIG%i){
 	    ######################## Found FIG start ####################
@@ -1087,11 +1099,11 @@ sub parse_special_tags
 	    local $anchor = "";
 	    #print STDERR "$htmlfile: FIG start\n";
 	    $num_fig++;
-	    if ($after =~ m%^([^>]*)\>%si){
+	    if ($remaining =~ m%^([^>]*)\>%si){
 		# Matched <FIG xxx>
 		$attributes = $1; # xxx
 		#print STDERR "$htmlfile: <FIG> attributes:'$attributes'\n";
-		$after = $';
+		$remaining = $';
 	    }
 	    # Handle attributes
 	    if ($attributes =~ m%ID\s*=\s*\"([^\"]+)\"%i){
@@ -1116,15 +1128,15 @@ sub parse_special_tags
 		$list=1;
 	    }
 	    # Handle rest until (and including) end tag
-	    if ($after =~ m%\</FIG\>%si){
+	    if ($remaining =~ m%\</FIG\>%si){
 		$figure = $`;
-		$after = $';
+		$remaining = $';
 		#print STDERR "$htmlfile: figure: $figure\n";
 		if ($figure =~ m%^\s*$%s){
-		    &error($full_length-length($after), "Empty figure? (<FIG></FIG>)");
+		    &error($full_length-length($remaining), "Empty figure? (<FIG></FIG>)");
 		}
 	    } else {
-		&error($full_length-length($after), "Unterminated figure tag? (<FIG>)");
+		&error($full_length-length($remaining), "Unterminated figure tag? (<FIG>)");
 	    }
 	    $listcap =~ s%^\s+%%s;
 	    $listcap =~ s%\s+$%%s;
@@ -1133,7 +1145,7 @@ sub parse_special_tags
 	    if ($listcap eq ""){
 		if ($caption eq ""){
 		    if ($list){
-			&error($full_length-length($after), "<FIG> tag with LIST attribute and no caption found.\nUsing \"Figure " . $num_fig . "\" for caption.");
+			&error($full_length-length($remaining), "<FIG> tag with LIST attribute and no caption found.\nUsing \"Figure " . $num_fig . "\" for caption.");
 			#$caption = "Figure $num_fig";
 		    }
 		} else {
@@ -1164,15 +1176,15 @@ sub parse_special_tags
 	    $done .= "\n<P></P>\n<A NAME=\"$anchor\">";
 	    $done .= "<STRONG CLASS=figure>$caption</STRONG>\n</A>\n";
 	    $done .= "<P></P>\n";
-	    # Must put $figure into $after to get processing of e.g.
+	    # Must put $figure into $remaining to get processing of e.g.
 	    # <INX>, <BETA> in the figure.
-	    $after = $figure . $after;
+	    $remaining = $figure . $remaining;
 	    if ($list){
 		push (@figures, "$listcap\@$htmlfile\#$anchor");
 	    }
 	} elsif ($match =~ m%\</FIG\>%i){
 	    # Found FIG end
-	    &error($full_length-length($after), "Unmatched end-of-figure? (</FIG>)");
+	    &error($full_length-length($remaining), "Unmatched end-of-figure? (</FIG>)");
 	    $done .= $match;
 	} else {
 	    # Hmmm, error? Should not happen.
@@ -1180,7 +1192,7 @@ sub parse_special_tags
 	}
 	
 	# handle rest of input in next iteration
-	$_ = $after;
+	$_ = $remaining;
     }
 
     $srcline=$done . $_;
@@ -1386,7 +1398,7 @@ without the prior written permission of Mj&oslash;lner Informatics
 EOT
     &print_trailer($title, 0, "");
     close (STDOUT);
-    printf STDERR "done.\n" if $verbose==1;
+    printf STDERR "done.\n\n" if $verbose==1;
 }
 
 sub read_and_abstract_beta
@@ -1469,7 +1481,7 @@ EOT
     # Mark '(#', '#)' and ':' in comments to avoid interference with
     # subsequent matchings.
 
-    $after = $_;			# in case of no comments at all
+    $remaining = $_;			# in case of no comments at all
     $betaline = "";
 
     printf STDERR "Substituting special symbols...\n" if $debug;
@@ -1477,16 +1489,16 @@ EOT
     while ( /\(\*|\*\)/ ) {
 	$before = $`;
 	$match  = $&;
-	$after  = $';
+	$remaining  = $';
 	if ( $match eq '*)' ) {
 	    $before =~ s/:/\001/g;
 	    $before =~ s/\(\#/\002/g;
 	    $before =~ s/\#\)/\003/g;
 	}
 	$betaline .= $before.$match;
-	$_ = $after;
+	$_ = $remaining;
     }
-    $_ = $betaline.$after;
+    $_ = $betaline.$remaining;
     
     # Substitute ':' in slots with \004
     s/(\<\<\s*SLOT\s*\w+\s*):(\s*\w+\s*\>\>)/$1\004$2/gi;
@@ -1521,7 +1533,7 @@ EOT
 	$before = $`;
 	$match  = $&; 
 	$idxop  = $1; $idxlev = $2; # if index information present
-	$after  = $';
+	$remaining  = $';
 	if ( "$idxop" ne "" ) {
 	    # index pseudo comment found
 	    if ( "$idxop" eq "+" ) { $scope++; }
@@ -1534,7 +1546,7 @@ EOT
 		$scope = $idxlev;
 	    }
 	    $match = ""; # delete comment
-	    $after = "\n".$after;
+	    $remaining = "\n".$remaining;
 	    # $match = "\nINDEXLEVEL: $scope\n";
 	}
 	elsif ( "$match" eq "(#" ) {
@@ -1600,23 +1612,23 @@ EOT
 		    @ids = split( ',' , $1); # list of identifiers, e.g.: x, y, z
 		    $tail = "";
 		    $prefix = "";
-		    if ( $after =~ m/^\s*\(\*/ ) {
-			# move comment after colon but before prefix from $after to $tail
+		    if ( $remaining =~ m/^\s*\(\*/ ) {
+			# move comment after colon but before prefix from $remaining to $tail
 			$tail = $&;            # the stuff matched by the regexp
-			$after = $';           # the stuff after the match
-			$after =~ m/\*\)\s*/;  # MUST succeed if comment matches
+			$remaining = $';           # the stuff after the match
+			$remaining =~ m/\*\)\s*/;  # MUST succeed if comment matches
 			$tail .= $`.$&;        # the stuff before the last match and the match itself
-			$after = $';           # the stuff after the match
+			$remaining = $';           # the stuff after the match
 		    }
 		    
-		    if ( $after  =~ m/^\s*(\w+)\s*\(\#/ ) { 
+		    if ( $remaining  =~ m/^\s*(\w+)\s*\(\#/ ) { 
 			$prefix = $1;
 		    } else {
 			# the match for prefix failed.
 			# look ahead and check if there was a comment after the prefix
 			# and try the match again.
-			# don't change $tail or $after (historical: superpattern index generation)
-			if ( $after =~ m/^\s*(\w+)\s*\(\*/ ) {
+			# don't change $tail or $remaining (historical: superpattern index generation)
+			if ( $remaining =~ m/^\s*(\w+)\s*\(\*/ ) {
 			    # there was a comment after the word after the colon
 			    $possibleprefix = $1;
 			    # set $peekafter to the stuff after the match, i.e. start of comment text
@@ -1684,7 +1696,7 @@ EOT
 	} # "switch" on $match finished
 	
 	$betaline .= $before.$match;
-	$_ = $after;
+	$_ = $remaining;
     } # while
 
     $_ = $betaline."\n";
@@ -2255,7 +2267,7 @@ sub filter_for_pdf
 {
     local ($file, $distfile) = @_;
     local ($contents);
-    local ($done, $before, $match, $after, $number, $i);
+    local ($done, $before, $match, $remaining, $number, $i);
 
     #print STDERR "filter_for_pdf($file, $distfile)\n";
 
@@ -2472,7 +2484,7 @@ sub quote_gram_strings
     while (1){
 	if ($line =~ m/\'([^\']+)\'/){
 	    $processedline .= $`;
-	    $after = $';
+	    $remaining = $';
 	    $literal = $1;
 	    $literal = &quote_html($literal);
 	    # HTML tags are generated as <+...+> to avoid
@@ -2481,7 +2493,7 @@ sub quote_gram_strings
 	    $literal = "<+B+>$literal<+/B+>" if ($in_gram_rules);
 	    $literal = "\'$literal\'";
 	    $processedline .= $literal;
-	    $line = $after;
+	    $line = $remaining;
 	} else {
 	    $processedline .= $line;
 	    last;
@@ -2718,6 +2730,7 @@ if ($book_file_name eq ""){
     @srcfiles = ($ARGV[0]);
     &generate($ARGV[0], "PREVIEW");
 } else {
+    #print STDERR "reading book file\n";
     &read_book_file;
     if ($#gramfiles>=0){
 	if ($#srcfiles>=0){
@@ -2738,3 +2751,4 @@ if ($book_file_name eq ""){
     &generate_pdf;
     &generate_toc_page;
 }
+1;

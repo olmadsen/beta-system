@@ -1,0 +1,61 @@
+#!/usr/local/bin/perl -s
+
+# PC usage: perl -s build [ -p | -v | -d ]
+
+$skippdf = $p;
+$verbose = $v;
+$debug   = $d;
+$book_file_name = "";
+
+local ($d);
+local ($dirs) = ();
+
+
+opendir(CURDIR, ".") || die "Failed to open .: $!";
+foreach $d (readdir CURDIR) {
+    next if (! -d $d);
+    push @dirs, $d;
+}
+close (CURDIR);
+
+@dirs = sort @dirs;
+#print STDERR "dirs: ", join (" ", @dirs), "\n";
+
+foreach $d (@dirs){
+    &build_dir($d);
+}
+
+sub build_dir
+{
+    local ($dir) = @_;
+
+    #print STDERR "build_dir($dir)\n";
+
+    opendir(DOCDIR, "$dir") || die "Failed to open $dir: $!";
+    foreach $file (readdir DOCDIR) {
+	# There may be more than one book file
+	if ($file =~ m%\.book$%){
+	    $book_file_name = $file;
+	    print STDERR "--- $dir ---\n" if (!$reported_dirs{"$dir"});
+	    $reported_dirs{"$dir"} = 1;
+	    chdir($dir);
+	    if (-f "build"){
+		print STDERR "Building auxiliary files\n";
+		do "build";
+	    }
+	    print STDERR "Calling makedoc";
+	    print STDERR " -p" if ($skippdf);
+	    print STDERR " $book_file_name\n";
+	    do "../bin/makedoc" || print STDERR "*** makedoc failed!\n";
+	    chdir "..";
+	    $book_file_name = "";
+	}
+	
+    }
+    close (DOCDIR);
+}
+
+print STDERR "checking links\n";
+system "perl bin/linklint_2.1/linklint -net -error -xref -doc admin/errors -quiet -orphan -htmlonly -limit 2000 -ignore /contents.html -root . -index index.html  /@";
+print STDERR "See file admin/errors/linklint.html for a survey of errors.\n";
+
