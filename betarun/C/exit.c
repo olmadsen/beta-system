@@ -32,7 +32,7 @@
   fprintf(output, "CopyPPP:  %-8d\n", (int)NumCopyPPP)
 #else
 #define PrintMacNumVars()
-#endif
+#endif /* MAC */
 
 static void PrintNumVars(void) 
 { 

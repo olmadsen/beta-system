@@ -697,8 +697,6 @@ long AOAFreeListTotalFree(void)
       blksize = AOASmallIndex2Size(index);
       res += blksize*AOAFreeListSize[index];
     } else {
-      blksize = AOASmallIndex2Size(FreeListSmallMAX) 
-	<< (index-FreeListSmallMAX);
       current = AOAFreeList[index];
       while (current) {
 	res += current->size;

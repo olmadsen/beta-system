@@ -223,9 +223,6 @@ static void ValueProperty(char *name, char *value)
 	  Notify(buf);
 	  AOABlockSize = 1024;
 	}
-	if (AOAMinFree>AOABlockSize) {
-	  AOAMinFree=AOABlockSize;
-	}
 	);
   ENTRY("cbfa", 
 	CBFABlockSize = 1024 * intScan(name, value);
@@ -239,34 +236,22 @@ static void ValueProperty(char *name, char *value)
 
   ENTRY("ioapercentage",
         IOAPercentage = intScan(name, value);
-        if( IOAPercentage < 3 ){
-	  sprintf(buf, "IOAPercentage (%d) is too low, adjusted to 3.",
-		  (int)IOAPercentage);
-	  Notify(buf);
-	  IOAPercentage = 3;
-	}
-	if( IOAPercentage > 40 ){
-	  sprintf( buf, "IOAPercentage (%d) is too high, adjusted to 40.",
+	if( IOAPercentage > 100 ){
+	  sprintf( buf, "IOAPercentage (%d) is too high, adjusted to 100.",
 		   (int)IOAPercentage);
 	  Notify(buf);
-	  IOAPercentage = 40;
+	  IOAPercentage = 100;
 	});
 
   ENTRY("aoaminfree",
 	AOAMinFree = 1024 * intScan(name, value); );
   ENTRY("aoapercentage",
 	AOAPercentage = intScan(name, value);
-        if( AOAPercentage < 3 ){
-	  sprintf(buf, "AOAPercentage (%d) is too low, adjusted to 3.",
+	if( AOAPercentage > 50 ){
+	  sprintf(buf, "AOAPercentage (%d) is too high, adjusted to 50.",
 		  (int)AOAPercentage);
 	  Notify(buf);
-	  AOAPercentage = 3;
-	}
-	if( AOAPercentage > 40 ){
-	  sprintf(buf, "AOAPercentage (%d) is too high, adjusted to 40.",
-		  (int)AOAPercentage);
-	  Notify(buf);
-	  AOAPercentage = 40;
+	  AOAPercentage = 50;
 	});
 
 

@@ -458,7 +458,7 @@ void IOAGc()
   {
     long limit;
     long sum = 0;
-    limit = areaSize(GLOBAL_IOA,GLOBAL_IOALimit) / 10;
+    limit = IOAPercentage*areaSize(GLOBAL_IOA,GLOBAL_IOALimit) / 100;
     IOAtoAOAtreshold = 0;
     do
       {
