@@ -1,0 +1,152 @@
+ORIGIN 'moviePlayer';
+INCLUDE 
+'~beta/guienv/v1.6/controls'
+'~beta/guienv/v1.6/stddialogs';
+
+-- MPPrivate: Descriptor --
+(# (* (movieOpened = true) <=> there is a movie in theMovie. It comes
+    *		   from the file designated by theFileId.
+    *		   theField is open and contains theMovie.
+    *)
+   movieOpened: @boolean;
+   
+   theMovie: @movie
+     (#	
+        start, dur: @integer;
+        
+        init: 
+          (# run: @Boolean;
+          enter(start, dur, run)
+          do (if run then
+                 dur -> theField.start; 
+             if);
+          #);
+     #);
+   
+   theField: @movieView
+     (# eventHandler::
+          (# onMediaChanged::
+               (# mw, mh: @integer;
+               do (if theFileId[]<>NONE then
+                      (if not (newName[] -> theFileId.equalNCS) then
+                          getDisplaySize -> (mw,mh);
+                          (mw,mh) -> Size; (* adjust field size *) 
+                          (mw+20,mh+20) -> this(moviePlayer).size;
+                          
+                          theField[] -> target;
+                      if);
+                  if);
+               #);
+             onFrameChanged::
+               (# mw, mh: @integer;
+               do 
+                  newFrame.size -> (mw,mh);
+                  (mw+20,mh+20) -> this(moviePlayer).size;
+                  theField[] -> target;
+               #);
+          #);
+        
+        
+        open::< 
+          (# 
+          do (10,20) -> position;	
+             true -> border.visible;
+             borderstyles.simple -> border.style;
+          #);
+        
+        (* enterMovie makes m the contents of theField.
+         * First adjusts the sizes of theField and the window.
+         *)
+        enterMovie: 
+          (# m: ^movie;
+             mw, mh : @integer;
+          enter m[]
+          do m[] -> contents;
+             getDisplaySize -> (mw,mh);
+             (mw,mh) -> Size; (* adjust field size *)
+             (mw+20, mh+20) -> this(moviePlayer).size;
+             theField[] -> target;
+             goToBeginning;
+          #);
+     #); (* Slut theField *)  
+   
+#)(* Slut MPPrivate *)
+
+-- MPPlayUserSelectedMovie: doPart --
+do (# mf: @movieFile; msg: ^text;
+   do (* identify the file. This is the only place PlayUserSelectedMovie
+       * and PlayMovieByFileId are different.
+       *)
+      (if mf.getFile then
+          (if theFileId[]=NONE then &text[] -> theFileId[] if);
+          mf.name -> theFileId; 
+          true -> private.movieOpened;
+          mf.openRead;
+          mf.getMovie -> private.theMovie;
+          mf.close;
+          private.theMovie[] -> private.theField.enterMovie;
+      if);
+   #)
+
+-- MPPlayMovieByFileId: doPart --
+do (# mf: @movieFile; 
+      t: ^text; t2: @text;
+      tempName: ^text;
+      noFileIdException: exception
+        (# do 'No file id object in getMovieByFileId' -> msg.putText; true -> continue; #);
+      
+   do (if theFileId[]=NONE then 
+          noFileIdException;
+       else
+	  (if (theFileId.length=0)=false then (* there is a file to open *)
+              (* check if there's already a movie in theField: *)
+              true -> private.movieOpened;
+              
+              theFileId -> mf.name;
+              (if mf.exists then
+                  mf.openRead;
+                  mf.getMovie -> private.theMovie;
+                  mf.close;
+                  private.theMovie[] -> private.theField.enterMovie;
+               else
+                  'Sorry. Movie file not found.' -> t[];  t.putline;
+                  mf.name -> t2; t2.copy -> t.putline;
+                  (this(moviePlayer)[],t[],'Movie Exception') -> noteuser;
+		if);
+	  if);
+      if);
+   #)
+   
+
+-- MPgetFileId: doPart -- 
+do private.theField.getMovieName -> theFileId[];
+   
+-- MPRunMovieInterval: doPart --
+do (if theFileId[]<>NONE then 
+       (if private.movieOpened then
+           start->private.theField.time;
+           (start, duration, true) -> private.theMovie.init;
+        else
+           (this(moviePlayer)[],'Cannot find associated movie.','Movie Exception') -> noteUser;
+       if);
+    else
+       (this(moviePlayer)[],'Cannot find associated movie.','Movie Exception') -> noteUser;
+   if);
+
+
+-- MPOpen: doPart --
+do hide;
+   false -> private.movieOpened;
+   NONE -> theFileId[];
+   (100,200) -> size;
+   private.theField.open;
+
+   INNER Open;
+   
+   show;
+
+-- MPClose: doPart --
+do INNER Close;
+   (if private.movieOpened then
+       private.theMovie.dispose;
+   if);
