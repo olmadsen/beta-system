@@ -1,0 +1,669 @@
+ORIGIN '~beta/editor/v5.0/ymersiflib';
+BODY '~beta/editor/v5.0/private/compiler';
+
+INCLUDE 'graphicaleditor/graphicaleditor';
+INCLUDE '~beta/guienv/v1.3.1/utils/getfile';
+INCLUDE 'mpsstuff/mpsutils';
+INCLUDE 'objectsstore/getresourcefile';
+INCLUDE 'dialogs/promptfortextdialog';
+INCLUDE 'code/generate';
+INCLUDE 'preferences/preferences';
+INCLUDE 'guienvstuff/getpreferencefile';
+INCLUDE 'editorenv/prettyprinter';
+INCLUDE 'utils/catchallfile';
+INCLUDE 'buildermenu';
+INCLUDE '~beta/pretty/v4.9.1/pplib';
+
+
+-- program: descriptor --
+fragmentBrowser
+(# 
+   
+   prefs: ^preferences.section;
+   
+   (*
+    * Misc utilities that ought to be somewhere else...
+    *)
+   
+   stripExtension:
+     (# path: ^text;
+        lastDotInx, lastSlashInx: @integer;
+     enter path[]
+     do '.' -> path.findCH (# do inx -> lastDotInx #);
+        '/' -> path.findCH (# do inx -> lastSlashInx #);
+        (if (lastDotInx > 0) and (lastDotInx > lastSlashInx) then
+            (lastDotInx, path.length) -> path.delete;
+        if);
+     #);
+   
+   getName:
+     (# path: ^text;
+        name: ^text;
+        lastSlashInx: @integer;
+     enter path[]
+     do '/' -> path.findCH (# do inx -> lastSlashInx #);
+        (if (lastSlashInx > 0) and (lastSlashInx <> path.length) then
+            (lastSlashInx + 1, path.length) -> path.sub -> name[];
+         else
+            path.copy -> name[];
+        if);
+     exit name[]
+     #);
+   
+   createFile:
+     (# fileName: ^text;
+        msg: ^text;
+     enter msg[]
+     do ymerBrowser[] -> fileCreationDialog
+        (# 
+        do msg[] -> label[];
+        #) -> fileName[];
+        (if fileName[] <> none then
+            fileName[] -> stripExtension;
+        if);
+     exit fileName[]
+     #);
+   getIdentifier:
+     (# prompt: ^text;
+        identifier: ^text;
+        values: @promptForTextValues;
+     enter prompt[]
+     do prompt[] -> values.prompt[];
+        values[] -> dopromptForText
+        (# verify::
+             (# str: ^text;
+             do false -> okToClose;
+                values.theText[] -> str[];
+                checking:
+                  (# EOS: (# exit 1 #);
+                     ch: @char;
+                     next:
+                       (# 
+                       do (if str.eos then
+                              EOS -> ch;
+                           else
+                              str.get -> ch;
+                          if);
+                       #);
+                  do str.reset;
+                     next;
+                     (if ch = EOS then
+                         leave checking;
+                      else
+                         (if ch -> ASCII.isLetter then
+                             next;
+                             l:
+                               (if ch = EOS then
+                                   leave l;
+                                else
+                                   (if (ch -> ASCII.isLetter) or (ch -> ASCII.isDigit) then
+                                       next;
+                                       restart l;
+                                    else
+                                       leave checking;
+                                   if);
+                               if);
+                          else
+                             leave checking;
+                         if);
+                     if);
+                     true -> okToClose;
+                  #);
+                (if not okToClose then
+                    system.beep;
+                if);
+             #);
+           accept::
+             (# 
+             do values.theText.copy -> identifier[];
+             #);
+        #);
+     exit identifier[]
+     #);
+   externalFragmentFormHandler: ymerBrowser.browser.edenv.externalFragmentFormHandler
+     (# astReplacedEvent::
+          (# 
+          do (false, ff[], oldAst[], newAst[]) -> theFragServer.notifyAstReplaced;
+          #);
+        astReplacedSequenceEvent::
+          (# 
+          do (false, ff[], rootOfSequence[]) -> theFragServer.notifyAstReplacedSequence;
+          #);
+        listElementInsertedEvent::
+          (#
+          do (false, ff[], listNode[], position) -> theFragServer.notifylistElementInserted;
+          #);
+        makeAstList:
+          (# thePartList: ^window.editorEnv.partList;
+             theAstList: ^astInterface.astList;
+             length: @integer;
+          enter (length, thePartList[])
+          do &mps.ast.astList[] -> theAstList[];
+             theAstList.init;
+             (for inx: length repeat
+                  thePartList.elm[inx][] -> theAstList.insert;
+             for);
+          exit theAstList[]
+          #);
+        listElementsDeletedEvent::
+          (#
+          do (false, ff[], listNode[], position, length, (length, oldElements[]) -> makeAstList)
+               -> theFragServer.notifyListElementsDeleted;
+          #);
+        listElementsReplacedEvent::
+          (#
+          enter (listNode[],position,length,oldElements[],newLength)
+          do (false, ff[], listNode[], position, length, 
+             (length, oldElements[]) 
+               -> makeAstList, newLength)
+               -> theFragServer.notifyListElementsReplaced;
+          #);
+     #);
+   
+   theFragServer: @fragmentServer
+     (# subscribe::
+          (# effh: ^externalFragmentFormHandler
+          do &externalFragmentFormHandler[] -> effh[];
+             fragHandler.frag[] -> effh.ff[];
+             effh[] -> ymerBrowser.browser.edenv.ffhandler.externalSubscribe;
+          #);
+        
+        findFFhandler:
+          (# frag: ^astInterface.fragmentForm;
+             ffh: ^window.editorEnv.fragmentFormHandler;
+          enter frag[]
+          do l: ymerBrowser.browser.edenv.ffhandler.scan
+               (# 
+               do 
+                  (if current.ff[] = frag[] then
+                      current[] -> ffh[];
+                      leave l;
+                  if);
+               #);
+          exit ffh[]
+          #);
+        withFFH:
+          (# ffh: ^window.editorEnv.fragmentFormHandler;
+             frag: ^astInterface.fragmentForm;
+             fromInterfaceBuilder: @boolean;
+          enter (frag[],  fromInterfaceBuilder)
+          do (if fromInterfaceBuilder then
+                 frag[] -> findFFhandler -> ffh[];
+                 (if ffh[] <> none then
+                     inner;
+                 if);
+             if);
+          #);
+        notifyAstReplaced::
+          (# 
+          do (frag[], fromInterfaceBuilder) -> withFFH
+             (# 
+             do (none, oldAst[], newAst[]) -> ffh.anAstReplacedEvent;
+             #);
+          #);
+        notifyListElementInserted::
+          (#
+          do (frag[], fromInterfaceBuilder) -> withFFH
+             (# 
+             do (none, listNode[], position) -> ffh.aListElementInsertedEvent;
+             #);
+          #);
+        notifyAstReplacedSequence::
+          (# 
+          do (frag[], fromInterfaceBuilder) -> withFFH
+             (# 
+             do (none, rootOfSequence[]) -> ffh.astReplacedSequenceEvent;
+             #);
+          #);
+        makePartList:
+          (# theAstList: ^astInterface.astList;
+             thePartList: ^window.editorEnv.partList;
+             inx: @integer;
+          enter theAstList[]
+          do &ymerBrowser.browser.edenv.partList[] -> thePartList[];
+             theAstList.size -> thePartList.elm.new;
+             0 -> inx;
+             theAstList.scan
+             (# 
+             do inx + 1 -> inx;
+                current[] -> thePartList.elm[inx][];
+             #);
+          exit thePartList[]
+          #);
+        notifyListElementsDeleted::
+          (# 
+          do 
+             (frag[], fromInterfaceBuilder) -> withFFH
+             (# 
+             do 
+                (none, listNode[], position, length, oldElements[] -> makePartList) 
+                  -> ffh.aListElementsDeletedEvent;
+             #);
+          #);
+        notifyListElementsReplaced::
+          (# 
+          do (frag[], fromInterfaceBuilder) -> withFFH
+             (# 
+             do 
+                (none, listNode[], position, length, oldElements[] -> makePartList, newLength) 
+                  -> ffh.aListElementsReplacedEvent;
+             #);
+          #);
+     #);
+   
+   
+   pretty: @MPS.AST.prettyPrinter;
+   
+   theGraphicalEditorEnv: @graphicalEditorEnv
+     (# save::
+          (# 
+          do ymerBrowser.saveAll;
+          #);
+        openAstEditor::
+          (# 
+          do (node[], node[]) -> ymerBrowser.cfe.openSubEditor;
+          #);
+     #);
+   
+   
+   ymerBrowserWindow::
+     (# 
+        (*
+         * Resource file handling
+         *)
+        
+        theObjectStore: @objectDataStore;
+        objectStoreInited: @boolean;
+        resourceFileName: ^text;
+        
+        getResourceFile:
+          (# 
+          do 'res' -> getFile -> resourceFileName[];
+             (if resourceFileName[] <> none then
+                 theObjectStore.init;
+                 ('resource-file', resourceFileName[]) -> prefs.setOption;
+                 prefs.save;
+                 resourceFileName[] -> theObjectStore.readFile;
+                 true -> objectStoreInited;
+             if);
+          #);
+        createResourceFile:
+          (# 
+          do 'Resource file:' -> createFile -> resourceFileName[];
+             (if resourceFileName[] <> none then
+                 '.res' -> resourceFileName.append;
+                 theObjectStore.init;
+                 resourceFileName[] -> theObjectStore.readFile;
+                 ('resource-file', resourceFileName[]) -> prefs.setOption;
+                 prefs.save;
+                 true -> objectStoreInited;
+             if);
+          #);
+        ensureResourceFile: booleanValue
+          (# 
+          do (if not objectStoreInited then
+                 (if resourceFileName[] = none then
+                     (none, 'You must create or open a resourcefile', '') -> noteUser;
+                     false -> value;
+                  else
+                     theObjectStore.init;
+                     resourceFileName[] -> theObjectStore.readFile;
+                     true -> objectStoreInited;
+                     true -> value;
+                 if);
+              else
+                 true -> value;
+             if);
+          #);
+        
+        (* End Resource file handling *)
+        
+        (*
+         * Menubar
+         *)
+        
+        menubarType::
+          (# ibMenu: @builderMenu
+               (# newSourceFileItem: @builderItem
+                    (# eventHandler::
+                         (# onStatus::
+                              (# 
+                              do true -> value;
+                              #);
+                            onSelect::
+                              (# 
+                              do createSourceFile;
+                              #);
+                         #);
+                       open::
+                         (# 
+                         do 'New GUI library...' -> name;
+                         #);
+                    #);
+                  saveItem: @builderItem
+                    (#  eventHandler::
+                         (# onStatus::
+                              (# 
+                              do true -> value;
+                              #);
+                            onSelect::
+                              (# 
+                              do saveAll;
+                              #);
+                         #);
+                       open::
+                         (# 
+                         do 'Save all' -> name;
+                         #);
+                    #);
+                  openGraphicalEditor: @builderItem
+                    (# eventHandler::
+                         (# onStatus::
+                              (# 
+                              do false -> value;
+                                 (if cfe[] <> none then
+                                     (if cfe.cs[] <> none then
+                                         (if cfe.cs.node[] <> none then
+                                             cfe.cs.node.hasGUIcomment -> value;
+                                         if);
+                                     if);
+                                 if);
+                              #);
+                            onSelect::
+                              (# group: ^astInterface.fragmentGroup;
+                                 result: @boolean;
+                              do cfe.cs.node.frag.father -> group[];
+                                 ensureResourceFile -> result;
+                                 (if result then
+                                     cfe.cs.node[] -> editWindow;
+                                 if);
+                              #);
+                         #);
+                       open::
+                         (# 
+                         do 'Edit window...' -> name;
+                         #);
+                    #);
+                  newGraphicalEditor: @builderItem
+                    (# eventHandler::
+                         (# onStatus::
+                              (# frag: ^astInterface.fragmentForm;
+                              do false -> value;
+                                 (if cfe[] <> none then
+                                     (if cfe.cs.node[] <> none then
+                                         cfe.cs.node.frag[] -> frag[];
+                                         (if frag[] <> None then
+                                             (if frag.category = mps.betaCfl.attributesForm then
+                                                 true -> value;
+                                             if);
+                                         if);
+                                     if);
+                                 if);        
+                              #);
+                            onSelect::
+                              (# frag: ^astInterface.fragmentForm;
+                                 group: ^astInterface.fragmentGroup;
+                                 result: @boolean;
+                              do (if cfe[] <> none then
+                                     (if cfe.cs.node[] <> none then
+                                         cfe.cs.node.frag[] -> frag[];
+                                         (if frag[] <> None then
+                                             (if frag.category = mps.betaCfl.attributesForm then
+                                                 frag.father -> group[];
+                                                 ensureResourceFile -> result;
+                                                 (if result then
+                                                     frag[] -> createWindow;
+                                                 if);
+                                             if);
+                                         if);
+                                     if);
+                                 if);
+                              #);
+                         #);
+                       open::
+                         (# 
+                         do 'Create window...' -> name;
+                         #);
+                    #);
+                  resourceFileItem: @builderItem
+                    (# eventHandler::
+                         (# onStatus::
+                              (# t: ^text;
+                              do 
+                                 'Resourcefile: ' -> t[];
+                                 (if resourceFileName[] <> none then
+                                     resourceFileName[] -> getName -> t.append;;
+                                  else
+                                     'NONE' -> t.append;;
+                                 if);
+                                 t[] -> name;
+                              #);
+                         #);
+                    #);
+                  createResourceFileItem: @builderItem
+                    (# eventHandler::
+                         (# onStatus::
+                              (# 
+                              do not objectStoreInited  -> value;
+                              #);
+                            onSelect::
+                              (#
+                              do createResourceFile;
+                              #);
+                         #);
+                       open::
+                         (# 
+                         do 'New resourcefile...' -> name;
+                         #);
+                    #);
+                   getResourceFileItem: @builderItem
+                    (# eventHandler::
+                         (# onStatus::
+                              (# 
+                              do not objectStoreInited  -> value;
+                              #);
+                            onSelect::
+                              (#
+                              do getResourceFile;
+                              #);
+                         #);
+                       open::
+                         (# 
+                         do 'Open resourcefile...' -> name;
+                         #);
+                    #);
+                  open::
+                    (# 
+                    do 'Interfacebuilder' -> name;
+                      
+                       newSourceFileItem.open;
+                       saveItem.open;
+                       addSeparator;
+                       openGraphicalEditor.open;
+                       newGraphicalEditor.open;
+                       addSeparator;
+                       resourceFileItem.open;
+                       createResourceFileItem.open;
+                       getResourceFileItem.open;
+                    #);
+               #);
+             open::
+               (# 
+               do SLOTs.new;
+                  SLOTs[]->append;
+                  'Fragment'->GroupEdit.new;
+                  'Tools'->GroupPerform.new;
+                  ibMenu.open;
+                  ibMenu[] -> append;
+               #);
+          #);
+        
+        (* End of Menubar *)
+        
+        (*
+         * Event handling
+         *)
+        
+        eventHandler::
+          (# onAboutToClose::
+               (# 
+               do (this(ymerBrowserWindow)[], '', 'Save changes to windows before closing?')
+                    -> promptForBoolean
+                  (# 
+                     ok::
+                       (# 
+                       do saveAll;
+                          true -> okToClose;
+                       #);
+                     notOk::
+                       (# 
+                       do true -> okToClose
+                       #);
+                     cancel::
+                       (# 
+                       do false -> okToClose;
+                       #);
+                  #);
+               #);
+          #);
+        
+        (*
+         * Handling of windows
+         *)
+        
+        saveAll:
+          (# putBool:
+               (# b: @boolean;
+               enter b
+               do (if b then
+                      'true' -> putText;
+                   else
+                      'false' -> putText;
+                  if);
+               #);
+          do theObjectStore.save;
+             browser.edenv.saveAll;
+             MPS.AST.top.groupTable.scan
+             (# 
+             do (if current.g[] <> none then
+                    
+                    (if current.g.changed then
+                        current.g[] -> saveGroup;
+                    if);
+                if);
+             #);
+          #);
+        
+        saveGroup:
+          (# fg: ^astInterface.fragmentGroup;
+          enter fg[]
+          do saving:
+               (# 
+                  theFile: @catchAllFile
+                    (# failure::
+                         (# 
+                         do msg[] -> putLine;
+                            leave saving;
+                         #);
+                    #);
+                  fileName: ^text;
+               do (fg.name).copy -> fileName[];
+                  '.bet' -> fileName.append;
+                  fileName[] -> theFile.name;
+                  theFile.openWrite;
+                  (mps.ast[], fg[], theFile[], none) -> prettyPrintFragment;
+                  theFile.close;
+                  fg.fragmentList.scan
+                  (# frag: ^astInterface.fragmentForm;
+                  do (if current.type = MPS.AST.formType then
+                         current.open -> frag[];
+                         frag.recomputeSlotChain;
+                     if);
+                  #);
+                  'doneCheck' -> fg.prop.deleteProp;
+                  fg.markAsChanged;
+               #);
+          #);
+        
+        
+        editWindow:
+          (# theAttributeDecl: ^astInterface.ast;
+             theGraphicalEditor: ^graphicalEditorEnv.graphicalEditor;
+          enter theAttributeDecl[]
+          do 
+             theAttributeDecl[] -> theGraphicalEditorEnv.find -> theGraphicalEditor[];
+             (if theGraphicalEditor[] = none then
+                 &theGraphicalEditorEnv.graphicalEditor[] -> theGraphicalEditor[];
+                 theObjectStore[] -> theGraphicalEditor.theObjectStore[];
+                 theGraphicalEditor.open;
+                 theAttributeDecl[] -> theGraphicalEditor.init;
+              else
+                 theGraphicalEditor.bringToFront;
+             if);
+          #);
+        createGUI:
+          (# theAttribute: ^astInterface.beta.attributeDecl;
+             theGraphicalEditor: ^graphicalEditorEnv.graphicalEditor;
+          enter theAttribute[]
+          do  &theGraphicalEditorEnv.graphicalEditor[] -> theGraphicalEditor[];
+             theObjectStore[] -> theGraphicalEditor.theObjectStore[];
+             theGraphicalEditor.open;
+             theAttribute[] -> theGraphicalEditor.new;
+          #);
+        createWindow:
+          (# frag: ^astInterface.fragmentForm;
+          enter frag[]
+          do (# theAttributesForm: ^astInterface.beta.attributesForm;
+                theAttributes: ^astInterface.beta.attributes;
+                theAttribute: ^astInterface.beta.attributeDecl;
+                name: ^text;
+                
+             do frag.root[] -> theAttributesForm[];
+                theAttributesForm.getAttributes -> theAttributes[];
+                'Name:' -> getIdentifier -> name[];
+                (if name[] <> none then
+                    (frag[], name[], 'window') -> mps.betacfl.newPatternAttribute -> theAttribute[];
+                    theAttribute[] -> theAttributes.append;
+                    theAttribute[] -> createGUI;
+                    (true, frag[], theAttributes[], theAttributes.noOfSons - 1) 
+                      -> theFragServer.notifyListElementInserted
+                if);
+             #);
+          #);
+        createSourceFile:
+          (# fileName: ^text;
+             group: ^astInterface.fragmentGroup;
+             theLink: ^astInterface.fragmentLink;
+             frag: ^astInterface.fragmentForm;
+          do 'File name: ' -> createFile -> fileName[];
+             (if fileName[] <> none then
+                 fileName[] -> MPS.AST.top.newGroup -> group[];
+                 '~beta/guienv/v1.3.1/guienvall' -> group.originProperty;
+                 'INCLUDE' -> group.prop.addProp
+                 (# 
+                 do '~beta/interfacebuilder/v1.2/objectsstore/initfromresource' -> addString;
+                 #);
+                 MPS.AST.newfragmentLink -> theLink[];
+                 '~beta/interfacebuilder/v1.2/objectsstore/initfromresource' -> theLink.name;
+                 'initfromresource' -> theLink.localName[];
+                 theLink[] -> group.fragmentList.addfragment;
+                 'guienvLib' -> MPS.betaCfl.newAttributesFrag -> frag[];
+                 frag[] -> group.fragmentList.addFragment;
+                 group[] -> saveGroup;
+                 fileName[]->ymerBrowser.appendProject; ymerBrowser.appendDone;
+             if);
+          #);
+     #);
+   init::
+     (# 
+     do ymerBrowser.initCompiler;
+        ('Sif: Known Bugs and Inconveniences',
+        '~beta/editor/v5.0/doc/TODO')->ymerBrowser.helpDocument;
+        ('mjolner', 'Interfacebuilder') -> getPreferencesSection  -> prefs[];
+        'resource-file' -> prefs.getOption -> ymerBrowser.resourceFileName[];
+        theFragServer.init;
+        (theFragServer[], MPS.AST[], MPS.betaCfl[], pretty[]) -> theGraphicalEditorEnv.init;
+        MPS.betaCfl[] -> pretty.init;
+        pretty[] -> objectPool.put;
+     #);
+#)

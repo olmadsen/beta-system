@@ -1,0 +1,213 @@
+ORIGIN '../forms';
+INCLUDE '~beta/sysutils/v1.4/objinterface';
+
+-- windowItemLib: attributes --
+
+flexible: booleanValue
+  (# 
+  do (if true 
+      //this(windowItem)## <= editText## then
+         true -> value;
+      //this(windowItem)## <= row## then
+         true -> value;
+      //this(windowItem)## <= col## then
+         true -> value;
+      else
+         false -> value;
+     if);
+  #);
+  
+-- canvasLib: attributes --
+
+
+
+maxSize:
+  (# maxWidth, maxHeight: @integer;
+     widthSum, heightSum: @integer;
+     noOfChildren: @integer;
+  do scan
+     (# width, height: @integer;
+     do noOfChildren + 1 -> noOfChildren;
+        current.size -> (width, height);
+        widthSum + width -> widthSum;
+        heightSum + height -> heightSum;
+        (width, maxWidth) -> max -> maxWidth;
+        (height, maxHeight) -> max -> maxHeight;
+     #);
+  exit ((maxWidth, maxHeight), (widthSum, heightSum), noOfChildren)
+  #);
+countFlexible: integerValue
+  (# 
+  do scan
+     (# 
+     do (if current.flexible then
+            value + 1 -> value;
+        if);
+     #);
+  #);
+
+stackingInfo:
+  (# sum: @integer;
+     max: @integer;
+     noOfFlexible: @integer;
+  #);
+
+computeStackingInfo:
+  (# horInfo, verInfo: ^stackingInfo;
+  do &stackingInfo[] -> horInfo[];
+     &stackingInfo[] -> verInfo[];
+     scan
+     (# w, h: @integer;
+     do current.size -> (w, h);
+        (w, horInfo.max) -> max -> horInfo.max;
+        (h, verInfo.max) -> max -> verInfo.max;
+        horInfo.sum + w -> horInfo.sum;
+        verInfo.sum + h -> verInfo.sum;
+        (if current.flexible then
+            horInfo.noOfFlexible + 1 -> horInfo.noOfFlexible;
+            verInfo.noOfFlexible + 1 -> verInfo.noOfFlexible;
+        if);
+     #);
+  #);
+
+stackChildrenVertical:
+  (# margin, distance: @integer;
+     hor, ver: ^resizingAttributes;
+     swap:<
+       (# left,right: @integer;
+       enter (left, right)
+       do inner;
+       exit (left, right)
+       #);
+     adjustSize: @boolean;
+  enter (margin, distance, hor[], ver[], adjustSize)
+  do (# maxWidth, maxHeight: @integer;
+        x, y: @integer;
+        widthSum, heightSum: @integer;
+        noOfChildren: @integer;
+        width, height: @integer;
+        deltaY: @integer;
+        verJust, horJust: @integer;
+        noOfFlexible: @integer;
+     do maxSize -> ((maxWidth, maxHeight), (widthSum, heightSum), noOfChildren);
+        (if noOfChildren > 0 then
+            (maxWidth, maxHeight) -> swap -> (maxWidth, maxHeight);
+            (widthSum, heightSum) -> swap -> (widthSum, heightSum);
+            (hor.Justification, ver.Justification) -> swap -> (horJust, verJust);
+            (if adjustSize then
+                (margin * 2 + maxWidth, margin * 2 + heightSum + (noOfChildren - 1) * distance) -> (width, height);
+                (width, height) -> swap -> size;
+             else
+                size -> swap -> (width, height);
+                (if verJust 
+                 //topJustify then
+                    (* Nothing *)
+                 //bottomJustify then
+                    height - (margin * 2 + heightSum + (noOfChildren - 1) * distance) -> deltaY;
+                 //centerJustify then
+                    (height - (margin * 2 + heightSum + (noOfChildren - 1) * distance)) div 2 -> deltaY;
+                 //equalJustify then
+                    countFlexible -> noOfFlexible;
+                    (if noOfFlexible = 0 then
+                        (height - (margin * 2 + heightSum + (noOfChildren - 1) * distance)) div 2 -> deltaY;
+                     else
+                        (# extra: @integer;
+                        do (height - (margin * 2 + heightSum + (noOfChildren - 1) * distance)) -> extra;
+                           extra div noOfFlexible -> extra;
+                           scan
+                           (# w, h: @integer;
+                           do (if current.flexible then
+                                  current.size -> swap -> (w, h);
+                                  h + extra -> h;
+                                  (w, h) -> swap -> current.size;
+                              if);
+                           #);
+                        #);
+                    if);
+                if);
+            if);
+            
+            margin -> x -> y;
+            width - (2 * margin) -> width;
+            scan
+            (# w, h: @integer;
+               theX, theY: @integer;
+               theWidth: @integer;
+               theHeight: @integer;
+            do current.size -> swap -> (w, h);
+               h -> theHeight;
+               y + deltaY -> theY;
+               (if horJust
+                //leftJustify then
+                   x -> theX;
+                   w -> theWidth;
+                //rightJustify then
+                   x + (width - w) -> theX;
+                   w -> theWidth;
+                //centerJustify then
+                   x + (width - w) / 2 -> theX;
+                   w -> theWidth;
+                //equalJustify then
+                   x -> theX;
+                   width -> theWidth;
+               if);
+               ((theX, theY) -> swap, (theX + theWidth, theY + theHeight) -> swap) -> current.frame;
+               y + theHeight + distance -> y;
+            #);
+         else
+            (2 * margin, 2 * margin) -> size;
+        if);
+     #);
+  #);
+
+stackChildrenHorizontal: stackChildrenVertical
+  (# swap::
+       (# tmp: @integer;
+       do left -> tmp;
+          right -> left;
+          tmp -> right;
+       #);
+  #);
+
+-- colComputeLayout: doPart --
+do (if not sema then
+       true -> sema;
+       (margin, distance, &horizontal[], &vertical[], true) -> stackChildrenVertical;
+       false -> sema;
+   if);
+
+-- colOpen: doPart --
+do inner;
+   computeLayout;
+
+-- colClose: doPart --
+do inner;
+   
+-- colOnFrameChanged: doPart --
+do (if not sema then
+       true -> sema;
+       (margin, distance, &horizontal[], &vertical[], false) -> stackChildrenVertical;
+       false -> sema;
+   if);
+   
+-- rowComputeLayout: doPart --
+do (if not sema then
+       true -> sema;
+       (margin, distance, &horizontal[], &vertical[], true) -> stackChildrenHorizontal;
+       false -> sema;
+   if);
+   
+-- rowOpen: doPart --
+do inner;
+   computeLayout;
+   
+-- rowClose: doPart --
+do inner;
+   
+-- rowOnFrameChanged: doPart --
+do (if not sema then
+       true -> sema;
+       (margin, distance, &horizontal[], &vertical[], false) -> stackChildrenHorizontal;
+       false -> sema;
+   if);
+
