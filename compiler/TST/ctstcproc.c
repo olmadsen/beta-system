@@ -93,3 +93,7 @@ char *XdataToText(r) struct Xdata *r;
   else {return "???";}
 }
 
+void printSub(char *s){
+   printf("%s",s);
+   fflush(stdout);
+ }
