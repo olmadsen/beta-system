@@ -97,7 +97,7 @@ ExtRR: public
          pop newRange; {Restore newRange}
          pop theRep; {Restore theRep}
          pop  RegThis, RegCall;
-         pReg3 -> addSize;
+         pReg3 -> addSize; { addsize needed by copybody }
          
          { STACK:
            <General stack layout>
@@ -108,11 +108,13 @@ ExtRR: public
          4 -> BodySize*;
          ObjectAlign -> BodySize|;
 	 (if newRep = 0 then 
-	      goto GC;
+	      goto GC; { FIXME: Should fall through to IOAAlloc }
 	 if);
          goto copyBody 
      if);
      { end LVRAcheck }
+     
+     IOAAlloc: 
      
      { Calculate BodySize of new repetition }
      newRange -> BodySize; { invalidates RegAdr }
@@ -159,15 +161,15 @@ ExtRR: public
          theRep.HighBorder -> oldBodySize; { invalidates addSize }
 	 goto calcBody				
      if);							
-     newRange -> oldBodySize; 
+     newRange -> oldBodySize; { in case of addsize <= 0 }
      calcBody:						
      (if oldBodySize > 0 then
          4->oldBodySize*;
-         ObjectAlign -> oldBodySize|;
+         { ObjectAlign -> oldBodySize|; NO, NO, NO! May copy one element too much! }
          4 -> oldBodySize-;
          push newRep;
          newRep[16+oldBodySize][] -> copyCell;  { Cell to copy to }
-         (if copyCell outside IOA then  { The theCell resides in AOA. }
+         (if copyCell outside IOA then  { The copyCell resides in AOA. }
              { Loop which calls ChkRA for each element }
              loop1:
              theRep[16+oldBodySize] -> value;
@@ -175,10 +177,8 @@ ExtRR: public
              (if call_chkra_unconditionally then
                  call ChkRA_ESI;
               else
-                 (if copyCell outside IOA then  { The theCell resides in AOA. }
-                     push copyCell;
-                     call ChkRA { No need to remove parameter. }
-                 if);
+                 push copyCell;
+                 call ChkRA { No need to remove parameter. }
              if);
              4 -> copyCell-;
              4 -> oldBodySize-;
@@ -191,9 +191,6 @@ ExtRR: public
          loop2:
          theRep[16+oldBodySize] -> value;
          value -> copyCell[0];
-         (if call_chkra_unconditionally then
-             call ChkRA_ESI;
-         if);
          4 -> copyCell-;
          4 -> oldBodySize-;
          (if FLAGS >= 0 then goto loop2 if);

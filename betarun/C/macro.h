@@ -194,16 +194,14 @@ do {                               \
 #define LongAlign(numbytes)       ((unsigned long)(((numbytes)+3) & ~3))
 #define LongAlignDown(numbytes)   ((unsigned long)(((numbytes))   & ~3))
 
-/* FIXME: It is currently unclear if the use of LongAlign instead of 
- * ObjectAlign below is intentional or something that was not fixed when
- * ObjectAlign was changed to 8.
- * Things seem to work as is, but all direct and indirect uses of the four
- * macros below should be checked. 
+/* It is INTENSIONAL that we use of LongAlign instead of ObjectAlign below.
+ * This meens that RepSize <> RepBodySize + HeadSize (the latter may be 4 less). 
  */
 #define ByteRepBodySize(range)   LongAlign((range)+1) /* +1 for NULL termination */
 #define ShortRepBodySize(range)  LongAlign(2*(range))
 #define LongRepBodySize(range)   ((range)*4)
 #define DoubleRepBodySize(range) ((range)*8)
+#define RefRepBodySize(range)    ((range)*4)
 
 #define StructureSize          ObjectAlign(headsize(Structure))
 #define RefRepSize(range)      ObjectAlign((range)*4 + headsize(RefRep))
@@ -235,7 +233,9 @@ do {                               \
   (((long)(proto) == (long)(DoubleRepPTValue)) ? DoubleRepSize(range) :    	\
    LongRepSize(range))))
 
-/* DispatchRepBodySize works for both value repetitions and reference repetitions */
+/* DispatchRepBodySize works for both value repetitions and reference repetitions
+ * Notice that these values are only 4 aligned, NOT ObjectAlign'ed (8).
+ */
 #define DispatchRepBodySize(proto, range)			                \
 (((long)(proto) == (long)(ByteRepPTValue)) ? ByteRepBodySize(range) :      	\
  (((long)(proto) == (long)(ShortRepPTValue))   ? ShortRepBodySize(range)  : 	\

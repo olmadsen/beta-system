@@ -22,9 +22,9 @@ void ExtRR(Object *theObj,
     theRep = *(RefRep **)((long *) theObj + offset);
     Ck(theRep);
     newRange = theRep->HighBorder + add;
-    copyRange = (add < 0) ? newRange : theRep->HighBorder;
-    
     if (newRange < 0) newRange = 0;
+
+    copyRange = (RefRepBodySize((add < 0) ? newRange : theRep->HighBorder))>>2;
 
     push(theObj);
     push(theRep);
