@@ -88,7 +88,7 @@ struct Component * Att(struct Object *this, struct Component *comp)
     MEMCPY(theStackObj->Body+1, FP+SPStartOff, sizeToMove*4);
 
     /* save jump stack from Misc.c */
-    PackAndFreeJmpBuf(&theStackObj->Body[1+sizeToMove]); 
+    PackAndFreeJmpBuf((long)&theStackObj->Body[1+sizeToMove]); 
 
     /* Save reference stack */
     MEMCPY(theStackObj->Body+1+sizeToMove+jump_stack_size, baseRefSP, sizeOfRefStack*4);
@@ -145,7 +145,7 @@ struct Component * Att(struct Object *this, struct Component *comp)
     MEMCPY(newSP+SPStartOff, theStackObj->Body+1, sizeToMove*4);
 
     /* Restore jump stack. no_of_buffers is first */
-    UnPackAndAllocateJmpBuf(&theStackObj->Body[1+sizeToMove+1], theStackObj->Body[1+sizeToMove]);
+    UnPackAndAllocateJmpBuf((long)&theStackObj->Body[1+sizeToMove+1], theStackObj->Body[1+sizeToMove]);
 
     /* Restore reference stack */
     sizeOfRefStack = theStackObj->BodySize-theStackObj->StackSize-1; /* In longs ! */
@@ -204,7 +204,7 @@ struct Component * Att(struct Object *this, struct Component *comp)
   MEMCPY(theStackObj->Body+1, FP+SPStartOff, sizeToMove*4);
 
   /* save jump stack from Misc.c */
-  PackAndFreeJmpBuf(&theStackObj->Body[1+sizeToMove]); 
+  PackAndFreeJmpBuf((long)&theStackObj->Body[1+sizeToMove]); 
   /* Save reference stack */
   MEMCPY(theStackObj->Body+1+sizeToMove+jump_stack_size, baseRefSP, sizeOfRefStack*4);
   
@@ -230,7 +230,7 @@ struct Component * Att(struct Object *this, struct Component *comp)
   MEMCPY(newSP+SPStartOff, theStackObj->Body+1, sizeToMove*4);
 
   /* Restore jump stack. no_of_buffers is first */
-  UnPackAndAllocateJmpBuf(&theStackObj->Body[1+sizeToMove+1], theStackObj->Body[1+sizeToMove]);
+  UnPackAndAllocateJmpBuf((long)&theStackObj->Body[1+sizeToMove+1], theStackObj->Body[1+sizeToMove]);
 
   /* Restore reference stack */
   sizeOfRefStack = theStackObj->BodySize-theStackObj->StackSize-1; /* In longs! */

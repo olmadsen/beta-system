@@ -6,12 +6,9 @@
  * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, and Jacob Seligmann
  */
 
-#ifdef crts
-#undef sparc
-#undef hppa
-#endif
-
 #include <stdio.h>
+
+#include "define.h"
 
 extern long *BETA_data1; /* C-variable */
 extern long *BETA_end; /* C-variable */
@@ -31,15 +28,6 @@ extern long *BETA_end; /* C-variable */
 # endif
 #endif
 
-#ifdef linux
-#define intel
-#endif
-
-#ifdef nti
-#define intel
-#endif
-
-#include "define.h"
 #include "betaerror.h"
 #include "object.h"
 #include "heap.h"
@@ -47,15 +35,6 @@ extern long *BETA_end; /* C-variable */
 #include "macro.h"
 #include "function.h"
 #include "data.h"
-
-#ifdef crts
-#ifndef RTINFO
-#define RTINFO
-#endif
-#ifndef RTLAZY
-#define RTLAZY
-#endif
-#endif
 
 #ifdef crts
 #include "crtsdep.h"
@@ -69,11 +48,12 @@ extern long *BETA_end; /* C-variable */
 #include "snakedep.h"
 #endif
 
+#if 0
 #ifdef __STDC__
 #define P(A) A
 #else
 #define P(A) ()
 #endif
-
+#endif
 
 #endif

@@ -7,7 +7,7 @@
 #include "constant.h"
 #endif
 
-#define REFSTACK
+#define UseRefStack
 
 #define TH	%r3
 #define CA	%r4
@@ -175,7 +175,7 @@ Att:
 ;; called with theComp in CA, and theObj in TH
 	STW	%r2,-20(0,SP)
 	LDO	128(SP),SP
-#ifdef REFSTACK
+#ifdef UseRefStack
 	LDIL    LR'RefSP,%r1
         LDW     RR'RefSP(%r1),%r14
 	stws,ma	CA,4(%r14)			;save CA and TH for suspend
@@ -256,7 +256,7 @@ Lnoinsert2
 	STW	%r20,nextCompBlock+SFoffset(0,SP)
 	load(ActiveCallBackFrame,%r21)
 	STW	%r21,callBackFrame+SFoffset(0,SP)
-#ifdef REFSTACK
+#ifdef UseRefStack
         LDIL    LR'RefSP,%r1
         LDW     RR'RefSP(%r1),%r14
 	stw	%r14,RefBlock+SFoffset(0,SP)
@@ -292,7 +292,7 @@ TerminateComponent
 	store(%r1,ActiveCallBackFrame)
 	LDW	nextCompBlock+SFoffset(0,SP),%r1
 	store(%r1,lastCompBlock)
-#ifdef REFSTACK
+#ifdef UseRefStack
 	ldw	RefBlock+SFoffset(0,SP),%r14		;RSP from before Att
 	ldws,mb	-4(%r14),TH
 	ldws,mb	-4(%r14),CA
@@ -338,7 +338,7 @@ Lstartcopy
 	LDWS,MA	4(0,%r23),%r1
 Lendcopy
 	;; r21 == 0, %r1 trashed
-#ifdef REFSTACK
+#ifdef UseRefStack
 	;; now copy refstack into place. Get length from %r1 loaded in delayslot
 	copy	%r1,%r21		;r21 = len of refstack in longs
 	ldws,ma	4(%r23),%r1
@@ -352,21 +352,21 @@ Lcprefstack
 	ldws,ma	4(%r23),%r1
         LDIL    LR'RefSP,%r1
         STW     %r14,RR'RefSP(0,%r1)
-#endif REFSTACK
+#endif UseRefStack
 	;; r21 == 0, %r1 trashed
 	;; no framepointers to correct?!
 	;; LDW	CallerLSC(0,CA),%r2
-#ifdef REFSTACK
+#ifdef UseRefStack
 	ldws,mb	-4(%r14),TH		;restore registers saved by Susp
 	ldws,mb	-4(%r14),CA
         STW     %r14,RR'RefSP(0,%r1)
 #if 0
 	store(%r14, savedRefSP)
 #endif
-#else REFSTACK
+#else UseRefStack
 	LDW	-64-36(SP),TH		;restore registers saved by Susp
 	LDW	-64-40(SP),CA
-#endif REFSTACK
+#endif UseRefStack
 	LDW	-64-20(SP),%r2
 	BV	%r0(%r2)
 	LDO	-64(SP),SP		;drop Susp frame
@@ -377,7 +377,7 @@ Susp:
 ;; called with theObj in CA
 	STW	%r2,-20(SP)
 	LDO	64(SP),SP
-#ifdef REFSTACK
+#ifdef UseRefStack
         LDIL    LR'RefSP,%r1
         LDW     RR'RefSP(%r1),%r14
 	stws,ma	CA,4(%r14)
@@ -398,7 +398,7 @@ Lok1
 	load(lastCompBlock,%r1)
 	SUB	SP,%r1,%r20		;r20 = size in bytes
 	LDO	64(%r20),%r20		;r20 = sp-lastCompBlock+64 (bytesize)
-#ifdef REFSTACK
+#ifdef UseRefStack
 	ldw	RefBlock+SFoffset(%r1),%r1
 	SUB	%r14,%r1,%r1
 	ADD	%r20,%r1,%r1
@@ -461,7 +461,7 @@ Lcopy
 	LDO	-1(%r20),%r20
 	COMIB,<	0,%r20,Lcopy
        	LDWS,MA	4(0,%r23),%r1
-#ifdef REFSTACK
+#ifdef UseRefStack
 ;; has copied real stack, now copy refstack to stackobj
 	load(lastCompBlock,%r23)
 	ldw	RefBlock+SFoffset(%r23),%r23
@@ -487,7 +487,7 @@ Lhascaller
 	store(%r1,ActiveCallBackFrame)
 	LDW	nextCompBlock+SFoffset(0,%r23),%r1
 	store(%r1,lastCompBlock)
-#ifdef REFSTACK
+#ifdef UseRefStack
 	;; reset RSP to what it was just inside Attach
 	ldw	RefBlock+SFoffset(0,%r23),%r14
 #endif
@@ -498,7 +498,7 @@ Lhascaller
 	COPY	%r19,%r22		;r22 = called = old Act.Comp
 	store(%r20,ActiveComponent)
 	LDW	-128-20(%r23),%r2	;get rp from frame just before attach
-#ifdef REFSTACK
+#ifdef UseRefStack
 	ldws,mb	-4(%r14),TH		;get refs that Att saved for me
 	ldws,mb	-4(%r14),CA
         LDIL    LR'RefSP,%r1
@@ -547,7 +547,7 @@ ExTerminateComponent
 	store(%r1,ActiveCallBackFrame)
 	LDW	nextCompBlock+SFoffset(0,%r22),%r1
 	store(%r1,lastCompBlock)
-#ifdef REFSTACK
+#ifdef UseRefStack
 	ldw	RefBlock+SFoffset(0,%r22),%r1	;r1=RSP from before Att
 	ldo	-8(%r1),%r1		; pop TH and CA off RefStack
 #else

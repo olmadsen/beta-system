@@ -140,7 +140,7 @@ void setupDanglers (int* danglers, long* objects, int count)
       if ((inx = danglerLookup (danglers, 0, count - 1, dangler)) >= 0) {
 	/* fprintf (stderr, "setupDanglerIOA(%d)\n", dangler); */
 	/*if (!inIOA(negIOArefs[i]))*/
-#if defined (hppa) || defined(crts)
+#ifdef UseRefStack
 	if ( ((long)&ReferenceStack[0] <= negIOArefs[i]) &&
 	     (negIOArefs[i]< (long)RefSP))
 #else

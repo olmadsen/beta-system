@@ -121,6 +121,18 @@ static long M_Part(ref(ProtoType) proto)
 
 static char *machine_name()
 {
+#ifdef crts
+#ifdef SGI
+return "(sgi)";
+#endif
+#ifdef SUN4S
+return "(sun4s)";
+#endif
+#ifdef __powerc
+return "(ppc)";
+#endif
+#endif /* crts */
+
   /* Sun variants */
 #ifdef sun
 #ifdef sparc
@@ -955,9 +967,9 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
     return 0;
   }
   
-#ifdef hppa
+#ifdef UseRefStack
   /*
-   * The HP-PA (Snake) specific parts of tracing the Beta stack.
+   * The ReferenceStack way of tracing the Beta stack.
    */
   {
     struct Object **theCell = /*getRefSP()*/ (struct Object **)(RefSP-1);

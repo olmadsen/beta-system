@@ -4,6 +4,27 @@
  * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, and Jacob Seligmann
  */
 
+
+
+#ifdef crts
+#undef sparc
+#undef hppa
+#define UseRefStack
+#endif
+
+#ifdef linux
+#define intel
+#define UNIX
+#endif
+
+#ifdef hppa
+#define UseRefStack
+#endif
+
+#ifdef nti
+#define intel
+#endif
+
 #define FALSE	0
 #define TRUE	1
 
@@ -27,10 +48,6 @@
  */  
 
 #define headsize(x) (sizeof(struct x) - sizeof(long))
-
-#ifdef linux
-#  define UNIX
-#endif
 
 #ifdef hpux
 #  define UNIX

@@ -5,7 +5,7 @@
  * Copyright (C) 1992-94 Mjolner Informatics Aps.
  * Written by Ole Lehrmann Madsen, Jacob Seligmann, and Peter Andersen.
  *
- * $Id: betarun.h,v 1.9 1995-02-03 09:49:59 beta Exp $
+ * $Id: betarun.h,v 1.10 1995-02-03 12:32:09 beta Exp $
  *
  */
 
@@ -13,75 +13,184 @@
 #ifndef _CRTS_H_
 #define _CRTS_H_
 
-struct ProtoType {
-  short           	GCTabOff; 
-  short           	OriginOff;
-  long *       		GenPart;
-  struct ProtoType *	Prefix;
-  short           	Size;
-  short           	FormOff;
-  short          	FormInx;
-  short           	AstRef;
-  long            	(*CallBackRoutine)();
-};
+typedef struct ProtoType{
+    short           GCTabOff;  /* Offset to the GC Table            */
+    short           OriginOff; /* Where should the origin be        */
+    long*       GenPart;   /* Reference to the generation code  */
+    struct ProtoType*  Prefix;    /* Reference to the prefix prototype */
+    short           Size;      /* Object size in longs              */
+    short           FormOff;   /* Reference to the FormID string    */
+    short           FormInx;   /* FragmentForm index of this object-desc */
+    short           AstRef;    /* AST index of this object-desc.*/
+    long            (*CallBackRoutine)();
+} ProtoType;
 
-struct Object { 
-  struct ProtoType *  	Proto;
-  long            	GCAttr;
-};
+typedef struct Object{ 
+    ProtoType*  Proto;     /* Reference to the Prototype */
+    long            GCAttr;    /* The GC attribute           */
+    long            Body[1];   /* The body part              */ 
+} Object;
 
-struct Item { 
-  struct ProtoType *  	Proto;
-  long            	GCAttr;
-};
+typedef struct Item{ 
+    ProtoType*  Proto;     /* Reference to the Prototype */
+    long            GCAttr;    /* The GC attribute           */
+    long            Body[1];   /* The body part              */ 
+} Item;
 
-struct DopartObject { 
-  struct ProtoType *  	Proto;
-  long            	GCAttr;
-  struct Object *     	Origin;
-  long            	Size;
-};
+typedef struct DopartObject{ 
+    ProtoType*  Proto;     /* Reference to the Prototype */
+    long            GCAttr;    /* The GC attribute           */
+    Object*     Origin;    /* Origin of dopart object    */
+    long            Size;      /* Size in BYTES of body      */
+    long            Body[1];   /* The body part              */ 
+} DopartObject;
 
-struct Component {
-  struct ProtoType *  	Proto;
-  long            	GCAttr;
-  struct StackObject *	StackObj;
-  struct Object *     	CallerObj;
-  struct Component *  	CallerComp;
-  long            	CallerLSC;
-};
+typedef struct StackObject{
+    ProtoType*  Proto;     /* Reference to the Prototype  */
+    long            GCAttr;    /* The GC attribute            */
+    long            BodySize;  /* The size of the body part   */
+    long            StackSize; /* Size of the packed stack    */
+    long            Body[1];   /* The body part               */ 
+} StackObject;
 
-struct ValRep {
-  struct ProtoType *  	Proto;
-  long            	GCAttr;
-  long            	LowBorder;
-  long            	HighBorder;
-};
+typedef struct Component{
+    ProtoType*  Proto;     /* Reference to the Prototype  */
+    long            GCAttr;    /* The GC attribute            */
+    StackObject* StackObj;  /* Packed stack (suspended) 
+				  or -1 (active)              */
+    Object*     CallerObj; /* Calling object              */
+    struct Component*  CallerComp;/* Calling component           */ 
+    long            CallerLSC; /* Local sequence counter in
+				  calling object              */ 
+    long            Body[1];   /* The body part               */ 
+} Component;
 
-struct RefRep {
-  struct ProtoType *  	Proto;
-  long            	GCAttr; 
-  long            	LowBorder;
-  long            	HighBorder;
-};
+typedef struct ValRep{
+    ProtoType*  Proto;     /* Reference to the Prototype  */
+    long            GCAttr;    /* The GC attribute            */
+    long            LowBorder; /* Lower bound of range        */
+    long            HighBorder;/* Higher bound of range       */
+    long            Body[1];   /* The body part               */ 
+} ValRep;
 
-struct Structure {
-  struct ProtoType *  	Proto;
-  long            	GCAttr;
-  struct Object *     	iOrigin;
-  struct ProtoType *  	iProto;
-};
+typedef struct RefRep{
+    ProtoType*  Proto;     /* Reference to the Prototype  */
+    long            GCAttr;    /* The GC attribute            */
+    long            LowBorder; /* Lower bound of range        */
+    long            HighBorder;/* Higher bound of range       */
+    long            Body[1];   /* The body part               */ 
+} RefRep;
 
-struct GCEntry {
-  unsigned short 	StaticOff;
-  short 		OrigOff;
-  struct ProtoType * 	Proto;
-};
+typedef struct Structure{
+    ProtoType*  Proto;     /* StructurePTValue	      */
+    long            GCAttr;    /* The GC attribute            */
+    Object*     iOrigin;   /* The origin of the structure */
+    ProtoType*  iProto;    /* The protoType of the struc  */
+    long	    Body[1];   /* Dummy. Makes headsize work. */
+} Structure;
 
-struct PartObject {
-  struct ProtoType * 	Proto;
-  long 			OrigOff;
-};
+/* Block is memory unit for AOArea and LVRArea. */
+typedef struct Block{
+    struct Block*      next;      /* Refernece to the next Block     */
+    union { 
+             long* nextTop; 
+             long      state; 
+          } info;
+    long*       top;       /* Refers the top in this(Block)   */
+    long*       limit;     /* Refers the limit of this(Block) */
+} Block;
+
+typedef struct LVRABlock{
+    struct LVRABlock*  next;
+    long            state;
+    long*       top;
+    long*       limit;
+} LVRABlock;
+
+typedef struct CallBackFrame {
+    struct CallBackFrame*  next;
+#if !(defined(hppa) && defined(REFSTACK))
+    long*           betaTop;
+#endif
+    long                tmp;
+} CallBackFrame;
+
+typedef struct CallBackEntry {
+#ifdef crts
+    Structure*      theStruct;
+#ifdef __powerc
+    unsigned long *     code[2]; /* codeptr and TOC */
+#else
+    unsigned long       code[40];
+#endif
+#endif
+#ifdef sparc
+    Structure*	theStruct;
+    long		mov_o7_g1;
+    long		call_HandleCallBack;
+    long		nop;
+#endif
+#ifdef hppa
+    Structure*      theStruct;
+    unsigned long       code[7];
+#endif
+#ifdef mc68020 
+    Structure*      theStruct;
+    short		jsr;
+    void 	        (*handleCallBackPtr)();
+    short		rts;
+#endif
+#ifdef linux
+    Structure*      theStruct;
+    char                call;
+    long                address;
+    char                rts;
+#endif
+#ifdef nti
+    Structure*      theStruct;
+    char                call;
+    long                address;
+    char                rts;
+    short               disp; /* Only used for pascal and std call */
+#endif
+} CallBackEntry;
+
+#ifdef linux
+#define CallBackEntrySize 10
+#else
+#ifdef nti
+#define CallBackEntrySize 12
+#else
+#define CallBackEntrySize sizeof(struct CallBackEntry)
+#endif
+#endif
+
+
+typedef struct CallBackArea {
+  struct CallBackArea* next;
+  CallBackEntry* entries;
+} CallBackArea;
+
+typedef struct ComponentBlock{
+    CallBackFrame*  callBackFrame;
+    struct ComponentBlock* next;
+    long                level;
+#ifdef hppa
+    void *              RefBlock;
+#endif
+} ComponentBlock;
+
+typedef struct GCEntry {
+    unsigned short StaticOff;
+    short OrigOff;
+    ProtoType* Proto;
+} GCEntry;
+
+typedef struct PartObject {
+    ProtoType* Proto;
+    long OrigOff;
+} PartObject;
+
 
 extern long *IOA;
 extern long *IOATop;
@@ -309,7 +418,7 @@ extern void			ExtVR(struct Object *theObj, unsigned offset, long add);
 extern void			HandleIndexErr(struct Item *this);
 extern void 			MkTO(char *cText, struct Item *theItem, unsigned offset);
 extern void			Return(void);
-extern void			RefNone(struct Object *theObj);
+extern void			BetaError(int, struct Object *theObj);
 extern void			SetArgValues(long argc, char *argv[]);
 extern void			FailureExit(void);
 extern void			NewRR(struct Object *theObj, long offset, long range);

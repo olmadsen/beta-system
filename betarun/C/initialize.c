@@ -435,7 +435,7 @@ void Initialize()
   IOA = tmpIOA;
   IOATopoff = tmpIOATop - IOA;
 #else
-#if defined(hppa) || defined(crts)
+#ifdef UseRefStack
   /*setIOAReg(tmpIOA);
   setIOATopoffReg(tmpIOATop - tmpIOA);*/
   IOA = tmpIOA;

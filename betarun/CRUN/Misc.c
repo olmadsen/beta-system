@@ -98,94 +98,9 @@ void SetArgValues(int argc, char *argv[])
 }
 #endif
 
-
-/* GC/PerformGC.c: Not declared in function.h, doGC should only be 
- * called from IOA(c)lloc or DoGC.
- */
-extern void doGC();
-
-
-#ifndef RTDEBUG
-/* inline */
+#ifndef __GNUC__
+#include "IOAAlloc.h"
 #endif
-char *
-  IOAalloc(unsigned size)
-{
-  register char *p;
-  
-  GCable_Entry();
-  
-  /*fprintf(output, "IOAalloc: IOATop=0x%x, size=0x%x\n", IOATop, size);*/
-  
-  DEBUG_CODE(Claim(size>0, "IOAalloc: size>0"));
-#if (defined(sparc) || defined(hppa) || defined(crts))
-  DEBUG_CODE(Claim( ((long)size&7)==0 , "IOAalloc: (size&7)==0"));
-  DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "IOAalloc: (IOATop&7)==0"));
-#endif
-  
-  while ((char *)IOATop+size > (char *)IOALimit) {
-    ReqObjectSize = size / 4;
-    doGC();
-  }
-  
-  p = (char *)IOATop;
-#ifdef hppa
-  /*
-    setIOATopoffReg(getIOATopoffReg() + size);
-    */
-  IOATop = (long*)((long)IOATop+size);
-#endif
-#ifdef sparc
-  IOATopoff += size;
-#endif
-#ifdef crts
-  IOATop = (long*)((long)IOATop+size);
-#endif
-  
-  return p;
-  
-}
-
-#ifndef RTDEBUG
-/* inline */
-#endif
-char *
-  IOAcalloc(unsigned size)
-{
-  
-  register char *p;
-  
-  GCable_Entry();
-  
-  /*fprintf(output, "IOACalloc: IOATop=0x%x, size=0x%x\n", IOATop, size);*/
-  
-  DEBUG_CODE(Claim(size>0, "IOACalloc: size>0"));
-#if (defined(sparc) || defined(hppa) || defined(crts))
-  DEBUG_CODE(Claim( ((long)size&7)==0 , "IOAcalloc: (size&7)==0"));
-  DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "IOAcalloc: (IOATop&7)==0"));
-#endif
-  
-  while ((char *) IOATop+size > (char *)IOALimit) {
-    ReqObjectSize = size / 4;
-    doGC();
-  }
-  
-  p = (char *)IOATop;
-#ifdef hppa
-  /*setIOATopoffReg(getIOATopoffReg() + size);*/
-  IOATop = (long*)((long)IOATop+size);
-#endif
-#ifdef sparc
-  IOATopoff += size;
-#endif
-#ifdef crts
-  IOATop = (long*)((long)IOATop+size);
-#endif
-  
-  long_clear(p, size);
-  
-  return p;
-}
 
 #ifdef sparc
 #ifdef sun4s
@@ -322,14 +237,8 @@ void initJmpPool()
 }
 
 void reallocJmpList()     
-{ long off;
+{
   fprintf(output,"***ERROR: Jump Stack Overflow...\n"); fflush(output); exit(1);
-#if 0
-  off= (long)jmp_buf_stack_top-(long)jmp_buf_stack;
-  jmp_buf_stack = (jmpInfoElem **) REALLOC(jmp_buf_stack,
-					 2*JmpStackSize*sizeof(jmpInfoElem*));
-  jmp_buf_stack_top=(jmpInfoElem **) (long)jmp_buf_stack+off;
-#endif
 }
 
 long GetJumpStackSize(void)
@@ -345,7 +254,7 @@ void PackAndFreeJmpBuf(long dest)
   }
   *(long*)dest=long_size; /* save long_size */
   dest+=4;
-  memcpy(dest, jmp_buf_stack, long_size*4);
+  memcpy((void*)dest, (void*)jmp_buf_stack, long_size*4);
   jmp_buf_stack_top=jmp_buf_stack; /* reset */
 }
 void UnPackAndAllocateJmpBuf(long src, long long_size)
@@ -354,7 +263,7 @@ void UnPackAndAllocateJmpBuf(long src, long long_size)
     jmp_buf_stack_top=jmp_buf_stack; /* reset */
     return;
   }
-  memcpy(jmp_buf_stack, src, long_size*4);
+  memcpy(jmp_buf_stack, (void*)src, long_size*4);
   jmp_buf_stack_top = (jmpInfoElem *) ((long)jmp_buf_stack+(long_size*4));
 }
 
@@ -366,7 +275,7 @@ void UnPackAndAllocateJmpBuf(long src, long long_size)
 /* 3. save ref. for above info in a0[off]         */
 /* 4. return jmp_buf                              */
 
-void FreeJmpBuf(int addr, int off);
+void FreeJmpBuf(unsigned long addr, unsigned long off);
 
 jmp_buf *GetJmpBuf(int addr, int off)
 {
@@ -383,7 +292,7 @@ jmp_buf *GetJmpBuf(int addr, int off)
 }
 
 
-void FreeJmpBuf(int addr, int off)
+void FreeJmpBuf(unsigned long addr, unsigned long off)
 {
   jmpInfoElem *info = *(jmpInfoElem **)(addr+off);
 
@@ -393,7 +302,7 @@ void FreeJmpBuf(int addr, int off)
   while((jmp_buf_stack_top-1)!=info) {
     jmp_buf_stack_top--;
 	if ((jmp_buf_stack_top==jmp_buf_stack) || !(jmp_buf_stack_top->jumpBuffer)) {
-	   fprintf(output,"*** ERROR in FreeJmpBuf: jmp_buf_stack reached or jmp_buf_stack_top->jumpBuffer==0 (0x%x,0x%x,0x%x)\n",jmp_buf_stack,jmp_buf_stack_top,jmp_buf_stack_top->jumpBuffer);
+	   fprintf(output,"*** ERROR in FreeJmpBuf: jmp_buf_stack reached or jmp_buf_stack_top->jumpBuffer==0 (0x%x,0x%x,0x%x)\n",(unsigned)jmp_buf_stack,(unsigned)jmp_buf_stack_top,(unsigned)jmp_buf_stack_top->jumpBuffer);
 	   exit(1);
 	}
   }
@@ -401,7 +310,7 @@ void FreeJmpBuf(int addr, int off)
     *(jmpInfoElem **)(addr+off) = 0;
 	jmp_buf_stack_top--; /* info itself */
   } else {
-    fprintf(output,"WARNING: attempt to clear jmp_buf 0 in 0x%x, off: %d\n",addr,off);
+    fprintf(output,"WARNING: attempt to clear jmp_buf 0 in 0x%x, off: %d\n",(unsigned)addr,(int)off);
   }
 }
 
