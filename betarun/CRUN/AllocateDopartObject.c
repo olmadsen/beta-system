@@ -24,14 +24,14 @@ ref(DopartObject)
 CAlloDO(ref(Object) origin, int i1, unsigned size)
 #else
 ref(DopartObject)
-AlloDO(unsigned size)
+AlloDO(ref(Object) origin, unsigned size)
 #endif
 {
     DeclReference1(struct DopartObject *, theObj);
-
     GCable_Entry();
 
     Ck(origin);
+
     Protect(origin, theObj = cast(DopartObject) IOAalloc(DopartObjectSize(size)));
     Ck(origin);
 
