@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Attach.c,v $, rel: %R%, date: $Date: 1992-07-21 17:16:52 $, SID: $Revision: 1.5 $
+ * Mod: $RCSfile: Attach.c,v $, rel: %R%, date: $Date: 1992-07-23 15:04:07 $, SID: $Revision: 1.6 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -24,12 +24,14 @@ void CAtt(ref(Component) theComp, ref(Object) theObj)
     int first = theComp->CallerLSC == 0;
     void (*entrypoint)();
 
+    /* printf("\nAttach: theComp = %x", theComp); */
+
     getret(ActiveComponent->CallerLSC);
 
-    AssignReference((long *)theComp->CallerComp, cast(Item) ActiveComponent);
-    AssignReference((long *)theComp->CallerObj, cast(Item) theObj);
+    AssignReference((long *)&theComp->CallerComp, cast(Item) ActiveComponent);
+    AssignReference((long *)&theComp->CallerObj, cast(Item) theObj);
 
-    /* -1 tells that ActiveComponent is active (what else??) */
+    /* -1 tells that ActiveComponent is active */
     ActiveComponent->StackObj = cast(StackObject) -1;
 
     /* Push a new Component Block. */
@@ -63,8 +65,10 @@ void CAtt(ref(Component) theComp, ref(Object) theObj)
 	setret(ActiveComponent->CallerLSC);
 	return;
     } 
-    if (theComp->StackObj == 0)
+    if (theComp->StackObj == 0){
+      /* printf("\nAttach: theComp->StackObj == 0, thecomp=%x", (long)theComp); */
       BetaError(-2, theObj);
+    }
     ActiveComponent = theComp;
 
     /* Unpack 'ActiveComponent.StackObj' on top of the stack.
