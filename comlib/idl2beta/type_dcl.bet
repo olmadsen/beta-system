@@ -170,21 +170,13 @@ do_type_spec:
               * add the type to types.
               *)
              (info[], t[]) -> do_constr_struct_type;
-             info.name.copy -> info.representation[];
-             type_cat_struct -> info.category;
-             info.name.copy -> holders.add;
           // idl.constr_union_type then
              (info[], t[]) -> do_constr_union_type;
-             info.name.copy -> info.representation[];
-             type_cat_union -> info.category;
           // idl.constr_enum_type then
              (* Both emit the definition of the enum mapping, and
               * add the type to types.
               *)
              (info[], t[]) -> do_constr_enum_type;
-             'int32' -> info.representation[];
-             type_cat_enum -> info.category;
-             (* No need for holder: Never pointer to enum *)
           else
              'Oops, must have forgotten a type!' -> outfile.comment;
          if);
@@ -287,29 +279,57 @@ do_struct_type:
           #);
        #);
      info: ^type_info;
+     struct_tag: ^text;
   enter (info[], t[])
-  do (if t.getstruct_body_opt -> optionalPresent then
+  do (if info[]=NONE then
+         'do_struct_type: no info!' -> error;
+         &type_info[] -> info[];
+     if);
+     (if info.name[]=NONE then
+         'do_struct_type: no name!' -> error;
+         'struct' -> info.name[];
+     if);
+     (if t.gettag -> optionalPresent then
+         t.gettag -> IdentifierToText -> struct_tag[];
+     if);
+     (if info.pointer_level > 0 then
+         (if struct_tag[]=NONE then
+             'struct alias: tag is none' -> error;
+          else
+             'struct-' -> (struct_tag.copy).prepend -> local_types.findtype
+             (# 
+             do current.representation.copy -> info.representation[];
+                current.category -> info.category;
+             #);
+         if);
+         leave do_struct_type;
+     if);
+     (if not (t.getstruct_body_opt -> optionalPresent) then
+         (if struct_tag[]=NONE then
+             'struct alias: tag is none' -> error;
+          else
+             'struct-' -> (struct_tag.copy).prepend -> local_types.findtype
+             (# 
+             do current.representation.copy -> info.representation[];
+                current.category -> info.category;
+             #);
+         if);
+         leave do_struct_type;
+      else
          t.getstruct_body_opt -> b[];
-         (if info[]=NONE then
-             'do_struct_type: no info!' -> error;
-             &type_info[] -> info[];
-         if);
-         (if info.name[]=NONE then
-             'struct' -> info.name[];
-         if);
          outfile.indent;
          info.name[] -> outfile.puttext;
          ': DATA' -> outfile.putline;
          2 -> outfile.indent.inc;
          outfile.indent;
-         (if not compact then 
-             outfile.CommentBegin;
-             'struct' -> outfile.puttext;
-             (if t.gettag -> optionalPresent then
+         (if struct_tag[]<>NONE then
+             'struct-' -> struct_tag.prepend;
+             (struct_tag[], info.name[]) -> local_types.add_struct_type;
+             (if not compact then 
+                 outfile.CommentBegin;
+                 'struct' -> outfile.puttext;
                  ' ' -> outfile.put;
-                 t.gettag
-                   -> IdentifierToText
-                   -> outfile.puttext;
+                 struct_tag[] -> outfile.puttext;
              if);
              outfile.CommentEnd;
              outfile.newline;
@@ -324,6 +344,9 @@ do_struct_type:
          outfile.PatternEnd;
          2 -> outfile.indent.dec;
          ';' -> outfile.putline;
+         info.name.copy -> info.representation[];
+         type_cat_struct -> info.category;
+         info.name.copy -> holders.add;
      if);
   #);
 do_enum_type:
@@ -400,6 +423,9 @@ do_enum_type:
          ';' -> outfile.putline;
          (if not compact then outfile.newline; if);
      if);
+     'int32' -> info.representation[];
+     type_cat_enum -> info.category;
+     (* No need for holder: Never pointer to enum *)
   #);
 
 do_union_type:
@@ -414,6 +440,7 @@ do_union_type:
      (if info.name[]=NONE then
          'union' -> info.name[];
      if);
+     (* FIXME: aliasing ligesom for struct *)
      info.name.copy -> msg[];
      ':\n        union types are not translated. You must do it by hand, sorry!'
        -> msg.puttext;
@@ -439,6 +466,9 @@ do_union_type:
      ';' -> outfile.putline;
      (if not compact then outfile.newline; if);
      2 -> outfile.indent.dec;
+     info.name.copy -> info.representation[];
+     type_cat_union -> info.category;
+     info.name.copy -> holders.add;
   #);
 
 do_constr_enum_type:
