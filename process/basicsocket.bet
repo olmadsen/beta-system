@@ -1,0 +1,180 @@
+ORIGIN '~beta/basiclib/v1.5/basicsystemenv';
+
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics 1995
+ *       All rights reserved.
+ *)
+
+INCLUDE 'errorcallback';
+INCLUDE 'commaddress';
+
+--- systemlib:attributes ---
+
+(* Used for timeouts *)
+waitForever: (# exit -1 #);
+
+(* Used to make it checkable whether smth. is uninitialized *)
+assignGuard: (# assigned: @Boolean do true -> assigned #);
+
+(* The number 127.0.0.1 by convention means 'this host' *)
+localHost_IP_number: (# exit 2130706433 #);
+
+basicSocket: 
+  (#
+     <<SLOT socketlib:attributes>>;
+
+
+     (* OPERATIONS
+      * ==========
+      *)
+
+     (* do 'this' and 'other' wrap the same OS level connection? *)
+     sameConnection: booleanValue
+       (# other: ^basicSocket;
+       enter other[]
+       <<SLOT BasicSocketSameConnection:dopart>>
+       #);
+     
+     (* construct portable address for this connection *)
+     getPortableAddress:
+       (# addr: ^portablePortAddress;
+       <<SLOT BasicSocketGetPortableAddress:dopart>>
+       exit addr[]
+       #);
+
+     (* Initiator of socket communication. Pass 'host' and 'port' to
+      * 'connect' to connect a passive socket to establish communication.
+      *)
+     connect: open
+       (# accessError:< loErrCB(# do INNER #);
+          resourceError:< loErrCB(# do INNER #);
+          addressError:< loErrCB(# do INNER #);
+          refusedError:< loErrCB(# do INNER #);
+          intrError:< loErrCB(# do INNER #);
+          getHostError:< loErrCB(# do INNER #);
+          aHost: ^Text;
+          aPort: @Integer;
+       enter (aHost[],aPort)
+       <<SLOT BasicSocketConnect:dopart>>
+       #);
+     
+     (* provoke a timeout error in the current operation *)
+     forceTimeout:< (# <<SLOT BasicSocketForceTimeout:dopart>> #);
+
+     (* return timestamp of latest operation on this socket *)
+     usageTimestamp:< integerValue
+       (# <<SLOT BasicSocketUsageTimestamp:dopart>> #);
+     
+     (* return true iff no data is immediately available for reading *)
+     endOfDataPattern:
+       (# error:< hiErrCB (* operation level error callback *)
+            (#
+            do INNER;
+               (if errCB_initialValue // value then
+                   (value,cleanup[])->this(basicSocket).error->value;
+               if);
+            #);
+          loErrCB: errCB (* superpattern for concrete error callbacks *)
+            (#
+            do INNER;
+               (if errCB_initialValue // value then
+                   (value,cleanup[])->error->value;
+               if);
+            #);
+          connBrokenError:< loErrCB(# do INNER #);
+          internalError:< loErrCB(# do INNER #);
+          unknownError:< loErrCB(# do INNER #);
+          value: @boolean;
+       <<SLOT BasicSocketEndOfData:dopart>>
+       exit value
+       #);
+
+     close:< withIdle(# <<SLOT BasicSocketClose:dopart>> #);
+
+
+     (* CALLBACKS
+      * =========
+      *)
+
+     (* every local 'idle' executes this global one *)
+     idle:< Object;
+
+     (* socket level error callback *)
+     error:< hiErrCB(# do INNER #);
+
+
+     (* EXPLICIT SCHEDULING
+      * ===================
+      *)
+
+     (* NB: don`t 'leave' a 'nonBlockingScope'. Use 'leaveNBScope'. *)
+     nonBlockingScope: (# <<SLOT BasicSocketNonBlockingScope:dopart>> #);
+     leaveNBScope: (# <<SLOT BasicSocketLeaveNBScope:dopart>> #);
+
+
+     (* ATTRIBUTES
+      * ==========
+      *)
+
+     host: @assignGuard(# t: @text; enter t exit t #);
+     port: @assignGuard(# rep: @integer enter rep exit rep #);
+     inetAddr: @assignGuard(# rep: @integer enter rep exit rep #);
+
+
+     (* AUXILIARY PATTERNS
+      * ==================
+      *)
+
+     withPE:
+       (# error:< hiErrCB (* operation level error callback *)
+            (#
+            do INNER;
+               (if errCB_initialValue // value then
+                   (value,cleanup[])->this(basicSocket).error->value;
+               if);
+            #);
+          loErrCB: errCB (* superpattern for concrete error callbacks *)
+            (#
+            do INNER;
+               (if errCB_initialValue // value then
+                   (value,cleanup[])->error->value;
+               if);
+            #);
+          timedOut:< loErrCB(# do INNER #);
+          timedOutInTransfer:< loErrCB(# do INNER #);
+          internalError:< loErrCB(# do INNER #);
+          connBrokenError:< loErrCB(# do INNER #);
+          usageError:< loErrCB(# do INNER #);
+          unknownError:< loErrCB(# do INNER #);
+          resourceError:< loErrCB(# do INNER #);
+          badMsgError:< loErrCB(# do INNER #);
+          timeout: @integer;
+       enter timeout
+       do INNER
+       #);
+
+     withIdle: withPE
+       (# idle:< (# do INNER; this(basicSocket).idle #);
+          blocking:<
+            (# continue: (# do true->doContinue #);
+               doContinue: @boolean;
+            do
+               INNER;
+               (if doContinue//false then leaveNBScope if);
+               idle;
+            #);
+       do INNER
+       #);
+
+     open: withIdle(# <<SLOT BasicSocketOpen:dopart>> #);
+     init:< (# <<SLOT BasicSocketInit:dopart>> #);
+
+     (* PRIVATE
+      * =======
+      *)
+
+     private: @<<SLOT BasicSocketPrivate:descriptor>>;
+  #);
+
+

@@ -2,7 +2,7 @@
 
 /*
  * COPYRIGHT
- *       Copyright Mjolner Informatics, 1994
+ *       Copyright Mjolner Informatics, 1994-95
  *       All rights reserved.
  */
 

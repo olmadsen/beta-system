@@ -1,0 +1,197 @@
+ORIGIN '~beta/basiclib/v1.5/systemenv';
+INCLUDE '~beta/process/v1.6/streamgenerator';
+INCLUDE '~beta/process/v1.6/private/basicsocketbody';
+
+--- program:descriptor ---
+systemEnv
+(# 
+   streamGen: @SocketGenerator;
+   clientSock: ^StreamSocket;
+   
+   getRequest: 
+     (# req: ^Text;
+        blank: @Boolean;
+        ch: @Char;
+        clientEOS: ^StreamSocket.eos;
+        clientGet: ^StreamSocket.get;
+        
+     do &Text[] -> req[];
+        &clientSock.eos[] -> clientEOS[];
+        &clientSock.get[] -> clientGet[];
+        
+        L: (# 
+           do (if not clientEOS then 
+                  clientGet -> ch;
+                  (if ch=13 then req.put; restart L if);
+                  (if ch=ascii.newline then
+                      (if blank then 
+                          leave L 
+                      if);
+                      true -> blank
+                   else
+                      false -> blank;
+                  if);
+                  ch -> req.put;
+                  restart L; 
+              if)
+           #);
+        
+     exit req[]
+     #);
+   
+   parseRequest:
+     (# in, out, host, line, a, l, prot, doc: ^Text;
+        i,j, port: @Integer;
+        keepOpen: @Boolean;
+     enter in[]
+     do &Text[] -> out[];
+        in.reset;
+        Loop:(# 
+             do (if not in.eos then
+                    in.getLine -> line[];
+                    line.copy -> l[];
+                    l.reset;
+                    l.getAtom -> a[];
+                    l.getAtom -> l[];
+                    (if true 
+                     // 'GET' -> a.equalNCS then
+                        0 -> i;
+                        Find: 
+                          (# 
+                          do ':' -> l.findAll
+                             (# 
+                             do inx -> i; leave Find 
+                             #)
+                          #);
+                        (if i<=1 then 
+                            (failureTrace, 'No : in URL?') -> Stop
+                        if);
+                        
+                        (1,i-1) ->l.sub -> prot[];
+                        (i+3,65536) -> l.sub -> host[];
+                        
+                        Find: 
+                          (# 
+                          do '/' -> host.findAll
+                             (# 
+                             do (inx, 65536) -> host.sub -> doc[];
+                                (1, inx-1) -> host.sub -> host[]; 
+                                leave Find 
+                             #)
+                          #);
+                        (if true
+                         // 'HTTP' -> prot.equalNCS then 
+                            80 -> port; (* Should parse host for ':' *)
+                            'GET ' -> out.putText;
+                            doc.length -> i;
+                            Find: 
+                              (# 
+                              do ' ' -> doc.findAll
+                                 (# 
+                                 do inx-1 -> i;
+                                    leave Find 
+                                 #)
+                              #);
+                            (1, i) -> doc.sub -> out.putText;
+                            ' ' -> out.putText;
+                            13 -> out.put; out.newLine;
+                         else 
+                            'Uknown protocol: ' -> line.prepend;
+                            (FailureTrace, line[]) -> Stop
+                        if)
+                     // 'Proxy-Connection:' -> a.equalNCS then
+                        (* ditch this header... *)
+                        true -> keepOpen;
+                     else
+                        line[] -> out.putText; 13 -> out.put; out.newLine;
+                    if);
+                    restart Loop
+                if)
+             #);
+        (* 13 -> out.put;*) out.newLine;
+        (* 13 -> out.put;*) out.newLine;
+     exit (out[], host[], port, keepOpen)
+     #);
+                         
+   sendRequest:
+     (# s: @StreamSocket;
+        req, host: ^Text;
+        port: @Integer;
+        answer: ^Text;
+        OK: @Boolean;
+        sEOS: @s.eos;
+        sGet: @s.get;
+        
+     enter (req[], host[], port)
+     do s.init;
+        true -> OK;
+        (5, host[], port) -> s.connect
+        (# accessError::(# do false -> OK; errCB_abortOperation -> value#);
+           resourceError::(# do false -> OK; errCB_abortOperation -> value#);
+           addressError::(# do false -> OK; errCB_abortOperation -> value#);
+           refusedError::(# do false -> OK; errCB_abortOperation -> value#);
+           intrError::(# do false -> OK; errCB_abortOperation -> value#);
+           getHostError::(# do false -> OK; errCB_abortOperation -> value#);
+           timedout::(# do false -> OK; errCB_abortOperation -> value#);
+        #);
+        
+        (if OK then
+            req[] -> s.putLine;
+            s.flush;
+            &Text[] -> answer[];               
+            16384 -> answer.extend;
+            L: (# ch: @Char;
+               do (if not sEOS then 
+                      sGet -> answer.put;
+                      restart L
+                  if)
+               #);
+            s.close;
+        if);
+        
+     exit answer[]
+     #);
+   
+   aReq, host, aAnswer: ^Text;
+   port: @Integer;
+   keepOpen: @Boolean;
+   
+do 7899 -> streamGen.bind; (* My well-known proxy-port  ;) *)
+   
+   cycle
+   (# 
+   do 'Awaiting connection...' -> screen.putLine;
+      waitForever -> streamGen.getStreamConnection -> clientSock[];
+      'Client Connected at socket=' -> screen.putText;
+      clientSock.theSocket.private.index -> screen.putInt; screen.newLine;
+      
+      'Getting Request...' -> screen.putText;
+      getRequest -> aReq[];
+      'done' -> screen.putLine;
+      
+      aReq[] -> parseRequest -> (aReq[], host[], port, keepOpen);
+      host[] -> screen.putText; ':' -> screen.put; port -> screen.putInt; 
+      screen.newLine;
+      aReq[] -> screen.putText; screen.newLine;
+      
+      'Passing request to server...' -> screen.putText;
+      (aReq[], host[], port) -> &sendRequest -> aAnswer[];
+      'done' -> screen.putLine;
+      
+      (if aAnswer[]=NONE then
+          'Host not found!'->screen.putLine;
+          &Text[]->aAnswer[];
+          '<HTML><HEAD><TITLE>Unable to connect</TITLE></HEAD>' 
+            -> aAnswer.putLine;
+          '<BODY>Proxy:  could not connect to  ' -> aAnswer.putText;
+          host[] -> aAnswer.putLine;
+          '</BODY></HTML>' -> aAnswer.putLine;
+      if);
+      
+      'Sending response to client...' -> screen.putText;
+      aAnswer[] -> clientSock.putText;
+      clientSock.close;
+      NONE -> clientSock[];
+      'done' -> screen.putLine
+   #)
+#)

@@ -46,15 +46,34 @@ extern int asynch_level;
 #  define COND_ECHO_USER_ERROR(test,msg)
 #endif
 
+/* NB: ECHO_ACTION_IP only works when integers are 32 bits wide */
+
 #ifdef DO_ECHO_ACTION
-#  define ECHO_ACTION(action,fd,somenum) \
+#  define ECHO_ACTION(action,fd) \
      if (ECHO_ACTION_ACTIVE) {                                          \
-       printf(FILE_ID ", [fd=%d:%lu] %s, %d\n",fd,GET_TIMESTAMP(fd),    \
+       printf(FILE_ID ", [fd=%d:%lu] %s\n",fd,GET_TIMESTAMP(fd),action);\
+       fflush(stdout);                                                  \
+     } 
+#  define ECHO_ACTION_INT(action,fd,somenum) \
+     if (ECHO_ACTION_ACTIVE) {                                          \
+       printf(FILE_ID ", [fd=%d:%lu] %s %d\n",fd,GET_TIMESTAMP(fd),     \
 	      action,somenum);                                          \
        fflush(stdout);                                                  \
      } 
+#  define ECHO_ACTION_IP(action,fd,ipaddr) \
+     if (ECHO_ACTION_ACTIVE) {                                          \
+       unsigned int b0=(((unsigned)ipaddr) & 0x000000FF);               \
+       unsigned int b1=(((unsigned)ipaddr) & 0x0000FF00) >> 8;          \
+       unsigned int b2=(((unsigned)ipaddr) & 0x00FF0000) >> 16;         \
+       unsigned int b3=(((unsigned)ipaddr) & 0xFF000000) >> 24;         \
+       printf(FILE_ID ", [fd=%d:%lu] %s %u.%u.%u.%u\n",fd,              \
+	      GET_TIMESTAMP(fd),action,b3,b2,b1,b0);                    \
+       fflush(stdout);                                                  \
+     } 
 #else
-#  define ECHO_ACTION(action,fd,somenum)
+#  define ECHO_ACTION(action,fd)
+#  define ECHO_ACTION_INT(action,fd,somenum)
+#  define ECHO_ACTION_IP(action,fd,ipaddr)
 #endif
 
 #ifdef DO_ECHO_TRANSFER

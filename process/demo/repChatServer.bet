@@ -1,20 +1,23 @@
-ORIGIN '~beta/process/v1.5/processmanager';
-[[
---- include 'timeout'
---- include 'commandCategory'
---- include '~beta/process/v1.5/repstream/extendedRepstream'
---- include '~beta/containers/v1.5/list'
+ORIGIN '~beta/basiclib/v1.5/systemenv';
+INCLUDE '~beta/process/v1.6/processmanager';
+INCLUDE '~beta/process/v1.6/binarygenerator';
+INCLUDE 'timeout';
+INCLUDE 'commandCategory';
+INCLUDE '~beta/process/v1.6/repstream/extendedRepstream';
+INCLUDE '~beta/containers/v1.5/list';
+
 --- program:descriptor ---
+systemEnv
 (#
-   updateClients: sockGen.nonBlockingScope
+   updateClients: clientGen.nonBlockingScope
      (# newClient: ^client;
      do
-        sockGen.getBinaryConnection -> newClient[];
+        waitForever -> clientGen.getClient -> newClient[];
         clientId+1 -> clientId -> newClient.id;
         newClient[] -> clients.append;
         
         (* Tell the client process about its identity *)
-        (@@clientId,4) -> newClient.writeData;
+        (waitForever,clientId) -> newClient.putInt;
         
         (* Report to user *)
         'Accepted connection from client no. ' -> screen.putText;
@@ -56,7 +59,7 @@ ORIGIN '~beta/process/v1.5/processmanager';
         theClient.nonBlockingScope
         (#
         do
-           rep[] -> theClient.getRep -> header;
+           (waitForever, rep[]) -> theClient.getRep -> header;
            (theClient[],rep[],header) -> executeService -> stillActive;
         #);
      exit stillActive
@@ -85,7 +88,7 @@ ORIGIN '~beta/process/v1.5/processmanager';
             
             rep.clear;
             cmd[] -> rep.putText;
-            (rep[],header) -> theClient.putRep;
+            (waitForever, rep[],header) -> theClient.putRep;
         if);
      exit stillActive
      #);
@@ -99,18 +102,19 @@ ORIGIN '~beta/process/v1.5/processmanager';
             '.. minding my own business' -> screen.putLine;
             interval -> tm;
         if);
-        5 -> waitForIO;
+        5 -> sleep;
      #);
 
    client: BinarySocket(# id: @integer #);
    clientList: list(# element::< client #);
    clients: @clientList;
    clientId: @integer;
-   sockGen: @socketGenerator(# BinarySocketType::< client #);
+   clientGen: @socketGenerator
+     (# getClient: @getBinaryConnection(# sockType:: client #) #);
+
 do
    (* Setup, communicating on port number 5000 *)
-   5000 -> sockGen.port;
-   sockGen.bind;
+   5000 -> clientGen.bind;
 
    (* Main loop *)
    L: cycle(#
@@ -121,6 +125,5 @@ do
            #);
 
    (* Close down *)
-   sockGen.close;
+   clientGen.close;
 #)
----]]

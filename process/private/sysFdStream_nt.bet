@@ -1,0 +1,183 @@
+ORIGIN 'sysFdStream';
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1993,94
+ *       All rights reserved.
+ *)
+INCLUDE '~beta/win32lib/v1.2/ntinterface';
+INCLUDE 'socketsint';
+
+--- fdStreamPrivate:descriptor ---
+(#
+   (* The NT filedescriptor index on top of which buffered
+    * I/O is provided.
+    *)
+   index: @integer;
+
+   ntStream: @integer; (* NT FILE (cf. stdio.h)  pointer for file. *)
+   NtErrNo: @integer; (* may contain NT variable 'errno'*)
+   outputFile: @boolean; (* True iff this file is opened for writing. *)
+
+   ProcessError:
+     (# msg: @text
+     enter msg
+     do (if (Errno->NtErrNo)
+         // EPERM// EACCESS then msg->AccessError
+         // ENOSPC then msg->NoSpaceError
+         else inner
+        if);
+     #);
+
+   SetUpNtStream:
+     (# type: @text;
+     enter type
+     do	(index,type) -> fdopen -> private.ntStream;
+        (if private.ntStream//0 then
+            private.processError(# do 'Cannot open file'->OtherError #);
+        if);
+     #);
+#)
+
+--- fdStreamPut:descriptor ---
+(#
+do INNER put;
+   (if ((ch,private.ntStream)->fputc)//EOFvalue then WriteError if);
+#)
+
+--- fdStreamGet:descriptor ---
+(#
+do INNER get;
+   private.ntStream -> fgetc -> ch;
+   (if ch//EOFvalue then   (* Either a read error or simply end of file. *)
+       (if true//(private.ntStream -> EOFfunction) then
+           EOSError;
+        else
+           ReadError;
+       if);
+   if);
+#)
+
+--- fdStreamPeek:descriptor ---
+(#
+do INNER peek;
+   private.ntStream -> fgetc -> ch;
+   (if ((ch,private.ntStream) -> ungetc)//EOFvalue
+       then   (* Either a read error or simply end of file. *)
+       (if true//(private.ntStream -> EOFfunction) then
+           EOSError;
+        else
+           ReadError;
+       if);
+   if);
+#)
+
+--- fdStreamEos:descriptor ---
+(#
+do INNER eos;
+   (if (private.ntStream->EOFfunction)
+    //0 then 
+       false -> value;
+    else
+       true -> value;
+   if);
+#)
+
+--- fdStreamPutText:descriptor ---
+(# fputs: external (# t,s,e: @integer; enter (t,s) exit e #);
+   printf: external(# t: @integer enter t #);
+do 
+   INNER putText;
+   (if txt.lgth>0 //true then
+       (if txt.lgth < txt.T.range // true then 0 -> txt.T[txt.lgth+1] if);
+       (if ((@@txt.T[1],private.ntStream)->fputs)
+        //EOFvalue then WriteError
+   if)if);
+#)
+
+--- fdStreamGetLine:descriptor ---
+(#
+do
+   INNER GetLine;
+   (private.ntStream,true) -> GetTextFromStream -> Txt;
+   (if StreamError then '' -> Txt if);
+#)
+
+--- fdStreamGetAtom:descriptor ---
+(#
+do
+   INNER GetAtom;
+   (private.ntStream,false) -> GetTextFromStream -> Txt;
+   (if StreamError then '' -> Txt if);
+#)
+
+--- fdStreamGetRep:descriptor ---
+(#
+do INNER getRep;
+   (repAdr,1,length*4,private.ntStream) -> fread -> length;
+#)
+
+--- fdStreamPutRep:descriptor ---
+(#
+do INNER putRep;
+   (repAdr,1,length*4,private.ntStream) -> fwrite -> length;
+#)
+
+--- fdStreamOpenRead:descriptor ---
+(# z: [1]@char;
+do
+   INNER OpenRead;
+   'r' -> z[1];
+   (* z -> private.SetUpNtStream;*)
+#)
+
+--- fdStreamOpenWrite:descriptor ---
+(# z: [1]@char;
+do
+   INNER OpenWrite;
+   true -> private.outputFile;
+   'w' -> z[1];
+   (* z -> private.SetUpNtStream; *)
+#)
+
+--- fdStreamOpenReadWrite:descriptor ---
+(#
+do
+   INNER OpenReadWrite;
+   true -> private.outputFile;
+   (*'r+' -> private.SetUpNtStream; *)
+#)
+
+--- fdStreamOpenExeWrite:descriptor ---
+(# z: [1]@char;
+do
+   INNER OpenExeWrite;
+   true -> private.outputFile;
+   'w' -> z[1];
+   (* z -> private.SetUpNtStream; *)
+#)
+
+--- fdStreamFlush:descriptor ---
+(#
+do
+   INNER flush;
+   (if true//private.OutputFile then
+       (if (private.ntStream->fflush)//EOFvalue then WriteError; if);
+   if);
+#)
+
+--- fdStreamClose:descriptor ---
+(#
+do
+   INNER close;
+   (if (private.ntStream->fclose)//EOFvalue then OtherError; if);
+   (* Note that the fclose call closes both the ntStream and the
+    filedescriptor (index). *)
+#)
+
+--- fdStreamException:descriptor ---
+(#
+do
+   'fdStream exception: ' -> msg.puttext;
+   message[] -> msg.puttext;
+#)
+

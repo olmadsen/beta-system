@@ -1,0 +1,116 @@
+ORIGIN '../binarysocket';
+
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics 1995-96
+ *       All rights reserved.
+ *)
+
+
+INCLUDE '~beta/sysutils/v1.5/endian';
+INCLUDE 'basicsocketbody';
+
+--- binarysocketprivate:descriptor ---
+(# 
+   i, length: @Integer;   (* Temporaries used in operations *)
+   
+   printRepObj: (* For tests!!! *)
+     (# rep: ^RepetitionObject;
+     enter rep[]
+     do (for i: rep.size repeat 
+             i->screen.putInt; ':'->screen.put; 
+             rep.r[i]->screen.putInt; screen.newLine
+        for)
+     #)        
+#)
+
+--- BinarySocketPutInt:dopart ---
+do i -> htonl -> i; (* byteswap on little endian archs. *)
+   4 -> private.sendMem.init;
+   (@@i, 4) -> private.sendMem.appendToBuffer;
+   (timeout, this(withIdle)[])->private.sendMem;
+   
+--- BinarySocketGetInt:dopart ---
+do
+   timeout -> private.timerStart;
+   (this(withIdle)[], 4) -> private.receiveMem.readExact;
+   private.timerStop;
+   (@@i, 4) -> private.receiveMem.copyFromBuffer;
+   i -> ntohl -> i; (* byteswap on little endian archs. *)
+
+--- BinarySocketPutRep:dopart ---
+do (rep.length+2)*4 -> private.sendMem.init;
+   rep.length -> htonl -> binpriv.i;
+   (@@binpriv.i, 4) -> private.sendMem.appendToBuffer;
+   header -> htonl -> binpriv.i;
+   (@@binpriv.i, 4) -> private.sendMem.appendToBuffer;
+   rep.length*4 -> binpriv.i;
+   (@@rep.R[1], binpriv.i) -> private.sendMem.appendToBuffer;
+   (timeout, this(withIdle)[])->private.sendMem;
+
+--- BinarySocketGetRep:dopart ---
+do timeout -> private.timerStart;
+   (this(withIdle)[], 8) -> private.receiveMem.readExact;
+   (@@binpriv.length, 4) -> private.receiveMem.copyFromBuffer;
+   (@@header, 4) -> private.receiveMem.copyFromBuffer;
+   binpriv.length -> ntohl -> binpriv.length;
+   header -> ntohl -> header;
+   
+   (if rep.R.range < binpriv.length then
+       binpriv.length-rep.R.range -> rep.r.extend;
+   if);
+   
+   (if binpriv.length<>0 then
+       (this(withIdle)[], binpriv.length*4) -> private.receiveMem.readExact;
+       (@@rep.R[1], binpriv.length*4) -> private.receiveMem.copyFromBuffer;
+   if);
+   
+   private.timerStop;
+   binpriv.length->rep.lgth; (* Announce how much data received *)
+   rep.reset; (* Prepare 'rep' for reading from the beginning *)
+   
+--- BinarySocketPutRepObj:dopart ---
+do (*'BinarySocketPutRepObj:'->putLine;
+   rep[] -> binpriv.printRepObj; test!!! *)
+   
+   rep.size*4 -> binpriv.i;
+   (if binpriv.i <= 0 then
+       0 -> binpriv.i;
+       4 -> private.sendMem.init;
+       (@@binpriv.i, 4) -> private.sendMem.appendToBuffer;
+    else 
+       binpriv.i -> private.sendMem.init;
+       rep.r[1] -> htonl -> rep.r[1];
+       rep.r[2] -> htonl -> rep.r[2];
+       (@@rep.R[1], binpriv.i) -> private.sendMem.appendToBuffer;
+       rep.r[1] -> ntohl -> rep.r[1];
+       rep.r[2] -> ntohl -> rep.r[2];
+   if);
+   (timeout, this(withIdle)[])->private.sendMem;
+
+--- BinarySocketGetRepObj:dopart ---
+do timeout -> private.timerStart;
+   (this(withIdle)[], 4) -> private.receiveMem.readExact;
+   (@@binpriv.length, 4) -> private.receiveMem.copyFromBuffer;
+   binpriv.length -> ntohl -> binpriv.length;
+   
+   (if rep.r.range < binpriv.length then
+       binpriv.length-rep.r.range -> rep.r.extend;
+   if);
+   
+   (if rep.r.range=0 then 1 -> rep.r.extend if); (* paranoid! *)
+   
+   (if 1 < binpriv.length then
+       (binpriv.length-1)*4 -> binpriv.i;
+       (this(withIdle)[], binpriv.i) -> private.receiveMem.readExact;
+       (@@rep.R[2], binpriv.i) -> private.receiveMem.copyFromBuffer;
+   if);
+   
+   private.timerStop;
+   binpriv.length -> rep.size; (* Announce how much data received *)
+   rep.reset; (* Prepare 'rep' for reading from the beginning *)
+   (*'BinarySocketGetRepObj:'->putLine;
+   rep[] -> binpriv.printRepObj; test!!! *)
+   
+
+

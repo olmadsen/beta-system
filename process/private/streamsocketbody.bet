@@ -1,0 +1,218 @@
+ORIGIN '../streamsocket';
+
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics 1995
+ *       All rights reserved.
+ *)
+
+INCLUDE '~beta/sysutils/v1.5/iostate';
+INCLUDE 'basicsocketbody';
+
+
+--- streamsocketlib:attributes ---
+MaxReadAhead: (# exit 16384 #); 
+(* Max count of bytes to buffer ahead in stream *)
+
+Buffer:
+  (# 
+     T: [16]@Char;
+     putpos, getpos: @Integer;
+     Expand: @
+       (# len: @Integer;
+       enter len
+       do (if putpos + len >= T.range then len -> T.extend; if);
+       #);
+          
+     put: @
+       (# c: @char;
+       enter c
+       do putpos + 1 -> putpos;
+          (if putpos > T.range then 16 -> T.extend  if);
+          c -> T[putpos];
+       #);
+     get: @
+       (# c: @char;
+       do getpos + 1 -> getpos;
+          T[getpos] -> c;
+          (if getpos=putpos then 0 -> getpos; 0 -> putpos if)
+       exit c
+       #);
+     putMem: @
+       (# adr,len,tmp: @Integer;
+       enter (adr,len)
+       do (@@T[putpos + 1], adr, len) -> memcpy;
+          putpos + len -> putpos;
+       #);
+     getMem: @
+       (# adr,len,tmp: @Integer;
+       enter len
+       do @@T[getpos + 1] -> adr;
+          getpos + len -> getpos;
+          (if getpos=putpos then 0 -> getpos; 0 -> putpos if)
+       exit adr
+       #);
+     length: @(# exit putpos-getpos #);
+     isEmpty: @(# exit (putpos=0) #);
+     peek: @(# exit T[getpos+1] #);  (* Allowed when not isEmpty *)
+     skip: @
+       (# 
+       do getpos + 1 -> getpos;
+          (if getpos=putpos then 0 -> getpos; 0 -> putpos if)
+       #)
+  #);
+          
+     
+
+--- SSocketPrivate:descriptor ---
+(#
+   theInBuffer: @Buffer;
+   theOutBuffer: @Buffer;
+   
+   length: @Integer;
+#)
+
+--- SSocketSameConnection:dopart ---
+do
+   other.theSocket[] -> theSocket.sameConnection -> value;
+
+--- SSocketClose:dopart ---
+do 
+   flush; 
+   INNER close;
+   theSocket.close;
+   (* No error checks; closing should be safe even on sick socket *)
+
+--- SSocketFlush:dopart ---
+do (if not private.theOutBuffer.isEmpty then
+       private.theOutBuffer.length -> private.length;
+       private.length -> theSocket.private.sendMem.init;
+       (private.length -> private.theOutBuffer.getMem, private.length) 
+         -> theSocket.private.sendMem.AppendToBuffer;
+       (timeoutValue, this(flush)[]) -> theSocket.private.sendMem;
+   if)
+   
+--- SSocketPut:dopart ---
+do ch -> private.theOutBuffer.put;
+   (if ch=ascii.newline then
+       flush
+       (# 
+          idle::(# do this(put).Idle #);
+          blocking::(# do this(put).Blocking #);
+          (* errorCB's ??? *)
+       #);
+   if)
+   
+--- SSocketPutText:dopart ---
+do txt.lgth -> private.theOutBuffer.expand;
+   (@@txt.T[1], txt.lgth) -> private.theOutBuffer.putMem;
+   L: (for i:txt.lgth repeat 
+           (if txt.T[i]=ascii.newline then
+               flush
+               (# 
+                  idle::(# do this(putText).Idle #);
+                  blocking::(# do this(putText).Blocking #);
+                  (* errorCB's ??? *)
+               #);
+               leave L;
+           if)
+      for);   
+   
+--- SSocketPeek:dopart ---
+do (if private.theInBuffer.isEmpty then
+       timeoutValue -> theSocket.private.timerStart;
+       (theIdle[], MaxReadAhead) -> theSocket.private.receiveMem.init;
+       MaxReadAhead -> private.theInBuffer.expand;
+       (@@theSocket.private.receiveMem.buffer[1], 
+       theSocket.private.receiveMem.readMore) -> private.theInBuffer.putMem;
+       theSocket.private.timerStop;
+   if);
+   
+   private.theInBuffer.peek -> ch
+   
+--- SSocketGet:dopart ---
+do (if private.theInBuffer.isEmpty then
+       timeoutValue -> theSocket.private.timerStart;
+       (theIdle[], MaxReadAhead) -> theSocket.private.receiveMem.init;
+       MaxReadAhead -> private.theInBuffer.expand;
+       (@@theSocket.private.receiveMem.buffer[1], 
+       theSocket.private.receiveMem.readMore) -> private.theInBuffer.putMem;
+       theSocket.private.timerStop;
+   if);
+   
+   private.theInBuffer.get -> ch
+   
+--- SSocketGetLinePriv:descriptor ---
+(# idleType: theSocket.withIdle
+     (# idle::(# do this(getLine).idle #);
+        blocking::(# do this(getLine).blocking #);
+     do INNER
+     #);
+   
+   ch: @Char;
+   
+do Copy:
+     (# 
+     do (if private.theInBuffer.isEmpty then
+            timeoutValue -> theSocket.private.timerStart;
+            (&idleType[], MaxReadAhead) -> theSocket.private.receiveMem.init;
+            MaxReadAhead -> private.theInBuffer.expand;
+            (@@theSocket.private.receiveMem.buffer[1], 
+            theSocket.private.receiveMem.readMore) 
+              -> private.theInBuffer.putMem;
+            theSocket.private.timerStop;
+        if);
+        
+        private.theInBuffer.get -> ch;
+        
+        (if ch<>ascii.newline then
+            (if (txt.pos+1->txt.pos) > txt.T.range then 
+                txt.T.range+16->txt.T.extend 
+            if);
+            ch->txt.T[txt.pos]; txt.lgth+1->txt.lgth;
+            restart Copy
+        if)
+     #)
+#)
+
+--- SSocketEos:descriptor ---
+(# 
+   theIdle: @theSocket.withIdle
+     (# connBrokenError::
+          (# 
+          do errCB_abortOperation -> value;
+             true -> this(eos).value
+          #)
+     #);
+   
+do (if private.theInBuffer.isEmpty then
+       timeoutValue -> theSocket.private.timerStart;
+       (theIdle[], MaxReadAhead) -> theSocket.private.receiveMem.init;
+       MaxReadAhead -> private.theInBuffer.expand;
+       (@@theSocket.private.receiveMem.buffer[1], 
+       theSocket.private.receiveMem.readMore) -> private.theInBuffer.putMem;
+       theSocket.private.timerStop
+   if);
+   
+   (if not private.theInBuffer.isEmpty then false -> value; if)
+#)
+
+--- SSocketGetAtom: dopart ---
+do skipBlanks:
+     (if not this(StreamSocket).eos then
+         this(StreamSocket).peek -> ch;
+         (if (ch->ascii.isWhiteSpace) then
+             this(StreamSocket).get; restart skipBlanks 
+         if)
+     if);
+   copy:
+     (if not this(StreamSocket).eos then
+         this(StreamSocket).peek -> ch;
+         (if not (ch->ascii.isWhiteSpace) then
+             (if (txt.pos+1->txt.pos) > txt.T.range then 
+                 txt.T.range+16->txt.T.extend 
+             if);
+             this(StreamSocket).get -> txt.T[txt.pos]; txt.lgth+1->txt.lgth;
+             restart copy;
+         if)
+     if);

@@ -2,7 +2,7 @@
 
 /*
  * COPYRIGHT
- *       Copyright Mjolner Informatics, 1994
+ *       Copyright Mjolner Informatics, 1994-95
  *       All rights reserved.
  */
 
@@ -42,10 +42,12 @@
 
 
 /* A readable and not too long filespec, for debug(gish) output */
-#define FILE_ID "process/v1.3.9.1/.../sockSignals.c"
+#define FILE_ID "process/v1.6/.../sockSignals.c"
 
 /* Enable {in,de}crementing counter by means of the USR{1,2} signals */
-#define SUPPORT_ASYNCHLEVEL
+#ifndef nti
+#  define SUPPORT_ASYNCHLEVEL
+#endif
 
 /* #define DO_ECHO_ERROR */
 /* #define MAKE_CTRL_C_A_KILLER */
@@ -57,8 +59,9 @@
 #include "echoError.h"
 
 /* Make sure 'broken pipe' signal doesn't kill us */
-#define USE_SIGPIPE_HANDLER
-
+#ifndef nti
+#  define USE_SIGPIPE_HANDLER
+#endif
 
 /********************************************************************
  *                                                                  *
@@ -88,10 +91,10 @@
  * return value
  *   level, reflecting received USR1 (level++) and USR2 (level--) signals
  */
+  int asynch_level=0;
 #ifdef SUPPORT_ASYNCHLEVEL
 
   static int SIGUSR_installed=0;
-  int asynch_level=0;
 
   int asynchLevel(void)
   {

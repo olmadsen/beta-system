@@ -21,6 +21,7 @@
 
 #if defined(sun3)
 #  define A_SUN3
+#  undef  A_SGI
 #  undef  A_SUN4
 #  undef  A_SUN4S
 #  undef  A_OLDHP
@@ -28,10 +29,10 @@
 #  undef  A_SNAKE
 #  undef  A_LINUX
 #  undef  A_NT
-#  undef  A_SGI
 #endif /* sun3 */
 
 #if defined(sun4)
+#  undef  A_SGI
 #  undef  A_SUN3
 #  define A_SUN4
 #  undef  A_SUN4S
@@ -40,10 +41,10 @@
 #  undef  A_SNAKE
 #  undef  A_LINUX
 #  undef  A_NT
-#  undef  A_SGI
 #endif /* sun4 */
 
 #if defined(sun4s)
+#  undef  A_SGI
 #  undef  A_SUN3
 #  undef  A_SUN4
 #  define A_SUN4S
@@ -52,10 +53,10 @@
 #  undef  A_SNAKE
 #  undef  A_LINUX
 #  undef  A_NT
-#  undef  A_SGI
 #endif /* sun4s */
 
 #if defined(hp)
+#  undef  A_SGI
 #  undef  A_SUN3
 #  undef  A_SUN4
 #  undef  A_SUN4S
@@ -64,10 +65,10 @@
 #  undef  A_SNAKE
 #  undef  A_LINUX
 #  undef  A_NT
-#  undef  A_SGI
 #endif /* hp */
 
 #if defined(hpux8)
+#  undef  A_SGI
 #  undef  A_SUN3
 #  undef  A_SUN4
 #  undef  A_SUN4S
@@ -76,10 +77,10 @@
 #  undef  A_SNAKE
 #  undef  A_LINUX
 #  undef  A_NT
-#  undef  A_SGI
 #endif /* hpux8 */
 
 #if defined(hpux9mc)
+#  undef  A_SGI
 #  undef  A_SUN3
 #  undef  A_SUN4
 #  undef  A_SUN4S
@@ -88,10 +89,10 @@
 #  undef  A_SNAKE
 #  undef  A_LINUX
 #  undef  A_NT
-#  undef  A_SGI
-#endif /* hpux8 */
+#endif /* hpux9mc */
 
 #if defined(snake)
+#  undef  A_SGI
 #  undef  A_SUN3
 #  undef  A_SUN4
 #  undef  A_SUN4S
@@ -100,10 +101,10 @@
 #  define A_SNAKE
 #  undef  A_LINUX
 #  undef  A_NT
-#  undef  A_SGI
 #endif /* snake */
 
 #if defined(hpux9pa) /* datpete 22/8/94 */
+#  undef  A_SGI
 #  undef  A_SUN3
 #  undef  A_SUN4
 #  undef  A_SUN4S
@@ -112,11 +113,11 @@
 #  define A_SNAKE
 #  undef  A_LINUX
 #  undef  A_NT
-#  undef  A_SGI
 #endif /* hpux9pa */
 
 
-#if defined(linux) /* !!! new architecture - this might be wrong */
+#if defined(linux)
+#  undef  A_SGI
 #  undef  A_SUN3
 #  undef  A_SUN4
 #  undef  A_SUN4S
@@ -125,10 +126,10 @@
 #  undef  A_SNAKE
 #  define A_LINUX
 #  undef  A_NT
-#  undef  A_SGI
 #endif /* linux */
 
-#if defined(nt) /* !!! new architecture - this might be wrong */
+#if defined(nti) 
+#  undef  A_SGI
 #  undef  A_SUN3
 #  undef  A_SUN4
 #  undef  A_SUN4S
@@ -137,7 +138,6 @@
 #  undef  A_SNAKE
 #  undef  A_LINUX
 #  define A_NT
-#  undef  A_SGI
 #endif /* nt */
 
 #if defined(A_SUN3) || defined(A_SUN4)
@@ -152,12 +152,12 @@
 #  define A_HP
 #endif
 
-#if defined(A_SUN) || defined(A_HP) || defined(A_SGI)
-#  define A_BIGEND
-#endif
-
 #if defined(A_LINUX) || defined(A_NT)
 #  define A_LITTLEEND
+#  undef  A_BIGEND
+#else
+#  undef  A_LITTLEEND
+#  define A_BIGEND
 #endif
 
 #define ARCH_UNKNOWN "Unknown architecture"

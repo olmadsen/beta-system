@@ -2,7 +2,7 @@
 
 /*
  * COPYRIGHT
- *       Copyright Mjolner Informatics, 1994
+ *       Copyright Mjolner Informatics, 1994-95
  *       All rights reserved.
  */
 
@@ -15,25 +15,25 @@
 
 
 #include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
 #include <errno.h>
-#include <netdb.h>		/* to see struct hostent */
-#include <netinet/in.h>
 #include <stdio.h>		/* to see FILE */
-#include <values.h>		/* to see MAXINT */
-#include <sys/types.h>
-#include <sys/socket.h>         /* to see SOL_SOCKET, SO_TYPE */
-#include <sys/param.h>		/* to see NOFILE */
-#include <sys/time.h>		/* to see struct timeval */
 #include "sockSignals.h"
 
-#define SUPPORT_TIMESTAMPING
 
-#ifdef linux
-#define TYPE_FD_SET fd_set
+#ifdef nti
+#  include <winsock.h> 
+#  include <limits.h>
 #else
-#define TYPE_FD_SET struct fd_set
+#  define SUPPORT_TIMESTAMPING
+#  include <fcntl.h>
+#  include <unistd.h>
+#  include <netdb.h>		/* to see struct hostent */
+#  include <netinet/in.h>
+#  include <values.h>		/* to see MAXINT */
+#  include <sys/socket.h>         /* to see SOL_SOCKET, SO_TYPE */
+#  include <sys/param.h>		/* to see NOFILE */
+#  include <sys/time.h>		/* to see struct timeval */
+#  include <sys/types.h>
 #endif
 
 /***************************
@@ -63,7 +63,10 @@
 #    if defined(A_LINUX)
 #      include <linux/termios.h>
 #    else
-#      error ARCH_UNKNOWN
+#      ifdef nti
+#      else
+#        error ARCH_UNKNOWN
+#      endif
 #    endif
 #  endif
 #endif
@@ -71,7 +74,7 @@
 
 /* Architecture dependant types/values */
 
-#if (defined(A_SUN) || defined(A_SGI))
+#if defined(A_SUN) || defined(A_SGI)
 #  define HPFD_cast
 #else
 #  if defined(A_HP)
@@ -80,7 +83,11 @@
 #    if defined(A_LINUX)
 #      define HPFD_cast
 #    else
-#      error ARCH_UNKNOWN
+#      ifdef nti
+#        define HPFD_cast
+#      else
+#        error ARCH_UNKNOWN
+#      endif
 #    endif
 #  endif
 #endif
@@ -94,7 +101,10 @@
 #    if defined(A_LINUX)
 #      define SIGNALPARM int ignore
 #    else
-#      error ARCH_UNKNOWN
+#      ifdef nti
+#      else
+#        error ARCH_UNKNOWN
+#      endif
 #    endif
 #  endif
 #endif
@@ -108,7 +118,11 @@
 #    if defined (A_LINUX)
 #      define SOCKADDR_type sockaddr
 #    else
-#      error ARCH_UNKNOWN
+#      ifdef nti
+#        define SOCKADDR_type sockaddr
+#      else
+#        error ARCH_UNKNOWN
+#      endif
 #    endif
 #  endif
 #endif
@@ -120,6 +134,10 @@
 #endif
 
 
+#ifdef nti
+#  define MAXHOSTNAMELEN 256 /* Value from fraxinus:'man gethostname' */
+#  define MAXINT INT_MAX
+#endif
 /********************************************************************
  *                                                                  *
  * DEBUGGING #defines:                                              *
@@ -130,10 +148,10 @@
 
 
 /* A readable and not too long filespec, for debug(gish) output */
-#define FILE_ID "process/v1.4/.../sockets.c"
+#define FILE_ID "process/v1.5/.../sockets.c"
 
-#define DO_ECHO_ERROR
-#define DO_ECHO_ACTION
+#define DO_ECHO_ERROR(x) printf(x);
+#define DO_ECHO_ACTION(x) printf(x);
 #define DO_ECHO_TRANSFER
 #define DO_SHOW_SELECT
 
@@ -143,55 +161,56 @@
 
 #ifdef DO_ECHO_TRANSFER
 
-   /* This ought to go into its own file, echoError.c */
+/* This ought to go into its own file, echoError.c */
 
 #  include <stdio.h>
 #  include <ctype.h>
 #  define MAXLISTLEN 200
 #  define BLOCKS_PER_LINE 6
 #  define PER_BLOCK 4
-#  define min(a,b) ((a)<(b)? (a):(b))
+#  ifndef nti
+#    define min(a,b) ((a)<(b)? (a):(b))
+#  endif
+char *hexList(char *data, int len)
+{
+  static char buffer[1024];
+  int i,listLen=min(len,MAXLISTLEN);
+  char *p;
 
-   char *hexList(char *data, int len)
-   {
-     static char buffer[1024];
-     int i,listLen=min(len,MAXLISTLEN);
-     char *p;
+  buffer[0]=0;
+  p=buffer;
 
-     buffer[0]=0;
-     p=buffer;
+  for (i=0; i<listLen; i++) {
+    if (!(i % (BLOCKS_PER_LINE*PER_BLOCK))) {
+      sprintf(p,"\n>>");
+      p += strlen("\n>>");
+    }
+    else if (!(i % 4)) {
+      sprintf(p,"  ");
+      p += strlen("  ");
+    }
+    sprintf(p," %02x",(int)(unsigned char)data[i]);
+    p += strlen(" ##");
+  }
 
-     for (i=0; i<listLen; i++) {
-       if (!(i % (BLOCKS_PER_LINE*PER_BLOCK))) {
-	 sprintf(p,"\n>>");
-	 p += strlen("\n>>");
-       }
-       else if (!(i % 4)) {
-	 sprintf(p,"  ");
-	 p += strlen("  ");
-       }
-       sprintf(p," %02x",(int)(unsigned char)data[i]);
-       p += strlen(" ##");
-     }
+  for (i=0; i<listLen; i++) {
+    if (!(i % (BLOCKS_PER_LINE*PER_BLOCK))) {
+      sprintf(p,"\n>>");
+      p += strlen("\n>>");
+    }
+    else if (!(i % PER_BLOCK)) {
+      sprintf(p,"  ");
+      p += strlen("  ");
+    }
+    if isprint(data[i])
+      sprintf(p,"  %c",data[i]);
+    else
+      sprintf(p,"  .");
+    p += strlen("  .");
+  }
 
-     for (i=0; i<listLen; i++) {
-       if (!(i % (BLOCKS_PER_LINE*PER_BLOCK))) {
-	 sprintf(p,"\n>>");
-	 p += strlen("\n>>");
-       }
-       else if (!(i % PER_BLOCK)) {
-	 sprintf(p,"  ");
-	 p += strlen("  ");
-       }
-       if isprint(data[i])
-	 sprintf(p,"  %c",data[i]);
-       else
-	 sprintf(p,"  .");
-       p += strlen("  .");
-     }
-
-     return buffer;
-   }
+  return buffer;
+}
 
 #endif
 
@@ -200,67 +219,67 @@
 # define DEBUG_DEST stdout
 # define SHOW_SELECT(msg,rd,wr,er) print_select_parms(DEBUG_DEST,msg,rd,wr,er)
 
-  static int do_show_select_initalized=0;
-  static int do_show_select=0;
+static int do_show_select_initalized=0;
+static int do_show_select=0;
 
-  static int print_fd_set(FILE *f, char const *msg, fd_set const *pmask)
-  {
-    int i,first=1,count=0;
+static int print_fd_set(FILE *f, char const *msg, fd_set const *pmask)
+{
+  int i,first=1,count=0;
 
-    count += fprintf(f,"%s",msg);
-    for (i=0; i<FD_SETSIZE; i++) {
-      if (FD_ISSET(i,pmask)) {
-	if (first) {
-	  first=0;
-	  count += fprintf(f,"{");
-	}
-	else {
-	  count += fprintf(f,",");
-	}
-	count += fprintf(f,"%d",i);
+  count += fprintf(f,"%s",msg);
+  for (i=0; i<FD_SETSIZE; i++) {
+    if (FD_ISSET(i,pmask)) {
+      if (first) {
+	first=0;
+	count += fprintf(f,"{");
       }
-    }
-    if (first)
-      count += fprintf(f,"{");
-    count += fprintf(f,"}");
-    return count;
-  }
-
-  static int fill(FILE *f,int width)
-  {
-    int i;
-    for (i=0; i<width; i++)
-      fprintf(f," ");
-    return width;
-  }
-
-  static void print_select_parms(FILE *f,
-				 char const * msg,
-				 fd_set const *rd,
-				 fd_set const *wr,
-				 fd_set const *er)
-  {
-    int width;
-    static int const col_width=20;
-
-    if (!do_show_select_initalized) {
-      /* do_show_select true iff SHOW_SELECT defined */
-      do_show_select = (getenv("SHOW_SELECT") != 0);
-      do_show_select_initalized=1;
-    }
-
-    if (do_show_select) {
-      width=fprintf(f,"%s: ",msg);
-      width+=fill(f,col_width-width);
-      width+=print_fd_set(f," rd",rd);
-      width+=fill(f,2*col_width-width);
-      width+=print_fd_set(f," wr",wr);
-      width+=fill(f,3*col_width-width);
-      print_fd_set(f," er",er);
-      printf("\n");
-      fflush(f);
+      else {
+	count += fprintf(f,",");
+      }
+      count += fprintf(f,"%d",i);
     }
   }
+  if (first)
+    count += fprintf(f,"{");
+  count += fprintf(f,"}");
+  return count;
+}
+
+static int fill(FILE *f,int width)
+{
+  int i;
+  for (i=0; i<width; i++)
+    fprintf(f," ");
+  return width;
+}
+
+static void print_select_parms(FILE *f,
+			       char const * msg,
+			       fd_set const *rd,
+			       fd_set const *wr,
+			       fd_set const *er)
+{
+  int width;
+  static int const col_width=20;
+
+  if (!do_show_select_initalized) {
+    /* do_show_select true iff SHOW_SELECT defined */
+    do_show_select = (getenv("SHOW_SELECT") != 0);
+    do_show_select_initalized=1;
+  }
+
+  if (do_show_select) {
+    width=fprintf(f,"%s: ",msg);
+    width+=fill(f,col_width-width);
+    width+=print_fd_set(f," rd",rd);
+    width+=fill(f,2*col_width-width);
+    width+=print_fd_set(f," wr",wr);
+    width+=fill(f,3*col_width-width);
+    print_fd_set(f," er",er);
+    printf("\n");
+    fflush(f);
+  }
+}
 
 #else
 # define DEBUG_DEST
@@ -275,9 +294,9 @@
 #define MORE_THAN_MAXFD 512
 
 #if defined(A_SUN4S)
-#define MAXFD sysconf(_SC_OPEN_MAX)
+#  define MAXFD sysconf(_SC_OPEN_MAX)
 #else
-#define MAXFD NOFILE
+#  define MAXFD NOFILE
 #endif /* defined(A_SUN4S) */
 
 static unsigned long current_timestamp;
@@ -323,6 +342,35 @@ unsigned long getTimeStamp(long fd)
  * return value
  *   none
  */
+#if defined(A_NT)
+
+static void 
+StopWSA(void)
+{
+  ECHO_USER_ERROR("WSACleanup");
+  /*  Sleep(500); */
+  WSACleanup();
+}
+
+static void
+StartWSA(void)
+{
+  WSADATA wsadata;
+
+  ECHO_USER_ERROR("WSAStartup");
+  if (WSAStartup(MAKEWORD(1,1), &wsadata) == 0) {
+    atexit(StopWSA);
+  } else {
+    ECHO_USER_ERROR("WSAStartup failed");
+    exit(1);
+  }
+}
+
+# define START_WSA() StartWSA()
+#else
+# define START_WSA()
+#endif
+
 void initSockets(void)
 {
   static initialized=0;
@@ -330,6 +378,7 @@ void initSockets(void)
   if (!initialized) {
     initialized = 1;
     INIT_TIMESTAMP();
+    START_WSA();
     initSockSignals();
 
     /* This will print out the message iff it is true */
@@ -359,18 +408,28 @@ void initSockets(void)
 static int validateSocket(int fd)
 {
   long dummy;
-  int dummy_len=sizeof(dummy);
-  int res=getsockopt(fd,SOL_SOCKET,SO_TYPE,(char*)&dummy,&dummy_len);
+  int dummy_len = sizeof(dummy);
 
-  if (0>res) {
+  int res = getsockopt(fd, SOL_SOCKET, SO_TYPE, (char*)&dummy, &dummy_len);
+
+#ifdef nti
+  if (res) 
+  {
     RESET_TIMESTAMP(fd);
-    errno=ENOTSOCK;		/* ANY error means 'Not a socket' */
+    errno = WSAENOTSOCK;
     return 0;
   }
-  else {
-    SET_TIMESTAMP(fd);
-    return 1;
+#else
+  if (0 > res) 
+  {
+    RESET_TIMESTAMP(fd);
+    errno = ENOTSOCK;		/* ANY error means 'Not a socket' */
+    return 0;
   }
+#endif
+
+  SET_TIMESTAMP(fd);
+  return 1;
 }
 
 
@@ -387,10 +446,10 @@ static int validateSocket(int fd)
  */
 long selectReadable(int fd)
 {
-  static TYPE_FD_SET read_mask,write_mask,error_mask;
+  static struct fd_set read_mask,write_mask,error_mask;
   static struct timeval timeout = {0,0};
   long result;
-  int err,err_size=sizeof(err);
+  int err,err_size = sizeof(err);
 
   SET_TIMESTAMP(fd);
 
@@ -406,8 +465,12 @@ long selectReadable(int fd)
 			   HPFD_cast &read_mask,
 			   HPFD_cast &write_mask,
 			   HPFD_cast &error_mask,
-			   &timeout))) {
+			   &timeout))) 
+    {
       SHOW_SELECT("       (error)",&read_mask,&write_mask,&error_mask);
+#ifdef nti
+    errno = WSAGetLastError();
+#endif
       if (EINTR == errno)
 	continue;		/* interrupted ssytem call: restart */
       else
@@ -442,11 +505,15 @@ long selectReadable(int fd)
  */
 long doBlock(long fd, long rd, long wr, long timeoutValue)
 {
-  static TYPE_FD_SET read_mask,write_mask,error_mask;
+  static struct fd_set read_mask,write_mask,error_mask;
   static struct timeval timeout = {0,0};
   struct timeval *ptm;
   long result;
   int err,err_size=sizeof(err);
+
+#ifdef nti
+  printf("doBlock called! You should not block this way! (doing it anyway...\n)");
+#endif
 
   SET_TIMESTAMP(fd);
 
@@ -471,8 +538,12 @@ long doBlock(long fd, long rd, long wr, long timeoutValue)
 			   HPFD_cast &read_mask,
 			   HPFD_cast &write_mask,
 			   HPFD_cast &error_mask,
-			   ptm))) {
+			   ptm))) 
+    {
       SHOW_SELECT("       (error)",&read_mask,&write_mask,&error_mask);
+#ifdef nti
+    errno = WSAGetLastError();
+#endif
       if (EINTR == errno)
 	continue;		/* interrupted ssytem call: restart */
       else
@@ -503,6 +574,9 @@ long doBlock(long fd, long rd, long wr, long timeoutValue)
 /* function 'Errno' simply returns the value of the variable 'errno'
  * used by C-stdlib to report the most recent error.
  *
+ * On NT, make sure to set errno to WSAGetLastError in the C-func that 
+ * failed, if that is the kind of error, the BETAcode expects.
+ *
  * args
  *   none
  *
@@ -521,21 +595,28 @@ long Errno(void)
  *                                                                  *
  ********************************************************************/
 
-unsigned long
-host2inetAddr(char *host)
+/* 
+ *  Find host by name. Return IP-address in host-byteorder. 
+ */
+unsigned long host2inetAddr(char *host)
 {
   struct hostent *pHostInfo=gethostbyname(host);
 
   if (!pHostInfo) {
     ECHO_ERROR("host2inetAddr");
+#ifdef nti
+    errno = WSAGetLastError();
+#endif
     return -1;
   }
   return ntohl(*(unsigned long *)(*pHostInfo->h_addr_list));
 }
 
 
-char const *
-nameOfThisHost(long *pErrorCode)
+/* 
+ *  Get name of this host. (cached here.)
+ */
+char const *nameOfThisHost(long *pErrorCode)
 {
   static int nameOfThisHostCached=0;
   static char nameOfThisHostCache[MAXHOSTNAMELEN+1];
@@ -545,6 +626,9 @@ nameOfThisHost(long *pErrorCode)
 
     if (0 > gethostname(nameOfThisHostCache,MAXHOSTNAMELEN)) {
       ECHO_ERROR("nameOfThisHost");
+#ifdef nti
+      errno = WSAGetLastError();
+#endif
       *pErrorCode=-1;
       return "";
     }
@@ -555,8 +639,10 @@ nameOfThisHost(long *pErrorCode)
 }
 
 
-unsigned long
-inetAddrOfThisHost(void)
+/*
+ *  Get IP-address of this host in host-byteorder. (Cached here)
+ */
+unsigned long inetAddrOfThisHost(void)
 {
   static int inetAddrOfThisHostCached=0;
   static unsigned long inetAddrOfThisHostCache;
@@ -567,14 +653,20 @@ inetAddrOfThisHost(void)
 
     if (!pHostInfo) {
       ECHO_ERROR("inetAddrOfThisHost");
+#ifdef nti
+      errno = WSAGetLastError();
+#endif
       return -1;
     }
     if (0 > errorCode) {
       /* no ECHO_ERROR here: has already been reported */
+#ifdef nti
+      errno = WSAGetLastError();
+#endif
       return -1;
     }
     inetAddrOfThisHostCache = ntohl(*(unsigned long *)(*pHostInfo->h_addr_list));
-    inetAddrOfThisHostCached=1;
+    inetAddrOfThisHostCached = 1;
   }
   return inetAddrOfThisHostCache;
 }
@@ -586,17 +678,57 @@ inetAddrOfThisHost(void)
  *                                                                  *
  ********************************************************************/
 
-/* inetAddr & port is in HOST byteorder. */
-int openActiveSocket(unsigned long inetAddr, long port)
+/* inetaddres & Portnumber in HOST byte-order. */
+
+int createActiveSocket(unsigned long inetAddr, long port)
 {
+  int on = 1;
+  unsigned long NonBlock = 1;
   struct sockaddr_in addr;
   int sock;
 
+  SET_TIMESTAMP(sock);
+
   /* Create a socket */
-  if((sock=socket(AF_INET,SOCK_STREAM,0))<0) {
-    ECHO_ERROR("openActiveSocket,1");
+#ifdef nti
+  if((sock = socket(AF_INET,SOCK_STREAM,0)) == SOCKET_ERROR) {
+    ECHO_ERROR("createActiveSocket,1");
+    errno = WSAGetLastError();
     return -1;
   }
+  ECHO_ACTION_INT("opened active socket on port",sock,port);
+
+  /* And connect to the server */
+  memset((char *)&addr,0,sizeof(addr)); /* instead of bzero */
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons((unsigned short)port);
+  addr.sin_addr.s_addr = htonl(inetAddr);
+
+  if(connect(sock,(struct SOCKADDR_type*)&addr,sizeof(addr))) {
+    ECHO_ERROR("createActiveSocket,2");
+    errno = WSAGetLastError();
+    return -1;
+  }
+
+  if (ioctlsocket(sock, FIONBIO, &NonBlock)) {
+    ECHO_ERROR("createActiveSocket,3");
+    errno = WSAGetLastError();
+    return -1;
+  }
+
+  if (setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (char*)&on, sizeof(on))) {
+    ECHO_ERROR("createActiveSocket,4");
+    errno = WSAGetLastError();
+    return -1;
+  }
+
+#else /* Not nti */
+
+  if((sock=socket(AF_INET,SOCK_STREAM,0))<0) {
+    ECHO_ERROR("createActiveSocket,1");
+    return -1;
+  }
+  ECHO_ACTION_INT("opened active socket on port",sock,port);
 
   /* And connect to the server */
   memset((char *)&addr,0,sizeof(addr)); /* instead of bzero */
@@ -605,14 +737,23 @@ int openActiveSocket(unsigned long inetAddr, long port)
   addr.sin_addr.s_addr=htonl(inetAddr);
 
   if(connect(sock,(struct SOCKADDR_type*)&addr,sizeof(addr))<0) {
-    ECHO_ERROR("openActiveSocket,2");
+    ECHO_ERROR("createActiveSocket,2");
     return -1;
   }
 
-  SET_TIMESTAMP(sock);
+  if (0 > fcntl(sock, F_SETFL, O_NONBLOCK)) {
+    ECHO_ERROR("createActiveSocket,3");
+    return -1;
+  }
+
+  if (0 > setsockopt(sock, SOL_SOCKET, SO_KEEPALIVE, (char*)&on, sizeof(on))) {
+    ECHO_ERROR("createActiveSocket,4");
+    return -1;
+  }
+#endif
 
   /* Connection is now established and the descriptor is in sock */
-  ECHO_ACTION("opened active socket",sock,port);
+  ECHO_ACTION_IP("established connection to",sock,inetAddr);
   return sock;
 }
 
@@ -627,46 +768,86 @@ int openActiveSocket(unsigned long inetAddr, long port)
 /* function 'createPassiveSocket' creates a passive socket
  * and binds it to a port. In case the port is 0, a random,
  * free port is chosen, and the port number is returned in
- * (*port). The internet address (225.130.16.214 style value
- * as an unsigned long integer) for this passiveSocket (i.e.
- * this host) is returned in (*pInetAddr), iff the operation
- * succeeds.
+ * (*port).
  *
  * args
  *   port: pointer to port number to bind socket to
- *   pInetAddr: pointer to place to put internet address
  *
  * return value
  *   normally: file descriptor for the new passive socket
  *   in case of error: -1
  */
-int createPassiveSocket(long *port, unsigned long *pInetAddr)
+int createPassiveSocket(long *port)
 {
+  unsigned long NonBlock = 1;
+  unsigned long on = 1;
   struct sockaddr_in sockaddr;
   int listenSock;
   int size;
 
+  SET_TIMESTAMP(listenSock);
+
   /* Create a socket */
+#ifdef nti
+  if ((listenSock = socket(AF_INET,SOCK_STREAM,0)) == INVALID_SOCKET) {
+    ECHO_ERROR("createPassiveSocket,1");
+    errno = WSAGetLastError();
+    return -1;
+  }
+  if (ioctlsocket(listenSock, FIONBIO, &NonBlock)) {
+    ECHO_ERROR("createPassiveSocket,2");
+    errno = WSAGetLastError();
+    return -1;
+  }
+  if (setsockopt(listenSock, SOL_SOCKET, SO_REUSEADDR, 
+		 (char*)&on, sizeof(on))) {
+    ECHO_ERROR("createPassiveSocket,2a");
+    errno = WSAGetLastError();
+    return -1;
+  }
+#else
   if (0>(listenSock=socket(AF_INET,SOCK_STREAM,0))) {
     ECHO_ERROR("createPassiveSocket,1");
     return -1;
   }
-
-  /* Bind the socket */
-  memset((char *)&sockaddr,0,sizeof(sockaddr)); /* instead of bzero */
-  sockaddr.sin_family=AF_INET;
-  sockaddr.sin_port=htons((unsigned short)*port);
-  sockaddr.sin_addr.s_addr=INADDR_ANY;
-  if(0>bind(listenSock,(struct SOCKADDR_type*)&sockaddr,sizeof(sockaddr))) {
+  if (0>fcntl(listenSock, F_SETFL, O_NDELAY)) {
     ECHO_ERROR("createPassiveSocket,2");
     return -1;
   }
+  if (setsockopt(listenSock, SOL_SOCKET, SO_REUSEADDR,
+		 (char*)&on, sizeof(on))) {
+    ECHO_ERROR("createPassiveSocket,2a");
+    return -1;
+  }
+#endif
+
+  /* Bind the socket */
+  memset((char *)&sockaddr,0,sizeof(sockaddr)); /* instead of bzero */
+  sockaddr.sin_family = AF_INET;
+  sockaddr.sin_port = htons((unsigned short)*port);
+  sockaddr.sin_addr.s_addr = INADDR_ANY;
+
+#ifdef nti
+  if(bind(listenSock,(struct SOCKADDR_type*)&sockaddr,sizeof(sockaddr))) {
+    ECHO_ERROR("createPassiveSocket,3");
+    errno = WSAGetLastError();
+    return -1;
+  }
+#else
+  if(0 > bind(listenSock,(struct SOCKADDR_type*)&sockaddr,sizeof(sockaddr))) {
+    ECHO_ERROR("createPassiveSocket,3");
+    return -1;
+  }
+#endif
 
   /* If the port number was 0, we must lookup the randomly chosen no. */
   if (!*port) {
     size = sizeof(sockaddr);
-    if (0>getsockname(listenSock,(struct SOCKADDR_type*)&sockaddr,&size)) {
-      ECHO_ERROR("createPassiveSocket,3");
+    if (0 > getsockname(listenSock,(struct SOCKADDR_type*)&sockaddr,&size)) {
+      ECHO_ERROR("createPassiveSocket,4");
+#ifdef nti
+      errno = WSAGetLastError();
+#endif
       return -1;
     }
     (*port) = ntohs(sockaddr.sin_port);
@@ -674,24 +855,14 @@ int createPassiveSocket(long *port, unsigned long *pInetAddr)
 
   /* Ask OS to create client request queue */
   if (listen(listenSock,5)<0) {
-    ECHO_ERROR("createPassiveSocket,4");
+    ECHO_ERROR("createPassiveSocket,5");
+#ifdef nti
+    errno = WSAGetLastError();
+#endif
     return -1;
   }
 
-  /* Report internet address of this host */
-  {
-    unsigned long inetAddr=inetAddrOfThisHost();
-    if (0 > inetAddr) {
-      ECHO_ERROR("createPassiveSocket,5");
-      errno=0; /* Make this situation detectable */
-      return -1;
-    }
-    *pInetAddr=inetAddr;
-  }
-
-  SET_TIMESTAMP(listenSock);
-
-  ECHO_ACTION("created passive socket",listenSock,*port);
+  ECHO_ACTION_INT("created passive socket on port",listenSock,*port);
   return listenSock;
 }
 
@@ -715,33 +886,67 @@ int acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr)
 {
   int newSock;
   struct SOCKADDR_type from;
-  int fromaddrlen=sizeof( struct SOCKADDR_type );
+  int fromaddrlen = sizeof( struct SOCKADDR_type );
 
   SET_TIMESTAMP(sock);
 
   *pBlocked=0;
-  do {
-    if ((newSock=accept(sock,&(from),&(fromaddrlen)))<0) {
-      switch (errno) {
+
+  do 
+  {
+    newSock = accept(sock, &from, &fromaddrlen);
+    
+#ifdef nti
+    if (newSock == INVALID_SOCKET) 
+    {
+      switch (WSAGetLastError()) 
+      {
       case EINTR:		/* Interrupt during system call .. */
 	continue;		/* .. simply restart it */
-      case EWOULDBLOCK:		/* not ready */
+	
+      case WSAEWOULDBLOCK:	/* not ready */
 	*pBlocked=1;
 	return 0;
+	
       default:
-	ECHO_ERROR("acceptConn");
+	printf("acceptConn failed, WSAGetLastError=%d\n", WSAGetLastError());
+	errno = WSAGetLastError();
 	return -1;
       }
     }
+#else
+    if (newSock < 0)
+    {
+      switch (errno) 
+      {
+      case EINTR:		/* Interrupt during system call .. */
+	continue;		/* .. simply restart it */
+	
+      case EWOULDBLOCK:	        /* not ready */
+	*pBlocked=1;
+	return 0;
+	
+      default:
+	printf("acceptConn failed, errno=%d\n", errno);
+	return -1;
+      }
+    }
+#endif
   } while (0);
+  
+  ECHO_ACTION_INT("accepted new connection on fd",sock,newSock);
 
   /* Report internet address of peer */
   {
     struct sockaddr_in peer;
     int size = sizeof(peer);
 
-    if (0>getpeername(newSock,(struct SOCKADDR_type*)&peer,&size)) {
+    if (0 > getpeername(newSock,(struct SOCKADDR_type*)&peer,&size)) 
+    {
       ECHO_ERROR("acceptConn,2");
+#ifdef nti
+      errno = WSAGetLastError();
+#endif
       return -1;
     }
     *pInetAddr=ntohl(peer.sin_addr.s_addr);
@@ -749,7 +954,7 @@ int acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr)
 
   SET_TIMESTAMP(newSock);
 
-  ECHO_ACTION("accepted new connection",newSock,*pInetAddr);
+  ECHO_ACTION_IP("connected to",newSock,*pInetAddr);
   return newSock;
 }
 
@@ -777,98 +982,35 @@ int sockToRead(int fd)
 
   SET_TIMESTAMP(fd);
 
-  if (0>ioctl(fd,FIONREAD,(caddr_t)&result)) {
+#ifdef nti
+  if (ioctlsocket(fd, FIONREAD, &result)) 
+#else
+  if (0 > ioctl(fd, FIONREAD, (caddr_t)&result)) 
+#endif
+  {
     ECHO_ERROR("sockToRead");
+#ifdef nti
+    errno = WSAGetLastError();
+#endif
     return -1;
   }
   else
-    return (result>MAXINT)? MAXINT : (int)result;
-}
-
-
-/* function 'sockStreamEos' computes the end-of-stream status for
- * a socket wrapped in a FILE. This is a bit tricky, since the
- * eof for a FILE does not get updated automatically. If you ever
- * get eof on a FILE, that status will persist on the FILE until
- * you 'fclose()' it or explicitly reset it by means of 'clearerr()'.
- * That means that neither "yes" nor "no" is a reliable answer wrt
- * the question can-we-read-now-from-this-FILE-which-is-a-socket.
- *
- * args
- *   fd: file descriptor for the socket acted on
- *   fp: FILE pointer for the FILE wrapper for the socket
- *
- * return value
- *   when no data in FILE buffer and in socket buffer: 1
- *   when some data in at least one of the buffers: 0
- *   in case of error: -1
- */
-int sockStreamEos(int fd, FILE* fp)
-{
-  long result;
-
-  SET_TIMESTAMP(fd);
-
-  if (feof(fp)) {		/* eof detected, see if still true */
-    if (0>ioctl(fd,FIONREAD,(caddr_t)&result)) {
-      return -1;
-    }
-    if (result>0) {
-      clearerr(fp);		/* tell the stupid stream, eof is over */
-      return 0;
-    }
-    else
-      return 1;
-  }
-  else {			/* eof not detected */
-    if (0>ioctl(fd,FIONREAD,(caddr_t)&result)) {
-      return -1;
-    }
-    if (result>0) {		/* data on socket: not eof */
-      return 0;
-    }
-    else {
-      /* NOTE: this depends on the declaration of
-       * the FILE macro in <stdio.h>. There seems
-       * to be no decent way to ask for the amount of data
-       * in the FILE buffer.
-       *
-       * Rationale: "if data in buffer: return false (not eof)"
-       */
-#      if defined(A_SUN) || defined(A_SGI)
-         return (0 >= fp->_cnt);
-#      else
-#        if defined(A_HP)
-	   return (0 >= fp->__cnt);
-#        else
-#          if defined(A_LINUX)
-	     /* !!! This has NOT been tested! */
-             return (0 >= fp->_IO_read_end - fp->_IO_read_ptr);
-#          else
-#	     error ARCH_UNKNOWN
-#          endif
-#        endif
-#      endif
-    }
-  }
+    return (result > MAXINT) ? MAXINT : (int)result;
 }
 
 
 /********************************************************************
  *                                                                  *
- * Setting up a new socket                                          *
+ * Setting up a new socket and closing it down                      *
  *                                                                  *
  ********************************************************************/
 
 
-/* function 'makeNonblocking' makes a socket use POSIX
- * style non-blocking communication. Afterwards, it
- * is not possible to revert the socket to a blocking
- * style of operation (as far as I know). The socket
- * may be open when you do 'makeNonblocking' (i.e. the
- * filedescriptor was obtained from 'accept()' or a
- * 'connect()' was called on it), but it is not legal
- * to do it on a passive socket (after 'bind()').
+/* function 'closeSocket' closes a socket and 
+ * updates local information about it.  To enable 
+ * holding this information up-to-date, please
+ * call this function instead of calling close()
+ * directly. 
  *
  * args
  *   fd: file descriptor for the socket
@@ -877,62 +1019,29 @@ int sockStreamEos(int fd, FILE* fp)
  *   when successful: 0
  *   in case of error: -1
  */
-int makeNonblocking(int fd)
+int closeSocket(int fd)
 {
-  int on=1;
-
-  if (!validateSocket(fd)) {
-    ECHO_ERROR("makeNonblocking");
-    return -1;
-  }
-
-  if (0>fcntl(fd,F_SETFL,O_NONBLOCK)) {
-    ECHO_ERROR("makeNonblocking,2");
-    return -1;
-  }
-
-  if (0>setsockopt(fd,SOL_SOCKET,SO_KEEPALIVE,(char*)&on,sizeof(on))) {
-    ECHO_ERROR("makeNonblocking,3");
-    return -1;
-  }
-
   SET_TIMESTAMP(fd);
 
-  ECHO_ACTION("made socket nonblocking",fd,0);
-  return 0;
-}
-
-
-/* function 'makePassiveNonblocking' makes a (supposedly) passive
- * socket BSD4.2-style non-blocking, for accepting connection
- * requests in a non-blocking manner. (The POSIX-style non-
- * blocking behaviour doesn't affect 'accept()'). Do this just
- * before 'bind()', and don't do 'makeNonblocking' on the same
- * socket.
- *
- * args
- *   fd: file descriptor for the passive socket
- *
- * return value
- *   when successful: 0
- *   in case of error: -1
- */
-int makePassiveNonblocking(int fd)
-{
-  if (!validateSocket(fd)) {
-    ECHO_ERROR("makePassiveNonblocking");
+#ifdef nti
+  if (closesocket(fd))
+  {
+    ECHO_ERROR("closeSocket");
+    printf("Closesocket failed with WSAGetLastError=%d\n", WSAGetLastError());
+    errno = WSAGetLastError();
     return -1;
   }
-
-  if (0>fcntl(fd,F_SETFL,O_NDELAY)) {
-    ECHO_ERROR("makePassiveNonblocking,2");
+#else
+  if (0 > close(fd)) 
+  {
+    ECHO_ERROR("closeSocket");
     return -1;
   }
+#endif
 
-  SET_TIMESTAMP(fd);
-
-  ECHO_ACTION("made passive socket nonblocking",fd,0);
+  ECHO_ACTION("closed socket", fd);
   return 0;
+
 }
 
 
@@ -967,30 +1076,69 @@ int readDataMax(int fd, char *destbuffer, int buflen)
 
   SET_TIMESTAMP(fd);
 
-  do {
-    switch (received=read(fd,destbuffer,buflen)) {
+  do 
+  {
+    received = recv(fd, destbuffer, buflen, 0);
+
+#ifdef nti
+    switch (received)
+    {
     case -1:			/* ERROR */
-      switch (errno) {
-      case ERR_WOULDBLOCK:	/* No data available */
+      switch (WSAGetLastError()) 
+      {
+      case WSAEWOULDBLOCK:
 	return 0;
+
       case EINTR:		/* Interrupted, just restart */
 	continue;
+      
       default:
-	ECHO_ERROR("readDataMax,1");
+	ECHO_USER_ERROR("readDataMax,1");
+	errno = WSAGetLastError();
 	return -1;
       }
       break;
-
+    
     case 0:
       /* No data available and not WOULDBLOCK: comm.partner closed down */
       ECHO_USER_ERROR("other party closed down; readDataMax,2");
-      errno=ENOTCONN;
+      errno = WSAENOTCONN;
       return -1;
-
+    
     default:
-      ECHO_TRANSFER("read",fd,destbuffer,received,buflen);
+      break;
     }
-  } while (0);
+#else
+    switch (received)
+    {
+    case -1:			/* ERROR */
+      switch (errno)
+      {
+      case ERR_WOULDBLOCK: /* No data available */
+	return 0;
+      
+      case EINTR:		/* Interrupted, just restart */
+	continue;
+      
+      default:
+	ECHO_USER_ERROR("readDataMax,1");
+	return -1;
+      }
+      break;
+    
+    case 0:
+      /* No data available and not WOULDBLOCK: comm.partner closed down */
+      ECHO_USER_ERROR("other party closed down; readDataMax,2");
+      errno = ENOTCONN;
+      return -1;
+    
+    default:
+      break;
+    }
+#endif
+  } while(0);
+
+
   return received;
 }
 
@@ -1020,23 +1168,58 @@ int writeDataMax(int fd, char *srcbuffer, int length)
 
   SET_TIMESTAMP(fd);
 
-  do {
-    if (0 > (sent=write(fd,srcbuffer,length)))
-      switch (errno) {
-      case ERR_WOULDBLOCK:	/* Buffer full */
+  do
+  {
+    sent = send(fd, srcbuffer, length, 0);
+  
+#ifdef nti
+    if (sent == -1)
+    {
+      switch (WSAGetLastError()) 
+      {
+      case WSAEWOULDBLOCK:
 	return 0;
+
       case EINTR:		/* Interrupt, just restart */
 	continue;
+      
+      default:
+	ECHO_ERROR("writeDataMax");
+	errno = WSAGetLastError();   /* betacode uses this */
+	return -1;
+      }
+    }
+    else 
+    {
+      ECHO_TRANSFER("wrote",fd,srcbuffer,sent,length);
+    }
+#else
+    if (sent < 0)
+    {
+      switch (errno) 
+      {
+      case ERR_WOULDBLOCK:	/* Buffer full */
+	return 0;
+      
+      case EINTR:		/* Interrupt, just restart */
+	continue;
+      
       default:
 	ECHO_ERROR("writeDataMax");
 	return -1;
       }
-    else {
+    }
+    else 
+    {
       ECHO_TRANSFER("wrote",fd,srcbuffer,sent,length);
     }
-  } while (0);
-
+#endif
+  } while(0);
+  
   return sent;
 }
+
+
+
 
 /* ------------------------- END sockets.c ------------------------- */

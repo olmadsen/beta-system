@@ -1,0 +1,516 @@
+ORIGIN '../basicsocket';
+
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics 1995
+ *       All rights reserved.
+ *)
+
+INCLUDE '../errorcallback';
+INCLUDE 'socketsint';
+INCLUDE '~beta/basiclib/v1.5/timehandler';
+INCLUDE '~beta/sysutils/v1.5/iostate';
+
+MDBODY default 'basicsocketerr_unix'
+       nti     'basicsocketerr_nt';
+
+MDBODY default 'basicsocket_unix'
+       nti     'basicsocket_nt';
+
+
+--- systemlib:attributes ---
+memcpy: external
+  (# adrTarget: @Integer;
+     adrSource: @Integer;
+     byteCount: @Integer;
+     out: @Integer;
+  enter (adrTarget, adrSource, byteCount)
+  exit out
+  #);
+
+unexpected_error: exception
+  (#
+  do
+     'Unexpected error condition.\nPlease contact support@mjolner.dk\n'
+       -> msg.append;
+  #);
+
+errorChooser: 
+  (* Enter error code and exit corresponding error callback *) 
+  (# err: @integer;
+     chosen: ^errCB;
+  enter err
+  do INNER
+  exit chosen[]
+  #);
+
+
+--- socketlib:attributes ---
+
+errInquiry:
+  (* Ask the given error callback object what to do *)
+  (# errorCB: ^errCB;
+     abort:< object;
+     continue:< object;
+     cleanup:< object;
+  enter errorCB[]
+  do
+     (if errorCB[] // NONE then
+         unexpected_error;
+      else
+         (if &cleanup[]->errorCB
+          // errCB_abortOperation then abort;
+          // errCB_continueOperation then continue;
+          else
+             unexpected_error;
+         if);
+     if);
+  #);
+
+timeoutInquiry: errInquiry
+  (# 
+     continue::<
+       (#
+       do private.timerStop;
+          private.timerStart;
+          INNER;
+       #);
+     cleanup::< 
+       (# priv: <<SLOT BasicSockettimeoutInquiry:descriptor>>;
+       do priv;
+          INNER cleanup;
+       #);
+  #);
+
+--- BasicSocketInit:dopart ---
+do private.init;
+   INNER;
+   
+--- BasicSocketPrivate:descriptor ---
+(#
+   index: @assignGuard(# rep: @integer; enter rep exit rep #);
+   lastReadLength: @integer;
+   untryPatVar: ##Object;
+   ios: @IOstate;
+   timeHnd: @timeHandler;
+   timerRunning: @boolean;
+   timerID: @integer;
+
+   errorCB: ##errCB;
+   
+   init: (# do initSockets; index -> ios.init; timeHnd.init; #);
+
+   onTimeOut: @(# do ios.timeOut #);
+
+   timerStart: @
+     (# timeout: @integer;
+     enter timeout
+     do
+        (if timeout // waitForever then
+            (* Noop *)
+         else
+            (onTimeOut[],timeout)->timeHnd.register->timerId;
+            true->timerRunning;
+        if);
+     #);
+
+   timerStop: @
+     (#
+     do
+        (if timerRunning then
+            false->timerRunning;
+            timerId -> timeHnd.unregister;
+        if);
+     #);
+
+   forcedTimeout: @boolean;
+
+   readBlock: @
+     (# timedOut: @boolean;
+     do (if forcedTimeout then
+            true->timedOut;
+         else
+            ios.readBlock->timedOut;
+        if);
+        false->forcedTimeout;
+     exit timedOut
+     #);
+
+   writeBlock: @
+     (# timedOut: @boolean;
+     do (if forcedTimeout then
+            true->timedOut;
+         else
+            ios.writeBlock->timedOut;
+        if);
+        false->forcedTimeout;
+     exit timedOut
+     #);
+
+   (* temporaries used in operations *)
+   tcp_addr: ^tcpPortAddress;
+   uerr: ^errCB;
+   result: @integer;
+   portno: @integer;
+   iaddr: @integer;
+   
+   sendMem: @
+     (# timeout: @Integer;
+        buffer: [1]@Char;
+        bufferEnd: @Integer;
+        theIdle: ^withIdle;
+        todo,done,delta: @Integer;
+        
+        Init: @   (* Clear buffer, make room for 'len' bytes *)
+          (# len: @Integer;
+          enter len
+          do 0 -> bufferEnd;
+             (if buffer.range < len then
+                 len -> buffer.new;
+             if);
+          #);
+        
+        Expand: @    (* Make room for 'len bytes after existing data *)
+          (# len: @Integer;
+          do (if buffer.range - bufferEnd < len then
+                 len -> buffer.extend;
+             if);
+          #);
+        
+        appendToBuffer: @  (* Append data in buffer. *)
+          (# adr,len: @Integer;
+          enter (adr,len)
+          do (@@buffer[1] + bufferEnd, adr, len) -> memcpy;
+             len + bufferEnd -> bufferEnd;
+          #);
+        
+     enter (timeout, theIdle[])
+     do timeout -> timerStart;
+        
+        (bufferEnd, 0) -> (todo, done);
+        L: (if ((index,@@buffer[1]+done,todo)
+                 ->doWriteDataMax
+                 ->delta)
+               
+            //-1 then
+          
+               Errno -> 
+               errorChooser(# <<SLOT BasicSocketSendMemEC:dopart>> #) -> 
+               errInquiry
+               (# abort::(# do leave L #);
+                  continue::(# do restart L #);
+                  cleanup::(# do timerStop #);
+               #);
+               
+            //0 then
+               
+               theIdle.Blocking;
+               (if ios.writeBlock then
+                   &theIdle.timedOut[] -> 
+                   timeoutInquiry
+                   (# abort::(# do leave L #);
+                      continue::(# do restart L #);
+                   #);
+               if);
+               restart L;
+               
+            else
+               
+               (if delta<todo then
+                   done+delta -> done;
+                   todo-delta -> todo;
+                   theIdle.Idle;
+                   (if ios.writeBlock then
+                       &theIdle.timedOutInTransfer[] -> 
+                       timeoutInquiry
+                       (# abort::(# do leave L #);
+                          continue::(# do restart L #);
+                       #);
+                    else
+                       restart L;
+                   if);
+                else
+                   timerStop;
+               if)               
+           if)
+     #);
+   
+   
+   (* Usage: 
+    * timeOut -> private.timerStart;
+    * 0->done; <something> -> todo;
+    * while todo>0
+    *   (0, todo) -> receiveMem -> read;
+    *   memcpy(LocalBuffer + done, receiveMem.buffer, read);
+    *   todo-read->todo;
+    *   done+read->done;
+    * endwhile
+    * private.timerStop;
+    * 
+    * receiveMem will return as soon as something has been read.
+    * receiveMem will block when there is nothing to read.
+    * (use NonBlockingScope to avoid this)
+    *)
+   
+   receiveMem: @
+     (# buffer: [1]@Char;
+        maxRead: @Integer;
+        bufferEnd: @Integer;
+        todo,done,delta: @Integer;
+        readPos: @Integer;
+        theIdle: ^withIdle;
+        
+        copyFromBuffer: @
+          (# adr,len: @Integer;
+          enter (adr,len)
+          do (adr,@@buffer[1]+readPos,len) -> memcpy;
+             readPos+len->readPos;
+          #);
+        
+        initpat:
+          (# 
+          enter (theIdle[], maxRead)
+             
+          do (if buffer.range < maxRead then
+                 maxRead -> buffer.new;
+             if);
+             maxRead -> todo;
+             0 -> bufferEnd;
+             0 -> readPos;             
+             INNER;
+          #);
+        
+        init: @initpat;
+        
+        readMore: @
+          (# 
+          do 0 -> done;
+             L: (if ((index, @@buffer[1] + bufferEnd, todo)
+                      -> doReadDataMax
+                      -> delta)
+                    
+                 //-1 then
+                    
+                    Errno -> 
+                    errorChooser(# <<SLOT BasicSocketRecvMemEC:dopart>> #) -> 
+                    errInquiry
+                    (# abort::(# do leave L #);
+                       continue::(# do restart L #);
+                       cleanup::(# do timerStop #);
+                    #);
+                    
+                 //0 then
+                    
+                    (if done<>0 then leave L if);
+                    
+                    theIdle.Blocking;
+                    (if readBlock then
+                        
+                        &theIdle.timedOut[] ->
+                        timeoutInquiry
+                        (# abort::(# do leave L #);
+                           continue::(# do restart L #)
+                        #)
+                        
+                    if);
+                    restart L
+                    
+                 else
+                    done+delta -> done;
+                    bufferEnd+delta->bufferEnd;
+                    todo-delta -> todo;
+                    theIdle.Idle;
+                    (if todo<>0 then
+                        restart L
+                    if)
+                if)
+             
+          exit bufferEnd
+          #);
+        
+        readExact: @initpat
+          (# 
+          do L: (# 
+                do (if readMore < maxRead then restart L if)
+                #)
+          #)        
+     #)
+#)
+
+
+--- BasicSocketSameConnection:dopart ---
+do
+   (private.index=other.private.index)->value;
+
+
+--- BasicSocketGetPortableAddress:dopart ---
+do
+   &portablePortAddress[]->addr[];
+   &tcpPortAddress[]->private.tcp_addr[]->addr.insert;
+   inetAddr->private.tcp_addr.inetAddr;
+   port->private.tcp_addr.portNo;
+
+--- BasicSocketOpen:dopart ---
+do
+   INNER;
+   L: (if not private.index.assigned then
+          
+          &usageError[]->private.uerr[];
+          'Can not open a socket with unassigned index'->private.uerr.addMsg;
+          
+          private.uerr[] ->
+          errInquiry
+          (# abort::(# do leave L #);
+             continue::(# do restart L #);
+          #);
+          
+      if);
+   
+
+--- BasicSocketClose:dopart ---
+do
+   INNER close;
+   (* (private.index,shutdownboth) -> shutdown; needed? *)
+   private.index->closeSocket;
+   (* no error checks: we must be able to close after error *)
+
+
+--- BasicSocketForceTimeout:dopart ---
+do
+   true->private.forcedTimeout;
+   private.timerStop;
+   private.ios.timeout;
+   INNER;
+
+
+--- BasicSocketUsageTimestamp:dopart ---
+do
+   private.index->getTimeStamp->value;
+   INNER;
+
+
+--- BasicSocketEndOfData:dopart ---
+do
+   L: (if (private.index -> sockToRead -> private.result) // -1 then
+
+          Errno -> 
+          errorChooser(# <<SLOT BasicSocketEndOfDataEC:dopart>> #) -> 
+          errInquiry
+          (# abort::(# do leave L #);
+             continue::(# do restart L #);
+          #);
+
+       else
+          (private.result>0) -> value;
+      if);
+
+
+--- BasicSocketNonBlockingScope:dopart ---
+do
+   tryLabel:
+     (#
+        doUntry:
+          (#
+          do
+             NONE -> private.untryPatVar##;  (* Leaving: always "deactivate" *)
+             leave tryLabel
+          #);
+     do
+        (if private.untryPatVar##=NONE then (* Outermost NBScope: "activate" *)
+            doUntry## -> private.untryPatVar##;
+            INNER nonBlockingScope;
+            NONE -> private.untryPatVar##;
+         else                                (* Nested NBScope: "is active" *)
+            INNER nonBlockingScope;
+        if);
+     #);
+
+
+--- BasicSocketLeaveNBScope:dopart ---
+do
+   (if private.untryPatVar##=NONE then else private.untryPatVar if)
+
+
+--- BasicSocketConnect:dopart ---
+do
+   initSockets;
+   INNER connect;
+   (if (aHost[]<>NONE) and (0<aHost.length) then
+       aHost->host;
+       (if aPort<>0 then 
+           aPort->port
+       if)
+   if);
+   L: (#
+      do 
+         (if not port.assigned or (port=0) then
+             
+             &usageError[]->private.uerr[];
+             'Can not connect with unassigned port or port=0'
+               ->private.uerr.addMsg;
+             private.uerr[] ->
+             errInquiry
+             (# abort::(# do leave L #);
+                continue::(# do restart L #);
+             #);
+             
+         if);
+
+         (if not inetAddr.assigned then
+             
+             (if not host.assigned then
+                 
+                 &usageError[]->private.uerr[];
+                 'Can not connect with both host and inetAddr unassigned'
+                   ->private.uerr.addMsg;
+                 private.uerr[] ->
+                 errInquiry
+                 (# abort::(# do leave L #);
+                    continue::(# do restart L #);
+                 #);
+
+              else
+
+                 (* 'host' has a value, but 'inetAddr' doesn`t *)
+                 host -> host2inetAddr -> inetAddr;
+
+                 (if inetAddr=-1 then
+                     (* No classification of error: OS doesn`t tell *)
+                     &getHostError[] ->
+                     errInquiry
+                     (# abort::(# do leave L #);
+                        continue::(# do restart L #);
+                     #);
+                 if);
+                 
+             if);
+
+          else
+             (* 'inetAddr' has a value, which then takes precedence *)
+         if);
+
+         (* intercept special 'localhost' value *)
+         (if inetAddr // localHost_IP_number then
+             inetAddrOfThisHost->inetAddr;
+         if);
+
+         inetAddr->private.iaddr;
+         port->private.portno;
+         
+         L2:
+           (#
+           do (private.iaddr,private.portno)
+                ->&createActiveSocket
+                ->private.index;
+              
+              (if private.index=-1 then
+                  Errno -> 
+                  errorChooser(# <<SLOT BasicSocketConnectEC:dopart>> #) -> 
+                  errInquiry
+                  (# abort::(# do leave L #);
+                     continue::(# do restart L2 #);
+                  #);
+               if);
+           #);
+         private.init;
+      #);

@@ -1,0 +1,250 @@
+ORIGIN '../socketgenerator';
+
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1995
+ *       All rights reserved.
+ *)
+
+MDBODY default 'socketgenerr_unix'
+       nti     'socketgenerr_nt';
+
+MDBODY default 'socketgen_unix'
+       nti     'socketgen_nt';
+
+INCLUDE '~beta/sysutils/v1.5/iostate';
+
+INCLUDE 'basicsocketbody';
+
+
+--- socketgeneratorlib:attributes ---
+
+errInquiry:
+  (* Ask the given error callback object what to do *)
+  (# errorCB: ^errCB;
+     abort:< object;
+     continue:< object;
+     cleanup:< object;
+  enter errorCB[]
+  do
+     (if errorCB[] // NONE then
+         unexpected_error;
+      else
+         (if &cleanup[]->errorCB
+          // errCB_abortOperation then abort;
+          // errCB_continueOperation then continue;
+          else
+             unexpected_error;
+         if)
+     if);
+  #);
+
+timeoutInquiry: errInquiry
+  (# 
+     continue::<
+       (#
+       do private.timerStop;
+          private.timerStart;
+          INNER
+       #);
+     cleanup::< 
+       (# priv: <<SLOT SocketGentimeoutInquiry:descriptor>>;
+       do priv;
+          INNER cleanup;
+       #);
+  #);
+
+
+--- SocketGeneratorPrivate:descriptor ---
+(#
+   index: @assignGuard(# rep: @integer enter rep exit rep #);
+   untryPatVar: ##Object;
+   ios: @IOstate;
+   timeHnd: @timeHandler;
+   timerRunning: @boolean;
+   timerID: @integer;
+
+   init: (# do initSockets; index -> ios.init; timeHnd.init #);
+
+   onTimeOut: @(# do ios.timeOut #);
+
+   timerStart: @
+     (# timeout: @integer;
+     enter timeout
+     do (if timeout // waitForever then
+            (* Noop *)
+         else
+            (onTimeOut[],timeout)->timeHnd.register->timerId;
+            true->timerRunning;
+        if);
+     #);
+
+   timerStop: @
+     (#
+     do (if timerRunning // true then
+            false->timerRunning;
+            timerId -> timeHnd.unregister;
+        if);
+     #);
+
+   forcedTimeout: @boolean;
+
+   readBlock: @
+     (# timedOut: @boolean;
+     do (if forcedTimeout // true then
+            true->timedOut;
+         else
+            ios.readBlock->timedOut;
+        if);
+        false->forcedTimeout;
+     exit timedOut
+     #);
+
+   getNewConnection: @
+     (# newIndex, newInetAddr, wouldBlock: @integer;
+        timeout: @Integer;
+        theIdle: ^WithIdleAndPE;
+     enter (timeout, theIdle[])
+     do L:
+          (if index.assigned // false then
+              
+              'getBinaryConnection on an unbound socket generator'
+                ->uerr.addMsg;
+              uerr[] ->
+              errInQuiry
+              (# abort::(# do leave L #);
+                 continue::(# do restart L #);
+              #);
+           else
+              timeout -> timerStart;
+              
+              L1:
+                (#
+                do (index,@@wouldblock,@@newInetAddr)
+                     ->&acceptConn
+                     ->newIndex;
+              
+                   (if newIndex // -1 then
+                       Errno -> 
+                       errorChooser(#<<SLOT SockGenGetNewConnEC:dopart>>#) -> 
+                       errInquiry
+                       (# abort::(# do leave L #);
+                          continue::(# do restart L1 #);
+                          cleanup::(# do timerStop #);
+                       #);
+                   if);
+                   
+                   (if wouldblock // 1 then
+                       theIdle.Blocking;
+                       (if readBlock // true then
+                           &theIdle.timedOut[] ->
+                           timeoutInquiry
+                           (# abort::(# do leave L #);
+                              continue::(# do restart L1 #);
+                           #);
+                       if);
+                       restart L1
+                   if)
+                #);
+              INNER
+          if)
+        exit (newIndex, newInetAddr)
+     #);
+   
+        
+   (* temporaries used in operations *)
+   tcp_addr: ^tcpPortAddress;
+   portno: @integer;
+   uerr: ^errCB;
+#)
+
+--- SocketGeneratorGetPortableAddress:dopart ---
+do
+   &portablePortAddress[]->addr[];
+   &tcpPortAddress[]->private.tcp_addr[]->addr.insert;
+   inetAddrOfThisHost->private.tcp_addr.inetAddr;
+   port->private.tcp_addr.portNo;
+
+--- SocketGeneratorBind:dopart ---
+do
+   initSockets;
+   INNER;
+
+   L:
+     (#
+     do (if port.assigned // false then
+            
+            &usageError[]->private.uerr[];
+            'Can not bind socket generator with unassigned port'
+              ->private.uerr.addMsg;
+            private.uerr[] ->
+            errInQuiry
+            (# abort::(# do leave L #);
+               continue::(# do restart L #);
+            #);
+            
+        if);
+        
+        L2:
+          (#
+          do port -> private.portno;
+             
+             (if (@@private.portno->&createPassiveSocket->private.index)
+              // -1 then
+                 Errno -> 
+                 errorChooser(# <<SLOT SocketGeneratorBindEC:dopart>> #) -> 
+                 errInquiry
+                 (# abort::(# do leave L #);
+                    continue::(# do restart L2 #);
+                 #);
+             if);
+          #);
+        private.portno -> port;
+        private.init;
+     #);
+
+
+--- SocketGeneratorClose:dopart ---
+do
+   INNER;
+   (* (private.index,shutdownboth) -> shutdown; no need? *)
+   private.index->closeSocket;
+   (* no error check: we must be able to close after error *)
+
+
+--- SocketGeneratorForceTimeout:dopart ---
+do true->private.forcedTimeout;
+   private.timerStop;
+   private.ios.timeout;
+   INNER;
+
+
+--- SocketGeneratorUsageTimestamp:dopart ---
+do
+   private.index->getTimeStamp->value;
+
+
+--- SocketGeneratorNBScope:dopart ---
+do
+   tryLabel:
+     (#
+        doUntry:
+          (#
+          do
+             NONE -> private.untryPatVar##;  (* Leaving: always "deactivate" *)
+             leave tryLabel
+          #);
+     do
+        (if private.untryPatVar##//NONE then (* Outermost NBScope: "activate" *)
+            doUntry## -> private.untryPatVar##;
+            INNER nonBlockingScope;
+            NONE -> private.untryPatVar##;
+         else                                (* Nested NBScope: "is active" *)
+            INNER nonBlockingScope;
+        if);
+     #);
+
+
+--- SocketGeneratorLeaveNBScope:dopart ---
+do
+   (if private.untryPatVar##//NONE then else private.untryPatVar if)
