@@ -429,6 +429,7 @@ void Initialize()
   AOAMaxSize -= PERSIST_MAXENTRIES; /* Leave room for persistense */
   AOAMaxSize -= 64 * MMAPPageSize; /* Leave 64 pages for other things */
   AOABaseBlock = reserveBlock(AOAMaxSize);
+  AOABlocks++;
   InsertGuardPage();
 #endif /* USEMMAP */
 

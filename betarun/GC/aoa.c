@@ -70,12 +70,12 @@ void scanPartObjects(Object *obj, void (*)(Object *));
 
 /* LOCAL VARIABLES */
 static long totalFree = 0;
-static long totalFreeAtLast = 0;
 static long lastAOAGCAt = -1000;  /* NumIOAGc of last AOAGC */
 
 static int OverFullFlag = 0;
 static unsigned long AOASizeAtGC = 0;
 static unsigned long AOAFreeAtGC = 0;
+static unsigned long AOAMinSizeForGC = 0;
 
 
 /* tempAOArootsAlloc:
@@ -290,7 +290,6 @@ static long AllocateBaseBlock(unsigned long numbytes)
     AOATopBlock  = AOABaseBlock;
     AOABlocks++;
     totalFree += blksize;
-    totalFreeAtLast = blksize;	
     totalAOASize += blksize;
         
     /* Insert the new block in the freelist */
@@ -336,13 +335,14 @@ Object *AOAallocate(long numbytes)
 		       "numbytes=%d, OFflag=%d\n",
 		       (int)numbytes, OverFullFlag));
     }
-  });
+  }); 
+  
   if (!totalAOASize || noAOAGC || IOALooksFullCount
 #ifdef PERSIST
       || forceAOAAllocation
 #endif
       ) {
-    AOANeedCompaction = 1;
+    OverFullFlag = 1;
 #ifdef USEMMAP
     return ExtendBaseBlock(numbytes);
 #else
@@ -353,21 +353,25 @@ Object *AOAallocate(long numbytes)
 
   if (!OverFullFlag){
     OverFullFlag = 1;
-    AOANeedCompaction = 1;
     return NULL;  /* perform GC */
   }
 
   if (OverFullFlag == 1) {
+#if 0    
     if ((unsigned long)(totalAOASize-AOASizeAtGC) >= (unsigned long)AOAMinFree
 	|| ((unsigned long)totalAOASize > 100 
-	    && (unsigned long)(AOASizeAtGC / (totalAOASize / 100)) 
+	    && (unsigned long)((totalAOASize - AOASizeAtGC) 
+			       / (totalAOASize / 100)) 
 	    > (unsigned long)AOAPercentage)) {
-      AOANeedCompaction = 1;
+#else
+    if (totalAOASize > AOAMinSizeForGC) {
+#endif
+
+      OverFullFlag = 2;
       return NULL;  /* perform GC */
     }
   }
 
-  OverFullFlag = 1;
   /* IOA/NewCopyObject handles that we return 0
    * by just moving the object to ToSpace once more.
    */
@@ -647,7 +651,8 @@ void AOAGc()
   if (totalAOASize > 100 
       && (unsigned long)(freed / (totalAOASize / 100)) 
       < (unsigned long)AOAPercentage) {
-    OverFullFlag++;
+    AOAMinSizeForGC = totalAOASize + (totalAOASize / 100) * AOAPercentage;
+    /* Still overfull. */
   } else {
     OverFullFlag = 0;
   }
@@ -663,7 +668,6 @@ void AOAGc()
     AOANewBlock(blksize);
   }
 #endif
-  totalFreeAtLast = totalFree;
 
   STAT_AOA(AOADisplayFreeList());
 
@@ -687,9 +691,10 @@ void AOAGc()
   });
   
   INFO_AOA({
-    fprintf(output, "AOA-%d done, freed 0x%x, free 0x%x, aoatime=%dms)\n", 
-	    (int)NumAOAGc, (int)freed, (int)totalFree,
-	    (int)(getmilisectimestamp() - starttime));
+    fprintf(output, "AOA-%d done, freed 0x%x, free 0x%x, size 0x%x,\n"
+	    "OF=%d, aoatime=%dms)\n", 
+	    (int)NumAOAGc, (int)freed, (int)totalFree, (int)totalAOASize,
+	    (int)OverFullFlag, (int)(getmilisectimestamp() - starttime));
   });
 
   AOANeedCompaction = FALSE;
@@ -1560,7 +1565,13 @@ void scanOrigins(Object *theObj, void (*originAction)(Object **theCell))
 
 void SetAOANeedCompaction(void)
 {
-  if (totalFree < totalFreeAtLast/2) {
-    AOANeedCompaction = TRUE;
+  if (OverFullFlag) {
+    if (totalAOASize > AOAMinSizeForGC) {
+      AOANeedCompaction = TRUE;
+    }
+  } else {
+    if (totalFree < AOAFreeAtGC/2) {
+      AOANeedCompaction = TRUE;
+    }
   }
 }
