@@ -78,6 +78,8 @@ sub print_summary
 	    print "CHECK  : Not a program file (or not compiled): $prog.bet\n";
 	} elsif ($progs{$prog}==999){
 	    print "CHECK  : program not attempted run: $prog\n";
+	} elsif ($progs{$prog}==111){
+	    # OK: explicitly ignored
 	} elsif ($progs{$prog}==0){
 	    if ($status{$prog}==1){
 		print "ok     : program tested ok: $prog\n";
@@ -118,9 +120,9 @@ sub compare_expected()
     close IN;
     close OUT;
     if (! -d "reference"){
-	print "'reference' directory does not exist. Now creating it.\n";
+	print "['reference' directory does not exist. Now creating it.]\n";
 	mkdir "reference", 0775 || die "Cannot create directory 'reference': $!";
-	print "Do a manual 'cvs add reference'\n";
+	print "[Please do a manual 'cvs add reference']\n";
     }
     if ( -f "reference/$exec.run" ){
 	open(IN, "<reference/$exec.run") || die "Unable to read reference output reference/$exec.run: $!";
@@ -219,8 +221,18 @@ sub countdirs
     return $numdirs;
 }
 
+sub stripcounter()
+{
+    my ($exec) = @_;
+    $exec =~ s/\[(\d+)\]//;
+    return $exec;
+}
+
 sub run_demo
 {
+    # If $exec is of the form 'foo[1]' the executable will be expected to be
+    # foo and the '[1]' just used to distinguish multiple executions.
+    
     my ($dir, $exec, $args) = @_;
 
     $dir = '.' if ($dir eq "");
@@ -232,9 +244,9 @@ sub run_demo
 
     chdir "$dir" || die "cannot chdir($dir): $!\n";
     unlink "$exec.dump", "$exec.run", "$exec.out", "$exec.ref", "$exec.diff";
-    &compile_demo($exec);
+    &compile_demo(&stripcounter($exec));
     print "-"x10 . "Executing $exec" . "-"x10  . "\n"; 
-    system "$exec $args > $exec.run";
+    system &stripcounter($exec) . " $args > $exec.run";
     $progs{&trim_path("$dir/$exec")}=$?;
 
     &cat("$exec.run") unless ($skipoutput);
@@ -257,12 +269,12 @@ sub write_to_demo
 
     chdir "$dir" || die "cannot chdir($dir): $!\n";
     unlink "$exec.dump $exec.run $exec.out $exec.ref $exec.diff";
-    &compile_demo($exec);
+    &compile_demo(&stripcounter($exec));
     print "-"x10 . "Executing $exec with input" . "-"x10  . "\n";
     open(SAVEOUT, ">&STDOUT");
     select(SAVEOUT); $| = 1;       # make unbuffered
     open(STDOUT, ">$exec.run") || die "Can't redirect stdout";
-    open (EXEC, "| $exec $args");
+    open (EXEC, "| " . &stripcounter($exec) . " $args");
     foreach $input (@inputlines){
 	print EXEC $input;
     }
@@ -275,7 +287,13 @@ sub write_to_demo
 
     chdir ("../" x $numdirs) if ($numdirs>0);
     &compare_expected($dir, $exec);
+    
+}
 
+sub ignore()
+{
+    my ($dir, $exec) = @_;
+    $progs{&trim_path("$dir/$exec")}=111;
 }
 
 sub compile_command()
