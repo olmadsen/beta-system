@@ -264,6 +264,83 @@ typedef struct group_header
 typedef void (*CellProcessFunc)(struct Object **theCell,struct Object *theObj);
 #endif
 
+typedef struct nums
+{
+  long NumAlloI;
+  long NumAlloC;
+  long NumAlloDO;
+  long NumAlloRR;
+  long NumAlloVR1;
+  long NumAlloVR2;
+  long NumAlloVR4;
+  long NumAlloVR8;
+  long NumAlloVRI;
+  long NumAlloVRC;
+  long NumCopyCT;
+  long NumCopyRR;
+  long NumCopySRR;
+  long NumCopySVR1;
+  long NumCopySVR2;
+  long NumCopySVR4;
+  long NumCopySVR8;
+  long NumCopySVRI;
+  long NumCopySVRC;
+  long NumCopyT;
+  long NumCopyVR1;
+  long NumCopyVR2;
+  long NumCopyVR4;
+  long NumCopyVR8;
+  long NumCopyVRI;
+  long NumCopyVRC;
+  long NumExtRR;
+  long NumExtVR1;
+  long NumExtVR2;
+  long NumExtVR4;
+  long NumExtVR8;
+  long NumExtVRI;
+  long NumExtVRC;
+  long NumMkTO;
+  long NumNewRR;
+  long NumNewVR1;
+  long NumNewVR2;
+  long NumNewVR4;
+  long NumNewVR8;
+  long NumNewVRI;
+  long NumNewVRC;
+  long NumAlloS;
+  long NumThisS;
+  long NumObjS;
+  long NumAlloSICB;
+  long NumAlloSI;
+  long NumAlloSC;
+  long NumAlloSO;
+  long NumleS;
+  long NumgeS;
+  long NumgtS;
+  long NumltS;
+  long NumeqS;
+  long NumneS;
+  long NumQua;
+  long NumReturn;
+  long NumRefNone;
+  long NumCopyCPP;
+  long NumCinitT;
+  long NumCpkVT;
+  long NumCpkSVT;
+  long NumChkRA;
+  long NumExO;
+  long NumSusp;
+  long NumAtt;
+  long NumTermComp;
+  long NumAOAAlloc;
+#ifdef MAC
+  long NumPpkVT;
+  long NumPpkCT;
+  long NumPpkSVT;
+  long NumCopyPPP;
+#endif
+} nums;
+
 #ifdef MT
 /* Thread Specific Data */
 typedef struct TSD 
@@ -273,17 +350,96 @@ typedef struct TSD
   /*  8 */ long               * _IOALimit;
   /* 12 */ long                 _MallocExhausted;
   /* 16 */ thread_t             _thread_id;
-  /* 20 */ char               * _CTextPoolEnd;
-  /* 24 */ long                 _CTextPool [MAXCTEXTPOOL/4];
+  /* 20 */ nums               * _nums;
+  /* 24 */ char               * _CTextPoolEnd;
+  /* 28 */ long                 _CTextPool [MAXCTEXTPOOL/4];
 } TSD;
 
 #define ActiveComponent TSDReg->_ActiveComponent
 #define ActiveStack     TSDReg->_ActiveStack
 #define IOALimit        TSDReg->_IOALimit
 #define ThreadId        TSDReg->_thread_id
+#define Nums            TSDReg->_nums
 #define MallocExhausted TSDReg->_MallocExhausted
 #define CTextPoolEnd    TSDReg->_CTextPoolEnd
 #define CTextPool       TSDReg->_CTextPool
+
+#ifdef RTDEBUG
+#define NumAlloI	Nums->NumAlloI
+#define NumAlloC	Nums->NumAlloC
+#define NumAlloDO	Nums->NumAlloDO
+#define NumAlloRR	Nums->NumAlloRR
+#define NumAlloVR1	Nums->NumAlloVR1
+#define NumAlloVR2	Nums->NumAlloVR2
+#define NumAlloVR4	Nums->NumAlloVR4
+#define NumAlloVR8	Nums->NumAlloVR8
+#define NumAlloVRI	Nums->NumAlloVRI
+#define NumAlloVRC	Nums->NumAlloVRC
+#define NumCopyCT	Nums->NumCopyCT
+#define NumCopyRR	Nums->NumCopyRR
+#define NumCopySRR	Nums->NumCopySRR
+#define NumCopySVR1	Nums->NumCopySVR1
+#define NumCopySVR2	Nums->NumCopySVR2
+#define NumCopySVR4	Nums->NumCopySVR4
+#define NumCopySVR8	Nums->NumCopySVR8
+#define NumCopySVRI	Nums->NumCopySVRI
+#define NumCopySVRC	Nums->NumCopySVRC
+#define NumCopyT	Nums->NumCopyT
+#define NumCopyVR1	Nums->NumCopyVR1
+#define NumCopyVR2	Nums->NumCopyVR2
+#define NumCopyVR4	Nums->NumCopyVR4
+#define NumCopyVR8	Nums->NumCopyVR8
+#define NumCopyVRI	Nums->NumCopyVRI
+#define NumCopyVRC	Nums->NumCopyVRC
+#define NumExtRR	Nums->NumExtRR
+#define NumExtVR1	Nums->NumExtVR1
+#define NumExtVR2	Nums->NumExtVR2
+#define NumExtVR4	Nums->NumExtVR4
+#define NumExtVR8	Nums->NumExtVR8
+#define NumExtVRI	Nums->NumExtVRI
+#define NumExtVRC	Nums->NumExtVRC
+#define NumMkTO		Nums->NumMkTO
+#define NumNewRR	Nums->NumNewRR
+#define NumNewVR1	Nums->NumNewVR1
+#define NumNewVR2	Nums->NumNewVR2
+#define NumNewVR4	Nums->NumNewVR4
+#define NumNewVR8	Nums->NumNewVR8
+#define NumNewVRI	Nums->NumNewVRI
+#define NumNewVRC	Nums->NumNewVRC
+#define NumAlloS	Nums->NumAlloS
+#define NumThisS	Nums->NumThisS
+#define NumObjS		Nums->NumObjS
+#define NumAlloSICB	Nums->NumAlloSICB
+#define NumAlloSI	Nums->NumAlloSI
+#define NumAlloSC	Nums->NumAlloSC
+#define NumAlloSO	Nums->NumAlloSO
+#define NumleS		Nums->NumleS
+#define NumgeS		Nums->NumgeS
+#define NumgtS		Nums->NumgtS
+#define NumltS		Nums->NumltS
+#define NumeqS		Nums->NumeqS
+#define NumneS		Nums->NumneS
+#define NumQua		Nums->NumQua
+#define NumReturn	Nums->NumReturn
+#define NumRefNone	Nums->NumRefNone
+#define NumCopyCPP	Nums->NumCopyCPP
+#define NumCinitT	Nums->NumCinitT
+#define NumCpkVT	Nums->NumCpkVT
+#define NumCpkSVT	Nums->NumCpkSVT
+#define NumChkRA	Nums->NumChkRA
+#define NumExO		Nums->NumExO
+#define NumSusp		Nums->NumSusp
+#define NumAtt		Nums->NumAtt
+#define NumTermComp	Nums->NumTermComp
+#define NumAOAAlloc	Nums->NumAOAAlloc
+#ifdef MAC
+#define NumPpkVT	Nums->NumPpkVT
+#define NumPpkCT	Nums->NumPpkCT
+#define NumPpkSVT	Nums->NumPpkSVT
+#define NumCopyPPP	Nums->NumCopyPPP
+#endif
+
+#endif /* RTDEBUG */
 #endif /* MT */
 
 

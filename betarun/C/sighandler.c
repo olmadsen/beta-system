@@ -657,8 +657,9 @@ void SetupBetaSignalHandlers(void)
   /* This is solaris */
   
 #ifdef MT
-  SetupVirtualTimerHandler(100000); /* interrupt every 0.1 second */
+  SetupVirtualTimerHandler(); /* interrupt every 0.1 second */
 #endif
+
   /* sbrandt 9/7 93. See man sigaction and <sys/signal.h>. */
   { /* Setup signal handlers for the Beta system */
     struct sigaction sa;

@@ -981,10 +981,11 @@ int DisplayBetaStack(enum BetaErr errorNumber,
 #endif
     fflush(output);
     fflush(stdout);
-    /*isMakingDump=0;*/ /* allow other threads to make dump */
+    isMakingDump=0; /* allow other threads to make dump */
     BetaExit(1);
+  } else {
+    isMakingDump=1;
   }
-  isMakingDump=1;
 
   if (thePC && !IsBetaCodeAddr((long)thePC)){
     c_on_top = 1;

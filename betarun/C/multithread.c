@@ -53,25 +53,16 @@ long TSDlistlen=0;
 void create_TSD(void)
 {
   TSDReg = MALLOC(sizeof(TSD));
-  if (!TSDReg){
-    fprintf(output, "create_TSD failed for thread %d\n", thr_self());
-    return;
-  }
   ThreadId = thr_self();
-  MallocExhausted = 0;
-  IOALimit = NULL;
-  IOATop = NULL;
-  ActiveComponent = NULL;
-  ActiveStack = NULL;
+  Nums = MALLOC(sizeof(nums));
 
   /* insert newly created TSD into TSDlist */
   mutex_lock(&tsd_lock);
-  NumTSD++;
-  if (TSDlistlen < NumTSD){
+  if (TSDlistlen <= NumTSD){
     TSDlistlen += numProcessors(TRUE);
     TSDlist = REALLOC(TSDlist, TSDlistlen);
   }
-  TSDlist[NumTSD] = TSDReg;
+  TSDlist[NumTSD++] = TSDReg;
   mutex_unlock(&tsd_lock);
 }
 
@@ -161,7 +152,7 @@ thread_t attToProcessor(struct Component *comp)
 		 0                              /* stack size */,
 		 (void *(*)(void *))AttTC       /* func       */,
 		 (void *)comp                   /* arg        */,
-		 THR_NEW_LWP|THR_DETACHED                   /* flags      */,
+		 THR_NEW_LWP|THR_DETACHED       /* flags      */,
 		 &tid                           /* id         */)){
     fprintf(output, "Failed to create thread for component 0x%x\n", (int)comp);
     fflush(output);
@@ -217,7 +208,7 @@ void AlarmHandler(int sig, siginfo_t *sip, void *uap)
   }
 }
 
-void SetupVirtualTimerHandler(unsigned usec)
+void SetupVirtualTimerHandler()
 {
   struct sigaction act;
 
@@ -232,7 +223,6 @@ void SetupVirtualTimerHandler(unsigned usec)
     fprintf(output,"sigaction failed. Errno=%d (%s)\n", errno,strerror(errno));
     BetaExit(1);
   }
-  SetupVirtualTimer(usec);
 }
 
 void SetupVirtualTimer(unsigned usec)

@@ -116,6 +116,7 @@ void BetaExit(long number)
   DEBUG_MT(fprintf(stderr, "[thread 0x%x terminated]\n", (int)ThreadId);
 	   fflush(stderr)
 	   );
+  /* FIXME: Free TSD here */
   thr_exit(NULL);
 #else
   exit( number );

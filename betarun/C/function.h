@@ -86,7 +86,7 @@ extern void InstallSigHandler(int sig);
 extern void initSynchVariables(void);
 extern int numProcessors(int online);
 extern thread_t attToProcessor(struct Component *comp);
-extern void SetupVirtualTimerHandler(unsigned usec);
+extern void SetupVirtualTimerHandler(void);
 extern void SetupVirtualTimer(unsigned usec);
 extern void* MT_malloc(int size);
 #endif /* MT */
