@@ -63,6 +63,8 @@ extern long              geS() __asm__("geS");
 extern long              ltS() __asm__("ltS");
 #endif
 
+#if 0
+  static void and not referenced fromn this file???
 #ifdef MAC
 static void 
 #else
@@ -79,6 +81,7 @@ AssignReference(long *theCell, Item * newObject)
 #endif /* MT */
   }
 }
+#endif
 
 /* inline version of memcpy; works only for 4 byte aligned */
 #define MEMCPY(dst,src,bytesize)            \

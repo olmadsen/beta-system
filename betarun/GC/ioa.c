@@ -32,8 +32,9 @@ static void DoAOACell(Object **theCell,Object *theObj);
 
 #ifdef RTDEBUG
 static void IOACheckPrintTheObj(Object *theObj);
+#ifdef MT
 static void IOACheckPrintSkipped(long *ptr, Object *theObj);
-static void IOACheckPrintIOA(void);
+#endif
 #endif /* RTDEBUG */
 
 /*
@@ -939,12 +940,6 @@ static void IOACheckPrintSkipped(long *ptr, Object *theObj)
     fflush(output);
   }
 }
-
-static void IOACheckPrintIOA(void)
-{
-  ;
-}
-
 
 /* IOACheck:
  *   Scan through entire IOA heap and check every object encountered.
