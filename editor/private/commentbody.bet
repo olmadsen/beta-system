@@ -1,0 +1,216 @@
+ORIGIN '../codeviewer';
+-- editComment: Descriptor --
+(# old: @integer; commentAST: ^mps.comment; emptyComment: ^text; 
+do
+   trace
+     (#  do 'editComment'->str[] #);
+   true->rePrettyprint;
+   node.typeOfComment->old;
+   (t[],screen[])->mps.printComment;
+   newLine;
+   (if node.hasComment
+    // true then
+       (if (t.length > 0)
+        // true then (* update existing *)
+           (t[],subCommentInx1,subCommentInx2)->node.setSubcomment;
+           false->reprettyprint;
+           
+        // false then (* remove existing *)
+           none ->node.addComment; 
+       if);
+       
+    // false then
+       (if (t.length > 0)
+        // true then (* insert new *)
+           node[]->astView.pp.CreateEmptyComment->emptyComment[];
+           (mps.comment,0,frag[])->frag.grammar.newlexemText->commentAST[];
+           emptyComment[]->commentAST.putText;
+           commentAST[]->node.addComment;
+           astView.pp.normalComment->node.typeOfComment;
+           (if (subCommentInx1 <> 0) and (subCommentInx2 <> 0) then
+               (t[],subCommentInx1,subCommentInx2)->node.setSubcomment; 
+            else
+               'subCommentInx1 and subCommentInx2 are 0!'->putLine; 
+           if);
+           
+       if);
+       
+   if);
+   
+#)  
+
+-- commentEditorPrivate: Descriptor --
+(#
+   reprettyprint,commentTouched: @boolean;
+   commentWindow: ^commentEditor;
+   hereIAm:
+     (#  do 'hereIam: (char1,line1,char2,line2)->cursor;'->putLine #);
+   writeComment:
+     (# t: ^text; withoutLeadingBlanks: @text; skip: @boolean; 
+     do
+        contents.contents.clear;
+        (if node.hasComment then
+            (subCommentInx1,subCommentInx2)->node.getSubcomment->t[];
+            withoutLeadingBlanks.reset;
+            t.scanAll
+              (# 
+              do
+                 (if ch = ascii.newLine then
+                     ascii.newLine->withoutLeadingBlanks.put; true->skip
+                  else
+                     (if skip and (ch = ascii.sp) then
+                         
+                      else
+                         ch->withoutLeadingBlanks.put; false->skip
+                     if)
+                 if)
+              #);
+            withoutLeadingBlanks[]->contents.contents.insert;
+            true->isReadOnly
+        if);
+        
+     #);
+   undoCommentEditing: (* Reinsert the text in the comment node *)
+     (# 
+     do
+        writeComment;
+        false->reprettyPrint;
+        (CS.node[],CS.subCommentInx1,CS.subCommentInx2,reprettyprint,false)
+          ->printComment;
+        
+     #);
+   updateComment:
+     (# commentText: @text; 
+     do
+        commentText.clear;
+        contents.contents.all
+          ->contents.contents.scanText (#  do ch->commentText.put #);
+        (CS.node[],subCommentInx1,subCommentInx2,commentText[])->editComment
+          ->reprettyprint;
+        false->commentEditorPrivate.commentTouched;
+        (if astView.pp.includeComments then true->rePrettyprint;  if);
+        (if commentText.length
+         // 0 then 'Empty comment'->screen.putLine
+         else
+            (CS.node[],subCommentInx1,subCommentInx2,reprettyprint,false)
+              ->printComment;
+            
+        if);
+        'sde.fragmentChangedEvent;'->putLine;
+        
+     #);
+   
+#)  
+
+-- commentTextEditorOpen: DoPart --
+do THIS(commentEditor).size->size; doBind; commentEditorPrivate.writeComment  
+
+-- createCommentWindow: DoPart --
+do
+     (# title: ^text; 
+     do
+        (if
+        ((node[],subcommentInx1,subcommentInx2)->commentWindows.findWindow
+           ->theWindow[]) = none then
+            'Comment on '->title[];
+            &commentEditor[]->theWindow[];
+            node[]->theWindow.node[];
+            subCommentinx1->theWindow.subCommentInx1;
+            subCommentinx2->theWindow.subCommentInx2;
+            theWindow[]->commentWindows.insertWindow;
+            true->HideCommentPermit;
+            theWindow.open;
+            
+         else
+            theWindow.commentEditorPrivate.hereIam; 
+        if)
+     #);
+     
+
+-- checkCommentWindow: DoPart --
+do
+   (if
+   (((node[],subcommentInx1,subcommentInx2)->commentWindows.findWindow
+       ->theWindow[]) <> none ) then
+       (if updateWindow then
+           theWindow.commentEditorPrivate.writeComment
+        else
+           theWindow.commentEditorPrivate.hereIam; 
+       if);
+       
+   if);
+     
+
+-- commentWindowFileMenuRevertOnSelect: DoPart --
+do   
+
+-- commentWindowFileMenuCloseOnSelect: DoPart --
+do THIS(commentEditor).close  
+
+-- commentWindowFileMenuOpen: DoPart --
+do
+   'File'->name;
+   (* revertItem.open; revertItem[]->append; *)
+   closeItem.open;
+   closeItem[]->append  
+
+-- commentWindowEditMenuOpen: DoPart --
+do
+   'Edit'->name;
+   cutItem.open;
+   cutItem[]->append;
+   copyItem.open;
+   copyItem[]->append;
+   pasteItem.open;
+   pasteItem[]->append  
+
+-- commentTexteditorOnBeforeChange: DoPart --
+do not isReadOnly->allow  
+
+-- commentTexteditorOnFrameChanged: DoPart --
+do   
+
+-- commentTexteditorOnEnableTarget: DoPart --
+do   
+
+-- commentTexteditorOnDisableTarget: DoPart --
+do   
+
+-- commentWindowsInsertWindow: DoPart --
+do ce[]->append; comcPrivate.commentWindowsTest;   
+
+-- commentWindowsDeleteWindow: DoPart --
+do
+     (# ce2: ^commentEditor; 
+     do
+        search: scan
+          (# 
+          do
+             (if (Current.node[]->node.equal) and
+             (Current.subcommentInx1 = subcommentInx1) and
+             (Current.subcommentInx2 = subcommentInx2) then
+                 Current[]->ce2[];
+                 Current[]->at->delete;
+                 ce2.close;
+                 leave search
+             if)
+          #);
+        comcPrivate.commentWindowsTest;
+        
+     #);
+     
+
+-- commentWindowsFindWindow: DoPart --
+do   
+
+-- commentWindowsDeleteAllWindows: DoPart --
+do
+     (# ce2: ^commentEditor; 
+     do
+        scan
+          (#  do Current[]->ce2[]; Current[]->at->delete; ce2.close;  #);
+        comcPrivate.commentWindowsTest;
+        
+     #);
+     
+
