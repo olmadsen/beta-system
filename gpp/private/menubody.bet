@@ -28,19 +28,23 @@ do
            name->openFragmentGroup
         else
            (if '.diag'->ext.equal then
-               name->checkAutoSaveFile->didRecover;
-               name->removeExtension->fname;
-               '.freja'->fname.append;
-               fname
-                 ->scanASTfiles
-                   (# 
-                   do
-                      currentGroupName[]->putline;
-                      currentModTime->putint;
-                      newline
-                   #);
-               (if (name,didRecover,true)->checkDiagFile then
-                   name->openDiagram
+               (if currentDiagramName[] = none then
+                   name->checkAutoSaveFile->didRecover;
+                   name->removeExtension->fname;
+                   '.freja'->fname.append;
+                   fname
+                     ->scanASTfiles
+                       (# 
+                       do
+                          currentGroupName[]->putline;
+                          currentModTime->putint;
+                          newline
+                       #);
+                   (if (name,didRecover,true)->checkDiagFile then
+                       name->openDiagram
+                   if)
+                else
+                   'You cannot open more than one diagram'->alertUser
                if)
             else
                'Please select a .bet, .ast or .diag file'->GppAlert
@@ -149,13 +153,15 @@ do
    name: @Text;
    dummyFilter: ##external;
    pageList: ^ObjectList;
-   filename: @Text;
+   filename,t: @Text;
    cancelled: ^integerRef;
    prompt: @text;
    count: @ShortRef;
    list: @IntegerRef;
    f: @file;
-   diagFile,tildeDiagFile: @file
+   diagFile,tildeDiagFile: @file;
+   dirWriteable: (# f: @file enter f.name exit f.entry.writeable #);
+   dirIsWriteable: @boolean
 do
    (if CurrentDiagramName[] <> none then
        currentDiagramName[]->diagFile.name;
@@ -165,27 +171,35 @@ do
            diagFile.name->putLine;
            tildeDiagFile.name->putLine
        if);
-       (if diagFile.entry.exists then
-           'mv .diag .diag~'->putLine; tildeDiagFile.name->diagFile.entry.rename
+       (if diagFile.entry.path.head->dirWriteable then
+           true->dirIsWriteable;
+           (if diagFile.entry.exists then
+               'mv .diag .diag~'->putLine;
+               tildeDiagFile.name->diagFile.entry.rename
+           if)
        if);
-       (if currentDiagramName[] <> none then
-           currentDiagramName->removeExtension->fileName;
-           '.freja'->fileName.Append;
-           '#'->fileName.copyAppend->f.name;
-           (if f.entry.exists then 'rm .freja#'->putLine; f.delete if)
+       (if dirIsWriteable then
+           (if currentDiagramName[] <> none then
+               currentDiagramName->removeExtension->fileName;
+               '.freja'->fileName.Append;
+               '#'->fileName.copyAppend->f.name;
+               (if f.entry.exists then 'rm .freja#'->putLine; f.delete if)
+            else
+               'No currentDiagramName?'->putline
+           if);
+           (if doQuit then sifSaveAndQuit else sifSave if);
+           SaveLists;
+           (count[],list[])->DSStrGetPageList;
+           &integerRef[]->cancelled[];
+           ' '->prompt.puttext;
+           (@@ CurrentDiagramName.T[1],false,cancelled[],true,count,list,
+            dummyFilter##,prompt)->DSFileSavePagesAsDiagram;
+           '#'->currentDiagramName.copyAppend->f.name;
+           (if f.entry.exists then 'rm .diag#'->putLine; f.delete if);
+           (if doQuit then (normal,' ')->stop if)
         else
-           'No currentDiagramName?'->putline
-       if);
-       (if doQuit then sifSaveAndQuit else sifSave if);
-       SaveLists;
-       (count[],list[])->DSStrGetPageList;
-       &integerRef[]->cancelled[];
-       ' '->prompt.puttext;
-       (@@ CurrentDiagramName.T[1],false,cancelled[],true,count,list,
-        dummyFilter##,prompt)->DSFileSavePagesAsDiagram;
-       '#'->currentDiagramName.copyAppend->f.name;
-       (if f.entry.exists then 'rm .diag#'->putLine; f.delete if);
-       (if doQuit then (normal,' ')->stop if)
+           'No write access to the directory'->t; t[]->alertUser
+       if)
     else
        SaveAs.hit
    if)
@@ -455,8 +469,8 @@ do
                               true->current.BorderVisible;
                               true->current.selectable
                            else
-                              current.theText.get->t;
-                              (if not (''->t.equal) then
+                              (if not (current.theText.length = 0) then
+                                  current.theText.get->t;
                                   t[]->current.invisibleText
                               if);
                               current.theText.clear;
@@ -830,16 +844,16 @@ do
    (UserMenu4+13,'Associations')->AssociationsItem.init;
    (UserMenu4+14,'-')->sep2.init;
    (UserMenu4+15,'Text Attributes')->TextAttributesItem.init;
-   (UserMenu4+16,'-')->sep3.init;
-   (UserMenu4+17,'Dump node')->DumpNodeItem.init;
-   (UserMenu4+18,'Debug on/off')->TraceItem.init;
-   (UserMenu4+19,'User data trace on/off')->TraceUserDataItem.init;
-   (UserMenu4+20,'Callback trace on/off')->TraceCallbacksItem.init;
-   (UserMenu4+21,'Dump inheritance list')->DumpInheritanceListItem.init;
-   (UserMenu4+22,'Dump association list')->DumpAssociationListItem.init;
-   (UserMenu4+23,'Dump dynamic reference list')->DumpDynReferenceListItem.init;
-   (UserMenu4+24,'Communication trace on/off')->TraceCommunicationItem.init;
-   (UserMenu4+25,'Dump indexIDList')->DumpIndexIDListItem.init;
+   (*  (UserMenu4+16,'-')->sep3.init;
+    (UserMenu4+17,'Dump node')->DumpNodeItem.init;
+    (UserMenu4+18,'Debug on/off')->TraceItem.init;
+    (UserMenu4+19,'User data trace on/off')->TraceUserDataItem.init;
+    (UserMenu4+20,'Callback trace on/off')->TraceCallbacksItem.init;
+    (UserMenu4+21,'Dump inheritance list')->DumpInheritanceListItem.init;
+    (UserMenu4+22,'Dump association list')->DumpAssociationListItem.init;
+    (UserMenu4+23,'Dump dynamic reference list')->DumpDynReferenceListItem.init;
+    (UserMenu4+24,'Communication trace on/off')->TraceCommunicationItem.init;
+    (UserMenu4+25,'Dump indexIDList')->DumpIndexIDListItem.init;*)
    INNER init;
    (*  (UserMenu4+3,'-')->sep.init;
     (UserMenu4+4,'Classification')->classificationItem.init;
@@ -870,7 +884,9 @@ do
      (#
         thisListDiagram: ^theWorkPage.ListDiagram;
         theDiagramNode: ^thisListDiagram.DiagramNode;
-        theNames: ^betaGram.Names
+        theNames: ^betaGram.Names;
+        iterate: @boolean;
+        sonNo: @integer
      do
         current.e[]->thisListDiagram[];
         thisListDiagram.localNodes.scan
@@ -879,9 +895,24 @@ do
              (if not (current## = thisListDiagram.PatternNode##) then
                  (if current## <= thisListDiagram.DiagramNode## then
                      current[]->theDiagramNode[];
-                     (theDiagramNode.theDeclaration).getSon1->theNames[];
-                     (theDiagramNode.theDeclaration,theNames.getSon1)
-                       ->theDiagramNode.Redisplay
+                     (if iterate then
+                         (theDiagramNode.theDeclaration,sonNo->theNames.get)
+                           ->theDiagramNode.Redisplay;
+                         sonNo+1->sonNo;
+                         (if sonNo > theNames.noOfSons then false->iterate if)
+                      else
+                         (theDiagramNode.theDeclaration).getSon1->theNames[];
+                         (if theNames.noOfsons = 1 then
+                             (theDiagramNode.theDeclaration,theNames.getSon1)
+                               ->theDiagramNode.Redisplay
+                          else
+                             true->iterate;
+                             1->sonNo;
+                             (theDiagramNode.theDeclaration,sonNo->theNames.get)
+                               ->theDiagramNode.Redisplay;
+                             2->sonNo
+                         if)
+                     if)
                  if)
              if)
           #);
