@@ -35,6 +35,8 @@
 
 #define isValRep(x)      (((long)DoubleRepPTValue <= (long)((x)->Proto))\
 			  && ((long)((x)->Proto) <= (long)ValRepPTValue))
+#define isObjectRep(x)   (((long)DynCompRepPTValue <= (long)((x)->Proto))\
+			  && ((long)((x)->Proto) <= (long)StatItemRepPTValue))
 
 #define isStackObject(x) ((x)->Proto == StackObjectPTValue)
 #define isComponent(x)   ((x)->Proto == ComponentPTValue)
@@ -49,7 +51,7 @@
 #define WordRepBodySize(range)   (((2*(range)+3)/4)*4)
 #define ValRepBodySize(range)    ((range)*4)
 #define DoubleRepBodySize(range) ((range)*8)
-#define StatObjectRepSize(range, proto) \
+#define StatItemRepSize(range, proto) \
       (((range)*4*((proto)->Size)) + headsize(ObjectRep))
 #define StatCompRepSize(range, proto) \
       (((range)*(headsize(Component)+4*((proto)->Size))) + headsize(ObjectRep))
@@ -189,6 +191,12 @@
  (((proto) == ValRepPTValue)   ? ValRepBodySize(range)  :	\
   (((proto) == DoubleRepPTValue) ? DoubleRepBodySize(range) :	\
    WordRepBodySize(range))))
+
+#define DispatchObjectRepSize(proto, range, iproto)		         \
+((((proto) == DynItemRepPTValue) ||                                      \
+ (((proto) == DynCompRepPTValue)) ? DynObjectRepSize(range) :	         \
+  (((proto) == StatItemRepPTValue)  ? StatItemRepSize(range, iproto)  :	 \
+   StatCompRepSize(range, iproto))))
 
 /* Safe way to save AOAroots references */
 #define saveAOAroot(cell)				        \
