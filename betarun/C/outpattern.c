@@ -524,6 +524,9 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
   if (valhallaTest)
     if (valhallaOnError (errorNumber,theObj,thePC,stackEnd,theSignal))
       return 1;
+#else
+  theSignal = 0; 
+  /* Just to avoid a compiler warning if valhallaRT is not defined. */ 
 #endif
 
 #ifndef sparc
@@ -649,7 +652,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
   
   if (StackStart == 0){
     fprintf(output,"\n  [initialization of basic component]\n");
-    return;
+    return 0;
   }
   
 #ifdef hppa

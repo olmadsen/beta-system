@@ -238,8 +238,6 @@ Initialize()
   InitCursor();
   InitTheCursor();
   UnloadSeg((Ptr)_DataInit); /* Unload %A5Init% segment */
-  CouldAlert(PromptID);
-  CouldAlert(CPromptID);
 #endif
   
   GetBetaEnv();

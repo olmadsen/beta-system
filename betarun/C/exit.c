@@ -28,7 +28,7 @@ void BetaExit( number )
 }
 
 #ifdef RTLAZY
-#if defined(linux) || defined(nti)
+#if defined(linux) || defined(nti) || defined(macintosh)
 long RefNonePC = 0; 
 int *RefNoneStackEnd = 0;
 /* SBRANDT 7/6/94: RefNonePC is set by RefNone in Misc.run to point to return 
@@ -38,6 +38,10 @@ int *RefNoneStackEnd = 0;
 static unsigned char regnum;
 static volatile int InLazyHandler;
 #endif
+#endif
+
+#if defined(macintosh)
+extern void CallLazyItem ();
 #endif
 
 
@@ -98,6 +102,73 @@ void BetaError(errorNo, theObj)
 #endif
       }
 #ifdef RTLAZY
+#if defined(macintosh)
+      else if (errorNo==RefNoneErr) {
+
+	/* Check whether it is a genuine error or whether the RefNoneErr
+         * was caused by a lazy persistent reference */
+
+	if (LazyItem) {
+	  /* If LazyItem is 0, the reference cannot be a dangler, since
+	   * the objectserver has not been initialized.
+	   *
+	   * Fetch the register number "n" from the "move.l am,dn" instruction.
+           * This is the register containing the lazy or NONE reference. */ 
+	  
+	  regnum = ((* (short *) (RefNonePC-12)) >> 9) & 7;
+	  
+	  /* RefNone pushed data registers as shown below. The register
+	   * (if any) containing a lazy reference must be found  by the
+	   * garbage collector in order to be updated by the lazy fetch
+           * mechanism. This is ensured by clearing the "-5" pushed
+	   * after the relevant register.
+	   *
+	   * Notice: Stack grows downwards.
+	   *                      ____
+	   *                     | d7 |
+	   *                     | -5 |
+	   *                     | d6 |
+	   *                     | -5 |
+	   *                     | d5 |
+	   *                     | -5 |
+	   *                     | d4 |
+	   *                     | -5 |
+	   *                     | d3 |
+	   *                     | -5 |
+	   *                     | d2 |
+	   *                     | -5 |
+	   *                     | d1 |
+	   *                     | -5 |
+	   *                     | d0 |
+	   * RefNoneStackEnd ->  | -5 |
+	   *                      ----                              */
+
+	  printf ("Lazy ref in register %d\n", regnum);
+
+	  LazyDangler = RefNoneStackEnd[2*regnum+1];
+	  RefNoneStackEnd[2*regnum] = 0;
+	  
+	  if (LazyDangler) {
+	    
+	    if (InLazyHandler)
+	      fprintf (output,"WARNING: Lazy fetch reentered !\n");
+	    
+	    /* The stack now hopefully has a layout that wont setup the
+	     * garbage collector. Call back to BETA to fetch the missing
+	     * object. */
+	    
+	    InLazyHandler = 1;
+	    
+	    /* call beta object handling the lazy fetch. */
+	    CallLazyItem ();
+	    
+	    InLazyHandler = 0;
+		  
+	    return;
+	  }
+	}
+      }
+#endif /* mac */
 #if defined(linux) || defined(nti)
       else if (errorNo==RefNoneErr) {
 
@@ -153,9 +224,6 @@ void BetaError(errorNo, theObj)
 	     * object. */
 	    
 	    InLazyHandler = 1;
-
-	    if (LazyDangler == -149) 
-		fprintf (stderr, "dyt");
 	    
 	    /* call beta object handling the lazy fetch.
 	     * To ensure that the C return statement works correctly, we
