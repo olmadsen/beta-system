@@ -77,6 +77,8 @@ do\\2" nil)))
   (interactive "NGoto pattern number: ")
 
   (let ( (number num)
+	 (case-fold-search t)
+	 (prefixed nil)
          (ulimit (save-excursion 
 		   (re-search-forward "^\-\-" (point-max) 'move)
 		   ;; the next lines are just to end up with point just before
@@ -86,11 +88,29 @@ do\\2" nil)))
 		       (- (point) 1)
 		     (+ (point) 1)))
 		 ))
+    ;; go to beginning of form
     (re-search-backward "^\-\-" (point-min) 'move)
+    (re-search-forward ":\\s\-\*" (point-max) 'move)
+    (if (or (looking-at "descriptor") (looking-at "objectdescriptor"))
+	(progn
+	  (re-search-forward "\-\-\+\\s\-\*" (point-max) 'move)
+	  ;; now we are positioned just after "--foo:descriptor--"
+	  ;; if this is a prefixed descriptor, subtract one from
+	  ;; number of patterns to search for.
+	  (if (not (looking-at "\(\#")) 
+	      (progn
+		(setq num (1- num))
+		(setq prefixed t))))
+      ;; else
+      (re-search-forward "\-\-\+\\s\-\*" (point-max) 'move))
     (while (> num 0)
       (if (search-forward "(#" ulimit 'move)
 	  (if (not (beta-within-comment)) (setq num (1- num)))
-	(error "There are only %d patterns in this fragment" (- number num))))))
+	(error "There are only %d patterns in this fragment" (- number num))))
+    (if prefixed
+	(message "Positioned at pattern number %d in current fragment (prefix counts too)" number)
+      (message "Positioned at pattern number %d in current fragment" number)
+    )))
       
 (defun beta-what-pattern ()
   "Find the number of the current pattern (counting '(#' not within a comments)
@@ -101,13 +121,29 @@ within current fragment"
     (if (not (looking-at "(#"))
 	(if (not (search-backward "(#" (point-min) 'move))
 	    (error "Not inside pattern")))
-    (let ((num 0) (pos (point)))
+    ;; we are now positioned just before current '(#'.
+    (let ( (case-fold-search t) (prefixed nil) (num 0) (pos (point)))
+      ;; go to beginning of form
       (re-search-backward "^\-\-" (point-min) 'move)
-      (while (< (point) pos)
+      (re-search-forward ":\\s\-\*" (point-max) 'move)
+      (if (or (looking-at "descriptor") (looking-at "objectdescriptor"))
+	  (progn
+	    (re-search-forward "\-\-\+\\s\-\*" (point-max) 'move)
+	    ;; now we are positioned just after "--foo:descriptor--"
+	    ;; if this is a prefixed descriptor, add one to count.
+	    (if (not (looking-at "\(\#")) 
+		(progn
+		  (setq num (1+ num))
+		  (setq prefixed t))))
+	;; else
+	(re-search-forward "\-\-\+\\s\-\*" (point-max) 'move))
+      (while (<= (point) pos)
 	(if (search-forward "(#" (point-max) 'move)
 	    (if (not (beta-within-comment)) (setq num (1+ num)))
 	  (error "End of buffer reached")))
-      (message "The pattern is number %d in current fragment" num))))
+      (if prefixed
+	  (message "The pattern is number %d in current fragment (prefix counts too)" num)
+	(message "The pattern is number %d in current fragment" num)))))
 
 ;;; Functions to convert from old fragment syntax to new fragment syntax
     
