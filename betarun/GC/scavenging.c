@@ -5,7 +5,9 @@
  */
 #include "beta.h"
 #include "scavenging.h"
+#ifdef sparc
 #include "../CRUN/crun.h"
+#endif
 
 extern ref(Object) NewCopyObject();
 
