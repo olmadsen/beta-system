@@ -95,14 +95,14 @@ $lastmodscript = "$scriptdir/lastmod.js";
 $hashfromparent = "$scriptdir/hashfromparent.js";
 $indexfile = "inx.html";
 ($indexnavfile = $indexfile) =~ s/\.html$/-nav.html/;
-($indexdocfile = $indexfile) =~ s/\.html$/-doc.html/;
+($indexdocfile = $indexfile) =~ s/\.html$/-body.html/;
 if ($wiki){
     $tocfile = $ENV{'TOCURL'};
 } else {
     $tocfile = "index.html";
 }
 ($tocnavfile = $tocfile) =~ s/\.html$/-nav.html/;
-($tocdocfile = $tocfile) =~ s/\.html$/-doc.html/;
+($tocdocfile = $tocfile) =~ s/\.html$/-body.html/;
 
 
 ###### Functions for buttons and standard HTML header and frameset ##
@@ -219,12 +219,12 @@ sub print_frameset()
    <P>
    Click here instead:
    <UL>
-     <LI><A href="$basename-doc.html">$title</A>
+     <LI><A href="$basename-body.html">$title</A>
    </UL>
    </BODY>
    </NOFRAMES>
    <FRAME SRC="$basename-nav.html" NAME="${basename}Nav" SCROLLING=NO MARGINHEIGHT=1>
-   <FRAME SRC="$basename-doc.html" NAME="${basename}Body">
+   <FRAME SRC="$basename-body.html" NAME="${basename}Body">
 </FRAMESET>
 </HTML>
 EOT
@@ -323,7 +323,7 @@ sub print_index_toc
     for ($i=65; $i<=90; $i++){
 	$ch = sprintf ("%c", $i);
 	if ($caps{$ch}){
-	    print "<STRONG><A HREF=\"inx-doc.html#_$ch\" TARGET=\"inxBody\">$ch</A></STRONG> &nbsp; \n";
+	    print "<STRONG><A HREF=\"inx-body.html#_$ch\" TARGET=\"inxBody\">$ch</A></STRONG> &nbsp; \n";
 	} else {
 	    # no indices starting with $ch
 	    print "<STRONG CLASS=disabled>$ch</STRONG> &nbsp; \n";
@@ -568,7 +568,7 @@ sub print_toc_doc_frame
     print "<DT><DD>\n";
     print "<DL>\n";
     for ($i=0; $i<=$#htmlfiles; $i++){
-	($htmlfile = $htmlfiles[$i]) =~ s/\-doc$//;
+	($htmlfile = $htmlfiles[$i]) =~ s/\-body$//;
 	print "<DT><A HREF=\"" . $htmlfile . ".html\">";
 	print $htmlfile ." Interface</A>\n<DD>\n";
     }
@@ -903,7 +903,7 @@ sub process_file
     close (STDOUT);
     printf STDERR "done.\n" if $verbose==1;
     
-    $outfile = $basename . "-doc.html";
+    $outfile = $basename . "-body.html";
     printf STDERR "Writing body frame to $outfile ... " if $verbose==1;
     if (!open (STDOUT, ">$outfile")){
 	print "\nCannot open $outfile for writing: $!\n";
