@@ -37,6 +37,19 @@ extern void _DataInit();
 #define PromptID  7129
 #define CPromptID 7130
 
+void EnlargeMacHeap(char *buf)
+{
+  if (StandAlone){
+    sprintf(buf, "\nTry enlarging the application heap");
+    sprintf(buf, "\nusing the Info box in the Finder.");
+    sprintf(buf, "\nOr try quitting other aplications to free");
+    sprintf(buf, "\nmemory for this application.");
+  } else {
+    sprintf(buf, "\nTry enlarging the heap of MPW");
+    sprintf(buf, "\nusing the Info box in the Finder.");
+  }
+}
+
 /* Prompt four C Strings */
 void CPrompt(char *msg1, char *msg2, char *msg3, char *msg4)
 { Str255 m1, m2, m3, m4;
@@ -410,8 +423,11 @@ void Initialize()
     exit(1);
   }
   if( !AllocateHeap( &tmpIOA,     &tmpIOATop,     &IOALimit, IOASize ) ){
-    char buf[100];
-    sprintf(buf,"Couldn't allocate IOA (%dKb)", (int)IOASize/Kb);
+    char buf[300];
+    sprintf(buf,"Couldn't allocate the IOA heap (%dKb).", (int)IOASize/Kb);
+#ifdef macintosh
+    EnlargeMacHeap(buf);
+#endif
     Notify(buf);
     exit(1);
   }
@@ -439,8 +455,13 @@ void Initialize()
 #endif
 
   if( !AllocateHeap( &ToSpace, &ToSpaceTop, &ToSpaceLimit, IOASize ) ){
-    char buf[100];
-    sprintf(buf,"Couldn't allocate ToSpace (%dKb)\n", (int)IOASize/Kb);
+    char buf[300];
+    sprintf(buf,
+	    "Couldn't allocate the ToSpace heap (%dKb)\n", 
+	    (int)IOASize/Kb);
+#ifdef macintosh
+    EnlargeMacHeap(buf);
+#endif
     Notify(buf);
     exit(1);
   }

@@ -2,6 +2,7 @@
 #if defined(macintosh) || defined(MAC)
 extern void CPrompt(char *msg1, char *msg2, char *msg3, char *msg4);
 extern long StandAlone;
+extern void EnlargeMacHeap(char *buf);
 #endif
 #ifdef RTDEBUG
 extern long GetBetaCodeStart();
