@@ -1,85 +1,99 @@
-#!/bin/sh
+#!/usr/local/bin/perl5
+#-*-Perl-*-
 
-# remove all ..gs and .o and .go files from code directories in release 4.0
 
-#---------- configuration ------------
-
-FILES="*..gs *..s *.o *.go *..db *.job *.so *.gso"
-export FILES
-
-DIRS=`dirs4.0`
-
-# add some extra dirs here if required:
-DIRS="\
-$DIRS"
-
-#---------- don't change below -------
-
-echonl(){
-  if [ -f /usr/bin/sun ]; 
-  then 
-    echo -n "$1"
-  else
-    echo "$1\c"
-  fi
+if ($#ARGV == -1) {
+    print "Usage: $0 targets\n";
+    exit 1;
 }
 
-if [ $# -eq 0 ]
-then
-  echo usage: $0 targets
-fi
+$betalib=$ENV{'BETALIB'}  || die "BETALIB must be set!\n";
+$betalib =~ s#\\#/#g;
 
-for OBJDIR 
-do
-  echo   "Ready to remove $FILES from $OBJDIR directories in release 4.0:"
-  
-  for d in $DIRS
-  do
-	  echo /users/beta/$d
-  done
-  
-  echo ""
-  
-  echo   "Are you sure that you want to remove $FILES"
-  echonl "in $OBJDIR directories in these directories? (no/yes) "
-  read answer
-  if [ "$answer" != "yes" ]; then  exit 0; fi
-  
-  echo ""
-  echonl "Really sure? (no/yes) "
-  read answer
-  if [ "$answer" != "yes" ]; then  exit 0; fi
-  
-  echo ""
-  echonl "Would you like to be prompted for each directory? (yes/no) "
-  read answer
-  if [ "$answer" = "no" ]
-  then
-    doprompt=0
-  else
-    doprompt=1
-  fi
-  
-  cd /users/beta
-  
-  for d in $DIRS
-  do
-     if [ "$doprompt" = "1" ]
-     then
-	  echo ""
-	  echo   "Remove $FILES from $OBJDIR directories in"
-	  echonl "  /users/beta/$d? (y/n/q) "
-	  read answer
-	  case "$answer" in
-	  "y") ;;
-	  "n") continue;;
-	  "q") exit;;
-	  esac
-     else
-	  echo "Removing from $OBJDIR directories in /users/beta/$d..."
-     fi
-  
-     find $d -type d -name $OBJDIR -print -exec sh -c 'chmod -f u+w $0 $0/*; cd $0; /bin/rm -f $FILES' '{}' \;
-  done
+$dirs=require "$betalib/bin/admin/dirlist";
 
-done
+if ($MACHINETYPE eq 'NTI') {
+    $match='\.((obj)|(asm))$';    
+} else {
+    $match='\.((\.gs)|(\.s)|(o)|(go)|(\.db)|(job)|(so)|(gso))$';
+}
+
+print "This script will recursively remove files matching $match from $RELEASE:\n\n";
+
+foreach $dir (split ' ', $dirs) {
+    if (-d "$betalib/$dir") {
+	print "$dir\n";
+    }
+}
+
+print "Are you sure that you want to remove files matching $match\n";
+print "from these directories? (no/yes) ";
+
+$yes = <STDIN>;
+chop $yes;
+exit if ($yes ne 'yes');
+
+print "Really sure? ";
+$yes = <STDIN>;
+chop $yes;
+exit if ($yes ne 'yes');
+
+print "\nWould you like to be prompted for each directory? (yes/no) ";
+$doprompt = <STDIN>;
+chop $doprompt;
+
+foreach $dir (split ' ', $dirs) {
+    next if (!$CompileFlag{$dir});
+    ($basedir ="$betalib/$dir") =~ s#/$##;
+    next if (! -d $basedir);
+    if ($doprompt eq "yes"){
+	print  "\nRecursively remove files matching $match from\n";
+	print "  $basedir? (y/n/q) ";
+	$answer=<STDIN>;
+	chop $answer;
+	if ($answer eq "y"){
+	    # just go on
+	} elsif ($answer eq "n"){
+	    next;
+	} elsif ($answer eq "q"){
+	    exit 0;
+	}
+    } else {
+	print "*********** Removing from $basedir ***************\n";
+    }
+    @todo=('.');
+    while ($curdir = pop @todo) {
+	$CurrentPath = $curdir;
+	$curdir .= '/';
+	$curdir =~ s#^\./$##;
+	$ntdirfix = "$basedir/$curdir";
+	#$ntdirfix =~ s/^.\://;
+	#$ntdirfix =~ s#\/#\\#g;
+	#print "Scanning $ntdirfix\n";
+	chdir $ntdirfix or die "Unable to chdir: $!";
+	opendir DIR, '.' or die "Unable to readdir $!";
+	@files=readdir(DIR);
+	closedir DIR;
+	foreach $file (@files) {
+	    next if ($file =~ /^\./);
+	    if (-d $file) {
+		push @todo, "$curdir$file";
+		#print "Pushing $file\n";
+	    }
+	    elsif ($file =~ /$match/) {
+		foreach $target (@ARGV) {
+		    if ($CurrentPath =~ /${target}\/?$/) {		
+		        print "$file\n";
+			unlink $file or print "Unable to delete file $file\n";
+		    }
+		}
+	    }
+	}
+    }
+}
+	    
+
+
+
+
+
