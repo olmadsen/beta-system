@@ -26,6 +26,11 @@ BODY 'private/misc'
      'private/subeditorbody'
      'private/fragmentgrouphandlerbody'
      'private/fragmentformhandlerbody';
+(*
+ * COPYRIGHT
+ *   Copyright Mjolner Informatics, 1995-96
+ *   All rights reserved.
+ *)
 -- windowlib: Attributes --
 codeEditor: codeViewer
   (#
@@ -71,6 +76,7 @@ codeEditor: codeViewer
            else it is replaced by another fragment           *)
        exit (fatherRef[],sonPos,fragments.elm[1][],fragmentLength)
        #);
+     setIsReadOnly::<  (#  <<SLOT codeeditorSetIsReadOnly:DoPart>> #);
      onReturnKey::<  (#  <<SLOT codeeditorOnReturnKey:DoPart>> #);
      updateHistory::< 
        (# 
@@ -581,10 +587,14 @@ codeEditor: codeViewer
        (# 
        <<SLOT subeditorOpenSubeditor:DoPart>>
        #);
-     subeditors: @list (# element::< codeeditor #);
-     close::<  (#  <<SLOT codeeditorclose:DoPart>> #);
-     init::< 
-       (#  <<SLOT codeeditorinit:DoPart>> #)
+     createSubeditor::<  (#  <<SLOT subeditorCreateSubeditor:DoPart>> #);
+     subeditors: @list
+       (# element::< codeeditor #);
+     close::< 
+       (# 
+       <<SLOT codeeditorclose:DoPart>>
+       #);
+     init::<  (#  <<SLOT codeeditorinit:DoPart>> #)
   #);
 mysimplemenu: menu
 (* Special menu type with interdependant check marks, some other 
@@ -900,6 +910,35 @@ codeeditorEditMenu: mysimplemenu
             #);
           onSelect::  (#  do cfe.openSubeditor #)
        #);
+     iSetIsReadOnly: @item
+       (#
+          onStatus:: 
+            (# 
+            do
+               formeditorExists and not cfe.texteditMode->value;
+               (if formEditorExists then
+                   cfe.isReadOnly->checked;
+                   (if cfe.isReadOnly then
+                       'Write protected'->writeStatus
+                    else
+                       ''->writeStatus
+                   if)
+               if)
+            #);
+          onSelect:: 
+            (# 
+            do
+               (if cfe.isReadOnly then
+                   (if cfe.thisGroupEditor[] <> none then
+                       (if cfe.thisGroupEditor.groupFileWriteable then
+                           false->cfe.setIsReadOnly; ''->writeStatus
+                       if)
+                   if)
+                else
+                   true->cfe.setIsReadOnly; 'Write protected'->writeStatus
+               if)
+            #)
+       #);
      open:: 
        (# 
        do
@@ -921,7 +960,9 @@ codeeditorEditMenu: mysimplemenu
           newSeparator;
           ('Search...','s')->iSearch.newKey;
           newSeparator;
-          ('Create subeditor')->iSubeditor.new;
+          ('Create Subeditor')->iSubeditor.new;
+          newSeparator;
+          'Form Write Protection'->iSetIsReadOnly.new;
           'Edit'->name
        #);
      
@@ -984,7 +1025,12 @@ codeeditorViewMenu: mysimplemenu
             (# 
             do
                (if allowCommand then
-                   cfe.askZoomIn->value
+                   (if cfe.thisGroupEditor[] <> none then
+                       not cfe.thisGroupEditor.isAfrejaEditor and cfe.askZoomIn
+                         ->value
+                    else
+                       cfe.askZoomIn->value
+                   if)
                 else
                    false->value
                if)
@@ -997,7 +1043,12 @@ codeeditorViewMenu: mysimplemenu
             (# 
             do
                (if allowCommand then
-                   cfe.askZoomOut->value
+                   (if cfe.thisGroupEditor[] <> none then
+                       not cfe.thisGroupEditor.isAfrejaEditor and cfe.askZoomOut
+                         ->value
+                    else
+                       cfe.askZoomOut->value
+                   if)
                 else
                    false->value
                if)
@@ -1010,7 +1061,12 @@ codeeditorViewMenu: mysimplemenu
             (# 
             do
                (if allowCommand then
-                   cfe.askZoomFullEditor->value
+                   (if cfe.thisGroupEditor[] <> none then
+                       not cfe.thisGroupEditor.isAfrejaEditor and
+                       cfe.askZoomFullEditor->value
+                    else
+                       cfe.askZoomFullEditor->value
+                   if)
                 else
                    false->value
                if)
@@ -1218,7 +1274,14 @@ editorenv: sifEditorEnv
      mg: ^astInterface.metagrammar;
      UI: ^guienv;
      initiator: ^text;
-     contractOnOpen,onlyNotifyFreja: @boolean;
+     globalWriteProtection: @boolean;
+     setGlobalWriteProtection:
+       (# value: @boolean
+       enter value
+       <<SLOT editorenvSetGlobalWriteProtection:DoPart>>
+       #);
+     contractOnOpen,
+       onlyNotifyFreja: @boolean;
      adaptivePrettyprinting: @boolean;
      doQuit: @boolean;
      onGoingRecovery: @boolean;
@@ -1409,11 +1472,18 @@ editorenv: sifEditorEnv
        (#
           fg: ^astInterface.fragmentGroup;
           theBrowser: ^object;
-          writeAccess: @boolean;
+          groupFileWriteable: @boolean;
+          isReadOnly: @boolean;
+          setIsReadOnly:
+            (# value: @boolean
+            enter value
+            <<SLOT groupeditorSetIsReadOnly:DoPart>>
+            #);
           grammarName: ^text;
           touched: @integer;
           isAFrejaEditor: @boolean;
-          needToUpdateTextFile: @boolean;
+          needToUpdateTextFile:
+            @boolean;
           autoSaveFileExists: @boolean;
           thePropertyEditor: ^codeeditor;
           fgh: ^fragmentGroupHandler;
@@ -1537,6 +1607,11 @@ editorenv: sifEditorEnv
             (# 
             <<SLOT groupeditorEditProperties:DoPart>>
             #);
+          createPropertyEditor:
+            (# theSifTextEditor: ^sifTexteditor
+            enter theSifTexteditor[]
+            <<SLOT groupeditorCreatePropertyEditor:DoPart>>
+            #);
           editFormName:
             (# ff: ^astInterface.fragmentForm
             enter ff[]
@@ -1607,8 +1682,9 @@ editorenv: sifEditorEnv
             (#
                theBrowser: ^object;
                fg: ^astInterface.fragmentGroup;
+               readOnly: @boolean;
                ge: ^groupEditor
-            enter (theBrowser[],fg[])
+            enter (theBrowser[],fg[],readOnly)
             <<SLOT editorenvCreateGroupEditor:DoPart>>
             exit ge[]
             #);
@@ -1616,8 +1692,9 @@ editorenv: sifEditorEnv
             (#
                theBrowser: ^object;
                fg: ^astInterface.fragmentGroup;
+               readOnly: @boolean;
                ge: ^groupEditor
-            enter (theBrowser[],fg[])
+            enter (theBrowser[],fg[],readOnly)
             <<SLOT editorenvFindOrCreateGroupEditor:DoPart>>
             exit ge[]
             #);

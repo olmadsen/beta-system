@@ -5,9 +5,17 @@ INCLUDE '~beta/basiclib/v1.4/directory'
         'modtime'
         '../searchdialog';
 (*'~beta/mps/v4.9.1/propertyparser'*)
-(*'~beta/mps/v4.9.1/propertyparser'*)
-(*'~beta/mps/v4.9.1/propertyparser'*)
-(*'~beta/mps/v4.9.1/propertyparser'*)
+(*
+ * COPYRIGHT
+ *	 Copyright Mjolner Informatics, 1995-96
+ *	 All rights reserved.
+ *)
+-- editorenvSetGlobalWriteProtection: DoPart --
+do
+   value->globalWriteProtection;
+   groupEditorList.scan
+     (#  do value->current.setIsReadOnly #)  
+
 -- editorenvMetaGrammarInit: Descriptor --
 (#
    theMetaGrammar: ^astInterface.treelevel;
@@ -453,22 +461,16 @@ do
         f: @file
      enter fg[]
      do
-        (if true (*writeAccess*)
+        fg.textFileName->textFile[]->f.name;
+        textFile.copy->tildeTextFile[];
+        '~'->tildeTextFile.append;
+        (if f.entry.exists
          // true then
-            fg.textFileName->textFile[]->f.name;
-            textFile.copy->tildeTextFile[];
-            '~'->tildeTextFile.append;
-            (if f.entry.exists
-             // true then
-                newLine;
-                'Renaming text file to: '->putText;
-                tildeTextFile[]->putLine;
-                tildeTextFile[]->f.entry.rename;
-                
-            if);
+            newLine;
+            'Renaming text file to: '->putText;
+            tildeTextFile[]->putLine;
+            tildeTextFile[]->f.entry.rename;
             
-         else
-            (none ,'This file is read-only','Alert')->UI.alertUser; 
         if);
         
      #);
@@ -516,7 +518,6 @@ do
         help,grammarName: ^text;
         groupFile,autoSaveFile: @file;
         g: ^astInterface.fragmentGroup;
-        writeAccess: @boolean;
         ge: ^groupEditor
      enter g[]
      do
@@ -534,7 +535,6 @@ do
                         
                      else
                     (* do not backup *)
-                        true->writeAccess;
                         (if ('property'->grammarName.equal) then
                         (* no backup needed *)
                             
@@ -578,7 +578,6 @@ do
                 if)
             if)
         if)
-     exit writeAccess
      #);
    nonterminalExists:
      (#
@@ -1492,8 +1491,9 @@ do
                 
             if);
             
-         // dir.root then (* editorRoot[]->node[];
-                           1->length;*)
+         // dir.root then
+         (* editorRoot[]->node[];
+          1->length;*)
             
          // dir.extend then
               (# prod: ^mg.prod; 
@@ -1581,10 +1581,26 @@ do
         &groupEditor[]->ge[];
         fg[]->ge.fg[];
         theBrowser[]->ge.theBrowser[];
-        fg[]->editorenvPrivate.checkWriteAccess->ge.writeAccess;
+        fg[]->editorenvPrivate.checkWriteAccess->ge.groupfileWriteable;
+        globalWriteProtection or readOnly or not ge.groupfileWriteable
+          ->ge.isReadOnly;
         (if trace[2] then
-            'create groupeditor writeAccess: '->putText;
-            (if ge.writeAccess then 'true'->putLine else 'false'->putLine if)
+            'create groupeditor globalWriteProtection: '->putText;
+            (if globalWriteProtection then
+                'true'->putLine
+             else
+                'false'->putLine
+            if);
+            'create groupeditor readonly: '->putText;
+            (if readOnly then 'true'->putLine else 'false'->putLine if);
+            'create groupeditor ge.groupfileWriteable: '->putText;
+            (if ge.groupfileWriteable then
+                'true'->putLine
+             else
+                'false'->putLine
+            if);
+            'create groupeditor ge.isReadOnly: '->putText;
+            (if ge.isReadOnly then 'true'->putLine else 'false'->putLine if)
         if);
         ;
         fg.textfilename->textfile.name;
@@ -1607,7 +1623,9 @@ do
      (# textfile: @file
      do
         (theBrowser[],fg[])->findGroupEditor->ge[];
-        (if ge[] = none then (theBrowser[],fg[])->createGroupEditor->ge[] if)
+        (if ge[] = none then
+            (theBrowser[],fg[],readOnly)->createGroupEditor->ge[]
+        if)
      #)  
 
 -- editorenvCreateFormEditor: Descriptor --
@@ -1641,7 +1659,6 @@ do
                (if ff[] <> none then
                    ff[]->theSifTexteditor.frag[];
                    none ->theSifTexteditor.editorRoot[];
-                   (* the editorRoot is set up by codeeditor.init *)
                    (mps[],ff.grammar[],UI[],theSifTextEditor[],ff[],
                     theEditorRoot[],initialSelection[])->fe.init;
                    
@@ -1651,9 +1668,15 @@ do
            if);
            fe[]->ge.formeditorList.append;
            ge[]->fe.thisGroupEditor[];
-           not ge.writeAccess->fe.isReadOnly->fe.theSifTextEditor.isReadOnly;
+           (if ge.groupFileWriteable then
+               globalWriteProtection or ge.isReadOnly->fe.isReadOnly
+                 ->fe.theSifTextEditor.isReadOnly;
+               
+            else
+               true->fe.isReadOnly->fe.theSifTextEditor.isReadOnly; 
+           if);
            (if trace[2] then
-               'createFormEditor readOnly: '->putText;
+               'createFormEditor isReadOnly: '->putText;
                (if fe.theSifTextEditor.isReadOnly then
                    'true'->putLine
                 else
@@ -1703,7 +1726,7 @@ do
                    fe.editorRoot[]->theSifTexteditor.editorRoot[];
                    fe.isReadOnly->theSifTexteditor.isReadOnly;
                    (if trace[2] then
-                       'findOrcreateFormEditor readOnly: '->putText;
+                       'findOrcreateFormEditor isReadOnly: '->putText;
                        (if fe.theSifTextEditor.isReadOnly then
                            'true'->putLine
                         else
@@ -1788,7 +1811,7 @@ do
 -- findEditorForFormBody: Descriptor --
 (# ge: ^groupEditor; help: ^text; 
 do
-   (ymerCallback.theBrowser[],ff.father)
+   (ymerCallback.theBrowser[],ff.father,false)
      ->groupeditorList.findOrCreateGroupEditor->ge[];
    (if ge[] <> none then
        ff[]->ge.formeditorList.findEditor->fe[];
