@@ -1,4 +1,10 @@
 ORIGIN  'filebody';
+INCLUDE '~beta/dotnetlib/beta_helpers';
+INCLUDE 'betaenv_clrbody';
+INCLUDE '~beta/dotnetlib/System/IO/FileInfo';
+INCLUDE '~beta/dotnetlib/System/IO/FileAttributes';
+INCLUDE '~beta/dotnetlib/System/DateTime';
+INCLUDE '~beta/dotnetlib/System/Convert';
 
 (*
  * COPYRIGHT
@@ -8,20 +14,6 @@ ORIGIN  'filebody';
 
 
 (* This fragment group is the .NET dependent implementation of files *)
-
---LIB:attributes--
-
-String: ExternalClass
-  (# 
-  do '[mscorlib]System.String' -> className;
-  #);
-FileInfo: ExternalClass
-  (# _init:
-       (# path: ^String;
-       enter path[]
-       #);  
-  do '[mscorlib]System.IO.FileInfo' -> classname;
-  #);
 
 --DiskEntryException: dopart-- 
 do 'Disk entry exception for \''->msg.puttext;
@@ -33,7 +25,6 @@ do 'Disk entry exception for \''->msg.puttext;
 
 --DiskEntryPrivate: descriptor--
 (# path: @text;
-   spath: ^String;
    pathchanged: @boolean;
    head, name, main, suf: ^text;
    info: ^FileInfo;
@@ -92,42 +83,68 @@ do INNER; &text[]->n[]; private.decomposepath; private.name -> n
 do INNER;
    (if p[]=NONE then &text[]->p[] if);
    p -> private.path;
-   private.path[] -> private.spath[];
-   private.spath[] -> &FileInfo[] -> private.info[];
+   private.path[] -> &FileInfo[] -> private.info[];
    true -> private.pathchanged;
 
 --DiskEntryPathGet: dopart--
 do INNER; private.path.copy -> p[]
 
 --DiskEntryExists: dopart--
-do 
+do private.info.get_Exists -> value
 
 --DiskEntryTouch: dopart--
-do 
+do (if private.info.get_Exists then
+       DateTime.get_Now -> private.info.set_LastWriteTime;
+    else
+       private.info.Create;
+   if);
    
 --DiskEntrySize: dopart--
-do 
+do private.info.get_Length -> value
    
 --DiskEntryGetModTime:dopart--
-do 
-   
+do (* FIXME: missing * for int64: *)
+   (*(private.info.get_LastWriteTime->asDateTime).ToFileTime -> BetaHelpers.long2intDiv1000 -> time*) 
+   (if false then
+       (# dt: ^DateTime;
+          ft: @int64;
+       do 'get_LastWriteTime' -> Console.Writeline_String;
+          private.info.get_LastWriteTime->dt[];
+          'dt set' -> Console.Writeline_String;
+          (# dummy:@char do dt.ToFileTime -> ft; #);
+          'ft set' -> Console.Writeline_String;
+          ft -> BetaHelpers.long2intDiv1000 -> time;
+          'time set' -> Console.Writeline_String;
+       #)
+   if)
+
 --DiskEntrySetModTime:dopart--
-do 
+do (* FIXME: missing * for int64 *)
+   (time -> BetaHelpers.int2longMul1000) -> DateTime.FromFileTime -> private.info.set_LastWriteTime;   
 
 --DiskEntryRename: dopart--
-do 
+do (if private.info.get_Exists then
+       error
+    else
+       newpath[] -> private.info.MoveTo;
+   if);
 
 --DiskEntryReadable: dopart--
-do 
+do true->value; (* FIXME: Really? *)
 
 --DiskEntryWriteable: descriptor--
-(# #)
+(# 
+do ((private.info.get_Attributes->asFileAttributes).value__ %Band FileAttributes.ReadOnly) = 0 
+     -> value
+#)
 
 --DiskEntryIsDir: dopart--
-do
+do ((private.info.get_Attributes->asFileAttributes).value__ %Band FileAttributes.Directory) = FileAttributes.Directory
+     -> value
    
 --DiskEntryIsFile: dopart--
-do 
+do ((private.info.get_Attributes->asFileAttributes).value__ %Band FileAttributes.Normal) = FileAttributes.Normal
+     -> value
    
 --FilePrivate:descriptor--
 (# 
@@ -191,12 +208,6 @@ do
 do 
    
 --FileEos:dopart--
-do 
-
---FileGetRep:dopart--
-do 
-
---FilePutRep:dopart--
 do 
 
 --FileFlush:dopart--
