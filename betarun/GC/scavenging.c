@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1992 Mjolner Informatics Aps.
- * Mod: $Id: scavenging.c,v 1.45 1992-10-02 14:50:10 beta Exp $
+ * Mod: $Id: scavenging.c,v 1.46 1992-10-07 15:57:25 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 
@@ -238,26 +238,26 @@ void ProcessStack()
     theFrame  = ActiveCallBackFrame;
     /* Follow the stack */
     while( theFrame){
-	ProcessStackPart( theTop, (long) theFrame - 4);
+	ProcessStackPart( theTop, (long *)theFrame-1);
 	theTop   = theFrame->betaTop;
 	theFrame = theFrame->next;
     }
-    ProcessStackPart( theTop, theBottom+4);  
+    ProcessStackPart( theTop, theBottom-1);  
     
     /*
      * Then handle the remaining component blocks.
      */
     currentBlock = lastCompBlock;
     while( currentBlock->next ){
-	theTop    = (ptr(long)) ((long) currentBlock + 12);
-	theBottom = (ptr(long)) currentBlock->next;
+	theTop    = (long *) ((long) currentBlock + sizeof(ComponentBlock) );
+	theBottom = (long *) currentBlock->next;
 	theFrame  = currentBlock->callBackFrame;
 	while( theFrame){
-	    ProcessStackPart( theTop, (long) theFrame - 4);
+	    ProcessStackPart( theTop, (long *)theFrame-1);
 	    theTop   = theFrame->betaTop;
 	    theFrame = theFrame->next;
 	}
-	ProcessStackPart( theTop, theBottom+4);  
+	ProcessStackPart( theTop, theBottom-1);  
 	currentBlock = currentBlock->next;
     }
 }
