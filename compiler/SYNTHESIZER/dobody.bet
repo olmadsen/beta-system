@@ -71,55 +71,64 @@ do
            generate,internalDesc,internalSlot: @Boolean;
            sonImp: @ASTindex;
            as: ^expanded;
+           theLab: ^beta.nameDcl
         enter imp (* imp = (label <nameDcl> <Imp+;>) *)
-        do imp.son->lab;
-
+        do imp.son->lab->theLab[];
            not b2c -> generate; (* OLM: 'generate' is a boolean 
                                  * introduced by KJM to handle b2c; 
                                  * it is always true for not b2c
                                  *)
-           (* the following suffixWalk was introduced by KJM to handle
-            * b2c. For sgi we also need it to find out if there are
-            * (1) Nested internal descriptors that may contain a
-            * leave/restart to be executed by 'ExO'. The current check
-            * is conservative, assuming that a nested descriptor has
-            * a leave/restart. The check could be made more precise by
-            * checking if the descriptor in fact contains a leave/restart
-            * to the considered label; perhaps it would be better to
-            * check for each "leave/restart L" if L=lab and L.on>0 (this
-            * must take insertable descriptors into account).
-            * (2) Slots in the code enclosed by a label as in:
-            *     L: ( ...; <<SLOT ..>>; ...); 
-            * The slot may execute leave/restart and this may
-            * cause a jump from one shared object file to another,
-            * and such jumps must restore the context pointer for
-            * the shared object (GP for sgi).
-            * The b2c version terminated the suffixWalk when either a 
-            * descriptor or a slot was found; we now continue until 
-            * a slot is found (if any exists).
-            *)
-           lab.brother->sonImp;
-           (*321->trace(# do 'genLabel:Scan: '->xT; sonImp[]->xA #);*)
-           sonImp.asAST -> as[];
-           (*sonImp.inx->sonImp.frag.indexToNode->as[];*)
-           L: as.suffixWalk
-             (# 
-             do (if current.symbol
-                 // gram.objectDescriptor then
-                    current[] -> AstAsAstIndex -> sonImp;
-                    (* (current.index,current.frag[])->sonImp;*)
-                    (if not (sonImp[]->sematt.insertable) then
-                        (* a real objectdescriptor *)
-                        (*321->trace(# do 'Found desc'->xT #);*)
-                        true->generate->internalDesc; (*leave L *)
+           (if true then
+               (* Stuff below has been moved to checker *)
+               (theLab.access %band sematt.innerDescMark) -> internalDesc;
+               (theLab.access %band sematt.innerSlotMark) > 0 -> internalSlot;
+               (if internalSlot then true -> internalDesc if);
+               331->trace(#
+                         do 'Label: ' -> xT;
+                            lab[] -> xA; 
+                            ': hasInternalDesc: ' -> xT; internalDesc->xB;
+                            ' hasInternalSlot: ' -> xT; internalSlot->xB;
+                         #)
+            else
+               (* the following suffixWalk was introduced by KJM to handle
+                * b2c. For sgi we also need it to find out if there are
+                * (1) Nested internal descriptors that may contain a
+                * leave/restart to be executed by 'ExO'. The current check
+                * is conservative, assuming that a nested descriptor has
+                * a leave/restart. The check could be made more precise by
+                * checking if the descriptor in fact contains a leave/restart
+                * to the considered label; perhaps it would be better to
+                * check for each "leave/restart L" if L=lab and L.on>0 (this
+                * must take insertable descriptors into account).
+                * (2) Slots in the code enclosed by a label as in:
+                *     L: ( ...; <<SLOT ..>>; ...); 
+                * The slot may execute leave/restart and this may
+                * cause a jump from one shared object file to another,
+                * and such jumps must restore the context pointer for
+                * the shared object (GP for sgi).
+                * The b2c version terminated the suffixWalk when either a 
+                * descriptor or a slot was found; we now continue until 
+                * a slot is found (if any exists).
+                *)
+               lab.brother->sonImp;
+               sonImp.asAST -> as[];
+               L: as.suffixWalk
+                 (#(* N: @astIndex; lab: ^beta.nameApl; *)
+                 do (if current.symbol
+                     // gram.objectDescriptor then
+                        current[] -> AstAsAstIndex -> sonImp;
+                        (* (current.index,current.frag[])->sonImp;*)
+                        (if not (sonImp[]->sematt.insertable) then
+                            (* a real objectdescriptor *)
+                            (*321->trace(# do 'Found desc'->xT #);*)
+                            true->generate->internalDesc; (*leave L *)
+                        if);
+                     // gram.unexpanded then
+                        true->generate->internalDesc->internalSlot; 
+                        leave L 
                     if);
-                 // gram.unexpanded then
-                    true->generate->internalDesc->internalSlot; leave L 
-                if);
-             #);
-           (*321->trace(# do (if generate then 'Generate'->xT
-            else 'Don\'t Generate'->xT if)#)*)
-
+                 #);
+           if);
            restartLab.new; leaveLab.New;
            (if internalDesc or internalSlot then
                (* the label may be referred from other descriptors*)
@@ -230,10 +239,28 @@ do
            origin: ^ASTindex;                
            count: @Integer; (* count origin levels *)
            interSlots: @boolean;
-           ch: @char; descNo: @integer; form: ^text
-        enter(imp[],isLeave) (*on,off,thisDescOrgOff,lab*)
-        do imp.son->lab; lab.dclRef->labDcl; labDcl.sort->labSort;
+           ch: @char; descNo: @integer; form: ^text;
+           theLabDcl: ^beta.nameDcl;
+           hasInnerDesc,hasInnerSlot: @boolean;
+        enter(imp[],isLeave)
+        do imp.son->lab; 
+           lab.dclRef->labDcl; 
+           (*1->trace(#
+                   do 'break:labDcl: ' -> xT; labDcl[] -> xAF;
+                      labDcl.label -> xI
+                   #);*)
+           labDcl ->theLabDcl[];
+           labDcl.sort->labSort;
+
            labDcl.off->off; lab.on->on;
+           (theLabDcl.access %band sematt.innerDescMark) -> hasInnerDesc;
+           (theLabDcl.access %band sematt.innerSlotMark) > 0 -> hasInnerSlot;
+           331->trace(#
+                   do imp[] -> xA;
+                      'hasInnerDesc: ' -> xT; hasInnerDesc -> xB;
+                      ' hasInnerSlot: ' -> xT; hasInnerSlot -> xB;
+                   #);
+           
            (if labSort.label = gram.labelledImp then
                (* Leave/restart L where L is a label as in
                 *    L: (if .... leave L; ... if)
@@ -373,7 +400,7 @@ do
                             if);
                          #);
                    if);
-                   (if common.isCLR then
+                   (if hasInnerDesc or hasInnerSlot then
                        (* datpete: 2004-04-02.
                         * FIXME: We cannot use jGmp to exit a try block
                         * on .NET. 
