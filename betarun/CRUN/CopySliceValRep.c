@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopySliceValRep.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:32 $, SID: $Revision: 1.12 $
+ * Mod: $RCSfile: CopySliceValRep.c,v $, rel: %R%, date: $Date: 1992-09-01 11:33:04 $, SID: $Revision: 1.13 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -45,19 +45,15 @@ void CCopySVR(ref(ValRep) theRep,
     /* Copy a slice of a Value Repetition. */
     
     /* Check that low and high are usable. */
-    if (low<theRep->LowBorder) BetaError(-6, theItem);
-    if (high<theRep->LowBorder) BetaError(-7, theItem);
-    if (low>theRep->HighBorder) BetaError(-6, theItem);
-    if (high>theRep->HighBorder) BetaError(-7, theItem);
+    if (low < theRep->LowBorder) BetaError(-6, theItem);
+    if (high > theRep->HighBorder) BetaError(-7, theItem);
     
     /* Calculate the range of the new repetition. */
     high =  high - low + 1;
     if (high < 0) high = 0;
     
-    newRep = cast(ValRep) IOAalloc(DispatchValRepSize(theRep, high));
+    Protect2(theRep,theItem,newRep = cast(ValRep) IOAalloc(DispatchValRepSize(theRep, high)));
     
-    ForceVolatileRef(theRep);
-    ForceVolatileRef(theItem);
     Ck(theRep); Ck(theItem);
 
     /* The new Object is now allocated, but not assigned yet! */
