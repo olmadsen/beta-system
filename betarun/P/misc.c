@@ -352,20 +352,20 @@ void insertStoreOffset(unsigned long store,
   Trie *loadedObjectsOFbefore, *loadedObjectsOFafter;
   
   /* Check if store is member */
-  if ((loadedObjectsOFbefore = loadedObjectsOFafter = TILookup(store, *loadedObjects))
+  if ((loadedObjectsOFbefore = loadedObjectsOFafter = (Trie *)TILookup(store, *loadedObjects))
       == NULL) {
     /* insert new table for store */
     loadedObjectsOFafter = TInit();
   }
   
   /* insert inx in loadedObjectsOF */
-  TInsert(offset, (void *)inx, &loadedObjectsOFafter, offset);
+  TInsert(offset, inx, &loadedObjectsOFafter, offset);
   
   /* */
   if (loadedObjectsOFbefore == loadedObjectsOFafter) {
     return;
   } else {
-    TInsert(store, (void *)loadedObjectsOFafter, loadedObjects, store);
+    TInsert(store, (unsigned long)loadedObjectsOFafter, loadedObjects, store);
   }
 }
 
