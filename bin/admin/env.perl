@@ -58,7 +58,7 @@ $USE_GNUC="yes";
 
 $betalib=$ENV{'BETALIB'} || die "BETALIB must be set!\n";
 
-@MachineTypes = ('NTI_MS', 'NTI_GNU', 'NTI_BOR', 'SUN4S', 'HPUX9PA', 'LINUX', 'SGI', 'PPCMAC', 'X86SOL');
+@MachineTypes = ('NTI_MS', 'NTI_GNU', 'NTI_BOR', 'SUN4S', 'HPUX9PA', 'LINUX', 'SGI', 'PPCMAC', 'X86SOL', 'MACOSX');
 @ObjDirs =  ('nti_ms', 'nti_gnu', 'nti_bor', 'sun4s', 'hpux9pa', 'linux', 'sgi', 'ppcmac', 'x86sol', 'macosx');
 @OsTypes = ('WIN', 'UNIX', 'MAC');
 
