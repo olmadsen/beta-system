@@ -481,6 +481,7 @@ void removeUnusedObjects()
   OTEndGC();
   RTEndGC();
   SOEndGC();
+  saveCurrentStore();
 }
 
 #endif /* PERSIST */

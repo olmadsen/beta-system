@@ -547,7 +547,7 @@ int setStoreObject(unsigned long storeID,
 				     delta * (currentPStore -> blockSize));
 	  
 	  Claim((long)blockOffset(offset)+ObjectSize(theObj)*4
-		< currentPStore->blockSize, 
+		< (long)currentPStore->blockSize, 
 		"Object is too large, it spans into the next block");
 
 	  memcpy(ObjectInStore, 

@@ -13,7 +13,7 @@
 #define MAXHOSTNAMELENGTH 128
 #define MAXPATHNAMELENGTH 256
 #define INITIALNUMLOCATIONS 2
-#define INITIALPROTONAMEBUFFERSIZE 8192
+#define INITIALPROTONAMEBUFFERSIZE 65536
 
 typedef struct StoreProxy {
   unsigned long storeID;     /* Store in which to find referred object */
