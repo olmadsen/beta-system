@@ -5,7 +5,8 @@
 
 #define GCable_Module
 
-#define REP ((struct ObjectRep *)theRep)
+#define REP    ((struct ObjectRep *)theRep)
+#define NEWREP ((struct ObjectRep *)newRep)
 
 #ifdef hppa
 /* to keep Gcc's grappy little hand off this */
@@ -118,8 +119,8 @@ void ExtVR(ref(Object) theObj,
       newRep->Body[i] = theRep->Body[i];
 
     if (isObjectRep(theRep)){
-      ((struct ObjectRep *)newRep)->iProto = REP->iProto;
-      ((struct ObjectRep *)newRep)->iOrigin = REP->iOrigin;
+      NEWREP->iProto = REP->iProto;
+      NEWREP->iOrigin = REP->iOrigin;
 
       if (add>0){
 	/* Allocate/Initialize new extra elements */
@@ -165,17 +166,20 @@ void ExtVR(ref(Object) theObj,
 	case (long) StatItemRepPTValue:
 	  while(--add>=0){
 	    struct Item *item;
+	    long *gpart;
 	    item=(struct Item *)
-	      ((long)(&theRep->Body) + (range+add)*ItemSize(REP->iProto));
+	      ((long)(&NEWREP->Body) + (range+add)*ItemSize(REP->iProto));
+	    gpart = (long *)(REP->iProto->GenPart);
 	    setup_item(item, REP->iProto, REP->iOrigin); 
-	    Protect(theRep, CallBetaEntry(REP->iProto->GenPart,item));
+	    Protect2(theRep, newRep, CallBetaEntry(gpart,item));
 	  }
 	  break;
 	case (long) StatCompRepPTValue:
 	  while(--add>=0){
 	    struct Component *comp;
+	    long *gpart;
 	    comp=(struct Component *)
-	      ((long)(&theRep->Body) + (range+add)*ComponentSize(REP->iProto));
+	      ((long)(&NEWREP->Body) + (range+add)*ComponentSize(REP->iProto));
 	    comp->Proto = ComponentPTValue;
 	    comp->GCAttr = 1;
 	    comp->StackObj = cast(StackObject) 0;
@@ -184,7 +188,8 @@ void ExtVR(ref(Object) theObj,
 	    comp->CallerLSC = 0;
 	    setup_item(cast(Item) &comp->Body, REP->iProto, REP->iOrigin); 
 	    (cast(Item) &comp->Body)->GCAttr = -((headsize(Component))/4);
-	    Protect(theRep, CallBetaEntry(REP->iProto->GenPart,&comp->Body));
+	    gpart = REP->iProto->GenPart;
+	    Protect2(theRep, newRep, CallBetaEntry(gpart,&comp->Body));
 	  }
 	  break;
 	}
