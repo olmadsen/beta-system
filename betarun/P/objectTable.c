@@ -12,6 +12,8 @@
 #include "pit.h"
 
 /* LOCAL TYPES */
+#define NULLPOINTER 0xFFFFFFFF
+#define RECURSION 1
 
 /* LOCAL DEFINITIONS */
 #define SIZEOFPROTOANDGCATTRIBUTE 8
@@ -23,6 +25,9 @@
  */
 static Trie *loadedObjects;
 static int newPersistentObjectInIOA = 0;
+#if RECURSION
+static Object *head, *tail, *last;
+#endif /* RECURSION */
 
 /* GLOBAL VARIABLES */
 
@@ -365,8 +370,49 @@ void markObject(Object *obj, int follow)
 
 static void markReachableObjects(REFERENCEACTIONARGSTYPE)
 {
-   markObject(*theCell, 1);
+  markObject(*theCell, 1);
 }
+
+#if RECURSION
+static void appendObject(Object *obj)
+{
+  if (head == NULL) {
+    last = head = obj;
+  } else {
+    last -> GCAttr = (u_long)obj;
+    last = obj;
+    last -> GCAttr = NULLPOINTER;
+  }
+}
+
+static void collectPersistentObjects(REFERENCEACTIONARGSTYPE)
+{
+  if (!inPIT((void *)*theCell)) {
+    Object *realObj;
+
+    realObj = getRealObject(*theCell);
+    if (realObj -> GCAttr < IOAPersist) {
+
+      /* The object might be in IOA or AOA. In either case it is not
+       * in the list, nor is it persistent */      
+      
+      if ((IOAActive && inToSpace(realObj)) ||
+	  (!IOAActive && inIOA(realObj))) {
+	/* The object is in IOA and cannot be persistent, nor is it in the list */
+	appendObject(realObj);
+      } else {
+	Claim(inAOA(realObj), "markReachableObjects: Where is theObj?");	
+	
+	if (!(realObj -> GCAttr == AOASPECIAL)) {	    
+	  /* We have encountered a new persistent object in AOA,
+	   * that must be in the list */
+	  appendObject(realObj);
+	}
+      }
+    }
+  }
+}
+#endif /* RECURSION */
 
 static void visitOffsetsFuncP1(contentsBox *cb)
 {
@@ -378,11 +424,18 @@ static void visitOffsetsFuncP1(contentsBox *cb)
     Claim(inAOA(current -> theObj), "The object should have been moved");
     Claim(GETOI(current -> theObj -> GCAttr) == (u_long)current, "Unlinked object info");
     
+#if RECURSION
+    scanObject(current -> theObj,
+               collectPersistentObjects,
+               NULL,
+               TRUE);
+#else
     scanObject(current -> theObj,
                markReachableObjects,
                NULL,
-               TRUE);
-    
+               TRUE);    
+#endif    
+
     /* Objects from the current table are scanned right now and
      * inserted in the new table. The new objects not in the old table
      * will be insert by 'objectInfo' when a new info object is
@@ -411,7 +464,37 @@ void phaseOne(void)
     oldTable = loadedObjects;
     loadedObjects = TInit();
     
+#if RECURSION
+    /* Initialize list of new persistent object */
+    head = tail = last = NULL;
+#endif /* RECURSION */
+
     TIVisit(oldTable, visitStoresFuncP1);
+
+#if RECURSION
+    if (head) {
+      tail = head;
+      while (tail != (Object *)NULLPOINTER) {
+	scanObject(tail,
+		   collectPersistentObjects,
+		   NULL,
+		   TRUE);
+	tail = (Object *)(tail -> GCAttr);
+      }
+
+      tail = head;
+      while (tail != (Object *)NULLPOINTER) {
+	static Object *current;
+	current = tail;
+	
+	tail = (Object *)(tail -> GCAttr);
+	current -> GCAttr = 0;
+
+	markObject(current, 0);
+      }
+    }
+#endif /* RECURSION */
+
     TIFree(oldTable, freeStores);
 }
 
