@@ -66,6 +66,7 @@ INCLUDE '~beta/basiclib/numberio'
         start,end: @integer;
         ch: @char
      #);
+   contractionSet: @set (# element:: mps.ast #);
    skipLeadingAndTrailingBlanks:
      (# t: ^text
      enter t[]
@@ -342,6 +343,7 @@ INCLUDE '~beta/basiclib/numberio'
                           true->hasOne;
                           (if current.typeOfComment = astView.pp.holoComment
                            then
+                              current[]->contractionSet.insert;
                               (if
                               'beta'->(frag.grammar.grammarIdentification).equal
                                then
@@ -394,6 +396,7 @@ INCLUDE '~beta/basiclib/numberio'
                 *) oldParsingInformation;
              astView.pp.includeComments->oldIncludeComments;
              true->astView.pp.parsingInformation->astView.pp.includeComments;
+             contractionSet.clear;
              (if cs.length = 1 then
                  (if (cs.node[]->temporaryhasComment) then
                      cs->selectArea
@@ -639,7 +642,7 @@ INCLUDE '~beta/basiclib/numberio'
         posEndAfter: @integer;
         newCs: @mps.astFocus;
         textToParse,help,tt: ^text;
-        parseOk,OKtoParse: @boolean;
+        parseOk,OKtoParse,noText: @boolean;
         instring: @boolean;
         parsingOK:< (#  do INNER #);
         parsingNotOK:< (#  do INNER #);
@@ -749,12 +752,95 @@ INCLUDE '~beta/basiclib/numberio'
                   else
                      (if textToParse.length > 0 then
                          false->OKtoParse;
+                         true->noText;
                          textToParse.scanAll
                            (# 
                            do
                               (if not (ch->ascii.isSpace) then
-                                  true->OKtoParse
+                                  true->OKtoParse; false->noText
                               if)
+                           #)
+                     if);
+                     (if OKtoParse then
+                         checkContractions:
+                           (#
+                              index: @integer;
+                              contractionFound,syntaxErrorInText: @boolean;
+                              msg: ^text
+                           do
+                              (if contractionSet.size > 0 then  if);
+                              '<<@'
+                                ->textToParse.findTextAll
+                                  (# 
+                                  do
+                                     (if contractionSet.size > 0 then
+                                         inx+2->textToParse.pos;
+                                         (if not textToParse.eos and
+                                         (textToParse.peek->ascii.isDigit) then
+                                             textToParse.getInt->index;
+                                             false->contractionFound;
+                                             l: contractionSet.scan
+                                               (# 
+                                               do
+                                                  (if current.index = index then
+                                                      true->contractionFound;
+                                                      leave l
+                                                  if)
+                                               #);
+                                             (if not contractionFound then
+                                                 false->OKtoParse;
+                                                 'The AST index: '->msg[];
+                                                 index->msg.putInt;
+                                                 ' not found, do not modify the textual representation of contractions'
+                                                   ->msg.append;
+                                                 msg[]
+                                                   ->
+                                                     edenv.ymerCallback.
+                                                       infoView;
+                                                 ascii.bel->put;
+                                                 true->texteditMode;
+                                                 true->teInfo.hadParseErrors;
+                                                 (teInfo.posStartBefore+
+                                                  markerLength+inx+2,
+                                                  teInfo.posStartBefore+
+                                                  markerLength+inx+2)
+                                                   ->
+                                                     theSifTextEditor.contents.
+                                                       selection;
+                                                 leave parsing
+                                             if)
+                                          else
+                                             false->OKtoParse;
+                                             'Do not modify the textual representation of contractions'
+                                               ->edenv.ymerCallback.infoView;
+                                             ascii.bel->put;
+                                             true->texteditMode;
+                                             true->teInfo.hadParseErrors;
+                                             (teInfo.posStartBefore+markerLength
+                                              +inx+2,teInfo.posStartBefore+
+                                              markerLength+inx+2)
+                                               ->
+                                                 theSifTextEditor.contents.
+                                                   selection;
+                                             leave parsing
+                                         if)
+                                      else
+                                         false->OKtoParse;
+                                         'Unexpected textual representation of contraction'
+                                           ->edenv.ymerCallback.infoView;
+                                         ascii.bel->put;
+                                         true->texteditMode;
+                                         true->teInfo.hadParseErrors;
+                                         (teInfo.posStartBefore+markerLength+inx
+                                          +2,teInfo.posStartBefore+markerLength+
+                                          inx+2)
+                                           ->
+                                             theSifTextEditor.contents.
+                                               selection;
+                                         leave parsing
+                                     if)
+                                  #);
+                              textToParse.length->textToParse.pos
                            #)
                      if);
                      (if OKtoParse then
@@ -836,10 +922,12 @@ INCLUDE '~beta/basiclib/numberio'
                              structureMode->editingMode
                          if)
                       else
-                         cut;
-                         structureMode->editingMode;
-                         newCS->setFocus;
-                         parsingOK
+                         (if noText then
+                             cut;
+                             structureMode->editingMode;
+                             newCS->setFocus;
+                             parsingOK
+                         if)
                      if)
                  if)
              if)
