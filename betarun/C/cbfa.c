@@ -16,7 +16,7 @@ void CBFAAlloc()
   }
   if ( CBFABlockSize == 0 ) {
     INFO_CBFA( Notify2("Warning, CBFA size of 0Kb specified.",
-		       "CBFA: Check your BETART environment variable"));
+		       "Check your BETART environment variable"));
   } else {
 #ifdef hppa
     (void) MALLOC(16); /* to avoid spurious bug, with overwriten CBFA */
@@ -27,8 +27,13 @@ void CBFAAlloc()
     }
     lastCBFA = CBFA;
     if ( ! (lastCBFA->entries = cast(CallBackEntry) MALLOC(CBFABlockSize)) ) {
-      char buf[100];
-      sprintf(buf,"Couldn't allocate CBFA (%dKb)\n", (int)CBFABlockSize/Kb);
+      char buf[300];
+      sprintf(buf,
+	      "Couldn't allocate the CBFA heap (%dKb)\n", 
+	      (int)CBFABlockSize/Kb);
+#ifdef macintosh
+      EnlargeMacHeap(buf);
+#endif
       Notify(buf);
       exit(1);
     }
