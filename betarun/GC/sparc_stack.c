@@ -176,7 +176,7 @@ GeneralProcessStack(CellProcessFunc func)
                        (int)theAR->l5,
                        (int)theAR->l6
                        );
-               if (valhallaID) {
+               if (valhallaID || isHandlingException) {
                   fprintf(output, "Cannot wind down past signal handler.\n");
                   fprintf(output, "Skipping directly to SP=0x%x.\n", (int)theAR->l6);
                } else {
@@ -196,7 +196,6 @@ GeneralProcessStack(CellProcessFunc func)
                   }
                }
             });
-            DEBUG_STACK(fprintf(output, "Skip to betaTop=0x%08x\n", (int)theAR->l6));
             theAR = (RegWin *) theAR->l6; /* Skip to betaTop */
          }
       }
@@ -633,6 +632,9 @@ int scanComponentStack (Component* comp,
 			CellDisplayFunc forEach)
 { 
   struct ComponentStack compStack;
+#ifndef RTDEBUG
+  long frame_PC;
+#endif
 
   compStack.comp = comp;
 
@@ -648,7 +650,6 @@ int scanComponentStack (Component* comp,
   case CS_STACKOBJ:
     { StackObject *theStack = compStack.info.stackObj;
       RegWin *theAR;
-      int lastReturnAdr = compStack.returnAdr; 
       
       /* ASSUMES THAT THERE ARE NO CALLBACK FRAMES IN A COMPONENT OBJECT.
        * IF THIS CHANGES, SO SHOULD THE CODE BELOW. */
@@ -656,13 +657,14 @@ int scanComponentStack (Component* comp,
       /* Start at theStack->Body[1], since theStack->Body[0] 
        * is saved FramePointer */
       long delta = (char *) &theStack->Body[1] - (char *) theStack->Body[0];
+      frame_PC = compStack.returnAdr; 
       
       for (theAR =  (RegWin *) &theStack->Body[1];
 	   theAR != (RegWin *) &theStack->Body[theStack->StackSize];
 	   theAR =  (RegWin *) (theAR->fp + delta))
 	{
-	  DisplayAR(theAR, lastReturnAdr, forEach);
-	  lastReturnAdr = theAR->i7+8;
+	  DisplayAR(theAR, frame_PC, forEach);
+	  frame_PC = theAR->i7+8;
 	}
     };
     break;
@@ -670,15 +672,24 @@ int scanComponentStack (Component* comp,
   case CS_ACTIVECOMPONENT:
     { RegWin *theAR = compStack.info.if_onstack.lastAR;
       RegWin *nextCBF = compStack.info.if_onstack.activeCBF;
-      int lastReturnAdr = compStack.returnAdr;
+      frame_PC = compStack.returnAdr;
+
+      /* Scan machine stack like ProcessSPARCStack.
+       *  Precondition: 
+       *     1. Register windows must be flushed to stack - asm(ta 3)
+       *     2. StackEnd must point to top of stack part that is to be GC'ed.
+       *     3. If RTDEBUG, frame_PC must be PC corresponding to frame that
+       *        ends in StackEnd.
+       */
+      __asm__("ta 3");
 
       if (pc && !IsBetaCodeAddrOfProcess(pc)){
 	DEBUG_VALHALLA(fprintf(output,"BetaStackTop = 0x%08x\n",(int)BetaStackTop));
 	/* Skip external code on top of stack: */
 	while ((unsigned int) theAR < (unsigned int) BetaStackTop) {
 	  DEBUG_VALHALLA(fprintf(output,"External return address: "));
-	  forEach (lastReturnAdr,0);
-	  lastReturnAdr = theAR->i7+8;
+	  forEach (frame_PC,0);
+	  frame_PC = theAR->i7+8;
 	  theAR = (RegWin *) theAR->fp;
 	}
       }
@@ -686,29 +697,59 @@ int scanComponentStack (Component* comp,
       for (;
 	   theAR != compStack.info.if_onstack.firstAR;
 	   theAR = (RegWin *) theAR->fp){
-	DEBUG_STACK(PrintAR(theAR, (RegWin*)theAR->fp));
+	DEBUG_STACK({
+	  PrintAR(theAR, (RegWin*)theAR->fp); 
+	  fprintf(output, "nextCBF=0x%08x\n", (int)nextCBF);
+	});
 	if (theAR == nextCBF) {
 	  /* This is AR of HandleCB. Skip this and
 	   * skip to betaTop and update nextCBF
 	   */
 	  nextCBF = (RegWin *) theAR->l5;
-	  { /* Wind down the stack until betaTop is reached. Needed in 
-	     * order to update lastReturnAdr. */
+
+	  DEBUG_STACK({ 
+	    fprintf(output, 
+		    "Met frame of HandleCB at SP=0x%08x, %%l5=0x%08x, %%l6=0x%08x.\n",
+		    (int)theAR,
+		    (int)theAR->l5,
+		    (int)theAR->l6
+		    );
+	  });
+
+	  if (isHandlingException
+#ifdef RTVALHALLA
+	      || valhallaID
+#endif
+	      ) {
+	    DEBUG_STACK({
+	      fprintf(output, "Cannot wind down past signal handler.\n");
+	      fprintf(output, "Skipping directly to SP=0x%x.\n", (int)theAR->l6);
+	    });
+	    frame_PC = 0;
+	  } else {
+	    /* Wind down the stack until betaTop is reached */
 	    RegWin *cAR;
-	    forEach (lastReturnAdr,0);
-	    lastReturnAdr = theAR->i7+8;
+	    DEBUG_STACK({
+	      fprintf(output, 
+		      "Winding down to frame with %%fp=betatop (0x%x)",
+		      (int)theAR->l6);
+	      fprintf(output, " (BetaStackTop)\n");
+	    });
 	    for (cAR = theAR;
 		 cAR != (RegWin *) theAR->l6;
-		 cAR = (RegWin *) cAR->fp) {
-	      forEach (lastReturnAdr,0);
-	      lastReturnAdr = cAR->i7+8;
+		 frame_PC = cAR->i7 +8, cAR = (RegWin *) cAR->fp){
+	      if (!cAR) {
+		fprintf(output, "scanComponentStack: gone past _start - exiting...!\n");
+		ILLEGAL;
+		BetaExit(1);
+	      }
+	      DEBUG_STACK(PrintCAR(cAR));
 	    }
 	  }
 	  theAR = (RegWin *) theAR->l6; /* Skip to betaTop */
 	}
-	DisplayAR(theAR, lastReturnAdr, forEach);
-	lastReturnAdr = theAR->i7+8; /* First return address used is actually PC of the process. 
-				      * For other return addresses, add 8. */
+	DisplayAR(theAR, frame_PC, forEach);
+	frame_PC = theAR->i7+8;
       };
       break;
     }
