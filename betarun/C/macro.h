@@ -184,7 +184,7 @@
    WordRepBodySize(range))))
 
 /* Safe way to save AOAroots references */
-#define saveAOAroot(cell)				\
+#define saveAOAroot(cell)				        \
   ((ToSpaceTop == AOArootsPtr)?tempAOArootsAlloc(): (void) 0,	\
    *--AOArootsPtr = (long) (cell))
 
