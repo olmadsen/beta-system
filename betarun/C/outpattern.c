@@ -872,17 +872,13 @@ int DisplayBetaStack(BetaErr errorNumber,
 	break;
       }
   } else {
-#ifdef RTDEBUG
-    fprintf(output, "DisplayBetaStack: valhallaID is 0\n");
-#endif
+    /*DEBUG_CODE(fprintf(output, "DisplayBetaStack: valhallaID is 0\n"));*/
   }
 #else
   if (theSignal) theSignal = 0; 
   /* Just to avoid a compiler warning if RTVALHALLA is not defined. */ 
 #endif /* RTVALHALLA */
 #endif /* MT */
-
-
 
 #if BETAENV_RUNTIME_HANDLER
   /* FIXME: does not work with MT */
@@ -1004,7 +1000,9 @@ int DisplayBetaStack(BetaErr errorNumber,
     fprintf(output,"\n  [initialization of basic component]\n");
     return 0;
   }
-  
+ 
+/************************* Begin HPPA ****************************/
+ 
 #if defined(UseRefStack) && !defined(SGI)
   /*
    * The ReferenceStack way of tracing the Beta stack.
@@ -1048,6 +1046,9 @@ int DisplayBetaStack(BetaErr errorNumber,
     fflush(output);
   }
 #endif
+/************************* End HPPA ****************************/
+
+/************************* Begin NEWRUN ****************************/
 
 #ifdef NEWRUN
   /*
@@ -1057,7 +1058,10 @@ int DisplayBetaStack(BetaErr errorNumber,
     ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, TRUE, DumpCell);
   }
 #endif
-  
+/*************************** End NEWRUN ***************************/
+
+/*************************** Begin SPARC ******************************/
+
 #ifdef sparc
   /*
    * This is the SPARC specifics of DisplayBetaStack
@@ -1116,6 +1120,9 @@ int DisplayBetaStack(BetaErr errorNumber,
     }
   }
 #endif
+/*************************** End SPARC ***************************/
+
+/****************************** Begin INTEL ********************************/
 
 #ifdef RUN
   { /* RUN based DisplayBetaStack() - i.e. MOTOROLA like stack */
@@ -1239,6 +1246,7 @@ int DisplayBetaStack(BetaErr errorNumber,
     }
   }
 #endif /* RUN */
+/***************************** End INTEL **********************************/
 
 
 #endif /* MT */
