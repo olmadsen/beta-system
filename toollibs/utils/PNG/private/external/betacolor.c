@@ -223,7 +223,6 @@ void BetaInitColor(Display *display, Colormap cmap)
   }
   
   if(!truecolor) {
-    
     gamma = 2.2;
     
     for ( i = 0; i < 256; i++ )
@@ -236,8 +235,7 @@ void BetaInitColor(Display *display, Colormap cmap)
     
     MakeColorMap1(stdcolormap, &colors);
     
-    /*  result = BetaAllocateColormap(display, cmap, colors, stdcolormap); */
-    result = 0;
+    result = BetaAllocateColormap(display, cmap, colors, stdcolormap);
 
     if (!result) {
       colors = 256;

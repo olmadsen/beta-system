@@ -104,10 +104,11 @@ int readPNG(Display *display, char *name, XImage **ximage, Pixmap *xmask)
 
   if(image.alpha) {
     betaImage2Mask(&image, &mask);
+    *xmask = XCreateBitmapFromData(display, defaultdrawable, mask.data, mask.width, mask.height);
   }
 
   
-  *xmask = XCreateBitmapFromData(display, defaultdrawable, mask.data, mask.width, mask.height);
+  
   
   if (error == 0) {
     BetaImageToXImage(display, &image, ximage);

@@ -171,11 +171,14 @@ static void BetaAddRow(long width,  Color *row, Color *error, unsigned char *src
 static void BetaAddRow24(long width,  Color *row, Color *error, unsigned long *src)
 {
   long index = 0;
+
+  unsigned char *pixel = (unsigned char *) src;
+
+
   while (index < width) {
-    
-    row[index].red = error[index].red + ((src[index] & 0xFF000000) >> 24);
-    row[index].green = error[index].green + ((src[index] & 0x00FF0000) >> 16);
-    row[index].blue = error[index].blue + ((src[index] & 0x0000FF00) >> 8);
+    row[index].red = error[index].red + pixel[index * 4];
+    row[index].green = error[index].green + pixel[index * 4 + 1];
+    row[index].blue = error[index].blue + pixel[index * 4 + 2];
     index++;
   }
 }
@@ -352,30 +355,6 @@ void BetaTranslateImage(BetaImage *image)
       row[j] = BetaAllocColor(&(image->palette[row[j]]), &actual);
     }
     row += image->rowbytes;
-  }
-}
-
-void BetaCopyImage(BetaImage *src, BetaImage *dst)
-{
-  unsigned char *row;
-  unsigned long *srcrow;
-  int i, j;
-  Color actual;
-  Color color;
-
-  
-  row = dst->data;
-  srcrow = src->data;
-  for (i = 0; i < src->height; i++) {
-    for (j = 0; j < src->width; j++) {
-      
-      color.red = (srcrow[j] & 0x00FF0000) >> 16;
-      color.green =  (srcrow[j] & 0x0000FF00) >> 8;
-      color.blue =  (srcrow[j] & 0x000000FF);
-      row[j] = BetaAllocColor(&color, &actual);
-    }
-    row += dst->rowbytes;
-    srcrow += (src->rowbytes >> 2);
   }
 }
 
