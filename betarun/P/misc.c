@@ -7,10 +7,13 @@
 #include "unswizzle.h"
 #include "specialObjectsTable.h"
 #include "trie.h"
+#include "../C/dot.h"
 
 #ifdef PERSIST
 
-/* */
+/* IMPORTS */
+extern int betaenvHandle; 
+extern int programHandle;
 
 /* LOCAL VARIABLES */
 
@@ -35,7 +38,30 @@ void forceObjectToAOA(Object *theObj)
 
 void markSpecialObject(unsigned long tag, Object *theObj)
 {
-  Object *realObj;
+  Object *realObj, *currentBetaenvObj, *currentProgramObj;
+
+  currentBetaenvObj = DOThandleLookup(betaenvHandle);
+  currentProgramObj = DOThandleLookup(programHandle);
+  
+  if (tag == BETAENVOBJ) {
+    if (theObj != currentBetaenvObj) {
+      fprintf(output, "markSpecialObject: Tag %d may only be used for BETAENV (this *will* cause problems soon, use another tag value for this object)\n", BETAENVOBJ);
+    }
+  }
+  
+  if (tag == PRGOBJ) {
+    if (theObj != currentProgramObj) {
+      fprintf(output, "markSpecialObject: Tag %d may only be used for PROGRAM (this *will* cause problems soon, use another tag value for this object)\n", PRGOBJ);
+    }
+  }
+  
+#ifndef sparc
+  if (theObj != currentBetaenvObj) {
+    if (theObj != currentProgramObj) {
+      fprintf(output, "markSpecialObject: This platform does not support handling of user registered special objects");
+    }
+  }
+#endif /* sparc */
   
   realObj = getRealObject(theObj);
   
@@ -58,6 +84,13 @@ unsigned long newPersistentObject(unsigned long storeID, Object *theObj)
 
   Claim(theObj == getRealObject(theObj), "Unexpected part object");
   Claim(!inPIT((void *)(theObj -> GCAttr)), "Allready persistent?");
+  
+  /* We cannot save component. Rather they should be registered as
+     special objects */
+
+  if (isComponent(theObj)) {
+    fprintf(output, "newPersistentObject: Saving component (should be registered as special object)\n");
+  }
   
   if (repeatIOAGc) {
     GCMark = POTENTIALLYDEAD;

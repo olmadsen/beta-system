@@ -145,16 +145,20 @@ int strongIsObject(Object *obj)
   ProtoType *proto;
   long gc;
   
-  if (ObjectAlign((unsigned)obj) != (unsigned)obj) {
-    fprintf(output,"Is unaligned\n");
-    fflush(output);
-    return 0;
-  }
-
   if (!inBetaHeap(obj)) {
-    fprintf(output,"Is not not in heap\n");
-    fflush(output);
-    return 0; 
+    if (obj) {
+      DEBUG_CODE(fprintf(output,"(0x%X) is not in heap\n", (int)obj));
+      DEBUG_CODE(fflush(output));
+      return 0; 
+    } else {
+      return 1;
+    }
+  }
+  
+  if (ObjectAlign((unsigned)obj) != (unsigned)obj) {
+    DEBUG_CODE(fprintf(output,"(0x%X) is unaligned\n", (int)obj));
+    DEBUG_CODE(fflush(output));
+    return 0;
   }
   
   proto = GETPROTO(obj);
@@ -162,8 +166,8 @@ int strongIsObject(Object *obj)
   
   if (inAOA(obj)) {
     if (gc == FREECHUNK) {
-      fprintf(output,"Free chunk in AOA\n");
-      fflush(output);
+      DEBUG_CODE(fprintf(output,"Free chunk in AOA\n"));
+      DEBUG_CODE(fflush(output));
       return 0;
     }
   }
@@ -171,14 +175,14 @@ int strongIsObject(Object *obj)
   if (inIOA(obj)) {
     if (IOAActive) {
       if (!(isStatic(gc) || isAutonomous(gc) || isForward(gc))) {
-	fprintf(output,"Is not static or autonomous (1)\n");
-	fflush(output);
+	DEBUG_CODE(fprintf(output,"Is not static or autonomous (1)\n"));
+	DEBUG_CODE(fflush(output));
 	return 0;
       }
     } else {
       if (!(isStatic(gc) || isAutonomous(gc))) {
-	fprintf(output,"Is not static or autonomous (2)\n");
-	fflush(output);
+	DEBUG_CODE(fprintf(output,"Is not static or autonomous (2)\n"));
+	DEBUG_CODE(fflush(output));
 	return 0;
       }
     }
@@ -186,8 +190,8 @@ int strongIsObject(Object *obj)
   
   if (inToSpace(obj)) {
     if (!(isStatic(gc) || isAutonomous(gc))) {
-      fprintf(output,"Is not static or autonomous (3) (gc = 0x%X)\n", (int)gc);
-      fflush(output);
+      DEBUG_CODE(fprintf(output,"Is not static or autonomous (3) (gc = 0x%X)\n", (int)gc));
+      DEBUG_CODE(fflush(output));
       return 0;
     }
   }
@@ -195,14 +199,14 @@ int strongIsObject(Object *obj)
   if (!isSpecialProtoType(proto)) {
 #ifdef RISC
     if (((long)proto) & 3) {
-      fprintf(output,"proto is not 4-aligned: 0x%08X\n", (int)proto);
-      fflush(output);
+      DEBUG_CODE(fprintf(output,"proto is not 4-aligned: 0x%08X\n", (int)proto));
+      DEBUG_CODE(fflush(output));
       return 0;
     }
 #endif
     if (!IsBetaDataAddrOfProcess((unsigned long)proto)) {
-      fprintf(output,"proto is not in data segment: 0x%08X\n", (int)proto);
-      fflush(output);
+      DEBUG_CODE(fprintf(output,"proto is not in data segment: 0x%08X\n", (int)proto));
+      DEBUG_CODE(fflush(output));
       return 0;
     }
   }

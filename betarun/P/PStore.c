@@ -117,8 +117,8 @@ unsigned long getRootOffset(unsigned long storeID,
     }
     return -1;
   } else {
-    Claim(FALSE, "insertRoot: Store change not implemented");
-    return -1;
+    setCurrentPStore(storeID);
+    return getRootOffset(storeID, name);
   }
 }
 

@@ -8,6 +8,8 @@
 #include "transitObjectTable.h"
 #include "PStore.h"
 #include "crossStoreReferences.h"
+#include "misc.h"
+#include "../C/dot.h"
 
 /* */
 #ifdef PERSIST
@@ -16,6 +18,10 @@
 /* LOCAL VARIABLES */
 static unsigned long loadedBytes = 0;
 static unsigned long forceAOACompaction = 0;
+
+/* GLOBAL VARIABLES */
+int betaenvHandle; 
+int programHandle;
 
 /* IMPORTS */
 extern PStoreHeader *currentPStore;
@@ -74,6 +80,8 @@ Object *lookUpReferenceEntry(unsigned long store, unsigned long offset, unsigned
   if ((theObj = indexLookupTOT(store, offset)) != NULL) {
     return theObj;
   } else {
+    Claim(indexLookupOT(store, offset) == -1, 
+	  "lookUpReferenceEntry: Object in Object Table but referred indirectly!");
     return loadObject(store, offset, inx);
   }
 }
@@ -166,14 +174,50 @@ Object *handleSpecialReference(unsigned long specRef)
      issued, and GCs, both IOAGC amd AOAGC, might occur. While it
      should be possible to support all these events only an IOAGC is
      legal at this point in time. */
-
-  BETAREENTERED = TRUE;
-  target = callRebinderC(tag, UNKNOWNTAG);
-  BETAREENTERED = FALSE;
   
+  if (tag == BETAENVOBJ) {
+    target = DOThandleLookup(betaenvHandle);
+  } else if (tag == PRGOBJ) {
+    target = DOThandleLookup(programHandle);
+  } else {
+    BETAREENTERED = TRUE;
+    target = callRebinderC(tag, UNKNOWNTAG);
+    BETAREENTERED = FALSE;
+  }
   target = (Object *)((unsigned long)getRealObject(target) + distanceToPart);
-
   return target;
 }
 
+static void dummy(int handle)
+{ 
+  ;
+}
+
+void registerBETAENVandPROGRAM(Component *theProgram)
+{
+  Object *betaenvObj, *programObj;
+  programObj = (Object *)ComponentItem(theProgram);
+  betaenvObj = *(Object **)((unsigned long)programObj + 0x8);
+
+  DOTinit();
+
+  /* */
+  if ((betaenvHandle = DOThandleInsert(betaenvObj, dummy, TRUE)) == -1) {
+    fprintf(output, "registerBETAENVandPROGRAM: Failed to insert betaenvObj in dot!");
+    BetaExit(1);
+  }
+  
+  if ((programHandle = DOThandleInsert(programObj, dummy, TRUE)) == -1) {
+    fprintf(output, "registerBETAENVandPROGRAM: Failed to insert programObj in dot!");
+    BetaExit(1);
+  }
+  
+  markSpecialObject(BETAENVOBJ, betaenvObj);
+  markSpecialObject(PRGOBJ, programObj);
+}
+#else
+void registerBETAENVandPROGRAM(Component *theProgram)
+{
+  return;
+}
 #endif /* PERSIST */

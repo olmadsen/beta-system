@@ -817,7 +817,9 @@ static __inline__ void ProcessStackCell(long *addr, char *desc, CellProcessFunc 
    * but this is probably a price we have to pay for the generality of the
    * function-parameterized routines.
    */
-  if (strongIsObject(*(Object **)addr)) {
+  if (IsBetaCodeAddrOfProcess((long)addr)) {
+    return;
+  } else if (strongIsObject(*(Object **)addr)) {
     func((Object **)addr, *(Object **)addr);
     DEBUG_LAZY({
       if (isLazyRef(*addr)) {
