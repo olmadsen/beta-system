@@ -198,6 +198,12 @@ init:
      
      argv,argc: @integer;
      
+     initUpdateCompression:
+       (# 
+       do MaxInt -> private.updateLeft -> private.updateTop;
+          MinInt -> private.updateRight -> private.updateBottom;
+       #);
+     
      (* bifrost begin *)
      initDeviceInfo: 
        (# 
@@ -237,6 +243,12 @@ init:
           bifrostprivate.PH.init;
        #);
      (* bifrost end *)
+     
+     initGC:
+       (#
+       do (private.display, private.theDeviceInfo.defaultDrawable,
+          0, 0) -> XCreateGC -> private.gc;
+       #);
   do inittickcount;
      private.theXtlib.init;
      
@@ -248,10 +260,12 @@ init:
          stop;
       else
          private.display -> private.theDeviceInfo.init;
+         initGC;
          initCursors;
          initBitmaps;
          initMenubar;
          internAtoms;
+         initUpdateCompression;
          initDeviceInfo; (* bifrost *)
          initBifrost; (* bifrost *)
          (* SBRANDT 19/4/94: To avoid doSetUp from being called twice. *)
@@ -1933,7 +1947,11 @@ do allocate;
 (# length: @integer;
 do allocate;
    str.length -> length;
-   (@@str.T[1],length,private.fontStruct) -> gettextwidth -> value;
+   (if length > 0 then
+       (@@str.T[1],length,private.fontStruct) -> gettextwidth -> value;
+    else
+       0 -> value;
+   if);
 #)
 --- GUIENVtextStyleSetName: descriptor ---
 (# 
@@ -2462,10 +2480,25 @@ do
 
 --- GUIENVwindowSetTarget: descriptor ---
 (# 
+   XmIsTraversable: external
+     (# w: @integer;
+        result: @integer;
+     enter w
+     exit result
+     #);
+
+   result: @integer;
 do (if theTarget[]=None then
        (private.contents.widgetID,XmTRAVERSE_CURRENT) ->  XmProcessTraversal;
     else
-       (theTarget.widgetID,XmTRAVERSE_CURRENT) ->  XmProcessTraversal;
+       theTarget.widgetID -> XmIsTraversable -> result;
+       (if result <> 0 then
+           (* Kald en exception eller hvad ??? *)
+       if);
+       (theTarget.widgetID,XmTRAVERSE_CURRENT) ->  XmProcessTraversal -> result;
+       (if result <> 0 then
+           (* Kald en exception eller hvad ??? *)
+       if);
    if);
 #)
 --- GUIENVwindowGetTarget: descriptor ---
@@ -2499,26 +2532,52 @@ focusChangeProcessor: eventProcessor
 refreshSelector: exposeEventSelector
   (# 
   do
-    
+     ((x, y), (x + width, y + height)) -> this(guienv).private.updateRectAdd;
      (if count=0 then
-    
-         (x, y) 
-           -> THIS(guienv).private.damaged.topleft; (* bifrost *)
-    
-         (width, height) 
-           -> THIS(guienv).private.damaged.size; (* bifrost *)
+         this(guienv).private.updateRectFlush;
     
          theEventHandler.onRefresh;
-
      if);
-     #);
+  #);
+
+handleMouseDown:
+  (# 
+  do 
+     (if private.delegate then
+         (if father[] <> none then
+             this(guienv).private.x + private.left 
+               -> this(guienv).private.x;
+             this(guienv).private.y + private.top 
+               -> this(guienv).private.y;
+             father.handleMouseDown;
+         if);
+      else
+         theEventHandler.onMouseDown;
+     if);
+  #);
 mouseDownSelector: buttonEventSelector
   (# 
-  do theEventHandler.onMouseDown;
+  do handleMouseDown;
+  #);
+
+handleMouseUp:
+  (# 
+  do 
+     (if private.delegate then
+         (if father[] <> none then
+             this(guienv).private.x + private.left 
+               -> this(guienv).private.x;
+             this(guienv).private.y + private.top 
+               -> this(guienv).private.y;
+             father.handleMouseUp;
+         if);
+      else
+         theEventHandler.onMouseUp;
+     if);
   #);
 mouseUpSelector: buttonEventSelector
   (# 
-  do theEventHandler.onMouseUp;
+  do handleMouseUp;
   #);
 keyDownSelector: KeyEventSelector
   (# 
@@ -2908,7 +2967,8 @@ do (if widgetID=0 then
 -- GUIENVwindowitemCreate: descriptor --
 (# origin: ^object;
    args: @argList;
-do  (if father[]=none then
+do true -> private.needsWidget;
+   (if father[]=none then
        THIS(windowitem)[] -> getOrigin -> origin[];
        l:
          (if origin[]=none then
@@ -2925,10 +2985,12 @@ do  (if father[]=none then
          if);
    if);
    inner create;
-   (* (if widgetID=0 then
-    *        (xmDrawingAreaWidgetClass,father.widgetID) -> createSimple;
-    *    if);
-    *)
+   
+   (if widgetID=0 then
+       (if private.needsWidget then
+           (xmDrawingAreaWidgetClass,father.widgetID) -> createSimple;
+       if);
+   if);
 #)
 
 --- GUIENVwindowitemOpen: descriptor ---
@@ -3254,3 +3316,10 @@ do callback## -> makeCBF -> address;
    1 -> private.callbacks.extend;
    address -> private.callbacks[private.callbacks.range];
    
+-- GUIENVupdateRect: doPart --
+do this(guienv).private.damaged[] -> value[];
+   
+-- GUIENVwindowItemSetXBorder: doPart --
+do true -> SetAnswer;
+   (XtNborderWidth, width) -> setIntegerResource;
+   false -> SetAnswer;
