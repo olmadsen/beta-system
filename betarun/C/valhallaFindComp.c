@@ -369,7 +369,7 @@ static void findComponentStack (ComponentStack* compStack, int PC)
       /* comp found on processor stack. */
       
       compStack->info.if_onstack.firstAR 
-	= (RegWin *) thisCompBlock->fp;
+	= (RegWin *) thisCompBlock/*->fp (pa/gram 07/01/2000)*/;
       
       if (prevCompBlock) { 
 	
@@ -476,32 +476,32 @@ int scanComponentStack (Component* comp,
 	  theAR = (RegWin *) theAR->fp;
 	}
       
-      for (;theAR != compStack.info.if_onstack.firstAR;
-	   theAR = (RegWin *) theAR->fp)
-	{
-	  if (theAR == nextCBF) {
-	    /* This is AR of HandleCB. Skip this and
-	     * skip to betaTop and update nextCBF
-	     */
-	    nextCBF = (RegWin *) theAR->l5;
-	    { /* Wind down the stack until betaTop is reached. Needed in 
-	       * order to update lastReturnAdr. */
-	      RegWin *cAR;
+      for (;
+	   theAR != compStack.info.if_onstack.firstAR;
+	   theAR = (RegWin *) theAR->fp){
+	if (theAR == nextCBF) {
+	  /* This is AR of HandleCB. Skip this and
+	   * skip to betaTop and update nextCBF
+	   */
+	  nextCBF = (RegWin *) theAR->l5;
+	  { /* Wind down the stack until betaTop is reached. Needed in 
+	     * order to update lastReturnAdr. */
+	    RegWin *cAR;
+	    forEach (lastReturnAdr,0);
+	    lastReturnAdr = theAR->i7+8;
+	    for (cAR = theAR;
+		 cAR != (RegWin *) theAR->l6;
+		 cAR = (RegWin *) cAR->fp) {
 	      forEach (lastReturnAdr,0);
-	      lastReturnAdr = theAR->i7+8;
-	      for (cAR = theAR;
-		   cAR != (RegWin *) theAR->l6;
-		   cAR = (RegWin *) cAR->fp) {
-		forEach (lastReturnAdr,0);
-		lastReturnAdr = cAR->i7+8;
-	      }
+	      lastReturnAdr = cAR->i7+8;
 	    }
-	    theAR = (RegWin *) theAR->l6; /* Skip to betaTop */
 	  }
-	  DisplayAR(theAR, lastReturnAdr, forEach);
-	  lastReturnAdr = theAR->i7+8; /* First return address used is actually PC of the process. 
-					* For other return addresses, add 8. */
-	};
+	  theAR = (RegWin *) theAR->l6; /* Skip to betaTop */
+	}
+	DisplayAR(theAR, lastReturnAdr, forEach);
+	lastReturnAdr = theAR->i7+8; /* First return address used is actually PC of the process. 
+				      * For other return addresses, add 8. */
+      };
       break;
     }
   }
