@@ -165,14 +165,8 @@ do (# thisClassName                (* name of current class           *)
         #);
       dumpReg:
         (# 
-        do
-           '%'->out.put;
-           (if BC.get
-            // thisO then 'this'->out.puttext // callO then 'call'->out.puttext
-            else
-               'top'->out.puttext
-           if);
-           
+        do '; assume register on stack: regno=' -> out.puttext;
+           BC.get -> out.putint           
         #);
       getReg: (#  exit BC.get #);
       Address:
@@ -456,6 +450,15 @@ do (# thisClassName                (* name of current class           *)
            '\tL'->out.puttext;
            lab -> out.putint
         #);
+      IOcall:
+        (# routine: ^text; hasArg: @boolean
+        enter(routine[],hasArg)
+        do '\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n'
+             -> out.puttext;
+           (if hasArg then '\tswap\n' -> out.puttext if);
+           '\tinvokevirtual ' -> out.puttext; 
+           routine[] -> out.puttext
+        #);
       opCode: @integer; 
       A: @Address;
       T: ^text
@@ -641,29 +644,37 @@ do (# thisClassName                (* name of current class           *)
              // callExternal then
                 (# prim: ^text
                 do BC.getText -> prim[];
-                   '\tgetstatic java/lang/System/out Ljava/io/PrintStream;\n'
-                     -> out.puttext;
-                   (if 'newline' -> prim.equalNCS then
-                       '\tinvokevirtual java/io/PrintStream/println()V' 
-                         -> out.puttext
+                   (if true
+                    // 'newline' -> prim.equalNCS then
+                       ('\tjava/io/PrintStream/println()V',false)
+                         -> IOcall                       
+                    // 'put' -> prim.equalNCS then
+                       ('java/io/PrintStream/print(C)V',true) -> IOcall
+                    // 'puttext' -> prim.equalNCS then
+                       ('java/io/PrintStream/print(Ljava/lang/String;)V'
+                       ,true) 
+                         -> IOcall
+                    // 'putline' -> prim.equalNCS then
+                       ('java/io/PrintStream/println(Ljava/lang/String;)V'
+                       ,true)
+                         -> IOcall
+                    // 'putint' -> prim.equalNCS then 
+                       ('java/io/PrintStream/print(I)V',true) -> IOcall
                     else
-                       '\tswap\n'
-                       '\tinvokevirtual ' -> out.puttext;  
-                       (if true 
-                        // 'put' -> prim.equalNCS then
-                           'java/io/PrintStream/print(C)V' -> out.puttext
-                        // 'puttext' -> prim.equalNCS then
-                           'java/io/PrintStream/print(Ljava/lang/String;)V' 
-                             -> out.puttext
-                        // 'putline' -> prim.equalNCS then
-                           'java/io/PrintStream/println(Ljava/lang/String;)V'
-                             -> out.puttext
-                        // 'putint' -> prim.equalNCS then 
-                           'java/io/PrintStream/print(I)V' -> out.puttext
+                       (if (prim.length >= 19)
+                           and 
+                           ('java/io/PrintStream' 
+                             -> ((1,19)->prim.sub).equal) then
+                           (* just a hack *)
+                           (prim[],true) -> IOcall
                         else
+                           '\tinvokevirtual ' -> out.puttext;  
+                           (*thisClassName[] -> out.puttext;
+                            '/' -> out.put;*)
                            prim[] -> out.puttext;
-                           (* '\nPrim:'->puttext; prim[] -> putline *)
-                   if)if)
+                       if);
+                       (* '\nPrim:'->puttext; prim[] -> putline *)
+                   if)
                 #)
              // callInner then
                 '\taload_0\n'
@@ -767,21 +778,36 @@ do (# thisClassName                (* name of current class           *)
                     if);
                     '\n.end method'->out.puttext
                  // cmpAndJmp then
-                    (BC.get,BC.get,BC.get) -> emitCmpJmp  
+                    (BC.get,BC.get,BC.get) -> emitCmpJmp
+                 // pushReg then
+                    dumpReg
                  else
                     opCode->dumpOpCode; '\t'->out.put;
                     (if opCode
                      // pushCst then
                         BC.get->out.putint
-                     // pushReg then
-                        dumpReg
                      // pushText then 
                         BC.getText->emitString
                      // jmp then 
                         BC.get->asText->out.puttext; BC.get->out.putint; 
                     
                      // func then
-                        BC.get->asText->out.puttext
+                        (# func: @integer;
+                        do BC.get->func;
+                           (if func
+                            // nott then
+                               'ifne ' -> out.puttext; 
+                               'Lab1\n' -> out.puttext; (* label generator needed here*)
+                               '\ticonst_1\n' -> out.puttext;
+                               '\tgoto ' -> out.puttext; 
+                               'Lab2\n' -> out.puttext;
+                               'Lab1:\n' -> out.puttext;
+                               '\ticonst_0\n' -> out.puttext;
+                               'Lab2:\n' -> out.puttext;
+                            else
+                               func -> asText->out.puttext
+                           if)
+                        #)
                     if);
                     
                 if)
