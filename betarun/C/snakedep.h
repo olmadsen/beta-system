@@ -2,7 +2,7 @@
 #define _SNAKEDEP_H_
 
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1992 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
  * snakedep.h
  * by Peter Orbaek
  */

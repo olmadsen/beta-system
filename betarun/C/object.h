@@ -10,10 +10,10 @@ struct ProtoType{
     ptr(long)       GenPart;   /* Reference to the generation code  */
     ref(ProtoType)  Prefix;    /* Reference to the prefix prototype */
     short           Size;      /* Object size in longs              */
-    short        FormOff;   /* Reference to the FormID string    */
+    short           FormOff;   /* Reference to the FormID string    */
     short           AstRef;    /* AST reference of this object-desc.*/
     short	    pad;
-    long		    (*CallBackRoutine)();
+    long	    (*CallBackRoutine)();
 };
 
 struct Object{ 

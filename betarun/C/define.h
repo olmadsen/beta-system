@@ -1,5 +1,5 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1990-93 Mjolner Informatics Aps.
  * define.h
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
@@ -49,14 +49,12 @@
 #  define DEBUG_LVRA( code) if( DebugLVRA ) { code; }
 #  define DEBUG_CODE( code)  code;
 #  define DEBUG_STACK( code) if( DebugStack ) { code; }
-#  define DEBUG_LABELS( code) if( DebugLabels ) { code; }
 #else
 #  define DEBUG_IOA( code)
 #  define DEBUG_AOA( code)
 #  define DEBUG_LVRA( code)
 #  define DEBUG_CODE( code)
 #  define DEBUG_STACK( code)
-#  define DEBUG_LABELS( code)
 #endif
 
 #ifdef RTINFO

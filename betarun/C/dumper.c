@@ -1,5 +1,5 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1991-93 Mjolner Informatics Aps.
  * dumper.c
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
@@ -8,23 +8,61 @@
 
 FILE *output;
 
-/* Display the ItemName of the item */
-char *DumpItemName( theItem)
-  struct Item *theItem;
-{ short *Tab;
-  long index;
-  long TabValue;
-
-  TabValue  = (long) theItem->Proto->GCTabOff;
-  TabValue += (long) theItem->Proto;
-  Tab = (ptr(short)) TabValue;
-
-  index = 0;
-  while( Tab[index] != 0 ) index += 4;
-  while( Tab[index++] != 0 );
+char *DescribeObject(theObject)
+  struct Object *theObject;
+{
+  ref(ProtoType) theProto = theObject->Proto;
+  if (isSpecialProtoType(theProto)){
+    char buffer[100];
+    switch ((long) theProto){
+    case (long) ComponentPTValue:
+      strcpy(buffer, "Component: ");
+      strncat(buffer, DescribeObject((cast(Component)theObject)->Body), 88);
+      return buffer;
+    case (long) StackObjectPTValue:
+      return "StackObj";
+    case (long) StructurePTValue:
+      sprintf(buffer, 
+	     "Struc: origin: 0x%x, proto: 0x%x", 
+	     (cast(Structure)theObject)->iOrigin,
+	     (cast(Structure)theObject)->iProto);
+      return buffer;
+    case (long) RefRepPTValue:
+      return "RefRep";	
+    case (long) ValRepPTValue:
+      return "IntegerRep";
+    case (long) ByteRepPTValue:
+      strcpy(buffer, "CharRep: '");
+      if ( (((cast(ValRep)theObject)->HighBorder)-((cast(ValRep)theObject)->LowBorder)+1) > 10 ){
+	strncat(buffer, (cast(ValRep)theObject)->Body, 10);
+	strcat(buffer, "...'");
+      } else {
+	strcat(buffer, (cast(ValRep)theObject)->Body);
+	strcat(buffer, "'");
+      }
+      return buffer;
+    case (long) WordRepPTValue:
+      return "ShortRep";
+    case (long) DoubleRepPTValue:
+      return "RealRep";
+    }
+  } else {
+    ref(GCEntry) stat = cast(GCEntry) ((long) theProto + theProto->GCTabOff);
+    ptr(short) dyn;
   
-  return (ptr(char)) &Tab[index+1];
+    while (*(short *) stat) stat++;	/* Step over static gc entries */ 
+    dyn = ((short *) stat) + 1;		/* Step over the zero */
+    while (*dyn++);			/* Step over dynamic gc entries */
+    
+    return (ptr(char)) dyn;
+  }
 }
+
+/* Display the ItemName of the item */
+char *DumpItemName(theItem)
+     struct Item *theItem;
+{ DescribeObject(theItem); }
+
 static char theString[100];
 
 
@@ -39,7 +77,7 @@ char *DumpItemFragment( theItem)
   return  str;
 }
 
-char *DumpValContents( theValRep)
+char *DumpValContents( theValRep) /* Needs checking ! */
   struct ValRep *theValRep;
 { long pos, i; char c;
 
@@ -123,7 +161,7 @@ static DumpObject( theObj)
   }
 }
 
-dumpIOA( fileName)
+void DumpIOA( fileName)
   char *fileName;
 {
   ref(Object) theObj;

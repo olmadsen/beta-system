@@ -1,6 +1,5 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: stat.c, rel: 1, date: 1/30/91, SID: 1.1
+ * BETA RUNTIME SYSTEM, Copyright (C) 1991-93 Mjolner Informatics Aps.
  * by Lars Bak
  */
 #include <stdio.h>

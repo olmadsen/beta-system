@@ -12,6 +12,15 @@ extern void SetupProperties();
 /* C/wordsort.c */
 extern void WordSort();
 
+#ifdef RTDEBUG
+/* C/dumper.c */
+char *DescribeObject();
+char *DumpItemName();
+char *DumpItemFragment();
+char *DumpValContents();
+void DumpIOA();
+#endif
+
 /* C/outpattern.c */
 extern void DisplayObject();
 extern void ErrorMessage();
@@ -41,6 +50,11 @@ extern long ObjectSize();
 extern void AOAtoIOAInsert();
 extern long AOAtoIOAAlloc();
 extern void AOAtoIOAClear();
+
+#ifdef RTDEBUG
+void AOAtoIOACheck();
+void AOAtoIOAReport();
+#endif
 
 /* GC/aoa.c */
 extern ref(Object) CopyObjectToAOA();
@@ -87,6 +101,11 @@ extern long inLVRA();
 extern long LVRARestInBlock();
 extern void LVRAkill();
 extern ref(Object) CopyObjectToLVRA(); 
+
+#ifdef RTDEBUG
+void LVRACheck();
+long LVRAAlive();
+#endif
 
 
 /* GC/misc.c */
