@@ -28,32 +28,41 @@
 
 ;;; Adds support for font-lock decoration of BETA source code.
 ;;;
-;;; To use this, you must (1) arrange for font-lock-mode to be enabled
-;;; and (2) load this library.  With one of these lacking it won't happen.
+;;; To use this library, simply 'require' it in your mode hook 
+;;; for BETA, '(require 'beta-font-lock)'.
 ;;;
-;;; (1): To try font-lock once, use 'M-x / font-lock-mode' in a buffer.
-;;; You may have to 'M-x / load-library / font-lock' first.
-;;; To enable font-lock-mode in general, you can execute
-;;; '(add-hook 'find-file-hooks 'turn-on-font-lock)' in your '.emacs';
-;;; and to use font-lock-mode with specific modes, execute
-;;; '(turn-on-font-lock)' in your mode specific hook.  See the
-;;; documentation about/in font-lock-mode.el for more details.
+;;; You must use 'add-hook' in stead of 'setq' when installing your
+;;; beta-mode-hook; the facilities in this file are installed with 
+;;; 'add-hook', and a subsequent '(setq beta-mode-hook ...)' will simply
+;;; overwrite all previously added hooks.  So your normal beta-mode 
+;;; customizations should be loaded with something like 
+;;; '(add-hook 'beta-mode-hook 'mybeta)'.
 ;;;
-;;; (2): Put '(load "beta-font-lock")' in your '.emacs'.
-;;; This will define regexps and functions as needed.
+;;; To make it possible for emacs to find this file, you must have the 
+;;; path to it in your 'load-path'.  This might already be the case, 
+;;; otherwise you can use something like
+;;; '(setq load-path (cons "/usr/local/lib/beta/emacs/v1.6" load-path))'.
 ;;;
-;;; Please Note: It is important that you use 'add-hook' in stead of
-;;; 'setq' when installing a beta-mode-hook; the facilities in this
-;;; file are installed with add-hook, and a subsequent
-;;; '(setq beta-mode-hook ...)' will prevent the previously added
-;;; hook from taking effect.  So your normal beta-mode customizations
-;;; should be loaded like '(add-hook 'beta-mode-hook 'mybeta)'.
+;;; NB: If you _do_not_ want to use "beta-menu19" you can execute
+;;; '(setq beta-font-lock-insert-menus-p nil)'.  By default,
+;;; beta-menu19 will be loaded if not already present, and 
+;;; a few beta font lock specific menu items will be inserted 
+;;; to allow selection between different font-lock styles.
 ;;;
-;;; If you're using "beta-menu19" you can execute
-;;; '(beta-font-lock-insert-menu-entries)' in a BETA mode hook
-;;; to add menu entries for selecting different fontification
-;;; styles.
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;
+;;; Executive summary:
+;;;
+;;;  (setq load-path (cons "/users/beta/emacs/v1.6" load-path)); if needed
+;;; 
+;;;  (defun mybeta () 
+;;;    (interactive)
+;;;    (require 'beta-font-lock)
+;;;    <<your-usual-stuff-to-initialize-beta-mode>>)
+;;;
+;;;  (add-hook 'beta-mode-hook 'mybeta) ; NB: 'add-hook', not 'setq'
+;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (require 'font-lock)
 (require 'make-regexp)
@@ -302,42 +311,7 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
-;;;  Choose a specification
-;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(defun beta-font-lock-syntax-begin ()
-  (re-search-backward "^\\S \\|\\`"))
-
-(defvar beta-font-lock-keywords beta-font-lock-keywords-sparse)
-
-;; arrange for font-lock mode to be initialized along with beta-mode
-(defun beta-font-lock-install ()
-  (make-local-variable 'font-lock-defaults)
-  (setq font-lock-defaults
-	(list
-	 'beta-font-lock-keywords
-	 nil           ; (KEYWORDS-ONLY) yes to strings/comments
-	 t             ; (CASE-FOLD) keywords case-insensitive
-	 '((?_ . "w"))  ; (SYNTAX-ALIST) allow '_'in words
-	 'beta-font-lock-syntax-begin ; (SYNTAX-BEGIN)
-	 ))
-  ;; install special BETA faces
-  (font-lock-make-faces t)
-  (setq font-lock-face-attributes
-	(append font-lock-face-attributes beta-font-lock-face-defs)))
-
-(defun beta-font-lock-change-specification (spec)
-  (interactive "SChoose a BETA font-lock spec: ")
-  (setq beta-font-lock-keywords spec)
-  (font-lock-mode nil)
-  (beta-mode)
-  (font-lock-mode t))
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;
-;;;  Beta mode menu ready functions
+;;;  Beta mode menu related functions
 ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -353,39 +327,82 @@
   (interactive)
   (beta-font-lock-change-specification beta-font-lock-keywords-fruitcake))
 
+(defvar beta-font-lock-map (make-sparse-keymap "Beta Font Lock Styles")
+  "Local keymap for sub-menu entries to choose beta-font-lock style")
+(defalias 'beta-font-lock-map (symbol-value 'beta-font-lock-map))
+
 (defun beta-font-lock-insert-menu-entries ()
   (interactive)
   (require 'beta-menu19)
 
-  (define-key beta-mode-map [menu-bar beta beta-font-lock-choose-sparse]
-    '("Font Lock Mode - Sparse" . beta-font-lock-choose-sparse))
+  (define-key beta-mode-map [menu-bar beta beta-font-lock-map]
+    '("Font Lock Styles" . beta-font-lock-map))
+  
+  (define-key beta-font-lock-map [hilit] 
+    '("Hilit-like" . beta-font-lock-choose-hilit-like))
+  
+  (define-key beta-font-lock-map [fruit-cake] 
+    '("Fruit Cake" . beta-font-lock-choose-fruitcake))
 
-  (define-key beta-mode-map [menu-bar beta beta-font-lock-choose-hilit-like]
-    '("Font Lock Mode - Hilit19" . beta-font-lock-choose-hilit-like))
-
-  (define-key beta-mode-map [menu-bar beta beta-font-lock-choose-fruitcake]
-    '("Font Lock Mode - Fruit Cake" . beta-font-lock-choose-fruitcake)))
+  (define-key beta-font-lock-map [sparse] 
+    '("Sparse but Fast" . beta-font-lock-choose-sparse)))
 
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; You can set-up beta-font-lock by:
-;;;  (defun mybeta () (interactive) 
-;;;    (require 'beta-font-lock)
-;;;    (beta-font-lock-insert-menu-entries))
-;;;    (beta-font-lock))
-;;;  (setq beta-mode-hook 'mybeta)
+;;;
+;;;  Choose a specification
+;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(defun beta-font-lock ()
-  (interactive)
-  (beta-font-lock-install)
-  (turn-on-font-lock)
-  )
+(defun beta-font-lock-syntax-begin ()
+  (re-search-backward "^\\S \\|\\`"))
+
+(defvar beta-font-lock-keywords beta-font-lock-keywords-sparse
+  "The default font lock specification being used")
+
+(defvar beta-font-lock-insert-menus-p t
+  "Should 'beta-font-lock-install' also insert menu items in the BETA menu?")
+
+;; arrange for font-lock mode to be initialized along with beta-mode
+(defun beta-font-lock-install ()
+  (make-local-variable 'font-lock-defaults)
+  (setq font-lock-defaults
+        (list
+         'beta-font-lock-keywords
+         nil           ; (KEYWORDS-ONLY) yes to strings/comments
+         t             ; (CASE-FOLD) keywords case-insensitive
+         '((?_ . "w"))  ; (SYNTAX-ALIST) allow '_'in words
+         'beta-font-lock-syntax-begin ; (SYNTAX-BEGIN)
+         ))
+  ;; install special BETA faces
+  (font-lock-make-faces t)
+  (setq font-lock-face-attributes
+        (append font-lock-face-attributes beta-font-lock-face-defs))
+  ;; insert menus
+  (if beta-font-lock-insert-menus-p
+      (beta-font-lock-insert-menu-entries))
+  ;; ensure that font-lock is in fact used
+  (turn-on-font-lock))
+
+(defun beta-font-lock-change-specification (spec)
+  (interactive "SChoose a BETA font-lock spec: ")
+  (setq beta-font-lock-keywords spec)
+  (font-lock-mode nil)
+  (beta-mode)
+  (font-lock-mode t))
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;
 ;;;  Tell 'em
 ;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(add-hook 'beta-mode-hook 'beta-font-lock-install)
+
+;; we expect to be loaded by 'require' in a mode-hook, so first execution 
+;; must be manual (the hook isn't called before the next file is loaded):
+(if (equal mode-name "BETA")
+    (beta-font-lock-install))
 
 (provide 'beta-font-lock)
