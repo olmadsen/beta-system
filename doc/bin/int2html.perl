@@ -51,8 +51,10 @@ sub usage
 #
 # TODO: 
 # 1. Make several file names accepted on command line
-#    and generate separate HTML file for each. The generate 
+#    and generate separate HTML file for each. Then generate 
 #    idx.html which contains *common* index.
+#    Preparations has been made for this - should mostly be
+#    a matter of putting a loop around the major part of MAIN.
 #
 # 2. Should automatically set up next and previous in navigation buttons, 
 #    based on the argument files (see 1). And Top could be ../index.html.
@@ -66,6 +68,7 @@ sub usage
 
 # Style sheet:
 $css = "../../style/miadoc.css";
+$indexfile = "inx.html";
 
 sub print_header
 {
@@ -84,7 +87,7 @@ sub print_header
 <A><IMG ALIGN=BOTTOM SRC="../../images/prevg.gif" ALT=Previous BORDER=0></A> 
 <A><IMG ALIGN=BOTTOM SRC="../../images/topg.gif" ALT=Top BORDER=0></A> 
 <A><IMG ALIGN=BOTTOM SRC="../../images/contentg.gif" ALT=Contents BORDER=0></A>
-<A HREF="#Index.identifiers"><IMG ALIGN=BOTTOM SRC="../../images/index.gif" ALT=Index BORDER=0></A>
+<A HREF="$indexfile"><IMG ALIGN=BOTTOM SRC="../../images/index.gif" ALT=Index BORDER=0></A>
 <P></P>
 <P>$title</P>
 <HR>
@@ -110,7 +113,47 @@ sub print_trailer
 <A><IMG ALIGN=BOTTOM SRC="../../images/prevg.gif" ALT=Previous BORDER=0></A> 
 <A><IMG ALIGN=BOTTOM SRC="../../images/topg.gif" ALT=Top BORDER=0></A> 
 <A><IMG ALIGN=BOTTOM SRC="../../images/contentg.gif" ALT=Contents BORDER=0></A>
-<A HREF="#Index.identifiers"><IMG ALIGN=BOTTOM SRC="../../images/index.gif" ALT=Index BORDER=0></A>
+<A HREF="$indexfile"><IMG ALIGN=BOTTOM SRC="../../images/index.gif" ALT=Index BORDER=0></A>
+
+</BODY>
+</HTML>
+EOT
+}
+
+sub print_index_header
+{
+    print<<EOT;
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<HTML>
+<HEAD>
+<TITLE>Index of Identifiers</TITLE>
+<LINK REL="stylesheet" HREF="$css" TYPE="text/css">
+</HEAD>
+<BODY>
+<P></P>
+<A><IMG ALIGN=BOTTOM SRC="../../images/topg.gif" ALT=Top BORDER=0></A> 
+<A><IMG ALIGN=BOTTOM SRC="../../images/contentg.gif" ALT=Contents BORDER=0></A>
+<P></P>
+<P>Index of Identifiers</P>
+<HR>
+<!---------------------------------------------------------->
+
+<H1><A name="Index.identifiers">Index of Identifiers</A></H1>
+<PRE CLASS=interface>
+EOT
+}
+
+sub print_index_trailer
+{
+    print<<EOT;
+</PRE>
+<!---------------------------------------------------------->
+<HR>
+<P></P>
+<ADDRESS>Index of Identifiers</ADDRESS>
+<P></P>
+<A><IMG ALIGN=BOTTOM SRC="../../images/topg.gif" ALT=Top BORDER=0></A> 
+<A><IMG ALIGN=BOTTOM SRC="../../images/contentg.gif" ALT=Contents BORDER=0></A>
 
 </BODY>
 </HTML>
@@ -136,14 +179,17 @@ sub print_index_toc
 sub print_index
 {
     @index = sort @index;
-    local ($html_index, $initial_ch);
+    local ($html_index, $initial_ch, $htmlfile, $i);
 
     $html_index = "";
 
-    print "</PRE><HR><H2><A name=\"Index.identifiers\">Index of Identifiers</A></H2><PRE CLASS=interface>";
-
     for($i = 0; $i <= $#index; $i++) {
+	# delete traling file name (after '@')
+	$index[$i] =~ s/(.+)\@(.+)/$1/;
+	# save target file name
+	$htmlfile = $2;
 	$_ = $index[$i];
+	
 	s/(\s*\w+)\.\d+/$1/g;
 	s/\(\d+\)//g;
 	while ( m/[ :](\w+)\.(\d+)[:\}]/ ) {
@@ -159,10 +205,12 @@ sub print_index
 	    $caps{$initial_ch} = 1;
 	}
 
-	$html_index .= "<A href=\"#" . $index[$i] . "\">" . $_ . "</A>\n";
+	$html_index .= "<A href=\"$htmlfile\#" . $index[$i] . "\">" . $_ . "</A>\n";
     }
+    &print_index_header;
     &print_index_toc;
     print $html_index;
+    &print_index_trailer;
 }
 
 sub strip_extension
@@ -195,7 +243,7 @@ $trace=$t;
 
 $file=$ARGV[0];
 $title=ucfirst(&strip_path(&strip_extension($file))) . " Interface";
-$output=&strip_extension($file) . ".html";
+$outfile=&strip_extension($file) . ".html";
 
 # Read entire input-stream into $line.
 
@@ -393,28 +441,28 @@ while ( m/\n[ \t]*\(\*\s+idx([\+\-\=\001])\s*(\d*)\s*\*\)\s*\n|\(\#|\#\)|::?<?/i
 			$super{$prefix} .= "$idxid-";
 			$l = $level; $l1 = $level+1; $l2 = $level+2;
 			$before .= "$bid<A name=\"$idxid\"></A><A name=\"$prefix.$l:$subpatterns.$l1:$id.$l2\"></A>";
-			$index[$indexid] = "$idxid";
+			$index[$indexid] = "$idxid\@$outfile";
 			$indexid += 1;
-			$index[$indexid] = "$prefix.$l:$subpatterns.$l1:$id.$l2";
+			$index[$indexid] = "$prefix.$l:$subpatterns.$l1:$id.$l2\@$outfile";
 			$indexid += 1;
 		    }
 		} else { # inner scope
 		    if ( $prefix eq "" ){
 			$before .= "$bid<A name=\"$patterns$idxid\"></A><A name=\"$idxid\"></A>";
-			$index[$indexid] = "$idxid";
+			$index[$indexid] = "$idxid\@$outfile";
 			$indexid += 1;
-			$index[$indexid] = "$patterns$idxid";
+			$index[$indexid] = "$patterns$idxid\@$outfile";
 			$indexid += 1;
 		    } else { # prefix is present
 			# Insert super- and sub pattern information
 			$super{$prefix} .= "$patterns$idxid-";
 			$l = $level; $l1 = $level+1; $l2 = $level+2;
 			$before .= "$bid<A name=\"$patterns$idxid\"></A><A name=\"$idxid\"></A><A name=\"$patterns$prefix.$l:$subpatterns.$l1:$id.$l2\"></A>";
-			$index[$indexid] = "$idxid";
+			$index[$indexid] = "$idxid\@$outfile";
 			$indexid += 1;
-			$index[$indexid] = "$patterns$idxid";
+			$index[$indexid] = "$patterns$idxid\@$outfile";
 			$indexid += 1;
-			$index[$indexid] = "$patterns$prefix.$l:$subpatterns.$l1:$id.$l2";
+			$index[$indexid] = "$patterns$prefix.$l:$subpatterns.$l1:$id.$l2\@$outfile";
 			$indexid += 1;
 		    } # prefix present
 		} # inner scope
@@ -500,18 +548,17 @@ s/\007/&amp;/g;
 s/\021/&lt;/g;
 s/\022/&gt;/g;
 
-printf STDERR "Writing to $output ... " if $verbose==1;
-
-open (STDOUT, ">$output") || die "\nCannot open $output for writing: $!\n";
-
+printf STDERR "Writing to $outfile ... " if $verbose==1;
+open (STDOUT, ">$outfile") || die "\nCannot open $outfile for writing: $!\n";
 &print_header($title);
-
 print;
-
-&print_index();
-
 &print_trailer($title);
-
 close (STDOUT);
+printf STDERR "done.\n" if $verbose==1;
 
+
+printf STDERR "Writing index to $indexfile ... " if $verbose==1;
+open (STDOUT, ">$indexfile") || die "\nCannot open $indexfile for writing: $!\n";
+&print_index();
+close (STDOUT);
 printf STDERR "done.\n" if $verbose==1;
