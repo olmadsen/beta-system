@@ -7,7 +7,9 @@
 #define RTINFO  /* Include support for runtime info */
 #define RTLAZY  /* Include support for lazy fetch */
 #ifdef RTDEBUG
+#if (!defined(nti) && !defined(MAC))
 #define RTVALHALLA
+#endif
 #endif
 
 
